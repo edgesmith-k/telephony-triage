@@ -8,8 +8,8 @@
 ## 진행 상태
 
 - 모드: **사외 초안** (`.local-draft` 있음)
-- 완료 Phase: **D0, 1** (2026-09-28), **2** (2026-09-29)
-- 다음 Phase: **3** (매처)
+- 완료 Phase: **D0, 1** (2026-09-28), **2, 3** (2026-09-29)
+- 다음 Phase: **4** (마스킹)
 - Phase 2~6은 사용자가 미리 승인해서 Phase마다 확인을 기다리지 않고 진행한다(각 Phase 끝에 커밋·push). 완료 기준 점검 결과는 Phase별 절에 적는다.
 - 기준 문서 세트: `telephony-triage-docs-v11` (`CHANGES.md` 참고)
 - 레포 루트: 이 파일이 있는 디렉토리 (`CLAUDE.md`, `docs/design/`, `plugin/`,
@@ -192,6 +192,64 @@
 - **규칙 스키마 위치**: `--rules <db>/parser-rules`의 상위 `<db>/schema/parser-rules.schema.json`. 고정값은 `<db>/issue-db.config.yaml`.
 - **extractor**: 태그가 맞으면 패턴을 순서대로 `search`하고 첫 매치만 쓴다. `fields`에 적힌 그룹 중 값이 있는 것만 넣는다. `fields`가 패턴의 이름 있는 그룹에 없으면 규칙 오류. 패턴 실행 시간 상한(`matcher.pattern_timeout_ms`)은 Phase 3의 컴파일 함수와 함께 넣는다.
 
+### Phase 3에서 만든 것
+
+| 산출물 | 경로 |
+|---|---|
+| 매처 | `plugin/scripts/match_signatures.py` (분석 모드 2단계 / `--regress`, 점수·신뢰도·bonus·피드백 가중치, 수정 상태 판단, related, `pending_causes`) |
+| 시그니처 컴파일·평가 | `plugin/scripts/common/signatures.py` (`compile_signature`, `Evaluator`: 윈도우·`same_phone`·`sequence`·`must_not_match`) |
+| 이슈 DB 읽기 | `plugin/scripts/common/issuedb.py` (설정·유형 frontmatter·원인·Jira 건수·피드백, 수락률 `acceptance`) |
+| 정규식 시간 상한 | `plugin/scripts/common/patterns.py` (`PatternRunner`: 작업 프로세스에서 패턴 실행, 상한을 넘기면 프로세스를 끝내고 `PatternTimeout`) |
+| 빌드 비교 | `plugin/scripts/common/builds.py` (`build_compare`, 같은 브랜치 접두어끼리만 비교) |
+| `--db` 기본값 | `plugin/scripts/common/dbpath.py` (① `--db` ② cwd git toplevel ③ 사용자 config는 Phase 6에서 연결) |
+| Phase 3 테스트 | `tests/test_match_signatures.py` (17개) |
+
+### Phase 3 완료 기준 확인 결과
+
+`python3 tests/test_match_signatures.py` — **17개 전부 통과**. `python3 -m pytest tests` 전체 **79개 통과**.
+테스트 입력 이벤트는 `parse` 출력에 `masked: true`를 붙인 테스트 데이터다(완료 기준 문구대로).
+
+| 완료 기준 | 확인 | 어디서 |
+|---|---|---|
+| "없음 + DATA_DISABLED" → `DATA-001 > DATA-001-01` 1위, medium 이상 | ✅ (high, 1.0) | `test_data_disabled_is_top_candidate` |
+| 원인 로그를 지운 fixture → "DATA-001, 원인 미확인" | ✅ | `test_cause_log_removed_gives_unresolved_type` |
+| 음성 fixture → S=1 유형 없음 | ✅ (샘플 음성 fixture 전부, 두 모드) | `test_negative_fixtures_have_no_symptom` |
+| 증상 없이 원인 시그니처만 → 분석 모드 후보 없음, `--regress` C=1(0.6 참고), `cause_weight` 0.5여도 S/C 같음 | ✅ | `test_cause_without_symptom_only_in_regress` |
+| CALL-001에 fixed_in 이전/같은/이후 SW → 이미 수정됨/회귀 의심/회귀 의심 | ✅ (+ 다른 브랜치·빌드 없음 → 판단 불가, open → 미수정 N건, fix-submitted 두 경우) | `test_fix_judgement_against_fixed_in`, `test_fix_submitted_judgement` |
+| `deprecated` 원인은 후보에 없음, `signatures_pending` 원인은 `pending_causes`로만 | ✅ | `test_status_filter_and_pending_causes` |
+| `--regress`면 bonus 0, 피드백 가중치 끔, 범위 = 파일 전체 | ✅ (+ 수락률 가중치·`--no-feedback-weight`, `manual` 제외) | `test_regress_mode_disables_bonus_and_feedback`, `test_manual_feedback_is_not_counted` |
+| 교차 슬롯 fixture → DATA-001-01 C=0, `same_phone: false` 사본에서 C=1 | ✅ (아래 해석 참고) | `test_cross_slot_same_phone`, `test_symptom_must_not_match_is_per_slot` |
+| `sequence` 시그니처는 순서를 뒤집은 로그에서 C=0 | ✅ | `test_sequence_order_matters`, `test_window_sec_limits_span` |
+| 느린 정규식은 타임아웃으로 `error`, 다른 후보는 그대로 | ✅ (매처·extractor 둘 다) | `test_slow_regex_times_out_and_others_continue`, `test_parse_logcat.py::test_slow_extractor_times_out_and_others_continue` |
+| 마스킹 안 된 입력 거부 | ✅ 종료 코드 2 | `test_unmasked_input_is_rejected` |
+
+**완료 기준 해석 (교차 슬롯)**: 기준 문구는 "분석 모드에서 DATA-001-01 C=0, `same_phone: false` 사본에서는 C=1"이다. 교차 슬롯 로그는 음성이라 DATA-001의 S=0이고, 분석 모드는 S=1 유형의 원인만 평가하므로 사본에서도 분석 모드로는 C가 나오지 않는다. 그래서 분석 모드에서는 "DATA-001-01이 후보에 없음"을, C 값 비교(원본 C=0 / `same_phone: false` 사본 C=1)는 원인을 독립 평가하는 `--regress`로 확인했다. 원인 시그니처의 `same_phone`이 실제로 슬롯을 가르는지는 이것으로 드러난다.
+
+### Phase 3에서 바꾼 이전 산출물
+
+| 대상 | 무엇을 | 왜 |
+|---|---|---|
+| `tests/fixtures/issue-db-sample/schema/type.schema.json` | `must_match` 항목에 `{id, pattern}` 객체도 허용 | `04-parser-matching.md §5.11 (1)`: "`must_match`·`must_event` 항목에 선택 `id`를 붙이고 `sequence`로 참조". Phase 1 스키마는 문자열만 받아 설계와 달랐다 |
+| `tests/mocks/scenarios/data-001-none-cross-slot.yaml` | 순서를 "슬롯 1 설정 OFF → 슬롯 0 거부 → 슬롯 0 정상 연결"로 | Phase 1 배치(슬롯 0 거부가 먼저)에서는 `same_phone: false` 사본도 `sequence: [setting-off, rejected]` 때문에 C=0이라 Phase 3 완료 기준을 시험할 수 없었다. 음성 성질(S=0, `expect_top: none`)은 그대로다 |
+| `DATA-001.none.2.log`, `tests/fixtures/logs/dual-sim-cross-slot.{log,events.json}`, `tests/mocks/golden/data-001-none-cross-slot.golden.json` | 위 시나리오로 다시 생성 | 위와 같음 (모의 골든) |
+| `plugin/scripts/parse_logcat.py` | extractor를 `PatternRunner`로 실행(시간 상한), 출력에 `errors` 추가, 경고 `pattern-timeout` | `04-parser-matching.md §5.8 (4)`: 매처와 extractor 모두 패턴당 상한 |
+| `tests/test_parse_logcat.py` | `test_slow_extractor_times_out_and_others_continue` 추가 (24개) | 위와 같음 |
+
+### Phase 3 구현에서 정한 세부 (계약 보완 후보)
+
+- **`--jira-meta` 형식**(계약에 정의 없음): JSON 객체 `{key, occurred_at, sw, summary, description}`, 모두 선택. `occurred_at`은 타임존 있는 ISO(없으면 종료 코드 2). 텍스트는 마스킹된 것. `--regress`는 이 값을 쓰지 않는다(수정 판단 없음, bonus 0).
+- **출력**: `{schema, mode: analysis|regress, db, range, bonus, feedback_weight, jira, candidates[], pending_causes[], types[{type,S,signature,evidence}], causes[{type,cause,S,C,signature}], errors[{signature,error}], warnings[]}`. 후보는 `{type, cause, title, category, secondary_categories, score, confidence, S, C, signature, evidence[], bonus{proximity,keyword}, feedback{accepted,total,rate,applied}, fix_judgement, related[{cause,type,title,status}]}`. `--top 0`이면 전부. 증거 항목은 `{signature, condition, ts, tag, msg, event, fields, phone_id}`.
+- **후보 구성**: S=1 유형마다 C=1 원인은 각각 후보, C=1 원인이 없으면 `cause: null`("원인 미확인") 후보 하나. `--regress`에서는 S=0이어도 C=1 원인이 후보가 된다(점수 0.6 참고). `pending_causes`는 S=1 유형의 pending 원인.
+- **윈도우 의미**: 분석 범위 `[lo, hi]`는 분석 모드면 입력의 `input.window`(없으면 파일 범위), `--regress`면 `coverage.first_ts~last_ts`. 구간 `[a, a+W]`는 `lo ≤ a ≤ max(lo, hi−W)`로 범위 안에 둔다(범위 밖으로 밀어서 `must_not_match`를 피하지 못하게).
+- **`same_phone`과 `must_not_match`**: 부정 조건도 같은 슬롯(+ `phone_id: null`) 레코드만 본다. 다른 슬롯의 `SETUP_DATA_CALL`은 이 슬롯의 증상을 깨지 않는다(`test_symptom_must_not_match_is_per_slot`).
+- **`sequence`**: 구간 안 각 조건의 첫 충족 레코드가 `(시각, 입력 순서)` 기준으로 엄격히 증가해야 한다.
+- **증거 구간 선택**: 충족 구간이 여럿이면 분석 모드는 발생 시각에 가장 가까운 증거가 있는 구간, 아니면 가장 이른 구간.
+- **bonus**: 근접 = `proximity_bonus_max × max(0, 1 − |증거 시각 − 발생 시각| / (분석 범위 절반))`, 증거 중 가장 가까운 것. 키워드 = `keyword_bonus_max × |원인 title(원인 미확인이면 유형 title) + 유형 tags의 토큰 ∩ Jira summary·description 토큰| / |앞의 토큰|`. 토큰은 영숫자·한글 2자 이상, 소문자.
+- **피드백 가중치**: 후보가 충족한 시그니처(원인 미확인이면 증상 시그니처)의 전역 키로 수락률을 찾는다. 표본 ≥ `quality.min_samples`일 때만 적용.
+- **수정 판단 코드**: `already-fixed`, `regression-suspected`, `undetermined`, `fix-pending-build`, `fix-insufficient`, `unfixed`, 그리고 `wont-fix`/`not-a-bug`은 `judgement: null`. 빌드 비교는 같은 `build_compare` 규칙에 맞고 `branch_regex`가 맞은 부분(브랜치 접두어)이 같을 때만 한다.
+- **시간 상한 구현**: `re`는 실행 중 끊을 수 없어서 작업 프로세스(spawn) 하나에 줄 목록을 한 번 넘기고 패턴마다 결과를 기다린다. 넘기면 프로세스를 끝내고 다음 패턴에서 다시 띄운다. 호출마다 프로세스 기동 비용(이 PC에서 약 0.15초)이 든다. 매처는 상한을 넘긴 시그니처를 `errors`에 남기고 불충족으로 본다. `--regress`의 실패 처리(종료 코드)는 `db_regress`·`db_verify`(Phase 5·10)가 `errors`를 보고 한다.
+- **시그니처 오류**(없는 sequence id, 정규식 오류 등)는 이슈 DB 오류라 종료 코드 2.
+
 ## 개발 환경과 설계의 차이 (중요)
 
 설계는 실행 환경을 **Ubuntu(Linux)** 로 못박는다 (`01-architecture.md §3`,
@@ -280,6 +338,10 @@ Windows 전용 보정은 커밋하지 않는다.**
     메시지 끝 `[PHONE n]`도 본다(TODO(SITE:S20)).
 16. RILJ 형식 placeholder: 요청 `[serial]> NAME`, 응답 `[serial]< NAME ... error=X`,
     unsol `[UNSL]< NAME`. 에러 표기가 없으면 `NONE`. RIL 태그는 `RILJ`만(TODO(SITE:S9·S10)).
+17. `--jira-meta`는 스킬(Phase 13)이 Jira에서 뽑아 만드는 JSON이다. 형식은 위 "Phase 3
+    구현에서 정한 세부"에 정했다(계약에 없음).
+18. 정규식 시간 상한은 작업 프로세스로 구현했다(새 의존성 없음). 사내 반입 규정상
+    `regex` 모듈(자체 timeout 지원)을 쓸 수 있으면 더 가볍게 바꿀 수 있다.
 
 ## 모의와 실제가 다를 것으로 예상되는 지점
 
@@ -302,7 +364,7 @@ Windows 전용 보정은 커밋하지 않는다.**
 
 ## 사내 확인 목록 (`TODO(SITE:S<n>)`)
 
-`python3 tools/list_site_todos.py`로 갱신한다(Windows 콘솔에서는 `PYTHONIOENCODING=utf-8`). 2026-09-29(Phase 2 끝) 기준 **50곳**. Phase 2에서 파서 엔진(S7 시계 이상 기준·S9 RILJ 형식·S20 슬롯 표기·S21 bugreport 헤더)과 새 시나리오 4개가 더해졌다:
+`python3 tools/list_site_todos.py`로 갱신한다(Windows 콘솔에서는 `PYTHONIOENCODING=utf-8`). 2026-09-29(Phase 3 끝) 기준 **50곳**(Phase 3에서 늘지 않음). Phase 2에서 파서 엔진(S7 시계 이상 기준·S9 RILJ 형식·S20 슬롯 표기·S21 bugreport 헤더)과 새 시나리오 4개가 더해졌다:
 
 ### S1 (1곳)
 - `tests/mocks/skills/data-analyzer/SKILL.md:63` — 스킬 이름과 호출 방식 확인.
@@ -392,7 +454,7 @@ Windows 전용 보정은 커밋하지 않는다.**
 
 | 항목 | 상태 |
 |---|---|
-| 전체 테스트 통과 | 🟡 D0·Phase 1·2 범위 (`pytest tests` 61개). `db_regress`·eval은 Phase 5·13 뒤 |
+| 전체 테스트 통과 | 🟡 D0·Phase 1~3 범위 (`pytest tests` 79개). `db_regress`·eval은 Phase 5·13 뒤 |
 | 사내 정보 없음 | ✅ 사내 자료를 쓰지 않았다 |
 | `plugin/site-defaults.yaml` 없고 example만 있음 | ✅ `test_plugin_root_helper_and_missing_site_defaults`가 검사 |
 | `SITE_PATHS`의 다른 경로가 비어 있음 | ✅ `test_site_paths_are_absent_in_draft`가 검사 |
@@ -406,9 +468,15 @@ Windows 전용 보정은 커밋하지 않는다.**
 
 1. 새 세션을 열어 **빈 플러그인 실험**을 돌리고 위 "사외 Claude Code 실험
    결과" 표를 채운다 (`tests/mocks/plugin-probe/README.md`). 아직 미확인이다.
-2. **Phase 3** (매처): `docs/design/11-phases.md` Phase 3 절과 그 "읽을 문서"를 읽고
-   `match_signatures.py`와 `common/`의 시그니처·extractor 컴파일 함수를 만든다.
-   - 입력은 Phase 2 `parse` 출력이다. 위 "구현에서 정한 세부"(줄 레코드/이벤트 레코드,
-     `ril_*` 파생 이벤트, `fields`는 문자열)를 전제로 한다.
-   - 마스킹 안 된 입력(`masked: false`)은 종료 코드 2다. `--mask`는 Phase 4에서
-     연결되므로, Phase 3 테스트는 테스트 안에서 `masked: true`로 표시한 이벤트를 쓴다.
+2. (선택, 사내) **S-0 선행 확인**이 이제 가능하다: `parse_logcat.py`(reference 백엔드)와
+   `match_signatures.py`만 사내로 가져가 실제 로그 3~5개로 돌려 본다
+   (`15-local-draft.md §15.5` S-0). 사외에서는 기다리지 않고 Phase 4로 간다.
+3. **Phase 4** (마스킹): `docs/design/11-phases.md` Phase 4 절과 그 "읽을 문서"를 읽고
+   `common/masking.py`의 `new_masker()`와 `mask_pii.py`, `parse --mask`, `cut`을 만든다.
+   - 마스킹 자리는 Phase 2에서 만들었다: `parse_logcat.postprocess(masker=...)`가
+     extractor보다 먼저 줄·builtin·외부 파서 레코드의 `msg`·`fields`에 적용한다.
+   - Phase 3 매처는 `masked: true`만 받는다. Phase 4 완료 기준 "`parse --mask` → 매처
+     파이프라인이 Phase 3 결과와 같다"는 `tests/test_match_signatures.py`의 입력을
+     `--mask` 출력으로 바꿔 같은 결과가 나오는지로 확인한다.
+   - 골든 테스트의 임시 치환(`tests/test_golden.py`의 `_provisional_mask`)을 `mask_pii`로
+     바꾼다 (가정 10).

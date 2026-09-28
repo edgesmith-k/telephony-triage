@@ -6,6 +6,11 @@
 - parser_rules: `parser-rules/` 로드·스키마 검증 (Phase 2)
 - compat: 이슈 DB 고정 파서 백엔드·외부 파서와 현재 환경 비교 (Phase 2)
 - masking: 마스킹 함수 자리 (Phase 2 인터페이스, Phase 4 구현)
+- patterns: 정규식 시간 상한 실행기 (Phase 3)
+- signatures: 시그니처 컴파일·평가 (Phase 3)
+- issuedb: 이슈 DB 읽기(설정·유형·Jira 건수·피드백) (Phase 3)
+- builds: `build_compare` 빌드 비교 (Phase 3)
+- dbpath: `--db` 기본값 (Phase 3, 사용자 config 연결은 Phase 6)
 
-config 로드·git 헬퍼·시그니처 컴파일은 Phase 3·6에서 더한다.
+config 로드·git 헬퍼는 Phase 6에서 더한다.
 """

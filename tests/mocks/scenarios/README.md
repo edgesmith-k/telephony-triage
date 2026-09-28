@@ -61,7 +61,7 @@ fixture가 되는지는 `tests/mocks/sample_fixtures.yaml`에 있고,
 | `data-001-02-roaming.yaml` | DATA-001-02(로밍 꺼짐) 양성. 슬롯 1 | `DATA-001-02.log` |
 | `data-001-02-extra.yaml` | DATA-001-02 추가 표본 | `DATA-001-02.extra.1.log` |
 | `data-001-none.yaml` | 음성(정상 데이터 연결) | `DATA-001.none.log` |
-| `data-001-none-cross-slot.yaml` | **교차 슬롯 음성**: 슬롯 0의 거부 로그 + 슬롯 1의 원인 로그. `same_phone`과 `must_not_match`를 함께 시험한다 | `DATA-001.none.2.log` |
+| `data-001-none-cross-slot.yaml` | **교차 슬롯 음성**: 슬롯 1의 설정 OFF → 슬롯 0의 거부 → 슬롯 0 정상 연결. `same_phone`(false 사본에서는 원인 충족)과 `must_not_match`를 함께 시험한다 | `DATA-001.none.2.log`, 파서 `dual-sim-cross-slot.log` |
 | `call-001-01-positive.yaml` | CALL-001-01(VoLTE 실패) 양성. IMS 등록 실패도 있어 `also_allowed` 예시가 된다 | `CALL-001-01.log` |
 | `call-001-01-fixed.yaml` | 수정 빌드에서 정상 (verify-fix 통과) | `CALL-001-01.fixed.<build>.log` |
 | `call-001-01-resolved.yaml` | 해결책 적용 후 정상 | `CALL-001-01.resolved.1.log` |

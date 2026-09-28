@@ -413,6 +413,37 @@ def test_rules_are_validated():
     _expect_rules_error(lambda r: (r / "ril.yaml").unlink(), "규칙 파일이 없습니다")
 
 
+def test_slow_extractor_times_out_and_others_continue():
+    """패턴당 시간 상한(matcher.pattern_timeout_ms)을 넘긴 extractor는 error로 남고
+    분석은 계속한다 (04-parser-matching.md §5.8 (4))."""
+    tmp = _tmp()
+    db = _copy_db(tmp)
+    cfg = db / "issue-db.config.yaml"
+    cfg.write_text(
+        cfg.read_text(encoding="utf-8").replace("pattern_timeout_ms: 2000", "pattern_timeout_ms: 300"),
+        encoding="utf-8",
+    )
+    path = db / "parser-rules" / "extractors.yaml"
+    path.write_text(
+        path.read_text(encoding="utf-8")
+        + "\n  - id: slow-one\n    added_for: DATA-001\n    added_on: 2026-09-29\n    reason: 시험용\n"
+        "    tag_regex: '^DNC-\\d+$'\n    patterns: ['(?P<x>(a+)+)$']\n    event: slow_one\n    fields: [x]\n",
+        encoding="utf-8",
+    )
+    log = tmp / "slow.log"
+    log.write_text(
+        (LOG_DIR / "data-disabled.log").read_text(encoding="utf-8")
+        + "09-20 14:30:40.000  1234  1244 D DNC-0: " + "a" * 40 + "!\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+    data = _parse([log], rules=db / "parser-rules")
+    assert [e["extractor"] for e in data["errors"]] == ["slow-one"]
+    assert "pattern-timeout" in [w["code"] for w in data["warnings"]]
+    assert not _events(data, event="slow_one")
+    assert _events(data, event="data_evaluation_rejected"), "다른 extractor는 그대로 돈다"
+
+
 # -- 백엔드와 외부 파서 ------------------------------------------------------------
 
 

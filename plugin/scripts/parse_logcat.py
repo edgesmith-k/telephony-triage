@@ -21,7 +21,8 @@
   2. 태그 → 카테고리 매핑(`tags.yaml`). 목록에 없는 태그의 줄은 버린다
   3. 마스킹(`--mask`, Phase 4) — extractor보다 **먼저**
   4. RIL 파생 이벤트(`ril.yaml` timeout): `ril_error`, `ril_timeout`, `ril_no_response`
-  5. extractor(`extractors.yaml`)
+  5. extractor(`extractors.yaml`). 패턴마다 시간 상한 `matcher.pattern_timeout_ms`
+     (넘기면 그 extractor 이벤트를 버리고 `errors`·경고 `pattern-timeout`)
   6. 외부 파서(`external_parsers`, `--no-external`이면 건너뜀)
 """
 
@@ -43,6 +44,7 @@ sys.path.insert(0, str(SCRIPTS))
 import adapters  # noqa: E402
 import parser_backends  # noqa: E402
 from common import compat, masking, parser_rules, site_defaults  # noqa: E402
+from common.patterns import DEFAULT_TIMEOUT_MS, PatternError, PatternRunner, PatternTimeout  # noqa: E402
 from common.exitcodes import OK, USAGE  # noqa: E402
 from parser_backends import logcat  # noqa: E402
 
@@ -106,19 +108,36 @@ def _ril_events(rec: dict, rules: parser_rules.Rules, last_ts: str | None) -> li
     return out
 
 
-def _extract(rec: dict, rules: parser_rules.Rules) -> list[dict]:
-    out = []
-    for ex in rules.extractors:
-        if not ex.tag_matches(rec["tag"]):
-            continue
-        for pattern in ex.patterns:
-            hit = pattern.search(rec["msg"])
-            if hit:
-                groups = hit.groupdict()
-                fields = {f: groups[f] for f in ex.fields if groups.get(f) is not None}
-                out.append(_derived(rec, ex.event, fields, "rules"))
-                break
-    return out
+def _run_extractors(lines: list[dict], rules: parser_rules.Rules, timeout_ms: int | None,
+                    errors: list[dict]) -> list[list[dict]]:
+    """줄 레코드 목록에 extractor를 돌려 줄마다 파생 이벤트 목록을 준다(규칙 순서).
+
+    패턴은 시간 상한(`matcher.pattern_timeout_ms`)을 지키는 실행기에서 돈다. 넘기면 그
+    extractor의 이벤트를 모두 버리고 `errors`에 남긴다(분석은 계속, 04 §5.8 (4)).
+    """
+    derived: list[list[dict]] = [[] for _ in lines]
+    msgs = [rec["msg"] for rec in lines]
+    with PatternRunner(msgs, timeout_ms) as runner:
+        for ex in rules.extractors:
+            remaining = [i for i, rec in enumerate(lines) if ex.tag_matches(rec["tag"])]
+            found: list[tuple[int, dict]] = []
+            try:
+                for pattern in ex.patterns:
+                    if not remaining:
+                        break
+                    hits = runner.search(pattern.pattern, indices=remaining)
+                    hit_set = set(hits)
+                    for i in hits:
+                        groups = pattern.search(msgs[i]).groupdict()
+                        fields = {f: groups[f] for f in ex.fields if groups.get(f) is not None}
+                        found.append((i, _derived(lines[i], ex.event, fields, "rules")))
+                    remaining = [i for i in remaining if i not in hit_set]
+            except (PatternTimeout, PatternError) as exc:
+                errors.append({"extractor": ex.id, "error": str(exc)})
+                continue
+            for i, rec in sorted(found, key=lambda item: item[0]):
+                derived[i].append(rec)
+    return derived
 
 
 def _mask_record(rec: dict, masker) -> dict:
@@ -137,13 +156,17 @@ def postprocess(
     *,
     masker=None,
     last_ts: str | None = None,
+    timeout_ms: int | None = None,
+    errors: list[dict] | None = None,
 ) -> list[dict]:
     """백엔드 출력에 태그 매핑 → 마스킹 → RIL 파생 이벤트 → extractor를 적용한다.
 
     줄 레코드(`event: None`)는 `tags.yaml`에 없는 태그면 버린다. builtin 레코드는
-    그대로 두고(마스킹만) 줄 레코드와 함께 낸다. 파생 이벤트는 그 줄 바로 뒤에 온다.
+    그대로 두고(마스킹만) 줄 레코드와 함께 낸다. 파생 이벤트는 그 줄 바로 뒤에 온다
+    (RIL 파생 이벤트, 그다음 extractor 이벤트를 규칙 순서로).
     """
-    out: list[dict] = []
+    errors = [] if errors is None else errors
+    kept: list[dict] = []
     for rec in events:
         if rec.get("event") is None:
             category = rules.tag_category(rec["tag"])
@@ -153,13 +176,20 @@ def postprocess(
             if ann:
                 category = rules.ril_category(ann["request"]) or category
             rec = dict(rec, category_hint=category)
-            if masker:
-                rec = _mask_record(rec, masker)
-            out.append(rec)
-            out.extend(_ril_events(rec, rules, last_ts))
-            out.extend(_extract(rec, rules))
+            kept.append(_mask_record(rec, masker) if masker else rec)
         else:
-            out.append(_mask_record(rec, masker) if masker else dict(rec))
+            kept.append(_mask_record(rec, masker) if masker else dict(rec))
+
+    line_pos = [i for i, rec in enumerate(kept) if rec.get("event") is None]
+    extracted = _run_extractors([kept[i] for i in line_pos], rules, timeout_ms, errors)
+    by_pos = dict(zip(line_pos, extracted))
+
+    out: list[dict] = []
+    for i, rec in enumerate(kept):
+        out.append(rec)
+        if i in by_pos:
+            out.extend(_ril_events(rec, rules, last_ts))
+            out.extend(by_pos[i])
     return out
 
 
@@ -374,8 +404,14 @@ def run_parse(args, plugin_root: Path, defaults: dict, masker_factory=masking.ne
         "clock_anomalies": coverage["clock_anomalies"],
     }
 
+    timeout_ms = int((db_cfg.get("matcher") or {}).get("pattern_timeout_ms", DEFAULT_TIMEOUT_MS))
+    errors: list[dict] = []
     events = backend.parse(paths, args.tz, args.year, window)
-    events = postprocess(events, rules, masker=masker, last_ts=coverage["last_ts"])
+    events = postprocess(events, rules, masker=masker, last_ts=coverage["last_ts"],
+                         timeout_ms=timeout_ms, errors=errors)
+    for error in errors:
+        warnings.append({"code": "pattern-timeout",
+                         "message": f"extractor {error['extractor']}: {error['error']}"})
 
     configs = _external_configs(defaults)
     external_info = []
@@ -429,6 +465,7 @@ def run_parse(args, plugin_root: Path, defaults: dict, masker_factory=masking.ne
         "coverage": coverage,
         "masked": masker is not None,
         "warnings": warnings,
+        "errors": errors,
         "events": events,
     }
 
