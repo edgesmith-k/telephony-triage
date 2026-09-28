@@ -1,0 +1,7 @@
+jira: MOCK-1104
+date: 2026-09-26T10:10+09:00
+by: mock-user2
+suggested:
+  - {cause: DATA-001-01, signature: DATA-001-01/data-disabled, score: 0.45}
+decision: unresolved
+final: unresolved

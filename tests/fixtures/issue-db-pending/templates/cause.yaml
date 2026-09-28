@@ -1,0 +1,17 @@
+  - id: {{TYPE_ID}}-{{NN}}
+    status: active
+    title: {{원인 명사구}}
+    description: {{원인 한 문장}}
+    signatures:
+      - id: {{kebab-case}}
+        must_match: ['{{정규식}}']
+        window_sec: 60
+    recovery_signatures: []
+    scenario_signatures: []
+    resolution: {{행동 지시, ~한다}}
+    resolution_type: {{user-setting|carrier-config|framework-bug|vendor-ril|modem|network|hw}}
+    resolution_verification: {status: unverified}
+    fix: {status: {{open|fix-submitted|wont-fix|not-a-bug}}, ref: null, fixed_in: [], verification: null, verification_history: []}
+    related: []
+    android_versions: []
+    code_refs: []

@@ -67,7 +67,7 @@ def _secretish(value: str) -> bool:
     return len(value) >= 16 and any(c.isdigit() for c in value)
 
 
-_NUM_END = r"(?![\w*.])"  # 숫자 값 뒤: 단어 문자·`*`(Android 부분 마스킹)·`.`이 이어지면 안 된다
+_NUM_END = r"(?![\w*]|\.\w)"  # 숫자 값 뒤: 단어 문자·`*`(Android 부분 마스킹)·`.<글자>`(버전·IP의 일부)가 이어지면 안 된다. 문장 끝 `.`은 된다
 
 # 순서가 중요하다: 자격증명 → URI·이메일 → 문맥 있는 식별자 → 형식 → 문맥 없는 숫자.
 RULES: tuple[Rule, ...] = (
@@ -99,20 +99,20 @@ RULES: tuple[Rule, ...] = (
         r'(?i)\b(?:msisdn|phone(?:number)?|dest(?:addr)?|destination|number|callee|caller)\s*[=:]\s*"?(?P<v>\+?\d{7,15})'
         + _NUM_END)),
     # --- 형식 ---
-    Rule("MSISDN", re.compile(r"(?<![\w+.])(?P<v>\+\d{1,3}[- ]?\d{1,4}[- ]?\d{3,4}[- ]?\d{4})(?![\w.])")),
-    Rule("MSISDN", re.compile(r"(?<![\w.])(?P<v>01[016789][- ]?\d{3,4}[- ]?\d{4})(?![\w.])")),
+    Rule("MSISDN", re.compile(r"(?<![\w+.])(?P<v>\+\d{1,3}[- ]?\d{1,4}[- ]?\d{3,4}[- ]?\d{4})(?!\w|\.\w)")),
+    Rule("MSISDN", re.compile(r"(?<![\w.])(?P<v>01[016789][- ]?\d{3,4}[- ]?\d{4})(?!\w|\.\w)")),
     Rule("MAC", re.compile(r"(?<![0-9A-Fa-f:])(?P<v>(?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2})(?![0-9A-Fa-f:])")),
     Rule("IP", re.compile(
-        r"(?<![\w.])(?P<v>(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})(?![\w.])")),
+        r"(?<![\w.])(?P<v>(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})(?!\w|\.\w)")),
     Rule("IP", re.compile(
         r"(?<![0-9A-Fa-f:])(?P<v>(?:[0-9A-Fa-f]{1,4}:){7}[0-9A-Fa-f]{1,4}"
         r"|(?:[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4}){0,6})?::(?:[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4}){0,6})?)"
         r"(?![0-9A-Fa-f:])"),
          check=lambda v: v != "::"),
     # --- 문맥 없는 15자리 ---
-    Rule("IMEI", re.compile(r"(?<![\w.+-])(?P<v>\d{15})(?![\w.])"), check=_luhn),
-    Rule("IMSI", re.compile(r"(?<![\w.+-])(?P<v>\d{15})(?![\w.])"), check=_valid_mcc),
-    Rule("ICCID", re.compile(r"(?<![\w.+-])(?P<v>89\d{17,18})(?![\w.])")),
+    Rule("IMEI", re.compile(r"(?<![\w.+-])(?P<v>\d{15})(?!\w|\.\w)"), check=_luhn),
+    Rule("IMSI", re.compile(r"(?<![\w.+-])(?P<v>\d{15})(?!\w|\.\w)"), check=_valid_mcc),
+    Rule("ICCID", re.compile(r"(?<![\w.+-])(?P<v>89\d{17,18})(?!\w|\.\w)")),
 )
 
 

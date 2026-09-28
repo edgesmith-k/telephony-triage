@@ -1,0 +1,6 @@
+09-17 09:00:00.000  1300  1312 I ImsRegistration: [PHONE0] onRegistered: transport=LTE impu=sip:<IMPU#1>@ims.mnc001.mcc450.3gppnetwork.org
+09-17 09:00:10.000  1300  1312 D ImsPhoneCallTracker: [PHONE0] dial: isVolteEnabled=true imsRegistered=true
+09-17 09:00:10.500  1300  1312 D RILJ: [PHONE0] [0055]> DIAL clir=0
+09-17 09:00:11.500  1300  1312 D RILJ: [PHONE0] [0055]< DIAL error=NONE
+09-17 09:00:13.500  1300  1312 D ImsPhoneCallTracker: [PHONE0] call state changed: ACTIVE
+09-17 09:00:38.500  1300  1312 D ImsPhoneCallTracker: [PHONE0] call state changed: DISCONNECTED

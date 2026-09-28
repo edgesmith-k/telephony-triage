@@ -62,6 +62,7 @@ class IssueDb:
     types: list[IssueType]
     feedback: list[dict]
     jira_counts: Counter
+    jira: list[dict] = field(default_factory=list)  # 기록마다 `_type`(유형 ID), `_rel`(DB 기준 경로)
 
     def type_by_id(self, type_id: str) -> IssueType | None:
         return next((t for t in self.types if t.id == type_id), None)
@@ -114,6 +115,7 @@ def load(db_root: str | Path) -> IssueDb:
     config = load_config(root)
     types: list[IssueType] = []
     jira_counts: Counter = Counter()
+    jira_records: list[dict] = []
     for path in type_files(root, config):
         data = read_frontmatter(path)
         itype = IssueType(
@@ -138,14 +140,18 @@ def load(db_root: str | Path) -> IssueDb:
         types.append(itype)
         for jira in sorted((path.parent / "jira").glob("*.yaml")):
             record = yamlio.load(jira) or {}
+            if not isinstance(record, dict):
+                record = {}
             if record.get("cause"):
                 jira_counts[str(record["cause"])] += 1
+            jira_records.append({**record, "_type": itype.id, "_rel": jira.relative_to(root).as_posix()})
     feedback = []
     for path in sorted((root / "feedback").glob("*/*.yaml")):
         record = yamlio.load(path)
         if isinstance(record, dict):
             feedback.append(record)
-    return IssueDb(root=root, config=config, types=types, feedback=feedback, jira_counts=jira_counts)
+    return IssueDb(root=root, config=config, types=types, feedback=feedback, jira_counts=jira_counts,
+                   jira=jira_records)
 
 
 def acceptance(feedback: list[dict]) -> dict[str, tuple[int, int]]:

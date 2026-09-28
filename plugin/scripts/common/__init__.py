@@ -11,6 +11,10 @@
 - issuedb: 이슈 DB 읽기(설정·유형·Jira 건수·피드백) (Phase 3)
 - builds: `build_compare` 빌드 비교 (Phase 3)
 - dbpath: `--db` 기본값 (Phase 3, 사용자 config 연결은 Phase 6)
+- fixtures: fixture 이름 규칙·기본 기대값 (Phase 5)
+- compiled: `.cache/compiled.json` 컴파일 캐시 (Phase 5)
+- gitscope: `--changed`·`--staged`·`--ref` 범위와 index·ref 트리 꺼내기 (Phase 5)
+- versions: `GENERATOR_VERSION`, `SCHEMA_VERSION` (Phase 5)
 
 config 로드·git 헬퍼는 Phase 6에서 더한다.
 """

@@ -1,0 +1,4 @@
+09-26 09:00:00.000  1234  1244 I DNC-0: [PHONE0] onEvaluateNetworkRequests: reason=NETWORK_REQUEST_ADDED
+09-26 09:00:00.400  1234  1244 W DNC-0: [PHONE0] evaluation result: NOT_ALLOWED reasons=[SIM_NOT_READY]
+09-26 09:00:05.400  1234  1244 W DNC-0: [PHONE0] evaluation result: NOT_ALLOWED reasons=[SIM_NOT_READY]
+09-26 09:00:08.400  1234  1244 D DRM-0: [PHONE0] no retry scheduled: setup not allowed

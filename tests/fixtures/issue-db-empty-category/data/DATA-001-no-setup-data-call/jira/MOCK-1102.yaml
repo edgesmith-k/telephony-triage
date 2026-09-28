@@ -1,0 +1,10 @@
+key: MOCK-1102
+cause: DATA-001-01
+date: 2026-09-12
+occurred_on: 2026-09-11
+model: MOCK-A56
+sw: MOCKA56_U1_20260901
+android_version: "16"
+carrier: MockTel KR
+analyzed_by: mock-user1
+note: 설정을 켠 뒤 재현되지 않음을 확인 (해결책 근거)

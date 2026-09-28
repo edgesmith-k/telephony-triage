@@ -1,0 +1,158 @@
+# 이벤트 추출 규칙 (04-parser-matching.md §5.8 (2))
+#
+# - extractor 이벤트 이름에는 접두어가 없다. 백엔드 내장 판별은
+#   builtin.<category>.<이름>, 어댑터는 ext.<category>.<이름>이고 extractor는
+#   그 접두어를 만들 수 없다.
+# - 패턴은 **마스킹 이후 텍스트 기준**으로 쓴다. 원본 식별자 패턴은 db_lint가
+#   금지한다 (08-safety.md §8).
+# - id는 시그니처가 참조하므로 바꾸지 않는다.
+#
+# 아래 로그 문구는 **placeholder**다 — TODO(SITE:S9). 사내 실제 logcat으로
+# 확인하고 바꾼다 (14-site.md §14.2).
+
+extractors:
+  # --- data ---
+  - id: data-evaluation-rejected
+    added_for: DATA-001
+    added_on: 2026-09-28
+    reason: 데이터 평가 거부 사유 추출
+    tag_regex: '^DNC-\d+$'
+    patterns:
+      - 'evaluation result:\s*NOT_ALLOWED\s+reasons=\[(?P<reasons>[^\]]*)\]'
+    event: data_evaluation_rejected
+    fields: [reasons]
+
+  - id: data-evaluation-allowed
+    added_for: DATA-001
+    added_on: 2026-09-28
+    reason: 정상 동작(해결 후) 판별용
+    tag_regex: '^DNC-\d+$'
+    patterns:
+      - 'evaluation result:\s*ALLOWED'
+    event: data_evaluation_allowed
+    fields: []
+
+  - id: data-setting-changed
+    added_for: DATA-001-01
+    added_on: 2026-09-28
+    reason: 모바일 데이터 설정 변경 판별
+    tag_regex: '^DSM-\d+$'
+    patterns:
+      - 'onDataEnabledChanged:\s*enabled=(?P<enabled>true|false)(?:\s+reason=(?P<reason>\S+))?'
+    event: data_setting_changed
+    fields: [enabled, reason]
+
+  # --- call ---
+  - id: ims-dial-attempt
+    added_for: CALL-001-01
+    added_on: 2026-09-28
+    reason: VoLTE 발신 시도와 그때의 IMS 등록 상태
+    tag: ImsPhoneCallTracker
+    patterns:
+      - 'dial:\s*isVolteEnabled=(?P<volte>true|false)\s+imsRegistered=(?P<registered>true|false)'
+    event: ims_dial_attempt
+    fields: [volte, registered]
+
+  - id: call-fail-cause
+    added_for: CALL-001
+    added_on: 2026-09-28
+    reason: 통화 실패 원인 코드 추출
+    tag: RILJ
+    patterns:
+      - 'LAST_CALL_FAIL_CAUSE\s+causeCode[=:]\s*(?P<cause>\d+)'
+    event: call_fail_cause
+    fields: [cause]
+
+  - id: call-state-changed
+    added_for: CALL-001-01
+    added_on: 2026-09-28
+    reason: 통화 연결 성공(정상 동작) 판별
+    tag: ImsPhoneCallTracker
+    patterns:
+      - 'call state changed:\s*(?P<state>[A-Z_]+)'
+    event: call_state_changed
+    fields: [state]
+
+  # --- ims ---
+  - id: ims-registration-failed
+    added_for: IMS-001
+    added_on: 2026-09-28
+    reason: IMS 등록 실패 코드 추출
+    tag_regex: '^Ims(Manager|Resolver|ServiceController|Registration).*'
+    patterns:
+      - 'onRegistrationFailed:\s*code=(?P<code>\d+)(?:\s+reason=(?P<reason>\S+))?'
+    event: ims_registration_failed
+    fields: [code, reason]
+
+  - id: ims-registered
+    added_for: IMS-001
+    added_on: 2026-09-28
+    reason: IMS 등록 성공(정상 동작) 판별
+    tag_regex: '^Ims(Manager|Resolver|ServiceController|Registration).*'
+    patterns:
+      - 'onRegistered:\s*transport=(?P<transport>\S+)'
+    event: ims_registered
+    fields: [transport]
+
+  # --- network ---
+  - id: network-registration-rejected
+    added_for: NETWORK-001
+    added_on: 2026-09-28
+    reason: 망 등록 거절 코드 추출
+    tag_regex: '^(SST|ServiceStateTracker)(-\d+)?$'
+    patterns:
+      - 'registration rejected:\s*cause=(?P<cause>\d+)(?:\s+domain=(?P<domain>\S+))?'
+    event: network_registration_rejected
+    fields: [cause, domain]
+
+  - id: network-service-state
+    added_for: NETWORK-001
+    added_on: 2026-09-28
+    reason: 서비스 상태 변화 추출
+    tag_regex: '^(SST|ServiceStateTracker)(-\d+)?$'
+    patterns:
+      - 'onServiceStateChanged:\s*regState=(?P<reg_state>[A-Z_]+)'
+    event: network_service_state
+    fields: [reg_state]
+
+  # --- sim ---
+  - id: sim-state-changed
+    added_for: SIM-001
+    added_on: 2026-09-28
+    reason: SIM 상태 변화 추출
+    tag: UiccController
+    patterns:
+      - 'SIM state changed:\s*(?P<state>[A-Z_]+)'
+    event: sim_state_changed
+    fields: [state]
+
+  - id: uicc-card-status-error
+    added_for: SIM-001-01
+    added_on: 2026-09-28
+    reason: UICC 카드 상태 조회 오류 추출
+    tag: UiccController
+    patterns:
+      - 'onIccCardStatusDone:\s*error=(?P<error>[A-Z_]+)'
+    event: uicc_card_status_error
+    fields: [error]
+
+  # --- sms ---
+  - id: sms-send-failed
+    added_for: SMS-001
+    added_on: 2026-09-28
+    reason: SMS 전송 실패 결과 추출
+    tag: SmsDispatchersController
+    patterns:
+      - 'sendSms failed:\s*result=(?P<result>[A-Z_]+)'
+    event: sms_send_failed
+    fields: [result]
+
+  - id: smsc-address-missing
+    added_for: SMS-001-01
+    added_on: 2026-09-28
+    reason: SMSC 주소 미설정 판별
+    tag: SmsDispatchersController
+    patterns:
+      - 'getSmscAddress:\s*(?P<smsc>null|empty)'
+    event: smsc_address_missing
+    fields: [smsc]

@@ -1,0 +1,14 @@
+# DATA-001-03 양성 (signatures_pending 원인, tests/fixtures/issue-db-pending/).
+# DATA-001의 증상(평가 거부 + SETUP_DATA_CALL 없음)은 있지만 기존 원인(데이터 설정 OFF,
+# 로밍 OFF)의 근거는 없다. 회귀 기대값은 "DATA-001:unresolved"다 (contracts.md §fixture).
+# 로그 문구는 placeholder다 — TODO(SITE:S9)
+name: DATA-001-03
+start: "2026-09-26T09:00:00+09:00"
+default_phone: 0
+pid: 1234
+tid: 1244
+entries:
+  - {at: 0, tag: "DNC-{phone}", level: I, msg: "onEvaluateNetworkRequests: reason=NETWORK_REQUEST_ADDED"}
+  - {after: 0.4, tag: "DNC-{phone}", level: W, msg: "evaluation result: NOT_ALLOWED reasons=[SIM_NOT_READY]"}
+  - {after: 5, tag: "DNC-{phone}", level: W, msg: "evaluation result: NOT_ALLOWED reasons=[SIM_NOT_READY]"}
+  - {after: 3, tag: "DRM-{phone}", msg: "no retry scheduled: setup not allowed"}

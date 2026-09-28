@@ -20,8 +20,12 @@
 `--jira-meta` (분석 모드, 선택): `{key, occurred_at, sw, summary, description}`.
 `occurred_at`은 타임존 있는 ISO 시각, 텍스트 필드는 마스킹된 것이어야 한다.
 
+컴파일: `<db>/.cache/compiled.json`(`db_build.py`가 만든다)의 해시가 현재 이슈 DB·파서
+백엔드·외부 파서와 같으면 캐시의 시그니처를 쓰고, 다르면 메모리에서 다시 컴파일한다
+(06-collaboration.md §6.8). 출력 `cache: hit|miss|none`.
+
 출력(JSON, stdout): `{mode, candidates[], pending_causes[], types[], causes[], errors[],
-warnings[], ...}`. 후보 = `{type, cause, title, score, confidence, S, C, signature,
+warnings[], cache, ...}`. 후보 = `{type, cause, title, score, confidence, S, C, signature,
 evidence[], bonus, feedback, fix_judgement, related[]}`. 원인 미확인 후보는 `cause: null`.
 """
 
@@ -38,9 +42,10 @@ SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS))
 
 from common import builds, compat, dbpath, issuedb, site_defaults  # noqa: E402
+from common import compiled as compiled_cache  # noqa: E402
 from common.exitcodes import OK, USAGE  # noqa: E402
 from common.patterns import DEFAULT_TIMEOUT_MS  # noqa: E402
-from common.signatures import Evaluator, SignatureError, compile_list  # noqa: E402
+from common.signatures import Evaluator, SignatureError  # noqa: E402
 
 OUTPUT_SCHEMA = 1
 DEFAULT_SCORING = {
@@ -203,7 +208,24 @@ def run(args) -> dict:
     jira = _load_json(args.jira_meta, "--jira-meta") if args.jira_meta else {}
     if not isinstance(jira, dict):
         raise UsageError("--jira-meta는 JSON 객체여야 합니다.")
-    regress = bool(args.regress)
+    cache, cache_status = compiled_cache.load(db, compiled_cache.environment(args.defaults))
+    try:
+        compiled = compiled_cache.compile_signatures(db, cache)
+    except SignatureError as exc:
+        raise UsageError(f"시그니처 오류: {exc}") from exc
+    acceptance = ({k: tuple(v) for k, v in cache["acceptance"].items()} if cache is not None
+                  else issuedb.acceptance(db.feedback))
+    result = match(events_doc, db, compiled, regress=bool(args.regress), jira=jira,
+                   no_feedback_weight=args.no_feedback_weight, top=args.top, acceptance=acceptance)
+    result["cache"] = cache_status
+    return result
+
+
+def match(events_doc: dict, db: issuedb.IssueDb, compiled: dict, *, regress: bool, jira: dict | None = None,
+          no_feedback_weight: bool = False, top: int = 0, acceptance: dict | None = None) -> dict:
+    """마스킹된 이벤트 문서 하나를 이슈 DB에 매칭한다 (`db_regress`·`db_verify`가 직접 부른다).
+    `compiled`는 `common/compiled.py`의 `compile_signatures()` 결과."""
+    jira = jira or {}
     occurred = None
     if jira.get("occurred_at") and not regress:
         occurred = _parse_iso(jira["occurred_at"], "--jira-meta occurred_at")
@@ -221,9 +243,11 @@ def run(args) -> dict:
 
     scoring = _scoring(db.config)
     use_bonus = not regress
-    use_feedback = bool(scoring.get("feedback_weight")) and not regress and not args.no_feedback_weight
+    use_feedback = bool(scoring.get("feedback_weight")) and not regress and not no_feedback_weight
     min_samples = int((db.config.get("quality") or {}).get("min_samples", 5))
-    stats = issuedb.acceptance(db.feedback) if use_feedback else {}
+    if acceptance is None:
+        acceptance = issuedb.acceptance(db.feedback)
+    stats = acceptance if use_feedback else {}
     timeout_ms = int((db.config.get("matcher") or {}).get("pattern_timeout_ms", DEFAULT_TIMEOUT_MS))
     rules = db.config.get("build_compare") or []
 
@@ -231,19 +255,6 @@ def run(args) -> dict:
     backend = events_doc.get("backend") or {}
     if backend.get("name"):
         warnings += compat.check_parser_backend(db.config, backend["name"], str(backend.get("version")))
-
-    # 시그니처 컴파일 (메모리). 규칙 오류는 이슈 DB 오류라 종료 코드 2.
-    try:
-        compiled = {}
-        for itype in db.types:
-            if not itype.active:
-                continue
-            compiled[itype.id] = compile_list(itype.raw.get("symptom_signatures"), itype.id)
-            for cause in itype.causes:
-                if cause.active and not cause.pending:
-                    compiled[cause.id] = compile_list(cause.raw.get("signatures"), cause.id)
-    except SignatureError as exc:
-        raise UsageError(f"시그니처 오류: {exc}") from exc
 
     errors: list[dict] = []
     types_out, causes_out, candidates, pending = [], [], [], []
@@ -284,12 +295,12 @@ def run(args) -> dict:
     return {
         "schema": OUTPUT_SCHEMA,
         "mode": "regress" if regress else "analysis",
-        "db": str(root),
+        "db": str(db.root),
         "range": {"start": lo.isoformat() if lo else None, "end": hi.isoformat() if hi else None},
         "bonus": use_bonus,
         "feedback_weight": use_feedback,
         "jira": {k: jira.get(k) for k in ("key", "occurred_at", "sw") if k in jira},
-        "candidates": candidates[: args.top] if args.top else candidates,
+        "candidates": candidates[:top] if top else candidates,
         "pending_causes": pending,
         "types": types_out,
         "causes": causes_out,
@@ -358,7 +369,7 @@ def main(argv: list[str] | None = None) -> int:
     except (AttributeError, ValueError):
         pass
     args = build_parser().parse_args(argv)
-    site_defaults.load_or_exit(args.plugin_root)
+    args.defaults = site_defaults.load_or_exit(args.plugin_root)
     try:
         result = run(args)
     except UsageError as exc:

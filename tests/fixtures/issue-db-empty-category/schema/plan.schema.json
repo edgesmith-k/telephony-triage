@@ -1,0 +1,481 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "작업 계획 plan.json (contracts.md §작업 계획)",
+  "description": "<work_dir>/<작업 키>/plan.json. 로컬 전용이고 커밋하지 않는다. operations는 적용 순서가 의미를 가지는 순서 있는 배열이다. op별 적용 규칙·drift 판정·temp_id 치환 규칙의 원본은 contracts.md §작업 계획이며, 여기서는 형식만 검사한다. signatures_pending 허용(source: record만), 새 유형의 증상 시그니처 필수 같은 교차 검사는 db_add.py apply와 db_lint.py가 한다.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["source", "schema_version", "started_at", "base_sha", "operations"],
+  "properties": {
+    "source": {
+      "description": "계획을 만든 흐름 (9개). 마이그레이션·새 카테고리·사후 정리는 계획이 아니라 직접 편집 브랜치다 (contracts.md §브랜치).",
+      "enum": ["analyze", "record", "import", "fix-submitted", "verify-fix", "validate-cause", "review", "move"]
+    },
+    "schema_version": {"type": "integer", "minimum": 1},
+    "started_at": {"$ref": "#/$defs/timestamp"},
+    "base_sha": {"$ref": "#/$defs/sha"},
+    "jira": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["key", "origin"],
+          "properties": {
+            "key": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9]*-[0-9]+$"},
+            "origin": {
+              "description": "mcp: Jira MCP로 읽음, file: --jira-file. 기록 파일에는 쓰지 않는다.",
+              "enum": ["mcp", "file"]
+            },
+            "model": {"type": "string"},
+            "sw": {"type": "string"},
+            "android_version": {"type": "string", "pattern": "^[0-9]+$"},
+            "carrier": {"type": "string"},
+            "date": {"$ref": "#/$defs/isoDate"},
+            "occurred_on": {"$ref": "#/$defs/isoDate"},
+            "note": {"type": "string", "maxLength": 300}
+          }
+        }
+      ]
+    },
+    "operations": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/operation"}},
+    "extra_samples": {
+      "description": "R6 추가 표본 (05-verification.md §5.12 (1))",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "expect"],
+        "properties": {
+          "path": {"type": "string", "minLength": 1},
+          "expect": {"enum": ["match", "nomatch"]}
+        }
+      }
+    },
+    "feedback": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["date", "suggested", "decision", "final"],
+          "properties": {
+            "date": {"$ref": "#/$defs/timestamp"},
+            "suggested": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["cause", "signature", "score"],
+                "properties": {
+                  "cause": {"$ref": "#/$defs/causeId"},
+                  "signature": {"type": "string", "minLength": 1},
+                  "score": {"type": "number", "minimum": 0, "maximum": 1}
+                }
+              }
+            },
+            "decision": {"enum": ["accepted", "chose-other", "new-cause", "new-type", "unresolved", "manual"]},
+            "final": {"$ref": "#/$defs/causeRefOrUnresolved"}
+          }
+        }
+      ]
+    },
+    "commit_message": {"type": "string", "minLength": 1},
+    "pr": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["number", "branch", "head_sha"],
+      "properties": {
+        "number": {"type": ["integer", "null"], "minimum": 1},
+        "branch": {"type": "string", "minLength": 1},
+        "head_sha": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/sha"}]}
+      }
+    },
+    "included_pending": {
+      "description": "이 PR에 함께 올린 pending 피드백 목록 (03-issue-db.md §5.4 (3))",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["file", "pr"],
+        "properties": {
+          "file": {"type": "string", "minLength": 1},
+          "pr": {"type": ["integer", "null"], "minimum": 1}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "sha": {"type": "string", "pattern": "^[0-9a-f]{7,40}$"},
+    "isoDate": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
+    "timestamp": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}(:[0-9]{2})?([+-][0-9]{2}:?[0-9]{2}|Z)$"},
+    "typeId": {"type": "string", "pattern": "^[A-Z][A-Z0-9]*-[0-9]{3}$"},
+    "causeId": {"type": "string", "pattern": "^[A-Z][A-Z0-9]*-[0-9]{3}-[0-9]{2}$"},
+    "tempCause": {"type": "string", "pattern": "^NEW-CAUSE-[0-9]+$"},
+    "tempType": {"type": "string", "pattern": "^NEW-TYPE-[0-9]+$"},
+    "typeRef": {"oneOf": [{"$ref": "#/$defs/typeId"}, {"$ref": "#/$defs/tempType"}]},
+    "causeRef": {"oneOf": [{"$ref": "#/$defs/causeId"}, {"$ref": "#/$defs/tempCause"}]},
+    "causeRefOrUnresolved": {
+      "oneOf": [{"$ref": "#/$defs/causeId"}, {"$ref": "#/$defs/tempCause"}, {"const": "unresolved"}]
+    },
+    "jiraKey": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9]*-[0-9]+$"},
+    "signature": {
+      "$comment": "형식은 type.schema.json의 signature와 같다 (04-parser-matching.md §5.11 (1)).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "window_sec"],
+      "anyOf": [{"required": ["must_match"]}, {"required": ["must_event"]}],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$"},
+        "must_match": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+        "must_event": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["event"],
+            "properties": {
+              "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$"},
+              "event": {"type": "string", "pattern": "^((builtin|ext)\\.[a-z][a-z0-9_]*\\.)?[a-z][a-z0-9_]*$"},
+              "fields": {"type": "object", "additionalProperties": {"type": "string"}, "minProperties": 1}
+            }
+          }
+        },
+        "must_not_match": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "window_sec": {"type": "integer", "minimum": 1},
+        "same_phone": {"type": "boolean"},
+        "sequence": {"type": "array", "minItems": 2, "items": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$"}, "uniqueItems": true}
+      }
+    },
+    "causeBody": {
+      "$comment": "new-cause / new-type first_cause가 만드는 원인. 나머지 필드는 templates/cause.yaml 기본값으로 채운다.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "description", "signatures", "resolution", "resolution_type"],
+      "properties": {
+        "title": {"type": "string", "minLength": 1, "maxLength": 80},
+        "description": {"type": "string", "minLength": 1},
+        "signatures": {"type": "array", "items": {"$ref": "#/$defs/signature"}},
+        "signatures_pending": {"const": true},
+        "recovery_signatures": {"type": "array", "items": {"$ref": "#/$defs/signature"}},
+        "scenario_signatures": {"type": "array", "items": {"$ref": "#/$defs/signature"}},
+        "resolution": {"type": "string", "minLength": 1},
+        "resolution_type": {"enum": ["user-setting", "carrier-config", "framework-bug", "vendor-ril", "modem", "network", "hw"]},
+        "resolution_verification": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status"],
+          "properties": {
+            "status": {"const": "unverified"},
+            "method": {"type": ["string", "null"]}
+          }
+        },
+        "fix": {
+          "$comment": "새 원인은 fixed로 시작할 수 없다 (03-issue-db.md §5.9).",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status"],
+          "properties": {
+            "status": {"enum": ["open", "fix-submitted", "wont-fix", "not-a-bug"]},
+            "ref": {"type": ["string", "null"]},
+            "fixed_in": {"$ref": "#/$defs/fixedIn"}
+          }
+        },
+        "related": {"type": "array", "items": {"$ref": "#/$defs/causeId"}, "uniqueItems": true},
+        "cp_evidence": {"type": ["string", "null"]},
+        "android_versions": {"type": "array", "items": {"type": "string", "pattern": "^[0-9]+$"}, "uniqueItems": true},
+        "code_refs": {"type": "array", "items": {"$ref": "#/$defs/codeRef"}}
+      }
+    },
+    "codeRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ref", "symbol"],
+      "properties": {
+        "ref": {"type": "string", "pattern": "^[a-z][a-z0-9_]*:[^/\\\\][^:]*$"},
+        "symbol": {"type": "string", "minLength": 1},
+        "android_versions": {"type": "array", "items": {"type": "string", "pattern": "^[0-9]+$"}, "uniqueItems": true}
+      }
+    },
+    "fixedIn": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["branch"],
+        "properties": {"branch": {"type": "string", "minLength": 1}, "build": {"type": "string", "minLength": 1}}
+      }
+    },
+    "verificationRecord": {
+      "$comment": "verify-fix / verify-resolution op가 기록하는 검증 내용. 번호 할당 전이라 fixture는 계획 기준 경로다.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "build": {"type": "string", "minLength": 1},
+        "date": {"$ref": "#/$defs/isoDate"},
+        "by": {"type": "string", "minLength": 1},
+        "jira": {"$ref": "#/$defs/jiraKey"},
+        "fixture": {"type": "string", "minLength": 1},
+        "scenario_evidence": {"type": "string", "minLength": 1},
+        "method": {"type": "string", "minLength": 1},
+        "evidence": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+        "note": {"type": "string"}
+      }
+    },
+    "operation": {
+      "oneOf": [
+        {
+          "$comment": "append: 기존 원인에 Jira 기록만 추가",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["op", "cause"],
+          "properties": {"op": {"const": "append"}, "cause": {"$ref": "#/$defs/causeRef"}}
+        },
+        {
+          "$comment": "unresolved: 증상은 맞지만 원인 미확정",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["op", "type"],
+          "properties": {"op": {"const": "unresolved"}, "type": {"$ref": "#/$defs/typeRef"}}
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["op", "temp_id", "type", "cause", "body"],
+          "properties": {
+            "op": {"const": "new-cause"},
+            "temp_id": {"$ref": "#/$defs/tempCause"},
+            "type": {"$ref": "#/$defs/typeRef"},
+            "cause": {"$ref": "#/$defs/causeBody"},
+            "body": {"type": "string", "minLength": 1}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["op", "temp_id", "category", "type", "first_cause", "body", "dir_slug"],
+          "properties": {
+            "op": {"const": "new-type"},
+            "temp_id": {"$ref": "#/$defs/tempType"},
+            "category": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"},
+            "type": {
+              "$comment": "symptom_signatures는 모든 source에서 필수다 (contracts.md §작업 계획 op 표).",
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["title", "summary", "symptom_signatures"],
+              "properties": {
+                "title": {"type": "string", "minLength": 1, "maxLength": 120},
+                "summary": {"type": "string", "minLength": 1},
+                "symptom_signatures": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/signature"}},
+                "secondary_categories": {"type": "array", "items": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"}},
+                "tags": {"type": "array", "items": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$"}}
+              }
+            },
+            "first_cause": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["temp_id", "cause", "body"],
+              "properties": {
+                "temp_id": {"$ref": "#/$defs/tempCause"},
+                "cause": {"$ref": "#/$defs/causeBody"},
+                "body": {"type": "string", "minLength": 1}
+              }
+            },
+            "body": {"type": "string", "minLength": 1},
+            "dir_slug": {"type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["op", "jira", "from", "to"],
+          "properties": {
+            "op": {"const": "reclassify"},
+            "jira": {"$ref": "#/$defs/jiraKey"},
+            "from": {"$ref": "#/$defs/causeRefOrUnresolved"},
+            "to": {"$ref": "#/$defs/causeRef"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["op", "cause", "fix"],
+          "properties": {
+            "op": {"const": "update-fix"},
+            "cause": {"$ref": "#/$defs/causeRef"},
+            "fix": {
+              "$comment": "fixed로 바꾸는 것은 verify-fix op만 할 수 있다.",
+              "type": "object",
+              "additionalProperties": false,
+              "minProperties": 1,
+              "properties": {
+                "status": {"enum": ["open", "fix-submitted", "wont-fix", "not-a-bug"]},
+                "ref": {"type": ["string", "null"]},
+                "fixed_in": {"$ref": "#/$defs/fixedIn"}
+              }
+            },
+            "history": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "result": {"enum": ["failed", "reverted"]},
+                "build": {"type": "string", "minLength": 1},
+                "jira": {"$ref": "#/$defs/jiraKey"},
+                "fixture": {"type": "string", "minLength": 1},
+                "note": {"type": "string"}
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["op", "a", "b"],
+          "properties": {
+            "op": {"const": "add-related"},
+            "a": {"$ref": "#/$defs/causeRef"},
+            "b": {"$ref": "#/$defs/causeRef"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["op", "cause", "code_ref"],
+          "properties": {
+            "op": {"const": "add-code-ref"},
+            "cause": {"$ref": "#/$defs/causeRef"},
+            "code_ref": {"$ref": "#/$defs/codeRef"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["op", "file", "rule"],
+          "properties": {
+            "op": {"const": "add-parser-rule"},
+            "file": {"enum": ["tags.yaml", "ril.yaml", "extractors.yaml"]},
+            "section": {"enum": ["tags", "requests", "unsolicited", "extractors"]},
+            "rule": {"type": "object", "minProperties": 1}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["op", "file", "key", "rule"],
+          "properties": {
+            "op": {"const": "update-parser-rule"},
+            "file": {"enum": ["tags.yaml", "ril.yaml", "extractors.yaml"]},
+            "section": {"enum": ["tags", "requests", "unsolicited", "extractors"]},
+            "key": {"type": "string", "minLength": 1},
+            "rule": {"type": "object", "minProperties": 1}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["op", "owner", "kind", "signature"],
+          "properties": {
+            "op": {"const": "update-signature"},
+            "owner": {"oneOf": [{"$ref": "#/$defs/typeRef"}, {"$ref": "#/$defs/causeRef"}]},
+            "kind": {"enum": ["symptom", "cause", "recovery", "scenario"]},
+            "sig_id": {
+              "$comment": "있으면 교체, 없으면 추가",
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9-]*$"
+            },
+            "signature": {"$ref": "#/$defs/signature"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["op", "cause", "resolution"],
+          "properties": {
+            "op": {"const": "set-resolution"},
+            "cause": {"$ref": "#/$defs/causeRef"},
+            "resolution": {"type": "string", "minLength": 1},
+            "resolution_type": {"enum": ["user-setting", "carrier-config", "framework-bug", "vendor-ril", "modem", "network", "hw"]}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["op", "cause", "verification"],
+          "properties": {
+            "op": {"const": "verify-resolution"},
+            "cause": {"$ref": "#/$defs/causeRef"},
+            "verification": {
+              "allOf": [{"$ref": "#/$defs/verificationRecord"}],
+              "required": ["evidence", "by", "date"]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["op", "cause", "result", "verification"],
+          "properties": {
+            "op": {"const": "verify-fix"},
+            "cause": {"$ref": "#/$defs/causeRef"},
+            "result": {"enum": ["passed", "failed", "partial"]},
+            "verification": {
+              "allOf": [{"$ref": "#/$defs/verificationRecord"}],
+              "required": ["build", "date", "by", "fixture"]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["op", "id", "status"],
+          "properties": {
+            "op": {"const": "set-status"},
+            "id": {"oneOf": [{"$ref": "#/$defs/typeId"}, {"$ref": "#/$defs/causeId"}]},
+            "status": {
+              "type": "string",
+              "pattern": "^(active|deprecated|merged-into:[A-Z][A-Z0-9]*-[0-9]{3}(-[0-9]{2})?)$"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["op", "for", "kind", "path"],
+          "properties": {
+            "op": {"const": "add-fixture"},
+            "for": {
+              "$comment": "negative는 유형 ID, 그 밖은 원인 ID 또는 temp_id",
+              "oneOf": [{"$ref": "#/$defs/typeRef"}, {"$ref": "#/$defs/causeRef"}]
+            },
+            "kind": {"enum": ["positive", "negative", "fixed", "resolved", "recurrence", "extra"]},
+            "path": {"type": "string", "minLength": 1},
+            "build": {"type": "string", "minLength": 1},
+            "expect": {"type": "object", "minProperties": 1},
+            "occurred_at": {"$ref": "#/$defs/timestamp"}
+          },
+          "allOf": [
+            {
+              "$comment": "fixed·recurrence는 build가 파일명에 들어간다 (contracts.md §fixture)",
+              "if": {"properties": {"kind": {"enum": ["fixed", "recurrence"]}}, "required": ["kind"]},
+              "then": {"required": ["build"]}
+            }
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["op", "fixture", "cause"],
+          "properties": {
+            "op": {"const": "allow-cause"},
+            "fixture": {
+              "$comment": "유형 디렉토리 기준 경로 또는 같은 계획의 add-fixture 대상",
+              "type": "string",
+              "minLength": 1
+            },
+            "cause": {"$ref": "#/$defs/causeRef"}
+          }
+        }
+      ]
+    }
+  }
+}

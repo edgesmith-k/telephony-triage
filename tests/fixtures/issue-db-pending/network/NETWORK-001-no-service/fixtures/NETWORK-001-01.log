@@ -1,0 +1,5 @@
+09-24 10:11:00.000  1234  1260 I SST-0: [PHONE0] onServiceStateChanged: regState=NOT_REGISTERED cellId=<CELL#1>
+09-24 10:11:02.000  1234  1260 W SST-0: [PHONE0] registration rejected: cause=13 domain=PS
+09-24 10:11:12.000  1234  1260 W SST-0: [PHONE0] registration rejected: cause=13 domain=CS
+09-24 10:11:32.000  1234  1260 I SST-0: [PHONE0] onServiceStateChanged: regState=NOT_REGISTERED cellId=<CELL#2>
+09-24 10:11:34.000  1234  1260 W SST-0: [PHONE0] registration rejected: cause=13 domain=PS

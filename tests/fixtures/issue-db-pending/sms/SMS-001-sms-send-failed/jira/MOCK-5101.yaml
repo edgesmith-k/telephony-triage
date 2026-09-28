@@ -1,0 +1,10 @@
+key: MOCK-5101
+cause: SMS-001-01
+date: 2026-09-26
+occurred_on: 2026-09-26
+model: MOCK-A56
+sw: MOCKA56_U1_20260920
+android_version: "16"
+carrier: MockTel KR
+analyzed_by: mock-user1
+note: SMSC 주소가 비어 있는 SIM 프로필에서 발신 실패

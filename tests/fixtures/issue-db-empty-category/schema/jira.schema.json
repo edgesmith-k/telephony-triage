@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "jira/<JIRA-KEY>.yaml (03-issue-db.md §5.4 (2))",
+  "description": "Jira 한 건 = 파일 하나. 저장하는 것은 아래 구조화 필드와 note뿐이다. Jira 요약·설명·코멘트 원문은 저장하지 않는다 (08-safety.md §8.1). key가 issue-db.config.yaml의 jira_key_regex에 맞는지, 파일명과 같은지, 전체 중복이 없는지는 db_lint.py가 검사한다.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["key", "cause", "date", "model", "sw", "android_version", "analyzed_by"],
+  "properties": {
+    "key": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9]*-[0-9]+$"},
+    "cause": {
+      "description": "원인 ID 또는 unresolved (원인 미확정)",
+      "type": "string",
+      "pattern": "^([A-Z][A-Z0-9]*-[0-9]{3}-[0-9]{2}|unresolved)$"
+    },
+    "date": {"$ref": "#/$defs/isoDate"},
+    "occurred_on": {"$ref": "#/$defs/isoDate"},
+    "model": {"type": "string", "minLength": 1},
+    "sw": {"type": "string", "minLength": 1},
+    "android_version": {"type": "string", "pattern": "^[0-9]+$"},
+    "carrier": {"type": "string", "minLength": 1},
+    "analyzed_by": {"type": "string", "minLength": 1},
+    "note": {
+      "description": "사용자가 확인한 한 줄. 마스킹을 거친 값이고 db_lint가 원본 식별자 패턴을 검사한다.",
+      "type": "string",
+      "maxLength": 300
+    }
+  },
+  "$defs": {
+    "isoDate": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"}
+  }
+}

@@ -1,0 +1,8 @@
+#!/bin/sh
+# pre-push 스텁 (11-phases.md Phase 1). 경고만 내고 통과한다.
+# Phase 8에서 다음을 검사하도록 교체한다 (08-safety.md §9):
+#   (a) 대상 ref가 refs/heads/<base_branch>면 거부
+#   (b) TT_PUBLISH_TOKEN이 없거나 <work_dir>/<작업 키>/state.json의
+#       approved_hash와 다르면 거부
+echo "[telephony-triage] pre-push 스텁: 아직 검사를 하지 않습니다 (Phase 8에서 교체)." >&2
+exit 0

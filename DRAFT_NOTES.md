@@ -8,8 +8,8 @@
 ## 진행 상태
 
 - 모드: **사외 초안** (`.local-draft` 있음)
-- 완료 Phase: **D0, 1** (2026-09-28), **2, 3, 4** (2026-09-29)
-- 다음 Phase: **5** (생성기, 린터, 회귀)
+- 완료 Phase: **D0, 1** (2026-09-28), **2, 3, 4, 5** (2026-09-29)
+- 다음 Phase: **6** (설정, 코드 경로, setup)
 - Phase 2~6은 사용자가 미리 승인해서 Phase마다 확인을 기다리지 않고 진행한다(각 Phase 끝에 커밋·push). 완료 기준 점검 결과는 Phase별 절에 적는다.
 - 기준 문서 세트: `telephony-triage-docs-v11` (`CHANGES.md` 참고)
 - 레포 루트: 이 파일이 있는 디렉토리 (`CLAUDE.md`, `docs/design/`, `plugin/`,
@@ -305,6 +305,63 @@
 - **`mask_pii --events`**: `events` 목록이 있으면 각 `msg`·`fields`, 없으면(예: Jira 응답) 모든 문자열 값을 마스킹하고 최상위에 `masked: true`.
 - **`cut`**: 앵커는 `--around`면 ±`--seconds`의 줄, `--evidence`면 매처 출력 1위 후보 근거의 `(ts, tag)`와 같은 줄. 앵커마다 같은 파일에서 앞뒤 `--context` 줄을 합치고, `--max-lines`를 넘으면 context를 줄인다(앵커만으로 넘으면 종료 코드 2). 여러 파일은 시각 순으로 합친다. `--rules`를 주면 그 이슈 DB의 `allow_patterns`를 쓴다. 출력 `{out, lines, anchors, context, masked: true, replacements}`.
 
+### Phase 5에서 만든 것
+
+| 산출물 | 경로 |
+|---|---|
+| 생성기 | `plugin/scripts/db_build.py` (README·카테고리 README·STATS·parser-rules CHANGELOG·캐시, `--write`/`--verify [--staged]`/`--preview`/`--cache-only`, `generator_version` 검사) |
+| 린터 | `plugin/scripts/db_lint.py` (`--all`/`--ref`/`--changed`/`--staged`, `--residual`, 검사 코드 목록은 스크립트 머리말) |
+| 회귀 | `plugin/scripts/db_regress.py` (`--all`/`--changed`/`--staged`, 항상 회귀·검증 모드, 실패 원인·`allow-cause` 초안, `--events-diff`는 Phase 10 자리) |
+| fixture 이름·기대값 | `plugin/scripts/common/fixtures.py` |
+| 컴파일 캐시 | `plugin/scripts/common/compiled.py` (소스·백엔드·외부 파서 해시, 매처가 hit/miss 판단) |
+| git 범위 | `plugin/scripts/common/gitscope.py` (`--changed`·`--staged`·`--ref`, index·ref 트리 꺼내기) |
+| 버전 상수 | `plugin/scripts/common/versions.py` (`GENERATOR_VERSION = 1`, `SCHEMA_VERSION = 1`) |
+| 변형 이슈 DB | `tests/fixtures/issue-db-lint-errors/`, `issue-db-empty-category/`, `issue-db-pending/` — `tests/helpers/make_variant_dbs.py [--check]`가 샘플에서 만든다 |
+| 새 시나리오 | `tests/mocks/scenarios/data-001-03-pending.yaml` (pending 원인 양성 fixture) |
+| 테스트 공용 헬퍼 | `tests/helpers/runner.py` (플러그인 루트·스크립트 실행·DB 복사·임시 git 레포) |
+| Phase 5 테스트 | `tests/test_db_build.py`(10), `tests/test_db_lint.py`(9), `tests/test_db_regress.py`(8) |
+
+### Phase 5 완료 기준 확인 결과
+
+`python3 -m pytest tests` 전체 **121개 통과**.
+
+| 완료 기준 | 확인 | 어디서 |
+|---|---|---|
+| 샘플 README가 §5.6 구조, 6개 카테고리 모두 | ✅ | `test_readme_structure_matches_design` |
+| 0건 카테고리: `issue-db-empty-category/`와 `make_db_skeleton.py` 결과(6개 모두 "아직 등록된 이슈가 없습니다") | ✅ | `test_empty_categories_are_listed`, `test_skeleton_shows_all_categories_empty` |
+| 두 번 실행하면 바이트 단위로 같음 | ✅ (LF·끝 개행 1개 포함) | `test_write_is_deterministic_and_verify` |
+| `--preview`·`--cache-only`는 워킹 트리를 바꾸지 않음 | ✅ | `test_preview_and_cache_only_leave_worktree_alone` |
+| 캐시 해시가 다르면 매처가 재컴파일 | ✅ (hit이면 캐시 시그니처를 쓴다는 것도 확인) | `test_matcher_uses_cache_and_recompiles_when_hash_differs` |
+| 린터가 `issue-db-lint-*`의 일부러 넣은 오류를 모두 잡음 | ✅ 24개 (코드·파일 쌍) | `test_injected_errors_are_all_caught` (`EXPECTED`), 옛 ID 잔존은 `test_residual_ids`, synthetic은 `test_synthetic_fixtures_warn_when_not_allowed` |
+| `.resolved.1.log`·`.extra.1.log`·다른 유형 원인의 `also_allowed`는 통과 | ✅ 샘플 오류·경고 0 | `test_sample_db_is_clean`, `test_skeleton_is_clean` |
+| `decision: manual` 피드백이 수락률에 들어가지 않음 | ✅ | `test_stats_excludes_manual_feedback`, `test_manual_feedback_is_not_counted`(Phase 3) |
+| `date`는 최근이지만 `occurred_on`이 오래된 Jira가 최근 30일·급증에 들어가지 않음 | ✅ (반대 경우도 확인) | `test_stats_use_occurred_on_for_recent_counts` |
+| 회귀가 샘플 fixture 전부 통과 | ✅ 20개 | `test_all_sample_fixtures_pass` |
+| 음성 fixture를 깨면 어느 유형의 어떤 시그니처가 잡았는지 출력 | ✅ | `test_broken_negative_fixture_reports_type_and_signature` |
+| `signatures_pending` 원인의 양성 fixture가 `"<유형 ID>:unresolved"`로 포함 | ✅ (`issue-db-pending/`) | `test_pending_cause_fixture_expects_unresolved` |
+| (그 밖) `--verify --staged`, `generator_version` 불일치 종료 코드 2, 새 원인 fixed 금지(base 범위), `--changed`·`--staged` 범위와 parser-rules 변경 시 전체 확장, 백엔드 불일치·`--no-external` 종료 코드 2, 시간 상한 초과는 실패, `allow-cause` 초안 | ✅ | 각 테스트 파일 |
+
+### Phase 5에서 바꾼 이전 산출물
+
+| 대상 | 무엇을 | 왜 |
+|---|---|---|
+| `plugin/scripts/common/masking.py` | 번호·IP·문맥 숫자 규칙의 뒤쪽 경계를 `(?![\w.])` → `(?!\w\|\.\w)`로 | **마스킹 누락 수정**: 문장 끝 마침표 뒤의 값(`연락처 +82-10-1111-2222.`)이 마스킹되지 않았다. 린터 오류 주입 시험에서 드러났다. 버전 번호(`1.2.3.4.5`)·빌드명은 여전히 그대로다. 기존 fixture는 바뀌지 않았다 |
+| `plugin/scripts/match_signatures.py` | 매칭 본체를 `match()`로 분리(`db_regress`·`db_verify`가 직접 부른다), 캐시(`cache: hit\|miss\|none`)를 쓴다 | 06 §6.8, 04 §5.11 (3) |
+| `plugin/scripts/common/issuedb.py` | Jira 기록 자체도 보관(`IssueDb.jira`) | 생성기·통계 |
+| `tools/list_site_todos.py` | 변형 이슈 DB 3개를 건너뜀 | 샘플 표시의 사본이라 같은 항목이 네 번 세어졌다 |
+
+### Phase 5 구현에서 정한 세부 (계약 보완 후보)
+
+- **README**(§5.6 예시에 없는 표기): 원인 셀에 `CP 근거`(cp_evidence 있음), `시그니처 없음`(pending) 표시. "최근 추가 (N건)"의 N은 실제 표시 건수(최대 10). 보관 절은 `| ID | 제목 | 상태 | 새 ID |` 표, 없으면 "없음". Jira가 없으면 "아직 기록된 Jira가 없습니다.", 기준일은 `-`. 카테고리 README는 증상 시그니처 요약(이벤트·패턴·window·sequence·슬롯 무관), `Android`(빈 목록 = 전 버전)·`코드`(`ref` + `symbol` + 버전) 열을 더한다.
+- **STATS 급증**: 최근 30일 ≥ 2건이고 최근 30일 ≥ (그 앞 90일 건수 / 3) × `surge_ratio`. 발생일은 `occurred_on`(없으면 `date`), 기준일은 가장 최근 Jira `date`. "최근 N일"은 기준일 포함 N일(경과 일수 0~N-1).
+- **STATS 그 밖**: 기여 현황의 월은 피드백 `date`의 월, "분석"은 `decision`이 manual이 아닌 것. 기여자 = Jira `analyzed_by` ∪ 피드백 `by`. 품질 점검에 "fixed 전환 불가(흔적 시그니처 없음)"도 넣었다(§6.6 리뷰 항목과 같은 기준).
+- **캐시**: `.cache/compiled.json` = `{format, generator_version, hash, environment{backend, external}, signatures{소유자 ID: 원문}, causes{fix, related, status, pending}, extractors, acceptance}`. 해시 입력은 설정·`type.md`·`jira/`·`feedback/`·`parser-rules/*.yaml`(CRLF→LF)과 백엔드 이름·버전, site-defaults의 외부 파서 `{adapter, version}`.
+- **린터 수준**: 오류 = 스키마·ID·Jira·related·code_refs·fix.ref·fixture 이름·원본 식별자·정규식 안전·sequence·빈 시그니처·builtin/ext 참조·근거·새 원인 fixed·also_allowed·병합 대상·parser-rules·옛 ID. 경고 = 금지 동의어, 제목 길이(유형 30자·원인 20자), 양성 fixture 없음, pending, 특정 마스킹 번호 고정, synthetic.
+- **린터 휴리스틱(보수적·정적)**: 원본 식별자 패턴 = `\d{N}`/`[0-9]{N}`(N≥10), 10자리 이상 숫자, `01[016789]…`·`+82` 전화번호, 이스케이프를 푼 리터럴에 마스킹 규칙이 걸리는 값. 정규식 안전 = 반복 안의 반복(max>1), 반복 안에서 첫 요소가 같은 선택지, 역참조. **한계**: `(\d|\w)+`처럼 서로 다른 문자 집합이 겹치는 선택지는 못 잡는다 — 실행 시간 상한이 대신 막는다.
+- **린터 범위**: 전역 검사(중복 등)는 전체 트리를 보고 바뀐 파일이 관련된 결과만 낸다. `--staged`는 index를, `--ref`는 그 커밋을 임시 디렉토리로 꺼내 검사한다. "새 원인 fixed 금지"의 base는 `--changed`면 merge-base, `--staged`면 HEAD(없으면 검사 안 함).
+- **회귀**: fixture는 `parse --full --mask --tz UTC`(연도 기본값)로 파싱한다(분석 범위가 파일 전체라 시각 기준은 결과에 영향이 없다). 범위: 바뀐 유형 + 그 원인의 `related` 원인의 유형 + 같은 카테고리 유형, `parser-rules/`·`schema/`·`issue-db.config.yaml`이 바뀌면 전체. 결과 `{summary{scope, expanded, total, passed, failed}, results[{fixture, kind, expect, status, S, C, reasons[], allow_cause_drafts[]}]}`. `allow-cause` 초안은 `{op, fixture: fixtures/<이름>, cause, type_dir}`이고 양성·recurrence·extra에만 만든다. 파서·매처의 `errors`(시간 상한)는 실패.
+- **파서 백엔드 비교**: 회귀는 site-defaults의 백엔드(`parser.backend`)와 버전을 이슈 DB `parser_backend`와 비교한다. 외부 파서는 site-defaults에 설정된 것을 "사용 가능"으로 본다(어댑터 로드 실패는 분석 때 경고로 드러난다).
+
 ## 개발 환경과 설계의 차이 (중요)
 
 설계는 실행 환경을 **Ubuntu(Linux)** 로 못박는다 (`01-architecture.md §3`,
@@ -422,7 +479,7 @@ Windows 전용 보정은 커밋하지 않는다.**
 
 ## 사내 확인 목록 (`TODO(SITE:S<n>)`)
 
-`python3 tools/list_site_todos.py`로 갱신한다(Windows 콘솔에서는 `PYTHONIOENCODING=utf-8`). 2026-09-29(Phase 4 끝) 기준 **52곳**. Phase 4에서 S13(마스킹 오탐·누락, 셀 문맥의 `cid`)이 생겼다:
+`python3 tools/list_site_todos.py`로 갱신한다(Windows 콘솔에서는 `PYTHONIOENCODING=utf-8`). 변형 이슈 DB(`issue-db-lint-errors` 등)는 샘플의 사본이라 세지 않는다. 2026-09-29(Phase 5 끝) 기준 **53곳**(Phase 5에서 pending 시나리오 1곳 추가):
 
 ### S1 (1곳)
 - `tests/mocks/skills/data-analyzer/SKILL.md:63` — 스킬 이름과 호출 방식 확인.
@@ -440,7 +497,7 @@ Windows 전용 보정은 커밋하지 않는다.**
 - `plugin/scripts/parser_backends/logcat.py:33` — 사내 로그(NITZ 전·재부팅 직후)로 기준을 확인한다.
 - `plugin/site-defaults.example.yaml:54` — logcat 시각 타임존
 
-### S9 (21곳)
+### S9 (22곳)
 - `plugin/scripts/parser_backends/ril.py:11` — . 벤더 RIL 태그는 TODO(SITE:S10).
 - `tests/fixtures/issue-db-sample/data/DATA-001-no-setup-data-call/type.md:119` — .
 - `tests/fixtures/issue-db-sample/parser-rules/extractors.yaml:10` — . 사내 실제 logcat으로
@@ -456,6 +513,7 @@ Windows 전용 보정은 커밋하지 않는다.**
 - `tests/mocks/scenarios/call-drop.yaml:2`
 - `tests/mocks/scenarios/data-001-01-positive.yaml:2`
 - `tests/mocks/scenarios/data-001-02-roaming.yaml:2`
+- `tests/mocks/scenarios/data-001-03-pending.yaml:4`
 - `tests/mocks/scenarios/data-setup-error.yaml:2`
 - `tests/mocks/scenarios/dual-sim-ril.yaml:7` — TODO(SITE:S20)
 - `tests/mocks/scenarios/network-001-01-positive.yaml:2`
@@ -516,7 +574,7 @@ Windows 전용 보정은 커밋하지 않는다.**
 
 | 항목 | 상태 |
 |---|---|
-| 전체 테스트 통과 | 🟡 D0·Phase 1~4 범위 (`pytest tests` 94개). `db_regress`·eval은 Phase 5·13 뒤 |
+| 전체 테스트 통과 | 🟡 D0·Phase 1~5 범위 (`pytest tests` 121개, 샘플 `db_regress --all` 20개 통과). eval은 Phase 13 뒤 |
 | 사내 정보 없음 | ✅ 사내 자료를 쓰지 않았다 |
 | `plugin/site-defaults.yaml` 없고 example만 있음 | ✅ `test_plugin_root_helper_and_missing_site_defaults`가 검사 |
 | `SITE_PATHS`의 다른 경로가 비어 있음 | ✅ `test_site_paths_are_absent_in_draft`가 검사 |
@@ -530,13 +588,13 @@ Windows 전용 보정은 커밋하지 않는다.**
 
 1. 새 세션을 열어 **빈 플러그인 실험**을 돌리고 위 "사외 Claude Code 실험
    결과" 표를 채운다 (`tests/mocks/plugin-probe/README.md`). 아직 미확인이다.
-2. (선택, 사내) **S-0 선행 확인**이 가능하다: `parse_logcat.py`(reference 백엔드),
-   `match_signatures.py`, `mask_pii.py`를 사내로 가져가 실제 로그 3~5개로 돌려 본다
-   (`15-local-draft.md §15.5` S-0). 사외에서는 기다리지 않는다.
-3. **Phase 5** (생성기, 린터, 회귀): `docs/design/11-phases.md` Phase 5 절과 그 "읽을 문서"를
-   읽고 `db_build.py`, `db_lint.py`, `db_regress.py`, 캐시(`.cache/compiled.json`)를 만든다.
-   - 이미 있는 부품: `common/issuedb.py`(유형·Jira·피드백 읽기), `common/yamlio.py`(날짜 정규화),
-     `common/signatures.py`(컴파일), `common/parser_rules.py`(규칙 로드·검증),
-     `common/compat.py`(백엔드·외부 파서 고정 비교), `common/masking.py`(`find`로 원본 식별자 검사).
-   - `db_regress`는 fixture를 `parse --mask`로 파싱하고 매처 `--regress`로 판정한다. 매처 출력의
-     `errors`(정규식 시간 상한 초과)는 실패로 본다(04 §5.8 (4)). 백엔드·외부 파서 불일치면 종료 코드 2.
+2. (선택, 사내) **S-0 선행 확인**: `parse_logcat.py`, `match_signatures.py`, `mask_pii.py`를 사내로
+   가져가 실제 로그 3~5개로 돌려 본다 (`15-local-draft.md §15.5` S-0).
+3. **Phase 6** (설정, 코드 경로, setup): `docs/design/11-phases.md` Phase 6 절과 그 "읽을 문서"를 읽고
+   `config.py`(check·set·sync-scripts-path·show), `code_roots.py`, `db_pr.py lock`·`snapshot --job`,
+   `commands/setup.md`를 만든다. 사외 범위(모의 환경)까지만 한다.
+   - 이미 있는 부품: `common/site_defaults.py`(종료 코드 2), `common/compat.py`(백엔드·외부 파서 비교),
+     `common/versions.py`(`GENERATOR_VERSION`, `SCHEMA_VERSION`), `common/dbpath.py`(③ 사용자 config
+     `issue_db.path` 연결 자리 `user_config_path`), `common/gitscope.py`.
+   - `config.py check`의 쓰기 불가 사유 코드: `parser-backend-mismatch`, `external-parser-mismatch`
+     (`contracts.md §기존 자산 연결 계약`).
