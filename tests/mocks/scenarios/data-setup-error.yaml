@@ -1,0 +1,16 @@
+# 파서 fixture: SETUP_DATA_CALL 에러 응답 (11-phases.md Phase 2).
+# 로그 문구와 에러 이름은 placeholder다 — TODO(SITE:S9)
+name: data-setup-error
+start: "2026-09-21T10:00:00+09:00"
+default_phone: 0
+pid: 1234
+tid: 1244
+entries:
+  - {at: 0, tag: "DSM-{phone}", msg: "isDataEnabled=true"}
+  - {after: 0.5, tag: "DNC-{phone}", level: I, msg: "evaluation result: ALLOWED reasons=[]"}
+  - {after: 0.3, ril_request: SETUP_DATA_CALL, serial: 51, args: "apn=default"}
+  - {after: 1.1, ril_response: SETUP_DATA_CALL, serial: 51, result: "error=MISSING_UNKNOWN_APN"}
+  - {after: 0.2, tag: "DN-default-2", level: W, msg: "onSetupResponse: fail cause=MISSING_UNKNOWN_APN"}
+  - {after: 0.1, tag: "DRM-{phone}", msg: "retry scheduled in 5000ms"}
+  - {after: 5, ril_request: SETUP_DATA_CALL, serial: 52, args: "apn=default"}
+  - {after: 1.0, ril_response: SETUP_DATA_CALL, serial: 52, result: "error=MISSING_UNKNOWN_APN"}

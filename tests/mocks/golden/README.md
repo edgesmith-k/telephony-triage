@@ -6,5 +6,6 @@
 - 실제 골든(포팅 전 기존 파서 출력)은 **사내 전용**이고 `tests/golden/`에 둔다
   (SITE_PATHS. 사외 레포에서는 비어 있어야 한다 — 반입 체크리스트 §15.4).
 - 이 디렉토리의 파일은 모의 site 백엔드(`tests/mocks/parser_backends/site/`)의
-  출력이다. 백엔드를 고치면 `python3 tests/test_golden.py --update`로 갱신한다.
+  출력이다. Phase 2부터 모의 백엔드는 `parser_backends/base.py` 인터페이스를 따르고
+  reference 백엔드의 공통 처리를 상속한다(시각은 UTC, `ril` 필드 포함). 백엔드를 고치면 `python3 tests/test_golden.py --update`로 갱신한다.
 - 사내에서 진짜 포팅을 할 때는 골든을 **사용자 승인 없이 갱신하지 않는다.**

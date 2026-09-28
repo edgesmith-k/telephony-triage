@@ -1,0 +1,14 @@
+# 파서 fixture: 연결된 VoLTE 통화가 끊김 (11-phases.md Phase 2).
+# 로그 문구와 원인 코드는 placeholder다 — TODO(SITE:S9)
+name: call-drop
+start: "2026-09-19T20:00:00+09:00"
+default_phone: 0
+pid: 1300
+tid: 1312
+entries:
+  - {at: 0, tag: ImsPhoneCallTracker, msg: "dial: isVolteEnabled=true imsRegistered=true"}
+  - {after: 2, tag: ImsPhoneCallTracker, level: I, msg: "call state changed: ACTIVE"}
+  - {after: 95, ril_unsol: UNSOL_RESPONSE_CALL_STATE_CHANGED}
+  - {after: 0.2, tag: ImsPhoneCallTracker, level: W, msg: "call state changed: DISCONNECTED"}
+  - {after: 0.1, ril_request: LAST_CALL_FAIL_CAUSE, serial: 90}
+  - {after: 0.3, ril_response: LAST_CALL_FAIL_CAUSE, serial: 90, result: "causeCode=65"}

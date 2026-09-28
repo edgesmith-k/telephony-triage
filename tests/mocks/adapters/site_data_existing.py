@@ -30,10 +30,13 @@ external_parsers:
   data: {adapter: site_data_existing, min_version: "0.0.1-mock"}
 ```
 
-어댑터 계약 (Phase 2에서 인터페이스 파일로 고정한다)
+어댑터 계약: `plugin/scripts/adapters/base.py` (Phase 2에서 고정)
     ADAPTER_NAME: str
     VERSION: str
     convert(raw, meta) -> events[]
+
+모의 기존 파서는 `legacy_data_parser.py`다(시각을 logcat 스탬프 그대로 낸다.
+`parse_logcat.py`가 `--tz`/`--year`로 UTC로 바꾼다).
 """
 
 from __future__ import annotations
@@ -58,11 +61,10 @@ def convert(raw: dict, meta: dict | None = None) -> list[dict]:
     """
     events: list[dict] = []
     for record in raw.get("records", []):
+        # 매핑표에 없는 판별은 버리지 않고 이름 없는 줄(event: None)로 남긴다.
+        # merge 모드에서는 parse_logcat.py가 버리고, replace 모드에서는 줄 레코드가 된다.
+        # 사내에서 매핑표를 채울 때 unmapped_kinds()로 목록을 보고한다.
         name = EVENT_MAP.get(record.get("kind"))
-        if name is None:
-            # 매핑표에 없는 판별은 버리지 않고 이름 없는 줄로 남긴다.
-            # 사내에서 매핑표를 채울 때 목록으로 보고한다.
-            name = None
         slot = record.get("slot")
         events.append(
             {

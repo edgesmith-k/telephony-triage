@@ -1,0 +1,145 @@
+{
+ "coverage": {
+  "first_ts": "2026-09-26T04:00:00.000Z",
+  "last_ts": "2026-09-26T04:00:16.000Z",
+  "window_in_range": true,
+  "clock_anomalies": []
+ },
+ "warnings": [],
+ "events": [
+  {
+   "ts": "2026-09-26T04:00:00.000Z",
+   "pid": 1500,
+   "tid": 1510,
+   "level": "I",
+   "tag": "SmsDispatchersController",
+   "msg": "[PHONE0] sendText: dest=<MSISDN#1> parts=1",
+   "phone_id": 0,
+   "category_hint": "sms",
+   "ril": null,
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  },
+  {
+   "ts": "2026-09-26T04:00:04.000Z",
+   "pid": 1500,
+   "tid": 1510,
+   "level": "W",
+   "tag": "SmsDispatchersController",
+   "msg": "[PHONE0] getSmscAddress: null",
+   "phone_id": 0,
+   "category_hint": "sms",
+   "ril": null,
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  },
+  {
+   "ts": "2026-09-26T04:00:04.000Z",
+   "pid": 1500,
+   "tid": 1510,
+   "level": "W",
+   "tag": "SmsDispatchersController",
+   "msg": "[PHONE0] getSmscAddress: null",
+   "phone_id": 0,
+   "category_hint": "sms",
+   "ril": null,
+   "event": "smsc_address_missing",
+   "fields": {
+    "smsc": "null"
+   },
+   "source": "rules"
+  },
+  {
+   "ts": "2026-09-26T04:00:05.000Z",
+   "pid": 1500,
+   "tid": 1510,
+   "level": "W",
+   "tag": "SmsDispatchersController",
+   "msg": "[PHONE0] sendSms failed: result=GENERIC_FAILURE",
+   "phone_id": 0,
+   "category_hint": "sms",
+   "ril": null,
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  },
+  {
+   "ts": "2026-09-26T04:00:05.000Z",
+   "pid": 1500,
+   "tid": 1510,
+   "level": "W",
+   "tag": "SmsDispatchersController",
+   "msg": "[PHONE0] sendSms failed: result=GENERIC_FAILURE",
+   "phone_id": 0,
+   "category_hint": "sms",
+   "ril": null,
+   "event": "sms_send_failed",
+   "fields": {
+    "result": "GENERIC_FAILURE"
+   },
+   "source": "rules"
+  },
+  {
+   "ts": "2026-09-26T04:00:15.000Z",
+   "pid": 1500,
+   "tid": 1510,
+   "level": "W",
+   "tag": "SmsDispatchersController",
+   "msg": "[PHONE0] getSmscAddress: null",
+   "phone_id": 0,
+   "category_hint": "sms",
+   "ril": null,
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  },
+  {
+   "ts": "2026-09-26T04:00:15.000Z",
+   "pid": 1500,
+   "tid": 1510,
+   "level": "W",
+   "tag": "SmsDispatchersController",
+   "msg": "[PHONE0] getSmscAddress: null",
+   "phone_id": 0,
+   "category_hint": "sms",
+   "ril": null,
+   "event": "smsc_address_missing",
+   "fields": {
+    "smsc": "null"
+   },
+   "source": "rules"
+  },
+  {
+   "ts": "2026-09-26T04:00:16.000Z",
+   "pid": 1500,
+   "tid": 1510,
+   "level": "W",
+   "tag": "SmsDispatchersController",
+   "msg": "[PHONE0] sendSms failed: result=GENERIC_FAILURE",
+   "phone_id": 0,
+   "category_hint": "sms",
+   "ril": null,
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  },
+  {
+   "ts": "2026-09-26T04:00:16.000Z",
+   "pid": 1500,
+   "tid": 1510,
+   "level": "W",
+   "tag": "SmsDispatchersController",
+   "msg": "[PHONE0] sendSms failed: result=GENERIC_FAILURE",
+   "phone_id": 0,
+   "category_hint": "sms",
+   "ril": null,
+   "event": "sms_send_failed",
+   "fields": {
+    "result": "GENERIC_FAILURE"
+   },
+   "source": "rules"
+  }
+ ]
+}

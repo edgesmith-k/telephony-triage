@@ -1,0 +1,106 @@
+{
+ "coverage": {
+  "first_ts": "2026-09-24T00:59:54.000Z",
+  "last_ts": "2026-09-24T02:59:57.000Z",
+  "window_in_range": true,
+  "clock_anomalies": [
+   {
+    "ts": "2026-09-24T00:59:54.000Z",
+    "kind": "backward",
+    "delta_sec": -7.0
+   },
+   {
+    "ts": "2026-09-24T02:59:56.000Z",
+    "kind": "jump",
+    "delta_sec": 7201.0
+   }
+  ]
+ },
+ "warnings": [],
+ "events": [
+  {
+   "ts": "2026-09-24T00:59:54.000Z",
+   "pid": 1234,
+   "tid": 1244,
+   "level": "D",
+   "tag": "DNC-0",
+   "msg": "[PHONE0] 시각이 뒤로 감",
+   "phone_id": 0,
+   "category_hint": "data",
+   "ril": null,
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  },
+  {
+   "ts": "2026-09-24T00:59:55.000Z",
+   "pid": 1234,
+   "tid": 1244,
+   "level": "D",
+   "tag": "DNC-0",
+   "msg": "[PHONE0] 뒤로 간 뒤 1",
+   "phone_id": 0,
+   "category_hint": "data",
+   "ril": null,
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  },
+  {
+   "ts": "2026-09-24T01:00:00.000Z",
+   "pid": 1234,
+   "tid": 1244,
+   "level": "D",
+   "tag": "DNC-0",
+   "msg": "[PHONE0] 정상 구간 1",
+   "phone_id": 0,
+   "category_hint": "data",
+   "ril": null,
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  },
+  {
+   "ts": "2026-09-24T01:00:01.000Z",
+   "pid": 1234,
+   "tid": 1244,
+   "level": "D",
+   "tag": "DNC-0",
+   "msg": "[PHONE0] 정상 구간 2",
+   "phone_id": 0,
+   "category_hint": "data",
+   "ril": null,
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  },
+  {
+   "ts": "2026-09-24T02:59:56.000Z",
+   "pid": 1234,
+   "tid": 1244,
+   "level": "D",
+   "tag": "DNC-0",
+   "msg": "[PHONE0] 앞으로 뜀",
+   "phone_id": 0,
+   "category_hint": "data",
+   "ril": null,
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  },
+  {
+   "ts": "2026-09-24T02:59:57.000Z",
+   "pid": 1234,
+   "tid": 1244,
+   "level": "D",
+   "tag": "DNC-0",
+   "msg": "[PHONE0] 뜬 뒤 1",
+   "phone_id": 0,
+   "category_hint": "data",
+   "ril": null,
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  }
+ ]
+}

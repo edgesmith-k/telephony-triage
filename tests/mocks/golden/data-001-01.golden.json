@@ -1,7 +1,7 @@
 {
   "backend": {
     "name": "site",
-    "version": "0.0.1-mock"
+    "version": "0.0.2-mock"
   },
   "builtin_events": [
     "builtin.data.setup_not_allowed",
@@ -9,117 +9,181 @@
   ],
   "events": [
     {
-      "ts": "2026-09-20T14:30:00+09:00",
+      "ts": "2026-09-20T05:30:00.000Z",
+      "pid": 1234,
+      "tid": 1244,
+      "level": "D",
       "tag": "DCM-0",
       "msg": "[PHONE0] carrier config loaded: carrierId=<CARRIER>",
-      "pid": 1234,
-      "tid": 1244,
-      "level": "D",
       "phone_id": 0,
-      "category_hint": "data",
-      "source": "backend:site",
+      "category_hint": null,
+      "ril": null,
       "event": null,
-      "fields": {}
+      "fields": {},
+      "source": "backend:site"
     },
     {
-      "ts": "2026-09-20T14:30:03+09:00",
-      "tag": "DSM-0",
-      "msg": "[PHONE0] onDataEnabledChanged: enabled=false reason=USER",
+      "ts": "2026-09-20T05:30:03.000Z",
       "pid": 1234,
       "tid": 1244,
       "level": "D",
+      "tag": "DSM-0",
+      "msg": "[PHONE0] onDataEnabledChanged: enabled=false reason=USER",
+      "phone_id": 0,
+      "category_hint": null,
+      "ril": null,
+      "event": null,
+      "fields": {},
+      "source": "backend:site"
+    },
+    {
+      "ts": "2026-09-20T05:30:03.000Z",
+      "pid": 1234,
+      "tid": 1244,
+      "level": "D",
+      "tag": "DSM-0",
+      "msg": "[PHONE0] onDataEnabledChanged: enabled=false reason=USER",
       "phone_id": 0,
       "category_hint": "data",
-      "source": "backend:site",
+      "ril": null,
       "event": "builtin.data.user_data_disabled",
       "fields": {
         "enabled": "false",
         "reason": "USER"
-      }
+      },
+      "source": "backend:site"
     },
     {
-      "ts": "2026-09-20T14:30:03.400000+09:00",
-      "tag": "DSM-0",
-      "msg": "[PHONE0] isDataEnabled=false (user setting off)",
+      "ts": "2026-09-20T05:30:03.400Z",
       "pid": 1234,
       "tid": 1244,
       "level": "D",
+      "tag": "DSM-0",
+      "msg": "[PHONE0] isDataEnabled=false (user setting off)",
       "phone_id": 0,
-      "category_hint": "data",
-      "source": "backend:site",
+      "category_hint": null,
+      "ril": null,
       "event": null,
-      "fields": {}
+      "fields": {},
+      "source": "backend:site"
     },
     {
-      "ts": "2026-09-20T14:30:04.600000+09:00",
-      "tag": "DNC-0",
-      "msg": "[PHONE0] onEvaluateNetworkRequests: reason=DATA_ENABLED_CHANGED",
+      "ts": "2026-09-20T05:30:04.600Z",
       "pid": 1234,
       "tid": 1244,
       "level": "I",
+      "tag": "DNC-0",
+      "msg": "[PHONE0] onEvaluateNetworkRequests: reason=DATA_ENABLED_CHANGED",
       "phone_id": 0,
-      "category_hint": "data",
-      "source": "backend:site",
+      "category_hint": null,
+      "ril": null,
       "event": null,
-      "fields": {}
+      "fields": {},
+      "source": "backend:site"
     },
     {
-      "ts": "2026-09-20T14:30:04.900000+09:00",
-      "tag": "DNC-0",
-      "msg": "[PHONE0] evaluation result: NOT_ALLOWED reasons=[DATA_DISABLED]",
+      "ts": "2026-09-20T05:30:04.900Z",
       "pid": 1234,
       "tid": 1244,
       "level": "W",
-      "phone_id": 0,
-      "category_hint": "data",
-      "source": "backend:site",
-      "event": "builtin.data.setup_not_allowed",
-      "fields": {
-        "reasons": "DATA_DISABLED"
-      }
-    },
-    {
-      "ts": "2026-09-20T14:30:06.900000+09:00",
       "tag": "DNC-0",
       "msg": "[PHONE0] evaluation result: NOT_ALLOWED reasons=[DATA_DISABLED]",
+      "phone_id": 0,
+      "category_hint": null,
+      "ril": null,
+      "event": null,
+      "fields": {},
+      "source": "backend:site"
+    },
+    {
+      "ts": "2026-09-20T05:30:04.900Z",
       "pid": 1234,
       "tid": 1244,
       "level": "W",
+      "tag": "DNC-0",
+      "msg": "[PHONE0] evaluation result: NOT_ALLOWED reasons=[DATA_DISABLED]",
       "phone_id": 0,
       "category_hint": "data",
-      "source": "backend:site",
+      "ril": null,
       "event": "builtin.data.setup_not_allowed",
       "fields": {
         "reasons": "DATA_DISABLED"
-      }
+      },
+      "source": "backend:site"
     },
     {
-      "ts": "2026-09-20T14:30:14.900000+09:00",
-      "tag": "DRM-0",
-      "msg": "[PHONE0] no retry scheduled: setup not allowed",
+      "ts": "2026-09-20T05:30:06.900Z",
+      "pid": 1234,
+      "tid": 1244,
+      "level": "W",
+      "tag": "DNC-0",
+      "msg": "[PHONE0] evaluation result: NOT_ALLOWED reasons=[DATA_DISABLED]",
+      "phone_id": 0,
+      "category_hint": null,
+      "ril": null,
+      "event": null,
+      "fields": {},
+      "source": "backend:site"
+    },
+    {
+      "ts": "2026-09-20T05:30:06.900Z",
+      "pid": 1234,
+      "tid": 1244,
+      "level": "W",
+      "tag": "DNC-0",
+      "msg": "[PHONE0] evaluation result: NOT_ALLOWED reasons=[DATA_DISABLED]",
+      "phone_id": 0,
+      "category_hint": "data",
+      "ril": null,
+      "event": "builtin.data.setup_not_allowed",
+      "fields": {
+        "reasons": "DATA_DISABLED"
+      },
+      "source": "backend:site"
+    },
+    {
+      "ts": "2026-09-20T05:30:14.900Z",
       "pid": 1234,
       "tid": 1244,
       "level": "D",
+      "tag": "DRM-0",
+      "msg": "[PHONE0] no retry scheduled: setup not allowed",
       "phone_id": 0,
-      "category_hint": "data",
-      "source": "backend:site",
+      "category_hint": null,
+      "ril": null,
       "event": null,
-      "fields": {}
+      "fields": {},
+      "source": "backend:site"
     },
     {
-      "ts": "2026-09-20T14:30:29.900000+09:00",
-      "tag": "DNC-0",
-      "msg": "[PHONE0] evaluation result: NOT_ALLOWED reasons=[DATA_DISABLED]",
+      "ts": "2026-09-20T05:30:29.900Z",
       "pid": 1234,
       "tid": 1244,
       "level": "W",
+      "tag": "DNC-0",
+      "msg": "[PHONE0] evaluation result: NOT_ALLOWED reasons=[DATA_DISABLED]",
+      "phone_id": 0,
+      "category_hint": null,
+      "ril": null,
+      "event": null,
+      "fields": {},
+      "source": "backend:site"
+    },
+    {
+      "ts": "2026-09-20T05:30:29.900Z",
+      "pid": 1234,
+      "tid": 1244,
+      "level": "W",
+      "tag": "DNC-0",
+      "msg": "[PHONE0] evaluation result: NOT_ALLOWED reasons=[DATA_DISABLED]",
       "phone_id": 0,
       "category_hint": "data",
-      "source": "backend:site",
+      "ril": null,
       "event": "builtin.data.setup_not_allowed",
       "fields": {
         "reasons": "DATA_DISABLED"
-      }
+      },
+      "source": "backend:site"
     }
   ],
   "masked_builtin_events": [

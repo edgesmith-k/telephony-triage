@@ -1,0 +1,13 @@
+# 파서 fixture: SIM 없음 (11-phases.md Phase 2). 슬롯 1.
+# 로그 문구와 RIL 결과 형식은 placeholder다 — TODO(SITE:S9)
+name: sim-absent
+start: "2026-09-25T08:00:00+09:00"
+default_phone: 1
+pid: 1400
+tid: 1410
+entries:
+  - {at: 0, ril_unsol: UNSOL_SIM_STATUS_CHANGED}
+  - {after: 0.2, ril_request: GET_SIM_STATUS, serial: 21}
+  - {after: 0.3, ril_response: GET_SIM_STATUS, serial: 21, result: "cardState=ABSENT"}
+  - {after: 0.1, tag: UiccController, level: I, msg: "SIM state changed: ABSENT"}
+  - {after: 0.5, tag: SubscriptionManagerService, msg: "slot inactive: no card"}

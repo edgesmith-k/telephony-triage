@@ -1,0 +1,181 @@
+{
+ "coverage": {
+  "first_ts": "2026-09-19T11:00:00.000Z",
+  "last_ts": "2026-09-19T11:01:37.600Z",
+  "window_in_range": true,
+  "clock_anomalies": []
+ },
+ "warnings": [],
+ "events": [
+  {
+   "ts": "2026-09-19T11:00:00.000Z",
+   "pid": 1300,
+   "tid": 1312,
+   "level": "D",
+   "tag": "ImsPhoneCallTracker",
+   "msg": "[PHONE0] dial: isVolteEnabled=true imsRegistered=true",
+   "phone_id": 0,
+   "category_hint": "call",
+   "ril": null,
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  },
+  {
+   "ts": "2026-09-19T11:00:00.000Z",
+   "pid": 1300,
+   "tid": 1312,
+   "level": "D",
+   "tag": "ImsPhoneCallTracker",
+   "msg": "[PHONE0] dial: isVolteEnabled=true imsRegistered=true",
+   "phone_id": 0,
+   "category_hint": "call",
+   "ril": null,
+   "event": "ims_dial_attempt",
+   "fields": {
+    "volte": "true",
+    "registered": "true"
+   },
+   "source": "rules"
+  },
+  {
+   "ts": "2026-09-19T11:00:02.000Z",
+   "pid": 1300,
+   "tid": 1312,
+   "level": "I",
+   "tag": "ImsPhoneCallTracker",
+   "msg": "[PHONE0] call state changed: ACTIVE",
+   "phone_id": 0,
+   "category_hint": "call",
+   "ril": null,
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  },
+  {
+   "ts": "2026-09-19T11:00:02.000Z",
+   "pid": 1300,
+   "tid": 1312,
+   "level": "I",
+   "tag": "ImsPhoneCallTracker",
+   "msg": "[PHONE0] call state changed: ACTIVE",
+   "phone_id": 0,
+   "category_hint": "call",
+   "ril": null,
+   "event": "call_state_changed",
+   "fields": {
+    "state": "ACTIVE"
+   },
+   "source": "rules"
+  },
+  {
+   "ts": "2026-09-19T11:01:37.000Z",
+   "pid": 1300,
+   "tid": 1312,
+   "level": "D",
+   "tag": "RILJ",
+   "msg": "[PHONE0] [UNSL]< UNSOL_RESPONSE_CALL_STATE_CHANGED",
+   "phone_id": 0,
+   "category_hint": "call",
+   "ril": {
+    "serial": null,
+    "dir": "unsol",
+    "request": "UNSOL_RESPONSE_CALL_STATE_CHANGED",
+    "error": null,
+    "paired_ts": null,
+    "latency_ms": null
+   },
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  },
+  {
+   "ts": "2026-09-19T11:01:37.200Z",
+   "pid": 1300,
+   "tid": 1312,
+   "level": "W",
+   "tag": "ImsPhoneCallTracker",
+   "msg": "[PHONE0] call state changed: DISCONNECTED",
+   "phone_id": 0,
+   "category_hint": "call",
+   "ril": null,
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  },
+  {
+   "ts": "2026-09-19T11:01:37.200Z",
+   "pid": 1300,
+   "tid": 1312,
+   "level": "W",
+   "tag": "ImsPhoneCallTracker",
+   "msg": "[PHONE0] call state changed: DISCONNECTED",
+   "phone_id": 0,
+   "category_hint": "call",
+   "ril": null,
+   "event": "call_state_changed",
+   "fields": {
+    "state": "DISCONNECTED"
+   },
+   "source": "rules"
+  },
+  {
+   "ts": "2026-09-19T11:01:37.300Z",
+   "pid": 1300,
+   "tid": 1312,
+   "level": "D",
+   "tag": "RILJ",
+   "msg": "[PHONE0] [0090]> LAST_CALL_FAIL_CAUSE",
+   "phone_id": 0,
+   "category_hint": "call",
+   "ril": {
+    "serial": 90,
+    "dir": "req",
+    "request": "LAST_CALL_FAIL_CAUSE",
+    "error": null,
+    "paired_ts": "2026-09-19T11:01:37.600Z",
+    "latency_ms": 300
+   },
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  },
+  {
+   "ts": "2026-09-19T11:01:37.600Z",
+   "pid": 1300,
+   "tid": 1312,
+   "level": "D",
+   "tag": "RILJ",
+   "msg": "[PHONE0] [0090]< LAST_CALL_FAIL_CAUSE causeCode=65",
+   "phone_id": 0,
+   "category_hint": "call",
+   "ril": {
+    "serial": 90,
+    "dir": "resp",
+    "request": "LAST_CALL_FAIL_CAUSE",
+    "error": "NONE",
+    "paired_ts": "2026-09-19T11:01:37.300Z",
+    "latency_ms": 300
+   },
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  },
+  {
+   "ts": "2026-09-19T11:01:37.600Z",
+   "pid": 1300,
+   "tid": 1312,
+   "level": "D",
+   "tag": "RILJ",
+   "msg": "[PHONE0] [0090]< LAST_CALL_FAIL_CAUSE causeCode=65",
+   "phone_id": 0,
+   "category_hint": "call",
+   "ril": null,
+   "event": "call_fail_cause",
+   "fields": {
+    "cause": "65"
+   },
+   "source": "rules"
+  }
+ ]
+}

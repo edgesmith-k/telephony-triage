@@ -1,0 +1,127 @@
+{
+ "coverage": {
+  "first_ts": "2026-09-21T23:00:00.000Z",
+  "last_ts": "2026-09-21T23:00:18.500Z",
+  "window_in_range": true,
+  "clock_anomalies": []
+ },
+ "warnings": [],
+ "events": [
+  {
+   "ts": "2026-09-21T23:00:00.000Z",
+   "pid": 1234,
+   "tid": 1250,
+   "level": "D",
+   "tag": "SST-1",
+   "msg": "[PHONE1] onRoamingOn: roaming=true",
+   "phone_id": 1,
+   "category_hint": "network",
+   "ril": null,
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  },
+  {
+   "ts": "2026-09-21T23:00:02.000Z",
+   "pid": 1234,
+   "tid": 1250,
+   "level": "D",
+   "tag": "DSM-1",
+   "msg": "[PHONE1] isDataRoamingEnabled=false",
+   "phone_id": 1,
+   "category_hint": "data",
+   "ril": null,
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  },
+  {
+   "ts": "2026-09-21T23:00:03.000Z",
+   "pid": 1234,
+   "tid": 1250,
+   "level": "I",
+   "tag": "DNC-1",
+   "msg": "[PHONE1] onEvaluateNetworkRequests: reason=ROAMING_STATE_CHANGED",
+   "phone_id": 1,
+   "category_hint": "data",
+   "ril": null,
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  },
+  {
+   "ts": "2026-09-21T23:00:03.500Z",
+   "pid": 1234,
+   "tid": 1250,
+   "level": "W",
+   "tag": "DNC-1",
+   "msg": "[PHONE1] evaluation result: NOT_ALLOWED reasons=[ROAMING_DISABLED]",
+   "phone_id": 1,
+   "category_hint": "data",
+   "ril": null,
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  },
+  {
+   "ts": "2026-09-21T23:00:03.500Z",
+   "pid": 1234,
+   "tid": 1250,
+   "level": "W",
+   "tag": "DNC-1",
+   "msg": "[PHONE1] evaluation result: NOT_ALLOWED reasons=[ROAMING_DISABLED]",
+   "phone_id": 1,
+   "category_hint": "data",
+   "ril": null,
+   "event": "data_evaluation_rejected",
+   "fields": {
+    "reasons": "ROAMING_DISABLED"
+   },
+   "source": "rules"
+  },
+  {
+   "ts": "2026-09-21T23:00:13.500Z",
+   "pid": 1234,
+   "tid": 1250,
+   "level": "W",
+   "tag": "DNC-1",
+   "msg": "[PHONE1] evaluation result: NOT_ALLOWED reasons=[ROAMING_DISABLED]",
+   "phone_id": 1,
+   "category_hint": "data",
+   "ril": null,
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  },
+  {
+   "ts": "2026-09-21T23:00:13.500Z",
+   "pid": 1234,
+   "tid": 1250,
+   "level": "W",
+   "tag": "DNC-1",
+   "msg": "[PHONE1] evaluation result: NOT_ALLOWED reasons=[ROAMING_DISABLED]",
+   "phone_id": 1,
+   "category_hint": "data",
+   "ril": null,
+   "event": "data_evaluation_rejected",
+   "fields": {
+    "reasons": "ROAMING_DISABLED"
+   },
+   "source": "rules"
+  },
+  {
+   "ts": "2026-09-21T23:00:18.500Z",
+   "pid": 1234,
+   "tid": 1250,
+   "level": "D",
+   "tag": "DRM-1",
+   "msg": "[PHONE1] no retry scheduled: setup not allowed",
+   "phone_id": 1,
+   "category_hint": "data",
+   "ril": null,
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  }
+ ]
+}

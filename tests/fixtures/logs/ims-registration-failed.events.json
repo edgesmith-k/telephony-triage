@@ -1,0 +1,115 @@
+{
+ "coverage": {
+  "first_ts": "2026-09-27T00:30:00.000Z",
+  "last_ts": "2026-09-27T00:30:37.000Z",
+  "window_in_range": true,
+  "clock_anomalies": []
+ },
+ "warnings": [],
+ "events": [
+  {
+   "ts": "2026-09-27T00:30:00.000Z",
+   "pid": 1600,
+   "tid": 1610,
+   "level": "D",
+   "tag": "ImsResolver",
+   "msg": "[PHONE0] bound to mock ImsService",
+   "phone_id": 0,
+   "category_hint": "ims",
+   "ril": null,
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  },
+  {
+   "ts": "2026-09-27T00:30:03.000Z",
+   "pid": 1600,
+   "tid": 1610,
+   "level": "D",
+   "tag": "ImsManager",
+   "msg": "[PHONE0] register: impu=sip:<IMPU#1>@ims.mnc001.mcc450.3gppnetwork.org",
+   "phone_id": 0,
+   "category_hint": "ims",
+   "ril": null,
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  },
+  {
+   "ts": "2026-09-27T00:30:05.000Z",
+   "pid": 1600,
+   "tid": 1610,
+   "level": "W",
+   "tag": "ImsRegistration",
+   "msg": "[PHONE0] onRegistrationFailed: code=403 reason=FORBIDDEN",
+   "phone_id": 0,
+   "category_hint": "ims",
+   "ril": null,
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  },
+  {
+   "ts": "2026-09-27T00:30:05.000Z",
+   "pid": 1600,
+   "tid": 1610,
+   "level": "W",
+   "tag": "ImsRegistration",
+   "msg": "[PHONE0] onRegistrationFailed: code=403 reason=FORBIDDEN",
+   "phone_id": 0,
+   "category_hint": "ims",
+   "ril": null,
+   "event": "ims_registration_failed",
+   "fields": {
+    "code": "403",
+    "reason": "FORBIDDEN"
+   },
+   "source": "rules"
+  },
+  {
+   "ts": "2026-09-27T00:30:35.000Z",
+   "pid": 1600,
+   "tid": 1610,
+   "level": "D",
+   "tag": "ImsManager",
+   "msg": "[PHONE0] register: impu=sip:<IMPU#1>@ims.mnc001.mcc450.3gppnetwork.org",
+   "phone_id": 0,
+   "category_hint": "ims",
+   "ril": null,
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  },
+  {
+   "ts": "2026-09-27T00:30:37.000Z",
+   "pid": 1600,
+   "tid": 1610,
+   "level": "W",
+   "tag": "ImsRegistration",
+   "msg": "[PHONE0] onRegistrationFailed: code=403 reason=FORBIDDEN",
+   "phone_id": 0,
+   "category_hint": "ims",
+   "ril": null,
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  },
+  {
+   "ts": "2026-09-27T00:30:37.000Z",
+   "pid": 1600,
+   "tid": 1610,
+   "level": "W",
+   "tag": "ImsRegistration",
+   "msg": "[PHONE0] onRegistrationFailed: code=403 reason=FORBIDDEN",
+   "phone_id": 0,
+   "category_hint": "ims",
+   "ril": null,
+   "event": "ims_registration_failed",
+   "fields": {
+    "code": "403",
+    "reason": "FORBIDDEN"
+   },
+   "source": "rules"
+  }
+ ]
+}

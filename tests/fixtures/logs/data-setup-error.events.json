@@ -1,0 +1,201 @@
+{
+ "coverage": {
+  "first_ts": "2026-09-21T01:00:00.000Z",
+  "last_ts": "2026-09-21T01:00:08.200Z",
+  "window_in_range": true,
+  "clock_anomalies": []
+ },
+ "warnings": [],
+ "events": [
+  {
+   "ts": "2026-09-21T01:00:00.000Z",
+   "pid": 1234,
+   "tid": 1244,
+   "level": "D",
+   "tag": "DSM-0",
+   "msg": "[PHONE0] isDataEnabled=true",
+   "phone_id": 0,
+   "category_hint": "data",
+   "ril": null,
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  },
+  {
+   "ts": "2026-09-21T01:00:00.500Z",
+   "pid": 1234,
+   "tid": 1244,
+   "level": "I",
+   "tag": "DNC-0",
+   "msg": "[PHONE0] evaluation result: ALLOWED reasons=[]",
+   "phone_id": 0,
+   "category_hint": "data",
+   "ril": null,
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  },
+  {
+   "ts": "2026-09-21T01:00:00.500Z",
+   "pid": 1234,
+   "tid": 1244,
+   "level": "I",
+   "tag": "DNC-0",
+   "msg": "[PHONE0] evaluation result: ALLOWED reasons=[]",
+   "phone_id": 0,
+   "category_hint": "data",
+   "ril": null,
+   "event": "data_evaluation_allowed",
+   "fields": {},
+   "source": "rules"
+  },
+  {
+   "ts": "2026-09-21T01:00:00.800Z",
+   "pid": 1234,
+   "tid": 1244,
+   "level": "D",
+   "tag": "RILJ",
+   "msg": "[PHONE0] [0051]> SETUP_DATA_CALL apn=default",
+   "phone_id": 0,
+   "category_hint": "data",
+   "ril": {
+    "serial": 51,
+    "dir": "req",
+    "request": "SETUP_DATA_CALL",
+    "error": null,
+    "paired_ts": "2026-09-21T01:00:01.900Z",
+    "latency_ms": 1100
+   },
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  },
+  {
+   "ts": "2026-09-21T01:00:01.900Z",
+   "pid": 1234,
+   "tid": 1244,
+   "level": "D",
+   "tag": "RILJ",
+   "msg": "[PHONE0] [0051]< SETUP_DATA_CALL error=MISSING_UNKNOWN_APN",
+   "phone_id": 0,
+   "category_hint": "data",
+   "ril": {
+    "serial": 51,
+    "dir": "resp",
+    "request": "SETUP_DATA_CALL",
+    "error": "MISSING_UNKNOWN_APN",
+    "paired_ts": "2026-09-21T01:00:00.800Z",
+    "latency_ms": 1100
+   },
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  },
+  {
+   "ts": "2026-09-21T01:00:01.900Z",
+   "pid": 1234,
+   "tid": 1244,
+   "level": "D",
+   "tag": "RILJ",
+   "msg": "[PHONE0] [0051]< SETUP_DATA_CALL error=MISSING_UNKNOWN_APN",
+   "phone_id": 0,
+   "category_hint": "data",
+   "ril": null,
+   "event": "ril_error",
+   "fields": {
+    "request": "SETUP_DATA_CALL",
+    "serial": "51",
+    "error": "MISSING_UNKNOWN_APN"
+   },
+   "source": "rules"
+  },
+  {
+   "ts": "2026-09-21T01:00:02.100Z",
+   "pid": 1234,
+   "tid": 1244,
+   "level": "W",
+   "tag": "DN-default-2",
+   "msg": "[PHONE0] onSetupResponse: fail cause=MISSING_UNKNOWN_APN",
+   "phone_id": 0,
+   "category_hint": "data",
+   "ril": null,
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  },
+  {
+   "ts": "2026-09-21T01:00:02.200Z",
+   "pid": 1234,
+   "tid": 1244,
+   "level": "D",
+   "tag": "DRM-0",
+   "msg": "[PHONE0] retry scheduled in 5000ms",
+   "phone_id": 0,
+   "category_hint": "data",
+   "ril": null,
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  },
+  {
+   "ts": "2026-09-21T01:00:07.200Z",
+   "pid": 1234,
+   "tid": 1244,
+   "level": "D",
+   "tag": "RILJ",
+   "msg": "[PHONE0] [0052]> SETUP_DATA_CALL apn=default",
+   "phone_id": 0,
+   "category_hint": "data",
+   "ril": {
+    "serial": 52,
+    "dir": "req",
+    "request": "SETUP_DATA_CALL",
+    "error": null,
+    "paired_ts": "2026-09-21T01:00:08.200Z",
+    "latency_ms": 1000
+   },
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  },
+  {
+   "ts": "2026-09-21T01:00:08.200Z",
+   "pid": 1234,
+   "tid": 1244,
+   "level": "D",
+   "tag": "RILJ",
+   "msg": "[PHONE0] [0052]< SETUP_DATA_CALL error=MISSING_UNKNOWN_APN",
+   "phone_id": 0,
+   "category_hint": "data",
+   "ril": {
+    "serial": 52,
+    "dir": "resp",
+    "request": "SETUP_DATA_CALL",
+    "error": "MISSING_UNKNOWN_APN",
+    "paired_ts": "2026-09-21T01:00:07.200Z",
+    "latency_ms": 1000
+   },
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  },
+  {
+   "ts": "2026-09-21T01:00:08.200Z",
+   "pid": 1234,
+   "tid": 1244,
+   "level": "D",
+   "tag": "RILJ",
+   "msg": "[PHONE0] [0052]< SETUP_DATA_CALL error=MISSING_UNKNOWN_APN",
+   "phone_id": 0,
+   "category_hint": "data",
+   "ril": null,
+   "event": "ril_error",
+   "fields": {
+    "request": "SETUP_DATA_CALL",
+    "serial": "52",
+    "error": "MISSING_UNKNOWN_APN"
+   },
+   "source": "rules"
+  }
+ ]
+}

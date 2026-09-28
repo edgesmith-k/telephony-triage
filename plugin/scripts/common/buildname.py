@@ -20,3 +20,20 @@ def sanitize_build(build: str) -> str:
     if s.endswith("."):
         s = s[:-1] + "_"
     return s
+
+
+def is_valid_branch_name(name: str) -> bool:
+    """`git check-ref-format --branch <name>`로 브랜치 이름을 검사한다
+    (contracts.md §3.2: 브랜치 이름은 만들기 전에 한 번 더 검사하고, 실패하면 종료 코드 2).
+    git을 실행할 수 없으면 False다."""
+    import subprocess
+
+    try:
+        proc = subprocess.run(
+            ["git", "check-ref-format", "--branch", name],
+            capture_output=True,
+            text=True,
+        )
+    except OSError:
+        return False
+    return proc.returncode == 0

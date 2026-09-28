@@ -13,7 +13,7 @@
 4. 의도적으로 바꾼 부분은 사용자 승인 후에만 골든을 갱신하고 이유를
    `SITE_PROFILE.md`에 기록한다.
 
-사외(Phase D0)에서 도는 것
+사외에서 도는 것 (Phase D0 틀, Phase 2에서 base.py 상속으로 바꿈)
 - 케이스 목록: `tests/mocks/golden/cases.yaml`
 - 골든: `tests/mocks/golden/<이름>.golden.json` (모의)
 - 로그: 시나리오에서 그때그때 생성한다 (생성기는 결정적이다)
@@ -41,10 +41,36 @@ GOLDEN_DIR = REPO / "tests" / "mocks" / "golden"
 CASES = GOLDEN_DIR / "cases.yaml"
 
 sys.path.insert(0, str(REPO / "tests" / "mocks"))
-sys.path.insert(0, str(REPO / "tests"))
+sys.path.insert(0, str(REPO / "plugin" / "scripts"))
 
 import logcat_gen  # noqa: E402
-from mocks.parser_backends import site as site_backend  # noqa: E402
+import parser_backends  # noqa: E402  (plugin/scripts/parser_backends)
+
+MOCK_SITE_DIR = REPO / "tests" / "mocks" / "parser_backends" / "site"
+
+
+def _load_mock_site():
+    """모의 site 백엔드를 `parser_backends.site`로 불러온다.
+
+    사내에서는 `plugin/scripts/parser_backends/site/`(SITE_PATHS)에 있고, 사외 테스트는
+    `make_plugin_root.py --with-site-backend`가 임시 루트로 복사한다. 여기서는 같은
+    패키지 이름으로 직접 불러서 상대 import(`..reference`)가 그대로 동작하게 한다.
+    """
+    import importlib.util
+
+    name = "parser_backends.site"
+    if name in sys.modules:
+        return sys.modules[name]
+    spec = importlib.util.spec_from_file_location(
+        name, MOCK_SITE_DIR / "__init__.py", submodule_search_locations=[str(MOCK_SITE_DIR)]
+    )
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+site_backend = _load_mock_site().BACKEND
 
 # 비교에서 뺄 필드 (파일 경로·순번처럼 환경에 따라 달라지는 값이 생기면 여기에).
 VOLATILE_FIELDS: tuple[str, ...] = ()
@@ -100,7 +126,7 @@ def _make_log(case: dict, out_dir: Path) -> Path:
 
 def _run_backend(case: dict, log: Path) -> list[dict]:
     return _normalize(
-        site_backend.parse([log], tz=case.get("tz"), year=case.get("year"))
+        site_backend.parse([log], case.get("tz"), case.get("year"), None)
     )
 
 
@@ -115,10 +141,10 @@ def build_actual(case: dict, out_dir: Path) -> dict:
         newline="\n",
     )
     masked_events = _normalize(
-        site_backend.parse([masked_log], tz=case.get("tz"), year=case.get("year"))
+        site_backend.parse([masked_log], case.get("tz"), case.get("year"), None)
     )
     return {
-        "backend": {"name": "site", "version": site_backend.version()},
+        "backend": {"name": site_backend.name, "version": site_backend.version()},
         "builtin_events": site_backend.builtin_events(),
         "events": events,
         "masked_builtin_events": [e["event"] for e in masked_events if e.get("event")],
@@ -170,6 +196,18 @@ def test_golden_matches(tmp_path=None):
             f"{case['name']}: 백엔드 버전이 바뀌었습니다. "
             "골든·회귀 기준이 흔들리므로 승인 후 갱신하세요."
         )
+
+
+def test_golden_detects_change(tmp_path=None):
+    """골든을 일부러 바꾸면 비교가 실패한다 (11-phases.md Phase 2 완료 기준)."""
+    tmp = Path(tmp_path) if tmp_path else Path(tempfile.mkdtemp(prefix="tt-golden-"))
+    case = _load_cases()[0]
+    actual, expected = _compare(case, tmp)
+    assert actual["events"] == expected["events"]
+    tampered = copy.deepcopy(expected)
+    builtin = next(e for e in tampered["events"] if e.get("event"))
+    builtin["fields"] = {**builtin["fields"], "reasons": "TAMPERED"}
+    assert actual["events"] != tampered["events"], "골든을 바꿨는데 비교가 통과합니다."
 
 
 def test_builtin_events_declared(tmp_path=None):

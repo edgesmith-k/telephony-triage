@@ -13,4 +13,5 @@ entries:
   - {at: 0, tag: "DSM-{phone}", msg: "onDataEnabledChanged: enabled=false reason=USER"}
   - {after: 1, tag: "DNC-{phone}", level: W, msg: "evaluation result: NOT_ALLOWED reasons=[DATA_DISABLED]"}
   - {after: 1, tag: ActivityManager, buffer: main, msg: "모의 main 버퍼 줄"}
+  - {after: 0.5, tag: SubscriptionManagerService, buffer: system, msg: "모의 system 버퍼 줄"}
   - {after: 1, ril_request: SETUP_DATA_CALL, serial: 41, args: "apn=default"}

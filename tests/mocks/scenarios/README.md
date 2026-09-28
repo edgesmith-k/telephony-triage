@@ -51,7 +51,7 @@ entries:
 
 ## 만들어 둔 시나리오
 
-합성 샘플 이슈 DB의 fixture는 아래 시나리오에서 나온다. 어느 시나리오가 어느
+합성 샘플 이슈 DB의 fixture와 파서 fixture(`tests/fixtures/logs/`, 목록 `tests/mocks/log_fixtures.yaml`)는 아래 시나리오에서 나온다. 어느 시나리오가 어느
 fixture가 되는지는 `tests/mocks/sample_fixtures.yaml`에 있고,
 `tests/helpers/make_sample_fixtures.py`가 생성·검사한다 (`11-phases.md` Phase 1).
 
@@ -77,5 +77,9 @@ fixture가 되는지는 `tests/mocks/sample_fixtures.yaml`에 있고,
 | `ims-001-01-positive.yaml` | IMS-001-01(403 거절) 양성 | `IMS-001-01.log` |
 | `ims-001-01-recurrence.yaml` | 수정 빌드에서 재발 (verify-fix 실패) | `IMS-001-01.recurrence.<build>.log` |
 | `ims-001-none.yaml` | 음성(정상 IMS 등록) | `IMS-001.none.log` |
-| `clock-anomaly.yaml` | 시계 역행·점프 (`coverage.clock_anomalies` 시험) | — |
-| `bugreport-wrap.yaml` | `--bugreport txt|zip` 래핑 시험 | — |
+| `data-setup-error.yaml` | SETUP_DATA_CALL 에러 응답 (`ril_error`) | 파서 `data-setup-error.log` |
+| `call-drop.yaml` | 연결된 VoLTE 통화 끊김 | 파서 `call-drop.log` |
+| `sim-absent.yaml` | SIM 없음 (슬롯 1) | 파서 `sim-absent.log` |
+| `dual-sim-ril.yaml` | 같은 serial을 두 슬롯이 씀, 지연(`ril_timeout`), 응답 없음(`ril_no_response`), pid 변경, 슬롯 없는 줄 | 파서 `dual-sim-ril.log` |
+| `clock-anomaly.yaml` | 시계 역행(-8초)·점프(+2시간, 판정 기준 3600초 이상) (`coverage.clock_anomalies` 시험) | 파서 `clock-anomaly.log` |
+| `bugreport-wrap.yaml` | `--bugreport txt|zip` 래핑과 `extract-bugreport` 시험 (system·radio·main·events 버퍼 + 가짜 dumpsys) | — |

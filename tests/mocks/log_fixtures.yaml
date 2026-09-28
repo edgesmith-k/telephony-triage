@@ -1,0 +1,19 @@
+# 파서 fixture 목록 (11-phases.md Phase 2, tests/fixtures/logs/)
+#
+# `tests/helpers/make_log_fixtures.py`가 이 표대로 `tests/mocks/logcat_gen.py`를
+# 돌려 `tests/fixtures/logs/<name>.log`를 만든다. 이슈 DB 안의 fixture와 섞지 않는다.
+# 이벤트 스냅샷(`<name>.events.json`)은 `tests/test_parse_logcat.py --update`가 만든다.
+
+fixtures:
+  - {name: data-connected,          scenario: data-001-none.yaml,            desc: 정상 데이터 연결}
+  - {name: data-disabled,           scenario: data-001-01-positive.yaml,     desc: SETUP_DATA_CALL 없음 + DATA_DISABLED}
+  - {name: data-roaming-disabled,   scenario: data-001-02-roaming.yaml,      desc: SETUP_DATA_CALL 없음 + ROAMING_DISABLED (슬롯 1)}
+  - {name: data-setup-error,        scenario: data-setup-error.yaml,         desc: SETUP_DATA_CALL 에러 응답}
+  - {name: call-drop,               scenario: call-drop.yaml,                desc: call drop}
+  - {name: no-service,              scenario: network-001-01-positive.yaml,  desc: 서비스 없음 (등록 거절)}
+  - {name: sim-absent,              scenario: sim-absent.yaml,               desc: SIM absent (슬롯 1)}
+  - {name: sms-send-failed,         scenario: sms-001-01-positive.yaml,      desc: SMS 전송 실패}
+  - {name: ims-registration-failed, scenario: ims-001-01-positive.yaml,      desc: IMS 등록 실패}
+  - {name: dual-sim-cross-slot,     scenario: data-001-none-cross-slot.yaml, desc: 듀얼 SIM, 슬롯별 phone_id}
+  - {name: dual-sim-ril,            scenario: dual-sim-ril.yaml,             desc: 같은 serial 두 슬롯, 지연, 응답 없음, pid 변경}
+  - {name: clock-anomaly,           scenario: clock-anomaly.yaml,            desc: 시계 역행·점프}

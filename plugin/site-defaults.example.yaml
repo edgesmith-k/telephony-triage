@@ -59,7 +59,7 @@ parser:
   backend: reference
 
 # 어댑터(외부 파서). 사외 초안은 비워 둔다.
-# 예시 형식은 tests/mocks/adapters/README.md 참고.
+# 형식은 plugin/scripts/adapters/base.py, 예시는 tests/mocks/adapters/site_data_existing.py.
 external_parsers: {}
 
 # 카테고리별 심층 분석 스킬 (16-existing-assets.md §16.5)

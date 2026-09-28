@@ -1,0 +1,304 @@
+{
+ "coverage": {
+  "first_ts": "2026-09-22T03:00:00.000Z",
+  "last_ts": "2026-09-22T03:00:56.400Z",
+  "window_in_range": true,
+  "clock_anomalies": []
+ },
+ "warnings": [],
+ "events": [
+  {
+   "ts": "2026-09-22T03:00:00.000Z",
+   "pid": 1234,
+   "tid": 1244,
+   "level": "D",
+   "tag": "RILJ",
+   "msg": "[PHONE0] [0041]> SETUP_DATA_CALL apn=default",
+   "phone_id": 0,
+   "category_hint": "data",
+   "ril": {
+    "serial": 41,
+    "dir": "req",
+    "request": "SETUP_DATA_CALL",
+    "error": null,
+    "paired_ts": "2026-09-22T03:00:01.300Z",
+    "latency_ms": 1300
+   },
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  },
+  {
+   "ts": "2026-09-22T03:00:00.200Z",
+   "pid": 1234,
+   "tid": 1244,
+   "level": "D",
+   "tag": "RILJ",
+   "msg": "[PHONE1] [0041]> SETUP_DATA_CALL apn=ims",
+   "phone_id": 1,
+   "category_hint": "data",
+   "ril": {
+    "serial": 41,
+    "dir": "req",
+    "request": "SETUP_DATA_CALL",
+    "error": null,
+    "paired_ts": "2026-09-22T03:00:01.000Z",
+    "latency_ms": 800
+   },
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  },
+  {
+   "ts": "2026-09-22T03:00:01.000Z",
+   "pid": 1234,
+   "tid": 1244,
+   "level": "D",
+   "tag": "RILJ",
+   "msg": "[PHONE1] [0041]< SETUP_DATA_CALL error=INSUFFICIENT_RESOURCES",
+   "phone_id": 1,
+   "category_hint": "data",
+   "ril": {
+    "serial": 41,
+    "dir": "resp",
+    "request": "SETUP_DATA_CALL",
+    "error": "INSUFFICIENT_RESOURCES",
+    "paired_ts": "2026-09-22T03:00:00.200Z",
+    "latency_ms": 800
+   },
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  },
+  {
+   "ts": "2026-09-22T03:00:01.000Z",
+   "pid": 1234,
+   "tid": 1244,
+   "level": "D",
+   "tag": "RILJ",
+   "msg": "[PHONE1] [0041]< SETUP_DATA_CALL error=INSUFFICIENT_RESOURCES",
+   "phone_id": 1,
+   "category_hint": "data",
+   "ril": null,
+   "event": "ril_error",
+   "fields": {
+    "request": "SETUP_DATA_CALL",
+    "serial": "41",
+    "error": "INSUFFICIENT_RESOURCES"
+   },
+   "source": "rules"
+  },
+  {
+   "ts": "2026-09-22T03:00:01.300Z",
+   "pid": 1234,
+   "tid": 1244,
+   "level": "D",
+   "tag": "RILJ",
+   "msg": "[PHONE0] [0041]< SETUP_DATA_CALL error=NONE cid=1",
+   "phone_id": 0,
+   "category_hint": "data",
+   "ril": {
+    "serial": 41,
+    "dir": "resp",
+    "request": "SETUP_DATA_CALL",
+    "error": "NONE",
+    "paired_ts": "2026-09-22T03:00:00.000Z",
+    "latency_ms": 1300
+   },
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  },
+  {
+   "ts": "2026-09-22T03:00:01.400Z",
+   "pid": 1234,
+   "tid": 1244,
+   "level": "D",
+   "tag": "UiccController",
+   "msg": "slot status refreshed",
+   "phone_id": null,
+   "category_hint": "sim",
+   "ril": null,
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  },
+  {
+   "ts": "2026-09-22T03:00:02.400Z",
+   "pid": 1234,
+   "tid": 1244,
+   "level": "D",
+   "tag": "RILJ",
+   "msg": "[PHONE0] [0042]> DEACTIVATE_DATA_CALL",
+   "phone_id": 0,
+   "category_hint": "data",
+   "ril": {
+    "serial": 42,
+    "dir": "req",
+    "request": "DEACTIVATE_DATA_CALL",
+    "error": null,
+    "paired_ts": "2026-09-22T03:00:14.400Z",
+    "latency_ms": 12000
+   },
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  },
+  {
+   "ts": "2026-09-22T03:00:14.400Z",
+   "pid": 1234,
+   "tid": 1244,
+   "level": "D",
+   "tag": "RILJ",
+   "msg": "[PHONE0] [0042]< DEACTIVATE_DATA_CALL error=NONE",
+   "phone_id": 0,
+   "category_hint": "data",
+   "ril": {
+    "serial": 42,
+    "dir": "resp",
+    "request": "DEACTIVATE_DATA_CALL",
+    "error": "NONE",
+    "paired_ts": "2026-09-22T03:00:02.400Z",
+    "latency_ms": 12000
+   },
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  },
+  {
+   "ts": "2026-09-22T03:00:14.400Z",
+   "pid": 1234,
+   "tid": 1244,
+   "level": "D",
+   "tag": "RILJ",
+   "msg": "[PHONE0] [0042]< DEACTIVATE_DATA_CALL error=NONE",
+   "phone_id": 0,
+   "category_hint": "data",
+   "ril": null,
+   "event": "ril_timeout",
+   "fields": {
+    "request": "DEACTIVATE_DATA_CALL",
+    "serial": "42",
+    "latency_ms": "12000",
+    "timeout_ms": "10000"
+   },
+   "source": "rules"
+  },
+  {
+   "ts": "2026-09-22T03:00:15.400Z",
+   "pid": 1234,
+   "tid": 1244,
+   "level": "D",
+   "tag": "RILJ",
+   "msg": "[PHONE1] [0043]> SEND_SMS",
+   "phone_id": 1,
+   "category_hint": "sms",
+   "ril": {
+    "serial": 43,
+    "dir": "req",
+    "request": "SEND_SMS",
+    "error": null,
+    "paired_ts": null,
+    "latency_ms": null
+   },
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  },
+  {
+   "ts": "2026-09-22T03:00:15.400Z",
+   "pid": 1234,
+   "tid": 1244,
+   "level": "D",
+   "tag": "RILJ",
+   "msg": "[PHONE1] [0043]> SEND_SMS",
+   "phone_id": 1,
+   "category_hint": "sms",
+   "ril": null,
+   "event": "ril_no_response",
+   "fields": {
+    "request": "SEND_SMS",
+    "serial": "43",
+    "timeout_ms": "30000"
+   },
+   "source": "rules"
+  },
+  {
+   "ts": "2026-09-22T03:00:35.400Z",
+   "pid": 1234,
+   "tid": 1244,
+   "level": "I",
+   "tag": "DNC-1",
+   "msg": "[PHONE1] evaluation result: ALLOWED reasons=[]",
+   "phone_id": 1,
+   "category_hint": "data",
+   "ril": null,
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  },
+  {
+   "ts": "2026-09-22T03:00:35.400Z",
+   "pid": 1234,
+   "tid": 1244,
+   "level": "I",
+   "tag": "DNC-1",
+   "msg": "[PHONE1] evaluation result: ALLOWED reasons=[]",
+   "phone_id": 1,
+   "category_hint": "data",
+   "ril": null,
+   "event": "data_evaluation_allowed",
+   "fields": {},
+   "source": "rules"
+  },
+  {
+   "ts": "2026-09-22T03:00:55.400Z",
+   "pid": 1234,
+   "tid": 1244,
+   "level": "I",
+   "tag": "DNC-0",
+   "msg": "[PHONE0] evaluation result: ALLOWED reasons=[]",
+   "phone_id": 0,
+   "category_hint": "data",
+   "ril": null,
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  },
+  {
+   "ts": "2026-09-22T03:00:55.400Z",
+   "pid": 1234,
+   "tid": 1244,
+   "level": "I",
+   "tag": "DNC-0",
+   "msg": "[PHONE0] evaluation result: ALLOWED reasons=[]",
+   "phone_id": 0,
+   "category_hint": "data",
+   "ril": null,
+   "event": "data_evaluation_allowed",
+   "fields": {},
+   "source": "rules"
+  },
+  {
+   "ts": "2026-09-22T03:00:56.400Z",
+   "pid": 2345,
+   "tid": 2345,
+   "level": "D",
+   "tag": "RILJ",
+   "msg": "[PHONE1] [0043]< SEND_SMS error=NONE",
+   "phone_id": 1,
+   "category_hint": "sms",
+   "ril": {
+    "serial": 43,
+    "dir": "resp",
+    "request": "SEND_SMS",
+    "error": "NONE",
+    "paired_ts": null,
+    "latency_ms": null
+   },
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  }
+ ]
+}

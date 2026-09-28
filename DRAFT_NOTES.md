@@ -8,8 +8,9 @@
 ## 진행 상태
 
 - 모드: **사외 초안** (`.local-draft` 있음)
-- 완료 Phase: **D0, 1** (2026-09-28)
-- 다음 Phase: **2** (logcat 파서 엔진)
+- 완료 Phase: **D0, 1** (2026-09-28), **2** (2026-09-29)
+- 다음 Phase: **3** (매처)
+- Phase 2~6은 사용자가 미리 승인해서 Phase마다 확인을 기다리지 않고 진행한다(각 Phase 끝에 커밋·push). 완료 기준 점검 결과는 Phase별 절에 적는다.
 - 기준 문서 세트: `telephony-triage-docs-v11` (`CHANGES.md` 참고)
 - 레포 루트: 이 파일이 있는 디렉토리 (`CLAUDE.md`, `docs/design/`, `plugin/`,
   `tests/`, `tools/`가 같이 있다)
@@ -117,6 +118,80 @@
 | `tests/mocks/scenarios/call-001-01-positive.yaml` | `expect`에 `also_allowed: [IMS-001-01]` 추가 | 그 로그에 IMS 등록 실패도 실제로 있다 (`contracts.md §fixture`) |
 | `tests/fixtures/issue-db-sample/README.md` | 지우고 `tests/fixtures/README.md`로 옮김 | 샘플 트리는 운영 이슈 DB와 같은 모양이어야 하고, 루트 `README.md`는 `db_build.py`가 만드는 생성 파일 이름이다 |
 
+### Phase 2에서 만든 것
+
+| 산출물 | 경로 |
+|---|---|
+| 파서 백엔드 인터페이스 | `plugin/scripts/parser_backends/base.py` (`parse`, `builtin_events`, `version`, 기본 구현 있는 `coverage`) |
+| 백엔드 로더 | `plugin/scripts/parser_backends/__init__.py` (`load(name)` → `parser_backends.<name>.BACKEND`) |
+| 공통 처리: 줄 형식·시각·슬롯 | `plugin/scripts/parser_backends/logcat.py` (threadtime / `-v year` / `-v uid` / `-v zone` / `time`, `--tz`/`--year` → UTC, 12→1월 연도 넘김, `phone_id`, `coverage`·시계 이상) |
+| 공통 처리: RIL | `plugin/scripts/parser_backends/ril.py` (요청·응답·unsol 해석, 키 `(pid, phone_id, serial)` 페어링) |
+| reference 백엔드 | `plugin/scripts/parser_backends/reference/` (builtin 없음, `detect()` 훅) |
+| 진입점 | `plugin/scripts/parse_logcat.py` (`parse`, `extract-bugreport`, `cut`은 Phase 4 자리) |
+| 규칙 로드·검증 | `plugin/scripts/common/parser_rules.py` |
+| 고정 버전 비교 | `plugin/scripts/common/compat.py` (Phase 6 `config.py check`도 쓴다) |
+| YAML 읽기(날짜 → 문자열) | `plugin/scripts/common/yamlio.py` (Phase 5 `db_lint`도 쓴다) |
+| 마스킹 자리 | `plugin/scripts/common/masking.py` (`new_masker()`가 Phase 4 전까지 `MaskingNotReady`) |
+| 브랜치 이름 검사 | `plugin/scripts/common/buildname.py`의 `is_valid_branch_name` (`git check-ref-format --branch`) |
+| 어댑터 계약·로더 | `plugin/scripts/adapters/base.py`, `plugin/scripts/adapters/__init__.py` |
+| 모의 기존 파서 | `tests/mocks/adapters/legacy_data_parser.py` (테스트가 `site_vendor/legacy_parser.py`로 복사) |
+| 새 시나리오 4개 | `tests/mocks/scenarios/{data-setup-error,call-drop,sim-absent,dual-sim-ril}.yaml` |
+| 파서 fixture | `tests/fixtures/logs/<name>.log` 12개 + `<name>.events.json` 스냅샷. 목록 `tests/mocks/log_fixtures.yaml`, 생성 `tests/helpers/make_log_fixtures.py [--check]` |
+| Phase 2 테스트 | `tests/test_parse_logcat.py` (23개, `--update`로 스냅샷 갱신) |
+
+### Phase 2 완료 기준 확인 결과
+
+`python3 tests/test_parse_logcat.py` — **23개 전부 통과**. `python3 -m pytest tests` 전체 **61개 통과**.
+
+| 완료 기준 | 확인 | 어디서 |
+|---|---|---|
+| fixture별 이벤트 JSON 스냅샷 (정상 데이터 연결, SETUP 없음+DATA_DISABLED/ROAMING_DISABLED, SETUP 에러 응답, call drop, 서비스 없음, SIM absent, SMS 전송 실패, IMS 등록 실패) | ✅ | `test_event_snapshots`, `test_log_fixtures_match_scenarios` |
+| 연도 없는 threadtime + `--tz`/`--year` → UTC 기대값 | ✅ | `test_threadtime_without_year_converts_to_utc`, `test_format_variants` |
+| 듀얼 SIM에서 `phone_id`가 슬롯별, 접미사 없는 태그는 `null` | ✅ | `test_phone_id_per_slot` |
+| 같은 serial을 두 슬롯이 쓰는 로그에서 슬롯별 페어링 | ✅ | `test_ril_pairing_same_serial_two_slots` (+ pid 변경, 지연·무응답·에러) |
+| 발생 시각이 파일 범위 밖 → `window_in_range: false` | ✅ | `test_window_in_range_values` (true / partial / false) |
+| 시각 역행 로그에서 `clock_anomalies` | ✅ | `test_clock_anomalies` |
+| bugreport(zip·txt) → logcat 섹션만, dumpsys 문자열 없음, `build.json` fingerprint | ✅ | `test_extract_bugreport_txt_and_zip` |
+| `parser-rules/`만 바꿔도 결과가 바뀜 | ✅ | `test_rules_change_changes_output_without_code_change` |
+| 규칙 스키마 검증 | ✅ | `test_rules_are_validated` |
+| 모의 site 백엔드 → `builtin.data.*`가 extractor 이벤트와 함께(source 구분) | ✅ | `test_site_backend_builtin_events_with_extractors` |
+| extractor의 `builtin.`/`ext.` 접두어 거부 | ✅ | `test_rules_are_validated` |
+| 백엔드 이름·버전이 이슈 DB `parser_backend`와 다르면 경고 | ✅ | `test_site_backend_builtin_events_with_extractors`, `test_backend_version_mismatch_warns` |
+| 이슈 DB `external_parsers` 카테고리의 어댑터가 없거나 버전이 낮으면 경고 | ✅ | `test_external_parser_pin_mismatch_warns` |
+| 어댑터 실행, `${CLAUDE_PLUGIN_ROOT}` 치환, `--no-external`, merge/replace | ✅ | `test_external_parser_merge_and_no_external`, `test_external_parser_replace_mode` |
+| `sanitize_build`가 `A..B`, `X.lock`, 끝 `.`을 유효한 브랜치 이름으로 | ✅ | `test_sanitize_build_and_branch_names` |
+| `tests/test_golden.py`가 모의 골든으로 통과, 골든을 바꾸면 실패 | ✅ | `test_golden_matches`, `test_golden_detects_change` |
+| `--mask`·`cut`은 인터페이스만 (Phase 4) | ✅ | `test_mask_and_cut_are_phase4`, `test_masking_runs_before_extractors`(마스킹이 extractor보다 앞) |
+| `site-defaults.yaml` 없으면 종료 코드 2 | ✅ | `test_site_defaults_required` |
+
+### Phase 2에서 바꾼 이전 산출물
+
+| 대상 | 무엇을 | 왜 |
+|---|---|---|
+| `tests/mocks/parser_backends/site/__init__.py` | 자체 파싱을 버리고 `ReferenceBackend` 상속 + `detect()`만. `BACKEND` 객체 제공. 버전 `0.0.2-mock` | D0 가정 8 (Phase 2에서 `base.py` 상속). 시각이 UTC가 되고 `ril` 필드가 생겼다 |
+| `tests/mocks/parser_backends/__init__.py` | 지움 | `tests/mocks`가 `sys.path`에 있으면 이 패키지가 `plugin/scripts/parser_backends`를 가렸다. 지금은 네임스페이스 디렉토리라 정식 패키지가 이긴다 |
+| `tests/mocks/golden/*.golden.json` | `tests/test_golden.py --update` | 모의 백엔드 출력 형식 변경 반영 (모의 골든이다. 사내 진짜 골든은 사용자 승인 없이 갱신하지 않는다) |
+| `tests/test_golden.py` | 모의 site 백엔드를 `parser_backends.site`로 불러 `BACKEND`를 쓴다. `test_golden_detects_change` 추가 | 위와 같음, Phase 2 완료 기준 |
+| `tests/mocks/scenarios/clock-anomaly.yaml` | 앞으로 뛰는 시각 120초 → 7200초 | 점프 판정 기준(3600초, 가정 14) 이상이어야 시험이 된다 |
+| `tests/mocks/scenarios/bugreport-wrap.yaml` | system 버퍼 줄 하나 추가 | `extract-bugreport`가 system·radio·main을 모두 꺼내는지 시험 |
+| `tests/mocks/adapters/site_data_existing.py` | 문서만(계약 위치, 매핑 안 된 판별 처리) | 어댑터 계약을 `plugin/scripts/adapters/base.py`로 고정 |
+| `plugin/site-defaults.example.yaml` | 없는 `tests/mocks/adapters/README.md` 참조를 `adapters/base.py`로 | 끊긴 참조 |
+
+### 구현에서 정한 세부 (계약 보완 후보 — 설계 문서에는 아직 없다)
+
+사용자 확인 없이 설계 문서(`contracts.md` 등)는 고치지 않았다. 아래는 구현이 정한 것이고, Phase 3 이후가 이것에 기대므로 사내 보완(S-1) 때 계약에 옮길지 정한다.
+
+- **`parse` 출력 머리**: `{schema: 1, backend: {name, version}, external: [{category, adapter, version, mode}], external_disabled, rules: {path, tags, requests, unsolicited, extractors}, input: {files, tz, year, mode, window}, coverage, masked, warnings: [{code, message}], events}`. 항상 JSON을 stdout으로 낸다(`--json`은 받기만 한다). 경고는 stderr에도 한 줄씩.
+- **레코드 종류**: 로그 한 줄은 `event: null`인 **줄 레코드**, extractor·builtin·RIL 파생·외부 파서 이벤트는 **별도 레코드**(같은 `ts`·`tag`·`msg`, `ril: null`). 파생 레코드는 그 줄 바로 뒤에 온다. 매처(Phase 3)의 `must_match`는 줄 레코드에만 적용한다.
+- **`ril` 필드**: `{serial, dir: req|resp|unsol, request, error, paired_ts, latency_ms}`. 응답에 에러 표기가 없으면 `error: "NONE"`.
+- **RIL 파생 이벤트**(`source: rules`, 엔진 예약 이름 — extractor가 쓸 수 없다): `ril_error {request, serial, error}`, `ril_timeout {request, serial, latency_ms, timeout_ms}`(응답 시각), `ril_no_response {request, serial, timeout_ms}`(요청 시각, 파일이 요청+timeout 이후까지 있을 때만). `ril.yaml`의 `requests`에 있는 요청만 만든다. `fields` 값은 모두 문자열이다.
+- **태그 필터**: `tags.yaml`에 없는 태그의 줄 레코드는 버린다. `category_hint`는 태그 카테고리, RIL 줄은 `ril.yaml`의 요청/unsol 카테고리가 우선한다. builtin·외부 파서 레코드는 필터하지 않는다.
+- **외부 파서**: 로그 파일마다 한 번 실행(`{log}` 치환). `event`가 `ext.<category>.`로 시작하지 않거나 시각을 모르면 버리고 경고. `merge`는 이름 없는 레코드를 버리고, `replace`는 백엔드의 그 카테고리 레코드를 빼고 외부 레코드(이름 없는 줄 포함)를 쓴다. 실행 실패는 경고(`external-parser-failed`) 후 계속. 이슈 DB 고정 버전 비교는 site-defaults의 `version`(없으면 어댑터 `VERSION`).
+- **경고 코드**: `tz_assumed_utc`, `year_assumed`, `unparsed-lines`, `no-lines-parsed`, `parser-backend-mismatch`, `external-parser-mismatch`, `external-parser-failed`.
+- **`extract-bugreport` 출력**: `{files: [{buffer, path, lines}], build_json, build: {build, fingerprint}, warnings}`. 섹션을 하나도 못 찾으면 종료 코드 2(S21 안내). bugreport를 `parse`에 바로 넣으면 종료 코드 2로 `extract-bugreport`를 안내한다.
+- **규칙 스키마 위치**: `--rules <db>/parser-rules`의 상위 `<db>/schema/parser-rules.schema.json`. 고정값은 `<db>/issue-db.config.yaml`.
+- **extractor**: 태그가 맞으면 패턴을 순서대로 `search`하고 첫 매치만 쓴다. `fields`에 적힌 그룹 중 값이 있는 것만 넣는다. `fields`가 패턴의 이름 있는 그룹에 없으면 규칙 오류. 패턴 실행 시간 상한(`matcher.pattern_timeout_ms`)은 Phase 3의 컴파일 함수와 함께 넣는다.
+
 ## 개발 환경과 설계의 차이 (중요)
 
 설계는 실행 환경을 **Ubuntu(Linux)** 로 못박는다 (`01-architecture.md §3`,
@@ -179,11 +254,10 @@ Windows 전용 보정은 커밋하지 않는다.**
 7. **모의 MCP 서버는 MCP SDK에 의존하지 않는다.** 외부 의존성을 늘리지 않기
    위해 `initialize`/`tools/list`/`tools/call`만 stdlib로 구현했다. 사내
    Claude Code가 다른 프로토콜 버전을 요구하면 `PROTOCOL_VERSION`을 고친다.
-8. 파서 백엔드 인터페이스 파일(`plugin/scripts/parser_backends/base.py`)과
-   reference 백엔드는 **Phase 2**에서 만든다. D0의 모의 site 백엔드는
-   계약에 적힌 함수 세 개(`parse`, `builtin_events`, `version`)만 같은
-   이름·형식으로 제공하고 자체 파싱을 한다. Phase 2에서 `base.py`를
-   상속하도록 바꾼다.
+8. 파서 백엔드 인터페이스(`plugin/scripts/parser_backends/base.py`)와
+   reference 백엔드는 Phase 2에서 만들었다. 계약의 `parse`·`builtin_events`·
+   `version`은 모듈 함수가 아니라 백엔드 패키지의 `BACKEND` 객체(`ParserBackend`)의
+   메서드로 제공한다. 모의 site 백엔드는 reference를 상속해 builtin 판별만 더한다.
 9. `config.py`는 D0에서 **site-defaults 로드와 종료 코드 2 경로만** 있다.
    `check`/`set`/`sync-scripts-path`는 Phase 6에서 구현한다(지금은 종료
    코드 2로 "Phase 6에서 구현한다"를 낸다).
@@ -191,7 +265,21 @@ Windows 전용 보정은 커밋하지 않는다.**
     검사는 그때까지 `tests/test_golden.py` 안의 임시 치환을 쓴다.
     Phase 4에서 `mask_pii`로 바꾼다.
 11. 의존성은 `pyyaml`, `jsonschema`, `pytest`만 썼다. 사내 반입 규정과
-    오픈소스 승인 대상이다(사용자 확인 필요).
+    오픈소스 승인 대상이다(사용자 확인 필요). 타임존 변환은 표준 `zoneinfo`를 쓰므로
+    Ubuntu의 시스템 tzdata가 필요하다(보통 설치돼 있다).
+12. `--tz`가 없으면 logcat 시각을 **UTC**로, `--year`가 없으면 연도를 **2000**(고정,
+    윤년)으로 해석하고 경고한다. 실행 날짜에 따라 결과가 달라지지 않게 하기 위해서다.
+    분석 경로에서는 스킬이 항상 `--tz`/`--year`를 준다(`07-workflow.md §Step 3`).
+13. 연도 없는 로그에서 월이 6 넘게 줄면(12월 → 1월) 해가 넘어간 것으로 보고 연도를
+    올린다. `--year`는 **첫 줄의 연도**다.
+14. 시계 이상 기준: 한 파일 안에서 앞 줄보다 1초 넘게 이르면 역행, **3600초 이상**
+    늦으면 점프. 조용한 구간과 시계 점프를 로그만으로 구분할 수 없어서 점프 기준을
+    크게 잡았다(TODO(SITE:S7), 사내 NITZ 전·재부팅 직후 로그로 확인).
+15. 슬롯 태그 접미사는 `이름-숫자` 한 마디만 본다(`DNC-1`은 슬롯 1, `DN-17-C`·
+    `DN-default-1`은 슬롯이 아니다). 메시지 접두어 `[PHONE n]`/`[SUB n]`, AOSP RILJ식
+    메시지 끝 `[PHONE n]`도 본다(TODO(SITE:S20)).
+16. RILJ 형식 placeholder: 요청 `[serial]> NAME`, 응답 `[serial]< NAME ... error=X`,
+    unsol `[UNSL]< NAME`. 에러 표기가 없으면 `NONE`. RIL 태그는 `RILJ`만(TODO(SITE:S9·S10)).
 
 ## 모의와 실제가 다를 것으로 예상되는 지점
 
@@ -214,11 +302,10 @@ Windows 전용 보정은 커밋하지 않는다.**
 
 ## 사내 확인 목록 (`TODO(SITE:S<n>)`)
 
-`python3 tools/list_site_todos.py`로 갱신한다. 2026-09-28(Phase 1 끝) 기준 **50곳**.
-Phase 1에서 샘플 이슈 DB가 생기면서 S5·S9·S11이 늘고 S16~S19가 새로 생겼다:
+`python3 tools/list_site_todos.py`로 갱신한다(Windows 콘솔에서는 `PYTHONIOENCODING=utf-8`). 2026-09-29(Phase 2 끝) 기준 **50곳**. Phase 2에서 파서 엔진(S7 시계 이상 기준·S9 RILJ 형식·S20 슬롯 표기·S21 bugreport 헤더)과 새 시나리오 4개가 더해졌다:
 
 ### S1 (1곳)
-- `tests/mocks/skills/data-analyzer/SKILL.md:63` — 스킬 이름과 호출 방식 확인
+- `tests/mocks/skills/data-analyzer/SKILL.md:63` — 스킬 이름과 호출 방식 확인.
 
 ### S4 (1곳)
 - `plugin/site-defaults.example.yaml:38` — 사내 Jira 시각 타임존
@@ -226,53 +313,74 @@ Phase 1에서 샘플 이슈 DB가 생기면서 S5·S9·S11이 늘고 S16~S19가 
 ### S5 (3곳)
 - `plugin/site-defaults.example.yaml:50` — 사내 GHE 호스트
 - `plugin/site-defaults.example.yaml:51` — 사내 org
-- `tests/fixtures/issue-db-sample/.github/CODEOWNERS:3` — org·팀 이름
+- `tests/fixtures/issue-db-sample/.github/CODEOWNERS:3` — . 사내에서 확인하고 바꾼다.
 
-### S7 (1곳)
+### S7 (3곳)
+- `plugin/scripts/parser_backends/logcat.py:13` — TODO(SITE:S20).
+- `plugin/scripts/parser_backends/logcat.py:33` — 사내 로그(NITZ 전·재부팅 직후)로 기준을 확인한다.
 - `plugin/site-defaults.example.yaml:54` — logcat 시각 타임존
 
-### S9 (16곳) — 로그 문구·태그·RIL 출력 형식
-- `tests/fixtures/issue-db-sample/data/DATA-001-no-setup-data-call/type.md:119`
-- `tests/fixtures/issue-db-sample/parser-rules/extractors.yaml:10` (extractor 14개 전체)
-- `tests/fixtures/issue-db-sample/parser-rules/ril.yaml:3`
-- `tests/fixtures/issue-db-sample/parser-rules/tags.yaml:7,23,27,30,34`
-- `tests/mocks/logcat_gen.py:61` — RILJ 요청/응답 출력 형식
-- `tests/mocks/parser_backends/site/__init__.py:55` — 판별 규칙 문구
-- `tests/mocks/scenarios/{call-001-01-positive,data-001-01-positive,data-001-02-roaming,network-001-01-positive,sim-001-01-positive,sms-001-01-positive}.yaml:2`
+### S9 (21곳)
+- `plugin/scripts/parser_backends/ril.py:11` — . 벤더 RIL 태그는 TODO(SITE:S10).
+- `tests/fixtures/issue-db-sample/data/DATA-001-no-setup-data-call/type.md:119` — .
+- `tests/fixtures/issue-db-sample/parser-rules/extractors.yaml:10` — . 사내 실제 logcat으로
+- `tests/fixtures/issue-db-sample/parser-rules/ril.yaml:3` — .
+- `tests/fixtures/issue-db-sample/parser-rules/tags.yaml:7` — . 사내 실제 logcat으로
+- `tests/fixtures/issue-db-sample/parser-rules/tags.yaml:23` — TODO(SITE:S10)
+- `tests/fixtures/issue-db-sample/parser-rules/tags.yaml:27`
+- `tests/fixtures/issue-db-sample/parser-rules/tags.yaml:30`
+- `tests/fixtures/issue-db-sample/parser-rules/tags.yaml:34`
+- `tests/mocks/logcat_gen.py:61` — RILJ 요청/응답 출력 형식. 사내 실제 로그로 확인한다.
+- `tests/mocks/parser_backends/site/__init__.py:32`
+- `tests/mocks/scenarios/call-001-01-positive.yaml:2` — , TODO(SITE:S10)
+- `tests/mocks/scenarios/call-drop.yaml:2`
+- `tests/mocks/scenarios/data-001-01-positive.yaml:2`
+- `tests/mocks/scenarios/data-001-02-roaming.yaml:2`
+- `tests/mocks/scenarios/data-setup-error.yaml:2`
+- `tests/mocks/scenarios/dual-sim-ril.yaml:7` — TODO(SITE:S20)
+- `tests/mocks/scenarios/network-001-01-positive.yaml:2`
+- `tests/mocks/scenarios/sim-001-01-positive.yaml:2`
+- `tests/mocks/scenarios/sim-absent.yaml:2`
+- `tests/mocks/scenarios/sms-001-01-positive.yaml:2`
 
 ### S10 (2곳)
-- `tests/mocks/scenarios/ims-001-01-positive.yaml:2` — IMS 로그 문구
-- `tests/mocks/src/README.md:17` — 벤더 RIL 태그·소스 구조
+- `tests/mocks/scenarios/ims-001-01-positive.yaml:2`
+- `tests/mocks/src/README.md:17`
 
-### S11 (7곳) — 소스 경로
-- `tests/fixtures/issue-db-sample/{ims,network,sim,sms}/*/type.md` — 아직 `code_refs`를 못 채운 원인 4개
-- `tests/mocks/src/android16/build/make/core/version_defaults.mk:1`
-- `tests/mocks/src/android17/build/make/core/version_defaults.mk:1`
-- `tests/mocks/src/README.md:10` — 트리 버전 식별 파일
+### S11 (7곳)
+- `tests/fixtures/issue-db-sample/ims/IMS-001-ims-registration-failed/type.md:77` — .
+- `tests/fixtures/issue-db-sample/network/NETWORK-001-no-service/type.md:68` — .
+- `tests/fixtures/issue-db-sample/sim/SIM-001-sim-not-detected/type.md:74` — .
+- `tests/fixtures/issue-db-sample/sms/SMS-001-sms-send-failed/type.md:67` — .
+- `tests/mocks/src/android16/build/make/core/version_defaults.mk:1` — 사내 트리의 실제 버전 식별 파일로 바꾼다)
+- `tests/mocks/src/android17/build/make/core/version_defaults.mk:1` — 사내 트리의 실제 버전 식별 파일로 바꾼다)
+- `tests/mocks/src/README.md:10`
 
 ### S12 (1곳)
-- `tests/mocks/builds.yaml:3` — 빌드명 체계 (샘플 `issue-db.config.yaml`의 `build_compare`가 이것을 쓴다)
+- `tests/mocks/builds.yaml:3` — .
 
 ### S16 (1곳)
-- `tests/fixtures/issue-db-sample/issue-db.config.yaml:12` — `jira_key_regex`
+- `tests/fixtures/issue-db-sample/issue-db.config.yaml:12` — 사내 Jira 키 형식
 
 ### S17 (1곳)
-- `tests/fixtures/issue-db-sample/issue-db.config.yaml:11` — `jira_base_url`
+- `tests/fixtures/issue-db-sample/issue-db.config.yaml:11` — 사내 Jira URL
 
 ### S18 (1곳)
-- `tests/fixtures/issue-db-sample/issue-db.config.yaml:32` — `fix_ref_regex`
+- `tests/fixtures/issue-db-sample/issue-db.config.yaml:32` — 사내 Gerrit CL/커밋 형식
 
 ### S19 (2곳)
-- `tests/fixtures/issue-db-sample/.github/CODEOWNERS:5` — 리뷰어 형식
-- `tests/fixtures/issue-db-sample/issue-db.config.yaml:68` — `reviewers.format`
+- `tests/fixtures/issue-db-sample/.github/CODEOWNERS:5` — ).
+- `tests/fixtures/issue-db-sample/issue-db.config.yaml:68` — gh pr create --reviewer 형식
 
-### S20 (3곳)
-- `plugin/site-defaults.example.yaml:47` — Jira 슬롯 필드 유무
-- `tests/mocks/logcat_gen.py:66` — 슬롯 메시지 접두어
-- `tests/mocks/scenarios/README.md:10`
+### S20 (4곳)
+- `plugin/scripts/parser_backends/logcat.py:57` — 사내 실제 표기로 확인한다.
+- `plugin/site-defaults.example.yaml:47` — 사내 Jira에 슬롯 필드가 있는지
+- `tests/mocks/logcat_gen.py:66` — 슬롯 표기. 메시지 접두어는 사내 실제 형식으로 바꾼다.
+- `tests/mocks/scenarios/README.md:10` — )
 
-### S21 (1곳)
-- `tests/mocks/logcat_gen.py:35` — bugreport 섹션 헤더
+### S21 (2곳)
+- `plugin/scripts/parse_logcat.py:438` — 사내 실제 문자열로 확인한다.
+- `tests/mocks/logcat_gen.py:35` — 사내 실제 문자열 확인
 
 > 아직 코드가 없는 곳(S3 `jira.tools` 확정, S8 태그 수집 목록, S13 마스킹
 > 오탐, S14 보안 규정, S15 Ubuntu/파이썬 버전, S16~S19
@@ -284,7 +392,7 @@ Phase 1에서 샘플 이슈 DB가 생기면서 S5·S9·S11이 늘고 S16~S19가 
 
 | 항목 | 상태 |
 |---|---|
-| 전체 테스트 통과 | 🟡 D0·Phase 1 범위 (`pytest tests` 37개). `db_regress`·eval은 Phase 2~13 뒤 |
+| 전체 테스트 통과 | 🟡 D0·Phase 1·2 범위 (`pytest tests` 61개). `db_regress`·eval은 Phase 5·13 뒤 |
 | 사내 정보 없음 | ✅ 사내 자료를 쓰지 않았다 |
 | `plugin/site-defaults.yaml` 없고 example만 있음 | ✅ `test_plugin_root_helper_and_missing_site_defaults`가 검사 |
 | `SITE_PATHS`의 다른 경로가 비어 있음 | ✅ `test_site_paths_are_absent_in_draft`가 검사 |
@@ -298,10 +406,9 @@ Phase 1에서 샘플 이슈 DB가 생기면서 S5·S9·S11이 늘고 S16~S19가 
 
 1. 새 세션을 열어 **빈 플러그인 실험**을 돌리고 위 "사외 Claude Code 실험
    결과" 표를 채운다 (`tests/mocks/plugin-probe/README.md`). 아직 미확인이다.
-2. **Phase 2** 시작: `docs/design/11-phases.md` Phase 2 절과 그 "읽을 문서"를
-   읽고 파서 백엔드 인터페이스와 `parse_logcat.py`를 만든다.
-   - Phase 1의 `parser-rules/`(태그 15개, RIL 요청 6·unsol 5, extractor 14)가
-     파서의 규칙 입력이다. 하드코딩하지 않고 `--rules`로 읽는다.
-   - Phase 2의 fixture는 `tests/fixtures/logs/`에 따로 만든다(이슈 DB 안의
-     fixture와 섞지 않는다).
-   - D0의 모의 site 백엔드를 `base.py` 상속으로 바꾸고, 모의 골든을 다시 확인한다.
+2. **Phase 3** (매처): `docs/design/11-phases.md` Phase 3 절과 그 "읽을 문서"를 읽고
+   `match_signatures.py`와 `common/`의 시그니처·extractor 컴파일 함수를 만든다.
+   - 입력은 Phase 2 `parse` 출력이다. 위 "구현에서 정한 세부"(줄 레코드/이벤트 레코드,
+     `ril_*` 파생 이벤트, `fields`는 문자열)를 전제로 한다.
+   - 마스킹 안 된 입력(`masked: false`)은 종료 코드 2다. `--mask`는 Phase 4에서
+     연결되므로, Phase 3 테스트는 테스트 안에서 `masked: true`로 표시한 이벤트를 쓴다.

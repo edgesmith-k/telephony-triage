@@ -1,0 +1,24 @@
+# 파서 fixture: 듀얼 SIM RIL 페어링 (11-phases.md Phase 2 완료 기준).
+#  - 두 슬롯이 같은 serial(41)을 쓴다: 요청·응답이 슬롯별로 짝지어져야 한다.
+#  - 지연: DEACTIVATE_DATA_CALL 응답이 timeout(10000ms)을 넘는다 → ril_timeout
+#  - 응답 없음: SEND_SMS(timeout 30000ms) 뒤 40초 넘게 응답이 없다 → ril_no_response
+#  - 다른 pid(phone 프로세스 재시작)의 같은 serial 응답은 앞 요청과 짝지어지면 안 된다.
+#  - 슬롯 표기가 없는 줄(UiccController, phone: null)은 phone_id가 null이다.
+# RIL 출력 형식과 문구는 placeholder다 — TODO(SITE:S9) TODO(SITE:S20)
+name: dual-sim-ril
+start: "2026-09-22T12:00:00+09:00"
+default_phone: 0
+pid: 1234
+tid: 1244
+entries:
+  - {at: 0, ril_request: SETUP_DATA_CALL, serial: 41, args: "apn=default", phone: 0}
+  - {after: 0.2, ril_request: SETUP_DATA_CALL, serial: 41, args: "apn=ims", phone: 1}
+  - {after: 0.8, ril_response: SETUP_DATA_CALL, serial: 41, result: "error=INSUFFICIENT_RESOURCES", phone: 1}
+  - {after: 0.3, ril_response: SETUP_DATA_CALL, serial: 41, result: "error=NONE cid=1", phone: 0}
+  - {after: 0.1, tag: UiccController, msg: "slot status refreshed", phone: null}
+  - {after: 1, ril_request: DEACTIVATE_DATA_CALL, serial: 42, phone: 0}
+  - {after: 12, ril_response: DEACTIVATE_DATA_CALL, serial: 42, result: "error=NONE", phone: 0}
+  - {after: 1, ril_request: SEND_SMS, serial: 43, phone: 1}
+  - {after: 20, tag: "DNC-{phone}", level: I, msg: "evaluation result: ALLOWED reasons=[]", phone: 1}
+  - {after: 20, tag: "DNC-{phone}", level: I, msg: "evaluation result: ALLOWED reasons=[]", phone: 0}
+  - {after: 1, ril_response: SEND_SMS, serial: 43, result: "error=NONE", pid: 2345, phone: 1}

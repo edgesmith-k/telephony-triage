@@ -1,0 +1,164 @@
+{
+ "coverage": {
+  "first_ts": "2026-09-24T01:11:00.000Z",
+  "last_ts": "2026-09-24T01:11:34.000Z",
+  "window_in_range": true,
+  "clock_anomalies": []
+ },
+ "warnings": [],
+ "events": [
+  {
+   "ts": "2026-09-24T01:11:00.000Z",
+   "pid": 1234,
+   "tid": 1260,
+   "level": "I",
+   "tag": "SST-0",
+   "msg": "[PHONE0] onServiceStateChanged: regState=NOT_REGISTERED cellId=<CELL#1>",
+   "phone_id": 0,
+   "category_hint": "network",
+   "ril": null,
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  },
+  {
+   "ts": "2026-09-24T01:11:00.000Z",
+   "pid": 1234,
+   "tid": 1260,
+   "level": "I",
+   "tag": "SST-0",
+   "msg": "[PHONE0] onServiceStateChanged: regState=NOT_REGISTERED cellId=<CELL#1>",
+   "phone_id": 0,
+   "category_hint": "network",
+   "ril": null,
+   "event": "network_service_state",
+   "fields": {
+    "reg_state": "NOT_REGISTERED"
+   },
+   "source": "rules"
+  },
+  {
+   "ts": "2026-09-24T01:11:02.000Z",
+   "pid": 1234,
+   "tid": 1260,
+   "level": "W",
+   "tag": "SST-0",
+   "msg": "[PHONE0] registration rejected: cause=13 domain=PS",
+   "phone_id": 0,
+   "category_hint": "network",
+   "ril": null,
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  },
+  {
+   "ts": "2026-09-24T01:11:02.000Z",
+   "pid": 1234,
+   "tid": 1260,
+   "level": "W",
+   "tag": "SST-0",
+   "msg": "[PHONE0] registration rejected: cause=13 domain=PS",
+   "phone_id": 0,
+   "category_hint": "network",
+   "ril": null,
+   "event": "network_registration_rejected",
+   "fields": {
+    "cause": "13",
+    "domain": "PS"
+   },
+   "source": "rules"
+  },
+  {
+   "ts": "2026-09-24T01:11:12.000Z",
+   "pid": 1234,
+   "tid": 1260,
+   "level": "W",
+   "tag": "SST-0",
+   "msg": "[PHONE0] registration rejected: cause=13 domain=CS",
+   "phone_id": 0,
+   "category_hint": "network",
+   "ril": null,
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  },
+  {
+   "ts": "2026-09-24T01:11:12.000Z",
+   "pid": 1234,
+   "tid": 1260,
+   "level": "W",
+   "tag": "SST-0",
+   "msg": "[PHONE0] registration rejected: cause=13 domain=CS",
+   "phone_id": 0,
+   "category_hint": "network",
+   "ril": null,
+   "event": "network_registration_rejected",
+   "fields": {
+    "cause": "13",
+    "domain": "CS"
+   },
+   "source": "rules"
+  },
+  {
+   "ts": "2026-09-24T01:11:32.000Z",
+   "pid": 1234,
+   "tid": 1260,
+   "level": "I",
+   "tag": "SST-0",
+   "msg": "[PHONE0] onServiceStateChanged: regState=NOT_REGISTERED cellId=<CELL#2>",
+   "phone_id": 0,
+   "category_hint": "network",
+   "ril": null,
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  },
+  {
+   "ts": "2026-09-24T01:11:32.000Z",
+   "pid": 1234,
+   "tid": 1260,
+   "level": "I",
+   "tag": "SST-0",
+   "msg": "[PHONE0] onServiceStateChanged: regState=NOT_REGISTERED cellId=<CELL#2>",
+   "phone_id": 0,
+   "category_hint": "network",
+   "ril": null,
+   "event": "network_service_state",
+   "fields": {
+    "reg_state": "NOT_REGISTERED"
+   },
+   "source": "rules"
+  },
+  {
+   "ts": "2026-09-24T01:11:34.000Z",
+   "pid": 1234,
+   "tid": 1260,
+   "level": "W",
+   "tag": "SST-0",
+   "msg": "[PHONE0] registration rejected: cause=13 domain=PS",
+   "phone_id": 0,
+   "category_hint": "network",
+   "ril": null,
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  },
+  {
+   "ts": "2026-09-24T01:11:34.000Z",
+   "pid": 1234,
+   "tid": 1260,
+   "level": "W",
+   "tag": "SST-0",
+   "msg": "[PHONE0] registration rejected: cause=13 domain=PS",
+   "phone_id": 0,
+   "category_hint": "network",
+   "ril": null,
+   "event": "network_registration_rejected",
+   "fields": {
+    "cause": "13",
+    "domain": "PS"
+   },
+   "source": "rules"
+  }
+ ]
+}

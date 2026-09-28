@@ -1,0 +1,118 @@
+{
+ "coverage": {
+  "first_ts": "2026-09-24T23:00:00.000Z",
+  "last_ts": "2026-09-24T23:00:01.100Z",
+  "window_in_range": true,
+  "clock_anomalies": []
+ },
+ "warnings": [],
+ "events": [
+  {
+   "ts": "2026-09-24T23:00:00.000Z",
+   "pid": 1400,
+   "tid": 1410,
+   "level": "D",
+   "tag": "RILJ",
+   "msg": "[PHONE1] [UNSL]< UNSOL_SIM_STATUS_CHANGED",
+   "phone_id": 1,
+   "category_hint": "sim",
+   "ril": {
+    "serial": null,
+    "dir": "unsol",
+    "request": "UNSOL_SIM_STATUS_CHANGED",
+    "error": null,
+    "paired_ts": null,
+    "latency_ms": null
+   },
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  },
+  {
+   "ts": "2026-09-24T23:00:00.200Z",
+   "pid": 1400,
+   "tid": 1410,
+   "level": "D",
+   "tag": "RILJ",
+   "msg": "[PHONE1] [0021]> GET_SIM_STATUS",
+   "phone_id": 1,
+   "category_hint": "sim",
+   "ril": {
+    "serial": 21,
+    "dir": "req",
+    "request": "GET_SIM_STATUS",
+    "error": null,
+    "paired_ts": "2026-09-24T23:00:00.500Z",
+    "latency_ms": 300
+   },
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  },
+  {
+   "ts": "2026-09-24T23:00:00.500Z",
+   "pid": 1400,
+   "tid": 1410,
+   "level": "D",
+   "tag": "RILJ",
+   "msg": "[PHONE1] [0021]< GET_SIM_STATUS cardState=ABSENT",
+   "phone_id": 1,
+   "category_hint": "sim",
+   "ril": {
+    "serial": 21,
+    "dir": "resp",
+    "request": "GET_SIM_STATUS",
+    "error": "NONE",
+    "paired_ts": "2026-09-24T23:00:00.200Z",
+    "latency_ms": 300
+   },
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  },
+  {
+   "ts": "2026-09-24T23:00:00.600Z",
+   "pid": 1400,
+   "tid": 1410,
+   "level": "I",
+   "tag": "UiccController",
+   "msg": "[PHONE1] SIM state changed: ABSENT",
+   "phone_id": 1,
+   "category_hint": "sim",
+   "ril": null,
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  },
+  {
+   "ts": "2026-09-24T23:00:00.600Z",
+   "pid": 1400,
+   "tid": 1410,
+   "level": "I",
+   "tag": "UiccController",
+   "msg": "[PHONE1] SIM state changed: ABSENT",
+   "phone_id": 1,
+   "category_hint": "sim",
+   "ril": null,
+   "event": "sim_state_changed",
+   "fields": {
+    "state": "ABSENT"
+   },
+   "source": "rules"
+  },
+  {
+   "ts": "2026-09-24T23:00:01.100Z",
+   "pid": 1400,
+   "tid": 1410,
+   "level": "D",
+   "tag": "SubscriptionManagerService",
+   "msg": "[PHONE1] slot inactive: no card",
+   "phone_id": 1,
+   "category_hint": "sim",
+   "ril": null,
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  }
+ ]
+}
