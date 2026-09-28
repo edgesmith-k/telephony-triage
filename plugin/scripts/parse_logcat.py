@@ -8,8 +8,9 @@
       이벤트 JSON을 stdout으로 낸다.
   extract-bugreport <zip|txt> --out <dir>
       bugreport에서 logcat 섹션(system/radio/main)과 빌드 정보(build.json)만 꺼낸다.
-  cut ...
-      인터페이스만 있다. 마스킹 연결과 함께 Phase 4에서 구현한다.
+  cut <logcat...> (--evidence <match.json> | --around <ISO 시각> [--seconds 30]) --out <file>
+      [--context 20] [--max-lines 100] [--tz <IANA>] [--year <YYYY>] [--rules <db>/parser-rules]
+      판별 근거 주변 최소 구간을 마스킹된 상태로만 쓴다(fixture용).
 
 설정 읽기: 사용자 config를 읽지 않는다(시각은 `--tz`/`--year`). 파서 백엔드와
 외부 파서 설정은 플러그인 `site-defaults.yaml`에서만 읽는다. 이슈 DB 쪽 고정값
@@ -19,7 +20,7 @@
 처리 순서 (parse)
   1. 백엔드(`parser.backend`): 포맷·시각(UTC)·RIL 페어링·윈도우, builtin 판별
   2. 태그 → 카테고리 매핑(`tags.yaml`). 목록에 없는 태그의 줄은 버린다
-  3. 마스킹(`--mask`, Phase 4) — extractor보다 **먼저**
+  3. 마스킹(`--mask`) — extractor보다 **먼저**, 한 번의 파싱에 마스커 하나(같은 값 = 같은 번호)
   4. RIL 파생 이벤트(`ril.yaml` timeout): `ril_error`, `ril_timeout`, `ril_no_response`
   5. extractor(`extractors.yaml`). 패턴마다 시간 상한 `matcher.pattern_timeout_ms`
      (넘기면 그 extractor 이벤트를 버리고 `errors`·경고 `pattern-timeout`)
@@ -144,8 +145,11 @@ def _mask_record(rec: dict, masker) -> dict:
     rec = dict(rec)
     if isinstance(rec.get("msg"), str):
         rec["msg"] = masker(rec["msg"])
+    # 필드 값은 같은 마스커의 번호 대응을 쓴다: 줄에서 본 원래 값이면 같은 토큰이 된다
+    # (문맥 없는 값도 마스킹된다, 08-safety.md §8).
+    mask_value = getattr(masker, "mask_value", masker)
     rec["fields"] = {
-        k: masker(v) if isinstance(v, str) else v for k, v in (rec.get("fields") or {}).items()
+        k: mask_value(v) if isinstance(v, str) else v for k, v in (rec.get("fields") or {}).items()
     }
     return rec
 
@@ -345,7 +349,15 @@ def _in_range(window, coverage: dict) -> bool | str:
     return "partial"
 
 
-def run_parse(args, plugin_root: Path, defaults: dict, masker_factory=masking.new_masker) -> dict:
+def _read_texts(paths: list[Path]) -> str:
+    return "\n".join(p.read_text(encoding="utf-8", errors="replace") for p in paths)
+
+
+def _allow_patterns(db_cfg: dict) -> list[str]:
+    return list((db_cfg.get("mask") or {}).get("allow_patterns") or [])
+
+
+def run_parse(args, plugin_root: Path, defaults: dict) -> dict:
     paths = [Path(p) for p in args.logs]
     for path in paths:
         if not path.is_file():
@@ -375,10 +387,8 @@ def run_parse(args, plugin_root: Path, defaults: dict, masker_factory=masking.ne
 
     masker = None
     if args.mask:
-        try:
-            masker = masker_factory()
-        except masking.MaskingNotReady as exc:
-            raise UsageError(f"--mask: {exc}") from exc
+        # 입력에 이미 있는 토큰의 다음 번호부터 준다 (부분 마스킹된 로그, fixture 재파싱).
+        masker = masking.new_masker(_read_texts(paths), _allow_patterns(db_cfg))
 
     warnings: list[dict] = []
     warnings += compat.check_parser_backend(db_cfg, backend.name, backend.version())
@@ -572,6 +582,90 @@ def run_extract_bugreport(args) -> dict:
     }
 
 
+# -- cut ------------------------------------------------------------------------
+
+
+def _cut_anchors(args, lines: list) -> set[int]:
+    """앵커 줄의 전체 순번 집합."""
+    if args.around:
+        try:
+            center = logcat.parse_ts(args.around)
+        except ValueError as exc:
+            raise UsageError(f"--around는 타임존이 있는 ISO 시각이어야 합니다: {exc}") from exc
+        span = timedelta(seconds=args.seconds)
+        return {i for i, (_, line, _) in enumerate(lines) if center - span <= line.dt <= center + span}
+    try:
+        match = json.loads(Path(args.evidence).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise UsageError(f"--evidence를 읽을 수 없습니다: {exc}") from exc
+    candidates = match.get("candidates") or []
+    evidence = candidates[0].get("evidence") if candidates else None
+    if not evidence:
+        raise UsageError("--evidence: 1위 후보에 근거가 없습니다.")
+    wanted = {(e["ts"], e.get("tag")) for e in evidence}
+    return {i for i, (_, line, _) in enumerate(lines) if (logcat.format_ts(line.dt), line.tag) in wanted}
+
+
+def run_cut(args) -> dict:
+    """판별 근거(또는 지정 시각) 주변 최소 구간을 **마스킹해서** 파일로 쓴다.
+
+    앵커 줄 앞뒤 `--context` 줄(파일 순서)을 합치고, `--max-lines`를 넘으면 context를
+    줄인다. 앵커만으로도 넘으면 종료 코드 2. 여러 파일이면 시각 순으로 합친다.
+    """
+    paths = [Path(p) for p in args.logs]
+    for path in paths:
+        if not path.is_file():
+            raise UsageError(f"로그 파일이 없습니다: {path}")
+    try:
+        logcat.get_tz(args.tz)
+    except ValueError as exc:
+        raise UsageError(str(exc)) from exc
+    lines = []  # (파일 순번, LogLine, 원문 줄)
+    for index, path in enumerate(paths):
+        raw = path.read_text(encoding="utf-8", errors="replace").splitlines()
+        parsed, _ = logcat.read_file(path, index, args.tz, args.year)
+        lines += [(index, line, raw[line.line_no - 1]) for line in parsed]
+    anchors = _cut_anchors(args, lines)
+    if not anchors:
+        raise UsageError("앵커 줄이 없습니다 (시각·근거가 로그 범위 밖이거나 --tz/--year가 다름).")
+
+    def select(context: int) -> list[int]:
+        chosen: set[int] = set()
+        for i in anchors:
+            file_index = lines[i][0]
+            for j in range(max(0, i - context), min(len(lines), i + context + 1)):
+                if lines[j][0] == file_index:
+                    chosen.add(j)
+        return sorted(chosen, key=lambda j: (lines[j][1].dt, lines[j][0], lines[j][1].line_no))
+
+    context = max(0, args.context)
+    chosen = select(context)
+    while len(chosen) > args.max_lines and context > 0:
+        context -= 1
+        chosen = select(context)
+    if len(chosen) > args.max_lines:
+        raise UsageError(f"근거 줄만 {len(chosen)}줄이라 --max-lines {args.max_lines}를 넘습니다.")
+
+    allow = []
+    if args.rules:
+        allow = _allow_patterns(compat.load_db_config(Path(args.rules).parent))
+    texts = [lines[j][2] for j in chosen]
+    masker = masking.new_masker("\n".join(texts), allow)
+    masked = [masker(text) for text in texts]
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text("\n".join(masked) + "\n", encoding="utf-8", newline="\n")
+    return {
+        "out": str(out),
+        "lines": len(masked),
+        "anchors": len(anchors),
+        "context": context,
+        "masked": True,
+        "replacements": dict(sorted(masker.counts.items())),
+        "warnings": [],
+    }
+
+
 # -- main ----------------------------------------------------------------------
 
 
@@ -596,19 +690,21 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--rules", required=True, help="<db>/parser-rules")
     p.add_argument("--tz", default=None, help="연도 없는 logcat 시각의 타임존 (IANA)")
     p.add_argument("--year", type=int, default=None, help="첫 줄의 연도")
-    p.add_argument("--mask", action="store_true", help="extractor 전에 마스킹 (Phase 4)")
+    p.add_argument("--mask", action="store_true", help="extractor 전에 줄 단위 마스킹")
     p.add_argument("--no-external", action="store_true", help="외부 파서 끔 (분석 디버그용)")
 
     b = sub.add_parser("extract-bugreport", parents=[common], help="bugreport → logcat 섹션")
     b.add_argument("bugreport")
     b.add_argument("--out", required=True)
 
-    c = sub.add_parser("cut", parents=[common], help="[Phase 4] fixture 최소 구간")
-    c.add_argument("logs", nargs="*")
-    c.add_argument("--evidence")
-    c.add_argument("--around")
-    c.add_argument("--seconds", type=float, default=30)
-    c.add_argument("--out")
+    c = sub.add_parser("cut", parents=[common], help="판별 근거 주변 최소 구간 (마스킹해서 쓴다)")
+    c.add_argument("logs", nargs="+")
+    anchor = c.add_mutually_exclusive_group(required=True)
+    anchor.add_argument("--evidence", help="match_signatures.py 출력 (1위 후보의 근거)")
+    anchor.add_argument("--around", help="지정 시각 (타임존 있는 ISO)")
+    c.add_argument("--seconds", type=float, default=30, help="--around 앞뒤 초")
+    c.add_argument("--out", required=True)
+    c.add_argument("--rules", default=None, help="<db>/parser-rules (mask.allow_patterns를 읽는다)")
     c.add_argument("--context", type=int, default=20)
     c.add_argument("--max-lines", type=int, default=100)
     c.add_argument("--tz")
@@ -632,7 +728,7 @@ def main(argv: list[str] | None = None) -> int:
         elif args.cmd == "extract-bugreport":
             result = run_extract_bugreport(args)
         else:
-            raise UsageError("cut은 마스킹 함수와 함께 Phase 4에서 구현한다 (08-safety.md §8).")
+            result = run_cut(args)
     except UsageError as exc:
         print(str(exc), file=sys.stderr)
         return USAGE

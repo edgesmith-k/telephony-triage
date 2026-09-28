@@ -12,7 +12,7 @@
 - 모의 site 백엔드: `builtin.data.*`가 extractor 이벤트와 함께(source 구분)
 - 백엔드·외부 파서 불일치 경고, 외부 파서(어댑터) 실행과 `${CLAUDE_PLUGIN_ROOT}` 치환, `--no-external`
 - `sanitize_build`(`A..B`, `X.lock`, 끝 `.`)와 브랜치 이름 검사
-- `--mask`·`cut`은 Phase 4 (종료 코드 2), 마스킹 자리가 extractor보다 앞
+- 마스킹 자리가 extractor보다 앞 (`--mask`·`cut` 자체는 `tests/test_masking.py`)
 - `site-defaults.yaml` 없으면 종료 코드 2
 
 스냅샷 갱신: `python3 tests/test_parse_logcat.py --update`
@@ -572,15 +572,6 @@ def test_sanitize_build_and_branch_names():
     assert not is_valid_branch_name("fix/A..B")
     assert not is_valid_branch_name("fix/X.lock")
     assert not is_valid_branch_name("fix/abc.")
-
-
-def test_mask_and_cut_are_phase4():
-    code, _, err = _run(["parse", str(LOG_DIR / "data-connected.log"), "--full",
-                         "--rules", str(RULES), "--mask"])
-    assert code == 2 and "Phase 4" in err
-    code, _, err = _run(["cut", str(LOG_DIR / "data-connected.log"), "--around",
-                         "2026-09-23T09:00:01+09:00", "--out", str(_tmp() / "cut.log")])
-    assert code == 2 and "Phase 4" in err
 
 
 def test_masking_runs_before_extractors():

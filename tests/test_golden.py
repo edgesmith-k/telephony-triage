@@ -45,6 +45,7 @@ sys.path.insert(0, str(REPO / "plugin" / "scripts"))
 
 import logcat_gen  # noqa: E402
 import parser_backends  # noqa: E402  (plugin/scripts/parser_backends)
+from common import masking  # noqa: E402
 
 MOCK_SITE_DIR = REPO / "tests" / "mocks" / "parser_backends" / "site"
 
@@ -75,34 +76,11 @@ site_backend = _load_mock_site().BACKEND
 # 비교에서 뺄 필드 (파일 경로·순번처럼 환경에 따라 달라지는 값이 생기면 여기에).
 VOLATILE_FIELDS: tuple[str, ...] = ()
 
-# 마스킹 민감도 검사에 쓰는 임시 치환. Phase 4에서 `mask_pii`로 바꾼다.
-# 번호 토큰(`<종류#n>`)은 08-safety.md §8의 형식을 따른다.
-_MASK_PATTERNS = [
-    (re.compile(r"\bcarrierId=(?P<v>[\w.-]+)"), "CARRIER"),
-    (re.compile(r"\bcid=(?P<v>\d+)"), "CELL"),
-    (re.compile(r"\bapn=(?P<v>[\w.-]+)"), "APN"),
-]
-
-
-def _provisional_mask(text: str) -> str:
-    """Phase 4 전까지 쓰는 최소 마스킹. 같은 값 → 같은 번호."""
-    counters: dict[str, dict[str, int]] = {}
-
-    def replace(kind: str):
-        def _sub(match: re.Match) -> str:
-            value = match.group("v")
-            table = counters.setdefault(kind, {})
-            if value not in table:
-                table[value] = len(table) + 1
-            prefix = match.group(0)[: match.start("v") - match.start(0)]
-            return f"{prefix}<{kind}#{table[value]}>"
-
-        return _sub
-
-    out = text
-    for pattern, kind in _MASK_PATTERNS:
-        out = pattern.sub(replace(kind), out)
-    return out
+def _mask_text(text: str) -> str:
+    """마스킹 민감도 검사용: 파일 하나를 `mask_pii.py <file>`와 같이 마스킹한다
+    (`common/masking.py`, 번호 토큰 `<종류#n>`, 08-safety.md §8)."""
+    masker = masking.new_masker(text)
+    return "\n".join(masker(line) for line in text.split("\n"))
 
 
 def _normalize(events: list[dict]) -> list[dict]:
@@ -136,7 +114,7 @@ def build_actual(case: dict, out_dir: Path) -> dict:
 
     masked_log = out_dir / f"{case['name']}.masked.log"
     masked_log.write_text(
-        _provisional_mask(log.read_text(encoding="utf-8")),
+        _mask_text(log.read_text(encoding="utf-8")),
         encoding="utf-8",
         newline="\n",
     )

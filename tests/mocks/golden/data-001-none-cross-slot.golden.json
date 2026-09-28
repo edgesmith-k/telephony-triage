@@ -1,11 +1,12 @@
 {
   "backend": {
     "name": "site",
-    "version": "0.0.2-mock"
+    "version": "0.0.3-mock"
   },
   "builtin_events": [
     "builtin.data.setup_not_allowed",
-    "builtin.data.user_data_disabled"
+    "builtin.data.user_data_disabled",
+    "builtin.data.ip_assigned"
   ],
   "events": [
     {

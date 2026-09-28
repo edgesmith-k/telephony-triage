@@ -151,7 +151,7 @@
    "tid": 1244,
    "level": "D",
    "tag": "RILJ",
-   "msg": "[PHONE0] [0041]< SETUP_DATA_CALL error=NONE cid=1",
+   "msg": "[PHONE0] [0041]< SETUP_DATA_CALL error=NONE cid=<CELL#1>",
    "phone_id": 0,
    "category_hint": "data",
    "ril": {

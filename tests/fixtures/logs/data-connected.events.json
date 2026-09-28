@@ -104,7 +104,7 @@
    "tid": 1244,
    "level": "D",
    "tag": "RILJ",
-   "msg": "[PHONE0] [0041]< SETUP_DATA_CALL error=NONE cid=1",
+   "msg": "[PHONE0] [0041]< SETUP_DATA_CALL error=NONE cid=<CELL#1>",
    "phone_id": 0,
    "category_hint": "data",
    "ril": {
@@ -139,7 +139,7 @@
    "tid": 1244,
    "level": "D",
    "tag": "RILJ",
-   "msg": "[PHONE0] [UNSL]< UNSOL_DATA_CALL_LIST_CHANGED [cid=1 active=2]",
+   "msg": "[PHONE0] [UNSL]< UNSOL_DATA_CALL_LIST_CHANGED [cid=<CELL#1> active=2]",
    "phone_id": 0,
    "category_hint": "data",
    "ril": {

@@ -2,8 +2,9 @@
 """합성 샘플 이슈 DB의 fixture를 시나리오에서 생성한다 (11-phases.md Phase 1).
 
 `tests/mocks/sample_fixtures.yaml`의 표대로 `tests/mocks/logcat_gen.py`를 돌려
-`tests/fixtures/issue-db-sample/<type_dir>/fixtures/`에 넣는다. 생성기는
-결정적이므로 같은 시나리오는 항상 같은 파일을 낸다.
+`tests/fixtures/issue-db-sample/<type_dir>/fixtures/`에 넣는다. 로그는 마스킹 함수
+(`plugin/scripts/common/masking.py`)를 거친 뒤 쓴다. 생성기와 마스킹이 결정적이므로 같은
+시나리오는 항상 같은 파일을 낸다.
 
 fixture 파일은 **커밋한다**(이슈 DB의 일부이므로). 이 스크립트는 다시 만들 때와
 커밋된 내용이 시나리오와 맞는지 검사할 때 쓴다.
@@ -34,6 +35,22 @@ SAMPLE_DB = REPO / "tests" / "fixtures" / "issue-db-sample"
 sys.path.insert(0, str(REPO / "tests" / "mocks"))
 import logcat_gen  # noqa: E402
 
+sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+from common import masking  # noqa: E402
+
+
+def mask_log(path: Path, allow_patterns=()) -> None:
+    """생성한 로그를 마스킹해서 다시 쓴다 (모든 테스트 로그는 마스킹된 fixture만 쓴다,
+    CLAUDE.md §11.0). 파일마다 마스커 하나 — `mask_pii.py <file> --in-place`와 같다."""
+    text = path.read_text(encoding="utf-8")
+    masker = masking.new_masker(text, allow_patterns)
+    path.write_text("\n".join(masker(line) for line in text.split("\n")), encoding="utf-8", newline="\n")
+
+
+def sample_allow_patterns() -> list[str]:
+    cfg = yaml.safe_load((REPO / "tests/fixtures/issue-db-sample/issue-db.config.yaml").read_text(encoding="utf-8"))
+    return list((cfg.get("mask") or {}).get("allow_patterns") or [])
+
 
 def load_table() -> list[dict]:
     with TABLE.open(encoding="utf-8") as fh:
@@ -50,6 +67,8 @@ def _generate_one(entry: dict, out_dir: Path) -> list[Path]:
         raise SystemExit(f"시나리오가 없습니다: {scenario}")
     info = logcat_gen.generate(scenario, out_dir, name=entry["name"])
     paths = [Path(p) for p in info["files"]]
+    for path in paths:
+        mask_log(path, sample_allow_patterns())
     if info["expect"]:
         paths.append(Path(info["expect"]))
     return paths

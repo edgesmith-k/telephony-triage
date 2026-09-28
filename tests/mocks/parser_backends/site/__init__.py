@@ -27,9 +27,11 @@ import re
 
 from ..reference import ReferenceBackend
 
-VERSION = "0.0.2-mock"
+VERSION = "0.0.3-mock"
 
 # 판별 규칙 — 문구는 placeholder다. TODO(SITE:S9)
+# `builtin.data.ip_assigned`는 원본 값(IP)을 필드로 낸다. `parse --mask`가 builtin 필드도
+# 같은 번호 토큰으로 마스킹하는지 시험하기 위한 것이다 (11-phases.md Phase 4).
 DETECTORS = [
     (
         "builtin.data.setup_not_allowed",
@@ -40,6 +42,11 @@ DETECTORS = [
         "builtin.data.user_data_disabled",
         re.compile(r"^DSM-\d+$"),
         re.compile(r"onDataEnabledChanged:\s*enabled=(?P<enabled>false)\s*reason=(?P<reason>\w+)"),
+    ),
+    (
+        "builtin.data.ip_assigned",
+        re.compile(r"^DN-.+$"),
+        re.compile(r"onConnected:.*\bip=(?P<ip>\S+)"),
     ),
 ]
 

@@ -13,7 +13,7 @@
 
 - 카테고리 6개에 유형 1개씩, 원인 7개(DATA-001만 2개), Jira 기록 9건, 피드백 3건.
 - fixture는 모두 **합성**이다(`origin: synthetic`). `tests/mocks/scenarios/`의 시나리오에서
-  `tests/helpers/make_sample_fixtures.py`가 만든다. 목록은 `tests/mocks/sample_fixtures.yaml`.
+  `tests/helpers/make_sample_fixtures.py`가 만들고, **마스킹 함수를 거친 뒤** 쓴다(Phase 4). 목록은 `tests/mocks/sample_fixtures.yaml`.
   - 다시 만들기: `python3 tests/helpers/make_sample_fixtures.py`
   - 커밋된 내용과 시나리오가 맞는지: `python3 tests/helpers/make_sample_fixtures.py --check`
 - 사내 값(Jira 키 형식, GHE org/팀, 빌드명, 로그 문구)은 모의 값이고 `TODO(SITE:...)`로 표시돼 있다.

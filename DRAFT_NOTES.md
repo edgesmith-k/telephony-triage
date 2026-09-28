@@ -8,8 +8,8 @@
 ## 진행 상태
 
 - 모드: **사외 초안** (`.local-draft` 있음)
-- 완료 Phase: **D0, 1** (2026-09-28), **2, 3** (2026-09-29)
-- 다음 Phase: **4** (마스킹)
+- 완료 Phase: **D0, 1** (2026-09-28), **2, 3, 4** (2026-09-29)
+- 다음 Phase: **5** (생성기, 린터, 회귀)
 - Phase 2~6은 사용자가 미리 승인해서 Phase마다 확인을 기다리지 않고 진행한다(각 Phase 끝에 커밋·push). 완료 기준 점검 결과는 Phase별 절에 적는다.
 - 기준 문서 세트: `telephony-triage-docs-v11` (`CHANGES.md` 참고)
 - 레포 루트: 이 파일이 있는 디렉토리 (`CLAUDE.md`, `docs/design/`, `plugin/`,
@@ -250,6 +250,61 @@
 - **시간 상한 구현**: `re`는 실행 중 끊을 수 없어서 작업 프로세스(spawn) 하나에 줄 목록을 한 번 넘기고 패턴마다 결과를 기다린다. 넘기면 프로세스를 끝내고 다음 패턴에서 다시 띄운다. 호출마다 프로세스 기동 비용(이 PC에서 약 0.15초)이 든다. 매처는 상한을 넘긴 시그니처를 `errors`에 남기고 불충족으로 본다. `--regress`의 실패 처리(종료 코드)는 `db_regress`·`db_verify`(Phase 5·10)가 `errors`를 보고 한다.
 - **시그니처 오류**(없는 sequence id, 정규식 오류 등)는 이슈 DB 오류라 종료 코드 2.
 
+### Phase 4에서 만든 것
+
+| 산출물 | 경로 |
+|---|---|
+| 마스킹 함수 | `plugin/scripts/common/masking.py` (`Masker`: 규칙 표, 번호 토큰, 기존 토큰 다음 번호, 멱등, `allow_patterns`, `mask_value`, `find`) |
+| 마스킹 CLI | `plugin/scripts/mask_pii.py` (치환 `--in-place`/`--out`/stdout, `--check` 파일·`--staged`·`--changed <ref>`, `--events`) |
+| `parse --mask` 연결 | `plugin/scripts/parse_logcat.py` (입력 전체의 기존 토큰을 먼저 보고, 줄·builtin·외부 파서 레코드를 extractor 전에 마스킹. 필드 값은 같은 번호 대응) |
+| `cut` | `plugin/scripts/parse_logcat.py cut` (`--around`/`--evidence`, `--context`, `--max-lines`, 마스킹된 줄만 쓴다) |
+| 마스킹된 fixture 생성 | `tests/helpers/make_sample_fixtures.py`, `make_log_fixtures.py`가 생성한 로그를 마스킹해서 쓴다 |
+| Phase 4 테스트 | `tests/test_masking.py` (16개) |
+
+### Phase 4 완료 기준 확인 결과
+
+`python3 tests/test_masking.py` — **16개 전부 통과**. `python3 -m pytest tests` 전체 **94개 통과**.
+
+| 완료 기준 | 확인 | 어디서 |
+|---|---|---|
+| `08-safety.md §8` 항목별 누락/과잉 (자격증명 `<CRED#n>`: SIP Digest `response=`·`nonce=`, AKA `RES`, `password=`) | ✅ 누락 30줄·과잉 12줄 | `test_each_kind_is_masked`, `test_no_over_masking` |
+| Jira 응답 JSON 텍스트를 `mask_pii --events`로 → 전화번호·IMEI 토큰 | ✅ (날짜·빌드 필드는 그대로) | `test_mask_pii_jira_json_via_events` |
+| 같은 셀 ID = 같은 `<CELL#n>`, 다른 셀 = 다른 번호 | ✅ | `test_numbered_tokens_and_existing_tokens`, `test_extractor_reads_masked_values` |
+| 이미 `<CELL#1>`이 있는 입력의 새 셀 → `<CELL#2>` | ✅ (함수·`parse --mask` 둘 다) | `test_numbered_tokens_and_existing_tokens`, `test_existing_tokens_continue_numbering_in_parse` |
+| 빌드 번호·타임스탬프 오탐 없음 | ✅ | `test_no_over_masking` |
+| 같은 입력 = 같은 출력, 마스킹된 입력에 다시 적용해도 같음 | ✅ | `test_deterministic_and_idempotent`, `test_parse_mask_pipeline_matches_phase3` |
+| `parse --mask` → 매처 결과가 Phase 3와 같음 | ✅ 샘플 fixture 전부(`--regress` S/C·후보·점수) | `test_parse_mask_pipeline_matches_phase3` |
+| 원본 식별자가 든 줄에서 extractor가 마스킹된 값을 추출 | ✅ | `test_extractor_reads_masked_values` |
+| 모의 site 백엔드의 원본 값 `builtin.*` 필드도 마스킹 | ✅ (`builtin.data.ip_assigned`) | `test_site_backend_builtin_fields_are_masked` |
+| `cut` 결과 파일에 원본 식별자 없음 | ✅ (`--around`·`--evidence`, 잘라낸 fixture로 같은 원인) | `test_cut_writes_only_masked_lines` |
+| (`mask_pii --check`의 `--staged`·`--changed`, 종료 코드 1) | ✅ | `test_mask_pii_check_staged_and_changed`, `test_mask_pii_replace_and_check_files` |
+| (커밋된 fixture가 모두 마스킹돼 있음) | ✅ | `test_sample_db_fixtures_are_masked` |
+
+### Phase 4에서 바꾼 이전 산출물
+
+| 대상 | 무엇을 | 왜 |
+|---|---|---|
+| `tests/helpers/make_sample_fixtures.py`, `make_log_fixtures.py` | 생성한 로그를 마스킹해서 쓴다 | "모든 테스트 로그는 마스킹된 fixture만 쓴다"(`CLAUDE.md` §11.0). 시나리오 원문의 RIL 응답 `cid=1`이 셀 문맥(`cid=`)에 걸린다 |
+| 샘플 fixture `DATA-001.none.log`·`DATA-001.none.2.log`, 파서 fixture 3개와 스냅샷 | `cid=1` → `cid=<CELL#1>` | 위와 같음 |
+| `tests/test_golden.py` | 임시 치환(`_provisional_mask`)을 `common/masking.py`로 | 가정 10 (Phase 4에서 바꾼다) |
+| `tests/mocks/parser_backends/site/__init__.py` | `builtin.data.ip_assigned`(원본 IP를 필드로) 추가, 버전 `0.0.3-mock`, 모의 골든 갱신 | Phase 4 완료 기준 "원본 값을 담은 builtin 필드도 마스킹" |
+| `plugin/scripts/parse_logcat.py` | `--mask` 연결, `cut` 구현, 필드는 `mask_value`로 | Phase 2의 인터페이스 자리를 채움 |
+| `tests/test_parse_logcat.py` | `test_mask_and_cut_are_phase4` 삭제 (23개) | 기능이 생겼다. `tests/test_masking.py`가 대신한다 |
+
+### Phase 4 구현에서 정한 세부
+
+- **번호 순서**: 규칙마다 위치를 먼저 모은 뒤 **텍스트에 나온 순서**로 번호를 준다(규칙 순서가 아니다). 한 마스커 안에서는 줄이 달라도 같은 값 = 같은 번호.
+- **규칙 우선순위**: 자격증명 → SIP·tel URI·이메일·SUPI/SUCI → 문맥 있는 IMSI/IMEI/ICCID/TMSI/GUTI/셀/번호 → 번호·MAC·IP 형식 → 문맥 없는 15자리(Luhn이면 IMEI, MCC 200~799면 IMSI)·`89`로 시작하는 19~20자리(ICCID). 앞 규칙이 차지한 구간과 기존 토큰은 뒤 규칙이 다시 보지 않는다.
+- **자격증명 문맥**: `response=`·`nonce=`·`cnonce=`·`opaque=`는 줄에 `Authorization`·`WWW-Authenticate`·`Proxy-*`·`Digest`가 있을 때만. `key=`는 값이 16자 이상이고 숫자가 있을 때만(설정 키 이름 오탐 방지). `password`·`passwd`·`pwd`·`secret`·`token`은 항상.
+- **셀 문맥 키**: `mCi mPci mTac mLac mCid mNci mCellId cid ci pci tac lac nci eci cellId cellIdentity`. `mEarfcn`(채널 번호)은 식별자가 아니라 두지 않는다. RIL 데이터 콜 응답의 `cid`(context id)도 셀로 본다 — 과잉이지만 안전 쪽이다(TODO(SITE:S13)).
+- **숫자 경계**: 숫자 값은 앞뒤가 단어 문자·`.`·`*`가 아닐 때만 본다(`_20260915` 같은 빌드명 안, `310260xxxx` 같은 Android 부분 마스킹, `1.2.3` 버전 안의 숫자를 건드리지 않는다).
+- **`mask_value`(필드 값)**: 같은 마스커가 이미 본 원래 값과 정확히 같으면 그 토큰(문맥 없는 필드 값 `"4321"`도 `<CELL#1>`), 아니면 텍스트로 마스킹.
+- **`parse --mask`**: 마스커는 파싱 한 번에 하나. 입력 파일 전체 텍스트의 기존 토큰을 먼저 본다. 마스킹 순서는 후처리 순서(시각 정렬된 레코드 순, 줄 → 그 줄의 builtin), 그다음 외부 파서 레코드.
+- **`mask_pii` 치환 모드**: 파일마다 마스커 하나. `--in-place`/`--out`이 없으면 파일 하나를 stdout으로(여러 파일은 `--in-place` 필요). 요약 JSON은 `{files: [{path, replacements: {종류: 건수}}]}`.
+- **`mask_pii --check`**: 결과 `{checked, detections: [{path, line, col, kind}]}` — 값은 내지 않는다. 있으면 종료 코드 1. `--staged`는 `git diff --cached`(ACMR) 파일의 index 내용, `--changed <ref>`는 `merge-base <ref> HEAD` 이후 바뀐 파일과 추적 안 된 파일의 워킹 트리 내용. NUL 바이트가 있는 파일은 건너뛴다. `allow_patterns`는 `--db`(없으면 cwd의 이슈 DB) 설정에서 읽는다.
+- **`mask_pii --events`**: `events` 목록이 있으면 각 `msg`·`fields`, 없으면(예: Jira 응답) 모든 문자열 값을 마스킹하고 최상위에 `masked: true`.
+- **`cut`**: 앵커는 `--around`면 ±`--seconds`의 줄, `--evidence`면 매처 출력 1위 후보 근거의 `(ts, tag)`와 같은 줄. 앵커마다 같은 파일에서 앞뒤 `--context` 줄을 합치고, `--max-lines`를 넘으면 context를 줄인다(앵커만으로 넘으면 종료 코드 2). 여러 파일은 시각 순으로 합친다. `--rules`를 주면 그 이슈 DB의 `allow_patterns`를 쓴다. 출력 `{out, lines, anchors, context, masked: true, replacements}`.
+
 ## 개발 환경과 설계의 차이 (중요)
 
 설계는 실행 환경을 **Ubuntu(Linux)** 로 못박는다 (`01-architecture.md §3`,
@@ -319,9 +374,9 @@ Windows 전용 보정은 커밋하지 않는다.**
 9. `config.py`는 D0에서 **site-defaults 로드와 종료 코드 2 경로만** 있다.
    `check`/`set`/`sync-scripts-path`는 Phase 6에서 구현한다(지금은 종료
    코드 2로 "Phase 6에서 구현한다"를 낸다).
-10. 마스킹 함수(`mask_pii`)는 Phase 4다. 골든 테스트의 마스킹 민감도
-    검사는 그때까지 `tests/test_golden.py` 안의 임시 치환을 쓴다.
-    Phase 4에서 `mask_pii`로 바꾼다.
+10. 마스킹 함수는 Phase 4에서 만들었고, 골든 테스트의 마스킹 민감도 검사도 그 함수를
+    쓴다. 탐지 규칙(키 이름·형식)은 일반적인 Android 로그 기준이고 사내 로그의 오탐·누락은
+    S13에서 확인한다.
 11. 의존성은 `pyyaml`, `jsonschema`, `pytest`만 썼다. 사내 반입 규정과
     오픈소스 승인 대상이다(사용자 확인 필요). 타임존 변환은 표준 `zoneinfo`를 쓰므로
     Ubuntu의 시스템 tzdata가 필요하다(보통 설치돼 있다).
@@ -342,6 +397,9 @@ Windows 전용 보정은 커밋하지 않는다.**
     구현에서 정한 세부"에 정했다(계약에 없음).
 18. 정규식 시간 상한은 작업 프로세스로 구현했다(새 의존성 없음). 사내 반입 규정상
     `regex` 모듈(자체 timeout 지원)을 쓸 수 있으면 더 가볍게 바꿀 수 있다.
+19. 마스킹 IMSI 옵션 "MCC/MNC 유지"(`08-safety.md §8` 표)와 SIP 도메인 유지 옵션은 만들지
+    않았다. 지금은 IMSI 전체를 토큰으로 바꾸고, SIP URI는 사용자 부분만 바꾸고 도메인은 둔다.
+    설정 키가 정해지면(`mask.*`) 더한다.
 
 ## 모의와 실제가 다를 것으로 예상되는 지점
 
@@ -364,7 +422,7 @@ Windows 전용 보정은 커밋하지 않는다.**
 
 ## 사내 확인 목록 (`TODO(SITE:S<n>)`)
 
-`python3 tools/list_site_todos.py`로 갱신한다(Windows 콘솔에서는 `PYTHONIOENCODING=utf-8`). 2026-09-29(Phase 3 끝) 기준 **50곳**(Phase 3에서 늘지 않음). Phase 2에서 파서 엔진(S7 시계 이상 기준·S9 RILJ 형식·S20 슬롯 표기·S21 bugreport 헤더)과 새 시나리오 4개가 더해졌다:
+`python3 tools/list_site_todos.py`로 갱신한다(Windows 콘솔에서는 `PYTHONIOENCODING=utf-8`). 2026-09-29(Phase 4 끝) 기준 **52곳**. Phase 4에서 S13(마스킹 오탐·누락, 셀 문맥의 `cid`)이 생겼다:
 
 ### S1 (1곳)
 - `tests/mocks/skills/data-analyzer/SKILL.md:63` — 스킬 이름과 호출 방식 확인.
@@ -421,6 +479,10 @@ Windows 전용 보정은 커밋하지 않는다.**
 ### S12 (1곳)
 - `tests/mocks/builds.yaml:3` — .
 
+### S13 (2곳)
+- `plugin/scripts/common/masking.py:18` — .
+- `plugin/scripts/common/masking.py:94` — RIL 데이터 콜 응답의 `cid`(context id)도 셀로 본다(과잉이지만 안전 쪽)
+
 ### S16 (1곳)
 - `tests/fixtures/issue-db-sample/issue-db.config.yaml:12` — 사내 Jira 키 형식
 
@@ -441,7 +503,7 @@ Windows 전용 보정은 커밋하지 않는다.**
 - `tests/mocks/scenarios/README.md:10` — )
 
 ### S21 (2곳)
-- `plugin/scripts/parse_logcat.py:438` — 사내 실제 문자열로 확인한다.
+- `plugin/scripts/parse_logcat.py:485` — 사내 실제 문자열로 확인한다.
 - `tests/mocks/logcat_gen.py:35` — 사내 실제 문자열 확인
 
 > 아직 코드가 없는 곳(S3 `jira.tools` 확정, S8 태그 수집 목록, S13 마스킹
@@ -454,7 +516,7 @@ Windows 전용 보정은 커밋하지 않는다.**
 
 | 항목 | 상태 |
 |---|---|
-| 전체 테스트 통과 | 🟡 D0·Phase 1~3 범위 (`pytest tests` 79개). `db_regress`·eval은 Phase 5·13 뒤 |
+| 전체 테스트 통과 | 🟡 D0·Phase 1~4 범위 (`pytest tests` 94개). `db_regress`·eval은 Phase 5·13 뒤 |
 | 사내 정보 없음 | ✅ 사내 자료를 쓰지 않았다 |
 | `plugin/site-defaults.yaml` 없고 example만 있음 | ✅ `test_plugin_root_helper_and_missing_site_defaults`가 검사 |
 | `SITE_PATHS`의 다른 경로가 비어 있음 | ✅ `test_site_paths_are_absent_in_draft`가 검사 |
@@ -468,15 +530,13 @@ Windows 전용 보정은 커밋하지 않는다.**
 
 1. 새 세션을 열어 **빈 플러그인 실험**을 돌리고 위 "사외 Claude Code 실험
    결과" 표를 채운다 (`tests/mocks/plugin-probe/README.md`). 아직 미확인이다.
-2. (선택, 사내) **S-0 선행 확인**이 이제 가능하다: `parse_logcat.py`(reference 백엔드)와
-   `match_signatures.py`만 사내로 가져가 실제 로그 3~5개로 돌려 본다
-   (`15-local-draft.md §15.5` S-0). 사외에서는 기다리지 않고 Phase 4로 간다.
-3. **Phase 4** (마스킹): `docs/design/11-phases.md` Phase 4 절과 그 "읽을 문서"를 읽고
-   `common/masking.py`의 `new_masker()`와 `mask_pii.py`, `parse --mask`, `cut`을 만든다.
-   - 마스킹 자리는 Phase 2에서 만들었다: `parse_logcat.postprocess(masker=...)`가
-     extractor보다 먼저 줄·builtin·외부 파서 레코드의 `msg`·`fields`에 적용한다.
-   - Phase 3 매처는 `masked: true`만 받는다. Phase 4 완료 기준 "`parse --mask` → 매처
-     파이프라인이 Phase 3 결과와 같다"는 `tests/test_match_signatures.py`의 입력을
-     `--mask` 출력으로 바꿔 같은 결과가 나오는지로 확인한다.
-   - 골든 테스트의 임시 치환(`tests/test_golden.py`의 `_provisional_mask`)을 `mask_pii`로
-     바꾼다 (가정 10).
+2. (선택, 사내) **S-0 선행 확인**이 가능하다: `parse_logcat.py`(reference 백엔드),
+   `match_signatures.py`, `mask_pii.py`를 사내로 가져가 실제 로그 3~5개로 돌려 본다
+   (`15-local-draft.md §15.5` S-0). 사외에서는 기다리지 않는다.
+3. **Phase 5** (생성기, 린터, 회귀): `docs/design/11-phases.md` Phase 5 절과 그 "읽을 문서"를
+   읽고 `db_build.py`, `db_lint.py`, `db_regress.py`, 캐시(`.cache/compiled.json`)를 만든다.
+   - 이미 있는 부품: `common/issuedb.py`(유형·Jira·피드백 읽기), `common/yamlio.py`(날짜 정규화),
+     `common/signatures.py`(컴파일), `common/parser_rules.py`(규칙 로드·검증),
+     `common/compat.py`(백엔드·외부 파서 고정 비교), `common/masking.py`(`find`로 원본 식별자 검사).
+   - `db_regress`는 fixture를 `parse --mask`로 파싱하고 매처 `--regress`로 판정한다. 매처 출력의
+     `errors`(정규식 시간 상한 초과)는 실패로 본다(04 §5.8 (4)). 백엔드·외부 파서 불일치면 종료 코드 2.
