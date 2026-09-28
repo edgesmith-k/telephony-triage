@@ -1,0 +1,101 @@
+{
+  "source": "analyze",
+  "schema_version": 1,
+  "started_at": "2026-09-27T18:02+09:00",
+  "base_sha": "0123456789abcdef0123456789abcdef01234567",
+  "jira": {
+    "key": "MOCK-1001",
+    "origin": "mcp",
+    "model": "MOCK-A56",
+    "sw": "MOCKA56_U1_20260915",
+    "android_version": "16",
+    "carrier": "MockTel KR",
+    "date": "2026-09-27",
+    "occurred_on": "2026-09-20",
+    "note": "슬롯 0에서 데이터가 붙지 않음"
+  },
+  "operations": [
+    {
+      "op": "add-parser-rule",
+      "file": "extractors.yaml",
+      "section": "extractors",
+      "rule": {
+        "id": "data-retry-suppressed",
+        "tag_regex": "^DRM-\\d+$",
+        "patterns": ["no retry scheduled:\\s*(?P<reason>.+)"],
+        "event": "data_retry_suppressed",
+        "fields": ["reason"],
+        "added_for": "NEW-CAUSE-1",
+        "added_on": "2026-09-27",
+        "reason": "재시도 억제 사유 추출"
+      }
+    },
+    {
+      "op": "new-cause",
+      "temp_id": "NEW-CAUSE-1",
+      "type": "DATA-001",
+      "cause": {
+        "title": "APN 설정 없음",
+        "description": "기본 APN 프로파일이 없어 데이터 평가가 거부됨",
+        "signatures": [
+          {
+            "id": "no-default-apn",
+            "must_event": [
+              {"id": "rejected", "event": "data_evaluation_rejected", "fields": {"reasons": ".*NO_SUITABLE_DATA_PROFILE.*"}},
+              {"id": "suppressed", "event": "data_retry_suppressed"}
+            ],
+            "sequence": ["rejected", "suppressed"],
+            "same_phone": true,
+            "window_sec": 60
+          }
+        ],
+        "recovery_signatures": [],
+        "scenario_signatures": [],
+        "resolution": "캐리어 설정의 APN 프로파일을 다시 내려받는다",
+        "resolution_type": "carrier-config",
+        "resolution_verification": {"status": "unverified"},
+        "fix": {"status": "open", "ref": null, "fixed_in": []},
+        "related": [],
+        "android_versions": ["16"],
+        "code_refs": []
+      },
+      "body": "- **로그 예시**: (마스킹된 로그)\n- **확인 방법**: 평가 거부 사유가 NO_SUITABLE_DATA_PROFILE이다\n- **재현 시나리오**: APN 프로파일을 지운 상태로 데이터 사용\n- **해결책**: 캐리어 설정의 APN 프로파일을 다시 내려받는다\n- **코드 위치**: DataProfileManager\n- **비고**: 없음\n"
+    },
+    {
+      "op": "add-fixture",
+      "for": "NEW-CAUSE-1",
+      "kind": "positive",
+      "path": "/home/mock/.telephony-triage/work/MOCK-1001/fixtures/cut-1.log",
+      "occurred_at": "2026-09-20T14:32:10+09:00"
+    },
+    {
+      "op": "add-code-ref",
+      "cause": "NEW-CAUSE-1",
+      "code_ref": {
+        "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataRetryManager.java",
+        "symbol": "DataRetryManager#evaluateDataSetupRetry",
+        "android_versions": ["17"]
+      }
+    },
+    {
+      "op": "add-related",
+      "a": "NEW-CAUSE-1",
+      "b": "DATA-001-02"
+    }
+  ],
+  "extra_samples": [
+    {"path": "/home/mock/.telephony-triage/work/MOCK-1001/extra/a.log", "expect": "match"},
+    {"path": "/home/mock/.telephony-triage/work/MOCK-1001/extra/b.log", "expect": "nomatch"}
+  ],
+  "feedback": {
+    "date": "2026-09-27T18:30+09:00",
+    "suggested": [
+      {"cause": "DATA-001-01", "signature": "DATA-001-01/data-disabled", "score": 0.44}
+    ],
+    "decision": "new-cause",
+    "final": "NEW-CAUSE-1"
+  },
+  "commit_message": "[NEW-CAUSE-1] add MOCK-1001: APN 설정 없음",
+  "pr": {"number": null, "branch": "issue/MOCK-1001", "head_sha": null},
+  "included_pending": []
+}

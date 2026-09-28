@@ -8,8 +8,8 @@
 ## 진행 상태
 
 - 모드: **사외 초안** (`.local-draft` 있음)
-- 완료 Phase: **D0** (2026-09-28)
-- 다음 Phase: **1** (이슈 DB 뼈대와 합성 샘플)
+- 완료 Phase: **D0, 1** (2026-09-28)
+- 다음 Phase: **2** (logcat 파서 엔진)
 - 기준 문서 세트: `telephony-triage-docs-v11` (`CHANGES.md` 참고)
 - 레포 루트: 이 파일이 있는 디렉토리 (`CLAUDE.md`, `docs/design/`, `plugin/`,
   `tests/`, `tools/`가 같이 있다)
@@ -57,6 +57,65 @@
 | 레포 루트에 `.mcp.json` 없음 | ✅ | `test_no_mcp_json_at_repo_root` |
 | `import_draft.py` 두 번 반입 (SITE_PATHS 보존·삭제·유지·멈춤) | ✅ | `tests/test_import_draft.py` |
 | 골든 테스트 틀 동작 | ✅ | `tests/test_golden.py` |
+
+### Phase 1에서 만든 것
+
+합성 샘플 이슈 DB `tests/fixtures/issue-db-sample/` (운영 이슈 DB와 같은 모양).
+
+| 산출물 | 경로 |
+|---|---|
+| 설정 | `issue-db.config.yaml` (schema_version 1, generator_version 1, `external_parsers: {}`, `parser_backend: reference`, `matcher.pattern_timeout_ms`), `.gitignore`, `.gitattributes` |
+| 스키마 6종 | `schema/{type,jira,feedback,plan,parser-rules,expect}.schema.json` |
+| 템플릿 3종 | `templates/{type.md,cause.yaml,jira.yaml}` |
+| 파서 규칙 | `parser-rules/{tags,ril,extractors}.yaml` (extractor 14개, 전부 placeholder 문구) |
+| 협업 | `.github/CODEOWNERS`, `.github/pull_request_template.md`, `CONTRIBUTING.md`, `GLOSSARY.md`, `docs/{getting-started,review-guide,branch-protection}.md` |
+| 유형 6개 | `data/DATA-001-no-setup-data-call`(원인 2), `call/CALL-001-volte-not-working`, `network/NETWORK-001-no-service`, `sim/SIM-001-sim-not-detected`, `sms/SMS-001-sms-send-failed`, `ims/IMS-001-ims-registration-failed` |
+| Jira 기록 9건 | `MOCK-1101~1104`(DATA, 하나는 `unresolved`), `MOCK-2101`, `MOCK-3101`, `MOCK-4101`, `MOCK-5101`, `MOCK-6101` |
+| 피드백 3건 | `feedback/2026-09/` (`accepted`, `unresolved`, `manual`) |
+| fixture 20개 | 양성 6, 음성 9, `fixed` 1, `resolved` 1, `recurrence` 1, `extra` 1 + 각 `.expect.yaml`(`origin: synthetic`) |
+| fixture 생성 | 시나리오 20개(`tests/mocks/scenarios/`), 목록 `tests/mocks/sample_fixtures.yaml`, 생성·검사 `tests/helpers/make_sample_fixtures.py` |
+| 샘플 작업 계획 3개 | `tests/fixtures/plans/*.plan.json` (analyze / record(pending) / review) — `plan.schema.json` 검사용 |
+| 운영용 뼈대 | `tools/make_db_skeleton.py` |
+| Phase 1 테스트 | `tests/test_sample_db.py` (19개) |
+| fixture 안내 | `tests/fixtures/README.md` (샘플 트리 안의 D0 자리표시 README는 지웠다 — 그 이름은 생성 파일이다) |
+
+샘플이 일부러 담고 있는 상태 (뒤 Phase의 시험 대상)
+
+- `DATA-001-01`: `sequence` + `same_phone` 시그니처, 해결책 `verified`(근거 Jira `MOCK-1102`), Android 16/17 경로가 다른 `code_refs`
+- `DATA-001-02`: `android_versions: []`(전 버전), 해결책 `unverified`
+- `CALL-001-01`: `fix.status: fixed` + `verification` + `verification_history`(`partial`), `scenario_signatures`·`recovery_signatures`, `related: [IMS-001-01]`(양방향), 해결책 `verified`(근거 `resolved` fixture)
+- `CALL-001-01.expect.yaml`: `also_allowed: [IMS-001-01]` (같은 로그에 IMS 등록 실패도 실제로 있다)
+- `NETWORK-001-01`: `cp_evidence` 예시, `resolution_type: network`
+- `SIM-001-01`: `fix.status: fix-submitted`(+`ref`·`fixed_in` 빌드), `scenario_signatures`
+- `SMS-001-01`: `fix.status: wont-fix`(본문에 사유)
+- `IMS-001-01`: `verify-fix` 실패로 `open`으로 되돌아온 이력(`verification_history`의 `failed` + 그때의 `ref`·`fixed_in`)과 `recurrence` fixture. 코드 수정 유형인데 흔적 시그니처가 없어 월간 리뷰 "fixed 전환 불가" 대상이다
+- 음성 fixture는 카테고리마다 두 개인 곳이 있다(call, sim, data). 흔적 시그니처가 **그 카테고리 음성 fixture 전부에서** 충족되면 R1이 실패해야 하기 때문이다 (`05-verification.md §5.12 (1)`)
+
+### Phase 1 완료 기준 확인 결과
+
+`python3 tests/test_sample_db.py` — **19개 전부 통과** (`pytest tests` 전체 37개 통과).
+
+| 완료 기준 | 확인 | 어디서 |
+|---|---|---|
+| 샘플이 모든 JSON 스키마를 통과 | ✅ | `test_type_frontmatter_validates`, `test_jira_records_validate`, `test_feedback_records_validate`, `test_expect_files_validate`, `test_parser_rules_validate`, `test_sample_plans_validate` |
+| 스키마 6종이 유효한 JSON Schema | ✅ | `test_schemas_are_valid_json_schema` |
+| 파일 배치가 `03-issue-db.md §5.2`와 같음 | ✅ | `test_sample_tree_layout`, `test_no_generated_files_committed` |
+| fixture 이름이 `contracts.md §fixture`와 같음 | ✅ | `test_fixture_names_match_contract` |
+| 원인마다 양성 fixture 있음 | ✅ | `test_every_active_cause_has_positive_fixture` |
+| fixture가 시나리오에서 결정적으로 재생성됨 | ✅ | `test_fixtures_match_scenarios` |
+| ID·참조 정합(접두어·순서·related 양방향·Jira cause·evidence·also_allowed) | ✅ | `test_ids_and_category_prefixes`, `test_related_is_bidirectional`, `test_jira_cause_exists`, `test_verification_references_exist`, `test_also_allowed_targets_other_types`, `test_signature_references_exist_in_parser_rules` |
+| 뼈대에 유형·Jira·fixture·피드백이 없고 스키마 통과 | ✅ | `test_skeleton_has_no_types_and_validates` |
+| placeholder 목록 보고 | ✅ | 아래 "사내 확인 목록" |
+
+### Phase 1에서 바꾼 D0 산출물
+
+| 대상 | 무엇을 | 왜 |
+|---|---|---|
+| `tests/mocks/scenarios/data-001-none-cross-slot.yaml` | 슬롯 배치를 바꿨다: 슬롯 0에 거부 로그 + 곧 이어지는 정상 연결, 슬롯 1에 설정 OFF | D0 원본은 슬롯 1 하나에 원인 로그가 다 모여 있어 그 슬롯만으로 `DATA-001-01`이 충족됐다(양성이지 음성이 아니다). 지금 배치는 원인 시그니처의 `same_phone`(슬롯 0의 거부 + 슬롯 1의 설정 OFF로 충족되면 안 됨)과 증상의 `must_not_match`(같은 윈도우의 `SETUP_DATA_CALL`)를 함께 시험하고 `expect_top: none`이 성립한다 |
+| `tests/mocks/golden/data-001-none-cross-slot.golden.json` | `tests/test_golden.py --update`로 갱신 | 위 시나리오 변경 반영 (모의 골든이다. 사내 진짜 골든은 사용자 승인 없이 갱신하지 않는다) |
+| `tests/test_mocks.py::test_logcat_generation_slots_and_clock` | 슬롯 혼재 확인을 `DNC-0`+`DSM-1`로 | 같은 이유 |
+| `tests/mocks/scenarios/call-001-01-positive.yaml` | `expect`에 `also_allowed: [IMS-001-01]` 추가 | 그 로그에 IMS 등록 실패도 실제로 있다 (`contracts.md §fixture`) |
+| `tests/fixtures/issue-db-sample/README.md` | 지우고 `tests/fixtures/README.md`로 옮김 | 샘플 트리는 운영 이슈 DB와 같은 모양이어야 하고, 루트 `README.md`는 `db_build.py`가 만드는 생성 파일 이름이다 |
 
 ## 개발 환경과 설계의 차이 (중요)
 
@@ -155,7 +214,8 @@ Windows 전용 보정은 커밋하지 않는다.**
 
 ## 사내 확인 목록 (`TODO(SITE:S<n>)`)
 
-`python3 tools/list_site_todos.py`로 갱신한다. 2026-09-28 기준:
+`python3 tools/list_site_todos.py`로 갱신한다. 2026-09-28(Phase 1 끝) 기준 **50곳**.
+Phase 1에서 샘플 이슈 DB가 생기면서 S5·S9·S11이 늘고 S16~S19가 새로 생겼다:
 
 ### S1 (1곳)
 - `tests/mocks/skills/data-analyzer/SKILL.md:63` — 스킬 이름과 호출 방식 확인
@@ -163,30 +223,48 @@ Windows 전용 보정은 커밋하지 않는다.**
 ### S4 (1곳)
 - `plugin/site-defaults.example.yaml:38` — 사내 Jira 시각 타임존
 
-### S5 (2곳)
+### S5 (3곳)
 - `plugin/site-defaults.example.yaml:50` — 사내 GHE 호스트
 - `plugin/site-defaults.example.yaml:51` — 사내 org
+- `tests/fixtures/issue-db-sample/.github/CODEOWNERS:3` — org·팀 이름
 
 ### S7 (1곳)
 - `plugin/site-defaults.example.yaml:54` — logcat 시각 타임존
 
-### S9 (5곳)
+### S9 (16곳) — 로그 문구·태그·RIL 출력 형식
+- `tests/fixtures/issue-db-sample/data/DATA-001-no-setup-data-call/type.md:119`
+- `tests/fixtures/issue-db-sample/parser-rules/extractors.yaml:10` (extractor 14개 전체)
+- `tests/fixtures/issue-db-sample/parser-rules/ril.yaml:3`
+- `tests/fixtures/issue-db-sample/parser-rules/tags.yaml:7,23,27,30,34`
 - `tests/mocks/logcat_gen.py:61` — RILJ 요청/응답 출력 형식
 - `tests/mocks/parser_backends/site/__init__.py:55` — 판별 규칙 문구
-- `tests/mocks/scenarios/call-001-01-positive.yaml:2`
-- `tests/mocks/scenarios/data-001-01-positive.yaml:2`
-- `tests/mocks/scenarios/data-001-02-roaming.yaml:2`
+- `tests/mocks/scenarios/{call-001-01-positive,data-001-01-positive,data-001-02-roaming,network-001-01-positive,sim-001-01-positive,sms-001-01-positive}.yaml:2`
 
-### S10 (1곳)
+### S10 (2곳)
+- `tests/mocks/scenarios/ims-001-01-positive.yaml:2` — IMS 로그 문구
 - `tests/mocks/src/README.md:17` — 벤더 RIL 태그·소스 구조
 
-### S11 (3곳)
+### S11 (7곳) — 소스 경로
+- `tests/fixtures/issue-db-sample/{ims,network,sim,sms}/*/type.md` — 아직 `code_refs`를 못 채운 원인 4개
 - `tests/mocks/src/android16/build/make/core/version_defaults.mk:1`
 - `tests/mocks/src/android17/build/make/core/version_defaults.mk:1`
 - `tests/mocks/src/README.md:10` — 트리 버전 식별 파일
 
 ### S12 (1곳)
-- `tests/mocks/builds.yaml:3` — 빌드명 체계
+- `tests/mocks/builds.yaml:3` — 빌드명 체계 (샘플 `issue-db.config.yaml`의 `build_compare`가 이것을 쓴다)
+
+### S16 (1곳)
+- `tests/fixtures/issue-db-sample/issue-db.config.yaml:12` — `jira_key_regex`
+
+### S17 (1곳)
+- `tests/fixtures/issue-db-sample/issue-db.config.yaml:11` — `jira_base_url`
+
+### S18 (1곳)
+- `tests/fixtures/issue-db-sample/issue-db.config.yaml:32` — `fix_ref_regex`
+
+### S19 (2곳)
+- `tests/fixtures/issue-db-sample/.github/CODEOWNERS:5` — 리뷰어 형식
+- `tests/fixtures/issue-db-sample/issue-db.config.yaml:68` — `reviewers.format`
 
 ### S20 (3곳)
 - `plugin/site-defaults.example.yaml:47` — Jira 슬롯 필드 유무
@@ -206,19 +284,24 @@ Windows 전용 보정은 커밋하지 않는다.**
 
 | 항목 | 상태 |
 |---|---|
-| 전체 테스트 통과 | 🟡 D0 범위만 (`pytest tests` 18개). `db_regress`·eval은 Phase 1~13 뒤 |
+| 전체 테스트 통과 | 🟡 D0·Phase 1 범위 (`pytest tests` 37개). `db_regress`·eval은 Phase 2~13 뒤 |
 | 사내 정보 없음 | ✅ 사내 자료를 쓰지 않았다 |
 | `plugin/site-defaults.yaml` 없고 example만 있음 | ✅ `test_plugin_root_helper_and_missing_site_defaults`가 검사 |
 | `SITE_PATHS`의 다른 경로가 비어 있음 | ✅ `test_site_paths_are_absent_in_draft`가 검사 |
 | 레포 루트에 `.mcp.json` 없음 | ✅ `test_no_mcp_json_at_repo_root`가 검사 |
 | `.local-draft`를 반입 묶음에 넣지 않음 | ✅ `.gitignore` 등록 + `import_draft.py`가 항상 제외 |
-| 이슈 DB 뼈대 (`make_db_skeleton.py`) | ⏳ Phase 1 |
+| 이슈 DB 뼈대 (`make_db_skeleton.py`) | ✅ Phase 1. `test_skeleton_has_no_types_and_validates`가 검사 |
 | `TODO(SITE)` 목록 갱신 | ✅ 위 절 (Phase가 끝날 때마다 다시 뽑는다) |
 | `DRAFT_NOTES.md` 최신 | ✅ 이 파일 |
 
 ## 다음 세션에서 할 일
 
 1. 새 세션을 열어 **빈 플러그인 실험**을 돌리고 위 "사외 Claude Code 실험
-   결과" 표를 채운다 (`tests/mocks/plugin-probe/README.md`).
-2. **Phase 1** 시작: `docs/design/11-phases.md` Phase 1 절과 그 "읽을 문서"를
-   읽고 이슈 DB 합성 샘플·스키마·뼈대를 만든다.
+   결과" 표를 채운다 (`tests/mocks/plugin-probe/README.md`). 아직 미확인이다.
+2. **Phase 2** 시작: `docs/design/11-phases.md` Phase 2 절과 그 "읽을 문서"를
+   읽고 파서 백엔드 인터페이스와 `parse_logcat.py`를 만든다.
+   - Phase 1의 `parser-rules/`(태그 15개, RIL 요청 6·unsol 5, extractor 14)가
+     파서의 규칙 입력이다. 하드코딩하지 않고 `--rules`로 읽는다.
+   - Phase 2의 fixture는 `tests/fixtures/logs/`에 따로 만든다(이슈 DB 안의
+     fixture와 섞지 않는다).
+   - D0의 모의 site 백엔드를 `base.py` 상속으로 바꾸고, 모의 골든을 다시 확인한다.

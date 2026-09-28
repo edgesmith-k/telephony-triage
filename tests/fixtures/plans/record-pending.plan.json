@@ -1,0 +1,52 @@
+{
+  "source": "record",
+  "schema_version": 1,
+  "started_at": "2026-09-28T09:00+09:00",
+  "base_sha": "89abcdef0123456789abcdef0123456789abcdef",
+  "jira": {
+    "key": "MOCK-5001",
+    "origin": "file",
+    "model": "MOCK-A56",
+    "sw": "MOCKA56_U1_20260920",
+    "android_version": "16",
+    "carrier": "MockTel KR",
+    "date": "2026-09-28",
+    "note": "사용자가 직접 확인해 해결한 건을 기록"
+  },
+  "operations": [
+    {
+      "op": "new-cause",
+      "temp_id": "NEW-CAUSE-1",
+      "type": "SMS-001",
+      "cause": {
+        "title": "수신 필터 차단",
+        "description": "스팸 필터가 해당 발신번호를 차단해 수신되지 않음",
+        "signatures": [],
+        "signatures_pending": true,
+        "recovery_signatures": [],
+        "scenario_signatures": [],
+        "resolution": "메시지 앱의 차단 목록에서 해당 발신번호를 푼다",
+        "resolution_type": "user-setting",
+        "resolution_verification": {"status": "unverified", "method": "근거: 사용자 진술"},
+        "fix": {"status": "not-a-bug", "ref": null, "fixed_in": []},
+        "related": [],
+        "android_versions": [],
+        "code_refs": []
+      },
+      "body": "- **확인 방법**: 사용자가 차단 목록에서 발신번호를 확인함 (로그 분석 없음)\n- **재현 시나리오**: 차단된 번호에서 문자 발신\n- **해결책**: 차단 목록에서 해당 발신번호를 푼다\n- **비고**: 수동 기록. 판별 시그니처 없음(pending)\n"
+    },
+    {
+      "op": "append",
+      "cause": "NEW-CAUSE-1"
+    }
+  ],
+  "feedback": {
+    "date": "2026-09-28T09:20+09:00",
+    "suggested": [],
+    "decision": "manual",
+    "final": "NEW-CAUSE-1"
+  },
+  "commit_message": "[NEW-CAUSE-1] record MOCK-5001: 수신 필터 차단",
+  "pr": {"number": null, "branch": "issue/MOCK-5001", "head_sha": null},
+  "included_pending": []
+}

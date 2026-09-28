@@ -1,0 +1,18 @@
+# IMS-001-01 재발 fixture (IMS-001-01.recurrence.MOCKB77_U2_20260920.log).
+# 수정 CL이 반영된 빌드에서 같은 403 거절이 다시 나타나 verify-fix가 실패했다
+# (05-verification.md §5.12 (2)). 기대값은 양성과 같다.
+name: IMS-001-01.recurrence.MOCKB77_U2_20260920
+start: "2026-09-27T14:05:00+09:00"
+default_phone: 0
+pid: 1600
+tid: 1610
+build:
+  fingerprint: "mock/mockb77/b77:17/MOCKBUILD/MOCKB77_U2_20260920:user/release-keys"
+  build: MOCKB77_U2_20260920
+expect:
+  expect_top: IMS-001-01
+entries:
+  - {at: 0, tag: ImsResolver, msg: "bound to mock ImsService"}
+  - {after: 2, tag: ImsManager, msg: "register: impu=sip:<IMPU#1>@ims.mnc001.mcc450.3gppnetwork.org"}
+  - {after: 3, tag: ImsRegistration, level: W, msg: "onRegistrationFailed: code=403 reason=FORBIDDEN"}
+  - {after: 40, tag: ImsRegistration, level: W, msg: "onRegistrationFailed: code=403 reason=FORBIDDEN"}

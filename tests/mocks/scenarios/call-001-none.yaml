@@ -1,0 +1,16 @@
+# call 음성 fixture 1 (CALL-001.none.log): VoLTE 발신이 정상으로 끝난다.
+# 발신 시도는 있지만 실패 코드가 없으므로 증상(CALL-001)이 아니다.
+name: CALL-001.none
+start: "2026-09-17T09:00:00+09:00"
+default_phone: 0
+pid: 1300
+tid: 1312
+expect:
+  expect_top: none
+entries:
+  - {at: 0, tag: ImsRegistration, level: I, msg: "onRegistered: transport=LTE impu=sip:<IMPU#1>@ims.mnc001.mcc450.3gppnetwork.org"}
+  - {after: 10, tag: "ImsPhoneCallTracker", msg: "dial: isVolteEnabled=true imsRegistered=true"}
+  - {after: 0.5, ril_request: DIAL, serial: 55, args: "clir=0"}
+  - {after: 1.0, ril_response: DIAL, serial: 55, result: "error=NONE"}
+  - {after: 2, tag: "ImsPhoneCallTracker", msg: "call state changed: ACTIVE"}
+  - {after: 25, tag: "ImsPhoneCallTracker", msg: "call state changed: DISCONNECTED"}

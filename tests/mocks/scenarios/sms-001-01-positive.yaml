@@ -1,0 +1,19 @@
+# SMS-001-01 양성: SMSC 주소가 비어 있어 전송이 실패한다.
+# 태그·문구는 placeholder다 — TODO(SITE:S9)
+name: SMS-001-01
+start: "2026-09-26T13:00:00+09:00"
+default_phone: 0
+pid: 1500
+tid: 1510
+build:
+  fingerprint: "mock/mocka56/a56:16/MOCKBUILD/MOCKA56_U1_20260920:user/release-keys"
+  build: MOCKA56_U1_20260920
+expect:
+  expect_top: SMS-001-01
+  occurred_at: "2026-09-26T13:00:05+09:00"
+entries:
+  - {at: 0, tag: SmsDispatchersController, level: I, msg: "sendText: dest=<MSISDN#1> parts=1"}
+  - {after: 4, tag: SmsDispatchersController, level: W, msg: "getSmscAddress: null"}
+  - {after: 1, tag: SmsDispatchersController, level: W, msg: "sendSms failed: result=GENERIC_FAILURE"}
+  - {after: 10, tag: SmsDispatchersController, level: W, msg: "getSmscAddress: null"}
+  - {after: 1, tag: SmsDispatchersController, level: W, msg: "sendSms failed: result=GENERIC_FAILURE"}

@@ -10,6 +10,9 @@ build:
   build: MOCKB77_U2_20260910
 expect:
   expect_top: CALL-001-01
+  # 같은 로그에 IMS 등록 실패도 실제로 있다. IMS-001-01이 함께 잡히는 것을
+  # 허용한다 (contracts.md §fixture also_allowed, allow-cause op).
+  also_allowed: [IMS-001-01]
   occurred_at: "2026-09-18T19:44:00+09:00"
 entries:
   - {at: 0, tag: ImsResolver, msg: "bound to mock ImsService"}

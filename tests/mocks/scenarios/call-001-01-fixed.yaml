@@ -1,0 +1,24 @@
+# CALL-001-01 수정 후 fixture (CALL-001-01.fixed.MOCKB77_U2_20260920.log).
+# 재현 시나리오(VoLTE 발신)를 수행한 흔적이 있고, IMS 등록·통화가 정상이다.
+# - 시나리오 흔적: ims_dial_attempt
+# - 정상 동작(recovery): onRegistered → dial(imsRegistered=true) → call state ACTIVE
+# - 원인 시그니처(등록 실패 → 미등록 발신)는 충족되지 않는다.
+name: CALL-001-01.fixed.MOCKB77_U2_20260920
+start: "2026-09-26T10:00:00+09:00"
+default_phone: 0
+pid: 1300
+tid: 1312
+build:
+  fingerprint: "mock/mockb77/b77:17/MOCKBUILD/MOCKB77_U2_20260920:user/release-keys"
+  build: MOCKB77_U2_20260920
+expect:
+  expect_not: CALL-001-01
+entries:
+  - {at: 0, tag: ImsResolver, msg: "bound to mock ImsService"}
+  - {after: 4, tag: ImsRegistration, level: I, msg: "onRegistered: transport=LTE impu=sip:<IMPU#1>@ims.mnc001.mcc450.3gppnetwork.org"}
+  - {after: 20, tag: "ImsPhoneCallTracker", msg: "dial: isVolteEnabled=true imsRegistered=true"}
+  - {after: 0.5, ril_request: DIAL, serial: 91, args: "clir=0"}
+  - {after: 1.1, ril_response: DIAL, serial: 91, result: "error=NONE"}
+  - {after: 2, tag: "ImsPhoneCallTracker", msg: "call state changed: DIALING"}
+  - {after: 3, tag: "ImsPhoneCallTracker", msg: "call state changed: ACTIVE"}
+  - {after: 30, tag: "ImsPhoneCallTracker", msg: "call state changed: DISCONNECTED"}

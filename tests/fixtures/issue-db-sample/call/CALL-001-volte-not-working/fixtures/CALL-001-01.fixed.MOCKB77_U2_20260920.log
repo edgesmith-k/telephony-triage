@@ -1,0 +1,8 @@
+09-26 10:00:00.000  1300  1312 D ImsResolver: [PHONE0] bound to mock ImsService
+09-26 10:00:04.000  1300  1312 I ImsRegistration: [PHONE0] onRegistered: transport=LTE impu=sip:<IMPU#1>@ims.mnc001.mcc450.3gppnetwork.org
+09-26 10:00:24.000  1300  1312 D ImsPhoneCallTracker: [PHONE0] dial: isVolteEnabled=true imsRegistered=true
+09-26 10:00:24.500  1300  1312 D RILJ: [PHONE0] [0091]> DIAL clir=0
+09-26 10:00:25.600  1300  1312 D RILJ: [PHONE0] [0091]< DIAL error=NONE
+09-26 10:00:27.600  1300  1312 D ImsPhoneCallTracker: [PHONE0] call state changed: DIALING
+09-26 10:00:30.600  1300  1312 D ImsPhoneCallTracker: [PHONE0] call state changed: ACTIVE
+09-26 10:01:00.600  1300  1312 D ImsPhoneCallTracker: [PHONE0] call state changed: DISCONNECTED

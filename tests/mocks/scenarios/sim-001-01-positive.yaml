@@ -1,0 +1,20 @@
+# SIM-001-01 양성: 카드 상태 조회가 CARD_IO_ERROR로 끝나고 SIM이 ABSENT가 된다. 슬롯 1.
+# 태그·문구는 placeholder다 — TODO(SITE:S9)
+name: SIM-001-01
+start: "2026-09-25T16:20:00+09:00"
+default_phone: 1
+pid: 1400
+tid: 1410
+build:
+  fingerprint: "mock/mockb77/b77:17/MOCKBUILD/MOCKB77_U2_20260910:user/release-keys"
+  build: MOCKB77_U2_20260910
+expect:
+  expect_top: SIM-001-01
+  occurred_at: "2026-09-25T16:20:03+09:00"
+entries:
+  - {at: 0, ril_request: GET_SIM_STATUS, serial: 11}
+  - {after: 1, tag: UiccController, level: W, msg: "onIccCardStatusDone: error=CARD_IO_ERROR"}
+  - {after: 2, tag: UiccController, level: W, msg: "SIM state changed: ABSENT"}
+  - {after: 5, ril_request: GET_SIM_STATUS, serial: 12}
+  - {after: 1, tag: UiccController, level: W, msg: "onIccCardStatusDone: error=CARD_IO_ERROR"}
+  - {after: 1, tag: SubscriptionManagerService, level: W, msg: "no subscription for slot: iccid=<ICCID#1>"}

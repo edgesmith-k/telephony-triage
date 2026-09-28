@@ -1,0 +1,45 @@
+{
+  "source": "review",
+  "schema_version": 1,
+  "started_at": "2026-10-01T10:00+09:00",
+  "base_sha": "abcdef0123456789abcdef0123456789abcdef01",
+  "jira": null,
+  "operations": [
+    {
+      "op": "update-signature",
+      "owner": "IMS-001-01",
+      "kind": "scenario",
+      "signature": {
+        "id": "ims-register-attempt",
+        "must_match": ["ImsManager.*register:"],
+        "window_sec": 300
+      }
+    },
+    {
+      "op": "allow-cause",
+      "fixture": "fixtures/CALL-001-01.log",
+      "cause": "IMS-001-01"
+    },
+    {
+      "op": "set-resolution",
+      "cause": "DATA-001-02",
+      "resolution": "데이터 로밍 설정을 켠다. 로밍 요금제 가입 여부도 함께 확인한다",
+      "resolution_type": "user-setting"
+    },
+    {
+      "op": "set-status",
+      "id": "SMS-001-01",
+      "status": "deprecated"
+    },
+    {
+      "op": "reclassify",
+      "jira": "MOCK-1104",
+      "from": "unresolved",
+      "to": "DATA-001-01"
+    }
+  ],
+  "feedback": null,
+  "commit_message": "[DATA-001] review 2026-10: 시그니처·해결책 정리",
+  "pr": {"number": 42, "branch": "review/data-2026-10", "head_sha": "1234567"},
+  "included_pending": []
+}

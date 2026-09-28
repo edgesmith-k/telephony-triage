@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "feedback/<YYYY-MM>/<JIRA-KEY>-<timestamp>.yaml (03-issue-db.md §5.4 (3))",
+  "description": "분석 제안 수락/거절 기록. decision: manual은 수동 기록(record)이고 suggested가 비어 있으며 수락률·1위 정확도 통계에서 제외한다 (06-collaboration.md §6.5).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["jira", "date", "by", "suggested", "decision", "final"],
+  "properties": {
+    "jira": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9]*-[0-9]+$"},
+    "date": {
+      "description": "계획의 feedback.date (Step 7 저장 시각). 파일명 timestamp도 같은 값이다.",
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}(:[0-9]{2})?([+-][0-9]{2}:?[0-9]{2}|Z)$"
+    },
+    "by": {"type": "string", "minLength": 1},
+    "suggested": {
+      "description": "매처가 제시한 후보 (순위순). signature는 전역 키 <원인 ID>/<sig id>.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["cause", "signature", "score"],
+        "properties": {
+          "cause": {"$ref": "#/$defs/causeId"},
+          "signature": {"type": "string", "pattern": "^[A-Z][A-Z0-9]*-[0-9]{3}(-[0-9]{2})?/[a-z0-9][a-z0-9-]*$"},
+          "score": {"type": "number", "minimum": 0, "maximum": 1}
+        }
+      }
+    },
+    "decision": {"enum": ["accepted", "chose-other", "new-cause", "new-type", "unresolved", "manual"]},
+    "final": {
+      "description": "확정한 원인 ID 또는 unresolved. 계획의 temp_id는 적용 시점에 실제 ID로 치환된다 (contracts.md §작업 계획).",
+      "type": "string",
+      "pattern": "^([A-Z][A-Z0-9]*-[0-9]{3}-[0-9]{2}|unresolved)$"
+    }
+  },
+  "allOf": [
+    {
+      "$comment": "수동 기록은 제시된 후보가 없다 (03-issue-db.md §5.4 (3))",
+      "if": {"properties": {"decision": {"const": "manual"}}, "required": ["decision"]},
+      "then": {"properties": {"suggested": {"maxItems": 0}}}
+    },
+    {
+      "$comment": "unresolved 결정은 final도 unresolved다",
+      "if": {"properties": {"decision": {"const": "unresolved"}}, "required": ["decision"]},
+      "then": {"properties": {"final": {"const": "unresolved"}}}
+    }
+  ],
+  "$defs": {
+    "causeId": {"type": "string", "pattern": "^[A-Z][A-Z0-9]*-[0-9]{3}-[0-9]{2}$"}
+  }
+}

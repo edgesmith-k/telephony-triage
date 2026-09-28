@@ -1,0 +1,13 @@
+# ims 음성 fixture (IMS-001.none.log): IMS 등록이 정상으로 끝난다.
+name: IMS-001.none
+start: "2026-09-16T18:00:00+09:00"
+default_phone: 0
+pid: 1600
+tid: 1610
+expect:
+  expect_top: none
+entries:
+  - {at: 0, tag: ImsResolver, msg: "bound to mock ImsService"}
+  - {after: 2, tag: ImsManager, msg: "register: impu=sip:<IMPU#1>@ims.mnc001.mcc450.3gppnetwork.org"}
+  - {after: 3, tag: ImsRegistration, level: I, msg: "onRegistered: transport=LTE impu=sip:<IMPU#1>@ims.mnc001.mcc450.3gppnetwork.org"}
+  - {after: 60, tag: ImsRegistration, level: I, msg: "onRegistered: transport=LTE impu=sip:<IMPU#1>@ims.mnc001.mcc450.3gppnetwork.org"}

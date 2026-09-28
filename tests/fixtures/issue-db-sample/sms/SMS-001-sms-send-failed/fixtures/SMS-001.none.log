@@ -1,0 +1,5 @@
+09-16 15:00:00.000  1500  1510 I SmsDispatchersController: [PHONE0] sendText: dest=<MSISDN#1> parts=1
+09-16 15:00:00.500  1500  1510 I SmsDispatchersController: [PHONE0] getSmscAddress: <MSISDN#2>
+09-16 15:00:01.000  1500  1510 D RILJ: [PHONE0] [0061]> SEND_SMS
+09-16 15:00:02.200  1500  1510 D RILJ: [PHONE0] [0061]< SEND_SMS error=NONE messageRef=7
+09-16 15:00:02.500  1500  1510 I SmsDispatchersController: [PHONE0] sendSms done: result=SUCCESS

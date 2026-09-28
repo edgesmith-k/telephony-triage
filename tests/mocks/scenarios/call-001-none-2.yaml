@@ -1,0 +1,16 @@
+# call 음성 fixture 2 (CALL-001.none.2.log): IMS 등록만 정상이고 통화 시도가 없다.
+#
+# 목적: CALL-001-01의 시나리오 흔적(`volte-dial-attempt`)과 정상 동작 시그니처가
+# **그 카테고리의 모든 음성 fixture에서 충족되지는 않는지** 확인한다
+# (05-verification.md §5.12 (1) R1 흔적 검사: 아무 로그에나 맞는 흔적 금지).
+name: CALL-001.none.2
+start: "2026-09-17T20:00:00+09:00"
+default_phone: 0
+pid: 1300
+tid: 1312
+expect:
+  expect_top: none
+entries:
+  - {at: 0, tag: ImsResolver, msg: "bound to mock ImsService"}
+  - {after: 3, tag: ImsRegistration, level: I, msg: "onRegistered: transport=LTE impu=sip:<IMPU#1>@ims.mnc001.mcc450.3gppnetwork.org"}
+  - {after: 60, tag: ImsRegistration, level: I, msg: "onRegistered: transport=LTE impu=sip:<IMPU#1>@ims.mnc001.mcc450.3gppnetwork.org"}

@@ -1,0 +1,43 @@
+# 합성 샘플 이슈 DB의 fixture 목록 (11-phases.md Phase 1)
+#
+# `tests/helpers/make_sample_fixtures.py`가 이 표대로 `tests/mocks/logcat_gen.py`를
+# 돌려 `tests/fixtures/issue-db-sample/<type_dir>/fixtures/`에 넣는다.
+# 생성기는 결정적이므로 같은 시나리오는 항상 같은 파일을 낸다
+# (`--check`로 커밋된 fixture와 재생성 결과가 같은지 검사한다).
+#
+# 파일 이름 규칙은 `contracts.md §fixture`다. `name`이 곧 파일 이름이고,
+# `<name>.log`와 (시나리오에 expect가 있으면) `<name>.expect.yaml`이 나온다.
+# 모든 fixture는 합성이므로 `.expect.yaml`에 `origin: synthetic`이 붙는다.
+
+fixtures:
+  # --- data ---
+  - {scenario: data-001-01-positive.yaml,     type_dir: data/DATA-001-no-setup-data-call,        name: DATA-001-01,      kind: positive}
+  - {scenario: data-001-02-roaming.yaml,      type_dir: data/DATA-001-no-setup-data-call,        name: DATA-001-02,      kind: positive}
+  - {scenario: data-001-02-extra.yaml,        type_dir: data/DATA-001-no-setup-data-call,        name: DATA-001-02.extra.1,  kind: extra}
+  - {scenario: data-001-none.yaml,            type_dir: data/DATA-001-no-setup-data-call,        name: DATA-001.none,    kind: negative}
+  - {scenario: data-001-none-cross-slot.yaml, type_dir: data/DATA-001-no-setup-data-call,        name: DATA-001.none.2,  kind: negative}
+
+  # --- call ---
+  - {scenario: call-001-01-positive.yaml,     type_dir: call/CALL-001-volte-not-working,         name: CALL-001-01,      kind: positive}
+  - {scenario: call-001-01-fixed.yaml,        type_dir: call/CALL-001-volte-not-working,         name: CALL-001-01.fixed.MOCKB77_U2_20260920, kind: fixed}
+  - {scenario: call-001-01-resolved.yaml,     type_dir: call/CALL-001-volte-not-working,         name: CALL-001-01.resolved.1, kind: resolved}
+  - {scenario: call-001-none.yaml,            type_dir: call/CALL-001-volte-not-working,         name: CALL-001.none,    kind: negative}
+  - {scenario: call-001-none-2.yaml,          type_dir: call/CALL-001-volte-not-working,         name: CALL-001.none.2,  kind: negative}
+
+  # --- network ---
+  - {scenario: network-001-01-positive.yaml,  type_dir: network/NETWORK-001-no-service,          name: NETWORK-001-01,   kind: positive}
+  - {scenario: network-001-none.yaml,         type_dir: network/NETWORK-001-no-service,          name: NETWORK-001.none, kind: negative}
+
+  # --- sim ---
+  - {scenario: sim-001-01-positive.yaml,      type_dir: sim/SIM-001-sim-not-detected,            name: SIM-001-01,       kind: positive}
+  - {scenario: sim-001-none.yaml,             type_dir: sim/SIM-001-sim-not-detected,            name: SIM-001.none,     kind: negative}
+  - {scenario: sim-001-none-2.yaml,           type_dir: sim/SIM-001-sim-not-detected,            name: SIM-001.none.2,   kind: negative}
+
+  # --- sms ---
+  - {scenario: sms-001-01-positive.yaml,      type_dir: sms/SMS-001-sms-send-failed,             name: SMS-001-01,       kind: positive}
+  - {scenario: sms-001-none.yaml,             type_dir: sms/SMS-001-sms-send-failed,             name: SMS-001.none,     kind: negative}
+
+  # --- ims ---
+  - {scenario: ims-001-01-positive.yaml,      type_dir: ims/IMS-001-ims-registration-failed,     name: IMS-001-01,       kind: positive}
+  - {scenario: ims-001-01-recurrence.yaml,    type_dir: ims/IMS-001-ims-registration-failed,     name: IMS-001-01.recurrence.MOCKB77_U2_20260920, kind: recurrence}
+  - {scenario: ims-001-none.yaml,             type_dir: ims/IMS-001-ims-registration-failed,     name: IMS-001.none,     kind: negative}

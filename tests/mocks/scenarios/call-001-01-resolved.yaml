@@ -1,0 +1,21 @@
+# CALL-001-01 해결책 적용 후 fixture (CALL-001-01.resolved.1.log).
+# 캐리어 설정의 VoLTE 항목을 켠 뒤 같은 시나리오를 수행했다. 수정 빌드가 아니라
+# 해결책(설정) 근거이므로 이슈 발생 당시 빌드다 (05-verification.md §5.12 (1)).
+name: CALL-001-01.resolved.1
+start: "2026-09-24T14:00:00+09:00"
+default_phone: 0
+pid: 1300
+tid: 1312
+build:
+  fingerprint: "mock/mockb77/b77:17/MOCKBUILD/MOCKB77_U2_20260910:user/release-keys"
+  build: MOCKB77_U2_20260910
+expect:
+  expect_not: CALL-001-01
+entries:
+  - {at: 0, tag: ImsResolver, msg: "bound to mock ImsService"}
+  - {after: 2, tag: ImsManager, msg: "carrier config applied: volte_available=true"}
+  - {after: 3, tag: ImsRegistration, level: I, msg: "onRegistered: transport=LTE impu=sip:<IMPU#1>@ims.mnc001.mcc450.3gppnetwork.org"}
+  - {after: 15, tag: "ImsPhoneCallTracker", msg: "dial: isVolteEnabled=true imsRegistered=true"}
+  - {after: 0.5, ril_request: DIAL, serial: 81, args: "clir=0"}
+  - {after: 1.1, ril_response: DIAL, serial: 81, result: "error=NONE"}
+  - {after: 2, tag: "ImsPhoneCallTracker", msg: "call state changed: ACTIVE"}

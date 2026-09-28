@@ -1,0 +1,16 @@
+# sim 음성 fixture 1 (SIM-001.none.log): SIM이 정상 인식된다.
+# 시나리오 흔적(GET_SIM_STATUS)은 여기에도 있다 — 흔적 검사는 음성 fixture
+# **전부**에서 충족되는 것만 막는다 (SIM-001.none.2.log 참고).
+name: SIM-001.none
+start: "2026-09-16T07:00:00+09:00"
+default_phone: 0
+pid: 1400
+tid: 1410
+expect:
+  expect_top: none
+entries:
+  - {at: 0, ril_request: GET_SIM_STATUS, serial: 11}
+  - {after: 0.8, ril_response: GET_SIM_STATUS, serial: 11, result: "error=NONE state=PRESENT"}
+  - {after: 1, tag: UiccController, level: I, msg: "SIM state changed: READY"}
+  - {after: 2, tag: UiccController, level: I, msg: "SIM state changed: LOADED"}
+  - {after: 1, tag: SubscriptionManagerService, level: I, msg: "subscription loaded: iccid=<ICCID#1>"}

@@ -1,0 +1,18 @@
+# DATA-001-02 추가 표본 (R6 표본을 fixture로 승격한 예: DATA-001-02.extra.1.log).
+# 같은 원인, 다른 단말·다른 시각의 로그다.
+name: DATA-001-02.extra.1
+start: "2026-09-24T21:10:00+09:00"
+default_phone: 0
+pid: 1290
+tid: 1301
+build:
+  fingerprint: "mock/mocka56/a56:16/MOCKBUILD/MOCKA56_U1_20260920:user/release-keys"
+  build: MOCKA56_U1_20260920
+expect:
+  expect_top: DATA-001-02
+entries:
+  - {at: 0, tag: "SST-{phone}", msg: "onRoamingOn: roaming=true"}
+  - {after: 1.5, tag: "DSM-{phone}", msg: "isDataRoamingEnabled=false"}
+  - {after: 0.8, tag: "DNC-{phone}", level: I, msg: "onEvaluateNetworkRequests: reason=ROAMING_STATE_CHANGED"}
+  - {after: 0.4, tag: "DNC-{phone}", level: W, msg: "evaluation result: NOT_ALLOWED reasons=[ROAMING_DISABLED]"}
+  - {after: 6, tag: "DNC-{phone}", level: W, msg: "evaluation result: NOT_ALLOWED reasons=[ROAMING_DISABLED]"}

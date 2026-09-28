@@ -1,0 +1,19 @@
+# NETWORK-001-01 양성: 망 등록이 거절 코드 13으로 반복 거절된다.
+# 태그·문구는 placeholder다 — TODO(SITE:S9)
+name: NETWORK-001-01
+start: "2026-09-24T10:11:00+09:00"
+default_phone: 0
+pid: 1234
+tid: 1260
+build:
+  fingerprint: "mock/mocka56/a56:16/MOCKBUILD/MOCKA56_U1_20260920:user/release-keys"
+  build: MOCKA56_U1_20260920
+expect:
+  expect_top: NETWORK-001-01
+  occurred_at: "2026-09-24T10:11:02+09:00"
+entries:
+  - {at: 0, tag: "SST-{phone}", level: I, msg: "onServiceStateChanged: regState=NOT_REGISTERED cellId=<CELL#1>"}
+  - {after: 2, tag: "SST-{phone}", level: W, msg: "registration rejected: cause=13 domain=PS"}
+  - {after: 10, tag: "SST-{phone}", level: W, msg: "registration rejected: cause=13 domain=CS"}
+  - {after: 20, tag: "SST-{phone}", level: I, msg: "onServiceStateChanged: regState=NOT_REGISTERED cellId=<CELL#2>"}
+  - {after: 2, tag: "SST-{phone}", level: W, msg: "registration rejected: cause=13 domain=PS"}

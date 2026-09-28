@@ -1,0 +1,13 @@
+# sim 음성 fixture 2 (SIM-001.none.2.log): 이미 로딩된 상태의 가입자 로그만 있다.
+# SIM 상태 조회(GET_SIM_STATUS)가 없으므로 SIM-001-01의 시나리오 흔적이
+# 충족되지 않는다 (05-verification.md §5.12 (1) R1 흔적 검사).
+name: SIM-001.none.2
+start: "2026-09-16T12:00:00+09:00"
+default_phone: 0
+pid: 1400
+tid: 1410
+expect:
+  expect_top: none
+entries:
+  - {at: 0, tag: SubscriptionManagerService, level: I, msg: "subscription active: iccid=<ICCID#1>"}
+  - {after: 30, tag: SubscriptionManagerService, level: I, msg: "default data subscription unchanged"}

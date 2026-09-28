@@ -51,12 +51,31 @@ entries:
 
 ## 만들어 둔 시나리오
 
-| 파일 | 쓰임 |
-|---|---|
-| `data-001-01-positive.yaml` | DATA-001-01(데이터 설정 꺼짐) 양성. 슬롯 0 |
-| `data-001-02-roaming.yaml` | DATA-001-02(로밍 꺼짐) 양성. 슬롯 1 |
-| `data-001-none.yaml` | 음성(정상 데이터 연결) |
-| `data-001-none-cross-slot.yaml` | **교차 슬롯 음성**: 슬롯 0의 증상 + 슬롯 1의 원인 로그 (`11-phases.md` Phase 1) |
-| `call-001-01-positive.yaml` | CALL-001-01(VoLTE 실패) 양성 |
-| `clock-anomaly.yaml` | 시계 역행·점프 (`coverage.clock_anomalies` 시험) |
-| `bugreport-wrap.yaml` | `--bugreport txt|zip` 래핑 시험 |
+합성 샘플 이슈 DB의 fixture는 아래 시나리오에서 나온다. 어느 시나리오가 어느
+fixture가 되는지는 `tests/mocks/sample_fixtures.yaml`에 있고,
+`tests/helpers/make_sample_fixtures.py`가 생성·검사한다 (`11-phases.md` Phase 1).
+
+| 파일 | 쓰임 | fixture |
+|---|---|---|
+| `data-001-01-positive.yaml` | DATA-001-01(데이터 설정 꺼짐) 양성. 슬롯 0 | `DATA-001-01.log` |
+| `data-001-02-roaming.yaml` | DATA-001-02(로밍 꺼짐) 양성. 슬롯 1 | `DATA-001-02.log` |
+| `data-001-02-extra.yaml` | DATA-001-02 추가 표본 | `DATA-001-02.extra.1.log` |
+| `data-001-none.yaml` | 음성(정상 데이터 연결) | `DATA-001.none.log` |
+| `data-001-none-cross-slot.yaml` | **교차 슬롯 음성**: 슬롯 0의 거부 로그 + 슬롯 1의 원인 로그. `same_phone`과 `must_not_match`를 함께 시험한다 | `DATA-001.none.2.log` |
+| `call-001-01-positive.yaml` | CALL-001-01(VoLTE 실패) 양성. IMS 등록 실패도 있어 `also_allowed` 예시가 된다 | `CALL-001-01.log` |
+| `call-001-01-fixed.yaml` | 수정 빌드에서 정상 (verify-fix 통과) | `CALL-001-01.fixed.<build>.log` |
+| `call-001-01-resolved.yaml` | 해결책 적용 후 정상 | `CALL-001-01.resolved.1.log` |
+| `call-001-none.yaml` | 음성(정상 VoLTE 통화, 발신 시도 있음) | `CALL-001.none.log` |
+| `call-001-none-2.yaml` | 음성(IMS 등록만, 발신 시도 없음). 흔적 시그니처가 음성 fixture **전부**에서 충족되지 않게 한다 | `CALL-001.none.2.log` |
+| `network-001-01-positive.yaml` | NETWORK-001-01(등록 거절) 양성 | `NETWORK-001-01.log` |
+| `network-001-none.yaml` | 음성(정상 등록) | `NETWORK-001.none.log` |
+| `sim-001-01-positive.yaml` | SIM-001-01(UICC 초기화 실패) 양성. 슬롯 1 | `SIM-001-01.log` |
+| `sim-001-none.yaml` | 음성(정상 SIM 인식) | `SIM-001.none.log` |
+| `sim-001-none-2.yaml` | 음성(SIM 상태 조회 없음) | `SIM-001.none.2.log` |
+| `sms-001-01-positive.yaml` | SMS-001-01(SMSC 주소 없음) 양성 | `SMS-001-01.log` |
+| `sms-001-none.yaml` | 음성(정상 전송) | `SMS-001.none.log` |
+| `ims-001-01-positive.yaml` | IMS-001-01(403 거절) 양성 | `IMS-001-01.log` |
+| `ims-001-01-recurrence.yaml` | 수정 빌드에서 재발 (verify-fix 실패) | `IMS-001-01.recurrence.<build>.log` |
+| `ims-001-none.yaml` | 음성(정상 IMS 등록) | `IMS-001.none.log` |
+| `clock-anomaly.yaml` | 시계 역행·점프 (`coverage.clock_anomalies` 시험) | — |
+| `bugreport-wrap.yaml` | `--bugreport txt|zip` 래핑 시험 | — |

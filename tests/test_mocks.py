@@ -199,8 +199,9 @@ def test_logcat_generation_slots_and_clock():
             REPO / "tests/mocks/scenarios/data-001-none-cross-slot.yaml", out
         )
         text = Path(info["files"][0]).read_text(encoding="utf-8")
-        # 두 슬롯이 한 파일에 섞여 있다 (교차 슬롯 음성 fixture)
-        assert "DNC-0:" in text and "DNC-1:" in text
+        # 두 슬롯이 한 파일에 섞여 있다 (교차 슬롯 음성 fixture).
+        # 슬롯 0에는 거부 로그, 슬롯 1에는 원인 로그(설정 OFF)가 있다.
+        assert "DNC-0:" in text and "DSM-1:" in text
         assert "[PHONE0]" in text and "[PHONE1]" in text
         # 합성 fixture 표시
         expect = Path(info["expect"]).read_text(encoding="utf-8")

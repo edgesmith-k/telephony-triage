@@ -1,0 +1,12 @@
+# network 음성 fixture (NETWORK-001.none.log): 정상 등록.
+name: NETWORK-001.none
+start: "2026-09-16T08:30:00+09:00"
+default_phone: 0
+pid: 1234
+tid: 1260
+expect:
+  expect_top: none
+entries:
+  - {at: 0, tag: "SST-{phone}", level: I, msg: "onServiceStateChanged: regState=NOT_REGISTERED cellId=<CELL#1>"}
+  - {after: 3, tag: "SST-{phone}", level: I, msg: "onServiceStateChanged: regState=REGISTERED_HOME cellId=<CELL#1>"}
+  - {after: 1, ril_unsol: UNSOL_RESPONSE_NETWORK_STATE_CHANGED, args: "[registered]"}

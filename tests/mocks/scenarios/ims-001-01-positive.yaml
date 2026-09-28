@@ -1,0 +1,19 @@
+# IMS-001-01 양성: IMS 등록이 403으로 거절된다.
+# 태그·문구는 placeholder다 — TODO(SITE:S10)
+name: IMS-001-01
+start: "2026-09-27T09:30:00+09:00"
+default_phone: 0
+pid: 1600
+tid: 1610
+build:
+  fingerprint: "mock/mockb77/b77:17/MOCKBUILD/MOCKB77_U2_20260920:user/release-keys"
+  build: MOCKB77_U2_20260920
+expect:
+  expect_top: IMS-001-01
+  occurred_at: "2026-09-27T09:30:05+09:00"
+entries:
+  - {at: 0, tag: ImsResolver, msg: "bound to mock ImsService"}
+  - {after: 3, tag: ImsManager, msg: "register: impu=sip:<IMPU#1>@ims.mnc001.mcc450.3gppnetwork.org"}
+  - {after: 2, tag: ImsRegistration, level: W, msg: "onRegistrationFailed: code=403 reason=FORBIDDEN"}
+  - {after: 30, tag: ImsManager, msg: "register: impu=sip:<IMPU#1>@ims.mnc001.mcc450.3gppnetwork.org"}
+  - {after: 2, tag: ImsRegistration, level: W, msg: "onRegistrationFailed: code=403 reason=FORBIDDEN"}

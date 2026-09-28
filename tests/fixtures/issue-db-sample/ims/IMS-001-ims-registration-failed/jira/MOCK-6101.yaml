@@ -1,0 +1,10 @@
+key: MOCK-6101
+cause: IMS-001-01
+date: 2026-09-27
+occurred_on: 2026-09-27
+model: MOCK-B77
+sw: MOCKB77_U2_20260920
+android_version: "17"
+carrier: MockTel KR
+analyzed_by: mock-user2
+note: 수정 반영 빌드에서 403 거절 재발

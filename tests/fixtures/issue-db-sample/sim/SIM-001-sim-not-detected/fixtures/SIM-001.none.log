@@ -1,0 +1,5 @@
+09-16 07:00:00.000  1400  1410 D RILJ: [PHONE0] [0011]> GET_SIM_STATUS
+09-16 07:00:00.800  1400  1410 D RILJ: [PHONE0] [0011]< GET_SIM_STATUS error=NONE state=PRESENT
+09-16 07:00:01.800  1400  1410 I UiccController: [PHONE0] SIM state changed: READY
+09-16 07:00:03.800  1400  1410 I UiccController: [PHONE0] SIM state changed: LOADED
+09-16 07:00:04.800  1400  1410 I SubscriptionManagerService: [PHONE0] subscription loaded: iccid=<ICCID#1>
