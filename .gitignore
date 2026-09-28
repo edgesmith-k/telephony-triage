@@ -1,0 +1,19 @@
+# 사외 초안 모드 표식 (사내로 반입하지 않는다, 15-local-draft.md §15.2)
+.local-draft
+
+# 모의 gh 스텁이 만드는 상태 (테스트 실행마다 달라진다, 15-local-draft.md §15.2)
+tests/mocks/gh-state/*.json
+
+# 모의 원격 bare 레포 (테스트가 만들고 지운다)
+tests/mocks/remote/
+
+# 원본 문서 묶음
+telephony-triage-docs-v11.zip
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# 빈 플러그인 실험이 남기는 로그 (커밋하지 않는다)
+tests/mocks/plugin-probe/probe-hook.log

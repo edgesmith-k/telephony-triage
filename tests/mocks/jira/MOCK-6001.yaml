@@ -1,0 +1,15 @@
+key: MOCK-6001
+fields:
+  summary: IMS 등록이 실패함
+  description: IMS 등록 상태가 계속 등록 실패입니다.
+  status: {name: Open}
+  project: {key: MOCK, name: Mock Telephony}
+  components:
+    - {name: IMS}
+  customfield_10001: "2026-09-27T09:30:00+0900"
+  customfield_10002: MOCK-B77
+  customfield_10003: MOCKB77_U2_20260920
+  customfield_10004: "17"
+  customfield_10005: MockTel KR
+  customfield_10006: "0"
+comments: []

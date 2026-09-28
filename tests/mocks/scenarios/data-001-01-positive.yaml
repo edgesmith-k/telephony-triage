@@ -1,0 +1,22 @@
+# DATA-001-01 양성: 데이터 설정이 꺼져 SETUP_DATA_CALL이 발생하지 않음.
+# 로그 문구는 placeholder다 — TODO(SITE:S9)
+name: DATA-001-01
+start: "2026-09-20T14:30:00+09:00"
+default_phone: 0
+pid: 1234
+tid: 1244
+build:
+  fingerprint: "mock/mocka56/a56:16/MOCKBUILD/MOCKA56_U1_20260915:user/release-keys"
+  build: MOCKA56_U1_20260915
+expect:
+  expect_top: DATA-001-01
+  occurred_at: "2026-09-20T14:32:10+09:00"
+entries:
+  - {at: 0, tag: "DCM-{phone}", msg: "carrier config loaded: carrierId=<CARRIER>"}
+  - {after: 3, tag: "DSM-{phone}", msg: "onDataEnabledChanged: enabled=false reason=USER"}
+  - {after: 0.4, tag: "DSM-{phone}", msg: "isDataEnabled=false (user setting off)"}
+  - {after: 1.2, tag: "DNC-{phone}", level: I, msg: "onEvaluateNetworkRequests: reason=DATA_ENABLED_CHANGED"}
+  - {after: 0.3, tag: "DNC-{phone}", level: W, msg: "evaluation result: NOT_ALLOWED reasons=[DATA_DISABLED]"}
+  - {after: 2, tag: "DNC-{phone}", level: W, msg: "evaluation result: NOT_ALLOWED reasons=[DATA_DISABLED]"}
+  - {after: 8, tag: "DRM-{phone}", msg: "no retry scheduled: setup not allowed"}
+  - {after: 15, tag: "DNC-{phone}", level: W, msg: "evaluation result: NOT_ALLOWED reasons=[DATA_DISABLED]"}

@@ -1,0 +1,15 @@
+# 실행 환경은 Ubuntu(Linux)다 (01-architecture.md §3, 14-site.md S15).
+# Windows 개발 PC의 core.autocrlf가 켜져 있어도 작업 트리를 LF로 유지한다.
+# CRLF가 섞이면 `#!/bin/sh` 스크립트가 Ubuntu에서
+# "bad interpreter: /bin/sh^M"으로 죽고, 마스킹·fixture 회귀의 줄 비교도 어긋난다.
+* text=auto eol=lf
+
+# 줄바꿈을 건드리면 안 되는 것
+*.zip binary
+*.png binary
+*.jpg binary
+*.gz  binary
+*.pdf binary
+
+# 합성 logcat fixture는 항상 LF다 (분석과 회귀가 같은 텍스트를 봐야 한다).
+*.log text eol=lf

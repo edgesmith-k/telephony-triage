@@ -1,0 +1,15 @@
+key: MOCK-5001
+fields:
+  summary: SMS 수신이 되지 않음
+  description: 특정 번호에서 오는 문자가 오지 않습니다.
+  status: {name: Open}
+  project: {key: MOCK, name: Mock Telephony}
+  components:
+    - {name: SMS}
+  customfield_10001: "2026-09-26T13:00:00+0900"
+  customfield_10002: MOCK-A56
+  customfield_10003: MOCKA56_U1_20260920
+  customfield_10004: "16"
+  customfield_10005: MockTel KR
+  customfield_10006: "0"
+comments: []

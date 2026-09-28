@@ -1,0 +1,16 @@
+# bugreport 래핑 시험 (--bugreport txt|zip).
+# 헤더 fingerprint + logcat 섹션 + 가짜 dumpsys 섹션이 들어간다.
+name: bugreport-wrap
+start: "2026-09-20T14:30:00+09:00"
+default_phone: 0
+pid: 1234
+tid: 1244
+dumpstate_at: "2026-09-20 14:40:00"
+build:
+  fingerprint: "mock/mocka56/a56:16/MOCKBUILD/MOCKA56_U1_20260915:user/release-keys"
+  build: MOCKA56_U1_20260915
+entries:
+  - {at: 0, tag: "DSM-{phone}", msg: "onDataEnabledChanged: enabled=false reason=USER"}
+  - {after: 1, tag: "DNC-{phone}", level: W, msg: "evaluation result: NOT_ALLOWED reasons=[DATA_DISABLED]"}
+  - {after: 1, tag: ActivityManager, buffer: main, msg: "모의 main 버퍼 줄"}
+  - {after: 1, ril_request: SETUP_DATA_CALL, serial: 41, args: "apn=default"}

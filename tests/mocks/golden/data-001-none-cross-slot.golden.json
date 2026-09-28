@@ -1,0 +1,99 @@
+{
+  "backend": {
+    "name": "site",
+    "version": "0.0.1-mock"
+  },
+  "builtin_events": [
+    "builtin.data.setup_not_allowed",
+    "builtin.data.user_data_disabled"
+  ],
+  "events": [
+    {
+      "ts": "2026-09-23T11:00:00+09:00",
+      "tag": "DNC-0",
+      "msg": "[PHONE0] onEvaluateNetworkRequests: reason=NETWORK_REQUEST_ADDED",
+      "pid": 1234,
+      "tid": 1244,
+      "level": "I",
+      "phone_id": 0,
+      "category_hint": "data",
+      "source": "backend:site",
+      "event": null,
+      "fields": {}
+    },
+    {
+      "ts": "2026-09-23T11:00:00.500000+09:00",
+      "tag": "DNC-0",
+      "msg": "[PHONE0] evaluation result: ALLOWED reasons=[]",
+      "pid": 1234,
+      "tid": 1244,
+      "level": "I",
+      "phone_id": 0,
+      "category_hint": "data",
+      "source": "backend:site",
+      "event": null,
+      "fields": {}
+    },
+    {
+      "ts": "2026-09-23T11:00:00.800000+09:00",
+      "tag": "RILJ",
+      "msg": "[PHONE0] [0041]> SETUP_DATA_CALL apn=default",
+      "pid": 1234,
+      "tid": 1244,
+      "level": "D",
+      "phone_id": 0,
+      "category_hint": null,
+      "source": "backend:site",
+      "event": null,
+      "fields": {}
+    },
+    {
+      "ts": "2026-09-23T11:00:01.700000+09:00",
+      "tag": "RILJ",
+      "msg": "[PHONE0] [0041]< SETUP_DATA_CALL error=NONE cid=1",
+      "pid": 1234,
+      "tid": 1244,
+      "level": "D",
+      "phone_id": 0,
+      "category_hint": null,
+      "source": "backend:site",
+      "event": null,
+      "fields": {}
+    },
+    {
+      "ts": "2026-09-23T11:00:03.700000+09:00",
+      "tag": "DSM-1",
+      "msg": "[PHONE1] onDataEnabledChanged: enabled=false reason=USER",
+      "pid": 1234,
+      "tid": 1244,
+      "level": "D",
+      "phone_id": 1,
+      "category_hint": "data",
+      "source": "backend:site",
+      "event": "builtin.data.user_data_disabled",
+      "fields": {
+        "enabled": "false",
+        "reason": "USER"
+      }
+    },
+    {
+      "ts": "2026-09-23T11:00:04.100000+09:00",
+      "tag": "DNC-1",
+      "msg": "[PHONE1] evaluation result: NOT_ALLOWED reasons=[DATA_DISABLED]",
+      "pid": 1234,
+      "tid": 1244,
+      "level": "W",
+      "phone_id": 1,
+      "category_hint": "data",
+      "source": "backend:site",
+      "event": "builtin.data.setup_not_allowed",
+      "fields": {
+        "reasons": "DATA_DISABLED"
+      }
+    }
+  ],
+  "masked_builtin_events": [
+    "builtin.data.user_data_disabled",
+    "builtin.data.setup_not_allowed"
+  ]
+}

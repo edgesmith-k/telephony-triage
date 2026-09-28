@@ -1,0 +1,13 @@
+# 사내 전용 경로 (15-local-draft.md §15.6, contracts.md §기존 자산 연결 계약)
+#
+# 여기 적힌 경로는 사내에서만 만들고, 사외 초안에는 없다.
+# tools/import_draft.py는 재반입 때 이 경로들을 건드리지 않는다.
+# '#'로 시작하는 줄과 빈 줄은 무시한다. 끝이 '/'면 디렉토리 전체다.
+SITE_PROFILE.md
+.draft-manifest.json
+docs/site/
+plugin/site-defaults.yaml
+plugin/scripts/parser_backends/site/
+plugin/scripts/adapters/site_*
+tests/golden/
+tests/site/

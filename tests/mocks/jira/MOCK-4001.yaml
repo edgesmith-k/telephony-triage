@@ -1,0 +1,15 @@
+key: MOCK-4001
+fields:
+  summary: SIM 인식 실패
+  description: SIM 카드가 인식되지 않습니다.
+  status: {name: Open}
+  project: {key: MOCK, name: Mock Telephony}
+  components:
+    - {name: SIM}
+  customfield_10001: "2026-09-25T16:20:00+0900"
+  customfield_10002: MOCK-B77
+  customfield_10003: MOCKB77_U2_20260920
+  customfield_10004: "17"
+  customfield_10005: MockTel KR
+  customfield_10006: "1"
+comments: []

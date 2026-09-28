@@ -1,0 +1,15 @@
+key: MOCK-3001
+fields:
+  summary: 네트워크 등록이 반복적으로 거절됨
+  description: 서비스 없음 표시가 반복됩니다.
+  status: {name: Open}
+  project: {key: MOCK, name: Mock Telephony}
+  components:
+    - {name: Network}
+  customfield_10001: "2026-09-24T10:11:00+0900"
+  customfield_10002: MOCK-A56
+  customfield_10003: MOCKA56_U1_20260920
+  customfield_10004: "16"
+  customfield_10005: MockTel KR
+  customfield_10006: "0"
+comments: []

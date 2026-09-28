@@ -1,0 +1,45 @@
+# 가상 빌드명 체계와 build_compare 예시 (15-local-draft.md §15.2, S12)
+#
+# 사내 빌드명 체계는 다르다 — TODO(SITE:S12).
+# 사내에서 확인한 뒤 이슈 DB `issue-db.config.yaml`의 `build_compare`에 넣는다
+# (`02-config.md §5.3`, `03-issue-db.md §5.9`).
+
+scheme: "<모델><브랜치>_<리비전>_<YYYYMMDD>"
+
+# `issue-db.config.yaml`의 build_compare에 그대로 넣을 수 있는 형태.
+# branch_regex 로 브랜치를 판별하고, version_regex 의 캡처 그룹이 비교 가능한 부분이다.
+build_compare:
+  - branch_regex: '^MOCKA56_U\d+_'
+    version_regex: '^MOCKA56_U(?P<rev>\d+)_(?P<date>\d{8})$'
+  - branch_regex: '^MOCKB77_U\d+_'
+    version_regex: '^MOCKB77_U(?P<rev>\d+)_(?P<date>\d{8})$'
+
+builds:
+  - {name: MOCKA56_U1_20260901, model: MOCK-A56, branch: MOCKA56_U1, android: "16"}
+  - {name: MOCKA56_U1_20260915, model: MOCK-A56, branch: MOCKA56_U1, android: "16"}
+  - {name: MOCKA56_U1_20260920, model: MOCK-A56, branch: MOCKA56_U1, android: "16"}
+  - {name: MOCKA56_U2_20260925, model: MOCK-A56, branch: MOCKA56_U2, android: "16"}
+  - {name: MOCKB77_U2_20260910, model: MOCK-B77, branch: MOCKB77_U2, android: "17"}
+  - {name: MOCKB77_U2_20260920, model: MOCK-B77, branch: MOCKB77_U2, android: "17"}
+
+# 03-issue-db.md §5.9 수정 상태 판정을 시험할 비교 케이스.
+# expected: newer | older | same | incomparable
+compare_cases:
+  - {a: MOCKA56_U1_20260920, b: MOCKA56_U1_20260915, expected: newer}
+  - {a: MOCKA56_U1_20260901, b: MOCKA56_U1_20260915, expected: older}
+  - {a: MOCKA56_U1_20260915, b: MOCKA56_U1_20260915, expected: same}
+  # 브랜치가 다르면 비교하지 않는다 (같은 날짜여도 포함 관계를 알 수 없다)
+  - {a: MOCKA56_U2_20260925, b: MOCKA56_U1_20260920, expected: incomparable}
+  - {a: MOCKB77_U2_20260920, b: MOCKA56_U1_20260920, expected: incomparable}
+  # build_compare 에 걸리지 않는 이름은 "판단 불가"
+  - {a: UNKNOWN-BUILD-1, b: MOCKA56_U1_20260915, expected: incomparable}
+
+# sanitize_build(contracts.md §3.2) 시험용 이름.
+# fixture 파일명·브랜치 이름에 쓸 수 없는 문자가 들어간 경우.
+sanitize_cases:
+  - {raw: "MOCKA56_U1_20260915", sanitized: "MOCKA56_U1_20260915"}
+  - {raw: "MOCK A56/U1", sanitized: "MOCK_A56_U1"}
+  - {raw: "MOCKA56..U1", sanitized: "MOCKA56_U1"}
+  - {raw: ".MOCKA56", sanitized: "_MOCKA56"}
+  - {raw: "MOCKA56.", sanitized: "MOCKA56_"}
+  - {raw: "MOCKA56.lock", sanitized: "MOCKA56_lock"}

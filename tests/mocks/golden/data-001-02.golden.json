@@ -1,0 +1,98 @@
+{
+  "backend": {
+    "name": "site",
+    "version": "0.0.1-mock"
+  },
+  "builtin_events": [
+    "builtin.data.setup_not_allowed",
+    "builtin.data.user_data_disabled"
+  ],
+  "events": [
+    {
+      "ts": "2026-09-22T08:00:00+09:00",
+      "tag": "SST-1",
+      "msg": "[PHONE1] onRoamingOn: roaming=true",
+      "pid": 1234,
+      "tid": 1250,
+      "level": "D",
+      "phone_id": 1,
+      "category_hint": null,
+      "source": "backend:site",
+      "event": null,
+      "fields": {}
+    },
+    {
+      "ts": "2026-09-22T08:00:02+09:00",
+      "tag": "DSM-1",
+      "msg": "[PHONE1] isDataRoamingEnabled=false",
+      "pid": 1234,
+      "tid": 1250,
+      "level": "D",
+      "phone_id": 1,
+      "category_hint": "data",
+      "source": "backend:site",
+      "event": null,
+      "fields": {}
+    },
+    {
+      "ts": "2026-09-22T08:00:03+09:00",
+      "tag": "DNC-1",
+      "msg": "[PHONE1] onEvaluateNetworkRequests: reason=ROAMING_STATE_CHANGED",
+      "pid": 1234,
+      "tid": 1250,
+      "level": "I",
+      "phone_id": 1,
+      "category_hint": "data",
+      "source": "backend:site",
+      "event": null,
+      "fields": {}
+    },
+    {
+      "ts": "2026-09-22T08:00:03.500000+09:00",
+      "tag": "DNC-1",
+      "msg": "[PHONE1] evaluation result: NOT_ALLOWED reasons=[ROAMING_DISABLED]",
+      "pid": 1234,
+      "tid": 1250,
+      "level": "W",
+      "phone_id": 1,
+      "category_hint": "data",
+      "source": "backend:site",
+      "event": "builtin.data.setup_not_allowed",
+      "fields": {
+        "reasons": "ROAMING_DISABLED"
+      }
+    },
+    {
+      "ts": "2026-09-22T08:00:13.500000+09:00",
+      "tag": "DNC-1",
+      "msg": "[PHONE1] evaluation result: NOT_ALLOWED reasons=[ROAMING_DISABLED]",
+      "pid": 1234,
+      "tid": 1250,
+      "level": "W",
+      "phone_id": 1,
+      "category_hint": "data",
+      "source": "backend:site",
+      "event": "builtin.data.setup_not_allowed",
+      "fields": {
+        "reasons": "ROAMING_DISABLED"
+      }
+    },
+    {
+      "ts": "2026-09-22T08:00:18.500000+09:00",
+      "tag": "DRM-1",
+      "msg": "[PHONE1] no retry scheduled: setup not allowed",
+      "pid": 1234,
+      "tid": 1250,
+      "level": "D",
+      "phone_id": 1,
+      "category_hint": "data",
+      "source": "backend:site",
+      "event": null,
+      "fields": {}
+    }
+  ],
+  "masked_builtin_events": [
+    "builtin.data.setup_not_allowed",
+    "builtin.data.setup_not_allowed"
+  ]
+}

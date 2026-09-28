@@ -1,0 +1,4 @@
+# 모의 버전 정의 파일 (TODO(SITE:S11): 사내 트리의 실제 버전 식별 파일로 바꾼다)
+PLATFORM_VERSION := 17
+PLATFORM_SDK_VERSION := 37
+PLATFORM_VERSION_CODENAME := REL

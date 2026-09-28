@@ -1,0 +1,14 @@
+# 시계 이상 시나리오 (coverage.clock_anomalies 시험).
+# 중간에 시각이 8초 뒤로 가고, 이어서 120초 앞으로 뛴다.
+name: clock-anomaly
+start: "2026-09-24T10:00:00+09:00"
+default_phone: 0
+pid: 1234
+tid: 1244
+entries:
+  - {at: 0, tag: "DNC-{phone}", msg: "정상 구간 1"}
+  - {after: 1, tag: "DNC-{phone}", msg: "정상 구간 2"}
+  - {after: 1, tag: "DNC-{phone}", msg: "시각이 뒤로 감", clock_jump_sec: -8}
+  - {after: 1, tag: "DNC-{phone}", msg: "뒤로 간 뒤 1"}
+  - {after: 1, tag: "DNC-{phone}", msg: "앞으로 뜀", clock_jump_sec: 120}
+  - {after: 1, tag: "DNC-{phone}", msg: "뜬 뒤 1"}

@@ -1,0 +1,9 @@
+{
+  "_comment": "모의 Jira MCP 등록 (15-local-draft.md §15.2). 레포 루트 .mcp.json이 아니라 여기에 둔다. 사외 초안 세션만 --mcp-config tests/mocks/mcp.json 으로 불러온다.",
+  "mcpServers": {
+    "mock-jira": {
+      "command": "python3",
+      "args": ["tests/mocks/jira_mcp/server.py"]
+    }
+  }
+}

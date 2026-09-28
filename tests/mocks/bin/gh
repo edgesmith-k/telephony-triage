@@ -1,0 +1,4 @@
+#!/bin/sh
+# `gh` CLI 스텁 (15-local-draft.md §15.2). 실제 동작은 gh_stub.py에 있다.
+# 테스트는 PATH 앞에 이 디렉토리를 둔다. 실행 환경은 Ubuntu다.
+exec python3 "$(dirname "$0")/gh_stub.py" "$@"
