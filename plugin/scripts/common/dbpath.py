@@ -25,10 +25,12 @@ def git_toplevel(cwd: str | Path | None = None) -> Path | None:
             cwd=cwd,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
         )
     except OSError:
         return None
-    if proc.returncode != 0:
+    if proc.returncode != 0 or not proc.stdout:
         return None
     return Path(proc.stdout.strip())
 

@@ -40,12 +40,16 @@ def plugin_root(kind: str = "plain", **defaults) -> Path:
     return _ROOTS[key]
 
 
-def run(script: str, args: list[str], root: Path | None = None, cwd=None) -> subprocess.CompletedProcess:
+def run(script: str, args: list[str], root: Path | None = None, cwd=None, env: dict | None = None,
+        unauth: bool = False, stdin: str | None = None) -> subprocess.CompletedProcess:
+    """`env`는 더할 환경변수(예: TELEPHONY_TRIAGE_HOME), `unauth`는 gh 스텁 인증 실패."""
     root = root or plugin_root()
+    full_env = mock_env.env_with_mocks(plugin_root=root, unauth=unauth)
+    full_env.update({k: str(v) for k, v in (env or {}).items()})
     return subprocess.run(
         [sys.executable, str(root / "scripts" / script), *map(str, args)],
         capture_output=True, text=True, encoding="utf-8", errors="replace",
-        env=mock_env.env_with_mocks(plugin_root=root), cwd=cwd,
+        env=full_env, cwd=cwd, input=stdin,
     )
 
 

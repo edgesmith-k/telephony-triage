@@ -8,9 +8,9 @@
 ## 진행 상태
 
 - 모드: **사외 초안** (`.local-draft` 있음)
-- 완료 Phase: **D0, 1** (2026-09-28), **2, 3, 4, 5** (2026-09-29)
-- 다음 Phase: **6** (설정, 코드 경로, setup)
-- Phase 2~6은 사용자가 미리 승인해서 Phase마다 확인을 기다리지 않고 진행한다(각 Phase 끝에 커밋·push). 완료 기준 점검 결과는 Phase별 절에 적는다.
+- 완료 Phase: **D0, 1** (2026-09-28), **2, 3, 4, 5, 6** (2026-09-29)
+- 다음 Phase: **7** (이슈 DB 반영, PR, sync-pr)
+- Phase 2~6은 사용자가 미리 승인해서 Phase마다 확인을 기다리지 않고 진행했다(각 Phase 끝에 커밋·push). 완료 기준 점검 결과는 Phase별 절에 있다. **Phase 7부터는 다시 Phase마다 사용자 확인을 받는다.**
 - 기준 문서 세트: `telephony-triage-docs-v11` (`CHANGES.md` 참고)
 - 레포 루트: 이 파일이 있는 디렉토리 (`CLAUDE.md`, `docs/design/`, `plugin/`,
   `tests/`, `tools/`가 같이 있다)
@@ -362,6 +362,63 @@
 - **회귀**: fixture는 `parse --full --mask --tz UTC`(연도 기본값)로 파싱한다(분석 범위가 파일 전체라 시각 기준은 결과에 영향이 없다). 범위: 바뀐 유형 + 그 원인의 `related` 원인의 유형 + 같은 카테고리 유형, `parser-rules/`·`schema/`·`issue-db.config.yaml`이 바뀌면 전체. 결과 `{summary{scope, expanded, total, passed, failed}, results[{fixture, kind, expect, status, S, C, reasons[], allow_cause_drafts[]}]}`. `allow-cause` 초안은 `{op, fixture: fixtures/<이름>, cause, type_dir}`이고 양성·recurrence·extra에만 만든다. 파서·매처의 `errors`(시간 상한)는 실패.
 - **파서 백엔드 비교**: 회귀는 site-defaults의 백엔드(`parser.backend`)와 버전을 이슈 DB `parser_backend`와 비교한다. 외부 파서는 site-defaults에 설정된 것을 "사용 가능"으로 본다(어댑터 로드 실패는 분석 때 경고로 드러난다).
 
+### Phase 6에서 만든 것
+
+| 산출물 | 경로 |
+|---|---|
+| 설정 | `plugin/scripts/config.py` (`show`, `site-defaults`, `init`, `set`, `sync-scripts-path`, `jira-candidates`, `set-jira`, `install-hooks`, `check`, `gh-status`) |
+| 사용자 config·우선순위 | `plugin/scripts/common/userconfig.py` (사용자 config > site-defaults > 내장, `TELEPHONY_TRIAGE_HOME`, 권한 700) |
+| MCP 도구 후보 | `plugin/scripts/common/mcptools.py` (stdio 서버 `tools/list`, `exclude_servers`, 읽기·쓰기 분류, 전체 이름) |
+| gh 호출 | `plugin/scripts/common/ghcli.py` (`shutil.which("gh")`, `GH_HOST`) |
+| 코드 경로 | `plugin/scripts/code_roots.py` (`suggest`, `validate`, `resolve`, `find-symbol`, `remember`) |
+| 세션 lock·스냅샷 | `plugin/scripts/db_pr.py` (`lock status/acquire/release`, `snapshot --job`. 나머지 서브커맨드는 Phase 7 자리) |
+| setup 커맨드 | `plugin/commands/setup.md` (setup 1~10) |
+| `--db` ③ 연결 | `common/dbpath.resolve(user_config_path=...)` ← `userconfig.issue_db_path` |
+| Phase 6 테스트 | `tests/test_config_setup.py` (11개) |
+
+### Phase 6 완료 기준 확인 결과
+
+`python3 tests/test_config_setup.py` — **11개 전부 통과**. `python3 -m pytest tests` 전체 **132개 통과**.
+
+| 완료 기준 | 확인 | 어디서 |
+|---|---|---|
+| config 대화형 생성, 잘못된 경로 거부 | ✅ (stdin 대화형·`--answers` 둘 다, 타임존·year_source도 거부) | `test_init_interactive_rejects_bad_paths`, `test_set_and_sync_scripts_path` |
+| 비표준 이름의 `mock-jira`에서 `jira.tools` 후보를 골라 확인받고 `read_tools`에 포함 (헬퍼 루트, `exclude_servers: []`) | ✅ (쓰기 도구는 후보 아님, 짧은 이름 거부) | `test_jira_tools_from_nonstandard_mock_server` |
+| `exclude_servers: ['mock-*']` 복사본에서 `mock-jira`가 후보에서 빠짐 | ✅ | `test_excluded_mock_servers` |
+| `site-defaults.yaml` 없는 루트에서 setup·`config.py check`가 종료 코드 2, example 읽지 않음 | ✅ (config·db_pr·code_roots 모두) | `test_missing_site_defaults_stops_everything` |
+| read_tools 확인 절차(전체 도구 이름 저장) | ✅ | `test_jira_tools_from_nonstandard_mock_server` |
+| gh 인증 실패 시 읽기 설정(1~8)은 끝난 상태로 "쓰기 불가" 안내 후 종료 | ✅ | `test_setup_with_gh_unauth_finishes_read_setup` |
+| 스키마·생성기 버전 확인은 스냅샷(origin/<base>) 기준, 버전 불일치면 읽기 전용 | ✅ (옛 사용자 clone은 쓰기 가능, 스냅샷은 `schema-too-new`) | `test_version_check_uses_snapshot_of_origin` |
+| `migrate/schema-v<N>` 브랜치면 버전 불일치에서도 gh 인증만 | ✅ | `test_migrate_branch_skips_version_checks` |
+| `--for dry-run`은 gh 인증 없이 `push_allowed: false`로 통과 | ✅ | `test_setup_with_gh_unauth_finishes_read_setup` |
+| `core.hooksPath`가 정확히 `.githooks` | ✅ | 같은 테스트 |
+| setup 후 사용자 clone의 브랜치·워킹 트리 그대로(캐시는 스냅샷에만) | ✅ (HEAD도 같음) | 같은 테스트 |
+| lock: 다른 작업 키 → `acquire`·`snapshot` 종료 코드 2와 보유자, 같은 키 10분 이내 → `--take-over` 필요, 4시간 넘으면 가져옴, `release --force` | ✅ | `test_session_lock_rules` |
+| 코드 경로 선택기: 버전 일치 프로필 먼저 추천, 잘못된 루트 거부, 버전 불일치 경고 | ✅ (16/17 경로가 다른 파일 `find-symbol`, `resolve`) | `test_code_root_selector` |
+| (파서 백엔드·외부 파서 고정값 불일치 → 쓰기 불가 사유) | ✅ `parser-backend-mismatch`, `external-parser-mismatch` | `test_backend_and_external_pins_block_writes` |
+
+### Phase 6에서 바꾼 이전 산출물
+
+| 대상 | 무엇을 | 왜 |
+|---|---|---|
+| `plugin/scripts/config.py` | D0의 site-defaults 로드만 있던 것을 전체 구현으로 | Phase 6 할 일 (D0 가정 9) |
+| `plugin/scripts/common/dbpath.py`, `common/buildname.py` | git 출력 디코딩을 UTF-8로 지정 | 경로에 한글이 있으면(이 PC) cp949 디코딩이 실패해 `git_toplevel`이 예외를 냈다. Ubuntu에서는 영향 없음 |
+| `tests/helpers/runner.py` | `run()`에 `env`·`unauth`·`stdin` | Phase 6 테스트 |
+| `plugin/.claude-plugin/plugin.json` | 설명의 "Phase D0" 표기를 "사외 초안"으로 | 상태 표기 |
+
+### Phase 6 구현에서 정한 세부 (계약 보완 후보)
+
+- **`config.py` 서브커맨드 추가**: 계약(`contracts.md §3.2`)은 `show`/`check`/`sync-scripts-path`/`set`만 적는다. setup 1·4·5·9를 스크립트로 하려고 `init [--answers]`, `jira-candidates`, `set-jira`, `install-hooks`, `gh-status`를 더했다. 사용자 확인(Jira 도구 선택 등)은 커맨드(Claude)가 하고, 스크립트는 후보 계산과 저장만 한다.
+- **`config.py check` 출력·종료 코드**: `{db, for, branch, migrate_branch, writable, push_allowed, read_only, versions{schema, generator, backend}, gh{checked, ok, host}, reasons[{code, message}]}`. 사유 코드 `schema-too-new`, `schema-too-old`, `generator-mismatch`(`ci_mode: actions-build`면 보지 않음), `parser-backend-mismatch`, `external-parser-mismatch`, `gh-auth`. 종료 코드: `--for write`는 `push_allowed`면 0 아니면 2, `--for dry-run`은 `writable`이면 0 아니면 2. `SUPPORTED_SCHEMA = (1, 1)`.
+- **사용자 config 위치**: 환경변수 `TELEPHONY_TRIAGE_HOME`(기본 `~/.telephony-triage`). 사용자 config에 없는 값은 site-defaults(`jira.*`, `logcat.*`, `ghe.host` → `issue_db.ghe_host`)와 내장 기본값(`issue_db.base_branch: main`, `logcat.year_source: jira`, `work_dir: <home>/work`)으로 채운다.
+- **`init` 검증**: `issue_db.path`는 있는 디렉토리이거나 상위가 있어야 한다(없으면 clone 명령을 제안). `log_dir`는 있어야 한다(빈 값이면 건너뜀). `work_dir`는 상위가 있어야 하고 700으로 만든다. 타임존은 IANA, `year_source`는 `jira|file-mtime|ask`. 대화형은 항목당 3번까지 다시 묻는다.
+- **Jira 도구 후보**: 기본 서버 목록은 `~/.claude.json`의 `mcpServers`(사용자 범위), `--mcp-config`로 바꾼다. 원격 서버는 도구 목록을 못 읽으므로 스킬이 세션에서 보이는 이름을 `--tools-json`으로 준다. 이름 분류: 쓰기 단어(create/add/update/delete/post/move/…)가 있으면 제외, `comment` → `get_comments`, `search|query|jql`(또는 issue·ticket + list) → `search_issues`, issue·ticket + get/fetch/read/view/show → `get_issue`. site-defaults의 팀 기본값을 먼저 제안한다. `set-jira`는 `read_tools`에 `jira.tools` 값을 자동으로 더한다.
+- **gh 호출**: 런타임 코드도 `shutil.which("gh")`로 PATH의 `gh`를 찾는다(개발 환경 차이 표 참고).
+- **lock 파일**: `<work_dir>/session.lock` JSON. 이어받기(`--take-over` 또는 10분 초과)는 `started_at`을 유지한다. 출력 `{acquired, lock{job, command, started_at, updated_at, expired, age_sec}, taken_over, previous}`. 시각은 `TT_NOW`로 바꿀 수 있다(테스트).
+- **스냅샷**: 매번 `git worktree prune` 후 `<work_dir>/_snapshot`이 worktree면 `checkout --detach -f origin/<base>`, 아니면 `worktree add --detach`(worktree가 아닌데 비어 있지 않으면 종료 코드 2). pull은 현재 브랜치가 base이고 깨끗할 때만 `--ff-only`, 실패는 자동 해결하지 않고 사유로 낸다.
+- **코드 경로**: `suggest` 순서는 버전 일치 프로필 → 버전 일치 최근 → 나머지 최근(최신 순) → 나머지 프로필. 트리 버전 추정은 `build/release/release_config_map.textproto` → `build/make/core/version_defaults.mk` → `build/core/version_defaults.mk` 순서(TODO(SITE:S11)). `validate`는 잘못된 루트면 종료 코드 2. `find-symbol`은 `Class#method`면 `Class.*` 파일(또는 `class Class` 선언이 있는 파일)에서 `method(`를 찾는다. `remember`로 최근 5개를 기록한다(`code_roots.py`의 계약 밖 서브커맨드).
+- **setup 커맨드 형식**: `plugin/commands/setup.md`는 frontmatter `description`만 쓴다. 커맨드 파일 형식·`${CLAUDE_PLUGIN_ROOT}` 치환은 빈 플러그인 실험(S1)이 아직 미확인이다.
+
 ## 개발 환경과 설계의 차이 (중요)
 
 설계는 실행 환경을 **Ubuntu(Linux)** 로 못박는다 (`01-architecture.md §3`,
@@ -374,7 +431,8 @@ Windows 전용 보정은 커밋하지 않는다.**
 | `tests/mocks/bin/gh` | 확장자 없는 `#!/bin/sh` 스텁을 `PATH`로 부른다 | 로직은 `gh_stub.py`(파이썬)에 두고 `gh`는 `exec python3 …` 한 줄. Windows에서는 `mock_env.py`가 **런타임에** `gh.cmd` 래퍼를 임시 디렉토리에 만든다 (커밋 안 함) | 없음. Ubuntu에서는 POSIX 스텁이 그대로 쓰인다 |
 | 실행 비트 | 파일 모드가 그대로 커밋된다 | `make_repo.py`가 `git update-index --chmod=+x`로 index 모드를 100755로 명시 (Windows는 `core.filemode=false`) | 없음. Ubuntu에서는 무동작이고 커밋 결과(트리 100755)가 같다 |
 | 이 레포 자체의 실행 비트 | 〃 | 이 레포도 `core.filemode=false`다. **`git add` 뒤 `git commit` 전에 `python3 tools/fix_exec_bits.py`를 돌려야** POSIX 스크립트가 100755로 커밋된다 (`--check`로 확인) | 없음. Ubuntu에서는 무동작 |
-| 실행 파일 탐색 | `subprocess`가 자식 `PATH`로 찾는다 | Windows `CreateProcess`는 **부모 `PATH`** 로 찾는다. 테스트는 `mock_env.resolve()`로 절대 경로를 넘긴다. **런타임 코드는 그대로 PATH의 `gh`를 쓴다** | 없음 |
+| 실행 파일 탐색 | `subprocess`가 자식 `PATH`로 찾는다 | Windows `CreateProcess`는 **부모 `PATH`** 로 찾고 `.cmd` 스텁을 못 찾는다. 테스트는 `mock_env.resolve()`로 절대 경로를 넘긴다. Phase 6부터 **런타임 코드는 `shutil.which("gh")`로 PATH의 `gh`를 찾아** 부른다(`common/ghcli.py`) | 없음. Ubuntu에서는 PATH의 `gh`와 같다 |
+| 출력 인코딩(자식 프로세스) | UTF-8 | 이 PC 경로에 한글이 있어 `git` 출력을 cp949로 디코딩하면 실패한다. 스크립트의 `subprocess` 텍스트 호출은 모두 `encoding="utf-8"`을 지정한다 | 없음 |
 | 줄바꿈 | LF | `core.autocrlf`가 켜져 있으면 작업 트리가 CRLF가 되어 **`#!/bin/sh` 스텁이 Ubuntu에서 `bad interpreter: /bin/sh^M`으로 죽고**, 같은 시나리오가 OS마다 다른 fixture를 낸다. 레포 루트 `.gitattributes`(`* text=auto eol=lf`)로 막고, 생성기·도구의 모든 텍스트 쓰기에 `newline="\n"`을 명시했다 | 없음. `test_generated_files_use_lf`·`test_repo_text_files_use_lf`가 지킨다 |
 | 출력 인코딩 | UTF-8 기본 | Windows 콘솔이 cp949라 검증 때 `PYTHONIOENCODING=utf-8`을 붙였다. `mock_env.env_with_mocks()`가 기본으로 넣는다 | 없음 |
 
@@ -428,9 +486,7 @@ Windows 전용 보정은 커밋하지 않는다.**
    reference 백엔드는 Phase 2에서 만들었다. 계약의 `parse`·`builtin_events`·
    `version`은 모듈 함수가 아니라 백엔드 패키지의 `BACKEND` 객체(`ParserBackend`)의
    메서드로 제공한다. 모의 site 백엔드는 reference를 상속해 builtin 판별만 더한다.
-9. `config.py`는 D0에서 **site-defaults 로드와 종료 코드 2 경로만** 있다.
-   `check`/`set`/`sync-scripts-path`는 Phase 6에서 구현한다(지금은 종료
-   코드 2로 "Phase 6에서 구현한다"를 낸다).
+9. `config.py`는 Phase 6에서 전부 구현했다(D0에는 site-defaults 로드와 종료 코드 2 경로만 있었다).
 10. 마스킹 함수는 Phase 4에서 만들었고, 골든 테스트의 마스킹 민감도 검사도 그 함수를
     쓴다. 탐지 규칙(키 이름·형식)은 일반적인 Android 로그 기준이고 사내 로그의 오탐·누락은
     S13에서 확인한다.
@@ -479,9 +535,10 @@ Windows 전용 보정은 커밋하지 않는다.**
 
 ## 사내 확인 목록 (`TODO(SITE:S<n>)`)
 
-`python3 tools/list_site_todos.py`로 갱신한다(Windows 콘솔에서는 `PYTHONIOENCODING=utf-8`). 변형 이슈 DB(`issue-db-lint-errors` 등)는 샘플의 사본이라 세지 않는다. 2026-09-29(Phase 5 끝) 기준 **53곳**(Phase 5에서 pending 시나리오 1곳 추가):
+`python3 tools/list_site_todos.py`로 갱신한다(Windows 콘솔에서는 `PYTHONIOENCODING=utf-8`). 변형 이슈 DB(`issue-db-lint-errors` 등)는 샘플의 사본이라 세지 않는다. 2026-09-29(Phase 6 끝) 기준 **56곳**(Phase 6에서 S1 MCP 도구 이름 형식, S11 트리 버전 파일 2곳 추가):
 
-### S1 (1곳)
+### S1 (2곳)
+- `plugin/scripts/common/mcptools.py:8` — 사내 Claude Code 버전에서 확인한다.
 - `tests/mocks/skills/data-analyzer/SKILL.md:63` — 스킬 이름과 호출 방식 확인.
 
 ### S4 (1곳)
@@ -525,7 +582,9 @@ Windows 전용 보정은 커밋하지 않는다.**
 - `tests/mocks/scenarios/ims-001-01-positive.yaml:2`
 - `tests/mocks/src/README.md:17`
 
-### S11 (7곳)
+### S11 (9곳)
+- `plugin/scripts/code_roots.py:18` — .
+- `plugin/scripts/code_roots.py:39` — 최신 AOSP는 release config 쪽에 있을 수 있다.
 - `tests/fixtures/issue-db-sample/ims/IMS-001-ims-registration-failed/type.md:77` — .
 - `tests/fixtures/issue-db-sample/network/NETWORK-001-no-service/type.md:68` — .
 - `tests/fixtures/issue-db-sample/sim/SIM-001-sim-not-detected/type.md:74` — .
@@ -574,7 +633,7 @@ Windows 전용 보정은 커밋하지 않는다.**
 
 | 항목 | 상태 |
 |---|---|
-| 전체 테스트 통과 | 🟡 D0·Phase 1~5 범위 (`pytest tests` 121개, 샘플 `db_regress --all` 20개 통과). eval은 Phase 13 뒤 |
+| 전체 테스트 통과 | 🟡 D0·Phase 1~6 범위 (`pytest tests` 132개, 샘플 `db_regress --all` 20개 통과). eval은 Phase 13 뒤 |
 | 사내 정보 없음 | ✅ 사내 자료를 쓰지 않았다 |
 | `plugin/site-defaults.yaml` 없고 example만 있음 | ✅ `test_plugin_root_helper_and_missing_site_defaults`가 검사 |
 | `SITE_PATHS`의 다른 경로가 비어 있음 | ✅ `test_site_paths_are_absent_in_draft`가 검사 |
@@ -586,15 +645,25 @@ Windows 전용 보정은 커밋하지 않는다.**
 
 ## 다음 세션에서 할 일
 
-1. 새 세션을 열어 **빈 플러그인 실험**을 돌리고 위 "사외 Claude Code 실험
-   결과" 표를 채운다 (`tests/mocks/plugin-probe/README.md`). 아직 미확인이다.
-2. (선택, 사내) **S-0 선행 확인**: `parse_logcat.py`, `match_signatures.py`, `mask_pii.py`를 사내로
-   가져가 실제 로그 3~5개로 돌려 본다 (`15-local-draft.md §15.5` S-0).
-3. **Phase 6** (설정, 코드 경로, setup): `docs/design/11-phases.md` Phase 6 절과 그 "읽을 문서"를 읽고
-   `config.py`(check·set·sync-scripts-path·show), `code_roots.py`, `db_pr.py lock`·`snapshot --job`,
-   `commands/setup.md`를 만든다. 사외 범위(모의 환경)까지만 한다.
-   - 이미 있는 부품: `common/site_defaults.py`(종료 코드 2), `common/compat.py`(백엔드·외부 파서 비교),
-     `common/versions.py`(`GENERATOR_VERSION`, `SCHEMA_VERSION`), `common/dbpath.py`(③ 사용자 config
-     `issue_db.path` 연결 자리 `user_config_path`), `common/gitscope.py`.
-   - `config.py check`의 쓰기 불가 사유 코드: `parser-backend-mismatch`, `external-parser-mismatch`
-     (`contracts.md §기존 자산 연결 계약`).
+1. **사용자 확인**: Phase 2~6은 미리 받은 승인으로 확인 없이 진행했다. 아래 "사용자 확인이 필요한 항목"을
+   먼저 보여주고 답을 받는다. Phase 7부터는 Phase마다 확인을 받는다(`CLAUDE.md` §11.0).
+2. 새 세션을 열어 **빈 플러그인 실험**을 돌리고 위 "사외 Claude Code 실험 결과" 표를 채운다
+   (`tests/mocks/plugin-probe/README.md`). 커맨드 파일 형식(`plugin/commands/setup.md`), `${CLAUDE_PLUGIN_ROOT}`
+   치환, MCP 도구 이름 형식이 여기에 걸려 있다.
+3. (선택, 사내) **S-0 선행 확인**: `parse_logcat.py`, `match_signatures.py`, `mask_pii.py`를 사내 실제 로그로.
+4. **Phase 7** (이슈 DB 반영, PR, sync-pr): `docs/design/11-phases.md` Phase 7 절과 그 "읽을 문서"를 읽는다.
+   - 이미 있는 부품: `db_pr.py`(lock·snapshot, 나머지 서브커맨드 자리), `common/gitscope.py`, `common/fixtures.py`,
+     `db_build.py`·`db_lint.py`·`db_regress.py`(stage의 검사 순서), `mask_pii.py --check --changed`,
+     `config.py check --for write|dry-run`, `common/ghcli.py`, `tests/helpers/make_repo.py`(모의 원격·`gh` 스텁).
+
+### 사용자 확인이 필요한 항목 (Phase 2~6에서 쌓임)
+
+- 계약 보완 후보: 각 Phase의 "구현에서 정한 세부" 절 (`parse` 출력 형식과 `ril_*` 이벤트, `--jira-meta` 형식,
+  매처 출력, 마스킹 규칙, 생성 파일 표기와 급증 정의, 린터 코드, `config.py` 추가 서브커맨드 등).
+  `contracts.md`에 옮길지 정한다.
+- Phase 1 산출물 변경: 교차 슬롯 음성 fixture 순서(Phase 3), `type.schema.json`의 `must_match {id, pattern}`(Phase 3),
+  fixture를 마스킹해서 생성(Phase 4). 
+- 설계와 다르게 해석한 곳: Phase 3 완료 기준의 교차 슬롯 C 값은 `--regress`로 확인했다(분석 모드는 S=0이라 원인을
+  평가하지 않는다).
+- 의존성: `pyyaml`, `jsonschema`, `pytest`만 쓴다. 정규식 시간 상한은 작업 프로세스 방식이다(`regex` 모듈을 쓰면
+  더 가볍다, 가정 18).

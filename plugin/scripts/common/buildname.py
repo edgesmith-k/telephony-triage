@@ -33,6 +33,8 @@ def is_valid_branch_name(name: str) -> bool:
             ["git", "check-ref-format", "--branch", name],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
         )
     except OSError:
         return False
