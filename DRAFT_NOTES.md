@@ -10,7 +10,7 @@
 - 모드: **사외 초안** (`.local-draft` 있음)
 - 완료 Phase: **D0, 1** (2026-09-28), **2, 3, 4, 5, 6** (2026-09-29)
 - 완료 Phase 추가: **7** (2026-09-29, 사용자 확인 후 커밋)
-- 완료 Phase 추가: **8** (2026-09-29, 사용자 확인 후 커밋. "Phase 8 구현에서 정한 세부"의 계약 반영 여부는 미결)
+- 완료 Phase 추가: **8** (2026-09-29, 사용자 확인 후 커밋. guard 예외·pre-push 검사 강화는 계약에 반영 — `CHANGES.md`)
 - 다음 Phase: **9** (스키마 마이그레이션)
 - Phase 2~6은 사용자가 미리 승인해서 Phase마다 확인을 기다리지 않고 진행했다(각 Phase 끝에 커밋·push). 완료 기준 점검 결과는 Phase별 절에 있다. **Phase 7부터는 다시 Phase마다 사용자 확인을 받는다.**
 - 기준 문서 세트: `telephony-triage-docs-v11` (`CHANGES.md` 참고)
@@ -559,11 +559,12 @@ Claude hook은 `guard.py`에 hook 입력 JSON을 직접 넣어 시험했다. **�
 - **guard는 `site-defaults.yaml`이 없어도 멈추지 않는다**: 계약은 "없으면 모든 스크립트가 종료 코드 2"다. 그런데 guard는
   모든 Bash·파일·MCP 도구 호출에 걸리는 PreToolUse hook이라 2로 끝나면(= 차단) 이슈 DB와 무관한 작업까지 막힌다.
   그래서 경고만 내고 사용자 config만으로 판정한다. 이때 커밋 검사(규칙 3·4)가 부르는 스크립트가 2를 내므로 이슈 DB
-  커밋은 결국 거부된다. → `contracts.md §3.2` 설정 읽기에 "guard.py 제외"를 넣을지 확인 필요.
+  커밋은 결국 거부된다. → **계약에 반영함** (`contracts.md §3.2` 설정 읽기, `08-safety.md §9`).
 - **pre-push 토큰 검사를 계약보다 조금 강하게**: 계약은 "토큰이 `state.json`의 `approved_hash`와 같은지". 구현은 그 밖에
   (1) push하는 커밋의 트리 = 토큰, (2) 대상 브랜치 = 그 `state.json`의 `branch`, (3) 토큰으로 원격 ref 삭제 불가를 본다.
   pre-push는 작업 키를 모르므로 `<work_dir>/*/state.json` 전체에서 `approved_hash`가 같은 것을 찾는다.
   `base_branch`·`work_dir`는 사용자 config(없으면 `main`, `<home>/work`)에서 읽는다. config가 없어도 검사한다(토큰 없으면 거부).
+  → **계약에 반영함** (`08-safety.md §9`, `contracts.md §3.2` publish).
 - **pre-push는 플러그인 스크립트에 기대지 않는다**: 이슈 DB 안의 자기완결 스크립트(sh + python3 + pyyaml)다. 계약 표에
   pre-push용 스크립트가 없고, `plugin.scripts_path`가 무효해도 main push 차단은 동작해야 하기 때문이다.
 - **pre-commit 출력**: `db_precommit.py`는 사람이 읽는 요약을 stderr에, 결과 JSON을 stdout에 낸다. hook 스크립트는 stdout을
@@ -820,11 +821,9 @@ Windows 전용 보정은 커밋하지 않는다.**
    (`tests/mocks/plugin-probe/README.md`). 커맨드 파일 형식(`plugin/commands/setup.md`), `${CLAUDE_PLUGIN_ROOT}`
    치환, MCP 도구 이름 형식이 여기에 걸려 있다.
 3. (선택, 사내) **S-0 선행 확인**: `parse_logcat.py`, `match_signatures.py`, `mask_pii.py`를 사내 실제 로그로.
-4. **Phase 8 세부 결정**: "Phase 8 구현에서 정한 세부"(guard의 site-defaults 예외, pre-push 토큰 검사 강화)를
-   `contracts.md`에 반영할지 사용자에게 묻는다.
-5. 빈 플러그인 실험(2번)에서 **`plugin/hooks/hooks.json`도 함께 확인**한다: 플러그인 hook 로드, `mcp__.*` matcher,
+4. 빈 플러그인 실험(2번)에서 **`plugin/hooks/hooks.json`도 함께 확인**한다: 플러그인 hook 로드, `mcp__.*` matcher,
    `permissionDecision` deny/ask, SessionStart, hook 입력의 `tool_name` 형식(`guard.py`의 TODO(SITE:S1·S3)).
-6. **Phase 9** (스키마 마이그레이션): `docs/design/11-phases.md` Phase 9 절과 그 "읽을 문서"를 읽는다.
+5. **Phase 9** (스키마 마이그레이션): `docs/design/11-phases.md` Phase 9 절과 그 "읽을 문서"를 읽는다.
    - 이미 있는 부품: `config.py check`·`db_precommit`·guard의 `migrate/schema-v<N>` 브랜치 예외.
 
 ### 사용자 확인이 필요한 항목 (Phase 2~6에서 쌓임)

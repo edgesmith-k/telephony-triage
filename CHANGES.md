@@ -374,3 +374,9 @@
 - 세션 lock: `snapshot`·`stage`·`summary`·`publish`·`discard`·`db_verify --draft`의 lock 확인은 **만료 여부를 보지 않는다**(같은 작업 키면 이어간다).
 - `stage` 7번에 `db_add check-ids` 추가(`mask_pii` 뒤).
 - `publish`의 "커밋 1개" 검사에 `HEAD^2` 없음(머지 커밋 아님) 명시.
+
+## 사외 초안 중 계약 보완 (Phase 8, 2026-09-29)
+
+근거는 `DRAFT_NOTES.md` "Phase 8 구현에서 정한 세부". 사용자 확인 후 반영.
+- `guard.py`는 `site-defaults.yaml`이 없어도 종료 코드 2로 멈추지 않고 경고 후 사용자 config로 판정한다 → `contracts.md §3.2` 설정 읽기, `08-safety.md §9`.
+- `pre-push` 토큰 검사 강화: `<work_dir>/*/state.json`에서 토큰을 찾고, push 커밋 트리 = 토큰, 대상 브랜치 = 그 `state.json`의 `branch`, 원격 ref 삭제 불가. `base_branch`·`work_dir`는 사용자 config(없으면 기본값). 플러그인 스크립트 없이 동작 → `08-safety.md §9`, `contracts.md §3.2` publish.
