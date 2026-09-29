@@ -22,7 +22,7 @@
 - 모든 스크립트는 `${CLAUDE_PLUGIN_ROOT}/scripts/<이름>.py`로 호출한다 (`01-architecture.md §3`).
 - 결과는 `--json`일 때 stdout에 JSON으로 낸다. 로그 원문은 출력하지 않는다.
 - 종료 코드는 §종료 코드 표를 따른다.
-- **`--db <path>` 기본값** (guard.py 제외 전부):
+- **`--db <path>` 기본값** (`guard.py`·`db_pr.py` 제외 전부. `db_pr.py`는 사용자 clone·스냅샷·작업 worktree를 동시에 다루는 오케스트레이터라 `--db`를 받지 않고 항상 config의 `issue_db.path`를 쓴다):
   1. `--db`를 주면 그 값.
   2. 생략했고 cwd가 이슈 DB 레포(또는 그 worktree) 안이면 `git rev-parse --show-toplevel`. 판별 기준은 toplevel에 `issue-db.config.yaml`이 있는지다.
   3. 그 밖에는 config의 `issue_db.path`.
@@ -89,7 +89,7 @@
 - **도구 브랜치**: `db_pr`는 로컬에 도구 전용 브랜치 `tt/<br>`만 만든다. 사용자 clone의 로컬 브랜치 `<br>`는 만들지도, 덮어쓰지도, 지우지도 않는다. 원격 브랜치 이름은 `<br>`다 (§브랜치).
 - **세션 lock** (v1은 사용자별로 한 번에 한 작업): `<work_dir>/session.lock` = `{job, command, started_at, updated_at}`.
   - 스냅샷을 옮기거나 worktree를 만드는 흐름(analyze, record, `sync`(작업 키 `sync`), `sync-pr`, `verify-fix`, `validate --cause`, `fix-submitted`, setup 6번(작업 키 `setup`), review/move 계획 PR)은 시작할 때 `lock acquire <작업 키>`로 잡는다. 다른 작업 키의 lock이 있으면 종료 코드 2와 보유자 정보를 낸다. 같은 작업 키의 lock이면: `updated_at`이 **10분 이내**면 다른 세션이 같은 작업을 진행 중일 수 있으므로 종료 코드 2와 보유자 정보를 내고, 사용자가 확인하면 스킬이 `acquire <작업 키> --take-over`로 이어받는다. 10분이 넘었으면 그대로 이어받는다(같은 작업을 하던 이전 세션이 비정상 종료한 경우).
-  - `snapshot`, `stage`, `summary`, `publish`, `discard`, `db_verify ... --draft`는 lock이 그 작업 키 것인지 확인하고 `updated_at`을 갱신한다. 아니면 종료 코드 2. (`<wt>`·`<draft>`의 작업 키는 상위 디렉토리 이름이다.)
+  - `snapshot`, `stage`, `summary`, `publish`, `discard`, `db_verify ... --draft`는 lock이 그 작업 키 것인지 확인하고 `updated_at`을 갱신한다. 아니면 종료 코드 2. 이때 만료 여부는 보지 않는다(만료는 다른 작업이 가져갈 수 있다는 뜻일 뿐, 아직 같은 작업 키가 남아 있으면 그대로 이어간다). (`<wt>`·`<draft>`의 작업 키는 상위 디렉토리 이름이다.)
   - 4시간 넘게 갱신되지 않은 lock은 만료로 보고 `acquire`가 가져온다. 만료 전이라도 사용자가 "그 세션은 끝났다"고 확인하면 스킬이 `release <작업 키> --force`로 푼다. 스크립트는 호출마다 끝나는 프로세스이므로 프로세스 생존 여부로 판단하지 않는다.
   - **해제**: 작업의 모든 종료 경로에서 lock을 푼다. `discard`는 자동으로 푼다. `discard` 없이 끝나는 경로(analyze 읽기 전용 모드·계획 저장 후 종료, `validate --cause`의 failed/unknown, `verify-fix`의 unknown, 사용자가 중간에 그만둠, `sync`·setup 완료)에서는 스킬이 `lock release <작업 키>`를 호출한다.
   - 읽기 전용 커맨드(`search`, `review`, `preview`, 인자 없는 `validate`)는 lock을 잡지 않는다. 스냅샷을 옮기지 않기 때문이다.
@@ -104,10 +104,10 @@
   4. `git worktree add --no-track -B tt/<br> <wt> <기준 SHA>`. 이미 있는 `<wt>`면 **재적용**: 그 안에서 `git checkout -f -B tt/<br> <기준 SHA>` → `git reset --hard <기준 SHA>` → `git clean -fd`. 커밋 전이라 HEAD가 이미 기준 SHA여도 추적 파일의 이전 적용분이 남지 않게 하기 위해서다.
   5. `config.py check --db <wt>`로 기준 트리의 쓰기 가능 여부를 확인한다: `--dry-run`이면 `--for dry-run`(gh 인증 없이), 그 밖에는 `--for write`. 불가면 종료 코드 2.
   6. `db_add apply`. 계획 `source`가 `analyze`일 때만 pending 피드백을 포함한다: `<work_dir>/<작업 키>/included_pending/`(이미 이 PR에 올린 것)과 지금 `~/.telephony-triage/pending-feedback/`에 있는 파일.
-  7. (`ci_mode`가 `actions-build`가 아니면) `db_build --write` → `db_lint --changed origin/<base>` → `mask_pii --check --changed origin/<base>` → `db_regress --all` → `db_verify rules --plan`.
+  7. (`ci_mode`가 `actions-build`가 아니면) `db_build --write` → `db_lint --changed origin/<base>` → `mask_pii --check --changed origin/<base>` → `db_add check-ids`(기준 SHA에 그사이 들어온 ID와의 충돌, `07-workflow.md §Step 8`) → `db_regress --all` → `db_verify rules --plan`.
   - 모든 호출에 `--db <wt>`를 명시한다. `<br>`가 사용자 clone에 checkout돼 있어도 영향이 없다.
 - `summary`: 확인 화면에 필요한 값(계획 `source`와 표시 라벨 — `record`면 "수동 기록", `jira.origin: file`이면 "Jira 메타데이터: 오프라인 파일" —, 변경 파일, ID·fixture 번호 할당, README 미리보기, 주요 diff, 자동 검사, 검증 결과표(실행/건너뜀과 사유), 승인 필요 항목, 리뷰어, 커밋 메시지)과 `approved_hash`를 낸다. `approved_hash`는 워킹 트리 전체(`.gitignore` 적용)를 임시 index로 올려서 구한 트리 해시다: `GIT_INDEX_FILE=<임시> git add -A && GIT_INDEX_FILE=<임시> git write-tree`. `approved_hash`와 커밋 메시지를 `state.json`에 쓴다.
-- `publish`: `state.json`과 비교해서 다음을 모두 확인한다 (하나라도 다르면 종료 코드 1, 확인을 다시 받는다): `HEAD^{tree}`가 `--approved`와 같고 `state.json`의 `approved_hash`와 같다, `HEAD^`가 `state.json`의 `base_sha`다(커밋 1개), 커밋 메시지가 `state.json`의 메시지와 같다, `<br>`가 `state.json`의 `branch`이고 base 브랜치가 아니다. 그 뒤 환경변수 `TT_PUBLISH_TOKEN=<approved_hash>`를 붙여 `git push --force-with-lease=refs/heads/<br>:<sha> origin HEAD:refs/heads/<br>` (이슈 DB의 `.githooks/pre-push`가 토큰을 `state.json`의 `approved_hash`와 비교하고 base 브랜치 대상 push를 거부한다, `08-safety.md §9`. `--lease new`면 `--force-with-lease=refs/heads/<br>:`로 원격에 브랜치가 없어야 함) → `GH_HOST=<ghe_host> gh pr create`(또는 이미 PR이 있으면 `gh pr edit`) → 계획의 `pr`(`number`, `branch`, `head_sha`)과 `base_sha`(= `state.json`의 `base_sha`) 기록 → 포함된 pending 피드백 원본을 `included_pending/`로 옮기고 계획 `included_pending`에 PR 번호와 함께 기록.
+- `publish`: `state.json`과 비교해서 다음을 모두 확인한다 (하나라도 다르면 종료 코드 1, 확인을 다시 받는다): `HEAD^{tree}`가 `--approved`와 같고 `state.json`의 `approved_hash`와 같다, `HEAD^`가 `state.json`의 `base_sha`이고 `HEAD^2`가 없다(기준 위의 커밋 1개, 머지 커밋 아님), 커밋 메시지가 `state.json`의 메시지와 같다, `<br>`가 `state.json`의 `branch`이고 base 브랜치가 아니다. 그 뒤 환경변수 `TT_PUBLISH_TOKEN=<approved_hash>`를 붙여 `git push --force-with-lease=refs/heads/<br>:<sha> origin HEAD:refs/heads/<br>` (이슈 DB의 `.githooks/pre-push`가 토큰을 `state.json`의 `approved_hash`와 비교하고 base 브랜치 대상 push를 거부한다, `08-safety.md §9`. `--lease new`면 `--force-with-lease=refs/heads/<br>:`로 원격에 브랜치가 없어야 함) → `GH_HOST=<ghe_host> gh pr create`(또는 이미 PR이 있으면 `gh pr edit`) → 계획의 `pr`(`number`, `branch`, `head_sha`)과 `base_sha`(= `state.json`의 `base_sha`) 기록 → 포함된 pending 피드백 원본을 `included_pending/`로 옮기고 계획 `included_pending`에 PR 번호와 함께 기록.
 - `discard`: `git worktree remove --force <wt>`, 도구 브랜치 `tt/<br>` 삭제, `state.json` 삭제, **lock 해제**. 사용자 로컬 `<br>`와 원격 브랜치, `plan.json`은 건드리지 않는다.
 - 커밋은 `db_pr.py`가 하지 않는다. 스킬이 `git add`와 `git commit`을 **별도 Bash 호출**로 실행한다 (`07-workflow.md §Step 8-6`).
 

@@ -366,3 +366,11 @@
 
 ## 🟢
 - `GUIDE.md §6` 시나리오 1에 마스킹·시각 후보·범위 밖·bugreport·슬롯·후보 없음 한 줄씩, `§7`에 Write/Edit 차단·pre-push·서버 강제 전제, `§8`에 `REVIEW-11.md`.
+
+## 사외 초안 중 계약 보완 (Phase 7 대조, 2026-09-29)
+
+`contracts.md §3.2`만 바뀌었다. 근거는 `DRAFT_NOTES.md` "Phase 7 대조 후 보완".
+- `--db` 기본값 규칙의 예외에 `db_pr.py` 추가(오케스트레이터, 항상 config의 `issue_db.path`).
+- 세션 lock: `snapshot`·`stage`·`summary`·`publish`·`discard`·`db_verify --draft`의 lock 확인은 **만료 여부를 보지 않는다**(같은 작업 키면 이어간다).
+- `stage` 7번에 `db_add check-ids` 추가(`mask_pii` 뒤).
+- `publish`의 "커밋 1개" 검사에 `HEAD^2` 없음(머지 커밋 아님) 명시.

@@ -606,8 +606,43 @@ def test_publish_rejects_changes_after_approval():
     bad_branch[3] = "issue/OTHER-1"
     out = ws.db_pr(*bad_branch, expect=1)
     assert any("브랜치" in p for p in out["problems"])
+    # 첫 부모가 기준 SHA인 머지 커밋도 "커밋 하나"가 아니다 (HEAD^2 검사)
+    good = git(wt, "rev-parse", "HEAD")
+    git(wt, "checkout", "-q", "--detach", "HEAD^")
+    (wt / "side.txt").write_text("옆 가지\n", encoding="utf-8")
+    git(wt, "add", "-A")
+    git(wt, "commit", "-qm", "옆 가지")
+    side = git(wt, "rev-parse", "HEAD")
+    git(wt, "checkout", "-q", "tt/issue/MOCK-7001")
+    git(wt, "reset", "-q", "--hard", "HEAD^")
+    git(wt, "merge", "-q", "--no-ff", "-m", message, side)
+    git(wt, "rm", "-q", "--cached", "side.txt")
+    git(wt, "commit", "-q", "--amend", "--no-edit")   # 트리는 승인 트리와 같게, 부모만 둘
+    out = ws.db_pr(*publish, expect=1)
+    assert any("머지 커밋" in p for p in out["problems"])
+    git(wt, "reset", "-q", "--hard", good)
     assert ws.db_pr(*publish)["pushed"] is True
     ws.db_pr("discard", wt)
+
+
+def test_expired_own_lock_does_not_block_publish_or_discard():
+    """확인 화면에서 4시간 넘게 기다린 뒤에도 같은 작업의 publish·discard는 그대로 진행하고 lock을 푼다
+    (contracts.md §3.2: 만료는 다른 작업이 `acquire`로 가져갈 수 있다는 뜻일 뿐이다)."""
+    ws = Workspace()
+    at = lambda hours: {"TT_NOW": f"2026-09-29T{hours:02d}:00:00Z"}  # noqa: E731
+    ws.plan("MOCK-7001", "p7-analyze-append.plan.json")
+    ws.db_pr("lock", "acquire", "MOCK-7001", "--take-over", env=at(9))
+    ws.stage("MOCK-7001", "issue/MOCK-7001", env=at(9))
+    summary = ws.db_pr("summary", ws.wt("MOCK-7001"), env=at(9))
+    ws.commit("MOCK-7001")
+    assert ws.db_pr("lock", "status", env=at(14))["lock"]["expired"] is True
+    out = ws.db_pr("publish", ws.wt("MOCK-7001"), "--branch", "issue/MOCK-7001", "--lease", "new",
+                   "--approved", summary["approved_hash"], env=at(14))
+    assert out["pushed"] is True
+    assert ws.db_pr("lock", "status", env=at(14))["lock"]["expired"] is False   # publish가 갱신했다
+    done = ws.db_pr("discard", ws.wt("MOCK-7001"), env=at(19))                     # 또 5시간 뒤
+    assert done["lock"]["released"] is True
+    assert ws.db_pr("lock", "status")["held"] is False
 
 
 # -- cleanup·lock ------------------------------------------------------------------------------------

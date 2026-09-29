@@ -432,11 +432,11 @@
 | 손으로 쓴 계획 8개 | `tests/fixtures/plans/p7-*.plan.json` (analyze append/new-cause/new-type/unresolved, review reclassify, record pending/verified, import) |
 | 사후 lint 변형 | `tests/fixtures/issue-db-dup-id/` (`make_variant_dbs.py`의 `dup_id`: 같은 type.md에 DATA-001-03 두 번, MOCK-1101이 두 유형에) |
 | 쓰기 경로 테스트 환경 | `tests/helpers/workspace.py` (임시 홈·config·모의 원격·clone·gh 상태, 생성 파일을 main에 미리 커밋, `ship()`·`merge()`·`push_main()`·`push_branch()`) |
-| Phase 7 테스트 | `tests/test_db_pr.py` (20개) |
+| Phase 7 테스트 | `tests/test_db_pr.py` (21개) |
 
 ### Phase 7 완료 기준 확인 결과
 
-`python3 tests/test_db_pr.py` — **20개 전부 통과** (약 5분). 전체 결과는 아래 "반입 체크리스트 상태".
+`python3 tests/test_db_pr.py` — **21개 전부 통과** (약 5분. 20개 + 아래 "Phase 7 대조 후 보완"의 1개). 전체 결과는 아래 "반입 체크리스트 상태".
 
 | 완료 기준 | 확인 | 어디서 |
 |---|---|---|
@@ -492,6 +492,18 @@
 - **`cleanup`**: 대상은 lock 작업 밖의 `<job>/wt`·`<job>/draft`, 구현 파일(`state.json` 등), worktree가 없거나 이번에 지울 worktree에만 있는 `tt/*` 브랜치. `--older-than`은 값 없이 주면 90일.
 - **`summary` 출력**: `{source, source_label, jira{key, origin, label}, branch{name, remote: 신규|갱신, remote_sha, base}, reviewers, open_prs, files[{kind, path, change}], ids, fixtures, drift_decisions, readme_preview, diff(50줄), diff_total_lines, diff_truncated, checks{lint, ids, mask, regress, build}, verification[{id, status, label, reason, review_required}], approval_needed, notes, commit_message, pr_title, push_allowed, push_note, pending_included, pr_body, approved_hash}`. `notes`에 record 표시("로그·코드 분석: 하지 않음", "시그니처 없음 — 매칭 불가, 리뷰 대상", "사용자 진술 — 카테고리 오너 리뷰 필요", "검증 못 함 — 리뷰 대상").
 - **`db_verify rules` 뼈대의 R6**: `skipped`(사유 `해당 없음`). `--draft`는 lock 확인 뒤 `origin/<base>` 분리 worktree에 `db_add apply`, 끝나면 지운다.
+
+### Phase 7 대조 후 보완 (2026-09-29, `contracts.md §3.2` `db_pr.py` 세부와 코드 대조)
+
+사용자 확인 뒤 다음을 고쳤다. 계약을 고친 것은 `CHANGES.md`에도 적었다.
+
+| # | 발견 | 결정 | 어디 |
+|---|---|---|---|
+| 1 | `db_pr.py`가 `--db`를 받지 않는다 (계약 공통 규칙은 "guard.py 제외 전부") | **계약에 예외 명시**. 사용자 clone·스냅샷·작업 worktree를 동시에 다루는 오케스트레이터라 `--db` 하나로는 어느 트리인지 모호하고, cwd 기반 기본값은 오히려 위험하다. 문서에 `db_pr`에 `--db`를 주는 호출도 없다 | `contracts.md §3.2` 공통 규칙 |
+| 2 | `Lock.touch`가 **자기 작업의 만료된 lock**도 거부했다 → 확인 화면에서 4시간 넘게 기다리면 `publish`·`discard`가 2로 멈추고 lock을 못 푼다 | **코드를 계약에 맞춤**. 만료는 다른 작업이 `acquire`로 가져갈 수 있다는 뜻일 뿐이고, 같은 작업 키가 남아 있으면 아무도 안 가져간 것이다. 계약에도 한 문장 명시 | `db_pr.py` `Lock.touch`, `contracts.md` 세션 lock, `test_expired_own_lock_does_not_block_publish_or_discard` |
+| 3 | `publish`의 "커밋 1개" 검사가 `HEAD^`만 봐서 첫 부모가 기준 SHA인 머지 커밋이 통과했다 | **코드 수정**: `HEAD^2`가 있으면 거부 | `db_pr.py` `publish`, `contracts.md` publish, `test_publish_rejects_changes_after_approval` 확장 |
+| 4 | `stage` 7번에 `db_add check-ids`가 있는데 계약 목록에는 없다 (`07-workflow.md §Step 8`에는 있다) | **계약에 추가** (코드 유지). 기준 SHA에 다른 PR의 ID가 먼저 들어왔을 때 stage에서 잡아야 한다 | `contracts.md §3.2` stage 7번 |
+| 5 | `preflight`의 `ahead_of_remote`가 bool이 아니라 커밋 수(원격 브랜치가 없으면 `origin/<base>` 기준) | 유지. 0이면 false로 읽으면 되고 확인 화면에 수를 보여줄 수 있다 | (기록만) |
 
 ## 개발 환경과 설계의 차이 (중요)
 
@@ -707,7 +719,7 @@ Windows 전용 보정은 커밋하지 않는다.**
 
 | 항목 | 상태 |
 |---|---|
-| 전체 테스트 통과 | 🟡 D0·Phase 1~7 범위 (`pytest tests` 152개, 샘플 `db_regress --all` 20개 통과). eval은 Phase 13 뒤 |
+| 전체 테스트 통과 | 🟡 D0·Phase 1~7 범위 (`pytest tests` 153개, 샘플 `db_regress --all` 20개 통과). eval은 Phase 13 뒤 |
 | 사내 정보 없음 | ✅ 사내 자료를 쓰지 않았다 |
 | `plugin/site-defaults.yaml` 없고 example만 있음 | ✅ `test_plugin_root_helper_and_missing_site_defaults`가 검사 |
 | `SITE_PATHS`의 다른 경로가 비어 있음 | ✅ `test_site_paths_are_absent_in_draft`가 검사 |

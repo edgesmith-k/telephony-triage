@@ -140,8 +140,11 @@ class Lock:
                 "taken_over": bool(taken_from), "previous": taken_from}
 
     def touch(self, job: str) -> dict:
+        """lock이 그 작업 키 것인지 확인하고 `updated_at`을 갱신한다. 만료 여부는 보지 않는다: 만료는 **다른** 작업이
+        `acquire`로 가져갈 수 있다는 뜻이고, 아직 같은 작업 키가 남아 있으면 아무도 가져가지 않은 것이므로 그대로
+        이어간다 (확인 화면에서 4시간 넘게 기다린 뒤의 publish·discard가 멈추지 않게)."""
         held = self.describe(self.read())
-        if held is None or held["job"] != job or held["expired"]:
+        if held is None or held["job"] != job:
             raise UsageError(f"세션 lock이 작업 {job}의 것이 아닙니다. 먼저 lock acquire {job}를 한다.",
                              {"holder": held})
         held.update(updated_at=_iso(now()))
@@ -792,8 +795,9 @@ def publish(ctx: Ctx, wt: Path, branch: str, lease: str, approved: str) -> tuple
     if tree != approved or tree != state["approved_hash"]:
         problems.append("커밋 트리가 승인 해시와 다르다 (승인 뒤 파일이 바뀌었다). 확인 화면을 다시 받는다.")
     parent = _out(_git(wt, "rev-parse", "HEAD^", check=False))
-    if parent != state["base_sha"]:
-        problems.append("커밋이 기준 SHA 위의 커밋 하나가 아니다 (커밋이 둘 이상이거나 기준이 다르다).")
+    merge = _out(_git(wt, "rev-parse", "--verify", "--quiet", "HEAD^2", check=False))
+    if parent != state["base_sha"] or merge:
+        problems.append("커밋이 기준 SHA 위의 커밋 하나가 아니다 (커밋이 둘 이상이거나 머지 커밋이거나 기준이 다르다).")
     message = _git(wt, "log", "-1", "--format=%B", "HEAD", check=False).stdout.strip()
     if message != (state.get("commit_message") or "").strip():
         problems.append("커밋 메시지가 확인받은 메시지와 다르다.")
