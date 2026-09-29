@@ -1,0 +1,41 @@
+# 합성 라벨셋: tools/offline_eval.py 시험용 (Phase 12). 형식은 offline_eval.py 머리말 참고.
+# 사내 라벨셋(tests/site/offline-eval.yaml, S-5)은 실제 과거 Jira 키·마스킹된 로그 경로를 쓴다.
+db: issue-db-sample
+tz: Asia/Seoul
+year: 2026
+items:
+  - key: EVAL-1
+    logs: [issue-db-sample/data/DATA-001-no-setup-data-call/fixtures/DATA-001-01.log]
+    occurred_at: "2026-09-20T14:32:10+09:00"
+    summary: 데이터가 연결되지 않음
+    expect: DATA-001-01
+  - key: EVAL-2
+    logs: [issue-db-sample/data/DATA-001-no-setup-data-call/fixtures/DATA-001-02.log]
+    occurred_at: "2026-09-22T08:05:00+09:00"
+    expect: DATA-001-02
+  - key: EVAL-3
+    logs: [issue-db-sample/ims/IMS-001-ims-registration-failed/fixtures/IMS-001-01.log]
+    occurred_at: "2026-09-27T09:30:05+09:00"
+    expect: IMS-001-01
+  - key: EVAL-4
+    logs: [issue-db-sample/network/NETWORK-001-no-service/fixtures/NETWORK-001-01.log]
+    occurred_at: "2026-09-24T10:11:02+09:00"
+    expect: NETWORK-001-01
+  - key: EVAL-5
+    logs: [issue-db-sample/sim/SIM-001-sim-not-detected/fixtures/SIM-001-01.log]
+    occurred_at: "2026-09-25T16:20:03+09:00"
+    expect: SIM-001-01
+  - key: EVAL-6
+    logs: [issue-db-sample/sms/SMS-001-sms-send-failed/fixtures/SMS-001-01.log]
+    occurred_at: "2026-09-26T13:00:05+09:00"
+    expect: SMS-001-01
+  # 정답이 unresolved: 시그니처에 걸리지 않는 정상 로그 (오탐 없음)
+  - key: EVAL-7
+    logs: [issue-db-sample/data/DATA-001-no-setup-data-call/fixtures/DATA-001.none.log]
+    occurred_at: "2026-09-23T09:00:30+09:00"
+    expect: unresolved
+  # 일부러 틀린 라벨: 데이터 로그인데 정답을 SMS로 적어 '미스'가 표에 나오는지 본다
+  - key: EVAL-8
+    logs: [issue-db-sample/data/DATA-001-no-setup-data-call/fixtures/DATA-001-01.log]
+    occurred_at: "2026-09-20T14:32:10+09:00"
+    expect: SMS-001-01

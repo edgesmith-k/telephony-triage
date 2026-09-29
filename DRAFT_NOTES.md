@@ -14,7 +14,8 @@
 - 완료 Phase 추가: **9** (2026-09-29, 사용자 확인 — Phase 10 진행 지시로 확인)
 - 완료 Phase 추가: **10** (2026-09-29, 사용자 확인 후 커밋. recovery 예시는 사용자 결정 (a))
 - 완료 Phase 추가: **11** (2026-09-29, 사용자 확인 후 커밋. 병합 unresolved Jira는 결정 (a), `GENERATOR_VERSION`은 1 유지)
-- 다음 Phase: **12** (`11-phases.md` Phase 12 절부터)
+- 완료 Phase 추가: **12** 구현·점검 끝 (2026-09-29, **사용자 확인 대기**)
+- 다음 Phase: **13** (`11-phases.md` Phase 13 절부터, Phase 12 확인 후)
 - Phase 2~6은 사용자가 미리 승인해서 Phase마다 확인을 기다리지 않고 진행했다(각 Phase 끝에 커밋·push). 완료 기준 점검 결과는 Phase별 절에 있다. **Phase 7부터는 다시 Phase마다 사용자 확인을 받는다.**
 - 기준 문서 세트: `telephony-triage-docs-v11` (`CHANGES.md` 참고)
 - 레포 루트: 이 파일이 있는 디렉토리 (`CLAUDE.md`, `docs/design/`, `plugin/`,
@@ -793,6 +794,43 @@ Claude hook은 `guard.py`에 hook 입력 JSON을 직접 넣어 시험했다. **�
    - **결정 (2026-09-29, 사용자)**: 1로 둔다. **`GENERATOR_VERSION`(와 `SCHEMA_VERSION`) 증가 규칙은 첫 배포(S-7 파일럿)부터
      적용한다.** 그 전(사외 초안·사내 보완 중)의 생성 결과 변경은 모두 v1에 포함한다. 사내에서 이 규칙을 다시 따지지 않는다.
 
+### Phase 12에서 만든 것
+
+| 산출물 | 경로 |
+|---|---|
+| 커맨드 9개 추가 (총 12개) | `plugin/commands/{analyze,record,sync,search,sync-pr,preview,validate,verify-fix,fix-submitted}.md` (기존 `setup`, `review`, `migrate`) |
+| 스크립트만 쓰는 커맨드 | `sync`, `search`, `preview`, `sync-pr`, 인자 없는 `validate` (스킬 없이 동작) |
+| 스킬 연결 틀 | `analyze`, `record`, `verify-fix`, `fix-submitted`, `validate --cause` (Phase 13 스킬 `telephony-triage`를 부르는 틀만) |
+| 오프라인 재현 평가 | `tools/offline_eval.py <라벨셋.yaml> [--db] [--plugin-root] [--json]` |
+| 합성 라벨셋 | `tests/fixtures/offline-eval-sample.yaml` (8건: 정답 원인 6, unresolved 1, 일부러 틀린 라벨 1) |
+| Phase 12 테스트 | `tests/test_commands.py` (13개) |
+
+### Phase 12 완료 기준 확인 결과
+
+| 완료 기준 | 확인 | 어디서 |
+|---|---|---|
+| `commands/` 12개가 `01 §3`·`09 §10`과 같다 | ✅ | `test_command_files_match_design_lists` |
+| 스킬 연결 5개 로드·인자 힌트 | ✅ frontmatter `description`·`argument-hint` 검사. 실제 Claude Code 로드는 **미확인(S1)** | `test_every_command_has_description_and_argument_hint_where_it_takes_args` |
+| `sync`: 끝에 닫힌 PR의 오래된 작업 디렉토리 후보, 확인 전 삭제 없음 | ✅ 본문 스크립트 순서(lock → snapshot → `db_build --cache-only` → release → `cleanup --dry-run --older-than`)를 그대로 실행. 닫힌 PR·120일 전 mtime 작업 디렉토리가 후보로 나오고 `--yes` 전에는 남으며, 열린·최근 PR은 후보가 아님 | `test_sync_sequence_*` |
+| `validate`(인자 없음): lint·전체 회귀·R1~R5 | ✅ 본문 순서(`db_lint`·`mask_pii`·`db_regress --all`·`db_verify rules`·`db_build --verify`)를 실행. 깨끗한 DB는 전부 0, 양성 fixture를 깨면 회귀가 잡음, 워킹 트리를 안 바꿈 | `test_argless_validate_chain_*`, `test_validate_changes_are_read_only` |
+| `offline_eval.py`가 합성 라벨셋에서 정확도 표 | ✅ 1위 정확도·상위 3 포함률 85.7%(6/7, 일부러 틀린 라벨 1건), 오탐률 0% | `test_offline_eval_*` |
+| `setup`, `search`, `sync-pr`, `preview`, `review`, `migrate` 동작 | 스크립트 부분은 각 Phase 테스트(`test_db_pr`·`test_db_search`·`test_db_review`·`test_db_migrate`·`test_db_build`)로 확인. **플러그인 로드 상태의 커맨드 실행은 S1 실험 전이라 미확인** | — |
+
+### Phase 12 구현에서 정한 세부
+
+- **라벨셋 형식**(`tools/offline_eval.py` 머리말): 최상위 `db`(선택)·`tz`·`year`·`minutes`, 항목마다 `key`, `logs`(라벨셋 파일 기준 경로),
+  `occurred_at`(타임존 있는 ISO), `sw`·`summary`·`description`(선택), `expect`(원인 ID 또는 `unresolved`). 설계는 "Jira 키,
+  로그 경로, 정답 원인 ID 또는 unresolved"만 정했고 발생 시각(파서 `--around`에 필요)은 빠져 있어 항목에 넣었다.
+- **`--jira-file`은 받지 않는다**: 설계는 "`analyze --dry-run --jira-file`과 같은 경로"인데 `jira-file` 형식이 느슨해(`field_map` 값이
+  사내 필드 이름에 묶임) Jira 메타를 라벨셋에 직접 적는다. 매처 입력은 같은 `--jira-meta` JSON이라 결과 경로는 같다.
+- **플러그인 루트**: `--plugin-root` > `plugin/site-defaults.yaml`이 있으면 `plugin/` > 없으면 테스트 헬퍼 루트를 임시로 만든다
+  (사외 시험용). 런타임 코드가 아니라 개발 도구라 이 분기는 허용한다.
+- **지표**: 1위 정확도·상위 3 포함률은 정답이 원인 ID인 항목만, 오탐률은 정답이 `unresolved`인 항목만 분모로 한다. 파서·매처가
+  실패한 항목은 "오류"로 표에 남기고 분모에서 뺀다.
+- **`sync-pr` 커맨드는 스킬에 기대지 않는다**: 완료 기준이 "지금 동작"이라 9단계를 본문에 자기완결로 적었다.
+- **`${CLAUDE_PLUGIN_ROOT}` 치환(S1)은 아직 확인하지 못했다.** 커맨드 본문은 `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/<이름>.py"`를
+  쓴다. 치환이 안 되면 config의 `plugin.scripts_path`로 바꾼다.
+
 ## 개발 환경과 설계의 차이 (중요)
 
 설계는 실행 환경을 **Ubuntu(Linux)** 로 못박는다 (`01-architecture.md §3`,
@@ -1030,7 +1068,7 @@ Windows 전용 보정은 커밋하지 않는다.**
 3. (선택, 사내) **S-0 선행 확인**: `parse_logcat.py`, `match_signatures.py`, `mask_pii.py`를 사내 실제 로그로.
 4. 빈 플러그인 실험(2번)에서 **`plugin/hooks/hooks.json`도 함께 확인**한다: 플러그인 hook 로드, `mcp__.*` matcher,
    `permissionDecision` deny/ask, SessionStart, hook 입력의 `tool_name` 형식(`guard.py`의 TODO(SITE:S1·S3)).
-5. **Phase 12**: `docs/design/11-phases.md` Phase 12 절과 그 "읽을 문서"를 읽는다. (Phase 11 완료: `db_review.py`·`review` 커맨드, STATS 유형별, 병합 계획 지원, `db_search.py`. `search` 커맨드 연결은 Phase 12.)
+5. **Phase 13**: Phase 12 확인을 받은 뒤 `docs/design/11-phases.md` Phase 13 절과 그 "읽을 문서"를 읽는다 (skill-creator로 `SKILL.md`·`reference/`·eval). Phase 12 완료: 커맨드 12개, `tools/offline_eval.py`.
 
 ### 사용자 확인이 필요한 항목 (Phase 2~6에서 쌓임)
 
