@@ -397,3 +397,14 @@
 - `verify-fix` op의 `verification.fixture`는 `passed`만 필수(`failed`의 recurrence fixture, `partial`은 선택. 05 §5.12 (2) "넣을지 묻는다"와 맞춤) → `contracts.md §작업 계획` op 표, 이슈 DB `schema/plan.schema.json`.
 - `not-implemented`는 Phase 7~9 뼈대에서만 썼다 → `contracts.md §상태 값`, `05-verification.md §5.12 (1)`, `03-issue-db.md §5.7 (4)`.
 - recovery 시그니처 예시를 "이 원인에 특정한 정상 흐름"(계기 이벤트 → 정상 동작 `sequence`)으로 고침. 정상 로그 어디에나 맞는 `SETUP_DATA_CALL` 요청만의 예는 R1 흔적 검사(카테고리 음성 fixture 전부에서 충족 금지)를 통과할 수 없다. 사용자 결정 (a) → `03-issue-db.md §5.4 (1)`·`§5.7 (2)`.
+
+## 사외 초안 중 계약 보완 (Phase 11, 2026-09-29)
+
+근거는 `DRAFT_NOTES.md` "Phase 11 구현에서 정한 세부".
+- `db_review.py`: `--as-of`·`--json` 추가, 출력 형식, 기준일은 실행일, 방치 기간은 git 이력(없으면 "기간 확인 불가"), 중복 후보·수정 필요 누적·`also_allowed` 누적의 판정, 카테고리 범위 → `contracts.md §3.2` `db_review.py` 세부.
+- `db_search.py` 출력 형식(`kind`, `results[]`, `links[]`, `current`·`merged_from`) → `contracts.md §3.2`.
+- op 표 `set-status`: `id`·`merged-into:` 대상에 같은 계획의 temp_id 허용(이슈 DB `schema/plan.schema.json`도). op 표의 "ID 참조 필드"와 스키마가 어긋나 병합 계획이 거부됐다 → `contracts.md §작업 계획`.
+- op 표 `add-fixture`: `path`에 이슈 DB 기준 상대 경로 허용(병합 계획이 옛 fixture를 복사) → `contracts.md §작업 계획`.
+- op 표 `reclassify`: `to: <유형 ID>:unresolved`로 원인 미확정 Jira를 다른 유형으로 옮긴다(유형 병합에서 옛 유형의 원인 미확정 Jira가 남던 문제, 사용자 결정 (a)) → `contracts.md §작업 계획`, `06-collaboration.md §6.6`, 이슈 DB `schema/plan.schema.json`.
+- `GENERATOR_VERSION`·`SCHEMA_VERSION` 증가 규칙은 첫 배포(S-7 파일럿)부터 적용한다. 그 전의 생성 결과 변경은 v1에 포함한다(사용자 결정, `DRAFT_NOTES.md`).
+- STATS "fixture 없는 원인"은 pending 원인을 뺀다(`06-collaboration.md §6.6` 정의·`db_lint`와 같게). 유형별 건수 표 추가(§6.7).

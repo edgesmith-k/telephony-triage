@@ -1,0 +1,7 @@
+jira: MOCK-1112
+date: 2026-10-02T10:00+09:00
+by: mock-user1
+suggested:
+  - {cause: DATA-001-01, signature: DATA-001-01/data-disabled, score: 0.8}
+decision: accepted
+final: DATA-001-01

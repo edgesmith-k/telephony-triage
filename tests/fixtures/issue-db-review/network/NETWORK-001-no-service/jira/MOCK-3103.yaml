@@ -1,0 +1,10 @@
+key: MOCK-3103
+cause: NETWORK-001-01
+date: 2026-10-12
+occurred_on: 2026-10-12
+model: MOCK-A56
+sw: MOCKA56_U1_20260920
+android_version: "16"
+carrier: MockTel KR
+analyzed_by: mock-user1
+note: 급증 시험

@@ -445,11 +445,29 @@ class Applier:
         if str(record.get("cause")) != op["from"]:
             raise Reject("reclassify-from", f"Jira {key}의 현재 원인은 {record.get('cause')}입니다 (계획 from: "
                          f"{op['from']}).", i, current=record.get("cause"))
-        doc, cause = self.tree.cause(op["to"])
-        if cause is None:
-            raise Reject("unknown-cause", f"원인 {op['to']}가 없습니다.", i)
-        record["cause"] = op["to"]
-        note = f"reclassified from {op['from']}"
+        to = op["to"]
+        if to.endswith(":unresolved"):
+            # 원인 미확정 Jira를 다른 유형으로 옮긴다 (유형 병합, 06-collaboration.md §6.6)
+            type_id = to.split(":", 1)[0]
+            doc = self.tree.docs.get(type_id)
+            if doc is None:
+                raise Reject("unknown-type", f"유형 {type_id}가 없습니다.", i)
+            if op["from"] != "unresolved":
+                raise Reject("reclassify-unresolved", f"`{to}`로는 원인 미확정 Jira만 옮길 수 있습니다 "
+                             f"(from: {op['from']}).", i)
+            new_cause = "unresolved"
+        else:
+            doc, cause = self.tree.cause(to)
+            if cause is None:
+                raise Reject("unknown-cause", f"원인 {to}가 없습니다.", i)
+            new_cause = to
+        record["cause"] = new_cause
+        origin = op["from"]
+        if origin == "unresolved":
+            old_type = re.match(r"[A-Z][A-Z0-9]*-\d{3}", path.parent.parent.name)
+            if old_type and old_type.group(0) != doc.id:
+                origin = f"{old_type.group(0)}:unresolved"
+        note = f"reclassified from {origin}"
         record["note"] = f"{record['note']}; {note}" if record.get("note") else note
         dest = self.tree.type_dir(doc.id) / "jira" / f"{key}.yaml"
         if dest != path:
@@ -782,16 +800,30 @@ class Applier:
         return {c["id"] for d in self.tree.docs.values() for c in d.data.get("causes") or []
                 if c.get("signatures_pending")}
 
+    def _fixture_source(self, i: int, value: str) -> str:
+        """fixture 원본 텍스트. 절대 경로, 계획 디렉토리 기준 상대 경로, 그리고 없으면 **이슈 DB 기준 상대 경로**
+        (병합 `move/...` 계획이 옛 원인의 fixture를 새 원인 이름으로 복사할 때, 06-collaboration.md §6.6) 순서로 찾는다.
+        이슈 DB 경로는 적용 중인 트리(앞 op의 결과 포함)에서 읽고, 트리 밖을 가리키면 거부한다."""
+        src = Path(value)
+        if src.is_absolute():
+            if src.is_file():
+                return src.read_text(encoding="utf-8")
+        else:
+            if (self.plan_dir / src).is_file():
+                return (self.plan_dir / src).read_text(encoding="utf-8")
+            inside = (self.tree.root / src).resolve()
+            root = self.tree.root.resolve()
+            if inside != root and root in inside.parents:
+                text = self.tree.read(self.tree.root / src)
+                if text is not None:
+                    return text
+        raise Reject("fixture-source", f"fixture 원본이 없습니다: {value}", i)
+
     def op_add_fixture(self, i, op):
         type_id, name = self.fixture_names[i]
-        src = Path(op["path"])
-        if not src.is_absolute():
-            src = self.plan_dir / src
-        if not src.is_file():
-            raise Reject("fixture-source", f"fixture 원본이 없습니다: {op['path']}", i)
+        text = self._fixture_source(i, op["path"])
         if op["kind"] != "negative":
             self._cause_or_reject(i, op["for"])
-        text = src.read_text(encoding="utf-8")
         masked = masking.new_masker(existing_text=text, allow_patterns=self.allow).mask(text)
         fdir = self._type_dir_any(type_id) / "fixtures"
         self.tree.write(fdir / name, masked)

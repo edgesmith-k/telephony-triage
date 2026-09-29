@@ -1,0 +1,10 @@
+key: MOCK-1103
+cause: DATA-001-02
+date: 2026-09-22
+occurred_on: 2026-09-22
+model: MOCK-A56
+sw: MOCKA56_U1_20260915
+android_version: "16"
+carrier: MockTel Roaming
+analyzed_by: mock-user1
+note: '로밍 SIM 테스트 중 발생, 슬롯 1. 로밍을 켜니 됐다고 함(근거: 사용자 진술)'

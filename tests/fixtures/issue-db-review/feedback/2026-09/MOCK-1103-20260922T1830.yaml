@@ -1,0 +1,8 @@
+jira: MOCK-1103
+date: 2026-09-22T18:30+09:00
+by: mock-user1
+suggested:
+  - {cause: DATA-001-02, signature: DATA-001-02/roaming-disabled, score: 0.92}
+  - {cause: DATA-001-01, signature: DATA-001-01/data-disabled, score: 0.41}
+decision: accepted
+final: DATA-001-02

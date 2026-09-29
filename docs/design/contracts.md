@@ -51,7 +51,7 @@
 | `mask_pii.py` | `<file...> [--check] [--changed <ref> \| --staged]` | 치환 결과 또는 검출 목록 |
 | | `--events <json> --out <json>` | 외부에서 받은 이벤트 JSON의 `msg`와 `fields`를 마스킹, `masked: true`. 분석 경로는 `parse --mask`를 쓴다 |
 | `match_signatures.py` | `--events <json> --jira-meta <json> [--regress] [--no-feedback-weight] [--top 3]` | 후보 목록 `[{type, cause, score, confidence, S, C, evidence[], fix_judgement, related[]}]`와 후보 유형의 `pending_causes[]`(시그니처 없는 원인). 입력 이벤트가 `masked: true`가 아니면 종료 코드 2. 원인 평가 범위는 모드별로 다르다 (`04-parser-matching.md §5.11 (1)`) |
-| `db_search.py` | `<keyword\|JIRA-KEY\|ID> [--limit 20]` | 유형·원인·해결책·수정 상태·Jira, 옛 ID → 새 ID 연결 |
+| `db_search.py` | `<keyword\|JIRA-KEY\|ID> [--limit 20]` | `{query, kind: type-id\|cause-id\|jira\|keyword, results[], links[], git_history}`. `results[]`는 유형·원인(해결책·수정 상태·`related`·`secondary_categories`·Jira 최근 5건)·Jira 기록. 옛 ID → 새 ID 연결은 `links[]` `{from, to, via: merged-into\|renumbered, commit?, date?}`와 결과의 `current`(merged-into 체인의 끝)·`merged_from` (§renumber 참조). 결과가 없어도 종료 코드 0 |
 | `db_add.py` | `apply <plan.json>` | 변경 파일 목록, ID·fixture 번호 할당 내역 |
 | | `drift <plan.json> --onto <ref>` | 계획의 `base_sha` 이후 `<ref>`에서 계획 대상이 바뀐 목록 `[{op_index, op, target, field, plan_base_value, current_value}]` (§작업 계획 drift). 아무것도 바꾸지 않는다 |
 | | `renumber <옛 ID>` | 브랜치 안 재할당 내역 (직접 편집한 브랜치의 수동 보조. "내 ID"만 대상, §renumber 참조) |
@@ -71,7 +71,7 @@
 | | `publish <wt> --branch <br> --lease <sha\|new> --approved <hash>` | push 결과, PR 번호·링크 |
 | | `discard <wt>` | 정리 결과 |
 | `db_precommit.py` | `--db <toplevel>` | 검사 요약 (git pre-commit hook 전용) |
-| `db_review.py` | `[category] [--out <file>]` | 리뷰 리포트 |
+| `db_review.py` | `[category] [--out <file>] [--as-of <YYYY-MM-DD>] [--json]` | 리뷰 리포트(Markdown, `--out`이면 그 파일). `--json`이면 `{db, head, as_of, category, owners, thresholds, feedback{total, manual, used_for_acceptance}, summary, items[{key, title, criterion, action, count, entries[], undetermined[]}]}`. 읽기 전용(lock·스냅샷 없음). 기준일은 실행일(`--as-of`로 바꿈). 항목 판정 세부는 아래 `db_review.py` 세부 |
 | `db_migrate.py` | `--to <N> [--dry-run]` / `upgrade-plan <plan.json>` | 마이그레이션 결과 / 새 스키마로 올린 계획 (마이그레이션 모듈이 `upgrade_plan()`을 제공할 때만, 없으면 종료 코드 2). `--to`는 **`--db`의 워킹 트리를 직접 바꾼다**: `--db`가 이슈 DB clone이고 현재 브랜치가 `migrate/schema-v<N>`이며 깨끗할 때만 실행한다(아니면 종료 코드 2). 메인테이너가 자기 로컬 브랜치에서 직접 편집하는 흐름이므로 계획·worktree·lock을 쓰지 않는다 (`06-collaboration.md §6.4`). `--to <N>`은 플러그인 `SCHEMA_VERSION` ≥ N > 이슈 DB 버전일 때만(아니면 종료 코드 2), 현재 브랜치는 **정확히** `migrate/schema-v<N>`(`config.py check`의 예외는 `migrate/schema-v<숫자>` 패턴 전체). `--dry-run`은 브랜치·깨끗함을 보지 않고 아무것도 쓰지 않는다. 마이그레이션은 메모리에서 모두 적용한 뒤 한 번에 쓰므로 실패하면 트리가 그대로다. `schema_version`은 db_migrate가 올리고, `generator_version`은 `ci_mode`가 `actions-build`가 아니면 플러그인 값으로 함께 맞춘다(`db_build --write`가 두 값이 같아야 돌기 때문). 마이그레이션 모듈 계약: `FROM_VERSION`·`TO_VERSION`·`migrate(tree)`·(선택)`upgrade_plan(plan)`. `upgrade-plan`은 계획의 `schema_version`을 `--db`의 버전까지 올리고(`--write`면 원본을 `<plan>.v<옛 버전>.bak`으로 남기고 덮어씀), 그 사이 `upgrade_plan()`이 없는 마이그레이션이 있으면 종료 코드 2 |
 | `guard.py` | stdin: hook 입력 JSON | 권한 결정 JSON (`08-safety.md §9`) |
 
@@ -92,6 +92,15 @@
 - **`resolution`·`fix` 출력**: `{judgement, reason, cause, type, requested, C, S, satisfied_traces[{signature, kind, ts}], errors[], suggested_ops[]}`. `fix`는 더해서 `trace`(판정에 쓴 흔적), `other_candidates`(partial), `build_check{status: after\|undetermined\|not-given}`, `fix_status`, `user_confirmation_required`(흔적 시그니처가 없는 비코드 수정 유형). `suggested_ops`는 판정에 맞는 계획 op 초안이다(fixture 경로·아이디는 스킬이 채운다). 판정은 데이터이므로 종료 코드는 0이다.
 - **`fix` 중단(종료 코드 2)**: pending 원인, `fix.status`가 `fix-submitted`·`fixed`가 아님, `fixed_in`에 빌드 있는 항목 없음, `--build`가 비교 가능한 모든 `fixed_in` 빌드보다 이전. 비교 불가면 `build_check: undetermined`로 판정을 이어가고 스킬이 사용자에게 묻는다. `failed`(원인 시그니처 충족)는 흔적 검사보다 먼저 본다(재발 자체가 시나리오 수행 근거다).
 - **`--plan --draft`의 판정**: 같은 draft에서 `rules`도 돌려 출력 `rules`에 넣는다. R1 흔적 검사가 실패하면 판정을 쓰지 않는다(`withheld: true`, `withheld_judgement`, 판정 `unknown`).
+
+`db_review.py` 세부 (`06-collaboration.md §6.6`)
+- **기준일**: 실행일(`--as-of`로 바꿀 수 있다). 리뷰는 "지금 방치된 것"을 찾는 로컬 보고서이고 생성 파일이 아니므로 결정성 규칙(`03-issue-db.md §5.2`, STATS의 "가장 최근 Jira `date`")을 따르지 않는다. 발생일·급증·"fixture 없는 원인"(pending 원인 제외)·"fixed 전환 불가" 판정은 STATS와 같은 코드(`common/quality.py`)다.
+- **방치 기간**(해결책 미검증, 수정 검증 대기, Jira 없는 원인의 나이): 이슈 DB 파일에 상태 전환 날짜가 없으므로 **git 이력**으로 구한다. 그 원인의 `type.md`를 바꾼 커밋을 최신부터 거슬러 보며 조건이 계속 참인 가장 오래된 커밋의 커미터 날짜가 시작일이다(해결책 미검증은 `resolution` 문구가 같고 `unverified`인 구간). `--db`가 git 최상위가 아니거나 이력이 없으면(`no-history`), 커밋 전 워킹 트리 상태면(`uncommitted`) 그 원인은 `undetermined[]`("기간 확인 불가")로 따로 낸다. pending 원인은 `verify-resolution`이 거부되므로 "해결책 미검증 방치"에서 뺀다.
+- **오래된 원인 미확정**은 Jira 기록 `date`(기록한 날) 기준, **오래 안 쓰인 원인**은 마지막 발생일(`occurred_on`, 없으면 `date`)이 `stale_months` 전보다 이전인 원인. Jira가 없는 원인은 git 이력의 추가 시점으로 본다.
+- **중복 후보**: active 유형의 양성·`recurrence`·`extra` fixture를 회귀·검증 모드로 매칭해서 다른 유형의 증상 시그니처도 S=1인 쌍(두 유형의 원인이 `related`로 이어졌거나 그 fixture의 `also_allowed`에 상대 유형 원인이 있으면 이미 알려진 연관이라 뺀다), 또는 같은 카테고리에서 제목 유사도(`db_add similar`와 같은 계산) 0.8 이상인 쌍.
+- **수정 필요 누적**: `fix.status: open`이고 Jira가 1건 이상인 원인을 Jira 건수 순으로 낸다(따로 문턱이 없다).
+- **`also_allowed` 누적**: 한 fixture의 `also_allowed` 3개 이상, 또는 한 원인이 다른 유형 fixture 5개 이상에서 허용.
+- 카테고리를 주면 그 카테고리 엔티티(원인·유형·Jira·시그니처 소유자)만 낸다. 쌍 항목(중복 후보, `also_allowed`)은 한쪽이라도 그 카테고리면 낸다. `owners`는 CODEOWNERS의 `/<category>/` 규칙(마지막 규칙이 이긴다)이다.
 
 `db_pr.py` 세부 (오케스트레이션 소유자, `01-architecture.md §3.1`)
 - **도구 브랜치**: `db_pr`는 로컬에 도구 전용 브랜치 `tt/<br>`만 만든다. 사용자 clone의 로컬 브랜치 `<br>`는 만들지도, 덮어쓰지도, 지우지도 않는다. 원격 브랜치 이름은 `<br>`다 (§브랜치).
@@ -188,7 +197,7 @@
 | `unresolved` | `type` | Jira 파일(신규) | `cause: unresolved`로 생성. 같은 Jira가 이미 있으면 중단 | `type` |
 | `new-cause` | `temp_id`, `type`, `cause`, `body` | 유형 `causes[]`, 본문 `### <ID>` 섹션 | 템플릿 `cause.yaml`로 만들고 원인 ID 순서에 넣는다. `resolution_verification: unverified`로 만든다(같은 계획에서 뒤에 오는 `verify-resolution`만 이것을 `verified`로 바꿀 수 있다). `fix.status`는 `fixed` 금지. `cause.signatures`가 비었으면 `cause.signatures_pending: true`가 있어야 하고, 이것은 계획 `source: record`일 때만 허용한다(`import` 포함 그 밖이면 apply 거부, `16-existing-assets.md §16.4`). 그때 `resolution_verification`은 `unverified`로 고정 | `temp_id`, `type` |
 | `new-type` | `temp_id`, `category`, `type`, `first_cause`(`temp_id` 포함), `body`, `dir_slug` | 유형 디렉토리(신규) | 템플릿 `type.md`로 생성. 디렉토리명 `<유형 ID>-<dir_slug>`. **`type.symptom_signatures`는 모든 `source`에서 필수**(비었으면 apply 거부, 유형에는 `signatures_pending`을 둘 수 없다). 첫 원인에는 `new-cause` 규칙을 그대로 적용(원인 시그니처는 `record`에서만 pending 가능) | `temp_id`, `first_cause.temp_id` |
-| `reclassify` | `jira`, `from`, `to` | Jira 파일 | `jira`가 기준 트리(main)에 **있어야 한다**(없으면 apply 거부). 파일을 `to` 유형 디렉토리로 이동, `cause: <to>`, `note`에 `reclassified from <from>` 추가 | `to` (새 원인일 때) |
+| `reclassify` | `jira`, `from`, `to` | Jira 파일 | `jira`가 기준 트리(main)에 **있어야 한다**(없으면 apply 거부). 파일을 `to` 유형 디렉토리로 이동, `cause: <to>`, `note`에 `reclassified from <from>` 추가. `to`가 `<유형 ID>:unresolved`면 원인 미확정 Jira(`from: unresolved`만)를 그 유형으로 옮기고 `cause: unresolved`를 유지한다(유형 병합, `note`는 `reclassified from <옛 유형 ID>:unresolved`) | `to` (새 원인·새 유형일 때) |
 | `update-fix` | `cause`, `fix` (+선택 `history`) | 원인 `fix` | 필드 병합. `open`으로 되돌리면 현재 `verification`·`ref`·`fixed_in`을 `verification_history`에 한 항목으로 보존한 뒤 비운다. 그 항목의 `result`는 `history.result`(`failed \| reverted`)를 쓰고, 없으면 이전 검증이 있을 때 `passed`, 없을 때 `reverted`다. `history`의 `build`, `jira`, `fixture`, `note`도 항목에 넣는다 (`03-issue-db.md §5.9`). `fixed`로 바꾸는 것은 금지(`verify-fix` op로만). `wont-fix`·`not-a-bug` → `fix-submitted`는 허용, **`fixed` → `fix-submitted`는 거부**(먼저 `verify-fix` 실패나 회귀 의심으로 `open`으로 되돌린다). `fix.ref`는 `fix_ref_regex`에 맞아야 한다 | `cause`, `history.fixture` |
 | `add-related` | `a`, `b` | 두 원인 `related` | 양쪽에 함께 추가 | `a`, `b` |
 | `add-code-ref` | `cause`, `code_ref` (`{ref, symbol, android_versions?}`) | 원인 `code_refs[]` | 추가만. 기존 항목은 고치지 않는다 | `cause` |
@@ -198,8 +207,8 @@
 | `set-resolution` | `cause`, `resolution` | 원인 `resolution` | `resolution_verification`을 `{status: unverified}`로 초기화 | `cause` |
 | `verify-resolution` | `cause`, `verification` | 원인 `resolution_verification` | `status: verified`, `evidence` 필수(Jira 키 또는 `resolved` fixture 경로). evidence의 Jira 키는 `jira_key_regex`에 맞고 **적용 후 트리에 그 원인의 Jira 기록으로 존재**해야 하며, fixture 경로는 존재해야 한다(아니면 apply 거부. `db_lint`도 같은 검사). 대상 원인이 `signatures_pending`이면 거부. `cause`는 같은 계획의 `temp_id`여도 되고, 그 원인을 만드는 `new-cause`/`new-type`·`set-resolution`보다 **뒤에** 와야 한다. `record` 계획에서는 기록 대상 Jira(`jira.key`) 자신을 evidence로 쓸 수 없다(거부) | `cause`, `verification.evidence[]` |
 | `verify-fix` | `cause`, `result`, `verification` (`build`·`date`·`by` 필수, `fixture`는 `passed`만 필수) | 원인 `fix` | `passed`: `fixed_in`에 `build`가 있는 항목이 있어야 한다(없으면 거부. 먼저 `fix-submitted`로 빌드 추가). `fix.status: fixed`, `verification` 기록. `failed`: `open`으로, 기록과 `ref`·`fixed_in`을 `verification_history`에 보존 후 비움. `partial`: 상태 유지(`fix-submitted`. 재검증 대상이 `fixed`면 `fixed` 유지 — 원인 시그니처는 여전히 불충족이므로 이 원인의 수정은 유효하다고 본다), `verification_history`에 `partial` 추가 | `cause`, `verification.fixture` |
-| `set-status` | `id`, `status` | 유형 또는 원인 `status` | `active \| deprecated \| merged-into:<ID>` | `id`, `status`의 `merged-into:` 대상 |
-| `add-fixture` | `for`, `kind`, `path` (+`build`: `fixed`·`recurrence`일 때) | fixture 파일, `.expect.yaml` | 이름은 §fixture 표로 정한다. 번호 `<n1>`/`<n2>`는 **적용 시점에 최신 main 기준 다음 빈 번호**로 할당한다(계획에 쓰지 않음). `build`는 `sanitize_build`를 거친다. `expect`나 `occurred_at`이 기본값과 다를 때만 `.expect.yaml`을 쓴다 | `for`, 파일명, `expect` 값 |
+| `set-status` | `id`, `status` | 유형 또는 원인 `status` | `active \| deprecated \| merged-into:<ID>`. 대상은 같은 계획의 `temp_id`여도 된다(병합: `new-cause` 뒤 옛 원인을 `merged-into:<temp_id>`로). 대상은 적용 시점에 있어야 하고 같은 종류(유형↔유형, 원인↔원인)여야 한다 | `id`, `status`의 `merged-into:` 대상 |
+| `add-fixture` | `for`, `kind`, `path` (+`build`: `fixed`·`recurrence`일 때) | fixture 파일, `.expect.yaml` | `path`는 절대 경로, 계획 디렉토리 기준 상대 경로, 없으면 **이슈 DB 기준 상대 경로** 순으로 찾는다(병합 계획이 옛 원인의 fixture를 새 원인 이름으로 복사할 때. 적용 중인 트리에서 읽고 트리 밖은 거부). 이름은 §fixture 표로 정한다. 번호 `<n1>`/`<n2>`는 **적용 시점에 최신 main 기준 다음 빈 번호**로 할당한다(계획에 쓰지 않음). `build`는 `sanitize_build`를 거친다. `expect`나 `occurred_at`이 기본값과 다를 때만 `.expect.yaml`을 쓴다 | `for`, 파일명, `expect` 값 |
 | `allow-cause` | `fixture`(유형 디렉토리 기준 경로 또는 같은 계획의 `add-fixture` 대상), `cause` | 그 fixture의 `.expect.yaml` `also_allowed` | `also_allowed`에 `cause`를 추가한다(`.expect.yaml`이 없으면 기본 기대값으로 만들고 추가). 대상 fixture가 양성·`recurrence`·`extra`·`"<유형 ID>:unresolved"` 기대값일 때만. `cause`는 그 fixture의 대상 원인 자신이나 같은 유형의 원인일 수 없다(같은 유형 안의 충돌은 시그니처 설계 문제). 같은 로그에 실제로 두 현상이 있을 때만 쓴다(§fixture). 대상 fixture가 다른 카테고리면 그 카테고리 오너가 리뷰어에 추가된다(`02-config.md §5.3`) | `cause`, `fixture` 경로 |
 
 - op는 `operations`의 **순서대로** 적용한다. 같은 대상에 대한 뒤의 op가 앞의 결과를 바꿀 수 있다(예: `new-cause` → `verify-resolution`).

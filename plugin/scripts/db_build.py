@@ -39,17 +39,15 @@ from pathlib import Path
 SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS))
 
-from common import dbpath, gitscope, issuedb, site_defaults, yamlio  # noqa: E402
+from common import dbpath, gitscope, issuedb, quality, site_defaults, yamlio  # noqa: E402
 from common import compiled as compiled_cache  # noqa: E402
 from common.exitcodes import CHECK_FAILED, OK, USAGE  # noqa: E402
-from common.fixtures import parse_name  # noqa: E402
 from common.versions import GENERATOR_VERSION  # noqa: E402
 
 HEADER = "> 자동 생성 파일입니다. 직접 수정하지 마세요. (`db_build.py`, generator v{g})"
 EMPTY_CATEGORY = "아직 등록된 이슈가 없습니다."
 RULE_FILES = (("tags.yaml", "tags"), ("ril.yaml", "requests"), ("ril.yaml", "unsolicited"),
               ("extractors.yaml", "extractors"))
-CODE_FIX_TYPES = {"framework-bug", "vendor-ril", "modem", "carrier-config"}
 
 
 class UsageError(Exception):
@@ -125,12 +123,6 @@ class Context:
     def unresolved_of(self, itype: issuedb.IssueType) -> list[dict]:
         return [r for r in self.jira if r["_type"] == itype.id and str(r.get("cause")) == "unresolved"]
 
-    def occurred(self, record: dict) -> date | None:
-        return _day(record.get("occurred_on")) or _day(record.get("date"))
-
-    def days_ago(self, record: dict) -> int | None:
-        day = self.occurred(record)
-        return (self.base - day).days if (day and self.base) else None
 
 
 # -- README 셀 --------------------------------------------------------------------
@@ -325,28 +317,13 @@ def category_readme(ctx: Context, cat: dict) -> str:
 
 
 def _count_window(ctx: Context, records: list[dict], lo: int, hi: int) -> int:
-    n = 0
-    for r in records:
-        ago = ctx.days_ago(r)
-        if ago is not None and lo <= ago < hi:
-            n += 1
-    return n
-
-
-def _fixture_causes(ctx: Context) -> set[str]:
-    have = set()
-    for itype in ctx.types:
-        for path in (itype.path / "fixtures").glob("*.log"):
-            fx = parse_name(path.name)
-            if fx and fx.kind == "positive" and fx.cause:
-                have.add(fx.cause)
-    return have
+    return quality.count_window(records, ctx.base, lo, hi)
 
 
 def stats(ctx: Context) -> str:
-    quality = ctx.config.get("quality") or {}
-    min_samples = int(quality.get("min_samples", 5))
-    surge_ratio = float(quality.get("surge_ratio", 2.0))
+    qcfg = ctx.config.get("quality") or {}
+    min_samples = int(qcfg.get("min_samples", 5))
+    surge_ratio = float(qcfg.get("surge_ratio", 2.0))
     active_causes = [c for t in ctx.types if t.active for c in t.causes if c.active]
     out = ["# 통계", "", *ctx.header(),
            f"> 기준일: {ctx.base_text} (가장 최근 Jira 기록의 `date`). 발생일은 `occurred_on`, 없으면 `date`.",
@@ -362,6 +339,13 @@ def stats(ctx: Context) -> str:
         total = [a + b for a, b in zip(total, row)]
         out.append(f"| {cat['name']} | " + " | ".join(map(str, row)) + " |")
     out.append("| **합계** | " + " | ".join(f"**{n}**" for n in total) + " |")
+
+    out += ["", "### 유형별", "", "| 유형 | 제목 | 누적 | 최근 30일 | 최근 90일 |", "|---|---|---|---|---|"]
+    for itype in ctx.types:
+        if itype.active:
+            records = [r for r in ctx.jira if r["_type"] == itype.id]
+            out.append(f"| {itype.id} | {_cell(itype.title)} | {len(records)} | "
+                       f"{_count_window(ctx, records, 0, 30)} | {_count_window(ctx, records, 0, 90)} |")
 
     out += ["", "### 원인별", "", "| 원인 | 제목 | 누적 | 최근 30일 | 최근 90일 |", "|---|---|---|---|---|"]
     rows = []
@@ -414,12 +398,9 @@ def stats(ctx: Context) -> str:
             f"최근 30일 발생이 이전 90일 월평균 × {surge_ratio:g} 이상이고 2건 이상인 원인 (06-collaboration.md §6.6).", ""]
     surges = []
     for cause in active_causes:
-        records = ctx.jira_of(cause.id)
-        recent = _count_window(ctx, records, 0, 30)
-        before = _count_window(ctx, records, 30, 120)
-        monthly = before / 3
-        if recent >= 2 and recent >= monthly * surge_ratio:
-            surges.append((cause.id, recent, monthly))
+        hit = quality.surge(ctx.jira_of(cause.id), ctx.base, surge_ratio)
+        if hit:
+            surges.append((cause.id, hit["recent"], hit["monthly"]))
     if surges:
         out += ["| 원인 | 최근 30일 | 이전 90일 월평균 |", "|---|---|---|"]
         out += [f"| {ident} | {n} | {m:.2f} |" for ident, n, m in sorted(surges)]
@@ -471,11 +452,9 @@ def stats(ctx: Context) -> str:
     out.append(f"기여자 수: {len(people)}")
 
     pending = sorted(c.id for c in active_causes if c.pending)
-    have_fixture = _fixture_causes(ctx)
-    no_fixture = sorted(c.id for c in active_causes if c.id not in have_fixture)
-    no_trace = sorted(c.id for c in active_causes
-                      if c.raw.get("resolution_type") in CODE_FIX_TYPES
-                      and not c.raw.get("scenario_signatures") and not c.raw.get("recovery_signatures"))
+    have_fixture = quality.positive_fixture_causes(ctx.db)
+    no_fixture = sorted(c.id for c in active_causes if quality.no_fixture(c, have_fixture))
+    no_trace = sorted(c.id for c in active_causes if quality.no_trace(c))
     out += ["", "## 품질 점검", "",
             f"- 시그니처 없는 원인: {len(pending)}" + (f" ({', '.join(pending)})" if pending else ""),
             f"- fixture 없는 원인: {len(no_fixture)}" + (f" ({', '.join(no_fixture)})" if no_fixture else ""),

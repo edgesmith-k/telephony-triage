@@ -11,6 +11,7 @@
 | `issue-db-pending/` | `signatures_pending` 원인(DATA-001-03)과 그 양성 fixture. 회귀 기대값 `DATA-001:unresolved` |
 | `issue-db-dup-id/` | 머지 간격으로 main에 같은 ID(DATA-001-03 두 번)와 같은 Jira(MOCK-1101 두 곳)가 들어온 트리. 사후 lint 보고 (Phase 7) |
 | `issue-db-verify/` | 검증(Phase 10): CALL-001-01을 `fix-submitted`로 되돌리고(수정 후 fixture 제거) 같은 증상의 다른 원인 CALL-001-02(망 거절, scenario만 있음)와 그 양성 fixture를 넣은 트리 |
+| `issue-db-review/` | 월간 리뷰(Phase 11): §6.6 항목마다 걸리는 경우와 걸리지 않는 경우 (`REVIEW_CASES`) |
 | `verify-logs/` | 이슈 DB가 아니다. `db_verify fix`·`resolution` 입력 로그(수정 후·재발·증상만 남음·시나리오 없음, 마스킹됨) |
 
 CLI:
@@ -346,12 +347,199 @@ def verify_logs(dest: Path) -> None:
     _write(dest / "README.md", VERIFY_LOGS_README)
 
 
+DATA_002 = """---
+id: DATA-002
+category: data
+secondary_categories: []
+title: SETUP_DATA_CALL 요청이 나가지 않음
+summary: DATA-001과 같은 현상을 따로 등록한 유형 (리뷰 시험용 중복 후보)
+status: active
+symptom_signatures:
+  - id: evaluation-rejected
+    must_event:
+      - {event: data_evaluation_rejected}
+    window_sec: 60
+causes:
+  - id: DATA-002-01
+    status: active
+    title: 레거시 조건에서 평가 불허
+    description: 예전 버전에서만 나던 평가 거부
+    signatures:
+      - id: legacy-only
+        must_event:
+          - {event: data_evaluation_rejected, fields: {reasons: '.*LEGACY_ONLY.*'}}
+        window_sec: 60
+    recovery_signatures: []
+    scenario_signatures:
+      - id: evaluation
+        must_event:
+          - {event: data_evaluation_rejected}
+        window_sec: 60
+    resolution: 평가 조건을 고친다
+    resolution_type: framework-bug
+    resolution_verification: {status: unverified}
+    fix:
+      status: fix-submitted
+      ref: MOCKCL-11111
+      fixed_in:
+        - {branch: MOCKA56_U1}
+      verification: null
+      verification_history: []
+    related: []
+    cp_evidence: null
+    android_versions: ["14", "15"]
+    code_refs: []
+  - id: DATA-002-02
+    status: active
+    title: 평가 재요청 누락
+    description: RIL 복구 뒤 평가를 다시 요청하지 않음
+    signatures:
+      - id: retry-missing
+        must_event:
+          - {event: data_evaluation_rejected, fields: {reasons: '.*RETRY_MISSING.*'}}
+        window_sec: 60
+    recovery_signatures: []
+    scenario_signatures: []
+    resolution: RIL 복구 뒤 평가를 다시 요청하도록 고친다
+    resolution_type: vendor-ril
+    resolution_verification: {status: unverified}
+    fix:
+      status: fix-submitted
+      ref: null
+      fixed_in: []
+      verification: null
+      verification_history: []
+    related: []
+    cp_evidence: null
+    android_versions: []
+    code_refs: []
+tags: [data-evaluation]
+---
+
+## 증상
+
+리뷰 시험용 유형. DATA-001과 증상이 겹친다.
+
+## 증상 판별 방법
+
+`DNC-<slot>` 평가 거부.
+
+## 원인별 상세
+
+### DATA-002-01 레거시 조건에서 평가 불허
+
+- 리뷰 시험용.
+
+### DATA-002-02 평가 재요청 누락
+
+- 리뷰 시험용.
+"""
+
+DATA_001_03_PENDING = """  - id: DATA-001-03
+    status: active
+    title: SIM 준비 안 됨 (미확정)
+    description: 수동 기록으로 추가한 원인. 판별 시그니처는 아직 없다
+    signatures: []
+    signatures_pending: true
+    recovery_signatures: []
+    scenario_signatures: []
+    resolution: SIM 상태를 확인한다
+    resolution_type: user-setting
+    resolution_verification: {status: unverified, method: "근거: 사용자 진술"}
+    fix: {status: not-a-bug, ref: null, fixed_in: [], verification: null, verification_history: []}
+    related: []
+    cp_evidence: null
+    android_versions: []
+    code_refs: []
+"""
+
+# (키, 유형 디렉토리, 원인, date, occurred_on, note)
+REVIEW_JIRA = [
+    ("MOCK-1105", "data/DATA-001-no-setup-data-call", "unresolved", "2026-08-01", "2026-07-31", "오래 방치된 원인 미확정"),
+    ("MOCK-1201", "data/DATA-002-legacy-evaluation", "DATA-002-01", "2025-06-02", "2025-06-01", "옛 버전에서 접수"),
+    ("MOCK-3102", "network/NETWORK-001-no-service", "NETWORK-001-01", "2026-10-06", "2026-10-05", "급증 시험"),
+    ("MOCK-3103", "network/NETWORK-001-no-service", "NETWORK-001-01", "2026-10-12", "2026-10-12", "급증 시험"),
+    ("MOCK-3104", "network/NETWORK-001-no-service", "NETWORK-001-01", "2026-07-02", "2026-07-01", "급증 시험(이전 구간)"),
+    # 과거 이슈를 한꺼번에 record: 기록일은 최근이지만 발생일이 오래됐다 → 급증 아님
+    ("MOCK-5102", "sms/SMS-001-sms-send-failed", "SMS-001-01", "2026-10-18", "2025-03-03", "과거 이슈 일괄 기록"),
+    ("MOCK-5103", "sms/SMS-001-sms-send-failed", "SMS-001-01", "2026-10-18", "2025-03-10", "과거 이슈 일괄 기록"),
+    ("MOCK-5104", "sms/SMS-001-sms-send-failed", "SMS-001-01", "2026-10-18", "2025-04-02", "과거 이슈 일괄 기록"),
+]
+
+# (Jira, 날짜, 1위 시그니처, decision, final)
+REVIEW_FEEDBACK = [
+    ("MOCK-1111", "2026-10-01T10:00+09:00", "DATA-001-01/data-disabled", "accepted", "DATA-001-01"),
+    ("MOCK-1112", "2026-10-02T10:00+09:00", "DATA-001-01/data-disabled", "accepted", "DATA-001-01"),
+    ("MOCK-1113", "2026-10-03T10:00+09:00", "DATA-001-01/data-disabled", "chose-other", "DATA-001-02"),
+    ("MOCK-1114", "2026-10-04T10:00+09:00", "DATA-001-01/data-disabled", "chose-other", "DATA-001-02"),
+    ("MOCK-1115", "2026-10-05T10:00+09:00", "DATA-001-01/data-disabled", "chose-other", "DATA-001-02"),
+    # 표본 부족(1위 3건): 수락률이 낮아도 리포트에 넣지 않는다
+    ("MOCK-1116", "2026-10-06T10:00+09:00", "DATA-001-02/roaming-disabled", "chose-other", "DATA-001-01"),
+    ("MOCK-1117", "2026-10-07T10:00+09:00", "DATA-001-02/roaming-disabled", "chose-other", "DATA-001-01"),
+]
+
+# 수동 기록 피드백: suggested가 비어 수락률에 들어가지 않는다
+REVIEW_MANUAL = [("MOCK-1118", "2026-10-08T10:00+09:00", "DATA-001-01"),
+                 ("MOCK-1119", "2026-10-09T10:00+09:00", "DATA-001-01"),
+                 ("MOCK-1120", "2026-10-10T10:00+09:00", "DATA-001-01")]
+
+REVIEW_CASES = """# 리뷰 변형 (Phase 11)
+
+`tests/helpers/make_variant_dbs.py`가 만든다. 기준일 `--as-of 2026-10-20`, 시험은 `tests/test_db_review.py`.
+
+- 오래된 unresolved: MOCK-1105(2026-08-01 기록) 걸림, MOCK-1104(2026-09-26) 안 걸림
+- 낮은 수락률: DATA-001-01/data-disabled 2/6 걸림, DATA-001-02/roaming-disabled 1/3은 표본 부족
+- 수동 기록 피드백 3건(MOCK-1118~1120)은 수락률에서 빠짐
+- 중복 후보: DATA-001 ↔ DATA-002 (동시 매칭 + 제목 유사도)
+- 지원 종료: DATA-002-01 ["14","15"] 걸림, DATA-001-02 [] 안 걸림
+- fixed 전환 불가: DATA-002-02(vendor-ril), IMS-001-01, SMS-001-01
+- 시그니처 없는 원인: DATA-001-03 / fixture 없는 원인: DATA-002-01, DATA-002-02 (pending은 제외)
+- 사용자 진술만: DATA-001-03(method), DATA-001-02(MOCK-1103 note)
+- 수정 상태 누락: DATA-002-02 / 빌드 없는 fix-submitted: DATA-002-01
+- also_allowed 누적: NETWORK-001-01 fixture 3개, IMS-001-01이 다른 유형 fixture 5개에서 허용
+- 급증: NETWORK-001-01 걸림, SMS-001-01(과거 occurred_on 일괄 기록) 안 걸림
+- 오래 안 쓰인 원인: DATA-002-01(마지막 발생 2025-06-01)
+- 방치 기간(해결책 미검증, 수정 검증 대기)은 git 이력이 필요해서 테스트가 날짜를 지정한 커밋으로 만든다
+"""
+
+
+def review(db: Path) -> None:
+    """월간 리뷰(Phase 11) 완료 기준 케이스. 목록은 `REVIEW_CASES`."""
+    data = db / "data/DATA-001-no-setup-data-call"
+    _edit(data / "type.md", "tags: [data-evaluation]\n---", DATA_001_03_PENDING + "tags: [data-evaluation]\n---")
+    _write(db / "data/DATA-002-legacy-evaluation/type.md", DATA_002)
+    _edit(data / "jira/MOCK-1103.yaml", "note: 로밍 SIM 테스트 중 발생, 슬롯 1",
+          "note: '로밍 SIM 테스트 중 발생, 슬롯 1. 로밍을 켜니 됐다고 함(근거: 사용자 진술)'")
+    for key, rel, cause, when, occurred, note in REVIEW_JIRA:
+        sw, ver = ("MOCKA56_U1_20260901", "15") if "DATA-002" in rel else ("MOCKA56_U1_20260920", "16")
+        _write(db / rel / "jira" / f"{key}.yaml",
+               f"key: {key}\ncause: {cause}\ndate: {when}\noccurred_on: {occurred}\nmodel: MOCK-A56\nsw: {sw}\n"
+               f"android_version: \"{ver}\"\ncarrier: MockTel KR\nanalyzed_by: mock-user1\nnote: {note}\n")
+    for key, when, sig, decision, final in REVIEW_FEEDBACK:
+        stamp = when[:16].replace("-", "").replace(":", "")
+        _write(db / "feedback" / when[:7] / f"{key}-{stamp}.yaml",
+               f"jira: {key}\ndate: {when}\nby: mock-user1\nsuggested:\n"
+               f"  - {{cause: {sig.split('/', 1)[0]}, signature: {sig}, score: 0.8}}\ndecision: {decision}\n"
+               f"final: {final}\n")
+    for key, when, final in REVIEW_MANUAL:
+        stamp = when[:16].replace("-", "").replace(":", "")
+        _write(db / "feedback" / when[:7] / f"{key}-{stamp}.yaml",
+               f"jira: {key}\ndate: {when}\nby: mock-user2\nsuggested: []\ndecision: manual\nfinal: {final}\n")
+    _edit(db / "network/NETWORK-001-no-service/fixtures/NETWORK-001-01.expect.yaml", "origin: synthetic",
+          "also_allowed:\n- CALL-001-01\n- SIM-001-01\n- IMS-001-01\norigin: synthetic")
+    for rel in ("data/DATA-001-no-setup-data-call/fixtures/DATA-001-01.expect.yaml",
+                "sim/SIM-001-sim-not-detected/fixtures/SIM-001-01.expect.yaml",
+                "sms/SMS-001-sms-send-failed/fixtures/SMS-001-01.expect.yaml"):
+        _edit(db / rel, "origin: synthetic", "also_allowed:\n- IMS-001-01\norigin: synthetic")
+
+
 VARIANTS = {
     "issue-db-lint-errors": lint_errors,
     "issue-db-empty-category": empty_category,
     "issue-db-pending": pending,
     "issue-db-dup-id": dup_id,
     "issue-db-verify": verify,
+    "issue-db-review": review,
     "verify-logs": verify_logs,
 }
 

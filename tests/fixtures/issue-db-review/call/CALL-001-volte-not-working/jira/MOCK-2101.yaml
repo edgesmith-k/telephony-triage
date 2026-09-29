@@ -1,0 +1,10 @@
+key: MOCK-2101
+cause: CALL-001-01
+date: 2026-09-19
+occurred_on: 2026-09-18
+model: MOCK-B77
+sw: MOCKB77_U2_20260910
+android_version: "17"
+carrier: MockTel KR
+analyzed_by: mock-user2
+note: VoLTE 발신 즉시 종료, IMS 등록 실패 동반

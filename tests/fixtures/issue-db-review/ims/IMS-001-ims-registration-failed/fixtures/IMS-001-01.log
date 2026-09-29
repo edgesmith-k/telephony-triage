@@ -1,0 +1,5 @@
+09-27 09:30:00.000  1600  1610 D ImsResolver: [PHONE0] bound to mock ImsService
+09-27 09:30:03.000  1600  1610 D ImsManager: [PHONE0] register: impu=sip:<IMPU#1>@ims.mnc001.mcc450.3gppnetwork.org
+09-27 09:30:05.000  1600  1610 W ImsRegistration: [PHONE0] onRegistrationFailed: code=403 reason=FORBIDDEN
+09-27 09:30:35.000  1600  1610 D ImsManager: [PHONE0] register: impu=sip:<IMPU#1>@ims.mnc001.mcc450.3gppnetwork.org
+09-27 09:30:37.000  1600  1610 W ImsRegistration: [PHONE0] onRegistrationFailed: code=403 reason=FORBIDDEN

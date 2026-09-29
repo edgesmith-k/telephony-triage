@@ -1,0 +1,5 @@
+expect_top: SIM-001-01
+occurred_at: '2026-09-25T16:20:03+09:00'
+also_allowed:
+- IMS-001-01
+origin: synthetic

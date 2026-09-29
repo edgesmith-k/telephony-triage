@@ -190,7 +190,7 @@ v1에서 도구는 이런 브랜치를 바꾸지 않는다. `sync-pr`는 아래 
 | `also_allowed` 누적 | 한 fixture의 `also_allowed`에 3개 이상, 또는 한 원인이 5개 이상의 다른 유형 fixture에서 허용됨 (`contracts.md §fixture`) | 그 원인의 시그니처가 너무 넓은지, 또는 fixture 구간이 너무 긴지 검토 |
 | 급증 | 최근 30일 발생이 이전 90일 월평균 × `quality.surge_ratio` 이상 (발생 기준일은 Jira 기록의 `occurred_on`, 없으면 `date`) | 원인 조사 |
 
-- **유형 병합**: 흡수되는 유형의 `status`를 `merged-into:<유형 ID>`로 바꾸고, 그 원인들은 흡수하는 유형의 원인으로 새 ID를 받아 옮긴다. 옛 원인에는 `status: merged-into:<새 원인 ID>`를 남기고 삭제하지 않는다. Jira 파일은 새 유형 디렉토리로 이동하고 `cause`를 새 ID로 바꾼다 (`reclassify`). 브랜치는 `move/...`, 계획 `source: move`, op 조합: `new-cause`(옛 원인 내용 복사, `temp_id`) → `add-fixture`(옛 fixture 파일 경로를 `path`로, 새 원인 이름으로 복사) → `set-status merged-into`(옛 원인·옛 유형) → `reclassify`(Jira 각각).
+- **유형 병합**: 흡수되는 유형의 `status`를 `merged-into:<유형 ID>`로 바꾸고, 그 원인들은 흡수하는 유형의 원인으로 새 ID를 받아 옮긴다. 옛 원인에는 `status: merged-into:<새 원인 ID>`를 남기고 삭제하지 않는다. Jira 파일은 새 유형 디렉토리로 이동하고 `cause`를 새 ID로 바꾼다 (`reclassify`). 브랜치는 `move/...`, 계획 `source: move`, op 조합: `new-cause`(옛 원인 내용 복사, `temp_id`) → `add-fixture`(옛 fixture 파일 경로를 `path`로, 새 원인 이름으로 복사) → `set-status merged-into`(옛 원인·옛 유형) → `reclassify`(Jira 각각. 원인 미확정 Jira는 `to: <흡수하는 유형 ID>:unresolved`).
 - **원인 병합**: 옛 원인 `status: merged-into:<원인 ID>` (`set-status`), Jira `cause` 갱신 (`reclassify`). 같은 `source: move` 계획.
 
 ### 6.7 통계 (`STATS.md`, 생성 파일)

@@ -1,0 +1,7 @@
+expect_top: NETWORK-001-01
+occurred_at: '2026-09-24T10:11:02+09:00'
+also_allowed:
+- CALL-001-01
+- SIM-001-01
+- IMS-001-01
+origin: synthetic

@@ -13,7 +13,8 @@
 - 완료 Phase 추가: **8** (2026-09-29, 사용자 확인 후 커밋. guard 예외·pre-push 검사 강화는 계약에 반영 — `CHANGES.md`)
 - 완료 Phase 추가: **9** (2026-09-29, 사용자 확인 — Phase 10 진행 지시로 확인)
 - 완료 Phase 추가: **10** (2026-09-29, 사용자 확인 후 커밋. recovery 예시는 사용자 결정 (a))
-- 다음 Phase: **11** (`11-phases.md` Phase 11 절부터)
+- 완료 Phase 추가: **11** (2026-09-29, 사용자 확인 후 커밋. 병합 unresolved Jira는 결정 (a), `GENERATOR_VERSION`은 1 유지)
+- 다음 Phase: **12** (`11-phases.md` Phase 12 절부터)
 - Phase 2~6은 사용자가 미리 승인해서 Phase마다 확인을 기다리지 않고 진행했다(각 Phase 끝에 커밋·push). 완료 기준 점검 결과는 Phase별 절에 있다. **Phase 7부터는 다시 Phase마다 사용자 확인을 받는다.**
 - 기준 문서 세트: `telephony-triage-docs-v11` (`CHANGES.md` 참고)
 - 레포 루트: 이 파일이 있는 디렉토리 (`CLAUDE.md`, `docs/design/`, `plugin/`,
@@ -715,6 +716,83 @@ Claude hook은 `guard.py`에 hook 입력 JSON을 직접 넣어 시험했다. **�
   (a) 예시를 "원인에 특정한 정상 흐름"으로 고친다, (b) R1 음성 검사를 scenario에만 적용한다.
 - **결정 (2026-09-29, 사용자)**: (a). R1 규칙은 그대로 두고 `03 §5.4 (1)` 예시 주석과 `§5.7 (2)` 표의 recovery 좋은 예·나쁜 예를 고쳤다(`CHANGES.md`).
 
+### Phase 11에서 만든 것
+
+| 산출물 | 경로 |
+|---|---|
+| 월간 리뷰 리포트 (§6.6 항목 17개) | `plugin/scripts/db_review.py` (`[category] [--out] [--as-of] [--json]`, 읽기 전용) |
+| `review` 커맨드 | `plugin/commands/review.md` (카테고리 묻기 → 리포트 → 정리 방법·병합 op 안내) |
+| 검색·옛 ID 연결 | `plugin/scripts/db_search.py` (ID·Jira·키워드, `merged-into:` 체인, `Renumbered:` 트레일러). `search` 커맨드 연결은 Phase 12 |
+| 리뷰·STATS 공통 판정 | `plugin/scripts/common/quality.py` (발생일·급증·fixture 없음·fixed 전환 불가·수정 상태 누락 등) |
+| git 이력 조회 | `plugin/scripts/common/history.py` (상태가 시작된 날, `Renumbered:` 트레일러) |
+| STATS 완성 | `plugin/scripts/db_build.py` — 유형별 건수 표 추가, 급증·fixture 없음·fixed 전환 불가를 `common/quality.py`로 |
+| 병합 절차 지원 | `plugin/scripts/db_add.py` `add-fixture`의 `path`에 이슈 DB 기준 경로(옛 fixture) 허용, 이슈 DB `schema/plan.schema.json` `set-status`의 `id`·`merged-into:` 대상에 temp_id 허용 |
+| 리뷰 변형 이슈 DB | `tests/fixtures/issue-db-review/` (`make_variant_dbs.py`의 `review()`, 케이스 목록 `REVIEW_CASES`) |
+| 이슈 DB 문서 | 샘플 `docs/review-guide.md` §4 병합 op 순서·경로 |
+| Phase 11 테스트 | `tests/test_db_review.py` (6개), `tests/test_db_search.py` (3개) |
+
+### Phase 11 완료 기준 확인 결과
+
+`pytest tests` — **201개 전부 통과**(Phase 11 9개 포함).
+
+| 완료 기준 | 확인 | 어디서 |
+|---|---|---|
+| 오래된 unresolved | ✅ MOCK-1105(80일) 걸림, MOCK-1104(24일) 안 걸림 | `test_review_report_catches_every_planted_case` |
+| 낮은 수락률 | ✅ `DATA-001-01/data-disabled` 2/6. 1위 3건인 `roaming-disabled`(1/3)는 표본 부족이라 안 걸림 | 같은 테스트, `test_manual_feedback_is_not_in_acceptance` |
+| 중복 후보 | ✅ DATA-001 ↔ DATA-002 (동시 매칭 fixture 3개 + 제목 유사도 0.84). CALL-001 ↔ IMS-001 동시 매칭은 `related`로 이어져 있어 빠짐 | 같은 테스트 |
+| 지원 종료 버전 / 빈 `android_versions`는 아님 | ✅ DATA-002-01 `["14","15"]`만. `[]`인 DATA-001-02 등은 안 걸림 | 같은 테스트 |
+| fixed 전환 불가 | ✅ DATA-002-02(vendor-ril), IMS-001-01, SMS-001-01 | 같은 테스트 |
+| 시그니처 없는 원인 / fixture 없는 원인 | ✅ DATA-001-03 / DATA-002-01·02 (pending 원인은 fixture 없음에 넣지 않음) | 같은 테스트, STATS는 `test_stats_on_review_db` |
+| 사용자 진술만 있는 해결책 | ✅ DATA-001-03(`method`), DATA-001-02(MOCK-1103 `note`) | 같은 테스트 |
+| `also_allowed` 누적 | ✅ NETWORK-001-01 fixture(3개), IMS-001-01(다른 유형 fixture 5개) | 같은 테스트 |
+| 급증 / 과거 `occurred_on` 일괄 record는 급증 아님 | ✅ NETWORK-001-01 걸림, SMS-001-01(기록 2026-10-18, 발생 2025년) 안 걸림. STATS도 같다 | 같은 테스트, `test_stats_on_review_db` |
+| `decision: manual`은 수락률에서 빠짐 | ✅ 피드백 13건 중 manual 4건 제외, 분모 6 | `test_manual_feedback_is_not_in_acceptance` |
+| (§6.6 나머지) 오래 안 쓰인 원인, 수정 필요 누적, 수정 상태 누락, 빌드 없는 fix-submitted, 수정 검증 실패·부분 이력 | ✅ | `test_review_report_catches_every_planted_case` |
+| (§6.6 나머지) 해결책 미검증 방치, 수정 검증 대기 방치 — git 이력 기준, 이력 없으면 "기간 확인 불가" | ✅ 2026-06-01/2026-10-10 날짜 지정 커밋. 해결책 문구가 바뀐 DATA-001-02, 최근 fix-submitted가 된 DATA-002-02는 안 걸림, 커밋 전 변경은 `uncommitted` | `test_stale_periods_come_from_git_history` |
+| 카테고리 범위·오너, 읽기 전용, `--out` Markdown | ✅ | `test_category_scope_and_owners`, `test_review_is_read_only_and_writes_markdown` |
+| 병합 후 `db_search`가 옛 ID → 새 ID | ✅ `move` 계획(new-cause → add-fixture(옛 fixture DB 경로) → set-status ×2 → reclassify)이 `db_pr stage`의 lint·회귀·R1~R6을 통과해 PR·머지. `DATA-002-01` → `current: DATA-001-03`, `DATA-002` → `DATA-001`, `MOCK-1201` → 새 원인 | `test_move_merges_type_and_search_follows_old_ids` |
+| `Renumbered:` 트레일러 커밋 뒤 옛 ID → 새 ID | ✅ `issue-db-dup-id`에서 나중 DATA-001-03을 DATA-001-04로 옮긴 커밋. 옛 ID로 찾으면 원래 주인과 옮겨간 엔티티가 함께, 새 ID로 찾으면 거꾸로 | `test_renumbered_trailer_links_old_and_new_id` |
+| STATS §6.7 항목 | ✅ 유형별 건수 추가(나머지는 Phase 5에 있었음) | `test_stats_on_review_db` |
+
+### Phase 11에서 바꾼 이전 산출물
+
+| 대상 | 무엇을 | 왜 |
+|---|---|---|
+| 이슈 DB `schema/plan.schema.json` (샘플·변형) | `set-status`의 `id`와 `merged-into:` 대상에 `NEW-CAUSE-<n>`/`NEW-TYPE-<n>` 허용. `reclassify.to`에 `<유형 ID>:unresolved` 허용(사용자 결정 (a)) | op 표는 둘을 temp_id 치환 대상으로 적었는데 스키마가 막았다. 병합 계획(`new-cause` 뒤 옛 원인 `merged-into:<temp_id>`)이 거부됐다 |
+| `plugin/scripts/db_add.py` `add-fixture` | `path`가 계획 디렉토리에 없으면 이슈 DB 기준 상대 경로로 찾음(적용 중인 트리에서 읽고 트리 밖은 거부) | §6.6 병합 op "옛 fixture 파일 경로를 `path`로" |
+| `plugin/scripts/db_build.py` STATS | 유형별 표 추가. "fixture 없는 원인"에서 pending 원인 제외(§6.6 정의·`db_lint`와 맞춤. 샘플 결과는 같음) | §6.7 "카테고리, 유형, 원인별", §6.6 "R1·R2가 `skipped: fixture 없음`인 원인" |
+| `tools/list_site_todos.py` | `issue-db-review` 제외 | 샘플 사본 |
+| `docs/design/contracts.md` | `db_review`·`db_search` 옵션·출력, `db_review.py` 세부, op 표 `set-status`·`add-fixture` | 계약 보완 (`CHANGES.md`) |
+
+### Phase 11 구현에서 정한 세부 (계약 보완 — `contracts.md §3.2`·op 표에 반영함)
+
+- **리뷰 기준일은 실행일**(`--as-of`로 바꿈). STATS처럼 "가장 최근 Jira `date`"를 쓰면 Jira가 한동안 안 들어올 때
+  방치 기간이 늘지 않는다. 리뷰는 생성 파일이 아니라서 결정성 규칙 대상이 아니다.
+- **방치 기간은 git 이력**: `fix`·`resolution_verification`에 상태 전환 날짜가 없다. `type.md`를 바꾼 커밋을 거슬러
+  그 상태가 이어진 가장 오래된 커밋의 커미터 날짜를 쓴다. 이슈 DB가 git 최상위가 아니면(다른 레포 안의 시험 트리)
+  이력을 쓰지 않고 "기간 확인 불가"로 낸다. pending 원인은 검증할 수 없으므로 "해결책 미검증 방치"에서 뺐다.
+- **중복 후보**: "동시 매칭"과 "제목 유사도"를 OR로 본다(둘 다면 둘 다 표시). 제목만으로는 같은 카테고리, 0.8 이상
+  (짧은 한국어 제목끼리는 "…되지 않음" 때문에 0.6~0.7이 흔하다). 원인끼리 `related`·fixture `also_allowed`로 이미
+  이어진 유형 쌍의 동시 매칭은 뺐다(샘플 CALL-001 ↔ IMS-001이 매달 나오지 않게).
+- **수정 필요 누적**은 문턱 없이 open 원인을 Jira 건수 순으로 낸다(설계에 "많은"의 기준 키가 없다).
+- **`db_search`**: 질의 모양으로 종류를 정한다(유형/원인 ID, `jira_key_regex`, 그 밖은 키워드). `Renumbered:` 트레일러로
+  찾은 옛 ID는 원래 주인이 계속 쓰므로 두 엔티티를 함께 보인다. 유형 ID로 찾으면 소속 원인의 트레일러도 보인다.
+
+### Phase 11에서 발견한 설계 문서 간 긴장 (사용자 판단 필요)
+
+1. **병합되는 유형의 `unresolved` Jira를 옮길 op가 없다.** §6.6 유형 병합은 "Jira 파일은 새 유형 디렉토리로 이동"인데
+   `reclassify`의 `to`는 원인 ID(또는 temp_id)만 받는다. 원인 미확정 Jira는 옛(merged) 유형 디렉토리에 남는다(회귀·매칭에는
+   영향 없음, README·검색에서는 옛 유형 소속으로 보임). 선택지: (a) `reclassify`의 `to`에 `"<유형 ID>:unresolved"`를 허용,
+   (b) 그대로 두고 리뷰 가이드에 "원인을 정한 뒤 옮긴다"고 적는다.
+   - **결정 (2026-09-29, 사용자)**: (a). `reclassify.to`에 `<유형 ID>:unresolved`(temp_id 유형 포함)를 허용하고, `from: unresolved`만
+     받는다. `note`는 `reclassified from <옛 유형 ID>:unresolved`. 스키마·`db_add`·계약·리뷰 가이드·`review` 커맨드에 반영,
+     `test_move_merges_type_and_search_follows_old_ids`가 확인한다.
+2. **`GENERATOR_VERSION`을 올리지 않았다.** STATS에 유형별 표가 늘어 생성 결과가 바뀌었다. 규칙은 "생성 결과가 바뀌는
+   플러그인 변경은 항상 올린다"지만, 아직 배포된 이슈 DB가 없어(사외 초안) 1로 두었다. 올리면 샘플·변형·뼈대의
+   `generator_version`도 함께 바뀐다. 파일럿 전 첫 배포 버전을 1로 두는 것이 맞는지 확인이 필요하다.
+   - **결정 (2026-09-29, 사용자)**: 1로 둔다. **`GENERATOR_VERSION`(와 `SCHEMA_VERSION`) 증가 규칙은 첫 배포(S-7 파일럿)부터
+     적용한다.** 그 전(사외 초안·사내 보완 중)의 생성 결과 변경은 모두 v1에 포함한다. 사내에서 이 규칙을 다시 따지지 않는다.
+
 ## 개발 환경과 설계의 차이 (중요)
 
 설계는 실행 환경을 **Ubuntu(Linux)** 로 못박는다 (`01-architecture.md §3`,
@@ -831,7 +909,7 @@ Windows 전용 보정은 커밋하지 않는다.**
 
 ## 사내 확인 목록 (`TODO(SITE:S<n>)`)
 
-`python3 tools/list_site_todos.py`로 갱신한다(Windows 콘솔에서는 `PYTHONIOENCODING=utf-8`). 변형 이슈 DB(`issue-db-lint-errors` 등)는 샘플의 사본이라 세지 않는다. 2026-09-29(Phase 10 끝) 기준 **59곳**:
+`python3 tools/list_site_todos.py`로 갱신한다(Windows 콘솔에서는 `PYTHONIOENCODING=utf-8`). 변형 이슈 DB(`issue-db-lint-errors` 등)는 샘플의 사본이라 세지 않는다. 2026-09-29(Phase 11 끝) 기준 **59곳**:
 
 ### S1 (3곳)
 - `plugin/scripts/common/mcptools.py:8` — 사내 Claude Code 버전에서 확인한다.
@@ -952,7 +1030,7 @@ Windows 전용 보정은 커밋하지 않는다.**
 3. (선택, 사내) **S-0 선행 확인**: `parse_logcat.py`, `match_signatures.py`, `mask_pii.py`를 사내 실제 로그로.
 4. 빈 플러그인 실험(2번)에서 **`plugin/hooks/hooks.json`도 함께 확인**한다: 플러그인 hook 로드, `mcp__.*` matcher,
    `permissionDecision` deny/ask, SessionStart, hook 입력의 `tool_name` 형식(`guard.py`의 TODO(SITE:S1·S3)).
-5. **Phase 11**: `docs/design/11-phases.md` Phase 11 절과 그 "읽을 문서"를 읽는다. (Phase 10 완료: `db_verify.py` R1~R6·`resolution`·`fix`, `db_regress --events-diff`.)
+5. **Phase 12**: `docs/design/11-phases.md` Phase 12 절과 그 "읽을 문서"를 읽는다. (Phase 11 완료: `db_review.py`·`review` 커맨드, STATS 유형별, 병합 계획 지원, `db_search.py`. `search` 커맨드 연결은 Phase 12.)
 
 ### 사용자 확인이 필요한 항목 (Phase 2~6에서 쌓임)
 

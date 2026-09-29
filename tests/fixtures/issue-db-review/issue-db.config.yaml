@@ -1,0 +1,69 @@
+# 이슈 DB 설정 (02-config.md §5.3)
+#
+# 이 파일은 **합성 샘플**의 설정이다. 사외 초안이므로 사내 값(S16~S19 등)은
+# 모의 값이고 TODO(SITE:...)로 표시한다. 사내에서는 S-1~S-3에서 확인한 값으로
+# 바꾼다 (15-local-draft.md §15.5, 14-site.md §14.2).
+
+schema_version: 1
+generator_version: 1
+ci_mode: local                       # local | actions | actions-build (13-actions.md)
+
+jira_base_url: https://jira.mock.invalid/browse/   # TODO(SITE:S17) 사내 Jira URL
+jira_key_regex: '[A-Z][A-Z0-9]+-\d+'               # TODO(SITE:S16) 사내 Jira 키 형식
+
+categories:                          # README 표시 순서, 이름, ID 접두어
+  - {key: data,    name: Data,    id_prefix: DATA}
+  - {key: call,    name: Call,    id_prefix: CALL}
+  - {key: network, name: Network, id_prefix: NETWORK}
+  - {key: sim,     name: SIM,     id_prefix: SIM}
+  - {key: sms,     name: SMS,     id_prefix: SMS}
+  - {key: ims,     name: IMS,     id_prefix: IMS}
+
+android_versions_supported: ["16", "17"]
+
+parser_backend:                      # 16-existing-assets.md §16.3
+  name: reference                    # 사외 초안은 reference. 사내 포팅 후 site (S-4a)
+  min_version: 0.1.0
+
+external_parsers: {}                 # 어댑터를 쓰는 카테고리 고정 (contracts.md §기존 자산 연결 계약)
+
+code_root_keys: [aosp, vendor_ril]
+
+fix_ref_regex: '^(MOCKCL-\d+|[0-9a-f]{7,40})$'     # TODO(SITE:S18) 사내 Gerrit CL/커밋 형식
+
+build_compare:                       # 03-issue-db.md §5.9, 가상 빌드명은 tests/mocks/builds.yaml
+  - branch_regex: '^MOCKA56_U\d+_'
+    version_regex: '^MOCKA56_U(?P<rev>\d+)_(?P<date>\d{8})$'
+  - branch_regex: '^MOCKB77_U\d+_'
+    version_regex: '^MOCKB77_U(?P<rev>\d+)_(?P<date>\d{8})$'
+
+scoring:                             # 04-parser-matching.md §5.11 (2)
+  symptom_weight: 0.4
+  cause_weight: 0.6
+  proximity_bonus_max: 0.1
+  keyword_bonus_max: 0.05
+  feedback_weight: true
+  confidence: {high: 0.9, medium: 0.6}
+
+quality:                             # 06-collaboration.md §6.5, §6.6
+  min_samples: 5
+  low_acceptance_rate: 0.7
+  stale_months: 12
+  unresolved_max_days: 30
+  unverified_max_days: 60
+  fix_submitted_max_days: 30
+  surge_ratio: 2.0
+
+mask:                                # 08-safety.md §8
+  allow_patterns:
+    # 가상 빌드명은 15자리 숫자 오탐이 아니다 (tests/mocks/builds.yaml).
+    - '^MOCK[AB]\d{2}_U\d+_\d{8}$'
+
+matcher:
+  pattern_timeout_ms: 2000           # 04-parser-matching.md §5.8 (4)
+
+readme:
+  jira_inline_max: 3
+
+reviewers:                           # TODO(SITE:S19) gh pr create --reviewer 형식
+  format: '{org}/{team}'

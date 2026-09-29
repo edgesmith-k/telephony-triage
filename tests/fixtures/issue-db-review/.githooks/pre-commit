@@ -1,0 +1,42 @@
+#!/bin/sh
+# telephony-triage pre-commit (06-collaboration.md §6.3 ②, 08-safety.md §9) — 메인테이너 소유
+#
+# ~/.telephony-triage/config.yaml(TELEPHONY_TRIAGE_HOME로 바꿀 수 있다)의 plugin.scripts_path에서
+# db_precommit.py를 찾아 이 레포(worktree면 그 worktree)의 toplevel로 실행한다.
+# 경로가 없거나 무효하면 커밋을 막고 설정 방법을 안내한다 (조용히 통과시키지 않는다).
+# 우회(--no-verify, -n, core.hooksPath 변경)는 금지다 (CONTRIBUTING.md).
+
+PREFIX="[telephony-triage pre-commit]"
+top=$(git rev-parse --show-toplevel) || exit 1
+home="${TELEPHONY_TRIAGE_HOME:-$HOME/.telephony-triage}"
+config="$home/config.yaml"
+
+guide() {
+  echo "$PREFIX $1" >&2
+  echo "$PREFIX 설정 방법:" >&2
+  echo "  - 플러그인 사용자: Claude Code에서 /telephony-triage:setup 을 실행한다 (plugin.scripts_path를 기록한다)." >&2
+  echo "  - 플러그인 없이 편집: 플러그인 레포를 clone하고 $config 의" >&2
+  echo "    plugin.scripts_path 를 그 clone의 plugin/scripts 로 지정한다 (CONTRIBUTING.md)." >&2
+  exit 1
+}
+
+command -v python3 >/dev/null 2>&1 || guide "python3를 찾을 수 없다."
+[ -f "$config" ] || guide "사용자 config가 없다: $config"
+
+scripts=$(python3 - "$config" <<'EOF'
+import sys
+try:
+    import yaml
+    with open(sys.argv[1], encoding="utf-8") as fh:
+        data = yaml.safe_load(fh) or {}
+    print(((data.get("plugin") or {}).get("scripts_path")) or "")
+except Exception:
+    print("")
+EOF
+)
+
+[ -n "$scripts" ] || guide "config에 plugin.scripts_path가 없다 ($config)."
+[ -f "$scripts/db_precommit.py" ] || guide "plugin.scripts_path가 무효하다 (db_precommit.py 없음): $scripts"
+
+# 결과 JSON(stdout)은 버리고, 사람이 읽는 요약(stderr)만 보여준다.
+python3 "$scripts/db_precommit.py" --db "$top" --staged --plugin-root "$(dirname "$scripts")" >/dev/null
