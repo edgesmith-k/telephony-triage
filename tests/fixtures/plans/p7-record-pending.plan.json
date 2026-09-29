@@ -1,0 +1,65 @@
+{
+  "source": "record",
+  "schema_version": 1,
+  "started_at": "2026-09-29T14:00+09:00",
+  "base_sha": "0000000000000000000000000000000000000000",
+  "jira": {
+    "key": "MOCK-7005",
+    "origin": "file",
+    "model": "MOCK-A56",
+    "sw": "MOCKA56_U1_20260925",
+    "android_version": "16",
+    "carrier": "MockTel KR",
+    "date": "2026-09-29",
+    "occurred_on": "2026-09-28",
+    "note": "사용자가 직접 해결한 건"
+  },
+  "operations": [
+    {
+      "op": "new-cause",
+      "temp_id": "NEW-CAUSE-1",
+      "type": "DATA-001",
+      "cause": {
+        "title": "SIM 미준비(수동)",
+        "description": "SIM 초기화 전에 데이터 평가가 거부됨 (사용자 확인)",
+        "signatures": [],
+        "signatures_pending": true,
+        "resolution": "SIM 로딩이 끝난 뒤 데이터를 다시 켠다",
+        "resolution_type": "user-setting",
+        "resolution_verification": {
+          "status": "unverified",
+          "method": "근거: 사용자 진술"
+        },
+        "fix": {
+          "status": "not-a-bug",
+          "ref": null,
+          "fixed_in": []
+        }
+      },
+      "body": "- **확인 방법**: 사용자가 SIM 로딩 뒤 해결됨을 확인 (로그 분석 없음)\n- **비고**: 수동 기록. 판별 시그니처 없음(pending)\n"
+    },
+    {
+      "op": "add-fixture",
+      "for": "NEW-CAUSE-1",
+      "kind": "positive",
+      "path": "fixtures/cut-1.log"
+    },
+    {
+      "op": "append",
+      "cause": "NEW-CAUSE-1"
+    }
+  ],
+  "feedback": {
+    "date": "2026-09-29T14:20+09:00",
+    "suggested": [],
+    "decision": "manual",
+    "final": "NEW-CAUSE-1"
+  },
+  "commit_message": "[NEW-CAUSE-1] record MOCK-7005: SIM 미준비(수동)",
+  "pr": {
+    "number": null,
+    "branch": "issue/MOCK-7005",
+    "head_sha": null
+  },
+  "included_pending": []
+}

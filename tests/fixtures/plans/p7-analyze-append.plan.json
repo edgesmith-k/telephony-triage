@@ -1,0 +1,42 @@
+{
+  "source": "analyze",
+  "schema_version": 1,
+  "started_at": "2026-09-29T10:00+09:00",
+  "base_sha": "0000000000000000000000000000000000000000",
+  "jira": {
+    "key": "MOCK-7001",
+    "origin": "mcp",
+    "model": "MOCK-A56",
+    "sw": "MOCKA56_U1_20260925",
+    "android_version": "16",
+    "carrier": "MockTel KR",
+    "date": "2026-09-29",
+    "occurred_on": "2026-09-28",
+    "note": "로밍 SIM으로 데이터가 붙지 않음"
+  },
+  "operations": [
+    {
+      "op": "append",
+      "cause": "DATA-001-02"
+    }
+  ],
+  "feedback": {
+    "date": "2026-09-29T10:15+09:00",
+    "suggested": [
+      {
+        "cause": "DATA-001-02",
+        "signature": "DATA-001-02/roaming-disabled",
+        "score": 0.92
+      }
+    ],
+    "decision": "accepted",
+    "final": "DATA-001-02"
+  },
+  "commit_message": "[DATA-001-02] add MOCK-7001: 로밍 중 데이터 로밍 OFF",
+  "pr": {
+    "number": null,
+    "branch": "issue/MOCK-7001",
+    "head_sha": null
+  },
+  "included_pending": []
+}

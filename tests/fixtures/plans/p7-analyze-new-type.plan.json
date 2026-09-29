@@ -1,0 +1,89 @@
+{
+  "source": "analyze",
+  "schema_version": 1,
+  "started_at": "2026-09-29T12:00+09:00",
+  "base_sha": "0000000000000000000000000000000000000000",
+  "jira": {
+    "key": "MOCK-7003",
+    "origin": "mcp",
+    "model": "MOCK-A56",
+    "sw": "MOCKA56_U1_20260925",
+    "android_version": "16",
+    "carrier": "MockTel KR",
+    "date": "2026-09-29",
+    "occurred_on": "2026-09-28",
+    "note": "음성 발신 때 서비스가 계속 바뀜"
+  },
+  "operations": [
+    {
+      "op": "new-type",
+      "temp_id": "NEW-TYPE-1",
+      "category": "network",
+      "dir_slug": "csfb-fallback-loop",
+      "type": {
+        "title": "CSFB 폴백이 반복됨",
+        "summary": "음성 발신 때 CSFB 폴백이 끝나지 않고 반복된다",
+        "symptom_signatures": [
+          {
+            "id": "csfb-fallback-loop",
+            "must_match": [
+              "csfb fallback loop detected"
+            ],
+            "window_sec": 60
+          }
+        ],
+        "tags": [
+          "csfb"
+        ]
+      },
+      "first_cause": {
+        "temp_id": "NEW-CAUSE-1",
+        "cause": {
+          "title": "폴백 타이머 0",
+          "description": "캐리어 설정의 폴백 타이머가 0이라 폴백이 즉시 재시도됨",
+          "signatures": [
+            {
+              "id": "fallback-timer-zero",
+              "must_match": [
+                "csfb fallback loop detected .*timer=0"
+              ],
+              "window_sec": 60
+            }
+          ],
+          "resolution": "캐리어 설정의 CSFB 폴백 타이머 값을 고친다",
+          "resolution_type": "carrier-config",
+          "fix": {
+            "status": "open",
+            "ref": null,
+            "fixed_in": []
+          }
+        },
+        "body": "- **확인 방법**: 폴백 반복 로그에 timer=0\n- **재현 시나리오**: 해당 캐리어 SIM으로 음성 발신\n"
+      },
+      "body": "## 증상\n\n음성 발신 때 CSFB 폴백이 반복된다.\n\n## 증상 판별 방법\n\n`SST-<slot>`에 `csfb fallback loop detected`가 반복된다.\n"
+    },
+    {
+      "op": "add-fixture",
+      "for": "NEW-CAUSE-1",
+      "kind": "positive",
+      "path": "fixtures/cut-1.log"
+    },
+    {
+      "op": "append",
+      "cause": "NEW-CAUSE-1"
+    }
+  ],
+  "feedback": {
+    "date": "2026-09-29T12:30+09:00",
+    "suggested": [],
+    "decision": "new-type",
+    "final": "NEW-CAUSE-1"
+  },
+  "commit_message": "[NEW-TYPE-1] add MOCK-7003: CSFB 폴백 반복",
+  "pr": {
+    "number": null,
+    "branch": "issue/MOCK-7003",
+    "head_sha": null
+  },
+  "included_pending": []
+}

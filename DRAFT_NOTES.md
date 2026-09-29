@@ -9,7 +9,8 @@
 
 - 모드: **사외 초안** (`.local-draft` 있음)
 - 완료 Phase: **D0, 1** (2026-09-28), **2, 3, 4, 5, 6** (2026-09-29)
-- 다음 Phase: **7** (이슈 DB 반영, PR, sync-pr)
+- 완료 Phase 추가: **7** (2026-09-29, 사용자 확인 후 커밋)
+- 다음 Phase: **8** (git hooks·Claude hooks)
 - Phase 2~6은 사용자가 미리 승인해서 Phase마다 확인을 기다리지 않고 진행했다(각 Phase 끝에 커밋·push). 완료 기준 점검 결과는 Phase별 절에 있다. **Phase 7부터는 다시 Phase마다 사용자 확인을 받는다.**
 - 기준 문서 세트: `telephony-triage-docs-v11` (`CHANGES.md` 참고)
 - 레포 루트: 이 파일이 있는 디렉토리 (`CLAUDE.md`, `docs/design/`, `plugin/`,
@@ -419,6 +420,79 @@
 - **코드 경로**: `suggest` 순서는 버전 일치 프로필 → 버전 일치 최근 → 나머지 최근(최신 순) → 나머지 프로필. 트리 버전 추정은 `build/release/release_config_map.textproto` → `build/make/core/version_defaults.mk` → `build/core/version_defaults.mk` 순서(TODO(SITE:S11)). `validate`는 잘못된 루트면 종료 코드 2. `find-symbol`은 `Class#method`면 `Class.*` 파일(또는 `class Class` 선언이 있는 파일)에서 `method(`를 찾는다. `remember`로 최근 5개를 기록한다(`code_roots.py`의 계약 밖 서브커맨드).
 - **setup 커맨드 형식**: `plugin/commands/setup.md`는 frontmatter `description`만 쓴다. 커맨드 파일 형식·`${CLAUDE_PLUGIN_ROOT}` 치환은 빈 플러그인 실험(S1)이 아직 미확인이다.
 
+### Phase 7에서 만든 것
+
+| 산출물 | 경로 |
+|---|---|
+| 계획 적용·drift·ID 도구 | `plugin/scripts/db_add.py` (`apply`, `drift`, `renumber`, `check-ids`, `similar`) |
+| 쓰기 오케스트레이션 | `plugin/scripts/db_pr.py` (`cleanup`, `preflight`, `stage`, `summary`, `publish`, `discard`, `find-plan`, snapshot 뒤 사후 lint) |
+| 검증 뼈대 | `plugin/scripts/db_verify.py` (`rules`: R4만 실행, R1~R3·R5 `not-implemented`, R6 `skipped`, `--plan`/`--draft`/`--changed`/`--staged`, `TT_FORCE_VERIFY_EXIT=3`. `resolution`·`fix`는 Phase 10) |
+| type.md 엔티티 단위 쓰기 | `plugin/scripts/common/typedoc.py` (바뀐 최상위 키·원인·원인 안 필드만 다시 렌더링, 본문 `### <원인 ID>` 섹션을 ID 순서로 삽입) |
+| YAML 엔티티 단위 쓰기 | `plugin/scripts/common/yamldoc.py` (키 블록·목록 항목 분할, 결정적 덤프. parser-rules 항목 추가·교체도 이것으로) |
+| 손으로 쓴 계획 8개 | `tests/fixtures/plans/p7-*.plan.json` (analyze append/new-cause/new-type/unresolved, review reclassify, record pending/verified, import) |
+| 사후 lint 변형 | `tests/fixtures/issue-db-dup-id/` (`make_variant_dbs.py`의 `dup_id`: 같은 type.md에 DATA-001-03 두 번, MOCK-1101이 두 유형에) |
+| 쓰기 경로 테스트 환경 | `tests/helpers/workspace.py` (임시 홈·config·모의 원격·clone·gh 상태, 생성 파일을 main에 미리 커밋, `ship()`·`merge()`·`push_main()`·`push_branch()`) |
+| Phase 7 테스트 | `tests/test_db_pr.py` (20개) |
+
+### Phase 7 완료 기준 확인 결과
+
+`python3 tests/test_db_pr.py` — **20개 전부 통과** (약 5분). 전체 결과는 아래 "반입 체크리스트 상태".
+
+| 완료 기준 | 확인 | 어디서 |
+|---|---|---|
+| `append`·`new-cause`·`new-type`·`unresolved`·`reclassify`가 모두 PR까지 | ✅ (PR 5개, 제목에 할당된 실제 ID) | `test_each_op_reaches_pr` |
+| main에 없는 Jira의 `reclassify` 거부, main에 있는 Jira의 `append` 중단(기존 분류 표시) | ✅ `reclassify-missing`, `jira-exists`(+`existing.cause`), preflight `jira_in_main` | `test_reclassify_needs_jira_in_main_and_append_stops_on_existing` |
+| `source: record` → PR, summary·PR 본문에 "수동 기록"과 실행/건너뛴 검증, `jira.origin: file` 라벨 | ✅ | `test_record_labels_pending_rules_and_sync_keeps_pending` |
+| `signatures_pending`은 record에서만, pending 피드백은 analyze에서만 | ✅ (analyze·import의 pending 원인 거부, record stage는 pending 미포함, analyze stage는 포함) | `test_pending_only_in_record_and_pending_feedback_only_in_analyze`, 위 테스트 |
+| pending 원인이 든 record PR이 뒤처졌을 때 sync-pr가 pending 그대로 올림 | ✅ (다른 PR 머지 뒤 재적용, 최신 main 위, `signatures_pending: true` 유지) | `test_record_labels_pending_rules_and_sync_keeps_pending` |
+| record `verify-resolution`의 자기 Jira evidence 거부, `new-cause` 뒤 `verify-resolution`(resolved fixture) → verified, 순서 반대 거부 | ✅ (`self-evidence`, `order` — 뒤에 오는 `set-resolution`도 `order`) | `test_verify_resolution_and_update_fix_rules` |
+| 같은 계획 두 번 stage → `<wt>` diff 바이트 단위 같음 | ✅ (사이에 넣은 잔여 파일도 사라짐) | `test_restage_is_byte_identical_and_feedback_stable` |
+| 사용자 clone 불변(앞선 커밋이 있는 로컬 `issue/<KEY>` checkout 상태 포함), discard 후 worktree·`tt/*`·`state.json`·lock 없음 | ✅ (HEAD·브랜치·워킹 트리 상태·로컬 브랜치 SHA 같음) | `test_user_clone_is_untouched_and_discard_cleans_up` |
+| `tt/<br>`가 다른 worktree에 checkout → stage 종료 코드 2 | ✅ | `test_tool_branch_in_other_worktree_stops_stage` |
+| Step 8-2: 도구 브랜치 잔여물, 원격에 있는 브랜치("plan으로 브랜치 갱신"은 lease push) | ✅ (잔여물 cleanup, 같은 SHA → lease push + `gh pr edit`, 다른 사람 push → 옛 lease·`new` 모두 거부) | `test_step8_2_branch_states` |
+| source 9개 값 밖(`migrate`) 거부, `stage --dry-run` gh 인증 없이 summary까지, `TT_FORCE_VERIFY_EXIT=3` → stage 3 | ✅ | `test_source_outside_values_dry_run_and_forced_exit_3` |
+| drift: `set-resolution` 대상 해결책 변경 → 1, 결정 반영 후 통과. `update-parser-rule` 기능 필드 변경은 drift, 이력 필드만은 아님. `allow-cause` 대상 `also_allowed` 변경은 drift | ✅ | `test_drift_resolution_parser_rule_and_allow_cause` |
+| `allow-cause`: `.expect.yaml` 없으면 기본 기대값 + `also_allowed`로 생성, 있으면 추가, 자기·같은 유형 원인 거부, 리뷰어에 fixture 카테고리 오너 | ✅ | `test_allow_cause_creates_or_extends_expect_and_adds_reviewer` |
+| 같은 계획 두 번 stage해도 피드백 파일 이름·`date` 같음 | ✅ | `test_restage_is_byte_identical_and_feedback_stable` |
+| `verify-resolution` evidence가 없는 Jira·fixture면 거부, `update-fix` `fixed`→`fix-submitted` 거부, `not-a-bug`→`fix-submitted` 통과 | ✅ | `test_verify_resolution_and_update_fix_rules` |
+| 두 브랜치가 같은 번호(DATA-001-03)의 새 원인·fixture → 차례로 머지할 때 둘째가 sync-pr로 DATA-001-04, 섞이지 않고, PR 제목·본문 갱신 | ✅ (둘째 머지도 텍스트 충돌 없음) | `test_same_number_race_resolved_by_sync_pr` |
+| sync-pr 재적용 때 `included_pending` 다시 포함 | ✅ | `test_pending_only_in_record_and_pending_feedback_only_in_analyze` |
+| 원격이 `pr.head_sha` 이후 바뀌면 바뀐 내용 표시, 계획 없는 브랜치는 수동 절차만 안내하고 아무것도 안 바꿈 | ✅ (`find-plan`의 `remote_changed`·`remote_diff_stat` / `manual_steps`) | `test_step8_2_branch_states`, `test_sync_pr_without_plan_only_guides` |
+| sync-pr 도중 원격 변경 → push 거부, 승인 후 파일 변경·커밋 둘·메시지·브랜치 불일치 → publish 거부 | ✅ | `test_step8_2_branch_states`, `test_publish_rejects_changes_after_approval` |
+| `cleanup --dry-run`은 현재 lock 작업의 worktree 제외, `--yes` 없이는 안 지움, `lock release` 뒤 다음 작업이 바로 lock | ✅ | `test_cleanup_skips_lock_holder_and_needs_yes` |
+| `issue-db-dup-id/`에서 사후 lint가 ID 중복·Jira 중복 보고(아무것도 안 바꿈) | ✅ | `test_post_lint_reports_duplicates_without_changes` |
+| 기존 fixture 결과를 바꾸는 규칙은 R4에서 차단 | ✅ (R1~R3·R5 `not-implemented`) | `test_rule_that_changes_existing_fixture_is_blocked_by_r4` |
+| (그 밖) import 규칙(피드백 없음), 새 유형 증상 시그니처 필수, `check-ids`·`renumber`(내 ID만, 옛 ID 잔존 없음)·`similar` | ✅ | `test_import_rules_and_new_type_needs_symptom`, `test_check_ids_renumber_and_similar` |
+
+### Phase 7에서 바꾼 이전 산출물
+
+| 대상 | 무엇을 | 왜 |
+|---|---|---|
+| `plugin/scripts/db_lint.py` `_check_ids` | 같은 type.md 안의 중복 ID도 `duplicate-id`로 잡는다 | **린터 누락 수정**: 두 PR이 같은 원인 번호를 추가한 채 `sync-pr` 없이 머지되면 중복이 **한 type.md 안**에 생기는데, 기존 검사는 다른 파일 사이 중복만 봤다. `issue-db-dup-id` 사후 lint 시험에서 드러났다 |
+| `plugin/scripts/db_pr.py` | Phase 6 자리(`PHASE7` 종료 코드 2)를 구현으로. `snapshot` 결과에 `post_lint` | Phase 7 할 일 |
+| `tests/helpers/make_variant_dbs.py` | `issue-db-dup-id` 변형 추가 | Phase 7 완료 기준 |
+
+### Phase 7 구현에서 정한 세부 (계약 보완 후보)
+
+- **`db_add apply` 종료 코드**: 계획 형식(스키마)·`source` 값·`schema_version` 불일치·`--pending`을 analyze 밖에서 줌 → 2. op 규칙 위반(Jira 중복, reclassify 대상 없음, `fixed`→`fix-submitted`, evidence 없음, pending 불가, 순서 등) → 1과 `rejected: [{code, op_index, message, ...}]`. 거부가 있으면 **아무 파일도 쓰지 않는다**(메모리에서 적용 후 한 번에 쓴다).
+- **`db_add apply` 옵션**: `--pending <file>`(여러 번, `db_pr stage`가 analyze일 때만 넘김), `--user <GHE 아이디>`(없으면 config `user.ghe_id`). 출력 `{applied, changed[{path, change}], ids[{temp_id, id}], fixtures[{op_index, for, kind, name, path}], commit_message(치환됨), feedback, pending_included, operations(치환됨), warnings}`.
+- **ID 할당**: 적용 대상 트리의 최댓값 + 1(유형은 카테고리별, 원인은 유형별). 빈 번호를 채우지 않는다(폐기·병합 원인도 남아 있으므로 번호 재사용이 없다). 임시 ID는 `NEW-(CAUSE|TYPE)-<n>` 토큰을 계획 전체 문자열에서 치환한다.
+- **fixture 참조**: `verify-resolution` evidence, `verify-fix`·`update-fix` history의 `fixture`, `allow-cause`의 `fixture`에 같은 계획 `add-fixture`의 `path`를 쓰면 할당된 `fixtures/<이름>`으로 바꾼다(계획은 번호를 모르므로). `add-fixture`의 상대 `path`는 계획 파일 디렉토리 기준.
+- **`update-fix`**: `fixed_in`은 브랜치 기준으로 병합(같은 브랜치면 build 갱신, 없으면 추가 — fix-submitted "빌드 추가" 흐름). `open`으로 되돌리는 이력 항목의 `date`·`by`는 계획의 `jira.date`(없으면 `started_at`의 날짜)와 적용 사용자.
+- **새 원인 필드 순서**: `templates/cause.yaml`의 키 순서. `signatures_pending`은 `signatures` 뒤, `cp_evidence`는 값이 있을 때만 `related` 뒤(마스킹). `resolution_verification`은 항상 `{status: unverified(, method)}`로 시작.
+- **새 유형 본문**: 계획 `body`(`## `로 시작하지 않으면 `## 증상`을 앞에 붙임) + `## 원인별 상세` + `### <첫 원인 ID> <title>` + 첫 원인 `body`.
+- **Jira 기록**: `key, cause, date, occurred_on?, model, sw, android_version, carrier?, analyzed_by, note?` 순서. `note`·`cp_evidence`·fixture 내용은 마스킹 함수를 거친다(멱등).
+- **reclassify**: 현재 `cause`가 계획 `from`과 다르면 거부(`reclassify-from`). `note`에 `; reclassified from <from>`을 덧붙인다.
+- **drift 비교 대상**: `db_pr stage`가 사용자 clone에서 `db_add drift --onto <기준 SHA>`를 돈다(`base_sha`·기준 SHA 트리를 `git archive`로 꺼내 비교). 계획이 만드는 임시 ID 대상은 비교하지 않는다.
+- **작업 디렉토리 구현 파일**: 계약의 `plan.json`·`state.json`·`included_pending/`·`wt/` 외에 `stage.json`(stage 결과, summary 입력), `regress.json`(stage의 회귀 결과를 `db_verify rules --regress-json`에 넘겨 회귀를 두 번 돌리지 않는다), `pr.json`(summary가 만든 PR 제목·본문·리뷰어, publish 입력). `state.json`의 `approved_hash`·`commit_message`는 stage가 `null`로 초기화하고 summary가 채운다. discard가 모두 지운다.
+- **`approved_hash`**: 계약은 `GIT_INDEX_FILE=<임시> git add -A && git write-tree`. 구현은 그 앞에 `read-tree HEAD`를 둔다 — 빈 임시 index에서 시작하면 `core.filemode=false` 환경(Windows)에서 기존 100755 파일이 100644로 올라가 실제 커밋 트리와 달라진다. Ubuntu에서는 결과가 같다.
+- **리뷰어**: 생성 파일(README·카테고리 README·STATS·CHANGELOG)은 원본 변경을 따라가므로 리뷰어 계산에서 뺀다. CODEOWNERS는 마지막으로 맞는 규칙이 이긴다. 바뀐 type.md의 `secondary_categories` 오너, `allow-cause` 대상 fixture 카테고리 오너를 더한다.
+- **`publish`**: 검사 실패·push 거부(lease) → 1. push는 됐는데 `gh pr create/edit` 실패 → 2(`gh_error`, 계획의 `head_sha`는 기록). 기존 열린 PR은 `gh pr list --head <br>`로 찾고 `gh pr edit --title --body-file`로 고친다(바뀐 ID 반영). 포함된 pending 원본은 `included_pending/`으로 옮기고 계획 `included_pending`에 `{file, pr}`.
+- **`find-plan --branch <br>`**(계약 밖, sync-pr 1~4번 보조): `<work_dir>/*/plan.json` 중 `pr.branch`가 같은 것. 있으면 `{job, plan, pr, remote_sha, remote_changed, remote_diff_stat}`, 없으면 `{found: false, manual_steps}`(06 §6.3 "계획이 없는 브랜치" 4단계). 아무것도 바꾸지 않는다(fetch만).
+- **`cleanup`**: 대상은 lock 작업 밖의 `<job>/wt`·`<job>/draft`, 구현 파일(`state.json` 등), worktree가 없거나 이번에 지울 worktree에만 있는 `tt/*` 브랜치. `--older-than`은 값 없이 주면 90일.
+- **`summary` 출력**: `{source, source_label, jira{key, origin, label}, branch{name, remote: 신규|갱신, remote_sha, base}, reviewers, open_prs, files[{kind, path, change}], ids, fixtures, drift_decisions, readme_preview, diff(50줄), diff_total_lines, diff_truncated, checks{lint, ids, mask, regress, build}, verification[{id, status, label, reason, review_required}], approval_needed, notes, commit_message, pr_title, push_allowed, push_note, pending_included, pr_body, approved_hash}`. `notes`에 record 표시("로그·코드 분석: 하지 않음", "시그니처 없음 — 매칭 불가, 리뷰 대상", "사용자 진술 — 카테고리 오너 리뷰 필요", "검증 못 함 — 리뷰 대상").
+- **`db_verify rules` 뼈대의 R6**: `skipped`(사유 `해당 없음`). `--draft`는 lock 확인 뒤 `origin/<base>` 분리 worktree에 `db_add apply`, 끝나면 지운다.
+
 ## 개발 환경과 설계의 차이 (중요)
 
 설계는 실행 환경을 **Ubuntu(Linux)** 로 못박는다 (`01-architecture.md §3`,
@@ -633,7 +707,7 @@ Windows 전용 보정은 커밋하지 않는다.**
 
 | 항목 | 상태 |
 |---|---|
-| 전체 테스트 통과 | 🟡 D0·Phase 1~6 범위 (`pytest tests` 132개, 샘플 `db_regress --all` 20개 통과). eval은 Phase 13 뒤 |
+| 전체 테스트 통과 | 🟡 D0·Phase 1~7 범위 (`pytest tests` 152개, 샘플 `db_regress --all` 20개 통과). eval은 Phase 13 뒤 |
 | 사내 정보 없음 | ✅ 사내 자료를 쓰지 않았다 |
 | `plugin/site-defaults.yaml` 없고 example만 있음 | ✅ `test_plugin_root_helper_and_missing_site_defaults`가 검사 |
 | `SITE_PATHS`의 다른 경로가 비어 있음 | ✅ `test_site_paths_are_absent_in_draft`가 검사 |
@@ -651,10 +725,11 @@ Windows 전용 보정은 커밋하지 않는다.**
    (`tests/mocks/plugin-probe/README.md`). 커맨드 파일 형식(`plugin/commands/setup.md`), `${CLAUDE_PLUGIN_ROOT}`
    치환, MCP 도구 이름 형식이 여기에 걸려 있다.
 3. (선택, 사내) **S-0 선행 확인**: `parse_logcat.py`, `match_signatures.py`, `mask_pii.py`를 사내 실제 로그로.
-4. **Phase 7** (이슈 DB 반영, PR, sync-pr): `docs/design/11-phases.md` Phase 7 절과 그 "읽을 문서"를 읽는다.
-   - 이미 있는 부품: `db_pr.py`(lock·snapshot, 나머지 서브커맨드 자리), `common/gitscope.py`, `common/fixtures.py`,
-     `db_build.py`·`db_lint.py`·`db_regress.py`(stage의 검사 순서), `mask_pii.py --check --changed`,
-     `config.py check --for write|dry-run`, `common/ghcli.py`, `tests/helpers/make_repo.py`(모의 원격·`gh` 스텁).
+4. **Phase 7 확인**: 위 "Phase 7 완료 기준 확인 결과"와 "Phase 7 구현에서 정한 세부"를 사용자에게 확인받고 커밋한다
+   (`git add` 뒤 `python3 tools/fix_exec_bits.py`로 새 스크립트 실행 비트를 맞춘다).
+5. **Phase 8** (git hooks·Claude hooks): `docs/design/11-phases.md` Phase 8 절과 그 "읽을 문서"를 읽는다.
+   - 이미 있는 부품: `db_pr publish`의 `TT_PUBLISH_TOKEN`·`state.json`(`approved_hash`), 이슈 DB `.githooks/` 스텁,
+     `tests/helpers/workspace.py`(쓰기 경로 테스트 환경).
 
 ### 사용자 확인이 필요한 항목 (Phase 2~6에서 쌓임)
 

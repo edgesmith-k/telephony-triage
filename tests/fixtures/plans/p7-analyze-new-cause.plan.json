@@ -1,0 +1,77 @@
+{
+  "source": "analyze",
+  "schema_version": 1,
+  "started_at": "2026-09-29T11:00+09:00",
+  "base_sha": "0000000000000000000000000000000000000000",
+  "jira": {
+    "key": "MOCK-7002",
+    "origin": "mcp",
+    "model": "MOCK-A56",
+    "sw": "MOCKA56_U1_20260925",
+    "android_version": "16",
+    "carrier": "MockTel KR",
+    "date": "2026-09-29",
+    "occurred_on": "2026-09-28",
+    "note": "부팅 직후 데이터가 붙지 않음"
+  },
+  "operations": [
+    {
+      "op": "new-cause",
+      "temp_id": "NEW-CAUSE-1",
+      "type": "DATA-001",
+      "cause": {
+        "title": "SIM 미준비",
+        "description": "SIM 초기화가 끝나기 전에 데이터 평가가 돌아 SIM_NOT_READY로 거부됨",
+        "signatures": [
+          {
+            "id": "sim-not-ready",
+            "must_event": [
+              {
+                "event": "data_evaluation_rejected",
+                "fields": {
+                  "reasons": ".*SIM_NOT_READY.*"
+                }
+              }
+            ],
+            "window_sec": 60
+          }
+        ],
+        "resolution": "SIM 로딩 완료 이벤트 뒤에 데이터 평가를 다시 요청하도록 고친다",
+        "resolution_type": "framework-bug",
+        "fix": {
+          "status": "open",
+          "ref": null,
+          "fixed_in": []
+        },
+        "android_versions": [
+          "16"
+        ]
+      },
+      "body": "- **로그 예시**: (마스킹된 로그)\n- **확인 방법**: 평가 거부 사유가 SIM_NOT_READY이다\n- **재현 시나리오**: 부팅 직후 SIM 로딩 전에 데이터 사용\n- **해결책**: SIM 로딩 완료 뒤 재평가\n- **코드 위치**: DataNetworkController\n- **비고**: 합성 계획 (Phase 7 테스트)\n"
+    },
+    {
+      "op": "add-fixture",
+      "for": "NEW-CAUSE-1",
+      "kind": "positive",
+      "path": "fixtures/cut-1.log",
+      "occurred_at": "2026-09-26T09:00:05+09:00"
+    },
+    {
+      "op": "append",
+      "cause": "NEW-CAUSE-1"
+    }
+  ],
+  "feedback": {
+    "date": "2026-09-29T11:30+09:00",
+    "suggested": [],
+    "decision": "new-cause",
+    "final": "NEW-CAUSE-1"
+  },
+  "commit_message": "[NEW-CAUSE-1] add MOCK-7002: SIM 미준비로 평가 거부",
+  "pr": {
+    "number": null,
+    "branch": "issue/MOCK-7002",
+    "head_sha": null
+  },
+  "included_pending": []
+}

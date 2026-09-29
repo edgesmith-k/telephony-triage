@@ -1,0 +1,5 @@
+#!/bin/sh
+# pre-commit 스텁 (11-phases.md Phase 1). 경고만 내고 통과한다.
+# Phase 8에서 db_precommit.py 호출로 교체한다 (08-safety.md §9).
+echo "[telephony-triage] pre-commit 스텁: 아직 검사를 하지 않습니다 (Phase 8에서 db_precommit.py로 교체)." >&2
+exit 0

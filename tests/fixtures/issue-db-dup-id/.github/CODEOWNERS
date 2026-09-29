@@ -1,0 +1,28 @@
+# 소유권 (06-collaboration.md §6.1)
+#
+# org·팀 이름은 모의 값이다 — TODO(SITE:S5). 사내에서 확인하고 바꾼다.
+# gh pr create --reviewer에 넘기는 형식은 issue-db.config.yaml의 reviewers.format
+# (TODO(SITE:S19)).
+
+# 카테고리
+/data/                  @mock-org/telephony-data-owners
+/call/                  @mock-org/telephony-call-owners
+/network/               @mock-org/telephony-network-owners
+/sim/                   @mock-org/telephony-sim-owners
+/sms/                   @mock-org/telephony-sms-owners
+/ims/                   @mock-org/telephony-ims-owners
+
+# 공통 (모든 카테고리와 모든 기여자 PC에 영향)
+/parser-rules/          @mock-org/telephony-issue-db-maintainers
+/schema/                @mock-org/telephony-issue-db-maintainers
+/templates/             @mock-org/telephony-issue-db-maintainers
+/.githooks/             @mock-org/telephony-issue-db-maintainers
+/issue-db.config.yaml   @mock-org/telephony-issue-db-maintainers
+/GLOSSARY.md            @mock-org/telephony-issue-db-maintainers
+/CONTRIBUTING.md        @mock-org/telephony-issue-db-maintainers
+/docs/                  @mock-org/telephony-issue-db-maintainers
+/.gitattributes         @mock-org/telephony-issue-db-maintainers
+/.github/               @mock-org/telephony-issue-db-maintainers
+
+# 피드백 기록은 리뷰 불필요 (자동 기록)
+/feedback/

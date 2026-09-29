@@ -1,0 +1,43 @@
+{
+  "source": "import",
+  "schema_version": 1,
+  "started_at": "2026-09-29T16:00+09:00",
+  "base_sha": "0000000000000000000000000000000000000000",
+  "jira": null,
+  "operations": [
+    {
+      "op": "new-cause",
+      "temp_id": "NEW-CAUSE-1",
+      "type": "SMS-001",
+      "cause": {
+        "title": "SMSC 주소 없음",
+        "description": "SMSC 주소가 비어 있어 전송이 거부됨",
+        "signatures": [
+          {
+            "id": "smsc-empty",
+            "must_match": [
+              "SMSC address is empty"
+            ],
+            "window_sec": 60
+          }
+        ],
+        "resolution": "SIM의 SMSC 주소를 다시 설정한다",
+        "resolution_type": "user-setting",
+        "fix": {
+          "status": "not-a-bug",
+          "ref": null,
+          "fixed_in": []
+        }
+      },
+      "body": "- **확인 방법**: 기존 분류에서 가져옴\n"
+    }
+  ],
+  "feedback": null,
+  "commit_message": "[NEW-CAUSE-1] import sms-1: SMSC 주소 없음",
+  "pr": {
+    "number": null,
+    "branch": "import/sms-1",
+    "head_sha": null
+  },
+  "included_pending": []
+}

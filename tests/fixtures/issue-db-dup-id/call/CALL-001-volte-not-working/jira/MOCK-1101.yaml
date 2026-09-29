@@ -1,0 +1,10 @@
+key: MOCK-1101
+cause: CALL-001-01
+date: 2026-09-05
+occurred_on: 2026-09-04
+model: MOCK-A56
+sw: MOCKA56_U1_20260901
+android_version: "16"
+carrier: MockTel KR
+analyzed_by: mock-user1
+note: 모바일 데이터 OFF 상태에서 접수됨

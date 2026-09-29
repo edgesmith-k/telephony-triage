@@ -294,8 +294,10 @@ class Linter:
         for type_md, data in self.types:
             ids = [str(data.get("id"))] + [str(c.get("id")) for c in data.get("causes") or [] if isinstance(c, dict)]
             for ident in ids:
-                if ident in seen and seen[ident] != type_md:
-                    self.err("duplicate-id", [type_md, seen[ident]], f"ID {ident}가 두 곳에 있습니다.")
+                # 같은 type.md 안의 중복도 잡는다(두 PR이 같은 원인 번호를 추가한 채 차례로 머지된 경우)
+                if ident in seen:
+                    files = [type_md] if seen[ident] == type_md else [type_md, seen[ident]]
+                    self.err("duplicate-id", files, f"ID {ident}가 두 번 정의돼 있습니다.")
                 seen.setdefault(ident, type_md)
 
     def _check_type(self, type_md: Path, data: dict) -> None:

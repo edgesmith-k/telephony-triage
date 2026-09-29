@@ -1,0 +1,6 @@
+09-25 16:20:00.000  1400  1410 D RILJ: [PHONE1] [0011]> GET_SIM_STATUS
+09-25 16:20:01.000  1400  1410 W UiccController: [PHONE1] onIccCardStatusDone: error=CARD_IO_ERROR
+09-25 16:20:03.000  1400  1410 W UiccController: [PHONE1] SIM state changed: ABSENT
+09-25 16:20:08.000  1400  1410 D RILJ: [PHONE1] [0012]> GET_SIM_STATUS
+09-25 16:20:09.000  1400  1410 W UiccController: [PHONE1] onIccCardStatusDone: error=CARD_IO_ERROR
+09-25 16:20:10.000  1400  1410 W SubscriptionManagerService: [PHONE1] no subscription for slot: iccid=<ICCID#1>

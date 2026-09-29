@@ -1,0 +1,41 @@
+{
+  "source": "analyze",
+  "schema_version": 1,
+  "started_at": "2026-09-29T13:00+09:00",
+  "base_sha": "0000000000000000000000000000000000000000",
+  "jira": {
+    "key": "MOCK-7004",
+    "origin": "mcp",
+    "model": "MOCK-A56",
+    "sw": "MOCKA56_U1_20260925",
+    "android_version": "16",
+    "carrier": "MockTel KR",
+    "date": "2026-09-29",
+    "occurred_on": "2026-09-28"
+  },
+  "operations": [
+    {
+      "op": "unresolved",
+      "type": "DATA-001"
+    }
+  ],
+  "feedback": {
+    "date": "2026-09-29T13:10+09:00",
+    "suggested": [
+      {
+        "cause": "DATA-001-01",
+        "signature": "DATA-001-01/data-disabled",
+        "score": 0.4
+      }
+    ],
+    "decision": "unresolved",
+    "final": "unresolved"
+  },
+  "commit_message": "[DATA-001] add MOCK-7004: 원인 미확인",
+  "pr": {
+    "number": null,
+    "branch": "issue/MOCK-7004",
+    "head_sha": null
+  },
+  "included_pending": []
+}

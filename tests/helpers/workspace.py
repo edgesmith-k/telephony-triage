@@ -1,0 +1,189 @@
+#!/usr/bin/env python3
+"""쓰기 경로(Step 8·공통 쓰기 절차) 테스트용 작업 환경 (11-phases.md Phase 7).
+
+`Workspace` 하나가 다음을 갖는다.
+- 임시 사용자 홈(`TELEPHONY_TRIAGE_HOME`)과 사용자 config(`config.py init --answers`), `work_dir`
+- `make_repo.make()`로 만든 모의 원격(bare)과 사용자 clone (`core.hooksPath .githooks`)
+- 작업공간 전용 `gh` 스텁 상태 디렉토리(`MOCK_GH_STATE_DIR`)
+
+스킬 없이 Step 8을 돌린다: 손으로 쓴 계획(`tests/fixtures/plans/*.json`)을 `<work_dir>/<작업 키>/plan.json`에
+놓고 `db_pr stage → summary → git add/commit(별도 호출) → publish → discard`를 직접 부른다.
+"""
+
+from __future__ import annotations
+
+import json
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parents[2]
+PLANS = REPO / "tests" / "fixtures" / "plans"
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import make_repo  # noqa: E402
+from runner import SAMPLE, plugin_root, run, tmp  # noqa: E402
+
+GIT_ID = ["-c", "user.name=Mock User", "-c", "user.email=mock-user@ghe.mock.invalid"]
+
+
+def git(repo: Path, *args: str, check: bool = True) -> str:
+    proc = subprocess.run(["git", "-C", str(repo), *GIT_ID, *args], capture_output=True, text=True,
+                          encoding="utf-8", errors="replace")
+    if check and proc.returncode != 0:
+        raise AssertionError(f"git {' '.join(args)}: {proc.stderr}")
+    return proc.stdout.strip()
+
+
+class Workspace:
+    def __init__(self, src: Path = SAMPLE, root: Path | None = None, build: bool = True):
+        self.base = tmp("tt-ws-")
+        self.home = self.base / "home"
+        self.work = self.base / "work"
+        self.gh_state = self.base / "gh-state"
+        self.root = root or plugin_root()
+        info = make_repo.make(src, self.base / "repo")
+        self.clone = Path(info["clone"])
+        self.remote = Path(info["remote"])
+        answers = self.base / "answers.json"
+        answers.write_text(json.dumps({
+            "user.ghe_id": "mock-user1", "issue_db.path": str(self.clone),
+            "issue_db.remote": "https://ghe.mock.invalid/mock-org/telephony-issue-db.git",
+            "work_dir": str(self.work)}), encoding="utf-8")
+        self.json("config.py", ["init", "--answers", answers])
+        self.json("config.py", ["install-hooks", "--db", self.clone])
+        if build:   # 운영 이슈 DB처럼 main에 생성 파일이 커밋돼 있게 한다
+            self.json("db_build.py", ["--write", "--db", self.clone])
+            git(self.clone, "add", "-A")
+            git(self.clone, "commit", "-q", "-m", "생성 파일 (테스트 헬퍼)")
+            git(self.clone, "push", "-q", "origin", "main")
+
+    # 스크립트 ---------------------------------------------------------------------------
+
+    def env(self, **extra) -> dict:
+        return {"TELEPHONY_TRIAGE_HOME": self.home, "MOCK_GH_STATE_DIR": self.gh_state, **extra}
+
+    def run(self, script: str, args: list, env: dict | None = None, unauth: bool = False):
+        return run(script, [str(a) for a in args], root=self.root, env=self.env(**(env or {})), cwd=self.base,
+                   unauth=unauth)
+
+    def json(self, script: str, args: list, expect=0, **kw) -> dict:
+        proc = self.run(script, args, **kw)
+        codes = expect if isinstance(expect, tuple) else (expect,)
+        assert proc.returncode in codes, (f"{script} {args}: 종료 코드 {proc.returncode} (기대 {expect})\n"
+                                          f"stderr: {proc.stderr[-3000:]}\nstdout: {proc.stdout[-3000:]}")
+        return json.loads(proc.stdout) if proc.stdout.strip() else {}
+
+    def db_pr(self, *args, expect=0, **kw) -> dict:
+        return self.json("db_pr.py", list(args), expect=expect, **kw)
+
+    # 계획 -----------------------------------------------------------------------------------
+
+    def main_sha(self) -> str:
+        git(self.clone, "fetch", "origin")
+        return git(self.clone, "rev-parse", "origin/main")
+
+    def job_dir(self, job: str) -> Path:
+        return self.work / job
+
+    def wt(self, job: str) -> Path:
+        return self.work / job / "wt"
+
+    def plan(self, job: str, name_or_plan, base_sha: str | None = None, **over) -> Path:
+        """계획을 `<work_dir>/<job>/plan.json`에 쓴다. `base_sha`는 기본으로 지금 origin/main."""
+        if isinstance(name_or_plan, dict):
+            plan = json.loads(json.dumps(name_or_plan))
+        else:
+            plan = json.loads((PLANS / name_or_plan).read_text(encoding="utf-8"))
+        plan["base_sha"] = base_sha or self.main_sha()
+        plan.update(over)
+        path = self.job_dir(job) / "plan.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8")
+        return path
+
+    def read_plan(self, job: str) -> dict:
+        return json.loads((self.job_dir(job) / "plan.json").read_text(encoding="utf-8"))
+
+    def put(self, job: str, rel: str, src_or_text) -> Path:
+        """작업 디렉토리에 fixture 원본 등을 둔다 (마스킹된 텍스트)."""
+        dest = self.job_dir(job) / rel
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        if isinstance(src_or_text, Path):
+            shutil.copyfile(src_or_text, dest)
+        else:
+            dest.write_text(src_or_text, encoding="utf-8", newline="\n")
+        return dest
+
+    # Step 8 -----------------------------------------------------------------------------------
+
+    def acquire(self, job: str) -> dict:
+        return self.db_pr("lock", "acquire", job, "--take-over")
+
+    def stage(self, job: str, branch: str, expect=0, dry_run: bool = False, **kw) -> dict:
+        args = ["stage", self.job_dir(job) / "plan.json", "--wt", self.wt(job), "--branch", branch]
+        return self.db_pr(*(args + (["--dry-run"] if dry_run else [])), expect=expect, **kw)
+
+    def commit(self, job: str, message: str | None = None) -> str:
+        wt = self.wt(job)
+        msg = message or json.loads((self.job_dir(job) / "state.json").read_text(encoding="utf-8"))["commit_message"]
+        git(wt, "add", "-A")
+        git(wt, "commit", "-q", "-m", msg)
+        return git(wt, "rev-parse", "HEAD")
+
+    def ship(self, job: str, branch: str, lease: str = "new", discard: bool = True) -> dict:
+        """stage → summary → 커밋 → publish (→ discard)."""
+        self.acquire(job)
+        stage = self.stage(job, branch)
+        summary = self.db_pr("summary", self.wt(job))
+        self.commit(job)
+        pub = self.db_pr("publish", self.wt(job), "--branch", branch, "--lease", lease,
+                         "--approved", summary["approved_hash"])
+        if discard:
+            self.db_pr("discard", self.wt(job))
+        return {"stage": stage, "summary": summary, "publish": pub}
+
+    # 원격 조작 (다른 사람) ---------------------------------------------------------------------
+
+    def other_clone(self) -> Path:
+        path = tmp("tt-other-") / "c"
+        subprocess.run(["git", "clone", "-q", str(self.remote), str(path)], check=True, capture_output=True)
+        return path
+
+    def merge(self, branch: str) -> str:
+        """리뷰어가 PR을 머지한 것처럼 원격 main에 `branch`를 머지한다."""
+        other = self.other_clone()
+        git(other, "merge", "--no-ff", "-q", "-m", f"Merge {branch}", f"origin/{branch}")
+        git(other, "push", "-q", "origin", "main")
+        return git(other, "rev-parse", "HEAD")
+
+    def push_main(self, edit, message: str = "main 변경") -> str:
+        """다른 PR이 main에 들어온 것처럼 `edit(path)`로 바꾼 커밋을 원격 main에 올린다."""
+        other = self.other_clone()
+        edit(other)
+        git(other, "add", "-A")
+        git(other, "commit", "-q", "-m", message)
+        git(other, "push", "-q", "origin", "main")
+        return git(other, "rev-parse", "HEAD")
+
+    def push_branch(self, branch: str, edit, message: str = "다른 사람의 push") -> str:
+        other = self.other_clone()
+        git(other, "checkout", "-q", "-B", branch, f"origin/{branch}")
+        edit(other)
+        git(other, "add", "-A")
+        git(other, "commit", "-q", "-m", message)
+        git(other, "push", "-q", "origin", f"{branch}:refs/heads/{branch}")
+        return git(other, "rev-parse", "HEAD")
+
+    def remote_file(self, branch: str, rel: str) -> str | None:
+        proc = subprocess.run(["git", "-C", str(self.remote), "show", f"{branch}:{rel}"], capture_output=True,
+                              text=True, encoding="utf-8")
+        return proc.stdout if proc.returncode == 0 else None
+
+    def remote_files(self, branch: str) -> list[str]:
+        return git(self.remote, "ls-tree", "-r", "--name-only", branch).splitlines()
+
+    def prs(self) -> list[dict]:
+        path = self.gh_state / "prs.json"
+        return json.loads(path.read_text(encoding="utf-8"))["prs"] if path.is_file() else []

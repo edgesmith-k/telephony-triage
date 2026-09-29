@@ -9,6 +9,7 @@
 | `issue-db-lint-errors/` | 린터가 잡아야 할 오류를 일부러 넣은 트리 (`tests/test_db_lint.py`의 `EXPECTED`) |
 | `issue-db-empty-category/` | sms·ims 유형을 뺀 트리. README의 0건 카테고리 표시 |
 | `issue-db-pending/` | `signatures_pending` 원인(DATA-001-03)과 그 양성 fixture. 회귀 기대값 `DATA-001:unresolved` |
+| `issue-db-dup-id/` | 머지 간격으로 main에 같은 ID(DATA-001-03 두 번)와 같은 Jira(MOCK-1101 두 곳)가 들어온 트리. 사후 lint 보고 (Phase 7) |
 
 CLI:
     python3 tests/helpers/make_variant_dbs.py [--check] [--json]
@@ -224,10 +225,44 @@ tags: [data-evaluation]
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def dup_id(db: Path) -> None:
+    """두 PR이 sync-pr 없이 차례로 머지된 결과: 같은 원인 ID 두 개, 같은 Jira 파일 두 개 (06-collaboration.md §6.3)."""
+    data = db / "data/DATA-001-no-setup-data-call"
+    block = """  - id: DATA-001-03
+    status: active
+    title: {title}
+    description: {desc}
+    signatures:
+      - id: {sig}
+        must_event:
+          - {{event: data_evaluation_rejected, fields: {{reasons: '.*{reason}.*'}}}}
+        window_sec: 60
+    recovery_signatures: []
+    scenario_signatures: []
+    resolution: {res}
+    resolution_type: framework-bug
+    resolution_verification: {{status: unverified}}
+    fix: {{status: open, ref: null, fixed_in: [], verification: null, verification_history: []}}
+    related: []
+    cp_evidence: null
+    android_versions: []
+    code_refs: []
+"""
+    first = block.format(title="SIM 미준비", desc="SIM 초기화 전에 평가가 거부됨", sig="sim-not-ready",
+                         reason="SIM_NOT_READY", res="SIM 로딩 뒤 데이터 평가를 다시 요청하도록 고친다")
+    second = block.format(title="무선 꺼짐", desc="무선이 꺼진 상태에서 평가가 거부됨", sig="radio-off",
+                          reason="RADIO_POWER_OFF", res="무선 전원 상태 복구 뒤 평가를 다시 요청하도록 고친다")
+    _edit(data / "type.md", "tags: [data-evaluation]\n---", first + second + "tags: [data-evaluation]\n---")
+    dup = db / "call/CALL-001-volte-not-working/jira/MOCK-1101.yaml"
+    text = (data / "jira/MOCK-1101.yaml").read_text(encoding="utf-8").replace("cause: DATA-001-01", "cause: CALL-001-01")
+    _write(dup, text)
+
+
 VARIANTS = {
     "issue-db-lint-errors": lint_errors,
     "issue-db-empty-category": empty_category,
     "issue-db-pending": pending,
+    "issue-db-dup-id": dup_id,
 }
 
 

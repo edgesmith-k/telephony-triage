@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "parser-rules/*.yaml (04-parser-matching.md §5.8 (2))",
+  "description": "tags.yaml, ril.yaml, extractors.yaml을 모두 이 스키마로 검사한다. 파일 하나는 한 종류만 담는다(ril.yaml은 requests와 unsolicited). 모든 항목은 키로 식별되고(tags는 tag/tag_regex, requests·unsolicited는 name, extractors는 id) 이력 필드 added_for·added_on·reason을 가진다. 카테고리가 issue-db.config.yaml의 categories에 있는지는 db_lint.py가 검사한다. CHANGELOG.md는 이력 필드에서 db_build.py가 생성한다.",
+  "type": "object",
+  "additionalProperties": false,
+  "minProperties": 1,
+  "anyOf": [
+    {"required": ["tags"]},
+    {"required": ["requests"]},
+    {"required": ["unsolicited"]},
+    {"required": ["extractors"]}
+  ],
+  "properties": {
+    "tags": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/tagRule"}},
+    "requests": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/rilRequest"}},
+    "unsolicited": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/rilUnsol"}},
+    "extractors": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/extractor"}}
+  },
+  "$defs": {
+    "categoryKey": {
+      "description": "카테고리 키 또는 common (여러 카테고리가 공유하는 태그)",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*$"
+    },
+    "isoDate": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
+    "history": {
+      "type": "object",
+      "required": ["added_for", "added_on", "reason"],
+      "properties": {
+        "added_for": {
+          "description": "이 항목을 추가하게 한 유형/원인 ID. 공통 항목은 -",
+          "type": "string",
+          "pattern": "^([A-Z][A-Z0-9]*-[0-9]{3}(-[0-9]{2})?|-)$"
+        },
+        "added_on": {"$ref": "#/$defs/isoDate"},
+        "reason": {"type": "string", "minLength": 1}
+      }
+    },
+    "tagRule": {
+      "allOf": [{"$ref": "#/$defs/history"}],
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["category", "added_for", "added_on", "reason"],
+      "oneOf": [{"required": ["tag"]}, {"required": ["tag_regex"]}],
+      "properties": {
+        "tag": {"type": "string", "minLength": 1},
+        "tag_regex": {"type": "string", "minLength": 1},
+        "category": {"$ref": "#/$defs/categoryKey"},
+        "added_for": true,
+        "added_on": true,
+        "reason": true
+      }
+    },
+    "rilRequest": {
+      "allOf": [{"$ref": "#/$defs/history"}],
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "category", "timeout_ms", "added_for", "added_on", "reason"],
+      "properties": {
+        "name": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]*$"},
+        "category": {"$ref": "#/$defs/categoryKey"},
+        "timeout_ms": {"type": "integer", "minimum": 1},
+        "added_for": true,
+        "added_on": true,
+        "reason": true
+      }
+    },
+    "rilUnsol": {
+      "allOf": [{"$ref": "#/$defs/history"}],
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "category", "added_for", "added_on", "reason"],
+      "properties": {
+        "name": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]*$"},
+        "category": {"$ref": "#/$defs/categoryKey"},
+        "added_for": true,
+        "added_on": true,
+        "reason": true
+      }
+    },
+    "extractor": {
+      "allOf": [{"$ref": "#/$defs/history"}],
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "patterns", "event", "fields", "added_for", "added_on", "reason"],
+      "oneOf": [{"required": ["tag"]}, {"required": ["tag_regex"]}],
+      "properties": {
+        "id": {
+          "description": "kebab-case. 시그니처가 참조하므로 바꾸지 않는다 (04-parser-matching.md §5.8 (4)).",
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "tag": {"type": "string", "minLength": 1},
+        "tag_regex": {"type": "string", "minLength": 1},
+        "patterns": {
+          "description": "버전별 문구 차이는 여러 패턴으로. 마스킹 이후 텍스트 기준으로 쓴다.",
+          "type": "array",
+          "minItems": 1,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "event": {
+          "description": "extractor 이벤트는 접두어가 없다. builtin./ext. 접두어는 만들 수 없다 (04-parser-matching.md §5.8 (2)).",
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "fields": {"type": "array", "items": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"}, "uniqueItems": true},
+        "added_for": true,
+        "added_on": true,
+        "reason": true
+      }
+    }
+  }
+}

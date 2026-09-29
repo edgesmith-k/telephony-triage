@@ -15,6 +15,8 @@
 - compiled: `.cache/compiled.json` 컴파일 캐시 (Phase 5)
 - gitscope: `--changed`·`--staged`·`--ref` 범위와 index·ref 트리 꺼내기 (Phase 5)
 - versions: `GENERATOR_VERSION`, `SCHEMA_VERSION` (Phase 5)
+- yamldoc: YAML 문서의 엔티티 단위 다시 쓰기·결정적 덤프 (Phase 7)
+- typedoc: type.md 읽기·엔티티 단위 쓰기 (Phase 7)
 
 config 로드·git 헬퍼는 Phase 6에서 더한다.
 """

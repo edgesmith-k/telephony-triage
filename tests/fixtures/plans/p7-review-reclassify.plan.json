@@ -1,0 +1,23 @@
+{
+  "source": "review",
+  "schema_version": 1,
+  "started_at": "2026-10-01T10:00+09:00",
+  "base_sha": "0000000000000000000000000000000000000000",
+  "jira": null,
+  "operations": [
+    {
+      "op": "reclassify",
+      "jira": "MOCK-1104",
+      "from": "unresolved",
+      "to": "DATA-001-01"
+    }
+  ],
+  "feedback": null,
+  "commit_message": "[DATA-001-01] review 2026-10: MOCK-1104 재분류",
+  "pr": {
+    "number": null,
+    "branch": "review/data-2026-10",
+    "head_sha": null
+  },
+  "included_pending": []
+}
