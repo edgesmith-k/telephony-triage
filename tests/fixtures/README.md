@@ -22,6 +22,6 @@
   - 커밋된 내용과 시나리오가 맞는지: `python3 tests/helpers/make_sample_fixtures.py --check`
 - 사내 값(Jira 키 형식, GHE org/팀, 빌드명, 로그 문구)은 모의 값이고 `TODO(SITE:...)`로 표시돼 있다.
   목록은 `python3 tools/list_site_todos.py`로 뽑는다.
-- `.githooks/pre-commit`·`pre-push`는 경고만 내는 **스텁**이다. Phase 8에서 실제 hook으로 바꾼다.
+- `.githooks/pre-commit`(`db_precommit.py` 호출)·`pre-push`(base 브랜치·`TT_PUBLISH_TOKEN` 검사)는 실제 hook이다 (Phase 8, `08-safety.md §9`). 시험은 `tests/test_hooks.py`.
 
 운영·반입용 뼈대(유형·Jira·fixture·피드백 없음)는 이 트리에서 `tools/make_db_skeleton.py`가 만든다.

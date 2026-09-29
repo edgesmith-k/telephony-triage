@@ -10,7 +10,8 @@
 - 모드: **사외 초안** (`.local-draft` 있음)
 - 완료 Phase: **D0, 1** (2026-09-28), **2, 3, 4, 5, 6** (2026-09-29)
 - 완료 Phase 추가: **7** (2026-09-29, 사용자 확인 후 커밋)
-- 다음 Phase: **8** (git hooks·Claude hooks)
+- 완료 Phase 추가: **8** (2026-09-29, 사용자 확인 후 커밋. "Phase 8 구현에서 정한 세부"의 계약 반영 여부는 미결)
+- 다음 Phase: **9** (스키마 마이그레이션)
 - Phase 2~6은 사용자가 미리 승인해서 Phase마다 확인을 기다리지 않고 진행했다(각 Phase 끝에 커밋·push). 완료 기준 점검 결과는 Phase별 절에 있다. **Phase 7부터는 다시 Phase마다 사용자 확인을 받는다.**
 - 기준 문서 세트: `telephony-triage-docs-v11` (`CHANGES.md` 참고)
 - 레포 루트: 이 파일이 있는 디렉토리 (`CLAUDE.md`, `docs/design/`, `plugin/`,
@@ -505,6 +506,88 @@
 | 4 | `stage` 7번에 `db_add check-ids`가 있는데 계약 목록에는 없다 (`07-workflow.md §Step 8`에는 있다) | **계약에 추가** (코드 유지). 기준 SHA에 다른 PR의 ID가 먼저 들어왔을 때 stage에서 잡아야 한다 | `contracts.md §3.2` stage 7번 |
 | 5 | `preflight`의 `ahead_of_remote`가 bool이 아니라 커밋 수(원격 브랜치가 없으면 `origin/<base>` 기준) | 유지. 0이면 false로 읽으면 되고 확인 화면에 수를 보여줄 수 있다 | (기록만) |
 
+### Phase 8에서 만든 것
+
+| 산출물 | 경로 |
+|---|---|
+| git pre-commit | 이슈 DB `.githooks/pre-commit` (`#!/bin/sh`: config의 `plugin.scripts_path`에서 `db_precommit.py`를 찾아 `--db "$(git rev-parse --show-toplevel)"`로 실행. config·경로가 없거나 무효하면 차단하고 setup·CONTRIBUTING 안내) |
+| git pre-push | 이슈 DB `.githooks/pre-push` (`#!/bin/sh` + python3: base 브랜치 대상 거부, `TT_PUBLISH_TOKEN` 없음 거부, `manual` 통과, 그 밖은 `<work_dir>/*/state.json`의 `approved_hash`와 대조) |
+| pre-commit 오케스트레이터 | `plugin/scripts/db_precommit.py` (`config.py check --for dry-run` → `.cache/` → `db_lint`·`mask_pii --check`·`db_regress` `--staged` → 규칙 변경이면 `db_verify rules --staged` → `db_build --verify --staged`(`actions-build`면 생성 파일 staged 거부)) |
+| Claude hook 판정 | `plugin/scripts/guard.py` (규칙 2~8, 레포 판별, 최선 노력 명령 파싱, Write/Edit 경로 판정) |
+| hook 등록 | `plugin/hooks/hooks.json` (SessionStart `config.py sync-scripts-path`, PreToolUse `mcp__.*`·`Bash`·`Write\|Edit\|MultiEdit\|NotebookEdit` → `guard.py`) |
+| Phase 8 테스트 | `tests/test_hooks.py` (12개) |
+
+### Phase 8 완료 기준 확인 결과
+
+`python3 tests/test_hooks.py` — **12개 전부 통과**. 전체 결과는 아래 "반입 체크리스트 상태".
+Claude hook은 `guard.py`에 hook 입력 JSON을 직접 넣어 시험했다. **실제 Claude Code 세션에서 hooks.json이 로드되고
+결정 필드가 먹는지는 빈 플러그인 실험(S1) 미확인**이다.
+
+| 완료 기준 | 확인 | 어디서 |
+|---|---|---|
+| 수동 편집한 README 커밋 차단 (pre-commit) | ✅ ("db_build.py --write" 안내) | `test_precommit_blocks_manual_readme_pii_and_bad_scripts_path` |
+| PII가 든 커밋 차단 (pre-commit, guard 규칙 3) | ✅ (마스킹된 토큰은 통과) | 같은 테스트, `test_guard_commit_checks_pii_and_generated_files` |
+| `plugin.scripts_path` 무효 → 차단과 안내 (무효 경로·키 없음·config 없음) | ✅ | 같은 테스트 |
+| `--no-verify`/`-n`/`-anm`/`--no-veri`(약어)/`-c core.hooksPath=` 우회 차단 | ✅ | `test_guard_blocks_hook_bypass_and_hookspath_changes` |
+| `core.hooksPath` 변경·해제 차단(`--unset`, `unset`, 다른 값, 빈 값, `--remove-section core`), 정확히 `.githooks` 설정은 허용 → setup 재실행(`install-hooks`) 통과 | ✅ | 같은 테스트 |
+| `core.hooksPath`가 unset·다른 값(`hooks`, `.githooks/`)이면 이슈 DB 커밋 차단 | ✅ | `test_guard_commit_requires_exact_hookspath` |
+| worktree에서 커밋하면 그 worktree가 검사됨 | ✅ (clone에 staged로 남은 망가진 README를 보지 않고, worktree의 README 수정은 차단) | `test_precommit_in_worktree_checks_that_worktree` |
+| read_tools에 없는 Jira 서버 도구 거부, 다른 MCP 서버 무영향 | ✅ (`mock-jira-2`처럼 접두어가 비슷한 서버도 무영향, read_tools 비면 전부 거부, mcp_server 없으면 경고만) | `test_guard_jira_read_only_by_server` |
+| `cd <이슈 DB> && git commit --no-verify` 차단 | ✅ (`git -C`, `bash -c "cd … && …"`도) | `test_guard_blocks_hook_bypass_and_hookspath_changes` |
+| `git push origin HEAD:refs/heads/main` 차단 | ✅ (`main`, `+HEAD:main`, `--all`, `:`, `--delete … main`, main에서 인자 없는 `git push`) | `test_guard_push_rules` |
+| `python -c`로 한 main push는 guard를 지나치지만 pre-push가 거부 | ✅ | `test_prepush_token_and_base_branch` |
+| `TT_PUBLISH_TOKEN` 없이 push → pre-push 거부, `db_pr publish` push와 `manual` 통과 | ✅ (틀린 토큰, 승인 토큰으로 다른 브랜치·다른 트리 push도 거부) | 같은 테스트 (+ Phase 7 테스트 전체가 실제 hook으로 publish 경로 통과) |
+| Write로 사용자 clone 안 `type.md` 쓰기 거부, `<work_dir>/<키>/wt/` 허용 | ✅ (Edit·MultiEdit·NotebookEdit, 상대 경로, draft·스냅샷도 허용) | `test_guard_blocks_file_tools_in_user_clone_only` |
+| config가 없으면 git 규칙 미적용 | ✅ | `test_guard_ignores_other_repos_and_missing_config` |
+| 다른 레포에서는 어떤 git hook 규칙도 동작 안 함 | ✅ (commit·push·config·`-c core.hooksPath`·파일 쓰기) | 같은 테스트 |
+| `TT_FORCE_VERIFY_EXIT=3` → pre-commit 경고 후 통과 | ✅ ("승인 필요 … needs-approval" 경고, 커밋 성공) | `test_precommit_needs_approval_warns_and_passes` |
+| (그 밖) 이슈 DB push·`db_pr.py publish`는 `ask` | ✅ | `test_guard_push_rules` |
+
+### Phase 8에서 바꾼 이전 산출물
+
+| 대상 | 무엇을 | 왜 |
+|---|---|---|
+| `tests/fixtures/issue-db-sample/.githooks/pre-commit`·`pre-push` | Phase 1 스텁을 실제 hook으로 | Phase 8 할 일. 뼈대(`make_db_skeleton.py`)도 이것을 복사한다 |
+| `plugin/scripts/db_verify.py` `rules --staged` | index를 임시 디렉토리로 꺼내 검사 | 뼈대는 `--staged`에서도 워킹 트리로 회귀를 돌렸다 → pre-commit이 unstaged 변경을 보게 된다(계약 "`--staged`는 index 기준" 위반) |
+| `tests/helpers/workspace.py` | 생성 파일 커밋·main push를 hook 설치 **전**으로, `sync-scripts-path`(setup 2) 추가, 커밋은 `hook_env()`로 | 실제 pre-push가 main push를, pre-commit이 config 없는 커밋을 막는다 |
+| `tests/test_db_pr.py` | 테스트가 직접 하는 커밋(`clone`·`wt`)에 `env=ws.hook_env()` | pre-commit이 테스트용 config를 읽게 |
+| `tests/fixtures/README.md`, `tools/make_db_skeleton.py`, `tests/test_mocks.py` | "스텁" 표기 갱신 | 상태 표기 |
+| `tests/fixtures/issue-db-{dup-id,empty-category,lint-errors,pending}/.githooks/` | `make_variant_dbs.py`로 다시 생성 | 샘플에서 만드는 변형 트리다 (`test_variant_trees_match_builder`) |
+
+### Phase 8 구현에서 정한 세부 (계약 보완 후보)
+
+- **guard는 `site-defaults.yaml`이 없어도 멈추지 않는다**: 계약은 "없으면 모든 스크립트가 종료 코드 2"다. 그런데 guard는
+  모든 Bash·파일·MCP 도구 호출에 걸리는 PreToolUse hook이라 2로 끝나면(= 차단) 이슈 DB와 무관한 작업까지 막힌다.
+  그래서 경고만 내고 사용자 config만으로 판정한다. 이때 커밋 검사(규칙 3·4)가 부르는 스크립트가 2를 내므로 이슈 DB
+  커밋은 결국 거부된다. → `contracts.md §3.2` 설정 읽기에 "guard.py 제외"를 넣을지 확인 필요.
+- **pre-push 토큰 검사를 계약보다 조금 강하게**: 계약은 "토큰이 `state.json`의 `approved_hash`와 같은지". 구현은 그 밖에
+  (1) push하는 커밋의 트리 = 토큰, (2) 대상 브랜치 = 그 `state.json`의 `branch`, (3) 토큰으로 원격 ref 삭제 불가를 본다.
+  pre-push는 작업 키를 모르므로 `<work_dir>/*/state.json` 전체에서 `approved_hash`가 같은 것을 찾는다.
+  `base_branch`·`work_dir`는 사용자 config(없으면 `main`, `<home>/work`)에서 읽는다. config가 없어도 검사한다(토큰 없으면 거부).
+- **pre-push는 플러그인 스크립트에 기대지 않는다**: 이슈 DB 안의 자기완결 스크립트(sh + python3 + pyyaml)다. 계약 표에
+  pre-push용 스크립트가 없고, `plugin.scripts_path`가 무효해도 main push 차단은 동작해야 하기 때문이다.
+- **pre-commit 출력**: `db_precommit.py`는 사람이 읽는 요약을 stderr에, 결과 JSON을 stdout에 낸다. hook 스크립트는 stdout을
+  버린다. hook은 `--plugin-root "$(dirname "$scripts_path")"`를 넘긴다(git이 부른 프로세스에 `CLAUDE_PLUGIN_ROOT`가
+  남아 있어도 config가 가리키는 플러그인을 쓰게).
+- **`db_precommit`의 검사 순서·종료 코드**: 위 "만든 것" 순서. 하위에 1이 있으면 1, 2(실행 불가)가 있으면 2, 3만 있으면
+  경고 후 0. 스키마·생성기 버전 불일치는 `config.py check --for dry-run`으로 막는다(06 §6.4 "직접 편집 브랜치의
+  pre-commit"). `migrate/schema-v<N>` 브랜치에서 생성기 버전 불일치로 `db_build --verify`가 2를 내면 경고로 바꾼다.
+  "규칙 변경"은 staged에 `parser-rules/*.yaml`, `<cat>/<유형>/type.md`, `fixtures/*.expect.yaml`이 있을 때다.
+- **hooks.json**: PreToolUse는 matcher 3개(`mcp__.*`, `Bash`, 파일 도구)가 모두 같은 `guard.py`를 부른다. 규칙 3~7(Bash
+  5종)은 한 번의 guard 호출에서 모두 판정한다(명령을 한 번만 파싱, 결정은 deny > ask). "8종"은 규칙 수다.
+  SessionStart는 `config.py sync-scripts-path >/dev/null`(stdout이 세션 컨텍스트에 들어가지 않게). timeout은 Bash 180초
+  (커밋 검사가 mask·build를 돈다), 나머지 30초.
+- **guard 결정**: 허용일 때는 아무것도 내지 않는다(`allow`를 내면 사용자 권한 설정을 건너뛴다). push·`db_pr.py publish`는
+  `ask`, 규칙 위반은 `deny`. guard 내부 예외는 MCP 도구면 `deny`(Jira 쓰기 차단은 guard가 유일한 장치), 그 밖은 통과
+  (git hook이 진짜 강제).
+- **명령 파싱 범위**: `;` `&&` `||` `|` `&` `(` `)` 줄바꿈으로 나눔, heredoc 본문 제외, 앞의 `VAR=값`·`env`·`command`·
+  `exec`·`time`·`nohup` 제거, `cd`/`pushd` 추적, `sh|bash|zsh|dash|ksh -c` 안쪽(중첩 3단계까지), `git -C`·`--git-dir=`.
+  커밋 옵션: `--no-verify`의 약어(`--no-v` 이상), 짧은 옵션 묶음 안의 `n`(`-m`·`-F`·`-C`·`-c`·`-t` 값 앞까지).
+  push: `--no-verify` 금지(pre-push 우회), `--all`/`--mirror`/`--branches`와 matching(`:`) 거부, refspec 대상이 base면 거부,
+  refspec이 없거나 `HEAD`면 현재 브랜치. config: `core.hooksPath` 키는 대소문자 무시, 쓰기는 값이 정확히 `.githooks`일
+  때만, `--edit`·`core` 섹션 삭제·이름 변경 거부. `git -c core.hooksPath=…`는 커밋이 아니어도 이슈 DB면 거부.
+- **파일 규칙**: 대상 경로를 cwd 기준으로 절대화하고 realpath·normcase로 비교한다. `work_dir` 아래는 clone 안에 있어도 허용.
+
 ## 개발 환경과 설계의 차이 (중요)
 
 설계는 실행 환경을 **Ubuntu(Linux)** 로 못박는다 (`01-architecture.md §3`,
@@ -719,7 +802,7 @@ Windows 전용 보정은 커밋하지 않는다.**
 
 | 항목 | 상태 |
 |---|---|
-| 전체 테스트 통과 | 🟡 D0·Phase 1~7 범위 (`pytest tests` 153개, 샘플 `db_regress --all` 20개 통과). eval은 Phase 13 뒤 |
+| 전체 테스트 통과 | 🟡 D0·Phase 1~8 범위 (`pytest tests` 165개, 샘플 `db_regress --all` 20개 통과). eval은 Phase 13 뒤 |
 | 사내 정보 없음 | ✅ 사내 자료를 쓰지 않았다 |
 | `plugin/site-defaults.yaml` 없고 example만 있음 | ✅ `test_plugin_root_helper_and_missing_site_defaults`가 검사 |
 | `SITE_PATHS`의 다른 경로가 비어 있음 | ✅ `test_site_paths_are_absent_in_draft`가 검사 |
@@ -737,11 +820,12 @@ Windows 전용 보정은 커밋하지 않는다.**
    (`tests/mocks/plugin-probe/README.md`). 커맨드 파일 형식(`plugin/commands/setup.md`), `${CLAUDE_PLUGIN_ROOT}`
    치환, MCP 도구 이름 형식이 여기에 걸려 있다.
 3. (선택, 사내) **S-0 선행 확인**: `parse_logcat.py`, `match_signatures.py`, `mask_pii.py`를 사내 실제 로그로.
-4. **Phase 7 확인**: 위 "Phase 7 완료 기준 확인 결과"와 "Phase 7 구현에서 정한 세부"를 사용자에게 확인받고 커밋한다
-   (`git add` 뒤 `python3 tools/fix_exec_bits.py`로 새 스크립트 실행 비트를 맞춘다).
-5. **Phase 8** (git hooks·Claude hooks): `docs/design/11-phases.md` Phase 8 절과 그 "읽을 문서"를 읽는다.
-   - 이미 있는 부품: `db_pr publish`의 `TT_PUBLISH_TOKEN`·`state.json`(`approved_hash`), 이슈 DB `.githooks/` 스텁,
-     `tests/helpers/workspace.py`(쓰기 경로 테스트 환경).
+4. **Phase 8 세부 결정**: "Phase 8 구현에서 정한 세부"(guard의 site-defaults 예외, pre-push 토큰 검사 강화)를
+   `contracts.md`에 반영할지 사용자에게 묻는다.
+5. 빈 플러그인 실험(2번)에서 **`plugin/hooks/hooks.json`도 함께 확인**한다: 플러그인 hook 로드, `mcp__.*` matcher,
+   `permissionDecision` deny/ask, SessionStart, hook 입력의 `tool_name` 형식(`guard.py`의 TODO(SITE:S1·S3)).
+6. **Phase 9** (스키마 마이그레이션): `docs/design/11-phases.md` Phase 9 절과 그 "읽을 문서"를 읽는다.
+   - 이미 있는 부품: `config.py check`·`db_precommit`·guard의 `migrate/schema-v<N>` 브랜치 예외.
 
 ### 사용자 확인이 필요한 항목 (Phase 2~6에서 쌓임)
 

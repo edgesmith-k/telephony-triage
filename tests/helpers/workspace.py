@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -23,14 +24,19 @@ PLANS = REPO / "tests" / "fixtures" / "plans"
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import make_repo  # noqa: E402
+import mock_env  # noqa: E402
 from runner import SAMPLE, plugin_root, run, tmp  # noqa: E402
 
 GIT_ID = ["-c", "user.name=Mock User", "-c", "user.email=mock-user@ghe.mock.invalid"]
 
 
-def git(repo: Path, *args: str, check: bool = True) -> str:
+def git(repo: Path, *args: str, check: bool = True, env: dict | None = None) -> str:
+    full_env = None
+    if env:
+        full_env = dict(os.environ)
+        full_env.update({k: str(v) for k, v in env.items()})
     proc = subprocess.run(["git", "-C", str(repo), *GIT_ID, *args], capture_output=True, text=True,
-                          encoding="utf-8", errors="replace")
+                          encoding="utf-8", errors="replace", env=full_env)
     if check and proc.returncode != 0:
         raise AssertionError(f"git {' '.join(args)}: {proc.stderr}")
     return proc.stdout.strip()
@@ -52,12 +58,13 @@ class Workspace:
             "issue_db.remote": "https://ghe.mock.invalid/mock-org/telephony-issue-db.git",
             "work_dir": str(self.work)}), encoding="utf-8")
         self.json("config.py", ["init", "--answers", answers])
-        self.json("config.py", ["install-hooks", "--db", self.clone])
-        if build:   # 운영 이슈 DB처럼 main에 생성 파일이 커밋돼 있게 한다
+        self.json("config.py", ["sync-scripts-path"])   # setup 2: git pre-commit hook이 쓴다
+        if build:   # 운영 이슈 DB처럼 main에 생성 파일이 커밋돼 있게 한다 (hook 설치 전: 원격 main 준비)
             self.json("db_build.py", ["--write", "--db", self.clone])
             git(self.clone, "add", "-A")
             git(self.clone, "commit", "-q", "-m", "생성 파일 (테스트 헬퍼)")
             git(self.clone, "push", "-q", "origin", "main")
+        self.json("config.py", ["install-hooks", "--db", self.clone])
 
     # 스크립트 ---------------------------------------------------------------------------
 
@@ -129,8 +136,14 @@ class Workspace:
         wt = self.wt(job)
         msg = message or json.loads((self.job_dir(job) / "state.json").read_text(encoding="utf-8"))["commit_message"]
         git(wt, "add", "-A")
-        git(wt, "commit", "-q", "-m", msg)
+        git(wt, "commit", "-q", "-m", msg, env=self.hook_env())   # .githooks/pre-commit이 돈다
         return git(wt, "rev-parse", "HEAD")
+
+    def hook_env(self, **extra) -> dict:
+        """git hook이 이 작업공간의 사용자 config를 읽게 하는 환경 (PATH의 gh 스텁 포함)."""
+        env = mock_env.env_with_mocks(plugin_root=self.root, gh_state_dir=self.gh_state)
+        env.update({k: str(v) for k, v in self.env(**extra).items()})
+        return env
 
     def ship(self, job: str, branch: str, lease: str = "new", discard: bool = True) -> dict:
         """stage → summary → 커밋 → publish (→ discard)."""

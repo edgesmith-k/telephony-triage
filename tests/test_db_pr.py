@@ -340,7 +340,7 @@ def test_user_clone_is_untouched_and_discard_cleans_up():
     git(clone, "checkout", "-q", "-b", "issue/MOCK-7001")
     (clone / "note.txt").write_text("사용자 로컬 커밋\n", encoding="utf-8")
     git(clone, "add", "-A")
-    git(clone, "commit", "-q", "-m", "사용자 로컬 작업")
+    git(clone, "commit", "-q", "-m", "사용자 로컬 작업", env=ws.hook_env())
     (clone / "wip.txt").write_text("커밋 안 한 작업\n", encoding="utf-8")
     before = {"head": git(clone, "rev-parse", "HEAD"), "branch": git(clone, "rev-parse", "--abbrev-ref", "HEAD"),
               "status": git(clone, "status", "--porcelain"), "user": git(clone, "rev-parse", "issue/MOCK-7001")}
@@ -592,16 +592,16 @@ def test_publish_rejects_changes_after_approval():
     ws.commit("MOCK-7001")
     (wt / "x.txt").write_text("둘째 커밋\n", encoding="utf-8")
     git(wt, "add", "-A")
-    git(wt, "commit", "-qm", "둘째")
+    git(wt, "commit", "-qm", "둘째", env=ws.hook_env())
     out = ws.db_pr(*publish, expect=1)
     assert any("커밋 하나" in p for p in out["problems"])
 
     git(wt, "reset", "-q", "--hard", "HEAD^")
     message = json.loads((ws.job_dir("MOCK-7001") / "state.json").read_text(encoding="utf-8"))["commit_message"]
-    git(wt, "commit", "-q", "--amend", "-m", "다른 메시지")
+    git(wt, "commit", "-q", "--amend", "-m", "다른 메시지", env=ws.hook_env())
     out = ws.db_pr(*publish, expect=1)
     assert any("커밋 메시지" in p for p in out["problems"])
-    git(wt, "commit", "-q", "--amend", "-m", message)
+    git(wt, "commit", "-q", "--amend", "-m", message, env=ws.hook_env())
     bad_branch = list(publish)
     bad_branch[3] = "issue/OTHER-1"
     out = ws.db_pr(*bad_branch, expect=1)
@@ -611,13 +611,13 @@ def test_publish_rejects_changes_after_approval():
     git(wt, "checkout", "-q", "--detach", "HEAD^")
     (wt / "side.txt").write_text("옆 가지\n", encoding="utf-8")
     git(wt, "add", "-A")
-    git(wt, "commit", "-qm", "옆 가지")
+    git(wt, "commit", "-qm", "옆 가지", env=ws.hook_env())
     side = git(wt, "rev-parse", "HEAD")
     git(wt, "checkout", "-q", "tt/issue/MOCK-7001")
     git(wt, "reset", "-q", "--hard", "HEAD^")
-    git(wt, "merge", "-q", "--no-ff", "-m", message, side)
+    git(wt, "merge", "-q", "--no-ff", "-m", message, side, env=ws.hook_env())
     git(wt, "rm", "-q", "--cached", "side.txt")
-    git(wt, "commit", "-q", "--amend", "--no-edit")   # 트리는 승인 트리와 같게, 부모만 둘
+    git(wt, "commit", "-q", "--amend", "--no-edit", env=ws.hook_env())   # 트리는 승인 트리와 같게, 부모만 둘
     out = ws.db_pr(*publish, expect=1)
     assert any("머지 커밋" in p for p in out["problems"])
     git(wt, "reset", "-q", "--hard", good)

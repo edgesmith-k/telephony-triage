@@ -9,7 +9,7 @@
 5. `make_plugin_root.py`가 만든 루트에는 `site-defaults.yaml`이 있고,
    개발 레포 `plugin/`에는 없다
 6. `plugin/`을 직접 `${CLAUDE_PLUGIN_ROOT}`로 주면 `config.py`가 종료 코드 2
-7. `.githooks/pre-commit`·`pre-push` 스텁이 실행 비트(100755)와 함께 커밋된다
+7. `.githooks/pre-commit`·`pre-push`(Phase 8부터 실제 hook)가 실행 비트(100755)와 함께 커밋된다
 8. 레포 루트에 `.mcp.json`이 없다 (모의 MCP는 `tests/mocks/mcp.json`)
 
 재반입(`tools/import_draft.py`)은 `tests/test_import_draft.py`,

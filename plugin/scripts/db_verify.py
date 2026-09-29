@@ -10,6 +10,7 @@ R6은 `skipped`를 낸다. `not-implemented`는 종료 코드에 영향을 주�
     db_verify.py resolution --cause <ID> <logcat...> [--plan <plan.json> --draft <dir>]   (Phase 10)
     db_verify.py fix --cause <ID> <logcat...> [--build <빌드>] [--plan <plan.json> --draft <dir>]   (Phase 10)
 
+- `--staged`: index 내용을 임시 디렉토리로 꺼내 검사한다(unstaged 변경 무시, pre-commit).
 - `--plan`만: `--db`에 계획이 이미 적용돼 있다고 보고 검사한다 (db_pr stage, Step 8-4).
 - `--plan --draft <dir>`: `<dir>`에 origin/<base> 기준 분리 worktree를 만들고 계획을 적용해 검사한 뒤 지운다
   (Step 7 초안). 세션 lock이 `<dir>` 상위 디렉토리 이름(작업 키)의 것이어야 한다.
@@ -26,12 +27,13 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS))
 
-from common import dbpath, site_defaults, userconfig  # noqa: E402
+from common import dbpath, gitscope, site_defaults, userconfig  # noqa: E402
 from common.exitcodes import CHECK_FAILED, NEEDS_APPROVAL, OK, USAGE  # noqa: E402
 
 NOT_YET = "Phase 10에서 구현 (뼈대)"
@@ -89,6 +91,7 @@ def remove_draft(draft: Path, defaults: dict) -> None:
 
 def rules(args, defaults: dict) -> tuple[dict, int]:
     draft = None
+    index_dir = None
     if args.draft:
         if not args.plan:
             raise UsageError("--draft는 --plan과 함께 쓴다.")
@@ -98,6 +101,14 @@ def rules(args, defaults: dict) -> tuple[dict, int]:
         try:
             db = dbpath.resolve(args.db)
         except dbpath.DbPathError as exc:
+            raise UsageError(str(exc)) from exc
+    shown_db = db
+    if args.staged:   # index 내용으로 검사한다 (unstaged 변경 무시, pre-commit)
+        index_dir = Path(tempfile.mkdtemp(prefix="tt-verify-index-"))
+        try:
+            db = gitscope.materialize_index(db, index_dir / "db")
+        except gitscope.GitError as exc:
+            shutil.rmtree(index_dir, ignore_errors=True)
             raise UsageError(str(exc)) from exc
     try:
         if args.regress_json:
@@ -112,6 +123,8 @@ def rules(args, defaults: dict) -> tuple[dict, int]:
     finally:
         if draft is not None:
             remove_draft(draft, defaults)
+        if index_dir is not None:
+            shutil.rmtree(index_dir, ignore_errors=True)
     failed = [r for r in regress.get("results", []) if r.get("status") != "pass"]
     r4 = {"id": "R4", "status": "fail" if regress_code == CHECK_FAILED else "pass",
           "reason": (f"기대값이 깨진 fixture {len(failed)}개" if failed else
@@ -130,7 +143,7 @@ def rules(args, defaults: dict) -> tuple[dict, int]:
     code = CHECK_FAILED if "fail" in statuses else NEEDS_APPROVAL if "needs-approval" in statuses else OK
     if os.environ.get("TT_FORCE_VERIFY_EXIT") == "3" and code != CHECK_FAILED:
         code = NEEDS_APPROVAL
-    return {"db": str(db), "scope": scope, "skeleton": True, "rules": items,
+    return {"db": str(shown_db), "scope": scope, "skeleton": True, "rules": items,
             "regress": regress.get("summary")}, code
 
 
