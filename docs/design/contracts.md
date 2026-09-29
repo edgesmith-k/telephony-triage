@@ -72,7 +72,7 @@
 | | `discard <wt>` | 정리 결과 |
 | `db_precommit.py` | `--db <toplevel>` | 검사 요약 (git pre-commit hook 전용) |
 | `db_review.py` | `[category] [--out <file>]` | 리뷰 리포트 |
-| `db_migrate.py` | `--to <N> [--dry-run]` / `upgrade-plan <plan.json>` | 마이그레이션 결과 / 새 스키마로 올린 계획 (마이그레이션 모듈이 `upgrade_plan()`을 제공할 때만, 없으면 종료 코드 2). `--to`는 **`--db`의 워킹 트리를 직접 바꾼다**: `--db`가 이슈 DB clone이고 현재 브랜치가 `migrate/schema-v<N>`이며 깨끗할 때만 실행한다(아니면 종료 코드 2). 메인테이너가 자기 로컬 브랜치에서 직접 편집하는 흐름이므로 계획·worktree·lock을 쓰지 않는다 (`06-collaboration.md §6.4`) |
+| `db_migrate.py` | `--to <N> [--dry-run]` / `upgrade-plan <plan.json>` | 마이그레이션 결과 / 새 스키마로 올린 계획 (마이그레이션 모듈이 `upgrade_plan()`을 제공할 때만, 없으면 종료 코드 2). `--to`는 **`--db`의 워킹 트리를 직접 바꾼다**: `--db`가 이슈 DB clone이고 현재 브랜치가 `migrate/schema-v<N>`이며 깨끗할 때만 실행한다(아니면 종료 코드 2). 메인테이너가 자기 로컬 브랜치에서 직접 편집하는 흐름이므로 계획·worktree·lock을 쓰지 않는다 (`06-collaboration.md §6.4`). `--to <N>`은 플러그인 `SCHEMA_VERSION` ≥ N > 이슈 DB 버전일 때만(아니면 종료 코드 2), 현재 브랜치는 **정확히** `migrate/schema-v<N>`(`config.py check`의 예외는 `migrate/schema-v<숫자>` 패턴 전체). `--dry-run`은 브랜치·깨끗함을 보지 않고 아무것도 쓰지 않는다. 마이그레이션은 메모리에서 모두 적용한 뒤 한 번에 쓰므로 실패하면 트리가 그대로다. `schema_version`은 db_migrate가 올리고, `generator_version`은 `ci_mode`가 `actions-build`가 아니면 플러그인 값으로 함께 맞춘다(`db_build --write`가 두 값이 같아야 돌기 때문). 마이그레이션 모듈 계약: `FROM_VERSION`·`TO_VERSION`·`migrate(tree)`·(선택)`upgrade_plan(plan)`. `upgrade-plan`은 계획의 `schema_version`을 `--db`의 버전까지 올리고(`--write`면 원본을 `<plan>.v<옛 버전>.bak`으로 남기고 덮어씀), 그 사이 `upgrade_plan()`이 없는 마이그레이션이 있으면 종료 코드 2 |
 | `guard.py` | stdin: hook 입력 JSON | 권한 결정 JSON (`08-safety.md §9`) |
 
 `db_verify.py` 세부

@@ -380,3 +380,9 @@
 근거는 `DRAFT_NOTES.md` "Phase 8 구현에서 정한 세부". 사용자 확인 후 반영.
 - `guard.py`는 `site-defaults.yaml`이 없어도 종료 코드 2로 멈추지 않고 경고 후 사용자 config로 판정한다 → `contracts.md §3.2` 설정 읽기, `08-safety.md §9`.
 - `pre-push` 토큰 검사 강화: `<work_dir>/*/state.json`에서 토큰을 찾고, push 커밋 트리 = 토큰, 대상 브랜치 = 그 `state.json`의 `branch`, 원격 ref 삭제 불가. `base_branch`·`work_dir`는 사용자 config(없으면 기본값). 플러그인 스크립트 없이 동작 → `08-safety.md §9`, `contracts.md §3.2` publish.
+
+## 사외 초안 중 계약 보완 (Phase 9, 2026-09-29)
+
+근거는 `DRAFT_NOTES.md` "Phase 9 구현에서 정한 세부".
+- `db_migrate --to`: 플러그인 `SCHEMA_VERSION` 초과 거절, `--dry-run`은 브랜치 검사 없음, 메모리에서 모두 적용 후 한 번에 쓰기, `generator_version`(`actions-build` 제외) 자동 동기화, 마이그레이션 모듈 계약(`FROM_VERSION`·`TO_VERSION`·`migrate(tree)`·`upgrade_plan(plan)`), `upgrade-plan --write`의 `.bak` → `contracts.md §3.2`.
+- `06-collaboration.md §6.4`의 "직접 편집한 브랜치에서 `db_migrate --to <N>`" 안내를 "자기 변경분을 새 스키마 형식으로 직접 고친다"로 고침. `--to`는 `migrate/schema-v<N>` 브랜치에서만 돌므로 그 안내가 계약과 어긋났다.

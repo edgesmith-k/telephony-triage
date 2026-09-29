@@ -11,7 +11,8 @@
 - 완료 Phase: **D0, 1** (2026-09-28), **2, 3, 4, 5, 6** (2026-09-29)
 - 완료 Phase 추가: **7** (2026-09-29, 사용자 확인 후 커밋)
 - 완료 Phase 추가: **8** (2026-09-29, 사용자 확인 후 커밋. guard 예외·pre-push 검사 강화는 계약에 반영 — `CHANGES.md`)
-- 다음 Phase: **9** (스키마 마이그레이션)
+- 완료 Phase 추가: **9** (2026-09-29, 구현·테스트 완료, **사용자 확인 대기**)
+- 다음 Phase: **10** (`11-phases.md` Phase 10 절부터)
 - Phase 2~6은 사용자가 미리 승인해서 Phase마다 확인을 기다리지 않고 진행했다(각 Phase 끝에 커밋·push). 완료 기준 점검 결과는 Phase별 절에 있다. **Phase 7부터는 다시 Phase마다 사용자 확인을 받는다.**
 - 기준 문서 세트: `telephony-triage-docs-v11` (`CHANGES.md` 참고)
 - 레포 루트: 이 파일이 있는 디렉토리 (`CLAUDE.md`, `docs/design/`, `plugin/`,
@@ -589,6 +590,52 @@ Claude hook은 `guard.py`에 hook 입력 JSON을 직접 넣어 시험했다. **�
   때만, `--edit`·`core` 섹션 삭제·이름 변경 거부. `git -c core.hooksPath=…`는 커밋이 아니어도 이슈 DB면 거부.
 - **파일 규칙**: 대상 경로를 cwd 기준으로 절대화하고 realpath·normcase로 비교한다. `work_dir` 아래는 clone 안에 있어도 허용.
 
+### Phase 9에서 만든 것
+
+| 산출물 | 경로 |
+|---|---|
+| 마이그레이션 실행기 | `plugin/scripts/db_migrate.py` (`--to <N> [--dry-run]`, `upgrade-plan <plan.json> [--write]`) |
+| 예시 마이그레이션 v1→v2 | `plugin/scripts/migrations/0001_example_jira_tags.py` (Jira 스키마에 선택 필드 `tags` 추가 + 기존 Jira 파일에 `tags: []`, `upgrade_plan()`은 계획 그대로) |
+| `migrate` 커맨드 | `plugin/commands/migrate.md` (dry-run 미리보기 → 브랜치 준비 → 실행 → `db_build --write` → validate → 커밋·push 안내) |
+| v2 플러그인 루트 헬퍼 | `tests/helpers/runner.py:versioned_root(schema=, generator=)` (임시 루트의 `versions.py`를 고침) |
+| Phase 9 테스트 | `tests/test_db_migrate.py` (16개) |
+
+### Phase 9 완료 기준 확인 결과
+
+`pytest tests` — **181개 전부 통과**(Phase 9 16개 포함).
+
+| 완료 기준 | 확인 | 어디서 |
+|---|---|---|
+| 예시 마이그레이션이 샘플 DB를 새 버전으로 올림 | ✅ (config v2, Jira 파일 전부 `tags: []`, 새 스키마로 검증, 두 번째 실행은 "이미 v2") | `test_example_migration_upgrades_sample`, `test_already_current_and_second_run` |
+| `migrate/schema-v<N>`에서 `migrate --to <N>` 뒤 `config.py check`·pre-commit·validate 통과 | ✅ (validate 스크립트: `db_lint --changed`·`db_regress --all`·`db_build --verify`. 마이그레이션 전에도 이 브랜치는 버전을 안 본다) | `test_migrate_branch_passes_check_precommit_and_validate` |
+| 다른 브랜치 이름에서 `--to`는 종료 코드 2, 버전 불일치는 계속 차단 | ✅ (`feature/x`, `migrate/schema-v3`(`--to 2`), `migrate/ci-actions`, `migrate/schema-v2-extra`. 워킹 트리 그대로) | `test_other_branch_names_exit_2_and_stay_blocked` |
+| `db_add apply`가 옛 `schema_version` 계획을 거부(종료 코드 2) | ✅ (메시지에 `upgrade-plan` 안내) | `test_apply_rejects_old_schema_plan` |
+| `upgrade-plan`으로 올린 계획을 `sync-pr`가 새 스키마에 재적용 | ✅ (v1로 올린 PR → main에 v2 머지 → `stage`는 2로 거부 → `upgrade-plan --write` → `stage`·커밋·`publish` 성공, PR 브랜치 config v2) | `test_sync_pr_reapplies_upgraded_plan_on_new_schema` |
+| 스키마 범위 밖·generator 불일치(local)는 `migrate/schema-v<N>` 말고 모든 쓰기 차단 | ✅ (too-old·too-new·generator-mismatch 모두 main/other에서 차단, migrate 브랜치는 통과, `actions-build`는 generator 영향 없음) | `test_migrate_branch_passes_...`, `test_too_new_schema_blocked_except_on_migrate_branch`, `test_generator_mismatch_blocked_except_on_migrate_branch` |
+| (그 밖) 더러운 트리·untracked, clone 최상위 아님, 지원 안 하는 N, 체인 끊김, 다운그레이드, 마이그레이션 예외 → 종료 코드 2, 트리 그대로 | ✅ | `test_dirty_tree_...`, `test_db_must_be_clone_toplevel`, `test_plugin_version_and_missing_chain_exit_2`, `test_downgrade_and_broken_migration_leave_tree_untouched` |
+| (그 밖) `upgrade-plan`: `--write` 백업, 이미 현재면 `current`, 계획이 DB보다 새로우면·`upgrade_plan()`이 없으면 2 | ✅ | `test_upgrade_plan_cli`, `test_upgrade_plan_refuses_without_upgrade_fn_or_newer_plan` |
+
+### Phase 9에서 바꾼 이전 산출물
+
+| 대상 | 무엇을 | 왜 |
+|---|---|---|
+| `docs/design/06-collaboration.md §6.4` | "직접 편집한 브랜치는 자기 브랜치에서 `db_migrate.py --to <N>`" → 새 스키마 형식으로 직접 고침 | `--to`는 `migrate/schema-v<N>`에서만 돌아서 계약(`contracts.md §3.2`)과 어긋났다 |
+| `docs/design/contracts.md §3.2` `db_migrate` 행 | 아래 "구현에서 정한 세부" 반영 | 계약 보완 (`CHANGES.md`) |
+| `plugin/scripts/db_migrate.py` | 워킹 트리에 있던 미추적 파일을 새로 씀 | 이전 세션의 미완성 상태 |
+
+### Phase 9 구현에서 정한 세부 (계약 보완 후보)
+
+- **`--to N > 플러그인 SCHEMA_VERSION`은 거절(종료 코드 2)**: 배포 플러그인이 v1이면 v2 DB를 만들어도 자기가 못 읽는다. 그래서 예시 마이그레이션(v1→v2)은
+  **v2로 고친 임시 플러그인 루트**로만 시험한다. 실제 첫 마이그레이션이 생기면 그 PR이 `SCHEMA_VERSION`을 함께 올리고 예시 파일은 지운다.
+- **`--dry-run`은 브랜치·깨끗함을 보지 않는다**(아무것도 안 쓰므로). 실제 실행만 정확한 브랜치 이름 `migrate/schema-v<N>` + 깨끗한 트리 + clone 최상위를 요구한다.
+  `config.py check`의 예외는 `migrate/schema-v<숫자>` 패턴 전체라 `migrate/schema-v3`에서는 `--to 2`가 2를 내도 check는 통과한다(이름만 본다는 계약 그대로).
+- **메모리에서 모두 적용 후 한 번에 쓴다**: 마이그레이션이 던지면 트리는 그대로. 마이그레이션은 `tree.read/write/delete/exists/glob`만 본다(`.git`·`.cache` 쓰기 금지).
+- **`generator_version` 동기화**: `db_build --write`가 두 버전이 같아야 돌므로 `--to`가 `ci_mode != actions-build`일 때 `generator_version`도 플러그인 값으로 맞춘다.
+- **`upgrade_plan()`은 `schema_version`을 안 건드린다**: db_migrate가 단계마다 `TO_VERSION`으로 올린다. 어느 단계에든 `upgrade_plan()`이 없으면 전체가 2(계획을 다시 만든다).
+- **`upgrade-plan`의 대상 버전은 `--db`의 `schema_version`**(sync-pr는 `<work_dir>/_snapshot`)이다. lock·worktree를 만들지 않는다.
+- **`migrate` 커맨드는 `db_pr`를 부르지 않는다**(계획·lock·PR 없음). push는 안내만 한다.
+- **테스트 인프라**: 플러그인이 새 버전이 되면 git pre-commit hook이 보는 `plugin.scripts_path`도 새 루트여야 한다(`config.py sync-scripts-path`). sync-pr 테스트가 이를 다시 실행한다. 실제 사용자는 SessionStart hook이 한다.
+
 ## 개발 환경과 설계의 차이 (중요)
 
 설계는 실행 환경을 **Ubuntu(Linux)** 로 못박는다 (`01-architecture.md §3`,
@@ -803,7 +850,7 @@ Windows 전용 보정은 커밋하지 않는다.**
 
 | 항목 | 상태 |
 |---|---|
-| 전체 테스트 통과 | 🟡 D0·Phase 1~8 범위 (`pytest tests` 165개, 샘플 `db_regress --all` 20개 통과). eval은 Phase 13 뒤 |
+| 전체 테스트 통과 | 🟡 D0·Phase 1~9 범위 (`pytest tests` 181개, 샘플 `db_regress --all` 20개 통과). eval은 Phase 13 뒤 |
 | 사내 정보 없음 | ✅ 사내 자료를 쓰지 않았다 |
 | `plugin/site-defaults.yaml` 없고 example만 있음 | ✅ `test_plugin_root_helper_and_missing_site_defaults`가 검사 |
 | `SITE_PATHS`의 다른 경로가 비어 있음 | ✅ `test_site_paths_are_absent_in_draft`가 검사 |
@@ -823,8 +870,7 @@ Windows 전용 보정은 커밋하지 않는다.**
 3. (선택, 사내) **S-0 선행 확인**: `parse_logcat.py`, `match_signatures.py`, `mask_pii.py`를 사내 실제 로그로.
 4. 빈 플러그인 실험(2번)에서 **`plugin/hooks/hooks.json`도 함께 확인**한다: 플러그인 hook 로드, `mcp__.*` matcher,
    `permissionDecision` deny/ask, SessionStart, hook 입력의 `tool_name` 형식(`guard.py`의 TODO(SITE:S1·S3)).
-5. **Phase 9** (스키마 마이그레이션): `docs/design/11-phases.md` Phase 9 절과 그 "읽을 문서"를 읽는다.
-   - 이미 있는 부품: `config.py check`·`db_precommit`·guard의 `migrate/schema-v<N>` 브랜치 예외.
+5. **Phase 10**: `docs/design/11-phases.md` Phase 10 절과 그 "읽을 문서"를 읽는다. (Phase 9 완료: `db_migrate.py`, `migrate` 커맨드.)
 
 ### 사용자 확인이 필요한 항목 (Phase 2~6에서 쌓임)
 

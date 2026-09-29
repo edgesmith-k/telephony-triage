@@ -153,7 +153,7 @@ v1에서 도구는 이런 브랜치를 바꾸지 않는다. `sync-pr`는 아래 
 - 마이그레이션은 플러그인 `scripts/migrations/NNNN_<설명>.py`로 작성한다. 절차는 **직접 편집 브랜치**다(계획 op로 표현할 수 없는 변경이므로, 6.3 "계획이 없는 브랜치"): 메인테이너가 자기 clone에서 `git switch -c migrate/schema-v<N>` → `/telephony-triage:migrate --to <N>`(그 브랜치의 워킹 트리를 직접 바꾼다) → `db_build --write` → `/telephony-triage:validate` → 커밋 → push → PR. op 형식이 바뀌는 마이그레이션은 옛 계획을 새 형식으로 바꾸는 `upgrade_plan()`을 함께 제공한다.
 - 마이그레이션 PR을 머지하기 전에 열린 PR을 가능한 한 머지하거나 닫고, 머지되는 동안 다른 PR 머지를 멈춘다 (공지). 머지 후 남은 PR은 이렇게 올린다:
   - 계획이 있는 PR: 작업 계획의 `schema_version`이 다르므로 `db_add apply`가 거부한다. `sync-pr`가 `db_migrate upgrade-plan`으로 계획을 올린 뒤 재적용한다. `upgrade_plan()`이 없으면 analyze/record를 다시 해서 계획을 새로 만든다.
-  - 직접 편집한 브랜치: 작성자가 rebase한 뒤 자기 브랜치에 `db_migrate.py --to <N>`을 실행하고 `validate` 후 push한다.
+  - 직접 편집한 브랜치: 작성자가 rebase한 뒤 자기 변경분(새로 만든 파일)을 새 스키마 형식으로 직접 고치고 `validate` 후 push한다. `db_migrate --to`는 `migrate/schema-v<N>` 브랜치에서만 실행되고 main이 이미 v<N>이면 바꿀 것이 없으므로 쓰지 않는다.
 - 플러그인 릴리스 노트에 지원 스키마 범위와 생성기 버전을 적는다.
 
 ### 6.5 시그니처 품질 피드백

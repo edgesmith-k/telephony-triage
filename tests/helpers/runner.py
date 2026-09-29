@@ -40,6 +40,25 @@ def plugin_root(kind: str = "plain", **defaults) -> Path:
     return _ROOTS[key]
 
 
+def versioned_root(schema: int | None = None, generator: int | None = None) -> Path:
+    """`common/versions.py`의 SCHEMA_VERSION·GENERATOR_VERSION을 고친 임시 플러그인 루트 (스크립트는 서브프로세스로 돌아
+    monkeypatch가 닿지 않으므로 루트 복사본을 고친다). 종류별로 한 번만 만든다."""
+    key = f"versioned-{schema}-{generator}"
+    if key not in _ROOTS or not _ROOTS[key].is_dir():
+        root = make_plugin_root.make(with_site_backend=True)
+        path = root / "scripts" / "common" / "versions.py"
+        text = path.read_text(encoding="utf-8")
+        for name, value in (("SCHEMA_VERSION", schema), ("GENERATOR_VERSION", generator)):
+            if value is not None:
+                assert f"{name} = " in text
+                lines = [f"{name} = {value}" if line.startswith(f"{name} = ") else line
+                         for line in text.splitlines()]
+                text = "\n".join(lines) + "\n"
+        path.write_text(text, encoding="utf-8")
+        _ROOTS[key] = root
+    return _ROOTS[key]
+
+
 def run(script: str, args: list[str], root: Path | None = None, cwd=None, env: dict | None = None,
         unauth: bool = False, stdin: str | None = None) -> subprocess.CompletedProcess:
     """`env`는 더할 환경변수(예: TELEPHONY_TRIAGE_HOME), `unauth`는 gh 스텁 인증 실패."""
