@@ -1,0 +1,17 @@
+# 스킬 eval용 모의 Jira 티켓 (tests/skill_evals/README.md). 형식은 tests/mocks/jira/*.yaml과 같다.
+key: MOCK-9037
+fields:
+  summary: 로밍에서 데이터 안 됨
+  description: |
+    해외 로밍 중 데이터 불가. 이 단말에서 데이터 로밍 설정을 켜니까 해결됨.
+  status: {name: Open}
+  project: {key: MOCK, name: Mock Telephony}
+  components:
+    - {name: Data}
+  customfield_10001: "2026-09-24T09:10:00+0900"
+  customfield_10002: MOCK-A56
+  customfield_10003: MOCKA56_U1_20260915
+  customfield_10004: "16"
+  customfield_10005: MockTel Roaming
+  customfield_10006: "1"
+comments: []

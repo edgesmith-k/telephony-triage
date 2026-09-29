@@ -1,0 +1,17 @@
+# 스킬 eval용 모의 Jira 티켓 (tests/skill_evals/README.md). 형식은 tests/mocks/jira/*.yaml과 같다.
+key: MOCK-9018
+fields:
+  summary: 데이터 연결 안 됨 (새 SIM)
+  description: |
+    새로 개통한 SIM을 넣으면 LTE는 잡히는데 데이터가 안 됩니다.
+  status: {name: Open}
+  project: {key: MOCK, name: Mock Telephony}
+  components:
+    - {name: Data}
+  customfield_10001: "2026-09-23T11:00:10+0900"
+  customfield_10002: MOCK-A56
+  customfield_10003: MOCKA56_U1_20260915
+  customfield_10004: "16"
+  customfield_10005: MockTel KR
+  customfield_10006: "0"
+comments: []

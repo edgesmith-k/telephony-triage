@@ -1,0 +1,13 @@
+# eval 40: 매처 1위는 DATA-001-02(로밍), 그런데 사용자 데이터 설정 OFF 흔적도 있다 → 모의 분석 스킬이 DATA-001-01 의견.
+name: e040-roaming-setting-off
+start: "2026-09-22T08:00:00+09:00"
+default_phone: 0
+pid: 1234
+tid: 1250
+entries:
+  - {at: 0, tag: "SST-{phone}", msg: "onRoamingOn: roaming=true"}
+  - {after: 1, tag: "DSM-{phone}", msg: "onDataEnabledChanged: enabled=false reason=USER"}
+  - {after: 1, tag: "DSM-{phone}", msg: "isDataRoamingEnabled=false"}
+  - {after: 1, tag: "DNC-{phone}", level: I, msg: "onEvaluateNetworkRequests: reason=ROAMING_STATE_CHANGED"}
+  - {after: 0.5, tag: "DNC-{phone}", level: W, msg: "evaluation result: NOT_ALLOWED reasons=[ROAMING_DISABLED]"}
+  - {after: 10, tag: "DNC-{phone}", level: W, msg: "evaluation result: NOT_ALLOWED reasons=[ROAMING_DISABLED]"}

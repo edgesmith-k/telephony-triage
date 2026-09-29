@@ -408,3 +408,12 @@
 - op 표 `reclassify`: `to: <유형 ID>:unresolved`로 원인 미확정 Jira를 다른 유형으로 옮긴다(유형 병합에서 옛 유형의 원인 미확정 Jira가 남던 문제, 사용자 결정 (a)) → `contracts.md §작업 계획`, `06-collaboration.md §6.6`, 이슈 DB `schema/plan.schema.json`.
 - `GENERATOR_VERSION`·`SCHEMA_VERSION` 증가 규칙은 첫 배포(S-7 파일럿)부터 적용한다. 그 전의 생성 결과 변경은 v1에 포함한다(사용자 결정, `DRAFT_NOTES.md`).
 - STATS "fixture 없는 원인"은 pending 원인을 뺀다(`06-collaboration.md §6.6` 정의·`db_lint`와 같게). 유형별 건수 표 추가(§6.7).
+
+## 사외 초안 중 계약 보완 (Phase 13, 2026-09-29)
+
+근거는 `DRAFT_NOTES.md` "Phase 13 구현에서 정한 세부".
+
+- **`jira_fields.py` 추가**: Jira 키 검사(`check-key`)와 Jira 응답 → `field_map` 추출·텍스트 즉시 마스킹·발생 시각 UTC 변환·`--jira-meta` 생성(`extract`). 스킬이 매번 손으로 하던 일을 결정적 스크립트로 옮김 → `contracts.md §3.2` 표, `01-architecture.md §3`·§3.1.
+- **`db_pr.py`·`code_roots.py`**: `--json`·`--plugin-root`를 서브커맨드 앞뒤 어디서나 받는다(`contracts.md §3.2` 공통 규칙과 맞춤).
+- **계획 `pr_notes`(선택)**: 확인 화면·PR 본문에 붙는 흐름별 설명(drift 결정, verify-fix 근거, allow-cause 사유). 이슈 DB `schema/plan.schema.json`에 선택 필드 추가, `db_pr summary`가 마스킹해 넣는다. 스키마 버전은 그대로(선택 필드).
+- **`config.py show` effective에 `analyzers`** 포함(site-defaults → 사용자 config 병합).

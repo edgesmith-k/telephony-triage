@@ -51,9 +51,11 @@ def analyze(payload: dict) -> dict:
     else:
         lines.append("판별 이벤트가 없어 추가로 해석할 것이 없습니다.")
 
-    # 모의 규칙: 사용자 설정 꺼짐 이벤트가 있으면 그 원인을 의견으로 낸다.
+    # 모의 규칙: 사용자 설정 꺼짐 이벤트(백엔드 내장 또는 extractor)가 있으면 그 원인을 의견으로 낸다.
     suggested = None
-    if "builtin.data.user_data_disabled" in names and top_cause != "DATA-001-01":
+    setting_off = any(isinstance(e, dict) and e.get("event") == "data_setting_changed"
+                      and str((e.get("fields") or {}).get("enabled")) == "false" for e in events)
+    if ("builtin.data.user_data_disabled" in names or setting_off) and top_cause != "DATA-001-01":
         suggested = "DATA-001-01"
         lines.append("의견: 사용자 데이터 설정이 꺼진 흔적이 있습니다.")
 

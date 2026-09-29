@@ -80,6 +80,7 @@
       ]
     },
     "commit_message": {"type": "string", "minLength": 1},
+    "pr_notes": {"description": "확인 화면·PR 본문에 덧붙일 흐름별 설명(마스킹된 한 줄씩): drift 결정, verify-fix 판정 근거·시나리오 흔적, allow-cause 사유 등. 이슈 DB 파일에는 쓰지 않는다", "type": "array", "maxItems": 20, "items": {"type": "string", "minLength": 1, "maxLength": 500}},
     "pr": {
       "type": "object",
       "additionalProperties": false,

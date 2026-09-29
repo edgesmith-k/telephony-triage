@@ -96,6 +96,7 @@ telephony-triage-plugin/                 # 개발 레포 루트
     │   ├── adapters/                    # Jira 응답 변환, 외부 파서 어댑터 (사내 것은 site_* , SITE_PATHS)
     │   ├── match_signatures.py
     │   ├── mask_pii.py
+    │   ├── jira_fields.py               # Jira 응답 → field_map 추출·마스킹·UTC (Phase 13)
     │   ├── db_search.py
     │   ├── db_add.py
     │   ├── db_pr.py
@@ -129,6 +130,7 @@ telephony-triage-plugin/                 # 개발 레포 루트
 | `code_roots.py` | 코드 경로 후보 정렬, 경로 검증, 트리 버전 추정, `<root 키>:` 경로 변환, symbol 검색 | analyze Step 2-1, Step 5 |
 | `parse_logcat.py` | logcat → 이벤트 JSON (**파서 백엔드 선택·호출**(`parser_backends/`, 포맷·연도·타임존·윈도우·RIL 페어링·`phone_id`·`coverage`·builtin 판별은 백엔드), bugreport에서 logcat 섹션만 추출(`extract-bugreport`), 외부 파서(어댑터) 실행, 백엔드·외부 파서 불일치 경고, `--mask`면 extractor 전 줄 단위 마스킹(백엔드·외부 파서 이벤트 포함), extractor 실행), **fixture 최소 구간 자르기**(`cut`, `common/` 마스킹 함수로 마스킹 후 저장) | analyze Step 3·7, `record`(`--fixture`), `verify-fix`, `validate --cause`, `db_regress` |
 | `mask_pii.py` | 마스킹 치환(파일), 외부 이벤트 JSON 마스킹(`--events`), `--check` 검출. 마스킹 함수 자체는 `common/`에 있고 `parse_logcat`이 공유 | `db_add`, `db_precommit`, `db_pr stage` |
+| `jira_fields.py` | Jira 키 검사(`check-key`, `jira_key_regex`), Jira 응답(MCP `get_issue` 결과 또는 `--jira-file`)에서 `jira.field_map`으로 구조화 필드 추출, 텍스트 필드 즉시 마스킹, 발생 시각 UTC 변환·`occurred_on`·logcat 연도, `--jira-meta` 파일 생성(`extract`). 사람 이름 필드(코멘트 작성자)는 내지 않음 | analyze Step 0·2, `record`, `verify-fix --jira` |
 | `match_signatures.py` | 마스킹된 이벤트 JSON × 이슈 DB → 후보 랭킹(`same_phone`·`sequence` 포함, 패턴당 타임아웃), 수정 상태 판단, related | analyze Step 4, `db_regress`, `db_verify` |
 | `db_search.py` | 이슈 DB 검색 (secondary/related, 옛 ID → 새 ID 연결) | `search`, `record` 대화형 모드, Phase 11 테스트 |
 | `db_add.py` | 작업 계획(`plan.json`) 적용(`source`별 op 허용 규칙, `schema_version` 검사 포함), **drift 검사**(`drift`), ID·fixture 번호 할당, 브랜치 안 renumber("내 ID"만)·check-ids, 템플릿 생성, 유사 유형 검사 | `db_pr stage`, `db_verify rules --draft`, analyze Step 7·`record` (`similar`) |

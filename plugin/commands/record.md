@@ -3,7 +3,8 @@ description: 수동 기록 — 스스로 해결한 이슈를 분석·매칭 없�
 argument-hint: <JIRA-KEY> [--cause <원인 ID> | --new-cause <유형 ID> | --new-type <category> | --unresolved <유형 ID>] [--fixture <logcat>] [--resolved-fixture <logcat>] [--dry-run] [--jira-file <yaml>]
 ---
 
-telephony-triage 스킬의 `record` 흐름(`reference/record.md`, 원본 `07-workflow.md §record`)을 다음 인자로 실행한다: $ARGUMENTS
+먼저 `${CLAUDE_PLUGIN_ROOT}/skills/telephony-triage/reference/record.md`를 읽고, 그 `record` 흐름(원본 `07-workflow.md §record`)을 다음 인자로 실행한다: $ARGUMENTS
+적용 이후는 `reference/write-flow.md`, 새 원인·유형·시그니처는 `reference/db-authoring.md`. SKILL.md의 analyze 절차는 읽지 않는다.
 스크립트는 `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/<이름>.py"`로 호출한다.
 어떤 스크립트든 종료 코드 2와 "사내 기본값 없음(S-3 미완료)"을 내면 거기서 멈추고 메시지를 그대로 보여준다.
 

@@ -202,6 +202,19 @@ def cmd_remember(args, defaults) -> dict:
     return {"recent_code_roots": data["recent_code_roots"]}
 
 
+def _allow_common_anywhere(parser: argparse.ArgumentParser) -> None:
+    """`--json`·`--plugin-root`를 서브커맨드 앞뒤 어디에 줘도 받는다(contracts.md §3.2 공통 규칙, 다른 스크립트와 같게)."""
+    for action in parser._actions:
+        if isinstance(action, argparse._SubParsersAction):
+            for sub in action.choices.values():
+                opts = {o for a in sub._actions for o in a.option_strings}
+                if "--json" not in opts:
+                    sub.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="JSON 출력 (항상 JSON)")
+                if "--plugin-root" not in opts:
+                    sub.add_argument("--plugin-root", default=argparse.SUPPRESS)
+                _allow_common_anywhere(sub)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="code_roots.py", description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -222,6 +235,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--roots", required=True)
     p = sub.add_parser("remember")
     p.add_argument("roots")
+    _allow_common_anywhere(parser)
     return parser
 
 

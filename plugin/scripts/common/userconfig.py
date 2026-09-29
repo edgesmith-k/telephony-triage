@@ -51,6 +51,8 @@ def from_site_defaults(defaults: dict) -> dict:
         out["jira"] = {k: copy.deepcopy(v) for k, v in jira.items()}
     if defaults.get("logcat"):
         out["logcat"] = copy.deepcopy(defaults["logcat"])
+    if defaults.get("analyzers"):   # 분석 스킬은 site-defaults 또는 사용자 config (16-existing-assets.md §16.5)
+        out["analyzers"] = copy.deepcopy(defaults["analyzers"])
     ghe = defaults.get("ghe") or {}
     if ghe.get("host"):
         out.setdefault("issue_db", {})["ghe_host"] = ghe["host"]

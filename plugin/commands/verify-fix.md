@@ -3,7 +3,7 @@ description: 코드 수정 검증 — 수정 빌드 logcat으로 판정하고 ve
 argument-hint: <원인 ID> <수정 빌드 logcat...> [--jira <검증 Jira 키>]
 ---
 
-telephony-triage 스킬의 `verify-fix` 흐름(`reference/verify.md`, 원본 `07-workflow.md §verify-fix`, 판정 규칙 `05-verification.md §5.12 (2)`)을
+먼저 `${CLAUDE_PLUGIN_ROOT}/skills/telephony-triage/reference/verify.md`를 읽고, 그 `verify-fix` 흐름(원본 `07-workflow.md §verify-fix`, 판정 규칙 `05-verification.md §5.12 (2)`)을
 다음 인자로 실행한다: $ARGUMENTS
 스크립트는 `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/<이름>.py"`로 호출한다.
 어떤 스크립트든 종료 코드 2와 "사내 기본값 없음(S-3 미완료)"을 내면 거기서 멈추고 메시지를 그대로 보여준다.

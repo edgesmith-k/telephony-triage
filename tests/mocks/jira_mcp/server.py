@@ -21,6 +21,7 @@ MCP SDK에 의존하지 않는다 (01-architecture.md §3: 외부 의존성 최�
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -29,6 +30,15 @@ import yaml
 HERE = Path(__file__).resolve().parent
 DATA_DIR = HERE.parent / "jira"
 WRITE_LOG = HERE.parent / "gh-state" / "jira-writes.json"
+
+
+def _data_dir() -> Path:
+    """티켓 디렉토리. `MOCK_JIRA_DIR`로 바꿀 수 있다(스킬 eval 환경마다 다른 티켓)."""
+    return Path(os.environ.get("MOCK_JIRA_DIR") or DATA_DIR)
+
+
+def _write_log() -> Path:
+    return Path(os.environ.get("MOCK_JIRA_WRITE_LOG") or WRITE_LOG)
 
 PROTOCOL_VERSION = "2025-06-18"
 SERVER_NAME = "mock-jira"
@@ -89,7 +99,7 @@ WRITE_TOOLS = {"jira_post_comment", "jira_move_ticket"}
 
 
 def load_ticket(key: str) -> dict | None:
-    path = DATA_DIR / f"{key}.yaml"
+    path = _data_dir() / f"{key}.yaml"
     if not path.is_file():
         return None
     with path.open(encoding="utf-8") as fh:
@@ -98,7 +108,7 @@ def load_ticket(key: str) -> dict | None:
 
 def all_tickets() -> list[dict]:
     out = []
-    for path in sorted(DATA_DIR.glob("*.yaml")):
+    for path in sorted(_data_dir().glob("*.yaml")):
         with path.open(encoding="utf-8") as fh:
             data = yaml.safe_load(fh)
         if data:
@@ -109,15 +119,16 @@ def all_tickets() -> list[dict]:
 def record_write(tool: str, arguments: dict) -> None:
     """쓰기 도구가 실제로 불린 것을 남긴다. guard 차단 테스트가 이 파일이
     비어 있는지로 "막혔다"를 확인한다."""
-    WRITE_LOG.parent.mkdir(parents=True, exist_ok=True)
+    log = _write_log()
+    log.parent.mkdir(parents=True, exist_ok=True)
     entries = []
-    if WRITE_LOG.is_file():
+    if log.is_file():
         try:
-            entries = json.loads(WRITE_LOG.read_text(encoding="utf-8"))
+            entries = json.loads(log.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             entries = []
     entries.append({"tool": tool, "arguments": arguments})
-    WRITE_LOG.write_text(
+    log.write_text(
         json.dumps(entries, ensure_ascii=False, indent=2), encoding="utf-8", newline="\n"
     )
 

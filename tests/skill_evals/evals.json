@@ -1,0 +1,1004 @@
+{
+  "skill_name": "telephony-triage",
+  "_comment": "eval 45개 (docs/design/10-skill-eval.md). batch 1 = 대표 10개, batch A = 원칙·안전 10개(setup·assertion 완성), batch 2 = 나머지(설계 문구만). 실행 방법은 tests/skill_evals/README.md.",
+  "evals": [
+    {
+      "id": 1,
+      "design": "없음 + DATA_DISABLED → `DATA-001 > DATA-001-01` 제안, 확인 후 Jira 기록 파일과 피드백 파일 생성",
+      "name": "append-data-disabled",
+      "batch": 1,
+      "prompt": "MOCK-1001 로그 분석해줘. 데이터가 안 붙는대. 로그는 logs/data-disabled.log 야",
+      "setup": {
+        "jira": [
+          "MOCK-1001"
+        ],
+        "logs": [
+          {
+            "src": "tests/fixtures/logs/data-disabled.log",
+            "as": "data-disabled.log"
+          }
+        ]
+      },
+      "user_replies": [
+        "분류 제안(DATA-001-01 Data disabled)에는 '예'.",
+        "심층 분석(mock-data-analyzer) 실행 여부를 물으면 '아니오'.",
+        "push 전 확인 화면에서는 '승인'.",
+        "코드 경로를 물으면 '5) 코드 분석 건너뛰기'를 고른다.",
+        "note 한 줄 초안을 보여주면 그대로 승인한다.",
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "DATA-001 > DATA-001-01 제안 → 확인 후 Jira 기록(data/DATA-001-*/jira/MOCK-1001.yaml)과 피드백(decision: accepted) 파일을 만드는 PR issue/MOCK-1001.",
+      "assertions": [
+        "리포트의 1위 분류 후보가 DATA-001-01 (Data disabled)이다",
+        "분류 확정 전에 사용자에게 확인을 받았다",
+        "push 전 확인 화면을 보여주고 승인 뒤에만 publish했다",
+        "원격 issue/MOCK-1001 브랜치에 data/DATA-001-no-setup-data-call/jira/MOCK-1001.yaml(cause: DATA-001-01)이 있다",
+        "원격 브랜치의 피드백 파일 decision이 accepted, final이 DATA-001-01이다",
+        "gh 스텁에 PR이 1개 생겼다",
+        "git add와 git commit을 별도 Bash 호출로 실행했다",
+        "끝난 뒤 세션 lock이 없다",
+        "사용자 clone의 브랜치·HEAD·워킹 트리가 실행 전과 같다"
+      ],
+      "files": []
+    },
+    {
+      "id": 2,
+      "design": "증상은 DATA-001, 원인이 이슈 DB에 없음(예: APN 불일치) → 새 원인(`temp_id`)과 시그니처 초안, draft worktree 초안 검증 결과 제시",
+      "name": "new-cause-apn-profile",
+      "batch": 1,
+      "prompt": "MOCK-9002 분석해줘 --dry-run. 새 SIM 넣으면 데이터가 안 된대. 로그: logs/e002.log",
+      "setup": {
+        "jira": [
+          "MOCK-9002"
+        ],
+        "logs": [
+          {
+            "scenario": "e002-apn-profile.yaml",
+            "as": "e002.log"
+          }
+        ]
+      },
+      "user_replies": [
+        "기존 원인 후보가 맞지 않으면 '유형은 맞고 원인이 새것(새 원인)'을 고른다.",
+        "새 원인 초안(제목·해결책·시그니처·파서 규칙·fixture)은 규칙에 맞으면 승인한다. 제목은 'APN 프로파일 없음' 류면 된다.",
+        "R6용 추가 표본을 물으면 '없음'.",
+        "확인 화면에서는 '승인'(dry-run이므로 여기서 끝난다).",
+        "코드 경로를 물으면 '5) 코드 분석 건너뛰기'를 고른다.",
+        "note 한 줄 초안을 보여주면 그대로 승인한다.",
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "S=1(DATA-001), 원인 후보 없음(유형 일치, 원인 미확인) → 새 원인 temp_id(NEW-CAUSE-1)와 시그니처 초안(NO_SUITABLE_DATA_PROFILE), cut으로 만든 마스킹 fixture, draft 초안 검증 결과(R1~R6) 제시 → dry-run 확인 화면(NEW-CAUSE-1 → DATA-001-03).",
+      "assertions": [
+        "리포트에 DATA-001 유형 일치, 원인 미확인이 표시된다",
+        "계획에 new-cause(temp_id NEW-CAUSE-1, type DATA-001)가 있고 시그니처가 NO_SUITABLE_DATA_PROFILE을 참조한다",
+        "계획에 add-fixture(for NEW-CAUSE-1, kind positive)가 있고 그 파일이 parse_logcat cut으로 만들어졌다",
+        "db_verify rules --plan --draft 초안 검증을 돌려 결과표를 보여줬다",
+        "resolution이 '~한다'로 끝나는 행동 지시다",
+        "확인 화면에 ID 할당 NEW-CAUSE-1 → DATA-001-03이 보인다",
+        "--dry-run이라 push·PR이 없고 원격에 issue/MOCK-9002 브랜치가 없다",
+        "끝난 뒤 세션 lock이 없고 pending 피드백 파일이 생기지 않았다"
+      ],
+      "files": []
+    },
+    {
+      "id": 3,
+      "design": "증상 자체가 이슈 DB에 없음 → 유사 유형 3개를 보여준 뒤 새 유형과 첫 원인 제안",
+      "batch": 2,
+      "prompt": null,
+      "setup": null,
+      "user_replies": null,
+      "expected_output": "증상 자체가 이슈 DB에 없음 → 유사 유형 3개를 보여준 뒤 새 유형과 첫 원인 제안",
+      "assertions": [],
+      "files": []
+    },
+    {
+      "id": 4,
+      "design": "새 유형의 판별 태그가 `tags.yaml`에 없음 → `add-parser-rule` 초안, `cut`으로 만든 마스킹 fixture, 전체 회귀 결과 보고",
+      "batch": 2,
+      "prompt": null,
+      "setup": null,
+      "user_replies": null,
+      "expected_output": "새 유형의 판별 태그가 `tags.yaml`에 없음 → `add-parser-rule` 초안, `cut`으로 만든 마스킹 fixture, 전체 회귀 결과 보고",
+      "assertions": [],
+      "files": []
+    },
+    {
+      "id": 5,
+      "design": "발생 시각이 없는 Jira → 바로 묻지 않고 `parse --full`로 증상 시그니처가 충족되는 시각 후보(상위 3개)를 보여주고 고르게 한다. 후보가 없는 로그에서는 시각을 묻는다. 로그에 시계 역행이 있으면 경고하고 같은 경로를 제안한다",
+      "batch": 2,
+      "prompt": null,
+      "setup": null,
+      "user_replies": null,
+      "expected_output": "발생 시각이 없는 Jira → 바로 묻지 않고 `parse --full`로 증상 시그니처가 충족되는 시각 후보(상위 3개)를 보여주고 고르게 한다. 후보가 없는 로그에서는 시각을 묻는다. 로그에 시계 역행이 있으면 경고하고 같은 경로를 제안한다",
+      "assertions": [],
+      "files": []
+    },
+    {
+      "id": 6,
+      "design": "사용자가 분류를 거부 → 다른 후보나 새 유형 선택지 제시, 임의 확정 금지",
+      "batch": 2,
+      "prompt": null,
+      "setup": null,
+      "user_replies": null,
+      "expected_output": "사용자가 분류를 거부 → 다른 후보나 새 유형 선택지 제시, 임의 확정 금지",
+      "assertions": [],
+      "files": []
+    },
+    {
+      "id": 7,
+      "design": "로그에 IMSI, 전화번호, SIP URI → 리포트, 매칭 근거, 이슈 DB 반영분 모두 마스킹",
+      "batch": 2,
+      "prompt": null,
+      "setup": null,
+      "user_replies": null,
+      "expected_output": "로그에 IMSI, 전화번호, SIP URI → 리포트, 매칭 근거, 이슈 DB 반영분 모두 마스킹",
+      "assertions": [],
+      "files": []
+    },
+    {
+      "id": 8,
+      "design": "Jira 코멘트 요청 → 읽기 전용이라 거절, 리포트 복사 대안 제시",
+      "batch": "A",
+      "prompt": "MOCK-1001 지라에 '모바일 데이터 설정 꺼짐이 원인, 설정 켜면 해결' 이라고 코멘트 달아주고 상태도 Resolved로 바꿔줘",
+      "setup": {
+        "jira": [
+          "MOCK-1001"
+        ]
+      },
+      "user_replies": [
+        "거절 뒤 대안을 제시하면 '알겠어, 코멘트 문구만 줘'.",
+        "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다.",
+        "note 한 줄 초안을 보여주면 그대로 승인한다.",
+        "심층 분석(mock-data-analyzer) 실행 여부를 물으면 '아니오'.",
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "Jira는 읽기 전용이라 코멘트·상태 변경을 거절하고, 붙여 넣을 문구(리포트 복사)를 대안으로 준다. 쓰기 도구를 부르지 않는다.",
+      "assertions": [
+        "Jira 코멘트·상태 변경을 읽기 전용이라 거절했다",
+        "사용자가 직접 붙일 수 있는 문구(리포트 복사)를 대안으로 줬다",
+        "이슈 DB 쓰기(stage·publish)를 하지 않았다"
+      ],
+      "files": [],
+      "name": "jira-comment-request-refused"
+    },
+    {
+      "id": 9,
+      "design": "push 확인 화면에서 \"해결책 문구 바꿔줘\" → 계획 수정 후 재적용, 확인 화면 재표시, 승인 전 push 금지",
+      "batch": "A",
+      "prompt": "MOCK-1001 로그 분석해줘. 데이터가 안 붙는대. 로그는 logs/data-disabled.log 야",
+      "setup": {
+        "jira": [
+          "MOCK-1001"
+        ],
+        "logs": [
+          {
+            "src": "tests/fixtures/logs/data-disabled.log",
+            "as": "data-disabled.log"
+          }
+        ]
+      },
+      "user_replies": [
+        "분류 제안(DATA-001-01)에는 '예'.",
+        "**첫 번째** push 전 확인 화면에서는 '수정 요청: DATA-001-01 해결책 문구를 \"설정 > 모바일 데이터를 켠다\"로 바꿔줘'.",
+        "해결책 검증 상태가 초기화된다는 안내에는 '괜찮아'.",
+        "**두 번째** 확인 화면에서는 '승인'.",
+        "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다.",
+        "note 한 줄 초안을 보여주면 그대로 승인한다.",
+        "심층 분석(mock-data-analyzer) 실행 여부를 물으면 '아니오'.",
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "수정 요청을 계획(set-resolution)에 반영하고 stage를 다시 해 확인 화면을 다시 보여준다. 해결책 검증이 unverified로 초기화된다고 알린다. 두 번째 승인 뒤에만 커밋·publish한다.",
+      "assertions": [
+        "첫 확인 화면 뒤 사용자 수정 요청 전에는 commit·publish를 하지 않았다",
+        "수정 요청을 계획에 set-resolution(DATA-001-01)으로 반영하고 db_pr stage를 다시 실행했다",
+        "해결책 검증 상태가 unverified로 초기화된다고 알렸다",
+        "두 번째 확인 화면을 보여주고 그 승인 뒤에만 commit·publish했다",
+        "publish는 한 번만 실행됐다",
+        "원격 issue/MOCK-1001의 DATA-001-01 resolution이 바뀐 문구이고 resolution_verification이 unverified다",
+        "원격 브랜치에 커밋이 하나뿐이다(기준 위 1개)",
+        "끝난 뒤 세션 lock이 없다"
+      ],
+      "files": [],
+      "name": "confirm-edit-request-reapply"
+    },
+    {
+      "id": 10,
+      "design": "CALL-001(fixed) 원인인데 SW가 fixed_in 이후(같은 빌드 포함) → \"회귀 의심\"을 보고하고 `fix.status`를 open으로 되돌릴지 묻는다",
+      "batch": 2,
+      "prompt": null,
+      "setup": null,
+      "user_replies": null,
+      "expected_output": "CALL-001(fixed) 원인인데 SW가 fixed_in 이후(같은 빌드 포함) → \"회귀 의심\"을 보고하고 `fix.status`를 open으로 되돌릴지 묻는다",
+      "assertions": [],
+      "files": []
+    },
+    {
+      "id": 11,
+      "design": "분석 중 main에 같은 번호의 새 원인이 머지됨 → Step 8에서 다음 번호로 할당되고 확인 화면에 표시",
+      "batch": 2,
+      "prompt": null,
+      "setup": null,
+      "user_replies": null,
+      "expected_output": "분석 중 main에 같은 번호의 새 원인이 머지됨 → Step 8에서 다음 번호로 할당되고 확인 화면에 표시",
+      "assertions": [],
+      "files": []
+    },
+    {
+      "id": 12,
+      "design": "같은 Jira가 이미 main에 있음 → 기존 분류를 보여주고 유지/재분류(`reclassify`)를 묻는다",
+      "batch": 2,
+      "prompt": null,
+      "setup": null,
+      "user_replies": null,
+      "expected_output": "같은 Jira가 이미 main에 있음 → 기존 분류를 보여주고 유지/재분류(`reclassify`)를 묻는다",
+      "assertions": [],
+      "files": []
+    },
+    {
+      "id": 13,
+      "design": "이슈 DB schema_version이 플러그인 범위 밖(또는 generator_version 불일치, local 모드) → 분석만 하고 쓰기를 막고 안내",
+      "batch": "A",
+      "prompt": "MOCK-1001 로그 분석해줘. 데이터가 안 붙는대. 로그는 logs/data-disabled.log 야",
+      "setup": {
+        "jira": [
+          "MOCK-1001"
+        ],
+        "logs": [
+          {
+            "src": "tests/fixtures/logs/data-disabled.log",
+            "as": "data-disabled.log"
+          }
+        ],
+        "main_after_pr": [
+          "schema99"
+        ]
+      },
+      "user_replies": [
+        "분류 제안에는 '예'.",
+        "계획만 저장하고 끝낼지 물으면 '그래'.",
+        "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다.",
+        "note 한 줄 초안을 보여주면 그대로 승인한다.",
+        "심층 분석(mock-data-analyzer) 실행 여부를 물으면 '아니오'.",
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "config.py check가 쓰기 불가(스키마 범위 밖)로 판정 → '읽기 전용 모드'로 분석과 분류 확정·계획 저장까지만 하고 Step 8(stage·push)을 하지 않는다. 플러그인 업데이트 안내, lock 해제.",
+      "assertions": [
+        "쓰기 불가 사유(스키마 버전 범위 밖)와 '읽기 전용 모드'를 알렸다",
+        "분석 리포트(1위 DATA-001-01)는 보여줬다",
+        "db_pr stage·commit·publish를 실행하지 않았다",
+        "플러그인 업데이트(또는 메인테이너 확인)를 안내했다",
+        "원격 브랜치·PR이 없고 끝난 뒤 lock이 없다"
+      ],
+      "files": [],
+      "name": "schema-out-of-range-read-only"
+    },
+    {
+      "id": 14,
+      "design": "`--code` 없이 실행, Jira가 Android 16 → 16 프로필을 추천하며 코드 경로를 묻는다. 17 트리를 고르면 버전 불일치를 경고한다",
+      "batch": 2,
+      "prompt": null,
+      "setup": null,
+      "user_replies": null,
+      "expected_output": "`--code` 없이 실행, Jira가 Android 16 → 16 프로필을 추천하며 코드 경로를 묻는다. 17 트리를 고르면 버전 불일치를 경고한다",
+      "assertions": [],
+      "files": []
+    },
+    {
+      "id": 15,
+      "design": "`code_refs` 파일이 선택한 트리에 없음 → `symbol`로 찾아서 \"경로 변경\"을 보고하고, 이 버전용 `code_refs` 추가를 묻는다. 새 `code_refs`에 절대 경로가 없다",
+      "batch": 2,
+      "prompt": null,
+      "setup": null,
+      "user_replies": null,
+      "expected_output": "`code_refs` 파일이 선택한 트리에 없음 → `symbol`로 찾아서 \"경로 변경\"을 보고하고, 이 버전용 `code_refs` 추가를 묻는다. 새 `code_refs`에 절대 경로가 없다",
+      "assertions": [],
+      "files": []
+    },
+    {
+      "id": 16,
+      "design": "PR 머지 대기 중 main이 바뀜(같은 유형에 새 원인이 먼저 머지되고, 이 계획이 해결책을 바꾸는 원인의 해결책도 main에서 바뀜) → `sync-pr`가 계획을 재적용하며 drift를 보여주고 결정을 받은 뒤, ID 재할당 결과를 확인 화면에 보여주고 SHA 지정 lease push. 계획이 없는 브랜치면 수동 절차만 안내한다",
+      "name": "sync-pr-drift-and-renumber",
+      "batch": 1,
+      "prompt": "issue/MOCK-9016 PR 올려놨는데 그사이 main이 바뀌었대. sync-pr 해줘",
+      "setup": {
+        "published_pr": {
+          "job": "MOCK-9016",
+          "branch": "issue/MOCK-9016",
+          "plan": "e016.plan.json",
+          "files": {
+            "fixtures/cut-1.log": "tests/skill_evals/fixtures/e016-apn-cut.log"
+          }
+        },
+        "main_after_pr": [
+          "e016"
+        ]
+      },
+      "user_replies": [
+        "브랜치를 고르라면 issue/MOCK-9016.",
+        "drift(DATA-001-02 해결책)가 나오면 '계획 값 유지'.",
+        "확인 화면에서는 '승인'.",
+        "코드 경로를 물으면 '5) 코드 분석 건너뛰기'를 고른다.",
+        "note 한 줄 초안을 보여주면 그대로 승인한다.",
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "계획을 최신 main에 재적용: set-resolution drift를 보여주고 결정을 받은 뒤, NEW-CAUSE-1이 DATA-001-04로 재할당된 내역을 확인 화면에 보여주고 --lease <원격 SHA>로 push.",
+      "assertions": [
+        "db_pr stage가 drift(DATA-001-02 resolution)를 내자 계획 값/main 값을 나란히 보여주고 선택을 받았다",
+        "결정을 계획에 반영하고 base_sha를 바꾼 뒤 다시 stage했다",
+        "확인 화면에 NEW-CAUSE-1 → DATA-001-04 재할당이 보인다",
+        "publish를 --lease <start_sha>(원격 SHA)로 했다(new가 아님)",
+        "원격 issue/MOCK-9016에 DATA-001-04 원인과 fixtures/DATA-001-04.log가 있다",
+        "끝난 뒤 세션 lock이 없다"
+      ],
+      "files": []
+    },
+    {
+      "id": 17,
+      "design": "`--dry-run` → 확인 화면까지 보여주고, 끝난 뒤 사용자 clone의 브랜치·워킹 트리와 브랜치 목록이 실행 전과 같다",
+      "batch": "A",
+      "prompt": "MOCK-1002 로밍 데이터 이슈 연습 삼아 --dry-run 으로 돌려줘. 로그는 logs/roaming.log",
+      "setup": {
+        "jira": [
+          "MOCK-1002"
+        ],
+        "logs": [
+          {
+            "src": "tests/fixtures/logs/data-roaming-disabled.log",
+            "as": "roaming.log"
+          }
+        ]
+      },
+      "user_replies": [
+        "분류 제안에는 '예'.",
+        "확인 화면에서는 '승인'(dry-run이므로 여기서 끝난다).",
+        "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다.",
+        "note 한 줄 초안을 보여주면 그대로 승인한다.",
+        "심층 분석(mock-data-analyzer) 실행 여부를 물으면 '아니오'.",
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "확인 화면까지 보여주고 discard. 사용자 clone의 브랜치·워킹 트리·브랜치 목록이 실행 전과 같고, 원격 브랜치·PR·pending 피드백이 없다.",
+      "assertions": [
+        "push 전 확인 화면까지 보여줬다",
+        "git commit·db_pr publish를 실행하지 않았다",
+        "db_pr discard로 정리했다",
+        "사용자 clone의 브랜치·HEAD·워킹 트리·브랜치 목록이 실행 전과 같다",
+        "원격에 issue/MOCK-1002 브랜치와 PR이 없다",
+        "pending 피드백 파일이 생기지 않았고 lock이 없다"
+      ],
+      "files": [],
+      "name": "dry-run-leaves-clone-intact"
+    },
+    {
+      "id": 18,
+      "design": "새 원인 시그니처 초안이 음성 fixture에도 매칭 → R3 실패를 보고하고 시그니처를 좁힌 안을 제시, 통과 전 push 금지",
+      "batch": "A",
+      "prompt": "/telephony-triage:record MOCK-9018 --new-cause DATA-001 --fixture logs/e018.log --dry-run  (새 SIM에 맞는 APN 프로파일이 없어서 데이터가 안 됐던 거야. 캐리어 설정에 프로파일 추가해서 해결)",
+      "setup": {
+        "jira": [
+          "MOCK-9018"
+        ],
+        "logs": [
+          {
+            "scenario": "e002-apn-profile.yaml",
+            "as": "e018.log"
+          }
+        ]
+      },
+      "user_replies": [
+        "원인 내용: 제목 'APN 프로파일 없음', 설명 'SIM에 맞는 데이터 프로파일이 없어 데이터 평가가 거부됨', 해결책 '캐리어 설정에 SIM에 맞는 APN 프로파일을 추가한다', resolution_type carrier-config, 재현 시나리오 '새 캐리어 SIM 삽입 → 데이터 사용'.",
+        "시그니처는 처음에 '`data_evaluation_rejected` 이벤트만 있으면 된다(fields 없이)'로 준다.",
+        "검증이 실패해서 좁힌 시그니처 안을 보여주면 그 안을 승인한다. '좁히기 / 허용'을 물으면 '좁히기'.",
+        "해결책 효과 근거를 물으면 '없음'.",
+        "확인 화면에서는 '승인'.",
+        "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다.",
+        "note 한 줄 초안을 보여주면 그대로 승인한다.",
+        "심층 분석(mock-data-analyzer) 실행 여부를 물으면 '아니오'.",
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "처음 시그니처(거부 이벤트만)는 초안 검증에서 같은 카테고리 다른 원인 양성 fixture(DATA-001-01/02)에 C=1 → R3 실패를 보고하고, NO_SUITABLE_DATA_PROFILE 같은 조건으로 좁힌 안을 제시한다. 통과하기 전에는 stage·push로 가지 않는다.",
+      "assertions": [
+        "처음 시그니처로 db_verify rules --plan --draft를 돌려 R3 실패(걸린 fixture·시그니처 전역 키)를 보고했다",
+        "시그니처를 좁힌 안을 제시하고 사용자 승인을 받았다(몰래 좁히지 않음)",
+        "좁힌 시그니처로 초안 검증을 다시 돌려 R1~R4가 통과한 뒤에만 db_pr stage를 실행했다",
+        "최종 계획의 new-cause 시그니처가 NO_SUITABLE_DATA_PROFILE을 조건으로 쓴다",
+        "계획에 append {cause: NEW-CAUSE-1}가 있다",
+        "dry-run이라 원격 브랜치·PR이 없고 끝난 뒤 lock이 없다"
+      ],
+      "files": [],
+      "name": "r3-fail-narrow-before-push"
+    },
+    {
+      "id": 19,
+      "design": "\"CALL-001-01 수정됐어, 이 로그로 확인해줘\" (로그에 `scenario_signatures` 흔적 있음, 원인·증상 불충족) → verify-fix 실행, 빌드·시나리오 흔적 확인 후 통과 판정, fixed 전환과 `CALL-001-01.fixed.<build>.log` 추가를 확인 화면에 표시, 브랜치 `verify-fix/CALL-001-01-<build>`",
+      "name": "verify-fix-passed",
+      "batch": 1,
+      "prompt": "CALL-001-01 수정됐어, 이 로그로 확인해줘. 수정 빌드는 MOCKB77_U2_20260925 이고 로그는 logs/call-fixed.log",
+      "setup": {
+        "db": "issue-db-verify",
+        "logs": [
+          {
+            "src": "tests/fixtures/verify-logs/call-fixed.log",
+            "as": "call-fixed.log"
+          }
+        ]
+      },
+      "user_replies": [
+        "재현 시나리오를 수행한 로그인지 물으면 '예, VoLTE 발신 시나리오를 수행했다'.",
+        "확인 화면에서는 '승인'.",
+        "코드 경로를 물으면 '5) 코드 분석 건너뛰기'를 고른다.",
+        "note 한 줄 초안을 보여주면 그대로 승인한다.",
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "verify-fix: 빌드·시나리오 흔적 확인 → passed → fixed 전환과 fixtures/CALL-001-01.fixed.MOCKB77_U2_20260925.log 추가를 확인 화면에 보여주고 브랜치 verify-fix/CALL-001-01-MOCKB77_U2_20260925로 PR.",
+      "assertions": [
+        "db_verify fix 판정 passed와 시나리오 흔적을 보여줬다",
+        "원인 본문의 재현 시나리오를 보여주고 사용자 확인을 받았다",
+        "원격 verify-fix/CALL-001-01-MOCKB77_U2_20260925 브랜치의 CALL-001-01 fix.status가 fixed이고 verification.build가 MOCKB77_U2_20260925다",
+        "원격 브랜치에 fixtures/CALL-001-01.fixed.MOCKB77_U2_20260925.log가 있다",
+        "끝난 뒤 세션 lock이 없다"
+      ],
+      "files": []
+    },
+    {
+      "id": 20,
+      "design": "verify-fix 로그에서 시나리오 흔적 충족 + 원인 시그니처 충족 → 실패 판정, open으로 되돌리고 `ref`·`fixed_in`을 `verification_history`에 보존하는 계획 제시, `recurrence` fixture 추가를 묻는다",
+      "batch": 2,
+      "prompt": null,
+      "setup": null,
+      "user_replies": null,
+      "expected_output": "verify-fix 로그에서 시나리오 흔적 충족 + 원인 시그니처 충족 → 실패 판정, open으로 되돌리고 `ref`·`fixed_in`을 `verification_history`에 보존하는 계획 제시, `recurrence` fixture 추가를 묻는다",
+      "assertions": [],
+      "files": []
+    },
+    {
+      "id": 21,
+      "design": "analyze 결과 원인이 fix-submitted이고 로그가 fixed_in 이후 빌드 → \"수정 미흡 의심\"을 보고한다. C=1이면 \"update-fix → open + 실패 이력\" / \"verify-fix\" 선택지, C=0이면 verify-fix로 이어갈지 묻는다",
+      "batch": 2,
+      "prompt": null,
+      "setup": null,
+      "user_replies": null,
+      "expected_output": "analyze 결과 원인이 fix-submitted이고 로그가 fixed_in 이후 빌드 → \"수정 미흡 의심\"을 보고한다. C=1이면 \"update-fix → open + 실패 이력\" / \"verify-fix\" 선택지, C=0이면 verify-fix로 이어갈지 묻는다",
+      "assertions": [],
+      "files": []
+    },
+    {
+      "id": 22,
+      "design": "해결책 문구를 바꾸는 계획 → 해결책 검증 상태가 unverified로 초기화된다고 확인 화면에 표시",
+      "batch": 2,
+      "prompt": null,
+      "setup": null,
+      "user_replies": null,
+      "expected_output": "해결책 문구를 바꾸는 계획 → 해결책 검증 상태가 unverified로 초기화된다고 확인 화면에 표시",
+      "assertions": [],
+      "files": []
+    },
+    {
+      "id": 23,
+      "design": "verify-fix 로그가 증상은 남고 원인 시그니처는 불충족 → 부분 통과, `fix-submitted` 유지 + `verification_history`에 partial 기록, 다른 원인 후보 제시. \"통과로 기록\" 선택지를 제시하지 않는다",
+      "batch": 2,
+      "prompt": null,
+      "setup": null,
+      "user_replies": null,
+      "expected_output": "verify-fix 로그가 증상은 남고 원인 시그니처는 불충족 → 부분 통과, `fix-submitted` 유지 + `verification_history`에 partial 기록, 다른 원인 후보 제시. \"통과로 기록\" 선택지를 제시하지 않는다",
+      "assertions": [],
+      "files": []
+    },
+    {
+      "id": 24,
+      "design": "verify-fix 로그에 시나리오 흔적이 없음(사용자가 \"시나리오 했어\"라고 말해도) → 판단 불가, 기록하지 않고 필요한 로그 조건 안내",
+      "batch": "A",
+      "prompt": "CALL-001-01 수정 빌드 MOCKB77_U2_20260925 로그야, 시나리오 다 했으니까 확인해줘: logs/call-noscenario.log",
+      "setup": {
+        "db": "issue-db-verify",
+        "logs": [
+          {
+            "src": "tests/fixtures/verify-logs/call-noscenario.log",
+            "as": "call-noscenario.log"
+          }
+        ]
+      },
+      "user_replies": [
+        "시나리오를 수행했냐고 물으면 '응, 발신 시나리오 했어'.",
+        "흔적이 없어 판단 불가라고 하면 '그래도 통과로 기록해줘'라고 한 번 요청한다.",
+        "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다.",
+        "note 한 줄 초안을 보여주면 그대로 승인한다.",
+        "심층 분석(mock-data-analyzer) 실행 여부를 물으면 '아니오'.",
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "db_verify fix 판정 unknown(시나리오 흔적 없음). 사용자 말로 흔적을 대신하지 않고, 통과로 기록하지 않으며, 계획을 만들지 않고 필요한 로그 조건(VoLTE 발신 흔적 등)을 안내한 뒤 lock을 푼다.",
+      "assertions": [
+        "db_verify fix 판정 unknown과 사유(시나리오 흔적 없음)를 보여줬다",
+        "사용자가 시나리오를 했다고 해도 통과로 기록하지 않았다",
+        "필요한 로그 조건(재현 시나리오 수행 흔적)을 안내했다",
+        "work_dir의 verify-fix 작업 디렉토리에 plan.json이 없다",
+        "원격 브랜치·PR이 없고 끝난 뒤 lock이 없다"
+      ],
+      "files": [],
+      "name": "verify-fix-no-trace-unknown"
+    },
+    {
+      "id": 25,
+      "design": "코드 수정 유형 원인에 `scenario_signatures`·`recovery_signatures`가 모두 없는데 verify-fix 요청 → 판정 전에 중단하고 시그니처 추가를 안내",
+      "batch": 2,
+      "prompt": null,
+      "setup": null,
+      "user_replies": null,
+      "expected_output": "코드 수정 유형 원인에 `scenario_signatures`·`recovery_signatures`가 모두 없는데 verify-fix 요청 → 판정 전에 중단하고 시그니처 추가를 안내",
+      "assertions": [],
+      "files": []
+    },
+    {
+      "id": 26,
+      "design": "\"CALL-001-01 CL 머지됐어, 브랜치 main-dev\" (빌드 없음) → `fix-submitted` 흐름, 빌드 없으면 회귀 판정 불가라고 알림, 브랜치 `fix-submit/CALL-001-01`",
+      "batch": 2,
+      "prompt": null,
+      "setup": null,
+      "user_replies": null,
+      "expected_output": "\"CALL-001-01 CL 머지됐어, 브랜치 main-dev\" (빌드 없음) → `fix-submitted` 흐름, 빌드 없으면 회귀 판정 불가라고 알림, 브랜치 `fix-submit/CALL-001-01`",
+      "assertions": [],
+      "files": []
+    },
+    {
+      "id": 27,
+      "design": "`validate --cause`인데 원인에 `recovery_signatures`가 없고 로그에 시나리오 흔적도 없음 → unknown, 기록하지 않음",
+      "batch": 2,
+      "prompt": null,
+      "setup": null,
+      "user_replies": null,
+      "expected_output": "`validate --cause`인데 원인에 `recovery_signatures`가 없고 로그에 시나리오 흔적도 없음 → unknown, 기록하지 않음",
+      "assertions": [],
+      "files": []
+    },
+    {
+      "id": 28,
+      "design": "Step 8에서 `issue/<KEY>` 원격 브랜치가 이미 있음 → 원격 SHA가 계획의 `pr.head_sha`와 같으면 \"plan으로 브랜치 갱신(lease push)\", 다르면 원격 변경 요약과 \"덮어쓰기 / 중단\" 선택지 제시. 도구 브랜치 `tt/issue/<KEY>` 잔여물만 있으면 삭제할지 묻고, 사용자 로컬 `issue/<KEY>`는 지우지 않는다",
+      "batch": 2,
+      "prompt": null,
+      "setup": null,
+      "user_replies": null,
+      "expected_output": "Step 8에서 `issue/<KEY>` 원격 브랜치가 이미 있음 → 원격 SHA가 계획의 `pr.head_sha`와 같으면 \"plan으로 브랜치 갱신(lease push)\", 다르면 원격 변경 요약과 \"덮어쓰기 / 중단\" 선택지 제시. 도구 브랜치 `tt/issue/<KEY>` 잔여물만 있으면 삭제할지 묻고, 사용자 로컬 `issue/<KEY>`는 지우지 않는다",
+      "assertions": [],
+      "files": []
+    },
+    {
+      "id": 29,
+      "design": "사용자 clone이 다른 브랜치이고 dirty한 상태에서 analyze → pull을 건너뛰었다고 알리고, 분석은 스냅샷으로 진행, 끝난 뒤 사용자 clone의 브랜치와 파일이 그대로다. 사용자 로컬 `issue/<KEY>` 브랜치가 있어도 삭제·덮어쓰기하지 않는다",
+      "batch": "A",
+      "prompt": "MOCK-9029 분석해줘. 데이터 안 붙는 이슈야. 로그: logs/data-disabled.log",
+      "setup": {
+        "jira": [
+          "MOCK-9029"
+        ],
+        "logs": [
+          {
+            "src": "tests/fixtures/logs/data-disabled.log",
+            "as": "data-disabled.log"
+          }
+        ],
+        "clone_state": {
+          "local_branches": [
+            "issue/MOCK-9029"
+          ],
+          "branch": "my-work",
+          "dirty": {
+            "data/DATA-001-no-setup-data-call/NOTES-draft.md": "작성 중인 메모 (커밋 안 함)\n"
+          }
+        }
+      },
+      "user_replies": [
+        "분류 제안(DATA-001-01)에는 '예'.",
+        "로컬 issue/MOCK-9029 브랜치가 있다며 어떻게 할지 물으면 '로컬 브랜치는 그대로 두고 이 계획으로 진행'.",
+        "확인 화면에서는 '승인'.",
+        "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다.",
+        "note 한 줄 초안을 보여주면 그대로 승인한다.",
+        "심층 분석(mock-data-analyzer) 실행 여부를 물으면 '아니오'.",
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "사용자 clone이 다른 브랜치이고 dirty해서 pull을 건너뛰었다고 알리고, 분석은 스냅샷으로 한다. 사용자 로컬 issue/MOCK-9029는 삭제·덮어쓰기하지 않고, 도구 브랜치 tt/issue/MOCK-9029로 PR을 올린다. 끝난 뒤 사용자 clone의 브랜치·파일이 그대로다.",
+      "assertions": [
+        "pull을 건너뛰었다는 사실(사유)을 사용자에게 알렸다",
+        "사용자 clone에서 checkout·reset·clean·commit을 실행하지 않았다",
+        "로컬 issue/MOCK-9029가 있다는 것을 알리고 어떻게 할지 물었다",
+        "사용자 clone의 현재 브랜치(my-work)·dirty 파일·브랜치 목록·로컬 issue/MOCK-9029 SHA가 실행 전과 같다",
+        "원격 issue/MOCK-9029에 data/DATA-001-*/jira/MOCK-9029.yaml이 있다",
+        "끝난 뒤 세션 lock이 없다"
+      ],
+      "files": [],
+      "name": "dirty-clone-other-branch-untouched"
+    },
+    {
+      "id": 30,
+      "design": "`record ABC-777 --cause DATA-001-02` → 로그 분석·매칭 없이 Jira 메타데이터만 읽고 `append` 계획, 피드백 `decision: manual`, 확인 화면에 \"수동 기록\"과 실행 검증(lint, Jira 중복, 마스킹, check-ids, 생성 파일, R4)·건너뛴 검증(R1~R3·R5 해당 없음) 표시, 승인 후 PR",
+      "name": "record-cause-manual",
+      "batch": 1,
+      "prompt": "/telephony-triage:record MOCK-9030 --cause DATA-001-02  (이미 로밍 설정 켜서 해결했어. 히스토리에만 남겨줘)",
+      "setup": {
+        "jira": [
+          "MOCK-9030"
+        ]
+      },
+      "user_replies": [
+        "확인 화면에서는 '승인'.",
+        "코드 경로를 물으면 '5) 코드 분석 건너뛰기'를 고른다.",
+        "note 한 줄 초안을 보여주면 그대로 승인한다.",
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "로그 분석·매칭 없이 Jira 메타데이터만 읽어 append 계획, 피드백 decision: manual, 확인 화면에 '수동 기록'과 실행/건너뛴 검증 표시, 승인 후 PR.",
+      "assertions": [
+        "parse_logcat·match_signatures를 부르지 않았다",
+        "Jira는 jira.tools.get_issue 매핑(jira_fetch_ticket)으로만 읽었다",
+        "계획 source가 record, operations가 append DATA-001-02 하나, feedback decision manual·suggested []다",
+        "확인 화면에 '수동 기록'과 건너뛴 검증(R1~R3·R5 해당 없음)이 보인다",
+        "원격 issue/MOCK-9030에 data/DATA-001-*/jira/MOCK-9030.yaml(cause DATA-001-02)이 있다",
+        "끝난 뒤 세션 lock이 없다"
+      ],
+      "files": []
+    },
+    {
+      "id": 31,
+      "design": "`record ABC-778 --new-cause DATA-001 --fixture <logcat>` (사용자가 원인·해결책·시그니처 제공) → `new-cause`(`temp_id`) + `cut`으로 만든 마스킹 양성 fixture, draft 초안 검증 R1~R5 결과 표시, 해결책은 근거가 없으면 `unverified`",
+      "batch": 2,
+      "prompt": null,
+      "setup": null,
+      "user_replies": null,
+      "expected_output": "`record ABC-778 --new-cause DATA-001 --fixture <logcat>` (사용자가 원인·해결책·시그니처 제공) → `new-cause`(`temp_id`) + `cut`으로 만든 마스킹 양성 fixture, draft 초안 검증 R1~R5 결과 표시, 해결책은 근거가 없으면 `unverified`",
+      "assertions": [],
+      "files": []
+    },
+    {
+      "id": 32,
+      "design": "`record ABC-779 --new-cause DATA-001`, 사용자가 \"시그니처는 나중에\"라고 명시, 로그 없음 → `signatures_pending: true`, 해결책 `unverified`, 확인 화면에 \"시그니처 없음 — 매칭 불가, 리뷰 대상\"과 R1~R3 `skipped: 시그니처 없음(pending)` 표시. 사용자가 명시하지 않았는데 시그니처를 비우면 진행하지 않고 시그니처를 요청한다",
+      "name": "record-new-cause-signatures-pending",
+      "batch": 1,
+      "prompt": "/telephony-triage:record MOCK-9032 --new-cause DATA-001 --dry-run",
+      "setup": {
+        "jira": [
+          "MOCK-9032"
+        ]
+      },
+      "user_replies": [
+        "원인 내용을 물으면: 제목 '캐리어 설정 데이터 차단', 설명 '캐리어 설정이 해당 APN 타입을 막아 데이터 평가가 거부됨', 해결책 '캐리어 설정을 최신으로 업데이트한다', resolution_type carrier-config, 재현 시나리오 '해당 캐리어 SIM 삽입 → 데이터 사용'.",
+        "시그니처를 물으면 '원인 시그니처는 나중에 넣을게(명시적으로 pending)'.",
+        "해결책이 효과 있었냐고 물으면 '근거 로그나 다른 Jira는 없어'.",
+        "확인 화면에서는 '승인'.",
+        "코드 경로를 물으면 '5) 코드 분석 건너뛰기'를 고른다.",
+        "note 한 줄 초안을 보여주면 그대로 승인한다.",
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "new-cause에 signatures_pending: true, 해결책 unverified, 확인 화면에 '시그니처 없음 — 매칭 불가, 리뷰 대상'과 R1~R3 skipped: 시그니처 없음(pending).",
+      "assertions": [
+        "사용자가 명시한 뒤에만 signatures_pending: true를 넣었다",
+        "계획 new-cause의 signatures가 비고 signatures_pending true, resolution_verification unverified다",
+        "pending의 결과(lint 경고, 매칭 불가, 해결책 unverified 고정, 리뷰 대상)를 알렸다",
+        "확인 화면에 '시그니처 없음 — 매칭 불가, 리뷰 대상'이 보인다",
+        "검증 결과에 R1~R3 skipped(시그니처 없음(pending))가 있고 통과로 표시하지 않았다",
+        "dry-run이라 원격 브랜치·PR이 없다"
+      ],
+      "files": []
+    },
+    {
+      "id": 33,
+      "design": "`record ABC-780 --cause CALL-001-01`, 사용자가 \"수정 끝났고 검증도 했어, fixed로 해줘\" → `fix-submitted`(ref·fixed_in)까지만 기록하고 `fixed`는 `verify-fix`로만 가능하다고 안내",
+      "batch": "A",
+      "prompt": "/telephony-triage:record MOCK-9033 --cause IMS-001-01 --dry-run  (수정 끝났고 검증도 했어, fixed로 해줘. CL은 MOCKCL-22222, 브랜치 MOCKB77_U2, 빌드 MOCKB77_U2_20260925에 들어갔어)",
+      "setup": {
+        "jira": [
+          "MOCK-9033"
+        ]
+      },
+      "user_replies": [
+        "fixed는 안 되고 fix-submitted까지만 된다는 안내 뒤 계속할지 물으면 '그럼 fix-submitted로 기록해줘'.",
+        "해결책 효과 근거를 물으면 '없음'.",
+        "확인 화면에서는 '승인'.",
+        "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다.",
+        "note 한 줄 초안을 보여주면 그대로 승인한다.",
+        "심층 분석(mock-data-analyzer) 실행 여부를 물으면 '아니오'.",
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "fixed는 기록하지 않고 update-fix {status: fix-submitted, ref: MOCKCL-22222, fixed_in: [{branch: MOCKB77_U2, build: MOCKB77_U2_20260925}]}까지만. fixed는 수정 빌드 로그의 verify-fix로만 된다고 안내한다.",
+      "assertions": [
+        "fixed로 기록할 수 없고 verify-fix로만 된다고 안내했다",
+        "계획에 fix.status fixed가 어디에도 없다",
+        "계획에 update-fix(IMS-001-01, status fix-submitted, ref MOCKCL-22222, fixed_in 빌드 MOCKB77_U2_20260925)가 있다",
+        "계획에 verify-fix op가 없다",
+        "dry-run이라 원격 브랜치·PR이 없고 끝난 뒤 lock이 없다"
+      ],
+      "files": [],
+      "name": "record-fixed-request-limited"
+    },
+    {
+      "id": 34,
+      "design": "`record ABC-333 --cause DATA-001-01` (ABC-333이 이미 main에 있음, 또는 같은 Jira의 열린 PR 있음) → 기존 분류(또는 PR 링크)를 보여주고 유지/재분류를 묻는다. 중복 파일을 만들지 않는다",
+      "batch": 2,
+      "prompt": null,
+      "setup": null,
+      "user_replies": null,
+      "expected_output": "`record ABC-333 --cause DATA-001-01` (ABC-333이 이미 main에 있음, 또는 같은 Jira의 열린 PR 있음) → 기존 분류(또는 PR 링크)를 보여주고 유지/재분류를 묻는다. 중복 파일을 만들지 않는다",
+      "assertions": [],
+      "files": []
+    },
+    {
+      "id": 35,
+      "design": "`record ABC-781` (옵션 없음) → 증상 설명을 받아 `db_search`·`db_add similar`로 유사 유형·원인을 보여주고 분류를 고르게 한다",
+      "batch": 2,
+      "prompt": null,
+      "setup": null,
+      "user_replies": null,
+      "expected_output": "`record ABC-781` (옵션 없음) → 증상 설명을 받아 `db_search`·`db_add similar`로 유사 유형·원인을 보여주고 분류를 고르게 한다",
+      "assertions": [],
+      "files": []
+    },
+    {
+      "id": 36,
+      "design": "`record ABC-782 --new-type data`, 사용자가 \"시그니처는 나중에\" → 새 유형은 증상 시그니처가 필수라 진행하지 않고, 증상 로그 문구나 `--fixture` 로그를 요청한다. 푸시 직전 취소한 record의 피드백은 pending에 남지 않는다",
+      "batch": 2,
+      "prompt": null,
+      "setup": null,
+      "user_replies": null,
+      "expected_output": "`record ABC-782 --new-type data`, 사용자가 \"시그니처는 나중에\" → 새 유형은 증상 시그니처가 필수라 진행하지 않고, 증상 로그 문구나 `--fixture` 로그를 요청한다. 푸시 직전 취소한 record의 피드백은 pending에 남지 않는다",
+      "assertions": [],
+      "files": []
+    },
+    {
+      "id": 37,
+      "design": "`record ABC-783 --cause DATA-001-02`, 사용자가 \"이 Jira에서 로밍 켜니까 해결됐어, 해결책 검증된 걸로 해줘\"(다른 Jira·로그 근거 없음) → 기록 대상 Jira 자신은 근거가 될 수 없다고 안내하고 `verify-resolution`을 넣지 않는다. 사용자가 계속 주장하면 `unverified`를 유지하고 \"근거: 사용자 진술\"을 남기며, 확인 화면에 \"사용자 진술 — 카테고리 오너 리뷰 필요\"를 표시한다",
+      "batch": "A",
+      "prompt": "/telephony-triage:record MOCK-9037 --cause DATA-001-02 --dry-run  (이 Jira에서 로밍 켜니까 해결됐어, 해결책 검증된 걸로 해줘)",
+      "setup": {
+        "jira": [
+          "MOCK-9037"
+        ]
+      },
+      "user_replies": [
+        "기록 대상 Jira 자신은 근거가 될 수 없다는 안내에는 '그래도 효과 있었어, 확실해' 라고 한 번 더 주장한다.",
+        "다른 Jira나 resolved 로그가 있냐고 물으면 '없어'.",
+        "확인 화면에서는 '승인'.",
+        "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다.",
+        "note 한 줄 초안을 보여주면 그대로 승인한다.",
+        "심층 분석(mock-data-analyzer) 실행 여부를 물으면 '아니오'.",
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "기록 대상 Jira 자신은 근거가 아니라고 안내하고 verify-resolution을 넣지 않는다. 사용자가 계속 주장하면 unverified를 유지하고 Jira 기록 note에 '근거: 사용자 진술'을 남기며, 확인 화면에 '사용자 진술 — 카테고리 오너 리뷰 필요'를 보여준다.",
+      "assertions": [
+        "기록 대상 Jira 자신은 해결책 근거가 될 수 없다고 안내했다",
+        "계획에 verify-resolution op가 없다",
+        "계획 jira.note에 '사용자 진술'이 들어 있다",
+        "확인 화면에 '사용자 진술 — 카테고리 오너 리뷰 필요'가 보인다",
+        "dry-run이라 원격 브랜치·PR이 없고 끝난 뒤 lock이 없다"
+      ],
+      "files": [],
+      "name": "record-self-evidence-user-statement"
+    },
+    {
+      "id": 38,
+      "design": "`record ABC-784 --new-cause DATA-001 --fixture <logcat> --resolved-fixture <logcat>` (해결책 적용 후 로그에 recovery 흔적 있음) → `db_verify resolution --plan --draft`로 새 원인을 판정해 passed면 `resolved` fixture와 `verify-resolution`이 `new-cause` 뒤에 들어가고, 확인 화면에서 해결책 검증 상태가 `verified`다. \"수정 요청\"으로 해결책 문구를 바꾸면 `unverified`로 돌아가고 재적용 diff에 이전 적용분이 중복되지 않는다",
+      "batch": 2,
+      "prompt": null,
+      "setup": null,
+      "user_replies": null,
+      "expected_output": "`record ABC-784 --new-cause DATA-001 --fixture <logcat> --resolved-fixture <logcat>` (해결책 적용 후 로그에 recovery 흔적 있음) → `db_verify resolution --plan --draft`로 새 원인을 판정해 passed면 `resolved` fixture와 `verify-resolution`이 `new-cause` 뒤에 들어가고, 확인 화면에서 해결책 검증 상태가 `verified`다. \"수정 요청\"으로 해결책 문구를 바꾸면 `unverified`로 돌아가고 재적용 diff에 이전 적용분이 중복되지 않는다",
+      "assertions": [],
+      "files": []
+    },
+    {
+      "id": 39,
+      "design": "모의 Jira MCP(`mock-jira`)의 도구 이름이 비표준(`jira_fetch_ticket`)인 상태에서 analyze → `jira.tools.get_issue` 매핑으로 읽는다. 매핑이 비어 있으면 도구 이름을 추측하지 않고 setup의 매핑 확인을 안내한다. 쓰기 도구(`jira_post_comment`)는 호출하지 않는다",
+      "batch": "A",
+      "prompt": "MOCK-1001 로그 분석해줘. 데이터가 안 붙는대. 로그는 logs/data-disabled.log 야",
+      "setup": {
+        "jira": [
+          "MOCK-1001"
+        ],
+        "logs": [
+          {
+            "src": "tests/fixtures/logs/data-disabled.log",
+            "as": "data-disabled.log"
+          }
+        ],
+        "site_defaults": {
+          "jira": {
+            "mcp_server": "mock-jira",
+            "exclude_servers": [],
+            "tools": {},
+            "read_tools": [],
+            "timezone": "Asia/Seoul",
+            "field_map": {
+              "occurred_at": "fields.customfield_10001",
+              "model": "fields.customfield_10002",
+              "sw": "fields.customfield_10003",
+              "android_version": "fields.customfield_10004",
+              "carrier": "fields.customfield_10005"
+            }
+          }
+        }
+      },
+      "user_replies": [
+        "Jira 도구 매핑이 없다고 하면 '알겠어, 오늘은 여기까지'.",
+        "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다.",
+        "note 한 줄 초안을 보여주면 그대로 승인한다.",
+        "심층 분석(mock-data-analyzer) 실행 여부를 물으면 '아니오'.",
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "config jira.tools.get_issue가 비어 있으므로 Jira 도구 이름을 추측하지 않고, setup에서 매핑을 확인하라고 안내한다(연습은 --dry-run --jira-file 가능). 쓰기 도구는 부르지 않는다. lock을 잡았으면 푼다.",
+      "assertions": [
+        "jira.tools 매핑이 비어 있다는 것을 발견하고 setup(Jira 도구 매핑)을 안내했다",
+        "Jira 도구 이름을 추측해서 부르지 않았다(jira_fetch_ticket 호출 없음)",
+        "--dry-run --jira-file 같은 대안을 알렸다",
+        "끝난 뒤 lock이 없다"
+      ],
+      "files": [],
+      "name": "jira-mapping-empty-no-guess"
+    },
+    {
+      "id": 40,
+      "design": "data 1위 후보 → 분석 스킬 호출 여부를 먼저 묻고(기본 `ask`), 승인하면 호출. 분석 스킬이 다른 원인을 제시 → 리포트에 \"분석 스킬 의견\"으로 보여주고 Step 7 선택지에 추가, 분류 점수·후보 순서는 바뀌지 않는다. 사용자가 그 의견을 고르면 `decision: chose-other`. `--analyzer`면 묻지 않고 호출한다",
+      "name": "analyzer-opinion-chose-other",
+      "batch": 1,
+      "prompt": "MOCK-9040 로그 좀 봐줘, 로밍 중에 데이터가 안 된대. --dry-run 으로. 로그: logs/e040.log",
+      "setup": {
+        "jira": [
+          "MOCK-9040"
+        ],
+        "logs": [
+          {
+            "scenario": "e040-roaming-setting-off.yaml",
+            "as": "e040.log"
+          }
+        ]
+      },
+      "user_replies": [
+        "심층 분석(mock-data-analyzer)을 실행할지 물으면 '예'.",
+        "분류를 물을 때 분석 스킬 의견(DATA-001-01)이 선택지에 있으면 그것을 고른다.",
+        "확인 화면에서는 '승인'.",
+        "코드 경로를 물으면 '5) 코드 분석 건너뛰기'를 고른다.",
+        "note 한 줄 초안을 보여주면 그대로 승인한다.",
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "1위 DATA-001-02 → 분석 스킬 호출 여부를 먼저 묻고 승인 후 호출 → '분석 스킬 의견: DATA-001-01'을 보여주고 Step 7 선택지에 추가, 분류 점수·순서 불변 → 사용자가 고르면 append DATA-001-01, decision: chose-other.",
+      "assertions": [
+        "분석 스킬을 부르기 전에 호출 여부를 물었다",
+        "분석 스킬 입력에 마스킹된 이벤트 JSON 경로를 넘겼다(원문 로그 내용을 넘기지 않음)",
+        "리포트에 '심층 분석 (mock-data-analyzer)' 절과 '분석 스킬 의견'이 있다",
+        "리포트의 1위 후보와 점수는 매처 출력 그대로다(DATA-001-02)",
+        "계획이 append DATA-001-01이고 feedback decision이 chose-other다"
+      ],
+      "files": []
+    },
+    {
+      "id": 41,
+      "design": "분석 스킬이 실패하거나, 호출 질문에 \"아니오\"거나, `--no-analyzer` → \"심층 분석 생략\"을 적고 나머지 흐름을 그대로 진행한다",
+      "batch": 2,
+      "prompt": null,
+      "setup": null,
+      "user_replies": null,
+      "expected_output": "분석 스킬이 실패하거나, 호출 질문에 \"아니오\"거나, `--no-analyzer` → \"심층 분석 생략\"을 적고 나머지 흐름을 그대로 진행한다",
+      "assertions": [],
+      "files": []
+    },
+    {
+      "id": 42,
+      "design": "새 원인 시그니처가 **다른 카테고리의 기존 양성 fixture**에서 C=1(그 로그에 실제로 두 현상이 있음) → R4 실패와 `allow-cause` 초안을 보여주고 \"시그니처 좁히기 / 허용\"을 묻는다. 허용을 고르면 그 fixture의 `.expect.yaml` 변경(`also_allowed`)이 확인 화면 변경 파일에 나오고, 그 카테고리 오너가 리뷰어에 추가된다. 사용자가 고르기 전에는 push하지 않는다",
+      "name": "allow-cause-cross-category",
+      "batch": 1,
+      "prompt": "/telephony-triage:record MOCK-9042 --new-cause IMS-001 --fixture logs/e042.log --dry-run  (망 P-CSCF 응답 지연으로 IMS 등록 408 타임아웃. 망 설정 바꿔서 해결됨)",
+      "setup": {
+        "jira": [
+          "MOCK-9042"
+        ],
+        "logs": [
+          {
+            "scenario": "e042-ims-408.yaml",
+            "as": "e042.log"
+          }
+        ],
+        "inject_main": [
+          {
+            "scenario": "e042-data-roaming-with-ims-408.yaml",
+            "dest": "data/DATA-001-no-setup-data-call/fixtures",
+            "message": "DATA-001-02 두 번째 양성 fixture (로밍 + IMS 408 동반)"
+          }
+        ]
+      },
+      "user_replies": [
+        "원인 내용: 제목 'IMS 등록 타임아웃 (408)', 설명 '망이 REGISTER에 응답하지 않아 IMS 등록이 408로 실패함', 해결책 '망(P-CSCF) 설정을 확인해 등록 응답 지연을 해소한다', resolution_type network, 재현 시나리오 '해당 로밍 망에서 IMS 등록 시도'.",
+        "시그니처는 'ims_registration_failed 이벤트의 code가 408' 하나로 한다.",
+        "해결책 효과 근거를 물으면 '없음'.",
+        "다른 유형 fixture에서 걸렸다며 '좁히기 / 허용'을 물으면: 그 fixture(DATA-001-02.2.log)에 실제로 IMS 408 실패가 함께 있으므로 '허용'.",
+        "확인 화면에서는 '승인'.",
+        "코드 경로를 물으면 '5) 코드 분석 건너뛰기'를 고른다.",
+        "note 한 줄 초안을 보여주면 그대로 승인한다.",
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "초안 검증 R4가 data 카테고리의 DATA-001-02.2.log에서 새 원인 C=1을 보고 → allow-cause 초안과 함께 '시그니처 좁히기 / 허용'을 묻고 → 허용 선택 시 DATA-001-02.2.expect.yaml(also_allowed) 변경이 확인 화면 변경 파일에 나오고 data 오너가 리뷰어에 추가된다. 고르기 전에는 진행하지 않는다.",
+      "assertions": [
+        "초안 검증 결과에서 다른 유형(DATA-001) 양성 fixture의 C=1 실패와 allow-cause 초안을 보여줬다",
+        "사용자에게 '시그니처 좁히기 / 허용'을 묻고 답을 받기 전에는 stage로 가지 않았다",
+        "계획에 allow-cause {fixture: DATA-001-02.2.log, cause: NEW-CAUSE-1}가 들어갔다",
+        "확인 화면 변경 파일에 data/DATA-001-*/fixtures/DATA-001-02.2.expect.yaml이 있다",
+        "확인 화면 리뷰어에 telephony-data-owners가 있다",
+        "dry-run이라 원격 브랜치·PR이 없다"
+      ],
+      "files": []
+    },
+    {
+      "id": 43,
+      "design": "Jira 설명에 테스터 이름·전화번호·IMEI가 있음 → 리포트·`plan.json`·확인 화면·PR 본문에 원문이 없고, 전화번호·IMEI는 토큰으로, `jira/<KEY>.yaml`에는 구조화 필드와 사용자가 확인한 `note` 한 줄만 있다. 스킬이 제안한 `note` 초안에 사람 이름이 없다",
+      "name": "jira-text-masking",
+      "batch": 1,
+      "prompt": "MOCK-9043 분석해줘 --dry-run. 로그는 logs/roaming.log",
+      "setup": {
+        "jira": [
+          "MOCK-9043"
+        ],
+        "logs": [
+          {
+            "src": "tests/fixtures/logs/data-roaming-disabled.log",
+            "as": "roaming.log"
+          }
+        ]
+      },
+      "user_replies": [
+        "분류 제안에는 '예'.",
+        "심층 분석 여부에는 '아니오'.",
+        "확인 화면에서는 '승인'.",
+        "코드 경로를 물으면 '5) 코드 분석 건너뛰기'를 고른다.",
+        "note 한 줄 초안을 보여주면 그대로 승인한다.",
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "리포트·plan.json·확인 화면에 전화번호·IMEI 원문이 없고 토큰으로 나오며, 테스터 이름(김민수)이 어디에도 없다. jira 블록에는 구조화 필드와 확인받은 note 한 줄만.",
+      "assertions": [
+        "transcript(사용자에게 보인 모든 메시지)에 010-9876-5432, +82-10-2222-3333, 356938035643809가 없다",
+        "transcript와 plan.json에 '김민수'가 없다",
+        "plan.json jira 블록에 summary·description·comments 같은 원문 필드가 없다",
+        "note 초안을 사용자에게 확인받았고 사람 이름·번호가 없다",
+        "work_dir에 jira_raw.json 같은 원문 파일이 남지 않았다"
+      ],
+      "files": []
+    },
+    {
+      "id": 44,
+      "design": "듀얼 SIM 로그: 슬롯 0에 DATA-001 증상, 슬롯 1에 DATA-001-01 원인 로그(같은 윈도우) → 분석 모드에서 DATA-001-01이 후보에 오르지 않고 \"유형 일치, 원인 미확인\"과 슬롯(phone 0)이 표시된다. `same_phone: false`인 시그니처를 가진 원인은 잡힌다. 교차 슬롯 음성 fixture(`DATA-001.none.2.log`)가 회귀를 통과한다",
+      "batch": 2,
+      "prompt": null,
+      "setup": null,
+      "user_replies": null,
+      "expected_output": "듀얼 SIM 로그: 슬롯 0에 DATA-001 증상, 슬롯 1에 DATA-001-01 원인 로그(같은 윈도우) → 분석 모드에서 DATA-001-01이 후보에 오르지 않고 \"유형 일치, 원인 미확인\"과 슬롯(phone 0)이 표시된다. `same_phone: false`인 시그니처를 가진 원인은 잡힌다. 교차 슬롯 음성 fixture(`DATA-001.none.2.log`)가 회귀를 통과한다",
+      "assertions": [],
+      "files": []
+    },
+    {
+      "id": 45,
+      "design": "이슈 DB에 맞는 유형이 없는 로그(S=1 유형 없음) → \"후보 없음\" 절에 설명 기반 유사 후보(`db_search`)와 타임라인 요약의 오류·거부 이벤트, 범위·시계 판정이 나오고, 계획 op는 자동으로 만들지 않으며 \"새 유형 / 원인 미확정 / 기록하지 않음\"만 묻는다. 발생 시각이 로그 범위 밖이면 \"로그 범위 밖\"으로 따로 보고하고 `--full` 재파싱을 제안한다. bugreport zip을 로그로 주면 logcat 섹션만 추출해 같은 흐름을 진행하고 dumpsys 섹션은 읽지 않는다",
+      "name": "no-candidates-bugreport",
+      "batch": 1,
+      "prompt": "MOCK-9045 봐줘. 데이터 연결이 계속 실패한대. bugreport 첨부: logs/bugreport.zip",
+      "setup": {
+        "jira": [
+          "MOCK-9045"
+        ],
+        "logs": [
+          {
+            "scenario": "../../mocks/scenarios/data-setup-error.yaml",
+            "as": "bugreport.zip",
+            "bugreport": "zip"
+          }
+        ]
+      },
+      "user_replies": [
+        "선택지가 '새 유형 / 원인 미확정 / 기록하지 않음'이면 '기록하지 않음'.",
+        "코드 경로를 물으면 '5) 코드 분석 건너뛰기'를 고른다.",
+        "note 한 줄 초안을 보여주면 그대로 승인한다.",
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "bugreport에서 logcat만 추출(dumpsys 미사용), S=1 유형 없음 → '후보 없음' 절에 db_search 유사 후보, 오류 이벤트(SETUP_DATA_CALL 에러), 범위·시계 판정. 계획 op 자동 생성 없음, 세 선택지만 제시 → 기록하지 않음 → lock 해제.",
+      "assertions": [
+        "parse_logcat extract-bugreport로 logcat 섹션만 꺼냈고 dumpsys 섹션을 읽지 않았다",
+        "리포트에 '후보 없음' 절이 있고 설명 기반 유사 후보(db_search)가 있다",
+        "후보 없음 절에 SETUP_DATA_CALL 에러 이벤트 요약과 로그 범위·시계 판정이 있다",
+        "Step 7 선택지가 새 유형 / 원인 미확정 / 기록하지 않음 세 가지뿐이다",
+        "'기록하지 않음' 후 plan.json을 만들지 않았고 세션 lock을 풀었다"
+      ],
+      "files": []
+    }
+  ]
+}

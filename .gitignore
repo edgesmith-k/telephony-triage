@@ -17,3 +17,6 @@ __pycache__/
 
 # 빈 플러그인 실험이 남기는 로그 (커밋하지 않는다)
 tests/mocks/plugin-probe/probe-hook.log
+
+# 스킬 eval 실행 결과 (Phase 13, tests/skill_evals/README.md)
+tests/skill_evals/workspace/

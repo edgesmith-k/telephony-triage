@@ -1,0 +1,12 @@
+# eval 42: IMS 등록이 408(타임아웃)로 반복 실패. IMS-001의 새 원인 후보.
+name: e042-ims-408
+start: "2026-09-28T09:00:00+09:00"
+default_phone: 0
+pid: 1600
+tid: 1610
+entries:
+  - {at: 0, tag: ImsResolver, msg: "bound to mock ImsService"}
+  - {after: 3, tag: ImsManager, msg: "register: impu=sip:<IMPU#1>@ims.mnc001.mcc450.3gppnetwork.org"}
+  - {after: 32, tag: ImsRegistration, level: W, msg: "onRegistrationFailed: code=408 reason=REQUEST_TIMEOUT"}
+  - {after: 30, tag: ImsManager, msg: "register: impu=sip:<IMPU#1>@ims.mnc001.mcc450.3gppnetwork.org"}
+  - {after: 32, tag: ImsRegistration, level: W, msg: "onRegistrationFailed: code=408 reason=REQUEST_TIMEOUT"}

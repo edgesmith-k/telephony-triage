@@ -54,7 +54,7 @@ from pathlib import Path
 SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS))
 
-from common import site_defaults, userconfig, yamlio  # noqa: E402
+from common import masking, site_defaults, userconfig, yamlio  # noqa: E402
 from common.buildname import is_valid_branch_name  # noqa: E402
 from common import ghcli  # noqa: E402
 from common.exitcodes import CHECK_FAILED, NEEDS_APPROVAL, OK, USAGE  # noqa: E402
@@ -705,6 +705,9 @@ def summary(ctx: Ctx, wt: Path) -> dict:
     for row in verification:
         if row["status"] == "skipped" and row.get("review_required"):
             notes.append(f"{row['id']}: 검증 못 함 — 리뷰 대상 ({row['reason']})")
+    # 계획의 pr_notes: 흐름별 설명(drift 결정, verify-fix 근거, allow-cause 사유 등). 한 번 더 마스킹한다.
+    masker = masking.new_masker(allow_patterns=(db_cfg.get("mask") or {}).get("allow_patterns") or [])
+    notes += [masker(str(n)) for n in plan.get("pr_notes") or [] if str(n).strip()]
     check = stage_result.get("config_check") or {}
     push_allowed = bool(check.get("push_allowed")) and not stage_result.get("dry_run")
     push_note = None
@@ -995,6 +998,19 @@ def find_plan(ctx: Ctx, branch: str) -> dict:
 # -- main -------------------------------------------------------------------------------
 
 
+def _allow_common_anywhere(parser: argparse.ArgumentParser) -> None:
+    """`--json`·`--plugin-root`를 서브커맨드 앞뒤 어디에 줘도 받는다(contracts.md §3.2 공통 규칙, 다른 스크립트와 같게)."""
+    for action in parser._actions:
+        if isinstance(action, argparse._SubParsersAction):
+            for sub in action.choices.values():
+                opts = {o for a in sub._actions for o in a.option_strings}
+                if "--json" not in opts:
+                    sub.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="JSON 출력 (항상 JSON)")
+                if "--plugin-root" not in opts:
+                    sub.add_argument("--plugin-root", default=argparse.SUPPRESS)
+                _allow_common_anywhere(sub)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="db_pr.py", description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -1038,6 +1054,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("wt")
     p = sub.add_parser("find-plan")
     p.add_argument("--branch", required=True)
+    _allow_common_anywhere(parser)
     return parser
 
 

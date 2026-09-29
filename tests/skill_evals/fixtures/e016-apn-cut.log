@@ -1,0 +1,6 @@
+09-23 11:00:00.000  1234  1244 D DCM-0: [PHONE0] carrier config loaded: carrierId=<CARRIER>
+09-23 11:00:02.000  1234  1244 W DPM-0: [PHONE0] no data profile matches the SIM: apnTypes=default,supl
+09-23 11:00:03.000  1234  1244 I DNC-0: [PHONE0] onEvaluateNetworkRequests: reason=DATA_PROFILES_CHANGED
+09-23 11:00:03.500  1234  1244 W DNC-0: [PHONE0] evaluation result: NOT_ALLOWED reasons=[NO_SUITABLE_DATA_PROFILE]
+09-23 11:00:23.500  1234  1244 W DNC-0: [PHONE0] evaluation result: NOT_ALLOWED reasons=[NO_SUITABLE_DATA_PROFILE]
+09-23 11:00:26.500  1234  1244 D DRM-0: [PHONE0] no retry scheduled: no suitable data profile

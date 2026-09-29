@@ -9,7 +9,7 @@ argument-hint: "[--cause <원인 ID> <적용 후 logcat...>] [--extra <logcat...
 
 ## `--cause`가 있으면: 해결책 검증
 
-telephony-triage 스킬의 `validate --cause` 흐름(`reference/verify.md`, 원본 `07-workflow.md §validate`)을 다음 인자로 실행한다: $ARGUMENTS
+먼저 `${CLAUDE_PLUGIN_ROOT}/skills/telephony-triage/reference/verify.md`를 읽고, 그 `validate --cause` 흐름(원본 `07-workflow.md §validate`)을 다음 인자로 실행한다: $ARGUMENTS
 작업 키 `verify-res-<원인 ID>-<YYYYMMDD>`로 세션 lock을 잡고 끝나는 모든 경로에서 푼다. 판정이 passed일 때만
 `verify-res/<원인 ID>-<YYYYMMDD>` PR을 만든다(공통 쓰기 절차, push 전 확인 화면 승인).
 

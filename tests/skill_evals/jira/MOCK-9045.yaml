@@ -1,0 +1,17 @@
+# 스킬 eval용 모의 Jira 티켓 (tests/skill_evals/README.md). 형식은 tests/mocks/jira/*.yaml과 같다.
+key: MOCK-9045
+fields:
+  summary: 데이터 연결 실패 (APN 오류 추정)
+  description: |
+    데이터 연결 요청은 나가는데 계속 실패합니다. 로그는 bugreport로 첨부.
+  status: {name: Open}
+  project: {key: MOCK, name: Mock Telephony}
+  components:
+    - {name: Data}
+  customfield_10001: "2026-09-21T10:00:03+0900"
+  customfield_10002: MOCK-A56
+  customfield_10003: MOCKA56_U1_20260915
+  customfield_10004: "16"
+  customfield_10005: MockTel KR
+  customfield_10006: "0"
+comments: []

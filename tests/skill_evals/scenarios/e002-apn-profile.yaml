@@ -1,0 +1,13 @@
+# eval 2: 증상은 DATA-001(SETUP_DATA_CALL 미발생), 원인은 이슈 DB에 없음(적합한 APN 프로파일 없음).
+name: e002-apn-profile
+start: "2026-09-23T11:00:00+09:00"
+default_phone: 0
+pid: 1234
+tid: 1244
+entries:
+  - {at: 0, tag: "DCM-{phone}", msg: "carrier config loaded: carrierId=<CARRIER>"}
+  - {after: 2, tag: "DPM-{phone}", level: W, msg: "no data profile matches the SIM: apnTypes=default,supl"}
+  - {after: 1, tag: "DNC-{phone}", level: I, msg: "onEvaluateNetworkRequests: reason=DATA_PROFILES_CHANGED"}
+  - {after: 0.5, tag: "DNC-{phone}", level: W, msg: "evaluation result: NOT_ALLOWED reasons=[NO_SUITABLE_DATA_PROFILE]"}
+  - {after: 20, tag: "DNC-{phone}", level: W, msg: "evaluation result: NOT_ALLOWED reasons=[NO_SUITABLE_DATA_PROFILE]"}
+  - {after: 3, tag: "DRM-{phone}", msg: "no retry scheduled: no suitable data profile"}

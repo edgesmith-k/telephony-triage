@@ -14,8 +14,8 @@
 - 완료 Phase 추가: **9** (2026-09-29, 사용자 확인 — Phase 10 진행 지시로 확인)
 - 완료 Phase 추가: **10** (2026-09-29, 사용자 확인 후 커밋. recovery 예시는 사용자 결정 (a))
 - 완료 Phase 추가: **11** (2026-09-29, 사용자 확인 후 커밋. 병합 unresolved Jira는 결정 (a), `GENERATOR_VERSION`은 1 유지)
-- 완료 Phase 추가: **12** 구현·점검 끝 (2026-09-29, **사용자 확인 대기**)
-- 다음 Phase: **13** (`11-phases.md` Phase 13 절부터, Phase 12 확인 후)
+- 완료 Phase 추가: **12** (2026-09-29, 사용자 확인 — Phase 13 진행 지시로 확인)
+- 진행 중 Phase: **13** (`11-phases.md` Phase 13 절)
 - Phase 2~6은 사용자가 미리 승인해서 Phase마다 확인을 기다리지 않고 진행했다(각 Phase 끝에 커밋·push). 완료 기준 점검 결과는 Phase별 절에 있다. **Phase 7부터는 다시 Phase마다 사용자 확인을 받는다.**
 - 기준 문서 세트: `telephony-triage-docs-v11` (`CHANGES.md` 참고)
 - 레포 루트: 이 파일이 있는 디렉토리 (`CLAUDE.md`, `docs/design/`, `plugin/`,
@@ -830,6 +830,57 @@ Claude hook은 `guard.py`에 hook 입력 JSON을 직접 넣어 시험했다. **�
 - **`sync-pr` 커맨드는 스킬에 기대지 않는다**: 완료 기준이 "지금 동작"이라 9단계를 본문에 자기완결로 적었다.
 - **`${CLAUDE_PLUGIN_ROOT}` 치환(S1)은 아직 확인하지 못했다.** 커맨드 본문은 `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/<이름>.py"`를
   쓴다. 치환이 안 되면 config의 `plugin.scripts_path`로 바꾼다.
+
+### Phase 13에서 만든 것 (진행 중 — 반복 1 끝)
+
+| 산출물 | 경로 |
+|---|---|
+| 스킬 본체 (analyze Step 0~8, 263줄) | `plugin/skills/telephony-triage/SKILL.md` |
+| 흐름별 reference 8개 | `reference/{write-flow,record,verify,sync-pr,db-authoring,log-tags,ril-requests,fail-causes}.md` |
+| 커맨드 5개 → 자기 reference 연결 | `plugin/commands/{analyze,record,verify-fix,fix-submitted,validate}.md` |
+| Jira 응답 추출 스크립트 (계약 보완) | `plugin/scripts/jira_fields.py`, `tests/test_jira_fields.py` |
+| eval 45개 정의 (batch 1 = 10개 완성) | `tests/skill_evals/evals.json`, `jira/`, `scenarios/`, `plans/`, `fixtures/`, `README.md` |
+| 트리거 테스트 24개 | `tests/skill_evals/trigger_evals.json` |
+| eval 환경 빌더 / 채점 | `tests/helpers/skill_eval_env.py`, `tests/skill_evals/grade.py` |
+| 모의 Jira CLI (서브에이전트용) | `tests/mocks/jira_mcp/call.py`, `server.py`에 `MOCK_JIRA_DIR`·`MOCK_JIRA_WRITE_LOG` |
+
+### Phase 13 반복 1 결과 (2026-09-29, batch 1 = eval 1·2·16·19·30·32·40·42·43·45, with-skill만)
+
+- assertion 70/71 통과. 실패 1: eval 40 — 분석 스킬 호출 여부를 묻기 전에 입력 형식을 확인하려고 한 번 실행함 → SKILL.md Step 5-1에 "답을 받기 전에는 어떤 형태로도 실행하지 않는다" 추가.
+- 결과 보기: `tests/skill_evals/workspace/iteration-1/review.html` (skill-creator viewer, 커밋 안 함).
+- 토큰: 건당 약 8.4만~14.4만(평균 약 11만), 시간 3.4~6분. eval 2는 끝 보고 직전에 API 한도(429)로 끊겼지만 산출물은 완성.
+
+### Phase 13 구현에서 정한 세부 (반복 1 피드백 반영)
+
+- **`db_pr.py`·`code_roots.py`가 `--json`/`--plugin-root`를 서브커맨드 뒤에서도 받는다**(다른 스크립트와 같게). 10개 eval이 모두 여기서 종료 코드 2를 한 번씩 받았다.
+- **`config.py show`의 `effective`에 `analyzers`가 들어간다**(site-defaults → 사용자 config 병합, `16 §16.5`).
+- **계획 `pr_notes`(선택, 문자열 목록)**: 확인 화면 notes와 PR 본문에 붙는 흐름별 설명. drift 결정(다음 stage에는 drift가 없어 사라지던 기록),
+  verify-fix 판정 근거·시나리오 흔적, allow-cause 사유. `db_pr summary`가 한 번 더 마스킹한다. 이슈 DB `schema/plan.schema.json`에
+  선택 필드로 추가(필수 아님 → `schema_version` 그대로, `06 §6.4`). 7개 fixture DB 사본 모두 같은 줄 추가.
+- **새 원인·유형에도 `append {cause: <temp_id>}`가 필요**하다는 것을 SKILL·record·db-authoring에 명시(기존 테스트 계획과 같은 형태).
+- **`new-cause.cause` 형식**은 plan.schema `causeBody`대로(`id`·`status`·`fix.verification*` 없음), `body`는 섹션 내용만(제목 줄은 `db_add`가 씀).
+- **`window_in_range: partial`** = ±5분 창 일부만 로그에 있음(짧은 로그에서 흔함) → 진행하고 리포트에 범위를 적는다.
+- **검증 모드 흔적 시각**: `db_verify resolution/fix`의 `ts`는 연도 없이 UTC로 읽은 파일 시계(연도 2000). fixture를 자를 때 `cut --around <ts> --tz UTC`(`--year` 없이).
+- **Jira 도구 인자 이름**은 MCP 도구 입력 스키마를 따른다(추측 금지). eval 환경의 `call.py`는 스키마를 주지 않아 서브에이전트가 한 번씩 틀렸다 — `call.py --list`(입력 스키마)를 추가했고 env.json `jira_tools_list`로 알려준다.
+- **카테고리 README 전부 재생성**은 버그가 아니다: 머리의 "기준일"이 DB 안 최신 Jira `date`라(`03 §5.2` 결정성) Jira가 하나 늘면 모두 바뀐다. PR diff 소음은 있다(사용자 판단 후보).
+- 모의 분석 스킬 `run.py`는 extractor 이벤트 `data_setting_changed enabled=false`로도 의견을 낸다(백엔드 내장 이벤트 없이 eval 40을 만들기 위해).
+
+### Phase 13 반복 2 결과 (2026-09-29, batch A = 원칙·안전 eval 8·9·13·17·18·24·29·33·37·39)
+
+- assertion 63/63 통과(스크립트 채점 1건은 채점기 오탐 — 39번 commands.md의 "호출하지 않았다" 설명문에 도구 이름이 있어 걸림, 수동 정정).
+- 결과 보기: `tests/skill_evals/workspace/iteration-2/review.html`. 토큰 건당 약 6.4만~13.5만(합계 약 99만), 시간 1~5분.
+- 환경 빌더 추가: `site_defaults`(site-defaults 최상위 덮어쓰기), `clone_state`(사용자 clone 브랜치·dirty 파일·로컬 브랜치), main 편집 `schema99`. `before.json`에 브랜치별 SHA.
+- 반영한 스킬 수정: Jira 도구 매핑 확인을 Step 0으로(lock 전), analyze의 `config.py check` 쓰기 불가(종료 코드 2)는 멈추지 않고 읽기 전용 모드,
+  `pr_notes`에 summary 자동 문구를 중복하지 않기, 사용자 로컬 브랜치는 앞선 커밋이 있을 때만 묻기.
+- 스크립트 개선 후보(아직 안 함): `db_search`에 scenario/recovery 시그니처와 본문 "재현 시나리오"를 넣기(verify-fix가 type.md를 grep함),
+  `sanitize_build` CLI(작업 키 만들 때), Jira 슬롯 번호와 `phone_id`의 기준(0/1) 명시.
+- **사용자 판단 필요**: 생성 파일의 "기준일"(최신 Jira `date`) 때문에 Jira 하나만 더해도 모든 카테고리 README가 바뀐다(에이전트 3명이 PR diff 소음으로 지적).
+
+### Phase 13 남은 일
+
+1. batch 1 재실행(수정 확인) + 남은 25개(B·C·D) setup·assertion 작성 후 실행.
+2. 트리거 테스트: skill-creator `run_loop`(`claude -p`)로 description 최적화 — 스킬 본문이 안정된 뒤.
+3. 실제 Claude Code에서 플러그인 로드 상태로 커맨드→스킬 연결 확인(S1, 빈 플러그인 실험과 함께).
 
 ## 개발 환경과 설계의 차이 (중요)
 

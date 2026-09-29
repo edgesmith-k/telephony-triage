@@ -1,0 +1,17 @@
+# 스킬 eval용 모의 Jira 티켓 (tests/skill_evals/README.md). 형식은 tests/mocks/jira/*.yaml과 같다.
+key: MOCK-9042
+fields:
+  summary: VoLTE 등록 안 됨 (해외)
+  description: |
+    해외 망에서 IMS 등록이 계속 타임아웃 납니다. 망 쪽 P-CSCF 응답 지연으로 확인되어 망 설정 변경으로 해결됨.
+  status: {name: Open}
+  project: {key: MOCK, name: Mock Telephony}
+  components:
+    - {name: IMS}
+  customfield_10001: "2026-09-28T09:00:35+0900"
+  customfield_10002: MOCK-B77
+  customfield_10003: MOCKB77_U2_20260920
+  customfield_10004: "17"
+  customfield_10005: MockTel Roaming
+  customfield_10006: "0"
+comments: []

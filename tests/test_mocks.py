@@ -420,6 +420,8 @@ def test_repo_text_files_use_lf():
         rel = path.relative_to(REPO)
         if set(rel.parts) & skip_parts or path.suffix in skip_suffix:
             continue
+        if rel.as_posix().startswith("tests/skill_evals/workspace/"):  # 스킬 eval 실행 결과, .gitignore (커밋 안 함)
+            continue
         if rel.name == "probe-hook.log":  # 실험이 남기는 파일, 커밋하지 않는다
             continue
         if b"\r\n" in path.read_bytes():

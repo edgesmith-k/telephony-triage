@@ -1,0 +1,17 @@
+# 스킬 eval용 모의 Jira 티켓 (tests/skill_evals/README.md). 형식은 tests/mocks/jira/*.yaml과 같다.
+key: MOCK-9032
+fields:
+  summary: 데이터가 간헐적으로 안 붙음
+  description: |
+    특정 캐리어 설정에서 데이터가 안 붙었고 캐리어 설정 업데이트로 해결됨.
+  status: {name: Open}
+  project: {key: MOCK, name: Mock Telephony}
+  components:
+    - {name: Data}
+  customfield_10001: "2026-09-24T15:00:00+0900"
+  customfield_10002: MOCK-A56
+  customfield_10003: MOCKA56_U1_20260915
+  customfield_10004: "16"
+  customfield_10005: MockTel KR
+  customfield_10006: "0"
+comments: []

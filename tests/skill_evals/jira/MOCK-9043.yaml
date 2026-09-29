@@ -1,0 +1,18 @@
+# 스킬 eval용 모의 Jira 티켓 (tests/skill_evals/README.md). 형식은 tests/mocks/jira/*.yaml과 같다.
+key: MOCK-9043
+fields:
+  summary: 로밍 데이터 불가 - 테스터 제보
+  description: |
+    테스터 김민수(010-9876-5432) 제보. 단말 IMEI 356938035643809, 고객 번호 +82-10-2222-3333 에서 재현.
+    로밍 SIM으로 데이터가 붙지 않음.
+  status: {name: Open}
+  project: {key: MOCK, name: Mock Telephony}
+  components:
+    - {name: Data}
+  customfield_10001: "2026-09-22T08:00:05+0900"
+  customfield_10002: MOCK-A56
+  customfield_10003: MOCKA56_U1_20260915
+  customfield_10004: "16"
+  customfield_10005: MockTel Roaming
+  customfield_10006: "1"
+comments: []

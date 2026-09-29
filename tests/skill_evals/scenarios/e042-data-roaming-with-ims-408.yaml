@@ -1,0 +1,16 @@
+# eval 42 사전 주입: DATA-001-02 두 번째 양성 fixture. 해외 로밍에서 데이터 로밍 OFF와 IMS 등록 408 실패가 실제로 함께 있는 로그.
+name: DATA-001-02.2
+start: "2026-09-25T07:00:00+09:00"
+default_phone: 0
+pid: 1234
+tid: 1250
+expect:
+  expect_top: DATA-001-02
+entries:
+  - {at: 0, tag: "SST-{phone}", msg: "onRoamingOn: roaming=true"}
+  - {after: 2, tag: "DSM-{phone}", msg: "isDataRoamingEnabled=false"}
+  - {after: 1, tag: "DNC-{phone}", level: I, msg: "onEvaluateNetworkRequests: reason=ROAMING_STATE_CHANGED"}
+  - {after: 0.5, tag: "DNC-{phone}", level: W, msg: "evaluation result: NOT_ALLOWED reasons=[ROAMING_DISABLED]"}
+  - {after: 5, tag: ImsManager, pid: 1600, tid: 1610, msg: "register: impu=sip:<IMPU#1>@ims.mnc001.mcc450.3gppnetwork.org"}
+  - {after: 32, tag: ImsRegistration, pid: 1600, tid: 1610, level: W, msg: "onRegistrationFailed: code=408 reason=REQUEST_TIMEOUT"}
+  - {after: 10, tag: "DNC-{phone}", level: W, msg: "evaluation result: NOT_ALLOWED reasons=[ROAMING_DISABLED]"}

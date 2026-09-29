@@ -156,7 +156,8 @@ def test_reclassify_needs_jira_in_main_and_append_stops_on_existing():
 def test_record_labels_pending_rules_and_sync_keeps_pending():
     ws = Workspace()
     pending = pending_feedback(ws)
-    ws.plan("MOCK-7005", "p7-record-pending.plan.json")
+    ws.plan("MOCK-7005", "p7-record-pending.plan.json",
+            pr_notes=["drift 결정: DATA-001-02 resolution — 계획 값 유지", "연락처 010-1234-5678"])
     ws.put("MOCK-7005", "fixtures/cut-1.log", SIM_LOG)
     ws.acquire("MOCK-7005")
     stage = ws.stage("MOCK-7005", "issue/MOCK-7005")
@@ -166,6 +167,9 @@ def test_record_labels_pending_rules_and_sync_keeps_pending():
     assert summary["jira"]["label"] == "Jira 메타데이터: 오프라인 파일"
     notes = " / ".join(summary["notes"])
     assert "로그·코드 분석: 하지 않음" in notes and "시그니처 없음" in notes and "사용자 진술" in notes
+    # 계획 pr_notes는 확인 화면·PR 본문에 들어가고 한 번 더 마스킹된다 (Phase 13)
+    assert "drift 결정: DATA-001-02 resolution — 계획 값 유지" in notes and "010-1234-5678" not in notes
+    assert "drift 결정" in summary["pr_body"] and "010-1234-5678" not in summary["pr_body"]
     assert {r["id"] for r in summary["verification"]} == {"R1", "R2", "R3", "R4", "R5", "R6"}
     assert "수동 기록" in summary["pr_body"] and "| R4 | 통과 |" in summary["pr_body"]
     ws.commit("MOCK-7005")
