@@ -1,0 +1,8 @@
+09-27 12:00:00.000  1300  1312 D ImsResolver: [PHONE0] bound to mock ImsService
+09-27 12:00:06.000  1300  1312 W ImsRegistration: [PHONE0] onRegistrationFailed: code=403 reason=FORBIDDEN
+09-27 12:01:36.000  1300  1312 D ImsPhoneCallTracker: [PHONE0] dial: isVolteEnabled=true imsRegistered=false
+09-27 12:01:36.500  1300  1312 D RILJ: [PHONE0] [0095]> DIAL clir=0
+09-27 12:01:37.700  1300  1312 D RILJ: [PHONE0] [0095]< DIAL error=NONE
+09-27 12:01:38.000  1300  1312 D RILJ: [PHONE0] [0096]> LAST_CALL_FAIL_CAUSE
+09-27 12:01:38.400  1300  1312 D RILJ: [PHONE0] [0096]< LAST_CALL_FAIL_CAUSE causeCode=17
+09-27 12:01:38.600  1300  1312 W ImsPhoneCallTracker: [PHONE0] call ended: cause=17

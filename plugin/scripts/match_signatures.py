@@ -221,15 +221,8 @@ def run(args) -> dict:
     return result
 
 
-def match(events_doc: dict, db: issuedb.IssueDb, compiled: dict, *, regress: bool, jira: dict | None = None,
-          no_feedback_weight: bool = False, top: int = 0, acceptance: dict | None = None) -> dict:
-    """마스킹된 이벤트 문서 하나를 이슈 DB에 매칭한다 (`db_regress`·`db_verify`가 직접 부른다).
-    `compiled`는 `common/compiled.py`의 `compile_signatures()` 결과."""
-    jira = jira or {}
-    occurred = None
-    if jira.get("occurred_at") and not regress:
-        occurred = _parse_iso(jira["occurred_at"], "--jira-meta occurred_at")
-
+def _range(events_doc: dict, regress: bool):
+    """(정렬된 이벤트, 범위 시작, 끝, 분석 창). 회귀·검증 모드는 파일 전체다."""
     events = sorted(events_doc.get("events") or [], key=lambda e: e["ts"])
     coverage = events_doc.get("coverage") or {}
     window = (events_doc.get("input") or {}).get("window")
@@ -239,6 +232,28 @@ def match(events_doc: dict, db: issuedb.IssueDb, compiled: dict, *, regress: boo
         lo, hi = window["start"], window["end"]
     lo = _parse_iso(lo, "범위") if lo else None
     hi = _parse_iso(hi, "범위") if hi else None
+    return events, lo, hi, window
+
+
+def evaluator_for(events_doc: dict, db: issuedb.IssueDb) -> Evaluator:
+    """회귀·검증 모드 평가기 (파일 전체 범위, 이슈 DB의 패턴 시간 상한). 호출자가 닫는다."""
+    events, lo, hi, _ = _range(events_doc, True)
+    timeout_ms = int((db.config.get("matcher") or {}).get("pattern_timeout_ms", DEFAULT_TIMEOUT_MS))
+    return Evaluator(events, lo, hi, timeout_ms)
+
+
+def match(events_doc: dict, db: issuedb.IssueDb, compiled: dict, *, regress: bool, jira: dict | None = None,
+          no_feedback_weight: bool = False, top: int = 0, acceptance: dict | None = None,
+          evaluator: Evaluator | None = None) -> dict:
+    """마스킹된 이벤트 문서 하나를 이슈 DB에 매칭한다 (`db_regress`·`db_verify`가 직접 부른다).
+    `compiled`는 `common/compiled.py`의 `compile_signatures()` 결과. `evaluator`를 주면(회귀·검증 모드에서
+    같은 이벤트로 다른 시그니처도 평가할 때, `evaluator_for()`) 그것을 쓰고 닫지 않는다."""
+    jira = jira or {}
+    occurred = None
+    if jira.get("occurred_at") and not regress:
+        occurred = _parse_iso(jira["occurred_at"], "--jira-meta occurred_at")
+
+    events, lo, hi, window = _range(events_doc, regress)
     half = (hi - lo).total_seconds() / 2 if (lo and hi and window and not regress) else None
 
     scoring = _scoring(db.config)
@@ -258,7 +273,10 @@ def match(events_doc: dict, db: issuedb.IssueDb, compiled: dict, *, regress: boo
 
     errors: list[dict] = []
     types_out, causes_out, candidates, pending = [], [], [], []
-    with Evaluator(events, lo, hi, timeout_ms) as evaluator:
+    own = evaluator is None
+    if own:
+        evaluator = Evaluator(events, lo, hi, timeout_ms)
+    try:
         for itype in db.types:
             if not itype.active:
                 continue
@@ -290,6 +308,9 @@ def match(events_doc: dict, db: issuedb.IssueDb, compiled: dict, *, regress: boo
             if S and not any_cause:
                 candidates.append(_candidate(db, itype, None, S, 0, sym, None, jira, occurred, half,
                                              scoring, use_bonus, stats, min_samples, rules, use_feedback))
+    finally:
+        if own:
+            evaluator.close()
 
     candidates.sort(key=lambda c: (-c["score"], c["type"], c["cause"] or ""))
     return {

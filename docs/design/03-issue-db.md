@@ -153,7 +153,7 @@ causes:
         sequence: [setting-off, rejected]   # 선택. 설정 OFF가 거부보다 먼저여야 충족 (04-parser-matching.md §5.11 (1))
         same_phone: true               # 선택, 기본 true. 같은 슬롯(phone_id)의 이벤트로만 충족
         window_sec: 60
-    recovery_signatures: []            # 정상 동작(해결 후)을 보여주는 시그니처. 예: SETUP_DATA_CALL 요청이 나감 (05-verification.md)
+    recovery_signatures: []            # 해결 후 이 원인에 특정한 정상 흐름. 예: 데이터 설정 ON → SETUP_DATA_CALL 요청 (sequence). 음성 fixture 전부에 맞으면 R1 실패 (05-verification.md)
     scenario_signatures: []            # 재현 시나리오를 수행한 흔적. 예: 데이터 연결을 시도한 평가 로그 (05-verification.md §5.12 (2))
     resolution: 모바일 데이터 설정을 켠다
     resolution_type: user-setting      # user-setting | carrier-config | framework-bug | vendor-ril | modem | network | hw
@@ -371,7 +371,7 @@ analyze Step 7까지의 결정은 이슈 DB를 바로 바꾸지 않고 **작업 
 | `resolution_type` | 허용 값 중 하나 (`contracts.md §상태 값`) | user-setting, carrier-config, framework-bug, vendor-ril, modem, network, hw | etc |
 | `fix.status` | 허용 값 중 하나. `fix-submitted`면 `ref`와 `fixed_in`(브랜치 필수, 빌드 선택) 필수, `fixed`면 여기에 더해 `verification`(result: passed) 필수. **새 원인은 `fixed`로 시작할 수 없다** (verify-fix를 거쳐야 함, 검사 범위는 5.9 아래) | fix-submitted + CL 링크 + 브랜치[:빌드] | 검증 없이 fixed |
 | `resolution_verification` | 새 원인과 `resolution`을 바꾼 원인은 `unverified`로 시작. `verified`로 바꾸는 것은 `verify-resolution` op뿐이고 evidence(Jira 또는 `resolved` fixture) 필수. 같은 계획에서 `new-cause` 뒤에 `verify-resolution`이 오면 새 원인도 `verified`로 들어갈 수 있다. 기록 대상 Jira 자신은 evidence가 될 수 없고, 사용자 진술뿐이면 `unverified` + "근거: 사용자 진술"(새 원인은 `method`, 기존 원인은 Jira `note`) | `{status: verified, evidence: [ABC-222]}` | 근거 없이 verified, 기록하는 Jira 자신을 evidence로 |
-| `recovery_signatures` | 해결되면 나타나야 하는 정상 동작 시그니처. 코드·설정 수정 유형(framework-bug, vendor-ril, modem, carrier-config)은 권장 | `must_match: ['RILJ.*>\s*SETUP_DATA_CALL']` | 원인 시그니처의 단순 부정 |
+| `recovery_signatures` | 해결되면 나타나야 하는 **이 원인에 특정한** 정상 흐름. 원인의 계기가 풀리는 이벤트와 정상 동작을 `sequence`로 묶는다. 그 카테고리 음성 fixture(정상 로그) 전부에 맞으면 R1 흔적 검사에서 실패한다(`05-verification.md §5.12 (1)`). 코드·설정 수정 유형(framework-bug, vendor-ril, modem, carrier-config)은 권장 | `must_event: [{id: on, event: data_setting_changed, fields: {enabled: 'true'}}]` + `must_match: [{id: setup, pattern: 'RILJ.*>\s*SETUP_DATA_CALL'}]`, `sequence: [on, setup]` | 원인 시그니처의 단순 부정, 정상 로그면 어디에나 맞는 동작만(예: `SETUP_DATA_CALL` 요청만) |
 | `scenario_signatures` | 재현 시나리오 수행 흔적. 코드·설정 수정 유형은 **`fixed` 전환 전에 `scenario_signatures`나 `recovery_signatures` 중 하나가 필수** (`05-verification.md §5.12 (2)`) | 데이터 연결 시도 평가 로그, 발신 요청 로그 | 원인 시그니처 복사 |
 | 시그니처 | 증상용/원인용 분리. **새 유형/원인은 판별 시그니처 필수**. 예외는 `record`에서 사용자가 명시한 **원인의** `signatures_pending: true`뿐이다(경고, 리뷰 대상, 원인 판별 불가, 해결책 unverified 고정. `sync-pr` 재적용에서는 유지된다). **새 유형의 증상 시그니처는 예외 없이 필수**. **마스킹된 로그 기준으로** 실제 확인한 문구로만 작성. 원본 식별자(IMSI, 전화번호, 셀 ID 등) 패턴 금지(`db_lint`, extractor 패턴 포함). 반복되는 복잡한 패턴은 extractor + `must_event` | `must_event: data_evaluation_rejected` | `.*error.*` 같은 광범위 패턴, 마스킹될 값에 의존, 시그니처를 비운 채 pending 표시 없음 |
 | Jira 기록 | `templates/jira.yaml`의 필수 필드 모두 기입 | | key만 기입 |
@@ -501,7 +501,7 @@ note: {{선택, 한 줄}}
 - [ ] 시그니처의 `builtin.*` 참조가 현재 백엔드 `builtin_events()`에, `ext.<category>.*` 참조가 이슈 DB `external_parsers`에 있음 (`db_lint`)
 - [ ] 파서 규칙 갱신 (`04-parser-matching.md §5.8`): 필요한 태그/RIL/extractor 존재, 원인별 양성 fixture 존재, fixture 파일명이 규칙에 맞음 (`db_lint`)
 - [ ] **전체 fixture 회귀 통과** (`db_regress --all`)
-- [ ] 규칙·해결책 변경이면 `05-verification.md §5.12 (1)` 검증 R1~R5 통과 (`db_verify rules`). Phase 10 전에는 뼈대가 `not-implemented`를 표시한다
+- [ ] 규칙·해결책 변경이면 `05-verification.md §5.12 (1)` 검증 R1~R5 통과 (`db_verify rules`)
 - [ ] 새 원인·`resolution` 변경 원인은 `resolution_verification.status: unverified`. 예외는 같은 계획의 `verify-resolution`(evidence 있음)이 적용된 경우뿐이다(근거 없는 verified 금지. `db_pr stage`는 계획을, 계획이 없는 lint는 evidence 존재를 본다). `fixed`는 `verification` 있음, 새 원인 fixed 금지(5.9 아래 범위) (`db_lint`)
 - [ ] `.expect.yaml`의 `also_allowed`가 대상 원인 자신·같은 유형 원인·없는 ID를 가리키지 않음 (`db_lint`)
 - [ ] `verify-resolution`의 evidence Jira 키가 형식에 맞고 그 원인의 Jira 기록으로 존재하며, fixture 경로가 존재함 (`db_add apply`, `db_lint`)

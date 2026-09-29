@@ -420,9 +420,16 @@
             "result": {"enum": ["passed", "failed", "partial"]},
             "verification": {
               "allOf": [{"$ref": "#/$defs/verificationRecord"}],
-              "required": ["build", "date", "by", "fixture"]
+              "required": ["build", "date", "by"]
             }
-          }
+          },
+          "allOf": [
+            {
+              "$comment": "passed는 수정 후 fixture 필수. failed의 recurrence fixture와 partial의 fixture는 선택 (05-verification.md §5.12 (2))",
+              "if": {"properties": {"result": {"const": "passed"}}, "required": ["result"]},
+              "then": {"properties": {"verification": {"required": ["fixture"]}}}
+            }
+          ]
         },
         {
           "type": "object",

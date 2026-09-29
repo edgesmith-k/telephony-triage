@@ -10,6 +10,8 @@
 | `issue-db-empty-category/` | sms·ims 유형을 뺀 트리. README의 0건 카테고리 표시 |
 | `issue-db-pending/` | `signatures_pending` 원인(DATA-001-03)과 그 양성 fixture. 회귀 기대값 `DATA-001:unresolved` |
 | `issue-db-dup-id/` | 머지 간격으로 main에 같은 ID(DATA-001-03 두 번)와 같은 Jira(MOCK-1101 두 곳)가 들어온 트리. 사후 lint 보고 (Phase 7) |
+| `issue-db-verify/` | 검증(Phase 10): CALL-001-01을 `fix-submitted`로 되돌리고(수정 후 fixture 제거) 같은 증상의 다른 원인 CALL-001-02(망 거절, scenario만 있음)와 그 양성 fixture를 넣은 트리 |
+| `verify-logs/` | 이슈 DB가 아니다. `db_verify fix`·`resolution` 입력 로그(수정 후·재발·증상만 남음·시나리오 없음, 마스킹됨) |
 
 CLI:
     python3 tests/helpers/make_variant_dbs.py [--check] [--json]
@@ -258,11 +260,99 @@ def dup_id(db: Path) -> None:
     _write(dup, text)
 
 
+CALL_001_02 = """  - id: CALL-001-02
+    status: active
+    title: 망 측 통화 거절
+    description: IMS 등록은 정상인데 망이 통화를 거절(cause 31)해 콜이 바로 종료됨
+    signatures:
+      - id: network-reject-31
+        must_event:
+          - {id: dial, event: ims_dial_attempt, fields: {registered: 'true'}}
+          - {id: failed, event: call_fail_cause, fields: {cause: '31'}}
+        sequence: [dial, failed]
+        window_sec: 120
+    recovery_signatures: []
+    scenario_signatures:
+      - id: volte-dial-attempt
+        must_event:
+          - {event: ims_dial_attempt}
+        window_sec: 60
+    resolution: 망 측 거절 사유를 캐리어에 문의한다
+    resolution_type: network
+    resolution_verification: {status: unverified}
+    fix: {status: not-a-bug, ref: null, fixed_in: [], verification: null, verification_history: []}
+    related: []
+    cp_evidence: null
+    android_versions: ["17"]
+    code_refs: []
+"""
+
+
+def _gen(scenario: str, dest: Path, name: str) -> None:
+    """시나리오 하나를 만들어 마스킹한 뒤 `dest`에 쓴다 (샘플 fixture와 같은 규칙)."""
+    import make_sample_fixtures  # noqa: WPS433
+
+    import logcat_gen
+
+    tmp = Path(tempfile.mkdtemp(prefix="tt-variant-"))
+    try:
+        info = logcat_gen.generate(REPO / "tests/mocks/scenarios" / scenario, tmp, name=name)
+        log = Path(info["files"][0])
+        make_sample_fixtures.mask_log(log, make_sample_fixtures.sample_allow_patterns())
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(log, dest)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def verify(db: Path) -> None:
+    """Phase 10 검증용: CALL-001-01 fix-submitted(빌드 있는 fixed_in), 수정 후 fixture 없음, CALL-001-02 추가."""
+    call = db / "call/CALL-001-volte-not-working"
+    _sub(call / "type.md", r"    fix:\n      status: fixed\n.*?      verification_history:\n",
+         "    fix:\n      status: fix-submitted\n      ref: MOCKCL-12345\n      fixed_in:\n"
+         "        - {branch: MOCKB77_U2, build: MOCKB77_U2_20260920}\n      verification: null\n"
+         "      verification_history:\n")
+    _edit(call / "type.md", "tags: [volte, ims-registration]\n---", CALL_001_02 + "tags: [volte, ims-registration]\n---")
+    for name in ("CALL-001-01.fixed.MOCKB77_U2_20260920.log", "CALL-001-01.fixed.MOCKB77_U2_20260920.expect.yaml"):
+        (call / "fixtures" / name).unlink()
+    _gen("call-001-02-positive.yaml", call / "fixtures/CALL-001-02.log", "CALL-001-02")
+    _write(call / "fixtures/CALL-001-02.expect.yaml", "origin: synthetic\n")
+
+
+VERIFY_LOGS = {"call-fixed.log": "verify-call-fixed.yaml", "call-recurrence.log": "verify-call-recurrence.yaml",
+               "call-partial.log": "verify-call-partial.yaml", "call-noscenario.log": "verify-call-noscenario.yaml"}
+
+VERIFY_LOGS_README = """# db_verify 입력 로그 (Phase 10)
+
+`tests/helpers/make_variant_dbs.py`가 `tests/mocks/scenarios/verify-call-*.yaml`에서 만든다(마스킹됨). 이슈 DB가 아니다.
+대상은 `tests/fixtures/issue-db-verify/`의 CALL-001-01(fix-submitted, fixed_in MOCKB77_U2_20260920)이다.
+
+| 파일 | 내용 | `db_verify fix --cause CALL-001-01` |
+|---|---|---|
+| `call-fixed.log` | 등록 정상, 등록 상태로 발신, 통화 ACTIVE | passed |
+| `call-recurrence.log` | 등록 실패 뒤 미등록 발신, cause 17 | failed |
+| `call-partial.log` | 등록 상태로 발신했지만 망 거절 cause 31 (CALL-001-02) | partial |
+| `call-noscenario.log` | 등록만 있고 발신 없음 | unknown |
+"""
+
+
+def verify_logs(dest: Path) -> None:
+    """이슈 DB가 아닌 입력 로그 묶음 (build()가 샘플을 복사한 뒤 비우고 이것만 남긴다)."""
+    for name in [p.name for p in dest.iterdir()]:
+        target = dest / name
+        shutil.rmtree(target) if target.is_dir() else target.unlink()
+    for name, scenario in VERIFY_LOGS.items():
+        _gen(scenario, dest / name, Path(name).stem)
+    _write(dest / "README.md", VERIFY_LOGS_README)
+
+
 VARIANTS = {
     "issue-db-lint-errors": lint_errors,
     "issue-db-empty-category": empty_category,
     "issue-db-pending": pending,
     "issue-db-dup-id": dup_id,
+    "issue-db-verify": verify,
+    "verify-logs": verify_logs,
 }
 
 

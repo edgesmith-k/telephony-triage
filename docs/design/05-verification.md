@@ -45,7 +45,8 @@
 - 결과는 push 전 확인 화면(`07-workflow.md §Step 8-5`)과 PR 본문에 "검증 결과" 표로 넣는다.
 - R6 표본은 기본적으로 이슈 DB에 넣지 않는다. 사용자가 원하면 마스킹해서 `extra` fixture(`<원인 ID>.extra.<n1>.log`) 또는 음성 fixture로 추가한다 (`add-fixture`).
 - 해결책(`resolution`)만 바뀐 경우 R1~R5는 `skipped`(`해당 없음`)이고, 해결책 검증 상태만 `unverified`로 초기화한다 (`set-resolution`).
-- Phase 10 전(Phase 7~9)의 `db_verify rules`는 뼈대다: R4(`db_regress --all`)만 실제로 돌고 R1~R3, R5는 `not-implemented`, R6은 `skipped`를 낸다. `not-implemented`는 종료 코드에 영향을 주지 않는다. 종료 코드 `3` 경로는 `TT_FORCE_VERIFY_EXIT=3`으로 시험한다 (`contracts.md §종료 코드`).
+- Phase 7~9의 `db_verify rules`는 뼈대였다(R4만 실행, R1~R3·R5 `not-implemented`, R6 `skipped`). Phase 10부터 R1~R6이 모두 실제로 돌고 `not-implemented`는 나오지 않는다. 종료 코드 `3` 경로는 R5 또는 `TT_FORCE_VERIFY_EXIT=3`으로 시험한다 (`contracts.md §종료 코드`).
+- R6 `fail`은 종료 코드에 넣지 않는다(위 표 "사용자가 진행을 고를 수 있다"). 대상 계산·항목 모으기·출력 세부는 `contracts.md §3.2` `db_verify.py` 세부.
 
 **수동 기록 검증** (`/telephony-triage:record`, `07-workflow.md §record`)
 

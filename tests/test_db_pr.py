@@ -696,8 +696,9 @@ def test_rule_that_changes_existing_fixture_is_blocked_by_r4():
     out = ws.stage(job, "review/data-2026-10", expect=1)
     r4 = next(r for r in out["checks"]["verify"]["result"]["rules"] if r["id"] == "R4")
     assert r4["status"] == "fail" and any("DATA-001-01.log" in t for t in r4["targets"])
-    assert {r["status"] for r in out["checks"]["verify"]["result"]["rules"] if r["id"] in ("R1", "R2", "R3", "R5")} \
-        == {"not-implemented"}
+    rows = {r["id"]: r for r in out["checks"]["verify"]["result"]["rules"]}   # Phase 10: R1~R5 실제 판정
+    assert rows["R3"]["status"] == "fail" and rows["R3"]["targets"] == ["DATA-001-02"]
+    assert rows["R1"]["status"] == "pass" and rows["R5"]["status"] == "skipped"
     ws.db_pr("discard", ws.wt(job))
 
 

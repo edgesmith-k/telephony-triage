@@ -1,0 +1,5 @@
+09-26 13:00:00.000  1500  1510 I SmsDispatchersController: [PHONE0] sendText: dest=<MSISDN#1> parts=1
+09-26 13:00:04.000  1500  1510 W SmsDispatchersController: [PHONE0] getSmscAddress: null
+09-26 13:00:05.000  1500  1510 W SmsDispatchersController: [PHONE0] sendSms failed: result=GENERIC_FAILURE
+09-26 13:00:15.000  1500  1510 W SmsDispatchersController: [PHONE0] getSmscAddress: null
+09-26 13:00:16.000  1500  1510 W SmsDispatchersController: [PHONE0] sendSms failed: result=GENERIC_FAILURE

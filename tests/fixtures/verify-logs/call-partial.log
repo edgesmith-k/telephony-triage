@@ -1,0 +1,8 @@
+09-27 14:00:00.000  1300  1312 D ImsResolver: [PHONE0] bound to mock ImsService
+09-27 14:00:05.000  1300  1312 I ImsRegistration: [PHONE0] onRegistered: transport=LTE impu=sip:<IMPU#1>@ims.mnc001.mcc450.3gppnetwork.org
+09-27 14:00:45.000  1300  1312 D ImsPhoneCallTracker: [PHONE0] dial: isVolteEnabled=true imsRegistered=true
+09-27 14:00:45.500  1300  1312 D RILJ: [PHONE0] [0097]> DIAL clir=0
+09-27 14:00:46.500  1300  1312 D RILJ: [PHONE0] [0097]< DIAL error=NONE
+09-27 14:00:46.800  1300  1312 D RILJ: [PHONE0] [0098]> LAST_CALL_FAIL_CAUSE
+09-27 14:00:47.200  1300  1312 D RILJ: [PHONE0] [0098]< LAST_CALL_FAIL_CAUSE causeCode=31
+09-27 14:00:47.400  1300  1312 W ImsPhoneCallTracker: [PHONE0] call ended: cause=31

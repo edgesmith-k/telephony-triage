@@ -11,8 +11,9 @@
 - 완료 Phase: **D0, 1** (2026-09-28), **2, 3, 4, 5, 6** (2026-09-29)
 - 완료 Phase 추가: **7** (2026-09-29, 사용자 확인 후 커밋)
 - 완료 Phase 추가: **8** (2026-09-29, 사용자 확인 후 커밋. guard 예외·pre-push 검사 강화는 계약에 반영 — `CHANGES.md`)
-- 완료 Phase 추가: **9** (2026-09-29, 구현·테스트 완료, **사용자 확인 대기**)
-- 다음 Phase: **10** (`11-phases.md` Phase 10 절부터)
+- 완료 Phase 추가: **9** (2026-09-29, 사용자 확인 — Phase 10 진행 지시로 확인)
+- 완료 Phase 추가: **10** (2026-09-29, 구현·테스트 완료, **사용자 확인 대기**)
+- 다음 Phase: **11** (`11-phases.md` Phase 11 절부터)
 - Phase 2~6은 사용자가 미리 승인해서 Phase마다 확인을 기다리지 않고 진행했다(각 Phase 끝에 커밋·push). 완료 기준 점검 결과는 Phase별 절에 있다. **Phase 7부터는 다시 Phase마다 사용자 확인을 받는다.**
 - 기준 문서 세트: `telephony-triage-docs-v11` (`CHANGES.md` 참고)
 - 레포 루트: 이 파일이 있는 디렉토리 (`CLAUDE.md`, `docs/design/`, `plugin/`,
@@ -636,6 +637,84 @@ Claude hook은 `guard.py`에 hook 입력 JSON을 직접 넣어 시험했다. **�
 - **`migrate` 커맨드는 `db_pr`를 부르지 않는다**(계획·lock·PR 없음). push는 안내만 한다.
 - **테스트 인프라**: 플러그인이 새 버전이 되면 git pre-commit hook이 보는 `plugin.scripts_path`도 새 루트여야 한다(`config.py sync-scripts-path`). sync-pr 테스트가 이를 다시 실행한다. 실제 사용자는 SessionStart hook이 한다.
 
+### Phase 10에서 만든 것
+
+| 산출물 | 경로 |
+|---|---|
+| 검증 (R1~R6 완성, `resolution`·`fix` 판정) | `plugin/scripts/db_verify.py` |
+| 규칙 변경 계산·의존 그래프 | `plugin/scripts/common/rulediff.py` |
+| R5 이벤트 diff | `plugin/scripts/db_regress.py --events-diff <ref>` (`events_diff()`는 `db_verify`와 공유) |
+| 매처가 호출자의 평가기를 쓰게 함 | `plugin/scripts/match_signatures.py` (`match(..., evaluator=)`, `evaluator_for()`) |
+| lint 검증 규칙 | `plugin/scripts/db_lint.py` `fixed-without-verification`, `fixed-without-trace` |
+| 검증용 이슈 DB | `tests/fixtures/issue-db-verify/` (CALL-001-01 fix-submitted, CALL-001-02 추가) |
+| verify 입력 로그 | `tests/fixtures/verify-logs/` (수정 후·재발·증상만 남음·시나리오 없음) |
+| 시나리오 | `tests/mocks/scenarios/call-001-02-positive.yaml`, `verify-call-*.yaml` 4개 |
+| 변형 생성 | `tests/helpers/make_variant_dbs.py` (`issue-db-verify`, `verify-logs` 추가) |
+| Phase 10 테스트 | `tests/test_db_verify.py` (11개) |
+
+### Phase 10 완료 기준 확인 결과
+
+`pytest tests` — **192개 전부 통과**(Phase 10 11개 포함. 전체 실행에서 collect 뒤 고친 `test_db_pr` 1개는 따로 재실행해 통과).
+
+| 완료 기준 | 확인 | 어디서 |
+|---|---|---|
+| 너무 넓은 원인 시그니처(음성 fixture·같은 카테고리 다른 유형 양성에서 C=1) → R3 | ✅ (CALL-001.none, 다른 유형 DATA-002-01이 DATA-001-01.log를 잡음 + `allow-cause` 초안) | `test_broad_cause_signature_and_widened_fixed_cause_are_blocked` |
+| 다른 카테고리 양성에서 C=1 → R4 + `allow-cause` 초안, `also_allowed` 넣으면 R2·R3·R4 통과, 빠진 fixture는 여전히 실패 | ✅ (IMS-001-01·recurrence) | `test_cross_category_hit_needs_also_allowed_and_scoring_does_not_matter` |
+| `cause_weight 0.5`·`confidence.medium 0.7`로 바꿔도 R2·R3·R4·`db_regress` 같음 | ✅ | 같은 테스트 |
+| 새 유형 증상 시그니처가 다른 유형 음성에서 S=1 → R3, fixture 표시 | ✅ | `test_new_type_symptom_hitting_other_negative_fails_r3` |
+| extractor만 바꿔도 참조 시그니처의 원인이 R1·R2 대상 | ✅ (`why: depends:extractors:ims-dial-attempt`) | `test_extractor_change_selects_dependents_and_event_change_needs_approval` |
+| 기존 이벤트를 바꾸는 extractor 수정 → R5 `needs-approval`(3) | ✅ (`ims-registered` fields 제거, R4 통과, `--events-diff` 결과 확인) | 같은 테스트 |
+| CALL-001-01 수정 후 로그 → `fix` passed, 손으로 쓴 `verify-fix passed`+`add-fixture fixed` 계획 stage → fixed, `CALL-001-01.fixed.<build>.log` | ✅ | `test_fix_judgements_on_fix_submitted_cause`, `test_verify_fix_plans_reach_stage` |
+| 재발 로그 → failed, 계획 적용 → open, `ref`·`fixed_in`이 history로 보존·비움 | ✅ | 같은 두 테스트 |
+| 증상만 남은 로그 → partial + 다른 원인 후보(CALL-001-02), 계획 적용 → fix-submitted 유지 + partial 이력 | ✅ | 같은 두 테스트 |
+| 시나리오 흔적 없는 로그 → unknown | ✅ | `test_fix_judgements_on_fix_submitted_cause` |
+| scenario/recovery 모두 없는 코드 수정 유형 → 판정 없이 unknown(필수 시그니처 없음) | ✅ | `test_fix_stops_without_build_or_required_signatures_and_lint_rules` |
+| `fixed_in` 이전 빌드, 빌드 없는 `fixed_in` → 종료 코드 2. 빌드 없는 `fixed_in`에 `verify-fix passed` 계획 → 거부 | ✅ (`fixed-in-build-missing`) | 같은 테스트, `test_fix_judgements_on_fix_submitted_cause` |
+| `resolution`: recovery 없음 + 시나리오 흔적 없음 → unknown | ✅ (CALL-001-02) | `test_fix_judgements_on_fix_submitted_cause` |
+| record 계획(`new-cause`+recovery)에 `resolution --cause NEW-CAUSE-1 --plan --draft` → passed, 이어서 `add-fixture resolved`+`verify-resolution` 계획 stage → verified, lint 통과 | ✅ (DATA-001-03, draft는 지워짐) | `test_record_new_cause_resolution_draft_then_verified_stage` |
+| 카테고리 모든 음성 fixture에 맞는 scenario → R1 흔적 실패. 음성 fixture 없으면 `skipped: 음성 fixture 없음`(`review_required`), pass 아님 | ✅ | `test_trace_signature_matching_every_negative_fails_r1` |
+| `fixed` 원인 재검증이 증상만 남으면 partial, 적용하면 fixed 유지 + partial 이력 | ✅ (샘플 CALL-001-01) | `test_recheck_of_fixed_cause_partial_keeps_fixed` |
+| 양성 fixture 없는 새 원인 → R1·R2 `skipped: fixture 없음`(`review_required`). pending 원인 → R1~R3 `skipped: 시그니처 없음(pending)` | ✅ | `test_new_cause_without_fixture_and_pending_cause_are_skipped_not_passed` |
+| 수정 후 fixture가 있는 원인의 시그니처를 넓히면 R3·R4 차단 | ✅ (샘플 `CALL-001-01.fixed.*`) | `test_broad_cause_signature_and_widened_fixed_cause_are_blocked` |
+| (그 밖) `update-fix` open 되돌림 이력, `verify-resolution` pending 거부, `db_lint` 검증 없는 fixed·흔적 없는 코드 수정 fixed | ✅ (앞 둘은 Phase 7 `test_verify_resolution_and_update_fix_rules`) | `test_fix_stops_without_build_or_required_signatures_and_lint_rules` |
+| (그 밖) R6 `--extra`·`--extra-normal`, R6 fail은 종료 코드 0 | ✅ | `test_record_new_cause_resolution_draft_then_verified_stage` |
+
+### Phase 10에서 바꾼 이전 산출물
+
+| 대상 | 무엇을 | 왜 |
+|---|---|---|
+| 이슈 DB `schema/plan.schema.json` (샘플·변형) | `verify-fix`의 `verification.fixture`는 `passed`만 필수 | 05 §5.12 (2)는 실패 때 recurrence fixture를 "넣을지 묻는다"(선택)이고 partial은 넣을 fixture가 없다. Phase 7 스키마가 항상 필수로 두었다 |
+| `plugin/scripts/db_add.py` `op_verify_fix` | fixture가 있을 때만 경로 치환·존재 검사 | 위와 같음 |
+| `plugin/scripts/db_regress.py` | `prepare()`·`match_errors()`·`parse_logs()` 분리 (동작 같음) | `db_verify`가 같은 판정을 같은 프로세스에서 쓴다 |
+| `tests/test_db_pr.py` `test_rule_that_changes_existing_fixture_is_blocked_by_r4` | `not-implemented` 대신 실제 R1·R3·R5 값 | 뼈대 가정 |
+| `tools/list_site_todos.py` | `issue-db-verify` 제외 | 샘플 사본 |
+| `docs/design/contracts.md §3.2·op 표·상태 값`, `05 §5.12 (1)`, `03 §5.7 (4)` | 아래 세부 반영, 뼈대 문구 정리 | 계약 보완 (`CHANGES.md`) |
+
+### Phase 10 구현에서 정한 세부 (계약 보완 — `contracts.md §3.2`에 반영함)
+
+- **대상 계산은 기준 트리와의 의미 비교**다(`common/rulediff.py`). `--plan`의 기준은 대상 트리 `HEAD`(draft·작업
+  worktree 모두 기준 SHA에 있고 계획은 커밋 전 워킹 트리에 있다). 그래서 `--plan`/`--changed`/`--staged`가 같은 코드다.
+  계획 op를 해석하지 않으므로 `sync-pr` 재적용이나 직접 편집에도 같은 대상이 나온다.
+- **R1 파서 검사**: 조건마다 "소유자의 양성 계열 fixture 중 하나에서 추출"이면 통과(조건 단위, 창 무시). 새로 넣은
+  OR 시그니처가 기존 fixture 어디에도 안 나오면 실패한다(그 시그니처를 보여주는 fixture를 넣으라는 뜻).
+- **R3 원인 대상 fixture**에 같은 카테고리의 음성 fixture 전부(그 유형 것만이 아니라)를 넣었다. 검사할 fixture가 없으면
+  `skipped: 음성 fixture 없음`(리뷰 대상)으로 공허한 통과를 막았다.
+- **R6 `fail`은 종료 코드 0**(`blocking: false`): 설계가 "fail이어도 사용자가 진행을 고를 수 있다"라서 stage를 막지 않는다.
+  정상 표본을 줄 방법이 계약에 없어서 `--extra-normal`을 더했다.
+- **`fix`의 failed는 흔적 검사보다 먼저**: 원인 시그니처 충족(재발) 자체가 시나리오를 수행한 근거다.
+- **`fix`의 빌드 비교 불가**(`build_compare` 규칙 없음·`--build` 없음)는 중단하지 않고 `build_check`로 알린다(설계: "사용자에게 묻는다").
+- **`--plan --draft` 판정은 같은 draft에서 R1~R6도 돌리고**, R1 흔적 검사 실패면 판정을 `withheld`로 둔다.
+- 판정 결과에 **`suggested_ops`**(계획 op 초안)를 붙였다. 스킬(Phase 13)이 fixture 경로(`parse_logcat cut`)와 아이디를 채운다.
+
+### Phase 10에서 발견한 설계 문서 간 긴장 (사용자 판단 필요)
+
+- `03-issue-db.md §5.7 (2)` 표의 recovery 좋은 예 `must_match: ['RILJ.*>\s*SETUP_DATA_CALL']`는 R1 흔적 검사
+  ("scenario·recovery 모두 그 카테고리 음성 fixture **전부**에서 충족되지는 않음")를 통과하지 못한다. 음성 fixture는
+  정상 로그라서 정상 데이터 연결의 SETUP_DATA_CALL이 모두 들어 있기 때문이다(샘플 DATA-001.none·none.2). 구현은 R1
+  규칙을 그대로 따랐고, 테스트의 recovery는 원인에 특정한 흐름(SIM LOADED → 평가 허용)으로 썼다. 선택지:
+  (a) 예시를 "원인에 특정한 정상 흐름"으로 고친다, (b) R1 음성 검사를 scenario에만 적용한다.
+- **결정 (2026-09-29, 사용자)**: (a). R1 규칙은 그대로 두고 `03 §5.4 (1)` 예시 주석과 `§5.7 (2)` 표의 recovery 좋은 예·나쁜 예를 고쳤다(`CHANGES.md`).
+
 ## 개발 환경과 설계의 차이 (중요)
 
 설계는 실행 환경을 **Ubuntu(Linux)** 로 못박는다 (`01-architecture.md §3`,
@@ -752,11 +831,15 @@ Windows 전용 보정은 커밋하지 않는다.**
 
 ## 사내 확인 목록 (`TODO(SITE:S<n>)`)
 
-`python3 tools/list_site_todos.py`로 갱신한다(Windows 콘솔에서는 `PYTHONIOENCODING=utf-8`). 변형 이슈 DB(`issue-db-lint-errors` 등)는 샘플의 사본이라 세지 않는다. 2026-09-29(Phase 6 끝) 기준 **56곳**(Phase 6에서 S1 MCP 도구 이름 형식, S11 트리 버전 파일 2곳 추가):
+`python3 tools/list_site_todos.py`로 갱신한다(Windows 콘솔에서는 `PYTHONIOENCODING=utf-8`). 변형 이슈 DB(`issue-db-lint-errors` 등)는 샘플의 사본이라 세지 않는다. 2026-09-29(Phase 10 끝) 기준 **59곳**:
 
-### S1 (2곳)
+### S1 (3곳)
 - `plugin/scripts/common/mcptools.py:8` — 사내 Claude Code 버전에서 확인한다.
+- `plugin/scripts/guard.py:11` — hook 입력 필드(`tool_name`, `tool_input.command|file_path|notebook_path`, `cwd`)와 권한 결정 출력
 - `tests/mocks/skills/data-analyzer/SKILL.md:63` — 스킬 이름과 호출 방식 확인.
+
+### S3 (1곳)
+- `plugin/scripts/guard.py:13` — 플러그인 hook에 보이는 MCP 도구 이름이 `mcp__<server>__<tool>`이고 `<server>`가 config
 
 ### S4 (1곳)
 - `plugin/site-defaults.example.yaml:38` — 사내 Jira 시각 타임존
@@ -771,7 +854,7 @@ Windows 전용 보정은 커밋하지 않는다.**
 - `plugin/scripts/parser_backends/logcat.py:33` — 사내 로그(NITZ 전·재부팅 직후)로 기준을 확인한다.
 - `plugin/site-defaults.example.yaml:54` — logcat 시각 타임존
 
-### S9 (22곳)
+### S9 (23곳)
 - `plugin/scripts/parser_backends/ril.py:11` — . 벤더 RIL 태그는 TODO(SITE:S10).
 - `tests/fixtures/issue-db-sample/data/DATA-001-no-setup-data-call/type.md:119` — .
 - `tests/fixtures/issue-db-sample/parser-rules/extractors.yaml:10` — . 사내 실제 logcat으로
@@ -784,6 +867,7 @@ Windows 전용 보정은 커밋하지 않는다.**
 - `tests/mocks/logcat_gen.py:61` — RILJ 요청/응답 출력 형식. 사내 실제 로그로 확인한다.
 - `tests/mocks/parser_backends/site/__init__.py:32`
 - `tests/mocks/scenarios/call-001-01-positive.yaml:2` — , TODO(SITE:S10)
+- `tests/mocks/scenarios/call-001-02-positive.yaml:2` — , TODO(SITE:S10)
 - `tests/mocks/scenarios/call-drop.yaml:2`
 - `tests/mocks/scenarios/data-001-01-positive.yaml:2`
 - `tests/mocks/scenarios/data-001-02-roaming.yaml:2`
@@ -840,8 +924,6 @@ Windows 전용 보정은 커밋하지 않는다.**
 - `plugin/scripts/parse_logcat.py:485` — 사내 실제 문자열로 확인한다.
 - `tests/mocks/logcat_gen.py:35` — 사내 실제 문자열 확인
 
-> 아직 코드가 없는 곳(S3 `jira.tools` 확정, S8 태그 수집 목록, S13 마스킹
-> 오탐, S14 보안 규정, S15 Ubuntu/파이썬 버전, S16~S19
 > `issue-db.config.yaml` 값, S2 마켓플레이스, S6 Actions)은 Phase 1·2·4·6에서
 > 코드가 생길 때 `TODO(SITE:S<n>)`가 늘어난다. 반입 전에 이 목록을 다시
 > 뽑는다.
@@ -870,7 +952,7 @@ Windows 전용 보정은 커밋하지 않는다.**
 3. (선택, 사내) **S-0 선행 확인**: `parse_logcat.py`, `match_signatures.py`, `mask_pii.py`를 사내 실제 로그로.
 4. 빈 플러그인 실험(2번)에서 **`plugin/hooks/hooks.json`도 함께 확인**한다: 플러그인 hook 로드, `mcp__.*` matcher,
    `permissionDecision` deny/ask, SessionStart, hook 입력의 `tool_name` 형식(`guard.py`의 TODO(SITE:S1·S3)).
-5. **Phase 10**: `docs/design/11-phases.md` Phase 10 절과 그 "읽을 문서"를 읽는다. (Phase 9 완료: `db_migrate.py`, `migrate` 커맨드.)
+5. **Phase 11**: `docs/design/11-phases.md` Phase 11 절과 그 "읽을 문서"를 읽는다. (Phase 10 완료: `db_verify.py` R1~R6·`resolution`·`fix`, `db_regress --events-diff`.)
 
 ### 사용자 확인이 필요한 항목 (Phase 2~6에서 쌓임)
 

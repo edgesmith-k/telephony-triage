@@ -1,0 +1,16 @@
+# verify-fix 입력 (Phase 10): 수정은 유효(IMS 등록 정상, 등록 상태로 발신)하지만 망 거절(cause 31)로 증상이 남는다
+# → db_verify fix partial, 다른 원인 후보 CALL-001-02
+name: call-partial
+start: "2026-09-27T14:00:00+09:00"
+default_phone: 0
+pid: 1300
+tid: 1312
+entries:
+  - {at: 0, tag: ImsResolver, msg: "bound to mock ImsService"}
+  - {after: 5, tag: ImsRegistration, level: I, msg: "onRegistered: transport=LTE impu=sip:<IMPU#1>@ims.mnc001.mcc450.3gppnetwork.org"}
+  - {after: 40, tag: "ImsPhoneCallTracker", msg: "dial: isVolteEnabled=true imsRegistered=true"}
+  - {after: 0.5, ril_request: DIAL, serial: 97, args: "clir=0"}
+  - {after: 1.0, ril_response: DIAL, serial: 97, result: "error=NONE"}
+  - {after: 0.3, ril_request: LAST_CALL_FAIL_CAUSE, serial: 98}
+  - {after: 0.4, ril_response: LAST_CALL_FAIL_CAUSE, serial: 98, result: "causeCode=31"}
+  - {after: 0.2, tag: "ImsPhoneCallTracker", level: W, msg: "call ended: cause=31"}

@@ -651,8 +651,9 @@ class Applier:
         _, cause = self._cause_or_reject(i, op["cause"])
         fix = cause["fix"] = copy.deepcopy(cause.get("fix") or {})
         v = dict(op["verification"])
-        v["fixture"] = self.fixture_ref(v["fixture"])
-        self._require_fixture(i, op["cause"].rsplit("-", 1)[0], v["fixture"])
+        if v.get("fixture"):   # passed는 스키마가 필수로 본다. failed·partial은 선택
+            v["fixture"] = self.fixture_ref(v["fixture"])
+            self._require_fixture(i, op["cause"].rsplit("-", 1)[0], v["fixture"])
         if op["result"] == "passed":
             if fix.get("status") not in ("fix-submitted", "fixed"):
                 raise Reject("verify-fix-status", f"verify-fix 통과는 fix-submitted(재검증이면 fixed) 원인만 됩니다 "

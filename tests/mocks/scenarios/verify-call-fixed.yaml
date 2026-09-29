@@ -1,0 +1,16 @@
+# verify-fix 입력 (Phase 10): CALL-001-01 수정 빌드(MOCKB77_U2_20260925) 로그.
+# 재현 시나리오(VoLTE 발신) 흔적 있음, IMS 등록·통화 정상 → db_verify fix passed
+name: call-fixed
+start: "2026-09-27T10:00:00+09:00"
+default_phone: 0
+pid: 1300
+tid: 1312
+entries:
+  - {at: 0, tag: ImsResolver, msg: "bound to mock ImsService"}
+  - {after: 4, tag: ImsRegistration, level: I, msg: "onRegistered: transport=LTE impu=sip:<IMPU#1>@ims.mnc001.mcc450.3gppnetwork.org"}
+  - {after: 25, tag: "ImsPhoneCallTracker", msg: "dial: isVolteEnabled=true imsRegistered=true"}
+  - {after: 0.5, ril_request: DIAL, serial: 93, args: "clir=0"}
+  - {after: 1.1, ril_response: DIAL, serial: 93, result: "error=NONE"}
+  - {after: 2, tag: "ImsPhoneCallTracker", msg: "call state changed: DIALING"}
+  - {after: 3, tag: "ImsPhoneCallTracker", msg: "call state changed: ACTIVE"}
+  - {after: 40, tag: "ImsPhoneCallTracker", msg: "call state changed: DISCONNECTED"}

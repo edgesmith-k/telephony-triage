@@ -34,6 +34,7 @@ SKIP_DIRS = {
     "issue-db-empty-category",
     "issue-db-pending",
     "issue-db-dup-id",
+    "issue-db-verify",
 }
 SKIP_FILES = {"list_site_todos.py", "DRAFT_NOTES.md"}
 TEXT_SUFFIXES = {

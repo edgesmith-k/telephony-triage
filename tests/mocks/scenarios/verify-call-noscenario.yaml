@@ -1,0 +1,10 @@
+# verify-fix·해결책 검증 입력 (Phase 10): 재현 시나리오(VoLTE 발신)를 하지 않은 로그 — IMS 등록만 있다 → unknown
+name: call-noscenario
+start: "2026-09-27T16:00:00+09:00"
+default_phone: 0
+pid: 1300
+tid: 1312
+entries:
+  - {at: 0, tag: ImsResolver, msg: "bound to mock ImsService"}
+  - {after: 4, tag: ImsRegistration, level: I, msg: "onRegistered: transport=LTE impu=sip:<IMPU#1>@ims.mnc001.mcc450.3gppnetwork.org"}
+  - {after: 60, tag: ImsRegistration, level: I, msg: "onRegistered: transport=LTE impu=sip:<IMPU#1>@ims.mnc001.mcc450.3gppnetwork.org"}

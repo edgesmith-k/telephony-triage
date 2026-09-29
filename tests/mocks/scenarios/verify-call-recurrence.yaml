@@ -1,0 +1,15 @@
+# verify-fix 입력 (Phase 10): 수정 빌드에서 재발 — IMS 등록 실패 뒤 미등록 발신 → db_verify fix failed
+name: call-recurrence
+start: "2026-09-27T12:00:00+09:00"
+default_phone: 0
+pid: 1300
+tid: 1312
+entries:
+  - {at: 0, tag: ImsResolver, msg: "bound to mock ImsService"}
+  - {after: 6, tag: ImsRegistration, level: W, msg: "onRegistrationFailed: code=403 reason=FORBIDDEN"}
+  - {after: 90, tag: "ImsPhoneCallTracker", msg: "dial: isVolteEnabled=true imsRegistered=false"}
+  - {after: 0.5, ril_request: DIAL, serial: 95, args: "clir=0"}
+  - {after: 1.2, ril_response: DIAL, serial: 95, result: "error=NONE"}
+  - {after: 0.3, ril_request: LAST_CALL_FAIL_CAUSE, serial: 96}
+  - {after: 0.4, ril_response: LAST_CALL_FAIL_CAUSE, serial: 96, result: "causeCode=17"}
+  - {after: 0.2, tag: "ImsPhoneCallTracker", level: W, msg: "call ended: cause=17"}

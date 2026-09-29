@@ -1,0 +1,17 @@
+# CALL-001-02 양성 (issue-db-verify 변형 전용, Phase 10): IMS 등록은 정상인데 망이 통화를 거절(cause 31)한다.
+# 태그·문구는 placeholder다 — TODO(SITE:S9), TODO(SITE:S10)
+name: CALL-001-02
+start: "2026-09-21T11:00:00+09:00"
+default_phone: 0
+pid: 1300
+tid: 1312
+entries:
+  - {at: 0, tag: ImsResolver, msg: "bound to mock ImsService"}
+  - {after: 3, tag: ImsRegistration, level: I, msg: "onRegistered: transport=LTE impu=sip:<IMPU#1>@ims.mnc001.mcc450.3gppnetwork.org"}
+  - {after: 30, tag: "ImsPhoneCallTracker", msg: "dial: isVolteEnabled=true imsRegistered=true"}
+  - {after: 0.5, ril_request: DIAL, serial: 64, args: "clir=0"}
+  - {after: 1.0, ril_response: DIAL, serial: 64, result: "error=NONE"}
+  - {after: 2, tag: RILJ, level: W, msg: "[UNSL]< UNSOL_RESPONSE_CALL_STATE_CHANGED"}
+  - {after: 0.3, ril_request: LAST_CALL_FAIL_CAUSE, serial: 65}
+  - {after: 0.4, ril_response: LAST_CALL_FAIL_CAUSE, serial: 65, result: "causeCode=31"}
+  - {after: 0.2, tag: "ImsPhoneCallTracker", level: W, msg: "call ended: cause=31"}

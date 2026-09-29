@@ -386,3 +386,14 @@
 근거는 `DRAFT_NOTES.md` "Phase 9 구현에서 정한 세부".
 - `db_migrate --to`: 플러그인 `SCHEMA_VERSION` 초과 거절, `--dry-run`은 브랜치 검사 없음, 메모리에서 모두 적용 후 한 번에 쓰기, `generator_version`(`actions-build` 제외) 자동 동기화, 마이그레이션 모듈 계약(`FROM_VERSION`·`TO_VERSION`·`migrate(tree)`·`upgrade_plan(plan)`), `upgrade-plan --write`의 `.bak` → `contracts.md §3.2`.
 - `06-collaboration.md §6.4`의 "직접 편집한 브랜치에서 `db_migrate --to <N>`" 안내를 "자기 변경분을 새 스키마 형식으로 직접 고친다"로 고침. `--to`는 `migrate/schema-v<N>` 브랜치에서만 돌므로 그 안내가 계약과 어긋났다.
+
+## 사외 초안 중 계약 보완 (Phase 10, 2026-09-29)
+
+근거는 `DRAFT_NOTES.md` "Phase 10 구현에서 정한 세부".
+- `db_verify rules`: 기준 트리(`--plan`은 대상 트리 `HEAD`, `--changed`는 merge-base, `--staged`는 `HEAD`)와의 **의미 비교**로 대상을 정한다. 의존 그래프의 tags·ril 규칙, R1 파서 검사의 정의, R3 원인 대상 fixture 목록, 항목 모으기 순서, `checks[]`·`changes` 출력 → `contracts.md §3.2` `db_verify.py` 세부.
+- R6: `--extra-normal <logcat...>`(정상 표본) 추가, R6 `fail`은 종료 코드에 넣지 않음(`blocking: false`) → `contracts.md §3.2`, `05-verification.md §5.12 (1)`.
+- `db_verify resolution`·`fix` 출력 필드(`suggested_ops`, `build_check`, `other_candidates`, `withheld`), `fix` 중단 조건, `failed`를 흔적 검사보다 먼저 판정 → `contracts.md §3.2`.
+- `db_regress --events-diff <ref>` 출력 형식과 이벤트 식별 `(ts, phone_id, tag, event)` → `contracts.md §3.2`.
+- `verify-fix` op의 `verification.fixture`는 `passed`만 필수(`failed`의 recurrence fixture, `partial`은 선택. 05 §5.12 (2) "넣을지 묻는다"와 맞춤) → `contracts.md §작업 계획` op 표, 이슈 DB `schema/plan.schema.json`.
+- `not-implemented`는 Phase 7~9 뼈대에서만 썼다 → `contracts.md §상태 값`, `05-verification.md §5.12 (1)`, `03-issue-db.md §5.7 (4)`.
+- recovery 시그니처 예시를 "이 원인에 특정한 정상 흐름"(계기 이벤트 → 정상 동작 `sequence`)으로 고침. 정상 로그 어디에나 맞는 `SETUP_DATA_CALL` 요청만의 예는 R1 흔적 검사(카테고리 음성 fixture 전부에서 충족 금지)를 통과할 수 없다. 사용자 결정 (a) → `03-issue-db.md §5.4 (1)`·`§5.7 (2)`.

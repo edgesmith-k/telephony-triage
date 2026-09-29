@@ -1,0 +1,10 @@
+key: {{JIRA-KEY}}
+cause: {{원인 ID | unresolved}}
+date: {{YYYY-MM-DD}}
+occurred_on: {{선택, 발생 날짜 YYYY-MM-DD}}
+model: {{모델}}
+sw: {{빌드}}
+android_version: "{{버전}}"
+carrier: {{선택}}
+analyzed_by: {{GHE 아이디}}
+note: {{선택, 한 줄}}

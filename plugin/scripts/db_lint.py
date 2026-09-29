@@ -24,6 +24,9 @@
   없는 카테고리의 `ext.*`
 - `verified-without-evidence`·`evidence-missing` 오류: 근거 없는 verified, 없는 Jira 키·fixture 경로
 - `new-cause-fixed` 오류: base에 없던 원인이 `fixed` (`--changed`·`--staged`에서만)
+- `fixed-without-verification` 오류: `fixed`인데 `fix.verification.result: passed`가 없음 (검증 없는 fixed 금지)
+- `fixed-without-trace` 오류: 코드·설정 수정 유형(`framework-bug`·`vendor-ril`·`modem`·`carrier-config`)이 `fixed`인데
+  `scenario_signatures`·`recovery_signatures`가 모두 없음 (05-verification.md §5.12 (2) 전제)
 - `also-allowed` 오류: 자기 원인·같은 유형 원인·없는 ID
 - `merged-into` 오류: 없는 병합 대상
 - `parser-rules` 오류: 규칙 파일 로드·스키마
@@ -58,6 +61,7 @@ TOKEN_FIXED_RE = re.compile(r"<[A-Z][A-Z0-9]*#\d+>")
 KEBAB_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 SIG_KINDS = ("symptom_signatures", "signatures", "recovery_signatures", "scenario_signatures")
 TYPE_TITLE_MAX, CAUSE_TITLE_MAX = 30, 20
+CODE_FIX_TYPES = ("framework-bug", "vendor-ril", "modem", "carrier-config")
 
 
 class UsageError(Exception):
@@ -392,6 +396,15 @@ class Linter:
                 self.err("verified-without-evidence", type_md, f"{cid}: 근거(evidence) 없이 verified입니다.")
             for item in evidence:
                 self._check_evidence(type_md, cid, str(item))
+        if fix.get("status") == "fixed":
+            if (fix.get("verification") or {}).get("result") != "passed":
+                self.err("fixed-without-verification", type_md,
+                         f"{cid}: fixed인데 verification(result: passed)이 없다 (verify-fix로만 fixed가 된다).")
+            if (cause.get("resolution_type") in CODE_FIX_TYPES
+                    and not (cause.get("scenario_signatures") or cause.get("recovery_signatures"))):
+                self.err("fixed-without-trace", type_md,
+                         f"{cid}: 코드·설정 수정 유형({cause.get('resolution_type')})의 fixed에는 scenario_signatures 또는 "
+                         "recovery_signatures가 있어야 한다.")
         fixture = (fix.get("verification") or {}).get("fixture")
         if fixture and not (type_md.parent / fixture).is_file():
             self.err("evidence-missing", type_md, f"{cid}: fix.verification.fixture {fixture}가 없습니다.")
