@@ -16,6 +16,7 @@
 - 완료 Phase 추가: **11** (2026-09-29, 사용자 확인 후 커밋. 병합 unresolved Jira는 결정 (a), `GENERATOR_VERSION`은 1 유지)
 - 완료 Phase 추가: **12** (2026-09-29, 사용자 확인 — Phase 13 진행 지시로 확인)
 - 진행 중 Phase: **13** (`11-phases.md` Phase 13 절)
+- 개선 리뷰·수정 계획 인계: [PLUGIN_IMPROVEMENT_HANDOFF.md](docs/development/PLUGIN_IMPROVEMENT_HANDOFF.md) (2026-10-01, 분석 완료·구현 미착수; 기존 Phase 13과 별도인 개선 단계 I0~I6. 임시 문서이며 완료 후 삭제 검토).
 - 재개 상태 (2026-09-30): **45개 평가 정의와 남은 25개 환경 준비 완료. Claude Code 주간 한도(429)로 행동 평가·런타임 트리거 시험 미실행.** 아래 "Phase 13 재개 결과"에서 이어간다.
 - Phase 2~6은 사용자가 미리 승인해서 Phase마다 확인을 기다리지 않고 진행했다(각 Phase 끝에 커밋·push). 완료 기준 점검 결과는 Phase별 절에 있다. **Phase 7부터는 다시 Phase마다 사용자 확인을 받는다.**
 - 기준 문서 세트: `telephony-triage-docs-v11` (`CHANGES.md` 참고)
