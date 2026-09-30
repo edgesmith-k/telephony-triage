@@ -1,0 +1,13 @@
+# eval 4: CS(2G/3G) 통화 중 콜이 끊김. 판별 태그 GsmCdmaCallTracker가 이슈 DB tags.yaml에 없다 → add-parser-rule 필요.
+name: e004-cs-call-drop
+start: "2026-09-27T18:00:00+09:00"
+default_phone: 0
+pid: 1300
+tid: 1320
+entries:
+  - {at: 0, tag: GsmCdmaCallTracker, msg: "dial: rat=UMTS isVolteEnabled=false"}
+  - {after: 3, tag: GsmCdmaCallTracker, level: I, msg: "call state changed: ACTIVE"}
+  - {after: 120, ril_unsol: UNSOL_RESPONSE_CALL_STATE_CHANGED}
+  - {after: 0.2, tag: GsmCdmaCallTracker, level: W, msg: "handlePollCalls: call dropped, disconnect cause=LOST_SIGNAL"}
+  - {after: 0.1, ril_request: LAST_CALL_FAIL_CAUSE, serial: 95}
+  - {after: 0.3, ril_response: LAST_CALL_FAIL_CAUSE, serial: 95, result: "causeCode=65535"}

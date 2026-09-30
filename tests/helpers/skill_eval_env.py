@@ -112,7 +112,22 @@ def main_schema99(root: Path, ws: Workspace) -> str:
     return "스키마 v99 (플러그인 범위 밖)"
 
 
-MAIN_EDITS = {"e016": main_e016, "schema99": main_schema99}
+def main_e015(root: Path, ws: Workspace) -> str:
+    """eval 15: DATA-001-01의 DataFailCause code_ref를 버전 구분 없는 Android 16 경로 하나로 만든다.
+    Android 17 트리에서는 그 파일이 fail/ 아래로 옮겨져 있어 "경로 변경"을 찾아야 한다."""
+    old = ("      - ref: aosp:frameworks/base/telephony/java/android/telephony/DataFailCause.java\n"
+           "        symbol: DataFailCause#toString\n"
+           "        android_versions: [\"16\"]\n"
+           "      - ref: aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/fail/DataFailCause.java\n"
+           "        symbol: DataFailCause#toString\n"
+           "        android_versions: [\"17\"]\n")
+    new = ("      - ref: aosp:frameworks/base/telephony/java/android/telephony/DataFailCause.java\n"
+           "        symbol: DataFailCause#toString\n")
+    _edit_type(root, "DATA-001", old, new)
+    return "DATA-001-01 DataFailCause code_ref를 16 경로 하나로 (17 경로 항목 제거)"
+
+
+MAIN_EDITS = {"e016": main_e016, "schema99": main_schema99, "e015": main_e015}
 
 
 def _bash_path(p: str) -> str:
@@ -193,9 +208,24 @@ def build(entry: dict, out: Path) -> dict:
         ws.plan(pr["job"], json.loads(text))
         ws.ship(pr["job"], pr["branch"])
         git(ws.clone, "fetch", "-q", "origin")
+    seed = setup.get("seed_plan")
+    if seed:
+        plan = json.loads((EVALS / "plans" / seed["plan"]).read_text(encoding="utf-8"))
+        for rel, src in (seed.get("files") or {}).items():
+            ws.put(seed["job"], rel, REPO / src)
+        text = json.dumps(plan, ensure_ascii=False).replace("<JOB>", str(ws.job_dir(seed["job"])).replace("\\", "/"))
+        ws.plan(seed["job"], json.loads(text))
     for name in setup.get("main_after_pr") or []:
         holder = {}
         ws.push_main(lambda other, n=name: holder.setdefault("msg", MAIN_EDITS[n](other, ws)), f"eval {name}")
+
+    if setup.get("user_config"):
+        import yaml
+        cfg_path = ws.home / "config.yaml"
+        cfg = yaml.safe_load(cfg_path.read_text(encoding="utf-8")) or {}
+        extra = json.loads(json.dumps(setup["user_config"]).replace("<MOCK_SRC>", (REPO / "tests" / "mocks" / "src").as_posix()))
+        cfg.update(extra)
+        cfg_path.write_text(yaml.safe_dump(cfg, allow_unicode=True, sort_keys=False), encoding="utf-8", newline="\n")
 
     cs = setup.get("clone_state") or {}
     for br in cs.get("local_branches") or []:   # 사용자의 로컬 브랜치 (도구가 건드리면 안 된다)
@@ -231,7 +261,8 @@ def build(entry: dict, out: Path) -> dict:
         "logs": sorted(str(p) for p in logs.iterdir()), "jira_dir": str(jira_dir),
         "jira_call": f"python3 \"{CALL.as_posix()}\" <tool> '<arguments JSON>'",
         "jira_tools_list": f"python3 \"{CALL.as_posix()}\" --list",
-        "analyzer_run": f"python3 \"{ANALYZER.as_posix()}\" --input <입력 JSON 경로>",
+        "analyzer_run": (f"python3 -c \"import sys; sys.exit('mock-data-analyzer: internal error (timeout)')\" --input <입력 JSON 경로>"
+                         if setup.get("analyzer_fail") else f"python3 \"{ANALYZER.as_posix()}\" --input <입력 JSON 경로>"),
         "gh_state": str(ws.gh_state),
     }
     (out / "env.json").write_text(json.dumps(info, ensure_ascii=False, indent=2), encoding="utf-8")

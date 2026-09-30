@@ -1,0 +1,13 @@
+# eval 7: 로밍 데이터 불가 로그에 IMSI·전화번호·SIP URI 원본이 들어 있다(마스킹 전 원본 로그).
+name: e007-roaming-raw-pii
+start: "2026-09-22T08:00:00+09:00"
+default_phone: 1
+pid: 1234
+tid: 1250
+entries:
+  - {at: 0, tag: "SST-{phone}", msg: "onRoamingOn: roaming=true imsi=450081234567890"}
+  - {after: 1, tag: ImsManager, pid: 1600, tid: 1610, msg: "register: impu=sip:+821055512345@ims.mnc008.mcc450.3gppnetwork.org msisdn=+821055512345"}
+  - {after: 1, tag: "DSM-{phone}", msg: "isDataRoamingEnabled=false"}
+  - {after: 1, tag: "DNC-{phone}", level: I, msg: "onEvaluateNetworkRequests: reason=ROAMING_STATE_CHANGED"}
+  - {after: 0.5, tag: "DNC-{phone}", level: W, msg: "evaluation result: NOT_ALLOWED reasons=[ROAMING_DISABLED]"}
+  - {after: 10, tag: "DNC-{phone}", level: W, msg: "evaluation result: NOT_ALLOWED reasons=[ROAMING_DISABLED]"}

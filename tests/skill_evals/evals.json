@@ -1,6 +1,6 @@
 {
   "skill_name": "telephony-triage",
-  "_comment": "eval 45개 (docs/design/10-skill-eval.md). batch 1 = 대표 10개, batch A = 원칙·안전 10개(setup·assertion 완성), batch 2 = 나머지(설계 문구만). 실행 방법은 tests/skill_evals/README.md.",
+  "_comment": "eval 45개 (docs/design/10-skill-eval.md). batch 1 = 대표 10개, A = 원칙·안전 10개, B = analyze 핵심 경로 11개 (setup·assertion 완성), batch 2 = 나머지(설계 문구만). 실행 방법은 tests/skill_evals/README.md.",
   "evals": [
     {
       "id": 1,
@@ -83,57 +83,189 @@
     {
       "id": 3,
       "design": "증상 자체가 이슈 DB에 없음 → 유사 유형 3개를 보여준 뒤 새 유형과 첫 원인 제안",
-      "batch": 2,
-      "prompt": null,
-      "setup": null,
-      "user_replies": null,
-      "expected_output": "증상 자체가 이슈 DB에 없음 → 유사 유형 3개를 보여준 뒤 새 유형과 첫 원인 제안",
-      "assertions": [],
-      "files": []
+      "batch": "B",
+      "prompt": "MOCK-9003 분석해줘 --dry-run. 데이터는 붙는데 인터넷이 안 된대. 로그: logs/e003.log",
+      "setup": {
+        "jira": [
+          "MOCK-9003"
+        ],
+        "logs": [
+          {
+            "scenario": "e003-validation-fail.yaml",
+            "as": "e003.log"
+          }
+        ]
+      },
+      "user_replies": [
+        "후보가 없어 선택지를 주면 '새 유형'.",
+        "유사 유형 3개를 보여주면 '비슷한 게 없으니 새 유형으로'.",
+        "새 유형·첫 원인 초안(제목·요약·증상/원인 시그니처·파서 규칙·fixture)은 작성 규칙에 맞으면 승인한다. 원인은 'DNS 검증 실패'류, 해결책은 '[WA] 데이터를 껐다 켠다'류면 된다.",
+        "확인 화면에서는 '승인'(dry-run이므로 여기서 끝난다).",
+        "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다(규칙에 따로 적힌 경우 제외).",
+        "note 한 줄 초안을 보여주면 그대로 승인한다.",
+        "심층 분석(mock-data-analyzer) 실행 여부를 물으면 '아니오'(규칙에 따로 적힌 경우 제외).",
+        "R6 추가 표본을 물으면 '없음'. 수정 정보·해결책 효과 근거를 물으면 '없음'.",
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "S=1 유형이 없어 '후보 없음' → 사용자가 새 유형을 고르면 db_add similar로 유사 유형 상위 3개를 먼저 보여주고, 카테고리(data)를 확인한 뒤 new-type(증상 시그니처 필수) + 첫 원인 + append + fixture 계획을 만들고 초안 검증 후 확인 화면.",
+      "assertions": [
+        "새 유형을 만들기 전에 db_add similar로 유사 유형 상위 3개를 보여줬다",
+        "계획에 new-type(category data, 증상 시그니처 1개 이상, 첫 원인 temp_id)이 있다",
+        "계획에 append {cause: <첫 원인 temp_id>}와 add-fixture(positive)가 있다",
+        "유형 title이 증상 형태('~하지 않음/~됨')다",
+        "초안 검증(db_verify rules --plan --draft) 결과를 보여줬다",
+        "dry-run이라 원격 브랜치·PR이 없고 끝난 뒤 lock이 없다"
+      ],
+      "files": [],
+      "name": "new-type-validation-fail"
     },
     {
       "id": 4,
       "design": "새 유형의 판별 태그가 `tags.yaml`에 없음 → `add-parser-rule` 초안, `cut`으로 만든 마스킹 fixture, 전체 회귀 결과 보고",
-      "batch": 2,
-      "prompt": null,
-      "setup": null,
-      "user_replies": null,
-      "expected_output": "새 유형의 판별 태그가 `tags.yaml`에 없음 → `add-parser-rule` 초안, `cut`으로 만든 마스킹 fixture, 전체 회귀 결과 보고",
-      "assertions": [],
-      "files": []
+      "batch": "B",
+      "prompt": "MOCK-9004 분석해줘 --dry-run. 3G 통화 중에 콜이 끊긴대. 로그: logs/e004.log",
+      "setup": {
+        "jira": [
+          "MOCK-9004"
+        ],
+        "logs": [
+          {
+            "scenario": "e004-cs-call-drop.yaml",
+            "as": "e004.log"
+          }
+        ]
+      },
+      "user_replies": [
+        "후보가 없어 선택지를 주면 '새 유형'.",
+        "유사 유형을 보여주면 '새 유형으로 진행'.",
+        "새 유형 초안(call 카테고리, 'CS 통화 중 콜이 끊김'류, 원인 '신호 손실로 인한 CS 콜 끊김'류)과 파서 규칙 초안(add-parser-rule)은 승인한다.",
+        "확인 화면에서는 '승인'.",
+        "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다(규칙에 따로 적힌 경우 제외).",
+        "note 한 줄 초안을 보여주면 그대로 승인한다.",
+        "심층 분석(mock-data-analyzer) 실행 여부를 물으면 '아니오'(규칙에 따로 적힌 경우 제외).",
+        "R6 추가 표본을 물으면 '없음'. 수정 정보·해결책 효과 근거를 물으면 '없음'.",
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "판별 태그 GsmCdmaCallTracker가 tags.yaml에 없어 파서가 그 줄을 버린다는 것을 점검하고, add-parser-rule(tags.yaml, 필요하면 extractor) 초안, cut으로 만든 마스킹 fixture, 전체 회귀 결과를 보고한다.",
+      "assertions": [
+        "GsmCdmaCallTracker 태그가 parser-rules에 없어 이벤트가 추출되지 않는다는 것을 짚었다",
+        "계획에 add-parser-rule(file tags.yaml, GsmCdmaCallTracker)이 있고 이력 필드(added_for, added_on, reason)가 있다",
+        "계획에 new-type(call)과 parse_logcat cut으로 만든 add-fixture가 있다",
+        "초안 검증 결과(R1·R4 포함, 규칙 변경이면 R5)를 보여줬다",
+        "dry-run이라 원격 브랜치·PR이 없고 끝난 뒤 lock이 없다"
+      ],
+      "files": [],
+      "name": "new-type-needs-parser-tag"
     },
     {
       "id": 5,
       "design": "발생 시각이 없는 Jira → 바로 묻지 않고 `parse --full`로 증상 시그니처가 충족되는 시각 후보(상위 3개)를 보여주고 고르게 한다. 후보가 없는 로그에서는 시각을 묻는다. 로그에 시계 역행이 있으면 경고하고 같은 경로를 제안한다",
-      "batch": 2,
-      "prompt": null,
-      "setup": null,
-      "user_replies": null,
-      "expected_output": "발생 시각이 없는 Jira → 바로 묻지 않고 `parse --full`로 증상 시그니처가 충족되는 시각 후보(상위 3개)를 보여주고 고르게 한다. 후보가 없는 로그에서는 시각을 묻는다. 로그에 시계 역행이 있으면 경고하고 같은 경로를 제안한다",
-      "assertions": [],
-      "files": []
+      "batch": "B",
+      "prompt": "MOCK-9005 로그 봐줘 --dry-run. 발생 시각은 모른대. 로그: logs/roaming.log",
+      "setup": {
+        "jira": [
+          "MOCK-9005"
+        ],
+        "logs": [
+          {
+            "src": "tests/fixtures/logs/data-roaming-disabled.log",
+            "as": "roaming.log"
+          }
+        ]
+      },
+      "user_replies": [
+        "발생 시각 후보를 보여주면 첫 번째 후보를 고른다.",
+        "분류 제안에는 '예'.",
+        "확인 화면에서는 '승인'.",
+        "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다(규칙에 따로 적힌 경우 제외).",
+        "note 한 줄 초안을 보여주면 그대로 승인한다.",
+        "심층 분석(mock-data-analyzer) 실행 여부를 물으면 '아니오'(규칙에 따로 적힌 경우 제외).",
+        "R6 추가 표본을 물으면 '없음'. 수정 정보·해결책 효과 근거를 물으면 '없음'.",
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "Jira에 발생 시각이 없으므로 바로 묻지 않고 parse --full + 매처 --regress로 증상이 충족되는 시각 후보(최대 3개, 유형 이름과 함께)를 보여주고 고르게 한 뒤, 고른 시각으로 ±5분 재파싱해 분석한다.",
+      "assertions": [
+        "발생 시각을 먼저 묻지 않고 parse_logcat parse --full과 match_signatures --regress를 돌렸다",
+        "증상이 충족되는 시각 후보(유형 ID와 함께)를 보여주고 고르게 했다",
+        "고른 시각으로 --around 재파싱해 분석을 이어갔다",
+        "1위 후보가 DATA-001-02다",
+        "dry-run이라 원격 브랜치·PR이 없고 끝난 뒤 lock이 없다"
+      ],
+      "files": [],
+      "name": "no-occurrence-time-candidates"
     },
     {
       "id": 6,
       "design": "사용자가 분류를 거부 → 다른 후보나 새 유형 선택지 제시, 임의 확정 금지",
-      "batch": 2,
-      "prompt": null,
-      "setup": null,
-      "user_replies": null,
-      "expected_output": "사용자가 분류를 거부 → 다른 후보나 새 유형 선택지 제시, 임의 확정 금지",
-      "assertions": [],
-      "files": []
+      "batch": "B",
+      "prompt": "MOCK-9006 분석해줘 --dry-run. 로그: logs/data-disabled.log",
+      "setup": {
+        "jira": [
+          "MOCK-9006"
+        ],
+        "logs": [
+          {
+            "src": "tests/fixtures/logs/data-disabled.log",
+            "as": "data-disabled.log"
+          }
+        ]
+      },
+      "user_replies": [
+        "분류 제안(DATA-001-01)에는 '아니, 그거 아닌 것 같아. 사용자는 데이터 켜져 있었다고 했어'.",
+        "다른 선택지를 보여주면 '원인 미확정'으로 DATA-001에 둔다.",
+        "확인 화면에서는 '승인'.",
+        "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다(규칙에 따로 적힌 경우 제외).",
+        "note 한 줄 초안을 보여주면 그대로 승인한다.",
+        "심층 분석(mock-data-analyzer) 실행 여부를 물으면 '아니오'(규칙에 따로 적힌 경우 제외).",
+        "R6 추가 표본을 물으면 '없음'. 수정 정보·해결책 효과 근거를 물으면 '없음'.",
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "사용자가 거부하면 임의로 확정하지 않고 다른 기존 원인 / 새 원인 / 새 유형 / 원인 미확정 선택지를 다시 보여준다. 원인 미확정을 고르면 unresolved {type: DATA-001}, 피드백 decision unresolved.",
+      "assertions": [
+        "거부 뒤 다른 후보·새 원인·새 유형·원인 미확정 선택지를 다시 보여줬다",
+        "사용자가 고르기 전에 분류를 확정하지 않았다",
+        "계획 operations가 unresolved {type: DATA-001}이다",
+        "계획 feedback decision이 unresolved이고 suggested에 DATA-001-01이 있다",
+        "dry-run이라 원격 브랜치·PR이 없고 끝난 뒤 lock이 없다"
+      ],
+      "files": [],
+      "name": "user-rejects-classification"
     },
     {
       "id": 7,
       "design": "로그에 IMSI, 전화번호, SIP URI → 리포트, 매칭 근거, 이슈 DB 반영분 모두 마스킹",
-      "batch": 2,
-      "prompt": null,
-      "setup": null,
-      "user_replies": null,
-      "expected_output": "로그에 IMSI, 전화번호, SIP URI → 리포트, 매칭 근거, 이슈 DB 반영분 모두 마스킹",
-      "assertions": [],
-      "files": []
+      "batch": "B",
+      "prompt": "MOCK-9007 분석해줘 --dry-run. 로그: logs/e007.log",
+      "setup": {
+        "jira": [
+          "MOCK-9007"
+        ],
+        "logs": [
+          {
+            "scenario": "e007-roaming-raw-pii.yaml",
+            "as": "e007.log"
+          }
+        ]
+      },
+      "user_replies": [
+        "분류 제안에는 '예'.",
+        "확인 화면에서는 '승인'.",
+        "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다(규칙에 따로 적힌 경우 제외).",
+        "note 한 줄 초안을 보여주면 그대로 승인한다.",
+        "심층 분석(mock-data-analyzer) 실행 여부를 물으면 '아니오'(규칙에 따로 적힌 경우 제외).",
+        "R6 추가 표본을 물으면 '없음'. 수정 정보·해결책 효과 근거를 물으면 '없음'.",
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "로그의 IMSI(450081234567890)·전화번호(+821055512345)·SIP URI 사용자 부분이 리포트·근거 로그·계획·확인 화면 어디에도 원문으로 나오지 않고 토큰으로 나온다.",
+      "assertions": [
+        "transcript에 450081234567890, 821055512345가 없다",
+        "plan.json과 work_dir의 파일(events.json 등)에 원본 IMSI·전화번호가 없다",
+        "근거 로그를 마스킹된 이벤트로 보여줬다(토큰 표기)",
+        "로그 원문 파일을 통째로 cat하지 않았다",
+        "dry-run이라 원격 브랜치·PR이 없고 끝난 뒤 lock이 없다"
+      ],
+      "files": [],
+      "name": "log-pii-masked-everywhere"
     },
     {
       "id": 8,
@@ -215,24 +347,84 @@
     {
       "id": 11,
       "design": "분석 중 main에 같은 번호의 새 원인이 머지됨 → Step 8에서 다음 번호로 할당되고 확인 화면에 표시",
-      "batch": 2,
-      "prompt": null,
-      "setup": null,
-      "user_replies": null,
-      "expected_output": "분석 중 main에 같은 번호의 새 원인이 머지됨 → Step 8에서 다음 번호로 할당되고 확인 화면에 표시",
-      "assertions": [],
-      "files": []
+      "batch": "B",
+      "prompt": "MOCK-9011 저번에 하던 analyze 이어서 해줘 --dry-run. 로그는 logs/e011.log",
+      "setup": {
+        "jira": [
+          "MOCK-9011"
+        ],
+        "logs": [
+          {
+            "scenario": "e002-apn-profile.yaml",
+            "as": "e011.log"
+          }
+        ],
+        "seed_plan": {
+          "job": "MOCK-9011",
+          "plan": "e011.plan.json",
+          "files": {
+            "fixtures/cut-1.log": "tests/skill_evals/fixtures/e016-apn-cut.log"
+          }
+        },
+        "main_after_pr": [
+          "e016"
+        ]
+      },
+      "user_replies": [
+        "기존 계획이 있다며 이어서 할지 새로 시작할지 물으면 '이어서'.",
+        "drift가 나오면 '계획 값 유지'.",
+        "확인 화면에서는 '승인'(dry-run이므로 여기서 끝난다).",
+        "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다(규칙에 따로 적힌 경우 제외).",
+        "note 한 줄 초안을 보여주면 그대로 승인한다.",
+        "심층 분석(mock-data-analyzer) 실행 여부를 물으면 '아니오'(규칙에 따로 적힌 경우 제외).",
+        "R6 추가 표본을 물으면 '없음'. 수정 정보·해결책 효과 근거를 물으면 '없음'.",
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "저장된 계획(source analyze, NEW-CAUSE-1)을 이어서 Step 8로 적용한다. 그사이 main에 DATA-001-03이 먼저 들어왔으므로 NEW-CAUSE-1이 DATA-001-04로 할당되고 확인 화면에 그 내역이 보인다.",
+      "assertions": [
+        "기존 계획이 있다고 알리고 이어서/새로 시작을 물었다",
+        "이 Jira의 pending 피드백을 지우는 처리(또는 없음 확인)를 했다",
+        "db_pr stage를 기존 계획으로 실행했다(계획을 처음부터 다시 만들지 않음)",
+        "확인 화면에 NEW-CAUSE-1 → DATA-001-04 할당과, 분석 때 예상과 번호가 바뀌었다는 설명이 보인다",
+        "dry-run이라 원격 브랜치·PR이 없고 끝난 뒤 lock이 없다"
+      ],
+      "files": [],
+      "name": "resume-plan-id-reassigned"
     },
     {
       "id": 12,
       "design": "같은 Jira가 이미 main에 있음 → 기존 분류를 보여주고 유지/재분류(`reclassify`)를 묻는다",
-      "batch": 2,
-      "prompt": null,
-      "setup": null,
-      "user_replies": null,
-      "expected_output": "같은 Jira가 이미 main에 있음 → 기존 분류를 보여주고 유지/재분류(`reclassify`)를 묻는다",
-      "assertions": [],
-      "files": []
+      "batch": "B",
+      "prompt": "MOCK-1101 분석해줘. 로그: logs/data-disabled.log",
+      "setup": {
+        "jira": [
+          "MOCK-1101"
+        ],
+        "logs": [
+          {
+            "src": "tests/fixtures/logs/data-disabled.log",
+            "as": "data-disabled.log"
+          }
+        ]
+      },
+      "user_replies": [
+        "이미 분류된 Jira라며 유지/재분류를 물으면 '기존 분류 유지'.",
+        "재분석할지 물으면 '아니'.",
+        "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다(규칙에 따로 적힌 경우 제외).",
+        "note 한 줄 초안을 보여주면 그대로 승인한다.",
+        "심층 분석(mock-data-analyzer) 실행 여부를 물으면 '아니오'(규칙에 따로 적힌 경우 제외).",
+        "R6 추가 표본을 물으면 '없음'. 수정 정보·해결책 효과 근거를 물으면 '없음'.",
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "스냅샷에 MOCK-1101(DATA-001-01)이 이미 있으므로 기존 분류를 먼저 보여주고 재분석·유지/재분류를 묻는다. 유지하면 계획·중복 파일을 만들지 않고 lock을 풀고 끝낸다.",
+      "assertions": [
+        "MOCK-1101이 이미 DATA-001-01로 분류돼 있다는 것을 보여줬다",
+        "유지/재분류(reclassify)를 물었다",
+        "중복 Jira 파일이나 append 계획을 만들지 않았다",
+        "원격 브랜치·PR이 없고 끝난 뒤 lock이 없다"
+      ],
+      "files": [],
+      "name": "jira-already-in-main"
     },
     {
       "id": 13,
@@ -275,24 +467,120 @@
     {
       "id": 14,
       "design": "`--code` 없이 실행, Jira가 Android 16 → 16 프로필을 추천하며 코드 경로를 묻는다. 17 트리를 고르면 버전 불일치를 경고한다",
-      "batch": 2,
-      "prompt": null,
-      "setup": null,
-      "user_replies": null,
-      "expected_output": "`--code` 없이 실행, Jira가 Android 16 → 16 프로필을 추천하며 코드 경로를 묻는다. 17 트리를 고르면 버전 불일치를 경고한다",
-      "assertions": [],
-      "files": []
+      "batch": "B",
+      "prompt": "MOCK-9014 분석해줘 --dry-run. 로그: logs/data-disabled.log",
+      "setup": {
+        "jira": [
+          "MOCK-9014"
+        ],
+        "logs": [
+          {
+            "src": "tests/fixtures/logs/data-disabled.log",
+            "as": "data-disabled.log"
+          }
+        ],
+        "user_config": {
+          "code_profiles": [
+            {
+              "name": "android16-main",
+              "android_version": "16",
+              "roots": {
+                "aosp": "<MOCK_SRC>/android16",
+                "vendor_ril": "<MOCK_SRC>/android16"
+              }
+            },
+            {
+              "name": "android17-dev",
+              "android_version": "17",
+              "roots": {
+                "aosp": "<MOCK_SRC>/android17",
+                "vendor_ril": "<MOCK_SRC>/android17"
+              }
+            }
+          ]
+        }
+      },
+      "user_replies": [
+        "코드 경로를 물으면 **android17-dev**를 고른다(버전 불일치 경고 확인용).",
+        "버전 불일치 경고 뒤 계속할지 물으면 '아니, android16-main으로 바꿀게'.",
+        "분류 제안에는 '예'.",
+        "확인 화면에서는 '승인'.",
+        "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다(규칙에 따로 적힌 경우 제외).",
+        "note 한 줄 초안을 보여주면 그대로 승인한다.",
+        "심층 분석(mock-data-analyzer) 실행 여부를 물으면 '아니오'(규칙에 따로 적힌 경우 제외).",
+        "R6 추가 표본을 물으면 '없음'. 수정 정보·해결책 효과 근거를 물으면 '없음'.",
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "--code가 없으므로 Jira의 Android 16에 맞는 android16-main을 추천 표시해 코드 경로를 묻는다. 17 트리를 고르면 버전 불일치를 경고하고, 사용자가 16으로 바꾸면 그 트리로 코드 분석(code_refs resolve)을 하고 리포트에 분석 트리를 적는다.",
+      "assertions": [
+        "코드 경로 후보에서 android16-main을 버전 일치·추천으로 보여줬다",
+        "android17-dev를 고르자 대상(16)과 트리 버전(17) 불일치를 경고하고 계속할지 물었다",
+        "android16-main으로 code_roots resolve 등 코드 분석을 했다",
+        "리포트에 분석 트리(android16-main, Android 16)를 적었다",
+        "dry-run이라 원격 브랜치·PR이 없고 끝난 뒤 lock이 없다"
+      ],
+      "files": [],
+      "name": "code-profile-version-recommend"
     },
     {
       "id": 15,
       "design": "`code_refs` 파일이 선택한 트리에 없음 → `symbol`로 찾아서 \"경로 변경\"을 보고하고, 이 버전용 `code_refs` 추가를 묻는다. 새 `code_refs`에 절대 경로가 없다",
-      "batch": 2,
-      "prompt": null,
-      "setup": null,
-      "user_replies": null,
-      "expected_output": "`code_refs` 파일이 선택한 트리에 없음 → `symbol`로 찾아서 \"경로 변경\"을 보고하고, 이 버전용 `code_refs` 추가를 묻는다. 새 `code_refs`에 절대 경로가 없다",
-      "assertions": [],
-      "files": []
+      "batch": "B",
+      "prompt": "MOCK-9015 분석해줘 --dry-run --code android17-dev. 로그: logs/data-disabled.log",
+      "setup": {
+        "jira": [
+          "MOCK-9015"
+        ],
+        "logs": [
+          {
+            "src": "tests/fixtures/logs/data-disabled.log",
+            "as": "data-disabled.log"
+          }
+        ],
+        "user_config": {
+          "code_profiles": [
+            {
+              "name": "android16-main",
+              "android_version": "16",
+              "roots": {
+                "aosp": "<MOCK_SRC>/android16",
+                "vendor_ril": "<MOCK_SRC>/android16"
+              }
+            },
+            {
+              "name": "android17-dev",
+              "android_version": "17",
+              "roots": {
+                "aosp": "<MOCK_SRC>/android17",
+                "vendor_ril": "<MOCK_SRC>/android17"
+              }
+            }
+          ]
+        },
+        "main_after_pr": [
+          "e015"
+        ]
+      },
+      "user_replies": [
+        "분류 제안에는 '예'.",
+        "경로 변경된 파일에 대해 이 버전용 code_ref를 추가할지 물으면 '추가'.",
+        "확인 화면에서는 '승인'.",
+        "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다(규칙에 따로 적힌 경우 제외).",
+        "note 한 줄 초안을 보여주면 그대로 승인한다.",
+        "심층 분석(mock-data-analyzer) 실행 여부를 물으면 '아니오'(규칙에 따로 적힌 경우 제외).",
+        "R6 추가 표본을 물으면 '없음'. 수정 정보·해결책 효과 근거를 물으면 '없음'.",
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "DATA-001-01의 code_ref(DataFailCause.java, Android 16 경로)가 android17 트리에 없으므로 code_roots find-symbol로 symbol을 찾아 'Android 17에서 경로 변경: <새 경로>'를 보고하고, 이 버전용 add-code-ref(android_versions [17], 상대 경로)를 제안한다. 기존 항목은 고치지 않는다.",
+      "assertions": [
+        "code_roots resolve로 파일이 없음을 확인하고 find-symbol로 새 위치를 찾았다",
+        "리포트에 'Android 17에서 경로 변경'과 새 경로를 적었다",
+        "계획에 add-code-ref(DATA-001-01, ref aosp:…/data/fail/DataFailCause.java, android_versions ['17'])가 있다",
+        "새 code_ref에 절대 경로가 없다",
+        "dry-run이라 원격 브랜치·PR이 없고 끝난 뒤 lock이 없다"
+      ],
+      "files": [],
+      "name": "code-ref-moved-add-ref"
     },
     {
       "id": 16,
@@ -867,13 +1155,40 @@
     {
       "id": 41,
       "design": "분석 스킬이 실패하거나, 호출 질문에 \"아니오\"거나, `--no-analyzer` → \"심층 분석 생략\"을 적고 나머지 흐름을 그대로 진행한다",
-      "batch": 2,
-      "prompt": null,
-      "setup": null,
-      "user_replies": null,
-      "expected_output": "분석 스킬이 실패하거나, 호출 질문에 \"아니오\"거나, `--no-analyzer` → \"심층 분석 생략\"을 적고 나머지 흐름을 그대로 진행한다",
-      "assertions": [],
-      "files": []
+      "batch": "B",
+      "prompt": "MOCK-9041 분석해줘 --dry-run. 로그: logs/data-disabled.log",
+      "setup": {
+        "jira": [
+          "MOCK-9041"
+        ],
+        "logs": [
+          {
+            "src": "tests/fixtures/logs/data-disabled.log",
+            "as": "data-disabled.log"
+          }
+        ],
+        "analyzer_fail": true
+      },
+      "user_replies": [
+        "심층 분석(mock-data-analyzer) 실행 여부를 물으면 **'예'**.",
+        "분류 제안에는 '예'.",
+        "확인 화면에서는 '승인'.",
+        "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다(규칙에 따로 적힌 경우 제외).",
+        "note 한 줄 초안을 보여주면 그대로 승인한다.",
+        "심층 분석(mock-data-analyzer) 실행 여부를 물으면 '아니오'(규칙에 따로 적힌 경우 제외).",
+        "R6 추가 표본을 물으면 '없음'. 수정 정보·해결책 효과 근거를 물으면 '없음'.",
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "분석 스킬 호출이 실패하면 '심층 분석 생략: <사유>'를 리포트에 적고 나머지 흐름(분류·계획·확인 화면)을 그대로 진행한다.",
+      "assertions": [
+        "분석 스킬을 호출하기 전에 실행 여부를 물었다",
+        "분석 스킬이 실패하자 리포트에 '심층 분석 생략'과 사유를 적었다",
+        "실패 뒤에도 분류 확인·계획·확인 화면까지 진행했다",
+        "계획이 append DATA-001-01이다",
+        "dry-run이라 원격 브랜치·PR이 없고 끝난 뒤 lock이 없다"
+      ],
+      "files": [],
+      "name": "analyzer-fails-continue"
     },
     {
       "id": 42,
@@ -958,13 +1273,38 @@
     {
       "id": 44,
       "design": "듀얼 SIM 로그: 슬롯 0에 DATA-001 증상, 슬롯 1에 DATA-001-01 원인 로그(같은 윈도우) → 분석 모드에서 DATA-001-01이 후보에 오르지 않고 \"유형 일치, 원인 미확인\"과 슬롯(phone 0)이 표시된다. `same_phone: false`인 시그니처를 가진 원인은 잡힌다. 교차 슬롯 음성 fixture(`DATA-001.none.2.log`)가 회귀를 통과한다",
-      "batch": 2,
-      "prompt": null,
-      "setup": null,
-      "user_replies": null,
-      "expected_output": "듀얼 SIM 로그: 슬롯 0에 DATA-001 증상, 슬롯 1에 DATA-001-01 원인 로그(같은 윈도우) → 분석 모드에서 DATA-001-01이 후보에 오르지 않고 \"유형 일치, 원인 미확인\"과 슬롯(phone 0)이 표시된다. `same_phone: false`인 시그니처를 가진 원인은 잡힌다. 교차 슬롯 음성 fixture(`DATA-001.none.2.log`)가 회귀를 통과한다",
-      "assertions": [],
-      "files": []
+      "batch": "B",
+      "prompt": "MOCK-9044 분석해줘 --dry-run. 로그: logs/e044.log",
+      "setup": {
+        "jira": [
+          "MOCK-9044"
+        ],
+        "logs": [
+          {
+            "scenario": "e044-cross-slot.yaml",
+            "as": "e044.log"
+          }
+        ]
+      },
+      "user_replies": [
+        "'유형 일치, 원인 미확인'에서 선택지를 주면 '원인 미확정'.",
+        "확인 화면에서는 '승인'.",
+        "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다(규칙에 따로 적힌 경우 제외).",
+        "note 한 줄 초안을 보여주면 그대로 승인한다.",
+        "심층 분석(mock-data-analyzer) 실행 여부를 물으면 '아니오'(규칙에 따로 적힌 경우 제외).",
+        "R6 추가 표본을 물으면 '없음'. 수정 정보·해결책 효과 근거를 물으면 '없음'.",
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "슬롯 0에 DATA-001 증상, 슬롯 1에 데이터 설정 OFF → 분석 모드에서 DATA-001-01이 후보에 오르지 않고 '유형 일치, 원인 미확인'과 판별 슬롯(phone 0)을 보여준다. 다른 슬롯의 흔적을 원인 근거로 쓰지 않는다.",
+      "assertions": [
+        "리포트에 DATA-001 '유형 일치, 원인 미확인'이 보인다",
+        "DATA-001-01을 원인 후보로 제시하지 않았다(슬롯이 다름을 설명)",
+        "판별 슬롯 phone 0을 표시했다",
+        "계획이 unresolved {type: DATA-001}이다",
+        "dry-run이라 원격 브랜치·PR이 없고 끝난 뒤 lock이 없다"
+      ],
+      "files": [],
+      "name": "dual-sim-cross-slot"
     },
     {
       "id": 45,

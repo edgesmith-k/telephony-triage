@@ -1,0 +1,12 @@
+# eval 44: 듀얼 SIM. 슬롯 0에서 데이터 평가 거부(DATA-001 증상), 같은 창에 슬롯 1에서 데이터 설정 OFF(DATA-001-01 원인 흔적).
+# same_phone 기본 true라 DATA-001-01은 충족되지 않아야 한다 → "유형 일치, 원인 미확인", 슬롯 phone 0.
+name: e044-cross-slot
+start: "2026-09-23T11:00:00+09:00"
+default_phone: 0
+pid: 1234
+tid: 1244
+entries:
+  - {at: 0, tag: "DSM-1", phone: 1, msg: "onDataEnabledChanged: enabled=false reason=USER"}
+  - {after: 1, tag: "DNC-{phone}", level: I, msg: "onEvaluateNetworkRequests: reason=DATA_ENABLED_CHANGED"}
+  - {after: 0.5, tag: "DNC-{phone}", level: W, msg: "evaluation result: NOT_ALLOWED reasons=[DATA_DISABLED]"}
+  - {after: 15, tag: "DNC-{phone}", level: W, msg: "evaluation result: NOT_ALLOWED reasons=[DATA_DISABLED]"}

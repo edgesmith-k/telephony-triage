@@ -302,6 +302,97 @@ def checks(eid: int, ctx: Ctx) -> list:
                 None, ctx.lock_free]
     if eid == 8:
         return [None, None, no_write]
+    # --- batch B (analyze 핵심 경로) ---
+    def op_list(job, name):
+        return [o for o in ops(job) if o.get("op") == name]
+    def unresolved(job):
+        o = ops(job)
+        return (o == [{"op": "unresolved", "type": "DATA-001"}], json.dumps(o, ensure_ascii=False))
+    def in_cmd(*words):
+        hit = all(w in ctx.commands for w in words)
+        return lambda: (hit, f"commands.md에 {words} {'있음' if hit else '없음'}")
+    if eid == 3:
+        def nt():
+            n = op_list("MOCK-9003", "new-type")
+            t = n[0] if n else {}
+            ok = bool(n) and t.get("category") == "data" and len((t.get("type") or {}).get("symptom_signatures") or []) >= 1 \
+                and bool((t.get("first_cause") or {}).get("temp_id"))
+            return ok, json.dumps(n, ensure_ascii=False)[:400]
+        def af():
+            n = op_list("MOCK-9003", "new-type")
+            tid = ((n[0].get("first_cause") or {}).get("temp_id")) if n else None
+            ok = {"op": "append", "cause": tid} in ops("MOCK-9003") and any(o.get("kind") == "positive" for o in op_list("MOCK-9003", "add-fixture"))
+            return ok, json.dumps(ops("MOCK-9003"), ensure_ascii=False)[:300]
+        def title():
+            n = op_list("MOCK-9003", "new-type")
+            t = ((n[0].get("type") or {}).get("title") or "") if n else ""
+            return t.rstrip().endswith(("않음", "됨", "안 됨")), t
+        return [in_cmd("similar"), nt, af, title, in_cmd("--draft"), none_remote_lock]
+    if eid == 4:
+        def pr():
+            r = [o for o in op_list("MOCK-9004", "add-parser-rule") if o.get("file") == "tags.yaml"]
+            rule = r[0].get("rule", {}) if r else {}
+            ok = bool(r) and "GsmCdmaCallTracker" in json.dumps(rule) and all(rule.get(k) for k in ("added_for", "added_on", "reason"))
+            return ok, json.dumps(r, ensure_ascii=False)
+        def nt():
+            n = op_list("MOCK-9004", "new-type")
+            ok = bool(n) and n[0].get("category") == "call" and bool(op_list("MOCK-9004", "add-fixture")) and " cut " in ctx.commands
+            return ok, json.dumps([o.get("op") for o in ops("MOCK-9004")])
+        return [None, pr, nt, None, none_remote_lock]
+    if eid == 5:
+        return [in_cmd("--full", "--regress"), None, in_cmd("--around"), None, none_remote_lock]
+    if eid == 6:
+        def fb():
+            f = (ctx.plan("MOCK-9006") or {}).get("feedback") or {}
+            ok = f.get("decision") == "unresolved" and any(x.get("cause") == "DATA-001-01" for x in f.get("suggested") or [])
+            return ok, json.dumps(f, ensure_ascii=False)
+        return [None, None, lambda: unresolved("MOCK-9006"), fb, none_remote_lock]
+    if eid == 7:
+        raw = ["450081234567890", "821055512345"]
+        def tr():
+            hits = [r for r in raw if r in ctx.transcript]
+            return not hits and bool(ctx.transcript), f"transcript: {hits}"
+        def files():
+            bad = []
+            for f in (ctx.work / "MOCK-9007").rglob("*"):
+                if f.is_file():
+                    t = f.read_text(encoding="utf-8", errors="ignore")
+                    bad += [f"{f.name}:{r}" for r in raw if r in t]
+            return not bad, str(bad)
+        return [tr, files, None, None, none_remote_lock]
+    if eid == 11:
+        def staged():
+            p_ = ctx.plan("MOCK-9011") or {}
+            ok = ran("stage") >= 1 and any(o.get("temp_id") == "NEW-CAUSE-1" for o in p_.get("operations", []))
+            return ok, f"stage={ran('stage')}"
+        return [None, None, staged, None, none_remote_lock]
+    if eid == 12:
+        def noapp():
+            p_ = ctx.plan("MOCK-1101")
+            ok = p_ is None or not op_list("MOCK-1101", "append")
+            return ok, "plan 없음" if p_ is None else json.dumps(p_.get("operations"), ensure_ascii=False)
+        return [None, None, noapp, none_remote_lock]
+    if eid == 14:
+        return [None, None, None, None, none_remote_lock]
+    if eid == 15:
+        def acr():
+            a = [o for o in op_list("MOCK-9015", "add-code-ref") if o.get("cause") == "DATA-001-01"]
+            cr = a[0].get("code_ref", {}) if a else {}
+            ok = bool(a) and "data/fail/DataFailCause.java" in str(cr.get("ref")) and cr.get("android_versions") == ["17"]
+            return ok, json.dumps(a, ensure_ascii=False)
+        def noabs():
+            a = op_list("MOCK-9015", "add-code-ref")
+            refs = [str((o.get("code_ref") or {}).get("ref")) for o in a]
+            ok = bool(refs) and all(r.startswith(("aosp:", "vendor_ril:")) and ":/" not in r and ":\\" not in r for r in refs)
+            return ok, str(refs)
+        return [in_cmd("find-symbol"), None, acr, noabs, none_remote_lock]
+    if eid == 41:
+        def app():
+            o = ops("MOCK-9041")
+            return o == [{"op": "append", "cause": "DATA-001-01"}], json.dumps(o, ensure_ascii=False)
+        return [None, None, None, app, none_remote_lock]
+    if eid == 44:
+        return [None, None, None, lambda: unresolved("MOCK-9044"), none_remote_lock]
     return []
 
 
@@ -344,7 +435,7 @@ def main() -> int:
     it = Path(args.iteration)
     evals = json.loads((HERE / "evals.json").read_text(encoding="utf-8"))["evals"]
     for e in evals:
-        if e["batch"] not in (1, "A") or (args.eval and e["id"] not in args.eval):
+        if e["batch"] not in (1, "A", "B") or (args.eval and e["id"] not in args.eval):
             continue
         cands = [it / f"eval-{e['id']}-{e.get('name')}", it / f"eval-{e['id']}"]   # 반복마다 폴더 이름 규칙이 다를 수 있다
         run_dir = next((c for c in cands if c.is_dir()), cands[0]) / "with_skill"

@@ -1,0 +1,17 @@
+# eval 3: 데이터 연결(SETUP_DATA_CALL 성공)은 됐는데 망 검증(validation)이 계속 실패해 인터넷이 안 됨.
+# 이슈 DB에 이런 증상의 유형이 없다 → 새 유형. 판별에는 DN- 태그의 검증 실패 문구가 필요(extractor 추가 후보).
+name: e003-validation-fail
+start: "2026-09-26T10:00:00+09:00"
+default_phone: 0
+pid: 1234
+tid: 1244
+entries:
+  - {at: 0, tag: "DSM-{phone}", msg: "isDataEnabled=true"}
+  - {after: 0.5, tag: "DNC-{phone}", level: I, msg: "evaluation result: ALLOWED reasons=[]"}
+  - {after: 0.3, ril_request: SETUP_DATA_CALL, serial: 61, args: "apn=<APN>"}
+  - {after: 0.9, ril_response: SETUP_DATA_CALL, serial: 61, result: "cause=0 active=2"}
+  - {after: 0.2, tag: "DN-default-3", level: I, msg: "onSetupResponse: success, state=CONNECTED"}
+  - {after: 5, tag: "DN-default-3", level: W, msg: "network validation result: INVALID reason=DNS_PROBE_FAILED"}
+  - {after: 10, tag: "DN-default-3", level: W, msg: "network validation result: INVALID reason=DNS_PROBE_FAILED"}
+  - {after: 10, tag: "DN-default-3", level: W, msg: "network validation result: INVALID reason=DNS_PROBE_FAILED"}
+  - {after: 2, tag: "DSRM-{phone}", level: W, msg: "data stall suspected: recovery action=GET_DATA_CALL_LIST"}
