@@ -79,6 +79,33 @@ def _validator(name: str) -> Draft202012Validator:
     return Draft202012Validator(_schema(name))
 
 
+def test_plan_signatures_accept_named_patterns_and_legacy_strings():
+    plan = json.loads((PLAN_DIR / "p7-analyze-new-cause.plan.json").read_text(encoding="utf-8"))
+    signature = plan["operations"][0]["cause"]["signatures"][0]
+    signature["must_match"] = [{"id": "reason", "pattern": "SIM_NOT_READY"}]
+    signature["must_event"][0]["id"] = "rejected"
+    signature["sequence"] = ["reason", "rejected"]
+    for path in (REPO / "tests" / "fixtures").glob("issue-db-*/schema/plan.schema.json"):
+        validator = Draft202012Validator(json.loads(path.read_text(encoding="utf-8")))
+        assert not list(validator.iter_errors(plan)), path
+        legacy = json.loads(json.dumps(plan))
+        legacy_sig = legacy["operations"][0]["cause"]["signatures"][0]
+        legacy_sig["must_match"] = ["SIM_NOT_READY"]
+        legacy_sig.pop("sequence")
+        assert not list(validator.iter_errors(legacy)), path
+
+
+def test_plan_signature_rejects_incomplete_named_patterns():
+    plan = json.loads((PLAN_DIR / "p7-analyze-new-cause.plan.json").read_text(encoding="utf-8"))
+    signature = plan["operations"][0]["cause"]["signatures"][0]
+    validator = _validator("plan.schema.json")
+    for condition in ({"pattern": "SIM_NOT_READY"}, {"id": "reason"},
+                      {"id": "bad id", "pattern": "SIM_NOT_READY"}, {"id": "reason", "pattern": ""},
+                      {"id": "reason", "pattern": "SIM_NOT_READY", "extra": True}):
+        signature["must_match"] = [condition]
+        assert list(validator.iter_errors(plan)), condition
+
+
 def _normalize(value):
     """YAML이 날짜로 읽은 값을 ISO 문자열로 되돌린다.
 

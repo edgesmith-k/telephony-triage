@@ -9,6 +9,7 @@ tests/mocks/remote/
 
 # 원본 문서 묶음
 telephony-triage-docs-v11.zip
+telephony-triage-docs-v11/
 
 # Python
 __pycache__/

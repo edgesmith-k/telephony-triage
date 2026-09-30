@@ -1,0 +1,156 @@
+#!/usr/bin/env python3
+"""격리된 스킬 행동 평가를 준비하고 Claude Code로 실행한다.
+
+python3 tests/skill_evals/run.py --iteration <새 디렉토리> --eval 3 4 --prepare-only
+python3 tests/skill_evals/run.py --iteration <새 디렉토리> --eval 3 4 --execute
+
+Claude 모델을 별도로 지정하지 않는다. API 한도·인증 오류에서 배치를 멈추고, 기대 답이나
+assertion을 실행자에게 주지 않는다. transcript 기반 수동 채점은 grade.py 실행 뒤 별도 수행한다.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import shutil
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+REPO = HERE.parents[1]
+sys.path.insert(0, str(REPO / "tests" / "helpers"))
+from skill_eval_env import build, _bash_path  # noqa: E402
+from grade import grade  # noqa: E402
+
+
+def dump(path: Path, value) -> None:
+    path.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def evaluation_prompt(entry: dict, info: dict, env_dir: Path, run_dir: Path) -> str:
+    return f"""너는 telephony-triage 스킬의 격리된 평가 실행자다. 실제 사용자는 없다.
+스킬 {Path(info['skill']).as_posix()}/SKILL.md를 먼저 읽고 필요한 reference만 따른다.
+환경은 {env_dir.as_posix()}/env.json이다. Bash마다 source '{env_dir.as_posix()}/env.sh' && cd '{env_dir.as_posix()}' && 를 앞에 붙인다.
+스크립트는 $CLAUDE_PLUGIN_ROOT/scripts에서 실행하며, Jira MCP 대신 env.json의 jira_call/jira_tools_list,
+분석 스킬 대신 analyzer_run을 쓴다. 사용자 응답은 아래 규칙으로 시뮬레이션한다.
+요청: {entry['prompt']}
+응답 규칙: {json.dumps(entry['user_replies'], ensure_ascii=False)}
+규칙에 없는 질문에는 변경하지 않는 선택지를 택하고 이를 기록한다. 스킬 지시와 사용자 응답이 충돌하면
+사용자 응답을 바꾸지 말고 필요한 지점에서 멈춘다. 성공을 위해 스크립트/스킬/채점기를 수정하지 않는다.
+레포 원본은 읽기만 한다. 쓰기는 이 평가의 모의 환경 및 {run_dir.as_posix()}/outputs 안에서만 한다.
+실제 GitHub/Jira, 네트워크, 다른 평가 환경을 사용하지 않는다. gh는 제공된 스텁으로만 실행한다.
+outputs/transcript.md에는 모든 사용자용 메시지와 시뮬레이션 응답을 그대로 순서대로 저장한다.
+outputs/commands.md에는 실행한 명령, 종료 코드, 요약을 기록한다. outputs/notes.md에는 막힌 지점을 적는다.
+작업 계획이 생기면 outputs/plan.json에 사본을 남긴다. 끝나는 모든 경로에서 스킬의 lock 해제 절차를 따른다.
+"""
+
+
+def classify_result(result: dict | None, returncode: int) -> tuple[str, str]:
+    if not result:
+        return "error", f"Claude 결과 없음 (exit {returncode})"
+    reason = str(result.get("result", ""))
+    if result.get("api_error_status") in (401, 403, 429):
+        return "blocked", reason
+    if returncode or result.get("is_error"):
+        return "error", reason or str(result.get("subtype"))
+    return "completed", reason
+
+
+def execute(entry: dict, info: dict, env_dir: Path, run_dir: Path, claude: str,
+            timeout: int) -> dict:
+    env = dict(os.environ)
+    env.update(info["env"])
+    env["PATH"] = os.pathsep.join([str(Path(sys.executable).parent), *info["path_prefix"], env["PATH"]])
+    env["CLAUDE_CODE_GIT_BASH_PATH"] = env.get("CLAUDE_CODE_GIT_BASH_PATH", r"C:\Program Files\Git\bin\bash.exe") if os.name == "nt" else env.get("CLAUDE_CODE_GIT_BASH_PATH", "")
+    env.pop("CLAUDECODE", None)
+    # Git Bash는 python3.exe 없는 Windows에서도 같은 Python을 사용한다.
+    if os.name == "nt":
+        shim = env_dir / "bin"
+        shim.mkdir()
+        (shim / "python3").write_text(f"#!/bin/sh\nexec '{_bash_path(sys.executable)}' \"$@\"\n", encoding="utf-8", newline="\n")
+        with (env_dir / "env.sh").open("a", encoding="utf-8", newline="\n") as stream:
+            stream.write(f"export PATH='{_bash_path(str(shim))}':\"$PATH\"\n")
+    prompt = evaluation_prompt(entry, info, env_dir, run_dir)
+    (run_dir / "prompt.txt").write_text(prompt, encoding="utf-8")
+    command = [claude, "-p", "--output-format", "stream-json", "--verbose",
+               "--no-session-persistence", "--setting-sources", "",
+               "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}',
+               "--tools", "Read,Bash,Write,Edit,Glob,Grep", "--allowedTools", "Read,Bash,Write,Edit,Glob,Grep",
+               "--add-dir", str(info["plugin_root"]), str(Path(info["issue_db_clone"]).parents[1]),
+               str(run_dir), str(REPO)]
+    start = time.monotonic()
+    result = None
+    with (run_dir / "events.jsonl").open("w", encoding="utf-8") as events, (run_dir / "stderr.log").open("w", encoding="utf-8") as errors:
+        proc = subprocess.Popen(command, cwd=env_dir, env=env, stdin=subprocess.PIPE, stdout=events, stderr=errors,
+                                text=True, encoding="utf-8")
+        try:
+            proc.communicate(prompt, timeout=timeout)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.communicate()
+            status, reason = "timeout", f"{timeout}초 제한으로 중단. 모의 환경의 lock 상태 확인 필요."
+        else:
+            for line in (run_dir / "events.jsonl").read_text(encoding="utf-8").splitlines():
+                try:
+                    event = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if event.get("type") == "result":
+                    result = event
+            status, reason = classify_result(result, proc.returncode)
+            if status == "completed":
+                missing = [name for name in ("transcript.md", "commands.md", "notes.md")
+                           if not (run_dir / "outputs" / name).is_file()]
+                if missing:
+                    status, reason = "error", f"실행자가 필수 결과를 남기지 않음: {', '.join(missing)}"
+    outcome = {"status": status, "reason": reason, "exit_code": proc.returncode,
+               "elapsed_seconds": round(time.monotonic() - start, 2),
+               "usage": (result or {}).get("usage"), "total_cost_usd": (result or {}).get("total_cost_usd")}
+    dump(run_dir / "execution.json", outcome)
+    return outcome
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--iteration", type=Path, required=True)
+    parser.add_argument("--eval", type=int, nargs="+", required=True)
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--prepare-only", action="store_true")
+    mode.add_argument("--execute", action="store_true")
+    parser.add_argument("--timeout", type=int, default=900)
+    args = parser.parse_args()
+    entries = {e["id"]: e for e in json.loads((HERE / "evals.json").read_text(encoding="utf-8"))["evals"]}
+    for eid in args.eval:
+        entry = entries.get(eid)
+        if not entry or not all(entry.get(k) for k in ("prompt", "setup", "user_replies", "assertions")):
+            parser.error(f"eval {eid}: 입력 정의 미완성")
+    iteration = args.iteration.resolve()
+    if iteration.exists():
+        parser.error("기존 반복 디렉토리는 덮어쓰지 않는다. 새 경로를 지정한다.")
+    claude = shutil.which("claude") if args.execute else None
+    if args.execute and not claude:
+        parser.error("Claude Code CLI를 PATH에서 찾을 수 없음")
+    iteration.mkdir(parents=True)
+    for eid in args.eval:
+        entry = entries[eid]
+        run_dir = iteration / f"eval-{eid}" / "with_skill"
+        (run_dir / "outputs").mkdir(parents=True)
+        env_dir = iteration / f"env-{eid}"
+        info = build(entry, env_dir)
+        dump(run_dir.parent / "eval_metadata.json", {"eval_id": eid, "prompt": entry["prompt"], "assertions": entry["assertions"]})
+        if args.prepare_only:
+            dump(run_dir / "execution.json", {"status": "prepared", "reason": "환경 준비만 수행; 행동 평가 미실행"})
+            print(f"eval {eid}: prepared", flush=True)
+            continue
+        outcome = execute(entry, info, env_dir, run_dir, claude, args.timeout)
+        grade(eid, run_dir, env_dir, entry["assertions"])
+        print(f"eval {eid}: {outcome['status']} — {outcome['reason'][:180]}", flush=True)
+        if outcome["status"] != "completed":
+            return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

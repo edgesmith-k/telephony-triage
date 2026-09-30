@@ -1,0 +1,15 @@
+# eval 21: fix-submitted 이후 빌드의 재발 (합성 데이터).
+key: MOCK-9021
+fields:
+  summary: 수정 CL 반영 후에도 VoLTE 발신 실패
+  description: IMS 등록이 거절된 뒤 발신을 시도하면 통화가 바로 종료됩니다.
+  status: {name: Open}
+  project: {key: MOCK, name: Mock Telephony}
+  components: [{name: Call}, {name: IMS}]
+  customfield_10001: "2026-09-27T12:01:38+0900"
+  customfield_10002: MOCK-B77
+  customfield_10003: MOCKB77_U2_20260927
+  customfield_10004: "17"
+  customfield_10005: MockTel KR
+  customfield_10006: "0"
+comments: []

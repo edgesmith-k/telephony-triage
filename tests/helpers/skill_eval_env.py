@@ -16,6 +16,10 @@ setup 필드 (모두 선택):
     inject_main: [{scenario: <파일>, dest: <이슈 DB 안 디렉토리>, message: <커밋 메시지>}]
     published_pr: {job, branch, plan: <tests/skill_evals/plans 파일>, files: {<작업 디렉토리 기준 경로>: <레포 기준 원본>}}
     main_after_pr: [<이름>]  — 아래 MAIN_EDITS의 이름. 이미 올린 PR 뒤에 main을 바꾼다
+    remote_after_pr: {branch, files: {<상대 경로>: <내용>}, message} — 제3자의 원격 PR 변경
+    seed_plan: {job, plan, files} — 게시 전 계획을 작업 디렉토리에 보관
+    user_config: {...}, site_defaults: {...}, clone_state: {branch, local_branches, dirty}
+    analyzer_fail: true — 모의 분석 스킬 실패
     gh_unauth: true  — gh 스텁 인증 실패
 """
 
@@ -127,7 +131,33 @@ def main_e015(root: Path, ws: Workspace) -> str:
     return "DATA-001-01 DataFailCause code_ref를 16 경로 하나로 (17 경로 항목 제거)"
 
 
-MAIN_EDITS = {"e016": main_e016, "schema99": main_schema99, "e015": main_e015}
+def _update_call_cause(root: Path, ws: Workspace, **changes) -> None:
+    import yaml
+
+    path = _type_dir(root, "CALL-001") / "type.md"
+    _, front, body = path.read_text(encoding="utf-8").split("---", 2)
+    data = yaml.safe_load(front)
+    cause = next(c for c in data["causes"] if c["id"] == "CALL-001-01")
+    cause.update(changes)
+    path.write_text("---\n" + yaml.safe_dump(data, allow_unicode=True, sort_keys=False) + "---" + body,
+                    encoding="utf-8", newline="\n")
+    subprocess.run([sys.executable, str(ws.root / "scripts" / "db_build.py"), "--write", "--db", str(root)],
+                   check=True, capture_output=True, env=mock_env.env_with_mocks(plugin_root=ws.root))
+
+
+def main_e025(root: Path, ws: Workspace) -> str:
+    _update_call_cause(root, ws, scenario_signatures=[], recovery_signatures=[])
+    return "CALL-001-01 시나리오·회복 흔적 시그니처 없음"
+
+
+def main_e026(root: Path, ws: Workspace) -> str:
+    _update_call_cause(root, ws, fix={"status": "open", "ref": None, "fixed_in": [],
+                                    "verification": None, "verification_history": []})
+    return "CALL-001-01 수정 제출 전 open 상태"
+
+
+MAIN_EDITS = {"e016": main_e016, "schema99": main_schema99, "e015": main_e015,
+              "e025": main_e025, "e026": main_e026}
 
 
 def _bash_path(p: str) -> str:
@@ -218,6 +248,18 @@ def build(entry: dict, out: Path) -> dict:
     for name in setup.get("main_after_pr") or []:
         holder = {}
         ws.push_main(lambda other, n=name: holder.setdefault("msg", MAIN_EDITS[n](other, ws)), f"eval {name}")
+
+    remote_edit = setup.get("remote_after_pr")
+    if remote_edit:
+        def edit_remote(other: Path):
+            for rel, text in remote_edit.get("files", {}).items():
+                path = (other / rel).resolve()
+                if not path.is_relative_to(other.resolve()):
+                    raise ValueError(f"원격 편집 경로가 작업 트리 밖임: {rel}")
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(text, encoding="utf-8", newline="\n")
+        ws.push_branch(remote_edit["branch"], edit_remote,
+                       remote_edit.get("message", "eval: 제3자의 원격 브랜치 변경"))
 
     if setup.get("user_config"):
         import yaml

@@ -17,6 +17,7 @@ import sys
 from pathlib import Path
 
 import yaml
+import pytest
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "tests" / "helpers"))
@@ -361,13 +362,18 @@ def test_recheck_of_fixed_cause_partial_keeps_fixed():
 # -- 수동 기록 + 해결책 검증 --------------------------------------------------------------------
 
 
-def test_record_new_cause_resolution_draft_then_verified_stage():
+@pytest.mark.parametrize("loaded_condition", ["event", "pattern"])
+def test_record_new_cause_resolution_draft_then_verified_stage(loaded_condition):
     ws = Workspace()
     job = "MOCK-7006"
     ws.put(job, "fixtures/cut-1.log", SIM_LOG)
     resolved = ws.put(job, "fixtures/resolved-1.log", RESOLVED_LOG)
     full = json.loads((PLANS / "p7-record-verified.plan.json").read_text(encoding="utf-8"))
-    full["operations"][0]["cause"]["recovery_signatures"] = SIM_RECOVERY
+    recovery = json.loads(json.dumps(SIM_RECOVERY))
+    if loaded_condition == "pattern":
+        recovery[0]["must_event"].pop(0)
+        recovery[0]["must_match"] = [{"id": "loaded", "pattern": "SIM state changed: LOADED"}]
+    full["operations"][0]["cause"]["recovery_signatures"] = recovery
     draft_plan = json.loads(json.dumps(full))
     draft_plan["operations"] = [op for op in draft_plan["operations"]
                                 if op["op"] != "verify-resolution" and op.get("kind") != "resolved"]

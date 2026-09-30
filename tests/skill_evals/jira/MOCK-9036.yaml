@@ -1,0 +1,17 @@
+# Synthetic skill evaluation ticket; new-type refusal then cancellation.
+key: MOCK-9036
+fields:
+  summary: 데이터 연결 후 DNS 검증 실패로 인터넷이 안 됨
+  description: |
+    데이터 연결은 성공했으나 DNS 검증 실패로 인터넷 사용 불가.
+    데이터를 껐다 켜는 우회책을 새 유형으로 기록하려고 함.
+  status: {name: Open}
+  project: {key: MOCK, name: Mock Telephony}
+  components: [{name: Data}]
+  customfield_10001: "2026-09-26T10:00:06+0900"
+  customfield_10002: MOCK-A56
+  customfield_10003: MOCKA56_U1_20260915
+  customfield_10004: "16"
+  customfield_10005: MockTel KR
+  customfield_10006: "0"
+comments: []

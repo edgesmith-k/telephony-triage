@@ -1,0 +1,21 @@
+{
+  "source": "analyze",
+  "schema_version": 1,
+  "started_at": "2026-09-27T10:00+09:00",
+  "base_sha": "<env builder가 채운다>",
+  "jira": {
+    "key": "MOCK-9028", "origin": "mcp", "model": "MOCK-A56", "sw": "MOCKA56_U1_20260915",
+    "android_version": "16", "carrier": "MockTel KR", "date": "2026-09-27",
+    "occurred_on": "2026-09-20", "note": "모바일 데이터 설정이 꺼져 있어 데이터 연결이 거부됨"
+  },
+  "operations": [{"op": "append", "cause": "DATA-001-01"}],
+  "extra_samples": [],
+  "feedback": {
+    "date": "2026-09-27T10:00+09:00",
+    "suggested": [{"cause": "DATA-001-01", "signature": "DATA-001-01/data-disabled", "score": 1.0}],
+    "decision": "accepted", "final": "DATA-001-01"
+  },
+  "commit_message": "[DATA-001-01] add MOCK-9028: 모바일 데이터 설정 꺼짐",
+  "pr": {"number": null, "branch": "issue/MOCK-9028", "head_sha": null},
+  "included_pending": []
+}

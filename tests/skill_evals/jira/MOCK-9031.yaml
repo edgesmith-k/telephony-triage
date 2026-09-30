@@ -1,0 +1,17 @@
+# Synthetic skill evaluation ticket; no production identifiers.
+key: MOCK-9031
+fields:
+  summary: 새 SIM에서 APN 프로파일이 없어 데이터 연결 불가
+  description: |
+    SIM 교체 후 데이터 요청이 NO_SUITABLE_DATA_PROFILE로 거부됨.
+    캐리어 APN 목록을 초기화하는 해결책을 기록하려고 함. 효과 검증 근거는 아직 없음.
+  status: {name: Open}
+  project: {key: MOCK, name: Mock Telephony}
+  components: [{name: Data}]
+  customfield_10001: "2026-09-23T11:00:03+0900"
+  customfield_10002: MOCK-A56
+  customfield_10003: MOCKA56_U1_20260915
+  customfield_10004: "16"
+  customfield_10005: MockTel KR
+  customfield_10006: "0"
+comments: []

@@ -5,12 +5,31 @@
 
 | 파일 | 내용 |
 |---|---|
-| `evals.json` | eval 45개. `batch: 1`(대표 10개)은 `prompt`·`setup`·`user_replies`·`assertions`가 있고, `batch: 2`는 설계 문구(`design`)만 있다 |
+| `evals.json` | eval 45개 모두 `prompt`·`setup`·`user_replies`·`assertions` 정의 완료. 1(대표 10), A(안전 10), B(analyze 11), C(수정·검증 9), D(record 5) |
 | `trigger_evals.json` | description 트리거 테스트 (`10-skill-eval.md` 표 + near-miss) |
 | `jira/` | eval용 모의 Jira 티켓 (`MOCK-90xx`, `tests/mocks/jira`와 같은 형식) |
 | `scenarios/` | eval용 합성 logcat 시나리오 (`tests/mocks/logcat_gen.py` 형식) |
 | `plans/`, `fixtures/` | 미리 올려 둔 PR(eval 16)의 계획과 fixture |
 | `workspace/` | 실행 결과 (커밋하지 않음, `.gitignore`) |
+| `run.py` | 새 격리 환경을 준비하고 Claude Code로 평가 실행. 기존 반복 폴더는 덮어쓰지 않음 |
+| `grade.py` | 기계 채점과 수동 채점 보존. 미실행·API 오류를 통과로 세지 않음 |
+
+**정의 완료와 행동 평가 통과는 다르다.** 실행·수동 채점 상태는 `DRAFT_NOTES.md`의 최신 Phase 13 기록을 따른다.
+
+## 반복 실행
+
+```sh
+# API 호출 없이 환경 생성 확인
+python3 tests/skill_evals/run.py --iteration tests/skill_evals/workspace/prepare-new --eval 3 4 38 --prepare-only
+# 로그인된 Claude Code의 기본 모델로 독립 세션 실행
+python3 tests/skill_evals/run.py --iteration tests/skill_evals/workspace/run-new --eval 3 4 38 --execute
+python3 tests/skill_evals/grade.py tests/skill_evals/workspace/run-new --eval 3 4 38
+```
+
+CLI는 PATH에 있어야 한다. 실행자에게 기대 답과 assertions를 전달하지 않고, 모의 Jira·Git 원격·gh 스텁만 사용한다.
+`--execute`는 Claude API를 사용하며 한도·인증 오류나 시간 초과에서 배치를 멈춘다. 결과는 `execution.json`과
+`events.jsonl`에 남는다. 한도를 만난 뒤 자동 반복하지 말고 사용 가능해진 뒤 **새 반복 경로**로 재개한다.
+Windows 개발 PC에서는 Python과 Git Bash를 PATH에 두고 UTF-8 모드를 사용한다. 배포 대상은 Ubuntu다.
 
 ## 환경 만들기
 
@@ -50,6 +69,11 @@ gh 스텁 상태, Jira 티켓 디렉토리, 로그를 만든다. `env.sh`(export
 
 ## 채점
 
-`python3 tests/skill_evals/grade.py <run 디렉토리> <env 디렉토리> <eval id>`가 기계적으로 확인할 수 있는 항목(원격 브랜치·파일,
+`python3 tests/skill_evals/grade.py <iteration 디렉토리> [--eval <id> ...]`가 기계적으로 확인할 수 있는 항목(원격 브랜치·파일,
 gh PR, lock, 사용자 clone 상태, 원문 PII 노출, Jira 쓰기 도구 호출)을 채점하고, 나머지는 transcript를 읽고 채점한다.
 결과는 `grading.json`(`expectations[{text, passed, evidence}]`) — skill-creator viewer 형식.
+
+`transcript.md`·`commands.md`가 없거나 비어 있으면 `not-run`, API 오류·시간 초과가 있으면 `incomplete`로 남기며
+기대 항목을 통과로 세지 않는다. `passed: null` 항목은 대화 순서와 판정을 독립적으로 읽고 근거를 붙여 채점한다.
+수동 채점(`source: manual`)은 재채점 시 보존하고, `source: script`는 현재 환경에서 다시 계산한다.
+description에 대한 정적 리뷰는 실제 Claude 스킬 자동 선택 및 플러그인 로드 시험을 대신하지 않는다.

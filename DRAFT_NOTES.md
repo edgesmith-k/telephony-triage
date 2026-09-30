@@ -16,6 +16,7 @@
 - 완료 Phase 추가: **11** (2026-09-29, 사용자 확인 후 커밋. 병합 unresolved Jira는 결정 (a), `GENERATOR_VERSION`은 1 유지)
 - 완료 Phase 추가: **12** (2026-09-29, 사용자 확인 — Phase 13 진행 지시로 확인)
 - 진행 중 Phase: **13** (`11-phases.md` Phase 13 절)
+- 재개 상태 (2026-09-30): **45개 평가 정의와 남은 25개 환경 준비 완료. Claude Code 주간 한도(429)로 행동 평가·런타임 트리거 시험 미실행.** 아래 "Phase 13 재개 결과"에서 이어간다.
 - Phase 2~6은 사용자가 미리 승인해서 Phase마다 확인을 기다리지 않고 진행했다(각 Phase 끝에 커밋·push). 완료 기준 점검 결과는 Phase별 절에 있다. **Phase 7부터는 다시 Phase마다 사용자 확인을 받는다.**
 - 기준 문서 세트: `telephony-triage-docs-v11` (`CHANGES.md` 참고)
 - 레포 루트: 이 파일이 있는 디렉토리 (`CLAUDE.md`, `docs/design/`, `plugin/`,
@@ -876,9 +877,33 @@ Claude hook은 `guard.py`에 hook 입력 JSON을 직접 넣어 시험했다. **�
   `sanitize_build` CLI(작업 키 만들 때), Jira 슬롯 번호와 `phone_id`의 기준(0/1) 명시.
 - **사용자 판단 필요**: 생성 파일의 "기준일"(최신 Jira `date`) 때문에 Jira 하나만 더해도 모든 카테고리 README가 바뀐다(에이전트 3명이 PR diff 소음으로 지적).
 
+### Phase 13 재개 결과 (2026-09-30)
+
+- **정의·환경**: B 11개 및 C·D 14개를 포함해 eval 45개 모두 prompt/setup/user_replies/assertions 완성. 남은 25개 환경은
+  `tests/skill_evals/workspace/iteration-4-prepared/`에 생성했다. 없는 흔적 시그니처(25), open 수정 상태(26), 제3자의 PR SHA 변경(28)을 확인했다.
+- **실행 도구**: `tests/skill_evals/run.py` 추가. 새 반복 경로만 허용하며 `--prepare-only`와 `--execute`를 구분한다.
+  기대 답·assertions를 실행자에게 주지 않고, API 한도·인증 오류·시간 초과에서 배치를 멈춘다. 실행과 기계 채점 결과는 별도로 저장한다.
+- **채점 보완**: 실행 기록 없는 빈 폴더는 `not-run`, API 오류는 `incomplete`다. 이런 항목은 통과로 세지 않는다.
+  수동 판단은 `passed: null`로 남기고, 수동 채점만 보존하며 스크립트 결과는 다시 계산한다. C·D 기계 채점 추가.
+  최종 독립 리뷰에서 기계 판정 항목이 수동 항목으로 바뀔 때 옛 통과 값이 남는 경로도 수정했다. 해당 회귀를 포함한 채점기 테스트 6개 재통과.
+- **발견·해결한 결함**: `type.schema.json`과 계약은 `{id, pattern}` 정규식 조건을 허용했지만 `plan.schema.json`은 문자열만 받았다.
+  계획 스키마 7곳을 맞춰 새 원인/회복 시그니처의 `sequence`를 적용할 수 있게 했다. 기존 문자열 호환과 잘못된 객체 거절도 확인했다.
+  eval 10의 회귀 이력은 계약대로 `reverted`, eval 21의 수정 미흡 이력은 `failed`로 기대값을 구분했다.
+- **eval 38 fixture**: 일반 `data_evaluation_allowed`만의 회복 조건은 카테고리 음성 로그 모두에 걸려 R1이 실패하므로,
+  APN 초기화 문구 → 허용 이벤트의 순서 조건으로 좁혔다. 새 스키마 환경(`iteration-5-schema`)에서 결정적 `db_verify resolution --plan --draft`가
+  `passed`, R1 흔적 검사 통과, `withheld` 없음으로 판정했다. 이는 fixture/스크립트 검증이며 LLM 행동 평가 통과가 아니다.
+- **검사 결과**: 수정 전 전체 `pytest tests` **217개 통과**. 스키마 수정 후 관련 테스트(`test_sample_db`, `test_skill_evals`,
+  `test_record_new_cause_resolution_draft_then_verified_stage`의 이벤트/정규식 두 경로) **29개 통과**. skill-creator `quick_validate.py` 통과.
+  Windows에서는 `python -X utf8`로 검증했다. SKILL 본체 267줄, reference 8개·커맨드 5개 연결 정적 확인.
+- **트리거 정적 리뷰**: 24문장 중 맥락이 없는 유사 이슈/PR 동기화 2문장에 Telephony 이슈 DB를 명시한 뒤 24/24 일치.
+  최초 22/24 결과와 보완 후 결과는 workspace의 `trigger-review*.json`에 보관했다. 실제 Claude 자동 로딩 시험은 미완료다.
+- **현재 차단 요인**: Claude Code 연결 시험이 HTTP **429**, `You've hit your weekly limit · resets Oct 4, 9am (Asia/Seoul)`로 끝났다.
+  이번 재개에서 실제 Claude 행동 평가를 실행한 건수는 **0**이다. `workspace/api-blocker.json` 참고. Phase 13 완료로 표시하지 않는다.
+
 ### Phase 13 남은 일
 
-1. batch 1 재실행(수정 확인) + 남은 25개(B·C·D) setup·assertion 작성 후 실행.
+1. Claude 사용량 한도 해제 후 batch 1 재실행(수정 확인) + 남은 25개(B·C·D) 행동 평가와 수동 채점.
+   기존 준비 폴더를 덮어쓰지 말고 `run.py --iteration <새 경로> --eval <번호들> --execute`로 실행한다. 환경은 현재 코드로 새로 생성한다.
 2. 트리거 테스트: skill-creator `run_loop`(`claude -p`)로 description 최적화 — 스킬 본문이 안정된 뒤.
 3. 실제 Claude Code에서 플러그인 로드 상태로 커맨드→스킬 연결 확인(S1, 빈 플러그인 실험과 함께).
 

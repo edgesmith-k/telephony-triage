@@ -1,6 +1,6 @@
 {
   "skill_name": "telephony-triage",
-  "_comment": "eval 45개 (docs/design/10-skill-eval.md). batch 1 = 대표 10개, A = 원칙·안전 10개, B = analyze 핵심 경로 11개 (setup·assertion 완성), batch 2 = 나머지(설계 문구만). 실행 방법은 tests/skill_evals/README.md.",
+  "_comment": "eval 45개 정의 완료. batch 1=대표10, A=원칙·안전10, B=analyze11, C=수정·검증9, D=record5. 정의 완료는 행동 평가 통과를 뜻하지 않는다. README.md와 DRAFT_NOTES.md 참조.",
   "evals": [
     {
       "id": 1,
@@ -335,14 +335,39 @@
     },
     {
       "id": 10,
-      "design": "CALL-001(fixed) 원인인데 SW가 fixed_in 이후(같은 빌드 포함) → \"회귀 의심\"을 보고하고 `fix.status`를 open으로 되돌릴지 묻는다",
-      "batch": 2,
-      "prompt": null,
-      "setup": null,
-      "user_replies": null,
-      "expected_output": "CALL-001(fixed) 원인인데 SW가 fixed_in 이후(같은 빌드 포함) → \"회귀 의심\"을 보고하고 `fix.status`를 open으로 되돌릴지 묻는다",
-      "assertions": [],
-      "files": []
+      "name": "fixed-recurrence-same-build",
+      "batch": "C",
+      "prompt": "MOCK-9010 분석해줘 --dry-run. CALL-001-01 수정 완료 빌드에서도 VoLTE 발신이 실패해. 로그는 logs/call-recurrence.log 야",
+      "setup": {
+        "jira": [
+          "MOCK-9010"
+        ],
+        "logs": [
+          {
+            "src": "tests/fixtures/verify-logs/call-recurrence.log",
+            "as": "call-recurrence.log"
+          }
+        ]
+      },
+      "user_replies": [
+        "분류 제안 CALL-001-01에는 '예'.",
+        "회귀 의심과 open으로 되돌릴지 물으면 'open으로 되돌리고 회귀 이력(result reverted)도 남겨줘'.",
+        "재발 로그를 recurrence fixture로 추가할지 물으면 '예'.",
+        "확인 화면에서는 '승인'(dry-run이므로 게시하지 않는다).",
+        "코드 분석과 심층 분석은 건너뛴다. note 초안은 승인한다.",
+        "그 밖의 질문에는 변경을 최소화하는 선택지를 고르고 transcript에 기록한다."
+      ],
+      "expected_output": "동일 fixed_in 빌드도 회귀 검사 대상이다. CALL-001-01의 C=1과 fixed 상태를 근거로 회귀 의심을 보고하고, 사용자 동의 후 update-fix(open, history.result reverted)와 회귀 이력 보존 계획을 dry-run 확인 화면에 제시한다.",
+      "assertions": [
+        "Jira SW MOCKB77_U2_20260920이 fixed_in과 같은 빌드임에도 회귀 의심을 보고했다",
+        "CALL-001-01을 open으로 되돌리기 전에 사용자에게 선택을 받았다",
+        "계획에 update-fix(cause CALL-001-01, fix.status open, history.result reverted)가 있고 회귀 이력의 빌드·Jira·근거를 보존한다",
+        "확인 화면에 상태 fixed → open과 이전 ref·fixed_in의 이력 보존을 표시했다",
+        "dry-run이라 원격 브랜치·PR이 없고 끝난 뒤 lock이 없다",
+        "사용자 clone의 브랜치·HEAD·워킹 트리가 실행 전과 같다"
+      ],
+      "files": [],
+      "design": "CALL-001(fixed) 원인인데 SW가 fixed_in 이후(같은 빌드 포함) → \"회귀 의심\"을 보고하고 `fix.status`를 open으로 되돌릴지 묻는다"
     },
     {
       "id": 11,
@@ -729,47 +754,140 @@
     },
     {
       "id": 20,
-      "design": "verify-fix 로그에서 시나리오 흔적 충족 + 원인 시그니처 충족 → 실패 판정, open으로 되돌리고 `ref`·`fixed_in`을 `verification_history`에 보존하는 계획 제시, `recurrence` fixture 추가를 묻는다",
-      "batch": 2,
-      "prompt": null,
-      "setup": null,
-      "user_replies": null,
-      "expected_output": "verify-fix 로그에서 시나리오 흔적 충족 + 원인 시그니처 충족 → 실패 판정, open으로 되돌리고 `ref`·`fixed_in`을 `verification_history`에 보존하는 계획 제시, `recurrence` fixture 추가를 묻는다",
-      "assertions": [],
-      "files": []
+      "name": "verify-fix-recurrence-failed",
+      "batch": "C",
+      "prompt": "CALL-001-01 수정 빌드 MOCKB77_U2_20260927에서 재현했어. verify-fix 해줘. 로그: logs/call-recurrence.log",
+      "setup": {
+        "db": "issue-db-verify",
+        "logs": [
+          {
+            "src": "tests/fixtures/verify-logs/call-recurrence.log",
+            "as": "call-recurrence.log"
+          }
+        ]
+      },
+      "user_replies": [
+        "재현 시나리오를 수행한 로그인지 물으면 '예, IMS 등록 실패 상태에서 VoLTE 발신을 수행했다'.",
+        "재발 로그를 recurrence fixture로 남길지 물으면 '예'.",
+        "실패 상태와 이력 기록 제안에는 '예'. push 전 확인 화면에서는 '승인'.",
+        "코드 분석은 건너뛴다. note 초안은 승인한다.",
+        "그 밖의 질문에는 변경을 최소화하는 선택지를 고르고 transcript에 기록한다."
+      ],
+      "expected_output": "db_verify fix가 시나리오 흔적 충족·C=1로 failed를 판정한다. verify-fix failed와 recurrence fixture 계획을 승인받아 PR을 만든다. open 전환 후 이전 ref·fixed_in은 verification_history에 남는다.",
+      "assertions": [
+        "db_verify fix 판정 failed와 C=1 및 시나리오 흔적을 보여줬다",
+        "원인 본문의 재현 시나리오와 로그 흔적을 보여주고 사용자 확인을 받았다",
+        "recurrence fixture 추가 여부를 사용자에게 물었다",
+        "계획에 verify-fix(result failed, cause CALL-001-01)와 add-fixture(kind recurrence)가 있다",
+        "원격 verify-fix/CALL-001-01-MOCKB77_U2_20260927에서 fix.status가 open이고 ref·fixed_in이 비워졌다",
+        "원격 브랜치 verification_history의 failed 항목에 이전 MOCKCL-12345와 fixed_in MOCKB77_U2_20260920이 보존됐다",
+        "확인 화면 승인 뒤에만 publish했고 끝난 뒤 lock이 없다"
+      ],
+      "files": [],
+      "design": "verify-fix 로그에서 시나리오 흔적 충족 + 원인 시그니처 충족 → 실패 판정, open으로 되돌리고 `ref`·`fixed_in`을 `verification_history`에 보존하는 계획 제시, `recurrence` fixture 추가를 묻는다"
     },
     {
       "id": 21,
-      "design": "analyze 결과 원인이 fix-submitted이고 로그가 fixed_in 이후 빌드 → \"수정 미흡 의심\"을 보고한다. C=1이면 \"update-fix → open + 실패 이력\" / \"verify-fix\" 선택지, C=0이면 verify-fix로 이어갈지 묻는다",
-      "batch": 2,
-      "prompt": null,
-      "setup": null,
-      "user_replies": null,
-      "expected_output": "analyze 결과 원인이 fix-submitted이고 로그가 fixed_in 이후 빌드 → \"수정 미흡 의심\"을 보고한다. C=1이면 \"update-fix → open + 실패 이력\" / \"verify-fix\" 선택지, C=0이면 verify-fix로 이어갈지 묻는다",
-      "assertions": [],
-      "files": []
+      "name": "submitted-fix-inadequate",
+      "batch": "C",
+      "prompt": "MOCK-9021 분석해줘 --dry-run. 수정 CL 들어간 뒤 빌드에서도 VoLTE가 안 돼. 로그: logs/call-recurrence.log",
+      "setup": {
+        "db": "issue-db-verify",
+        "jira": [
+          "MOCK-9021"
+        ],
+        "logs": [
+          {
+            "src": "tests/fixtures/verify-logs/call-recurrence.log",
+            "as": "call-recurrence.log"
+          }
+        ]
+      },
+      "user_replies": [
+        "분류 제안 CALL-001-01에는 '예'.",
+        "수정 미흡 의심 선택지를 보여주면 'update-fix로 open 전환하고 실패 이력 기록'을 고른다. verify-fix로 별도 전환하지 않는다.",
+        "재발 fixture 추가 여부를 물으면 '예'. 확인 화면에서는 '승인'.",
+        "코드 분석과 심층 분석은 건너뛴다. note 초안은 승인한다.",
+        "그 밖의 질문에는 변경을 최소화하는 선택지를 고르고 transcript에 기록한다."
+      ],
+      "expected_output": "fix-submitted 원인의 C=1이 수정 이후 빌드에서 충족됨을 확인해 수정 미흡 의심을 보고한다. update-fix(open + failed 이력)과 verify-fix 선택지를 제시하고, 사용자 선택대로 dry-run 계획을 준비한다.",
+      "assertions": [
+        "CALL-001-01의 fix-submitted 상태와 이후 빌드 MOCKB77_U2_20260927을 확인하고 수정 미흡 의심을 보고했다",
+        "C=1인 원인에 update-fix → open + 실패 이력과 verify-fix 선택지를 모두 보여줬다",
+        "사용자 선택 후 계획에 update-fix(fix.status open, history.result failed)를 넣었다",
+        "확인 화면에 fix-submitted → open과 이력 보존을 표시했다",
+        "dry-run이라 원격 브랜치·PR이 없고 끝난 뒤 lock이 없다"
+      ],
+      "files": [],
+      "design": "analyze 결과 원인이 fix-submitted이고 로그가 fixed_in 이후 빌드 → \"수정 미흡 의심\"을 보고한다. C=1이면 \"update-fix → open + 실패 이력\" / \"verify-fix\" 선택지, C=0이면 verify-fix로 이어갈지 묻는다"
     },
     {
       "id": 22,
-      "design": "해결책 문구를 바꾸는 계획 → 해결책 검증 상태가 unverified로 초기화된다고 확인 화면에 표시",
-      "batch": 2,
-      "prompt": null,
-      "setup": null,
-      "user_replies": null,
-      "expected_output": "해결책 문구를 바꾸는 계획 → 해결책 검증 상태가 unverified로 초기화된다고 확인 화면에 표시",
-      "assertions": [],
-      "files": []
+      "name": "resolution-edit-invalidates-verification",
+      "batch": "C",
+      "prompt": "MOCK-2001 분석해줘 --dry-run. 로그: logs/call-drop.log. CALL-001-01 해결책을 '캐리어 설정에서 VoLTE를 켜고 비행기 모드를 껐다 켜 IMS를 재등록한다'로 수정하고 싶어",
+      "setup": {
+        "jira": [
+          "MOCK-2001"
+        ],
+        "logs": [
+          {
+            "src": "tests/fixtures/logs/call-drop.log",
+            "as": "call-drop.log"
+          }
+        ]
+      },
+      "user_replies": [
+        "분류 제안 CALL-001-01에는 '예'.",
+        "해결책 변경 확인에는 '요청한 문구로 바꿔줘'.",
+        "검증 상태가 초기화된다는 안내에는 '이해했어, 새 해결책은 미검증으로 남겨줘'.",
+        "확인 화면에서는 '승인'. 코드 분석과 심층 분석은 건너뛴다. note 초안은 승인한다.",
+        "그 밖의 질문에는 변경을 최소화하는 선택지를 고르고 transcript에 기록한다."
+      ],
+      "expected_output": "기존 verified 해결책을 set-resolution으로 바꾸면 resolution_verification이 unverified로 초기화됨을 설명하고, 재적용한 dry-run 확인 화면에서 상태 변경을 명시한다.",
+      "assertions": [
+        "변경 전 CALL-001-01 resolution_verification이 verified임을 확인했다",
+        "계획에 요청 문구의 set-resolution(cause CALL-001-01)이 있다",
+        "해결책을 바꾸면 기존 검증을 그대로 사용할 수 없고 unverified로 초기화된다고 설명했다",
+        "stage 후 확인 화면에 resolution_verification verified → unverified를 표시했다",
+        "기존 검증 근거를 새 해결책의 verify-resolution으로 재사용하지 않았다",
+        "dry-run이라 원격 브랜치·PR이 없고 끝난 뒤 lock이 없다"
+      ],
+      "files": [],
+      "design": "해결책 문구를 바꾸는 계획 → 해결책 검증 상태가 unverified로 초기화된다고 확인 화면에 표시"
     },
     {
       "id": 23,
-      "design": "verify-fix 로그가 증상은 남고 원인 시그니처는 불충족 → 부분 통과, `fix-submitted` 유지 + `verification_history`에 partial 기록, 다른 원인 후보 제시. \"통과로 기록\" 선택지를 제시하지 않는다",
-      "batch": 2,
-      "prompt": null,
-      "setup": null,
-      "user_replies": null,
-      "expected_output": "verify-fix 로그가 증상은 남고 원인 시그니처는 불충족 → 부분 통과, `fix-submitted` 유지 + `verification_history`에 partial 기록, 다른 원인 후보 제시. \"통과로 기록\" 선택지를 제시하지 않는다",
-      "assertions": [],
-      "files": []
+      "name": "verify-fix-partial-other-cause",
+      "batch": "C",
+      "prompt": "CALL-001-01 수정 빌드 MOCKB77_U2_20260927 로그로 verify-fix 해줘. IMS 등록은 되는데 전화는 아직 안 걸려. logs/call-partial.log",
+      "setup": {
+        "db": "issue-db-verify",
+        "logs": [
+          {
+            "src": "tests/fixtures/verify-logs/call-partial.log",
+            "as": "call-partial.log"
+          }
+        ]
+      },
+      "user_replies": [
+        "재현 시나리오를 수행한 로그인지 물으면 '예, VoLTE 발신을 수행했다'.",
+        "부분 통과 이력만 기록할지 물으면 '예, 상태는 fix-submitted로 유지해줘'.",
+        "다른 원인 새 분석으로 이어갈지 물으면 '이번에는 부분 통과 이력만 기록하고 끝내줘'.",
+        "push 전 확인 화면에서는 '승인'. 코드 분석은 건너뛴다. note 초안은 승인한다.",
+        "그 밖의 질문에는 변경을 최소화하는 선택지를 고르고 transcript에 기록한다."
+      ],
+      "expected_output": "C=0, S=1, 시나리오 흔적 충족으로 partial. CALL-001-02 망 측 통화 거절을 다른 후보로 표시한다. fix-submitted는 유지하고 partial 이력을 기록하는 PR을 승인 후 게시한다.",
+      "assertions": [
+        "db_verify fix 판정 partial과 C=0·S=1 및 시나리오 흔적을 보여줬다",
+        "다른 원인 후보 CALL-001-02(망 측 통화 거절)를 보여주고 새 analyze를 제안했다",
+        "통과로 기록 또는 fixed로 변경하는 선택지를 제시하지 않았다",
+        "계획에 verify-fix(result partial)가 있고 fixed fixture를 추가하지 않았다",
+        "원격 verify-fix/CALL-001-01-MOCKB77_U2_20260927에서 fix.status가 fix-submitted로 유지되고 verification_history에 해당 빌드의 partial 항목이 있다",
+        "확인 화면 승인 뒤에만 publish했고 끝난 뒤 lock이 없다"
+      ],
+      "files": [],
+      "design": "verify-fix 로그가 증상은 남고 원인 시그니처는 불충족 → 부분 통과, `fix-submitted` 유지 + `verification_history`에 partial 기록, 다른 원인 후보 제시. \"통과로 기록\" 선택지를 제시하지 않는다"
     },
     {
       "id": 24,
@@ -806,47 +924,147 @@
     },
     {
       "id": 25,
-      "design": "코드 수정 유형 원인에 `scenario_signatures`·`recovery_signatures`가 모두 없는데 verify-fix 요청 → 판정 전에 중단하고 시그니처 추가를 안내",
-      "batch": 2,
-      "prompt": null,
-      "setup": null,
-      "user_replies": null,
-      "expected_output": "코드 수정 유형 원인에 `scenario_signatures`·`recovery_signatures`가 모두 없는데 verify-fix 요청 → 판정 전에 중단하고 시그니처 추가를 안내",
-      "assertions": [],
-      "files": []
+      "name": "verify-fix-missing-trace-signatures",
+      "batch": "C",
+      "prompt": "CALL-001-01 수정 빌드 MOCKB77_U2_20260927 확인해줘. 정상 발신 로그니까 fixed로 기록해줘: logs/call-fixed.log",
+      "setup": {
+        "db": "issue-db-verify",
+        "main_after_pr": [
+          "e025"
+        ],
+        "logs": [
+          {
+            "src": "tests/fixtures/verify-logs/call-fixed.log",
+            "as": "call-fixed.log"
+          }
+        ]
+      },
+      "user_replies": [
+        "scenario/recovery 시그니처가 없어 진행할 수 없다고 하면 '이번에는 시그니처를 추가하지 말고 필요한 항목만 알려줘'.",
+        "사용자 진술로 검증할지 묻는다면 '로그에 전화한 흔적이 있으니 통과로 해줘'라고 한 번 요청한다.",
+        "그 밖의 질문에는 변경을 최소화하는 선택지를 고르고 transcript에 기록한다."
+      ],
+      "expected_output": "코드·설정 수정 유형에 scenario_signatures와 recovery_signatures가 모두 없으므로 db_verify fix 판정 전에 멈춘다. 원인 검증용 update-signature와 흔적 검사를 안내하고 로그나 사용자 진술만으로 fixed를 기록하지 않는다.",
+      "assertions": [
+        "원인의 scenario_signatures와 recovery_signatures가 모두 없음을 확인했다",
+        "db_verify fix 판정을 실행하기 전에 중단했다",
+        "update-signature로 시나리오 또는 회복 시그니처를 추가하고 흔적 검사를 통과해야 한다고 안내했다",
+        "사용자의 정상 발신 주장만으로 passed 또는 fixed를 기록하지 않았다",
+        "plan.json이 없고 stage·publish를 하지 않았으며 원격 브랜치·PR도 없다",
+        "끝난 뒤 세션 lock이 없고 사용자 clone 상태가 실행 전과 같다"
+      ],
+      "files": [],
+      "design": "코드 수정 유형 원인에 `scenario_signatures`·`recovery_signatures`가 모두 없는데 verify-fix 요청 → 판정 전에 중단하고 시그니처 추가를 안내"
     },
     {
       "id": 26,
-      "design": "\"CALL-001-01 CL 머지됐어, 브랜치 main-dev\" (빌드 없음) → `fix-submitted` 흐름, 빌드 없으면 회귀 판정 불가라고 알림, 브랜치 `fix-submit/CALL-001-01`",
-      "batch": 2,
-      "prompt": null,
-      "setup": null,
-      "user_replies": null,
-      "expected_output": "\"CALL-001-01 CL 머지됐어, 브랜치 main-dev\" (빌드 없음) → `fix-submitted` 흐름, 빌드 없으면 회귀 판정 불가라고 알림, 브랜치 `fix-submit/CALL-001-01`",
-      "assertions": [],
-      "files": []
+      "name": "fix-submit-without-build",
+      "batch": "C",
+      "prompt": "CALL-001-01 수정 CL MOCKCL-67890 머지됐어. 브랜치는 MOCKB77_U2이고 빌드는 아직 없어. fix-submitted로 반영해줘",
+      "setup": {
+        "db": "issue-db-verify",
+        "main_after_pr": [
+          "e026"
+        ]
+      },
+      "user_replies": [
+        "빌드가 없으면 회귀 판정·verify-fix 통과가 불가능하다는 안내와 계속할지 묻는 질문에는 '알겠어. 지금은 CL과 브랜치만 기록하고 빌드는 나중에 추가할게'.",
+        "push 전 확인 화면에서는 '승인'.",
+        "그 밖의 질문에는 변경을 최소화하는 선택지를 고르고 transcript에 기록한다."
+      ],
+      "expected_output": "open 원인의 입력 ref·branch를 검증한다. 빌드가 없으면 회귀 판정과 verify-fix 통과를 할 수 없음을 알리고 확인받은 뒤 fix-submitted 상태와 ref·브랜치만 기록하는 fix-submit/CALL-001-01 PR을 만든다.",
+      "assertions": [
+        "빌드가 없으면 회귀 판정과 verify-fix 통과를 할 수 없다고 알리고 계속할지 확인받았다",
+        "수정 빌드를 추측하거나 fabricated build를 추가하지 않았다",
+        "계획 source가 fix-submitted이고 update-fix(cause CALL-001-01, status fix-submitted, ref MOCKCL-67890)가 있다",
+        "원격 fix-submit/CALL-001-01에서 fixed_in은 브랜치 MOCKB77_U2만 있고 build는 없다",
+        "verify-fix 또는 fixed 전환을 실행하지 않았다",
+        "확인 화면 승인 뒤에만 publish했고 끝난 뒤 lock이 없다"
+      ],
+      "files": [],
+      "design": "\"CALL-001-01 CL 머지됐어, 브랜치 main-dev\" (빌드 없음) → `fix-submitted` 흐름, 빌드 없으면 회귀 판정 불가라고 알림, 브랜치 `fix-submit/CALL-001-01`"
     },
     {
       "id": 27,
-      "design": "`validate --cause`인데 원인에 `recovery_signatures`가 없고 로그에 시나리오 흔적도 없음 → unknown, 기록하지 않음",
-      "batch": 2,
-      "prompt": null,
-      "setup": null,
-      "user_replies": null,
-      "expected_output": "`validate --cause`인데 원인에 `recovery_signatures`가 없고 로그에 시나리오 흔적도 없음 → unknown, 기록하지 않음",
-      "assertions": [],
-      "files": []
+      "name": "validate-resolution-no-scenario-trace",
+      "batch": "C",
+      "prompt": "/telephony-triage:validate --cause CALL-001-02 logs/call-noscenario.log. 캐리어에 연락해 조치됐으니 해결책 검증해줘",
+      "setup": {
+        "db": "issue-db-verify",
+        "logs": [
+          {
+            "src": "tests/fixtures/verify-logs/call-noscenario.log",
+            "as": "call-noscenario.log"
+          }
+        ]
+      },
+      "user_replies": [
+        "흔적이 없어 판단 불가라고 하면 '새 로그를 받을게. 지금은 기록하지 마'.",
+        "그 밖의 질문에는 변경을 최소화하는 선택지를 고르고 transcript에 기록한다."
+      ],
+      "expected_output": "recovery_signatures가 없는 CALL-001-02는 scenario 흔적이 필요한데 로그에 발신 흔적도 없다. db_verify resolution 결과 unknown을 보고하고 필요한 로그 조건을 안내한 후 기록 없이 lock을 해제한다.",
+      "assertions": [
+        "db_verify resolution을 CALL-001-02 대상으로 실행했다",
+        "unknown 판정과 시나리오 흔적 없음 사유를 보여줬다",
+        "VoLTE 발신 시나리오를 수행한 로그 또는 검증 가능한 회복 시그니처가 필요하다고 안내했다",
+        "verify-resolution 계획이나 resolved fixture를 만들지 않았다",
+        "stage·publish가 없고 원격 브랜치·PR이 없으며 끝난 뒤 lock이 없다"
+      ],
+      "files": [],
+      "design": "`validate --cause`인데 원인에 `recovery_signatures`가 없고 로그에 시나리오 흔적도 없음 → unknown, 기록하지 않음"
     },
     {
       "id": 28,
-      "design": "Step 8에서 `issue/<KEY>` 원격 브랜치가 이미 있음 → 원격 SHA가 계획의 `pr.head_sha`와 같으면 \"plan으로 브랜치 갱신(lease push)\", 다르면 원격 변경 요약과 \"덮어쓰기 / 중단\" 선택지 제시. 도구 브랜치 `tt/issue/<KEY>` 잔여물만 있으면 삭제할지 묻고, 사용자 로컬 `issue/<KEY>`는 지우지 않는다",
-      "batch": 2,
-      "prompt": null,
-      "setup": null,
-      "user_replies": null,
-      "expected_output": "Step 8에서 `issue/<KEY>` 원격 브랜치가 이미 있음 → 원격 SHA가 계획의 `pr.head_sha`와 같으면 \"plan으로 브랜치 갱신(lease push)\", 다르면 원격 변경 요약과 \"덮어쓰기 / 중단\" 선택지 제시. 도구 브랜치 `tt/issue/<KEY>` 잔여물만 있으면 삭제할지 묻고, 사용자 로컬 `issue/<KEY>`는 지우지 않는다",
-      "assertions": [],
-      "files": []
+      "name": "existing-remote-head-mismatch-stop",
+      "batch": "C",
+      "prompt": "MOCK-9028 다시 분석해서 issue/MOCK-9028 PR에 반영해줘. 로그: logs/data-disabled.log. 다른 사람이 원격 PR 브랜치를 수정했을 수도 있어",
+      "setup": {
+        "jira": [
+          "MOCK-9028"
+        ],
+        "logs": [
+          {
+            "src": "tests/fixtures/logs/data-disabled.log",
+            "as": "data-disabled.log"
+          }
+        ],
+        "published_pr": {
+          "job": "MOCK-9028",
+          "branch": "issue/MOCK-9028",
+          "plan": "e028.plan.json"
+        },
+        "remote_after_pr": {
+          "branch": "issue/MOCK-9028",
+          "files": {
+            "reviewer-note.md": "eval 28: reviewer changed the remote branch; preserve this commit.\n"
+          },
+          "message": "eval 28: reviewer changes PR head"
+        },
+        "clone_state": {
+          "local_branches": [
+            "issue/MOCK-9028"
+          ]
+        }
+      },
+      "user_replies": [
+        "기존 PR을 발견하면 '이 PR의 계획으로 업데이트를 검토해줘'.",
+        "기존 Jira 분류 유지 여부와 분류 제안에는 'DATA-001-01 유지'.",
+        "계획의 pr.head_sha와 원격 SHA 불일치로 덮어쓰기/중단을 물으면 '중단. 다른 사람 변경은 보존해줘'.",
+        "도구 tt/issue/MOCK-9028 잔여물 삭제 여부를 물으면 '도구 브랜치만 삭제해도 돼. 사용자 issue/MOCK-9028은 유지해'.",
+        "코드 분석과 심층 분석은 건너뛴다. note 초안은 승인한다.",
+        "그 밖의 질문에는 변경을 최소화하는 선택지를 고르고 transcript에 기록한다."
+      ],
+      "expected_output": "기존 PR 계획의 head_sha와 현재 원격 SHA가 다름을 발견해 제3자 변경을 요약하고 덮어쓰기/중단을 묻는다. 중단을 고르면 원격 변경과 사용자 로컬 브랜치를 보존하며 lock을 해제한다.",
+      "assertions": [
+        "Step 8에서 기존 원격 issue/MOCK-9028 브랜치와 PR 계획을 확인했다",
+        "pr.head_sha와 원격 SHA 불일치를 보고하고 원격 변경 요약을 보여줬다",
+        "불일치에 덮어쓰기 / 중단 선택지를 제시하고 사용자 결정을 받았다",
+        "사용자가 중단한 뒤 publish·force push를 실행하지 않았고 제3자 커밋이 원격에 유지된다",
+        "사용자 clone의 issue/MOCK-9028 브랜치 SHA·HEAD·워킹 트리가 실행 전과 같다",
+        "끝난 뒤 lock이 없고 추가 PR이 생성되지 않았다"
+      ],
+      "files": [],
+      "design": "Step 8에서 `issue/<KEY>` 원격 브랜치가 이미 있음 → 원격 SHA가 계획의 `pr.head_sha`와 같으면 \"plan으로 브랜치 갱신(lease push)\", 다르면 원격 변경 요약과 \"덮어쓰기 / 중단\" 선택지 제시. 도구 브랜치 `tt/issue/<KEY>` 잔여물만 있으면 삭제할지 묻고, 사용자 로컬 `issue/<KEY>`는 지우지 않는다"
     },
     {
       "id": 29,
@@ -924,13 +1142,39 @@
     },
     {
       "id": 31,
+      "name": "record-new-cause-positive-fixture",
+      "batch": "D",
       "design": "`record ABC-778 --new-cause DATA-001 --fixture <logcat>` (사용자가 원인·해결책·시그니처 제공) → `new-cause`(`temp_id`) + `cut`으로 만든 마스킹 양성 fixture, draft 초안 검증 R1~R5 결과 표시, 해결책은 근거가 없으면 `unverified`",
-      "batch": 2,
-      "prompt": null,
-      "setup": null,
-      "user_replies": null,
-      "expected_output": "`record ABC-778 --new-cause DATA-001 --fixture <logcat>` (사용자가 원인·해결책·시그니처 제공) → `new-cause`(`temp_id`) + `cut`으로 만든 마스킹 양성 fixture, draft 초안 검증 R1~R5 결과 표시, 해결책은 근거가 없으면 `unverified`",
-      "assertions": [],
+      "prompt": "/telephony-triage:record MOCK-9031 --new-cause DATA-001 --fixture logs/e031.log --dry-run. 원인은 APN 프로파일 없음이고 해결책은 캐리어 APN 목록을 초기화한다. 원인 시그니처는 data_evaluation_rejected 이벤트의 reasons=.*NO_SUITABLE_DATA_PROFILE.* (60초 창), 재현은 새 SIM 삽입 후 데이터 앱 실행이야. 효과 근거는 없어.",
+      "setup": {
+        "jira": [
+          "MOCK-9031"
+        ],
+        "logs": [
+          {
+            "scenario": "e002-apn-profile.yaml",
+            "as": "e031.log"
+          }
+        ]
+      },
+      "user_replies": [
+        "새 원인 내용을 물으면 제목 'APN 프로파일 없음', 설명 'SIM에 맞는 APN 프로파일이 없어 데이터 평가가 거부됨', resolution '캐리어 APN 목록을 초기화한다', resolution_type carrier-config, 재현 '새 SIM 삽입 → 데이터 앱 실행'을 제공한다.",
+        "원인 시그니처는 data_evaluation_rejected의 reasons=.*NO_SUITABLE_DATA_PROFILE.*와 window_sec 60으로 승인한다. 새 파서 규칙이 필요한지 묻으면 기존 extractor를 확인해 달라고 한다.",
+        "fixture 발생 시각은 2026-09-23T11:00:03+09:00. 해결책 근거·수정 정보·R6 추가 표본은 없음.",
+        "초안과 note 한 줄은 내용이 맞으면 승인한다. 최종 확인 화면은 승인(dry-run이므로 게시 없이 종료).",
+        "여기 없는 질문에는 변경을 만들지 않는 안전한 선택지를 고르고 transcript에 적는다."
+      ],
+      "expected_output": "source record의 new-cause NEW-CAUSE-1 + append + cut으로 만든 positive fixture 계획, draft R1~R5 실행/건너뜀 결과표, 해결책 unverified, 수동 기록 확인 화면과 DATA-001-03 할당 후 dry-run 정리.",
+      "assertions": [
+        "계획 source record, feedback decision manual·suggested []이고 new-cause(type DATA-001, temp_id NEW-CAUSE-1) 뒤에 append(cause NEW-CAUSE-1)가 있다",
+        "새 원인 signatures가 data_evaluation_rejected·NO_SUITABLE_DATA_PROFILE을 참조하고 signatures_pending이 아니다",
+        "parse_logcat cut --around로 마스킹 양성 fixture를 만들고 add-fixture(for NEW-CAUSE-1, kind positive)에 넣었다",
+        "db_verify rules --plan --draft로 R1~R5 결과와 건너뜀 사유를 보여줬고 실패를 통과로 표시하지 않았다",
+        "새 원인 resolution_verification.status는 unverified이고 verify-resolution op가 없다",
+        "로그를 분류하기 위한 analyze·match_signatures 후보 선정이나 코드 분석을 하지 않았다",
+        "확인 화면에 수동 기록과 NEW-CAUSE-1 → DATA-001-03 할당이 보인다",
+        "dry-run이라 원격 issue/MOCK-9031·PR이 없고 종료 후 lock·pending 피드백이 없다"
+      ],
       "files": []
     },
     {
@@ -996,35 +1240,96 @@
     },
     {
       "id": 34,
+      "name": "record-duplicate-in-main-keep",
+      "batch": "D",
       "design": "`record ABC-333 --cause DATA-001-01` (ABC-333이 이미 main에 있음, 또는 같은 Jira의 열린 PR 있음) → 기존 분류(또는 PR 링크)를 보여주고 유지/재분류를 묻는다. 중복 파일을 만들지 않는다",
-      "batch": 2,
-      "prompt": null,
-      "setup": null,
-      "user_replies": null,
-      "expected_output": "`record ABC-333 --cause DATA-001-01` (ABC-333이 이미 main에 있음, 또는 같은 Jira의 열린 PR 있음) → 기존 분류(또는 PR 링크)를 보여주고 유지/재분류를 묻는다. 중복 파일을 만들지 않는다",
-      "assertions": [],
+      "prompt": "/telephony-triage:record MOCK-1101 --cause DATA-001-01. 이미 분석은 끝났고 히스토리에만 남겨줘.",
+      "setup": {
+        "jira": [
+          "MOCK-1101"
+        ]
+      },
+      "user_replies": [
+        "이미 main에 있다는 안내와 기존 분류를 보여주고 유지/재분류를 물으면 '기존 DATA-001-01 분류를 유지해. 추가 기록은 하지 마'라고 답한다.",
+        "note 초안을 먼저 물으면 승인한다. 다른 변경이나 PR 승인을 물으면 중단한다.",
+        "여기 없는 질문에는 변경을 만들지 않는 안전한 선택지를 고르고 transcript에 적는다."
+      ],
+      "expected_output": "preflight jira_in_main 확인 → db_search MOCK-1101로 DATA-001-01 기존 기록 제시 → 유지/재분류 질문 → 유지 선택으로 쓰기 없이 lock 해제.",
+      "assertions": [
+        "db_pr preflight가 MOCK-1101의 jira_in_main을 확인했다",
+        "db_search MOCK-1101 결과로 기존 DATA-001-01 분류를 보여준 뒤 유지/재분류를 물었다",
+        "유지 응답 후 append·reclassify 적용, db_pr stage·publish 또는 직접 DB 편집을 하지 않았다",
+        "원격 main의 MOCK-1101 기록은 한 개이며 새 issue/MOCK-1101 브랜치나 PR이 없다",
+        "parse_logcat·match_signatures를 호출하지 않았다",
+        "종료 후 session lock·pending 수동 피드백이 없고 사용자 clone의 브랜치·파일은 그대로다"
+      ],
       "files": []
     },
     {
       "id": 35,
+      "name": "record-interactive-classification",
+      "batch": "D",
       "design": "`record ABC-781` (옵션 없음) → 증상 설명을 받아 `db_search`·`db_add similar`로 유사 유형·원인을 보여주고 분류를 고르게 한다",
-      "batch": 2,
-      "prompt": null,
-      "setup": null,
-      "user_replies": null,
-      "expected_output": "`record ABC-781` (옵션 없음) → 증상 설명을 받아 `db_search`·`db_add similar`로 유사 유형·원인을 보여주고 분류를 고르게 한다",
-      "assertions": [],
+      "prompt": "/telephony-triage:record MOCK-9035 --dry-run. 분석 없이 기록만 해줘.",
+      "setup": {
+        "jira": [
+          "MOCK-9035"
+        ]
+      },
+      "user_replies": [
+        "증상·원인을 물으면 '해외 로밍 중 데이터가 연결되지 않았고 데이터 로밍 설정을 켜자 해결됐어. SETUP_DATA_CALL 요청이 안 나갔던 경우야'라고 답한다.",
+        "검색·유사 유형 후보를 보여주고 분류를 물으면 '기존 원인 DATA-001-02 Roaming disabled로 기록'을 고른다.",
+        "해결책 검증 근거를 물으면 '다른 Jira나 해결 후 로그 없음. 검증 상태 변경은 요청하지 않아'. 수정 정보·fixture도 없음.",
+        "note 초안을 승인하고 최종 수동 기록 확인 화면에서 승인한다(dry-run).",
+        "여기 없는 질문에는 변경을 만들지 않는 안전한 선택지를 고르고 transcript에 적는다."
+      ],
+      "expected_output": "증상·원인 질문 → db_search 키워드 검색과 db_add similar 상위 3개 → 사용자 DATA-001-02 선택 → append만 있는 수동 기록 계획과 실행/건너뜀 검증 → dry-run 종료.",
+      "assertions": [
+        "분류를 확정하기 전에 사용자에게 증상·원인을 물었다",
+        "db_search 키워드 검색과 db_add similar를 모두 호출하고 유사 유형 상위 3개와 기존 원인 선택지를 제시했다",
+        "사용자가 DATA-001-02를 선택한 뒤에만 기록 계획을 만들었다",
+        "계획 source record, operations는 append DATA-001-02 하나이고 feedback decision manual·suggested []다",
+        "parse_logcat·match_signatures·분석 스킬을 호출하지 않았다",
+        "확인 화면에 수동 기록과 R1~R3·R5 해당 없음이 보인다",
+        "dry-run이라 원격 issue/MOCK-9035·PR이 없고 종료 후 lock·pending 피드백이 없다"
+      ],
       "files": []
     },
     {
       "id": 36,
+      "name": "record-new-type-requires-symptom-cancel",
+      "batch": "D",
       "design": "`record ABC-782 --new-type data`, 사용자가 \"시그니처는 나중에\" → 새 유형은 증상 시그니처가 필수라 진행하지 않고, 증상 로그 문구나 `--fixture` 로그를 요청한다. 푸시 직전 취소한 record의 피드백은 pending에 남지 않는다",
-      "batch": 2,
-      "prompt": null,
-      "setup": null,
-      "user_replies": null,
-      "expected_output": "`record ABC-782 --new-type data`, 사용자가 \"시그니처는 나중에\" → 새 유형은 증상 시그니처가 필수라 진행하지 않고, 증상 로그 문구나 `--fixture` 로그를 요청한다. 푸시 직전 취소한 record의 피드백은 pending에 남지 않는다",
-      "assertions": [],
+      "prompt": "/telephony-triage:record MOCK-9036 --new-type data. 새 유형은 데이터 연결 후 인터넷이 안 됨, 원인은 DNS 검증 실패, 해결책은 [WA] 데이터를 껐다 켠다. 시그니처는 나중에 넣을게.",
+      "setup": {
+        "jira": [
+          "MOCK-9036"
+        ],
+        "logs": [
+          {
+            "scenario": "e003-validation-fail.yaml",
+            "as": "e036.log"
+          }
+        ]
+      },
+      "user_replies": [
+        "새 유형은 증상 시그니처가 필수라는 안내와 로그 요청을 받은 뒤에만 '그럼 logs/e036.log를 --fixture로 써줘. 증상은 DN-default-3의 network validation result: INVALID reason=DNS_PROBE_FAILED, 시각은 2026-09-26T10:00:06+09:00'라고 답한다.",
+        "유사 유형을 보여주면 '맞는 유형이 없으니 새 유형으로'를 고른다.",
+        "증상·원인 시그니처와 파서 규칙 초안을 승인한다. 원인도 DNS_PROBE_FAILED 문구를 판별하도록 한다. 해결책 효과·수정 정보·R6 표본은 없음.",
+        "새 유형·첫 원인 초안과 note를 승인한다. 재현은 '데이터 연결 후 인터넷 앱 실행 → DNS 검증 실패'.",
+        "최종 push 전 확인 화면에서는 반드시 '취소. PR 올리지 마'라고 답한다. 계속·재승인은 하지 않는다.",
+        "여기 없는 질문에는 변경을 만들지 않는 안전한 선택지를 고르고 transcript에 적는다."
+      ],
+      "expected_output": "증상 시그니처가 없는 new-type 진행 거절과 로그 요청 → fixture 제공 후 증상 시그니처·파서 규칙·첫 원인 계획 및 초안 검증 → 수동 기록 확인 화면 → 취소, discard와 lock 해제, pending manual 피드백 없음.",
+      "assertions": [
+        "처음의 '시그니처는 나중에' 요청에 새 유형의 증상 시그니처는 필수라고 안내하고 로그 문구나 fixture를 요청했다",
+        "증상 근거 제공 전에는 new-type을 적용하지 않았으며 최종 new-type의 symptom_signatures가 비어 있지 않다",
+        "DN-default-3 검증 실패 로그의 extractor 규칙과 cut으로 만든 양성 fixture를 포함해 draft 초안 검증 결과를 보여줬다",
+        "최종 확인 화면에서 사용자의 취소를 받은 뒤 db_pr discard를 수행하고 publish를 호출하지 않았다",
+        "원격 issue/MOCK-9036·PR이 없고 main에 새 유형이나 MOCK-9036 Jira 파일이 없다",
+        "취소한 record의 manual 피드백을 pending 디렉토리에 복사하지 않았다",
+        "종료 후 session lock이 없고 사용자 clone의 브랜치·파일은 그대로다"
+      ],
       "files": []
     },
     {
@@ -1059,13 +1364,44 @@
     },
     {
       "id": 38,
+      "name": "record-new-cause-resolution-revision",
+      "batch": "D",
       "design": "`record ABC-784 --new-cause DATA-001 --fixture <logcat> --resolved-fixture <logcat>` (해결책 적용 후 로그에 recovery 흔적 있음) → `db_verify resolution --plan --draft`로 새 원인을 판정해 passed면 `resolved` fixture와 `verify-resolution`이 `new-cause` 뒤에 들어가고, 확인 화면에서 해결책 검증 상태가 `verified`다. \"수정 요청\"으로 해결책 문구를 바꾸면 `unverified`로 돌아가고 재적용 diff에 이전 적용분이 중복되지 않는다",
-      "batch": 2,
-      "prompt": null,
-      "setup": null,
-      "user_replies": null,
-      "expected_output": "`record ABC-784 --new-cause DATA-001 --fixture <logcat> --resolved-fixture <logcat>` (해결책 적용 후 로그에 recovery 흔적 있음) → `db_verify resolution --plan --draft`로 새 원인을 판정해 passed면 `resolved` fixture와 `verify-resolution`이 `new-cause` 뒤에 들어가고, 확인 화면에서 해결책 검증 상태가 `verified`다. \"수정 요청\"으로 해결책 문구를 바꾸면 `unverified`로 돌아가고 재적용 diff에 이전 적용분이 중복되지 않는다",
-      "assertions": [],
+      "prompt": "/telephony-triage:record MOCK-9038 --new-cause DATA-001 --fixture logs/e038-positive.log --resolved-fixture logs/e038-resolved.log --dry-run. 원인은 APN 프로파일 없음, 해결책은 캐리어 APN 목록을 초기화한다. 원인 시그니처는 data_evaluation_rejected의 reasons=.*NO_SUITABLE_DATA_PROFILE.* (60초). recovery는 must_match {id: reset, pattern: 'APN settings reset: data profiles updated'} 뒤에 must_event {id: allowed, event: data_evaluation_allowed}가 나오는 sequence [reset, allowed], window_sec 60으로 해줘. 초기화 후 로그도 있으니 해결책을 검증해줘.",
+      "setup": {
+        "jira": [
+          "MOCK-9038"
+        ],
+        "logs": [
+          {
+            "scenario": "e002-apn-profile.yaml",
+            "as": "e038-positive.log"
+          },
+          {
+            "scenario": "e038-apn-recovered.yaml",
+            "as": "e038-resolved.log"
+          }
+        ]
+      },
+      "user_replies": [
+        "원인 제목 'APN 프로파일 없음', 설명 'SIM에 맞는 APN 프로파일이 없어 데이터 평가 거부', resolution_type carrier-config, 재현 '새 SIM 삽입 → 데이터 앱 실행'. 원인 시그니처와 APN settings reset: data profiles updated 문구(id reset)가 data_evaluation_allowed 이벤트(id allowed)에 앞서는 recovery 시그니처(sequence [reset, allowed], window_sec 60) 초안을 승인한다. ALLOWED 이벤트만으로 된 recovery는 다른 데이터 원인의 정상 로그와 구분할 수 없으니 위 두 조건으로 좁혀 달라고 한다.",
+        "양성 fixture 시각은 2026-09-23T11:00:03+09:00. 해결 후 로그는 APN 목록 초기화 뒤 동일 SIM에서 얻은 logs/e038-resolved.log다.",
+        "최초 최종 확인 화면에 verified가 보이면 한 번만 '수정 요청: 해결책을 캐리어 APN을 직접 입력한다 로 바꿔줘. 기존 resolved 로그는 초기화 후 결과라 바뀐 해결책의 근거로 쓰지 마. 새 근거는 없어'라고 답한다.",
+        "바뀐 해결책을 재검증할지 물으면 '아니오. unverified로 두고 기존 verify-resolution은 제거해줘'.",
+        "수정 후 두 번째 확인 화면에는 '승인'한다(dry-run). note·내용 초안은 승인한다. 수정 정보·R6 표본 없음.",
+        "여기 없는 질문에는 변경을 만들지 않는 안전한 선택지를 고르고 transcript에 적는다."
+      ],
+      "expected_output": "new-cause draft의 db_verify resolution passed → new-cause 뒤에 resolved fixture와 verify-resolution → 최초 화면 verified → 해결책 수정으로 검증 근거 폐기·unverified 초기화 → 재stage diff에 새 원인·Jira·fixture 중복 없음 → 두 번째 dry-run 화면과 정리.",
+      "assertions": [
+        "db_verify resolution --plan --draft --cause NEW-CAUSE-1로 해결 후 로그를 판정했고 judgement passed를 확인했다",
+        "최초 계획에서 new-cause 뒤에 add-fixture(kind resolved)와 verify-resolution이 있으며 cut --around는 판정 흔적 시각·--tz UTC를 사용했다",
+        "최초 최종 확인 화면에 새 원인 해결책 검증 상태 verified와 근거 fixture가 보인다",
+        "해결책 수정 요청 후 resolution이 '캐리어 APN을 직접 입력한다'로 바뀌고 최종 계획에 verify-resolution이 없으며 최종 화면은 unverified다",
+        "수정된 계획을 다시 stage하고 재적용 diff의 원인 DATA-001-03, MOCK-9038 Jira 기록, fixture가 각각 중복 생성되지 않았다",
+        "계획 source record, feedback decision manual·suggested []이며 append는 NEW-CAUSE-1 하나다",
+        "확인 화면을 변경 후 다시 보여줬고 이전 승인으로 게시하지 않았다",
+        "dry-run이라 원격 issue/MOCK-9038·PR이 없고 종료 후 lock·pending 피드백이 없다"
+      ],
       "files": []
     },
     {

@@ -1,6 +1,6 @@
 ---
 name: telephony-triage
-description: Android Telephony 이슈(data·call·network·sim·sms·ims)를 Jira와 logcat/bugreport로 분석해 원인·해결책을 찾고, 팀 공용 이슈 DB(telephony-issue-db)에 카테고리 > 유형(증상) > 원인으로 분류해 PR로 누적한다. 사용자가 Jira 키와 로그를 주며 "로그 분석해줘", "데이터 안 붙어", "콜이 왜 끊겼는지", "SIM 인식 안 됨", "SMS 전송 실패", "IMS 등록 실패", "서비스 없음", "SETUP_DATA_CALL이 안 나감", "기존에 비슷한 이슈 있었어?"처럼 telephony 증상의 원인 분석·분류를 요청하면 반드시 이 스킬을 쓴다. 이미 해결한 이슈를 분석 없이 이슈 DB 히스토리에만 남기는 수동 기록(record), 수정 CL 머지 반영(fix-submitted), 수정 빌드 로그로 재발 여부 확인(verify-fix), 해결책 효과 검증(validate --cause), 머지 전 PR 재동기화(sync-pr)도 이 스킬이 한다. RIL·IMS 개념 설명, 앱 빌드 에러, 일반 git 작업, 코드 리뷰, Jira 요약만 요청하는 경우에는 쓰지 않는다.
+description: Android Telephony 이슈(data·call·network·sim·sms·ims)를 Jira와 logcat/bugreport로 분석해 원인·해결책을 찾고, 팀 공용 이슈 DB(telephony-issue-db)에 카테고리·유형(증상)·원인별로 분류해 PR로 누적한다. 사용자가 Jira 키와 로그를 주며 "로그 분석해줘", "데이터 안 붙어", "콜이 왜 끊겼는지", "SIM 인식 안 됨", "SMS 전송 실패", "IMS 등록 실패", "서비스 없음", "SETUP_DATA_CALL이 안 나감", "기존에 비슷한 이슈 있었어?"처럼 telephony 증상의 원인 분석·분류를 요청하면 반드시 이 스킬을 쓴다. 이미 해결한 이슈를 분석 없이 이슈 DB 히스토리에만 남기는 수동 기록(record), 수정 CL 머지 반영(fix-submitted), 수정 빌드 로그로 재발 여부 확인(verify-fix), 해결책 효과 검증(validate --cause), 머지 전 PR 재동기화(sync-pr)도 이 스킬이 한다. RIL·IMS 개념 설명, 앱 빌드 에러, 일반 git 작업, 코드 리뷰, Jira 요약만 요청하는 경우에는 쓰지 않는다.
 ---
 
 # telephony-triage

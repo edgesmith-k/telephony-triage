@@ -417,3 +417,10 @@
 - **`db_pr.py`·`code_roots.py`**: `--json`·`--plugin-root`를 서브커맨드 앞뒤 어디서나 받는다(`contracts.md §3.2` 공통 규칙과 맞춤).
 - **계획 `pr_notes`(선택)**: 확인 화면·PR 본문에 붙는 흐름별 설명(drift 결정, verify-fix 근거, allow-cause 사유). 이슈 DB `schema/plan.schema.json`에 선택 필드 추가, `db_pr summary`가 마스킹해 넣는다. 스키마 버전은 그대로(선택 필드).
 - **`config.py show` effective에 `analyzers`** 포함(site-defaults → 사용자 config 병합).
+
+## Phase 13 평가 재개 중 보완 (2026-09-30)
+
+- `schema/plan.schema.json`의 시그니처 `must_match`에 문자열 외에 `{id, pattern}` 조건도 허용한다. 유형 스키마와 공통 계약은 이미 이 형식을 지원했지만 계획 스키마가 거부하여, 정규식 조건을 포함한 `sequence`를 새 원인 계획에 넣을 수 없었다. 샘플·변형 DB 7곳에 반영했고, 기존 문자열 호환·잘못된 객체 거절·해결책 draft 검증과 stage를 회귀 테스트한다. 배포 전 v1 보완이므로 기존 버전 유지 규칙을 따른다.
+- 스킬 eval 45개 입력 정의를 완성했다. `run.py`로 새 격리 환경을 준비·실행하며, 채점기는 실행 기록 없음과 API 중단을 통과로 세지 않는다. 대화 판단은 수동 채점으로 남긴다.
+- 트리거 입력 2개에 Telephony 이슈 DB 맥락을 명시했다. 독립 정적 리뷰와 실제 Claude 자동 선택 검증을 구분한다. 실제 행동 평가·런타임 시험은 Claude Code 주간 한도(429)로 미완료다.
+- 스킬 description의 분류 구분 기호를 바꿔 skill-creator frontmatter 검증을 통과하도록 했다. 흐름과 분류 의미는 같다.

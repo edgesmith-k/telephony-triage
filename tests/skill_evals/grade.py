@@ -6,7 +6,7 @@
 `evals.json`의 assertion 가운데 기계적으로 확인할 수 있는 것(원격 브랜치·파일, gh PR, 세션 lock, 사용자 clone 상태,
 원문 PII 노출, Jira 쓰기 도구 호출, 계획 내용)은 여기서 판정한다. 나머지는 `passed: null`(사람·LLM이 transcript로 채점)로 남긴다.
 결과는 각 run 디렉토리의 `grading.json` — skill-creator viewer 형식 `{expectations: [{text, passed, evidence}], summary}`.
-이미 채점된 항목(`passed`가 true/false)은 덮지 않는다(수동 채점 보존).
+수동 채점만 보존하고, 스크립트 판정은 다시 계산한다. 실행 기록이 없으면 미실행으로 남긴다.
 """
 
 from __future__ import annotations
@@ -107,6 +107,10 @@ def _cause(ctx: Ctx, branch: str, type_glob: str, cid: str) -> dict | None:
 
 def checks(eid: int, ctx: Ctx) -> list:
     """assertion 순서대로 (함수 | None). 함수는 (passed, evidence)."""
+    if eid in (10, 20, 21, 22, 23, 25, 26, 27, 28):
+        return checks_c(eid, ctx)
+    if eid in (31, 34, 35, 36, 38):
+        return checks_d(eid, ctx)
     no_remote = lambda br: (lambda: (br not in ctx.branches() and not ctx.prs(), f"branches={ctx.branches()} prs={len(ctx.prs())}"))
     if eid == 1:
         br = "issue/MOCK-1001"
@@ -396,7 +400,291 @@ def checks(eid: int, ctx: Ctx) -> list:
     return []
 
 
+def checks_c(eid, ctx):
+    def ran(sub):
+        return len(re.findall(r"db_pr\.py[^|\n]*\b" + sub + r"\b", ctx.commands))
+
+    def evidence_ready():
+        return bool(ctx.commands.strip() and ctx.transcript.strip())
+
+    def ops(job):
+        return (ctx.plan(job) or {}).get("operations", [])
+
+    def operation(job, name, predicate):
+        selected = [o for o in ops(job) if o.get("op") == name]
+        return bool(selected) and any(predicate(o) for o in selected), json.dumps(selected, ensure_ascii=False, default=str)
+
+    def cause(branch):
+        for f in ctx.find(branch, "call/CALL-001-*/type.md"):
+            text = ctx.show(branch, f)
+            data = yaml.safe_load(text.split("---")[1]) if text.startswith("---") else {}
+            for c in data.get("causes") or []:
+                if c.get("id") == "CALL-001-01":
+                    return c
+        return None
+
+    def no_remote_lock():
+        free, ev = ctx.lock_free()
+        return evidence_ready() and free and ctx.branches() == ["main"] and not ctx.prs(), f"{ev}; branches={ctx.branches()}; prs={len(ctx.prs())}"
+
+    def no_plan(pattern):
+        found = [str(p) for p in ctx.work.glob(pattern)]
+        out = ctx.run / "outputs" / "plan.json"
+        return not found and not out.exists(), f"plans={found}; output plan={out.exists()}"
+
+    def missing_workflow(pattern):
+        absent, ev = no_plan(pattern)
+        no_remote, remote_ev = no_remote_lock()
+        return absent and no_remote and ran("stage") == 0 and ran("publish") == 0, f"{ev}; {remote_ev}; stage={ran('stage')}; publish={ran('publish')}"
+
+    def exact_clone():
+        clone = Path(ctx.env["issue_db_clone"])
+        same, ev = ctx.clone_same()
+        # clone_same permits main fast-forward; these assertions promise exact HEAD preservation.
+        import subprocess
+        proc = subprocess.run(["git", "-C", str(clone), "rev-parse", "HEAD"], capture_output=True, text=True, encoding="utf-8")
+        now = proc.stdout.strip()
+        return same and proc.returncode == 0 and now == ctx.before["head"], f"{ev}; HEAD={now}"
+
+    def published_lock():
+        free, ev = ctx.lock_free()
+        # This checks publication occurred, not the dialogue ordering; ordering stays manual.
+        return free and ran("publish") >= 1, f"{ev}; publish={ran('publish')}"
+
+    if eid == 10:
+        def reopen():
+            return operation("MOCK-9010", "update-fix", lambda o: o.get("cause") == "CALL-001-01"
+                             and (o.get("fix") or {}).get("status") == "open"
+                             and (o.get("history") or {}).get("result") == "reverted"
+                             and (o.get("history") or {}).get("build") == "MOCKB77_U2_20260920"
+                             and (o.get("history") or {}).get("jira") == "MOCK-9010")
+        return [None, None, reopen, None, no_remote_lock, exact_clone]
+    if eid == 20:
+        br = "verify-fix/CALL-001-01-MOCKB77_U2_20260927"
+        job = "verify-fix-CALL-001-01-MOCKB77_U2_20260927"
+        def failed_plan():
+            selected = ops(job)
+            failed = any(o.get("op") == "verify-fix" and o.get("cause") == "CALL-001-01"
+                         and o.get("result") == "failed" for o in selected)
+            fx = any(o.get("op") == "add-fixture" and o.get("for") == "CALL-001-01"
+                     and o.get("kind") == "recurrence" for o in selected)
+            return failed and fx, json.dumps(selected, ensure_ascii=False, default=str)
+        def status():
+            c = cause(br)
+            f = (c or {}).get("fix") or {}
+            return c is not None and f.get("status") == "open" and f.get("ref") is None and f.get("fixed_in") == [], json.dumps(f, ensure_ascii=False, default=str)
+        def history():
+            f = (cause(br) or {}).get("fix") or {}
+            h = f.get("verification_history") or []
+            ok = any(x.get("result") == "failed" and x.get("ref") == "MOCKCL-12345"
+                     and any(b.get("build") == "MOCKB77_U2_20260920" for b in x.get("fixed_in") or []) for x in h)
+            return ok, json.dumps(h, ensure_ascii=False, default=str)
+        return [None, None, None, failed_plan, status, history, None]
+    if eid == 21:
+        def reopen():
+            return operation("MOCK-9021", "update-fix", lambda o: o.get("cause") == "CALL-001-01"
+                             and (o.get("fix") or {}).get("status") == "open"
+                             and (o.get("history") or {}).get("result") == "failed")
+        return [None, None, reopen, None, no_remote_lock]
+    if eid == 22:
+        expected = "캐리어 설정에서 VoLTE를 켜고 비행기 모드를 껐다 켜 IMS를 재등록한다"
+        def setres():
+            return operation("MOCK-2001", "set-resolution", lambda o: o.get("cause") == "CALL-001-01" and o.get("resolution") == expected)
+        def no_reuse():
+            p = ctx.plan("MOCK-2001")
+            selected = ops("MOCK-2001")
+            return p is not None and not any(o.get("op") == "verify-resolution" for o in selected), json.dumps(selected, ensure_ascii=False, default=str)
+        return [None, setres, None, None, no_reuse, no_remote_lock]
+    if eid == 23:
+        br = "verify-fix/CALL-001-01-MOCKB77_U2_20260927"
+        job = "verify-fix-CALL-001-01-MOCKB77_U2_20260927"
+        def partial_plan():
+            selected = ops(job)
+            found = any(o.get("op") == "verify-fix" and o.get("cause") == "CALL-001-01"
+                        and o.get("result") == "partial" for o in selected)
+            return found and not any(o.get("op") == "add-fixture" and o.get("kind") == "fixed" for o in selected), json.dumps(selected, ensure_ascii=False, default=str)
+        def partial_remote():
+            c = cause(br)
+            f = (c or {}).get("fix") or {}
+            h = f.get("verification_history") or []
+            ok = c is not None and f.get("status") == "fix-submitted" and any(x.get("result") == "partial" and x.get("build") == "MOCKB77_U2_20260927" for x in h)
+            return ok, json.dumps(f, ensure_ascii=False, default=str)
+        return [None, None, None, partial_plan, partial_remote, None]
+    if eid == 25:
+        def no_judgement():
+            called = bool(re.search(r"db_verify\.py[^\n]*\bfix\b", ctx.commands))
+            return evidence_ready() and not called, f"db_verify fix called={called}"
+        def cleanup():
+            free, ev = ctx.lock_free()
+            same, clone_ev = ctx.clone_same()
+            return evidence_ready() and free and same, f"{ev}; {clone_ev}"
+        return [None, no_judgement, None, None, lambda: missing_workflow("verify-fix-*/plan.json"), cleanup]
+    if eid == 26:
+        job = "fix-submit-CALL-001-01"
+        def submit():
+            p = ctx.plan(job)
+            ok, ev = operation(job, "update-fix", lambda o: o.get("cause") == "CALL-001-01"
+                               and (o.get("fix") or {}).get("status") == "fix-submitted"
+                               and (o.get("fix") or {}).get("ref") == "MOCKCL-67890")
+            return ok and p.get("source") == "fix-submitted", ev
+        def no_build():
+            c = cause("fix-submit/CALL-001-01")
+            f = (c or {}).get("fix") or {}
+            entries = f.get("fixed_in") or []
+            ok = c is not None and f.get("status") == "fix-submitted" and f.get("ref") == "MOCKCL-67890" and entries == [{"branch": "MOCKB77_U2"}]
+            return ok, json.dumps(f, ensure_ascii=False, default=str)
+        def no_verify():
+            p = ctx.plan(job)
+            selected = ops(job)
+            bad = any(o.get("op") == "verify-fix" or (o.get("fix") or {}).get("status") == "fixed" for o in selected)
+            return p is not None and not bad and not re.search(r"db_verify\.py[^\n]*\bfix\b", ctx.commands), json.dumps(selected, ensure_ascii=False, default=str)
+        return [None, None, submit, no_build, no_verify, None]
+    if eid == 27:
+        def resolution():
+            hit = bool(re.search(r"db_verify\.py[^\n]*\bresolution\b[^\n]*--cause\s+['\"]?CALL-001-02", ctx.commands))
+            return hit, f"db_verify resolution CALL-001-02={hit}"
+        def no_record():
+            absent, ev = no_plan("verify-res-CALL-001-02-*/plan.json")
+            return evidence_ready() and absent and "add-fixture" not in ctx.commands, ev
+        return [resolution, None, None, no_record, lambda: missing_workflow("verify-res-CALL-001-02-*/plan.json")]
+    if eid == 28:
+        def preserved():
+            note = ctx.show("issue/MOCK-9028", "reviewer-note.md")
+            no_push = ran("publish") == 0 and not re.search(r"\bgit\s+push\b", ctx.commands)
+            return evidence_ready() and no_push and "preserve this commit" in note, f"note={note!r}; publish={ran('publish')}"
+        def cleanup():
+            free, ev = ctx.lock_free()
+            return evidence_ready() and free and len(ctx.prs()) == 1, f"{ev}; prs={len(ctx.prs())}"
+        return [None, None, None, preserved, exact_clone, cleanup]
+    return []
+
+def checks_d(eid, ctx):
+    """Mechanical checks matching specs-d assertion order; dialogue checks are None."""
+    import json
+
+    jobs = {31: "MOCK-9031", 34: "MOCK-1101", 35: "MOCK-9035", 36: "MOCK-9036", 38: "MOCK-9038"}
+    job = jobs[eid]
+
+    def plan():
+        return ctx.plan(job)
+
+    def planned(predicate):
+        def check():
+            p = plan()
+            return (p is not None and predicate(p), json.dumps(p, ensure_ascii=False, default=str)[:1500] if p else "plan.json 없음")
+        return check
+
+    def no_remote():
+        # Require run artifacts: absent evidence must not become a successful cancellation.
+        ok = bool(ctx.transcript and ctx.commands) and f"issue/{job}" not in ctx.branches() and not ctx.prs()
+        return ok, f"branches={ctx.branches()}; prs={len(ctx.prs())}; transcript={bool(ctx.transcript)}; commands={bool(ctx.commands)}"
+
+    def cleaned():
+        lock, evidence = ctx.lock_free()
+        return bool(ctx.transcript and ctx.commands) and lock and not ctx.pending(), f"{evidence}; pending={ctx.pending()}"
+
+    def cleaned_remote():
+        a, ae = no_remote()
+        b, be = cleaned()
+        return a and b, ae + "; " + be
+
+    def unchanged():
+        a, ae = cleaned()
+        b, be = ctx.clone_same()
+        return a and b, ae + "; " + be
+
+    def ops(p, name):
+        return [o for o in p.get("operations", []) if o.get("op") == name]
+
+    def manual(p):
+        f = p.get("feedback") or {}
+        return p.get("source") == "record" and f.get("decision") == "manual" and f.get("suggested") == []
+
+    def append(p, cause):
+        return ops(p, "append") == [{"op": "append", "cause": cause}]
+
+    def newcause(p):
+        o = ops(p, "new-cause")
+        return o[0] if len(o) == 1 else {}
+
+    def cut_positive():
+        p = plan()
+        fx = ops(p or {}, "add-fixture")
+        found = any(o.get("for") == "NEW-CAUSE-1" and o.get("kind") == "positive" for o in fx)
+        ok = p is not None and found and "parse_logcat" in ctx.commands and " cut " in ctx.commands and "--around" in ctx.commands
+        return ok, json.dumps(fx, ensure_ascii=False) + "; cut command=" + str(" cut " in ctx.commands)
+
+    def commands_absent(words):
+        def check():
+            bad = [w for w in words if w in ctx.commands]
+            return bool(ctx.commands) and not bad, "commands present=" + str(bool(ctx.commands)) + "; unexpected=" + str(bad)
+        return check
+
+    if eid == 31:
+        def nc_order(p):
+            nc = newcause(p)
+            allops = p.get("operations", [])
+            return manual(p) and nc.get("type") == "DATA-001" and nc.get("temp_id") == "NEW-CAUSE-1" and append(p, "NEW-CAUSE-1") and allops.index(nc) < allops.index(ops(p, "append")[0])
+        def signature(p):
+            c = newcause(p).get("cause") or {}
+            s = json.dumps(c.get("signatures", []))
+            return "data_evaluation_rejected" in s and "NO_SUITABLE_DATA_PROFILE" in s and not c.get("signatures_pending")
+        def unverified(p):
+            c = newcause(p).get("cause") or {}
+            return (c.get("resolution_verification") or {}).get("status") == "unverified" and not ops(p, "verify-resolution")
+        return [planned(nc_order), planned(signature), cut_positive, None, planned(unverified), None, None, cleaned_remote]
+    if eid == 34:
+        def main_duplicate():
+            hits = ctx.find("main", "*/DATA-*/jira/MOCK-1101.yaml")
+            a, ae = no_remote()
+            return a and len(hits) == 1 and "cause: DATA-001-01" in ctx.show("main", hits[0]), ae + "; main hits=" + str(hits)
+        return [None, None, commands_absent([" stage ", " publish "]), main_duplicate,
+                commands_absent(["parse_logcat", "match_signatures"]), unchanged]
+    if eid == 35:
+        def justappend(p):
+            return manual(p) and p.get("operations") == [{"op": "append", "cause": "DATA-001-02"}]
+        return [None, None, None, planned(justappend), commands_absent(["parse_logcat", "match_signatures", "data-analyzer/run.py"]), None, cleaned_remote]
+    if eid == 36:
+        def symptoms(p):
+            nt = ops(p, "new-type")
+            return len(nt) == 1 and bool((nt[0].get("type") or {}).get("symptom_signatures"))
+        def discard():
+            return bool(ctx.commands) and " discard " in ctx.commands and " publish " not in ctx.commands, "discard=" + str(" discard " in ctx.commands) + "; publish=" + str(" publish " in ctx.commands)
+        def no_main():
+            a, ae = no_remote()
+            hits = ctx.find("main", "*/DATA-*/jira/MOCK-9036.yaml")
+            return a and not hits, ae + "; main jira=" + str(hits)
+        return [None, planned(symptoms), None, discard, no_main, cleaned, unchanged]
+    if eid == 38:
+        def revised(p):
+            c = newcause(p).get("cause") or {}
+            # set-resolution may represent the edited text separately from new-cause.
+            edits = ops(p, "set-resolution")
+            resolution = edits[-1].get("resolution") if edits else c.get("resolution")
+            return resolution == "캐리어 APN을 직접 입력한다" and not ops(p, "verify-resolution")
+        def unique(p):
+            fx = ops(p, "add-fixture")
+            keys = [(o.get("for"), o.get("kind"), o.get("path")) for o in fx]
+            return len(ops(p, "new-cause")) == 1 and append(p, "NEW-CAUSE-1") and len(keys) == len(set(keys)) and ctx.commands.count(" stage ") >= 2
+        return [None, None, None, planned(revised), planned(unique), planned(lambda p: manual(p) and append(p, "NEW-CAUSE-1")), None, cleaned_remote]
+    raise ValueError(eid)
+
+
 def grade(eid: int, run_dir: Path, env_dir: Path, assertions: list[str]) -> dict:
+    output = run_dir / "outputs"
+    missing = [name for name in ("transcript.md", "commands.md")
+               if not (output / name).is_file() or not (output / name).read_text(encoding="utf-8").strip()]
+    execution_path = run_dir / "execution.json"
+    execution = json.loads(execution_path.read_text(encoding="utf-8")) if execution_path.is_file() else {}
+    interrupted = execution.get("status") in ("blocked", "error", "timeout")
+    if missing or interrupted:
+        reason = str(execution.get("reason", execution["status"])) if interrupted else f"실행 기록 없음: {', '.join(missing)}"
+        rows = [{"text": text, "passed": None, "evidence": reason, "source": "execution"}
+                for text in [*assertions, "Jira 쓰기 도구를 부르지 않았다"]]
+        result = {"status": "incomplete" if interrupted else "not-run", "expectations": rows,
+                  "summary": {"passed": 0, "failed": 0, "total": len(rows), "undecided": len(rows), "pass_rate": 0}}
+        (run_dir / "grading.json").write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+        return result
     ctx = Ctx(env_dir, run_dir)
     fns = checks(eid, ctx)
     path = run_dir / "grading.json"
@@ -409,7 +697,7 @@ def grade(eid: int, run_dir: Path, env_dir: Path, assertions: list[str]) -> dict
             continue
         fn = fns[i] if i < len(fns) else None
         if fn is None:
-            rows.append(prev or {"text": text, "passed": None, "evidence": "transcript 수동 채점 필요", "source": "manual"})
+            rows.append({"text": text, "passed": None, "evidence": "transcript 수동 채점 필요", "source": "manual"})
             continue
         try:
             ok, ev = fn()
@@ -419,7 +707,7 @@ def grade(eid: int, run_dir: Path, env_dir: Path, assertions: list[str]) -> dict
     ok, ev = ctx.jira_writes()
     rows.append({"text": "Jira 쓰기 도구를 부르지 않았다", "passed": ok, "evidence": ev[:500], "source": "script"})
     decided = [r for r in rows if r["passed"] is not None]
-    result = {"expectations": rows,
+    result = {"status": "graded", "expectations": rows,
               "summary": {"passed": sum(1 for r in decided if r["passed"]), "failed": sum(1 for r in decided if not r["passed"]),
                           "total": len(rows), "undecided": len(rows) - len(decided),
                           "pass_rate": round(sum(1 for r in decided if r["passed"]) / len(rows), 2) if rows else 0}}
@@ -435,7 +723,7 @@ def main() -> int:
     it = Path(args.iteration)
     evals = json.loads((HERE / "evals.json").read_text(encoding="utf-8"))["evals"]
     for e in evals:
-        if e["batch"] not in (1, "A", "B") or (args.eval and e["id"] not in args.eval):
+        if not e.get("assertions") or (args.eval and e["id"] not in args.eval):
             continue
         cands = [it / f"eval-{e['id']}-{e.get('name')}", it / f"eval-{e['id']}"]   # 반복마다 폴더 이름 규칙이 다를 수 있다
         run_dir = next((c for c in cands if c.is_dir()), cands[0]) / "with_skill"

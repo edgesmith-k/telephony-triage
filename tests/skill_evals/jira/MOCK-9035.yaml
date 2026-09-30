@@ -1,0 +1,17 @@
+# Synthetic skill evaluation ticket; classification is supplied interactively.
+key: MOCK-9035
+fields:
+  summary: 해외 로밍 중 데이터가 연결되지 않음
+  description: |
+    해외 로밍 망에서 인터넷이 안 됨. 데이터 로밍 설정을 켜자 해결됨.
+    로그 분석 없이 기존 원인에 히스토리만 기록하려고 함.
+  status: {name: Open}
+  project: {key: MOCK, name: Mock Telephony}
+  components: [{name: Data}]
+  customfield_10001: "2026-09-24T09:10:00+0900"
+  customfield_10002: MOCK-A56
+  customfield_10003: MOCKA56_U1_20260915
+  customfield_10004: "16"
+  customfield_10005: MockTel Roaming
+  customfield_10006: "1"
+comments: []

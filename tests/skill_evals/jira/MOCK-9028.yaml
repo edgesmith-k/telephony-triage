@@ -1,0 +1,15 @@
+# eval 28: 이미 게시한 PR의 원격 변경 충돌 (합성 데이터).
+key: MOCK-9028
+fields:
+  summary: 데이터가 연결되지 않음
+  description: 모바일 데이터 설정이 꺼져 있어 연결이 되지 않습니다.
+  status: {name: Open}
+  project: {key: MOCK, name: Mock Telephony}
+  components: [{name: Data}]
+  customfield_10001: "2026-09-20T14:32:10+0900"
+  customfield_10002: MOCK-A56
+  customfield_10003: MOCKA56_U1_20260915
+  customfield_10004: "16"
+  customfield_10005: MockTel KR
+  customfield_10006: "0"
+comments: []
