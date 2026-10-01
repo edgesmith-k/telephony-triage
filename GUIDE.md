@@ -52,7 +52,7 @@ Phase 1~13 모의 환경으로 전부 구현           S-2  사내 Claude Code �
 
 ### 반입 전
 ```
-반입 체크리스트(15-local-draft.md §15.4) 확인하고 DRAFT_NOTES.md 갱신해줘
+반입 체크리스트(15-local-draft.md §15.4) 확인하고 DRAFT_NOTES.md(상태 파일) 갱신해줘
 ```
 - 테스트 전부 통과, `site-defaults.yaml` 없음, `.local-draft`·`.mcp.json`이 반입 묶음에 없음, 이슈 DB 뼈대 생성, `TODO(SITE:...)` 목록 정리를 확인한다.
 - 사내 **외부 작성 코드 반입 규정**(오픈소스 의존성 승인 포함)을 확인한 뒤 플러그인 레포 + 이슈 DB 뼈대를 반입한다.
@@ -212,4 +212,4 @@ Phase 1~13 모의 환경으로 전부 구현           S-2  사내 Claude Code �
 | 사내 정보가 있어야 판단할 남은 항목 | `REVIEW-OPEN.md` |
 | v1에서 뺀 설계(3-way replay 등) | `docs/design/99-deferred.md` |
 | 11차 변경안(동작 검토 U1~U17, 이력) | `docs/history/REVIEW-11.md` |
-| 변경 이력 | `CHANGES.md` |
+| 변경 이력 | `docs/history/CHANGES.md` |

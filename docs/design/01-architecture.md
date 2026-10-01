@@ -40,7 +40,8 @@ telephony-triage-plugin/                 # 개발 레포 루트
 ├── .local-draft                         # [사외 PC 전용, .gitignore] 사외 초안 모드 표식 (CLAUDE.md 머리말)
 ├── tools/import_draft.py                # 재반입: SITE_PATHS를 보존하며 새 사외 초안 덮어쓰기
 ├── tools/make_db_skeleton.py            # 합성 샘플에서 운영용 이슈 DB 뼈대 생성 (11-phases.md Phase 1)
-├── DRAFT_NOTES.md                       # 사외 초안 진행 상태·가정·실험 결과·TODO(SITE) 목록 (15-local-draft.md)
+├── DRAFT_NOTES.md                       # 사외 초안 상태 파일(≤6KB): 진행 상태·막힌 것·활성 트랙·실험 결과 표 (15-local-draft.md)
+├── docs/history/                        # 아카이브(읽지 않음): draft-notes-<날짜>.md(Phase별 상세), CHANGES.md(문서 세트 변경 이력), REVIEW-10/11.md
 ├── tools/list_site_todos.py             # TODO(SITE:S<n>) 목록 추출
 ├── tools/offline_eval.py                # 라벨셋(과거 Jira + 로그 + 정답 원인)으로 analyze --dry-run 1위 정확도·오탐률 측정 (15-local-draft.md §15.5 S-5)
 ├── docs/design/                         # 설계 문서 (이 파일 포함, 배포 대상 아님)

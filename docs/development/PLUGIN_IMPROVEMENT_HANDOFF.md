@@ -6,7 +6,7 @@
 - 검토 기준 commit: `47ba4c9602a6c6ba5c7022816dd9d3d220a44acf` (Phase 13 평가 정의·계획 스키마 수정).
 - 기존 개발 Phase D0, 1~12 완료; **Phase 13 진행 중**. 아래 개선 단계 I0~I6는 기존 Phase 번호와 별개다.
 - 이번 허용 범위: Handoff와 최소 문서 연결, commit, configured upstream으로 일반 push. **runtime/command/skill 변경·refactoring·기존 파일 삭제는 하지 않았다.** 후속 구현은 사용자에게 허용된 Phase 범위에서 시작한다.
-- Claude 행동 평가: 최신 재개에서 0건 실행. 이전 일부 평가 결과만 존재한다. 429 사용량 제한 기록은 `DRAFT_NOTES.md`의 최신 Phase 13 절에 있다. 한도 해제 시각 기록을 현재 사용 가능 여부로 간주하지 않는다.
+- Claude 행동 평가: 최신 재개에서 0건 실행. 이전 일부 평가 결과만 존재한다. 429 사용량 제한 기록은 `DRAFT_NOTES.md`(막힌 것)과 `docs/history/draft-notes-2026-09.md`의 Phase 13 절에 있다. 한도 해제 시각 기록을 현재 사용 가능 여부로 간주하지 않는다.
 
 ## Purpose
 
@@ -62,7 +62,7 @@
 - R4: 첫 파일 SEND_SMS request, 두 번째 파일 같은 pid/phone/serial의 1초 뒤 정상 response와 60초 뒤 줄 → ReferenceBackend.parse의 paired_ts=null, `_ril_events`에서 ril_no_response 생성.
 - R5: parse 결과에 external-parser-failed warning과 남은 recovery event를 주입하고 C=S=0·recovery hit인 검증 함수 → passed. `_traces`를 대체한 함수 수준 실험이며 실제 외부 프로세스 실패 통합 재현은 I0/I2에서 추가한다.
 - 위 실험은 임시·메모리 실험이며 재현 스크립트는 커밋되지 않았다. R3 삭제·R6 shell 공격은 실행하지 않고 코드로 확인했다. 나머지는 정적 분석이며 실제 Claude 행동을 관찰했다고 주장하지 않는다.
-- 사내 실제 로그·MCP·GHE·Ubuntu 배포 검증은 미실행. 과거 eval 일부 통과와 최신 미실행 상태의 상세는 `DRAFT_NOTES.md` Phase 13, 평가 방식은 `tests/skill_evals/README.md` 참조.
+- 사내 실제 로그·MCP·GHE·Ubuntu 배포 검증은 미실행. 과거 eval 일부 통과와 최신 미실행 상태의 상세는 `docs/history/draft-notes-2026-09.md` Phase 13, 평가 방식은 `tests/skill_evals/README.md` 참조.
 
 ## Priority
 

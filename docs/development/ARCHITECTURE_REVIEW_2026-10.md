@@ -292,7 +292,7 @@ EXTERNAL-SAFE (이 레포 그대로; 외부 Codex가 자유롭게 개발·테스
 구체 장치:
 
 1. **`tools/context_pack.py <task>`**: `docs/tasks/<task>.yaml`에 적힌 파일 목록을 한 번에 이어 붙여 stdout(또는 `--list`). agent는 "pack을 읽는다" 한 문장으로 끝난다. 결정적이고 token 0.
-2. **`HANDOFF_STATE.md`** (루트, ≤ 3KB): 모드, 완료 Phase, 다음 할 일 3개, 막힌 것, 마지막 테스트 결과 한 줄. `DRAFT_NOTES.md`·`SITE_PROFILE.md`의 "진행 상태" 절을 여기로 **이동**(둘 다 이 파일을 가리킴). `CLAUDE.md`는 "`HANDOFF_STATE.md`를 읽고 그 Phase의 pack을 읽어라"만 남긴다.
+2. **`HANDOFF_STATE.md`** (루트, ≤ 3KB) — *구현(2026-10-01)은 새 파일 대신 `DRAFT_NOTES.md` 자체를 ≤6KB 상태 파일로 축소하는 것으로 대체했다*: 모드, 완료 Phase, 다음 할 일 3개, 막힌 것, 마지막 테스트 결과 한 줄. `DRAFT_NOTES.md`·`SITE_PROFILE.md`의 "진행 상태" 절을 여기로 **이동**(둘 다 이 파일을 가리킴). `CLAUDE.md`는 "`HANDOFF_STATE.md`를 읽고 그 Phase의 pack을 읽어라"만 남긴다.
 3. **`docs/ARCHITECTURE.md`** (1페이지, ≤ 6KB): B.3 흐름표 + 계약 목록 + 디렉토리 → 어떤 agent든 레포 전체를 다시 분석하지 않게.
 4. **driver 출력 계약**: LLM이 읽는 파일은 `analysis.json`(≤ 4KB)·`report.md`·`summary.json`(확인 화면)뿐. `events.json`·`match.json`·`type.md`·fixture는 "읽지 않는 파일" 목록으로 SKILL.md에 명시(이미 부분적으로 있음).
 5. **캐시·재사용**: `<work_dir>/<KEY>/analysis.json`에 입력 해시(로그 파일 sha256, `parser-rules` 해시, 스냅샷 SHA)를 넣어 같은 입력이면 driver가 재계산을 건너뛴다(HANDOFF R14의 "분석 manifest"와 같은 것).
@@ -482,8 +482,8 @@ JiraWriter.post_comment  (guard 규칙 2는 Claude 세션 전용이므로, 자�
 |---|---|---|---|
 | **A 유지** | `plugin/**`, `docs/design/**`, `tests/**`(아래 제외), `tools/{import_draft,make_db_skeleton,offline_eval,list_site_todos}.py`, `SITE_PATHS`, `.gitattributes`, `.gitignore`, `GUIDE.md`, `AGENTS.md` | 핵심 | — |
 | **B 유지·정리** | `CLAUDE.md` (15KB → ≤4KB) | 매 세션 로드 | RF-1 |
-| B | `DRAFT_NOTES.md` | `D/15`·`CLAUDE.md`·`GUIDE.md`·HANDOFF가 참조 | 진행 상태 절 → `HANDOFF_STATE.md`, 나머지 → `docs/history/draft-notes-2026-09.md`. 참조 4곳 갱신 |
-| B | `CHANGES.md` (57KB, 문서 세트 1~11차 변경 이력) | `CLAUDE.md` 문서 지도, `D/14 §14.5` | `docs/history/`로. "기준 문서 세트 버전"만 `HANDOFF_STATE.md`에 |
+| B | `DRAFT_NOTES.md` — **완료(2026-10-01)**: 파일 이름은 유지하고 ≤6KB 상태 파일로 축소, 본문은 `docs/history/draft-notes-2026-09.md`. `HANDOFF_STATE.md`는 만들지 않았다(이름 유지가 설계 변경을 줄임) | `D/15`·`CLAUDE.md`·`GUIDE.md`·HANDOFF가 참조 | 진행 상태 절 → `HANDOFF_STATE.md`, 나머지 → `docs/history/draft-notes-2026-09.md`. 참조 4곳 갱신 |
+| B | `CHANGES.md` (57KB, 문서 세트 1~11차 변경 이력) — **`docs/history/`로 이동 완료(2026-10-01)** | `CLAUDE.md` 문서 지도, `D/14 §14.5` | `docs/history/`로. "기준 문서 세트 버전"만 `HANDOFF_STATE.md`에 |
 | B | `K/reference/db-authoring.md` (27KB) | `C/analyze.md`, `C/record.md`, SKILL Step 7 | op·drift·fixture·R1~R6·상태 표를 걷어내고 ≤ 10KB |
 | B | `C/sync-pr.md` ↔ `K/reference/sync-pr.md` | 둘 다 절차 전체 | reference를 단일 원본으로, 커맨드는 5줄 (HANDOFF R12) |
 | B | `plugin/.claude-plugin/plugin.json` description "(개발 중, 사외 초안)" | 배포 시 노출 | 사내 S-7에서 |

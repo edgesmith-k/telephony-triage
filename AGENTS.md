@@ -30,7 +30,7 @@ Name modules `tests/test_<component>.py` and functions `test_<behavior>`. Add be
 
 ## Commit & Pull Request Guidelines
 
-History uses descriptive, often Korean, phase-based subjects such as `Phase 12: ...`; follow that pattern for phase work. Keep commits scoped. PRs should explain behavior changes, reference relevant design sections or issues, and report validation results and skipped checks. Include fixture or generated-output diffs when relevant. Update `CHANGES.md` for substantive changes.
+History uses descriptive, often Korean, phase-based subjects such as `Phase 12: ...`; follow that pattern for phase work. Keep commits scoped. PRs should explain behavior changes, reference relevant design sections or issues, and report validation results and skipped checks. Include fixture or generated-output diffs when relevant. Update `docs/history/CHANGES.md` for substantive changes.
 
 ## Security & Configuration
 
