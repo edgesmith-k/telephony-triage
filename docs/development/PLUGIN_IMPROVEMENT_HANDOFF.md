@@ -17,7 +17,7 @@
 ### Source of truth / clone 시 주의
 
 - 리뷰의 요구사항 기준은 원본 `telephony-triage-docs-v11/telephony-triage-docs/`였다. **그 폴더와 ZIP은 `.gitignore` 대상이므로 clone에 없다.** 필수 인계 근거는 이 문서에 남겼다. 원본을 임의로 복원하거나 다운로드할 필요는 없다.
-- 유지보수할 canonical 문서는 `docs/design/`이며 공유 계약은 `docs/design/contracts.md`가 우선한다. 원본과 현재 설계의 차이를 새 결함으로 오인하지 않는다. 결정 이력은 `CHANGES.md`, `DRAFT_NOTES.md`, `REVIEW-10.md`, `REVIEW-11.md`에 있다.
+- 유지보수할 canonical 문서는 `docs/design/`이며 공유 계약은 `docs/design/contracts.md`가 우선한다. 원본과 현재 설계의 차이를 새 결함으로 오인하지 않는다. 결정 이력은 `CHANGES.md`, `DRAFT_NOTES.md`, `docs/history/REVIEW-10.md`, `docs/history/REVIEW-11.md`에 있다.
 - 현재 설계의 의도된 보완: Jira 추출용 `jira_fields.py`, 원인에 특정한 recovery 예시, 직접 편집 migration 안내, publish/pre-push 검사 강화. 원본과 달라졌다는 이유로 되돌리지 않는다.
 - `DRAFT_NOTES.md`는 기존 Phase 진행 상태, 이 문서는 개선 단계 상태를 관리한다. 사내 모드의 상태·값은 `SITE_PROFILE.md`와 `SITE_PATHS`를 따른다. `.local-draft`도 clone에 없으므로 새 PC에서는 `CLAUDE.md`의 모드 판별 절차를 따른다.
 - `tests/skill_evals/workspace/`는 비추적이다. 새 PC에서 기존 실행 산출물이 있다고 가정하지 않는다. 추적된 runner/fixture로 새 iteration을 만든다.
@@ -38,7 +38,7 @@
 
 | ID / 분류 | Problem / Cause | Impact | Target solution / 근거 위치 |
 |---|---|---|---|
-| R1 High, 구현·계약 보완 | `same_phone`가 각 signature 내부에만 적용되고 S와 C는 전체 이벤트에서 독립 선택된다. | SIM0 증상과 SIM1 원인이 높은 점수로 결합된다. | `S/match_signatures.py::match`(283/299), `S/common/signatures.py::Evaluator.evaluate`에 match 슬롯·구간 보존 및 분석 후보 결합 조건. 회귀 모드의 독립 C 평가는 유지. `D/04` §5.11, `REVIEW-11.md` U4, eval 44의 의도. |
+| R1 High, 구현·계약 보완 | `same_phone`가 각 signature 내부에만 적용되고 S와 C는 전체 이벤트에서 독립 선택된다. | SIM0 증상과 SIM1 원인이 높은 점수로 결합된다. | `S/match_signatures.py::match`(283/299), `S/common/signatures.py::Evaluator.evaluate`에 match 슬롯·구간 보존 및 분석 후보 결합 조건. 회귀 모드의 독립 C 평가는 유지. `D/04` §5.11, `docs/history/REVIEW-11.md` U4, eval 44의 의도. |
 | R2 High, 구현 결함 | `Lock.acquire`가 read→일반 write이며 원자적 상호 배제가 없다. JSON 읽기 실패도 부재로 취급한다. | 두 작업이 동시에 lock을 얻고 snapshot·cleanup·상태가 경쟁한다. | `S/db_pr.py::Lock`(100), `S/db_verify.py::_check_lock`: 짧은 OS lock 안에서 read/update/release, lease atomic write, owner 식별자. atomic replace만으로 acquire 경합은 해결되지 않음. `D/contracts` §3.2 lock. |
 | R3 High, 구현 결함 | 작업 키를 경로 부모 이름에서 얻고 work_dir 경계를 강제하지 않는다. Git worktree 삭제 실패 뒤에도 rmtree한다. | 잘못 준 경로에서 reset/clean/삭제로 사용자 데이터 손실 가능. | `S/db_pr.py::_job_of/_prepare_worktree/_remove_worktree/discard`(264/382/875), `S/db_verify.py::make_draft/remove_draft`: 정확한 작업 경로, symlink 경계, 소속 repo·도구 worktree 검증. `D/contracts` stage/discard, `D/07` Step 8. |
 | R4 High, 구현 결함 | RIL pairing은 파일별인데 무응답 deadline에는 전체 입력 last_ts를 쓴다. | 회전 파일의 정상 응답을 놓치거나 다른 버퍼의 긴 coverage로 무응답을 생성한다. | `S/parser_backends/reference/__init__.py::parse`, `ril.py::pair`, `S/parse_logcat.py::_ril_events/run_parse`: 같은 capture의 회전 파일 연결, 스트림별 coverage, 부팅/장치 경계. `D/07` Step 3, `D/16` §16.3. |
@@ -137,7 +137,7 @@ Completed: 분석과 인계 문서만 완료. **어떤 R 항목도 수정 완료
 
 | Path | Reason | Confidence | Delete-after condition |
 |---|---|---|---|
-| `REVIEW-10.md`, `REVIEW-11.md` | 과거 설계 변경안; 활성 지침과 혼동 방지 위해 역사 자료 위치 검토 | Medium | 결정이 canonical/CHANGES와 연결됨을 확인 후 archive 우선. 일괄 삭제 금지 |
+| `docs/history/REVIEW-10.md`, `docs/history/REVIEW-11.md` (2026-10-01 이동 완료) | 과거 설계 변경안; 활성 지침과 혼동 방지 위해 역사 자료 위치 검토 | Medium | 결정이 canonical/CHANGES와 연결됨을 확인 후 archive 우선. 일괄 삭제 금지 |
 | `telephony-triage-docs-v11/`, `telephony-triage-docs-v11.zip` (비추적) | 비교에 사용한 원본 사본·압축본 | Low | 원본 보존 위치와 비교 근거 확보, 개선 완료 후 로컬 보관 검토. 리뷰 중 source of truth를 제거하지 않음 |
 
 ### Delete Candidates

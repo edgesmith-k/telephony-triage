@@ -211,5 +211,5 @@ Phase 1~13 모의 환경으로 전부 구현           S-2  사내 Claude Code �
 | 공통 규칙 원본 | `docs/design/contracts.md` |
 | 사내 정보가 있어야 판단할 남은 항목 | `REVIEW-OPEN.md` |
 | v1에서 뺀 설계(3-way replay 등) | `docs/design/99-deferred.md` |
-| 11차 변경안(동작 검토 U1~U17) | `REVIEW-11.md` |
+| 11차 변경안(동작 검토 U1~U17, 이력) | `docs/history/REVIEW-11.md` |
 | 변경 이력 | `CHANGES.md` |

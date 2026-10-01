@@ -340,7 +340,7 @@
 
 # 11차 변경 — 10차 문서 세트 동작 검토(U1~U17) 반영
 
-기준: 10차 문서 세트 동작 검토 U1~U17(🔴5, 🟡12). 관점: 분석 정확도(텔레포니 특성), 운영 부담, 보안(저장되는 정보와 실행 경로). 사내 정보가 필요한 항목 없음(`REVIEW-OPEN.md` 0건 유지). 상세는 `REVIEW-11.md`.
+기준: 10차 문서 세트 동작 검토 U1~U17(🔴5, 🟡12). 관점: 분석 정확도(텔레포니 특성), 운영 부담, 보안(저장되는 정보와 실행 경로). 사내 정보가 필요한 항목 없음(`REVIEW-OPEN.md` 0건 유지). 상세는 `docs/history/REVIEW-11.md`.
 개수: hook 7 → **8**(Write/Edit 차단), eval 42 → **45**, placeholder 레지스트리 S19 → **S21**(S20 슬롯 표기, S21 bugreport 구조), git hook 1 → **2**(`pre-push`). 커맨드 12, 검증 단계 6, 계획 `source` 9는 그대로.
 
 ## 🔴
@@ -365,7 +365,7 @@
 - **U17** 개수·트리 정합: hook 8종, eval 45, S21, `tools/offline_eval.py`, `.githooks/pre-push`, `tests/site/offline-eval.yaml` → `01 §3`, `03 §5.2`, `15 §15.4`, `CLAUDE.md` 문서 지도, `GUIDE.md`.
 
 ## 🟢
-- `GUIDE.md §6` 시나리오 1에 마스킹·시각 후보·범위 밖·bugreport·슬롯·후보 없음 한 줄씩, `§7`에 Write/Edit 차단·pre-push·서버 강제 전제, `§8`에 `REVIEW-11.md`.
+- `GUIDE.md §6` 시나리오 1에 마스킹·시각 후보·범위 밖·bugreport·슬롯·후보 없음 한 줄씩, `§7`에 Write/Edit 차단·pre-push·서버 강제 전제, `§8`에 `docs/history/REVIEW-11.md`.
 
 ## 사외 초안 중 계약 보완 (Phase 7 대조, 2026-09-29)
 
@@ -429,3 +429,4 @@
 
 - `15-local-draft.md §15.5` S-1 "읽을 것": `DRAFT_NOTES.md`는 "진행 상태" 절만, TODO(SITE) 목록은 `tools/list_site_todos.py` 출력으로 대체. 사내 첫 세션의 고정 읽기를 약 4만 토큰 줄인다(`docs/development/ARCHITECTURE_REVIEW_2026-10.md` P2의 즉시 적용분).
 - `15-local-draft.md §15.5` S-0: 체크리스트(`docs/development/S0_PROBE_CHECKLIST.md`)와 지표 도구(`tools/s0_stats.py`, 테스트 3개) 연결. S-0가 S-3보다 앞이라 `site-defaults.yaml`이 없어 파서가 멈추는 점을 임시 플러그인 루트로 우회하는 절차를 명시.
+- 문서 정리(2026-10-01): `docs/history/REVIEW-10.md`·`docs/history/REVIEW-11.md` → `docs/history/`(참조 갱신). `EXTENSION_IDEAS.md`는 `ARCHITECTURE_REVIEW_2026-10.md` §X 부록으로 합치고 삭제. `CHANGES.md`·`DRAFT_NOTES.md` 이동은 RF-1에서.
