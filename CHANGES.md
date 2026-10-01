@@ -424,3 +424,7 @@
 - 스킬 eval 45개 입력 정의를 완성했다. `run.py`로 새 격리 환경을 준비·실행하며, 채점기는 실행 기록 없음과 API 중단을 통과로 세지 않는다. 대화 판단은 수동 채점으로 남긴다.
 - 트리거 입력 2개에 Telephony 이슈 DB 맥락을 명시했다. 독립 정적 리뷰와 실제 Claude 자동 선택 검증을 구분한다. 실제 행동 평가·런타임 시험은 Claude Code 주간 한도(429)로 미완료다.
 - 스킬 description의 분류 구분 기호를 바꿔 skill-creator frontmatter 검증을 통과하도록 했다. 흐름과 분류 의미는 같다.
+
+## 사내 토큰 절약 (2026-10-01)
+
+- `15-local-draft.md §15.5` S-1 "읽을 것": `DRAFT_NOTES.md`는 "진행 상태" 절만, TODO(SITE) 목록은 `tools/list_site_todos.py` 출력으로 대체. 사내 첫 세션의 고정 읽기를 약 4만 토큰 줄인다(`docs/development/ARCHITECTURE_REVIEW_2026-10.md` P2의 즉시 적용분).
