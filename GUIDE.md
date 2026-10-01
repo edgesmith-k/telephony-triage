@@ -55,7 +55,19 @@ Phase 1~13 모의 환경으로 전부 구현           S-2  사내 Claude Code �
 반입 체크리스트(15-local-draft.md §15.4) 확인하고 DRAFT_NOTES.md(상태 파일) 갱신해줘
 ```
 - 테스트 전부 통과, `site-defaults.yaml` 없음, `.local-draft`·`.mcp.json`이 반입 묶음에 없음, 이슈 DB 뼈대 생성, `TODO(SITE:...)` 목록 정리를 확인한다.
+- 사내 문자열 검색: 실제 회사명·서버명·팀명이 없는지 (`grep -rniE '<회사명>|<사내 도메인>' .`).
 - 사내 **외부 작성 코드 반입 규정**(오픈소스 의존성 승인 포함)을 확인한 뒤 플러그인 레포 + 이슈 DB 뼈대를 반입한다.
+
+**반입 묶음 만들기** (사외 PC, 체크리스트 통과 뒤)
+```
+git tag import-v1 && git push origin import-v1          # 이 이름이 사내 .draft-manifest.json의 label
+git archive --format=zip -o telephony-triage-import-v1.zip import-v1
+python3 tools/make_db_skeleton.py /tmp/issue-db-skeleton  # 유형·Jira·fixture 없는 빈 이슈 DB
+(cd /tmp/issue-db-skeleton && zip -r ../issue-db-skeleton-v1.zip .)
+sha256sum telephony-triage-import-v1.zip /tmp/issue-db-skeleton-v1.zip   # 사내에서 대조용으로 적어 둔다
+```
+- `git archive`는 커밋된 파일만 담으므로 `.local-draft`, `tests/skill_evals/workspace/`, `__pycache__` 같은 비추적·무시 파일이 자동으로 빠진다.
+- 전송 수단·승인은 회사 반입 절차를 따른다.
 
 ---
 
@@ -63,11 +75,61 @@ Phase 1~13 모의 환경으로 전부 구현           S-2  사내 Claude Code �
 
 ### 미리 준비할 것
 - Ubuntu PC (다른 OS는 지원하지 않음), Python 3.10+, git, `gh`
-- 샘플 Jira 키 2~3개(카테고리가 다른 것), 카테고리별 실제 logcat 1개씩 + 정상 로그 1~2개(16/17)
-- Android 16/17 소스 경로, 빌드명 예시 3~5개, GHE 주소·조직·팀 이름
+- 샘플 Jira 키 2~3개(카테고리가 다른 것), 각 Jira의 발생 시각 필드 이름·형식·타임존
+- 카테고리별 실제 logcat 1개씩 + 정상 로그 1~2개(16/17), 듀얼 SIM 로그 1개 이상
+- Android 16/17 소스 경로, 빌드명 예시 3~5개, GHE 주소·조직·카테고리별 팀 이름, Gerrit CL 링크 예시, Jira URL 예시
 - 샌드박스 이슈 DB 레포(빈 레포)
 - **기존 자산**: 검증된 로그 파서 코드 경로, 파서가 판별하는 경우별 실제 로그, data 이슈 분류 자료, data 분석 스킬 이름
+- 과거 해결 Jira 20~30건 목록(카테고리별 3건 이상, S-5 재현 평가용)
 - Jira MCP가 **사용자 범위(user scope)** 로 등록돼 있는지
+
+### 반입 전에 사내 PC에서 할 것
+
+사내 레포에 커밋하기 **전에** 묶음을 임시 폴더에 풀어서 확인한다. 막히는 것을 S 단계 전에 찾기 위해서다.
+
+**1) 환경 점검** (30분)
+
+| 항목 | 확인 | 필요 조건 / 이유 |
+|---|---|---|
+| OS | `lsb_release -a` | **Ubuntu** |
+| Python | `python3 --version` | **3.10+** |
+| 패키지 | `pip install pyyaml jsonschema pytest` (사내 미러) | 의존성은 이 셋뿐 |
+| git | `git --version` | **2.31+** (guard의 `rev-parse --path-format`, worktree `--no-track`, `push --force-with-lease=<ref>:<sha>`) |
+| gh | `gh auth status --hostname <GHE 호스트>` | 실패하면 쓰기 작업 전부 불가(읽기 분석은 가능) |
+| Claude Code | `claude --version`, `claude mcp list` | 플러그인·hooks 지원 버전, Jira MCP 서버 이름과 사용자 범위 등록 (정밀 확인은 S-2) |
+| GHE 권한 | 웹 | 레포 3개(플러그인, 샌드박스 이슈 DB, 운영 이슈 DB) 생성, **브랜치 보호·CODEOWNERS 필수 리뷰 설정 권한**(없으면 로컬 hook이 유일한 방어선, S5) |
+
+**2) 묶음 확인과 테스트 재현** (15분)
+```
+mkdir -p ~/tt-draft && cd ~/tt-draft && unzip ~/telephony-triage-import-v1.zip
+sha256sum ~/telephony-triage-import-v1.zip   # 사외에서 적은 값과 같은지
+python3 -m pytest -q tests                    # 사외와 같은 결과여야 한다 (10~15분)
+```
+사외에서 통과한 테스트가 실패하면 환경 차이(파이썬·git 버전, 로케일, 경로)다. 반입 전에 원인을 잡는다.
+
+**3) S-0 선행 확인** (권장, Claude 없이 30분) — 사내 로그 형식이 사외 파서 가정과 얼마나 다른지
+```
+ROOT=$(python3 tests/helpers/make_plugin_root.py | tail -1)   # site-defaults.yaml 없이 돌리는 임시 루트
+unzip ~/issue-db-skeleton-v1.zip -d ~/tt-skel
+python3 tools/s0_stats.py <logcat1> <logcat2> <logcat3> \
+    --rules ~/tt-skel/parser-rules --tz Asia/Seoul --year 2026 --plugin-root $ROOT
+```
+- 로그 3~5개(카테고리 섞어서, 듀얼 SIM 1개 이상). 숫자는 `SITE_PROFILE.md`에만(아직 없으면 메모 후 S-1에서 옮김).
+- 읽는 법·판정은 `docs/development/S0_PROBE_CHECKLIST.md`. 시각 파싱 90% 미만·RIL 요청 0건·phone_id 0%처럼 많이 다르면, **반입 전에** 정성 결론("슬롯 표기가 `[SUB<n>]`")을 사외로 가져가 고치고 묶음을 다시 만드는 게 싸다.
+
+### 첫 반입
+```
+git clone <사내 GHE>/<org>/telephony-triage-plugin.git && cd telephony-triage-plugin   # 사내에 만든 빈 레포
+git switch -c draft-import/<날짜>
+python3 ~/tt-draft/tools/import_draft.py ~/tt-draft --dest . --label import-v1 --dry-run
+python3 ~/tt-draft/tools/import_draft.py ~/tt-draft --dest . --label import-v1   # 첫 반입: 전체 복사 + .draft-manifest.json 생성
+python3 -m pytest -q tests
+git add -A && git commit -m "사외 초안 반입: import-v1"     # .draft-manifest.json 포함 → PR → main 머지
+```
+- `.local-draft`는 원본에 있어도 가져오지 않는다.
+- 이슈 DB: **샌드박스**는 뼈대를 그대로 push(S-5 시험용). **운영**은 S-4에서 실제 태그·문구·시드 유형을 넣은 뒤 S-7 전에 만든다(placeholder를 운영에 올리지 않는다).
+- GHE 서버에서 **브랜치 보호**(main 직접 push 금지, CODEOWNERS 필수 리뷰)를 켠다.
+- Claude Code를 플러그인 레포 루트에서 열고 아래 "첫 사내 세션에 붙여 넣을 컨텍스트"로 S-1을 시작한다.
 
 ### 세션별 입력 (플러그인 레포 루트에서 Claude Code 열기)
 
@@ -132,9 +194,16 @@ GHE <호스트/org/팀>, 샌드박스 이슈 DB <주소>, 기존 파서 코드 �
 - 단계가 끝나면 세션을 닫고 새로 엽니다.
 
 ### 사외 코드를 다시 반입할 때
-1. 사내 레포에서 `git switch -c draft-import/<날짜>`
-2. `tools/import_draft.py <새 사외 초안 경로>` (사내 전용 경로는 보존. 반입 기준선 `.draft-manifest.json`과 비교해서, 사내에서 고친 사외 파일이 있으면 멈추고, 사내에서 새로 만든 파일은 지우지 않고 알려줌)
-3. 테스트(골든 포함)와 `db_regress --all` 통과 후 병합
+```
+git switch -c draft-import/<날짜>
+python3 <새 초안>/tools/import_draft.py <새 초안> --dest . --label import-v2 --dry-run
+python3 <새 초안>/tools/import_draft.py <새 초안> --dest . --label import-v2
+python3 -m pytest -q tests        # 골든 포함, 그 뒤 운영 이슈 DB에 db_regress --all → 병합
+```
+- `SITE_PATHS` 경로(사내 코드·값)는 건드리지 않는다.
+- 사내에서 사외 파일을 고친 게 있으면 목록을 보여주고 **멈춘다(종료 코드 1)**. 그 변경을 사내 정보 없이 요약해 사외에 반영하거나, 되돌린 뒤 다시 실행한다.
+- 사외에서 지운 파일은 지우고, 사내에서 새로 만든 비-`SITE_PATHS` 파일은 지우지 않고 알려준다(사내 전용이면 `SITE_PATHS`로).
+- 설계 문서가 바뀌었으면 `14-site.md §14.5`대로 `SITE_PROFILE.md`와 비교해 영향을 본다.
 
 ### 막혔을 때
 - 사내 환경 문제 → 사내에서 수정.
