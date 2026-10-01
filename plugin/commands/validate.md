@@ -4,8 +4,7 @@ argument-hint: "[--cause <원인 ID> <적용 후 logcat...>] [--extra <logcat...
 ---
 
 `$ARGUMENTS`로 두 가지 형태를 구분한다 (`07-workflow.md §validate`, `09-commands.md` validate).
-스크립트는 `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/<이름>.py"`로 부른다. 결과는 JSON이다.
-어떤 스크립트든 종료 코드 2와 "사내 기본값 없음(S-3 미완료)"을 내면 거기서 멈추고 메시지를 그대로 보여준다.
+스크립트: `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/<이름>.py"`(결과 JSON). 종료 코드 2면 메시지를 그대로 보이고 멈춘다(예: 사내 기본값 없음 S-3).
 
 ## `--cause`가 있으면: 해결책 검증
 

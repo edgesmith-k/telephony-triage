@@ -40,6 +40,7 @@
 마스킹 표는 logcat 형식 기준이지만, Jira에서 읽은 텍스트도 리포트·계획·PR 본문에 들어가므로 같은 규칙을 적용한다. Jira 설명에는 테스터 이름, 고객 전화번호, IMEI가 자유 텍스트로 자주 적히고 **사람 이름은 위 표로 잡히지 않는다.** 그래서 마스킹에만 기대지 않고 **저장하는 정보 자체를 줄인다.**
 
 - 이슈 DB(`jira/<KEY>.yaml`, 원인 본문, 피드백)와 PR 본문에는 Jira의 **구조화 필드**(`model`, `sw`, `android_version`, `carrier`, `occurred_on`)와 **사용자가 확인한 한 줄 요약**(`note`)만 넣는다. Jira 요약·설명·코멘트 **원문은 저장하지 않는다** (`03-issue-db.md §5.4 (2)`).
+- **MCP 응답 원문은 모델 컨텍스트에 넣지 않는다.** Jira `get_issue`·`get_comments` 결과는 PostToolUse hook(`jira_bridge.py`, §9 9번)이 `<work_dir>/<KEY>/jira_raw.json`에 쓰고, 모델에는 마스킹된 요약만 보인다. `triage.py run`이 그 파일을 `jira_fields.py extract --consume`으로 읽고 지운다. 후처리 마스킹은 이미 컨텍스트에 들어간 원문을 되돌릴 수 없기 때문이다. hook 출력 대체가 안 되는 Claude Code 버전이면(S1에서 확인) 스킬이 응답을 그 파일에 저장하는 예전 경로로 돌아간다.
 - `field_map`으로 뽑은 텍스트 필드(요약, 설명, 재현 절차, 코멘트)는 Step 2에서 읽은 직후 `mask_pii`를 거치고, 이후 단계(리포트, 키워드 보너스, `note` 초안)는 마스킹된 텍스트만 쓴다. 계획 `jira`에는 원문 필드를 두지 않는다 (`contracts.md §작업 계획`).
 - `note` 초안은 스킬이 마스킹된 요약에서 한 문장으로 만들고 사용자가 확인한다. 사람 이름·고객명은 초안에 넣지 않는다.
 - `db_lint`는 `jira/*.yaml`의 `note`, 원인 본문, `cp_evidence`에 대해서도 원본 식별자 패턴(표의 항목)을 검사한다.
@@ -67,8 +68,9 @@
 | 6 | main 직접 push 차단 | PreToolUse, Bash (`git push`, 이슈 DB 레포) | 대상이 base_branch면 차단. 명령의 refspec(`HEAD:refs/heads/<br>`, `<src>:<dst>`)에서 대상 ref를 읽어 판정한다 |
 | 7 | push 확인 강제 | PreToolUse, Bash (`git push`, 이슈 DB 레포) | 권한 결정을 `ask`로 반환해서 승인 프롬프트가 반드시 뜨게 한다 |
 | 8 | 사용자 clone 직접 편집 차단 | PreToolUse, `Write\|Edit\|MultiEdit\|NotebookEdit` | 대상 파일 경로가 config의 `issue_db.path`(사용자 clone) 안이면 **거부**. `<work_dir>` 아래(작업 worktree `wt/`·`draft/`, `_snapshot`)는 대상이 아니다. 메시지: "이슈 DB clone은 도구가 직접 고치지 않는다. 직접 편집은 사용자가 한다". Bash 규칙만으로는 Write/Edit 도구의 파일 쓰기를 볼 수 없기 때문에 둔다 (`07-workflow.md` 워킹 트리 불변 원칙) |
+| 9 | Jira 응답 원문 격리 | PostToolUse, `mcp__.*` (`jira_bridge.py`가 `jira.tools.get_issue`·`get_comments`만 판정) | 원문을 `<work_dir>/<KEY>/jira_raw.json`(권한 700 디렉토리)에 쓰고, 모델에 보이는 결과를 `updatedToolOutput`으로 마스킹 요약으로 바꾼다. 키가 `jira_key_regex`에 맞지 않거나 처리에 실패하면 저장하지 않고 원문 대신 오류 문구를 준다(fail closed). 다른 도구는 그대로 통과 (§8.1) |
 
-- Hook은 **8종**이다 (SessionStart 1 + Jira 1 + Bash 5 + 파일 도구 1).
+- Hook은 **9종**이다 (SessionStart 1 + Jira 1 + Bash 5 + 파일 도구 1 + Jira 응답 격리 1). 판정은 1~8번 `guard.py`, 9번 `jira_bridge.py`.
 - **로컬 장치는 모두 우회 가능하다.** Claude hook은 최선 노력 파싱이고, git hook은 `core.hooksPath`를 바꾸면 꺼진다. main 직접 push 금지와 CODEOWNERS 필수 리뷰는 **GHE 브랜치 보호로 서버에서 강제**되어야 한다 (`06-collaboration.md §6.1`). 이 전제가 없으면 `.githooks/`(main에 커밋된 스크립트가 모든 기여자 PC에서 실행됨)가 코드 실행 경로가 된다.
 - git hook은 두 개다: `pre-commit`(`db_precommit.py`)과 **`pre-push`**. `pre-push`는 (a) 대상 ref가 `refs/heads/<base_branch>`면 거부하고, (b) 환경변수 `TT_PUBLISH_TOKEN`이 없거나 `<work_dir>/<작업 키>/state.json`의 `approved_hash`와 다르면 거부한다. pre-push는 작업 키를 모르므로 `<work_dir>/*/state.json`에서 `approved_hash`가 토큰과 같은 것을 찾는다. 토큰이 `manual`이 아니면 추가로 (c) push하는 커밋의 트리가 토큰과 같고, (d) 대상 브랜치가 그 `state.json`의 `branch`이며, (e) 원격 ref 삭제가 아니어야 한다(모두 `db_pr publish`가 이미 지키는 조건이라 정상 흐름은 거부되지 않는다). `base_branch`·`work_dir`는 사용자 config에서 읽고, 없으면 `main`·`<home>/work`로 본다. pre-push는 플러그인 스크립트에 기대지 않는 이슈 DB 안의 자기완결 스크립트다(`plugin.scripts_path`가 무효해도 동작). 토큰은 `db_pr publish`가 자기 `git push` 호출에만 넣는다 (`contracts.md §3.2`). 직접 편집 기여자는 `validate` 통과 후 `TT_PUBLISH_TOKEN=manual`로 push한다(`CONTRIBUTING.md`). 목적은 도구 경로 밖의 실수 방지이지 권한 통제가 아니다.
 - 3·4번은 git pre-commit hook(`db_precommit.py`)과 검사 내용이 겹친다. Claude 세션 안에서 더 빨리, 명확한 메시지로 막기 위한 이중 장치다.

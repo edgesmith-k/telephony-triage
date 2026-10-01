@@ -18,6 +18,14 @@
 
 ## analyze
 
+> **드라이버 (RF-1)**: Step 0~4와 Step 5의 `code_refs` resolve는 `triage.py run`이 아래 순서대로 기존 스크립트를 같은 프로세스에서 불러
+> 수행하고 `JOB/analysis.json`(≤4KB)·`JOB/report.md` 초안·`JOB/trace.jsonl`을 낸다 (`contracts.md §3.2` `triage.py`). 사용자 결정 지점
+> (lock 보유자, 잔여 정리, 기존 계획, Jira 읽기, 연도, 재분석, 열린 PR, 로그 경로, 코드 경로·버전 불일치, 발생 시각 후보, 로그 범위 밖)에서는
+> `needs_input`으로 멈추고, 스킬이 사용자에게 물어 `--answer`로 다시 실행한다. Jira MCP 호출만 스킬이 하며, 응답 원문은 PostToolUse
+> hook(`jira_bridge.py`)이 `JOB/jira_raw.json`에 두고 모델에는 마스킹 요약만 보인다 (`08-safety.md §8.1`). 아래 Step 0~5는 그 순서의
+> 원본이고, 스킬(LLM)이 직접 하는 것은 Step 5의 코드 읽기, Step 5-1, Step 6 문단, Step 7~8이다. Step 1의 사후 lint는 `snapshot`이 이미
+> 하므로 따로 부르지 않는다.
+
 ### Step 0. 사전 점검
 - config를 로드한다. 없으면 setup으로 유도한다.
 - **Jira 키를 먼저 검사한다**: `jira_key_regex`(`02-config.md §5.3`, 스냅샷이 아직 없으면 사용자 clone의 `issue-db.config.yaml`)에 맞지 않으면 다시 묻는다. 키를 작업 키·경로·브랜치로 쓰기 전에 한다 (`contracts.md §3.2` 작업 키 검증).

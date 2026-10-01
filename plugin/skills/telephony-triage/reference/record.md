@@ -15,7 +15,7 @@ SKILL.md의 "실행 규칙"(스크립트 호출, `--db` 명시, 종료 코드, �
 ## 1. 사전 점검
 
 - `config.py show`(없으면 setup 안내) → `jira_fields.py check-key <KEY>`(맞지 않으면 다시 묻는다) →
-  `db_pr lock acquire <KEY> --command record`(다른 작업 lock·10분 내 같은 Jira lock 처리는 SKILL.md Step 0과 같다) →
+  `db_pr lock acquire <KEY> --command record`(다른 작업 lock은 보유자를 보여주고 "끝났다"는 답에만 `lock release <그 키> --force`, 같은 Jira lock이 10분 안에 갱신됐으면 확인 후 `--take-over`) →
   `db_pr cleanup --dry-run`.
 - `WD/<KEY>/plan.json`이 있으면: `source: record`면 이어서/새로 시작을 묻고, 다른 `source`면 "새로 시작(덮어씀)"만.
 - `db_pr snapshot --job <KEY>` → `config.py check --db SNAP`(`--dry-run`이면 `--for dry-run`). **쓰기 불가면 사유를 보여주고
@@ -24,7 +24,7 @@ SKILL.md의 "실행 규칙"(스크립트 호출, `--db` 명시, 종료 코드, �
 
 ## 2. Jira 메타데이터
 
-SKILL.md Step 2와 같이 `jira_fields.py extract`로 읽는다(MCP는 `jira.tools.get_issue`만, 매핑이 없으면 추측하지 말고 setup 안내).
+MCP `jira.tools.get_issue`(매핑이 없으면 추측하지 말고 setup 안내)를 부르면 hook이 원문을 `WD/<KEY>/jira_raw.json`에 두고 마스킹 요약만 보여준다(결과에 `saved_to`가 없으면 응답을 그 경로에 저장). `jira_fields.py extract WD/<KEY>/jira_raw.json --origin mcp --db SNAP --consume --comments last:3`(파일이면 `<yaml> --origin file`)로 읽는다.
 `jira` 블록(model, sw, android_version, carrier, occurred_on)을 채우고, `missing`은 사용자에게 묻는다. `date`는 오늘.
 `note`는 마스킹된 요약으로 한 줄 초안을 만들어 확인받는다(사람 이름·전화번호·IMEI 금지).
 

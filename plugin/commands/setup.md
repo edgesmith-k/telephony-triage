@@ -3,11 +3,8 @@ description: telephony-triage 사용자 설정 — config 생성, Jira MCP 도�
 ---
 
 telephony-triage를 이 사용자 환경에 맞게 설정한다 (`02-config.md §4` setup 1~10).
-스크립트는 모두 `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/<이름>.py"`로 부른다. 결과는 JSON이다.
+스크립트: `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/<이름>.py"`(결과 JSON). 종료 코드 2면 메시지를 그대로 보이고 멈춘다(예: 사내 기본값 없음 S-3).
 각 단계의 결과를 짧게 보여주고, **사용자 확인이 필요한 곳에서는 반드시 묻는다.**
-
-어떤 스크립트든 종료 코드 2와 "사내 기본값 없음(S-3 미완료)"을 내면 **거기서 멈추고** 그 메시지를
-그대로 보여준다(플러그인에 `site-defaults.yaml`이 없다. example 파일로 대신하지 않는다).
 
 1. **config 만들기** — `config.py show`로 기존 config를 확인한다.
    - 없으면 아래 항목을 사용자에게 하나씩 묻는다(괄호 안 기본값은 `show`의 `effective`에 있다):

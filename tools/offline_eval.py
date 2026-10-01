@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """오프라인 재현 평가 (11-phases.md Phase 12, 15-local-draft.md §15.5 S-5).
 
-라벨셋의 항목마다 `analyze --dry-run`과 같은 경로(파서 → 매처)를 스크립트로만 돌려
-1위 정확도, 상위 3 포함률, 오탐률을 표로 낸다. 스킬(LLM)은 부르지 않는다.
+라벨셋의 항목마다 analyze와 같은 드라이버(`plugin/scripts/triage.py run --offline-db`: 파서 → 매처)를
+스크립트로만 돌려 1위 정확도, 상위 3 포함률, 오탐률을 표로 낸다. 스킬(LLM)은 부르지 않는다.
 
 라벨셋 형식 (경로는 라벨셋 파일 위치 기준 상대 경로):
 
@@ -89,34 +89,33 @@ def load_labelset(path: Path) -> dict:
 
 
 def evaluate_item(root: Path, db: Path, base: Path, doc: dict, item: dict, work: Path) -> dict:
+    """analyze와 같은 드라이버(`triage.py run --offline-db`)로 파서 → 매처를 돌린다."""
     key = str(item["key"])
     logs = [str((base / p).resolve()) for p in item["logs"]]
-    parse_args = ["parse", *logs, "--around", str(item["occurred_at"]),
-                  "--rules", str(db / "parser-rules"), "--mask"]
-    minutes = item.get("minutes", doc.get("minutes"))
-    if minutes:
-        parse_args += ["--minutes", str(minutes)]
-    if doc.get("tz"):
-        parse_args += ["--tz", str(doc["tz"])]
-    if doc.get("year"):
-        parse_args += ["--year", str(doc["year"])]
-    result = {"key": key, "expect": str(item["expect"]), "top": None, "top3": [], "error": None}
-    proc = _script(root, "parse_logcat.py", parse_args)
-    if proc.returncode != 0:
-        result["error"] = f"파서 종료 {proc.returncode}: {proc.stderr.strip()[:200]}"
-        return result
-    events = work / f"{key}.events.json"
-    events.write_text(proc.stdout, encoding="utf-8")
+    job = work / f"{len(list(work.iterdir())):03d}-{key}"
+    job.mkdir(parents=True)
     meta = {"key": key, "occurred_at": str(item["occurred_at"]), "sw": item.get("sw", ""),
             "summary": item.get("summary", ""), "description": item.get("description", "")}
-    meta_path = work / f"{key}.jira.json"
+    meta_path = job / "jira_input.json"
     meta_path.write_text(json.dumps(meta, ensure_ascii=False), encoding="utf-8")
-    proc = _script(root, "match_signatures.py", ["--db", str(db), "--events", str(events),
-                                                 "--jira-meta", str(meta_path), "--top", "3"])
+    args = ["run", key, "--offline-db", str(db), "--out", str(job), "--logs", *logs, "--jira-meta", str(meta_path)]
+    minutes = item.get("minutes", doc.get("minutes"))
+    if minutes:
+        args += ["--minutes", str(minutes)]
+    if doc.get("tz"):
+        args += ["--tz", str(doc["tz"])]
+    if doc.get("year"):
+        args += ["--year", str(doc["year"])]
+    result = {"key": key, "expect": str(item["expect"]), "top": None, "top3": [], "error": None}
+    proc = _script(root, "triage.py", args)
     if proc.returncode != 0:
-        result["error"] = f"매처 종료 {proc.returncode}: {proc.stderr.strip()[:200]}"
+        result["error"] = f"triage 종료 {proc.returncode}: {proc.stderr.strip()[:200]}"
         return result
-    candidates = json.loads(proc.stdout).get("candidates") or []
+    analysis = json.loads(proc.stdout)
+    if analysis.get("status") != "ok":
+        result["error"] = f"triage {analysis.get('status')}: {(analysis.get('needs_input') or {}).get('kind')}"
+        return result
+    candidates = analysis.get("candidates") or []
     result["top3"] = [c["cause"] for c in candidates[:3]]
     result["top"] = result["top3"][0] if result["top3"] else None
     return result

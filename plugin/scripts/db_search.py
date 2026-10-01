@@ -17,7 +17,8 @@
   어디서 옮겨왔는지 보인다.
 
 출력(JSON): `{query, kind: type-id|cause-id|jira|keyword, results[], links[], git_history}`.
-`results[]` 항목은 `kind: type|cause|jira`와 유형·원인·해결책·수정 상태·Jira 요약이다.
+`results[]` 항목은 `kind: type|cause|jira`와 유형·원인·해결책·수정 상태·Jira 요약이다. 원인 항목에는
+`code_refs[{ref, symbol, android_versions}]`(Step 5 resolve 입력)가 붙는다. 스킬·드라이버는 `--limit 3`으로 부른다.
 `links[]`는 `{from, to, via: merged-into|renumbered, commit?, date?}`. 결과가 없어도 종료 코드 0이다.
 """
 
@@ -37,6 +38,7 @@ from common.exitcodes import OK, USAGE  # noqa: E402
 from common.fixtures import CAUSE_ID_RE, TYPE_ID_RE  # noqa: E402
 
 JIRA_SHOWN = 5
+CODE_REF_FIELDS = ("ref", "symbol", "android_versions")   # Step 5 resolve에 필요한 것만 (contracts.md §3.2)
 
 
 class UsageError(Exception):
@@ -109,6 +111,8 @@ class Searcher:
             "fix": {"status": fix.get("status"), "ref": fix.get("ref"), "fixed_in": fix.get("fixed_in") or []},
             "related": [str(r) for r in cause.raw.get("related") or []],
             "secondary_categories": list(itype.raw.get("secondary_categories") or []),
+            "code_refs": [{k: ref.get(k) for k in CODE_REF_FIELDS if ref.get(k) not in (None, "", [])}
+                          for ref in cause.raw.get("code_refs") or [] if isinstance(ref, dict)],
             "jira": [str(r.get("key")) for r in records[:JIRA_SHOWN]],
             "jira_count": len(records),
             "path": (itype.path / "type.md").relative_to(self.db.root).as_posix(),

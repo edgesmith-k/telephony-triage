@@ -4,8 +4,7 @@ argument-hint: "[category]"
 ---
 
 카테고리 오너의 월간 리뷰 리포트를 만든다 (`06-collaboration.md §6.6`, `09-commands.md` review).
-스크립트는 `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/<이름>.py"`로 부른다.
-어떤 스크립트든 종료 코드 2와 "사내 기본값 없음(S-3 미완료)"을 내면 거기서 멈추고 메시지를 그대로 보여준다.
+스크립트: `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/<이름>.py"`(결과 JSON). 종료 코드 2면 메시지를 그대로 보이고 멈춘다(예: 사내 기본값 없음 S-3).
 
 이 커맨드는 **읽기 전용**이다. 세션 lock을 잡지 않고, 읽기 스냅샷을 옮기지 않으며, 이슈 DB를 바꾸거나 push하지 않는다.
 

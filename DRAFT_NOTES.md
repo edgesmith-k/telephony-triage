@@ -10,7 +10,7 @@
 - 완료 Phase: **D0, 1~12** (2026-09-28~29, Phase 7부터 Phase마다 사용자 확인). 상세: 이력 파일의 "Phase N" 절
 - 진행 중 Phase: **13** (SKILL.md·reference·eval 45개). 정의·환경 준비 완료, **행동 평가 미실행**
 - 기준 문서 세트: `telephony-triage-docs-v11` (변경 이력 `docs/history/CHANGES.md`)
-- 마지막 전체 테스트: `pytest tests` 통과 (2026-10-01, 이 컨테이너 Ubuntu 기준 226개·779s — `ARCHITECTURE_REVIEW` B.3)
+- 마지막 전체 테스트: `pytest tests` 302개 통과 (10/01 RF-1, Windows·Py3.14, 1364s)
 
 ## 막힌 것
 
@@ -23,8 +23,8 @@
 | 순서 | 작업 | 근거 문서 | 상태 / 다음 할 일 |
 |---|---|---|---|
 | ✅ | **리뷰** — RF 계획 외부 리뷰 | 리뷰 문서 머리 "외부 리뷰 결과" | 완료(2026-10-01). 반영 내역은 RF-0·RF-1·RF-2 행에 들어감 |
-| 1 | **RF-0** R1~R11 안전·정확성·의존성 + 재현 테스트·session 루트 | HANDOFF R1~R6·I0~I2, 리뷰 §U RF-0·머리 "외부 리뷰 결과" R7~R11 | 결함별 fail→pass·커밋 완료. 전체 테스트 확인 중 (`rf0/2026-10-01`) |
-| 2 | **RF-1** `triage.py` driver + `SKILL.md` ≤8KB + 커맨드 보일러플레이트 + 외부 리뷰분(MCP 원문을 모델이 보지 않게, `--top`을 types/causes에도, `db_search --limit 3`, `code_refs` projection, Jira 코멘트 예산). `CLAUDE.md` ≤4KB는 §12 이동이 사용자 결정이라 보류 | 리뷰 §U RF-1·§V 1·2 | RF-0 뒤. **10/11 전 완료 목표.** `tools/offline_eval.py`가 driver를 쓰고 결과 동일 확인 |
+| 1 | **RF-0** R1~R11 안전·정확성·의존성 + 재현 테스트·session 루트 | HANDOFF R1~R6·I0~I2, 리뷰 §U RF-0·머리 "외부 리뷰 결과" R7~R11 | ✅ 완료. 남은 격리 테스트·07 R6는 RF-1 때 정리 |
+| 2 | **RF-1** `triage.py` driver + `SKILL.md` ≤8KB + 커맨드 보일러플레이트 + 외부 리뷰분(MCP 원문을 모델이 보지 않게, `--top`을 types/causes에도, `db_search --limit 3`, `code_refs` projection, Jira 코멘트 예산). `CLAUDE.md` ≤4KB는 §12 이동이 사용자 결정이라 보류 | 리뷰 §U RF-1·§V 1·2 | ✅ 완료(10/01): `triage.py`·`jira_bridge.py`, SKILL 8.1KB, offline_eval→driver. **남음**: 행동 평가·토큰 실측(10/11), `CLAUDE.md` ≤4KB(사용자 결정), R7(후속) |
 | 3 | **Phase 13 재개 (2026-10-11)** — 행동 평가 45개(batch 1 재실행 + 남은 25개 B·C·D) + 수동 채점, 트리거 테스트, 빈 플러그인 실험(S1) | `11-phases.md` Phase 13, `tests/skill_evals/README.md`, 이력 파일 "Phase 13 재개 결과·남은 일" | Claude Code에서만. 새 iteration 경로로 실행(기존 폴더 덮어쓰기 금지) |
 | 4 | **RF-2** 반입 도구 강화(staging·rollback) + `check_boundary.py` + 사외 CI. `export_external.py`는 만들지 않음(결정 a) | 리뷰 §U RF-2 | Phase 13 뒤 |
 | 5 | **반입** — `15 §15.4` 체크리스트, `make_db_skeleton.py`, `git archive` 묶음 | `GUIDE.md` §3 "반입 전", §4 | 그 뒤 사내 S-1~S-7 |

@@ -4,8 +4,7 @@ argument-hint: --to <N> [--dry-run]
 ---
 
 이슈 DB 스키마를 v<N>으로 올린다 (`06-collaboration.md §6.4`, `09-commands.md` migrate).
-스크립트는 `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/<이름>.py"`로 부른다. 결과는 JSON이다.
-어떤 스크립트든 종료 코드 2와 "사내 기본값 없음(S-3 미완료)"을 내면 거기서 멈추고 메시지를 그대로 보여준다.
+스크립트: `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/<이름>.py"`(결과 JSON). 종료 코드 2면 메시지를 그대로 보이고 멈춘다(예: 사내 기본값 없음 S-3).
 
 이 커맨드는 **메인테이너가 자기 로컬 브랜치에서 직접 편집**하는 흐름이다. 작업 계획, worktree, 세션 lock, 읽기 스냅샷을
 쓰지 않고 PR 도구(`db_pr`)도 부르지 않는다. 다른 사용자의 clone이나 main은 건드리지 않는다.

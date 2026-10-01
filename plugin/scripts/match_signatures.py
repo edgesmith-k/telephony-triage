@@ -27,6 +27,8 @@
 출력(JSON, stdout): `{mode, candidates[], pending_causes[], types[], causes[], errors[],
 warnings[], cache, ...}`. 후보 = `{type, cause, title, score, confidence, S, C, signature,
 evidence[], bonus, feedback, fix_judgement, related[]}`. 원인 미확인 후보는 `cause: null`.
+`--top N`(기본 3)은 후보 N개와 함께 `types[]`는 S=1, `causes[]`는 C=1인 것만, `pending_causes[]`는 N개만 내고
+뺀 개수를 `omitted`에 적는다. 판정 목록 전체가 필요하면 `--top 0`.
 """
 
 from __future__ import annotations
@@ -342,7 +344,14 @@ def match(events_doc: dict, db: issuedb.IssueDb, compiled: dict, *, regress: boo
             evaluator.close()
 
     candidates.sort(key=lambda c: (-c["score"], c["type"], c["cause"] or ""))
-    return {
+    omitted = None
+    if top:   # --top N: 후보 N개, 유형·원인은 충족된 것만, pending 원인 N개 (판정 목록 전체는 --top 0)
+        kept_types = [t for t in types_out if t["S"]]
+        kept_causes = [c for c in causes_out if c["C"]]
+        omitted = {"types": len(types_out) - len(kept_types), "causes": len(causes_out) - len(kept_causes),
+                   "pending_causes": max(0, len(pending) - top), "candidates": max(0, len(candidates) - top)}
+        types_out, causes_out, pending = kept_types, kept_causes, pending[:top]
+    result = {
         "schema": OUTPUT_SCHEMA,
         "mode": "regress" if regress else "analysis",
         "db": str(db.root),
@@ -357,6 +366,9 @@ def match(events_doc: dict, db: issuedb.IssueDb, compiled: dict, *, regress: boo
         "errors": errors,
         "warnings": warnings,
     }
+    if omitted is not None:
+        result["omitted"] = omitted
+    return result
 
 
 def _candidate(db, itype, cause, S, C, sym, res, jira, occurred, half, scoring, use_bonus,
@@ -407,7 +419,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--jira-meta", default=None)
     parser.add_argument("--regress", action="store_true")
     parser.add_argument("--no-feedback-weight", action="store_true")
-    parser.add_argument("--top", type=int, default=3, help="후보 수 (0이면 전부)")
+    parser.add_argument("--top", type=int, default=3,
+                        help="후보 수. types·causes는 충족된 것만, pending은 N개 (0이면 전부)")
     parser.add_argument("--json", action="store_true", help="JSON 출력 (항상 JSON)")
     parser.add_argument("--plugin-root", default=None)
     return parser

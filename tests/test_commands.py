@@ -78,8 +78,11 @@ def test_commands_stop_on_missing_site_defaults():
 
 
 def test_write_commands_take_session_lock_and_readonly_commands_do_not():
-    for name in ("sync", "sync-pr"):
-        text = (COMMANDS / f"{name}.md").read_text(encoding="utf-8")
+    # sync-pr 절차의 단일 원본은 reference/sync-pr.md다 (커맨드는 그 파일을 가리키기만 한다)
+    reference = REPO / "plugin" / "skills" / "telephony-triage" / "reference" / "sync-pr.md"
+    assert "reference/sync-pr.md" in (COMMANDS / "sync-pr.md").read_text(encoding="utf-8")
+    for name, path in (("sync", COMMANDS / "sync.md"), ("sync-pr", reference)):
+        text = path.read_text(encoding="utf-8")
         assert "lock acquire" in text and "lock release" in text, name
     for name in ("search", "preview", "review"):
         assert "lock acquire" not in (COMMANDS / f"{name}.md").read_text(encoding="utf-8"), name

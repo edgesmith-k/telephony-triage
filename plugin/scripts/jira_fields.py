@@ -5,7 +5,7 @@
         `jira_key_regex`(이슈 DB `issue-db.config.yaml`)로 키를 검사한다. 맞지 않으면 종료 코드 1.
         작업 키·경로·브랜치로 쓰기 전에 부른다(contracts.md §3.2 작업 키 검증).
     jira_fields.py extract <raw.json|raw.yaml> [--origin mcp|file] [--db <path>]
-                           [--meta-out <file>] [--consume]
+                           [--meta-out <file>] [--consume] [--comments all|last:<N>] [--comment-chars <N>]
         Jira MCP `get_issue` 응답(스킬이 파일로 저장) 또는 `--jira-file` YAML을 읽어
         `jira.field_map`(사용자 config > site-defaults)으로 구조화 필드를 뽑고, 텍스트 필드
         (요약·설명·코멘트 본문)는 **읽은 직후 마스킹**한다. 코멘트 작성자 같은 사람 이름 필드는 내지 않는다.
@@ -15,7 +15,8 @@
      jira: {key, origin, model, sw, android_version, carrier, occurred_on},   # 계획 `jira` 블록 초안(date·note 제외)
      occurred_at: <UTC ISO | null>, occurred_at_local: <jira.timezone ISO | null>,
      logcat: {tz, year},                        # parse_logcat --tz/--year 값 (year_source: jira일 때 발생 연도)
-     sim_slot, components[], text: {summary, description, comments[]},   # 마스킹됨
+     sim_slot, components[], text: {summary, description, comments[], comments_total},   # 마스킹됨
+                                                # --comments last:N면 뒤에서 N개, --comment-chars면 하나당 N자
      missing[], meta_out}
 `--meta-out`이면 `match_signatures.py --jira-meta` 입력 `{key, occurred_at, sw, summary, description}`을 쓴다.
 `--consume`이면 읽은 원본 파일을 지운다(원문을 work_dir에 남기지 않기 위해서다, 08-safety.md §8.1).
@@ -138,7 +139,18 @@ def _text(value) -> str:
     return str(value)
 
 
-def extract(raw: dict, cfg: dict, db: Path | None, origin: str) -> dict:
+def comment_budget(spec: str) -> int | None:
+    """`all` → None(전부), `last:N` → N. 결정적 절삭이다(뒤에서 N개)."""
+    if spec == "all":
+        return None
+    m = re.fullmatch(r"last:(\d+)", spec or "")
+    if not m:
+        raise UsageError(f"--comments는 all 또는 last:<N>이다: {spec}")
+    return int(m.group(1))
+
+
+def extract(raw: dict, cfg: dict, db: Path | None, origin: str, last: int | None = None,
+            chars: int = 0) -> dict:
     jira_cfg = cfg.get("jira") or {}
     fmap = jira_cfg.get("field_map") or {}
     jtz = _zone(jira_cfg.get("timezone"), "Jira")
@@ -172,10 +184,18 @@ def extract(raw: dict, cfg: dict, db: Path | None, origin: str) -> dict:
     comments = texts("comments") or []
     if not isinstance(comments, list):
         comments = [comments]
+    comments = [c for c in comments if _text(c)]
+    total = len(comments)
+    if last is not None:
+        comments = comments[-last:] if last else []
+    masked = [masker(_text(c)) for c in comments]
+    if chars:
+        masked = [m if len(m) <= chars else m[: chars - 1] + "…" for m in masked]
     text = {
         "summary": masker(_text(texts("summary"))),
         "description": masker(_text(texts("description"))),
-        "comments": [masker(_text(c)) for c in comments if _text(c)],
+        "comments": masked,
+        "comments_total": total,
     }
 
     slot = lookup(raw, fmap["sim_slot"]) if fmap.get("sim_slot") else None
@@ -234,6 +254,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--origin", choices=["mcp", "file"], default="mcp")
     p.add_argument("--meta-out")
     p.add_argument("--consume", action="store_true")
+    p.add_argument("--comments", default="all", help="코멘트 예산: all | last:<N> (뒤에서 N개)")
+    p.add_argument("--comment-chars", type=int, default=0, help="코멘트 하나의 최대 글자 수 (0이면 자르지 않음)")
     return parser
 
 
@@ -253,7 +275,10 @@ def main(argv: list[str] | None = None) -> int:
             return OK if ok else CHECK_FAILED
         path = Path(args.raw)
         raw = _read(path)
-        result = extract(raw, userconfig.merged(defaults), db, args.origin)
+        if args.comment_chars < 0:
+            raise UsageError("--comment-chars는 0 이상이다.")
+        result = extract(raw, userconfig.merged(defaults), db, args.origin,
+                         comment_budget(args.comments), args.comment_chars)
         if args.meta_out:
             meta = {"key": result["key"], "sw": result["jira"].get("sw"),
                     "summary": result["text"]["summary"], "description": result["text"]["description"]}

@@ -44,7 +44,7 @@ v1 범위: logcat(radio/main/system/crash, bugreport는 logcat 섹션만) · Jir
 | `05-verification.md` | 검증 R1~R6, 수동 기록·해결책·verify-fix 검증 |
 | `06-collaboration.md` | CODEOWNERS, PR 규칙, 검증 체계·sync-pr·사후 정리, 스키마 버전, 피드백·리뷰·통계·용어집·새 카테고리 |
 | `07-workflow.md` | analyze Step 0~8, 공통 쓰기 절차, record/validate/fix-submitted/verify-fix/sync-pr |
-| `08-safety.md` | 마스킹, Hooks 8종 |
+| `08-safety.md` | 마스킹, Hooks 9종 |
 | `09-commands.md` | 커맨드 12개 |
 | `10-skill-eval.md` | SKILL.md 구성, 트리거 테스트, eval 45개 |
 | `11-phases.md` | **Phase D0~14** 할 일·완료 기준·읽을 문서 (사외 초안·사내 처음부터 모드만) |

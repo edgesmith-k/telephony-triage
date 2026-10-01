@@ -4,8 +4,7 @@ argument-hint: <keyword|JIRA-KEY|ID>
 ---
 
 이슈 DB를 검색한다 (`03-issue-db.md §5.5`, `09-commands.md` search). **읽기 전용**이라 세션 lock을 잡지 않는다.
-스크립트는 `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/db_search.py"`로 부른다.
-종료 코드 2와 "사내 기본값 없음(S-3 미완료)"이면 거기서 멈추고 메시지를 그대로 보여준다.
+스크립트: `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/<이름>.py"`(결과 JSON). 종료 코드 2면 메시지를 그대로 보이고 멈춘다(예: 사내 기본값 없음 S-3).
 
 인자: `$ARGUMENTS` (키워드, Jira 키, 유형 ID·원인 ID). 인자가 없으면 무엇을 찾는지 묻는다.
 

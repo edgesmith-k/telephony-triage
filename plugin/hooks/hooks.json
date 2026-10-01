@@ -1,5 +1,5 @@
 {
-  "description": "telephony-triage hooks (08-safety.md §9): 1 scripts 경로 갱신, 2 Jira 읽기 전용, 3~7 이슈 DB git 명령(PII·생성 파일·우회·base push·push 확인), 8 사용자 clone 직접 편집 차단. 판정은 guard.py가 한다.",
+  "description": "telephony-triage hooks (08-safety.md §9): 1 scripts 경로 갱신, 2 Jira 읽기 전용, 3~7 이슈 DB git 명령(PII·생성 파일·우회·base push·push 확인), 8 사용자 clone 직접 편집 차단 — 판정은 guard.py. 9 Jira 응답 원문을 파일로 받고 모델에는 마스킹 요약만 — jira_bridge.py.",
   "hooks": {
     "SessionStart": [
       {
@@ -38,6 +38,18 @@
           {
             "type": "command",
             "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/guard.py\"",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "mcp__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/jira_bridge.py\"",
             "timeout": 30
           }
         ]
