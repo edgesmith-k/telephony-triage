@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import shutil
 import sys
 from types import SimpleNamespace
 
@@ -244,3 +245,64 @@ def test_r10_dependency_manifest_has_complete_pins(safety_root):
                 continue
             name = child.name.lower().replace("_", "-")
             assert name in pins, f"unlocked transitive dependency: {raw}"
+
+
+@pytest.fixture
+def draft_import(safety_root):
+    target = safety_root / "import_draft.py"
+    shutil.copy2(REPO / "tools" / "import_draft.py", target)
+    spec = importlib.util.spec_from_file_location("safety_import_draft", target)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+@pytest.mark.parametrize("baseline", [False, True])
+def test_r7_new_file_collision_stops(draft_import, tmp_path, baseline):
+    source, dest = tmp_path / "source", tmp_path / "dest"
+    source.mkdir()
+    dest.mkdir()
+    (source / "new.py").write_text("external", encoding="utf-8")
+    (dest / "new.py").write_text("local", encoding="utf-8")
+    if baseline:
+        (dest / draft_import.MANIFEST).write_text(json.dumps({"schema": 1, "files": {}}), encoding="utf-8")
+    result = draft_import.plan(source, dest, None)
+    assert [item["path"] for item in result["locally_modified"]] == ["new.py"]
+    assert draft_import.main([str(source), "--dest", str(dest), "--json"]) == 1
+    assert (dest / "new.py").read_text(encoding="utf-8") == "local"
+
+
+def test_r7_site_paths_file_is_protected(draft_import, tmp_path):
+    source, dest = tmp_path / "source", tmp_path / "dest"
+    source.mkdir()
+    dest.mkdir()
+    (source / "SITE_PATHS").write_text("external/\n", encoding="utf-8")
+    (dest / "SITE_PATHS").write_text("local/\n", encoding="utf-8")
+    result = draft_import.plan(source, dest, None)
+    assert "SITE_PATHS" not in result["to_write"] + result["to_delete"]
+
+
+def test_r7_failed_apply_rolls_back_files_and_manifest(draft_import, tmp_path, monkeypatch):
+    source, dest = tmp_path / "source", tmp_path / "dest"
+    source.mkdir()
+    dest.mkdir()
+    for name in ("a.py", "b.py", "removed.py"):
+        (source / name).write_text("old", encoding="utf-8")
+    result = draft_import.plan(source, dest, None)
+    draft_import.apply(result, source, dest)
+    draft_import.write_manifest(result, source, dest)
+    before = {p.relative_to(dest).as_posix(): p.read_bytes() for p in dest.rglob("*") if p.is_file()}
+    (source / "a.py").write_text("new", encoding="utf-8")
+    (source / "b.py").write_text("new", encoding="utf-8")
+    (source / "removed.py").unlink()
+    result = draft_import.plan(source, dest, None)
+    original = draft_import.shutil.copy2
+    def fail_second(src, dst, *args, **kwargs):
+        if Path(dst) == dest / "b.py":
+            raise OSError("synthetic write failure")
+        return original(src, dst, *args, **kwargs)
+    monkeypatch.setattr(draft_import.shutil, "copy2", fail_second)
+    with pytest.raises(OSError):
+        draft_import.apply(result, source, dest)
+    after = {p.relative_to(dest).as_posix(): p.read_bytes() for p in dest.rglob("*") if p.is_file()}
+    assert after == before

@@ -34,8 +34,10 @@ import argparse
 import fnmatch
 import hashlib
 import json
+import os
 import shutil
 import sys
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -49,6 +51,7 @@ ALWAYS_SKIP = {
     ".local-draft",  # 사외 PC 전용 표식 (15-local-draft.md §15.2)
     "__pycache__",
     ".pytest_cache",
+    MANIFEST,
 }
 
 OK, CHECK_FAILED, USAGE = 0, 1, 2
@@ -132,10 +135,16 @@ def plan(source: Path, dest: Path, label: str | None) -> dict:
     manifest = load_manifest(dest)
     baseline: dict[str, str] = (manifest or {}).get("files", {})
     first_import = manifest is None
+    # The local protection registry itself is never replaced by an incoming draft.
+    if (dest / SITE_PATHS_FILE).exists():
+        src_files.pop(SITE_PATHS_FILE, None)
+    dest_files.pop(SITE_PATHS_FILE, None)
 
     locally_modified: list[dict] = []
     if not first_import:
         for rel, digest in baseline.items():
+            if rel == SITE_PATHS_FILE or is_site_path(rel, site_patterns):
+                continue
             current = dest_files.get(rel)
             if current is None:
                 # 사내에서 지운 사외 파일. 새 초안에 있으면 다시 놓인다.
@@ -146,12 +155,16 @@ def plan(source: Path, dest: Path, label: str | None) -> dict:
 
     to_write, to_delete, untouched = [], [], []
     for rel, path in src_files.items():
-        target = dest / rel
+        target = _contained(dest, rel)
         if target.is_file() and sha256(target) == sha256(path):
             untouched.append(rel)
         else:
             to_write.append(rel)
+            if rel not in baseline and target.exists():
+                locally_modified.append({"path": rel, "baseline": None,
+                                         "current": sha256(target) if target.is_file() else "directory"})
     for rel in baseline:
+        _contained(dest, rel)
         if rel not in src_files and rel in dest_files:
             to_delete.append(rel)
 
@@ -180,19 +193,52 @@ def plan(source: Path, dest: Path, label: str | None) -> dict:
     }
 
 
+def _contained(root: Path, relative: str) -> Path:
+    path = root / relative
+    if Path(relative).is_absolute() or ".." in Path(relative).parts or not path.resolve().is_relative_to(root.resolve()):
+        raise ValueError(f"반입 루트 밖 경로: {relative}")
+    for part in (path, *path.parents):
+        if part == root.parent:
+            break
+        if part.is_symlink() or getattr(part, "is_junction", lambda: False)():
+            raise ValueError(f"반입 경로 symlink/junction: {relative}")
+    return path
+
+
 def apply(result: dict, source: Path, dest: Path) -> None:
+    """Rollback file contents, metadata and the baseline on any apply failure."""
+    if result["locally_modified"]:
+        raise ValueError("사내 변경 파일이 있어 반입할 수 없습니다")
+    paths = sorted(set(result["to_write"] + result["to_delete"] + [MANIFEST]))
+    targets = {rel: _contained(dest, rel) for rel in paths}
     for rel in result["to_write"]:
-        target = dest / rel
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source / rel, target)
-    for rel in result["to_delete"]:
-        target = dest / rel
-        if target.is_file():
-            target.unlink()
-            parent = target.parent
-            while parent != dest and parent.is_dir() and not any(parent.iterdir()):
-                parent.rmdir()
-                parent = parent.parent
+        _contained(source, rel)
+    existing_dirs = {p for p in dest.rglob("*") if p.is_dir()}
+    with tempfile.TemporaryDirectory(prefix="tt-import-backup-", dir=dest.parent) as backup_dir:
+        backups = {}
+        for i, (rel, target) in enumerate(targets.items()):
+            if target.exists():
+                backup = Path(backup_dir) / str(i)
+                shutil.copy2(target, backup)
+                backups[rel] = backup
+        try:
+            for rel in result["to_write"]:
+                target = targets[rel]
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(source / rel, target)
+            for rel in result["to_delete"]:
+                targets[rel].unlink(missing_ok=True)
+            write_manifest(result, source, dest)
+        except BaseException:
+            for rel, target in targets.items():
+                if rel in backups:
+                    os.replace(backups[rel], target)
+                else:
+                    target.unlink(missing_ok=True)
+            for directory in sorted((p for p in dest.rglob("*") if p.is_dir() and p not in existing_dirs),
+                                    key=lambda p: len(p.parts), reverse=True):
+                directory.rmdir()
+            raise
 
 
 def write_manifest(result: dict, source: Path, dest: Path) -> None:
@@ -252,11 +298,15 @@ def main(argv: list[str] | None = None) -> int:
     if not dest.is_dir():
         print(f"사내 레포 경로가 없습니다: {dest}", file=sys.stderr)
         return USAGE
-    if source == dest:
-        print("원본과 대상이 같습니다.", file=sys.stderr)
+    if source == dest or source.is_relative_to(dest) or dest.is_relative_to(source):
+        print("원본과 대상 경로가 겹칩니다.", file=sys.stderr)
         return USAGE
 
-    result = plan(source, dest, args.label)
+    try:
+        result = plan(source, dest, args.label)
+    except (OSError, ValueError) as exc:
+        print(str(exc), file=sys.stderr)
+        return USAGE
 
     if result["locally_modified"]:
         payload = {
@@ -278,8 +328,11 @@ def main(argv: list[str] | None = None) -> int:
         return CHECK_FAILED
 
     if not args.dry_run:
-        apply(result, source, dest)
-        write_manifest(result, source, dest)
+        try:
+            apply(result, source, dest)
+        except (OSError, ValueError) as exc:
+            print(f"반입 실패 (변경 복구): {exc}", file=sys.stderr)
+            return USAGE
 
     if args.json:
         payload = {k: v for k, v in result.items() if k != "source_files"}
