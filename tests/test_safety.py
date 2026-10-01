@@ -337,3 +337,45 @@ def test_r5_external_failure_preserves_backend_and_blocks_pass(safety_root, tmp_
         assert verify.judge_fix(run, cause, paths)["judgement"] == "unknown"
     finally:
         run.close()
+
+
+@pytest.mark.parametrize("sym_slot,cause_slot,gap,cross,expected", [
+    (0, 1, 1, False, 0), (0, 0, 120, False, 0),
+    (0, 0, 1, False, 1), (None, 1, 1, False, 1), (0, 1, 1, True, 1),
+])
+def test_r1_analysis_requires_compatible_symptom_and_cause(
+        safety_root, sym_slot, cause_slot, gap, cross, expected):
+    from datetime import datetime, timedelta, timezone
+    matcher = importlib.import_module("match_signatures")
+    issuedb = importlib.import_module("common.issuedb")
+    compiled = importlib.import_module("common.compiled")
+    db = issuedb.load(REPO / "tests" / "fixtures" / "issue-db-sample")
+    db.types = db.types[:1]
+    itype = db.types[0]
+    itype.causes = itype.causes[:1]
+    cause = itype.causes[0]
+    itype.raw["symptom_signatures"] = [{"id": "sym", "must_event": [{"event": "SYM"}], "window_sec": 60}]
+    cause.raw["signatures"] = [{"id": "cause", "must_event": [{"event": "CAUSE"}], "window_sec": 60,
+                                "same_phone": not cross}]
+    start = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    def event(name, slot, offset):
+        return {"ts": (start + timedelta(seconds=offset)).isoformat(), "event": name,
+                "phone_id": slot, "fields": {}, "tag": "SYNTHETIC", "msg": name}
+    events = [event("SYM", sym_slot, 0), event("CAUSE", cause_slot, gap)]
+    doc = {"masked": True, "events": events, "coverage": {"first_ts": events[0]["ts"],
+                                                            "last_ts": events[-1]["ts"]}}
+    signatures = compiled.compile_signatures(db, None)
+    analysis = matcher.match(doc, db, signatures, regress=False)
+    assert analysis["causes"][0]["C"] == expected
+    regression = matcher.match(doc, db, signatures, regress=True)
+    assert regression["causes"][0]["C"] == 1, "regression C remains independent"
+    # A valid later symptom on the cause slot must not be hidden by the first symptom.
+    if expected == 0:
+        doc["events"].append(event("SYM", cause_slot, gap))
+        assert matcher.match(doc, db, signatures, regress=False)["causes"][0]["C"] == 1
+
+
+def test_r1_all_sample_regressions_keep_independent_c(safety_root):
+    from runner import SAMPLE, run_json
+    result = run_json("db_regress.py", ["--all", "--db", SAMPLE], root=safety_root)
+    assert result["summary"]["failed"] == 0

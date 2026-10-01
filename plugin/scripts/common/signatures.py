@@ -123,6 +123,9 @@ class Result:
     satisfied: bool
     evidence: list[dict] = field(default_factory=list)
     error: str | None = None
+    same_phone: bool = True
+    window_sec: float = 0
+    window: tuple[datetime, datetime] | None = None
 
 
 def _parse_ts(value: str) -> datetime:
@@ -186,16 +189,23 @@ class Evaluator:
     # -- 평가 -----------------------------------------------------------------
 
     def evaluate(self, sig: Signature, occurred: datetime | None = None) -> Result:
+        return self._evaluate(sig, occurred, False)[0]
+
+    def evaluate_all(self, sig: Signature, occurred: datetime | None = None) -> list[Result]:
+        """Keep distinct matching slots/episodes for analysis candidate joining."""
+        return self._evaluate(sig, occurred, True)
+
+    def _evaluate(self, sig: Signature, occurred: datetime | None, all_matches: bool) -> list[Result]:
         try:
             pos = [self.lines(c.pattern) if c.kind == "match" else self.matching_events(c)
                    for c in sig.positives]
             neg = sorted({i for p in sig.negatives for i in self.lines(p)})
         except PatternTimeout as exc:
-            return Result(sig.key, False, error=f"timeout: {exc}")
+            return [Result(sig.key, False, error=f"timeout: {exc}")]
         except PatternError as exc:
-            return Result(sig.key, False, error=f"regex: {exc}")
+            return [Result(sig.key, False, error=f"regex: {exc}")]
         if self.lo is None or self.hi is None or any(not hits for hits in pos):
-            return Result(sig.key, False)
+            return [Result(sig.key, False)]
 
         phone = lambda i: self.events[i].get("phone_id")  # noqa: E731
         if sig.same_phone:
@@ -205,19 +215,38 @@ class Evaluator:
             groups = [None]
 
         best: tuple | None = None
+        matches = []
         for slot in groups:
             ok = (lambda i: True) if slot is None else (lambda i, s=slot: phone(i) in (s, None))
             gpos = [[i for i in hits if ok(i)] for hits in pos]
             if any(not hits for hits in gpos):
                 continue
             gneg = [i for i in neg if ok(i)]
-            found = self._search_window(sig, gpos, gneg, occurred)
-            if found and (best is None or found[0] < best[0]):
+            found = self._search_window(sig, gpos, gneg, occurred, all_matches)
+            if all_matches:
+                matches.extend(found)
+            elif found and (best is None or found[0] < best[0]):
                 best = found
-        if best is None:
-            return Result(sig.key, False)
+        if all_matches:
+            matches.sort(key=lambda found: found[0])
+        else:
+            matches = [best] if best else []
+        if not matches:
+            return [Result(sig.key, False)]
+        results, seen = [], set()
+        for found in matches:
+            indices = tuple(found[1])
+            if indices in seen:
+                continue
+            seen.add(indices)
+            evidence = self._evidence(sig, indices)
+            results.append(Result(sig.key, True, evidence=evidence, same_phone=sig.same_phone,
+                                  window_sec=sig.window_sec, window=(found[2], found[3])))
+        return results
+
+    def _evidence(self, sig: Signature, indices: tuple[int, ...]) -> list[dict]:
         evidence = []
-        for cond, i in zip(sig.positives, best[1]):
+        for cond, i in zip(sig.positives, indices):
             e = self.events[i]
             evidence.append({
                 "signature": sig.key,
@@ -229,10 +258,10 @@ class Evaluator:
                 "fields": e.get("fields") or {},
                 "phone_id": e.get("phone_id"),
             })
-        return Result(sig.key, True, evidence=evidence)
+        return evidence
 
     def _search_window(self, sig: Signature, pos: list[list[int]], neg: list[int],
-                       occurred: datetime | None):
+                       occurred: datetime | None, all_matches: bool = False):
         width = timedelta(seconds=sig.window_sec)
         lo, hi = self.lo, self.hi
         a_max = max(lo, hi - width)
@@ -242,6 +271,7 @@ class Evaluator:
             candidates.update((t - width, t, t + _EPS, t - width + _EPS))
         order = {c.id: n for n, c in enumerate(sig.positives) if c.id}
         best = None
+        matches = []
         for a in sorted(c for c in candidates if lo <= c <= a_max):
             b = a + width
             if any(a <= self.dts[i] <= b for i in neg):
@@ -263,5 +293,7 @@ class Evaluator:
                 else:
                     rank = (a - lo).total_seconds()
                 if best is None or rank < best[0]:
-                    best = (rank, firsts)
-        return best
+                    best = (rank, firsts, a, b)
+                if all_matches:
+                    matches.append((rank, firsts, a, b))
+        return matches if all_matches else best

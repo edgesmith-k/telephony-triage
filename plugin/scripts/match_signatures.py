@@ -192,6 +192,27 @@ def _first_satisfied(evaluator: Evaluator, sigs, occurred, errors: list[dict]):
     return satisfied
 
 
+def _all_satisfied(evaluator: Evaluator, sigs, occurred, errors: list[dict]):
+    matches = []
+    for sig in sigs:
+        for result in evaluator.evaluate_all(sig, occurred):
+            if result.error:
+                errors.append({"signature": sig.key, "error": result.error})
+            elif result.satisfied:
+                matches.append(result)
+    return matches
+
+
+def _compatible(sym, cause) -> bool:
+    if sym.same_phone and cause.same_phone:
+        left = {e["phone_id"] for e in sym.evidence if e.get("phone_id") is not None}
+        right = {e["phone_id"] for e in cause.evidence if e.get("phone_id") is not None}
+        if left and right and left.isdisjoint(right):
+            return False
+    times = [_parse_iso(e["ts"], "evidence") for e in sym.evidence + cause.evidence]
+    return (max(times) - min(times)).total_seconds() <= max(sym.window_sec, cause.window_sec)
+
+
 def run(args) -> dict:
     events_doc = _load_json(args.events, "--events")
     if not isinstance(events_doc, dict) or events_doc.get("masked") is not True:
@@ -280,7 +301,9 @@ def match(events_doc: dict, db: issuedb.IssueDb, compiled: dict, *, regress: boo
         for itype in db.types:
             if not itype.active:
                 continue
-            sym = _first_satisfied(evaluator, compiled[itype.id], occurred, errors)
+            symptoms = [] if regress else _all_satisfied(evaluator, compiled[itype.id], occurred, errors)
+            sym = (_first_satisfied(evaluator, compiled[itype.id], occurred, errors) if regress
+                   else next(iter(symptoms), None))
             S = 1 if sym else 0
             types_out.append({
                 "type": itype.id, "S": S,
@@ -296,14 +319,20 @@ def match(events_doc: dict, db: issuedb.IssueDb, compiled: dict, *, regress: boo
             for cause in itype.causes:
                 if not cause.active or cause.pending:
                     continue
-                res = _first_satisfied(evaluator, compiled[cause.id], occurred, errors)
+                candidate_sym = sym
+                if regress:
+                    res = _first_satisfied(evaluator, compiled[cause.id], occurred, errors)
+                else:
+                    matches = _all_satisfied(evaluator, compiled[cause.id], occurred, errors)
+                    pair = next(((s, c) for c in matches for s in symptoms if _compatible(s, c)), None)
+                    candidate_sym, res = pair if pair else (sym, None)
                 C = 1 if res else 0
                 causes_out.append({"type": itype.id, "cause": cause.id, "S": S, "C": C,
                                    "signature": res.key if res else None})
                 if not C:
                     continue
                 any_cause = True
-                candidates.append(_candidate(db, itype, cause, S, C, sym, res, jira, occurred, half,
+                candidates.append(_candidate(db, itype, cause, S, C, candidate_sym, res, jira, occurred, half,
                                              scoring, use_bonus, stats, min_samples, rules, use_feedback))
             if S and not any_cause:
                 candidates.append(_candidate(db, itype, None, S, 0, sym, None, jira, occurred, half,
