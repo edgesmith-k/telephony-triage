@@ -48,6 +48,10 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
+import uuid
+from contextlib import contextmanager
+from functools import wraps
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -97,18 +101,64 @@ def _parse(value: str) -> datetime:
 # -- lock -----------------------------------------------------------------------------
 
 
+def _locked(method):
+    @wraps(method)
+    def guarded(self, *args, **kwargs):
+        with self.guard():
+            return method(self, *args, **kwargs)
+    return guarded
+
+
 class Lock:
     def __init__(self, work_dir: Path):
         self.work_dir = work_dir
         self.path = work_dir / LOCK_FILE
+        self.owner = os.environ.get("TT_LOCK_OWNER")
+
+    @contextmanager
+    def guard(self):
+        """Stable OS lock inode; never unlink it while other processes may wait."""
+        userconfig.ensure_private_dir(self.work_dir)
+        with (self.work_dir / "session.guard").open("a+b") as handle:
+            if handle.tell() == 0:
+                handle.write(b"\0")
+                handle.flush()
+            deadline = time.monotonic() + 10
+            while True:
+                try:
+                    handle.seek(0)
+                    if os.name == "nt":
+                        import msvcrt
+                        msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+                    else:
+                        import fcntl
+                        fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except OSError as exc:
+                    if time.monotonic() >= deadline:
+                        raise UsageError("session lock guard 시간 초과") from exc
+                    time.sleep(.02)
+            try:
+                yield
+            finally:
+                handle.seek(0)
+                if os.name == "nt":
+                    msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+                else:
+                    fcntl.flock(handle, fcntl.LOCK_UN)
 
     def read(self) -> dict | None:
-        if not self.path.is_file():
-            return None
         try:
-            return json.loads(self.path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
+            data = json.loads(self.path.read_text(encoding="utf-8"))
+            if not isinstance(data, dict) or not all(isinstance(data.get(k), str)
+                    for k in ("job", "started_at", "updated_at")):
+                raise ValueError("invalid lock record")
+            _parse(data["updated_at"])
+            return data
+        except FileNotFoundError:
             return None
+        except (OSError, ValueError, TypeError) as exc:
+            raise UsageError("session.lock을 읽을 수 없습니다. 손상된 lock을 확인한다.") from exc
 
     def describe(self, data: dict | None) -> dict | None:
         if data is None:
@@ -118,8 +168,15 @@ class Lock:
 
     def write(self, data: dict) -> None:
         userconfig.ensure_private_dir(self.work_dir)
-        self.path.write_text(json.dumps(data, ensure_ascii=False, indent=1) + "\n", encoding="utf-8", newline="\n")
+        fd, name = tempfile.mkstemp(dir=self.work_dir, prefix=".session-")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
+                handle.write(json.dumps(data, ensure_ascii=False, indent=1) + "\n")
+            os.replace(name, self.path)
+        finally:
+            Path(name).unlink(missing_ok=True)
 
+    @_locked
     def acquire(self, job: str, command: str | None, take_over: bool) -> dict:
         held = self.describe(self.read())
         stamp = _iso(now())
@@ -133,12 +190,14 @@ class Lock:
                                  "진행 중일 수 있다. 사용자가 확인하면 --take-over로 이어받는다.", {"holder": held})
         taken_from = held
         started = held["started_at"] if (held and held["job"] == job) else stamp
-        data = {"job": job, "command": command or (held or {}).get("command"), "started_at": started,
+        self.owner = uuid.uuid4().hex
+        data = {"job": job, "owner": self.owner, "command": command or (held or {}).get("command"), "started_at": started,
                 "updated_at": stamp}
         self.write(data)
         return {"acquired": True, "lock": self.describe(data),
                 "taken_over": bool(taken_from), "previous": taken_from}
 
+    @_locked
     def touch(self, job: str) -> dict:
         """lock이 그 작업 키 것인지 확인하고 `updated_at`을 갱신한다. 만료 여부는 보지 않는다: 만료는 **다른** 작업이
         `acquire`로 가져갈 수 있다는 뜻이고, 아직 같은 작업 키가 남아 있으면 아무도 가져가지 않은 것이므로 그대로
@@ -147,16 +206,24 @@ class Lock:
         if held is None or held["job"] != job:
             raise UsageError(f"세션 lock이 작업 {job}의 것이 아닙니다. 먼저 lock acquire {job}를 한다.",
                              {"holder": held})
+        self.check_owner(held)
         held.update(updated_at=_iso(now()))
-        self.write({k: held[k] for k in ("job", "command", "started_at", "updated_at")})
+        self.write({k: held[k] for k in ("job", "owner", "command", "started_at", "updated_at")})
         return held
 
+    def check_owner(self, held: dict) -> None:
+        if not self.owner or self.owner != held.get("owner"):
+            raise UsageError("lock owner 불일치: acquire 결과 lock.owner를 TT_LOCK_OWNER로 전달한다.")
+
+    @_locked
     def release(self, job: str, force: bool) -> dict:
         held = self.describe(self.read())
         if held is None:
             return {"released": False, "note": "lock이 없습니다"}
         if held["job"] != job and not force:
             raise UsageError(f"lock 보유자는 {held['job']}입니다. 그 세션이 끝났다면 --force로 푼다.", {"holder": held})
+        if not force:
+            self.check_owner(held)
         self.path.unlink()
         return {"released": True, "previous": held, "forced": held["job"] != job}
 

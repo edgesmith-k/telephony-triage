@@ -104,11 +104,12 @@ def _git(repo: Path, *args: str) -> subprocess.CompletedProcess:
 
 
 def _check_lock(job: str, defaults: dict) -> None:
+    from db_pr import Lock, UsageError as LockError
     work_dir = Path(str(userconfig.get(userconfig.merged(defaults), "work_dir"))).expanduser()
-    path = work_dir / "session.lock"
-    held = json.loads(path.read_text(encoding="utf-8")) if path.is_file() else None
-    if not held or held.get("job") != job:
-        raise UsageError(f"세션 lock이 작업 {job}의 것이 아닙니다 (보유자: {held and held.get('job')}).")
+    try:
+        Lock(work_dir).touch(job)
+    except LockError as exc:
+        raise UsageError(str(exc)) from exc
 
 
 def make_draft(plan: Path, draft: Path, defaults: dict, plugin_root: str | None) -> dict:

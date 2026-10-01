@@ -24,6 +24,7 @@ import make_plugin_root  # noqa: E402
 import mock_env  # noqa: E402
 
 _ROOTS: dict[str, Path] = {}
+_LOCK_OWNERS: dict[str, str] = {}
 
 
 def plugin_root(kind: str = "plain", **defaults) -> Path:
@@ -65,11 +66,17 @@ def run(script: str, args: list[str], root: Path | None = None, cwd=None, env: d
     root = root or plugin_root()
     full_env = mock_env.env_with_mocks(plugin_root=root, unauth=unauth)
     full_env.update({k: str(v) for k, v in (env or {}).items()})
-    return subprocess.run(
+    session = str(full_env.get("TELEPHONY_TRIAGE_HOME", ""))
+    if session in _LOCK_OWNERS:
+        full_env.setdefault("TT_LOCK_OWNER", _LOCK_OWNERS[session])
+    result = subprocess.run(
         [sys.executable, str(root / "scripts" / script), *map(str, args)],
         capture_output=True, text=True, encoding="utf-8", errors="replace",
         env=full_env, cwd=cwd, input=stdin,
     )
+    if script == "db_pr.py" and list(args[:2]) == ["lock", "acquire"] and result.returncode == 0:
+        _LOCK_OWNERS[session] = json.loads(result.stdout)["lock"]["owner"]
+    return result
 
 
 def run_json(script: str, args: list[str], expect: int | tuple = 0, **kw) -> dict:

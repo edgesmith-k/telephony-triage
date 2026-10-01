@@ -9,6 +9,8 @@ argument-hint: "[branch]"
 
 인자: `$ARGUMENTS` (브랜치 이름, 선택)
 
+lock 획득·인계 결과의 `lock.owner`를 보관하고 이후 `db_pr`·`db_verify` 호출마다 `TT_LOCK_OWNER`로 전달한다. lock 파일에서 토큰을 다시 읽어 쓰지 않는다.
+
 이 커맨드는 이슈 DB에 쓰므로 세션 lock을 잡는다. **끝나는 모든 경로에서 푼다**(`db_pr discard`가 풀고, 그 밖의 경로는
 `db_pr.py lock release <작업 키>`). 텍스트 rebase로 병합하지 않는다. 사용자 clone의 브랜치와 워킹 트리는 바꾸지 않는다.
 

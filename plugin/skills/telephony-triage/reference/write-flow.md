@@ -20,6 +20,9 @@ import/review/move 계획 PR)이 이 순서를 따른다. 사용자의 이슈 DB
 
 ## 1. 사전 점검
 
+lock 획득·인계 성공 시 반환된 `lock.owner`를 보관하고 이후 모든 `db_pr`·`db_verify` 호출의 `TT_LOCK_OWNER` 환경변수로 전달한다.
+현재 lock 파일에서 토큰을 다시 읽어 대신 쓰지 않는다. owner 불일치는 중단하고, 새 인계는 사용자 확인 후에만 한다.
+
 `S/db_pr.py preflight --branch <br> --search <…> [--jira <KEY>] --json` → `{tool_branch, user_branch: {exists, ahead_of_remote},
 remote_sha, open_prs[], jira_in_main}`.
 - 쓰기 불가(`config.py check`의 `writable`/`push_allowed`가 false, `--dry-run`이면 `--for dry-run`)면 사유를 보여주고 멈춘다.

@@ -21,3 +21,5 @@ analyze Step 1만 수행한다 (`07-workflow.md §Step 1`, `09-commands.md` sync
    목록으로 보여준다. 목록이 비면 "정리할 것 없음"으로 끝낸다. 있으면 지울지 **묻고**, 사용자가 동의한 경우에만
    `db_pr.py cleanup --yes --older-than`을 실행한다. 확인 전에는 아무것도 지우지 않는다.
    (5번은 lock을 잡지 않은 채 실행하므로, 다른 세션이 작업 중이면 그 작업 키의 것은 대상에서 빠진다.)
+
+lock 획득·인계 결과의 `lock.owner`를 보관하고 이후 `db_pr`·`db_verify` 호출마다 `TT_LOCK_OWNER`로 전달한다. 현재 lock 파일에서 토큰을 다시 읽어 쓰지 않는다.

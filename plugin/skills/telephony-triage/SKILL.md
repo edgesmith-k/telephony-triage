@@ -67,6 +67,7 @@ description: Android Telephony 이슈(data·call·network·sim·sms·ims)를 Jir
 2. **Jira 키 검사를 가장 먼저**: `S/jira_fields.py check-key <KEY> --db SNAP`(스냅샷이 아직 없으면 `--db <issue_db.path>`).
    종료 코드 1이면 키를 다시 묻는다. 검사 전에는 키를 경로·브랜치·작업 키로 쓰지 않는다(경로 조작 방지).
 3. `S/db_pr.py lock acquire <KEY> --command analyze`
+   - 모든 흐름에서 lock 획득·인계 결과의 `lock.owner`를 보관하고 이후 `db_pr`·`db_verify` 호출마다 `TT_LOCK_OWNER`로 전달한다. 현재 lock 파일의 토큰으로 대체하지 않는다.
    - 다른 작업의 lock(종료 코드 2, 보유자 정보) → 작업 키·명령·마지막 갱신 시각을 보여준다. 사용자가 "그 세션은 끝났다"고 하면
      `lock release <그 작업 키> --force` 후 다시 잡고, 아니면 중단한다.
    - 같은 Jira의 lock이 10분 안에 갱신됨 → "다른 세션이 같은 이슈를 진행 중일 수 있다"고 알리고, 확인받으면 `--take-over`.

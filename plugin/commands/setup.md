@@ -42,3 +42,5 @@ telephony-triage를 이 사용자 환경에 맞게 설정한다 (`02-config.md �
 9. **gh 인증** — `config.py gh-status`. 종료 코드 2면 `message`(로그인 방법)를 보여주고
    "쓰기 불가(gh 인증 없음). 읽기 전용 분석과 `--dry-run` 연습은 된다"로 **setup을 끝낸다.**
 10. 이슈 DB의 `docs/getting-started.md` 위치(`<issue_db.path>/docs/getting-started.md`)를 알려준다.
+
+lock 획득·인계 결과의 `lock.owner`를 보관하고 이후 `db_pr`·`db_verify` 호출마다 `TT_LOCK_OWNER`로 전달한다. 현재 lock 파일에서 토큰을 다시 읽어 쓰지 않는다.
