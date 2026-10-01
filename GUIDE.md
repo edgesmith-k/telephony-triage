@@ -74,7 +74,7 @@ Phase 1~13 모의 환경으로 전부 구현           S-2  사내 Claude Code �
 첫 사내 세션에서 Claude가 "사외 초안 계속 / 사내 보완 시작"을 물으면 **사내 보완**을 고릅니다(이후에는 `SITE_PROFILE.md`로 자동 판별).
 | 단계 | 입력 | 하는 일 |
 |---|---|---|
-| S-0 (선택) | `S-0 진행해줘` | 사외 Phase 3 이후 언제든. reference 파서·매처만 실제 로그 3~5개에 Python으로 돌려 태그 빈도·RIL 페어링 성공률·시각 파싱·슬롯 추출률을 `SITE_PROFILE.md`에 기록. 사외로는 정성 결론만 가져간다 |
+| S-0 (선택) | `S-0 진행해줘` — 또는 Claude 없이 `tools/s0_stats.py` (절차 `docs/development/S0_PROBE_CHECKLIST.md`) | 반입 전·S-1 전 언제든. reference 파서·매처만 실제 로그 3~5개에 Python으로 돌려 시각 파싱 비율·RIL 페어링·phone_id 추출·시계 이상을 봄. 결과 숫자는 `SITE_PROFILE.md`에만, 사외로는 정성 결론만. 로그 형식이 다르면 S-4가 커지므로 **권장** |
 | S-1 | `사내 보완 모드야. S-1 진행해줘` | TODO 목록 확인, 자료 받고 `SITE_PROFILE.md` 작성, 오프라인 평가 기준(1위 정확도 등) 합의 |
 | S-2 | `S-2 진행해줘` | 플러그인 로드·hook·MCP 도구 이름 형식 확인, 다른 점만 수정 |
 | S-3 | `S-3 진행해줘` | `site-defaults.yaml`(Jira 서버·도구 매핑·필드 매핑, GHE 등), 이슈 DB 설정 |
@@ -83,6 +83,39 @@ Phase 1~13 모의 환경으로 전부 구현           S-2  사내 Claude Code �
 | S-5 | `S-5 진행해줘. 샌드박스는 <주소>` | 실제 Jira·로그로 dry-run, 샌드박스에 PR 1건. 과거 해결 Jira 20~30건 라벨셋으로 `tools/offline_eval.py` 정확도 게이트 |
 | S-6 | `S-6 진행해줘` | 남은 `REVIEW-OPEN.md` 정리, 운영 이슈 DB에 합성 fixture·placeholder가 남았는지 확인 |
 | S-7 | `S-7 진행해줘` | 마켓플레이스 등록, 카테고리별 파일럿(10~20건), 첫 월간 리뷰 → 전체 확대 결정 |
+
+### 첫 사내 세션에 붙여 넣을 컨텍스트 (S-1 기동용, 한 번)
+
+사내 Claude Code가 설계 문서 전체를 읽지 않고 시작하게 하는 머리말입니다. `<...>`만 채워서 그대로 붙입니다.
+
+```
+[무엇] telephony-triage — Android Telephony 이슈를 Jira+logcat으로 분석해 사내 이슈 DB 레포(telephony-issue-db)에
+카테고리>유형>원인으로 누적하는 Claude Code 플러그인. 사외에서 만든 초안을 지금 사내로 반입했다 (반입 label: <.draft-manifest.json의 label>).
+판정은 스크립트(파서→매처→검증)가 하고 Claude는 설명·초안·사용자 확인만 한다.
+
+[모드] 사내 보완. 개발 Phase D0~13은 사외에서 끝났으니 다시 하지 않는다. 할 일은 15-local-draft.md §15.5의 S-1~S-7뿐이다.
+처음 물으면 "사내 보완"을 고르고, S-1에서 SITE_PROFILE.md를 만들어 "모드: 사내 보완"을 적는다. 이후 세션은 그 파일로 이어간다.
+
+[읽을 것 — 이것만, 순서대로]
+1. CLAUDE.md (머리말과 §12 원칙)   2. DRAFT_NOTES.md (사외 상태 파일 6KB)   3. docs/design/15-local-draft.md §15.5의 **해당 단계 행**과 그 행의 "읽을 것"
+4. REVIEW-OPEN.md (사내 정보가 있어야 판단할 항목)   5. 14-site.md §14.2 표 (S1~S21 placeholder)
+읽지 않는다: docs/history/ 전체, 11-phases.md, docs/design/의 다른 파일(단계 행이 지정한 절 외), ARCHITECTURE_REVIEW·HANDOFF(개선 작업은 사외 트랙).
+TODO(SITE) 57곳은 문서가 아니라 `python3 tools/list_site_todos.py`로 뽑는다.
+
+[지킬 것]
+- 사내 값·코드는 SITE_PATHS에 적힌 경로에만 (SITE_PROFILE.md, docs/site/, plugin/site-defaults.yaml, parser_backends/site/, adapters/site_*, tests/golden/, tests/site/).
+  그 밖의 사외 파일(docs/design/, plugin/scripts/ 공통 코드, 테스트)에 사내 문자열을 넣지 않는다 — 재반입(tools/import_draft.py) 때 충돌한다.
+- 설계 문서는 고치지 않는다. 사내 확인값·결정·차이는 SITE_PROFILE.md에만 쓴다 (형식: 14-site.md §14.3).
+- 새 md 파일을 만들지 않는다. 로그는 채팅에 붙이지 말고 파일 경로로 다룬다. 마스킹되지 않은 로그를 이슈 DB·fixture·문서에 남기지 않는다.
+- 단계가 끝나면 완료 기준을 점검하고 요약한 뒤 사용자 확인을 받고, SITE_PROFILE.md 진행 상태를 갱신하고 세션을 닫는다.
+- 막히면 우회하지 말고 보고한다 (git 충돌, 인증, MCP 부재, 버전 불일치, site-defaults.yaml 없음).
+
+[내가 줄 자료] Jira 키 <2~3개>, 카테고리별 logcat 경로 <...>, Android 16/17 소스 경로 <...>, 빌드명 예시 <...>,
+GHE <호스트/org/팀>, 샌드박스 이슈 DB <주소>, 기존 파서 코드 경로 <...>, Jira MCP 서버 이름 <...>.
+[시작] S-1 진행해줘. 먼저 확인 목록(TODO(SITE) 도구 출력 + REVIEW-OPEN.md)을 S번호별로 묶어 보여주고, 위 자료로 채울 수 있는 것부터 SITE_PROFILE.md에 적어라.
+```
+
+이후 세션은 머리말 없이 `S-n 진행해줘`면 됩니다(`SITE_PROFILE.md`로 판별). 긴 공백 뒤나 다른 PC면 위 블록의 **[모드]·[읽을 것]·[지킬 것]** 세 단락만 다시 붙입니다.
 
 ### 기존 파서 포팅의 핵심 (S-4a ①)
 - **검증된 판별 로직은 코드 그대로** 두고 `builtin.data.*` 이벤트로 노출합니다. 시그니처가 이 이벤트를 참조합니다.
