@@ -25,7 +25,7 @@ import json
 import re
 import sys
 from datetime import date
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -146,7 +146,8 @@ def cmd_validate(args, defaults) -> tuple[dict, int]:
 
 def _split_ref(ref: str) -> tuple[str, str]:
     key, sep, rel = ref.partition(":")
-    if not sep or not rel or rel.startswith(("/", "\\")) or ".." in Path(rel).parts:
+    if (not sep or not rel or rel.startswith(("/", "\\")) or PureWindowsPath(rel).drive
+            or ".." in Path(rel).parts or ".." in PureWindowsPath(rel).parts):
         raise UsageError(f"code_ref는 <root 키>:<루트 기준 상대 경로>여야 한다: {ref}")
     return key, rel
 
@@ -156,7 +157,10 @@ def cmd_resolve(args, defaults) -> tuple[dict, int]:
     key, rel = _split_ref(args.ref)
     if key not in roots:
         raise UsageError(f"루트 '{key}'가 없습니다 (주어진 루트: {', '.join(sorted(roots))}).")
-    path = Path(roots[key]).expanduser() / rel
+    root = Path(roots[key]).expanduser().resolve()
+    path = (root / rel).resolve()
+    if not path.is_relative_to(root):
+        raise UsageError(f"code_ref가 소스 루트 밖을 가리킵니다: {args.ref}")
     return {"ref": args.ref, "path": str(path), "exists": path.exists()}, OK
 
 

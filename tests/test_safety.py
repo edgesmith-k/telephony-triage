@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+from types import SimpleNamespace
 
 import pytest
 
@@ -157,7 +158,6 @@ def test_r3_draft_and_symlink_boundaries(safety_root, tmp_path, monkeypatch):
     try:
         link.symlink_to(outside.parent, target_is_directory=True)
     except OSError:
-        # Windows junctions exercise the same boundary without symlink privileges.
         if os.name != "nt":
             raise
         proc = subprocess.run(["cmd", "/c", "mklink", "/J", str(link), str(outside.parent)],
@@ -166,3 +166,24 @@ def test_r3_draft_and_symlink_boundaries(safety_root, tmp_path, monkeypatch):
     with pytest.raises(module.UsageError):
         module._remove_worktree(ctx, link / "draft")
     assert marker.exists()
+
+
+@pytest.mark.parametrize("relative", ["../outside/secret", "C:/outside/secret", "link/secret"])
+def test_r9_resolve_stays_inside_root(safety_root, tmp_path, monkeypatch, relative):
+    module = importlib.import_module("code_roots")
+    monkeypatch.setattr(module, "_cfg", lambda defaults: {})
+    root = tmp_path / "source"
+    root.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "secret").write_text("synthetic", encoding="utf-8")
+    if relative == "link/secret":
+        try:
+            (root / "link").symlink_to(outside, target_is_directory=True)
+        except OSError:
+            assert os.name == "nt"
+            assert subprocess.run(["cmd", "/c", "mklink", "/J", str(root / "link"), str(outside)],
+                                  capture_output=True).returncode == 0
+    args = SimpleNamespace(roots=json.dumps({"aosp": str(root)}), ref=f"aosp:{relative}")
+    with pytest.raises(module.UsageError):
+        module.cmd_resolve(args, {})
