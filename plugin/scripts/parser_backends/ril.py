@@ -68,6 +68,22 @@ def pair(records: list[dict]) -> None:
     레코드는 `ril`, `pid`, `phone_id`, `ts`, `_dt` 키를 가진다. 짝을 찾으면
     양쪽 `ril.paired_ts`(상대편 시각)와 `ril.latency_ms`를 채운다.
     """
+    # Split observations on radio-process restart, even if serials are reused.
+    segments, current, radio_pid = [], [], None
+    for rec in records:
+        if rec.get("ril"):
+            if radio_pid is not None and rec["pid"] != radio_pid:
+                segments.append(current)
+                current = []
+            radio_pid = rec["pid"]
+        current.append(rec)
+    if current:
+        segments.append(current)
+    for segment in segments:
+        _pair_segment(segment)
+
+
+def _pair_segment(records: list[dict]) -> None:
     pending: dict[tuple, list[dict]] = {}
     for rec in records:
         ann = rec.get("ril")
@@ -82,8 +98,14 @@ def pair(records: list[dict]) -> None:
             if stack[index]["ril"]["request"] == ann["request"]:
                 req = stack.pop(index)
                 latency = round((rec["_dt"] - req["_dt"]).total_seconds() * 1000)
+                if latency < 0:
+                    continue
                 req["ril"]["paired_ts"] = rec["ts"]
                 req["ril"]["latency_ms"] = latency
                 ann["paired_ts"] = req["ts"]
                 ann["latency_ms"] = latency
                 break
+    for rec in records:
+        ann = rec.get("ril")
+        if ann and ann["dir"] == "req" and ann["paired_ts"] is None:
+            ann["observed_until"] = records[-1]["ts"]

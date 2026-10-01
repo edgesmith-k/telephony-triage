@@ -71,6 +71,7 @@ class LogLine:
     level: str
     tag: str
     msg: str
+    buffer: str | None = None
 
 
 @dataclass
@@ -125,9 +126,12 @@ def read_file(
     lines: list[LogLine] = []
     current_year = year or DEFAULT_YEAR
     prev_month: int | None = None
+    buffer = None
     with open(path, encoding="utf-8", errors="replace", newline="") as fh:
         for line_no, raw in enumerate(fh, 1):
             text = raw.rstrip("\r\n")
+            if text.startswith("--------- beginning of "):
+                buffer = text.removeprefix("--------- beginning of ").strip()
             if not text.strip() or text.startswith(BEGINNING_PREFIX):
                 continue
             match = THREADTIME_RE.match(text) or TIME_RE.match(text)
@@ -163,6 +167,7 @@ def read_file(
                     level=match.group("level"),
                     tag=match.group("tag").strip(),
                     msg=match.group("msg") or "",
+                    buffer=buffer,
                 )
             )
             stats.lines += 1

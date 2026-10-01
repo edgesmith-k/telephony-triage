@@ -379,3 +379,63 @@ def test_r1_all_sample_regressions_keep_independent_c(safety_root):
     from runner import SAMPLE, run_json
     result = run_json("db_regress.py", ["--all", "--db", SAMPLE], root=safety_root)
     assert result["summary"]["failed"] == 0
+
+
+def parse_synthetic(safety_root, paths):
+    import yaml
+    from runner import SAMPLE
+    module = importlib.import_module("db_regress")
+    defaults = yaml.safe_load((safety_root / "site-defaults.yaml").read_text(encoding="utf-8"))
+    return module.parse_logs(paths, SAMPLE / "parser-rules", safety_root, defaults)
+
+
+def ril_line(second, message, pid=1234):
+    return f"09-22 12:{second // 60:02}:{second % 60:02}.000  {pid}  {pid} D RILJ: [PHONE0] {message}\n"
+
+
+def test_r4_rotated_response_pairs_before_windowing(safety_root, tmp_path):
+    first, second = tmp_path / "radio.log.1", tmp_path / "radio.log"
+    first.write_text(ril_line(0, "[0043]> SEND_SMS"), encoding="utf-8")
+    second.write_text(ril_line(1, "[0043]< SEND_SMS error=NONE") +
+                      ril_line(60, "[UNSL]< UNSOL_RESPONSE_NEW_SMS"), encoding="utf-8")
+    doc = parse_synthetic(safety_root, [second, first])
+    request = next(e for e in doc["events"] if e.get("ril") and e["ril"]["dir"] == "req")
+    assert request["ril"]["latency_ms"] == 1000
+    assert not any(e["event"] == "ril_no_response" for e in doc["events"])
+    backend = importlib.import_module("parser_backends.reference").BACKEND
+    logcat = importlib.import_module("parser_backends.logcat")
+    stamp = logcat.parse_ts("2026-09-22T12:00:01.000Z")
+    response_only = backend.parse([second, first], "UTC", 2026, (stamp, stamp))
+    assert len(response_only) == 1 and response_only[0]["ril"]["latency_ms"] == 1000
+
+
+@pytest.mark.parametrize("boundary", ["buffer-file", "device-directory", "buffer-header", "clock", "boot", "pid"])
+def test_r4_unrelated_coverage_does_not_prove_no_response(safety_root, tmp_path, boundary):
+    first = tmp_path / "radio.log"
+    first.write_text(ril_line(0, "[0043]> SEND_SMS"), encoding="utf-8")
+    tail = ril_line(60, "[UNSL]< UNSOL_RESPONSE_NEW_SMS")
+    second = tmp_path / "main.log"
+    if boundary == "device-directory":
+        second = tmp_path / "other-device" / "radio.log"
+        second.parent.mkdir()
+    elif boundary in ("buffer-header", "clock", "boot", "pid"):
+        second = first
+        prefix = {"buffer-header": "--------- beginning of main\n", "clock":
+                  "09-22 11:59:00.000  1234  1234 I DNC-0: clock reset\n",
+                  "boot": "09-22 12:00:01.000  1  1 I boot_progress_start: 1\n", "pid": ""}[boundary]
+        if boundary == "pid":
+            tail = ril_line(60, "[UNSL]< UNSOL_RESPONSE_NEW_SMS", pid=2345)
+        tail = first.read_text(encoding="utf-8") + prefix + tail
+    second.write_text(tail, encoding="utf-8")
+    paths = [first] if first == second else [first, second]
+    doc = parse_synthetic(safety_root, paths)
+    assert not any(e["event"] == "ril_no_response" for e in doc["events"])
+
+
+def test_r4_reused_serial_after_boot_is_not_paired(safety_root, tmp_path):
+    path = tmp_path / "radio.log"
+    path.write_text(ril_line(0, "[0043]> SEND_SMS") +
+                    "09-22 12:00:01.000  1  1 I boot_progress_start: 1\n" +
+                    ril_line(2, "[0043]< SEND_SMS error=NONE"), encoding="utf-8")
+    doc = parse_synthetic(safety_root, [path])
+    assert all(e["ril"]["paired_ts"] is None for e in doc["events"] if e.get("ril"))

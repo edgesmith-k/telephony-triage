@@ -199,7 +199,8 @@
     "request": "SEND_SMS",
     "error": null,
     "paired_ts": null,
-    "latency_ms": null
+    "latency_ms": null,
+    "observed_until": "2026-09-22T03:00:55.400Z"
    },
    "event": null,
    "fields": {},

@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 from typing import Sequence
 
 from .. import logcat, ril
@@ -74,16 +75,49 @@ class ReferenceBackend(ParserBackend):
         window: Window | None,
     ) -> list[dict]:
         out: list[dict] = []
+        streams: dict[tuple, list[list[dict]]] = {}
         for index, path in enumerate(paths):
             lines, _ = logcat.read_file(path, index, tz, year)
-            records = [self._line_record(line) for line in lines]
-            ril.pair(records)  # 윈도우를 자르기 전에 파일 전체로
-            for rec in records:
-                if window and not (window[0] <= rec["_dt"] <= window[1]):
-                    continue
-                out.append(rec)
-                for sub, (event, fields) in enumerate(self.detect(rec), 1):
-                    out.append(self._builtin_record(rec, event, fields, sub))
+            # Only conventional rotation names in the same directory share a capture.
+            path = Path(path).resolve()
+            stem = re.sub(r"\.\d+$", "", path.name)
+            stem = re.sub(r"[._-]\d+(?=\.log$)", "", stem)
+            chunks: dict[tuple, list[dict]] = {}
+            previous, epoch = {}, 0
+            for line in lines:
+                prev = previous.get(line.buffer)
+                delta = (line.dt - prev).total_seconds() if prev else 0
+                if (delta < -logcat.BACKWARD_THRESHOLD_SEC or delta >= logcat.JUMP_THRESHOLD_SEC
+                        or line.tag == "boot_progress_start"
+                        or (line.tag.lower() == "kernel" and line.msg.startswith("Linux version "))):
+                    epoch += 1
+                previous[line.buffer] = line.dt
+                chunks.setdefault((line.buffer, epoch), []).append(self._line_record(line))
+            for (buffer, segment), records in chunks.items():
+                # A file containing a discontinuity cannot safely join another file.
+                key = (path.parent, stem, buffer, (index, segment) if epoch else None)
+                streams.setdefault(key, []).append(records)
+        for chunks in streams.values():
+            chunks.sort(key=lambda records: records[0]["_dt"])
+            segments, current = [], []
+            for chunk in chunks:
+                gap = (chunk[0]["_dt"] - current[-1]["_dt"]).total_seconds() if current else 0
+                if current and (gap < 0 or gap >= logcat.JUMP_THRESHOLD_SEC):
+                    segments.append(current)
+                    current = []
+                current.extend(chunk)
+            if current:
+                segments.append(current)
+            for records in segments:
+                ril.pair(records)  # Pair the entire capture before window filtering.
+                out.extend(records)
+        records, out = out, []
+        for rec in records:
+            if window and not (window[0] <= rec["_dt"] <= window[1]):
+                continue
+            out.append(rec)
+            for sub, (event, fields) in enumerate(self.detect(rec), 1):
+                out.append(self._builtin_record(rec, event, fields, sub))
         out.sort(key=lambda r: (r["_dt"], r["_file"], r["_line"], r["_sub"]))
         return [{k: v for k, v in rec.items() if not k.startswith("_")} for rec in out]
 
