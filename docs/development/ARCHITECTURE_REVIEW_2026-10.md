@@ -3,8 +3,9 @@
 - 작성일: 2026-10-01. 기준 commit: `088d083` (`origin/main`, Phase 13 진행 중 + `PLUGIN_IMPROVEMENT_HANDOFF.md`).
 - 목적: 코드를 고치기 전에 **현재 상태 → 문제 → 근본 원인 → 목표 구조 → Phase별 수정 순서**를 한 문서로 고정한다. 새 Codex/Claude agent가 레포를 처음 보더라도 이 문서와 `docs/design/contracts.md`만으로 Phase 구현을 시작할 수 있게 쓴다.
 - 이 문서는 **분석과 계획**이다. 코드는 바꾸지 않았다. 삭제 후보도 삭제하지 않았다.
+- 번호 규칙: 이 문서의 리팩터링 단계는 **`RF-0`~`RF-9`** 다. 프로젝트 개발 Phase(D0~14, `docs/design/11-phases.md`)와 `PLUGIN_IMPROVEMENT_HANDOFF.md`의 I0~I6과 다른 번호 체계이며, 본문의 "Phase 13"은 개발 Phase를 가리킨다.
 - 경로 약어: `S/` = `plugin/scripts/`, `K/` = `plugin/skills/telephony-triage/`, `C/` = `plugin/commands/`, `D/` = `docs/design/`, `T/` = `tests/`.
-- 기존 임시 인계 문서 `PLUGIN_IMPROVEMENT_HANDOFF.md`(R1~R15, I0~I6)와의 관계: 그 문서는 **정확성·안전성 결함**(lock 원자성, 경로 안전, shell 인용, 교차 슬롯 결합 등)을 다룬다. 이 문서는 **구조·token·경계·확장성**을 다룬다. 두 계획은 §18에서 하나의 순서로 합친다. 서로 반복하지 않는다.
+- 기존 임시 인계 문서 `PLUGIN_IMPROVEMENT_HANDOFF.md`(R1~R15, I0~I6)와의 관계: 그 문서는 **정확성·안전성 결함**(lock 원자성, 경로 안전, shell 인용, 교차 슬롯 결합 등)을 다룬다. 이 문서는 **구조·token·경계·확장성**을 다룬다. 두 계획은 §U에서 하나의 순서로 합친다. 서로 반복하지 않는다.
 
 ---
 
@@ -102,11 +103,11 @@ CLAUDE.md 15KB · AGENTS.md 3KB · SITE_PATHS · README.md(빈 파일)
 
 ## C. Token Usage Analysis
 
-측정 근거: 사외 eval 실측(`DRAFT_NOTES.md` Phase 13 반복 1: 건당 8.4만~14.4만, 평균 11만; 반복 2: 6.4만~13.5만). 아래 분해는 파일 크기(bytes ÷ ~3.5 ≈ token, 한국어 섞임)와 호출 횟수에서 추정한 것이며, 실측 분해는 §18 Phase 1에서 `claude -p --output-format json`의 usage로 한다.
+측정 근거: 사외 eval 실측(`DRAFT_NOTES.md` Phase 13 반복 1: 건당 8.4만~14.4만, 평균 11만; 반복 2: 6.4만~13.5만). 아래 분해는 파일 크기(bytes ÷ ~3.5 ≈ token, 한국어 섞임)와 호출 횟수에서 추정한 것이며, 실측 분해는 §U RF-1에서 `claude -p --output-format json`의 usage로 한다.
 
 | 영향 | 어디서 | 근거 (파일·함수) | 추정 token / 건 | 왜 낭비인가 | 제안 |
 |---|---|---|---|---|---|
-| **High** | LLM이 Step 0~4의 CLI 15~20회를 직접 호출하고 각 JSON stdout(들여쓰기 `indent=1`)과 stderr 경고를 읽는다 | `K/SKILL.md` Step 0(7개 항목)·1(4)·2(6)·2-1(5)·3·4; 각 스크립트 `main()`의 `json.dump(..., indent=1)` | 3만~6만 | 결정적 순서를 LLM이 "기억하고 실행"한다. 호출마다 추론 토큰 + 출력 토큰 + 재시도(반복 1에서 10개 eval 모두 `--json` 위치 오류로 종료 코드 2를 1회씩 받음) | **`triage.py run`** 하나가 Step 0~4(+5의 resolve)를 수행하고 `analysis.json`(≤ 4KB) + `report.md` 초안만 낸다 (§18 Phase 1) |
+| **High** | LLM이 Step 0~4의 CLI 15~20회를 직접 호출하고 각 JSON stdout(들여쓰기 `indent=1`)과 stderr 경고를 읽는다 | `K/SKILL.md` Step 0(7개 항목)·1(4)·2(6)·2-1(5)·3·4; 각 스크립트 `main()`의 `json.dump(..., indent=1)` | 3만~6만 | 결정적 순서를 LLM이 "기억하고 실행"한다. 호출마다 추론 토큰 + 출력 토큰 + 재시도(반복 1에서 10개 eval 모두 `--json` 위치 오류로 종료 코드 2를 1회씩 받음) | **`triage.py run`** 하나가 Step 0~4(+5의 resolve)를 수행하고 `analysis.json`(≤ 4KB) + `report.md` 초안만 낸다 (§U RF-1) |
 | **High** | `SKILL.md` 25.6KB를 analyze마다 전부 로드 | `C/analyze.md` → `K/SKILL.md` | ≈ 8K | Step 0~4의 절차 서술(≈ 60%)은 driver로 옮기면 사라진다. 남는 것은 사용자 확인·분류 결정·Step 7·8 규칙 | SKILL.md를 **결정 규칙 + driver 호출** 중심 ≤ 8KB로 |
 | **High** (사내 개발 세션) | `CLAUDE.md` 15KB 매 세션 + `@SITE_PROFILE.md` import + S-1 "읽을 것"에 `DRAFT_NOTES.md` 136KB | `CLAUDE.md` 머리말, `D/15 §15.5` S-1 행 | 세션당 ≈ 5K 고정 + 45K(DRAFT_NOTES를 읽는 세션) | 모드 판별표·문서 지도·원칙 12개가 매 세션 들어간다. DRAFT_NOTES는 Phase별 산출물 표·테스트 결과·가정 19개·TODO 57곳이 한 파일 | `CLAUDE.md` ≤ 4KB(모드 판별 3줄 + 읽을 파일 지시), `DRAFT_NOTES.md` → `HANDOFF_STATE.md`(≤ 3KB: 모드·완료 Phase·다음 할 일·막힌 것) + `docs/history/draft-notes-2026-09.md`(아카이브, 읽지 않음) |
 | **High** | `parse_logcat parse` 출력이 원 로그의 ~25배 | `T/fixtures/logs/data-disabled.log` 8줄 → `.events.json` 188줄·3.6KB; `dual-sim-ril.log` 11줄 → 304줄 | 로그 1,000줄(±5분 radio)이면 **수십만 바이트** — LLM이 `cat`하면 치명적 | 줄 레코드(`event: None`)마다 `msg` 원문 + 파생 이벤트에 **같은 `msg` 재복사**(`_derived()`), `indent=1` | events.json은 **LLM이 읽지 않는 파일**로 못 박고(이미 SKILL 규칙), driver가 `evidence`(근거 3~10줄)만 analysis.json에 넣는다. 파생 이벤트는 `line_ref`(파일·행)만 갖고 `msg` 복사 제거 (HANDOFF R7 provenance와 같은 수정) |
@@ -358,7 +359,7 @@ raw log ──▶ [platform backend: 포맷·시각·슬롯·페어링] ──�
 
 1. **synthetic RIL-like / IMS-like source**: `T/mocks/src/android16/vendor/mockril/libril/mock_ril.c`(3줄)가 유일. §S의 "소스↔로그 상관" 사용 사례를 위해 로그 문구를 출력하는 함수가 있는 스텁 5~10개(합성)로 확장 — 사내 소스를 흉내 내지 않고 **형태만**.
 2. **fake FTP/SFTP**: §N 커넥터 테스트용. `pyftpdlib`/`paramiko` 의존을 피하려면 `LogSource` 추상 위에 `LocalDirSource`를 두고 FTP 구현은 사내에서 (또는 `tests/mocks/ftp_stub.py`로 "URI→로컬 복사" 가짜).
-3. **generic/oFono 합성 로그**: `T/mocks/ofono_gen.py` + 시나리오 3개(등록, 데이터 컨텍스트 실패, SIM 미인식) — Phase 5에서.
+3. **generic/oFono 합성 로그**: `T/mocks/ofono_gen.py` + 시나리오 3개(등록, 데이터 컨텍스트 실패, SIM 미인식) — RF-5에서.
 4. **external-only CI**: `.github/workflows/external.yml`(이 레포는 GitHub) — `pytest -x -q`, `tools/check_boundary.py`, `make_sample_fixtures.py --check`, `make_variant_dbs.py --check`. 사내 GHE Actions 유무(S6)와 무관하게 **사외 CI는 지금 만들 수 있다**.
 5. 테스트 속도: 현재 전체 10분+. 원인은 테스트마다 `make_plugin_root.make()`(plugin/ 전체 복사) + 임시 git 레포 생성 + 서브프로세스. `session` 범위 fixture로 플러그인 루트를 1회 복사하고, 서브프로세스 대신 `main(argv)` 직접 호출을 기본으로 → 외부 CI 비용과 사내 검증 시간 모두 절감 (§Q).
 
@@ -480,7 +481,7 @@ JiraWriter.post_comment  (guard 규칙 2는 Claude 세션 전용이므로, 자�
 | 분류 | 경로 | 의존·영향 | 조치 |
 |---|---|---|---|
 | **A 유지** | `plugin/**`, `docs/design/**`, `tests/**`(아래 제외), `tools/{import_draft,make_db_skeleton,offline_eval,list_site_todos}.py`, `SITE_PATHS`, `.gitattributes`, `.gitignore`, `GUIDE.md`, `AGENTS.md` | 핵심 | — |
-| **B 유지·정리** | `CLAUDE.md` (15KB → ≤4KB) | 매 세션 로드 | Phase 1 |
+| **B 유지·정리** | `CLAUDE.md` (15KB → ≤4KB) | 매 세션 로드 | RF-1 |
 | B | `DRAFT_NOTES.md` | `D/15`·`CLAUDE.md`·`GUIDE.md`·HANDOFF가 참조 | 진행 상태 절 → `HANDOFF_STATE.md`, 나머지 → `docs/history/draft-notes-2026-09.md`. 참조 4곳 갱신 |
 | B | `CHANGES.md` (57KB, 문서 세트 1~11차 변경 이력) | `CLAUDE.md` 문서 지도, `D/14 §14.5` | `docs/history/`로. "기준 문서 세트 버전"만 `HANDOFF_STATE.md`에 |
 | B | `K/reference/db-authoring.md` (27KB) | `C/analyze.md`, `C/record.md`, SKILL Step 7 | op·drift·fixture·R1~R6·상태 표를 걷어내고 ≤ 10KB |
@@ -489,7 +490,7 @@ JiraWriter.post_comment  (guard 규칙 2는 Claude 세션 전용이므로, 자�
 | **C 생성·캐시·임시** | `.pytest_cache/`, `**/__pycache__/`, `tests/mocks/gh-state/*.json`, `tests/mocks/remote/`, `tests/skill_evals/workspace/`, `tests/mocks/plugin-probe/probe-hook.log` | 모두 `.gitignore` | 유지(비추적) |
 | **D 현재 기능에 불필요** | `REVIEW-10.md`, `REVIEW-11.md` (41KB, 과거 검토 Q1~Q10·U1~U17) | `REVIEW-OPEN.md` 이력 절과 `CHANGES.md`가 참조 | `docs/history/`로 이동(링크 갱신). HANDOFF도 archive 제안 |
 | D | `README.md` (0바이트) | 없음 | `docs/ARCHITECTURE.md` 요약 + 링크로 채움(삭제 아님) |
-| **E 삭제 후보** | `docs/development/PLUGIN_IMPROVEMENT_HANDOFF.md` | 자기 자신이 "개선 완료 후 삭제 검토"로 표시. `DRAFT_NOTES.md` 19행이 링크 | I0~I6 완료 후. 그 전에는 유지. 이 문서(§18)가 그 계획을 흡수하면 R 표만 남기고 축소 |
+| **E 삭제 후보** | `docs/development/PLUGIN_IMPROVEMENT_HANDOFF.md` | 자기 자신이 "개선 완료 후 삭제 검토"로 표시. `DRAFT_NOTES.md` 19행이 링크 | I0~I6 완료 후. 그 전에는 유지. 이 문서(§U)가 그 계획을 흡수하면 R 표만 남기고 축소 |
 | E | `tests/fixtures/issue-db-{dup-id,empty-category,lint-errors,pending,review,verify}/` (6벌, ~3.1MB) | `T/helpers/make_variant_dbs.py --check`가 재생성·검증. `tests/test_db_lint.py` 등이 경로를 직접 참조 | 커밋 제거 + conftest에서 생성으로 전환. 테스트 경로 상수 수정 필요. **스키마 변경 시 7곳 수정 문제 해소**. 단 diff로 변형 내용을 리뷰하던 가치는 줄어든다 — 사용자 판단 |
 | E | `tools/fix_exec_bits.py` | Windows 개발 PC에서만 의미. `DRAFT_NOTES` "개발 환경과 설계의 차이" | Ubuntu 전용으로 가면 삭제 가능. 사외 개발 PC가 Windows인 동안 유지 |
 | E | `plugin/scripts/migrations/0001_example_jira_tags.py` | `test_db_migrate.py`가 사용 | 테스트 fixture로 이동(`tests/mocks/migrations/`) 가능. 운영 플러그인에 "example" 마이그레이션이 배포되는 것은 혼란 |
@@ -541,14 +542,14 @@ telephony-triage/  (EXTERNAL-SAFE 레포 = canonical)
 │       ├── platforms/               android/{logcat,ril,bugreport,backend,PROFILE}, generic/              [이동+신규]
 │       ├── parser_backends/         base.py, __init__.py(shim), site/ (SITE_PATHS)
 │       ├── adapters/                base.py, __init__.py, site_*.py (SITE_PATHS)
-│       ├── connectors/              jira.py(JiraReader/Writer 인터페이스 + MCP-file 구현), logsource.py(LocalDir)   [Phase 6]
+│       ├── connectors/              jira.py(JiraReader/Writer 인터페이스 + MCP-file 구현), logsource.py(LocalDir)   [RF-6]
 │       ├── config.py · code_roots.py(+--index) · jira_fields.py · parse_logcat.py · mask_pii.py · match_signatures.py
 │       ├── db_add.py(→ ops/ 분할) · db_pr.py · db_verify.py · db_lint.py · db_build.py · db_regress.py · db_review.py · db_search.py · db_migrate.py · db_precommit.py · guard.py
 │       └── migrations/
 ├── tests/
 │   ├── conftest.py                  session 플러그인 루트 1회, 변형 DB 생성 fixture                    [신규]
 │   ├── fixtures/issue-db-sample/    (변형 6벌은 생성으로 — 사용자 판단)
-│   ├── mocks/                       + ofono_gen.py(Phase 5), ftp_stub.py(Phase 6), 합성 RIL-like 소스 확장
+│   ├── mocks/                       + ofono_gen.py(RF-5), ftp_stub.py(RF-6), 합성 RIL-like 소스 확장
 │   ├── skill_evals/                 그대로
 │   └── test_*.py (+ test_boundary.py, test_triage.py, test_platforms.py)
 ├── tools/
@@ -557,13 +558,13 @@ telephony-triage/  (EXTERNAL-SAFE 레포 = canonical)
 │   ├── check_boundary.py            ★ 비-SITE_PATHS 파일의 사내 문자열·secret·사내 import 검사            [신규]
 │   ├── context_pack.py              docs/tasks/<task>.yaml → 파일 묶음                                   [신규]
 │   ├── offline_eval.py · make_db_skeleton.py · list_site_todos.py · fix_exec_bits.py
-│   └── triage_batch.py              스케줄러가 부르는 배치 (Phase 8)
+│   └── triage_batch.py              스케줄러가 부르는 배치 (RF-8)
 └── .github/workflows/external.yml   pytest + check_boundary + fixture --check                           [신규]
 
 ================================ SECURITY BOUNDARY ================================
 사내 레포 = 위 트리 전체(import_draft로 반입) + overlay:
     plugin/site-defaults.yaml · plugin/scripts/parser_backends/site/ · plugin/scripts/adapters/site_*.py
-    plugin/scripts/connectors/site_jira.py · site_ftp.py (Phase 6 이후)
+    plugin/scripts/connectors/site_jira.py · site_ftp.py (RF-6 이후)
     tests/golden/ · tests/site/ · docs/site/ · SITE_PROFILE.md · .draft-manifest.json
     (+ 사내 소스 트리 색인 symbols.json, 운영 이슈 DB 레포)
 ```
@@ -576,11 +577,11 @@ telephony-triage/  (EXTERNAL-SAFE 레포 = canonical)
 
 ---
 
-## 18. Step-by-Step Refactoring Plan
+## U. Step-by-Step Refactoring Plan
 
-순서 원칙: (1) 안전·기준선 → (2) token(측정 가능, 즉시 효과) → (3) 경계(도구화) → (4) 플랫폼 seam(이동만) → (5) 버전 어댑터(데이터화) → (6) 다중 플랫폼(두 번째 구현) → (7) 커넥터 → (8) 워크플로/자동화 → (9) 정리. HANDOFF의 I0~I2는 Phase 0에, I3는 Phase 1에, I4~I6는 Phase 7~9에 흡수한다. 각 Phase는 독립 PR 1~3개 크기다.
+순서 원칙: (1) 안전·기준선 → (2) token(측정 가능, 즉시 효과) → (3) 경계(도구화) → (4) 플랫폼 seam(이동만) → (5) 버전 어댑터(데이터화) → (6) 다중 플랫폼(두 번째 구현) → (7) 커넥터 → (8) 워크플로/자동화 → (9) 정리. HANDOFF의 I0~I2는 RF-0에, I3는 RF-1에, I4~I6는 RF-7~9에 흡수한다. 각 Phase는 독립 PR 1~3개 크기다.
 
-### Phase 0 — Baseline & Write-safety (HANDOFF I0 + I1 + I2 핵심)
+### RF-0 — Baseline & Write-safety (HANDOFF I0 + I1 + I2 핵심)
 
 - **Goal**: 이후 모든 리팩터링이 깨뜨리지 않을 기준선과, 자동화 전 필수 안전 결함 수정.
 - **Current Problem**: 전체 suite가 13분(이 컨테이너 Ubuntu 779s, 사외 Windows 999s)이라 반복이 느리다. R2 lock 비원자, R3 경로 밖 삭제, R6 `commit -m` 인용, R1 교차 슬롯 S/C 결합, R4 회전 파일, R5 외부 파서 실패 전파.
@@ -596,7 +597,7 @@ telephony-triage/  (EXTERNAL-SAFE 레포 = canonical)
 - **Test**: `pytest tests`, `db_regress --all`(샘플), 새 재현 테스트가 수정 전 fail/후 pass.
 - **Completion Criteria**: 전체 suite 통과 + 6개 재현 테스트 통과 + 실행 시간 기록.
 
-### Phase 1 — Token / Context Optimization
+### RF-1 — Token / Context Optimization
 
 - **Goal**: analyze 건당 token −50% 이상(목표), 개발 세션 고정 컨텍스트 −80%.
 - **Current Problem**: §C High 항목 4개.
@@ -610,14 +611,14 @@ telephony-triage/  (EXTERNAL-SAFE 레포 = canonical)
 - **Files to Modify**: `K/SKILL.md`, `C/*.md`(12), `K/reference/{db-authoring,sync-pr,record}.md`, `CLAUDE.md`, `D/07-workflow.md`(driver 반영), `D/contracts.md §3.2`(triage.py 행 추가), `S/parse_logcat.py::_derived`, `S/config.py::cmd_show`, `D/15 §15.5` S-1 "읽을 것".
 - **Files to Add**: `S/triage.py`, `S/common/events.py`, `docs/ARCHITECTURE.md`, `HANDOFF_STATE.md`, `docs/tasks/*.yaml`, `tools/context_pack.py`, `tests/test_triage.py`(offline_eval 라벨셋으로 analysis.json 결정성 검증).
 - **Files to Remove**: 없음(이동만: `docs/history/`).
-- **Dependencies**: Phase 0 (R7 provenance는 driver evidence 형식의 전제).
-- **Token Impact**: analyze 건당 Bash 왕복 15~20 → 3~5; SKILL 8K → 2.5K; 사내 개발 세션 고정 50K → 3K(추정, Phase 0의 측정 도구로 확인).
+- **Dependencies**: RF-0 (R7 provenance는 driver evidence 형식의 전제).
+- **Token Impact**: analyze 건당 Bash 왕복 15~20 → 3~5; SKILL 8K → 2.5K; 사내 개발 세션 고정 50K → 3K(추정, RF-0의 측정 도구로 확인).
 - **Security Impact**: 없음. driver는 기존 스크립트를 in-process로 묶을 뿐.
 - **Risk**: 스킬 eval 45개의 기대가 "스크립트 호출 순서"를 보는 항목이 있으면 조정 필요(`T/skill_evals/grade.py`는 결과물 중심이라 영향 적음).
 - **Test**: `tools/offline_eval.py`가 `triage.py run`을 쓰도록 바꾸고 결과 동일; eval batch 1 재실행(한도 해제 후) usage 비교.
 - **Completion Criteria**: analysis.json 결정성 테스트 통과, eval 1건 측정값 기록, `CLAUDE.md` ≤ 4KB, 루트에 이력 파일 없음.
 
-### Phase 2 — External / Internal Boundary
+### RF-2 — External / Internal Boundary
 
 - **Goal**: 사내 자료 반출 방지를 **도구와 CI**로 강제. 사내에서 사외로 코드를 보내는 절차를 자동화.
 - **Current Problem**: §H.3 — 반출 도구·스캐너·secret 스캔 없음. 사외 CI 없음.
@@ -631,83 +632,83 @@ telephony-triage/  (EXTERNAL-SAFE 레포 = canonical)
 - **Files to Modify**: `tools/import_draft.py`, `SITE_PATHS`(`docs/site/boundary-patterns.txt`, `plugin/scripts/connectors/site_*` 추가), `D/15 §15.6`(반출 절차), `GUIDE.md §4`.
 - **Files to Add**: `tools/export_external.py`, `tools/check_boundary.py`, `tests/test_boundary.py`, `.github/workflows/external.yml`, `plugin/schemas/`, `tools/sync_schemas.py`.
 - **Files to Remove**: 없음.
-- **Dependencies**: Phase 1(문서 이동이 끝나야 allowlist가 안정).
+- **Dependencies**: RF-1(문서 이동이 끝나야 allowlist가 안정).
 - **Token Impact**: 사내 AI가 "사외 요약"을 손으로 만들던 작업 제거.
 - **Security Impact**: 핵심. blocklist(패턴)는 보조이고 **allowlist(SITE_PATHS 역방향)** 가 1차 장치.
 - **Risk**: 스캐너 오탐(모의 값·15자리 숫자). `allow_patterns`와 같은 예외 파일 필요.
 - **Test**: 가짜 사내 레포(`tmp`)에 SITE_PATHS 파일 + 사외 파일에 일부러 넣은 사내 문자열 → export 거부; 깨끗하면 패키지 생성 + 두 번째 `import_draft` 왕복이 동일 해시.
 - **Completion Criteria**: "실제 사내 데이터 없이 external 레포에서 build/test/refactor가 된다"는 이미 성립(합성 fixture 226 테스트). 추가로 export→import 왕복 테스트와 CI 통과.
 
-### Phase 3 — Core / Platform Separation (이동만)
+### RF-3 — Core / Platform Separation (이동만)
 
 - **Goal**: §F 디렉토리. 동작·출력 바이트 동일.
 - **Files to Modify**: `S/parser_backends/__init__.py`(shim: `reference` → `platforms.android.backend`), `S/parse_logcat.py`(bugreport 부분 import), `S/code_roots.py`(상수 → `platforms.load().source_tree`), `S/config.py`(`platform` 키 노출), `plugin/site-defaults.example.yaml`(`platform: android`), `T/mocks/parser_backends/site/__init__.py`(import 경로 — 사내 site 백엔드도 같은 변경이 필요하므로 **re-export shim을 유지**해 사내 수정 0으로).
 - **Files to Add**: `S/platforms/__init__.py`, `S/platforms/android/{__init__,logcat,ril,bugreport,backend}.py`, `tests/test_platforms.py`.
 - **Files to Remove**: `S/parser_backends/{logcat,ril}.py`, `reference/`(shim 모듈만 남김).
-- **Dependencies**: Phase 1(events.py).
+- **Dependencies**: RF-1(events.py).
 - **Token Impact**: 사내 포팅 pack이 `platforms/android/`로 명확해짐.
 - **Security Impact**: 없음. `check_boundary`의 import 방향 규칙에 `platforms/*` 포함.
 - **Risk**: `T/fixtures/logs/*.events.json` 스냅샷은 바이트 동일해야 함.
 - **Test**: 기존 파서·골든 테스트 무수정 통과.
 - **Completion Criteria**: `git mv` 중심 diff, 스냅샷 동일.
 
-### Phase 4 — Android Version Adapter (데이터화)
+### RF-4 — Android Version Adapter (데이터화)
 
 - **Goal**: §E의 상수를 설정/데이터로. 새 Android 버전 = 설정 한 줄 + 이슈 DB 규칙 PR.
 - **Files to Modify**: `S/platforms/android/__init__.py`(PROFILE 기본값), `S/code_roots.py`(`required_dirs`, `version_sources` 설정 우선), `S/platforms/android/logcat.py`(`phone_id_patterns` 선택 규칙), `ril.py`(`ril.yaml` `tags:` 선택), `S/common/parser_rules.py`(스키마 선택 필드), 이슈 DB `schema/parser-rules.schema.json`(선택 필드 — schema_version 유지), `D/04 §5.8`, `D/14` S7·S11·S20·S21 반영 위치.
 - **Files to Add**: `tools/migrate_code_refs.py`(§S #3: 새 트리에서 전 원인 `code_refs` 점검 → `add-code-ref` 계획 초안), `S/code_roots.py --index` + `symbols.json`.
-- **Dependencies**: Phase 3.
+- **Dependencies**: RF-3.
 - **Token Impact**: Step 5 심볼 탐색이 색인 조회로.
 - **Security Impact**: `symbols.json`은 사내 트리 파생물 → `work_dir` 또는 `docs/site/`(SITE_PATHS).
 - **Risk**: 설정 우선순위 혼동 — 코드 기본값 ⊂ site-defaults ⊂ 이슈 DB 규칙 순서를 contracts에 명시.
 - **Test**: 모의 트리 16/17에서 `required_dirs`를 바꿔도 validate 통과; `phone_id_patterns` 추가 시 슬롯 추출 변화 테스트.
 - **Completion Criteria**: `grep -rn 'frameworks/opt/telephony\|RILJ\|\[PHONE' plugin/scripts` 결과가 `platforms/android/` 기본값 1곳씩.
 
-### Phase 5 — Multi-platform Support (두 번째 구현으로 seam 검증)
+### RF-5 — Multi-platform Support (두 번째 구현으로 seam 검증)
 
 - **Goal**: `platforms/generic/` 백엔드 + oFono 합성 시나리오로 이슈 DB·매처·검증이 플랫폼 무관임을 **실행으로** 증명.
 - **Files to Add**: `S/platforms/generic/{__init__,backend}.py`(`short-iso`/syslog/`ofonod -d` 줄 해석, 선택 `phone_id_regex`, 선택 `pair_strategy: dbus`), `T/mocks/ofono_gen.py`, `T/mocks/scenarios/ofono-*.yaml`(3개), `T/fixtures/issue-db-ofono-sample/`(카테고리 3개, 유형 3개, 생성 스크립트), `tests/test_platform_generic.py`.
 - **Files to Modify**: `S/parser_backends/__init__.py`(platform별 기본 백엔드), `S/common/compat.py`(이슈 DB `platform` 대조), `D/16`에 "플랫폼 추가 절차" 1절.
-- **Dependencies**: Phase 3·4.
+- **Dependencies**: RF-3·4.
 - **Token Impact**: 없음.
 - **Security Impact**: 없음(전부 합성).
 - **Risk**: 스키마 `android_versions` 이름을 바꾸고 싶어질 수 있음 — 바꾸지 않는다.
 - **Test**: oFono 샘플 DB로 `db_regress --all`, `db_verify rules`, `offline_eval` 통과.
 - **Completion Criteria**: "새 플랫폼 = 백엔드 1파일 + 합성 시나리오 + 이슈 DB"로 끝났음을 PR diff가 보여줌.
 
-### Phase 6 — Connector Architecture
+### RF-6 — Connector Architecture
 
 - **Goal**: Jira·로그 소스를 인터페이스 뒤로. 구현은 사외 `MCP-file`/`LocalDir`, 사내 `site_jira`/`site_ftp`.
 - **Files to Add**: `S/connectors/{__init__,jira,logsource}.py`(`JiraReader.get_issue/search/get_comments → NormalizedIssue`, `JiraWriter.post_comment(mode 검사)`, `LogSource.fetch(LogSourceRef) → paths`), `T/mocks/ftp_stub.py`, `tests/test_connectors.py`.
 - **Files to Modify**: `S/jira_fields.py`(NormalizedIssue 생성을 `connectors.jira`로 위임, CLI 유지), `S/triage.py`(`--jira-source mcp-file|file|<site>`), `S/guard.py`(변경 없음 — Claude 세션 전용), `site-defaults.example.yaml`(`connectors:` 블록), `SITE_PATHS`.
-- **Dependencies**: Phase 1·2.
+- **Dependencies**: RF-1·2.
 - **Token Impact**: 없음.
 - **Security Impact**: writer는 `automation.mode`와 `jira.write_tools` allowlist(신규, 기본 비어 있음)를 코드로 검사. 사내 구현만 SITE_PATHS.
 - **Risk**: MCP는 Claude 세션 밖에서 호출 불가 → 자동화용 사내 JiraReader는 REST일 가능성. 인터페이스는 둘 다 수용.
 - **Test**: 모의 Jira MCP(`call.py`)와 파일 소스로 `triage.py run` end-to-end.
 - **Completion Criteria**: `jira_fields`·`triage` 테스트가 connector 경유로 동일 결과.
 
-### Phase 7 — Workflow Engine (분석 전용 흐름 + 재사용 상태)
+### RF-7 — Workflow Engine (분석 전용 흐름 + 재사용 상태)
 
 - **Goal**: "Jira 기록 없이 분석만", "추가 로그로 재분석", 입력 해시 캐시 (HANDOFF I4의 합의 부분).
 - **Files to Modify**: `S/triage.py`(`analyze-only`, `--more-logs`, `analysis.json.request_hash`), `C/analyze.md`(옵션), `K/SKILL.md`.
 - **Files to Add**: `tests/test_triage_reuse.py`.
-- **Dependencies**: Phase 1·6.
+- **Dependencies**: RF-1·6.
 - **Token Impact**: 같은 이슈 재분석 시 driver 재계산 0.
 - **Completion Criteria**: 입력 변경 시에만 재계산되는 테스트.
 
-### Phase 8 — Automation (Scheduler + Jira monitoring + draft comment + approval)
+### RF-8 — Automation (Scheduler + Jira monitoring + draft comment + approval)
 
 - **Goal**: §N 흐름을 `analysis-only` 모드로 가동, 이후 `draft` → `approve` 승격.
 - **Files to Add**: `tools/triage_batch.py --since --assignee --mode`, `S/connectors/state.py`, `S/triage.py report --template comment`, `plugin/templates/comment.md`, `tests/test_batch.py`(모의 Jira 검색·LocalDir).
 - **Files to Modify**: `site-defaults.example.yaml`(`automation:`), `D/`에 `17-automation.md`(신규 설계 절), `GUIDE.md`.
-- **Dependencies**: Phase 0(R2/R3/R5), 6, 7.
+- **Dependencies**: RF-0(R2/R3/R5), 6, 7.
 - **Token Impact**: 건당 0~4K(§N).
 - **Security Impact**: post는 모드·allowlist·사람 승인 3중. 사내 cron 설정은 `docs/site/`.
 - **Risk**: 배치가 `work_dir` lock과 충돌 → 배치는 자기 `work_dir/batch/` 네임스페이스와 별도 lock.
 - **Completion Criteria**: 모의 환경에서 10건 배치 → 10개 analysis.json + 상태 파일, LLM 호출 0으로 완료.
 
-### Phase 9 — Cleanup / Documentation
+### RF-9 — Cleanup / Documentation
 
 - **Goal**: §R의 E 후보 처리(사용자 승인), HANDOFF 삭제 검토, `docs/ARCHITECTURE.md` 최종화, `README.md` 채움, `plugin.json` 설명.
 - **Dependencies**: 전부.
@@ -715,39 +716,39 @@ telephony-triage/  (EXTERNAL-SAFE 레포 = canonical)
 
 ---
 
-## 21. Recommended First Implementation (지금 시작할 3~5개)
+## V. Recommended First Implementation (지금 시작할 3~5개)
 
 | 순위 | 변경 | 왜 먼저 | 예상 token 절감 | architecture 영향 | 사외 개발 | 사내 작업량 | risk | 수정 범위 |
 |---|---|---|---|---|---|---|---|---|
-| 1 | **`S/triage.py run` driver + SKILL.md 축소** (Phase 1 핵심) | 가장 큰 token 소비처(건당 수만)가 LLM 오케스트레이션. 기존 스크립트를 in-process로 묶기만 하므로 로직 변경이 없다 | analyze 건당 **−40~60%** (추정; 측정으로 확정) | "Minimal Context" 고리 추가. 나머지 계층 불변 | 전부 사외 | 0 (반입 후 `pytest`) | 중: SKILL 재작성 → eval 재실행 필요 | `triage.py` ~400줄, `SKILL.md`, `offline_eval.py`, `D/07` |
+| 1 | **`S/triage.py run` driver + SKILL.md 축소** (RF-1 핵심) | 가장 큰 token 소비처(건당 수만)가 LLM 오케스트레이션. 기존 스크립트를 in-process로 묶기만 하므로 로직 변경이 없다 | analyze 건당 **−40~60%** (추정; 측정으로 확정) | "Minimal Context" 고리 추가. 나머지 계층 불변 | 전부 사외 | 0 (반입 후 `pytest`) | 중: SKILL 재작성 → eval 재실행 필요 | `triage.py` ~400줄, `SKILL.md`, `offline_eval.py`, `D/07` |
 | 2 | **고정 컨텍스트 다이어트** (`CLAUDE.md` ≤4KB, `HANDOFF_STATE.md`, 이력 → `docs/history/`, 커맨드 보일러플레이트, sync-pr 단일 원본) | 사내 개발 세션마다 5만 token을 쓰는 구조. 코드 변경 0 | 사내 세션 고정분 **−80~90%** | 없음 | 사외 | 0 | 낮음(링크 깨짐만) | 문서 10여 개 |
-| 3 | **`tools/export_external.py` + `tools/check_boundary.py` + 사외 CI** (Phase 2) | 지금은 사람의 주의가 경계. 자동화·반복 반입 전에 도구화해야 한다 | 사내 AI의 "사외 요약" 작업 제거 | SECURITY BOUNDARY를 코드로 | 사외(패턴 목록만 사내) | 패턴 파일 1개 | 낮음(오탐 조정) | 스크립트 2개 + 테스트 + workflow |
-| 4 | **HANDOFF R2·R3·R6 안전 수정** (Phase 0 일부) | 작고 명확하며, 자동화(Phase 8)와 사람이 없는 배치 실행의 전제 | 없음 | 없음 | 사외 | 0 | 낮음 | `db_pr.py::Lock/_job_of/_remove_worktree`, `write-flow.md`, 테스트 |
-| 5 | **`platforms/android/` 이동 + `platform:` 키** (Phase 3) | 이름이 생기면 사내 포팅 pack이 명확해지고 oFono 자리가 보인다. `git mv` 중심이라 위험이 낮다 | 사내 포팅 세션 탐색 토큰 감소 | Core/Platform 경계 가시화 | 사외 | 0 (shim 유지) | 낮음 | 5파일 이동 + shim |
+| 3 | **`tools/export_external.py` + `tools/check_boundary.py` + 사외 CI** (RF-2) | 지금은 사람의 주의가 경계. 자동화·반복 반입 전에 도구화해야 한다 | 사내 AI의 "사외 요약" 작업 제거 | SECURITY BOUNDARY를 코드로 | 사외(패턴 목록만 사내) | 패턴 파일 1개 | 낮음(오탐 조정) | 스크립트 2개 + 테스트 + workflow |
+| 4 | **HANDOFF R2·R3·R6 안전 수정** (RF-0 일부) | 작고 명확하며, 자동화(RF-8)와 사람이 없는 배치 실행의 전제 | 없음 | 없음 | 사외 | 0 | 낮음 | `db_pr.py::Lock/_job_of/_remove_worktree`, `write-flow.md`, 테스트 |
+| 5 | **`platforms/android/` 이동 + `platform:` 키** (RF-3) | 이름이 생기면 사내 포팅 pack이 명확해지고 oFono 자리가 보인다. `git mv` 중심이라 위험이 낮다 | 사내 포팅 세션 탐색 토큰 감소 | Core/Platform 경계 가시화 | 사외 | 0 (shim 유지) | 낮음 | 5파일 이동 + shim |
 
 큰 rewrite 없음. 1·2·4는 한 주 안에 사외에서 끝낼 수 있는 크기다.
 
 ---
 
-## 15. 핵심 질문 20개에 대한 답
+## W. 핵심 질문 20개에 대한 답
 
 1. **token이 가장 많이 낭비되는 곳**: (a) analyze에서 LLM이 15~20회 CLI를 직접 호출하며 JSON을 읽는 오케스트레이션(건당 6.4만~14.4만 실측의 대부분), (b) 사내 개발 세션의 `CLAUDE.md` 15KB + `DRAFT_NOTES.md` 136KB, (c) `events.json`(원 로그 ~25배)을 LLM이 열어볼 가능성.
 2. **SIM/Data를 core context에서 얼마나 제거**: 이미 0에 가깝다 — 카테고리 지식은 이슈 DB 데이터이고 LLM은 매칭 결과만 본다. 제거보다 "LLM이 읽지 않는 파일" 규칙을 driver 출력으로 강제하는 것이 조치다. `fail-causes.md`류 10KB는 선택 로드이며 장기적으로 데이터로.
 3. **가장 효과 큰 절감**: `triage.py` driver(건당) + 컨텍스트 다이어트(세션당).
 4. **Android 버전 업 유지 가능?**: 그렇다. 버전별 문구·경로는 이슈 DB 데이터(`parser-rules`, `code_refs.android_versions`)이고, 코드 상수는 `code_roots.py` 2개와 파서 regex 몇 개뿐(§E).
-5. **version-specific 코드를 adapter로?**: 코드가 아니라 **데이터**(이슈 DB 규칙 + 설정 `version_sources`/`phone_id_patterns`)가 어댑터다. Phase 4에서 남은 상수를 데이터화.
+5. **version-specific 코드를 adapter로?**: 코드가 아니라 **데이터**(이슈 DB 규칙 + 설정 `version_sources`/`phone_id_patterns`)가 어댑터다. RF-4에서 남은 상수를 데이터화.
 6. **oFono/Linux/Yocto 확장 가능?**: 가능. 백엔드 1개(`platforms/generic`) + 합성 시나리오 + 플랫폼용 이슈 DB로 끝난다(§G). 매처·검증·PR 흐름은 이벤트 기반이라 변경 없음.
 7. **external-safe core 비율**: 현재 레포는 **100% external-safe**(사내 파일 0). 사내 overlay는 `site-defaults.yaml`, `parser_backends/site/`, `adapters/site_*`, 골든, `tests/site`, `SITE_PROFILE.md` — 코드 기준 수백 줄.
-8. **반드시 사내 유지 코드**: 검증된 사내 파서 포팅(`site` 백엔드 `detect()`), 기존 파서 어댑터 `convert()`, (Phase 6 이후) 사내 Jira/FTP 커넥터 구현, 경계 패턴 목록. 값: `site-defaults.yaml`, 이슈 DB 레포.
-9. **RIL/IMS/vendor/Jira/log parser 격리 가능?**: 이미 격리됨. 사외 코드는 `builtin.*`/`ext.*` 이벤트 **이름**만 안다. Jira는 `field_map` + (Phase 6) `JiraReader`.
+8. **반드시 사내 유지 코드**: 검증된 사내 파서 포팅(`site` 백엔드 `detect()`), 기존 파서 어댑터 `convert()`, (RF-6 이후) 사내 Jira/FTP 커넥터 구현, 경계 패턴 목록. 값: `site-defaults.yaml`, 이슈 DB 레포.
+9. **RIL/IMS/vendor/Jira/log parser 격리 가능?**: 이미 격리됨. 사외 코드는 `builtin.*`/`ext.*` 이벤트 **이름**만 안다. Jira는 `field_map` + (RF-6) `JiraReader`.
 10. **사내 Claude가 전체 레포를 읽지 않고 개발?**: 가능. §I의 pack(포팅 pack ≈ 600줄) + `HANDOFF_STATE.md`. 지금은 "읽을 것" 목록이 문서에 흩어져 있어 agent가 탐색한다 → `docs/tasks/*.yaml`로 고정.
 11. **사내 token을 가장 크게 줄이는 architecture 변경**: 결정적 driver(`triage.py`)로 LLM의 역할을 "결과 해석·결정·초안"으로 축소하는 것.
 12. **외부 Codex에서 어디까지?**: 지금도 전부(226 테스트, 모의 Jira/GHE/로그/소스). 남는 사내 작업은 값 입력·포팅·실 로그 보정·실전 검증.
 13. **External Core ↔ Internal Extension interface**: §J — `ParserBackend`, `Adapter.convert`, `NormalizedLogEvent`, `NormalizedIssue`, `AnalysisResult`(신규), `plan.json`, `site-defaults.yaml` 키. 산문은 `contracts.md`, 코드는 `TypedDict`/JSON Schema.
 14. **실 데이터 없는 external CI**: `.github/workflows/external.yml` — `pytest`, `check_boundary`, fixture `--check`. 합성 생성기가 모두 결정적이므로 가능(§L).
 15. **Monorepo vs 분리**: A′(사외 canonical + 사내 overlay) 유지, 반출 도구·스캐너 추가(§M). 플러그인이 한 트리로 설치되어야 하므로 분리 레포는 compose 비용만 더한다.
-16. **사내 자료 유출 기술적 차단**: allowlist 역방향 export(`SITE_PATHS` 배제) → 스캐너(사내 패턴·secret·import 방향·`origin: synthetic`) → CI/pre-commit → 패키지. 사람의 주의는 마지막 줄이 아니라 첫 줄이 된다(§H.3, Phase 2).
-17. **Jira→FTP→Log→Source→Analysis→Jira 가능?**: 가능. `offline_eval.py`가 이미 LLM 없는 파이프라인. 부족한 것은 커넥터 인터페이스·상태 저장·writer·승인 모드(Phase 6~8). 선행: R2/R3/R5.
+16. **사내 자료 유출 기술적 차단**: allowlist 역방향 export(`SITE_PATHS` 배제) → 스캐너(사내 패턴·secret·import 방향·`origin: synthetic`) → CI/pre-commit → 패키지. 사람의 주의는 마지막 줄이 아니라 첫 줄이 된다(§H.3, RF-2).
+17. **Jira→FTP→Log→Source→Analysis→Jira 가능?**: 가능. `offline_eval.py`가 이미 LLM 없는 파이프라인. 부족한 것은 커넥터 인터페이스·상태 저장·writer·승인 모드(RF-6~8). 선행: R2/R3/R5.
 18. **그 중 external-safe 개발 범위**: 스케줄 루프, 필터, 상태, 파서, 매처, 리포트/코멘트 템플릿, 승인 상태 머신, 모의 커넥터 — 10개 중 8개 전부 + 2개의 인터페이스.
 19. **LLM → deterministic 이전 가능 작업**: Step 0~4 전체 오케스트레이션, 시각 후보 제시, 코드 경로 후보, `code_refs` 해석·심볼 재탐색, high-confidence 단일 후보의 리포트·코멘트 초안(템플릿), 입력 해시 캐시 판단(§P).
 20. **지금 가장 먼저 고칠 architecture 문제**: "LLM이 오케스트레이터"라는 점. 해결은 `triage.py` 하나.
