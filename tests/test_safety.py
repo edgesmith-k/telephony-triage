@@ -209,3 +209,13 @@ def test_r8_gh_timeout_returns_failure(safety_root, monkeypatch):
     monkeypatch.setattr(module.subprocess, "run", timeout)
     result = module.run(["auth", "status"])
     assert result.returncode != 0 and "시간 초과" in result.stderr
+
+
+def test_r11_validate_pins_selected_db_and_config_base(safety_root):
+    text = (safety_root / "commands" / "validate.md").read_text(encoding="utf-8")
+    assert "git -C <db> fetch origin" in text
+    assert "issue_db.base_branch" in text
+    for line in text.splitlines():
+        if line.startswith("   - `") and any(name in line for name in
+                ("db_lint.py", "mask_pii.py", "db_regress.py", "db_verify.py", "db_build.py")):
+            assert "--db <db>" in line
