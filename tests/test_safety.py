@@ -187,3 +187,25 @@ def test_r9_resolve_stays_inside_root(safety_root, tmp_path, monkeypatch, relati
     args = SimpleNamespace(roots=json.dumps({"aosp": str(root)}), ref=f"aosp:{relative}")
     with pytest.raises(module.UsageError):
         module.cmd_resolve(args, {})
+
+
+def test_r8_git_timeout_is_environment_error(safety_root, tmp_path, monkeypatch):
+    module = importlib.import_module("db_pr")
+    def timeout(*args, **kwargs):
+        assert 0 < kwargs.get("timeout", 0) <= 120
+        raise subprocess.TimeoutExpired(args[0], kwargs["timeout"])
+    monkeypatch.setattr(module.subprocess, "run", timeout)
+    with pytest.raises(module.UsageError, match="시간 초과"):
+        module._git(tmp_path, "fetch", "origin")
+    with pytest.raises(module.UsageError, match="시간 초과"):
+        module._git(tmp_path, "status", check=False)
+
+
+def test_r8_gh_timeout_returns_failure(safety_root, monkeypatch):
+    module = importlib.import_module("common.ghcli")
+    def timeout(*args, **kwargs):
+        assert 0 < kwargs.get("timeout", 0) <= 120
+        raise subprocess.TimeoutExpired(args[0], kwargs["timeout"])
+    monkeypatch.setattr(module.subprocess, "run", timeout)
+    result = module.run(["auth", "status"])
+    assert result.returncode != 0 and "시간 초과" in result.stderr

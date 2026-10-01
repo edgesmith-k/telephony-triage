@@ -231,9 +231,14 @@ class Lock:
 # -- snapshot ---------------------------------------------------------------------------
 
 
-def _git(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess:
-    proc = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, encoding="utf-8",
-                          errors="replace")
+def _git(repo: Path, *args: str, check: bool = True, env: dict | None = None) -> subprocess.CompletedProcess:
+    try:
+        proc = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, encoding="utf-8",
+                              errors="replace", env=env, timeout=120)
+    except subprocess.TimeoutExpired as exc:
+        raise UsageError("git 시간 초과 (120초). 원격·로컬 상태를 확인한 뒤 재개한다.") from exc
+    except OSError as exc:
+        raise UsageError(f"git 실행 실패: {exc}") from exc
     if check and proc.returncode != 0:
         raise UsageError(f"git {' '.join(args)} 실패: {proc.stderr.strip()}")
     return proc
@@ -409,7 +414,10 @@ def _check_branch(ctx: Ctx, branch: str) -> None:
 
 
 def _gh(ctx: Ctx, args: list[str], cwd: Path) -> subprocess.CompletedProcess:
-    return ghcli.run(args, host=ctx.host, cwd=str(cwd))
+    proc = ghcli.run(args, host=ctx.host, cwd=str(cwd))
+    if proc.returncode == 124:
+        raise UsageError(proc.stderr)
+    return proc
 
 
 # -- preflight -----------------------------------------------------------------------------
@@ -661,12 +669,10 @@ def approved_hash(wt: Path) -> str:
     env = {**os.environ, "GIT_INDEX_FILE": idx}
     try:
         for args in (("read-tree", "HEAD"), ("add", "-A")):
-            proc = subprocess.run(["git", "-C", str(wt), *args], capture_output=True, text=True, encoding="utf-8",
-                                  errors="replace", env=env)
+            proc = _git(wt, *args, env=env)
             if proc.returncode != 0:
                 raise UsageError(f"승인 해시 계산 실패 (git {' '.join(args)}): {proc.stderr.strip()}")
-        proc = subprocess.run(["git", "-C", str(wt), "write-tree"], capture_output=True, text=True,
-                              encoding="utf-8", errors="replace", env=env)
+        proc = _git(wt, "write-tree", env=env)
         if proc.returncode != 0:
             raise UsageError(f"승인 해시 계산 실패: {proc.stderr.strip()}")
         return proc.stdout.strip()
@@ -904,8 +910,7 @@ def publish(ctx: Ctx, wt: Path, branch: str, lease: str, approved: str) -> tuple
     lease_arg = (f"--force-with-lease=refs/heads/{branch}:" if lease == "new"
                  else f"--force-with-lease=refs/heads/{branch}:{lease}")
     env = {**os.environ, "TT_PUBLISH_TOKEN": approved}
-    push = subprocess.run(["git", "-C", str(wt), "push", lease_arg, "origin", f"HEAD:refs/heads/{branch}"],
-                          capture_output=True, text=True, encoding="utf-8", errors="replace", env=env)
+    push = _git(wt, "push", lease_arg, "origin", f"HEAD:refs/heads/{branch}", check=False, env=env)
     if push.returncode != 0:
         return {"published": False, "pushed": False,
                 "problems": ["push가 거부됐다 (원격 브랜치가 그 사이 바뀌었거나 lease가 다르다). 원격 상태를 다시 "

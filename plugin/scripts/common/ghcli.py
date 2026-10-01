@@ -20,9 +20,12 @@ def run(args: list[str], host: str | None = None, **kwargs) -> subprocess.Comple
     env = dict(kwargs.pop("env", None) or os.environ)
     if host:
         env["GH_HOST"] = host
+    kwargs.setdefault("timeout", 120)
     try:
         return subprocess.run([executable(), *args], capture_output=True, text=True, encoding="utf-8",
                               errors="replace", env=env, **kwargs)
+    except subprocess.TimeoutExpired:
+        return subprocess.CompletedProcess([executable(), *args], 124, "", "gh 시간 초과. 원격 상태를 확인한 뒤 재개한다.")
     except OSError as exc:
         return subprocess.CompletedProcess([executable(), *args], 127, "", f"gh를 실행할 수 없습니다: {exc}")
 
