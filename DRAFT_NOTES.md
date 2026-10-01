@@ -23,14 +23,14 @@
 | 순서 | 작업 | 근거 문서 | 상태 / 다음 할 일 |
 |---|---|---|---|
 | ✅ | **리뷰** — RF 계획 외부 리뷰 | 리뷰 문서 머리 "외부 리뷰 결과" | 완료(2026-10-01). 반영 내역은 RF-0·RF-1·RF-2 행에 들어감 |
-| 1 | **RF-0** 안전·정확성 결함. HANDOFF R1(교차 슬롯 S/C)·R2(lock 원자성)·R3(경로 밖 삭제)·R4(회전 파일 RIL)·R5(외부 파서 실패 전파)·R6(`commit -m` 인용) + 외부 리뷰분 R7(`import_draft` 첫 반입·새 파일 충돌·`SITE_PATHS` 보호·apply 롤백)·R8(git/gh timeout)·R9(`cmd_resolve` containment)·R10(`pyproject.toml`+lock)·R11(`validate.md` fetch `-C`·base_branch 위치) + 재현 테스트 + 테스트 속도(conftest) | HANDOFF R1~R6·I0~I2, 리뷰 §U RF-0, 리뷰 머리 "외부 리뷰 결과" | **다음 작업.** 결함마다 "수정 전 fail → 후 pass" 테스트(`tests/test_safety.py`), 결함별 커밋 |
+| 1 | **RF-0** R1~R11 안전·정확성·의존성 + 재현 테스트·session 루트 | HANDOFF R1~R6·I0~I2, 리뷰 §U RF-0·머리 "외부 리뷰 결과" R7~R11 | 결함별 fail→pass·커밋 완료. 전체 테스트 확인 중 (`rf0/2026-10-01`) |
 | 2 | **RF-1** `triage.py` driver + `SKILL.md` ≤8KB + 커맨드 보일러플레이트 + 외부 리뷰분(MCP 원문을 모델이 보지 않게, `--top`을 types/causes에도, `db_search --limit 3`, `code_refs` projection, Jira 코멘트 예산). `CLAUDE.md` ≤4KB는 §12 이동이 사용자 결정이라 보류 | 리뷰 §U RF-1·§V 1·2 | RF-0 뒤. **10/11 전 완료 목표.** `tools/offline_eval.py`가 driver를 쓰고 결과 동일 확인 |
 | 3 | **Phase 13 재개 (2026-10-11)** — 행동 평가 45개(batch 1 재실행 + 남은 25개 B·C·D) + 수동 채점, 트리거 테스트, 빈 플러그인 실험(S1) | `11-phases.md` Phase 13, `tests/skill_evals/README.md`, 이력 파일 "Phase 13 재개 결과·남은 일" | Claude Code에서만. 새 iteration 경로로 실행(기존 폴더 덮어쓰기 금지) |
 | 4 | **RF-2** 반입 도구 강화(staging·rollback) + `check_boundary.py` + 사외 CI. `export_external.py`는 만들지 않음(결정 a) | 리뷰 §U RF-2 | Phase 13 뒤 |
 | 5 | **반입** — `15 §15.4` 체크리스트, `make_db_skeleton.py`, `git archive` 묶음 | `GUIDE.md` §3 "반입 전", §4 | 그 뒤 사내 S-1~S-7 |
 | — | RF-3~RF-9, HANDOFF I3~I6(RF에 흡수) | 리뷰 §U | 반입 뒤 |
 
-- 어느 작업이든 **시작 전에 `git fetch` 후 `origin/main` 기준**, 끝나면 이 표의 상태 칸을 갱신한다.
+- 시작 전 **기존 remote/main을 fetch**, 끝나면 표 갱신. 이번 remote는 `telephony`(origin 신설 금지).
 - 사내 로그가 모의와 다를 때 가장 먼저: [S0_PROBE_CHECKLIST.md](docs/development/S0_PROBE_CHECKLIST.md) + `tools/s0_stats.py` (사내 PC, Claude 없이).
 - 사내 확인 항목(TODO(SITE) 57곳)은 `python3 tools/list_site_todos.py`로 뽑는다. 사내 정보가 있어야 판단할 것은 `REVIEW-OPEN.md`.
 
@@ -39,6 +39,13 @@
 - (a) **사내→사외 반출은 사용자가 직접 타이핑하는 사내 정보 없는 문장뿐.** 도구는 반출물(파일·마스킹 로그·diff·요약)을 만들지 않는다. 사외는 합성 데이터로만 재현한다.
 - (b) 자동 게시(RF-8)는 `confidence`가 아니라 별도 품질 게이트로만 채택.
 - 외부 리뷰(다른 에이전트, ZIP 기준) 대조 결과와 반영 내역: 리뷰 문서 머리 "외부 리뷰 결과" 절.
+
+### RF-0 구현에서 정한 세부
+
+- `lock.owner`를 `TT_LOCK_OWNER`로 전달한다. OS guard 안에서 lease 원자 교체; 손상은 오류.
+- 분석 S/C는 슬롯 호환·큰 쪽 window로 결합; 회귀 C는 독립. 회전 파일은 디렉터리·이름·buffer로 묶고 시간·부팅·pid 경계에서 분리.
+- 파서 실패는 `complete=false`·검증 unknown. 반입은 apply 예외 rollback; crash 복구 staging은 RF-2.
+- 별도 lock 대신 `pyproject.toml`에 직접·전이 의존성 고정(신규 파일 제한). 설치: `pip install .` / `pip install '.[test]'`.
 
 ## 문서 정리 상태 (2026-10-01)
 
@@ -74,7 +81,5 @@
   `contracts.md`에 옮길지 정한다.
 - Phase 1 산출물 변경: 교차 슬롯 음성 fixture 순서(Phase 3), `type.schema.json`의 `must_match {id, pattern}`(Phase 3),
   fixture를 마스킹해서 생성(Phase 4). 
-- 설계와 다르게 해석한 곳: Phase 3 완료 기준의 교차 슬롯 C 값은 `--regress`로 확인했다(분석 모드는 S=0이라 원인을
-  평가하지 않는다).
 - 의존성: `pyyaml`, `jsonschema`, `pytest`만 쓴다. 정규식 시간 상한은 작업 프로세스 방식이다(`regex` 모듈을 쓰면
   더 가볍다, 가정 18).
