@@ -114,14 +114,21 @@ def _check_lock(job: str, defaults: dict) -> None:
 
 def make_draft(plan: Path, draft: Path, defaults: dict, plugin_root: str | None) -> dict:
     """`<draft>`에 origin/<base> 기준 분리 worktree를 만들고 계획을 적용한다. `db_add apply` 결과를 돌려준다."""
+    from db_pr import _job_of, UsageError as WorktreeError
+    ctx = _draft_ctx(defaults)
+    try:
+        _job_of(draft, ctx)
+        if draft.name != "draft":
+            raise WorktreeError("draft 경로 이름은 draft여야 합니다")
+    except WorktreeError as exc:
+        raise UsageError(str(exc)) from exc
     _check_lock(draft.parent.name, defaults)
     cfg = userconfig.merged(defaults)
     repo = Path(str(userconfig.get(cfg, "issue_db.path") or "")).expanduser()
     base = userconfig.get(cfg, "issue_db.base_branch") or "main"
     _git(repo, "worktree", "prune")
     if draft.exists():
-        _git(repo, "worktree", "remove", "--force", str(draft))
-        shutil.rmtree(draft, ignore_errors=True)
+        remove_draft(draft, defaults)
     proc = _git(repo, "worktree", "add", "--detach", str(draft), f"origin/{base}")
     if proc.returncode != 0:
         raise UsageError(f"draft worktree를 만들 수 없습니다: {proc.stderr.strip()}")
@@ -132,11 +139,20 @@ def make_draft(plan: Path, draft: Path, defaults: dict, plugin_root: str | None)
     return json.loads(applied.stdout)
 
 
+def _draft_ctx(defaults: dict):
+    from db_pr import Ctx, Lock
+    cfg = userconfig.merged(defaults)
+    return Ctx(cfg, Lock(Path(str(userconfig.get(cfg, "work_dir"))).expanduser()))
+
+
 def remove_draft(draft: Path, defaults: dict) -> None:
-    repo = Path(str(userconfig.get(userconfig.merged(defaults), "issue_db.path") or "")).expanduser()
-    _git(repo, "worktree", "remove", "--force", str(draft))
-    shutil.rmtree(draft, ignore_errors=True)
-    _git(repo, "worktree", "prune")
+    from db_pr import _remove_worktree, UsageError as WorktreeError
+    if draft.name != "draft":
+        raise UsageError("draft 경로 이름은 draft여야 합니다")
+    try:
+        _remove_worktree(_draft_ctx(defaults), draft)
+    except WorktreeError as exc:
+        raise UsageError(str(exc)) from exc
 
 
 # -- fixture 실행 컨텍스트 ------------------------------------------------------------------

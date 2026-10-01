@@ -79,3 +79,90 @@ except UsageError:
     processes = [subprocess.Popen([sys.executable, "-c", script, str(safety_root / "scripts"),
                                   str(tmp_path), str(i)]) for i in range(4)]
     assert sorted(p.wait(timeout=15) for p in processes) == [0, 2, 2, 2]
+
+
+def safety_ctx(tmp_path):
+    module = importlib.import_module("db_pr")
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    git(repo, "init", "-q", "-b", "main")
+    git(repo, "commit", "--allow-empty", "-qm", "synthetic")
+    work = tmp_path / "work"
+    lock = module.Lock(work)
+    lock.acquire("job", None, False)
+    return module, module.Ctx({"issue_db": {"path": str(repo)}, "work_dir": str(work)}, lock)
+
+
+@pytest.mark.parametrize("location", ["outside", "plain", "foreign", "user-branch"])
+def test_r3_remove_refuses_unowned_paths(safety_root, tmp_path, location):
+    module, ctx = safety_ctx(tmp_path)
+    target = (tmp_path / "outside" / "job" / "wt" if location == "outside"
+              else ctx.work_dir / "job" / "wt")
+    target.mkdir(parents=True)
+    if location == "foreign":
+        git(target, "init", "-q")
+    if location == "user-branch":
+        git(ctx.repo, "worktree", "add", "-b", "user", str(target))
+    marker = target / "keep.txt"
+    marker.write_text("keep", encoding="utf-8")
+    with pytest.raises(module.UsageError):
+        module._remove_worktree(ctx, target)
+    assert marker.read_text(encoding="utf-8") == "keep"
+
+
+def test_r3_git_remove_failure_preserves_files(safety_root, tmp_path, monkeypatch):
+    module, ctx = safety_ctx(tmp_path)
+    target = ctx.work_dir / "job" / "wt"
+    git(ctx.repo, "worktree", "add", "-b", "tt/job", str(target))
+    marker = target / "keep.txt"
+    marker.write_text("keep", encoding="utf-8")
+    original = module._git
+    def fail_remove(repo, *args, **kwargs):
+        if args[:2] == ("worktree", "remove"):
+            if kwargs.get("check", True):
+                raise module.UsageError("synthetic removal failure")
+            return subprocess.CompletedProcess(args, 1, "", "failure")
+        return original(repo, *args, **kwargs)
+    monkeypatch.setattr(module, "_git", fail_remove)
+    with pytest.raises(module.UsageError):
+        module._remove_worktree(ctx, target)
+    assert marker.exists()
+
+
+def test_r3_prepare_refuses_foreign_repo(safety_root, tmp_path):
+    module, ctx = safety_ctx(tmp_path)
+    target = ctx.work_dir / "job" / "wt"
+    target.mkdir(parents=True)
+    git(target, "init", "-q")
+    git(target, "commit", "--allow-empty", "-qm", "foreign")
+    marker = target / "keep.txt"
+    marker.write_text("keep", encoding="utf-8")
+    with pytest.raises(module.UsageError):
+        module._prepare_worktree(ctx, target, "tt/job", "HEAD")
+    assert marker.exists()
+
+
+def test_r3_draft_and_symlink_boundaries(safety_root, tmp_path, monkeypatch):
+    module, ctx = safety_ctx(tmp_path)
+    verify = importlib.import_module("db_verify")
+    monkeypatch.setattr(verify.userconfig, "merged", lambda defaults: ctx.cfg)
+    outside = tmp_path / "outside" / "job" / "draft"
+    outside.mkdir(parents=True)
+    marker = outside / "keep.txt"
+    marker.write_text("keep", encoding="utf-8")
+    with pytest.raises(verify.UsageError):
+        verify.remove_draft(outside, {})
+    assert marker.exists()
+    link = ctx.work_dir / "job"
+    try:
+        link.symlink_to(outside.parent, target_is_directory=True)
+    except OSError:
+        # Windows junctions exercise the same boundary without symlink privileges.
+        if os.name != "nt":
+            raise
+        proc = subprocess.run(["cmd", "/c", "mklink", "/J", str(link), str(outside.parent)],
+                              capture_output=True)
+        assert proc.returncode == 0
+    with pytest.raises(module.UsageError):
+        module._remove_worktree(ctx, link / "draft")
+    assert marker.exists()

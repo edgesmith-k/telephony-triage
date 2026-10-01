@@ -328,9 +328,31 @@ class Ctx:
         return userconfig.home() / "pending-feedback"
 
 
-def _job_of(wt: Path) -> tuple[Path, str]:
-    wt = Path(wt).expanduser().resolve()
+def _job_of(wt: Path, ctx: Ctx) -> tuple[Path, str]:
+    wt = Path(wt).expanduser().absolute()
+    root = ctx.work_dir.absolute()
+    if wt.name not in ("wt", "draft") or wt.parent.parent != root or wt.parent.name.startswith("."):
+        raise UsageError(f"작업 경로는 work_dir/<작업 키>/wt 또는 draft여야 합니다: {wt}")
+    for path in (root, wt.parent, wt):
+        if path.is_symlink() or getattr(path, "is_junction", lambda: False)():
+            raise UsageError(f"작업 경로의 symlink/junction은 허용하지 않습니다: {path}")
+    if not wt.resolve().is_relative_to(root.resolve()):
+        raise UsageError(f"work_dir 밖 경로: {wt}")
     return wt.parent, wt.parent.name
+
+
+def _owned_worktree(ctx: Ctx, path: Path) -> None:
+    _job_of(path, ctx)
+    row = next((w for w in _worktrees(ctx.repo) if _same_path(w["path"], path)), None)
+    if not row or not (path / ".git").is_file():
+        raise UsageError(f"등록된 도구 worktree가 아닙니다: {path}")
+    branch = row.get("branch", "")
+    if (path.name == "wt" and not branch.startswith("refs/heads/tt/")) or (path.name == "draft" and branch):
+        raise UsageError(f"도구 worktree의 브랜치가 아닙니다: {path}")
+    common = _out(_git(path, "rev-parse", "--path-format=absolute", "--git-common-dir"))
+    expected = _out(_git(ctx.repo, "rev-parse", "--path-format=absolute", "--git-common-dir"))
+    if not _same_path(common, expected):
+        raise UsageError(f"다른 저장소 worktree: {path}")
 
 
 def _read_json(path: Path) -> dict | None:
@@ -447,7 +469,9 @@ def _pending_files(ctx: Ctx, job_dir: Path) -> list[Path]:
 
 
 def _prepare_worktree(ctx: Ctx, wt: Path, tool: str, base_sha: str) -> str:
+    _job_of(wt, ctx)
     if (wt / ".git").exists():
+        _owned_worktree(ctx, wt)
         for args in (("checkout", "-f", "-B", tool, base_sha), ("reset", "--hard", base_sha), ("clean", "-fd")):
             _git(wt, *args)
         return "reapplied"
@@ -459,7 +483,7 @@ def _prepare_worktree(ctx: Ctx, wt: Path, tool: str, base_sha: str) -> str:
 
 def stage(ctx: Ctx, plan_path: Path, wt: Path, branch: str, dry_run: bool) -> tuple[dict, int]:
     ctx.require_repo()
-    job_dir, job = _job_of(wt)
+    job_dir, job = _job_of(wt, ctx)
     wt = Path(wt).expanduser().resolve()
     ctx.lock.touch(job)
     _check_branch(ctx, branch)
@@ -710,7 +734,8 @@ def _main_diff(wt: Path, entries: list[tuple[str, str]]) -> tuple[list[str], int
 
 
 def summary(ctx: Ctx, wt: Path) -> dict:
-    job_dir, job = _job_of(wt)
+    job_dir, job = _job_of(wt, ctx)
+    _owned_worktree(ctx, wt)
     wt = job_dir / wt.name
     ctx.lock.touch(job)
     state = _read_json(job_dir / STATE)
@@ -852,7 +877,8 @@ def pr_body(screen: dict, plan: dict) -> str:
 
 
 def publish(ctx: Ctx, wt: Path, branch: str, lease: str, approved: str) -> tuple[dict, int]:
-    job_dir, job = _job_of(wt)
+    job_dir, job = _job_of(wt, ctx)
+    _owned_worktree(ctx, wt)
     wt = job_dir / wt.name
     ctx.lock.touch(job)
     state = _read_json(job_dir / STATE)
@@ -940,12 +966,12 @@ def publish(ctx: Ctx, wt: Path, branch: str, lease: str, approved: str) -> tuple
 
 
 def _remove_worktree(ctx: Ctx, path: Path) -> None:
-    _git(ctx.repo, "worktree", "remove", "--force", str(path), check=False)
-    shutil.rmtree(path, ignore_errors=True)
+    _owned_worktree(ctx, path)
+    _git(ctx.repo, "worktree", "remove", "--force", str(path))
 
 
 def discard(ctx: Ctx, wt: Path) -> dict:
-    job_dir, job = _job_of(wt)
+    job_dir, job = _job_of(wt, ctx)
     wt = job_dir / wt.name
     ctx.lock.touch(job)
     state = _read_json(job_dir / STATE) or {}
@@ -1008,6 +1034,16 @@ def cleanup(ctx: Ctx, yes: bool, older_than: int | None) -> dict:
                                 "pr_state": state})
     done = []
     if yes:
+        # Validate the complete deletion set before the first mutation.
+        for t in targets:
+            if t["kind"] in ("state", "job-dir", "worktree"):
+                path = Path(t["path"])
+                job_dir = ctx.work_dir / t["job"]
+                _job_of(job_dir / "wt", ctx)
+                if path.is_symlink() or getattr(path, "is_junction", lambda: False)():
+                    raise UsageError(f"정리 대상 symlink/junction: {path}")
+                if t["kind"] == "worktree":
+                    _owned_worktree(ctx, path)
         for t in targets:
             if t["kind"] == "worktree":
                 _remove_worktree(ctx, Path(t["path"]))
