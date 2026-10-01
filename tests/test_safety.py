@@ -27,7 +27,8 @@ def safety_root(monkeypatch):
 
 
 def test_r6_commit_message_is_file_data(safety_root, tmp_path):
-    for relative in ("skills/telephony-triage/reference/write-flow.md", "commands/sync-pr.md"):
+    for relative in ("skills/telephony-triage/reference/write-flow.md", "commands/sync-pr.md",
+                     "skills/telephony-triage/SKILL.md"):
         instructions = (safety_root / relative).read_text(encoding="utf-8")
         assert "commit -m" not in instructions
         assert "commit -F" in instructions

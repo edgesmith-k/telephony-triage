@@ -48,6 +48,7 @@ description: Android Telephony 이슈(data·call·network·sim·sms·ims)를 Jir
   마스킹한다. 사람 이름(테스터·고객)은 마스킹 규칙으로 안 잡히므로 너가 옮기지 않는다.
 - **세션 lock**: 작업을 시작할 때 잡고, 끝나는 **모든** 경로에서 푼다. `db_pr discard`는 자동으로 풀고, discard 없이
   끝나면(읽기 전용 모드, 계획만 저장하고 끝냄, 기록하지 않음, 사용자가 그만둠, 오류로 중단) `S/db_pr.py lock release <KEY>`.
+  모든 흐름에서 lock 획득·인계 결과의 `lock.owner`를 보관하고 이후 `db_pr`·`db_verify` 호출마다 `TT_LOCK_OWNER`로 전달한다. 현재 lock 파일의 토큰으로 대체하지 않는다.
 - **사실과 추정을 구분한다.** 로그로 확인한 것, 코드로 추정한 것, placeholder 규칙에서 나온 것을 리포트에서 나눠 쓴다.
 - 분류 확정, 새 유형·원인 생성, 시그니처·파서 규칙 추가, 수정 상태 변경은 **항상 사용자 확인 후**다. 추천은 하되 대신 정하지 않는다.
 
@@ -67,7 +68,6 @@ description: Android Telephony 이슈(data·call·network·sim·sms·ims)를 Jir
 2. **Jira 키 검사를 가장 먼저**: `S/jira_fields.py check-key <KEY> --db SNAP`(스냅샷이 아직 없으면 `--db <issue_db.path>`).
    종료 코드 1이면 키를 다시 묻는다. 검사 전에는 키를 경로·브랜치·작업 키로 쓰지 않는다(경로 조작 방지).
 3. `S/db_pr.py lock acquire <KEY> --command analyze`
-   - 모든 흐름에서 lock 획득·인계 결과의 `lock.owner`를 보관하고 이후 `db_pr`·`db_verify` 호출마다 `TT_LOCK_OWNER`로 전달한다. 현재 lock 파일의 토큰으로 대체하지 않는다.
    - 다른 작업의 lock(종료 코드 2, 보유자 정보) → 작업 키·명령·마지막 갱신 시각을 보여준다. 사용자가 "그 세션은 끝났다"고 하면
      `lock release <그 작업 키> --force` 후 다시 잡고, 아니면 중단한다.
    - 같은 Jira의 lock이 10분 안에 갱신됨 → "다른 세션이 같은 이슈를 진행 중일 수 있다"고 알리고, 확인받으면 `--take-over`.
@@ -254,7 +254,8 @@ op 필드·순서 규칙은 `reference/db-authoring.md`의 op 표를 따른다.
 2. `db_pr stage JOB/plan.json --wt JOB/wt --branch issue/<KEY>` (`--dry-run`이면 함께). drift(종료 코드 1)는 항목마다
    **계획 값 유지 / main 값 유지(op 삭제) / 직접 입력**을 묻고 계획에 반영한 뒤 `base_sha`를 바꿔 다시 `stage`.
 3. `db_pr summary JOB/wt` → **push 전 확인 화면(생략 불가)**: 승인 / 수정 요청(계획 수정 → 다시 stage → 화면 다시) / 전체 diff / 취소.
-4. 승인 → `git -C JOB/wt add -A`와 `git -C JOB/wt commit -m "<확인받은 메시지>"`를 **별도 Bash 호출**로.
+4. 승인 → 파일 쓰기 도구로 확인받은 메시지를 `JOB/commit-message.txt`에 저장한다(`reference/write-flow.md`).
+   `git -C JOB/wt add -A`와 `git -C JOB/wt commit -F JOB/commit-message.txt`를 **별도 Bash 호출**로. 경로는 절대 경로로 치환해 shell에 맞게 인용한다.
 5. `db_pr publish … --approved <approved_hash>` → PR 링크 → `db_pr discard JOB/wt`(lock 해제).
 - `--dry-run`: 확인 화면까지 보여주고 `discard`로 정리한다. pending 피드백을 만들지 않는다. 사용자 clone의 브랜치·워킹 트리·브랜치 목록은 실행 전과 같아야 한다.
 
