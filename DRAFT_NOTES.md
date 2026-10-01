@@ -16,17 +16,23 @@
 
 - Claude Code 주간 한도(HTTP 429) — **10월 4일 09:00(Asia/Seoul) 해제**. 그때까지 Phase 13 행동 평가·트리거 시험·빈 플러그인 실험(S1) 불가.
 
-## 활성 트랙 (셋, 우선순위 순)
+## 활성 트랙과 순서 (2026-10-01 결정)
 
-| # | 트랙 | 문서 | 다음 할 일 |
+반입 전에 끝낼 것은 **RF-0 → RF-1 → Phase 13 → RF-2** 순이다. RF-1이 `SKILL.md`를 다시 쓰므로 Phase 13 행동 평가는 RF-1 **뒤**에 한 번만 돌린다(한도 해제 10/4까지가 RF-0·RF-1 창). RF-3 이후는 반입 뒤.
+
+| 순서 | 작업 | 근거 문서 | 상태 / 다음 할 일 |
 |---|---|---|---|
-| 1 | **Phase 13** (개발 Phase 마무리) | `docs/design/11-phases.md` Phase 13, 이력 파일 "Phase 13 재개 결과·남은 일" | 한도 해제 후 batch 1 재실행 + 남은 25개 행동 평가(`tests/skill_evals/run.py --execute`, 새 iteration 경로) → 트리거 테스트 → 빈 플러그인 실험(S1) |
-| 2 | **개선 RF-0~RF-9** (구조·token·경계) | [ARCHITECTURE_REVIEW_2026-10.md](docs/development/ARCHITECTURE_REVIEW_2026-10.md) §U·§V (리뷰 대기 중, 코드 변경 없음) | 다른 에이전트 리뷰 → RF-0(안전 결함 R2·R3·R6 + 테스트 속도) → RF-1(`triage.py` driver) |
-| 3 | **정확성·안전 결함 I0~I6** | [PLUGIN_IMPROVEMENT_HANDOFF.md](docs/development/PLUGIN_IMPROVEMENT_HANDOFF.md) (R1~R15) | RF-0에 흡수됨. 별도로 진행하지 않는다 |
+| 1 | **RF-0** 안전 결함 R2(lock 원자성)·R3(경로 밖 삭제)·R6(`commit -m` 인용)·R5(외부 파서 실패 전파)·R1(교차 슬롯 S/C)·R4(회전 파일 RIL) + 재현 테스트 + 테스트 속도 | [HANDOFF](docs/development/PLUGIN_IMPROVEMENT_HANDOFF.md) R1~R6·I0~I2, [리뷰](docs/development/ARCHITECTURE_REVIEW_2026-10.md) §U RF-0 | **지금 시작 가능**(리뷰 불필요, 결함 수정). 결함마다 "수정 전 fail → 후 pass" 테스트 |
+| 2 | **리뷰** — RF 계획(§U·§V) 타당성, 의존 순서, 누락 선행 조건, HANDOFF와 충돌, 결정 필요 목록 | 리뷰 문서 전체 + `contracts.md` + HANDOFF | 다른 에이전트에게 의뢰. 결과를 리뷰 문서 머리에 "리뷰 결과" 절로 |
+| 3 | **RF-1** `triage.py` driver + `SKILL.md` ≤8KB + `CLAUDE.md` ≤4KB(§12 처리는 사용자 결정) + 커맨드 보일러플레이트 | 리뷰 §U RF-1, §V 1·2 | 2번 뒤. `tools/offline_eval.py`가 driver를 쓰도록 바꾸고 결과 동일 확인 |
+| 4 | **Phase 13 재개** — 새 SKILL로 행동 평가 25개 + 수동 채점, 트리거 테스트, 빈 플러그인 실험(S1) | `11-phases.md` Phase 13, 이력 파일 "Phase 13 재개 결과·남은 일" | **10/4 09:00 이후**, 3번 뒤 |
+| 5 | **RF-2** `export_external.py` + `check_boundary.py` + 사외 CI | 리뷰 §U RF-2 | 반입 묶음을 이 도구로 만든다 |
+| 6 | **반입** — `15-local-draft.md §15.4` 체크리스트, `make_db_skeleton.py`, 묶음 | §15.4·15.6 | 그 뒤 사내 S-1~S-7 |
+| — | RF-3~RF-9, HANDOFF I3~I6(RF에 흡수) | 리뷰 §U | 반입 뒤 |
 
-- 트랙 2·3은 Phase 13과 독립이며 코드 변경은 아직 없다. 어느 트랙을 하든 **시작 전에 `git fetch` 후 `origin/main` 기준**으로 한다.
-- 사내 로그가 모의와 다를 때 가장 먼저: [S0_PROBE_CHECKLIST.md](docs/development/S0_PROBE_CHECKLIST.md) + `tools/s0_stats.py`.
-- 사내 확인 항목(TODO(SITE) 57곳)은 문서가 아니라 `python3 tools/list_site_todos.py`로 뽑는다. 사내 정보가 있어야 판단할 것은 `REVIEW-OPEN.md`.
+- 어느 작업이든 **시작 전에 `git fetch` 후 `origin/main` 기준**, 끝나면 이 표의 상태 칸을 갱신한다.
+- 사내 로그가 모의와 다를 때 가장 먼저: [S0_PROBE_CHECKLIST.md](docs/development/S0_PROBE_CHECKLIST.md) + `tools/s0_stats.py` (사내 PC, Claude 없이).
+- 사내 확인 항목(TODO(SITE) 57곳)은 `python3 tools/list_site_todos.py`로 뽑는다. 사내 정보가 있어야 판단할 것은 `REVIEW-OPEN.md`.
 
 ## 문서 정리 상태 (2026-10-01)
 
