@@ -279,6 +279,7 @@ def match_errors(result: dict, events: dict) -> dict:
     """매처 결과에 extractor 시간 상한 오류를 합친다 (회귀·검증 모드에서는 실패다)."""
     result["errors"] = list(result["errors"]) + [
         {"extractor": e["extractor"], "error": e["error"]} for e in events.get("errors") or []]
+    result["errors"] += parse_logcat.observation_errors(events)
     return result
 
 

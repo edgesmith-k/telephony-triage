@@ -306,3 +306,34 @@ def test_r7_failed_apply_rolls_back_files_and_manifest(draft_import, tmp_path, m
         draft_import.apply(result, source, dest)
     after = {p.relative_to(dest).as_posix(): p.read_bytes() for p in dest.rglob("*") if p.is_file()}
     assert after == before
+
+
+@pytest.mark.parametrize("failure", ["nonzero", "timeout", "invalid-json", "partial"])
+def test_r5_external_failure_preserves_backend_and_blocks_pass(safety_root, tmp_path, failure):
+    import yaml
+    parse = importlib.import_module("parse_logcat")
+    regress = importlib.import_module("db_regress")
+    verify = importlib.import_module("db_verify")
+    defaults = yaml.safe_load((safety_root / "site-defaults.yaml").read_text(encoding="utf-8"))
+    scripts = {"nonzero": "raise SystemExit(7)", "timeout": "import time; time.sleep(5)",
+               "invalid-json": "print('invalid')", "partial":
+               "import sys; print('{}') if sys.argv[1].endswith('ok.log') else sys.exit(7)"}
+    defaults["external_parsers"] = {"call": {"adapter": "site_data_existing", "mode": "replace",
+        "command": [sys.executable, "-c", scripts[failure], "{log}"], "timeout_sec": .1 if failure == "timeout" else 5}}
+    db = REPO / "tests" / "fixtures" / "issue-db-verify"
+    source = REPO / "tests" / "fixtures" / "verify-logs" / "call-fixed.log"
+    paths = [source]
+    if failure == "partial":
+        ok = tmp_path / "ok.log"
+        shutil.copy2(source, ok)
+        paths.append(ok)
+    run = verify.Run(db, safety_root, defaults)
+    try:
+        doc = run.parse(paths)
+        assert any(e["source"].startswith("backend:") and e["category_hint"] == "call" for e in doc["events"])
+        assert regress.match_errors({"errors": []}, doc)["errors"]
+        cause = run.db.cause_by_id("CALL-001-01")
+        assert verify.judge_resolution(run, cause, paths)["judgement"] == "unknown"
+        assert verify.judge_fix(run, cause, paths)["judgement"] == "unknown"
+    finally:
+        run.close()

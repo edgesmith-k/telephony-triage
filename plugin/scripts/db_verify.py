@@ -705,6 +705,8 @@ def judge_resolution(run: Run, cause: issuedb.Cause, paths: list[Path]) -> dict:
     if cause.pending:
         return {**out, "reason": PENDING}
     doc = run.parse(paths)
+    if errors := parse_logcat.observation_errors(doc):
+        return {**out, "reason": "파서 관측 불완전 — 판정할 수 없다", "errors": [e["error"] for e in errors]}
     if not doc.get("events"):
         return {**out, "reason": "로그 구간 부족 (수집된 줄이 없다)"}
     result = run.result(paths)
@@ -740,6 +742,8 @@ def judge_fix(run: Run, cause: issuedb.Cause, paths: list[Path]) -> dict:
         return {**out, "reason": "필수 시그니처 없음 — 코드·설정 수정 유형은 scenario_signatures 또는 "
                                  "recovery_signatures가 있어야 판정한다 (update-signature로 같은 PR에 넣을 수 있다)"}
     doc = run.parse(paths)
+    if errors := parse_logcat.observation_errors(doc):
+        return {**out, "reason": "파서 관측 불완전 — 판정할 수 없다", "errors": [e["error"] for e in errors]}
     if not doc.get("events"):
         return {**out, "reason": "로그 구간 부족 (수집된 줄이 없다)"}
     result = run.result(paths)

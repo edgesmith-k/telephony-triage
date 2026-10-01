@@ -267,6 +267,10 @@ def _run_external(
         try:
             raw = json.loads(proc.stdout) if conf.get("output", "json") == "json" else proc.stdout
             converted = module.convert(raw, {"log": str(path), "category": category, "tz": tz, "year": year})
+            converted = list(converted or [])
+            if any(not isinstance(item, dict) or not isinstance(item.get("fields") or {}, dict)
+                   for item in converted):
+                raise ValueError("어댑터 이벤트 형식 오류")
         except Exception as exc:  # noqa: BLE001 — 외부 코드. 분석은 계속한다.
             warnings.append(_ext_warn(category, f"출력 변환 실패({path.name}): {exc}"))
             continue
@@ -437,7 +441,7 @@ def run_parse(args, plugin_root: Path, defaults: dict) -> dict:
             )
             warnings += w
             mode = conf.get("mode", "merge")
-            if mode == "replace":
+            if mode == "replace" and not w:
                 events = [
                     e
                     for e in events
@@ -461,6 +465,7 @@ def run_parse(args, plugin_root: Path, defaults: dict) -> dict:
         "backend": {"name": backend.name, "version": backend.version()},
         "external": external_info,
         "external_disabled": bool(args.no_external),
+        "complete": not args.no_external and not observation_errors({"warnings": warnings}),
         "rules": {"path": str(rules_dir), **rules.summary()},
         "input": {
             "files": [str(p) for p in paths],
@@ -478,6 +483,16 @@ def run_parse(args, plugin_root: Path, defaults: dict) -> dict:
         "errors": errors,
         "events": events,
     }
+
+
+def observation_errors(doc: dict) -> list[dict]:
+    """Missing observations cannot establish absence of a cause."""
+    codes = {"external-parser-failed", "external-parser-mismatch", "parser-backend-mismatch"}
+    errors = [{"error": w["message"], "code": w["code"]} for w in doc.get("warnings", [])
+              if w.get("code") in codes]
+    if (doc.get("external_disabled") or doc.get("complete") is False) and not errors:
+        errors.append({"error": "파서 관측 불완전", "code": "incomplete-observation"})
+    return errors
 
 
 # -- extract-bugreport --------------------------------------------------------
