@@ -1,6 +1,6 @@
 # DRAFT_NOTES — 사외 초안 상태 파일
 
-> **작게 유지한다(≤6KB).** 사외 초안 모드의 진행 상태·활성 트랙·막힌 것만 둔다 (`docs/design/15-local-draft.md §15.1`).
+> **작게 유지한다(≤8KB).** 사외 초안 모드의 진행 상태·활성 트랙·막힌 것만 둔다 (`docs/design/15-local-draft.md §15.1`).
 > Phase별 산출물 표·완료 기준 결과·가정·TODO 목록 같은 **상세 이력은 `docs/history/draft-notes-2026-09.md`** 에 있고, 필요한 절만 찾아 읽는다.
 > 이 파일은 반입 때 사내로 같이 간다. `.local-draft`는 가지 않는다. 모드 판별 규칙은 `CLAUDE.md` 머리말.
 
@@ -22,17 +22,23 @@
 
 | 순서 | 작업 | 근거 문서 | 상태 / 다음 할 일 |
 |---|---|---|---|
-| 1 | **RF-0** 안전 결함 R2(lock 원자성)·R3(경로 밖 삭제)·R6(`commit -m` 인용)·R5(외부 파서 실패 전파)·R1(교차 슬롯 S/C)·R4(회전 파일 RIL) + 재현 테스트 + 테스트 속도 | [HANDOFF](docs/development/PLUGIN_IMPROVEMENT_HANDOFF.md) R1~R6·I0~I2, [리뷰](docs/development/ARCHITECTURE_REVIEW_2026-10.md) §U RF-0 | **지금 시작 가능**(리뷰 불필요, 결함 수정). 결함마다 "수정 전 fail → 후 pass" 테스트 |
+| 1 | **RF-0** 안전 결함 R2(lock 원자성)·R3(경로 밖 삭제)·R6(`commit -m` 인용)·R5(외부 파서 실패 전파)·R1(교차 슬롯 S/C)·R4(회전 파일 RIL) + **외부 리뷰 추가분**: `import_draft` 첫 반입·새 파일 충돌·`SITE_PATHS` 보호, git/gh subprocess timeout, `cmd_resolve` containment, `pyproject.toml`+lock, `validate.md` fetch `-C`·base_branch 위치 + 재현 테스트 + 테스트 속도 | [HANDOFF](docs/development/PLUGIN_IMPROVEMENT_HANDOFF.md) R1~R6·I0~I2, [리뷰](docs/development/ARCHITECTURE_REVIEW_2026-10.md) §U RF-0 | **지금 시작 가능**(리뷰 불필요, 결함 수정). 결함마다 "수정 전 fail → 후 pass" 테스트 |
 | 2 | **리뷰** — RF 계획(§U·§V) 타당성, 의존 순서, 누락 선행 조건, HANDOFF와 충돌, 결정 필요 목록 | 리뷰 문서 전체 + `contracts.md` + HANDOFF | 다른 에이전트에게 의뢰. 결과를 리뷰 문서 머리에 "리뷰 결과" 절로 |
-| 3 | **RF-1** `triage.py` driver + `SKILL.md` ≤8KB + `CLAUDE.md` ≤4KB(§12 처리는 사용자 결정) + 커맨드 보일러플레이트 | 리뷰 §U RF-1, §V 1·2 | 2번 뒤. `tools/offline_eval.py`가 driver를 쓰도록 바꾸고 결과 동일 확인 |
+| 3 | **RF-1** `triage.py` driver + `SKILL.md` ≤8KB + `CLAUDE.md` ≤4KB(§12 처리는 사용자 결정) + 커맨드 보일러플레이트 + **외부 리뷰 추가분**: MCP 원문을 모델이 보지 않게(브리지 저장 → masked brief), `--top`을 types/causes에도, `db_search --limit 3`, `code_refs` projection, Jira 코멘트 예산 | 리뷰 §U RF-1, §V 1·2 | 2번 뒤. `tools/offline_eval.py`가 driver를 쓰도록 바꾸고 결과 동일 확인 |
 | 4 | **Phase 13 재개** — 새 SKILL로 행동 평가 25개 + 수동 채점, 트리거 테스트, 빈 플러그인 실험(S1) | `11-phases.md` Phase 13, 이력 파일 "Phase 13 재개 결과·남은 일" | **10/4 09:00 이후**, 3번 뒤 |
-| 5 | **RF-2** `export_external.py` + `check_boundary.py` + 사외 CI | 리뷰 §U RF-2 | 반입 묶음을 이 도구로 만든다 |
+| 5 | **RF-2** 반입 도구 강화(충돌 검사·staging·rollback) + `check_boundary.py` + 사외 CI. `export_external.py`는 **만들지 않음**(결정 a) | 리뷰 §U RF-2, 리뷰 머리 "외부 리뷰 결과" | 반입 묶음은 `git archive`(GUIDE §3) |
 | 6 | **반입** — `15-local-draft.md §15.4` 체크리스트, `make_db_skeleton.py`, 묶음 | §15.4·15.6 | 그 뒤 사내 S-1~S-7 |
 | — | RF-3~RF-9, HANDOFF I3~I6(RF에 흡수) | 리뷰 §U | 반입 뒤 |
 
 - 어느 작업이든 **시작 전에 `git fetch` 후 `origin/main` 기준**, 끝나면 이 표의 상태 칸을 갱신한다.
 - 사내 로그가 모의와 다를 때 가장 먼저: [S0_PROBE_CHECKLIST.md](docs/development/S0_PROBE_CHECKLIST.md) + `tools/s0_stats.py` (사내 PC, Claude 없이).
 - 사내 확인 항목(TODO(SITE) 57곳)은 `python3 tools/list_site_todos.py`로 뽑는다. 사내 정보가 있어야 판단할 것은 `REVIEW-OPEN.md`.
+
+## 결정 (2026-10-01)
+
+- (a) **사내→사외 반출은 사용자가 직접 타이핑하는 사내 정보 없는 문장뿐.** 도구는 반출물(파일·마스킹 로그·diff·요약)을 만들지 않는다. 사외는 합성 데이터로만 재현한다.
+- (b) 자동 게시(RF-8)는 `confidence`가 아니라 별도 품질 게이트로만 채택.
+- 외부 리뷰(다른 에이전트, ZIP 기준) 대조 결과와 반영 내역: 리뷰 문서 머리 "외부 리뷰 결과" 절.
 
 ## 문서 정리 상태 (2026-10-01)
 

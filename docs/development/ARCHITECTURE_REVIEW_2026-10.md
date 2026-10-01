@@ -9,6 +9,32 @@
 
 ---
 
+## 외부 리뷰 결과 (2026-10-01, 다른 에이전트가 ZIP 스냅샷 기준으로 작성 — 원문은 사용자 보관)
+
+**총평**: 결론 방향(엔진 유지, 모델 표현과 사내 경계 먼저 분리, 범용 프레임워크로 다시 쓰지 말 것)은 이 문서와 같다. 근거 수준을 스스로 제한(토큰 실측 아님, pytest 미실행, git 이력 없음)했다. 아래는 코드로 대조한 결과.
+
+**이 문서·HANDOFF에 없던 결함 — 현재 main에서 확인함** → RF-0에 추가:
+- `tools/import_draft.py`: (1) 첫 반입(기준선 없음)은 같은 경로의 사내 파일이 달라도 경고 없이 덮어씀(재현함. 설계상 빈 레포에 반입하므로 실전 위험은 낮음) (2) 기준선에 없는 사내 새 파일이 사외 새 파일과 이름이 같으면 덮어씀 (3) `SITE_PATHS` 파일 자체가 보호 대상이 아님 (4) `apply()`는 순차 copy/delete, 롤백 없음.
+- `db_pr.py`·`common/ghcli.py`: git/gh subprocess에 timeout 없음(자동화 전 필수).
+- `code_roots.py::cmd_resolve`: `Path(root)/rel` 그대로, `..`·symlink containment 검사 없음.
+- 의존성 매니페스트 없음(`pyproject.toml`/lock). 새 PC마다 손 설치.
+- `commands/validate.md`: `git fetch origin`에 `-C <db>` 없음; `base_branch` 위치를 `issue-db.config.yaml`로 적었으나 실제는 사용자 config `issue_db.base_branch`.
+
+**토큰 관련 — 확인함** → RF-1에 추가:
+- **MCP 원문이 마스킹 전에 모델 컨텍스트에 들어간다**(Claude가 응답을 받아 `jira_raw.json`으로 저장하는 설계). 후처리 마스킹은 이미 쓴 토큰·노출을 못 줄인다. → raw를 모델이 보지 않는 브리지로 저장하고 masked brief만 모델에.
+- `match_signatures --top`은 `candidates`에만 적용, `types`·`causes`·`pending_causes`는 전체 출력. `db_search --limit` 기본 20(SKILL은 상위 3). `cause_entry()`에 `code_refs` 없음. `jira_fields extract`가 코멘트 전부 출력(예산 없음).
+- 점수 포화: `base = 0.4·S + 0.6·C`, `min(1.0, …)` → S=C=1이면 bonus가 순위를 못 바꿈(HANDOFF R8). **`confidence=high`를 자동 게시 근거로 쓰지 않는다** — 별도 품질 게이트(사내 held-out 검증·오탐 기준) 필요.
+
+**현재와 다른 것(ZIP 시점)**: REVIEW-10/11·CHANGES는 `docs/history/`로 이동 완료, DRAFT_NOTES는 6KB 상태 파일로 축소 완료, `CURRENT_STATUS.md` 제안은 DRAFT_NOTES 축소로 대체, `git archive` 묶음이면 `.gitignore` 파일 혼입 지적은 해당 없음.
+
+**동의하지 않는 것**: 새 Phase 번호(0~8) — 내용이 RF와 거의 1:1이라 RF에 흡수하고 번호 체계를 늘리지 않는다. release descriptor·`contracts/`·SQLite state·outbox는 두 번째 구현(RF-5)·자동화(RF-8) 전엔 만들지 않는다(리뷰 자신의 원칙과 같음). `code_refs` projection은 P1보다 P2.
+
+**사용자 결정 (2026-10-01)**:
+- (a) **사내→사외 반출은 사용자가 직접 타이핑하는 사내 정보 없는 문장뿐.** 파일·마스킹 로그·diff·요약 파일은 나가지 않는다. 따라서 `export_external.py`는 만들지 않고(RF-2 재편), `import_draft.py`·`15 §15.6`·GUIDE의 "사외로 옮길 요약" 안내를 바꿨다. 한계: 사내에서 실패한 사례를 사외에서 확정 진단할 수 없다 — 사외는 합성 데이터로만 재현한다.
+- (b) 자동 게시 단계(RF-8)는 `confidence`가 아니라 별도 품질 게이트를 통과할 때만 채택한다.
+
+---
+
 ## A. Executive Summary
 
 **이 프로젝트가 지금 가진 것 (강점)**
@@ -33,7 +59,7 @@
 
 1. **결정적 파이프라인을 한 개의 driver(`triage.py`)로 묶고, LLM은 결과 하나만 읽게 한다.** (P1)
 2. **고정 컨텍스트를 다이어트한다**: `CLAUDE.md` ≤ 4KB, `DRAFT_NOTES.md` → 3KB 상태 파일 + 이력 아카이브, 커맨드 보일러플레이트 제거. (P2)
-3. **경계를 도구로 강제한다**: `tools/export_external.py`(allowlist 역방향) + `tools/check_boundary.py`(스캐너) + pre-commit/CI. (P3)
+3. **경계를 도구로 강제한다**: `tools/check_boundary.py`(스캐너) + pre-commit/CI + 반입 staging/rollback. ~~`export_external.py`~~ 는 2026-10-01 결정(사내→사외는 사용자 타이핑만)으로 제외. (P3)
 4. **플랫폼 seam을 이름 있는 디렉토리로 올린다**: `S/platforms/android/`에 4곳의 상수를 모으고, `site-defaults.yaml`에 `platform:` 키를 둔다. 동작 변경 없음. (P4)
 5. HANDOFF I0~I1을 먼저 끝낸다. (P6)
 
@@ -245,7 +271,7 @@ EXTERNAL-SAFE (이 레포 그대로; 외부 Codex가 자유롭게 개발·테스
 ┌──────────────────────────────────────────────────────────────────────────┐
 │ plugin/scripts/{common,parser_backends/base.py,platforms/android,…}      │
 │ plugin/{commands,skills,hooks}  docs/design  tests/{mocks,fixtures,…}    │
-│ tools/{import_draft,export_external*,check_boundary*,offline_eval,…}     │
+│ tools/{import_draft,check_boundary*,offline_eval,…}                      │
 │                                                                          │
 │   Stable contracts: ParserBackend · Adapter(convert) · 이벤트 스키마 ·    │
 │   jira_fields 출력(NormalizedIssue) · plan.json(op 표) · analysis.json*  │
@@ -371,8 +397,8 @@ raw log ──▶ [platform backend: 포맷·시각·슬롯·페어링] ──�
 
 | 기준 | Option A: Monorepo (한 레포, 디렉토리 경계) | Option B: `project-core` + `project-internal` 분리 | **권장: A′ = 사외 레포(core) + 사내 레포(= core 전체 + SITE_PATHS overlay)** |
 |---|---|---|---|
-| 보안·accidental leakage | 사람이 사내 파일을 사외 경로에 넣을 수 있음 | 레포 자체가 경계. 가장 안전 | 사내 레포는 사외와 **같은 트리 + overlay**. 반출은 `export_external.py`가 allowlist로만 만든다 → B 수준 안전, A 수준 편의 |
-| 개발 편의 | 최고 | import 경로·설치 경로가 두 레포에 걸침 | 사내에서 `import_draft.py` 한 번, 사외로 `export_external.py` 한 번 |
+| 보안·accidental leakage | 사람이 사내 파일을 사외 경로에 넣을 수 있음 | 레포 자체가 경계. 가장 안전 | 사내 레포는 사외와 **같은 트리 + overlay**. 반출 도구는 없다(결정 a: 사용자 타이핑만). 반입 충돌·staging·rollback으로 B 수준 안전, A 수준 편의 |
+| 개발 편의 | 최고 | import 경로·설치 경로가 두 레포에 걸침 | 사내에서 `import_draft.py` 한 번, 사외로는 사용자가 문장으로 전달 |
 | 플러그인 설치 | `${CLAUDE_PLUGIN_ROOT}` 한 트리 | 설치 전 **compose 단계** 필요(`parser_backends.site`는 패키지 안에 있어야 import됨) | 한 트리 |
 | CI | 하나 | 둘 + 통합 | 사외 CI(합성) + 사내 테스트(골든) |
 | interface 호환 | 같은 커밋 | 버전 핀 필요 | `.draft-manifest.json` label이 사실상 버전 |
@@ -554,7 +580,6 @@ telephony-triage/  (EXTERNAL-SAFE 레포 = canonical)
 │   └── test_*.py (+ test_boundary.py, test_triage.py, test_platforms.py)
 ├── tools/
 │   ├── import_draft.py              (사외→사내) 그대로
-│   ├── export_external.py           ★ (사내→사외) SITE_PATHS 역방향 allowlist + 스캔 + 패키지         [신규]
 │   ├── check_boundary.py            ★ 비-SITE_PATHS 파일의 사내 문자열·secret·사내 import 검사            [신규]
 │   ├── context_pack.py              docs/tasks/<task>.yaml → 파일 묶음                                   [신규]
 │   ├── offline_eval.py · make_db_skeleton.py · list_site_todos.py · fix_exec_bits.py
@@ -620,6 +645,8 @@ telephony-triage/  (EXTERNAL-SAFE 레포 = canonical)
 
 ### RF-2 — External / Internal Boundary
 
+> **2026-10-01 외부 리뷰 반영**: `export_external.py`는 **만들지 않는다**(사내→사외는 사용자 타이핑만). 대신 반입 도구를 강화한다 — 첫 반입 충돌 검사(기존 트리 위 반입 거부 또는 충돌 목록), 기준선에 없는 사내 새 파일과 사외 새 파일의 이름 충돌 검사, `SITE_PATHS` 자체 보호, `apply()` staging 디렉토리 → 검증 → 활성 전환 → 실패 시 rollback. `check_boundary.py`·사외 CI·`plugin/schemas/`는 그대로.
+
 - **Goal**: 사내 자료 반출 방지를 **도구와 CI**로 강제. 사내에서 사외로 코드를 보내는 절차를 자동화.
 - **Current Problem**: §H.3 — 반출 도구·스캐너·secret 스캔 없음. 사외 CI 없음.
 - **Root Cause**: 사외 초안 단계라 "사내→사외" 방향이 아직 필요 없었다.
@@ -630,7 +657,7 @@ telephony-triage/  (EXTERNAL-SAFE 레포 = canonical)
   - `import_draft.py`에 `--check-boundary` 옵션(반입 직후 사내 레포에서 비-SITE_PATHS 변경을 재검사).
   - `plugin/schemas/`에 이슈 DB 스키마 사본(사외 테스트가 DB 없이 plan 검증) — 단일 원본은 이슈 DB 레포, `tools/sync_schemas.py --check`로 동기화 검사.
 - **Files to Modify**: `tools/import_draft.py`, `SITE_PATHS`(`docs/site/boundary-patterns.txt`, `plugin/scripts/connectors/site_*` 추가), `D/15 §15.6`(반출 절차), `GUIDE.md §4`.
-- **Files to Add**: `tools/export_external.py`, `tools/check_boundary.py`, `tests/test_boundary.py`, `.github/workflows/external.yml`, `plugin/schemas/`, `tools/sync_schemas.py`.
+- **Files to Add**: ~~`tools/export_external.py`~~(제외, 결정 a), `tools/check_boundary.py`, 반입 staging/rollback(`tools/import_draft.py` 확장), `tests/test_boundary.py`, `.github/workflows/external.yml`, `plugin/schemas/`, `tools/sync_schemas.py`.
 - **Files to Remove**: 없음.
 - **Dependencies**: RF-1(문서 이동이 끝나야 allowlist가 안정).
 - **Token Impact**: 사내 AI가 "사외 요약"을 손으로 만들던 작업 제거.
@@ -722,7 +749,7 @@ telephony-triage/  (EXTERNAL-SAFE 레포 = canonical)
 |---|---|---|---|---|---|---|---|---|
 | 1 | **`S/triage.py run` driver + SKILL.md 축소** (RF-1 핵심) | 가장 큰 token 소비처(건당 수만)가 LLM 오케스트레이션. 기존 스크립트를 in-process로 묶기만 하므로 로직 변경이 없다 | analyze 건당 **−40~60%** (추정; 측정으로 확정) | "Minimal Context" 고리 추가. 나머지 계층 불변 | 전부 사외 | 0 (반입 후 `pytest`) | 중: SKILL 재작성 → eval 재실행 필요 | `triage.py` ~400줄, `SKILL.md`, `offline_eval.py`, `D/07` |
 | 2 | **고정 컨텍스트 다이어트** (`CLAUDE.md` ≤4KB, `HANDOFF_STATE.md`, 이력 → `docs/history/`, 커맨드 보일러플레이트, sync-pr 단일 원본) | 사내 개발 세션마다 5만 token을 쓰는 구조. 코드 변경 0 | 사내 세션 고정분 **−80~90%** | 없음 | 사외 | 0 | 낮음(링크 깨짐만) | 문서 10여 개 |
-| 3 | **`tools/export_external.py` + `tools/check_boundary.py` + 사외 CI** (RF-2) | 지금은 사람의 주의가 경계. 자동화·반복 반입 전에 도구화해야 한다 | 사내 AI의 "사외 요약" 작업 제거 | SECURITY BOUNDARY를 코드로 | 사외(패턴 목록만 사내) | 패턴 파일 1개 | 낮음(오탐 조정) | 스크립트 2개 + 테스트 + workflow |
+| 3 | **반입 도구 강화(충돌·staging·rollback) + `tools/check_boundary.py` + 사외 CI** (RF-2, `export_external.py`는 제외) | 지금은 사람의 주의가 경계. 자동화·반복 반입 전에 도구화해야 한다 | 사내 AI의 "사외 요약" 작업 제거 | SECURITY BOUNDARY를 코드로 | 사외(패턴 목록만 사내) | 패턴 파일 1개 | 낮음(오탐 조정) | 스크립트 2개 + 테스트 + workflow |
 | 4 | **HANDOFF R2·R3·R6 안전 수정** (RF-0 일부) | 작고 명확하며, 자동화(RF-8)와 사람이 없는 배치 실행의 전제 | 없음 | 없음 | 사외 | 0 | 낮음 | `db_pr.py::Lock/_job_of/_remove_worktree`, `write-flow.md`, 테스트 |
 | 5 | **`platforms/android/` 이동 + `platform:` 키** (RF-3) | 이름이 생기면 사내 포팅 pack이 명확해지고 oFono 자리가 보인다. `git mv` 중심이라 위험이 낮다 | 사내 포팅 세션 탐색 토큰 감소 | Core/Platform 경계 가시화 | 사외 | 0 (shim 유지) | 낮음 | 5파일 이동 + shim |
 
@@ -938,4 +965,4 @@ RF-0~RF-2 뒤, 싼 순으로:
 
 ## 최종 한 문장
 
-**"현재 레포는 이미 100% 사외 안전하고 지식이 데이터(이슈 DB)에 있으므로 레포를 나누거나 다시 쓰지 말고, (1) Step 0~4를 묶는 결정적 driver `triage.py`를 넣어 LLM이 `analysis.json` 하나만 읽게 하고, (2) `CLAUDE.md`·`DRAFT_NOTES.md`를 3~4KB 상태 파일과 task별 context pack으로 바꿔 사내 세션 고정 컨텍스트를 없애며, (3) `SITE_PATHS` 역방향 allowlist로 동작하는 `export_external.py`와 `check_boundary.py`를 CI에 걸어 사내→사외 반출을 도구로 강제하고, (4) Android 상수 4곳을 `platforms/android/`와 설정으로 옮겨 oFono 등을 같은 `ParserBackend` seam에 붙일 수 있게 하면 — 사내에는 `site` 백엔드·어댑터·커넥터 구현·값 파일만 남고, 나머지 전부는 합성 데이터만으로 외부 Codex에서 지속적으로 개발·테스트·유지보수된다."**
+**"현재 레포는 이미 100% 사외 안전하고 지식이 데이터(이슈 DB)에 있으므로 레포를 나누거나 다시 쓰지 말고, (1) Step 0~4를 묶는 결정적 driver `triage.py`를 넣어 LLM이 `analysis.json` 하나만 읽게 하고, (2) `CLAUDE.md`·`DRAFT_NOTES.md`를 3~4KB 상태 파일과 task별 context pack으로 바꿔 사내 세션 고정 컨텍스트를 없애며, (3) 반입 도구의 충돌 검사·staging·rollback과 `check_boundary.py`를 CI에 걸어 사외→사내 반입을 도구로 강제하고(사내→사외는 사용자 타이핑만), (4) Android 상수 4곳을 `platforms/android/`와 설정으로 옮겨 oFono 등을 같은 `ParserBackend` seam에 붙일 수 있게 하면 — 사내에는 `site` 백엔드·어댑터·커넥터 구현·값 파일만 남고, 나머지 전부는 합성 데이터만으로 외부 Codex에서 지속적으로 개발·테스트·유지보수된다."**
