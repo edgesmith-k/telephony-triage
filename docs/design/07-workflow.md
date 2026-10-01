@@ -230,7 +230,7 @@ Android 버전과 브랜치마다 소스 트리가 다르므로 **분석할 때�
    - **전체 diff 보기** → 전체 diff를 보여주고 다시 묻는다.
    - **취소** → 커밋하지 않는다. `db_pr discard <wt>`로 worktree와 도구 브랜치를 지우고 lock을 푼다. 작업 계획은 남긴다. 피드백은 `03-issue-db.md §5.4 (3)` 조건을 만족할 때만 pending으로 옮긴다.
    - `--dry-run`이면 여기서 끝내고 `db_pr discard <wt>`로 정리한다(lock 해제). pending 피드백은 만들지 않는다. gh 인증이 없으면 확인 화면에 "push 불가: gh 인증 없음"을 표시한다.
-6. **커밋**: `git -C <wt> add -A`와 `git -C <wt> commit -m "<확인받은 커밋 메시지>"`를 **별도 Bash 호출**로 실행한다. 커밋은 정확히 하나만 만든다 (`.cache/`는 `.gitignore`로 제외). 한 명령으로 묶지 않는 이유는 Claude hook이 `git commit` 호출을 확실히 보게 하기 위해서다. 진짜 강제는 git pre-commit hook이다. hook이 실패하면 원인을 보여주고 5번으로 돌아간다.
+6. **커밋**: 확인받은 커밋 메시지를 파일 쓰기 도구로 worktree 밖 `<work_dir>/<작업 키>/commit-message.txt`에 그대로 저장하고(메시지를 shell 명령·heredoc에 넣지 않는다), `git -C <wt> add -A`와 `git -C <wt> commit -F <메시지 파일>`을 **별도 Bash 호출**로 실행한다. 커밋은 정확히 하나만 만든다 (`.cache/`는 `.gitignore`로 제외). 한 명령으로 묶지 않는 이유는 Claude hook이 `git commit` 호출을 확실히 보게 하기 위해서다. 진짜 강제는 git pre-commit hook이다. hook이 실패하면 원인을 보여주고 5번으로 돌아간다.
 7. **push + PR**: `db_pr publish <wt> --branch issue/<JIRA-KEY> --lease <new | 2번의 원격 SHA> --approved <summary의 approved_hash>`
    - HEAD 트리가 승인 해시와 다르거나, 커밋이 둘 이상이거나, 커밋 메시지가 확인받은 것과 다르면 거부된다 → 5번으로 돌아간다.
    - `TT_PUBLISH_TOKEN=<approved_hash> git push --force-with-lease=refs/heads/issue/<JIRA-KEY>:<sha> origin HEAD:refs/heads/issue/<JIRA-KEY>`로 올리고(`.githooks/pre-push`가 토큰과 대상 브랜치를 검사한다, `08-safety.md §9`), `GH_HOST=<ghe_host> gh pr create`(본문: 분석 요약, Jira 키, 자동 검사 결과, 검증 결과, 수정 상태 판단. **Jira 원문은 넣지 않고** 구조화 필드와 확인받은 `note`만, 모든 텍스트는 마스킹을 거친다(`08-safety.md §8.1`). 리뷰어는 `02-config.md §5.3` 리뷰어 계산)를 실행한다. 이미 PR이 있으면(브랜치 갱신) `gh pr edit`으로 본문을 갱신한다.

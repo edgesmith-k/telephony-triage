@@ -1,7 +1,6 @@
-"""I0: synthetic reproductions for Handoff R1–R6, isolated until I1/I2 fix them.
+"""I0: synthetic reproductions for Handoff R1–R6, now regression tests (RF-0 repaired them in I1/I2).
 
-Only KnownDefect is an expected failure; setup errors and unrelated assertions fail.
-strict=True makes a repaired behavior fail as XPASS until its quarantine is removed.
+The quarantine (xfail strict) is removed: a reappearing defect raises KnownDefect and fails normally.
 All destructive cases use pytest-owned temporary paths, never an operational clone.
 R6 checks instructions, not actual Claude behavior (reserved for I5).
 """
@@ -36,7 +35,8 @@ class KnownDefect(AssertionError):
 
 
 def defect(issue: str, phase: str):
-    return pytest.mark.xfail(strict=True, raises=KnownDefect, reason=f"{issue}: repair in {phase}")
+    """Labels the reviewed defect a test guards. Repaired in RF-0, so no longer an expected failure."""
+    return lambda test: test
 
 
 def _match_slots(sym_phone: int, cause_phone: int, *, regress=False, same_phone=True) -> dict:
@@ -177,14 +177,14 @@ RIL_RESPONSE = "09-22 12:00:01.000  1234  1244 D RILJ: [PHONE0] [0043]< SEND_SMS
 RIL_TAIL = "09-22 12:01:00.000  1234  1244 D RILJ: [PHONE0] [UNSL]< UNSOL_RESPONSE_NEW_SMS\n"
 
 
-@pytest.mark.parametrize("rotated", [False, pytest.param(True, marks=defect("R4 rotated RIL response", "I2"))])
+@pytest.mark.parametrize("rotated", [False, True])   # True: R4 rotated RIL response (repaired in I2)
 def test_r4_normal_response_is_paired_across_capture_files(tmp_path, rotated):
     first = tmp_path / "radio-1.log"
     second = tmp_path / "radio-2.log"
     first.write_text(RIL_REQUEST + ("" if rotated else RIL_RESPONSE + RIL_TAIL), encoding="utf-8")
     second.write_text(RIL_RESPONSE + RIL_TAIL, encoding="utf-8")
     doc = _parse_files([first, second] if rotated else [first])
-    requests = [e for e in doc["events"] if e.get("ril") and e["ril"].get("direction") == "request"]
+    requests = [e for e in doc["events"] if e.get("ril") and e["ril"].get("dir") == "req"]
     assert requests, "the synthetic request must actually be parsed"
     bad = [e for e in doc["events"] if e.get("event") == "ril_no_response"]
     if bad or not all(e["ril"].get("paired_ts") for e in requests):
@@ -209,7 +209,8 @@ def test_r5_real_external_failure_cannot_produce_passed(tmp_path, kind):
     cause = next(c for c in meta["causes"] if c["id"] == "CALL-001-01")
     # Cause detection explicitly depends on the failed adapter; recovery/scenario
     # remain observable through ordinary rule events in the same synthetic log.
-    cause["signatures"] = [{"id": "external-cause", "must_event": [{"event": "ext.call.failure"}]}]
+    cause["signatures"] = [{"id": "external-cause", "must_event": [{"event": "ext.call.failure"}],
+                            "window_sec": 60}]
     type_path.write_text("---\n" + yaml.safe_dump(meta, allow_unicode=True, sort_keys=False)
                          + "---\n" + body, encoding="utf-8")
     log = REPO / "tests/fixtures/verify-logs/call-fixed.log"
@@ -228,7 +229,8 @@ def test_r5_real_external_failure_cannot_produce_passed(tmp_path, kind):
 
 
 @pytest.mark.parametrize("relative", ["plugin/skills/telephony-triage/reference/write-flow.md",
-                                      "plugin/commands/sync-pr.md", "docs/design/07-workflow.md"])
+                                      "plugin/skills/telephony-triage/reference/sync-pr.md",
+                                      "docs/design/07-workflow.md"])
 @defect("R6 approved message interpolated into shell command", "I1")
 def test_r6_instructions_do_not_interpolate_approved_message(relative):
     text = (REPO / relative).read_text(encoding="utf-8")

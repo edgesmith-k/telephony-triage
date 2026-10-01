@@ -75,6 +75,11 @@ def show(s: dict) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    for stream in (sys.stdout, sys.stderr):   # 출력은 UTF-8 (Windows 콘솔 기본 인코딩과 무관하게)
+        try:
+            stream.reconfigure(encoding="utf-8")
+        except (AttributeError, ValueError):
+            pass
     ap = argparse.ArgumentParser(prog="s0_stats.py", description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("logs", nargs="+")
