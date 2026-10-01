@@ -11,7 +11,7 @@ This repository develops the telephony-triage Claude plugin; the operational iss
 
 ## Build, Test, and Development Commands
 
-Run from the repository root, preferably on Ubuntu as specified by the architecture. Python tests require pytest and PyYAML; use `python3` below or your environment's equivalent.
+Run from the repository root, preferably on Ubuntu as specified by the architecture. Python tests require pytest, PyYAML, and jsonschema (`pip install pyyaml jsonschema pytest`; no lock file yet); use `python3` below or your environment's equivalent.
 - `python3 -m pytest -q tests`: run the automated suite.
 - `python3 -m pytest -q tests/test_parse_logcat.py`: run focused parser tests.
 - `python3 plugin/scripts/db_lint.py --db <db-path> --all`: validate an issue database.
@@ -34,4 +34,4 @@ History uses descriptive, often Korean, phase-based subjects such as `Phase 12: 
 
 ## Security & Configuration
 
-Read `CLAUDE.md` for development mode and phase guidance. Keep site-specific values in `SITE_PROFILE.md` and local configuration; use `plugin/site-defaults.example.yaml` as the template. Never commit raw log identifiers, credentials, or internal site data. Preserve Jira read-only access and obtain explicit approval before publishing changes.
+Read `CLAUDE.md` (mode header, §11.0, §12) for development mode and phase guidance, then the state file: `DRAFT_NOTES.md` in the external draft repo ("active tracks" table says what to do next) or `SITE_PROFILE.md` in the in-house repo. Do not read `docs/history/`. Claude-only features (plugin loading, hooks, skill-creator, `/telephony-triage:*` commands) are unavailable to other agents; limit work to scripts, tests, and docs. Resuming on another PC: `GUIDE.md` §4-1. Keep site-specific values in `SITE_PROFILE.md` and local configuration; use `plugin/site-defaults.example.yaml` as the template. Never commit raw log identifiers, credentials, or internal site data. Preserve Jira read-only access and obtain explicit approval before publishing changes.

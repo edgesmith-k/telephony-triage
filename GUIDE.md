@@ -234,6 +234,47 @@ python3 -m pytest -q tests        # 골든 포함, 그 뒤 운영 이슈 DB에 d
 
 ---
 
+## 4-1. 다른 PC·다른 에이전트에서 이어가기 (사외·사내 공통)
+
+**레포에 있는 것만 따라온다.** 새 에이전트는 이전 대화를 모르므로, 떠나기 전에 상태 파일을 최신으로 만드는 것이 절차의 절반이다.
+
+| 따라옴 (git) | 안 따라옴 (PC마다 다시) |
+|---|---|
+| 코드·테스트·설계 문서, `DRAFT_NOTES.md`(사외 상태), `GUIDE.md`, `REVIEW-OPEN.md` | `.local-draft`(gitignore, 사외 모드 표식) |
+| 사내 레포면 `SITE_PROFILE.md`·`plugin/site-defaults.yaml` 등 `SITE_PATHS` 전부 | `~/.telephony-triage/config.yaml`(사용자 config), `~/.telephony-triage/work/`(**작업 계획·lock·worktree·스냅샷**) |
+| | Python 패키지(`pyyaml`, `jsonschema`, `pytest`), `gh` 인증, Jira MCP 등록, Claude Code·플러그인 설치 |
+| | `tests/skill_evals/workspace/`(eval 산출물), 대화 기록 |
+
+**떠나기 전 (항상)**
+1. 진행 중인 이슈 DB 쓰기 작업을 끝내거나 버린다 — `plan.json`·lock은 PC에 있어 따라오지 않는다. `python3 plugin/scripts/db_pr.py lock status`, 끝난 작업은 `db_pr.py discard <wt>`. 계획이 있는 열린 PR의 `sync-pr`는 원래 PC에서 하거나, 새 PC에선 수동 재동기화(`06 §6.3`).
+2. 상태 파일 갱신 — 사외 `DRAFT_NOTES.md` "활성 트랙" 상태 칸, 사내 `SITE_PROFILE.md` "진행 상태". 에이전트에게: `지금까지 한 일을 진행 상태에 반영하고 커밋·push해줘.` 같은 트랙을 다른 에이전트가 동시에 하지 않게 상태 칸에 "진행 중 — 브랜치 X"를 적는다.
+3. 작업 브랜치에 커밋·push.
+
+**사외, 새 PC**
+```
+git clone <사외 레포 URL> && cd telephony-triage
+pip install pyyaml jsonschema pytest
+touch .local-draft            # 안 만들면 Claude Code가 모드를 묻는다 → "사외 초안"
+python3 -m pytest -q tests    # 기준선 (Ubuntu 10~15분)
+```
+첫 메시지: `DRAFT_NOTES.md의 "활성 트랙과 순서"에서 다음 할 일을 확인하고, 그 작업의 근거 문서만 읽고 시작해줘. docs/history/는 읽지 마.`
+원본 문서 zip·eval 산출물은 레포에 없어도 된다(`docs/design/`이 정본, eval은 새 iteration 경로로 다시 만든다).
+
+**사내, 새 PC** (`SITE_PROFILE.md`가 커밋돼 있어 모드는 자동)
+```
+git clone <사내 GHE>/<org>/telephony-triage-plugin.git && cd telephony-triage-plugin
+pip install pyyaml jsonschema pytest
+python3 -m pytest -q tests    # 골든 포함, 이전 PC와 같은 결과여야 한다
+claude mcp list               # Jira MCP 사용자 범위 등록 확인
+```
+- S-1~S-3 중이면 바로 `S-n 진행해줘`.
+- S-4 이후(이슈 DB 사용)면 Claude Code에서 `/telephony-triage:setup` — config 작성, `scripts_path`, 이슈 DB clone, Jira 도구 매핑, `core.hooksPath .githooks`, 스냅샷. S-5 이후면 `gh auth status` 통과 필요.
+- 긴 공백 뒤·새 에이전트면 위 "첫 사내 세션에 붙여 넣을 컨텍스트"의 **[모드]·[읽을 것]·[지킬 것]** + `S-n 진행해줘`.
+
+**Claude Code가 아닌 에이전트(Codex 등)**: `AGENTS.md`만 자동으로 읽고 `CLAUDE.md`·`@SITE_PROFILE.md` import는 안 될 수 있다. 첫 메시지에 `먼저 CLAUDE.md(머리말·§11.0·§12)와 DRAFT_NOTES.md(사내면 SITE_PROFILE.md)를 읽어라. Claude 전용 기능(플러그인 로드, hooks, skill-creator, /telephony-triage:* 커맨드)은 쓸 수 없으니 스크립트·테스트·문서 작업만 한다.`를 붙인다. Phase 13(스킬 eval)·S1 실험·S-2는 Claude Code에서만 가능하다. 사내에서 다른 에이전트를 쓸 수 있는지는 회사 정책이 정한다.
+
+---
+
 ## 5. 설치와 첫 설정 (팀원 공통)
 
 1. 사내 마켓플레이스에서 `telephony-triage` 설치
