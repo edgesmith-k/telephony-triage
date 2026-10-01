@@ -219,3 +219,28 @@ def test_r11_validate_pins_selected_db_and_config_base(safety_root):
         if line.startswith("   - `") and any(name in line for name in
                 ("db_lint.py", "mask_pii.py", "db_regress.py", "db_verify.py", "db_build.py")):
             assert "--db <db>" in line
+
+
+def test_r10_dependency_manifest_has_complete_pins(safety_root):
+    import importlib.metadata as metadata
+    import tomllib
+    from packaging.requirements import Requirement
+    manifest = REPO / "pyproject.toml"
+    assert manifest.is_file(), "fresh environments need a dependency manifest"
+    data = tomllib.loads(manifest.read_text(encoding="utf-8"))
+    requirements = [Requirement(value) for value in data["project"]["dependencies"]
+                    + data["project"]["optional-dependencies"]["test"]]
+    pins = {r.name.lower().replace("_", "-"): r for r in requirements}
+    for name in ("pyyaml", "jsonschema", "pytest"):
+        assert name in pins
+    for requirement in requirements:
+        assert str(requirement.specifier).startswith("==") and "*" not in str(requirement.specifier)
+        if requirement.marker and not requirement.marker.evaluate():
+            continue
+        assert metadata.version(requirement.name) in requirement.specifier
+        for raw in metadata.requires(requirement.name) or []:
+            child = Requirement(raw)
+            if child.marker and not child.marker.evaluate({"extra": ""}):
+                continue
+            name = child.name.lower().replace("_", "-")
+            assert name in pins, f"unlocked transitive dependency: {raw}"
