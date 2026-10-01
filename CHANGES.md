@@ -428,3 +428,4 @@
 ## 사내 토큰 절약 (2026-10-01)
 
 - `15-local-draft.md §15.5` S-1 "읽을 것": `DRAFT_NOTES.md`는 "진행 상태" 절만, TODO(SITE) 목록은 `tools/list_site_todos.py` 출력으로 대체. 사내 첫 세션의 고정 읽기를 약 4만 토큰 줄인다(`docs/development/ARCHITECTURE_REVIEW_2026-10.md` P2의 즉시 적용분).
+- `15-local-draft.md §15.5` S-0: 체크리스트(`docs/development/S0_PROBE_CHECKLIST.md`)와 지표 도구(`tools/s0_stats.py`, 테스트 3개) 연결. S-0가 S-3보다 앞이라 `site-defaults.yaml`이 없어 파서가 멈추는 점을 임시 플러그인 루트로 우회하는 절차를 명시.

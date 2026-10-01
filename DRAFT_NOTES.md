@@ -19,6 +19,7 @@
 - 개선 리뷰·수정 계획 인계: [PLUGIN_IMPROVEMENT_HANDOFF.md](docs/development/PLUGIN_IMPROVEMENT_HANDOFF.md) (2026-10-01, 분석 완료·구현 미착수; 기존 Phase 13과 별도인 개선 단계 I0~I6. 임시 문서이며 완료 후 삭제 검토).
 - 구조·token·경계·확장성 리뷰와 리팩터링 계획(RF-0~RF-9): [ARCHITECTURE_REVIEW_2026-10.md](docs/development/ARCHITECTURE_REVIEW_2026-10.md) (2026-10-01, 기준 `088d083`, 분석·계획만, 코드 변경 없음. HANDOFF의 I0~I6을 RF 순서에 흡수).
 - 확장 아이디어 백로그(분야 확장·자동화·파서 변경 검증의 빈틈): [EXTENSION_IDEAS.md](docs/development/EXTENSION_IDEAS.md) (2026-10-01, 목록만. 우선순위 미정).
+- 사내 로그가 모의와 다를 때 첫 확인(S-0): [S0_PROBE_CHECKLIST.md](docs/development/S0_PROBE_CHECKLIST.md) + `tools/s0_stats.py` (2026-10-01).
 - 재개 상태 (2026-09-30): **45개 평가 정의와 남은 25개 환경 준비 완료. Claude Code 주간 한도(429)로 행동 평가·런타임 트리거 시험 미실행.** 아래 "Phase 13 재개 결과"에서 이어간다.
 - Phase 2~6은 사용자가 미리 승인해서 Phase마다 확인을 기다리지 않고 진행했다(각 Phase 끝에 커밋·push). 완료 기준 점검 결과는 Phase별 절에 있다. **Phase 7부터는 다시 Phase마다 사용자 확인을 받는다.**
 - 기준 문서 세트: `telephony-triage-docs-v11` (`CHANGES.md` 참고)
