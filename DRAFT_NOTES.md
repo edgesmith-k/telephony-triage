@@ -14,20 +14,20 @@
 
 ## 막힌 것
 
-- Claude Code 주간 한도(HTTP 429) — **10월 4일 09:00(Asia/Seoul) 해제**. 그때까지 Phase 13 행동 평가·트리거 시험·빈 플러그인 실험(S1) 불가.
+- Claude Code 주간 한도(HTTP 429)로 Phase 13 행동 평가·트리거 시험·빈 플러그인 실험(S1) 미실행. **Phase 13 재개일: 2026-10-11**(사용자 결정). 그 전까지는 Claude API를 쓰지 않는 작업(RF-0, RF-1)만 한다.
 
 ## 활성 트랙과 순서 (2026-10-01 결정)
 
-반입 전에 끝낼 것은 **RF-0 → RF-1 → Phase 13 → RF-2** 순이다. RF-1이 `SKILL.md`를 다시 쓰므로 Phase 13 행동 평가는 RF-1 **뒤**에 한 번만 돌린다(한도 해제 10/4까지가 RF-0·RF-1 창). RF-3 이후는 반입 뒤.
+반입 전 순서: **RF-0 → RF-1 → (10/11) Phase 13 → RF-2 → 반입.** RF-1이 `SKILL.md`를 다시 쓰므로 Phase 13 행동 평가는 RF-1 **뒤**에 한 번만 돌린다. 10/11까지 RF-1이 끝나지 않으면: Phase 13을 현재 SKILL로 돌리고 RF-1 뒤 바뀐 eval만 다시 돌리거나(토큰 2회), Phase 13을 RF-1 완료까지 미룬다 — **그날 사용자에게 묻는다.**
 
 | 순서 | 작업 | 근거 문서 | 상태 / 다음 할 일 |
 |---|---|---|---|
-| 1 | **RF-0** 안전 결함 R2(lock 원자성)·R3(경로 밖 삭제)·R6(`commit -m` 인용)·R5(외부 파서 실패 전파)·R1(교차 슬롯 S/C)·R4(회전 파일 RIL) + **외부 리뷰 추가분**: `import_draft` 첫 반입·새 파일 충돌·`SITE_PATHS` 보호, git/gh subprocess timeout, `cmd_resolve` containment, `pyproject.toml`+lock, `validate.md` fetch `-C`·base_branch 위치 + 재현 테스트 + 테스트 속도 | [HANDOFF](docs/development/PLUGIN_IMPROVEMENT_HANDOFF.md) R1~R6·I0~I2, [리뷰](docs/development/ARCHITECTURE_REVIEW_2026-10.md) §U RF-0 | **지금 시작 가능**(리뷰 불필요, 결함 수정). 결함마다 "수정 전 fail → 후 pass" 테스트 |
-| 2 | **리뷰** — RF 계획(§U·§V) 타당성, 의존 순서, 누락 선행 조건, HANDOFF와 충돌, 결정 필요 목록 | 리뷰 문서 전체 + `contracts.md` + HANDOFF | 다른 에이전트에게 의뢰. 결과를 리뷰 문서 머리에 "리뷰 결과" 절로 |
-| 3 | **RF-1** `triage.py` driver + `SKILL.md` ≤8KB + `CLAUDE.md` ≤4KB(§12 처리는 사용자 결정) + 커맨드 보일러플레이트 + **외부 리뷰 추가분**: MCP 원문을 모델이 보지 않게(브리지 저장 → masked brief), `--top`을 types/causes에도, `db_search --limit 3`, `code_refs` projection, Jira 코멘트 예산 | 리뷰 §U RF-1, §V 1·2 | 2번 뒤. `tools/offline_eval.py`가 driver를 쓰도록 바꾸고 결과 동일 확인 |
-| 4 | **Phase 13 재개** — 새 SKILL로 행동 평가 25개 + 수동 채점, 트리거 테스트, 빈 플러그인 실험(S1) | `11-phases.md` Phase 13, 이력 파일 "Phase 13 재개 결과·남은 일" | **10/4 09:00 이후**, 3번 뒤 |
-| 5 | **RF-2** 반입 도구 강화(충돌 검사·staging·rollback) + `check_boundary.py` + 사외 CI. `export_external.py`는 **만들지 않음**(결정 a) | 리뷰 §U RF-2, 리뷰 머리 "외부 리뷰 결과" | 반입 묶음은 `git archive`(GUIDE §3) |
-| 6 | **반입** — `15-local-draft.md §15.4` 체크리스트, `make_db_skeleton.py`, 묶음 | §15.4·15.6 | 그 뒤 사내 S-1~S-7 |
+| ✅ | **리뷰** — RF 계획 외부 리뷰 | 리뷰 문서 머리 "외부 리뷰 결과" | 완료(2026-10-01). 반영 내역은 RF-0·RF-1·RF-2 행에 들어감 |
+| 1 | **RF-0** 안전·정확성 결함. HANDOFF R1(교차 슬롯 S/C)·R2(lock 원자성)·R3(경로 밖 삭제)·R4(회전 파일 RIL)·R5(외부 파서 실패 전파)·R6(`commit -m` 인용) + 외부 리뷰분 R7(`import_draft` 첫 반입·새 파일 충돌·`SITE_PATHS` 보호·apply 롤백)·R8(git/gh timeout)·R9(`cmd_resolve` containment)·R10(`pyproject.toml`+lock)·R11(`validate.md` fetch `-C`·base_branch 위치) + 재현 테스트 + 테스트 속도(conftest) | HANDOFF R1~R6·I0~I2, 리뷰 §U RF-0, 리뷰 머리 "외부 리뷰 결과" | **다음 작업.** 결함마다 "수정 전 fail → 후 pass" 테스트(`tests/test_safety.py`), 결함별 커밋 |
+| 2 | **RF-1** `triage.py` driver + `SKILL.md` ≤8KB + 커맨드 보일러플레이트 + 외부 리뷰분(MCP 원문을 모델이 보지 않게, `--top`을 types/causes에도, `db_search --limit 3`, `code_refs` projection, Jira 코멘트 예산). `CLAUDE.md` ≤4KB는 §12 이동이 사용자 결정이라 보류 | 리뷰 §U RF-1·§V 1·2 | RF-0 뒤. **10/11 전 완료 목표.** `tools/offline_eval.py`가 driver를 쓰고 결과 동일 확인 |
+| 3 | **Phase 13 재개 (2026-10-11)** — 행동 평가 45개(batch 1 재실행 + 남은 25개 B·C·D) + 수동 채점, 트리거 테스트, 빈 플러그인 실험(S1) | `11-phases.md` Phase 13, `tests/skill_evals/README.md`, 이력 파일 "Phase 13 재개 결과·남은 일" | Claude Code에서만. 새 iteration 경로로 실행(기존 폴더 덮어쓰기 금지) |
+| 4 | **RF-2** 반입 도구 강화(staging·rollback) + `check_boundary.py` + 사외 CI. `export_external.py`는 만들지 않음(결정 a) | 리뷰 §U RF-2 | Phase 13 뒤 |
+| 5 | **반입** — `15 §15.4` 체크리스트, `make_db_skeleton.py`, `git archive` 묶음 | `GUIDE.md` §3 "반입 전", §4 | 그 뒤 사내 S-1~S-7 |
 | — | RF-3~RF-9, HANDOFF I3~I6(RF에 흡수) | 리뷰 §U | 반입 뒤 |
 
 - 어느 작업이든 **시작 전에 `git fetch` 후 `origin/main` 기준**, 끝나면 이 표의 상태 칸을 갱신한다.

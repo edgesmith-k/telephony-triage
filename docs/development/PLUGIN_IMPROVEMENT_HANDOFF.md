@@ -113,9 +113,11 @@ Completed: 분석과 인계 문서만 완료. **어떤 R 항목도 수정 완료
 
 ## Next Actions
 
-1. `AGENTS.md`, `CLAUDE.md`, 이 문서와 `DRAFT_NOTES.md` 최신 상태를 읽고 `git status`, branch/upstream, 기준 commit 이후 diff를 확인한다. 기존 사용자 변경을 보존한다.
-2. 구현 허용 범위가 주어지면 **I0 → I1** 순서로 진행한다. 우선 R2/R3/R6의 임시 환경 재현과 회귀 보호를 준비하고, 한 Phase만 수정·검증·인계 갱신한다.
-3. Claude quota가 해제되면 현재 코드로 새 eval iteration을 준비한다. 본체 수정 전 결과는 기준 자료로만 사용하고, I5에서 최종 코드의 행동·실제 plugin 연결을 검증한다. 제한 상태에서는 호출을 자동 반복하지 않는다.
+> 2026-10-01 갱신. 순서의 단일 원본은 `DRAFT_NOTES.md` "활성 트랙과 순서" 표다. I0~I2는 리뷰 문서의 **RF-0**에 흡수됐고, 외부 리뷰가 찾은 R7~R11이 추가됐다(리뷰 문서 머리 "외부 리뷰 결과").
+
+1. **RF-0** (I0+I1+I2): R1~R11을 결함별로 — 재현 테스트(`tests/test_safety.py`)가 수정 전 fail → 수정 → pass → 전체 `pytest tests` → 결함별 커밋. 테스트 속도(session 범위 플러그인 루트 `tests/conftest.py`)는 마지막. 끝나면 위 Current Progress의 I0~I2 체크와 DRAFT_NOTES 상태 칸 갱신.
+2. **RF-1** (I3): 리뷰 §U RF-1. 10/11 전 완료 목표.
+3. **2026-10-11 Phase 13** (I5의 행동 평가 부분): `tests/skill_evals/run.py --iteration <새 경로> --execute`. 한도·인증 오류에서 자동 반복하지 않는다.
 
 ## Regression Requirements
 
