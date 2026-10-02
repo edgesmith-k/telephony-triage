@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import fnmatch
 import json
+import re
 import subprocess
 from pathlib import Path
 
@@ -38,6 +39,22 @@ class Ctx:
         out = run_dir / "outputs"
         self.transcript = (out / "transcript.md").read_text(encoding="utf-8") if (out / "transcript.md").is_file() else ""
         self.commands = (out / "commands.md").read_text(encoding="utf-8") if (out / "commands.md").is_file() else ""
+        # 실행한 명령만: commands.md 표의 명령 칸(설명 문장 제외)과 triage.py 드라이버 trace(내부 호출)
+        cells = [row.split("|")[2] for row in self.commands.splitlines()
+                 if row.lstrip().startswith("|") and row.count("|") >= 3]
+        self.invoked = "\n".join(cells or [self.commands]) + "\n" + self.trace()
+
+    def trace(self) -> str:
+        lines = []
+        for path in sorted(self.work.glob("*/trace.jsonl")) if self.work.is_dir() else []:
+            for raw in path.read_text(encoding="utf-8").splitlines():
+                try:
+                    row = json.loads(raw)
+                except ValueError:
+                    continue
+                if row.get("script"):
+                    lines.append(" ".join([row["script"], *map(str, row.get("args") or [])]))
+        return "\n".join(lines)
 
     # 원격 ---------------------------------------------------------------------------------
     def branches(self) -> list[str]:
@@ -313,8 +330,8 @@ def checks(eid: int, ctx: Ctx) -> list:
         o = ops(job)
         return (o == [{"op": "unresolved", "type": "DATA-001"}], json.dumps(o, ensure_ascii=False))
     def in_cmd(*words):
-        hit = all(w in ctx.commands for w in words)
-        return lambda: (hit, f"commands.md에 {words} {'있음' if hit else '없음'}")
+        hit = all(w in ctx.invoked for w in words)
+        return lambda: (hit, f"commands.md 명령·드라이버 trace에 {words} {'있음' if hit else '없음'}")
     if eid == 3:
         def nt():
             n = op_list("MOCK-9003", "new-type")
@@ -512,7 +529,7 @@ def checks_c(eid, ctx):
         return [None, None, None, partial_plan, partial_remote, None]
     if eid == 25:
         def no_judgement():
-            called = bool(re.search(r"db_verify\.py[^\n]*\bfix\b", ctx.commands))
+            called = bool(re.search(r"db_verify\.py[^\n]*\bfix\b", ctx.invoked))
             return evidence_ready() and not called, f"db_verify fix called={called}"
         def cleanup():
             free, ev = ctx.lock_free()
@@ -537,7 +554,7 @@ def checks_c(eid, ctx):
             p = ctx.plan(job)
             selected = ops(job)
             bad = any(o.get("op") == "verify-fix" or (o.get("fix") or {}).get("status") == "fixed" for o in selected)
-            return p is not None and not bad and not re.search(r"db_verify\.py[^\n]*\bfix\b", ctx.commands), json.dumps(selected, ensure_ascii=False, default=str)
+            return p is not None and not bad and not re.search(r"db_verify\.py[^\n]*\bfix\b", ctx.invoked), json.dumps(selected, ensure_ascii=False, default=str)
         return [None, None, submit, no_build, no_verify, None]
     if eid == 27:
         def resolution():

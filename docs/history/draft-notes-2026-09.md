@@ -909,6 +909,41 @@ Claude hook은 `guard.py`에 hook 입력 JSON을 직접 넣어 시험했다. **�
 2. 트리거 테스트: skill-creator `run_loop`(`claude -p`)로 description 최적화 — 스킬 본문이 안정된 뒤.
 3. 실제 Claude Code에서 플러그인 로드 상태로 커맨드→스킬 연결 확인(S1, 빈 플러그인 실험과 함께).
 
+### Phase 13 행동 평가 결과 (2026-10-01~03, RF-1 뒤 SKILL 8.1KB)
+
+- **실행**: Claude Code 2.1.286(Windows, Pro). `workspace/iteration-1`~`7`(커밋 안 함). 사용자 결정으로 10/11 재개일을 앞당김.
+  iteration-1: eval 1 / 2: 2·16·19·30(32는 429 blocked) / 3: 32·40·42·43·45 / 4: B 9개(15는 429 blocked) / 5: 15·41·44·C 6개 / 6: C 3개·D 5개 / 7: batch A 10개.
+  blocked 2건은 새 iteration에서 다시 실행했고 blocked 기록은 통과로 세지 않았다.
+- **결과(각 eval의 최신 실행)**: 45개 실행, **41개 전 항목 통과, 4개 실패**. 수동 채점(`passed: null`)은 transcript·commands 근거와 함께 모두 채웠다.
+
+  | eval | 실패 항목 | 원인 분류 | 처리 |
+  |---|---|---|---|
+  | 5 | 시각 후보·--full·--around·1위 후보 (4) | 스크립트: `triage.py year()`가 Jira 발생 시각 없음 + `year_source: jira`면 선택지 없는 `needs_input year` → 실행자가 중단. 설계(07)는 바로 묻지 않고 `--full` 후보 | 사용자 결정: 이번에는 안 고침 |
+  | 22 | resolution 변경 흐름 전부 (5) | eval 정의: `call-drop.log`(imsRegistered=true 통화 끊김)가 CALL-001-01과 안 맞고 Jira 발생 시각과 하루 차이 → 후보 없음. 실행자는 분류를 지어내지 않고 멈춤(정상) | 안 고침 |
+  | 29 | 로컬 `issue/<KEY>`를 알리고 "물었다" (1) | eval 정의: 반복 2 피드백으로 "ahead 커밋이 있을 때만 묻는다"로 바뀐 SKILL 규칙보다 assertion이 옛 기준 | 안 고침 |
+  | 44 | DATA-001-01 제외 이유로 "슬롯이 다름을 설명" (1) | eval 정의: 설계(10 §44)는 "후보에 오르지 않고 유형 일치·원인 미확인·phone 0 표시"까지만 요구. 매처 출력에도 다른 슬롯 충족 정보 없음 | 안 고침 |
+
+- **채점기 수정(사용자 승인)**: `grade.py`에 `import re` 누락(25·26·27·28 채점 오류), RF-1 뒤 드라이버가 내부에서 돌리는 `--full`·`--regress`·`--around`·`find-symbol`을
+  commands.md에서만 찾던 검사 → `<work_dir>/*/trace.jsonl`도 본다(eval 15 오탐), "실행하지 않았다" 설명 문장에 걸리던 정규식 → commands.md 표의 명령 칸만 본다(eval 25 오탐).
+- **스크립트·reference 마찰(통과에는 영향 없음, 미수정)**: `db_verify`의 `allow_cause_drafts`가 plan 스키마에 없는 `type_dir`를 포함(eval 42에서 그대로 붙여 종료 2),
+  `verify-resolution.verification`에 `status`를 넣는 실수(eval 38). eval 7은 PII 줄이 근거 줄이 아니어서 토큰 표기가 실제로 시험되지 않는다(정의 보완 후보).
+- **eval 환경 차이**: 실행자 세션에는 PostToolUse `jira_bridge.py`가 없어 Jira 원문을 직접 `jira_raw.json`으로 저장하거나 bridge를 수동으로 거쳤다(실제 플러그인 hook 동작은 S1에서 확인).
+  Git Bash `/tmp`를 Windows Python이 못 열어 첫 저장이 실패한 경우가 여러 번. user_replies의 "5) 코드 분석 건너뛰기"는 RF-1 뒤 2지선다 메뉴와 번호가 다르다(의미는 같아 통과).
+- **토큰(execution.json, API 환산)**: iteration-1 입력 0.91M·출력 17k·$0.94 / 2: 4.15M·69k·$4.28 / 3: 4.19M·80k·$4.54 / 4: 7.22M·139k·$7.63 /
+  5: 8.31M·148k·$8.51 / 6: 7.38M·121k·$7.23 / 7: 5.87M·125k·$6.92. 합계 약 38.0M·699k·$40. eval 하나 평균 약 0.8M 입력(대부분 캐시 읽기)·15k 출력, 1~5분.
+  Pro 5시간 창 기준 eval 하나가 약 8%. eval 1 실측: Bash 20회, 입력 0.91M, 출력 17k.
+- **트리거 시험**: skill-creator `run_loop`(질문 24개, 3회씩, train 15/test 9). Windows는 `select`가 파이프를 지원하지 않아 scratchpad 사본의 `run_eval.py`를 스레드 읽기로 패치해 실행.
+  기준 description: precision 100%, recall train 26%·test 13~33%(실행마다 다름). 1회 개선안도 train 26%·test 27%. `improve_description`의 `claude -p`가 사용량 한도 시점에 2회 실패해 중단.
+  description은 바꾸지 않았다. 빈 디렉토리 + 프로젝트 커맨드로 흉내 내는 방식이라 실제 플러그인 스킬 선택과 다를 수 있다(측정 방식 한계).
+- **S1**: `DRAFT_NOTES.md` "사외 Claude Code 실험 결과" 표. probe 플러그인과 실제 `plugin/hooks/hooks.json`(eval 환경 사본) 모두 확인.
+
+### RF-0 구현에서 정한 세부 (DRAFT_NOTES에서 옮김, 2026-10-03)
+
+- `lock.owner`를 `TT_LOCK_OWNER`로 전달한다. OS guard 안에서 lease 원자 교체; 손상은 오류.
+- 분석 S/C는 슬롯 호환·큰 쪽 window로 결합; 회귀 C는 독립. 회전 파일은 디렉터리·이름·buffer로 묶고 시간·부팅·pid 경계에서 분리.
+- 파서 실패는 `complete=false`·검증 unknown. 반입은 apply 예외 rollback; crash 복구 staging은 RF-2.
+- 별도 lock 대신 `pyproject.toml`에 직접·전이 의존성 고정(신규 파일 제한). 설치: `pip install .` / `pip install '.[test]'`.
+
 ## 개발 환경과 설계의 차이 (중요)
 
 설계는 실행 환경을 **Ubuntu(Linux)** 로 못박는다 (`01-architecture.md §3`,

@@ -8,29 +8,30 @@
 
 - 모드: **사외 초안** (`.local-draft` 있음)
 - 완료 Phase: **D0, 1~12** (2026-09-28~29, Phase 7부터 Phase마다 사용자 확인). 상세: 이력 파일의 "Phase N" 절
-- 진행 중 Phase: **13** (SKILL.md·reference·eval 45개). 정의·환경 준비 완료, **행동 평가 미실행**
+- 진행 중 Phase: **13** — 행동 평가 45개 모두 실행·채점(10/01~03, 현재 SKILL). **41개 통과, 4개 실패**(5·22·29·44), 트리거 시험 recall 26~33%. 완료 표시는 사용자 확인 대기. 상세: 이력 파일 "Phase 13 행동 평가 결과"
 - 기준 문서 세트: `telephony-triage-docs-v11` (변경 이력 `docs/history/CHANGES.md`)
-- 마지막 전체 테스트: `pytest tests` 302개 통과 (10/01 RF-1, Windows·Py3.14, 1364s)
+- 마지막 전체 테스트: `pytest tests` 302개 통과 (10/03 Phase 13, Windows·Py3.14, 1192s). Claude Code 도구 셸에서는 stdin 핸들이 없어 `WinError 6`이 나므로 `subprocess.run([...pytest], stdin=DEVNULL)`로 돌린다
 
 ## 막힌 것
 
-- Claude Code 주간 한도(HTTP 429)로 Phase 13 행동 평가·트리거 시험·빈 플러그인 실험(S1) 미실행. **Phase 13 재개일: 2026-10-11**(사용자 결정). 그 전까지는 eval 배치 실행(`run.py --execute`)을 하지 않고 코드 작업(RF-0, RF-1)만 한다. 작업 세션 자체도 같은 사용량을 쓰므로, 코드 전용인 RF-0은 다른 에이전트(Codex 등)에 맡겨도 된다.
+- Phase 13 남은 실패(사용자가 이번에는 고치지 않기로 함, 10/02): eval 5 — `triage.py`가 Jira 발생 시각 없고 `year_source: jira`면 선택지 없는 `needs_input year`로 멈춤(스크립트). eval 22 — `call-drop.log`가 CALL-001-01과 안 맞고 Jira 시각과 하루 차이(eval 정의). eval 29·44 — assertion이 현재 SKILL 규칙·설계보다 엄격(eval 정의).
+- 트리거 시험: skill-creator `run_loop`(Windows는 `select` 파이프 미지원 → scratchpad 사본에서 스레드 읽기로 패치)로 precision 100%, recall train 26%·test 27~33%. 개선 description도 같은 수준이고 `improve_description`의 `claude -p`가 한도로 2회 실패해 중단, description 미변경. Pro 5시간 창에서 eval 하나가 약 8%를 쓴다.
 
 ## 활성 트랙과 순서 (2026-10-01 결정)
 
-반입 전 순서: **RF-0 → RF-1 → (10/11) Phase 13 → RF-2 → 반입.** RF-1이 `SKILL.md`를 다시 쓰므로 Phase 13 행동 평가는 RF-1 **뒤**에 한 번만 돌린다. 10/11까지 RF-1이 끝나지 않으면: Phase 13을 현재 SKILL로 돌리고 RF-1 뒤 바뀐 eval만 다시 돌리거나(토큰 2회), Phase 13을 RF-1 완료까지 미룬다 — **그날 사용자에게 묻는다.**
+반입 전 순서: **RF-0 → RF-1 → Phase 13 → RF-2 → 반입.** Phase 13 행동 평가는 RF-1 뒤 SKILL로 돌렸다(10/01~03).
 
 | 순서 | 작업 | 근거 문서 | 상태 / 다음 할 일 |
 |---|---|---|---|
 | ✅ | **리뷰** — RF 계획 외부 리뷰 | 리뷰 문서 머리 "외부 리뷰 결과" | 완료(2026-10-01). 반영 내역은 RF-0·RF-1·RF-2 행에 들어감 |
 | 1 | **RF-0** R1~R11 안전·정확성·의존성 + 재현 테스트·session 루트 | HANDOFF R1~R6·I0~I2, 리뷰 §U RF-0·머리 "외부 리뷰 결과" R7~R11 | ✅ 완료. 남은 격리 테스트·07 R6는 RF-1 때 정리 |
-| 2 | **RF-1** `triage.py` driver + `SKILL.md` ≤8KB + 커맨드 보일러플레이트 + 외부 리뷰분(MCP 원문을 모델이 보지 않게, `--top`을 types/causes에도, `db_search --limit 3`, `code_refs` projection, Jira 코멘트 예산). `CLAUDE.md` ≤4KB는 §12 이동이 사용자 결정이라 보류 | 리뷰 §U RF-1·§V 1·2 | ✅ 완료(10/01): `triage.py`·`jira_bridge.py`, SKILL 8.1KB, offline_eval→driver. **남음**: 행동 평가·토큰 실측(10/11), `CLAUDE.md` ≤4KB(사용자 결정), R7(후속) |
-| 3 | **Phase 13 재개 (2026-10-11)** — 행동 평가 45개(batch 1 재실행 + 남은 25개 B·C·D) + 수동 채점, 트리거 테스트, 빈 플러그인 실험(S1) | `11-phases.md` Phase 13, `tests/skill_evals/README.md`, 이력 파일 "Phase 13 재개 결과·남은 일" | Claude Code에서만. 새 iteration 경로로 실행(기존 폴더 덮어쓰기 금지) |
+| 2 | **RF-1** `triage.py` driver + `SKILL.md` ≤8KB + 커맨드 보일러플레이트 + 외부 리뷰분(MCP 원문을 모델이 보지 않게, `--top`을 types/causes에도, `db_search --limit 3`, `code_refs` projection, Jira 코멘트 예산). `CLAUDE.md` ≤4KB는 §12 이동이 사용자 결정이라 보류 | 리뷰 §U RF-1·§V 1·2 | ✅ 완료(10/01): `triage.py`·`jira_bridge.py`, SKILL 8.1KB, offline_eval→driver. 토큰 실측은 Phase 13(eval 1: Bash 20회·입력 0.91M·출력 17k). **남음**: `CLAUDE.md` ≤4KB(사용자 결정), R7(후속) |
+| 3 | **Phase 13** — 행동 평가 45개 + 수동 채점, 트리거 테스트, 빈 플러그인 실험(S1) | `11-phases.md` Phase 13, `tests/skill_evals/README.md`, 이력 파일 "Phase 13 행동 평가 결과" | 10/01~03 앞당겨 실행(사용자 결정). 45개 실행: 41 통과·4 실패, S1 ✅, 트리거 recall 낮음. **다음: 실패 4건·트리거 처리 결정 → 완료 확인** |
 | 4 | **RF-2** 반입 도구 강화(staging·rollback) + `check_boundary.py` + 사외 CI. `export_external.py`는 만들지 않음(결정 a) | 리뷰 §U RF-2 | Phase 13 뒤 |
 | 5 | **반입** — `15 §15.4` 체크리스트, `make_db_skeleton.py`, `git archive` 묶음 | `GUIDE.md` §3 "반입 전", §4 | 그 뒤 사내 S-1~S-7 |
 | — | RF-3~RF-9, HANDOFF I3~I6(RF에 흡수) | 리뷰 §U | 반입 뒤 |
 
-- 시작 전 **기존 remote/main을 fetch**, 끝나면 표 갱신. 이번 remote는 `telephony`(origin 신설 금지).
+- 시작 전 **기존 remote/main을 fetch**, 끝나면 표 갱신. remote 이름은 PC마다 다르다(`telephony` 또는 `origin`) — 있는 것을 쓰고 새로 만들지 않는다.
 - 사내 로그가 모의와 다를 때 가장 먼저: [S0_PROBE_CHECKLIST.md](docs/development/S0_PROBE_CHECKLIST.md) + `tools/s0_stats.py` (사내 PC, Claude 없이).
 - 사내 확인 항목(TODO(SITE) 57곳)은 `python3 tools/list_site_todos.py`로 뽑는다. 사내 정보가 있어야 판단할 것은 `REVIEW-OPEN.md`.
 
@@ -40,39 +41,30 @@
 - (b) 자동 게시(RF-8)는 `confidence`가 아니라 별도 품질 게이트로만 채택.
 - 외부 리뷰(다른 에이전트, ZIP 기준) 대조 결과와 반영 내역: 리뷰 문서 머리 "외부 리뷰 결과" 절.
 
-### RF-0 구현에서 정한 세부
+- RF-0 구현에서 정한 세부(lock owner·S/C 결합·파서 실패·의존성 고정): 이력 파일 "RF-0 구현에서 정한 세부".
 
-- `lock.owner`를 `TT_LOCK_OWNER`로 전달한다. OS guard 안에서 lease 원자 교체; 손상은 오류.
-- 분석 S/C는 슬롯 호환·큰 쪽 window로 결합; 회귀 C는 독립. 회전 파일은 디렉터리·이름·buffer로 묶고 시간·부팅·pid 경계에서 분리.
-- 파서 실패는 `complete=false`·검증 unknown. 반입은 apply 예외 rollback; crash 복구 staging은 RF-2.
-- 별도 lock 대신 `pyproject.toml`에 직접·전이 의존성 고정(신규 파일 제한). 설치: `pip install .` / `pip install '.[test]'`.
+## 문서 정리 남음
 
-## 문서 정리 상태 (2026-10-01)
-
-- 완료: `REVIEW-10/11.md`·`CHANGES.md` → `docs/history/`, `EXTENSION_IDEAS.md` → 리뷰 문서 §X, 이 파일 축소(본문 → `docs/history/draft-notes-2026-09.md`).
-- 남음(RF-1): `CLAUDE.md` ≤4KB(원칙 §12를 설계 문서로 옮겨야 가능 — 사용자 결정), 리뷰 끝난 뒤 리뷰 문서를 계획(§U·V·X)만 남기기, HANDOFF는 I0~I6 완료 후 삭제.
+- `CLAUDE.md` ≤4KB(§12 이동, 사용자 결정), 리뷰 문서를 계획(§U·V·X)만 남기기, HANDOFF는 I0~I6 완료 후 삭제.
 
 ## 사외 Claude Code 실험 결과 (S1 예비)
 
 `tests/mocks/plugin-probe/`로 확인한다. 절차는 그 디렉토리의 `README.md`.
 **사내 버전은 다를 수 있으므로 S-2에서 다시 확인한다.**
 
+2026-10-01, Claude Code 2.1.286(Windows), 헤드리스 `claude -p --plugin-dir <dir> --mcp-config tests/mocks/mcp.json`으로 확인.
+
 | # | 항목 | 사외 결과 | 비고 |
 |---|---|---|---|
-| 1 | 플러그인 로컬 로드 | ⏳ 미확인 | 새 세션에서 `/plugin`으로 `tests/mocks/plugin-probe` 등록 후 `/probe:ping` |
-| 2 | 커맨드 ↔ 스킬 관계 | ⏳ 미확인 | 같은 실험 |
-| 3 | `${CLAUDE_PLUGIN_ROOT}` 치환 | ⏳ 미확인 | 치환 안 되면 config `plugin.scripts_path`를 읽는 방식으로 바꿔야 한다 (`01-architecture.md §3`) |
-| 4 | hooks (SessionStart / PreToolUse) | ⏳ 미확인 | `probe-hook.log`에 남는지 |
-| 5 | MCP 도구 이름 형식 | ⏳ 미확인 (예상 `mcp__<server>__<tool>`) | `probe_hook.py`가 `tool_name`을 그대로 기록한다. `guard.py`(Phase 8)가 이 형식에 의존한다 |
-| 6 | hook matcher `mcp__.*` | ⏳ 미확인 | 같은 실험 |
-| 7 | 권한 결정 필드(`allow`/`deny`/`ask`) | ⏳ 미확인 | `probe_hook.py --decide` |
-| 8 | `@SITE_PROFILE.md` import (파일 없음) | ⏳ 미확인 | `CLAUDE.md` 첫 줄. **사외에서는 경고가 나도 동작에 문제가 없다** — 모드 판별은 `.local-draft`가 한다 (`CLAUDE.md` 머리말 규칙 3) |
-| — | `--mcp-config tests/mocks/mcp.json` 로 모의 MCP 붙이는 법 | ⏳ 미확인 | 사외 Claude Code 버전에서 확인해서 여기 적는다 |
-
-> **왜 아직 미확인인가**: 플러그인 로드·hook·`@import`는 **세션이 시작될 때**
-> 결정되므로, D0를 진행한 이 세션에서는 관찰할 수 없다. 새 세션을 열어
-> 위 절차를 돌리고 이 표를 채운다. 스크립트 자체(`probe.py`,
-> `probe_hook.py`)는 직접 실행해서 동작을 확인했다.
+| 1 | 플러그인 로컬 로드 | ✅ `--plugin-dir`로 로드 | init에 `probe@inline`, 슬래시 목록에 `probe:ping`·`probe:probe` |
+| 2 | 커맨드 ↔ 스킬 관계 | ✅ 따로 | 커맨드도 `<plugin>:<name>` 스킬 목록에 같이 뜬다. `/probe:probe`는 스킬 본문만 쓰고 커맨드를 부르지 않는다 |
+| 3 | `${CLAUDE_PLUGIN_ROOT}` 치환 | ✅ 커맨드·스킬 본문, hooks.json 모두 치환 | **Bash 도구 프로세스에는 환경 변수 `CLAUDE_PLUGIN_ROOT`가 없다**(hook 프로세스에는 있음). 본문 치환 경로만 쓴다 |
+| 4 | hooks (SessionStart / PreToolUse / PostToolUse) | ✅ | 실제 `plugin/hooks/hooks.json`: SessionStart가 `scripts_path` 갱신, PostToolUse `jira_bridge.py`가 MCP 결과를 마스킹 요약으로 교체 |
+| 5 | MCP 도구 이름 형식 | ✅ `mcp__mock-jira__jira_fetch_ticket` | hook 입력에 `mcp_server {name, source}` 필드도 있다 |
+| 6 | hook matcher `mcp__.*` | ✅ | guard 규칙 2(쓰기 도구 거부) 동작 |
+| 7 | 권한 결정 필드 | ✅ `hookSpecificOutput.permissionDecision` | `deny` → 실행 안 됨(`PreToolUse:<tool> hook error: <reason>`), `allow` → allowedTools에 없어도 실행, `ask` → allowedTools에 있어도 확인 요구(헤드리스는 거부). guard 규칙 6·8 deny 확인 |
+| 8 | `@SITE_PROFILE.md` import (파일 없음) | ✅ 경고·오류 없음 | 조용히 무시 |
+| — | 모의 MCP 붙이기 | ✅ `--mcp-config tests/mocks/mcp.json` | 레포 루트에서 실행(상대 경로). source `dynamic` |
 
 ## 사용자 확인이 필요한 항목 (Phase 2~6에서 쌓임, 미결)
 

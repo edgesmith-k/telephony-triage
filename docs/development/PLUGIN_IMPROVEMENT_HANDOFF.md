@@ -106,7 +106,7 @@ R14~R15. 반복 분석·자연어 진입·대용량 비용을 측정하고 단�
 - [x] I2: RF-0 범위의 슬롯/시간 결합·capture 관측·파서 실패 전파; 독립 C 회귀 보존 (원본 행 provenance는 후속 범위)
 - [x] I3: prompt·보고서·context 정리 — RF-1: `triage.py` driver(needs_input), `jira_bridge.py`(MCP 원문 격리), SKILL 8.1KB, 커맨드 보일러플레이트 제거·sync-pr 단일 원본(R12), 리포트 사실/추정/반대 근거 규칙. R8 점수 의미는 리포트 문구만(랭킹 변경 없음), R9·R11·R7은 미완
 - [ ] I4: 합의된 UX·반복 분석·규모 개선
-- [ ] I5: 실제 Claude 행동·trigger·plugin 통합 평가
+- [ ] I5: 실제 Claude 행동·trigger·plugin 통합 평가 — 10/01~03 진행: 45개 실행(41 통과·4 실패), R13 trace 기반 채점(grade.py가 드라이버 `trace.jsonl` 사용), S1 plugin-dir·hook·MCP·permissionDecision 확인, 트리거 recall 26~33%. Phase 13 완료 확인 전이라 미체크
 - [ ] I6: 최종 regression·canonical 동기화·cleanup·Handoff 삭제 검토
 
 Completed: RF-0 R1~R11 결함별 수정·커밋 및 session 임시 플러그인 루트 적용(남은 격리 테스트는 RF-1 커밋에서 해제). RF-1(I3) driver·SKILL·커맨드·외부 리뷰 토큰 항목. 이 문서 원래 R7~R11과 외부 리뷰의 RF-0 R7~R11은 번호 체계가 다르다. 원본 행 provenance 등 RF-0에 포함되지 않은 요구는 완료로 간주하지 않는다.
@@ -117,7 +117,7 @@ Remaining (이 문서 원래 번호): R7 provenance, R8 점수/신뢰도, R9 ver
 
 > 2026-10-01 갱신. 순서의 단일 원본은 `DRAFT_NOTES.md` "활성 트랙과 순서" 표다. I0~I2는 리뷰 문서의 **RF-0**에 흡수됐고, 외부 리뷰가 찾은 R7~R11이 추가됐다(리뷰 문서 머리 "외부 리뷰 결과").
 
-1. **2026-10-11 Phase 13** (I5): 새 SKILL(8.1KB)로 새 iteration에서 행동 평가 45개·트리거 시험. 같은 날 S1 빈 플러그인 실험으로 PostToolUse `updatedToolOutput`(원문 대체)과 eval 1건 usage(analyze Bash 호출 수·토큰)를 실측해 RF-1 추정치와 비교한다. 한도·인증 오류에서 자동 반복하지 않는다.
+1. **Phase 13** (I5, 10/01~03 실행): 결과는 이력 파일 "Phase 13 행동 평가 결과". PostToolUse 원문 대체는 S1에서 확인(`jira_bridge.py`가 MCP 결과를 마스킹 요약으로 교체), eval 1 usage는 Bash 20회·입력 0.91M·출력 17k. 남은 것: 실패 4건(5·22·29·44)과 트리거 recall 처리 결정, 완료 확인.
 2. **RF-1 후속**(Phase 13 결과에 따라): R7 provenance(`line_ref`, `common/events.py`), `config.py show --keys`, R9 verify-fix 예외·R11 지식 단정, `CLAUDE.md` ≤4KB(§12 이동 사용자 결정 후).
 3. **RF-2**: Phase 13 뒤 반입 staging·crash 복구·경계 검사·사외 CI. 이번 apply 예외 rollback을 전체 트랜잭션 내구성으로 간주하지 않는다.
 
