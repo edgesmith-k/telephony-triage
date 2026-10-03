@@ -555,9 +555,20 @@ class Driver:
         source = logcat.get("year_source") or userconfig.get(self.cfg, "logcat.year_source")
         if self.offline:
             return None
+        mtime_year = datetime.fromtimestamp(logs[0].stat().st_mtime).year
         if source == "file-mtime":
-            return datetime.fromtimestamp(logs[0].stat().st_mtime).year
-        raise NeedsInput("year", "연도 없는 logcat의 연도를 정해야 한다(Jira 발생 시각 없음).", [])
+            return mtime_year
+        if source == "jira" or not source:
+            # Jira 발생 시각이 없다 → 묻지 않고 시각 후보(Step 2 --full)로 간다. 연도는 파일 시각으로 임시로 정한다.
+            self.warnings.append(f"Jira 발생 시각이 없어 logcat 연도를 로그 파일 시각({mtime_year})으로 임시로 정했다. "
+                                 "다르면 --year로 다시 실행한다.")
+            return mtime_year
+        this_year = datetime.now().year
+        options = [{"value": str(mtime_year), "label": f"{mtime_year} (로그 파일 시각)"}]
+        if this_year != mtime_year:
+            options.append({"value": str(this_year), "label": f"{this_year} (올해)"})
+        options.append({"value": "<YYYY>", "label": "직접 입력"})
+        raise NeedsInput("year", "연도 없는 logcat의 연도를 정한다(logcat.year_source: ask).", options)
 
     def parse(self, logs: list[Path], around: str | None, tz: str | None, year: int | None, out: Path) -> dict:
         argv = ["parse", *logs]

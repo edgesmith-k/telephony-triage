@@ -1,0 +1,18 @@
+# tools/check_boundary.py 예외 (사외). 사내 전용 예외는 docs/site/boundary-allow.txt (SITE_PATHS).
+# 형식: <규칙 glob> <경로 glob> [<맞은 문자열 정규식>]   — 예외는 좁게(값까지) 적는다.
+
+# 마스킹 시험용 합성 IMEI·IMSI (공개 예시 값)
+pattern:long-number tests/* ^(450081234567890|450081234567891|356938035643809|490154203237518)$
+
+# 마스킹 시험 입력: 합성 JWT 머리, 문서용 IP
+pattern:secret-assign tests/test_masking.py ^token: eyJhbGciOiJIUzI1NiJ9$
+pattern:ip-address tests/test_masking.py ^1\.2\.3\.4$
+
+# 오류 주입 변형 트리 (tests/helpers/make_variant_dbs.py가 합성 샘플에서 결정적으로 만든다)
+fixture-origin tests/fixtures/issue-db-empty-category/call/CALL-001-volte-not-working/fixtures/CALL-001-01.log
+fixture-origin tests/fixtures/issue-db-lint-errors/data/DATA-001-no-setup-data-call/fixtures/DATA-001-01.resolved.log
+fixture-origin tests/fixtures/issue-db-lint-errors/data/DATA-001-no-setup-data-call/fixtures/DATA-001-02.1.log
+fixture-origin tests/fixtures/issue-db-pending/data/DATA-001-no-setup-data-call/fixtures/DATA-001-03.log
+
+# 경계 시험이 일부러 넣는 위반 문자열
+pattern:* tests/test_boundary.py

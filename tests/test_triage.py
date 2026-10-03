@@ -172,6 +172,25 @@ def test_full_run_resolves_code_refs_against_the_chosen_tree():
     ws.json("triage.py", ["release", "MOCK-1001"])
 
 
+def test_jira_without_time_offers_time_candidates_instead_of_asking_year():
+    """eval 5: `year_source: jira`인데 Jira 발생 시각이 없으면 연도를 묻지 않고 `--full` 시각 후보로 간다."""
+    ws = Workspace()
+    log = tmp("tt-triage-year-") / "roaming.log"
+    log.write_bytes((REPO / "tests/fixtures/logs/data-roaming-disabled.log").read_bytes())  # mtime = 오늘
+    args = ["run", "MOCK-9005", "--dry-run", "--jira-file", REPO / "tests/skill_evals/jira/MOCK-9005.yaml",
+            "--logs", log, "--code", "skip"]
+    ask = ws.json("triage.py", args)
+    assert ask["status"] == "needs_input" and ask["needs_input"]["kind"] == "time", ask
+    options = ask["needs_input"]["options"]
+    assert 1 <= len(options) <= 3 and "DATA-001" in options[0]["label"]
+
+    done = ws.json("triage.py", [*args, "--answer", f"time={options[0]['value']}"])
+    assert done["status"] == "ok", done
+    assert done["candidates"][0]["cause"] == "DATA-001-02"
+    assert any("임시로" in w for w in done.get("warnings") or [])
+    ws.json("triage.py", ["release", "MOCK-9005"])
+
+
 def test_full_run_asks_for_jira_and_reads_what_the_bridge_saved():
     ws = Workspace()
     args = ["run", "MOCK-1001", "--logs", DATA_LOG, "--code", "skip"]

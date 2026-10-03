@@ -9,7 +9,7 @@
 | `trigger_evals.json` | description 트리거 테스트 (`10-skill-eval.md` 표 + near-miss) |
 | `jira/` | eval용 모의 Jira 티켓 (`MOCK-90xx`, `tests/mocks/jira`와 같은 형식) |
 | `scenarios/` | eval용 합성 logcat 시나리오 (`tests/mocks/logcat_gen.py` 형식) |
-| `plans/`, `fixtures/` | 미리 올려 둔 PR(eval 16)의 계획과 fixture |
+| `plans/`, `fixtures/` | 미리 올려 둔 PR(eval 16)의 계획과 fixture(`e016-apn-cut.log`, 합성) |
 | `workspace/` | 실행 결과 (커밋하지 않음, `.gitignore`) |
 | `run.py` | 새 격리 환경을 준비하고 Claude Code로 평가 실행. 기존 반복 폴더는 덮어쓰지 않음 |
 | `grade.py` | 기계 채점과 수동 채점 보존. 미실행·API 오류를 통과로 세지 않음 |

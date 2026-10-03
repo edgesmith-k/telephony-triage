@@ -16,16 +16,25 @@
   안내한다.
 - `.local-draft`(사외 PC 전용 표식)는 원본에 있어도 가져오지 않는다.
 - 끝나면 새 초안 기준으로 `.draft-manifest.json`을 다시 쓴다.
-  첫 반입이면 기준선 없이 전체를 복사하고 기준선을 만든다.
+  첫 반입이면 기준선 없이 전체를 복사하고 기준선을 만든다. 첫 반입이라도 대상에
+  같은 경로의 다른 파일이 있으면 위 "사내에서 고친 파일"처럼 멈춘다.
+
+적용 순서 (사내 레포를 반쯤 바뀐 채로 두지 않는다)
+    1. staging: 새 초안 파일을 대상 옆 임시 디렉토리에 복사하고 계획 때의 해시와 대조
+    2. 검증: `--check-boundary`면 반입 뒤 모습(staging + 남는 사내 파일)에
+       `check_boundary.py --mode site` 규칙을 돌린다. 위반이면 대상은 그대로
+    3. 활성 전환: 대상 파일을 백업하고 staging 파일을 `os.replace`로 옮긴 뒤 지울 파일을
+       지우고 기준선을 쓴다. 옮긴 파일 해시를 다시 대조한다
+    4. 3에서 무엇이든 실패하면 백업으로 되돌린다 (파일·새 디렉토리·기준선)
 
 CLI:
     python3 tools/import_draft.py <새 사외 초안 경로> [--dest <사내 레포>]
-        [--label <버전 표시>] [--dry-run] [--json]
+        [--label <버전 표시>] [--dry-run] [--check-boundary] [--json]
 
 종료 코드 (contracts.md §종료 코드)
     0  반입 완료 (경고 포함)
-    1  사내에서 고친 사외 파일이 있어 멈춤
-    2  사용 오류·환경 오류
+    1  사내에서 고친 사외 파일이 있거나 경계 검사 위반이라 멈춤 (대상 변경 없음)
+    2  사용 오류·환경 오류 (적용 중 실패면 되돌린 뒤)
 """
 
 from __future__ import annotations
@@ -154,9 +163,10 @@ def plan(source: Path, dest: Path, label: str | None) -> dict:
                 locally_modified.append({"path": rel, "baseline": digest, "current": now})
 
     to_write, to_delete, untouched = [], [], []
+    source_hashes = {rel: sha256(path) for rel, path in src_files.items()}
     for rel, path in src_files.items():
         target = _contained(dest, rel)
-        if target.is_file() and sha256(target) == sha256(path):
+        if target.is_file() and sha256(target) == source_hashes[rel]:
             untouched.append(rel)
         else:
             to_write.append(rel)
@@ -190,6 +200,7 @@ def plan(source: Path, dest: Path, label: str | None) -> dict:
         "kept_site_paths": site_only,
         "kept_new_in_site": new_in_site,
         "source_files": src_files,
+        "source_hashes": source_hashes,
     }
 
 
@@ -205,30 +216,85 @@ def _contained(root: Path, relative: str) -> Path:
     return path
 
 
-def apply(result: dict, source: Path, dest: Path) -> None:
-    """Rollback file contents, metadata and the baseline on any apply failure."""
+class BoundaryViolation(ValueError):
+    def __init__(self, findings: list):
+        super().__init__(f"경계 검사 위반 {len(findings)}건")
+        self.findings = findings
+
+
+def _stage(result: dict, source: Path, staging: Path) -> dict[str, Path]:
+    """새 초안 파일을 staging에 복사하고 계획 때 해시와 대조한다. 대상은 건드리지 않는다."""
+    staged = {}
+    for rel in result["to_write"]:
+        target = staging / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(_contained(source, rel), target)
+        if sha256(target) != result["source_hashes"][rel]:
+            raise ValueError(f"staging 사본이 계획 때와 다릅니다 (반입 중 원본이 바뀜?): {rel}")
+        staged[rel] = target
+    return staged
+
+
+def _activate(staged: Path, target: Path) -> None:
+    target.parent.mkdir(parents=True, exist_ok=True)
+    os.replace(staged, target)
+
+
+def _verify_active(result: dict, dest: Path) -> None:
+    for rel in result["to_write"]:
+        if sha256(dest / rel) != result["source_hashes"][rel]:
+            raise ValueError(f"활성 전환 뒤 해시가 다릅니다: {rel}")
+    for rel in result["to_delete"]:
+        if (dest / rel).exists():
+            raise ValueError(f"지울 파일이 남아 있습니다: {rel}")
+
+
+def final_view(result: dict, dest: Path, staged: dict[str, Path]) -> dict[str, Path]:
+    """반입 뒤 사내 레포의 비-SITE_PATHS 파일 모습 {상대경로: 지금 읽을 경로}."""
+    view = {rel: path for rel, path in walk(dest, result["site_patterns"]).items()
+            if rel not in result["to_delete"]}
+    view.update(staged)
+    return dict(sorted(view.items()))
+
+
+def boundary_check(dest: Path):
+    """`--check-boundary`용 검사 함수. `check_boundary.py`는 이 도구 옆에 있다."""
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import check_boundary
+
+    def check(result: dict, staged: dict[str, Path]) -> None:
+        findings = check_boundary.scan(dest, "site", files=final_view(result, dest, staged))
+        if findings:
+            raise BoundaryViolation(findings)
+    return check
+
+
+def apply(result: dict, source: Path, dest: Path, check=None) -> None:
+    """staging → 검증(`check`) → 활성 전환. 활성 전환 중 실패하면 파일·새 디렉토리·기준선을 되돌린다."""
     if result["locally_modified"]:
         raise ValueError("사내 변경 파일이 있어 반입할 수 없습니다")
     paths = sorted(set(result["to_write"] + result["to_delete"] + [MANIFEST]))
     targets = {rel: _contained(dest, rel) for rel in paths}
-    for rel in result["to_write"]:
-        _contained(source, rel)
-    existing_dirs = {p for p in dest.rglob("*") if p.is_dir()}
-    with tempfile.TemporaryDirectory(prefix="tt-import-backup-", dir=dest.parent) as backup_dir:
+    with tempfile.TemporaryDirectory(prefix="tt-import-", dir=dest.parent) as work:
+        staged = _stage(result, source, Path(work) / "staging")
+        if check is not None:
+            check(result, staged)
+        backup_dir = Path(work) / "backup"
+        backup_dir.mkdir()
+        existing_dirs = {p for p in dest.rglob("*") if p.is_dir()}
         backups = {}
         for i, (rel, target) in enumerate(targets.items()):
             if target.exists():
-                backup = Path(backup_dir) / str(i)
+                backup = backup_dir / str(i)
                 shutil.copy2(target, backup)
                 backups[rel] = backup
         try:
             for rel in result["to_write"]:
-                target = targets[rel]
-                target.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(source / rel, target)
+                _activate(staged[rel], targets[rel])
             for rel in result["to_delete"]:
                 targets[rel].unlink(missing_ok=True)
             write_manifest(result, source, dest)
+            _verify_active(result, dest)
         except BaseException:
             for rel, target in targets.items():
                 if rel in backups:
@@ -242,7 +308,8 @@ def apply(result: dict, source: Path, dest: Path) -> None:
 
 
 def write_manifest(result: dict, source: Path, dest: Path) -> None:
-    files = {rel: sha256(path) for rel, path in sorted(result["source_files"].items())}
+    # SITE_PATHS는 첫 반입 뒤 사내 소유라 기준선에 넣지 않는다 (반입마다 기준선이 같도록).
+    files = {rel: digest for rel, digest in sorted(result["source_hashes"].items()) if rel != SITE_PATHS_FILE}
     payload = {
         "schema": MANIFEST_SCHEMA,
         "label": result["label"],
@@ -287,6 +354,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--dest", default=".", help="사내 플러그인 레포 (기본: 현재 디렉토리)")
     parser.add_argument("--label", default=None, help="기준선에 적을 버전 표시")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--check-boundary", action="store_true",
+                        help="활성 전환 전에 반입 뒤 모습을 check_boundary.py --mode site로 검사")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
 
@@ -327,15 +396,28 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"  - {item['path']}", file=sys.stderr)
         return CHECK_FAILED
 
-    if not args.dry_run:
-        try:
-            apply(result, source, dest)
-        except (OSError, ValueError) as exc:
-            print(f"반입 실패 (변경 복구): {exc}", file=sys.stderr)
-            return USAGE
+    check = boundary_check(dest) if args.check_boundary else None
+    try:
+        if not args.dry_run:
+            apply(result, source, dest, check)
+        elif check is not None:
+            with tempfile.TemporaryDirectory(prefix="tt-import-", dir=dest.parent) as work:
+                check(result, _stage(result, source, Path(work) / "staging"))
+    except BoundaryViolation as exc:
+        import check_boundary
+        if args.json:
+            print(json.dumps({"status": "stopped", "reason": "boundary",
+                              "violations": [vars(f) for f in exc.findings]}, ensure_ascii=False, indent=2))
+        else:
+            print(f"{exc}. 사내 레포는 바뀌지 않았습니다:", file=sys.stderr)
+            print(check_boundary.format_findings(exc.findings), file=sys.stderr)
+        return CHECK_FAILED
+    except (OSError, ValueError) as exc:
+        print(f"반입 실패 (변경 복구): {exc}", file=sys.stderr)
+        return USAGE
 
     if args.json:
-        payload = {k: v for k, v in result.items() if k != "source_files"}
+        payload = {k: v for k, v in result.items() if k not in ("source_files", "source_hashes")}
         payload["status"] = "dry-run" if args.dry_run else "applied"
         print(json.dumps(payload, ensure_ascii=False, indent=2))
     else:

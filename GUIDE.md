@@ -55,6 +55,7 @@ Phase 1~13 모의 환경으로 전부 구현           S-2  사내 Claude Code �
 반입 체크리스트(15-local-draft.md §15.4) 확인하고 DRAFT_NOTES.md(상태 파일) 갱신해줘
 ```
 - 테스트 전부 통과, `site-defaults.yaml` 없음, `.local-draft`·`.mcp.json`이 반입 묶음에 없음, 이슈 DB 뼈대 생성, `TODO(SITE:...)` 목록 정리를 확인한다.
+- 경계 검사: `python3 tools/check_boundary.py --mode external`(사외 CI에서도 돈다), `python3 tools/sync_schemas.py --check`.
 - 사내 문자열 검색: 실제 회사명·서버명·팀명이 없는지 (`grep -rniE '<회사명>|<사내 도메인>' .`).
 - 사내 **외부 작성 코드 반입 규정**(오픈소스 의존성 승인 포함)을 확인한 뒤 플러그인 레포 + 이슈 DB 뼈대를 반입한다.
 
@@ -122,7 +123,7 @@ python3 tools/s0_stats.py <logcat1> <logcat2> <logcat3> \
 git clone <사내 GHE>/<org>/telephony-triage-plugin.git && cd telephony-triage-plugin   # 사내에 만든 빈 레포
 git switch -c draft-import/<날짜>
 python3 ~/tt-draft/tools/import_draft.py ~/tt-draft --dest . --label import-v1 --dry-run
-python3 ~/tt-draft/tools/import_draft.py ~/tt-draft --dest . --label import-v1   # 첫 반입: 전체 복사 + .draft-manifest.json 생성
+python3 ~/tt-draft/tools/import_draft.py ~/tt-draft --dest . --label import-v1 --check-boundary   # 첫 반입: 전체 복사 + .draft-manifest.json 생성
 python3 -m pytest -q tests
 git add -A && git commit -m "사외 초안 반입: import-v1"     # .draft-manifest.json 포함 → PR → main 머지
 ```
@@ -197,11 +198,12 @@ GHE <호스트/org/팀>, 샌드박스 이슈 DB <주소>, 기존 파서 코드 �
 ```
 git switch -c draft-import/<날짜>
 python3 <새 초안>/tools/import_draft.py <새 초안> --dest . --label import-v2 --dry-run
-python3 <새 초안>/tools/import_draft.py <새 초안> --dest . --label import-v2
+python3 <새 초안>/tools/import_draft.py <새 초안> --dest . --label import-v2 --check-boundary
 python3 -m pytest -q tests        # 골든 포함, 그 뒤 운영 이슈 DB에 db_regress --all → 병합
 ```
 - `SITE_PATHS` 경로(사내 코드·값)는 건드리지 않는다.
-- 사내에서 사외 파일을 고친 게 있으면 목록을 보여주고 **멈춘다(종료 코드 1)**. 그 변경을 사내 정보 없이 요약해 사외에 반영하거나, 되돌린 뒤 다시 실행한다.
+- 사내에서 사외 파일을 고친 게 있으면 목록을 보여주고 **멈춘다(종료 코드 1)**. 그 변경 요지를 사용자가 사내 정보 없이 직접 타이핑해 사외에 전달하거나, 되돌린 뒤 다시 실행한다.
+- `--check-boundary`: 반입 뒤 모습을 사내 패턴(`docs/site/boundary-patterns.txt`, 실제 회사·서버·팀 이름)으로 검사한다. 위반이면 **반입하지 않고** 종료 코드 1. 적용 중 실패하면 자동으로 되돌린다.
 - 사외에서 지운 파일은 지우고, 사내에서 새로 만든 비-`SITE_PATHS` 파일은 지우지 않고 알려준다(사내 전용이면 `SITE_PATHS`로).
 - 설계 문서가 바뀌었으면 `14-site.md §14.5`대로 `SITE_PROFILE.md`와 비교해 영향을 본다.
 

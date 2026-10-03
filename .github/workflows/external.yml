@@ -1,0 +1,56 @@
+# 사외 CI (ARCHITECTURE_REVIEW_2026-10.md RF-2). 사외 레포(github.com)에서만 돈다.
+# 사내 GHE Actions 전환은 docs/design/13-actions.md이고 이 파일과 별개다.
+name: external
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  boundary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: python -m pip install '.[test]'
+      - name: Boundary (SITE_PATHS 비어 있음, 사내 표식·import 방향·합성 fixture)
+        run: python tools/check_boundary.py --mode external
+      - name: Schema copy in sync
+        run: python tools/sync_schemas.py --check
+      - name: Generated fixtures match their scenarios
+        run: |
+          python tests/helpers/make_log_fixtures.py --check
+          python tests/helpers/make_sample_fixtures.py --check
+          python tests/helpers/make_variant_dbs.py --check
+
+  test:
+    needs: boundary
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install
+        run: python -m pip install '.[test]'
+      - name: Git identity for test repositories
+        run: |
+          git config --global user.name "CI"
+          git config --global user.email "ci@example.invalid"
+          git config --global init.defaultBranch main
+      - name: pytest
+        run: python -m pytest -q tests

@@ -432,3 +432,11 @@
 - 문서 정리(2026-10-01): `docs/history/REVIEW-10.md`·`docs/history/REVIEW-11.md` → `docs/history/`(참조 갱신). `EXTENSION_IDEAS.md`는 `ARCHITECTURE_REVIEW_2026-10.md` §X 부록으로 합치고 삭제. `CHANGES.md`·`DRAFT_NOTES.md` 이동은 RF-1에서.
 - 문서 정리 2단계(2026-10-01): `CHANGES.md` → `docs/history/`(이 파일), `DRAFT_NOTES.md`는 이름을 유지한 채 ≤6KB 상태 파일로 축소하고 본문을 `docs/history/draft-notes-2026-09.md`로. `14-site.md §14.5` 반입 문서 세트에 `docs/history/CHANGES.md`·`DRAFT_NOTES.md` 명시, `15-local-draft.md §15.1·15.4·15.5` 문구 갱신, `01-architecture.md §3` 트리에 `docs/history/`. `CLAUDE.md` §1·문서 지도 압축(원칙 §11.0·§12 불변).
 - 외부 리뷰 반영(2026-10-01): 결정 (a) 사내→사외 반출은 사용자 타이핑 문장만 — `15-local-draft.md §15.6`, `GUIDE.md` "막혔을 때", `tools/import_draft.py` 안내 문구, `S0_PROBE_CHECKLIST.md` 갱신. 리뷰 문서에 "외부 리뷰 결과" 절, RF-2에서 `export_external.py` 제외하고 반입 staging/rollback 추가, RF-0·RF-1 범위 확장(DRAFT_NOTES 표).
+
+## RF-2 반입 도구·경계 (2026-10-03)
+
+- `tools/check_boundary.py` 추가: 사내 표식 패턴(비밀 키·토큰·공인 IP·15자리 숫자·허용 목록 밖 이메일/URL 호스트 + 사내 `docs/site/boundary-patterns.txt`), `plugin/scripts/**`의 SITE_PATHS 모듈 정적 import, 합성 표시 없는 로그 fixture, `--mode external`에서 SITE_PATHS 경로 존재. 예외 `tools/boundary-allow.txt` → `15-local-draft.md §15.4·§15.6`, `GUIDE.md §3·§4`, `01-architecture.md §3`.
+- `tools/import_draft.py`: staging(해시 대조) → `--check-boundary` 검증 → 활성 전환(`os.replace`) → 해시 재대조, 실패 시 rollback. `SITE_PATHS` 파일은 기준선에서 뺀다(반입마다 기준선 동일). `export_external.py`는 만들지 않는다(결정 a).
+- `plugin/schemas/`(이슈 DB 스키마 사본)와 `tools/sync_schemas.py --check|--write`. 사외 CI `.github/workflows/external.yml`.
+- Phase 13 실패 후속: `triage.py`는 `year_source: jira`인데 Jira 발생 시각이 없으면 연도를 묻지 않고 로그 파일 시각 연도를 임시로 쓰고 경고한 뒤 시각 후보로 간다(`ask`면 선택지 제공) → `07-workflow.md` Step 3 입력 포맷. eval 22 로그를 CALL-001-01 양성 fixture로, eval 29·44 assertion을 현재 SKILL 규칙·`10-skill-eval.md` 설계에 맞춤.
+

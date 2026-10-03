@@ -389,4 +389,4 @@ ID가 바뀔 때 함께 바꿔야 하는 참조 목록이다. `db_add renumber`(
 - **분석 스킬** `analyzers.<category>`(`site-defaults.yaml` 또는 사용자 config): `skill`, `when: ask | after_match | always_for_category`(기본 `ask`), `inputs`. `ask`는 1위 후보가 그 카테고리일 때 호출 여부를 묻는다. analyze 옵션 `--analyzer`는 묻지 않고 호출하고, `--no-analyzer`는 호출하지 않는다.
 - 마스킹 토큰: `<종류#n>` 번호 토큰(파일 안에서 같은 값 = 같은 번호, 이미 있는 토큰 다음 번호부터, `08-safety.md §8`). 시그니처·extractor는 특정 번호를 고정하지 않는다.
 - 설정 우선순위: 사용자 config > `plugin/site-defaults.yaml` > 코드 내장 기본값. `plugin/site-defaults.yaml`이 없으면 setup과 모든 커맨드·스크립트가 종료 코드 2로 멈춘다. `site-defaults.example.yaml`은 **코드가 읽지 않는다**. 사외 테스트·eval은 테스트 헬퍼 `tests/helpers/make_plugin_root.py`가 example을 `site-defaults.yaml`로 복사한 임시 플러그인 루트를 만들어 `${CLAUDE_PLUGIN_ROOT}`로 준다(`15-local-draft.md §15.1`). 런타임 코드에는 "사내/사외 모드" 판별이 없다.
-- 사내 전용 경로: 레포 루트 `SITE_PATHS` 목록 파일, 재반입은 `tools/import_draft.py`와 반입 기준선 `.draft-manifest.json`(`15-local-draft.md §15.6`).
+- 사내 전용 경로: 레포 루트 `SITE_PATHS` 목록 파일, 재반입은 `tools/import_draft.py`와 반입 기준선 `.draft-manifest.json`(`15-local-draft.md §15.6`). 경계 검사는 `tools/check_boundary.py`(종료 코드 0 위반 없음 / 1 위반 / 2 사용 오류), 반입 때 `import_draft.py --check-boundary`(위반이면 종료 코드 1, 대상 변경 없음).

@@ -825,15 +825,15 @@
       "id": 22,
       "name": "resolution-edit-invalidates-verification",
       "batch": "C",
-      "prompt": "MOCK-2001 분석해줘 --dry-run. 로그: logs/call-drop.log. CALL-001-01 해결책을 '캐리어 설정에서 VoLTE를 켜고 비행기 모드를 껐다 켜 IMS를 재등록한다'로 수정하고 싶어",
+      "prompt": "MOCK-2001 분석해줘 --dry-run. 로그: logs/volte-fail.log. CALL-001-01 해결책을 '캐리어 설정에서 VoLTE를 켜고 비행기 모드를 껐다 켜 IMS를 재등록한다'로 수정하고 싶어",
       "setup": {
         "jira": [
           "MOCK-2001"
         ],
         "logs": [
           {
-            "src": "tests/fixtures/logs/call-drop.log",
-            "as": "call-drop.log"
+            "src": "tests/fixtures/issue-db-sample/call/CALL-001-volte-not-working/fixtures/CALL-001-01.log",
+            "as": "volte-fail.log"
           }
         ]
       },
@@ -1104,7 +1104,7 @@
       "assertions": [
         "pull을 건너뛰었다는 사실(사유)을 사용자에게 알렸다",
         "사용자 clone에서 checkout·reset·clean·commit을 실행하지 않았다",
-        "로컬 issue/MOCK-9029가 있다는 것을 알리고 어떻게 할지 물었다",
+        "로컬 issue/MOCK-9029가 있다는 것을 알렸다(앞선 커밋이 없으면 묻지 않고 진행해도 된다)",
         "사용자 clone의 현재 브랜치(my-work)·dirty 파일·브랜치 목록·로컬 issue/MOCK-9029 SHA가 실행 전과 같다",
         "원격 issue/MOCK-9029에 data/DATA-001-*/jira/MOCK-9029.yaml이 있다",
         "끝난 뒤 세션 lock이 없다"
@@ -1634,7 +1634,7 @@
       "expected_output": "슬롯 0에 DATA-001 증상, 슬롯 1에 데이터 설정 OFF → 분석 모드에서 DATA-001-01이 후보에 오르지 않고 '유형 일치, 원인 미확인'과 판별 슬롯(phone 0)을 보여준다. 다른 슬롯의 흔적을 원인 근거로 쓰지 않는다.",
       "assertions": [
         "리포트에 DATA-001 '유형 일치, 원인 미확인'이 보인다",
-        "DATA-001-01을 원인 후보로 제시하지 않았다(슬롯이 다름을 설명)",
+        "DATA-001-01을 원인 후보로 제시하지 않았다",
         "판별 슬롯 phone 0을 표시했다",
         "계획이 unresolved {type: DATA-001}이다",
         "dry-run이라 원격 브랜치·PR이 없고 끝난 뒤 lock이 없다"

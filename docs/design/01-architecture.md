@@ -38,7 +38,11 @@ telephony-triage-plugin/                 # 개발 레포 루트
 ├── SITE_PATHS                           # 사내 전용 경로 목록 (15-local-draft.md §15.6)
 ├── .draft-manifest.json                 # [사내 전용, SITE_PATHS] 마지막 반입 기준선 (import_draft.py가 씀)
 ├── .local-draft                         # [사외 PC 전용, .gitignore] 사외 초안 모드 표식 (CLAUDE.md 머리말)
-├── tools/import_draft.py                # 재반입: SITE_PATHS를 보존하며 새 사외 초안 덮어쓰기
+├── tools/import_draft.py                # 재반입: SITE_PATHS를 보존하며 새 사외 초안 덮어쓰기 (staging → 검증 → 활성 전환, 실패 시 rollback)
+├── tools/check_boundary.py             # 사외/사내 경계 검사 (사내 표식 패턴·site import·합성 fixture·SITE_PATHS 부재, 15-local-draft.md §15.6)
+├── tools/boundary-allow.txt            # check_boundary 예외 (사외). 사내 패턴·예외는 docs/site/
+├── tools/sync_schemas.py               # plugin/schemas/ 사본 ↔ 이슈 DB schema/ 대조
+├── .github/workflows/external.yml      # 사외 CI (경계 검사·스키마 사본·fixture 생성기 --check·pytest). 사내 Actions(13-actions.md)와 별개
 ├── tools/make_db_skeleton.py            # 합성 샘플에서 운영용 이슈 DB 뼈대 생성 (11-phases.md Phase 1)
 ├── DRAFT_NOTES.md                       # 사외 초안 상태 파일(≤8KB): 진행 상태·막힌 것·활성 트랙·실험 결과 표 (15-local-draft.md)
 ├── docs/history/                        # 아카이브(읽지 않음): draft-notes-<날짜>.md(Phase별 상세), CHANGES.md(문서 세트 변경 이력), REVIEW-10/11.md
@@ -112,6 +116,7 @@ telephony-triage-plugin/                 # 개발 레포 루트
     │   ├── jira_bridge.py               # PostToolUse hook: Jira MCP 원문 → JOB/jira_raw.json, 모델에는 마스킹 요약 (08-safety.md §9)
     │   ├── triage.py                    # analyze Step 0~4 + Step 5 resolve 드라이버 (contracts.md §3.2)
     │   └── migrations/                  # 0001_xxx.py … 스키마 버전별 마이그레이션
+    ├── schemas/                         # 이슈 DB schema/ 사본 (단일 원본은 이슈 DB, tools/sync_schemas.py로 대조)
     └── hooks/
         └── hooks.json                   # 08-safety.md §9
 ```

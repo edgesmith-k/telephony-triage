@@ -645,6 +645,8 @@ telephony-triage/  (EXTERNAL-SAFE 레포 = canonical)
 
 ### RF-2 — External / Internal Boundary
 
+> **구현 (2026-10-03)**: `tools/check_boundary.py`(규칙 a~d, 예외 `tools/boundary-allow.txt`), `import_draft.py` staging → `--check-boundary` → 활성 전환 → rollback(충돌 검사·SITE_PATHS 보호는 RF-0 R7), `plugin/schemas/` + `tools/sync_schemas.py`, `.github/workflows/external.yml`, `tests/test_boundary.py`. pre-commit 연결은 하지 않았다(선택 항목). 사외 CI 첫 실행 결과는 push 뒤 확인.
+
 > **2026-10-01 외부 리뷰 반영**: `export_external.py`는 **만들지 않는다**(사내→사외는 사용자 타이핑만). 대신 반입 도구를 강화한다 — 첫 반입 충돌 검사(기존 트리 위 반입 거부 또는 충돌 목록), 기준선에 없는 사내 새 파일과 사외 새 파일의 이름 충돌 검사, `SITE_PATHS` 자체 보호, `apply()` staging 디렉토리 → 검증 → 활성 전환 → 실패 시 rollback. `check_boundary.py`·사외 CI·`plugin/schemas/`는 그대로.
 
 - **Goal**: 사내 자료 반출 방지를 **도구와 CI**로 강제. 사내에서 사외로 코드를 보내는 절차를 자동화.

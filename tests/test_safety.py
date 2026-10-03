@@ -297,12 +297,12 @@ def test_r7_failed_apply_rolls_back_files_and_manifest(draft_import, tmp_path, m
     (source / "b.py").write_text("new", encoding="utf-8")
     (source / "removed.py").unlink()
     result = draft_import.plan(source, dest, None)
-    original = draft_import.shutil.copy2
-    def fail_second(src, dst, *args, **kwargs):
-        if Path(dst) == dest / "b.py":
+    original = draft_import._activate
+    def fail_second(staged, target):
+        if Path(target) == dest / "b.py":
             raise OSError("synthetic write failure")
-        return original(src, dst, *args, **kwargs)
-    monkeypatch.setattr(draft_import.shutil, "copy2", fail_second)
+        return original(staged, target)
+    monkeypatch.setattr(draft_import, "_activate", fail_second)
     with pytest.raises(OSError):
         draft_import.apply(result, source, dest)
     after = {p.relative_to(dest).as_posix(): p.read_bytes() for p in dest.rglob("*") if p.is_file()}

@@ -52,7 +52,8 @@
 ## 15.4 사내 반입 전 체크리스트
 
 - [ ] 전체 테스트 통과 (`pytest`, `db_regress --all`, eval 45개 모의 실행, `tools/offline_eval.py` 합성 라벨셋 실행 — 모두 테스트 헬퍼 플러그인 루트에서)
-- [ ] 사내 정보 없음 (애초에 없지만, 실제 회사명·서버명 등을 쓰지 않았는지 검색)
+- [ ] 사내 정보 없음: `python3 tools/check_boundary.py --mode external` 종료 코드 0 (사외 CI `.github/workflows/external.yml`도 같은 검사). 그래도 실제 회사명·서버명 등을 쓰지 않았는지 사람이 한 번 검색
+- [ ] `python3 tools/sync_schemas.py --check` 통과 (`plugin/schemas/` 사본 = 샘플 DB `schema/`)
 - [ ] `plugin/site-defaults.yaml`이 없고 `site-defaults.example.yaml`만 있음. `SITE_PATHS`의 다른 경로(`.draft-manifest.json` 포함)도 비어 있음
 - [ ] 레포 루트에 `.mcp.json`이 없음 (모의 MCP는 `tests/mocks/mcp.json`). `.local-draft`는 반입 묶음에 넣지 않음
 - [ ] `tools/make_db_skeleton.py`로 이슈 DB 뼈대를 만들었고, 뼈대에 유형·Jira·fixture(합성 포함)가 없음
@@ -103,13 +104,16 @@ tests/site/
 - 사내 코드는 위 경로에만 둔다. 사외 레포의 파일(예: `parse_logcat.py`)을 사내에서 직접 고쳐야 했다면 그 변경의 요지를 사용자가 **직접 타이핑해** 사외에 전달하고 다음 사외 버전에 반영한다. 사내 사본은 임시로 취급한다. 사내에서 사외로 나가는 것은 **사용자가 직접 타이핑하는 사내 정보 없는 문장**뿐이다(파일·마스킹 로그·diff·요약 파일 반출 없음, 2026-10-01 결정). 도구는 반출물을 만들지 않는다.
 - **재반입 절차** (통째로 교체 금지). 사내 플러그인 레포는 git으로 관리한다.
   1. `git switch -c draft-import/<날짜>`
-  2. `tools/import_draft.py <새 사외 초안 경로>`: 반입 기준선 `.draft-manifest.json`(마지막으로 반입한 사외 초안의 버전 표시와 파일 경로·해시 목록)과 비교해서 처리한다.
+  2. `tools/import_draft.py <새 사외 초안 경로> --check-boundary`: 반입 기준선 `.draft-manifest.json`(마지막으로 반입한 사외 초안의 버전 표시와 파일 경로·해시 목록)과 비교해서 처리한다.
      - `SITE_PATHS`에 있는 경로는 건드리지 않는다.
-     - 기준선 이후 사내에서 고친 사외 파일(현재 해시 ≠ 기준선 해시)이 있으면 목록을 보여주고 **멈춘다** (사외 요약으로 옮기거나 되돌린 뒤 다시 실행).
+     - 기준선 이후 사내에서 고친 사외 파일(현재 해시 ≠ 기준선 해시)이 있으면 목록을 보여주고 **멈춘다** (변경 요지를 사용자가 타이핑해 사외에 전달하거나 되돌린 뒤 다시 실행). 기준선에 없던 같은 경로의 사내 파일(첫 반입 포함)도 같다.
      - 새 초안에 있는 파일은 덮어쓴다. 기준선에 있었는데 새 초안에 없는 파일은 사외에서 지운 것이므로 지운다.
      - 기준선에도 새 초안에도 없는 파일(사내에서 새로 만든 비-`SITE_PATHS` 파일)은 **지우지 않고** 목록으로 보고한다. 사내 전용이면 `SITE_PATHS`로 옮기라고 안내한다.
-     - 끝나면 새 초안 기준으로 `.draft-manifest.json`을 다시 쓴다. 첫 반입이면 기준선 없이 전체를 복사하고 기준선을 만든다.
+     - 끝나면 새 초안 기준으로 `.draft-manifest.json`을 다시 쓴다(`SITE_PATHS` 파일은 첫 반입 뒤 사내 소유라 기준선에서 뺀다). 첫 반입이면 기준선 없이 전체를 복사하고 기준선을 만든다.
+     - 적용은 staging → 검증 → 활성 전환 순서다: 새 파일을 대상 옆 임시 디렉토리에 복사해 해시를 대조하고, `--check-boundary`면 반입 뒤 모습에 `check_boundary.py --mode site`(사내 패턴 `docs/site/boundary-patterns.txt` 포함)를 돌린다. 위반이면 종료 코드 1이고 대상은 그대로다. 활성 전환 중 실패하면 파일·새 디렉토리·기준선을 되돌린다.
   3. `pytest`(골든 포함), `db_regress --all` 통과 확인 → main에 병합.
   4. 사외에서 설계가 바뀐 부분은 `14-site.md §14.5`대로 영향을 확인한다.
+- **경계 검사** `tools/check_boundary.py` (RF-2): 1차 장치는 `SITE_PATHS` 허용 목록이고 패턴은 보조다. 규칙: 사내 표식 패턴(비밀 키·토큰·공인 IP·15자리 숫자·허용 목록 밖 이메일/URL 호스트 + 사내 `docs/site/boundary-patterns.txt`), `plugin/scripts/**`의 SITE_PATHS 모듈 정적 import, 합성 표시 없는 로그 fixture, (`--mode external`) SITE_PATHS 경로 존재. 예외는 `tools/boundary-allow.txt`(사외)·`docs/site/boundary-allow.txt`(사내)에 값까지 좁게 적는다. 사외 CI와 반입 `--check-boundary`에서 돈다.
+- 이슈 DB 스키마 사본 `plugin/schemas/`: 단일 원본은 이슈 DB `schema/`. `tools/sync_schemas.py --check [--db <이슈 DB>]`로 대조하고, 다르면 사용자에게 보고한 뒤 `--write`로 갱신한다.
 - `tools/import_draft.py`와 `SITE_PATHS`는 사외 초안(Phase D0)에서 만든다. `.gitignore`가 아니라 **목록 파일**로 관리한다(사내에서는 이 경로들을 커밋해야 하므로). `.draft-manifest.json`은 사내에서 `import_draft.py`가 쓰고 커밋한다.
 - 사내에서 발견한 설계 문제는 사내 정보를 뺀 문장으로 요약해서 사외 문서(이 문서 세트)에 반영한다.

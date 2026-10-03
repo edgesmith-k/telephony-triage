@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "fixture 기대값 <fixture 이름>.expect.yaml (contracts.md §fixture)",
+  "description": "fixture 종류별 기본 기대값과 다를 때, 또는 합성 fixture 표시(origin: synthetic)를 남길 때 둔다. 판정은 S/C 값만 쓴다. expect_top과 expect_not을 함께 둘 수 없다.",
+  "type": "object",
+  "additionalProperties": false,
+  "not": {"required": ["expect_top", "expect_not"]},
+  "properties": {
+    "expect_top": {
+      "description": "<원인 ID> | \"<유형 ID>:unresolved\" | none",
+      "type": "string",
+      "pattern": "^([A-Z][A-Z0-9]*-[0-9]{3}-[0-9]{2}|[A-Z][A-Z0-9]*-[0-9]{3}:unresolved|none)$"
+    },
+    "expect_not": {"$ref": "#/$defs/causeId"},
+    "also_allowed": {
+      "description": "이 fixture에서 C=1이어도 되는 다른 유형의 원인. 대상 원인 자신·같은 유형 원인·없는 ID는 db_lint 오류다. 추가는 allow-cause op로 한다.",
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/causeId"},
+      "uniqueItems": true
+    },
+    "occurred_at": {
+      "description": "fixture 원본의 발생 시각. 판정에 쓰지 않고 결과 표에 참고로 보여준다.",
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}(:[0-9]{2})?([+-][0-9]{2}:?[0-9]{2}|Z)$"
+    },
+    "origin": {
+      "description": "사외 모의 환경에서 만든 합성 fixture 표시 (15-local-draft.md §15.2)",
+      "const": "synthetic"
+    }
+  },
+  "$defs": {
+    "causeId": {"type": "string", "pattern": "^[A-Z][A-Z0-9]*-[0-9]{3}-[0-9]{2}$"}
+  }
+}
