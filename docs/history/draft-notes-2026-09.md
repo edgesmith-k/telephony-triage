@@ -936,6 +936,8 @@ Claude hook은 `guard.py`에 hook 입력 JSON을 직접 넣어 시험했다. **�
   기준 description: precision 100%, recall train 26%·test 13~33%(실행마다 다름). 1회 개선안도 train 26%·test 27%. `improve_description`의 `claude -p`가 사용량 한도 시점에 2회 실패해 중단.
   description은 바꾸지 않았다. 빈 디렉토리 + 프로젝트 커맨드로 흉내 내는 방식이라 실제 플러그인 스킬 선택과 다를 수 있다(측정 방식 한계).
 - **S1**: `DRAFT_NOTES.md` "사외 Claude Code 실험 결과" 표. probe 플러그인과 실제 `plugin/hooks/hooks.json`(eval 환경 사본) 모두 확인.
+- **완료 결정(2026-10-03, 사용자)**: 완료 기준 중 "eval 45개 통과"(41/45)와 "트리거 전 항목"은 미달이지만 이대로 Phase 13 완료.
+  실패 4건은 RF 후속(RF-2와 함께), 트리거 recall은 사내 S-2에서 실제 플러그인 로드 상태로 확인한다.
 
 ### RF-0 구현에서 정한 세부 (DRAFT_NOTES에서 옮김, 2026-10-03)
 

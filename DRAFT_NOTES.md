@@ -7,15 +7,15 @@
 ## 진행 상태
 
 - 모드: **사외 초안** (`.local-draft` 있음)
-- 완료 Phase: **D0, 1~12** (2026-09-28~29, Phase 7부터 Phase마다 사용자 확인). 상세: 이력 파일의 "Phase N" 절
-- 진행 중 Phase: **13** — 행동 평가 45개 모두 실행·채점(10/01~03, 현재 SKILL). **41개 통과, 4개 실패**(5·22·29·44), 트리거 시험 recall 26~33%. 완료 표시는 사용자 확인 대기. 상세: 이력 파일 "Phase 13 행동 평가 결과"
+- 완료 Phase: **D0, 1~13** (D0~12: 2026-09-28~29, 13: 10/03 사용자 확인). 상세: 이력 파일의 "Phase N" 절
+- Phase 13 결과: 행동 평가 45개 중 41개 통과·4개 실패(5·22·29·44), 트리거 recall 26~33%. **사용자 결정(10/03): 이대로 완료, 실패 4건은 RF 후속, 트리거는 사내 S-2에서 실제 플러그인으로 확인.** 상세: 이력 파일 "Phase 13 행동 평가 결과"
 - 기준 문서 세트: `telephony-triage-docs-v11` (변경 이력 `docs/history/CHANGES.md`)
 - 마지막 전체 테스트: `pytest tests` 302개 통과 (10/03 Phase 13, Windows·Py3.14, 1192s). Claude Code 도구 셸에서는 stdin 핸들이 없어 `WinError 6`이 나므로 `subprocess.run([...pytest], stdin=DEVNULL)`로 돌린다
 
 ## 막힌 것
 
-- Phase 13 남은 실패(사용자가 이번에는 고치지 않기로 함, 10/02): eval 5 — `triage.py`가 Jira 발생 시각 없고 `year_source: jira`면 선택지 없는 `needs_input year`로 멈춤(스크립트). eval 22 — `call-drop.log`가 CALL-001-01과 안 맞고 Jira 시각과 하루 차이(eval 정의). eval 29·44 — assertion이 현재 SKILL 규칙·설계보다 엄격(eval 정의).
-- 트리거 시험: skill-creator `run_loop`(Windows는 `select` 파이프 미지원 → scratchpad 사본에서 스레드 읽기로 패치)로 precision 100%, recall train 26%·test 27~33%. 개선 description도 같은 수준이고 `improve_description`의 `claude -p`가 한도로 2회 실패해 중단, description 미변경. Pro 5시간 창에서 eval 하나가 약 8%를 쓴다.
+- Phase 13에서 넘긴 실패(RF 후속): eval 5 — `triage.py`가 Jira 발생 시각 없고 `year_source: jira`면 선택지 없는 `needs_input year`로 멈춤(스크립트). eval 22 — `call-drop.log`가 CALL-001-01과 안 맞고 Jira 시각과 하루 차이(eval 정의). eval 29·44 — assertion이 현재 SKILL 규칙·설계보다 엄격(eval 정의).
+- 트리거 시험(skill-creator `run_loop`, Windows는 scratchpad 사본을 스레드 읽기로 패치): precision 100%, recall 26~33%, description 미변경 → 사내 S-2에서 실제 플러그인으로 확인. Pro 5시간 창에서 eval 하나가 약 8%.
 
 ## 활성 트랙과 순서 (2026-10-01 결정)
 
@@ -26,8 +26,8 @@
 | ✅ | **리뷰** — RF 계획 외부 리뷰 | 리뷰 문서 머리 "외부 리뷰 결과" | 완료(2026-10-01). 반영 내역은 RF-0·RF-1·RF-2 행에 들어감 |
 | 1 | **RF-0** R1~R11 안전·정확성·의존성 + 재현 테스트·session 루트 | HANDOFF R1~R6·I0~I2, 리뷰 §U RF-0·머리 "외부 리뷰 결과" R7~R11 | ✅ 완료. 남은 격리 테스트·07 R6는 RF-1 때 정리 |
 | 2 | **RF-1** `triage.py` driver + `SKILL.md` ≤8KB + 커맨드 보일러플레이트 + 외부 리뷰분(MCP 원문을 모델이 보지 않게, `--top`을 types/causes에도, `db_search --limit 3`, `code_refs` projection, Jira 코멘트 예산). `CLAUDE.md` ≤4KB는 §12 이동이 사용자 결정이라 보류 | 리뷰 §U RF-1·§V 1·2 | ✅ 완료(10/01): `triage.py`·`jira_bridge.py`, SKILL 8.1KB, offline_eval→driver. 토큰 실측은 Phase 13(eval 1: Bash 20회·입력 0.91M·출력 17k). **남음**: `CLAUDE.md` ≤4KB(사용자 결정), R7(후속) |
-| 3 | **Phase 13** — 행동 평가 45개 + 수동 채점, 트리거 테스트, 빈 플러그인 실험(S1) | `11-phases.md` Phase 13, `tests/skill_evals/README.md`, 이력 파일 "Phase 13 행동 평가 결과" | 10/01~03 앞당겨 실행(사용자 결정). 45개 실행: 41 통과·4 실패, S1 ✅, 트리거 recall 낮음. **다음: 실패 4건·트리거 처리 결정 → 완료 확인** |
-| 4 | **RF-2** 반입 도구 강화(staging·rollback) + `check_boundary.py` + 사외 CI. `export_external.py`는 만들지 않음(결정 a) | 리뷰 §U RF-2 | Phase 13 뒤 |
+| ✅ | **Phase 13** — 행동 평가 45개 + 수동 채점, 트리거 테스트, 빈 플러그인 실험(S1) | `11-phases.md` Phase 13, `tests/skill_evals/README.md`, 이력 파일 "Phase 13 행동 평가 결과" | 10/01~03 앞당겨 실행(사용자 결정). 45개 실행: 41 통과·4 실패, S1 ✅, 트리거 recall 낮음. ✅ 완료(10/03, 실패 4건·트리거는 위 "막힌 것") |
+| 4 | **RF-2** 반입 도구 강화(staging·rollback) + `check_boundary.py` + 사외 CI. `export_external.py`는 만들지 않음(결정 a) | 리뷰 §U RF-2 | **다음 작업**. 실패 4건(eval 5 `triage.py` 연도, 22·29·44 eval 정의)도 RF 후속으로 함께 처리 |
 | 5 | **반입** — `15 §15.4` 체크리스트, `make_db_skeleton.py`, `git archive` 묶음 | `GUIDE.md` §3 "반입 전", §4 | 그 뒤 사내 S-1~S-7 |
 | — | RF-3~RF-9, HANDOFF I3~I6(RF에 흡수) | 리뷰 §U | 반입 뒤 |
 
