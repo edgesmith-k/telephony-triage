@@ -123,7 +123,7 @@ CLAUDE.md 15KB · AGENTS.md 3KB · SITE_PATHS · README.md(빈 파일)
 - 모든 스크립트 → `common.site_defaults.load_or_exit`(진입점에서 필수) → `common.*`.
 - in-process import: `db_verify`·`db_regress`·`db_review` → `parse_logcat`, `match_signatures`; `db_review` → `db_add.similarity`.
 - subprocess: `db_pr` → `db_lint/db_add/config/db_build/mask_pii/db_regress/db_verify`; `db_precommit` → `config/db_lint/mask_pii/db_regress/db_verify/db_build`; `guard` → `mask_pii/db_build`; `db_verify.make_draft` → `db_add apply`.
-- 순환 의존은 없다. 다만 `db_pr`·`db_precommit`·`guard`가 같은 검사를 각자 조립한다(검사 오케스트레이션이 3곳).
+- 순환 의존은 없다. 다만 `db_pr`·`db_precommit`·`guard`가 같은 검사를 각자 조립한다(검사 오케스트레이션이 3곳 → **완료 (2026-10-04, common/checks.py)**).
 
 ---
 
@@ -484,7 +484,7 @@ JiraWriter.post_comment  (guard 규칙 2는 Claude 세션 전용이므로, 자�
 | 항목 | 근거 | 영향 | 조치 |
 |---|---|---|---|
 | 큰 모듈 | `db_add.py` 1373줄(`Applier` 클래스가 op 16개 처리), `db_pr.py` 1109, `db_verify.py` 910 | 수정 시 넓은 컨텍스트 필요 | `db_add`를 `ops/<op>.py`로 분할(계약은 동일), `db_pr`의 `summary/pr_body`를 `db_summary.py`로 |
-| 검사 오케스트레이션 3곳 | `db_pr.stage`, `db_precommit`, `guard.check_commit`가 각자 lint/mask/build/regress/verify 호출 순서를 가짐 | 규칙 drift | `S/common/checks.py::run_checks(scope)` 하나로 |
+| 검사 오케스트레이션 3곳 | `db_pr.stage`, `db_precommit`, `guard.check_commit`가 각자 lint/mask/build/regress/verify 호출 순서를 가짐 | 규칙 drift | **완료 (2026-10-04, common/checks.py)**: `run_checks(profile, ctx)`와 프로필 stage/precommit/guard, `aggregate` |
 | 서브프로세스 재진입 | `db_pr` → 7개 스크립트 subprocess, 각 스크립트가 `site_defaults.load_or_exit` + 이슈 DB 전체 로드 | 느림(stage 수십 초), 테스트 10분+ | in-process `main(argv)` 호출 또는 함수 import. 종료 코드 계약은 유지 |
 | HANDOFF R1~R15 | lock 비원자(R2), 경로 삭제 안전(R3), `commit -m "<msg>"` 인용(R6), 교차 슬롯 S/C(R1), 회전 파일 RIL(R4), 외부 파서 실패 전파(R5), provenance(R7), 점수 포화(R8) | 정확성·안전 | 그 문서의 I0~I2 |
 | 중복 문서 | §C 표. 추가로 `CLAUDE.md` 문서 지도 ↔ `D/01 §3` 트리 ↔ `AGENTS.md` 구조 절 | 세 곳 유지 | `docs/ARCHITECTURE.md` 하나 + 나머지는 링크 |
