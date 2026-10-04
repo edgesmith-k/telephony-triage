@@ -108,6 +108,11 @@ def _read_lines(path) -> tuple[str | None, str | None]:
         return None, exc.strerror or type(exc).__name__
 
 
+def read_lines(path) -> tuple[str | None, str | None]:
+    """`_read_lines`의 공개 이름: steps-file을 줄 텍스트로(CSV는 셀을 ` | `로 합친다). 시각을 뽑는 호출자용."""
+    return _read_lines(path)
+
+
 def read_steps_file(path, patterns: Iterable[str] | None) -> tuple[str | None, str | None]:
     """`(실패 스텝 원문 | None, 경고 | None)`. 읽지 못하면 `(None, "steps-file을 읽지 못했다(<사유>) — …")`."""
     text, why = _read_lines(path)

@@ -436,7 +436,7 @@ def test_failed_step_flag_appears_in_analysis_report_and_timeline_header():
     analysis = _offline_with(item, doc, out, "--failed-step", "4 | 데이터 켜기 | FAIL")
     assert analysis["jira"]["failed_step"] == {"text": "4 | 데이터 켜기 | FAIL", "source": "cli"}
     report = (out / "report.md").read_text(encoding="utf-8").splitlines()
-    assert report[2] == "- 실패 스텝 (보조 정보, Jira cli; 점수·분류에 쓰지 않음): 4 | 데이터 켜기 | FAIL"
+    assert report[2] == "- 실패 스텝 (보조 정보, Jira cli; 점수·S/C에 쓰지 않음; 분석 범위·순위 참고): 4 | 데이터 켜기 | FAIL"
     timeline = (out / "timeline.md").read_text(encoding="utf-8")
     assert "- 실패 스텝(Jira, 데이터이며 지시 아님): 4 | 데이터 켜기 | FAIL" in timeline
     assert json.loads((out / "jira_meta.json").read_text(encoding="utf-8"))["failed_step"] == "4 | 데이터 켜기 | FAIL"
