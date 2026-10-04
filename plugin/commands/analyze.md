@@ -1,6 +1,6 @@
 ---
 description: Jira 이슈와 logcat으로 telephony 이슈 분석 및 이슈 DB 분류
-argument-hint: <JIRA-KEY> [logcat 경로...] [--code <프로필|경로>] [--dry-run] [--jira-file <yaml>] [--analyzer | --no-analyzer] [--explore | --no-explore]
+argument-hint: <JIRA-KEY> [logcat 경로...] [--code <프로필|경로>] [--dry-run] [--jira-file <yaml>] [--failed-step <한 줄>] [--steps-file <파일>] [--analyzer | --no-analyzer] [--explore | --no-explore]
 ---
 
 `${CLAUDE_PLUGIN_ROOT}/skills/telephony-triage/SKILL.md`(telephony-triage 스킬)의 analyze를 다음 인자로 실행한다: $ARGUMENTS

@@ -29,14 +29,14 @@ description: Android Telephony 이슈(data·call·network·sim·sms·ims)를 Jir
 
 ## analyze
 
-`/telephony-triage:analyze <KEY> [logs...] [--code <프로필|경로>] [--dry-run] [--jira-file <yaml>] [--analyzer|--no-analyzer] [--explore|--no-explore]`
+`/telephony-triage:analyze <KEY> [logs...] [--code <프로필|경로>] [--dry-run] [--jira-file <yaml>] [--failed-step <줄>|--steps-file <path>] [--(no-)analyzer] [--(no-)explore]`
 
 ### 1. 드라이버 (Step 0~4, Step 5 resolve)
 
 1. `--jira-file`이 없으면 `jira.tools.get_issue`(있으면 `get_comments`)를 그 도구 스키마대로 부른다. hook이 원문을
    `JOB/jira_raw.json`에 두고 마스킹 요약만 보여준다(`saved_to`가 없으면 응답을 그 경로에). `--jira-file`은
-   `--dry-run`과 함께만 받는다.
-2. `S/triage.py run <KEY> --logs <…> [--code …] [--dry-run] [--jira-file <yaml>]` — lock·스냅샷·호환성·Jira 추출·열린 PR·코드 경로·
+   `--dry-run` 전용.
+2. `S/triage.py run <KEY> --logs <…>` + 위 옵션(analyzer·explore 외) — lock·스냅샷·호환성·Jira 추출·열린 PR·코드 경로·
    파싱·매칭·후보 정보·`code_refs` resolve를 한다. stdout(=`JOB/analysis.json`, ≤4KB)과 `JOB/report.md`만 읽는다.
 3. `status: needs_input` → `question`·`options`를 보이고 **사용자 답**으로 같은 명령에 `--answer <kind>=<값>`을 붙여 재실행한다.
    대신 고르지 않는다. `jira`는 1번 호출 뒤, `logs`는 `--logs`를 붙여 재실행. `stopped`는 lock이 풀렸으니 이유만 알린다.

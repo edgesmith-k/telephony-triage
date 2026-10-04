@@ -136,6 +136,33 @@ def test_default_patterns_empty_means_no_auto():
     assert failedstep.auto_from(None, "Step 1: x FAIL", "Step 2: y FAIL", [], _masker()) == (None, [])
 
 
+def test_raw_cli_text_never_reaches_any_job_file():
+    from workspace import Workspace
+    ws = Workspace()
+    raw = "고객 010-1234-5678 데이터 켜기 FAIL"
+    args = ["run", "MOCK-1001", "--dry-run", "--jira-file", MOCK_JIRA / "MOCK-1001.yaml",
+            "--logs", SAMPLE / "data/DATA-001-no-setup-data-call/fixtures/DATA-001-01.log",
+            "--failed-step", raw, "--answer", "code=skip"]
+    done = ws.json("triage.py", args)
+    assert done["status"] == "ok" and done["jira"]["failed_step"]["source"] == "cli"
+    job = ws.job_dir("MOCK-1001")
+    files = [p for p in job.rglob("*") if p.is_file()]
+    names = {p.name for p in files}
+    assert {"trace.jsonl", "triage-state.json", "jira.json", "jira_meta.json", "analysis.json", "report.md"} <= names
+    for path in files:
+        assert "010-1234-5678" not in path.read_text(encoding="utf-8", errors="replace"), path.name
+    jira = json.loads((job / "jira.json").read_text(encoding="utf-8"))
+    assert "<MSISDN#" in jira["failed_step"]["text"] and jira["jira"]["failed_step"] == jira["failed_step"]["text"]
+    assert "<MSISDN#" in json.loads((job / "jira_meta.json").read_text(encoding="utf-8"))["failed_step"]
+    # 같은 명령을 다시 돌려도(멱등) 같은 결과
+    again = ws.json("triage.py", args)
+    assert again["request_hash"] == done["request_hash"]
+    # 플래그 없이 다시 돌리면 자동 추출분만 남는다(이 Jira에는 없음) → 키가 사라진다
+    plain = ws.json("triage.py", args[:-4] + ["--answer", "code=skip"])
+    assert "failed_step" not in plain["jira"]
+    assert "failed_step" not in json.loads((job / "jira.json").read_text(encoding="utf-8"))
+
+
 if __name__ == "__main__":
     import pytest
     raise SystemExit(pytest.main([__file__, "-q"]))

@@ -18,7 +18,7 @@
   실패로 본다.
 - 후보 정렬: 같은 score 후보는 bonus 합(근접+키워드) 내림차순, 다음 ID 순. 회귀 모드는 bonus가 0이라 ID 순.
 
-`--jira-meta` (분석 모드, 선택): `{key, occurred_at, sw, summary, description}`.
+`--jira-meta` (분석 모드, 선택): `{key, occurred_at, sw, summary, description, failed_step?}` (`failed_step`은 있을 때만, 키워드 보너스 입력).
 `occurred_at`은 타임존 있는 ISO 시각, 텍스트 필드는 마스킹된 것이어야 한다.
 
 컴파일: `<db>/.cache/compiled.json`(`db_build.py`가 만든다)의 해시가 현재 이슈 DB·파서
@@ -104,7 +104,7 @@ def _tokens(text: str) -> set[str]:
 
 
 def _keyword_ratio(jira: dict, itype: issuedb.IssueType, cause: issuedb.Cause | None) -> float:
-    jira_tokens = _tokens(" ".join(str(jira.get(k) or "") for k in ("summary", "description")))
+    jira_tokens = _tokens(" ".join(str(jira.get(k) or "") for k in ("summary", "description", "failed_step")))
     if not jira_tokens:
         return 0.0
     words = " ".join([cause.title if cause else itype.title, *map(str, itype.raw.get("tags") or [])])

@@ -427,6 +427,24 @@ def test_regress_order_unchanged_by_tiebreak():
         assert json.dumps(results[0][key], sort_keys=True) == json.dumps(results[1][key], sort_keys=True)
 
 
+def _tie_cands(result: dict) -> list[dict]:
+    return [c for c in result["candidates"] if c["cause"] in ("DATA-001-01", "DATA-001-02")]
+
+
+def test_failed_step_feeds_keyword_bonus_only_in_analysis_mode():
+    events = _events(_two_cluster_log(), around="2026-09-20T14:31:30+09:00")
+    base = {"key": "MOCK-R8", "sw": "MOCKA56_U1_20260915", "summary": ""}       # occurred_at 없음 → 근접 0
+    plain = _tie_cands(_match(events, SAMPLE, "--no-feedback-weight", jira=base))
+    assert [c["cause"] for c in plain] == ["DATA-001-01", "DATA-001-02"]
+    withstep = _tie_cands(_match(events, SAMPLE, "--no-feedback-weight",
+                                 jira={**base, "failed_step": "3 | Enable roaming data"}))
+    assert [c["cause"] for c in withstep] == ["DATA-001-02", "DATA-001-01"]
+    assert withstep[0]["bonus"]["keyword"] > withstep[1]["bonus"]["keyword"]
+    reg = _tie_cands(_match(events, SAMPLE, "--regress", jira={**base, "failed_step": "3 | Enable roaming data"}))
+    assert [c["cause"] for c in reg] == ["DATA-001-01", "DATA-001-02"]
+    assert all(c["bonus"] == {"proximity": 0.0, "keyword": 0.0} for c in reg)
+
+
 def _all_tests():
     return [(n, o) for n, o in sorted(globals().items()) if n.startswith("test_") and callable(o)]
 
