@@ -6,9 +6,12 @@
   parse <logcat...> (--around <ISO 시각> [--minutes 5] | --between <ISO 시작> <ISO 끝> | --full)
         --rules <db>/parser-rules [--tz <IANA>] [--year <YYYY>] [--mask] [--no-external]
       이벤트 JSON을 stdout으로 낸다. `--between`은 명시 구간(타임존 있는 ISO 둘, 시작 ≤ 끝)이다.
-  markers <logcat...> --rules <db>/parser-rules [--tz <IANA>] [--year <YYYY>]
+  markers <logcat...> --rules <db>/parser-rules [--tz <IANA>] [--year <YYYY>] [--step-events]
       시험 자동화의 스텝 마커 줄(`failed_step.marker_patterns`, site-defaults에서만 읽는다)을 모아
       `{schema, markers[{ts, step, status, tag, msg}], total, truncated, coverage, warnings}`로 낸다(상한 2000).
+      `--step-events`: 이슈 DB `issue-db.config.yaml`의 `step_events` 규칙(스텝 이름은 인자로 받지 않는다)마다 로그에서
+      그 흔적을 모아 `step_events[{rule, ts, seq, label}]`(규칙 번호·시각·줄 순번·이름 — 로그 본문 없음, (ts, seq, rule) 순)을
+      더한다. 규칙당 1000개·전체 5000개 상한(넘으면 경고 `step-events-truncated`), 잘못된 규칙은 경고 `step-event-rule`.
   extract-bugreport <zip|txt> --out <dir>
       bugreport에서 logcat 섹션(system/radio/main)과 빌드 정보(build.json)만 꺼낸다.
   cut <logcat...> (--evidence <match.json> | --around <ISO 시각> [--seconds 30]) --out <file>
@@ -513,6 +516,133 @@ def observation_errors(doc: dict) -> list[dict]:
 # -- markers -----------------------------------------------------------------
 
 
+STEP_EVENT_PER_RULE = 1000
+STEP_EVENT_TOTAL = 5000
+
+
+def _step_event_rules(db_cfg: dict) -> tuple[list[dict | None], list[dict]]:
+    """`step_events` → 규칙 번호 자리마다 `{kind, ...}`(관측 불가·잘못된 규칙은 None)와 경고.
+
+    대상은 정확히 하나: `ril`(+`dir`), `match`(정규식), `event`(+`fields{이름: 정규식}`). 스텝 이름 패턴은 쓰지 않는다."""
+    raw = db_cfg.get("step_events")
+    if not isinstance(raw, list):
+        return [], []
+    out: list[dict | None] = []
+    warnings: list[dict] = []
+
+    def bad(i: int, why: str) -> None:
+        warnings.append({"code": "step-event-rule", "message": f"step_events[{i}]: {why} — 건너뜀"})
+        out.append(None)
+
+    for i, item in enumerate(raw):
+        if not isinstance(item, dict):
+            bad(i, "매핑이 아님")
+            continue
+        targets = [k for k in ("event", "ril", "match") if k in item]
+        if item.get("observable") is False:
+            out.append(None)
+            if targets:
+                warnings.append({"code": "step-event-rule", "message": f"step_events[{i}]: observable: false에 대상이 있다 — 건너뜀"})
+            continue
+        if len(targets) != 1:
+            bad(i, "event·ril·match 중 정확히 하나가 필요하다")
+            continue
+        kind = targets[0]
+        value = item[kind]
+        if not isinstance(value, str) or not value:
+            bad(i, f"{kind}는 문자열이어야 한다")
+            continue
+        if kind == "ril":
+            direction = item.get("dir") or ("unsol" if value.startswith("UNSOL_") else "req")
+            if direction not in ("req", "resp", "unsol"):
+                bad(i, f"dir이 req|resp|unsol이 아니다: {direction!r}")
+                continue
+            out.append({"kind": "ril", "name": value, "dir": direction})
+        elif kind == "match":
+            try:
+                out.append({"kind": "match", "rx": re.compile(value), "pattern": value})
+            except re.error as exc:
+                bad(i, f"match 정규식 오류: {exc}")
+        else:
+            if value.startswith("ext."):
+                bad(i, "ext.* 이벤트는 지원하지 않는다")
+                continue
+            fields = item.get("fields") or {}
+            if not isinstance(fields, dict):
+                bad(i, "fields는 매핑이어야 한다")
+                continue
+            try:
+                compiled = {str(k): re.compile(str(v)) for k, v in fields.items()}
+            except re.error as exc:
+                bad(i, f"fields 정규식 오류: {exc}")
+                continue
+            out.append({"kind": "event", "name": value, "fields": compiled})
+    return out, warnings
+
+
+def _step_event_hits(raw: list[dict], specs: list[dict | None], paths: list[Path], rules_dir: Path,
+                     db_cfg: dict, coverage: dict, timeout_ms: int, warnings: list[dict]) -> list[dict]:
+    """규칙별 로그 흔적 `[{rule, ts, seq, label}]`(정렬 전). `seq`는 파서 출력 줄의 순번이다.
+
+    `ril`: 원 레코드의 `ril`(요청 이름·방향) 그대로. `match`: 모든 `TAG: msg`를 한 마스커로 마스킹해 정규식 검색.
+    `event`: `postprocess`(마스킹 포함) 이벤트 중 이름·필드 정규식이 맞는 것. 라벨은 이름뿐이다(본문 없음)."""
+    hits: list[dict] = []
+    masker = None
+    if any(sp and sp["kind"] in ("match", "event") for sp in specs):
+        masker = masking.new_masker(_read_texts(paths), _allow_patterns(db_cfg))
+    line_idx = [i for i, r in enumerate(raw) if r.get("event") is None]
+
+    for rule, sp in enumerate(specs):             # ril
+        if sp and sp["kind"] == "ril":
+            for i in line_idx:
+                ann = raw[i].get("ril")
+                if ann and ann.get("request") == sp["name"] and ann.get("dir") == sp["dir"]:
+                    hits.append({"rule": rule, "ts": raw[i]["ts"], "seq": i, "label": sp["name"]})
+
+    match_rules = [(rule, sp) for rule, sp in enumerate(specs) if sp and sp["kind"] == "match"]
+    if match_rules:
+        texts = [masker(f"{raw[i]['tag']}: {raw[i]['msg']}") for i in line_idx]
+        with PatternRunner(texts, timeout_ms) as runner:
+            for rule, sp in match_rules:
+                try:
+                    found = runner.search(sp["pattern"])
+                except (PatternTimeout, PatternError) as exc:
+                    warnings.append({"code": "step-event-rule", "message": f"step_events[{rule}]: match 건너뜀: {exc}"})
+                    continue
+                for k in found:
+                    i = line_idx[k]
+                    hits.append({"rule": rule, "ts": raw[i]["ts"], "seq": i, "label": str(raw[i]["tag"])[:40]})
+
+    event_rules = [(rule, sp) for rule, sp in enumerate(specs) if sp and sp["kind"] == "event"]
+    if event_rules:
+        try:
+            rules = parser_rules.load(rules_dir)
+        except parser_rules.RulesError as exc:
+            raise UsageError(f"파서 규칙 오류: {exc}") from exc
+        errors: list[dict] = []
+        out = postprocess(list(raw), rules, masker=masker, last_ts=coverage["last_ts"], timeout_ms=timeout_ms,
+                          errors=errors)
+        for error in errors:
+            warnings.append({"code": "pattern-timeout", "message": f"extractor {error['extractor']}: {error['error']}"})
+        # postprocess가 남긴 원 레코드(태그 매핑에 맞는 줄 + builtin 이벤트)의 원래 순번. 파생 이벤트는 그 줄 바로 뒤에 온다.
+        kept = [i for i, r in enumerate(raw) if r.get("event") is not None or rules.tag_category(r["tag"]) is not None]
+        pos, seq = 0, None
+        for e in out:
+            derived = e.get("event") is not None and e.get("source") == "rules"
+            if not derived:
+                seq = kept[pos] if pos < len(kept) else seq
+                pos += 1
+            if e.get("event") is None or seq is None:
+                continue
+            for rule, sp in event_rules:
+                if e["event"] != sp["name"]:
+                    continue
+                fields = e.get("fields") or {}
+                if all(name in fields and rx.search(str(fields[name])) for name, rx in sp["fields"].items()):
+                    hits.append({"rule": rule, "ts": e["ts"], "seq": seq, "label": sp["name"]})
+    return hits
+
+
 def run_markers(args, defaults: dict) -> dict:
     """스텝 마커 줄을 모은다. 마커 태그는 `tags.yaml`에 없으므로 `parse` 출력을 쓰지 못하고 백엔드의 줄 레코드를 직접 본다.
 
@@ -549,9 +679,14 @@ def run_markers(args, defaults: dict) -> dict:
     coverage = {"first_ts": coverage["first_ts"], "last_ts": coverage["last_ts"]}
     markers: list[dict] = []
     total = 0
+    timeout_ms = int((db_cfg.get("matcher") or {}).get("pattern_timeout_ms", DEFAULT_TIMEOUT_MS))
+    step_specs, rule_warnings = _step_event_rules(db_cfg) if getattr(args, "step_events", False) else ([], [])
+    warnings += rule_warnings
+    raw_records = None
+    if compiled or any(step_specs):
+        raw_records = backend.parse(paths, args.tz, args.year, None)       # 한 번만 파싱한다
     if compiled:
-        timeout_ms = int((db_cfg.get("matcher") or {}).get("pattern_timeout_ms", DEFAULT_TIMEOUT_MS))
-        records = [r for r in backend.parse(paths, args.tz, args.year, None) if r.get("event") is None]
+        records = [r for r in raw_records if r.get("event") is None]
         texts = [f"{r['tag']}: {r['msg']}" for r in records]
         hits: dict[int, re.Pattern] = {}
         remaining = list(range(len(records)))
@@ -587,8 +722,29 @@ def run_markers(args, defaults: dict) -> dict:
     if truncated:
         warnings.append({"code": "markers-truncated",
                          "message": f"마커 {total}개 중 앞의 {len(markers)}개만 냈습니다."})
-    return {"schema": OUTPUT_SCHEMA, "markers": markers, "total": total, "truncated": truncated,
-            "coverage": coverage, "warnings": warnings}
+    result = {"schema": OUTPUT_SCHEMA, "markers": markers, "total": total, "truncated": truncated,
+              "coverage": coverage, "warnings": warnings}
+    if getattr(args, "step_events", False):
+        hits = _step_event_hits(raw_records, step_specs, paths, rules_dir, db_cfg, coverage, timeout_ms, warnings) \
+            if any(step_specs) else []
+        by_rule: dict[int, int] = {}
+        capped = []
+        for hit in sorted(hits, key=lambda h: (h["ts"], h["seq"], h["rule"])):
+            if by_rule.get(hit["rule"], 0) >= STEP_EVENT_PER_RULE:
+                by_rule[hit["rule"]] = by_rule.get(hit["rule"], 0) + 1
+                continue
+            by_rule[hit["rule"]] = by_rule.get(hit["rule"], 0) + 1
+            capped.append(hit)
+        truncated_rules = {r for r, n in by_rule.items() if n > STEP_EVENT_PER_RULE}
+        if len(capped) > STEP_EVENT_TOTAL:
+            truncated_rules |= {h["rule"] for h in capped[STEP_EVENT_TOTAL:]}
+            capped = capped[:STEP_EVENT_TOTAL]
+        if truncated_rules:
+            warnings.append({"code": "step-events-truncated", "truncated_rules": sorted(truncated_rules),
+                             "message": f"step_events 규칙 {sorted(truncated_rules)}의 흔적이 상한"
+                                        f"(규칙당 {STEP_EVENT_PER_RULE}, 전체 {STEP_EVENT_TOTAL})을 넘어 앞부분만 냈습니다."})
+        result["step_events"] = capped
+    return result
 
 
 # -- extract-bugreport --------------------------------------------------------
@@ -811,6 +967,8 @@ def build_parser() -> argparse.ArgumentParser:
     k.add_argument("--rules", required=True, help="<db>/parser-rules")
     k.add_argument("--tz", default=None, help="연도 없는 logcat 시각의 타임존 (IANA)")
     k.add_argument("--year", type=int, default=None, help="첫 줄의 연도")
+    k.add_argument("--step-events", action="store_true",
+                   help="이슈 DB step_events 규칙의 로그 흔적(step_events[{rule, ts, seq, label}])을 더한다")
 
     b = sub.add_parser("extract-bugreport", parents=[common], help="bugreport → logcat 섹션")
     b.add_argument("bugreport")

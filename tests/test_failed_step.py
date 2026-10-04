@@ -282,6 +282,9 @@ def test_resolve_falls_back_to_fail_row_after_patterns():
     # extract는 site-defaults의 failed_step_patterns가 먼저다(붙여넣기 줄 "Step 7: … FAIL"에 맞는다)
     out = _extract(_raw(tmp), "--steps-file", paste)
     assert out["failed_step"] == {"text": "데이터 연결 확인", "source": "steps_file"}
+    # html의 요약 표("Overall result | FAIL")는 표 머리 앞이라 패턴이 먼저 잡지 않는다
+    out = _extract(_raw(tmp), "--steps-file", html)
+    assert out["failed_step"] == {"text": "7 | 데이터 연결 확인", "source": "steps_file"}
 
 
 def test_raw_cli_text_never_reaches_any_job_file():

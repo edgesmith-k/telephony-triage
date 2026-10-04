@@ -35,8 +35,9 @@
 
 실패 스텝 앵커(선택): 실패 스텝이 **어디를(시간 범위)·무엇을(우선 유형)** 볼지 정하고, **왜(S/C)** 는 로그 시그니처가 정한다.
 앵커 우선순위 `--answer anchor=off`(끔) > 로그 스텝 마커(`failed_step.marker_patterns`가 있을 때 `parse_logcat markers`, 기본 꺼짐) >
-`--steps-file`의 스텝 시각(**수동 시계 차 `--clock-offset`이 있을 때만**) > Jira 발생 시각(±`--minutes`) > 증상 시각 스캔
-(`--answer time`). 시험 장비 시계는 단말 logcat 시계와 다를 수 있어, 시계 차를 모르면 장비 시각은 쓰지 않는다(경고).
+`--steps-file`의 스텝 시각(**수동 시계 차 `--clock-offset`이 있을 때만**) > `--steps-file`의 스텝 순서(`step_order`: PASS 스텝의
+흔적을 이슈 DB `step_events` 규칙으로 로그에서 찾아 마지막 일치 뒤를 실패 구간으로 본다, 시계 불필요) > Jira 발생 시각(±`--minutes`) >
+증상 시각 스캔(`--answer time`). 시험 장비 시계는 단말 logcat 시계와 다를 수 있어, 시계 차를 모르면 장비 시각은 쓰지 않는다(경고).
 마커·steps-file 앵커는 분석 범위와 근접 보너스의 중심에서 Jira 시각을 대신한다(`JOB/match_meta.json`, `jira_meta.json`은 그대로).
 앵커 시각이 로그 범위 밖이면 경고하고 다음 출처로 넘어간다. 실패 스텝 문구는 앵커와 무관하게 우선 유형·키워드에 쓴다.
 앵커가 없고 마커 패턴·steps-file도 없으면 출력은 이전과 같다.
@@ -235,6 +236,8 @@ class Driver:
         self.anchor_off = False
         self.clock_offset: float | None = None   # 장비 시각 → 단말 시각 시계 차(초). --clock-offset > failed_step.clock_offset
         self._steps = None                       # read_steps 결과 캐시 (steps-file은 한 번만 읽는다)
+        self.order_fail: dict | None = None      # 스텝 순서 정렬을 시도했으나 앵커를 못 정한 이유 {matched, observable, missed, reason}
+        self.order_evidence: list[tuple[str, str, str]] = []   # (스텝 이름, 로그 시각, 흔적 이름) — 리포트용(마스킹됨)
         self.clock: dict | None = None           # 시계 정렬 결과 {mode: manual|none, offset_sec | reason}
         self.focus: list[str] = []               # match.step_focus.types (순위 참고용 우선 유형)
 
@@ -715,6 +718,9 @@ class Driver:
             argv += ["--tz", tz]
         if year:
             argv += ["--year", year]
+        step_rules = self.step_event_rules() if steps_file else []
+        if step_rules:      # 스텝 이름은 인자로 넘기지 않는다: 규칙은 이슈 DB 설정에서 파서가 읽는다
+            argv.append("--step-events")
         _, data, _ = self.run.call("3-markers", "parse_logcat.py", argv)
         data = data or {}
         for w in data.get("warnings") or []:
@@ -740,15 +746,22 @@ class Driver:
                 span = None
         if span is None and steps_file:
             span = self.steps_file_span(steps_file, tz, year, conf, jira_at, first, inside)
+        if span is None and steps_file:
+            span = self.step_order_span(data, step_rules, conf, last)
         if span is None:
             return None
         fail = span["fail"] or span["end"]
-        start, end, warns = stepanchor.window(span, window_cfg)
-        for w in warns:
-            self.warn(w)
+        if span["source"] == "step_order":
+            start, end = span["start"], span["end"]
+        else:
+            start, end, warns = stepanchor.window(span, window_cfg)
+            for w in warns:
+                self.warn(w)
         anchor = {"source": span["source"], "step": span.get("step"), "step_from": span["step_from"],
                   "start": lc.format_ts(span["start"]) if span.get("start") else None, "fail": lc.format_ts(fail),
                   "window": (lc.format_ts(start), lc.format_ts(end))}
+        if span.get("order"):
+            anchor["order"] = span["order"]
         if jira_at:
             gap = stepanchor.gap_minutes(fail, jira_at)
             anchor["jira_gap_min"] = round(gap, 1)
@@ -757,9 +770,57 @@ class Driver:
                 hint = " (Jira 시각이 장비 시각이면 시계 차 때문일 수 있다)" if span["source"] in ("steps_file", "step_order") else ""
                 self.warn(f"Jira 발생 시각과 실패 스텝 시각이 {gap:.0f}분 다르다 — 스텝 시각 기준으로 분석했다"
                           f"(끄기: --answer anchor=off){hint}")     # 경고만 낸다. 구간은 바꾸지 않는다
-        if self.clock and span["source"] == "steps_file":
-            anchor["clock"] = dict(self.clock)
         return anchor
+
+    def step_event_rules(self) -> list:
+        """스냅샷 `issue-db.config.yaml`의 `step_events`(없거나 형식이 틀리면 빈 목록). 규칙 번호 = 목록 위치."""
+        try:
+            rules = compat.load_db_config(self.snap).get("step_events")
+        except Exception:    # noqa: BLE001 — 호환성 문제는 compat 단계가 보고한다
+            return []
+        return [r for r in rules] if isinstance(rules, list) else []
+
+    def step_order_span(self, data: dict, step_rules: list, conf: dict, last) -> dict | None:
+        """steps-file의 스텝 순서를 로그의 흔적과 맞춰 실패 구간을 정한다(장비 시각을 쓰지 않는다). 못 정하면 None(경고)."""
+        steps, fidx, warns, _ = self.steps_info()
+        for w in warns:
+            self.warn(w)
+        if not fidx:            # FAIL 스텝이 없거나 앞선 PASS 스텝이 없으면 순서로 정할 것이 없다
+            return None
+        masker = self.masker()
+        labels = [failedstep.label(row, masker) for row in steps]
+        rule_of: dict[int, int | None] = {}
+        for k, text in enumerate(labels):
+            rule_of[k] = None
+            for i, rule in enumerate(step_rules):
+                pattern = rule.get("pattern") if isinstance(rule, dict) else None
+                try:
+                    hit = bool(pattern) and re.search(str(pattern), text)
+                except re.error:
+                    hit = False
+                if hit:      # 처음 맞는 규칙이 이긴다. observable: false면 관측 불가
+                    rule_of[k] = None if rule.get("observable") is False else i
+                    break
+        truncated = [r for w in data.get("warnings") or [] if w.get("code") == "step-events-truncated"
+                     for r in w.get("truncated_rules") or []]
+        cfg = {"order": conf.get("order"), "window": conf.get("window"),
+               "coverage_last": last, "truncated_rules": truncated}
+        result, info, more = stepanchor.order_walk(steps, fidx, rule_of, data.get("step_events") or [], cfg)
+        for w in more:
+            self.warn(w)
+        summary = {k: info[k] for k in ("matched", "observable", "missed")}
+        if result is None:
+            self.order_fail = {**summary, "reason": info["reason"]}
+            self.warn(f"스텝 순서 정렬 안 함: {info['reason']} — Jira 발생 시각 기준으로 분석했다")
+            return None
+        evidence = [(labels[k], ts, lab) for k, ts, lab in info["evidence"]]
+        self.order_evidence = evidence
+        self.check_failed_step_row(labels[fidx])
+        order = {**summary, "unobservable": info["unobservable"],
+                 "last": {"step": _clip(labels[result["last_step"]], 40), "ts": evidence[-1][1]},
+                 "last_label": labels[result["last_step"]]}
+        return {"source": "step_order", "step": labels[fidx] or None, "step_from": "failed_step",
+                "start": result["start"], "fail": result["fail"], "end": result["end"], "order": order}
 
     def steps_info(self):
         """`failedstep.read_steps` 결과(스텝 목록, 실패 위치, 경고, zip 멤버) — steps-file을 한 번만 읽는다. 원문은 이 프로세스 안에서만 쓴다."""
@@ -1025,10 +1086,15 @@ class Driver:
             out = {"source": anchor["source"], "step": _clip(_step_label(anchor.get("step")), 80),
                    "step_from": anchor["step_from"] if anchor["step_from"] != "failed_step" else None,
                    "span": [anchor["start"], anchor["fail"]], "jira_gap_min": anchor.get("jira_gap_min")}
-        elif self.failed_step or self.clock:
+        elif self.failed_step or self.clock or self.order_fail:
             out = {"source": "jira" if info.get("occurred_at") and not self.answer("time") else "symptom_scan"}
         else:
             return None
+        if anchor and anchor.get("order"):
+            o = anchor["order"]
+            out["order"] = {"matched": o["matched"], "observable": o["observable"], "missed": o["missed"], "last": dict(o["last"])}
+        elif self.order_fail:
+            out["order"] = dict(self.order_fail)
         if self.clock:
             out["clock"] = dict(self.clock)
         if self.focus:
@@ -1060,11 +1126,21 @@ class Driver:
         if anchor:
             jira_at = (r.get("jira") or {}).get("occurred_at")
             gap = anchor.get("jira_gap_min")
-            manual = anchor.get("clock") or {}
-            lines.append(f"- 실패 스텝 구간 ({anchor['source']}): {_step_label(anchor.get('step'))} "
-                         f"{anchor['start'] or '?'} ~ {anchor['fail']} → 분석 범위 {anchor['window'][0]} ~ {anchor['window'][1]}"
-                         + (f" (시계 차 {manual['offset_sec']:+g}초, 수동)" if manual.get("mode") == "manual" else "")
-                         + (f" (Jira 발생 시각 {jira_at} / {gap:g}분 차이)" if jira_at and gap is not None else ""))
+            manual = self.clock or {}
+            jira_part = f" (Jira 발생 시각 {jira_at} / {gap:g}분 차이)" if jira_at and gap is not None else ""
+            order = anchor.get("order")
+            if order:
+                lines.append(f"- 실패 스텝 구간 (step_order): {_step_label(anchor.get('step'))} — 마지막 확인 스텝 "
+                             f"{order['last_label']} {order['last']['ts']} 이후 → 분석 범위 {anchor['window'][0]} ~ {anchor['window'][1]} "
+                             f"(관측 가능 {order['observable']}개 중 {order['matched']}개 일치, 놓침 {order['missed']}, "
+                             f"관측 불가 {order['unobservable']})" + jira_part)
+                lines += [f"  - {step} → {ts} {label}" for step, ts, label in self.order_evidence[-6:]]
+            else:
+                lines.append(f"- 실패 스텝 구간 ({anchor['source']}): {_step_label(anchor.get('step'))} "
+                             f"{anchor['start'] or '?'} ~ {anchor['fail']} → 분석 범위 {anchor['window'][0]} ~ {anchor['window'][1]}"
+                             + (f" (시계 차 {manual['offset_sec']:+g}초, 수동)"
+                                if anchor["source"] == "steps_file" and manual.get("mode") == "manual" else "")
+                             + jira_part)
         if self.focus:
             lines.append("- 스텝 기준 우선 유형 (순위 참고만, 점수·S/C 불변): " + ", ".join(self.focus))
         cands = r["candidates"]
@@ -1220,6 +1296,10 @@ def _clip_failed_step(result: dict, limit: int) -> None:
         fs["text"] = _clip(fs["text"], limit)
 
 
+def _drop_order_last(result: dict) -> None:
+    ((result.get("step_anchor") or {}).get("order") or {}).pop("last", None)
+
+
 def _drop_clock_reason(result: dict) -> None:
     ((result.get("step_anchor") or {}).get("clock") or {}).pop("reason", None)
 
@@ -1251,6 +1331,7 @@ def fit(result: dict) -> dict:
     steps += [lambda: result.update(warnings=(result.get("warnings") or [])[:3]),
               lambda: result.update(files={"report": result["files"]["report"]}),
               lambda: cands and cands[0].update(evidence=cands[0]["evidence"][:3]),
+              lambda: _drop_order_last(result),
               lambda: _drop_clock_reason(result),
               lambda: _drop_focus(result),
               lambda: _clip_anchor_step(result, 40),

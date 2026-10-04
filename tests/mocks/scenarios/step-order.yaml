@@ -1,0 +1,30 @@
+# 파서 fixture: 스텝 마커가 **없는** 실제형 로그 (스텝 순서 정렬 시험, tests/test_step_order.py).
+# 시험 7스텝(비행기 모드 켜기·끄기 PASS, IMS 등록 확인 PASS(규칙 없음), 망 등록 확인 PASS(RIL unsol), CP 파라미터 설정 PASS(CP 동작),
+# 모바일 데이터 켜기 PASS, 데이터 연결 확인 FAIL)가 로그에는 흔적(비행기 모드·망 등록 unsol·데이터 설정 변경)으로만 남는다.
+# 시계는 장비 시각과 맞지 않아 쓰지 않는다. +0의 BOOT 데이터 켜짐(미끼)과 +12·+36의 IMS 403(스텝과 무관한 이른 오류)은
+# 스텝 순서로 구간을 잡으면 구간 밖이고, Jira 시각(14:31) 기준이면 IMS-001-01이 1위가 된다.
+# 문구는 placeholder다 — TODO(SITE:S22). SETUP_DATA_CALL은 일부러 없다(마지막 스텝의 흔적 없음).
+name: step-order
+start: "2026-09-20T14:30:00+09:00"
+default_phone: 0
+pid: 1234
+tid: 1244
+build:
+  fingerprint: "mock/mocka56/a56:16/MOCKBUILD/MOCKA56_U1_20260915:user/release-keys"
+  build: MOCKA56_U1_20260915
+entries:
+  - {at: 0, tag: ImsResolver, msg: "bound to mock ImsService"}
+  - {at: 2, tag: "DSM-{phone}", msg: "onDataEnabledChanged: enabled=true reason=BOOT"}
+  - {at: 5, tag: ConnectivityService, phone: null, msg: "setAirplaneMode enabled=true"}
+  - {at: 12, tag: ImsRegistration, level: W, msg: "onRegistrationFailed: code=403 reason=FORBIDDEN"}
+  - {at: 20, tag: ConnectivityService, phone: null, msg: "setAirplaneMode enabled=false"}
+  - {at: 36, tag: ImsRegistration, level: W, msg: "onRegistrationFailed: code=403 reason=FORBIDDEN"}
+  - {at: 90, ril_unsol: UNSOL_RESPONSE_NETWORK_STATE_CHANGED}
+  - {at: 170, tag: "DSM-{phone}", msg: "onDataEnabledChanged: enabled=true reason=USER"}
+  - {at: 183, tag: "DSM-{phone}", msg: "onDataEnabledChanged: enabled=false reason=USER"}
+  - {at: 184, tag: "DSM-{phone}", msg: "isDataEnabled=false (user setting off)"}
+  - {at: 186, tag: "DNC-{phone}", level: I, msg: "onEvaluateNetworkRequests: reason=DATA_ENABLED_CHANGED"}
+  - {at: 187, tag: "DNC-{phone}", level: W, msg: "evaluation result: NOT_ALLOWED reasons=[DATA_DISABLED]"}
+  - {at: 195, tag: "DNC-{phone}", level: W, msg: "evaluation result: NOT_ALLOWED reasons=[DATA_DISABLED]"}
+  - {at: 240, tag: "DRM-{phone}", msg: "no retry scheduled: setup not allowed"}
+  - {at: 250, tag: ConnectivityService, phone: null, msg: "setAirplaneMode enabled=true"}

@@ -302,3 +302,110 @@ def steps_file_times(line, tz, year, ref_dt=None):
     if len(found) == 1:
         return None, found[0]
     return found[0], found[1]
+
+
+# -- 스텝 순서 정렬 ----------------------------------------------------------------------------------
+
+DEFAULT_ORDER = {"min_matched": 1, "max_missing": 1, "pre_sec": 10, "fail_post_sec": 120}
+
+
+def _order_cfg(cfg) -> dict:
+    out = dict(DEFAULT_ORDER)
+    for k, v in ((cfg or {}).get("order") or {}).items():
+        if k in out and isinstance(v, (int, float)) and not isinstance(v, bool) and v >= 0:
+            out[k] = v
+    return out
+
+
+def _walk(steps, failed_idx, rule_of, by_rule, start_after=None):
+    """PASS 스텝을 순서대로 걸으며 규칙의 흔적을 찾는다. `(matches[(k, dt, seq, label, ts 원문)], observable, missed, unobservable)`.
+
+    스텝마다 그 스텝 규칙의 흔적 중 `(ts, seq)`가 커서보다 뒤인 **가장 이른 것**을 쓰고 커서를 옮긴다. 없으면 놓친 것이다.
+    규칙이 없거나 관측 불가인 스텝은 세기만 한다(놓친 것이 아니다)."""
+    cursor = start_after
+    matches, observable, missed, unobservable = [], 0, 0, 0
+    for k in range(min(failed_idx, len(steps))):
+        rule = rule_of.get(k) if isinstance(rule_of, dict) else (rule_of[k] if k < len(rule_of) else None)
+        if rule is None:
+            unobservable += 1
+            continue
+        observable += 1
+        pick = next((h for h in by_rule.get(rule, ()) if cursor is None or (h[0], h[1]) > cursor), None)
+        if pick is None:
+            missed += 1
+            continue
+        matches.append((k, *pick))
+        cursor = (pick[0], pick[1])
+    return matches, observable, missed, unobservable
+
+
+def order_walk(steps, failed_idx, rule_of, hits, cfg=None):
+    """스텝 순서로 실패 구간을 정한다(순수·결정적). `(result | None, info, warnings)`.
+
+    `steps`: `failedstep.parse_steps` 목록(첫 FAIL까지), `failed_idx`: 실패 스텝 위치, `rule_of`: 스텝 위치 → `step_events`
+    규칙 번호(없거나 관측 불가면 None; dict 또는 목록), `hits`: `parse_logcat markers --step-events`의 `step_events`
+    (`{rule, ts, seq, label}`), `cfg`: `failed_step` 설정(`order`·`window.max_span_sec`)에 `coverage_last`(로그 끝 시각)와
+    `truncated_rules`(상한에 걸린 규칙 번호)를 더한 것.
+
+    `info = {matched, observable, missed, unobservable, evidence[(스텝 위치, ts, 라벨)], reason?}`. 앵커를 못 정하면
+    `result`가 None이고 `info["reason"]`에 사유가 있다. 앵커가 있으면 `result = {start, fail, end, last_ts, failed_hit,
+    last_step}`(UTC datetime; `fail`은 실패 스텝의 흔적이 있으면 그 시각, 없으면 마지막 일치 시각). 끝은 로그 범위로 자를 뿐 버리지 않는다."""
+    conf = _order_cfg(cfg)
+    by_rule: dict[int, list] = {}
+    for h in sorted((h for h in hits or [] if _ts(h.get("ts")) is not None),
+                    key=lambda h: (_ts(h["ts"]), int(h.get("seq") or 0))):
+        by_rule.setdefault(h["rule"], []).append((_ts(h["ts"]), int(h.get("seq") or 0), str(h.get("label") or ""), h["ts"]))
+    warnings: list[str] = []
+    info = {"matched": 0, "observable": 0, "missed": 0, "unobservable": 0, "evidence": []}
+    if failed_idx is None or not steps:
+        info["reason"] = "실패 스텝 위치를 모름"
+        return None, info, warnings
+    matches, observable, missed, unobservable = _walk(steps, failed_idx, rule_of, by_rule)
+    info.update(matched=len(matches), observable=observable, missed=missed, unobservable=unobservable,
+                evidence=[(k, raw, label) for k, _, _, label, raw in matches])
+    used = {_rule(rule_of, k) for k in range(min(failed_idx, len(steps))) if _rule(rule_of, k) is not None}
+    truncated = set((cfg or {}).get("truncated_rules") or ())
+
+    def fail(reason: str):
+        info["reason"] = reason
+        return None, info, warnings
+
+    if observable == 0:
+        return fail("관측 가능한 PASS 스텝 없음")
+    if used & truncated:
+        return fail("스텝 흔적이 상한을 넘어 일부만 읽었다")
+    if len(matches) < conf["min_matched"]:
+        return fail(f"일치한 스텝이 적다({len(matches)}개, 최소 {int(conf['min_matched'])}개)")
+    last_observable = max(k for k in range(min(failed_idx, len(steps))) if _rule(rule_of, k) is not None)
+    if not matches or matches[-1][0] != last_observable:
+        return fail("마지막 관측 가능 스텝 미발견")
+    if missed > conf["max_missing"]:
+        return fail(f"놓친 스텝 {missed}개")
+    again = _walk(steps, failed_idx, rule_of, by_rule, start_after=(matches[0][1], matches[0][2]))[0]
+    if len(again) >= len(matches):
+        return fail("스텝 순서가 로그에 두 번 이상(반복 실행)")
+
+    last_k, last_ts, last_seq, _, _ = matches[-1]
+    failed_rule = _rule(rule_of, failed_idx)
+    h_f = None
+    if failed_rule is not None:
+        h_f = next((h[0] for h in by_rule.get(failed_rule, ()) if (h[0], h[1]) > (last_ts, last_seq)), None)
+    max_span = ((cfg or {}).get("window") or {}).get("max_span_sec", DEFAULT_WINDOW["max_span_sec"])
+    if not isinstance(max_span, (int, float)) or isinstance(max_span, bool) or max_span < 0:
+        max_span = DEFAULT_WINDOW["max_span_sec"]
+    ends = [last_ts + timedelta(seconds=max_span)]
+    cov_last = _ts((cfg or {}).get("coverage_last")) if (cfg or {}).get("coverage_last") else None
+    if cov_last is not None:
+        ends.append(cov_last)
+    if h_f is not None:
+        ends.append(h_f + timedelta(seconds=conf["fail_post_sec"]))
+    start = last_ts - timedelta(seconds=conf["pre_sec"])
+    end = max(min(ends), last_ts)
+    return {"start": start, "fail": h_f or last_ts, "end": end, "last_ts": last_ts, "failed_hit": h_f,
+            "last_step": last_k}, info, warnings
+
+
+def _rule(rule_of, k):
+    if isinstance(rule_of, dict):
+        return rule_of.get(k)
+    return rule_of[k] if 0 <= k < len(rule_of) else None

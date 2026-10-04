@@ -348,6 +348,35 @@ def _status_of(cell: str, pass_w: set[str], fail_w: set[str]) -> str | None:
     return None
 
 
+def _split_cells(text) -> list[list[str]]:
+    return [[c.strip() for c in _CELL_SPLIT.split(line[:MAX_LINE_CHARS]) if c.strip()]
+            for line in str(text or "").splitlines()[:MAX_SCAN_LINES]]
+
+
+def _find_header(split, cols) -> tuple[dict | None, int, int]:
+    """표 머리(상태 열을 포함해 열 이름이 2개 이상 맞는 첫 줄) → `(열 위치, 칸 수, 머리 다음 줄 위치)`. 없으면 `(None, 0, 0)`."""
+    for pos, cells in enumerate(split):
+        found: dict[str, int] = {}
+        for idx, cell in enumerate(cells):
+            for kind, words in cols.items():
+                if kind not in found and cell.casefold() in words:
+                    found[kind] = idx
+                    break
+        if len(found) >= 2 and "status" in found:
+            return found, len(cells), pos + 1
+    return None, 0, 0
+
+
+def _after_header(text, cfg=None) -> str:
+    """표 머리가 있으면 그 다음 줄부터의 텍스트(요약 표의 `Overall result | FAIL` 같은 줄을 패턴이 먼저 잡지 않도록), 없으면 그대로."""
+    conf = cfg if isinstance(cfg, dict) else {}
+    cols = {k: _words(conf.get("steps_columns"), DEFAULT_STEPS_COLUMNS, k) for k in DEFAULT_STEPS_COLUMNS}
+    header, _, start = _find_header(_split_cells(text), cols)
+    if header is None:
+        return str(text or "")
+    return "\n".join(str(text).splitlines()[start:])
+
+
 def parse_steps(text, cfg=None) -> list[dict]:
     """시험 절차 줄 텍스트 → 스텝 목록(≤ 500개) `{index, number, name_raw, status: pass|fail, time_raw}` (`index`는 0부터).
 
@@ -362,21 +391,8 @@ def parse_steps(text, cfg=None) -> list[dict]:
     pass_w = _words(conf.get("steps_status"), DEFAULT_STEPS_STATUS, "pass")
     fail_w = _words(conf.get("steps_status"), DEFAULT_STEPS_STATUS, "fail")
     cols = {k: _words(conf.get("steps_columns"), DEFAULT_STEPS_COLUMNS, k) for k in DEFAULT_STEPS_COLUMNS}
-    split = [[c.strip() for c in _CELL_SPLIT.split(line[:MAX_LINE_CHARS]) if c.strip()]
-             for line in str(text or "").splitlines()[:MAX_SCAN_LINES]]
-    header: dict[str, int] | None = None
-    header_n = 0
-    start = 0
-    for pos, cells in enumerate(split):          # 표 머리: 이 줄 앞(요약 표 등)은 스텝으로 보지 않는다
-        found: dict[str, int] = {}
-        for idx, cell in enumerate(cells):
-            for kind, words in cols.items():
-                if kind not in found and cell.casefold() in words:
-                    found[kind] = idx
-                    break
-        if len(found) >= 2 and "status" in found:
-            header, header_n, start = found, len(cells), pos + 1
-            break
+    split = _split_cells(text)
+    header, header_n, start = _find_header(split, cols)      # 표 머리: 이 줄 앞(요약 표 등)은 스텝으로 보지 않는다
     rows: list[dict] = []
     for cells in split[start:]:
         if not cells:
@@ -486,7 +502,7 @@ def read_steps_file(path, patterns: Iterable[str] | None, cfg=None) -> tuple[str
     text, why, _ = read_source(path)
     if text is None:
         return None, _unreadable(why)
-    step, warns = from_text(text, patterns)
+    step, warns = from_text(_after_header(text, cfg), patterns)
     if step:
         return step, (warns[0] if warns else None)
     fail = next((r for r in parse_steps(text, cfg) if r["status"] == "fail"), None)

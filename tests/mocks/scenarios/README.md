@@ -84,3 +84,4 @@ fixture가 되는지는 `tests/mocks/sample_fixtures.yaml`에 있고,
 | `clock-anomaly.yaml` | 시계 역행(-8초)·점프(+2시간, 판정 기준 3600초 이상) (`coverage.clock_anomalies` 시험) | 파서 `clock-anomaly.log` |
 | `bugreport-wrap.yaml` | `--bugreport txt|zip` 래핑과 `extract-bugreport` 시험 (system·radio·main·events 버퍼 + 가짜 dumpsys) | — |
 | `step-anchor.yaml` | 시험 자동화 스텝 마커(`TestRunner: Step N START/PASS/FAIL`) + Step 3 IMS 403(PASS), Step 5 데이터 설정 OFF(FAIL). Jira 발생 시각 14:31(Step 3 쪽). 실패 스텝 앵커 시험 (`tests/test_step_anchor.py`) | 파서 `step-anchor.log` |
+| `step-order.yaml` | 스텝 마커 **없는** 로그: 비행기 모드 켜기·끄기(`ConnectivityService`), 망 등록(`UNSOL_RESPONSE_NETWORK_STATE_CHANGED`), 데이터 설정 켜기(DSM)가 스텝의 흔적이고 이른 BOOT 데이터 켜짐(미끼)·IMS 403이 있다. 마지막 스텝(데이터 연결 확인)의 `SETUP_DATA_CALL`은 없다. 스텝 순서 정렬 시험 (`tests/test_step_order.py`) | 파서 `step-order.log` |
