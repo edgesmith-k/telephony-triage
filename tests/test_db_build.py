@@ -23,7 +23,7 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "tests" / "helpers"))
 
 import runner  # noqa: E402
-from runner import SAMPLE, copy_db, edit, git, git_db, run, run_json, tmp  # noqa: E402
+from runner import SAMPLE, copy_db, edit, git, git_db, run, run_json, tmp, variant_db  # noqa: E402
 
 CATEGORIES = ["Data", "Call", "Network", "SIM", "SMS", "IMS"]
 EMPTY = "아직 등록된 이슈가 없습니다."
@@ -69,7 +69,7 @@ def test_readme_structure_matches_design():
 
 
 def test_empty_categories_are_listed():
-    out = _preview(REPO / "tests/fixtures/issue-db-empty-category")
+    out = _preview(variant_db("issue-db-empty-category"))
     text = (out / "README.md").read_text(encoding="utf-8")
     assert "| [SMS](#sms) | 0 | 0 | 0 | 0 |" in text and "| [IMS](#ims) | 0 | 0 | 0 | 0 |" in text
     for name in ("SMS", "IMS"):

@@ -7,6 +7,7 @@ Phase 5 이후 테스트가 쓴다. 플러그인 루트는 `make_plugin_root.mak
 
 from __future__ import annotations
 
+import atexit
 import json
 import shutil
 import subprocess
@@ -77,6 +78,46 @@ def run(script: str, args: list[str], root: Path | None = None, cwd=None, env: d
     if script == "db_pr.py" and list(args[:2]) == ["lock", "acquire"] and result.returncode == 0:
         _LOCK_OWNERS[session] = json.loads(result.stdout)["lock"]["owner"]
     return result
+
+
+_VARIANT_DIR: Path | None = None
+
+
+def variant_dir() -> Path:
+    """`make_variant_dbs.build_all()` 결과 디렉터리. 프로세스당 한 번 임시 디렉터리에 만들고 종료 때 지운다."""
+    global _VARIANT_DIR
+    if _VARIANT_DIR is None or not _VARIANT_DIR.is_dir():
+        import make_variant_dbs  # 지연 import (순환 방지)
+
+        d = tmp("tt-variants-")
+        make_variant_dbs.build_all(d)
+        atexit.register(shutil.rmtree, d, True)
+        _VARIANT_DIR = d
+    return _VARIANT_DIR
+
+
+def variant_db(name: str) -> Path:
+    """변형 이슈 DB(또는 `verify-logs`) 경로. 읽기 전용으로 쓴다 — 바꾸려면 `copy_db()`로 복사한다."""
+    import make_variant_dbs
+
+    if name not in make_variant_dbs.VARIANTS:
+        raise KeyError(f"알 수 없는 변형: {name}")
+    return variant_dir() / name
+
+
+def fixture_db(name: str) -> Path:
+    return SAMPLE if name == "issue-db-sample" else variant_db(name)
+
+
+def fixture_path(rel: str) -> Path:
+    """`tests/fixtures/<변형>/나머지` → 생성된 변형 트리 안의 경로, 그 밖은 `REPO/rel`."""
+    parts = Path(rel).parts
+    if len(parts) >= 3 and parts[:2] == ("tests", "fixtures"):
+        import make_variant_dbs
+
+        if parts[2] in make_variant_dbs.VARIANTS:
+            return variant_db(parts[2]).joinpath(*parts[3:])
+    return REPO / rel
 
 
 def run_json(script: str, args: list[str], expect: int | tuple = 0, **kw) -> dict:

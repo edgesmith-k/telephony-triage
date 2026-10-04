@@ -19,11 +19,10 @@ import yaml
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "tests" / "helpers"))
 
-from runner import SAMPLE, git_db, run_json, run  # noqa: E402
+from runner import SAMPLE, git_db, run_json, run, variant_db  # noqa: E402
 from workspace import PLANS, Workspace, git  # noqa: E402
 
-FIX = REPO / "tests" / "fixtures"
-SIM_LOG = FIX / "issue-db-pending/data/DATA-001-no-setup-data-call/fixtures/DATA-001-03.log"
+SIM_LOG = variant_db("issue-db-pending") / "data/DATA-001-no-setup-data-call/fixtures/DATA-001-03.log"
 NORMAL_LOG = SAMPLE / "data/DATA-001-no-setup-data-call/fixtures/DATA-001.none.log"
 DATA_DIR = "data/DATA-001-no-setup-data-call"
 CSFB_LOG = """09-28 11:00:00.000  1234  1250 I SST-0: [PHONE0] pollState: voice=IN_SERVICE data=IN_SERVICE
@@ -677,7 +676,7 @@ def test_cleanup_skips_lock_holder_and_needs_yes():
 
 
 def test_post_lint_reports_duplicates_without_changes():
-    ws = Workspace(src=FIX / "issue-db-dup-id")
+    ws = Workspace(src=variant_db("issue-db-dup-id"))
     head = git(ws.clone, "rev-parse", "HEAD")
     ws.acquire("sync")
     out = ws.db_pr("snapshot", "--job", "sync")

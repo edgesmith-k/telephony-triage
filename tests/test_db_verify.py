@@ -3,8 +3,8 @@
 
 - 규칙 검증(R1~R6)은 샘플 이슈 DB를 git 레포로 만든 뒤 워킹 트리를 고치고 `db_verify rules --changed HEAD`로
   돌린다(계획을 적용한 트리와 같은 의미 비교를 쓴다). 계획 경로(`--plan --draft`, `db_pr stage`)는 `Workspace`로 본다.
-- 코드 수정 검증은 `tests/fixtures/issue-db-verify/`(CALL-001-01 fix-submitted)와 입력 로그
-  `tests/fixtures/verify-logs/`(`tests/helpers/make_variant_dbs.py`가 만든다)를 쓴다.
+- 코드 수정 검증은 `issue-db-verify`(CALL-001-01 fix-submitted)와 입력 로그
+  `verify-logs`(`tests/helpers/make_variant_dbs.py`가 테스트 때 만든다, `runner.variant_db()`)를 쓴다.
 
 `pytest tests/test_db_verify.py`로도, 그냥 실행해도 돈다.
 """
@@ -22,13 +22,12 @@ import pytest
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "tests" / "helpers"))
 
-from runner import SAMPLE, copy_db, edit, git, git_db, run, run_json  # noqa: E402
+from runner import SAMPLE, copy_db, edit, git, git_db, run, run_json, variant_db  # noqa: E402
 from workspace import PLANS, Workspace  # noqa: E402
 
-FIX = REPO / "tests" / "fixtures"
-VERIFY_DB = FIX / "issue-db-verify"
-LOGS = FIX / "verify-logs"
-PENDING_DB = FIX / "issue-db-pending"
+VERIFY_DB = variant_db("issue-db-verify")
+LOGS = variant_db("verify-logs")
+PENDING_DB = variant_db("issue-db-pending")
 CALL = "call/CALL-001-volte-not-working"
 DATA = "data/DATA-001-no-setup-data-call"
 IMS = "ims/IMS-001-ims-registration-failed"

@@ -28,14 +28,6 @@ SKIP_DIRS = {
     # 설계 문서 자체는 placeholder를 설명하는 곳이므로 목록에서 뺀다.
     # 확인 대상은 코드·설정·모의 데이터에 남긴 표시다.
     "docs",
-    # 합성 샘플에서 기계적으로 만든 변형 이슈 DB (tests/helpers/make_variant_dbs.py).
-    # 표시는 샘플(issue-db-sample)의 사본이라 샘플 쪽만 센다.
-    "issue-db-lint-errors",
-    "issue-db-empty-category",
-    "issue-db-pending",
-    "issue-db-dup-id",
-    "issue-db-verify",
-    "issue-db-review",
 }
 SKIP_FILES = {"list_site_todos.py", "DRAFT_NOTES.md"}
 TEXT_SUFFIXES = {

@@ -85,7 +85,7 @@ def test_plan_signatures_accept_named_patterns_and_legacy_strings():
     signature["must_match"] = [{"id": "reason", "pattern": "SIM_NOT_READY"}]
     signature["must_event"][0]["id"] = "rejected"
     signature["sequence"] = ["reason", "rejected"]
-    for path in (REPO / "tests" / "fixtures").glob("issue-db-*/schema/plan.schema.json"):
+    for path in [SAMPLE / "schema/plan.schema.json"]:
         validator = Draft202012Validator(json.loads(path.read_text(encoding="utf-8")))
         assert not list(validator.iter_errors(plan)), path
         legacy = json.loads(json.dumps(plan))

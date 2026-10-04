@@ -26,7 +26,7 @@ import db_pr  # noqa: E402
 import db_verify  # noqa: E402
 import match_signatures  # noqa: E402
 from common import compiled, issuedb  # noqa: E402
-from runner import SAMPLE, git, run_json  # noqa: E402
+from runner import SAMPLE, git, run_json, variant_db  # noqa: E402
 import make_plugin_root  # noqa: E402
 
 
@@ -196,7 +196,7 @@ def test_r4_normal_response_is_paired_across_capture_files(tmp_path, rotated):
 def test_r5_real_external_failure_cannot_produce_passed(tmp_path, kind):
     root = make_plugin_root.make(tmp_path / "plugin", with_site_backend=True)
     db = tmp_path / "db"
-    shutil.copytree(REPO / "tests/fixtures/issue-db-verify", db)
+    shutil.copytree(variant_db("issue-db-verify"), db)
     defaults_path = root / "site-defaults.yaml"
     defaults = yaml.safe_load(defaults_path.read_text(encoding="utf-8"))
     defaults["external_parsers"] = {"call": {
@@ -213,7 +213,7 @@ def test_r5_real_external_failure_cannot_produce_passed(tmp_path, kind):
                             "window_sec": 60}]
     type_path.write_text("---\n" + yaml.safe_dump(meta, allow_unicode=True, sort_keys=False)
                          + "---\n" + body, encoding="utf-8")
-    log = REPO / "tests/fixtures/verify-logs/call-fixed.log"
+    log = variant_db("verify-logs") / "call-fixed.log"
     assert log.is_file()
     parsed = run_json("parse_logcat.py", ["parse", log, "--full", "--mask", "--rules", db / "parser-rules",
                                            "--tz", "Asia/Seoul", "--year", "2026"], root=root)

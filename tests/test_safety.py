@@ -15,7 +15,7 @@ import pytest
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "tests" / "helpers"))
-from runner import plugin_root, git  # noqa: E402
+from runner import plugin_root, git, variant_db  # noqa: E402
 
 
 @pytest.fixture
@@ -321,8 +321,8 @@ def test_r5_external_failure_preserves_backend_and_blocks_pass(safety_root, tmp_
                "import sys; print('{}') if sys.argv[1].endswith('ok.log') else sys.exit(7)"}
     defaults["external_parsers"] = {"call": {"adapter": "site_data_existing", "mode": "replace",
         "command": [sys.executable, "-c", scripts[failure], "{log}"], "timeout_sec": .1 if failure == "timeout" else 5}}
-    db = REPO / "tests" / "fixtures" / "issue-db-verify"
-    source = REPO / "tests" / "fixtures" / "verify-logs" / "call-fixed.log"
+    db = variant_db("issue-db-verify")
+    source = variant_db("verify-logs") / "call-fixed.log"
     paths = [source]
     if failure == "partial":
         ok = tmp_path / "ok.log"

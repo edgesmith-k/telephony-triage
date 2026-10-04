@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Phase 5 완료 기준 확인: 린터 `db_lint.py` (11-phases.md Phase 5).
 
-`tests/fixtures/issue-db-lint-errors/`(`tests/helpers/make_variant_dbs.py`가 샘플에서 만든다)에 일부러
+`issue-db-lint-errors`(`tests/helpers/make_variant_dbs.py`가 테스트 때 샘플에서 만든다, `runner.variant_db()`)에 일부러
 넣은 오류를 모두 잡고, 샘플의 `.resolved.1.log`·`.extra.1.log`·다른 유형 원인을 담은 `also_allowed`는
 통과시키는지 본다. 범위 모드(`--changed`·`--staged`·`--ref`), `--residual`, 새 원인 fixed 금지,
 `synthetic_allowed: false`도 확인한다.
@@ -19,9 +19,9 @@ sys.path.insert(0, str(REPO / "tests" / "helpers"))
 sys.path.insert(0, str(REPO / "plugin" / "scripts"))
 
 import make_variant_dbs  # noqa: E402
-from runner import SAMPLE, edit, git, git_db, plugin_root, run, run_json  # noqa: E402
+from runner import SAMPLE, edit, git, git_db, plugin_root, run, run_json, variant_db  # noqa: E402
 
-LINT_DB = REPO / "tests" / "fixtures" / "issue-db-lint-errors"
+LINT_DB = variant_db("issue-db-lint-errors")
 D = "data/DATA-001-no-setup-data-call"
 C = "call/CALL-001-volte-not-working"
 N = "network/NETWORK-001-no-service"
@@ -63,8 +63,8 @@ def _pairs(result) -> set[tuple[str, str]]:
     return {(f["code"], f["file"]) for f in result["errors"] + result["warnings"]}
 
 
-def test_variant_trees_match_builder():
-    result = make_variant_dbs.run(check=True)
+def test_variant_builder_is_deterministic():
+    result = make_variant_dbs.check()
     assert not any(result.values()), result
 
 

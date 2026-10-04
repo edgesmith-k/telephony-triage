@@ -26,13 +26,13 @@ from jsonschema import Draft202012Validator
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "tests" / "helpers"))
 
-from runner import SAMPLE, git, git_db, run, run_json, versioned_root  # noqa: E402
+from runner import SAMPLE, git, git_db, run, run_json, versioned_root, variant_db  # noqa: E402
 from workspace import PLANS, Workspace  # noqa: E402
 from workspace import git as ws_git  # noqa: E402
 
 BRANCH = "migrate/schema-v2"
 CONFIG = "issue-db.config.yaml"
-SIM_LOG = REPO / "tests/fixtures/issue-db-pending/data/DATA-001-no-setup-data-call/fixtures/DATA-001-03.log"
+SIM_LOG = variant_db("issue-db-pending") / "data/DATA-001-no-setup-data-call/fixtures/DATA-001-03.log"
 
 
 def v2():

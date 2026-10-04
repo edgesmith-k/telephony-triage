@@ -490,7 +490,7 @@ JiraWriter.post_comment  (guard 규칙 2는 Claude 세션 전용이므로, 자�
 | 중복 문서 | §C 표. 추가로 `CLAUDE.md` 문서 지도 ↔ `D/01 §3` 트리 ↔ `AGENTS.md` 구조 절 | 세 곳 유지 | `docs/ARCHITECTURE.md` 하나 + 나머지는 링크 |
 | 임시·이력 파일이 루트에 | `DRAFT_NOTES.md`, `REVIEW-10.md`, `REVIEW-11.md`, `CHANGES.md`(57KB) | 새 agent가 모두 열어봄 | `docs/history/`로 이동, 루트에는 `HANDOFF_STATE.md`만 |
 | Windows 전용 보정 | `tools/fix_exec_bits.py`, `T/helpers/mock_env.py`의 `.cmd` shim, `encoding="utf-8"` 산재 | 배포 대상은 Ubuntu | 유지(해롭지 않음). CI는 Ubuntu |
-| 테스트 fixture DB 7벌 커밋 | `T/fixtures/issue-db-*` 3.6MB, 각자 `docs/schema/templates` 사본 | 스키마 한 줄 바꾸면 7곳(실제로 Phase 13에서 발생) | `make_variant_dbs.py`가 결정적이므로 **sample 1벌만 커밋 + 변형은 세션 fixture로 생성** (F 후보, §R) |
+| 테스트 fixture DB 7벌 커밋 (**완료 2026-10-04: 샘플 1벌 커밋, 변형은 테스트 때 생성**) | `T/fixtures/issue-db-*` 3.6MB, 각자 `docs/schema/templates` 사본 | 스키마 한 줄 바꾸면 7곳(실제로 Phase 13에서 발생) | `make_variant_dbs.py`가 결정적이므로 **sample 1벌만 커밋 + 변형은 세션 fixture로 생성** (F 후보, §R) |
 | 하드코딩 | `S/code_roots.py` 상수, `logcat.py`/`ril.py` regex, `parse_logcat.py` bugreport 헤더, `mcptools.py` `WRITE_WORDS/READ_WORDS` 휴리스틱 | §E | 설정/데이터로 |
 | 관측성 | 스크립트는 stderr 경고 + JSON `warnings[]`. 실행 로그 파일 없음 | 자동화에서 추적 불가 | driver가 `<work_dir>/<KEY>/trace.jsonl`(단계·소요·종료 코드) |
 | 재시도·멱등 | `db_pr` lease push·승인 해시로 멱등. git fetch 실패는 보고만 | 자동화에서는 재시도 정책 필요 | §N state.json + 입력 해시 |
@@ -517,7 +517,7 @@ JiraWriter.post_comment  (guard 규칙 2는 Claude 세션 전용이므로, 자�
 | **D 현재 기능에 불필요** | `REVIEW-10.md`, `REVIEW-11.md` (41KB, 과거 검토 Q1~Q10·U1~U17) — **`docs/history/`로 이동 완료(2026-10-01)** | `REVIEW-OPEN.md` 이력 절과 `CHANGES.md`가 참조 | `docs/history/`로 이동(링크 갱신). HANDOFF도 archive 제안 |
 | D | `README.md` (0바이트) | 없음 | `docs/ARCHITECTURE.md` 요약 + 링크로 채움(삭제 아님) |
 | **E 삭제 후보** | `docs/development/PLUGIN_IMPROVEMENT_HANDOFF.md` | 자기 자신이 "개선 완료 후 삭제 검토"로 표시. `DRAFT_NOTES.md` 19행이 링크 | I0~I6 완료 후. 그 전에는 유지. 이 문서(§U)가 그 계획을 흡수하면 R 표만 남기고 축소 |
-| E | `tests/fixtures/issue-db-{dup-id,empty-category,lint-errors,pending,review,verify}/` (6벌, ~3.1MB) | `T/helpers/make_variant_dbs.py --check`가 재생성·검증. `tests/test_db_lint.py` 등이 경로를 직접 참조 | 커밋 제거 + conftest에서 생성으로 전환. 테스트 경로 상수 수정 필요. **스키마 변경 시 7곳 수정 문제 해소**. 단 diff로 변형 내용을 리뷰하던 가치는 줄어든다 — 사용자 판단 |
+| E (**완료 2026-10-04: 샘플 1벌 커밋, 변형은 테스트 때 생성**) | `tests/fixtures/issue-db-{dup-id,empty-category,lint-errors,pending,review,verify}/` (6벌, ~3.1MB) | `T/helpers/make_variant_dbs.py --check`가 재생성·검증. `tests/test_db_lint.py` 등이 경로를 직접 참조 | 커밋 제거 + conftest에서 생성으로 전환. 테스트 경로 상수 수정 필요. **스키마 변경 시 7곳 수정 문제 해소**. 단 diff로 변형 내용을 리뷰하던 가치는 줄어든다 — 사용자 판단 |
 | E | `tools/fix_exec_bits.py` | Windows 개발 PC에서만 의미. `DRAFT_NOTES` "개발 환경과 설계의 차이" | Ubuntu 전용으로 가면 삭제 가능. 사외 개발 PC가 Windows인 동안 유지 |
 | E | `plugin/scripts/migrations/0001_example_jira_tags.py` | `test_db_migrate.py`가 사용 | 테스트 fixture로 이동(`tests/mocks/migrations/`) 가능. 운영 플러그인에 "example" 마이그레이션이 배포되는 것은 혼란 |
 | **F 추가 확인 필요** | `tests/mocks/plugin-probe/` | S1 실험용. 실험 결과 미기록(⏳ 8항목) | 실험 완료·결과 기록 후 유지/삭제 결정 |

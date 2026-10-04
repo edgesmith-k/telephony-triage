@@ -54,8 +54,7 @@ telephony-triage-plugin/                 # 개발 레포 루트
 │   ├── fixtures/
 │   │   ├── logs/                        # 엔진 단위 테스트용 로그 (유형별 회귀 fixture는 이슈 DB에 있음)
 │   │   ├── plans/                       # 손으로 쓴 plan.json (Phase 7·10 테스트, record·import·review 계획 포함)
-│   │   ├── issue-db-sample/             # 합성 샘플 이슈 DB 트리 (6개 유형, 테스트의 기준 데이터)
-│   │   └── issue-db-*/                  # 테스트용 변형 이슈 DB (0건 카테고리, 리뷰 케이스, ID 중복 등)
+│   │   └── issue-db-sample/             # 합성 샘플 이슈 DB 트리 (6개 유형, 테스트의 기준 데이터). 변형 issue-db-*는 커밋하지 않고 make_variant_dbs.py가 테스트 때 생성
 │   ├── helpers/make_repo.py             # 샘플 트리에서 임시 git 레포와 bare 원격을 만드는 테스트 헬퍼
 │   ├── helpers/make_plugin_root.py      # plugin/을 임시 디렉토리에 복사하고 example을 site-defaults.yaml로 넣은 테스트용 플러그인 루트 (15-local-draft.md §15.1)
 │   ├── site/                            # [사내 전용, SITE_PATHS] 실제 로그 기반 추가 테스트, offline-eval.yaml 라벨셋 (15-local-draft.md §15.5 S-4·S-5)
@@ -128,7 +127,7 @@ telephony-triage-plugin/                 # 개발 레포 루트
 - Jira MCP는 사내 제공 서버를 쓰므로 `.mcp.json`에 번들하지 않는다. setup에서 **존재 여부와 읽기 도구 목록만 확인**한다.
 - 플러그인은 상수 두 개를 가진다: 지원하는 이슈 DB 스키마 범위 `SUPPORTED_SCHEMA = (min, max)`, 생성기 버전 `GENERATOR_VERSION` (`02-config.md §5.3`, `06-collaboration.md §6.4`).
 - `marketplace.json`이 하위 폴더를 플러그인 source로 지정하는 방식은 공식 문서(사내에서 접근 불가면 빈 플러그인 실험, S1)로 확인한다. 지원하지 않으면 플러그인을 루트에 두고 개발 문서(`CLAUDE.md`, `docs/design/`)는 `docs/`로 옮긴다.
-- 합성 샘플과 테스트용 변형 이슈 DB는 모두 플러그인 레포 `tests/fixtures/issue-db-*/`에 둔다. 변형용 오류·케이스는 샘플 트리(`issue-db-sample/`)에 넣지 않는다. 반입·운영용 이슈 DB는 `tools/make_db_skeleton.py`로 만든 뼈대에서 시작한다(합성 샘플 없음).
+- 합성 샘플만 플러그인 레포 `tests/fixtures/issue-db-sample/`에 커밋한다. 테스트용 변형 이슈 DB(`issue-db-*`)는 `tests/helpers/make_variant_dbs.py`가 테스트 때 샘플에서 생성하며 커밋하지 않는다. 변형용 오류·케이스는 샘플 트리에 넣지 않는다. 반입·운영용 이슈 DB는 `tools/make_db_skeleton.py`로 만든 뼈대에서 시작한다(합성 샘플 없음).
 
 ### 3.1 스크립트 책임과 호출자
 

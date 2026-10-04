@@ -74,7 +74,7 @@ v1 범위: logcat(radio/main/system/crash, bugreport는 logcat 섹션만) · Jir
 - 사내 확인값은 `SITE_PROFILE.md`에만 쓴다. 이 문서 세트에는 쓰지 않는다 (`14-site.md §14.1`).
 - 모든 테스트 로그는 마스킹된 fixture만 쓴다.
 - Claude Code 세션은 **플러그인 레포 루트에서 연다** (이 `CLAUDE.md`가 로드되도록). 이슈 DB 레포는 절대 경로로 다룬다.
-- 테스트용 이슈 DB(합성 샘플 `tests/fixtures/issue-db-sample/`, 오류 주입·0건 카테고리·리뷰 케이스 등 변형)는 모두 플러그인 레포 `tests/fixtures/issue-db-*/`에 둔다. 반입·운영용 이슈 DB는 샘플 없는 **뼈대**만 `tools/make_db_skeleton.py`로 만든다 (`11-phases.md` Phase 1).
+- 테스트용 이슈 DB 중 커밋하는 것은 합성 샘플 `tests/fixtures/issue-db-sample/` 하나뿐이다. 변형(`issue-db-*`: 오류 주입·0건 카테고리·리뷰 케이스 등)은 `tests/helpers/make_variant_dbs.py`가 샘플에서 테스트 때 생성한다(커밋하지 않음, `runner.variant_db(name)`). 반입·운영용 이슈 DB는 샘플 없는 **뼈대**만 `tools/make_db_skeleton.py`로 만든다 (`11-phases.md` Phase 1).
 
 ---
 

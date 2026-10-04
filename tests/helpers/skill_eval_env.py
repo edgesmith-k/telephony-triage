@@ -38,7 +38,7 @@ EVALS = REPO / "tests" / "skill_evals"
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import mock_env  # noqa: E402
-from runner import plugin_root  # noqa: E402
+from runner import fixture_db, fixture_path, plugin_root  # noqa: E402
 from workspace import Workspace, git  # noqa: E402
 
 GEN = REPO / "tests" / "mocks" / "logcat_gen.py"
@@ -193,7 +193,7 @@ def build(entry: dict, out: Path) -> dict:
     out.mkdir(parents=True)
     # site_defaults: site-defaults.yaml 최상위 키 덮어쓰기 (예: eval 39의 빈 jira.tools)
     root = plugin_root("eval", **setup["site_defaults"]) if setup.get("site_defaults") else plugin_root()
-    db_src = REPO / "tests" / "fixtures" / setup.get("db", "issue-db-sample")
+    db_src = fixture_db(setup.get("db", "issue-db-sample"))
     ws = Workspace(src=db_src, root=root)
 
     jira_dir = out / "jira"
@@ -206,7 +206,7 @@ def build(entry: dict, out: Path) -> dict:
     for item in setup.get("logs") or []:
         if "src" in item:
             dest = logs / item.get("as", Path(item["src"]).name)
-            shutil.copyfile(REPO / item["src"], dest)
+            shutil.copyfile(fixture_path(item["src"]), dest)
         else:
             tmp = out / "_gen"
             files = _gen(EVALS / "scenarios" / item["scenario"], tmp, bugreport=item.get("bugreport"))
@@ -233,7 +233,7 @@ def build(entry: dict, out: Path) -> dict:
     if pr:
         plan = json.loads((EVALS / "plans" / pr["plan"]).read_text(encoding="utf-8"))
         for rel, src in (pr.get("files") or {}).items():
-            ws.put(pr["job"], rel, REPO / src)
+            ws.put(pr["job"], rel, fixture_path(src))
         text = json.dumps(plan, ensure_ascii=False).replace("<JOB>", str(ws.job_dir(pr["job"])).replace("\\", "/"))
         ws.plan(pr["job"], json.loads(text))
         ws.ship(pr["job"], pr["branch"])
@@ -242,7 +242,7 @@ def build(entry: dict, out: Path) -> dict:
     if seed:
         plan = json.loads((EVALS / "plans" / seed["plan"]).read_text(encoding="utf-8"))
         for rel, src in (seed.get("files") or {}).items():
-            ws.put(seed["job"], rel, REPO / src)
+            ws.put(seed["job"], rel, fixture_path(src))
         text = json.dumps(plan, ensure_ascii=False).replace("<JOB>", str(ws.job_dir(seed["job"])).replace("\\", "/"))
         ws.plan(seed["job"], json.loads(text))
     for name in setup.get("main_after_pr") or []:

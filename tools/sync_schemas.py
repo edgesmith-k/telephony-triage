@@ -9,8 +9,8 @@ CLI:
     python3 tools/sync_schemas.py --check [--db <이슈 DB>]   # 다르면 종료 코드 1
     python3 tools/sync_schemas.py --write [--db <이슈 DB>]   # 원본으로 사본을 덮어씀
 
-`--check`에 `--db`가 없으면 합성 샘플과 `tests/fixtures/issue-db-*/schema` 변형 트리
-모두를 사본과 대조한다 (변형 트리는 샘플에서 만들어지므로 같아야 한다).
+`--check`에 `--db`가 없으면 합성 샘플과 대조한다 (변형은 테스트 실행 때 샘플 schema를 그대로 복사해
+만들므로 따로 대조하지 않는다).
 
 종료 코드: 0 같음·갱신함 / 1 다름 / 2 사용 오류
 """
@@ -69,8 +69,7 @@ def main(argv: list[str] | None = None) -> int:
         return OK
 
     copy = schema_files(COPY)
-    sources = [db / "schema"] if args.db else sorted(
-        p for p in (REPO / "tests" / "fixtures").glob("issue-db-*/schema") if p.is_dir())
+    sources = [db / "schema"] if args.db else [SAMPLE / "schema"]
     failed = False
     for source in sources:
         problems = compare(copy, schema_files(source))

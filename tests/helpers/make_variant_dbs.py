@@ -2,7 +2,8 @@
 """변형 이슈 DB를 합성 샘플에서 만든다 (11-phases.md Phase 5, CLAUDE.md §11.0).
 
 샘플 트리(`tests/fixtures/issue-db-sample/`)를 복사한 뒤 정해진 변경을 결정적으로 적용한다.
-샘플 트리는 건드리지 않는다. 결과는 **커밋한다**.
+샘플 트리는 건드리지 않는다. 결과는 커밋하지 않는다 — 테스트가 `runner.variant_db()`로 프로세스당 한 번
+임시 디렉터리에 만든다. 눈으로 확인하려면 `--out DIR`로 만든다.
 
 | 변형 | 용도 |
 |---|---|
@@ -15,7 +16,8 @@
 | `verify-logs/` | 이슈 DB가 아니다. `db_verify fix`·`resolution` 입력 로그(수정 후·재발·증상만 남음·시나리오 없음, 마스킹됨) |
 
 CLI:
-    python3 tests/helpers/make_variant_dbs.py [--check] [--json]
+    python3 tests/helpers/make_variant_dbs.py --out DIR [--json]   # DIR 아래에 변형 전부를 만든다
+    python3 tests/helpers/make_variant_dbs.py --check [--json]     # 두 번 만들어 결과가 같은지 확인 (결정성)
 """
 
 from __future__ import annotations
@@ -31,7 +33,6 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 SAMPLE = REPO / "tests" / "fixtures" / "issue-db-sample"
-OUT = REPO / "tests" / "fixtures"
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(REPO / "tests" / "mocks"))
 
@@ -326,7 +327,7 @@ VERIFY_LOGS = {"call-fixed.log": "verify-call-fixed.yaml", "call-recurrence.log"
 VERIFY_LOGS_README = """# db_verify 입력 로그 (Phase 10)
 
 `tests/helpers/make_variant_dbs.py`가 `tests/mocks/scenarios/verify-call-*.yaml`에서 만든다(마스킹됨). 이슈 DB가 아니다.
-대상은 `tests/fixtures/issue-db-verify/`의 CALL-001-01(fix-submitted, fixed_in MOCKB77_U2_20260920)이다.
+대상은 `issue-db-verify` 변형의 CALL-001-01(fix-submitted, fixed_in MOCKB77_U2_20260920)이다.
 
 | 파일 | 내용 | `db_verify fix --cause CALL-001-01` |
 |---|---|---|
@@ -563,35 +564,50 @@ def _diff(a: Path, b: Path) -> list[str]:
     return out
 
 
-def run(check: bool = False) -> dict:
-    result = {}
+def build_all(out: Path) -> Path:
+    """VARIANTS 전부를 `out/<name>`에 만든다."""
+    out.mkdir(parents=True, exist_ok=True)
     for name in VARIANTS:
-        target = OUT / name
-        if check:
-            tmp = Path(tempfile.mkdtemp(prefix="tt-variant-check-"))
-            try:
-                fresh = build(name, tmp / name)
-                result[name] = _diff(fresh, target) if target.is_dir() else ["(없음)"]
-            finally:
-                shutil.rmtree(tmp, ignore_errors=True)
-        else:
-            build(name, target)
-            result[name] = []
-    return result
+        build(name, out / name)
+    return out
+
+
+def check() -> dict[str, list[str]]:
+    """전부를 임시 디렉터리 둘에 만들어 이름별로 다른 파일을 돌려준다 (결정성 증명)."""
+    a = Path(tempfile.mkdtemp(prefix="tt-variant-check-a-"))
+    b = Path(tempfile.mkdtemp(prefix="tt-variant-check-b-"))
+    try:
+        build_all(a)
+        build_all(b)
+        return {name: _diff(a / name, b / name) for name in VARIANTS}
+    finally:
+        shutil.rmtree(a, ignore_errors=True)
+        shutil.rmtree(b, ignore_errors=True)
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="make_variant_dbs.py", description=__doc__)
-    parser.add_argument("--check", action="store_true")
+    parser = argparse.ArgumentParser(prog="make_variant_dbs.py", description=__doc__,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--out", metavar="DIR", help="DIR 아래에 변형 전부를 만든다 (확인용)")
+    parser.add_argument("--check", action="store_true", help="두 번 만들어 결과가 같은지 확인한다")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
-    result = run(check=args.check)
+    if not args.out and not args.check:
+        parser.error("--out DIR 또는 --check가 필요합니다")
+    result: dict[str, list[str]] = {}
+    if args.out:
+        out = build_all(Path(args.out))
+        result = {name: [] for name in VARIANTS}
+        if not args.json:
+            print(f"{len(VARIANTS)}개를 {out}에 만들었습니다")
+    if args.check:
+        result = check()
     if args.json:
         print(json.dumps(result, ensure_ascii=False, indent=2))
-    else:
+    elif args.check:
         for name, diffs in result.items():
-            print(f"{name}: {'일치' if not diffs else '다름 ' + ', '.join(diffs)}" if args.check else name)
-    return 1 if any(result.values()) else 0
+            print(f"{name}: {'일치' if not diffs else '다름 ' + ', '.join(diffs)}")
+    return 1 if args.check and any(result.values()) else 0
 
 
 if __name__ == "__main__":

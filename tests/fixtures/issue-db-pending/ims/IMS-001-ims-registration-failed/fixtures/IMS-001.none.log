@@ -1,4 +1,0 @@
-09-16 18:00:00.000  1600  1610 D ImsResolver: [PHONE0] bound to mock ImsService
-09-16 18:00:02.000  1600  1610 D ImsManager: [PHONE0] register: impu=sip:<IMPU#1>@ims.mnc001.mcc450.3gppnetwork.org
-09-16 18:00:05.000  1600  1610 I ImsRegistration: [PHONE0] onRegistered: transport=LTE impu=sip:<IMPU#1>@ims.mnc001.mcc450.3gppnetwork.org
-09-16 18:01:05.000  1600  1610 I ImsRegistration: [PHONE0] onRegistered: transport=LTE impu=sip:<IMPU#1>@ims.mnc001.mcc450.3gppnetwork.org

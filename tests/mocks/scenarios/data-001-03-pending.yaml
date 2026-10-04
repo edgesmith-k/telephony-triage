@@ -1,4 +1,4 @@
-# DATA-001-03 양성 (signatures_pending 원인, tests/fixtures/issue-db-pending/).
+# DATA-001-03 양성 (signatures_pending 원인, `issue-db-pending` 변형, make_variant_dbs.py가 테스트 때 생성).
 # DATA-001의 증상(평가 거부 + SETUP_DATA_CALL 없음)은 있지만 기존 원인(데이터 설정 OFF,
 # 로밍 OFF)의 근거는 없다. 회귀 기대값은 "DATA-001:unresolved"다 (contracts.md §fixture).
 # 로그 문구는 placeholder다 — TODO(SITE:S9)

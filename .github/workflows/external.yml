@@ -26,7 +26,7 @@ jobs:
         run: python tools/check_boundary.py --mode external
       - name: Schema copy in sync
         run: python tools/sync_schemas.py --check
-      - name: Generated fixtures match their scenarios
+      - name: Generated fixtures match their scenarios (variant builder is deterministic)
         run: |
           python tests/helpers/make_log_fixtures.py --check
           python tests/helpers/make_sample_fixtures.py --check
