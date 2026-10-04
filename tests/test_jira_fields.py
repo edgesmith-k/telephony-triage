@@ -72,6 +72,34 @@ def test_extract_reports_missing_fields():
     assert "occurred_on" not in out["jira"] and out["logcat"]["year"] is None
 
 
+def test_extract_without_failed_step_fields_adds_no_keys():
+    tmp = Path(tempfile.mkdtemp())
+    raw = tmp / "raw.yaml"
+    raw.write_text((MOCK_JIRA / "MOCK-1001.yaml").read_text(encoding="utf-8"), encoding="utf-8")
+    meta = tmp / "meta.json"
+    out = run_json("jira_fields.py", ["extract", raw, "--origin", "file", "--db", SAMPLE,
+                                      "--meta-out", meta], env=_home())
+    assert not {"failed_step", "failed_step_auto", "warnings"} & set(out)
+    assert "failed_step" not in out["jira"] and "test_steps" not in out["text"]
+    assert set(json.loads(meta.read_text(encoding="utf-8"))) == {"key", "sw", "summary", "description", "occurred_at"}
+
+
+def test_extract_failed_step_field_is_masked_and_not_missing():
+    import yaml
+    tmp = Path(tempfile.mkdtemp())
+    data = yaml.safe_load((MOCK_JIRA / "MOCK-1001.yaml").read_text(encoding="utf-8"))
+    data["fields"]["customfield_10008"] = "고객 010-1234-5678 데이터 켜기"
+    raw = tmp / "raw.yaml"
+    raw.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+    meta = tmp / "meta.json"
+    out = run_json("jira_fields.py", ["extract", raw, "--origin", "file", "--db", SAMPLE,
+                                      "--meta-out", meta], env=_home())
+    assert "010-1234-5678" not in json.dumps(out, ensure_ascii=False)
+    assert "<MSISDN#" in out["jira"]["failed_step"] and out["failed_step"]["source"] == "field"
+    assert out["missing"] == [] and "warnings" not in out
+    assert json.loads(meta.read_text(encoding="utf-8"))["failed_step"] == out["jira"]["failed_step"]
+
+
 if __name__ == "__main__":
     import pytest
     raise SystemExit(pytest.main([__file__, "-q"]))

@@ -45,6 +45,15 @@ jira:
     android_version: fields.customfield_10004
     carrier: fields.customfield_10005
     sim_slot: fields.customfield_10006      # TODO(SITE:S20) 사내 Jira에 슬롯 필드가 있는지
+    test_steps: fields.customfield_10007    # TODO(SITE:S22) 시험 절차 필드가 있는지 (선택)
+    failed_step: fields.customfield_10008   # TODO(SITE:S22) 실패 스텝 필드가 있는지 (선택)
+
+  # 설명·시험 절차 텍스트에서 실패 스텝 한 줄을 찾는 줄 단위 정규식 (선택, 02-config.md). 기본값은 [].
+  # (?P<step>…) 그룹이 있으면 그 값, 없으면 줄 전체. 정규식 오류는 경고만 낸다.
+  failed_step_patterns:        # TODO(SITE:S22) 사내 시험 절차·실패 표기에 맞춘다
+    - '(?i)^\s*(?:step|스텝|단계)\s*\d+\s*[.):-]?\s*(?P<step>.+?)\s*[-:|]?\s*(?:fail(?:ed)?|ng|실패)\s*$'
+    - '(?i)^\s*(?:failed step|실패\s*(?:스텝|단계))\s*[:：]\s*(?P<step>.+)$'
+    - '(?i)^(?P<step>.+?)\s*\|\s*(?:fail(?:ed)?|ng|실패)\s*(?:\|.*)?$'
 
 ghe:
   host: ghe.mock.invalid      # TODO(SITE:S5) 사내 GHE 호스트

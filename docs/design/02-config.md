@@ -29,6 +29,10 @@ jira:
     sw: <필드>
     android_version: <필드>
     carrier: <필드>
+    # 선택(14-site.md S22): 시험 절차·실패 스텝 필드. 없으면 쓰지 않는다
+    test_steps: <필드>
+    failed_step: <필드>
+  failed_step_patterns: []                  # 선택. 설명·시험 절차 텍스트에서 실패 스텝 한 줄을 찾는 줄 단위 정규식 (아래 설명)
 logcat:
   timezone: <logcat 시각 타임존>             # 연도 없는 threadtime의 해석 기준 (14-site.md S7). 스킬이 parse_logcat --tz로 넘김
   year_source: jira                         # jira(발생 시각의 연도) | file-mtime | ask. 스킬이 연도를 정해 parse_logcat --year로 넘김
@@ -71,7 +75,9 @@ setup 커맨드가 순서대로 하는 일:
 
 ---
 
-> 설정 우선순위: 사용자 config > `plugin/site-defaults.yaml` > 코드 내장 기본값. `plugin/site-defaults.yaml`이 없으면 setup과 모든 커맨드가 멈춘다. `site-defaults.example.yaml`은 코드가 읽지 않고, 사외 테스트 헬퍼가 복사해서 쓴다 (`15-local-draft.md §15.1`). `site-defaults.yaml`에는 `jira.tools`·`jira.field_map`·`jira.exclude_servers`·`parser.backend`·`external_parsers`·`analyzers`·`explore`(탐색 분석 `when`·`timeline_max_lines`, `07-workflow.md §Step 5-2`)·`synthetic_allowed`가 들어간다.
+> **실패 스텝(선택)**: 이슈의 시험 절차·실패한 스텝은 있을 수도 없을 수도 있다. `jira.field_map.failed_step`(필드 값을 그대로), 없으면 `jira.failed_step_patterns`로 마스킹된 설명, 그다음 `field_map.test_steps` 텍스트에서 찾는다. 패턴은 **줄 단위** 정규식이고, 줄 순서대로·패턴 순서대로 처음 맞는 것이 이기며 `(?P<step>…)` 그룹이 있으면 그 값, 없으면 줄 전체다. 정규식 오류는 경고만 내고 건너뛴다. 기본값은 `[]`(자동 추출 없음). 값이 없거나 읽지 못해도 동작은 없을 때와 같다(질문·중단 없음). 첨부 파일은 사용자가 `--steps-file`로 줄 때만 읽는다. **MCP로 첨부를 가져오는 것은 향후 과제**다(`jira.read_tools`로 허용된 도구만, `99-deferred.md`).
+>
+> 설정 우선순위: 사용자 config > `plugin/site-defaults.yaml` > 코드 내장 기본값. `plugin/site-defaults.yaml`이 없으면 setup과 모든 커맨드가 멈춘다. `site-defaults.example.yaml`은 코드가 읽지 않고, 사외 테스트 헬퍼가 복사해서 쓴다 (`15-local-draft.md §15.1`). `site-defaults.yaml`에는 `jira.tools`·`jira.field_map`(선택 키 `test_steps`·`failed_step`)·`jira.failed_step_patterns`·`jira.exclude_servers`·`parser.backend`·`external_parsers`·`analyzers`·`explore`(탐색 분석 `when`·`timeline_max_lines`, `07-workflow.md §Step 5-2`)·`synthetic_allowed`가 들어간다.
 
 ## 5.3 `issue-db.config.yaml`
 

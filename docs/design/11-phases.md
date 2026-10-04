@@ -16,7 +16,7 @@
 - 모의 site 백엔드(`builtin.data.*` 이벤트를 내는 가짜)·골든 테스트 틀·어댑터 예시, 모의 분석 스킬, 비표준 Jira 도구 이름도 만든다 (`16-existing-assets.md §16.6`). 백엔드·`jira.tools`·`analyzers`의 구현 위치는 Phase 2(백엔드 인터페이스·어댑터), Phase 6(`jira.tools` setup), Phase 13(심층 분석 호출, `--analyzer`/`--no-analyzer`)이며, 해당 Phase의 읽을 문서에 `16-existing-assets.md`를 더한다.
 
 ### Phase 0. 사내 환경 확인 (사내 처음부터 모드에서만)
-- 할 일: `14-site.md §14.4` 절차. 문서 정합성 검토(여러 파일 간 참조·표 복사·개수 포함, `REVIEW-OPEN.md` 항목 포함) + 사내 환경 확인(S1~S21). 결과는 `SITE_PROFILE.md`(진행 상태 포함).
+- 할 일: `14-site.md §14.4` 절차. 문서 정합성 검토(여러 파일 간 참조·표 복사·개수 포함, `REVIEW-OPEN.md` 항목 포함) + 사내 환경 확인(S1~S22). 결과는 `SITE_PROFILE.md`(진행 상태 포함).
 - 완료 기준: `14-site.md §14.4` 완료 기준.
 - 읽을 문서: 전체 (`CLAUDE.md`, `docs/design/*.md`(`99-deferred.md` 제외), `REVIEW-OPEN.md`). 정합성 검토를 위해 이 Phase만 전부 읽는다. **사내 보완 모드에서는 이 Phase를 하지 않는다** (S-1 축약판을 쓴다). 이 Phase 다음은 Phase D0다.
 

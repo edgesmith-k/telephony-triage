@@ -41,6 +41,7 @@
 | S19 | CODEOWNERS 팀을 `gh pr create --reviewer`에 넘기는 형식 (`{org}/{team}` 등) | `02-config.md §5.3` `reviewers`·리뷰어 계산, `06-collaboration.md §6.1` | GHE 샌드박스 레포에서 `gh pr create --reviewer` 시험 | `issue-db.config.yaml` `reviewers` (Phase 1 초기값, Phase 7 사용) |
 | S20 | 슬롯(phoneId) 표기: 태그 접미사(`DNC-<n>`)와 메시지 접두어(`[PHONE<n>]`, `[SUB<n>]` 등)의 실제 형식, RILJ 요청·응답에 슬롯이 어떻게 붙는지, Jira에 SIM 슬롯 필드가 있는지 | `04-parser-matching.md §5.8 (2)` 슬롯, `07-workflow.md §Step 3` | 듀얼 SIM 단말 샘플 logcat에서 두 슬롯의 데이터·RIL 로그 비교 | 파서 `phone_id` 추출 규칙, `jira.field_map.sim_slot` (Phase 2, 6) |
 | S21 | bugreport 구조: 첨부 형식(zip/txt), logcat 섹션 헤더(`------ SYSTEM LOG`, `RADIO LOG` 등)의 실제 문자열, 헤더의 `Build fingerprint`·`Build` 줄 형식 | `contracts.md §3.2` `extract-bugreport`, `07-workflow.md §Step 3` | 샘플 Jira 첨부 bugreport 1~2개의 섹션 헤더 확인 | `parse_logcat.py extract-bugreport` 섹션 목록 (Phase 2) |
+| S22 | 시험 절차·실패 스텝 표기: Jira 필드 유무, 설명·첨부의 표기, 첨부 형식(txt/csv/xlsx) | `02-config.md` `jira.field_map`·`jira.failed_step_patterns`, `07-workflow.md §Step 2` | 샘플 Jira 3~5건에서 시험 절차와 실패 스텝이 어디에 어떻게 적히는지 확인(없으면 선택 값이므로 비워 둔다) | `jira.field_map.test_steps`·`failed_step`, `jira.failed_step_patterns` (`site-defaults.yaml`) |
 
 ### 14.3 `SITE_PROFILE.md` 형식
 
@@ -101,7 +102,7 @@
 6. 샘플 logcat은 Phase 1 fixture의 원본이 된다. fixture로 만들 때 반드시 마스킹한다.
 7. `SITE_PROFILE.md`의 "진행 상태"에 Phase 0 완료를 기록한다.
 
-완료 기준: 문서 정합성 검토 결과의 🔴 항목이 모두 처리 방식까지 정해졌고, `REVIEW-OPEN.md`의 모든 항목이 처리 방식이 정해졌거나 사유와 함께 보류로 `SITE_PROFILE.md`에 기록됐고, S1~S21이 모두 "확인" 또는 "미확인 + 대안"으로 기록되고, 설계 변경이 필요한 항목은 사용자 결정이 기록돼 있다.
+완료 기준: 문서 정합성 검토 결과의 🔴 항목이 모두 처리 방식까지 정해졌고, `REVIEW-OPEN.md`의 모든 항목이 처리 방식이 정해졌거나 사유와 함께 보류로 `SITE_PROFILE.md`에 기록됐고, S1~S22이 모두 "확인" 또는 "미확인 + 대안"으로 기록되고, 설계 변경이 필요한 항목은 사용자 결정이 기록돼 있다.
 
 ### 14.5 사외 문서 업데이트를 사내에 반영할 때
 

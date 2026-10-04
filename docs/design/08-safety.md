@@ -39,9 +39,10 @@
 
 마스킹 표는 logcat 형식 기준이지만, Jira에서 읽은 텍스트도 리포트·계획·PR 본문에 들어가므로 같은 규칙을 적용한다. Jira 설명에는 테스터 이름, 고객 전화번호, IMEI가 자유 텍스트로 자주 적히고 **사람 이름은 위 표로 잡히지 않는다.** 그래서 마스킹에만 기대지 않고 **저장하는 정보 자체를 줄인다.**
 
-- 이슈 DB(`jira/<KEY>.yaml`, 원인 본문, 피드백)와 PR 본문에는 Jira의 **구조화 필드**(`model`, `sw`, `android_version`, `carrier`, `occurred_on`)와 **사용자가 확인한 한 줄 요약**(`note`)만 넣는다. Jira 요약·설명·코멘트 **원문은 저장하지 않는다** (`03-issue-db.md §5.4 (2)`).
+- 이슈 DB(`jira/<KEY>.yaml`, 원인 본문, 피드백)와 PR 본문에는 Jira의 **구조화 필드**(`model`, `sw`, `android_version`, `carrier`, `occurred_on`)와 **사용자가 확인한 한 줄 요약**(`note`), 그리고 있으면 마스킹된 **실패 스텝 한 줄**(`failed_step`, ≤200자)만 넣는다. Jira 요약·설명·코멘트 **원문은 저장하지 않는다** (`03-issue-db.md §5.4 (2)`).
 - **MCP 응답 원문은 모델 컨텍스트에 넣지 않는다.** Jira `get_issue`·`get_comments` 결과는 PostToolUse hook(`jira_bridge.py`, §9 9번)이 `<work_dir>/<KEY>/jira_raw.json`에 쓰고, 모델에는 마스킹된 요약만 보인다. `triage.py run`이 그 파일을 `jira_fields.py extract --consume`으로 읽고 지운다. 후처리 마스킹은 이미 컨텍스트에 들어간 원문을 되돌릴 수 없기 때문이다. hook 출력 대체가 안 되는 Claude Code 버전이면(S1에서 확인) 스킬이 응답을 그 파일에 저장하는 예전 경로로 돌아간다.
 - `field_map`으로 뽑은 텍스트 필드(요약, 설명, 재현 절차, 코멘트)는 Step 2에서 읽은 직후 `mask_pii`를 거치고, 이후 단계(리포트, 키워드 보너스, `note` 초안)는 마스킹된 텍스트만 쓴다. 계획 `jira`에는 원문 필드를 두지 않는다 (`contracts.md §작업 계획`).
+- **실패 스텝**(`--failed-step` 원문·`--steps-file` 내용)의 원문은 `trace.jsonl`·`triage-state.json` 같은 상태·추적 파일에 쓰지 않는다. `triage.py`가 같은 프로세스 안에서 마스킹한 뒤에만 `jira.json`·`jira_meta.json`·계획에 남기고, 하위 스크립트 인자에도 원문을 넘기지 않는다.
 - `note` 초안은 스킬이 마스킹된 요약에서 한 문장으로 만들고 사용자가 확인한다. 사람 이름·고객명은 초안에 넣지 않는다.
 - `db_lint`는 `jira/*.yaml`의 `note`, 원인 본문, `cp_evidence`에 대해서도 원본 식별자 패턴(표의 항목)을 검사한다.
 

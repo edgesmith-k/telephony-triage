@@ -49,7 +49,7 @@ v1 범위: logcat(radio/main/system/crash, bugreport는 logcat 섹션만) · Jir
 | `10-skill-eval.md` | SKILL.md 구성, 트리거 테스트, eval 45개 |
 | `11-phases.md` | **Phase D0~14** 할 일·완료 기준·읽을 문서 (사외 초안·사내 처음부터 모드만) |
 | `13-actions.md` | GHE Actions 전환 |
-| `14-site.md` | 사내 적용: placeholder 레지스트리 S1~S21, `SITE_PROFILE.md` 형식, Phase 0, 사외 문서 반영 |
+| `14-site.md` | 사내 적용: placeholder 레지스트리 S1~S22, `SITE_PROFILE.md` 형식, Phase 0, 사외 문서 반영 |
 | `15-local-draft.md` | 사외 초안↔사내 보완: 모의 환경, 반입 체크리스트, **S-1~S-7**, `site-defaults.yaml` 필수, 재반입 |
 | `16-existing-assets.md` | 기존 Jira MCP 재사용, 기존 파서 포팅(골든), 기존 분류 import, 분석 스킬 연결 |
 | `99-deferred.md` | v1에서 뺀 설계. **어느 Phase에서도 읽지 않는다** |

@@ -89,6 +89,12 @@ v1의 세션 lock(한 번에 한 작업) 대신, 같은 사용자의 여러 세�
 
 ---
 
+## D. MCP로 Jira 첨부 가져오기 (실패 스텝)
+
+v1의 실패 스텝은 필드·설명·시험 절차 텍스트와 사용자가 준 `--steps-file`에서만 얻는다. 첨부(txt/csv/xlsx)를 Jira MCP로 직접 받으려면 `jira.read_tools`에 허용된 읽기 도구만 쓰고, 받은 파일은 `jira_raw.json`처럼 격리해 `--steps-file` 경로로 넘긴다 (`02-config.md`, 14-site.md S22).
+
+---
+
 ## 되살릴 때 바꿀 곳
 
 - `contracts.md`: `db_add` CLI(`extract`, `replay`, `renumber --in-main`), `db_pr snapshot --lease`와 lock 정의, op 표(replay 전용 op), `source: replay|migrate|category|cleanup`, `signatures_pending`의 replay 이어받기, 종료 코드 `3`의 `set-field` 예시, `config.py check --for migrate`와 `db_pr stage`의 마이그레이션 경로(`migration_to`)
