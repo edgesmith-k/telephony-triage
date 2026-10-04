@@ -28,6 +28,16 @@ UTC = timezone.utc
 LOG = REPO / "tests" / "fixtures" / "logs" / "step-anchor.log"
 RULES = SAMPLE / "parser-rules"
 TZ = ["--tz", "Asia/Seoul", "--year", "2026"]
+# 마커 패턴은 기본 꺼짐([])이다. 마커 테스트는 옛 블록 전체(plugin_root는 failed_step 블록을 통째로 바꾼다)를 켠 루트를 쓴다.
+MARKER_ROOT = plugin_root("markers", failed_step={
+    "marker_patterns": [r"^(?:TestRunner|Automation)\s*:\s*\[?(?i:step)\s*(?P<step>\d+)\]?\s*(?:[:-]\s*.*?\s)?(?P<status>START|PASS|FAIL)\b"],
+    "marker_status": {"start": ["start", "begin", "시작"], "pass": ["pass", "ok", "성공"], "fail": ["fail", "ng", "error", "실패"]},
+    "anchor_without_step": True,
+    "window": {"pre_sec": 60, "post_sec": 30, "fail_only_pre_sec": 120, "max_span_sec": 900},
+    "disagree_minutes": 10,
+    "steps_file_tz": None,
+    "clock_offset": None,
+})
 
 
 def _t(clock: str) -> datetime:
@@ -163,7 +173,7 @@ def test_steps_file_times():
 
 
 def test_markers_on_fixture_masks_and_reports_coverage():
-    out = run_json("parse_logcat.py", ["markers", LOG, "--rules", RULES, *TZ])
+    out = run_json("parse_logcat.py", ["markers", LOG, "--rules", RULES, *TZ], root=MARKER_ROOT)
     assert out["schema"] == 1 and out["total"] == 4 and out["truncated"] is False and out["warnings"] == []
     got = [(m["ts"], m["step"], m["status"], m["tag"], m["msg"]) for m in out["markers"]]
     assert got == [
@@ -184,7 +194,7 @@ def test_markers_mask_hit_lines_and_cap_message(tmp_path=None):
         "09-20 14:33:02.000  1234  1244 D Other: Step 4 FAIL\n"                  # 태그가 패턴과 다르다
         "09-20 14:33:03.000  1234  1244 D TestRunner: Step 5 UNKNOWN\n",           # 상태가 패턴과 다르다
         encoding="utf-8")
-    out = run_json("parse_logcat.py", ["markers", log, "--rules", RULES, *TZ])
+    out = run_json("parse_logcat.py", ["markers", log, "--rules", RULES, *TZ], root=MARKER_ROOT)
     assert [(m["step"], m["status"]) for m in out["markers"]] == [("4", "start"), ("4", "fail")]
     first = out["markers"][0]
     assert "010-1234-5678" not in first["msg"] and "<MSISDN#" in first["msg"] and len(first["msg"]) <= 200
@@ -264,11 +274,11 @@ def _strip(a: dict) -> dict:
 
 
 def test_marker_anchor_with_failed_step_moves_window_and_top_candidate():
-    off, _ = _offline("off", "--failed-step", STEP, "--answer", "anchor=off")
+    off, _ = _offline("off", "--failed-step", STEP, "--answer", "anchor=off", root=MARKER_ROOT)
     assert _causes(off)[0] == "IMS-001-01" and off["step_anchor"] == {"source": "jira"}     # 오늘의 동작
     assert off["logs"]["window"] == {"start": "2026-09-20T05:26:00.000Z", "end": "2026-09-20T05:36:00.000Z"}
 
-    done, job = _offline("on", "--failed-step", STEP)
+    done, job = _offline("on", "--failed-step", STEP, root=MARKER_ROOT)
     assert _causes(done) == ["DATA-001-01"]                                  # IMS는 구간 밖
     sa = done["step_anchor"]
     assert sa["source"] == "log_marker" and sa["step"] == "Step 5" and "step_from" not in sa
@@ -291,7 +301,7 @@ def test_marker_anchor_with_failed_step_moves_window_and_top_candidate():
 
 
 def test_marker_anchor_without_failed_step_uses_marker_step_but_never_records_it():
-    done, job = _offline("m")
+    done, job = _offline("m", root=MARKER_ROOT)
     assert _causes(done) == ["DATA-001-01"]
     assert done["step_anchor"]["source"] == "log_marker" and done["step_anchor"]["step_from"] == "marker"
     assert done["step_anchor"]["step"] == "Step 5"
@@ -312,7 +322,7 @@ def test_steps_file_anchor_on_markerless_log_and_no_raw_text_in_job_files():
     log = _markerless(d)
     steps = d / "steps.csv"
     steps.write_text(CSV, encoding="utf-8")
-    done, job = _offline("s", "--steps-file", steps, logs=(log,))
+    done, job = _offline("s", "--steps-file", steps, "--clock-offset", "0", logs=(log,))
     assert _causes(done) == ["DATA-001-01"]
     sa = done["step_anchor"]
     assert sa["source"] == "steps_file" and sa["span"] == ["2026-09-20T05:33:00.000Z", "2026-09-20T05:33:30.000Z"]
@@ -323,18 +333,71 @@ def test_steps_file_anchor_on_markerless_log_and_no_raw_text_in_job_files():
         assert "2026-09-20 14:33:00" not in text and "14:33:30" not in text.replace("T05:33:30", "") \
             and "5,데이터 켜기,FAIL" not in text, path.name
     # 마커도 steps-file도 없는 로그에 실패 스텝만 있으면 앵커 없이 오늘과 같다
-    plain, _ = _offline("p", "--failed-step", STEP, logs=(log,))
+    plain, _ = _offline("p", "--failed-step", STEP, logs=(log,), root=MARKER_ROOT)
     assert plain["step_anchor"] == {"source": "jira"} and _causes(plain)[0] == "IMS-001-01"
 
 
+def test_equipment_skew_never_anchors_without_offset():
+    """시험 장비 시계가 단말보다 180초 느리다(장비 = 단말 − 180초). 시계 차를 모르면 장비 시각을 단말 시각으로 쓰지 않는다."""
+    d = tmp("tt-skew-")
+    steps = d / "steps.csv"
+    steps.write_text("no,action,result,start,end\n5,데이터 켜기,FAIL,14:30:10,14:30:30\n", encoding="utf-8")
+    occurred = "2026-09-20T14:33:20+09:00"
+    log = REPO / "tests" / "fixtures" / "logs" / "step-anchor.log"
+
+    # (a) 시계 차 모름: 앵커 없음 — Jira 발생 시각 ±5분 그대로
+    none, job = _offline("skew-none", "--steps-file", steps, occurred=occurred, logs=(log,))
+    assert none["step_anchor"] == {"source": "jira", "clock": {"mode": "none", "reason": "시계 차 모름"}}
+    assert none["logs"]["window"] == {"start": "2026-09-20T05:28:20.000Z", "end": "2026-09-20T05:38:20.000Z"}
+    assert "장비 시각 미사용: 시계 정렬 불가(시계 차 모름) — --clock-offset으로 맞출 수 있다" in none["warnings"]
+    assert _causes(none)[0] == "DATA-001-01"
+    report = (job / "report.md").read_text(encoding="utf-8")
+    assert "- 장비 시각 미사용: 시계 정렬 불가(시계 차 모름)" in report and "실패 스텝 구간" not in report
+    assert not (job / "match_meta.json").exists()
+
+    # (b) 0초로 잘못 맞추면 장비 시각 그대로 쓴다 — 로그 범위 안의 엉뚱한 구간
+    wrong, _ = _offline("skew-zero", "--steps-file", steps, "--clock-offset", "0", occurred=occurred, logs=(log,))
+    assert wrong["step_anchor"]["source"] == "steps_file" and wrong["step_anchor"]["clock"] == {"mode": "manual", "offset_sec": 0}
+    assert _causes(wrong)[0] == "IMS-001-01"
+
+    # (c)(d) 올바른 시계 차: 같은 표기들은 같은 결과
+    docs = []
+    for value in ("+3m", "+00:03:00", "180"):
+        done, job = _offline(f"skew{value}", "--steps-file", steps, "--clock-offset", value, occurred=occurred, logs=(log,))
+        sa = done["step_anchor"]
+        assert sa["source"] == "steps_file" and sa["clock"] == {"mode": "manual", "offset_sec": 180}, value
+        assert done["logs"]["window"] == {"start": "2026-09-20T05:32:10.000Z", "end": "2026-09-20T05:34:00.000Z"}, value
+        assert _causes(done) == ["DATA-001-01"], value
+        assert "(시계 차 +180초, 수동)" in (job / "report.md").read_text(encoding="utf-8")
+        docs.append(_strip(done))
+        for path in (p for p in job.rglob("*") if p.is_file()):
+            text = path.read_text(encoding="utf-8", errors="replace")
+            assert "14:30:10" not in text and "14:30:30" not in text, path.name      # 장비 시각 원문은 남기지 않는다
+    assert docs[0] == docs[1] == docs[2]
+
+    # (e) 형식 오류는 사용 오류(종료 코드 2)
+    proc = run("triage.py", ["run", KEY, "--offline-db", SAMPLE, "--out", tmp("tt-skew-") / "x", "--logs", log,
+                             "--jira-meta", d / "none.json", "--steps-file", steps, "--clock-offset", "abc", *TZ])
+    assert proc.returncode == 2 and "--clock-offset 형식" in proc.stderr
+
+
+def test_parse_offset_formats():
+    f = stepanchor.parse_offset
+    assert [f(v) for v in ("+3m", "-3m", "+1h2m3s", "-90s", "+0.5s", "1h", "+00:03:00", "-00:00:45.5", "+03:00", "180", "-180.5", 180, 0)] \
+        == [180, -180, 3723, -90, 0.5, 3600, 180, -45.5, 180, 180, -180.5, 180, 0]
+    assert [f(v) for v in ("abc", "", None, "m", "+3x", "1m1", True, "86401", -86401, "1:2:3:4", "+3m 5")] == [None] * 11
+    assert f("86400") == 86400 and f("+24h") == 86400
+
+
 def test_jira_time_disagreement_warns_but_anchor_still_wins():
-    done, job = _offline("far", "--failed-step", STEP, occurred="2026-09-20T14:10:00+09:00")
+    done, job = _offline("far", "--failed-step", STEP, occurred="2026-09-20T14:10:00+09:00", root=MARKER_ROOT)
     assert done["step_anchor"]["source"] == "log_marker" and _causes(done) == ["DATA-001-01"]
     warns = [w for w in done["warnings"] if "분 다르다" in w]
     assert warns == ["Jira 발생 시각과 실패 스텝 시각이 24분 다르다 — 스텝 시각 기준으로 분석했다(끄기: --answer anchor=off)"]
     assert done["step_anchor"]["jira_gap_min"] == 23.5
     assert "23.5분 차이" in (job / "report.md").read_text(encoding="utf-8")
-    off, _ = _offline("far-off", "--failed-step", STEP, "--answer", "anchor=off", occurred="2026-09-20T14:10:00+09:00")
+    off, _ = _offline("far-off", "--failed-step", STEP, "--answer", "anchor=off", occurred="2026-09-20T14:10:00+09:00",
+                      root=MARKER_ROOT)
     assert not any("분 다르다" in w for w in off.get("warnings") or []) and off["step_anchor"] == {"source": "jira"}
 
 
@@ -343,9 +406,9 @@ def test_steps_file_time_outside_log_coverage_is_discarded_with_warning():
     log = _markerless(d)
     steps = d / "steps.csv"
     steps.write_text(CSV.replace("14:33", "16:33"), encoding="utf-8")
-    done, _ = _offline("out", "--steps-file", steps, logs=(log,))
+    done, _ = _offline("out", "--steps-file", steps, "--clock-offset", "0", logs=(log,))
     assert any("로그 범위 밖" in w for w in done["warnings"])
-    assert done["step_anchor"] == {"source": "jira"}                          # 실패 스텝은 있으나 앵커는 폐기
+    assert done["step_anchor"] == {"source": "jira", "clock": {"mode": "manual", "offset_sec": 0}}   # 앵커는 폐기
     assert done["logs"]["window"] == {"start": "2026-09-20T05:26:00.000Z", "end": "2026-09-20T05:36:00.000Z"}
     assert _causes(done)[0] == "IMS-001-01"
 
@@ -355,7 +418,7 @@ def test_marker_fail_time_outside_coverage_falls_back_to_steps_file_then_today()
     log = d / "short.log"      # Step 5 FAIL 줄이 잘린 로그: START 뒤 로그가 끊겼다
     log.write_text("".join(line + "\n" for line in LOG.read_text(encoding="utf-8").splitlines()
                            if "Step 5 FAIL" not in line and "no retry" not in line), encoding="utf-8")
-    done, _ = _offline("cut", "--failed-step", STEP, logs=(log,))
+    done, _ = _offline("cut", "--failed-step", STEP, logs=(log,), root=MARKER_ROOT)
     sa = done["step_anchor"]          # START만 있으면 다음 마커가 없어 start+900초가 끝이다 → 로그 범위 밖이라 폐기
     assert sa == {"source": "jira"}
     assert any("로그 범위 밖" in w for w in done["warnings"])
@@ -386,7 +449,7 @@ def test_no_markers_means_output_identical_to_anchor_off_for_every_labelset_item
 
 
 def test_long_failed_step_with_anchor_keeps_analysis_within_4kb_and_fit_drops_focus_first():
-    done, job = _offline("long", "--failed-step", "Step 5 " + "가나다 " * 120)
+    done, job = _offline("long", "--failed-step", "Step 5 " + "가나다 " * 120, root=MARKER_ROOT)
     assert done["step_anchor"]["source"] == "log_marker"
     assert len((job / "analysis.json").read_bytes()) <= 4096
     import importlib

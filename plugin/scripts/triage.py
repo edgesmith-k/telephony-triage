@@ -4,7 +4,7 @@
     triage.py run <KEY> [--logs <logcat|bugreport>...] [--jira-raw <json> | --jira-file <yaml>]
                   [--code <프로필|경로|키=경로,…|skip>] [--dry-run] [--answer <kind>=<값>...]
                   [--tz <IANA>] [--year <YYYY>] [--minutes 5] [--refresh]
-                  [--failed-step <한 줄>] [--steps-file <파일>]
+                  [--failed-step <한 줄>] [--steps-file <파일>] [--clock-offset <±시간>]
     triage.py run <KEY> --offline-db <path> --out <dir> --logs <logcat...> (--jira-meta <json> | --jira-file <yaml>)
     triage.py release <KEY>
 
@@ -34,10 +34,12 @@
 `anchor`(off: 실패 스텝 앵커를 쓰지 않고 Jira 발생 시각 기준 범위로 분석, 아래).
 
 실패 스텝 앵커(선택): 실패 스텝이 **어디를(시간 범위)·무엇을(우선 유형)** 볼지 정하고, **왜(S/C)** 는 로그 시그니처가 정한다.
-앵커 우선순위 `--answer anchor=off`(끔) > 로그 스텝 마커(`failed_step.marker_patterns`가 있을 때 `parse_logcat markers`) >
-`--steps-file`의 스텝 시각 > Jira 발생 시각(±`--minutes`) > 증상 시각 스캔(`--answer time`). 마커·steps-file 앵커는 분석 범위와
-근접 보너스의 중심에서 Jira 시각을 대신한다(`JOB/match_meta.json`, `jira_meta.json`은 그대로). 앵커 시각이 로그 범위 밖이면
-경고하고 다음 출처로 넘어간다. 앵커가 없고 마커 패턴·steps-file도 없으면 출력은 이전과 같다.
+앵커 우선순위 `--answer anchor=off`(끔) > 로그 스텝 마커(`failed_step.marker_patterns`가 있을 때 `parse_logcat markers`, 기본 꺼짐) >
+`--steps-file`의 스텝 시각(**수동 시계 차 `--clock-offset`이 있을 때만**) > Jira 발생 시각(±`--minutes`) > 증상 시각 스캔
+(`--answer time`). 시험 장비 시계는 단말 logcat 시계와 다를 수 있어, 시계 차를 모르면 장비 시각은 쓰지 않는다(경고).
+마커·steps-file 앵커는 분석 범위와 근접 보너스의 중심에서 Jira 시각을 대신한다(`JOB/match_meta.json`, `jira_meta.json`은 그대로).
+앵커 시각이 로그 범위 밖이면 경고하고 다음 출처로 넘어간다. 실패 스텝 문구는 앵커와 무관하게 우선 유형·키워드에 쓴다.
+앵커가 없고 마커 패턴·steps-file도 없으면 출력은 이전과 같다.
 
 종료 코드: 0 = 완료·needs_input·사용자 중단(`status: stopped`), 1 = Jira 키 형식 불일치(다시 묻는다),
 2 = 사용·환경 오류(하위 스크립트 메시지를 그대로 낸다. lock을 잡았으면 풀고 끝낸다).
@@ -55,7 +57,7 @@ import re
 import sys
 import time
 from contextlib import redirect_stderr, redirect_stdout
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 SCRIPTS = Path(__file__).resolve().parent
@@ -231,6 +233,8 @@ class Driver:
         self.out: dict = {"key": self.key}
         self.failed_step: dict | None = None     # 마스킹된 {text, source}. 없으면 None (선택 값)
         self.anchor_off = False
+        self.clock_offset: float | None = None   # 장비 시각 → 단말 시각 시계 차(초). --clock-offset > failed_step.clock_offset
+        self.clock: dict | None = None           # 시계 정렬 결과 {mode: manual|none, offset_sec | reason}
         self.focus: list[str] = []               # match.step_focus.types (순위 참고용 우선 유형)
 
     # 공통 ---------------------------------------------------------------------------------------
@@ -245,6 +249,11 @@ class Driver:
 
     def preflight_args(self) -> None:
         a = self.args
+        if getattr(a, "clock_offset", None) is not None:
+            self.clock_offset = stepanchor.parse_offset(a.clock_offset)
+            if self.clock_offset is None:
+                raise Fail(USAGE, f"--clock-offset 형식이 맞지 않는다: {a.clock_offset!s:.40} "
+                                  "(예: +3m, -90s, +1h2m3s, +00:03:00, 180 — 하루(86400초) 이내)")
         if self.offline:
             if not a.out:
                 raise Fail(USAGE, "--offline-db에는 --out <dir>이 필요하다.")
@@ -695,6 +704,10 @@ class Driver:
         if not site.get("marker_patterns") and not steps_file:
             return None
         conf = userconfig.get(self.cfg, "failed_step") or {}
+        if self.clock_offset is None and conf.get("clock_offset") is not None:
+            self.clock_offset = stepanchor.parse_offset(conf["clock_offset"])
+            if self.clock_offset is None:
+                self.warn(f"failed_step.clock_offset 형식이 맞지 않아 쓰지 않았다({str(conf['clock_offset'])[:40]})")
         argv = ["markers", *logs, "--rules", self.snap / "parser-rules"]
         if tz:
             argv += ["--tz", tz]
@@ -739,7 +752,11 @@ class Driver:
             anchor["jira_gap_min"] = round(gap, 1)
             limit = conf.get("disagree_minutes", stepanchor.DEFAULT_DISAGREE_MINUTES)
             if isinstance(limit, (int, float)) and not isinstance(limit, bool) and gap > limit:
-                self.warn(f"Jira 발생 시각과 실패 스텝 시각이 {gap:.0f}분 다르다 — 스텝 시각 기준으로 분석했다(끄기: --answer anchor=off)")
+                hint = " (Jira 시각이 장비 시각이면 시계 차 때문일 수 있다)" if span["source"] in ("steps_file", "step_order") else ""
+                self.warn(f"Jira 발생 시각과 실패 스텝 시각이 {gap:.0f}분 다르다 — 스텝 시각 기준으로 분석했다"
+                          f"(끄기: --answer anchor=off){hint}")     # 경고만 낸다. 구간은 바꾸지 않는다
+        if self.clock and span["source"] == "steps_file":
+            anchor["clock"] = dict(self.clock)
         return anchor
 
     def steps_file_span(self, steps_file, tz, year, conf: dict, jira_at, first, inside) -> dict | None:
@@ -759,6 +776,14 @@ class Driver:
             return None
         if fail is None:
             return None
+        if self.clock_offset is None:       # 장비 시계와 단말 시계는 다를 수 있다 — 맞출 수 없으면 쓰지 않는다
+            self.clock = {"mode": "none", "reason": "시계 차 모름"}
+            self.warn("장비 시각 미사용: 시계 정렬 불가(시계 차 모름) — --clock-offset으로 맞출 수 있다")
+            return None
+        shift = timedelta(seconds=self.clock_offset)
+        fail += shift
+        start = start + shift if start else None
+        self.clock = {"mode": "manual", "offset_sec": _num(self.clock_offset)}
         if not inside(fail):
             self.warn(f"steps-file의 실패 시각({lc.format_ts(fail)})이 로그 범위 밖이라 쓰지 않았다")
             return None
@@ -976,10 +1001,12 @@ class Driver:
             out = {"source": anchor["source"], "step": _clip(_step_label(anchor.get("step")), 80),
                    "step_from": anchor["step_from"] if anchor["step_from"] != "failed_step" else None,
                    "span": [anchor["start"], anchor["fail"]], "jira_gap_min": anchor.get("jira_gap_min")}
-        elif self.failed_step:
+        elif self.failed_step or self.clock:
             out = {"source": "jira" if info.get("occurred_at") and not self.answer("time") else "symptom_scan"}
         else:
             return None
+        if self.clock:
+            out["clock"] = dict(self.clock)
         if self.focus:
             out["focus"] = self.focus[:3]
         return {k: v for k, v in out.items() if v is not None}
@@ -1001,11 +1028,15 @@ class Driver:
         if self.failed_step:
             lines.append(f"- 실패 스텝 (보조 정보, Jira {self.failed_step['source']}; 점수·S/C에 쓰지 않음; 분석 범위·순위 참고): "
                          f"{self.failed_step['text']}")
+        if self.clock and self.clock.get("mode") == "none":
+            lines.append(f"- 장비 시각 미사용: 시계 정렬 불가({self.clock.get('reason')})")
         if anchor:
             jira_at = (r.get("jira") or {}).get("occurred_at")
             gap = anchor.get("jira_gap_min")
+            manual = anchor.get("clock") or {}
             lines.append(f"- 실패 스텝 구간 ({anchor['source']}): {_step_label(anchor.get('step'))} "
                          f"{anchor['start'] or '?'} ~ {anchor['fail']} → 분석 범위 {anchor['window'][0]} ~ {anchor['window'][1]}"
+                         + (f" (시계 차 {manual['offset_sec']:+g}초, 수동)" if manual.get("mode") == "manual" else "")
                          + (f" (Jira 발생 시각 {jira_at} / {gap:g}분 차이)" if jira_at and gap is not None else ""))
         if self.focus:
             lines.append("- 스텝 기준 우선 유형 (순위 참고만, 점수·S/C 불변): " + ", ".join(self.focus))
@@ -1091,6 +1122,11 @@ def _parse_ts(text: str | None) -> datetime | None:
     return ts if ts.tzinfo else ts.replace(tzinfo=timezone.utc)
 
 
+def _num(x: float):
+    """정수로 떨어지면 int, 아니면 float (JSON에 180.0 대신 180)."""
+    return int(x) if float(x).is_integer() else x
+
+
 def _step_label(step) -> str:
     """마커의 스텝 값 → 표시 이름(번호만이면 `Step N`)."""
     text = str(step or "").strip()
@@ -1157,6 +1193,10 @@ def _clip_failed_step(result: dict, limit: int) -> None:
         fs["text"] = _clip(fs["text"], limit)
 
 
+def _drop_clock_reason(result: dict) -> None:
+    ((result.get("step_anchor") or {}).get("clock") or {}).pop("reason", None)
+
+
 def _drop_focus(result: dict) -> None:
     (result.get("step_anchor") or {}).pop("focus", None)
 
@@ -1184,6 +1224,7 @@ def fit(result: dict) -> dict:
     steps += [lambda: result.update(warnings=(result.get("warnings") or [])[:3]),
               lambda: result.update(files={"report": result["files"]["report"]}),
               lambda: cands and cands[0].update(evidence=cands[0]["evidence"][:3]),
+              lambda: _drop_clock_reason(result),
               lambda: _drop_focus(result),
               lambda: _clip_anchor_step(result, 40),
               lambda: _clip_failed_step(result, 60)]
@@ -1223,6 +1264,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--out")
     p.add_argument("--failed-step", help="실패 스텝 한 줄(선택, 보조 정보). 마스킹해서만 쓴다")
     p.add_argument("--steps-file", help="시험 절차 첨부 파일(txt/csv, 선택). 읽지 못하면 경고만 내고 진행")
+    p.add_argument("--clock-offset", help="시험 장비 시각 → 단말 logcat 시각 시계 차(단말 = 장비 + 값). 예: +3m, -90s, +00:03:00, 180. "
+                                          "없으면 steps-file의 장비 시각은 분석 구간에 쓰지 않는다")
     p = sub.add_parser("release", parents=[common])
     p.add_argument("key")
     return parser

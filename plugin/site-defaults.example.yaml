@@ -89,10 +89,16 @@ explore:
 # 시험 자동화가 logcat에 남기는 스텝 마커로 실패 스텝의 시간 구간을 정한다(어디를 볼지만 정하고 S/C는 로그가 정한다).
 # 마커 패턴은 이 파일에서만 읽는다(사용자 config로 덮어쓸 수 없다). 비우면([]) 마커 스캔을 하지 않는다.
 failed_step:
-  marker_patterns:                # 마스킹 전 `TAG: msg` 줄에 맞춘다. 이름 그룹 step, status 필수
-    - '^(?:TestRunner|Automation)\s*:\s*\[?(?i:step)\s*(?P<step>\d+)\]?\s*(?:[:-]\s*.*?\s)?(?P<status>START|PASS|FAIL)\b'   # TODO(SITE:S22)
+  # 로그 스텝 마커 패턴. 기본은 꺼짐([]): 실제 logcat에는 시험 스텝의 START/FAIL 마커가 없다.
+  # 마스킹 전 `TAG: msg` 줄에 맞춘다. 이름 그룹 step, status 필수. 마커를 남기는 시험 자동화가 있을 때만 켠다.
+  marker_patterns: []             # TODO(SITE:S22)
+  # marker_patterns:
+  #   - '^(?:TestRunner|Automation)\s*:\s*\[?(?i:step)\s*(?P<step>\d+)\]?\s*(?:[:-]\s*.*?\s)?(?P<status>START|PASS|FAIL)\b'
   marker_status: {start: [start, begin, 시작], pass: [pass, ok, 성공], fail: [fail, ng, error, 실패]}   # casefold 비교
   anchor_without_step: true       # 실패 스텝을 모를 때 FAIL 마커 자체를 앵커로 쓴다(스텝 이름은 DB에 쓰지 않는다)
   window: {pre_sec: 60, post_sec: 30, fail_only_pre_sec: 120, max_span_sec: 900}
   disagree_minutes: 10            # Jira 발생 시각과 스텝 실패 시각이 이만큼(분) 넘게 다르면 경고
   steps_file_tz: null             # steps-file 시각의 타임존. null이면 logcat 타임존
+  # 시험 장비 시각 → 단말 logcat 시각 시계 차(단말 = 장비 + 값, 예: '+3m', '-00:00:45', 180). null이면 steps-file의
+  # 장비 시각은 분석 구간에 쓰지 않는다(--clock-offset이 우선). TODO(SITE:S22) 장비·단말 시계가 같은지 확인한다
+  clock_offset: null

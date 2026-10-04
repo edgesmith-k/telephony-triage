@@ -223,6 +223,41 @@ def window(span: dict, cfg=None) -> tuple[datetime, datetime, list[str]]:
     return start - timedelta(seconds=w["pre_sec"]), fail + timedelta(seconds=w["post_sec"]), warnings
 
 
+# -- 시계 차 -------------------------------------------------------------------------------------
+
+OFFSET_MAX_SEC = 86400
+_OFF_HMS_RE = re.compile(r"^(?P<sign>[+-]?)(?:(?P<h>\d+)h)?(?:(?P<m>\d+)m)?(?:(?P<s>\d+(?:\.\d+)?)s)?$")
+_OFF_CLOCK_RE = re.compile(r"^(?P<sign>[+-]?)(?:(?P<h>\d+):)?(?P<m>\d{1,2}):(?P<s>\d{1,2}(?:\.\d+)?)$")
+_OFF_NUM_RE = re.compile(r"^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$")
+
+
+def parse_offset(value) -> float | None:
+    """장비 시각 → 단말(logcat) 시각으로 옮기는 시계 차(초): **단말 시각 = 장비 시각 + offset**. 형식이 틀리면 None.
+
+    허용: `±XhYmZ(.f)s`(단위 1개 이상, 부호 선택), `±HH:MM:SS(.f)`, `±MM:SS`, 초 단위 정수·실수(문자열 가능).
+    절댓값이 86400초(1일)를 넘으면 None이다."""
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        out = float(value)
+    else:
+        text = "".join(str(value).split()).casefold()
+        if not text:
+            return None
+        sign = -1.0 if text.startswith("-") else 1.0
+        if _OFF_NUM_RE.match(text):
+            out = float(text)
+        elif (m := _OFF_CLOCK_RE.match(text)):
+            out = sign * (int(m.group("h") or 0) * 3600 + int(m.group("m")) * 60 + float(m.group("s")))
+        elif (m := _OFF_HMS_RE.match(text)) and any(m.group(g) for g in ("h", "m", "s")):
+            out = sign * (int(m.group("h") or 0) * 3600 + int(m.group("m") or 0) * 60 + float(m.group("s") or 0))
+        else:
+            return None
+    if out != out or abs(out) > OFFSET_MAX_SEC:      # NaN·범위 밖
+        return None
+    return out + 0.0
+
+
 # -- 시험 절차 파일의 시각 ---------------------------------------------------------------------------
 
 
