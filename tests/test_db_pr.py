@@ -651,6 +651,41 @@ def test_expired_own_lock_does_not_block_publish_or_discard():
 # -- cleanup·lock ------------------------------------------------------------------------------------
 
 
+def test_pasted_steps_are_removed_when_job_ends():
+    """붙여넣은 스텝 원문(steps-pasted.txt)은 discard·lock release(자기 작업)·cleanup이 지운다 (08-safety.md §8.1)."""
+    ws = Workspace()
+    ws.plan("MOCK-7001", "p7-analyze-append.plan.json")
+    ws.acquire("MOCK-7001")
+    ws.stage("MOCK-7001", "issue/MOCK-7001")
+    pasted = ws.job_dir("MOCK-7001") / "steps-pasted.txt"
+    pasted.write_text("1 | 데이터 켜기 | FAIL\n", encoding="utf-8")
+    ws.db_pr("discard", ws.wt("MOCK-7001"))
+    assert not pasted.exists()
+
+    # discard 없이 끝나는 경로: 자기 작업 lock release (lock이 이미 없어도)
+    ws.acquire("MOCK-7002")
+    pasted = ws.job_dir("MOCK-7002") / "steps-pasted.txt"
+    pasted.parent.mkdir(parents=True, exist_ok=True)
+    pasted.write_text("붙여넣기\n", encoding="utf-8")
+    ws.db_pr("lock", "release", "MOCK-7002")
+    assert not pasted.exists()
+    pasted.write_text("붙여넣기\n", encoding="utf-8")
+    ws.db_pr("lock", "release", "MOCK-7002")
+    assert not pasted.exists()
+
+    # --force(다른 세션의 lock)는 그 작업의 파일을 건드리지 않는다. 남은 파일은 cleanup이 지운다
+    ws.acquire("MOCK-7003")
+    other = ws.job_dir("MOCK-7003") / "steps-pasted.txt"
+    other.parent.mkdir(parents=True, exist_ok=True)
+    other.write_text("붙여넣기\n", encoding="utf-8")
+    ws.db_pr("lock", "release", "MOCK-7003", "--force")
+    assert other.exists()
+    dry = ws.db_pr("cleanup", "--dry-run")
+    assert {"kind": "state", "job": "MOCK-7003", "path": str(other)} in dry["targets"]
+    ws.db_pr("cleanup", "--yes")
+    assert not other.exists()
+
+
 def test_cleanup_skips_lock_holder_and_needs_yes():
     ws = Workspace()
     ws.plan("MOCK-7004", "p7-analyze-unresolved.plan.json")

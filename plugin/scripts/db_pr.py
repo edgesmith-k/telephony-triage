@@ -16,6 +16,7 @@
 작업 디렉토리 `<work_dir>/<작업 키>/`: `plan.json`(계획), `state.json`(`{base_sha, branch, approved_hash,
 commit_message, staged_at}`), `included_pending/`, `wt/`(작업 worktree). 구현 파일: `stage.json`(stage 결과,
 summary 입력), `regress.json`, `pr.json`(summary가 만든 PR 제목·본문·리뷰어, publish 입력). discard가 지운다.
+붙여넣은 스텝 원문 `steps-pasted.txt`는 discard·`lock release <자기 작업 키>`(--force 아님)·cleanup이 지운다.
 도구 브랜치는 로컬 `tt/<br>`만 만든다. 사용자 clone의 로컬 `<br>`와 워킹 트리는 건드리지 않는다.
 
 세션 lock `<work_dir>/session.lock` = `{job, command, started_at, updated_at}` (사용자별로 한 번에 한 작업)
@@ -69,7 +70,9 @@ SNAPSHOT_DIR = "_snapshot"
 FRESH = timedelta(minutes=10)
 EXPIRE = timedelta(hours=4)
 STATE, STAGE, PR_FILE, REGRESS, PLAN = "state.json", "stage.json", "pr.json", "regress.json", "plan.json"
-WORK_FILES = (STATE, STAGE, PR_FILE, REGRESS)
+PASTED_STEPS = "steps-pasted.txt"   # 개발자가 붙여넣은 스텝 목록 원문(08-safety.md §8.1) — 작업이 끝나면 지운다
+WORK_FILES = (STATE, STAGE, PR_FILE, REGRESS, PASTED_STEPS)
+JOB_KEY_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 TOOL_PREFIX = "tt/"
 GENERATED_RE = re.compile(r"^(README\.md|STATS\.md|parser-rules/CHANGELOG\.md|[^/]+/README\.md)$")
 SOURCE_LABELS = {"analyze": "분석 (analyze)", "record": "수동 기록 (record)", "import": "기존 분류 가져오기 (import)",
@@ -998,6 +1001,19 @@ def discard(ctx: Ctx, wt: Path) -> dict:
             "lock": released, "plan_kept": (job_dir / PLAN).is_file()}
 
 
+def _drop_pasted_steps(ctx: Ctx, job: str) -> None:
+    """자기 작업의 lock을 풀 때 붙여넣은 스텝 원문을 지운다(discard 없이 끝나는 경로, 08-safety.md §8.1)."""
+    if not JOB_KEY_RE.fullmatch(job or ""):
+        return
+    job_dir = ctx.work_dir / job
+    if job_dir.is_symlink() or not job_dir.is_dir():
+        return
+    try:
+        (job_dir / PASTED_STEPS).unlink(missing_ok=True)
+    except OSError:
+        pass    # 지우지 못해도 lock 해제는 끝낸다(남은 파일은 cleanup이 보여준다)
+
+
 def cleanup(ctx: Ctx, yes: bool, older_than: int | None) -> dict:
     ctx.require_repo()
     _git(ctx.repo, "worktree", "prune", check=False)
@@ -1188,6 +1204,8 @@ def main(argv: list[str] | None = None) -> int:
                 result = lock.acquire(args.job, args.command, args.take_over)
             else:
                 result = lock.release(args.job, args.force)
+                if not args.force:      # 자기 작업을 끝낼 때(lock이 이미 없어도)
+                    _drop_pasted_steps(ctx, args.job)
         elif args.cmd == "cleanup":
             result = cleanup(ctx, args.yes, args.older_than)
         elif args.cmd == "preflight":

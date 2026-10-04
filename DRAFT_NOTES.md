@@ -14,7 +14,7 @@
 ## 진행 상태
 
 - 모드: **사외 초안**. 완료 Phase: **D0, 1~13**. RF-0·RF-1 완료.
-- 마지막 전체 테스트: **465개 통과** (10/04, `aaf5a17`, Ubuntu·Py3.11). Windows에서는 도구 셸 stdin을 `/dev/null`로, PATH 앞에 실제 Python과 `python3` shim(Store 별칭이면 gh 스텁·git hook이 9009로 실패).
+- 마지막 전체 테스트: **466개 통과** (10/04, 보안 검토·R9·R11 커밋, Ubuntu·Py3.11). Windows에서는 도구 셸 stdin을 `/dev/null`로, PATH 앞에 실제 Python과 `python3` shim(Store 별칭이면 gh 스텁·git hook이 9009로 실패).
 - 사내 확인 항목: `TODO(SITE)` **73곳**(S22 12곳 추가) — `python3 tools/list_site_todos.py`. `REVIEW-OPEN.md` 0건.
 - 안내서(사람용 HTML, 10/04 1~6단계 반영): `docs/telephony-triage-guide.html` (공유본 https://claude.ai/artifact/1jov1Et4dQUMauFr6aoxWG)
 
@@ -28,20 +28,23 @@
 | 검사 통합 | `common/checks.py` 프로필(stage·precommit·guard) | `01 §3.1`, `contracts §종료 코드` |
 | 4b 실패 스텝 | 선택 입력(cli > Jira 필드 > 설명 > steps-file), 기록 `failed_step`, README "자주 실패한 스텝". v1 스키마 직접 수정(반입 전 규칙 `06 §6.4`) | `07 §Step 2`, `03 §5.4` |
 | 실패 스텝 기준점 | `step_order`: report.html/zip/붙여넣기 스텝 목록의 PASS 스텝을 `step_events`로 로그 흔적과 순서대로 짝지어 마지막 PASS 이후만 분석. 장비 시각은 `--clock-offset` 없이 쓰지 않음. 로그 표식(`log_marker`)은 기본 꺼짐. 스텝 기준 우선 유형(순위만 ≤0.05) | `07 §Step 3`, `02` failed_step·step_events, `14 S22` |
+| 보안 검토 수정 | `steps-pasted.txt`를 discard·`lock release`(자기 작업)·cleanup이 지운다 | `08 §8.1`, `contracts §3.2` |
+| R11 단정 제거 | RIL 요청 안 보임·시계 점프를 관측 사실·추론·반례로 구분 | `reference/ril-requests.md`·`log-tags.md`, `07 §Step 3` |
+| R9 verify-fix 예외 | 결정 (e)로 07·reference·`CLAUDE.md §12`를 05에 맞춤(코드 변경 없음) | `05 §5.12 (2)`, `07 §verify-fix` |
 | RF-2 | 반입 staging·rollback, `check_boundary`, 사외 CI | 리뷰 §U RF-2 (10/03부터 확인 대기) |
 
 ## 다음 할 일 (위에서부터)
 
 | ☐ | 항목 | 메모 |
 |---|---|---|
-| ☐ 1 | **보안 검토** — 10/04 세션 변경분(`93ef099..HEAD`)에 `/security-review` | zip 처리(크기·경로·암호화), 붙여넣은 스텝 파일(`WD/<KEY>/steps-pasted.txt`)이 `discard` 때 지워지는지, 새 입력 마스킹, 첨부 속 지시문 |
+| ✅ 1 | **보안 검토** — 10/04 변경분(`93ef099..f91daf6`) | 10/04 완료. 고친 것: 붙여넣은 스텝 원문 `steps-pasted.txt`가 discard·release 뒤에도 남음 → `db_pr` discard·`lock release`(--force 아님)·cleanup이 지움. 문제없음: zip(메모리만, 선언·실제 크기 상한, 암호화·절대/`..` 거부, 멤버 하나), html 5 MiB, 정규식 타임아웃, 스텝 이름·zip 경로·마커 마스킹, 첨부 문장은 데이터(SKILL·explore) |
 | ☐ 2 | **사용자 확인 받기** — 위 표와 RF-2 | 확인되면 표에서 "확인 대기"를 지운다 |
 | ☐ 3 | **스킬 행동 평가 재실행 + 새 기능 eval 추가** (사용자 결정: 사외 vs 사내 S-2, 토큰 큼) | 탐색 분석·실패 스텝·기준점·붙여넣기 흐름, Phase 13 실패 4건 수정분. `tests/skill_evals/README.md` |
 | ✅ 4 | **HTML 안내서 갱신** — 1~6단계 반영 | 10/04 완료. 이후 기능이 바뀌면 `docs/telephony-triage-guide.html`도 고친다 |
 | ☐ 5 | **성능** — `db_pr` 등이 하위 스크립트를 같은 프로세스에서 호출 | PR 한 건당 수십 초 단축. 리뷰 §Q "서브프로세스 재진입". 종료 코드 계약 유지 |
 | ☐ 6 | **유지보수** — `db_add.py`(1,373줄) op별 분할 | 리뷰 §Q. 동작 동일 |
 | ☐ 7 | **트리거 개선** — 자연어 호출 recall 26~33% | SKILL.md 8,191/8,192바이트: description을 늘리면 본문을 줄여야 함. 지금은 슬래시 커맨드로 쓰면 문제없음 |
-| ☐ 8 | **R7 근거 출처**, **R9·R11 문구 정리**, **R15 대용량 로그 처리** | `docs/development/PLUGIN_IMPROVEMENT_HANDOFF.md`. R7은 RF-8 전제 |
+| ☐ 8 | **R7 근거 출처**, **R15 대용량 로그 처리** (R9·R11은 10/04 완료) | `docs/development/PLUGIN_IMPROVEMENT_HANDOFF.md`. R7은 RF-8 전제 |
 | ☐ 9 | **`CLAUDE.md` 축소(≤4KB, §12 이동)** — 사용자 결정 대기 | 결정 전에는 건너뛴다 |
 | ☐ 10 | **반입** — `15 §15.4` 체크리스트 재실행: `check_boundary --mode external`, `sync_schemas --check`, `make_db_skeleton.py`(새 키 `step_focus`·`step_events` 확인), `list_site_todos`, `git archive` 묶음 | `GUIDE.md` §3 "반입 전". 1~2는 반입 전에 필수, 3~9는 반입을 막지 않는다 |
 
@@ -64,5 +67,6 @@
 - (b) 자동 게시(RF-8)는 `confidence`가 아니라 별도 품질 게이트로만. (10/01)
 - (c) 실패 스텝·Claude 가설은 판정(S/C)에 쓰지 않는다. 구간·순위·검색·리포트 보조만. (10/04)
 - (d) 반입 전에는 v1 스키마를 직접 고치고, 배포 뒤에는 항상 버전을 올린다(`06 §6.4`). (10/04)
+- (e) verify-fix 흔적: 코드·설정 수정 유형은 흔적 필수. 비코드 유형(user-setting·network·hw)에 흔적 시그니처가 둘 다 없을 때만 사용자 확인으로 판정하고 `verification.note`에 남긴다. (10/04, R9)
 - 시작 전 remote를 fetch한다. remote 이름은 PC마다 다르다(`telephony` 또는 `origin`) — 있는 것을 쓴다.
 - 사내 로그가 모의와 다를 때 가장 먼저: `docs/development/S0_PROBE_CHECKLIST.md` + `tools/s0_stats.py`.
