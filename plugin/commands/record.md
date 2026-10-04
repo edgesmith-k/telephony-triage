@@ -1,6 +1,6 @@
 ---
 description: 수동 기록 — 스스로 해결한 이슈를 분석·매칭 없이 이슈 DB 히스토리에 남긴다
-argument-hint: <JIRA-KEY> [--cause <원인 ID> | --new-cause <유형 ID> | --new-type <category> | --unresolved <유형 ID>] [--fixture <logcat>] [--resolved-fixture <logcat>] [--dry-run] [--jira-file <yaml>] [--failed-step <한 줄>] [--steps-file <파일>] [--clock-offset <±시간>]
+argument-hint: <JIRA-KEY> [--cause <원인 ID> | --new-cause <유형 ID> | --new-type <category> | --unresolved <유형 ID>] [--fixture <logcat>] [--resolved-fixture <logcat>] [--dry-run] [--jira-file <yaml>] [--failed-step <한 줄>] [--steps-file <파일>]
 ---
 
 먼저 `${CLAUDE_PLUGIN_ROOT}/skills/telephony-triage/reference/record.md`를 읽고 그 `record` 흐름을 다음 인자로 실행한다: $ARGUMENTS

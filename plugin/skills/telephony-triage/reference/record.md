@@ -3,7 +3,7 @@
 ```
 /telephony-triage:record <JIRA-KEY> [--cause <원인 ID> | --new-cause <유형 ID> | --new-type <category> | --unresolved <유형 ID>]
                          [--fixture <logcat>] [--resolved-fixture <logcat>] [--dry-run] [--jira-file <yaml>]
-                         [--failed-step <한 줄>] [--steps-file <파일>] [--clock-offset <±시간>]
+                         [--failed-step <한 줄>] [--steps-file <파일>]
 ```
 
 사용자가 이미 스스로 해결한 이슈를 **로그·코드 분석과 매칭 없이** 히스토리에 남긴다. 분류와 내용은 사용자가 정한다.
