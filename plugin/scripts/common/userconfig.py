@@ -53,6 +53,8 @@ def from_site_defaults(defaults: dict) -> dict:
         out["logcat"] = copy.deepcopy(defaults["logcat"])
     if defaults.get("analyzers"):   # 분석 스킬은 site-defaults 또는 사용자 config (16-existing-assets.md §16.5)
         out["analyzers"] = copy.deepcopy(defaults["analyzers"])
+    if defaults.get("explore"):     # 탐색 분석(Step 5-2) 기본값 (07-workflow.md §Step 5-2)
+        out["explore"] = copy.deepcopy(defaults["explore"])
     ghe = defaults.get("ghe") or {}
     if ghe.get("host"):
         out.setdefault("issue_db", {})["ghe_host"] = ghe["host"]

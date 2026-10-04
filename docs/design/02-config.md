@@ -71,7 +71,7 @@ setup 커맨드가 순서대로 하는 일:
 
 ---
 
-> 설정 우선순위: 사용자 config > `plugin/site-defaults.yaml` > 코드 내장 기본값. `plugin/site-defaults.yaml`이 없으면 setup과 모든 커맨드가 멈춘다. `site-defaults.example.yaml`은 코드가 읽지 않고, 사외 테스트 헬퍼가 복사해서 쓴다 (`15-local-draft.md §15.1`). `site-defaults.yaml`에는 `jira.tools`·`jira.field_map`·`jira.exclude_servers`·`parser.backend`·`external_parsers`·`analyzers`·`synthetic_allowed`가 들어간다.
+> 설정 우선순위: 사용자 config > `plugin/site-defaults.yaml` > 코드 내장 기본값. `plugin/site-defaults.yaml`이 없으면 setup과 모든 커맨드가 멈춘다. `site-defaults.example.yaml`은 코드가 읽지 않고, 사외 테스트 헬퍼가 복사해서 쓴다 (`15-local-draft.md §15.1`). `site-defaults.yaml`에는 `jira.tools`·`jira.field_map`·`jira.exclude_servers`·`parser.backend`·`external_parsers`·`analyzers`·`explore`(탐색 분석 `when`·`timeline_max_lines`, `07-workflow.md §Step 5-2`)·`synthetic_allowed`가 들어간다.
 
 ## 5.3 `issue-db.config.yaml`
 

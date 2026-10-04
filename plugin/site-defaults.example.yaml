@@ -69,3 +69,9 @@ analyzers:
     when: ask                          # ask | after_match | always_for_category
     inputs: [events_json, log_paths, top_candidates, jira_summary]
     max_tokens_hint: medium
+
+# 탐색 분석: 후보 없음·원인 미확인일 때 Claude가 타임라인으로 가설을 세운다 (07-workflow.md §Step 5-2)
+# 결과는 리포트 보조 절에만 쓰고 점수·분류·검증에는 쓰지 않는다.
+explore:
+  when: ask                            # ask | always | never (analyze --explore / --no-explore가 우선)
+  timeline_max_lines: 200              # JOB/timeline.md 줄 수 상한 (20~1000)

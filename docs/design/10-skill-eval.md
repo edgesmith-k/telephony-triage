@@ -44,6 +44,7 @@ skill-creator 스킬을 실행하고 아래를 입력으로 준다.
   - drift가 나오면 자동으로 덮지 않고 항목마다 사용자 결정을 받는다.
   - 다른 유형의 fixture에서 새 시그니처가 걸리면 시그니처를 몰래 좁히거나 `allow-cause`를 몰래 넣지 않고 사용자에게 고르게 한다.
   - 분석 스킬(`analyzers`)은 기본적으로 호출 전에 묻는다(`--analyzer`/`--no-analyzer`가 있으면 따른다).
+  - 탐색 분석(Step 5-2, `explore`)도 기본적으로 묻는다(`--explore`/`--no-explore`). `timeline.md`만 읽고, 결과는 "탐색 분석 (추정)" 칸에만 쓰며 op를 만들지 않는다(`reference/explore.md`).
 
 ## description 트리거 테스트
 
