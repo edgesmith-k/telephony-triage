@@ -154,7 +154,7 @@ def comment_budget(spec: str) -> int | None:
     return int(m.group(1))
 
 
-def _failed_step_part(raw, fmap, jira_cfg, text, masker, cli, steps_file) -> dict:
+def _failed_step_part(raw, fmap, jira_cfg, text, masker, cli, steps_file, step_cfg=None) -> dict:
     """선택 키(`test_steps`·`failed_step_auto`·`failed_step`·`warnings`). 없으면 키를 만들지 않는다."""
     out: dict = {}
     patterns = jira_cfg.get("failed_step_patterns") or []
@@ -166,7 +166,7 @@ def _failed_step_part(raw, fmap, jira_cfg, text, masker, cli, steps_file) -> dic
     elif isinstance(field, dict):
         field = _text(field)
     auto, warnings = failedstep.auto_from(field, text["description"], steps, patterns, masker)
-    final, more = failedstep.resolve(cli, auto, steps_file, patterns, masker)
+    final, more = failedstep.resolve(cli, auto, steps_file, patterns, masker, step_cfg)
     warnings += [w for w in more if w not in warnings]
     if steps:
         if len(steps) > failedstep.TEST_STEPS_MAX:
@@ -235,7 +235,7 @@ def extract(raw: dict, cfg: dict, db: Path | None, origin: str, last: int | None
     if not isinstance(comps, list):
         comps = [comps]
 
-    optional = _failed_step_part(raw, fmap, jira_cfg, text, masker, failed_step, steps_file)
+    optional = _failed_step_part(raw, fmap, jira_cfg, text, masker, failed_step, steps_file, cfg.get("failed_step"))
 
     local = when.astimezone(jtz) if when else None
     year = None
@@ -297,7 +297,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--comments", default="all", help="코멘트 예산: all | last:<N> (뒤에서 N개)")
     p.add_argument("--comment-chars", type=int, default=0, help="코멘트 하나의 최대 글자 수 (0이면 자르지 않음)")
     p.add_argument("--failed-step", help="실패 스텝 한 줄(선택, 마스킹 후 사용)")
-    p.add_argument("--steps-file", help="시험 절차 첨부 파일(txt/csv, 선택). 읽지 못하면 경고만 내고 진행")
+    p.add_argument("--steps-file", help="시험 절차 첨부 파일(txt/csv/html/zip, 선택). 읽지 못하면 경고만 내고 진행")
     return parser
 
 

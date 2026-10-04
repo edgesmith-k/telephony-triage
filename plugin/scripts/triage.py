@@ -234,6 +234,7 @@ class Driver:
         self.failed_step: dict | None = None     # 마스킹된 {text, source}. 없으면 None (선택 값)
         self.anchor_off = False
         self.clock_offset: float | None = None   # 장비 시각 → 단말 시각 시계 차(초). --clock-offset > failed_step.clock_offset
+        self._steps = None                       # read_steps 결과 캐시 (steps-file은 한 번만 읽는다)
         self.clock: dict | None = None           # 시계 정렬 결과 {mode: manual|none, offset_sec | reason}
         self.focus: list[str] = []               # match.step_focus.types (순위 참고용 우선 유형)
 
@@ -496,7 +497,8 @@ class Driver:
         """auto(이미 마스킹) + 이번 실행의 플래그 → 마스킹된 {text, source} | None. 원문은 이 함수 안에서만 쓴다."""
         a = self.args
         patterns = userconfig.get(self.cfg, "jira.failed_step_patterns") or []
-        result, warns = failedstep.resolve(getattr(a, "failed_step", None), auto, getattr(a, "steps_file", None), patterns, masker)
+        result, warns = failedstep.resolve(getattr(a, "failed_step", None), auto, getattr(a, "steps_file", None), patterns, masker,
+                                           userconfig.get(self.cfg, "failed_step") or {})
         for w in warns:
             if w not in self.warnings:
                 self.warnings.append(w)
@@ -759,12 +761,33 @@ class Driver:
             anchor["clock"] = dict(self.clock)
         return anchor
 
+    def steps_info(self):
+        """`failedstep.read_steps` 결과(스텝 목록, 실패 위치, 경고, zip 멤버) — steps-file을 한 번만 읽는다. 원문은 이 프로세스 안에서만 쓴다."""
+        if self._steps is None:
+            path = getattr(self.args, "steps_file", None)
+            self._steps = failedstep.read_steps(path, userconfig.get(self.cfg, "failed_step") or {}) if path else ([], None, [], None)
+        return self._steps
+
+    def check_failed_step_row(self, row_label: str) -> None:
+        """cli·Jira의 실패 스텝과 steps-file의 FAIL 스텝이 다르면 경고한다(구간은 steps-file 쪽으로 정한다)."""
+        fs = self.failed_step
+        if fs and fs.get("source") != "steps_file" and not stepanchor.same_step(row_label, fs["text"]):
+            self.warn(f"실패 스텝({fs['source']})과 steps-file의 FAIL 스텝이 다르다 — 구간은 steps-file 순서로 정했다")
+
     def steps_file_span(self, steps_file, tz, year, conf: dict, jira_at, first, inside) -> dict | None:
-        text, _ = failedstep.read_lines(steps_file)     # 읽지 못한 경고는 resolve_failed_step이 이미 냈다
-        if text is None:
-            return None
-        patterns = userconfig.get(self.cfg, "jira.failed_step_patterns") or []
-        step, line = failedstep.find_line(text, patterns)
+        steps, fidx, warns, _ = self.steps_info()
+        for w in warns:
+            self.warn(w)
+        row = steps[fidx] if fidx is not None else None
+        if row is not None:      # 표의 FAIL 스텝(첫 FAIL = 마지막으로 실행된 스텝)의 시각
+            line, label = row.get("time_raw"), failedstep.label(row, self.masker())
+        else:                    # 표로 읽지 못하면 failed_step_patterns에 맞는 줄에서
+            text, _ = failedstep.read_lines(steps_file)     # 읽지 못한 경고는 resolve_failed_step이 이미 냈다
+            if text is None:
+                return None
+            patterns = userconfig.get(self.cfg, "jira.failed_step_patterns") or []
+            step, line = failedstep.find_line(text, patterns)
+            label = failedstep.normalize(self.masker()(step or ""), 80)
         if not line:
             return None
         zone = conf.get("steps_file_tz") or tz or userconfig.get(self.cfg, "logcat.timezone")
@@ -787,7 +810,8 @@ class Driver:
         if not inside(fail):
             self.warn(f"steps-file의 실패 시각({lc.format_ts(fail)})이 로그 범위 밖이라 쓰지 않았다")
             return None
-        label = failedstep.normalize(self.masker()(step or ""), 80)
+        if row is not None:
+            self.check_failed_step_row(label)
         return {"source": "steps_file", "step": label or None, "step_from": "failed_step",
                 "start": start if start and start < fail else None, "fail": fail, "end": fail}
 
@@ -1030,6 +1054,9 @@ class Driver:
                          f"{self.failed_step['text']}")
         if self.clock and self.clock.get("mode") == "none":
             lines.append(f"- 장비 시각 미사용: 시계 정렬 불가({self.clock.get('reason')})")
+        member = self.steps_info()[3]
+        if member:
+            lines.append(f"- 시험 절차: zip 안 {_clip(self.masker()(member), 120)}")
         if anchor:
             jira_at = (r.get("jira") or {}).get("occurred_at")
             gap = anchor.get("jira_gap_min")
@@ -1263,7 +1290,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--offline-db")
     p.add_argument("--out")
     p.add_argument("--failed-step", help="실패 스텝 한 줄(선택, 보조 정보). 마스킹해서만 쓴다")
-    p.add_argument("--steps-file", help="시험 절차 첨부 파일(txt/csv, 선택). 읽지 못하면 경고만 내고 진행")
+    p.add_argument("--steps-file", help="시험 절차 첨부 파일(txt/csv/html/zip, 선택). 읽지 못하면 경고만 내고 진행")
     p.add_argument("--clock-offset", help="시험 장비 시각 → 단말 logcat 시각 시계 차(단말 = 장비 + 값). 예: +3m, -90s, +00:03:00, 180. "
                                           "없으면 steps-file의 장비 시각은 분석 구간에 쓰지 않는다")
     p = sub.add_parser("release", parents=[common])

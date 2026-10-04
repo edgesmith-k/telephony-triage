@@ -389,6 +389,33 @@ def test_parse_offset_formats():
     assert f("86400") == 86400 and f("+24h") == 86400
 
 
+def test_steps_file_zip_report_uses_fail_row_and_warns_when_failed_step_differs():
+    import zipfile
+    d = tmp("tt-zip-")
+    log = _markerless(d)
+    html = ("<table><tr><th>No</th><th>Step</th><th>Result</th><th>Start</th><th>End</th></tr>"
+            "<tr><td>4</td><td>망 등록</td><td>PASS</td><td>2026-09-20 14:32:00</td><td>2026-09-20 14:32:20</td></tr>"
+            "<tr><td>5</td><td>데이터 켜기</td><td>FAIL</td><td>2026-09-20 14:33:00</td><td>2026-09-20 14:33:30</td></tr></table>")
+    path = d / "att.zip"
+    with zipfile.ZipFile(path, "w") as zf:
+        zf.writestr("run_01/report.html", html)
+        zf.writestr("index.html", "<table><tr><td>1</td><td>가짜</td><td>FAIL</td></tr></table>")
+    done, job = _offline("zip", "--steps-file", path, "--clock-offset", "0", logs=(log,))
+    sa = done["step_anchor"]
+    assert sa["source"] == "steps_file" and sa["span"] == ["2026-09-20T05:33:00.000Z", "2026-09-20T05:33:30.000Z"]
+    assert sa["step"] == "5 | 데이터 켜기" and _causes(done) == ["DATA-001-01"]
+    assert done["jira"]["failed_step"] == {"text": "5 | 데이터 켜기", "source": "steps_file"}
+    assert "- 시험 절차: zip 안 run_01/report.html" in (job / "report.md").read_text(encoding="utf-8")
+    assert not any("FAIL 스텝이 다르다" in w for w in done.get("warnings") or [])
+    other, _ = _offline("zip2", "--steps-file", path, "--clock-offset", "0", "--failed-step", "로밍 설정 확인", logs=(log,))
+    assert other["step_anchor"]["source"] == "steps_file"
+    assert "실패 스텝(cli)과 steps-file의 FAIL 스텝이 다르다 — 구간은 steps-file 순서로 정했다" in other["warnings"]
+    same, _ = _offline("zip3", "--steps-file", path, "--clock-offset", "0", "--failed-step", "Step 5 데이터 켜기", logs=(log,))
+    assert not any("FAIL 스텝이 다르다" in w for w in same.get("warnings") or [])
+    for p in (q for q in job.rglob("*") if q.is_file()):
+        assert "2026-09-20 14:33:00" not in p.read_text(encoding="utf-8", errors="replace"), p.name
+
+
 def test_jira_time_disagreement_warns_but_anchor_still_wins():
     done, job = _offline("far", "--failed-step", STEP, occurred="2026-09-20T14:10:00+09:00", root=MARKER_ROOT)
     assert done["step_anchor"]["source"] == "log_marker" and _causes(done) == ["DATA-001-01"]

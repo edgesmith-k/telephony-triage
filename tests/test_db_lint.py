@@ -119,6 +119,66 @@ def test_step_focus_config_checks_one_error_each():
     assert [f["code"] for f in _step_focus_lint("step_focus_bonus_max: 0.05", "step_focus_bonus_max: 0.5")] == ["schema"]
 
 
+def _step_events_lint(body: str) -> list[tuple[str, str]]:
+    """샘플 이슈 DB의 `step_events: []`를 `body`로 바꿔 린트하고 설정 파일의 `(코드, 메시지)`를 돌려준다."""
+    db = runner_copy(SAMPLE)
+    edit(db / "issue-db.config.yaml", "step_events: []", body)
+    result = _lint(db, "--all", expect=(0, 1))
+    return [(f["code"], f["message"]) for f in result["errors"] + result["warnings"] if f["file"] == "issue-db.config.yaml"]
+
+
+def test_step_events_valid_variant_is_clean():
+    db = variant_db("issue-db-step-events")
+    result = _lint(db, "--all", expect=0)
+    assert result["errors"] == [] and result["warnings"] == []
+    assert _step_events_lint("step_events: []") == []
+
+
+def test_step_events_target_rules():
+    assert [c for c, _ in _step_events_lint("step_events:\n  - {pattern: 'a'}")] == ["step-event"]                 # 대상 없음
+    both = _step_events_lint("step_events:\n  - {pattern: 'a', ril: DIAL, match: '^x'}")
+    assert [c for c, _ in both] == ["step-event"] and "정확히 하나" in both[0][1]
+    obs = _step_events_lint("step_events:\n  - {pattern: 'a', observable: false, ril: DIAL}")
+    assert [c for c, _ in obs] == ["step-event"] and "observable: false" in obs[0][1]
+    assert _step_events_lint("step_events:\n  - {pattern: 'a', observable: false}") == []                         # CP 스텝: 대상 없음
+    assert _step_events_lint("step_events:\n  - {pattern: 'a', observable: true, ril: DIAL, dir: resp}") == []
+
+
+def test_step_events_names_and_dir():
+    unknown_event = _step_events_lint("step_events:\n  - {pattern: 'a', event: no_such_event}")
+    assert [(c, "no_such_event" in m) for c, m in unknown_event] == [("step-event", True)]
+    assert _step_events_lint("step_events:\n  - {pattern: 'a', event: ril_error}") == []                          # 예약 이벤트
+    assert _step_events_lint("step_events:\n  - {pattern: 'a', event: sim_state_changed}") == []                  # extractor
+    ext = _step_events_lint("step_events:\n  - {pattern: 'a', event: ext.data.x}")
+    assert [(c, "ext." in m) for c, m in ext] == [("step-event", True)]
+    builtin = _step_events_lint("step_events:\n  - {pattern: 'a', event: builtin.nope.x}")
+    assert [c for c, _ in builtin] == ["step-event"]
+    ril = _step_events_lint("step_events:\n  - {pattern: 'a', ril: NO_SUCH_REQUEST}")
+    assert [(c, "NO_SUCH_REQUEST" in m) for c, m in ril] == [("step-event", True)]
+    assert _step_events_lint("step_events:\n  - {pattern: 'a', ril: UNSOL_SIM_STATUS_CHANGED, dir: unsol}") == []
+    bad_dir = _step_events_lint("step_events:\n  - {pattern: 'a', ril: DIAL, dir: sideways}")
+    assert [c for c, _ in bad_dir] == ["step-event"]
+    fields = _step_events_lint("step_events:\n  - {pattern: 'a', ril: DIAL, fields: {x: '1'}}")
+    assert [(c, "fields" in m) for c, m in fields] == [("step-event", True)]                                        # event 없는 fields
+
+
+def test_step_events_schema_and_regex_safety():
+    assert [c for c, _ in _step_events_lint("step_events: {pattern: a}")] == ["schema"]                            # 목록 아님
+    assert [c for c, _ in _step_events_lint("step_events:\n  - {ril: DIAL}")] == ["schema"]                        # pattern 없음
+    assert [c for c, _ in _step_events_lint("step_events:\n  - 'a'")] == ["schema"]
+    assert [c for c, _ in _step_events_lint("step_events:\n  - {pattern: '(a', ril: DIAL}")] == ["schema"]
+    assert [c for c, _ in _step_events_lint("step_events:\n  - {pattern: 'a', match: '(x'}")] == ["schema"]
+    assert [c for c, _ in _step_events_lint(
+        "step_events:\n  - {pattern: 'a', event: data_setting_changed, fields: {enabled: '(x'}}")] == ["schema"]
+    assert [c for c, _ in _step_events_lint("step_events:\n  - {pattern: 'a', event: data_setting_changed, fields: [x]}")] == ["schema"]
+    assert [c for c, _ in _step_events_lint("step_events:\n  - {pattern: '(a+)+b', ril: DIAL}")] == ["regex-unsafe"]
+    assert [c for c, _ in _step_events_lint("step_events:\n  - {pattern: 'a', match: '^(x+)+y'}")] == ["regex-unsafe"]
+    raw = _step_events_lint("step_events:\n  - {pattern: 'a', match: 'imsi \\d{15}'}")
+    assert [c for c, _ in raw] == ["raw-identifier"]
+    fixed = _step_events_lint("step_events:\n  - {pattern: 'a', match: '<CELL#1>'}")
+    assert [c for c, _ in fixed] == ["fixed-token"]
+
+
 def test_residual_ids():
     result = _lint(SAMPLE, "--all", "--residual", "DATA-001-02=DATA-001-09", expect=1)
     files = {f["file"] for f in result["errors"] if f["code"] == "residual-id"}

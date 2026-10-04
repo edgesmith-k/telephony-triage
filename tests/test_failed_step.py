@@ -136,6 +136,154 @@ def test_default_patterns_empty_means_no_auto():
     assert failedstep.auto_from(None, "Step 1: x FAIL", "Step 2: y FAIL", [], _masker()) == (None, [])
 
 
+# -- 스텝 목록: html·zip·붙여넣기 ----------------------------------------------------------------------
+
+REPORT_HTML = """<!doctype html><html><head><meta charset="utf-8"><title>Report</title>
+<style>td { color: red; }</style><script>var rows = "9 | 가짜 스텝 | FAIL";</script></head><body>
+<h1>시험 결과</h1>
+<table><tr><th>Item</th><th>Value</th></tr><tr><td>Passed</td><td>6</td></tr><tr><td>Overall result</td><td>FAIL</td></tr></table>
+<table>
+<tr><th>No</th><th>Step</th><th>Result</th><th>Comment</th></tr>
+<tr><td>1</td><td>비행기 모드 켜기</td><td>PASS</td><td></td></tr>
+<tr><td>2</td><td>비행기 모드 끄기</td><td>PASS</td><td></td></tr>
+<tr><td>3</td><td>IMS<br>등록 확인</td><td>PASS</td><td></td></tr>
+<tr><td>4</td><td>망 등록 확인</td><td>PASS</td><td>ok &amp; fine</td></tr>
+<tr><td>5</td><td>CP 파라미터 설정</td><td>PASS</td><td></td></tr>
+<tr><td>6</td><td>모바일 데이터 켜기</td><td>PASS</td><td></td></tr>
+<tr><td>7</td><td>데이터 연결 확인</td><td>FAIL</td><td>응답 없음</td></tr>
+<tr><td>8</td><td>정리</td><td>FAIL</td><td></td></tr>
+</table></body></html>"""
+PASTE = """Step 1: 비행기 모드 켜기 PASS
+Step 2: 비행기 모드 끄기 PASS
+3\tIMS 등록 확인\tPASS
+4  망 등록 확인  PASS
+5. CP 파라미터 설정 - PASS
+Step 6: 모바일 데이터 켜기 PASS
+Step 7: 데이터 연결 확인 FAIL
+Step 8: 정리 PASS
+"""
+
+
+def _zip(path: Path, members: dict, flag_encrypted: bool = False) -> Path:
+    import zipfile
+    with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as zf:
+        for name, data in members.items():
+            zf.writestr(name, data)
+    if flag_encrypted:       # 중앙 디렉터리의 일반 목적 비트 0(암호화)을 켠다(첫 항목)
+        raw = bytearray(path.read_bytes())
+        raw[raw.find(b"PK\x01\x02") + 8] |= 1
+        path.write_bytes(bytes(raw))
+    return path
+
+
+def _expected_steps(rows):
+    return [(r["number"], r["name_raw"], r["status"]) for r in rows]
+
+
+SEVEN = [(1, "비행기 모드 켜기", "pass"), (2, "비행기 모드 끄기", "pass"), (3, "IMS 등록 확인", "pass"),
+         (4, "망 등록 확인", "pass"), (5, "CP 파라미터 설정", "pass"), (6, "모바일 데이터 켜기", "pass"),
+         (7, "데이터 연결 확인", "fail")]
+
+
+def test_html_report_table_gives_steps_with_fail_last():
+    tmp = Path(tempfile.mkdtemp())
+    path = tmp / "report.html"
+    path.write_text(REPORT_HTML, encoding="utf-8")
+    text, why, member = failedstep.read_source(path)
+    assert why is None and member is None
+    assert "var rows" not in text and "color: red" not in text            # script·style은 버린다
+    assert "4 | 망 등록 확인 | PASS | ok & fine" in text and "3 | IMS 등록 확인 | PASS" in text
+    steps, failed, warnings, member = failedstep.read_steps(path)
+    assert _expected_steps(steps) == SEVEN and failed == 6 and member is None        # 첫 FAIL(7)에서 끊는다
+    assert [r["index"] for r in steps] == list(range(7))
+    assert len(warnings) == 1 and "FAIL 스텝이 2개" in warnings[0]                     # 8번도 FAIL
+    assert failedstep.label(steps[6], _masker()) == "7 | 데이터 연결 확인"
+    # 요약 표(Passed·Overall result)는 스텝이 아니다
+    assert not any(r["name_raw"] in ("6", "Overall result") for r in steps)
+
+
+def test_text_paste_format_gives_same_steps():
+    tmp = Path(tempfile.mkdtemp())
+    path = tmp / "steps-pasted.txt"
+    path.write_text(PASTE, encoding="utf-8")
+    steps, failed, warnings, member = failedstep.read_steps(path)
+    assert _expected_steps(steps) == SEVEN and failed == 6 and warnings == [] and member is None
+
+
+def test_parse_steps_time_status_words_and_limits():
+    rows = failedstep.parse_steps("no,action,result,start,end\n".replace(",", " | ") +
+                                  "1 | 켜기 | OK | 14:30:10 | 14:30:20\n2 | 확인 | 실패 | 14:30:30\n")
+    assert [(r["status"], r["time_raw"]) for r in rows] == [("pass", "14:30:10 14:30:20"), ("fail", "14:30:30")]
+    assert failedstep.parse_steps("상태 없는 줄\n다른 줄 | 값\n") == []
+    custom = {"steps_status": {"pass": ["합격"], "fail": ["불합격"]}}
+    assert [r["status"] for r in failedstep.parse_steps("1 | 켜기 | 합격\n2 | 끄기 | 불합격", custom)] == ["pass", "fail"]
+    many = "\n".join(f"{i} | 스텝 {i} | PASS" for i in range(1, 700))
+    assert len(failedstep.parse_steps(many)) == 500
+
+
+def test_zip_member_priority_and_in_memory_read():
+    tmp = Path(tempfile.mkdtemp())
+    decoy = "<table><tr><th>No</th><th>Step</th><th>Result</th></tr><tr><td>1</td><td>가짜</td><td>FAIL</td></tr></table>"
+    path = _zip(tmp / "att.zip", {"index.html": decoy, "notes.txt": "1 | 메모 | FAIL\n", "run_01/report.html": REPORT_HTML,
+                                  "run_01/shot.png": b"\x89PNG", "a/b/c/Report.HTML": decoy})
+    steps, failed, warnings, member = failedstep.read_steps(path)
+    assert member == "run_01/report.html" and _expected_steps(steps) == SEVEN
+    assert sorted(p.name for p in tmp.iterdir()) == ["att.zip"]                  # 풀지 않는다
+    # report.html이 없으면 다른 html > csv/txt, 같은 단계에서는 얕은 경로 > 이름 순
+    path = _zip(tmp / "b.zip", {"z/deep/x.csv": "1,켜기,FAIL\n", "m/a.htm": decoy, "b.html": decoy.replace("가짜", "둘째"),
+                                "a.html": decoy.replace("가짜", "첫째")})
+    steps, failed, _, member = failedstep.read_steps(path)
+    assert member == "a.html" and steps[0]["name_raw"] == "첫째"
+    path = _zip(tmp / "c.zip", {"notes.txt": "Step 3: 켜기 FAIL\n", "dir/steps.csv": "1,켜기,FAIL\n"})
+    assert failedstep.read_steps(path)[3] == "notes.txt"
+    assert failedstep.read_source(path)[2] == "notes.txt"
+    assert failedstep.read_lines(path)[0].startswith("Step 3")
+
+
+def test_zip_oversize_corrupt_encrypted_and_unsafe_members():
+    tmp = Path(tempfile.mkdtemp())
+    big = _zip(tmp / "big.zip", {"report.html": "<tr><td>1</td><td>x</td><td>FAIL</td></tr>" + " " * (6 * 1024 * 1024)})
+    steps, failed, warnings, member = failedstep.read_steps(big)
+    assert steps == [] and failed is None and member is None
+    assert len(warnings) == 1 and warnings[0].startswith("steps-file을 읽지 못했다(5 MiB 초과)")
+    bad = tmp / "bad.zip"
+    bad.write_bytes(b"PK\x03\x04junk")
+    steps, failed, warnings, member = failedstep.read_steps(bad)
+    assert steps == [] and len(warnings) == 1 and "zip" in warnings[0]
+    enc = _zip(tmp / "enc.zip", {"report.html": REPORT_HTML, "other.txt": "1 | 켜기 | FAIL\n"}, flag_encrypted=True)
+    steps, failed, warnings, member = failedstep.read_steps(enc)
+    assert steps == [] and member is None and len(warnings) == 1 and "암호화" in warnings[0]    # 낮은 단계 후보로 넘어가지 않는다
+    unsafe = _zip(tmp / "unsafe.zip", {"../x.html": REPORT_HTML, "/abs/report.html": REPORT_HTML,
+                                       "ok/steps.csv": "1,켜기,PASS\n2,확인,FAIL\n"})
+    steps, failed, warnings, member = failedstep.read_steps(unsafe)
+    assert member == "ok/steps.csv" and failed == 1 and steps[1]["name_raw"] == "확인"
+    only_unsafe = _zip(tmp / "only.zip", {"../x.html": REPORT_HTML})
+    assert failedstep.read_steps(only_unsafe)[0] == []
+    # 해당 파일 없음
+    none = _zip(tmp / "none.zip", {"shot.png": b"x"})
+    assert failedstep.read_steps(none)[2][0].startswith("steps-file을 읽지 못했다(")
+    res, warns = failedstep.resolve(None, None, bad, [], _masker())
+    assert res is None and len(warns) == 1
+
+
+def test_resolve_falls_back_to_fail_row_after_patterns():
+    tmp = Path(tempfile.mkdtemp())
+    html = tmp / "report.html"
+    html.write_text(REPORT_HTML, encoding="utf-8")
+    res, warns = failedstep.resolve(None, None, html, [], _masker())                 # 패턴 없음 → 표의 FAIL 스텝
+    assert res == {"text": "7 | 데이터 연결 확인", "source": "steps_file"} and warns == []
+    # 패턴이 맞으면 패턴이 먼저다(옛 동작)
+    res, _ = failedstep.resolve(None, None, html, [r"(?i)^\d+\s*\|\s*(?P<step>.+?)\s*\|\s*FAIL"], _masker())
+    assert res == {"text": "데이터 연결 확인", "source": "steps_file"}
+    paste = tmp / "p.txt"
+    paste.write_text(PASTE, encoding="utf-8")
+    assert failedstep.resolve(None, None, paste, [], _masker())[0]["text"] == "7 | 데이터 연결 확인"
+    assert failedstep.resolve("직접", None, html, [], _masker())[0]["source"] == "cli"      # 우선순위는 그대로
+    # extract는 site-defaults의 failed_step_patterns가 먼저다(붙여넣기 줄 "Step 7: … FAIL"에 맞는다)
+    out = _extract(_raw(tmp), "--steps-file", paste)
+    assert out["failed_step"] == {"text": "데이터 연결 확인", "source": "steps_file"}
+
+
 def test_raw_cli_text_never_reaches_any_job_file():
     from workspace import Workspace
     ws = Workspace()
