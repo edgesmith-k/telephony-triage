@@ -16,7 +16,7 @@
 - 모드: **사외 초안**. 완료 Phase: **D0, 1~13**. RF-0·RF-1 완료.
 - 마지막 전체 테스트: **465개 통과** (10/04, `aaf5a17`, Ubuntu·Py3.11). Windows에서는 도구 셸 stdin을 `/dev/null`로, PATH 앞에 실제 Python과 `python3` shim(Store 별칭이면 gh 스텁·git hook이 9009로 실패).
 - 사내 확인 항목: `TODO(SITE)` **73곳**(S22 12곳 추가) — `python3 tools/list_site_todos.py`. `REVIEW-OPEN.md` 0건.
-- 안내서(사람용 HTML, 2단계까지 반영): https://claude.ai/artifact/1jov1Et4dQUMauFr6aoxWG (레포에는 없음)
+- 안내서(사람용 HTML, 10/04 1~6단계 반영): `docs/telephony-triage-guide.html` (공유본 https://claude.ai/artifact/1jov1Et4dQUMauFr6aoxWG)
 
 ### 10/04 세션에서 끝낸 것 (모두 push, **사용자 확인 대기**)
 
@@ -37,7 +37,7 @@
 | ☐ 1 | **보안 검토** — 10/04 세션 변경분(`93ef099..HEAD`)에 `/security-review` | zip 처리(크기·경로·암호화), 붙여넣은 스텝 파일(`WD/<KEY>/steps-pasted.txt`)이 `discard` 때 지워지는지, 새 입력 마스킹, 첨부 속 지시문 |
 | ☐ 2 | **사용자 확인 받기** — 위 표와 RF-2 | 확인되면 표에서 "확인 대기"를 지운다 |
 | ☐ 3 | **스킬 행동 평가 재실행 + 새 기능 eval 추가** (사용자 결정: 사외 vs 사내 S-2, 토큰 큼) | 탐색 분석·실패 스텝·기준점·붙여넣기 흐름, Phase 13 실패 4건 수정분. `tests/skill_evals/README.md` |
-| ☐ 4 | **HTML 안내서 갱신** — 1~6단계 반영 | 위 링크를 Artifact `read`로 받아 고친다 |
+| ✅ 4 | **HTML 안내서 갱신** — 1~6단계 반영 | 10/04 완료. 이후 기능이 바뀌면 `docs/telephony-triage-guide.html`도 고친다 |
 | ☐ 5 | **성능** — `db_pr` 등이 하위 스크립트를 같은 프로세스에서 호출 | PR 한 건당 수십 초 단축. 리뷰 §Q "서브프로세스 재진입". 종료 코드 계약 유지 |
 | ☐ 6 | **유지보수** — `db_add.py`(1,373줄) op별 분할 | 리뷰 §Q. 동작 동일 |
 | ☐ 7 | **트리거 개선** — 자연어 호출 recall 26~33% | SKILL.md 8,191/8,192바이트: description을 늘리면 본문을 줄여야 함. 지금은 슬래시 커맨드로 쓰면 문제없음 |
