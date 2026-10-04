@@ -29,7 +29,7 @@
 | ✅ | **Phase 13** — 행동 평가 45개 + 수동 채점, 트리거 테스트, 빈 플러그인 실험(S1) | `11-phases.md` Phase 13, `tests/skill_evals/README.md`, 이력 파일 "Phase 13 행동 평가 결과" | 10/01~03 앞당겨 실행(사용자 결정). 45개 실행: 41 통과·4 실패, S1 ✅, 트리거 recall 낮음. ✅ 완료(10/03, 실패 4건·트리거는 위 "막힌 것") |
 | 4 | **RF-2** 반입 도구 강화(staging·rollback) + `check_boundary.py` + 사외 CI. `export_external.py`는 만들지 않음(결정 a) | 리뷰 §U RF-2 | 구현(10/03), **사용자 확인 대기**: `check_boundary.py`, `import_draft --check-boundary`·staging, `plugin/schemas/`·`sync_schemas.py`, `external.yml`(push 뒤 첫 실행 확인), eval 5·22·29·44. pre-commit 연결은 안 함 |
 | 4a | **탐색 분석(Step 5-2)** — 후보 없음·원인 미확인이면 `timeline.md` + Claude 가설(리포트 보조, 점수 무관) | `07 §Step 5-2`, `reference/explore.md` | 구현(10/04, 사용자 요청), **사용자 확인 대기**. 행동 eval은 추가 안 함(S-2 또는 사용자 결정) |
-| 4b | **실패 스텝(선택 입력)** — 필드·설명·첨부의 한 줄, 보조 정보(점수 무관) | `07 §Step 2`, `14 S22` | 구현(10/04), 사용자 확인 대기 |
+| 4b | **실패 스텝(선택 입력)** — 한 줄, 보조 정보(점수 무관) | `07 §Step 2`, `14 S22` | 구현(10/04). 앵커·우선 유형 구현, 사용자 확인 대기 |
 | 5 | **반입** — `15 §15.4` 체크리스트(`check_boundary` 포함), `make_db_skeleton.py`, `git archive` 묶음 | `GUIDE.md` §3 "반입 전", §4 | 그 뒤 사내 S-1~S-7 |
 | — | RF-3~RF-9, HANDOFF I3~I6(RF에 흡수) | 리뷰 §U | 반입 뒤 |
 

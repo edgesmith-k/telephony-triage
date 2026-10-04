@@ -454,3 +454,10 @@
 - 분석 보조: `triage.py`(같은 프로세스에서 마스킹, trace·state에 원문 없음, report·timeline 머리·후보 없음 힌트·request_hash), `match_signatures` 키워드 보너스 입력, `offline_eval` 라벨셋 `failed_step`.
 - 누적: Jira 기록 `failed_step`(≤200자, v1 스키마에 직접 추가 — 반입 전이라 버전을 올리지 않음, `06 §6.4`), `db_add`·`db_lint`·`db_search`, 카테고리 README "자주 실패한 스텝".
 - 테스트: `tests/test_failed_step.py`, `test_jira_fields.py`, `test_triage.py`, `test_match_signatures.py`, `test_db_build.py`, `test_db_lint.py`, `test_db_search.py`, `test_db_pr.py`.
+
+## 실패 스텝 기준 원인 파악 (2026-10-04)
+
+- 실패 스텝을 분석의 앵커로 쓴다: **어디를(시간 범위)·무엇을(우선 유형)** 정하고, **왜(S/C)** 는 로그 시그니처가 그대로 정한다. 모두 선택이며 쓰지 않으면 출력은 이전과 바이트 단위로 같다(trace.jsonl에 `3-markers` 한 줄이 더해질 수 있다).
+- 구간: `parse_logcat.py markers`(스텝 마커 줄을 마스킹해서 수집, 패턴은 `site-defaults.yaml` `failed_step.marker_patterns`에서만)와 `parse --between`. `common/stepanchor.py`(FAIL 선택·시작 대체·창·clamp·steps-file 시각), `failedstep.find_line/group_key`. `triage.py` `step_anchor`: 앵커 우선순위 `anchor=off` > 로그 마커 > steps-file > Jira 시각 > 증상 시각 스캔, 로그 범위 밖이면 폐기하고 다음 출처로, Jira 시각과 `disagree_minutes` 넘게 다르면 경고, 근접 중심은 `JOB/match_meta.json`(`jira_meta.json`은 그대로), `analysis.step_anchor`·report·timeline·`request_hash`.
+- 순위: `match_signatures` 스텝 기준 우선 유형(`bonus.step`, `step_focus`). 같은 스텝 Jira 기록이 `step_focus.min_records`건 이상이거나 `step_focus.map`에 맞으면 순위 키에만 `step_focus_bonus_max`(기본 0.05)를 더한다. score·confidence·S·C·회귀·검증은 불변. `issue-db.config.yaml`에 `scoring.step_focus_bonus_max`·`step_focus`(v1 직접 추가 — 반입 전이라 버전을 올리지 않음, `06 §6.4`), `db_lint` 검사.
+- 테스트: `tests/test_step_anchor.py`, 합성 시나리오 `step-anchor`, 변형 DB `issue-db-step-focus`, `test_db_lint.py`.

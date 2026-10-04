@@ -294,7 +294,7 @@ claude mcp list               # Jira MCP 사용자 범위 등록 확인
 ### 커맨드 한눈에
 | 커맨드 | 언제 |
 |---|---|
-| `analyze <JIRA> [로그...] [--code <프로필>] [--dry-run] [--failed-step <한 줄>] [--steps-file <파일>] [--analyzer \| --no-analyzer] [--explore \| --no-explore]` | 로그로 이슈 분석하고 분류·기록. 실패 스텝은 선택 보조 정보. 맞는 규칙이 없으면 Claude 탐색 분석(가설)을 할지 묻는다 |
+| `analyze <JIRA> [로그...] [--code <프로필>] [--dry-run] [--failed-step <한 줄>] [--steps-file <파일>] [--analyzer \| --no-analyzer] [--explore \| --no-explore]` | 로그로 이슈 분석하고 분류·기록. 실패 스텝은 선택 보조 정보이고, 시험 자동화 마커나 steps-file의 스텝 시각이 있으면 그 시각을 분석 범위의 기준으로 쓴다(`--answer anchor=off`로 끔). 맞는 규칙이 없으면 Claude 탐색 분석(가설)을 할지 묻는다 |
 | `record <JIRA> [--cause <ID> \| --new-cause <유형> \| --new-type <카테고리> \| --unresolved <유형>] [--fixture <로그>] [--resolved-fixture <로그>] [--failed-step <한 줄>] [--steps-file <파일>]` | 직접 해결한 이슈를 히스토리만 기록 |
 | `search <키워드\|JIRA\|ID>` | 비슷한 이슈가 있었는지 찾기 |
 | `fix-submitted <원인 ID> --ref <CL> --fixed-in <브랜치>[:<빌드>]` | 수정 CL이 머지됐을 때 |
@@ -311,6 +311,7 @@ claude mcp list               # Jira MCP 사용자 범위 등록 확인
 1. 이슈 DB 최신화 (분석은 별도 스냅샷에서, 내 clone은 main이고 깨끗할 때만 fast-forward)
 2. Jira 읽기(텍스트는 즉시 마스킹, 원문은 저장 안 함) → 발생 시각(없으면 로그에서 증상 시각 후보 제시) → Android 버전 확인 → 코드 경로 선택(16/17 프로필 추천)
 3. 로그 파싱(bugreport를 주면 logcat 섹션만 추출. 발생 시각이 로그 범위 밖이면 "로그 범위 밖"으로 따로 알림, 듀얼 SIM은 슬롯별로 판별) → 시그니처 매칭(맞는 유형이 없으면 "후보 없음" 절에 설명 기반 유사 후보와 타임라인 요약) → 코드 분석 → (data면) 분석 스킬 심층 분석을 할지 물어봄 (토큰 추가 사용). 후보 없음·원인 미확인이면 Claude 탐색 분석(타임라인·소스로 가설 1~3개, 점수·분류에는 안 씀)을 할지 물어봄
+   - **실패 스텝 기준 분석(선택)**: 실패 스텝이 **어디를(시간 범위)·무엇을(우선 유형)** 볼지 정하고, **왜(원인 S/C)** 는 여전히 로그 시그니처가 정한다. 로그에 `TestRunner: Step 5 FAIL` 같은 마커가 있거나(`failed_step.marker_patterns`, 사내 표기는 S22) `--steps-file`에 스텝 시각이 있으면 Jira 발생 시각 대신 스텝이 실패한 시각 구간으로 분석한다. Jira 시각과 많이 다르면 경고하고 리포트에 둘을 함께 보인다. 구간이 너무 좁아 원인이 안 잡히면 `--answer anchor=off`로 다시 실행한다. 같은 스텝이 쌓인 유형(또는 `step_focus.map`)은 순위에서만 우선한다(점수·S/C 불변). 마커·steps-file이 없으면 이전과 같다.
 4. 리포트: 분류 후보, 근거 로그, 원인, **해결책**, 수정 상태(이미 수정됨/회귀 의심), 기존 사례 Jira
 5. "이 분류가 맞나요?" → 예 / 다른 원인 / 새 원인 / 새 유형 / 원인 미확정
 6. 분석하는 동안 main이 바뀌어 내 계획이 건드리는 원인이 먼저 수정됐으면(drift) 항목마다 어느 값을 쓸지 물어봄
