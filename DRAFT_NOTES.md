@@ -33,7 +33,9 @@
 | R9 verify-fix 예외 | 결정 (e)로 07·reference·`CLAUDE.md §12`를 05에 맞춤(코드 변경 없음) | `05 §5.12 (2)`, `07 §verify-fix` |
 | RF-2 | 반입 staging·rollback, `check_boundary`, 사외 CI | 리뷰 §U RF-2 (10/03부터 확인 대기) |
 
-## 다음 할 일 (위에서부터)
+## 다음 할 일
+
+**순서(사용자 지시 10/04): 5 → 6 → 8 → 9 → 10 → 7 → 3 → 2.** 3·7(실제 Claude 실행)은 마지막, 2는 끝에서 한꺼번에. 10의 반입 태그 push는 묻는다.
 
 | ☐ | 항목 | 메모 |
 |---|---|---|
@@ -45,7 +47,7 @@
 | ☐ 6 | **유지보수** — `db_add.py`(1,373줄) op별 분할 | 리뷰 §Q. 동작 동일 |
 | ☐ 7 | **트리거 개선** — 자연어 호출 recall 26~33% | SKILL.md 8,191/8,192바이트: description을 늘리면 본문을 줄여야 함. 지금은 슬래시 커맨드로 쓰면 문제없음 |
 | ☐ 8 | **R7 근거 출처**, **R15 대용량 로그 처리** (R9·R11은 10/04 완료) | `docs/development/PLUGIN_IMPROVEMENT_HANDOFF.md`. R7은 RF-8 전제 |
-| ☐ 9 | **`CLAUDE.md` 축소(≤4KB, §12 이동)** — 사용자 결정 대기 | 결정 전에는 건너뛴다 |
+| ☐ 9 | **`CLAUDE.md` 축소(≤4KB, §12 이동)** — 진행 결정(10/04) | §12는 옮겨서 링크 |
 | ☐ 10 | **반입** — `15 §15.4` 체크리스트 재실행: `check_boundary --mode external`, `sync_schemas --check`, `make_db_skeleton.py`(새 키 `step_focus`·`step_events` 확인), `list_site_todos`, `git archive` 묶음 | `GUIDE.md` §3 "반입 전". 1~2는 반입 전에 필수, 3~9는 반입을 막지 않는다 |
 
 반입 뒤(사외 트랙): RF-3 전에 **`common/events.py`**(RF-1에서 빠짐) → RF-3 → RF-4 → RF-5(oFono), RF-6 → RF-7 → RF-8(품질 게이트·R7 필요), RF-9. 웹 UI는 사용자 결정으로 보류(RF-6·7 뒤 후보).
