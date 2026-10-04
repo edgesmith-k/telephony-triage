@@ -26,10 +26,10 @@
 | ✅ | **리뷰** — RF 계획 외부 리뷰 | 리뷰 문서 머리 "외부 리뷰 결과" | 완료(2026-10-01). 반영 내역은 RF-0·RF-1·RF-2 행에 들어감 |
 | 1 | **RF-0** R1~R11 안전·정확성·의존성 + 재현 테스트·session 루트 | HANDOFF R1~R6·I0~I2, 리뷰 §U RF-0·머리 "외부 리뷰 결과" R7~R11 | ✅ 완료. 남은 격리 테스트·07 R6는 RF-1 때 정리 |
 | 2 | **RF-1** `triage.py` driver + `SKILL.md` ≤8KB + 커맨드 보일러플레이트 + 외부 리뷰 토큰 항목 | 리뷰 §U RF-1·§V 1·2 | ✅ 완료(10/01). 토큰 실측(eval 1): Bash 20회·입력 0.91M·출력 17k. **남음**: `CLAUDE.md` ≤4KB(사용자 결정), R7(후속) |
-| ✅ | **Phase 13** — 행동 평가 45개 + 수동 채점, 트리거 테스트, 빈 플러그인 실험(S1) | `11-phases.md` Phase 13, `tests/skill_evals/README.md`, 이력 파일 "Phase 13 행동 평가 결과" | 10/01~03 앞당겨 실행(사용자 결정). 45개 실행: 41 통과·4 실패, S1 ✅, 트리거 recall 낮음. ✅ 완료(10/03, 실패 4건·트리거는 위 "막힌 것") |
-| 4 | **RF-2** 반입 도구 강화(staging·rollback) + `check_boundary.py` + 사외 CI. `export_external.py`는 만들지 않음(결정 a) | 리뷰 §U RF-2 | 구현(10/03), **사용자 확인 대기**: `check_boundary.py`, `import_draft --check-boundary`·staging, `plugin/schemas/`·`sync_schemas.py`, `external.yml`(push 뒤 첫 실행 확인), eval 5·22·29·44. pre-commit 연결은 안 함 |
+| ✅ | **Phase 13** — 행동 평가 45개 + 수동 채점, 트리거 테스트, 빈 플러그인 실험(S1) | `11-phases.md` Phase 13, `tests/skill_evals/README.md`, 이력 파일 "Phase 13 행동 평가 결과" | 10/01~03 앞당겨 실행(사용자 결정). 41 통과·4 실패, S1 ✅, 트리거 recall 낮음. ✅ 완료(10/03, 위 "막힌 것") |
+| 4 | **RF-2** 반입 도구 강화(staging·rollback) + `check_boundary.py` + 사외 CI. `export_external.py`는 만들지 않음(결정 a) | 리뷰 §U RF-2 | 구현(10/03), **사용자 확인 대기**: `check_boundary.py`, `import_draft --check-boundary`·staging, `plugin/schemas/`, `external.yml`(push 뒤 첫 실행 확인), eval 5·22·29·44. pre-commit 연결 안 함 |
 | 4a | **탐색 분석(Step 5-2)** — 후보 없음·원인 미확인이면 `timeline.md` + Claude 가설(리포트 보조, 점수 무관) | `07 §Step 5-2`, `reference/explore.md` | 구현(10/04, 사용자 요청), **사용자 확인 대기**. 행동 eval은 추가 안 함(S-2 또는 사용자 결정) |
-| 4b | **실패 스텝(선택 입력)** — 한 줄, 보조 정보(점수 무관) | `07 §Step 2`, `14 S22` | 구현(10/04). 앵커·우선 유형 구현, 사용자 확인 대기 |
+| 4b | **실패 스텝(선택 입력)** — 보조 정보(점수 무관) | `07 §Step 2·3`, `14 S22` | 구현(10/04). 스텝 순서 앵커(`step_order`)·수동 시계 차·html/zip/붙여넣기·`step_events`, 사용자 확인 대기 |
 | 5 | **반입** — `15 §15.4` 체크리스트(`check_boundary` 포함), `make_db_skeleton.py`, `git archive` 묶음 | `GUIDE.md` §3 "반입 전", §4 | 그 뒤 사내 S-1~S-7 |
 | — | RF-3~RF-9, HANDOFF I3~I6(RF에 흡수) | 리뷰 §U | 반입 뒤 |
 

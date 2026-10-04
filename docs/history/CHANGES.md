@@ -461,3 +461,13 @@
 - 구간: `parse_logcat.py markers`(스텝 마커 줄을 마스킹해서 수집, 패턴은 `site-defaults.yaml` `failed_step.marker_patterns`에서만)와 `parse --between`. `common/stepanchor.py`(FAIL 선택·시작 대체·창·clamp·steps-file 시각), `failedstep.find_line/group_key`. `triage.py` `step_anchor`: 앵커 우선순위 `anchor=off` > 로그 마커 > steps-file > Jira 시각 > 증상 시각 스캔, 로그 범위 밖이면 폐기하고 다음 출처로, Jira 시각과 `disagree_minutes` 넘게 다르면 경고, 근접 중심은 `JOB/match_meta.json`(`jira_meta.json`은 그대로), `analysis.step_anchor`·report·timeline·`request_hash`.
 - 순위: `match_signatures` 스텝 기준 우선 유형(`bonus.step`, `step_focus`). 같은 스텝 Jira 기록이 `step_focus.min_records`건 이상이거나 `step_focus.map`에 맞으면 순위 키에만 `step_focus_bonus_max`(기본 0.05)를 더한다. score·confidence·S·C·회귀·검증은 불변. `issue-db.config.yaml`에 `scoring.step_focus_bonus_max`·`step_focus`(v1 직접 추가 — 반입 전이라 버전을 올리지 않음, `06 §6.4`), `db_lint` 검사.
 - 테스트: `tests/test_step_anchor.py`, 합성 시나리오 `step-anchor`, 변형 DB `issue-db-step-focus`, `test_db_lint.py`.
+
+## 스텝 순서로 실패 구간 정렬 (2026-10-04)
+
+- **버그 수정**: `triage.py`가 steps-file(시험 장비) 시각을 단말 logcat 시각으로 그대로 써서, 시계 차가 있으면 로그 범위 안의 엉뚱한 구간이 조용히 잡혔다. 이제 시계 차(`--clock-offset`·`failed_step.clock_offset`)가 있을 때만 장비 시각을 쓰고, 모르면 경고(`장비 시각 미사용: 시계 정렬 불가(시계 차 모름)`)하고 쓰지 않는다. `stepanchor.parse_offset`, `step_anchor.clock {mode: manual|none}`. Jira 시각 불일치 경고는 구간을 바꾸지 않는다(steps_file·step_order에는 시계 차 힌트가 붙는다).
+- 앵커 우선순위: `anchor=off` > `log_marker`(기본 꺼짐: `marker_patterns: []`, 실제 logcat에는 마커가 없다) > `steps_file`(수동 시계 차 필요) > **`step_order`(신규, 기본)** > `jira` > `symptom_scan`. 실패 스텝 문구는 모든 경우에 우선 유형·키워드·힌트에 쓴다.
+- **스텝 목록 읽기**: `failedstep.read_source`(txt/csv/tsv·html·zip), `parse_steps`·`read_steps`·`label`. zip은 메모리에서만 읽고 후보 하나(`report.html` > 다른 html > csv/tsv/txt)만 고른다(절대·`..`·암호화·5 MiB 초과 거부). 시험은 첫 FAIL에서 멈추므로 첫 FAIL 행이 실패 스텝이다. **`resolve()` 변경**: `failed_step_patterns`가 먼저 맞고, 맞는 줄이 없으면 표의 FAIL 행(`번호 | 이름`, 출처 `steps_file`)으로 대신한다(표 머리가 있으면 그 앞의 요약 표는 패턴 검색에서 뺀다). `site-defaults`의 `failed_step`에 `clock_offset`·`steps_status`·`steps_columns`·`order` 추가(YAML `no`는 따옴표).
+- **스텝 순서 정렬**: 이슈 DB `issue-db.config.yaml`의 `step_events`(메인테이너 관리, 순서 있는 규칙 목록: `event`·`ril`·`match`·`observable: false`)와 `db_lint` 새 코드 `step-event`. `parse_logcat.py markers --step-events`(규칙별 흔적, 라벨만, 스텝 이름은 인자로 안 받음), `stepanchor.order_walk`(가장 이른 흔적·커서 전진, 관측 불가·놓침, 반복 실행·상한 시 앵커 없음). 못 정하면 경고 `스텝 순서 정렬 안 함: <사유> — Jira 발생 시각 기준으로 분석했다`.
+- 커맨드 `analyze`·`record`에 붙여넣기 안내(`WD/<KEY>/steps-pasted.txt` → `--steps-file`)와 `--clock-offset`.
+- 테스트: `tests/test_step_order.py`, `test_step_anchor.py`(장비 시계 어긋남), `test_failed_step.py`(html·zip·붙여넣기), `test_db_lint.py`(`step-event`), 합성 시나리오 `step-order`, 변형 DB `issue-db-step-events`.
+- 미룸: 시계 차 자동 추정, 중첩 zip, MCP 첨부 가져오기(`99-deferred.md`).

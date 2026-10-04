@@ -116,6 +116,8 @@ analyze Step 7에서 새 원인/유형을 계획할 때 아래를 점검하고, 
 
 시험 자동화가 남기는 스텝 마커(`TestRunner: Step 5 FAIL` 등)는 `tags.yaml`에 없는 태그다. `parse`는 목록에 없는 태그의 줄을 버리므로 마커는 별도 서브커맨드 `parse_logcat.py markers`가 백엔드의 줄 레코드에서 직접 찾는다. 패턴은 이슈 DB가 아니라 `site-defaults.yaml`의 `failed_step.marker_patterns`(이름 그룹 `step`·`status`)에서만 읽는다(`02-config.md`, `14-site.md` S22). 절차: 원문 `TAG: msg`에 패턴을 시간 상한(`matcher.pattern_timeout_ms`) 안에서 돌려 맞은 줄만 고르고, 그 줄만 마스킹한 뒤 마스킹된 텍스트에서 그룹을 다시 뽑는다. 출력은 `{ts, step, status: start|pass|fail, tag, msg(≤200)}` 목록(상한 2000)과 로그 범위(`coverage`)다. 마커가 `parse` 이벤트나 시그니처 평가에 들어가지 않으므로 **S/C·회귀·검증에는 영향이 없다**. `parse --between <ISO 시작> <ISO 끝>`은 `--around`/`--full`과 같은 상호 배타 그룹의 명시 구간이다(`input.mode: "between"`).
 
+**`markers --step-events`(스텝 순서 정렬 입력)**: 실제 logcat에는 스텝 마커가 없으므로 시험 절차의 스텝 순서를 로그의 **흔적**과 맞춘다(`07-workflow.md §Step 3`). 이 플래그는 이슈 DB(`--rules`의 상위) `issue-db.config.yaml`의 `step_events`(`02-config.md §5.3`)를 읽어 규칙마다 흔적을 모은다 — **스텝 이름·시험 절차는 인자로 받지 않는다.** 한 번의 `backend.parse`로: `ril` 규칙은 원 레코드의 `rec["ril"]`(요청 이름·방향)을 그대로, `match` 규칙은 모든 `TAG: msg`를 마스커 하나로 마스킹해 `PatternRunner`(시간 상한)로 검색, `event` 규칙은 `postprocess`(마스킹 포함) 이벤트 중 이름과 `fields` 정규식이 맞는 것을 쓴다. 출력은 `step_events: [{rule, ts, seq, label}]`(규칙 번호·UTC 시각·파서 줄 순번·이벤트/요청/태그 이름 — **로그 본문 없음**, `(ts, seq, rule)` 순)이고, 규칙당 1000개·전체 5000개 상한을 넘으면 경고 `step-events-truncated`(`truncated_rules`)와 함께 앞부분만 낸다. 잘못된 규칙은 경고 `step-event-rule`로 건너뛴다. 플래그가 없으면 출력은 이전과 같다. 이 흔적도 `parse` 이벤트·시그니처 평가에 들어가지 않으므로 **S/C·회귀·검증에는 영향이 없다**.
+
 ### 5.11 시그니처 매칭 규칙
 
 #### (1) 시그니처 의미

@@ -91,7 +91,16 @@ v1의 세션 lock(한 번에 한 작업) 대신, 같은 사용자의 여러 세�
 
 ## D. MCP로 Jira 첨부 가져오기 (실패 스텝)
 
-v1의 실패 스텝은 필드·설명·시험 절차 텍스트와 사용자가 준 `--steps-file`에서만 얻는다. 첨부(txt/csv/xlsx)를 Jira MCP로 직접 받으려면 `jira.read_tools`에 허용된 읽기 도구만 쓰고, 받은 파일은 `jira_raw.json`처럼 격리해 `--steps-file` 경로로 넘긴다 (`02-config.md`, 14-site.md S22).
+v1의 실패 스텝은 필드·설명·시험 절차 텍스트와 사용자가 준 `--steps-file`에서만 얻는다. 첨부(txt/csv/xlsx)를 Jira MCP로 직접 받으려면 `jira.read_tools`에 허용된 읽기 도구만 쓰고, 받은 파일은 `jira_raw.json`처럼 격리해 `--steps-file` 경로로 넘긴다 (`02-config.md`, 14-site.md S22). v1은 zip 첨부를 사용자가 직접 받아 `--steps-file`로 줄 때만 읽는다(안의 `report.html` 하나, 메모리에서만).
+
+### D-2. 시계 차 자동 추정
+
+시각이 있는 스텝(시작·종료 시각이 있는 PASS 스텝)의 장비 시각과 로그의 흔적 시각(`step_events`)을 맞춰 장비 시계와 단말 시계의 차를 **자동으로 추정**하는 것은 v1에서 뺐다. v1은 `--clock-offset`/`failed_step.clock_offset`을 사람이 줄 때만 장비 시각을 쓰고, 그 밖에는 스텝 순서(`step_order`)로 구간을 잡는다. 되살리면 추정값을 사용자가 확인한 뒤에만 쓴다.
+
+### D-3. 중첩 zip
+
+첨부 zip 안의 zip은 읽지 않는다(무시). 되살리려면 깊이·총 크기 상한과 같은 항목 선택 규칙을 재귀로 적용한다(`08-safety.md §8.1`).
+
 
 ---
 

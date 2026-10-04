@@ -43,6 +43,7 @@
 - **MCP 응답 원문은 모델 컨텍스트에 넣지 않는다.** Jira `get_issue`·`get_comments` 결과는 PostToolUse hook(`jira_bridge.py`, §9 9번)이 `<work_dir>/<KEY>/jira_raw.json`에 쓰고, 모델에는 마스킹된 요약만 보인다. `triage.py run`이 그 파일을 `jira_fields.py extract --consume`으로 읽고 지운다. 후처리 마스킹은 이미 컨텍스트에 들어간 원문을 되돌릴 수 없기 때문이다. hook 출력 대체가 안 되는 Claude Code 버전이면(S1에서 확인) 스킬이 응답을 그 파일에 저장하는 예전 경로로 돌아간다.
 - `field_map`으로 뽑은 텍스트 필드(요약, 설명, 재현 절차, 코멘트)는 Step 2에서 읽은 직후 `mask_pii`를 거치고, 이후 단계(리포트, 키워드 보너스, `note` 초안)는 마스킹된 텍스트만 쓴다. 계획 `jira`에는 원문 필드를 두지 않는다 (`contracts.md §작업 계획`).
 - **실패 스텝**(`--failed-step` 원문·`--steps-file` 내용)의 원문은 `trace.jsonl`·`triage-state.json` 같은 상태·추적 파일에 쓰지 않는다. `triage.py`가 같은 프로세스 안에서 마스킹한 뒤에만 `jira.json`·`jira_meta.json`·계획에 남기고, 하위 스크립트 인자에도 원문을 넘기지 않는다.
+  `--steps-file`이 zip이면 **메모리에서만 읽는다**(풀지 않는다 — 항목 선택·크기 상한·절대/`..`/암호화 항목 거부는 `07-workflow.md §Step 2`). 개발자가 붙여넣은 스텝 목록은 `WD/<KEY>/steps-pasted.txt`(work_dir는 700 권한 디렉터리)에 쓰고 `--steps-file`로 넘기며, **커밋하지 않고** 도구가 읽을 때 마스킹한다. 스텝 이름·표 내용은 `parse_logcat markers --step-events`의 인자에 없고(규칙은 이슈 DB 설정에서 읽는다) 출력에는 이름·시각만 있다. 리포트의 zip 멤버 경로는 마스킹해서 쓴다.
 - `note` 초안은 스킬이 마스킹된 요약에서 한 문장으로 만들고 사용자가 확인한다. 사람 이름·고객명은 초안에 넣지 않는다.
 - `db_lint`는 `jira/*.yaml`의 `note`, 원인 본문, `cp_evidence`에 대해서도 원본 식별자 패턴(표의 항목)을 검사한다.
 
