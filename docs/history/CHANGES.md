@@ -440,3 +440,9 @@
 - `plugin/schemas/`(이슈 DB 스키마 사본)와 `tools/sync_schemas.py --check|--write`. 사외 CI `.github/workflows/external.yml`.
 - Phase 13 실패 후속: `triage.py`는 `year_source: jira`인데 Jira 발생 시각이 없으면 연도를 묻지 않고 로그 파일 시각 연도를 임시로 쓰고 경고한 뒤 시각 후보로 간다(`ask`면 선택지 제공) → `07-workflow.md` Step 3 입력 포맷. eval 22 로그를 CALL-001-01 양성 fixture로, eval 29·44 assertion을 현재 SKILL 규칙·`10-skill-eval.md` 설계에 맞춤.
 
+
+## R8 점수 포화 동점 정렬 (2026-10-04)
+
+- `match_signatures.py`: 후보 정렬 키를 `(-score, -(근접+키워드 bonus), 유형, 원인)`으로 바꿨다(`_rank_key`). S=C=1에서 score가 1.0으로 포화해도 발생 시각에 가까운 원인이 앞선다. score·confidence·bonus 값·회귀 모드(bonus 0, ID 순)는 불변. `04-parser-matching.md §5.11 (2)·(4)`, `contracts.md §3.2` 동기화.
+- `triage.py` 리포트: "신뢰도" → "일치 수준 … — 진단 확신도 아님", 1위와 동점인 후보가 있으면 "순위 참고" 줄, 기타 후보는 `(규칙 일치 점수 N)`. `analysis.json` 필드는 불변. `07-workflow.md` Step 4·6 예시, `reference/db-authoring.md` 한 줄.
+- 테스트: `test_full_match_ties_are_ordered_by_proximity`, `test_regress_order_unchanged_by_tiebreak`, `test_triage.py` 리포트 문구.

@@ -802,9 +802,14 @@ class Driver:
             label = {"high": "높음", "medium": "중간", "low": "낮음"}.get(top["confidence"], top["confidence"])
             cause = f"{top['cause']} {top['title']}" if top["cause"] else "원인 미확인"
             lines.append(f"- 분류 후보: {top.get('category')} > {top['type']} > {cause} "
-                         f"(규칙 일치 점수 {top['score']}, 신뢰도 {label}{'' if top['C'] else ', 유형 일치·원인 미확인'})")
+                         f"(규칙 일치 점수 {top['score']}, 일치 수준 {label} — 진단 확신도 아님"
+                         f"{'' if top['C'] else ', 유형 일치·원인 미확인'})")
             lines.append(f"- 근거 로그 (마스킹, 슬롯 phone {','.join(map(str, top['phones'])) or '?'}):")
             lines += [f"  - {e['ts']} {e['tag']} {e['msg']}" for e in top["evidence"]]
+            if (len(cands) > 1 and cands[1]["score"] == top["score"]
+                    and (cands[1]["S"], cands[1]["C"]) == (top["S"], top["C"])):
+                n = sum(1 for c in cands if c["score"] == top["score"])
+                lines.append(f"- 순위 참고: 규칙 일치 점수 동점 후보 {n}개 — 발생 시각 근접·키워드 근거 순으로 정렬했다(원인 확정 아님)")
         else:
             lines.append("- 분류 후보: **후보 없음** (S=1인 유형 없음)")
             hints = r.get("no_candidate") or {}
@@ -832,7 +837,7 @@ class Driver:
             lines.append(f"- 수정 상태: {top.get('fix_status') or '-'} — {top.get('fix_message') or '-'}")
             lines.append(f"- 기존 사례: Jira {top.get('jira_count') or 0}건 ({', '.join(top.get('jira_recent') or []) or '-'})")
             lines.append(f"- 관련 원인: {', '.join(top['related']) or '없음'}")
-        others = [f"{c['cause'] or c['type']} ({c['confidence']}, {c['score']})" for c in cands[1:]]
+        others = [f"{c['cause'] or c['type']} (규칙 일치 점수 {c['score']})" for c in cands[1:]]
         lines.append(f"- 기타 후보: {', '.join(others) or '없음'}")
         if r.get("pending_causes"):
             lines.append("- 참고: 시그니처 없는 기존 원인: " + ", ".join(p["cause"] for p in r["pending_causes"]))

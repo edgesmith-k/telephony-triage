@@ -93,6 +93,7 @@ def test_analysis_is_small_deterministic_and_writes_report_and_trace():
     assert len(raw) <= 4096 and json.loads(raw)["candidates"][0]["cause"] == "DATA-001-01"
     report = (work / "a" / "report.md").read_text(encoding="utf-8")
     assert report.startswith(f"## {items[0]['key']} 분석") and "TODO(LLM)" in report and "DATA-001-01" in report
+    assert "진단 확신도 아님" in report and "신뢰도 " not in report
     trace = [json.loads(line) for line in (work / "a" / "trace.jsonl").read_text(encoding="utf-8").splitlines()]
     scripts = [row.get("script") for row in trace if row.get("script")]
     assert "parse_logcat.py" in scripts and "match_signatures.py" in scripts

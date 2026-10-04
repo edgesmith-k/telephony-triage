@@ -45,7 +45,7 @@
 | R5 High, 구현 결함 | 외부 parser 실패는 warning만 되며 replace는 실패 시에도 backend 이벤트를 제거한다. 검증은 이 warning을 오류로 보지 않는다. | 관측 실패를 C=0으로 해석해 recovery만 남으면 passed 가능. | `S/parse_logcat.py::_run_external/run_parse`, `S/db_regress.py::match_errors`(278), `S/db_verify.py::judge_resolution/judge_fix`(686/717): 필요한 parser의 completeness 확인, 실패는 unknown/환경 오류. `D/05` §5.12, `D/16` §16.3. |
 | R6 High, spec·prompt 결함 | 승인 메시지를 `commit -m`의 큰따옴표 안에 그대로 삽입하도록 지시한다. 외부 텍스트의 instruction 경계도 명시하지 않는다. | 메시지의 shell 메타문자가 코드로 평가될 위험. PII 마스킹·승인 해시로 해결되지 않음. | `K/reference/write-flow.md:103`, `C/sync-pr.md:40`, `D/07` Step 8-6: 메시지 파일 + commit -F 또는 argv helper. add/commit 별도 호출·git hook 유지. Jira/log/source는 데이터로만 취급. |
 | R7 Medium, spec 공백 | backend의 `_file/_line`을 버리고 evidence가 시각·태그 중심이다. cut도 `(ts, tag)`로 앵커를 재탐색한다. | 중복 시각·태그에서 원본 근거 식별과 fixture 선택이 불명확. | backend→derived event→Evaluator→report→`S/parse_logcat.py::_cut_anchors`에 input ID/원본 행/event ID 유지. `D/04` 이벤트 계약, `D/07` Step 6 보완. |
-| R8 Medium, spec 결함 | 기본 S=C=1이면 base=1.0, 보너스는 min(1.0)에서 포화된다. 피드백이 없으면 여러 원인이 ID 순 동점이며 이를 신뢰도로 표시한다. | 시간 근접성이 순위에 반영되지 않고 규칙 일치가 원인 확정처럼 보인다. | `S/match_signatures.py::_candidate`, `K/SKILL.md` Step 6: 규칙 일치 점수와 진단 신뢰도 분리. ranking 변경은 합의 후 `D/04` §5.11 동기화. |
+| R8 Medium, spec 결함 (완료: 정렬 키 동점 해소(2026-10-04)) | 기본 S=C=1이면 base=1.0, 보너스는 min(1.0)에서 포화된다. 피드백이 없으면 여러 원인이 ID 순 동점이며 이를 신뢰도로 표시한다. | 시간 근접성이 순위에 반영되지 않고 규칙 일치가 원인 확정처럼 보인다. | `S/match_signatures.py::_candidate`, `K/SKILL.md` Step 6: 규칙 일치 점수와 진단 신뢰도 분리. ranking 변경은 합의 후 `D/04` §5.11 동기화. |
 | R9 Medium, spec 모호성 | command/reference는 흔적 없으면 중단, Python과 reference의 다른 줄은 비코드 원인에 user_confirmation_required 예외를 허용한다. | 동일 입력에서 서로 다른 안내·불필요한 차단. | `C/verify-fix.md`, `K/reference/verify.md:91~93`, `S/db_verify.py::judge_fix`; `D/05` §5.12와 `D/07` verify-fix의 충돌을 유형별 분기로 먼저 정리. |
 | R10 Medium, prompt 결함 | validate는 config clone을 선택한 뒤 경로 없는 git fetch를 지시하고 base_branch 설정 위치도 잘못 적는다. | cwd가 plugin repo면 다른 remote를 fetch, DB의 오래된 ref/잘못된 base 검사. | `C/validate.md:20~22`: resolved DB로 git -C/--db 통일, 사용자 config의 issue_db.base_branch 사용. `D/contracts` §3.2. |
 | R11 Medium, 지식 결함 | RIL 요청 부재=DNC 차단, 시계 점프=재부팅/NITZ로 단정한다. | 누락·필터·시간 공백을 원인 증거로 오해. | `K/reference/ril-requests.md:41`, `log-tags.md:62`: 관측 사실·추론·전제·반례 구분. `D/07` Step 3/5/6. |
@@ -111,7 +111,7 @@ R14~R15. 반복 분석·자연어 진입·대용량 비용을 측정하고 단�
 
 Completed: RF-0 R1~R11 결함별 수정·커밋 및 session 임시 플러그인 루트 적용(남은 격리 테스트는 RF-1 커밋에서 해제). RF-1(I3) driver·SKILL·커맨드·외부 리뷰 토큰 항목. 이 문서 원래 R7~R11과 외부 리뷰의 RF-0 R7~R11은 번호 체계가 다르다. 원본 행 provenance 등 RF-0에 포함되지 않은 요구는 완료로 간주하지 않는다.
 
-Remaining (이 문서 원래 번호): R7 provenance, R8 점수/신뢰도, R9 verify-fix 예외, R11 지식 단정, R12 context 중복, R13 실제 통합 평가, R14 UX, R15 규모 개선. 원래 R10(validate 대상)은 RF-0 R11로 수정했다.
+Remaining (이 문서 원래 번호): R7 provenance, ~~R8 점수/신뢰도~~(정렬 키 동점 해소(2026-10-04)), R9 verify-fix 예외, R11 지식 단정, R12 context 중복, R13 실제 통합 평가, R14 UX, R15 규모 개선. 원래 R10(validate 대상)은 RF-0 R11로 수정했다.
 
 ## Next Actions
 

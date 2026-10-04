@@ -149,7 +149,8 @@ score = min(1, base + bonus)
 feedback_weight가 켜져 있고 해당 시그니처 표본 ≥ min_samples면: score × (0.5 + 0.5 × 수락률)
 ```
 
-- 신뢰도: `score ≥ confidence.high` 높음, `≥ confidence.medium` 중간, 그 외 낮음.
+- 정렬 = score 내림차순, 동점은 bonus(근접+키워드) 합 내림차순 → 유형·원인 ID. `min(1, …)` 때문에 S=C=1에서 점수가 포화하므로 bonus는 점수를 올리지 못하고 동점 정렬에만 쓰인다.
+- 신뢰도: `score ≥ confidence.high` 높음, `≥ confidence.medium` 중간, 그 외 낮음. `confidence`는 score를 구간으로 나눈 규칙 일치 수준이며 진단 확신도가 아니고 자동 게시 근거로 쓰지 않는다(`ARCHITECTURE_REVIEW` 결정 (b)).
 - 증상만 충족(S=1, C=0)하면 "유형 일치, 원인 미확인" 후보로 표시한다.
 - `status`가 `active`가 아닌 유형과 원인은 후보에서 제외한다.
 - 수락률 = (그 시그니처가 **1위로 제시된** 피드백 중 `decision: accepted`인 건수) / (그 시그니처가 1위로 제시된 피드백 건수). 2위 이하로 제시된 경우는 분모에 넣지 않는다. `decision: manual`(수동 기록)은 제시된 후보가 없으므로 집계하지 않는다 (`06-collaboration.md §6.5`).
@@ -164,7 +165,7 @@ feedback_weight가 켜져 있고 해당 시그니처 표본 ≥ min_samples면: 
 **회귀·검증 모드** (`match_signatures.py --regress`)
 - 분석 범위 = **fixture 파일 전체** (발생 시각 기준으로 자르지 않는다).
 - 원인 평가 = **모든 active 원인의 C를 독립 평가** (위 (1) 원인 평가 범위).
-- bonus = **0** (proximity, keyword 모두).
+- bonus = **0** (proximity, keyword 모두). 그래서 (2)의 동점 정렬이 적용되지 않으며 후보 순서는 이전과 같다(ID 순).
 - 피드백 가중치 **끔** (`--no-feedback-weight` 포함). 피드백이 쌓여도 규칙 변경 없이 회귀 결과가 바뀌지 않게 하기 위해서다.
 - **판정은 S/C 값만으로 한다.** 점수(S=1, C=1 → 1.0 / S=0, C=1 → 0.6 / S=1, C=0 → 0.4)와 신뢰도는 결과표의 참고 값이고 판정에 쓰지 않는다. `scoring` 값(`cause_weight`, `confidence`)을 바꿔도 회귀·검증 결과가 바뀌지 않게 하기 위해서다 (`contracts.md §fixture` 기대값, `05-verification.md` R2·R3).
 - `db_regress`, `db_verify`(rules, resolution, fix)는 항상 이 모드를 쓴다.

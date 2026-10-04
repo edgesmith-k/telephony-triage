@@ -16,6 +16,7 @@
   분석 범위 = 파일 전체, bonus 0, 피드백 가중치 끔. 판정은 S/C 값만 쓰고 점수는
   참고 값이다. 시간 상한을 넘긴 시그니처(`errors`)는 호출자(`db_regress`·`db_verify`)가
   실패로 본다.
+- 후보 정렬: 같은 score 후보는 bonus 합(근접+키워드) 내림차순, 다음 ID 순. 회귀 모드는 bonus가 0이라 ID 순.
 
 `--jira-meta` (분석 모드, 선택): `{key, occurred_at, sw, summary, description}`.
 `occurred_at`은 타임존 있는 ISO 시각, 텍스트 필드는 마스킹된 것이어야 한다.
@@ -343,7 +344,7 @@ def match(events_doc: dict, db: issuedb.IssueDb, compiled: dict, *, regress: boo
         if own:
             evaluator.close()
 
-    candidates.sort(key=lambda c: (-c["score"], c["type"], c["cause"] or ""))
+    candidates.sort(key=_rank_key)
     omitted = None
     if top:   # --top N: 후보 N개, 유형·원인은 충족된 것만, pending 원인 N개 (판정 목록 전체는 --top 0)
         kept_types = [t for t in types_out if t["S"]]
@@ -369,6 +370,11 @@ def match(events_doc: dict, db: issuedb.IssueDb, compiled: dict, *, regress: boo
     if omitted is not None:
         result["omitted"] = omitted
     return result
+
+
+def _rank_key(c: dict) -> tuple:
+    """(-score, -bonus 합, 유형, 원인): 점수 동점은 근접+키워드 근거로 정렬한다."""
+    return (-c["score"], -round(c["bonus"]["proximity"] + c["bonus"]["keyword"], 4), c["type"], c["cause"] or "")
 
 
 def _candidate(db, itype, cause, S, C, sym, res, jira, occurred, half, scoring, use_bonus,
