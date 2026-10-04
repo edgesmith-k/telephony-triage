@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Phase 11 완료 기준 확인: 월간 리뷰와 통계 (11-phases.md Phase 11, 06-collaboration.md §6.6·§6.7).
 
-- `tests/fixtures/issue-db-review/`(`tests/helpers/make_variant_dbs.py`가 만든다)에 일부러 넣은 케이스를
+- `issue-db-review`(`tests/helpers/make_variant_dbs.py`가 테스트 때 만든다, `runner.variant_db()`)에 일부러 넣은 케이스를
   `db_review.py`가 모두 잡는지 본다. 기준일은 `--as-of 2026-10-20`.
 - 방치 기간(해결책 미검증, 수정 검증 대기, Jira 없는 원인의 나이)은 git 이력이 근거라서, 날짜를 지정한 커밋으로
   이력을 만든 레포에서 본다.
@@ -21,9 +21,9 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "tests" / "helpers"))
 
-from runner import copy_db, edit, run, run_json, tmp  # noqa: E402
+from runner import copy_db, edit, run, run_json, tmp, variant_db  # noqa: E402
 
-REVIEW_DB = REPO / "tests" / "fixtures" / "issue-db-review"
+REVIEW_DB = variant_db("issue-db-review")
 AS_OF = "2026-10-20"
 DATA = "data/DATA-001-no-setup-data-call"
 DATA2 = "data/DATA-002-legacy-evaluation"

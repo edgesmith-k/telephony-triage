@@ -22,13 +22,12 @@ import yaml
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "tests" / "helpers"))
 
-from runner import SAMPLE, copy_db, edit, git, run, run_json  # noqa: E402
+from runner import SAMPLE, copy_db, edit, git, run, run_json, variant_db  # noqa: E402
 from workspace import Workspace  # noqa: E402
 
-FIX = REPO / "tests" / "fixtures"
 DATA = "data/DATA-001-no-setup-data-call"
 DATA2 = "data/DATA-002-sim-not-ready"
-SIM_LOG = FIX / "issue-db-pending" / DATA / "fixtures/DATA-001-03.log"
+SIM_LOG = variant_db("issue-db-pending") / DATA / "fixtures/DATA-001-03.log"
 
 DATA_002 = """---
 id: DATA-002
@@ -189,7 +188,7 @@ def test_move_merges_type_and_search_follows_old_ids():
 
 
 def test_renumbered_trailer_links_old_and_new_id():
-    db = copy_db(FIX / "issue-db-dup-id")
+    db = copy_db(variant_db("issue-db-dup-id"))
     git(db, "init", "-q", "-b", "main")
     git(db, "add", "-A")
     git(db, "commit", "-qm", "merge two PRs")
@@ -234,6 +233,18 @@ def test_keyword_and_jira_search_on_sample():
     none = run_json("db_search.py", ["--db", SAMPLE, "NOPE-009-01"])
     assert none["results"] == [] and none["links"] == []
     assert run("db_search.py", ["--db", SAMPLE, "x", "--limit", "0"]).returncode == 2
+
+
+def test_failed_step_is_searchable_and_shown_only_when_present():
+    from runner import copy_db
+    db = copy_db()
+    edit(db / "data/DATA-001-no-setup-data-call/jira/MOCK-1101.yaml", "note: 모바일", "failed_step: 3 | Enable data\nnote: 모바일")
+    found = run_json("db_search.py", ["--db", db, "enable data"])
+    jira = [r for r in found["results"] if r["kind"] == "jira"]
+    assert [r["key"] for r in jira] == ["MOCK-1101"] and jira[0]["failed_step"] == "3 | Enable data"
+    other = run_json("db_search.py", ["--db", db, "MOCK-1102"])
+    assert "failed_step" not in other["results"][0]
+    assert found["results"][0].get("failed_step") in (None, "3 | Enable data")
 
 
 if __name__ == "__main__":

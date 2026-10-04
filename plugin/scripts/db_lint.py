@@ -18,6 +18,10 @@
 - `raw-identifier` 오류: 시그니처·extractor 패턴, Jira `note`, 원인 `cp_evidence`, 유형 본문의 원본 식별자
 - `fixed-token` 경고: 시그니처·extractor가 특정 마스킹 번호(`<CELL#1>`)를 고정
 - `regex-unsafe` 오류: 중첩 수량자·겹치는 선택지 반복·역참조 (04 §5.8 (4), 정적·보수적)
+- `step-event` 오류: `issue-db.config.yaml`의 `step_events` 규칙(스텝 → 로그 흔적, 02-config.md §5.3): 대상(`event`·`ril`·`match`)이
+  정확히 하나가 아님(`observable: false`면 없어야 함), 없는 `event`(extractor 이벤트·예약 이벤트·`builtin.*`가 아님)·`ext.*`(미지원),
+  없는 `ril` 이름, 잘못된 `dir`, `event` 없는 `fields`. 목록·`pattern`·정규식 형식 오류는 `schema`, 패턴 안전성은
+  `raw-identifier`·`fixed-token`·`regex-unsafe`
 - `sequence`·`signature` 오류: sequence의 없는 id·중복 id·must_not_match 참조, 시그니처 형식
 - `symptom-missing`·`signatures-missing` 오류, `signatures-pending` 경고, `pending-on-type`·`pending-verified` 오류
 - `builtin-event`·`ext-event` 오류: 현재 백엔드 `builtin_events()`에 없는 `builtin.*`, 이슈 DB `external_parsers`에
@@ -211,6 +215,8 @@ class Linter:
                     self.cause_owner.setdefault(str(cause["id"]), (type_md, data))
 
         self._check_ids()
+        self._check_step_focus()
+        self._check_step_events()
         for type_md, data in self.types:
             self._check_type(type_md, data)
         self._check_jira()
@@ -239,6 +245,134 @@ class Linter:
         except re.error as exc:
             self.err("schema", issuedb.CONFIG, f"{key} 정규식 오류: {exc}")
             return None
+
+    def _check_step_focus(self) -> None:
+        """`scoring.step_focus_bonus_max`(0~0.1)와 `step_focus`(`min_records` ≥ 1, `map[{pattern, types[], categories[]}]`).
+        값 오류는 `schema`, 안전하지 않은 패턴은 `regex-unsafe`(issue-db.config.yaml)."""
+        cfg = issuedb.CONFIG
+        bonus = (self.config.get("scoring") or {}).get("step_focus_bonus_max")
+        if bonus is not None and (isinstance(bonus, bool) or not isinstance(bonus, (int, float)) or not 0 <= bonus <= 0.1):
+            self.err("schema", cfg, f"scoring.step_focus_bonus_max는 0~0.1 숫자여야 합니다: {bonus!r}")
+        focus = self.config.get("step_focus")
+        if focus is None:
+            return
+        if not isinstance(focus, dict):
+            self.err("schema", cfg, "step_focus는 매핑이어야 합니다.")
+            return
+        minimum = focus.get("min_records")
+        if minimum is not None and (isinstance(minimum, bool) or not isinstance(minimum, int) or minimum < 1):
+            self.err("schema", cfg, f"step_focus.min_records는 1 이상의 정수여야 합니다: {minimum!r}")
+        entries = focus.get("map")
+        if entries is None:
+            return
+        if not isinstance(entries, list):
+            self.err("schema", cfg, "step_focus.map은 목록이어야 합니다.")
+            return
+        type_ids = {str(data.get("id")) for _, data in self.types if data.get("id")}
+        for i, item in enumerate(entries):
+            where = f"step_focus.map[{i}]"
+            if not isinstance(item, dict) or not isinstance(item.get("pattern"), str) or not item["pattern"]:
+                self.err("schema", cfg, f"{where}는 pattern(문자열)이 있는 매핑이어야 합니다.")
+                continue
+            try:
+                re.compile(item["pattern"])
+            except re.error as exc:
+                self.err("schema", cfg, f"{where}.pattern 정규식 오류: {exc}")
+            else:
+                unsafe = unsafe_regex(item["pattern"])
+                if unsafe:
+                    self.err("regex-unsafe", cfg, f"{where}.pattern {item['pattern']!r}에 {unsafe}이(가) 있습니다.")
+            for name, known, label in (("types", type_ids, "유형"), ("categories", set(self.categories), "카테고리")):
+                values = item.get(name) or []
+                if not isinstance(values, list):
+                    self.err("schema", cfg, f"{where}.{name}는 목록이어야 합니다.")
+                    continue
+                for value in values:
+                    if str(value) not in known:
+                        self.err("schema", cfg, f"{where}.{name}: 없는 {label} {value!r}")
+
+    def _rule_names(self) -> tuple[set[str], set[str]]:
+        """`parser-rules/`의 extractor 이벤트 이름과 RIL 요청·unsol 이름(읽지 못하면 빈 집합 — 규칙 오류는 `_check_rules`가 낸다)."""
+        events: set[str] = set()
+        names: set[str] = set()
+        try:
+            data = yamlio.load(self.root / "parser-rules" / "extractors.yaml") or {}
+            events = {str(i["event"]) for i in data.get("extractors") or [] if isinstance(i, dict) and i.get("event")}
+            ril = yamlio.load(self.root / "parser-rules" / "ril.yaml") or {}
+            for section in ("requests", "unsolicited"):
+                names |= {str(i["name"]) for i in ril.get(section) or [] if isinstance(i, dict) and i.get("name")}
+        except Exception:    # noqa: BLE001 — 읽기·YAML 오류는 parser-rules 검사가 보고한다
+            pass
+        return events, names
+
+    def _check_step_events(self) -> None:
+        """`step_events`(02-config.md §5.3): 순서 있는 목록 `[{pattern, event|ril|match, fields?, dir?, observable?}]`.
+        형식 오류는 `schema`, 대상·이름 오류는 `step-event`, 패턴 안전성은 `_check_pattern`."""
+        cfg = issuedb.CONFIG
+        rules = self.config.get("step_events")
+        if rules is None:
+            return
+        if not isinstance(rules, list):
+            self.err("schema", cfg, "step_events는 목록이어야 합니다.")
+            return
+        events, ril_names = self._rule_names()
+        known_events = events | set(parser_rules.RESERVED_EVENTS) | set(self.builtin_events)
+
+        def regex(where: str, value) -> bool:
+            if not isinstance(value, str) or not value:
+                self.err("schema", cfg, f"{where}는 비어 있지 않은 문자열이어야 합니다.")
+                return False
+            try:
+                re.compile(value)
+            except re.error as exc:
+                self.err("schema", cfg, f"{where} 정규식 오류: {exc}")
+                return False
+            self._check_pattern(cfg, where, value)
+            return True
+
+        for i, item in enumerate(rules):
+            where = f"step_events[{i}]"
+            if not isinstance(item, dict) or not isinstance(item.get("pattern"), str) or not item["pattern"]:
+                self.err("schema", cfg, f"{where}는 pattern(문자열)이 있는 매핑이어야 합니다.")
+                continue
+            regex(f"{where}.pattern", item["pattern"])
+            observable = item.get("observable", True)
+            if not isinstance(observable, bool):
+                self.err("schema", cfg, f"{where}.observable은 true/false여야 합니다: {observable!r}")
+                observable = True
+            targets = [k for k in ("event", "ril", "match") if k in item]
+            if not observable and targets:
+                self.err("step-event", cfg, f"{where}: observable: false인 규칙에는 대상({', '.join(targets)})이 없어야 합니다.")
+            elif observable and len(targets) != 1:
+                self.err("step-event", cfg, f"{where}: event·ril·match 중 정확히 하나가 필요합니다"
+                                            f"(observable: false이면 대상 없음): {', '.join(targets) or '없음'}")
+            if "fields" in item:
+                fields = item["fields"]
+                if "event" not in item:
+                    self.err("step-event", cfg, f"{where}: fields는 event 규칙에서만 씁니다.")
+                if not isinstance(fields, dict) or not all(isinstance(k, str) for k in fields):
+                    self.err("schema", cfg, f"{where}.fields는 {{필드 이름: 정규식}} 매핑이어야 합니다.")
+                else:
+                    for name, value in fields.items():
+                        regex(f"{where}.fields.{name}", value)
+            if "match" in item:
+                regex(f"{where}.match", item["match"])
+            if "event" in item:
+                name = item["event"]
+                if not isinstance(name, str) or not name:
+                    self.err("schema", cfg, f"{where}.event는 문자열이어야 합니다.")
+                elif name.startswith("ext."):
+                    self.err("step-event", cfg, f"{where}.event: {name} — ext.* 이벤트는 step_events에서 지원하지 않습니다.")
+                elif name not in known_events:
+                    self.err("step-event", cfg, f"{where}.event: 없는 이벤트 {name!r} (extractor 이벤트·ril_* 예약 이벤트·builtin.*)")
+            if "ril" in item:
+                name = item["ril"]
+                if not isinstance(name, str) or not name:
+                    self.err("schema", cfg, f"{where}.ril은 문자열이어야 합니다.")
+                elif name not in ril_names:
+                    self.err("step-event", cfg, f"{where}.ril: ril.yaml에 없는 이름 {name!r}")
+            if "dir" in item and item["dir"] not in ("req", "resp", "unsol"):
+                self.err("step-event", cfg, f"{where}.dir은 req|resp|unsol이어야 합니다: {item['dir']!r}")
 
     def _builtin_events(self) -> set[str]:
         name = (self.defaults.get("parser") or {}).get("backend")
@@ -559,10 +693,11 @@ class Linter:
                 cause = str(record.get("cause"))
                 if cause != "unresolved" and cause not in causes:
                     self.err("jira-cause", path, f"cause {cause}가 유형 {type_id}의 원인이 아닙니다.")
-                if record.get("note"):
-                    for hit in masking.new_masker().find(str(record["note"])):
-                        self.err("raw-identifier", path, f"note에 마스킹되지 않은 {hit['kind']}가 있습니다.")
-                        break
+                for field in ("note", "failed_step"):
+                    if record.get(field):
+                        for hit in masking.new_masker().find(str(record[field])):
+                            self.err("raw-identifier", path, f"{field}에 마스킹되지 않은 {hit['kind']}가 있습니다.")
+                            break
 
     def _check_feedback(self) -> None:
         for path in sorted((self.root / "feedback").glob("*/*.yaml")):

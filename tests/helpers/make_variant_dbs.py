@@ -2,7 +2,8 @@
 """변형 이슈 DB를 합성 샘플에서 만든다 (11-phases.md Phase 5, CLAUDE.md §11.0).
 
 샘플 트리(`tests/fixtures/issue-db-sample/`)를 복사한 뒤 정해진 변경을 결정적으로 적용한다.
-샘플 트리는 건드리지 않는다. 결과는 **커밋한다**.
+샘플 트리는 건드리지 않는다. 결과는 커밋하지 않는다 — 테스트가 `runner.variant_db()`로 프로세스당 한 번
+임시 디렉터리에 만든다. 눈으로 확인하려면 `--out DIR`로 만든다.
 
 | 변형 | 용도 |
 |---|---|
@@ -11,11 +12,14 @@
 | `issue-db-pending/` | `signatures_pending` 원인(DATA-001-03)과 그 양성 fixture. 회귀 기대값 `DATA-001:unresolved` |
 | `issue-db-dup-id/` | 머지 간격으로 main에 같은 ID(DATA-001-03 두 번)와 같은 Jira(MOCK-1101 두 곳)가 들어온 트리. 사후 lint 보고 (Phase 7) |
 | `issue-db-verify/` | 검증(Phase 10): CALL-001-01을 `fix-submitted`로 되돌리고(수정 후 fixture 제거) 같은 증상의 다른 원인 CALL-001-02(망 거절, scenario만 있음)와 그 양성 fixture를 넣은 트리 |
+| `issue-db-step-focus/` | 스텝 기준 우선 유형(순위 참고): `step_focus.map`(`데이터` → DATA-001)과 DATA-001의 같은 스텝(`5 | 데이터 켜기`) Jira 기록 2건 |
+| `issue-db-step-events/` | 스텝 순서 정렬: `step_events` 규칙 10개(CP는 관측 불가, 비행기 모드 켜기·끄기는 `match`, 망 등록은 `ril`, 데이터 켜기·끄기는 `event`) |
 | `issue-db-review/` | 월간 리뷰(Phase 11): §6.6 항목마다 걸리는 경우와 걸리지 않는 경우 (`REVIEW_CASES`) |
 | `verify-logs/` | 이슈 DB가 아니다. `db_verify fix`·`resolution` 입력 로그(수정 후·재발·증상만 남음·시나리오 없음, 마스킹됨) |
 
 CLI:
-    python3 tests/helpers/make_variant_dbs.py [--check] [--json]
+    python3 tests/helpers/make_variant_dbs.py --out DIR [--json]   # DIR 아래에 변형 전부를 만든다
+    python3 tests/helpers/make_variant_dbs.py --check [--json]     # 두 번 만들어 결과가 같은지 확인 (결정성)
 """
 
 from __future__ import annotations
@@ -31,7 +35,6 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 SAMPLE = REPO / "tests" / "fixtures" / "issue-db-sample"
-OUT = REPO / "tests" / "fixtures"
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(REPO / "tests" / "mocks"))
 
@@ -326,7 +329,7 @@ VERIFY_LOGS = {"call-fixed.log": "verify-call-fixed.yaml", "call-recurrence.log"
 VERIFY_LOGS_README = """# db_verify 입력 로그 (Phase 10)
 
 `tests/helpers/make_variant_dbs.py`가 `tests/mocks/scenarios/verify-call-*.yaml`에서 만든다(마스킹됨). 이슈 DB가 아니다.
-대상은 `tests/fixtures/issue-db-verify/`의 CALL-001-01(fix-submitted, fixed_in MOCKB77_U2_20260920)이다.
+대상은 `issue-db-verify` 변형의 CALL-001-01(fix-submitted, fixed_in MOCKB77_U2_20260920)이다.
 
 | 파일 | 내용 | `db_verify fix --cause CALL-001-01` |
 |---|---|---|
@@ -533,6 +536,35 @@ def review(db: Path) -> None:
         _edit(db / rel, "origin: synthetic", "also_allowed:\n- IMS-001-01\norigin: synthetic")
 
 
+def step_focus(db: Path) -> None:
+    """`step_focus.map`(`데이터` → DATA-001)과 DATA-001에 같은 실패 스텝("5 | 데이터 켜기") 기록 2건. 우선 유형 시험용."""
+    _edit(db / "issue-db.config.yaml", "  map: []",
+          "  map:\n    - {pattern: '데이터', types: [DATA-001], categories: []}")
+    for key in ("MOCK-1131", "MOCK-1132"):
+        _write(db / "data/DATA-001-no-setup-data-call/jira" / f"{key}.yaml",
+               f"key: {key}\ncause: DATA-001-01\ndate: 2026-09-25\noccurred_on: 2026-09-24\nmodel: MOCK-A56\n"
+               "sw: MOCKA56_U1_20260915\nandroid_version: \"16\"\ncarrier: MockTel KR\nanalyzed_by: mock-user1\n"
+               "failed_step: 5 | 데이터 켜기\nnote: 스텝 우선 유형 시험\n")
+
+
+STEP_EVENTS = """step_events:
+  - {pattern: '(?i)(CP|모뎀|AT\\s*cmd)', observable: false}
+  - {pattern: '(?i)(비행기|airplane).*(켜|\\bon\\b)', match: '^ConnectivityService: setAirplaneMode enabled=true'}
+  - {pattern: '(?i)(비행기|airplane).*(끄|\\boff\\b)', match: '^ConnectivityService: setAirplaneMode enabled=false'}
+  - {pattern: '(?i)(망|network)\\s*등록', ril: UNSOL_RESPONSE_NETWORK_STATE_CHANGED}
+  - {pattern: '(?i)데이터.*켜', event: data_setting_changed, fields: {enabled: '^true$'}}
+  - {pattern: '(?i)데이터.*끄', event: data_setting_changed, fields: {enabled: '^false$'}}
+  - {pattern: '(?i)데이터\\s*연결', ril: SETUP_DATA_CALL}
+  - {pattern: '(?i)(발신|dial)', ril: DIAL}
+  - {pattern: '(?i)재부팅|reboot', match: '^(?:Zygote|AndroidRuntime): '}
+  - {pattern: '(?i)SIM', event: sim_state_changed}"""
+
+
+def step_events(db: Path) -> None:
+    """`step_events` 규칙을 채운다(placeholder 예시 그대로). 스텝 순서 정렬 시험용."""
+    _sub(db / "issue-db.config.yaml", r"step_events: \[\][^\n]*", STEP_EVENTS.replace("\\", "\\\\"))
+
+
 VARIANTS = {
     "issue-db-lint-errors": lint_errors,
     "issue-db-empty-category": empty_category,
@@ -540,6 +572,8 @@ VARIANTS = {
     "issue-db-dup-id": dup_id,
     "issue-db-verify": verify,
     "issue-db-review": review,
+    "issue-db-step-focus": step_focus,
+    "issue-db-step-events": step_events,
     "verify-logs": verify_logs,
 }
 
@@ -563,35 +597,50 @@ def _diff(a: Path, b: Path) -> list[str]:
     return out
 
 
-def run(check: bool = False) -> dict:
-    result = {}
+def build_all(out: Path) -> Path:
+    """VARIANTS 전부를 `out/<name>`에 만든다."""
+    out.mkdir(parents=True, exist_ok=True)
     for name in VARIANTS:
-        target = OUT / name
-        if check:
-            tmp = Path(tempfile.mkdtemp(prefix="tt-variant-check-"))
-            try:
-                fresh = build(name, tmp / name)
-                result[name] = _diff(fresh, target) if target.is_dir() else ["(없음)"]
-            finally:
-                shutil.rmtree(tmp, ignore_errors=True)
-        else:
-            build(name, target)
-            result[name] = []
-    return result
+        build(name, out / name)
+    return out
+
+
+def check() -> dict[str, list[str]]:
+    """전부를 임시 디렉터리 둘에 만들어 이름별로 다른 파일을 돌려준다 (결정성 증명)."""
+    a = Path(tempfile.mkdtemp(prefix="tt-variant-check-a-"))
+    b = Path(tempfile.mkdtemp(prefix="tt-variant-check-b-"))
+    try:
+        build_all(a)
+        build_all(b)
+        return {name: _diff(a / name, b / name) for name in VARIANTS}
+    finally:
+        shutil.rmtree(a, ignore_errors=True)
+        shutil.rmtree(b, ignore_errors=True)
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="make_variant_dbs.py", description=__doc__)
-    parser.add_argument("--check", action="store_true")
+    parser = argparse.ArgumentParser(prog="make_variant_dbs.py", description=__doc__,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--out", metavar="DIR", help="DIR 아래에 변형 전부를 만든다 (확인용)")
+    parser.add_argument("--check", action="store_true", help="두 번 만들어 결과가 같은지 확인한다")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
-    result = run(check=args.check)
+    if not args.out and not args.check:
+        parser.error("--out DIR 또는 --check가 필요합니다")
+    result: dict[str, list[str]] = {}
+    if args.out:
+        out = build_all(Path(args.out))
+        result = {name: [] for name in VARIANTS}
+        if not args.json:
+            print(f"{len(VARIANTS)}개를 {out}에 만들었습니다")
+    if args.check:
+        result = check()
     if args.json:
         print(json.dumps(result, ensure_ascii=False, indent=2))
-    else:
+    elif args.check:
         for name, diffs in result.items():
-            print(f"{name}: {'일치' if not diffs else '다름 ' + ', '.join(diffs)}" if args.check else name)
-    return 1 if any(result.values()) else 0
+            print(f"{name}: {'일치' if not diffs else '다름 ' + ', '.join(diffs)}")
+    return 1 if args.check and any(result.values()) else 0
 
 
 if __name__ == "__main__":

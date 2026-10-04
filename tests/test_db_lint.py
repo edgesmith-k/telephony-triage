@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Phase 5 완료 기준 확인: 린터 `db_lint.py` (11-phases.md Phase 5).
 
-`tests/fixtures/issue-db-lint-errors/`(`tests/helpers/make_variant_dbs.py`가 샘플에서 만든다)에 일부러
+`issue-db-lint-errors`(`tests/helpers/make_variant_dbs.py`가 테스트 때 샘플에서 만든다, `runner.variant_db()`)에 일부러
 넣은 오류를 모두 잡고, 샘플의 `.resolved.1.log`·`.extra.1.log`·다른 유형 원인을 담은 `also_allowed`는
 통과시키는지 본다. 범위 모드(`--changed`·`--staged`·`--ref`), `--residual`, 새 원인 fixed 금지,
 `synthetic_allowed: false`도 확인한다.
@@ -19,9 +19,9 @@ sys.path.insert(0, str(REPO / "tests" / "helpers"))
 sys.path.insert(0, str(REPO / "plugin" / "scripts"))
 
 import make_variant_dbs  # noqa: E402
-from runner import SAMPLE, edit, git, git_db, plugin_root, run, run_json  # noqa: E402
+from runner import SAMPLE, copy_db as runner_copy, edit, git, git_db, plugin_root, run, run_json, variant_db  # noqa: E402
 
-LINT_DB = REPO / "tests" / "fixtures" / "issue-db-lint-errors"
+LINT_DB = variant_db("issue-db-lint-errors")
 D = "data/DATA-001-no-setup-data-call"
 C = "call/CALL-001-volte-not-working"
 N = "network/NETWORK-001-no-service"
@@ -63,8 +63,8 @@ def _pairs(result) -> set[tuple[str, str]]:
     return {(f["code"], f["file"]) for f in result["errors"] + result["warnings"]}
 
 
-def test_variant_trees_match_builder():
-    result = make_variant_dbs.run(check=True)
+def test_variant_builder_is_deterministic():
+    result = make_variant_dbs.check()
     assert not any(result.values()), result
 
 
@@ -93,6 +93,90 @@ def test_injected_errors_are_all_caught():
     assert any("resolved.9.log" in m for m in evidence) and any("MOCK-9999" in m for m in evidence)
     levels = {f["code"]: f["level"] for f in result["errors"] + result["warnings"]}
     assert levels["glossary"] == "warning" and levels["fixed-token"] == "warning"
+
+
+def _step_focus_lint(old: str, new: str) -> list[dict]:
+    db = runner_copy(variant_db("issue-db-step-focus"))
+    edit(db / "issue-db.config.yaml", old, new)
+    result = _lint(db, "--all", expect=(0, 1))
+    return [f for f in result["errors"] if f["file"] == "issue-db.config.yaml"]
+
+
+STEP_MAP = "{pattern: '데이터', types: [DATA-001], categories: []}"
+
+
+def test_step_focus_config_checks_one_error_each():
+    assert _step_focus_lint("  map:\n    - " + STEP_MAP, "  map:\n    - " + STEP_MAP) == []     # 변형 자체는 깨끗하다
+    bad = _step_focus_lint(STEP_MAP, "{pattern: '(데이터', types: [DATA-001]}")                   # 컴파일 오류
+    assert [(f["code"], "정규식 오류" in f["message"]) for f in bad] == [("schema", True)]
+    unsafe = _step_focus_lint(STEP_MAP, "{pattern: '(a+)+b', types: [DATA-001]}")                  # 중첩 수량자
+    assert [f["code"] for f in unsafe] == ["regex-unsafe"]
+    unknown_type = _step_focus_lint("types: [DATA-001]", "types: [DATA-999]")
+    assert [(f["code"], "DATA-999" in f["message"]) for f in unknown_type] == [("schema", True)]
+    unknown_cat = _step_focus_lint("categories: []", "categories: [nope]")
+    assert [(f["code"], "nope" in f["message"]) for f in unknown_cat] == [("schema", True)]
+    assert [f["code"] for f in _step_focus_lint("min_records: 2", "min_records: 0")] == ["schema"]
+    assert [f["code"] for f in _step_focus_lint("step_focus_bonus_max: 0.05", "step_focus_bonus_max: 0.5")] == ["schema"]
+
+
+def _step_events_lint(body: str) -> list[tuple[str, str]]:
+    """샘플 이슈 DB의 `step_events: []`를 `body`로 바꿔 린트하고 설정 파일의 `(코드, 메시지)`를 돌려준다."""
+    db = runner_copy(SAMPLE)
+    edit(db / "issue-db.config.yaml", "step_events: []", body)
+    result = _lint(db, "--all", expect=(0, 1))
+    return [(f["code"], f["message"]) for f in result["errors"] + result["warnings"] if f["file"] == "issue-db.config.yaml"]
+
+
+def test_step_events_valid_variant_is_clean():
+    db = variant_db("issue-db-step-events")
+    result = _lint(db, "--all", expect=0)
+    assert result["errors"] == [] and result["warnings"] == []
+    assert _step_events_lint("step_events: []") == []
+
+
+def test_step_events_target_rules():
+    assert [c for c, _ in _step_events_lint("step_events:\n  - {pattern: 'a'}")] == ["step-event"]                 # 대상 없음
+    both = _step_events_lint("step_events:\n  - {pattern: 'a', ril: DIAL, match: '^x'}")
+    assert [c for c, _ in both] == ["step-event"] and "정확히 하나" in both[0][1]
+    obs = _step_events_lint("step_events:\n  - {pattern: 'a', observable: false, ril: DIAL}")
+    assert [c for c, _ in obs] == ["step-event"] and "observable: false" in obs[0][1]
+    assert _step_events_lint("step_events:\n  - {pattern: 'a', observable: false}") == []                         # CP 스텝: 대상 없음
+    assert _step_events_lint("step_events:\n  - {pattern: 'a', observable: true, ril: DIAL, dir: resp}") == []
+
+
+def test_step_events_names_and_dir():
+    unknown_event = _step_events_lint("step_events:\n  - {pattern: 'a', event: no_such_event}")
+    assert [(c, "no_such_event" in m) for c, m in unknown_event] == [("step-event", True)]
+    assert _step_events_lint("step_events:\n  - {pattern: 'a', event: ril_error}") == []                          # 예약 이벤트
+    assert _step_events_lint("step_events:\n  - {pattern: 'a', event: sim_state_changed}") == []                  # extractor
+    ext = _step_events_lint("step_events:\n  - {pattern: 'a', event: ext.data.x}")
+    assert [(c, "ext." in m) for c, m in ext] == [("step-event", True)]
+    builtin = _step_events_lint("step_events:\n  - {pattern: 'a', event: builtin.nope.x}")
+    assert [c for c, _ in builtin] == ["step-event"]
+    ril = _step_events_lint("step_events:\n  - {pattern: 'a', ril: NO_SUCH_REQUEST}")
+    assert [(c, "NO_SUCH_REQUEST" in m) for c, m in ril] == [("step-event", True)]
+    assert _step_events_lint("step_events:\n  - {pattern: 'a', ril: UNSOL_SIM_STATUS_CHANGED, dir: unsol}") == []
+    bad_dir = _step_events_lint("step_events:\n  - {pattern: 'a', ril: DIAL, dir: sideways}")
+    assert [c for c, _ in bad_dir] == ["step-event"]
+    fields = _step_events_lint("step_events:\n  - {pattern: 'a', ril: DIAL, fields: {x: '1'}}")
+    assert [(c, "fields" in m) for c, m in fields] == [("step-event", True)]                                        # event 없는 fields
+
+
+def test_step_events_schema_and_regex_safety():
+    assert [c for c, _ in _step_events_lint("step_events: {pattern: a}")] == ["schema"]                            # 목록 아님
+    assert [c for c, _ in _step_events_lint("step_events:\n  - {ril: DIAL}")] == ["schema"]                        # pattern 없음
+    assert [c for c, _ in _step_events_lint("step_events:\n  - 'a'")] == ["schema"]
+    assert [c for c, _ in _step_events_lint("step_events:\n  - {pattern: '(a', ril: DIAL}")] == ["schema"]
+    assert [c for c, _ in _step_events_lint("step_events:\n  - {pattern: 'a', match: '(x'}")] == ["schema"]
+    assert [c for c, _ in _step_events_lint(
+        "step_events:\n  - {pattern: 'a', event: data_setting_changed, fields: {enabled: '(x'}}")] == ["schema"]
+    assert [c for c, _ in _step_events_lint("step_events:\n  - {pattern: 'a', event: data_setting_changed, fields: [x]}")] == ["schema"]
+    assert [c for c, _ in _step_events_lint("step_events:\n  - {pattern: '(a+)+b', ril: DIAL}")] == ["regex-unsafe"]
+    assert [c for c, _ in _step_events_lint("step_events:\n  - {pattern: 'a', match: '^(x+)+y'}")] == ["regex-unsafe"]
+    raw = _step_events_lint("step_events:\n  - {pattern: 'a', match: 'imsi \\d{15}'}")
+    assert [c for c, _ in raw] == ["raw-identifier"]
+    fixed = _step_events_lint("step_events:\n  - {pattern: 'a', match: '<CELL#1>'}")
+    assert [c for c, _ in fixed] == ["fixed-token"]
 
 
 def test_residual_ids():
@@ -192,6 +276,21 @@ def test_skeleton_is_clean():
 
 def _all_tests():
     return [(n, o) for n, o in sorted(globals().items()) if n.startswith("test_") and callable(o)]
+
+
+def test_failed_step_is_schema_valid_and_checked_for_raw_identifiers():
+    import yaml
+    db = runner_copy()
+    path = db / "data/DATA-001-no-setup-data-call/jira/MOCK-1101.yaml"
+    edit(path, "note: 모바일", "failed_step: 3 | Enable data\nnote: 모바일")
+    assert _lint(db, "--all", expect=0)["errors"] == []
+    edit(path, "failed_step: 3 | Enable data", "failed_step: 고객 010-1234-5678 데이터 켜기")
+    result = _lint(db, "--all", expect=1)
+    hits = [e for e in result["errors"] if e["code"] == "raw-identifier"]
+    assert hits and "failed_step" in hits[0]["message"] and "MOCK-1101" in hits[0]["file"]
+    edit(path, "failed_step: 고객 010-1234-5678 데이터 켜기", "failed_step: " + "x" * 201)
+    assert any(e["code"] == "schema" or "failed_step" in str(e) for e in _lint(db, "--all", expect=1)["errors"])
+    assert yaml.safe_load(path.read_text(encoding="utf-8"))["note"]
 
 
 if __name__ == "__main__":

@@ -29,6 +29,10 @@ jira:
     sw: <필드>
     android_version: <필드>
     carrier: <필드>
+    # 선택(14-site.md S22): 시험 절차·실패 스텝 필드. 없으면 쓰지 않는다
+    test_steps: <필드>
+    failed_step: <필드>
+  failed_step_patterns: []                  # 선택. 설명·시험 절차 텍스트에서 실패 스텝 한 줄을 찾는 줄 단위 정규식 (아래 설명)
 logcat:
   timezone: <logcat 시각 타임존>             # 연도 없는 threadtime의 해석 기준 (14-site.md S7). 스킬이 parse_logcat --tz로 넘김
   year_source: jira                         # jira(발생 시각의 연도) | file-mtime | ask. 스킬이 연도를 정해 parse_logcat --year로 넘김
@@ -71,7 +75,11 @@ setup 커맨드가 순서대로 하는 일:
 
 ---
 
-> 설정 우선순위: 사용자 config > `plugin/site-defaults.yaml` > 코드 내장 기본값. `plugin/site-defaults.yaml`이 없으면 setup과 모든 커맨드가 멈춘다. `site-defaults.example.yaml`은 코드가 읽지 않고, 사외 테스트 헬퍼가 복사해서 쓴다 (`15-local-draft.md §15.1`). `site-defaults.yaml`에는 `jira.tools`·`jira.field_map`·`jira.exclude_servers`·`parser.backend`·`external_parsers`·`analyzers`·`synthetic_allowed`가 들어간다.
+> **실패 스텝(선택)**: 이슈의 시험 절차·실패한 스텝은 있을 수도 없을 수도 있다. `jira.field_map.failed_step`(필드 값을 그대로), 없으면 `jira.failed_step_patterns`로 마스킹된 설명, 그다음 `field_map.test_steps` 텍스트에서 찾는다. 패턴은 **줄 단위** 정규식이고, 줄 순서대로·패턴 순서대로 처음 맞는 것이 이기며 `(?P<step>…)` 그룹이 있으면 그 값, 없으면 줄 전체다. 정규식 오류는 경고만 내고 건너뛴다. 기본값은 `[]`(자동 추출 없음). 값이 없거나 읽지 못해도 동작은 없을 때와 같다(질문·중단 없음). 첨부 파일은 사용자가 `--steps-file`로 줄 때만 읽는다. **MCP로 첨부를 가져오는 것은 향후 과제**다(`jira.read_tools`로 허용된 도구만, `99-deferred.md`).
+>
+> **실패 스텝 앵커(선택, `site-defaults.yaml`의 `failed_step`)**: 시험 자동화가 logcat에 남기는 스텝 마커로 실패 스텝의 시간 구간을 정한다(`07-workflow.md §Step 3`). 키: `marker_patterns`(`TAG: msg` 줄에 맞추는 정규식 목록, 이름 그룹 `step`·`status` 필수, **기본 `[]` = 마커 스캔 안 함** — 실제 logcat에는 시험 스텝의 START/FAIL 마커가 없다. 마커를 남기는 시험 자동화가 있을 때만 켠다. **`parse_logcat.py`가 이 파일에서만 읽으므로 사용자 config로 바꿀 수 없다**), `marker_status`(`start`·`pass`·`fail`별 상태 문구 목록, casefold 비교), `anchor_without_step`(실패 스텝을 모를 때 FAIL 마커 자체를 앵커로 쓸지, 기본 `true`), `window`(`pre_sec` 60·`post_sec` 30·`fail_only_pre_sec` 120·`max_span_sec` 900), `disagree_minutes`(Jira 발생 시각과 스텝 실패 시각이 이보다 많이 다르면 경고, 기본 10), `steps_file_tz`(steps-file 시각의 타임존, 기본 `null` = logcat 타임존), `clock_offset`(시험 장비 시각 → 단말 logcat 시각 시계 차, `단말 = 장비 + 값`, 예 `'+3m'`·`'-00:00:45'`·`180`, 기본 `null` = 모름 → 장비 시각은 구간에 쓰지 않는다. `--clock-offset`이 우선, 형식이 틀리면 경고하고 `null`), `steps_status`(`pass`·`fail` 상태 낱말, casefold), `steps_columns`(표 머리 열 이름 `number`·`name`·`status`·`start`·`end`, casefold, **YAML에서 `no`·`yes`·`on`·`off`는 따옴표로 감싼다** — 안 그러면 불리언이 된다), `order`(스텝 순서 정렬: `min_matched` 1·`max_missing` 1·`pre_sec` 10·`fail_post_sec` 120; 최대 구간은 `window.max_span_sec`을 쓴다). 시험 장비 시계는 단말과 다를 수 있으므로 steps-file의 시각 열은 시계 차를 **수동으로** 줄 때만 쓴다. 사내 표기를 확인하기 전까지는 placeholder다(14-site.md S22).
+>
+> 설정 우선순위: 사용자 config > `plugin/site-defaults.yaml` > 코드 내장 기본값. `plugin/site-defaults.yaml`이 없으면 setup과 모든 커맨드가 멈춘다. `site-defaults.example.yaml`은 코드가 읽지 않고, 사외 테스트 헬퍼가 복사해서 쓴다 (`15-local-draft.md §15.1`). `site-defaults.yaml`에는 `jira.tools`·`jira.field_map`(선택 키 `test_steps`·`failed_step`)·`jira.failed_step_patterns`·`jira.exclude_servers`·`parser.backend`·`external_parsers`·`analyzers`·`explore`(탐색 분석 `when`·`timeline_max_lines`, `07-workflow.md §Step 5-2`)·`failed_step`(실패 스텝 앵커, 위)·`synthetic_allowed`가 들어간다.
 
 ## 5.3 `issue-db.config.yaml`
 
@@ -104,8 +112,13 @@ scoring:                             # 매칭 점수 (04-parser-matching.md §5.
   cause_weight: 0.6
   proximity_bonus_max: 0.1
   keyword_bonus_max: 0.05
+  step_focus_bonus_max: 0.05         # 스텝 기준 우선 유형의 순위 가산(0~0.1). score는 바꾸지 않는다
   feedback_weight: true
   confidence: {high: 0.9, medium: 0.6}
+step_focus:                          # 실패 스텝 → 우선 유형(순위 참고만, 04-parser-matching.md §5.11 (2))
+  min_records: 2                     # 같은 스텝의 기존 Jira 기록이 이 건수 이상인 유형을 우선 유형으로 본다(≥ 1)
+  map: []                            # [{pattern: '<마스킹된 스텝에 맞출 정규식>', types: [DATA-001], categories: [data]}]
+step_events: []                      # 스텝 → 로그 흔적 규칙(스텝 순서 정렬, 04-parser-matching.md §5.8 (5)). 아래 설명
 quality:                             # 06-collaboration.md §6.5, §6.6
   min_samples: 5
   low_acceptance_rate: 0.7
@@ -124,6 +137,7 @@ reviewers:                           # gh pr create --reviewer에 넘길 형식 
   format: '{org}/{team}'             # CODEOWNERS 항목 @<org>/<team>에서 {org}, {team}을 치환
 ```
 
+- **`step_events`**(메인테이너가 관리하는 **순서 있는 목록**): 시험 스텝(마스킹된 `번호 | 이름`)이 AP 로그에 남기는 흔적을 규칙으로 적는다. 스텝에 `pattern`이 처음 맞는 규칙 하나가 적용된다. 대상은 **정확히 하나**: `event`(extractor 이벤트 이름, 예약 `ril_*`, `builtin.*`; 선택 `fields{필드: 정규식}`), `ril`(`ril.yaml`의 요청·unsol 이름; 선택 `dir: req|resp|unsol`, 기본 `req`, `UNSOL_*`는 `unsol`), `match`(마스킹된 `TAG: msg`에 맞출 정규식). CP(모뎀) 동작처럼 AP 로그에 흔적이 없는 스텝은 `observable: false`(대상 없음)로 적는다. **어느 규칙에도 맞지 않는 스텝은 관측 불가**(건너뜀, 놓친 것으로 세지 않음). 기본 `[]`(스텝 순서 정렬 안 함). 예: `{pattern: '(?i)(비행기|airplane).*(켜|\bon\b)', match: '^ConnectivityService: setAirplaneMode enabled=true'}`, `{pattern: '(?i)데이터\s*연결', ril: SETUP_DATA_CALL}`, `{pattern: '(?i)(CP|모뎀)', observable: false}` (placeholder — `14-site.md` S22). `db_lint`가 검사한다(오류 코드 `step-event`, `contracts.md §3.2`). 규칙 번호는 목록 위치이므로 순서를 바꾸면 달라진다.
 - 리뷰어 계산: `db_pr summary`가 변경 파일 경로와 유형의 `secondary_categories`로 `.github/CODEOWNERS`의 해당 항목(`/<category>/`, `/parser-rules/` 등)을 찾고, 그 `@<org>/<team>`을 `reviewers.format`으로 바꿔 `gh pr create --reviewer`에 넘긴다. 계획에 `allow-cause`가 있으면 대상 fixture 경로의 카테고리 오너도 더한다(다른 카테고리 fixture의 `also_allowed`를 바꾸므로, `contracts.md §fixture`).
 - 카테고리 목록 검증(`category`가 `categories`에 있는지, ID 접두어가 `id_prefix`와 맞는지)은 JSON Schema가 아니라 `db_lint.py`가 한다.
 - `generator_version`이 플러그인 `GENERATOR_VERSION`과 다르면 `ci_mode: local`/`actions`에서는 **이슈 DB 쓰기 전체**(Step 8, `record`, `sync-pr`, `verify-fix`, `validate --cause`, `fix-submitted`, 리뷰 PR)를 막고 읽기 전용 분석만 한다. 예외는 메인테이너가 버전을 올리는 `migrate/schema-v<N>` 브랜치의 직접 편집뿐이다(그 브랜치에서는 `config.py check`·pre-commit·`validate`가 버전 불일치를 차단하지 않는다, `06-collaboration.md §6.4`). `actions-build`에서는 생성 파일을 PR에 넣지 않으므로 영향이 없다.

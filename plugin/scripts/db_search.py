@@ -119,9 +119,12 @@ class Searcher:
         }
 
     def jira_entry(self, record: dict) -> dict:
-        return {"kind": "jira", "key": record.get("key"), "cause": record.get("cause"), "type": record["_type"],
-                "date": str(record.get("date", "")), "occurred_on": str(record.get("occurred_on") or "") or None,
-                "note": record.get("note"), "path": record["_rel"]}
+        entry = {"kind": "jira", "key": record.get("key"), "cause": record.get("cause"), "type": record["_type"],
+                 "date": str(record.get("date", "")), "occurred_on": str(record.get("occurred_on") or "") or None,
+                 "note": record.get("note"), "path": record["_rel"]}
+        if record.get("failed_step"):
+            entry["failed_step"] = record["failed_step"]
+        return entry
 
     def entity_entry(self, ident: str) -> dict | None:
         if ident in self.causes:
@@ -220,7 +223,7 @@ class Searcher:
             elif hit(cause.raw.get("description"), cause.raw.get("resolution")):
                 scored.append((2, cause.id, self.cause_entry(cause)))
         for record in sorted(self.db.jira, key=_jira_key, reverse=True):
-            if hit(record.get("note")):
+            if hit(record.get("note"), record.get("failed_step")):
                 scored.append((3, str(record.get("key")), self.jira_entry(record)))
         scored.sort(key=lambda s: (s[0], s[1]))
         return [s[2] for s in scored]

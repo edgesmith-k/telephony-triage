@@ -42,8 +42,28 @@ scoring:                             # 04-parser-matching.md §5.11 (2)
   cause_weight: 0.6
   proximity_bonus_max: 0.1
   keyword_bonus_max: 0.05
+  step_focus_bonus_max: 0.05         # 스텝 기준 우선 유형의 순위 가산(0~0.1, score는 바꾸지 않는다)
   feedback_weight: true
   confidence: {high: 0.9, medium: 0.6}
+
+step_focus:                          # 04-parser-matching.md §5.11 (2): 실패 스텝 → 우선 유형(순위 참고만)
+  min_records: 2                     # 같은 스텝의 기존 Jira 기록이 이 수 이상인 유형을 우선 유형으로 본다
+  map: []                            # [{pattern: '<정규식>', types: [DATA-001], categories: [data]}]
+
+# step_events (02-config.md §5.3): 스텝 → 로그 흔적. 스텝 순서 정렬(04-parser-matching.md §5.8 (5))이 쓴다. 메인테이너가 관리하는 순서 있는 목록.
+# 마스킹된 스텝 이름에 pattern이 처음 맞는 규칙 하나가 적용된다. 대상은 event·ril·match 중 하나, 또는 observable: false(CP 동작 등).
+# 맞는 규칙이 없는 스텝은 관측 불가(건너뜀, 놓친 것으로 세지 않음). 아래는 placeholder 예시 — TODO(SITE:S22)
+# - {pattern: '(?i)(CP|모뎀|AT\s*cmd)', observable: false}
+# - {pattern: '(?i)(비행기|airplane).*(켜|\bon\b)',  match: '^ConnectivityService: setAirplaneMode enabled=true'}
+# - {pattern: '(?i)(비행기|airplane).*(끄|\boff\b)', match: '^ConnectivityService: setAirplaneMode enabled=false'}
+# - {pattern: '(?i)(망|network)\s*등록', ril: UNSOL_RESPONSE_NETWORK_STATE_CHANGED}
+# - {pattern: '(?i)데이터.*켜', event: data_setting_changed, fields: {enabled: '^true$'}}
+# - {pattern: '(?i)데이터.*끄', event: data_setting_changed, fields: {enabled: '^false$'}}
+# - {pattern: '(?i)데이터\s*연결', ril: SETUP_DATA_CALL}
+# - {pattern: '(?i)(발신|dial)', ril: DIAL}
+# - {pattern: '(?i)재부팅|reboot', match: '^(?:Zygote|AndroidRuntime): '}
+# - {pattern: '(?i)SIM', event: sim_state_changed}
+step_events: []
 
 quality:                             # 06-collaboration.md §6.5, §6.6
   min_samples: 5

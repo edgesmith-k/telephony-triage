@@ -1,6 +1,0 @@
-09-22 08:00:00.000  1234  1250 D SST-1: [PHONE1] onRoamingOn: roaming=true
-09-22 08:00:02.000  1234  1250 D DSM-1: [PHONE1] isDataRoamingEnabled=false
-09-22 08:00:03.000  1234  1250 I DNC-1: [PHONE1] onEvaluateNetworkRequests: reason=ROAMING_STATE_CHANGED
-09-22 08:00:03.500  1234  1250 W DNC-1: [PHONE1] evaluation result: NOT_ALLOWED reasons=[ROAMING_DISABLED]
-09-22 08:00:13.500  1234  1250 W DNC-1: [PHONE1] evaluation result: NOT_ALLOWED reasons=[ROAMING_DISABLED]
-09-22 08:00:18.500  1234  1250 D DRM-1: [PHONE1] no retry scheduled: setup not allowed

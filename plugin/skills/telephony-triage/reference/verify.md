@@ -89,8 +89,9 @@ open ─(fix-submitted)─▶ fix-submitted ─(verify-fix passed)─▶ fixed
    - 종료 코드 2(빌드가 fixed_in보다 이전, 상태 부적합 등) → 사유를 보여주고 중단.
    - `build_check.status: undetermined` → 비교 규칙이 없거나 파싱 불가. 두 값을 보여주고 사용자에게 이후 빌드인지 묻는다.
    - **시나리오 흔적**(`trace`)과 원인 본문의 "재현 시나리오"를 함께 보여주고, 사용자가 그 시나리오를 수행한 로그인지 확인받는다.
-     흔적이 없으면 **판단 불가**다. 사용자가 "시나리오 했어"라고 해도 흔적을 대신하지 않는다.
-   - `user_confirmation_required`(비코드 수정 유형이고 흔적 시그니처 없음) → 사용자 확인을 받고 그 사실을 `verification.note`에 남긴다.
+     흔적 시그니처가 있는데 흔적이 없으면 **판단 불가**다. 사용자가 "시나리오 했어"라고 해도 흔적을 대신하지 않는다.
+   - 유일한 예외 `user_confirmation_required`(비코드 유형 `user-setting`·`network`·`hw`이고 scenario·recovery 시그니처가 **둘 다 없음**)
+     → 사용자 확인을 받고 그 사실을 `verification.note`에 "사용자 확인(흔적 시그니처 없음)"으로 남긴다. 코드·설정 수정 유형에는 이 예외가 없다(3번에서 중단).
 6. 판정별 계획 `WD/<작업 키>/plan.json`(`source: verify-fix`, `jira: null`). `verification`: `{build, date, by, jira?, fixture?, scenario_evidence?, note}`.
 
    | 판정 | 조건 | 계획 |

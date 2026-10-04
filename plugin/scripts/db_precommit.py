@@ -5,6 +5,7 @@
 
 이슈 DB의 `.githooks/pre-commit`만 부른다. 검사는 직접 하지 않고 변경 범위(index)를 계산해서 아래를 순서대로
 부른다. 모두 index 내용(`--staged`) 기준이다. `--staged`는 기본값이고 명시해도 된다.
+순서는 common/checks.py PRECOMMIT 프로필(compat·cache 포함)이 정한다. 아래는 그 요약이다.
 
 1. `config.py check --db <top> --for dry-run` — 스키마·생성기·파서 백엔드·외부 파서 버전 (06-collaboration.md
    §6.4 "직접 편집 브랜치의 pre-commit"). `migrate/schema-v<N>` 브랜치는 버전을 보지 않는다(check가 판별).
@@ -28,7 +29,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 import subprocess
 import sys
 from pathlib import Path
@@ -36,32 +36,12 @@ from pathlib import Path
 SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS))
 
+from common import checks as checks_mod  # noqa: E402
 from common import compat, gitscope, site_defaults  # noqa: E402
+from common.checks import MIGRATE_BRANCH_RE, RULE_FILE_RE, generated_paths  # noqa: E402,F401  (재노출)
 from common.exitcodes import CHECK_FAILED, NEEDS_APPROVAL, OK, USAGE  # noqa: E402
 
-MIGRATE_BRANCH_RE = re.compile(r"^migrate/schema-v\d+$")
-RULE_FILE_RE = re.compile(r"^(parser-rules/.+\.ya?ml|[^/]+/[^/]+/type\.md|[^/]+/[^/]+/fixtures/.+\.expect\.yaml)$")
 PREFIX = "[telephony-triage pre-commit]"
-
-
-def _script(name: str, args: list[str], plugin_root: str | None) -> tuple[int, dict | None, str]:
-    extra = ["--plugin-root", plugin_root] if plugin_root else []
-    proc = subprocess.run([sys.executable, str(SCRIPTS / name), *args, *extra], capture_output=True, text=True,
-                          encoding="utf-8", errors="replace")
-    try:
-        data = json.loads(proc.stdout) if proc.stdout.strip() else None
-    except json.JSONDecodeError:
-        data = None
-    return proc.returncode, data, proc.stderr.strip()
-
-
-def generated_paths(db_cfg: dict) -> set[str]:
-    """생성 파일 경로 (db_build.generate와 같은 목록)."""
-    paths = {"README.md", "STATS.md", "parser-rules/CHANGELOG.md"}
-    for cat in db_cfg.get("categories") or []:
-        if isinstance(cat, dict) and cat.get("key"):
-            paths.add(f"{cat['key']}/README.md")
-    return paths
 
 
 def _brief(name: str, code: int, data: dict | None, err: str) -> str:
@@ -89,7 +69,7 @@ def run(db: Path, plugin_root: str | None) -> tuple[dict, int]:
     staged = gitscope.staged_files(db)
     branch = subprocess.run(["git", "-C", str(db), "rev-parse", "--abbrev-ref", "HEAD"], capture_output=True,
                             text=True, encoding="utf-8").stdout.strip()
-    migrate = bool(MIGRATE_BRANCH_RE.match(branch))
+    migrate = checks_mod.is_migrate_branch(branch)
     db_cfg = compat.load_db_config(db)
     ci_mode = db_cfg.get("ci_mode", "local")
     checks: list[dict] = []
@@ -105,50 +85,31 @@ def run(db: Path, plugin_root: str | None) -> tuple[dict, int]:
     if not staged:
         return {"db": str(db), "branch": branch, "staged": [], "checks": [], "note": "staged 변경 없음"}, OK
 
-    # 1. 버전 호환성 (쓰기 가능 여부). gh 인증은 보지 않는다.
-    code, data, err = _script("config.py", ["check", "--db", str(db), "--for", "dry-run"], plugin_root)
-    add("compat", code, data, err)
-
-    # 2. 캐시
-    cache = [p for p in staged if p == ".cache" or p.startswith(".cache/")]
-    add("cache", CHECK_FAILED if cache else OK,
-        note=(f".cache/는 커밋하지 않는다: {', '.join(cache[:5])}" if cache else None))
-
-    # 3~5. lint, 마스킹, 회귀
-    for name, script, args in (("lint", "db_lint.py", ["--staged"]),
-                               ("mask", "mask_pii.py", ["--check", "--staged"]),
-                               ("regress", "db_regress.py", ["--staged"])):
-        code, data, err = _script(script, [*args, "--db", str(db)], plugin_root)
-        add(name, code, data, err)
-
-    # 6. 규칙 검증 (규칙 변경이 있을 때만)
-    rule_files = [p for p in staged if RULE_FILE_RE.match(p)]
-    if rule_files:
-        code, data, err = _script("db_verify.py", ["rules", "--staged", "--db", str(db)], plugin_root)
-        add("verify", code, data, err)
-    else:
-        checks.append({"check": "verify", "code": OK, "skipped": "규칙 변경 없음"})
-
-    # 7. 생성 파일
-    if ci_mode == "actions-build":
-        gen = sorted(set(staged) & generated_paths(db_cfg))
-        add("build", CHECK_FAILED if gen else OK,
-            note=(f"ci_mode: actions-build — 생성 파일은 머지 후 봇이 만든다. staged에서 빼라: {', '.join(gen)}"
-                  if gen else None))
-    else:
-        code, data, err = _script("db_build.py", ["--verify", "--staged", "--db", str(db)], plugin_root)
-        if code == USAGE and migrate and "생성기 버전" in err:
+    ctx = checks_mod.Ctx(db=db, scope="staged", files=staged, branch=branch, ci_mode=ci_mode, db_cfg=db_cfg,
+                         plugin_root=plugin_root)
+    for res in checks_mod.run_checks(checks_mod.PROFILES["precommit"], ctx).steps:
+        if res.skipped:
+            checks.append({"check": res.name, "code": OK, "skipped": res.skipped})
+        elif res.name == "cache":
+            paths = (res.data or {}).get("paths") or []
+            add("cache", res.code, note=(f".cache/는 커밋하지 않는다: {', '.join(paths[:5])}" if paths else None))
+        elif res.name == "build" and res.script is None:
+            gen = (res.data or {}).get("paths") or []
+            add("build", res.code,
+                note=(f"ci_mode: actions-build — 생성 파일은 머지 후 봇이 만든다. staged에서 빼라: {', '.join(gen)}"
+                      if gen else None))
+        elif res.note == checks_mod.NOTE_MIGRATE_TOLERATED:
             checks.append({"check": "build", "code": OK,
                            "note": f"{branch}: 생성기 버전 불일치로 생성 파일 검증을 건너뛴다 (06-collaboration.md §6.4)"})
-        else:
-            add("build", code, data, err,
+        elif res.name == "build":
+            add("build", res.code, res.data, res.stderr,
                 note=("생성 파일(README·STATS·CHANGELOG)이 원본과 다르다. 직접 고치지 말고 "
-                      "db_build.py --write로 다시 만든 뒤 git add 한다: " + _brief("build", code, data, err))
-                if code == CHECK_FAILED else None)
+                      "db_build.py --write로 다시 만든 뒤 git add 한다: " + _brief("build", res.code, res.data, res.stderr))
+                if res.code == CHECK_FAILED else None)
+        else:
+            add(res.name, res.code, res.data, res.stderr)
 
-    codes = [c["code"] for c in checks]
-    overall = (CHECK_FAILED if CHECK_FAILED in codes else USAGE if USAGE in codes
-               else NEEDS_APPROVAL if NEEDS_APPROVAL in codes else OK)
+    overall = checks_mod.aggregate(c["code"] for c in checks)
     return {"db": str(db), "branch": branch, "migrate_branch": migrate, "ci_mode": ci_mode,
             "staged": staged, "checks": checks, "result": overall}, overall
 

@@ -48,7 +48,7 @@ sys.path.insert(0, str(SCRIPTS))
 
 import jsonschema  # noqa: E402
 
-from common import dbpath, gitscope, issuedb, masking, site_defaults, userconfig, yamldoc, yamlio  # noqa: E402
+from common import dbpath, failedstep, gitscope, issuedb, masking, site_defaults, userconfig, yamldoc, yamlio  # noqa: E402
 from common.buildname import sanitize_build  # noqa: E402
 from common.exitcodes import CHECK_FAILED, OK, USAGE  # noqa: E402
 from common.fixtures import parse_name  # noqa: E402
@@ -419,6 +419,10 @@ class Applier:
         if jira.get("carrier"):
             record["carrier"] = jira["carrier"]
         record["analyzed_by"] = self.user
+        if jira.get("failed_step"):    # 선택 값. 마스킹은 멱등이므로 다시 거친다
+            step = failedstep.normalize(masking.new_masker(allow_patterns=self.allow).mask(str(jira["failed_step"])))
+            if step:
+                record["failed_step"] = step
         if jira.get("note"):
             record["note"] = masking.new_masker(allow_patterns=self.allow).mask(str(jira["note"]))
         path = self.tree.type_dir(type_id) / "jira" / f"{key}.yaml"

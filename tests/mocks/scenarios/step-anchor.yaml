@@ -1,0 +1,26 @@
+# 파서 fixture: 시험 자동화 스텝 마커가 있는 로그 (실패 스텝 기준 분석 구간).
+# Step 3(IMS 등록 403)은 PASS, Step 5(데이터 설정 OFF)가 FAIL이다. Jira 발생 시각은 14:31:00(Step 3 쪽)이라
+# 시각만 믿으면 IMS-001-01이 1위가 되고, 실패 스텝 구간으로 보면 DATA-001-01이 1위가 된다.
+# 마커 문구는 placeholder다 — TODO(SITE:S22). 마커 줄에는 슬롯 접두어를 붙이지 않는다(phone: null).
+name: step-anchor
+start: "2026-09-20T14:30:00+09:00"
+default_phone: 0
+pid: 1234
+tid: 1244
+build:
+  fingerprint: "mock/mocka56/a56:16/MOCKBUILD/MOCKA56_U1_20260915:user/release-keys"
+  build: MOCKA56_U1_20260915
+entries:
+  - {at: 0, tag: ImsResolver, msg: "bound to mock ImsService"}
+  - {at: 10, tag: TestRunner, phone: null, msg: "Step 3 START"}
+  - {at: 12, tag: ImsRegistration, level: W, msg: "onRegistrationFailed: code=403 reason=FORBIDDEN"}
+  - {at: 36, tag: ImsRegistration, level: W, msg: "onRegistrationFailed: code=403 reason=FORBIDDEN"}
+  - {at: 40, tag: TestRunner, phone: null, msg: "Step 3 PASS"}
+  - {at: 180, tag: TestRunner, phone: null, msg: "Step 5 START"}
+  - {at: 183, tag: "DSM-{phone}", msg: "onDataEnabledChanged: enabled=false reason=USER"}
+  - {at: 184, tag: "DSM-{phone}", msg: "isDataEnabled=false (user setting off)"}
+  - {at: 186, tag: "DNC-{phone}", level: I, msg: "onEvaluateNetworkRequests: reason=DATA_ENABLED_CHANGED"}
+  - {at: 187, tag: "DNC-{phone}", level: W, msg: "evaluation result: NOT_ALLOWED reasons=[DATA_DISABLED]"}
+  - {at: 195, tag: "DNC-{phone}", level: W, msg: "evaluation result: NOT_ALLOWED reasons=[DATA_DISABLED]"}
+  - {at: 210, tag: TestRunner, phone: null, msg: "Step 5 FAIL"}
+  - {at: 240, tag: "DRM-{phone}", msg: "no retry scheduled: setup not allowed"}

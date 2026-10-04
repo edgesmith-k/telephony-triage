@@ -19,7 +19,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "tests" / "helpers"))
 
-from runner import SAMPLE, copy_db, edit, git, git_db, plugin_root, run, run_json  # noqa: E402
+from runner import SAMPLE, copy_db, edit, git, git_db, plugin_root, run, run_json, variant_db  # noqa: E402
 
 D = "data/DATA-001-no-setup-data-call"
 C = "call/CALL-001-volte-not-working"
@@ -76,7 +76,7 @@ def test_cross_type_cause_gives_allow_cause_draft():
 
 
 def test_pending_cause_fixture_expects_unresolved():
-    result = _regress(REPO / "tests/fixtures/issue-db-pending", expect=0)
+    result = _regress(variant_db("issue-db-pending"), expect=0)
     row = _by_name(result)["DATA-001-03.log"]
     assert row["expect"] == "expect_top: DATA-001:unresolved" and row["status"] == "pass"
     assert row["S"] == ["DATA-001"] and row["C"] == []

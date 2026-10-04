@@ -112,6 +112,12 @@ analyze Step 7에서 새 원인/유형을 계획할 때 아래를 점검하고, 
 - `parser-rules/` 변경은 이슈 DB 메인테이너 리뷰가 필수다 (`06-collaboration.md §6.1`).
 - **정규식 안전**: 규칙과 시그니처의 정규식은 모든 기여자의 매처·pre-commit·CI에서 전체 로그에 실행된다. `db_lint`는 중첩 수량자(`(a+)+`, `(a|a)*` 류)와 길이 제한 없는 역참조를 거부한다(정적 검사, 보수적). 매처와 extractor는 패턴당 실행 시간 상한 `matcher.pattern_timeout_ms`(`issue-db.config.yaml`, 기본 2000)를 두고, 초과하면 그 시그니처(또는 extractor)를 결과에 `error`로 표시하고 분석은 계속한다. 회귀·검증 모드에서는 실패로 본다.
 
+#### (5) 스텝 마커 스캔과 명시 구간 (선택)
+
+시험 자동화가 남기는 스텝 마커(`TestRunner: Step 5 FAIL` 등)는 `tags.yaml`에 없는 태그다. `parse`는 목록에 없는 태그의 줄을 버리므로 마커는 별도 서브커맨드 `parse_logcat.py markers`가 백엔드의 줄 레코드에서 직접 찾는다. 패턴은 이슈 DB가 아니라 `site-defaults.yaml`의 `failed_step.marker_patterns`(이름 그룹 `step`·`status`)에서만 읽는다(`02-config.md`, `14-site.md` S22). 절차: 원문 `TAG: msg`에 패턴을 시간 상한(`matcher.pattern_timeout_ms`) 안에서 돌려 맞은 줄만 고르고, 그 줄만 마스킹한 뒤 마스킹된 텍스트에서 그룹을 다시 뽑는다. 출력은 `{ts, step, status: start|pass|fail, tag, msg(≤200)}` 목록(상한 2000)과 로그 범위(`coverage`)다. 마커가 `parse` 이벤트나 시그니처 평가에 들어가지 않으므로 **S/C·회귀·검증에는 영향이 없다**. `parse --between <ISO 시작> <ISO 끝>`은 `--around`/`--full`과 같은 상호 배타 그룹의 명시 구간이다(`input.mode: "between"`).
+
+**`markers --step-events`(스텝 순서 정렬 입력)**: 실제 logcat에는 스텝 마커가 없으므로 시험 절차의 스텝 순서를 로그의 **흔적**과 맞춘다(`07-workflow.md §Step 3`). 이 플래그는 이슈 DB(`--rules`의 상위) `issue-db.config.yaml`의 `step_events`(`02-config.md §5.3`)를 읽어 규칙마다 흔적을 모은다 — **스텝 이름·시험 절차는 인자로 받지 않는다.** 한 번의 `backend.parse`로: `ril` 규칙은 원 레코드의 `rec["ril"]`(요청 이름·방향)을 그대로, `match` 규칙은 모든 `TAG: msg`를 마스커 하나로 마스킹해 `PatternRunner`(시간 상한)로 검색, `event` 규칙은 `postprocess`(마스킹 포함) 이벤트 중 이름과 `fields` 정규식이 맞는 것을 쓴다. 출력은 `step_events: [{rule, ts, seq, label}]`(규칙 번호·UTC 시각·파서 줄 순번·이벤트/요청/태그 이름 — **로그 본문 없음**, `(ts, seq, rule)` 순)이고, 규칙당 1000개·전체 5000개 상한을 넘으면 경고 `step-events-truncated`(`truncated_rules`)와 함께 앞부분만 낸다. 잘못된 규칙은 경고 `step-event-rule`로 건너뛴다. 플래그가 없으면 출력은 이전과 같다. 이 흔적도 `parse` 이벤트·시그니처 평가에 들어가지 않으므로 **S/C·회귀·검증에는 영향이 없다**.
+
 ### 5.11 시그니처 매칭 규칙
 
 #### (1) 시그니처 의미
@@ -144,12 +150,15 @@ S = 증상 시그니처 충족 시 1, 아니면 0
 C = 원인 시그니처 충족 시 1, 아니면 0
 base = symptom_weight × S + cause_weight × C
 bonus = proximity_bonus_max × (1 - |근거 시각 - 발생 시각| / 분석 범위 절반)   # 0 이상으로 자름
-      + keyword_bonus_max × (Jira 텍스트와 원인 title/tags 키워드 일치 비율)
+      + keyword_bonus_max × (Jira 텍스트(요약·설명·실패 스텝)와 원인 title/tags 키워드 일치 비율)
 score = min(1, base + bonus)
+순위 키 = (-(score + step), -(근접 + 키워드 + step), 유형, 원인)    # step = 스텝 기준 우선 유형이면 step_focus_bonus_max, 아니면 0
 feedback_weight가 켜져 있고 해당 시그니처 표본 ≥ min_samples면: score × (0.5 + 0.5 × 수락률)
 ```
 
-- 신뢰도: `score ≥ confidence.high` 높음, `≥ confidence.medium` 중간, 그 외 낮음.
+- 정렬 = score 내림차순, 동점은 bonus(근접+키워드) 합 내림차순 → 유형·원인 ID. `min(1, …)` 때문에 S=C=1에서 점수가 포화하므로 bonus는 점수를 올리지 못하고 동점 정렬에만 쓰인다. 실패 스텝(선택 입력, `07-workflow.md §Step 2`)은 키워드 입력에 더해질 뿐 S·C에는 관여하지 않는다. S=1·C=0이면 점수가 포화하지 않아 ≤0.05 bonus가 일치 수준 라벨(`confidence`)을 바꿀 수 있다(기존 키워드 보너스와 같은 동작).
+- **스텝 기준 우선 유형(분석 모드, 순위 참고만)**: `--jira-meta`에 `failed_step`이 있으면 매처가 우선 유형을 정한다. (i) 유형의 기존 Jira 기록 중 `failed_step`이 같은 스텝(번호를 뗀 이름의 `group_key` 같음, 또는 짧은 쪽이 4자 이상이고 긴 쪽에 포함)인 것이 `step_focus.min_records`(기본 2)건 이상이거나, (ii) `step_focus.map[{pattern, types[], categories[]}]`의 `pattern`이 마스킹된 스텝에 `re.search`로 맞으면(나열한 유형과 나열한 카테고리의 active 유형 전부) 그 유형이 우선 유형이다. 우선 유형 후보는 **순위 키에만** `scoring.step_focus_bonus_max`(기본 0.05)를 더한다. **`score`·`confidence`·S·C는 바뀌지 않는다**(점수에 더하지 않으므로 라벨도 안 바뀐다). `min(1, …)` 포화 때문에 score가 같은 후보 사이에서만이 아니라 score 차이가 이 값 이내인 후보 사이에서도 순서가 바뀔 수 있다는 점에 유의한다(S=C=1이면 보통 동점이라 동점 정렬이 된다). 우선 유형이 있을 때만 후보 `bonus.step`(> 0)과 최상위 `step_focus: {types[], by{유형: ["records:N" | "map"]}}`를 낸다. 회귀·검증 모드(`bonus` 0)는 우선 유형이 없고 새 키도 없다(출력이 이전과 같다). **피드백 주의**: 수락률·1위 정확도의 "1위"는 이 정렬이 반영된 1위다(`06-collaboration.md §6.5`).
+- 신뢰도: `score ≥ confidence.high` 높음, `≥ confidence.medium` 중간, 그 외 낮음. `confidence`는 score를 구간으로 나눈 규칙 일치 수준이며 진단 확신도가 아니고 자동 게시 근거로 쓰지 않는다(`ARCHITECTURE_REVIEW` 결정 (b)).
 - 증상만 충족(S=1, C=0)하면 "유형 일치, 원인 미확인" 후보로 표시한다.
 - `status`가 `active`가 아닌 유형과 원인은 후보에서 제외한다.
 - 수락률 = (그 시그니처가 **1위로 제시된** 피드백 중 `decision: accepted`인 건수) / (그 시그니처가 1위로 제시된 피드백 건수). 2위 이하로 제시된 경우는 분모에 넣지 않는다. `decision: manual`(수동 기록)은 제시된 후보가 없으므로 집계하지 않는다 (`06-collaboration.md §6.5`).
@@ -164,7 +173,7 @@ feedback_weight가 켜져 있고 해당 시그니처 표본 ≥ min_samples면: 
 **회귀·검증 모드** (`match_signatures.py --regress`)
 - 분석 범위 = **fixture 파일 전체** (발생 시각 기준으로 자르지 않는다).
 - 원인 평가 = **모든 active 원인의 C를 독립 평가** (위 (1) 원인 평가 범위).
-- bonus = **0** (proximity, keyword 모두).
+- bonus = **0** (proximity, keyword 모두). 그래서 (2)의 동점 정렬이 적용되지 않으며 후보 순서는 이전과 같다(ID 순).
 - 피드백 가중치 **끔** (`--no-feedback-weight` 포함). 피드백이 쌓여도 규칙 변경 없이 회귀 결과가 바뀌지 않게 하기 위해서다.
 - **판정은 S/C 값만으로 한다.** 점수(S=1, C=1 → 1.0 / S=0, C=1 → 0.6 / S=1, C=0 → 0.4)와 신뢰도는 결과표의 참고 값이고 판정에 쓰지 않는다. `scoring` 값(`cause_weight`, `confidence`)을 바꿔도 회귀·검증 결과가 바뀌지 않게 하기 위해서다 (`contracts.md §fixture` 기대값, `05-verification.md` R2·R3).
 - `db_regress`, `db_verify`(rules, resolution, fix)는 항상 이 모드를 쓴다.

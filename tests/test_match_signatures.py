@@ -383,6 +383,68 @@ def test_bad_signature_is_usage_error():
     assert "sequence" in err
 
 
+# -- 동점 정렬 (R8) --------------------------------------------------------------
+
+
+def _two_cluster_log() -> Path:
+    """60초(window_sec)보다 떨어진 두 군집: A(14:30) DATA-001-01, B(14:33) DATA-001-02. SETUP_DATA_CALL 없음."""
+    return _write_log([
+        _line("14:30:03.000", "D", "DSM-0", OFF),
+        _line("14:30:04.900", "W", "DNC-0", REJECTED),
+        _line("14:33:00.000", "D", "SST-0", "onRoamingOn: roaming=true"),
+        _line("14:33:02.700", "W", "DNC-0", "evaluation result: NOT_ALLOWED reasons=[ROAMING_DISABLED]"),
+    ])
+
+
+def _jira_at(occurred_at: str) -> dict:
+    return {"key": "MOCK-R8", "occurred_at": occurred_at, "sw": "MOCKA56_U1_20260915", "summary": ""}
+
+
+def test_full_match_ties_are_ordered_by_proximity():
+    events = _events(_two_cluster_log(), around="2026-09-20T14:31:30+09:00")
+    near = {}
+    for name, at in (("B", "2026-09-20T14:33:02+09:00"), ("A", "2026-09-20T14:30:05+09:00")):
+        result = _match(events, SAMPLE, "--no-feedback-weight", jira=_jira_at(at))
+        cands = [c for c in result["candidates"] if c["cause"] in ("DATA-001-01", "DATA-001-02")]
+        assert len(cands) == 2
+        assert all(c["S"] == 1 and c["C"] == 1 and c["score"] == 1.0 for c in cands)
+        near[name] = cands
+    assert [c["cause"] for c in near["B"]] == ["DATA-001-02", "DATA-001-01"]
+    assert [c["cause"] for c in near["A"]] == ["DATA-001-01", "DATA-001-02"]
+    for cands in near.values():
+        assert cands[0]["bonus"]["proximity"] > cands[1]["bonus"]["proximity"]
+
+
+def test_regress_order_unchanged_by_tiebreak():
+    events = _events(_two_cluster_log(), around="2026-09-20T14:31:30+09:00")
+    results = [_match(events, SAMPLE, "--regress", jira=_jira_at(at))
+               for at in ("2026-09-20T14:33:02+09:00", "2026-09-20T14:30:05+09:00")]
+    for result in results:
+        cands = result["candidates"]
+        assert cands and all(c["bonus"] == {"proximity": 0.0, "keyword": 0.0} for c in cands)
+        assert cands == sorted(cands, key=lambda c: (-c["score"], c["type"], c["cause"] or ""))
+    for key in ("candidates", "types", "causes"):
+        assert json.dumps(results[0][key], sort_keys=True) == json.dumps(results[1][key], sort_keys=True)
+
+
+def _tie_cands(result: dict) -> list[dict]:
+    return [c for c in result["candidates"] if c["cause"] in ("DATA-001-01", "DATA-001-02")]
+
+
+def test_failed_step_feeds_keyword_bonus_only_in_analysis_mode():
+    events = _events(_two_cluster_log(), around="2026-09-20T14:31:30+09:00")
+    base = {"key": "MOCK-R8", "sw": "MOCKA56_U1_20260915", "summary": ""}       # occurred_at 없음 → 근접 0
+    plain = _tie_cands(_match(events, SAMPLE, "--no-feedback-weight", jira=base))
+    assert [c["cause"] for c in plain] == ["DATA-001-01", "DATA-001-02"]
+    withstep = _tie_cands(_match(events, SAMPLE, "--no-feedback-weight",
+                                 jira={**base, "failed_step": "3 | Enable roaming data"}))
+    assert [c["cause"] for c in withstep] == ["DATA-001-02", "DATA-001-01"]
+    assert withstep[0]["bonus"]["keyword"] > withstep[1]["bonus"]["keyword"]
+    reg = _tie_cands(_match(events, SAMPLE, "--regress", jira={**base, "failed_step": "3 | Enable roaming data"}))
+    assert [c["cause"] for c in reg] == ["DATA-001-01", "DATA-001-02"]
+    assert all(c["bonus"] == {"proximity": 0.0, "keyword": 0.0} for c in reg)
+
+
 def _all_tests():
     return [(n, o) for n, o in sorted(globals().items()) if n.startswith("test_") and callable(o)]
 

@@ -17,6 +17,7 @@
         sw: ""                    # 선택
         summary: ""               # 선택
         description: ""           # 선택
+        failed_step: ""           # 선택. 실패 스텝 한 줄(보조 정보, 후보 동점 정렬의 키워드 보너스·후보 없음 힌트에만 쓴다)
         expect: DATA-001-01       # 정답 원인 ID 또는 unresolved
 
 지표:
@@ -96,6 +97,8 @@ def evaluate_item(root: Path, db: Path, base: Path, doc: dict, item: dict, work:
     job.mkdir(parents=True)
     meta = {"key": key, "occurred_at": str(item["occurred_at"]), "sw": item.get("sw", ""),
             "summary": item.get("summary", ""), "description": item.get("description", "")}
+    if item.get("failed_step"):
+        meta["failed_step"] = str(item["failed_step"])
     meta_path = job / "jira_input.json"
     meta_path.write_text(json.dumps(meta, ensure_ascii=False), encoding="utf-8")
     args = ["run", key, "--offline-db", str(db), "--out", str(job), "--logs", *logs, "--jira-meta", str(meta_path)]

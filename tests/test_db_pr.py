@@ -19,11 +19,10 @@ import yaml
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "tests" / "helpers"))
 
-from runner import SAMPLE, git_db, run_json, run  # noqa: E402
+from runner import SAMPLE, git_db, run_json, run, variant_db  # noqa: E402
 from workspace import PLANS, Workspace, git  # noqa: E402
 
-FIX = REPO / "tests" / "fixtures"
-SIM_LOG = FIX / "issue-db-pending/data/DATA-001-no-setup-data-call/fixtures/DATA-001-03.log"
+SIM_LOG = variant_db("issue-db-pending") / "data/DATA-001-no-setup-data-call/fixtures/DATA-001-03.log"
 NORMAL_LOG = SAMPLE / "data/DATA-001-no-setup-data-call/fixtures/DATA-001.none.log"
 DATA_DIR = "data/DATA-001-no-setup-data-call"
 CSFB_LOG = """09-28 11:00:00.000  1234  1250 I SST-0: [PHONE0] pollState: voice=IN_SERVICE data=IN_SERVICE
@@ -652,6 +651,41 @@ def test_expired_own_lock_does_not_block_publish_or_discard():
 # -- cleanup·lock ------------------------------------------------------------------------------------
 
 
+def test_pasted_steps_are_removed_when_job_ends():
+    """붙여넣은 스텝 원문(steps-pasted.txt)은 discard·lock release(자기 작업)·cleanup이 지운다 (08-safety.md §8.1)."""
+    ws = Workspace()
+    ws.plan("MOCK-7001", "p7-analyze-append.plan.json")
+    ws.acquire("MOCK-7001")
+    ws.stage("MOCK-7001", "issue/MOCK-7001")
+    pasted = ws.job_dir("MOCK-7001") / "steps-pasted.txt"
+    pasted.write_text("1 | 데이터 켜기 | FAIL\n", encoding="utf-8")
+    ws.db_pr("discard", ws.wt("MOCK-7001"))
+    assert not pasted.exists()
+
+    # discard 없이 끝나는 경로: 자기 작업 lock release (lock이 이미 없어도)
+    ws.acquire("MOCK-7002")
+    pasted = ws.job_dir("MOCK-7002") / "steps-pasted.txt"
+    pasted.parent.mkdir(parents=True, exist_ok=True)
+    pasted.write_text("붙여넣기\n", encoding="utf-8")
+    ws.db_pr("lock", "release", "MOCK-7002")
+    assert not pasted.exists()
+    pasted.write_text("붙여넣기\n", encoding="utf-8")
+    ws.db_pr("lock", "release", "MOCK-7002")
+    assert not pasted.exists()
+
+    # --force(다른 세션의 lock)는 그 작업의 파일을 건드리지 않는다. 남은 파일은 cleanup이 지운다
+    ws.acquire("MOCK-7003")
+    other = ws.job_dir("MOCK-7003") / "steps-pasted.txt"
+    other.parent.mkdir(parents=True, exist_ok=True)
+    other.write_text("붙여넣기\n", encoding="utf-8")
+    ws.db_pr("lock", "release", "MOCK-7003", "--force")
+    assert other.exists()
+    dry = ws.db_pr("cleanup", "--dry-run")
+    assert {"kind": "state", "job": "MOCK-7003", "path": str(other)} in dry["targets"]
+    ws.db_pr("cleanup", "--yes")
+    assert not other.exists()
+
+
 def test_cleanup_skips_lock_holder_and_needs_yes():
     ws = Workspace()
     ws.plan("MOCK-7004", "p7-analyze-unresolved.plan.json")
@@ -677,7 +711,7 @@ def test_cleanup_skips_lock_holder_and_needs_yes():
 
 
 def test_post_lint_reports_duplicates_without_changes():
-    ws = Workspace(src=FIX / "issue-db-dup-id")
+    ws = Workspace(src=variant_db("issue-db-dup-id"))
     head = git(ws.clone, "rev-parse", "HEAD")
     ws.acquire("sync")
     out = ws.db_pr("snapshot", "--job", "sync")
@@ -751,6 +785,24 @@ def test_check_ids_renumber_and_similar():
 
     sim = run_json("db_add.py", ["similar", "SETUP_DATA_CALL이 나가지 않음", "--db", db])
     assert sim["top"][0]["type"] == "DATA-001" and len(sim["top"]) == 3
+
+
+def test_apply_masks_failed_step_and_writes_it_before_note():
+    db = git_db()
+    plan = load_plan("p7-analyze-append.plan.json")
+    plan["jira"]["failed_step"] = "고객 010-1234-5678  데이터 켜기"
+    apply_json(db, plan)
+    text = (db / DATA_DIR / "jira" / "MOCK-7001.yaml").read_text(encoding="utf-8")
+    record = yaml.safe_load(text)
+    assert "010-1234-5678" not in text and "<MSISDN#" in record["failed_step"] and "  " not in record["failed_step"]
+    keys = list(record)
+    assert keys.index("failed_step") == keys.index("note") - 1
+    lint = run_json("db_lint.py", ["--db", db, "--all"], expect=0)
+    assert lint["errors"] == []
+    plain = load_plan("p7-analyze-append.plan.json")
+    db2 = git_db()
+    apply_json(db2, plain)
+    assert "failed_step" not in yaml.safe_load((db2 / DATA_DIR / "jira" / "MOCK-7001.yaml").read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

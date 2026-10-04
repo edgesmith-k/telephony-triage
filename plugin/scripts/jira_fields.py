@@ -18,7 +18,12 @@
      sim_slot, components[], text: {summary, description, comments[], comments_total},   # 마스킹됨
                                                 # --comments last:N면 뒤에서 N개, --comment-chars면 하나당 N자
      missing[], meta_out}
-`--meta-out`이면 `match_signatures.py --jira-meta` 입력 `{key, occurred_at, sw, summary, description}`을 쓴다.
+선택 키(실패 스텝은 선택 값이라 **있을 때만** 나온다, 07-workflow.md §Step 2): `text.test_steps`(마스킹, ≤1000자),
+`failed_step_auto {text, source}`(Jira에서 자동으로 얻은 값: field > description > test_steps),
+`failed_step {text, source}`(`--failed-step`·`--steps-file`까지 반영한 최종 값, source는 cli|field|description|test_steps|steps_file),
+`jira.failed_step`(그 값의 text), `warnings[]`. 보조 정보일 뿐이며 `missing`에 넣지 않는다.
+`--failed-step <한 줄>`·`--steps-file <파일>`은 record 흐름이 쓴다(우선순위 cli > 자동 > steps-file, 모두 마스킹 후 정규화).
+`--meta-out`이면 `match_signatures.py --jira-meta` 입력 `{key, occurred_at, sw, summary, description}`을 쓴다(`failed_step`은 있을 때만 더한다).
 `--consume`이면 읽은 원본 파일을 지운다(원문을 work_dir에 남기지 않기 위해서다, 08-safety.md §8.1).
 
 `field_map` 경로 표기: 점으로 잇고, 목록은 `[]`로 펼친다(`fields.components[].name`). 경로가 비었거나
@@ -41,7 +46,7 @@ import yaml
 SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS))
 
-from common import compat, dbpath, masking, site_defaults, userconfig  # noqa: E402
+from common import compat, dbpath, failedstep, masking, site_defaults, userconfig  # noqa: E402
 from common.exitcodes import CHECK_FAILED, OK, USAGE  # noqa: E402
 
 DEFAULT_KEY_RE = r"[A-Z][A-Z0-9]+-\d+"
@@ -149,8 +154,35 @@ def comment_budget(spec: str) -> int | None:
     return int(m.group(1))
 
 
+def _failed_step_part(raw, fmap, jira_cfg, text, masker, cli, steps_file, step_cfg=None) -> dict:
+    """선택 키(`test_steps`·`failed_step_auto`·`failed_step`·`warnings`). 없으면 키를 만들지 않는다."""
+    out: dict = {}
+    patterns = jira_cfg.get("failed_step_patterns") or []
+    steps_raw = lookup(raw, fmap["test_steps"]) if fmap.get("test_steps") else None
+    steps = masker(_text(steps_raw)) if steps_raw not in (None, "", []) else ""
+    field = lookup(raw, fmap["failed_step"]) if fmap.get("failed_step") else None
+    if isinstance(field, list):
+        field = " ".join(_text(v) for v in field)
+    elif isinstance(field, dict):
+        field = _text(field)
+    auto, warnings = failedstep.auto_from(field, text["description"], steps, patterns, masker)
+    final, more = failedstep.resolve(cli, auto, steps_file, patterns, masker, step_cfg)
+    warnings += [w for w in more if w not in warnings]
+    if steps:
+        if len(steps) > failedstep.TEST_STEPS_MAX:
+            steps = steps[: failedstep.TEST_STEPS_MAX - 1] + "…"
+        out["test_steps"] = steps
+    if auto:
+        out["failed_step_auto"] = auto
+    if final:
+        out["failed_step"] = final
+    if warnings:
+        out["warnings"] = warnings
+    return out
+
+
 def extract(raw: dict, cfg: dict, db: Path | None, origin: str, last: int | None = None,
-            chars: int = 0) -> dict:
+            chars: int = 0, failed_step: str | None = None, steps_file: str | None = None) -> dict:
     jira_cfg = cfg.get("jira") or {}
     fmap = jira_cfg.get("field_map") or {}
     jtz = _zone(jira_cfg.get("timezone"), "Jira")
@@ -203,6 +235,8 @@ def extract(raw: dict, cfg: dict, db: Path | None, origin: str, last: int | None
     if not isinstance(comps, list):
         comps = [comps]
 
+    optional = _failed_step_part(raw, fmap, jira_cfg, text, masker, failed_step, steps_file, cfg.get("failed_step"))
+
     local = when.astimezone(jtz) if when else None
     year = None
     if when and (logcat_cfg.get("year_source") or "jira") == "jira":
@@ -210,7 +244,11 @@ def extract(raw: dict, cfg: dict, db: Path | None, origin: str, last: int | None
     jira_block = {"key": key, "origin": origin, **structured}
     if local:
         jira_block["occurred_on"] = local.date().isoformat()
-    return {
+    if optional.get("failed_step") or optional.get("failed_step_auto"):
+        jira_block["failed_step"] = (optional.get("failed_step") or optional["failed_step_auto"])["text"]
+    if "test_steps" in optional:
+        text["test_steps"] = optional.pop("test_steps")
+    result = {
         "key": key,
         "key_valid": bool(key and kre.fullmatch(key)),
         "origin": origin,
@@ -223,6 +261,8 @@ def extract(raw: dict, cfg: dict, db: Path | None, origin: str, last: int | None
         "text": text,
         "missing": missing,
     }
+    result.update(optional)
+    return result
 
 
 def _read(path: Path) -> dict:
@@ -256,6 +296,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--consume", action="store_true")
     p.add_argument("--comments", default="all", help="코멘트 예산: all | last:<N> (뒤에서 N개)")
     p.add_argument("--comment-chars", type=int, default=0, help="코멘트 하나의 최대 글자 수 (0이면 자르지 않음)")
+    p.add_argument("--failed-step", help="실패 스텝 한 줄(선택, 마스킹 후 사용)")
+    p.add_argument("--steps-file", help="시험 절차 첨부 파일(txt/csv/html/zip, 선택). 읽지 못하면 경고만 내고 진행")
     return parser
 
 
@@ -278,12 +320,16 @@ def main(argv: list[str] | None = None) -> int:
         if args.comment_chars < 0:
             raise UsageError("--comment-chars는 0 이상이다.")
         result = extract(raw, userconfig.merged(defaults), db, args.origin,
-                         comment_budget(args.comments), args.comment_chars)
+                         comment_budget(args.comments), args.comment_chars,
+                         args.failed_step, args.steps_file)
         if args.meta_out:
             meta = {"key": result["key"], "sw": result["jira"].get("sw"),
                     "summary": result["text"]["summary"], "description": result["text"]["description"]}
             if result["occurred_at"]:
                 meta["occurred_at"] = result["occurred_at"]
+            fs = result.get("failed_step") or result.get("failed_step_auto")
+            if fs:
+                meta["failed_step"] = fs["text"]
             out = Path(args.meta_out)
             out.parent.mkdir(parents=True, exist_ok=True)
             out.write_text(json.dumps(meta, ensure_ascii=False, indent=1), encoding="utf-8", newline="\n")

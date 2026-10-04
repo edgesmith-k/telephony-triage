@@ -1,7 +1,0 @@
-09-24 14:00:00.000  1300  1312 D ImsResolver: [PHONE0] bound to mock ImsService
-09-24 14:00:02.000  1300  1312 D ImsManager: [PHONE0] carrier config applied: volte_available=true
-09-24 14:00:05.000  1300  1312 I ImsRegistration: [PHONE0] onRegistered: transport=LTE impu=sip:<IMPU#1>@ims.mnc001.mcc450.3gppnetwork.org
-09-24 14:00:20.000  1300  1312 D ImsPhoneCallTracker: [PHONE0] dial: isVolteEnabled=true imsRegistered=true
-09-24 14:00:20.500  1300  1312 D RILJ: [PHONE0] [0081]> DIAL clir=0
-09-24 14:00:21.600  1300  1312 D RILJ: [PHONE0] [0081]< DIAL error=NONE
-09-24 14:00:23.600  1300  1312 D ImsPhoneCallTracker: [PHONE0] call state changed: ACTIVE

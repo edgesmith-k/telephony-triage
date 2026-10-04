@@ -6,7 +6,7 @@
 > 각 Phase를 시작할 때 이 파일에서 **그 Phase 절만** 읽고, 그 Phase의 "읽을 문서"를 읽는다.
 
 - **수동 기록(`record`)의 구현 위치**: 별도 Phase가 없다. 계획 경로와 `source: record` 규칙은 Phase 7(손으로 쓴 record 계획), 검증 상태(`skipped: fixture 없음`, `시그니처 없음(pending)`)는 Phase 10, 리뷰 항목은 Phase 11, 커맨드 틀은 Phase 12, 대화형 흐름과 eval 30~38(수동 기록)은 Phase 13에서 만든다. `also_allowed`/`allow-cause`도 별도 Phase가 없다: 스키마·lint는 Phase 1·5, op·drift는 Phase 7, R2~R4 판정과 초안 제시는 Phase 10, 리뷰 항목은 Phase 11, eval 42는 Phase 13. 설계는 `07-workflow.md §record`, 검증 표는 `05-verification.md §5.12 (1)` "수동 기록 검증".
-- **테스트용 이슈 DB**: 합성 샘플은 `tests/fixtures/issue-db-sample/`(파일 트리)에 둔다. 테스트는 헬퍼(`tests/helpers/make_repo.py`)로 이 트리에서 임시 git 레포와 bare 원격을 만들어 쓴다. 변형(오류 주입, 0건 카테고리, 리뷰 케이스 등)도 `tests/fixtures/issue-db-*/`에 두고, 샘플 트리를 오염시키지 않는다.
+- **테스트용 이슈 DB**: 합성 샘플은 `tests/fixtures/issue-db-sample/`(파일 트리)에 둔다. 테스트는 헬퍼(`tests/helpers/make_repo.py`)로 이 트리에서 임시 git 레포와 bare 원격을 만들어 쓴다. 변형(오류 주입, 0건 카테고리, 리뷰 케이스 등 `issue-db-*`)은 커밋하지 않고 `tests/helpers/make_variant_dbs.py`가 테스트 때 샘플에서 생성한다(`runner.variant_db(name)`). 샘플 트리를 오염시키지 않는다.
 
 ### Phase D0. 모의 환경 (두 모드 공통)
 - 사외 초안 모드는 여기서 시작한다. 사내 처음부터 모드는 Phase 0 다음에 한다(모의 환경은 Phase 1~13의 테스트에 필요하므로 모드와 무관하다). 사내 보완 모드는 하지 않는다(사외에서 이미 만들어 반입됨).
@@ -16,7 +16,7 @@
 - 모의 site 백엔드(`builtin.data.*` 이벤트를 내는 가짜)·골든 테스트 틀·어댑터 예시, 모의 분석 스킬, 비표준 Jira 도구 이름도 만든다 (`16-existing-assets.md §16.6`). 백엔드·`jira.tools`·`analyzers`의 구현 위치는 Phase 2(백엔드 인터페이스·어댑터), Phase 6(`jira.tools` setup), Phase 13(심층 분석 호출, `--analyzer`/`--no-analyzer`)이며, 해당 Phase의 읽을 문서에 `16-existing-assets.md`를 더한다.
 
 ### Phase 0. 사내 환경 확인 (사내 처음부터 모드에서만)
-- 할 일: `14-site.md §14.4` 절차. 문서 정합성 검토(여러 파일 간 참조·표 복사·개수 포함, `REVIEW-OPEN.md` 항목 포함) + 사내 환경 확인(S1~S21). 결과는 `SITE_PROFILE.md`(진행 상태 포함).
+- 할 일: `14-site.md §14.4` 절차. 문서 정합성 검토(여러 파일 간 참조·표 복사·개수 포함, `REVIEW-OPEN.md` 항목 포함) + 사내 환경 확인(S1~S22). 결과는 `SITE_PROFILE.md`(진행 상태 포함).
 - 완료 기준: `14-site.md §14.4` 완료 기준.
 - 읽을 문서: 전체 (`CLAUDE.md`, `docs/design/*.md`(`99-deferred.md` 제외), `REVIEW-OPEN.md`). 정합성 검토를 위해 이 Phase만 전부 읽는다. **사내 보완 모드에서는 이 Phase를 하지 않는다** (S-1 축약판을 쓴다). 이 Phase 다음은 Phase D0다.
 
@@ -69,7 +69,7 @@
   - `db_build.py`: README(`03-issue-db.md §5.6`), 카테고리 README, STATS(`06-collaboration.md §6.7`, 수락률은 `06-collaboration.md §6.5`대로 `manual` 제외, 최근 N일·급증은 `occurred_on` 기준), CHANGELOG, 로컬 캐시(`06-collaboration.md §6.8`, `common/` 컴파일 함수 사용), 결정성 규칙(`03-issue-db.md §5.2`), `generator_version` 검사, 모드 `--write`/`--verify [--staged]`/`--preview <dir>`/`--cache-only`
   - `db_lint.py`: `01-architecture.md §3.1`의 lint 책임 전부 (fixture 파일명(`<n1>`/`<n2>` 구분), 시그니처·extractor 원본 식별자, `jira_key_regex`, `fix.ref` 형식(`fix_ref_regex`), 금지 동의어, `signatures_pending` 경고와 pending 원인의 `unverified` 고정, 양성 fixture 없음 경고, `builtin.*`·`ext.*` 참조 검사, `--residual`, 검증 규칙 중 "근거 없는 verified 금지"·"새 원인 fixed 금지(base ref 범위)"), `--all`/`--ref`/`--changed`(merge-base)/`--staged`
   - `db_regress.py`: `contracts.md §fixture` 기대값, `--all`/`--changed`/`--staged`(parser-rules 변경 시 전체), 항상 `--regress`, 실패 원인 출력(음성 fixture면 S=1이 된 유형·시그니처 전역 키)
-- 완료 기준: 샘플 이슈 DB에서 README가 `03-issue-db.md §5.6`과 같은 구조로 나오고 6개 카테고리가 모두 나온다. 0건 카테고리 표시는 `tests/fixtures/issue-db-empty-category/`와 `make_db_skeleton.py` 결과(6개 카테고리 모두 "아직 등록된 이슈가 없습니다")로 확인한다. 두 번 실행하면 바이트 단위로 같다. `--preview`와 `--cache-only`는 워킹 트리를 바꾸지 않는다. 캐시 해시가 다르면 매처가 재컴파일한다. 린터가 `tests/fixtures/issue-db-lint-*/`의 일부러 넣은 오류(ID 중복, Jira 중복, 금지 동의어, 없는 related, 절대 경로 code_refs, 잘못된 id_prefix, 규칙 밖 fixture 이름(`.resolved.log`, 양성 `.1.log` 등), 시그니처·extractor의 원본 IMSI 패턴, 옛 ID 잔존, pending 표시 없이 빈 시그니처, 유형에 붙은 `signatures_pending`, 빈 `symptom_signatures`, `verify-resolution` evidence 없는 verified, `fix_ref_regex`에 맞지 않는 `fix.ref`, 현재 백엔드 `builtin_events()`에 없는 `builtin.*` 참조, 이슈 DB `external_parsers`에 없는 카테고리의 `ext.*` 참조, 시그니처의 특정 마스킹 번호 고정(`<CELL#1>`), 중첩 수량자 정규식(`(a+)+`), `sequence`에 없는 조건 id·중복 id·`must_not_match` 참조, `jira/*.yaml` `note`와 `cp_evidence`의 원본 전화번호, `also_allowed`에 자기 원인·같은 유형 원인·없는 ID, 없는 Jira 키나 fixture 경로를 가리키는 `resolution_verification.evidence`, `synthetic_allowed: false`인 루트에서 `origin: synthetic` fixture)를 모두 잡고, `.resolved.1.log`·`.extra.1.log`·다른 유형 원인을 담은 `also_allowed`는 통과시킨다. `decision: manual` 피드백이 수락률에 들어가지 않는다. `date`는 최근이지만 `occurred_on`이 오래된 Jira 여러 건이 최근 30일 건수·급증에 들어가지 않는다. 회귀가 샘플 fixture 전부 통과한다. 음성 fixture를 일부러 깨면 어느 유형의 어떤 시그니처가 잡았는지 출력된다. `signatures_pending` 원인의 양성 fixture가 회귀에 `"<유형 ID>:unresolved"` 기대값으로 포함된다(`tests/fixtures/issue-db-pending/`).
+- 완료 기준: 샘플 이슈 DB에서 README가 `03-issue-db.md §5.6`과 같은 구조로 나오고 6개 카테고리가 모두 나온다. 0건 카테고리 표시는 변형 `issue-db-empty-category`(make_variant_dbs.py가 테스트 때 생성)와 `make_db_skeleton.py` 결과(6개 카테고리 모두 "아직 등록된 이슈가 없습니다")로 확인한다. 두 번 실행하면 바이트 단위로 같다. `--preview`와 `--cache-only`는 워킹 트리를 바꾸지 않는다. 캐시 해시가 다르면 매처가 재컴파일한다. 린터가 변형 `issue-db-lint-errors`(make_variant_dbs.py가 테스트 때 생성)의 일부러 넣은 오류(ID 중복, Jira 중복, 금지 동의어, 없는 related, 절대 경로 code_refs, 잘못된 id_prefix, 규칙 밖 fixture 이름(`.resolved.log`, 양성 `.1.log` 등), 시그니처·extractor의 원본 IMSI 패턴, 옛 ID 잔존, pending 표시 없이 빈 시그니처, 유형에 붙은 `signatures_pending`, 빈 `symptom_signatures`, `verify-resolution` evidence 없는 verified, `fix_ref_regex`에 맞지 않는 `fix.ref`, 현재 백엔드 `builtin_events()`에 없는 `builtin.*` 참조, 이슈 DB `external_parsers`에 없는 카테고리의 `ext.*` 참조, 시그니처의 특정 마스킹 번호 고정(`<CELL#1>`), 중첩 수량자 정규식(`(a+)+`), `sequence`에 없는 조건 id·중복 id·`must_not_match` 참조, `jira/*.yaml` `note`와 `cp_evidence`의 원본 전화번호, `also_allowed`에 자기 원인·같은 유형 원인·없는 ID, 없는 Jira 키나 fixture 경로를 가리키는 `resolution_verification.evidence`, `synthetic_allowed: false`인 루트에서 `origin: synthetic` fixture)를 모두 잡고, `.resolved.1.log`·`.extra.1.log`·다른 유형 원인을 담은 `also_allowed`는 통과시킨다. `decision: manual` 피드백이 수락률에 들어가지 않는다. `date`는 최근이지만 `occurred_on`이 오래된 Jira 여러 건이 최근 30일 건수·급증에 들어가지 않는다. 회귀가 샘플 fixture 전부 통과한다. 음성 fixture를 일부러 깨면 어느 유형의 어떤 시그니처가 잡았는지 출력된다. `signatures_pending` 원인의 양성 fixture가 회귀에 `"<유형 ID>:unresolved"` 기대값으로 포함된다(변형 `issue-db-pending`, make_variant_dbs.py가 테스트 때 생성).
 - 읽을 문서: `contracts.md`, `02-config.md §5.3`, `03-issue-db.md`, `04-parser-matching.md §5.11`, `06-collaboration.md §6.5·6.7·6.8·6.9`
 
 ### Phase 6. 설정, 코드 경로, setup
@@ -104,7 +104,7 @@
   - 원격 브랜치가 마지막 publish(`pr.head_sha`) 이후 다른 사람에 의해 바뀌었으면 `sync-pr`가 바뀐 내용을 보여주고 덮어쓰기/중단을 묻는다. 계획이 없는 브랜치는 `sync-pr`가 수동 재동기화 절차를 안내하고 아무것도 바꾸지 않는다
   - `sync-pr` 도중 원격 브랜치가 바뀌면 push가 거부된다. 승인 후 파일이 바뀌거나, 커밋이 둘이거나, 커밋 메시지나 브랜치가 `state.json`과 다르면 `publish`가 거부된다
   - `cleanup --dry-run`은 현재 작업 키의 worktree를 대상에 넣지 않고, `--yes` 없이는 아무것도 지우지 않는다. discard 없이 끝나는 경로(읽기 전용 종료, 계획 저장 후 종료)에서 `lock release`가 호출되면 다음 작업이 바로 lock을 잡는다
-  - `tests/fixtures/issue-db-dup-id/`에서 사후 lint가 ID 중복과 Jira 중복을 보고한다 (아무것도 바꾸지 않는다)
+  - 변형 `issue-db-dup-id`(make_variant_dbs.py가 테스트 때 생성)에서 사후 lint가 ID 중복과 Jira 중복을 보고한다 (아무것도 바꾸지 않는다)
   - 기존 fixture 결과를 바꾸는 규칙은 R4에서 차단된다
 - 읽을 문서: `contracts.md`, `01-architecture.md §3.1`, `02-config.md §5.3`(리뷰어 계산), `03-issue-db.md §5.4·5.5·5.7·5.9`, `04-parser-matching.md §5.8`, `05-verification.md §5.12 (1)`(뼈대·수동 기록 검증 표), `06-collaboration.md §6.2·6.3`, `07-workflow.md §Step 8·공통 쓰기 절차·record·sync-pr`
 
@@ -119,7 +119,7 @@
 - 읽을 문서: `contracts.md`, `06-collaboration.md §6.3·6.4`
 
 ### Phase 10. 검증
-- 할 일: `db_verify.py`(`rules` R1~R6 완성 — 의존 그래프 기반 대상 계산, 증상 시그니처의 R1·R3, R1 흔적 검사, `skipped` 사유(`fixture 없음`·`음성 fixture 없음`은 `review_required`, `시그니처 없음(pending)`), `--draft` worktree, R5 `needs-approval`; `resolution`, `fix`(둘 다 `--plan --draft` 포함) 판정 — 시나리오 흔적 전제), `db_regress.py --events-diff`, 검증 op(`set-resolution`, `verify-resolution`, `verify-fix`)의 판정 연결(`verify-fix` passed는 빌드 있는 `fixed_in` 필요, pending 원인의 `verify-resolution` 거부), `update-fix` open 되돌림 시 이력 보존(`history`), `db_lint` 검증 규칙(검증 없는 fixed 금지, 코드·설정 수정 유형의 fixed에 scenario/recovery 필수). 테스트용 이슈 DB `tests/fixtures/issue-db-verify/`에서 CALL-001-01을 `fix-submitted`로 바꾸고 수정 전/후/재발/시나리오 없음 fixture를 만들어 쓴다.
+- 할 일: `db_verify.py`(`rules` R1~R6 완성 — 의존 그래프 기반 대상 계산, 증상 시그니처의 R1·R3, R1 흔적 검사, `skipped` 사유(`fixture 없음`·`음성 fixture 없음`은 `review_required`, `시그니처 없음(pending)`), `--draft` worktree, R5 `needs-approval`; `resolution`, `fix`(둘 다 `--plan --draft` 포함) 판정 — 시나리오 흔적 전제), `db_regress.py --events-diff`, 검증 op(`set-resolution`, `verify-resolution`, `verify-fix`)의 판정 연결(`verify-fix` passed는 빌드 있는 `fixed_in` 필요, pending 원인의 `verify-resolution` 거부), `update-fix` open 되돌림 시 이력 보존(`history`), `db_lint` 검증 규칙(검증 없는 fixed 금지, 코드·설정 수정 유형의 fixed에 scenario/recovery 필수). 테스트용 이슈 DB 변형 `issue-db-verify`(make_variant_dbs.py가 테스트 때 생성)에서 CALL-001-01을 `fix-submitted`로 바꾸고 수정 전/후/재발/시나리오 없음 fixture를 만들어 쓴다.
 - 완료 기준:
   - 너무 넓은 원인 시그니처 초안(음성 fixture 또는 같은 카테고리 다른 유형의 양성 fixture에서 C=1)이 R3에서 걸린다
   - 새 시그니처가 **다른 카테고리**의 양성 fixture에서 C=1이면 R4에서 걸리고, 결과에 그 fixture와 `allow-cause` 초안이 나온다. 그 fixture의 `.expect.yaml`에 `also_allowed`로 그 원인을 넣으면 R2·R3·R4가 통과한다. 반대로 `also_allowed`에 없는 원인이 C=1이면 여전히 실패한다
@@ -143,7 +143,7 @@
 
 ### Phase 11. 리뷰와 통계
 - 할 일: `db_review.py`와 `review [category]` 커맨드 (`06-collaboration.md §6.6` 항목 전부), STATS 항목 완성(`06-collaboration.md §6.7`), 병합(`move/...`) 절차 지원, `db_search.py`(옛 ID → 새 ID 연결: `merged-into:` 체인과 `Renumbered:` 트레일러).
-- 완료 기준: `tests/fixtures/issue-db-review/`에 일부러 만든 케이스(오래된 unresolved, 낮은 수락률, 중복 후보, 지원 종료 버전, 빈 `android_versions`는 지원 종료가 아님, fixed 전환 불가, 시그니처 없는 원인, fixture 없는 원인, 사용자 진술만 있는 해결책, `also_allowed` 누적, 급증)를 리포트가 모두 잡고, `decision: manual` 피드백은 수락률에서 빠진다. 과거 `occurred_on`의 Jira를 한꺼번에 record한 경우는 급증으로 잡지 않는다. 병합 후, 그리고 `Renumbered:` 트레일러가 있는 커밋 뒤에 `db_search.py`가 옛 ID를 새 ID로 연결한다 (`search` 커맨드 연결은 Phase 12).
+- 완료 기준: 변형 `issue-db-review`(make_variant_dbs.py가 테스트 때 생성)에 일부러 만든 케이스(오래된 unresolved, 낮은 수락률, 중복 후보, 지원 종료 버전, 빈 `android_versions`는 지원 종료가 아님, fixed 전환 불가, 시그니처 없는 원인, fixture 없는 원인, 사용자 진술만 있는 해결책, `also_allowed` 누적, 급증)를 리포트가 모두 잡고, `decision: manual` 피드백은 수락률에서 빠진다. 과거 `occurred_on`의 Jira를 한꺼번에 record한 경우는 급증으로 잡지 않는다. 병합 후, 그리고 `Renumbered:` 트레일러가 있는 커밋 뒤에 `db_search.py`가 옛 ID를 새 ID로 연결한다 (`search` 커맨드 연결은 Phase 12).
 - 읽을 문서: `contracts.md §renumber 참조·상태 값`, `06-collaboration.md §6.5·6.6·6.7`, `03-issue-db.md §5.5`
 
 ### Phase 12. 나머지 커맨드

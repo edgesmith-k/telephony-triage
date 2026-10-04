@@ -49,7 +49,7 @@ v1 범위: logcat(radio/main/system/crash, bugreport는 logcat 섹션만) · Jir
 | `10-skill-eval.md` | SKILL.md 구성, 트리거 테스트, eval 45개 |
 | `11-phases.md` | **Phase D0~14** 할 일·완료 기준·읽을 문서 (사외 초안·사내 처음부터 모드만) |
 | `13-actions.md` | GHE Actions 전환 |
-| `14-site.md` | 사내 적용: placeholder 레지스트리 S1~S21, `SITE_PROFILE.md` 형식, Phase 0, 사외 문서 반영 |
+| `14-site.md` | 사내 적용: placeholder 레지스트리 S1~S22, `SITE_PROFILE.md` 형식, Phase 0, 사외 문서 반영 |
 | `15-local-draft.md` | 사외 초안↔사내 보완: 모의 환경, 반입 체크리스트, **S-1~S-7**, `site-defaults.yaml` 필수, 재반입 |
 | `16-existing-assets.md` | 기존 Jira MCP 재사용, 기존 파서 포팅(골든), 기존 분류 import, 분석 스킬 연결 |
 | `99-deferred.md` | v1에서 뺀 설계. **어느 Phase에서도 읽지 않는다** |
@@ -74,7 +74,7 @@ v1 범위: logcat(radio/main/system/crash, bugreport는 logcat 섹션만) · Jir
 - 사내 확인값은 `SITE_PROFILE.md`에만 쓴다. 이 문서 세트에는 쓰지 않는다 (`14-site.md §14.1`).
 - 모든 테스트 로그는 마스킹된 fixture만 쓴다.
 - Claude Code 세션은 **플러그인 레포 루트에서 연다** (이 `CLAUDE.md`가 로드되도록). 이슈 DB 레포는 절대 경로로 다룬다.
-- 테스트용 이슈 DB(합성 샘플 `tests/fixtures/issue-db-sample/`, 오류 주입·0건 카테고리·리뷰 케이스 등 변형)는 모두 플러그인 레포 `tests/fixtures/issue-db-*/`에 둔다. 반입·운영용 이슈 DB는 샘플 없는 **뼈대**만 `tools/make_db_skeleton.py`로 만든다 (`11-phases.md` Phase 1).
+- 테스트용 이슈 DB 중 커밋하는 것은 합성 샘플 `tests/fixtures/issue-db-sample/` 하나뿐이다. 변형(`issue-db-*`: 오류 주입·0건 카테고리·리뷰 케이스 등)은 `tests/helpers/make_variant_dbs.py`가 샘플에서 테스트 때 생성한다(커밋하지 않음, `runner.variant_db(name)`). 반입·운영용 이슈 DB는 샘플 없는 **뼈대**만 `tools/make_db_skeleton.py`로 만든다 (`11-phases.md` Phase 1).
 
 ---
 
@@ -93,7 +93,7 @@ v1 범위: logcat(radio/main/system/crash, bugreport는 logcat 섹션만) · Jir
 - 로그 원문은 필요한 구간만 읽는다. 매칭과 이슈 DB에는 마스킹된 텍스트만 쓴다. 이슈 DB에는 마스킹된 최소 예시와 fixture만 남긴다.
 - 분석 리포트에서 로그로 확인한 사실과 코드 기반 추정을 구분한다. placeholder 규칙으로 얻은 결과는 그렇다고 밝힌다.
 - 수동 기록(`record`)은 로그·코드 분석과 매칭만 건너뛰고, 쓰기 경로와 검증은 analyze와 같다. 확인 화면과 PR에 "수동 기록"을 밝힌다.
-- 규칙·해결책 변경은 `05-verification.md §5.12 (1)` 검증을 통과해야 올린다. 건너뛴 검증(`skipped`)은 통과로 표시하지 않는다. `fixed`는 시나리오 흔적이 있는 `verify-fix` 통과로만 기록한다. 검증되지 않은 해결책은 미검증으로 표시한다.
+- 규칙·해결책 변경은 `05-verification.md §5.12 (1)` 검증을 통과해야 올린다. 건너뛴 검증(`skipped`)은 통과로 표시하지 않는다. `fixed`는 `verify-fix` 통과로만 기록하고, 통과에는 시나리오 흔적이 필요하다(유일한 예외: 비코드 유형에 흔적 시그니처가 없으면 사용자 확인을 `verification.note`에 남긴다, `05-verification.md §5.12 (2)`). 검증되지 않은 해결책은 미검증으로 표시한다.
 - 분류·회귀·검증의 기준은 결정적인 스크립트 출력(파서 이벤트, 시그니처 매칭)이다. 카테고리 분석 스킬(LLM)의 결과는 리포트 보조 정보로만 쓴다.
 - 사내 코드와 값은 `SITE_PATHS` 경로에만 두고, 재반입은 `tools/import_draft.py`로 한다 (통째로 교체하지 않는다). 런타임 코드는 사내/사외 모드를 판별하지 않는다: `plugin/site-defaults.yaml`이 없으면 멈추고, example은 테스트 헬퍼만 쓴다 (`15-local-draft.md §15.1`).
 - git 충돌, 인증 실패, MCP 부재, 스키마·생성기·파서 백엔드·외부 파서 버전 불일치는 자동으로 우회하지 않고 사용자에게 보고한다.
