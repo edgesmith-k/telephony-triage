@@ -112,6 +112,10 @@ analyze Step 7에서 새 원인/유형을 계획할 때 아래를 점검하고, 
 - `parser-rules/` 변경은 이슈 DB 메인테이너 리뷰가 필수다 (`06-collaboration.md §6.1`).
 - **정규식 안전**: 규칙과 시그니처의 정규식은 모든 기여자의 매처·pre-commit·CI에서 전체 로그에 실행된다. `db_lint`는 중첩 수량자(`(a+)+`, `(a|a)*` 류)와 길이 제한 없는 역참조를 거부한다(정적 검사, 보수적). 매처와 extractor는 패턴당 실행 시간 상한 `matcher.pattern_timeout_ms`(`issue-db.config.yaml`, 기본 2000)를 두고, 초과하면 그 시그니처(또는 extractor)를 결과에 `error`로 표시하고 분석은 계속한다. 회귀·검증 모드에서는 실패로 본다.
 
+#### (5) 스텝 마커 스캔과 명시 구간 (선택)
+
+시험 자동화가 남기는 스텝 마커(`TestRunner: Step 5 FAIL` 등)는 `tags.yaml`에 없는 태그다. `parse`는 목록에 없는 태그의 줄을 버리므로 마커는 별도 서브커맨드 `parse_logcat.py markers`가 백엔드의 줄 레코드에서 직접 찾는다. 패턴은 이슈 DB가 아니라 `site-defaults.yaml`의 `failed_step.marker_patterns`(이름 그룹 `step`·`status`)에서만 읽는다(`02-config.md`, `14-site.md` S22). 절차: 원문 `TAG: msg`에 패턴을 시간 상한(`matcher.pattern_timeout_ms`) 안에서 돌려 맞은 줄만 고르고, 그 줄만 마스킹한 뒤 마스킹된 텍스트에서 그룹을 다시 뽑는다. 출력은 `{ts, step, status: start|pass|fail, tag, msg(≤200)}` 목록(상한 2000)과 로그 범위(`coverage`)다. 마커가 `parse` 이벤트나 시그니처 평가에 들어가지 않으므로 **S/C·회귀·검증에는 영향이 없다**. `parse --between <ISO 시작> <ISO 끝>`은 `--around`/`--full`과 같은 상호 배타 그룹의 명시 구간이다(`input.mode: "between"`).
+
 ### 5.11 시그니처 매칭 규칙
 
 #### (1) 시그니처 의미

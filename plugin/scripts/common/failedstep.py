@@ -30,12 +30,7 @@ def normalize(text, limit: int = FAILED_STEP_MAX) -> str:
     return s if len(s) <= limit else s[: limit - 1].rstrip() + "…"
 
 
-def from_text(text, patterns: Iterable[str] | None) -> tuple[str | None, list[str]]:
-    """여러 줄 텍스트에서 실패 스텝 한 줄을 뽑는다. `(step|None, warnings)`.
-
-    줄 순서대로 보고, 한 줄에서는 패턴 순서대로 보아 처음 맞는 것이 이긴다. `(?P<step>…)` 그룹이 있으면 그 값,
-    없으면 줄 전체. 잘못된 정규식은 경고만 내고 건너뛴다.
-    """
+def _compile(patterns: Iterable[str] | None) -> tuple[list[re.Pattern], list[str]]:
     warnings: list[str] = []
     compiled: list[re.Pattern] = []
     for p in patterns or []:
@@ -43,8 +38,12 @@ def from_text(text, patterns: Iterable[str] | None) -> tuple[str | None, list[st
             compiled.append(re.compile(str(p)))
         except (re.error, TypeError, ValueError) as exc:
             warnings.append(f"failed_step_patterns 정규식 오류({p!s:.60}): {exc} — 건너뜀")
+    return compiled, warnings
+
+
+def _scan(text, compiled: list[re.Pattern]) -> tuple[str | None, str | None]:
     if not compiled or not text:
-        return None, warnings
+        return None, None
     for line in str(text).splitlines()[:MAX_LINES]:
         line = line[:MAX_LINE_CHARS]
         if not line.strip():
@@ -54,8 +53,30 @@ def from_text(text, patterns: Iterable[str] | None) -> tuple[str | None, list[st
             if not m:
                 continue
             step = m.groupdict().get("step") if "step" in rx.groupindex else None
-            return (step if step and step.strip() else line), warnings
-    return None, warnings
+            return (step if step and step.strip() else line), line
+    return None, None
+
+
+def find_line(text, patterns: Iterable[str] | None) -> tuple[str | None, str | None]:
+    """여러 줄 텍스트에서 실패 스텝 한 줄을 찾는다. `(step|None, 맞은 줄|None)`.
+
+    줄 순서대로 보고, 한 줄에서는 패턴 순서대로 보아 처음 맞는 것이 이긴다. `(?P<step>…)` 그룹이 있으면 그 값,
+    없으면 줄 전체. 맞은 줄(원문)은 호출자가 시각 같은 보조 값을 뽑을 때만 쓴다 — 밖으로 내보내지 않는다.
+    잘못된 정규식은 건너뛴다(경고는 `from_text`가 낸다)."""
+    return _scan(text, _compile(patterns)[0])
+
+
+def from_text(text, patterns: Iterable[str] | None) -> tuple[str | None, list[str]]:
+    """여러 줄 텍스트에서 실패 스텝 한 줄을 뽑는다. `(step|None, warnings)`.
+
+    `find_line`과 같은 규칙이고, 잘못된 정규식은 경고만 내고 건너뛴다."""
+    compiled, warnings = _compile(patterns)
+    return _scan(text, compiled)[0], warnings
+
+
+def group_key(text) -> str:
+    """실패 스텝을 묶는 키: 공백 압축 + casefold (README 집계와 스텝 이름 비교가 같은 키를 쓴다)."""
+    return " ".join(str(text or "").split()).casefold()
 
 
 def _decode(data: bytes) -> str:

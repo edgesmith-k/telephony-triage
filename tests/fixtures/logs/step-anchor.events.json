@@ -1,0 +1,220 @@
+{
+ "coverage": {
+  "first_ts": "2026-09-20T05:30:00.000Z",
+  "last_ts": "2026-09-20T05:34:00.000Z",
+  "window_in_range": true,
+  "clock_anomalies": []
+ },
+ "warnings": [],
+ "events": [
+  {
+   "ts": "2026-09-20T05:30:00.000Z",
+   "pid": 1234,
+   "tid": 1244,
+   "level": "D",
+   "tag": "ImsResolver",
+   "msg": "[PHONE0] bound to mock ImsService",
+   "phone_id": 0,
+   "category_hint": "ims",
+   "ril": null,
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  },
+  {
+   "ts": "2026-09-20T05:30:12.000Z",
+   "pid": 1234,
+   "tid": 1244,
+   "level": "W",
+   "tag": "ImsRegistration",
+   "msg": "[PHONE0] onRegistrationFailed: code=403 reason=FORBIDDEN",
+   "phone_id": 0,
+   "category_hint": "ims",
+   "ril": null,
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  },
+  {
+   "ts": "2026-09-20T05:30:12.000Z",
+   "pid": 1234,
+   "tid": 1244,
+   "level": "W",
+   "tag": "ImsRegistration",
+   "msg": "[PHONE0] onRegistrationFailed: code=403 reason=FORBIDDEN",
+   "phone_id": 0,
+   "category_hint": "ims",
+   "ril": null,
+   "event": "ims_registration_failed",
+   "fields": {
+    "code": "403",
+    "reason": "FORBIDDEN"
+   },
+   "source": "rules"
+  },
+  {
+   "ts": "2026-09-20T05:30:36.000Z",
+   "pid": 1234,
+   "tid": 1244,
+   "level": "W",
+   "tag": "ImsRegistration",
+   "msg": "[PHONE0] onRegistrationFailed: code=403 reason=FORBIDDEN",
+   "phone_id": 0,
+   "category_hint": "ims",
+   "ril": null,
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  },
+  {
+   "ts": "2026-09-20T05:30:36.000Z",
+   "pid": 1234,
+   "tid": 1244,
+   "level": "W",
+   "tag": "ImsRegistration",
+   "msg": "[PHONE0] onRegistrationFailed: code=403 reason=FORBIDDEN",
+   "phone_id": 0,
+   "category_hint": "ims",
+   "ril": null,
+   "event": "ims_registration_failed",
+   "fields": {
+    "code": "403",
+    "reason": "FORBIDDEN"
+   },
+   "source": "rules"
+  },
+  {
+   "ts": "2026-09-20T05:33:03.000Z",
+   "pid": 1234,
+   "tid": 1244,
+   "level": "D",
+   "tag": "DSM-0",
+   "msg": "[PHONE0] onDataEnabledChanged: enabled=false reason=USER",
+   "phone_id": 0,
+   "category_hint": "data",
+   "ril": null,
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  },
+  {
+   "ts": "2026-09-20T05:33:03.000Z",
+   "pid": 1234,
+   "tid": 1244,
+   "level": "D",
+   "tag": "DSM-0",
+   "msg": "[PHONE0] onDataEnabledChanged: enabled=false reason=USER",
+   "phone_id": 0,
+   "category_hint": "data",
+   "ril": null,
+   "event": "data_setting_changed",
+   "fields": {
+    "enabled": "false",
+    "reason": "USER"
+   },
+   "source": "rules"
+  },
+  {
+   "ts": "2026-09-20T05:33:04.000Z",
+   "pid": 1234,
+   "tid": 1244,
+   "level": "D",
+   "tag": "DSM-0",
+   "msg": "[PHONE0] isDataEnabled=false (user setting off)",
+   "phone_id": 0,
+   "category_hint": "data",
+   "ril": null,
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  },
+  {
+   "ts": "2026-09-20T05:33:06.000Z",
+   "pid": 1234,
+   "tid": 1244,
+   "level": "I",
+   "tag": "DNC-0",
+   "msg": "[PHONE0] onEvaluateNetworkRequests: reason=DATA_ENABLED_CHANGED",
+   "phone_id": 0,
+   "category_hint": "data",
+   "ril": null,
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  },
+  {
+   "ts": "2026-09-20T05:33:07.000Z",
+   "pid": 1234,
+   "tid": 1244,
+   "level": "W",
+   "tag": "DNC-0",
+   "msg": "[PHONE0] evaluation result: NOT_ALLOWED reasons=[DATA_DISABLED]",
+   "phone_id": 0,
+   "category_hint": "data",
+   "ril": null,
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  },
+  {
+   "ts": "2026-09-20T05:33:07.000Z",
+   "pid": 1234,
+   "tid": 1244,
+   "level": "W",
+   "tag": "DNC-0",
+   "msg": "[PHONE0] evaluation result: NOT_ALLOWED reasons=[DATA_DISABLED]",
+   "phone_id": 0,
+   "category_hint": "data",
+   "ril": null,
+   "event": "data_evaluation_rejected",
+   "fields": {
+    "reasons": "DATA_DISABLED"
+   },
+   "source": "rules"
+  },
+  {
+   "ts": "2026-09-20T05:33:15.000Z",
+   "pid": 1234,
+   "tid": 1244,
+   "level": "W",
+   "tag": "DNC-0",
+   "msg": "[PHONE0] evaluation result: NOT_ALLOWED reasons=[DATA_DISABLED]",
+   "phone_id": 0,
+   "category_hint": "data",
+   "ril": null,
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  },
+  {
+   "ts": "2026-09-20T05:33:15.000Z",
+   "pid": 1234,
+   "tid": 1244,
+   "level": "W",
+   "tag": "DNC-0",
+   "msg": "[PHONE0] evaluation result: NOT_ALLOWED reasons=[DATA_DISABLED]",
+   "phone_id": 0,
+   "category_hint": "data",
+   "ril": null,
+   "event": "data_evaluation_rejected",
+   "fields": {
+    "reasons": "DATA_DISABLED"
+   },
+   "source": "rules"
+  },
+  {
+   "ts": "2026-09-20T05:34:00.000Z",
+   "pid": 1234,
+   "tid": 1244,
+   "level": "D",
+   "tag": "DRM-0",
+   "msg": "[PHONE0] no retry scheduled: setup not allowed",
+   "phone_id": 0,
+   "category_hint": "data",
+   "ril": null,
+   "event": null,
+   "fields": {},
+   "source": "backend:reference"
+  }
+ ]
+}

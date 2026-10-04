@@ -55,6 +55,8 @@ def from_site_defaults(defaults: dict) -> dict:
         out["analyzers"] = copy.deepcopy(defaults["analyzers"])
     if defaults.get("explore"):     # 탐색 분석(Step 5-2) 기본값 (07-workflow.md §Step 5-2)
         out["explore"] = copy.deepcopy(defaults["explore"])
+    if defaults.get("failed_step"):  # 실패 스텝 앵커 설정(마커 패턴 포함, 07-workflow.md §Step 3)
+        out["failed_step"] = copy.deepcopy(defaults["failed_step"])
     ghe = defaults.get("ghe") or {}
     if ghe.get("host"):
         out.setdefault("issue_db", {})["ghe_host"] = ghe["host"]

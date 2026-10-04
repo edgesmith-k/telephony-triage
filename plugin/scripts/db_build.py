@@ -39,7 +39,7 @@ from pathlib import Path
 SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS))
 
-from common import dbpath, gitscope, issuedb, quality, site_defaults, yamlio  # noqa: E402
+from common import dbpath, failedstep, gitscope, issuedb, quality, site_defaults, yamlio  # noqa: E402
 from common import compiled as compiled_cache  # noqa: E402
 from common.exitcodes import CHECK_FAILED, OK, USAGE  # noqa: E402
 from common.versions import GENERATOR_VERSION  # noqa: E402
@@ -186,7 +186,7 @@ def _failed_steps_line(ctx: Context, itype: issuedb.IssueType) -> list[str]:
     for r in ctx.jira:
         step = r.get("failed_step")
         if r["_type"] == itype.id and step and str(step).strip():
-            groups.setdefault(" ".join(str(step).split()).casefold(), []).append(str(step))
+            groups.setdefault(failedstep.group_key(step), []).append(str(step))
     if not groups:
         return []
     top = sorted(groups.items(), key=lambda kv: (-len(kv[1]), kv[0]))[:FAILED_STEP_TOP]

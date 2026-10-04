@@ -17,3 +17,4 @@ fixtures:
   - {name: dual-sim-cross-slot,     scenario: data-001-none-cross-slot.yaml, desc: 듀얼 SIM, 슬롯별 phone_id}
   - {name: dual-sim-ril,            scenario: dual-sim-ril.yaml,             desc: 같은 serial 두 슬롯, 지연, 응답 없음, pid 변경}
   - {name: clock-anomaly,           scenario: clock-anomaly.yaml,            desc: 시계 역행·점프}
+  - {name: step-anchor,             scenario: step-anchor.yaml,              desc: 스텝 마커(Step 3 PASS·Step 5 FAIL) + IMS 403·데이터 설정 OFF}

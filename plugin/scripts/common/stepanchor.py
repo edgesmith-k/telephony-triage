@@ -1,0 +1,269 @@
+"""실패 스텝 기준 분석 구간 (07-workflow.md §Step 3, contracts.md §3.2 `parse_logcat.py markers`).
+
+시험 자동화가 logcat에 남기는 스텝 마커(`TestRunner: Step 5 FAIL` 등)나 시험 절차 첨부 파일의 시각으로
+**실패한 스텝의 시간 구간**을 정한다. 이 구간은 **어디를(시간 범위) 볼지**만 정한다. 원인(S/C)은 여전히 로그
+시그니처가 정한다. 마커 표기는 사내마다 다르다 — TODO(SITE:S22) (`plugin/site-defaults.yaml`의 `failed_step`).
+
+순수 함수(표준 라이브러리만). 시각은 모두 UTC `datetime`이고, 입력 마커는 `parse_logcat.py markers` 출력의
+`{ts, step, status, tag, msg}`(마스킹됨)다. 정규식 오류는 경고로 바꾸고 예외를 내지 않는다.
+"""
+
+from __future__ import annotations
+
+import re
+from datetime import datetime, timedelta, timezone
+
+from . import failedstep
+
+UTC = timezone.utc
+MARKER_MAX = 2000
+
+DEFAULT_STATUS = {
+    "start": ["start", "begin", "시작"],
+    "pass": ["pass", "ok", "성공"],
+    "fail": ["fail", "ng", "error", "실패"],
+}
+DEFAULT_WINDOW = {"pre_sec": 60, "post_sec": 30, "fail_only_pre_sec": 120, "max_span_sec": 900}
+DEFAULT_DISAGREE_MINUTES = 10
+
+_STEP_NUM_RE = re.compile(r"(?i)^\s*(?:step|스텝|단계|#)?\s*(\d{1,4})\b")
+_LEAD_RE = re.compile(r"(?i)^\s*(?:(?:step|스텝|단계|#)?\s*\d{1,4}\b)?[\s.):|\-]*")
+_NAME_MIN = 4
+
+# steps-file 시각: ISO(오프셋 선택) | logcat 스탬프(연도 없음) | 시각만. 왼쪽부터 겹치지 않게 찾는다.
+_TS_RE = re.compile(
+    r"(?P<iso>\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:?\d{2})?)"
+    r"|(?P<stamp>(?<![\d-])\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?)"
+    r"|(?P<time>(?<![\d:.\-])\d{1,2}:\d{2}:\d{2}(?:\.\d{1,9})?(?![\d:]))"
+)
+
+
+# -- 마커 ----------------------------------------------------------------------------------------
+
+
+def compile_markers(patterns) -> tuple[list[re.Pattern], list[str]]:
+    """마커 정규식 컴파일. `(step, status)` 이름 그룹이 없거나 컴파일되지 않으면 경고하고 건너뛴다."""
+    out: list[re.Pattern] = []
+    warnings: list[str] = []
+    for p in patterns or []:
+        try:
+            rx = re.compile(str(p))
+        except (re.error, TypeError, ValueError) as exc:
+            warnings.append(f"failed_step.marker_patterns 정규식 오류({str(p):.60}): {exc} — 건너뜀")
+            continue
+        if "step" not in rx.groupindex or "status" not in rx.groupindex:
+            warnings.append(f"failed_step.marker_patterns에 (?P<step>)·(?P<status>) 그룹이 없다({str(p):.60}) — 건너뜀")
+            continue
+        out.append(rx)
+    return out, warnings
+
+
+def status_of(raw, mapping=None) -> str | None:
+    """마커 상태 문구 → `start|pass|fail|None` (casefold 비교)."""
+    key = " ".join(str(raw or "").split()).casefold()
+    if not key:
+        return None
+    mapping = mapping if isinstance(mapping, dict) and mapping else DEFAULT_STATUS
+    for state in ("start", "pass", "fail"):
+        words = mapping.get(state) or []
+        if isinstance(words, str):
+            words = [words]
+        if key in {" ".join(str(w).split()).casefold() for w in words}:
+            return state
+    return None
+
+
+# -- 스텝 이름 비교 --------------------------------------------------------------------------------
+
+
+def step_number(text) -> int | None:
+    """`Step 5`, `스텝 5`, `단계 5`, `#5`, `5 | ...`의 앞쪽 번호. 없으면 None."""
+    m = _STEP_NUM_RE.match(str(text or ""))
+    return int(m.group(1)) if m else None
+
+
+def _name(text) -> str:
+    """번호·`Step N`·구분 기호를 뗀 스텝 이름의 비교 키."""
+    return failedstep.group_key(_LEAD_RE.sub("", str(text or ""), count=1))
+
+
+def same_step(marker_step, failed_text, names_only: bool = False) -> bool:
+    """마커의 스텝 값과 실패 스텝 텍스트가 같은 스텝인가.
+
+    둘 다 번호가 있으면 번호가 같은지만 본다(`names_only`가 아니면). 그렇지 않으면 번호를 뗀 이름의 `group_key`가
+    같거나, 짧은 쪽이 4자 이상이고 긴 쪽에 들어 있으면 같다."""
+    if not names_only:
+        a, b = step_number(marker_step), step_number(failed_text)
+        if a is not None and b is not None:
+            return a == b
+    left, right = _name(marker_step), _name(failed_text)
+    if not left or not right:
+        return False
+    if left == right:
+        return True
+    short, long_ = sorted((left, right), key=len)
+    return len(short) >= _NAME_MIN and short in long_
+
+
+# -- 구간 ----------------------------------------------------------------------------------------
+
+
+def _ts(value) -> datetime | None:
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=UTC)
+    try:
+        dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return dt.astimezone(UTC) if dt.tzinfo else dt.replace(tzinfo=UTC)
+
+
+def gap_minutes(a, b) -> float:
+    """두 시각 차이(분, 절댓값)."""
+    return abs((_ts(a) - _ts(b)).total_seconds()) / 60.0
+
+
+def _closest(items: list[tuple[datetime, dict]], jira_at) -> tuple[datetime, dict]:
+    if jira_at is None:
+        return items[0]
+    return min(items, key=lambda it: (abs((it[0] - jira_at).total_seconds()), it[0]))
+
+
+def find_span(markers, failed_text, jira_at, allow_without_step: bool = True,
+              max_span_sec: int = DEFAULT_WINDOW["max_span_sec"]):
+    """마커 목록에서 실패 스텝의 구간을 찾는다. `(span | None, warnings)`.
+
+    span: `{source: "log_marker", step, step_from: "failed_step"|"marker", start, fail, end}`. 시각은 UTC datetime,
+    `start`는 없을 수 있다. FAIL 마커가 있으면 `fail == end`, 시작만 있으면(`fail: None`) `end`는 다음 마커 시각
+    (없으면 `start + max_span_sec`)이다. 실패 스텝을 모르면 `allow_without_step`일 때만 FAIL 마커 자체를 쓴다."""
+    jira_at = _ts(jira_at) if jira_at else None
+    rows: list[tuple[datetime, dict]] = []
+    for m in markers or []:
+        t = _ts(m.get("ts"))
+        if t is not None and m.get("status") in ("start", "pass", "fail"):
+            rows.append((t, m))
+    rows.sort(key=lambda it: it[0])      # 안정 정렬: 같은 시각이면 파일 순서
+    warnings: list[str] = []
+    have_step = bool(failed_text and str(failed_text).strip())
+    if not have_step and not allow_without_step:
+        return None, warnings
+
+    def matches(m) -> bool:
+        return same_step(m.get("step"), failed_text) if have_step else True
+
+    fails = [(i, t, m) for i, (t, m) in enumerate(rows) if m["status"] == "fail" and matches(m)]
+    if fails:
+        if len(fails) > 1:
+            warnings.append(f"FAIL 마커 {len(fails)}개 — Jira 발생 시각에 가장 가까운 것(없으면 첫 번째)을 골랐다")
+        pick = _closest([(t, {"i": i, "m": m}) for i, t, m in fails], jira_at)
+        fail_t, ref = pick
+        idx, marker = ref["i"], ref["m"]
+        step = marker.get("step")
+        start = None
+        for t, m in reversed(rows[:idx]):
+            if m["status"] == "start" and same_marker_step(m.get("step"), step):
+                start = t
+                break
+        if start is None and idx > 0:
+            start = rows[idx - 1][0]
+        return {"source": "log_marker", "step": step, "step_from": "failed_step" if have_step else "marker",
+                "start": start, "fail": fail_t, "end": fail_t}, warnings
+    if not have_step:
+        return None, warnings
+
+    # FAIL 마커가 없고 START만 있는 스텝(실패 직후 로그가 끊김): 같은 스텝의 PASS·FAIL이 뒤에 없는 마지막 START
+    starts = []
+    for i, (t, m) in enumerate(rows):
+        if m["status"] != "start" or not matches(m):
+            continue
+        if any(m2["status"] in ("pass", "fail") and same_marker_step(m2.get("step"), m.get("step"))
+               for _, m2 in rows[i + 1:]):
+            continue
+        starts.append((i, t, m))
+    if not starts:
+        return None, warnings
+    i, start, marker = starts[-1]
+    nxt = next((t for t, _ in rows[i + 1:] if t > start), None)
+    end = nxt or start + timedelta(seconds=max_span_sec)
+    warnings.append("FAIL 마커 없이 START만 있다 — 다음 마커(없으면 최대 구간) 전까지를 실패 구간으로 봤다")
+    return {"source": "log_marker", "step": marker.get("step"), "step_from": "failed_step",
+            "start": start, "fail": None, "end": end}, warnings
+
+
+def same_marker_step(a, b) -> bool:
+    """마커 두 개의 스텝 값이 같은가(번호가 있으면 번호, 아니면 이름)."""
+    return same_step(a, b)
+
+
+def _window_cfg(cfg) -> dict:
+    out = dict(DEFAULT_WINDOW)
+    for k, v in ((cfg or {}).get("window") or {}).items():
+        if k in out and isinstance(v, (int, float)) and not isinstance(v, bool) and v >= 0:
+            out[k] = v
+    return out
+
+
+def window(span: dict, cfg=None) -> tuple[datetime, datetime, list[str]]:
+    """span → 분석 구간 `(start, end, warnings)`.
+
+    시작이 있으면 `[start - pre_sec, fail + post_sec]`, 실패 시각만 있으면 `[fail - fail_only_pre_sec, fail + post_sec]`.
+    `fail - start`가 `max_span_sec`을 넘으면 시작을 그만큼으로 당겨 쓴다(경고)."""
+    w = _window_cfg(cfg)
+    fail = span.get("fail") or span["end"]
+    start = span.get("start")
+    warnings: list[str] = []
+    if start is not None and start > fail:
+        start = None
+    if start is None:
+        return (fail - timedelta(seconds=w["fail_only_pre_sec"]), fail + timedelta(seconds=w["post_sec"]), warnings)
+    length = (fail - start).total_seconds()
+    if length > w["max_span_sec"]:
+        warnings.append(f"스텝 구간이 {int(length)}초로 길어 끝에서 {int(w['max_span_sec'])}초만 분석 범위에 넣었다")
+        start = fail - timedelta(seconds=w["max_span_sec"])
+    return start - timedelta(seconds=w["pre_sec"]), fail + timedelta(seconds=w["post_sec"]), warnings
+
+
+# -- 시험 절차 파일의 시각 ---------------------------------------------------------------------------
+
+
+def steps_file_times(line, tz, year, ref_dt=None):
+    """실패 스텝 줄(원문)에서 시각 최대 2개 → `(start | None, fail | None)` (UTC datetime).
+
+    첫 시각이 시작, 둘째가 실패이고 하나뿐이면 실패 시각이다. 오프셋 있는 ISO는 그대로, 오프셋 없는 ISO와
+    logcat 스탬프(`MM-DD HH:MM:SS(.mmm)`)는 `tz`·`year`로, 시각만(`HH:MM:SS`)은 `ref_dt`(Jira 발생 시각 또는
+    로그 첫 시각)의 날짜를 쓰고 `ref_dt`보다 12시간 넘게 앞서면 하루 뒤로 본다. 줄 원문은 돌려주지 않는다."""
+    from parser_backends import logcat
+
+    ref = _ts(ref_dt) if ref_dt else None
+    found: list[datetime] = []
+    for m in _TS_RE.finditer(str(line or "")):
+        dt = None
+        if m.group("iso"):
+            dt = logcat.normalize_ts(m.group("iso").replace(" ", "T", 1), tz, year)
+        elif m.group("stamp"):
+            text = m.group("stamp").replace("T", " ")
+            if "." not in text:
+                text += ".000"
+            dt = logcat.normalize_ts(text, tz, year)
+        elif ref is not None:
+            h, mi, rest = m.group("time").split(":", 2)
+            sec, _, frac = rest.partition(".")
+            try:
+                zone = logcat.get_tz(tz)
+                local_ref = ref.astimezone(zone)
+                naive = datetime(local_ref.year, local_ref.month, local_ref.day, int(h), int(mi), int(sec),
+                                 int((frac or "0")[:6].ljust(6, "0")))
+            except ValueError:
+                continue
+            dt = naive.replace(tzinfo=zone).astimezone(UTC)
+            if dt < ref - timedelta(hours=12):
+                dt += timedelta(days=1)
+        if dt is not None:
+            found.append(dt)
+        if len(found) == 2:
+            break
+    if not found:
+        return None, None
+    if len(found) == 1:
+        return None, found[0]
+    return found[0], found[1]

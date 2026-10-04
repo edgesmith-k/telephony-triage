@@ -3,9 +3,12 @@
 07-workflow.md §Step 3, 16-existing-assets.md §16.3).
 
 서브커맨드
-  parse <logcat...> (--around <ISO 시각> [--minutes 5] | --full) --rules <db>/parser-rules
-        [--tz <IANA>] [--year <YYYY>] [--mask] [--no-external]
-      이벤트 JSON을 stdout으로 낸다.
+  parse <logcat...> (--around <ISO 시각> [--minutes 5] | --between <ISO 시작> <ISO 끝> | --full)
+        --rules <db>/parser-rules [--tz <IANA>] [--year <YYYY>] [--mask] [--no-external]
+      이벤트 JSON을 stdout으로 낸다. `--between`은 명시 구간(타임존 있는 ISO 둘, 시작 ≤ 끝)이다.
+  markers <logcat...> --rules <db>/parser-rules [--tz <IANA>] [--year <YYYY>]
+      시험 자동화의 스텝 마커 줄(`failed_step.marker_patterns`, site-defaults에서만 읽는다)을 모아
+      `{schema, markers[{ts, step, status, tag, msg}], total, truncated, coverage, warnings}`로 낸다(상한 2000).
   extract-bugreport <zip|txt> --out <dir>
       bugreport에서 logcat 섹션(system/radio/main)과 빌드 정보(build.json)만 꺼낸다.
   cut <logcat...> (--evidence <match.json> | --around <ISO 시각> [--seconds 30]) --out <file>
@@ -44,7 +47,7 @@ sys.path.insert(0, str(SCRIPTS))
 
 import adapters  # noqa: E402
 import parser_backends  # noqa: E402
-from common import compat, masking, parser_rules, site_defaults  # noqa: E402
+from common import compat, masking, parser_rules, site_defaults, stepanchor  # noqa: E402
 from common.patterns import DEFAULT_TIMEOUT_MS, PatternError, PatternRunner, PatternTimeout  # noqa: E402
 from common.exitcodes import OK, USAGE  # noqa: E402
 from parser_backends import logcat  # noqa: E402
@@ -331,6 +334,16 @@ def _looks_like_bugreport(path: Path) -> bool:
 def _window(args) -> tuple | None:
     if args.full:
         return None
+    if args.between:
+        try:
+            start, end = logcat.parse_ts(args.between[0]), logcat.parse_ts(args.between[1])
+        except ValueError as exc:
+            raise UsageError(
+                f"--between은 타임존이 있는 ISO 시각 둘이어야 합니다(예: 2026-09-20T14:32:00+09:00): {exc}"
+            ) from exc
+        if start > end:
+            raise UsageError(f"--between의 시작이 끝보다 늦습니다: {args.between[0]} > {args.between[1]}")
+        return (start, end)
     try:
         center = logcat.parse_ts(args.around)
     except ValueError as exc:
@@ -473,7 +486,7 @@ def run_parse(args, plugin_root: Path, defaults: dict) -> dict:
             "files": [str(p) for p in paths],
             "tz": args.tz,
             "year": args.year,
-            "mode": "full" if args.full else "around",
+            "mode": "full" if args.full else "between" if args.between else "around",
             "window": None if window is None else {
                 "start": logcat.format_ts(window[0]),
                 "end": logcat.format_ts(window[1]),
@@ -495,6 +508,87 @@ def observation_errors(doc: dict) -> list[dict]:
     if (doc.get("external_disabled") or doc.get("complete") is False) and not errors:
         errors.append({"error": "파서 관측 불완전", "code": "incomplete-observation"})
     return errors
+
+
+# -- markers -----------------------------------------------------------------
+
+
+def run_markers(args, defaults: dict) -> dict:
+    """스텝 마커 줄을 모은다. 마커 태그는 `tags.yaml`에 없으므로 `parse` 출력을 쓰지 못하고 백엔드의 줄 레코드를 직접 본다.
+
+    원문 줄에서 정규식이 맞는 줄만 골라(시간 상한 `matcher.pattern_timeout_ms`) 그 줄만 마스킹하고, 마스킹된 텍스트에서
+    이름 그룹(`step`, `status`)을 다시 뽑는다 — 원문 값은 출력에 나가지 않는다. 마커 패턴은 `site-defaults.yaml`의
+    `failed_step.marker_patterns`에서만 읽는다(사용자 config로 바꿀 수 없다). 패턴이 없으면 마커 없이 범위(`coverage`)만 낸다."""
+    paths = [Path(p) for p in args.logs]
+    for path in paths:
+        if not path.is_file():
+            raise UsageError(f"로그 파일이 없습니다: {path}")
+        if _looks_like_bugreport(path):
+            raise UsageError(
+                f"{path.name}은(는) bugreport입니다. 먼저 extract-bugreport로 logcat 섹션을 꺼내세요."
+            )
+    try:
+        logcat.get_tz(args.tz)
+    except ValueError as exc:
+        raise UsageError(str(exc)) from exc
+    rules_dir = Path(args.rules)
+    db_cfg = compat.load_db_config(rules_dir.parent)
+    backend_name = (defaults.get("parser") or {}).get("backend")
+    try:
+        backend = parser_backends.load(backend_name)
+    except parser_backends.BackendError as exc:
+        raise UsageError(f"site-defaults.yaml parser.backend: {exc}") from exc
+
+    conf = defaults.get("failed_step") or {}
+    status_map = conf.get("marker_status") if isinstance(conf.get("marker_status"), dict) else None
+    compiled, warn_texts = stepanchor.compile_markers(conf.get("marker_patterns") or [])
+    warnings: list[dict] = [{"code": "marker-pattern", "message": w} for w in warn_texts]
+
+    coverage = backend.coverage(paths, args.tz, args.year)
+    coverage.pop("stats", None)
+    coverage = {"first_ts": coverage["first_ts"], "last_ts": coverage["last_ts"]}
+    markers: list[dict] = []
+    total = 0
+    if compiled:
+        timeout_ms = int((db_cfg.get("matcher") or {}).get("pattern_timeout_ms", DEFAULT_TIMEOUT_MS))
+        records = [r for r in backend.parse(paths, args.tz, args.year, None) if r.get("event") is None]
+        texts = [f"{r['tag']}: {r['msg']}" for r in records]
+        hits: dict[int, re.Pattern] = {}
+        remaining = list(range(len(records)))
+        with PatternRunner(texts, timeout_ms) as runner:
+            for rx in compiled:
+                if not remaining:
+                    break
+                try:
+                    found = runner.search(rx.pattern, indices=remaining)
+                except (PatternTimeout, PatternError) as exc:
+                    warnings.append({"code": "marker-pattern", "message": f"마커 패턴 건너뜀: {exc}"})
+                    continue
+                for i in found:
+                    hits[i] = rx
+                done = set(found)
+                remaining = [i for i in remaining if i not in done]
+        if hits:
+            masker = masking.new_masker(_read_texts(paths), _allow_patterns(db_cfg))
+            for i in sorted(hits):
+                masked = masker(texts[i])
+                m = hits[i].search(masked)       # 이름 그룹은 마스킹된 텍스트에서만 뽑는다
+                if not m:
+                    continue
+                state = stepanchor.status_of(m.group("status"), status_map)
+                if state is None:
+                    continue
+                tag, _, msg = masked.partition(":")
+                total += 1
+                if len(markers) < stepanchor.MARKER_MAX:
+                    markers.append({"ts": records[i]["ts"], "step": " ".join(str(m.group("step") or "").split())[:60],
+                                    "status": state, "tag": tag.strip(), "msg": " ".join(msg.split())[:200]})
+    truncated = total > len(markers)
+    if truncated:
+        warnings.append({"code": "markers-truncated",
+                         "message": f"마커 {total}개 중 앞의 {len(markers)}개만 냈습니다."})
+    return {"schema": OUTPUT_SCHEMA, "markers": markers, "total": total, "truncated": truncated,
+            "coverage": coverage, "warnings": warnings}
 
 
 # -- extract-bugreport --------------------------------------------------------
@@ -702,6 +796,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("logs", nargs="+")
     mode = p.add_mutually_exclusive_group(required=True)
     mode.add_argument("--around", help="발생 시각 (타임존 있는 ISO)")
+    mode.add_argument("--between", nargs=2, metavar=("START", "END"),
+                      help="명시 구간 (타임존 있는 ISO 둘, 시작 ≤ 끝)")
     mode.add_argument("--full", action="store_true", help="파일 전체")
     p.add_argument("--minutes", type=float, default=DEFAULT_MINUTES)
     p.add_argument("--rules", required=True, help="<db>/parser-rules")
@@ -709,6 +805,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--year", type=int, default=None, help="첫 줄의 연도")
     p.add_argument("--mask", action="store_true", help="extractor 전에 줄 단위 마스킹")
     p.add_argument("--no-external", action="store_true", help="외부 파서 끔 (분석 디버그용)")
+
+    k = sub.add_parser("markers", parents=[common], help="logcat → 스텝 마커 목록 (마스킹)")
+    k.add_argument("logs", nargs="+")
+    k.add_argument("--rules", required=True, help="<db>/parser-rules")
+    k.add_argument("--tz", default=None, help="연도 없는 logcat 시각의 타임존 (IANA)")
+    k.add_argument("--year", type=int, default=None, help="첫 줄의 연도")
 
     b = sub.add_parser("extract-bugreport", parents=[common], help="bugreport → logcat 섹션")
     b.add_argument("bugreport")
@@ -742,6 +844,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.cmd == "parse":
             result = run_parse(args, plugin_root, defaults)
+        elif args.cmd == "markers":
+            result = run_markers(args, defaults)
         elif args.cmd == "extract-bugreport":
             result = run_extract_bugreport(args)
         else:
