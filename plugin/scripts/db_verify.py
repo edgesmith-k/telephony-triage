@@ -73,7 +73,7 @@ sys.path.insert(0, str(SCRIPTS))
 import db_regress  # noqa: E402
 import match_signatures  # noqa: E402
 import parse_logcat  # noqa: E402
-from common import builds, dbpath, gitscope, issuedb, rulediff, site_defaults, userconfig  # noqa: E402
+from common import builds, checks, dbpath, gitscope, issuedb, rulediff, site_defaults, userconfig  # noqa: E402
 from common.buildname import sanitize_build  # noqa: E402
 from common.exitcodes import CHECK_FAILED, NEEDS_APPROVAL, OK, USAGE  # noqa: E402
 from common.patterns import PatternError, PatternTimeout  # noqa: E402
@@ -90,9 +90,10 @@ class UsageError(Exception):
 
 
 def _script(name: str, args: list[str], plugin_root: str | None) -> subprocess.CompletedProcess:
-    extra = ["--plugin-root", plugin_root] if plugin_root else []
-    return subprocess.run([sys.executable, str(SCRIPTS / name), *args, *extra], capture_output=True, text=True,
-                          encoding="utf-8", errors="replace")
+    """하위 스크립트를 같은 프로세스에서 부른다 (`common.checks.run_in_process`)."""
+    argv = [*args, *(["--plugin-root", plugin_root] if plugin_root else [])]
+    code, out, err = checks.run_in_process(name, argv)
+    return subprocess.CompletedProcess([name, *argv], code, out, err)
 
 
 def _git(repo: Path, *args: str) -> subprocess.CompletedProcess:

@@ -9,18 +9,27 @@
 | `precommit` | `db_precommit.run` | index (`--staged`) | 기록하고 계속 |
 | `guard` | `guard.check_commit` | index (`--staged`) | 기록하고 계속 (호출자가 거부 문구로 바꾼다) |
 
-하위 스크립트는 지금처럼 subprocess로 부른다(프로세스 안으로 옮기지 않는다). 이 모듈은 stdlib와
-`common.exitcodes`만 가져온다: guard는 `site-defaults.yaml`이 없어도 멈추면 안 되므로(모든 도구 호출에 걸린다)
-`site_defaults`·yaml을 import하지 않는다.
+하위 스크립트는 같은 프로세스에서 `main(argv)`로 부른다(`run_script`). 프로세스와 인터프리터 기동, 모듈
+import를 스크립트마다 반복하지 않는다. 종료 코드·stdout JSON·stderr 계약은 subprocess로 부를 때와 같다:
+`SystemExit`는 그 코드, 잡히지 않은 예외는 traceback을 stderr에 쓰고 1. `env`를 주거나 환경 변수
+`TT_SCRIPT_SUBPROCESS=1`이면 예전처럼 subprocess로 부른다(환경을 바꿔야 하는 호출·문제 추적용).
+
+이 모듈은 stdlib와 `common.exitcodes`만 top-level에서 가져온다: guard는 `site-defaults.yaml`이 없어도 멈추면 안
+되므로(모든 도구 호출에 걸린다) `site_defaults`·yaml을 import하지 않는다. 하위 스크립트 모듈은 부를 때 import하고,
+그때 나는 import 오류도 위 계약(stderr + 1)으로 돌려준다.
 """
 
 from __future__ import annotations
 
+import contextlib
+import importlib
+import io
 import json
 import os
 import re
 import subprocess
 import sys
+import traceback
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
@@ -59,22 +68,58 @@ def is_migrate_branch(branch: str) -> bool:
     return bool(MIGRATE_BRANCH_RE.match(branch or ""))
 
 
+SUBPROCESS_ENV = "TT_SCRIPT_SUBPROCESS"
+
+
 def run_script(name: str, args: list[str], plugin_root: str | None = None,
                env: dict | None = None) -> tuple[int, dict | None, str]:
-    """플러그인 스크립트를 부른다. (종료 코드, stdout JSON 또는 None, 가공 전 stderr)."""
-    extra = ["--plugin-root", plugin_root] if plugin_root else []
+    """플러그인 스크립트를 부른다. (종료 코드, stdout JSON 또는 None, 가공 전 stderr).
+
+    기본은 같은 프로세스에서 `main(argv)`. `env`가 있거나 `TT_SCRIPT_SUBPROCESS=1`이면 subprocess."""
+    argv = [*args, *(["--plugin-root", plugin_root] if plugin_root else [])]
+    if env is not None or os.environ.get(SUBPROCESS_ENV) == "1":
+        code, out, err = _run_subprocess(name, argv, env)
+    else:
+        code, out, err = run_in_process(name, argv)
+    try:
+        data = json.loads(out) if out.strip() else None
+    except json.JSONDecodeError:
+        data = None
+    return code, data, err
+
+
+def run_in_process(name: str, argv: list[str]) -> tuple[int, str, str]:
+    """`<name>`의 `main(argv)`를 같은 프로세스에서 부르고 (종료 코드, stdout, stderr)를 돌려준다.
+
+    `python <name> <argv>`와 같은 종료 코드를 낸다: `main`의 반환값, `SystemExit`의 코드(None은 0, 문자열은
+    stderr에 쓰고 1), 그 밖의 예외(import 오류 포함)는 traceback을 stderr에 쓰고 1. KeyboardInterrupt는 그대로
+    올린다."""
+    if str(SCRIPTS) not in sys.path:
+        sys.path.insert(0, str(SCRIPTS))
+    out, err = io.StringIO(), io.StringIO()
+    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+        try:
+            code = importlib.import_module(Path(name).stem).main(list(argv))
+        except SystemExit as exc:
+            code = exc.code
+            if code is not None and not isinstance(code, int):
+                print(code, file=sys.stderr)
+                code = 1
+        except Exception:  # noqa: BLE001 - 하위 프로세스의 잡히지 않은 예외와 같게 다룬다
+            traceback.print_exc()
+            code = 1
+    return (code or 0), out.getvalue(), err.getvalue()
+
+
+def _run_subprocess(name: str, argv: list[str], env: dict | None) -> tuple[int, str, str]:
     kwargs = {}
     if env is not None:
         full_env = dict(os.environ)
         full_env.update(env)
         kwargs["env"] = full_env
-    proc = subprocess.run([sys.executable, str(SCRIPTS / name), *args, *extra], capture_output=True, text=True,
+    proc = subprocess.run([sys.executable, str(SCRIPTS / name), *argv], capture_output=True, text=True,
                           encoding="utf-8", errors="replace", **kwargs)
-    try:
-        data = json.loads(proc.stdout) if proc.stdout.strip() else None
-    except json.JSONDecodeError:
-        data = None
-    return proc.returncode, data, proc.stderr
+    return proc.returncode, proc.stdout, proc.stderr
 
 
 def aggregate(codes) -> int:

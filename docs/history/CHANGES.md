@@ -471,3 +471,10 @@
 - 커맨드 `analyze`·`record`에 붙여넣기 안내(`WD/<KEY>/steps-pasted.txt` → `--steps-file`)와 `--clock-offset`.
 - 테스트: `tests/test_step_order.py`, `test_step_anchor.py`(장비 시계 어긋남), `test_failed_step.py`(html·zip·붙여넣기), `test_db_lint.py`(`step-event`), 합성 시나리오 `step-order`, 변형 DB `issue-db-step-events`.
 - 미룸: 시계 차 자동 추정, 중첩 zip, MCP 첨부 가져오기(`99-deferred.md`).
+
+## 하위 스크립트 같은 프로세스 호출 (2026-10-04)
+
+- `common/checks.run_script`(`db_pr`·`db_precommit`·`guard`가 쓰는 검사 단계)와 `db_verify._script`가 하위 스크립트를 subprocess 대신 같은 프로세스에서 `main(argv)`로 부른다(`run_in_process`). 계약은 같다: 반환값이 종료 코드, `SystemExit`는 그 코드(None은 0, 문자열은 stderr + 1), 그 밖의 예외(import 오류 포함)는 traceback을 stderr에 쓰고 1. stdout은 JSON으로 파싱한다. `env`를 주거나 `TT_SCRIPT_SUBPROCESS=1`이면 예전처럼 subprocess. `checks.py`의 top-level import는 그대로 stdlib와 `common.exitcodes`뿐이다(guard).
+- `common/patterns.py`: 정규식 시간 상한용 작업 프로세스를 runner마다 spawn하지 않고 프로세스 안에서 공유한다. 본문은 runner가 처음 패턴을 돌릴 때 보내고, 다른 runner가 끼어들면 다시 보낸다. 시간 초과면 그 프로세스를 끝내고 다음 패턴에서 새로 띄운다(상한·`PatternTimeout` 동작 불변).
+- 효과(이 컨테이너, 합성 샘플 DB): `stage` 한 번 6.9~10.8초 → 1.5~2.1초, `pytest tests/test_db_pr.py tests/test_checks.py` 418s → 138s.
+- 테스트: `tests/test_inprocess.py`(종료 코드 계약, subprocess와 결과 일치, 작업 프로세스 재사용·본문 교체·시간 초과 후 재기동).

@@ -9,12 +9,12 @@
 - clone에는 `.local-draft`가 없다. 첫 메시지를 **"사외 초안 모드로 다음 단계 진행해"** 로 하면 모드를 묻지 않는다(만들어도 됨: `touch .local-draft`).
 - 의존성은 고정 버전으로: `pip install '.[test]'` (데비안 패키지와 충돌하면 `pyproject.toml`의 목록을 `pip install --ignore-installed -r`로). 버전이 다르면 `test_r10_dependency_manifest_has_complete_pins`만 실패한다.
 - **"다음 단계 진행"** = 아래 "다음 할 일"에서 ☐인 첫 항목을 한다. "사용자 결정"이 붙은 항목은 결정을 먼저 묻고, 결정이 없으면 건너뛰고 다음 ☐로 간다.
-- 진행 방식(10/04 세션에서 쓴 방식): 계획(Plan 에이전트) → 구현(구현 에이전트) → 직접 diff 검토 → **전체 `pytest tests` 통과**(Ubuntu 약 23분) → 커밋·push. 단계마다 브랜치 `ccr-9abe96b9-ou831g`에 push하고 이 표를 갱신한다.
+- 진행 방식(10/04 세션에서 쓴 방식): 계획(Plan 에이전트) → 구현(구현 에이전트) → 직접 diff 검토 → **전체 `pytest tests` 통과**(Ubuntu 약 8분) → 커밋·push. 단계마다 브랜치 `ccr-9abe96b9-ou831g`에 push하고 이 표를 갱신한다.
 
 ## 진행 상태
 
 - 모드: **사외 초안**. 완료 Phase: **D0, 1~13**. RF-0·RF-1 완료.
-- 마지막 전체 테스트: **466개 통과** (10/04, 보안 검토·R9·R11 커밋, Ubuntu·Py3.11). Windows에서는 도구 셸 stdin을 `/dev/null`로, PATH 앞에 실제 Python과 `python3` shim(Store 별칭이면 gh 스텁·git hook이 9009로 실패).
+- 마지막 전체 테스트: **477개 통과** (10/04, 5 성능 커밋, Ubuntu·Py3.11, 7분 39초). Windows에서는 도구 셸 stdin을 `/dev/null`로, PATH 앞에 실제 Python과 `python3` shim(Store 별칭이면 gh 스텁·git hook이 9009로 실패).
 - 사내 확인 항목: `TODO(SITE)` **73곳**(S22 12곳 추가) — `python3 tools/list_site_todos.py`. `REVIEW-OPEN.md` 0건.
 - 안내서(사람용 HTML, 10/04 1~6단계 반영): `docs/telephony-triage-guide.html` (공유본 https://claude.ai/artifact/1jov1Et4dQUMauFr6aoxWG)
 
@@ -43,7 +43,7 @@
 | ☐ 2 | **사용자 확인 받기** — 위 표와 RF-2 | 확인되면 표에서 "확인 대기"를 지운다 |
 | ☐ 3 | **스킬 행동 평가 재실행 + 새 기능 eval 추가** (사용자 결정: 사외 vs 사내 S-2, 토큰 큼) | 탐색 분석·실패 스텝·기준점·붙여넣기 흐름, Phase 13 실패 4건 수정분. `tests/skill_evals/README.md` |
 | ✅ 4 | **HTML 안내서 갱신** — 1~6단계 반영 | 10/04 완료. 이후 기능이 바뀌면 `docs/telephony-triage-guide.html`도 고친다 |
-| ☐ 5 | **성능** — `db_pr` 등이 하위 스크립트를 같은 프로세스에서 호출 | PR 한 건당 수십 초 단축. 리뷰 §Q "서브프로세스 재진입". 종료 코드 계약 유지 |
+| ✅ 5 | **성능** — 하위 스크립트 같은 프로세스 호출 | 10/04 완료(확인 대기). `checks.run_in_process`, 정규식 작업 프로세스 공유. stage 7~11초→2초. `CHANGES.md` |
 | ☐ 6 | **유지보수** — `db_add.py`(1,373줄) op별 분할 | 리뷰 §Q. 동작 동일 |
 | ☐ 7 | **트리거 개선** — 자연어 호출 recall 26~33% | SKILL.md 8,191/8,192바이트: description을 늘리면 본문을 줄여야 함. 지금은 슬래시 커맨드로 쓰면 문제없음 |
 | ☐ 8 | **R7 근거 출처**, **R15 대용량 로그 처리** (R9·R11은 10/04 완료) | `docs/development/PLUGIN_IMPROVEMENT_HANDOFF.md`. R7은 RF-8 전제 |

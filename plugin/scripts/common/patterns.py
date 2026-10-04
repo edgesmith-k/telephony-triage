@@ -6,8 +6,12 @@ extractor)을 `error`로 표시하고 분석은 계속한다.
 
 파이썬 `re`는 실행 중에 끊을 수 없으므로 **작업 프로세스 하나**에서 패턴을 돌리고,
 시간을 넘기면 그 프로세스를 끝낸 뒤(`PatternTimeout`) 다음 패턴에서 새로 띄운다.
-본문(줄 목록)은 프로세스를 띄울 때 한 번만 넘긴다. 새 의존성(`regex` 모듈 등)을
-쓰지 않기 위한 방식이다.
+새 의존성(`regex` 모듈 등)을 쓰지 않기 위한 방식이다.
+
+작업 프로세스는 **한 프로세스 안의 모든 `PatternRunner`가 같이 쓴다**(spawn 기동은 인터프리터와
+`__main__` import를 다시 하므로 픽스처마다 띄우면 느리다). 본문(줄 목록)은 runner가 처음 패턴을 돌릴 때
+한 번 보내고, 다른 runner가 끼어들어 본문을 바꿨으면 다시 보낸다. `close()`는 프로세스를 끝내지 않는다
+(daemon이라 부모가 끝나면 같이 끝난다). 시간 초과로 끝낸 뒤에는 다음 패턴에서 새로 띄우고 본문을 다시 보낸다.
 
     with PatternRunner(texts, timeout_ms=2000) as runner:
         hits = runner.search(r"RILJ.*>\\s*SETUP_DATA_CALL")      # texts 인덱스 목록
@@ -41,8 +45,12 @@ def _scan(regex: re.Pattern, mode: str, texts, indices=None) -> list[int]:
     return [i for i, text in enumerate(texts) if text is not None and fn(text)]
 
 
-def _worker(conn, texts) -> None:  # 작업 프로세스
+_TEXTS = "texts"  # 본문 교체 메시지: (_TEXTS, 줄 목록) → ("ready", None)
+
+
+def _worker(conn) -> None:  # 작업 프로세스
     cache: dict[str, re.Pattern] = {}
+    texts: list = []
     conn.send(("ready", None))
     while True:
         try:
@@ -51,6 +59,10 @@ def _worker(conn, texts) -> None:  # 작업 프로세스
             return
         if msg is None:
             return
+        if msg[0] == _TEXTS:
+            texts = msg[1]
+            conn.send(("ready", None))
+            continue
         pattern, mode, subset, indices = msg
         try:
             regex = cache.get(pattern)
@@ -62,46 +74,79 @@ def _worker(conn, texts) -> None:  # 작업 프로세스
             conn.send(("error", str(exc)))
 
 
-class PatternRunner:
-    def __init__(self, texts, timeout_ms: int | None = DEFAULT_TIMEOUT_MS):
-        self.texts = list(texts)
-        self.timeout_ms = int(timeout_ms) if timeout_ms else 0
-        self._proc = None
-        self._conn = None
+class _SharedWorker:
+    """프로세스 안에서 runner들이 같이 쓰는 작업 프로세스 하나. `owner`는 지금 본문을 올려 둔 runner."""
 
-    # -- 프로세스 -------------------------------------------------------------
+    proc = None
+    conn = None
+    owner = None
 
-    def _start(self) -> None:
+    @classmethod
+    def alive(cls) -> bool:
+        return cls.proc is not None and cls.proc.is_alive()
+
+    @classmethod
+    def start(cls) -> None:
+        cls.stop(kill=True)
         ctx = multiprocessing.get_context("spawn")  # OS마다 같은 방식
         parent, child = ctx.Pipe()
-        proc = ctx.Process(target=_worker, args=(child, self.texts), daemon=True)
+        proc = ctx.Process(target=_worker, args=(child,), daemon=True)
         proc.start()
         child.close()
         if not parent.poll(_STARTUP_TIMEOUT_SEC):
             proc.kill()
+            proc.join(timeout=5)
+            parent.close()
             raise RuntimeError("정규식 작업 프로세스가 시작되지 않았습니다.")
         parent.recv()
-        self._proc, self._conn = proc, parent
+        cls.proc, cls.conn, cls.owner = proc, parent, None
 
-    def _stop(self, kill: bool = False) -> None:
-        if self._proc is None:
+    @classmethod
+    def load(cls, owner, texts) -> None:
+        """본문을 올린다 (전달 시간은 패턴 상한에 넣지 않는다)."""
+        cls.owner = None
+        cls.conn.send((_TEXTS, texts))
+        if not cls.conn.poll(_STARTUP_TIMEOUT_SEC):
+            cls.stop(kill=True)
+            raise RuntimeError("정규식 작업 프로세스에 본문을 넘기지 못했습니다.")
+        cls.conn.recv()
+        cls.owner = owner
+
+    @classmethod
+    def stop(cls, kill: bool = False) -> None:
+        proc, conn = cls.proc, cls.conn
+        cls.proc = cls.conn = cls.owner = None
+        if proc is None:
             return
         try:
             if kill:
-                self._proc.kill()
+                proc.kill()
             else:
-                self._conn.send(None)
+                conn.send(None)
         except (OSError, BrokenPipeError):
             pass
-        self._proc.join(timeout=5)
-        if self._proc.is_alive():
-            self._proc.kill()
-            self._proc.join(timeout=5)
-        self._conn.close()
-        self._proc = self._conn = None
+        proc.join(timeout=5)
+        if proc.is_alive():
+            proc.kill()
+            proc.join(timeout=5)
+        conn.close()
+
+
+class PatternRunner:
+    def __init__(self, texts, timeout_ms: int | None = DEFAULT_TIMEOUT_MS):
+        self.texts = list(texts)
+        self.timeout_ms = int(timeout_ms) if timeout_ms else 0
+
+    def _ready(self) -> None:
+        if not _SharedWorker.alive():
+            _SharedWorker.start()
+        if _SharedWorker.owner is not self:
+            _SharedWorker.load(self, self.texts)
 
     def close(self) -> None:
-        self._stop()
+        """작업 프로세스는 다음 runner가 다시 쓴다. 본문을 올려 둔 것이 이 runner면 소유만 푼다."""
+        if _SharedWorker.owner is self:
+            _SharedWorker.owner = None
 
     def __enter__(self):
         return self
@@ -124,13 +169,13 @@ class PatternRunner:
                 return _scan(re.compile(pattern), mode, src, idx)
             except re.error as exc:
                 raise PatternError(str(exc)) from exc
-        if self._proc is None or not self._proc.is_alive():
-            self._start()
-        self._conn.send((pattern, mode, None if texts is None else src, idx))
-        if not self._conn.poll(self.timeout_ms / 1000):
-            self._stop(kill=True)
+        self._ready()
+        conn = _SharedWorker.conn
+        conn.send((pattern, mode, None if texts is None else src, idx))
+        if not conn.poll(self.timeout_ms / 1000):
+            _SharedWorker.stop(kill=True)
             raise PatternTimeout(pattern, self.timeout_ms)
-        status, value = self._conn.recv()
+        status, value = conn.recv()
         if status == "error":
             raise PatternError(value)
         return value
