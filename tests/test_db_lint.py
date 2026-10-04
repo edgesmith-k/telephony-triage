@@ -19,7 +19,7 @@ sys.path.insert(0, str(REPO / "tests" / "helpers"))
 sys.path.insert(0, str(REPO / "plugin" / "scripts"))
 
 import make_variant_dbs  # noqa: E402
-from runner import SAMPLE, edit, git, git_db, plugin_root, run, run_json, variant_db  # noqa: E402
+from runner import SAMPLE, copy_db as runner_copy, edit, git, git_db, plugin_root, run, run_json, variant_db  # noqa: E402
 
 LINT_DB = variant_db("issue-db-lint-errors")
 D = "data/DATA-001-no-setup-data-call"
@@ -192,6 +192,21 @@ def test_skeleton_is_clean():
 
 def _all_tests():
     return [(n, o) for n, o in sorted(globals().items()) if n.startswith("test_") and callable(o)]
+
+
+def test_failed_step_is_schema_valid_and_checked_for_raw_identifiers():
+    import yaml
+    db = runner_copy()
+    path = db / "data/DATA-001-no-setup-data-call/jira/MOCK-1101.yaml"
+    edit(path, "note: 모바일", "failed_step: 3 | Enable data\nnote: 모바일")
+    assert _lint(db, "--all", expect=0)["errors"] == []
+    edit(path, "failed_step: 3 | Enable data", "failed_step: 고객 010-1234-5678 데이터 켜기")
+    result = _lint(db, "--all", expect=1)
+    hits = [e for e in result["errors"] if e["code"] == "raw-identifier"]
+    assert hits and "failed_step" in hits[0]["message"] and "MOCK-1101" in hits[0]["file"]
+    edit(path, "failed_step: 고객 010-1234-5678 데이터 켜기", "failed_step: " + "x" * 201)
+    assert any(e["code"] == "schema" or "failed_step" in str(e) for e in _lint(db, "--all", expect=1)["errors"])
+    assert yaml.safe_load(path.read_text(encoding="utf-8"))["note"]
 
 
 if __name__ == "__main__":

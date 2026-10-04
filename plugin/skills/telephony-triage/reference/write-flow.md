@@ -20,12 +20,12 @@ import/review/move 계획 PR)이 이 순서를 따른다. 사용자의 이슈 DB
 
 ## 계획 형식 (analyze Step 7)
 
-`JOB/plan.json` (`contracts.md §작업 계획`). `jira`에는 요약·설명·코멘트 원문을 두지 않는다. 새 원인·유형은 커밋 메시지에 `temp_id`를 쓴다(적용 때 치환).
+`JOB/plan.json` (`contracts.md §작업 계획`). `jira`에는 요약·설명·코멘트 원문을 두지 않는다. `failed_step`(마스킹된 한 줄, 선택)은 jira 블록 그대로 복사하며, 확인 화면에서 사용자가 지우라고 하면 계획 `jira`에서 뺀다. 새 원인·유형은 커밋 메시지에 `temp_id`를 쓴다(적용 때 치환).
 
 ```json
 {"source": "analyze", "schema_version": <SNAP issue-db.config.yaml>, "started_at": "<lock 획득 시각>",
  "base_sha": "<analysis.json snapshot.sha>",
- "jira": {<JOB/jira.json의 jira 블록>, "date": "<오늘>", "note": "<확인받은 한 줄>"},
+ "jira": {<JOB/jira.json의 jira 블록(있으면 `failed_step` 포함)>, "date": "<오늘>", "note": "<확인받은 한 줄>"},
  "operations": [...], "extra_samples": [...],
  "feedback": {"date": "<지금, 타임존 포함>", "suggested": [<후보: {cause, signature, score} — JOB/match.json>],
               "decision": "<SKILL.md Step 7 표>", "final": "<원인 ID | temp_id | unresolved>"},

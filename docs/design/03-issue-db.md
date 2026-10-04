@@ -226,11 +226,13 @@ sw: <빌드>
 android_version: "16"
 carrier: <캐리어>                      # 선택
 analyzed_by: <GHE 아이디>
+failed_step: 3 | Enable data           # 선택, 한 줄(≤200자). 마스킹된 실패 스텝 (아래)
 note: 로밍 SIM 테스트 중 발생          # 선택, 한 줄. 사용자가 확인한 요약만 (아래)
 ```
 
-- **저장하는 Jira 정보는 위 구조화 필드와 `note`뿐이다.** Jira 요약·설명·코멘트 원문은 이슈 DB·PR 본문·피드백 어디에도 저장하지 않는다. `note`는 스킬이 마스킹된 Jira 요약에서 한 문장 초안을 만들고 **사용자가 확인한 문장**을 쓴다. 사람 이름·고객명은 넣지 않는다. `db_lint`가 `note`의 원본 식별자 패턴을 검사한다 (`08-safety.md §8.1`).
+- **저장하는 Jira 정보는 위 구조화 필드와 `note`, 선택 `failed_step`뿐이다.** Jira 요약·설명·코멘트 원문은 이슈 DB·PR 본문·피드백 어디에도 저장하지 않는다. `note`는 스킬이 마스킹된 Jira 요약에서 한 문장 초안을 만들고 **사용자가 확인한 문장**을 쓴다. 사람 이름·고객명은 넣지 않는다. `db_lint`가 `note`의 원본 식별자 패턴을 검사한다 (`08-safety.md §8.1`).
 
+- `failed_step`(선택)은 실패한 테스트 스텝 한 줄이다. 마스킹을 거쳐 공백을 정리하고 200자로 자른 값만 저장하고(`db_add`), `db_lint`가 `note`처럼 원본 식별자 패턴을 검사한다. Jira 필드·설명·시험 절차·`--failed-step`·`--steps-file`에서 자동으로 얻은 값(`07-workflow.md §Step 2`)은 Step 8 확인 화면의 diff에 보이고 **사용자가 지울 수 있다**. 없으면 키를 만들지 않는다. 점수·분류·회귀·검증에는 쓰지 않는 보조 정보다(검색 키워드와 카테고리 README의 "자주 실패한 스텝"에만 쓴다).
 - `occurred_on`은 analyze·record가 Jira 발생 시각(`jira.field_map.occurred_at`, `jira.timezone`)에서 채운다. 모르면 생략하고, 통계는 `date`로 대신한다. 과거 이슈를 한꺼번에 기록해도 통계가 분류일에 몰리지 않게 하기 위해서다.
 - 파일명이 Jira 키이므로 이슈 DB 전체에서 같은 Jira는 하나만 존재한다. `db_lint.py`가 전체 중복을 검사한다.
 - 재분류는 `reclassify` op로 한다: 파일을 다른 유형 디렉토리로 **이동**하고 `cause`를 바꾼 뒤, `note`에 `reclassified from <이전 원인 ID>`를 남긴다 (`contracts.md §작업 계획`).
@@ -310,6 +312,8 @@ analyze Step 7까지의 결정은 이슈 DB를 바로 바꾸지 않고 **작업 
 
 원인 미확정: [ABC-444](…)
 
+- 자주 실패한 스텝: Data 켜기 (3건); Roaming 켜기 (1건)
+
 ## Call
 
 ### 1. [VoLTE가 동작하지 않음](call/CALL-001-volte-not-working/type.md) `CALL-001`
@@ -332,6 +336,8 @@ analyze Step 7까지의 결정은 이슈 DB를 바로 바꾸지 않고 **작업 
 ## 보관
 (deprecated / merged-into 유형과 원인. 옛 ID → 새 ID 표 포함)
 ```
+
+- 유형에 `failed_step`이 있는 Jira 기록이 있으면 카테고리 README 유형 절 끝에 `- 자주 실패한 스텝: <스텝> (N건); …` 한 줄을 더한다(공백·대소문자를 무시해 묶고, 많은 순 → 키 순 상위 3개, 표시는 묶음 안 원문의 최솟값 80자). 하나도 없으면 줄을 만들지 않는다. STATS는 바뀌지 않는다.
 
 - 카테고리는 **건수가 0이어도** 요약표 행과 섹션을 남기고, 섹션에는 "아직 등록된 이슈가 없습니다"를 쓴다.
 - Jira는 최근 `jira_inline_max`건만 표에 링크하고, 전체 건수와 유형 디렉토리의 `jira/` 링크를 함께 둔다.

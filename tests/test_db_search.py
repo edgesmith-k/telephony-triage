@@ -235,6 +235,18 @@ def test_keyword_and_jira_search_on_sample():
     assert run("db_search.py", ["--db", SAMPLE, "x", "--limit", "0"]).returncode == 2
 
 
+def test_failed_step_is_searchable_and_shown_only_when_present():
+    from runner import copy_db
+    db = copy_db()
+    edit(db / "data/DATA-001-no-setup-data-call/jira/MOCK-1101.yaml", "note: 모바일", "failed_step: 3 | Enable data\nnote: 모바일")
+    found = run_json("db_search.py", ["--db", db, "enable data"])
+    jira = [r for r in found["results"] if r["kind"] == "jira"]
+    assert [r["key"] for r in jira] == ["MOCK-1101"] and jira[0]["failed_step"] == "3 | Enable data"
+    other = run_json("db_search.py", ["--db", db, "MOCK-1102"])
+    assert "failed_step" not in other["results"][0]
+    assert found["results"][0].get("failed_step") in (None, "3 | Enable data")
+
+
 if __name__ == "__main__":
     import pytest
 

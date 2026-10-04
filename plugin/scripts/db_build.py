@@ -46,6 +46,8 @@ from common.versions import GENERATOR_VERSION  # noqa: E402
 
 HEADER = "> 자동 생성 파일입니다. 직접 수정하지 마세요. (`db_build.py`, generator v{g})"
 EMPTY_CATEGORY = "아직 등록된 이슈가 없습니다."
+FAILED_STEP_TOP = 3          # 카테고리 README "자주 실패한 스텝" 줄에 보이는 개수
+FAILED_STEP_CLIP = 80
 RULE_FILES = (("tags.yaml", "tags"), ("ril.yaml", "requests"), ("ril.yaml", "unsolicited"),
               ("extractors.yaml", "extractors"))
 
@@ -175,6 +177,26 @@ def _unresolved_line(ctx: Context, itype: issuedb.IssueType) -> list[str]:
     if not records:
         return []
     return ["", "원인 미확정: " + ", ".join(ctx.link(str(r["key"])) for r in records)]
+
+
+def _failed_steps_line(ctx: Context, itype: issuedb.IssueType) -> list[str]:
+    """유형 Jira 기록의 `failed_step`(선택)을 공백·대소문자 무시로 묶어 자주 나온 순으로 보여준다.
+    하나도 없으면 아무것도 내지 않는다(기존 README가 바뀌지 않는다). 결정적이다(03-issue-db.md §5.2)."""
+    groups: dict[str, list[str]] = {}
+    for r in ctx.jira:
+        step = r.get("failed_step")
+        if r["_type"] == itype.id and step and str(step).strip():
+            groups.setdefault(" ".join(str(step).split()).casefold(), []).append(str(step))
+    if not groups:
+        return []
+    top = sorted(groups.items(), key=lambda kv: (-len(kv[1]), kv[0]))[:FAILED_STEP_TOP]
+    cells = []
+    for _, originals in top:
+        shown = " ".join(min(originals).split())
+        if len(shown) > FAILED_STEP_CLIP:
+            shown = shown[: FAILED_STEP_CLIP - 1] + "…"
+        cells.append(f"{_cell(shown)} ({len(originals)}건)")
+    return ["", "- 자주 실패한 스텝: " + "; ".join(cells)]
 
 
 def _signature_summary(sig: dict) -> str:
@@ -307,6 +329,7 @@ def category_readme(ctx: Context, cat: dict) -> str:
                        f"{_jira_cell(ctx, ctx.jira_of(cause.id), itype, rel + '/')} | "
                        f"{_versions(cause.raw.get('android_versions'))} | {_code_cell(cause)} |")
         out += _unresolved_line(ctx, itype)
+        out += _failed_steps_line(ctx, itype)
         out.append("")
     if out[-1] == "":
         out.pop()

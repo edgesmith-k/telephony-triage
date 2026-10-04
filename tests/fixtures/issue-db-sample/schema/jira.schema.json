@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "jira/<JIRA-KEY>.yaml (03-issue-db.md §5.4 (2))",
-  "description": "Jira 한 건 = 파일 하나. 저장하는 것은 아래 구조화 필드와 note뿐이다. Jira 요약·설명·코멘트 원문은 저장하지 않는다 (08-safety.md §8.1). key가 issue-db.config.yaml의 jira_key_regex에 맞는지, 파일명과 같은지, 전체 중복이 없는지는 db_lint.py가 검사한다.",
+  "description": "Jira 한 건 = 파일 하나. 저장하는 것은 아래 구조화 필드와 note, 선택 failed_step(마스킹된 실패 스텝 한 줄)뿐이다. Jira 요약·설명·코멘트 원문은 저장하지 않는다 (08-safety.md §8.1). key가 issue-db.config.yaml의 jira_key_regex에 맞는지, 파일명과 같은지, 전체 중복이 없는지는 db_lint.py가 검사한다.",
   "type": "object",
   "additionalProperties": false,
   "required": ["key", "cause", "date", "model", "sw", "android_version", "analyzed_by"],
@@ -19,6 +19,7 @@
     "android_version": {"type": "string", "pattern": "^[0-9]+$"},
     "carrier": {"type": "string", "minLength": 1},
     "analyzed_by": {"type": "string", "minLength": 1},
+    "failed_step": {"description": "실패한 테스트 스텝 한 줄. 마스킹된 값, db_lint가 원본 식별자를 검사한다.", "type": "string", "maxLength": 200},
     "note": {
       "description": "사용자가 확인한 한 줄. 마스킹을 거친 값이고 db_lint가 원본 식별자 패턴을 검사한다.",
       "type": "string",

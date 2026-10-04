@@ -752,6 +752,24 @@ def test_check_ids_renumber_and_similar():
     assert sim["top"][0]["type"] == "DATA-001" and len(sim["top"]) == 3
 
 
+def test_apply_masks_failed_step_and_writes_it_before_note():
+    db = git_db()
+    plan = load_plan("p7-analyze-append.plan.json")
+    plan["jira"]["failed_step"] = "고객 010-1234-5678  데이터 켜기"
+    apply_json(db, plan)
+    text = (db / DATA_DIR / "jira" / "MOCK-7001.yaml").read_text(encoding="utf-8")
+    record = yaml.safe_load(text)
+    assert "010-1234-5678" not in text and "<MSISDN#" in record["failed_step"] and "  " not in record["failed_step"]
+    keys = list(record)
+    assert keys.index("failed_step") == keys.index("note") - 1
+    lint = run_json("db_lint.py", ["--db", db, "--all"], expect=0)
+    assert lint["errors"] == []
+    plain = load_plan("p7-analyze-append.plan.json")
+    db2 = git_db()
+    apply_json(db2, plain)
+    assert "failed_step" not in yaml.safe_load((db2 / DATA_DIR / "jira" / "MOCK-7001.yaml").read_text(encoding="utf-8"))
+
+
 if __name__ == "__main__":
     import pytest
 

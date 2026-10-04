@@ -206,6 +206,36 @@ def _all_tests():
     return [(n, o) for n, o in sorted(globals().items()) if n.startswith("test_") and callable(o)]
 
 
+def _set_steps(db: Path, steps: dict) -> None:
+    jira = db / "data/DATA-001-no-setup-data-call/jira"
+    for key, step in steps.items():
+        path = jira / f"{key}.yaml"
+        text = path.read_text(encoding="utf-8")
+        head, note = text.split("\nnote: ", 1)
+        path.write_text(f"{head}\nfailed_step: {step}\nnote: {note}", encoding="utf-8", newline="\n")
+
+
+def test_category_readme_lists_frequent_failed_steps_deterministically():
+    db = copy_db()
+    _set_steps(db, {"MOCK-1101": "Data 켜기", "MOCK-1102": "Data 켜기", "MOCK-1103": "data  켜기"})
+    first, second = _preview(db), _preview(db)
+    text = (first / "data/README.md").read_text(encoding="utf-8")
+    assert "- 자주 실패한 스텝: Data 켜기 (3건)" in text.splitlines()
+    assert (first / "data/README.md").read_bytes() == (second / "data/README.md").read_bytes()
+    plain = _preview(SAMPLE)
+    assert (first / "STATS.md").read_bytes() == (plain / "STATS.md").read_bytes()
+    for key in ("data", "call", "network", "sim", "sms", "ims"):
+        assert "자주 실패한 스텝" not in (plain / key / "README.md").read_text(encoding="utf-8")
+    assert (first / "call/README.md").read_bytes() == (plain / "call/README.md").read_bytes()
+
+
+def test_failed_steps_line_shows_top_three_by_count_then_key():
+    db = copy_db()
+    _set_steps(db, {"MOCK-1101": "b 스텝", "MOCK-1102": "a 스텝", "MOCK-1103": "b 스텝", "MOCK-1104": "c 스텝"})
+    text = (_preview(db) / "data/README.md").read_text(encoding="utf-8")
+    assert "- 자주 실패한 스텝: b 스텝 (2건); a 스텝 (1건); c 스텝 (1건)" in text.splitlines()
+
+
 if __name__ == "__main__":
     failures = 0
     for name, func in _all_tests():

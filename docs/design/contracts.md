@@ -159,7 +159,7 @@
   "started_at": "2026-09-27T18:02+09:00",
   "base_sha": "<계획의 결정을 내린 기준 트리 SHA>",
   "jira": {"key": "ABC-12345", "origin": "mcp", "model": "...", "sw": "...", "android_version": "16",
-           "carrier": "...", "date": "2026-09-27", "occurred_on": "2026-09-26", "note": "로밍 SIM 테스트 중 발생"},
+           "carrier": "...", "date": "2026-09-27", "occurred_on": "2026-09-26", "failed_step": "3 | Enable data", "note": "로밍 SIM 테스트 중 발생"},
   "operations": [
     {"op": "append", "cause": "DATA-001-02"},
     {"op": "new-cause", "temp_id": "NEW-CAUSE-1", "type": "DATA-001", "cause": {"title": "...", "resolution": "...", "signatures": []}, "body": "..."},

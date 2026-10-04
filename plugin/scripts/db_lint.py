@@ -559,10 +559,11 @@ class Linter:
                 cause = str(record.get("cause"))
                 if cause != "unresolved" and cause not in causes:
                     self.err("jira-cause", path, f"cause {cause}가 유형 {type_id}의 원인이 아닙니다.")
-                if record.get("note"):
-                    for hit in masking.new_masker().find(str(record["note"])):
-                        self.err("raw-identifier", path, f"note에 마스킹되지 않은 {hit['kind']}가 있습니다.")
-                        break
+                for field in ("note", "failed_step"):
+                    if record.get(field):
+                        for hit in masking.new_masker().find(str(record[field])):
+                            self.err("raw-identifier", path, f"{field}에 마스킹되지 않은 {hit['kind']}가 있습니다.")
+                            break
 
     def _check_feedback(self) -> None:
         for path in sorted((self.root / "feedback").glob("*/*.yaml")):

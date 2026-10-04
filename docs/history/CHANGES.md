@@ -446,3 +446,11 @@
 - `match_signatures.py`: 후보 정렬 키를 `(-score, -(근접+키워드 bonus), 유형, 원인)`으로 바꿨다(`_rank_key`). S=C=1에서 score가 1.0으로 포화해도 발생 시각에 가까운 원인이 앞선다. score·confidence·bonus 값·회귀 모드(bonus 0, ID 순)는 불변. `04-parser-matching.md §5.11 (2)·(4)`, `contracts.md §3.2` 동기화.
 - `triage.py` 리포트: "신뢰도" → "일치 수준 … — 진단 확신도 아님", 1위와 동점인 후보가 있으면 "순위 참고" 줄, 기타 후보는 `(규칙 일치 점수 N)`. `analysis.json` 필드는 불변. `07-workflow.md` Step 4·6 예시, `reference/db-authoring.md` 한 줄.
 - 테스트: `test_full_match_ties_are_ordered_by_proximity`, `test_regress_order_unchanged_by_tiebreak`, `test_triage.py` 리포트 문구.
+
+## 실패 스텝(선택 입력) (2026-10-04)
+
+- 시험 절차·실패 스텝을 선택 입력으로 추가했다. 우선순위 `--failed-step` > Jira 필드 > 설명 > 시험 절차 텍스트(`jira.failed_step_patterns`) > `--steps-file`(txt/csv). 없거나 읽지 못해도 출력은 이전과 같다(질문·중단·새 키 없음). 점수·분류·회귀·검증에는 쓰지 않는 보조 정보다.
+- 입력: `common/failedstep.py`, `jira_fields.py extract --failed-step/--steps-file`, `site-defaults`의 `field_map.test_steps/failed_step`·`failed_step_patterns`, 레지스트리 S22(S1~S22).
+- 분석 보조: `triage.py`(같은 프로세스에서 마스킹, trace·state에 원문 없음, report·timeline 머리·후보 없음 힌트·request_hash), `match_signatures` 키워드 보너스 입력, `offline_eval` 라벨셋 `failed_step`.
+- 누적: Jira 기록 `failed_step`(≤200자, v1 스키마에 직접 추가 — 반입 전이라 버전을 올리지 않음, `06 §6.4`), `db_add`·`db_lint`·`db_search`, 카테고리 README "자주 실패한 스텝".
+- 테스트: `tests/test_failed_step.py`, `test_jira_fields.py`, `test_triage.py`, `test_match_signatures.py`, `test_db_build.py`, `test_db_lint.py`, `test_db_search.py`, `test_db_pr.py`.
