@@ -60,6 +60,7 @@ sys.path.insert(0, str(SCRIPTS))
 
 from common import masking, site_defaults, userconfig, yamlio  # noqa: E402
 from common.buildname import is_valid_branch_name  # noqa: E402
+from common import checks as checks_mod  # noqa: E402
 from common import ghcli  # noqa: E402
 from common.exitcodes import CHECK_FAILED, NEEDS_APPROVAL, OK, USAGE  # noqa: E402
 
@@ -302,16 +303,7 @@ _PLUGIN_ROOT: str | None = None
 
 def run_script(name: str, args: list[str], env: dict | None = None) -> tuple[int, dict | None, str]:
     """플러그인 스크립트를 부른다. (종료 코드, stdout JSON 또는 None, stderr)."""
-    extra = ["--plugin-root", _PLUGIN_ROOT] if _PLUGIN_ROOT else []
-    full_env = dict(os.environ)
-    full_env.update(env or {})
-    proc = subprocess.run([sys.executable, str(SCRIPTS / name), *args, *extra], capture_output=True, text=True,
-                          encoding="utf-8", errors="replace", env=full_env)
-    try:
-        data = json.loads(proc.stdout) if proc.stdout.strip() else None
-    except json.JSONDecodeError:
-        data = None
-    return proc.returncode, data, proc.stderr
+    return checks_mod.run_script(name, args, plugin_root=_PLUGIN_ROOT, env=env)
 
 
 class Ctx:
@@ -549,37 +541,43 @@ def stage(ctx: Ctx, plan_path: Path, wt: Path, branch: str, dry_run: bool) -> tu
         result["stopped"] = "apply"
         return result, code
 
-    codes = [OK]
     db_cfg = yamlio.load(wt / "issue-db.config.yaml") or {}
-    checks: dict = {}
-    if db_cfg.get("ci_mode", "local") != "actions-build":
-        ref = f"origin/{ctx.base}"
-        steps = [("build", "db_build.py", ["--write", "--db", str(wt)]),
-                 ("lint", "db_lint.py", ["--changed", ref, "--db", str(wt)]),
-                 ("mask", "mask_pii.py", ["--check", "--changed", ref, "--db", str(wt)]),
-                 ("ids", "db_add.py", ["check-ids", "--db", str(wt)]),
-                 ("regress", "db_regress.py", ["--all", "--db", str(wt)])]
-        for name, script, sargs in steps:
-            code, data, err = run_script(script, sargs)
-            checks[name] = {"code": code, "result": data, "stderr": err.strip()[-500:] if code else ""}
-            if code == USAGE:
-                _write_json(job_dir / STAGE, {**result, "checks": checks})
-                raise UsageError(f"{script} 실행 불가: {err.strip()[:300]}", {**result, "checks": checks})
-            codes.append(code)
-        _write_json(job_dir / REGRESS, checks["regress"]["result"] or {})
-        code, data, err = run_script("db_verify.py", ["rules", "--plan", str(plan_path), "--db", str(wt),
-                                                      "--regress-json", str(job_dir / REGRESS)])
-        if code == USAGE:
-            raise UsageError(f"db_verify 실행 불가: {err.strip()[:300]}", result)
-        checks["verify"] = {"code": code, "result": data}
-        codes.append(code)
+    ci_mode = db_cfg.get("ci_mode", "local")
+    cctx = checks_mod.Ctx(db=wt, scope="worktree", ref=f"origin/{ctx.base}", ci_mode=ci_mode, db_cfg=db_cfg,
+                          plan=plan_path, regress_json=job_dir / REGRESS, plugin_root=_PLUGIN_ROOT)
+
+    def save_regress(res: checks_mod.StepResult) -> None:
+        if res.name == "regress":
+            _write_json(job_dir / REGRESS, res.data or {})
+
+    run = checks_mod.run_checks(checks_mod.PROFILES["stage"], cctx, on_step=save_regress)
+    if run.aborted is not None:
+        bad = run.aborted
+        if bad.name == "verify":
+            # 주의: verify의 실행 불가는 checks 없이 result만 싣고 STAGE도 쓰지 않는다 (기존 동작 유지).
+            raise UsageError(f"db_verify 실행 불가: {bad.stderr[:300]}", result)
+        checks_so_far = _stage_checks(run)
+        _write_json(job_dir / STAGE, {**result, "checks": checks_so_far})
+        raise UsageError(f"{bad.script} 실행 불가: {bad.stderr[:300]}", {**result, "checks": checks_so_far})
+    if ci_mode != "actions-build":
+        checks_out = _stage_checks(run)
     else:
-        checks["skipped"] = "ci_mode: actions-build — 생성·검사는 CI가 한다 (13-actions.md)"
-    result["checks"] = checks
-    final = CHECK_FAILED if CHECK_FAILED in codes else NEEDS_APPROVAL if NEEDS_APPROVAL in codes else OK
+        checks_out = {"skipped": "ci_mode: actions-build — 생성·검사는 CI가 한다 (13-actions.md)"}
+    result["checks"] = checks_out
+    final = run.overall   # 1 > 3 > 0 (2는 위에서 중단했다)
     result["result"] = {0: "ok", 1: "check-failed", 3: "needs-approval"}[final]
     _write_json(job_dir / STAGE, result)
     return result, final
+
+
+def _stage_checks(run: checks_mod.Run) -> dict:
+    """`Run`을 stage 결과의 `checks` 모양 `{이름: {code, result, stderr}}`으로 (verify는 stderr 없음)."""
+    out: dict = {}
+    for res in run.steps:
+        out[res.name] = {"code": res.code, "result": res.data}
+        if res.name != "verify":
+            out[res.name]["stderr"] = res.stderr[-500:] if res.code else ""
+    return out
 
 
 # -- summary -------------------------------------------------------------------------------
