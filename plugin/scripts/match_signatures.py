@@ -17,6 +17,10 @@
   참고 값이다. 시간 상한을 넘긴 시그니처(`errors`)는 호출자(`db_regress`·`db_verify`)가
   실패로 본다.
 - 후보 정렬: 같은 score 후보는 bonus 합(근접+키워드) 내림차순, 다음 ID 순. 회귀 모드는 bonus가 0이라 ID 순.
+- 스텝 기준 우선 유형(분석 모드, `--jira-meta`에 `failed_step`이 있을 때만): 같은 스텝이 이 유형의 기존 Jira 기록에 `step_focus.min_records`
+  건 이상 있거나(스텝 이름 비교) `issue-db.config.yaml`의 `step_focus.map`에 맞으면 그 유형은 **순위 키에만**
+  `scoring.step_focus_bonus_max`(기본 0.05)를 더해 정렬한다. score·confidence·S·C는 바뀌지 않는다. 우선 유형이 있을 때만
+  후보 `bonus.step`과 최상위 `step_focus: {types[], by{유형: ["records:N" | "map"]}}`를 낸다.
 
 `--jira-meta` (분석 모드, 선택): `{key, occurred_at, sw, summary, description, failed_step?}` (`failed_step`은 있을 때만, 키워드 보너스 입력).
 `occurred_at`은 타임존 있는 ISO 시각, 텍스트 필드는 마스킹된 것이어야 한다.
@@ -44,7 +48,7 @@ from pathlib import Path
 SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS))
 
-from common import builds, compat, dbpath, issuedb, site_defaults  # noqa: E402
+from common import builds, compat, dbpath, issuedb, site_defaults, stepanchor  # noqa: E402
 from common import compiled as compiled_cache  # noqa: E402
 from common.exitcodes import OK, USAGE  # noqa: E402
 from common.patterns import DEFAULT_TIMEOUT_MS  # noqa: E402
@@ -56,10 +60,12 @@ DEFAULT_SCORING = {
     "cause_weight": 0.6,
     "proximity_bonus_max": 0.1,
     "keyword_bonus_max": 0.05,
+    "step_focus_bonus_max": 0.05,
     "feedback_weight": True,
     "confidence": {"high": 0.9, "medium": 0.6},
 }
 _TOKEN_RE = re.compile(r"[0-9A-Za-z가-힣_]{2,}")
+DEFAULT_STEP_FOCUS_MIN_RECORDS = 2
 
 
 class UsageError(Exception):
@@ -110,6 +116,52 @@ def _keyword_ratio(jira: dict, itype: issuedb.IssueType, cause: issuedb.Cause | 
     words = " ".join([cause.title if cause else itype.title, *map(str, itype.raw.get("tags") or [])])
     target = _tokens(words)
     return len(target & jira_tokens) / len(target) if target else 0.0
+
+
+def _num(value, default: float, lo: float, hi: float) -> float:
+    ok = isinstance(value, (int, float)) and not isinstance(value, bool) and lo <= value <= hi
+    return float(value) if ok else default
+
+
+def _step_focus(db: issuedb.IssueDb, jira: dict, scoring: dict) -> dict[str, list[str]]:
+    """실패 스텝 → 우선 유형 `{유형 ID: ["records:N", "map"]}` (순위 참고만, 점수·S/C 불변).
+
+    (i) 유형의 Jira 기록 중 `failed_step`이 같은 스텝(이름 비교)인 것이 `step_focus.min_records`건 이상,
+    (ii) `step_focus.map[{pattern, types[], categories[]}]`의 `pattern`이 마스킹된 스텝에 맞으면 그 유형과 그 카테고리의
+    active 유형 전부. 정규식·값 오류는 그 항목만 건너뛴다(`db_lint`가 잡는다)."""
+    step = " ".join(str(jira.get("failed_step") or "").split())
+    if not step or not scoring.get("step_focus_bonus_max"):
+        return {}
+    cfg = db.config.get("step_focus")
+    cfg = cfg if isinstance(cfg, dict) else {}
+    minimum = cfg.get("min_records", DEFAULT_STEP_FOCUS_MIN_RECORDS)
+    if not isinstance(minimum, int) or isinstance(minimum, bool) or minimum < 1:
+        minimum = DEFAULT_STEP_FOCUS_MIN_RECORDS
+    active = {t.id: t for t in db.types if t.active}
+    by: dict[str, list[str]] = {}
+    counts: dict[str, int] = {}
+    for record in db.jira:
+        recorded = record.get("failed_step")
+        if recorded and stepanchor.same_step(recorded, step, names_only=True):
+            counts[record["_type"]] = counts.get(record["_type"], 0) + 1
+    for type_id in sorted(counts):
+        if counts[type_id] >= minimum and type_id in active:
+            by.setdefault(type_id, []).append(f"records:{counts[type_id]}")
+    for item in cfg.get("map") or []:
+        if not isinstance(item, dict) or not isinstance(item.get("pattern"), str):
+            continue
+        try:
+            hit = re.search(item["pattern"], step)
+        except re.error:
+            continue
+        if not hit:
+            continue
+        types = {str(t) for t in item.get("types") or []}
+        categories = {str(c) for c in item.get("categories") or []}
+        for type_id, itype in active.items():
+            if (type_id in types or itype.category in categories) and "map" not in by.get(type_id, []):
+                by.setdefault(type_id, []).append("map")
+    return {type_id: by[type_id] for type_id in sorted(by)}
 
 
 def _proximity(evidence: list[dict], occurred: datetime | None, half_sec: float | None) -> float:
@@ -282,6 +334,8 @@ def match(events_doc: dict, db: issuedb.IssueDb, compiled: dict, *, regress: boo
 
     scoring = _scoring(db.config)
     use_bonus = not regress
+    focus_map = _step_focus(db, jira, scoring) if use_bonus and jira.get("failed_step") else {}
+    focus_max = _num(scoring.get("step_focus_bonus_max"), DEFAULT_SCORING["step_focus_bonus_max"], 0.0, 0.1)
     use_feedback = bool(scoring.get("feedback_weight")) and not regress and not no_feedback_weight
     min_samples = int((db.config.get("quality") or {}).get("min_samples", 5))
     if acceptance is None:
@@ -336,10 +390,12 @@ def match(events_doc: dict, db: issuedb.IssueDb, compiled: dict, *, regress: boo
                     continue
                 any_cause = True
                 candidates.append(_candidate(db, itype, cause, S, C, candidate_sym, res, jira, occurred, half,
-                                             scoring, use_bonus, stats, min_samples, rules, use_feedback))
+                                             scoring, use_bonus, stats, min_samples, rules, use_feedback,
+                                             focus_max if itype.id in focus_map else 0.0))
             if S and not any_cause:
                 candidates.append(_candidate(db, itype, None, S, 0, sym, None, jira, occurred, half,
-                                             scoring, use_bonus, stats, min_samples, rules, use_feedback))
+                                             scoring, use_bonus, stats, min_samples, rules, use_feedback,
+                                             focus_max if itype.id in focus_map else 0.0))
     finally:
         if own:
             evaluator.close()
@@ -367,18 +423,25 @@ def match(events_doc: dict, db: issuedb.IssueDb, compiled: dict, *, regress: boo
         "errors": errors,
         "warnings": warnings,
     }
+    if focus_map:
+        result["step_focus"] = {"types": list(focus_map), "by": focus_map}
     if omitted is not None:
         result["omitted"] = omitted
     return result
 
 
 def _rank_key(c: dict) -> tuple:
-    """(-score, -bonus 합, 유형, 원인): 점수 동점은 근접+키워드 근거로 정렬한다."""
-    return (-c["score"], -round(c["bonus"]["proximity"] + c["bonus"]["keyword"], 4), c["type"], c["cause"] or "")
+    """(-(score+step), -(근접+키워드+step), 유형, 원인): 점수 동점은 근접+키워드 근거로 정렬한다.
+
+    `step`은 스텝 기준 우선 유형의 순위 가산(`bonus.step`, 없으면 0)이다. 정렬에만 쓰고 `score`는 바꾸지 않는다.
+    우선 유형이 없으면 키가 `(-score, -(근접+키워드), 유형, 원인)`으로 이전과 같다."""
+    b = c["bonus"]
+    focus = b.get("step", 0)
+    return (-round(c["score"] + focus, 4), -round(b["proximity"] + b["keyword"] + focus, 4), c["type"], c["cause"] or "")
 
 
 def _candidate(db, itype, cause, S, C, sym, res, jira, occurred, half, scoring, use_bonus,
-               stats, min_samples, rules, use_feedback) -> dict:
+               stats, min_samples, rules, use_feedback, step_bonus: float = 0.0) -> dict:
     evidence = (res.evidence if res else []) + (sym.evidence if sym else [])
     base = scoring["symptom_weight"] * S + scoring["cause_weight"] * C
     proximity = keyword = 0.0
@@ -398,6 +461,9 @@ def _candidate(db, itype, cause, S, C, sym, res, jira, occurred, half, scoring, 
     judgement = None
     if cause is not None and use_bonus:  # 분석 모드에서만 (회귀·검증 모드는 Jira가 없다)
         judgement = fix_judgement(cause, jira.get("sw"), rules, db.jira_counts.get(cause.id, 0))
+    bonus = {"proximity": round(proximity, 4), "keyword": round(keyword, 4)}
+    if step_bonus > 0:
+        bonus["step"] = round(step_bonus, 4)
     return {
         "type": itype.id,
         "cause": cause.id if cause else None,
@@ -410,7 +476,7 @@ def _candidate(db, itype, cause, S, C, sym, res, jira, occurred, half, scoring, 
         "C": C,
         "signature": signature,
         "evidence": evidence,
-        "bonus": {"proximity": round(proximity, 4), "keyword": round(keyword, 4)},
+        "bonus": bonus,
         "feedback": feedback,
         "fix_judgement": judgement,
         "related": _related(db, cause),

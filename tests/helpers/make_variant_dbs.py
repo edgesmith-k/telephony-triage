@@ -12,6 +12,7 @@
 | `issue-db-pending/` | `signatures_pending` 원인(DATA-001-03)과 그 양성 fixture. 회귀 기대값 `DATA-001:unresolved` |
 | `issue-db-dup-id/` | 머지 간격으로 main에 같은 ID(DATA-001-03 두 번)와 같은 Jira(MOCK-1101 두 곳)가 들어온 트리. 사후 lint 보고 (Phase 7) |
 | `issue-db-verify/` | 검증(Phase 10): CALL-001-01을 `fix-submitted`로 되돌리고(수정 후 fixture 제거) 같은 증상의 다른 원인 CALL-001-02(망 거절, scenario만 있음)와 그 양성 fixture를 넣은 트리 |
+| `issue-db-step-focus/` | 스텝 기준 우선 유형(순위 참고): `step_focus.map`(`데이터` → DATA-001)과 DATA-001의 같은 스텝(`5 | 데이터 켜기`) Jira 기록 2건 |
 | `issue-db-review/` | 월간 리뷰(Phase 11): §6.6 항목마다 걸리는 경우와 걸리지 않는 경우 (`REVIEW_CASES`) |
 | `verify-logs/` | 이슈 DB가 아니다. `db_verify fix`·`resolution` 입력 로그(수정 후·재발·증상만 남음·시나리오 없음, 마스킹됨) |
 
@@ -534,6 +535,17 @@ def review(db: Path) -> None:
         _edit(db / rel, "origin: synthetic", "also_allowed:\n- IMS-001-01\norigin: synthetic")
 
 
+def step_focus(db: Path) -> None:
+    """`step_focus.map`(`데이터` → DATA-001)과 DATA-001에 같은 실패 스텝("5 | 데이터 켜기") 기록 2건. 우선 유형 시험용."""
+    _edit(db / "issue-db.config.yaml", "  map: []",
+          "  map:\n    - {pattern: '데이터', types: [DATA-001], categories: []}")
+    for key in ("MOCK-1131", "MOCK-1132"):
+        _write(db / "data/DATA-001-no-setup-data-call/jira" / f"{key}.yaml",
+               f"key: {key}\ncause: DATA-001-01\ndate: 2026-09-25\noccurred_on: 2026-09-24\nmodel: MOCK-A56\n"
+               "sw: MOCKA56_U1_20260915\nandroid_version: \"16\"\ncarrier: MockTel KR\nanalyzed_by: mock-user1\n"
+               "failed_step: 5 | 데이터 켜기\nnote: 스텝 우선 유형 시험\n")
+
+
 VARIANTS = {
     "issue-db-lint-errors": lint_errors,
     "issue-db-empty-category": empty_category,
@@ -541,6 +553,7 @@ VARIANTS = {
     "issue-db-dup-id": dup_id,
     "issue-db-verify": verify,
     "issue-db-review": review,
+    "issue-db-step-focus": step_focus,
     "verify-logs": verify_logs,
 }
 

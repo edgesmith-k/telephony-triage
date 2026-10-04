@@ -95,6 +95,30 @@ def test_injected_errors_are_all_caught():
     assert levels["glossary"] == "warning" and levels["fixed-token"] == "warning"
 
 
+def _step_focus_lint(old: str, new: str) -> list[dict]:
+    db = runner_copy(variant_db("issue-db-step-focus"))
+    edit(db / "issue-db.config.yaml", old, new)
+    result = _lint(db, "--all", expect=(0, 1))
+    return [f for f in result["errors"] if f["file"] == "issue-db.config.yaml"]
+
+
+STEP_MAP = "{pattern: '데이터', types: [DATA-001], categories: []}"
+
+
+def test_step_focus_config_checks_one_error_each():
+    assert _step_focus_lint("  map:\n    - " + STEP_MAP, "  map:\n    - " + STEP_MAP) == []     # 변형 자체는 깨끗하다
+    bad = _step_focus_lint(STEP_MAP, "{pattern: '(데이터', types: [DATA-001]}")                   # 컴파일 오류
+    assert [(f["code"], "정규식 오류" in f["message"]) for f in bad] == [("schema", True)]
+    unsafe = _step_focus_lint(STEP_MAP, "{pattern: '(a+)+b', types: [DATA-001]}")                  # 중첩 수량자
+    assert [f["code"] for f in unsafe] == ["regex-unsafe"]
+    unknown_type = _step_focus_lint("types: [DATA-001]", "types: [DATA-999]")
+    assert [(f["code"], "DATA-999" in f["message"]) for f in unknown_type] == [("schema", True)]
+    unknown_cat = _step_focus_lint("categories: []", "categories: [nope]")
+    assert [(f["code"], "nope" in f["message"]) for f in unknown_cat] == [("schema", True)]
+    assert [f["code"] for f in _step_focus_lint("min_records: 2", "min_records: 0")] == ["schema"]
+    assert [f["code"] for f in _step_focus_lint("step_focus_bonus_max: 0.05", "step_focus_bonus_max: 0.5")] == ["schema"]
+
+
 def test_residual_ids():
     result = _lint(SAMPLE, "--all", "--residual", "DATA-001-02=DATA-001-09", expect=1)
     files = {f["file"] for f in result["errors"] if f["code"] == "residual-id"}

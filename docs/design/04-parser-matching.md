@@ -150,10 +150,12 @@ base = symptom_weight × S + cause_weight × C
 bonus = proximity_bonus_max × (1 - |근거 시각 - 발생 시각| / 분석 범위 절반)   # 0 이상으로 자름
       + keyword_bonus_max × (Jira 텍스트(요약·설명·실패 스텝)와 원인 title/tags 키워드 일치 비율)
 score = min(1, base + bonus)
+순위 키 = (-(score + step), -(근접 + 키워드 + step), 유형, 원인)    # step = 스텝 기준 우선 유형이면 step_focus_bonus_max, 아니면 0
 feedback_weight가 켜져 있고 해당 시그니처 표본 ≥ min_samples면: score × (0.5 + 0.5 × 수락률)
 ```
 
 - 정렬 = score 내림차순, 동점은 bonus(근접+키워드) 합 내림차순 → 유형·원인 ID. `min(1, …)` 때문에 S=C=1에서 점수가 포화하므로 bonus는 점수를 올리지 못하고 동점 정렬에만 쓰인다. 실패 스텝(선택 입력, `07-workflow.md §Step 2`)은 키워드 입력에 더해질 뿐 S·C에는 관여하지 않는다. S=1·C=0이면 점수가 포화하지 않아 ≤0.05 bonus가 일치 수준 라벨(`confidence`)을 바꿀 수 있다(기존 키워드 보너스와 같은 동작).
+- **스텝 기준 우선 유형(분석 모드, 순위 참고만)**: `--jira-meta`에 `failed_step`이 있으면 매처가 우선 유형을 정한다. (i) 유형의 기존 Jira 기록 중 `failed_step`이 같은 스텝(번호를 뗀 이름의 `group_key` 같음, 또는 짧은 쪽이 4자 이상이고 긴 쪽에 포함)인 것이 `step_focus.min_records`(기본 2)건 이상이거나, (ii) `step_focus.map[{pattern, types[], categories[]}]`의 `pattern`이 마스킹된 스텝에 `re.search`로 맞으면(나열한 유형과 나열한 카테고리의 active 유형 전부) 그 유형이 우선 유형이다. 우선 유형 후보는 **순위 키에만** `scoring.step_focus_bonus_max`(기본 0.05)를 더한다. **`score`·`confidence`·S·C는 바뀌지 않는다**(점수에 더하지 않으므로 라벨도 안 바뀐다). `min(1, …)` 포화 때문에 score가 같은 후보 사이에서만이 아니라 score 차이가 이 값 이내인 후보 사이에서도 순서가 바뀔 수 있다는 점에 유의한다(S=C=1이면 보통 동점이라 동점 정렬이 된다). 우선 유형이 있을 때만 후보 `bonus.step`(> 0)과 최상위 `step_focus: {types[], by{유형: ["records:N" | "map"]}}`를 낸다. 회귀·검증 모드(`bonus` 0)는 우선 유형이 없고 새 키도 없다(출력이 이전과 같다). **피드백 주의**: 수락률·1위 정확도의 "1위"는 이 정렬이 반영된 1위다(`06-collaboration.md §6.5`).
 - 신뢰도: `score ≥ confidence.high` 높음, `≥ confidence.medium` 중간, 그 외 낮음. `confidence`는 score를 구간으로 나눈 규칙 일치 수준이며 진단 확신도가 아니고 자동 게시 근거로 쓰지 않는다(`ARCHITECTURE_REVIEW` 결정 (b)).
 - 증상만 충족(S=1, C=0)하면 "유형 일치, 원인 미확인" 후보로 표시한다.
 - `status`가 `active`가 아닌 유형과 원인은 후보에서 제외한다.

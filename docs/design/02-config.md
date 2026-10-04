@@ -112,8 +112,12 @@ scoring:                             # 매칭 점수 (04-parser-matching.md §5.
   cause_weight: 0.6
   proximity_bonus_max: 0.1
   keyword_bonus_max: 0.05
+  step_focus_bonus_max: 0.05         # 스텝 기준 우선 유형의 순위 가산(0~0.1). score는 바꾸지 않는다
   feedback_weight: true
   confidence: {high: 0.9, medium: 0.6}
+step_focus:                          # 실패 스텝 → 우선 유형(순위 참고만, 04-parser-matching.md §5.11 (2))
+  min_records: 2                     # 같은 스텝의 기존 Jira 기록이 이 건수 이상인 유형을 우선 유형으로 본다(≥ 1)
+  map: []                            # [{pattern: '<마스킹된 스텝에 맞출 정규식>', types: [DATA-001], categories: [data]}]
 quality:                             # 06-collaboration.md §6.5, §6.6
   min_samples: 5
   low_acceptance_rate: 0.7

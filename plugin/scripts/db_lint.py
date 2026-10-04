@@ -211,6 +211,7 @@ class Linter:
                     self.cause_owner.setdefault(str(cause["id"]), (type_md, data))
 
         self._check_ids()
+        self._check_step_focus()
         for type_md, data in self.types:
             self._check_type(type_md, data)
         self._check_jira()
@@ -239,6 +240,51 @@ class Linter:
         except re.error as exc:
             self.err("schema", issuedb.CONFIG, f"{key} 정규식 오류: {exc}")
             return None
+
+    def _check_step_focus(self) -> None:
+        """`scoring.step_focus_bonus_max`(0~0.1)와 `step_focus`(`min_records` ≥ 1, `map[{pattern, types[], categories[]}]`).
+        값 오류는 `schema`, 안전하지 않은 패턴은 `regex-unsafe`(issue-db.config.yaml)."""
+        cfg = issuedb.CONFIG
+        bonus = (self.config.get("scoring") or {}).get("step_focus_bonus_max")
+        if bonus is not None and (isinstance(bonus, bool) or not isinstance(bonus, (int, float)) or not 0 <= bonus <= 0.1):
+            self.err("schema", cfg, f"scoring.step_focus_bonus_max는 0~0.1 숫자여야 합니다: {bonus!r}")
+        focus = self.config.get("step_focus")
+        if focus is None:
+            return
+        if not isinstance(focus, dict):
+            self.err("schema", cfg, "step_focus는 매핑이어야 합니다.")
+            return
+        minimum = focus.get("min_records")
+        if minimum is not None and (isinstance(minimum, bool) or not isinstance(minimum, int) or minimum < 1):
+            self.err("schema", cfg, f"step_focus.min_records는 1 이상의 정수여야 합니다: {minimum!r}")
+        entries = focus.get("map")
+        if entries is None:
+            return
+        if not isinstance(entries, list):
+            self.err("schema", cfg, "step_focus.map은 목록이어야 합니다.")
+            return
+        type_ids = {str(data.get("id")) for _, data in self.types if data.get("id")}
+        for i, item in enumerate(entries):
+            where = f"step_focus.map[{i}]"
+            if not isinstance(item, dict) or not isinstance(item.get("pattern"), str) or not item["pattern"]:
+                self.err("schema", cfg, f"{where}는 pattern(문자열)이 있는 매핑이어야 합니다.")
+                continue
+            try:
+                re.compile(item["pattern"])
+            except re.error as exc:
+                self.err("schema", cfg, f"{where}.pattern 정규식 오류: {exc}")
+            else:
+                unsafe = unsafe_regex(item["pattern"])
+                if unsafe:
+                    self.err("regex-unsafe", cfg, f"{where}.pattern {item['pattern']!r}에 {unsafe}이(가) 있습니다.")
+            for name, known, label in (("types", type_ids, "유형"), ("categories", set(self.categories), "카테고리")):
+                values = item.get(name) or []
+                if not isinstance(values, list):
+                    self.err("schema", cfg, f"{where}.{name}는 목록이어야 합니다.")
+                    continue
+                for value in values:
+                    if str(value) not in known:
+                        self.err("schema", cfg, f"{where}.{name}: 없는 {label} {value!r}")
 
     def _builtin_events(self) -> set[str]:
         name = (self.defaults.get("parser") or {}).get("backend")

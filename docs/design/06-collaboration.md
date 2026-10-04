@@ -161,7 +161,7 @@ v1에서 도구는 이런 브랜치를 바꾸지 않는다. `sync-pr`는 아래 
 
 - 모든 analyze와 record는 `03-issue-db.md §5.4 (3)` 피드백 기록을 남긴다. record는 `decision: manual`, `suggested: []`다. `suggested`는 `match_signatures.py` 출력 그대로(원인 ID, 전역 시그니처 키, 점수), `decision`과 `final`은 Step 7 결정에서 온다. 작업 계획의 `feedback`에 담겨서 Step 8에서 파일로 쓰인다.
 - `db_build.py`는 피드백을 집계해서 시그니처(전역 키)별 제안 횟수, 수락률, 1위 제안 정확도를 STATS.md와 `.cache/compiled.json`에 넣는다.
-  - 수락률의 분모는 그 시그니처가 **1위로 제시된** 피드백만이다 (`04-parser-matching.md §5.11 (2)`).
+  - 수락률의 분모는 그 시그니처가 **1위로 제시된** 피드백만이다 (`04-parser-matching.md §5.11 (2)`). 이 "1위"는 스텝 기준 우선 유형 가산이 반영된 순위다(실패 스텝을 준 분석은 같은 로그라도 1위가 달라질 수 있다).
   - `decision: manual`(수동 기록) 피드백은 제시된 후보가 없으므로 수락률·1위 정확도 집계에서 **제외**한다. 분석 건수와 기여 현황에는 "수동 기록"으로 따로 센다.
   - 옛 ID → 새 ID 매핑은 `merged-into:` 체인과 사후 재배치 커밋의 `Renumbered:` 트레일러로 만든다. 머지 전 renumber는 main에 옛 ID가 없으므로 매핑이 필요 없다 (`contracts.md §renumber 참조`).
 - 매처는 점수를 매길 때 수락률을 가중치로 쓴다 (`04-parser-matching.md §5.11 (2)`). 표본이 `min_samples` 미만이면 쓰지 않는다. 회귀·검증 모드에서는 쓰지 않는다.

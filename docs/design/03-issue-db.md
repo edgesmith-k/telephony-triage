@@ -232,7 +232,7 @@ note: 로밍 SIM 테스트 중 발생          # 선택, 한 줄. 사용자가 �
 
 - **저장하는 Jira 정보는 위 구조화 필드와 `note`, 선택 `failed_step`뿐이다.** Jira 요약·설명·코멘트 원문은 이슈 DB·PR 본문·피드백 어디에도 저장하지 않는다. `note`는 스킬이 마스킹된 Jira 요약에서 한 문장 초안을 만들고 **사용자가 확인한 문장**을 쓴다. 사람 이름·고객명은 넣지 않는다. `db_lint`가 `note`의 원본 식별자 패턴을 검사한다 (`08-safety.md §8.1`).
 
-- `failed_step`(선택)은 실패한 테스트 스텝 한 줄이다. 마스킹을 거쳐 공백을 정리하고 200자로 자른 값만 저장하고(`db_add`), `db_lint`가 `note`처럼 원본 식별자 패턴을 검사한다. Jira 필드·설명·시험 절차·`--failed-step`·`--steps-file`에서 자동으로 얻은 값(`07-workflow.md §Step 2`)은 Step 8 확인 화면의 diff에 보이고 **사용자가 지울 수 있다**. 없으면 키를 만들지 않는다. 점수·분류·회귀·검증에는 쓰지 않는 보조 정보다(검색 키워드와 카테고리 README의 "자주 실패한 스텝"에만 쓴다).
+- `failed_step`(선택)은 실패한 테스트 스텝 한 줄이다. 마스킹을 거쳐 공백을 정리하고 200자로 자른 값만 저장하고(`db_add`), `db_lint`가 `note`처럼 원본 식별자 패턴을 검사한다. Jira 필드·설명·시험 절차·`--failed-step`·`--steps-file`에서 자동으로 얻은 값(`07-workflow.md §Step 2`)은 Step 8 확인 화면의 diff에 보이고 **사용자가 지울 수 있다**. 없으면 키를 만들지 않는다. 점수(S/C)·분류·회귀·검증에는 쓰지 않는 보조 정보다(검색 키워드, 카테고리 README의 "자주 실패한 스텝", 그리고 **스텝 기준 우선 유형**의 한 출처로 쓴다: 같은 스텝이 한 유형에 `step_focus.min_records`건 이상 쌓이면 그 스텝으로 분석할 때 그 유형이 순위에서 우선한다, `04-parser-matching.md §5.11 (2)`). `issue-db.config.yaml`의 `scoring.step_focus_bonus_max`·`step_focus {min_records, map}`은 메인테이너가 관리하고 `db_lint`가 값·정규식·유형·카테고리를 검사한다.
 - `occurred_on`은 analyze·record가 Jira 발생 시각(`jira.field_map.occurred_at`, `jira.timezone`)에서 채운다. 모르면 생략하고, 통계는 `date`로 대신한다. 과거 이슈를 한꺼번에 기록해도 통계가 분류일에 몰리지 않게 하기 위해서다.
 - 파일명이 Jira 키이므로 이슈 DB 전체에서 같은 Jira는 하나만 존재한다. `db_lint.py`가 전체 중복을 검사한다.
 - 재분류는 `reclassify` op로 한다: 파일을 다른 유형 디렉토리로 **이동**하고 `cause`를 바꾼 뒤, `note`에 `reclassified from <이전 원인 ID>`를 남긴다 (`contracts.md §작업 계획`).

@@ -5,6 +5,7 @@
 2. `parse_logcat.py markers`(마스킹, 정규식 오류 경고)와 `parse --between`.
 3. `triage.py`(오프라인): 마커 앵커(실패 스텝 있음·없음), steps-file 앵커, `--answer anchor=off`, Jira 시각 불일치 경고,
    범위 밖 앵커 폐기, 마커 없는 입력은 이전과 같음, analysis.json ≤ 4KB.
+4. 스텝 기준 우선 유형(순위 참고): `match_signatures`의 `step_focus`(map·records), score·confidence 불변, 회귀 모드 동일.
 
 `pytest tests/test_step_anchor.py`로도, 그냥 실행해도 돈다.
 """
@@ -21,7 +22,7 @@ sys.path.insert(0, str(REPO / "tests" / "helpers"))
 sys.path.insert(0, str(REPO / "plugin" / "scripts"))
 
 from common import stepanchor  # noqa: E402
-from runner import SAMPLE, plugin_root, run, run_json, tmp  # noqa: E402
+from runner import SAMPLE, copy_db, edit, plugin_root, run, run_json, tmp, variant_db  # noqa: E402
 
 UTC = timezone.utc
 LOG = REPO / "tests" / "fixtures" / "logs" / "step-anchor.log"
@@ -398,6 +399,104 @@ def test_long_failed_step_with_anchor_keeps_analysis_within_4kb_and_fit_drops_fo
     fitted = triage.fit(result)
     assert "focus" not in fitted["step_anchor"] and len(fitted["step_anchor"]["step"]) <= 40
     assert len(fitted["jira"]["failed_step"]["text"]) <= 120
+
+
+# -- 4. 스텝 기준 우선 유형 (순위 참고만) --------------------------------------------------------------
+
+
+def _events_for(db: Path, name: str = "events") -> Path:
+    """스텝 시나리오를 Jira 시각(14:31) ±5분으로 파싱한 마스킹 이벤트 파일."""
+    out = run_json("parse_logcat.py", ["parse", LOG, "--around", "2026-09-20T14:31:00+09:00", "--minutes", "5",
+                                       "--rules", db / "parser-rules", "--mask", *TZ])
+    path = tmp("tt-focus-") / f"{name}.json"
+    path.write_text(json.dumps(out, ensure_ascii=False), encoding="utf-8")
+    return path
+
+
+def _match(db: Path, events: Path, failed_step: str | None = None, *extra) -> dict:
+    meta = events.parent / "meta.json"
+    jira = {"key": KEY, "occurred_at": "2026-09-20T14:31:00+09:00", "summary": ""}
+    if failed_step:
+        jira["failed_step"] = failed_step
+    meta.write_text(json.dumps(jira, ensure_ascii=False), encoding="utf-8")
+    return run_json("match_signatures.py", ["--db", db, "--events", events, "--jira-meta", meta, "--top", "0", *extra])
+
+
+def _score_table(result: dict) -> dict:
+    return {c["cause"]: (c["score"], c["confidence"], c["S"], c["C"]) for c in result["candidates"]}
+
+
+def test_step_focus_reorders_ties_without_changing_score_or_confidence():
+    db = variant_db("issue-db-step-focus")
+    events = _events_for(db)
+    plain = _match(db, events)
+    assert [c["cause"] for c in plain["candidates"]] == ["IMS-001-01", "DATA-001-01"] and "step_focus" not in plain
+    focused = _match(db, events, "데이터 켜기")
+    assert [c["cause"] for c in focused["candidates"]] == ["DATA-001-01", "IMS-001-01"]
+    assert _score_table(plain) == _score_table(focused)                                   # score·confidence·S·C 불변
+    assert focused["step_focus"]["types"] == ["DATA-001"]
+    by = focused["step_focus"]["by"]["DATA-001"]
+    assert "map" in by and "records:2" in by
+    assert focused["candidates"][0]["bonus"]["step"] == 0.05 and "step" not in focused["candidates"][1]["bonus"]
+    # 앵커의 Step 번호가 붙은 전체 문구도 이름으로 같은 스텝이다
+    assert _match(db, events, "Step 5 데이터 켜기 FAIL")["step_focus"]["by"]["DATA-001"] == by
+    # 맞지 않는 스텝이면 우선 유형이 없다
+    assert "step_focus" not in _match(db, events, "로밍 설정 확인")
+
+
+def test_step_focus_sources_records_only_threshold_and_map_only():
+    base = variant_db("issue-db-step-focus")
+    events = _events_for(base)
+    db = copy_db(base)
+    cfg = db / "issue-db.config.yaml"
+    edit(cfg, "  map:\n    - {pattern: '데이터', types: [DATA-001], categories: []}", "  map: []")
+    only_records = _match(db, events, "데이터 켜기")
+    assert only_records["step_focus"]["by"] == {"DATA-001": ["records:2"]}
+    assert [c["cause"] for c in only_records["candidates"]][0] == "DATA-001-01"
+    edit(cfg, "min_records: 2", "min_records: 3")                      # 기록 2건 < 3건 → 우선 유형 없음
+    none = _match(db, events, "데이터 켜기")
+    assert "step_focus" not in none and [c["cause"] for c in none["candidates"]][0] == "IMS-001-01"
+    # map만: 카테고리로 지정하면 그 카테고리의 active 유형 전부
+    edit(cfg, "  map: []", "  map:\n    - {pattern: '(?i)ims', categories: [ims]}")
+    by_cat = _match(db, events, "IMS 등록 확인")
+    assert by_cat["step_focus"] == {"types": ["IMS-001"], "by": {"IMS-001": ["map"]}}
+
+
+def test_step_focus_is_off_in_regress_and_when_disabled():
+    db = variant_db("issue-db-step-focus")
+    events = _events_for(db)
+    regress = _match(db, events, "데이터 켜기", "--regress")
+    assert "step_focus" not in regress and all("step" not in c["bonus"] for c in regress["candidates"])
+    off = copy_db(db)
+    edit(off / "issue-db.config.yaml", "step_focus_bonus_max: 0.05", "step_focus_bonus_max: 0")
+    assert "step_focus" not in _match(off, events, "데이터 켜기")
+
+
+def test_regress_output_is_byte_identical_between_sample_and_step_focus_variant():
+    variant = variant_db("issue-db-step-focus")
+    full = run_json("parse_logcat.py", ["parse", LOG, "--full", "--rules", SAMPLE / "parser-rules", "--mask", *TZ])
+    events = tmp("tt-focus-") / "full.json"
+    events.write_text(json.dumps(full, ensure_ascii=False), encoding="utf-8")
+    docs = []
+    for db in (SAMPLE, variant):
+        doc = run_json("match_signatures.py", ["--db", db, "--events", events, "--regress", "--top", "0"])
+        docs.append(json.dumps({k: v for k, v in doc.items() if k not in ("db", "cache")}, ensure_ascii=False, sort_keys=True))
+    assert docs[0] == docs[1]
+    result = run_json("db_regress.py", ["--db", variant, "--all"], expect=0)
+    assert result["summary"]["failed"] == 0
+
+
+def test_triage_reports_focus_types_in_step_anchor_and_report():
+    """전체 경로 대신 오프라인 triage를 변형 DB로: 앵커 없이(--answer anchor=off) 우선 유형이 순위·리포트에 나온다."""
+    db = variant_db("issue-db-step-focus")
+    out = tmp("tt-anchor-") / "f"
+    meta = out.parent / "f.meta.json"
+    meta.write_text(json.dumps({"key": KEY, "occurred_at": "2026-09-20T14:31:00+09:00", "summary": ""}), encoding="utf-8")
+    done = run_json("triage.py", ["run", KEY, "--offline-db", db, "--out", out, "--logs", LOG, "--jira-meta", meta,
+                                  "--tz", "Asia/Seoul", "--year", "2026", "--failed-step", "데이터 켜기",
+                                  "--answer", "anchor=off"])
+    assert _causes(done)[0] == "DATA-001-01" and done["step_anchor"] == {"source": "jira", "focus": ["DATA-001"]}
+    assert "- 스텝 기준 우선 유형 (순위 참고만, 점수·S/C 불변): DATA-001" in (out / "report.md").read_text(encoding="utf-8")
 
 
 if __name__ == "__main__":
