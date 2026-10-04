@@ -51,10 +51,9 @@ from pathlib import Path
 SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS))
 
-from common import site_defaults, userconfig  # noqa: E402
+from common import checks, site_defaults, userconfig  # noqa: E402
 
 FILE_TOOLS = {"Write", "Edit", "MultiEdit", "NotebookEdit"}
-MIGRATE_BRANCH_RE = re.compile(r"^migrate/schema-v\d+$")
 HOOKS_PATH_KEY = "core.hookspath"
 SEPARATORS = {";", "&&", "||", "|", "&", "(", ")", "\n", "|&", ";;"}
 SHELLS = {"sh", "bash", "zsh", "dash", "ksh"}
@@ -459,17 +458,6 @@ def check_config(call: GitCall, dec: Decision) -> None:
         dec.deny.append(f"core.hooksPath는 정확히 .githooks여야 한다 (규칙 5): '{pos[1]}'는 거부한다.")
 
 
-def _script(conf: Config, name: str, args: list[str]) -> tuple[int, dict | None, str]:
-    extra = ["--plugin-root", conf.plugin_root] if conf.plugin_root else []
-    proc = subprocess.run([sys.executable, str(SCRIPTS / name), *args, *extra], capture_output=True, text=True,
-                          encoding="utf-8", errors="replace")
-    try:
-        data = json.loads(proc.stdout) if proc.stdout.strip() else None
-    except json.JSONDecodeError:
-        data = None
-    return proc.returncode, data, proc.stderr.strip()
-
-
 def check_commit(call: GitCall, conf: Config, dec: Decision) -> None:
     flag = commit_bypass(call.args)
     if flag:
@@ -486,36 +474,35 @@ def check_commit(call: GitCall, conf: Config, dec: Decision) -> None:
     staged = [p for p in _git(Path(top), "diff", "--cached", "--name-only", "-z").stdout.split("\0") if p]
     if not staged:
         return
-    code, data, err = _script(conf, "mask_pii.py", ["--check", "--staged", "--db", top])
-    if code != 0:
-        hits = (data or {}).get("detections") or []
-        detail = "; ".join(f"{h['path']}:{h['line']} {h['kind']}" for h in hits[:10]) or err[-300:]
-        dec.deny.append(f"staged 변경에 마스킹 안 된 개인정보가 있다 (규칙 3): {detail}. mask_pii로 마스킹한 뒤 다시 add한다.")
-    cache = [p for p in staged if p == ".cache" or p.startswith(".cache/")]
-    if cache:
-        dec.deny.append(f".cache/는 커밋하지 않는다 (규칙 4): {', '.join(cache[:5])}")
     try:
         import yaml
         db_cfg = yaml.safe_load((Path(top) / "issue-db.config.yaml").read_text(encoding="utf-8")) or {}
     except (OSError, ValueError, ImportError):
         db_cfg = {}
-    if db_cfg.get("ci_mode", "local") == "actions-build":
-        gen = {"README.md", "STATS.md", "parser-rules/CHANGELOG.md"}
-        gen |= {f"{c['key']}/README.md" for c in db_cfg.get("categories") or [] if isinstance(c, dict)}
-        hit = sorted(set(staged) & gen)
-        if hit:
+    ci_mode = db_cfg.get("ci_mode", "local")
+    branch = _git(Path(top), "rev-parse", "--abbrev-ref", "HEAD").stdout.strip() if ci_mode != "actions-build" else ""
+    ctx = checks.Ctx(db=top, scope="staged", files=staged, branch=branch, ci_mode=ci_mode, db_cfg=db_cfg,
+                     plugin_root=conf.plugin_root)
+    # 단계 순서(마스킹 → 캐시 → 생성 파일)와 migrate 브랜치 허용은 common/checks.py guard 프로필이 정한다.
+    # 여기서는 실패한 단계를 deny 문구로 바꾼다 (실행 불가 2도 거부다).
+    for res in checks.run_checks(checks.PROFILES["guard"], ctx).steps:
+        if res.code == 0:
+            continue
+        paths = (res.data or {}).get("paths") or []
+        if res.name == "mask":
+            hits = (res.data or {}).get("detections") or []
+            detail = "; ".join(f"{h['path']}:{h['line']} {h['kind']}" for h in hits[:10]) or res.stderr[-300:]
+            dec.deny.append(f"staged 변경에 마스킹 안 된 개인정보가 있다 (규칙 3): {detail}. mask_pii로 마스킹한 뒤 다시 add한다.")
+        elif res.name == "cache":
+            dec.deny.append(f".cache/는 커밋하지 않는다 (규칙 4): {', '.join(paths[:5])}")
+        elif res.script is None:
             dec.deny.append(f"ci_mode: actions-build — 생성 파일은 머지 후 봇이 만든다. staged에서 뺀다 (규칙 4): "
-                            f"{', '.join(hit)}")
-        return
-    code, data, err = _script(conf, "db_build.py", ["--verify", "--staged", "--db", top])
-    if code == 0:
-        return
-    branch = _git(Path(top), "rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
-    if code == 2 and MIGRATE_BRANCH_RE.match(branch) and "생성기 버전" in err:
-        return   # migrate/schema-v<N>: 생성기 버전 불일치는 차단하지 않는다 (06-collaboration.md §6.4)
-    problems = "; ".join(f"{p['path']} ({p['status']})" for p in (data or {}).get("problems", [])) or err[-300:]
-    dec.deny.append("생성 파일(README·STATS·CHANGELOG)이 원본과 맞지 않는다 (규칙 4): "
-                    f"{problems}. 직접 고치지 말고 db_build.py --write로 다시 만든 뒤 add한다.")
+                            f"{', '.join(paths)}")
+        else:
+            problems = ("; ".join(f"{p['path']} ({p['status']})" for p in (res.data or {}).get("problems", []))
+                        or res.stderr[-300:])
+            dec.deny.append("생성 파일(README·STATS·CHANGELOG)이 원본과 맞지 않는다 (규칙 4): "
+                            f"{problems}. 직접 고치지 말고 db_build.py --write로 다시 만든 뒤 add한다.")
 
 
 def check_bash(command: str, cwd: Path, conf: Config, dec: Decision) -> None:
