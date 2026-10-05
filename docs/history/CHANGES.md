@@ -478,3 +478,7 @@
 - `common/patterns.py`: 정규식 시간 상한용 작업 프로세스를 runner마다 spawn하지 않고 프로세스 안에서 공유한다. 본문은 runner가 처음 패턴을 돌릴 때 보내고, 다른 runner가 끼어들면 다시 보낸다. 시간 초과면 그 프로세스를 끝내고 다음 패턴에서 새로 띄운다(상한·`PatternTimeout` 동작 불변).
 - 효과(이 컨테이너, 합성 샘플 DB): `stage` 한 번 6.9~10.8초 → 1.5~2.1초, `pytest tests/test_db_pr.py tests/test_checks.py` 418s → 138s.
 - 테스트: `tests/test_inprocess.py`(종료 코드 계약, subprocess와 결과 일치, 작업 프로세스 재사용·본문 교체·시간 초과 후 재기동).
+
+## db_add.py 분할 (2026-10-05)
+
+- 동작·CLI·출력 동일. `db_add.py`(1,377줄)는 CLI만(112줄) 두고 구현을 `plugin/scripts/dbadd/`로 옮겼다: `core`(상수·오류·계획 읽기·검사·`Tree`), `applier`(`Applier`·`cmd_apply`, 임시 ID·fixture 이름·피드백), `ops/`의 op 메서드 믹스인 7개(`jira`·`entities`·`fix`·`resolution`·`signature`·`fixture`·`parser_rules`), `drift`, `ids`(check-ids·renumber), `similar`. 함수 본문은 그대로 옮겼고 바뀐 참조는 drift의 `Applier._rule_key` → `ParserRuleOps._rule_key` 하나다. `db_review`가 쓰는 `db_add.similarity`는 그대로 import된다.

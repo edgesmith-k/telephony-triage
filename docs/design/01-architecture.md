@@ -103,7 +103,8 @@ telephony-triage-plugin/                 # 개발 레포 루트
     │   ├── mask_pii.py
     │   ├── jira_fields.py               # Jira 응답 → field_map 추출·마스킹·UTC (Phase 13)
     │   ├── db_search.py
-    │   ├── db_add.py
+    │   ├── db_add.py                    # CLI만. 구현은 dbadd/
+    │   ├── dbadd/                       # core(상수·계획 검사·Tree), applier(apply), ops/<묶음>.py(op 메서드 믹스인), drift, ids, similar
     │   ├── db_pr.py
     │   ├── db_build.py
     │   ├── db_lint.py

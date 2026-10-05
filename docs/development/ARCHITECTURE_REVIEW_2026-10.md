@@ -483,7 +483,7 @@ JiraWriter.post_comment  (guard 규칙 2는 Claude 세션 전용이므로, 자�
 
 | 항목 | 근거 | 영향 | 조치 |
 |---|---|---|---|
-| 큰 모듈 | `db_add.py` 1373줄(`Applier` 클래스가 op 16개 처리), `db_pr.py` 1109, `db_verify.py` 910 | 수정 시 넓은 컨텍스트 필요 | `db_add`를 `ops/<op>.py`로 분할(계약은 동일), `db_pr`의 `summary/pr_body`를 `db_summary.py`로 |
+| 큰 모듈 | `db_add.py` 1373줄(`Applier` 클래스가 op 16개 처리), `db_pr.py` 1109, `db_verify.py` 910 | 수정 시 넓은 컨텍스트 필요 | `db_add`를 `ops/<op>.py`로 분할(계약은 동일) — **완료 (2026-10-05)**: `db_add.py`는 CLI(112줄), 구현은 `dbadd/`(op 묶음별 믹스인 7개). `db_pr`의 `summary/pr_body`를 `db_summary.py`로(미완) |
 | 검사 오케스트레이션 3곳 | `db_pr.stage`, `db_precommit`, `guard.check_commit`가 각자 lint/mask/build/regress/verify 호출 순서를 가짐 | 규칙 drift | **완료 (2026-10-04, common/checks.py)**: `run_checks(profile, ctx)`와 프로필 stage/precommit/guard, `aggregate` |
 | 서브프로세스 재진입 | `db_pr` → 7개 스크립트 subprocess, 각 스크립트가 `site_defaults.load_or_exit` + 이슈 DB 전체 로드 | 느림(stage 수십 초), 테스트 10분+ | **완료 (2026-10-04)**: `checks.run_script`가 같은 프로세스에서 `main(argv)` 호출(종료 코드 계약 유지, `TT_SCRIPT_SUBPROCESS=1`이면 subprocess) + 정규식 작업 프로세스를 runner마다 띄우지 않고 프로세스 안에서 공유(`common/patterns.py`). `test_db_pr`+`test_checks` 418s → 138s |
 | HANDOFF R1~R15 | lock 비원자(R2), 경로 삭제 안전(R3), `commit -m "<msg>"` 인용(R6), 교차 슬롯 S/C(R1), 회전 파일 RIL(R4), 외부 파서 실패 전파(R5), provenance(R7), 점수 포화(R8) | 정확성·안전 | 그 문서의 I0~I2 |

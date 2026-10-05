@@ -14,7 +14,7 @@
 ## 진행 상태
 
 - 모드: **사외 초안**. 완료 Phase: **D0, 1~13**. RF-0·RF-1 완료.
-- 마지막 전체 테스트: **477개 통과** (10/04, 5 성능 커밋, Ubuntu·Py3.11, 7분 39초). Windows에서는 도구 셸 stdin을 `/dev/null`로, PATH 앞에 실제 Python과 `python3` shim(Store 별칭이면 gh 스텁·git hook이 9009로 실패).
+- 마지막 전체 테스트: **477개 통과** (10/05, 6 db_add 분할 커밋, Ubuntu·Py3.11, 8분). Windows에서는 도구 셸 stdin을 `/dev/null`로, PATH 앞에 실제 Python과 `python3` shim(Store 별칭이면 gh 스텁·git hook이 9009로 실패).
 - 사내 확인 항목: `TODO(SITE)` **73곳**(S22 12곳 추가) — `python3 tools/list_site_todos.py`. `REVIEW-OPEN.md` 0건.
 - 안내서(사람용 HTML, 10/04 1~6단계 반영): `docs/telephony-triage-guide.html` (공유본 https://claude.ai/artifact/1jov1Et4dQUMauFr6aoxWG)
 
@@ -44,7 +44,7 @@
 | ☐ 3 | **스킬 행동 평가 재실행 + 새 기능 eval 추가** (사용자 결정: 사외 vs 사내 S-2, 토큰 큼) | 탐색 분석·실패 스텝·기준점·붙여넣기 흐름, Phase 13 실패 4건 수정분. `tests/skill_evals/README.md` |
 | ✅ 4 | **HTML 안내서 갱신** — 1~6단계 반영 | 10/04 완료. 이후 기능이 바뀌면 `docs/telephony-triage-guide.html`도 고친다 |
 | ✅ 5 | **성능** — 하위 스크립트 같은 프로세스 호출 | 10/04 완료(확인 대기). `checks.run_in_process`, 정규식 작업 프로세스 공유. stage 7~11초→2초. `CHANGES.md` |
-| ☐ 6 | **유지보수** — `db_add.py`(1,373줄) op별 분할 | 리뷰 §Q. 동작 동일 |
+| ✅ 6 | **유지보수** — `db_add.py` op별 분할 | 10/05 완료(확인 대기). CLI만 남기고 `dbadd/`(ops 믹스인 7개) |
 | ☐ 7 | **트리거 개선** — 자연어 호출 recall 26~33% | SKILL.md 8,191/8,192바이트: description을 늘리면 본문을 줄여야 함. 지금은 슬래시 커맨드로 쓰면 문제없음 |
 | ☐ 8 | **R7 근거 출처**, **R15 대용량 로그 처리** (R9·R11은 10/04 완료) | `docs/development/PLUGIN_IMPROVEMENT_HANDOFF.md`. R7은 RF-8 전제 |
 | ☐ 9 | **`CLAUDE.md` 축소(≤4KB, §12 이동)** — 진행 결정(10/04) | §12는 옮겨서 링크 |
