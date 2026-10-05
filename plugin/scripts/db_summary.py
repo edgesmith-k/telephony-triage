@@ -178,7 +178,9 @@ def screen(wt: Path, plan: dict, stage_result: dict, state: dict, db_cfg: dict, 
         files.append({"kind": _file_kind(path), "path": path, "change": change})
     paths = [p for _, p in entries]
     jira = plan.get("jira") or {}
-    ids = applied.get("ids") or []
+    at_base = {i.get("temp_id"): i.get("id") for i in stage_result.get("ids_at_base") or []}
+    ids = [({**i, "expected_at_base": at_base[i["temp_id"]]} if i.get("temp_id") in at_base else dict(i))
+           for i in applied.get("ids") or []]
     keys = [i["id"] for i in ids] + [jira.get("key")] if jira else [i["id"] for i in ids]
     for op in applied.get("operations") or []:
         for field in ("cause", "type", "to", "id", "a", "b", "owner"):
@@ -253,7 +255,10 @@ def pr_body(screen: dict, plan: dict) -> str:
     for note in screen["notes"]:
         lines.append(f"- {note}")
     if screen["ids"]:
-        lines.append("- ID 할당: " + ", ".join(f"{i['temp_id']} → {i['id']}" for i in screen["ids"]))
+        lines.append("- ID 할당: " + ", ".join(
+            f"{i['temp_id']} → {i['id']}"
+            + (f" (계획 당시 {i['expected_at_base']})" if i.get("expected_at_base") not in (None, i["id"]) else "")
+            for i in screen["ids"]))
     lines += ["", "### 변경 파일", "", "| 구분 | 파일 | 변경 |", "|---|---|---|"]
     lines += [f"| {f['kind']} | {f['path']} | {f['change']} |" for f in screen["files"]]
     checks = screen["checks"]

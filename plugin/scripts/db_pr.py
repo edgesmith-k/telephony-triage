@@ -37,12 +37,18 @@ summary 입력), `regress.json`, `pr.json`(summary가 만든 PR 제목·본문·
 `publish`는 승인 해시·커밋 부모·커밋 메시지·브랜치를 `state.json`과 대조하고(다르면 1), lease push 뒤
 PR을 만들거나(`gh pr create`) 고친다(`gh pr edit`).
 
+`stage`는 계획을 읽을 때 먼저 형식을 검사한다(최상위 키·필수 키, `계획 형식 오류:` 종료 코드 2 — 이전 작업 파일은
+그대로 둔다). 하위 스크립트가 Traceback으로 끝나면 사용자에게는 마지막 줄만 "내부 오류"로 보인다(`_err_brief`).
+drift가 계산한 `ids_at_base`(계획 당시 기준 임시 ID 할당)는 stage 결과·`state.json`에 싣고, `summary`가 각 ID에
+`expected_at_base`로 붙인다(drift를 건너뛴 재stage는 같은 base_sha의 이전 값을 이어받는다).
+
 시각은 환경변수 `TT_NOW`(ISO, 테스트용)로 바꿀 수 있다.
 """
 
 from __future__ import annotations
 
 import argparse
+import difflib
 import json
 import os
 import re
@@ -283,7 +289,7 @@ def post_lint(snap: Path) -> dict:
     """사후 lint (06-collaboration.md §6.3 ⑤). 보고만 한다."""
     code, data, err = run_script("db_lint.py", ["--all", "--db", str(snap)])
     if data is None:
-        return {"ran": False, "error": err.strip()[:300]}
+        return {"ran": False, "error": _err_brief(err)}
     errors = data.get("errors") or []
     dups = [e for e in errors if e.get("code") in ("duplicate-id", "duplicate-jira")]
     out = {"ran": True, "errors": len(errors), "warnings": len(data.get("warnings") or []),
@@ -349,6 +355,66 @@ def _owned_worktree(ctx: Ctx, path: Path) -> None:
     expected = _out(_git(ctx.repo, "rev-parse", "--path-format=absolute", "--git-common-dir"))
     if not _same_path(common, expected):
         raise UsageError(f"다른 저장소 worktree: {path}")
+
+
+def _err_brief(err: str, limit: int = 300) -> str:
+    """하위 스크립트 stderr를 사용자에게 보일 만큼만. Traceback이면 마지막 줄만 내고 내부 오류로 표시한다."""
+    text = (err or "").strip()
+    if any(line.startswith("Traceback (most recent call last)") for line in text.splitlines()):
+        last = next((line.strip() for line in reversed(text.splitlines()) if line.strip()), "")
+        return f"{last} (내부 오류 — 스크립트 버그로 보고)"
+    return text[:limit]
+
+
+PLAN_KEY_ALIASES = {"ops": "operations", "op": "operations", "operation": "operations", "steps": "operations",
+                    "base": "base_sha", "sha": "base_sha", "schema": "schema_version"}
+PLAN_KEY_HELP = {"base_sha": "base_sha = db_pr snapshot의 snapshot_sha",
+                 "schema_version": "schema_version = SNAP issue-db.config.yaml"}
+
+
+def _load_plan_checked(plan_path: Path, repo: Path, base_sha: str) -> dict:
+    """계획 JSON을 읽고 최상위 키를 검사한다 (db_add apply와 같은 `schema/plan.schema.json`, 없으면 최소 검사).
+    잘못되면 `계획 형식 오류:` UsageError — 하위 스크립트의 Traceback까지 가지 않게 한다."""
+    try:
+        plan = json.loads(Path(plan_path).read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise UsageError(f"계획 형식 오류: JSON을 읽을 수 없습니다 ({plan_path}): {str(exc)[:200]}") from exc
+    if not isinstance(plan, dict):
+        raise UsageError(f"계획 형식 오류: 계획은 JSON 객체여야 합니다 ({plan_path})")
+    schema = None
+    proc = _git(repo, "show", f"{base_sha}:schema/plan.schema.json", check=False)
+    if proc.returncode == 0:
+        try:
+            schema = json.loads(proc.stdout)
+        except ValueError:
+            schema = None
+    required = list((schema or {}).get("required") or []) if isinstance(schema, dict) else []
+    props = list(((schema or {}).get("properties") or {}).keys()) if isinstance(schema, dict) else []
+    problems = []
+    if props:
+        unknown = [k for k in plan if k not in props]
+        if unknown:
+            hints = []
+            for key in unknown:
+                near = PLAN_KEY_ALIASES.get(key) or next(iter(difflib.get_close_matches(key, props, 1, 0.6)), None)
+                hints.append(f"{key} (→ {near}?)" if near else key)
+            problems.append("알 수 없는 최상위 키 " + ", ".join(hints))
+    else:
+        required = ["operations", "base_sha"]
+    missing = [k for k in required if k not in plan]
+    if not props:
+        if "operations" in plan and not isinstance(plan["operations"], list):
+            missing.append("operations(목록)")
+        if "base_sha" in plan and not isinstance(plan["base_sha"], str):
+            missing.append("base_sha(문자열)")
+    if missing:
+        problems.append("필수 키 없음: " + ", ".join(missing))
+    if problems:
+        helps = [PLAN_KEY_HELP[k] for k in missing if k in PLAN_KEY_HELP]
+        tail = " — write-flow.md §계획 형식" + (f" ({', '.join(helps)})" if helps else "")
+        raise UsageError("계획 형식 오류: " + "; ".join(problems) + tail,
+                         {"unknown_keys": [k for k in plan if props and k not in props], "missing_keys": missing})
+    return plan
 
 
 def _read_json(path: Path) -> dict | None:
@@ -496,11 +562,19 @@ def stage(ctx: Ctx, plan_path: Path, wt: Path, branch: str, dry_run: bool) -> tu
     base_sha = _ref_sha(ctx.repo, f"refs/remotes/origin/{ctx.base}")
     if not base_sha:
         raise UsageError(f"origin/{ctx.base}가 없습니다.")
-    plan = json.loads(Path(plan_path).read_text(encoding="utf-8"))
+    plan = _load_plan_checked(plan_path, ctx.repo, base_sha)
+    try:
+        old_state = _read_json(job_dir / STATE)
+    except ValueError:
+        old_state = None
     for name in (STAGE, PR_FILE, REGRESS):
         (job_dir / name).unlink(missing_ok=True)
     state = {"base_sha": base_sha, "branch": branch, "approved_hash": None, "commit_message": None,
              "staged_at": _iso(now())}
+    ids_at_base = None   # 계획 당시(plan.base_sha) 트리 기준 임시 ID 할당 — drift가 계산한다
+    if old_state and old_state.get("ids_at_base") and old_state.get("base_sha") == base_sha == plan.get("base_sha"):
+        ids_at_base = old_state["ids_at_base"]
+    state["ids_at_base"] = ids_at_base
     _write_json(job_dir / STATE, state)
     result: dict = {"job": job, "wt": str(wt), "branch": branch, "tool_branch": tool, "base_sha": base_sha,
                     "plan": str(Path(plan_path).resolve()), "dry_run": dry_run, "source": plan.get("source")}
@@ -508,17 +582,23 @@ def stage(ctx: Ctx, plan_path: Path, wt: Path, branch: str, dry_run: bool) -> tu
     if plan.get("base_sha") != base_sha:
         code, data, err = run_script("db_add.py", ["drift", str(plan_path), "--onto", base_sha, "--db", str(ctx.repo)])
         if code == USAGE or data is None:
-            raise UsageError(f"drift 검사 실패: {err.strip()[:300]}")
+            raise UsageError(f"drift 검사 실패: {_err_brief(err)}")
         result["drift"] = data.get("drift") or []
+        ids_at_base = data.get("ids_at_base")
+        state["ids_at_base"] = ids_at_base
+        _write_json(job_dir / STATE, state)
         if code == CHECK_FAILED:
             result["stopped"] = "drift"
-            result["next"] = ("drift 항목마다 계획 값 유지 / main 값 유지(op 삭제) / 직접 입력을 골라 계획에 반영하고 "
+            result["ids_at_base"] = ids_at_base
+            result["next"] = ("drift 항목마다 계획 값(plan_value) 유지 / main 값(current_value) 유지(op 삭제) / 직접 입력을 "
+                              "골라 계획에 반영한다. plan_base_value는 계획 당시 main 값이다. 반영하고 "
                               f"base_sha를 {base_sha}로 바꾼 뒤 다시 stage한다 (contracts.md §작업 계획 drift).")
             _write_json(job_dir / STAGE, result)
             return result, CHECK_FAILED
     else:
         result["drift"] = []
 
+    result["ids_at_base"] = ids_at_base
     result["worktree"] = _prepare_worktree(ctx, wt, tool, base_sha)
     code, check, err = run_script("config.py", ["check", "--db", str(wt), "--for", "dry-run" if dry_run else "write"])
     result["config_check"] = check
@@ -536,7 +616,7 @@ def stage(ctx: Ctx, plan_path: Path, wt: Path, branch: str, dry_run: bool) -> tu
     if code != OK:
         _write_json(job_dir / STAGE, result)
         if code == USAGE:
-            raise UsageError(f"계획을 적용할 수 없습니다: {err.strip()[:500]}", result)
+            raise UsageError(f"계획을 적용할 수 없습니다: {_err_brief(err, 500)}", result)
         result["stopped"] = "apply"
         return result, code
 
@@ -554,10 +634,10 @@ def stage(ctx: Ctx, plan_path: Path, wt: Path, branch: str, dry_run: bool) -> tu
         bad = run.aborted
         if bad.name == "verify":
             # 주의: verify의 실행 불가는 checks 없이 result만 싣고 STAGE도 쓰지 않는다 (기존 동작 유지).
-            raise UsageError(f"db_verify 실행 불가: {bad.stderr[:300]}", result)
+            raise UsageError(f"db_verify 실행 불가: {_err_brief(bad.stderr)}", result)
         checks_so_far = _stage_checks(run)
         _write_json(job_dir / STAGE, {**result, "checks": checks_so_far})
-        raise UsageError(f"{bad.script} 실행 불가: {bad.stderr[:300]}", {**result, "checks": checks_so_far})
+        raise UsageError(f"{bad.script} 실행 불가: {_err_brief(bad.stderr)}", {**result, "checks": checks_so_far})
     if ci_mode != "actions-build":
         checks_out = _stage_checks(run)
     else:

@@ -69,7 +69,7 @@
 
 `db_pr snapshot --job <JIRA-KEY>`가 한다 (`contracts.md §3.2`). Step 0에서 잡은 세션 lock이 있어야 한다.
 
-이어서 `config.py check --db <work_dir>/_snapshot`(`--dry-run`이면 `--for dry-run`)으로 origin/<base> 기준 `schema_version`, `generator_version`, 파서 백엔드·외부 파서, gh 인증을 확인한다 (`06-collaboration.md §6.4`, `02-config.md §4`). 쓰기가 막히는 경우면 "읽기 전용 모드"로 진행하고 Step 7의 계획 저장까지만 하고 Step 8을 생략한다고 알린다. 읽기 전용 모드는 계획을 저장한 뒤 `db_pr lock release <JIRA-KEY>`로 끝낸다.
+이어서 `config.py check --db <work_dir>/_snapshot`(`--dry-run`이면 `--for dry-run`)으로 origin/<base> 기준 `schema_version`, `generator_version`, 파서 백엔드·외부 파서, gh 인증을 확인한다 (`06-collaboration.md §6.4`, `02-config.md §4`). 쓰기가 막히는 경우면 "읽기 전용 모드"로 진행하고 Step 7의 계획 저장까지만 하고 Step 8을 생략한다고 알린다. 읽기 전용 모드는 계획을 저장한 뒤 `db_pr lock release <JIRA-KEY>`로 끝낸다. 이유는 `read_only_hint`(`config.py check` 사유 메시지, 예: "플러그인을 업데이트한다 (읽기 전용 분석만)")와 리포트 `- 읽기 전용: …` 줄로 사용자에게 그대로 보인다(코드만 말하지 않는다).
 
 ```
 git -C <issue_db.path> fetch origin
@@ -152,7 +152,7 @@ Android 버전과 브랜치마다 소스 트리가 다르므로 **분석할 때�
 4. **연관 조회**: 원인 후보의 `related`를 함께 가져온다.
 
 - 의미와 점수는 `04-parser-matching.md §5.11`을 따른다. 앵커가 있으면 `--jira-meta`로 `JOB/match_meta.json`(발생 시각 = 스텝 실패 시각)을 넘긴다(Step 3).
-- **후보 없음**(S=1인 유형이 없음): 리포트에 "후보 없음" 절을 만든다. (a) 마스킹된 Jira 요약의 키워드(실패 스텝이 있으면 그 구절 전체 → 그 토큰 → 요약 토큰 순)로 `db_search`를 돌린 상위 3개("설명 기반 유사 후보"), (b) `tags.yaml` 카테고리별 타임라인 요약(±5분, 이벤트 요약이지 원문이 아님)에서 오류·거부·타임아웃 이벤트 목록, (c) Step 3의 범위·시계 판정. 점수·검증에 쓰지 않고 계획 op를 자동으로 만들지 않는다. Step 7은 "새 유형 / 원인 미확정(가장 가까운 유형) / 기록하지 않음"만 제시한다. Claude 가설이 필요하면 Step 5-2 탐색 분석을 쓴다. 초기 DB가 비어 있을 때 가장 흔한 경우이므로, 여기서 도구가 아무것도 주지 않으면 안 된다.
+- **후보 없음**(S=1인 유형이 없음): 리포트에 "후보 없음" 절을 만든다. (a) 마스킹된 Jira 요약의 키워드(실패 스텝이 있으면 그 구절 전체 → 그 토큰 → 요약 토큰 순)로 `db_search`를 돌린 상위 3개("설명 기반 유사 후보"), (b) `tags.yaml` 카테고리별 타임라인 요약(±5분, 이벤트 요약이지 원문이 아님)에서 오류·거부·타임아웃 이벤트 목록(리포트에 최대 8줄 `<시각> <태그> <이벤트> request=… error=… (phone n)`, 마스킹된 값만), (c) Step 3의 범위·시계 판정. 점수·검증에 쓰지 않고 계획 op를 자동으로 만들지 않는다. Step 7은 "새 유형 / 원인 미확정(가장 가까운 유형) / 기록하지 않음"만 제시한다. Claude 가설이 필요하면 Step 5-2 탐색 분석을 쓴다. 초기 DB가 비어 있을 때 가장 흔한 경우이므로, 여기서 도구가 아무것도 주지 않으면 안 된다.
 - 출력: `유형 > 원인` 조합 **상위 3개**와 근거 로그(마스킹), 규칙 일치 점수·수준, 수정 상태 판단, 관련 원인, 판별된 슬롯(`phone_id`, Jira의 슬롯 정보와 다르면 경고). 증상만 맞으면 "유형 일치, 원인 미확인"으로 표시한다. 후보 유형에 시그니처 없는 원인(`pending_causes`)이 있으면 "참고: 시그니처 없는 기존 원인"으로 함께 보여준다 (Step 7에서 그 원인을 고르면 `append`와 `update-signature`를 제안한다).
 
 ### Step 5. 코드 분석
@@ -184,6 +184,7 @@ Android 버전과 브랜치마다 소스 트리가 다르므로 **분석할 때�
 - (실패 스텝이 있을 때만) 실패 스텝: Step 5 데이터 켜기 (점수·S/C에 쓰지 않음; 분석 범위·순위 참고)
 - (앵커가 있을 때만) 실패 스텝 구간 (log_marker): Step 5 <시작> ~ <실패> → 분석 범위 <시작> ~ <끝> (Jira 발생 시각 <시각> / N분 차이)
 - (`step_order` 앵커일 때) 실패 스텝 구간 (step_order): <실패 스텝> — 마지막 확인 스텝 <스텝> <시각> 이후 → 분석 범위 <시작> ~ <끝> (관측 가능 m개 중 n개 일치, 놓침 x, 관측 불가 u) 뒤에 근거 줄 최대 6개 `  - <스텝> → <로그 시각> <흔적 이름>`(마스킹). 시계 정렬을 못 했으면 `- 장비 시각 미사용: 시계 정렬 불가(<사유>)`, zip이면 `- 시험 절차: zip 안 <경로>`
+- (앵커가 있고 Jira 발생 시각이 분석 범위 밖·로그 범위 안일 때) 분석 범위 밖 오류 이벤트 (Jira 발생 시각 <시각> 근처, 근거·점수에 쓰지 않음): n건 + 표본 최대 3줄 — 마스킹 파싱을 한 번 더 한다(`analysis.json step_anchor.outside_errors`)
 - 분류 후보: Data > DATA-001 SETUP_DATA_CALL이 발생하지 않음 > DATA-001-02 Roaming disabled (규칙 일치 점수 1.0, 일치 수준 높음 — 진단 확신도 아님)
 - 근거 로그: (시각, 태그, 메시지 3~10줄, 마스킹, 줄 위치 `(f<입력 순번>:L<줄>)` — 입력 순번은 `analysis.json logs.files` 순서, 0부터)  슬롯: phone 0
 - 로그 범위: 10:02~10:12 (발생 시각 포함), 시계 이상 없음
@@ -237,7 +238,7 @@ Android 버전과 브랜치마다 소스 트리가 다르므로 **분석할 때�
      - 다르거나 계획에 PR 기록이 없음(다른 사람이 push했거나 다른 PC에서 만든 브랜치) → 원격 변경 요약을 보여주고 **덮어쓰기**(원격 변경은 사라진다. 필요하면 먼저 계획에 반영) / **중단**을 묻는다. v1은 원격 변경을 자동으로 합치지 않는다 (`99-deferred.md`).
    - 원격에 없음 → 새 브랜치로 진행한다 (`--lease new`).
 3. **적용**: `db_pr stage <plan.json> --wt <wt> --branch issue/<JIRA-KEY>` (`--dry-run`이면 `--dry-run`)
-   - **drift 검사**: 계획의 `base_sha`와 지금 `origin/<base>`가 다르면 계획 대상이 그사이 main에서 바뀌었는지 본다. drift가 있으면 `stage`는 적용하지 않고 종료 코드 1과 목록을 낸다. 항목마다 **계획 값 유지 / main 값 유지(op 삭제) / 직접 입력**을 묻고, 계획에 반영하고 `base_sha`를 바꾼 뒤 3번을 다시 한다 (`contracts.md §작업 계획` drift).
+   - **drift 검사**: 계획의 `base_sha`와 지금 `origin/<base>`가 다르면 계획 대상이 그사이 main에서 바뀌었는지 본다. drift가 있으면 `stage`는 적용하지 않고 종료 코드 1과 목록을 낸다. 항목마다 **계획 값(`plan_value`)·계획 당시 main 값·현재 main 값**을 함께 보이고 **계획 값 유지 / main 값 유지(op 삭제) / 직접 입력**을 묻고, 계획에 반영하고 `base_sha`를 바꾼 뒤 3번을 다시 한다 (`contracts.md §작업 계획` drift).
    - `git worktree add --no-track -B tt/issue/<JIRA-KEY> <wt> <기준 SHA>` (기준 SHA = `stage`가 `state.json`에 적은 이때의 `origin/<base_branch>`. 도구 브랜치. 사용자 로컬 `issue/<JIRA-KEY>`와 별개)
    - `db_add apply --db <wt>`: 새 원인/유형의 임시 ID를 **최신 main 기준 다음 빈 번호로 할당**하고 계획 안의 참조를 모두 치환한다. 템플릿으로 파일을 만들고 type.md를 엔티티 단위로 다시 쓴다. Jira 기록, fixture(번호는 최신 main 기준 다음 빈 번호), 피드백, parser-rules 항목, 이번 PR에 넣을 pending 피드백(`source: analyze`일 때만)을 쓴다.
    - `mask_pii`로 변경분을 마스킹한다.
@@ -263,7 +264,7 @@ Android 버전과 브랜치마다 소스 트리가 다르므로 **분석할 때�
    | 생성 파일 | README.md, data/README.md, STATS.md | 재생성 |
 
    ### ID 할당
-   NEW-CAUSE-1 → DATA-001-03   (분석 중 main에 DATA-001-03이 생겼다면 DATA-001-04로 할당된 내역 표시)
+   NEW-CAUSE-1 → DATA-001-03   (분석 중 main에 DATA-001-03이 생겼다면 `NEW-CAUSE-1 → DATA-001-04 (계획 당시 DATA-001-03)`으로 표시 — `ids[].expected_at_base`)
 
    ### README 반영 미리보기
    | 1-2 | Roaming disabled | 데이터 로밍 설정을 켠다 | user-setting | not-a-bug | 2건: ABC-333, ABC-12345 |

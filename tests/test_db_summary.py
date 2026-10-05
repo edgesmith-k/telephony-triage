@@ -50,6 +50,15 @@ def test_pr_body_skipped_checks():
     assert body.endswith("승인 필요: 없음\n")
 
 
+def test_pr_body_shows_id_expected_at_plan_time_only_when_different():
+    ids = [{"temp_id": "NEW-CAUSE-1", "id": "DATA-001-04", "expected_at_base": "DATA-001-03"},
+           {"temp_id": "NEW-CAUSE-2", "id": "DATA-002-01", "expected_at_base": "DATA-002-01"},
+           {"temp_id": "NEW-CAUSE-3", "id": "DATA-003-01"}]
+    body = db_summary.pr_body(_screen(ids=ids), {})
+    assert ("- ID 할당: NEW-CAUSE-1 → DATA-001-04 (계획 당시 DATA-001-03), NEW-CAUSE-2 → DATA-002-01, "
+            "NEW-CAUSE-3 → DATA-003-01\n") in body
+
+
 def test_pr_body_full_checks_and_approval():
     verification = [{"id": "R4", "label": "통과"}, {"id": "R5", "label": "승인 필요"}]
     body = db_summary.pr_body(_screen(checks=FULL_CHECKS, verification=verification,

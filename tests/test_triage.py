@@ -536,3 +536,44 @@ def test_unique_evidence_keys_on_line_ref_first():
     out = triage._unique_evidence(ev)
     assert [e["event_index"] for e in out] == [5, 7, 8]
     assert out[0]["signature"] == "S1"
+
+
+# -- 3D-A: 후보 없음 오류 이벤트 상세·읽기 전용 안내 -------------------------------------------------------------
+
+
+def test_no_candidate_error_events_carry_request_and_error_and_report_lists_them():
+    log = tmp("tt-ril-") / "ril.log"
+    log.write_text("09-22 12:00:00.000  1234  1244 D RILJ: [PHONE1] [0041]> SETUP_DATA_CALL apn=ims\n"
+                   "09-22 12:00:01.000  1234  1244 D RILJ: [PHONE1] [0041]< SETUP_DATA_CALL error=INSUFFICIENT_RESOURCES\n",
+                   encoding="utf-8")
+    out = tmp("tt-triage-") / "x"
+    meta = out.parent / "x.meta.json"
+    meta.write_text(json.dumps({"key": "MOCK-7400", "occurred_at": "2026-09-22T12:00:01.000Z", "summary": ""}),
+                    encoding="utf-8")
+    analysis = run_json("triage.py", ["run", "MOCK-7400", "--offline-db", SAMPLE, "--out", out, "--logs", log,
+                                      "--jira-meta", meta, "--tz", "UTC", "--year", 2026])
+    assert not analysis.get("candidates")
+    rows = analysis["no_candidate"]["error_events"]
+    assert rows[0]["event"] == "ril_error" and rows[0]["request"] == "SETUP_DATA_CALL"
+    assert rows[0]["error"] == "INSUFFICIENT_RESOURCES" and rows[0]["phone"] == 1
+    assert len((out / "analysis.json").read_bytes()) <= 4096
+    report = (out / "report.md").read_text(encoding="utf-8")
+    assert "- 오류·거부·타임아웃 이벤트: 1건" in report
+    assert "  - 2026-09-22T12:00:01.000Z RILJ ril_error request=SETUP_DATA_CALL error=INSUFFICIENT_RESOURCES (phone 1)" in report
+
+
+def test_read_only_mode_shows_update_hint_in_analysis_and_report():
+    ws = Workspace()
+    ws.push_main(lambda c: (c / "issue-db.config.yaml").write_text(
+        (c / "issue-db.config.yaml").read_text(encoding="utf-8").replace("schema_version: 1", "schema_version: 99"),
+        encoding="utf-8", newline="\n"))
+    args = ["run", "MOCK-1001", "--dry-run", "--jira-file", MOCK_JIRA / "MOCK-1001.yaml", "--logs", DATA_LOG,
+            "--answer", "code=skip"]
+    done = ws.json("triage.py", args)
+    assert done["status"] == "ok" and done["mode"] == "read-only"
+    assert "schema-too-new" in done["read_only_reasons"]
+    assert "플러그인을 업데이트" in done["read_only_hint"] and len(done["read_only_hint"].encode("utf-8")) <= 200
+    job = ws.job_dir("MOCK-1001")
+    assert len((job / "analysis.json").read_bytes()) <= 4096
+    assert "- 읽기 전용: " in (job / "report.md").read_text(encoding="utf-8")
+    assert "플러그인을 업데이트" in (job / "report.md").read_text(encoding="utf-8")
