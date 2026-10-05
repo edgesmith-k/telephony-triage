@@ -538,3 +538,7 @@
 
 - `failedstep.from_text`(Jira 설명·시험 절차·steps-file 패턴 검색): 패턴이 이름만 뽑아도 맞은 줄이 스텝 번호로 시작하면(`Step 7 …`·`7 | …`·`7. …`) `7 | 이름`으로 낸다. 전에는 붙여넣은 목록·설명에서는 `데이터 연결 확인`, Jira 필드·report.html 표에서는 `7 | 데이터 연결 확인`이라 README "자주 실패한 스텝"이 두 줄로 갈렸다. 번호 없는 줄(`실패 스텝: X`)은 그대로. `find_line`(스텝 기준점 쪽)은 바꾸지 않았다. 판정(S/C)·회귀·검증에는 영향 없음.
 - 테스트 `test_failed_step.py` 기대값을 새 표기로, `test_numbered_label_matches_table_and_field` 추가. eval 49 기대값 `7 | 데이터 연결 확인`.
+
+## 리포트 근거 줄 중복 제거 (2026-10-05)
+
+- 증상 시그니처와 원인 시그니처가 같은 이벤트를 근거로 잡으면 `report.md`·`analysis.json` 후보 근거에 같은 줄이 두 번 나왔다(eval 7에서 발견). `triage.py`가 이벤트(`event_index`, 없으면 시각·태그·메시지)마다 한 번만 보인다. 표시용이며 `match.json`·점수·S/C는 그대로. 테스트 `test_unique_evidence_drops_same_event_from_symptom_and_cause`.

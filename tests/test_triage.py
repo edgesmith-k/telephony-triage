@@ -508,3 +508,14 @@ if __name__ == "__main__":
     import pytest
 
     raise SystemExit(pytest.main([__file__, "-q"]))
+
+
+def test_unique_evidence_drops_same_event_from_symptom_and_cause():
+    import triage
+    ev = [{"event_index": 5, "ts": "t", "tag": "DNC-1", "msg": "m", "signature": "DATA-001-02/x"},
+          {"event_index": 5, "ts": "t", "tag": "DNC-1", "msg": "m", "signature": "DATA-001/y"},
+          {"event_index": 7, "ts": "t2", "tag": "DNC-1", "msg": "m2"},
+          {"ts": "t3", "tag": "A", "msg": "x"}, {"ts": "t3", "tag": "A", "msg": "x"}]
+    out = triage._unique_evidence(ev)
+    assert [e.get("event_index") for e in out] == [5, 7, None]
+    assert out[0]["signature"] == "DATA-001-02/x"     # 처음 것(원인 근거)을 남긴다

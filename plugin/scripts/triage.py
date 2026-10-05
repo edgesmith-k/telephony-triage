@@ -110,6 +110,19 @@ def _ref_label(ref) -> str | None:
     return None
 
 
+def _unique_evidence(evidence: list) -> list:
+    """증상·원인 시그니처가 같은 이벤트를 근거로 잡으면 리포트에 같은 줄이 두 번 나온다. 이벤트마다 한 번만 둔다
+    (`event_index`, 없으면 시각·태그·메시지). 표시용이고 match.json·점수는 그대로다."""
+    seen, out = set(), []
+    for e in evidence:
+        key = e.get("event_index")
+        key = ("i", key) if key is not None else ("m", e.get("ts"), e.get("tag"), e.get("msg"))
+        if key not in seen:
+            seen.add(key)
+            out.append(e)
+    return out
+
+
 def _clip(text, limit: int) -> str:
     text = " ".join(str(text or "").split())
     return text if len(text) <= limit else text[: limit - 1] + "…"
@@ -1040,7 +1053,7 @@ class Driver:
                     "evidence": [{"ts": e.get("ts"), "tag": e.get("tag"), "msg": _clip(e.get("msg"), 140),
                                   "event": e.get("event"),
                                   "_ref": _ref_label(e.get("line_ref"))}   # report.md 전용, analysis.json에는 안 나간다
-                                 for e in (c.get("evidence") or [])[:10]],
+                                 for e in _unique_evidence(c.get("evidence") or [])[:10]],
                     "fix_judgement": (c.get("fix_judgement") or {}).get("judgement"),
                     "fix_message": _clip((c.get("fix_judgement") or {}).get("message"), 100),
                     "related": [r.get("cause") for r in c.get("related") or []]}
