@@ -8,7 +8,7 @@
 페어링은 윈도우를 자르기 **전에** 파일 전체로 한다. 응답 없음·에러·지연 이벤트는
 `ril.yaml`(timeout)을 아는 `parse_logcat.py`가 이 결과로 만든다.
 
-RILJ 출력 형식은 placeholder다 — TODO(SITE:S9). 벤더 RIL 태그는 TODO(SITE:S10).
+RILJ 출력 형식은 placeholder다 — TODO(SITE:S9). 벤더 RIL 태그·슬롯 표기는 `platform.ril.tags`·`platform.log.phone_id`로 바꾼다.
 """
 
 from __future__ import annotations
@@ -27,12 +27,12 @@ ERROR_RE = re.compile(r"\berror[=:]\s*(?P<error>[A-Z][A-Z0-9_]*)")
 NO_ERROR = "NONE"
 
 
-def parse(tag: str, msg: str) -> dict | None:
-    """RIL 줄이면 `{serial, dir, request, error, paired_ts, latency_ms}`, 아니면 None.
+def parse(tag: str, msg: str, tags=RIL_TAGS, phone: logcat.PhoneIdRules = logcat.DEFAULT_PHONE_RULES) -> dict | None:
+    """`tags`·`phone`은 `platform` 설정값이다 (기본은 코드 기본값). RIL 줄이면 `{serial, dir, request, error, paired_ts, latency_ms}`, 아니면 None.
     `dir`: `req` / `resp` / `unsol`. 응답에 에러 표기가 없으면 `error: "NONE"`."""
-    if tag not in RIL_TAGS:
+    if tag not in tags:
         return None
-    body = logcat.strip_phone(msg)
+    body = phone.strip(msg)
     hit = REQUEST_RE.match(body)
     if hit:
         return _ann(int(hit.group("serial")), "req", hit.group("request"), None)

@@ -13,7 +13,7 @@
       그 흔적을 모아 `step_events[{rule, ts, seq, label}]`(규칙 번호·시각·줄 순번·이름 — 로그 본문 없음, (ts, seq, rule) 순)을
       더한다. 규칙당 1000개·전체 5000개 상한(넘으면 경고 `step-events-truncated`), 잘못된 규칙은 경고 `step-event-rule`.
   extract-bugreport <zip|txt> --out <dir>
-      bugreport에서 logcat 섹션(system/radio/main)과 빌드 정보(build.json)만 꺼낸다.
+      bugreport에서 logcat 섹션(기본 system/radio/main)과 빌드 정보(build.json)만 꺼낸다.
   cut <logcat...> (--evidence <match.json> | --around <ISO 시각> [--seconds 30]) --out <file>
       [--context 20] [--max-lines 100] [--tz <IANA>] [--year <YYYY>] [--rules <db>/parser-rules]
       판별 근거 주변 최소 구간을 마스킹된 상태로만 쓴다(fixture용).
@@ -52,6 +52,7 @@ from common import compat, masking, parser_rules, site_defaults, stepanchor  # n
 from common import events as evt  # noqa: E402
 from common.patterns import DEFAULT_TIMEOUT_MS, PatternError, PatternRunner, PatternTimeout  # noqa: E402
 from common.exitcodes import OK, USAGE  # noqa: E402
+import platforms  # noqa: E402
 from platforms.android import bugreport, logcat  # noqa: E402
 
 OUTPUT_SCHEMA = evt.SCHEMA_VERSION  # markers 출력도 같은 번호
@@ -353,7 +354,23 @@ def _allow_patterns(db_cfg: dict) -> list[str]:
     return list((db_cfg.get("mask") or {}).get("allow_patterns") or [])
 
 
-def run_parse(args, plugin_root: Path, defaults: dict) -> dict:
+def _profile(defaults: dict) -> platforms.PlatformProfile:
+    """site-defaults의 `platform:`을 읽는다. 잘못되면 사용 오류(종료 코드 2)."""
+    try:
+        return platforms.load(defaults)
+    except platforms.PlatformConfigError as exc:
+        raise UsageError(str(exc)) from exc
+
+
+def _load_backend(defaults: dict, profile: platforms.PlatformProfile):
+    backend_name = (defaults.get("parser") or {}).get("backend")
+    try:
+        return parser_backends.load(backend_name).configure(profile)
+    except parser_backends.BackendError as exc:
+        raise UsageError(f"site-defaults.yaml parser.backend: {exc}") from exc
+
+
+def run_parse(args, plugin_root: Path, defaults: dict, profile: platforms.PlatformProfile | None = None) -> dict:
     paths = [Path(p) for p in args.logs]
     for path in paths:
         if not path.is_file():
@@ -375,11 +392,7 @@ def run_parse(args, plugin_root: Path, defaults: dict) -> dict:
         raise UsageError(f"파서 규칙 오류: {exc}") from exc
     db_cfg = compat.load_db_config(rules_dir.parent)
 
-    backend_name = (defaults.get("parser") or {}).get("backend")
-    try:
-        backend = parser_backends.load(backend_name)
-    except parser_backends.BackendError as exc:
-        raise UsageError(f"site-defaults.yaml parser.backend: {exc}") from exc
+    backend = _load_backend(defaults, profile or _profile(defaults))
 
     masker = None
     if args.mask:
@@ -617,7 +630,7 @@ def _step_event_hits(raw: list[dict], specs: list[dict | None], paths: list[Path
     return hits
 
 
-def run_markers(args, defaults: dict) -> dict:
+def run_markers(args, defaults: dict, profile: platforms.PlatformProfile | None = None) -> dict:
     """스텝 마커 줄을 모은다. 마커 태그는 `tags.yaml`에 없으므로 `parse` 출력을 쓰지 못하고 백엔드의 줄 레코드를 직접 본다.
 
     원문 줄에서 정규식이 맞는 줄만 골라(시간 상한 `matcher.pattern_timeout_ms`) 그 줄만 마스킹하고, 마스킹된 텍스트에서
@@ -637,11 +650,7 @@ def run_markers(args, defaults: dict) -> dict:
         raise UsageError(str(exc)) from exc
     rules_dir = Path(args.rules)
     db_cfg = compat.load_db_config(rules_dir.parent)
-    backend_name = (defaults.get("parser") or {}).get("backend")
-    try:
-        backend = parser_backends.load(backend_name)
-    except parser_backends.BackendError as exc:
-        raise UsageError(f"site-defaults.yaml parser.backend: {exc}") from exc
+    backend = _load_backend(defaults, profile or _profile(defaults))
 
     conf = defaults.get("failed_step") or {}
     status_map = conf.get("marker_status") if isinstance(conf.get("marker_status"), dict) else None
@@ -727,9 +736,10 @@ def run_markers(args, defaults: dict) -> dict:
 _looks_like_bugreport = bugreport.looks_like_bugreport
 
 
-def run_extract_bugreport(args) -> dict:
+def run_extract_bugreport(args, profile: platforms.PlatformProfile | None = None) -> dict:
+    rules = profile.bugreport if profile else None
     try:
-        return bugreport.extract(Path(args.bugreport), Path(args.out))
+        return bugreport.extract(Path(args.bugreport), Path(args.out), rules)
     except bugreport.BugreportError as exc:
         raise UsageError(str(exc)) from exc
 
@@ -917,12 +927,13 @@ def main(argv: list[str] | None = None) -> int:
     plugin_root = Path(root_opt) if root_opt else site_defaults.plugin_root()
 
     try:
+        profile = _profile(defaults)
         if args.cmd == "parse":
-            result = run_parse(args, plugin_root, defaults)
+            result = run_parse(args, plugin_root, defaults, profile)
         elif args.cmd == "markers":
-            result = run_markers(args, defaults)
+            result = run_markers(args, defaults, profile)
         elif args.cmd == "extract-bugreport":
-            result = run_extract_bugreport(args)
+            result = run_extract_bugreport(args, profile)
         else:
             result = run_cut(args)
     except UsageError as exc:

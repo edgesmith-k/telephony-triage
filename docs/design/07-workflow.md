@@ -87,7 +87,7 @@ Android 버전과 브랜치마다 소스 트리가 다르므로 **분석할 때�
    ```
    - 버전이 일치하는 프로필과 최근 경로를 위에 올린다.
    - 직접 입력은 `code_root_keys`의 루트마다 묻는다. 모르는 루트는 비워둘 수 있다.
-4. 검증: 경로가 존재하는지, `aosp` 루트에 `frameworks/opt/telephony`가 있는지 확인한다. 트리 버전을 추정해서 대상 버전과 다르면 경고하고 계속할지 묻는다. 추정은 빌드 시스템의 플랫폼 버전 정의(최신 AOSP는 release config 쪽, 이전 버전은 `build/make/core/version_defaults.mk` 등)를 순서대로 시도하고, 모두 실패하면 사용자 입력을 신뢰한다. 정확한 파일 위치는 Phase 0에서 확인하고(S11) Phase 6에서 반영한다.
+4. 검증: 경로가 존재하는지, `aosp` 루트에 `platform.source_tree.required_dirs`(기본 `frameworks/opt/telephony`)가 모두 있는지 확인한다. 트리 버전을 추정해서 대상 버전과 다르면 경고하고 계속할지 묻는다. 추정은 빌드 시스템의 플랫폼 버전 정의(최신 AOSP는 release config 쪽, 이전 버전은 `build/make/core/version_defaults.mk` 등)를 순서대로 시도하고, 모두 실패하면 사용자 입력을 신뢰한다. 정확한 파일 위치는 Phase 0에서 확인하고(S11) `platform.source_tree.version_sources`에 반영한다.
 5. 직접 입력한 경로는 `recent_code_roots`에 기록한다. 같은 조합을 자주 쓰면 프로필로 저장할지 한 번만 묻는다.
 6. **건너뛰기**를 고르면 Step 5를 생략하고, 리포트에 "코드 미확인"으로 표시한다. 이 경우 새 원인/유형의 `code_refs`는 비워두고 `db_lint.py`는 경고만 낸다.
 

@@ -31,6 +31,12 @@ class ParserBackend(ABC):
     #: 백엔드 이름. 이벤트 `source`는 `backend:<name>`이다.
     name: str = ""
 
+    def configure(self, profile) -> "ParserBackend":
+        """`platforms.PlatformProfile`(site-defaults `platform:`)을 반영한 백엔드를 준다 (옵트인).
+        기본은 자기 자신이다. `_line_record`를 직접 구현한 site 백엔드는 무시해도 된다.
+        원본 객체(싱글톤)는 바꾸지 않는다."""
+        return self
+
     @abstractmethod
     def parse(
         self,

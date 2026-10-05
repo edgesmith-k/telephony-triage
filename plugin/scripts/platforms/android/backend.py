@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import copy
 from pathlib import Path
 import re
 from typing import Sequence
@@ -22,6 +23,16 @@ VERSION = "0.1.0"
 
 class ReferenceBackend(ParserBackend):
     name = "reference"
+
+    # 슬롯 표기·RIL 태그. `configure(profile)`이 바꾼 복사본에만 들어간다 (전역 상태 없음).
+    _phone = logcat.DEFAULT_PHONE_RULES
+    _ril_tags = ril.RIL_TAGS
+
+    def configure(self, profile) -> "ReferenceBackend":
+        other = copy.copy(self)
+        other._phone = profile.phone
+        other._ril_tags = profile.ril_tags
+        return other
 
     def version(self) -> str:
         return VERSION
@@ -44,8 +55,8 @@ class ReferenceBackend(ParserBackend):
             level=line.level,
             tag=line.tag,
             msg=line.msg,
-            phone_id=logcat.phone_id(line.tag, line.msg),
-            ril=ril.parse(line.tag, line.msg),
+            phone_id=self._phone.phone_id(line.tag, line.msg),
+            ril=ril.parse(line.tag, line.msg, tags=self._ril_tags, phone=self._phone),
             source=f"{events.BACKEND_PREFIX}{self.name}",
             # 입력 목록 순번과 물리 줄 번호(1부터). 04-parser-matching.md §5.8 (6).
             line_ref=events.line_ref(line.file_index, line.line_no),

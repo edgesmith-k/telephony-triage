@@ -10,7 +10,7 @@
   → 메시지 끝(`[PHONE1]`, AOSP RILJ 형식) 순서. 없으면 `None`
   (`04-parser-matching.md §5.8 (2)`).
 
-로그 형식 변형과 슬롯 표기는 placeholder다 — TODO(SITE:S7) TODO(SITE:S20).
+로그 형식 변형은 placeholder다 — TODO(SITE:S7). 슬롯 표기는 `site-defaults.yaml`의 `platform.log.phone_id`로 바꾼다.
 """
 
 from __future__ import annotations
@@ -54,7 +54,7 @@ TIME_RE = re.compile(
 )
 BEGINNING_PREFIX = "--------- "
 
-# 슬롯 — TODO(SITE:S20) 사내 실제 표기로 확인한다.
+# 슬롯 기본 표기. 사내 값은 `platform.log.phone_id`로 덮어쓴다 (`platforms.load()`, 02-config.md).
 # 태그 접미사는 "이름-숫자" 한 마디만 본다(DN-17-C 같은 DataNetwork 태그는 슬롯이 아니다).
 TAG_PHONE_RE = re.compile(r"^[A-Za-z]+-(\d+)$")
 MSG_PHONE_PREFIX_RE = re.compile(r"^\[(?:PHONE|SUB)(\d+)\]\s?")
@@ -243,20 +243,43 @@ def coverage(files: list[list[LogLine]]) -> dict:
     }
 
 
+@dataclass(frozen=True)
+class PhoneIdRules:
+    """슬롯 표기 규칙. 위치마다 패턴을 순서대로 보고 첫 일치를 쓴다. 그룹 1 = 슬롯 번호."""
+
+    tag: tuple[re.Pattern, ...]      # 태그에 match
+    prefix: tuple[re.Pattern, ...]   # 메시지 앞에 match
+    suffix: tuple[re.Pattern, ...]   # 메시지 끝쪽에 search
+
+    def phone_id(self, tag: str, msg: str) -> int | None:
+        for patterns, text, search in ((self.tag, tag, False), (self.prefix, msg, False), (self.suffix, msg, True)):
+            for pattern in patterns:
+                hit = pattern.search(text) if search else pattern.match(text)
+                if hit and (hit.group(1) or "").isdecimal():
+                    return int(hit.group(1))
+        return None
+
+    def strip(self, msg: str) -> str:
+        """슬롯 표기를 뗀 메시지 (RIL 줄 해석용. 이벤트의 `msg`는 원문 그대로 둔다)."""
+        for pattern in self.prefix:
+            hit = pattern.match(msg)
+            if hit:
+                msg = msg[hit.end():]
+                break
+        for pattern in self.suffix:
+            hit = pattern.search(msg)
+            if hit:
+                msg = msg[:hit.start()] + msg[hit.end():]
+                break
+        return msg
+
+
+DEFAULT_PHONE_RULES = PhoneIdRules((TAG_PHONE_RE,), (MSG_PHONE_PREFIX_RE,), (MSG_PHONE_SUFFIX_RE,))
+
+
 def phone_id(tag: str, msg: str) -> int | None:
-    hit = TAG_PHONE_RE.match(tag)
-    if hit:
-        return int(hit.group(1))
-    hit = MSG_PHONE_PREFIX_RE.match(msg)
-    if hit:
-        return int(hit.group(1))
-    hit = MSG_PHONE_SUFFIX_RE.search(msg)
-    if hit:
-        return int(hit.group(1))
-    return None
+    return DEFAULT_PHONE_RULES.phone_id(tag, msg)
 
 
 def strip_phone(msg: str) -> str:
-    """슬롯 표기를 뗀 메시지 (RIL 줄 해석용. 이벤트의 `msg`는 원문 그대로 둔다)."""
-    msg = MSG_PHONE_PREFIX_RE.sub("", msg, count=1)
-    return MSG_PHONE_SUFFIX_RE.sub("", msg, count=1)
+    return DEFAULT_PHONE_RULES.strip(msg)

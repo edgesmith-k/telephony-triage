@@ -89,7 +89,7 @@ extractors:
 
 추출된 이벤트는 파서 출력 JSON에 `{event, fields, ts, tag, msg, phone_id}`로 들어간다. `--mask`면 extractor는 **마스킹된 줄**에 돈다. 그래서 extractor 패턴도 마스킹 이후 텍스트 기준으로 쓰고, 원본 식별자 패턴은 `db_lint`가 금지한다.
 
-**슬롯(`phone_id`)**: 듀얼 SIM 단말에서는 두 슬롯의 로그가 한 파일에 섞인다. 파서는 모든 이벤트에 `phone_id`(정수 또는 `null`)를 넣는다. 추출원은 순서대로 태그 접미사(`DNC-1` → 1), 메시지 접두어(`[PHONE1]`, `[SUB1]` 등, 실제 표기는 S20에서 확인), 없으면 `null`. 시그니처는 기본적으로 **같은 슬롯 안에서만** 충족된다 (5.11 (1) `same_phone`). RIL 페어링 키는 `(pid, phone_id, serial)`이고 `phone_id`를 못 뽑으면 `(pid, serial)`이다. phone 프로세스 재시작이나 슬롯별 serial 충돌로 요청·응답이 잘못 짝지어지는 것을 막기 위해 pid를 포함한다.
+**슬롯(`phone_id`)**: 듀얼 SIM 단말에서는 두 슬롯의 로그가 한 파일에 섞인다. 파서는 모든 이벤트에 `phone_id`(정수 또는 `null`)를 넣는다. 추출원은 순서대로 태그 접미사(`DNC-1` → 1), 메시지 접두어(`[PHONE1]`, `[SUB1]` 등, 실제 표기는 S20에서 확인해 `site-defaults.yaml`의 `platform.log.phone_id`로 바꾼다), 없으면 `null`. RIL로 해석하는 태그는 `platform.ril.tags`(기본 `RILJ`)다. 시그니처는 기본적으로 **같은 슬롯 안에서만** 충족된다 (5.11 (1) `same_phone`). RIL 페어링 키는 `(pid, phone_id, serial)`이고 `phone_id`를 못 뽑으면 `(pid, serial)`이다. phone 프로세스 재시작이나 슬롯별 serial 충돌로 요청·응답이 잘못 짝지어지는 것을 막기 위해 pid를 포함한다.
 
 #### (3) 새 유형/원인 추가 시 파서 갱신 절차
 

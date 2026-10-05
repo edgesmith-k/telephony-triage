@@ -7,7 +7,9 @@
 import re
 
 TELEPHONY_DIR = "frameworks/opt/telephony"
-# (파일, 정규식) 순서대로 시도한다 — TODO(SITE:S11) 최신 AOSP는 release config 쪽에 있을 수 있다.
+# aosp 루트에 있어야 하는 디렉토리 기본값 (`platform.source_tree.required_dirs`로 덮어쓴다).
+REQUIRED_DIRS = (TELEPHONY_DIR,)
+# (파일, 정규식) 순서대로 시도한다. 기본값이며 `platform.source_tree.version_sources`로 덮어쓴다.
 VERSION_SOURCES = [
     ("build/release/release_config_map.textproto", re.compile(r"RELEASE_PLATFORM_VERSION\D*(\d+)")),
     ("build/make/core/version_defaults.mk", re.compile(r"^\s*PLATFORM_VERSION\s*:?=\s*(\d+)", re.M)),

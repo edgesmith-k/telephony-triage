@@ -10,6 +10,7 @@ import io
 import json
 import re
 import zipfile
+from dataclasses import dataclass
 from pathlib import Path
 
 
@@ -17,7 +18,7 @@ class BugreportError(Exception):
     pass
 
 
-# bugreport 섹션 헤더 — TODO(SITE:S21) 사내 실제 문자열로 확인한다.
+# bugreport 섹션 헤더 기본값. 사내 값은 `platform.bugreport`로 덮어쓴다 (`platforms.load()`).
 # 예: "------ RADIO LOG (logcat -b radio -v threadtime -d *:v) ------"
 SECTION_RE = re.compile(r"^------ (?P<title>.+?) \((?P<cmd>logcat\b[^)]*)\) ------\s*$")
 SECTION_BOUNDARY_RE = re.compile(r"^------ .* ------\s*$")
@@ -25,6 +26,18 @@ BUFFER_RE = re.compile(r"-b\s+(?P<buf>[a-z]+)")
 BUILD_RE = re.compile(r"^Build:\s*(?P<v>.+?)\s*$")
 FINGERPRINT_RE = re.compile(r"^Build fingerprint:\s*'?(?P<v>[^']+?)'?\s*$")
 WANTED_BUFFERS = ("system", "radio", "main")
+
+
+@dataclass(frozen=True)
+class BugreportRules:
+    """섹션 헤더 규칙. `section_re`는 이름 그룹 `cmd`(logcat 명령줄)를 가진다."""
+
+    section_re: re.Pattern = SECTION_RE
+    boundary_re: re.Pattern = SECTION_BOUNDARY_RE
+    wanted_buffers: tuple[str, ...] = WANTED_BUFFERS
+
+
+DEFAULT_RULES = BugreportRules()
 
 
 def open_bugreport(path: Path) -> tuple[io.TextIOBase, list]:
@@ -54,7 +67,8 @@ def looks_like_bugreport(path: Path) -> bool:
     return any(line.startswith("== dumpstate") for line in head)
 
 
-def extract(src: Path, out_dir: Path) -> dict:
+def extract(src: Path, out_dir: Path, rules: BugreportRules | None = None) -> dict:
+    rules = rules or DEFAULT_RULES
     if not src.is_file():
         raise BugreportError(f"bugreport 파일이 없습니다: {src}")
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -68,13 +82,13 @@ def extract(src: Path, out_dir: Path) -> dict:
     try:
         for raw in stream:
             line = raw.rstrip("\r\n")
-            if SECTION_BOUNDARY_RE.match(line):
+            if rules.boundary_re.match(line):
                 in_header = False
                 current = None
-                hit = SECTION_RE.match(line)
+                hit = rules.section_re.match(line)
                 if hit:
                     buf = BUFFER_RE.search(hit.group("cmd"))
-                    if buf and buf.group("buf") in WANTED_BUFFERS:
+                    if buf and buf.group("buf") in rules.wanted_buffers:
                         current = buf.group("buf")
                         if current not in writers:
                             writers[current] = (out_dir / f"logcat-{current}.txt").open(
@@ -101,8 +115,9 @@ def extract(src: Path, out_dir: Path) -> dict:
             writer.close()
 
     if not writers:
+        names = "/".join(rules.wanted_buffers)
         raise BugreportError(
-            f"{src.name}: logcat 섹션(system/radio/main)을 찾지 못했습니다. "
+            f"{src.name}: logcat 섹션({names})을 찾지 못했습니다. "
             "섹션 헤더 형식이 다를 수 있습니다 (S21)."
         )
     warnings = []
@@ -117,7 +132,7 @@ def extract(src: Path, out_dir: Path) -> dict:
     return {
         "files": [
             {"buffer": name, "path": str(out_dir / f"logcat-{name}.txt"), "lines": counts[name]}
-            for name in WANTED_BUFFERS
+            for name in rules.wanted_buffers
             if name in writers
         ],
         "build_json": str(build_json),

@@ -55,7 +55,7 @@
 | ✅ S5 | `check_boundary`에 비밀값 패턴 | 10/05, `CHANGES.md` |
 | ✅ I1 | `common/events.py`(`line_ref` 포함) | 10/05, `CHANGES.md` |
 | ✅ I2 | RF-3 `platforms/android/` 이동(출력 동일, shim) | 10/05, `CHANGES.md` |
-| ☐ I3 | RF-4 일부: 경로·태그 상수 → 설정 | 리뷰 RF-4 |
+| ✅ I3 | RF-4 일부: 경로·태그 상수 → 설정 | 10/05, `CHANGES.md` |
 | ☐ I4 | YAML C 로더(`CSafeLoader`, 없으면 SafeLoader) | 파싱 시간 대부분이 YAML |
 | ☐ I5 | `db_pr` summary/pr_body → `db_summary.py` | 리뷰 §Q |
 | ☐ X | **RF-7만**(분석 전용·추가 로그 재분석·입력 해시 재사용) — 사용자 결정 10/05. RF-5·6·8은 반입 뒤 | 리뷰 RF-7 |

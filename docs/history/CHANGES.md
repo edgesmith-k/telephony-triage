@@ -605,3 +605,12 @@
 - 출력 동일: `test_parse_logcat.py --update` 스냅샷 diff 없음, 골든 그대로, bugreport 추출 결과 동일, `TODO(SITE)` 73곳 그대로.
 - 테스트: 새 `tests/test_platforms.py`(shim 동일성·import 순서·site식 상대 import·계층 가드(`common`→`platforms`는 `stepanchor` 시각 함수만)·bugreport 래퍼), `test_boundary`에 `platforms/` site-import 사례.
 - 범위 밖: `platform:` 키·`platforms.load()`·상수 설정화(RF-4, I3).
+
+## I3 플랫폼 상수 → site-defaults `platform:` (리뷰 RF-4 일부, 2026-10-05)
+
+- 새 키 `site-defaults.yaml` `platform:` — `name`(android만)·`source_tree.{required_dirs, version_sources}`(S11)·`log.phone_id.{tag, msg_prefix, msg_suffix}`(S20)·`ril.tags`(S10)·`bugreport.{wanted_buffers, section_regex, boundary_regex}`(S21). 생략하면 코드 기본값, 키를 쓰면 목록 통째로 교체. 사용자 config로는 못 바꾼다(`userconfig` 안 거침). 잘못된 값은 키 경로와 함께 종료 코드 2. example은 `name: android`만 켜고 나머지는 주석 값(= 기본값).
+- 새 `platforms/__init__.py`: `load(defaults)`·`default()`·`PlatformProfile`·`PlatformConfigError`(I/O·전역 상태 없음). `logcat.PhoneIdRules`(`phone_id()`·`strip()`), `bugreport.BugreportRules`, `android.REQUIRED_DIRS`가 기본값 소유(모듈 상수 객체 그대로).
+- 전달 방식: `parse_logcat.main()`이 프로파일을 한 번 만들어 `run_parse`·`run_markers`·`run_extract_bugreport`에 넘기고(`profile=None`이면 `defaults`에서 직접 만든다, db_regress 등 기존 호출 그대로), 백엔드는 `ParserBackend.configure(profile)`(기본 자기 자신, reference는 복사본)로, `ril.parse(tags=, phone=)`·`bugreport.extract(rules=)`·`code_roots.validate(tree=)`·`estimate_version(sources=)`는 명시 인자로 받는다. 전역·싱글톤은 바꾸지 않는다.
+- 출력 동일: `test_parse_logcat.py --update` 스냅샷 diff 없음, 골든 그대로, bugreport 추출(txt·zip)·not-found 메시지 동일, 캐시 해시·`parser_backend` 확인 그대로, `TODO(SITE)` 73곳(S10 +1, S11 −1 — 마커가 코드에서 example으로 옮겨감). 설정 `version_sources`는 항상 `re.M`이고 기본 첫 항목(앵커 없음)에는 영향 없다.
+- 테스트: 새 `tests/test_platform_profile.py`(기본값 동일성·example 주석 값 = 기본값·검증 오류별 키 경로·CLI 종료 코드 2·슬롯/RIL 태그/bugreport/소스 트리 덮어쓰기 효과·`configure()` 격리·모의 site 백엔드 추종).
+- 범위 밖: 이슈 DB 층 설정(`phone_id_patterns`·`ril.yaml` `tags`), 정규식 문법·시계 기준·mcptools 낱말, `migrate_code_refs`, `--index`.

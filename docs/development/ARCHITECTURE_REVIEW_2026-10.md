@@ -685,6 +685,8 @@ telephony-triage/  (EXTERNAL-SAFE 레포 = canonical)
 
 ### RF-4 — Android Version Adapter (데이터화)
 
+- *I3 일부 완료 (2026-10-05): site-defaults `platform:`(name·source_tree·log.phone_id·ril.tags·bugreport), `platforms.load()`/`PlatformProfile`, 기본값 동일·출력 동일. 남음: 이슈 DB 층(parser-rules phone_id_patterns·ril.yaml tags)·migrate_code_refs·--index.*
+
 - **Goal**: §E의 상수를 설정/데이터로. 새 Android 버전 = 설정 한 줄 + 이슈 DB 규칙 PR.
 - **Files to Modify**: `S/platforms/android/__init__.py`(PROFILE 기본값), `S/code_roots.py`(`required_dirs`, `version_sources` 설정 우선), `S/platforms/android/logcat.py`(`phone_id_patterns` 선택 규칙), `ril.py`(`ril.yaml` `tags:` 선택), `S/common/parser_rules.py`(스키마 선택 필드), 이슈 DB `schema/parser-rules.schema.json`(선택 필드 — schema_version 유지), `D/04 §5.8`, `D/14` S7·S11·S20·S21 반영 위치.
 - **Files to Add**: `tools/migrate_code_refs.py`(§S #3: 새 트리에서 전 원인 `code_refs` 점검 → `add-code-ref` 계획 초안), `S/code_roots.py --index` + `symbols.json`.
