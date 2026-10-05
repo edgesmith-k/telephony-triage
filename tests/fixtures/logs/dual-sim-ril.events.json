@@ -26,7 +26,11 @@
    },
    "event": null,
    "fields": {},
-   "source": "backend:reference"
+   "source": "backend:reference",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 1
+   }
   },
   {
    "ts": "2026-09-22T03:00:00.200Z",
@@ -47,7 +51,11 @@
    },
    "event": null,
    "fields": {},
-   "source": "backend:reference"
+   "source": "backend:reference",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 2
+   }
   },
   {
    "ts": "2026-09-22T03:00:01.000Z",
@@ -68,7 +76,11 @@
    },
    "event": null,
    "fields": {},
-   "source": "backend:reference"
+   "source": "backend:reference",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 3
+   }
   },
   {
    "ts": "2026-09-22T03:00:01.000Z",
@@ -86,7 +98,11 @@
     "serial": "41",
     "error": "INSUFFICIENT_RESOURCES"
    },
-   "source": "rules"
+   "source": "rules",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 3
+   }
   },
   {
    "ts": "2026-09-22T03:00:01.300Z",
@@ -107,7 +123,11 @@
    },
    "event": null,
    "fields": {},
-   "source": "backend:reference"
+   "source": "backend:reference",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 4
+   }
   },
   {
    "ts": "2026-09-22T03:00:01.400Z",
@@ -121,7 +141,11 @@
    "ril": null,
    "event": null,
    "fields": {},
-   "source": "backend:reference"
+   "source": "backend:reference",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 5
+   }
   },
   {
    "ts": "2026-09-22T03:00:02.400Z",
@@ -142,7 +166,11 @@
    },
    "event": null,
    "fields": {},
-   "source": "backend:reference"
+   "source": "backend:reference",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 6
+   }
   },
   {
    "ts": "2026-09-22T03:00:14.400Z",
@@ -163,7 +191,11 @@
    },
    "event": null,
    "fields": {},
-   "source": "backend:reference"
+   "source": "backend:reference",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 7
+   }
   },
   {
    "ts": "2026-09-22T03:00:14.400Z",
@@ -182,7 +214,11 @@
     "latency_ms": "12000",
     "timeout_ms": "10000"
    },
-   "source": "rules"
+   "source": "rules",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 7
+   }
   },
   {
    "ts": "2026-09-22T03:00:15.400Z",
@@ -204,7 +240,11 @@
    },
    "event": null,
    "fields": {},
-   "source": "backend:reference"
+   "source": "backend:reference",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 8
+   }
   },
   {
    "ts": "2026-09-22T03:00:15.400Z",
@@ -222,7 +262,11 @@
     "serial": "43",
     "timeout_ms": "30000"
    },
-   "source": "rules"
+   "source": "rules",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 8
+   }
   },
   {
    "ts": "2026-09-22T03:00:35.400Z",
@@ -236,7 +280,11 @@
    "ril": null,
    "event": null,
    "fields": {},
-   "source": "backend:reference"
+   "source": "backend:reference",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 9
+   }
   },
   {
    "ts": "2026-09-22T03:00:35.400Z",
@@ -250,7 +298,11 @@
    "ril": null,
    "event": "data_evaluation_allowed",
    "fields": {},
-   "source": "rules"
+   "source": "rules",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 9
+   }
   },
   {
    "ts": "2026-09-22T03:00:55.400Z",
@@ -264,7 +316,11 @@
    "ril": null,
    "event": null,
    "fields": {},
-   "source": "backend:reference"
+   "source": "backend:reference",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 10
+   }
   },
   {
    "ts": "2026-09-22T03:00:55.400Z",
@@ -278,7 +334,11 @@
    "ril": null,
    "event": "data_evaluation_allowed",
    "fields": {},
-   "source": "rules"
+   "source": "rules",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 10
+   }
   },
   {
    "ts": "2026-09-22T03:00:56.400Z",
@@ -299,7 +359,11 @@
    },
    "event": null,
    "fields": {},
-   "source": "backend:reference"
+   "source": "backend:reference",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 11
+   }
   }
  ]
 }

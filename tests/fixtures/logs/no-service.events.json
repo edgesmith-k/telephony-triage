@@ -19,7 +19,11 @@
    "ril": null,
    "event": null,
    "fields": {},
-   "source": "backend:reference"
+   "source": "backend:reference",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 1
+   }
   },
   {
    "ts": "2026-09-24T01:11:00.000Z",
@@ -35,7 +39,11 @@
    "fields": {
     "reg_state": "NOT_REGISTERED"
    },
-   "source": "rules"
+   "source": "rules",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 1
+   }
   },
   {
    "ts": "2026-09-24T01:11:02.000Z",
@@ -49,7 +57,11 @@
    "ril": null,
    "event": null,
    "fields": {},
-   "source": "backend:reference"
+   "source": "backend:reference",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 2
+   }
   },
   {
    "ts": "2026-09-24T01:11:02.000Z",
@@ -66,7 +78,11 @@
     "cause": "13",
     "domain": "PS"
    },
-   "source": "rules"
+   "source": "rules",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 2
+   }
   },
   {
    "ts": "2026-09-24T01:11:12.000Z",
@@ -80,7 +96,11 @@
    "ril": null,
    "event": null,
    "fields": {},
-   "source": "backend:reference"
+   "source": "backend:reference",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 3
+   }
   },
   {
    "ts": "2026-09-24T01:11:12.000Z",
@@ -97,7 +117,11 @@
     "cause": "13",
     "domain": "CS"
    },
-   "source": "rules"
+   "source": "rules",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 3
+   }
   },
   {
    "ts": "2026-09-24T01:11:32.000Z",
@@ -111,7 +135,11 @@
    "ril": null,
    "event": null,
    "fields": {},
-   "source": "backend:reference"
+   "source": "backend:reference",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 4
+   }
   },
   {
    "ts": "2026-09-24T01:11:32.000Z",
@@ -127,7 +155,11 @@
    "fields": {
     "reg_state": "NOT_REGISTERED"
    },
-   "source": "rules"
+   "source": "rules",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 4
+   }
   },
   {
    "ts": "2026-09-24T01:11:34.000Z",
@@ -141,7 +173,11 @@
    "ril": null,
    "event": null,
    "fields": {},
-   "source": "backend:reference"
+   "source": "backend:reference",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 5
+   }
   },
   {
    "ts": "2026-09-24T01:11:34.000Z",
@@ -158,7 +194,11 @@
     "cause": "13",
     "domain": "PS"
    },
-   "source": "rules"
+   "source": "rules",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 5
+   }
   }
  ]
 }

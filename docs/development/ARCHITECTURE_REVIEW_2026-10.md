@@ -136,7 +136,7 @@ CLAUDE.md 15KB · AGENTS.md 3KB · SITE_PATHS · README.md(빈 파일)
 | **High** | LLM이 Step 0~4의 CLI 15~20회를 직접 호출하고 각 JSON stdout(들여쓰기 `indent=1`)과 stderr 경고를 읽는다 | `K/SKILL.md` Step 0(7개 항목)·1(4)·2(6)·2-1(5)·3·4; 각 스크립트 `main()`의 `json.dump(..., indent=1)` | 3만~6만 | 결정적 순서를 LLM이 "기억하고 실행"한다. 호출마다 추론 토큰 + 출력 토큰 + 재시도(반복 1에서 10개 eval 모두 `--json` 위치 오류로 종료 코드 2를 1회씩 받음) | **`triage.py run`** 하나가 Step 0~4(+5의 resolve)를 수행하고 `analysis.json`(≤ 4KB) + `report.md` 초안만 낸다 (§U RF-1) |
 | **High** | `SKILL.md` 25.6KB를 analyze마다 전부 로드 | `C/analyze.md` → `K/SKILL.md` | ≈ 8K | Step 0~4의 절차 서술(≈ 60%)은 driver로 옮기면 사라진다. 남는 것은 사용자 확인·분류 결정·Step 7·8 규칙 | SKILL.md를 **결정 규칙 + driver 호출** 중심 ≤ 8KB로 |
 | **High** (사내 개발 세션) | `CLAUDE.md` 15KB 매 세션 + `@SITE_PROFILE.md` import + S-1 "읽을 것"에 `DRAFT_NOTES.md` 136KB | `CLAUDE.md` 머리말, `D/15 §15.5` S-1 행 | 세션당 ≈ 5K 고정 + 45K(DRAFT_NOTES를 읽는 세션) | 모드 판별표·문서 지도·원칙 12개가 매 세션 들어간다. DRAFT_NOTES는 Phase별 산출물 표·테스트 결과·가정 19개·TODO 57곳이 한 파일 | `CLAUDE.md` ≤ 4KB(모드 판별 3줄 + 읽을 파일 지시), `DRAFT_NOTES.md` → `HANDOFF_STATE.md`(≤ 3KB: 모드·완료 Phase·다음 할 일·막힌 것) + `docs/history/draft-notes-2026-09.md`(아카이브, 읽지 않음) |
-| **High** | `parse_logcat parse` 출력이 원 로그의 ~25배 | `T/fixtures/logs/data-disabled.log` 8줄 → `.events.json` 188줄·3.6KB; `dual-sim-ril.log` 11줄 → 304줄 | 로그 1,000줄(±5분 radio)이면 **수십만 바이트** — LLM이 `cat`하면 치명적 | 줄 레코드(`event: None`)마다 `msg` 원문 + 파생 이벤트에 **같은 `msg` 재복사**(`_derived()`), `indent=1` | events.json은 **LLM이 읽지 않는 파일**로 못 박고(이미 SKILL 규칙), driver가 `evidence`(근거 3~10줄)만 analysis.json에 넣는다. 파생 이벤트는 `line_ref`(파일·행)만 갖고 `msg` 복사 제거 (HANDOFF R7 provenance와 같은 수정) |
+| **High** | `parse_logcat parse` 출력이 원 로그의 ~25배 | `T/fixtures/logs/data-disabled.log` 8줄 → `.events.json` 188줄·3.6KB; `dual-sim-ril.log` 11줄 → 304줄 | 로그 1,000줄(±5분 radio)이면 **수십만 바이트** — LLM이 `cat`하면 치명적 | 줄 레코드(`event: None`)마다 `msg` 원문 + 파생 이벤트에 **같은 `msg` 재복사**(`_derived()`), `indent=1` | events.json은 **LLM이 읽지 않는 파일**로 못 박고(이미 SKILL 규칙), driver가 `evidence`(근거 3~10줄)만 analysis.json에 넣는다. 파생 이벤트는 `line_ref`(파일·행)만 갖고 `msg` 복사 제거 (HANDOFF R7 provenance와 같은 수정) — *(2026-10-05: `line_ref` 추가 완료, 파생 이벤트의 `msg` 복사 제거는 아직 열림)* |
 | Medium | Step 1 `db_lint --all --db SNAP` 매 analyze | `K/SKILL.md` Step 1-3, `S/db_pr.py::post_lint` (snapshot이 이미 수행) | 1K~5K (DB가 커질수록) | `sync`가 이미 하고, `snapshot()`도 `post_lint`를 돌린다 → **두 번** | snapshot 결과의 `post_lint` 요약(건수만)만 쓴다. SKILL Step 1-3 삭제 |
 | Medium | `config.py show`가 `effective` 전체(field_map, analyzers, code_profiles, read_tools…)를 출력 | `S/config.py::cmd_show` | 1K~2K | Step 0에서 필요한 것은 `user_config` 유무, `work_dir`, `jira.tools.get_issue` 뿐 | `config.py show --keys work_dir,jira.tools` 또는 driver가 내부에서 읽음 |
 | Medium | `db_pr summary` 확인 화면(README 미리보기 + 주요 diff + 검사표) + `pr_body` | `S/db_pr.py::summary/_readme_preview/_main_diff` | 2K~6K | 필요하다(승인 화면). 다만 diff 50줄 제한은 있고 README 미리보기는 카테고리 README 전체가 바뀌는 구조(기준일) 때문에 소음 | "기준일" 결정성 규칙 재검토(`DRAFT_NOTES` Phase 13 사용자 판단 항목) — README 머리의 기준일을 `STATS.md`로만 옮기면 카테고리 README diff 소음이 사라진다 |
@@ -332,7 +332,7 @@ EXTERNAL-SAFE (이 레포 그대로; 외부 Codex가 자유롭게 개발·테스
 
 | 모델 | 지금 어디에 (사실상 존재) | 상태 | 조치 |
 |---|---|---|---|
-| **NormalizedLogEvent** | 파서 이벤트 `{ts(UTC ISO), pid, tid, level, tag, msg, phone_id, category_hint, ril{serial,dir,request,error,paired_ts,latency_ms}, event, fields{str}, source}` (`S/parser_backends/base.py` docstring, `D/07 Step 3`) | 안정. 문서로만 정의 | `S/common/events.py`에 `TypedDict` + `validate_event()` + `schema_version`. 파생 이벤트의 `msg` 복사 대신 `line_ref: {file_index, line_no}` 추가 (HANDOFF R7) |
+| **NormalizedLogEvent** | 파서 이벤트 `{ts(UTC ISO), pid, tid, level, tag, msg, phone_id, category_hint, ril{serial,dir,request,error,paired_ts,latency_ms}, event, fields{str}, source}` (`S/parser_backends/base.py` docstring, `D/07 Step 3`) | 안정. 문서로만 정의 | `S/common/events.py`에 `TypedDict` + `validate_event()` + `schema_version`. 파생 이벤트의 `msg` 복사 대신 `line_ref: {file_index, line_no}` 추가 (HANDOFF R7) — *(2026-10-05: `line_ref`는 추가됨(`D/04 §5.8 (6)`), `msg` 복사 제거는 열림. `common/events.py`는 `line_ref`를 포함해야 한다)* |
 | **ParserBackend** | `base.py` `parse(paths, tz, year, window)`, `coverage()`, `builtin_events()`, `version()` | 안정 | 그대로. `name`·`platform` 속성 추가 |
 | **ExternalParserAdapter** | `adapters/base.py` `ADAPTER_NAME, VERSION, convert(raw, meta)` | 안정 | 그대로 |
 | **NormalizedIssue** | `jira_fields.py extract` 출력 `{key, jira{model,sw,android_version,carrier,occurred_on}, occurred_at, text{summary,description,comments[]}, sim_slot, components[], missing[]}` | 안정 | 이름만 붙이고(`S/common/issue.py`), **Jira 외 소스**(파일, 다른 트래커)도 같은 형식을 내게. `comments`에 `created`·`index`를 넣어 선택 절삭 가능하게 |
@@ -361,7 +361,7 @@ raw log ──▶ [platform backend: 포맷·시각·슬롯·페어링] ──�
 - **Generic framework** (사외): `parse_logcat.py`의 `postprocess()`·`_run_extractors()`·`_run_external()`, `common/parser_rules.py`, `common/patterns.py`(정규식 시간 상한), `common/masking.py`.
 - **Parser interface** (사외): `ParserBackend`, `Adapter`.
 - **Internal implementation** (사내, 작게): `parser_backends/site/`가 `ReferenceBackend`를 상속해 `detect()`만 구현(`T/mocks/parser_backends/site/__init__.py` 74줄이 모범). 또는 어댑터 `site_*.py` 100줄 내외. 골든 테스트 `T/test_golden.py`(사외) + `tests/golden/*.orig.json`(사내).
-- 이 구조는 이미 요구한 모양이다. 남은 수정은 (1) §F의 디렉토리 이동, (2) §E의 regex 데이터화(선택), (3) HANDOFF R4(회전 파일 페어링)·R5(외부 파서 실패 전파), (4) `line_ref` provenance.
+- 이 구조는 이미 요구한 모양이다. 남은 수정은 (1) §F의 디렉토리 이동, (2) §E의 regex 데이터화(선택), (3) HANDOFF R4(회전 파일 페어링)·R5(외부 파서 실패 전파), (4) ~~`line_ref` provenance~~(2026-10-05 완료).
 - **proprietary RIL/IMS 파서**: 사외 코드는 `RILJ` AOSP 형식만 안다. 벤더 RIL/IMS 로그는 사내 `site` 백엔드의 `detect()`가 `builtin.<cat>.*`로 내거나 `ril.yaml`/`extractors.yaml`(데이터)로 표현한다. 사외 매처는 이벤트 이름만 본다 → **외부 analyzer가 원시 포맷을 알 필요 없음**이 이미 성립.
 
 ---
@@ -486,7 +486,7 @@ JiraWriter.post_comment  (guard 규칙 2는 Claude 세션 전용이므로, 자�
 | 큰 모듈 | `db_add.py` 1373줄(`Applier` 클래스가 op 16개 처리), `db_pr.py` 1109, `db_verify.py` 910 | 수정 시 넓은 컨텍스트 필요 | `db_add`를 `ops/<op>.py`로 분할(계약은 동일) — **완료 (2026-10-05)**: `db_add.py`는 CLI(112줄), 구현은 `dbadd/`(op 묶음별 믹스인 7개). `db_pr`의 `summary/pr_body`를 `db_summary.py`로(미완) |
 | 검사 오케스트레이션 3곳 | `db_pr.stage`, `db_precommit`, `guard.check_commit`가 각자 lint/mask/build/regress/verify 호출 순서를 가짐 | 규칙 drift | **완료 (2026-10-04, common/checks.py)**: `run_checks(profile, ctx)`와 프로필 stage/precommit/guard, `aggregate` |
 | 서브프로세스 재진입 | `db_pr` → 7개 스크립트 subprocess, 각 스크립트가 `site_defaults.load_or_exit` + 이슈 DB 전체 로드 | 느림(stage 수십 초), 테스트 10분+ | **완료 (2026-10-04)**: `checks.run_script`가 같은 프로세스에서 `main(argv)` 호출(종료 코드 계약 유지, `TT_SCRIPT_SUBPROCESS=1`이면 subprocess) + 정규식 작업 프로세스를 runner마다 띄우지 않고 프로세스 안에서 공유(`common/patterns.py`). `test_db_pr`+`test_checks` 418s → 138s |
-| HANDOFF R1~R15 | lock 비원자(R2), 경로 삭제 안전(R3), `commit -m "<msg>"` 인용(R6), 교차 슬롯 S/C(R1), 회전 파일 RIL(R4), 외부 파서 실패 전파(R5), provenance(R7), 점수 포화(R8) | 정확성·안전 | 그 문서의 I0~I2 |
+| HANDOFF R1~R15 | lock 비원자(R2), 경로 삭제 안전(R3), `commit -m "<msg>"` 인용(R6), 교차 슬롯 S/C(R1), 회전 파일 RIL(R4), 외부 파서 실패 전파(R5), provenance(R7), 점수 포화(R8) | 정확성·안전 | 그 문서의 I0~I2 (R7 완료·R15 부분 완료 2026-10-05) |
 | 중복 문서 | §C 표. 추가로 `CLAUDE.md` 문서 지도 ↔ `D/01 §3` 트리 ↔ `AGENTS.md` 구조 절 | 세 곳 유지 | `docs/ARCHITECTURE.md` 하나 + 나머지는 링크 |
 | 임시·이력 파일이 루트에 | `DRAFT_NOTES.md`, `REVIEW-10.md`, `REVIEW-11.md`, `CHANGES.md`(57KB) | 새 agent가 모두 열어봄 | `docs/history/`로 이동, 루트에는 `HANDOFF_STATE.md`만 |
 | Windows 전용 보정 | `tools/fix_exec_bits.py`, `T/helpers/mock_env.py`의 `.cmd` shim, `encoding="utf-8"` 산재 | 배포 대상은 Ubuntu | 유지(해롭지 않음). CI는 Ubuntu |
@@ -632,11 +632,11 @@ telephony-triage/  (EXTERNAL-SAFE 레포 = canonical)
   - `K/SKILL.md` ≤ 8KB: 실행 규칙(10줄) + `triage.py run` 호출 + `needs_input` 처리 + Step 6 리포트 완성 규칙 + Step 7 결정표 + Step 8은 write-flow.
   - `CLAUDE.md` ≤ 4KB, `HANDOFF_STATE.md` 신설, `DRAFT_NOTES.md`·`CHANGES.md`·`REVIEW-10/11.md` → `docs/history/`.
   - `C/*.md` 보일러플레이트 제거(각 ≤ 1.5KB). `K/reference/sync-pr.md` 단일 원본. `db-authoring.md` ≤ 10KB.
-  - `parse_logcat` 파생 이벤트 `msg` 복사 제거 + `line_ref`(R7). `config.py show --keys`.
+  - `parse_logcat` 파생 이벤트 `msg` 복사 제거 + ~~`line_ref`(R7)~~(`line_ref`는 2026-10-05 완료, `msg` 복사 제거는 열림). `config.py show --keys`.
 - **Files to Modify**: `K/SKILL.md`, `C/*.md`(12), `K/reference/{db-authoring,sync-pr,record}.md`, `CLAUDE.md`, `D/07-workflow.md`(driver 반영), `D/contracts.md §3.2`(triage.py 행 추가), `S/parse_logcat.py::_derived`, `S/config.py::cmd_show`, `D/15 §15.5` S-1 "읽을 것".
 - **Files to Add**: `S/triage.py`, `S/common/events.py`, `docs/ARCHITECTURE.md`, `HANDOFF_STATE.md`, `docs/tasks/*.yaml`, `tools/context_pack.py`, `tests/test_triage.py`(offline_eval 라벨셋으로 analysis.json 결정성 검증).
 - **Files to Remove**: 없음(이동만: `docs/history/`).
-- **Dependencies**: RF-0 (R7 provenance는 driver evidence 형식의 전제).
+- **Dependencies**: RF-0 (R7 provenance는 driver evidence 형식의 전제 — R7 완료 2026-10-05).
 - **Token Impact**: analyze 건당 Bash 왕복 15~20 → 3~5; SKILL 8K → 2.5K; 사내 개발 세션 고정 50K → 3K(추정, RF-0의 측정 도구로 확인).
 - **Security Impact**: 없음. driver는 기존 스크립트를 in-process로 묶을 뿐.
 - **Risk**: 스킬 eval 45개의 기대가 "스크립트 호출 순서"를 보는 항목이 있으면 조정 필요(`T/skill_evals/grade.py`는 결과물 중심이라 영향 적음).

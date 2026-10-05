@@ -94,6 +94,11 @@ def test_analysis_is_small_deterministic_and_writes_report_and_trace():
     report = (work / "a" / "report.md").read_text(encoding="utf-8")
     assert report.startswith(f"## {items[0]['key']} 분석") and "TODO(LLM)" in report and "DATA-001-01" in report
     assert "진단 확신도 아님" in report and "신뢰도 " not in report
+    # report.md의 근거 줄에는 로그 줄 위치가 붙고, analysis.json 근거에는 키가 늘지 않는다 (04 §5.8 (6))
+    assert "(f0:L" in report
+    analysis = json.loads(raw)
+    assert all(set(e) <= {"ts", "tag", "msg", "event"} for c in analysis["candidates"] for e in c["evidence"])
+    assert "line_ref" not in raw.decode("utf-8") and "_ref" not in raw.decode("utf-8")
     trace = [json.loads(line) for line in (work / "a" / "trace.jsonl").read_text(encoding="utf-8").splitlines()]
     scripts = [row.get("script") for row in trace if row.get("script")]
     assert "parse_logcat.py" in scripts and "match_signatures.py" in scripts

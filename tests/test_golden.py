@@ -74,7 +74,9 @@ def _load_mock_site():
 site_backend = _load_mock_site().BACKEND
 
 # 비교에서 뺄 필드 (파일 경로·순번처럼 환경에 따라 달라지는 값이 생기면 여기에).
-VOLATILE_FIELDS: tuple[str, ...] = ()
+# `line_ref`는 입력 파일 순번·줄 번호라 골든(사내 포팅 결과)의 일부가 아니다. 백엔드가 내는지는
+# `test_backend_emits_line_ref`가 따로 본다 (04-parser-matching.md §5.8 (6)).
+VOLATILE_FIELDS: tuple[str, ...] = ("line_ref",)
 
 def _mask_text(text: str) -> str:
     """마스킹 민감도 검사용: 파일 하나를 `mask_pii.py <file>`와 같이 마스킹한다
@@ -186,6 +188,22 @@ def test_golden_detects_change(tmp_path=None):
     builtin = next(e for e in tampered["events"] if e.get("event"))
     builtin["fields"] = {**builtin["fields"], "reasons": "TAMPERED"}
     assert actual["events"] != tampered["events"], "골든을 바꿨는데 비교가 통과합니다."
+
+
+def test_backend_emits_line_ref(tmp_path=None):
+    """백엔드가 모든 이벤트에 `line_ref`(마지막 키)를 낸다. builtin은 그 줄 레코드의 값을 그대로 갖는다."""
+    tmp = Path(tmp_path) if tmp_path else Path(tempfile.mkdtemp(prefix="tt-golden-"))
+    for case in _load_cases():
+        log = _make_log(case, tmp)
+        events = site_backend.parse([log], case.get("tz"), case.get("year"), None)
+        raw = log.read_text(encoding="utf-8").split("\n")
+        for n, event in enumerate(events):
+            assert list(event)[-1] == "line_ref", case["name"]
+            ref = event["line_ref"]
+            assert ref["file_index"] == 0 and ref["line_no"] >= 1, (case["name"], ref)
+            assert event["tag"] in raw[ref["line_no"] - 1], (case["name"], ref)
+            if event.get("event"):
+                assert events[n - 1]["line_ref"] == ref, case["name"]
 
 
 def test_builtin_events_declared(tmp_path=None):

@@ -103,6 +103,13 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+def _ref_label(ref) -> str | None:
+    """근거 줄 위치 → `f<입력 순번>:L<줄>` (report.md 전용). 줄 번호를 모르면 None."""
+    if isinstance(ref, dict) and ref.get("line_no"):
+        return f"f{ref['file_index']}:L{ref['line_no']}"
+    return None
+
+
 def _clip(text, limit: int) -> str:
     text = " ".join(str(text or "").split())
     return text if len(text) <= limit else text[: limit - 1] + "…"
@@ -1028,7 +1035,9 @@ class Driver:
                     "S": c["S"], "C": c["C"], "phones": sorted({e.get("phone_id") for e in c.get("evidence") or []
                                                                 if e.get("phone_id") is not None}),
                     "evidence": [{"ts": e.get("ts"), "tag": e.get("tag"), "msg": _clip(e.get("msg"), 140),
-                                  "event": e.get("event")} for e in (c.get("evidence") or [])[:10]],
+                                  "event": e.get("event"),
+                                  "_ref": _ref_label(e.get("line_ref"))}   # report.md 전용, analysis.json에는 안 나간다
+                                 for e in (c.get("evidence") or [])[:10]],
                     "fix_judgement": (c.get("fix_judgement") or {}).get("judgement"),
                     "fix_message": _clip((c.get("fix_judgement") or {}).get("message"), 100),
                     "related": [r.get("cause") for r in c.get("related") or []]}
@@ -1068,6 +1077,9 @@ class Driver:
         for cand in candidates:
             cand.pop("_code_refs", None)
         self.write_report(result, anchor)
+        for cand in candidates:
+            for e in cand["evidence"]:
+                e.pop("_ref", None)
         result = fit({k: v for k, v in result.items() if v not in (None, [], {})})
         (self.job / "analysis.json").write_text(json.dumps(result, ensure_ascii=False, indent=1) + "\n",
                                                 encoding="utf-8", newline="\n")
@@ -1152,7 +1164,8 @@ class Driver:
                          f"(규칙 일치 점수 {top['score']}, 일치 수준 {label} — 진단 확신도 아님"
                          f"{'' if top['C'] else ', 유형 일치·원인 미확인'})")
             lines.append(f"- 근거 로그 (마스킹, 슬롯 phone {','.join(map(str, top['phones'])) or '?'}):")
-            lines += [f"  - {e['ts']} {e['tag']} {e['msg']}" for e in top["evidence"]]
+            lines += [f"  - {e['ts']} {e['tag']} {e['msg']}" + (f" ({e['_ref']})" if e.get("_ref") else "")
+                      for e in top["evidence"]]
             if (len(cands) > 1 and cands[1]["score"] == top["score"]
                     and (cands[1]["S"], cands[1]["C"]) == (top["S"], top["C"])):
                 n = sum(1 for c in cands if c["score"] == top["score"])

@@ -60,7 +60,7 @@ MCP `jira.tools.get_issue`(매핑이 없으면 추측하지 말고 setup 안내)
   - 시그니처가 있으면 파서 규칙 점검(`db-authoring.md`)으로 `add-parser-rule`/`update-parser-rule` 초안.
 - **fixture** (`--fixture <logcat>`) — 마스킹된 최소 구간을 잘라 `add-fixture {for, kind: positive, path}`:
   - 기존 원인(`--cause`): `parse_logcat.py parse <log> --full --rules SNAP/parser-rules --mask ...` → `match_signatures.py --regress`
-    결과를 파일로 저장하고 `parse_logcat.py cut <log> --evidence <match.json> --out WD/<KEY>/fixtures/cut-1.log --rules SNAP/parser-rules`.
+    결과를 파일로 저장하고 `parse_logcat.py cut <log> --evidence <match.json> --out WD/<KEY>/fixtures/cut-1.log --rules SNAP/parser-rules` (parse와 같은 로그를 같은 순서로).
   - 새 원인·유형: 새 시그니처는 계획에만 있어 스냅샷 매처로 근거를 찾을 수 없다. 발생 시각(없으면 사용자가 지정한 시각)으로
     `parse_logcat.py cut <log> --around <시각> --out ...`. 그 fixture가 새 시그니처를 실제로 충족하는지는 7번 초안 검증(R1·R2)이 확인한다.
   - fixture가 없으면 R1·R2가 `skipped: fixture 없음`(검증 못 함, 리뷰 대상)이 된다고 알린다.

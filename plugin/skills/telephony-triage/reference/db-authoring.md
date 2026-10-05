@@ -205,7 +205,7 @@ update-signature는 같은 sig_id 변경, 파서 규칙은 키 추가/기능 필
   `parser-rules/` 변경은 메인테이너 리뷰 필수다.
 
 **fixture 자르기**
-- 근거 기반(기존 원인): `parse_logcat.py cut <log> --evidence <match.json> --out WD/<KEY>/fixtures/cut-<n>.log --rules SNAP/parser-rules [--tz --year]`
+- 근거 기반(기존 원인): `parse_logcat.py cut <log> --evidence <match.json> --out WD/<KEY>/fixtures/cut-<n>.log --rules SNAP/parser-rules [--tz --year]` (로그는 parse에 준 것과 같은 파일을 같은 순서로 준다)
 - 시각 기반(새 원인·유형, resolved/fixed): `parse_logcat.py cut <log> --around <ISO 시각> --seconds 30 --out ...`
 - cut은 항상 마스킹된 파일만 쓴다. 자른 fixture가 새 시그니처를 충족하는지는 초안 검증 R1·R2가 본다.
 

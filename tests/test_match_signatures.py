@@ -445,6 +445,67 @@ def test_failed_step_feeds_keyword_bonus_only_in_analysis_mode():
     assert all(c["bonus"] == {"proximity": 0.0, "keyword": 0.0} for c in reg)
 
 
+# -- 근거 출처 (line_ref, event_index) ----------------------------------------------
+
+
+def _all_evidence(result: dict) -> list[dict]:
+    out = [e for c in result["candidates"] for e in c["evidence"]]
+    return out + [e for t in result["types"] for e in t["evidence"]]
+
+
+def _check_provenance(result: dict, doc: dict) -> int:
+    """모든 근거의 `event_index`가 입력 문서의 같은 이벤트를 가리킨다."""
+    evidence = _all_evidence(result)
+    for e in evidence:
+        src = doc["events"][e["event_index"]]
+        assert (src["ts"], src["tag"], src["event"], src["line_ref"]) == (e["ts"], e["tag"], e["event"], e["line_ref"])
+    return len(evidence)
+
+
+def test_evidence_has_line_ref_and_event_index():
+    events = _events(DATA_DIR / "fixtures/DATA-001-01.log")
+    doc = json.loads(events.read_text(encoding="utf-8"))
+    result = _match(events)
+    assert _check_provenance(result, doc) >= 2
+    raw = (DATA_DIR / "fixtures/DATA-001-01.log").read_text(encoding="utf-8").split("\n")
+    for e in _all_evidence(result):
+        assert e["line_ref"]["file_index"] == 0
+        assert e["tag"] in raw[e["line_ref"]["line_no"] - 1]
+
+
+def test_event_index_with_unsorted_input():
+    import random
+
+    events = _events(DATA_DIR / "fixtures/DATA-001-01.log")
+    doc = json.loads(events.read_text(encoding="utf-8"))
+    base = _match(events)
+    shuffled = dict(doc, events=random.Random(7).sample(doc["events"], len(doc["events"])))
+    assert shuffled["events"] != doc["events"]
+    path = _tmp() / "events.json"
+    path.write_text(json.dumps(shuffled, ensure_ascii=False), encoding="utf-8")
+    result = _match(path)
+    assert _check_provenance(result, shuffled) >= 2  # 입력 문서 순서 기준 순번이다 (정렬된 사본의 순번이 아니다)
+    key = lambda r: ([(t["type"], t["S"]) for t in r["types"]],  # noqa: E731
+                     [(c["cause"], c["S"], c["C"]) for c in r["causes"]],
+                     [(c["cause"], c["score"]) for c in r["candidates"]])
+    assert key(result) == key(base)
+
+
+def test_duplicate_ts_tag_evidence_is_distinguished():
+    # 같은 시각·태그의 줄이 둘 있고 시그니처에 맞는 것은 둘째 줄뿐이다. 근거의 줄 위치가 그 줄을 가리킨다.
+    log = _write_log([
+        _line("14:30:00.000", "D", "DSM-0", "isDataEnabled=true"),
+        _line("14:30:00.000", "D", "DSM-0", OFF),
+        _line("14:30:02.000", "W", "DNC-0", REJECTED),
+    ])
+    events = _events(log)
+    result = _match(events)
+    assert _C(result, "DATA-001-01") == 1
+    (off,) = [e for e in result["candidates"][0]["evidence"] if e["tag"] == "DSM-0"]
+    assert off["line_ref"] == {"file_index": 0, "line_no": 2}
+    assert _check_provenance(result, json.loads(events.read_text(encoding="utf-8"))) >= 2
+
+
 def _all_tests():
     return [(n, o) for n, o in sorted(globals().items()) if n.startswith("test_") and callable(o)]
 

@@ -482,3 +482,23 @@
 ## db_add.py 분할 (2026-10-05)
 
 - 동작·CLI·출력 동일. `db_add.py`(1,377줄)는 CLI만(112줄) 두고 구현을 `plugin/scripts/dbadd/`로 옮겼다: `core`(상수·오류·계획 읽기·검사·`Tree`), `applier`(`Applier`·`cmd_apply`, 임시 ID·fixture 이름·피드백), `ops/`의 op 메서드 믹스인 7개(`jira`·`entities`·`fix`·`resolution`·`signature`·`fixture`·`parser_rules`), `drift`, `ids`(check-ids·renumber), `similar`. 함수 본문은 그대로 옮겼고 바뀐 참조는 drift의 `Applier._rule_key` → `ParserRuleOps._rule_key` 하나다. `db_review`가 쓰는 `db_add.similarity`는 그대로 import된다.
+
+## R7 근거 출처·R15 대용량 측정 (2026-10-05)
+
+- **R7 `line_ref`/`event_index`** (`04-parser-matching.md §5.8 (6)`): 모든 이벤트의 마지막 키 `line_ref: {file_index, line_no}`(입력 로그 목록 순번, 1부터 센 물리 줄; 줄 위치를 모르면 `null`). 줄 레코드는 reference 백엔드가 채우고 builtin·파생(`source: rules`) 이벤트는 기준 줄의 값을 이어받는다. 외부 파서 이벤트는 `{file_index, line_no: null}`. site 백엔드가 키를 안 내도 `postprocess`가 `null`로 채운다. 정수뿐이다(경로·본문 없음, 이슈 DB에 안 감).
+- 매처 근거에 `line_ref`와 `event_index`(입력 `events[]` 순번, `_range`가 안정 정렬 순열을 `ids`로 `Evaluator`에 넘김) 추가. `report.md` 근거 줄 끝에 ` (f<순번>:L<줄>)`. `analysis.json`은 그대로(근거 키 `{ts, tag, msg, event}`, `_ref`는 리포트 작성 뒤 지움).
+- **`cut --evidence` 동작 변경**: 근거의 `line_ref`가 가리키는 줄이 입력에 있고 (시각, 태그)가 같으면 그 줄만 앵커로 삼는다. 그래서 같은 시각·태그의 다른 줄은 더 이상 앵커가 아니다(예전에는 모두 앵커). 못 쓰면 그 근거만 예전처럼 `(ts, tag)`로 찾고 경고 `evidence-ref-mismatch`(종료 코드 그대로, `parse`와 같은 로그를 같은 순서로 줘야 한다). 출력 `anchors_by: {line_ref, ts_tag}`. **버그 수정**: raw 줄을 `str.splitlines()`로 읽어 `\x0b \x0c \x1c-\x1e \x85` 등이 든 줄 뒤에서 원문이 어긋났다 → `read_file`과 같은 방식(`newline=""`, `rstrip("\r\n")`)으로 센다.
+- 바뀌는 출력: 이벤트(`events.json`·스냅샷 `tests/fixtures/logs/*.events.json` 14개: `line_ref`만 추가), `match.json` 근거(+`line_ref`·`event_index`), `cut` JSON(+`anchors_by`, 경고), `report.md` 근거 줄. **바뀌지 않는 것**: 골든 JSON(`VOLATILE_FIELDS = ("line_ref",)`로 비교에서 제외, 키 유무는 `test_backend_emits_line_ref`), `analysis.json`, score·S/C·정렬, 회귀·검증 결과, 종료 코드. 합성 로그 34개(`tests/fixtures/logs`·샘플 DB fixture)의 `parse --full --mask`·`match --regress`·분석 모드·`cut --evidence` 출력을 변경 전후로 비교해 새 키(`line_ref`·`event_index`·`anchors_by`)를 빼면 같음을 확인했다.
+- **R15 측정** `tools/bench_scale.py`(커밋, pytest가 모으지 않음): 합성 로그 10k·50k·200k줄(단일)·50k(2파일), 단계별 시간·최대 RSS·events.json 크기, `_search_window`·`find-symbol` 마이크로. 임계값을 넘은 것만 적용했다.
+
+| 항목 (이 컨테이너, 합성 로그) | 전 | 후 | 적용 |
+|---|---|---|---|
+| O1 `_search_window` K=8000 evaluate / evaluate_all (K=2000 → 8000 증가 배율 16배) | 23.2 s / 23.7 s | 0.17 s / 0.30 s | 적용 (> 1.0 s, 배율 > 6) |
+| 200k줄 `match --regress` | 3.9 s | 2.3 s | O1 효과 |
+| O2 200k coverage / parse_e2e | 1.82 s / 20.96 s (8.7%) | — | 미적용 (< 15%) |
+| O3 200k masker_init / 최대 RSS(parse 직후) | 0.04 s (0.2%) / 390 MB (입력의 26배) | (줄 단위 observe 시험: 0.09 s / 424 MB) | 미적용 — RSS 규칙(> 10배)은 넘었지만 RSS는 이벤트 dict가 지배하고 줄 단위 observe는 줄이지 못했다(masker_init은 약간 느림). 시험 뒤 되돌림 |
+| O4 `find-symbol` 20k 파일 `Foo#bar` / `bar` | 3.13 s / 3.80 s | 0.81 s / 0.67 s | 적용 (> 3 s) |
+| R7 오버헤드: 200k parse_e2e / events.json | 20.96 s / 61.8 MB | 21.42 s (+2%) / 75.4 MB (+22%) | 기준 이내 (≤10%, ≤25%) |
+
+- 테스트(+12, 전체 489개): `test_parse_logcat`(`line_ref` 줄 일치·다중 파일 순번·외부/builtin), `test_match_signatures`(`event_index`·섞인 입력·같은 시각·태그), `test_signatures_window`(예전 구현 사본과 무작위 300건 비교·구간 경계), `test_masking`(cut 줄 위치 앵커·불일치 대체·`\x0c` 정렬), `test_golden`, `test_triage`, `test_code_roots`(예전 구현과 비교).
+- 미룸: 파생 이벤트 `msg` 복사 제거, `common/events.py`(`line_ref` 포함해야 함), `analysis.json`에 줄 위치, 백엔드가 주는 줄 번호, find-symbol 범위 제한·색인, GB급 스트리밍·`events.json` 크기, `cut --events`, 사내 임계값 재보정(S-5), `db_regress.compare_events`의 `line_ref`.

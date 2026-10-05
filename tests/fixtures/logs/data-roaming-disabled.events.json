@@ -19,7 +19,11 @@
    "ril": null,
    "event": null,
    "fields": {},
-   "source": "backend:reference"
+   "source": "backend:reference",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 1
+   }
   },
   {
    "ts": "2026-09-21T23:00:02.000Z",
@@ -33,7 +37,11 @@
    "ril": null,
    "event": null,
    "fields": {},
-   "source": "backend:reference"
+   "source": "backend:reference",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 2
+   }
   },
   {
    "ts": "2026-09-21T23:00:03.000Z",
@@ -47,7 +55,11 @@
    "ril": null,
    "event": null,
    "fields": {},
-   "source": "backend:reference"
+   "source": "backend:reference",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 3
+   }
   },
   {
    "ts": "2026-09-21T23:00:03.500Z",
@@ -61,7 +73,11 @@
    "ril": null,
    "event": null,
    "fields": {},
-   "source": "backend:reference"
+   "source": "backend:reference",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 4
+   }
   },
   {
    "ts": "2026-09-21T23:00:03.500Z",
@@ -77,7 +93,11 @@
    "fields": {
     "reasons": "ROAMING_DISABLED"
    },
-   "source": "rules"
+   "source": "rules",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 4
+   }
   },
   {
    "ts": "2026-09-21T23:00:13.500Z",
@@ -91,7 +111,11 @@
    "ril": null,
    "event": null,
    "fields": {},
-   "source": "backend:reference"
+   "source": "backend:reference",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 5
+   }
   },
   {
    "ts": "2026-09-21T23:00:13.500Z",
@@ -107,7 +131,11 @@
    "fields": {
     "reasons": "ROAMING_DISABLED"
    },
-   "source": "rules"
+   "source": "rules",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 5
+   }
   },
   {
    "ts": "2026-09-21T23:00:18.500Z",
@@ -121,7 +149,11 @@
    "ril": null,
    "event": null,
    "fields": {},
-   "source": "backend:reference"
+   "source": "backend:reference",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 6
+   }
   }
  ]
 }

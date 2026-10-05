@@ -454,6 +454,11 @@ def test_site_backend_builtin_events_with_extractors():
     names = {e["event"] for e in builtin}
     assert names == {"builtin.data.setup_not_allowed", "builtin.data.user_data_disabled"}
     assert all(e["source"] == "backend:site" and e["category_hint"] == "data" for e in builtin)
+    # builtin 레코드는 그 줄 레코드의 line_ref를 그대로 가진다
+    lines_by_ref = {json.dumps(e["line_ref"], sort_keys=True): e for e in data["events"] if e["event"] is None}
+    for e in builtin:
+        base = lines_by_ref[json.dumps(e["line_ref"], sort_keys=True)]
+        assert (base["ts"], base["tag"], base["msg"]) == (e["ts"], e["tag"], e["msg"])
     rules = _events(data, event="data_evaluation_rejected")
     assert rules and all(e["source"] == "rules" for e in rules)
     # 같은 줄에서 builtin 판별과 extractor가 둘 다 나온다
@@ -505,6 +510,8 @@ def test_external_parser_merge_and_no_external():
     # 외부 파서 시각도 UTC로 바뀐다 (logcat 스탬프 + --tz/--year)
     first = min(e["ts"] for e in ext if e["event"] == "ext.data.user_data_disabled")
     assert first == "2026-09-20T05:30:03.000Z"
+    # 외부 파서 이벤트는 파일 순번만 안다 (줄 번호 없음)
+    assert all(e["line_ref"] == {"file_index": 0, "line_no": None} for e in ext)
     assert data["external"] == [
         {"category": "data", "adapter": "site_data_existing", "version": "1.2.0", "mode": "merge"}
     ]
@@ -593,6 +600,46 @@ def test_masking_runs_before_extractors():
     assert rejected and all(e["fields"]["cause"] == "99" for e in rejected)
     assert all("cause=13" not in e["msg"] for e in out)
     assert seen, "마스커가 불리지 않았다"
+
+
+def _raw_lines(path: Path) -> list[str]:
+    with open(path, encoding="utf-8", newline="") as fh:
+        return [line.rstrip("\r\n") for line in fh]
+
+
+def test_line_ref_points_to_raw_line():
+    log = LOG_DIR / "data-setup-error.log"
+    data = _parse([log])
+    raw = _raw_lines(log)
+    previous = None
+    for e in data["events"]:
+        assert list(e)[-1] == "line_ref"
+        ref = e["line_ref"]
+        assert ref["file_index"] == 0 and ref["line_no"] >= 1
+        if e["event"] is None:
+            text = raw[ref["line_no"] - 1]
+            assert e["tag"] in text and e["msg"] in text, (ref, text)
+            previous = e
+        elif e["source"] == "rules":
+            # 파생 이벤트는 그 줄 레코드의 줄 위치를 그대로 가진다
+            assert e["line_ref"] == previous["line_ref"] and e["ts"] == previous["ts"]
+    assert any(e["source"] == "rules" for e in data["events"])
+
+
+def test_line_ref_multi_file_index():
+    first, second = LOG_DIR / "data-connected.log", LOG_DIR / "data-disabled.log"
+    data = _parse([first, second])
+    tags = {0: {e["tag"] for e in _events(_parse([first]), event=None)},
+            1: {e["tag"] for e in _events(_parse([second]), event=None)}}
+    refs = {e["line_ref"]["file_index"] for e in data["events"]}
+    assert refs == {0, 1}
+    for e in data["events"]:
+        if e["event"] is None:
+            i = e["line_ref"]["file_index"]
+            assert e["tag"] in tags[i]
+            assert e["tag"] in _raw_lines([first, second][i])[e["line_ref"]["line_no"] - 1]
+    swapped = _parse([second, first])
+    assert {e["line_ref"]["file_index"] for e in _events(swapped, ts="2026-09-20T05:30:00.000Z")} == {0}
 
 
 def test_site_defaults_required():

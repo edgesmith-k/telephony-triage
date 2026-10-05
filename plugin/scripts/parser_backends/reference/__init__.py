@@ -47,6 +47,8 @@ class ReferenceBackend(ParserBackend):
             "event": None,
             "fields": {},
             "source": f"backend:{self.name}",
+            # 입력 목록 순번과 물리 줄 번호(1부터). 04-parser-matching.md §5.8 (6).
+            "line_ref": {"file_index": line.file_index, "line_no": line.line_no},
             "_dt": line.dt,
             "_file": line.file_index,
             "_line": line.line_no,

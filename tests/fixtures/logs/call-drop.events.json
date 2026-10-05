@@ -19,7 +19,11 @@
    "ril": null,
    "event": null,
    "fields": {},
-   "source": "backend:reference"
+   "source": "backend:reference",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 1
+   }
   },
   {
    "ts": "2026-09-19T11:00:00.000Z",
@@ -36,7 +40,11 @@
     "volte": "true",
     "registered": "true"
    },
-   "source": "rules"
+   "source": "rules",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 1
+   }
   },
   {
    "ts": "2026-09-19T11:00:02.000Z",
@@ -50,7 +58,11 @@
    "ril": null,
    "event": null,
    "fields": {},
-   "source": "backend:reference"
+   "source": "backend:reference",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 2
+   }
   },
   {
    "ts": "2026-09-19T11:00:02.000Z",
@@ -66,7 +78,11 @@
    "fields": {
     "state": "ACTIVE"
    },
-   "source": "rules"
+   "source": "rules",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 2
+   }
   },
   {
    "ts": "2026-09-19T11:01:37.000Z",
@@ -87,7 +103,11 @@
    },
    "event": null,
    "fields": {},
-   "source": "backend:reference"
+   "source": "backend:reference",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 3
+   }
   },
   {
    "ts": "2026-09-19T11:01:37.200Z",
@@ -101,7 +121,11 @@
    "ril": null,
    "event": null,
    "fields": {},
-   "source": "backend:reference"
+   "source": "backend:reference",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 4
+   }
   },
   {
    "ts": "2026-09-19T11:01:37.200Z",
@@ -117,7 +141,11 @@
    "fields": {
     "state": "DISCONNECTED"
    },
-   "source": "rules"
+   "source": "rules",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 4
+   }
   },
   {
    "ts": "2026-09-19T11:01:37.300Z",
@@ -138,7 +166,11 @@
    },
    "event": null,
    "fields": {},
-   "source": "backend:reference"
+   "source": "backend:reference",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 5
+   }
   },
   {
    "ts": "2026-09-19T11:01:37.600Z",
@@ -159,7 +191,11 @@
    },
    "event": null,
    "fields": {},
-   "source": "backend:reference"
+   "source": "backend:reference",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 6
+   }
   },
   {
    "ts": "2026-09-19T11:01:37.600Z",
@@ -175,7 +211,11 @@
    "fields": {
     "cause": "65"
    },
-   "source": "rules"
+   "source": "rules",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 6
+   }
   }
  ]
 }

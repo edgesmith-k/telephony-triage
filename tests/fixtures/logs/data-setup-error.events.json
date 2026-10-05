@@ -19,7 +19,11 @@
    "ril": null,
    "event": null,
    "fields": {},
-   "source": "backend:reference"
+   "source": "backend:reference",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 1
+   }
   },
   {
    "ts": "2026-09-21T01:00:00.500Z",
@@ -33,7 +37,11 @@
    "ril": null,
    "event": null,
    "fields": {},
-   "source": "backend:reference"
+   "source": "backend:reference",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 2
+   }
   },
   {
    "ts": "2026-09-21T01:00:00.500Z",
@@ -47,7 +55,11 @@
    "ril": null,
    "event": "data_evaluation_allowed",
    "fields": {},
-   "source": "rules"
+   "source": "rules",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 2
+   }
   },
   {
    "ts": "2026-09-21T01:00:00.800Z",
@@ -68,7 +80,11 @@
    },
    "event": null,
    "fields": {},
-   "source": "backend:reference"
+   "source": "backend:reference",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 3
+   }
   },
   {
    "ts": "2026-09-21T01:00:01.900Z",
@@ -89,7 +105,11 @@
    },
    "event": null,
    "fields": {},
-   "source": "backend:reference"
+   "source": "backend:reference",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 4
+   }
   },
   {
    "ts": "2026-09-21T01:00:01.900Z",
@@ -107,7 +127,11 @@
     "serial": "51",
     "error": "MISSING_UNKNOWN_APN"
    },
-   "source": "rules"
+   "source": "rules",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 4
+   }
   },
   {
    "ts": "2026-09-21T01:00:02.100Z",
@@ -121,7 +145,11 @@
    "ril": null,
    "event": null,
    "fields": {},
-   "source": "backend:reference"
+   "source": "backend:reference",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 5
+   }
   },
   {
    "ts": "2026-09-21T01:00:02.200Z",
@@ -135,7 +163,11 @@
    "ril": null,
    "event": null,
    "fields": {},
-   "source": "backend:reference"
+   "source": "backend:reference",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 6
+   }
   },
   {
    "ts": "2026-09-21T01:00:07.200Z",
@@ -156,7 +188,11 @@
    },
    "event": null,
    "fields": {},
-   "source": "backend:reference"
+   "source": "backend:reference",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 7
+   }
   },
   {
    "ts": "2026-09-21T01:00:08.200Z",
@@ -177,7 +213,11 @@
    },
    "event": null,
    "fields": {},
-   "source": "backend:reference"
+   "source": "backend:reference",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 8
+   }
   },
   {
    "ts": "2026-09-21T01:00:08.200Z",
@@ -195,7 +235,11 @@
     "serial": "52",
     "error": "MISSING_UNKNOWN_APN"
    },
-   "source": "rules"
+   "source": "rules",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 8
+   }
   }
  ]
 }

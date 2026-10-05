@@ -96,7 +96,7 @@ Android 버전과 브랜치마다 소스 트리가 다르므로 **분석할 때�
 - 파서 규칙은 스냅샷의 `parser-rules/`에서 읽는다: `parse_logcat.py parse <logcat...> --around <발생 시각> --minutes 5 --rules <work_dir>/_snapshot/parser-rules --tz <logcat.timezone> --year <연도> --mask` (`04-parser-matching.md §5.8`).
 - 입력 포맷: `threadtime` 기본. 연도 포함, `-v uid`, `-b radio` 등 변형도 허용한다. 연도가 없으면 스킬이 `logcat.year_source`로 연도를 정하고(`jira`면 발생 시각의 연도. Jira에 발생 시각이 없으면 묻지 않고 로그 파일 시각의 연도를 임시로 쓰고 경고한 뒤 시각 후보 단계로 간다. `ask`면 선택지를 주고 묻는다) 타임존은 `logcat.timezone`으로 넘겨서 UTC로 바꾼다 (S7).
 - 파싱은 `site-defaults.yaml`의 `parser.backend`(사내 `site` = 포팅한 기존 파서, 사외 `reference`)가 하고, 마스킹·extractor·태그 매핑은 `parse_logcat.py`가 한다 (`16-existing-assets.md §16.3`). 백엔드가 이슈 DB의 `parser_backend`와 맞지 않으면 경고하고, 리포트에 "백엔드 불일치 — 결과가 팀 기준과 다를 수 있음"을 표시한다.
-- 출력 이벤트: `{ts, pid, tid, level, tag, msg, phone_id, category_hint, ril: {serial, dir, request, error}, event, fields, source}` (`source`: `rules` / `backend:<name>` / `external:<adapter>`, 이벤트 이름 공간은 `04-parser-matching.md §5.8 (2)`). `phone_id`는 슬롯(없으면 `null`)이고 시그니처는 기본적으로 같은 슬롯 안에서만 충족된다 (`04-parser-matching.md §5.8 (2)` 슬롯).
+- 출력 이벤트: `{ts, pid, tid, level, tag, msg, phone_id, category_hint, ril: {serial, dir, request, error}, event, fields, source, line_ref}` (`source`: `rules` / `backend:<name>` / `external:<adapter>`, 이벤트 이름 공간은 `04-parser-matching.md §5.8 (2)`; `line_ref: {file_index, line_no}`는 로그 줄 위치로 `04-parser-matching.md §5.8 (6)`). `phone_id`는 슬롯(없으면 `null`)이고 시그니처는 기본적으로 같은 슬롯 안에서만 충족된다 (`04-parser-matching.md §5.8 (2)` 슬롯).
 - 출력 머리의 **`coverage`**: `{first_ts, last_ts, window_in_range: true|partial|false, clock_anomalies: [{ts, kind: backward|jump, delta_sec}]}`. `window_in_range: false`면 "로그 범위 밖(파일: A~B, 발생: T)"으로 보고하고 `--full`로 다시 파싱할지 묻는다(매칭 없음과 구분한다. radio 버퍼가 작아 흔하다). `clock_anomalies`가 있으면(예: NITZ 전, 재부팅 직후 — 원인은 근처의 부팅·시각 갱신 로그가 있을 때만 적고 없으면 "원인 미상") 경고하고 Step 2의 증상 스캔 경로를 제안한다. 리포트에 범위와 이상 여부를 적는다.
 - **`--mask`로 각 줄을 extractor 실행 전에 마스킹**한다. 그래서 이벤트의 `msg`와 `fields`가 모두 마스킹돼 있다(`masked: true`). 이후 단계(매칭, 리포트, fixture)는 마스킹된 이벤트만 쓴다 (`04-parser-matching.md §5.11 (1)`).
 - RIL 페어링: `RILJ`의 요청(`[serial]> REQUEST`)과 응답(`[serial]< REQUEST`)을 `(pid, phone_id, serial)` 키로 매칭하고, 응답 없음, 에러 응답, 지연(`ril.yaml` timeout)을 이벤트로 표시한다. 실제 출력 형식은 Phase 0에서 확인한다(S9, 슬롯 표기는 S20).
@@ -158,7 +158,7 @@ Android 버전과 브랜치마다 소스 트리가 다르므로 **분석할 때�
 - (앵커가 있을 때만) 실패 스텝 구간 (log_marker): Step 5 <시작> ~ <실패> → 분석 범위 <시작> ~ <끝> (Jira 발생 시각 <시각> / N분 차이)
 - (`step_order` 앵커일 때) 실패 스텝 구간 (step_order): <실패 스텝> — 마지막 확인 스텝 <스텝> <시각> 이후 → 분석 범위 <시작> ~ <끝> (관측 가능 m개 중 n개 일치, 놓침 x, 관측 불가 u) 뒤에 근거 줄 최대 6개 `  - <스텝> → <로그 시각> <흔적 이름>`(마스킹). 시계 정렬을 못 했으면 `- 장비 시각 미사용: 시계 정렬 불가(<사유>)`, zip이면 `- 시험 절차: zip 안 <경로>`
 - 분류 후보: Data > DATA-001 SETUP_DATA_CALL이 발생하지 않음 > DATA-001-02 Roaming disabled (규칙 일치 점수 1.0, 일치 수준 높음 — 진단 확신도 아님)
-- 근거 로그: (시각, 태그, 메시지 3~10줄, 마스킹)  슬롯: phone 0
+- 근거 로그: (시각, 태그, 메시지 3~10줄, 마스킹, 줄 위치 `(f<입력 순번>:L<줄>)` — 입력 순번은 `analysis.json logs.files` 순서, 0부터)  슬롯: phone 0
 - 로그 범위: 10:02~10:12 (발생 시각 포함), 시계 이상 없음
 - 원인: ...
 - 코드 위치: 파일:라인 + 분기 조건 (분석 트리: android16-main, Android 16)
@@ -310,7 +310,7 @@ Android 버전과 브랜치마다 소스 트리가 다르므로 **분석할 때�
    - 새 원인/유형: 원인 `title`, `description`, `resolution`, `resolution_type`, 본문(재현 시나리오 포함). 새 유형이면 유형 `title`, `summary`, `dir_slug`.
    - **시그니처**: 새 원인/유형은 판별 시그니처가 필수다. 사용자에게 받거나(마스킹된 로그 문구 기준) 초안을 제안한다. **새 유형은 증상 시그니처가 없으면 진행하지 않는다**(증상 로그 문구를 받거나, 증상이 보이는 로그를 `--fixture`로 받아 초안을 만든다). 새 원인은 사용자가 **명시적으로** "원인 시그니처는 나중에"를 고르면 원인에 `signatures_pending: true`로 기록하고, 그 결과(경고, 매칭 불가, 해결책 unverified 고정, 월간 리뷰 대상)를 알린다. 시그니처가 있으면 `04-parser-matching.md §5.8 (3)` 파서 점검을 해서 `add-parser-rule`/`update-parser-rule` 초안을 만든다.
    - **fixture** (`--fixture <logcat>`): 자를 구간을 정한다.
-     - 기존 원인(`--cause`): 스냅샷에서 `parse --mask`와 `match_signatures`로 그 원인의 근거를 찾아 `parse_logcat.py cut --evidence`로 자른다.
+     - 기존 원인(`--cause`): 스냅샷에서 `parse --mask`와 `match_signatures`로 그 원인의 근거를 찾아 `parse_logcat.py cut --evidence`로 자른다. `cut`에는 `parse`에 준 로그를 **같은 순서로** 준다(근거의 `line_ref`가 `events.json input.files` 순서의 파일 순번을 가리킨다). 순서가 다르면 `(시각, 태그)`로 앵커를 찾고 경고 `evidence-ref-mismatch`를 내므로 같은 시각·태그의 다른 줄까지 들어갈 수 있다(`04-parser-matching.md §5.8 (6)`).
      - 새 원인·새 유형: 새 시그니처는 계획에만 있고 스냅샷에는 없으므로 스냅샷 매처로 근거를 찾을 수 없다. 발생 시각(없으면 사용자가 지정한 줄 번호나 시각) 기준으로 `parse_logcat.py cut --around <시각>`으로 자른다. 자른 fixture가 새 시그니처를 실제로 충족하는지는 7번 초안 검증(R1·R2, 계획을 적용한 draft 트리)이 확인하고, 충족하지 않으면 구간이나 시그니처를 고친다.
      - 자른 마스킹 fixture를 `add-fixture`(`kind: positive`)로 넣는다. fixture가 없으면 R1·R2가 `skipped: fixture 없음`이 된다고 알린다. 원인이 `signatures_pending`이면 이 fixture는 기대값 `"<유형 ID>:unresolved"`로 회귀에 들어간다 (`contracts.md §fixture`).
    - **수정 정보**(선택): 사용자가 "이미 고쳤다"고 하면 `ref`와 `fixed_in`(브랜치 필수, 빌드 선택)을 받아 `fix.status: fix-submitted`로 기록한다(새 원인은 `new-cause`의 `cause.fix`, 기존 원인은 `update-fix`). 기존 원인이 이미 `fixed`면 `update-fix`를 넣지 않고 "이미 검증된 수정이 있다"고 보여준다(`fixed` → `fix-submitted`는 `contracts.md` op 표가 거부한다). **`fixed`는 기록하지 않는다.** "검증까지 끝났다"고 해도 `fixed`는 `verify-fix`로만 한다고 안내한다. 형식은 `fix_ref_regex`, `build_compare`로 검사한다.

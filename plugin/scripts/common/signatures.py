@@ -22,6 +22,7 @@
 from __future__ import annotations
 
 import re
+from bisect import bisect_left
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
@@ -136,8 +137,10 @@ class Evaluator:
     """한 이벤트 목록에 대해 시그니처를 평가한다. 패턴 결과는 캐시한다."""
 
     def __init__(self, events: list[dict], lo: datetime | None, hi: datetime | None,
-                 timeout_ms: int | None = None):
+                 timeout_ms: int | None = None, ids: list[int] | None = None):
+        # `ids[i]`: `events[i]`의 원래 입력 문서 `events[]` 안 순번 (근거 `event_index`). 없으면 `i`.
         self.events = events
+        self.ids = ids
         self.dts = [_parse_ts(e["ts"]) for e in events]
         self.lo, self.hi = lo, hi
         self.line_idx = [i for i, e in enumerate(events) if e.get("event") is None]
@@ -257,6 +260,8 @@ class Evaluator:
                 "event": e.get("event"),
                 "fields": e.get("fields") or {},
                 "phone_id": e.get("phone_id"),
+                "line_ref": e.get("line_ref"),
+                "event_index": self.ids[i] if self.ids is not None else i,
             })
         return evidence
 
@@ -270,18 +275,24 @@ class Evaluator:
         for t in times:
             candidates.update((t - width, t, t + _EPS, t - width + _EPS))
         order = {c.id: n for n, c in enumerate(sig.positives) if c.id}
+        # 구간마다 조건 hit 전체를 훑지 않도록 (시각, 인덱스) 정렬본에서 bisect로 찾는다.
+        # `[a, b]` 안의 최소 (시각, 인덱스)는 정렬본에서 시각 ≥ a인 첫 항목이다(그 시각이 ≤ b일 때 안에 있다).
+        keyed = [sorted((self.dts[i], i) for i in hits) for hits in pos]
+        key_dts = [[d for d, _ in ks] for ks in keyed]
+        neg_dts = sorted(self.dts[i] for i in neg)
         best = None
         matches = []
         for a in sorted(c for c in candidates if lo <= c <= a_max):
             b = a + width
-            if any(a <= self.dts[i] <= b for i in neg):
+            j = bisect_left(neg_dts, a)
+            if j < len(neg_dts) and neg_dts[j] <= b:  # 닫힌 구간 [a, b] 안의 부정 조건
                 continue
             firsts = []
-            for hits in pos:
-                inside = [i for i in hits if a <= self.dts[i] <= b]
-                if not inside:
+            for ks, ds in zip(keyed, key_dts):
+                j = bisect_left(ds, a)
+                if j == len(ds) or ds[j] > b:
                     break
-                firsts.append(min(inside, key=lambda i: (self.dts[i], i)))
+                firsts.append(ks[j][1])
             else:
                 if sig.sequence:
                     seq = [firsts[order[s]] for s in sig.sequence]

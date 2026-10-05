@@ -20,6 +20,7 @@
 - 파서 백엔드의 **내장 판별 로직**(사내에서 포팅한 검증된 파서): `builtin.<category>.<이름>`. 목록은 백엔드의 `builtin_events()`. 바꾸려면 백엔드 코드 변경(메인테이너 리뷰 + 골든 갱신, `16-existing-assets.md §16.3`).
 - 어댑터(외부 파서를 그대로 실행하는 대안): `ext.<category>.<이름>`. 이슈 DB `issue-db.config.yaml`의 `external_parsers`에 그 카테고리가 고정돼 있을 때만 시그니처에서 참조할 수 있다 (`db_lint`, `contracts.md §기존 자산 연결 계약`).
 - 시그니처 `must_event`는 셋 모두 참조할 수 있다. extractor는 `builtin.`/`ext.` 접두어 이벤트를 만들 수 없다. 새 유형은 원칙적으로 extractor로 확장한다.
+- 모든 이벤트는 마지막 키로 `line_ref`(로그 줄 위치, 아래 (6))를 가진다. 이벤트 이름 공간·`source`와는 무관하다.
 
 모든 규칙 항목은 **키로 식별**되고(`tags`는 `tag`/`tag_regex`, `ril`은 `name`, `extractors`는 `id`), 이력 필드 `added_for`, `added_on`, `reason`을 가진다. 나머지 필드는 **기능 필드**다. `CHANGELOG.md`는 이력 필드로 `db_build.py`가 생성한다 (끝에 한 줄씩 붙이는 파일은 동시 PR에서 항상 충돌하므로 두지 않는다).
 
@@ -117,6 +118,16 @@ analyze Step 7에서 새 원인/유형을 계획할 때 아래를 점검하고, 
 시험 자동화가 남기는 스텝 마커(`TestRunner: Step 5 FAIL` 등)는 `tags.yaml`에 없는 태그다. `parse`는 목록에 없는 태그의 줄을 버리므로 마커는 별도 서브커맨드 `parse_logcat.py markers`가 백엔드의 줄 레코드에서 직접 찾는다. 패턴은 이슈 DB가 아니라 `site-defaults.yaml`의 `failed_step.marker_patterns`(이름 그룹 `step`·`status`)에서만 읽는다(`02-config.md`, `14-site.md` S22). 절차: 원문 `TAG: msg`에 패턴을 시간 상한(`matcher.pattern_timeout_ms`) 안에서 돌려 맞은 줄만 고르고, 그 줄만 마스킹한 뒤 마스킹된 텍스트에서 그룹을 다시 뽑는다. 출력은 `{ts, step, status: start|pass|fail, tag, msg(≤200)}` 목록(상한 2000)과 로그 범위(`coverage`)다. 마커가 `parse` 이벤트나 시그니처 평가에 들어가지 않으므로 **S/C·회귀·검증에는 영향이 없다**. `parse --between <ISO 시작> <ISO 끝>`은 `--around`/`--full`과 같은 상호 배타 그룹의 명시 구간이다(`input.mode: "between"`).
 
 **`markers --step-events`(스텝 순서 정렬 입력)**: 실제 logcat에는 스텝 마커가 없으므로 시험 절차의 스텝 순서를 로그의 **흔적**과 맞춘다(`07-workflow.md §Step 3`). 이 플래그는 이슈 DB(`--rules`의 상위) `issue-db.config.yaml`의 `step_events`(`02-config.md §5.3`)를 읽어 규칙마다 흔적을 모은다 — **스텝 이름·시험 절차는 인자로 받지 않는다.** 한 번의 `backend.parse`로: `ril` 규칙은 원 레코드의 `rec["ril"]`(요청 이름·방향)을 그대로, `match` 규칙은 모든 `TAG: msg`를 마스커 하나로 마스킹해 `PatternRunner`(시간 상한)로 검색, `event` 규칙은 `postprocess`(마스킹 포함) 이벤트 중 이름과 `fields` 정규식이 맞는 것을 쓴다. 출력은 `step_events: [{rule, ts, seq, label}]`(규칙 번호·UTC 시각·파서 줄 순번·이벤트/요청/태그 이름 — **로그 본문 없음**, `(ts, seq, rule)` 순)이고, 규칙당 1000개·전체 5000개 상한을 넘으면 경고 `step-events-truncated`(`truncated_rules`)와 함께 앞부분만 낸다. 잘못된 규칙은 경고 `step-event-rule`로 건너뛴다. 플래그가 없으면 출력은 이전과 같다. 이 흔적도 `parse` 이벤트·시그니처 평가에 들어가지 않으므로 **S/C·회귀·검증에는 영향이 없다**.
+
+#### (6) 근거 출처 (provenance)
+
+이벤트가 로그의 어느 줄에서 왔는지를 정수 두 개로 남겨, 근거 줄을 `(ts, tag)`가 아니라 **줄 위치**로 되짚는다. 같은 시각·태그의 줄이 여럿이어도 근거로 쓴 줄이 구분된다.
+
+- **`line_ref`**: `{file_index, line_no}` 또는 `null`. `file_index`는 `parse`에 준 로그 목록의 0부터 순번(= `events.json`의 `input.files` 순서), `line_no`는 그 파일의 1부터 센 물리 줄 번호(`parser_backends/logcat.py::read_file`과 같은 방식)다. 줄 레코드와 builtin 레코드(그 줄 레코드 값을 그대로 이어받음), `source: rules` 파생 이벤트(RIL 파생·extractor, 기준 줄의 값)는 줄 번호를 갖는다. 외부 파서(`ext.*`) 이벤트는 파일만 알아 `{file_index, line_no: null}`이다. 줄 위치를 줄 수 없는 백엔드는 `null`을 줘도 된다(`postprocess`가 빠진 키를 `null`로 채운다). 이벤트의 마지막 키다.
+- **매처 근거**: `match_signatures` 근거(`candidates[].evidence`, `types[].evidence`)에 `line_ref`(이벤트의 값 그대로)와 `event_index`(입력 `events[]` 안의 순번, 입력 문서 순서 기준)가 더해진다. S/C·score·정렬·회귀·검증 판정은 이 값을 쓰지 않는다.
+- **`cut --evidence`**: 근거마다 `line_ref`가 가리키는 줄이 입력에 있고 그 줄의 (시각, 태그)가 근거와 같으면 **그 줄만** 앵커로 삼는다. 아니면 그 근거만 (시각, 태그)가 같은 모든 줄을 앵커로 삼고(예전 동작), `line_ref`가 있었는데 못 쓴 경우 경고 `evidence-ref-mismatch`를 낸다(종료 코드는 그대로). 그래서 `cut`에는 `parse`와 **같은 로그를 같은 순서로** 줘야 한다. 출력 `anchors_by: {line_ref: n, ts_tag: m}`는 앵커를 찾은 방식별 근거 수다(`--around`는 둘 다 0).
+- **`report.md`**: 근거 줄 끝에 ` (f<file_index>:L<line_no>)`이 붙는다(`analysis.json`의 근거 키는 그대로 `{ts, tag, msg, event}`).
+- 정수뿐이다. 경로·파일 이름·본문은 넣지 않으며 이슈 DB에는 쓰지 않는다(fixture는 마스킹된 잘라낸 텍스트라 줄 위치가 의미 없다, `08-safety.md §8`).
 
 ### 5.11 시그니처 매칭 규칙
 
