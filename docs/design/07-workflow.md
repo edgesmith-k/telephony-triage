@@ -41,7 +41,7 @@
 
 - **그대로 한다**: 키 검사, lock 획득(스냅샷을 옮기므로), 스냅샷·사후 lint·캐시, 호환성(`--for dry-run`), Jira 읽기(`--jira-file`은 `--dry-run` 없이도 받는다), 로그·코드·Step 3~5, 입력 재사용.
 - **건너뛴다**: `db_pr cleanup`(dry-run·yes·질문 모두), 기존 `plan.json` 질문과 pending 피드백 삭제(있는지만 `plan{exists, source, pr_number}`로 알리고 파일은 건드리지 않는다), 열린 PR 확인(`db_pr preflight`·gh 없음, 리포트는 "확인 안 함"이며 "없음"이 아니다), 재분석 질문(`existing`은 알리기만).
-- **끝**: Step 6 리포트까지만 하고 **Step 7(분류 확정)·Step 8로 가지 않는다**. ok로 끝나면 `triage.py`가 lock을 풀고(`lock_released: true`, 붙여넣은 스텝 원문 `steps-pasted.txt`도 지운다) 리포트 첫 줄에 "분석 전용: 이슈 DB에 기록하지 않는다…"를 둔다. 기록하려면 `--analysis-only` 없이 다시 실행한다(mode는 입력 해시에 없으므로 core는 재사용되고 건너뛴 사전 질문이 그때 나온다). needs_input에서는 lock을 유지한다(재실행은 멱등).
+- **끝**: Step 6 리포트까지만 하고 **Step 7(분류 확정)·Step 8로 가지 않는다**. ok로 끝나면 `triage.py`가 lock을 풀고(`lock_released: true`, 붙여넣은 스텝 원문 `steps-pasted.txt`도 지운다) 리포트 첫 줄에 "분석 전용: 이슈 DB에 기록하지 않는다…"를 둔다. 기록하려면 `--analysis-only` 없이 다시 실행한다(mode는 입력 해시에 없으므로 core는 재사용되고 건너뛴 사전 질문이 그때 나온다). needs_input에서는 lock을 유지한다(재실행은 멱등). 붙여넣은 스텝은 lock과 함께 지워지므로, 이어서 기록 실행을 할 때는 `--steps-file`을 다시 써야 한다(안 쓰면 입력 `args`가 바뀌어 core를 다시 계산한다).
 
 ### Step 0. 사전 점검
 - config를 로드한다. 없으면 setup으로 유도한다.
