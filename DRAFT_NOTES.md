@@ -45,7 +45,7 @@
 | ✅ 4 | **HTML 안내서 갱신** — 1~6단계 반영 | 10/04 완료. 이후 기능이 바뀌면 `docs/telephony-triage-guide.html`도 고친다 |
 | ✅ 5 | **성능** — 하위 스크립트 같은 프로세스 호출 | 10/04 완료(확인 대기). `checks.run_in_process`, 정규식 작업 프로세스 공유. stage 7~11초→2초. `CHANGES.md` |
 | ✅ 6 | **유지보수** — `db_add.py` op별 분할 | 10/05 완료(확인 대기). CLI만 남기고 `dbadd/`(ops 믹스인 7개) |
-| ☐ 7 | **트리거 개선** — 자연어 호출 recall 26~33% | SKILL.md 8,191/8,192바이트: description을 늘리면 본문을 줄여야 함. 지금은 슬래시 커맨드로 쓰면 문제없음 |
+| ✅ 7 | **트리거** | 10/05: 실제 플러그인 측정 recall·precision 100%(24개×2회, `trigger_real.py`). 26~33%는 측정기 탓(첫 도구만 셈). description 그대로 |
 | ✅ 8 | **R7 근거 출처**, **R15 대용량** | 10/05 완료(확인 대기). `line_ref`·`event_index`·cut 줄 앵커, 측정(`tools/bench_scale.py`)·O1 bisect·O4. `CHANGES.md` |
 | ✅ 9 | **`CLAUDE.md` 축소(≤4KB)** | 10/05 완료(확인 대기). §12 → `12-principles.md`. `CHANGES.md` |
 | ◐ 10 | **반입** — `15 §15.4` 체크리스트 | 10/05 자동 항목 통과, main `7b69cb5` 병합·묶음·sha256 생성. 사내 문자열 검색은 생략(사내→사외 반출 불가, 사용자 판단). 남은 것: `import-v1` 태그 push(세션 권한 밖, 사용자가 직접) |
@@ -61,7 +61,7 @@
 
 ## 막힌 것
 
-- 행동 eval 재실행과 트리거 recall 확인은 실제 Claude 세션이 필요하다(위 3·7).
+- 행동 eval 재실행은 실제 Claude 세션이 필요하다(위 3).
 
 ## 결정
 

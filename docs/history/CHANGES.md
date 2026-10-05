@@ -516,3 +516,9 @@
 | 머리말의 "사내 자료 없이 작성", placeholder·데이터 스택·Ubuntu 문단 | `14-site.md §14.1` |
 
 - 참조 갱신: `CLAUDE.md §12`/`12장` → `12-principles.md`(07·10·11 Phase 13·AGENTS·GUIDE·HTML 안내서·리뷰 문서), `CLAUDE.md §11.0` → `11-phases.md §11.0`(테스트 헬퍼), 문서 지도 → `docs/design/README.md`(14 §14.4). S-1 "읽을 것"에 `12-principles.md` 추가. `CLAUDE.md` 머리말을 가리키는 참조는 그대로 유효. `docs/history/`의 옛 참조는 고치지 않는다(이 표로 찾는다).
+
+## 트리거 측정 (2026-10-05)
+
+- skill-creator `run_loop`(질문 24개, train 15·test 9, 3회, 5반복): 현재 description과 개선안 모두 recall 0~20%, precision 100%. 원인은 측정기다: `run_eval`은 스킬을 임시 커맨드로 넣고 **첫 도구 호출**만 세는데, 로그 분석 요청에서 Claude는 먼저 `ls`로 로그를 찾는다.
+- 실제 플러그인 측정 `tests/skill_evals/trigger_real.py`(`claude -p --plugin-dir plugin`, 처음 4번의 도구 호출 안에 `Skill`): 현재 description과 개선안 모두 recall 100%(14/14)·precision 100%(오트리거 0/10), 질문당 2회. **description은 바꾸지 않았다**(`SKILL.md` 8,191바이트 그대로). 이전 기록의 recall 26~33%는 같은 측정기 결과다.
+- `10-skill-eval.md` 트리거 절에 측정 방법을 적었다.

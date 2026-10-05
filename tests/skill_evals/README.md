@@ -12,6 +12,7 @@
 | `plans/`, `fixtures/` | 미리 올려 둔 PR(eval 16)의 계획과 fixture(`e016-apn-cut.log`, 합성) |
 | `workspace/` | 실행 결과 (커밋하지 않음, `.gitignore`) |
 | `run.py` | 새 격리 환경을 준비하고 Claude Code로 평가 실행. 기존 반복 폴더는 덮어쓰지 않음 |
+| `trigger_real.py` | 실제 플러그인(`--plugin-dir`)을 불러와 `trigger_evals.json`의 트리거를 잰다. skill-creator `run_eval`(첫 도구 호출만 셈)보다 실제에 가깝다 |
 | `grade.py` | 기계 채점과 수동 채점 보존. 미실행·API 오류를 통과로 세지 않음 |
 
 **정의 완료와 행동 평가 통과는 다르다.** 실행·수동 채점 상태는 `DRAFT_NOTES.md`(상태 파일)와 `docs/history/draft-notes-2026-09.md`의 Phase 13 기록을 따른다.

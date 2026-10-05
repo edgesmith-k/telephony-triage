@@ -63,6 +63,8 @@ skill-creator 스킬을 실행하고 아래를 입력으로 준다.
 | "ABC-777은 내가 APN 설정 고쳐서 해결했어, 이슈 DB에 기록만 해줘" | "이 CL 커밋 메시지 다듬어줘" |
 | "분석은 필요 없고 이 Jira를 DATA-001-02로 히스토리에만 올려줘" | |
 
+- 측정: `tests/skill_evals/trigger_real.py`(실제 플러그인 `--plugin-dir`, 처음 4번의 도구 호출 안에 `Skill` 호출이면 트리거). skill-creator `run_eval`은 **첫 도구 호출**만 세서, 로그 분석 요청에서 먼저 `ls`로 로그를 찾는 경우를 미트리거로 잡는다(2026-10-05 측정: 그 방식 recall 0~20%, 실제 플러그인 방식 recall 100%·precision 100%, 24개×2회). description 개선 효과는 실제 플러그인 방식으로 판단한다.
+
 ## eval 케이스 (fixture와 가짜 Jira 요약 사용)
 
 1. 없음 + DATA_DISABLED → `DATA-001 > DATA-001-01` 제안, 확인 후 Jira 기록 파일과 피드백 파일 생성
