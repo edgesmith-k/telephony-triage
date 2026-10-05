@@ -9,14 +9,14 @@
 - clone에는 `.local-draft`가 없다. 첫 메시지를 **"사외 초안 모드로 다음 단계 진행해"** 로 하면 모드를 묻지 않는다(만들어도 됨: `touch .local-draft`).
 - 의존성은 고정 버전으로: `pip install '.[test]'` (데비안 패키지와 충돌하면 `pyproject.toml`의 목록을 `pip install --ignore-installed -r`로). 버전이 다르면 `test_r10_dependency_manifest_has_complete_pins`만 실패한다.
 - **"다음 단계 진행"** = 아래 **"반입 전 보강 트랙"**에서 ☐인 첫 항목을 한다(2·3C·10은 트랙 Z 때). "묻는다"가 붙은 항목은 결정을 먼저 묻는다.
-- 진행 방식(10/05, 사용자 지정): 계획 Opus(Plan 에이전트) → 구현 Sonnet → 메인이 diff 검토·판단 → 관련 테스트(코드 변경이면 전체 `pytest tests`, 약 9분; 문서만이면 관련 테스트) → 커밋·push. 세션에 지정된 브랜치에 push하고 이 표를 갱신한다. 10/05 작업은 모두 main에 병합됐다(브랜치 `ccr-fdf6ebf3-7xq8yd`, PR). 새 세션은 최신 main에서 시작한다.
+- 진행 방식(10/05, 사용자 지정): 계획 Opus(Plan 에이전트) → 구현 Sonnet → 메인이 diff 검토·판단 → 관련 테스트(코드 변경이면 전체 `pytest tests`, 약 9분; 문서만이면 관련 테스트) → 커밋·push. 세션에 지정된 브랜치에 push하고 이 표를 갱신한다. **S2b~S4·10/05 결정은 브랜치 `ccr-fdf6ebf3-7xq8yd`에만 있다(main 미병합)** — 새 세션은 먼저 이 브랜치를 PR로 main에 병합한다. 순서: S5→I1~I5→X(RF-7)→3C→Z.
 
 ## 진행 상태
 
 - 모드: **사외 초안**. 완료 Phase: **D0, 1~13**. RF-0·RF-1 완료.
 - 마지막 전체 테스트: **510개 통과** (10/05, S2b, Ubuntu·Py3.11, 9분). Windows에서는 도구 셸 stdin을 `/dev/null`로, PATH 앞에 실제 Python과 `python3` shim(Store 별칭이면 gh 스텁·git hook이 9009로 실패).
 - 사내 확인 항목: `TODO(SITE)` **73곳**(S22 12곳 추가) — `python3 tools/list_site_todos.py`. `REVIEW-OPEN.md` 0건.
-- 안내서(사람용 HTML, 10/04 1~6단계 반영): `docs/telephony-triage-guide.html` (공유본 https://claude.ai/artifact/1jov1Et4dQUMauFr6aoxWG)
+- 안내서(사람용 HTML): `docs/telephony-triage-guide.html` (공유본 https://claude.ai/artifact/1jov1Et4dQUMauFr6aoxWG)
 
 ### 10/04 세션에서 끝낸 것 (모두 push, **사용자 확인 대기**)
 
