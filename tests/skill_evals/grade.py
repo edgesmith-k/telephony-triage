@@ -29,6 +29,18 @@ def git(repo, *args) -> str:
     return p.stdout if p.returncode == 0 else ""
 
 
+_HEREDOC_RE = re.compile(r"<<-?\s*(['\"]?)(\w+)\1[^\n]*\n.*?^\s*\2\s*$", re.S | re.M)
+
+
+def _strip_heredocs(cmd: str) -> str:
+    """heredoc 본문(실행자가 transcript·commands.md를 쓰는 글)은 실행한 명령이 아니다."""
+    return _HEREDOC_RE.sub("<<heredoc", cmd)
+
+
+def _read(path: Path) -> str:
+    return path.read_text(encoding="utf-8") if path.is_file() else ""
+
+
 class Ctx:
     def __init__(self, env_dir: Path, run_dir: Path):
         self.env = json.loads((env_dir / "env.json").read_text(encoding="utf-8"))
@@ -43,6 +55,8 @@ class Ctx:
         cells = [row.split("|")[2] for row in self.commands.splitlines()
                  if row.lstrip().startswith("|") and row.count("|") >= 3]
         self.invoked = "\n".join(cells or [self.commands]) + "\n" + self.trace()
+        # 실행 기록(events.jsonl)의 실제 Bash 명령도 본다 — commands.md는 실행자가 쓴 요약이라 빠질 수 있다
+        self.invoked += "\n" + "\n".join(_strip_heredocs(str(i.get("command", ""))) for n, i in (self.tool_uses() or []) if n == "Bash")
 
     def trace(self) -> str:
         lines = []
@@ -413,7 +427,10 @@ def checks(eid: int, ctx: Ctx) -> list:
                     t = f.read_text(encoding="utf-8", errors="ignore")
                     bad += [f"{f.name}:{r}" for r in raw if r in t]
             return not bad, str(bad)
-        tok = lambda: ("<IMSI#" in ctx.transcript and "<MSISDN#" in ctx.transcript, "transcript의 토큰 표기(<IMSI#n>·<MSISDN#n>) 여부")
+        def tok():   # 결정적 칸은 드라이버 report.md 그대로 보인다(SKILL Step 6). transcript는 실행자 요약이라 줄이 줄어들 수 있다
+            r = ctx.work / "MOCK-9007" / "report.md"
+            t = r.read_text(encoding="utf-8") if r.is_file() else ""
+            return "<IMSI#" in t and "<MSISDN#" in t and "450081234567890" not in t, "JOB/report.md 근거 줄의 토큰 표기"
         return [tr, files, tok, None, none_remote_lock]
     if eid == 11:
         def staged():
@@ -458,7 +475,8 @@ def checks(eid: int, ctx: Ctx) -> list:
         return ok and not p.is_file(), f"{ev}; plan.json={'있음' if p.is_file() else '없음'}"
     def scope(log):
         """탐색 분석은 timeline.md만 읽는다: 원본 중간 산출물·로그 원문을 열지 않았다."""
-        bad = ctx.opened("events.json", "match.json", "jira_raw.json", "events-full.json", "match-full.json", log)
+        # match.json은 계획 feedback.suggested용으로 일부 읽는 것이 정상 절차(write-flow.md)라 뺀다
+        bad = ctx.opened("events.json", "jira_raw.json", "events-full.json", log)
         seen = "timeline.md" in ctx.opened("timeline.md")
         return seen and not bad, f"timeline.md 열람={seen}; 열면 안 되는 파일={sorted(set(bad))}"
     if eid == 46:
@@ -486,7 +504,7 @@ def checks(eid: int, ctx: Ctx) -> list:
         return [None, append, fs, remote, readme, None, lock_clone]
     if eid == 49:
         def paste():
-            ok = bool(re.search(r"--steps-file\s+\S*MOCK-9049/steps-pasted\.txt", ctx.invoked))
+            ok = bool(re.search(r"--steps-file\s+\S*(?:MOCK-9049|\$\w+|\$\{\w+\})/steps-pasted\.txt", ctx.invoked))
             return ok, "commands.md·드라이버 trace의 --steps-file 인자"
         def anchor():
             a = analysis("MOCK-9049")
@@ -521,7 +539,7 @@ def checks(eid: int, ctx: Ctx) -> list:
             ok = {"op": "append", "cause": "DATA-001-02"} in o and any(
                 x.get("op") == "add-fixture" and x.get("for") == "DATA-001-02" and x.get("kind") == "positive" for x in o)
             return ok, json.dumps(o, ensure_ascii=False)[:400]
-        return [both, lambda: (bool(re.search(r"\(f\d+:L\d+\)", ctx.transcript)), "transcript의 (f<n>:L<m>)"), order,
+        return [both, lambda: (bool(re.search(r"\(f\d+:L\d+\)", _read(ctx.work / "MOCK-9050" / "report.md"))), "JOB/report.md 근거 줄의 (f<n>:L<m>)"), order,
                 None, planned, none_remote_lock]
     return []
 
