@@ -37,6 +37,7 @@ sys.path.insert(0, str(REPO / "tests" / "mocks"))
 sys.path.insert(0, str(REPO / "plugin" / "scripts"))
 
 import logcat_gen  # noqa: E402
+from common import events  # noqa: E402
 import make_log_fixtures  # noqa: E402
 import make_plugin_root  # noqa: E402
 import mock_env  # noqa: E402
@@ -134,6 +135,8 @@ def test_event_snapshots():
         assert snap.exists(), f"{snap.name} 없음 — python3 tests/test_parse_logcat.py --update"
         expected = json.loads(snap.read_text(encoding="utf-8"))
         assert _snapshot_view(data) == expected, f"{name}: 이벤트가 스냅샷과 다릅니다."
+        assert events.validate_events(data["events"]) == [], name
+        assert data["schema"] == events.SCHEMA_VERSION
 
 
 def update_snapshots() -> list[Path]:
@@ -512,6 +515,7 @@ def test_external_parser_merge_and_no_external():
     assert first == "2026-09-20T05:30:03.000Z"
     # 외부 파서 이벤트는 파일 순번만 안다 (줄 번호 없음)
     assert all(e["line_ref"] == {"file_index": 0, "line_no": None} for e in ext)
+    assert events.validate_events(data["events"]) == []
     assert data["external"] == [
         {"category": "data", "adapter": "site_data_existing", "version": "1.2.0", "mode": "merge"}
     ]

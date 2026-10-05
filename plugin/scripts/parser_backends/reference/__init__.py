@@ -11,6 +11,7 @@ from pathlib import Path
 import re
 from typing import Sequence
 
+from common import events
 from .. import logcat, ril
 from ..base import ParserBackend, Window
 
@@ -34,26 +35,21 @@ class ReferenceBackend(ParserBackend):
     # -- 공통 처리 ---------------------------------------------------------
 
     def _line_record(self, line: logcat.LogLine) -> dict:
-        return {
-            "ts": logcat.format_ts(line.dt),
-            "pid": line.pid,
-            "tid": line.tid,
-            "level": line.level,
-            "tag": line.tag,
-            "msg": line.msg,
-            "phone_id": logcat.phone_id(line.tag, line.msg),
-            "category_hint": None,
-            "ril": ril.parse(line.tag, line.msg),
-            "event": None,
-            "fields": {},
-            "source": f"backend:{self.name}",
+        rec = events.make_event(
+            ts=logcat.format_ts(line.dt),
+            pid=line.pid,
+            tid=line.tid,
+            level=line.level,
+            tag=line.tag,
+            msg=line.msg,
+            phone_id=logcat.phone_id(line.tag, line.msg),
+            ril=ril.parse(line.tag, line.msg),
+            source=f"{events.BACKEND_PREFIX}{self.name}",
             # 입력 목록 순번과 물리 줄 번호(1부터). 04-parser-matching.md §5.8 (6).
-            "line_ref": {"file_index": line.file_index, "line_no": line.line_no},
-            "_dt": line.dt,
-            "_file": line.file_index,
-            "_line": line.line_no,
-            "_sub": 0,
-        }
+            line_ref=events.line_ref(line.file_index, line.line_no),
+        )
+        rec.update({"_dt": line.dt, "_file": line.file_index, "_line": line.line_no, "_sub": 0})
+        return rec
 
     def _builtin_record(self, base: dict, event: str, fields: dict, sub: int) -> dict:
         parts = event.split(".")

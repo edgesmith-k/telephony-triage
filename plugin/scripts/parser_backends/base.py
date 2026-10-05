@@ -45,6 +45,7 @@ class ParserBackend(ABC):
         `line_ref`는 `{file_index, line_no}`(입력 `paths`의 0부터 순번, 1부터 센 물리 줄 번호)로, builtin 레코드는
         그 줄 레코드의 값을 그대로 가진다. 줄 위치를 줄 수 없는 백엔드는 `None`을 줘도 된다(`postprocess`가 빠진 키를
         `None`으로 채운다). 경로·본문은 넣지 않는다 (04-parser-matching.md §5.8 (6)).
+        레코드 형식·검사: `common/events.py` (`Event`, `validate_event`).
         RIL 페어링은 윈도우를 자르기 **전에** 파일 전체로 한다."""
 
     @abstractmethod

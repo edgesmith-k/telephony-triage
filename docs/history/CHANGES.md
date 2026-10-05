@@ -588,3 +588,12 @@
 - 오탐 방지: 자리표시 값(`<…>`·`${…}`·`xxxx`·`REDACTED`·`EXAMPLE`·서로 다른 문자 6개 미만)은 제외. 대입·헤더 값은 숫자와 글자가 다 있어야 비밀값으로 본다(순수 영문 식별자는 이제 안 걸림). 키 이름 앞뒤는 30자 상한(긴 줄 제곱 시간 방지).
 - 출력 가림: stderr·`--json`·반입 `--check-boundary`는 비밀값의 앞부분과 길이만 보인다. 예외(`boundary-allow.txt`) 대조는 원문으로 끝난 뒤 가린다.
 - 현재 트리 추가 위반 0건, `boundary-allow.txt` 변경 없음. 테스트: `test_secret_patterns_catch_values`(19줄), `test_secret_placeholders_and_code_pass`, `test_secret_assign_long_line_is_fast`.
+
+## I1 공통 이벤트 레코드 common/events.py (리뷰 §J, RF-3 전제, 2026-10-05)
+
+- 새 `plugin/scripts/common/events.py`(표준 라이브러리만): `EVENT_KEYS`·`RIL_KEYS`·`SCHEMA_VERSION`, `Event`·`LineRef`·`RilAnnotation` TypedDict, `make_event`·`derived_event`(예전 `parse_logcat._derived`), `line_ref`·`ref_key`·`ref_label`, `validate_event`·`validate_events`(키 순서, 타입, `source`와 이벤트 이름 공간, `ril`, `line_ref`; 예외 없이 위반 목록).
+- 사용처: reference 백엔드 `_line_record`, `parse_logcat`(파생 이벤트·외부 파서 이벤트 생성, `cut` 앵커의 `ref_key`, `OUTPUT_SCHEMA`), `triage`(`_ref_label`·`_unique_evidence`). 후처리와 builtin 레코드는 그대로. `parse_logcat`에서는 지역 변수 `events`와 겹쳐 `evt`로 import한다.
+- 출력 동일: `test_parse_logcat.py --update`로 스냅샷 diff 없음, 골든 그대로.
+- 문서: `07 §Step 3`에 `ril.paired_ts·latency_ms`와 응답 없는 요청의 `observed_until` 기록, `04 §5.8 (6)`·`contracts.md`·`01`에 코드 위치.
+- 테스트: 새 `tests/test_events.py`(키 순서·기본값, 파생 상속, `line_ref` 도우미, 스냅샷 전체 검증, 깨진 이벤트 22종). `test_parse_logcat`(스냅샷·외부 어댑터)와 `test_golden`(모의 사내 백엔드 raw 출력)에도 `validate_event` 검사.
+- 범위 밖: 파생 이벤트의 `msg` 복사 제거(RF-1).

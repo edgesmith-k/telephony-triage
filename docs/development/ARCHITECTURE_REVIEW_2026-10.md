@@ -332,7 +332,7 @@ EXTERNAL-SAFE (이 레포 그대로; 외부 Codex가 자유롭게 개발·테스
 
 | 모델 | 지금 어디에 (사실상 존재) | 상태 | 조치 |
 |---|---|---|---|
-| **NormalizedLogEvent** | 파서 이벤트 `{ts(UTC ISO), pid, tid, level, tag, msg, phone_id, category_hint, ril{serial,dir,request,error,paired_ts,latency_ms}, event, fields{str}, source}` (`S/parser_backends/base.py` docstring, `D/07 Step 3`) | 안정. 문서로만 정의 | `S/common/events.py`에 `TypedDict` + `validate_event()` + `schema_version`. 파생 이벤트의 `msg` 복사 대신 `line_ref: {file_index, line_no}` 추가 (HANDOFF R7) — *(2026-10-05: `line_ref`는 추가됨(`D/04 §5.8 (6)`), `msg` 복사 제거는 열림. `common/events.py`는 `line_ref`를 포함해야 한다)* |
+| **NormalizedLogEvent** | 파서 이벤트 `{ts(UTC ISO), pid, tid, level, tag, msg, phone_id, category_hint, ril{serial,dir,request,error,paired_ts,latency_ms}, event, fields{str}, source}` (`S/parser_backends/base.py` docstring, `D/07 Step 3`) | 안정. 문서로만 정의 | `S/common/events.py`에 `TypedDict` + `validate_event()` + `schema_version`. 파생 이벤트의 `msg` 복사 대신 `line_ref: {file_index, line_no}` 추가 (HANDOFF R7) — *(2026-10-05: `line_ref`는 추가됨(`D/04 §5.8 (6)`), `msg` 복사 제거는 열림. `common/events.py`는 `line_ref`를 포함해야 한다)* — *I1 완료 (2026-10-05): `S/common/events.py`(`Event`·`LineRef` TypedDict, `make_event`·`derived_event`·`validate_event`, `SCHEMA_VERSION`). 출력 동일. `msg` 복사 제거는 열림* |
 | **ParserBackend** | `base.py` `parse(paths, tz, year, window)`, `coverage()`, `builtin_events()`, `version()` | 안정 | 그대로. `name`·`platform` 속성 추가 |
 | **ExternalParserAdapter** | `adapters/base.py` `ADAPTER_NAME, VERSION, convert(raw, meta)` | 안정 | 그대로 |
 | **NormalizedIssue** | `jira_fields.py extract` 출력 `{key, jira{model,sw,android_version,carrier,occurred_on}, occurred_at, text{summary,description,comments[]}, sim_slot, components[], missing[]}` | 안정 | 이름만 붙이고(`S/common/issue.py`), **Jira 외 소스**(파일, 다른 트래커)도 같은 형식을 내게. `comments`에 `created`·`index`를 넣어 선택 절삭 가능하게 |
@@ -674,7 +674,7 @@ telephony-triage/  (EXTERNAL-SAFE 레포 = canonical)
 - **Files to Modify**: `S/parser_backends/__init__.py`(shim: `reference` → `platforms.android.backend`), `S/parse_logcat.py`(bugreport 부분 import), `S/code_roots.py`(상수 → `platforms.load().source_tree`), `S/config.py`(`platform` 키 노출), `plugin/site-defaults.example.yaml`(`platform: android`), `T/mocks/parser_backends/site/__init__.py`(import 경로 — 사내 site 백엔드도 같은 변경이 필요하므로 **re-export shim을 유지**해 사내 수정 0으로).
 - **Files to Add**: `S/platforms/__init__.py`, `S/platforms/android/{__init__,logcat,ril,bugreport,backend}.py`, `tests/test_platforms.py`.
 - **Files to Remove**: `S/parser_backends/{logcat,ril}.py`, `reference/`(shim 모듈만 남김).
-- **Dependencies**: RF-1(events.py).
+- **Dependencies**: RF-1(events.py). *(events.py는 I1 2026-10-05 완료)*
 - **Token Impact**: 사내 포팅 pack이 `platforms/android/`로 명확해짐.
 - **Security Impact**: 없음. `check_boundary`의 import 방향 규칙에 `platforms/*` 포함.
 - **Risk**: `T/fixtures/logs/*.events.json` 스냅샷은 바이트 동일해야 함.

@@ -64,7 +64,7 @@ from pathlib import Path
 SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS))
 
-from common import compat, failedstep, masking, site_defaults, stepanchor, userconfig  # noqa: E402
+from common import compat, events, failedstep, masking, site_defaults, stepanchor, userconfig  # noqa: E402
 from common.exitcodes import CHECK_FAILED, OK, USAGE  # noqa: E402
 from parser_backends import logcat as lc  # noqa: E402
 
@@ -103,11 +103,7 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
-def _ref_label(ref) -> str | None:
-    """근거 줄 위치 → `f<입력 순번>:L<줄>` (report.md 전용). 줄 번호를 모르면 None."""
-    if isinstance(ref, dict) and ref.get("line_no"):
-        return f"f{ref['file_index']}:L{ref['line_no']}"
-    return None
+_ref_label = events.ref_label   # report.md 전용 `f<순번>:L<줄>`
 
 
 def _unique_evidence(evidence: list) -> list:
@@ -117,8 +113,9 @@ def _unique_evidence(evidence: list) -> list:
     seen, out = set(), []
     for e in evidence:
         ref, idx = e.get("line_ref"), e.get("event_index")
-        if isinstance(ref, dict) and ref.get("line_no"):
-            key = ("l", ref.get("file_index"), ref["line_no"])
+        ref_pos = events.ref_key(ref)
+        if ref_pos is not None:
+            key = ("l", *ref_pos)
         elif idx is not None:
             key = ("i", idx)
         else:

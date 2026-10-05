@@ -51,11 +51,12 @@ sys.path.insert(0, str(SCRIPTS))
 import adapters  # noqa: E402
 import parser_backends  # noqa: E402
 from common import compat, masking, parser_rules, site_defaults, stepanchor  # noqa: E402
+from common import events as evt  # noqa: E402
 from common.patterns import DEFAULT_TIMEOUT_MS, PatternError, PatternRunner, PatternTimeout  # noqa: E402
 from common.exitcodes import OK, USAGE  # noqa: E402
 from parser_backends import logcat  # noqa: E402
 
-OUTPUT_SCHEMA = 1
+OUTPUT_SCHEMA = evt.SCHEMA_VERSION  # markers 출력도 같은 번호
 DEFAULT_MINUTES = 5
 
 
@@ -64,24 +65,6 @@ class UsageError(Exception):
 
 
 # -- 공통 후처리 ------------------------------------------------------------
-
-
-def _derived(base: dict, event: str, fields: dict, source: str) -> dict:
-    return {
-        "ts": base["ts"],
-        "pid": base.get("pid"),
-        "tid": base.get("tid"),
-        "level": base.get("level"),
-        "tag": base.get("tag"),
-        "msg": base.get("msg"),
-        "phone_id": base.get("phone_id"),
-        "category_hint": base.get("category_hint"),
-        "ril": None,
-        "event": event,
-        "fields": {k: str(v) for k, v in fields.items()},
-        "source": source,
-        "line_ref": base.get("line_ref"),
-    }
 
 
 def _ril_events(rec: dict, rules: parser_rules.Rules, last_ts: str | None) -> list[dict]:
@@ -98,14 +81,13 @@ def _ril_events(rec: dict, rules: parser_rules.Rules, last_ts: str | None) -> li
     out = []
     if ann["dir"] == "resp":
         if ann["error"] not in (None, "NONE"):
-            out.append(_derived(rec, "ril_error", {**base_fields, "error": ann["error"]}, "rules"))
+            out.append(evt.derived_event(rec, "ril_error", {**base_fields, "error": ann["error"]}))
         if ann["latency_ms"] is not None and ann["latency_ms"] > timeout:
             out.append(
-                _derived(
+                evt.derived_event(
                     rec,
                     "ril_timeout",
                     {**base_fields, "latency_ms": ann["latency_ms"], "timeout_ms": timeout},
-                    "rules",
                 )
             )
     elif ann["paired_ts"] is None and last_ts is not None:
@@ -113,7 +95,7 @@ def _ril_events(rec: dict, rules: parser_rules.Rules, last_ts: str | None) -> li
         deadline = logcat.parse_ts(rec["ts"]) + timedelta(milliseconds=timeout)
         if logcat.parse_ts(last_ts) >= deadline:
             out.append(
-                _derived(rec, "ril_no_response", {**base_fields, "timeout_ms": timeout}, "rules")
+                evt.derived_event(rec, "ril_no_response", {**base_fields, "timeout_ms": timeout})
             )
     return out
 
@@ -140,7 +122,7 @@ def _run_extractors(lines: list[dict], rules: parser_rules.Rules, timeout_ms: in
                     for i in hits:
                         groups = pattern.search(msgs[i]).groupdict()
                         fields = {f: groups[f] for f in ex.fields if groups.get(f) is not None}
-                        found.append((i, _derived(lines[i], ex.event, fields, "rules")))
+                        found.append((i, evt.derived_event(lines[i], ex.event, fields)))
                     remaining = [i for i in remaining if i not in hit_set]
             except (PatternTimeout, PatternError) as exc:
                 errors.append({"extractor": ex.id, "error": str(exc)})
@@ -298,22 +280,21 @@ def _run_external(
             if window and not (window[0] <= dt <= window[1]):
                 continue
             events.append(
-                {
-                    "ts": logcat.format_ts(dt),
-                    "pid": item.get("pid"),
-                    "tid": item.get("tid"),
-                    "level": item.get("level"),
-                    "tag": item.get("tag"),
-                    "msg": item.get("msg") or "",
-                    "phone_id": item.get("phone_id"),
-                    "category_hint": category,
-                    "ril": None,
-                    "event": name,
-                    "fields": {k: str(v) for k, v in (item.get("fields") or {}).items() if v is not None},
-                    "source": f"external:{module.ADAPTER_NAME}",
+                evt.make_event(
+                    ts=logcat.format_ts(dt),
+                    pid=item.get("pid"),
+                    tid=item.get("tid"),
+                    level=item.get("level"),
+                    tag=item.get("tag"),
+                    msg=item.get("msg") or "",
+                    phone_id=item.get("phone_id"),
+                    category_hint=category,
+                    event=name,
+                    fields={k: str(v) for k, v in (item.get("fields") or {}).items() if v is not None},
+                    source=f"{evt.EXTERNAL_PREFIX}{module.ADAPTER_NAME}",
                     # 외부 파서는 파일만 안다 (줄 번호 없음).
-                    "line_ref": {"file_index": file_index, "line_no": None},
-                }
+                    line_ref=evt.line_ref(file_index),
+                )
             )
     if dropped:
         warnings.append(
@@ -891,14 +872,15 @@ def _cut_anchors(args, lines: list) -> tuple[set[int], dict, list[dict]]:
     for e in evidence:
         ref = e.get("line_ref") or {}
         key = (e["ts"], e.get("tag"))
-        i = position.get((ref.get("file_index"), ref.get("line_no"))) if ref.get("line_no") else None
+        ref_pos = evt.ref_key(ref)
+        i = position.get(ref_pos) if ref_pos else None
         if i is not None and (logcat.format_ts(lines[i][1].dt), lines[i][1].tag) == key:
             anchors.add(i)
             by["line_ref"] += 1
             continue
         anchors.update(by_ts_tag.get(key, []))
         by["ts_tag"] += 1
-        mismatch = mismatch or bool(ref.get("line_no"))
+        mismatch = mismatch or ref_pos is not None
     warnings = []
     if mismatch:
         warnings.append({"code": "evidence-ref-mismatch",

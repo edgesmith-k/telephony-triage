@@ -45,7 +45,7 @@ sys.path.insert(0, str(REPO / "plugin" / "scripts"))
 
 import logcat_gen  # noqa: E402
 import parser_backends  # noqa: E402  (plugin/scripts/parser_backends)
-from common import masking  # noqa: E402
+from common import events as evrec, masking  # noqa: E402
 
 MOCK_SITE_DIR = REPO / "tests" / "mocks" / "parser_backends" / "site"
 
@@ -199,6 +199,7 @@ def test_backend_emits_line_ref(tmp_path=None):
         raw = log.read_text(encoding="utf-8").split("\n")
         for n, event in enumerate(events):
             assert list(event)[-1] == "line_ref", case["name"]
+            assert evrec.validate_event(event) == [], case["name"]
             ref = event["line_ref"]
             assert ref["file_index"] == 0 and ref["line_no"] >= 1, (case["name"], ref)
             assert event["tag"] in raw[ref["line_no"] - 1], (case["name"], ref)
