@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 from datetime import date
@@ -169,20 +170,26 @@ def cmd_find_symbol(args, defaults) -> dict:
     cls, sep, member = args.symbol.partition("#")
     name_re = re.compile(rf"\b(?:class|interface|enum|object)\s+{re.escape(cls)}\b") if sep else None
     member_re = re.compile(rf"\b{re.escape(member if sep else cls)}\s*\(")
+    needle = cls.encode("utf-8")  # `Class#method`는 클래스 이름, 함수 이름만 주면 그 이름 (정규식이 둘 다 글자 그대로를 요구한다)
     matches = []
     for key, value in sorted(roots.items()):
         root = Path(value).expanduser()
         if not root.is_dir():
             continue
-        for path in sorted(root.rglob("*")):
-            if path.suffix not in SOURCE_SUFFIXES or not path.is_file():
+        # 소스 트리가 크므로 확장자로 먼저 거르고, 심볼 글자가 바이트에 없는 파일은 해석하지 않는다.
+        # (순서는 예전 `sorted(root.rglob("*"))`와 같다: 링크는 따라가지 않고 Path 순으로 정렬)
+        found = []
+        for base, _dirs, names in os.walk(root, followlinks=False):
+            found += [Path(base) / n for n in names if Path(n).suffix in SOURCE_SUFFIXES]
+        for path in sorted(found):
+            if not path.is_file():
                 continue
-            if sep and path.stem != cls:
-                text = path.read_text(encoding="utf-8", errors="replace")
-                if not name_re.search(text):
-                    continue
-            else:
-                text = path.read_text(encoding="utf-8", errors="replace")
+            # 클래스 이름과 파일 이름이 같으면 본문에 없어도 `class`로 낸다(아래 else). 그 밖에는 이름이 본문에 있어야 한다.
+            if not (sep and path.stem == cls) and needle not in path.read_bytes():
+                continue
+            text = path.read_text(encoding="utf-8", errors="replace")
+            if sep and path.stem != cls and not name_re.search(text):
+                continue
             rel = path.relative_to(root).as_posix()
             for line_no, line in enumerate(text.splitlines(), 1):
                 if member_re.search(line):

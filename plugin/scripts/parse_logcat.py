@@ -80,6 +80,7 @@ def _derived(base: dict, event: str, fields: dict, source: str) -> dict:
         "event": event,
         "fields": {k: str(v) for k, v in fields.items()},
         "source": source,
+        "line_ref": base.get("line_ref"),
     }
 
 
@@ -188,9 +189,12 @@ def postprocess(
             if ann:
                 category = rules.ril_category(ann["request"]) or category
             rec = dict(rec, category_hint=category)
+            rec.setdefault("line_ref", None)
             kept.append(_mask_record(rec, masker) if masker else rec)
         else:
-            kept.append(_mask_record(rec, masker) if masker else dict(rec))
+            rec = dict(rec)
+            rec.setdefault("line_ref", None)
+            kept.append(_mask_record(rec, masker) if masker else rec)
 
     line_pos = [i for i, rec in enumerate(kept) if rec.get("event") is None]
     extracted = _run_extractors([kept[i] for i in line_pos], rules, timeout_ms, errors)
@@ -252,7 +256,7 @@ def _run_external(
     prefix = f"ext.{category}."
     events, warnings = [], []
     dropped = 0
-    for path in paths:
+    for file_index, path in enumerate(paths):
         argv = [
             str(a).replace("${CLAUDE_PLUGIN_ROOT}", str(plugin_root)).replace("{log}", str(path))
             for a in command
@@ -307,6 +311,8 @@ def _run_external(
                     "event": name,
                     "fields": {k: str(v) for k, v in (item.get("fields") or {}).items() if v is not None},
                     "source": f"external:{module.ADAPTER_NAME}",
+                    # 외부 파서는 파일만 안다 (줄 번호 없음).
+                    "line_ref": {"file_index": file_index, "line_no": None},
                 }
             )
     if dropped:
@@ -852,15 +858,21 @@ def run_extract_bugreport(args) -> dict:
 # -- cut ------------------------------------------------------------------------
 
 
-def _cut_anchors(args, lines: list) -> set[int]:
-    """앵커 줄의 전체 순번 집합."""
+def _cut_anchors(args, lines: list) -> tuple[set[int], dict, list[dict]]:
+    """(앵커 줄의 전체 순번 집합, 앵커 방식별 근거 수, 경고).
+
+    `--evidence`는 근거마다 `line_ref`(`match.json` 근거의 줄 위치)가 가리키는 줄을 앵커로 삼는다.
+    그 줄이 입력에 있고 시각·태그가 근거와 같을 때만이다(입력 파일이 `events.json`의 `input.files`와
+    같은 순서가 아니면 어긋난다). 아니면 그 근거만 예전처럼 `(ts, tag)`가 같은 모든 줄을 앵커로 삼고
+    `line_ref`가 있었는데 못 쓴 경우 경고 `evidence-ref-mismatch`를 낸다 (04-parser-matching.md §5.8 (6))."""
     if args.around:
         try:
             center = logcat.parse_ts(args.around)
         except ValueError as exc:
             raise UsageError(f"--around는 타임존이 있는 ISO 시각이어야 합니다: {exc}") from exc
         span = timedelta(seconds=args.seconds)
-        return {i for i, (_, line, _) in enumerate(lines) if center - span <= line.dt <= center + span}
+        found = {i for i, (_, line, _) in enumerate(lines) if center - span <= line.dt <= center + span}
+        return found, {"line_ref": 0, "ts_tag": 0}, []
     try:
         match = json.loads(Path(args.evidence).read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
@@ -869,8 +881,30 @@ def _cut_anchors(args, lines: list) -> set[int]:
     evidence = candidates[0].get("evidence") if candidates else None
     if not evidence:
         raise UsageError("--evidence: 1위 후보에 근거가 없습니다.")
-    wanted = {(e["ts"], e.get("tag")) for e in evidence}
-    return {i for i, (_, line, _) in enumerate(lines) if (logcat.format_ts(line.dt), line.tag) in wanted}
+    position = {(fi, line.line_no): i for i, (fi, line, _) in enumerate(lines)}
+    by_ts_tag: dict[tuple, list[int]] = {}
+    for i, (_, line, _) in enumerate(lines):
+        by_ts_tag.setdefault((logcat.format_ts(line.dt), line.tag), []).append(i)
+    anchors: set[int] = set()
+    by = {"line_ref": 0, "ts_tag": 0}
+    mismatch = False
+    for e in evidence:
+        ref = e.get("line_ref") or {}
+        key = (e["ts"], e.get("tag"))
+        i = position.get((ref.get("file_index"), ref.get("line_no"))) if ref.get("line_no") else None
+        if i is not None and (logcat.format_ts(lines[i][1].dt), lines[i][1].tag) == key:
+            anchors.add(i)
+            by["line_ref"] += 1
+            continue
+        anchors.update(by_ts_tag.get(key, []))
+        by["ts_tag"] += 1
+        mismatch = mismatch or bool(ref.get("line_no"))
+    warnings = []
+    if mismatch:
+        warnings.append({"code": "evidence-ref-mismatch",
+                         "message": "근거의 줄 위치(line_ref)가 입력과 맞지 않아 (시각, 태그)로 앵커를 찾았습니다. "
+                                    "parse에 준 로그를 같은 순서로 주세요 (events.json input.files 순서)."})
+    return anchors, by, warnings
 
 
 def run_cut(args) -> dict:
@@ -889,10 +923,12 @@ def run_cut(args) -> dict:
         raise UsageError(str(exc)) from exc
     lines = []  # (파일 순번, LogLine, 원문 줄)
     for index, path in enumerate(paths):
-        raw = path.read_text(encoding="utf-8", errors="replace").splitlines()
+        # `read_file`과 같은 방식으로 줄을 센다(`splitlines`는 \x0c 등에서도 끊어 줄 번호가 어긋난다).
+        with open(path, encoding="utf-8", errors="replace", newline="") as fh:
+            raw = [text.rstrip("\r\n") for text in fh]
         parsed, _ = logcat.read_file(path, index, args.tz, args.year)
         lines += [(index, line, raw[line.line_no - 1]) for line in parsed]
-    anchors = _cut_anchors(args, lines)
+    anchors, anchors_by, warnings = _cut_anchors(args, lines)
     if not anchors:
         raise UsageError("앵커 줄이 없습니다 (시각·근거가 로그 범위 밖이거나 --tz/--year가 다름).")
 
@@ -926,10 +962,11 @@ def run_cut(args) -> dict:
         "out": str(out),
         "lines": len(masked),
         "anchors": len(anchors),
+        "anchors_by": anchors_by,
         "context": context,
         "masked": True,
         "replacements": dict(sorted(masker.counts.items())),
-        "warnings": [],
+        "warnings": warnings,
     }
 
 

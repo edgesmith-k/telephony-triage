@@ -44,7 +44,7 @@
 | R4 High, 구현 결함 | RIL pairing은 파일별인데 무응답 deadline에는 전체 입력 last_ts를 쓴다. | 회전 파일의 정상 응답을 놓치거나 다른 버퍼의 긴 coverage로 무응답을 생성한다. | `S/parser_backends/reference/__init__.py::parse`, `ril.py::pair`, `S/parse_logcat.py::_ril_events/run_parse`: 같은 capture의 회전 파일 연결, 스트림별 coverage, 부팅/장치 경계. `D/07` Step 3, `D/16` §16.3. |
 | R5 High, 구현 결함 | 외부 parser 실패는 warning만 되며 replace는 실패 시에도 backend 이벤트를 제거한다. 검증은 이 warning을 오류로 보지 않는다. | 관측 실패를 C=0으로 해석해 recovery만 남으면 passed 가능. | `S/parse_logcat.py::_run_external/run_parse`, `S/db_regress.py::match_errors`(278), `S/db_verify.py::judge_resolution/judge_fix`(686/717): 필요한 parser의 completeness 확인, 실패는 unknown/환경 오류. `D/05` §5.12, `D/16` §16.3. |
 | R6 High, spec·prompt 결함 | 승인 메시지를 `commit -m`의 큰따옴표 안에 그대로 삽입하도록 지시한다. 외부 텍스트의 instruction 경계도 명시하지 않는다. | 메시지의 shell 메타문자가 코드로 평가될 위험. PII 마스킹·승인 해시로 해결되지 않음. | `K/reference/write-flow.md:103`, `C/sync-pr.md:40`, `D/07` Step 8-6: 메시지 파일 + commit -F 또는 argv helper. add/commit 별도 호출·git hook 유지. Jira/log/source는 데이터로만 취급. |
-| R7 Medium, spec 공백 | backend의 `_file/_line`을 버리고 evidence가 시각·태그 중심이다. cut도 `(ts, tag)`로 앵커를 재탐색한다. | 중복 시각·태그에서 원본 근거 식별과 fixture 선택이 불명확. | backend→derived event→Evaluator→report→`S/parse_logcat.py::_cut_anchors`에 input ID/원본 행/event ID 유지. `D/04` 이벤트 계약, `D/07` Step 6 보완. |
+| R7 Medium, spec 공백 (완료: line_ref·event_index·cut 앵커(2026-10-05)) | backend의 `_file/_line`을 버리고 evidence가 시각·태그 중심이다. cut도 `(ts, tag)`로 앵커를 재탐색한다. | 중복 시각·태그에서 원본 근거 식별과 fixture 선택이 불명확. | backend→derived event→Evaluator→report→`S/parse_logcat.py::_cut_anchors`에 input ID/원본 행/event ID 유지. `D/04` 이벤트 계약, `D/07` Step 6 보완. |
 | R8 Medium, spec 결함 (완료: 정렬 키 동점 해소(2026-10-04)) | 기본 S=C=1이면 base=1.0, 보너스는 min(1.0)에서 포화된다. 피드백이 없으면 여러 원인이 ID 순 동점이며 이를 신뢰도로 표시한다. | 시간 근접성이 순위에 반영되지 않고 규칙 일치가 원인 확정처럼 보인다. | `S/match_signatures.py::_candidate`, `K/SKILL.md` Step 6: 규칙 일치 점수와 진단 신뢰도 분리. ranking 변경은 합의 후 `D/04` §5.11 동기화. |
 | R9 Medium, spec 모호성 | command/reference는 흔적 없으면 중단, Python과 reference의 다른 줄은 비코드 원인에 user_confirmation_required 예외를 허용한다. | 동일 입력에서 서로 다른 안내·불필요한 차단. | `C/verify-fix.md`, `K/reference/verify.md:91~93`, `S/db_verify.py::judge_fix`; `D/05` §5.12와 `D/07` verify-fix의 충돌을 유형별 분기로 먼저 정리. |
 | R10 Medium, prompt 결함 | validate는 config clone을 선택한 뒤 경로 없는 git fetch를 지시하고 base_branch 설정 위치도 잘못 적는다. | cwd가 plugin repo면 다른 remote를 fetch, DB의 오래된 ref/잘못된 base 검사. | `C/validate.md:20~22`: resolved DB로 git -C/--db 통일, 사용자 config의 issue_db.base_branch 사용. `D/contracts` §3.2. |
@@ -52,7 +52,7 @@
 | R12 Medium, context 결함 | record는 analyze를 읽지 말라면서 SKILL Step 0/2를 참조하고 sync-pr 절차는 command/reference에 중복된다. | 불필요한 로드, 예외 규칙 drift. | `C/record.md`, `K/reference/record.md/verify.md/sync-pr.md`, `C/sync-pr.md`: 작은 공통 실행 규칙, 흐름별 단일 원본. `D/10` SKILL 구성. |
 | R13 Medium, 검증 공백 | runner는 SKILL 직접 Read, mock CLI, 빈 MCP; plugin-dir/실제 Skill/guard 연결이 없다. 일부 채점은 모델 작성 commands.md 문자열을 본다. | workflow eval 통과를 실제 plugin 작동 통과로 오해할 수 있음. | `tests/skill_evals/run.py::evaluation_prompt/execute`, `grade.py`: 실제 tool trace 채점 + 별도 설치 통합 평가. README의 한계를 유지. `D/10`, `D/11` Phase 13, `D/14` S1. |
 | R14 Medium, 제품 범위 공백 | Jira/DB 중심 진입, analyzer는 1위 카테고리 의존, plan 재개만 있고 입력 hash·가설 수정 상태는 없다. | 후보 없는 신규 문제·추가 로그·부분 재분석 UX가 약함. | `C/analyze.md`, `K/SKILL.md` Step 0/2/5-1: 합의 후 분석 전용 경로·analysis manifest. Jira는 기록 시 필수로 분리하는 안. v11 위반으로 취급하지 않음. |
-| R15 Medium, 규모 위험 | 전체 파일 결합·coverage·parse 중복 적재, window 후보마다 hit 순회, symbol 전체 트리 검색. | 대용량 메모리/시간 비용, window 탐색은 많은 hit에서 이차 비용 가능. | `S/parse_logcat.py::_read_texts`, backend coverage/parse, `Evaluator._search_window`, `S/code_roots.py::cmd_find_symbol`: 대표 크기 측정 후 결과 재사용·sliding window·검색 범위 제한. GB급 장애는 미측정. |
+| R15 Medium, 규모 위험 (부분 완료: 측정·O1 bisect·O4 find-symbol 사전 필터(2026-10-05); 색인·범위 제한은 보류) | 전체 파일 결합·coverage·parse 중복 적재, window 후보마다 hit 순회, symbol 전체 트리 검색. | 대용량 메모리/시간 비용, window 탐색은 많은 hit에서 이차 비용 가능. | `S/parse_logcat.py::_read_texts`, backend coverage/parse, `Evaluator._search_window`, `S/code_roots.py::cmd_find_symbol`: 대표 크기 측정 후 결과 재사용·sliding window·검색 범위 제한. GB급 장애는 미측정. |
 
 ### Evidence already obtained
 
@@ -111,14 +111,14 @@ R14~R15. 반복 분석·자연어 진입·대용량 비용을 측정하고 단�
 
 Completed: RF-0 R1~R11 결함별 수정·커밋 및 session 임시 플러그인 루트 적용(남은 격리 테스트는 RF-1 커밋에서 해제). RF-1(I3) driver·SKILL·커맨드·외부 리뷰 토큰 항목. 이 문서 원래 R7~R11과 외부 리뷰의 RF-0 R7~R11은 번호 체계가 다르다. 원본 행 provenance 등 RF-0에 포함되지 않은 요구는 완료로 간주하지 않는다.
 
-Remaining (이 문서 원래 번호): R7 provenance, ~~R8 점수/신뢰도~~(정렬 키 동점 해소(2026-10-04)), ~~R9 verify-fix 예외~~(유형별 분기로 문서 정리(2026-10-04)), ~~R11 지식 단정~~(관측·추론·반례 구분(2026-10-04)), R12 context 중복, R13 실제 통합 평가, R14 UX, R15 규모 개선. 원래 R10(validate 대상)은 RF-0 R11로 수정했다.
+Remaining (이 문서 원래 번호): ~~R7 provenance~~(line_ref·event_index·cut 앵커(2026-10-05)), ~~R8 점수/신뢰도~~(정렬 키 동점 해소(2026-10-04)), ~~R9 verify-fix 예외~~(유형별 분기로 문서 정리(2026-10-04)), ~~R11 지식 단정~~(관측·추론·반례 구분(2026-10-04)), R12 context 중복, R13 실제 통합 평가, R14 UX, R15 규모 개선(부분 완료: 측정·O1·O4(2026-10-05), 색인·범위 제한 보류). 원래 R10(validate 대상)은 RF-0 R11로 수정했다.
 
 ## Next Actions
 
 > 2026-10-01 갱신. 순서의 단일 원본은 `DRAFT_NOTES.md` "활성 트랙과 순서" 표다. I0~I2는 리뷰 문서의 **RF-0**에 흡수됐고, 외부 리뷰가 찾은 R7~R11이 추가됐다(리뷰 문서 머리 "외부 리뷰 결과").
 
 1. **Phase 13** (I5) ✅ 10/03 완료(사용자 결정). 결과는 이력 파일 "Phase 13 행동 평가 결과". 남은 실패 4건은 RF-1 후속(아래 2번)과 함께, 트리거는 사내 S-2.
-2. **RF-1 후속**(Phase 13 결과에 따라): R7 provenance(`line_ref`, `common/events.py`), `config.py show --keys`, R9 verify-fix 예외·R11 지식 단정, `CLAUDE.md` ≤4KB(§12 이동 사용자 결정 후).
+2. **RF-1 후속**(Phase 13 결과에 따라): ~~R7 provenance(`line_ref`)~~(2026-10-05 완료; `common/events.py`는 `line_ref`를 포함해 남음), `config.py show --keys`, R9 verify-fix 예외·R11 지식 단정, ~~`CLAUDE.md` ≤4KB~~(2026-10-05 완료, §12 → `docs/design/12-principles.md`).
 3. **RF-2**: Phase 13 뒤 반입 staging·crash 복구·경계 검사·사외 CI. 이번 apply 예외 rollback을 전체 트랜잭션 내구성으로 간주하지 않는다.
 
 ## Regression Requirements

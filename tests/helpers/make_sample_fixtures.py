@@ -41,7 +41,7 @@ from common import masking  # noqa: E402
 
 def mask_log(path: Path, allow_patterns=()) -> None:
     """생성한 로그를 마스킹해서 다시 쓴다 (모든 테스트 로그는 마스킹된 fixture만 쓴다,
-    CLAUDE.md §11.0). 파일마다 마스커 하나 — `mask_pii.py <file> --in-place`와 같다."""
+    11-phases.md §11.0). 파일마다 마스커 하나 — `mask_pii.py <file> --in-place`와 같다."""
     text = path.read_text(encoding="utf-8")
     masker = masking.new_masker(text, allow_patterns)
     path.write_text("\n".join(masker(line) for line in text.split("\n")), encoding="utf-8", newline="\n")

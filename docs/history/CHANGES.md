@@ -471,3 +471,48 @@
 - 커맨드 `analyze`·`record`에 붙여넣기 안내(`WD/<KEY>/steps-pasted.txt` → `--steps-file`)와 `--clock-offset`.
 - 테스트: `tests/test_step_order.py`, `test_step_anchor.py`(장비 시계 어긋남), `test_failed_step.py`(html·zip·붙여넣기), `test_db_lint.py`(`step-event`), 합성 시나리오 `step-order`, 변형 DB `issue-db-step-events`.
 - 미룸: 시계 차 자동 추정, 중첩 zip, MCP 첨부 가져오기(`99-deferred.md`).
+
+## 하위 스크립트 같은 프로세스 호출 (2026-10-04)
+
+- `common/checks.run_script`(`db_pr`·`db_precommit`·`guard`가 쓰는 검사 단계)와 `db_verify._script`가 하위 스크립트를 subprocess 대신 같은 프로세스에서 `main(argv)`로 부른다(`run_in_process`). 계약은 같다: 반환값이 종료 코드, `SystemExit`는 그 코드(None은 0, 문자열은 stderr + 1), 그 밖의 예외(import 오류 포함)는 traceback을 stderr에 쓰고 1. stdout은 JSON으로 파싱한다. `env`를 주거나 `TT_SCRIPT_SUBPROCESS=1`이면 예전처럼 subprocess. `checks.py`의 top-level import는 그대로 stdlib와 `common.exitcodes`뿐이다(guard).
+- `common/patterns.py`: 정규식 시간 상한용 작업 프로세스를 runner마다 spawn하지 않고 프로세스 안에서 공유한다. 본문은 runner가 처음 패턴을 돌릴 때 보내고, 다른 runner가 끼어들면 다시 보낸다. 시간 초과면 그 프로세스를 끝내고 다음 패턴에서 새로 띄운다(상한·`PatternTimeout` 동작 불변).
+- 효과(이 컨테이너, 합성 샘플 DB): `stage` 한 번 6.9~10.8초 → 1.5~2.1초, `pytest tests/test_db_pr.py tests/test_checks.py` 418s → 138s.
+- 테스트: `tests/test_inprocess.py`(종료 코드 계약, subprocess와 결과 일치, 작업 프로세스 재사용·본문 교체·시간 초과 후 재기동).
+
+## db_add.py 분할 (2026-10-05)
+
+- 동작·CLI·출력 동일. `db_add.py`(1,377줄)는 CLI만(112줄) 두고 구현을 `plugin/scripts/dbadd/`로 옮겼다: `core`(상수·오류·계획 읽기·검사·`Tree`), `applier`(`Applier`·`cmd_apply`, 임시 ID·fixture 이름·피드백), `ops/`의 op 메서드 믹스인 7개(`jira`·`entities`·`fix`·`resolution`·`signature`·`fixture`·`parser_rules`), `drift`, `ids`(check-ids·renumber), `similar`. 함수 본문은 그대로 옮겼고 바뀐 참조는 drift의 `Applier._rule_key` → `ParserRuleOps._rule_key` 하나다. `db_review`가 쓰는 `db_add.similarity`는 그대로 import된다.
+
+## R7 근거 출처·R15 대용량 측정 (2026-10-05)
+
+- **R7 `line_ref`/`event_index`** (`04-parser-matching.md §5.8 (6)`): 모든 이벤트의 마지막 키 `line_ref: {file_index, line_no}`(입력 로그 목록 순번, 1부터 센 물리 줄; 줄 위치를 모르면 `null`). 줄 레코드는 reference 백엔드가 채우고 builtin·파생(`source: rules`) 이벤트는 기준 줄의 값을 이어받는다. 외부 파서 이벤트는 `{file_index, line_no: null}`. site 백엔드가 키를 안 내도 `postprocess`가 `null`로 채운다. 정수뿐이다(경로·본문 없음, 이슈 DB에 안 감).
+- 매처 근거에 `line_ref`와 `event_index`(입력 `events[]` 순번, `_range`가 안정 정렬 순열을 `ids`로 `Evaluator`에 넘김) 추가. `report.md` 근거 줄 끝에 ` (f<순번>:L<줄>)`. `analysis.json`은 그대로(근거 키 `{ts, tag, msg, event}`, `_ref`는 리포트 작성 뒤 지움).
+- **`cut --evidence` 동작 변경**: 근거의 `line_ref`가 가리키는 줄이 입력에 있고 (시각, 태그)가 같으면 그 줄만 앵커로 삼는다. 그래서 같은 시각·태그의 다른 줄은 더 이상 앵커가 아니다(예전에는 모두 앵커). 못 쓰면 그 근거만 예전처럼 `(ts, tag)`로 찾고 경고 `evidence-ref-mismatch`(종료 코드 그대로, `parse`와 같은 로그를 같은 순서로 줘야 한다). 출력 `anchors_by: {line_ref, ts_tag}`. **버그 수정**: raw 줄을 `str.splitlines()`로 읽어 `\x0b \x0c \x1c-\x1e \x85` 등이 든 줄 뒤에서 원문이 어긋났다 → `read_file`과 같은 방식(`newline=""`, `rstrip("\r\n")`)으로 센다.
+- 바뀌는 출력: 이벤트(`events.json`·스냅샷 `tests/fixtures/logs/*.events.json` 14개: `line_ref`만 추가), `match.json` 근거(+`line_ref`·`event_index`), `cut` JSON(+`anchors_by`, 경고), `report.md` 근거 줄. **바뀌지 않는 것**: 골든 JSON(`VOLATILE_FIELDS = ("line_ref",)`로 비교에서 제외, 키 유무는 `test_backend_emits_line_ref`), `analysis.json`, score·S/C·정렬, 회귀·검증 결과, 종료 코드. 합성 로그 34개(`tests/fixtures/logs`·샘플 DB fixture)의 `parse --full --mask`·`match --regress`·분석 모드·`cut --evidence` 출력을 변경 전후로 비교해 새 키(`line_ref`·`event_index`·`anchors_by`)를 빼면 같음을 확인했다.
+- **R15 측정** `tools/bench_scale.py`(커밋, pytest가 모으지 않음): 합성 로그 10k·50k·200k줄(단일)·50k(2파일), 단계별 시간·최대 RSS·events.json 크기, `_search_window`·`find-symbol` 마이크로. 임계값을 넘은 것만 적용했다.
+
+| 항목 (이 컨테이너, 합성 로그) | 전 | 후 | 적용 |
+|---|---|---|---|
+| O1 `_search_window` K=8000 evaluate / evaluate_all (K=2000 → 8000 증가 배율 16배) | 23.2 s / 23.7 s | 0.17 s / 0.30 s | 적용 (> 1.0 s, 배율 > 6) |
+| 200k줄 `match --regress` | 3.9 s | 2.3 s | O1 효과 |
+| O2 200k coverage / parse_e2e | 1.82 s / 20.96 s (8.7%) | — | 미적용 (< 15%) |
+| O3 200k masker_init / 최대 RSS(parse 직후) | 0.04 s (0.2%) / 390 MB (입력의 26배) | (줄 단위 observe 시험: 0.09 s / 424 MB) | 미적용 — RSS 규칙(> 10배)은 넘었지만 RSS는 이벤트 dict가 지배하고 줄 단위 observe는 줄이지 못했다(masker_init은 약간 느림). 시험 뒤 되돌림 |
+| O4 `find-symbol` 20k 파일 `Foo#bar` / `bar` | 3.13 s / 3.80 s | 0.81 s / 0.67 s | 적용 (> 3 s) |
+| R7 오버헤드: 200k parse_e2e / events.json | 20.96 s / 61.8 MB | 21.42 s (+2%) / 75.4 MB (+22%) | 기준 이내 (≤10%, ≤25%) |
+
+- 테스트(+12, 전체 489개): `test_parse_logcat`(`line_ref` 줄 일치·다중 파일 순번·외부/builtin), `test_match_signatures`(`event_index`·섞인 입력·같은 시각·태그), `test_signatures_window`(예전 구현 사본과 무작위 300건 비교·구간 경계), `test_masking`(cut 줄 위치 앵커·불일치 대체·`\x0c` 정렬), `test_golden`, `test_triage`, `test_code_roots`(예전 구현과 비교).
+- 미룸: 파생 이벤트 `msg` 복사 제거, `common/events.py`(`line_ref` 포함해야 함), `analysis.json`에 줄 위치, 백엔드가 주는 줄 번호, find-symbol 범위 제한·색인, GB급 스트리밍·`events.json` 크기, `cut --events`, 사내 임계값 재보정(S-5), `db_regress.compare_events`의 `line_ref`.
+
+## CLAUDE.md 축소 (2026-10-05)
+
+- `CLAUDE.md` 13,640 → 3,613바이트(≤4KB, 매 세션 로드). 남긴 것: `@SITE_PROFILE.md` import, 목적 한 줄, 머리말(모드 판별 5규칙·번호 유지, 모드 표, import 대체), 작업 방식 요약, "항상 지킬 것" 7줄. 내용은 지우지 않고 옮겼다:
+
+| 이전 `CLAUDE.md` | 새 위치 |
+|---|---|
+| §12 원칙 | `docs/design/12-principles.md` (원본 12장, 새 파일) |
+| 문서 지도, "진입점·짧게 유지" 문단 | `docs/design/README.md` (새 파일) |
+| §11.0 작업 방식, 머리말의 플러그인 규격 확인 문단 | `11-phases.md §11.0` ("테스트용 이슈 DB" 문단은 기존 절에 합침) |
+| §1 목적과 범위 | `01-architecture.md §1` |
+| 머리말의 "사내 자료 없이 작성", placeholder·데이터 스택·Ubuntu 문단 | `14-site.md §14.1` |
+
+- 참조 갱신: `CLAUDE.md §12`/`12장` → `12-principles.md`(07·10·11 Phase 13·AGENTS·GUIDE·HTML 안내서·리뷰 문서), `CLAUDE.md §11.0` → `11-phases.md §11.0`(테스트 헬퍼), 문서 지도 → `docs/design/README.md`(14 §14.4). S-1 "읽을 것"에 `12-principles.md` 추가. `CLAUDE.md` 머리말을 가리키는 참조는 그대로 유효. `docs/history/`의 옛 참조는 고치지 않는다(이 표로 찾는다).

@@ -19,7 +19,11 @@
    "ril": null,
    "event": null,
    "fields": {},
-   "source": "backend:reference"
+   "source": "backend:reference",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 1
+   }
   },
   {
    "ts": "2026-09-20T05:30:02.000Z",
@@ -33,7 +37,11 @@
    "ril": null,
    "event": null,
    "fields": {},
-   "source": "backend:reference"
+   "source": "backend:reference",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 2
+   }
   },
   {
    "ts": "2026-09-20T05:30:02.000Z",
@@ -50,7 +58,11 @@
     "enabled": "true",
     "reason": "BOOT"
    },
-   "source": "rules"
+   "source": "rules",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 2
+   }
   },
   {
    "ts": "2026-09-20T05:30:12.000Z",
@@ -64,7 +76,11 @@
    "ril": null,
    "event": null,
    "fields": {},
-   "source": "backend:reference"
+   "source": "backend:reference",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 4
+   }
   },
   {
    "ts": "2026-09-20T05:30:12.000Z",
@@ -81,7 +97,11 @@
     "code": "403",
     "reason": "FORBIDDEN"
    },
-   "source": "rules"
+   "source": "rules",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 4
+   }
   },
   {
    "ts": "2026-09-20T05:30:36.000Z",
@@ -95,7 +115,11 @@
    "ril": null,
    "event": null,
    "fields": {},
-   "source": "backend:reference"
+   "source": "backend:reference",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 6
+   }
   },
   {
    "ts": "2026-09-20T05:30:36.000Z",
@@ -112,7 +136,11 @@
     "code": "403",
     "reason": "FORBIDDEN"
    },
-   "source": "rules"
+   "source": "rules",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 6
+   }
   },
   {
    "ts": "2026-09-20T05:31:30.000Z",
@@ -133,7 +161,11 @@
    },
    "event": null,
    "fields": {},
-   "source": "backend:reference"
+   "source": "backend:reference",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 7
+   }
   },
   {
    "ts": "2026-09-20T05:32:50.000Z",
@@ -147,7 +179,11 @@
    "ril": null,
    "event": null,
    "fields": {},
-   "source": "backend:reference"
+   "source": "backend:reference",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 8
+   }
   },
   {
    "ts": "2026-09-20T05:32:50.000Z",
@@ -164,7 +200,11 @@
     "enabled": "true",
     "reason": "USER"
    },
-   "source": "rules"
+   "source": "rules",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 8
+   }
   },
   {
    "ts": "2026-09-20T05:33:03.000Z",
@@ -178,7 +218,11 @@
    "ril": null,
    "event": null,
    "fields": {},
-   "source": "backend:reference"
+   "source": "backend:reference",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 9
+   }
   },
   {
    "ts": "2026-09-20T05:33:03.000Z",
@@ -195,7 +239,11 @@
     "enabled": "false",
     "reason": "USER"
    },
-   "source": "rules"
+   "source": "rules",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 9
+   }
   },
   {
    "ts": "2026-09-20T05:33:04.000Z",
@@ -209,7 +257,11 @@
    "ril": null,
    "event": null,
    "fields": {},
-   "source": "backend:reference"
+   "source": "backend:reference",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 10
+   }
   },
   {
    "ts": "2026-09-20T05:33:06.000Z",
@@ -223,7 +275,11 @@
    "ril": null,
    "event": null,
    "fields": {},
-   "source": "backend:reference"
+   "source": "backend:reference",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 11
+   }
   },
   {
    "ts": "2026-09-20T05:33:07.000Z",
@@ -237,7 +293,11 @@
    "ril": null,
    "event": null,
    "fields": {},
-   "source": "backend:reference"
+   "source": "backend:reference",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 12
+   }
   },
   {
    "ts": "2026-09-20T05:33:07.000Z",
@@ -253,7 +313,11 @@
    "fields": {
     "reasons": "DATA_DISABLED"
    },
-   "source": "rules"
+   "source": "rules",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 12
+   }
   },
   {
    "ts": "2026-09-20T05:33:15.000Z",
@@ -267,7 +331,11 @@
    "ril": null,
    "event": null,
    "fields": {},
-   "source": "backend:reference"
+   "source": "backend:reference",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 13
+   }
   },
   {
    "ts": "2026-09-20T05:33:15.000Z",
@@ -283,7 +351,11 @@
    "fields": {
     "reasons": "DATA_DISABLED"
    },
-   "source": "rules"
+   "source": "rules",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 13
+   }
   },
   {
    "ts": "2026-09-20T05:34:00.000Z",
@@ -297,7 +369,11 @@
    "ril": null,
    "event": null,
    "fields": {},
-   "source": "backend:reference"
+   "source": "backend:reference",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 14
+   }
   }
  ]
 }

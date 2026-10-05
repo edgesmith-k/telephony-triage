@@ -569,7 +569,7 @@ NEW-CAUSE-1 → DATA-001-03</div></dd>
 <h2><span class="num">07</span>레포 구조</h2>
 <p class="sub">플러그인 개발 레포의 실제 트리 (fixture와 이력 폴더는 접음).</p>
 <pre class="code"><code>telephony-triage/
-├── <span class="k">CLAUDE.md</span>                  <span class="c"># Claude Code 진입점: 작업 모드 판별 + §12 원칙</span>
+├── <span class="k">CLAUDE.md</span>                  <span class="c"># Claude Code 진입점(≤4KB): 작업 모드 판별 + 지킬 것 (원칙은 docs/design/12-principles.md)</span>
 ├── GUIDE.md                   <span class="c"># 사람용 총정리</span>
 ├── DRAFT_NOTES.md             <span class="c"># 사외 초안 상태 파일 (≤8KB)</span>
 ├── REVIEW-OPEN.md             <span class="c"># 사내 정보가 있어야 판단할 항목 (현재 0건)</span>
@@ -610,7 +610,7 @@ NEW-CAUSE-1 → DATA-001-03</div></dd>
 │   ├── skill_evals/           <span class="c"># 행동 평가 45개 + 트리거 평가</span>
 │   └── test_*.py              <span class="c"># 25개 테스트 파일</span>
 └── docs/
-    ├── design/                <span class="c"># 설계 문서 01~16 + contracts.md (공통 계약 단일 원본)</span>
+    ├── design/                <span class="c"># 설계 문서 01~16(12 원칙) + README(지도) + contracts.md (공통 계약 단일 원본)</span>
     ├── development/           <span class="c"># 아키텍처 리뷰(RF 계획), 개선 인계, S0 체크리스트</span>
     └── history/               <span class="c"># 이력 아카이브 (평소 읽지 않음)</span></code></pre>
 </section>
@@ -1040,7 +1040,6 @@ score = min(1, base + bonus)
 <li><b>유지보수</b>: <code>db_add.py</code>(1,373줄) op별 분할.</li>
 <li><b>트리거 개선</b>: 자연어 호출 recall 26~33%. SKILL.md가 크기 상한이라 문구 조정 필요. 지금은 슬래시 커맨드로 쓰면 문제없음.</li>
 <li><b>R7 근거 출처, R9·R11 문구 정리, R15 대용량 로그 처리.</b></li>
-<li><b>CLAUDE.md 축소</b> (4KB 이하, 사용자 결정 대기).</li>
 </ul>
 <p>반입 전에 꼭 할 것은 <b>보안 검토</b>와 <b>사용자 확인</b>이고, 스킬 행동 평가 재실행은 사외에서 할지 사내 S-2로 넘길지 결정이 필요합니다. 순서는 <code>DRAFT_NOTES.md</code>의 "다음 할 일"에 있습니다.</p>
 </section>

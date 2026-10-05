@@ -400,6 +400,80 @@ def test_cut_writes_only_masked_lines():
     assert proc.returncode == 2 and "max-lines" in proc.stderr
 
 
+def _line_at(sec: int, tag: str, msg: str, ms: int = 0) -> str:
+    return f"09-20 14:30:{sec:02d}.{ms:03d}  1234  1244 D {tag}: [PHONE0] {msg}"
+
+
+def _evidence_json(refs: list[dict | None], ts: str = "2026-09-20T05:30:10.000Z") -> Path:
+    """`match.json` 모양의 최소 입력 (1위 후보의 근거만)."""
+    evidence = [{"ts": ts, "tag": "DSM-0", "msg": "x", "event": None, "line_ref": ref} for ref in refs]
+    path = _tmp() / "match.json"
+    path.write_text(json.dumps({"candidates": [{"evidence": evidence}]}), encoding="utf-8")
+    return path
+
+
+def _cut(logs: list[Path], evidence: Path, *extra: str):
+    out = _tmp() / "cut.log"
+    proc = _run("parse_logcat.py", ["cut", *map(str, logs), "--evidence", str(evidence), "--out", str(out),
+                                    "--tz", TZ, "--year", YEAR, *extra])
+    return proc, out
+
+
+def _dup_ts_tag_log() -> Path:
+    """10번째 줄이 근거이고, 60번째 줄은 같은 시각·태그의 다른 줄이다."""
+    lines = [_line_at(n, "DSM-0", f"tick {n}") for n in range(1, 60)]
+    lines[9] = _line_at(10, "DSM-0", "evidence line imsi=450081234567890")
+    lines.append(_line_at(10, "DSM-0", "duplicate ts tag"))
+    return _write(lines)
+
+
+def test_cut_evidence_line_ref_excludes_duplicate_ts_tag():
+    log = _dup_ts_tag_log()
+    proc, out = _cut([log], _evidence_json([{"file_index": 0, "line_no": 10}]), "--context", "2")
+    assert proc.returncode == 0, proc.stderr
+    info = json.loads(proc.stdout)
+    text = out.read_text(encoding="utf-8")
+    assert info["anchors"] == 1 and info["anchors_by"] == {"line_ref": 1, "ts_tag": 0}
+    assert info["warnings"] == [] and "경고[" not in proc.stderr
+    assert "evidence line" in text and "duplicate ts tag" not in text
+    assert "450081234567890" not in text and masking.new_masker().find(text) == []
+    assert info["lines"] == 5  # 8~12번째 줄 (앵커 앞뒤 2줄)
+
+    # line_ref가 없는 예전 match.json은 (ts, tag)가 같은 줄을 모두 앵커로 삼는다
+    proc, out = _cut([log], _evidence_json([None]), "--context", "0")
+    info = json.loads(proc.stdout)
+    assert proc.returncode == 0 and info["anchors"] == 2 and info["anchors_by"] == {"line_ref": 0, "ts_tag": 1}
+    assert info["warnings"] == [] and "duplicate ts tag" in out.read_text(encoding="utf-8")
+
+
+def test_cut_evidence_ref_mismatch_falls_back():
+    log = _dup_ts_tag_log()
+    short = _write([_line_at(n, "DSM-0", f"other {n}") for n in range(1, 4)])
+    # parse 때와 다른 순서로 로그를 주면 (0, 10)이 입력에 없다: (ts, tag)로 앵커를 찾고 경고한다 (종료 코드 0)
+    proc, out = _cut([short, log], _evidence_json([{"file_index": 0, "line_no": 10}]), "--context", "0")
+    assert proc.returncode == 0, proc.stderr
+    info = json.loads(proc.stdout)
+    assert info["anchors_by"]["line_ref"] == 0 and info["anchors_by"]["ts_tag"] > 0 and info["anchors"] == 2
+    assert [w["code"] for w in info["warnings"]] == ["evidence-ref-mismatch"]
+    assert "경고[evidence-ref-mismatch]" in proc.stderr
+    # 줄은 있어도 시각·태그가 근거와 다르면 그 줄을 앵커로 삼지 않는다
+    proc, _ = _cut([log], _evidence_json([{"file_index": 0, "line_no": 3}]), "--context", "0")
+    info = json.loads(proc.stdout)
+    assert info["anchors_by"] == {"line_ref": 0, "ts_tag": 1}
+    assert [w["code"] for w in info["warnings"]] == ["evidence-ref-mismatch"]
+
+
+def test_cut_raw_alignment_with_form_feed():
+    # str.splitlines는 \x0c에서도 줄을 끊어 raw 줄 번호가 어긋난다 (read_file의 줄 번호와 같아야 한다)
+    lines = [_line_at(1, "DSM-0", "first"), _line_at(2, "DSM-0", "page\x0cbreak and\x1dmore"),
+             _line_at(10, "DSM-0", "evidence after control chars")]
+    log = _write(lines)
+    proc, out = _cut([log], _evidence_json([{"file_index": 0, "line_no": 3}]), "--context", "0")
+    assert proc.returncode == 0, proc.stderr
+    assert out.read_text(encoding="utf-8").strip().endswith("evidence after control chars")
+    assert json.loads(proc.stdout)["lines"] == 1
+
+
 def _all_tests():
     return [(n, o) for n, o in sorted(globals().items()) if n.startswith("test_") and callable(o)]
 

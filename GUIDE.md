@@ -160,7 +160,7 @@ git add -A && git commit -m "사외 초안 반입: import-v1"     # .draft-manif
 처음 물으면 "사내 보완"을 고르고, S-1에서 SITE_PROFILE.md를 만들어 "모드: 사내 보완"을 적는다. 이후 세션은 그 파일로 이어간다.
 
 [읽을 것 — 이것만, 순서대로]
-1. CLAUDE.md (머리말과 §12 원칙)   2. DRAFT_NOTES.md (사외 상태 파일 6KB)   3. docs/design/15-local-draft.md §15.5의 **해당 단계 행**과 그 행의 "읽을 것"
+1. CLAUDE.md와 docs/design/12-principles.md (원칙)   2. DRAFT_NOTES.md (사외 상태 파일 6KB)   3. docs/design/15-local-draft.md §15.5의 **해당 단계 행**과 그 행의 "읽을 것"
 4. REVIEW-OPEN.md (사내 정보가 있어야 판단할 항목)   5. 14-site.md §14.2 표 (S1~S22 placeholder)
 읽지 않는다: docs/history/ 전체, 11-phases.md, docs/design/의 다른 파일(단계 행이 지정한 절 외), ARCHITECTURE_REVIEW·HANDOFF(개선 작업은 사외 트랙).
 TODO(SITE) 57곳은 문서가 아니라 `python3 tools/list_site_todos.py`로 뽑는다.
@@ -273,7 +273,7 @@ claude mcp list               # Jira MCP 사용자 범위 등록 확인
 - S-4 이후(이슈 DB 사용)면 Claude Code에서 `/telephony-triage:setup` — config 작성, `scripts_path`, 이슈 DB clone, Jira 도구 매핑, `core.hooksPath .githooks`, 스냅샷. S-5 이후면 `gh auth status` 통과 필요.
 - 긴 공백 뒤·새 에이전트면 위 "첫 사내 세션에 붙여 넣을 컨텍스트"의 **[모드]·[읽을 것]·[지킬 것]** + `S-n 진행해줘`.
 
-**Claude Code가 아닌 에이전트(Codex 등)**: `AGENTS.md`만 자동으로 읽고 `CLAUDE.md`·`@SITE_PROFILE.md` import는 안 될 수 있다. 첫 메시지에 `먼저 CLAUDE.md(머리말·§11.0·§12)와 DRAFT_NOTES.md(사내면 SITE_PROFILE.md)를 읽어라. Claude 전용 기능(플러그인 로드, hooks, skill-creator, /telephony-triage:* 커맨드)은 쓸 수 없으니 스크립트·테스트·문서 작업만 한다.`를 붙인다. Phase 13(스킬 eval)·S1 실험·S-2는 Claude Code에서만 가능하다. 사내에서 다른 에이전트를 쓸 수 있는지는 회사 정책이 정한다.
+**Claude Code가 아닌 에이전트(Codex 등)**: `AGENTS.md`만 자동으로 읽고 `CLAUDE.md`·`@SITE_PROFILE.md` import는 안 될 수 있다. 첫 메시지에 `먼저 CLAUDE.md, docs/design/12-principles.md와 DRAFT_NOTES.md(사내면 SITE_PROFILE.md)를 읽어라. Claude 전용 기능(플러그인 로드, hooks, skill-creator, /telephony-triage:* 커맨드)은 쓸 수 없으니 스크립트·테스트·문서 작업만 한다.`를 붙인다. Phase 13(스킬 eval)·S1 실험·S-2는 Claude Code에서만 가능하다. 사내에서 다른 에이전트를 쓸 수 있는지는 회사 정책이 정한다.
 
 ---
 
@@ -372,6 +372,8 @@ claude mcp list               # Jira MCP 사용자 범위 등록 확인
 | 보고 싶은 것 | 파일 |
 |---|---|
 | Claude Code 지침 진입점, 모드 판별 | `CLAUDE.md` |
+| 원칙(사용자 확인·push 승인 등) | `docs/design/12-principles.md` |
+| 설계 문서 지도 | `docs/design/README.md` |
 | Phase별 할 일·완료 기준 | `docs/design/11-phases.md` |
 | 사외 초안·사내 보완 절차 | `docs/design/15-local-draft.md` |
 | 기존 Jira MCP·파서·분류·분석 스킬 활용 | `docs/design/16-existing-assets.md` |

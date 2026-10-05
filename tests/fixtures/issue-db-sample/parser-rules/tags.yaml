@@ -2,7 +2,7 @@
 #
 # 데이터 스택 태그는 Android 13+ 형식으로 **확정**이다: DNC-<n>, DN-…, DPM-<n>,
 # DRM-<n>, DSM-<n>, DCM-<n>, DSRM-<n>. 레거시 데이터 스택(DcTracker/DCT)은
-# 고려하지 않는다 (CLAUDE.md).
+# 고려하지 않는다 (플러그인 레포 `docs/design/14-site.md §14.1`).
 #
 # 그 밖의 태그는 **placeholder**다 — TODO(SITE:S9). 사내 실제 logcat으로
 # 확인하고 바꾼다 (14-site.md §14.2).

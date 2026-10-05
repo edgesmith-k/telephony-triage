@@ -31,7 +31,9 @@
 
 출력(JSON, stdout): `{mode, candidates[], pending_causes[], types[], causes[], errors[],
 warnings[], cache, ...}`. 후보 = `{type, cause, title, score, confidence, S, C, signature,
-evidence[], bonus, feedback, fix_judgement, related[]}`. 원인 미확인 후보는 `cause: null`.
+evidence[], bonus, feedback, fix_judgement, related[]}`. 근거 = `{signature, condition, ts, tag, msg, event, fields,
+phone_id, line_ref, event_index}` (`line_ref`: 이벤트의 로그 줄 위치 `{file_index, line_no}` 또는 null, `event_index`: 입력
+`events[]` 안의 순번 — 입력 문서 순서 기준이다. 점수·판정에는 쓰지 않는다, 04-parser-matching.md §5.8 (6)). 원인 미확인 후보는 `cause: null`.
 `--top N`(기본 3)은 후보 N개와 함께 `types[]`는 S=1, `causes[]`는 C=1인 것만, `pending_causes[]`는 N개만 내고
 뺀 개수를 `omitted`에 적는다. 판정 목록 전체가 필요하면 `--top 0`.
 """
@@ -298,8 +300,10 @@ def run(args) -> dict:
 
 
 def _range(events_doc: dict, regress: bool):
-    """(정렬된 이벤트, 범위 시작, 끝, 분석 창). 회귀·검증 모드는 파일 전체다."""
-    events = sorted(events_doc.get("events") or [], key=lambda e: e["ts"])
+    """(정렬된 이벤트, 범위 시작, 끝, 분석 창, 정렬된 이벤트의 입력 순번). 회귀·검증 모드는 파일 전체다."""
+    raw = events_doc.get("events") or []
+    order = sorted(range(len(raw)), key=lambda k: raw[k]["ts"])  # 안정 정렬: 같은 시각이면 입력 순서
+    events = [raw[k] for k in order]
     coverage = events_doc.get("coverage") or {}
     window = (events_doc.get("input") or {}).get("window")
     if regress or not window:
@@ -308,14 +312,14 @@ def _range(events_doc: dict, regress: bool):
         lo, hi = window["start"], window["end"]
     lo = _parse_iso(lo, "범위") if lo else None
     hi = _parse_iso(hi, "범위") if hi else None
-    return events, lo, hi, window
+    return events, lo, hi, window, order
 
 
 def evaluator_for(events_doc: dict, db: issuedb.IssueDb) -> Evaluator:
     """회귀·검증 모드 평가기 (파일 전체 범위, 이슈 DB의 패턴 시간 상한). 호출자가 닫는다."""
-    events, lo, hi, _ = _range(events_doc, True)
+    events, lo, hi, _, ids = _range(events_doc, True)
     timeout_ms = int((db.config.get("matcher") or {}).get("pattern_timeout_ms", DEFAULT_TIMEOUT_MS))
-    return Evaluator(events, lo, hi, timeout_ms)
+    return Evaluator(events, lo, hi, timeout_ms, ids)
 
 
 def match(events_doc: dict, db: issuedb.IssueDb, compiled: dict, *, regress: bool, jira: dict | None = None,
@@ -329,7 +333,7 @@ def match(events_doc: dict, db: issuedb.IssueDb, compiled: dict, *, regress: boo
     if jira.get("occurred_at") and not regress:
         occurred = _parse_iso(jira["occurred_at"], "--jira-meta occurred_at")
 
-    events, lo, hi, window = _range(events_doc, regress)
+    events, lo, hi, window, ids = _range(events_doc, regress)
     half = (hi - lo).total_seconds() / 2 if (lo and hi and window and not regress) else None
 
     scoring = _scoring(db.config)
@@ -353,7 +357,7 @@ def match(events_doc: dict, db: issuedb.IssueDb, compiled: dict, *, regress: boo
     types_out, causes_out, candidates, pending = [], [], [], []
     own = evaluator is None
     if own:
-        evaluator = Evaluator(events, lo, hi, timeout_ms)
+        evaluator = Evaluator(events, lo, hi, timeout_ms, ids)
     try:
         for itype in db.types:
             if not itype.active:

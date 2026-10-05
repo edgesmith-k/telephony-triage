@@ -30,7 +30,11 @@
    "ril": null,
    "event": null,
    "fields": {},
-   "source": "backend:reference"
+   "source": "backend:reference",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 3
+   }
   },
   {
    "ts": "2026-09-24T00:59:55.000Z",
@@ -44,7 +48,11 @@
    "ril": null,
    "event": null,
    "fields": {},
-   "source": "backend:reference"
+   "source": "backend:reference",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 4
+   }
   },
   {
    "ts": "2026-09-24T01:00:00.000Z",
@@ -58,7 +66,11 @@
    "ril": null,
    "event": null,
    "fields": {},
-   "source": "backend:reference"
+   "source": "backend:reference",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 1
+   }
   },
   {
    "ts": "2026-09-24T01:00:01.000Z",
@@ -72,7 +84,11 @@
    "ril": null,
    "event": null,
    "fields": {},
-   "source": "backend:reference"
+   "source": "backend:reference",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 2
+   }
   },
   {
    "ts": "2026-09-24T02:59:56.000Z",
@@ -86,7 +102,11 @@
    "ril": null,
    "event": null,
    "fields": {},
-   "source": "backend:reference"
+   "source": "backend:reference",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 5
+   }
   },
   {
    "ts": "2026-09-24T02:59:57.000Z",
@@ -100,7 +120,11 @@
    "ril": null,
    "event": null,
    "fields": {},
-   "source": "backend:reference"
+   "source": "backend:reference",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 6
+   }
   }
  ]
 }
