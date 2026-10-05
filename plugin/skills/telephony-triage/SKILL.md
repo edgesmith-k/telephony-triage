@@ -25,11 +25,11 @@ description: Android Telephony 이슈(data·call·network·sim·sms·ims)를 Jir
 - 사용자 clone에서 checkout·reset·clean·commit 금지. Jira는 config `jira.tools`(`read_tools` 안)만, 이름·인자 추측 금지, 쓰기 거절.
 - 리포트·계획·PR엔 마스킹된 텍스트만, 사람 이름은 옮기지 않는다.
 - 세션 lock은 **모든 종료 경로에서 푼다**. `lock.owner`를 이후 `db_pr`·`db_verify` 호출의 `TT_LOCK_OWNER`로 넘긴다.
-- 분류 확정, 새 유형·원인, 시그니처·파서 규칙, 수정 상태 변경은 **사용자 확인 후**만(추천만, 대신 정하지 않음).
+- 분류 확정, 새 유형·원인, 시그니처·파서 규칙, 수정 상태 변경은 **사용자 확인 후**만(추천만).
 
 ## analyze
 
-`/telephony-triage:analyze <KEY> [logs...] [--code <프로필|경로>] [--dry-run] [--jira-file <yaml>] [--failed-step <줄>|--steps-file <path>] [--(no-)analyzer] [--(no-)explore]`
+`/telephony-triage:analyze <KEY> [logs...] [--code <프로필|경로>] [--dry-run] [--jira-file <yaml>] [--failed-step <줄>|--steps-file <path|붙인 목록→JOB/steps-pasted.txt>] [--(no-)analyzer] [--(no-)explore]`
 
 ### 1. 드라이버 (Step 0~4, Step 5 resolve)
 
@@ -40,7 +40,7 @@ description: Android Telephony 이슈(data·call·network·sim·sms·ims)를 Jir
    파싱·매칭·후보 정보·`code_refs` resolve를 한다. stdout(=`JOB/analysis.json`, ≤4KB)과 `JOB/report.md`만 읽는다.
 3. `status: needs_input` → `question`·`options`를 보이고 **사용자 답**으로 같은 명령에 `--answer <kind>=<값>`을 붙여 재실행한다.
    대신 고르지 않는다. `jira`는 1번 호출 뒤, `logs`는 `--logs`를 붙여 재실행. `stopped`는 lock이 풀렸으니 이유만 알린다.
-4. 종료 코드 1 → 키를 다시 묻는다. 2 → 메시지를 보이고 멈춘다(lock은 드라이버가 풀었다).
+4. 종료 코드 1 → 키를 다시 묻는다. 2 → 메시지를 보이고 멈춘다(lock 해제됨).
 
 ### 2. 결과 읽기 (Step 3~5)
 

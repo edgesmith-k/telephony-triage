@@ -150,8 +150,7 @@ def judge(item: dict, result: dict) -> dict:
         for reason in reasons:
             cause = reason.get("cause")
             if reason["kind"] == "cause" and cause and cause_type.get(cause) != fx.type_id:
-                drafts.append({"op": "allow-cause", "fixture": f"fixtures/{fx.name}", "cause": cause,
-                               "type_dir": item["type"].path.relative_to(item["type"].path.parents[1]).as_posix()})
+                drafts.append({"op": "allow-cause", "fixture": f"fixtures/{fx.name}", "cause": cause})
     return {
         "fixture": item["rel"],
         "kind": fx.kind,

@@ -110,6 +110,25 @@ def _ref_label(ref) -> str | None:
     return None
 
 
+def _unique_evidence(evidence: list) -> list:
+    """증상·원인 시그니처가 같은 이벤트를 근거로 잡으면 리포트에 같은 줄이 두 번 나온다. 이벤트마다 한 번만 둔다
+    (`line_ref`의 파일·줄 번호 — 내장·파생 이벤트는 원본 줄과 줄 위치를 공유한다. 없으면 `event_index`, 그것도 없으면
+    시각·태그·메시지). 표시용이고 match.json·점수는 그대로다."""
+    seen, out = set(), []
+    for e in evidence:
+        ref, idx = e.get("line_ref"), e.get("event_index")
+        if isinstance(ref, dict) and ref.get("line_no"):
+            key = ("l", ref.get("file_index"), ref["line_no"])
+        elif idx is not None:
+            key = ("i", idx)
+        else:
+            key = ("m", e.get("ts"), e.get("tag"), e.get("msg"))
+        if key not in seen:
+            seen.add(key)
+            out.append(e)
+    return out
+
+
 def _clip(text, limit: int) -> str:
     text = " ".join(str(text or "").split())
     return text if len(text) <= limit else text[: limit - 1] + "…"
@@ -855,7 +874,7 @@ class Driver:
                 return None
             patterns = userconfig.get(self.cfg, "jira.failed_step_patterns") or []
             step, line = failedstep.find_line(text, patterns)
-            label = failedstep.normalize(self.masker()(step or ""), 80)
+            label = failedstep.normalize(self.masker()(failedstep.numbered(step, line) or ""), 80)
         if not line:
             return None
         zone = conf.get("steps_file_tz") or tz or userconfig.get(self.cfg, "logcat.timezone")
@@ -901,9 +920,12 @@ class Driver:
         times.sort()
         options = [{"value": ts, "label": f"{ts} {tid}"} for ts, tid in times[:3]]
         cov = full.get("coverage") or {}
-        raise NeedsInput("time", "Jira에 발생 시각이 없다. 증상 시그니처가 충족된 시각 후보에서 고르게 한다"
-                                 + ("." if options else " — 후보가 없으니 시각을 묻는다."),
-                         options, log_range=[cov.get("first_ts"), cov.get("last_ts")])
+        jumps = len(cov.get("clock_anomalies") or [])
+        question = ("Jira에 발생 시각이 없다. 증상 시그니처가 충족된 시각 후보에서 고르게 한다"
+                    + ("." if options else " — 후보가 없으니 시각을 묻는다."))
+        if jumps:
+            question += f" 로그에 시계 이상(역행·점프) {jumps}건 — 후보 시각이 실제와 다를 수 있다(재부팅·NITZ 전 가능)."
+        raise NeedsInput("time", question, options, log_range=[cov.get("first_ts"), cov.get("last_ts")])
 
     # Step 4·5 --------------------------------------------------------------------------------------
 
@@ -1037,7 +1059,7 @@ class Driver:
                     "evidence": [{"ts": e.get("ts"), "tag": e.get("tag"), "msg": _clip(e.get("msg"), 140),
                                   "event": e.get("event"),
                                   "_ref": _ref_label(e.get("line_ref"))}   # report.md 전용, analysis.json에는 안 나간다
-                                 for e in (c.get("evidence") or [])[:10]],
+                                 for e in _unique_evidence(c.get("evidence") or [])[:10]],
                     "fix_judgement": (c.get("fix_judgement") or {}).get("judgement"),
                     "fix_message": _clip((c.get("fix_judgement") or {}).get("message"), 100),
                     "related": [r.get("cause") for r in c.get("related") or []]}

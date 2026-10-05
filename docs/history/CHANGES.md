@@ -516,3 +516,43 @@
 | 머리말의 "사내 자료 없이 작성", placeholder·데이터 스택·Ubuntu 문단 | `14-site.md §14.1` |
 
 - 참조 갱신: `CLAUDE.md §12`/`12장` → `12-principles.md`(07·10·11 Phase 13·AGENTS·GUIDE·HTML 안내서·리뷰 문서), `CLAUDE.md §11.0` → `11-phases.md §11.0`(테스트 헬퍼), 문서 지도 → `docs/design/README.md`(14 §14.4). S-1 "읽을 것"에 `12-principles.md` 추가. `CLAUDE.md` 머리말을 가리키는 참조는 그대로 유효. `docs/history/`의 옛 참조는 고치지 않는다(이 표로 찾는다).
+
+## 트리거 측정 (2026-10-05)
+
+- skill-creator `run_loop`(질문 24개, train 15·test 9, 3회, 5반복): 현재 description과 개선안 모두 recall 0~20%, precision 100%. 원인은 측정기다: `run_eval`은 스킬을 임시 커맨드로 넣고 **첫 도구 호출**만 세는데, 로그 분석 요청에서 Claude는 먼저 `ls`로 로그를 찾는다.
+- 실제 플러그인 측정 `tests/skill_evals/trigger_real.py`(`claude -p --plugin-dir plugin`, 처음 4번의 도구 호출 안에 `Skill`): 현재 description과 개선안 모두 recall 100%(14/14)·precision 100%(오트리거 0/10), 질문당 2회. **description은 바꾸지 않았다**(`SKILL.md` 8,191바이트 그대로). 이전 기록의 recall 26~33%는 같은 측정기 결과다.
+- `10-skill-eval.md` 트리거 절에 측정 방법을 적었다.
+
+## 스킬 eval 보강·마찰 수정 (2026-10-05)
+
+- eval 46~50 추가(batch E, 총 50개): 46 후보 없음 탐색 분석(`timeline.md`만 읽음), 47 `--explore` 원인 미확인 보류(슬롯 차이 반대 근거), 48 Jira 실패 스텝 필드 → `jira.failed_step`·README "자주 실패한 스텝 (3건)", 49 붙여넣은 스텝 목록 → `steps-pasted.txt` → `step_order`, 50 두 버퍼 로그 → 근거 줄 `(f<n>:L<m>)`·`cut --evidence` 같은 순서. 채점(`grade.py`)에 `tool_uses`·`opened`(Read·Bash 읽기로 연 파일) 추가. 환경 빌더에 `split_buffers: true`(`<as>.main.log`·`<as>.radio.log`).
+- eval 7: 근거 줄(DATA-001-02 거부 줄)에 IMSI·전화번호를 넣어 리포트 근거의 `<IMSI#n>`·`<MSISDN#n>` 토큰 표기를 확인한다. 탐색 분석 질문에 '아니오'로 답하는 규칙을 eval 2·3·4·44·45에 추가.
+- `allow_cause_drafts`: `type_dir` 제거(plan 스키마 `additionalProperties: false`), `--draft`/`judge --plan --draft`에서는 새 원인을 계획 `temp_id`로 낸다(`_retemp_drafts`) — 초안을 그대로 계획에 붙인다. `reasons`의 문자열 메시지는 실제 ID 그대로.
+- `verify-resolution`: op의 `verification`에는 `status`를 넣지 않는다(스키마가 거부, 적용 결과가 `verified`). `db-authoring.md`·`record.md`·`verify.md`·`contracts.md` 수정.
+- SKILL.md 붙여넣기 줄: `--steps-file <path|붙인 목록→JOB/steps-pasted.txt>`. 같은 크기를 맞추려 문구 두 곳을 줄였다(skill-creator 소유 파일, 최소 수정).
+- 시각 질문(`time`)에 시계 이상(역행·점프) 경고를 덧붙인다(Jira 발생 시각 없음 경로, `coverage.clock_anomalies`).
+- DRAFT_NOTES ✅1 상세(10/04 보안 검토): 10/04 완료. 고친 것: 붙여넣은 스텝 원문 `steps-pasted.txt`가 discard·release 뒤에도 남음 → `db_pr` discard·`lock release`(--force 아님)·cleanup이 지움. 문제없음: zip(메모리만, 선언·실제 크기 상한, 암호화·절대/`..` 거부, 멤버 하나), html 5 MiB, 정규식 타임아웃, 스텝 이름·zip 경로·마커 마스킹, 첨부 문장은 데이터(SKILL·explore)
+- B 실행 결과(iteration-8~11, 12개): 10개 전 항목 통과, 2개 각 1항목 실패 — eval 49(구간 밖 IMS 403 제외 이유를 설명하지 않음), eval 42(선택 전에 allow_cause_drafts 초안을 보이지 않음 → B4로 보완). 채점기 수정(실행 기록 Bash 명령, heredoc 제외, report.md 검사). 발견: 커밋 trailer로 publish 거부, jira.origin 누락, cause=null suggested(→B1~B3).
+
+## 실패 스텝 표기 통일 (2026-10-05)
+
+- `failedstep.from_text`(Jira 설명·시험 절차·steps-file 패턴 검색): 패턴이 이름만 뽑아도 맞은 줄이 스텝 번호로 시작하면(`Step 7 …`·`7 | …`·`7. …`) `7 | 이름`으로 낸다. 전에는 붙여넣은 목록·설명에서는 `데이터 연결 확인`, Jira 필드·report.html 표에서는 `7 | 데이터 연결 확인`이라 README "자주 실패한 스텝"이 두 줄로 갈렸다. 번호 없는 줄(`실패 스텝: X`)은 그대로. `find_line`(스텝 기준점 쪽)은 바꾸지 않았다. 판정(S/C)·회귀·검증에는 영향 없음.
+- 테스트 `test_failed_step.py` 기대값을 새 표기로, `test_numbered_label_matches_table_and_field` 추가. eval 49 기대값 `7 | 데이터 연결 확인`.
+
+## 리포트 근거 줄 중복 제거 (2026-10-05)
+
+- 증상 시그니처와 원인 시그니처가 같은 이벤트를 근거로 잡으면 `report.md`·`analysis.json` 후보 근거에 같은 줄이 두 번 나왔다(eval 7에서 발견). `triage.py`가 이벤트(`event_index`, 없으면 시각·태그·메시지)마다 한 번만 보인다. 표시용이며 `match.json`·점수·S/C는 그대로. 테스트 `test_unique_evidence_drops_same_event_from_symptom_and_cause`.
+
+## 코드 리뷰·eval 발견 수정 (2026-10-05)
+
+점수·S/C·회귀 결과·종료 코드는 바뀌지 않는다.
+
+- A1 `failedstep` 번호 인식: 전에는 `12:03:44 FAIL step=Attach`가 `12 | Attach`, `2026.09.21 Attach FAIL`이 `2026 | Attach`가 됐다. 이제 줄이 `Step|스텝|단계 N`, `N |`(표 행), `N.`·`N)` + 공백 + 숫자가 아닌 글자(`7. Attach`)로 시작할 때만 번호로 본다(`:` 제외, 날짜·시각·`10.5`·`3G`는 번호 아님). 뽑은 이름이 이미 `7. Attach PDN`·`Step 7 Attach PDN`·`7) Attach`처럼 번호로 시작하면 번호를 떼고 `7 | Attach PDN`으로 낸다(`7 | 7. …` 방지). 공개 함수 `failedstep.numbered(step, line)`. `triage.steps_file_span`의 패턴 경로 앵커 라벨도 `numbered`를 거쳐 `jira.failed_step`과 같은 표기가 된다(비교는 `same_step`이 번호를 떼고 하므로 그대로). 앞서 적은 "`find_line`은 바꾸지 않았다"는 여전하고, 호출부에서 번호를 맞춘다.
+- A2 `db_verify --draft`(`rules`·`resolution`·`fix`): `_retemp_drafts`를 `op` 키가 있는 모든 초안(allow-cause, verify-fix, verify-resolution, add-fixture 등)의 `cause`·`for`·`owner`·`a`·`b`·`id`로 넓혀 실제 ID를 계획 `temp_id`로 바꾼다. `judge`의 `suggested_ops`에도 적용. `reason`·`message` 같은 설명 문자열과 `op`가 없는 dict(`cause` 최상위 키 등)는 실제 ID 그대로.
+- A3 `triage._unique_evidence`: 키를 `line_ref`(파일 순번·줄 번호)로 먼저 잡는다. 내장·파생 이벤트는 원본 줄과 `line_ref`가 같고 `event_index`만 달라 같은 줄이 두 번 나왔다. `line_no`가 없으면 `event_index`, 그것도 없으면 시각·태그·메시지.
+- A4 `common/patterns.py`: 공유 작업 프로세스가 runner별 정수 토큰으로 본문을 최근 4개까지 들고 있다(LRU). 부모는 올라간 토큰만 기억해(runner·본문 참조를 붙들지 않는다 — 전의 클래스 수준 `owner`가 마지막 runner의 본문을 잡고 있던 문제 해결) 미스일 때만 다시 보낸다. 픽스처마다 평가기를 두고 조건마다 픽스처를 도는 `db_verify`의 R×F 업로드가 runner당 한 번이 된다. `close()`는 `drop`을 응답 없이 보낸다. `texts=`를 직접 준 검색은 본문을 올리지 않는다. 시간 초과 재시작 시 기록을 비운다. 시간 상한·예외는 그대로.
+- A5 `db_verify._script`: `TT_SCRIPT_SUBPROCESS=1`이면 subprocess로 부른다(`checks.run_text` 추가, `run_script`와 같은 경로).
+- A6 `code_roots find-symbol`: 파일 바이트를 한 번만 읽고 그 바이트를 디코드한다(출력 동일).
+- A7 `analysis.json`의 `mode`: `dry-run`에도 `write`로 나오는 것은 의도다. `mode`는 `write|read-only|offline` 계약값(`contracts.md`)으로 DB 쓰기 가능 여부이지 `--dry-run` 여부가 아니다. 바꾸지 않았다.
+- A8 `db_pr publish`: 커밋 메시지가 확인받은 메시지와 다르면 "trailer(Co-Authored-By 등)나 서명 줄을 덧붙이지 않는다 — summary의 commit_message 그대로 커밋한다." 힌트를 덧붙인다(종료 코드 1 그대로).
+- B1 `write-flow.md §5`·`07-workflow.md` Step 8-6: 커밋 메시지에 trailer를 덧붙이지 않는다(publish가 거부). B2 `write-flow.md` 계획 예시의 `jira` 블록에 필수 `key`·`origin`을 보이고 "`JOB/jira.json`의 jira 블록을 그대로 복사"로 적었다(`plan.schema.json`: `jira`는 `key`·`origin` 필수). B3 `feedback.suggested`에 `cause: null` 후보를 넣지 않는다(스키마 `causeId`는 문자열 패턴이라 거부). B4 `db-authoring.md`: 선택지를 보일 때 `allow_cause_drafts` 초안을 op 그대로 함께 보인다. `SKILL.md`는 건드리지 않았다.

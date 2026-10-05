@@ -1,0 +1,14 @@
+# eval 50: 로밍 데이터 불가, main(IMS)·radio(데이터 스택) 두 버퍼 파일. 근거는 radio 쪽.
+name: e050-roaming-two-buffers
+start: "2026-09-24T09:00:00+09:00"
+default_phone: 0
+pid: 1234
+tid: 1244
+entries:
+  - {at: 0, tag: ImsManager, buffer: main, pid: 1600, tid: 1610, msg: "registration state: REGISTERED"}
+  - {after: 1, tag: "SST-{phone}", msg: "onRoamingOn: roaming=true"}
+  - {after: 1, tag: "DSM-{phone}", msg: "isDataRoamingEnabled=false"}
+  - {after: 1, tag: "DNC-{phone}", level: I, msg: "onEvaluateNetworkRequests: reason=ROAMING_STATE_CHANGED"}
+  - {after: 0.5, tag: "DNC-{phone}", level: W, msg: "evaluation result: NOT_ALLOWED reasons=[ROAMING_DISABLED]"}
+  - {after: 2, tag: ImsManager, buffer: main, pid: 1600, tid: 1610, msg: "onFeatureCapabilityChanged: data=false"}
+  - {after: 8, tag: "DNC-{phone}", level: W, msg: "evaluation result: NOT_ALLOWED reasons=[ROAMING_DISABLED]"}

@@ -76,16 +76,22 @@ def run_script(name: str, args: list[str], plugin_root: str | None = None,
     """플러그인 스크립트를 부른다. (종료 코드, stdout JSON 또는 None, 가공 전 stderr).
 
     기본은 같은 프로세스에서 `main(argv)`. `env`가 있거나 `TT_SCRIPT_SUBPROCESS=1`이면 subprocess."""
-    argv = [*args, *(["--plugin-root", plugin_root] if plugin_root else [])]
-    if env is not None or os.environ.get(SUBPROCESS_ENV) == "1":
-        code, out, err = _run_subprocess(name, argv, env)
-    else:
-        code, out, err = run_in_process(name, argv)
+    code, out, err = run_text(name, args, plugin_root, env)
     try:
         data = json.loads(out) if out.strip() else None
     except json.JSONDecodeError:
         data = None
     return code, data, err
+
+
+def run_text(name: str, args: list[str], plugin_root: str | None = None,
+             env: dict | None = None) -> tuple[int, str, str]:
+    """`run_script`와 같은 실행 방식(같은 프로세스, `env`가 있거나 `TT_SCRIPT_SUBPROCESS=1`이면 subprocess)으로
+    부르고 JSON 해석 없이 (종료 코드, stdout, stderr)를 돌려준다."""
+    argv = [*args, *(["--plugin-root", plugin_root] if plugin_root else [])]
+    if env is not None or os.environ.get(SUBPROCESS_ENV) == "1":
+        return _run_subprocess(name, argv, env)
+    return run_in_process(name, argv)
 
 
 def run_in_process(name: str, argv: list[str]) -> tuple[int, str, str]:

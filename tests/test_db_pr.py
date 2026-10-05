@@ -603,7 +603,7 @@ def test_publish_rejects_changes_after_approval():
     message = json.loads((ws.job_dir("MOCK-7001") / "state.json").read_text(encoding="utf-8"))["commit_message"]
     git(wt, "commit", "-q", "--amend", "-m", "다른 메시지", env=ws.hook_env())
     out = ws.db_pr(*publish, expect=1)
-    assert any("커밋 메시지" in p for p in out["problems"])
+    assert any("커밋 메시지" in p and "trailer(Co-Authored-By" in p and "commit_message 그대로" in p for p in out["problems"])
     git(wt, "commit", "-q", "--amend", "-m", message, env=ws.hook_env())
     bad_branch = list(publish)
     bad_branch[3] = "issue/OTHER-1"

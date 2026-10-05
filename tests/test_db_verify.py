@@ -115,8 +115,7 @@ def test_broad_cause_signature_and_widened_fixed_cause_are_blocked():
     assert code == 1 and rows["R3"]["status"] == "fail"
     check = next(c for c in rows["R3"]["checks"] if c["target"] == "DATA-002-01")
     assert f"{DATA}/fixtures/DATA-001-01.log" in {h["fixture"] for h in check["hits"]}
-    assert {"op": "allow-cause", "fixture": "fixtures/DATA-001-01.log", "cause": "DATA-002-01",
-            "type_dir": DATA} in check["allow_cause_drafts"]
+    assert {"op": "allow-cause", "fixture": "fixtures/DATA-001-01.log", "cause": "DATA-002-01"} in check["allow_cause_drafts"]
 
 
 def test_cross_category_hit_needs_also_allowed_and_scoring_does_not_matter():
@@ -131,7 +130,12 @@ def test_cross_category_hit_needs_also_allowed_and_scoring_does_not_matter():
     recurrence = f"{IMS}/fixtures/IMS-001-01.recurrence.MOCKB77_U2_20260920.log"
     assert set(rows["R4"]["targets"]) == {positive, recurrence}
     drafts = [d for f in rows["R4"]["failures"] for d in f["allow_cause_drafts"]]
-    assert {"op": "allow-cause", "fixture": "fixtures/IMS-001-01.log", "cause": "CALL-001-01", "type_dir": IMS} in drafts
+    draft = {"op": "allow-cause", "fixture": "fixtures/IMS-001-01.log", "cause": "CALL-001-01"}
+    assert draft in drafts
+    plan = {"source": "analyze", "schema_version": 1, "started_at": "2026-10-05T10:00+09:00",
+            "base_sha": "0123456", "operations": [dict(draft)]}
+    from dbadd.core import validate_plan      # 초안은 그대로 계획에 붙일 수 있어야 한다 (additionalProperties: false)
+    validate_plan(plan, SAMPLE)
 
     def view(rows_):
         return {k: (rows_[k]["status"], rows_[k]["targets"]) for k in ("R2", "R3", "R4")}
@@ -156,6 +160,54 @@ def test_cross_category_hit_needs_also_allowed_and_scoring_does_not_matter():
     code, rows, _ = rules(db)
     assert code == 0, rows
     assert [rows[k]["status"] for k in ("R2", "R3", "R4")] == ["pass", "pass", "pass"]
+
+
+def test_retemp_drafts_maps_real_ids_back_to_plan_temp_ids():
+    from db_verify import _retemp_drafts
+    tree = {"rules": [{"checks": [{"allow_cause_drafts": [{"op": "allow-cause", "fixture": "fixtures/a.log",
+                                                           "cause": "DATA-001-03"}],
+                                   "hits": [{"allow_cause_draft": {"op": "allow-cause", "fixture": "fixtures/b.log",
+                                                                   "cause": "DATA-001-03"}},
+                                            {"allow_cause_draft": None}]}]}],
+            "reasons": [{"cause": "DATA-001-03", "message": "DATA-001-03도 C=1이다"}],
+            "other": {"op": "allow-cause", "fixture": "fixtures/c.log", "cause": "CALL-001-01"}}
+    _retemp_drafts(tree, {"DATA-001-03": "NEW-CAUSE-1"})
+    check = tree["rules"][0]["checks"][0]
+    assert check["allow_cause_drafts"][0]["cause"] == "NEW-CAUSE-1"
+    assert check["hits"][0]["allow_cause_draft"]["cause"] == "NEW-CAUSE-1"
+    assert tree["reasons"][0]["cause"] == "DATA-001-03"             # allow-cause 초안이 아닌 항목은 그대로
+    assert tree["other"]["cause"] == "CALL-001-01"                   # 매핑에 없는 ID는 그대로
+
+
+def test_retemp_drafts_covers_all_op_id_keys():
+    from db_verify import _retemp_drafts
+    back = {"DATA-001-03": "NEW-CAUSE-1", "DATA-002-01": "NEW-CAUSE-2"}
+    ops = [{"op": "add-fixture", "for": "DATA-001-03", "kind": "fixed", "path": "p"},
+           {"op": "verify-fix", "cause": "DATA-001-03", "result": "passed", "verification": {"note": "DATA-001-03"}},
+           {"op": "merge", "a": "DATA-001-03", "b": "DATA-002-01", "id": "DATA-002-01", "owner": "DATA-001-03"},
+           {"op": "verify-fix", "cause": "CALL-001-01"}]
+    tree = {"suggested_ops": ops, "cause": "DATA-001-03", "reason": "DATA-001-03 충족", "for": "DATA-001-03"}
+    _retemp_drafts(tree, back)
+    assert ops[0]["for"] == "NEW-CAUSE-1" and ops[1]["cause"] == "NEW-CAUSE-1"
+    assert (ops[2]["a"], ops[2]["b"], ops[2]["id"], ops[2]["owner"]) == ("NEW-CAUSE-1", "NEW-CAUSE-2", "NEW-CAUSE-2", "NEW-CAUSE-1")
+    assert ops[3]["cause"] == "CALL-001-01"                         # 매핑에 없는 ID
+    assert ops[1]["verification"]["note"] == "DATA-001-03"          # 설명 문자열은 그대로
+    assert tree["cause"] == "DATA-001-03" and tree["reason"] == "DATA-001-03 충족" and tree["for"] == "DATA-001-03"   # op가 아닌 dict
+
+
+def test_script_honours_subprocess_env(monkeypatch):
+    import db_verify
+    from common import checks
+    calls = []
+    monkeypatch.setattr(checks, "_run_subprocess", lambda name, argv, env: calls.append((name, argv, env)) or (0, "{}", ""))
+    monkeypatch.setattr(checks, "run_in_process", lambda name, argv: calls.append(("inproc", name)) or (0, "{}", ""))
+    monkeypatch.setenv("TT_SCRIPT_SUBPROCESS", "1")
+    proc = db_verify._script("db_add.py", ["apply", "p"], "/root")
+    assert calls == [("db_add.py", ["apply", "p", "--plugin-root", "/root"], None)] and proc.returncode == 0 and proc.stdout == "{}"
+    monkeypatch.delenv("TT_SCRIPT_SUBPROCESS")
+    calls.clear()
+    db_verify._script("db_add.py", ["apply", "p"], None)
+    assert calls == [("inproc", "db_add.py")]
 
 
 def test_new_type_symptom_hitting_other_negative_fails_r3():
@@ -386,6 +438,8 @@ def test_record_new_cause_resolution_draft_then_verified_stage(loaded_condition)
     assert out["cause"] == "DATA-001-03" and out["requested"] == "NEW-CAUSE-1"
     assert out["satisfied_traces"][0]["signature"] == "DATA-001-03/sim-loaded-then-allowed"
     assert [op["op"] for op in out["suggested_ops"]] == ["add-fixture", "verify-resolution"]
+    # draft 모드의 초안 op는 계획의 temp_id를 쓴다 (실제 ID는 reason 같은 설명에만 남는다)
+    assert [op.get("for") or op.get("cause") for op in out["suggested_ops"]] == ["NEW-CAUSE-1", "NEW-CAUSE-1"]
     r1 = next(r for r in out["rules"]["rules"] if r["id"] == "R1")
     assert r1["status"] == "pass" and not out.get("withheld")
     assert not draft.exists()

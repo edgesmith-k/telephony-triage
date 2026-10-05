@@ -81,3 +81,55 @@ def test_evaluator_prompt_does_not_leak_expected_answers(tmp_path):
     prompt = evaluation.evaluation_prompt(entry, {"skill": "isolated/skill"}, tmp_path, tmp_path)
     assert "SECRET_EXPECTATION" not in prompt and "SECRET_ANSWER" not in prompt
     assert "로그 분석해줘" in prompt and "취소" in prompt
+
+
+# -- 정의 정합성 (실행 없이) ---------------------------------------------------------------------
+
+EVALS = REPO / "tests" / "skill_evals"
+sys.path.insert(0, str(REPO / "tests" / "helpers"))
+
+
+def _entries() -> list[dict]:
+    return json.loads((EVALS / "evals.json").read_text(encoding="utf-8"))["evals"]
+
+
+def test_eval_ids_are_unique_and_consecutive():
+    ids = [e["id"] for e in _entries()]
+    assert ids == list(range(1, len(ids) + 1)), ids
+
+
+def test_every_eval_has_required_keys_and_assertions():
+    for e in _entries():
+        for key in ("id", "name", "prompt", "setup", "user_replies", "expected_output", "assertions"):
+            assert e.get(key), (e["id"], key)
+        assert all(isinstance(a, str) and a for a in e["assertions"]), e["id"]
+
+
+def test_eval_setup_references_resolve():
+    import make_variant_dbs
+    import skill_eval_env
+    from runner import fixture_path
+
+    dbs = {"issue-db-sample", *make_variant_dbs.VARIANTS}
+    for e in _entries():
+        setup = e["setup"]
+        assert setup.get("db", "issue-db-sample") in dbs, (e["id"], setup.get("db"))
+        for key in setup.get("jira") or []:
+            assert skill_eval_env._find_jira(key).is_file(), (e["id"], key)
+        for item in setup.get("logs") or []:
+            if "src" in item:
+                assert fixture_path(item["src"]).is_file(), (e["id"], item["src"])
+            else:
+                assert (EVALS / "scenarios" / item["scenario"]).is_file(), (e["id"], item["scenario"])
+        for inj in setup.get("inject_main") or []:
+            assert (EVALS / "scenarios" / inj["scenario"]).is_file(), (e["id"], inj["scenario"])
+
+
+def test_split_buffers_setup_writes_one_file_per_buffer(tmp_path):
+    import skill_eval_env
+
+    entry = next(e for e in _entries() if e["id"] == 50)
+    env = skill_eval_env.build(entry, tmp_path / "env")
+    assert env is not None
+    logs = sorted(p.name for p in (tmp_path / "env" / "logs").iterdir())
+    assert logs == ["e050.main.log", "e050.radio.log"], logs

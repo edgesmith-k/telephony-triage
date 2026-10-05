@@ -86,12 +86,44 @@ def find_line(text, patterns: Iterable[str] | None) -> tuple[str | None, str | N
     return _scan(text, _compile(patterns)[0])
 
 
+# 번호로 보는 것: `Step 7`·`스텝 7`·`단계 7`, `7 |`(표 행), `7.`·`7)` 뒤에 공백과 숫자가 아닌 글자(`7. Attach`).
+# 시각·날짜(`12:03:44`, `2026.09.21`, `2026-09-21`)·`10.5`·`3G`는 번호가 아니다.
+_NO_BODY = r"(?:(?:step|스텝|단계)\s*(\d+)\b|(\d+)\s*\||(\d+)[.)]\s+(?=[^\d\s]))"
+_STEP_NO_RE = re.compile(r"(?i)^\s*" + _NO_BODY)
+_STEP_PREFIX_RE = re.compile(r"(?i)^\s*" + _NO_BODY + r"[\s:.\-)|]*")
+_NUMBERED_RE = re.compile(r"^\s*\d+\s*\|")
+
+
+def numbered(step: str | None, line: str | None) -> str | None:
+    """패턴이 이름만 뽑았어도 맞은 줄이 `Step 7 …`·`7 | …`·`7. …`처럼 번호로 시작하면 `7 | 이름`으로 맞춘다.
+    뽑은 이름이 이미 `7. 이름`·`Step 7 이름`·`7) 이름`처럼 번호로 시작하면 그 번호를 떼고 `7 | 이름`으로 쓴다.
+    표의 FAIL 행·Jira 필드와 같은 표기라 README "자주 실패한 스텝"이 한 줄로 묶인다."""
+    if not step or _NUMBERED_RE.match(step):
+        return step
+    own = _STEP_PREFIX_RE.match(step)
+    if own:
+        rest = step[own.end():].strip()
+        number = next(g for g in own.groups() if g is not None)
+        return f"{number} | {rest}" if rest else step
+    if not line:
+        return step
+    m = _STEP_NO_RE.match(line)
+    if m and step.strip() != line.strip():
+        return f"{next(g for g in m.groups() if g is not None)} | {step.strip()}"
+    return step
+
+
+_numbered = numbered
+
+
 def from_text(text, patterns: Iterable[str] | None) -> tuple[str | None, list[str]]:
     """여러 줄 텍스트에서 실패 스텝 한 줄을 뽑는다. `(step|None, warnings)`.
 
-    `find_line`과 같은 규칙이고, 잘못된 정규식은 경고만 내고 건너뛴다."""
+    `find_line`과 같은 규칙이고, 잘못된 정규식은 경고만 내고 건너뛴다. 맞은 줄이 스텝 번호로 시작하면
+    `번호 | 이름`으로 낸다(`_numbered`)."""
     compiled, warnings = _compile(patterns)
-    return _scan(text, compiled)[0], warnings
+    step, line = _scan(text, compiled)
+    return _numbered(step, line), warnings
 
 
 def group_key(text) -> str:

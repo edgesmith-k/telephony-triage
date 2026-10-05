@@ -185,9 +185,10 @@ def cmd_find_symbol(args, defaults) -> dict:
             if not path.is_file():
                 continue
             # 클래스 이름과 파일 이름이 같으면 본문에 없어도 `class`로 낸다(아래 else). 그 밖에는 이름이 본문에 있어야 한다.
-            if not (sep and path.stem == cls) and needle not in path.read_bytes():
+            data = path.read_bytes()      # 한 번만 읽는다 (걸러내기와 해석이 같은 바이트를 쓴다)
+            if not (sep and path.stem == cls) and needle not in data:
                 continue
-            text = path.read_text(encoding="utf-8", errors="replace")
+            text = data.decode("utf-8", errors="replace")
             if sep and path.stem != cls and not name_re.search(text):
                 continue
             rel = path.relative_to(root).as_posix()

@@ -29,6 +29,18 @@ def git(repo, *args) -> str:
     return p.stdout if p.returncode == 0 else ""
 
 
+_HEREDOC_RE = re.compile(r"<<-?\s*(['\"]?)(\w+)\1[^\n]*\n.*?^\s*\2\s*$", re.S | re.M)
+
+
+def _strip_heredocs(cmd: str) -> str:
+    """heredoc 본문(실행자가 transcript·commands.md를 쓰는 글)은 실행한 명령이 아니다."""
+    return _HEREDOC_RE.sub("<<heredoc", cmd)
+
+
+def _read(path: Path) -> str:
+    return path.read_text(encoding="utf-8") if path.is_file() else ""
+
+
 class Ctx:
     def __init__(self, env_dir: Path, run_dir: Path):
         self.env = json.loads((env_dir / "env.json").read_text(encoding="utf-8"))
@@ -43,6 +55,8 @@ class Ctx:
         cells = [row.split("|")[2] for row in self.commands.splitlines()
                  if row.lstrip().startswith("|") and row.count("|") >= 3]
         self.invoked = "\n".join(cells or [self.commands]) + "\n" + self.trace()
+        # 실행 기록(events.jsonl)의 실제 Bash 명령도 본다 — commands.md는 실행자가 쓴 요약이라 빠질 수 있다
+        self.invoked += "\n" + "\n".join(_strip_heredocs(str(i.get("command", ""))) for n, i in (self.tool_uses() or []) if n == "Bash")
 
     def trace(self) -> str:
         lines = []
@@ -55,6 +69,39 @@ class Ctx:
                 if row.get("script"):
                     lines.append(" ".join([row["script"], *map(str, row.get("args") or [])]))
         return "\n".join(lines)
+
+    def tool_uses(self):
+        """events.jsonl의 assistant tool_use를 [(이름, 입력)]으로. 기록이 없으면 None."""
+        p = self.run / "events.jsonl"
+        if not p.is_file():
+            return None
+        out = []
+        for raw in p.read_text(encoding="utf-8", errors="replace").splitlines():
+            try:
+                ev = json.loads(raw)
+            except ValueError:
+                continue
+            if ev.get("type") == "assistant":
+                out += [(c.get("name") or "", c.get("input") or {}) for c in (ev.get("message") or {}).get("content") or []
+                        if isinstance(c, dict) and c.get("type") == "tool_use"]
+        return out
+
+    def opened(self, *names):
+        """Read나 Bash 읽기(cat·head·tail·less·sed·awk·jq·grep·python)로 연 파일 중 basename이 names에 있는 것.
+        triage·parse_logcat 호출 인자는 제외한다. events.jsonl이 없으면 commands.md의 읽기 명령으로 본다."""
+        uses = self.tool_uses()
+        if uses is None:
+            return [n for n in names if re.search(r"\b(cat|head|tail|less|sed|awk|jq|grep)\b[^|\n]*" + re.escape(n), self.invoked)]
+        hits = []
+        for name, inp in uses:
+            if name == "Read" and Path(str(inp.get("file_path", ""))).name in names:
+                hits.append(Path(inp["file_path"]).name)
+            elif name == "Bash":
+                cmd = str(inp.get("command", ""))
+                if re.search(r"\b(cat|head|tail|less|sed|awk|jq|grep|python3?)\b", cmd) \
+                        and "triage.py" not in cmd and "parse_logcat.py" not in cmd:
+                    hits += [n for n in names if re.search(r"(?<![\w.-])" + re.escape(n) + r"\b", cmd)]
+        return hits
 
     # 원격 ---------------------------------------------------------------------------------
     def branches(self) -> list[str]:
@@ -380,7 +427,11 @@ def checks(eid: int, ctx: Ctx) -> list:
                     t = f.read_text(encoding="utf-8", errors="ignore")
                     bad += [f"{f.name}:{r}" for r in raw if r in t]
             return not bad, str(bad)
-        return [tr, files, None, None, none_remote_lock]
+        def tok():   # 결정적 칸은 드라이버 report.md 그대로 보인다(SKILL Step 6). transcript는 실행자 요약이라 줄이 줄어들 수 있다
+            r = ctx.work / "MOCK-9007" / "report.md"
+            t = r.read_text(encoding="utf-8") if r.is_file() else ""
+            return "<IMSI#" in t and "<MSISDN#" in t and "450081234567890" not in t, "JOB/report.md 근거 줄의 토큰 표기"
+        return [tr, files, tok, None, none_remote_lock]
     if eid == 11:
         def staged():
             p_ = ctx.plan("MOCK-9011") or {}
@@ -414,6 +465,82 @@ def checks(eid: int, ctx: Ctx) -> list:
         return [None, None, None, app, none_remote_lock]
     if eid == 44:
         return [None, None, None, lambda: unresolved("MOCK-9044"), none_remote_lock]
+    # --- batch E (10/04~05 기능) ---
+    def analysis(job):
+        p = ctx.work / job / "analysis.json"
+        return json.loads(p.read_text(encoding="utf-8")) if p.is_file() else {}
+    def noplan(job):
+        ok, ev = ctx.lock_free()
+        p = ctx.work / job / "plan.json"
+        return ok and not p.is_file(), f"{ev}; plan.json={'있음' if p.is_file() else '없음'}"
+    def scope(log):
+        """탐색 분석은 timeline.md만 읽는다: 원본 중간 산출물·로그 원문을 열지 않았다."""
+        # match.json은 계획 feedback.suggested용으로 일부 읽는 것이 정상 절차(write-flow.md)라 뺀다
+        bad = ctx.opened("events.json", "jira_raw.json", "events-full.json", log)
+        seen = "timeline.md" in ctx.opened("timeline.md")
+        return seen and not bad, f"timeline.md 열람={seen}; 열면 안 되는 파일={sorted(set(bad))}"
+    if eid == 46:
+        return [None, lambda: scope("setup-error.log"), None, None, None, lambda: noplan("MOCK-9046")]
+    if eid == 47:
+        return [None, lambda: scope("e047.log"), None, lambda: unresolved("MOCK-9047"), None, none_remote_lock]
+    if eid == 48:
+        br = "issue/MOCK-9048"
+        def append():
+            o = ops("MOCK-9048")
+            return o == [{"op": "append", "cause": "DATA-001-01"}], json.dumps(o, ensure_ascii=False)
+        def fs():
+            v = ((ctx.plan("MOCK-9048") or {}).get("jira") or {}).get("failed_step")
+            return v == "5 | 데이터 켜기", f"plan jira.failed_step={v!r}"
+        def remote():
+            t = ctx.show(br, "data/DATA-001-no-setup-data-call/jira/MOCK-9048.yaml")
+            return bool(re.search(r"^failed_step: 5 \| 데이터 켜기\s*$", t, re.M)), t or f"branches={ctx.branches()}"
+        def readme():
+            t = ctx.show(br, "data/README.md")
+            m = re.search(r"자주 실패한 스텝: [^\n]*5 \\?\| 데이터 켜기 \(3건\)", t)
+            return bool(m), m.group(0) if m else "README에 '자주 실패한 스텝' 줄 없음"
+        def lock_clone():
+            (a, ea), (b, eb) = ctx.lock_free(), ctx.clone_same()
+            return a and b, f"{ea}; {eb}"
+        return [None, append, fs, remote, readme, None, lock_clone]
+    if eid == 49:
+        def paste():
+            ok = bool(re.search(r"--steps-file\s+\S*(?:MOCK-9049|\$\w+|\$\{\w+\})/steps-pasted\.txt", ctx.invoked))
+            return ok, "commands.md·드라이버 trace의 --steps-file 인자"
+        def anchor():
+            a = analysis("MOCK-9049")
+            sa, cand = a.get("step_anchor") or {}, (a.get("candidates") or [{}])[0]
+            src = ((a.get("jira") or {}).get("failed_step") or {}).get("source")
+            ok = sa.get("source") == "step_order" and cand.get("cause") == "DATA-001-01" and src == "steps_file"
+            return ok, f"step_anchor.source={sa.get('source')} 1위={cand.get('cause')} failed_step.source={src}"
+        def fs():
+            want = (((analysis("MOCK-9049").get("jira") or {}).get("failed_step")) or {}).get("text")
+            v = ((ctx.plan("MOCK-9049") or {}).get("jira") or {}).get("failed_step")
+            return bool(want) and v == want == "7 | 데이터 연결 확인", f"plan={v!r} analysis.json={want!r}"
+        def cleaned():
+            gone = not (ctx.work / "MOCK-9049" / "steps-pasted.txt").is_file()
+            ok, ev = none_remote_lock()
+            return gone and ok, f"steps-pasted.txt {'없음' if gone else '남음'}; {ev}"
+        return [paste, anchor, None, lambda: ("--clock-offset" not in ctx.invoked, "--clock-offset 인자 없음"), fs, cleaned]
+    if eid == 50:
+        names = ("e050.main.log", "e050.radio.log")
+        def both():
+            return all(n in ctx.invoked for n in names), f"invoked에 {names}"
+        def order():
+            p = ctx.work / "MOCK-9050" / "events.json"
+            want = names
+            if p.is_file():
+                files = (json.loads(p.read_text(encoding="utf-8")).get("input") or {}).get("files") or []
+                want = tuple(Path(f).name for f in files) or names
+            cuts = [l for l in ctx.invoked.splitlines() if " cut " in l and "--evidence" in l]
+            got = [[Path(t).name for t in l.split() if t.endswith(".log") and Path(t).name in want] for l in cuts]
+            return bool(cuts) and all(g == list(want) for g in got), f"입력 순서={list(want)} cut 호출={got}"
+        def planned():
+            o = ops("MOCK-9050")
+            ok = {"op": "append", "cause": "DATA-001-02"} in o and any(
+                x.get("op") == "add-fixture" and x.get("for") == "DATA-001-02" and x.get("kind") == "positive" for x in o)
+            return ok, json.dumps(o, ensure_ascii=False)[:400]
+        return [both, lambda: (bool(re.search(r"\(f\d+:L\d+\)", _read(ctx.work / "MOCK-9050" / "report.md"))), "JOB/report.md 근거 줄의 (f<n>:L<m>)"), order,
+                None, planned, none_remote_lock]
     return []
 
 

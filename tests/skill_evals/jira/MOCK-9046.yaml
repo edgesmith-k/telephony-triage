@@ -1,0 +1,18 @@
+# 모의 Jira 티켓. 커스텀 필드 이름은 일부러 사내와 다를 법한 이름으로 두어
+# jira.field_map을 반드시 거치게 한다 (15-local-draft.md §15.2).
+key: MOCK-9046
+fields:
+  summary: 데이터 연결 실패
+  description: |
+    데이터 연결 요청은 나가는데 계속 실패합니다.
+  status: {name: Open}
+  project: {key: MOCK, name: Mock Telephony}
+  components:
+    - {name: Data}
+  customfield_10001: "2026-09-21T10:00:03+0900"   # 발생 시각
+  customfield_10002: MOCK-A56                      # 모델
+  customfield_10003: MOCKA56_U1_20260915           # SW
+  customfield_10004: "16"                          # Android 버전
+  customfield_10005: MockTel KR                    # 캐리어
+  customfield_10006: "0"                           # SIM 슬롯
+comments: []

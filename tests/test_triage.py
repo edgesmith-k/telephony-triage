@@ -197,6 +197,22 @@ def test_jira_without_time_offers_time_candidates_instead_of_asking_year():
     ws.json("triage.py", ["release", "MOCK-9005"])
 
 
+def test_time_question_warns_about_clock_anomalies():
+    """A3: Jira에 발생 시각이 없고 로그에 시계 이상이 있으면 시각 질문에 경고를 붙인다."""
+    ws = Workspace()
+    log = tmp("tt-triage-clock-") / "clock-anomaly.log"
+    log.write_bytes((REPO / "tests/fixtures/logs/clock-anomaly.log").read_bytes())
+    args = ["run", "MOCK-9005", "--dry-run", "--jira-file", REPO / "tests/skill_evals/jira/MOCK-9005.yaml",
+            "--logs", log, "--code", "skip"]
+    ask = ws.json("triage.py", args)
+    assert ask["status"] == "needs_input" and ask["needs_input"]["kind"] == "time", ask
+    question = ask["needs_input"]["question"]
+    assert "시계 이상" in question, question
+    if not ask["needs_input"]["options"]:
+        assert "후보가 없으니" in question, question
+    ws.json("triage.py", ["release", "MOCK-9005"])
+
+
 def test_full_run_asks_for_jira_and_reads_what_the_bridge_saved():
     ws = Workspace()
     args = ["run", "MOCK-1001", "--logs", DATA_LOG, "--code", "skip"]
@@ -492,3 +508,27 @@ if __name__ == "__main__":
     import pytest
 
     raise SystemExit(pytest.main([__file__, "-q"]))
+
+
+def test_unique_evidence_drops_same_event_from_symptom_and_cause():
+    import triage
+    ev = [{"event_index": 5, "ts": "t", "tag": "DNC-1", "msg": "m", "signature": "DATA-001-02/x"},
+          {"event_index": 5, "ts": "t", "tag": "DNC-1", "msg": "m", "signature": "DATA-001/y"},
+          {"event_index": 7, "ts": "t2", "tag": "DNC-1", "msg": "m2"},
+          {"ts": "t3", "tag": "A", "msg": "x"}, {"ts": "t3", "tag": "A", "msg": "x"}]
+    out = triage._unique_evidence(ev)
+    assert [e.get("event_index") for e in out] == [5, 7, None]
+    assert out[0]["signature"] == "DATA-001-02/x"     # 처음 것(원인 근거)을 남긴다
+
+
+def test_unique_evidence_keys_on_line_ref_first():
+    import triage
+    ref = {"file_index": 0, "line_no": 12}
+    ev = [{"event_index": 5, "line_ref": ref, "ts": "t", "tag": "A", "msg": "m", "signature": "S1"},
+          {"event_index": 6, "line_ref": dict(ref), "ts": "t", "tag": "A", "msg": "m", "signature": "S2"},   # 파생 이벤트: 같은 줄
+          {"event_index": 7, "line_ref": {"file_index": 1, "line_no": 12}, "ts": "t", "tag": "A", "msg": "m"},   # 다른 파일
+          {"event_index": 8, "line_ref": {"file_index": 0, "line_no": None}, "ts": "t", "tag": "A", "msg": "m"},   # 줄 번호 모름 → event_index
+          {"event_index": 8, "ts": "t", "tag": "A", "msg": "m"}]
+    out = triage._unique_evidence(ev)
+    assert [e["event_index"] for e in out] == [5, 7, 8]
+    assert out[0]["signature"] == "S1"

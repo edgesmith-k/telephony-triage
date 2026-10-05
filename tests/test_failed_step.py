@@ -71,13 +71,13 @@ def test_precedence_cli_field_description_test_steps_file():
     assert out["jira"]["failed_step"] == "필드 스텝"
     raw = _raw(tmp, description="\nStep 2: 설명 스텝 FAIL\n", test_steps="Step 1: 절차 스텝 NG\n")
     out = _extract(raw, "--steps-file", steps)
-    assert out["failed_step"] == {"text": "설명 스텝", "source": "description"}
+    assert out["failed_step"] == {"text": "2 | 설명 스텝", "source": "description"}
     raw = _raw(tmp, test_steps="Step 1: 절차 스텝 NG\n")
     out = _extract(raw, "--steps-file", steps)
-    assert out["failed_step"] == {"text": "절차 스텝", "source": "test_steps"}
+    assert out["failed_step"] == {"text": "1 | 절차 스텝", "source": "test_steps"}
     assert out["text"]["test_steps"].startswith("Step 1")
     out = _extract(_raw(tmp), "--steps-file", steps)
-    assert out["failed_step"] == {"text": "파일 스텝", "source": "steps_file"}
+    assert out["failed_step"] == {"text": "9 | 파일 스텝", "source": "steps_file"}
     assert "failed_step_auto" not in out
 
 
@@ -97,7 +97,7 @@ def test_csv_row_and_cp949_and_utf8_bom(tmp_path=None):
     assert step == "3 | Enable data" and warn is None
     kr = tmp / "steps.txt"
     kr.write_bytes("단계 4: 데이터 켜기 실패\n".encode("cp949"))
-    assert failedstep.read_steps_file(kr, PATTERNS) == ("데이터 켜기", None)
+    assert failedstep.read_steps_file(kr, PATTERNS) == ("4 | 데이터 켜기", None)
     assert csv_file.exists() and kr.exists()          # 복사·삭제하지 않는다
 
 
@@ -119,9 +119,33 @@ def test_unreadable_steps_file_gives_none_and_one_warning():
     assert "failed_step" not in out and len(out["warnings"]) == 1
 
 
+def test_numbered_label_matches_table_and_field():
+    # 패턴이 이름만 뽑아도 줄이 스텝 번호로 시작하면 `번호 | 이름`(표의 FAIL 행·Jira 필드와 같은 표기)
+    assert failedstep.from_text("Step 7: 데이터 연결 확인 FAIL", PATTERNS)[0] == "7 | 데이터 연결 확인"
+    assert failedstep.from_text("실패 스텝: 데이터 켜기", PATTERNS)[0] == "데이터 켜기"     # 번호가 없으면 그대로
+    assert failedstep.from_text("5 | 데이터 켜기 | FAIL", PATTERNS)[0] == "5 | 데이터 켜기"  # 이미 번호가 있으면 그대로
+    assert failedstep.from_text("3G 데이터 실패", [r"(?P<step>.+?)\s*실패$"])[0] == "3G 데이터"   # 숫자+구분자가 아니면 번호 아님
+
+
+def test_numbered_ignores_timestamps_and_dates():
+    for line in ("12:03:44 FAIL step=Attach", "2026.09.21 Attach FAIL", "2026-09-21 Attach FAIL", "2026. 09. 21 Attach FAIL",
+                 "3G 데이터 실패", "10.5 Attach FAIL"):
+        assert failedstep.numbered("Attach", line) == "Attach", line
+    assert failedstep.numbered("Attach", "7. Attach FAIL") == "7 | Attach"
+    assert failedstep.numbered("Attach", "7) Attach FAIL") == "7 | Attach"
+    assert failedstep.numbered("Attach", "7 | Attach | FAIL") == "7 | Attach"
+
+
+def test_numbered_strips_number_already_in_step():
+    for step in ("7. Attach PDN", "Step 7 Attach PDN", "7) Attach PDN", "스텝 7: Attach PDN"):
+        assert failedstep.numbered(step, step + " FAIL") == "7 | Attach PDN", step
+    assert failedstep.numbered("7 | Attach PDN", "x") == "7 | Attach PDN"
+    assert failedstep.numbered(None, "7. x") is None
+
+
 def test_bad_regex_is_warning_not_error():
     step, warns = failedstep.from_text("Step 1: x FAIL", ["(", *PATTERNS])
-    assert step == "x" and len(warns) == 1 and "정규식" in warns[0]
+    assert step == "1 | x" and len(warns) == 1 and "정규식" in warns[0]
     assert failedstep.from_text("아무 줄", ["("])[0] is None
 
 
@@ -274,14 +298,14 @@ def test_resolve_falls_back_to_fail_row_after_patterns():
     assert res == {"text": "7 | 데이터 연결 확인", "source": "steps_file"} and warns == []
     # 패턴이 맞으면 패턴이 먼저다(옛 동작)
     res, _ = failedstep.resolve(None, None, html, [r"(?i)^\d+\s*\|\s*(?P<step>.+?)\s*\|\s*FAIL"], _masker())
-    assert res == {"text": "데이터 연결 확인", "source": "steps_file"}
+    assert res == {"text": "7 | 데이터 연결 확인", "source": "steps_file"}
     paste = tmp / "p.txt"
     paste.write_text(PASTE, encoding="utf-8")
     assert failedstep.resolve(None, None, paste, [], _masker())[0]["text"] == "7 | 데이터 연결 확인"
     assert failedstep.resolve("직접", None, html, [], _masker())[0]["source"] == "cli"      # 우선순위는 그대로
     # extract는 site-defaults의 failed_step_patterns가 먼저다(붙여넣기 줄 "Step 7: … FAIL"에 맞는다)
     out = _extract(_raw(tmp), "--steps-file", paste)
-    assert out["failed_step"] == {"text": "데이터 연결 확인", "source": "steps_file"}
+    assert out["failed_step"] == {"text": "7 | 데이터 연결 확인", "source": "steps_file"}
     # html의 요약 표("Overall result | FAIL")는 표 머리 앞이라 패턴이 먼저 잡지 않는다
     out = _extract(_raw(tmp), "--steps-file", html)
     assert out["failed_step"] == {"text": "7 | 데이터 연결 확인", "source": "steps_file"}

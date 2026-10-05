@@ -63,6 +63,8 @@ skill-creator 스킬을 실행하고 아래를 입력으로 준다.
 | "ABC-777은 내가 APN 설정 고쳐서 해결했어, 이슈 DB에 기록만 해줘" | "이 CL 커밋 메시지 다듬어줘" |
 | "분석은 필요 없고 이 Jira를 DATA-001-02로 히스토리에만 올려줘" | |
 
+- 측정: `tests/skill_evals/trigger_real.py`(실제 플러그인 `--plugin-dir`, 처음 4번의 도구 호출 안에 `Skill` 호출이면 트리거). skill-creator `run_eval`은 **첫 도구 호출**만 세서, 로그 분석 요청에서 먼저 `ls`로 로그를 찾는 경우를 미트리거로 잡는다(2026-10-05 측정: 그 방식 recall 0~20%, 실제 플러그인 방식 recall 100%·precision 100%, 24개×2회). description 개선 효과는 실제 플러그인 방식으로 판단한다.
+
 ## eval 케이스 (fixture와 가짜 Jira 요약 사용)
 
 1. 없음 + DATA_DISABLED → `DATA-001 > DATA-001-01` 제안, 확인 후 Jira 기록 파일과 피드백 파일 생성
@@ -71,7 +73,7 @@ skill-creator 스킬을 실행하고 아래를 입력으로 준다.
 4. 새 유형의 판별 태그가 `tags.yaml`에 없음 → `add-parser-rule` 초안, `cut`으로 만든 마스킹 fixture, 전체 회귀 결과 보고
 5. 발생 시각이 없는 Jira → 바로 묻지 않고 `parse --full`로 증상 시그니처가 충족되는 시각 후보(상위 3개)를 보여주고 고르게 한다. 후보가 없는 로그에서는 시각을 묻는다. 로그에 시계 역행이 있으면 경고하고 같은 경로를 제안한다
 6. 사용자가 분류를 거부 → 다른 후보나 새 유형 선택지 제시, 임의 확정 금지
-7. 로그에 IMSI, 전화번호, SIP URI → 리포트, 매칭 근거, 이슈 DB 반영분 모두 마스킹
+7. 로그에 IMSI, 전화번호, SIP URI → 리포트, 매칭 근거, 이슈 DB 반영분 모두 마스킹 (PII가 근거 줄에 있음)
 8. Jira 코멘트 요청 → 읽기 전용이라 거절, 리포트 복사 대안 제시
 9. push 확인 화면에서 "해결책 문구 바꿔줘" → 계획 수정 후 재적용, 확인 화면 재표시, 승인 전 push 금지
 10. CALL-001(fixed) 원인인데 SW가 fixed_in 이후(같은 빌드 포함) → "회귀 의심"을 보고하고 `fix.status`를 open으로 되돌릴지 묻는다
@@ -110,5 +112,10 @@ skill-creator 스킬을 실행하고 아래를 입력으로 준다.
 43. Jira 설명에 테스터 이름·전화번호·IMEI가 있음 → 리포트·`plan.json`·확인 화면·PR 본문에 원문이 없고, 전화번호·IMEI는 토큰으로, `jira/<KEY>.yaml`에는 구조화 필드와 사용자가 확인한 `note` 한 줄만 있다. 스킬이 제안한 `note` 초안에 사람 이름이 없다
 44. 듀얼 SIM 로그: 슬롯 0에 DATA-001 증상, 슬롯 1에 DATA-001-01 원인 로그(같은 윈도우) → 분석 모드에서 DATA-001-01이 후보에 오르지 않고 "유형 일치, 원인 미확인"과 슬롯(phone 0)이 표시된다. `same_phone: false`인 시그니처를 가진 원인은 잡힌다. 교차 슬롯 음성 fixture(`DATA-001.none.2.log`)가 회귀를 통과한다
 45. 이슈 DB에 맞는 유형이 없는 로그(S=1 유형 없음) → "후보 없음" 절에 설명 기반 유사 후보(`db_search`)와 타임라인 요약의 오류·거부 이벤트, 범위·시계 판정이 나오고, 계획 op는 자동으로 만들지 않으며 "새 유형 / 원인 미확정 / 기록하지 않음"만 묻는다. 발생 시각이 로그 범위 밖이면 "로그 범위 밖"으로 따로 보고하고 `--full` 재파싱을 제안한다. bugreport zip을 로그로 주면 logcat 섹션만 추출해 같은 흐름을 진행하고 dumpsys 섹션은 읽지 않는다
+46. 후보 없음 로그에서 탐색 분석 여부를 묻고 승인되면 `JOB/timeline.md`만 읽어(`events.json`·`match.json`·`jira_raw.json`·로그 원문은 읽지 않음) 리포트 "탐색 분석 (추정)" 칸에 가설 1~3개(로그로 확인·코드로 추정·반대 근거·다음 확인)를 쓴다. 점수·확신도를 매기지 않고, Step 7 선택지는 "새 유형 / 원인 미확정 / 기록하지 않음" 그대로이며 가설로 op를 만들지 않는다
+47. 유형 일치·원인 미확인(듀얼 SIM 교차 슬롯) + `--explore` → 묻지 않고 탐색 분석. 다른 슬롯 흔적을 쓰는 가설에는 슬롯 차이를 반대 근거로 적는다. 사용자가 가설을 보류하면 `unresolved {type}`만 넣고, Jira 기록 `note`에 가설 한 줄(마스킹)을 남길지 묻는다
+48. Jira 실패 스텝 필드(`5 | 데이터 켜기`)가 있는 이슈(스텝 우선 유형 DB) → 리포트에 실패 스텝을 보이되 점수·S/C에 쓰지 않고, 계획 `jira.failed_step`에 그대로 복사해 PR의 Jira 기록에 `failed_step`이 남고 카테고리 README "자주 실패한 스텝"이 갱신된다
+49. 사용자가 시험 스텝 목록을 대화에 붙여넣음(로그에 스텝 마커 없음, 이슈 DB `step_events` 있음) → `JOB/steps-pasted.txt`에 써서 `--steps-file`로 넘기고, 스텝 순서 기준(`step_order`)으로 마지막 PASS 스텝 이후를 분석해 Jira 시각 근처의 이른 IMS 403이 아니라 DATA-001-01을 1위로 보고한다. 시계 차를 추측하지 않고, 끝난 뒤 `steps-pasted.txt`가 남지 않는다
+50. 로그 두 개(main·radio) → 리포트 근거 줄의 위치 표기 `(f<n>:L<m>)`를 그대로 두고, 그 원인의 양성 fixture를 `parse_logcat.py cut --evidence JOB/match.json`으로 만들 때 triage에 준 로그를 같은 순서로 준다. `evidence-ref-mismatch` 경고가 나오면 사용자에게 알리고 순서를 맞춰 다시 자른다
 
-- 완료 기준: 트리거 테스트 전 항목, eval 45개 통과. SKILL.md 본체 500줄 이내, 흐름별 reference 분리("SKILL 구성"). 결과물은 플러그인 `skills/telephony-triage/`에 둔다. `analyze`, `record`, `validate --cause`, `verify-fix`, `fix-submitted` 커맨드가 스킬과 연결되어 동작한다.
+- 완료 기준: 트리거 테스트 전 항목, eval 50개(46~50은 10/04~05 기능 추가분) 통과. SKILL.md 본체 500줄 이내, 흐름별 reference 분리("SKILL 구성"). 결과물은 플러그인 `skills/telephony-triage/`에 둔다. `analyze`, `record`, `validate --cause`, `verify-fix`, `fix-submitted` 커맨드가 스킬과 연결되어 동작한다.
