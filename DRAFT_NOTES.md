@@ -14,7 +14,7 @@
 ## 진행 상태
 
 - 모드: **사외 초안**. 완료 Phase: **D0, 1~13**. RF-0·RF-1 완료.
-- 마지막 전체 테스트: **N_TESTS개 통과** (10/05, I5, Ubuntu·Py3.11, 8분). Windows에서는 도구 셸 stdin을 `/dev/null`로, PATH 앞에 실제 Python과 `python3` shim(Store 별칭이면 gh 스텁·git hook이 9009로 실패).
+- 마지막 전체 테스트: **658개 통과** (10/05, I5, Ubuntu·Py3.11, 6분). Windows에서는 도구 셸 stdin을 `/dev/null`로, PATH 앞에 실제 Python과 `python3` shim(Store 별칭이면 gh 스텁·git hook이 9009로 실패).
 - 사내 확인 항목: `TODO(SITE)` **73곳**(S22 12곳 추가) — `python3 tools/list_site_todos.py`. `REVIEW-OPEN.md` 0건.
 - 안내서(사람용 HTML): `docs/telephony-triage-guide.html` (공유본 https://claude.ai/artifact/1jov1Et4dQUMauFr6aoxWG)
 
