@@ -556,3 +556,9 @@
 - A7 `analysis.json`의 `mode`: `dry-run`에도 `write`로 나오는 것은 의도다. `mode`는 `write|read-only|offline` 계약값(`contracts.md`)으로 DB 쓰기 가능 여부이지 `--dry-run` 여부가 아니다. 바꾸지 않았다.
 - A8 `db_pr publish`: 커밋 메시지가 확인받은 메시지와 다르면 "trailer(Co-Authored-By 등)나 서명 줄을 덧붙이지 않는다 — summary의 commit_message 그대로 커밋한다." 힌트를 덧붙인다(종료 코드 1 그대로).
 - B1 `write-flow.md §5`·`07-workflow.md` Step 8-6: 커밋 메시지에 trailer를 덧붙이지 않는다(publish가 거부). B2 `write-flow.md` 계획 예시의 `jira` 블록에 필수 `key`·`origin`을 보이고 "`JOB/jira.json`의 jira 블록을 그대로 복사"로 적었다(`plan.schema.json`: `jira`는 `key`·`origin` 필수). B3 `feedback.suggested`에 `cause: null` 후보를 넣지 않는다(스키마 `causeId`는 문자열 패턴이라 거부). B4 `db-authoring.md`: 선택지를 보일 때 `allow_cause_drafts` 초안을 op 그대로 함께 보인다. `SKILL.md`는 건드리지 않았다.
+
+## S2b 스텝 번호에서 날짜 제외 (2026-10-05)
+
+- `stepanchor.step_number`·`_LEAD_RE`: 숫자 뒤에 `-:./` + 숫자가 오면 번호가 아니다. 전에는 `2026-10-05 Attach`·`2026.09.21 …`·`12:03:44 …`·`10.5`의 앞 숫자(2026·12·10)를 스텝 번호로 읽어 `same_step`이 번호만 비교하고, 번호 열이 있는 표에서 날짜로 시작하는 요약 행이 스텝이 됐다. `failedstep.numbered`의 규칙(A1)과 같은 결과.
+- `failedstep._step_row`(표 행 경로): 날짜만 또는 날짜+시각인 칸(`2026.09.21 10:00:01`)은 스텝 이름에서 뺀다(전에는 `_TS_RE`가 못 잡는 점 날짜가 이름에 남아 README "자주 실패한 스텝"이 묶이지 않았다). 칸으로 나뉘지 않은 한 줄(`2026.09.21 Attach FAIL`)의 이름은 그대로(번호만 안 붙음).
+- 테스트: `test_step_number_and_same_step` 보강, `test_parse_steps_date_cell_is_not_step_number`.

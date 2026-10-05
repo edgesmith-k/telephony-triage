@@ -26,8 +26,10 @@ DEFAULT_STATUS = {
 DEFAULT_WINDOW = {"pre_sec": 60, "post_sec": 30, "fail_only_pre_sec": 120, "max_span_sec": 900}
 DEFAULT_DISAGREE_MINUTES = 10
 
-_STEP_NUM_RE = re.compile(r"(?i)^\s*(?:step|스텝|단계|#)?\s*(\d{1,4})\b")
-_LEAD_RE = re.compile(r"(?i)^\s*(?:(?:step|스텝|단계|#)?\s*\d{1,4}\b)?[\s.):|\-]*")
+# 뒤에 `-:./` + 숫자가 오면 날짜·시각·소수(`2026-10-05`, `12:03:44`, `2026.09.21`, `10.5`)라 번호가 아니다.
+_NOT_DATE = r"\b(?![-:./]\d)"
+_STEP_NUM_RE = re.compile(r"(?i)^\s*(?:step|스텝|단계|#)?\s*(\d{1,4})" + _NOT_DATE)
+_LEAD_RE = re.compile(r"(?i)^\s*(?:(?:step|스텝|단계|#)?\s*\d{1,4}" + _NOT_DATE + r")?[\s.):|\-]*")
 _NAME_MIN = 4
 
 # steps-file 시각: ISO(오프셋 선택) | logcat 스탬프(연도 없음) | 시각만. 왼쪽부터 겹치지 않게 찾는다.

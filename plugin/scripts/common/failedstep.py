@@ -478,8 +478,8 @@ def _step_row(cells, header, header_n, pass_w, fail_w, stepanchor) -> dict | Non
         if st_idx is not None:
             before = body[:st_idx]
             after = body[st_idx + 1:]
-            body = before if any(not stepanchor._TS_RE.fullmatch(c) for c in before) else after
-        body = [c for c in body if not stepanchor._TS_RE.fullmatch(c)]
+            body = before if any(not _time_cell(c, stepanchor) for c in before) else after
+        body = [c for c in body if not _time_cell(c, stepanchor)]
         number = stepanchor.step_number(body[0]) if body else None
         if number is not None:
             body[0] = stepanchor._LEAD_RE.sub("", body[0], count=1)
@@ -488,6 +488,14 @@ def _step_row(cells, header, header_n, pass_w, fail_w, stepanchor) -> dict | Non
     if not name:
         return None
     return {"number": number, "name_raw": name, "status": status, "time_raw": times}
+
+
+# 날짜만(또는 날짜+시각) 있는 칸: `2026.09.21`, `2026-09-21 10:00:01`. 스텝 이름에 넣지 않는다.
+_DATE_CELL = re.compile(r"\d{4}[./-]\d{1,2}[./-]\d{1,2}\.?(?:[ T]+\d{1,2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?)?")
+
+
+def _time_cell(cell: str, stepanchor) -> bool:
+    return bool(stepanchor._TS_RE.fullmatch(cell) or _DATE_CELL.fullmatch(cell))
 
 
 def _times(text: str, stepanchor) -> str | None:
