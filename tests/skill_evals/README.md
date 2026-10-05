@@ -1,11 +1,11 @@
 # telephony-triage 스킬 eval (Phase 13)
 
-`docs/design/10-skill-eval.md`의 eval 50개와 트리거 테스트를 skill-creator 방식으로 돌리는 자료다.
+`docs/design/10-skill-eval.md`의 eval 52개와 트리거 테스트를 skill-creator 방식으로 돌리는 자료다.
 스킬 본체는 `plugin/skills/telephony-triage/`.
 
 | 파일 | 내용 |
 |---|---|
-| `evals.json` | eval 50개 모두 `prompt`·`setup`·`user_replies`·`assertions` 정의 완료. 1(대표 10), A(안전 10), B(analyze 11), C(수정·검증 9), D(record 5), E(10/04~05 기능 5) |
+| `evals.json` | eval 52개 모두 `prompt`·`setup`·`user_replies`·`assertions` 정의 완료. 1(대표 10), A(안전 10), B(analyze 11), C(수정·검증 9), D(record 5), E(10/04~05 기능 7) |
 | `trigger_evals.json` | description 트리거 테스트 (`10-skill-eval.md` 표 + near-miss) |
 | `jira/` | eval용 모의 Jira 티켓 (`MOCK-90xx`, `tests/mocks/jira`와 같은 형식) |
 | `scenarios/` | eval용 합성 logcat 시나리오 (`tests/mocks/logcat_gen.py` 형식) |

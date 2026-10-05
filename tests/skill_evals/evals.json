@@ -1,6 +1,6 @@
 {
   "skill_name": "telephony-triage",
-  "_comment": "eval 50개 정의 완료. batch 1=대표10, A=원칙·안전10, B=analyze11, C=수정·검증9, D=record5, E=10/04~05 기능 5(46~50). 정의 완료는 행동 평가 통과를 뜻하지 않는다. README.md와 DRAFT_NOTES.md 참조.",
+  "_comment": "eval 52개 정의 완료. batch 1=대표10, A=원칙·안전10, B=analyze11, C=수정·검증9, D=record5, E=10/04~05 기능 7(46~52). 정의 완료는 행동 평가 통과를 뜻하지 않는다. README.md와 DRAFT_NOTES.md 참조.",
   "evals": [
     {
       "id": 1,
@@ -1865,6 +1865,79 @@
         "cut 결과에 evidence-ref-mismatch가 없거나, 있으면 사용자에게 알리고 순서를 맞춰 다시 잘랐다",
         "계획에 append DATA-001-02와 add-fixture {for: DATA-001-02, kind: positive}가 있다",
         "dry-run이라 원격 브랜치·PR이 없고 끝난 뒤 lock이 없다"
+      ],
+      "files": []
+    },
+    {
+      "id": 51,
+      "design": "\"분석만 해줘, 기록하지 마\" → `triage.py run --analysis-only`로 Step 6 리포트까지만 보이고, 계획(`plan.json`)·`db_pr stage`·`publish`·PR 없이 끝나며 lock이 남지 않는다. 기록하려면 플래그 없이 다시 실행한다고 안내한다",
+      "name": "analysis-only-no-record",
+      "batch": "E",
+      "prompt": "MOCK-9051 로그 분석만 해줘. 이슈 DB에는 기록하지 마. 로그: logs/data-disabled.log",
+      "setup": {
+        "db": "issue-db-sample",
+        "jira": [
+          "MOCK-9051"
+        ],
+        "logs": [
+          {
+            "src": "tests/fixtures/logs/data-disabled.log",
+            "as": "data-disabled.log"
+          }
+        ]
+      },
+      "user_replies": [
+        "심층 분석(mock-data-analyzer) 실행 여부를 물으면 '아니오'.",
+        "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다.",
+        "분류를 기록할지 묻거나 기록 선택지를 주면 '기록하지 않는다'(분석만)로 답한다.",
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "triage.py run MOCK-9051 --analysis-only → 1위 DATA-001-01 리포트(분석 전용 줄)를 보이고 끝. plan.json·db_pr stage/publish·원격 브랜치·PR 없음, 세션 lock 없음. 기록하려면 --analysis-only 없이 재실행하라고 안내.",
+      "assertions": [
+        "triage.py run을 --analysis-only로 호출했다",
+        "JOB/report.md에 '분석 전용' 줄이 있고 사용자에게 리포트를 보였다",
+        "JOB/plan.json을 만들지 않았다",
+        "db_pr.py stage·publish를 부르지 않았고 원격 브랜치·PR이 없다",
+        "끝난 뒤 세션 lock이 없다",
+        "분류를 확정하라고 요구하지 않고, 기록하려면 플래그 없이 다시 실행하면 된다고 안내했다"
+      ],
+      "files": []
+    },
+    {
+      "id": 52,
+      "design": "\"a.log로 분석만 → b.log를 더해 다시\" → 두 번째 호출은 `--logs`가 아니라 `--more-logs`(이전 로그 뒤에 추가). 이전 결과(1위 CALL-001, 원인 미확인)와 비교해 추가 로그 때문에 1위가 IMS-001-01로 바뀐 것(`reuse.changed`·`top_changed`)을 알린다. 기록·계획 없음",
+      "name": "more-logs-reanalysis",
+      "batch": "E",
+      "prompt": "MOCK-9052 logs/a.log로 분석만 해줘. 이슈 DB에는 기록하지 마.",
+      "setup": {
+        "db": "issue-db-sample",
+        "jira": [
+          "MOCK-9052"
+        ],
+        "logs": [
+          {
+            "scenario": "e052-a-call-drop.yaml",
+            "as": "a.log"
+          },
+          {
+            "scenario": "e052-b-ims-403.yaml",
+            "as": "b.log"
+          }
+        ]
+      },
+      "user_replies": [
+        "첫 분석 리포트를 보인 뒤 사용자로서 '같은 시간대 b.log도 있어. 이걸 추가해서 다시 분석해줘'라고 말한다(b.log 경로는 logs/b.log).",
+        "심층 분석(mock-data-analyzer) 실행 여부를 물으면 '아니오'.",
+        "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다.",
+        "분류를 기록할지 묻거나 기록 선택지를 주면 '기록하지 않는다'(분석만)로 답한다.",
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "1차 triage.py run MOCK-9052 --analysis-only --logs a.log → 1위 CALL-001(원인 미확인). 2차 --analysis-only --more-logs b.log → analysis.json logs.files [a.log, b.log], run 2, reuse.changed [logs], added_logs [b.log], top_changed true(CALL-001 → IMS-001-01). 답변이 이전 결과 대비 변화를 말한다. 계획·PR·lock 없음.",
+      "assertions": [
+        "첫 호출은 --analysis-only와 --logs a.log, 두 번째 호출은 --more-logs b.log다(--logs로 b.log만 다시 주지 않았다)",
+        "JOB/analysis.json이 logs.files [a.log, b.log], run 2, reuse.added_logs [b.log], reuse.top_changed true를 담는다",
+        "답변에서 이전 결과(CALL-001)에서 추가 로그 뒤 1위(IMS-001-01)로 바뀐 점을 밝혔다",
+        "JOB/plan.json 없음, db_pr stage·publish 없음, 원격 브랜치·PR 없음, 끝난 뒤 lock 없음"
       ],
       "files": []
     }

@@ -105,13 +105,13 @@ R14~R15. 반복 분석·자연어 진입·대용량 비용을 측정하고 단�
 - [x] I1: 쓰기·lock owner·경로·shell 안전성
 - [x] I2: RF-0 범위의 슬롯/시간 결합·capture 관측·파서 실패 전파; 독립 C 회귀 보존 (원본 행 provenance는 후속 범위)
 - [x] I3: prompt·보고서·context 정리 — RF-1: `triage.py` driver(needs_input), `jira_bridge.py`(MCP 원문 격리), SKILL 8.1KB, 커맨드 보일러플레이트 제거·sync-pr 단일 원본(R12), 리포트 사실/추정/반대 근거 규칙. R8 점수 의미는 리포트 문구만(랭킹 변경 없음), R9·R11·R7은 미완
-- [ ] I4: 합의된 UX·반복 분석·규모 개선
+- [ ] I4: 합의된 UX·반복 분석·규모 개선 — 일부 완료(2026-10-05, X1~X4): R14 분석 전용·`--more-logs`·입력 해시 재사용·eval 51·52. R15 규모 개선은 열려 있음(위 R15 부분 완료 외)
 - [x] I5: 실제 Claude 행동·trigger·plugin 통합 평가 — 10/01~03: 45개 실행(41 통과·4 실패), R13 trace 기반 채점, S1 plugin-dir·hook·MCP·permissionDecision 확인. Phase 13 완료는 사용자 결정(10/03). **넘긴 것**: 실패 4건(5·22·29·44)은 RF 후속, 트리거 recall 26~33%는 사내 S-2에서 실제 플러그인으로 재확인
 - [ ] I6: 최종 regression·canonical 동기화·cleanup·Handoff 삭제 검토
 
 Completed: RF-0 R1~R11 결함별 수정·커밋 및 session 임시 플러그인 루트 적용(남은 격리 테스트는 RF-1 커밋에서 해제). RF-1(I3) driver·SKILL·커맨드·외부 리뷰 토큰 항목. 이 문서 원래 R7~R11과 외부 리뷰의 RF-0 R7~R11은 번호 체계가 다르다. 원본 행 provenance 등 RF-0에 포함되지 않은 요구는 완료로 간주하지 않는다.
 
-Remaining (이 문서 원래 번호): ~~R7 provenance~~(line_ref·event_index·cut 앵커(2026-10-05)), ~~R8 점수/신뢰도~~(정렬 키 동점 해소(2026-10-04)), ~~R9 verify-fix 예외~~(유형별 분기로 문서 정리(2026-10-04)), ~~R11 지식 단정~~(관측·추론·반례 구분(2026-10-04)), R12 context 중복, R13 실제 통합 평가, R14 UX, R15 규모 개선(부분 완료: 측정·O1·O4(2026-10-05), 색인·범위 제한 보류). 원래 R10(validate 대상)은 RF-0 R11로 수정했다.
+Remaining (이 문서 원래 번호): ~~R7 provenance~~(line_ref·event_index·cut 앵커(2026-10-05)), ~~R8 점수/신뢰도~~(정렬 키 동점 해소(2026-10-04)), ~~R9 verify-fix 예외~~(유형별 분기로 문서 정리(2026-10-04)), ~~R11 지식 단정~~(관측·추론·반례 구분(2026-10-04)), R12 context 중복, R13 실제 통합 평가, R14 UX(부분 완료: 분석 전용·추가 로그·입력 해시 재사용 2026-10-05), R15 규모 개선(부분 완료: 측정·O1·O4(2026-10-05), 색인·범위 제한 보류). 원래 R10(validate 대상)은 RF-0 R11로 수정했다.
 
 ## Next Actions
 

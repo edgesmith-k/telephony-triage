@@ -550,6 +550,50 @@ def checks(eid: int, ctx: Ctx) -> list:
             return ok, json.dumps(o, ensure_ascii=False)[:400]
         return [both, lambda: (bool(re.search(r"\(f\d+:L\d+\)", _read(ctx.work / "MOCK-9050" / "report.md"))), "JOB/report.md 근거 줄의 (f<n>:L<m>)"), order,
                 None, planned, none_remote_lock]
+    def triage_calls():
+        """드라이버 trace(스크립트 내부 기록)의 triage.py run 호출 인자. 기록이 없으면 실행한 명령 줄로 대신한다."""
+        lines = [l for l in ctx.trace().splitlines() if "triage.py" in l and " run " in f" {l} "]
+        return lines or [l for l in ctx.ran.splitlines() if "triage.py" in l and " run " in f" {l} "]
+    def no_record(job):
+        p = ctx.work / job / "plan.json"
+        ok, ev = none_remote_lock()
+        return (not p.is_file() and ran("stage") == 0 and ran("publish") == 0 and ok,
+                f"plan.json={'있음' if p.is_file() else '없음'} stage={ran('stage')} publish={ran('publish')}; {ev}")
+    if eid == 51:
+        def only():
+            calls = triage_calls()
+            return bool(calls) and all("--analysis-only" in c for c in calls), f"triage.py run 호출={calls}"
+        def reportline():
+            t = _read(ctx.work / "MOCK-9051" / "report.md")
+            return "분석 전용" in t, "JOB/report.md의 '분석 전용' 줄" + (" 있음" if "분석 전용" in t else " 없음")
+        def lock():
+            ok, ev = ctx.lock_free()
+            return ok, ev
+        return [only, reportline, lambda: (not (ctx.work / "MOCK-9051" / "plan.json").is_file(), "JOB/plan.json 없음"),
+                lambda: (ran("stage") == 0 and ran("publish") == 0 and ctx.branches() == ["main"] and not ctx.prs(),
+                         f"stage={ran('stage')} publish={ran('publish')} branches={ctx.branches()} prs={len(ctx.prs())}"),
+                lock, None]
+    if eid == 52:
+        def calls_ok():
+            calls = triage_calls()
+            first = [c for c in calls if "--more-logs" not in c]
+            more = [c for c in calls if "--more-logs" in c]
+            ok = (bool(first) and "--logs" in first[0] and "a.log" in first[0] and bool(more) and "b.log" in more[-1]
+                  and all("--analysis-only" in c for c in calls) and "--logs" not in more[-1])
+            return ok, f"1차={first[:1]} 추가={more[-1:]}"
+        def analysis_ok():
+            a = analysis("MOCK-9052")
+            r = a.get("reuse") or {}
+            files = (a.get("logs") or {}).get("files")
+            ok = (files == ["a.log", "b.log"] and a.get("run") == 2 and r.get("added_logs") == ["b.log"]
+                  and r.get("top_changed") is True and (a.get("candidates") or [{}])[0].get("cause") == "IMS-001-01")
+            return ok, f"logs.files={files} run={a.get('run')} reuse={r} 1위={(a.get('candidates') or [{}])[0].get('cause')}"
+        def told():
+            t = ctx.transcript
+            ok = "CALL-001" in t and "IMS-001-01" in t and bool(re.search(r"추가\s*로그|b\.log", t)) \
+                and bool(re.search(r"1위|바뀌|바뀐|변경|→", t))
+            return ok, "transcript에 CALL-001·IMS-001-01·추가 로그·1위 변화 표현" + (" 있음" if ok else " 없음(수동 확인)")
+        return [calls_ok, analysis_ok, told, lambda: no_record("MOCK-9052")]
     return []
 
 

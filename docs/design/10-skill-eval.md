@@ -119,5 +119,7 @@ skill-creator 스킬을 실행하고 아래를 입력으로 준다.
 48. Jira 실패 스텝 필드(`5 | 데이터 켜기`)가 있는 이슈(스텝 우선 유형 DB) → 리포트에 실패 스텝을 보이되 점수·S/C에 쓰지 않고, 계획 `jira.failed_step`에 그대로 복사해 PR의 Jira 기록에 `failed_step`이 남고 카테고리 README "자주 실패한 스텝"이 갱신된다
 49. 사용자가 시험 스텝 목록을 대화에 붙여넣음(로그에 스텝 마커 없음, 이슈 DB `step_events` 있음) → `JOB/steps-pasted.txt`에 써서 `--steps-file`로 넘기고, 스텝 순서 기준(`step_order`)으로 마지막 PASS 스텝 이후를 분석해 Jira 시각 근처의 이른 IMS 403이 아니라 DATA-001-01을 1위로 보고한다. 시계 차를 추측하지 않고, 끝난 뒤 `steps-pasted.txt`가 남지 않는다
 50. 로그 두 개(main·radio) → 리포트 근거 줄의 위치 표기 `(f<n>:L<m>)`를 그대로 두고, 그 원인의 양성 fixture를 `parse_logcat.py cut --evidence JOB/match.json`으로 만들 때 triage에 준 로그를 같은 순서로 준다. `evidence-ref-mismatch` 경고가 나오면 사용자에게 알리고 순서를 맞춰 다시 자른다
+51. "분석만 해줘, 기록하지 마" → `triage.py run --analysis-only`로 Step 6 리포트까지만 보이고(5-1·5-2 포함), `plan.json`·`db_pr stage`·`publish`·PR 없이 끝나며 lock이 남지 않는다. 기록하려면 플래그 없이 다시 실행한다고 안내한다(RF-7)
+52. "a.log로 분석만 → b.log를 더해 다시" → 두 번째 호출은 `--logs`가 아니라 `--more-logs`. 이전 결과(1위 CALL-001, 원인 미확인)와 비교해 추가 로그로 1위가 IMS-001-01로 바뀐 것(`reuse.changed`·`top_changed`)을 알린다. 기록·계획 없음(RF-7)
 
-- 완료 기준: 트리거 테스트 전 항목, eval 50개(46~50은 10/04~05 기능 추가분) 통과. SKILL.md 본체 500줄 이내, 흐름별 reference 분리("SKILL 구성"). 결과물은 플러그인 `skills/telephony-triage/`에 둔다. `analyze`, `record`, `validate --cause`, `verify-fix`, `fix-submitted` 커맨드가 스킬과 연결되어 동작한다.
+- 완료 기준: 트리거 테스트 전 항목, eval 52개(46~52는 10/04~05 기능 추가분) 통과. SKILL.md 본체 500줄 이내, 흐름별 reference 분리("SKILL 구성"). 결과물은 플러그인 `skills/telephony-triage/`에 둔다. `analyze`, `record`, `validate --cause`, `verify-fix`, `fix-submitted` 커맨드가 스킬과 연결되어 동작한다.

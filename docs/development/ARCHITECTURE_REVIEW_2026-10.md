@@ -729,6 +729,7 @@ telephony-triage/  (EXTERNAL-SAFE 레포 = canonical)
 - **Dependencies**: RF-1·6.
 - **Token Impact**: 같은 이슈 재분석 시 driver 재계산 0.
 - **Completion Criteria**: 입력 변경 시에만 재계산되는 테스트.
+- *완료 (2026-10-05, X1~X4): `triage.py run --analysis-only`·`--more-logs`, 입력 해시 6부분 재사용(`analysis-cache.json`, `runs/` 최근 5), 스킬·eval 51·52. RF-6 의존은 생략(Jira는 기존 MCP 파일 경로).*
 
 ### RF-8 — Automation (Scheduler + Jira monitoring + draft comment + approval)
 

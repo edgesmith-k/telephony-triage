@@ -16,7 +16,7 @@
 | `07-workflow.md` | analyze Step 0~8, 공통 쓰기 절차, record/validate/fix-submitted/verify-fix/sync-pr |
 | `08-safety.md` | 마스킹, Hooks 9종 |
 | `09-commands.md` | 커맨드 12개 |
-| `10-skill-eval.md` | SKILL.md 구성, 트리거 테스트, eval 50개 |
+| `10-skill-eval.md` | SKILL.md 구성, 트리거 테스트, eval 52개 |
 | `11-phases.md` | **Phase D0~14** 할 일·완료 기준·읽을 문서 (사외 초안·사내 처음부터 모드만) + **§11.0 작업 방식** |
 | `12-principles.md` | 원본 12장 **원칙**: 사용자 확인, push 전 승인, 작업 계획·drift, 사용자 clone 불변, lock, 생성 파일, ID, 마스킹, 검증 표시, 판정 기준, 우회 금지 |
 | `13-actions.md` | GHE Actions 전환 |
