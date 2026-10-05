@@ -179,6 +179,37 @@ def test_retemp_drafts_maps_real_ids_back_to_plan_temp_ids():
     assert tree["other"]["cause"] == "CALL-001-01"                   # 매핑에 없는 ID는 그대로
 
 
+def test_retemp_drafts_covers_all_op_id_keys():
+    from db_verify import _retemp_drafts
+    back = {"DATA-001-03": "NEW-CAUSE-1", "DATA-002-01": "NEW-CAUSE-2"}
+    ops = [{"op": "add-fixture", "for": "DATA-001-03", "kind": "fixed", "path": "p"},
+           {"op": "verify-fix", "cause": "DATA-001-03", "result": "passed", "verification": {"note": "DATA-001-03"}},
+           {"op": "merge", "a": "DATA-001-03", "b": "DATA-002-01", "id": "DATA-002-01", "owner": "DATA-001-03"},
+           {"op": "verify-fix", "cause": "CALL-001-01"}]
+    tree = {"suggested_ops": ops, "cause": "DATA-001-03", "reason": "DATA-001-03 충족", "for": "DATA-001-03"}
+    _retemp_drafts(tree, back)
+    assert ops[0]["for"] == "NEW-CAUSE-1" and ops[1]["cause"] == "NEW-CAUSE-1"
+    assert (ops[2]["a"], ops[2]["b"], ops[2]["id"], ops[2]["owner"]) == ("NEW-CAUSE-1", "NEW-CAUSE-2", "NEW-CAUSE-2", "NEW-CAUSE-1")
+    assert ops[3]["cause"] == "CALL-001-01"                         # 매핑에 없는 ID
+    assert ops[1]["verification"]["note"] == "DATA-001-03"          # 설명 문자열은 그대로
+    assert tree["cause"] == "DATA-001-03" and tree["reason"] == "DATA-001-03 충족" and tree["for"] == "DATA-001-03"   # op가 아닌 dict
+
+
+def test_script_honours_subprocess_env(monkeypatch):
+    import db_verify
+    from common import checks
+    calls = []
+    monkeypatch.setattr(checks, "_run_subprocess", lambda name, argv, env: calls.append((name, argv, env)) or (0, "{}", ""))
+    monkeypatch.setattr(checks, "run_in_process", lambda name, argv: calls.append(("inproc", name)) or (0, "{}", ""))
+    monkeypatch.setenv("TT_SCRIPT_SUBPROCESS", "1")
+    proc = db_verify._script("db_add.py", ["apply", "p"], "/root")
+    assert calls == [("db_add.py", ["apply", "p", "--plugin-root", "/root"], None)] and proc.returncode == 0 and proc.stdout == "{}"
+    monkeypatch.delenv("TT_SCRIPT_SUBPROCESS")
+    calls.clear()
+    db_verify._script("db_add.py", ["apply", "p"], None)
+    assert calls == [("inproc", "db_add.py")]
+
+
 def test_new_type_symptom_hitting_other_negative_fails_r3():
     db = git_db()
     new = db / "call/CALL-002-dial-seen"
@@ -407,6 +438,8 @@ def test_record_new_cause_resolution_draft_then_verified_stage(loaded_condition)
     assert out["cause"] == "DATA-001-03" and out["requested"] == "NEW-CAUSE-1"
     assert out["satisfied_traces"][0]["signature"] == "DATA-001-03/sim-loaded-then-allowed"
     assert [op["op"] for op in out["suggested_ops"]] == ["add-fixture", "verify-resolution"]
+    # draft 모드의 초안 op는 계획의 temp_id를 쓴다 (실제 ID는 reason 같은 설명에만 남는다)
+    assert [op.get("for") or op.get("cause") for op in out["suggested_ops"]] == ["NEW-CAUSE-1", "NEW-CAUSE-1"]
     r1 = next(r for r in out["rules"]["rules"] if r["id"] == "R1")
     assert r1["status"] == "pass" and not out.get("withheld")
     assert not draft.exists()

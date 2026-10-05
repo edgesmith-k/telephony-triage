@@ -519,3 +519,16 @@ def test_unique_evidence_drops_same_event_from_symptom_and_cause():
     out = triage._unique_evidence(ev)
     assert [e.get("event_index") for e in out] == [5, 7, None]
     assert out[0]["signature"] == "DATA-001-02/x"     # 처음 것(원인 근거)을 남긴다
+
+
+def test_unique_evidence_keys_on_line_ref_first():
+    import triage
+    ref = {"file_index": 0, "line_no": 12}
+    ev = [{"event_index": 5, "line_ref": ref, "ts": "t", "tag": "A", "msg": "m", "signature": "S1"},
+          {"event_index": 6, "line_ref": dict(ref), "ts": "t", "tag": "A", "msg": "m", "signature": "S2"},   # 파생 이벤트: 같은 줄
+          {"event_index": 7, "line_ref": {"file_index": 1, "line_no": 12}, "ts": "t", "tag": "A", "msg": "m"},   # 다른 파일
+          {"event_index": 8, "line_ref": {"file_index": 0, "line_no": None}, "ts": "t", "tag": "A", "msg": "m"},   # 줄 번호 모름 → event_index
+          {"event_index": 8, "ts": "t", "tag": "A", "msg": "m"}]
+    out = triage._unique_evidence(ev)
+    assert [e["event_index"] for e in out] == [5, 7, 8]
+    assert out[0]["signature"] == "S1"

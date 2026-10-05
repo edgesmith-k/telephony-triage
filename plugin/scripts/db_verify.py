@@ -90,9 +90,9 @@ class UsageError(Exception):
 
 
 def _script(name: str, args: list[str], plugin_root: str | None) -> subprocess.CompletedProcess:
-    """하위 스크립트를 같은 프로세스에서 부른다 (`common.checks.run_in_process`)."""
+    """하위 스크립트를 부른다 — 기본은 같은 프로세스, `TT_SCRIPT_SUBPROCESS=1`이면 subprocess (`common.checks.run_text`)."""
     argv = [*args, *(["--plugin-root", plugin_root] if plugin_root else [])]
-    code, out, err = checks.run_in_process(name, argv)
+    code, out, err = checks.run_text(name, args, plugin_root)
     return subprocess.CompletedProcess([name, *argv], code, out, err)
 
 
@@ -414,11 +414,18 @@ def _allow_draft(item: dict, cause_id: str) -> dict | None:
     return {"op": "allow-cause", "fixture": f"fixtures/{fx.name}", "cause": cause_id}
 
 
+_OP_ID_KEYS = ("cause", "for", "owner", "a", "b", "id")
+
+
 def _retemp_drafts(obj, back: dict) -> None:
-    """draft 트리의 실제 ID → 계획 temp_id. allow-cause 초안을 계획에 그대로 붙일 수 있게 한다."""
+    """draft 트리의 실제 ID → 계획 temp_id. `op` 키가 있는 초안(allow-cause·verify-fix·add-fixture 등)의 ID 필드
+    (`cause`·`for`·`owner`·`a`·`b`·`id`)를 계획에 그대로 붙일 수 있게 바꾼다. `reason` 같은 설명 문자열은 그대로 둔다."""
     if isinstance(obj, dict):
-        if obj.get("op") == "allow-cause" and obj.get("cause") in back:
-            obj["cause"] = back[obj["cause"]]
+        if "op" in obj:
+            for key in _OP_ID_KEYS:
+                v = obj.get(key)
+                if isinstance(v, str) and v in back:
+                    obj[key] = back[v]
         for v in obj.values():
             _retemp_drafts(v, back)
     elif isinstance(obj, list):
@@ -827,7 +834,7 @@ def judge(args, defaults: dict, plugin_root: Path) -> tuple[dict, int]:
             raise UsageError(f"로그 파일이 없습니다: {p}")
     if bool(args.plan) != bool(args.draft):
         raise UsageError("--plan과 --draft는 함께 쓴다.")
-    draft = applied = None
+    draft = applied = mapping = None
     cause_id = args.cause
     rules_result = None
     try:
@@ -878,6 +885,8 @@ def judge(args, defaults: dict, plugin_root: Path) -> tuple[dict, int]:
                        reason="흔적 시그니처가 R1 흔적 검사를 통과하지 못해 판정을 쓰지 않는다: "
                               + "; ".join(c["reason"] for c in trace_fail))
     out["suggested_ops"] = _suggest(args.cmd, cause_id, out, args.build if args.cmd == "fix" else None)
+    if mapping is not None:     # draft 모드: 초안 op는 계획의 temp_id로 (reason 문자열은 실제 ID 그대로)
+        _retemp_drafts(out["suggested_ops"], {v: k for k, v in mapping.items()})
     return out, OK
 
 

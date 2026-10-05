@@ -127,6 +127,22 @@ def test_numbered_label_matches_table_and_field():
     assert failedstep.from_text("3G 데이터 실패", [r"(?P<step>.+?)\s*실패$"])[0] == "3G 데이터"   # 숫자+구분자가 아니면 번호 아님
 
 
+def test_numbered_ignores_timestamps_and_dates():
+    for line in ("12:03:44 FAIL step=Attach", "2026.09.21 Attach FAIL", "2026-09-21 Attach FAIL", "2026. 09. 21 Attach FAIL",
+                 "3G 데이터 실패", "10.5 Attach FAIL"):
+        assert failedstep.numbered("Attach", line) == "Attach", line
+    assert failedstep.numbered("Attach", "7. Attach FAIL") == "7 | Attach"
+    assert failedstep.numbered("Attach", "7) Attach FAIL") == "7 | Attach"
+    assert failedstep.numbered("Attach", "7 | Attach | FAIL") == "7 | Attach"
+
+
+def test_numbered_strips_number_already_in_step():
+    for step in ("7. Attach PDN", "Step 7 Attach PDN", "7) Attach PDN", "스텝 7: Attach PDN"):
+        assert failedstep.numbered(step, step + " FAIL") == "7 | Attach PDN", step
+    assert failedstep.numbered("7 | Attach PDN", "x") == "7 | Attach PDN"
+    assert failedstep.numbered(None, "7. x") is None
+
+
 def test_bad_regex_is_warning_not_error():
     step, warns = failedstep.from_text("Step 1: x FAIL", ["(", *PATTERNS])
     assert step == "1 | x" and len(warns) == 1 and "정규식" in warns[0]

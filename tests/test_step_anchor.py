@@ -389,6 +389,17 @@ def test_parse_offset_formats():
     assert f("86400") == 86400 and f("+24h") == 86400
 
 
+def test_steps_file_pattern_path_anchor_label_is_numbered_like_failed_step():
+    d = tmp("tt-steps-pat-")
+    log = _markerless(d)
+    for i, line in enumerate(("실패 스텝: 7. 데이터 켜기 2026-09-20 14:33:30", "실패 스텝: Step 7 데이터 켜기 2026-09-20 14:33:30")):
+        steps = d / f"s{i}.txt"
+        steps.write_text(line + "\n", encoding="utf-8")
+        done, _ = _offline(f"pat{i}", "--steps-file", steps, "--clock-offset", "0", logs=(log,))
+        assert done["step_anchor"]["source"] == "steps_file"
+        assert done["step_anchor"]["step"] == done["jira"]["failed_step"]["text"] == "7 | 데이터 켜기 2026-09-20 14:33:30"
+
+
 def test_steps_file_zip_report_uses_fail_row_and_warns_when_failed_step_differs():
     import zipfile
     d = tmp("tt-zip-")

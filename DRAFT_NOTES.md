@@ -8,13 +8,13 @@
 
 - clone에는 `.local-draft`가 없다. 첫 메시지를 **"사외 초안 모드로 다음 단계 진행해"** 로 하면 모드를 묻지 않는다(만들어도 됨: `touch .local-draft`).
 - 의존성은 고정 버전으로: `pip install '.[test]'` (데비안 패키지와 충돌하면 `pyproject.toml`의 목록을 `pip install --ignore-installed -r`로). 버전이 다르면 `test_r10_dependency_manifest_has_complete_pins`만 실패한다.
-- **"다음 단계 진행"** = 아래 "다음 할 일"에서 ☐인 첫 항목을 한다. "사용자 결정"이 붙은 항목은 결정을 먼저 묻고, 결정이 없으면 건너뛰고 다음 ☐로 간다.
-- 진행 방식(10/04 세션에서 쓴 방식): 계획(Plan 에이전트) → 구현(구현 에이전트) → 직접 diff 검토 → **전체 `pytest tests` 통과**(Ubuntu 약 8분) → 커밋·push. 단계마다 브랜치 `ccr-9abe96b9-ou831g`에 push하고 이 표를 갱신한다.
+- **"다음 단계 진행"** = 아래 **"반입 전 보강 트랙"**에서 ☐인 첫 항목을 한다(2·3C·10은 트랙 Z 때). "묻는다"가 붙은 항목은 결정을 먼저 묻는다.
+- 진행 방식(10/05, 사용자 지정): 계획 Opus(Plan 에이전트) → 구현 Sonnet → 메인이 diff 검토·판단 → 관련 테스트(코드 변경이면 전체 `pytest tests`, 약 9분; 문서만이면 관련 테스트) → 커밋·push. 세션에 지정된 브랜치에 push하고 이 표를 갱신한다. 10/05 작업은 브랜치 `ccr-fdf6ebf3-7xq8yd`(main `7b69cb5` 이후 미병합 — 새 세션은 이 브랜치를 main에 PR로 병합하거나 그 위에서 이어간다).
 
 ## 진행 상태
 
 - 모드: **사외 초안**. 완료 Phase: **D0, 1~13**. RF-0·RF-1 완료.
-- 마지막 전체 테스트: **489개 통과** (10/05, R7·R15, Ubuntu·Py3.11, 8분). Windows에서는 도구 셸 stdin을 `/dev/null`로, PATH 앞에 실제 Python과 `python3` shim(Store 별칭이면 gh 스텁·git hook이 9009로 실패).
+- 마지막 전체 테스트: **509개 통과** (10/05, S2 리뷰 수정, Ubuntu·Py3.11, 9분). Windows에서는 도구 셸 stdin을 `/dev/null`로, PATH 앞에 실제 Python과 `python3` shim(Store 별칭이면 gh 스텁·git hook이 9009로 실패).
 - 사내 확인 항목: `TODO(SITE)` **73곳**(S22 12곳 추가) — `python3 tools/list_site_todos.py`. `REVIEW-OPEN.md` 0건.
 - 안내서(사람용 HTML, 10/04 1~6단계 반영): `docs/telephony-triage-guide.html` (공유본 https://claude.ai/artifact/1jov1Et4dQUMauFr6aoxWG)
 
@@ -35,23 +35,33 @@
 
 ## 다음 할 일
 
-**순서(사용자 지시 10/04): 5 → 6 → 8 → 9 → 10 → 7 → 3 → 2.** 3·7(실제 Claude 실행)은 마지막, 2는 끝에서 한꺼번에. 10의 반입 태그 push는 묻는다.
+10/04~05 지시 순서(5→6→8→9→10→7→3→2) 중 **1·3~9 완료**(상세 `docs/history/CHANGES.md` 10/04~05 절). 남은 것:
 
 | ☐ | 항목 | 메모 |
 |---|---|---|
-| ✅ 1 | **보안 검토** — 10/04 변경분 | 10/04 완료. 고친 것: `steps-pasted.txt` 잔존 → discard·release·cleanup이 지움. 상세 `CHANGES.md` |
-| ☐ 2 | **사용자 확인 받기** — 위 표와 RF-2 | 확인되면 표에서 "확인 대기"를 지운다 |
-| ◐ 3 | **스킬 행동 eval: 새 기능 46~50 + 변경분 실행** (사용자 결정 10/05: A+B 사외, C는 사내 S-2) | 10/05: 46~50 정의, 7 보완, 마찰 2건 수정. 실행 결과는 검토자가 채움 |
-| ☐ 3C | **행동 eval 전체(50개) 재실행** — 사내 S-2(`15 §15.5`) | 토큰 약 40M. 사외는 새·변경분만 |
-| ✅ 4 | **HTML 안내서 갱신** — 1~6단계 반영 | 10/04 완료. 이후 기능이 바뀌면 `docs/telephony-triage-guide.html`도 고친다 |
-| ✅ 5 | **성능** — 하위 스크립트 같은 프로세스 호출 | 10/04 완료(확인 대기). `checks.run_in_process`, 정규식 작업 프로세스 공유. stage 7~11초→2초. `CHANGES.md` |
-| ✅ 6 | **유지보수** — `db_add.py` op별 분할 | 10/05 완료(확인 대기). CLI만 남기고 `dbadd/`(ops 믹스인 7개) |
-| ✅ 7 | **트리거** | 10/05: 실제 플러그인 측정 recall·precision 100%(24개×2회, `trigger_real.py`). 26~33%는 측정기 탓(첫 도구만 셈). description 그대로 |
-| ✅ 8 | **R7 근거 출처**, **R15 대용량** | 10/05 완료(확인 대기). `line_ref`·`event_index`·cut 줄 앵커, 측정(`tools/bench_scale.py`)·O1 bisect·O4. `CHANGES.md` |
-| ✅ 9 | **`CLAUDE.md` 축소(≤4KB)** | 10/05 완료(확인 대기). §12 → `12-principles.md`. `CHANGES.md` |
-| ◐ 10 | **반입** — `15 §15.4` 체크리스트 | 10/05 자동 항목 통과, main `7b69cb5` 병합·묶음·sha256 생성. 사내 문자열 검색은 생략(사내→사외 반출 불가, 사용자 판단). 남은 것: `import-v1` 태그 push(세션 권한 밖, 사용자가 직접) |
+| ☐ 2 | **사용자 확인** — 위 표, RF-2, 10/05 작업 전체 | 반입 직전에 한꺼번에 |
+| ☐ 3C | **행동 eval 전체(50개)** — 사내 S-2 | 토큰 약 40M |
+| ◐ 10 | **반입** | main `7b69cb5` 묶음은 낡음 → 아래 보강 뒤 다시 만든다. 태그 push는 사용자(세션 권한 밖) |
 
-반입 뒤(사외 트랙): RF-3 전에 **`common/events.py`**(RF-1에서 빠짐, `line_ref` 포함) → RF-3 → RF-4 → RF-5(oFono), RF-6 → RF-7 → RF-8(품질 게이트), RF-9. 웹 UI는 사용자 결정으로 보류(RF-6·7 뒤 후보).
+**반입 전 보강 트랙**(사용자 결정 10/05: 시간 여유, 사외에서 최대한 안정화·보완 뒤 반입). 위에서부터 ☐ 첫 항목을 한다. 단계마다 결과 요약 → 사용자 확인.
+
+| ☐ | 항목 | 메모 |
+|---|---|---|
+| ✅ S1 | 실패 스텝 표기 `번호 \| 이름` 통일 | 10/05 |
+| ✅ S2 | 10/04~05 코드 리뷰·eval 발견 수정 | 10/05, `CHANGES.md` |
+| ☐ S2b | `stepanchor.step_number`가 줄 앞 날짜를 스텝 번호로 읽음 | S2 구현자가 발견, 표 행 경로 |
+| ☐ S3 | R12 문서 중복(record·verify·sync-pr) 정리 | HANDOFF R12 |
+| ☐ S4 | R13 eval 실행기를 `--plugin-dir` 실제 플러그인으로 | hook·guard 포함, `trigger_real.py` 참고 |
+| ☐ S5 | `check_boundary`에 비밀값 패턴 | 리뷰 §Q |
+| ☐ I1 | `common/events.py`(`line_ref` 포함) | RF-3 전제 |
+| ☐ I2 | RF-3 `platforms/android/` 이동(출력 동일, shim) | 리뷰 RF-3 |
+| ☐ I3 | RF-4 일부: 경로·태그 상수 → 설정 | 리뷰 RF-4 |
+| ☐ I4 | YAML C 로더(`CSafeLoader`, 없으면 SafeLoader) | 파싱 시간 대부분이 YAML |
+| ☐ I5 | `db_pr` summary/pr_body → `db_summary.py` | 리뷰 §Q |
+| ☐ X | RF-5·6·7·8 | **시작 전 사용자에게 묻는다**(범위 확대) |
+| ☐ Z | 마무리: main 병합 → `15 §15.4` 재실행 → 새 묶음·sha256 → 사용자 태그 → 2 | |
+
+RF-9·웹 UI(보류)는 X 뒤 후보. RF 상세는 `docs/development/ARCHITECTURE_REVIEW_2026-10.md` §U.
 
 ## 사외에서는 못 하는 것 (사내 S-1~S-5)
 
@@ -70,6 +80,7 @@
 - (b) 자동 게시(RF-8)는 `confidence`가 아니라 별도 품질 게이트로만. (10/01)
 - (c) 실패 스텝·Claude 가설은 판정(S/C)에 쓰지 않는다. 구간·순위·검색·리포트 보조만. (10/04)
 - (d) 반입 전에는 v1 스키마를 직접 고치고, 배포 뒤에는 항상 버전을 올린다(`06 §6.4`). (10/04)
+- (f) 반입 전 사외에서 최대한 안정화·보완·개선한 뒤 반입한다. 사내 문자열 사람 검색은 생략(사내→사외 반출 불가). (10/05)
 - (e) verify-fix 흔적: 코드·설정 수정 유형은 흔적 필수. 비코드 유형(user-setting·network·hw)에 흔적 시그니처가 둘 다 없을 때만 사용자 확인으로 판정하고 `verification.note`에 남긴다. (10/04, R9)
 - 시작 전 remote를 fetch한다. remote 이름은 PC마다 다르다(`telephony` 또는 `origin`) — 있는 것을 쓴다.
 - 사내 로그가 모의와 다를 때 가장 먼저: `docs/development/S0_PROBE_CHECKLIST.md` + `tools/s0_stats.py`.

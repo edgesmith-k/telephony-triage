@@ -903,7 +903,8 @@ def publish(ctx: Ctx, wt: Path, branch: str, lease: str, approved: str) -> tuple
         problems.append("커밋이 기준 SHA 위의 커밋 하나가 아니다 (커밋이 둘 이상이거나 머지 커밋이거나 기준이 다르다).")
     message = _git(wt, "log", "-1", "--format=%B", "HEAD", check=False).stdout.strip()
     if message != (state.get("commit_message") or "").strip():
-        problems.append("커밋 메시지가 확인받은 메시지와 다르다.")
+        problems.append("커밋 메시지가 확인받은 메시지와 다르다. trailer(Co-Authored-By 등)나 서명 줄을 덧붙이지 않는다 — "
+                        "summary의 commit_message 그대로 커밋한다.")
     if branch != state["branch"] or branch == ctx.base:
         problems.append(f"브랜치 {branch}가 stage한 브랜치 {state['branch']}와 다르거나 base 브랜치다.")
     if problems:

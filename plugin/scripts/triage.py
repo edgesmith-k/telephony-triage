@@ -112,11 +112,17 @@ def _ref_label(ref) -> str | None:
 
 def _unique_evidence(evidence: list) -> list:
     """증상·원인 시그니처가 같은 이벤트를 근거로 잡으면 리포트에 같은 줄이 두 번 나온다. 이벤트마다 한 번만 둔다
-    (`event_index`, 없으면 시각·태그·메시지). 표시용이고 match.json·점수는 그대로다."""
+    (`line_ref`의 파일·줄 번호 — 내장·파생 이벤트는 원본 줄과 줄 위치를 공유한다. 없으면 `event_index`, 그것도 없으면
+    시각·태그·메시지). 표시용이고 match.json·점수는 그대로다."""
     seen, out = set(), []
     for e in evidence:
-        key = e.get("event_index")
-        key = ("i", key) if key is not None else ("m", e.get("ts"), e.get("tag"), e.get("msg"))
+        ref, idx = e.get("line_ref"), e.get("event_index")
+        if isinstance(ref, dict) and ref.get("line_no"):
+            key = ("l", ref.get("file_index"), ref["line_no"])
+        elif idx is not None:
+            key = ("i", idx)
+        else:
+            key = ("m", e.get("ts"), e.get("tag"), e.get("msg"))
         if key not in seen:
             seen.add(key)
             out.append(e)
@@ -868,7 +874,7 @@ class Driver:
                 return None
             patterns = userconfig.get(self.cfg, "jira.failed_step_patterns") or []
             step, line = failedstep.find_line(text, patterns)
-            label = failedstep.normalize(self.masker()(step or ""), 80)
+            label = failedstep.normalize(self.masker()(failedstep.numbered(step, line) or ""), 80)
         if not line:
             return None
         zone = conf.get("steps_file_tz") or tz or userconfig.get(self.cfg, "logcat.timezone")
