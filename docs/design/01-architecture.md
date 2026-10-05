@@ -104,7 +104,8 @@ telephony-triage-plugin/                 # 개발 레포 루트
     │   ├── config.py
     │   ├── code_roots.py
     │   ├── parse_logcat.py
-    │   ├── parser_backends/             # base.py(인터페이스), reference/(공통 처리, 사외), site/(포팅한 기존 파서, 사내 전용 SITE_PATHS)
+    │   ├── parser_backends/             # base.py(인터페이스), reference/(공통 처리, 사외; 호환 shim → platforms/android/backend.py), site/(포팅한 기존 파서, 사내 전용 SITE_PATHS)
+    │   ├── platforms/                   # android/{logcat,ril,bugreport,backend}.py — Android 전용 코드(RF-3). 핵심(common·매처·db_*)은 플랫폼 무관
     │   ├── adapters/                    # Jira 응답 변환, 외부 파서 어댑터 (사내 것은 site_* , SITE_PATHS)
     │   ├── match_signatures.py
     │   ├── mask_pii.py
@@ -144,7 +145,7 @@ telephony-triage-plugin/                 # 개발 레포 루트
 | `common/` | config·이슈 DB 로드, 스키마 검증, git 헬퍼, 로깅, **시그니처·extractor 컴파일 함수**(매처와 `db_build --cache-only`가 공유), **마스킹 함수**(`mask_pii`와 `parse_logcat` 공유), **이벤트 레코드 `events.py`**(파서 출력 이벤트 키 순서·`line_ref`·`validate_event`, 표준 라이브러리만), `sanitize_build`, **검사 오케스트레이션 `checks.py`**(프로필 `stage`·`precommit`·`guard`의 단계 목록과 종료 코드 집계 `aggregate`. 하위 스크립트는 같은 프로세스에서 `main(argv)`로 부른다(`run_script`, 종료 코드·stdout JSON·stderr는 subprocess와 같고 `TT_SCRIPT_SUBPROCESS=1`이면 subprocess). top-level import는 stdlib와 `common.exitcodes`뿐이다: guard가 `site-defaults.yaml` 없이도 멈추지 않아야 한다) | 모든 스크립트 |
 | `config.py` | 사용자 config 로드/검증/갱신, `site-defaults.yaml` 로드(없으면 종료 코드 2), 스키마·생성기·파서 백엔드·외부 파서 버전과 gh 인증 호환성 판정(`check --for write\|dry-run`, `migrate/schema-v<N>` 브랜치는 버전 불일치 예외), **`plugin.scripts_path` 갱신**(`sync-scripts-path`) | 모든 스크립트, setup, SessionStart hook |
 | `code_roots.py` | 코드 경로 후보 정렬, 경로 검증, 트리 버전 추정, `<root 키>:` 경로 변환, symbol 검색 | analyze Step 2-1, Step 5 |
-| `parse_logcat.py` | logcat → 이벤트 JSON (**파서 백엔드 선택·호출**(`parser_backends/`, 포맷·연도·타임존·윈도우·RIL 페어링·`phone_id`·`coverage`·builtin 판별은 백엔드), bugreport에서 logcat 섹션만 추출(`extract-bugreport`), 외부 파서(어댑터) 실행, 백엔드·외부 파서 불일치 경고, `--mask`면 extractor 전 줄 단위 마스킹(백엔드·외부 파서 이벤트 포함), extractor 실행), **fixture 최소 구간 자르기**(`cut`, `common/` 마스킹 함수로 마스킹 후 저장) | analyze Step 3·7, `record`(`--fixture`), `verify-fix`, `validate --cause`, `db_regress` |
+| `parse_logcat.py` | logcat → 이벤트 JSON (**파서 백엔드 선택·호출**(`parser_backends/`, 포맷·연도·타임존·윈도우·RIL 페어링·`phone_id`·`coverage`·builtin 판별은 백엔드), bugreport에서 logcat 섹션만 추출(`extract-bugreport`, 구현 `platforms/android/bugreport.py`), 외부 파서(어댑터) 실행, 백엔드·외부 파서 불일치 경고, `--mask`면 extractor 전 줄 단위 마스킹(백엔드·외부 파서 이벤트 포함), extractor 실행), **fixture 최소 구간 자르기**(`cut`, `common/` 마스킹 함수로 마스킹 후 저장) | analyze Step 3·7, `record`(`--fixture`), `verify-fix`, `validate --cause`, `db_regress` |
 | `mask_pii.py` | 마스킹 치환(파일), 외부 이벤트 JSON 마스킹(`--events`), `--check` 검출. 마스킹 함수 자체는 `common/`에 있고 `parse_logcat`이 공유 | `db_add`, `db_precommit`, `db_pr stage`, guard hook 3번 |
 | `jira_fields.py` | Jira 키 검사(`check-key`, `jira_key_regex`), Jira 응답(MCP `get_issue` 결과 또는 `--jira-file`)에서 `jira.field_map`으로 구조화 필드 추출, 텍스트 필드 즉시 마스킹, 발생 시각 UTC 변환·`occurred_on`·logcat 연도, `--jira-meta` 파일 생성(`extract`). 사람 이름 필드(코멘트 작성자)는 내지 않음 | analyze Step 0·2, `record`, `verify-fix --jira` |
 | `match_signatures.py` | 마스킹된 이벤트 JSON × 이슈 DB → 후보 랭킹(`same_phone`·`sequence` 포함, 패턴당 타임아웃), 수정 상태 판단, related | analyze Step 4, `db_regress`, `db_verify` |

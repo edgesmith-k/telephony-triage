@@ -66,7 +66,7 @@ sys.path.insert(0, str(SCRIPTS))
 
 from common import compat, events, failedstep, masking, site_defaults, stepanchor, userconfig  # noqa: E402
 from common.exitcodes import CHECK_FAILED, OK, USAGE  # noqa: E402
-from parser_backends import logcat as lc  # noqa: E402
+from platforms.android import logcat as lc  # noqa: E402
 
 ANALYSIS_MAX = 4096
 STATE_FILE = "triage-state.json"

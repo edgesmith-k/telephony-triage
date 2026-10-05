@@ -32,17 +32,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from common import compat, dbpath, site_defaults, userconfig  # noqa: E402
 from common.exitcodes import OK, USAGE  # noqa: E402
+from platforms.android import TELEPHONY_DIR, VERSION_SOURCES  # noqa: E402
 
 DEFAULT_KEYS = ["aosp", "vendor_ril"]
 RECENT_MAX = 5
-TELEPHONY_DIR = "frameworks/opt/telephony"
 SOURCE_SUFFIXES = {".java", ".kt", ".c", ".cc", ".cpp", ".h", ".hpp", ".aidl"}
-# (파일, 정규식) 순서대로 시도한다 — TODO(SITE:S11) 최신 AOSP는 release config 쪽에 있을 수 있다.
-VERSION_SOURCES = [
-    ("build/release/release_config_map.textproto", re.compile(r"RELEASE_PLATFORM_VERSION\D*(\d+)")),
-    ("build/make/core/version_defaults.mk", re.compile(r"^\s*PLATFORM_VERSION\s*:?=\s*(\d+)", re.M)),
-    ("build/core/version_defaults.mk", re.compile(r"^\s*PLATFORM_VERSION\s*:?=\s*(\d+)", re.M)),
-]
 
 
 class UsageError(Exception):

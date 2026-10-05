@@ -64,8 +64,8 @@ class ParserBackend(ABC):
         윈도우와 상관없이 파일 전체를 본다. `stats`는
         `{lines, unparsed, missing_year, missing_zone}`이고 `parse_logcat.py`가
         경고를 만든 뒤 출력에서 뺀다. 기본 구현은 reference의 공통 줄 해석
-        (`parser_backends/logcat.py`)을 쓴다. 형식을 직접 해석하는 백엔드는 바꾼다."""
-        from . import logcat
+        (`platforms/android/logcat.py`)을 쓴다. 형식을 직접 해석하는 백엔드는 바꾼다."""
+        from platforms.android import logcat
 
         files = []
         stats = {"lines": 0, "unparsed": 0, "missing_year": False, "missing_zone": False}

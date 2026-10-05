@@ -84,6 +84,7 @@ def test_each_rule_reports_injected_violation(fake_repo):
         "api_key = abcdefghijklmnopqrstuvwxyz012345",
     ]))
     _write(fake_repo, "plugin/scripts/bad.py", "from parser_backends.site import backend\n")
+    _write(fake_repo, "plugin/scripts/platforms/android/bad.py", "from parser_backends.site import backend\n")
     _write(fake_repo, "plugin/scripts/adapters/uses.py", "from . import site_data_x\n")
     _write(fake_repo, "tests/fixtures/issue-db-x/data/DATA-001-x/fixtures/DATA-001-01.log", "log\n")
     _write(fake_repo, "tests/fixtures/issue-db-x/data/DATA-001-x/fixtures/DATA-001-01.expect.yaml",
@@ -95,6 +96,7 @@ def test_each_rule_reports_injected_violation(fake_repo):
     for rule in ("private-key", "url-host", "email", "ip-address", "long-number", "secret-assign"):
         assert (f"pattern:{rule}", "docs/leak.md") in found, rule
     assert ("site-import", "plugin/scripts/bad.py") in found
+    assert ("site-import", "plugin/scripts/platforms/android/bad.py") in found
     assert ("site-import", "plugin/scripts/adapters/uses.py") in found
     assert ("fixture-origin", "tests/fixtures/issue-db-x/data/DATA-001-x/fixtures/DATA-001-01.log") in found
     assert ("fixture-origin", "tests/fixtures/logs/unknown.log") in found

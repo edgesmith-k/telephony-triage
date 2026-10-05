@@ -597,3 +597,11 @@
 - 문서: `07 §Step 3`에 `ril.paired_ts·latency_ms`와 응답 없는 요청의 `observed_until` 기록, `04 §5.8 (6)`·`contracts.md`·`01`에 코드 위치.
 - 테스트: 새 `tests/test_events.py`(키 순서·기본값, 파생 상속, `line_ref` 도우미, 스냅샷 전체 검증, 깨진 이벤트 22종). `test_parse_logcat`(스냅샷·외부 어댑터)와 `test_golden`(모의 사내 백엔드 raw 출력)에도 `validate_event` 검사.
 - 범위 밖: 파생 이벤트의 `msg` 복사 제거(RF-1).
+
+## I2 platforms/android/ 이동 (리뷰 RF-3, 2026-10-05)
+
+- 새 `plugin/scripts/platforms/android/`: `logcat.py`·`ril.py`(git mv), `backend.py`(← `parser_backends/reference/__init__.py`, `name`·`VERSION` 그대로), `bugreport.py`(← `parse_logcat` extract-bugreport, `BugreportError` → `parse_logcat`이 `UsageError`로), `__init__.py`(← `code_roots`의 `TELEPHONY_DIR`·`VERSION_SOURCES`).
+- 옛 경로 `parser_backends/{logcat,ril,reference}`는 `sys.modules` shim(같은 모듈 객체). 사내 site 백엔드의 `from ..reference import ReferenceBackend` 그대로 동작, SITE_PATHS 변경 없음. 사외 코드는 새 경로로 import.
+- 출력 동일: `test_parse_logcat.py --update` 스냅샷 diff 없음, 골든 그대로, bugreport 추출 결과 동일, `TODO(SITE)` 73곳 그대로.
+- 테스트: 새 `tests/test_platforms.py`(shim 동일성·import 순서·site식 상대 import·계층 가드(`common`→`platforms`는 `stepanchor` 시각 함수만)·bugreport 래퍼), `test_boundary`에 `platforms/` site-import 사례.
+- 범위 밖: `platform:` 키·`platforms.load()`·상수 설정화(RF-4, I3).

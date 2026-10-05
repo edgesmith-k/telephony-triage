@@ -670,6 +670,8 @@ telephony-triage/  (EXTERNAL-SAFE 레포 = canonical)
 
 ### RF-3 — Core / Platform Separation (이동만)
 
+- *I2 완료 (2026-10-05): logcat·ril·reference 백엔드·bugreport 추출·code_roots 상수 2개를 S/platforms/android/로 이동, 옛 경로는 sys.modules shim. 출력 동일. platform: 키·platforms.load()는 RF-4(I3)로.*
+
 - **Goal**: §F 디렉토리. 동작·출력 바이트 동일.
 - **Files to Modify**: `S/parser_backends/__init__.py`(shim: `reference` → `platforms.android.backend`), `S/parse_logcat.py`(bugreport 부분 import), `S/code_roots.py`(상수 → `platforms.load().source_tree`), `S/config.py`(`platform` 키 노출), `plugin/site-defaults.example.yaml`(`platform: android`), `T/mocks/parser_backends/site/__init__.py`(import 경로 — 사내 site 백엔드도 같은 변경이 필요하므로 **re-export shim을 유지**해 사내 수정 0으로).
 - **Files to Add**: `S/platforms/__init__.py`, `S/platforms/android/{__init__,logcat,ril,bugreport,backend}.py`, `tests/test_platforms.py`.

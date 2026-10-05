@@ -123,7 +123,7 @@ analyze Step 7에서 새 원인/유형을 계획할 때 아래를 점검하고, 
 
 이벤트가 로그의 어느 줄에서 왔는지를 정수 두 개로 남겨, 근거 줄을 `(ts, tag)`가 아니라 **줄 위치**로 되짚는다. 같은 시각·태그의 줄이 여럿이어도 근거로 쓴 줄이 구분된다.
 
-- **`line_ref`**: `{file_index, line_no}` 또는 `null`. `file_index`는 `parse`에 준 로그 목록의 0부터 순번(= `events.json`의 `input.files` 순서), `line_no`는 그 파일의 1부터 센 물리 줄 번호(`parser_backends/logcat.py::read_file`과 같은 방식)다. 줄 레코드와 builtin 레코드(그 줄 레코드 값을 그대로 이어받음), `source: rules` 파생 이벤트(RIL 파생·extractor, 기준 줄의 값)는 줄 번호를 갖는다. 외부 파서(`ext.*`) 이벤트는 파일만 알아 `{file_index, line_no: null}`이다. 줄 위치를 줄 수 없는 백엔드는 `null`을 줘도 된다(`postprocess`가 빠진 키를 `null`로 채운다). 이벤트의 마지막 키다.
+- **`line_ref`**: `{file_index, line_no}` 또는 `null`. `file_index`는 `parse`에 준 로그 목록의 0부터 순번(= `events.json`의 `input.files` 순서), `line_no`는 그 파일의 1부터 센 물리 줄 번호(`platforms/android/logcat.py::read_file`과 같은 방식)다. 줄 레코드와 builtin 레코드(그 줄 레코드 값을 그대로 이어받음), `source: rules` 파생 이벤트(RIL 파생·extractor, 기준 줄의 값)는 줄 번호를 갖는다. 외부 파서(`ext.*`) 이벤트는 파일만 알아 `{file_index, line_no: null}`이다. 줄 위치를 줄 수 없는 백엔드는 `null`을 줘도 된다(`postprocess`가 빠진 키를 `null`로 채운다). 이벤트의 마지막 키다.
   코드: `common/events.py`(`LineRef`, `line_ref()`·`ref_key()`·`ref_label()`).
 - **매처 근거**: `match_signatures` 근거(`candidates[].evidence`, `types[].evidence`)에 `line_ref`(이벤트의 값 그대로)와 `event_index`(입력 `events[]` 안의 순번, 입력 문서 순서 기준)가 더해진다. S/C·score·정렬·회귀·검증 판정은 이 값을 쓰지 않는다.
 - **`cut --evidence`**: 근거마다 `line_ref`가 가리키는 줄이 입력에 있고 그 줄의 (시각, 태그)가 근거와 같으면 **그 줄만** 앵커로 삼는다. 아니면 그 근거만 (시각, 태그)가 같은 모든 줄을 앵커로 삼고(예전 동작), `line_ref`가 있었는데 못 쓴 경우 경고 `evidence-ref-mismatch`를 낸다(종료 코드는 그대로). 그래서 `cut`에는 `parse`와 **같은 로그를 같은 순서로** 줘야 한다. 출력 `anchors_by: {line_ref: n, ts_tag: m}`는 앵커를 찾은 방식별 근거 수다(`--around`는 둘 다 0).

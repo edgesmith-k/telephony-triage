@@ -218,7 +218,7 @@ python3 -m pytest -q tests        # 골든 포함, 그 뒤 운영 이슈 DB에 d
   틀 (5줄, 타이핑 2분):
   ```
   [사외 수정 요청 #n]
-  어디: plugin/scripts/parser_backends/logcat.py (슬롯 표기 regex)
+  어디: plugin/scripts/platforms/android/logcat.py (슬롯 표기 regex)
   증상: 사내 로그에서 phone_id 추출률이 매우 낮음. 슬롯 접두어 형식이 사외 가정([PHONE<n>])과 다름
   형식: 메시지 앞에 대괄호+영문 3자+숫자 1자리 (실제 문자는 전달하지 않음)
   요청: 접두어 패턴을 site-defaults 또는 parser-rules 설정으로 뺄 것

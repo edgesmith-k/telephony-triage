@@ -45,7 +45,7 @@
 parse_logcat.py (플러그인 진입점, contracts.md §3.2 계약 유지)
  └─ 파서 백엔드 인터페이스 (plugin/scripts/parser_backends/base.py)
      ├─ site/       ← 기존 검증된 파서를 포팅 (사내 전용, 사외 레포에 없음)
-     └─ reference/  ← 사외 초안의 최소 구현 (모의 환경 테스트용)
+     └─ reference/  ← 사외 초안의 최소 구현 (모의 환경 테스트용; 구현은 platforms/android/backend.py, 이 경로는 shim)
 ```
 
 **백엔드 인터페이스** (사외에서 정의, `contracts.md`에 계약 추가)
@@ -101,7 +101,7 @@ external_parsers:
 - `db_lint`는 이슈 DB `external_parsers`에 없는 카테고리의 `ext.*` 참조를 오류로 본다.
 - `--no-external`은 분석 디버그용이고, 회귀·검증은 이 옵션을 받지 않는다.
 
-- 3.1 책임: 백엔드 선택·공통 후처리는 `parse_logcat.py`, 백엔드 코드는 `plugin/scripts/parser_backends/`, 어댑터는 `plugin/scripts/adapters/`.
+- 3.1 책임: 백엔드 선택·공통 후처리는 `parse_logcat.py`, 백엔드 인터페이스·선택은 `plugin/scripts/parser_backends/`, 공통 처리 구현은 `plugin/scripts/platforms/android/`, 어댑터는 `plugin/scripts/adapters/`.
 
 ## 16.4 기존 분류 가져오기 (A)
 
