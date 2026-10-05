@@ -63,7 +63,7 @@ telephony-issue-db/
 ├── .githooks/pre-push                 # main 직접 push·승인 토큰 없는 push 거부 (08-safety.md §9) — 메인테이너 소유
 ├── issue-db.config.yaml               # 02-config.md §5.3
 ├── CONTRIBUTING.md                    # 기여 규칙 (5.7 + 06-collaboration.md §6.2 요약)
-├── GLOSSARY.md                        # 카테고리별 표준 용어, 카테고리 경계 (06-collaboration.md §6.9)
+├── GLOSSARY.md                        # 카테고리별 표준 용어, 카테고리 경계, 검색 별칭(search 전용) (06-collaboration.md §6.9)
 ├── docs/
 │   ├── getting-started.md             # 10분 온보딩 (06-collaboration.md §6.9)
 │   ├── review-guide.md                # 월간 리뷰 절차 (06-collaboration.md §6.6)
@@ -270,6 +270,7 @@ analyze Step 7까지의 결정은 이슈 DB를 바로 바꾸지 않고 **작업 
 - 폐기와 병합은 삭제하지 않고 `status`로 표시한다: 유형은 `deprecated | merged-into:<유형 ID>`, 원인은 `deprecated | merged-into:<원인 ID>`. 매처는 `active`만 후보로 쓰고, `search`는 옛 ID를 새 ID로 연결해서 보여준다 (연결 출처: `contracts.md §renumber 참조`).
 - README의 `1-1`, `1-2` 같은 번호는 표시용이며 순서에서 자동 생성된다.
 - 시그니처 의미는 `04-parser-matching.md §5.11`을 따른다.
+- **증상 문장 검색**: `search`는 문장을 그대로 받아 질의 전체의 부분 일치(옛 동작)를 먼저 보이고, 이어서 단어로 쪼개 찾는다. 불용어("이런 이슈 있었어")·조사·부정 접두("안붙어")를 떼고, `GLOSSARY.md`의 `## 검색 별칭`(메인테이너 리뷰)으로 별칭을 더한다. 위치별 가중치(ID·제목·태그 > 요약·원인 설명·해결책 > 증상 본문·상위 유형·Jira)로 맞은 단어 수·점수 순위를 낸다. 이 순위는 검색용이며 분류·매칭에는 쓰지 않는다.
 
 ### 5.6 README 인덱스 (사람이 보는 화면)
 

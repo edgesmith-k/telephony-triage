@@ -5,19 +5,19 @@ description: Android Telephony 이슈(data·call·network·sim·sms·ims)를 Jir
 
 # telephony-triage
 
-틀린 분류는 팀 전체 매칭을 망친다. **스크립트 출력으로 판단하고, 사람 확인을 받고, 계획을 최신 main 위에 적용해 PR로
+**스크립트 출력으로 판단하고, 사람 확인을 받고, 계획을 최신 main 위에 적용해 PR로
 올린다.** 너는 결과를 설명하고 사용자 결정을 계획에 옮길 뿐 이슈 DB 파일을 직접 쓰지 않는다.
 
 | 언제 | `reference/` |
 |---|---|
 | Step 7·8, 모든 쓰기 흐름 | `write-flow.md` |
 | 새 원인·유형·시그니처·파서 규칙·fixture, Step 7 op 필드 | `db-authoring.md` |
-| `record` / `verify-fix`·`fix-submitted`·`validate --cause` / `sync-pr` | `record.md` / `verify.md` / `sync-pr.md` |
+| `record` / `verify-fix`·`fix-submitted`·`validate --cause` / `sync-pr` / 증상만 "비슷한 이슈·이슈 번호?"(search, analyze 아님) | `record.md` / `verify.md` / `sync-pr.md` / `search.md` |
 | 로그 해석 | `log-tags.md`, `ril-requests.md`, `fail-causes.md` |
 
 ## 실행 규칙 (모든 흐름)
 
-- 스크립트: `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/<이름>.py" … --json`(안 되면 config `plugin.scripts_path`) = `S/`.
+- 스크립트: `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/<이름>.py" … --json` = `S/`.
   `WD` = config `work_dir`, `SNAP` = `WD/_snapshot`, `JOB` = `WD/<작업 키>`, `wt` = `JOB/wt`. `--db`: 읽기 `SNAP`, 쓰기 `wt`.
 - 종료 코드: 1 검사 실패(drift 포함)→원인 표시·차단, 2→**stderr를 그대로 보이고 멈춘다**(예: 사내 기본값 없음 S-3. "계획 형식 오류"만 계획을 고쳐 재실행), 3 승인 필요.
   git 충돌·인증 실패·MCP 없음·버전 불일치는 우회하지 않고 보고한다.

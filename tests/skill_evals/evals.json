@@ -1,6 +1,6 @@
 {
   "skill_name": "telephony-triage",
-  "_comment": "eval 52개 정의 완료. batch 1=대표10, A=원칙·안전10, B=analyze11, C=수정·검증9, D=record5, E=10/04~05 기능 7(46~52). 정의 완료는 행동 평가 통과를 뜻하지 않는다. README.md와 DRAFT_NOTES.md 참조.",
+  "_comment": "eval 54개 정의 완료. batch 1=대표10, A=원칙·안전10, B=analyze11, C=수정·검증9, D=record5, E=10/04~05 기능 7(46~52), F=S6 증상 검색 2(53~54). 정의 완료는 행동 평가 통과를 뜻하지 않는다. README.md와 DRAFT_NOTES.md 참조.",
   "evals": [
     {
       "id": 1,
@@ -1940,6 +1940,49 @@
         "JOB/analysis.json이 logs.files [a.log, b.log], run 2, reuse.added_logs [b.log], reuse.top_changed true를 담는다",
         "답변에서 이전 결과(CALL-001)에서 추가 로그 뒤 1위(IMS-001-01)로 바뀐 점을 밝혔다",
         "JOB/plan.json 없음, db_pr stage·publish 없음, 원격 브랜치·PR 없음, 끝난 뒤 lock 없음"
+      ],
+      "files": []
+    },
+    {
+      "id": 53,
+      "name": "symptom-search-natural-language",
+      "batch": "F",
+      "design": "증상만 자연어로 묻는 \"예전에 이런 이슈 있었어? 지라 번호 알려줘\" → search 흐름(`reference/search.md`): 문장을 그대로 `db_search.py`에 넘기고 분석(triage.py·파서·매칭)·lock 없이 이슈 번호 줄과 유형 > 원인 표(해결책·수정 상태)를 보인다. 번호를 지어내지 않는다",
+      "prompt": "데이터가 안 붙는 증상, 예전에 이런 이슈 있었어? 있으면 지라 번호 알려줘",
+      "setup": {"db": "issue-db-sample"},
+      "user_replies": [
+        "로그나 Jira 키를 달라고 하면 '없어, 과거 이슈만 알고 싶어'라고 답한다.",
+        "분석을 해볼지 물으면 '아니오'.",
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "db_search.py \"<문장>\"(스냅샷 또는 cwd DB) 호출 → DATA-001 계열(원인 DATA-001-01·02)과 Jira MOCK-1101~1104를 이슈 번호 줄에 보이고, 유형 > 원인 표에 해결책·수정 상태를 보인다. triage.py·parse_logcat·match_signatures·lock 없음. 분석이 필요하면 /telephony-triage:analyze 안내만.",
+      "assertions": [
+        "db_search.py를 호출했고 triage.py·parse_logcat.py·match_signatures.py·lock acquire는 실행하지 않았다",
+        "답변에 DATA-001이 있고 MOCK-1101·MOCK-1102·MOCK-1103 중 2개 이상이 있다",
+        "답변의 모든 MOCK-숫자 키는 샘플 이슈 DB에 있는 키다(지어낸 번호 없음)",
+        "결과를 유형 > 원인 순으로 해결책과 수정 상태와 함께 보였다",
+        "끝난 뒤 세션 lock이 없고 사용자 clone이 그대로다"
+      ],
+      "files": []
+    },
+    {
+      "id": 54,
+      "name": "symptom-search-no-hit",
+      "batch": "F",
+      "design": "`/telephony-triage:search eSIM 다운로드가 안 돼, 이런 이슈 있었어? 번호 알려줘` → 일치 없음. 이슈 번호를 지어내지 않고 다른 검색어(유형 제목·태그)를 제안하며, 다시 검색하면 어떤 단어로 찾았는지 밝히고 같은 이슈라고 하지 않는다. 분석·lock 없음",
+      "prompt": "/telephony-triage:search eSIM 다운로드가 안 돼, 이런 이슈 있었어? 번호 알려줘",
+      "setup": {"db": "issue-db-sample"},
+      "user_replies": [
+        "분석을 해볼지 물으면 '아니오'.",
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "db_search.py 호출 결과 results 비어 있음 → \"일치 없음\"과 대안 검색어(유형 제목·태그, SIM 미인식 등) 제안. 번호를 만들지 않는다. triage·analyze·lock 없음.",
+      "assertions": [
+        "db_search.py를 호출했고 triage.py·analyze 흐름은 실행하지 않았다",
+        "일치하는 이슈가 없다고 밝혔다",
+        "답변의 MOCK-숫자 키는 모두 샘플 이슈 DB에 있는 키다(없으면 통과)",
+        "다른 검색어를 제안했고, 다시 검색했다면 어떤 단어로 찾았는지 밝히고 같은 이슈라고 말하지 않았다",
+        "세션 lock이 없고 사용자 clone이 그대로다"
       ],
       "files": []
     }

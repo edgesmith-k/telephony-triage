@@ -640,6 +640,48 @@ def checks(eid: int, ctx: Ctx) -> list:
                 and bool(re.search(r"1위|바뀌|바뀐|변경|→", t))
             return ok, "transcript에 CALL-001·IMS-001-01·추가 로그·1위 변화 표현" + (" 있음" if ok else " 없음(수동 확인)")
         return [calls_ok, analysis_ok, told, lambda: no_record("MOCK-9052")]
+    if eid in (53, 54):
+        sample = HERE.parent / "fixtures" / "issue-db-sample"
+        known = {p.stem for p in sample.glob("*/*/jira/*.yaml")}
+
+        def answer() -> str:
+            """사용자에게 보인 글: 실행자가 남긴 transcript.md(요약만 남기기도 한다)와 실행 기록의 assistant 글·최종 결과."""
+            texts = [ctx.transcript]
+            p = ctx.run / "events.jsonl"
+            for raw in (p.read_text(encoding="utf-8", errors="replace").splitlines() if p.is_file() else []):
+                try:
+                    ev = json.loads(raw)
+                except ValueError:
+                    continue
+                if ev.get("type") == "assistant":
+                    texts += [c.get("text", "") for c in (ev.get("message") or {}).get("content") or []
+                              if isinstance(c, dict) and c.get("type") == "text"]
+                elif ev.get("type") == "result":
+                    texts.append(str(ev.get("result") or ""))
+            return "\n".join(texts)
+
+        def searched():
+            used = re.findall(r"\b(triage\.py|parse_logcat\.py|match_signatures\.py)\b|lock\s+acquire", ctx.ran)
+            ok = "db_search.py" in ctx.ran and not used
+            return ok, f"db_search 호출={'db_search.py' in ctx.ran}; 쓰면 안 되는 호출={used}"
+
+        def only_known():
+            seen = sorted(set(re.findall(r"MOCK-\d+", answer())))
+            bad = [k for k in seen if k not in known]
+            return not bad, f"transcript의 키={seen}; 샘플 DB에 없는 키={bad}"
+
+        def free_clone():
+            (a, ea), (b, eb) = ctx.lock_free(), ctx.clone_same()
+            return a and b, f"{ea}; {eb}"
+
+        if eid == 53:
+            def numbers():
+                t = answer()
+                hit = [k for k in ("MOCK-1101", "MOCK-1102", "MOCK-1103") if k in t]
+                return "DATA-001" in t and len(hit) >= 2, f"DATA-001 {'있음' if 'DATA-001' in t else '없음'}; 키={hit}"
+            return [searched, numbers, only_known, None, free_clone]
+        return [searched, lambda: (bool(re.search(r"일치.*없|찾지 못|없습니다", answer())), "transcript의 '일치 없음' 표현"),
+                only_known, None, free_clone]
     return []
 
 

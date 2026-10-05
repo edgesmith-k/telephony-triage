@@ -79,7 +79,7 @@ telephony-triage-plugin/                 # 개발 레포 루트
     │   ├── analyze.md                   # /telephony-triage:analyze <JIRA-KEY> [logcat...] [--code <프로필|경로>] [--dry-run] [--jira-file <yaml>] [--analyzer | --no-analyzer] [--explore | --no-explore]
     │   ├── record.md                    # /telephony-triage:record <JIRA-KEY> [--cause <원인 ID> | --new-cause <유형 ID> | --new-type <category> | --unresolved <유형 ID>] [--fixture <logcat>] [--resolved-fixture <logcat>] [--dry-run] [--jira-file <yaml>]
     │   ├── sync.md                      # /telephony-triage:sync
-    │   ├── search.md                    # /telephony-triage:search <keyword|JIRA-KEY|ID>
+    │   ├── search.md                    # /telephony-triage:search <증상 문장|keyword|JIRA-KEY|ID> (reference/search.md를 가리킴)
     │   ├── sync-pr.md                   # /telephony-triage:sync-pr [branch] (계획 재적용)
     │   ├── preview.md                   # /telephony-triage:preview
     │   ├── review.md                    # /telephony-triage:review [category]
@@ -96,12 +96,13 @@ telephony-triage-plugin/                 # 개발 레포 루트
     │           ├── verify.md            # validate --cause, fix-submitted, verify-fix 흐름
     │           ├── explore.md           # analyze Step 5-2 탐색 분석 (후보 없음·원인 미확인일 때 Claude 가설)
     │           ├── sync-pr.md           # sync-pr 흐름
+    │           ├── search.md            # search 흐름: 증상 문장 그대로 db_search, 이슈 번호 줄·유형 > 원인 표 (읽기 전용)
     │           ├── db-authoring.md      # 구성 목록은 10-skill-eval.md §skill-creator 입력
     │           ├── ril-requests.md      # RIL request/response/unsol 해설
     │           ├── fail-causes.md       # DataFailCause, CallFailCause, 등록 reject cause
     │           └── log-tags.md          # 태그 해설 (실제 수집 목록은 이슈 DB parser-rules/tags.yaml)
     ├── scripts/                         # 3.1 매트릭스 참고
-    │   ├── common/                      # config 로드, 이슈 DB 로드, 스키마 검증, git 헬퍼, 로깅, 시그니처 컴파일, 마스킹 함수, `events.py`(파서 출력 이벤트 키 순서·`line_ref`·`validate_event`, 표준 라이브러리만), `yamlio.py`(YAML 읽기 단일 입구, libyaml `CSafeLoader` 있으면 사용)
+    │   ├── common/                      # config 로드, 이슈 DB 로드, 스키마 검증, git 헬퍼, 로깅, 시그니처 컴파일, 마스킹 함수, `events.py`(파서 출력 이벤트 키 순서·`line_ref`·`validate_event`, 표준 라이브러리만), `yamlio.py`(YAML 읽기 단일 입구, libyaml `CSafeLoader` 있으면 사용), `glossary.py`(GLOSSARY.md 표 읽기: `table`, `search_aliases`)
     │   ├── config.py
     │   ├── code_roots.py
     │   ├── parse_logcat.py
@@ -152,7 +153,7 @@ telephony-triage-plugin/                 # 개발 레포 루트
 | `mask_pii.py` | 마스킹 치환(파일), 외부 이벤트 JSON 마스킹(`--events`), `--check` 검출. 마스킹 함수 자체는 `common/`에 있고 `parse_logcat`이 공유 | `db_add`, `db_precommit`, `db_pr stage`, guard hook 3번 |
 | `jira_fields.py` | Jira 키 검사(`check-key`, `jira_key_regex`), Jira 응답(MCP `get_issue` 결과 또는 `--jira-file`)에서 `jira.field_map`으로 구조화 필드 추출, 텍스트 필드 즉시 마스킹, 발생 시각 UTC 변환·`occurred_on`·logcat 연도, `--jira-meta` 파일 생성(`extract`). 사람 이름 필드(코멘트 작성자)는 내지 않음 | analyze Step 0·2, `record`, `verify-fix --jira` |
 | `match_signatures.py` | 마스킹된 이벤트 JSON × 이슈 DB → 후보 랭킹(`same_phone`·`sequence` 포함, 패턴당 타임아웃), 수정 상태 판단, related | analyze Step 4, `db_regress`, `db_verify` |
-| `db_search.py` | 이슈 DB 검색 (secondary/related, 옛 ID → 새 ID 연결) | `search`, `record` 대화형 모드, Phase 11 테스트 |
+| `db_search.py` | 이슈 DB 검색 (secondary/related, 옛 ID → 새 ID 연결, 증상 문장 단어별 검색·`## 검색 별칭`·순위) | `search`, `record` 대화형 모드, Phase 11 테스트 |
 | `db_add.py` | 작업 계획(`plan.json`) 적용(`source`별 op 허용 규칙, `schema_version` 검사 포함), **drift 검사**(`drift`), ID·fixture 번호 할당, 브랜치 안 renumber("내 ID"만)·check-ids, 템플릿 생성, 유사 유형 검사 | `db_pr stage`, `db_verify rules --draft`, analyze Step 7·`record` (`similar`) |
 | `db_pr.py` | **이슈 DB 쓰기 오케스트레이션**: 세션 lock(`lock`), 읽기 스냅샷, 잔여 worktree·도구 브랜치(`tt/*`) 정리, 사전 점검(브랜치·열린 PR·Jira 중복), worktree 준비 + drift 검사 + apply + 검사(`stage`), 확인 화면 데이터(`summary`, 조립은 `db_summary.py`), lease push + PR(`publish`), 정리(`discard`), 작업 상태 파일(`state.json`) | analyze Step 0·1·8, `record`, `sync`, `sync-pr`, `verify-fix`, `validate --cause`, `fix-submitted`, import/review/move 계획 PR |
 | `db_build.py` | 생성 파일(README, 카테고리 README, STATS, CHANGELOG)과 로컬 캐시 생성, 정합성 검증 | `db_pr stage`, `preview`, setup, `db_pr snapshot` 이후 캐시 갱신, `db_precommit`, guard hook 4번 |

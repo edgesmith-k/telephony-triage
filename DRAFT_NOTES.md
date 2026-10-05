@@ -31,7 +31,7 @@
 | 보안 검토 수정 | `steps-pasted.txt`를 discard·`lock release`(자기 작업)·cleanup이 지운다 | `08 §8.1`, `contracts §3.2` |
 | R11 단정 제거 | RIL 요청 안 보임·시계 점프를 관측 사실·추론·반례로 구분 | `reference/ril-requests.md`·`log-tags.md`, `07 §Step 3` |
 | R9 verify-fix 예외 | 결정 (e)로 07·reference·`12-principles.md`를 05에 맞춤(코드 변경 없음) | `05 §5.12 (2)`, `07 §verify-fix` |
-| RF-2 | 반입 staging·rollback, `check_boundary`, 사외 CI | 리뷰 §U RF-2 (10/03부터 확인 대기) |
+| RF-2 | 반입 staging·rollback, `check_boundary`, 사외 CI | 리뷰 §U RF-2 (10/03부터) |
 
 ## 다음 할 일
 
@@ -40,7 +40,7 @@
 | ☐ | 항목 | 메모 |
 |---|---|---|
 | ☐ 2 | **사용자 확인** — 위 표, RF-2, 10/05 작업 전체 | 반입 직전에 한꺼번에 |
-| ☐ 3C | **행동 eval 전체(52개)** — **사외에서 실행**(사용자 결정 10/05), I1~I5 뒤·Z 전 | 1개 $0.1~0.6. 사내 S-2에서도 한 번 더 |
+| ☐ 3C | **행동 eval 전체(54개)** — **사외에서 실행**(사용자 결정 10/05), I1~I5 뒤·Z 전 | 1개 $0.1~0.6. 사내 S-2에서도 한 번 더 |
 | ◐ 10 | **반입** | main `7b69cb5` 묶음은 낡음 → 아래 보강 뒤 다시 만든다. 태그 push는 사용자(세션 권한 밖) |
 
 **반입 전 보강 트랙**(사용자 결정 10/05: 시간 여유, 사외에서 최대한 안정화·보완 뒤 반입). 위에서부터 ☐ 첫 항목을 한다. 단계마다 결과 요약 → 사용자 확인.
@@ -59,6 +59,7 @@
 | ✅ I4 | YAML C 로더(`CSafeLoader`, 없으면 SafeLoader) | 10/05, `CHANGES.md` |
 | ✅ I5 | `db_pr` summary/pr_body → `db_summary.py` | 10/05, `CHANGES.md` |
 | ✅ X | RF-7 분석 전용·추가 로그·입력 해시 재사용 | 10/05, `CHANGES.md` |
+| ✅ S6 | 증상 문장 검색(search) | 10/05, `CHANGES.md` |
 | ☐ Z | 마무리: main 병합 → `15 §15.4` 재실행 → 새 묶음·sha256 → 사용자 태그 → 2 | |
 
 RF-5(oFono)·RF-6(커넥터)·RF-8(자동화)은 사내 환경을 알아야 의미가 있어 반입 뒤. RF-9·웹 UI(보류)는 그 뒤 후보. RF 상세는 `docs/development/ARCHITECTURE_REVIEW_2026-10.md` §U.

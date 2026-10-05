@@ -297,7 +297,7 @@ claude mcp list               # Jira MCP 사용자 범위 등록 확인
 |---|---|
 | `analyze <JIRA> [로그...] [--code <프로필>] [--dry-run] [--failed-step <한 줄>] [--steps-file <파일>] [--clock-offset <±시간>] [--analyzer \| --no-analyzer] [--explore \| --no-explore]` | 로그로 이슈 분석하고 분류·기록. 실패 스텝은 선택 보조 정보이고, 시험 절차(`--steps-file`: txt/csv·html·zip·붙여넣기)의 PASS 스텝 순서를 로그의 흔적과 맞춰 분석 범위를 정한다(`--answer anchor=off`로 끔). 맞는 규칙이 없으면 Claude 탐색 분석(가설)을 할지 묻는다 |
 | `record <JIRA> [--cause <ID> \| --new-cause <유형> \| --new-type <카테고리> \| --unresolved <유형>] [--fixture <로그>] [--resolved-fixture <로그>] [--failed-step <한 줄>] [--steps-file <파일>]` | 직접 해결한 이슈를 히스토리만 기록 |
-| `search <키워드\|JIRA\|ID>` | 비슷한 이슈가 있었는지 찾기 |
+| `search <증상 문장\|키워드\|JIRA\|ID>` | 비슷한 이슈가 있었는지 찾기. 예: `search 데이터 안 붙어, 이슈 번호 알려줘` |
 | `fix-submitted <원인 ID> --ref <CL> --fixed-in <브랜치>[:<빌드>]` | 수정 CL이 머지됐을 때 |
 | `verify-fix <원인 ID> <수정 빌드 로그>` | 수정 빌드에서 재발 안 하는지 확인 → fixed |
 | `validate [--cause <원인 ID> <적용 후 로그>] [--extra <로그...>]` | 직접 편집 검사 / 해결책 효과 검증 |
