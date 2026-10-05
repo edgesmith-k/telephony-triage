@@ -7,7 +7,7 @@
 순서: analyze(Step 0~8) → 공통 쓰기 절차 → record → validate → fix-submitted → verify-fix → sync-pr (이슈가 처음 분류되고(분석 또는 수동 기록), 수정되고, 검증되고, 머지 전 재동기화되는 순서).
 
 ```
-/telephony-triage:analyze ABC-12345 ./logcat_radio.txt ./logcat_main.txt [--code android16-main] [--dry-run] [--jira-file <yaml>] [--analyzer | --no-analyzer]
+/telephony-triage:analyze ABC-12345 ./logcat_radio.txt ./logcat_main.txt [--code android16-main] [--dry-run] [--jira-file <yaml>] [--more-logs <logcat...>] [--analyzer | --no-analyzer]
 ```
 
 모든 스크립트는 `${CLAUDE_PLUGIN_ROOT}/scripts/`로 호출하고, 결과는 `--json`으로 받는다. `--db`는 `contracts.md §3.2`의 명시 규칙을 따른다: 읽기는 `<work_dir>/_snapshot`, 쓰기는 `<wt>`.
@@ -42,6 +42,16 @@
 - **그대로 한다**: 키 검사, lock 획득(스냅샷을 옮기므로), 스냅샷·사후 lint·캐시, 호환성(`--for dry-run`), Jira 읽기(`--jira-file`은 `--dry-run` 없이도 받는다), 로그·코드·Step 3~5, 입력 재사용.
 - **건너뛴다**: `db_pr cleanup`(dry-run·yes·질문 모두), 기존 `plan.json` 질문과 pending 피드백 삭제(있는지만 `plan{exists, source, pr_number}`로 알리고 파일은 건드리지 않는다), 열린 PR 확인(`db_pr preflight`·gh 없음, 리포트는 "확인 안 함"이며 "없음"이 아니다), 재분석 질문(`existing`은 알리기만).
 - **끝**: Step 6 리포트까지만 하고 **Step 7(분류 확정)·Step 8로 가지 않는다**. ok로 끝나면 `triage.py`가 lock을 풀고(`lock_released: true`, 붙여넣은 스텝 원문 `steps-pasted.txt`도 지운다) 리포트 첫 줄에 "분석 전용: 이슈 DB에 기록하지 않는다…"를 둔다. 기록하려면 `--analysis-only` 없이 다시 실행한다(mode는 입력 해시에 없으므로 core는 재사용되고 건너뛴 사전 질문이 그때 나온다). needs_input에서는 lock을 유지한다(재실행은 멱등). 붙여넣은 스텝은 lock과 함께 지워지므로, 이어서 기록 실행을 할 때는 `--steps-file`을 다시 써야 한다(안 쓰면 입력 `args`가 바뀌어 core를 다시 계산한다).
+
+#### 추가 로그 재분석 (`--more-logs`, RF-7)
+
+> 첫 분석 뒤에 로그를 더 받았을 때(`triage.py run <KEY> --more-logs <경로…>`): 이전 분석의 로그에 새 로그를 **더해** 다시 분석한다. `--logs`와는 함께 못 쓴다(종료 코드 2). `--logs`는 로그 목록을 통째로 바꾼다. `--analysis-only`와도, 보통 analyze와도 함께 쓴다.
+
+- **기준 목록**: `triage-state.json`의 `job.logs`(세션이 바뀌어도 남는다). 비어 있으면 종료 코드 2(`이전 분석 로그가 없다 — --logs로 시작한다`, lock은 풀고 끝남). `--offline-db`에는 이전 로그 이력이 없어 쓸 수 없다(종료 코드 2).
+- **붙이는 순서**: 새 경로는 기존 목록 **뒤에** 붙인다. 그래서 리포트 근거의 `(f<순번>:L<줄>)`에서 이미 나온 순번이 그대로 유효하다.
+- **중복 제거(sha256)**: 이미 목록에 있는 경로는 조용히 건너뛴다(같은 명령을 다시 실행해도 같다 — 로그 부분이 같아 입력 재사용 적중). 경로는 다르지만 내용이 목록의 어느 로그와 같으면 경고(`more-logs-duplicate: …`)하고 건너뛴다. 결과 목록은 `job.logs`와 세션의 `logs` 키에 남는다.
+- **전체 재계산**: 로그 부분 해시가 바뀌므로 입력 재사용은 적중하지 않고 Step 3~5를 **합친 로그 전체**로 다시 계산한다(일부만 덧붙여 계산하지 않는다). `reuse.changed: [logs]`·`added_logs`(새로 들어온 로그 이름)·`prev_top`·`top_changed`가 나오고, 리포트에 `- 재분석: 실행 m 대비 바뀐 입력 [logs] (추가 로그 …) — 1위 X → Y | 1위 변화 없음`이 있다. 추가 로그가 이전 1위를 뒤집어도(예: 증상만 보이던 유형이 원인 확인된 유형으로 바뀜) 판정은 매처 출력이 하며, 스킬은 달라진 1위를 사용자에게 알려 분류를 다시 확인받는다.
+- **이전 결과 보관**: 새로 계산한 결과가 이전 실행과 입력(`request_hash`)이 다르면, 덮어쓰기 전에 이전 `analysis.json`·`report.md`를 `JOB/runs/<n>/`(n = 이전 실행 번호)에 복사한다. 최근 5개만 두고 오래된 것부터 지운다(`state.job.runs` 이력은 10개). `events.json`·`match.json`은 보관하지 않는다.
 
 ### Step 0. 사전 점검
 - config를 로드한다. 없으면 setup으로 유도한다.

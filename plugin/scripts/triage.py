@@ -5,6 +5,7 @@
                   [--code <프로필|경로|키=경로,…|skip>] [--dry-run | --analysis-only] [--answer <kind>=<값>...]
                   [--tz <IANA>] [--year <YYYY>] [--minutes 5] [--refresh]
                   [--failed-step <한 줄>] [--steps-file <파일>] [--clock-offset <±시간>]
+    triage.py run <KEY> --more-logs <logcat|bugreport>... [위 옵션]      # --logs와 함께 못 쓴다(종료 코드 2)
     triage.py run <KEY> --offline-db <path> --out <dir> --logs <logcat...> (--jira-meta <json> | --jira-file <yaml>)
     triage.py release <KEY>
 
@@ -24,6 +25,10 @@
   재사용은 그대로 하고, 쓰기 흐름의 질문·부작용(cleanup, 기존 계획 질문·pending 피드백 삭제, 열린 PR 확인)은 건너뛴다. 출력 `mode: "analysis-only"`
   (`read_only_reasons`·`open_prs` 없음, `plan`은 `{exists, source, pr_number}`만), ok로 끝나면 lock을 풀고 `lock_released: true`(`lock_owner` 없음).
   `--jira-file`은 `--dry-run` 없이도 받는다. 입력 해시에는 mode가 없어 이어서 보통 analyze를 하면 core를 재사용한다.
+- `--more-logs <경로…>`(RF-7): 이전 분석의 로그(`triage-state.json`의 `job.logs`) 뒤에 로그를 더해 다시 분석한다(`--logs`와 함께 못 쓴다).
+  순서는 이전 로그 뒤에 붙여 `f<순번>`이 안 바뀐다. 이미 있는 경로는 조용히, 내용(sha256)이 같은 다른 경로는 경고하고 건너뛴다. 이전 로그가 없거나
+  `--offline-db`면 종료 코드 2. 로그 부분 해시가 바뀌어 Step 3~5를 합친 로그로 모두 다시 계산하고, 이전 `analysis.json`·`report.md`는
+  `JOB/runs/<n>/`에 보관한다(최근 5개). `events.json`·`match.json`은 보관하지 않는다.
 - 읽지 않는 파일: `events.json`(파서 출력), `match.json`(매처 출력, `parse_logcat cut --evidence` 입력),
   `jira.json`(마스킹된 Jira 추출 전체 — 코멘트 원문이 필요할 때만 읽는다), `jira_meta.json`, `triage-state.json`, `analysis-cache.json`.
 
@@ -61,6 +66,7 @@ import io
 import json
 import os
 import re
+import shutil
 import sys
 import time
 from contextlib import redirect_stderr, redirect_stdout
@@ -79,7 +85,9 @@ STATE_FILE = "triage-state.json"
 STATE_SCHEMA = 2                 # 2: `job` 절(로그·실행 이력·재사용 캐시 요약)이 있다. 스키마 표시가 없는 파일은 job = {}
 CACHE_FILE = "analysis-cache.json"
 CACHE_FORMAT = 1                 # 캐시 형식·`core` 구조를 바꾸면 올린다(plugin 해시에 들어가 이전 캐시가 무효가 된다)
-RUNS_KEEP = 10
+RUNS_KEEP = 10                   # state.job.runs(실행 이력)에 남기는 수
+RUN_DIRS_KEEP = 5                # JOB/runs/<n>/(이전 analysis.json·report.md 보관)에 남기는 수
+RUNS_DIR = "runs"
 PART_KEYS = ("logs", "jira", "db", "config", "plugin", "args")     # 입력 해시 부분(바뀐 것을 알려 주는 순서)
 CACHE_FILES = {"events": "events.json", "match": "match.json", "timeline": "timeline.md"}   # 캐시가 크기·mtime을 기록하는 산출물
 ANSWER_KEYS = ("time", "window", "anchor", "year", "code", "code_confirm")   # 결과를 바꾸는 답만 args 해시에 넣는다
@@ -328,6 +336,8 @@ class Driver:
         if self.analysis_only and (a.dry_run or self.offline):
             raise Fail(USAGE, "--analysis-only는 " + ("--dry-run" if a.dry_run else "--offline-db")
                        + "과 함께 쓰지 않는다(분석 전용은 이슈 DB에 기록하지 않는 실행이다).")
+        if self.offline and getattr(a, "more_logs", None):
+            raise Fail(USAGE, "--more-logs는 --offline-db와 함께 쓰지 않는다(이전 분석의 로그 이력이 없다) — --logs에 모두 준다.")
         if self.offline:
             if not a.out:
                 raise Fail(USAGE, "--offline-db에는 --out <dir>이 필요하다.")
@@ -655,8 +665,36 @@ class Driver:
 
     # Step 2-1 / 3 -----------------------------------------------------------------------------------
 
+    def check_more_logs(self) -> None:
+        """`--more-logs`는 이전 분석의 로그가 있어야 한다(없으면 종료 코드 2). lock 직후에 해서 Jira 읽기 전에 알린다."""
+        if getattr(self.args, "more_logs", None) and not (self.state.job.get("logs") or []):
+            raise Fail(USAGE, "이전 분석 로그가 없다 — --logs로 시작한다")
+
+    def combine_more_logs(self) -> list[str]:
+        """이전 로그(`job.logs`) 뒤에 `--more-logs`를 붙인 경로 목록. 순서를 지켜 기존 `f<순번>`이 유지된다(D7).
+        이미 있는 경로는 조용히, 내용(sha256)이 같은 다른 경로는 경고하고 건너뛴다."""
+        known = [dict(f) for f in self.state.job.get("logs") or []]
+        paths = [f["path"] for f in known]
+        shas = {f.get("sha"): f for f in known}
+        for raw in self.args.more_logs:
+            p = Path(raw).expanduser().resolve()
+            if not p.is_file():
+                raise Fail(USAGE, f"로그 파일이 없습니다: {p}")
+            if str(p) in paths:
+                continue
+            sha = _file_sha(p)
+            if sha in shas:
+                self.warn(f"more-logs-duplicate: {p.name}은(는) 이미 있는 {shas[sha].get('name')}와 내용이 같아 건너뛰었다")
+                continue
+            paths.append(str(p))
+            shas[sha] = {"name": p.name}
+        return paths
+
     def logs(self) -> list[Path]:
-        paths = self.args.logs or self.state.data.get("logs")
+        if getattr(self.args, "more_logs", None):
+            paths = self.combine_more_logs()
+        else:
+            paths = self.args.logs or self.state.data.get("logs")
         if not paths:
             log_dir = userconfig.get(self.cfg, "log_dir")
             found = []
@@ -1084,6 +1122,7 @@ class Driver:
         self.open_job()
         if not self.offline:
             self.lock()
+            self.check_more_logs()
             if self.analysis_only:
                 self.plan_info()
             else:
@@ -1310,6 +1349,8 @@ class Driver:
             "files": {"report": str(self.job / "report.md"), "events": str(self.job / "events.json"),
                       "match": str(self.job / "match.json"), "jira": str(self.job / "jira.json")},
         }
+        if parts is not None and not hit:
+            self.archive_previous(request_hash)       # 덮어쓰기 전에 이전 결과를 runs/<n>/에 보관
         self.write_report(result, anchor)
         if parts is not None:
             self.save_job(core, parts, request_hash, run_no, seq, hit, candidates)   # `_ref`를 지우기 전에(리포트 재현용)
@@ -1321,6 +1362,28 @@ class Driver:
                                                 encoding="utf-8", newline="\n")
         self.run.note("done", candidates=len(candidates), calls=self.run.calls)
         return result
+
+    def archive_previous(self, request_hash: str) -> None:
+        """새로 계산한 결과가 이전 실행과 입력이 다르면, 덮어쓰기 전에 이전 `analysis.json`·`report.md`를 `JOB/runs/<n>/`에
+        보관한다(n = 이전 실행 번호, 최근 `RUN_DIRS_KEEP`개만 둔다). 마스킹된 결과만이고 `events.json`·`match.json`은 보관하지 않는다."""
+        runs = self.state.job.get("runs") or []
+        if not runs or runs[-1].get("request_hash") == request_hash:
+            return
+        dest_root = self.job / RUNS_DIR
+        dest = dest_root / str(runs[-1]["n"])
+        copied = False
+        for name in ("analysis.json", "report.md"):
+            src = self.job / name
+            if src.is_file():
+                dest.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(src, dest / name)
+                copied = True
+        if copied:
+            self.run.note("archive", run=runs[-1]["n"])
+        numbered = sorted((int(d.name) for d in dest_root.iterdir() if d.is_dir() and d.name.isdigit()), reverse=True) \
+            if dest_root.is_dir() else []
+        for n in numbered[RUN_DIRS_KEEP:]:
+            shutil.rmtree(dest_root / str(n), ignore_errors=True)
 
     def reuse_out(self, candidates: list[dict], parts: dict, runs: list) -> dict:
         """analysis.json의 `reuse`: 적중이면 `{hit, run}`, 다시 계산했으면 무엇이 바뀌었고 1위가 달라졌는지."""
@@ -1674,7 +1737,9 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("run", parents=[common])
     p.add_argument("key")
-    p.add_argument("--logs", nargs="+")
+    logs = p.add_mutually_exclusive_group()
+    logs.add_argument("--logs", nargs="+")
+    logs.add_argument("--more-logs", nargs="+", help="이전 분석의 로그 뒤에 로그를 더해 다시 분석(RF-7). --logs와 함께 못 쓴다")
     src = p.add_mutually_exclusive_group()
     src.add_argument("--jira-raw")
     src.add_argument("--jira-file")

@@ -45,6 +45,7 @@
 - **실패 스텝**(`--failed-step` 원문·`--steps-file` 내용)의 원문은 `trace.jsonl`·`triage-state.json` 같은 상태·추적 파일에 쓰지 않는다. `triage.py`가 같은 프로세스 안에서 마스킹한 뒤에만 `jira.json`·`jira_meta.json`·계획에 남기고, 하위 스크립트 인자에도 원문을 넘기지 않는다.
   `--steps-file`이 zip이면 **메모리에서만 읽는다**(풀지 않는다 — 항목 선택·크기 상한·절대/`..`/암호화 항목 거부는 `07-workflow.md §Step 2`). 개발자가 붙여넣은 스텝 목록은 `WD/<KEY>/steps-pasted.txt`(work_dir는 700 권한 디렉터리)에 쓰고 `--steps-file`로 넘기며, **커밋하지 않고** 도구가 읽을 때 마스킹한다. 원문이므로 작업이 끝나면 지운다: `db_pr discard`, `--force` 없는 `lock release <작업 키>`(`triage.py release` 포함, `triage.py run --analysis-only`가 ok로 끝나며 lock을 풀 때도), `cleanup`. 스텝 이름·표 내용은 `parse_logcat markers --step-events`의 인자에 없고(규칙은 이슈 DB 설정에서 읽는다) 출력에는 이름·시각만 있다. 리포트의 zip 멤버 경로는 마스킹해서 쓴다.
 - **재사용 캐시**(`<work_dir>/<KEY>/analysis-cache.json`)에는 마스킹된 분석 결과(후보·근거·코드 경로·마스킹된 스텝 이름)와 입력의 해시만 둔다. `triage-state.json`의 `job`에는 입력 로그의 경로·이름·sha·크기와 실행 이력만 있고, 실패 스텝·steps-file 원문은 어느 쪽에도 없다 (`07-workflow.md §입력 재사용`).
+- **`runs/<n>/`**(`--more-logs`·재분석 때 덮어쓰기 전에 복사한 이전 `analysis.json`·`report.md`, 최근 5개)에는 이미 마스킹된 결과만 있다. `events.json`·`match.json`·로그 원문은 보관하지 않는다 (`07-workflow.md §추가 로그 재분석`).
 - `note` 초안은 스킬이 마스킹된 요약에서 한 문장으로 만들고 사용자가 확인한다. 사람 이름·고객명은 초안에 넣지 않는다.
 - `db_lint`는 `jira/*.yaml`의 `note`, 원인 본문, `cp_evidence`에 대해서도 원본 식별자 패턴(표의 항목)을 검사한다.
 
