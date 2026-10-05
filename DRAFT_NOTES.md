@@ -9,7 +9,7 @@
 - clone에는 `.local-draft`가 없다. 첫 메시지를 **"사외 초안 모드로 다음 단계 진행해"** 로 하면 모드를 묻지 않는다(만들어도 됨: `touch .local-draft`).
 - 의존성은 고정 버전으로: `pip install '.[test]'` (데비안 패키지와 충돌하면 `pyproject.toml`의 목록을 `pip install --ignore-installed -r`로). 버전이 다르면 `test_r10_dependency_manifest_has_complete_pins`만 실패한다.
 - **"다음 단계 진행"** = 아래 **"반입 전 보강 트랙"**에서 ☐인 첫 항목을 한다(2·3C·10은 트랙 Z 때). "묻는다"가 붙은 항목은 결정을 먼저 묻는다.
-- 진행 방식(10/05, 사용자 지정): 계획 Opus(Plan 에이전트) → 구현 Sonnet → 메인이 diff 검토·판단 → 관련 테스트(코드 변경이면 전체 `pytest tests`, 약 9분; 문서만이면 관련 테스트) → 커밋·push. 세션에 지정된 브랜치에 push하고 이 표를 갱신한다. 10/05 작업은 브랜치 `ccr-fdf6ebf3-7xq8yd`(main `7b69cb5` 이후 미병합 — 새 세션은 이 브랜치를 main에 PR로 병합하거나 그 위에서 이어간다).
+- 진행 방식(10/05, 사용자 지정): 계획 Opus(Plan 에이전트) → 구현 Sonnet → 메인이 diff 검토·판단 → 관련 테스트(코드 변경이면 전체 `pytest tests`, 약 9분; 문서만이면 관련 테스트) → 커밋·push. 세션에 지정된 브랜치에 push하고 이 표를 갱신한다. 10/05 작업은 모두 main에 병합됐다(브랜치 `ccr-fdf6ebf3-7xq8yd`, PR). 새 세션은 최신 main에서 시작한다.
 
 ## 진행 상태
 
