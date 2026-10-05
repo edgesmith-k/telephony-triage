@@ -86,12 +86,27 @@ def find_line(text, patterns: Iterable[str] | None) -> tuple[str | None, str | N
     return _scan(text, _compile(patterns)[0])
 
 
+_STEP_NO_RE = re.compile(r"(?i)^\s*(?:(?:step|스텝|단계)\s*(\d+)\b|(\d+)\s*[|.:)])")
+_NUMBERED_RE = re.compile(r"^\s*\d+\s*\|")
+
+
+def _numbered(step: str | None, line: str | None) -> str | None:
+    """패턴이 이름만 뽑았어도 맞은 줄이 `Step 7 …`·`7 | …`·`7. …`처럼 번호로 시작하면 `7 | 이름`으로 맞춘다.
+    표의 FAIL 행·Jira 필드와 같은 표기라 README "자주 실패한 스텝"이 한 줄로 묶인다."""
+    if not step or not line or _NUMBERED_RE.match(step):
+        return step
+    m = _STEP_NO_RE.match(line)
+    return f"{m.group(1) or m.group(2)} | {step.strip()}" if m and step.strip() != line.strip() else step
+
+
 def from_text(text, patterns: Iterable[str] | None) -> tuple[str | None, list[str]]:
     """여러 줄 텍스트에서 실패 스텝 한 줄을 뽑는다. `(step|None, warnings)`.
 
-    `find_line`과 같은 규칙이고, 잘못된 정규식은 경고만 내고 건너뛴다."""
+    `find_line`과 같은 규칙이고, 잘못된 정규식은 경고만 내고 건너뛴다. 맞은 줄이 스텝 번호로 시작하면
+    `번호 | 이름`으로 낸다(`_numbered`)."""
     compiled, warnings = _compile(patterns)
-    return _scan(text, compiled)[0], warnings
+    step, line = _scan(text, compiled)
+    return _numbered(step, line), warnings
 
 
 def group_key(text) -> str:

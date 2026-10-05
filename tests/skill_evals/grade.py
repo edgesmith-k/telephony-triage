@@ -497,7 +497,7 @@ def checks(eid: int, ctx: Ctx) -> list:
         def fs():
             want = (((analysis("MOCK-9049").get("jira") or {}).get("failed_step")) or {}).get("text")
             v = ((ctx.plan("MOCK-9049") or {}).get("jira") or {}).get("failed_step")
-            return bool(want) and v == want, f"plan={v!r} analysis.json={want!r}"
+            return bool(want) and v == want == "7 | 데이터 연결 확인", f"plan={v!r} analysis.json={want!r}"
         def cleaned():
             gone = not (ctx.work / "MOCK-9049" / "steps-pasted.txt").is_file()
             ok, ev = none_remote_lock()

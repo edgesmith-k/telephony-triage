@@ -533,3 +533,8 @@
 - 시각 질문(`time`)에 시계 이상(역행·점프) 경고를 덧붙인다(Jira 발생 시각 없음 경로, `coverage.clock_anomalies`).
 - DRAFT_NOTES ✅1 상세(10/04 보안 검토): 10/04 완료. 고친 것: 붙여넣은 스텝 원문 `steps-pasted.txt`가 discard·release 뒤에도 남음 → `db_pr` discard·`lock release`(--force 아님)·cleanup이 지움. 문제없음: zip(메모리만, 선언·실제 크기 상한, 암호화·절대/`..` 거부, 멤버 하나), html 5 MiB, 정규식 타임아웃, 스텝 이름·zip 경로·마커 마스킹, 첨부 문장은 데이터(SKILL·explore)
 - B 실행 결과: (검토자가 채움)
+
+## 실패 스텝 표기 통일 (2026-10-05)
+
+- `failedstep.from_text`(Jira 설명·시험 절차·steps-file 패턴 검색): 패턴이 이름만 뽑아도 맞은 줄이 스텝 번호로 시작하면(`Step 7 …`·`7 | …`·`7. …`) `7 | 이름`으로 낸다. 전에는 붙여넣은 목록·설명에서는 `데이터 연결 확인`, Jira 필드·report.html 표에서는 `7 | 데이터 연결 확인`이라 README "자주 실패한 스텝"이 두 줄로 갈렸다. 번호 없는 줄(`실패 스텝: X`)은 그대로. `find_line`(스텝 기준점 쪽)은 바꾸지 않았다. 판정(S/C)·회귀·검증에는 영향 없음.
+- 테스트 `test_failed_step.py` 기대값을 새 표기로, `test_numbered_label_matches_table_and_field` 추가. eval 49 기대값 `7 | 데이터 연결 확인`.

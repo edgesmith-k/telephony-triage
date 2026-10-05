@@ -1819,13 +1819,13 @@
         "확인 화면에서는 '승인'(dry-run).",
         "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
       ],
-      "expected_output": "붙여넣기 → WD/MOCK-9049/steps-pasted.txt → --steps-file → step_anchor step_order(마지막 확인 6 | 모바일 데이터 켜기 이후) → 1위 DATA-001-01, IMS 403은 구간 밖 → 계획 jira.failed_step은 analysis.json 값 그대로('데이터 연결 확인', 붙여넣은 줄에서 뽑은 스텝 이름; 앵커 줄에는 '7 | 데이터 연결 확인') → dry-run 확인 화면 → discard가 steps-pasted.txt 삭제.",
+      "expected_output": "붙여넣기 → WD/MOCK-9049/steps-pasted.txt → --steps-file → step_anchor step_order(마지막 확인 6 | 모바일 데이터 켜기 이후) → 1위 DATA-001-01, IMS 403은 구간 밖 → 계획 jira.failed_step '7 | 데이터 연결 확인'(analysis.json 값 그대로) → dry-run 확인 화면 → discard가 steps-pasted.txt 삭제.",
       "assertions": [
         "붙여넣은 스텝 목록을 WD/MOCK-9049/steps-pasted.txt에 쓰고 그 경로를 --steps-file로 triage에 넘겼다",
         "analysis.json step_anchor.source가 step_order이고 1위 후보가 DATA-001-01이며 jira.failed_step 출처가 steps_file이다",
         "리포트에 '실패 스텝 구간 (step_order)'과 마지막 확인 스텝(6 | 모바일 데이터 켜기)이 보이고, Jira 시각 근처의 IMS 403은 분석 구간 밖이라 원인 근거로 쓰지 않았다고 설명했다",
         "시계 차를 추측해 --clock-offset을 넣지 않았다",
-        "계획 jira.failed_step이 analysis.json jira.failed_step.text('데이터 연결 확인') 그대로다",
+        "계획 jira.failed_step이 '7 | 데이터 연결 확인'(analysis.json jira.failed_step.text 그대로)이다",
         "끝난 뒤 WD/MOCK-9049/steps-pasted.txt가 없고 원격 브랜치·PR·lock이 없다"
       ],
       "files": []
