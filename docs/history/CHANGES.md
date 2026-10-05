@@ -625,3 +625,11 @@
 - 쓰기는 `SafeDumper` 그대로, 헬퍼 없음: C 방출기는 `yamldoc._Dumper.increase_indent` 재정의를 무시한다.
 - 의존성: PyYAML 6.0.3 manylinux wheel은 libyaml을 포함한다(Ubuntu/Py3.11에서 확인, 다른 OS는 미확인). libyaml-dev 없는 sdist 설치는 `SafeLoader`로 폴백(동작은 같고 느리다). 사내 확인: `python3 -c "import yaml; print(yaml.__with_libyaml__)"`.
 - 테스트: 새 `tests/test_yamlio.py`(LOADER 선택·폴백·샘플 DB 결과/오류 위치 동일·날짜 처리·깨진 frontmatter `IssueDbError`·`db_build --preview` 바이트 동일·직접 호출 금지 가드).
+
+## I5 db_pr 확인 화면·PR 본문 → db_summary.py (리뷰 §Q, 2026-10-05)
+
+- `plugin/scripts/db_summary.py` 신설(라이브러리, shebang·main 없음): `screen`(확인 화면 dict), `pr_body`, `search_key`(gh pr list 검색어), `reviewers`, `_status_entries`, `_main_diff`, `_readme_preview`, `_check_rows`, `_verification_rows`, `_file_kind`, `_codeowners`, `_owners_for`, `GENERATED_RE`, `SOURCE_LABELS`. 코드는 이동만 했다.
+- git 호출은 호출자가 `git(repo, *args, check=...)`로 넘긴다(`_status_entries`·`_main_diff`·`screen`의 `git` 인자). `db_pr`가 `__main__`으로 도는 중에 `db_summary`가 `db_pr`를 import하면 두 번째 사본(다른 `UsageError`)이 로드되기 때문이다.
+- `db_pr.summary`는 lock·상태 파일·gh·`approved_hash`만 맡는다(1234 → 991줄). stdout·`pr.json`·`state.json`은 이전과 동일(키 순서 포함).
+- 기존 `tests/test_db_pr.py`·`test_checks.py` 변경 없이 통과.
+- 신규 `tests/test_db_summary.py`: `pr_body`(검사 건너뜀/전체 검사+승인 필요), `_check_rows`·`_verification_rows`(skipped·review_required·NEEDS_APPROVAL), `_file_kind`, `reviewers`(마지막 규칙 우선·생성 파일 제외·`{org}/{team}` 형식·allow-cause 카테고리 오너), `search_key`, 라이브러리 경계(`db_pr` 미로드·main 없음), `db_pr.db_summary` 연결.

@@ -14,7 +14,7 @@
 ## 진행 상태
 
 - 모드: **사외 초안**. 완료 Phase: **D0, 1~13**. RF-0·RF-1 완료.
-- 마지막 전체 테스트: **576개 통과** (10/05, I2, Ubuntu·Py3.11, 8분). Windows에서는 도구 셸 stdin을 `/dev/null`로, PATH 앞에 실제 Python과 `python3` shim(Store 별칭이면 gh 스텁·git hook이 9009로 실패).
+- 마지막 전체 테스트: **N_TESTS개 통과** (10/05, I5, Ubuntu·Py3.11, 8분). Windows에서는 도구 셸 stdin을 `/dev/null`로, PATH 앞에 실제 Python과 `python3` shim(Store 별칭이면 gh 스텁·git hook이 9009로 실패).
 - 사내 확인 항목: `TODO(SITE)` **73곳**(S22 12곳 추가) — `python3 tools/list_site_todos.py`. `REVIEW-OPEN.md` 0건.
 - 안내서(사람용 HTML): `docs/telephony-triage-guide.html` (공유본 https://claude.ai/artifact/1jov1Et4dQUMauFr6aoxWG)
 
@@ -57,7 +57,7 @@
 | ✅ I2 | RF-3 `platforms/android/` 이동(출력 동일, shim) | 10/05, `CHANGES.md` |
 | ✅ I3 | RF-4 일부: 경로·태그 상수 → 설정 | 10/05, `CHANGES.md` |
 | ✅ I4 | YAML C 로더(`CSafeLoader`, 없으면 SafeLoader) | 10/05, `CHANGES.md` |
-| ☐ I5 | `db_pr` summary/pr_body → `db_summary.py` | 리뷰 §Q |
+| ✅ I5 | `db_pr` summary/pr_body → `db_summary.py` | 10/05, `CHANGES.md` |
 | ☐ X | **RF-7만**(분석 전용·추가 로그 재분석·입력 해시 재사용) — 사용자 결정 10/05. RF-5·6·8은 반입 뒤 | 리뷰 RF-7 |
 | ☐ Z | 마무리: main 병합 → `15 §15.4` 재실행 → 새 묶음·sha256 → 사용자 태그 → 2 | |
 
