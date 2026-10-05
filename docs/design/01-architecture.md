@@ -48,6 +48,7 @@ telephony-triage-plugin/                 # 개발 레포 루트
 ├── tools/import_draft.py                # 재반입: SITE_PATHS를 보존하며 새 사외 초안 덮어쓰기 (staging → 검증 → 활성 전환, 실패 시 rollback)
 ├── tools/check_boundary.py             # 사외/사내 경계 검사 (사내 표식 패턴·site import·합성 fixture·SITE_PATHS 부재, 15-local-draft.md §15.6)
 ├── tools/boundary-allow.txt            # check_boundary 예외 (사외). 사내 패턴·예외는 docs/site/
+├── tools/related_tests.py              # 바뀐 파일(git diff·스테이징·untracked)에서 관련 테스트를 골라 `--run`으로 pytest + 경계 검사 실행. 공용 모듈·스키마·헬퍼·의존성 변경이면 `full: true` (11-phases.md §11.0)
 ├── tools/sync_schemas.py               # plugin/schemas/ 사본 ↔ 이슈 DB schema/ 대조
 ├── .github/workflows/external.yml      # 사외 CI (경계 검사·스키마 사본·fixture 생성기 --check·pytest). 사내 Actions(13-actions.md)와 별개
 ├── tools/make_db_skeleton.py            # 합성 샘플에서 운영용 이슈 DB 뼈대 생성 (11-phases.md Phase 1)
