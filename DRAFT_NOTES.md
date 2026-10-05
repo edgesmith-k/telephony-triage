@@ -50,7 +50,7 @@
 | ✅ S1 | 실패 스텝 표기 `번호 \| 이름` 통일 | 10/05 |
 | ✅ S2 | 10/04~05 코드 리뷰·eval 발견 수정 | 10/05, `CHANGES.md` |
 | ✅ S2b | `stepanchor.step_number`가 줄 앞 날짜를 스텝 번호로 읽음 | 10/05, 날짜 칸은 이름에서도 뺌, `CHANGES.md` |
-| ☐ S3 | R12 문서 중복(record·verify·sync-pr) 정리 | HANDOFF R12 |
+| ✅ S3 | R12 문서 중복(record·verify·sync-pr) 정리 | 10/05, lock 처리 단일 원본은 write-flow 1번, `CHANGES.md` |
 | ☐ S4 | R13 eval 실행기를 `--plugin-dir` 실제 플러그인으로 | hook·guard 포함, `trigger_real.py` 참고 |
 | ☐ S5 | `check_boundary`에 비밀값 패턴 | 리뷰 §Q |
 | ☐ I1 | `common/events.py`(`line_ref` 포함) | RF-3 전제 |

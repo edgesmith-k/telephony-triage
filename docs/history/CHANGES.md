@@ -562,3 +562,10 @@
 - `stepanchor.step_number`·`_LEAD_RE`: 숫자 뒤에 `-:./` + 숫자가 오면 번호가 아니다. 전에는 `2026-10-05 Attach`·`2026.09.21 …`·`12:03:44 …`·`10.5`의 앞 숫자(2026·12·10)를 스텝 번호로 읽어 `same_step`이 번호만 비교하고, 번호 열이 있는 표에서 날짜로 시작하는 요약 행이 스텝이 됐다. `failedstep.numbered`의 규칙(A1)과 같은 결과.
 - `failedstep._step_row`(표 행 경로): 날짜만 또는 날짜+시각인 칸(`2026.09.21 10:00:01`)은 스텝 이름에서 뺀다(전에는 `_TS_RE`가 못 잡는 점 날짜가 이름에 남아 README "자주 실패한 스텝"이 묶이지 않았다). 칸으로 나뉘지 않은 한 줄(`2026.09.21 Attach FAIL`)의 이름은 그대로(번호만 안 붙음).
 - 테스트: `test_step_number_and_same_step` 보강, `test_parse_steps_date_cell_is_not_step_number`.
+
+## S3 R12 문서 중복 정리 (2026-10-05)
+
+- `write-flow.md` 1번이 lock 획득 처리(보유 중 → 보유자 표시, "끝난 세션"에만 `--force`, 10분 안 같은 키는 확인 후 `--take-over`)의 단일 원본. `record.md` 1번·`sync-pr.md` 3번·`verify.md` 머리는 그쪽을 가리킨다.
+- `sync-pr.md`: 재적용·drift·확인 화면·커밋·publish·정리(옛 6~9번)와 "analyze Step 8-2 원격 브랜치" 절을 `write-flow.md` 2~7번 참조로 바꾸고 sync-pr만의 차이(ID 재할당·drift 내역 필수, `--lease <start_sha>`, `gh pr edit`, 로컬 브랜치 안내)만 남겼다. 6168 → 4614바이트. `commit -F`·`lock acquire`·`lock release` 문구는 유지(테스트).
+- 커맨드 `record`·`verify-fix`·`fix-submitted`: "SKILL.md는 §실행 규칙 절만 읽고 analyze 절은 읽지 않는다"로 통일.
+- 동작 변경 없음. 관련 테스트(commands·safety·improvement_regressions·triage) 통과. 행동 eval은 3C(사내 S-2) 때.

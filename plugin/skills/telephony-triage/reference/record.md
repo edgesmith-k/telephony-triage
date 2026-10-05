@@ -16,7 +16,7 @@ SKILL.md의 "실행 규칙"(스크립트 호출, `--db` 명시, 종료 코드, �
 ## 1. 사전 점검
 
 - `config.py show`(없으면 setup 안내) → `jira_fields.py check-key <KEY>`(맞지 않으면 다시 묻는다) →
-  `db_pr lock acquire <KEY> --command record`(다른 작업 lock은 보유자를 보여주고 "끝났다"는 답에만 `lock release <그 키> --force`, 같은 Jira lock이 10분 안에 갱신됐으면 확인 후 `--take-over`) →
+  `db_pr lock acquire <KEY> --command record`(보유 중이면 `write-flow.md` 1번) →
   `db_pr cleanup --dry-run`.
 - `WD/<KEY>/plan.json`이 있으면: `source: record`면 이어서/새로 시작을 묻고, 다른 `source`면 "새로 시작(덮어씀)"만.
 - `db_pr snapshot --job <KEY>` → `config.py check --db SNAP`(`--dry-run`이면 `--for dry-run`). **쓰기 불가면 사유를 보여주고

@@ -37,6 +37,8 @@ import/review/move 계획 PR)이 이 순서를 따른다. 사용자의 이슈 DB
 
 ## 1. 사전 점검
 
+**lock 획득** `db_pr lock acquire <작업 키> --command <흐름>`: 종료 코드 2(다른 작업이 보유)면 보유자를 보여주고 묻는다 —
+"끝난 세션"이라는 답에만 `lock release <그 키> --force`, 같은 키가 10분 안에 갱신됐으면 확인 후 `--take-over`.
 lock 획득·인계 성공 시 반환된 `lock.owner`를 보관하고 이후 모든 `db_pr`·`db_verify` 호출의 `TT_LOCK_OWNER` 환경변수로 전달한다.
 현재 lock 파일에서 토큰을 다시 읽어 대신 쓰지 않는다. owner 불일치는 중단하고, 새 인계는 사용자 확인 후에만 한다.
 
