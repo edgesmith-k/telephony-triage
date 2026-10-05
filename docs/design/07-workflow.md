@@ -26,6 +26,15 @@
 > 원본이고, 스킬(LLM)이 직접 하는 것은 Step 5의 코드 읽기, Step 5-1, Step 6 문단, Step 7~8이다. Step 1의 사후 lint는 `snapshot`이 이미
 > 하므로 따로 부르지 않는다.
 
+#### 입력 재사용 (RF-7)
+
+> `triage.py`는 같은 이슈를 같은 입력으로 다시 돌리면(세션이 바뀌어도) 파싱·매칭·후보별 DB 조회·코드 resolve를 다시 하지 않고 지난 실행의 결과를 다시 보여 준다. **재사용은 통과가 아니라 같은 결과의 재표시**다: 건너뛴 일은 "다시 검증했다"로 표시하지 않고, 리포트에 "재사용"이라고 밝히며, 검증·판정은 여전히 스크립트 출력이 기준이다.
+
+- **입력 해시** (`request_hash`, 파싱 전에 계산): 부분별 16자리 해시 `logs`(입력 로그 원본의 이름·sha, bugreport는 원본 파일) · `jira`(`jira.json`, 실패 스텝 반영 후) · `db`(스냅샷의 이슈 DB 소스·파서 환경, `compiled.source_hash`) · `config`(site-defaults + 사용자 config, `recent_code_roots` 제외) · `plugin`(`plugin.json` 버전 + `scripts/**/*.py` + 캐시 형식) · `args`(시간대·연도·`--minutes`·코드 트리·`--clock-offset`·steps-file sha·결과를 바꾸는 답 `time`·`window`·`anchor`·`year`·`code`·`code_confirm`). 합쳐서 `request_hash`. 실행 모드(write/read-only)·`--dry-run`은 넣지 않는다.
+- **적중 조건**: 오프라인이 아니고 `--refresh`가 아니며, state의 `job.cache.request_hash`와 같고, `JOB/analysis-cache.json`이 있고, `events.json`·`match.json`(·`timeline.md`)이 캐시가 기록한 크기·mtime 그대로이고, resolve한 코드 경로가 아직 있다. 적중해도 사전 점검·Jira 읽기·스냅샷·열린 PR은 그대로 하고, 답 시각의 `jira_meta.json` 갱신과 `match_meta.json` 쓰기 같은 싼 파일 쓰기도 한다.
+- **무효화**: 부분 하나라도 다르면 다시 계산하고 `analysis.json.reuse`가 바뀐 부분(`changed`)·추가된 로그·1위 변화를 알려 준다. 캐시 파일이 없거나 산출물이 바뀌었으면 `reason: cache-missing`, 코드 경로가 옮겨졌으면 `changed: [code]`, `--refresh`면 `reason: refresh`. `needs_input`·중단·오류 실행은 캐시를 쓰지 않는다. 캐시와 `triage-state.json`에는 마스킹된 값·경로·sha만 둔다(`08-safety.md §8.1`).
+- **리포트**: 적중이면 `- 재사용: 입력(…)이 실행 n과 같아 파싱·매칭을 다시 하지 않았다`, 이전 실행이 있는데 다시 계산했으면 `- 재분석: 실행 m 대비 바뀐 입력 […] — 1위 X → Y | 1위 변화 없음`.
+
 ### Step 0. 사전 점검
 - config를 로드한다. 없으면 setup으로 유도한다.
 - **Jira 키를 먼저 검사한다**: `jira_key_regex`(`02-config.md §5.3`, 스냅샷이 아직 없으면 사용자 clone의 `issue-db.config.yaml`)에 맞지 않으면 다시 묻는다. 키를 작업 키·경로·브랜치로 쓰기 전에 한다 (`contracts.md §3.2` 작업 키 검증).

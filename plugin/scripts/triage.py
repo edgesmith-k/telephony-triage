@@ -18,8 +18,10 @@
 - `JOB/trace.jsonl`: 호출마다 `{ts, step, script, args, exit, ms, out_bytes, stderr}` 한 줄.
 - `JOB/timeline.md`: 후보 없음·원인 미확인(1위 C=0)이고 `explore.when`이 `never`가 아닐 때만. Step 5-2 탐색 분석이
   읽는 마스킹된 요약 타임라인(줄 수 상한 `explore.timeline_max_lines`, 기본 200). `analysis.json`의 `explore`가 가리킨다.
+- `JOB/analysis-cache.json`: 입력 해시(`request_hash`, 부분별 `parts`)가 같으면 파싱·매칭을 다시 하지 않고 이 core를 다시 보여 준다
+  (RF-7, `07-workflow.md §입력 재사용`). `--offline-db`·`--refresh`·`needs_input`/오류 실행은 쓰지도 읽지도 않는다. 마스킹된 값만 담는다.
 - 읽지 않는 파일: `events.json`(파서 출력), `match.json`(매처 출력, `parse_logcat cut --evidence` 입력),
-  `jira.json`(마스킹된 Jira 추출 전체 — 코멘트 원문이 필요할 때만 읽는다), `jira_meta.json`, `triage-state.json`.
+  `jira.json`(마스킹된 Jira 추출 전체 — 코멘트 원문이 필요할 때만 읽는다), `jira_meta.json`, `triage-state.json`, `analysis-cache.json`.
 
 `--failed-step`·`--steps-file`(선택)은 이 프로세스 안에서만 읽고 마스킹한다. 원문은 하위 스크립트 인자(→ `trace.jsonl`)와
 `triage-state.json`에 쓰지 않는다. 결과는 `jira.json`·`jira_meta.json`·`analysis.json`의 `jira.failed_step`·`report.md`·
@@ -64,12 +66,19 @@ from pathlib import Path
 SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS))
 
-from common import compat, events, failedstep, masking, site_defaults, stepanchor, userconfig  # noqa: E402
+from common import compat, compiled, events, failedstep, masking, site_defaults, stepanchor, userconfig  # noqa: E402
 from common.exitcodes import CHECK_FAILED, OK, USAGE  # noqa: E402
 from platforms.android import logcat as lc  # noqa: E402
 
 ANALYSIS_MAX = 4096
 STATE_FILE = "triage-state.json"
+STATE_SCHEMA = 2                 # 2: `job` 절(로그·실행 이력·재사용 캐시 요약)이 있다. 스키마 표시가 없는 파일은 job = {}
+CACHE_FILE = "analysis-cache.json"
+CACHE_FORMAT = 1                 # 캐시 형식·`core` 구조를 바꾸면 올린다(plugin 해시에 들어가 이전 캐시가 무효가 된다)
+RUNS_KEEP = 10
+PART_KEYS = ("logs", "jira", "db", "config", "plugin", "args")     # 입력 해시 부분(바뀐 것을 알려 주는 순서)
+CACHE_FILES = {"events": "events.json", "match": "match.json", "timeline": "timeline.md"}   # 캐시가 크기·mtime을 기록하는 산출물
+ANSWER_KEYS = ("time", "window", "anchor", "year", "code", "code_confirm")   # 결과를 바꾸는 답만 args 해시에 넣는다
 SNAPSHOT_DIR = "_snapshot"
 TOP = 3
 SEARCH_LIMIT = 3
@@ -101,6 +110,23 @@ class Stopped(Exception):
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def _digest(obj) -> str:
+    """JSON으로 직렬화한 값의 sha256 앞 16자리(키 정렬)."""
+    return hashlib.sha256(json.dumps(obj, ensure_ascii=False, sort_keys=True, default=str).encode("utf-8")).hexdigest()[:16]
+
+
+def _file_sha(path: Path) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()[:16]
+
+
+def _top_label(candidates: list) -> str | None:
+    return (candidates[0]["cause"] or candidates[0]["type"]) if candidates else None
 
 
 _ref_label = events.ref_label   # report.md 전용 `f<순번>:L<줄>`
@@ -218,20 +244,30 @@ class State:
                 self.data = json.loads(path.read_text(encoding="utf-8"))
             except (OSError, json.JSONDecodeError):
                 self.data = {}
+            if not isinstance(self.data, dict):
+                self.data = {}
+            if self.data.get("schema") != STATE_SCHEMA:
+                self.data.pop("job", None)     # 스키마 1(표시 없음) 파일: 재사용 이력 없이 첫 실행으로 본다
 
     def reset(self, owner: str | None) -> None:
         answers = self.data.get("answers") or {}
-        self.data = {"owner": owner, "answers": answers if self.data.get("owner") == owner else {}}
+        # 새 세션: 답·진행 상태는 버리고 `job`(로그·실행 이력·캐시 요약)만 남긴다 — 세션이 바뀌어도 같은 입력이면 재사용한다
+        self.data = {"owner": owner, "answers": answers if self.data.get("owner") == owner else {},
+                     "job": self.data.get("job") or {}}
 
     @property
     def answers(self) -> dict:
         return self.data.setdefault("answers", {})
 
+    @property
+    def job(self) -> dict:
+        return self.data.setdefault("job", {})
+
     def save(self) -> None:
         if self.path is None:
             return
         # lock 답(이어받기·강제 해제)은 그 실행에만 쓴다. 다음 실행에서 상황이 달라도 저절로 적용되지 않게 남기지 않는다.
-        data = {**self.data, "answers": {k: v for k, v in self.answers.items() if k != "lock"}}
+        data = {**self.data, "schema": STATE_SCHEMA, "answers": {k: v for k, v in self.answers.items() if k != "lock"}}
         tmp = self.path.with_suffix(".tmp")
         tmp.write_text(json.dumps(data, ensure_ascii=False, indent=1) + "\n", encoding="utf-8", newline="\n")
         os.replace(tmp, self.path)
@@ -263,6 +299,9 @@ class Driver:
         self.order_evidence: list[tuple[str, str, str]] = []   # (스텝 이름, 로그 시각, 흔적 이름) — 리포트용(마스킹됨)
         self.clock: dict | None = None           # 시계 정렬 결과 {mode: manual|none, offset_sec | reason}
         self.focus: list[str] = []               # match.step_focus.types (순위 참고용 우선 유형)
+        self.steps_member: str | None = None     # steps-file이 zip일 때 읽은 멤버 경로(마스킹·≤120자) — 리포트용
+        self.log_inputs: list[dict] = []         # 입력 로그 원본 [{path, name, sha, size}] (bugreport는 원본 파일)
+        self.reuse: dict | None = None           # 재사용 결정 {hit, run, reason?, changed?} — 오프라인·첫 실행은 None
 
     # 공통 ---------------------------------------------------------------------------------------
 
@@ -611,6 +650,8 @@ class Driver:
         if not self.offline:
             self.state.data["logs"] = [str(p) for p in resolved]
             self.state.save()
+            self.log_inputs = [{"path": str(p), "name": p.name, "sha": _file_sha(p), "size": p.stat().st_size}
+                               for p in resolved]
         parser = _module("parse_logcat")
         out, build = [], {}
         for p in resolved:
@@ -1003,6 +1044,19 @@ class Driver:
     # 실행 ------------------------------------------------------------------------------------------
 
     def execute(self) -> dict:
+        ctx = self.prepare()
+        parts = None if self.offline else self.inputs(ctx)
+        request_hash = None if parts is None else _digest(parts)
+        core = self.reuse_check(parts, request_hash) if parts is not None else None   # 적중이면 캐시된 core
+        hit = core is not None
+        if hit:
+            self.restore(core)
+        else:
+            core = self.core(ctx)
+        return self.assemble(ctx, core, parts, request_hash, hit)
+
+    def prepare(self) -> dict:
+        """Step 0~2와 입력 정리(로그·코드·시간대·연도). 여기까지는 재사용 여부와 상관없이 항상 한다."""
         self.preflight_args()
         self.check_key()
         self.open_job()
@@ -1021,6 +1075,123 @@ class Driver:
         code = self.code(version)
         tz = self.args.tz or (info.get("logcat") or {}).get("tz")
         year = self.year(info, logs)
+        return {"info": info, "logs": logs, "version": version, "code": code, "tz": tz, "year": year}
+
+    # 입력 재사용 (RF-7) ---------------------------------------------------------------------------------
+
+    def inputs(self, ctx: dict) -> dict:
+        """결과를 정하는 입력의 부분별 해시(각 16자리 hex). 바뀐 부분 이름을 알려 주는 데 쓴다. mode·dry-run은 넣지 않는다."""
+        a = self.args
+        jira_path = self.job / "jira.json"
+        user = dict(userconfig.load_user() or {})
+        user.pop("recent_code_roots", None)      # 코드 경로를 처음 쓸 때 도구가 기록한다 — 결과와 무관
+        code = ctx["code"] or {}
+        steps_file = getattr(a, "steps_file", None)
+        steps_sha = None
+        if steps_file:
+            try:
+                steps_sha = _file_sha(Path(steps_file).expanduser())
+            except OSError:
+                steps_sha = "missing"
+        scripts = sorted(p for p in SCRIPTS.rglob("*.py") if "__pycache__" not in p.parts)
+        plugin_json = SCRIPTS.parent / ".claude-plugin" / "plugin.json"
+        try:
+            version = json.loads(plugin_json.read_text(encoding="utf-8")).get("version")
+        except (OSError, json.JSONDecodeError, AttributeError):
+            version = None
+        plugin = [version, CACHE_FORMAT] + [[p.relative_to(SCRIPTS).as_posix(), _file_sha(p)] for p in scripts]
+        return {
+            "logs": _digest([{"name": f["name"], "sha": f["sha"]} for f in self.log_inputs]),
+            "jira": _file_sha(jira_path) if jira_path.is_file() else None,
+            "db": compiled.source_hash(self.snap, compat.load_db_config(self.snap), compiled.environment(self.defaults))[:16],
+            "config": _digest({"site": self.defaults, "user": user}),
+            "plugin": _digest(plugin),
+            "args": _digest({"tz": ctx["tz"], "year": ctx["year"], "minutes": a.minutes,
+                             "code": {k: code.get(k) for k in ("skipped", "roots", "tree_version")},
+                             "clock_offset_sec": self.clock_offset, "steps_file_sha": steps_sha,
+                             "answers": {k: v for k, v in sorted(self.state.answers.items()) if k in ANSWER_KEYS}}),
+        }
+
+    def reuse_check(self, parts: dict, request_hash: str) -> dict | None:
+        """저장된 core가 이번 입력에 그대로 쓸 수 있으면 돌려주고(적중), 아니면 None. 결정은 `self.reuse`와 trace에 남긴다."""
+        prev = self.state.job.get("cache")
+        if not prev:
+            return None       # 첫 실행(또는 스키마 1 상태): 재사용 정보가 없다
+        base = {"hit": False, "prev_run": prev.get("run")}
+        cached = None
+        if self.args.refresh:
+            base["reason"] = "refresh"
+        elif prev.get("request_hash") == request_hash:
+            cached, why = self.load_cache(request_hash)
+            if cached is None:
+                base.update({"changed": ["code"]} if why == "code" else {"reason": "cache-missing"})
+        else:
+            old = prev.get("parts") or {}
+            base["changed"] = [k for k in PART_KEYS if parts.get(k) != old.get(k)]
+        if cached is not None:
+            self.reuse = {"hit": True, "run": cached["run"]}
+            self.run.note("reuse", hit=True, run=cached["run"])
+            return cached["core"]
+        self.reuse = base
+        self.run.note("reuse", hit=False, **{k: v for k, v in base.items() if k in ("changed", "reason")})
+        return None
+
+    def load_cache(self, request_hash: str) -> tuple[dict | None, str | None]:
+        """`analysis-cache.json`이 쓸 만한가 → (캐시, None) | (None, 사유 `cache-missing`·`code`)."""
+        try:
+            doc = json.loads((self.job / CACHE_FILE).read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return None, "cache-missing"
+        core = doc.get("core") if isinstance(doc, dict) else None
+        if (not isinstance(core, dict) or doc.get("format") != CACHE_FORMAT or doc.get("request_hash") != request_hash
+                or not isinstance(doc.get("run"), int)):
+            return None, "cache-missing"
+        files = doc.get("files") or {}
+        need = ["events", "match"] + (["timeline"] if (core.get("explore") or {}).get("timeline") else [])
+        for name in need:        # 파서·매처 출력과 타임라인이 그대로 있어야 같은 결과다(손으로 고치거나 지웠으면 다시 계산)
+            try:
+                st = (self.job / CACHE_FILES[name]).stat()
+            except OSError:
+                return None, "cache-missing"
+            if files.get(name) != [st.st_size, st.st_mtime_ns]:
+                return None, "cache-missing"
+        for ref in (core.get("code") or {}).get("resolved") or []:
+            if not Path(str(ref.get("path"))).exists():     # 코드 트리가 옮겨졌다 — 열 파일 목록이 달라진다
+                return None, "code"
+        return doc, None
+
+    def restore(self, core: dict) -> None:
+        """적중: core가 계산하며 남기던 상태를 되살린다(리포트·analysis.json이 같게 나오도록). 싼 파일 쓰기는 그대로 한다."""
+        attrs = core.get("attrs") or {}
+        self.clock = attrs.get("clock")
+        self.order_fail = attrs.get("order_fail")
+        self.order_evidence = [tuple(x) for x in attrs.get("order_evidence") or []]
+        self.focus = list(attrs.get("focus") or [])
+        self.steps_member = attrs.get("steps_member")
+        self.warnings += core.get("warnings_core") or []
+        self.write_meta(core.get("anchor"))
+
+    def write_meta(self, anchor: dict | None) -> Path | None:
+        """`time` 답을 jira_meta.json에, 앵커가 있으면 match_meta.json(근접 중심 = 스텝 실패 시각)에 쓴다 → 매처에 줄 메타 경로."""
+        meta_path = self.job / "jira_meta.json"
+        if self.answer("time"):
+            meta = json.loads(meta_path.read_text(encoding="utf-8")) if meta_path.is_file() else {"key": self.key}
+            meta["occurred_at"] = self.answer("time")
+            meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=1), encoding="utf-8", newline="\n")
+        match_meta = meta_path if meta_path.is_file() else None
+        if anchor:      # 근접 보너스 중심을 스텝 실패 시각으로. jira_meta.json은 건드리지 않는다
+            base = json.loads(meta_path.read_text(encoding="utf-8")) if match_meta else {"key": self.key}
+            match_meta = self.job / "match_meta.json"
+            match_meta.write_text(json.dumps({**base, "occurred_at": anchor["fail"]}, ensure_ascii=False, indent=1),
+                                  encoding="utf-8", newline="\n")
+        return match_meta
+
+    # 분석 core: 파싱·매칭·후보 정보 --------------------------------------------------------------------------
+
+    def core(self, ctx: dict) -> dict:
+        """입력이 같으면 결과도 같은 부분(Step 3~5). 재사용 캐시에 그대로 들어가므로 마스킹된 값만 둔다."""
+        info, logs, version, code, tz, year = (ctx[k] for k in ("info", "logs", "version", "code", "tz", "year"))
+        warn0 = len(self.warnings)
         anchor = self.step_anchor(logs, tz, year, info)
         around = anchor["fail"] if anchor else self.occurred(info, logs, tz, year)
         events_path = self.job / "events.json"
@@ -1034,17 +1205,7 @@ class Driver:
                                  [{"value": "full", "label": "전체 파싱"}, {"value": "keep", "label": "그대로(매칭 없음으로 보고)"}])
             if choice == "full":
                 events = self.parse(logs, None, tz, year, events_path)
-        meta_path = self.job / "jira_meta.json"
-        if self.answer("time"):
-            meta = json.loads(meta_path.read_text(encoding="utf-8")) if meta_path.is_file() else {"key": self.key}
-            meta["occurred_at"] = self.answer("time")
-            meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=1), encoding="utf-8", newline="\n")
-        match_meta = meta_path if meta_path.is_file() else None
-        if anchor:      # 근접 보너스 중심을 스텝 실패 시각으로. jira_meta.json은 건드리지 않는다
-            base = json.loads(meta_path.read_text(encoding="utf-8")) if match_meta else {"key": self.key}
-            match_meta = self.job / "match_meta.json"
-            match_meta.write_text(json.dumps({**base, "occurred_at": anchor["fail"]}, ensure_ascii=False, indent=1),
-                                  encoding="utf-8", newline="\n")
+        match_meta = self.write_meta(anchor)
         match = self.match(events_path, match_meta, self.job / "match.json")
         self.focus = list((match.get("step_focus") or {}).get("types") or [])
         candidates = []
@@ -1065,37 +1226,65 @@ class Driver:
                 cand["_code_refs"] = extra.pop("code_refs")
                 cand.update(extra)
             candidates.append(cand)
+        no_candidate = None if candidates else self.no_candidate_hints(info, events)
+        code_out = self.resolve_code(code, version, candidates)
+        analyzer = self.analyzer(candidates)
+        explore = self.explore(candidates, events, around, anchor)
+        for cand in candidates:
+            cand.pop("_code_refs", None)
+        extra_warnings = [_clip(w.get("message"), 120) for w in (events.get("warnings") or []) + (match.get("warnings") or [])]
+        if cov.get("clock_anomalies"):
+            extra_warnings.append("시계 이상(재부팅·NITZ 전 가능) — 증상 시각 스캔(--answer time=…)을 제안한다")
+        member = self.steps_info()[3]
+        self.steps_member = _clip(self.masker()(member), 120) if member else None
+        return {
+            "around": around, "anchor": anchor, "candidates": candidates,
+            "pending_causes": [{"cause": p["cause"], "title": _clip(p.get("title"), 50)}
+                               for p in match.get("pending_causes") or []][:TOP],
+            "no_candidate": no_candidate, "code": code_out, "analyzer": analyzer, "explore": explore,
+            "logs": {"files": [p.name for p in logs], "window": (events.get("input") or {}).get("window"),
+                     "range": [cov.get("first_ts"), cov.get("last_ts")], "in_range": cov.get("window_in_range"),
+                     "clock_anomalies": len(cov.get("clock_anomalies") or []), "events": len(events.get("events") or [])},
+            "warnings_core": self.warnings[warn0:], "extra_warnings": extra_warnings,
+            "attrs": {"clock": self.clock, "order_fail": self.order_fail, "order_evidence": self.order_evidence,
+                      "focus": self.focus, "steps_member": self.steps_member},
+        }
+
+    def assemble(self, ctx: dict, core: dict, parts: dict | None, request_hash: str | None, hit: bool) -> dict:
+        info, logs = ctx["info"], ctx["logs"]
+        candidates, anchor = core["candidates"], core["anchor"]
+        run_no = reuse = None
+        if parts is not None:
+            runs = self.state.job.get("runs") or []
+            seq = (runs[-1]["n"] if runs else 0) + 1
+            run_no = self.reuse["run"] if hit else seq     # 결과를 계산한 실행 번호
+            reuse = self.reuse_out(candidates, parts, runs) if self.reuse else None
         result = {
             "status": "ok", "key": self.key, "generated_at": _now(),
-            "request_hash": self.request_hash(logs, around, anchor),
+            "request_hash": request_hash or self.request_hash(logs, core["around"], anchor),
+            "run": run_no, "reuse": reuse,
             "mode": self.out.get("mode", "offline" if self.offline else "write"),
             "read_only_reasons": self.out.get("read_only_reasons"),
             "snapshot": self.out.get("snapshot"), "plan": self.out.get("plan"),
             "jira": self.out.get("jira"), "step_anchor": self.anchor_out(anchor, info),
             "existing": self.out.get("existing"), "open_prs": self.out.get("open_prs"),
             "build": self.out.get("build"),
-            "logs": {"files": [p.name for p in logs], "window": (events.get("input") or {}).get("window"),
-                     "range": [cov.get("first_ts"), cov.get("last_ts")], "in_range": cov.get("window_in_range"),
-                     "clock_anomalies": len(cov.get("clock_anomalies") or []), "events": len(events.get("events") or [])},
+            "logs": core["logs"],
             "candidates": candidates,
-            "pending_causes": [{"cause": p["cause"], "title": _clip(p.get("title"), 50)}
-                               for p in match.get("pending_causes") or []][:TOP],
-            "no_candidate": None if candidates else self.no_candidate_hints(info, events),
-            "code": self.resolve_code(code, version, candidates),
-            "analyzer": self.analyzer(candidates),
-            "explore": self.explore(candidates, events, around, anchor),
-            "warnings": self.warnings + [_clip(w.get("message"), 120) for w in
-                                         (events.get("warnings") or []) + (match.get("warnings") or [])],
+            "pending_causes": core["pending_causes"],
+            "no_candidate": core["no_candidate"],
+            "code": core["code"],
+            "analyzer": core["analyzer"],
+            "explore": core["explore"],
+            "warnings": self.warnings + core["extra_warnings"],
             "notes": self.notes,
             "lock_owner": self.run.env.get("TT_LOCK_OWNER"),
-            "files": {"report": str(self.job / "report.md"), "events": str(events_path),
+            "files": {"report": str(self.job / "report.md"), "events": str(self.job / "events.json"),
                       "match": str(self.job / "match.json"), "jira": str(self.job / "jira.json")},
         }
-        if cov.get("clock_anomalies"):
-            result["warnings"].append("시계 이상(재부팅·NITZ 전 가능) — 증상 시각 스캔(--answer time=…)을 제안한다")
-        for cand in candidates:
-            cand.pop("_code_refs", None)
         self.write_report(result, anchor)
+        if parts is not None:
+            self.save_job(core, parts, request_hash, run_no, seq, hit, candidates)   # `_ref`를 지우기 전에(리포트 재현용)
         for cand in candidates:
             for e in cand["evidence"]:
                 e.pop("_ref", None)
@@ -1104,6 +1293,48 @@ class Driver:
                                                 encoding="utf-8", newline="\n")
         self.run.note("done", candidates=len(candidates), calls=self.run.calls)
         return result
+
+    def reuse_out(self, candidates: list[dict], parts: dict, runs: list) -> dict:
+        """analysis.json의 `reuse`: 적중이면 `{hit, run}`, 다시 계산했으면 무엇이 바뀌었고 1위가 달라졌는지."""
+        r = dict(self.reuse)
+        if r["hit"]:
+            return r
+        prev_top = runs[-1].get("top") if runs else None
+        prev_label = (prev_top or {}).get("cause") or (prev_top or {}).get("type")
+        label = _top_label(candidates)
+        if "logs" in (r.get("changed") or []):
+            old = {f.get("name") for f in (self.state.job.get("logs") or [])}    # 이전 실행의 로그 이름
+            added = [f["name"] for f in self.log_inputs if f["name"] not in old]
+            if added:
+                r["added_logs"] = added[:5]
+        if prev_label:
+            r["prev_top"] = prev_label
+        r["top_changed"] = prev_label != label
+        return r
+
+    def save_job(self, core: dict, parts: dict, request_hash: str, run_no: int, seq: int, hit: bool, candidates: list) -> None:
+        """계산한 실행이면 `analysis-cache.json`을, 모든 성공 실행이면 state의 `job` 절(실행 이력)을 갱신한다. 마스킹된 값·경로·sha만."""
+        job = self.state.job
+        if not hit:
+            names = ["events", "match"] + (["timeline"] if (core.get("explore") or {}).get("timeline") else [])
+            files = {}
+            for name in names:      # 이전 실행이 남긴 타임라인은 이번 결과가 아니므로 explore가 만들었을 때만 적는다
+                st = (self.job / CACHE_FILES[name]).stat()
+                files[name] = [st.st_size, st.st_mtime_ns]
+            doc = {"format": CACHE_FORMAT, "request_hash": request_hash, "run": run_no, "parts": parts,
+                   "core": core, "files": files}
+            tmp = (self.job / CACHE_FILE).with_suffix(".tmp")
+            tmp.write_text(json.dumps(doc, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n")
+            os.replace(tmp, self.job / CACHE_FILE)
+            job["cache"] = {"request_hash": request_hash, "parts": parts, "run": run_no}
+        top = candidates[0] if candidates else None
+        runs = list(job.get("runs") or [])
+        runs.append({"n": seq, "at": _now(), "request_hash": request_hash, "mode": self.out.get("mode"),
+                     "logs": [f["name"] for f in self.log_inputs],
+                     "top": {k: top[k] for k in ("type", "cause", "score", "S", "C")} if top else None, "reused": hit})
+        job["runs"] = runs[-RUNS_KEEP:]
+        job["logs"] = self.log_inputs
+        self.state.save()
 
     def analyzer(self, candidates: list[dict]) -> dict | None:
         if not candidates:
@@ -1151,9 +1382,21 @@ class Driver:
                          f"{self.failed_step['text']}")
         if self.clock and self.clock.get("mode") == "none":
             lines.append(f"- 장비 시각 미사용: 시계 정렬 불가({self.clock.get('reason')})")
-        member = self.steps_info()[3]
-        if member:
-            lines.append(f"- 시험 절차: zip 안 {_clip(self.masker()(member), 120)}")
+        if self.steps_member:
+            lines.append(f"- 시험 절차: zip 안 {self.steps_member}")
+        reuse = r.get("reuse")
+        if reuse and reuse.get("hit"):
+            lines.append(f"- 재사용: 입력(로그·Jira·이슈 DB·설정·플러그인)이 실행 {reuse['run']}과 같아 파싱·매칭을 다시 하지 않았다")
+        elif reuse:
+            if reuse.get("changed"):
+                what = f"바뀐 입력 [{', '.join(reuse['changed'])}]"
+            else:
+                what = {"refresh": "--refresh로 재사용을 껐다", "cache-missing": "저장된 분석 결과를 쓸 수 없다"}.get(
+                    reuse.get("reason"), "다시 계산했다")
+            added = f" (추가 로그 {', '.join(reuse['added_logs'])})" if reuse.get("added_logs") else ""
+            top = (f" — 1위 {reuse.get('prev_top') or '없음'} → {_top_label(r['candidates']) or '없음'}"
+                   if reuse.get("top_changed") else " — 1위 변화 없음")
+            lines.append(f"- 재분석: 실행 {reuse.get('prev_run')} 대비 {what}{added}{top}")
         if anchor:
             jira_at = (r.get("jira") or {}).get("occurred_at")
             gap = anchor.get("jira_gap_min")
@@ -1346,6 +1589,10 @@ def _clip_anchor_step(result: dict, limit: int) -> None:
         sa["step"] = _clip(sa["step"], limit)
 
 
+def _drop_reuse(result: dict, key: str) -> None:
+    (result.get("reuse") or {}).pop(key, None)
+
+
 def fit(result: dict) -> dict:
     """analysis.json을 ≤ 4KB로 줄인다: 다른 후보 근거 → 근거 줄 수 → 메시지 길이 → 경고 순."""
     def size() -> int:
@@ -1367,7 +1614,9 @@ def fit(result: dict) -> dict:
               lambda: _drop_clock_reason(result),
               lambda: _drop_focus(result),
               lambda: _clip_anchor_step(result, 40),
-              lambda: _clip_failed_step(result, 60)]
+              lambda: _clip_failed_step(result, 60),
+              lambda: _drop_reuse(result, "added_logs"),
+              lambda: _drop_reuse(result, "prev_top")]
     for step in steps:
         if size() <= ANALYSIS_MAX:
             break
@@ -1399,7 +1648,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--tz")
     p.add_argument("--year", type=int)
     p.add_argument("--minutes", type=float)
-    p.add_argument("--refresh", action="store_true", help="같은 세션에서도 스냅샷을 다시 만든다")
+    p.add_argument("--refresh", action="store_true", help="같은 세션에서도 스냅샷을 다시 만들고, 같은 입력의 분석 재사용(analysis-cache.json)도 끈다")
     p.add_argument("--offline-db")
     p.add_argument("--out")
     p.add_argument("--failed-step", help="실패 스텝 한 줄(선택, 보조 정보). 마스킹해서만 쓴다")
