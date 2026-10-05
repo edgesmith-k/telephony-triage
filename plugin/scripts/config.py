@@ -162,8 +162,10 @@ def cmd_init(args, defaults: dict) -> dict:
 def _parse_value(text: str):
     import yaml
 
+    from common import yamlio
+
     try:
-        return yaml.safe_load(text)
+        return yamlio.safe_load(text)
     except yaml.YAMLError:
         return text
 

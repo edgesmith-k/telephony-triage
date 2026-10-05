@@ -475,8 +475,8 @@ def check_commit(call: GitCall, conf: Config, dec: Decision) -> None:
     if not staged:
         return
     try:
-        import yaml
-        db_cfg = yaml.safe_load((Path(top) / "issue-db.config.yaml").read_text(encoding="utf-8")) or {}
+        from common import yamlio
+        db_cfg = yamlio.safe_load((Path(top) / "issue-db.config.yaml").read_text(encoding="utf-8")) or {}
     except (OSError, ValueError, ImportError):
         db_cfg = {}
     ci_mode = db_cfg.get("ci_mode", "local")

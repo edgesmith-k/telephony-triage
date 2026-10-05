@@ -614,3 +614,14 @@
 - 출력 동일: `test_parse_logcat.py --update` 스냅샷 diff 없음, 골든 그대로, bugreport 추출(txt·zip)·not-found 메시지 동일, 캐시 해시·`parser_backend` 확인 그대로, `TODO(SITE)` 73곳(S10 +1, S11 −1 — 마커가 코드에서 example으로 옮겨감). 설정 `version_sources`는 항상 `re.M`이고 기본 첫 항목(앵커 없음)에는 영향 없다.
 - 테스트: 새 `tests/test_platform_profile.py`(기본값 동일성·example 주석 값 = 기본값·검증 오류별 키 경로·CLI 종료 코드 2·슬롯/RIL 태그/bugreport/소스 트리 덮어쓰기 효과·`configure()` 격리·모의 site 백엔드 추종).
 - 범위 밖: 이슈 DB 층 설정(`phone_id_patterns`·`ril.yaml` `tags`), 정규식 문법·시계 기준·mcptools 낱말, `migrate_code_refs`, `--index`.
+
+## I4 YAML C 로더 (yamlio, 2026-10-05)
+
+- `common/yamlio.py`: `LOADER = CSafeLoader`(없으면 `SafeLoader`)와 `safe_load(stream)`(= `yaml.safe_load`와 같되 `LOADER` 사용, 날짜 변환 없음). `loads`·`load`는 이를 거쳐 `normalize`한다.
+- 런타임 직접 호출 6곳을 `yamlio.safe_load`로 교체: `common/site_defaults.py`, `common/compat.py`, `config.py`(`_parse_value`, `YAMLError`용 in-function `import yaml` 유지), `jira_fields.py`, `jira_bridge.py`, `guard.py`(기존 try·except 튜플 그대로). 날짜 정규화 없는 읽기는 그대로 유지한다.
+- 측정(계획 단계, 이 PC): 샘플 DB 파싱 43.7 → 5.2 ms(약 8.4배), `db_build --preview` 159 → 110 ms, `db_lint --all` 263 → 190 ms.
+- 결과 동일: 레포 YAML 153개 SafeLoader와 같은 결과, `db_build --preview` `diff -r` 동일.
+- 차이: 오류 문구가 다르다(줄·열은 같다). libyaml은 `a:\tb`처럼 탭 구분을 받아들인다.
+- 쓰기는 `SafeDumper` 그대로, 헬퍼 없음: C 방출기는 `yamldoc._Dumper.increase_indent` 재정의를 무시한다.
+- 의존성: PyYAML 6.0.3 manylinux wheel은 libyaml을 포함한다(Ubuntu/Py3.11에서 확인, 다른 OS는 미확인). libyaml-dev 없는 sdist 설치는 `SafeLoader`로 폴백(동작은 같고 느리다). 사내 확인: `python3 -c "import yaml; print(yaml.__with_libyaml__)"`.
+- 테스트: 새 `tests/test_yamlio.py`(LOADER 선택·폴백·샘플 DB 결과/오류 위치 동일·날짜 처리·깨진 frontmatter `IssueDbError`·`db_build --preview` 바이트 동일·직접 호출 금지 가드).

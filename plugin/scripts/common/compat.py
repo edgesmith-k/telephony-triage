@@ -13,7 +13,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-import yaml
+from . import yamlio
 
 BACKEND_MISMATCH = "parser-backend-mismatch"
 EXTERNAL_MISMATCH = "external-parser-mismatch"
@@ -38,7 +38,7 @@ def load_db_config(db_root: str | Path) -> dict:
     if not path.is_file():
         return {}
     with path.open(encoding="utf-8") as fh:
-        data = yaml.safe_load(fh)
+        data = yamlio.safe_load(fh)
     return data if isinstance(data, dict) else {}
 
 

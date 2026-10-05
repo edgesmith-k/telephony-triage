@@ -41,12 +41,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-import yaml
-
 SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS))
 
-from common import compat, dbpath, failedstep, masking, site_defaults, userconfig  # noqa: E402
+from common import compat, dbpath, failedstep, masking, site_defaults, userconfig, yamlio  # noqa: E402
 from common.exitcodes import CHECK_FAILED, OK, USAGE  # noqa: E402
 
 DEFAULT_KEY_RE = r"[A-Z][A-Z0-9]+-\d+"
@@ -272,7 +270,7 @@ def _read(path: Path) -> dict:
     try:
         data = json.loads(raw)
     except json.JSONDecodeError:
-        data = yaml.safe_load(raw)
+        data = yamlio.safe_load(raw)
     if isinstance(data, dict) and isinstance(data.get("issue"), dict) and "key" not in data:
         data = data["issue"]
     if not isinstance(data, dict):

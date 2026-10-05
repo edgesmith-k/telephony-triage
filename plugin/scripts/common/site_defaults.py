@@ -13,8 +13,7 @@ import os
 import sys
 from pathlib import Path
 
-import yaml
-
+from . import yamlio
 from .exitcodes import USAGE
 
 FILENAME = "site-defaults.yaml"
@@ -46,7 +45,7 @@ def load(root: Path | None = None) -> dict:
     if not path.is_file():
         raise SiteDefaultsMissing(root, (root / EXAMPLE_FILENAME).is_file())
     with path.open(encoding="utf-8") as fh:
-        data = yaml.safe_load(fh)
+        data = yamlio.safe_load(fh)
     return data if isinstance(data, dict) else {}
 
 

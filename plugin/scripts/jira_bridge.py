@@ -41,8 +41,8 @@ def _payload(response):
         try:
             return json.loads(response)
         except json.JSONDecodeError:
-            import yaml
-            data = yaml.safe_load(response)
+            from common import yamlio
+            data = yamlio.safe_load(response)
             return data if isinstance(data, (dict, list)) else {"text": response}
     return response
 

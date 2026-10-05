@@ -100,7 +100,7 @@ telephony-triage-plugin/                 # 개발 레포 루트
     │           ├── fail-causes.md       # DataFailCause, CallFailCause, 등록 reject cause
     │           └── log-tags.md          # 태그 해설 (실제 수집 목록은 이슈 DB parser-rules/tags.yaml)
     ├── scripts/                         # 3.1 매트릭스 참고
-    │   ├── common/                      # config 로드, 이슈 DB 로드, 스키마 검증, git 헬퍼, 로깅, 시그니처 컴파일, 마스킹 함수, `events.py`(파서 출력 이벤트 키 순서·`line_ref`·`validate_event`, 표준 라이브러리만)
+    │   ├── common/                      # config 로드, 이슈 DB 로드, 스키마 검증, git 헬퍼, 로깅, 시그니처 컴파일, 마스킹 함수, `events.py`(파서 출력 이벤트 키 순서·`line_ref`·`validate_event`, 표준 라이브러리만), `yamlio.py`(YAML 읽기 단일 입구, libyaml `CSafeLoader` 있으면 사용)
     │   ├── config.py
     │   ├── code_roots.py
     │   ├── parse_logcat.py
@@ -142,7 +142,7 @@ telephony-triage-plugin/                 # 개발 레포 루트
 
 | 스크립트 | 책임 (이것만 한다) | 호출자 |
 |---|---|---|
-| `common/` | config·이슈 DB 로드, 스키마 검증, git 헬퍼, 로깅, **시그니처·extractor 컴파일 함수**(매처와 `db_build --cache-only`가 공유), **마스킹 함수**(`mask_pii`와 `parse_logcat` 공유), **이벤트 레코드 `events.py`**(파서 출력 이벤트 키 순서·`line_ref`·`validate_event`, 표준 라이브러리만), `sanitize_build`, **검사 오케스트레이션 `checks.py`**(프로필 `stage`·`precommit`·`guard`의 단계 목록과 종료 코드 집계 `aggregate`. 하위 스크립트는 같은 프로세스에서 `main(argv)`로 부른다(`run_script`, 종료 코드·stdout JSON·stderr는 subprocess와 같고 `TT_SCRIPT_SUBPROCESS=1`이면 subprocess). top-level import는 stdlib와 `common.exitcodes`뿐이다: guard가 `site-defaults.yaml` 없이도 멈추지 않아야 한다) | 모든 스크립트 |
+| `common/` | config·이슈 DB 로드, 스키마 검증, git 헬퍼, 로깅, **시그니처·extractor 컴파일 함수**(매처와 `db_build --cache-only`가 공유), **마스킹 함수**(`mask_pii`와 `parse_logcat` 공유), **이벤트 레코드 `events.py`**(파서 출력 이벤트 키 순서·`line_ref`·`validate_event`, 표준 라이브러리만), **`yamlio.py`**(YAML 읽기 단일 입구, `CSafeLoader` 있으면 사용), `sanitize_build`, **검사 오케스트레이션 `checks.py`**(프로필 `stage`·`precommit`·`guard`의 단계 목록과 종료 코드 집계 `aggregate`. 하위 스크립트는 같은 프로세스에서 `main(argv)`로 부른다(`run_script`, 종료 코드·stdout JSON·stderr는 subprocess와 같고 `TT_SCRIPT_SUBPROCESS=1`이면 subprocess). top-level import는 stdlib와 `common.exitcodes`뿐이다: guard가 `site-defaults.yaml` 없이도 멈추지 않아야 한다) | 모든 스크립트 |
 | `config.py` | 사용자 config 로드/검증/갱신, `site-defaults.yaml` 로드(없으면 종료 코드 2), 스키마·생성기·파서 백엔드·외부 파서 버전과 gh 인증 호환성 판정(`check --for write\|dry-run`, `migrate/schema-v<N>` 브랜치는 버전 불일치 예외), **`plugin.scripts_path` 갱신**(`sync-scripts-path`) | 모든 스크립트, setup, SessionStart hook |
 | `platforms/` | `__init__.py`의 `load(defaults)`·`PlatformProfile`(site-defaults `platform:` 검증, 소스 트리·슬롯 표기·RIL 태그·bugreport 섹션 상수, RF-4), `android/`(logcat·ril·bugreport·backend, RF-3) | `parse_logcat.py`, `code_roots.py` |
 | `code_roots.py` | 코드 경로 후보 정렬, 경로 검증, 트리 버전 추정, `<root 키>:` 경로 변환, symbol 검색 | analyze Step 2-1, Step 5 |

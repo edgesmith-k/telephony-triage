@@ -94,7 +94,7 @@ sha256sum telephony-triage-import-v1.zip /tmp/issue-db-skeleton-v1.zip   # 사�
 |---|---|---|
 | OS | `lsb_release -a` | **Ubuntu** |
 | Python | `python3 --version` | **3.10+** |
-| 패키지 | `pip install pyyaml jsonschema pytest` (사내 미러) | 의존성은 이 셋뿐 |
+| 패키지 | `pip install pyyaml jsonschema pytest` (사내 미러) | 의존성은 이 셋뿐. `python3 -c "import yaml; print(yaml.__with_libyaml__)"`가 True면 YAML을 C 로더로 읽어 빠르다(False여도 동작) |
 | git | `git --version` | **2.31+** (guard의 `rev-parse --path-format`, worktree `--no-track`, `push --force-with-lease=<ref>:<sha>`) |
 | gh | `gh auth status --hostname <GHE 호스트>` | 실패하면 쓰기 작업 전부 불가(읽기 분석은 가능) |
 | Claude Code | `claude --version`, `claude mcp list` | 플러그인·hooks 지원 버전, Jira MCP 서버 이름과 사용자 범위 등록 (정밀 확인은 S-2) |
