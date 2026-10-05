@@ -569,3 +569,14 @@
 - `sync-pr.md`: 재적용·drift·확인 화면·커밋·publish·정리(옛 6~9번)와 "analyze Step 8-2 원격 브랜치" 절을 `write-flow.md` 2~7번 참조로 바꾸고 sync-pr만의 차이(ID 재할당·drift 내역 필수, `--lease <start_sha>`, `gh pr edit`, 로컬 브랜치 안내)만 남겼다. 6168 → 4614바이트. `commit -F`·`lock acquire`·`lock release` 문구는 유지(테스트).
 - 커맨드 `record`·`verify-fix`·`fix-submitted`: "SKILL.md는 §실행 규칙 절만 읽고 analyze 절은 읽지 않는다"로 통일.
 - 동작 변경 없음. 관련 테스트(commands·safety·improvement_regressions·triage) 통과. 행동 eval은 3C(사내 S-2) 때.
+
+## S4 eval 실행기 plugin 모드 (R13, 2026-10-05)
+
+- `tests/skill_evals/run.py --mode plugin`(기본): `claude -p --plugin-dir <헬퍼 플러그인 루트> --plugin-dir <모의 분석 스킬 플러그인> --mcp-config <mock-jira + eval-approver>`로 설치 상태처럼 실행. 요청 원문이 첫 메시지(슬래시 커맨드·스킬 자동 선택이 실제로 돈다), 실행자 규칙은 `--append-system-prompt`. hook(SessionStart·guard·jira_bridge)이 걸린다. `--mode direct`는 예전 방식.
+- 실행 환경: `CLAUDE_ENV_FILE=<env>/env.sh`(Bash가 셸 프로필로 PATH를 다시 잡아 gh 스텁이 빠지는 문제), `--permission-prompt-tool mcp__eval-approver__approve`(guard `ask` — publish 규칙 7 — 에 사람 대신 허용하고 `approvals.json`에 기록, `tests/mocks/approver_mcp/server.py`).
+- `execution.json`의 `plugin`: 로딩된 플러그인·MCP 상태·Skill/MCP 호출·hook 횟수·차단 hook·권한 확인 기록. 플러그인·MCP가 안 붙으면 `error`(환경).
+- `grade.py`: "무엇을 실행했나" 판정은 `ctx.ran`(실행 기록의 Bash·MCP 호출 + 드라이버 trace). `commands.md`는 기록 없는 옛 결과에서만. 기존 iteration-8~11 재채점 결과 동일.
+- plugin 모드 실행(Sonnet 계열 기본 모델, 합계 약 $2.5): eval 8·18·1·16·19·27·41 모두 completed, 기계 채점 실패 0(eval 41은 문구 수정 뒤 재실행에서 분석 스킬 질문 → Skill 호출 → 실패 시 "심층 분석 생략" 확인). 수동 항목은 transcript로 확인(eval 18의 "db_verify rules --draft로 R3 보고"는 아래 결함 때문에 stage --dry-run으로 대신함).
+- eval이 찾은 결함과 수정:
+  - `db_verify.make_draft`: 실행자가 `WD/<KEY>/draft`를 미리 만들면 "등록된 도구 worktree가 아닙니다"로 종료 코드 2. 빈 디렉토리는 치우고 다시 만들고, 도구가 만들지 않은 파일이 있으면 지우지 않고 원인을 말하며 멈춘다. `record.md` 7번에 "draft는 도구가 만든다 — 미리 만들지 않는다".
+  - SKILL.md Step 5-1: "(후보 없음·원인 미확인)"이 analyzer에도 걸리는 것처럼 읽혀 C=1이면 분석 스킬 질문을 건너뜀(eval 41). 07 §Step 5-1대로 "analyzer 값이 있으면 C 무관, explore만 후보 없음·원인 미확인"으로. 8KB 유지(8186).

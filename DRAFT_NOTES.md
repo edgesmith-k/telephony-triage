@@ -40,7 +40,7 @@
 | ☐ | 항목 | 메모 |
 |---|---|---|
 | ☐ 2 | **사용자 확인** — 위 표, RF-2, 10/05 작업 전체 | 반입 직전에 한꺼번에 |
-| ☐ 3C | **행동 eval 전체(50개)** — 사내 S-2 | 토큰 약 40M |
+| ☐ 3C | **행동 eval 전체(50개)** — plugin 모드로 사외에서도 가능(10/05 확인, 1개 $0.1~0.6) | 사외 실행 여부는 사용자 결정 |
 | ◐ 10 | **반입** | main `7b69cb5` 묶음은 낡음 → 아래 보강 뒤 다시 만든다. 태그 push는 사용자(세션 권한 밖) |
 
 **반입 전 보강 트랙**(사용자 결정 10/05: 시간 여유, 사외에서 최대한 안정화·보완 뒤 반입). 위에서부터 ☐ 첫 항목을 한다. 단계마다 결과 요약 → 사용자 확인.
@@ -51,7 +51,7 @@
 | ✅ S2 | 10/04~05 코드 리뷰·eval 발견 수정 | 10/05, `CHANGES.md` |
 | ✅ S2b | `stepanchor.step_number`가 줄 앞 날짜를 스텝 번호로 읽음 | 10/05, 날짜 칸은 이름에서도 뺌, `CHANGES.md` |
 | ✅ S3 | R12 문서 중복(record·verify·sync-pr) 정리 | 10/05, lock 처리 단일 원본은 write-flow 1번, `CHANGES.md` |
-| ☐ S4 | R13 eval 실행기를 `--plugin-dir` 실제 플러그인으로 | hook·guard 포함, `trigger_real.py` 참고 |
+| ✅ S4 | R13 eval 실행기를 `--plugin-dir` 실제 플러그인으로 | 10/05, 기본 `--mode plugin`, eval 7개 실행·결함 2건 수정, `CHANGES.md` |
 | ☐ S5 | `check_boundary`에 비밀값 패턴 | 리뷰 §Q |
 | ☐ I1 | `common/events.py`(`line_ref` 포함) | RF-3 전제 |
 | ☐ I2 | RF-3 `platforms/android/` 이동(출력 동일, shim) | 리뷰 RF-3 |
