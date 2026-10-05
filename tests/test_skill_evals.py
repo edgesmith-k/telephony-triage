@@ -98,6 +98,8 @@ def test_prepare_plugin_mode_builds_mcp_config_and_analyzer_plugin(tmp_path):
     out = evaluation.prepare_plugin_mode({"setup": {"analyzer_fail": True}}, info, tmp_path)
     mcp = json.loads(Path(out["mcp_config"]).read_text(encoding="utf-8"))["mcpServers"]["mock-jira"]
     assert mcp["args"][0].endswith("jira_mcp/server.py") and mcp["env"]["MOCK_JIRA_DIR"] == "J"
+    approver = json.loads(Path(out["mcp_config"]).read_text(encoding="utf-8"))["mcpServers"]["eval-approver"]
+    assert approver["env"]["MOCK_APPROVALS_LOG"] == str(tmp_path / "approvals.json")
     analyzer = Path(out["plugin_dirs"][1])
     assert out["plugin_dirs"][0] == info["plugin_root"]
     assert json.loads((analyzer / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))["name"] == "mock-analyzers"
@@ -117,13 +119,30 @@ def test_plugin_check_flags_missing_plugin_or_mcp_and_summarizes_calls():
         {"type": "tool_use", "name": "mcp__mock-jira__jira_post_comment", "input": {}}]}}
     hook = {"type": "system", "subtype": "hook_response", "hook_event": "PreToolUse",
             "hook_name": "PreToolUse:mcp__mock-jira__jira_post_comment", "exit_code": 2, "output": ""}
-    ok, seen = evaluation.plugin_check([_init(["telephony-triage"], {"mock-jira": "connected"}), tool, hook])
+    connected = {"mock-jira": "connected", "eval-approver": "connected"}
+    ok, seen = evaluation.plugin_check([_init(["telephony-triage"], connected), tool, hook])
     assert ok is None and seen["skill_calls"] == ["telephony-triage:telephony-triage"]
     assert seen["mcp_calls"] == ["mcp__mock-jira__jira_post_comment"] and seen["hooks"] == {"PreToolUse": 1}
     assert seen["hooks_blocked"] == ["PreToolUse:mcp__mock-jira__jira_post_comment"]
-    assert evaluation.plugin_check([_init([], {"mock-jira": "connected"})])[0]
-    assert evaluation.plugin_check([_init(["telephony-triage"], {"mock-jira": "failed"})])[0]
+    assert evaluation.plugin_check([_init([], connected)])[0]
+    assert evaluation.plugin_check([_init(["telephony-triage"], {**connected, "mock-jira": "failed"})])[0]
+    assert evaluation.plugin_check([_init(["telephony-triage"], {"mock-jira": "connected"})])[0]   # 승인 서버 없음
     assert evaluation.plugin_check([])[0]
+
+
+def test_approver_allows_and_logs_permission_requests(tmp_path, monkeypatch):
+    spec_a = importlib.util.spec_from_file_location("eval_approver", REPO / "tests" / "mocks" / "approver_mcp" / "server.py")
+    approver = importlib.util.module_from_spec(spec_a)
+    spec_a.loader.exec_module(approver)
+    log = tmp_path / "approvals.json"
+    monkeypatch.setenv("MOCK_APPROVALS_LOG", str(log))
+    call = {"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+            "params": {"name": "approve", "arguments": {"tool_name": "Bash", "input": {"command": "db_pr.py publish"}}}}
+    reply = json.loads(approver.handle(call)["result"]["content"][0]["text"])
+    assert reply == {"behavior": "allow", "updatedInput": {"command": "db_pr.py publish"}}
+    monkeypatch.setenv("EVAL_APPROVER_DENY", "1")
+    assert json.loads(approver.handle(call)["result"]["content"][0]["text"])["behavior"] == "deny"
+    assert [r["decision"] for r in json.loads(log.read_text(encoding="utf-8"))] == ["allow", "deny"]
 
 
 # -- 정의 정합성 (실행 없이) ---------------------------------------------------------------------

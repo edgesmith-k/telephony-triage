@@ -39,7 +39,7 @@ description: Android Telephony 이슈(data·call·network·sim·sms·ims)를 Jir
 2. `S/triage.py run <KEY> --logs <…>` + 위 옵션(analyzer·explore 외) — lock·스냅샷·호환성·Jira 추출·열린 PR·코드 경로·
    파싱·매칭·후보 정보·`code_refs` resolve를 한다. stdout(=`JOB/analysis.json`, ≤4KB)과 `JOB/report.md`만 읽는다.
 3. `status: needs_input` → `question`·`options`를 보이고 **사용자 답**으로 같은 명령에 `--answer <kind>=<값>`을 붙여 재실행한다.
-   대신 고르지 않는다. `jira`는 1번 호출 뒤, `logs`는 `--logs`를 붙여 재실행. `stopped`는 lock이 풀렸으니 이유만 알린다.
+   대신 고르지 않는다. `jira`는 1번 뒤, `logs`는 `--logs`를 붙여 재실행. `stopped`는 lock이 풀렸으니 이유만 알린다.
 4. 종료 코드 1 → 키를 다시 묻는다. 2 → 메시지를 보이고 멈춘다(lock 해제됨).
 
 ### 2. 결과 읽기 (Step 3~5)
@@ -49,12 +49,12 @@ description: Android Telephony 이슈(data·call·network·sim·sms·ims)를 Jir
 - `logs.in_range`가 `partial`이면 "로그 일부", `false`면 "로그 범위 밖"으로 "매칭 없음"과 구분한다.
 - `C: 0`은 "유형 일치, 원인 미확인". `phones` ≠ `jira.sim_slot`이면 경고. `pending_causes`는 "참고: 시그니처 없는 기존 원인".
 - `no_candidate`면 "후보 없음" 절(`search_hits`, `error_events`, 범위). 점수·op에 쓰지 않는다.
-- Step 5: `code.resolved` 파일에서 근거 문구로 출력 위치·분기 조건을 찾는다(`grep -n` 상위 몇 줄·필요한 함수만). `code.moved`는
-  "경로 변경"으로 보고하고 Step 7에서 `add-code-ref`를 묻는다. 새 `code_refs`는 `<root 키>:<상대 경로>` + `symbol`.
-- Step 5-1 `analyzer`/5-2 `explore`(후보 없음·원인 미확인): `--no-…`·`never`면 생략, `--analyzer`·`--explore`·`always`면
+- Step 5: `code.resolved` 파일에서 근거 문구로 출력 위치·분기 조건을 찾는다(`grep -n`, 필요한 함수만). `code.moved`는
+  "경로 변경"으로 알리고 Step 7에서 `add-code-ref`를 묻는다. 새 `code_refs`는 `<root 키>:<상대 경로>` + `symbol`.
+- Step 5-1 `analyzer`(`analyzer` 값이 있으면, C 무관)·5-2 `explore`(후보 없음·원인 미확인만): `--no-…`·`never`면 생략, `--analyzer`·`--explore`·`always`면
   실행, 아니면 토큰 추가를 알리고 묻는다(답 전 실행 금지). 5-1 입력은 `files.events`·로그 경로·상위 후보·마스킹
-  요약, 결과는 `S/mask_pii.py`를 거쳐 "심층 분석" 절에만, 다른 원인 의견은 Step 7 선택지로. 5-2는 `explore.md`대로
-  `JOB/timeline.md`만 읽고 "탐색 분석" 칸에만 쓴다. 둘 다 점수에 쓰지 않는다.
+  요약, 결과는 `S/mask_pii.py` 후 "심층 분석" 절에만, 다른 원인 의견은 Step 7 선택지로. 5-2는 `explore.md`대로
+  `JOB/timeline.md`만 읽고 "탐색 분석" 칸에만 쓴다. 둘 다 점수와 무관.
 
 ### Step 6. 리포트
 

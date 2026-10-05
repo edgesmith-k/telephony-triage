@@ -38,6 +38,7 @@ def dump(path: Path, value) -> None:
 
 MOCKS = REPO / "tests" / "mocks"
 ANALYZER_PLUGIN = "mock-analyzers"
+APPROVER = "eval-approver"
 
 
 def _rules(entry: dict, run_dir: Path) -> str:
@@ -79,9 +80,12 @@ def prepare_plugin_mode(entry: dict, info: dict, env_dir: Path) -> dict:
     (skill / "SKILL.md").write_text(text.replace("tests/mocks/skills/data-analyzer/run.py",
                                                  (skill / "run.py").as_posix()), encoding="utf-8")
     mcp = env_dir / "mcp.json"
-    dump(mcp, {"mcpServers": {"mock-jira": {
-        "command": sys.executable, "args": [(MOCKS / "jira_mcp" / "server.py").as_posix()],
-        "env": {k: info["env"][k] for k in ("MOCK_JIRA_DIR", "MOCK_JIRA_WRITE_LOG", "PYTHONIOENCODING")}}}})
+    dump(mcp, {"mcpServers": {
+        "mock-jira": {"command": sys.executable, "args": [(MOCKS / "jira_mcp" / "server.py").as_posix()],
+                      "env": {k: info["env"][k] for k in ("MOCK_JIRA_DIR", "MOCK_JIRA_WRITE_LOG", "PYTHONIOENCODING")}},
+        # guard의 ask(예: publish 규칙 7)에 사람 대신 답하고 요청을 기록한다(`approvals.json`)
+        APPROVER: {"command": sys.executable, "args": [(MOCKS / "approver_mcp" / "server.py").as_posix()],
+                   "env": {"MOCK_APPROVALS_LOG": str(env_dir / "approvals.json"), "PYTHONIOENCODING": "utf-8"}}}})
     return {"plugin_dirs": [info["plugin_root"], str(analyzer)], "mcp_config": str(mcp)}
 
 
@@ -105,8 +109,9 @@ def plugin_check(events: list[dict]) -> tuple[str | None, dict]:
     seen.update(plugins=plugins, mcp_servers=servers)
     if "telephony-triage" not in plugins:
         return f"플러그인이 로딩되지 않음: {plugins}", seen
-    if servers.get("mock-jira") not in ("connected", None) or "mock-jira" not in servers:
-        return f"mock-jira MCP 연결 실패: {servers}", seen
+    bad = {n: servers.get(n) for n in ("mock-jira", APPROVER) if servers.get(n) != "connected"}
+    if bad:
+        return f"MCP 연결 실패: {bad}", seen
     return None, seen
 
 
@@ -154,7 +159,10 @@ def execute(entry: dict, info: dict, env_dir: Path, run_dir: Path, claude: str,
         (run_dir / "prompt.txt").write_text(f"[system]\n{system}\n[user]\n{prompt}\n", encoding="utf-8")
         tools = "Read,Bash,Write,Edit,Glob,Grep,Skill"
         # MCP 도구는 서버 단위로 허용한다 — Jira 쓰기 차단은 권한 거부가 아니라 guard hook이 해야 평가가 된다.
+        # Bash는 매번 사용자 셸 프로필로 PATH를 다시 잡으므로(gh 스텁이 빠진다) env.sh를 명령마다 source하게 한다.
+        env["CLAUDE_ENV_FILE"] = str(env_dir / "env.sh")
         command = [claude, "-p", *common, "--mcp-config", plugin["mcp_config"],
+                   "--permission-prompt-tool", f"mcp__{APPROVER}__approve",
                    *[a for d in plugin["plugin_dirs"] for a in ("--plugin-dir", d)],
                    "--append-system-prompt", system,
                    "--tools", tools, "--allowedTools", tools + ",mcp__mock-jira", *dirs]
@@ -189,6 +197,8 @@ def execute(entry: dict, info: dict, env_dir: Path, run_dir: Path, claude: str,
             status, reason = classify_result(result, proc.returncode)
             if plugin:
                 problem, seen = plugin_check(events_list)
+                approvals = env_dir / "approvals.json"
+                seen["approvals"] = json.loads(approvals.read_text(encoding="utf-8")) if approvals.is_file() else []
                 plugin = {**plugin, "seen": seen}
                 if problem and status == "completed":
                     status, reason = "error", f"플러그인 환경: {problem}"
