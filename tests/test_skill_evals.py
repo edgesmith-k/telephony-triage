@@ -83,6 +83,49 @@ def test_evaluator_prompt_does_not_leak_expected_answers(tmp_path):
     assert "로그 분석해줘" in prompt and "취소" in prompt
 
 
+def test_plugin_prompt_sends_request_verbatim_without_answers_or_skill_paths(tmp_path):
+    entry = {"prompt": "/telephony-triage:record MOCK-1 --dry-run", "user_replies": ["취소"],
+             "assertions": ["SECRET_EXPECTATION"], "expected_output": "SECRET_ANSWER"}
+    user, system = evaluation.plugin_prompt(entry, tmp_path, tmp_path)
+    assert user == entry["prompt"]                       # 슬래시 커맨드가 그대로 첫 메시지여야 커맨드로 들어간다
+    assert "SECRET" not in user + system and "취소" in system
+    assert "SKILL.md" not in system and "call.py" not in system   # 스킬 위치·모의 호출법을 알려주지 않는다
+
+
+def test_prepare_plugin_mode_builds_mcp_config_and_analyzer_plugin(tmp_path):
+    info = {"plugin_root": str(tmp_path / "root"),
+            "env": {"MOCK_JIRA_DIR": "J", "MOCK_JIRA_WRITE_LOG": "W", "PYTHONIOENCODING": "utf-8"}}
+    out = evaluation.prepare_plugin_mode({"setup": {"analyzer_fail": True}}, info, tmp_path)
+    mcp = json.loads(Path(out["mcp_config"]).read_text(encoding="utf-8"))["mcpServers"]["mock-jira"]
+    assert mcp["args"][0].endswith("jira_mcp/server.py") and mcp["env"]["MOCK_JIRA_DIR"] == "J"
+    analyzer = Path(out["plugin_dirs"][1])
+    assert out["plugin_dirs"][0] == info["plugin_root"]
+    assert json.loads((analyzer / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))["name"] == "mock-analyzers"
+    skill = analyzer / "skills" / "mock-data-analyzer"
+    assert "tests/mocks/skills" not in (skill / "SKILL.md").read_text(encoding="utf-8")
+    assert "internal error" in (skill / "run.py").read_text(encoding="utf-8")      # analyzer_fail
+
+
+def _init(plugins, servers):
+    return {"type": "system", "subtype": "init", "plugins": [{"name": p} for p in plugins],
+            "mcp_servers": [{"name": n, "status": st} for n, st in servers.items()]}
+
+
+def test_plugin_check_flags_missing_plugin_or_mcp_and_summarizes_calls():
+    tool = {"type": "assistant", "message": {"content": [
+        {"type": "tool_use", "name": "Skill", "input": {"skill": "telephony-triage:telephony-triage"}},
+        {"type": "tool_use", "name": "mcp__mock-jira__jira_post_comment", "input": {}}]}}
+    hook = {"type": "system", "subtype": "hook_response", "hook_event": "PreToolUse",
+            "hook_name": "PreToolUse:mcp__mock-jira__jira_post_comment", "exit_code": 2, "output": ""}
+    ok, seen = evaluation.plugin_check([_init(["telephony-triage"], {"mock-jira": "connected"}), tool, hook])
+    assert ok is None and seen["skill_calls"] == ["telephony-triage:telephony-triage"]
+    assert seen["mcp_calls"] == ["mcp__mock-jira__jira_post_comment"] and seen["hooks"] == {"PreToolUse": 1}
+    assert seen["hooks_blocked"] == ["PreToolUse:mcp__mock-jira__jira_post_comment"]
+    assert evaluation.plugin_check([_init([], {"mock-jira": "connected"})])[0]
+    assert evaluation.plugin_check([_init(["telephony-triage"], {"mock-jira": "failed"})])[0]
+    assert evaluation.plugin_check([])[0]
+
+
 # -- 정의 정합성 (실행 없이) ---------------------------------------------------------------------
 
 EVALS = REPO / "tests" / "skill_evals"

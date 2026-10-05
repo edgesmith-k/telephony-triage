@@ -11,7 +11,7 @@
 | `scenarios/` | eval용 합성 logcat 시나리오 (`tests/mocks/logcat_gen.py` 형식) |
 | `plans/`, `fixtures/` | 미리 올려 둔 PR(eval 16)의 계획과 fixture(`e016-apn-cut.log`, 합성) |
 | `workspace/` | 실행 결과 (커밋하지 않음, `.gitignore`) |
-| `run.py` | 새 격리 환경을 준비하고 Claude Code로 평가 실행. 기존 반복 폴더는 덮어쓰지 않음 |
+| `run.py` | 새 격리 환경을 준비하고 Claude Code로 평가 실행(기본 `--mode plugin`: 실제 플러그인·모의 Jira MCP·hook). 기존 반복 폴더는 덮어쓰지 않음 |
 | `trigger_real.py` | 실제 플러그인(`--plugin-dir`)을 불러와 `trigger_evals.json`의 트리거를 잰다. skill-creator `run_eval`(첫 도구 호출만 셈)보다 실제에 가깝다 |
 | `grade.py` | 기계 채점과 수동 채점 보존. 미실행·API 오류를 통과로 세지 않음 |
 
@@ -41,38 +41,36 @@ python3 tests/helpers/skill_eval_env.py <eval id> --out tests/skill_evals/worksp
 eval마다 독립된 플러그인 루트(테스트 헬퍼, `site-defaults.example.yaml` 복사본), 사용자 홈·config, 모의 원격 + 사용자 clone,
 gh 스텁 상태, Jira 티켓 디렉토리, 로그를 만든다. `env.sh`(export), `env.json`(경로), `before.json`(사용자 clone 상태)이 생긴다.
 
-## 평가 환경의 제약 (실제와 다른 점)
+## 실행 모드
 
-- 서브에이전트 세션에는 모의 Jira MCP가 등록돼 있지 않다. 그래서 `mcp__mock-jira__<tool>` 호출을
-  `python3 tests/mocks/jira_mcp/call.py <tool> '<JSON>'`으로 대신한다. `jira.tools` 매핑을 거쳐 도구 이름을 고르는 것은 같다.
-- 분석 스킬 `mock-data-analyzer`는 스킬로 부르지 않고 `python3 tests/mocks/skills/data-analyzer/run.py --input <json>`으로 부른다.
-- 사용자 대화는 `user_replies` 규칙으로 흉내 낸다. 실제 사용자 확인 대기는 없다.
-- guard hook(PreToolUse)은 서브에이전트에 걸리지 않는다. 쓰기 도구 호출 여부는 `MOCK_JIRA_WRITE_LOG` 파일로 본다.
+`run.py --mode plugin`(기본)은 `claude -p --plugin-dir <테스트 헬퍼 플러그인 루트> --plugin-dir <env>/mock-plugins/mock-analyzers
+--mcp-config <env>/mcp.json`으로 **설치된 플러그인처럼** 돌린다. 사용자 요청 원문이 첫 메시지라 `/telephony-triage:…` 커맨드,
+스킬 자동 선택, hook(SessionStart·guard·jira_bridge)이 실제로 동작한다. 실행자 규칙(사용자 응답 시뮬레이션·결과 파일)은
+`--append-system-prompt`로만 준다. `execution.json`의 `plugin`에 로딩된 플러그인·MCP 상태·Skill/MCP 호출·hook 횟수·차단한 hook이
+남는다. 플러그인이 안 붙었거나 `mock-jira`가 연결되지 않으면 행동 실패가 아니라 `error`(환경)다.
 
-## 서브에이전트 실행 프롬프트 (with-skill)
+| | plugin (기본) | direct (예전) |
+|---|---|---|
+| 스킬 진입 | 커맨드·`Skill` 자동 선택 | 실행자가 SKILL.md 직접 Read |
+| Jira | 모의 MCP 서버 `mock-jira`(비표준 도구 이름) → jira_bridge hook이 원문 격리 | `call.py`를 Bash로 |
+| 분석 스킬 | 모의 플러그인 스킬 `mock-analyzers:mock-data-analyzer` | `run.py`를 Bash로 |
+| guard hook | 걸린다(MCP·Bash·Write/Edit) | 안 걸린다 |
+| MCP 권한 | 서버 단위 허용 — Jira 쓰기 차단은 권한 거부가 아니라 guard가 해야 통과 | — |
 
-```
-너는 telephony-triage 스킬을 시험하는 평가 실행자다. 실제 사용자는 없다.
+**남은 차이**(두 모드 공통): 사용자 대화는 `user_replies` 규칙으로 흉내 낸다. 테스트 헬퍼 플러그인 루트는 `site-defaults.example.yaml`
+(모의 Jira 도구 매핑)을 쓴다. 분석 스킬 이름은 설정의 `mock-data-analyzer`이고 실제 스킬은 플러그인 접두사가 붙는다(사내 분석 스킬도
+설치 방식에 따라 같을 수 있다). 쓰기 도구 호출 여부는 `MOCK_JIRA_WRITE_LOG`로도 본다.
 
-- 스킬: <env.json의 skill>/SKILL.md 를 먼저 읽고 그대로 따른다(필요한 reference만 읽는다).
-- 환경: <env 디렉토리>/env.json 을 읽는다. Bash 호출마다 맨 앞에 `source '<env 디렉토리>/env.sh' && cd '<env 디렉토리>' && `를 붙인다
-  (셸 상태가 유지되지 않는다). 스크립트는 "$CLAUDE_PLUGIN_ROOT/scripts/<이름>.py"로 부른다. 로그 경로 logs/…는 env 디렉토리 기준이다.
-- Jira MCP 대신: env.json의 jira_call 명령. 분석 스킬 대신: env.json의 analyzer_run 명령.
-- 사용자 요청(첫 메시지): <prompt>
-- 시뮬레이션 사용자 응답 규칙: <user_replies>
-- 레포 파일(plugin/, docs/, tests/ 등)을 고치지 않는다. env 디렉토리 밖에 쓰지 않는다.
-- 산출물(<run 디렉토리>/outputs/):
-  - transcript.md: 사용자에게 보여준 모든 메시지(리포트, 질문, 확인 화면)와 시뮬레이션 사용자 응답을 순서대로 **그대로** 적는다.
-  - commands.md: 실행한 모든 명령(순서대로, 종료 코드와 한 줄 요약).
-  - notes.md: 스킬 지시가 모호하거나 막힌 곳, 스킬에 없어서 스스로 정한 것.
-  - 작업 계획이 생겼으면 plan.json 사본.
-```
+사내(S-2)에서 바꿀 것은 없다. CLI가 `--plugin-dir`·`stream-json` init 이벤트(`plugins`·`mcp_servers`)를 지원하지 않는 옛 버전이면
+`--mode direct`로 돌리고 그 사실을 결과에 적는다.
 
 ## 채점
 
 `python3 tests/skill_evals/grade.py <iteration 디렉토리> [--eval <id> ...]`가 기계적으로 확인할 수 있는 항목(원격 브랜치·파일,
 gh PR, lock, 사용자 clone 상태, 원문 PII 노출, Jira 쓰기 도구 호출)을 채점하고, 나머지는 transcript를 읽고 채점한다.
 결과는 `grading.json`(`expectations[{text, passed, evidence}]`) — skill-creator viewer 형식.
+"무엇을 실행했나" 판정은 실행 기록(`events.jsonl`의 Bash 명령·MCP 도구 호출 + 드라이버 `trace.jsonl`)으로 한다. 실행자가 쓴
+`commands.md`는 기록이 없는 옛 결과에서만 대신 쓴다(R13).
 
 `transcript.md`·`commands.md`가 없거나 비어 있으면 `not-run`, API 오류·시간 초과가 있으면 `incomplete`로 남기며
 기대 항목을 통과로 세지 않는다. `passed: null` 항목은 대화 순서와 판정을 독립적으로 읽고 근거를 붙여 채점한다.

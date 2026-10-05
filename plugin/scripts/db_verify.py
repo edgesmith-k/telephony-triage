@@ -129,7 +129,12 @@ def make_draft(plan: Path, draft: Path, defaults: dict, plugin_root: str | None)
     base = userconfig.get(cfg, "issue_db.base_branch") or "main"
     _git(repo, "worktree", "prune")
     if draft.exists():
-        remove_draft(draft, defaults)
+        if draft.is_dir() and not (draft / ".git").exists() and not any(draft.iterdir()):
+            draft.rmdir()       # 미리 만든 빈 디렉토리: 도구가 worktree로 다시 만든다
+        elif not (draft / ".git").exists():
+            raise UsageError(f"draft 경로에 도구가 만들지 않은 파일이 있다: {draft} — draft는 도구가 만든다. 내용을 옮기고 지운 뒤 다시 실행")
+        else:
+            remove_draft(draft, defaults)
     proc = _git(repo, "worktree", "add", "--detach", str(draft), f"origin/{base}")
     if proc.returncode != 0:
         raise UsageError(f"draft worktree를 만들 수 없습니다: {proc.stderr.strip()}")
