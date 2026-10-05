@@ -121,6 +121,8 @@ class Ctx:
     def _is_raw_target(self, token: str) -> bool:
         t = token.strip("\"'")
         name = Path(t).name
+        if "/fixtures/" in t.replace("\\", "/"):
+            return False     # 판별 근거 주변만 잘라 마스킹한 fixture(`cut` 출력)는 원문이 아니다
         if name in ("events.json", "jira_raw.json") or name.endswith((".log", ".zip")):
             return True
         logs = self.env_dir / "logs"
