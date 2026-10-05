@@ -35,11 +35,19 @@
 - **무효화**: 부분 하나라도 다르면 다시 계산하고 `analysis.json.reuse`가 바뀐 부분(`changed`)·추가된 로그·1위 변화를 알려 준다. 캐시 파일이 없거나 산출물이 바뀌었으면 `reason: cache-missing`, 코드 경로가 옮겨졌으면 `changed: [code]`, `--refresh`면 `reason: refresh`. `needs_input`·중단·오류 실행은 캐시를 쓰지 않는다. 캐시와 `triage-state.json`에는 마스킹된 값·경로·sha만 둔다(`08-safety.md §8.1`).
 - **리포트**: 적중이면 `- 재사용: 입력(…)이 실행 n과 같아 파싱·매칭을 다시 하지 않았다`, 이전 실행이 있는데 다시 계산했으면 `- 재분석: 실행 m 대비 바뀐 입력 […] — 1위 X → Y | 1위 변화 없음`.
 
+#### 분석 전용 (`--analysis-only`, RF-7)
+
+> 같은 입력의 분석 결과만 보고 싶고 이슈 DB에 기록할 생각이 없을 때(`triage.py run --analysis-only`, `--dry-run`과 함께 못 쓴다 → 종료 코드 2). 분석(Step 1~6의 결정적 부분·재사용)은 보통 analyze와 같고, **기록하는 흐름의 사전 질문·부작용만 건너뛴다**.
+
+- **그대로 한다**: 키 검사, lock 획득(스냅샷을 옮기므로), 스냅샷·사후 lint·캐시, 호환성(`--for dry-run`), Jira 읽기(`--jira-file`은 `--dry-run` 없이도 받는다), 로그·코드·Step 3~5, 입력 재사용.
+- **건너뛴다**: `db_pr cleanup`(dry-run·yes·질문 모두), 기존 `plan.json` 질문과 pending 피드백 삭제(있는지만 `plan{exists, source, pr_number}`로 알리고 파일은 건드리지 않는다), 열린 PR 확인(`db_pr preflight`·gh 없음, 리포트는 "확인 안 함"이며 "없음"이 아니다), 재분석 질문(`existing`은 알리기만).
+- **끝**: Step 6 리포트까지만 하고 **Step 7(분류 확정)·Step 8로 가지 않는다**. ok로 끝나면 `triage.py`가 lock을 풀고(`lock_released: true`, 붙여넣은 스텝 원문 `steps-pasted.txt`도 지운다) 리포트 첫 줄에 "분석 전용: 이슈 DB에 기록하지 않는다…"를 둔다. 기록하려면 `--analysis-only` 없이 다시 실행한다(mode는 입력 해시에 없으므로 core는 재사용되고 건너뛴 사전 질문이 그때 나온다). needs_input에서는 lock을 유지한다(재실행은 멱등).
+
 ### Step 0. 사전 점검
 - config를 로드한다. 없으면 setup으로 유도한다.
 - **Jira 키를 먼저 검사한다**: `jira_key_regex`(`02-config.md §5.3`, 스냅샷이 아직 없으면 사용자 clone의 `issue-db.config.yaml`)에 맞지 않으면 다시 묻는다. 키를 작업 키·경로·브랜치로 쓰기 전에 한다 (`contracts.md §3.2` 작업 키 검증).
-- `db_pr lock acquire <JIRA-KEY>`로 세션 lock을 잡는다. 다른 작업의 lock이 있으면 보유자(작업 키, 명령, 마지막 갱신 시각)를 보여준다. 사용자가 그 세션이 끝났다고 확인하면 `db_pr lock release <그 작업 키> --force` 후 다시 잡고, 아니면 중단한다. 같은 Jira의 lock이 10분 이내에 갱신됐으면 "다른 세션이 같은 이슈를 진행 중일 수 있다"고 보여주고, 사용자가 확인하면 `acquire <JIRA-KEY> --take-over`로 이어받는다 (`contracts.md §3.2` 세션 lock).
-- `db_pr cleanup --dry-run`으로 비정상 종료로 남은 worktree(`<work_dir>/*/wt`, `*/draft`)와 도구 브랜치(`tt/*`)를 찾는다. 있으면 목록을 보여주고, 사용자가 동의하면 `db_pr cleanup --yes`로 지운다 (`git worktree prune` 포함). 현재 작업 키의 것은 대상이 아니다.
+- `db_pr lock acquire <JIRA-KEY>`로 세션 lock을 잡는다(`--analysis-only`도 잡고, ok로 끝나면 `triage.py`가 푼다). 다른 작업의 lock이 있으면 보유자(작업 키, 명령, 마지막 갱신 시각)를 보여준다. 사용자가 그 세션이 끝났다고 확인하면 `db_pr lock release <그 작업 키> --force` 후 다시 잡고, 아니면 중단한다. 같은 Jira의 lock이 10분 이내에 갱신됐으면 "다른 세션이 같은 이슈를 진행 중일 수 있다"고 보여주고, 사용자가 확인하면 `acquire <JIRA-KEY> --take-over`로 이어받는다 (`contracts.md §3.2` 세션 lock).
+- (`--analysis-only`면 이 항목과 아래 기존 계획 항목을 건너뛴다 — `§분석 전용`) `db_pr cleanup --dry-run`으로 비정상 종료로 남은 worktree(`<work_dir>/*/wt`, `*/draft`)와 도구 브랜치(`tt/*`)를 찾는다. 있으면 목록을 보여주고, 사용자가 동의하면 `db_pr cleanup --yes`로 지운다 (`git worktree prune` 포함). 현재 작업 키의 것은 대상이 아니다.
 - `<work_dir>/<JIRA-KEY>/plan.json`이 이미 있으면:
   - 기존 계획의 `source`가 `analyze`면 이어서 할지, 새로 시작할지 묻는다. `source`가 다르면(예: `record`) **"새로 시작(기존 계획 덮어씀)"만** 허용한다 (`contracts.md §작업 계획`).
   - 이어서 하든 새로 시작하든 이 Jira의 pending 피드백을 지운다 (`03-issue-db.md §5.4 (3)`). 계획에 `pr.number`가 있으면 열린 PR이 있다고 알리고 `sync-pr` 또는 Step 8-2의 "브랜치 갱신"을 안내한다.
@@ -67,7 +75,7 @@ git -C <issue_db.path> pull --ff-only
 - 스냅샷은 읽기 전용이다. 쓰는 것은 `.cache/`뿐이고, 커밋하지 않는다.
 - 최신화 직후 **사후 lint**(`06-collaboration.md §6.3` ⑤): `db_lint --all --db <work_dir>/_snapshot`. 문제가 있으면 보여주고, 메인테이너 정리가 필요하다고 알린다(v1은 도구가 정리 PR을 만들지 않는다). 분석은 계속한다.
 - 캐시가 스냅샷과 다르면 `db_build --cache-only --db <work_dir>/_snapshot`으로 다시 만든다.
-- **작업이 끝나면 lock을 푼다**: Step 8의 `db_pr discard`가 풀고, discard 없이 끝나면(읽기 전용 모드의 계획 저장 후 종료, Step 7에서 계획만 저장하고 끝냄, 사용자가 중간에 그만둠) `db_pr lock release <JIRA-KEY>`를 호출한다.
+- **작업이 끝나면 lock을 푼다**: Step 8의 `db_pr discard`가 풀고, discard 없이 끝나면(`--analysis-only`는 `triage.py`가 ok에서 자동으로 풀고, 읽기 전용 모드의 계획 저장 후 종료, Step 7에서 계획만 저장하고 끝냄, 사용자가 중간에 그만둠) `db_pr lock release <JIRA-KEY>`를 호출한다.
 
 ### Step 2. Jira 읽기 (읽기 전용)
 - Jira는 **논리 동작 `jira.tools`**(`get_issue`, 있으면 `get_comments`·`search_issues`)로 부른다. 도구 이름을 직접 쓰지 않는다 (`16-existing-assets.md §16.1`). `jira.tools`는 `jira.read_tools`(guard 허용 목록) 안에 있어야 한다. 필드는 `jira.field_map`으로 읽는다. `--dry-run --jira-file <yaml>`이면 파일에서 읽는다 (`06-collaboration.md §6.9`). 계획의 `jira.origin`은 MCP면 `mcp`, 파일이면 `file`이다.
@@ -181,6 +189,9 @@ Android 버전과 브랜치마다 소스 트리가 다르므로 **분석할 때�
 ```
 
 ### Step 7. 분류 확정 → 작업 계획 작성 (반드시 사용자 확인)
+
+`--analysis-only`면 Step 6 리포트로 끝내고 이 단계로 오지 않는다(`§분석 전용`).
+
 "이 이슈를 `Data > DATA-001 > DATA-001-02 Roaming disabled`로 분류할까요?"
 - **예** → 계획에 `append DATA-001-02`.
 - **다른 기존 원인** → 사용자가 고른 원인으로 `append`.

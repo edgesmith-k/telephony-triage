@@ -163,7 +163,7 @@ telephony-triage-plugin/                 # 개발 레포 루트
 | `db_migrate.py` | 스키마 마이그레이션 실행(`--to`, 메인테이너의 `migrate/schema-v<N>` 브랜치 워킹 트리를 직접 바꿈), 옛 스키마 계획 올리기(`upgrade-plan`) | `migrate`, `sync-pr`(옛 스키마 계획) |
 | `guard.py` | Claude hook 입력(도구 이름, 명령, 파일 경로)을 받아 허용/차단/ask 판정 (Bash·MCP·Write/Edit) | `hooks.json` |
 | `jira_bridge.py` | 설정된 Jira `get_issue`·`get_comments` MCP 응답 원문을 `<work_dir>/<KEY>/jira_raw.json`에 쓰고 모델에 보이는 결과를 마스킹 요약으로 바꾼다(PostToolUse `updatedToolOutput`) | `hooks.json` |
-| `triage.py` | **analyze 드라이버**: Step 0~4와 Step 5 `code_refs` resolve를 위 스크립트의 `main()`을 같은 프로세스에서 불러 순서대로 수행, `analysis.json`(≤4KB)·`report.md` 초안·`trace.jsonl`, 후보 없음·원인 미확인이면 Step 5-2 입력 `timeline.md`. 사용자 결정 지점은 `needs_input`. 자체 판정 로직은 없다(요약·절삭만) | analyze(SKILL.md), `tools/offline_eval.py`(`--offline-db`) |
+| `triage.py` | **analyze 드라이버**: Step 0~4와 Step 5 `code_refs` resolve를 위 스크립트의 `main()`을 같은 프로세스에서 불러 순서대로 수행, `analysis.json`(≤4KB)·`report.md` 초안·`trace.jsonl`, 후보 없음·원인 미확인이면 Step 5-2 입력 `timeline.md`. `--analysis-only`면 기록하지 않는 분석 전용(쓰기 흐름의 사전 질문 생략, ok에서 lock 해제). 사용자 결정 지점은 `needs_input`. 자체 판정 로직은 없다(요약·절삭만) | analyze(SKILL.md), `tools/offline_eval.py`(`--offline-db`) |
 
 - 검사 로직은 각 담당 스크립트에만 둔다. 다른 스크립트는 호출만 한다.
 - `record`는 매처와 코드 분석을 쓰지 않지만 쓰기 경로(`db_pr stage` → `summary` → 커밋 → `publish`)와 검사는 analyze와 같다 (`07-workflow.md §record`).

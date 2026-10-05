@@ -2,7 +2,7 @@
 """triage.py — analyze Step 0~4 + Step 5 resolve 드라이버 (contracts.md §3.2, 07-workflow.md §analyze).
 
     triage.py run <KEY> [--logs <logcat|bugreport>...] [--jira-raw <json> | --jira-file <yaml>]
-                  [--code <프로필|경로|키=경로,…|skip>] [--dry-run] [--answer <kind>=<값>...]
+                  [--code <프로필|경로|키=경로,…|skip>] [--dry-run | --analysis-only] [--answer <kind>=<값>...]
                   [--tz <IANA>] [--year <YYYY>] [--minutes 5] [--refresh]
                   [--failed-step <한 줄>] [--steps-file <파일>] [--clock-offset <±시간>]
     triage.py run <KEY> --offline-db <path> --out <dir> --logs <logcat...> (--jira-meta <json> | --jira-file <yaml>)
@@ -20,6 +20,10 @@
   읽는 마스킹된 요약 타임라인(줄 수 상한 `explore.timeline_max_lines`, 기본 200). `analysis.json`의 `explore`가 가리킨다.
 - `JOB/analysis-cache.json`: 입력 해시(`request_hash`, 부분별 `parts`)가 같으면 파싱·매칭을 다시 하지 않고 이 core를 다시 보여 준다
   (RF-7, `07-workflow.md §입력 재사용`). `--offline-db`·`--refresh`·`needs_input`/오류 실행은 쓰지도 읽지도 않는다. 마스킹된 값만 담는다.
+- `--analysis-only`(RF-7): 이슈 DB에 기록하지 않는 분석 전용 실행. `--dry-run`과 함께 못 쓴다(종료 코드 2). lock·스냅샷·Jira·코드·파싱·매칭·
+  재사용은 그대로 하고, 쓰기 흐름의 질문·부작용(cleanup, 기존 계획 질문·pending 피드백 삭제, 열린 PR 확인)은 건너뛴다. 출력 `mode: "analysis-only"`
+  (`read_only_reasons`·`open_prs` 없음, `plan`은 `{exists, source, pr_number}`만), ok로 끝나면 lock을 풀고 `lock_released: true`(`lock_owner` 없음).
+  `--jira-file`은 `--dry-run` 없이도 받는다. 입력 해시에는 mode가 없어 이어서 보통 analyze를 하면 core를 재사용한다.
 - 읽지 않는 파일: `events.json`(파서 출력), `match.json`(매처 출력, `parse_logcat cut --evidence` 입력),
   `jira.json`(마스킹된 Jira 추출 전체 — 코멘트 원문이 필요할 때만 읽는다), `jira_meta.json`, `triage-state.json`, `analysis-cache.json`.
 
@@ -45,7 +49,7 @@
 앵커가 없고 마커 패턴·steps-file도 없으면 출력은 이전과 같다.
 
 종료 코드: 0 = 완료·needs_input·사용자 중단(`status: stopped`), 1 = Jira 키 형식 불일치(다시 묻는다),
-2 = 사용·환경 오류(하위 스크립트 메시지를 그대로 낸다. lock을 잡았으면 풀고 끝낸다).
+2 = 사용·환경 오류(하위 스크립트 메시지를 그대로 낸다. lock을 잡았으면 풀고 끝낸다. `--analysis-only`와 `--dry-run`을 함께 준 경우도 여기).
 """
 
 from __future__ import annotations
@@ -283,6 +287,7 @@ class Driver:
         self.cfg = userconfig.merged(defaults)
         self.key = args.key
         self.offline = args.offline_db is not None
+        self.analysis_only = bool(getattr(args, "analysis_only", False))   # 이슈 DB에 기록하지 않는 분석 전용(RF-7)
         self.run = Runner(args.plugin_root)
         self.state = State(None)
         self.job: Path | None = None
@@ -320,6 +325,9 @@ class Driver:
             if self.clock_offset is None:
                 raise Fail(USAGE, f"--clock-offset 형식이 맞지 않는다: {a.clock_offset!s:.40} "
                                   "(예: +3m, -90s, +1h2m3s, +00:03:00, 180 — 하루(86400초) 이내)")
+        if self.analysis_only and (a.dry_run or self.offline):
+            raise Fail(USAGE, "--analysis-only는 " + ("--dry-run" if a.dry_run else "--offline-db")
+                       + "과 함께 쓰지 않는다(분석 전용은 이슈 DB에 기록하지 않는 실행이다).")
         if self.offline:
             if not a.out:
                 raise Fail(USAGE, "--offline-db에는 --out <dir>이 필요하다.")
@@ -328,8 +336,8 @@ class Driver:
             return
         if a.jira_meta:
             raise Fail(USAGE, "--jira-meta는 --offline-db(오프라인 평가)에서만 쓴다.")
-        if a.jira_file and not a.dry_run:
-            raise Fail(USAGE, "--jira-file은 --dry-run과 함께만 받는다(실제 PR은 Jira MCP 값으로만 만든다).")
+        if a.jira_file and not (a.dry_run or self.analysis_only):
+            raise Fail(USAGE, "--jira-file은 --dry-run 또는 --analysis-only와 함께만 받는다(실제 PR은 Jira MCP 값으로만 만든다).")
         if userconfig.load_user() is None:
             raise Fail(USAGE, "사용자 config가 없다. /telephony-triage:setup을 먼저 실행한다.")
         if not (a.jira_raw or a.jira_file) and not self.jira_tool("get_issue"):
@@ -455,6 +463,18 @@ class Driver:
             self.notes.append(f"다른 Jira의 pending 피드백 {len(others)}건이 이번 PR에 함께 올라간다")
         self.out["plan"] = info
 
+    def plan_info(self) -> None:
+        """분석 전용: 기존 계획이 있는지만 알린다. 묻지 않고, 계획·pending 피드백은 건드리지 않는다."""
+        plan_path = self.job / "plan.json"
+        info = {"exists": plan_path.is_file()}
+        if info["exists"]:
+            try:
+                plan = json.loads(plan_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                plan = {}
+            info.update(source=plan.get("source"), pr_number=(plan.get("pr") or {}).get("number"))
+        self.out["plan"] = info
+
     # Step 1 ---------------------------------------------------------------------------------------
 
     def snapshot(self) -> None:
@@ -473,14 +493,14 @@ class Driver:
         self.out["snapshot"] = snap
 
     def compat(self) -> None:
-        for_ = "dry-run" if self.args.dry_run else "write"
+        for_ = "dry-run" if self.args.dry_run or self.analysis_only else "write"
         code, data, err = self.run.call("1-check", "config.py", ["check", "--db", self.snap, "--for", for_],
                                         expect=(0, 2))
         if code == 2 and not isinstance(data, dict):
             raise Fail(USAGE, err.strip())
         ok = data["push_allowed"] if for_ == "write" else data["writable"]
-        self.out["mode"] = "write" if ok else "read-only"
-        if not ok:
+        self.out["mode"] = "analysis-only" if self.analysis_only else "write" if ok else "read-only"
+        if not ok and not self.analysis_only:
             self.out["read_only_reasons"] = [r.get("code") for r in data.get("reasons") or []]
         backend = [r for r in data.get("reasons") or [] if r.get("code") == "parser-backend-mismatch"]
         if backend:
@@ -604,6 +624,8 @@ class Driver:
         record = next((r for r in (data or {}).get("results") or [] if r.get("kind") == "jira"), None)
         if record:
             self.out["existing"] = {"cause": record.get("cause"), "type": record.get("type"), "date": record.get("date")}
+            if self.analysis_only:
+                return      # 기록하지 않는 실행: 기존 분류만 알리고 재분석 여부는 묻지 않는다
             choice = self.answer("reanalyze")
             if choice is None:
                 raise NeedsInput("reanalyze", f"이 Jira는 이미 {record.get('cause')}(으)로 분류돼 있다. 재분석할까?",
@@ -1062,14 +1084,18 @@ class Driver:
         self.open_job()
         if not self.offline:
             self.lock()
-            self.cleanup()
-            self.existing_plan()
+            if self.analysis_only:
+                self.plan_info()
+            else:
+                self.cleanup()
+                self.existing_plan()
             self.snapshot()
             self.compat()
         info = self.jira()
         if not self.offline:
             self.existing_record()
-            self.open_prs()
+            if not self.analysis_only:
+                self.open_prs()
         logs = self.logs()
         version = info.get("android_version") or None
         code = self.code(version)
@@ -1254,6 +1280,7 @@ class Driver:
         info, logs = ctx["info"], ctx["logs"]
         candidates, anchor = core["candidates"], core["anchor"]
         run_no = reuse = None
+        released = self.release() if self.analysis_only else False   # 분석 전용은 ok로 끝나면 lock을 푼다(stage 불가)
         if parts is not None:
             runs = self.state.job.get("runs") or []
             seq = (runs[-1]["n"] if runs else 0) + 1
@@ -1278,7 +1305,8 @@ class Driver:
             "explore": core["explore"],
             "warnings": self.warnings + core["extra_warnings"],
             "notes": self.notes,
-            "lock_owner": self.run.env.get("TT_LOCK_OWNER"),
+            "lock_owner": None if released else self.run.env.get("TT_LOCK_OWNER"),
+            "lock_released": True if released else None,
             "files": {"report": str(self.job / "report.md"), "events": str(self.job / "events.json"),
                       "match": str(self.job / "match.json"), "jira": str(self.job / "jira.json")},
         }
@@ -1377,6 +1405,8 @@ class Driver:
 
     def write_report(self, r: dict, anchor: dict | None = None) -> None:
         lines = [f"## {self.key} 분석", ""]
+        if self.analysis_only:
+            lines.append("- 분석 전용: 이슈 DB에 기록하지 않는다(계획·PR 없음). 기록하려면 --analysis-only 없이 다시 실행")
         if self.failed_step:
             lines.append(f"- 실패 스텝 (보조 정보, Jira {self.failed_step['source']}; 점수·S/C에 쓰지 않음; 분석 범위·순위 참고): "
                          f"{self.failed_step['text']}")
@@ -1474,20 +1504,27 @@ class Driver:
             lines.append(f"- 탐색 분석 (추정, {TIMELINE_FILE} {explore['lines']}/{explore['total']}줄): TODO(LLM) 가설 1~3개"
                          " — 로그로 확인 / 코드로 추정 / 반대 근거 / 다음에 받을 로그. 실행하지 않으면 \"탐색 분석 생략: <사유>\"."
                          " 점수·분류·검증에 쓰지 않는다")
-        prs = r.get("open_prs") or []
-        lines.append(f"- 열린 PR: {', '.join(str(p.get('url') or p.get('number')) for p in prs) or '없음'}")
+        if self.analysis_only:
+            lines.append("- 열린 PR: 확인 안 함(분석 전용)")
+            if (r.get("plan") or {}).get("exists"):
+                lines.append("- 기존 작업 계획: 있음(분석 전용이라 건드리지 않음)")
+        else:
+            prs = r.get("open_prs") or []
+            lines.append(f"- 열린 PR: {', '.join(str(p.get('url') or p.get('number')) for p in prs) or '없음'}")
         if r["warnings"]:
             lines.append("- 경고: " + "; ".join(r["warnings"]))
         (self.job / "report.md").write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
 
-    def release(self) -> None:
+    def release(self) -> bool:
         if self.locked and self.run.env.get("TT_LOCK_OWNER"):
             try:
                 self.run.call("end", "db_pr.py", ["lock", "release", self.key])
                 self.state.data["owner"] = None
                 self.state.save()
+                return True
             except Fail:
                 pass
+        return False
 
 
 def _parse_ts(text: str | None) -> datetime | None:
@@ -1644,6 +1681,7 @@ def build_parser() -> argparse.ArgumentParser:
     src.add_argument("--jira-meta")
     p.add_argument("--code")
     p.add_argument("--dry-run", action="store_true")
+    p.add_argument("--analysis-only", action="store_true", help="이슈 DB에 기록하지 않는 분석 전용(cleanup·기존 계획·열린 PR 건너뜀, ok면 lock 해제). --dry-run과 함께 못 쓴다")
     p.add_argument("--answer", action="append")
     p.add_argument("--tz")
     p.add_argument("--year", type=int)
