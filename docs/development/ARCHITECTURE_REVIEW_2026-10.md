@@ -496,7 +496,7 @@ JiraWriter.post_comment  (guard 규칙 2는 Claude 세션 전용이므로, 자�
 | 재시도·멱등 | `db_pr` lease push·승인 해시로 멱등. git fetch 실패는 보고만 | 자동화에서는 재시도 정책 필요 | §N state.json + 입력 해시 |
 | 커넥터 장애 격리 | 외부 파서 실패는 warning(R5), MCP 부재는 중단 | 자동화에서 한 이슈 실패가 배치를 멈추면 안 됨 | 이슈 단위 `status: error` 기록 후 계속 |
 | 의존성 | `pyyaml`, `jsonschema`, `pytest`만 | 좋음 | 유지. `regex` 모듈 도입은 사내 승인 뒤(가정 18) |
-| 자격증명 | 레포에 없음. `work_dir` 700 | 좋음 | `check_boundary.py`에 secret 패턴 추가 |
+| 자격증명 | 레포에 없음. `work_dir` 700 | 좋음 | `check_boundary.py`에 secret 패턴 추가 — **완료 (2026-10-05, S5)** |
 
 ---
 

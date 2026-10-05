@@ -6,8 +6,12 @@
 (git 레포면 `git ls-files -co --exclude-standard`, 아니면 디렉토리 전체).
 
 규칙
-    pattern:<id>   사내 표식 패턴 — 비밀 키, 토큰, 공인 IP, 15자리 숫자(IMEI·IMSI),
-                   허용 목록 밖 이메일·URL 호스트. 사내는 `docs/site/boundary-patterns.txt`
+    pattern:<id>   사내 표식 패턴 — 비밀 키(PEM·OPENSSH·PGP), 비밀값(GitHub·AWS·Slack·Google·
+                   Atlassian·npm/PyPI·LLM API 토큰, JWT, `Authorization` 헤더 값, URL·netrc
+                   자격증명, `*token*`·`*secret*`·`*password*`·`*api_key*` 대입 — 자리표시 값
+                   `<…>`·`${…}`·`xxxx`·`REDACTED`·`EXAMPLE`은 제외, 대입 값은 숫자 포함 20자
+                   이상), 공인 IP, 15자리 숫자(IMEI·IMSI), 허용 목록 밖 이메일·URL 호스트.
+                   비밀값은 출력에서 앞부분만 보인다. 사내는 `docs/site/boundary-patterns.txt`
                    (SITE_PATHS)에 실제 회사·서버·팀 이름 패턴을 더한다.
     site-import    `plugin/scripts/**`가 SITE_PATHS 모듈(`parser_backends.site`,
                    `adapters.site_*`)을 정적으로 import함. 사내 모듈은 동적 로드만 쓴다.
@@ -92,12 +96,48 @@ def _ip_ok(ip: str) -> bool:
     return ip in SAFE_IPS or ip.startswith(DOC_NETS)
 
 
+# 문서·테스트의 자리표시 값: <token>, ${GH_TOKEN}, $TOKEN, {{ secrets.X }}, ***, xxxx, REDACTED, …EXAMPLE
+_PLACEHOLDER = re.compile(r"(?i)example|sample|dummy|placeholder|redacted|changeme|your|xxxx|fake|[<>${}*]")
+
+
+def _placeholder(value: str) -> bool:
+    """자리표시 값인가 (위 단어·기호, 또는 서로 다른 문자 6개 미만 — `aaaa…`, `0000…`)."""
+    return bool(_PLACEHOLDER.search(value)) or len(set(value)) < 6
+
+
+def _not_secret(value: str) -> bool:
+    """`키=값` 문맥의 값이 비밀값이 아닌가. masking.py `_secretish`처럼 숫자가 있어야 비밀값으로 본다."""
+    return _placeholder(value) or not (any(c.isdigit() for c in value) and any(c.isalpha() for c in value))
+
+
 # (id, 정규식, 맞은 문자열이 괜찮은지 판정 — None이면 언제나 위반)
 DEFAULT_PATTERNS: list[tuple[str, re.Pattern, object]] = [
-    ("private-key", re.compile(r"-----BEGIN (?:[A-Z]+ )?PRIVATE KEY-----"), None),
-    ("github-token", re.compile(r"\bgh[pousr]_[A-Za-z0-9]{30,}\b"), None),
+    ("private-key", re.compile(r"-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY(?: BLOCK)?-----"), None),
+    ("github-token", re.compile(r"\b(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{40,})\b"),
+     lambda m: _placeholder(m.group(0))),
+    ("aws-access-key", re.compile(r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b"), lambda m: _placeholder(m.group(0))),
+    ("slack-token", re.compile(r"\bxox[abposr]-[A-Za-z0-9-]{10,}"), lambda m: _placeholder(m.group(0))),
+    ("google-api-key", re.compile(r"\bAIza[0-9A-Za-z_-]{35}(?![\w-])"), lambda m: _placeholder(m.group(0))),
+    ("atlassian-token", re.compile(r"\bATATT[A-Za-z0-9_=-]{40,}"), lambda m: _placeholder(m.group(0))),
+    ("package-token", re.compile(r"\b(?:npm_[A-Za-z0-9]{36}|pypi-AgE[A-Za-z0-9_-]{50,})"),
+     lambda m: _placeholder(m.group(0))),
+    ("llm-api-key", re.compile(
+        r"\bsk-ant-[A-Za-z0-9_-]{20,}|\bsk-(?:proj-|svcacct-|admin-)?[A-Za-z0-9_-]*T3BlbkFJ[A-Za-z0-9_-]+"),
+     lambda m: _placeholder(m.group(0))),
+    ("jwt", re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}"),
+     lambda m: _placeholder(m.group(0))),
+    ("auth-header", re.compile(
+        r"(?:(?i:\bauthorization)\s*[:=]\s*['\"]?(?:Bearer|Basic|token)\s+|\bBearer\s+)([A-Za-z0-9._~+/-]{16,}=*)"),
+     lambda m: _not_secret(m.group(1))),
+    ("url-credential", re.compile(r"\b[A-Za-z][A-Za-z0-9+.-]*://[^\s:/@<>'\"]+:([^\s/@<>'\"]+)@"),
+     lambda m: _placeholder(m.group(1))),
+    ("netrc", re.compile(r"(?i)\blogin\s+\S+\s+password\s+(\S+)"), lambda m: _placeholder(m.group(1))),
+    # 키 이름 앞뒤를 {0,30}으로 묶어 긴 줄에서 제곱 시간이 되지 않게 한다.
     ("secret-assign", re.compile(
-        r"(?i)\b(?:token|secret|passwd|password|api[_-]?key)\s*[:=]\s*['\"]?([A-Za-z0-9_\-+/]{20,})"), None),
+        r"(?i)(?<![A-Za-z0-9])[\w.-]{0,30}?"
+        r"(?:token|secret|passw(?:or)?d|pwd|api[_-]?key|access[_-]?key|private[_-]?key|credentials?)"
+        r"[\w.-]{0,30}?['\"]?\s*[:=]\s*['\"]?([A-Za-z0-9_\-+/=]{20,})"),
+     lambda m: _not_secret(m.group(1))),
     ("ip-address", re.compile(r"(?<![\w.])(\d{1,3}(?:\.\d{1,3}){3})(?![\w.])"),
      lambda m: _ip_ok(m.group(1))),
     ("long-number", re.compile(r"(?<![\w.])\d{15}(?![\w.])"), None),
@@ -291,6 +331,17 @@ def check_site_paths_absent(root: Path, site_patterns: list[str]) -> list[Findin
     return findings
 
 
+SECRET_RULES = {"github-token", "aws-access-key", "slack-token", "google-api-key", "atlassian-token",
+                "package-token", "llm-api-key", "jwt", "auth-header", "url-credential", "netrc", "secret-assign"}
+
+
+def _redact(f: Finding) -> Finding:
+    """비밀값은 출력(stderr·--json·CI 로그)에 앞부분과 길이만 남긴다. 예외 대조는 원문으로 끝난 뒤다."""
+    if f.rule.removeprefix("pattern:") in SECRET_RULES:
+        f.text = f.text[: min(12, len(f.text) // 3)] + f"…({len(f.text)}자)"
+    return f
+
+
 def scan(root: Path, mode: str, files: dict[str, Path] | None = None) -> list[Finding]:
     """`files`를 주면 그 목록(반입 staging 미리보기 등)만 본다. 규칙 파일은 `root`에서 읽는다."""
     site_patterns = load_site_paths(root)
@@ -305,7 +356,7 @@ def scan(root: Path, mode: str, files: dict[str, Path] | None = None) -> list[Fi
     )
     if mode == "external":
         findings += check_site_paths_absent(root, site_patterns)
-    return [f for f in findings if not _allowed(f, allow)]
+    return [_redact(f) for f in findings if not _allowed(f, allow)]
 
 
 def format_findings(findings: list[Finding]) -> str:

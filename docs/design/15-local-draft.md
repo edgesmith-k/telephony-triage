@@ -113,7 +113,7 @@ tests/site/
      - 적용은 staging → 검증 → 활성 전환 순서다: 새 파일을 대상 옆 임시 디렉토리에 복사해 해시를 대조하고, `--check-boundary`면 반입 뒤 모습에 `check_boundary.py --mode site`(사내 패턴 `docs/site/boundary-patterns.txt` 포함)를 돌린다. 위반이면 종료 코드 1이고 대상은 그대로다. 활성 전환 중 실패하면 파일·새 디렉토리·기준선을 되돌린다.
   3. `pytest`(골든 포함), `db_regress --all` 통과 확인 → main에 병합.
   4. 사외에서 설계가 바뀐 부분은 `14-site.md §14.5`대로 영향을 확인한다.
-- **경계 검사** `tools/check_boundary.py` (RF-2): 1차 장치는 `SITE_PATHS` 허용 목록이고 패턴은 보조다. 규칙: 사내 표식 패턴(비밀 키·토큰·공인 IP·15자리 숫자·허용 목록 밖 이메일/URL 호스트 + 사내 `docs/site/boundary-patterns.txt`), `plugin/scripts/**`의 SITE_PATHS 모듈 정적 import, 합성 표시 없는 로그 fixture, (`--mode external`) SITE_PATHS 경로 존재. 예외는 `tools/boundary-allow.txt`(사외)·`docs/site/boundary-allow.txt`(사내)에 값까지 좁게 적는다. 사외 CI와 반입 `--check-boundary`에서 돈다.
+- **경계 검사** `tools/check_boundary.py` (RF-2): 1차 장치는 `SITE_PATHS` 허용 목록이고 패턴은 보조다. 비밀값은 출력에서 앞부분만 보인다. 규칙: 사내 표식 패턴(비밀 키·비밀값(서비스 토큰·JWT·`Authorization` 헤더·URL/netrc 자격증명·`*token*`/`*secret*` 대입, 자리표시 값 제외)·공인 IP·15자리 숫자·허용 목록 밖 이메일/URL 호스트 + 사내 `docs/site/boundary-patterns.txt`), `plugin/scripts/**`의 SITE_PATHS 모듈 정적 import, 합성 표시 없는 로그 fixture, (`--mode external`) SITE_PATHS 경로 존재. 예외는 `tools/boundary-allow.txt`(사외)·`docs/site/boundary-allow.txt`(사내)에 값까지 좁게 적는다. 사외 CI와 반입 `--check-boundary`에서 돈다.
 - 이슈 DB 스키마 사본 `plugin/schemas/`: 단일 원본은 이슈 DB `schema/`. `tools/sync_schemas.py --check [--db <이슈 DB>]`로 대조하고, 다르면 사용자에게 보고한 뒤 `--write`로 갱신한다.
 - `tools/import_draft.py`와 `SITE_PATHS`는 사외 초안(Phase D0)에서 만든다. `.gitignore`가 아니라 **목록 파일**로 관리한다(사내에서는 이 경로들을 커밋해야 하므로). `.draft-manifest.json`은 사내에서 `import_draft.py`가 쓰고 커밋한다.
 - 사내에서 발견한 설계 문제는 사내 정보를 뺀 문장으로 요약해서 사외 문서(이 문서 세트)에 반영한다.

@@ -52,7 +52,7 @@
 | ✅ S2b | `stepanchor.step_number`가 줄 앞 날짜를 스텝 번호로 읽음 | 10/05, 날짜 칸은 이름에서도 뺌, `CHANGES.md` |
 | ✅ S3 | R12 문서 중복(record·verify·sync-pr) 정리 | 10/05, lock 처리 단일 원본은 write-flow 1번, `CHANGES.md` |
 | ✅ S4 | R13 eval 실행기를 `--plugin-dir` 실제 플러그인으로 | 10/05, 기본 `--mode plugin`, eval 7개 실행·결함 2건 수정, `CHANGES.md` |
-| ☐ S5 | `check_boundary`에 비밀값 패턴 | 리뷰 §Q |
+| ✅ S5 | `check_boundary`에 비밀값 패턴 | 10/05, `CHANGES.md` |
 | ☐ I1 | `common/events.py`(`line_ref` 포함) | RF-3 전제 |
 | ☐ I2 | RF-3 `platforms/android/` 이동(출력 동일, shim) | 리뷰 RF-3 |
 | ☐ I3 | RF-4 일부: 경로·태그 상수 → 설정 | 리뷰 RF-4 |

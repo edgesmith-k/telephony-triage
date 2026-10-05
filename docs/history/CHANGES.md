@@ -580,3 +580,11 @@
 - eval이 찾은 결함과 수정:
   - `db_verify.make_draft`: 실행자가 `WD/<KEY>/draft`를 미리 만들면 "등록된 도구 worktree가 아닙니다"로 종료 코드 2. 빈 디렉토리는 치우고 다시 만들고, 도구가 만들지 않은 파일이 있으면 지우지 않고 원인을 말하며 멈춘다. `record.md` 7번에 "draft는 도구가 만든다 — 미리 만들지 않는다".
   - SKILL.md Step 5-1: "(후보 없음·원인 미확인)"이 analyzer에도 걸리는 것처럼 읽혀 C=1이면 분석 스킬 질문을 건너뜀(eval 41). 07 §Step 5-1대로 "analyzer 값이 있으면 C 무관, explore만 후보 없음·원인 미확인"으로. 8KB 유지(8186).
+
+## S5 경계 검사 비밀값 패턴 (리뷰 §Q, 2026-10-05)
+
+- 새 기본 패턴: `aws-access-key`, `slack-token`, `google-api-key`, `atlassian-token`, `package-token`(npm·PyPI), `llm-api-key`, `jwt`(세 조각), `auth-header`(`Bearer`·`Authorization: Basic|token`; Digest는 마스킹 `CRED` 몫이라 제외), `url-credential`(`scheme://user:pass@`), `netrc`(`login … password …`).
+- 넓힘: `private-key`는 PGP `BLOCK`·두 단어 종류까지. `github-token`은 fine-grained `github_pat_`까지(GHE도 같은 접두사. 접두사 없는 옛 GHE 40자 hex는 `secret-assign`만 잡음). `secret-assign`은 키 이름 `*token*`·`*secret*`·`pwd`·`access_key`·`private_key`·`credential(s)`와 JSON 따옴표 키까지.
+- 오탐 방지: 자리표시 값(`<…>`·`${…}`·`xxxx`·`REDACTED`·`EXAMPLE`·서로 다른 문자 6개 미만)은 제외. 대입·헤더 값은 숫자와 글자가 다 있어야 비밀값으로 본다(순수 영문 식별자는 이제 안 걸림). 키 이름 앞뒤는 30자 상한(긴 줄 제곱 시간 방지).
+- 출력 가림: stderr·`--json`·반입 `--check-boundary`는 비밀값의 앞부분과 길이만 보인다. 예외(`boundary-allow.txt`) 대조는 원문으로 끝난 뒤 가린다.
+- 현재 트리 추가 위반 0건, `boundary-allow.txt` 변경 없음. 테스트: `test_secret_patterns_catch_values`(19줄), `test_secret_placeholders_and_code_pass`, `test_secret_assign_long_line_is_fast`.
