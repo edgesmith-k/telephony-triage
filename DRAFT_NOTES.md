@@ -48,7 +48,7 @@
 | ☐ 7 | **트리거 개선** — 자연어 호출 recall 26~33% | SKILL.md 8,191/8,192바이트: description을 늘리면 본문을 줄여야 함. 지금은 슬래시 커맨드로 쓰면 문제없음 |
 | ✅ 8 | **R7 근거 출처**, **R15 대용량** | 10/05 완료(확인 대기). `line_ref`·`event_index`·cut 줄 앵커, 측정(`tools/bench_scale.py`)·O1 bisect·O4. `CHANGES.md` |
 | ✅ 9 | **`CLAUDE.md` 축소(≤4KB)** | 10/05 완료(확인 대기). §12 → `12-principles.md`. `CHANGES.md` |
-| ☐ 10 | **반입** — `15 §15.4` 체크리스트 재실행: `check_boundary --mode external`, `sync_schemas --check`, `make_db_skeleton.py`(새 키 `step_focus`·`step_events` 확인), `list_site_todos`, `git archive` 묶음 | `GUIDE.md` §3 "반입 전". 1~2는 반입 전에 필수, 3~9는 반입을 막지 않는다 |
+| ◐ 10 | **반입** — `15 §15.4` 체크리스트 | 10/05 자동 항목 통과(테스트 489·회귀 20/20·eval 45 준비·offline_eval·경계·스키마·뼈대·TODO 73). 남은 것: 사내 문자열 사람 검색, 태그 push·`git archive`(사용자 승인) |
 
 반입 뒤(사외 트랙): RF-3 전에 **`common/events.py`**(RF-1에서 빠짐, `line_ref` 포함) → RF-3 → RF-4 → RF-5(oFono), RF-6 → RF-7 → RF-8(품질 게이트), RF-9. 웹 UI는 사용자 결정으로 보류(RF-6·7 뒤 후보).
 
