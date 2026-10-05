@@ -444,6 +444,7 @@ def test_record_new_cause_resolution_draft_then_verified_stage(loaded_condition)
     assert r1["status"] == "pass" and not out.get("withheld")
     assert not draft.exists()
 
+    draft.mkdir()       # 실행자가 draft 경로를 미리 만들어도(빈 디렉토리) 도구가 다시 만든다 (S4 plugin eval 18)
     proc = ws.run("db_verify.py", ["rules", "--plan", plan_path, "--draft", draft, "--extra", SIM_LOG,
                                    "--extra-normal", NORMAL_LOG, SIM_LOG])
     assert proc.returncode == 0, proc.stderr
@@ -451,6 +452,12 @@ def test_record_new_cause_resolution_draft_then_verified_stage(loaded_condition)
     assert [rows[k]["status"] for k in ("R1", "R2", "R3", "R4")] == ["pass"] * 4
     assert rows["R6"]["status"] == "fail" and rows["R6"]["blocking"] is False
     assert rows["R6"]["targets"] == [str(SIM_LOG)]       # 정상 표본으로 준 SIM 로그만 기대와 다름
+
+    draft.mkdir()
+    (draft / "note.txt").write_text("x", encoding="utf-8")   # 도구가 만들지 않은 파일은 지우지 않고 멈춘다
+    proc = ws.run("db_verify.py", ["rules", "--plan", plan_path, "--draft", draft])
+    assert proc.returncode == 2 and "도구가 만들지 않은 파일" in proc.stderr and (draft / "note.txt").is_file()
+    shutil.rmtree(draft)
 
     ws.plan(job, full)
     stage = ws.stage(job, "issue/MOCK-7006")

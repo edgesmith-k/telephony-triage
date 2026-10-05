@@ -341,3 +341,11 @@ def test_raw_cli_text_never_reaches_any_job_file():
 if __name__ == "__main__":
     import pytest
     raise SystemExit(pytest.main([__file__, "-q"]))
+
+
+def test_parse_steps_date_cell_is_not_step_number():
+    """표 행 앞 날짜 칸은 스텝 번호도 이름도 아니다(S2b)."""
+    rows = failedstep.parse_steps("2026.09.21 10:00:01 | Attach PDN | PASS\n2026-09-21 10:00:09 | Data call | FAIL\n")
+    assert [(r["number"], r["name_raw"], r["time_raw"]) for r in rows] == \
+        [(None, "Attach PDN", "10:00:01"), (None, "Data call", "2026-09-21 10:00:09")]
+    assert [(r["number"], r["name_raw"]) for r in failedstep.parse_steps("2026-09-21 | 3 | Attach | FAIL\n")] == [(3, "Attach")]

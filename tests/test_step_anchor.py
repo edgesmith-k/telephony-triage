@@ -58,6 +58,11 @@ def test_step_number_and_same_step():
     assert [stepanchor.step_number(t) for t in ("Step 5 x", "스텝 12", "단계3", "#7 a", "5 | 켜기", "  05", "켜기")] \
         == [5, 12, 3, 7, 5, 5, None]
     assert stepanchor.step_number("12345") is None            # 5자리는 번호가 아니다
+    # 줄 앞 날짜·시각·소수는 번호가 아니다(S2b)
+    assert [stepanchor.step_number(t) for t in ("2026-10-05 Attach", "2026.09.21 Attach", "2026/10/05 x",
+                                                "12:03:44 Attach", "10.5 x", "3G attach", "7. Attach")] \
+        == [None, None, None, None, None, None, 7]
+    assert stepanchor._LEAD_RE.sub("", "2026-10-05 Attach", count=1) == "2026-10-05 Attach"
     assert stepanchor.same_step("5", "Step 5 데이터 켜기")          # 번호가 같다
     assert not stepanchor.same_step("5", "Step 3 데이터 켜기")      # 번호가 다르면 이름이 같아도 다르다
     assert stepanchor.same_step("데이터 켜기", "Step 5 데이터 켜기")  # 한쪽에 번호가 없으면 이름

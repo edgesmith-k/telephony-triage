@@ -1,6 +1,6 @@
 # 검증·수정 상태 흐름: validate --cause, fix-submitted, verify-fix
 
-세 흐름 모두 **판정·입력 확인 → 사용자 확인 → `write-flow.md`의 공통 쓰기 절차 PR**이다. SKILL.md의 "실행 규칙"을 따른다.
+세 흐름 모두 **판정·입력 확인 → 사용자 확인 → `write-flow.md`의 공통 쓰기 절차 PR**이다. SKILL.md의 "실행 규칙"을 따른다. 아래 "lock"은 `db_pr lock acquire <작업 키> --command <흐름>`이고 보유 중이면 `write-flow.md` 1번.
 판정은 `db_verify.py`의 출력으로만 한다(항상 회귀·검증 모드: 파일 전체, 모든 active 원인 독립 평가, bonus 0).
 **시각 기준**: 회귀·검증 모드는 로그 시각을 연도 없이 UTC로 읽는다. 그래서 `satisfied_traces`·`trace`의 `ts`는 "파일 시계 그대로(연도 2000)"다.
 이 시각으로 fixture를 자를 때는 `parse_logcat.py cut <log> --around <ts> --tz UTC`(**`--year` 없이**)로 같은 기준을 쓴다. 리포트에는 파일 시계 시각(월-일 시:분:초)으로 보여준다.
