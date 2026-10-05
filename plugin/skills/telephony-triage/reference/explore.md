@@ -9,7 +9,7 @@
 - `analysis.json`에 `explore`가 있을 때만: `reason: no_candidate`(후보 없음) 또는 `cause_unconfirmed`(1위 C=0).
 - `--no-explore` 또는 `explore.when: never` → 하지 않는다. 리포트에 "탐색 분석 생략: <사유>".
 - `--explore` 또는 `explore.when: always` → 묻지 않고 한다.
-- 그 밖(`ask`, 기본) → "탐색 분석을 실행할까요? (토큰 추가 사용)"을 묻고, 답을 받기 전에는 시작하지 않는다.
+- 그 밖(`ask`, 기본) → "탐색 분석을 실행할까요? (토큰 추가 사용)"을 묻고, 답을 받기 전에는 시작하지 않는다(`timeline.md`도 읽지 않는다).
 - `logs.in_range`가 `false`면 먼저 "로그 범위 밖"을 알리고, 사용자가 원할 때만 한다(가설 근거가 약하다).
 
 ## 읽는 것 (이것만)

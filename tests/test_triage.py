@@ -283,8 +283,12 @@ def test_skill_md_is_within_8kb_and_drives_triage():
     skill = REPO / "plugin" / "skills" / "telephony-triage" / "SKILL.md"
     text = skill.read_text(encoding="utf-8")
     assert len(text.encode("utf-8")) <= 8192
-    for needle in ("triage.py run", "needs_input", "--answer", "S-3", "write-flow.md", "commit -F"):
+    for needle in ("triage.py run", "needs_input", "--answer", "S-3", "write-flow.md", "commit -F",
+                   "steps-pasted.txt", "--dry-run --jira-file", "analyzer.skill", "계획 형식 오류"):
         assert needle in text, needle
+    verify = (REPO / "plugin" / "skills" / "telephony-triage" / "reference" / "verify.md").read_text(encoding="utf-8")
+    for needle in ("operations", "snapshot_sha"):
+        assert needle in verify, needle
     for name in ("analyze", "record", "verify-fix", "fix-submitted"):   # 보일러플레이트 없이 한 줄로 가리킨다
         assert len((REPO / "plugin" / "commands" / f"{name}.md").read_bytes()) < 1024, name
 
