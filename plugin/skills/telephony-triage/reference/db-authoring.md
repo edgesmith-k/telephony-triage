@@ -135,7 +135,7 @@ schema 오류 메시지가 잘려 원인이 안 보이면 `python3 -c` 로 `json
 | `update-parser-rule` | `file`, `key`, `rule` | 키가 있어야 함. 기능 필드 변경 + `reason`·`added_on` 갱신 |
 | `update-signature` | `owner`, `kind`(symptom\|cause\|recovery\|scenario), `sig_id`, `signature` | 같은 sig_id면 교체, 없으면 추가. pending 원인에 cause 시그니처가 생기면 pending 해제 |
 | `set-resolution` | `cause`, `resolution` | 검증 상태 unverified로 초기화 |
-| `verify-resolution` | `cause`, `verification {status: verified, method, evidence[]}` | evidence: 그 원인의 Jira 기록으로 존재하는 키 또는 존재하는 `resolved` fixture. `new-cause`/`set-resolution` **뒤에**. pending 원인 거부. record는 `jira.key` 자신을 evidence로 못 씀 |
+| `verify-resolution` | `cause`, `verification {method, evidence[], by, date}` | `status`는 넣지 않는다(적용 결과가 verified; 스키마가 거부). `db_verify`의 `suggested_ops`를 복사해 placeholder만 채운다. evidence: 그 원인의 Jira 기록으로 존재하는 키 또는 존재하는 `resolved` fixture. `new-cause`/`set-resolution` **뒤에**. pending 원인 거부. record는 `jira.key` 자신을 evidence로 못 씀 |
 | `verify-fix` | `cause`, `result`, `verification {build, date, by, fixture(passed만)}` | passed: `fixed_in`에 그 빌드 필요 → fixed. failed: open + 이력. partial: 상태 유지 + 이력 |
 | `set-status` | `id`, `status`(active\|deprecated\|merged-into:<ID>) | 같은 종류끼리. temp_id 대상 가능 |
 | `add-fixture` | `for`, `kind`, `path` (+`build`: fixed·recurrence) | `path`는 WD의 마스킹된 파일(`parse_logcat cut` 결과). 이름·번호는 적용 때 정해진다. `negative`의 `for`는 유형 ID |
@@ -243,7 +243,7 @@ update-signature는 같은 sig_id 변경, 파서 규칙은 키 추가/기능 필
 - 상태: `pass | fail | needs-approval | skipped`. `skipped`는 사유 필수(`해당 없음`, `fixture 없음`, `음성 fixture 없음`,
   `시그니처 없음(pending)`). **`fixture 없음`·`음성 fixture 없음`은 통과가 아니다** — "검증 못 함 — 리뷰 대상"으로 표시한다.
 - 해결책만 바뀌면 R1~R5는 `skipped: 해당 없음`, 검증 상태만 unverified로.
-- **R3·R4가 다른 유형의 양성 fixture에서 새 시그니처가 C=1이 됐다고 할 때**(결과에 `allow-cause` 초안이 딸려 온다):
+- **R3·R4가 다른 유형의 양성 fixture에서 새 시그니처가 C=1이 됐다고 할 때**(결과에 `allow-cause` 초안이 딸려 온다 — 결과 `allow_cause_drafts` 항목을 그대로 복사):
   - (a) **시그니처 좁히기**: 그 fixture와 걸린 시그니처 전역 키를 보여주고, 대상 원인 fixture에만 있는 조건(`must_not_match`, 더 구체적인
     `fields`, `sequence`)을 더한 안을 제시한다. 다시 초안 검증.
   - (b) **허용**: 그 로그에 실제로 두 현상이 다 있으면 `allow-cause {fixture, cause}`를 계획에 넣는다. 그 fixture의 `.expect.yaml` 변경이

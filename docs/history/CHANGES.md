@@ -522,3 +522,14 @@
 - skill-creator `run_loop`(질문 24개, train 15·test 9, 3회, 5반복): 현재 description과 개선안 모두 recall 0~20%, precision 100%. 원인은 측정기다: `run_eval`은 스킬을 임시 커맨드로 넣고 **첫 도구 호출**만 세는데, 로그 분석 요청에서 Claude는 먼저 `ls`로 로그를 찾는다.
 - 실제 플러그인 측정 `tests/skill_evals/trigger_real.py`(`claude -p --plugin-dir plugin`, 처음 4번의 도구 호출 안에 `Skill`): 현재 description과 개선안 모두 recall 100%(14/14)·precision 100%(오트리거 0/10), 질문당 2회. **description은 바꾸지 않았다**(`SKILL.md` 8,191바이트 그대로). 이전 기록의 recall 26~33%는 같은 측정기 결과다.
 - `10-skill-eval.md` 트리거 절에 측정 방법을 적었다.
+
+## 스킬 eval 보강·마찰 수정 (2026-10-05)
+
+- eval 46~50 추가(batch E, 총 50개): 46 후보 없음 탐색 분석(`timeline.md`만 읽음), 47 `--explore` 원인 미확인 보류(슬롯 차이 반대 근거), 48 Jira 실패 스텝 필드 → `jira.failed_step`·README "자주 실패한 스텝 (3건)", 49 붙여넣은 스텝 목록 → `steps-pasted.txt` → `step_order`, 50 두 버퍼 로그 → 근거 줄 `(f<n>:L<m>)`·`cut --evidence` 같은 순서. 채점(`grade.py`)에 `tool_uses`·`opened`(Read·Bash 읽기로 연 파일) 추가. 환경 빌더에 `split_buffers: true`(`<as>.main.log`·`<as>.radio.log`).
+- eval 7: 근거 줄(DATA-001-02 거부 줄)에 IMSI·전화번호를 넣어 리포트 근거의 `<IMSI#n>`·`<MSISDN#n>` 토큰 표기를 확인한다. 탐색 분석 질문에 '아니오'로 답하는 규칙을 eval 2·3·4·44·45에 추가.
+- `allow_cause_drafts`: `type_dir` 제거(plan 스키마 `additionalProperties: false`), `--draft`/`judge --plan --draft`에서는 새 원인을 계획 `temp_id`로 낸다(`_retemp_drafts`) — 초안을 그대로 계획에 붙인다. `reasons`의 문자열 메시지는 실제 ID 그대로.
+- `verify-resolution`: op의 `verification`에는 `status`를 넣지 않는다(스키마가 거부, 적용 결과가 `verified`). `db-authoring.md`·`record.md`·`verify.md`·`contracts.md` 수정.
+- SKILL.md 붙여넣기 줄: `--steps-file <path|붙인 목록→JOB/steps-pasted.txt>`. 같은 크기를 맞추려 문구 두 곳을 줄였다(skill-creator 소유 파일, 최소 수정).
+- 시각 질문(`time`)에 시계 이상(역행·점프) 경고를 덧붙인다(Jira 발생 시각 없음 경로, `coverage.clock_anomalies`).
+- DRAFT_NOTES ✅1 상세(10/04 보안 검토): 10/04 완료. 고친 것: 붙여넣은 스텝 원문 `steps-pasted.txt`가 discard·release 뒤에도 남음 → `db_pr` discard·`lock release`(--force 아님)·cleanup이 지움. 문제없음: zip(메모리만, 선언·실제 크기 상한, 암호화·절대/`..` 거부, 멤버 하나), html 5 MiB, 정규식 타임아웃, 스텝 이름·zip 경로·마커 마스킹, 첨부 문장은 데이터(SKILL·explore)
+- B 실행 결과: (검토자가 채움)

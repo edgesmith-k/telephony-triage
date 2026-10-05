@@ -411,9 +411,19 @@ def _allow_draft(item: dict, cause_id: str) -> dict | None:
     fx = item["fx"]
     if fx.kind not in POSITIVE_KINDS or fx.type_id == cause_id.rsplit("-", 1)[0]:
         return None
-    tdir = item["type"].path
-    return {"op": "allow-cause", "fixture": f"fixtures/{fx.name}", "cause": cause_id,
-            "type_dir": tdir.relative_to(tdir.parents[1]).as_posix()}
+    return {"op": "allow-cause", "fixture": f"fixtures/{fx.name}", "cause": cause_id}
+
+
+def _retemp_drafts(obj, back: dict) -> None:
+    """draft 트리의 실제 ID → 계획 temp_id. allow-cause 초안을 계획에 그대로 붙일 수 있게 한다."""
+    if isinstance(obj, dict):
+        if obj.get("op") == "allow-cause" and obj.get("cause") in back:
+            obj["cause"] = back[obj["cause"]]
+        for v in obj.values():
+            _retemp_drafts(v, back)
+    elif isinstance(obj, list):
+        for v in obj:
+            _retemp_drafts(v, back)
 
 
 def r3(run: Run, t: Targets) -> dict:
@@ -609,11 +619,13 @@ def rules(args, defaults: dict, plugin_root: Path) -> tuple[dict, int]:
         if not plan_path:
             raise UsageError("--draft는 --plan과 함께 쓴다.")
         draft = Path(args.draft)
-        make_draft(plan_path, draft, defaults, args.plugin_root)
+        applied = make_draft(plan_path, draft, defaults, args.plugin_root)
         try:
             result, code = verify_rules(draft, draft, "HEAD", plugin_root, defaults, samples, regress)
         finally:
             remove_draft(draft, defaults)
+        back = {i["id"]: i["temp_id"] for i in applied.get("ids") or [] if i.get("temp_id")}
+        _retemp_drafts(result, back)
         return {"db": str(draft), "scope": "plan:draft", **result}, code
     try:
         db = dbpath.resolve(args.db)
@@ -828,6 +840,7 @@ def judge(args, defaults: dict, plugin_root: Path) -> tuple[dict, int]:
             root = draft
             rules_result, _ = verify_rules(draft, draft, "HEAD", plugin_root, defaults,
                                            _samples(_load_plan(args.plan), plan_path, [], []))
+            _retemp_drafts(rules_result, {v: k for k, v in mapping.items()})
         else:
             try:
                 root = dbpath.resolve(args.db)

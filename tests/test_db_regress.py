@@ -72,7 +72,7 @@ def test_cross_type_cause_gives_allow_cause_draft():
     assert [r["cause"] for r in row["reasons"]] == ["IMS-001-01"]
     assert row["reasons"][0]["signature"] == "IMS-001-01/registration-forbidden"
     assert row["allow_cause_drafts"] == [{"op": "allow-cause", "fixture": "fixtures/CALL-001-01.log",
-                                          "cause": "IMS-001-01", "type_dir": C}]
+                                          "cause": "IMS-001-01"}]
 
 
 def test_pending_cause_fixture_expects_unresolved():

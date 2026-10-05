@@ -197,6 +197,22 @@ def test_jira_without_time_offers_time_candidates_instead_of_asking_year():
     ws.json("triage.py", ["release", "MOCK-9005"])
 
 
+def test_time_question_warns_about_clock_anomalies():
+    """A3: Jira에 발생 시각이 없고 로그에 시계 이상이 있으면 시각 질문에 경고를 붙인다."""
+    ws = Workspace()
+    log = tmp("tt-triage-clock-") / "clock-anomaly.log"
+    log.write_bytes((REPO / "tests/fixtures/logs/clock-anomaly.log").read_bytes())
+    args = ["run", "MOCK-9005", "--dry-run", "--jira-file", REPO / "tests/skill_evals/jira/MOCK-9005.yaml",
+            "--logs", log, "--code", "skip"]
+    ask = ws.json("triage.py", args)
+    assert ask["status"] == "needs_input" and ask["needs_input"]["kind"] == "time", ask
+    question = ask["needs_input"]["question"]
+    assert "시계 이상" in question, question
+    if not ask["needs_input"]["options"]:
+        assert "후보가 없으니" in question, question
+    ws.json("triage.py", ["release", "MOCK-9005"])
+
+
 def test_full_run_asks_for_jira_and_reads_what_the_bridge_saved():
     ws = Workspace()
     args = ["run", "MOCK-1001", "--logs", DATA_LOG, "--code", "skip"]

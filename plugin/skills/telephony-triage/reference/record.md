@@ -74,7 +74,7 @@ MCP `jira.tools.get_issue`(매핑이 없으면 추측하지 말고 setup 안내)
      `db_verify.py resolution --db SNAP --cause <ID> <log>`, 새 원인은
      `db_verify.py resolution --plan WD/<KEY>/plan.json --draft WD/<KEY>/draft --cause NEW-CAUSE-1 <log>`
      (먼저 계획을 저장해야 한다). passed면 결과의 흔적 시각으로 `cut --around <ts> --tz UTC`(`--year` 없이, 판정과 같은 시각 기준 — `verify.md`)해 `add-fixture {kind: resolved}`와
-     `verify-resolution {cause, verification: {status: verified, method, evidence: [<fixture 경로 또는 Jira 키>]}}`를 넣는다.
+     `verify-resolution {cause, verification: {method, evidence: [<fixture 경로 또는 Jira 키>], by, date}}`를 넣는다(`status` 없음 — `db_verify` `suggested_ops` 그대로).
      **순서: `new-cause`/`set-resolution` 뒤에.** `signatures_pending` 원인은 해결책을 검증할 수 없다.
   - 기록 대상 Jira 자신은 근거가 아니다(그 Jira의 해결 진술은 사용자 진술이다). 근거가 없으면 `unverified`로 둔다.
     사용자가 그래도 주장하면 `unverified`를 유지하고 "근거: 사용자 진술"을 남긴다 — 새 원인은

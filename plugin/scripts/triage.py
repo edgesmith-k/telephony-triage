@@ -901,9 +901,12 @@ class Driver:
         times.sort()
         options = [{"value": ts, "label": f"{ts} {tid}"} for ts, tid in times[:3]]
         cov = full.get("coverage") or {}
-        raise NeedsInput("time", "Jira에 발생 시각이 없다. 증상 시그니처가 충족된 시각 후보에서 고르게 한다"
-                                 + ("." if options else " — 후보가 없으니 시각을 묻는다."),
-                         options, log_range=[cov.get("first_ts"), cov.get("last_ts")])
+        jumps = len(cov.get("clock_anomalies") or [])
+        question = ("Jira에 발생 시각이 없다. 증상 시그니처가 충족된 시각 후보에서 고르게 한다"
+                    + ("." if options else " — 후보가 없으니 시각을 묻는다."))
+        if jumps:
+            question += f" 로그에 시계 이상(역행·점프) {jumps}건 — 후보 시각이 실제와 다를 수 있다(재부팅·NITZ 전 가능)."
+        raise NeedsInput("time", question, options, log_range=[cov.get("first_ts"), cov.get("last_ts")])
 
     # Step 4·5 --------------------------------------------------------------------------------------
 

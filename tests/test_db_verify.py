@@ -115,8 +115,7 @@ def test_broad_cause_signature_and_widened_fixed_cause_are_blocked():
     assert code == 1 and rows["R3"]["status"] == "fail"
     check = next(c for c in rows["R3"]["checks"] if c["target"] == "DATA-002-01")
     assert f"{DATA}/fixtures/DATA-001-01.log" in {h["fixture"] for h in check["hits"]}
-    assert {"op": "allow-cause", "fixture": "fixtures/DATA-001-01.log", "cause": "DATA-002-01",
-            "type_dir": DATA} in check["allow_cause_drafts"]
+    assert {"op": "allow-cause", "fixture": "fixtures/DATA-001-01.log", "cause": "DATA-002-01"} in check["allow_cause_drafts"]
 
 
 def test_cross_category_hit_needs_also_allowed_and_scoring_does_not_matter():
@@ -131,7 +130,12 @@ def test_cross_category_hit_needs_also_allowed_and_scoring_does_not_matter():
     recurrence = f"{IMS}/fixtures/IMS-001-01.recurrence.MOCKB77_U2_20260920.log"
     assert set(rows["R4"]["targets"]) == {positive, recurrence}
     drafts = [d for f in rows["R4"]["failures"] for d in f["allow_cause_drafts"]]
-    assert {"op": "allow-cause", "fixture": "fixtures/IMS-001-01.log", "cause": "CALL-001-01", "type_dir": IMS} in drafts
+    draft = {"op": "allow-cause", "fixture": "fixtures/IMS-001-01.log", "cause": "CALL-001-01"}
+    assert draft in drafts
+    plan = {"source": "analyze", "schema_version": 1, "started_at": "2026-10-05T10:00+09:00",
+            "base_sha": "0123456", "operations": [dict(draft)]}
+    from dbadd.core import validate_plan      # 초안은 그대로 계획에 붙일 수 있어야 한다 (additionalProperties: false)
+    validate_plan(plan, SAMPLE)
 
     def view(rows_):
         return {k: (rows_[k]["status"], rows_[k]["targets"]) for k in ("R2", "R3", "R4")}
@@ -156,6 +160,23 @@ def test_cross_category_hit_needs_also_allowed_and_scoring_does_not_matter():
     code, rows, _ = rules(db)
     assert code == 0, rows
     assert [rows[k]["status"] for k in ("R2", "R3", "R4")] == ["pass", "pass", "pass"]
+
+
+def test_retemp_drafts_maps_real_ids_back_to_plan_temp_ids():
+    from db_verify import _retemp_drafts
+    tree = {"rules": [{"checks": [{"allow_cause_drafts": [{"op": "allow-cause", "fixture": "fixtures/a.log",
+                                                           "cause": "DATA-001-03"}],
+                                   "hits": [{"allow_cause_draft": {"op": "allow-cause", "fixture": "fixtures/b.log",
+                                                                   "cause": "DATA-001-03"}},
+                                            {"allow_cause_draft": None}]}]}],
+            "reasons": [{"cause": "DATA-001-03", "message": "DATA-001-03도 C=1이다"}],
+            "other": {"op": "allow-cause", "fixture": "fixtures/c.log", "cause": "CALL-001-01"}}
+    _retemp_drafts(tree, {"DATA-001-03": "NEW-CAUSE-1"})
+    check = tree["rules"][0]["checks"][0]
+    assert check["allow_cause_drafts"][0]["cause"] == "NEW-CAUSE-1"
+    assert check["hits"][0]["allow_cause_draft"]["cause"] == "NEW-CAUSE-1"
+    assert tree["reasons"][0]["cause"] == "DATA-001-03"             # allow-cause 초안이 아닌 항목은 그대로
+    assert tree["other"]["cause"] == "CALL-001-01"                   # 매핑에 없는 ID는 그대로
 
 
 def test_new_type_symptom_hitting_other_negative_fails_r3():

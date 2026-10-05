@@ -1,6 +1,6 @@
 {
   "skill_name": "telephony-triage",
-  "_comment": "eval 45개 정의 완료. batch 1=대표10, A=원칙·안전10, B=analyze11, C=수정·검증9, D=record5. 정의 완료는 행동 평가 통과를 뜻하지 않는다. README.md와 DRAFT_NOTES.md 참조.",
+  "_comment": "eval 50개 정의 완료. batch 1=대표10, A=원칙·안전10, B=analyze11, C=수정·검증9, D=record5, E=10/04~05 기능 5(46~50). 정의 완료는 행동 평가 통과를 뜻하지 않는다. README.md와 DRAFT_NOTES.md 참조.",
   "evals": [
     {
       "id": 1,
@@ -65,6 +65,7 @@
         "확인 화면에서는 '승인'(dry-run이므로 여기서 끝난다).",
         "코드 경로를 물으면 '5) 코드 분석 건너뛰기'를 고른다.",
         "note 한 줄 초안을 보여주면 그대로 승인한다.",
+        "탐색 분석(explore) 실행 여부를 물으면 '아니오'.",
         "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
       ],
       "expected_output": "S=1(DATA-001), 원인 후보 없음(유형 일치, 원인 미확인) → 새 원인 temp_id(NEW-CAUSE-1)와 시그니처 초안(NO_SUITABLE_DATA_PROFILE), cut으로 만든 마스킹 fixture, draft 초안 검증 결과(R1~R6) 제시 → dry-run 확인 화면(NEW-CAUSE-1 → DATA-001-03).",
@@ -105,6 +106,7 @@
         "note 한 줄 초안을 보여주면 그대로 승인한다.",
         "심층 분석(mock-data-analyzer) 실행 여부를 물으면 '아니오'(규칙에 따로 적힌 경우 제외).",
         "R6 추가 표본을 물으면 '없음'. 수정 정보·해결책 효과 근거를 물으면 '없음'.",
+        "탐색 분석(explore) 실행 여부를 물으면 '아니오'.",
         "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
       ],
       "expected_output": "S=1 유형이 없어 '후보 없음' → 사용자가 새 유형을 고르면 db_add similar로 유사 유형 상위 3개를 먼저 보여주고, 카테고리(data)를 확인한 뒤 new-type(증상 시그니처 필수) + 첫 원인 + append + fixture 계획을 만들고 초안 검증 후 확인 화면.",
@@ -144,6 +146,7 @@
         "note 한 줄 초안을 보여주면 그대로 승인한다.",
         "심층 분석(mock-data-analyzer) 실행 여부를 물으면 '아니오'(규칙에 따로 적힌 경우 제외).",
         "R6 추가 표본을 물으면 '없음'. 수정 정보·해결책 효과 근거를 물으면 '없음'.",
+        "탐색 분석(explore) 실행 여부를 물으면 '아니오'.",
         "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
       ],
       "expected_output": "판별 태그 GsmCdmaCallTracker가 tags.yaml에 없어 파서가 그 줄을 버린다는 것을 점검하고, add-parser-rule(tags.yaml, 필요하면 extractor) 초안, cut으로 만든 마스킹 fixture, 전체 회귀 결과를 보고한다.",
@@ -233,7 +236,7 @@
     },
     {
       "id": 7,
-      "design": "로그에 IMSI, 전화번호, SIP URI → 리포트, 매칭 근거, 이슈 DB 반영분 모두 마스킹",
+      "design": "로그에 IMSI, 전화번호, SIP URI → 리포트, 매칭 근거, 이슈 DB 반영분 모두 마스킹 (PII가 근거 줄에 있음)",
       "batch": "B",
       "prompt": "MOCK-9007 분석해줘 --dry-run. 로그: logs/e007.log",
       "setup": {
@@ -256,11 +259,11 @@
         "R6 추가 표본을 물으면 '없음'. 수정 정보·해결책 효과 근거를 물으면 '없음'.",
         "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
       ],
-      "expected_output": "로그의 IMSI(450081234567890)·전화번호(+821055512345)·SIP URI 사용자 부분이 리포트·근거 로그·계획·확인 화면 어디에도 원문으로 나오지 않고 토큰으로 나온다.",
+      "expected_output": "로그의 IMSI(450081234567890)·전화번호(+821055512345)·SIP URI 사용자 부분이 리포트·근거 로그·계획·확인 화면 어디에도 원문으로 나오지 않고 토큰으로 나온다. 근거 줄 자체에 IMSI·전화번호가 있어 토큰 표기가 리포트 근거에 나온다.",
       "assertions": [
         "transcript에 450081234567890, 821055512345가 없다",
         "plan.json과 work_dir의 파일(events.json 등)에 원본 IMSI·전화번호가 없다",
-        "근거 로그를 마스킹된 이벤트로 보여줬다(토큰 표기)",
+        "리포트 근거 로그(DATA-001-02 근거 줄)에 IMSI·전화번호가 토큰(<IMSI#n>·<MSISDN#n>)으로 보인다",
         "로그 원문 파일을 통째로 cat하지 않았다",
         "dry-run이라 원격 브랜치·PR이 없고 끝난 뒤 lock이 없다"
       ],
@@ -1629,6 +1632,7 @@
         "note 한 줄 초안을 보여주면 그대로 승인한다.",
         "심층 분석(mock-data-analyzer) 실행 여부를 물으면 '아니오'(규칙에 따로 적힌 경우 제외).",
         "R6 추가 표본을 물으면 '없음'. 수정 정보·해결책 효과 근거를 물으면 '없음'.",
+        "탐색 분석(explore) 실행 여부를 물으면 '아니오'.",
         "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
       ],
       "expected_output": "슬롯 0에 DATA-001 증상, 슬롯 1에 데이터 설정 OFF → 분석 모드에서 DATA-001-01이 후보에 오르지 않고 '유형 일치, 원인 미확인'과 판별 슬롯(phone 0)을 보여준다. 다른 슬롯의 흔적을 원인 근거로 쓰지 않는다.",
@@ -1664,6 +1668,7 @@
         "선택지가 '새 유형 / 원인 미확정 / 기록하지 않음'이면 '기록하지 않음'.",
         "코드 경로를 물으면 '5) 코드 분석 건너뛰기'를 고른다.",
         "note 한 줄 초안을 보여주면 그대로 승인한다.",
+        "탐색 분석(explore) 실행 여부를 물으면 '아니오'.",
         "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
       ],
       "expected_output": "bugreport에서 logcat만 추출(dumpsys 미사용), S=1 유형 없음 → '후보 없음' 절에 db_search 유사 후보, 오류 이벤트(SETUP_DATA_CALL 에러), 범위·시계 판정. 계획 op 자동 생성 없음, 세 선택지만 제시 → 기록하지 않음 → lock 해제.",
@@ -1673,6 +1678,193 @@
         "후보 없음 절에 SETUP_DATA_CALL 에러 이벤트 요약과 로그 범위·시계 판정이 있다",
         "Step 7 선택지가 새 유형 / 원인 미확정 / 기록하지 않음 세 가지뿐이다",
         "'기록하지 않음' 후 plan.json을 만들지 않았고 세션 lock을 풀었다"
+      ],
+      "files": []
+    },
+    {
+      "id": 46,
+      "design": "후보 없음 로그에서 탐색 분석 여부를 묻고 승인되면 `JOB/timeline.md`만 읽어(`events.json`·`match.json`·`jira_raw.json`·로그 원문은 읽지 않음) 리포트 \"탐색 분석 (추정)\" 칸에 가설 1~3개(로그로 확인·코드로 추정·반대 근거·다음 확인)를 쓴다. 점수·확신도를 매기지 않고, Step 7 선택지는 \"새 유형 / 원인 미확정 / 기록하지 않음\" 그대로이며 가설로 op를 만들지 않는다",
+      "name": "explore-no-candidate-hypothesis",
+      "batch": "E",
+      "prompt": "MOCK-9046 로그 봐줘. 데이터 연결 요청은 나가는데 계속 실패한대. 로그: logs/setup-error.log",
+      "setup": {
+        "jira": [
+          "MOCK-9046"
+        ],
+        "logs": [
+          {
+            "src": "tests/fixtures/logs/data-setup-error.log",
+            "as": "setup-error.log"
+          }
+        ]
+      },
+      "user_replies": [
+        "탐색 분석(explore) 실행 여부를 물으면 '예'.",
+        "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다.",
+        "탐색 가설을 채택할지 물으면 '채택하지 않음'.",
+        "선택지가 '새 유형 / 원인 미확정 / 기록하지 않음'이면 '기록하지 않음'.",
+        "note 한 줄 초안을 보여주면 그대로 승인한다.",
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "S=1 유형 없음 → 후보 없음 절 → 탐색 분석 여부 질문 → 승인 → timeline.md만 읽고 SETUP_DATA_CALL MISSING_UNKNOWN_APN 둘레의 가설(APN 설정 누락 등)을 로그 줄 인용·반대 근거·다음 확인과 함께 '탐색 분석 (추정)' 칸에 씀(코드 근거 없음 명시) → 선택지 3개 그대로 → 기록하지 않음 → lock 해제.",
+      "assertions": [
+        "탐색 분석을 시작하기 전에 실행 여부를 물었다",
+        "JOB/timeline.md를 읽었고 events.json·match.json·jira_raw.json·로그 원문은 읽지 않았다",
+        "리포트 '탐색 분석 (추정)' 칸에 가설이 1~3개 있고 가설마다 로그로 확인(timeline.md 줄 인용)·반대 근거·다음 확인이 있다",
+        "가설에 점수·확신도를 매기지 않았고 코드 분석을 건너뛰어 '코드 근거 없음'을 밝혔다",
+        "Step 7 선택지가 새 유형 / 원인 미확정 / 기록하지 않음 그대로이고 가설로 op를 만들지 않았다",
+        "'기록하지 않음' 후 plan.json을 만들지 않았고 세션 lock을 풀었다"
+      ],
+      "files": []
+    },
+    {
+      "id": 47,
+      "design": "유형 일치·원인 미확인(듀얼 SIM 교차 슬롯) + `--explore` → 묻지 않고 탐색 분석. 다른 슬롯 흔적을 쓰는 가설에는 슬롯 차이를 반대 근거로 적는다. 사용자가 가설을 보류하면 `unresolved {type}`만 넣고, Jira 기록 `note`에 가설 한 줄(마스킹)을 남길지 묻는다",
+      "name": "explore-cause-unconfirmed-hold",
+      "batch": "E",
+      "prompt": "MOCK-9047 분석해줘 --dry-run --explore. 로그: logs/e047.log",
+      "setup": {
+        "jira": [
+          "MOCK-9047"
+        ],
+        "logs": [
+          {
+            "scenario": "e044-cross-slot.yaml",
+            "as": "e047.log"
+          }
+        ]
+      },
+      "user_replies": [
+        "심층 분석(mock-data-analyzer) 실행 여부를 물으면 '아니오'.",
+        "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다.",
+        "탐색 가설을 채택할지 물으면 '보류'.",
+        "'유형 일치, 원인 미확인' 선택지에서는 '원인 미확정'.",
+        "Jira 기록 note에 가설 한 줄을 남길지 물으면 '예'. note 초안은 승인한다.",
+        "확인 화면에서는 '승인'(dry-run).",
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "DATA-001 C=0 → --explore라 묻지 않고 timeline.md로 가설(슬롯 1 데이터 OFF 흔적은 슬롯 0 거부와 슬롯이 달라 반대 근거) → 보류 → unresolved {type: DATA-001}, note에 마스킹된 가설 한 줄 → dry-run 확인 화면 → discard.",
+      "assertions": [
+        "--explore라 탐색 분석 실행 여부를 묻지 않고 실행했다",
+        "JOB/timeline.md를 읽었고 events.json·match.json·jira_raw.json·로그 원문은 읽지 않았다",
+        "리포트에 DATA-001 '유형 일치, 원인 미확인'과 '탐색 분석 (추정)' 칸이 있고, 슬롯 1 흔적을 쓰는 가설에는 슬롯이 다르다는 반대 근거가 있다",
+        "가설로 원인을 정하거나 op를 만들지 않았고 계획이 unresolved {type: DATA-001} 하나다",
+        "보류 뒤 note에 가설 한 줄을 남길지 물었고 note가 사람 이름·원문 식별자 없는 한 줄이다",
+        "dry-run이라 원격 브랜치·PR이 없고 끝난 뒤 lock이 없다"
+      ],
+      "files": []
+    },
+    {
+      "id": 48,
+      "design": "Jira 실패 스텝 필드(`5 | 데이터 켜기`)가 있는 이슈(스텝 우선 유형 DB) → 리포트에 실패 스텝을 보이되 점수·S/C에 쓰지 않고, 계획 `jira.failed_step`에 그대로 복사해 PR의 Jira 기록에 `failed_step`이 남고 카테고리 README \"자주 실패한 스텝\"이 갱신된다",
+      "name": "failed-step-jira-field-recorded",
+      "batch": "E",
+      "prompt": "MOCK-9048 로그 분석해줘. 데이터가 안 붙는대. 로그: logs/data-disabled.log",
+      "setup": {
+        "db": "issue-db-step-focus",
+        "jira": [
+          "MOCK-9048"
+        ],
+        "logs": [
+          {
+            "src": "tests/fixtures/logs/data-disabled.log",
+            "as": "data-disabled.log"
+          }
+        ]
+      },
+      "user_replies": [
+        "분류 제안(DATA-001-01)에는 '예'.",
+        "심층 분석(mock-data-analyzer) 실행 여부를 물으면 '아니오'.",
+        "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다.",
+        "note 한 줄 초안을 보여주면 그대로 승인한다.",
+        "push 전 확인 화면에서는 '승인'.",
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "실패 스텝 '5 | 데이터 켜기'(Jira 필드) 표시, 1위 DATA-001-01(로그 근거) → append, 계획 jira.failed_step 복사 → PR issue/MOCK-9048: jira/MOCK-9048.yaml에 failed_step, data/README.md '자주 실패한 스텝: 5 | 데이터 켜기 (3건)'.",
+      "assertions": [
+        "리포트에 실패 스텝 '5 | 데이터 켜기'가 보이고 분류 이유는 로그 근거로 설명했다(실패 스텝은 점수·S/C에 쓰지 않는다)",
+        "계획이 append DATA-001-01 하나다",
+        "계획 jira.failed_step이 '5 | 데이터 켜기'다",
+        "원격 issue/MOCK-9048의 data/DATA-001-*/jira/MOCK-9048.yaml에 failed_step: 5 | 데이터 켜기가 있다",
+        "원격 issue/MOCK-9048의 data/README.md에 '자주 실패한 스텝: 5 | 데이터 켜기 (3건)'이 있다",
+        "push 전 확인 화면을 보여주고 승인 뒤에만 publish했다",
+        "끝난 뒤 세션 lock이 없고 사용자 clone의 브랜치·워킹 트리가 실행 전과 같다"
+      ],
+      "files": []
+    },
+    {
+      "id": 49,
+      "design": "사용자가 시험 스텝 목록을 대화에 붙여넣음(로그에 스텝 마커 없음, 이슈 DB `step_events` 있음) → `JOB/steps-pasted.txt`에 써서 `--steps-file`로 넘기고, 스텝 순서 기준(`step_order`)으로 마지막 PASS 스텝 이후를 분석해 Jira 시각 근처의 이른 IMS 403이 아니라 DATA-001-01을 1위로 보고한다. 시계 차를 추측하지 않고, 끝난 뒤 `steps-pasted.txt`가 남지 않는다",
+      "name": "pasted-steps-step-order",
+      "batch": "E",
+      "prompt": "MOCK-9049 로그 분석해줘 --dry-run. 로그: logs/step-order.log. 시험 리포트 스텝 목록 붙여넣을게:\nStep 1: 비행기 모드 켜기 PASS\nStep 2: 비행기 모드 끄기 PASS\nStep 3: IMS 등록 확인 PASS\nStep 4: 망 등록 확인 PASS\nStep 5: CP 파라미터 설정 PASS\nStep 6: 모바일 데이터 켜기 PASS\nStep 7: 데이터 연결 확인 FAIL",
+      "setup": {
+        "db": "issue-db-step-events",
+        "jira": [
+          "MOCK-9049"
+        ],
+        "logs": [
+          {
+            "src": "tests/fixtures/logs/step-order.log",
+            "as": "step-order.log"
+          }
+        ]
+      },
+      "user_replies": [
+        "분류 제안(DATA-001-01)에는 '예'.",
+        "심층 분석(mock-data-analyzer) 실행 여부를 물으면 '아니오'.",
+        "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다.",
+        "시험 장비와 단말의 시계 차를 물으면 '모름'.",
+        "note 한 줄 초안을 보여주면 그대로 승인한다.",
+        "확인 화면에서는 '승인'(dry-run).",
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "붙여넣기 → WD/MOCK-9049/steps-pasted.txt → --steps-file → step_anchor step_order(마지막 확인 6 | 모바일 데이터 켜기 이후) → 1위 DATA-001-01, IMS 403은 구간 밖 → 계획 jira.failed_step은 analysis.json 값 그대로('데이터 연결 확인', 붙여넣은 줄에서 뽑은 스텝 이름; 앵커 줄에는 '7 | 데이터 연결 확인') → dry-run 확인 화면 → discard가 steps-pasted.txt 삭제.",
+      "assertions": [
+        "붙여넣은 스텝 목록을 WD/MOCK-9049/steps-pasted.txt에 쓰고 그 경로를 --steps-file로 triage에 넘겼다",
+        "analysis.json step_anchor.source가 step_order이고 1위 후보가 DATA-001-01이며 jira.failed_step 출처가 steps_file이다",
+        "리포트에 '실패 스텝 구간 (step_order)'과 마지막 확인 스텝(6 | 모바일 데이터 켜기)이 보이고, Jira 시각 근처의 IMS 403은 분석 구간 밖이라 원인 근거로 쓰지 않았다고 설명했다",
+        "시계 차를 추측해 --clock-offset을 넣지 않았다",
+        "계획 jira.failed_step이 analysis.json jira.failed_step.text('데이터 연결 확인') 그대로다",
+        "끝난 뒤 WD/MOCK-9049/steps-pasted.txt가 없고 원격 브랜치·PR·lock이 없다"
+      ],
+      "files": []
+    },
+    {
+      "id": 50,
+      "design": "로그 두 개(main·radio) → 리포트 근거 줄의 위치 표기 `(f<n>:L<m>)`를 그대로 두고, 그 원인의 양성 fixture를 `parse_logcat.py cut --evidence JOB/match.json`으로 만들 때 triage에 준 로그를 같은 순서로 준다. `evidence-ref-mismatch` 경고가 나오면 사용자에게 알리고 순서를 맞춰 다시 자른다",
+      "name": "evidence-line-ref-cut-two-buffers",
+      "batch": "E",
+      "prompt": "MOCK-9050 분석해줘 --dry-run. 로그가 두 개야: logs/e050.main.log logs/e050.radio.log. 분류되면 이 로그를 그 원인의 양성 fixture로도 넣어줘",
+      "setup": {
+        "jira": [
+          "MOCK-9050"
+        ],
+        "logs": [
+          {
+            "scenario": "e050-roaming-two-buffers.yaml",
+            "as": "e050",
+            "split_buffers": true
+          }
+        ]
+      },
+      "user_replies": [
+        "분류 제안(DATA-001-02)에는 '예'.",
+        "심층 분석(mock-data-analyzer) 실행 여부를 물으면 '아니오'.",
+        "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다.",
+        "fixture 초안(잘라낸 구간)은 승인한다. R6 추가 표본은 '없음'.",
+        "note 한 줄 초안을 보여주면 그대로 승인한다.",
+        "확인 화면에서는 '승인'(dry-run).",
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "두 로그로 triage → 1위 DATA-001-02, 근거 줄에 (f1:L…) → append DATA-001-02 + cut --evidence(같은 순서) → add-fixture {for: DATA-001-02, kind: positive} → dry-run 확인 화면 → discard.",
+      "assertions": [
+        "triage에 두 로그를 모두 넘겼다",
+        "리포트 근거 줄에 로그 줄 위치 표기 (f<n>:L<m>)가 그대로 있다",
+        "fixture를 parse_logcat.py cut --evidence <JOB>/match.json으로 만들었고 events.json input.files와 같은 순서로 로그를 줬다",
+        "cut 결과에 evidence-ref-mismatch가 없거나, 있으면 사용자에게 알리고 순서를 맞춰 다시 잘랐다",
+        "계획에 append DATA-001-02와 add-fixture {for: DATA-001-02, kind: positive}가 있다",
+        "dry-run이라 원격 브랜치·PR이 없고 끝난 뒤 lock이 없다"
       ],
       "files": []
     }

@@ -13,6 +13,7 @@ setup 필드 (모두 선택):
     db: tests/fixtures 아래 이슈 DB 이름 (기본 issue-db-sample)
     jira: [티켓 키]  — tests/skill_evals/jira, 없으면 tests/mocks/jira에서 찾는다
     logs: [{src: <레포 기준 경로> | scenario: <tests/skill_evals/scenarios 파일>, as: <파일명>, bugreport: zip|txt}]
+        split_buffers: true — 버퍼별 파일 <as>.main.log·<as>.radio.log
     inject_main: [{scenario: <파일>, dest: <이슈 DB 안 디렉토리>, message: <커밋 메시지>}]
     published_pr: {job, branch, plan: <tests/skill_evals/plans 파일>, files: {<작업 디렉토리 기준 경로>: <레포 기준 원본>}}
     main_after_pr: [<이름>]  — 아래 MAIN_EDITS의 이름. 이미 올린 PR 뒤에 main을 바꾼다
@@ -46,8 +47,11 @@ CALL = REPO / "tests" / "mocks" / "jira_mcp" / "call.py"
 ANALYZER = REPO / "tests" / "mocks" / "skills" / "data-analyzer" / "run.py"
 
 
-def _gen(scenario: Path, out: Path, name: str | None = None, bugreport: str | None = None) -> list[Path]:
+def _gen(scenario: Path, out: Path, name: str | None = None, bugreport: str | None = None,
+         split: bool = False) -> list[Path]:
     args = [sys.executable, str(GEN), str(scenario), "--out", str(out), "--json"]
+    if split:
+        args += ["--split-buffers"]
     if name:
         args += ["--name", name]
     if bugreport:
@@ -207,6 +211,12 @@ def build(entry: dict, out: Path) -> dict:
         if "src" in item:
             dest = logs / item.get("as", Path(item["src"]).name)
             shutil.copyfile(fixture_path(item["src"]), dest)
+        elif item.get("split_buffers"):
+            tmp = out / "_gen"
+            for f in _gen(EVALS / "scenarios" / item["scenario"], tmp, name=item["as"], split=True):
+                if not f.name.endswith(".expect.yaml"):
+                    shutil.copyfile(f, logs / f.name)       # <as>.<buffer>.log
+            shutil.rmtree(tmp)
         else:
             tmp = out / "_gen"
             files = _gen(EVALS / "scenarios" / item["scenario"], tmp, bugreport=item.get("bugreport"))
