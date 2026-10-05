@@ -58,10 +58,10 @@
 | ☐ I3 | RF-4 일부: 경로·태그 상수 → 설정 | 리뷰 RF-4 |
 | ☐ I4 | YAML C 로더(`CSafeLoader`, 없으면 SafeLoader) | 파싱 시간 대부분이 YAML |
 | ☐ I5 | `db_pr` summary/pr_body → `db_summary.py` | 리뷰 §Q |
-| ☐ X | RF-5·6·7·8 | **시작 전 사용자에게 묻는다**(범위 확대) |
+| ☐ X | **RF-7만**(분석 전용·추가 로그 재분석·입력 해시 재사용) — 사용자 결정 10/05. RF-5·6·8은 반입 뒤 | 리뷰 RF-7 |
 | ☐ Z | 마무리: main 병합 → `15 §15.4` 재실행 → 새 묶음·sha256 → 사용자 태그 → 2 | |
 
-RF-9·웹 UI(보류)는 X 뒤 후보. RF 상세는 `docs/development/ARCHITECTURE_REVIEW_2026-10.md` §U.
+RF-5(oFono)·RF-6(커넥터)·RF-8(자동화)은 사내 환경을 알아야 의미가 있어 반입 뒤. RF-9·웹 UI(보류)는 그 뒤 후보. RF 상세는 `docs/development/ARCHITECTURE_REVIEW_2026-10.md` §U.
 
 ## 사외에서는 못 하는 것 (사내 S-1~S-5)
 
