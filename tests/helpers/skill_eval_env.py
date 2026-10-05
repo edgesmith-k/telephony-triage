@@ -189,7 +189,9 @@ def _clone_state(clone: Path) -> dict:
     }
 
 
-def build(entry: dict, out: Path) -> dict:
+def build(entry: dict, out: Path, direct_tools: bool = True) -> dict:
+    """direct_tools=False(plugin 모드)면 env.json에 jira_call·jira_tools_list·analyzer_run을 쓰지 않는다 —
+    실행자가 MCP·Skill 대신 그 명령을 직접 부르는 우회를 막는다."""
     setup = entry.get("setup") or {}
     out = out.resolve()
     if out.exists():
@@ -311,12 +313,15 @@ def build(entry: dict, out: Path) -> dict:
         "plugin_root": str(root), "skill": str(root / "skills" / "telephony-triage"),
         "issue_db_clone": str(ws.clone), "remote": str(ws.remote), "work_dir": str(ws.work),
         "logs": sorted(str(p) for p in logs.iterdir()), "jira_dir": str(jira_dir),
-        "jira_call": f"python3 \"{CALL.as_posix()}\" <tool> '<arguments JSON>'",
-        "jira_tools_list": f"python3 \"{CALL.as_posix()}\" --list",
-        "analyzer_run": (f"python3 -c \"import sys; sys.exit('mock-data-analyzer: internal error (timeout)')\" --input <입력 JSON 경로>"
-                         if setup.get("analyzer_fail") else f"python3 \"{ANALYZER.as_posix()}\" --input <입력 JSON 경로>"),
         "gh_state": str(ws.gh_state),
     }
+    if direct_tools:
+        info.update({
+            "jira_call": f"python3 \"{CALL.as_posix()}\" <tool> '<arguments JSON>'",
+            "jira_tools_list": f"python3 \"{CALL.as_posix()}\" --list",
+            "analyzer_run": (f"python3 -c \"import sys; sys.exit('mock-data-analyzer: internal error (timeout)')\" --input <입력 JSON 경로>"
+                             if setup.get("analyzer_fail") else f"python3 \"{ANALYZER.as_posix()}\" --input <입력 JSON 경로>"),
+        })
     (out / "env.json").write_text(json.dumps(info, ensure_ascii=False, indent=2), encoding="utf-8")
     (out / "before.json").write_text(json.dumps(_clone_state(ws.clone), ensure_ascii=False, indent=2),
                                      encoding="utf-8")

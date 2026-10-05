@@ -243,7 +243,7 @@ def main() -> int:
         run_dir = iteration / f"eval-{eid}" / "with_skill"
         (run_dir / "outputs").mkdir(parents=True)
         env_dir = iteration / f"env-{eid}"
-        info = build(entry, env_dir)
+        info = build(entry, env_dir, direct_tools=(args.mode == "direct"))
         plugin = prepare_plugin_mode(entry, info, env_dir) if args.mode == "plugin" else None
         dump(run_dir.parent / "eval_metadata.json", {"eval_id": eid, "prompt": entry["prompt"], "assertions": entry["assertions"],
                                                      "mode": args.mode})

@@ -358,6 +358,7 @@
         "재발 로그를 recurrence fixture로 추가할지 물으면 '예'.",
         "확인 화면에서는 '승인'(dry-run이므로 게시하지 않는다).",
         "코드 분석과 심층 분석은 건너뛴다. note 초안은 승인한다.",
+        "새 fixture에서 다른 유형 원인(IMS-001-01)도 걸려 시그니처 좁히기 / allow-cause를 물으면 'allow-cause(허용) — 로그에 실제로 IMS 403이 있다'.",
         "그 밖의 질문에는 변경을 최소화하는 선택지를 고르고 transcript에 기록한다."
       ],
       "expected_output": "동일 fixed_in 빌드도 회귀 검사 대상이다. CALL-001-01의 C=1과 fixed 상태를 근거로 회귀 의심을 보고하고, 사용자 동의 후 update-fix(open, history.result reverted)와 회귀 이력 보존 계획을 dry-run 확인 화면에 제시한다.",
@@ -774,6 +775,7 @@
         "재발 로그를 recurrence fixture로 남길지 물으면 '예'.",
         "실패 상태와 이력 기록 제안에는 '예'. push 전 확인 화면에서는 '승인'.",
         "코드 분석은 건너뛴다. note 초안은 승인한다.",
+        "새 fixture에서 다른 유형 원인(IMS-001-01)도 걸려 시그니처 좁히기 / allow-cause를 물으면 'allow-cause(허용) — 로그에 실제로 IMS 403이 있다'.",
         "그 밖의 질문에는 변경을 최소화하는 선택지를 고르고 transcript에 기록한다."
       ],
       "expected_output": "db_verify fix가 시나리오 흔적 충족·C=1로 failed를 판정한다. verify-fix failed와 recurrence fixture 계획을 승인받아 PR을 만든다. open 전환 후 이전 ref·fixed_in은 verification_history에 남는다.",
@@ -811,6 +813,7 @@
         "수정 미흡 의심 선택지를 보여주면 'update-fix로 open 전환하고 실패 이력 기록'을 고른다. verify-fix로 별도 전환하지 않는다.",
         "재발 fixture 추가 여부를 물으면 '예'. 확인 화면에서는 '승인'.",
         "코드 분석과 심층 분석은 건너뛴다. note 초안은 승인한다.",
+        "새 fixture에서 다른 유형 원인(IMS-001-01)도 걸려 시그니처 좁히기 / allow-cause를 물으면 'allow-cause(허용) — 로그에 실제로 IMS 403이 있다'.",
         "그 밖의 질문에는 변경을 최소화하는 선택지를 고르고 transcript에 기록한다."
       ],
       "expected_output": "fix-submitted 원인의 C=1이 수정 이후 빌드에서 충족됨을 확인해 수정 미흡 의심을 보고한다. update-fix(open + failed 이력)과 verify-fix 선택지를 제시하고, 사용자 선택대로 dry-run 계획을 준비한다.",
@@ -1514,7 +1517,6 @@
         "확인 화면에서는 '승인'.",
         "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다(규칙에 따로 적힌 경우 제외).",
         "note 한 줄 초안을 보여주면 그대로 승인한다.",
-        "심층 분석(mock-data-analyzer) 실행 여부를 물으면 '아니오'(규칙에 따로 적힌 경우 제외).",
         "R6 추가 표본을 물으면 '없음'. 수정 정보·해결책 효과 근거를 물으면 '없음'.",
         "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
       ],

@@ -48,6 +48,10 @@ class Ctx:
         self.env_dir, self.run = env_dir, run_dir
         self.remote = Path(self.env["remote"])
         self.work = Path(self.env["work_dir"])
+        try:
+            self.execution = json.loads(_read(run_dir / "execution.json") or "{}")
+        except ValueError:
+            self.execution = {}
         out = run_dir / "outputs"
         self.transcript = (out / "transcript.md").read_text(encoding="utf-8") if (out / "transcript.md").is_file() else ""
         self.commands = (out / "commands.md").read_text(encoding="utf-8") if (out / "commands.md").is_file() else ""
@@ -110,6 +114,37 @@ class Ctx:
                 if re.search(r"\b(cat|head|tail|less|sed|awk|jq|grep|python3?)\b", cmd) \
                         and "triage.py" not in cmd and "parse_logcat.py" not in cmd:
                     hits += [n for n in names if re.search(r"(?<![\w.-])" + re.escape(n) + r"\b", cmd)]
+        return hits
+
+    _RAW_READ_CMD = re.compile(r"(?<![\w./-])(cat|head|less|strings|unzip)\b([^|;&\n]*)")
+
+    def _is_raw_target(self, token: str) -> bool:
+        t = token.strip("\"'")
+        name = Path(t).name
+        if name in ("events.json", "jira_raw.json") or name.endswith((".log", ".zip")):
+            return True
+        logs = self.env_dir / "logs"
+        return "/logs/" in t.replace("\\", "/") or t.startswith("logs/") or str(logs) in t
+
+    def raw_full_reads(self) -> list[str]:
+        """원문 통독 의심(지표): 로그·zip·events.json·jira_raw.json을 Bash cat/head -c/less/strings/unzip -p 로 열거나
+        limit 없는 Read로 읽은 호출. 채점 항목은 아니다. 실행 기록이 없으면 빈 목록."""
+        hits = []
+        for name, inp in self.tool_uses() or []:
+            if name == "Read":
+                fp = str(inp.get("file_path", ""))
+                if fp and not inp.get("limit") and self._is_raw_target(fp):
+                    hits.append(f"Read {fp}")
+            elif name == "Bash":
+                cmd = _strip_heredocs(str(inp.get("command", "")))
+                for m in self._RAW_READ_CMD.finditer(cmd):
+                    verb, rest = m.group(1), m.group(2)
+                    if verb == "head" and not re.search(r"(^|\s)-c\b", rest):
+                        continue
+                    if verb == "unzip" and not re.search(r"(^|\s)-\w*p", rest):
+                        continue
+                    if any(self._is_raw_target(t) for t in rest.split() if not t.startswith("-")):
+                        hits.append(f"{verb}{rest}".strip()[:200])
         return hits
 
     # 원격 ---------------------------------------------------------------------------------
@@ -267,7 +302,7 @@ def checks(eid: int, ctx: Ctx) -> list:
             p = ctx.plan("MOCK-9040") or {}
             ok = p.get("operations") == [{"op": "append", "cause": "DATA-001-01"}] and \
                 (p.get("feedback") or {}).get("decision") == "chose-other"
-            return ok, json.dumps({"ops": p.get("operations"), "fb": p.get("feedback")}, ensure_ascii=False)
+            return ok and analyzer_called()[0], json.dumps({"ops": p.get("operations"), "fb": p.get("feedback")}, ensure_ascii=False) + "; " + analyzer_called()[1]
         return [None, None, None, None, plan]
     if eid == 42:
         def allow():
@@ -382,6 +417,15 @@ def checks(eid: int, ctx: Ctx) -> list:
     # --- batch B (analyze 핵심 경로) ---
     def op_list(job, name):
         return [o for o in ops(job) if o.get("op") == name]
+    def analyzer_called():
+        """e40·e41은 분석 스킬을 실제로 Skill 도구로 불렀을 때만 센다(plugin 모드). direct 모드·기록 없음은 이 조건을 적용하지 않는다."""
+        plugin = ctx.execution.get("plugin")   # run.py가 execution.json의 "plugin"에 seen을 그대로 쓴다(중첩 "seen"도 허용)
+        seen = (plugin.get("seen") or plugin) if isinstance(plugin, dict) else None
+        if seen is None:
+            return True, "plugin.seen 없음(direct 모드·옛 결과): skill_calls 조건 생략"
+        calls = seen.get("skill_calls") or []
+        ok = "mock-analyzers:mock-data-analyzer" in calls
+        return ok, f"skill_calls={calls}" + ("" if ok else " — mock-analyzers:mock-data-analyzer 호출 없음, 5-1 미검증")
     def unresolved(job):
         o = ops(job)
         return (o == [{"op": "unresolved", "type": "DATA-001"}], json.dumps(o, ensure_ascii=False))
@@ -470,7 +514,7 @@ def checks(eid: int, ctx: Ctx) -> list:
     if eid == 41:
         def app():
             o = ops("MOCK-9041")
-            return o == [{"op": "append", "cause": "DATA-001-01"}], json.dumps(o, ensure_ascii=False)
+            return o == [{"op": "append", "cause": "DATA-001-01"}] and analyzer_called()[0], json.dumps(o, ensure_ascii=False) + "; " + analyzer_called()[1]
         return [None, None, None, app, none_remote_lock]
     if eid == 44:
         return [None, None, None, lambda: unresolved("MOCK-9044"), none_remote_lock]
@@ -513,8 +557,8 @@ def checks(eid: int, ctx: Ctx) -> list:
         return [None, append, fs, remote, readme, None, lock_clone]
     if eid == 49:
         def paste():
-            ok = bool(re.search(r"--steps-file\s+\S*(?:MOCK-9049|\$\w+|\$\{\w+\})/steps-pasted\.txt", ctx.invoked))
-            return ok, "commands.md·드라이버 trace의 --steps-file 인자"
+            ok = bool(re.search(r"--steps-file\s+\S*(?:MOCK-9049|\$\w+|\$\{\w+\})/steps-pasted\.txt", ctx.ran))
+            return ok, "실행 기록·드라이버 trace의 --steps-file 인자"
         def anchor():
             a = analysis("MOCK-9049")
             sa, cand = a.get("step_anchor") or {}, (a.get("candidates") or [{}])[0]
@@ -533,14 +577,14 @@ def checks(eid: int, ctx: Ctx) -> list:
     if eid == 50:
         names = ("e050.main.log", "e050.radio.log")
         def both():
-            return all(n in ctx.invoked for n in names), f"invoked에 {names}"
+            return all(n in ctx.ran for n in names), f"실행 기록(ran)에 {names}"
         def order():
             p = ctx.work / "MOCK-9050" / "events.json"
             want = names
             if p.is_file():
                 files = (json.loads(p.read_text(encoding="utf-8")).get("input") or {}).get("files") or []
                 want = tuple(Path(f).name for f in files) or names
-            cuts = [l for l in ctx.invoked.splitlines() if " cut " in l and "--evidence" in l]
+            cuts = [l for l in ctx.ran.splitlines() if " cut " in l and "--evidence" in l]
             got = [[Path(t).name for t in l.split() if t.endswith(".log") and Path(t).name in want] for l in cuts]
             return bool(cuts) and all(g == list(want) for g in got), f"입력 순서={list(want)} cut 호출={got}"
         def planned():
@@ -709,7 +753,7 @@ def checks_c(eid, ctx):
         return [None, None, None, partial_plan, partial_remote, None]
     if eid == 25:
         def no_judgement():
-            called = bool(re.search(r"db_verify\.py[^\n]*\bfix\b", ctx.invoked))
+            called = bool(re.search(r"db_verify\.py[^\n]*\bfix\b", ctx.ran))
             return evidence_ready() and not called, f"db_verify fix called={called}"
         def cleanup():
             free, ev = ctx.lock_free()
@@ -734,7 +778,7 @@ def checks_c(eid, ctx):
             p = ctx.plan(job)
             selected = ops(job)
             bad = any(o.get("op") == "verify-fix" or (o.get("fix") or {}).get("status") == "fixed" for o in selected)
-            return p is not None and not bad and not re.search(r"db_verify\.py[^\n]*\bfix\b", ctx.invoked), json.dumps(selected, ensure_ascii=False, default=str)
+            return p is not None and not bad and not re.search(r"db_verify\.py[^\n]*\bfix\b", ctx.ran), json.dumps(selected, ensure_ascii=False, default=str)
         return [None, None, submit, no_build, no_verify, None]
     if eid == 27:
         def resolution():
@@ -904,7 +948,7 @@ def grade(eid: int, run_dir: Path, env_dir: Path, assertions: list[str]) -> dict
     ok, ev = ctx.jira_writes()
     rows.append({"text": "Jira 쓰기 도구를 부르지 않았다", "passed": ok, "evidence": ev[:500], "source": "script"})
     decided = [r for r in rows if r["passed"] is not None]
-    result = {"status": "graded", "expectations": rows,
+    result = {"status": "graded", "expectations": rows, "metrics": {"raw_full_reads": ctx.raw_full_reads()},
               "summary": {"passed": sum(1 for r in decided if r["passed"]), "failed": sum(1 for r in decided if not r["passed"]),
                           "total": len(rows), "undecided": len(rows) - len(decided),
                           "pass_rate": round(sum(1 for r in decided if r["passed"]) / len(rows), 2) if rows else 0}}

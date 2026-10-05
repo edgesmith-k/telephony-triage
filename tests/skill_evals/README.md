@@ -57,6 +57,11 @@ gh 스텁 상태, Jira 티켓 디렉토리, 로그를 만든다. `env.sh`(export
 | guard hook | 걸린다(MCP·Bash·Write/Edit) | 안 걸린다 |
 | MCP 권한 | 서버 단위 허용 — Jira 쓰기 차단은 권한 거부가 아니라 guard가 해야 통과 | — |
 
+**plugin 모드 환경 정보**: `env.json`에는 direct 모드용 키(`jira_call`·`jira_tools_list`·`analyzer_run`)를 넣지 않는다(`run.py`가
+`build(direct_tools=False)`로 부른다). 3C의 e40·e41은 실행자가 `env.json`을 보고 분석 스크립트를 Bash로 직접 돌려 Skill 경로(5-1)를
+실제로 시험하지 못했다. 그래서 e40·e41의 스크립트 판정(계획 항목)은 `execution.json`의 `plugin.skill_calls`(중첩된 `plugin.seen`도 허용)에
+`mock-analyzers:mock-data-analyzer`가 있을 때만 통과로 센다(direct 모드·기록 없음은 이 조건 생략). 헬퍼 CLI(`skill_eval_env.py`)의 기본값은 그대로다.
+
 **남은 차이**(두 모드 공통): 사용자 대화는 `user_replies` 규칙으로 흉내 낸다. 테스트 헬퍼 플러그인 루트는 `site-defaults.example.yaml`
 (모의 Jira 도구 매핑)을 쓴다. 분석 스킬 이름은 설정의 `mock-data-analyzer`이고 실제 스킬은 플러그인 접두사가 붙는다(사내 분석 스킬도
 설치 방식에 따라 같을 수 있다). 쓰기 도구 호출 여부는 `MOCK_JIRA_WRITE_LOG`로도 본다.
@@ -71,6 +76,15 @@ gh PR, lock, 사용자 clone 상태, 원문 PII 노출, Jira 쓰기 도구 호�
 결과는 `grading.json`(`expectations[{text, passed, evidence}]`) — skill-creator viewer 형식.
 "무엇을 실행했나" 판정은 실행 기록(`events.jsonl`의 Bash 명령·MCP 도구 호출 + 드라이버 `trace.jsonl`)으로 한다. 실행자가 쓴
 `commands.md`는 기록이 없는 옛 결과에서만 대신 쓴다(R13).
+`Ctx.invoked`는 `commands.md` 표의 설명 칸까지 섞이므로 긍정 확인(`in_cmd`)에만 쓰고, 부정 확인(e25 `no_judgement`·e26 `no_verify`)과
+순서·존재 확인(e49 `paste`, e50 `both`·`order`)은 `Ctx.ran`(실행 기록)으로 판정한다 — 설명 문장 때문의 거짓 실패(3C)를 없앤다.
+`grading.json`에는 채점 항목이 아닌 `metrics.raw_full_reads`가 붙는다: 원문 통독 의심 호출(env `logs/`·`*.log`·`*.zip`·`events.json`·
+`jira_raw.json`에 대한 Bash `cat`/`head -c`/`less`/`strings`/`unzip -p`, `limit` 없는 `Read`). 실행 기록이 없으면 빈 목록이다.
+
+**R4 응답 규칙(e10·e20·e21)**: 새 fixture에서 다른 유형 원인(IMS-001-01)도 걸려 시그니처 좁히기 / `allow-cause`를 물으면 실행자는
+`allow-cause(허용) — 로그에 실제로 IMS 403이 있다`를 고른다. 시그니처를 좁힐지 허용할지는 사용자 선택이라(`docs/design/12-principles.md`)
+규칙이 없으면 실행자가 임의로 골라 흐름이 갈린다. 세 eval의 채점은 `any()`라 추가 `allow-cause` 연산이 있어도 영향이 없다.
+e41의 기본 응답 줄('아니오')은 굵은 '예' 규칙과 충돌해 지웠다.
 
 `transcript.md`·`commands.md`가 없거나 비어 있으면 `not-run`, API 오류·시간 초과가 있으면 `incomplete`로 남기며
 기대 항목을 통과로 세지 않는다. `passed: null` 항목은 대화 순서와 판정을 독립적으로 읽고 근거를 붙여 채점한다.

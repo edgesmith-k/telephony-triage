@@ -56,6 +56,8 @@ def test_machine_grades_refresh_but_manual_grades_are_preserved(tmp_path, monkey
     class FakeContext:
         def __init__(self, *_):
             pass
+        def raw_full_reads(self):
+            return []
         def jira_writes(self):
             return True, "쓰기 없음"
     monkeypatch.setattr(grader, "Ctx", FakeContext)
@@ -195,3 +197,72 @@ def test_split_buffers_setup_writes_one_file_per_buffer(tmp_path):
     assert env is not None
     logs = sorted(p.name for p in (tmp_path / "env" / "logs").iterdir())
     assert logs == ["e050.main.log", "e050.radio.log"], logs
+
+
+# --- 3D-C: eval 실행기·채점 보정 ---------------------------------------------------------
+
+def _bash_events(run, *commands, extra=()):
+    rows = []
+    for c in commands:
+        rows.append({"type": "assistant", "message": {"content": [{"type": "tool_use", "name": "Bash", "input": {"command": c}}]}})
+    for name, inp in extra:
+        rows.append({"type": "assistant", "message": {"content": [{"type": "tool_use", "name": name, "input": inp}]}})
+    (run / "events.jsonl").write_text("\n".join(json.dumps(r, ensure_ascii=False) for r in rows) + "\n", encoding="utf-8")
+
+
+def _synthetic_env(tmp_path):
+    env_dir = tmp_path / "env"
+    (env_dir / "logs").mkdir(parents=True)
+    work = tmp_path / "work"
+    work.mkdir()
+    (env_dir / "env.json").write_text(json.dumps({"remote": str(tmp_path / "remote"), "work_dir": str(work),
+                                                  "issue_db_clone": str(tmp_path / "clone"),
+                                                  "gh_state": str(tmp_path / "gh")}), encoding="utf-8")
+    (env_dir / "before.json").write_text("{}", encoding="utf-8")
+    return env_dir
+
+
+def test_e50_order_uses_ran_not_command_descriptions(tmp_path):
+    env_dir = _synthetic_env(tmp_path)
+    run = run_dir(tmp_path)
+    # commands.md 표의 설명 칸에 (역순) cut 문장이 있어도 실제 실행 기록이 기준이다
+    (run / "outputs" / "commands.md").write_text(
+        "| 1 | 로그 자르기 | python3 x.py |\n| 2 | e050.radio.log e050.main.log 순으로 cut … --evidence | python3 y.py |\n",
+        encoding="utf-8")
+    (run / "outputs" / "transcript.md").write_text("t", encoding="utf-8")
+    _bash_events(run, "python3 triage.py cut --evidence /e/logs/e050.main.log /e/logs/e050.radio.log")
+    ctx = grader.Ctx(env_dir, run)
+    assert "e050.radio.log e050.main.log" in ctx.invoked      # 설명 칸이 invoked에는 섞여 들어간다
+    assert "e050.radio.log e050.main.log" not in ctx.ran
+    fns = grader.checks(50, ctx)
+    assert fns[0]()[0] is True
+    assert fns[2]()[0] is True, fns[2]()
+
+
+def test_raw_full_reads_metric(tmp_path):
+    env_dir = _synthetic_env(tmp_path)
+    run = run_dir(tmp_path)
+    (run / "outputs" / "transcript.md").write_text("t", encoding="utf-8")
+    (run / "outputs" / "commands.md").write_text("c", encoding="utf-8")
+    _bash_events(run, "cat logs/e.log", "head -c 100000 logs/e.log", "head -n 20 logs/e.log", "grep X logs/e.log",
+                 "unzip -p logs/a.zip", "cat notes.txt", "less jira_raw.json", "strings logs/e.log | head",
+                 extra=[("Read", {"file_path": "/x/logs/e.log"}),
+                        ("Read", {"file_path": "/x/logs/e.log", "limit": 50}),
+                        ("Read", {"file_path": "/x/events.json"}),
+                        ("Read", {"file_path": "/x/other.md"})])
+    reads = grader.Ctx(env_dir, run).raw_full_reads()
+    assert len(reads) == 7, reads
+    assert not any("head -n" in r or "grep" in r or "notes.txt" in r or "limit" in r for r in reads)
+    assert "Read /x/events.json" in reads
+
+
+def test_plugin_mode_env_json_has_no_direct_tool_keys(tmp_path):
+    import skill_eval_env
+
+    entry = next(e for e in _entries() if e["id"] == 40)
+    plugin_info = skill_eval_env.build(entry, tmp_path / "plugin", direct_tools=False)
+    stored = json.loads((tmp_path / "plugin" / "env.json").read_text(encoding="utf-8"))
+    for key in ("jira_call", "jira_tools_list", "analyzer_run"):
+        assert key not in plugin_info and key not in stored, key
+    direct = skill_eval_env.build(entry, tmp_path / "direct")
+    assert all(k in direct for k in ("jira_call", "jira_tools_list", "analyzer_run"))
