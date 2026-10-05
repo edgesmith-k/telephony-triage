@@ -24,13 +24,13 @@
 |---|---|---|
 | 4a 탐색 분석 | 후보 없음·원인 미확인 → `timeline.md` + Claude 가설(리포트 보조) | `07 §Step 5-2`, `reference/explore.md` |
 | R8 점수 포화 | 동점은 근접·키워드로 정렬, score·S/C 불변 | `04 §5.11 (2)` |
-| 테스트 DB | 변형 이슈 DB는 커밋하지 않고 테스트 때 생성 | `CLAUDE.md §11.0`, `runner.variant_db` |
+| 테스트 DB | 변형 이슈 DB는 커밋하지 않고 테스트 때 생성 | `11 §11.0`, `runner.variant_db` |
 | 검사 통합 | `common/checks.py` 프로필(stage·precommit·guard) | `01 §3.1`, `contracts §종료 코드` |
 | 4b 실패 스텝 | 선택 입력(cli > Jira 필드 > 설명 > steps-file), 기록 `failed_step`, README "자주 실패한 스텝". v1 스키마 직접 수정(반입 전 규칙 `06 §6.4`) | `07 §Step 2`, `03 §5.4` |
 | 실패 스텝 기준점 | `step_order`: report.html/zip/붙여넣기 스텝 목록의 PASS 스텝을 `step_events`로 로그 흔적과 순서대로 짝지어 마지막 PASS 이후만 분석. 장비 시각은 `--clock-offset` 없이 쓰지 않음. 로그 표식(`log_marker`)은 기본 꺼짐. 스텝 기준 우선 유형(순위만 ≤0.05) | `07 §Step 3`, `02` failed_step·step_events, `14 S22` |
 | 보안 검토 수정 | `steps-pasted.txt`를 discard·`lock release`(자기 작업)·cleanup이 지운다 | `08 §8.1`, `contracts §3.2` |
 | R11 단정 제거 | RIL 요청 안 보임·시계 점프를 관측 사실·추론·반례로 구분 | `reference/ril-requests.md`·`log-tags.md`, `07 §Step 3` |
-| R9 verify-fix 예외 | 결정 (e)로 07·reference·`CLAUDE.md §12`를 05에 맞춤(코드 변경 없음) | `05 §5.12 (2)`, `07 §verify-fix` |
+| R9 verify-fix 예외 | 결정 (e)로 07·reference·`12-principles.md`를 05에 맞춤(코드 변경 없음) | `05 §5.12 (2)`, `07 §verify-fix` |
 | RF-2 | 반입 staging·rollback, `check_boundary`, 사외 CI | 리뷰 §U RF-2 (10/03부터 확인 대기) |
 
 ## 다음 할 일
@@ -47,7 +47,7 @@
 | ✅ 6 | **유지보수** — `db_add.py` op별 분할 | 10/05 완료(확인 대기). CLI만 남기고 `dbadd/`(ops 믹스인 7개) |
 | ☐ 7 | **트리거 개선** — 자연어 호출 recall 26~33% | SKILL.md 8,191/8,192바이트: description을 늘리면 본문을 줄여야 함. 지금은 슬래시 커맨드로 쓰면 문제없음 |
 | ✅ 8 | **R7 근거 출처**, **R15 대용량** | 10/05 완료(확인 대기). `line_ref`·`event_index`·cut 줄 앵커, 측정(`tools/bench_scale.py`)·O1 bisect·O4. `CHANGES.md` |
-| ☐ 9 | **`CLAUDE.md` 축소(≤4KB, §12 이동)** — 진행 결정(10/04) | §12는 옮겨서 링크 |
+| ✅ 9 | **`CLAUDE.md` 축소(≤4KB)** | 10/05 완료(확인 대기). §12 → `12-principles.md`. `CHANGES.md` |
 | ☐ 10 | **반입** — `15 §15.4` 체크리스트 재실행: `check_boundary --mode external`, `sync_schemas --check`, `make_db_skeleton.py`(새 키 `step_focus`·`step_events` 확인), `list_site_todos`, `git archive` 묶음 | `GUIDE.md` §3 "반입 전". 1~2는 반입 전에 필수, 3~9는 반입을 막지 않는다 |
 
 반입 뒤(사외 트랙): RF-3 전에 **`common/events.py`**(RF-1에서 빠짐, `line_ref` 포함) → RF-3 → RF-4 → RF-5(oFono), RF-6 → RF-7 → RF-8(품질 게이트), RF-9. 웹 UI는 사용자 결정으로 보류(RF-6·7 뒤 후보).

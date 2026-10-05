@@ -502,3 +502,17 @@
 
 - 테스트(+12, 전체 489개): `test_parse_logcat`(`line_ref` 줄 일치·다중 파일 순번·외부/builtin), `test_match_signatures`(`event_index`·섞인 입력·같은 시각·태그), `test_signatures_window`(예전 구현 사본과 무작위 300건 비교·구간 경계), `test_masking`(cut 줄 위치 앵커·불일치 대체·`\x0c` 정렬), `test_golden`, `test_triage`, `test_code_roots`(예전 구현과 비교).
 - 미룸: 파생 이벤트 `msg` 복사 제거, `common/events.py`(`line_ref` 포함해야 함), `analysis.json`에 줄 위치, 백엔드가 주는 줄 번호, find-symbol 범위 제한·색인, GB급 스트리밍·`events.json` 크기, `cut --events`, 사내 임계값 재보정(S-5), `db_regress.compare_events`의 `line_ref`.
+
+## CLAUDE.md 축소 (2026-10-05)
+
+- `CLAUDE.md` 13,640 → 3,613바이트(≤4KB, 매 세션 로드). 남긴 것: `@SITE_PROFILE.md` import, 목적 한 줄, 머리말(모드 판별 5규칙·번호 유지, 모드 표, import 대체), 작업 방식 요약, "항상 지킬 것" 7줄. 내용은 지우지 않고 옮겼다:
+
+| 이전 `CLAUDE.md` | 새 위치 |
+|---|---|
+| §12 원칙 | `docs/design/12-principles.md` (원본 12장, 새 파일) |
+| 문서 지도, "진입점·짧게 유지" 문단 | `docs/design/README.md` (새 파일) |
+| §11.0 작업 방식, 머리말의 플러그인 규격 확인 문단 | `11-phases.md §11.0` ("테스트용 이슈 DB" 문단은 기존 절에 합침) |
+| §1 목적과 범위 | `01-architecture.md §1` |
+| 머리말의 "사내 자료 없이 작성", placeholder·데이터 스택·Ubuntu 문단 | `14-site.md §14.1` |
+
+- 참조 갱신: `CLAUDE.md §12`/`12장` → `12-principles.md`(07·10·11 Phase 13·AGENTS·GUIDE·HTML 안내서·리뷰 문서), `CLAUDE.md §11.0` → `11-phases.md §11.0`(테스트 헬퍼), 문서 지도 → `docs/design/README.md`(14 §14.4). S-1 "읽을 것"에 `12-principles.md` 추가. `CLAUDE.md` 머리말을 가리키는 참조는 그대로 유효. `docs/history/`의 옛 참조는 고치지 않는다(이 표로 찾는다).

@@ -27,7 +27,7 @@ skill-creator 스킬을 실행하고 아래를 입력으로 준다.
 - 스킬 이름: `telephony-triage`
 - 구성: 위 "SKILL 구성" 표 (본체 500줄 이내, 흐름별 reference)
 - 워크플로우: `07-workflow.md` 전체 (analyze Step 0~8 → SKILL.md 본체, 공통 쓰기 절차·record·validate·fix-submitted·verify-fix·sync-pr → 각 reference)
-- 원칙: `CLAUDE.md`의 12장
+- 원칙: `12-principles.md`
 - 추가 지침 → `reference/db-authoring.md` (**이 목록이 db-authoring 구성의 유일한 정의다**. `01-architecture.md §3`과 `11-phases.md` Phase 13은 여기를 참조한다): `03-issue-db.md §5.4·5.5·5.7·5.9·5.10`, `04-parser-matching.md`, `05-verification.md`, `06-collaboration.md §6.2·6.5·6.9`, `16-existing-assets.md §16.1·16.3·16.5`, `contracts.md §작업 계획·§fixture·§상태 값·§브랜치·§기존 자산 연결 계약`
 - 추가 워크플로우: 수동 기록(`record`, `05-verification.md §5.12 (1)` 수동 기록 검증), `§5.12 (1)` 해결책 검증(`validate --cause`), `§5.12 (2)` `verify-fix`, `fix-submitted` — 모두 판정/입력 확인 → 사용자 확인 → 공통 쓰기 절차 PR
 - 참조 자료: `ril-requests.md`, `fail-causes.md`, `log-tags.md`

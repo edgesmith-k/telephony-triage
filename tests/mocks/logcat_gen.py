@@ -6,7 +6,7 @@
 
 확정된 것과 placeholder
 - **데이터 스택 태그는 확정 형식**이다: `DNC-<n>`, `DN-…`, `DPM-<n>`,
-  `DRM-<n>`, `DSM-<n>`, `DCM-<n>`, `DSRM-<n>` (Android 13+, `CLAUDE.md`).
+  `DRM-<n>`, `DSM-<n>`, `DCM-<n>`, `DSRM-<n>` (Android 13+, `14-site.md §14.1`).
 - 그 밖의 태그, 로그 문구, RIL 출력 형식, 슬롯 표기(`[PHONE<n>]`),
   bugreport 섹션 헤더는 **placeholder**다. 사내에서 S7·S9·S20·S21로 확인한다
   (`14-site.md §14.2`).

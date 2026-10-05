@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""변형 이슈 DB를 합성 샘플에서 만든다 (11-phases.md Phase 5, CLAUDE.md §11.0).
+"""변형 이슈 DB를 합성 샘플에서 만든다 (11-phases.md Phase 5·§11.0).
 
 샘플 트리(`tests/fixtures/issue-db-sample/`)를 복사한 뒤 정해진 변경을 결정적으로 적용한다.
 샘플 트리는 건드리지 않는다. 결과는 커밋하지 않는다 — 테스트가 `runner.variant_db()`로 프로세스당 한 번

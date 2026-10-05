@@ -1,12 +1,27 @@
 # 11. 개발 Phase (할 일·완료 기준·읽을 문서)
 
-> 원본 11장(11.0 제외). 11.0 작업 방식은 `CLAUDE.md`에 있다.
+> 원본 11장. 11.0 작업 방식은 아래 절(매 세션 요약은 `CLAUDE.md` "작업 방식").
 > **사외 초안 모드(D0 → 1~13)와 사내 처음부터 모드(0 → D0 → 1~14)에서만 읽는다.** 사내 보완 모드는 이 파일을 읽지 않는다 (`15-local-draft.md §15.5`. Phase 14는 S-7로 그 표에 있다).
 > 모든 테스트·eval은 테스트 헬퍼 플러그인 루트(`tests/helpers/make_plugin_root.py`, `site-defaults.example.yaml` 복사본)에서 돈다 (`15-local-draft.md §15.1`).
 > 각 Phase를 시작할 때 이 파일에서 **그 Phase 절만** 읽고, 그 Phase의 "읽을 문서"를 읽는다.
 
+## 11.0 작업 방식 (Claude Code가 지킬 것)
+
+> 이전 `CLAUDE.md §11.0`. 사내 보완 모드는 이 파일을 읽지 않으므로, 모든 모드에 필요한 요약은 `CLAUDE.md`에 있다.
+
+- **`CLAUDE.md` 머리말의 모드 표에 따른 시작점부터** Phase(또는 S 단계) 단위로 진행한다. 사외 초안·사내 처음부터 모드에서는 각 Phase를 시작할 때 `11-phases.md`의 그 Phase 절과 "읽을 문서"를 읽는다 (항상 `contracts.md` 포함. 코드·스킬·이슈 DB 동작을 바꾸면 `12-principles.md`도). 사내 보완 모드(S 단계)에서는 `15-local-draft.md §15.5`의 그 단계 "읽을 것"만 읽는다. Phase(단계)가 끝날 때마다 완료 기준을 점검하고 결과를 요약한 뒤 사용자 확인을 받는다. 확인을 받아야 다음으로 넘어가고, 모드에 맞는 파일(사외 초안 `DRAFT_NOTES.md`, 사내 `SITE_PROFILE.md`)의 "진행 상태"를 갱신한다.
+- 각 Phase의 완료 기준은 **그 시점까지 만든 것만으로** 확인할 수 있게 짜여 있다. 뒤 Phase의 기능이 필요하면 멈추고 보고한다.
+- 역할 분담:
+  - 플러그인 뼈대, 스크립트, 커맨드, Claude hooks, git hooks: Claude Code가 직접 구현한다.
+  - `skills/telephony-triage/SKILL.md`와 `reference/`: **skill-creator 스킬**로 작성하고 eval로 검증한다 (Phase 13, 모든 스크립트가 끝난 뒤).
+- 플러그인 규격, hooks 스키마, GHE Actions 문법은 구현 전에 최신 공식 문서로 확인한다. 사내에서 외부 공식 문서에 접근할 수 없으면 **빈 플러그인 실험(S1)** 으로 대체하고 결과를 `SITE_PROFILE.md`에 기록한다.
+- 사내 확인값은 `SITE_PROFILE.md`에만 쓴다. 이 문서 세트에는 쓰지 않는다 (`14-site.md §14.1`).
+- 모든 테스트 로그는 마스킹된 fixture만 쓴다.
+- Claude Code 세션은 **플러그인 레포 루트에서 연다** (`CLAUDE.md`가 로드되도록). 이슈 DB 레포는 절대 경로로 다룬다.
+- Claude Code 플러그인 규격(디렉토리 구조, `plugin.json`/`marketplace.json` 필드, hooks 스키마와 권한 결정 필드, 커맨드와 스킬의 관계, `${CLAUDE_PLUGIN_ROOT}` 치환, MCP 도구 이름 형식, 로컬 플러그인 로드 방법)과 GHE Actions 문법은 버전에 따라 바뀔 수 있다. **구현 전에 최신 공식 문서로 확인하고, 사내에서 공식 문서에 접근할 수 없으면 빈 플러그인 실험(S1)으로 확인한다.** 이 문서와 다르면 확인 결과를 따르고 차이를 사용자에게 보고한다.
+
 - **수동 기록(`record`)의 구현 위치**: 별도 Phase가 없다. 계획 경로와 `source: record` 규칙은 Phase 7(손으로 쓴 record 계획), 검증 상태(`skipped: fixture 없음`, `시그니처 없음(pending)`)는 Phase 10, 리뷰 항목은 Phase 11, 커맨드 틀은 Phase 12, 대화형 흐름과 eval 30~38(수동 기록)은 Phase 13에서 만든다. `also_allowed`/`allow-cause`도 별도 Phase가 없다: 스키마·lint는 Phase 1·5, op·drift는 Phase 7, R2~R4 판정과 초안 제시는 Phase 10, 리뷰 항목은 Phase 11, eval 42는 Phase 13. 설계는 `07-workflow.md §record`, 검증 표는 `05-verification.md §5.12 (1)` "수동 기록 검증".
-- **테스트용 이슈 DB**: 합성 샘플은 `tests/fixtures/issue-db-sample/`(파일 트리)에 둔다. 테스트는 헬퍼(`tests/helpers/make_repo.py`)로 이 트리에서 임시 git 레포와 bare 원격을 만들어 쓴다. 변형(오류 주입, 0건 카테고리, 리뷰 케이스 등 `issue-db-*`)은 커밋하지 않고 `tests/helpers/make_variant_dbs.py`가 테스트 때 샘플에서 생성한다(`runner.variant_db(name)`). 샘플 트리를 오염시키지 않는다.
+- **테스트용 이슈 DB**: 합성 샘플은 `tests/fixtures/issue-db-sample/`(파일 트리)에 둔다. 테스트는 헬퍼(`tests/helpers/make_repo.py`)로 이 트리에서 임시 git 레포와 bare 원격을 만들어 쓴다. 변형(오류 주입, 0건 카테고리, 리뷰 케이스 등 `issue-db-*`)은 커밋하지 않고 `tests/helpers/make_variant_dbs.py`가 테스트 때 샘플에서 생성한다(`runner.variant_db(name)`). 샘플 트리를 오염시키지 않는다. 반입·운영용 이슈 DB는 샘플 없는 **뼈대**만 `tools/make_db_skeleton.py`로 만든다 (Phase 1).
 
 ### Phase D0. 모의 환경 (두 모드 공통)
 - 사외 초안 모드는 여기서 시작한다. 사내 처음부터 모드는 Phase 0 다음에 한다(모의 환경은 Phase 1~13의 테스트에 필요하므로 모드와 무관하다). 사내 보완 모드는 하지 않는다(사외에서 이미 만들어 반입됨).
@@ -168,7 +183,7 @@
 ### Phase 13. SKILL.md (skill-creator 사용)
 - 할 일: `10-skill-eval.md`의 구성과 입력으로 skill-creator 스킬을 실행한다. **SKILL.md 본체는 analyze 핵심 흐름만(500줄 이내)**, 나머지 흐름은 `reference/`로 나눈다 (`10-skill-eval.md §SKILL 구성`). Step 5-1 심층 분석(`analyzers`, 기본 `ask`, `--analyzer`/`--no-analyzer`)과 `jira.tools` 호출을 포함한다 (모의 분석 스킬로 시험).
 - 완료 기준: `10-skill-eval.md`의 트리거 테스트 전 항목, eval 45개(수동 기록 30~38, 기존 자산 39~41, `allow-cause` 42, Jira 텍스트 마스킹 43, 슬롯 44, 후보 없음·범위 밖·bugreport 45 포함) 통과. 결과물은 `plugin/skills/telephony-triage/`. SKILL.md 본체가 500줄 이내이고, 각 커맨드는 자기 흐름의 `reference/` 파일만 읽는다. `analyze`, `record`, `validate --cause`, `verify-fix`, `fix-submitted` 커맨드가 스킬과 연결되어 동작한다.
-- 읽을 문서: `10-skill-eval.md`, `07-workflow.md`, `contracts.md`, `16-existing-assets.md §16.1·16.5`, `CLAUDE.md` 12장, 그리고 `10-skill-eval.md §skill-creator 입력`의 db-authoring 구성 목록에 있는 절
+- 읽을 문서: `10-skill-eval.md`, `07-workflow.md`, `contracts.md`, `16-existing-assets.md §16.1·16.5`, `12-principles.md`, 그리고 `10-skill-eval.md §skill-creator 입력`의 db-authoring 구성 목록에 있는 절
 
 ### Phase 14. 배포와 파일럿
 - 사내 보완 모드는 `15-local-draft.md §15.5`의 **S-7**로 한다(내용 같음).

@@ -1,6 +1,13 @@
 # 01. 전체 구조와 플러그인 레포
 
-> 원본 2장, 3장. CLI 옵션과 종료 코드는 `contracts.md §3.2`, `contracts.md §종료 코드`에만 있다.
+> 원본 1장(이전 `CLAUDE.md §1`), 2장, 3장. CLI 옵션과 종료 코드는 `contracts.md §3.2`, `contracts.md §종료 코드`에만 있다.
+
+---
+
+## 1. 목적과 범위
+
+Android Telephony 이슈 도구. Jira 이슈와 logcat을 받아 원인·해결책을 분석하고, 결과를 **카테고리 > 이슈 유형(증상) > 원인**으로 사내 GitHub 이슈 DB 레포(`telephony-issue-db`)에 누적한다. 팀원들이 같은 DB에 계속 기여하며 시그니처 품질과 해결 상태를 관리한다.
+v1 범위: logcat(radio/main/system/crash, bugreport는 logcat 섹션만) · Jira **읽기 전용** · GHE 브랜치+PR(main 직접 push 금지) · CI 없음(`ci_mode: local`) · 카테고리 data/call/network/sim/sms/ims · 사용자별 한 번에 한 작업. 제외: CP 로그 파싱, Jira 쓰기, 3-way replay. 상세 표는 `GUIDE.md §1`.
 
 ---
 
@@ -48,7 +55,7 @@ telephony-triage-plugin/                 # 개발 레포 루트
 ├── docs/history/                        # 아카이브(읽지 않음): draft-notes-<날짜>.md(Phase별 상세), CHANGES.md(문서 세트 변경 이력), REVIEW-10/11.md
 ├── tools/list_site_todos.py             # TODO(SITE:S<n>) 목록 추출
 ├── tools/offline_eval.py                # 라벨셋(과거 Jira + 로그 + 정답 원인)으로 analyze --dry-run 1위 정확도·오탐률 측정 (15-local-draft.md §15.5 S-5)
-├── docs/design/                         # 설계 문서 (이 파일 포함, 배포 대상 아님)
+├── docs/design/                         # 설계 문서 (이 파일 포함. 지도 README.md, 원칙 12-principles.md. 배포 대상 아님)
 ├── docs/site/                           # [사내 전용, SITE_PATHS] 확인 근거 (14-site.md §14.3)
 ├── tests/
 │   ├── fixtures/
