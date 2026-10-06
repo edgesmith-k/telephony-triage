@@ -76,20 +76,11 @@ def _has_shebang(path: Path) -> bool:
 
 
 def wanted() -> list[str]:
-    paths: set[str] = set()
-    for pattern in EXEC_GLOBS:
-        for path in REPO.glob(pattern):
-            if path.is_file():
-                paths.add(path.relative_to(REPO).as_posix())
-    for path in REPO.rglob("*"):
-        if not path.is_file():
-            continue
-        rel = path.relative_to(REPO)
-        if ".git" in rel.parts or "__pycache__" in rel.parts:
-            continue
-        if _has_shebang(path):
-            paths.add(rel.as_posix())
-    return sorted(paths)
+    # 무시된 경로(workspace 등)는 대상이 아니다: 추적·비추적(무시 제외)만 본다.
+    visible = [p for p in _git(["ls-files", "-co", "--exclude-standard", "-z"]).split(chr(0)) if p]
+    globbed = {p.relative_to(REPO).as_posix() for pattern in EXEC_GLOBS for p in REPO.glob(pattern)}
+    return sorted(rel for rel in visible
+                  if (REPO / rel).is_file() and (rel in globbed or _has_shebang(REPO / rel)))
 
 
 def main(argv: list[str] | None = None) -> int:

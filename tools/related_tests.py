@@ -163,6 +163,19 @@ def import_edges(mods: dict[str, str]) -> dict[str, set[str]]:
     return edges
 
 
+def units(edges: dict[str, set[str]]) -> dict[str, str]:
+    """모듈 -> 셈 단위. 패키지는 하나로 세고, 바깥 importer가 하나뿐인 패키지(`dbpr/`처럼
+    진입 스크립트 `db_pr.py`의 구현)는 그 진입 스크립트와 같은 단위로 센다."""
+    top = {m: m.split(".")[0] for m in edges}
+    owner: dict[str, str] = {}
+    for pkg in {t for m, t in top.items() if m != t}:
+        outside = {top[i] for i, used in edges.items()
+                   if top[i] != pkg and any(top.get(u) == pkg for u in used)}
+        if len(outside) == 1:
+            owner[pkg] = outside.pop()
+    return {m: owner.get(t, t) for m, t in top.items()}
+
+
 def reverse_closure(edges: dict[str, set[str]], start: str) -> set[str]:
     reverse: dict[str, set[str]] = {}
     for importer, used in edges.items():
@@ -275,8 +288,10 @@ def select(files: list[str]) -> Selection:
             for mod in changed:
                 importers |= reverse_closure(edges, mod)
             importers -= set(changed)
-            if len(importers) > MAX_IMPORTERS:
-                full(path, f"공용 모듈(간접 importer {len(importers)}개 > {MAX_IMPORTERS})")
+            unit = units(edges)
+            count = len({unit[m] for m in importers} - {unit[m] for m in changed})
+            if count > MAX_IMPORTERS:
+                full(path, f"공용 모듈(간접 importer {count}개 > {MAX_IMPORTERS})")
                 continue
             found = set()
             for mod in set(changed) | importers:
@@ -286,7 +301,7 @@ def select(files: list[str]) -> Selection:
                 for tpath, text in tests.items():
                     if references_module(text, imported_names(text), mod, rel):
                         found.add(tpath)
-            add(path, found, f"importer {len(importers)}개")
+            add(path, found, f"importer {count}개")
         elif path.startswith("tests/test_") and path.endswith(".py") and path.count("/") == 1:
             add(path, {path} & set(tests))
         elif path.startswith("tests/fixtures/") or path.startswith("tests/mocks/"):

@@ -1590,7 +1590,7 @@ def test_guard_and_db_pr_share_rule_3_4_deny_messages():
     assert [m.endswith(tail) for m in swapped] == [True, False, True, True]
     assert swapped[0].startswith("staged 변경에 마스킹 안 된 개인정보가 있다 (규칙 3): a.yaml:3 IMEI. ")
     assert swapped[1] == ".cache/는 커밋하지 않는다 (규칙 4): .cache/x, .cache/y"
-    for path in (REPO / "plugin/scripts/guard.py", REPO / "plugin/scripts/db_pr.py"):   # 문구를 다시 복제하지 않았다
+    for path in (REPO / "plugin/scripts/guard.py", REPO / "plugin/scripts/dbpr/publish.py"):   # 문구를 다시 복제하지 않았다
         src = path.read_text(encoding="utf-8")
         assert "guard_deny_messages" in src and "마스킹 안 된 개인정보" not in src and "원본과 맞지 않는다" not in src, path
 
@@ -1686,6 +1686,25 @@ def test_my_prs_lists_only_my_open_prs_with_base_moved_and_is_read_only():
     after = (_listing(ws.work), git(ws.clone, "for-each-ref"), git(ws.clone, "status", "--porcelain"))
     # 읽기 전용: 위의 fetch·push_main 외에 my-prs가 바꾼 것은 없다 (작업 디렉토리·워킹 트리)
     assert after[0] == before[0] and after[2] == before[2]
+
+
+def test_my_prs_compares_against_the_prs_own_base():
+    """base_moved는 config base가 아니라 PR의 baseRefName 기준이다 (W9 보류 → W10)."""
+    ws = Workspace()
+    ws.plan("MOCK-7001", "p7-analyze-append.plan.json")
+    ws.ship("MOCK-7001", "issue/MOCK-7001")
+    git(ws.other_clone(), "push", "-q", "origin", "main:refs/heads/release")
+    prs_path = ws.gh_state / "prs.json"
+    state = json.loads(prs_path.read_text(encoding="utf-8"))
+    state["prs"][0]["baseRefName"] = "release"
+    prs_path.write_text(json.dumps(state), encoding="utf-8")
+
+    ws.push_main(lambda p: (p / "NOTE.md").write_text("main 변경\n", encoding="utf-8"))
+    git(ws.clone, "fetch", "-q", "origin")
+    assert ws.db_pr("my-prs")["prs"][0]["base_moved"] is False     # main은 움직였지만 PR의 base(release)는 그대로
+    ws.push_branch("release", lambda p: (p / "NOTE.md").write_text("release 변경\n", encoding="utf-8"))
+    git(ws.clone, "fetch", "-q", "origin")
+    assert ws.db_pr("my-prs")["prs"][0]["base_moved"] is True
 
 
 def test_my_prs_gh_failure_is_a_warning_and_missing_config_stops_with_2():

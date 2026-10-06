@@ -88,7 +88,7 @@ except UsageError:
 
 
 def safety_ctx(tmp_path):
-    module = importlib.import_module("db_pr")
+    module = importlib.import_module("dbpr.worktree")
     repo = tmp_path / "repo"
     repo.mkdir()
     git(repo, "init", "-q", "-b", "main")
@@ -195,7 +195,7 @@ def test_r9_resolve_stays_inside_root(safety_root, tmp_path, monkeypatch, relati
 
 
 def test_r8_git_timeout_is_environment_error(safety_root, tmp_path, monkeypatch):
-    module = importlib.import_module("db_pr")
+    module = importlib.import_module("dbpr.worktree")
     def timeout(*args, **kwargs):
         assert 0 < kwargs.get("timeout", 0) <= 120
         raise subprocess.TimeoutExpired(args[0], kwargs["timeout"])

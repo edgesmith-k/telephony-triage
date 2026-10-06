@@ -64,8 +64,8 @@ Phase 1~13 모의 환경으로 전부 구현           S-2  사내 Claude Code �
 python3 tools/make_bundle.py --label import-v1     # 이 이름이 사내 .draft-manifest.json의 label
 ```
 - 도구가 자동 항목을 싼 것부터 검사하고(첫 실패에서 중단), 모두 통과하면 묶음을 만든다: 레포 zip(`git archive`), 이슈 DB 뼈대 zip, `SHA256SUMS`(`sha256sum -c` 형식), `make_bundle-result.json`, `logs/`. 위치는 기본 `<레포 상위>/tt-import-bundles/<label>/`이다 (`--out`으로 바꾸고, 이미 있으면 `--force`). 전체 pytest를 돌리므로 시간이 걸린다.
-- **종료 3 = 정상 완료**: 자동 검사 통과, 묶음 생성, 사람 확인 3건 대기. 이 도구는 0으로 끝나지 않는다. 종료 1은 자동 검사 실패 또는 `--skip`(묶음 없음, `--skip`은 통과로 세지 않는다), 종료 2는 사용·환경 오류(트리가 깨끗하지 않음, 태그가 다른 커밋을 가리킴 등)다.
-- 사람이 확인할 3건: ① 실제 회사명·서버명·팀명 검색(`grep -rniE '<회사명>|<사내 도메인>' .`), ② `list_site_todos.py` 결과를 직접 봄, ③ `DRAFT_NOTES.md`가 최신인지.
+- **종료 3 = 정상 완료**: 자동 검사 통과, 묶음 생성, 사람 확인 4건 대기. 이 도구는 0으로 끝나지 않는다. 종료 1은 자동 검사 실패 또는 `--skip`(묶음 없음, `--skip`은 통과로 세지 않는다), 종료 2는 사용·환경 오류(트리가 깨끗하지 않음, 태그가 다른 커밋을 가리킴 등)다.
+- 사람이 확인할 4건: ① 실제 회사명·서버명·팀명 검색(`grep -rniE '<회사명>|<사내 도메인>' .`), ② `list_site_todos.py` 결과를 직접 봄, ③ `DRAFT_NOTES.md`가 최신인지, ④ `plugin.json` description에서 "사외 초안"을 빼고 version 확인.
 - 확인을 마치면 도구가 출력한 명령으로 **직접** 태그를 만들고 push한다 (도구는 태그를 만들지 않는다): `git tag import-v1 <HEAD sha> && git push origin import-v1`
 - 사내에서는 `SHA256SUMS`로 대조한다 (`sha256sum -c SHA256SUMS`).
 - `git archive`는 커밋된 파일만 담으므로 `.local-draft`, `tests/skill_evals/workspace/`, `__pycache__` 같은 비추적·무시 파일이 자동으로 빠진다. 도구가 zip 안에 `.local-draft`·`.mcp.json`·`SITE_PATHS` 경로가 없는지도 다시 확인한다.
@@ -161,11 +161,11 @@ git add -A && git commit -m "사외 초안 반입: import-v1"     # .draft-manif
 [모드] 사내 보완. 개발 Phase D0~13은 사외에서 끝났으니 다시 하지 않는다. 할 일은 15-local-draft.md §15.5의 S-1~S-7뿐이다.
 처음 물으면 "사내 보완"을 고르고, S-1에서 SITE_PROFILE.md를 만들어 "모드: 사내 보완"을 적는다. 이후 세션은 그 파일로 이어간다.
 
-[읽을 것 — 이것만, 순서대로]
-1. CLAUDE.md와 docs/design/12-principles.md (원칙)   2. DRAFT_NOTES.md (사외 상태 파일 6KB)   3. docs/design/15-local-draft.md §15.5의 **해당 단계 행**과 그 행의 "읽을 것"
-4. REVIEW-OPEN.md (사내 정보가 있어야 판단할 항목)   5. 14-site.md §14.2 표 (S1~S22 placeholder)
-읽지 않는다: docs/history/ 전체, 11-phases.md, docs/design/의 다른 파일(단계 행이 지정한 절 외), ARCHITECTURE_REVIEW·HANDOFF(개선 작업은 사외 트랙).
-TODO(SITE) 57곳은 문서가 아니라 `python3 tools/list_site_todos.py`로 뽑는다.
+[읽을 것 — 이것만]
+`python3 tools/context_pack.py S-n` 출력(그 단계의 §15.5 행·비고·읽을 파일과 절, 목록은 docs/tasks.md). CLAUDE.md는 자동 로드.
+읽지 않는다: docs/history/ 전체, 11-phases.md, pack에 없는 docs/design/ 파일, ARCHITECTURE_REVIEW·HANDOFF(개선 작업은 사외 트랙).
+파일럿 지표(PR까지 시간·중도 취소 비율·작업당 질문 수)는 `python3 tools/usage_stats.py`로 뽑는다.
+TODO(SITE) 목록은 문서가 아니라 `python3 tools/list_site_todos.py`로 뽑는다.
 
 [지킬 것]
 - 사내 값·코드는 SITE_PATHS에 적힌 경로에만 (SITE_PROFILE.md, docs/site/, plugin/site-defaults.yaml, parser_backends/site/, adapters/site_*, tests/golden/, tests/site/).

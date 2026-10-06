@@ -467,7 +467,7 @@ def test_doctor_snapshot_age_missing_and_corrupt_meta():
     later = lambda days: {"TT_NOW": (datetime.now(timezone.utc) + timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%SZ")}  # noqa: E731
     assert _rows(_doctor(env, at=later(6)))["snapshot"]["status"] == "ok"
     old = _rows(_doctor(env, at=later(8)))["snapshot"]
-    assert old["status"] == "warn" and "8일" in old["detail"] and "sync" in old["next"]
+    assert old["status"] == "warn" and "8일 전 (" in old["detail"] and "7일 초과)" in old["detail"] and "sync" in old["next"]
     meta.unlink()
     unknown = _rows(_doctor(env))["snapshot"]
     assert unknown["status"] == "warn" and "나이 불명" in unknown["detail"]

@@ -29,7 +29,8 @@
 | `GUIDE.md` (루트) | 사람용 총정리 |
 | `REVIEW-OPEN.md` (루트) | 사내 정보가 있어야 판단할 미해결 항목 (S-1 / Phase 0에서 처리) |
 | `DRAFT_NOTES.md` (루트) | 사외 초안 **상태 파일(≤8KB)**: 진행 상태·막힌 것·활성 트랙. 상세 이력은 `docs/history/`(읽지 않는다) |
-| `docs/development/` | 리뷰·인계 문서(`ARCHITECTURE_REVIEW_2026-10.md` RF 계획, `PLUGIN_IMPROVEMENT_HANDOFF.md`, `S0_PROBE_CHECKLIST.md`) |
+| `docs/tasks.md` | 사내 보완 단계(S-0~S-7)별 "읽을 것" 표. `python3 tools/context_pack.py S-n`이 그 파일·절만 출력 |
+| `docs/development/` | 리뷰·인계 문서(`ARCHITECTURE_REVIEW_2026-10.md` 남은 RF·R 항목, `PLUGIN_IMPROVEMENT_HANDOFF.md`(이관 안내), `S0_PROBE_CHECKLIST.md`) |
 
 - `07-workflow.md §Step 8-5`는 "Step 8의 5번 항목". `§record`처럼 워크플로우 이름은 `07-workflow.md`의 `##` 절.
 - 변경 이력은 `docs/history/CHANGES.md`.

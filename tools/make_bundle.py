@@ -75,7 +75,7 @@ class CheckResult:
 @dataclass
 class Check:
     id: str
-    checklist: int                   # 15-local-draft.md §15.4 항목 번호 (1..9)
+    checklist: int                   # 15-local-draft.md §15.4 항목 번호 (1..10)
     kind: str                        # auto | manual
     fn: Callable | None = None       # fn(ctx) -> CheckResult (manual은 None)
     how: str = ""                    # manual: 사람이 할 일
@@ -331,12 +331,16 @@ CHECKS: list[Check] = [
     Check("schemas", 3, "auto", tool_check("schemas", "sync_schemas.py", ["--check"], "sync_schemas --check 통과")),
     Check("contracts", 4, "auto", tool_check("contracts", "gen_contracts.py", ["--check"],
                                              "gen_contracts --check 통과")),
+    Check("exec-bits", 1, "auto", tool_check("exec-bits", "fix_exec_bits.py", ["--check"],
+                                             "fix_exec_bits --check 통과")),
     Check("site-todos", 8, "auto", check_site_todos),
     Check("todos-seen", 8, "manual", None,
           "python3 tools/list_site_todos.py 결과를 사용자가 직접 보고, 상태 파일에는 개수만 적었는지 확인한다."),
     Check("draft-notes-size", 9, "auto", check_draft_notes_size),
     Check("draft-notes-fresh", 9, "manual", None,
           "DRAFT_NOTES.md의 진행 상태·막힌 것·활성 트랙·실험 결과 표가 최신인지 사람이 확인한다."),
+    Check("plugin-json", 10, "manual", None,
+          "plugin/.claude-plugin/plugin.json: description에서 '사외 초안'을 빼고 version을 확인한다 (반입 전·태그 전)."),
     Check("skeleton", 7, "auto", check_skeleton),
     Check("offline-eval", 1, "auto", check_offline_eval),
     Check("regress", 1, "auto", check_regress),
