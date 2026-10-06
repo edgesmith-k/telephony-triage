@@ -578,7 +578,7 @@ def checks(eid: int, ctx: Ctx) -> list:
             texts = ctx.texts()
             if texts is None:
                 raise _Manual("실행 기록(events.jsonl) 없음")
-            ran = bool(re.search(r"config\.py\s+doctor\s+--format\s+markdown", ctx.ran))
+            ran = bool(re.search(r"config\.py[\"']?\s+doctor\s+--format\s+markdown", ctx.ran))
             row = next((t for t in texts if re.search(r"\|\s*jira\s*\|\s*fail\s*\|", t)), None)
             return ran and row is not None, f"doctor 실행={ran}; jira fail 행을 담은 assistant 텍스트={'있음' if row else '없음'}"
         return [None, lambda: ("jira_fetch_ticket" not in ctx.ran.replace("--list", ""), "실행 기록(Bash·MCP)에 jira_fetch_ticket 호출 여부"),
@@ -891,7 +891,7 @@ def checks_w4(eid, ctx):
 
     if eid == 58:
         def doctor_ran():
-            ok = bool(re.search(r"config\.py\s+doctor\s+--format\s+markdown", ctx.ran))
+            ok = bool(re.search(r"config\.py[\"']?\s+doctor\s+--format\s+markdown", ctx.ran))
             return ok, "실행 기록에 `config.py doctor --format markdown` " + ("있음" if ok else "없음")
         def pasted():
             return said(r"\|\s*점검\s*\|\s*상태\s*\|", r"\|\s*gh\s*\|")()
@@ -901,7 +901,7 @@ def checks_w4(eid, ctx):
             a, ea = ctx.lock_free()
             b, eb = ctx.clone_same()
             ran = ctx.ran
-            hit = re.search(r"config\.py\s+doctor", ran)
+            hit = re.search(r"config\.py[\"']?\s+doctor", ran)
             after = ran[hit.end():] if hit else ""     # doctor 호출 뒤에 수리 명령이 없어야 한다
             c = bool(hit) and not re.search(r"install-hooks|sync-scripts-path|config\.py\s+set\b|git\b[^\n]*\bconfig\b", after)
             return a and b and c, f"{ea}; {eb}; doctor 호출 {'있음' if hit else '없음'}, 그 뒤 수리 호출 {'없음' if c else '있음'}"
