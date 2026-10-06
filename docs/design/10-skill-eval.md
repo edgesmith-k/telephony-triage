@@ -95,7 +95,7 @@ skill-creator 스킬을 실행하고 아래를 입력으로 준다.
 22. 해결책 문구를 바꾸는 계획 → 해결책 검증 상태가 unverified로 초기화된다고 확인 화면에 표시
 23. verify-fix 로그가 증상은 남고 원인 시그니처는 불충족 → 부분 통과, `fix-submitted` 유지 + `verification_history`에 partial 기록, 다른 원인 후보 제시. "통과로 기록" 선택지를 제시하지 않는다
 24. verify-fix 로그에 시나리오 흔적이 없음(사용자가 "시나리오 했어"라고 말해도) → 판단 불가, 기록하지 않고 필요한 로그 조건 안내
-25. 코드 수정 유형 원인에 `scenario_signatures`·`recovery_signatures`가 모두 없는데 verify-fix 요청 → 판정 전에 중단하고 시그니처 추가를 안내
+25. 코드 수정 유형 원인에 `scenario_signatures`·`recovery_signatures`가 모두 없는데 verify-fix 요청 → 판정이 나오지 않고(`db_verify fix`를 부르지 않거나 종료 코드 2로 거부) 시그니처 추가를 안내
 26. "CALL-001-01 CL 머지됐어, 브랜치 main-dev" (빌드 없음) → `fix-submitted` 흐름, 빌드 없으면 회귀 판정 불가라고 알림, 브랜치 `fix-submit/CALL-001-01`
 27. `validate --cause`인데 원인에 `recovery_signatures`가 없고 로그에 시나리오 흔적도 없음 → unknown, 기록하지 않음
 28. Step 8에서 `issue/<KEY>` 원격 브랜치가 이미 있음 → 원격 SHA가 계획의 `pr.head_sha`와 같으면 "plan으로 브랜치 갱신(lease push)", 다르면 원격 변경 요약과 "덮어쓰기 / 중단" 선택지 제시. 도구 브랜치 `tt/issue/<KEY>` 잔여물만 있으면 삭제할지 묻고, 사용자 로컬 `issue/<KEY>`는 지우지 않는다

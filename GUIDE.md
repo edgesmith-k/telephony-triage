@@ -349,8 +349,8 @@ claude mcp list               # Jira MCP 사용자 범위 등록 확인
 
 ### 모델 선택 (3C~3E eval 근거)
 
-- Sonnet 기본: analyze·record·fix-submitted·sync-pr·search·5-1 분석 스킬.
-- verify-fix: 당분간 Opus 권장(Sonnet은 실행마다 갈림, 3E 2/3). 흔적 시그니처 없는 코드 수정 유형을 `db_verify`가 막는 구조 수정 뒤 Sonnet 재검토(반입 뒤)
+- Sonnet 기본: analyze·record·fix-submitted·verify-fix·sync-pr·search·5-1 분석 스킬.
+- verify-fix: W3부터 흔적 시그니처 없는 코드·설정 수정 유형을 `db_verify fix`가 종료 코드 2로 막아 Sonnet 기본(eval 25 Sonnet 3/3, W3). 사내 S-2 재실행에서 다시 확인한다.
 - 5-2 탐색은 Sonnet. 가설 품질이 중요하면 Opus를 고른다.
 - 바꾸는 법: `/model`. 커맨드 frontmatter `model` 고정은 사내 S1 확인 뒤(`14-site.md` S1).
 

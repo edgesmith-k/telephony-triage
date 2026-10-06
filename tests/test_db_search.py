@@ -430,6 +430,48 @@ def test_format_json_is_default_and_brief_is_ignored_for_markdown():
     assert both.returncode == 2 and both.stdout == ""
 
 
+# --- verify_fix_blocked (99-deferred.md §F 방안 2, W3) -----------------------------------------------------------
+
+CAUSE_KEYS = {"kind", "id", "type", "type_title", "category", "title", "status", "current", "chain", "merged_from",
+              "signatures_pending", "resolution", "resolution_type", "resolution_verification", "fix", "related",
+              "secondary_categories", "code_refs", "jira", "jira_count", "jira_latest", "path"}
+BLOCKED_REASON = "코드·설정 수정 유형({rtype})에 scenario·recovery 시그니처 없음 — update-signature 필요"
+
+
+def _cause_entry(db, cause_id: str, *extra) -> dict:
+    return run_json("db_search.py", ["--db", db, cause_id, *extra])["results"][0]
+
+
+def test_verify_fix_blocked_only_on_code_fix_cause_without_traces():
+    """코드·설정 수정 유형 + scenario·recovery 모두 없음 + pending 아님 → 사유 문자열 하나. 그 밖에는 키 자체가 없다."""
+    blocked = _cause_entry(SAMPLE, "IMS-001-01")                    # framework-bug, 시그니처 없음
+    assert blocked["verify_fix_blocked"] == BLOCKED_REASON.format(rtype="framework-bug")
+    assert set(blocked) == CAUSE_KEYS | {"verify_fix_blocked"}
+    for cause_id in ("CALL-001-01",                           # carrier-config + 흔적 있음
+                     "DATA-001-01", "DATA-001-02",            # user-setting (비코드): 사용자 확인 경로
+                     "NETWORK-001-01"):                       # network (비코드)
+        entry = _cause_entry(SAMPLE, cause_id)
+        assert set(entry) == CAUSE_KEYS, cause_id             # 다른 원인 출력은 키가 늘지 않는다
+    pending = _cause_entry(variant_db("issue-db-pending"), "DATA-001-03")
+    assert pending["signatures_pending"] is True and "verify_fix_blocked" not in pending
+
+
+def test_verify_fix_blocked_keeps_other_output_and_markdown_unchanged():
+    """`--brief`는 키를 그대로 남기고, markdown은 렌더하지 않는다(바이트 동일: 키 추가가 마크다운에 새지 않는다)."""
+    assert _cause_entry(SAMPLE, "IMS-001-01", "--brief")["verify_fix_blocked"].startswith("코드·설정 수정 유형(framework-bug)")
+    md = _md(SAMPLE, "IMS-001-01")
+    assert "verify_fix_blocked" not in md and "update-signature 필요" not in md
+    assert md == _md(SAMPLE, "IMS-001-01", "--brief")
+
+
+def test_verify_fix_blocked_text_is_documented():
+    contracts = (REPO / "docs/design/contracts.md").read_text(encoding="utf-8")
+    row = next(line for line in contracts.splitlines() if line.startswith("| `db_search.py`"))
+    assert "verify_fix_blocked" in row and "기본 출력 불변 원칙의 예외" in row
+    assert "`verify_fix_blocked`가 있으면" in (REPO / "plugin/skills/telephony-triage/reference/verify.md"
+                                              ).read_text(encoding="utf-8")
+
+
 if __name__ == "__main__":
     import pytest
 

@@ -110,10 +110,10 @@ v1의 실패 스텝은 필드·설명·시험 절차 텍스트와 사용자가 �
 
 3E에서 Sonnet은 e25(코드·설정 수정 유형에 scenario·recovery 시그니처가 없음)에서 "판정 전 중단" 규칙을 문구만으로는 지키지 못했다(2/3). 구조로 강제한다.
 
-- 방안 1: `db_verify.py fix`가 코드·설정 수정 유형이면서 scenario·recovery 시그니처가 모두 없을 때 `judgement: unknown`을 내는 대신 **종료 코드 2와 "판정 전 중단 조건" 오류**로 거부한다. 오류에 "update-signature로 scenario/recovery 추가 → 초안 R1 흔적 검사 통과 → 재실행" 안내를 `must_show`처럼 담는다.
-- 방안 2: `db_search.py` 원인 출력에 `verify_fix_blocked: "<사유>"`를 내고 verify.md 3번에 "있으면 `db_verify fix`를 부르지 않는다"를 적는다.
+- 방안 1(완료, W3): `db_verify.py fix`가 코드·설정 수정 유형이면서 scenario·recovery 시그니처가 모두 없을 때 `judgement: unknown`을 내는 대신 **종료 코드 2와 "판정 전 중단 조건" 오류**로 거부한다. 오류에 "update-signature로 scenario/recovery 추가 → 초안 R1 흔적 검사 통과 → 재실행" 안내를 `must_show`처럼 담는다.
+- 방안 2(완료, W3): `db_search.py` 원인 출력에 `verify_fix_blocked: "<사유>"`를 내고 verify.md 3번에 "있으면 `db_verify fix`를 부르지 않는다"를 적는다.
 - 같이 할 것(b-6): SKILL 5-1을 "report.md의 그 칸 줄을 **파일에서 바꿔 쓰고** 답변에도 보인다"로 명확히 한다(e40·e41은 답변만 채우고 `report.md`는 TODO로 남았다).
-- 그때까지 verify-fix는 Opus를 권장한다(`GUIDE.md`).
+- ~~그때까지 verify-fix는 Opus를 권장한다~~ → W3 뒤 Sonnet 기본(eval 25 Sonnet 3/3, `GUIDE.md`).
 
 ---
 

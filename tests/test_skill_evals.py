@@ -293,6 +293,60 @@ def _write_artifacts(run):
     (run / "outputs" / "commands.md").write_text("c", encoding="utf-8")
 
 
+E25_REFUSAL = "CALL-001-01는 코드·설정 수정 유형(carrier-config)인데 ... 판정 전에 중단합니다(판단 불가). 다음: update-signature로 ..."
+E25_CMD = "python3 $CLAUDE_PLUGIN_ROOT/scripts/db_verify.py fix --cause CALL-001-01 logs/call-fixed.log --build B1 --json"
+
+
+def _e25(tmp_path, items, transcript="update-signature로 시그니처를 추가해야 합니다"):
+    env_dir = _synthetic_env(tmp_path)
+    run = run_dir(tmp_path)
+    (run / "outputs" / "transcript.md").write_text(transcript, encoding="utf-8")
+    (run / "outputs" / "commands.md").write_text("c", encoding="utf-8")
+    _seq_events(run, items)
+    return grader.checks(25, grader.Ctx(env_dir, run))[1]
+
+
+@pytest.mark.parametrize("name,items,transcript,expected", [
+    # 05-verification.md §5.12 (2): 판정이 나오지 않았다 = 부르지 않았거나, 종료 코드 2로 거부되고 안내를 보였다
+    ("부르지 않음", [("tool", "t1", "Bash", {"command": "python3 db_search.py CALL-001-01"}, "{}", False)], None, True),
+    ("exit 2 거부 + 안내", [("tool", "t1", "Bash", {"command": E25_CMD}, "Exit code 2\n" + E25_REFUSAL, True)], None, True),
+    ("판정 출력", [("tool", "t1", "Bash", {"command": E25_CMD}, '{"judgement": "passed"}', False)], None, False),
+    ("exit 2 거부, 안내 없음", [("tool", "t1", "Bash", {"command": E25_CMD}, "Exit code 2\n" + E25_REFUSAL, True)],
+     "판정을 못 했습니다", False),
+    ("부르지 않음, 안내 불필요", [], None, True),
+])
+def test_e25_assertion_2_branches(tmp_path, name, items, transcript, expected):
+    check = _e25(tmp_path, items, **({} if transcript is None else {"transcript": transcript}))
+    assert check()[0] is expected, name
+
+
+def test_e25_assertion_2_is_undecided_when_result_cannot_be_read(tmp_path):
+    env_dir = _synthetic_env(tmp_path)
+    run = run_dir(tmp_path)
+    (run / "outputs" / "transcript.md").write_text("update-signature", encoding="utf-8")
+    (run / "outputs" / "commands.md").write_text("c", encoding="utf-8")
+    _seq_events(run, [("tool", "t1", "Bash", {"command": E25_CMD}, None, False)])
+    row = grader.grade(25, run, env_dir, ["a", "b"])["expectations"][1]
+    assert row["passed"] is None and row["source"] == "manual"
+    assert "종료 코드 2로 거부" in next(e for e in _entries() if e["id"] == 25)["assertions"][1]
+
+
+def test_e25_assertion_2_line_continuation_and_file_bypass_and_error_flag(tmp_path):
+    cont = E25_CMD.replace(" fix ", " \\\n  fix ")
+    assert _e25(tmp_path / "a", [("tool", "t1", "Bash", {"command": cont}, '{"judgement": "passed"}', False)])()[0] is False
+    bypass = [("tool", "t1", "Bash", {"command": E25_CMD + " > /tmp/x.json"}, "", False),
+              ("tool", "t2", "Bash", {"command": "cat /tmp/x.json"}, '{"judgement": "passed"}', False)]
+    ok, ev = _e25(tmp_path / "b", bypass)()
+    assert ok is False and "called=1" in ev
+    flagged = [("tool", "t1", "Bash", {"command": E25_CMD}, "Exit code 2\nCALL-001-01: 다른 이유", False)]
+    with pytest.raises(grader._Manual):                  # 거부 문구도 is_error도 없으면 거부로 보지 않는다
+        _e25(tmp_path / "c", flagged)()
+    twice = [("tool", "t1", "Bash", {"command": E25_CMD}, E25_REFUSAL, True),
+             ("tool", "t2", "Bash", {"command": E25_CMD}, E25_REFUSAL, True)]
+    ok, ev = _e25(tmp_path / "d", twice)()
+    assert ok is True and "called=2" in ev and "재호출=True" in ev
+
+
 def test_e40_plan_with_plugin_seen_skill_calls_does_not_raise(tmp_path):
     env_dir = _synthetic_env(tmp_path)
     run = run_dir(tmp_path)

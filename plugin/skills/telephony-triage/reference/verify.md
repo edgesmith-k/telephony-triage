@@ -79,14 +79,13 @@ open ─(fix-submitted)─▶ fix-submitted ─(verify-fix passed)─▶ fixed
 3. 원인 확인(`db_search.py <ID> --db SNAP`). 이 확인은 판정(5번)과 따로, 먼저 한다 — 중단 조건이면 `db_verify fix`를 부르지 않는다(같은 Bash 호출로 묶지 않는다):
    - `fix.status`가 `fix-submitted`(재검증이면 `fixed`)가 아니면 중단.
    - `signatures_pending` 원인이면 중단하고 판별 시그니처 추가(`update-signature`)를 안내.
-   - 코드·설정 수정 유형인데 scenario·recovery 시그니처가 **둘 다 없으면 판정 전에 중단**하고 시그니처 추가를 안내한다.
-     사용자가 원하면 `update-signature`를 이 계획에 넣고 진행할 수 있다 — 그때 판정은 `--plan <p> --draft <draft>`로 시그니처를 적용한
-     트리에서 하고, 흔적 시그니처가 R1 흔적 검사를 통과해야 판정이 쓰인다(`withheld: true`면 판정 불가).
+   - `verify_fix_blocked`가 있으면 그 사유를 보여주고 중단(`db_verify fix` 호출 안 함).
+     사용자가 `update-signature`를 이 계획에 넣으면 `--plan --draft`로 판정, `withheld: true`면 판정 불가.
    - `fixed_in`에 빌드 있는 항목이 없으면 중단하고 `fix-submitted`로 빌드를 추가하라고 안내.
 4. `db_pr preflight --branch verify-fix/<원인 ID>-<build> --search <원인 ID>` → 열린 PR(다른 verify-fix, fix-submit)을 보여준다.
 5. 판정: `db_verify.py fix --db SNAP --cause <ID> <logcat...> --build <build> --json`
    → `{judgement, reason, C, S, trace, satisfied_traces, other_candidates, build_check{status}, fix_status, user_confirmation_required, suggested_ops}`.
-   - 종료 코드 2(빌드가 fixed_in보다 이전, 상태 부적합 등) → 사유를 보여주고 중단.
+   - 종료 코드 2(빌드가 fixed_in보다 이전, 상태 부적합, 흔적 시그니처 없음 등) → 사유를 보여주고 중단.
    - `build_check.status: undetermined` → 비교 규칙이 없거나 파싱 불가. 두 값을 보여주고 사용자에게 이후 빌드인지 묻는다.
    - **시나리오 흔적**(`trace`)과 원인 본문의 '재현 시나리오' 줄을 그대로 인용해 함께 보여주고, 사용자가 그 시나리오를 수행한 로그인지 확인받는다.
      흔적 시그니처가 있는데 흔적이 없으면 **판단 불가**다. 사용자가 "시나리오 했어"라고 해도 흔적을 대신하지 않는다.
@@ -99,7 +98,7 @@ open ─(fix-submitted)─▶ fix-submitted ─(verify-fix passed)─▶ fixed
    | passed | 흔적 충족, 원인·증상 불충족, recovery 있으면 충족 | `cut --around <흔적 시각>` → `add-fixture {kind: fixed, build}` + `verify-fix {result: passed, verification{..., fixture: fixtures/<ID>.fixed.<build>.log}}` → `fixed` |
    | failed | 원인 시그니처 충족(재발) | `verify-fix {result: failed}` → open, 이전 `ref`·`fixed_in`은 `verification_history`에 보존. 재발 로그를 `recurrence` fixture로 넣을지 묻는다 |
    | partial | 흔적 충족, 원인 불충족, 증상 남음 | `verify-fix {result: partial}` → 상태 유지 + 이력. `other_candidates`를 보여주고 남은 증상은 `analyze`로 새로 분석하라고 안내. **"통과로 기록" 선택지를 제시하지 않는다** |
-   | unknown | 흔적 없음, 필수 시그니처 없음, 구간 부족 | 계획을 만들지 않는다. 필요한 로그 조건(시나리오 수행 방법, 필요한 시그니처)을 안내하고 `lock release` |
+   | unknown | 흔적 없음, 구간 부족 | 계획을 만들지 않는다. 필요한 로그 조건(시나리오 수행 방법, 필요한 시그니처)을 안내하고 `lock release` |
 
    `suggested_ops`를 초안으로 쓴다: `<parse_logcat cut 결과 경로>` 자리(`add-fixture.path`, `verification.fixture`/`evidence`)에
    cut한 파일 경로를 **똑같이** 넣으면 적용 때 `fixtures/<ID>.fixed.<build>.log` 같은 이슈 DB 경로로 함께 바뀐다. `by`는 config

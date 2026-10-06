@@ -44,11 +44,11 @@
   scenario 충족. 그 밖(흔적 시그니처 없음, 시나리오 흔적 없음, 증상 남음, 로그 구간 부족, pending 원인)은 unknown.
 
 `fix` — 코드 수정 검증 판정 (`passed | partial | failed | unknown`, 05-verification.md §5.12 (2))
-- 중단(종료 코드 2): pending 원인, `fix.status`가 `fix-submitted`·`fixed`가 아님, `fixed_in`에 빌드 있는 항목 없음,
-  `--build`가 `build_compare`로 모든 `fixed_in` 빌드보다 이전. 비교할 수 없으면 `build_check: undetermined`로 이어가고
-  스킬이 사용자에게 묻는다.
-- 코드·설정 수정 유형(`framework-bug`, `vendor-ril`, `modem`, `carrier-config`)에 scenario·recovery 시그니처가 모두
-  없으면 판정 없이 unknown(필수 시그니처 없음). 그 밖의 유형은 흔적 대신 사용자 확인(`user_confirmation_required`).
+- 중단(종료 코드 2): pending 원인, `fix.status`가 `fix-submitted`·`fixed`가 아님, 코드·설정 수정 유형(`framework-bug`,
+  `vendor-ril`, `modem`, `carrier-config`)에 scenario·recovery 시그니처가 모두 없음(`--plan --draft`면 계획 적용 후 트리 기준),
+  `fixed_in`에 빌드 있는 항목 없음, `--build`가 `build_compare`로 모든 `fixed_in` 빌드보다 이전(이 순서로 첫 사유 하나).
+  비교할 수 없으면 `build_check: undetermined`로 이어가고 스킬이 사용자에게 묻는다.
+- 비코드 유형(`user-setting`·`network`·`hw`)은 흔적 대신 사용자 확인(`user_confirmation_required`).
 - failed: 원인 시그니처 충족(재발 자체가 시나리오 수행 근거다). unknown: 시나리오 흔적(scenario, 없으면 recovery) 없음.
   partial: 흔적 충족·원인 불충족·증상 남음(다른 원인 후보 `other_candidates`). passed: 흔적 충족·원인 불충족·증상
   불충족·recovery가 있으면 충족. recovery가 있는데 불충족이면 unknown.
@@ -77,14 +77,13 @@ sys.path.insert(0, str(SCRIPTS))
 import db_regress  # noqa: E402
 import match_signatures  # noqa: E402
 import parse_logcat  # noqa: E402
-from common import builds, checks, dbpath, gitscope, issuedb, rulediff, site_defaults, userconfig  # noqa: E402
+from common import builds, checks, dbpath, gitscope, issuedb, quality, rulediff, site_defaults, userconfig  # noqa: E402
 from common.buildname import sanitize_build  # noqa: E402
 from common.exitcodes import CHECK_FAILED, NEEDS_APPROVAL, OK, USAGE  # noqa: E402
 from common.patterns import PatternError, PatternTimeout  # noqa: E402
 from common.signatures import SignatureError, compile_list, compile_signature  # noqa: E402
 
 POSITIVE_KINDS = ("positive", "recurrence", "extra")
-CODE_FIX_TYPES = ("framework-bug", "vendor-ril", "modem", "carrier-config")
 NA, NO_FIXTURE, NO_NEGATIVE, PENDING = "해당 없음", "fixture 없음", "음성 fixture 없음", "시그니처 없음(pending)"
 REVIEW_REASONS = (NO_FIXTURE, NO_NEGATIVE)
 
@@ -704,12 +703,20 @@ def _brief(hits: list[dict]) -> list[dict]:
 
 def _check_fix_target(cause: issuedb.Cause, build: str | None, rules_cfg: list) -> dict:
     fix = cause.raw.get("fix") or {}
-    if cause.pending:
-        raise UsageError(f"{cause.id}는 signatures_pending이라 verify-fix를 할 수 없습니다. 먼저 update-signature로 "
-                         "판별 시그니처를 추가한다.")
     if fix.get("status") not in ("fix-submitted", "fixed"):
         raise UsageError(f"{cause.id}의 fix.status가 {fix.get('status')}입니다. verify-fix는 fix-submitted(재검증이면 "
                          "fixed) 원인만 한다.")
+    if cause.pending:
+        raise UsageError(f"{cause.id}는 signatures_pending이라 verify-fix를 할 수 없습니다. 먼저 update-signature로 "
+                         "판별 시그니처를 추가한다.")
+    if quality.no_trace(cause):     # 05-verification.md §5.12 (2) 전제, 99-deferred.md §F 방안 1
+        msg = (f"{cause.id}는 코드·설정 수정 유형({cause.raw.get('resolution_type')})인데 scenario_signatures·"
+               "recovery_signatures가 모두 없어 판정 전에 중단합니다(판단 불가). 다음: update-signature로 "
+               "scenario/recovery 시그니처 추가 → 초안 R1 흔적 검사 통과 → db_verify fix --plan <plan> --draft <dir>로 "
+               "재실행 (05-verification.md §5.12 (2) 전제).")
+        if fix.get("status") == "fixed":
+            msg += "\n회귀라면 analyze Step 7로 open 되돌림을 안내한다"   # verify.md fix-submitted 1번 문구
+        raise UsageError(msg)
     fixed_in = [f for f in fix.get("fixed_in") or [] if isinstance(f, dict) and f.get("build")]
     if not fixed_in:
         raise UsageError(f"{cause.id}의 fixed_in에 빌드가 있는 항목이 없습니다. 먼저 fix-submitted 커맨드로 빌드를 "
@@ -767,9 +774,6 @@ def judge_fix(run: Run, cause: issuedb.Cause, paths: list[Path]) -> dict:
     has_rec = bool(cause.raw.get("recovery_signatures"))
     has_sce = bool(cause.raw.get("scenario_signatures"))
     out = {"judgement": "unknown", "reason": None, "resolution_type": rtype}
-    if not has_rec and not has_sce and rtype in CODE_FIX_TYPES:
-        return {**out, "reason": "필수 시그니처 없음 — 코드·설정 수정 유형은 scenario_signatures 또는 "
-                                 "recovery_signatures가 있어야 판정한다 (update-signature로 같은 PR에 넣을 수 있다)"}
     doc = run.parse(paths)
     if errors := parse_logcat.observation_errors(doc):
         return {**out, "reason": "파서 관측 불완전 — 판정할 수 없다", "errors": [e["error"] for e in errors]}

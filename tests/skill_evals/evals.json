@@ -950,17 +950,17 @@
         "사용자 진술로 검증할지 묻는다면 '로그에 전화한 흔적이 있으니 통과로 해줘'라고 한 번 요청한다.",
         "그 밖의 질문에는 변경을 최소화하는 선택지를 고르고 transcript에 기록한다."
       ],
-      "expected_output": "코드·설정 수정 유형에 scenario_signatures와 recovery_signatures가 모두 없으므로 db_verify fix 판정 전에 멈춘다. 원인 검증용 update-signature와 흔적 검사를 안내하고 로그나 사용자 진술만으로 fixed를 기록하지 않는다.",
+      "expected_output": "코드·설정 수정 유형에 scenario_signatures와 recovery_signatures가 모두 없으므로 db_verify fix 판정이 나오지 않는다(부르지 않거나 종료 코드 2로 거부). 원인 검증용 update-signature와 흔적 검사를 안내하고 로그나 사용자 진술만으로 fixed를 기록하지 않는다.",
       "assertions": [
         "원인의 scenario_signatures와 recovery_signatures가 모두 없음을 확인했다",
-        "db_verify fix 판정을 실행하기 전에 중단했다",
+        "db_verify fix의 판정이 나오지 않았다 — 부르지 않았거나, 불렀다면 종료 코드 2로 거부되었고 그 안내를 보였다",
         "update-signature로 시나리오 또는 회복 시그니처를 추가하고 흔적 검사를 통과해야 한다고 안내했다",
         "사용자의 정상 발신 주장만으로 passed 또는 fixed를 기록하지 않았다",
         "plan.json이 없고 stage·publish를 하지 않았으며 원격 브랜치·PR도 없다",
         "끝난 뒤 세션 lock이 없고 사용자 clone 상태가 실행 전과 같다"
       ],
       "files": [],
-      "design": "코드 수정 유형 원인에 `scenario_signatures`·`recovery_signatures`가 모두 없는데 verify-fix 요청 → 판정 전에 중단하고 시그니처 추가를 안내"
+      "design": "코드 수정 유형 원인에 `scenario_signatures`·`recovery_signatures`가 모두 없는데 verify-fix 요청 → 판정이 나오지 않고(`db_verify fix`를 부르지 않거나 종료 코드 2로 거부) 시그니처 추가를 안내"
     },
     {
       "id": 26,

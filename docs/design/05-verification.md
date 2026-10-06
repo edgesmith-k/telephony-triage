@@ -95,7 +95,7 @@ open ──(수정 CL 머지, fix-submitted 커맨드)──▶ fix-submitted �
 ```
 
 **전제: 시나리오 흔적**
-- 코드·설정 수정 유형(`resolution_type`이 `framework-bug`, `vendor-ril`, `modem`, `carrier-config`)의 원인은 `fixed`로 바꾸기 전에 `scenario_signatures` 또는 `recovery_signatures` 중 **하나가 필수**다. 없으면 verify-fix는 판정 전에 중단하고, 시그니처를 먼저 추가하라고 안내한다 (`update-signature` op로 같은 PR에 넣을 수 있다. 이 경우 판정은 `db_verify fix --plan <p> --draft <dir>`로 시그니처를 적용한 트리에서 하고, R1(흔적 검사 포함)~R5가 함께 돈다. 흔적 시그니처가 R1 흔적 검사를 통과하지 못하면 판정 결과를 쓰지 않는다).
+- 코드·설정 수정 유형(`resolution_type`이 `framework-bug`, `vendor-ril`, `modem`, `carrier-config`)의 원인은 `fixed`로 바꾸기 전에 `scenario_signatures` 또는 `recovery_signatures` 중 **하나가 필수**다. 없으면 `db_verify fix`가 종료 코드 2와 다음 할 일(`update-signature` → R1 흔적 검사 통과 → 재실행)로 거부하고, `db_search`는 원인 항목에 `verify_fix_blocked`를 낸다 (`update-signature` op로 같은 PR에 넣을 수 있다. 이 경우 판정은 `db_verify fix --plan <p> --draft <dir>`로 시그니처를 적용한 트리에서 하고, R1(흔적 검사 포함)~R5가 함께 돈다. 흔적 시그니처가 R1 흔적 검사를 통과하지 못하면 판정 결과를 쓰지 않는다).
 - `signatures_pending` 원인은 원인 시그니처가 없으므로 verify-fix를 할 수 없다. 먼저 `update-signature`로 판별 시그니처를 추가한다.
 - "시나리오 흔적 충족" = `scenario_signatures`가 있으면 그것이 충족, 없으면 `recovery_signatures`가 충족. 판정은 시나리오 흔적 충족을 전제로 한다. **흔적이 없으면 판단 불가**다. 사용자 말만으로 흔적을 대신하지 않는다.
 - 그 밖의 유형(`user-setting`, `network`, `hw`)은 두 시그니처가 없어도 되지만, 없으면 흔적 판정 대신 사용자 확인을 받고 그 사실을 `verification.note`에 남긴다.
@@ -111,7 +111,7 @@ open ──(수정 CL 머지, fix-submitted 커맨드)──▶ fix-submitted �
    | **통과** (`passed`) | 시나리오 흔적 충족, 원인 시그니처 불충족, 증상 시그니처 불충족, `recovery_signatures`가 있으면 충족 |
    | **부분 통과** (`partial`) | 시나리오 흔적 충족, 원인 시그니처 불충족, 증상은 남아 있음 → 같은 증상의 다른 원인일 수 있음. 다른 원인 후보를 보여준다 |
    | **실패** (`failed`) | 원인 시그니처 충족 (재발) |
-   | **판단 불가** (`unknown`) | 시나리오 흔적 없음, 필수 시그니처 없음, 로그 구간 부족 |
+   | **판단 불가** (`unknown`) | 시나리오 흔적 없음, 로그 구간 부족 |
 
 5. 결과로 작업 계획을 만든다 (`verify-fix` op, `contracts.md §작업 계획`).
    - **통과** → `fix.status: fixed`, `fix.verification` 기록. 수정 빌드 로그의 최소 구간을 마스킹해서 **수정 후 fixture** `fixtures/<원인 ID>.fixed.<build>.log`로 추가한다 (기본 기대값 `expect_not: <원인 ID>`, `.expect.yaml` 불필요).

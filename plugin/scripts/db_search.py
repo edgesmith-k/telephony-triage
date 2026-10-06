@@ -25,6 +25,8 @@
 더해지고 `results[]` 항목에 `matched[]`, `score`, `phrase`가 붙는다.
 `results[]` 항목은 `kind: type|cause|jira`와 유형·원인·해결책·수정 상태·Jira 요약이다. 원인 항목에는
 `code_refs[{ref, symbol, android_versions}]`(Step 5 resolve 입력)가 붙는다. 스킬·드라이버는 `--limit 3`으로 부른다.
+코드·설정 수정 유형이면서 scenario·recovery 시그니처가 없는 원인(pending 제외)에만 `verify_fix_blocked`(사유 문자열)가 붙는다
+(`db_verify fix`가 종료 코드 2로 거부하는 조건, 99-deferred.md §F). 다른 원인 항목에는 키가 없다.
 `links[]`는 `{from, to, via: merged-into|renumbered, commit?, date?}`. 결과가 없어도 종료 코드 0이다.
 `--brief`(opt-in, 기본 출력은 그대로): 항목에서 `path`·`chain`·`merged_from`·`code_refs`·`resolution_type`·`signatures_pending`·
 `type_title`·`category`와 빈 값·id와 같은 `current`, 최상위 `db`를 뺀다. `links[]`는 그대로. 후보를 훑어볼 때만 쓰고,
@@ -129,7 +131,7 @@ class Searcher:
         fix = quality.fix_of(cause)
         records = self.jira_of(cause.id)
         rv = cause.raw.get("resolution_verification")
-        return {
+        entry = {
             "kind": "cause", "id": cause.id, "type": cause.type_id, "type_title": itype.title,
             "category": itype.category, "title": cause.title, "status": cause.status,
             "current": current, "chain": chain, "merged_from": self.merged_from(cause.id),
@@ -146,6 +148,10 @@ class Searcher:
             "jira_latest": str(records[0].get("date", "")) if records else None,
             "path": (itype.path / "type.md").relative_to(self.db.root).as_posix(),
         }
+        if not cause.pending and quality.no_trace(cause):   # 99-deferred.md §F 방안 2: 해당 원인에만 키가 있다
+            entry["verify_fix_blocked"] = (f"코드·설정 수정 유형({cause.raw.get('resolution_type')})에 "
+                                           "scenario·recovery 시그니처 없음 — update-signature 필요")
+        return entry
 
     def jira_entry(self, record: dict) -> dict:
         entry = {"kind": "jira", "key": record.get("key"), "cause": record.get("cause"), "type": record["_type"],
