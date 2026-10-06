@@ -15,7 +15,7 @@
 | RF-6 커넥터 | 사내 환경을 안 뒤(반입 뒤) |
 | RF-7 워크플로 엔진 | 분석 전용·`--more-logs`·입력 해시 재사용 완료 (X1~X4) |
 | RF-8 자동화 | 사내 환경을 안 뒤(반입 뒤). 아래 결정 (b) |
-| RF-9 정리·문서 | 열림: E 후보 삭제(사용자 승인), `PLUGIN_IMPROVEMENT_HANDOFF.md` 경로 삭제(사용자 승인), `docs/ARCHITECTURE.md` 확정. README·plugin.json 점검·새 세션 리허설은 W11·W12에서 함 |
+| RF-9 정리·문서 | 열림: E 후보 삭제(사용자 승인), `docs/ARCHITECTURE.md` 확정. README·plugin.json 점검·새 세션 리허설은 W11·W12에서 함 |
 
 ## 남은 R 항목 (인계 문서 R1~R15 중 열린 것만)
 
