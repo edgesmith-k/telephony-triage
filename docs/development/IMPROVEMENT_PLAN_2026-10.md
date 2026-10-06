@@ -76,7 +76,7 @@
 - 테스트: `test_db_pr`, `test_hooks`(guard가 `publish`를 여전히 `ask`로). 사내 잔여: 없음.
 
 ### W6. reference 축소와 실행 규칙 분리 (T·M)
-- 목표: `db-authoring.md` 27KB → 10KB 이하(op·drift·fixture·R 표 제거, 스키마·오류 메시지가 대신). `SKILL.md`의 실행 규칙을 `reference/rules.md`로 떼어 record·verify·sync-pr·search가 그 파일만 읽게.
+- 목표: `db-authoring.md` 27KB → 10KB 이하(op·drift·fixture·R 표 제거, 스키마·오류 메시지가 대신). `SKILL.md`의 실행 규칙을 `reference/rules.md`로 떼어 record·verify·sync-pr가 그 파일만 읽게(search 제외: 읽기 전용, Read 1회·1.5KB 절약).
 - 변경: `plugin/skills/telephony-triage/{SKILL.md, reference/*}`, `commands/*.md`의 "그 절만 읽는다" 문구 정리, `10-skill-eval.md §SKILL 구성`.
 - 완료: 파일 크기 기준 충족, eval 2·3·4·31(새 원인·유형 작성) 통과.
 - 테스트: `test_commands`, `test_skill_evals`(파일 존재·크기 검사 추가). 사내 잔여: 없음.
@@ -176,7 +176,7 @@
 | ✅ | W3 | ✅ 완료(10/06) | ccr-2495ec74-xn15cn · 커밋 `W3: verify-fix…` | eval 25 Sonnet 3/3, verify-fix Sonnet 기본. W3 영향 미확인: eval 21·22·26·27·33 |
 | ✅ | W4 | ✅ 완료(10/06) | ccr-2495ec74-xn15cn · 커밋 `W4: 질문 수 줄이기…` | eval 55·56 질문 1→0. 영향 미확인: eval 42·45 등 explore 사용 eval |
 | ✅ | W5 | ✅ 완료(10/06) | ccr-2495ec74-xn15cn · 커밋 `W5: 쓰기 흐름 왕복 축소…` | eval 1 Step 8 Bash 6→2, 토큰 699k→386k. 커밋은 `publish --commit`(계약 반전, 사용자 승인). write-flow +348B는 W6에서. 테스트 임시 디렉토리 누수는 별도 chore 커밋으로 정리 |
-| ☐ | W6 | 계획 확인 중 | ccr-2495ec74-xn15cn | W2·W3 뒤 |
+| ☐ | W6 | 실행 중 | ccr-2495ec74-xn15cn | W2·W3 뒤. search 제외: 읽기 전용, Read 1회·1.5KB 절약 |
 | ☐ | W7 | 대기 | | W5 뒤, 실행 Opus |
 | ☐ | W8 | 대기 | | 독립 |
 | ☐ | W9 | 대기 | | 독립 |
