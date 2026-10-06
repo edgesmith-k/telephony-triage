@@ -182,7 +182,7 @@
 | ✅ | W7 | ✅ 완료(10/06) | ccr-2495ec74-xn15cn · 커밋 `W7: 계약 문서 생성…` | 결정은 사용자 위임 결정 에이전트. 스키마는 `plugin/schemas/output/`(sync_schemas 대조 충돌 회피, D2), 검증은 `TT_SCHEMA_CHECK=1`일 때만(D3), db-authoring 한도 1,152/11,392B(D4②). 리뷰 R1~R6 반영(R3(c) 보류). eval 3 7/7·31 6/0/3(수동), 스키마 Read 4·4회 — 0회 미달, 대상은 add-parser-rule·signature·참조 규칙·timestamp → 후속 "db-authoring 스키마 요약 확장"(W11 후보). eval 3 토큰 1.24M(W6 0.82~0.88M, 1회) |
 | ✅ | W8 | ✅ 완료(10/06) | ccr-2495ec74-xn15cn · 커밋 `W8: 반입 묶음 도구…` | 결정은 위임 결정 에이전트(D1 싼 것부터·D2 정상 완료 3, 0 없음·D3 레포 밖 출력). 리뷰 차단 B1(`--force` 상위·홈 삭제) 수정, R1~R6·R8 반영, R7 보류. 실제 실행 종료 3·pytest 959·sha256 OK. W11 후보: exec 비트·TODO 셈 기준 |
 | ✅ | W9 | ✅ 완료(10/06) | ccr-2495ec74-xn15cn · 커밋 `W9: 진단·상태 커맨드…` | 위임 결정 에이전트 D1~D8 ①. 리뷰 R1~R5·R7 + 재리뷰 1~4 반영. lock 읽기 전용부 `common/session_lock.py`(related_tests 공용 판정 해소). eval 58 5/5, 39 3회 4/0/2(SKILL "표 그대로" 문구 뒤), 39 토큰 중앙값 127k ≤ 변경 전 104,792×1.3. 기준선에 39·58 추가. 전체 978 |
-| ☐ | W10 | 대기 | | W4 뒤, 실행 Opus. W9 보류: my-prs base 비교를 PR `baseRefName` 기준으로(분할 때) |
+| ✅ | W10 | ✅ 완료(10/07) | w10/module-split · 커밋 `W10: triage.py·db_pr.py 분할…`·`W10: related_tests…`·`W10: my-prs base_moved…` | 위임 결정 에이전트 D1~D5(①①→②①①). 분할 AST·`--help` 동일, related_tests `units()`(범위 밖, 승인), my-prs `baseRefName`(사용자 승인). 리뷰 차단 0. 전체 973 통과·4 실패(Windows 환경, HEAD 동일) |
 | ☐ | W11 | 대기 | | 항목별 커밋 |
 | ☐ | W12 | 대기 | | 마지막 |
 | ☐ | W 끝 | 대기 | | 전체 테스트·eval 54·`make_bundle.py` |
