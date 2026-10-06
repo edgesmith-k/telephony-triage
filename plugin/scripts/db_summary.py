@@ -13,6 +13,7 @@ from pathlib import Path
 
 from common import masking
 from common.exitcodes import NEEDS_APPROVAL, OK
+from common.issuedb import IssueDbError, parse_frontmatter_text
 
 GENERATED_RE = re.compile(r"^(README\.md|STATS\.md|parser-rules/CHANGELOG\.md|[^/]+/README\.md)$")
 SOURCE_LABELS = {"analyze": "분석 (analyze)", "record": "수동 기록 (record)", "import": "기존 분류 가져오기 (import)",
@@ -155,6 +156,78 @@ def _main_diff(wt: Path, entries: list[tuple[str, str]], git) -> tuple[list[str]
     return diff[:50], len(diff)
 
 
+def _builds(items) -> list[str]:
+    """`fixed_in`·history의 `[{branch, build}]` → 표시용 빌드 목록(빌드가 없으면 브랜치)."""
+    out = []
+    for it in items or []:
+        value = (it.get("build") or it.get("branch")) if isinstance(it, dict) else it
+        if value and str(value) not in out:
+            out.append(str(value))
+    return out
+
+
+def _cause_fix(data: dict | None, cause_id: str) -> dict | None:
+    for cause in (data or {}).get("causes") or []:
+        if isinstance(cause, dict) and cause.get("id") == cause_id:
+            return cause.get("fix") or {}
+    return None
+
+
+def _detail(ref, builds: list[str]) -> str:
+    return ", ".join(x for x in (f"ref {ref}" if ref else "", f"fixed_in {', '.join(builds)}" if builds else "") if x)
+
+
+def fix_changes(wt: Path, entries: list[tuple[str, str]], operations: list[dict], base_sha: str | None, git) -> list[dict]:
+    """적용된 `update-fix`·`verify-fix` op마다 원인의 수정 상태가 어떻게 바뀌었는지 → `[{cause, from, to, history, line}]`.
+
+    "이전"은 `git show <base_sha>:<type.md>`의 frontmatter, "이후"는 작업 worktree의 파일이다. 이전 내용을 읽지 못하면 `from`은 None.
+    `history`는 이번 변경으로 `verification_history`에 새로 들어간 항목 `{result, ref, fixed_in:[빌드]}`(없으면 None)다.
+    """
+    out, seen = [], set()
+    for op in operations:
+        cause = op.get("cause")
+        if op.get("op") not in ("update-fix", "verify-fix") or not isinstance(cause, str) or cause in seen:
+            continue
+        seen.add(cause)
+        type_id = cause.rsplit("-", 1)[0]
+        pattern = re.compile(rf"^[^/]+/{re.escape(type_id)}-[^/]+/type\.md$")
+        rel = next((p for _, p in entries if pattern.match(p)), None)
+        if rel is None or not (wt / rel).is_file():
+            continue
+        try:
+            after = _cause_fix(parse_frontmatter_text((wt / rel).read_text(encoding="utf-8"), rel), cause)
+            proc = git(wt, "show", f"{base_sha}:{rel}", check=False) if base_sha else None
+            before = (_cause_fix(parse_frontmatter_text(proc.stdout, rel), cause)
+                      if proc is not None and proc.returncode == 0 else None)
+        except IssueDbError:
+            continue
+        if after is None:
+            continue
+        old_hist = (before or {}).get("verification_history") or []
+        new_hist = after.get("verification_history") or []
+        added = new_hist[0] if len(new_hist) > len(old_hist) and isinstance(new_hist[0], dict) else None
+        history = ({"result": added.get("result"), "ref": added.get("ref"), "fixed_in": _builds(added.get("fixed_in"))}
+                   if added else None)
+        src, dst = (before or {}).get("status"), after.get("status")
+        detail = _detail(after.get("ref"), _builds(after.get("fixed_in")))
+        if history and dst == "open" and src != "open":
+            prev = "·".join(x for x in (f"이전 ref {history['ref']}" if history["ref"] else "",
+                                        f"fixed_in {', '.join(history['fixed_in'])}" if history["fixed_in"] else "") if x)
+            line = (f"{cause}: {src or '?'} → open ({prev + ' → ' if prev else ''}"
+                    f"verification_history 보존, 결과 {history['result']})")
+        elif history and src == dst:
+            line = f"{cause}: verification_history에 {history['result']} 추가 (상태 {dst} 유지)"
+        elif dst == "fixed" and src != "fixed":
+            build = (after.get("verification") or {}).get("build")
+            line = f"{cause}: {src or '?'} → fixed" + (f" (검증 빌드 {build})" if build else "")
+        elif src != dst:
+            line = f"{cause}: {src or '?'} → {dst}" + (f" ({detail})" if detail else "")
+        else:
+            line = f"{cause}: 수정 정보 갱신 ({dst})" + (f" — {detail}" if detail else "")
+        out.append({"cause": cause, "from": src, "to": dst, "history": history, "line": line})
+    return out
+
+
 def search_key(plan: dict, applied: dict) -> str | None:
     """열린 PR을 찾는 gh 검색어: Jira 키, 없으면 첫 할당 ID."""
     ids = applied.get("ids") or []
@@ -241,6 +314,9 @@ def screen(wt: Path, plan: dict, stage_result: dict, state: dict, db_cfg: dict, 
         "approval_needed": approval, "notes": notes, "commit_message": commit_message, "pr_title": title,
         "push_allowed": push_allowed, "push_note": push_note, "pending_included": applied.get("pending_included") or [],
     }
+    changes = fix_changes(wt, entries, applied.get("operations") or [], state.get("base_sha"), git)
+    if changes:      # 수정 상태가 바뀌는 계획에만 나온다(없으면 출력이 이전과 같다)
+        result["fix_changes"] = changes
     return result
 
 
@@ -259,6 +335,8 @@ def pr_body(screen: dict, plan: dict) -> str:
             f"{i['temp_id']} → {i['id']}"
             + (f" (계획 당시 {i['expected_at_base']})" if i.get("expected_at_base") not in (None, i["id"]) else "")
             for i in screen["ids"]))
+    if screen.get("fix_changes"):
+        lines += ["", "### 수정 상태 변경", ""] + [f"- {c['line']}" for c in screen["fix_changes"]]
     lines += ["", "### 변경 파일", "", "| 구분 | 파일 | 변경 |", "|---|---|---|"]
     lines += [f"| {f['kind']} | {f['path']} | {f['change']} |" for f in screen["files"]]
     checks = screen["checks"]

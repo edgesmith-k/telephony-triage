@@ -17,8 +17,13 @@
 - `JOB/analysis.json` (≤ 4KB): LLM이 읽는 유일한 분석 결과. stdout에도 같은 내용을 낸다.
 - `JOB/report.md`: Step 6 리포트 초안(결정적인 칸은 채우고, 원인 설명·코드 위치는 `TODO(LLM)`로 둔다).
 - `JOB/trace.jsonl`: 호출마다 `{ts, step, script, args, exit, ms, out_bytes, stderr}` 한 줄.
-- `JOB/timeline.md`: 후보 없음·원인 미확인(1위 C=0)이고 `explore.when`이 `never`가 아닐 때만. Step 5-2 탐색 분석이
-  읽는 마스킹된 요약 타임라인(줄 수 상한 `explore.timeline_max_lines`, 기본 200). `analysis.json`의 `explore`가 가리킨다.
+- `JOB/explore-input.json`: 후보 없음·원인 미확인(1위 C=0)이고 `explore.when`이 `never`가 아닐 때만. 탐색 분석 입력(마스킹된 값만:
+  발생 시각·실패 스텝·앵커 머리·줄 수 상한 `explore.timeline_max_lines`). `run`은 타임라인을 만들지 않고 이전 `timeline.md`·입력 파일을 지운다.
+- `triage.py explore <KEY> [--out <dir>]`: 사용자가 탐색 분석에 동의한 뒤(또는 `--explore`·`explore.when: always`) `JOB/explore-input.json`과
+  `events.json`으로 `JOB/timeline.md`(마스킹된 요약 타임라인, 줄 수 상한 기본 200)를 만들고 `report.md`의 탐색 분석 줄을 갱신한다.
+  출력 `{timeline, lines, total}`. 종료 코드 1 = 해당 없음(입력 파일 없음), 2 = 사용 오류·`events.json` 없음. lock·trace는 쓰지 않는다.
+- `analysis.json`의 `must_show`(있을 때만, ≤4줄·줄당 ≤160자): 리포트 줄 중 사용자에게 꼭 보여야 하는 것(분석 전용·읽기 전용·1위 변화 재분석·실패 스텝·
+  장비 시각 미사용·로그 범위 이상·범위 밖 오류·파서 규칙에 없는 태그). `report.md`의 줄과 같은 문구다.
 - `JOB/analysis-cache.json`: 입력 해시(`request_hash`, 부분별 `parts`)가 같으면 파싱·매칭을 다시 하지 않고 이 core를 다시 보여 준다
   (RF-7, `07-workflow.md §입력 재사용`). `--offline-db`·`--refresh`·`needs_input`/오류 실행은 쓰지도 읽지도 않는다. 마스킹된 값만 담는다.
 - `--analysis-only`(RF-7): 이슈 DB에 기록하지 않는 분석 전용 실행. `--dry-run`과 함께 못 쓴다(종료 코드 2). lock·스냅샷·Jira·코드·파싱·매칭·
@@ -84,12 +89,12 @@ ANALYSIS_MAX = 4096
 STATE_FILE = "triage-state.json"
 STATE_SCHEMA = 2                 # 2: `job` 절(로그·실행 이력·재사용 캐시 요약)이 있다. 스키마 표시가 없는 파일은 job = {}
 CACHE_FILE = "analysis-cache.json"
-CACHE_FORMAT = 1                 # 캐시 형식·`core` 구조를 바꾸면 올린다(plugin 해시에 들어가 이전 캐시가 무효가 된다)
+CACHE_FORMAT = 2                 # 캐시 형식·`core` 구조를 바꾸면 올린다(plugin 해시에 들어가 이전 캐시가 무효가 된다). 2: 타임라인은 캐시 파일이 아니다
 RUNS_KEEP = 10                   # state.job.runs(실행 이력)에 남기는 수
 RUN_DIRS_KEEP = 5                # JOB/runs/<n>/(이전 analysis.json·report.md 보관)에 남기는 수
 RUNS_DIR = "runs"
 PART_KEYS = ("logs", "jira", "db", "config", "plugin", "args")     # 입력 해시 부분(바뀐 것을 알려 주는 순서)
-CACHE_FILES = {"events": "events.json", "match": "match.json", "timeline": "timeline.md"}   # 캐시가 크기·mtime을 기록하는 산출물
+CACHE_FILES = {"events": "events.json", "match": "match.json"}   # 캐시가 크기·mtime을 기록하는 산출물
 ANSWER_KEYS = ("time", "window", "anchor", "year", "code", "code_confirm")   # 결과를 바꾸는 답만 args 해시에 넣는다
 SNAPSHOT_DIR = "_snapshot"
 TOP = 3
@@ -99,6 +104,14 @@ ERROR_FIELDS = ("request", "error", "code", "reason", "cause")   # 오류 이벤
 EXPLORE_WHEN = ("ask", "always", "never")
 EXPLORE_MAX_LINES = 200
 TIMELINE_FILE = "timeline.md"
+EXPLORE_INPUT_FILE = "explore-input.json"   # `triage.py explore`의 입력(마스킹된 값만). run이 쓰고, 탐색 동의 뒤 subcommand가 읽는다
+MUST_SHOW_MAX = 6                # write_report가 모으는 must_show 상한
+MUST_SHOW_FIT = 4                # fit이 마지막에 남기는 수
+MUST_SHOW_CLIP = 160
+EXPLORE_HYPOTHESIS = "TODO(LLM) 가설 1~3개 — 로그로 확인 / 코드로 추정 / 반대 근거 / 다음에 받을 로그. 실행하지 않으면 \"탐색 분석 생략: <사유>\". 점수·분류·검증에 쓰지 않는다"
+EXPLORE_PENDING_LINE = ("- 탐색 분석 (추정): 미실행 — 동의(또는 --explore·explore.when: always) 뒤 triage.py explore {key}가 "
+                        f"{TIMELINE_FILE}를 만든다. " + EXPLORE_HYPOTHESIS)
+EXPLORE_DONE_LINE = "- 탐색 분석 (추정, " + TIMELINE_FILE + " {lines}/{total}줄): " + EXPLORE_HYPOTHESIS
 _HOT_LEVELS = {"W", "E", "F"}
 _TOKEN_RE = re.compile(r"[0-9A-Za-z가-힣_]{2,}")
 
@@ -1116,10 +1129,10 @@ class Driver:
                 row[k] = _clip(fields[k], 40)
         return row
 
-    def explore(self, candidates: list[dict], events: dict, around: str | None, anchor: dict | None = None) -> dict | None:
-        """Step 5-2 탐색 분석 준비: 후보 없음·원인 미확인이면 마스킹된 요약 타임라인을 `JOB/timeline.md`에 쓴다.
+    def explore(self, candidates: list[dict]) -> dict | None:
+        """Step 5-2 탐색 분석 해당 여부: 후보 없음·원인 미확인이면 `{reason, when}`, 아니면 None.
 
-        판정은 하지 않는다. LLM이 읽을 입력의 크기만 정한다(07-workflow.md §Step 5-2).
+        타임라인은 만들지 않는다(동의 뒤 `triage.py explore`가 `explore_input()`의 값으로 만든다). 판정은 하지 않는다(07-workflow.md §Step 5-2).
         """
         if candidates and candidates[0]["C"]:
             return None
@@ -1128,16 +1141,17 @@ class Driver:
         if when not in EXPLORE_WHEN:
             self.warnings.append(f"explore.when 값이 잘못됐다({when}). ask로 본다")
             when = "ask"
-        if when == "never":
-            return {"reason": reason, "when": when}
+        return {"reason": reason, "when": when}
+
+    def explore_input(self, around: str | None, anchor: dict | None) -> dict:
+        """`JOB/explore-input.json`의 내용(마스킹된 값만): 타임라인 머리·줄 수 상한. `core`에 들어가 캐시된다."""
         limit = userconfig.get(self.cfg, "explore.timeline_max_lines", EXPLORE_MAX_LINES)
         if not isinstance(limit, int) or isinstance(limit, bool) or not 20 <= limit <= 1000:
             self.warnings.append(f"explore.timeline_max_lines 값이 잘못됐다({limit}). {EXPLORE_MAX_LINES}로 본다")
             limit = EXPLORE_MAX_LINES
         step = getattr(self, "failed_step", None)
-        text, kept, total = timeline(self.key, events, around, limit, step["text"] if step else None, anchor)
-        (self.job / TIMELINE_FILE).write_text(text, encoding="utf-8", newline="\n")
-        return {"reason": reason, "when": when, "timeline": TIMELINE_FILE, "lines": kept, "total": total}
+        return {"around": around, "failed_step": step["text"] if step else None, "limit": limit,
+                "anchor": {k: anchor.get(k) for k in ("source", "step", "start", "fail")} if anchor else None}
 
     # 실행 ------------------------------------------------------------------------------------------
 
@@ -1158,6 +1172,8 @@ class Driver:
         self.preflight_args()
         self.check_key()
         self.open_job()
+        for name in (TIMELINE_FILE, EXPLORE_INPUT_FILE):    # 이전 실행의 탐색 산출물은 이번 결과가 아니다(타임라인은 동의 뒤 `explore`가 만든다)
+            (self.job / name).unlink(missing_ok=True)
         if not self.offline:
             self.lock()
             self.check_more_logs()
@@ -1250,8 +1266,7 @@ class Driver:
                 or not isinstance(doc.get("run"), int)):
             return None, "cache-missing"
         files = doc.get("files") or {}
-        need = ["events", "match"] + (["timeline"] if (core.get("explore") or {}).get("timeline") else [])
-        for name in need:        # 파서·매처 출력과 타임라인이 그대로 있어야 같은 결과다(손으로 고치거나 지웠으면 다시 계산)
+        for name in ("events", "match"):        # 파서·매처 출력이 그대로 있어야 같은 결과다(손으로 고치거나 지웠으면 다시 계산)
             try:
                 st = (self.job / CACHE_FILES[name]).stat()
             except OSError:
@@ -1333,7 +1348,11 @@ class Driver:
         no_candidate = None if candidates else self.no_candidate_hints(info, events)
         code_out = self.resolve_code(code, version, candidates)
         analyzer = self.analyzer(candidates)
-        explore = self.explore(candidates, events, around, anchor)
+        explore = self.explore(candidates)
+        explore_input = self.explore_input(around, anchor) if explore and explore["when"] != "never" else None
+        uncollected = [] if candidates and candidates[0]["C"] else \
+            [{"tag": _clip(u.get("tag"), 40), "lines": u.get("lines"), "warn": u.get("warn")}
+             for u in events.get("uncollected_tags") or []][:3]
         for cand in candidates:
             cand.pop("_code_refs", None)
         extra_warnings = [_clip(w.get("message"), 120) for w in (events.get("warnings") or []) + (match.get("warnings") or [])]
@@ -1346,9 +1365,11 @@ class Driver:
             "pending_causes": [{"cause": p["cause"], "title": _clip(p.get("title"), 50)}
                                for p in match.get("pending_causes") or []][:TOP],
             "no_candidate": no_candidate, "code": code_out, "analyzer": analyzer, "explore": explore,
+            "explore_input": explore_input,
             "logs": {"files": [p.name for p in logs], "window": (events.get("input") or {}).get("window"),
                      "range": [cov.get("first_ts"), cov.get("last_ts")], "in_range": cov.get("window_in_range"),
-                     "clock_anomalies": len(cov.get("clock_anomalies") or []), "events": len(events.get("events") or [])},
+                     "clock_anomalies": len(cov.get("clock_anomalies") or []), "events": len(events.get("events") or []),
+                     **({"uncollected_tags": uncollected} if uncollected else {})},
             "warnings_core": self.warnings[warn0:], "extra_warnings": extra_warnings,
             "attrs": {"clock": self.clock, "order_fail": self.order_fail, "order_evidence": self.order_evidence,
                       "focus": self.focus, "steps_member": self.steps_member},
@@ -1392,8 +1413,13 @@ class Driver:
         if parts is not None and not hit:
             self.archive_previous(request_hash)       # 덮어쓰기 전에 이전 결과를 runs/<n>/에 보관
         result["_outside"] = core.get("outside")      # report.md 전용, analysis.json에는 안 나간다
-        self.write_report(result, anchor)
+        must_show = self.write_report(result, anchor)
         result.pop("_outside", None)
+        if core.get("explore_input") is not None:       # 동의 뒤 `triage.py explore`가 읽는다(캐시 적중이어도 다시 쓴다)
+            (self.job / EXPLORE_INPUT_FILE).write_text(json.dumps(core["explore_input"], ensure_ascii=False, indent=1) + "\n",
+                                                       encoding="utf-8", newline="\n")
+        if must_show:
+            result["must_show"] = must_show
         if parts is not None:
             self.save_job(core, parts, request_hash, run_no, seq, hit, candidates)   # `_ref`를 지우기 전에(리포트 재현용)
         for cand in candidates:
@@ -1449,9 +1475,8 @@ class Driver:
         """계산한 실행이면 `analysis-cache.json`을, 모든 성공 실행이면 state의 `job` 절(실행 이력)을 갱신한다. 마스킹된 값·경로·sha만."""
         job = self.state.job
         if not hit:
-            names = ["events", "match"] + (["timeline"] if (core.get("explore") or {}).get("timeline") else [])
             files = {}
-            for name in names:      # 이전 실행이 남긴 타임라인은 이번 결과가 아니므로 explore가 만들었을 때만 적는다
+            for name in ("events", "match"):
                 st = (self.job / CACHE_FILES[name]).stat()
                 files[name] = [st.st_size, st.st_mtime_ns]
             doc = {"format": CACHE_FORMAT, "request_hash": request_hash, "run": run_no, "parts": parts,
@@ -1510,17 +1535,24 @@ class Driver:
         h.update(json.dumps(parts, ensure_ascii=False).encode())
         return h.hexdigest()[:16]
 
-    def write_report(self, r: dict, anchor: dict | None = None) -> None:
+    def write_report(self, r: dict, anchor: dict | None = None) -> list[str]:
+        """`report.md`를 쓰고, 사용자에게 꼭 보여야 하는 줄(`must_show`: 우선순위 순, 줄 앞 "- " 없이, 최대 `MUST_SHOW_MAX`개)을 돌려준다."""
         lines = [f"## {self.key} 분석", ""]
+        must: list[tuple[int, str]] = []          # (우선순위, 줄 본문). 이미 마스킹된 값만
+
+        def add(priority: int, text: str) -> str:
+            must.append((priority, text))
+            return f"- {text}"
+
         if self.analysis_only:
-            lines.append("- 분석 전용: 이슈 DB에 기록하지 않는다(계획·PR 없음). 기록하려면 --analysis-only 없이 다시 실행")
+            lines.append(add(1, "분석 전용: 이슈 DB에 기록하지 않는다(계획·PR 없음). 기록하려면 --analysis-only 없이 다시 실행"))
         if r.get("read_only_hint"):
-            lines.append(f"- 읽기 전용: {r['read_only_hint']}")
+            lines.append(add(2, f"읽기 전용: {r['read_only_hint']}"))
         if self.failed_step:
-            lines.append(f"- 실패 스텝 (보조 정보, Jira {self.failed_step['source']}; 점수·S/C에 쓰지 않음; 분석 범위·순위 참고): "
-                         f"{self.failed_step['text']}")
+            lines.append(add(4, f"실패 스텝 (보조 정보, Jira {self.failed_step['source']}; 점수·S/C에 쓰지 않음; 분석 범위·순위 참고): "
+                                f"{self.failed_step['text']}"))
         if self.clock and self.clock.get("mode") == "none":
-            lines.append(f"- 장비 시각 미사용: 시계 정렬 불가({self.clock.get('reason')})")
+            lines.append(add(5, f"장비 시각 미사용: 시계 정렬 불가({self.clock.get('reason')})"))
         if self.steps_member:
             lines.append(f"- 시험 절차: zip 안 {self.steps_member}")
         reuse = r.get("reuse")
@@ -1535,7 +1567,8 @@ class Driver:
             added = f" (추가 로그 {', '.join(reuse['added_logs'])})" if reuse.get("added_logs") else ""
             top = (f" — 1위 {reuse.get('prev_top') or '없음'} → {_top_label(r['candidates']) or '없음'}"
                    if reuse.get("top_changed") else " — 1위 변화 없음")
-            lines.append(f"- 재분석: 실행 {reuse.get('prev_run')} 대비 {what}{added}{top}")
+            text = f"재분석: 실행 {reuse.get('prev_run')} 대비 {what}{added}{top}"
+            lines.append(add(3, text) if reuse.get("top_changed") else f"- {text}")
         if anchor:
             jira_at = (r.get("jira") or {}).get("occurred_at")
             gap = anchor.get("jira_gap_min")
@@ -1583,13 +1616,20 @@ class Driver:
                          "`--answer anchor=off`로 다시 실행하면 Jira 발생 시각 기준 범위로 넓힌다")
         outside = r.get("_outside")
         if outside and outside.get("total"):
-            lines.append(f"- 분석 범위 밖 오류 이벤트 (Jira 발생 시각 {outside['at']} 근처, 근거·점수에 쓰지 않음): "
-                         f"{outside['total']}건")
+            lines.append(add(7, f"분석 범위 밖 오류 이벤트 (Jira 발생 시각 {outside['at']} 근처, 근거·점수에 쓰지 않음): "
+                                f"{outside['total']}건"))
             lines += [f"  - {_error_line(e)}" for e in outside["rows"][:3]]
         logs = r["logs"]
+        if logs.get("uncollected_tags"):       # 후보 없음·원인 미확인일 때만 core가 채운다
+            tags = ", ".join(f"{u['tag']} {u['lines']}줄(W/E {u['warn']})" for u in logs["uncollected_tags"])
+            lines.append(add(8, "파서 규칙에 없는 태그 (수집 태그와 같은 프로세스, tags.yaml에 없어 이벤트로 추출 안 됨): " + tags))
         in_range = {True: "발생 시각 포함", "partial": "일부만 포함", False: "로그 범위 밖"}.get(logs["in_range"], "?")
-        lines.append(f"- 로그 범위: {logs['range'][0]} ~ {logs['range'][1]} ({in_range}), "
-                     f"시계 이상 {'있음' if logs['clock_anomalies'] else '없음'}")
+        range_text = (f"로그 범위: {logs['range'][0]} ~ {logs['range'][1]} ({in_range}), "
+                      f"시계 이상 {'있음' if logs['clock_anomalies'] else '없음'}")
+        if not cands or not cands[0]["C"] or logs["in_range"] is not True or logs["clock_anomalies"]:
+            lines.append(add(6, range_text))
+        else:
+            lines.append(f"- {range_text}")
         lines.append("- 원인: TODO(LLM) — 로그로 확인한 것 / 코드로 추정한 것 / placeholder 규칙 결과를 나눠 쓴다")
         code = r["code"]
         if code.get("skipped"):
@@ -1611,14 +1651,19 @@ class Driver:
         lines.append(f"- 기타 후보: {', '.join(others) or '없음'}")
         if r.get("pending_causes"):
             lines.append("- 참고: 시그니처 없는 기존 원인: " + ", ".join(p["cause"] for p in r["pending_causes"]))
-        lines.append("- 심층 분석: TODO(LLM) 실행 결과 또는 \"심층 분석 생략: <사유>\"")
+        analyzer = r.get("analyzer")
+        if analyzer and analyzer.get("when") == "never":
+            lines.append(f"- 심층 분석 생략: analyzers.{cands[0].get('category')}.when: never")
+        elif analyzer:
+            lines.append(f"- 심층 분석 ({analyzer['skill']}): TODO(LLM) 결과 요약 / 분석 스킬 의견: <원인 ID — 근거 | 1위와 같음>. "
+                         "실행 안 함·실패면 이 줄을 \"심층 분석 생략: <사유>\"로")
+        else:
+            lines.append("- 심층 분석: 해당 없음(" + ("1위 카테고리에 분석 스킬 설정 없음" if cands else "1위 후보 없음") + ")")
         explore = r.get("explore")
         if explore and explore.get("when") == "never":
             lines.append("- 탐색 분석: 생략 (explore.when: never)")
         elif explore:
-            lines.append(f"- 탐색 분석 (추정, {TIMELINE_FILE} {explore['lines']}/{explore['total']}줄): TODO(LLM) 가설 1~3개"
-                         " — 로그로 확인 / 코드로 추정 / 반대 근거 / 다음에 받을 로그. 실행하지 않으면 \"탐색 분석 생략: <사유>\"."
-                         " 점수·분류·검증에 쓰지 않는다")
+            lines.append(EXPLORE_PENDING_LINE.format(key=self.key))
         if self.analysis_only:
             lines.append("- 열린 PR: 확인 안 함(분석 전용)")
             if (r.get("plan") or {}).get("exists"):
@@ -1629,6 +1674,7 @@ class Driver:
         if r["warnings"]:
             lines.append("- 경고: " + "; ".join(r["warnings"]))
         (self.job / "report.md").write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
+        return [text for _, text in sorted(must, key=lambda m: m[0])][:MUST_SHOW_MAX]
 
     def release(self) -> bool:
         if self.locked and self.run.env.get("TT_LOCK_OWNER"):
@@ -1752,8 +1798,15 @@ def _trim_error_events(result: dict) -> None:
                               for e in nc["error_events"][:4]]
 
 
+def _drop_read_only_hint_if_shown(result: dict) -> None:
+    """must_show가 읽기 전용 줄을 이미 담고 있으면 같은 내용의 `read_only_hint`는 뺀다."""
+    if any(str(m).startswith("읽기 전용:") for m in result.get("must_show") or []):
+        result.pop("read_only_hint", None)
+
+
 def fit(result: dict) -> dict:
-    """analysis.json을 ≤ 4KB로 줄인다: 다른 후보 근거 → 근거 줄 수 → 메시지 길이 → 경고 순."""
+    """analysis.json을 ≤ 4KB로 줄인다: (읽기 전용 줄 중복) → 다른 후보 근거 → 근거 줄 수 → 메시지 길이 → 경고 순,
+    마지막으로 must_show 항목을 160자로 줄이고 앞 4개만 남긴다(`truncated` 의미는 그대로: 그래도 넘으면 true)."""
     def size() -> int:
         return len(json.dumps(result, ensure_ascii=False, indent=1).encode("utf-8"))
 
@@ -1766,7 +1819,8 @@ def fit(result: dict) -> dict:
         steps.append(lambda c=c: c.update(evidence=[{**e, "msg": _clip(e.get("msg"), 80)} for e in c["evidence"]]))
     for c in cands[1:]:
         steps.append(lambda c=c: c.update(evidence=[]))
-    steps.insert(0, lambda: result.update(read_only_hint=_clip(result.get("read_only_hint"), 100))
+    steps.insert(0, lambda: _drop_read_only_hint_if_shown(result))
+    steps.insert(1, lambda: result.update(read_only_hint=_clip(result.get("read_only_hint"), 100))
                  if result.get("read_only_hint") else None)
     steps += [lambda: result.update(warnings=(result.get("warnings") or [])[:3]),
               lambda: result.update(files={"report": result["files"]["report"]}),
@@ -1778,7 +1832,9 @@ def fit(result: dict) -> dict:
               lambda: _clip_anchor_step(result, 40),
               lambda: _clip_failed_step(result, 60),
               lambda: _drop_reuse(result, "added_logs"),
-              lambda: _drop_reuse(result, "prev_top")]
+              lambda: _drop_reuse(result, "prev_top"),
+              lambda: result.update(must_show=[_clip(m, MUST_SHOW_CLIP) for m in result["must_show"]]) if result.get("must_show") else None,
+              lambda: result.update(must_show=result["must_show"][:MUST_SHOW_FIT]) if result.get("must_show") else None]
     for step in steps:
         if size() <= ANALYSIS_MAX:
             break
@@ -1820,6 +1876,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--steps-file", help="시험 절차 첨부 파일(txt/csv/html/zip, 선택). 읽지 못하면 경고만 내고 진행")
     p.add_argument("--clock-offset", help="시험 장비 시각 → 단말 logcat 시각 시계 차(단말 = 장비 + 값). 예: +3m, -90s, +00:03:00, 180. "
                                           "없으면 steps-file의 장비 시각은 분석 구간에 쓰지 않는다")
+    p = sub.add_parser("explore", parents=[common])
+    p.add_argument("key")
+    p.add_argument("--out", help="`run --offline-db --out`의 JOB 디렉토리(없으면 <work_dir>/<KEY>)")
     p = sub.add_parser("release", parents=[common])
     p.add_argument("key")
     return parser
@@ -1851,6 +1910,49 @@ def cmd_release(args, defaults: dict) -> int:
     return OK
 
 
+def cmd_explore(args, defaults: dict) -> int:
+    """동의 뒤 탐색 타임라인 만들기: `JOB/explore-input.json`·`events.json` → `JOB/timeline.md`, report.md의 탐색 분석 줄 갱신.
+
+    lock·trace·스냅샷은 건드리지 않는다. 종료 코드 0 = 완료, 1 = 해당 없음(입력 파일 없음: 후보 확정·`explore.when: never`·run 전),
+    2 = 사용 오류(키 형식·작업 디렉토리·`events.json` 없음·입력 파일 손상).
+    """
+    cfg = userconfig.merged(defaults)
+    if not re.fullmatch(r"[A-Za-z0-9._-]+", args.key):
+        print(f"Jira 키 형식이 아니다: {args.key}", file=sys.stderr)
+        return USAGE
+    job = Path(args.out).expanduser().resolve() if args.out else Path(str(userconfig.get(cfg, "work_dir"))).expanduser() / args.key
+    if not job.is_dir():
+        print(f"작업 디렉토리가 없다: {job} — 먼저 triage.py run을 실행한다", file=sys.stderr)
+        return USAGE
+    input_path, events_path = job / EXPLORE_INPUT_FILE, job / "events.json"
+    if not input_path.is_file():
+        print(f"탐색 분석 해당 없음: {EXPLORE_INPUT_FILE}가 없다(후보 확정·explore.when: never·run 전)", file=sys.stderr)
+        return CHECK_FAILED
+    if not events_path.is_file():
+        print(f"events.json이 없다: {events_path} — triage.py run을 다시 실행한다", file=sys.stderr)
+        return USAGE
+    try:
+        spec = json.loads(input_path.read_text(encoding="utf-8"))
+        events = json.loads(events_path.read_text(encoding="utf-8"))
+        limit = spec.get("limit")
+        if not isinstance(spec, dict) or not isinstance(limit, int) or isinstance(limit, bool):
+            raise ValueError("limit")
+    except (OSError, ValueError) as exc:
+        print(f"탐색 입력을 읽지 못했다({exc}) — triage.py run을 다시 실행한다", file=sys.stderr)
+        return USAGE
+    text, kept, total = timeline(args.key, events, spec.get("around"), limit, spec.get("failed_step"), spec.get("anchor"))
+    (job / TIMELINE_FILE).write_text(text, encoding="utf-8", newline="\n")
+    report = job / "report.md"
+    if report.is_file():
+        rows = report.read_text(encoding="utf-8").split("\n")
+        for i, row in enumerate(rows):
+            if row.startswith("- 탐색 분석"):
+                rows[i] = EXPLORE_DONE_LINE.format(lines=kept, total=total)
+        report.write_text("\n".join(rows), encoding="utf-8", newline="\n")
+    _emit({"timeline": TIMELINE_FILE, "lines": kept, "total": total})
+    return OK
+
+
 def main(argv: list[str] | None = None) -> int:
     try:
         sys.stdout.reconfigure(encoding="utf-8")
@@ -1860,6 +1962,8 @@ def main(argv: list[str] | None = None) -> int:
     defaults = site_defaults.load_or_exit(args.plugin_root)
     if args.cmd == "release":
         return cmd_release(args, defaults)
+    if args.cmd == "explore":
+        return cmd_explore(args, defaults)
     driver = Driver(args, defaults)
     try:
         result = driver.execute()

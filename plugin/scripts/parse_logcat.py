@@ -152,8 +152,11 @@ def postprocess(
     last_ts: str | None = None,
     timeout_ms: int | None = None,
     errors: list[dict] | None = None,
+    dropped: dict | None = None,
 ) -> list[dict]:
     """백엔드 출력에 태그 매핑 → 마스킹 → RIL 파생 이벤트 → extractor를 적용한다.
+
+    `dropped`가 dict면 버린 줄을 `(태그, pid, 레벨) → 줄 수`로 센다(`uncollected_tags`용, 원문 태그 그대로 — 쓰는 쪽이 마스킹한다).
 
     줄 레코드(`event: None`)는 `tags.yaml`에 없는 태그면 버린다. builtin 레코드는
     그대로 두고(마스킹만) 줄 레코드와 함께 낸다. 파생 이벤트는 그 줄 바로 뒤에 온다
@@ -165,6 +168,9 @@ def postprocess(
         if rec.get("event") is None:
             category = rules.tag_category(rec["tag"])
             if category is None:
+                if dropped is not None:
+                    key = (rec["tag"], rec.get("pid"), rec.get("level"))
+                    dropped[key] = dropped.get(key, 0) + 1
                 continue
             ann = rec.get("ril")
             if ann:
@@ -370,6 +376,27 @@ def _load_backend(defaults: dict, profile: platforms.PlatformProfile):
         raise UsageError(f"site-defaults.yaml parser.backend: {exc}") from exc
 
 
+UNCOLLECTED_TOP = 5
+
+
+def uncollected_tags(dropped: dict, events: list[dict], masker=None) -> list[dict]:
+    """`tags.yaml`에 없어 버려진 줄의 태그 중, 수집된 줄과 같은 pid에 있는 것만 → `[{tag, lines, warn}]`(상위 5개).
+
+    관측 누락 힌트다(로그에 있었지만 파서 규칙 태그가 아니라 이벤트로 못 뽑힌 줄). pid가 없는 줄은 건너뛴다.
+    """
+    pids = {e.get("pid") for e in events if e.get("event") is None and e.get("pid") is not None}
+    agg: dict[str, list[int]] = {}
+    for (tag, pid, level), n in dropped.items():
+        if pid is None or pid not in pids:
+            continue
+        row = agg.setdefault(str(tag), [0, 0])
+        row[0] += n
+        if level in ("W", "E", "F"):
+            row[1] += n
+    rows = sorted(agg.items(), key=lambda kv: (-kv[1][1], -kv[1][0], kv[0]))[:UNCOLLECTED_TOP]
+    return [{"tag": (masker(tag) if masker else tag)[:40], "lines": v[0], "warn": v[1]} for tag, v in rows]
+
+
 def run_parse(args, plugin_root: Path, defaults: dict, profile: platforms.PlatformProfile | None = None) -> dict:
     paths = [Path(p) for p in args.logs]
     for path in paths:
@@ -426,8 +453,10 @@ def run_parse(args, plugin_root: Path, defaults: dict, profile: platforms.Platfo
     timeout_ms = int((db_cfg.get("matcher") or {}).get("pattern_timeout_ms", DEFAULT_TIMEOUT_MS))
     errors: list[dict] = []
     events = backend.parse(paths, args.tz, args.year, window)
+    dropped: dict = {}
     events = postprocess(events, rules, masker=masker, last_ts=coverage["last_ts"],
-                         timeout_ms=timeout_ms, errors=errors)
+                         timeout_ms=timeout_ms, errors=errors, dropped=dropped)
+    uncollected = uncollected_tags(dropped, events, masker)
     for error in errors:
         warnings.append({"code": "pattern-timeout",
                          "message": f"extractor {error['extractor']}: {error['error']}"})
@@ -465,7 +494,7 @@ def run_parse(args, plugin_root: Path, defaults: dict, profile: platforms.Platfo
     elif not args.no_external:
         warnings += compat.check_external(db_cfg, {})
 
-    return {
+    out = {
         "schema": OUTPUT_SCHEMA,
         "backend": {"name": backend.name, "version": backend.version()},
         "external": external_info,
@@ -488,6 +517,9 @@ def run_parse(args, plugin_root: Path, defaults: dict, profile: platforms.Platfo
         "errors": errors,
         "events": events,
     }
+    if uncollected:      # 최상위, 있을 때만(없으면 출력이 이전과 같다)
+        out["uncollected_tags"] = uncollected
+    return out
 
 
 def observation_errors(doc: dict) -> list[dict]:

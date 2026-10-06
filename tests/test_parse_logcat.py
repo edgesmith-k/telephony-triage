@@ -652,6 +652,25 @@ def test_site_defaults_required():
     assert code == 2 and "사내 기본값 없음" in err
 
 
+def test_uncollected_tags_counts_dropped_tags_of_collected_pids_only():
+    """tags.yaml에 없어 버려진 줄의 태그는, 수집된 줄과 같은 pid일 때만 `uncollected_tags`(최상위)에 나온다."""
+    log = _tmp() / "u.log"
+    log.write_text("\n".join([
+        "09-27 18:00:00.000  1300  1320 D RILJ: [PHONE0] [0095]> LAST_CALL_FAIL_CAUSE",
+        "09-27 18:00:01.000  1300  1320 I GsmCdmaCallTracker: [PHONE0] call state changed: ACTIVE",
+        "09-27 18:00:02.000  1300  1320 W GsmCdmaCallTracker: [PHONE0] handlePollCalls: call dropped",
+        "09-27 18:00:02.500  1300  1320 D OtherTag: [PHONE0] noise",
+        "09-27 18:00:03.000  4242  4242 E ForeignTag: 다른 프로세스",
+        "09-27 18:00:03.100  4242  4242 E ForeignTag: 다른 프로세스",
+    ]) + "\n", encoding="utf-8")
+    data = _parse([log], "--full", "--mask")
+    assert data["uncollected_tags"] == [{"tag": "GsmCdmaCallTracker", "lines": 2, "warn": 1},
+                                        {"tag": "OtherTag", "lines": 1, "warn": 0}]
+    assert "ForeignTag" not in json.dumps(data["uncollected_tags"])
+    # 없으면 키가 없다(기존 출력 불변)
+    assert "uncollected_tags" not in _parse([LOG_DIR / "data-connected.log"], "--full", "--mask")
+
+
 def _all_tests():
     return [(n, o) for n, o in sorted(globals().items()) if n.startswith("test_") and callable(o)]
 

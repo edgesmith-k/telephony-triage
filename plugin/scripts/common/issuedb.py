@@ -75,20 +75,24 @@ class IssueDb:
         return None
 
 
-def read_frontmatter(path: Path) -> dict:
-    text = path.read_text(encoding="utf-8")
+def parse_frontmatter_text(text: str, label: str = "") -> dict:
+    """`type.md` 등의 본문 텍스트에서 YAML frontmatter를 읽는다(`label`은 오류 메시지의 출처). 이전 커밋 내용에도 쓴다."""
     if not text.startswith("---\n"):
-        raise IssueDbError(f"{path}: frontmatter가 없습니다.")
+        raise IssueDbError(f"{label}: frontmatter가 없습니다.")
     end = text.find("\n---\n", 3)
     if end < 0:
-        raise IssueDbError(f"{path}: frontmatter 끝(---)이 없습니다.")
+        raise IssueDbError(f"{label}: frontmatter 끝(---)이 없습니다.")
     try:
         data = yamlio.loads(text[4:end])
     except yaml.YAMLError as exc:
-        raise IssueDbError(f"{path}: frontmatter YAML 오류: {exc}") from exc
+        raise IssueDbError(f"{label}: frontmatter YAML 오류: {exc}") from exc
     if not isinstance(data, dict):
-        raise IssueDbError(f"{path}: frontmatter가 매핑이 아닙니다.")
+        raise IssueDbError(f"{label}: frontmatter가 매핑이 아닙니다.")
     return data
+
+
+def read_frontmatter(path: Path) -> dict:
+    return parse_frontmatter_text(path.read_text(encoding="utf-8"), str(path))
 
 
 def load_config(root: Path) -> dict:

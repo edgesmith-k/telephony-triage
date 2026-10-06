@@ -279,3 +279,32 @@ def test_runs_are_capped_and_top_change_is_reported():
     changed = _run(ws, "--minutes", "7")
     assert changed["reuse"]["top_changed"] is True and changed["reuse"]["prev_top"] == "IMS-001-01"
     assert "1위 IMS-001-01 → DATA-001-01" in (ws.job_dir(KEY) / "report.md").read_text(encoding="utf-8")
+
+
+def _no_candidate_log() -> Path:
+    import subprocess
+    gen = tmp("tt-e004-")
+    done = subprocess.run([sys.executable, str(REPO / "tests" / "mocks" / "logcat_gen.py"),
+                           str(REPO / "tests" / "skill_evals" / "scenarios" / "e004-cs-call-drop.yaml"), "--out", str(gen)],
+                          capture_output=True, text=True)
+    assert done.returncode == 0, done.stderr
+    return next(gen.glob("*.log"))
+
+
+def test_explore_timeline_is_not_a_cache_file_and_is_reproduced_on_a_hit():
+    ws = Workspace()
+    log = _no_candidate_log()
+    first = _run(ws, "--answer", "time=2026-09-27T18:02:03+09:00", logs=log)
+    job = ws.job_dir(KEY)
+    assert not first.get("candidates") and not (job / "timeline.md").exists() and (job / "explore-input.json").is_file()
+    done = ws.json("triage.py", ["explore", KEY])                    # work_dir/<KEY>에서 찾는다
+    assert done["timeline"] == "timeline.md" and done["lines"] == done["total"] > 0
+    made = (job / "timeline.md").read_bytes()
+    cache = json.loads((job / "analysis-cache.json").read_text(encoding="utf-8"))
+    assert "timeline" not in cache["files"] and cache["format"] == 2 and cache["core"]["explore_input"]["limit"] == 200
+    second = _run(ws, "--answer", "time=2026-09-27T18:02:03+09:00", logs=log)                                      # 타임라인을 만든 뒤에도 적중
+    assert second["reuse"] == {"hit": True, "run": 1}
+    assert not (job / "timeline.md").exists() and (job / "explore-input.json").is_file()   # run은 이전 타임라인을 지운다
+    again = ws.json("triage.py", ["explore", KEY])
+    assert again == done and (job / "timeline.md").read_bytes() == made
+    assert "- 탐색 분석 (추정, timeline.md" in (job / "report.md").read_text(encoding="utf-8")
