@@ -405,9 +405,8 @@ def _tree(*roots: Path) -> list:
     out = []
     for root in roots:
         for path in sorted(root.rglob("*")):
-            if path.is_file():
-                st = path.stat()
-                out.append((str(path), st.st_size, st.st_mtime_ns))
+            st = path.stat()    # 디렉토리도 센다 (mkdir 방지)
+            out.append((str(path), path.is_dir(), 0 if path.is_dir() else st.st_size, 0 if path.is_dir() else st.st_mtime_ns))
     return out
 
 
@@ -533,6 +532,56 @@ def test_doctor_refactored_helpers_keep_messages():
     assert proc.returncode == 2 and proc.stderr.strip() == "도구 이름은 전체 이름(mcp__<server>__<tool>)이어야 합니다: jira_fetch_ticket"
     proc = env.run("config.py", ["set-jira", "--server", "mock-jira", "--get-issue", "mcp__other__get_issue"])
     assert proc.returncode == 2 and proc.stderr.strip() == "mcp__other__get_issue는 서버 mock-jira의 도구가 아닙니다."
+
+
+def test_doctor_bad_jira_types_make_a_fail_row_not_a_traceback():
+    env, _ = _ready_env()
+    _set_user(env, jira={"mcp_server": "mock-jira", "tools": ["get_issue"], "read_tools": "mcp__mock-jira__x"})
+    proc = env.run("config.py", ["doctor", "--format", "markdown"])
+    assert proc.returncode == 1 and "Traceback" not in proc.stderr and "| jira | fail | " in proc.stdout
+    assert "형식 오류" in proc.stdout
+    _set_user(env, jira={"mcp_server": "mock-jira", "tools": {"get_issue": "mcp__mock-jira__a"}, "read_tools": "oops"})
+    assert "형식 오류" in _rows(_doctor(env, expect=1))["jira"]["detail"]
+
+
+def test_doctor_does_not_create_missing_work_dir_and_empty_work_dir_skips():
+    env, _ = _ready_env()
+    import shutil
+    shutil.rmtree(env.base / "work")
+    before = _tree(env.base)
+    rows = _rows(_doctor(env))
+    assert not (env.base / "work").exists() and _tree(env.base) == before
+    assert rows["snapshot"]["status"] == "warn" and rows["lock"]["status"] == "ok" and rows["compat"]["status"] == "skip"
+    _set_user(env, work_dir="")
+    rows = _rows(_doctor(env))
+    assert rows["snapshot"] == {"check": "snapshot", "status": "skip", "detail": "work_dir 없음"}
+    assert rows["lock"]["status"] == "skip" and rows["lock"]["detail"] == "work_dir 없음"
+
+
+def test_doctor_snapshot_age_uses_exact_timedelta():
+    from datetime import datetime, timedelta, timezone
+
+    env, _ = _ready_env()
+    meta = env.base / "work" / "snapshot.json"
+    at = datetime(2099, 1, 1, tzinfo=timezone.utc)
+    meta.write_text(json.dumps({"sha": "abcdef0123", "base": "main", "at": at.strftime("%Y-%m-%dT%H:%M:%SZ")}), encoding="utf-8")
+    now = lambda delta: {"TT_NOW": (at + delta).strftime("%Y-%m-%dT%H:%M:%SZ")}  # noqa: E731
+    assert _rows(_doctor(env, at=now(timedelta(days=7))))["snapshot"]["status"] == "ok"
+    over = _rows(_doctor(env, at=now(timedelta(days=7, seconds=1))))["snapshot"]
+    assert over["status"] == "warn" and "7일" in over["detail"]
+
+
+def test_doctor_worst_case_markdown_fits_1kb():
+    clone = Path(_repo()["clone"])
+    env = Env()
+    env.init(clone)    # hook·snapshot·jira 문제, lock 보유, gh 인증 없음
+    _set_user(env, jira={"mcp_server": "mock-jira-with-a-fairly-long-server-name", "tools": {"get_issue": ""}})
+    env.json("db_pr.py", ["lock", "acquire", "MOCK-1101-long-job-key", "--command", "analyze"])
+    proc = env.run("config.py", ["doctor", "--format", "markdown"], unauth=True)
+    assert proc.returncode == 1
+    assert sum(r in proc.stdout for r in ("| warn |", "| fail |")) == 2
+    assert proc.stdout.count("| fail |") >= 2 and proc.stdout.count("| warn |") >= 3
+    assert len(proc.stdout.encode("utf-8")) <= 1024, len(proc.stdout.encode("utf-8"))
 
 
 if __name__ == "__main__":

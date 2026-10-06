@@ -900,8 +900,11 @@ def checks_w4(eid, ctx):
         def untouched():
             a, ea = ctx.lock_free()
             b, eb = ctx.clone_same()
-            c = not re.search(r"doctor[^\n]*(install-hooks|sync-scripts-path|\bset\b|git config)", ctx.ran)
-            return a and b and c, f"{ea}; {eb}; doctor와 같은 명령줄의 수리 호출 {'없음' if c else '있음'}"
+            ran = ctx.ran
+            hit = re.search(r"config\.py\s+doctor", ran)
+            after = ran[hit.end():] if hit else ""     # doctor 호출 뒤에 수리 명령이 없어야 한다
+            c = bool(hit) and not re.search(r"install-hooks|sync-scripts-path|config\.py\s+set\b|git\b[^\n]*\bconfig\b", after)
+            return a and b and c, f"{ea}; {eb}; doctor 호출 {'있음' if hit else '없음'}, 그 뒤 수리 호출 {'없음' if c else '있음'}"
         return [doctor_ran, pasted, gh_guided, untouched]
     if eid == 55:
         def code_used():

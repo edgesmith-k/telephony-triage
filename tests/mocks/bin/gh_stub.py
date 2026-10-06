@@ -13,6 +13,7 @@
   MOCK_GH_UNAUTH=1    `auth status`를 실패시킨다 (setup 9번 경로 시험)
   MOCK_GH_USER        `--author @me`가 가리키는 사용자 (기본 mock-user). `pr create`가 author로 기록한다
   MOCK_GH_FAIL_LIST=1 `pr list`를 실패시킨다 (my-prs의 gh 실패 경로 시험)
+  MOCK_GH_BAD_JSON=1  `pr list`가 JSON이 아닌 출력을 내고 0으로 끝난다 (my-prs 경고 경로 시험)
   GH_HOST             호스트 이름 (없으면 ghe.mock.invalid)
 """
 
@@ -209,6 +210,9 @@ def cmd_pr(argv: list[str]) -> int:
         if os.environ.get("MOCK_GH_FAIL_LIST") == "1":
             print("gh 스텁: pr list 실패 (MOCK_GH_FAIL_LIST)", file=sys.stderr)
             return 1
+        if os.environ.get("MOCK_GH_BAD_JSON") == "1":
+            print("<html>proxy error</html>")
+            return 0
         rows = [p for p in state["prs"] if p["repo"] == repo]
         if args.author:
             who = me() if args.author == "@me" else args.author

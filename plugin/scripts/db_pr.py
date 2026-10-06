@@ -85,15 +85,15 @@ import yaml  # noqa: E402
 from common import site_defaults, userconfig, yamlio  # noqa: E402
 from common.buildname import is_valid_branch_name  # noqa: E402
 from common import checks as checks_mod  # noqa: E402
-from common import ghcli  # noqa: E402
+from common import ghcli, session_lock  # noqa: E402
 import db_summary  # noqa: E402
 from common.exitcodes import CHECK_FAILED, OK, USAGE  # noqa: E402
 
-LOCK_FILE = "session.lock"
-SNAPSHOT_DIR = "_snapshot"
-SNAPSHOT_META = "snapshot.json"   # `<work_dir>/snapshot.json` = {sha, base, at} — snapshot이 best-effort로 쓴다 (doctor가 나이를 읽는다)
-FRESH = timedelta(minutes=10)
-EXPIRE = timedelta(hours=4)
+LOCK_FILE = session_lock.LOCK_FILE
+SNAPSHOT_DIR = session_lock.SNAPSHOT_DIR
+SNAPSHOT_META = session_lock.SNAPSHOT_META   # snapshot이 best-effort로 쓴다 (doctor가 나이를 읽는다)
+FRESH = session_lock.FRESH
+EXPIRE = session_lock.EXPIRE
 STATE, STAGE, PR_FILE, REGRESS, PLAN = "state.json", "stage.json", "pr.json", "regress.json", "plan.json"
 PASTED_STEPS = "steps-pasted.txt"   # 개발자가 붙여넣은 스텝 목록 원문(08-safety.md §8.1) — 작업이 끝나면 지운다
 WORK_FILES = (STATE, STAGE, PR_FILE, REGRESS, PASTED_STEPS)
@@ -106,19 +106,9 @@ class UsageError(Exception):
         self.detail = detail
 
 
-def now() -> datetime:
-    env = os.environ.get("TT_NOW")
-    if env:
-        return datetime.fromisoformat(env.replace("Z", "+00:00")).astimezone(timezone.utc)
-    return datetime.now(timezone.utc)
-
-
-def _iso(dt: datetime) -> str:
-    return dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-
-def _parse(value: str) -> datetime:
-    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+now = session_lock.now
+_iso = session_lock.iso
+_parse = session_lock.parse
 
 
 # -- lock -----------------------------------------------------------------------------
@@ -172,22 +162,12 @@ class Lock:
 
     def read(self) -> dict | None:
         try:
-            data = json.loads(self.path.read_text(encoding="utf-8"))
-            if not isinstance(data, dict) or not all(isinstance(data.get(k), str)
-                    for k in ("job", "started_at", "updated_at")):
-                raise ValueError("invalid lock record")
-            _parse(data["updated_at"])
-            return data
-        except FileNotFoundError:
-            return None
-        except (OSError, ValueError, TypeError) as exc:
-            raise UsageError("session.lock을 읽을 수 없습니다. 손상된 lock을 확인한다.") from exc
+            return session_lock.read(self.work_dir)
+        except session_lock.LockError as exc:
+            raise UsageError(str(exc)) from exc.__cause__
 
     def describe(self, data: dict | None) -> dict | None:
-        if data is None:
-            return None
-        age = now() - _parse(data["updated_at"])
-        return {**data, "expired": age > EXPIRE, "age_sec": int(age.total_seconds())}
+        return session_lock.describe(data)
 
     def write(self, data: dict) -> None:
         userconfig.ensure_private_dir(self.work_dir)
@@ -288,7 +268,8 @@ def snapshot(job: str, cfg: dict, lock: Lock) -> dict:
         previous = _read_json(lock.work_dir / SNAPSHOT_META)
     except (OSError, ValueError):
         previous = None
-    previous_sha = previous.get("sha") if isinstance(previous, dict) and isinstance(previous.get("sha"), str) else None
+    previous_sha = (previous.get("sha") if isinstance(previous, dict) and isinstance(previous.get("sha"), str)
+                    and previous.get("base") == base else None)    # base 브랜치가 바뀌었으면 비교하지 않는다
     try:
         _write_json(lock.work_dir / SNAPSHOT_META, {"sha": sha, "base": base, "at": _iso(now())})
         meta_written = True
@@ -524,7 +505,7 @@ def my_prs(ctx: Ctx) -> dict:
     note = "base_moved는 fetch 없이 로컬 원격 ref(origin/*) 기준이다. null이면 그 ref가 없다(미fetch)."
     try:
         found, warning = _open_prs(ctx, ["--author", "@me"], _gh)
-    except UsageError as exc:    # gh 시간 초과도 경고로 돌린다 (sync는 계속한다)
+    except (UsageError, ValueError) as exc:    # gh 시간 초과·JSON이 아닌 출력도 경고로 돌린다 (sync는 계속한다)
         found, warning = None, f"열린 PR을 확인하지 못했다 (gh): {str(exc)[:200]}"
     if found is None:
         return {"base": ctx.base, "prs": None, "warnings": [warning], "note": note}

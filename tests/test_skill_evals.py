@@ -829,3 +829,20 @@ def test_question_detection_needs_question_sentence():
     assert not grader.is_question("심층 분석을 할지 물으면 규칙대로 '아니오'로 답하고, 탐색 분석은 묻지 않고 실행합니다", "심층 분석")
     assert grader.is_question("심층 분석(mock-data-analyzer)을 실행할까요? (토큰 추가)", "심층 분석")
     assert not grader.is_question("탐색 분석을 실행할까요?", "심층 분석")
+
+
+def test_eval58_untouched_check_only_rejects_repairs_after_doctor(tmp_path):
+    import grade as grader
+
+    def verdict(*commands):
+        sub = tmp_path / str(len(list(tmp_path.iterdir())))
+        sub.mkdir()
+        ctx = _ctx_with_events(sub, [(c,) for c in commands])
+        ctx.clone_same = lambda: (True, "same")
+        return grader.checks(58, ctx)[3]()[0]
+
+    assert verdict("python3 $S/config.py install-hooks", "python3 $S/config.py doctor --format markdown")   # 수리는 doctor 앞
+    assert verdict("python3 $S/config.py doctor --format markdown")
+    assert not verdict("python3 $S/config.py doctor --format markdown", "python3 $S/config.py install-hooks")
+    assert not verdict("python3 $S/config.py doctor --format markdown; git -C x config core.hooksPath h")
+    assert not verdict("python3 $S/config.py gh-status")        # doctor를 부르지 않았다

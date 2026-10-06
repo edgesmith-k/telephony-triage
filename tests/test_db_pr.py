@@ -1635,6 +1635,11 @@ def test_snapshot_reports_previous_sha_base_change_and_writes_meta_best_effort()
     (ws.work / "snapshot.json").write_text("{깨짐", encoding="utf-8")
     broken = ws.db_pr("snapshot", "--job", "sync")
     assert broken["previous_sha"] is None and broken["base_sha_changed"] is None and broken["snapshot_meta_written"] is True
+    # 이전 메타의 base가 지금 base와 다르면 비교하지 않는다
+    meta_path = ws.work / "snapshot.json"
+    meta_path.write_text(json.dumps({"sha": new_sha, "base": "release", "at": "2026-01-01T00:00:00Z"}), encoding="utf-8")
+    other_base = ws.db_pr("snapshot", "--job", "sync")
+    assert other_base["previous_sha"] is None and other_base["base_sha_changed"] is None
     # 메타를 쓸 수 없어도 snapshot은 성공한다 (best-effort)
     (ws.work / "snapshot.json").unlink()
     (ws.work / "snapshot.json").mkdir()
@@ -1647,9 +1652,8 @@ def _listing(*roots: Path) -> list:
     out = []
     for root in roots:
         for path in sorted(root.rglob("*")):
-            if path.is_file():
-                st = path.stat()
-                out.append((str(path), st.st_size, st.st_mtime_ns))
+            st = path.stat()    # 디렉토리도 센다
+            out.append((str(path), path.is_dir(), 0 if path.is_dir() else st.st_size, 0 if path.is_dir() else st.st_mtime_ns))
     return out
 
 
@@ -1688,6 +1692,8 @@ def test_my_prs_gh_failure_is_a_warning_and_missing_config_stops_with_2():
     ws = Workspace()
     out = ws.db_pr("my-prs", env={"MOCK_GH_FAIL_LIST": "1"})
     assert out["prs"] is None and out["base"] == "main" and "열린 PR을 확인하지 못했다" in out["warnings"][0]
+    bad = ws.db_pr("my-prs", env={"MOCK_GH_BAD_JSON": "1"})     # JSON이 아닌 gh 출력도 경고, 종료 0
+    assert bad["prs"] is None and "열린 PR을 확인하지 못했다" in bad["warnings"][0]
     from runner import tmp
     proc = run("db_pr.py", ["my-prs"], env={"TELEPHONY_TRIAGE_HOME": tmp("tt-nohome-") / "h"})
     assert proc.returncode == 2 and "setup" in proc.stderr

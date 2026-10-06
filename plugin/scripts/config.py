@@ -35,12 +35,13 @@ import json
 import re
 import subprocess
 import sys
+from datetime import timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import adapters  # noqa: E402
-from common import compat, dbpath, ghcli, mcptools, site_defaults, userconfig  # noqa: E402
+from common import compat, dbpath, ghcli, mcptools, session_lock, site_defaults, userconfig  # noqa: E402
 from common import compiled as compiled_cache  # noqa: E402
 from common.exitcodes import CHECK_FAILED, OK, USAGE  # noqa: E402
 from common.versions import GENERATOR_VERSION, SCHEMA_VERSION  # noqa: E402
@@ -392,10 +393,14 @@ def _row(check: str, status: str, detail: str, next_: str | None = None) -> dict
 def _doctor_rows(args, defaults: dict) -> list[dict]:
     """점검 행. 행 단위로 예외를 흡수한다(그 행 fail). 앞선 행이 실패하면 의존 행은 skip.
     아무것도 만들거나 바꾸지 않는다 (mkdir·fetch·lock·쓰기 없음)."""
-    import db_pr    # 지연 import: lock·시각 판정을 db_pr과 같게 쓴다 (config→db_pr 결합은 이 함수에만)
-
     rows: list[dict] = []
     skip = lambda name, why: rows.append(_row(name, "skip", why))  # noqa: E731
+
+    def guarded(name: str, func) -> None:
+        try:
+            func()
+        except Exception as exc:    # noqa: BLE001 — 한 행의 실패가 표 전체를 막지 않는다
+            rows.append(_row(name, "fail", f"점검 실패: {type(exc).__name__}: {exc}"))
 
     # 1 config
     user, cfg = None, None
@@ -407,13 +412,11 @@ def _doctor_rows(args, defaults: dict) -> list[dict]:
             cfg = userconfig.merged(defaults, user)
             rows.append(_row("config", "ok", "config.yaml 있음"))
     except Exception as exc:    # noqa: BLE001 — 읽기 실패도 한 행의 fail이다
-        rows.append(_row("config", "fail", f"config 읽기 실패: {exc}", "config.yaml을 확인하거나 setup"))
+        rows.append(_row("config", "fail", f"config 읽기 실패: {exc}", "config.yaml 확인 또는 setup"))
     ok_cfg = cfg is not None
 
     # 2 scripts_path
-    if not ok_cfg:
-        skip("scripts_path", "config 없음")
-    else:
+    def scripts_path():
         have = userconfig.get(cfg, "plugin.scripts_path")
         want = str(_plugin_root(args) / "scripts")
         if have == want:
@@ -421,119 +424,135 @@ def _doctor_rows(args, defaults: dict) -> list[dict]:
         else:
             rows.append(_row("scripts_path", "warn", "config의 경로가 이 플러그인과 다름" if have else "scripts_path 비어 있음",
                              "config.py sync-scripts-path"))
+    guarded("scripts_path", scripts_path) if ok_cfg else skip("scripts_path", "config 없음")
 
     # 3 clone
-    repo = None
-    if not ok_cfg:
-        skip("clone", "config 없음")
-    else:
-        repo = Path(str(userconfig.get(cfg, "issue_db.path") or "")).expanduser()
-        if not userconfig.get(cfg, "issue_db.path"):
+    repo_box: list = []
+
+    def clone():
+        raw = userconfig.get(cfg, "issue_db.path")
+        if not raw:
             rows.append(_row("clone", "fail", "issue_db.path 비어 있음", "setup 1"))
-            repo = None
-        elif (repo / ".git").exists():
+            return
+        repo = Path(str(raw)).expanduser()
+        if (repo / ".git").exists():
             rows.append(_row("clone", "ok", f"{repo}"))
+            repo_box.append(repo)
         else:
             remote = userconfig.get(cfg, "issue_db.remote")
             rows.append(_row("clone", "fail", "이슈 DB clone 없음", f"git clone {remote} {repo}" if remote else "setup 3"))
-            repo = None
+    guarded("clone", clone) if ok_cfg else skip("clone", "config 없음")
 
     # 4 hook
-    if repo is None:
-        skip("hook", "clone 없음")
-    else:
-        value = _hooks_value(repo)
+    def hook():
+        value = _hooks_value(repo_box[0])
         if value == ".githooks":
             rows.append(_row("hook", "ok", "core.hooksPath=.githooks"))
         else:
             rows.append(_row("hook", "fail", f"core.hooksPath={value or '(없음)'}", "config.py install-hooks"))
+    guarded("hook", hook) if repo_box else skip("hook", "clone 없음")
 
     # 5 jira (매핑만 본다)
-    if not ok_cfg:
-        skip("jira", "config 없음")
-    else:
+    def jira():
         server = userconfig.get(cfg, "jira.mcp_server")
-        tools = userconfig.get(cfg, "jira.tools", {}) or {}
-        names = [v for v in tools.values() if v] + list(userconfig.get(cfg, "jira.read_tools", []) or [])
+        tools = userconfig.get(cfg, "jira.tools", {})
+        read_tools = userconfig.get(cfg, "jira.read_tools", [])
+        hint = "setup 4 (Jira MCP 확인)"
+        if tools is None:
+            tools = {}
+        if read_tools is None:
+            read_tools = []
+        if not isinstance(tools, dict) or not isinstance(read_tools, list):
+            rows.append(_row("jira", "fail", "jira.tools(매핑)·read_tools(목록) 형식 오류", hint))
+            return
+        names = [v for v in tools.values() if v] + read_tools
         if not server:
-            rows.append(_row("jira", "fail", "jira.mcp_server 비어 있음", "setup 4 (Jira MCP 확인)"))
+            rows.append(_row("jira", "fail", "jira.mcp_server 비어 있음", hint))
         elif not tools.get("get_issue"):
-            rows.append(_row("jira", "fail", "jira.tools.get_issue 매핑 비어 있음", "setup 4 (Jira MCP 확인)"))
+            rows.append(_row("jira", "fail", "jira.tools.get_issue 매핑 비어 있음", hint))
         else:
-            problems = _tool_problems(server, names)
+            problems = _tool_problems(str(server), names)
             if problems:
-                rows.append(_row("jira", "fail", problems[0], "setup 4 (Jira MCP 확인)"))
+                rows.append(_row("jira", "fail", problems[0], hint))
             else:
                 rows.append(_row("jira", "ok", f"{server} / get_issue 매핑 있음"))
+    guarded("jira", jira) if ok_cfg else skip("jira", "config 없음")
 
     # 6 gh
-    if not ok_cfg:
-        skip("gh", "config 없음")
-    else:
+    def gh():
         host, ok, _message = _gh_auth(defaults)
         if ok:
             rows.append(_row("gh", "ok", f"인증됨 ({host})"))
         else:
-            rows.append(_row("gh", "warn", f"gh 인증 없음 ({host}) — 쓰기 불가, 읽기 분석은 됨", f"gh auth login --hostname {host}"))
+            rows.append(_row("gh", "warn", f"gh 인증 없음 ({host}) — 쓰기 불가", f"gh auth login -h {host}"))
+    guarded("gh", gh) if ok_cfg else skip("gh", "config 없음")
 
     # 7 snapshot
-    snap = None
-    if not ok_cfg:
-        skip("snapshot", "config 없음")
-    else:
-        work = Path(str(userconfig.get(cfg, "work_dir") or "")).expanduser()
-        snap_dir = work / db_pr.SNAPSHOT_DIR
+    snap_box: list = []
+    work_raw = userconfig.get(cfg, "work_dir") if ok_cfg else None
+    work = Path(str(work_raw)).expanduser() if work_raw else None
+
+    def snapshot():
+        snap_dir = work / session_lock.SNAPSHOT_DIR
         if not (snap_dir / ".git").exists():
             rows.append(_row("snapshot", "warn", "읽기 스냅샷 없음", "/telephony-triage:sync"))
+            return
+        snap_box.append(snap_dir)
+        meta_path = work / session_lock.SNAPSHOT_META
+        if not meta_path.is_file():
+            rows.append(_row("snapshot", "warn", "시각 기록 없음 (나이 불명)", "/telephony-triage:sync"))
+            return
+        try:
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
+            age = session_lock.now() - session_lock.parse(meta["at"])
+            sha = str(meta.get("sha") or "")[:7]
+        except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
+            snap_box.clear()
+            rows.append(_row("snapshot", "fail", f"{session_lock.SNAPSHOT_META} 손상: {type(exc).__name__}", "/telephony-triage:sync"))
+            return
+        days = int(age.total_seconds() // 86400)
+        if age > timedelta(days=SNAPSHOT_STALE_DAYS):
+            rows.append(_row("snapshot", "warn", f"{days}일 전 ({sha})", "/telephony-triage:sync"))
         else:
-            snap = snap_dir
-            meta_path = work / db_pr.SNAPSHOT_META
-            if not meta_path.is_file():
-                rows.append(_row("snapshot", "warn", "스냅샷 시각 기록 없음 (나이 불명)", "/telephony-triage:sync"))
-            else:
-                try:
-                    meta = json.loads(meta_path.read_text(encoding="utf-8"))
-                    age = db_pr.now() - db_pr._parse(meta["at"])
-                    sha = str(meta.get("sha") or "")[:7]
-                except (OSError, ValueError, KeyError, TypeError) as exc:
-                    rows.append(_row("snapshot", "fail", f"{db_pr.SNAPSHOT_META} 손상: {type(exc).__name__}", "/telephony-triage:sync"))
-                else:
-                    days = int(age.total_seconds() // 86400)
-                    if days > SNAPSHOT_STALE_DAYS:
-                        rows.append(_row("snapshot", "warn", f"{days}일 전 ({sha})", "/telephony-triage:sync"))
-                    else:
-                        rows.append(_row("snapshot", "ok", f"{days}일 전 ({sha})"))
+            rows.append(_row("snapshot", "ok", f"{days}일 전 ({sha})"))
+    if not ok_cfg:
+        skip("snapshot", "config 없음")
+    elif work is None:
+        skip("snapshot", "work_dir 없음")
+    else:
+        guarded("snapshot", snapshot)
 
-    # 8 compat
-    if snap is None:
+    # 8 compat (<work_dir>/_snapshot 기준)
+    if not snap_box:
         skip("compat", "스냅샷 없음")
     else:
         try:
-            result = check(snap, defaults, "dry-run")
+            result = check(snap_box[0], defaults, "dry-run")
             if result["writable"]:
                 rows.append(_row("compat", "ok", "스키마·생성기·파서 호환"))
             else:
                 codes = ",".join(r["code"] for r in result["reasons"])
-                rows.append(_row("compat", "fail", f"쓰기 막힘: {codes}", "config.py check --for dry-run 으로 사유 확인"))
+                rows.append(_row("compat", "fail", f"쓰기 막힘: {codes}", "config.py check --for dry-run"))
         except Exception as exc:    # noqa: BLE001
             rows.append(_row("compat", "fail", f"판정 실패: {exc}"))
 
     # 9 lock
     if not ok_cfg:
         skip("lock", "config 없음")
+    elif work is None:
+        skip("lock", "work_dir 없음")
     else:
         try:
-            lock = db_pr.Lock(Path(str(userconfig.get(cfg, "work_dir") or "")).expanduser())
-            held = lock.describe(lock.read())
+            held = session_lock.describe(session_lock.read(work))
             if held is None:
                 rows.append(_row("lock", "ok", "세션 lock 없음"))
             else:
                 mins = held["age_sec"] // 60
                 state = "만료" if held["expired"] else "보유 중"
-                rows.append(_row("lock", "warn", f"{state}: {held['job']} ({mins}분 전 갱신)",
-                                 f"끝난 세션이면 db_pr.py lock release {held['job']} --force"))
+                rows.append(_row("lock", "warn", f"{state}: {held['job']} ({mins}분 전)",
+                                 f"끝난 세션이면 db_pr lock release {held['job']} --force"))
         except Exception as exc:    # noqa: BLE001 — 손상 lock 포함
-            rows.append(_row("lock", "fail", str(exc) or type(exc).__name__, "손상 여부를 확인한다"))
+            rows.append(_row("lock", "fail", str(exc) or type(exc).__name__, "lock 파일 확인"))
     return rows
 
 
