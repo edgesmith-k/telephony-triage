@@ -174,7 +174,7 @@
 | ✅ | W1 | ✅ 완료(10/06) | ccr-2495ec74-xn15cn · 커밋 `W1: 출력 다이어트…` | stdout 33%, record verify는 `--verbose`(eval 18 회귀) |
 | ✅ | W2 | ✅ 완료(10/06) | ccr-2495ec74-xn15cn · 커밋 `W2: 결정적 렌더링…` | W2 영향 미확인: eval 9·18·20~23·26·31·54. W2 보류: 검색 전용 문구(search.md는 `--brief` JSON 유지, eval 53) |
 | ✅ | W3 | ✅ 완료(10/06) | ccr-2495ec74-xn15cn · 커밋 `W3: verify-fix…` | eval 25 Sonnet 3/3, verify-fix Sonnet 기본. W3 영향 미확인: eval 21·22·26·27·33 |
-| ☐ | W4 | 대기 | | |
+| ☐ | W4 | 계획 확인 중 | ccr-2495ec74-xn15cn | |
 | ☐ | W5 | 대기 | | W2 뒤 |
 | ☐ | W6 | 대기 | | W2·W3 뒤 |
 | ☐ | W7 | 대기 | | W5 뒤, 실행 Opus |
