@@ -53,6 +53,7 @@ telephony-triage-plugin/                 # 개발 레포 루트
 ├── tools/gen_contracts.py              # 계약 생성물: docs/design/contracts-cli.md(build_parser()·analysis 스키마)와 db-authoring.md 필수 키 요약(plan 스키마). --check는 CI
 ├── .github/workflows/external.yml      # 사외 CI (경계 검사·스키마 사본·fixture 생성기 --check·pytest). 사내 Actions(13-actions.md)와 별개
 ├── tools/make_db_skeleton.py            # 합성 샘플에서 운영용 이슈 DB 뼈대 생성 (11-phases.md Phase 1)
+├── tools/make_bundle.py                 # 반입 전 자동 검사 + 반입 묶음(레포 zip·뼈대 zip·SHA256SUMS) 생성, 종료 3 = 완료·사람 확인 대기 (15-local-draft.md §15.4)
 ├── DRAFT_NOTES.md                       # 사외 초안 상태 파일(≤8KB): 진행 상태·막힌 것·활성 트랙·실험 결과 표 (15-local-draft.md)
 ├── docs/history/                        # 아카이브(읽지 않음): draft-notes-<날짜>.md(Phase별 상세), CHANGES.md(문서 세트 변경 이력), REVIEW-10/11.md
 ├── tools/list_site_todos.py             # TODO(SITE:S<n>) 목록 추출
