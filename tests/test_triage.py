@@ -290,12 +290,20 @@ def _check_op_summary(path):
     assert len(block.encode("utf-8")) <= 1024
     schema = json.loads((REPO / "plugin" / "schemas" / "plan.schema.json").read_text(encoding="utf-8"))
     required = {b["properties"]["op"]["const"]: [k for k in b["required"] if k != "op"] for b in schema["$defs"]["operation"]["oneOf"]}
-    seen = {}
+    seen, seen_signature = {}, False
     for line in block.splitlines():
+        sig = re.match(r"- `signature`: (\S+) 필수, 선택 (\S+)$", line)
+        if sig:
+            defs = schema["$defs"]["signature"]
+            assert set(sig.group(1).split("·")) == set(defs["required"])
+            assert set(sig.group(2).split("·")) == set(defs["properties"]) - set(defs["required"])
+            seen_signature = True
+            continue
         match = re.match(r"- `([a-z-]+)`: ([^—]+?)(?: — .*)?$", line)
         if match:
             seen[match.group(1)] = {k.strip() for k in match.group(2).split(",")}
     assert {"new-cause", "new-type", "append", "unresolved", "add-fixture", "verify-resolution", "allow-cause"} <= set(seen)
+    assert seen_signature
     for op, keys in seen.items():
         assert keys == set(required[op]), (op, keys, required[op])
 

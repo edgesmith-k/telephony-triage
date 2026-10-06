@@ -25,6 +25,7 @@ op 필수 키 (`op` 외, plan.schema.json 기준):
 - `update-fix`: cause, fix
 - `add-code-ref`: cause, code_ref
 - `set-status`: id, status
+- `signature`: id·window_sec 필수, 선택 must_match·must_event·must_not_match·same_phone·sequence
 여기 없는 op·세부 제약은 `SNAP/schema/plan.schema.json`
 
 - 새 유형 전에 **전체 카테고리**에서 유사 유형 상위 3개를 보인다(`db_add.py similar "<제목>" --db SNAP`). 비슷하면 새 원인 쪽을 권한다.
