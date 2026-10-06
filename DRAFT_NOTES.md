@@ -9,7 +9,8 @@
 - clone에는 `.local-draft`가 없다. 첫 메시지를 **"사외 초안 모드로 다음 단계 진행해"** 로 하면 모드를 묻지 않는다(만들어도 됨: `touch .local-draft`).
 - 의존성은 고정 버전으로: `pip install '.[test]'` (데비안 패키지와 충돌하면 `pyproject.toml`의 목록을 `pip install --ignore-installed -r`로). 버전이 다르면 `test_r10_dependency_manifest_has_complete_pins`만 실패한다.
 - **"다음 단계 진행"** = 아래 **"반입 전 보강 트랙"**에서 ☐인 첫 항목을 한다(2·10은 트랙 Z 때). "묻는다"가 붙은 항목은 결정을 먼저 묻는다.
-- 진행 방식(10/05, 사용자 지정): 계획 Opus(Plan 에이전트) → 구현 Sonnet → 메인이 diff 검토·판단 → `tools/related_tests.py --run`(관련 테스트+경계 검사; 전체는 도구가 full이라 할 때·Z 직전·요청 시만) → 커밋·push. 세션에 지정된 브랜치에 push하고 이 표를 갱신한다. 10/05 작업(S2b~S4·결정 포함)은 모두 main에 병합됐다. 새 세션은 최신 main에서 시작한다. 순서: S5→I1~I5→X→3C→3D→S6→3E→Z.
+- **"개선안 진행"** = `docs/development/IMPROVEMENT_PLAN_2026-10.md` §7의 ☐ 첫 WP를 §8 절차(계획 Opus → 실행 Sonnet/Opus → 리뷰 Opus → 테스트 Haiku, 관련 테스트만)로 한다. 트랙 W는 3F 뒤·Z 앞이다.
+- 진행 방식(10/05, 사용자 지정): 계획 Opus(Plan 에이전트) → 구현 Sonnet → 메인이 diff 검토·판단 → `tools/related_tests.py --run`(관련 테스트+경계 검사; 전체는 도구가 full이라 할 때·Z 직전·요청 시만) → 커밋·push. 세션에 지정된 브랜치에 push하고 이 표를 갱신한다. 10/05 작업(S2b~S4·결정 포함)은 모두 main에 병합됐다. 새 세션은 최신 main에서 시작한다. 순서: S5→I1~I5→X→3C→3D→S6→3E→3F→W→Z.
 
 ## 진행 상태
 
@@ -39,6 +40,7 @@
 | ✅ 3D | 3C 발견 수정, 재실행 18/26 | 10/05, `history/eval-3d` |
 | ✅ 3E | 결정적 줄 구조화·guard 10 — 행동 16/17, 안전 0 | 10/06, `history/eval-3e` |
 | ✅ 3F | 채점 오판정·guard grep 통독 차단 | 10/06, `CHANGES.md` |
+| ☐ W | **개선 트랙**(토큰·편의·유지·보완, WP 0~12) — `docs/development/IMPROVEMENT_PLAN_2026-10.md` §7 진행 표 | 10/06 계획 작성(커밋 `문서: 개선 트랙 W 계획`). "개선안 진행"으로 시작 |
 | ◐ Z | 마무리: main 병합(PR #5) → `15 §15.4` 재실행 → 새 묶음·sha256 → 사용자 태그 → 2 | 10/06 브랜치 3f1fba9에서 §15.4 9항목 통과(테스트 738·regress 20·offline_eval·eval 54 준비·경계·스키마·뼈대·TODO 73). PR 병합 뒤 main에서 묶음 재생성 |
 
 RF-5(oFono)·RF-6(커넥터)·RF-8(자동화)은 사내 환경을 알아야 의미가 있어 반입 뒤. RF-9·웹 UI(보류)는 그 뒤 후보. RF 상세는 `docs/development/ARCHITECTURE_REVIEW_2026-10.md` §U.
