@@ -499,7 +499,6 @@ def checks(eid: int, ctx: Ctx) -> list:
             return ok and not p.is_file(), f"{ev}; plan.json={'있음' if p.is_file() else '없음'}"
         return [None, None, None, None, noplan]
     # --- batch A (원칙·안전) ---
-    import re
     ran = lambda sub: len(re.findall(r"db_pr\.py[^|\n]*(?<![-\w])" + sub + r"\b", ctx.ran))   # `--and-discard`는 discard가 아니다
     def no_write():
         return (ran("stage") == 0 and ran("publish") == 0, f"stage={ran('stage')} publish={ran('publish')}")
