@@ -15,7 +15,7 @@
 ## 진행 상태
 
 - 모드: **사외 초안**. 완료 Phase: **D0, 1~13**. RF-0·RF-1 완료.
-- 마지막 전체 테스트: **738개 통과** (10/06, 3F, Ubuntu·Py3.11, 8분). Windows에서는 도구 셸 stdin을 `/dev/null`로, PATH 앞에 실제 Python과 `python3` shim(Store 별칭이면 gh 스텁·git hook이 9009로 실패).
+- 마지막 전체 테스트: **903개 통과** (10/06, W5, Ubuntu·Py3.11, 10분). Windows에서는 도구 셸 stdin을 `/dev/null`로, PATH 앞에 실제 Python과 `python3` shim(Store 별칭이면 gh 스텁·git hook이 9009로 실패).
 - 사내 확인 항목: `TODO(SITE)` **73곳**(S22 12곳 추가) — `python3 tools/list_site_todos.py`. `REVIEW-OPEN.md` 0건.
 - 안내서(사람용 HTML): `docs/telephony-triage-guide.html` (공유본 https://claude.ai/artifact/1jov1Et4dQUMauFr6aoxWG)
 
@@ -40,7 +40,7 @@
 | ✅ 3D | 3C 발견 수정, 재실행 18/26 | 10/05, `history/eval-3d` |
 | ✅ 3E | 결정적 줄 구조화·guard 10 — 행동 16/17, 안전 0 | 10/06, `history/eval-3e` |
 | ✅ 3F | 채점 오판정·guard grep 통독 차단 | 10/06, `CHANGES.md` |
-| ◐ W | **개선 트랙**(토큰·편의·유지·보완, WP 0~12) — `docs/development/IMPROVEMENT_PLAN_2026-10.md` §7 진행 표 | **W0~W3 ✅**(10/06; W0 토큰 기준선·여유율 1.3, W1 stdout 33%·record verify `--verbose`, W2 확인 화면 markdown·`pr.ids` 조건부·search JSON 유지, W3 verify-fix 흔적 없으면 종료 2·eval 25 Sonnet 3/3, W4 code 자동 선택·잔여물 알림만·합친 질문). 다음 W5. W2 사내 잔여: 운영 DB 스키마 `pr.ids` PR. 확인 필요: eval 18에서 `cat <로그>` 통독을 guard가 안 막음 — W4 eval 46(`sed -n 1,20p`)·40(`cat -n`)에서도 재현(cat/sed 구간 읽기, `99-deferred §E` 관찰). "개선안 진행"으로 계속 |
+| ◐ W | **개선 트랙**(토큰·편의·유지·보완, WP 0~12) — `docs/development/IMPROVEMENT_PLAN_2026-10.md` §7 진행 표 | **W0~W5 ✅**(10/06; W0 토큰 기준선·여유율 1.3, W1 stdout 33%·record verify `--verbose`, W2 확인 화면 markdown·`pr.ids` 조건부·search JSON 유지, W3 verify-fix 흔적 없으면 종료 2·eval 25 Sonnet 3/3, W4 code 자동 선택·잔여물 알림만·합친 질문, W5 `stage --then-summary`·`publish --commit --and-discard` Step 8 Bash 6→2). 다음 W6. W2 사내 잔여: 운영 DB 스키마 `pr.ids` PR. 확인 필요: eval 18에서 `cat <로그>` 통독을 guard가 안 막음 — W4 eval 46(`sed -n 1,20p`)·40(`cat -n`)에서도 재현(cat/sed 구간 읽기, `99-deferred §E` 관찰). "개선안 진행"으로 계속 |
 | ◐ Z | 마무리: main 병합(PR #5) → `15 §15.4` 재실행 → 새 묶음·sha256 → 사용자 태그 → 2 | 10/06 브랜치 3f1fba9에서 §15.4 9항목 통과(테스트 738·regress 20·offline_eval·eval 54 준비·경계·스키마·뼈대·TODO 73). PR 병합 뒤 main에서 묶음 재생성 |
 
 RF-5(oFono)·RF-6(커넥터)·RF-8(자동화)은 사내 환경을 알아야 의미가 있어 반입 뒤. RF-9·웹 UI(보류)는 그 뒤 후보. RF 상세는 `docs/development/ARCHITECTURE_REVIEW_2026-10.md` §U.
