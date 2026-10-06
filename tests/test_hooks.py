@@ -384,6 +384,36 @@ def test_guard_blocks_whole_raw_log_reads():
     assert decision(guard(None, "Bash", {"command": "cat x.log"}, d, env={**ws.env(), "HOME": str(d)})) == "deny"
 
 
+def _raw_guard(raw_read, cmd: str, cwd: Path):
+    root = plugin_root(**({"guard": {"raw_read": raw_read}} if raw_read is not None else {}))
+    event = {"hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_input": {"command": cmd}, "cwd": str(cwd)}
+    proc = run("guard.py", [], root=root, cwd=cwd, env=shared().env(), stdin=json.dumps(event))
+    assert proc.returncode == 0, proc.stderr
+    out = json.loads(proc.stdout)["hookSpecificOutput"] if proc.stdout.strip() else None
+    return decision(out), proc.stderr
+
+
+def test_guard_raw_read_site_defaults_extend_builtins():
+    d = tmp("tt-rawsite-")
+    (d / "extra").mkdir()
+    (d / "mine.dat").write_text("x", encoding="utf-8")
+    (d / "extra" / "x.log").write_text(LOGCAT, encoding="utf-8")
+    (d / "x.log").write_text(LOGCAT, encoding="utf-8")
+    site = {"names": ["mine.dat"], "exempt_dirs": ["extra"]}
+    assert _raw_guard(None, "cat mine.dat", d)[0] is None                  # 키 없음 = 내장만
+    assert _raw_guard(None, "cat extra/x.log", d)[0] == "deny"
+    assert _raw_guard(site, "cat mine.dat", d)[0] == "deny"                # 이름 추가
+    assert _raw_guard(site, "cat extra/x.log", d)[0] is None               # 제외 디렉토리 추가
+    assert _raw_guard(site, "cat x.log", d)[0] == "deny"                   # 내장 판별 유지
+
+
+def test_guard_raw_read_bad_site_value_warns_and_uses_builtins():
+    d = tmp("tt-rawbad-")
+    (d / "x.log").write_text(LOGCAT, encoding="utf-8")
+    kind, err = _raw_guard({"names": "mine.dat"}, "cat x.log", d)
+    assert kind == "deny" and "guard.raw_read" in err
+
+
 def test_hooks_json_has_eight_rules_wired_to_guard():
     hooks = json.loads((REPO / "plugin" / "hooks" / "hooks.json").read_text(encoding="utf-8"))["hooks"]
     assert "sync-scripts-path" in hooks["SessionStart"][0]["hooks"][0]["command"]

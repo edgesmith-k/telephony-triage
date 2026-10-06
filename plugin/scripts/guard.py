@@ -66,6 +66,7 @@ HEREDOC_RE = re.compile(r"<<-?\s*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\1")
 # 규칙 10: 로그 원문 통독 차단
 RAW_ALWAYS_CMDS = {"cat", "tac", "nl", "less", "more", "bat", "strings", "zcat", "zless", "bzcat", "xzcat"}
 RAW_NAMES = {"events.json", "events-full.json", "jira_raw.json", "match.json"}
+RAW_EXEMPT_DIRS = {"fixtures", "draft"}
 RAW_GLOB_MAX = 20
 RAW_SNIFF_BYTES = 8192
 RAW_SNIFF_LINES = 30
@@ -128,6 +129,7 @@ class Config:
             defaults = {}
             self.warnings.append("site-defaults.yaml이 없다 (S-3 미완료). 사용자 config만으로 판정한다.")
         self.plugin_root = plugin_root
+        self.raw_names, self.raw_exempt = self._raw_read(defaults)
         self.user = userconfig.load_user()
         self.cfg = userconfig.merged(defaults, self.user or {})
         self.clone = None
@@ -140,6 +142,21 @@ class Config:
                 self.clone_common = _common_dir(self.clone)
             self.work_dir = Path(str(userconfig.get(self.cfg, "work_dir"))).expanduser()
         self.base = str(userconfig.get(self.cfg, "issue_db.base_branch") or "main")
+
+    def _raw_read(self, defaults: dict) -> tuple[set, set]:
+        """규칙 10 목록: 내장 ∪ site-defaults `guard.raw_read`. 잘못된 값은 경고하고 내장만 쓴다."""
+        names, exempt = set(RAW_NAMES), set(RAW_EXEMPT_DIRS)
+        site = (defaults.get("guard") or {}).get("raw_read") if isinstance(defaults.get("guard"), dict) else None
+        if site is None:
+            return names, exempt
+        ok = isinstance(site, dict) and all(
+            isinstance(site.get(k, []), list) and all(isinstance(v, str) and v for v in site.get(k, []))
+            for k in ("names", "exempt_dirs"))
+        if not ok:
+            self.warnings.append("site-defaults의 guard.raw_read가 {names: [문자열], exempt_dirs: [문자열]} 형식이 "
+                                 "아니다. 내장 목록만 쓴다.")
+            return names, exempt
+        return names | set(site.get("names", [])), exempt | set(site.get("exempt_dirs", []))
 
     @property
     def git_rules(self) -> bool:
@@ -671,14 +688,14 @@ def _raw_args(argv: list[str]) -> list[str]:
     return out
 
 
-def _is_raw_file(path: Path) -> bool:
+def _is_raw_file(path: Path, names: set = RAW_NAMES, exempt: set = RAW_EXEMPT_DIRS) -> bool:
     real = _norm(path)
     segs = real.replace("\\", "/").split("/")
-    if "fixtures" in segs[:-1] or "draft" in segs[:-1]:
+    if exempt & set(segs[:-1]):
         return False
     if not os.path.isfile(real):
         return False
-    if path.name in RAW_NAMES:
+    if path.name in names:
         return True
     with open(real, "rb") as fh:
         head = fh.read(RAW_SNIFF_BYTES)
@@ -697,7 +714,8 @@ def _is_raw_file(path: Path) -> bool:
     return False
 
 
-def check_raw_read(command: str, cwd: Path, dec: Decision) -> None:
+def check_raw_read(command: str, cwd: Path, dec: Decision, conf: Config | None = None) -> None:
+    names, exempt = (conf.raw_names, conf.raw_exempt) if conf else (RAW_NAMES, RAW_EXEMPT_DIRS)
     for inv in invocations(command, cwd):
         verb = _raw_cmd_verb(inv)
         if verb is not None:
@@ -715,7 +733,7 @@ def check_raw_read(command: str, cwd: Path, dec: Decision) -> None:
                 cands = [Path(p) for p in sorted(glob.glob(str(path)))[:RAW_GLOB_MAX]]
             for cand in cands:
                 try:
-                    hit = _is_raw_file(cand)
+                    hit = _is_raw_file(cand, names, exempt)
                 except OSError:
                     hit = False
                 if hit:
@@ -727,7 +745,7 @@ def check_raw_read(command: str, cwd: Path, dec: Decision) -> None:
 
 
 def check_bash(command: str, cwd: Path, conf: Config, dec: Decision) -> None:
-    check_raw_read(command, cwd, dec)
+    check_raw_read(command, cwd, dec, conf)
     for inv in invocations(command, cwd):
         name = _base(inv.argv[0])
         is_db_pr = name == "db_pr.py" or (name.startswith("python")

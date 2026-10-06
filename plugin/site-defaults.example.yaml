@@ -11,6 +11,11 @@
 
 schema: 1
 
+# guard 규칙 10(로그 원문 통독 차단)에 더할 값 (선택, 08-safety.md §9). 내장 목록에 합쳐진다(대체 아님).
+# names: 원문으로 볼 파일 이름, exempt_dirs: 이 이름의 디렉토리 아래는 검사하지 않는다.
+# guard:
+#   raw_read: {names: [], exempt_dirs: []}
+
 # 합성 fixture(origin: synthetic) 허용 여부.
 # 사내 기본값은 false이고, 이 example(테스트 헬퍼 복사본)만 true다 (15-local-draft.md §15.2).
 synthetic_allowed: true
