@@ -25,6 +25,13 @@ def pytest_sessionstart(session):
 
 
 def pytest_sessionfinish(session, exitstatus):
+    try:
+        _check_shared_variants(session)
+    finally:
+        runner.cleanup_tmp()  # runner.tmp()가 만든 임시 디렉터리 (TT_KEEP_TMP=1이면 남긴다)
+
+
+def _check_shared_variants(session):
     # 공유 변형 트리를 제자리에서 바꾼 테스트가 있으면 새로 만든 것과 달라진다.
     if runner._VARIANT_DIR is None or not runner._VARIANT_DIR.is_dir():
         return

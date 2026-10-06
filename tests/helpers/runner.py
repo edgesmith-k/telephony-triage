@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import atexit
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -127,8 +128,22 @@ def run_json(script: str, args: list[str], expect: int | tuple = 0, **kw) -> dic
     return json.loads(proc.stdout)
 
 
+_TMP_DIRS: list[Path] = []
+
+
 def tmp(prefix: str = "tt-test-") -> Path:
-    return Path(tempfile.mkdtemp(prefix=prefix))
+    """임시 디렉터리. 만든 경로를 기록해 두고 pytest 세션 끝에 지운다(`conftest.pytest_sessionfinish`, `TT_KEEP_TMP=1`이면 남긴다)."""
+    d = Path(tempfile.mkdtemp(prefix=prefix))
+    _TMP_DIRS.append(d)
+    return d
+
+
+def cleanup_tmp() -> None:
+    """`tmp()`가 만든 디렉터리를 모두 지운다. `TT_KEEP_TMP=1`이면 남긴다."""
+    if os.environ.get("TT_KEEP_TMP") == "1":
+        return
+    while _TMP_DIRS:
+        shutil.rmtree(_TMP_DIRS.pop(), ignore_errors=True)
 
 
 def copy_db(src: Path = SAMPLE, name: str = "db") -> Path:
