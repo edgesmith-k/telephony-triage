@@ -339,6 +339,8 @@ CHECKS: list[Check] = [
     Check("draft-notes-size", 9, "auto", check_draft_notes_size),
     Check("draft-notes-fresh", 9, "manual", None,
           "DRAFT_NOTES.md의 진행 상태·막힌 것·활성 트랙·실험 결과 표가 최신인지 사람이 확인한다."),
+    Check("plugin-json", 10, "manual", None,
+          "plugin/.claude-plugin/plugin.json: description에서 '사외 초안'을 빼고 version을 확인한다 (반입 전·태그 전)."),
     Check("skeleton", 7, "auto", check_skeleton),
     Check("offline-eval", 1, "auto", check_offline_eval),
     Check("regress", 1, "auto", check_regress),

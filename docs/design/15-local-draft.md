@@ -51,7 +51,7 @@
 
 ## 15.4 사내 반입 전 체크리스트
 
-도구로 실행: `python3 tools/make_bundle.py --label <label>` — auto 항목은 도구가 판정(싼 것부터, 첫 실패에서 중단), manual 3건은 사람. 종료 3 = 묶음 완료·사람 확인 대기.
+도구로 실행: `python3 tools/make_bundle.py --label <label>` — auto 항목은 도구가 판정(싼 것부터, 첫 실패에서 중단), manual 4건은 사람. 종료 3 = 묶음 완료·사람 확인 대기.
 
 - [ ] 전체 테스트 통과 (`pytest`, `db_regress --all`, eval 전체(`evals.json`) 준비(`--prepare-only`), `tools/offline_eval.py` 합성 라벨셋 실행 — 모두 테스트 헬퍼 플러그인 루트에서, `tools/fix_exec_bits.py --check`: 셰뱅 파일은 100755)
 - [ ] 사내 정보 없음: `python3 tools/check_boundary.py --mode external` 종료 코드 0 (사외 CI `.github/workflows/external.yml`도 같은 검사). 그래도 실제 회사명·서버명 등을 쓰지 않았는지 사람이 한 번 검색
@@ -62,6 +62,7 @@
 - [ ] `tools/make_db_skeleton.py`로 이슈 DB 뼈대를 만들었고, 뼈대에 유형·Jira·fixture(합성 포함)가 없음
 - [ ] `python3 tools/list_site_todos.py`가 오류 없이 돌고 결과를 사용자가 봤다 (목록은 문서에 두지 않는다. 상태 파일에는 개수만)
 - [ ] `DRAFT_NOTES.md`(상태 파일, ≤8KB): 진행 상태·막힌 것·활성 트랙·사외 Claude Code 실험 결과 표가 최신. 가정·모의와 실제가 다를 지점 같은 상세는 `docs/history/draft-notes-<날짜>.md`
+- [ ] `plugin/.claude-plugin/plugin.json`의 description에서 "사외 초안"을 빼고 version을 확인한다 (manual)
 - [ ] 플러그인 레포 전체(코드, 테스트, 모의, 합성 샘플, 문서)와 이슈 DB 뼈대를 묶어서 반입
 
 ## 15.5 사내 보완 (Phase S) — 토큰 최소화
