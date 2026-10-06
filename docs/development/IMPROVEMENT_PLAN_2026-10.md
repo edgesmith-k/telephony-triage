@@ -176,7 +176,7 @@
 | ✅ | W3 | ✅ 완료(10/06) | ccr-2495ec74-xn15cn · 커밋 `W3: verify-fix…` | eval 25 Sonnet 3/3, verify-fix Sonnet 기본. W3 영향 미확인: eval 21·22·26·27·33 |
 | ✅ | W4 | ✅ 완료(10/06) | ccr-2495ec74-xn15cn · 커밋 `W4: 질문 수 줄이기…` | eval 55·56 질문 1→0. 영향 미확인: eval 42·45 등 explore 사용 eval |
 | ✅ | W5 | ✅ 완료(10/06) | ccr-2495ec74-xn15cn · 커밋 `W5: 쓰기 흐름 왕복 축소…` | eval 1 Step 8 Bash 6→2, 토큰 699k→386k. 커밋은 `publish --commit`(계약 반전, 사용자 승인). write-flow +348B는 W6에서. 테스트 임시 디렉토리 누수는 별도 chore 커밋으로 정리 |
-| ☐ | W6 | 실행 중 | ccr-2495ec74-xn15cn | W2·W3 뒤. search 제외: 읽기 전용, Read 1회·1.5KB 절약 |
+| ✅ | W6 | ✅ 완료(10/06) | ccr-2495ec74-xn15cn · 커밋 `W6: reference 축소…` | SKILL 7.0KB·db-authoring 11.1KB·rules.md 1.5KB. search 제외: 읽기 전용, Read 1회·1.5KB 절약. 남은 스키마 열람(add-fixture 세부)은 W7 |
 | ☐ | W7 | 대기 | | W5 뒤, 실행 Opus. db-authoring 필수 필드 요약을 스키마에서 생성 |
 | ☐ | W8 | 대기 | | 독립 |
 | ☐ | W9 | 대기 | | 독립 |
