@@ -1,16 +1,22 @@
 #!/usr/bin/env python3
-"""docs/tasks.md의 pack(S-n)이 지정한 파일·절만 출력한다. 모르는 pack·못 찾는 참조는 종료 2."""
+"""docs/tasks.md의 pack(S-n)을 출력한다: §15.5의 그 단계 행(할 일·완료 기준), 비고, `읽을 것`의 파일·절.
+모르는 pack·못 찾는 참조는 종료 2."""
 import re
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+STEPS = "docs/design/15-local-draft.md"
 
 
-def pack_items(name):
-    """tasks.md 표에서 pack의 `읽을 것` 항목을 [(path, [절...])]로 돌려준다."""
+def _cells(line):
+    return [c.strip() for c in line.strip().strip("|").split("|")]
+
+
+def pack_row(name):
+    """tasks.md 표에서 pack의 ([(path, [절...])], 비고)."""
     for line in (ROOT / "docs/tasks.md").read_text(encoding="utf-8").splitlines():
-        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        cells = _cells(line)
         if len(cells) >= 2 and cells[0] == name:
             items = []
             for raw in cells[1].split(","):
@@ -18,16 +24,30 @@ def pack_items(name):
                 if raw and raw != "—":
                     path, _, secs = raw.partition(" §")
                     items.append((path.strip(), secs.split("·") if secs else []))
-            return items
+            return items, (cells[2] if len(cells) > 2 else "")
     raise KeyError(name)
 
 
+def pack_items(name):
+    return pack_row(name)[0]
+
+
+def step_row(name):
+    """§15.5 표의 머리줄과 그 단계 행. 없으면 None."""
+    lines = section((ROOT / STEPS).read_text(encoding="utf-8"), "15.5") or ""
+    rows = [ln for ln in lines.splitlines() if ln.startswith("|")]
+    hit = [ln for ln in rows if _cells(ln)[0].strip("*") == name]
+    return "\n".join(rows[:2] + hit) if hit else None
+
+
 def section(text, num):
-    """num 제목(예: 5.8)부터 같은 수준 이하의 다음 제목 전까지. 없으면 None."""
-    lines, out, level = text.splitlines(), [], 0
-    for ln in lines:
-        m = re.match(r"(#+)\s+(\S+)", ln)
-        if m and not level and m.group(2).rstrip(".") == num:
+    """제목 `num`(번호 `5.8` 또는 제목 글 `Step 8`)부터 같은 수준 이하의 다음 제목 전까지. 코드 펜스 안 `#`은 제목이 아니다."""
+    out, level, fence = [], 0, False
+    for ln in text.splitlines():
+        if ln.lstrip().startswith("```"):
+            fence = not fence
+        m = None if fence else re.match(r"(#+)\s+(.+?)\s*$", ln)
+        if m and not level and (m.group(2).split()[0].rstrip(".") == num or m.group(2).startswith(num)):
             level = len(m.group(1))
         elif m and level and len(m.group(1)) <= level:
             break
@@ -37,8 +57,14 @@ def section(text, num):
 
 
 def render(name):
-    parts = []
-    for path, secs in pack_items(name):
+    items, note = pack_row(name)
+    row = step_row(name)
+    parts = [f"===== {STEPS} §15.5 {name} =====\n{row}\n"] if row else []
+    if note:
+        parts.append(f"===== 비고 =====\n{note}\n")
+    if not items:
+        parts.append("(이 단계는 고정으로 읽을 파일이 없다. 비고를 따른다)\n")
+    for path, secs in items:
         f = ROOT / path
         if not f.is_file():
             raise FileNotFoundError(path)

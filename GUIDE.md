@@ -161,10 +161,9 @@ git add -A && git commit -m "사외 초안 반입: import-v1"     # .draft-manif
 [모드] 사내 보완. 개발 Phase D0~13은 사외에서 끝났으니 다시 하지 않는다. 할 일은 15-local-draft.md §15.5의 S-1~S-7뿐이다.
 처음 물으면 "사내 보완"을 고르고, S-1에서 SITE_PROFILE.md를 만들어 "모드: 사내 보완"을 적는다. 이후 세션은 그 파일로 이어간다.
 
-[읽을 것 — 이것만, 순서대로]
-1. CLAUDE.md와 docs/design/12-principles.md (원칙)   2. DRAFT_NOTES.md (사외 상태 파일 6KB)   3. docs/design/15-local-draft.md §15.5의 **해당 단계 행**과 그 행의 "읽을 것"
-4. REVIEW-OPEN.md (사내 정보가 있어야 판단할 항목)   5. 14-site.md §14.2 표 (S1~S22 placeholder)
-읽지 않는다: docs/history/ 전체, 11-phases.md, docs/design/의 다른 파일(단계 행이 지정한 절 외), ARCHITECTURE_REVIEW·HANDOFF(개선 작업은 사외 트랙).
+[읽을 것 — 이것만]
+`python3 tools/context_pack.py S-n` 출력(그 단계의 §15.5 행·비고·읽을 파일과 절, 목록은 docs/tasks.md). CLAUDE.md는 자동 로드.
+읽지 않는다: docs/history/ 전체, 11-phases.md, pack에 없는 docs/design/ 파일, ARCHITECTURE_REVIEW·HANDOFF(개선 작업은 사외 트랙).
 파일럿 지표(PR까지 시간·중도 취소 비율·작업당 질문 수)는 `python3 tools/usage_stats.py`로 뽑는다.
 TODO(SITE) 목록은 문서가 아니라 `python3 tools/list_site_todos.py`로 뽑는다.
 

@@ -113,7 +113,7 @@
 - 테스트: `test_parse_logcat`(스냅샷), `test_hooks`, 신규 `test_usage_stats`. 사내 잔여: guard 예외 값·usage 기준치는 사내.
 
 ### W12. 문서 정리 (M·T)
-- `ARCHITECTURE_REVIEW_2026-10.md`·`PLUGIN_IMPROVEMENT_HANDOFF.md`를 "남은 항목 3KB 절 + 본문은 `docs/history/`"로, `tools/context_pack.py` + `docs/tasks/*.yaml`(사내 S-1~S-5 단계별·사외 WP별 읽을 파일), `11-phases.md §11.0`과 `15-local-draft.md §15.5`의 "읽을 것"을 pack 이름으로 통일, `pytest` 기본 `--tb=short`(`pyproject.toml`).
+- `ARCHITECTURE_REVIEW_2026-10.md`·`PLUGIN_IMPROVEMENT_HANDOFF.md`를 "남은 항목 3KB 절 + 본문은 `docs/history/`"로, `tools/context_pack.py` + `docs/tasks/*.yaml`(사내 S-1~S-5 단계별·사외 WP별 읽을 파일; 실제: `docs/tasks.md` 표 하나, 사내 S-0~S-7만 — 위임 결정 D2·D3), `11-phases.md §11.0`과 `15-local-draft.md §15.5`의 "읽을 것"을 pack 이름으로 통일, `pytest` 기본 `--tb=short`(`pyproject.toml`).
 - 완료: 새 세션이 pack 하나로 W 또는 S 단계를 시작하는 리허설 1회(토큰 기록).
 - 테스트: `test_boundary`(문서 이동 뒤 참조), 신규 `test_context_pack`. 사내 잔여: 사내 pack(`docs/site/tasks/`)은 S-1에서.
 

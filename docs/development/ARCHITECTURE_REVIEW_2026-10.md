@@ -7,15 +7,15 @@
 | RF | 상태 |
 |---|---|
 | RF-0 기준선·쓰기 안전 | 완료 |
-| RF-1 토큰·컨텍스트 | 완료 (행동 평가 후속은 사내 S-2) |
+| RF-1 토큰·컨텍스트 | 완료 (행동 평가 후속은 사내 S-2). 파생 이벤트 `msg` 복사 제거는 보류(W11, 스냅샷 재생성 사용자 승인) |
 | RF-2 사외/사내 경계 | 완료 (2026-10-03). `tools/check_boundary.py`, `import_draft.py` staging·rollback, `plugin/schemas/`, `.github/workflows/external.yml`. pre-commit 연결은 선택, 안 함 |
-| RF-3 코어/플랫폼 분리 | 이동 완료 (android 백엔드). 나머지 열림 |
+| RF-3 코어/플랫폼 분리 | 완료 (android 백엔드 이동). 남은 것은 RF-4로 |
 | RF-4 Android 버전 어댑터 | 일부 (`platform:` 키·`platforms.load()`). 남음: 이슈 DB 층(`phone_id_patterns`·`ril.yaml tags`), `migrate_code_refs`, `--index` |
 | RF-5 oFono 등 다중 플랫폼 | 사내 환경을 안 뒤(반입 뒤) |
 | RF-6 커넥터 | 사내 환경을 안 뒤(반입 뒤) |
 | RF-7 워크플로 엔진 | 분석 전용·`--more-logs`·입력 해시 재사용 완료 (X1~X4) |
 | RF-8 자동화 | 사내 환경을 안 뒤(반입 뒤). 아래 결정 (b) |
-| RF-9 정리·문서 | 열림 (E 후보 삭제는 사용자 승인) |
+| RF-9 정리·문서 | 열림: E 후보 삭제(사용자 승인), `PLUGIN_IMPROVEMENT_HANDOFF.md` 경로 삭제(사용자 승인), `docs/ARCHITECTURE.md` 확정. README·plugin.json 점검·새 세션 리허설은 W11·W12에서 함 |
 
 ## 남은 R 항목 (인계 문서 R1~R15 중 열린 것만)
 
