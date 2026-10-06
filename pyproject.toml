@@ -33,3 +33,6 @@ test = [
 
 [tool.setuptools]
 py-modules = []
+
+[tool.pytest.ini_options]
+addopts = "--tb=short"

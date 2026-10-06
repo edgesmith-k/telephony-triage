@@ -9,7 +9,7 @@
 
 > 이전 `CLAUDE.md §11.0`. 사내 보완 모드는 이 파일을 읽지 않으므로, 모든 모드에 필요한 요약은 `CLAUDE.md`에 있다.
 
-- **`CLAUDE.md` 머리말의 모드 표에 따른 시작점부터** Phase(또는 S 단계) 단위로 진행한다. 사외 초안·사내 처음부터 모드에서는 각 Phase를 시작할 때 `11-phases.md`의 그 Phase 절과 "읽을 문서"를 읽는다 (항상 `contracts.md` 포함. 코드·스킬·이슈 DB 동작을 바꾸면 `12-principles.md`도). 사내 보완 모드(S 단계)에서는 `15-local-draft.md §15.5`의 그 단계 "읽을 것"만 읽는다. Phase(단계)가 끝날 때마다 완료 기준을 점검하고 결과를 요약한 뒤 사용자 확인을 받는다. 확인을 받아야 다음으로 넘어가고, 모드에 맞는 파일(사외 초안 `DRAFT_NOTES.md`, 사내 `SITE_PROFILE.md`)의 "진행 상태"를 갱신한다.
+- **`CLAUDE.md` 머리말의 모드 표에 따른 시작점부터** Phase(또는 S 단계) 단위로 진행한다. 사외 초안·사내 처음부터 모드에서는 각 Phase를 시작할 때 `11-phases.md`의 그 Phase 절과 "읽을 문서"를 읽는다 (항상 `contracts.md` 포함. 코드·스킬·이슈 DB 동작을 바꾸면 `12-principles.md`도). 사내 보완 모드(S 단계)에서는 `15-local-draft.md §15.5`의 그 단계 "읽을 것"만, `python3 tools/context_pack.py S-n`(목록 `docs/tasks.md`) 출력으로 읽는다. Phase(단계)가 끝날 때마다 완료 기준을 점검하고 결과를 요약한 뒤 사용자 확인을 받는다. 확인을 받아야 다음으로 넘어가고, 모드에 맞는 파일(사외 초안 `DRAFT_NOTES.md`, 사내 `SITE_PROFILE.md`)의 "진행 상태"를 갱신한다.
 - 각 Phase의 완료 기준은 **그 시점까지 만든 것만으로** 확인할 수 있게 짜여 있다. 뒤 Phase의 기능이 필요하면 멈추고 보고한다.
 - 역할 분담:
   - 플러그인 뼈대, 스크립트, 커맨드, Claude hooks, git hooks: Claude Code가 직접 구현한다.
