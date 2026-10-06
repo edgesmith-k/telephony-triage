@@ -69,7 +69,7 @@ skill-creator 스킬을 실행하고 아래를 입력으로 준다.
 
 ## eval 케이스 (fixture와 가짜 Jira 요약 사용)
 
-실행: `tests/skill_evals/run.py`(기본 `--mode plugin`). `claude -p --plugin-dir`로 실제 플러그인을 불러오고 Jira는 모의 MCP 서버, 분석 스킬은 모의 플러그인으로 붙여 커맨드·스킬 선택·hook(guard·jira_bridge)까지 평가한다. 채점은 실행 기록(도구 호출·드라이버 trace)으로 한다. 상세와 남은 차이는 `tests/skill_evals/README.md` "실행 모드".
+실행: `tests/skill_evals/run.py`(기본 `--mode plugin`). `claude -p --plugin-dir`로 실제 플러그인을 불러오고 Jira는 모의 MCP 서버, 분석 스킬은 모의 플러그인으로 붙여 커맨드·스킬 선택·hook(guard·jira_bridge)까지 평가한다. 채점은 실행 기록(도구 호출·드라이버 trace)으로 한다. 상세와 남은 차이는 `tests/skill_evals/README.md` "실행 모드". 실행마다 토큰(stream-json result의 modelUsage)을 `execution.json` `tokens`에 남기고, `grade.py --token-budget`이 `token_baseline.json` × 여유율로 상한을 판정한다. 상세 README.
 
 1. 없음 + DATA_DISABLED → `DATA-001 > DATA-001-01` 제안, 확인 후 Jira 기록 파일과 피드백 파일 생성
 2. 증상은 DATA-001, 원인이 이슈 DB에 없음(예: APN 불일치) → 새 원인(`temp_id`)과 시그니처 초안, draft worktree 초안 검증 결과 제시

@@ -693,3 +693,7 @@
 ## W 개선 트랙 계획 (2026-10-06)
 
 구조·3축(편의·유지·보완)·토큰 검토를 바탕으로 `docs/development/IMPROVEMENT_PLAN_2026-10.md`를 만들었다. 역할별 모델(오케스트레이터·계획·리뷰 Opus, 실행 Sonnet(구조 변경은 Opus), 테스트 Haiku), WP 한 건의 순서(계획→실행→리뷰→관련 테스트), WP 0~12와 예상 규모·의존, 진행 표, "개선안 진행" 절차. 사내 잔여는 S 단계 값·포팅·실제 로그 보정뿐. `DRAFT_NOTES.md`에 트랙 W 행과 시작 문구를 넣었다. 코드 변경 없음.
+
+## W0 토큰 측정 (2026-10-06)
+
+`run.py`가 stream-json result의 `usage`·`modelUsage`를 `execution.json` `tokens`(합계는 modelUsage 네 값 합, 빠진 값은 null)와 `model`·`init_model`로 남긴다. `grade.py`는 eval별 토큰 표·`tokens.json`을 내고, `--token-budget`이 추적 파일 `tests/skill_evals/token_baseline.json` × 여유율(`--token-margin`, 기본 1.3)로 상한을 판정한다(초과·미기록 종료 1, 플래그 없으면 채점 결과·종료 코드 불변). `--write-baseline`으로 기준선을 쓴다. 실측(Sonnet 5.5, plugin): eval 1 3회 680,589~743,146(폭 9%), eval 2 1,329,388, eval 45 209,391, 비용 $2.09. 상위 usage와 modelUsage 차이는 보조 Haiku 호출(약 950토큰). 테스트 30→47. 수동 채점·eval 2·45 편차는 하지 않았다.

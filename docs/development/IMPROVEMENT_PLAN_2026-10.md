@@ -41,7 +41,7 @@
 
 ### W0. 토큰 측정 (T) — 가장 먼저
 - 목표: eval 1건의 입력·출력 토큰을 기록해 이후 WP의 효과를 증명한다.
-- 변경: `tests/skill_evals/run.py`(`claude -p --output-format json` usage → `execution.json`), `grade.py`(eval별 토큰 표, 상한 초과를 실패로 세는 `--token-budget`), `README.md` 절 추가.
+- 변경: `tests/skill_evals/run.py`(stream-json result 이벤트의 usage·modelUsage → `execution.json`), `grade.py`(eval별 토큰 표, 상한 초과를 실패로 세는 `--token-budget`), `README.md` 절 추가.
 - 완료: 대표 eval 3개(1·2·45) 실행 결과에 토큰이 기록된다.
 - 테스트: `tests/test_skill_evals.py`. 사내 잔여: 없음(사내 S-2 재실행 때 같은 표가 나온다).
 
@@ -170,7 +170,7 @@
 
 | ☐ | WP | 상태 | 브랜치·커밋 | 비고 |
 |---|---|---|---|---|
-| ☐ | W0 | 계획 확인 중 | ccr-2495ec74-xn15cn | |
+| ✅ | W0 | ✅ 완료(10/06) | ccr-2495ec74-xn15cn · 커밋 `W0: 토큰 측정…` | 기준선 `token_baseline.json`, 여유율 1.3 |
 | ☐ | W1 | 대기 | | W0 뒤 |
 | ☐ | W2 | 대기 | | W1 뒤 |
 | ☐ | W3 | 대기 | | 독립 |

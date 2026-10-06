@@ -219,7 +219,8 @@ def _synthetic_env(tmp_path):
     work.mkdir()
     (env_dir / "env.json").write_text(json.dumps({"remote": str(tmp_path / "remote"), "work_dir": str(work),
                                                   "issue_db_clone": str(tmp_path / "clone"),
-                                                  "gh_state": str(tmp_path / "gh")}), encoding="utf-8")
+                                                  "gh_state": str(tmp_path / "gh"),
+                                                  "env": {"MOCK_JIRA_WRITE_LOG": str(tmp_path / "jira-writes.log")}}), encoding="utf-8")
     (env_dir / "before.json").write_text("{}", encoding="utf-8")
     return env_dir
 
@@ -429,3 +430,262 @@ def test_explore_order_ignores_explore_text_inside_heredocs(tmp_path):
                       ("tool", "e1", "Bash", {"command": "python3 triage.py explore X"}, "ok", False)])
     explored, asked, _ = grader.Ctx(env_dir, run).explore_order()
     assert (asked, explored) == (1, 2)
+
+
+# --- W0: 토큰 기록·상한 판정 (claude 호출 없음) -------------------------------------------------
+
+def _mu(i, o, cc, cr, cost):
+    return {"inputTokens": i, "outputTokens": o, "cacheCreationInputTokens": cc, "cacheReadInputTokens": cr, "costUSD": cost}
+
+
+def _result(**extra):
+    return {"type": "result", "num_turns": 7, "duration_ms": 1234, "total_cost_usd": 0.5,
+            "usage": {"input_tokens": 10, "output_tokens": 20, "cache_creation_input_tokens": 30, "cache_read_input_tokens": 40},
+            "modelUsage": {"m-a": _mu(10, 20, 30, 40, 0.3), "m-b": _mu(1, 2, 3, 4, 0.2)}, **extra}
+
+
+def test_token_record_sums_model_usage_and_keeps_usage_total_separate():
+    t = grader.token_record(_result())
+    assert (t["input"], t["output"], t["cache_creation"], t["cache_read"]) == (11, 22, 33, 44)
+    assert t["total"] == 110 and t["usage_total"] == 100          # 보조 모델 몫이 total에만 들어간다
+    assert t["by_model"]["m-b"] == {"input": 1, "output": 2, "cache_creation": 3, "cache_read": 4, "total": 10, "cost_usd": 0.2}
+    assert (t["num_turns"], t["duration_ms"], t["total_cost_usd"], t["source"]) == (7, 1234, 0.5, "modelUsage")
+
+
+def test_token_record_uses_null_not_zero_for_missing_values():
+    r = _result()
+    del r["modelUsage"]["m-b"]["outputTokens"]
+    r["modelUsage"]["m-a"]["costUSD"] = True                        # bool은 정수·숫자가 아니다
+    t = grader.token_record(r)
+    assert t["by_model"]["m-b"]["output"] is None and t["by_model"]["m-b"]["total"] is None
+    assert t["by_model"]["m-a"]["total"] == 100 and t["by_model"]["m-a"]["cost_usd"] is None
+    assert t["output"] is None and t["total"] is None and t["input"] == 11 and t["usage_total"] == 100
+    none = grader.token_record(None)
+    assert none["total"] is None and none["usage_total"] is None and none["source"] is None and none["by_model"] == {}
+    old = grader.token_record({"status": "completed", "usage": _result()["usage"], "total_cost_usd": 0.4})    # 옛 execution.json
+    assert old["total"] is None and old["source"] is None and old["usage_total"] == 100 and old["total_cost_usd"] == 0.4
+    assert old["num_turns"] is None
+
+
+def _graded_run(tmp_path, execution, *, artifacts=True):
+    env_dir = _synthetic_env(tmp_path)
+    run = run_dir(tmp_path)
+    if artifacts:
+        _write_artifacts(run)
+    if execution is not None:
+        (run / "execution.json").write_text(json.dumps(execution), encoding="utf-8")
+    return env_dir, run
+
+
+def _budget(total, margin=1.5, eid="24"):
+    return {"baseline": {"evals": {eid: {"total": total}}}, "margin": margin}
+
+
+@pytest.mark.parametrize("total,baseline,passed,failed,row_passed", [
+    (150, 100, 1, 0, True),           # 상한 = 100 × 1.5 = 150: 이내
+    (151, 100, 0, 1, False),          # 초과
+    (None, 100, 0, 0, None),          # 미기록: 판정 보류
+    (999, None, 0, 0, "absent"),      # 기준선에 eval 없음: 항목을 만들지 않는다
+])
+def test_token_budget_row_in_grading(tmp_path, total, baseline, passed, failed, row_passed):
+    tokens = grader.token_record(_result(modelUsage={"m": _mu(total, 0, 0, 0, 0.1)}) if total is not None else None)
+    env_dir, run = _graded_run(tmp_path, {"status": "completed", "tokens": tokens})
+    base = grader.grade(24, run, env_dir, ["lock 해제"])
+    budget = _budget(baseline) if baseline else {"baseline": {"evals": {"1": {"total": 5}}}, "margin": 1.5}
+    result = grader.grade(24, run, env_dir, ["lock 해제"], budget)
+    rows = [r for r in result["expectations"] if r["text"] == grader.TOKEN_BUDGET_TEXT]
+    assert result["tokens"] == tokens and base["tokens"] == tokens          # 예산 없이도 tokens 키는 있다
+    if row_passed == "absent":
+        assert not rows and result["summary"] == base["summary"]
+        return
+    assert [r["passed"] for r in rows] == [row_passed] and rows[0]["source"] == "script"
+    assert result["summary"]["failed"] == base["summary"]["failed"] + failed
+    assert len(result["expectations"]) == len(base["expectations"]) + 1
+    assert "미기록" in rows[0]["evidence"] if total is None else "상한=150" in rows[0]["evidence"]
+
+
+def test_token_budget_row_for_interrupted_and_not_run(tmp_path):
+    tokens = grader.token_record(None)                           # 시간 초과: 전부 null
+    env_dir, run = _graded_run(tmp_path, {"status": "timeout", "reason": "제한", "tokens": tokens}, artifacts=False)
+    result = grader.grade(24, run, env_dir, ["lock 해제"], _budget(100))
+    assert result["status"] == "incomplete" and result["tokens"] == tokens
+    assert result["expectations"][-1]["text"] == grader.TOKEN_BUDGET_TEXT and result["expectations"][-1]["passed"] is None
+    env_dir2, run2 = _graded_run(tmp_path / "b", {"status": "prepared"}, artifacts=False)
+    not_run = grader.grade(24, run2, env_dir2, ["lock 해제"], _budget(100))
+    assert not_run["status"] == "not-run" and not_run["tokens"] is None
+    assert all(r["text"] != grader.TOKEN_BUDGET_TEXT for r in not_run["expectations"])
+
+
+def _iteration(tmp_path, name, execution, eid=1):
+    """grade.py main이 찾는 최소 iteration 디렉토리(합성 환경)."""
+    it = tmp_path / name
+    it.mkdir()
+    (it / f"env-{eid}").mkdir()
+    _synthetic_env(it / "_s")
+    env = it / f"env-{eid}"
+    for f in ("env.json", "before.json"):
+        (env / f).write_text((it / "_s" / "env" / f).read_text(encoding="utf-8"), encoding="utf-8")
+    (env / "logs").mkdir()
+    run = it / f"eval-{eid}" / "with_skill"
+    (run / "outputs").mkdir(parents=True)
+    if execution is not None:
+        (run / "execution.json").write_text(json.dumps(execution), encoding="utf-8")
+    return it
+
+
+def _main(monkeypatch, capsys, *argv):
+    monkeypatch.setattr(sys, "argv", ["grade.py", *map(str, argv)])
+    code = grader.main()
+    return code, capsys.readouterr()
+
+
+def test_main_exit_codes_and_token_table(tmp_path, monkeypatch, capsys):
+    tokens = grader.token_record(_result())                      # total 110
+    ran = _iteration(tmp_path, "ran", {"status": "error", "reason": "x", "tokens": tokens})
+    base = tmp_path / "base.json"
+    base.write_text(json.dumps({"margin_default": 1.0, "evals": {"1": {"total": 100}}}), encoding="utf-8")
+    code, out = _main(monkeypatch, capsys, ran, "--eval", 1)
+    assert code == 0 and "미기록" not in out.out and "110" in out.out and "기준선 없음" not in out.out    # 예산 없음: 상한 열 "-"
+    assert (ran / "tokens.json").is_file()
+    code, out = _main(monkeypatch, capsys, ran, "--eval", 1, "--token-budget", base)           # margin_default 1.0 → 상한 100 < 110
+    assert code == 1 and "초과" in out.out
+    code, out = _main(monkeypatch, capsys, ran, "--eval", 1, "--token-budget", base, "--token-margin", "1.2")
+    assert code == 0 and "통과" in out.out and "120" in out.out
+    code, _ = _main(monkeypatch, capsys, ran, "--eval", 1, "--token-budget", tmp_path / "none.json")
+    assert code == 2
+    bad = tmp_path / "bad.json"
+    bad.write_text("{", encoding="utf-8")
+    assert _main(monkeypatch, capsys, ran, "--token-budget", bad)[0] == 2
+    # 미기록(시간 초과)은 판정 대상이면 1, 실행하지 않은(prepared) eval은 "미실행"이고 종료 코드에 영향 없다
+    timeout = _iteration(tmp_path, "timeout", {"status": "timeout", "reason": "t", "tokens": grader.token_record(None)})
+    code, out = _main(monkeypatch, capsys, timeout, "--eval", 1, "--token-budget", base)
+    assert code == 1 and "미기록" in out.out
+    prepared = _iteration(tmp_path, "prepared", {"status": "prepared"})
+    code, out = _main(monkeypatch, capsys, prepared, "--eval", 1, "--token-budget", base)
+    assert code == 0 and "미실행" in out.out
+
+
+def test_write_baseline_takes_max_run_and_records_model_and_commit(tmp_path, monkeypatch, capsys):
+    its = []
+    for i, extra in enumerate((0, 50, 20)):
+        r = _result(modelUsage={"m-a": _mu(100 + extra, 0, 0, 0, 0.1)}, num_turns=5 + i, total_cost_usd=1.0 + i)
+        its.append(_iteration(tmp_path, f"it{i}", {"status": "error", "reason": "x", "model": "m-a", "tokens": grader.token_record(r)}))
+    out_path = tmp_path / "token_baseline.json"
+    code, _ = _main(monkeypatch, capsys, *its, "--eval", 1, "--write-baseline", out_path)
+    data = json.loads(out_path.read_text(encoding="utf-8"))
+    assert code == 0 and data["model"] == "m-a" and set(data) >= {"commit", "dirty", "date", "margin_default", "margin_basis"}
+    assert data["evals"]["1"]["total"] == 150 and data["evals"]["1"]["num_turns"] == 6       # 최댓값 run의 기록
+    assert [r["total"] for r in data["evals"]["1"]["runs"]] == [100, 150, 120]
+    assert grader.load_baseline(out_path)["evals"]["1"]["total"] == 150
+    # 모델이 섞이면 쓰지 않는다
+    mixed = _iteration(tmp_path, "mixed", {"status": "error", "reason": "x", "model": "m-z", "tokens": grader.token_record(_result())})
+    assert _main(monkeypatch, capsys, its[0], mixed, "--eval", 1, "--write-baseline", tmp_path / "x.json")[0] == 2
+    # 기존 파일과 모델이 다르면 덮어쓰지 않는다(메시지에 두 모델)
+    before = out_path.read_text(encoding="utf-8")
+    code, out = _main(monkeypatch, capsys, mixed, "--eval", 1, "--write-baseline", out_path)
+    assert code == 2 and "m-a" in out.err and "m-z" in out.err and out_path.read_text(encoding="utf-8") == before
+    # 기존 파일이 깨졌으면 2
+    broken = tmp_path / "broken.json"
+    broken.write_text("{", encoding="utf-8")
+    assert _main(monkeypatch, capsys, its[0], "--eval", 1, "--write-baseline", broken)[0] == 2
+
+
+def _tok(total):
+    return grader.token_record(_result(modelUsage={"m-a": _mu(total, 0, 0, 0, 0.1)}) if total is not None else None)
+
+
+def test_write_baseline_skips_null_runs_and_refuses_empty(tmp_path, monkeypatch, capsys):
+    path = tmp_path / "b.json"
+    mixed = [_iteration(tmp_path, "ok", {"status": "completed", "model": "m-a", "tokens": _tok(100)}),
+             _iteration(tmp_path, "null", {"status": "timeout", "reason": "t", "model": "m-a", "tokens": _tok(None)})]
+    code, out = _main(monkeypatch, capsys, *mixed, "--eval", 1, "--write-baseline", path)
+    assert code == 0 and "1개 제외" in out.err and [r["total"] for r in json.loads(path.read_text())["evals"]["1"]["runs"]] == [100]
+    none = tmp_path / "none.json"
+    code, out = _main(monkeypatch, capsys, mixed[1], "--eval", 1, "--write-baseline", none)
+    assert code == 2 and not none.exists() and "빠진 run 수" in out.err
+    with pytest.raises(ValueError):
+        grader.write_baseline(tmp_path / "w.json", {1: [_tok(None)]}, "m-a", "c", False)
+    empty = tmp_path / "empty.json"
+    empty.write_text(json.dumps({"evals": {}}), encoding="utf-8")
+    with pytest.raises(ValueError):
+        grader.load_baseline(empty)
+
+
+def test_baseline_model_comes_from_model_then_init_model_never_by_model(tmp_path, monkeypatch, capsys):
+    only_init = _iteration(tmp_path, "init", {"status": "completed", "model": None, "init_model": "m-init", "tokens": _tok(100)})
+    path = tmp_path / "b.json"
+    assert _main(monkeypatch, capsys, only_init, "--eval", 1, "--write-baseline", path)[0] == 0
+    assert json.loads(path.read_text())["model"] == "m-init"
+    both = _iteration(tmp_path, "both", {"status": "completed", "model": "m-flag", "init_model": "m-init", "tokens": _tok(100)})
+    path2 = tmp_path / "b2.json"
+    assert _main(monkeypatch, capsys, both, "--eval", 1, "--write-baseline", path2)[0] == 0
+    assert json.loads(path2.read_text())["model"] == "m-flag"
+    nomodel = _iteration(tmp_path, "nomodel", {"status": "completed", "model": None, "tokens": _tok(100)})   # by_model에 m-a가 있어도 추정하지 않는다
+    path3 = tmp_path / "b3.json"
+    assert _main(monkeypatch, capsys, nomodel, "--eval", 1, "--write-baseline", path3)[0] == 2 and not path3.exists()
+
+
+def test_init_model_reads_system_init_event():
+    assert evaluation.init_model([{"type": "system", "subtype": "init", "model": "claude-x"}]) == "claude-x"
+    assert evaluation.init_model([{"type": "system", "subtype": "init"}]) is None
+    assert evaluation.init_model([]) is None
+
+
+def test_token_record_real_shape_with_extra_keys_and_nested_usage():
+    r = _result()
+    r["usage"] = {**r["usage"], "server_tool_use": {"web_search_requests": 0}, "cache_creation": {"ephemeral_5m_input_tokens": 30},
+                  "service_tier": "standard"}
+    for m in r["modelUsage"].values():
+        m.update(webSearchRequests=0, contextWindow=200000, maxOutputTokens=32000)
+    t = grader.token_record(r)
+    assert t["total"] == 110 and t["usage_total"] == 100 and set(t["by_model"]) == {"m-a", "m-b"}
+    assert set(t["by_model"]["m-a"]) == {"input", "output", "cache_creation", "cache_read", "total", "cost_usd"}
+
+
+def test_grade_without_budget_matches_head_behavior(tmp_path, monkeypatch, capsys):
+    env_dir, run = _graded_run(tmp_path, None)
+    result = grader.grade(24, run, env_dir, ["lock 해제", "기록 없음", "수동"])
+    assert [(e["text"], e["passed"], e["evidence"], e["source"]) for e in result["expectations"]] == [
+        ("lock 해제", None, "transcript 수동 채점 필요", "manual"), ("기록 없음", None, "transcript 수동 채점 필요", "manual"),
+        ("수동", None, "transcript 수동 채점 필요", "manual"), ("Jira 쓰기 도구를 부르지 않았다", True, "쓰기 도구 호출 없음", "script")]
+    assert result["summary"] == {"passed": 1, "failed": 0, "total": 4, "undecided": 3, "pass_rate": 0.25}
+    assert result["status"] == "graded" and result["tokens"] is None and "tokens" in json.loads((run / "grading.json").read_text())
+    (run / "execution.json").write_text(json.dumps({"status": "timeout", "reason": "제한"}), encoding="utf-8")
+    cut = grader.grade(24, run, env_dir, ["a"])
+    assert cut["summary"] == {"passed": 0, "failed": 0, "total": 2, "undecided": 2, "pass_rate": 0}
+    assert [(e["passed"], e["evidence"], e["source"]) for e in cut["expectations"]] == [(None, "제한", "execution")] * 2
+    ran = _iteration(tmp_path, "ran", {"status": "error", "reason": "x", "tokens": grader.token_record(_result())})
+    assert _main(monkeypatch, capsys, ran, "--eval", 1)[0] == 0
+
+
+def test_interrupted_summary_reflects_decided_budget_row(tmp_path):
+    for total, passed, failed in ((100, 1, 0), (999, 0, 1)):
+        env_dir, run = _graded_run(tmp_path / str(total), {"status": "error", "reason": "x", "tokens": _tok(total)}, artifacts=False)
+        s = grader.grade(24, run, env_dir, ["a"], _budget(100))["summary"]
+        assert (s["passed"], s["failed"], s["total"], s["undecided"]) == (passed, failed, 3, 2)
+
+
+def test_read_events_takes_last_result_and_skips_garbage(tmp_path):
+    p = tmp_path / "events.jsonl"
+    p.write_text('{"type":"system"}\nnot json\n{"type":"result","num_turns":1}\n{"type":"result","num_turns":2}\n', encoding="utf-8")
+    events, result = evaluation.read_events(p)
+    assert len(events) == 3 and result["num_turns"] == 2
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="가짜 claude는 shebang 실행 파일")
+def test_execute_records_tokens_from_stream_json_result(tmp_path, monkeypatch):
+    fake = tmp_path / "bin" / "claude"
+    fake.parent.mkdir()
+    fake.write_text(f"#!{sys.executable}\nimport sys\nsys.stdin.read()\n"
+                    f"print({json.dumps(_result(result='ok', is_error=False, subtype='success'))!r})\n", encoding="utf-8")
+    fake.chmod(0o755)
+    env_dir, run = tmp_path / "env", run_dir(tmp_path)
+    env_dir.mkdir()
+    info = {"env": {}, "skill": str(tmp_path / "skill"), "path_prefix": [], "plugin_root": str(tmp_path / "root"), "issue_db_clone": str(tmp_path / "a" / "b" / "clone")}
+    monkeypatch.delenv("CLAUDE_CODE_GIT_BASH_PATH", raising=False)
+    outcome = evaluation.execute({"prompt": "p", "user_replies": []}, info, env_dir, run, str(fake), 30, None, "m-a")
+    saved = json.loads((run / "execution.json").read_text(encoding="utf-8"))
+    assert outcome["status"] == "completed", outcome["reason"]
+    assert saved["model"] == "m-a"
+    assert saved["tokens"]["total"] == 110 and saved["tokens"]["usage_total"] == 100 and saved["usage"]["input_tokens"] == 10
+    assert saved["total_cost_usd"] == 0.5

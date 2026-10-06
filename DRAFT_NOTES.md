@@ -40,7 +40,7 @@
 | ✅ 3D | 3C 발견 수정, 재실행 18/26 | 10/05, `history/eval-3d` |
 | ✅ 3E | 결정적 줄 구조화·guard 10 — 행동 16/17, 안전 0 | 10/06, `history/eval-3e` |
 | ✅ 3F | 채점 오판정·guard grep 통독 차단 | 10/06, `CHANGES.md` |
-| ☐ W | **개선 트랙**(토큰·편의·유지·보완, WP 0~12) — `docs/development/IMPROVEMENT_PLAN_2026-10.md` §7 진행 표 | 10/06 계획 작성(커밋 `문서: 개선 트랙 W 계획`). "개선안 진행"으로 시작 |
+| ◐ W | **개선 트랙**(토큰·편의·유지·보완, WP 0~12) — `docs/development/IMPROVEMENT_PLAN_2026-10.md` §7 진행 표 | **W0 ✅**(10/06, 토큰 기준선 eval 1·2·45, 여유율 1.3). 다음 W1. "개선안 진행"으로 계속 |
 | ◐ Z | 마무리: main 병합(PR #5) → `15 §15.4` 재실행 → 새 묶음·sha256 → 사용자 태그 → 2 | 10/06 브랜치 3f1fba9에서 §15.4 9항목 통과(테스트 738·regress 20·offline_eval·eval 54 준비·경계·스키마·뼈대·TODO 73). PR 병합 뒤 main에서 묶음 재생성 |
 
 RF-5(oFono)·RF-6(커넥터)·RF-8(자동화)은 사내 환경을 알아야 의미가 있어 반입 뒤. RF-9·웹 UI(보류)는 그 뒤 후보. RF 상세는 `docs/development/ARCHITECTURE_REVIEW_2026-10.md` §U.
