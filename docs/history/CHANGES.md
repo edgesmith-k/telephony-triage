@@ -737,3 +737,7 @@ SKILL §실행 규칙을 `reference/rules.md`(1.5KB)로 옮기고 analyze·recor
 ## W10 큰 모듈 분할 (2026-10-07)
 
 `triage.py`(2090→250줄)·`db_pr.py`(1277→245줄)를 CLI 진입 파일로 남기고 구현을 `triagelib/`(core·cache·anchor·report·driver, Driver = 믹스인 3개)·`dbpr/`(lock·worktree·publish)로 옮겼다(`db_add.py`+`dbadd/` 선례). 함수 본문 AST 동일, `--help` 18개 동일(진입 docstring 한 문장 추가), `_PLUGIN_ROOT`는 `dbpr.worktree` 하나. 테스트 변경은 import 경로 3줄뿐. `tools/related_tests.py`는 패키지를 한 단위로 세도록(`units()`) 고쳐 분할 뒤에도 full 판정이 HEAD와 같다. 별도 커밋으로 my-prs `base_moved`를 PR의 `baseRefName` 기준으로 바꿨다(W9 보류, 사용자 승인). 결정 D1~D5·완료 승인은 위임 결정 에이전트, 리뷰 차단 0·권고 1·3·4 반영. 전체 테스트(Windows) 973 통과·4 실패(HEAD와 같은 환경 실패).
+
+## W11 기타 보완 묶음 (2026-10-07)
+
+항목별 커밋 8개. `list_site_todos`는 `git ls-files` 기준(무시 디렉토리 제외, git 없거나 빈 결과면 rglob — 73곳), `fix_exec_bits`는 무시 경로를 건너뛰고 셰뱅 파일 16개를 100755로, `make_bundle` CHECKS에 `exec-bits`(자동)·`plugin-json`(manual, 사람 확인 4건). doctor 스냅샷 경고에 기준일, `README.md` 작성, `99-deferred §E` guard cat/sed 관찰 종결(eval 트레이스는 yaml/py/json 읽기). guard 규칙 10은 site-defaults `guard.raw_read{names, exempt_dirs}`로 내장 목록에 더한다(합집합, 사용자 config 무관, 형식 오류는 경고). `tools/usage_stats.py`(S-7: PR 시간·취소 비율·질문 수, PR 시간은 plan.json mtime 근사). 결정 D1~D6·완료 승인은 위임 결정 에이전트, 리뷰 차단 0·권고 9건 반영. 보류(사용자 결정): 파생 이벤트 `msg` 복사 제거(스냅샷 재생성), Windows 보정 잔존물, db-authoring 스키마 요약 확장(eval ×3, W 끝). 전체 테스트(Windows) 980 통과·4 실패(환경, HEAD 동일).
