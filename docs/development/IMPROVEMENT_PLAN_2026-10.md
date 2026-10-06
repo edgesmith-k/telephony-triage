@@ -108,6 +108,7 @@
 
 ### W11. 기타 보완 묶음 (X)
 - `README.md` 채우기(요약 + 링크), `plugin.json` description 정리를 반입 체크리스트에 추가, 파생 이벤트 `msg` 복사 제거(`parse_logcat.py::_derived`, `line_ref` 기준; 이벤트 스냅샷 재생성은 사용자 승인), guard 규칙 10의 명령·파일 목록을 `site-defaults.yaml` 선택 키로(`platform`과 같은 방식, 기본값 동일), Windows 보정 잔존물 삭제 여부 사용자 결정, `tools/usage_stats.py`(work_dir에서 PR 소요 시간·취소 비율·질문 횟수 집계, S-7 지표). W7 후속: db-authoring 스키마 요약 확장(eval 3·31이 여전히 `plan.schema.json`을 여는 대상 — add-parser-rule 세부·signature 구조·causeRef/tempCause 참조·timestamp 형식 — 을 `gen_contracts.py` 블록에 넣을지, 한도와 함께 결정; 판정은 같은 모델 eval 3회 이상).
+- W9 보류: doctor 스냅샷 나이 표기 경계(7일+1초가 warn인데 "7일 전") 문구 정리.
 - 각 항목은 작아서 한 WP로 묶되 커밋은 항목별로.
 - 테스트: `test_parse_logcat`(스냅샷), `test_hooks`, 신규 `test_usage_stats`. 사내 잔여: guard 예외 값·usage 기준치는 사내.
 
@@ -124,7 +125,7 @@
 | 단계 | 남는 일 | 사외에서 미리 해 둔 것 |
 |---|---|---|
 | S-1 | 사내 값 조사, `SITE_PROFILE.md` | context pack(W12), `list_site_todos.py` |
-| S-2 | Claude Code 기능 확인, eval 54 재실행 | 토큰 표(W0), doctor 출력 형식(W9) |
+| S-2 | Claude Code 기능 확인, eval 54 재실행 | 토큰 표(W0), doctor 출력 형식(W9: 사내 `gh auth status`·`gh pr list --author @me` 실제 출력, GHE `@me` 지원, Jira MCP 매핑 실제 값) |
 | S-3 | `site-defaults.yaml`·이슈 DB config, 이슈 DB `schema/plan.schema.json`에 `pr.ids` 추가 PR(W2) | guard 규칙 10 예외 키(W11), `platform` 키(RF-4 완료분), `pr.ids` 조건부 기록(W2) |
 | S-4a·S-4 | 파서 포팅·골든, 규칙·시드 유형, `parser-rules` 이슈 DB 층(`phone_id_patterns`·`ril.yaml tags`, RF-4 잔여) | 설정 층 순서는 `contracts.md`에 명시됨. 이슈 DB 층 구현은 사외에서 W 뒤에 할 수 있으나 실제 값은 사내 |
 | S-5 | 오프라인 평가, 샌드박스 PR, 토큰 기준치 | `offline_eval.py`, `usage_stats.py`(W11) |
@@ -180,8 +181,8 @@
 | ✅ | W6 | ✅ 완료(10/06) | ccr-2495ec74-xn15cn · 커밋 `W6: reference 축소…` | SKILL 7.0KB·db-authoring 11.1KB·rules.md 1.5KB. search 제외: 읽기 전용, Read 1회·1.5KB 절약. 남은 스키마 열람(add-fixture 세부)은 W7 |
 | ✅ | W7 | ✅ 완료(10/06) | ccr-2495ec74-xn15cn · 커밋 `W7: 계약 문서 생성…` | 결정은 사용자 위임 결정 에이전트. 스키마는 `plugin/schemas/output/`(sync_schemas 대조 충돌 회피, D2), 검증은 `TT_SCHEMA_CHECK=1`일 때만(D3), db-authoring 한도 1,152/11,392B(D4②). 리뷰 R1~R6 반영(R3(c) 보류). eval 3 7/7·31 6/0/3(수동), 스키마 Read 4·4회 — 0회 미달, 대상은 add-parser-rule·signature·참조 규칙·timestamp → 후속 "db-authoring 스키마 요약 확장"(W11 후보). eval 3 토큰 1.24M(W6 0.82~0.88M, 1회) |
 | ✅ | W8 | ✅ 완료(10/06) | ccr-2495ec74-xn15cn · 커밋 `W8: 반입 묶음 도구…` | 결정은 위임 결정 에이전트(D1 싼 것부터·D2 정상 완료 3, 0 없음·D3 레포 밖 출력). 리뷰 차단 B1(`--force` 상위·홈 삭제) 수정, R1~R6·R8 반영, R7 보류. 실제 실행 종료 3·pytest 959·sha256 OK. W11 후보: exec 비트·TODO 셈 기준 |
-| ☐ | W9 | 실행 중 | ccr-2495ec74-xn15cn | 독립. 결정은 위임 결정 에이전트(D1~D8 권장안) |
-| ☐ | W10 | 대기 | | W4 뒤, 실행 Opus |
+| ✅ | W9 | ✅ 완료(10/06) | ccr-2495ec74-xn15cn · 커밋 `W9: 진단·상태 커맨드…` | 위임 결정 에이전트 D1~D8 ①. 리뷰 R1~R5·R7 + 재리뷰 1~4 반영. lock 읽기 전용부 `common/session_lock.py`(related_tests 공용 판정 해소). eval 58 5/5, 39 3회 4/0/2(SKILL "표 그대로" 문구 뒤), 39 토큰 중앙값 127k ≤ 변경 전 104,792×1.3. 기준선에 39·58 추가. 전체 978 |
+| ☐ | W10 | 대기 | | W4 뒤, 실행 Opus. W9 보류: my-prs base 비교를 PR `baseRefName` 기준으로(분할 때) |
 | ☐ | W11 | 대기 | | 항목별 커밋 |
 | ☐ | W12 | 대기 | | 마지막 |
 | ☐ | W 끝 | 대기 | | 전체 테스트·eval 54·`make_bundle.py` |
