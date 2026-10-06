@@ -37,6 +37,10 @@ def _strip_heredocs(cmd: str) -> str:
     return _HEREDOC_RE.sub("<<heredoc", cmd)
 
 
+class _Manual(Exception):
+    """자동 판정할 근거가 없다: 수동 채점으로 넘긴다."""
+
+
 def _read(path: Path) -> str:
     return path.read_text(encoding="utf-8") if path.is_file() else ""
 
@@ -85,18 +89,45 @@ class Ctx:
 
     def tool_uses(self):
         """events.jsonl의 assistant tool_use를 [(이름, 입력)]으로. 기록이 없으면 None."""
+        seq = self.seq()
+        if seq is None:
+            return None
+        return [(e["name"], e["input"]) for e in seq if e["kind"] == "tool"]
+
+    def seq(self):
+        """events.jsonl을 순서대로 [{kind:"text",text} | {kind:"tool",id,name,input,result,error}]로. 기록이 없으면 None.
+        tool_use는 id가 같은 tool_result(user 이벤트)와 짝지어 result(문자열)·error(bool)를 채운다."""
+        if getattr(self, "_seq", None) is not None:
+            return self._seq
         p = self.run / "events.jsonl"
         if not p.is_file():
             return None
-        out = []
+        out, by_id = [], {}
         for raw in p.read_text(encoding="utf-8", errors="replace").splitlines():
             try:
                 ev = json.loads(raw)
             except ValueError:
                 continue
-            if ev.get("type") == "assistant":
-                out += [(c.get("name") or "", c.get("input") or {}) for c in (ev.get("message") or {}).get("content") or []
-                        if isinstance(c, dict) and c.get("type") == "tool_use"]
+            content = (ev.get("message") or {}).get("content")
+            if not isinstance(content, list):
+                continue
+            for c in content:
+                if not isinstance(c, dict):
+                    continue
+                if ev.get("type") == "assistant" and c.get("type") == "tool_use":
+                    e = {"kind": "tool", "id": c.get("id"), "name": c.get("name") or "", "input": c.get("input") or {},
+                         "result": "", "error": False}
+                    out.append(e)
+                    if e["id"]:
+                        by_id[e["id"]] = e
+                elif ev.get("type") == "assistant" and c.get("type") == "text":
+                    out.append({"kind": "text", "text": str(c.get("text") or "")})
+                elif ev.get("type") == "user" and c.get("type") == "tool_result" and c.get("tool_use_id") in by_id:
+                    body = c.get("content")
+                    if isinstance(body, list):
+                        body = "\n".join(str(b.get("text", "")) for b in body if isinstance(b, dict))
+                    by_id[c["tool_use_id"]].update(result=str(body or ""), error=bool(c.get("is_error")))
+        self._seq = out
         return out
 
     def opened(self, *names):
@@ -107,14 +138,32 @@ class Ctx:
             return [n for n in names if re.search(r"\b(cat|head|tail|less|sed|awk|jq|grep)\b[^|\n]*" + re.escape(n), self.invoked)]
         hits = []
         for name, inp in uses:
-            if name == "Read" and Path(str(inp.get("file_path", ""))).name in names:
-                hits.append(Path(inp["file_path"]).name)
-            elif name == "Bash":
-                cmd = str(inp.get("command", ""))
-                if re.search(r"\b(cat|head|tail|less|sed|awk|jq|grep|python3?)\b", cmd) \
-                        and "triage.py" not in cmd and "parse_logcat.py" not in cmd:
-                    hits += [n for n in names if re.search(r"(?<![\w.-])" + re.escape(n) + r"\b", cmd)]
+            hits += self._opens(name, inp, names)
         return hits
+
+    @staticmethod
+    def _opens(name, inp, names) -> list[str]:
+        if name == "Read" and Path(str(inp.get("file_path", ""))).name in names:
+            return [Path(inp["file_path"]).name]
+        if name == "Bash":
+            cmd = str(inp.get("command", ""))
+            if re.search(r"\b(cat|head|tail|less|sed|awk|jq|grep|python3?)\b", cmd) \
+                    and "triage.py" not in cmd and "parse_logcat.py" not in cmd:
+                return [n for n in names if re.search(r"(?<![\w.-])" + re.escape(n) + r"\b", cmd)]
+        return []
+
+    def explore_order(self, filename="timeline.md"):
+        """(explore 호출 순번, 질문 순번, `filename` 첫 열람 순번). 순번은 seq 안의 위치, 없으면 None. 기록이 없으면 None.
+        질문 = explore 호출 앞의 assistant 텍스트 중 '탐색 분석'과 '할까요/실행할까/진행할까'가 함께 든 것."""
+        seq = self.seq()
+        if seq is None:
+            return None
+        explored = next((i for i, e in enumerate(seq) if e["kind"] == "tool" and e["name"] == "Bash"
+                         and re.search(r"triage\.py\s+explore\b", str(e["input"].get("command", "")))), None)
+        asked = next((i for i, e in enumerate(seq) if e["kind"] == "text" and "탐색 분석" in e["text"]
+                      and re.search(r"할까요|실행할까|진행할까", e["text"]) and (explored is None or i < explored)), None)
+        read = next((i for i, e in enumerate(seq) if e["kind"] == "tool" and self._opens(e["name"], e["input"], (filename,))), None)
+        return explored, asked, read
 
     _RAW_READ_CMD = re.compile(r"(?<![\w./-])(cat|head|less|strings|unzip)\b([^|;&\n]*)")
 
@@ -128,15 +177,19 @@ class Ctx:
         logs = self.env_dir / "logs"
         return "/logs/" in t.replace("\\", "/") or t.startswith("logs/") or str(logs) in t
 
-    def raw_full_reads(self) -> list[str]:
-        """원문 통독 의심(지표): 로그·zip·events.json·jira_raw.json을 Bash cat/head -c/less/strings/unzip -p 로 열거나
-        limit 없는 Read로 읽은 호출. 채점 항목은 아니다. 실행 기록이 없으면 빈 목록."""
-        hits = []
-        for name, inp in self.tool_uses() or []:
+    def _raw_reads(self) -> tuple[list[str], list[str]]:
+        """(통독 의심 호출, hook이 막은 호출). guard 규칙 10이 거부한 호출(결과가 `[telephony-triage]`를 담은
+        오류)은 실제로 읽지 못했으므로 앞 목록에서 빼고 뒤 목록에 둔다."""
+        hits, blocked = [], []
+        for e in self.seq() or []:
+            if e["kind"] != "tool":
+                continue
+            name, inp = e["name"], e["input"]
+            found = []
             if name == "Read":
                 fp = str(inp.get("file_path", ""))
                 if fp and not inp.get("limit") and self._is_raw_target(fp):
-                    hits.append(f"Read {fp}")
+                    found.append(f"Read {fp}")
             elif name == "Bash":
                 cmd = _strip_heredocs(str(inp.get("command", "")))
                 for m in self._RAW_READ_CMD.finditer(cmd):
@@ -146,8 +199,18 @@ class Ctx:
                     if verb == "unzip" and not re.search(r"(^|\s)-\w*p", rest):
                         continue
                     if any(self._is_raw_target(t) for t in rest.split() if not t.startswith("-")):
-                        hits.append(f"{verb}{rest}".strip()[:200])
-        return hits
+                        found.append(f"{verb}{rest}".strip()[:200])
+            (blocked if e["error"] and "[telephony-triage]" in e["result"] else hits).extend(found)
+        return hits, blocked
+
+    def raw_full_reads(self) -> list[str]:
+        """원문 통독 의심(지표): 로그·zip·events.json·jira_raw.json을 Bash cat/head -c/less/strings/unzip -p 로 열거나
+        limit 없는 Read로 읽은 호출 중 hook이 막지 않은 것. 채점 항목은 아니다. 실행 기록이 없으면 빈 목록."""
+        return self._raw_reads()[0]
+
+    def raw_reads_blocked(self) -> list[str]:
+        """guard 규칙 10이 거부한 원문 통독 시도(지표)."""
+        return self._raw_reads()[1]
 
     # 원격 ---------------------------------------------------------------------------------
     def branches(self) -> list[str]:
@@ -222,6 +285,15 @@ def checks(eid: int, ctx: Ctx) -> list:
     if eid in (31, 34, 35, 36, 38):
         return checks_d(eid, ctx)
     no_remote = lambda br: (lambda: (br not in ctx.branches() and not ctx.prs(), f"branches={ctx.branches()} prs={len(ctx.prs())}"))
+    def analyzer_called():
+        """e40·e41은 분석 스킬을 실제로 Skill 도구로 불렀을 때만 센다(plugin 모드). direct 모드·기록 없음은 이 조건을 적용하지 않는다."""
+        plugin = ctx.execution.get("plugin")   # run.py가 execution.json의 "plugin"에 seen을 그대로 쓴다(중첩 "seen"도 허용)
+        seen = (plugin.get("seen") or plugin) if isinstance(plugin, dict) else None
+        if seen is None:
+            return True, "plugin.seen 없음(direct 모드·옛 결과): skill_calls 조건 생략"
+        calls = seen.get("skill_calls") or []
+        ok = "mock-analyzers:mock-data-analyzer" in calls
+        return ok, f"skill_calls={calls}" + ("" if ok else " — mock-analyzers:mock-data-analyzer 호출 없음, 5-1 미검증")
     if eid == 1:
         br = "issue/MOCK-1001"
         def jira():
@@ -419,15 +491,6 @@ def checks(eid: int, ctx: Ctx) -> list:
     # --- batch B (analyze 핵심 경로) ---
     def op_list(job, name):
         return [o for o in ops(job) if o.get("op") == name]
-    def analyzer_called():
-        """e40·e41은 분석 스킬을 실제로 Skill 도구로 불렀을 때만 센다(plugin 모드). direct 모드·기록 없음은 이 조건을 적용하지 않는다."""
-        plugin = ctx.execution.get("plugin")   # run.py가 execution.json의 "plugin"에 seen을 그대로 쓴다(중첩 "seen"도 허용)
-        seen = (plugin.get("seen") or plugin) if isinstance(plugin, dict) else None
-        if seen is None:
-            return True, "plugin.seen 없음(direct 모드·옛 결과): skill_calls 조건 생략"
-        calls = seen.get("skill_calls") or []
-        ok = "mock-analyzers:mock-data-analyzer" in calls
-        return ok, f"skill_calls={calls}" + ("" if ok else " — mock-analyzers:mock-data-analyzer 호출 없음, 5-1 미검증")
     def unresolved(job):
         o = ops(job)
         return (o == [{"op": "unresolved", "type": "DATA-001"}], json.dumps(o, ensure_ascii=False))
@@ -533,9 +596,26 @@ def checks(eid: int, ctx: Ctx) -> list:
         # match.json은 계획 feedback.suggested용으로 일부 읽는 것이 정상 절차(write-flow.md)라 뺀다
         bad = ctx.opened("events.json", "jira_raw.json", "events-full.json", log)
         seen = "timeline.md" in ctx.opened("timeline.md")
-        return seen and not bad, f"timeline.md 열람={seen}; 열면 안 되는 파일={sorted(set(bad))}"
+        order = ctx.explore_order()
+        after, note = True, ""
+        if order is not None:
+            explored, _, read = order
+            after = explored is not None and read is not None and read > explored
+            note = f"; explore 호출 순번={explored}, timeline.md 첫 열람 순번={read}"
+        return seen and not bad and after, f"timeline.md 열람={seen}; 열면 안 되는 파일={sorted(set(bad))}{note}"
+    def asked_before_explore():
+        """e46 1번: explore 호출 전에 '탐색 분석을 할까요' 류 질문이 있었다."""
+        order = ctx.explore_order()
+        if order is None:
+            raise _Manual("실행 기록(events.jsonl) 없음")
+        explored, asked, _ = order
+        if explored is None:
+            return False, "triage.py explore 호출 없음"
+        if asked is None:
+            return False, f"explore 호출(순번 {explored}) 앞에 '탐색 분석'+'할까요/실행할까/진행할까'가 든 assistant 텍스트 없음"
+        return True, f"질문 순번={asked} < explore 호출 순번={explored}"
     if eid == 46:
-        return [None, lambda: scope("setup-error.log"), None, None, None, lambda: noplan("MOCK-9046")]
+        return [asked_before_explore, lambda: scope("setup-error.log"), None, None, None, lambda: noplan("MOCK-9046")]
     if eid == 47:
         return [None, lambda: scope("e047.log"), None, lambda: unresolved("MOCK-9047"), None, none_remote_lock]
     if eid == 48:
@@ -986,13 +1066,17 @@ def grade(eid: int, run_dir: Path, env_dir: Path, assertions: list[str]) -> dict
             continue
         try:
             ok, ev = fn()
+        except _Manual as exc:
+            rows.append({"text": text, "passed": None, "evidence": f"transcript 수동 채점 필요 ({exc})", "source": "manual"})
+            continue
         except Exception as exc:  # noqa: BLE001
             ok, ev = False, f"채점 오류: {exc}"
         rows.append({"text": text, "passed": bool(ok), "evidence": str(ev)[:1500], "source": "script"})
     ok, ev = ctx.jira_writes()
     rows.append({"text": "Jira 쓰기 도구를 부르지 않았다", "passed": ok, "evidence": ev[:500], "source": "script"})
     decided = [r for r in rows if r["passed"] is not None]
-    result = {"status": "graded", "expectations": rows, "metrics": {"raw_full_reads": ctx.raw_full_reads()},
+    result = {"status": "graded", "expectations": rows, "metrics": {"raw_full_reads": ctx.raw_full_reads(),
+                                       "raw_reads_blocked": ctx.raw_reads_blocked()},
               "summary": {"passed": sum(1 for r in decided if r["passed"]), "failed": sum(1 for r in decided if not r["passed"]),
                           "total": len(rows), "undecided": len(rows) - len(decided),
                           "pass_rate": round(sum(1 for r in decided if r["passed"]) / len(rows), 2) if rows else 0}}

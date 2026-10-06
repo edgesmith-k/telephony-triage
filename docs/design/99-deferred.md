@@ -102,6 +102,10 @@ v1의 실패 스텝은 필드·설명·시험 절차 텍스트와 사용자가 �
 첨부 zip 안의 zip은 읽지 않는다(무시). 되살리려면 깊이·총 크기 상한과 같은 항목 선택 규칙을 재귀로 적용한다(`08-safety.md §8.1`).
 
 
+## E. Read 도구 원문 통독 차단 (사내 S1 뒤)
+
+규칙 10(`08-safety.md §9`)은 Bash 명령만 판정한다. Read 도구가 `limit` 없이 로그 원문·zip·`events.json`·`events-full.json`·`jira_raw.json`·`match.json`을 통째로 읽는 것은 막지 못한다. 사내 Claude Code(S1)에서 PreToolUse hook이 `Read`에 걸리고 입력에 `file_path`·`offset`·`limit`이 오는지 확인한 뒤, `hooks.json`에 matcher `Read`를 더하고 `guard.py check_file`(또는 같은 모양의 함수)에서 **`limit`·`offset` 없는 읽기**가 규칙 10과 같은 원문 대상(같은 이름·내용 판별, `fixtures/`·`draft/` 제외)이면 거부한다. 메시지는 규칙 10과 같게 구간 읽기를 안내한다. 대용량 파일은 Read 도구가 기본 줄 수 상한으로 자르기도 하므로(버전에 따라 다름) 상한이 있는 읽기를 어디까지 허용할지는 S1에서 정한다.
+
 ---
 
 ## 되살릴 때 바꿀 곳

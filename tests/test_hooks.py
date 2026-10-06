@@ -322,6 +322,39 @@ def test_guard_blocks_file_tools_in_user_clone_only():
         assert decision(guard(ws, "Write", {"file_path": str(ws.work / rel)}, ws.base)) is None, rel
 
 
+LOGCAT = "".join(f"10-06 12:00:{i:02d}.123  1000  1000 I RILJ    : [0001] line {i}\n" for i in range(40))
+
+
+def test_guard_blocks_whole_raw_log_reads():
+    ws = shared()
+    d = tmp("tt-raw-")
+    (d / "logs").mkdir()
+    (d / "x.log").write_text(LOGCAT, encoding="utf-8")
+    (d / "logs" / "a.log").write_text(LOGCAT, encoding="utf-8")
+    (d / "a.txt").write_text("hello\n", encoding="utf-8")
+    (d / "br.zip").write_bytes(b"PK\x03\x04" + b"\0" * 100)
+    (d / "jira_raw.json").write_text("{}", encoding="utf-8")
+    for name in ("timeline.md", "report.md", "commit-message.txt"):
+        (d / name).write_text("text\n", encoding="utf-8")
+    fx = ws.work / "JOB" / "fixtures"
+    fx.mkdir(parents=True, exist_ok=True)
+    (fx / "X.log").write_text(LOGCAT, encoding="utf-8")
+    deny = ["cat x.log", "cat a.txt x.log", "cat < x.log", 'sh -c "cat x.log"', "cat logs/*.log",
+            "head -c 5000 x.log", "tail -c5000 x.log", "unzip -p br.zip", "unzip -pq br.zip", "strings br.zip",
+            f"cat {d}/jira_raw.json", "echo hi && cat x.log"]
+    for cmd in deny:
+        out = bash(ws, cmd, d)
+        assert decision(out) == "deny", cmd
+        assert "규칙 10" in out["permissionDecisionReason"], cmd
+    allow = ["grep -n RILJ x.log", "sed -n 1,20p x.log", "head -n 20 x.log", "wc -l x.log", "unzip -l br.zip",
+             f"cat {fx}/X.log", "cat timeline.md", "cat report.md", "cat commit-message.txt",
+             "cat <<EOF > x.log\nhi\nEOF", "cat nonexistent.log", "cat a.txt", "echo hi > x.log"]
+    for cmd in allow:
+        assert decision(bash(ws, cmd, d)) is None, cmd
+    # 사용자 config가 없어도 적용된다
+    assert decision(guard(None, "Bash", {"command": "cat x.log"}, d, env={**ws.env(), "HOME": str(d)})) == "deny"
+
+
 def test_hooks_json_has_eight_rules_wired_to_guard():
     hooks = json.loads((REPO / "plugin" / "hooks" / "hooks.json").read_text(encoding="utf-8"))["hooks"]
     assert "sync-scripts-path" in hooks["SessionStart"][0]["hooks"][0]["command"]

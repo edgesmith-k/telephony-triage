@@ -58,6 +58,8 @@ def test_machine_grades_refresh_but_manual_grades_are_preserved(tmp_path, monkey
             pass
         def raw_full_reads(self):
             return []
+        def raw_reads_blocked(self):
+            return []
         def jira_writes(self):
             return True, "쓰기 없음"
     monkeypatch.setattr(grader, "Ctx", FakeContext)
@@ -266,3 +268,124 @@ def test_plugin_mode_env_json_has_no_direct_tool_keys(tmp_path):
         assert key not in plugin_info and key not in stored, key
     direct = skill_eval_env.build(entry, tmp_path / "direct")
     assert all(k in direct for k in ("jira_call", "jira_tools_list", "analyzer_run"))
+
+
+# --- 3E-B: 규칙 10 반영·e40 순서·e46/e47 explore ---------------------------------------------
+
+def _seq_events(run, items):
+    """items: ("text", 문장) | ("tool", id, 이름, 입력, 결과|None, 오류여부)."""
+    rows = []
+    for it in items:
+        if it[0] == "text":
+            rows.append({"type": "assistant", "message": {"content": [{"type": "text", "text": it[1]}]}})
+            continue
+        _, tid, name, inp, result, err = it
+        rows.append({"type": "assistant", "message": {"content": [{"type": "tool_use", "id": tid, "name": name, "input": inp}]}})
+        if result is not None:
+            rows.append({"type": "user", "message": {"content": [
+                {"type": "tool_result", "tool_use_id": tid, "content": result, "is_error": err}]}})
+    (run / "events.jsonl").write_text("\n".join(json.dumps(r, ensure_ascii=False) for r in rows) + "\n", encoding="utf-8")
+
+
+def _write_artifacts(run):
+    (run / "outputs" / "transcript.md").write_text("t", encoding="utf-8")
+    (run / "outputs" / "commands.md").write_text("c", encoding="utf-8")
+
+
+def test_e40_plan_with_plugin_seen_skill_calls_does_not_raise(tmp_path):
+    env_dir = _synthetic_env(tmp_path)
+    run = run_dir(tmp_path)
+    _write_artifacts(run)
+    job = tmp_path / "work" / "MOCK-9040"
+    job.mkdir(parents=True)
+    (job / "plan.json").write_text(json.dumps({"operations": [{"op": "append", "cause": "DATA-001-01"}],
+                                                "feedback": {"decision": "chose-other"}}), encoding="utf-8")
+    for plugin in ({"seen": {"skill_calls": ["mock-analyzers:mock-data-analyzer"]}},
+                   {"skill_calls": ["mock-analyzers:mock-data-analyzer"]}):
+        (run / "execution.json").write_text(json.dumps({"plugin": plugin}), encoding="utf-8")
+        ok, evidence = grader.checks(40, grader.Ctx(env_dir, run))[4]()
+        assert ok is True, evidence
+    (run / "execution.json").write_text(json.dumps({"plugin": {"seen": {"skill_calls": []}}}), encoding="utf-8")
+    assert grader.checks(40, grader.Ctx(env_dir, run))[4]()[0] is False
+
+
+def test_blocked_raw_reads_are_counted_separately(tmp_path):
+    env_dir = _synthetic_env(tmp_path)
+    run = run_dir(tmp_path)
+    _write_artifacts(run)
+    _seq_events(run, [
+        ("tool", "t1", "Bash", {"command": "cat logs/e.log"}, "[telephony-triage] 로그 원문은 통째로 읽지 않는다(규칙 10)", True),
+        ("tool", "t2", "Bash", {"command": "unzip -p logs/a.zip"}, "binary", False),
+        ("tool", "t3", "Bash", {"command": "cat logs/e.log"}, "permission denied", True),   # 다른 오류: 읽기 시도로 센다
+        ("tool", "t4", "Read", {"file_path": "/x/events.json"}, "[telephony-triage] 규칙 10", True),
+    ])
+    ctx = grader.Ctx(env_dir, run)
+    assert ctx.raw_full_reads() == ["unzip -p logs/a.zip", "cat logs/e.log"]
+    assert ctx.raw_reads_blocked() == ["cat logs/e.log", "Read /x/events.json"]
+
+
+def test_child_env_strips_parent_session_identity_but_keeps_auth_and_proxy():
+    env = {"CLAUDE_CODE_SESSION_ID": "s", "CLAUDE_CODE_REMOTE_SESSION_ID": "r", "CLAUDE_CODE_REMOTE": "true",
+           "CLAUDE_CODE_CONTAINER_ID": "c", "TRACEPARENT": "t", "CLAUDE_CODE_MESSAGING_TOKEN": "m",
+           "HTTPS_PROXY": "p", "ANTHROPIC_BASE_URL": "u", "GH_TOKEN": "g", "PATH": "/bin", "CLAUDE_CODE_VERSION": "1"}
+    kept, stripped = evaluation.child_env(env)
+    assert set(kept) == {"HTTPS_PROXY", "ANTHROPIC_BASE_URL", "GH_TOKEN", "PATH", "CLAUDE_CODE_VERSION"}
+    assert "CLAUDE_CODE_REMOTE_SESSION_ID" in stripped and "CLAUDE_CODE_SESSION_ID" in stripped
+    assert evaluation.NO_ATTRIBUTION_SETTINGS and json.loads(evaluation.NO_ATTRIBUTION_SETTINGS)["attribution"] == {"commit": "", "pr": ""}
+
+
+def test_rules_use_absolute_result_paths_and_commit_message_line(tmp_path):
+    rules = evaluation._rules({"user_replies": ["예"]}, tmp_path / "run")
+    out = (tmp_path / "run" / "outputs").as_posix()
+    assert f"{out}/transcript.md" in rules and f"{out}/commands.md" in rules and f"{out}/notes.md" in rules
+    assert "커밋 메시지는 확인 화면 commit_message 그대로(trailer·서명 줄 없음)" in rules
+
+
+def test_missing_result_files_are_derived_from_events(tmp_path):
+    run = run_dir(tmp_path)
+    (run / "outputs" / "notes.md").write_text("실행자 노트", encoding="utf-8")
+    events = [
+        {"type": "assistant", "message": {"content": [{"type": "text", "text": "안녕하세요"},
+                                                      {"type": "tool_use", "id": "a", "name": "Bash", "input": {"command": "ls | wc -l"}}]}},
+        {"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": "a", "content": "x", "is_error": True}]}},
+        {"type": "assistant", "message": {"content": [{"type": "tool_use", "id": "b", "name": "Bash", "input": {"command": "pwd"}}]}},
+        {"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": "b", "content": "/", "is_error": False}]}},
+    ]
+    made = evaluation.derive_outputs(run, events)
+    assert made == ["transcript.md", "commands.md"]
+    assert (run / "outputs" / "notes.md").read_text(encoding="utf-8") == "실행자 노트"
+    transcript = (run / "outputs" / "transcript.md").read_text(encoding="utf-8")
+    commands = (run / "outputs" / "commands.md").read_text(encoding="utf-8")
+    assert transcript.startswith(evaluation.DERIVED_HEADER) and "안녕하세요" in transcript
+    assert commands.startswith(evaluation.DERIVED_HEADER)
+    assert "| 1 | ls \\| wc -l | error |" in commands and "| 2 | pwd | ok |" in commands
+
+
+def _explore_events(run, *, ask=True, read_before=False, explore=True):
+    items = []
+    if read_before:
+        items.append(("tool", "r0", "Read", {"file_path": "/w/MOCK-9046/timeline.md"}, "x", False))
+    if ask:
+        items.append(("text", "탐색 분석을 실행할까요?"))
+    if explore:
+        items.append(("tool", "e1", "Bash", {"command": "python3 triage.py explore MOCK-9046"}, "ok", False))
+    items.append(("tool", "r1", "Read", {"file_path": "/w/MOCK-9046/timeline.md"}, "x", False))
+    _seq_events(run, items)
+
+
+@pytest.mark.parametrize("kwargs,item1,scope_ok", [
+    ({}, True, True),
+    ({"ask": False}, False, True),
+    ({"explore": False}, False, False),
+    ({"read_before": True}, True, False),
+])
+def test_e46_e47_ask_before_explore_and_read_timeline_after(tmp_path, kwargs, item1, scope_ok):
+    env_dir = _synthetic_env(tmp_path)
+    run = run_dir(tmp_path)
+    _write_artifacts(run)
+    _explore_events(run, **kwargs)
+    ctx = grader.Ctx(env_dir, run)
+    fns = grader.checks(46, ctx)
+    assert fns[0]()[0] is item1, fns[0]()
+    assert fns[1]()[0] is scope_ok, fns[1]()
+    assert grader.checks(47, ctx)[1]()[0] is scope_ok

@@ -32,6 +32,12 @@ CLI는 PATH에 있어야 한다. 실행자에게 기대 답과 assertions를 전
 `events.jsonl`에 남는다. 한도를 만난 뒤 자동 반복하지 말고 사용 가능해진 뒤 **새 반복 경로**로 재개한다.
 Windows 개발 PC에서는 Python과 Git Bash를 PATH에 두고 UTF-8 모드를 사용한다. 배포 대상은 Ubuntu다.
 
+실행자 결과 파일(`transcript.md`·`commands.md`·`notes.md`)은 규칙에서 `<run>/outputs/…` 절대 경로로 알려 준다(실행자의 작업 디렉토리는 `env-N`이라 상대 경로를
+잘못 쓴 적이 있다). 그래도 빠진 파일은 실행 기록(`events.jsonl`)에서 만든 대체본(첫 줄 `<!-- run.py: 실행자 미작성, events.jsonl에서 생성 -->`:
+transcript = assistant 텍스트, commands = Bash 명령 표와 오류 여부, notes = 고정 문구)으로 채우고 `execution.json`의 `outputs_derived`에 이름을 남긴다.
+이 경우 상태는 `error`가 아니라 `completed`다. 자식 `claude -p`는 부모 원격 세션의 정체성 환경 변수(`CLAUDE_CODE_SESSION_ID`·`CLAUDE_CODE_REMOTE*`·
+`CLAUDE_CODE_CONTAINER_ID`·`TRACEPARENT` 등, `execution.json`의 `env_stripped`)를 받지 않고 `--settings`로 커밋·PR 서명(`Co-Authored-By`·세션 URL)을 끈다.
+
 ## 환경 만들기
 
 ```sh
@@ -80,6 +86,10 @@ gh PR, lock, 사용자 clone 상태, 원문 PII 노출, Jira 쓰기 도구 호�
 순서·존재 확인(e49 `paste`, e50 `both`·`order`)은 `Ctx.ran`(실행 기록)으로 판정한다 — 설명 문장 때문의 거짓 실패(3C)를 없앤다.
 `grading.json`에는 채점 항목이 아닌 `metrics.raw_full_reads`가 붙는다: 원문 통독 의심 호출(env `logs/`·`*.log`·`*.zip`·`events.json`·
 `jira_raw.json`에 대한 Bash `cat`/`head -c`/`less`/`strings`/`unzip -p`, `limit` 없는 `Read`). 실행 기록이 없으면 빈 목록이다.
+`metrics.raw_reads_blocked`는 guard 규칙 10(`08-safety.md §9`)이 거부한 같은 종류의 시도다: `tool_use.id`와 짝이 되는 `tool_result`가
+오류이고 `[telephony-triage]`를 담은 호출은 `raw_full_reads`에서 빼고 여기에 센다(읽지 못했으므로 통독이 아니다). 다른 오류는 그대로 센다.
+e46·e47 `scope()`는 `timeline.md` 첫 열람이 `triage.py explore` Bash 호출 뒤여야 통과한다. e46 1번은 그 호출 앞 assistant 텍스트에
+'탐색 분석'과 '할까요'(또는 '실행할까'·'진행할까')가 함께 있어야 통과하고, 실행 기록이 없으면 수동 채점으로 남는다.
 
 **R4 응답 규칙(e10·e20·e21)**: 새 fixture에서 다른 유형 원인(IMS-001-01)도 걸려 시그니처 좁히기 / `allow-cause`를 물으면 실행자는
 `allow-cause(허용) — 로그에 실제로 IMS 403이 있다`를 고른다. 시그니처를 좁힐지 허용할지는 사용자 선택이라(`docs/design/12-principles.md`)

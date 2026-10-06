@@ -43,14 +43,17 @@ APPROVER = "eval-approver"
 
 def _rules(entry: dict, run_dir: Path) -> str:
     """실행자 공통 규칙(사용자 응답 시뮬레이션·결과 파일). 기대 답·assertion은 넣지 않는다."""
+    out = (run_dir / "outputs").as_posix()
     return f"""응답 규칙: {json.dumps(entry['user_replies'], ensure_ascii=False)}
 규칙에 없는 질문에는 변경하지 않는 선택지를 택하고 이를 기록한다. 스킬 지시와 사용자 응답이 충돌하면
 사용자 응답을 바꾸지 말고 필요한 지점에서 멈춘다. 성공을 위해 스크립트/스킬/채점기를 수정하지 않는다.
 레포 원본은 읽기만 한다. 쓰기는 이 평가의 모의 환경 및 {run_dir.as_posix()}/outputs 안에서만 한다.
 실제 GitHub/Jira, 네트워크, 다른 평가 환경을 사용하지 않는다. gh는 제공된 스텁으로만 실행한다.
-outputs/transcript.md에는 모든 사용자용 메시지와 시뮬레이션 응답을 그대로 순서대로 저장한다.
-outputs/commands.md에는 실행한 명령, 종료 코드, 요약을 기록한다. outputs/notes.md에는 막힌 지점을 적는다.
-작업 계획이 생기면 outputs/plan.json에 사본을 남긴다. 끝나는 모든 경로에서 스킬의 lock 해제 절차를 따른다.
+결과 파일은 반드시 아래 절대 경로에 쓴다(작업 디렉토리 기준 상대 경로를 쓰지 않는다).
+{out}/transcript.md에는 모든 사용자용 메시지와 시뮬레이션 응답을 그대로 순서대로 저장한다.
+{out}/commands.md에는 실행한 명령, 종료 코드, 요약을 기록한다. {out}/notes.md에는 막힌 지점을 적는다.
+작업 계획이 생기면 {out}/plan.json에 사본을 남긴다. 끝나는 모든 경로에서 스킬의 lock 해제 절차를 따른다.
+커밋 메시지는 확인 화면 commit_message 그대로(trailer·서명 줄 없음)
 """
 
 
@@ -125,6 +128,59 @@ def evaluation_prompt(entry: dict, info: dict, env_dir: Path, run_dir: Path) -> 
 """ + _rules(entry, run_dir)
 
 
+# 부모(원격 세션)의 정체성을 나르는 환경 변수: 자식 `claude -p`가 상속하면 부모 세션 ID로 동작해
+# 커밋에 부모의 `Co-Authored-By`·`Claude-Session` 줄이 붙는다. 인증·프록시(HTTPS_PROXY, ANTHROPIC_*, *_CA_*, GH_TOKEN …)는 남긴다.
+PARENT_IDENTITY_PREFIXES = ("CLAUDE_CODE_REMOTE", "CLAUDE_CODE_MESSAGING", "CLAUDE_CODE_ARTIFACT")
+PARENT_IDENTITY_NAMES = frozenset({
+    "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_CONTAINER_ID", "CLAUDE_CODE_CHILD_SESSION", "CLAUDE_CODE_USE_CCR_V2",
+    "CLAUDE_CODE_POST_FOR_SESSION_INGRESS_V2", "CLAUDE_CODE_SYNC_SESSION_REFS", "CLAUDE_CODE_SYNC_SKILLS",
+    "CLAUDE_CODE_WORKER_EPOCH", "TRACEPARENT"})
+# 커밋·PR 서명을 끈다(`claude --settings`는 JSON 문자열을 받는다).
+NO_ATTRIBUTION_SETTINGS = json.dumps({"includeCoAuthoredBy": False, "attribution": {"commit": "", "pr": ""}})
+DERIVED_HEADER = "<!-- run.py: 실행자 미작성, events.jsonl에서 생성 -->"
+REQUIRED_OUTPUTS = ("transcript.md", "commands.md", "notes.md")
+
+
+def child_env(env: dict[str, str]) -> tuple[dict[str, str], list[str]]:
+    """자식 claude에 넘길 환경 (부모 세션 정체성 변수를 뺀 사본, 뺀 이름 목록)."""
+    stripped = sorted(k for k in env if k.startswith(PARENT_IDENTITY_PREFIXES) or k in PARENT_IDENTITY_NAMES)
+    return {k: v for k, v in env.items() if k not in stripped}, stripped
+
+
+def derive_outputs(run_dir: Path, events: list[dict], names=REQUIRED_OUTPUTS) -> list[str]:
+    """실행자가 쓰지 않은 결과 파일을 events.jsonl에서 만든다. 만든 파일 이름 목록을 돌려준다."""
+    out = run_dir / "outputs"
+    results, calls, texts = {}, [], []
+    for e in events:
+        content = (e.get("message") or {}).get("content")
+        if not isinstance(content, list):
+            continue
+        for c in content:
+            if not isinstance(c, dict):
+                continue
+            if e.get("type") == "assistant" and c.get("type") == "text" and str(c.get("text", "")).strip():
+                texts.append(str(c["text"]).strip())
+            elif e.get("type") == "assistant" and c.get("type") == "tool_use" and c.get("name") == "Bash":
+                calls.append((c.get("id"), str((c.get("input") or {}).get("command", ""))))
+            elif e.get("type") == "user" and c.get("type") == "tool_result":
+                results[c.get("tool_use_id")] = bool(c.get("is_error"))
+    made = []
+    bodies = {
+        "transcript.md": "\n\n".join(texts) or "(assistant 텍스트 없음)",
+        "commands.md": "| # | 명령 | 상태 |\n|---|---|---|\n" + "\n".join(
+            f"| {i} | {' '.join(cmd.split())[:300].replace('|', chr(92) + '|')} | "
+            f"{'error' if results.get(tid) else ('ok' if tid in results else '결과 없음')} |"
+            for i, (tid, cmd) in enumerate(calls, 1)),
+        "notes.md": "실행자가 notes.md를 쓰지 않았다. 이 파일은 실행 기록에서 만든 대체본이다.",
+    }
+    for name in names:
+        path = out / name
+        if not path.is_file():
+            path.write_text(f"{DERIVED_HEADER}\n{bodies[name]}\n", encoding="utf-8")
+            made.append(name)
+    return made
+
+
 def classify_result(result: dict | None, returncode: int) -> tuple[str, str]:
     if not result:
         return "error", f"Claude 결과 없음 (exit {returncode})"
@@ -143,6 +199,7 @@ def execute(entry: dict, info: dict, env_dir: Path, run_dir: Path, claude: str,
     env["PATH"] = os.pathsep.join([str(Path(sys.executable).parent), *info["path_prefix"], env["PATH"]])
     env["CLAUDE_CODE_GIT_BASH_PATH"] = env.get("CLAUDE_CODE_GIT_BASH_PATH", r"C:\Program Files\Git\bin\bash.exe") if os.name == "nt" else env.get("CLAUDE_CODE_GIT_BASH_PATH", "")
     env.pop("CLAUDECODE", None)
+    env, stripped_env = child_env(env)
     # Git Bash는 python3.exe 없는 Windows에서도 같은 Python을 사용한다.
     if os.name == "nt":
         shim = env_dir / "bin"
@@ -152,7 +209,7 @@ def execute(entry: dict, info: dict, env_dir: Path, run_dir: Path, claude: str,
             stream.write(f"export PATH='{_bash_path(str(shim))}':\"$PATH\"\n")
         env["PATH"] = os.pathsep.join([str(shim), env["PATH"]])      # plugin 모드는 env.sh를 source하지 않는다
     common = ["--output-format", "stream-json", "--verbose", "--no-session-persistence", "--setting-sources", "",
-              "--strict-mcp-config"]
+              "--settings", NO_ATTRIBUTION_SETTINGS, "--strict-mcp-config"]
     dirs = ["--add-dir", str(info["plugin_root"]), str(Path(info["issue_db_clone"]).parents[1]), str(run_dir), str(REPO)]
     if plugin:
         prompt, system = plugin_prompt(entry, env_dir, run_dir)
@@ -175,6 +232,7 @@ def execute(entry: dict, info: dict, env_dir: Path, run_dir: Path, claude: str,
         command[2:2] = ["--model", model]
     start = time.monotonic()
     result = None
+    derived: list[str] = []
     with (run_dir / "events.jsonl").open("w", encoding="utf-8") as events, (run_dir / "stderr.log").open("w", encoding="utf-8") as errors:
         proc = subprocess.Popen(command, cwd=env_dir, env=env, stdin=subprocess.PIPE, stdout=events, stderr=errors,
                                 text=True, encoding="utf-8")
@@ -203,14 +261,12 @@ def execute(entry: dict, info: dict, env_dir: Path, run_dir: Path, claude: str,
                 if problem and status == "completed":
                     status, reason = "error", f"플러그인 환경: {problem}"
             if status == "completed":
-                missing = [name for name in ("transcript.md", "commands.md", "notes.md")
-                           if not (run_dir / "outputs" / name).is_file()]
-                if missing:
-                    status, reason = "error", f"실행자가 필수 결과를 남기지 않음: {', '.join(missing)}"
+                derived = derive_outputs(run_dir, events_list)
     outcome = {"status": status, "reason": reason, "exit_code": proc.returncode,
                "elapsed_seconds": round(time.monotonic() - start, 2),
                "usage": (result or {}).get("usage"), "total_cost_usd": (result or {}).get("total_cost_usd"),
-               "mode": "plugin" if plugin else "direct", "plugin": (plugin or {}).get("seen")}
+               "mode": "plugin" if plugin else "direct", "plugin": (plugin or {}).get("seen"),
+               "outputs_derived": derived, "env_stripped": stripped_env}
     dump(run_dir / "execution.json", outcome)
     return outcome
 
