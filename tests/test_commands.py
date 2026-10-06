@@ -95,9 +95,10 @@ REFERENCE = REPO / "plugin" / "skills" / "telephony-triage" / "reference"
 
 
 def test_reference_calls_use_flags_the_scripts_accept():
-    """search.md·write-flow.md가 부르는 `--format markdown`이 실제 argparse에 있고 값이 choices에 든다."""
+    """write-flow.md가 부르는 `--format markdown`이 실제 argparse에 있고 값이 choices에 든다.
+    search.md는 W2 eval 53(출력 토큰 증가)으로 `--brief` JSON 호출을 유지한다(markdown은 opt-in으로만 남김)."""
     search, flow = (REFERENCE / "search.md").read_text(encoding="utf-8"), (REFERENCE / "write-flow.md").read_text(encoding="utf-8")
-    assert "db_search.py --db SNAP" in search and "--format markdown" in search and "--brief" not in search.split("## 3.")[0]
+    assert "db_search.py --db SNAP" in search and "--brief" in search and "--format markdown" not in search
     assert "summary <wt> --format markdown" in flow
     sys.path.insert(0, str(REPO / "plugin" / "scripts"))
     import db_pr, db_search
