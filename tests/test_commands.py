@@ -91,6 +91,22 @@ def test_write_commands_take_session_lock_and_readonly_commands_do_not():
 # -- sync: 본문이 부르는 스크립트 순서 ------------------------------------------------------------
 
 
+REFERENCE = REPO / "plugin" / "skills" / "telephony-triage" / "reference"
+
+
+def test_reference_calls_use_flags_the_scripts_accept():
+    """search.md·write-flow.md가 부르는 `--format markdown`이 실제 argparse에 있고 값이 choices에 든다."""
+    search, flow = (REFERENCE / "search.md").read_text(encoding="utf-8"), (REFERENCE / "write-flow.md").read_text(encoding="utf-8")
+    assert "db_search.py --db SNAP" in search and "--format markdown" in search and "--brief" not in search.split("## 3.")[0]
+    assert "summary <wt> --format markdown" in flow
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    import db_pr, db_search
+    assert db_search.build_parser().parse_args(["q", "--format", "markdown"]).format == "markdown"
+    assert db_pr.build_parser().parse_args(["summary", "wt", "--format", "markdown"]).format == "markdown"
+    assert db_pr.build_parser().parse_args(["summary", "wt"]).format == "json"
+
+
+
 def test_sync_sequence_lists_closed_pr_workdir_and_deletes_only_after_yes():
     ws = Workspace()
     plan = ws.plan("MOCK-7001", "p7-analyze-append.plan.json")

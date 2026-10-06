@@ -251,7 +251,7 @@ Android 버전과 브랜치마다 소스 트리가 다르므로 **분석할 때�
    - `mask_pii`로 변경분을 마스킹한다.
    - `check-ids`, Jira 중복을 op별로 검사한다: `append`·`unresolved`는 같은 Jira가 이미 main에 있으면 중단하고 기존 분류를 보여준 뒤 유지/재분류를 묻는다. `reclassify`는 그 Jira가 main에 **있어야** 진행한다(없으면 거부). 1번에서 같은 Jira의 **열린 PR**이 발견됐으면 링크를 보여주고 계속할지 묻는다.
 4. **생성·검사** (`db_pr stage`가 이어서, 모두 `--db <wt>`): `db_build --write`로 생성 파일(README, 카테고리 README, STATS, CHANGELOG)을 재생성하고, `db_lint --changed origin/<base>`, `mask_pii --check --changed origin/<base>`, `db_regress --all`, **`db_verify rules --plan <plan>`(R1~R6)** 을 돌린다.
-5. **push 전 사용자 확인 (생략 불가)**: `db_pr summary <wt>`의 결과를 한 번에 보여주고 승인을 받는다.
+5. **push 전 사용자 확인 (생략 불가)**: `db_pr summary <wt> --format markdown`의 렌더 결과를 요약·재서술 없이 한 번에 보여주고 승인을 받는다. 아래는 화면 구성 예(정확한 문구는 렌더 결과)다.
 
    ```
    ## push 전 확인: ABC-12345 → DATA-001-02 Roaming disabled
@@ -321,7 +321,7 @@ Android 버전과 브랜치마다 소스 트리가 다르므로 **분석할 때�
 | 1 | `db_pr lock acquire <작업 키>` → `db_pr snapshot --job <작업 키>` → `config.py check --db <work_dir>/_snapshot` (쓰기 가능, gh 인증) → `db_pr preflight --branch <br> --search <원인 ID 또는 JIRA-KEY>` | Step 0·1, 8-1 |
 | 2 | 로컬·원격 브랜치 검사와 선택 | 8-2 |
 | 3 | `db_pr stage <plan> --wt <work_dir>/<작업 키>/wt --branch <br>` (drift가 있으면 결정 반영 후 다시) | 8-3, 8-4 |
-| 4 | `db_pr summary` → 확인 화면 (승인 / 수정 요청 / 전체 diff / 취소) | 8-5 |
+| 4 | `db_pr summary --format markdown` → 확인 화면 (승인 / 수정 요청 / 전체 diff / 취소) | 8-5 |
 | 5 | `git add -A`, `git commit` (별도 Bash 호출) | 8-6 |
 | 6 | `db_pr publish --lease <sha\|new> --approved <hash>` | 8-7, 8-8 |
 | 7 | `db_pr discard` (lock 해제) | 8-9 |

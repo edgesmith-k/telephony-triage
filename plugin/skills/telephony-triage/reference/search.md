@@ -8,7 +8,7 @@
 
 사용자의 문장을 **고치지 않고 그대로** 넘긴다. 조사·불용어 정리와 별칭 확장은 스크립트가 한다. 임의로 키워드로 줄이면 맞는 단어를 놓친다.
 
-`S/db_search.py --db SNAP "<문장>" --limit 10 --brief` (SNAP = `<work_dir>/_snapshot`, `work_dir`는 `config.py show --keys work_dir`의 값).
+`S/db_search.py --db SNAP "<문장>" --limit 10 --format markdown` (SNAP = `<work_dir>/_snapshot`, `work_dir`는 `config.py show --keys work_dir`의 값).
 스냅샷이 없으면(`sync`를 한 적이 없음) `--db`를 빼고(cwd의 이슈 DB 또는 config의 clone) "최신 main 기준이 아닐 수 있으니 `sync`를 권한다"고 알린다.
 문장에 Jira 키나 유형·원인 ID가 있으면 그 키로도 한 번 더 검색한다(정확 일치).
 
@@ -20,7 +20,7 @@
 
 ## 3. 보여주기
 
-스크립트가 준 순서 그대로 보인다(다시 순위를 매기지 않는다. `matched`·`score` 순위가 이미 계산돼 있다).
+`--format markdown` 출력을 순서·내용 그대로 보인다(요약·재서술 금지). 다시 순위를 매기거나 키를 지어내지 않는다(`matched`·`score` 순위가 이미 계산돼 있다). 출력이 따르는 규칙은 아래와 같다(`tests/test_db_search.py`가 대조한다).
 
 1. **이슈 번호** 줄 먼저: 원인·유형의 `jira`에서 Jira 키를 중복 없이 모으고 `jira_latest`(가장 최근 날짜)를 붙인다. 키는 결과에 있는 것만 쓴다.
 2. 표: 유형 > 원인 | 해결책(`resolution_verification` — 미검증이면 그렇다고) | 수정 상태(`fix.status`, `fixed_in`) | 최근 Jira(`jira_count`건) | 맞은 단어(`matched`).

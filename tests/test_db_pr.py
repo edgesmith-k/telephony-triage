@@ -306,6 +306,56 @@ def test_source_outside_values_dry_run_and_forced_exit_3():
     ws.db_pr("discard", ws.wt("MOCK-7001"))
 
 
+SUMMARY_KEYS = ["source", "source_label", "jira", "branch", "reviewers", "open_prs", "files", "ids", "fixtures",
+                "drift_decisions", "readme_preview", "diff", "diff_total_lines", "diff_truncated", "checks", "verification",
+                "approval_needed", "notes", "commit_message", "pr_title", "push_allowed", "push_note", "pending_included",
+                "pr_body", "approved_hash"]
+
+
+def test_summary_markdown_is_opt_in_and_leaves_json_and_state_files_alone():
+    ws = Workspace()
+    ws.plan("MOCK-7002", "p7-analyze-new-cause.plan.json")
+    ws.put("MOCK-7002", "fixtures/cut-1.log", SIM_LOG)
+    ws.acquire("MOCK-7002")
+    ws.stage("MOCK-7002", "issue/MOCK-7002")
+    wt, job = ws.wt("MOCK-7002"), ws.job_dir("MOCK-7002")
+    default = ws.run("db_pr.py", ["summary", wt])
+    files = {name: (job / name).read_bytes() for name in ("state.json", "pr.json")}
+    shown = json.loads(default.stdout)
+    assert default.returncode == 0 and list(shown) == SUMMARY_KEYS      # 기본 stdout 키 목록·순서 고정
+
+    explicit = ws.run("db_pr.py", ["summary", wt, "--format", "json"])
+    assert explicit.returncode == 0 and explicit.stdout == default.stdout
+    md = ws.run("db_pr.py", ["summary", wt, "--format", "markdown"])
+    assert md.returncode == 0 and md.stdout.startswith("## push 전 확인: MOCK-7002 → DATA-001-03 SIM 미준비\n")
+    assert md.stdout.splitlines()[-1] == f"approved_hash: {shown['approved_hash']}"   # 같은 승인 해시
+    assert "해결책 검증 상태: DATA-001-03 — unverified(new-cause)" in md.stdout
+    assert "NEW-CAUSE-1 → DATA-001-03" in md.stdout and shown["commit_message"] in md.stdout
+    assert {name: (job / name).read_bytes() for name in files} == files   # state.json·pr.json 바이트 동일
+    assert len(md.stdout.encode()) < len(default.stdout.encode())
+
+    both = ws.run("db_pr.py", ["summary", wt, "--json", "--format", "markdown"])
+    assert both.returncode == 2 and both.stdout == "" and "--json" in both.stderr
+    assert {name: (job / name).read_bytes() for name in files} == files
+    ws.db_pr("discard", wt)
+
+
+def test_summary_markdown_shows_needs_approval_and_dry_run_push_note():
+    ws = Workspace()
+    ws.plan("MOCK-7001", "p7-analyze-append.plan.json")
+    ws.acquire("MOCK-7001")
+    ws.stage("MOCK-7001", "issue/MOCK-7001", expect=3, env={"TT_FORCE_VERIFY_EXIT": "3"})
+    md = ws.run("db_pr.py", ["summary", ws.wt("MOCK-7001"), "--format", "markdown"])
+    assert md.returncode == 0 and "승인 필요: " in md.stdout and "승인 필요: 없음" not in md.stdout
+    assert "메인테이너 승인 필수" in md.stdout
+    ws.db_pr("discard", ws.wt("MOCK-7001"))
+    ws.acquire("MOCK-7001")
+    ws.stage("MOCK-7001", "issue/MOCK-7001", dry_run=True, unauth=True)
+    md = ws.run("db_pr.py", ["summary", ws.wt("MOCK-7001"), "--format", "markdown"], unauth=True)
+    assert "push 불가: gh 인증 없음 (--dry-run)" in md.stdout and md.stdout.splitlines()[-1].startswith("approved_hash: ")
+    ws.db_pr("discard", ws.wt("MOCK-7001"))
+
+
 # -- 재적용·사용자 clone 보호 ---------------------------------------------------------------
 
 

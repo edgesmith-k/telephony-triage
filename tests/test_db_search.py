@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -340,6 +341,93 @@ def test_brief_drops_detail_keys_but_keeps_what_skills_read():
 def test_brief_on_id_query_keeps_related_and_secondary():
     cause = run_json("db_search.py", ["--db", SAMPLE, "CALL-001-01", "--brief"])["results"][0]
     assert cause["related"] == ["IMS-001-01"] and cause["secondary_categories"] == ["ims"]
+
+
+# --- --format markdown (search.md §3 보여주기 규칙) -----------------------------------------------------------
+
+def _md(db, query, *extra) -> str:
+    proc = run("db_search.py", ["--db", db, query, "--limit", "10", "--format", "markdown", *extra])
+    assert proc.returncode == 0, proc.stderr
+    return proc.stdout
+
+
+def test_markdown_symptom_sentence_shows_only_keys_present_in_json():
+    query = "데이터 안 붙어, 이런 이슈 있었어? 이슈 번호 알려줘"
+    found = run_json("db_search.py", ["--db", SAMPLE, query, "--limit", "10"])
+    text = _md(SAMPLE, query)
+    assert text.splitlines()[0] == f'검색: "{query}" (keyword, 단어: 데이터, 붙어)'
+    line = next(l for l in text.splitlines() if l.startswith("이슈 번호:"))      # search.md §3-1
+    keys = re.findall(r"[A-Z]+-\d+", line)
+    in_json = {k for r in found["results"] if r["kind"] != "jira" for k in r.get("jira", [])}
+    assert keys and set(keys) <= in_json and len(keys) == len(set(keys))          # 결과에 있는 키만, 중복 없이
+    assert keys[:4] == ["MOCK-1104", "MOCK-1103", "MOCK-1102", "MOCK-1101"]        # 결과 순서
+    assert set(re.findall(r"MOCK-\d+", text)) <= {k for r in found["results"] for k in (r.get("jira") or [r.get("key")])}
+    rows = [l for l in text.splitlines() if l.startswith("| ") and "유형 > 원인" not in l]
+    assert [r.split("|")[1].split()[0] for r in rows][:3] == ["DATA-001", "SETUP_DATA_CALL이", "SETUP_DATA_CALL이"]
+    assert "DATA-001-02 Roaming disabled | 데이터 로밍 설정을 켠다 (미검증)" in text   # §3-2: 미검증이면 그렇다고
+    assert "DATA-001-01 Data disabled | 모바일 데이터 설정을 켠다 (verified)" in text   # 검증됨 문구는 search.md에 없어 원값
+    assert "붙어 (부분 일치)" in text                                              # matched가 terms보다 적으면
+    assert "- CALL-001-01: 연관 IMS-001-01 / 다른 카테고리 ims" in _md(SAMPLE, "CALL-001-01")   # §3-3
+    assert text.rstrip().endswith("이 순위는 검색용이다. 분류를 확정하거나 원인을 단정하는 근거로 쓰지 않는다.")
+
+
+def test_markdown_no_result_and_stopword_only_and_id_queries():
+    assert _md(SAMPLE, "이런 이슈 있었어?").splitlines()[2] == "일치 없음 — 검색 단어(terms): 없음 (불용어뿐)"   # search.md §2 첫 항목
+    none = _md(SAMPLE, "eSIM 다운로드가 안 돼, 이런 이슈 있었어?")
+    assert none.splitlines()[0].endswith("(keyword, 단어: esim, 다운로드)") and "일치 없음 — 검색 단어: esim, 다운로드" in none
+    assert "일치 없음" in _md(SAMPLE, "NOPE-009-01") and "(cause-id)" in _md(SAMPLE, "CALL-001-01").splitlines()[0]
+    assert "(jira)" in _md(SAMPLE, "MOCK-1104").splitlines()[0] and "| Jira MOCK-1104 (" in _md(SAMPLE, "MOCK-1104")
+
+
+def test_markdown_shows_merged_current_and_renumbered_links():
+    db = copy_db(variant_db("issue-db-dup-id"))
+    git(db, "init", "-q", "-b", "main")
+    git(db, "add", "-A")
+    git(db, "commit", "-qm", "merge two PRs")
+    edit(db / DATA / "type.md", "  - id: DATA-001-03\n    status: active\n    title: 무선 꺼짐",
+         "  - id: DATA-001-04\n    status: active\n    title: 무선 꺼짐")
+    git(db, "add", "-A")
+    git(db, "commit", "-qm", "chore: fix duplicated DATA-001-03\n\nRenumbered: DATA-001-03 -> DATA-001-04")
+    text = _md(db, "DATA-001-03")
+    link = next(l for l in text.splitlines() if l.startswith("- DATA-001-03 → DATA-001-04 ("))   # search.md §3-4
+    assert "사후 정리 (renumbered)" in link and re.search(r"[0-9a-f]{7,}", link)
+    merged = copy_db()
+    edit(merged / DATA / "type.md", "  - id: DATA-001-02\n    status: active", "  - id: DATA-001-02\n    status: merged-into:DATA-001-01")
+    text = _md(merged, "DATA-001-02")
+    assert "- DATA-001-02: current: DATA-001-01" in text and "DATA-001-02 → DATA-001-01 (병합 (merged-into))" in text
+
+
+def test_markdown_keeps_result_order_and_jira_rows_carry_matched():
+    found = run_json("db_search.py", ["--db", SAMPLE, "IMS 등록 실패", "--limit", "10"])
+    text = _md(SAMPLE, "IMS 등록 실패")
+    rows = [l for l in text.splitlines() if l.startswith("| ") and "유형 > 원인" not in l]
+    first = lambda e: (e.get("id") or e.get("key"))                      # noqa: E731
+    assert [e["kind"] for e in found["results"]][:2] == ["jira", "type"]   # Jira가 앞에 오는 결과도 순서를 바꾸지 않는다
+    assert len(rows) == len(found["results"])
+    for row, entry in zip(rows, found["results"]):
+        assert first(entry) in row.split("|")[1]
+        assert ", ".join(entry["matched"]) in row                         # Jira 항목의 matched 포함
+
+
+def test_markdown_fixed_phrases_are_in_search_md():
+    """`search.md §3`이 \"tests/test_db_search.py가 대조한다\"고 한 문구들이 실제로 문서에 있는지."""
+    doc = (REPO / "plugin/skills/telephony-triage/reference/search.md").read_text(encoding="utf-8")
+    text = _md(SAMPLE, "데이터 안 붙어") + _md(SAMPLE, "이런 이슈 있었어?") + _md(SAMPLE, "NOPE-009-01")
+    emitted_and_documented = ("이슈 번호", "유형 > 원인", "수정 상태", "최근 Jira", "맞은 단어", "부분 일치", "미검증", "연관",
+                              "다른 카테고리", "일치 없음", "불용어뿐",
+                              "이 순위는 검색용이다. 분류를 확정하거나 원인을 단정하는 근거로 쓰지 않는다.")
+    for phrase in emitted_and_documented:
+        assert phrase in doc and phrase in text + _md(SAMPLE, "CALL-001-01"), phrase
+    assert "옛 ID → 새 ID" in doc and "병합" in doc and "사후 정리" in doc
+
+
+def test_format_json_is_default_and_brief_is_ignored_for_markdown():
+    plain = run("db_search.py", ["--db", SAMPLE, "로밍"])
+    explicit = run("db_search.py", ["--db", SAMPLE, "로밍", "--format", "json"])
+    assert plain.returncode == explicit.returncode == 0 and plain.stdout == explicit.stdout
+    assert _md(SAMPLE, "로밍", "--brief") == _md(SAMPLE, "로밍")
+    both = run("db_search.py", ["--db", SAMPLE, "로밍", "--json", "--format", "markdown"])
+    assert both.returncode == 2 and both.stdout == ""
 
 
 if __name__ == "__main__":

@@ -8,7 +8,7 @@
     db_pr.py cleanup (--dry-run | --yes) [--older-than [<days>]]
     db_pr.py preflight --branch <br> [--search <원인 ID|JIRA-KEY>] [--jira <KEY>]
     db_pr.py stage <plan.json> --wt <dir> --branch <br> [--dry-run] [--verbose]
-    db_pr.py summary <wt>
+    db_pr.py summary <wt> [--format json|markdown]
     db_pr.py publish <wt> --branch <br> --lease <sha|new> --approved <hash>
     db_pr.py discard <wt>
     db_pr.py find-plan --branch <br>          (sync-pr 1~4번 보조: 계획 찾기·원격 변경 확인)
@@ -723,7 +723,7 @@ def approved_hash(wt: Path) -> str:
             os.unlink(idx)
 
 
-def summary(ctx: Ctx, wt: Path) -> dict:
+def summary(ctx: Ctx, wt: Path, markdown: bool = False) -> dict:
     job_dir, job = _job_of(wt, ctx)
     _owned_worktree(ctx, wt)
     wt = job_dir / wt.name
@@ -754,7 +754,11 @@ def summary(ctx: Ctx, wt: Path) -> dict:
     state.update(approved_hash=digest, commit_message=scr["commit_message"])
     _write_json(job_dir / STATE, state)
     _write_json(job_dir / PR_FILE, {"title": scr["pr_title"], "body": body, "reviewers": scr["reviewers"]})
-    return {**scr, "pr_body": body, "approved_hash": digest}
+    result = {**scr, "pr_body": body, "approved_hash": digest}
+    if markdown:    # opt-in: 확인 화면 마크다운(JSON 키·상태 파일은 그대로, main이 `_markdown`을 꺼내 출력한다)
+        extras = db_summary.screen_extras(wt, scr, stage_result["apply"].get("operations") or [], digest)
+        result["_markdown"] = db_summary.render_markdown(scr, plan, extras)
+    return result
 
 
 # -- publish -------------------------------------------------------------------------------
@@ -1047,6 +1051,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--verbose", action="store_true", default=argparse.SUPPRESS, help="stdout도 stage.json과 같이 전체 (기본은 통과 항목을 접는다)")
     p = sub.add_parser("summary")
     p.add_argument("wt")
+    p.add_argument("--format", choices=("json", "markdown"), default="json",
+                   help="markdown: write-flow §4 확인 화면을 마크다운으로 (기본 json, --json과 함께 못 쓴다)")
     p = sub.add_parser("publish")
     p.add_argument("wt")
     p.add_argument("--branch", required=True)
@@ -1095,7 +1101,12 @@ def main(argv: list[str] | None = None) -> int:
             if not getattr(args, "verbose", False):
                 result = _brief_stage(result, _job_of(Path(args.wt), ctx)[0])
         elif args.cmd == "summary":
-            result = summary(ctx, Path(args.wt))
+            if args.format == "markdown" and args.json:
+                raise UsageError("--format markdown은 --json과 함께 쓸 수 없다.")
+            result = summary(ctx, Path(args.wt), args.format == "markdown")
+            if args.format == "markdown":
+                print(result["_markdown"], end="")
+                return code
         elif args.cmd == "publish":
             result, code = publish(ctx, Path(args.wt), args.branch, args.lease, args.approved)
         elif args.cmd == "discard":
