@@ -261,6 +261,25 @@ def test_guard_push_rules():
     assert decision(bash(ws, publish, ws.base)) == "ask"
 
 
+def test_guard_publish_with_commit_and_discard_still_asks():
+    """W5: `publish --commit --and-discard`도 `publish` 토큰 때문에 ask다 (옵션 이름과 무관)."""
+    ws = shared()
+    db_pr = f'python3 "{ws.root}/scripts/db_pr.py"'
+    base = "publish wt --branch issue/MOCK-1 --lease new --approved x"
+    for tail in ("--commit", "--and-discard", "--commit --and-discard", "--and-discard --commit"):
+        out = bash(ws, f"{db_pr} {base} {tail}", ws.base)
+        assert decision(out) == "ask" and "publish" in out["permissionDecisionReason"], tail
+
+
+def test_guard_stage_then_summary_and_discard_are_not_asked():
+    """W5: `stage --then-summary`와 단독 `discard`는 판정할 것이 없다 (publish만 ask)."""
+    ws = shared()
+    db_pr = f'python3 "{ws.root}/scripts/db_pr.py"'
+    for cmd in (f"{db_pr} stage plan.json --wt wt --branch issue/MOCK-1 --then-summary",
+                f"{db_pr} summary wt --format markdown", f"{db_pr} discard wt"):
+        assert decision(bash(ws, cmd, ws.base)) is None, cmd
+
+
 def test_guard_ignores_other_repos_and_missing_config():
     ws = shared()
     other = tmp("tt-other-repo-") / "r"

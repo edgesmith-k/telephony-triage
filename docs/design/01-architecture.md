@@ -155,7 +155,7 @@ telephony-triage-plugin/                 # 개발 레포 루트
 | `match_signatures.py` | 마스킹된 이벤트 JSON × 이슈 DB → 후보 랭킹(`same_phone`·`sequence` 포함, 패턴당 타임아웃), 수정 상태 판단, related | analyze Step 4, `db_regress`, `db_verify` |
 | `db_search.py` | 이슈 DB 검색 (secondary/related, 옛 ID → 새 ID 연결, 증상 문장 단어별 검색·`## 검색 별칭`·순위) | `search`, `record` 대화형 모드, Phase 11 테스트 |
 | `db_add.py` | 작업 계획(`plan.json`) 적용(`source`별 op 허용 규칙, `schema_version` 검사 포함), **drift 검사**(`drift`), ID·fixture 번호 할당, 브랜치 안 renumber("내 ID"만)·check-ids, 템플릿 생성, 유사 유형 검사 | `db_pr stage`, `db_verify rules --draft`, analyze Step 7·`record` (`similar`) |
-| `db_pr.py` | **이슈 DB 쓰기 오케스트레이션**: 세션 lock(`lock`), 읽기 스냅샷, 잔여 worktree·도구 브랜치(`tt/*`) 정리, 사전 점검(브랜치·열린 PR·Jira 중복), worktree 준비 + drift 검사 + apply + 검사(`stage`), 확인 화면 데이터(`summary`, 조립은 `db_summary.py`), lease push + PR(`publish`), 정리(`discard`), 작업 상태 파일(`state.json`) | analyze Step 0·1·8, `record`, `sync`, `sync-pr`, `verify-fix`, `validate --cause`, `fix-submitted`, import/review/move 계획 PR |
+| `db_pr.py` | **이슈 DB 쓰기 오케스트레이션**: 세션 lock(`lock`), 읽기 스냅샷, 잔여 worktree·도구 브랜치(`tt/*`) 정리, 사전 점검(브랜치·열린 PR·Jira 중복), worktree 준비 + drift 검사 + apply + 검사(`stage`), 확인 화면 데이터(`summary`, 조립은 `db_summary.py`), 커밋 + lease push + PR(`publish --commit`), 정리(`discard`, `publish --and-discard`), 작업 상태 파일(`state.json`) | analyze Step 0·1·8, `record`, `sync`, `sync-pr`, `verify-fix`, `validate --cause`, `fix-submitted`, import/review/move 계획 PR |
 | `db_build.py` | 생성 파일(README, 카테고리 README, STATS, CHANGELOG)과 로컬 캐시 생성, 정합성 검증 | `db_pr stage`, `preview`, setup, `db_pr snapshot` 이후 캐시 갱신, `db_precommit`, guard hook 4번 |
 | `db_lint.py` | 정적 검사: 스키마, ID 형식·중복, Jira 중복, 작성 규칙, 용어집, related·code_refs 형식, `fix.ref` 형식(`fix_ref_regex`), 카테고리 목록, fixture 파일명, 시그니처·extractor·`jira/*.yaml` `note`·원인 본문·`cp_evidence` 안의 원본 식별자 패턴, **정규식 안전**(중첩 수량자·무제한 역참조 거부, `04-parser-matching.md §5.8 (4)`), 시그니처 `sequence`의 id 존재·중복, `builtin.*`·`ext.*` 이벤트 참조, 옛 ID 잔존, `.expect.yaml`의 `also_allowed`(자기 원인·같은 유형 원인·없는 ID 금지), 검증 규칙(근거 없는 verified 금지: `verify-resolution`의 evidence 없이 verified 금지, evidence의 Jira 키·fixture 경로 존재), `synthetic_allowed: false`일 때 `origin: synthetic` 경고 | `db_pr stage`, `db_precommit`, Step 1 사후 lint, CI |
 | `db_regress.py` | fixture 회귀: 파서 + 마스킹 + 매처로 기대 결과 확인 (회귀·검증 모드), 파서 규칙 변경 전/후 이벤트 diff | `db_pr stage`, `db_precommit`, `db_verify`, CI |
@@ -168,7 +168,7 @@ telephony-triage-plugin/                 # 개발 레포 루트
 | `triage.py` | **analyze 드라이버**: Step 0~4와 Step 5 `code_refs` resolve를 위 스크립트의 `main()`을 같은 프로세스에서 불러 순서대로 수행, `analysis.json`(≤4KB)·`report.md` 초안·`trace.jsonl`, 후보 없음·원인 미확인이면 Step 5-2 입력 `timeline.md`. `--analysis-only`면 기록하지 않는 분석 전용(쓰기 흐름의 사전 질문 생략, ok에서 lock 해제). 사용자 결정 지점은 `needs_input`. 자체 판정 로직은 없다(요약·절삭만) | analyze(SKILL.md), `tools/offline_eval.py`(`--offline-db`) |
 
 - 검사 로직은 각 담당 스크립트에만 둔다. 다른 스크립트는 호출만 한다.
-- `record`는 매처와 코드 분석을 쓰지 않지만 쓰기 경로(`db_pr stage` → `summary` → 커밋 → `publish`)와 검사는 analyze와 같다 (`07-workflow.md §record`).
-- **스킬은 이슈 DB를 직접 바꾸지 않는다.** 스킬이 하는 일은 결정·초안 작성과 사용자 확인이고, 쓰기 절차(worktree, 적용, 검사, push, PR)는 `db_pr.py`가 한다. 커밋만 스킬이 `git add`와 `git commit`을 별도 Bash 호출로 실행한다 (`07-workflow.md §Step 8-6`).
+- `record`는 매처와 코드 분석을 쓰지 않지만 쓰기 경로(`db_pr stage --then-summary` → `publish --commit --and-discard`)와 검사는 analyze와 같다 (`07-workflow.md §record`).
+- **스킬은 이슈 DB를 직접 바꾸지 않는다.** 스킬이 하는 일은 결정·초안 작성과 사용자 확인이고, 쓰기 절차(worktree, 적용, 검사, push, PR)는 `db_pr.py`가 한다. 커밋도 `publish --commit`이 승인 해시·guard 프로필 검사·pre-commit을 거쳐 한다 (`07-workflow.md §Step 8-6`).
 - SessionStart의 `plugin.scripts_path` 갱신은 `hooks.json`이 `config.py sync-scripts-path`를 호출해서 한다.
 - 사후 main ID 중복·Jira 중복은 `db_lint`가 찾아 보고만 한다. 정리는 v1에서 메인테이너가 직접 편집으로 한다 (`06-collaboration.md §6.3`, 자동화는 `99-deferred.md`).

@@ -22,7 +22,7 @@ argument-hint: "[category]"
    - (a) 직접 편집 → `db_build.py --write` → `validate` → 커밋 → push.
    - (b) 조치를 **작업 계획**(`source: review`, op: `set-status`·`update-signature`·`reclassify`·`set-resolution`·
      `allow-cause`·`add-fixture`)으로 `<work_dir>/review-<category>-<YYYY-MM>/plan.json`에 사용자와 함께 쓰고
-     공통 쓰기 절차(`07-workflow.md`, `db_pr stage → summary → 승인 → 커밋 → publish`)로 올린다. 별도 커맨드는 없다.
+     공통 쓰기 절차(`07-workflow.md`, `db_pr stage --then-summary → 승인 → publish --commit --and-discard`)로 올린다. 별도 커맨드는 없다.
    - **중복 후보 병합**은 `move/<옛 ID>-to-<새 ID>` 브랜치와 `source: move` 계획이다. op 순서: `new-cause`(옛 원인 내용
      복사, `temp_id`) → `add-fixture`(`path`에 옛 fixture의 **이슈 DB 기준 경로**, 새 원인 이름으로 복사) →
      `set-status`(옛 원인 `merged-into:<temp_id>`, 유형 병합이면 옛 유형 `merged-into:<유형 ID>`) → `reclassify`(옛 원인의

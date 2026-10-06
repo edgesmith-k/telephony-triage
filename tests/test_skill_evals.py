@@ -259,6 +259,23 @@ def test_raw_full_reads_metric(tmp_path):
     assert "Read /x/events.json" in reads
 
 
+def test_step8_bash_metric_counts_subcommands_not_options(tmp_path):
+    """W5: `--then-summary`·`--and-discard`는 summary·discard 호출로 세지 않고, eval 1은 직접 git commit을 거른다."""
+    env_dir = _synthetic_env(tmp_path)
+    run = run_dir(tmp_path)
+    for name in ("transcript.md", "commands.md"):
+        (run / "outputs" / name).write_text("c", encoding="utf-8")
+    _bash_events(run, "python3 S/db_pr.py stage plan.json --wt w --branch b --then-summary",
+                 "python3 S/db_pr.py publish w --branch b --lease new --approved h --commit --and-discard")
+    ctx = grader.Ctx(env_dir, run)
+    assert ctx.step8_bash() == {"stage": 1, "summary": 0, "publish": 1, "discard": 0, "git_add": 0, "git_commit": 0, "total": 2}
+    _bash_events(run, "python3 S/db_pr.py stage plan.json --wt w --branch b", "python3 S/db_pr.py summary w",
+                 "git -C w add -A", "git -C w commit -F m.txt", "python3 S/db_pr.py publish w --branch b --lease new --approved h",
+                 "python3 S/db_pr.py discard w")
+    assert grader.Ctx(env_dir, run).step8_bash() == {"stage": 1, "summary": 1, "publish": 1, "discard": 1, "git_add": 1,
+                                                     "git_commit": 1, "total": 6}
+
+
 def test_plugin_mode_env_json_has_no_direct_tool_keys(tmp_path):
     import skill_eval_env
 

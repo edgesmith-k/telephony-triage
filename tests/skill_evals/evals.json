@@ -35,7 +35,7 @@
         "원격 issue/MOCK-1001 브랜치에 data/DATA-001-no-setup-data-call/jira/MOCK-1001.yaml(cause: DATA-001-01)이 있다",
         "원격 브랜치의 피드백 파일 decision이 accepted, final이 DATA-001-01이다",
         "gh 스텁에 PR이 1개 생겼다",
-        "git add와 git commit을 별도 Bash 호출로 실행했다",
+        "직접 git commit 없이 `db_pr publish --commit`으로 커밋했다(승인 뒤)",
         "끝난 뒤 세션 lock이 없다",
         "사용자 clone의 브랜치·HEAD·워킹 트리가 실행 전과 같다"
       ],

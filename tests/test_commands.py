@@ -99,12 +99,22 @@ def test_reference_calls_use_flags_the_scripts_accept():
     search.md는 W2 eval 53(출력 토큰 증가)으로 `--brief` JSON 호출을 유지한다(markdown은 opt-in으로만 남김)."""
     search, flow = (REFERENCE / "search.md").read_text(encoding="utf-8"), (REFERENCE / "write-flow.md").read_text(encoding="utf-8")
     assert "db_search.py --db SNAP" in search and "--brief" in search and "--format markdown" not in search
-    assert "summary <wt> --format markdown" in flow
+    assert "summary <wt> --format markdown" in flow     # stage 성공·summary 실패 때 다시 부르는 호출
+    assert "stage <plan> --wt <wt> --branch <br> [--dry-run] --then-summary" in flow
+    assert "--commit --and-discard" in flow
     sys.path.insert(0, str(REPO / "plugin" / "scripts"))
     import db_pr, db_search
     assert db_search.build_parser().parse_args(["q", "--format", "markdown"]).format == "markdown"
     assert db_pr.build_parser().parse_args(["summary", "wt", "--format", "markdown"]).format == "markdown"
     assert db_pr.build_parser().parse_args(["summary", "wt"]).format == "json"
+    parser = db_pr.build_parser()
+    assert parser.parse_args(["stage", "p.json", "--wt", "wt", "--branch", "b", "--then-summary"]).then_summary is True
+    assert parser.parse_args(["stage", "p.json", "--wt", "wt", "--branch", "b"]).then_summary is False
+    pub = parser.parse_args(["publish", "wt", "--branch", "b", "--lease", "new", "--approved", "h", "--commit",
+                             "--and-discard"])
+    assert pub.commit is True and pub.and_discard is True
+    pub = parser.parse_args(["publish", "wt", "--branch", "b", "--lease", "new", "--approved", "h"])
+    assert pub.commit is False and pub.and_discard is False
 
 
 

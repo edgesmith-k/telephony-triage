@@ -39,7 +39,7 @@ skill-creator 스킬을 실행하고 아래를 입력으로 준다.
   - 생성 파일은 직접 편집하지 않고 `db_build.py`로만 만든다.
   - 이슈 DB 변경은 작업 계획 → `db_pr.py`(stage/summary/publish/discard)로만 한다. 스킬은 이슈 DB 파일을 직접 쓰지 않는다.
   - 사용자 clone에서 `checkout`, `reset`, `clean`을 실행하지 않는다.
-  - `git add`와 `git commit`은 별도 Bash 호출로 실행한다.
+  - 직접 `git commit` 없이 `db_pr publish --commit`으로 커밋한다(승인 뒤). 확인 화면은 `stage --then-summary`의 출력이다.
   - 수동 기록은 분석을 건너뛰어도 검증을 건너뛰지 않는다. `fixed`를 기록하지 않고, 근거 없는 해결책은 `unverified`로 둔다(기록 대상 Jira 자신은 근거가 아니다). 시그니처 없는 새 원인은 사용자가 명시할 때만 `signatures_pending`으로 둔다.
   - 작업을 시작할 때 세션 lock을 잡고, 끝나는 모든 경로(discard, 계획 저장 후 종료, 기록하지 않는 판정, 사용자가 그만둠)에서 푼다.
   - drift가 나오면 자동으로 덮지 않고 항목마다 사용자 결정을 받는다.

@@ -7,9 +7,9 @@
     db_pr.py snapshot --job <작업 키>
     db_pr.py cleanup (--dry-run | --yes) [--older-than [<days>]]
     db_pr.py preflight --branch <br> [--search <원인 ID|JIRA-KEY>] [--jira <KEY>]
-    db_pr.py stage <plan.json> --wt <dir> --branch <br> [--dry-run] [--verbose]
+    db_pr.py stage <plan.json> --wt <dir> --branch <br> [--dry-run] [--verbose | --then-summary]
     db_pr.py summary <wt> [--format json|markdown]
-    db_pr.py publish <wt> --branch <br> --lease <sha|new> --approved <hash>
+    db_pr.py publish <wt> --branch <br> --lease <sha|new> --approved <hash> [--commit] [--and-discard]
     db_pr.py discard <wt>
     db_pr.py find-plan --branch <br>          (sync-pr 1~4번 보조: 계획 찾기·원격 변경 확인)
 
@@ -35,8 +35,14 @@ summary 입력), `regress.json`, `pr.json`(summary가 만든 PR 제목·본문·
 
 `stage` stdout은 기본 요약(통과 단계·apply 세부를 접고 `detail`·`folded`를 붙인다), `--verbose`면 `stage.json`과 같은 전체.
 `stage.json`은 항상 전체다. `stage` 종료 코드: 하위 결과 집계(1이 하나라도 있으면 1, 없고 3이 있으면 3). drift면 적용 전에 1.
+`stage --then-summary`: stage 종료 0·3이면 같은 프로세스에서 `summary --format markdown`을 이어 부르고 stdout은 그 마크다운만
+(`--json`·`--verbose`와 함께 못 쓴다). stage 1·2는 기존 그대로(summary 안 부른다), stage 성공·summary 실패는 종료 2
+(stdout은 stage 요약 JSON + `summary_error`).
 `publish`는 승인 해시·커밋 부모·커밋 메시지·브랜치를 `state.json`과 대조하고(다르면 1), lease push 뒤
 PR을 만들거나(`gh pr create`) 고친다(`gh pr edit`).
+`publish --commit`: 아직 커밋이 없으면(HEAD == base_sha) 승인 해시 → hooksPath(`.githooks`) → `git add -A` → guard 프로필 검사
+→ `git commit -F <작업 디렉터리의 임시 파일>`(pre-commit 실행)을 한 뒤 위 대조·push로 간다. 이미 커밋이 있으면 건너뛴다(멱등).
+`publish --and-discard`: publish 종료 0일 때만 `discard`를 이어 부른다(실패하면 worktree·lock을 남긴다).
 
 `stage`는 계획을 읽을 때 먼저 형식을 검사한다(최상위 키·필수 키, `계획 형식 오류:` 종료 코드 2 — 이전 작업 파일은
 그대로 둔다). 하위 스크립트가 Traceback으로 끝나면 사용자에게는 마지막 줄만 "내부 오류"로 보인다(`_err_brief`).
@@ -773,7 +779,70 @@ def _schema_allows_pr_ids(repo: Path, base_sha: str) -> bool:
         return False
 
 
-def publish(ctx: Ctx, wt: Path, branch: str, lease: str, approved: str) -> tuple[dict, int]:
+def _guard_problems(plugin_root: str | None, wt: Path) -> list[str]:
+    """guard.py 규칙 3·4(`check_commit`)와 같은 검사·같은 문구. staged 범위로 `PROFILES["guard"]`를 돌린다."""
+    staged = [p for p in _git(wt, "diff", "--cached", "--name-only", "-z").stdout.split("\0") if p]
+    if not staged:
+        return []
+    try:
+        db_cfg = yamlio.load(wt / "issue-db.config.yaml") or {}
+    except (OSError, ValueError):
+        db_cfg = {}
+    ci_mode = db_cfg.get("ci_mode", "local")
+    branch = _out(_git(wt, "rev-parse", "--abbrev-ref", "HEAD", check=False)) if ci_mode != "actions-build" else ""
+    cctx = checks_mod.Ctx(db=wt, scope="staged", files=staged, branch=branch, ci_mode=ci_mode, db_cfg=db_cfg,
+                          plugin_root=plugin_root)
+    deny: list[str] = []
+    for res in checks_mod.run_checks(checks_mod.PROFILES["guard"], cctx).steps:
+        if res.code == 0:
+            continue
+        paths = (res.data or {}).get("paths") or []
+        if res.name == "mask":
+            hits = (res.data or {}).get("detections") or []
+            detail = "; ".join(f"{h['path']}:{h['line']} {h['kind']}" for h in hits[:10]) or res.stderr[-300:]
+            deny.append(f"staged 변경에 마스킹 안 된 개인정보가 있다 (규칙 3): {detail}. mask_pii로 마스킹한 뒤 다시 add한다.")
+        elif res.name == "cache":
+            deny.append(f".cache/는 커밋하지 않는다 (규칙 4): {', '.join(paths[:5])}")
+        elif res.script is None:
+            deny.append(f"ci_mode: actions-build — 생성 파일은 머지 후 봇이 만든다. staged에서 뺀다 (규칙 4): "
+                        f"{', '.join(paths)}")
+        else:
+            problems = ("; ".join(f"{p['path']} ({p['status']})" for p in (res.data or {}).get("problems", []))
+                        or res.stderr[-300:])
+            deny.append("생성 파일(README·STATS·CHANGELOG)이 원본과 맞지 않는다 (규칙 4): "
+                        f"{problems}. 직접 고치지 말고 db_build.py --write로 다시 만든 뒤 add한다.")
+    return deny
+
+
+def _commit_approved(wt: Path, job_dir: Path, state: dict, approved: str) -> tuple[dict, list[str] | None]:
+    """`publish --commit`의 커밋 단계. (commit 정보, 실패 problems 또는 None). 이미 커밋이 있으면 건너뛴다(멱등)."""
+    if _out(_git(wt, "rev-parse", "HEAD", check=False)) != state.get("base_sha"):
+        return {"skipped": "이미 커밋됨"}, None
+    fail = {"committed": False}
+    digest = approved_hash(wt)
+    if digest != approved or digest != state["approved_hash"]:
+        return fail, ["승인 뒤 파일이 바뀌었다 (현재 트리가 승인 해시와 다르다). 확인 화면을 다시 받는다."]
+    hooks = _out(_git(wt, "config", "--get", "core.hooksPath", check=False))
+    if hooks != ".githooks":
+        raise UsageError(f"이 레포의 core.hooksPath가 '{hooks or '(없음)'}'다. 정확히 .githooks여야 커밋할 수 있다 "
+                         "(규칙 5). /telephony-triage:setup 을 다시 실행한다.")
+    _git(wt, "add", "-A")
+    deny = _guard_problems(_PLUGIN_ROOT, wt)
+    if deny:
+        return fail, deny
+    msg_file = job_dir / "commit-msg.txt"      # worktree 밖. 메시지는 셸을 거치지 않는 데이터다
+    msg_file.write_text(state.get("commit_message") or "", encoding="utf-8", newline="\n")
+    try:
+        proc = _git(wt, "commit", "-q", "-F", str(msg_file), check=False)
+    finally:
+        msg_file.unlink(missing_ok=True)
+    if proc.returncode != 0:
+        output = ((proc.stdout or "") + (proc.stderr or "")).strip()
+        return fail, [f"git commit 실패 (pre-commit hook 등): {output[-800:]}"]
+    return {"committed": True, "sha": _out(_git(wt, "rev-parse", "HEAD"))}, None
+
+
+def publish(ctx: Ctx, wt: Path, branch: str, lease: str, approved: str, commit: bool = False) -> tuple[dict, int]:
     job_dir, job = _job_of(wt, ctx)
     _owned_worktree(ctx, wt)
     wt = job_dir / wt.name
@@ -783,6 +852,12 @@ def publish(ctx: Ctx, wt: Path, branch: str, lease: str, approved: str) -> tuple
     pr_info = _read_json(job_dir / PR_FILE)
     if not state or not state.get("approved_hash") or not pr_info:
         raise UsageError("승인 정보가 없습니다. stage → summary(확인) → 커밋 뒤에 publish한다.")
+    commit_info = None
+    if commit:
+        commit_info, early = _commit_approved(wt, job_dir, state, approved)
+        if early is not None:
+            return {"published": False, "commit": commit_info, "problems": early}, CHECK_FAILED
+    extra = {"commit": commit_info} if commit_info is not None else {}
     problems = []
     tree = _out(_git(wt, "rev-parse", "HEAD^{tree}", check=False))
     if tree != approved or tree != state["approved_hash"]:
@@ -798,13 +873,13 @@ def publish(ctx: Ctx, wt: Path, branch: str, lease: str, approved: str) -> tuple
     if branch != state["branch"] or branch == ctx.base:
         problems.append(f"브랜치 {branch}가 stage한 브랜치 {state['branch']}와 다르거나 base 브랜치다.")
     if problems:
-        return {"published": False, "problems": problems}, CHECK_FAILED
+        return {"published": False, **extra, "problems": problems}, CHECK_FAILED
     lease_arg = (f"--force-with-lease=refs/heads/{branch}:" if lease == "new"
                  else f"--force-with-lease=refs/heads/{branch}:{lease}")
     env = {**os.environ, "TT_PUBLISH_TOKEN": approved}
     push = _git(wt, "push", lease_arg, "origin", f"HEAD:refs/heads/{branch}", check=False, env=env)
     if push.returncode != 0:
-        return {"published": False, "pushed": False,
+        return {"published": False, "pushed": False, **extra,
                 "problems": ["push가 거부됐다 (원격 브랜치가 그 사이 바뀌었거나 lease가 다르다). 원격 상태를 다시 "
                              "확인하고(preflight) 처음부터 다시 한다."],
                 "stderr": push.stderr.strip()[-800:]}, CHECK_FAILED
@@ -855,7 +930,7 @@ def publish(ctx: Ctx, wt: Path, branch: str, lease: str, approved: str) -> tuple
         included[src.name] = {"file": src.name, "pr": number}
     plan["included_pending"] = sorted(included.values(), key=lambda i: i["file"])
     plan_path.write_text(json.dumps(plan, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
-    result = {"published": True, "pushed": True, "branch": branch, "head_sha": head, "lease": lease,
+    result = {"published": True, "pushed": True, **extra, "branch": branch, "head_sha": head, "lease": lease,
               "pr": {"number": number, "url": url, "action": action}, "plan": str(plan_path),
               "pr_ids_recorded": ids_recorded}
     if gh_error:
@@ -1063,6 +1138,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--branch", required=True)
     p.add_argument("--dry-run", action="store_true")
     p.add_argument("--verbose", action="store_true", default=argparse.SUPPRESS, help="stdout도 stage.json과 같이 전체 (기본은 통과 항목을 접는다)")
+    p.add_argument("--then-summary", action="store_true",
+                   help="stage 종료 0·3이면 이어서 summary --format markdown을 부르고 그 마크다운만 출력한다 (--json·--verbose와 못 쓴다)")
     p = sub.add_parser("summary")
     p.add_argument("wt")
     p.add_argument("--format", choices=("json", "markdown"), default="json",
@@ -1072,6 +1149,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--branch", required=True)
     p.add_argument("--lease", required=True, help="원격 브랜치 SHA 또는 new(원격에 없어야 함)")
     p.add_argument("--approved", required=True)
+    p.add_argument("--commit", action="store_true",
+                   help="커밋이 없으면 승인 해시·hooksPath·guard 검사를 거쳐 summary의 commit_message로 커밋한 뒤 publish한다 (멱등)")
+    p.add_argument("--and-discard", action="store_true", help="publish 종료 0일 때만 이어서 discard한다")
     p = sub.add_parser("discard")
     p.add_argument("wt")
     p = sub.add_parser("find-plan")
@@ -1111,9 +1191,23 @@ def main(argv: list[str] | None = None) -> int:
         elif args.cmd == "preflight":
             result = preflight(ctx, args.branch, args.search, args.jira)
         elif args.cmd == "stage":
+            if args.then_summary and (args.json or getattr(args, "verbose", False)):
+                raise UsageError("--then-summary는 --json·--verbose와 함께 쓸 수 없다 (stdout이 마크다운이다).")
             result, code = stage(ctx, Path(args.plan), Path(args.wt), args.branch, args.dry_run)
             if not getattr(args, "verbose", False):
                 result = _brief_stage(result, _job_of(Path(args.wt), ctx)[0])
+            if args.then_summary and code in (OK, 3):
+                try:
+                    shown = summary(ctx, Path(args.wt), True)["_markdown"]
+                except Exception as exc:    # stage는 성공했다: stage.json·state.json은 남아 있다
+                    reason = str(exc) or type(exc).__name__
+                    print(f"stage 성공, summary 실패: {reason} — db_pr summary {args.wt} --format markdown만 다시 부른다",
+                          file=sys.stderr)
+                    result["summary_error"] = reason
+                    code = USAGE
+                else:
+                    print(shown, end="")
+                    return code
         elif args.cmd == "summary":
             if args.format == "markdown" and args.json:
                 raise UsageError("--format markdown은 --json과 함께 쓸 수 없다.")
@@ -1122,7 +1216,17 @@ def main(argv: list[str] | None = None) -> int:
                 print(result["_markdown"], end="")
                 return code
         elif args.cmd == "publish":
-            result, code = publish(ctx, Path(args.wt), args.branch, args.lease, args.approved)
+            result, code = publish(ctx, Path(args.wt), args.branch, args.lease, args.approved, args.commit)
+            if args.and_discard:
+                if code == OK:
+                    try:
+                        result["discard"] = discard(ctx, Path(args.wt))
+                    except Exception as exc:    # PR은 이미 만들어졌다: publish를 다시 하지 않는다
+                        result["discard"] = {"discarded": False, "error": str(exc) or type(exc).__name__,
+                                             "next": f"PR은 만들어졌다. publish를 다시 하지 말고 db_pr discard {args.wt}만 다시 한다"}
+                        code = USAGE
+                else:
+                    result["discard"] = {"discarded": False, "skipped": "publish 실패 — worktree·lock 보존"}
         elif args.cmd == "discard":
             result = discard(ctx, Path(args.wt))
         else:

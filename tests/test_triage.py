@@ -283,7 +283,7 @@ def test_skill_md_is_within_8kb_and_drives_triage():
     skill = REPO / "plugin" / "skills" / "telephony-triage" / "SKILL.md"
     text = skill.read_text(encoding="utf-8")
     assert len(text.encode("utf-8")) <= 8192
-    for needle in ("triage.py run", "needs_input", "--answer", "S-3", "write-flow.md", "commit -F",
+    for needle in ("triage.py run", "needs_input", "--answer", "S-3", "write-flow.md", "--commit",
                    "steps-pasted.txt", "--dry-run --jira-file", "analyzer.skill", "계획 형식 오류",
                    "must_show", "triage.py explore"):
         assert needle in text, needle

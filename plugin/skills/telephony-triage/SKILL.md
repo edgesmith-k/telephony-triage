@@ -83,6 +83,6 @@ description: Android Telephony 이슈(data·call·network·sim·sms·ims)를 Jir
 
 ### Step 8. 적용 → 확인 → 커밋 → PR
 
-`write-flow.md` 그대로: `db_pr stage` → `db_pr summary <wt> --format markdown` 확인 화면(생략 불가) → 승인 메시지를
-파일로 저장, `git -C <wt> add -A`·`commit -F <파일>`은 별도 Bash 호출 → `publish` → `discard`.
+`write-flow.md` 그대로: `db_pr stage --then-summary`(출력 = 확인 화면, 생략 불가) → 승인 → `db_pr publish --commit --and-discard`
+(직접 `git commit` 없음). 취소·dry-run만 `discard`.
 `fixed`는 `verify-fix` 통과로만 기록한다.

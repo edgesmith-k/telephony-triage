@@ -245,14 +245,14 @@ Android 버전과 브랜치마다 소스 트리가 다르므로 **분석할 때�
      - 같음(내가 마지막으로 올린 상태) → **plan으로 브랜치 갱신**: 이 작업 계획을 최신 main 위에 다시 적용하고 `--lease <원격 SHA>`로 push한다 (`sync-pr`와 같은 경로).
      - 다르거나 계획에 PR 기록이 없음(다른 사람이 push했거나 다른 PC에서 만든 브랜치) → 원격 변경 요약을 보여주고 **덮어쓰기**(원격 변경은 사라진다. 필요하면 먼저 계획에 반영) / **중단**을 묻는다. v1은 원격 변경을 자동으로 합치지 않는다 (`99-deferred.md`).
    - 원격에 없음 → 새 브랜치로 진행한다 (`--lease new`).
-3. **적용**: `db_pr stage <plan.json> --wt <wt> --branch issue/<JIRA-KEY>` (`--dry-run`이면 `--dry-run`)
+3. **적용**: `db_pr stage <plan.json> --wt <wt> --branch issue/<JIRA-KEY> --then-summary` (`--dry-run`이면 `--dry-run`). 종료 코드 0·3이면 stdout이 곧 5번 확인 화면(마크다운)이다 (`contracts.md §3.2` `stage`).
    - **drift 검사**: 계획의 `base_sha`와 지금 `origin/<base>`가 다르면 계획 대상이 그사이 main에서 바뀌었는지 본다. drift가 있으면 `stage`는 적용하지 않고 종료 코드 1과 목록을 낸다. 항목마다 **계획 값(`plan_value`)·계획 당시 main 값·현재 main 값**을 함께 보이고 **계획 값 유지 / main 값 유지(op 삭제) / 직접 입력**을 묻고, 계획에 반영하고 `base_sha`를 바꾼 뒤 3번을 다시 한다 (`contracts.md §작업 계획` drift).
    - `git worktree add --no-track -B tt/issue/<JIRA-KEY> <wt> <기준 SHA>` (기준 SHA = `stage`가 `state.json`에 적은 이때의 `origin/<base_branch>`. 도구 브랜치. 사용자 로컬 `issue/<JIRA-KEY>`와 별개)
    - `db_add apply --db <wt>`: 새 원인/유형의 임시 ID를 **최신 main 기준 다음 빈 번호로 할당**하고 계획 안의 참조를 모두 치환한다. 템플릿으로 파일을 만들고 type.md를 엔티티 단위로 다시 쓴다. Jira 기록, fixture(번호는 최신 main 기준 다음 빈 번호), 피드백, parser-rules 항목, 이번 PR에 넣을 pending 피드백(`source: analyze`일 때만)을 쓴다.
    - `mask_pii`로 변경분을 마스킹한다.
    - `check-ids`, Jira 중복을 op별로 검사한다: `append`·`unresolved`는 같은 Jira가 이미 main에 있으면 중단하고 기존 분류를 보여준 뒤 유지/재분류를 묻는다. `reclassify`는 그 Jira가 main에 **있어야** 진행한다(없으면 거부). 1번에서 같은 Jira의 **열린 PR**이 발견됐으면 링크를 보여주고 계속할지 묻는다.
 4. **생성·검사** (`db_pr stage`가 이어서, 모두 `--db <wt>`): `db_build --write`로 생성 파일(README, 카테고리 README, STATS, CHANGELOG)을 재생성하고, `db_lint --changed origin/<base>`, `mask_pii --check --changed origin/<base>`, `db_regress --all`, **`db_verify rules --plan <plan>`(R1~R6)** 을 돌린다.
-5. **push 전 사용자 확인 (생략 불가)**: `db_pr summary <wt> --format markdown`의 렌더 결과를 요약·재서술 없이 한 번에 보여주고 승인을 받는다. 아래는 화면 구성 예(정확한 문구는 렌더 결과)다.
+5. **push 전 사용자 확인 (생략 불가)**: 3번 `stage --then-summary`의 출력(= `db_pr summary <wt> --format markdown`의 렌더 결과, 종료 코드 3도 이 화면이 나온 정상 경로)을 요약·재서술 없이 한 번에 보여주고 승인을 받는다. 아래는 화면 구성 예(정확한 문구는 렌더 결과)다.
 
    ```
    ## push 전 확인: ABC-12345 → DATA-001-02 Roaming disabled
@@ -297,17 +297,17 @@ Android 버전과 브랜치마다 소스 트리가 다르므로 **분석할 때�
 
    선택지:
    - **승인** → 6번으로 진행한다.
-   - **수정 요청** → 사용자가 말한 부분을 **작업 계획에 반영**하고, 3번부터 다시 한다 (`db_pr stage`가 `<wt>` 안에서 `checkout -f -B tt/<br> <기준 SHA>` → `reset --hard <기준 SHA>` → `clean -fd`로 이전 적용분을 모두 지운 뒤 다시 적용. `contracts.md §3.2` `db_pr.py` 세부). **이 확인 화면을 다시 보여준다.** (worktree는 이 작업 전용이므로 되돌려도 사용자 파일에는 영향이 없다.)
+   - **수정 요청** → 사용자가 말한 부분을 **작업 계획에 반영**하고, `stage --then-summary`(3번)부터 다시 한다 (`db_pr stage`가 `<wt>` 안에서 `checkout -f -B tt/<br> <기준 SHA>` → `reset --hard <기준 SHA>` → `clean -fd`로 이전 적용분을 모두 지운 뒤 다시 적용. `contracts.md §3.2` `db_pr.py` 세부). **이 확인 화면을 다시 보여준다.** (worktree는 이 작업 전용이므로 되돌려도 사용자 파일에는 영향이 없다.)
    - **전체 diff 보기** → 전체 diff를 보여주고 다시 묻는다.
    - **취소** → 커밋하지 않는다. `db_pr discard <wt>`로 worktree와 도구 브랜치를 지우고 lock을 푼다. 작업 계획은 남긴다. 피드백은 `03-issue-db.md §5.4 (3)` 조건을 만족할 때만 pending으로 옮긴다.
    - `--dry-run`이면 여기서 끝내고 `db_pr discard <wt>`로 정리한다(lock 해제). pending 피드백은 만들지 않는다. gh 인증이 없으면 확인 화면에 "push 불가: gh 인증 없음"을 표시한다.
-6. **커밋**: 확인받은 커밋 메시지를 파일 쓰기 도구로 worktree 밖 `<work_dir>/<작업 키>/commit-message.txt`에 그대로 저장하고(메시지를 shell 명령·heredoc에 넣지 않는다), `git -C <wt> add -A`와 `git -C <wt> commit -F <메시지 파일>`을 **별도 Bash 호출**로 실행한다. 커밋은 정확히 하나만 만든다 (`.cache/`는 `.gitignore`로 제외). 커밋 메시지에 trailer(Co-Authored-By·Signed-off-by 등)를 덧붙이지 않는다 — publish가 승인 메시지와 대조해 거부한다. 한 명령으로 묶지 않는 이유는 Claude hook이 `git commit` 호출을 확실히 보게 하기 위해서다. 진짜 강제는 git pre-commit hook이다. hook이 실패하면 원인을 보여주고 5번으로 돌아간다.
-7. **push + PR**: `db_pr publish <wt> --branch issue/<JIRA-KEY> --lease <new | 2번의 원격 SHA> --approved <summary의 approved_hash>`
+6. **커밋**: 스킬이 직접 커밋하지 않는다. 7번 `publish --commit`이 한다 — 승인 해시 일치, `core.hooksPath`(`.githooks`), guard 프로필 검사(마스킹·`.cache/`·생성 파일), 확인받은 커밋 메시지를 worktree 밖 임시 파일로 `git commit -F`(셸을 거치지 않는다, 메시지는 데이터다), git pre-commit hook 실행. 커밋은 정확히 하나만 만든다 (`.cache/`는 `.gitignore`로 제외). 커밋 메시지에 trailer(Co-Authored-By·Signed-off-by 등)를 덧붙일 수 없다 — publish가 승인 메시지와 대조해 거부한다. 진짜 강제는 git pre-commit hook이다. hook이 실패하면(종료 코드 1, `commit.committed: false`) 원인을 보여주고 5번으로 돌아간다 (`contracts.md §3.2` `publish --commit`).
+7. **커밋 + push + PR**: `db_pr publish <wt> --branch issue/<JIRA-KEY> --lease <new | 2번의 원격 SHA> --approved <확인 화면의 approved_hash> --commit --and-discard`
    - HEAD 트리가 승인 해시와 다르거나, 커밋이 둘 이상이거나, 커밋 메시지가 확인받은 것과 다르면 거부된다 → 5번으로 돌아간다.
    - `TT_PUBLISH_TOKEN=<approved_hash> git push --force-with-lease=refs/heads/issue/<JIRA-KEY>:<sha> origin HEAD:refs/heads/issue/<JIRA-KEY>`로 올리고(`.githooks/pre-push`가 토큰과 대상 브랜치를 검사한다, `08-safety.md §9`), `GH_HOST=<ghe_host> gh pr create`(본문: 분석 요약, Jira 키, 자동 검사 결과, 검증 결과, 수정 상태 판단. **Jira 원문은 넣지 않고** 구조화 필드와 확인받은 `note`만, 모든 텍스트는 마스킹을 거친다(`08-safety.md §8.1`). 리뷰어는 `02-config.md §5.3` 리뷰어 계산)를 실행한다. 이미 PR이 있으면(브랜치 갱신) `gh pr edit`으로 본문을 갱신한다.
    - 계획에 `pr: {number, branch, head_sha}`와 `base_sha`를 기록하고, 포함된 pending 피드백 원본을 `<work_dir>/<JIRA-KEY>/included_pending/`으로 옮긴다 (`sync-pr` 재적용 때 다시 포함).
 8. PR 링크를 보여준다.
-9. **정리**: `db_pr discard <wt>`로 worktree, **도구 브랜치** `tt/issue/<JIRA-KEY>`, `state.json`을 지우고 lock을 푼다. 작업 계획은 PR 번호와 함께 남긴다 (`sync-pr`가 이 계획을 재적용한다). 머지는 CODEOWNERS 리뷰어가 한다.
+9. **정리**: `--and-discard`가 publish 성공(종료 코드 0) 뒤 이어서 `discard`한다(취소·`--dry-run`·discard 실패 때만 단독 `db_pr discard <wt>`; publish 0·discard 실패는 종료 코드 2이고 publish를 다시 하지 않는다). discard가 worktree, **도구 브랜치** `tt/issue/<JIRA-KEY>`, `state.json`을 지우고 lock을 푼다. 작업 계획은 PR 번호와 함께 남긴다 (`sync-pr`가 이 계획을 재적용한다). 머지는 CODEOWNERS 리뷰어가 한다.
 
 - 확인 이후 파일이 하나라도 바뀌면(자동 수정 포함) 승인은 무효이고, 5번 확인을 다시 받는다 (`publish`의 승인 해시 검사가 강제한다).
 
@@ -321,11 +321,10 @@ Android 버전과 브랜치마다 소스 트리가 다르므로 **분석할 때�
 |---|---|---|
 | 1 | `db_pr lock acquire <작업 키>` → `db_pr snapshot --job <작업 키>` → `config.py check --db <work_dir>/_snapshot` (쓰기 가능, gh 인증) → `db_pr preflight --branch <br> --search <원인 ID 또는 JIRA-KEY>` | Step 0·1, 8-1 |
 | 2 | 로컬·원격 브랜치 검사와 선택 | 8-2 |
-| 3 | `db_pr stage <plan> --wt <work_dir>/<작업 키>/wt --branch <br>` (drift가 있으면 결정 반영 후 다시) | 8-3, 8-4 |
-| 4 | `db_pr summary --format markdown` → 확인 화면 (승인 / 수정 요청 / 전체 diff / 취소) | 8-5 |
-| 5 | `git add -A`, `git commit` (별도 Bash 호출) | 8-6 |
-| 6 | `db_pr publish --lease <sha\|new> --approved <hash>` | 8-7, 8-8 |
-| 7 | `db_pr discard` (lock 해제) | 8-9 |
+| 3 | `db_pr stage <plan> --wt <work_dir>/<작업 키>/wt --branch <br> --then-summary` (drift가 있으면 결정 반영 후 다시) | 8-3, 8-4 |
+| 4 | 확인 화면 = 3의 출력 그대로 (승인 / 수정 요청 / 전체 diff / 취소) | 8-5 |
+| 5 | `db_pr publish --lease <sha\|new> --approved <hash> --commit --and-discard` (커밋·push·PR·정리) | 8-6, 8-7, 8-8, 8-9 |
+| 6 | 취소·dry-run·discard 실패 때만 단독 `db_pr discard` (lock 해제) | 8-9 |
 
 - 브랜치 이름은 `contracts.md §브랜치`를 따른다.
 - 계획을 만들 때 `schema_version`과 `base_sha`(그때의 스냅샷 SHA)를 넣는다 (`contracts.md §작업 계획`).
