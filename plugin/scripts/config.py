@@ -512,7 +512,7 @@ def _doctor_rows(args, defaults: dict) -> list[dict]:
             return
         days = int(age.total_seconds() // 86400)
         if age > timedelta(days=SNAPSHOT_STALE_DAYS):
-            rows.append(_row("snapshot", "warn", f"{days}일 전 ({sha})", "/telephony-triage:sync"))
+            rows.append(_row("snapshot", "warn", f"{days}일 전 ({sha}, {SNAPSHOT_STALE_DAYS}일 초과)", "/telephony-triage:sync"))
         else:
             rows.append(_row("snapshot", "ok", f"{days}일 전 ({sha})"))
     if not ok_cfg:
