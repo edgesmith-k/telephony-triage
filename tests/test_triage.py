@@ -721,3 +721,251 @@ def test_read_only_mode_shows_update_hint_in_analysis_and_report():
     assert len((job / "analysis.json").read_bytes()) <= 4096
     assert "- 읽기 전용: " in (job / "report.md").read_text(encoding="utf-8")
     assert "플러그인을 업데이트" in (job / "report.md").read_text(encoding="utf-8")
+
+
+# -- W4 질문 수 줄이기: 코드 경로 자동 선택·잔여물 알림 (07-workflow.md §Step 0·§Step 2-1, 02-config.md, contracts.md) -------------
+# 표의 각 행은 문서 출처(`07 §…`, `02 §…`, `contracts §…`)를 적는다.
+
+SRC = REPO / "tests" / "mocks" / "src"
+W4_KEY = "MOCK-1001"      # Jira Android 16
+W4_DOCS = REPO / "docs" / "design"
+
+
+def _profile(name: str, version: str, tree: Path | str | None = None) -> dict:
+    tree = str(tree or SRC / f"android{version}")
+    return {"name": name, "android_version": version, "roots": {"aosp": tree, "vendor_ril": tree}}
+
+
+def _w4_config(ws: Workspace, **extra) -> None:
+    path = ws.home / "config.yaml"
+    cfg = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    cfg.update(extra)
+    path.write_text(yaml.safe_dump(cfg, allow_unicode=True, sort_keys=False), encoding="utf-8", newline="\n")
+
+
+def _w4_run(ws: Workspace, *extra, jira: Path | None = None) -> dict:
+    mode = [] if "--analysis-only" in extra else ["--dry-run"]
+    args = ["run", W4_KEY, *mode, "--jira-file", jira or MOCK_JIRA / f"{W4_KEY}.yaml", "--logs", DATA_LOG, *extra]
+    return ws.json("triage.py", args)
+
+
+def _w4_trace(ws: Workspace) -> list[dict]:
+    path = ws.job_dir(W4_KEY) / "trace.jsonl"
+    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+
+
+def _suggest_calls(ws: Workspace) -> int:
+    return sum(1 for r in _w4_trace(ws) if r.get("script") == "code_roots.py" and (r.get("args") or [""])[0] == "suggest")
+
+
+def _w4_state(ws: Workspace) -> dict:
+    return json.loads((ws.job_dir(W4_KEY) / "triage-state.json").read_text(encoding="utf-8"))
+
+
+def _no_version_jira(tmp_path: Path) -> Path:
+    text = (MOCK_JIRA / f"{W4_KEY}.yaml").read_text(encoding="utf-8")
+    lines = [line for line in text.splitlines() if "# Android 버전" not in line]
+    out = tmp_path / "no-version.yaml"
+    out.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return out
+
+
+def _asked_code(done: dict) -> None:
+    assert done["status"] == "needs_input" and done["needs_input"]["kind"] == "code", done
+
+
+def test_code_auto_select_table():
+    """07 §Step 2-1 3번(자동 선택 조건) · 02-config code.auto_select(우선순위 사용자 config > site-defaults > true)."""
+    p16, p16b, p17 = _profile("android16-main", "16"), _profile("android16-alt", "16"), _profile("android17-dev", "17")
+    site_false = plugin_root("w4-site-false", code={"auto_select": False})
+    rows = [  # (이름, 프로필, 사용자 config code, 플러그인 루트, 기대: 자동 선택 여부)
+        ("일치 0개", [p17], None, None, False),
+        ("일치 1개", [p16, p17], None, None, True),
+        ("일치 2개 이상", [p16, p16b, p17], None, None, False),
+        ("user auto_select false", [p16], {"auto_select": False}, None, False),
+        ("site-defaults auto_select false", [p16], None, site_false, False),
+        ("user true가 site false보다 우선", [p16], {"auto_select": True}, site_false, True),
+    ]
+    for name, profiles, user_code, root, expect_auto in rows:
+        ws = Workspace(root=root) if root else Workspace()
+        _w4_config(ws, code_profiles=profiles, **({"code": user_code} if user_code is not None else {}))
+        saved = yaml.safe_load((ws.home / "config.yaml").read_text(encoding="utf-8"))
+        assert ("code" in saved) == (user_code is not None), name     # setup이 site-defaults의 code를 사용자 config에 복사하지 않는다
+        done = _w4_run(ws)
+        if expect_auto:
+            assert done["status"] == "ok" and done["code"]["auto"] is True and done["code"]["roots"] == "android16-main", name
+            report = (ws.job_dir(W4_KEY) / "report.md").read_text(encoding="utf-8")
+            assert "(자동 선택: code.auto_select)" in report and "분석 트리: android16-main" in report, name
+            assert _w4_state(ws)["code_auto"] == "android16-main" and "code" not in _w4_state(ws)["answers"], name
+            assert not [w for w in done.get("warnings", []) if "code.auto_select" in w], name     # 키 없음·유효 값은 경고 없음
+        else:
+            _asked_code(done)
+            assert "잘못돼" not in done["needs_input"]["question"], name
+            assert "code_auto" not in _w4_state(ws), name
+            assert any(o["value"] == "skip" for o in done["needs_input"]["options"]), name
+        ws.json("triage.py", ["release", W4_KEY])
+
+
+def test_invalid_auto_select_values_ask_and_warn():
+    """02 §4 code.auto_select: 유효 값은 불리언뿐. 문자열·0/1·null은 explore.when처럼 warnings(ok 출력)에 남기고 묻는다(질문 문구에도 표시)."""
+    for value in ("false", "true", 0, 1, None):
+        ws = Workspace()
+        _w4_config(ws, code_profiles=[_profile("android16-main", "16")], code={"auto_select": value})
+        asked = _w4_run(ws)
+        _asked_code(asked)
+        assert asked["needs_input"]["question"].endswith("(code.auto_select 값이 잘못돼 묻기로 본다)"), value
+        done = _w4_run(ws, "--answer", "code=skip")      # 답이 있어도 점검해 경고가 ok 출력에 남는다
+        assert done["status"] == "ok" and f"code.auto_select 값이 잘못됐다({value}). 묻기로 본다" in done["warnings"], value
+        ws.json("triage.py", ["release", W4_KEY])
+
+
+def test_code_flag_and_answer_win_over_auto_select():
+    """07 §Step 2-1 2번·3번: --code·사용자 답이 자동 선택보다 우선, 자동 선택 표시 없음."""
+    ws = Workspace()
+    _w4_config(ws, code_profiles=[_profile("android16-main", "16")])
+    skipped = _w4_run(ws, "--code", "skip")
+    assert skipped["status"] == "ok" and skipped["code"] == {"skipped": True} and "code_auto" not in _w4_state(ws)
+    answered = _w4_run(ws, "--answer", f"code={SRC / 'android16'}")
+    assert answered["status"] == "ok" and "auto" not in answered["code"] and "code_auto" not in _w4_state(ws)
+    assert "자동 선택" not in (ws.job_dir(W4_KEY) / "report.md").read_text(encoding="utf-8")
+    ws.json("triage.py", ["release", W4_KEY])
+
+
+def test_code_without_jira_version_still_asks(tmp_path):
+    """07 §Step 2-1 3번: Jira 버전이 없으면(대체 출처는 쓰지 않는다) 자동 선택하지 않는다."""
+    ws = Workspace()
+    _w4_config(ws, code_profiles=[_profile("android16-main", "16")])
+    done = _w4_run(ws, jira=_no_version_jira(tmp_path))
+    _asked_code(done)
+    ws.json("triage.py", ["release", W4_KEY])
+
+
+def test_code_recent_only_match_is_not_auto_selected():
+    """07 §Step 2-1 3번: 최근 사용 경로만 일치하면 자동 선택하지 않는다."""
+    ws = Workspace()
+    _w4_config(ws, code_profiles=[_profile("android17-dev", "17")],
+               recent_code_roots=[{"roots": {"aosp": str(SRC / "android16")}, "used_on": "2026-09-25"}])
+    _asked_code(_w4_run(ws))
+    ws.json("triage.py", ["release", W4_KEY])
+
+
+def test_invalid_auto_path_asks_full_choices_and_records_nothing():
+    """07 §Step 2-1 3번: 자동 선택 경로가 무효면 전체 선택지로 묻고 `code_auto`를 기록하지 않는다(재실행도 다시 묻는다)."""
+    ws = Workspace()
+    gone = tmp("tt-gone-") / "missing"
+    _w4_config(ws, code_profiles=[_profile("android16-main", "16", gone), _profile("android17-dev", "17")])
+    for _ in range(2):
+        done = _w4_run(ws)
+        _asked_code(done)
+        values = [o["value"] for o in done["needs_input"]["options"]]
+        assert "android16-main" in values and "android17-dev" in values and "skip" in values
+        assert any(v.startswith("<경로") for v in values) and "유효하지 않다" in done["needs_input"]["question"]
+        assert "code_auto" not in _w4_state(ws)
+    ws.json("triage.py", ["release", W4_KEY])
+
+
+def test_auto_selected_tree_version_mismatch_uses_code_confirm():
+    """07 §Step 2-1 4번: 트리 버전이 다르면 기존 `code_confirm`(자동 선택해도 같다)."""
+    ws = Workspace()
+    _w4_config(ws, code_profiles=[_profile("android16-main", "16", SRC / "android17")])
+    done = _w4_run(ws)
+    assert done["status"] == "needs_input" and done["needs_input"]["kind"] == "code_confirm", done
+    again = _w4_run(ws, "--answer", "code_confirm=yes")
+    assert again["status"] == "ok" and again["code"]["auto"] is True
+    ws.json("triage.py", ["release", W4_KEY])
+
+
+def test_auto_select_is_idempotent_within_a_session_and_rejudged_for_a_new_owner():
+    """07 §Step 2-1 3번(code_auto): 같은 owner 재실행은 다시 고르지 않고 request_hash 동일, 새 owner는 다시 판단한다."""
+    ws = Workspace()
+    _w4_config(ws, code_profiles=[_profile("android16-main", "16")])
+    first = _w4_run(ws)
+    calls = _suggest_calls(ws)
+    assert first["code"]["auto"] is True and calls == 1
+    second = _w4_run(ws)
+    assert second["request_hash"] == first["request_hash"] and second["code"]["auto"] is True
+    assert _suggest_calls(ws) == calls, "재실행은 다시 고르지 않고 code_auto를 쓴다"
+    ws.json("triage.py", ["release", W4_KEY])
+    _w4_config(ws, code_profiles=[_profile("android16-main", "16"), _profile("android16-alt", "16")])
+    _asked_code(_w4_run(ws))        # 새 owner: 상태가 초기화돼 일치 2개를 다시 판단한다
+    assert "code_auto" not in _w4_state(ws)
+    ws.json("triage.py", ["release", W4_KEY])
+
+
+def _leftover(ws: Workspace, job: str = "MOCK-8800") -> Path:
+    wt = ws.wt(job)
+    wt.parent.mkdir(parents=True, exist_ok=True)
+    git(ws.clone, "worktree", "add", "--no-track", "-B", f"tt/{job}", str(wt), "origin/main")
+    return wt
+
+
+def test_other_job_leftovers_are_noted_never_asked_or_deleted():
+    """07 §Step 0 cleanup 항목: 묻지 않고 지우지 않으며 notes로 알린다(`cleanup=yes`도 무시), `cleanup_targets`가 있으면 매번 알린다."""
+    ws = Workspace()
+    wt = _leftover(ws)
+    before = _clone_state(ws)
+    branches = git(ws.clone, "branch", "--list", "tt/*")
+    note = "잔여 worktree·도구 브랜치 2개(붙여넣은 스텝 원문이 남아 있을 수 있음) — `/telephony-triage:sync`에서 정리"
+    first = _w4_run(ws)                                   # 코드 질문 앞에서 멈춰도 cleanup은 묻지 않는다
+    _asked_code(first)
+    assert _w4_state(ws)["cleanup_targets"] == 2 and _w4_state(ws)["cleanup_done"] is True   # worktree 1 + 도구 브랜치 1
+    done = _w4_run(ws, "--answer", "code=skip", "--answer", "cleanup=yes")     # NI 뒤 ok 출력에도 note가 있다
+    assert done["status"] == "ok" and done["notes"] == [note]
+    again = _w4_run(ws, "--answer", "code=skip")           # cleanup_done이 있어도 매 실행 note
+    assert again["notes"] == [note]
+    assert wt.is_dir() and git(ws.clone, "branch", "--list", "tt/*") == branches, "아무것도 지우지 않는다"
+    assert not [r for r in _w4_trace(ws) if r.get("script") == "db_pr.py" and "--yes" in (r.get("args") or [])]
+    assert _clone_state(ws)[:2] == before[:2] and "tt/MOCK-8800" in git(ws.clone, "branch", "--list")
+    ws.json("triage.py", ["release", W4_KEY])
+
+
+def test_no_leftovers_means_no_note_and_analysis_only_does_not_look():
+    """07 §Step 0·§분석 전용: 대상이 없으면 note 없음, 분석 전용은 cleanup을 보지도 알리지도 않는다(0-cleanup trace 없음)."""
+    ws = Workspace()
+    done = _w4_run(ws, "--answer", "code=skip")
+    assert "notes" not in done and "cleanup_targets" not in _w4_state(ws)
+    ws.json("triage.py", ["release", W4_KEY])
+    ws2 = Workspace()
+    _leftover(ws2)
+    only = _w4_run(ws2, "--analysis-only", "--answer", "code=skip")
+    assert only["status"] == "ok" and "notes" not in only
+    assert not [r for r in _w4_trace(ws2) if r.get("step") == "0-cleanup"]
+
+
+def test_step8_current_key_tool_branch_still_asks_and_stops_when_declined():
+    """07 §Step 8 2번(그대로): 현재 키 `tt/issue/<KEY>`만 있으면 삭제를 묻고 안 지우면 중단 — 질문은 스킬이 preflight 결과로 한다
+    (`tool_branch`, triage.py kind 아님). analyze Step 0은 이 브랜치도 `cleanup --dry-run` 목록으로 알리기만 한다."""
+    ws = Workspace()
+    git(ws.clone, "branch", f"tt/issue/{W4_KEY}", "origin/main")
+    done = _w4_run(ws, "--answer", "code=skip")
+    assert done["status"] == "ok" and len(done["notes"]) == 1 and "브랜치 1개" in done["notes"][0]   # 알리기만 한다
+    assert git(ws.clone, "branch", "--list", f"tt/issue/{W4_KEY}"), "지우지 않는다"
+    pre = ws.db_pr("preflight", "--branch", f"issue/{W4_KEY}", "--search", W4_KEY, "--jira", W4_KEY)
+    assert pre["tool_branch"]["exists"] is True and not pre["tool_branch"].get("worktree")
+    step8 = (W4_DOCS / "07-workflow.md").read_text(encoding="utf-8")
+    assert "이전 작업의 잔여물이다. 삭제할지 묻는다 (`db_pr cleanup`). 삭제하지 않으면 중단한다." in step8
+    flow = (REPO / "plugin/skills/telephony-triage/reference/write-flow.md").read_text(encoding="utf-8")
+    assert "이전 작업 잔여물. 삭제할지 묻는다" in flow and "거절하면 중단" in flow
+    ws.json("triage.py", ["release", W4_KEY])
+
+
+def test_w4_docs_match_the_implementation():
+    """문서 문구 대조: 07 Step 0·2-1·5-1/5-2, 02-config 우선순위, contracts kind 목록·code.auto·notes, sync.md, SKILL 합친 질문."""
+    wf = (W4_DOCS / "07-workflow.md").read_text(encoding="utf-8")
+    step0 = wf[wf.index("### Step 0."):wf.index("### Step 1.")]
+    assert "/telephony-triage:sync" in step0 and "`--yes`를 부르지 않고" in step0 and "cleanup_targets" in step0
+    step21 = wf[wf.index("### Step 2-1."):wf.index("### Step 3.")]
+    assert "code.auto_select" in step21 and "정확히 1개" in step21 and "(자동 선택: code.auto_select)" in step21
+    step5 = wf[wf.index("### Step 5-1."):wf.index("### Step 6.")]
+    assert "심층 분석과 탐색 분석을 할까요?" in step5 and "선택지 4개" in step5 and "선택지 2개" in step5
+    cfg = (W4_DOCS / "02-config.md").read_text(encoding="utf-8")
+    assert "사용자 config > `site-defaults.yaml` > 내장 기본값 `true`" in cfg
+    contracts = (W4_DOCS / "contracts.md").read_text(encoding="utf-8")
+    assert "(kind: `lock`·`plan`·`jira`" in contracts and "`cleanup`·`plan`" not in contracts
+    assert "auto?(`true`: `code.auto_select`" in contracts and "cleanup_targets" in contracts and "notes?(" in contracts
+    sync = (REPO / "plugin/commands/sync.md").read_text(encoding="utf-8")
+    assert "analyze가 알린 잔여물" in sync
+    skill = (REPO / "plugin/skills/telephony-triage/SKILL.md").read_text(encoding="utf-8")
+    assert "심층 분석과 탐색 분석을 할까요?" in skill and "`notes`는 항상 알린다" in skill and "`--code`로 변경 가능" in skill
+    doc = (REPO / "plugin/scripts/triage.py").read_text(encoding="utf-8").split('"""')[1]
+    assert "`cleanup`(yes|no)" not in doc and "`code`(프로필|경로|skip)" in doc

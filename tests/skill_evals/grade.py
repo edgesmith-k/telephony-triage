@@ -55,6 +55,19 @@ def _read(path: Path) -> str:
     return path.read_text(encoding="utf-8") if path.is_file() else ""
 
 
+_ASK = re.compile(r"할까요|실행할까|진행할까|할지|하시겠|할래요")
+
+
+def is_question(text: str, topic: str) -> bool:
+    """사용자에게 묻는 문장인가: 물음표로 끝나는 문장(줄·마침표 단위) 안에 topic 정규식과 질문 어구가 함께 있다.
+    '…할지 물으면 아니오로 답한다' 같은 서술·요약은 물음표로 끝나지 않으므로 질문이 아니다."""
+    for chunk in re.split(r"(?<=[?？])", text):
+        sent = re.split(r"[.!\n]", chunk.rstrip("?？"))[-1] if chunk.rstrip().endswith(("?", "？")) else ""
+        if sent and re.search(topic, sent) and _ASK.search(sent):
+            return True
+    return False
+
+
 class Ctx:
     def __init__(self, env_dir: Path, run_dir: Path):
         self.env = json.loads((env_dir / "env.json").read_text(encoding="utf-8"))
@@ -195,6 +208,16 @@ class Ctx:
         asked = next((i for i, e in enumerate(seq) if e["kind"] == "text" and "탐색 분석" in e["text"]
                       and re.search(r"할까요|실행할까|진행할까|할지", e["text"]) and (explored is None or i < explored)), None)
         read = next((i for i, e in enumerate(seq) if e["kind"] == "tool" and self._opens(e["name"], e["input"], (filename,))), None)
+        if explored is not None:
+            # 같은 Bash 호출 안에서 explore 뒤에 filename을 읽으면 explore 뒤 열람(순번 explored+0.5). 앞이면 인정하지 않는다.
+            cmd = _strip_heredocs(str(seq[explored]["input"].get("command", "")))
+            m = re.search(r"triage\.py[\"']?\s+explore\b", cmd)
+            same = re.search(r"\b(cat|head|tail|less|sed|awk|jq|grep)\b[^\n;&|]*" + re.escape(filename), cmd[m.end():])
+            before = re.search(r"\b(cat|head|tail|less|sed|awk|jq|grep)\b[^\n;&|]*" + re.escape(filename), cmd[:m.start()])
+            if before and (read is None or read >= explored):
+                read = explored
+            elif same and (read is None or read > explored):
+                read = explored + 0.5
         return explored, asked, read
 
     _RAW_READ_CMD = re.compile(r"(?<![\w./-])(cat|head|less|strings|unzip)\b([^|;&\n]*)")
@@ -641,8 +664,8 @@ def checks(eid: int, ctx: Ctx) -> list:
         """탐색 분석은 timeline.md만 읽는다: 원본 중간 산출물·로그 원문을 열지 않았다."""
         # match.json은 계획 feedback.suggested용으로 일부 읽는 것이 정상 절차(write-flow.md)라 뺀다
         bad = ctx.opened("events.json", "jira_raw.json", "events-full.json", log)
-        seen = "timeline.md" in ctx.opened("timeline.md")
         order = ctx.explore_order()
+        seen = "timeline.md" in ctx.opened("timeline.md") or (order is not None and order[2] is not None)
         after, note = True, ""
         if order is not None:
             explored, _, read = order
@@ -836,7 +859,7 @@ def checks_w4(eid, ctx):
         texts = ctx.texts()
         if texts is None:
             return None
-        return [t for t in texts if re.search(topic, t) and re.search(r"할까요|실행할까|진행할까|할지", t)]
+        return [t for t in texts if is_question(t, topic)]
 
     if eid == 55:
         def code_used():

@@ -779,3 +779,36 @@ def test_w4_eval_checks_cover_assertions_and_never_pass_unread(tmp_path):
     (env / "work" / "MOCK-1001" / "trace.jsonl").write_text(
         '{"step": "needs_input", "kind": "code"}\n{"step": "needs_input", "kind": "cleanup"}\n', encoding="utf-8")
     assert ctx.needs_input("code") == ["code"] and ctx.needs_input() == ["code", "cleanup"]
+
+
+def _ctx_with_events(tmp_path, events):
+    import grade as grader
+    env, run = tmp_path / "env", tmp_path / "run"
+    env.mkdir(); run.mkdir(); (env / "work").mkdir()
+    (env / "env.json").write_text(json.dumps({"remote": str(env), "work_dir": str(env / "work")}), encoding="utf-8")
+    (env / "before.json").write_text("{}", encoding="utf-8")
+    rows = []
+    for i, e in enumerate(events):
+        c = {"type": "text", "text": e} if isinstance(e, str) else {"type": "tool_use", "id": f"t{i}", "name": "Bash", "input": {"command": e[0]}}
+        rows.append(json.dumps({"type": "assistant", "message": {"content": [c]}}))
+    (run / "events.jsonl").write_text("\n".join(rows), encoding="utf-8")
+    return grader.Ctx(env, run)
+
+
+def test_explore_order_same_command_read_after_explore(tmp_path):
+    ctx = _ctx_with_events(tmp_path, [("python3 $S/triage.py explore K --json | head -c 9; echo x; cat /w/K/timeline.md",)])
+    explored, _, read = ctx.explore_order()
+    assert explored == 0 and read > explored
+
+
+def test_explore_order_same_command_read_before_explore_rejected(tmp_path):
+    ctx = _ctx_with_events(tmp_path, [("cat /w/K/timeline.md; python3 $S/triage.py explore K",)])
+    explored, _, read = ctx.explore_order()
+    assert explored == 0 and not read > explored
+
+
+def test_question_detection_needs_question_sentence():
+    import grade as grader
+    assert not grader.is_question("심층 분석을 할지 물으면 규칙대로 '아니오'로 답하고, 탐색 분석은 묻지 않고 실행합니다", "심층 분석")
+    assert grader.is_question("심층 분석(mock-data-analyzer)을 실행할까요? (토큰 추가)", "심층 분석")
+    assert not grader.is_question("탐색 분석을 실행할까요?", "심층 분석")

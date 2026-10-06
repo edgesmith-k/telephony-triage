@@ -44,10 +44,15 @@
 사용자 결정이 필요한 곳에서는 멈추고 `{"status": "needs_input", "needs_input": {kind, question, options[], answer}}`를
 낸다(종료 코드 0). 스킬이 사용자에게 묻고 `--answer <kind>=<값>`을 붙여 **같은 명령을 다시** 실행한다. 답과 진행 상태는
 `JOB/triage-state.json`에 남고, 세션 lock owner가 같으면 다시 묻지 않는다(재실행은 멱등). kind:
-`lock`(release-other|take-over|stop) · `cleanup`(yes|no) · `plan`(resume|new) · `jira`(MCP 호출 후 재실행) ·
+`lock`(release-other|take-over|stop) · `plan`(resume|new) · `jira`(MCP 호출 후 재실행) ·
 `year`(YYYY) · `reanalyze`(yes|no) · `open_pr`(continue|stop) · `logs`(`--logs`로 재실행) ·
 `code`(프로필|경로|skip) · `code_confirm`(yes|skip) · `time`(ISO 시각) · `window`(full|keep) ·
 `anchor`(off: 실패 스텝 앵커를 쓰지 않고 Jira 발생 시각 기준 범위로 분석, 아래).
+
+질문 줄이기: 잔여 worktree·도구 브랜치는 묻지도 지우지도 않는다. `db_pr cleanup --dry-run`만 하고 대상이 있으면 `notes`로
+알린다(상태 `cleanup_targets`, 정리는 `/telephony-triage:sync`). `--code`도 답도 없고 `code.auto_select`(사용자 config > site-defaults
+> 기본 true)가 참이며 Jira 버전과 일치하는 프로필이 정확히 1개면 그 프로필을 `--code <프로필>`처럼 쓴다(출력 `code.auto: true`,
+상태 `code_auto`, report.md 코드 줄에 표시). 경로가 무효면 전체 선택지로 묻는다.
 
 실패 스텝 앵커(선택): 실패 스텝이 **어디를(시간 범위)·무엇을(우선 유형)** 볼지 정하고, **왜(S/C)** 는 로그 시그니처가 정한다.
 앵커 우선순위 `--answer anchor=off`(끔) > 로그 스텝 마커(`failed_step.marker_patterns`가 있을 때 `parse_logcat markers`, 기본 꺼짐) >
@@ -101,6 +106,7 @@ TOP = 3
 SEARCH_LIMIT = 3
 ERROR_EVENT_RE = re.compile(r"(error|timeout|no_response|reject|fail|denied|lost)", re.I)
 ERROR_FIELDS = ("request", "error", "code", "reason", "cause")   # 오류 이벤트 줄에 싣는 필드 (analysis.json·report.md)
+AUTO_CODE_NOTE = " (자동 선택: code.auto_select)"   # report.md 코드 줄
 EXPLORE_WHEN = ("ask", "always", "never")
 EXPLORE_MAX_LINES = 200
 TIMELINE_FILE = "timeline.md"
@@ -334,6 +340,8 @@ class Driver:
         self.focus: list[str] = []               # match.step_focus.types (순위 참고용 우선 유형)
         self.steps_member: str | None = None     # steps-file이 zip일 때 읽은 멤버 경로(마스킹·≤120자) — 리포트용
         self.log_inputs: list[dict] = []         # 입력 로그 원본 [{path, name, sha, size}] (bugreport는 원본 파일)
+        self.auto_invalid = False                # `code.auto_select`가 불리언이 아니었다
+        self.code_auto: str | None = None        # 자동 선택한 코드 프로필(`code.auto_select`). 없으면 None
         self.reuse: dict | None = None           # 재사용 결정 {hit, run, reason?, changed?} — 오프라인·첫 실행은 None
 
     # 공통 ---------------------------------------------------------------------------------------
@@ -445,21 +453,18 @@ class Driver:
         self.state.save()
 
     def cleanup(self) -> None:
-        if self.state.data.get("cleanup_done"):
-            return
-        _, data, _ = self.run.call("0-cleanup", "db_pr.py", ["cleanup", "--dry-run"])
-        targets = (data or {}).get("targets") or []
-        if targets:
-            choice = self.answer("cleanup")
-            if choice is None:
-                shown = [t.get("path") or t.get("name") for t in targets[:8]]
-                raise NeedsInput("cleanup", f"비정상 종료로 남은 worktree·도구 브랜치 {len(targets)}개가 있다. 지울까?",
-                                 [{"value": "yes", "label": "지운다"}, {"value": "no", "label": "그대로 둔다"}],
-                                 targets=shown)
-            if choice == "yes":
-                self.run.call("0-cleanup", "db_pr.py", ["cleanup", "--yes"])
-        self.state.data["cleanup_done"] = True
-        self.state.save()
+        """잔여 worktree·도구 브랜치는 묻지도 지우지도 않는다. 목록만 보고 notes로 알린다(정리는 `/telephony-triage:sync`)."""
+        if not self.state.data.get("cleanup_done"):
+            _, data, _ = self.run.call("0-cleanup", "db_pr.py", ["cleanup", "--dry-run"])
+            targets = (data or {}).get("targets") or []
+            if targets:
+                self.state.data["cleanup_targets"] = len(targets)
+            self.state.data["cleanup_done"] = True
+            self.state.save()
+        count = self.state.data.get("cleanup_targets")
+        if count:
+            self.notes.append(f"잔여 worktree·도구 브랜치 {count}개(붙여넣은 스텝 원문이 남아 있을 수 있음) — "
+                              "`/telephony-triage:sync`에서 정리")
 
     def existing_plan(self) -> None:
         plan_path = self.job / "plan.json"
@@ -751,29 +756,74 @@ class Driver:
             raise Fail(USAGE, "bugreport에서 logcat 섹션을 찾지 못했다.")
         return out
 
+    def auto_select(self) -> bool:
+        """`code.auto_select`: 사용자 config > site-defaults > 기본 true (02-config.md). 유효 값은 불리언뿐이고(`type(v) is bool`),
+        그 밖(문자열·0/1·null)은 `explore.when`처럼 warnings에 남기고 묻는 쪽(false)으로 본다."""
+        # `from_site_defaults`를 거치지 않는다(setup이 그 결과를 사용자 config에 저장하므로 site-defaults 값이 복사된다)
+        value = True
+        for source in (userconfig.load_user() or {}, self.defaults):
+            node = source.get("code")
+            if isinstance(node, dict) and "auto_select" in node:
+                value = node["auto_select"]
+                break
+        if type(value) is not bool:
+            self.warnings.append(f"code.auto_select 값이 잘못됐다({value}). 묻기로 본다")
+            self.auto_invalid = True     # needs_input 출력에는 warnings가 없으므로 질문 문구로도 알린다
+            return False
+        return value
+
+    def code_suggest(self, version: str | None) -> dict:
+        argv = ["suggest"] + (["--version", version] if version else [])
+        _, data, _ = self.run.call("2-1-code", "code_roots.py", argv)
+        return data or {}
+
+    def code_question(self, version: str | None, suggested: dict, text: str | None = None) -> NeedsInput:
+        options = [{"value": c.get("name") or ",".join(f"{k}={v}" for k, v in (c.get("roots") or {}).items()),
+                    "label": f"{c.get('name') or '최근'} Android {c.get('android_version') or '?'}"
+                             + (" (추천)" if c.get("recommended") else "")}
+                   for c in suggested.get("candidates") or []]
+        options += [{"value": "<경로 또는 키=경로,…>", "label": "직접 입력"},
+                    {"value": "skip", "label": "코드 분석 건너뛰기(로그 기반 분석만)"}]
+        text = text or f"코드 경로를 고른다 (대상: Android {version or '?'})."
+        return NeedsInput("code", text + (" (code.auto_select 값이 잘못돼 묻기로 본다)" if self.auto_invalid else ""), options)
+
+    @staticmethod
+    def code_auto_profile(suggested: dict) -> str | None:
+        """버전이 일치하는 프로필이 정확히 1개일 때만 그 이름(최근 사용 경로는 세지 않는다)."""
+        hits = [c.get("name") for c in suggested.get("candidates") or [] if c.get("kind") == "profile" and c.get("match")]
+        return hits[0] if len(hits) == 1 else None
+
     def code(self, version: str | None) -> dict | None:
         if self.offline:
             return None
         choice = self.args.code or self.answer("code")
+        auto = False
+        suggested: dict | None = None
+        auto_on = self.auto_select()      # 답이 있어도 점검해 잘못된 값의 경고가 ok 출력에 남게 한다
+        if choice is None and version and auto_on:     # Jira 버전이 없으면 자동 선택하지 않는다
+            choice = self.state.data.get("code_auto")             # 이전 실행이 자동 선택한 프로필
+            if choice is None:
+                suggested = self.code_suggest(version)
+                choice = self.code_auto_profile(suggested)
+            auto = choice is not None
         if choice is None:
-            argv = ["suggest"] + (["--version", version] if version else [])
-            _, data, _ = self.run.call("2-1-code", "code_roots.py", argv)
-            options = [{"value": c.get("name") or ",".join(f"{k}={v}" for k, v in (c.get("roots") or {}).items()),
-                        "label": f"{c.get('name') or '최근'} Android {c.get('android_version') or '?'}"
-                                 + (" (추천)" if c.get("recommended") else "")}
-                       for c in (data or {}).get("candidates") or []]
-            options += [{"value": "<경로 또는 키=경로,…>", "label": "직접 입력"},
-                        {"value": "skip", "label": "코드 분석 건너뛰기(로그 기반 분석만)"}]
-            raise NeedsInput("code", f"코드 경로를 고른다 (대상: Android {version or '?'}).", options)
+            raise self.code_question(version, suggested if suggested is not None else self.code_suggest(version))
         if choice == "skip":
             return {"skipped": True}
         argv = ["validate", choice, "--db", self.snap] + (["--version", version] if version else [])
         code, data, _ = self.run.call("2-1-code", "code_roots.py", argv, expect=(0, 2))
         if code == 2 or not (data or {}).get("valid"):
             self.state.answers.pop("code", None)
+            if auto:
+                self.state.data.pop("code_auto", None)
             self.state.save()
-            raise NeedsInput("code", "코드 경로가 유효하지 않다: " + "; ".join((data or {}).get("errors") or ["?"]),
-                             [{"value": "skip", "label": "코드 분석 건너뛰기"}])
+            reason = "코드 경로가 유효하지 않다: " + "; ".join((data or {}).get("errors") or ["?"])
+            if auto:     # 자동 선택이 틀렸으면 전체 선택지로 다시 묻는다(자동 선택 결과는 기록하지 않는다)
+                raise self.code_question(version, self.code_suggest(version), reason)
+            raise NeedsInput("code", reason, [{"value": "skip", "label": "코드 분석 건너뛰기"}])
+        if auto and not self.state.data.get("code_auto"):
+            self.state.data["code_auto"] = choice
+            self.state.save()
         mismatch = [w for w in data.get("warnings") or [] if "다르다" in w]
         if mismatch and self.answer("code_confirm") is None:
             raise NeedsInput("code_confirm", mismatch[0], [{"value": "yes", "label": "이 트리로 계속"},
@@ -785,6 +835,7 @@ class Driver:
             self.run.call("2-1-code", "code_roots.py", ["remember", choice])
             self.state.data["code_remembered"] = True
             self.state.save()
+        self.code_auto = choice if auto else None
         return {"skipped": False, "roots": choice, "tree_version": data.get("estimated_version"),
                 "warnings": data.get("warnings") or []}
 
@@ -1400,7 +1451,7 @@ class Driver:
             "candidates": candidates,
             "pending_causes": core["pending_causes"],
             "no_candidate": core["no_candidate"],
-            "code": core["code"],
+            "code": {**core["code"], "auto": True} if self.code_auto and not core["code"].get("skipped") else core["code"],
             "analyzer": core["analyzer"],
             "explore": core["explore"],
             "warnings": self.warnings + core["extra_warnings"],
@@ -1637,7 +1688,7 @@ class Driver:
         else:
             refs = ", ".join(f"{c['ref']}" for c in code.get("resolved") or []) or "code_refs 없음"
             lines.append(f"- 코드 위치: TODO(LLM) 파일:라인 + 분기 조건 (열 파일: {refs}; 분석 트리: {code.get('roots')}, "
-                         f"Android {code.get('tree_version') or '?'})")
+                         f"Android {code.get('tree_version') or '?'}{AUTO_CODE_NOTE if code.get('auto') else ''})")
             for m in code.get("moved") or []:
                 lines.append(f"  - 경로 변경: {m['ref']} → {m['new_ref'] or '찾지 못함'} (Step 7 add-code-ref 제안)")
         if cands and cands[0]["cause"]:
