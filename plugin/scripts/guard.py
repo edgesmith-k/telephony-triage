@@ -495,24 +495,7 @@ def check_commit(call: GitCall, conf: Config, dec: Decision) -> None:
                      plugin_root=conf.plugin_root)
     # 단계 순서(마스킹 → 캐시 → 생성 파일)와 migrate 브랜치 허용은 common/checks.py guard 프로필이 정한다.
     # 여기서는 실패한 단계를 deny 문구로 바꾼다 (실행 불가 2도 거부다).
-    for res in checks.run_checks(checks.PROFILES["guard"], ctx).steps:
-        if res.code == 0:
-            continue
-        paths = (res.data or {}).get("paths") or []
-        if res.name == "mask":
-            hits = (res.data or {}).get("detections") or []
-            detail = "; ".join(f"{h['path']}:{h['line']} {h['kind']}" for h in hits[:10]) or res.stderr[-300:]
-            dec.deny.append(f"staged 변경에 마스킹 안 된 개인정보가 있다 (규칙 3): {detail}. mask_pii로 마스킹한 뒤 다시 add한다.")
-        elif res.name == "cache":
-            dec.deny.append(f".cache/는 커밋하지 않는다 (규칙 4): {', '.join(paths[:5])}")
-        elif res.script is None:
-            dec.deny.append(f"ci_mode: actions-build — 생성 파일은 머지 후 봇이 만든다. staged에서 뺀다 (규칙 4): "
-                            f"{', '.join(paths)}")
-        else:
-            problems = ("; ".join(f"{p['path']} ({p['status']})" for p in (res.data or {}).get("problems", []))
-                        or res.stderr[-300:])
-            dec.deny.append("생성 파일(README·STATS·CHANGELOG)이 원본과 맞지 않는다 (규칙 4): "
-                            f"{problems}. 직접 고치지 말고 db_build.py --write로 다시 만든 뒤 add한다.")
+    dec.deny.extend(checks.guard_deny_messages(checks.run_checks(checks.PROFILES["guard"], ctx).steps))
 
 
 # -- 로그 원문 통독 차단 (10) ---------------------------------------------------------------

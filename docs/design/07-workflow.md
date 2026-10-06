@@ -359,7 +359,7 @@ Android 버전과 브랜치마다 소스 트리가 다르므로 **분석할 때�
    - **code_refs**(선택): `<root 키>:<상대 경로>` + `symbol`로 받는다. 절대 경로는 거부한다 (`add-code-ref` 또는 새 원인의 `code_refs`).
 6. **작업 계획**: `<work_dir>/<JIRA-KEY>/plan.json`, `source: record`, `schema_version`, `base_sha`(스냅샷 SHA), `jira.origin`, `pr.branch: issue/<JIRA-KEY>`, 피드백 `{suggested: [], decision: manual, final: <원인 ID | temp_id | unresolved>}`, 커밋 메시지 `[<ID>] record <JIRA-KEY>: <요약>`. 계획을 만들 때 **같은 Jira의 pending 피드백을 지운다** (`03-issue-db.md §5.4 (3)`).
 7. **초안 검증**: 새 원인/유형 또는 시그니처·파서 규칙 변경이 있으면 `db_verify rules --plan <plan> --draft <work_dir>/<JIRA-KEY>/draft`로 검증하고 결과표(실행/건너뜀과 사유)를 보여준다. `fail`이면 수정한다. 다른 유형의 양성 fixture에서 C=1이 된 경우는 analyze Step 7과 같이 "시그니처 좁히기 / `allow-cause`"를 묻는다.
-8. **적용 → 확인 → 커밋 → PR**: 공통 쓰기 절차(analyze Step 8의 2~9번과 같음). 확인 화면 머리에 **"구분: 수동 기록 (record)"**, "로그·코드 분석: 하지 않음", 실행한 검증과 건너뛴 검증(사유), `skipped: fixture 없음`이면 "검증 못 함 — 리뷰 대상", `signatures_pending`이면 "시그니처 없음 — 매칭 불가, 리뷰 대상", 해결책 근거가 사용자 진술뿐이면 "사용자 진술 — 카테고리 오너 리뷰 필요"를 보여준다. PR 본문에도 같은 내용을 넣는다. `--dry-run`이면 확인 화면까지 보여주고 `db_pr discard`로 정리한다(lock 해제).
+8. **적용 → 확인 → 커밋 → PR**: 공통 쓰기 절차(analyze Step 8의 2~9번과 같음). 확인 화면 머리에 **"구분: 수동 기록 (record)"**, "로그·코드 분석: 하지 않음", 실행한 검증과 건너뛴 검증(사유), `skipped: fixture 없음`이면 "검증 못 함 — 리뷰 대상", `signatures_pending`이면 "시그니처 없음 — 매칭 불가, 리뷰 대상", 해결책 근거가 사용자 진술뿐이면 "사용자 진술 — 카테고리 오너 리뷰 필요"를 보여준다. PR 본문에도 같은 내용을 넣는다. `--dry-run`이면 확인 화면까지 보여주고 `--and-discard`가 정리한다(lock 해제).
 
 - 사용자가 취소하면 manual 피드백은 **보관하지 않고 버린다** (통계에 쓰지 않고, 취소는 분류가 확실하지 않다는 뜻일 수 있으며, 다른 Jira의 PR에 섞이면 리뷰가 헷갈리므로). 작업 계획은 남겨서 같은 Jira로 다시 record하면 이어서 할 수 있다.
 
@@ -420,6 +420,6 @@ Android 버전과 브랜치마다 소스 트리가 다르므로 **분석할 때�
 3. `db_pr lock acquire <작업 키>` → `db_pr snapshot --job <작업 키>` → `db_pr preflight --branch <br>`: 원격 SHA를 `<start_sha>`로 기록한다. 원격 브랜치가 없으면 중단한다.
 4. **원격 변경 확인**: `<start_sha>`가 계획의 `pr.head_sha`와 다르면 원격 변경 요약(`git diff <pr.head_sha> <start_sha>`)을 보여주고 **덮어쓰기** / **중단**을 묻는다. 필요한 변경은 먼저 계획에 반영하게 한다.
 5. **스키마 확인**: 계획의 `schema_version`이 main과 다르면 `db_migrate upgrade-plan`으로 계획을 올린다. 올릴 수 없으면 계획을 다시 만들라고(analyze/record 재실행) 안내하고 lock을 풀고 끝낸다.
-6. `db_pr stage <plan.json> --wt <work_dir>/<작업 키>/wt --branch <br>` (도구 브랜치 `tt/<br>`, drift 검사와 모든 검사 포함, `ci_mode: actions-build`면 생성 파일 재생성 없음). drift가 있으면 Step 8-3처럼 결정을 받아 계획에 반영하고 다시 `stage`한다.
-7. 확인 화면 (ID 재할당 내역, drift 결정 내역, 계획 `source` 라벨 — record면 "수동 기록", `jira.origin: file`이면 "오프라인 파일" — 포함) → 커밋(별도 Bash 호출) → `db_pr publish --lease <start_sha>`. 원격이 그 사이 바뀌었으면 push가 거부되고 3번부터 다시 한다.
-8. 바뀐 ID가 PR 제목·본문에 있으면 `publish`가 `gh pr edit`으로 고친다. `publish`가 계획의 `pr.head_sha`와 `base_sha`를 갱신한다. `db_pr discard`로 정리한다(lock 해제). 사용자 로컬 `<br>`가 있으면 원격과 달라졌다고 알린다.
+6. `db_pr stage <plan.json> --wt <work_dir>/<작업 키>/wt --branch <br> --then-summary` (도구 브랜치 `tt/<br>`, drift 검사와 모든 검사 포함, `ci_mode: actions-build`면 생성 파일 재생성 없음). drift가 있으면 Step 8-3처럼 결정을 받아 계획에 반영하고 다시 `stage`한다.
+7. `stage --then-summary`가 낸 확인 화면 (ID 재할당 내역, drift 결정 내역, 계획 `source` 라벨 — record면 "수동 기록", `jira.origin: file`이면 "오프라인 파일" — 포함) → 승인 → `db_pr publish --lease <start_sha> --commit --and-discard`. 원격이 그 사이 바뀌었으면 push가 거부되고 3번부터 다시 한다.
+8. 바뀐 ID가 PR 제목·본문에 있으면 `publish`가 `gh pr edit`으로 고친다. `publish`가 계획의 `pr.head_sha`와 `base_sha`를 갱신한다. `--and-discard`가 정리한다(lock 해제). 사용자 로컬 `<br>`가 있으면 원격과 달라졌다고 알린다.

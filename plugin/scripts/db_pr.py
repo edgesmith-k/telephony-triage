@@ -73,6 +73,7 @@ from pathlib import Path
 SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS))
 
+import yaml  # noqa: E402
 from common import site_defaults, userconfig, yamlio  # noqa: E402
 from common.buildname import is_valid_branch_name  # noqa: E402
 from common import checks as checks_mod  # noqa: E402
@@ -779,6 +780,9 @@ def _schema_allows_pr_ids(repo: Path, base_sha: str) -> bool:
         return False
 
 
+_GUARD_FIX_TAIL = "계획을 고쳐 3번(stage --then-summary)부터 다시 한다."
+
+
 def _guard_problems(plugin_root: str | None, wt: Path) -> list[str]:
     """guard.py 규칙 3·4(`check_commit`)와 같은 검사·같은 문구. staged 범위로 `PROFILES["guard"]`를 돌린다."""
     staged = [p for p in _git(wt, "diff", "--cached", "--name-only", "-z").stdout.split("\0") if p]
@@ -788,30 +792,16 @@ def _guard_problems(plugin_root: str | None, wt: Path) -> list[str]:
         db_cfg = yamlio.load(wt / "issue-db.config.yaml") or {}
     except (OSError, ValueError):
         db_cfg = {}
+    except yaml.YAMLError as exc:
+        raise UsageError(f"issue-db.config.yaml을 읽을 수 없다 (YAML 오류): {str(exc)[-300:]}") from exc
+    if not isinstance(db_cfg, dict):
+        raise UsageError("issue-db.config.yaml이 매핑(dict)이 아니다. 이슈 DB 설정 문제다 — 보고하고 멈춘다.")
     ci_mode = db_cfg.get("ci_mode", "local")
     branch = _out(_git(wt, "rev-parse", "--abbrev-ref", "HEAD", check=False)) if ci_mode != "actions-build" else ""
     cctx = checks_mod.Ctx(db=wt, scope="staged", files=staged, branch=branch, ci_mode=ci_mode, db_cfg=db_cfg,
                           plugin_root=plugin_root)
-    deny: list[str] = []
-    for res in checks_mod.run_checks(checks_mod.PROFILES["guard"], cctx).steps:
-        if res.code == 0:
-            continue
-        paths = (res.data or {}).get("paths") or []
-        if res.name == "mask":
-            hits = (res.data or {}).get("detections") or []
-            detail = "; ".join(f"{h['path']}:{h['line']} {h['kind']}" for h in hits[:10]) or res.stderr[-300:]
-            deny.append(f"staged 변경에 마스킹 안 된 개인정보가 있다 (규칙 3): {detail}. mask_pii로 마스킹한 뒤 다시 add한다.")
-        elif res.name == "cache":
-            deny.append(f".cache/는 커밋하지 않는다 (규칙 4): {', '.join(paths[:5])}")
-        elif res.script is None:
-            deny.append(f"ci_mode: actions-build — 생성 파일은 머지 후 봇이 만든다. staged에서 뺀다 (규칙 4): "
-                        f"{', '.join(paths)}")
-        else:
-            problems = ("; ".join(f"{p['path']} ({p['status']})" for p in (res.data or {}).get("problems", []))
-                        or res.stderr[-300:])
-            deny.append("생성 파일(README·STATS·CHANGELOG)이 원본과 맞지 않는다 (규칙 4): "
-                        f"{problems}. 직접 고치지 말고 db_build.py --write로 다시 만든 뒤 add한다.")
-    return deny
+    return checks_mod.guard_deny_messages(checks_mod.run_checks(checks_mod.PROFILES["guard"], cctx).steps,
+                                          fix_tail=_GUARD_FIX_TAIL)
 
 
 def _commit_approved(wt: Path, job_dir: Path, state: dict, approved: str) -> tuple[dict, list[str] | None]:
@@ -851,7 +841,7 @@ def publish(ctx: Ctx, wt: Path, branch: str, lease: str, approved: str, commit: 
     stage_result = _read_json(job_dir / STAGE) or {}
     pr_info = _read_json(job_dir / PR_FILE)
     if not state or not state.get("approved_hash") or not pr_info:
-        raise UsageError("승인 정보가 없습니다. stage → summary(확인) → 커밋 뒤에 publish한다.")
+        raise UsageError("승인 정보가 없습니다. stage --then-summary(확인) 뒤 publish --commit한다.")
     commit_info = None
     if commit:
         commit_info, early = _commit_approved(wt, job_dir, state, approved)
@@ -1225,6 +1215,9 @@ def main(argv: list[str] | None = None) -> int:
                         result["discard"] = {"discarded": False, "error": str(exc) or type(exc).__name__,
                                              "next": f"PR은 만들어졌다. publish를 다시 하지 말고 db_pr discard {args.wt}만 다시 한다"}
                         code = USAGE
+                elif result.get("published"):   # push는 됐고 PR 생성만 실패(gh_error)
+                    result["discard"] = {"discarded": False, "skipped": "PR 생성 실패 — worktree·lock 보존",
+                                         "next": f"push는 됐다. PR을 수동 처리하거나 publish 재시도를 사용자와 정한 뒤 db_pr discard {args.wt}"}
                 else:
                     result["discard"] = {"discarded": False, "skipped": "publish 실패 — worktree·lock 보존"}
         elif args.cmd == "discard":

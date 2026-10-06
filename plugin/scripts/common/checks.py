@@ -266,6 +266,40 @@ PROFILES: dict[str, Profile] = {
 }
 
 
+# -- guard 프로필 실패 → deny 문구 (guard.py 규칙 3·4와 db_pr publish --commit이 같이 쓴다) ----------
+
+
+GUARD_FIX_MASK = "mask_pii로 마스킹한 뒤 다시 add한다."
+GUARD_FIX_GENERATED = "직접 고치지 말고 db_build.py --write로 다시 만든 뒤 add한다."
+GUARD_FIX_ACTIONS_BUILD = "staged에서 뺀다"
+
+
+def guard_deny_messages(steps, fix_tail: str | None = None) -> list[str]:
+    """`PROFILES["guard"]` 단계 결과에서 실패한 단계의 규칙 3·4 deny 문구를 만든다.
+    `fix_tail`이 None이면 guard.py(직접 add 흐름)의 안내 꼬리, 아니면 그 문구로 바꾼다(db_pr: 계획을 고쳐 다시 stage)."""
+    deny: list[str] = []
+    for res in steps:
+        if res.code == 0:
+            continue
+        paths = (res.data or {}).get("paths") or []
+        if res.name == "mask":
+            hits = (res.data or {}).get("detections") or []
+            detail = "; ".join(f"{h['path']}:{h['line']} {h['kind']}" for h in hits[:10]) or res.stderr[-300:]
+            deny.append(f"staged 변경에 마스킹 안 된 개인정보가 있다 (규칙 3): {detail}. {fix_tail or GUARD_FIX_MASK}")
+        elif res.name == "cache":
+            deny.append(f".cache/는 커밋하지 않는다 (규칙 4): {', '.join(paths[:5])}")
+        elif res.script is None:
+            lead = "ci_mode: actions-build — 생성 파일은 머지 후 봇이 만든다."
+            deny.append(f"{lead} (규칙 4): {', '.join(paths)}. {fix_tail}" if fix_tail
+                        else f"{lead} {GUARD_FIX_ACTIONS_BUILD} (규칙 4): {', '.join(paths)}")
+        else:
+            problems = ("; ".join(f"{p['path']} ({p['status']})" for p in (res.data or {}).get("problems", []))
+                        or res.stderr[-300:])
+            deny.append("생성 파일(README·STATS·CHANGELOG)이 원본과 맞지 않는다 (규칙 4): "
+                        f"{problems}. {fix_tail or GUARD_FIX_GENERATED}")
+    return deny
+
+
 # -- 실행 ----------------------------------------------------------------------------------
 
 

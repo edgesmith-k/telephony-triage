@@ -1404,3 +1404,148 @@ def test_ship_combined_path_matches_separate_path():
     assert git(ws.remote, "log", "-1", "--format=%B", "issue/MOCK-7001") == \
         git(ws2.remote, "log", "-1", "--format=%B", "issue/MOCK-7001")
     assert not ws2.wt("MOCK-7001").exists() and ws2.db_pr("lock", "status")["held"] is False
+
+
+# -- W5 리뷰 반영: publish --commit의 guard 검사·pre-commit 실패·이미 커밋된 경로, --and-discard 분기 ------------------
+
+
+def _approved_then(ws: Workspace, job: str, branch: str, change) -> Path:
+    """stage → (확인 화면 전) wt를 `change`로 바꾼다 → summary로 승인 해시를 만든다. 승인 해시는 바뀐 트리를 담는다."""
+    wt = _staged_job(ws, job, "p7-analyze-append.plan.json")
+    ws.stage(job, branch)
+    change(wt)
+    ws.db_pr("summary", wt)
+    return wt
+
+
+def _assert_commit_refused(ws: Workspace, wt: Path, job: str, branch: str) -> dict:
+    out = ws.db_pr(*_publish_args(ws, job, branch, "--commit", "--and-discard"), expect=1)
+    assert out["published"] is False and out["commit"] == {"committed": False}
+    assert out["discard"]["skipped"] == "publish 실패 — worktree·lock 보존"
+    assert git(wt, "rev-parse", "HEAD") == _state(ws, job)["base_sha"], "커밋하지 않았다"
+    assert git(ws.remote, "branch", "--list", branch) == "" and wt.is_dir()
+    return out
+
+
+def test_publish_commit_refuses_unmasked_pii_in_approved_tree_rule_3():
+    ws = Workspace()
+    jira = f"{DATA_DIR}/jira/MOCK-1101.yaml"
+    wt = _approved_then(ws, "MOCK-7001", "issue/MOCK-7001", lambda w: (w / jira).write_text(
+        (w / jira).read_text(encoding="utf-8").replace("접수됨", "접수됨 imei=490154203237518"), encoding="utf-8"))
+    out = _assert_commit_refused(ws, wt, "MOCK-7001", "issue/MOCK-7001")
+    text = "\n".join(out["problems"])
+    assert "마스킹 안 된 개인정보가 있다 (규칙 3)" in text and "IMEI" in text
+    assert "계획을 고쳐 3번(stage --then-summary)부터 다시 한다." in text and "직접" not in text and "add한다" not in text
+    ws.db_pr("discard", wt)
+
+
+def test_publish_commit_refuses_hand_edited_generated_file_rule_4():
+    ws = Workspace()
+    wt = _approved_then(ws, "MOCK-7001", "issue/MOCK-7001", lambda w: (w / "README.md").write_text(
+        (w / "README.md").read_text(encoding="utf-8") + "\n손으로 고친 줄\n", encoding="utf-8"))
+    out = _assert_commit_refused(ws, wt, "MOCK-7001", "issue/MOCK-7001")
+    text = "\n".join(out["problems"])
+    assert "생성 파일(README·STATS·CHANGELOG)이 원본과 맞지 않는다 (규칙 4)" in text and "README.md" in text
+    assert "계획을 고쳐 3번(stage --then-summary)부터 다시 한다." in text and "db_build.py --write" not in text
+    ws.db_pr("discard", wt)
+
+
+def test_publish_commit_reports_precommit_failure_without_pushing():
+    ws = Workspace()
+    wt = _staged_job(ws, "MOCK-7001", "p7-analyze-append.plan.json")
+    assert _then_summary(ws, "MOCK-7001", "issue/MOCK-7001").returncode == 0
+    cfg_path = ws.home / "config.yaml"
+    cfg = yaml.safe_load(cfg_path.read_text(encoding="utf-8"))
+    cfg["plugin"]["scripts_path"] = str(ws.base / "nowhere")        # pre-commit hook이 스크립트를 못 찾는다
+    cfg_path.write_text(yaml.safe_dump(cfg, allow_unicode=True), encoding="utf-8")
+    out = ws.db_pr(*_publish_args(ws, "MOCK-7001", "issue/MOCK-7001", "--commit", "--and-discard"), expect=1)
+    assert out["published"] is False and out["commit"] == {"committed": False}
+    assert any("git commit 실패" in p and "scripts_path" in p for p in out["problems"]), out["problems"]
+    assert out["discard"]["discarded"] is False
+    assert git(wt, "rev-parse", "HEAD") == _state(ws, "MOCK-7001")["base_sha"]
+    assert git(ws.remote, "branch", "--list", "issue/MOCK-7001") == "" and not ws.prs()
+    assert not (ws.job_dir("MOCK-7001") / "commit-msg.txt").exists()
+    ws.db_pr("discard", wt)
+
+
+def test_publish_commit_checks_tree_of_already_committed_path():
+    ws = Workspace()
+    wt = _staged_job(ws, "MOCK-7001", "p7-analyze-append.plan.json")
+    assert _then_summary(ws, "MOCK-7001", "issue/MOCK-7001").returncode == 0
+    args = _publish_args(ws, "MOCK-7001", "issue/MOCK-7001", "--commit")
+    (wt / "CONTRIBUTING.md").write_text("승인 뒤 수정\n", encoding="utf-8")
+    ws.commit("MOCK-7001")                                           # 승인 해시와 다른 트리를 이미 커밋했다
+    out = ws.db_pr(*args, expect=1)
+    assert out["published"] is False and out["commit"] == {"skipped": "이미 커밋됨"}
+    assert any("커밋 트리가 승인 해시와 다르다" in p for p in out["problems"])
+    assert git(ws.remote, "branch", "--list", "issue/MOCK-7001") == "" and not ws.prs()
+    ws.db_pr("discard", wt)
+
+
+def test_publish_and_discard_keeps_work_when_only_pr_creation_fails(tmp_path):
+    ws = Workspace()
+    wt = _staged_job(ws, "MOCK-7001", "p7-analyze-append.plan.json")
+    assert _then_summary(ws, "MOCK-7001", "issue/MOCK-7001").returncode == 0
+    shim = tmp_path / "bin"
+    shim.mkdir()
+    real_path = mock_env.env_with_mocks(plugin_root=ws.root)["PATH"]
+    (shim / "gh").write_text('#!/bin/sh\nif [ "$1" = pr ] && [ "$2" = create ]; then echo "boom" >&2; exit 1; fi\n'
+                             f'PATH="{real_path}"; exec gh "$@"\n', encoding="utf-8")
+    (shim / "gh").chmod(0o755)
+    out = ws.db_pr(*_publish_args(ws, "MOCK-7001", "issue/MOCK-7001", "--commit", "--and-discard"),
+                   env={"PATH": f"{shim}:{real_path}"}, expect=2)
+    assert out["published"] is True and out["pushed"] is True and "gh_error" in out and not ws.prs()
+    assert out["discard"]["discarded"] is False
+    assert out["discard"]["skipped"] == "PR 생성 실패 — worktree·lock 보존"
+    assert f"db_pr discard {wt}" in out["discard"]["next"] and "publish" in out["discard"]["next"]
+    assert wt.is_dir() and (ws.job_dir("MOCK-7001") / "state.json").is_file()
+    assert ws.db_pr("lock", "status")["held"] is True
+    assert git(ws.remote, "branch", "--list", "issue/MOCK-7001") != ""      # push는 됐다
+    ws.db_pr("discard", wt)
+
+
+def test_guard_and_db_pr_share_rule_3_4_deny_messages():
+    """guard.py와 db_pr publish --commit의 규칙 3·4 문구는 `checks.guard_deny_messages` 하나에서 나온다 (drift 방지)."""
+    import db_pr
+    from common import checks
+
+    S = checks.StepResult
+    steps = [S("mask", 1, data={"detections": [{"path": "a.yaml", "line": 3, "kind": "IMEI"}]}),
+             S("cache", 1, data={"paths": [".cache/x", ".cache/y"]}),
+             S("generated_staged", 1, data={"paths": ["README.md"]}),                     # script None = actions-build
+             S("generated", 1, script="db_build.py", data={"problems": [{"path": "README.md", "status": "stale"}]})]
+    assert checks.guard_deny_messages(steps) == [          # guard.py의 기존 문구(바이트 동일)
+        "staged 변경에 마스킹 안 된 개인정보가 있다 (규칙 3): a.yaml:3 IMEI. mask_pii로 마스킹한 뒤 다시 add한다.",
+        ".cache/는 커밋하지 않는다 (규칙 4): .cache/x, .cache/y",
+        "ci_mode: actions-build — 생성 파일은 머지 후 봇이 만든다. staged에서 뺀다 (규칙 4): README.md",
+        "생성 파일(README·STATS·CHANGELOG)이 원본과 맞지 않는다 (규칙 4): README.md (stale). "
+        "직접 고치지 말고 db_build.py --write로 다시 만든 뒤 add한다."]
+    tail = db_pr._GUARD_FIX_TAIL
+    assert tail == "계획을 고쳐 3번(stage --then-summary)부터 다시 한다."
+    swapped = checks.guard_deny_messages(steps, fix_tail=tail)
+    assert [m.endswith(tail) for m in swapped] == [True, False, True, True]
+    assert swapped[0].startswith("staged 변경에 마스킹 안 된 개인정보가 있다 (규칙 3): a.yaml:3 IMEI. ")
+    assert swapped[1] == ".cache/는 커밋하지 않는다 (규칙 4): .cache/x, .cache/y"
+    for path in (REPO / "plugin/scripts/guard.py", REPO / "plugin/scripts/db_pr.py"):   # 문구를 다시 복제하지 않았다
+        src = path.read_text(encoding="utf-8")
+        assert "guard_deny_messages" in src and "마스킹 안 된 개인정보" not in src and "원본과 맞지 않는다" not in src, path
+
+
+def test_publish_commit_rejects_non_mapping_or_broken_issue_db_config_as_usage_error():
+    ws = Workspace()
+    wt = _staged_job(ws, "MOCK-7001", "p7-analyze-append.plan.json")
+    assert _then_summary(ws, "MOCK-7001", "issue/MOCK-7001").returncode == 0
+    for text, needle in (("- 목록\n- 이다\n", "매핑"), ("a: [unclosed\n", "YAML")):
+        (wt / "issue-db.config.yaml").write_text(text, encoding="utf-8")
+        state = _state(ws, "MOCK-7001")
+        state["approved_hash"] = _approved_now(wt)                 # 바뀐 트리를 승인한 것으로 맞춘다 (guard 단계까지 가려고)
+        (ws.job_dir("MOCK-7001") / "state.json").write_text(json.dumps(state), encoding="utf-8")
+        out = ws.run("db_pr.py", _publish_args(ws, "MOCK-7001", "issue/MOCK-7001", "--commit"))
+        assert out.returncode == 2 and needle in out.stderr and "Traceback" not in out.stderr, (text, out.stderr[-400:])
+        assert git(wt, "rev-parse", "HEAD") == state["base_sha"]
+    ws.db_pr("discard", wt)
+
+
+def _approved_now(wt: Path) -> str:
+    import db_pr
+    return db_pr.approved_hash(wt)
