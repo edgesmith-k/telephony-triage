@@ -346,8 +346,8 @@ def test_checks_use_target_repo_tools(repo, tmp_path, monkeypatch):
     assert all(str(repo / "tools") in " ".join(a) for a in seen) and len(seen) == 3
 
 
-def test_evals_prepare_output_parsing(monkeypatch):
-    ctx = mb.Ctx(REPO, Path(os.environ.get("TMPDIR", "/tmp")) / "tt-mb-test-ctx", dict(os.environ))
+def test_evals_prepare_output_parsing(monkeypatch, tmp_path):
+    ctx = mb.Ctx(REPO, tmp_path / "ctx", dict(os.environ))
     ids = [e["id"] for e in json.loads((REPO / "tests/skill_evals/evals.json").read_text(encoding="utf-8"))["evals"]]
     good = "".join(f"eval {i}: prepared (plugin)\n" for i in ids)
     monkeypatch.setattr(mb.Ctx, "run", lambda self, *a, **k: (0, good))
@@ -363,7 +363,8 @@ def test_timeout_output_is_decoded_into_log(repo, tmp_path):
     ctx = _ctx(repo, tmp_path)
     code, out = ctx.run("slow", [sys.executable, "-c", "import time;print('hi',flush=True);time.sleep(5)"], timeout=1)
     assert code == 2 and "시간 초과" in out
-    assert "시간 초과" in (ctx.logs / "slow.log").read_text(encoding="utf-8")
+    log = (ctx.logs / "slow.log").read_text(encoding="utf-8")
+    assert "시간 초과" in log and "hi" in log and "b'" not in log
 
 
 @pytest.mark.parametrize("label", ["bad label", "a/b", "x..y", "-lead", "end.lock", "한글", "a~b"])
