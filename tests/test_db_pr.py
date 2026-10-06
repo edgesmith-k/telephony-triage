@@ -1590,7 +1590,7 @@ def test_guard_and_db_pr_share_rule_3_4_deny_messages():
     assert [m.endswith(tail) for m in swapped] == [True, False, True, True]
     assert swapped[0].startswith("staged 변경에 마스킹 안 된 개인정보가 있다 (규칙 3): a.yaml:3 IMEI. ")
     assert swapped[1] == ".cache/는 커밋하지 않는다 (규칙 4): .cache/x, .cache/y"
-    for path in (REPO / "plugin/scripts/guard.py", REPO / "plugin/scripts/db_pr.py"):   # 문구를 다시 복제하지 않았다
+    for path in (REPO / "plugin/scripts/guard.py", REPO / "plugin/scripts/dbpr/publish.py"):   # 문구를 다시 복제하지 않았다
         src = path.read_text(encoding="utf-8")
         assert "guard_deny_messages" in src and "마스킹 안 된 개인정보" not in src and "원본과 맞지 않는다" not in src, path
 

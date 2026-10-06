@@ -117,7 +117,8 @@ telephony-triage-plugin/                 # 개발 레포 루트
     │   ├── db_search.py
     │   ├── db_add.py                    # CLI만. 구현은 dbadd/
     │   ├── dbadd/                       # core(상수·계획 검사·Tree), applier(apply), ops/<묶음>.py(op 메서드 믹스인), drift, ids, similar
-    │   ├── db_pr.py
+    │   ├── db_pr.py                     # CLI만. 구현은 dbpr/
+    │   ├── dbpr/                        # lock(상수·UsageError·Lock·JSON 읽기/쓰기), worktree(git·snapshot·Ctx·worktree 준비/제거·discard·cleanup), publish(my-prs·preflight·stage·summary·publish·find-plan)
     │   ├── db_summary.py                # 라이브러리: db_pr summary 확인 화면·PR 본문(pr_body)
     │   ├── db_build.py
     │   ├── db_lint.py
@@ -128,7 +129,8 @@ telephony-triage-plugin/                 # 개발 레포 루트
     │   ├── db_migrate.py
     │   ├── guard.py                     # Claude hook 판정기 (08-safety.md §9)
     │   ├── jira_bridge.py               # PostToolUse hook: Jira MCP 원문 → JOB/jira_raw.json, 모델에는 마스킹 요약 (08-safety.md §9)
-    │   ├── triage.py                    # analyze Step 0~4 + Step 5 resolve 드라이버 (contracts.md §3.2)
+    │   ├── triage.py                    # analyze Step 0~4 + Step 5 resolve 드라이버 (contracts.md §3.2). CLI만. 구현은 triagelib/
+    │   ├── triagelib/                   # core(상수·오류·Runner), cache(State·캐시 믹스인), anchor(실패 스텝·앵커 믹스인), report(fit·스키마 검사·report.md 믹스인), driver(Driver)
     │   └── migrations/                  # 0001_xxx.py … 스키마 버전별 마이그레이션
     ├── schemas/                         # 이슈 DB schema/ 사본 (단일 원본은 이슈 DB, tools/sync_schemas.py로 대조)
     │   └── output/analysis.schema.json   # 플러그인 소유: triage.py run 출력 형식 (TT_SCHEMA_CHECK=1이면 검사, 대조 대상 아님)
