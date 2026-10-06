@@ -55,7 +55,7 @@
 - 목표: 확인 화면과 검색 결과를 스크립트가 마크다운으로 낸다. LLM은 붙여 넣기만 한다.
 - 변경: `db_summary.py`에 `render_markdown()`(`write-flow.md §4` 형식 그대로), `db_pr summary --format markdown`, `db_search --format markdown`. `write-flow.md §4`·`search.md §3`은 "출력을 그대로 보인다"로 축소. `07-workflow.md Step 8-5`·`contracts.md` 갱신.
 - 완료: eval 1·30·53 통과, 확인 화면 토큰(W0 측정)이 이전보다 감소.
-- 테스트: `test_db_pr`(summary 스냅샷), `test_db_search`, `test_commands`. 사내 잔여: 없음.
+- 테스트: `test_db_pr`(summary 스냅샷), `test_db_search`, `test_commands`. 사내 잔여: 운영 이슈 DB `schema/plan.schema.json`에 `pr.ids` 추가 PR(없으면 publish가 기록하지 않고 재할당 줄은 "확인 불가").
 
 ### W3. verify-fix 전제의 스크립트 강제 (U) — `99-deferred.md §F` 방안 1
 - 목표: 코드·설정 수정 유형에 scenario·recovery 시그니처가 없으면 `db_verify fix`가 종료 코드 2와 다음 할 일을 낸다. 문구 의존 제거.
@@ -124,7 +124,7 @@
 |---|---|---|
 | S-1 | 사내 값 조사, `SITE_PROFILE.md` | context pack(W12), `list_site_todos.py` |
 | S-2 | Claude Code 기능 확인, eval 54 재실행 | 토큰 표(W0), doctor 출력 형식(W9) |
-| S-3 | `site-defaults.yaml`·이슈 DB config | guard 규칙 10 예외 키(W11), `platform` 키(RF-4 완료분) |
+| S-3 | `site-defaults.yaml`·이슈 DB config, 이슈 DB `schema/plan.schema.json`에 `pr.ids` 추가 PR(W2) | guard 규칙 10 예외 키(W11), `platform` 키(RF-4 완료분), `pr.ids` 조건부 기록(W2) |
 | S-4a·S-4 | 파서 포팅·골든, 규칙·시드 유형, `parser-rules` 이슈 DB 층(`phone_id_patterns`·`ril.yaml tags`, RF-4 잔여) | 설정 층 순서는 `contracts.md`에 명시됨. 이슈 DB 층 구현은 사외에서 W 뒤에 할 수 있으나 실제 값은 사내 |
 | S-5 | 오프라인 평가, 샌드박스 PR, 토큰 기준치 | `offline_eval.py`, `usage_stats.py`(W11) |
 | S-7 | 배포·파일럿 지표 | `usage_stats.py`, `plugin.json` 정리 항목 |
@@ -172,7 +172,7 @@
 |---|---|---|---|---|
 | ✅ | W0 | ✅ 완료(10/06) | ccr-2495ec74-xn15cn · 커밋 `W0: 토큰 측정…` | 기준선 `token_baseline.json`, 여유율 1.3 |
 | ✅ | W1 | ✅ 완료(10/06) | ccr-2495ec74-xn15cn · 커밋 `W1: 출력 다이어트…` | stdout 33%, record verify는 `--verbose`(eval 18 회귀) |
-| ☐ | W2 | eval 실측 중(코드·리뷰·관련 테스트 통과, 미완료) | ccr-2495ec74-xn15cn | W1 뒤. W2 영향 미확인: eval 9·18·20~23·26·31·54 |
+| ✅ | W2 | ✅ 완료(10/06) | ccr-2495ec74-xn15cn · 커밋 `W2: 결정적 렌더링…` | W2 영향 미확인: eval 9·18·20~23·26·31·54. W2 보류: 검색 전용 문구(search.md는 `--brief` JSON 유지, eval 53) |
 | ☐ | W3 | 대기 | | 독립 |
 | ☐ | W4 | 대기 | | |
 | ☐ | W5 | 대기 | | W2 뒤 |

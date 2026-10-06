@@ -337,7 +337,7 @@ def _scenario_record() -> tuple[dict, dict]:
         commit_message="[DATA-001-04] record MOCK-7005: SIM 미준비\n\n```\n본문 펜스\n```", push_allowed=False,
         push_note="push 불가: gh 인증 없음 (--dry-run)")
     return scr, _extra(target_id="DATA-001-04", target_title="SIM 미준비",
-                       resolution=[{"cause": "DATA-001-04", "state": "unverified", "reason": "new-cause"}])
+                       resolution=[{"cause": "DATA-001-04", "state": "unverified", "reason": "신규 원인 (new-cause)"}])
 
 
 def _scenario_skipped_checks() -> tuple[dict, dict]:
@@ -347,12 +347,41 @@ def _scenario_skipped_checks() -> tuple[dict, dict]:
 SCENARIOS = {"analyze-append-pass": lambda: (_render_screen(), _extra()),
              "record-non-success": _scenario_record, "checks-skipped": _scenario_skipped_checks}
 
+_PUB = {"number": 12, "branch": "issue/MOCK-7001", "head_sha": "a" * 40}
+_ID = {"temp_id": "NEW-CAUSE-1", "id": "DATA-001-04"}
 
-@pytest.mark.parametrize("name", sorted(SCENARIOS))
-def test_render_markdown_snapshots(name):
+
+def _res(reason, state="unverified"):
+    return [{"cause": "DATA-001-04", "state": state, "reason": reason}]
+
+
+# 결정 1~4를 잠그는 스냅샷: 케이스별 (screen, plan, extra)
+PLAN_SCENARIOS = {
+    "reassign-same": lambda: (_render_screen(ids=[_ID]), {"pr": {**_PUB, "ids": {"NEW-CAUSE-1": "DATA-001-04"}}}, _extra()),
+    "reassign-base-differs": lambda: (_render_screen(ids=[{**_ID, "expected_at_base": "DATA-001-03"}]), {}, _extra()),
+    "reassign-previous-differs": lambda: (_render_screen(ids=[{**_ID, "previous_id": "DATA-001-03"}]),
+                                          {"pr": {**_PUB, "ids": {"NEW-CAUSE-1": "DATA-001-03"}}}, _extra()),
+    "reassign-unknown": lambda: (_render_screen(ids=[_ID]), {"pr": _PUB}, _extra()),
+    "title-present": lambda: (_render_screen(), {}, _extra()),
+    "title-missing": lambda: (_render_screen(), {}, _extra(target_title=None)),
+    "resolution-new-cause": lambda: (_render_screen(), {}, _extra(resolution=_res("신규 원인 (new-cause)"))),
+    "resolution-set-resolution": lambda: (_render_screen(), {}, _extra(resolution=_res("해결책 변경 (set-resolution)"))),
+    "resolution-user-statement": lambda: (_render_screen(), {}, _extra(resolution=_res("신규 원인 (new-cause), 근거: 사용자 진술"))),
+    "resolution-null": lambda: (_render_screen(), {}, _extra(resolution=[])),
+}
+
+
+def _scenario(name):
+    if name in PLAN_SCENARIOS:
+        return PLAN_SCENARIOS[name]()
     scr, extra = SCENARIOS[name]()
-    text = db_summary.render_markdown(scr, {}, extra)
-    assert text == (RENDER / f"{name}.md").read_text(encoding="utf-8")
+    return scr, {}, extra
+
+
+@pytest.mark.parametrize("name", sorted([*SCENARIOS, *PLAN_SCENARIOS]))
+def test_render_markdown_snapshots(name):
+    scr, plan, extra = _scenario(name)
+    assert db_summary.render_markdown(scr, plan, extra) == (RENDER / f"{name}.md").read_text(encoding="utf-8")
 
 
 def test_render_markdown_all_pass_has_one_check_per_rule():
@@ -417,9 +446,14 @@ def test_render_markdown_sections_for_drift_fix_changes_and_empty_values():
     # write-flow.md §4 "ID 할당" 항목: `ids[].expected_at_base`가 다르면 '계획 당시 DATA-001-03 → DATA-001-04 (main에 먼저 머지된 원인)'
     ({"temp_id": "NEW-CAUSE-1", "id": "DATA-001-04", "expected_at_base": "DATA-001-03"},
      "NEW-CAUSE-1 → DATA-001-04: 계획 당시 DATA-001-03 → DATA-001-04 (main에 먼저 머지된 원인)"),
-    # 같은 항목의 기본형 `NEW-CAUSE-1 → DATA-001-04` (expected_at_base가 같을 때)
+    # 같은 항목: 이전 적용(`previous_id`, 계획 pr.ids 기록)과 다르면 'DATA-001-03 → DATA-001-04 재할당'
+    ({"temp_id": "NEW-CAUSE-1", "id": "DATA-001-04", "previous_id": "DATA-001-03"},
+     "NEW-CAUSE-1 → DATA-001-04: DATA-001-03 → DATA-001-04 재할당"),
+    ({"temp_id": "NEW-CAUSE-1", "id": "DATA-001-04", "expected_at_base": "DATA-001-02", "previous_id": "DATA-001-03"},
+     "NEW-CAUSE-1 → DATA-001-04: 계획 당시 DATA-001-02 → DATA-001-04 (main에 먼저 머지된 원인); DATA-001-03 → DATA-001-04 재할당"),
+    # 기본형 `NEW-CAUSE-1 → DATA-001-04`: 같거나 모를 때
     ({"temp_id": "NEW-CAUSE-1", "id": "DATA-001-04", "expected_at_base": "DATA-001-04"}, "NEW-CAUSE-1 → DATA-001-04"),
-    # 계획 당시 번호를 모를 때(expected_at_base 없음)도 기본형
+    ({"temp_id": "NEW-CAUSE-1", "id": "DATA-001-04", "previous_id": "DATA-001-04"}, "NEW-CAUSE-1 → DATA-001-04"),
     ({"temp_id": "NEW-CAUSE-1", "id": "DATA-001-04"}, "NEW-CAUSE-1 → DATA-001-04"),
 ])
 def test_id_assignment_wording(row, expected):
@@ -428,25 +462,33 @@ def test_id_assignment_wording(row, expected):
 
 def test_id_assignment_phrase_is_the_one_written_in_write_flow():
     assert "'계획 당시 DATA-001-03 → DATA-001-04 (main에 먼저 머지된 원인)'" in WRITE_FLOW
+    assert "'DATA-001-03 → DATA-001-04 재할당'" in WRITE_FLOW
     assert "NEW-CAUSE-1 → DATA-001-04" in WRITE_FLOW
 
 
+NEW_CAUSE_USER = {"op": "new-cause", "temp_id": "DATA-001-03",
+                  "cause": {"resolution_verification": {"status": "unverified", "method": "근거: 사용자 진술"}}}
+
+
 @pytest.mark.parametrize("ops,expected", [
-    # write-flow.md §4 "계획에 `set-resolution`이 있거나 새 원인이면 unverified"(옛 §4 L113-114). 사유 어휘(op 이름)는 문서 출처 없음 — 사용자 결정 필요
-    ([{"op": "new-cause", "temp_id": "DATA-001-03"}], [("DATA-001-03", "unverified", "new-cause")]),
+    # write-flow.md §4 "계획에 `set-resolution`이 있거나 새 원인이면 unverified"(옛 §4 L113-114); 사유 어휘는 사용자 결정(contracts.md §3.2 summary 행)
+    ([{"op": "new-cause", "temp_id": "DATA-001-03"}], [("DATA-001-03", "unverified", "신규 원인 (new-cause)")]),
+    ([{"op": "set-resolution", "cause": "DATA-001-02"}], [("DATA-001-02", "unverified", "해결책 변경 (set-resolution)")]),
+    # db-authoring.md L78·L270: 사용자 진술만 있으면 method "근거: 사용자 진술"(unverified)
+    ([NEW_CAUSE_USER], [("DATA-001-03", "unverified", "신규 원인 (new-cause), 근거: 사용자 진술")]),
+    # 어휘가 정해지지 않은 op는 op 이름만(어휘를 지어내지 않는다)
     ([{"op": "new-type", "temp_id": "NETWORK-002", "first_cause": {"temp_id": "NETWORK-002-01"}}],
-     [("NETWORK-002-01", "unverified", "new-type")]),
-    ([{"op": "set-resolution", "cause": "DATA-001-02"}], [("DATA-001-02", "unverified", "set-resolution")]),
+     [("NETWORK-002-01", "unverified", "신규 유형 (new-type)")]),
     # "같은 계획의 `verify-resolution`이 적용된 경우만 verified"
     ([{"op": "new-cause", "temp_id": "DATA-001-03"}, {"op": "verify-resolution", "cause": "DATA-001-03"}],
-     [("DATA-001-03", "verified", None)]),
+     [("DATA-001-03", "verified", "verify-resolution")]),
     ([{"op": "set-resolution", "cause": "DATA-001-02"}, {"op": "verify-resolution", "cause": "DATA-001-02"}],
-     [("DATA-001-02", "verified", None)]),
-    ([{"op": "verify-resolution", "cause": "DATA-001-02"}], [("DATA-001-02", "verified", None)]),
+     [("DATA-001-02", "verified", "verify-resolution")]),
+    ([{"op": "verify-resolution", "cause": "DATA-001-02"}], [("DATA-001-02", "verified", "verify-resolution")]),
     # 다른 원인의 verify-resolution은 이 원인을 올리지 않는다
     ([{"op": "new-cause", "temp_id": "DATA-001-03"}, {"op": "verify-resolution", "cause": "DATA-001-02"}],
-     [("DATA-001-03", "unverified", "new-cause"), ("DATA-001-02", "verified", None)]),
-    # 규칙 없음: 해결책을 건드리지 않는 계획(append·update-fix 등)은 상태를 계산하지 않는다
+     [("DATA-001-03", "unverified", "신규 원인 (new-cause)"), ("DATA-001-02", "verified", "verify-resolution")]),
+    # 해결책을 바꾸는 op가 없으면 값 없음(null → "해당 없음")
     ([{"op": "append", "cause": "DATA-001-02"}, {"op": "update-fix", "cause": "DATA-001-02"}], []),
 ])
 def test_resolution_states(ops, expected):
@@ -454,39 +496,36 @@ def test_resolution_states(ops, expected):
     assert got == expected
 
 
-def test_resolution_state_lines_and_no_rule_case():
+def test_resolution_state_lines_and_not_applicable_case():
     scr = _render_screen()
     for states, line in [
-        ([{"cause": "DATA-001-03", "state": "unverified", "reason": "new-cause"}],
-         "해결책 검증 상태: DATA-001-03 — unverified(new-cause)"),
-        ([{"cause": "DATA-001-03", "state": "verified", "reason": None}], "해결책 검증 상태: DATA-001-03 — verified"),
+        ([{"cause": "DATA-001-03", "state": "unverified", "reason": "신규 원인 (new-cause)"}],
+         "해결책 검증 상태: DATA-001-03 — unverified(신규 원인 (new-cause))"),
+        ([{"cause": "DATA-001-03", "state": "unverified", "reason": "해결책 변경 (set-resolution)"}],
+         "해결책 검증 상태: DATA-001-03 — unverified(해결책 변경 (set-resolution))"),
+        ([{"cause": "DATA-001-03", "state": "unverified", "reason": "신규 원인 (new-cause), 근거: 사용자 진술"}],
+         "해결책 검증 상태: DATA-001-03 — unverified(신규 원인 (new-cause), 근거: 사용자 진술)"),
+        ([{"cause": "DATA-001-03", "state": "unverified", "reason": "신규 유형 (new-type)"}],
+         "해결책 검증 상태: DATA-001-03 — unverified(신규 유형 (new-type))"),
+        ([{"cause": "DATA-001-03", "state": "verified", "reason": "verify-resolution"}],
+         "해결책 검증 상태: DATA-001-03 — verified(verify-resolution)"),
     ]:
         assert line in db_summary.render_markdown(scr, {}, _extra(resolution=states)).splitlines()
-    # 규칙 밖 계획: 계산하지 않고 원값을 보인다(문서 출처 없음 — "(규칙 없음 — 원값: …)" 표식)
-    raw = db_summary.render_markdown(scr, {}, _extra(resolution=[], resolution_raw="DATA-001-02 unverified"))
-    assert "해결책 검증 상태: (규칙 없음 — 원값: DATA-001-02 unverified)" in raw.splitlines()
     none = db_summary.render_markdown(scr, {}, _extra(resolution=[]))
-    assert "해결책 검증 상태: (규칙 없음 — 원값 없음)" in none.splitlines()
-    # 문구 출처: write-flow.md §4 (옛 §4 L105-106, L113-114)
+    assert "해결책 검증 상태: 해당 없음 (이번 계획은 해결책을 바꾸지 않음)" in none.splitlines()     # type.md 현재 상태를 읽지 않는다
     for phrase in ("해결책 검증 상태", "unverified(사유)", "verified", "set-resolution", "verify-resolution"):
-        assert phrase in WRITE_FLOW, phrase
+        assert phrase in WRITE_FLOW, phrase                                        # write-flow.md §4 (옛 §4 L105-106, L113-114)
+    assert not hasattr(db_summary, "target_resolution_raw")
 
 
-@pytest.mark.parametrize("raw_status,expected", [
-    ("unverified", "DATA-001-02 unverified"), ("verified", "DATA-001-02 verified"), (None, "DATA-001-02 None"),
-])
-def test_target_resolution_raw_is_the_type_md_value(tmp_path, raw_status, expected):
-    """문서 출처 없음: 규칙 밖 계획에 type.md의 resolution_verification.status 원값을 붙인다."""
-    import yaml
-    path = tmp_path / "data" / "DATA-001-x" / "type.md"
-    path.parent.mkdir(parents=True)
-    cause = {"id": "DATA-001-02", "title": "t"}
-    if raw_status:
-        cause["resolution_verification"] = {"status": raw_status}
-    path.write_text("---\n" + yaml.safe_dump({"id": "DATA-001", "causes": [cause]}) + "---\n", encoding="utf-8")
-    assert db_summary.target_resolution_raw(tmp_path, "DATA-001-02") == expected
-    assert db_summary.target_resolution_raw(tmp_path, "DATA-001-09") is None
-    assert db_summary.target_resolution_raw(tmp_path, "DATA-001") is None and db_summary.target_resolution_raw(tmp_path, None) is None
+def test_resolution_vocabulary_is_listed_in_contracts_and_07_example_matches_render():
+    contracts = (REPO / "docs" / "design" / "contracts.md").read_text(encoding="utf-8")
+    for phrase in ("신규 원인 (new-cause)", "신규 유형 (new-type)", "해결책 변경 (set-resolution)", "근거: 사용자 진술",
+                   "해당 없음 (이번 계획은 해결책을 바꾸지 않음)", "재할당 내역: 확인 불가 (이전 적용 ID 기록 없음)", "pr_ids_recorded", "(제목 없음)"):
+        assert phrase in contracts, phrase
+    workflow = (REPO / "docs" / "design" / "07-workflow.md").read_text(encoding="utf-8")
+    assert "해결책 검증 상태: DATA-001-03 — unverified(신규 원인 (new-cause))" in workflow
+    assert "근거: 사용자 진술" in (REPO / "plugin/skills/telephony-triage/reference/db-authoring.md").read_text(encoding="utf-8")
 
 
 @pytest.mark.parametrize("message,target", [
@@ -517,7 +556,7 @@ def test_target_title(tmp_path, target, title):
 
 @pytest.mark.parametrize("jira,target,title,head", [
     ({"key": "MOCK-7002"}, "DATA-001-03", "SIM 미준비", "## push 전 확인: MOCK-7002 → DATA-001-03 SIM 미준비"),
-    ({"key": "MOCK-7002"}, "DATA-001-03", None, "## push 전 확인: MOCK-7002 → DATA-001-03"),       # 제목을 못 찾으면 ID만
+    ({"key": "MOCK-7002"}, "DATA-001-03", None, "## push 전 확인: MOCK-7002 → DATA-001-03 (제목 없음)"),   # 제목을 못 읽으면 "(제목 없음)"(contracts.md §3.2 summary 행)
     ({}, "DATA-001-03", "SIM 미준비", "## push 전 확인: DATA-001-03 → DATA-001-03 SIM 미준비"),   # KEY 없으면 원인 ID
     # 대상 ID 없음: 조용히 생략하지 않고 원값(커밋 메시지 첫 줄)을 보인다 — 문서 출처 없음
     ({"key": "MOCK-7002"}, None, None,
@@ -534,12 +573,50 @@ def test_md_cell_and_fence():
     assert db_summary._fence("a ```` b", "diff") == "`````diff\na ```` b\n`````"
 
 
-def test_render_markdown_reassignment_line_when_plan_has_pr_number():
-    """sync-pr 재적용 계획(pr.number 있음): 재할당 줄의 규칙은 입력이 없어 표식만 낸다(문서 출처 없음 — 사용자 결정 필요)."""
-    scr = _render_screen(ids=[{"temp_id": "NEW-CAUSE-1", "id": "DATA-001-04"}])
-    with_pr = db_summary.render_markdown(scr, {"pr": {"number": 12}}, _extra())
-    assert "- 재할당(이전 적용 대비): (규칙 없음 — 이전 적용 ID가 입력에 없음)" in with_pr
-    assert "재할당(이전" not in db_summary.render_markdown(scr, {"pr": {"number": None}}, _extra())
+def _reassign_text(ids, plan) -> str:
+    return db_summary.render_markdown(_render_screen(ids=ids), plan, _extra())
+
+
+UNKNOWN = "- 재할당 내역: 확인 불가 (이전 적용 ID 기록 없음)"
+
+
+def test_render_markdown_reassignment_four_cases_and_no_pr():
+    published = {"pr": {"number": 12, "branch": "issue/X", "head_sha": "a" * 40}}
+    # 같음: 줄 없음
+    same = _reassign_text([{"temp_id": "NEW-CAUSE-1", "id": "DATA-001-04"}], {"pr": {**published["pr"], "ids": {"NEW-CAUSE-1": "DATA-001-04"}}})
+    assert "- NEW-CAUSE-1 → DATA-001-04\n" in same and "재할당" not in same and "확인 불가" not in same
+    # 계획 당시 다름
+    base = _reassign_text([{"temp_id": "NEW-CAUSE-1", "id": "DATA-001-04", "expected_at_base": "DATA-001-03"}], {})
+    assert "- NEW-CAUSE-1 → DATA-001-04: 계획 당시 DATA-001-03 → DATA-001-04 (main에 먼저 머지된 원인)" in base
+    # 이전 적용 다름
+    prev = _reassign_text([{"temp_id": "NEW-CAUSE-1", "id": "DATA-001-04", "previous_id": "DATA-001-03"}],
+                          {"pr": {**published["pr"], "ids": {"NEW-CAUSE-1": "DATA-001-03"}}})
+    assert "- NEW-CAUSE-1 → DATA-001-04: DATA-001-03 → DATA-001-04 재할당" in prev
+    # 기록 없음: PR은 올라갔는데 pr.ids가 없다(이 변경 전에 만든 PR) — PR 제목을 추정하지 않는다
+    assert UNKNOWN in _reassign_text([{"temp_id": "NEW-CAUSE-1", "id": "DATA-001-04"}], published)
+    # pr 자체 없음(첫 적용): 줄 없음
+    never = {"pr": {"number": None, "branch": "issue/X", "head_sha": None}}
+    assert "재할당" not in _reassign_text([{"temp_id": "NEW-CAUSE-1", "id": "DATA-001-04"}], never)
+    assert "확인 불가" not in _reassign_text([{"temp_id": "NEW-CAUSE-1", "id": "DATA-001-04"}], {})
+
+
+def test_screen_adds_previous_id_only_when_plan_pr_ids_exist_and_differ(tmp_path):
+    import subprocess as sp
+    wt = tmp_path / "wt"
+    wt.mkdir()
+    sp.run(["git", "init", "-q", str(wt)], check=True)
+    git = lambda repo, *a, check=True: sp.run(["git", "-C", str(repo), *a], capture_output=True, text=True)  # noqa: E731
+    stage = {"apply": {"ids": [{"temp_id": "NEW-CAUSE-1", "id": "DATA-001-04"}, {"temp_id": "NEW-CAUSE-2", "id": "DATA-001-05"}],
+                       "operations": [], "commit_message": "[DATA-001-04] x"}, "config_check": {"push_allowed": True}}
+
+    def ids_for(plan):
+        out = db_summary.screen(wt, plan, stage, {"branch": "b"}, {}, job="j", base="main", git=git, remote_sha=None,
+                                open_prs=[], push_note=None)
+        return out["ids"]
+    assert ids_for({}) == stage["apply"]["ids"]                                    # 기록 없음: 키를 넣지 않는다(JSON 바이트 동일)
+    assert ids_for({"pr": {"number": None, "branch": "b", "head_sha": None}}) == stage["apply"]["ids"]
+    got = ids_for({"pr": {"ids": {"NEW-CAUSE-1": "DATA-001-03", "NEW-CAUSE-2": "DATA-001-05"}}})
+    assert got[0]["previous_id"] == "DATA-001-03" and "previous_id" not in got[1]
 
 
 def test_render_markdown_collapses_newlines_in_single_line_values():

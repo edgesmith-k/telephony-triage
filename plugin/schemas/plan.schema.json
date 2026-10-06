@@ -89,7 +89,8 @@
       "properties": {
         "number": {"type": ["integer", "null"], "minimum": 1},
         "branch": {"type": "string", "minLength": 1},
-        "head_sha": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/sha"}]}
+        "head_sha": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/sha"}]},
+        "ids": {"description": "publish가 기록한 이번 적용의 임시 ID → 최종 ID(summary가 이전 적용 대비 재할당을 보이는 데 쓴다)", "type": "object", "additionalProperties": {"type": "string", "minLength": 1}}
       }
     },
     "included_pending": {

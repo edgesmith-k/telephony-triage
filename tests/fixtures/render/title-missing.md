@@ -1,4 +1,4 @@
-## push 전 확인: MOCK-7001 → DATA-001-02 Roaming disabled
+## push 전 확인: MOCK-7001 → DATA-001-02 (제목 없음)
 구분: 분석 (analyze)
 브랜치: issue/MOCK-7001 (신규) → PR 대상: main
 리뷰어: mock-org/telephony-data-owners

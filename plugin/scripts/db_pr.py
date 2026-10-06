@@ -764,6 +764,15 @@ def summary(ctx: Ctx, wt: Path, markdown: bool = False) -> dict:
 # -- publish -------------------------------------------------------------------------------
 
 
+def _schema_allows_pr_ids(repo: Path, base_sha: str) -> bool:
+    """`base_sha` 커밋의 `schema/plan.schema.json`이 `pr.ids`를 아는가(옛 스키마는 `pr`의 알 수 없는 키를 거부해 재적용이 깨진다)."""
+    proc = _git(repo, "show", f"{base_sha}:schema/plan.schema.json", check=False)
+    try:
+        return "ids" in json.loads(proc.stdout)["properties"]["pr"]["properties"] if proc.returncode == 0 else False
+    except (ValueError, KeyError, TypeError):
+        return False
+
+
 def publish(ctx: Ctx, wt: Path, branch: str, lease: str, approved: str) -> tuple[dict, int]:
     job_dir, job = _job_of(wt, ctx)
     _owned_worktree(ctx, wt)
@@ -831,6 +840,10 @@ def publish(ctx: Ctx, wt: Path, branch: str, lease: str, approved: str) -> tuple
     plan_path = Path(stage_result.get("plan") or job_dir / PLAN)
     plan = json.loads(plan_path.read_text(encoding="utf-8"))
     plan["pr"] = {"number": number, "branch": branch, "head_sha": head}
+    applied_ids = {i["temp_id"]: i["id"] for i in (stage_result.get("apply") or {}).get("ids") or [] if i.get("temp_id")}
+    ids_recorded = bool(applied_ids) and _schema_allows_pr_ids(ctx.repo, state["base_sha"])
+    if ids_recorded:    # summary가 재할당(이전 적용 대비)을 보이는 데 쓴다. 검증에 쓴 base_sha의 스키마가 pr.ids를 알 때만
+        plan["pr"]["ids"] = applied_ids
     plan["base_sha"] = state["base_sha"]
     included = {i["file"]: i for i in plan.get("included_pending") or []}
     inc_dir = job_dir / "included_pending"
@@ -843,7 +856,8 @@ def publish(ctx: Ctx, wt: Path, branch: str, lease: str, approved: str) -> tuple
     plan["included_pending"] = sorted(included.values(), key=lambda i: i["file"])
     plan_path.write_text(json.dumps(plan, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
     result = {"published": True, "pushed": True, "branch": branch, "head_sha": head, "lease": lease,
-              "pr": {"number": number, "url": url, "action": action}, "plan": str(plan_path)}
+              "pr": {"number": number, "url": url, "action": action}, "plan": str(plan_path),
+              "pr_ids_recorded": ids_recorded}
     if gh_error:
         result["gh_error"] = f"push는 됐지만 PR {action}에 실패했다: {gh_error}"
         return result, USAGE

@@ -329,7 +329,7 @@ def test_summary_markdown_is_opt_in_and_leaves_json_and_state_files_alone():
     md = ws.run("db_pr.py", ["summary", wt, "--format", "markdown"])
     assert md.returncode == 0 and md.stdout.startswith("## push 전 확인: MOCK-7002 → DATA-001-03 SIM 미준비\n")
     assert md.stdout.splitlines()[-1] == f"approved_hash: {shown['approved_hash']}"   # 같은 승인 해시
-    assert "해결책 검증 상태: DATA-001-03 — unverified(new-cause)" in md.stdout
+    assert "해결책 검증 상태: DATA-001-03 — unverified(신규 원인 (new-cause))" in md.stdout
     assert "NEW-CAUSE-1 → DATA-001-03" in md.stdout and shown["commit_message"] in md.stdout
     assert {name: (job / name).read_bytes() for name in files} == files   # state.json·pr.json 바이트 동일
     assert len(md.stdout.encode()) < len(default.stdout.encode())
@@ -615,6 +615,75 @@ def test_same_number_race_resolved_by_sync_pr():
     ws.merge("issue/MOCK-7010")                      # 텍스트 충돌 없이 머지된다
     files = ws.remote_files("main")
     assert f"{DATA_DIR}/fixtures/DATA-001-03.log" in files and f"{DATA_DIR}/fixtures/DATA-001-04.log" in files
+
+
+def _db_with_old_plan_schema():
+    """`pr.ids`를 모르는 옛 plan.schema.json을 가진 이슈 DB(샘플 원본은 건드리지 않는다)."""
+    from runner import copy_db
+    db = copy_db()
+    path = db / "schema" / "plan.schema.json"
+    schema = json.loads(path.read_text(encoding="utf-8"))
+    del schema["properties"]["pr"]["properties"]["ids"]
+    path.write_text(json.dumps(schema, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return db
+
+
+def _ship_for_race(ws):
+    ws.plan("MOCK-7002", "p7-analyze-new-cause.plan.json")
+    ws.put("MOCK-7002", "fixtures/cut-1.log", SIM_LOG)
+    ws.plan("MOCK-7010", radio_off_plan())
+    ws.put("MOCK-7010", "fixtures/cut-1.log", radio_off_log())
+    ws.ship("MOCK-7002", "issue/MOCK-7002")
+    return ws.ship("MOCK-7010", "issue/MOCK-7010")
+
+
+def test_publish_records_pr_ids_and_summary_shows_reassignment_against_previous_apply():
+    ws = Workspace()                      # 샘플 DB 스키마가 pr.ids를 안다 — 사본 바꿔치기 없음
+    out = _ship_for_race(ws)
+    assert out["publish"]["pr_ids_recorded"] is True
+    assert ws.read_plan("MOCK-7010")["pr"]["ids"] == {"NEW-CAUSE-1": "DATA-001-03"}      # publish가 이번 적용을 기록
+    ws.merge("issue/MOCK-7002")
+    found = ws.db_pr("find-plan", "--branch", "issue/MOCK-7010")
+    ws.acquire(found["job"])
+    ws.stage("MOCK-7010", "issue/MOCK-7010")                                           # 기록이 든 계획도 재적용된다(스키마 통과)
+    summary = ws.db_pr("summary", ws.wt("MOCK-7010"))
+    assert summary["ids"][0]["previous_id"] == "DATA-001-03" and summary["ids"][0]["expected_at_base"] == "DATA-001-03"
+    md = ws.run("db_pr.py", ["summary", ws.wt("MOCK-7010"), "--format", "markdown"]).stdout
+    assert ("- NEW-CAUSE-1 → DATA-001-04: 계획 당시 DATA-001-03 → DATA-001-04 (main에 먼저 머지된 원인); "
+            "DATA-001-03 → DATA-001-04 재할당") in md
+    ws.db_pr("discard", ws.wt("MOCK-7010"))
+
+
+def test_publish_skips_pr_ids_when_base_schema_is_old_and_summary_says_unknown():
+    ws = Workspace(src=_db_with_old_plan_schema())      # base_sha 커밋의 스키마가 pr.ids를 모른다 — 기록하면 재적용이 거부된다
+    ws.plan("MOCK-7002", "p7-analyze-new-cause.plan.json")
+    ws.put("MOCK-7002", "fixtures/cut-1.log", SIM_LOG)
+    out = ws.ship("MOCK-7002", "issue/MOCK-7002")
+    assert out["publish"]["pr_ids_recorded"] is False and "ids" not in ws.read_plan("MOCK-7002")["pr"]
+    ws.acquire("MOCK-7002")
+    ws.stage("MOCK-7002", "issue/MOCK-7002")
+    summary = ws.db_pr("summary", ws.wt("MOCK-7002"))
+    assert all("previous_id" not in row for row in summary["ids"])                       # 기록 없으면 키를 넣지 않는다
+    md = ws.run("db_pr.py", ["summary", ws.wt("MOCK-7002"), "--format", "markdown"]).stdout
+    assert "- 재할당 내역: 확인 불가 (이전 적용 ID 기록 없음)" in md
+    ws.db_pr("discard", ws.wt("MOCK-7002"))
+
+
+def test_publish_checks_base_sha_schema_not_the_working_copy():
+    ws = Workspace(src=_db_with_old_plan_schema())      # base_sha 커밋의 스키마는 pr.ids를 모른다
+    ws.plan("MOCK-7002", "p7-analyze-new-cause.plan.json")
+    ws.put("MOCK-7002", "fixtures/cut-1.log", SIM_LOG)
+    ws.acquire("MOCK-7002")
+    ws.stage("MOCK-7002", "issue/MOCK-7002")
+    wt = ws.wt("MOCK-7002")
+    new_schema = (REPO / "plugin" / "schemas" / "plan.schema.json").read_text(encoding="utf-8")
+    (wt / "schema" / "plan.schema.json").write_text(new_schema, encoding="utf-8")       # 작업 사본만 pr.ids를 안다
+    assert "ids" in json.loads(new_schema)["properties"]["pr"]["properties"]
+    summary = ws.db_pr("summary", wt)
+    ws.commit("MOCK-7002")
+    pub = ws.db_pr("publish", wt, "--branch", "issue/MOCK-7002", "--lease", "new", "--approved", summary["approved_hash"])
+    assert pub["pr_ids_recorded"] is False and "ids" not in ws.read_plan("MOCK-7002")["pr"]
+    ws.db_pr("discard", wt)
 
 
 def test_sync_pr_without_plan_only_guides():

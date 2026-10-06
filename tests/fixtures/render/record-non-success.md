@@ -119,7 +119,7 @@
 | R6 | other | 알 수 없음 |
 
 승인 필요: R4 — 메인테이너 승인 필수
-해결책 검증 상태: DATA-001-04 — unverified(new-cause)
+해결책 검증 상태: DATA-001-04 — unverified(신규 원인 (new-cause))
 
 ### 커밋 메시지 / PR 제목
 

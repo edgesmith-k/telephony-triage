@@ -288,7 +288,7 @@ Android 버전과 브랜치마다 소스 트리가 다르므로 **분석할 때�
    ### 검증 결과 (규칙·해결책 변경이 있을 때, 05-verification.md §5.12 (1))
    R1 파서 ✅ / R2 양성 ✅ (C=1, 다른 원인 C=0) / R3 음성 ✅ (C=0 12/12) / R4 교차 회귀 ✅ / R5 이벤트 diff ✅ (추가 3, 변경 0) / R6 추가 표본: 없음
    승인 필요: 없음   (R5 needs-approval이면 "메인테이너 승인 필요"로 표시)
-   해결책 검증 상태: unverified (신규)
+   해결책 검증 상태: DATA-001-03 — unverified(신규 원인 (new-cause))
 
    ### 커밋 메시지 / PR 제목
    [DATA-001-02] add ABC-12345: 로밍 중 데이터 로밍 OFF로 SETUP_DATA_CALL 미발생

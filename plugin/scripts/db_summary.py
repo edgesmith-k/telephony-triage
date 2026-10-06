@@ -255,6 +255,11 @@ def screen(wt: Path, plan: dict, stage_result: dict, state: dict, db_cfg: dict, 
     at_base = {i.get("temp_id"): i.get("id") for i in stage_result.get("ids_at_base") or []}
     ids = [({**i, "expected_at_base": at_base[i["temp_id"]]} if i.get("temp_id") in at_base else dict(i))
            for i in applied.get("ids") or []]
+    recorded = (plan.get("pr") or {}).get("ids")    # publish가 기록한 이전 적용 ID(`{temp_id: id}`). 없으면 previous_id 키를 만들지 않는다
+    if isinstance(recorded, dict):
+        for row in ids:
+            if recorded.get(row.get("temp_id")) not in (None, row["id"]):
+                row["previous_id"] = recorded[row["temp_id"]]
     keys = [i["id"] for i in ids] + [jira.get("key")] if jira else [i["id"] for i in ids]
     for op in applied.get("operations") or []:
         for field in ("cause", "type", "to", "id", "a", "b", "owner"):
@@ -410,58 +415,58 @@ def target_title(wt: Path, target: str | None) -> str | None:
 
 
 def id_assignment(row: dict) -> str:
-    """ID 할당 한 줄. `expected_at_base`(계획 `base_sha` 당시 번호)가 최종 번호와 다르면 write-flow §4 문구를 붙인다.
-
-    '이전 적용(PR 제목·계획 pr 기록)과 다르면 재할당' 분기는 이전 적용 ID의 출처(요약 입력에 없음)가 정해져 있지 않아 구현하지 않는다.
-    """
+    """ID 할당 한 줄(write-flow §4 ID 할당 문구). `expected_at_base`(계획 `base_sha` 당시 번호)가 다르면
+    '계획 당시 X → Y (main에 먼저 머지된 원인)', `previous_id`(이전 적용 번호, 계획 `pr.ids` 기록)가 다르면 'X → Y 재할당'."""
     line = f"{row['temp_id']} → {row['id']}"
+    notes = []
     base = row.get("expected_at_base")
     if base not in (None, row["id"]):
-        line += f": 계획 당시 {base} → {row['id']} (main에 먼저 머지된 원인)"
-    return line
+        notes.append(f"계획 당시 {base} → {row['id']} (main에 먼저 머지된 원인)")
+    if row.get("previous_id") not in (None, row["id"]):
+        notes.append(f"{row['previous_id']} → {row['id']} 재할당")
+    return line + (": " + "; ".join(notes) if notes else "")
+
+
+USER_STATEMENT = "근거: 사용자 진술"      # db-authoring.md: 사용자 진술만 있으면 method에 이 문구, status는 unverified
 
 
 def resolution_states(operations: list[dict]) -> list[dict]:
-    """해결책 검증 상태 `[{cause, state, reason}]`. write-flow §4: 새 원인이거나 `set-resolution`이 있으면 unverified,
-    같은 계획의 `verify-resolution`이 적용된 경우만 verified. 그 밖의 원인은 규칙이 없어 나오지 않는다."""
-    reasons: dict[str, str] = {}
+    """해결책 검증 상태 `[{cause, state, reason}]` — 계획 op만 보고 정한다(type.md 현재 상태는 읽지 않는다).
+
+    write-flow §4: 새 원인이거나 `set-resolution`이 있으면 unverified, 같은 계획의 `verify-resolution`이 적용된 경우만 verified.
+    `state`는 원값(verified/unverified), `reason`은 고정 어휘: "신규 원인 (new-cause)", "해결책 변경 (set-resolution)",
+    새 원인 본문 `resolution_verification.method`가 "근거: 사용자 진술"이면 그 문구를 덧붙인다. `new-type`은 "신규 유형 (new-type)". 어휘가 정해지지 않은 op
+    (verify-resolution)는 op 이름만 보인다(렌더가 괄호로 감싼다). 해결책을 바꾸는 op가 없으면 빈 목록(해당 없음).
+    """
+    reasons: dict[str, list[str]] = {}
     verified: set[str] = set()
     for op in operations:
         kind = op.get("op")
+        body = None
         if kind == "new-cause" and isinstance(op.get("temp_id"), str):
-            reasons.setdefault(op["temp_id"], "new-cause")
+            cause, label, body = op["temp_id"], "신규 원인 (new-cause)", op.get("cause")
         elif kind == "new-type" and isinstance((op.get("first_cause") or {}).get("temp_id"), str):
-            reasons.setdefault(op["first_cause"]["temp_id"], "new-type")
+            cause, label, body = op["first_cause"]["temp_id"], "신규 유형 (new-type)", op["first_cause"].get("cause")
         elif kind == "set-resolution" and isinstance(op.get("cause"), str):
-            reasons.setdefault(op["cause"], "set-resolution")
+            cause, label = op["cause"], "해결책 변경 (set-resolution)"
         elif kind == "verify-resolution" and isinstance(op.get("cause"), str):
             verified.add(op["cause"])
-            reasons.setdefault(op["cause"], "verify-resolution")
-    return [{"cause": c, "state": "verified" if c in verified else "unverified",
-             "reason": None if c in verified else r} for c, r in reasons.items()]
-
-
-def target_resolution_raw(wt: Path, target: str | None) -> str | None:
-    """규칙이 없는 계획용 원값: 대상 원인 type.md의 `resolution_verification.status`를 `<ID> <status>`로. 없으면 None."""
-    if not target or not CAUSE_ID_RE.fullmatch(target):
-        return None
-    for path in sorted(wt.glob(f"*/{target.rsplit('-', 1)[0]}-*/type.md")):
-        try:
-            data = parse_frontmatter_text(path.read_text(encoding="utf-8"), str(path))
-        except (IssueDbError, OSError):
+            reasons.setdefault(op["cause"], [])
             continue
-        for cause in data.get("causes") or []:
-            if isinstance(cause, dict) and cause.get("id") == target:
-                rv = cause.get("resolution_verification")
-                return f"{target} {rv.get('status') if isinstance(rv, dict) else None}"
-    return None
+        else:
+            continue
+        found = reasons.setdefault(cause, [])
+        found.append(label)
+        if isinstance(body, dict) and USER_STATEMENT in str((body.get("resolution_verification") or {}).get("method") or ""):
+            found.append(USER_STATEMENT)
+    return [{"cause": c, "state": "verified", "reason": "verify-resolution"} if c in verified else
+            {"cause": c, "state": "unverified", "reason": ", ".join(dict.fromkeys(found))} for c, found in reasons.items()]
 
 
 def screen_extras(wt: Path, scr: dict, operations: list[dict], digest: str) -> dict:
     target = target_id(scr.get("commit_message"))
     return {"target_id": target, "target_title": target_title(wt, target),
-            "resolution": resolution_states(operations), "resolution_raw": target_resolution_raw(wt, target),
-            "approved_hash": digest}
+            "resolution": resolution_states(operations), "approved_hash": digest}
 
 
 def _result_cell(row: dict) -> str:
@@ -501,7 +506,7 @@ def render_markdown(scr: dict, plan: dict, extra: dict) -> str:
     key = jira.get("key") or target or (ids[0]["id"] if ids else None)
     head = f"## push 전 확인: {_md_line(key) or '(대상 없음)'}"
     if target:
-        head += f" → {target} {_md_line(title)}" if title else f" → {target}"
+        head += f" → {target} {_md_line(title) if title else '(제목 없음)'}"
     else:       # 대상 ID(`[<원인 또는 유형 ID>]`)를 못 정하면 조용히 생략하지 않고 원값을 보인다
         head += f" → ({NO_RULE} — 원값: {_md_line((scr.get('commit_message') or '').splitlines()[0] if scr.get('commit_message') else '') or '없음'})"
     branch = scr["branch"]
@@ -516,8 +521,9 @@ def render_markdown(scr: dict, plan: dict, extra: dict) -> str:
         or ["| 없음 | | |"]
     out += ["", "### ID 할당", ""]
     rows = [f"- {id_assignment(i)}" for i in ids]
-    if (plan.get("pr") or {}).get("number"):    # sync-pr 재적용: 이전 적용 ID는 입력에 없다
-        rows.append(f"- 재할당(이전 적용 대비): ({NO_RULE} — 이전 적용 ID가 입력에 없음)")
+    pr = plan.get("pr") or {}
+    if ids and (pr.get("number") or pr.get("head_sha")) and not isinstance(pr.get("ids"), dict):
+        rows.append("- 재할당 내역: 확인 불가 (이전 적용 ID 기록 없음)")     # 이 기록 도입 전에 올린 PR
     rows += [_md_line(f"- fixture: {fx.get('path')} ({fx.get('kind')}, {fx.get('for')})") for fx in scr["fixtures"]]
     rows += [f"- pending 피드백 포함: {json.dumps(p, ensure_ascii=False)}" for p in scr["pending_included"]]
     out += rows or ["없음"]
@@ -554,12 +560,10 @@ def render_markdown(scr: dict, plan: dict, extra: dict) -> str:
                                 if approval else "없음")]
     states = extra.get("resolution") or []
     if states:
-        out += [f"해결책 검증 상태: {s['cause']} — " + (f"unverified({s['reason']})" if s["state"] == "unverified"
-                                                      else "verified") for s in states]
-    else:
-        raw = extra.get("resolution_raw")      # 규칙이 없는 계획: 계산하지 않고 type.md 원값을 보인다
-        out.append(f"해결책 검증 상태: ({NO_RULE} — 원값: {_md_line(raw)})" if raw else
-                   f"해결책 검증 상태: ({NO_RULE} — 원값 없음)")
+        for st in states:
+            out.append(f"해결책 검증 상태: {st['cause']} — {st['state']}({st['reason']})")
+    else:       # 해결책을 바꾸는 op(new-cause·new-type·set-resolution·verify-resolution)가 없다 — type.md 현재 상태는 읽지 않는다
+        out.append("해결책 검증 상태: 해당 없음 (이번 계획은 해결책을 바꾸지 않음)")
     out += ["", "### 커밋 메시지 / PR 제목", "", _fence(scr["commit_message"]), f"PR 제목: {_md_line(scr['pr_title'])}"]
     if scr.get("push_note"):
         out.append(_md_line(scr["push_note"]))
