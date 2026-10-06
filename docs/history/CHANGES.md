@@ -741,3 +741,7 @@ SKILL §실행 규칙을 `reference/rules.md`(1.5KB)로 옮기고 analyze·recor
 ## W11 기타 보완 묶음 (2026-10-07)
 
 항목별 커밋 8개. `list_site_todos`는 `git ls-files` 기준(무시 디렉토리 제외, git 없거나 빈 결과면 rglob — 73곳), `fix_exec_bits`는 무시 경로를 건너뛰고 셰뱅 파일 16개를 100755로, `make_bundle` CHECKS에 `exec-bits`(자동)·`plugin-json`(manual, 사람 확인 4건). doctor 스냅샷 경고에 기준일, `README.md` 작성, `99-deferred §E` guard cat/sed 관찰 종결(eval 트레이스는 yaml/py/json 읽기). guard 규칙 10은 site-defaults `guard.raw_read{names, exempt_dirs}`로 내장 목록에 더한다(합집합, 사용자 config 무관, 형식 오류는 경고). `tools/usage_stats.py`(S-7: PR 시간·취소 비율·질문 수, PR 시간은 plan.json mtime 근사). 결정 D1~D6·완료 승인은 위임 결정 에이전트, 리뷰 차단 0·권고 9건 반영. 보류(사용자 결정): 파생 이벤트 `msg` 복사 제거(스냅샷 재생성), Windows 보정 잔존물, db-authoring 스키마 요약 확장(eval ×3, W 끝). 전체 테스트(Windows) 980 통과·4 실패(환경, HEAD 동일).
+
+## W12 문서 정리 (2026-10-07)
+
+`ARCHITECTURE_REVIEW_2026-10.md`·`PLUGIN_IMPROVEMENT_HANDOFF.md` 본문을 `docs/history/architecture-review-2026-10.md`·`improvement-handoff-2026-10.md`로 옮기고, 같은 경로에 RF 색인·열린 R 항목·인용 앵커(RF-2·R15·결정 (b))만 둔 2.8KB 색인을 새로 썼다(HANDOFF는 안내 스텁, 경로 삭제는 사용자 확인). 사내 보완 단계별 읽을 것은 `docs/tasks.md` 표 하나(S-0~S-7)와 `tools/context_pack.py S-n`(§15.5 단계 행·비고·파일·절 출력, 코드 펜스 인식)으로, §15.5·§11.0·CLAUDE.md·GUIDE 시작 문구가 pack을 가리킨다. `pyproject.toml` pytest `--tb=short`. 리허설(새 Sonnet, S-3 pack만): 1회째 단계 정의가 빠져 보강, 2회째 pack 밖 Read 0·~64k 토큰. 결정·완료 승인은 위임 결정 에이전트, 리뷰 차단 1 수정. 전체 테스트 984 통과·4 실패(환경).

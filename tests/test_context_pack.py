@@ -13,7 +13,16 @@ PACKS = ["S-0", "S-1", "S-2", "S-3", "S-4a", "S-4", "S-5", "S-6", "S-7"]
 
 def test_every_pack_resolves():
     for p in PACKS:
+        assert cp.step_row(p), p  # §15.5에 그 단계 행이 있다
         cp.render(p)  # 파일·절이 없으면 예외
+
+
+def test_packs_match_steps_table():
+    """tasks.md의 pack과 §15.5의 단계가 같다 (두 표 drift 방지)."""
+    steps = cp.section((ROOT / cp.STEPS).read_text(encoding="utf-8"), "15.5")
+    names = [c.strip("*").split()[0] for c in (cp._cells(ln)[0] for ln in steps.splitlines()
+             if ln.startswith("| ") and not ln.startswith("| 단계")) if c.strip("*").startswith("S-")]
+    assert names == PACKS
 
 
 def test_output_sections_bounded():

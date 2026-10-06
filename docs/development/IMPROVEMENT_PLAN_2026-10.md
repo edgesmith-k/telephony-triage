@@ -184,7 +184,7 @@
 | ✅ | W9 | ✅ 완료(10/06) | ccr-2495ec74-xn15cn · 커밋 `W9: 진단·상태 커맨드…` | 위임 결정 에이전트 D1~D8 ①. 리뷰 R1~R5·R7 + 재리뷰 1~4 반영. lock 읽기 전용부 `common/session_lock.py`(related_tests 공용 판정 해소). eval 58 5/5, 39 3회 4/0/2(SKILL "표 그대로" 문구 뒤), 39 토큰 중앙값 127k ≤ 변경 전 104,792×1.3. 기준선에 39·58 추가. 전체 978 |
 | ✅ | W10 | ✅ 완료(10/07) | w10/module-split · 커밋 `W10: triage.py·db_pr.py 분할…`·`W10: related_tests…`·`W10: my-prs base_moved…` | 위임 결정 에이전트 D1~D5(①①→②①①). 분할 AST·`--help` 동일, related_tests `units()`(범위 밖, 승인), my-prs `baseRefName`(사용자 승인). 리뷰 차단 0. 전체 973 통과·4 실패(Windows 환경, HEAD 동일) |
 | ✅ | W11 | ✅ 완료(10/07) | w10/module-split · 커밋 `W11: …` 8개 | 위임 결정 에이전트 D1 ①·D2 ②·D3 ①·D4 ②·D5 ①·D6 ①. 리뷰 차단 0·권고 9 반영. 보류(사용자 결정): `_derived` msg 제거(스냅샷 재생성)·Windows 잔존물·db-authoring 스키마 요약(eval ×3, W 끝). 전체 980 통과·4 실패(환경) |
-| ☐ | W12 | 대기 | | 마지막 |
+| ✅ | W12 | ✅ 완료(10/07) | w10/module-split · 커밋 `W12: …` 5개 | 위임 결정 D1 ②(HANDOFF 경로 삭제는 사용자 확인, 지금은 안내 스텁)·D2 ③(`docs/tasks.md` 표 + `context_pack.py`)·D3 ①(S-0~S-7만)·D4 ①. 리뷰 차단 1(코드 펜스) 수정. 리허설 2회(새 Sonnet, S-3 pack만): 2회째 pack 밖 Read 0·도구 3회·~64k 토큰. §15.5 S 행 대부분에 완료 기준이 없음 → 사내 S-1에서. 전체 984 통과·4 실패(환경) |
 | ☐ | W 끝 | 대기 | | 전체 테스트·eval 54·`make_bundle.py` |
 
 상태 값: 대기 / 계획 확인 중 / 실행 중 / 리뷰·테스트 중 / 완료 확인 중 / ✅ 완료(날짜). 독립 WP를 병렬로 돌리면 "실행 중 — 브랜치 X"로 적는다.
