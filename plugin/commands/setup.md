@@ -36,8 +36,10 @@ telephony-triage를 이 사용자 환경에 맞게 설정한다 (`02-config.md �
 7. **호환성(스냅샷 기준)** — `config.py check --db <work_dir>/_snapshot --for dry-run`.
    `writable: false`면 `reasons`를 보여주고 "읽기 전용 — 이슈 DB 쓰기는 막힌다"고 알린 뒤 계속한다.
 8. `db_pr.py lock release setup`. (1~8 중 어디서 멈추든 lock을 잡았다면 반드시 푼다.)
-9. **gh 인증** — `config.py gh-status`. 종료 코드 2면 `message`(로그인 방법)를 보여주고
+9. **gh 인증** — `config.py gh-status`. 종료 코드 2면 `message`(로그인 방법)를 보여주고, 10번의 `doctor` 표를 붙인 뒤
    "쓰기 불가(gh 인증 없음). 읽기 전용 분석과 `--dry-run` 연습은 된다"로 **setup을 끝낸다.**
-10. 이슈 DB의 `docs/getting-started.md` 위치(`<issue_db.path>/docs/getting-started.md`)를 알려준다.
+10. **점검 한 장** — `config.py doctor --format markdown`의 표를 **그대로** 붙여 보여준다(다시 요약·재가공하지 않는다).
+    `fail`·`warn` 행은 `다음` 열의 안내만 전한다(doctor는 읽기 전용이라 고치지 않는다. 자동 수리 금지).
+    이어서 이슈 DB의 `docs/getting-started.md` 위치(`<issue_db.path>/docs/getting-started.md`)를 알려준다.
 
 lock 획득·인계 결과의 `lock.owner`를 보관하고 이후 `db_pr`·`db_verify` 호출마다 `TT_LOCK_OWNER`로 전달한다. 현재 lock 파일에서 토큰을 다시 읽어 쓰지 않는다.

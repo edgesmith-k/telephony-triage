@@ -188,6 +188,23 @@ def test_mock_remote_push_and_pr():
         )
         assert unauth.returncode == 1
 
+        # `pr list --author @me`: MOCK_GH_USER(기본 mock-user)가 만든 PR만, 목록 실패 경로는 종료 코드 1 (db_pr my-prs)
+        author = {**env, "MOCK_GH_USER": "someone-else"}
+        other = subprocess.run(
+            [gh, "pr", "create", "--base", "main", "--head", "issue/MOCK-1002"], cwd=str(clone), env=author,
+            capture_output=True, text=True, encoding="utf-8", errors="replace")
+        assert other.returncode == 0, other.stderr
+        mine = run([gh, "pr", "list", "--author", "@me", "--state", "open", "--json", "number,headRefName"])
+        assert [r["headRefName"] for r in json.loads(mine.stdout)] == ["issue/MOCK-1001"]
+        theirs = subprocess.run(
+            [gh, "pr", "list", "--author", "@me", "--state", "open", "--json", "number,headRefName"],
+            cwd=str(clone), env=author, capture_output=True, text=True, encoding="utf-8", errors="replace")
+        assert [r["headRefName"] for r in json.loads(theirs.stdout)] == ["issue/MOCK-1002"]
+        failing = subprocess.run(
+            [gh, "pr", "list", "--author", "@me"], cwd=str(clone), env={**env, "MOCK_GH_FAIL_LIST": "1"},
+            capture_output=True, text=True, encoding="utf-8", errors="replace")
+        assert failing.returncode == 1 and "MOCK_GH_FAIL_LIST" in failing.stderr
+
 
 # -- 3. 합성 logcat ---------------------------------------------------------
 

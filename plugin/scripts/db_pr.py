@@ -5,6 +5,7 @@
     db_pr.py lock acquire <작업 키> [--command <이름>] [--take-over]
     db_pr.py lock release <작업 키> [--force]
     db_pr.py snapshot --job <작업 키>
+    db_pr.py my-prs                           (읽기 전용: 내 열린 PR과 base 이동 여부, sync 6번)
     db_pr.py cleanup (--dry-run | --yes) [--older-than [<days>]]
     db_pr.py preflight --branch <br> [--search <원인 ID|JIRA-KEY>] [--jira <KEY>]
     db_pr.py stage <plan.json> --wt <dir> --branch <br> [--dry-run] [--verbose | --then-summary]
@@ -32,6 +33,13 @@ summary 입력), `regress.json`, `pr.json`(summary가 만든 PR 제목·본문·
 → 사용자 clone의 현재 브랜치가 `<base>`이고 깨끗할 때만 `pull --ff-only`(아니면 건너뛰고 사유)
 → **사후 lint**(`db_lint --all --db <snapshot>`, 06-collaboration.md §6.3 ⑤): ID 중복·Jira 중복 등을 `post_lint`로
 보고만 한다(정리는 메인테이너 수동). **사용자 clone에서 checkout은 하지 않는다.** 스냅샷은 읽기 전용이다.
+결과에 `previous_sha`(이전 스냅샷 SHA, 첫 실행·기록 없음 null)·`base_sha_changed`(이전과 달라졌는지, 첫 실행 null)를 싣고,
+`<work_dir>/snapshot.json`(`{sha, base, at}`)을 best-effort로 쓴다(실패해도 snapshot은 성공, `snapshot_meta_written: false`).
+
+`my-prs`: 읽기 전용(lock·fetch·쓰기 없음). `gh pr list --author @me --state open`의 PR마다 `git merge-base --is-ancestor
+origin/<base> origin/<head>`로 `base_moved`(true/false, 로컬 원격 ref가 없으면 null)를 붙인다. fetch를 하지 않으므로
+`base_moved`는 마지막 fetch 기준이다(`note`). 출력 `{base, prs|null, warnings, note}`. gh 실패는 `prs: null`+`warnings`, 종료 0.
+config가 없거나 clone이 아니면 2.
 
 `stage` stdout은 기본 요약(통과 단계·apply 세부를 접고 `detail`·`folded`를 붙인다), `--verbose`면 `stage.json`과 같은 전체.
 `stage.json`은 항상 전체다. `stage` 종료 코드: 하위 결과 집계(1이 하나라도 있으면 1, 없고 3이 있으면 3). drift면 적용 전에 1.
@@ -83,6 +91,7 @@ from common.exitcodes import CHECK_FAILED, OK, USAGE  # noqa: E402
 
 LOCK_FILE = "session.lock"
 SNAPSHOT_DIR = "_snapshot"
+SNAPSHOT_META = "snapshot.json"   # `<work_dir>/snapshot.json` = {sha, base, at} — snapshot이 best-effort로 쓴다 (doctor가 나이를 읽는다)
 FRESH = timedelta(minutes=10)
 EXPIRE = timedelta(hours=4)
 STATE, STAGE, PR_FILE, REGRESS, PLAN = "state.json", "stage.json", "pr.json", "regress.json", "plan.json"
@@ -275,6 +284,16 @@ def snapshot(job: str, cfg: dict, lock: Lock) -> dict:
             raise UsageError(f"{snap}가 worktree가 아닌데 비어 있지 않습니다. 확인 후 지운다.")
         _git(repo, "worktree", "add", "--detach", str(snap), ref)
     sha = _git(snap, "rev-parse", "HEAD").stdout.strip()
+    try:
+        previous = _read_json(lock.work_dir / SNAPSHOT_META)
+    except (OSError, ValueError):
+        previous = None
+    previous_sha = previous.get("sha") if isinstance(previous, dict) and isinstance(previous.get("sha"), str) else None
+    try:
+        _write_json(lock.work_dir / SNAPSHOT_META, {"sha": sha, "base": base, "at": _iso(now())})
+        meta_written = True
+    except OSError:
+        meta_written = False
 
     pulled, reason = False, None
     branch = _git(repo, "rev-parse", "--abbrev-ref", "HEAD", check=False).stdout.strip()
@@ -290,7 +309,8 @@ def snapshot(job: str, cfg: dict, lock: Lock) -> dict:
         else:
             reason = f"pull --ff-only 실패(자동으로 해결하지 않는다): {proc.stderr.strip()[:200]}"
     return {"fetched": fetch.returncode == 0, "snapshot": str(snap), "snapshot_sha": sha,
-            "pulled": pulled, "pull_skipped_reason": reason, "post_lint": post_lint(snap)}
+            "previous_sha": previous_sha, "base_sha_changed": None if previous_sha is None else previous_sha != sha,
+            "snapshot_meta_written": meta_written, "pulled": pulled, "pull_skipped_reason": reason, "post_lint": post_lint(snap)}
 
 
 def post_lint(snap: Path) -> dict:
@@ -488,6 +508,39 @@ def _gh(ctx: Ctx, args: list[str], cwd: Path) -> subprocess.CompletedProcess:
 # -- preflight -----------------------------------------------------------------------------
 
 
+def _open_prs(ctx: Ctx, extra: list[str], runner) -> tuple[list | None, str | None]:
+    """`gh pr list <extra> --state open` → (PR 목록 또는 None, 경고 또는 None). preflight·my-prs 공유."""
+    proc = runner(ctx, ["pr", "list", *extra, "--state", "open", "--json", "number,title,url,headRefName"], ctx.repo)
+    if proc.returncode == 0:
+        return json.loads(proc.stdout or "[]"), None
+    return None, f"열린 PR을 확인하지 못했다 (gh): {(proc.stderr or '').strip()[:200]}"
+
+
+def my_prs(ctx: Ctx) -> dict:
+    """내 열린 PR과 base 이동 여부 (읽기 전용: fetch·lock·쓰기 없음)."""
+    if not userconfig.get(ctx.cfg, "issue_db.path"):
+        raise UsageError("config가 없거나 issue_db.path가 비어 있다. /telephony-triage:setup을 먼저 한다.")
+    ctx.require_repo()
+    note = "base_moved는 fetch 없이 로컬 원격 ref(origin/*) 기준이다. null이면 그 ref가 없다(미fetch)."
+    try:
+        found, warning = _open_prs(ctx, ["--author", "@me"], _gh)
+    except UsageError as exc:    # gh 시간 초과도 경고로 돌린다 (sync는 계속한다)
+        found, warning = None, f"열린 PR을 확인하지 못했다 (gh): {str(exc)[:200]}"
+    if found is None:
+        return {"base": ctx.base, "prs": None, "warnings": [warning], "note": note}
+    prs = []
+    for pr in found:
+        head = f"refs/remotes/origin/{pr.get('headRefName')}"
+        base = f"refs/remotes/origin/{ctx.base}"
+        moved = None
+        if _ref_sha(ctx.repo, head) and _ref_sha(ctx.repo, base):
+            code = _git(ctx.repo, "merge-base", "--is-ancestor", base, head, check=False).returncode
+            moved = {0: False, 1: True}.get(code)
+        prs.append({"number": pr.get("number"), "title": pr.get("title"), "url": pr.get("url"),
+                    "head": pr.get("headRefName"), "base_moved": moved})
+    return {"base": ctx.base, "prs": prs, "warnings": [], "note": note}
+
+
 def preflight(ctx: Ctx, branch: str, search: str | None, jira: str | None) -> dict:
     ctx.require_repo()
     _check_branch(ctx, branch)
@@ -503,12 +556,9 @@ def preflight(ctx: Ctx, branch: str, search: str | None, jira: str | None) -> di
         ahead = int(_out(_git(ctx.repo, "rev-list", "--count", f"{against}..refs/heads/{branch}", check=False)) or 0)
     open_prs, warnings = None, []
     if search:
-        proc = _gh(ctx, ["pr", "list", "--search", search, "--state", "open", "--json",
-                         "number,title,url,headRefName"], ctx.repo)
-        if proc.returncode == 0:
-            open_prs = json.loads(proc.stdout or "[]")
-        else:
-            warnings.append(f"열린 PR을 확인하지 못했다 (gh): {(proc.stderr or '').strip()[:200]}")
+        open_prs, warning = _open_prs(ctx, ["--search", search], _gh)
+        if warning:
+            warnings.append(warning)
     jira_in_main = None
     if jira:
         names = _out(_git(ctx.repo, "ls-tree", "-r", "--name-only", f"origin/{ctx.base}", check=False)).splitlines()
@@ -1113,6 +1163,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--force", action="store_true")
     p = sub.add_parser("snapshot")
     p.add_argument("--job", metavar="작업 키", required=True)
+    sub.add_parser("my-prs")
     p = sub.add_parser("cleanup")
     mode = p.add_mutually_exclusive_group(required=True)
     mode.add_argument("--dry-run", action="store_true")
@@ -1176,6 +1227,8 @@ def main(argv: list[str] | None = None) -> int:
                 result = lock.release(args.job, args.force)
                 if not args.force:      # 자기 작업을 끝낼 때(lock이 이미 없어도)
                     _drop_pasted_steps(ctx, args.job)
+        elif args.cmd == "my-prs":
+            result = my_prs(ctx)
         elif args.cmd == "cleanup":
             result = cleanup(ctx, args.yes, args.older_than)
         elif args.cmd == "preflight":

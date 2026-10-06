@@ -365,7 +365,7 @@ def checks(eid: int, ctx: Ctx) -> list:
         return checks_c(eid, ctx)
     if eid in (31, 34, 35, 36, 38):
         return checks_d(eid, ctx)
-    if eid in (55, 56, 57):
+    if eid in (55, 56, 57, 58):
         return checks_w4(eid, ctx)
     no_remote = lambda br: (lambda: (br not in ctx.branches() and not ctx.prs(), f"branches={ctx.branches()} prs={len(ctx.prs())}"))
     def analyzer_called():
@@ -573,8 +573,16 @@ def checks(eid: int, ctx: Ctx) -> list:
     if eid == 13:
         return [None, None, no_write, None, none_remote_lock]
     if eid == 39:
+        def doctor_table():
+            """W9: 매핑이 비었을 때 `config.py doctor --format markdown` 표(jira 행 fail)를 그대로 보였다."""
+            texts = ctx.texts()
+            if texts is None:
+                raise _Manual("실행 기록(events.jsonl) 없음")
+            ran = bool(re.search(r"config\.py\s+doctor\s+--format\s+markdown", ctx.ran))
+            row = next((t for t in texts if re.search(r"\|\s*jira\s*\|\s*fail\s*\|", t)), None)
+            return ran and row is not None, f"doctor 실행={ran}; jira fail 행을 담은 assistant 텍스트={'있음' if row else '없음'}"
         return [None, lambda: ("jira_fetch_ticket" not in ctx.ran.replace("--list", ""), "실행 기록(Bash·MCP)에 jira_fetch_ticket 호출 여부"),
-                None, ctx.lock_free]
+                None, ctx.lock_free, doctor_table]
     if eid == 8:
         return [None, None, no_write]
     # --- batch B (analyze 핵심 경로) ---
@@ -881,6 +889,20 @@ def checks_w4(eid, ctx):
             return None
         return [t for t in texts if is_question(t, topic)]
 
+    if eid == 58:
+        def doctor_ran():
+            ok = bool(re.search(r"config\.py\s+doctor\s+--format\s+markdown", ctx.ran))
+            return ok, "실행 기록에 `config.py doctor --format markdown` " + ("있음" if ok else "없음")
+        def pasted():
+            return said(r"\|\s*점검\s*\|\s*상태\s*\|", r"\|\s*gh\s*\|")()
+        def gh_guided():
+            return said(r"gh", r"auth login")()
+        def untouched():
+            a, ea = ctx.lock_free()
+            b, eb = ctx.clone_same()
+            c = not re.search(r"doctor[^\n]*(install-hooks|sync-scripts-path|\bset\b|git config)", ctx.ran)
+            return a and b and c, f"{ea}; {eb}; doctor와 같은 명령줄의 수리 호출 {'없음' if c else '있음'}"
+        return [doctor_ran, pasted, gh_guided, untouched]
     if eid == 55:
         def code_used():
             ok = bool(re.search(r"code_roots\.py[^\n]*android16-main", ctx.ran)) or "android16-main" in json.dumps(

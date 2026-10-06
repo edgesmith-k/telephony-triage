@@ -83,6 +83,7 @@ git -C <issue_db.path> pull --ff-only
 - **사용자 clone에서 `checkout`하지 않는다.** 현재 브랜치가 base가 아니거나 dirty하면 pull을 건너뛰고 그 사실만 알린다. ff-only가 실패하면 자동으로 해결하지 않고 보고한다.
 - 분석(Step 3~7), 사후 lint, 캐시, `parse_logcat --rules`, 매처, `db_search`, setup의 `--cache-only`는 모두 **스냅샷**(`--db <work_dir>/_snapshot`)을 읽는다. 로컬 main이 오래됐어도 결과가 최신 origin 기준이 된다.
 - 스냅샷은 읽기 전용이다. 쓰는 것은 `.cache/`뿐이고, 커밋하지 않는다.
+- `snapshot` 결과의 `previous_sha`·`base_sha_changed`로 이전 스냅샷 대비 base 변경 여부를 알 수 있다(`sync`가 한 줄로 보인다). 시각은 `<work_dir>/snapshot.json`에 남아 `config.py doctor`가 스냅샷 나이를 본다(`contracts.md §3.2`).
 - 최신화 직후 **사후 lint**(`06-collaboration.md §6.3` ⑤): `db_lint --all --db <work_dir>/_snapshot`. 문제가 있으면 보여주고, 메인테이너 정리가 필요하다고 알린다(v1은 도구가 정리 PR을 만들지 않는다). 분석은 계속한다.
 - 캐시가 스냅샷과 다르면 `db_build --cache-only --db <work_dir>/_snapshot`으로 다시 만든다.
 - **작업이 끝나면 lock을 푼다**: Step 8의 `db_pr discard`가 풀고, discard 없이 끝나면(`--analysis-only`는 `triage.py`가 ok에서 자동으로 풀고, 읽기 전용 모드의 계획 저장 후 종료, Step 7에서 계획만 저장하고 끝냄, 사용자가 중간에 그만둠) `db_pr lock release <JIRA-KEY>`를 호출한다.

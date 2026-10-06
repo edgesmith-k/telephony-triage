@@ -150,6 +150,26 @@ def test_sync_sequence_lists_closed_pr_workdir_and_deletes_only_after_yes():
     assert (ws.work / "_snapshot").exists(), "스냅샷은 지우지 않는다"
 
 
+def test_sync_and_setup_bodies_list_new_steps_in_order():
+    sync = (COMMANDS / "sync.md").read_text(encoding="utf-8")
+    calls = [sync.index(c) for c in ("lock acquire sync", "snapshot --job sync", "db_build.py --cache-only",
+                                     "lock release sync", "cleanup --dry-run", "db_pr.py my-prs")]
+    assert calls == sorted(calls), "my-prs는 cleanup 뒤(6번, lock 밖)다"
+    assert "base_sha_changed" in sync and "sync-pr" in sync[calls[-1]:] and "안내만" in sync[calls[-1]:]
+    setup = (COMMANDS / "setup.md").read_text(encoding="utf-8")
+    order = [setup.index(c) for c in ("config.py gh-status", "config.py doctor --format markdown", "getting-started.md")]
+    assert order == sorted(order) and "그대로" in setup[order[1]:order[2]]
+    assert "doctor" in setup[order[0]:order[1]], "gh 실패 경로도 doctor 표를 보인다"
+    skill = (REPO / "plugin" / "skills" / "telephony-triage" / "SKILL.md").read_text(encoding="utf-8")
+    assert "config.py doctor --format markdown" in skill
+    assert len(list(COMMANDS.glob("*.md"))) == 12
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    import config, db_pr
+    assert config.build_parser().parse_args(["doctor"]).format == "json"
+    assert config.build_parser().parse_args(["doctor", "--format", "markdown"]).format == "markdown"
+    assert db_pr.build_parser().parse_args(["my-prs"]).cmd == "my-prs"
+
+
 def test_sync_sequence_keeps_recent_or_open_pr_workdirs():
     ws = Workspace()
     ws.plan("MOCK-7001", "p7-analyze-append.plan.json")

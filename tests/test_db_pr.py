@@ -1613,3 +1613,84 @@ def test_publish_commit_rejects_non_mapping_or_broken_issue_db_config_as_usage_e
 def _approved_now(wt: Path) -> str:
     import db_pr
     return db_pr.approved_hash(wt)
+
+
+# -- W9: snapshot 메타·my-prs -----------------------------------------------------------------------
+
+
+def test_snapshot_reports_previous_sha_base_change_and_writes_meta_best_effort():
+    ws = Workspace()
+    ws.db_pr("lock", "acquire", "sync", "--command", "sync")
+    first = ws.db_pr("snapshot", "--job", "sync")
+    assert first["previous_sha"] is None and first["base_sha_changed"] is None and first["snapshot_meta_written"] is True
+    meta = json.loads((ws.work / "snapshot.json").read_text(encoding="utf-8"))
+    assert meta["sha"] == first["snapshot_sha"] and meta["base"] == "main" and meta["at"].endswith("Z")
+    same = ws.db_pr("snapshot", "--job", "sync")
+    assert same["previous_sha"] == first["snapshot_sha"] and same["base_sha_changed"] is False
+    new_sha = ws.push_main(lambda p: (p / "NOTE.md").write_text("main 변경\n", encoding="utf-8"))
+    moved = ws.db_pr("snapshot", "--job", "sync")
+    assert moved["snapshot_sha"] == new_sha and moved["previous_sha"] == first["snapshot_sha"]
+    assert moved["base_sha_changed"] is True
+    # 손상된 메타는 "이전 없음"으로 본다
+    (ws.work / "snapshot.json").write_text("{깨짐", encoding="utf-8")
+    broken = ws.db_pr("snapshot", "--job", "sync")
+    assert broken["previous_sha"] is None and broken["base_sha_changed"] is None and broken["snapshot_meta_written"] is True
+    # 메타를 쓸 수 없어도 snapshot은 성공한다 (best-effort)
+    (ws.work / "snapshot.json").unlink()
+    (ws.work / "snapshot.json").mkdir()
+    blocked = ws.db_pr("snapshot", "--job", "sync")
+    assert blocked["snapshot_meta_written"] is False and blocked["snapshot_sha"] == new_sha
+    ws.db_pr("lock", "release", "sync")
+
+
+def _listing(*roots: Path) -> list:
+    out = []
+    for root in roots:
+        for path in sorted(root.rglob("*")):
+            if path.is_file():
+                st = path.stat()
+                out.append((str(path), st.st_size, st.st_mtime_ns))
+    return out
+
+
+def test_my_prs_lists_only_my_open_prs_with_base_moved_and_is_read_only():
+    ws = Workspace()
+    for key in ("MOCK-7001", "MOCK-7002"):
+        ws.plan(key, "p7-analyze-append.plan.json" if key == "MOCK-7001" else "p7-analyze-unresolved.plan.json")
+        ws.ship(key, f"issue/{key}")
+    prs_path = ws.gh_state / "prs.json"
+    state = json.loads(prs_path.read_text(encoding="utf-8"))
+    state["prs"][1]["author"] = "other-user"           # 다른 사람의 PR은 목록에 없다
+    prs_path.write_text(json.dumps(state), encoding="utf-8")
+    git(ws.clone, "fetch", "-q", "origin")
+
+    before = (_listing(ws.work), git(ws.clone, "for-each-ref"), git(ws.clone, "status", "--porcelain"))
+    out = ws.db_pr("my-prs")
+    assert out["base"] == "main" and out["warnings"] == [] and "fetch 없이" in out["note"]
+    assert [(p["number"], p["head"], p["base_moved"]) for p in out["prs"]] == [(1, "issue/MOCK-7001", False)]
+    assert set(out["prs"][0]) == {"number", "title", "url", "head", "base_moved"}
+
+    ws.push_main(lambda p: (p / "NOTE.md").write_text("main 변경\n", encoding="utf-8"))
+    assert ws.db_pr("my-prs")["prs"][0]["base_moved"] is False      # fetch 전: 로컬 ref 기준
+    git(ws.clone, "fetch", "-q", "origin")
+    assert ws.db_pr("my-prs")["prs"][0]["base_moved"] is True
+    git(ws.clone, "update-ref", "-d", "refs/remotes/origin/issue/MOCK-7001")
+    assert ws.db_pr("my-prs")["prs"][0]["base_moved"] is None        # 미fetch 브랜치
+    assert not (ws.work / "session.lock").exists()
+
+    git(ws.clone, "fetch", "-q", "origin")
+    after = (_listing(ws.work), git(ws.clone, "for-each-ref"), git(ws.clone, "status", "--porcelain"))
+    # 읽기 전용: 위의 fetch·push_main 외에 my-prs가 바꾼 것은 없다 (작업 디렉토리·워킹 트리)
+    assert after[0] == before[0] and after[2] == before[2]
+
+
+def test_my_prs_gh_failure_is_a_warning_and_missing_config_stops_with_2():
+    ws = Workspace()
+    out = ws.db_pr("my-prs", env={"MOCK_GH_FAIL_LIST": "1"})
+    assert out["prs"] is None and out["base"] == "main" and "열린 PR을 확인하지 못했다" in out["warnings"][0]
+    from runner import tmp
+    proc = run("db_pr.py", ["my-prs"], env={"TELEPHONY_TRIAGE_HOME": tmp("tt-nohome-") / "h"})
+    assert proc.returncode == 2 and "setup" in proc.stderr
+    plain = tmp("tt-notclone-")
+    ws.run("config.py", ["set", "issue_db.path", plain])
+    assert ws.run("db_pr.py", ["my-prs"]).returncode == 2

@@ -22,6 +22,7 @@
 | `install-hooks` | `[--db <DB>]` |  |
 | `check` | `[--db <path>] [--for {write,dry-run}]` | `--for`: 기본 write |
 | `gh-status` |  |  |
+| `doctor` | `[--format {json,markdown}]` | `--format`: markdown: 표 하나와 마지막 줄 카운트 (기본 json, --json과 함께 못 쓴다), 기본 json |
 
 ## `code_roots.py`
 
@@ -124,6 +125,7 @@
 | `lock acquire` | `<작업 키> [--command <이름>] [--take-over]` |  |
 | `lock release` | `<작업 키> [--force]` |  |
 | `snapshot` | `--job <작업 키>` |  |
+| `my-prs` |  |  |
 | `cleanup` | `(--dry-run \| --yes) [--older-than [<days>]]` |  |
 | `preflight` | `--branch <br> [--search <원인 ID\|JIRA-KEY>] [--jira <KEY>]` |  |
 | `stage` | `<plan.json> --wt <dir> --branch <br> [--dry-run] [--verbose] [--then-summary]` | `--verbose`: stdout도 stage.json과 같이 전체 (기본은 통과 항목을 접는다); `--then-summary`: stage 종료 0·3이면 이어서 summary --format markdown을 부르고 그 마크다운만 출력한다 (--json·--verbose와 못 쓴다) |

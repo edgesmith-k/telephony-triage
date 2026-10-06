@@ -176,8 +176,8 @@ def test_missing_site_defaults_stops_everything():
     assert (bare / "site-defaults.example.yaml").is_file()
     env = Env(root=bare)
     for script, args in (("config.py", ["init"]), ("config.py", ["check", "--db", SAMPLE]),
-                         ("config.py", ["jira-candidates", "--mcp-config", MCP_CONFIG]),
-                         ("db_pr.py", ["lock", "status"]), ("code_roots.py", ["suggest"])):
+                         ("config.py", ["jira-candidates", "--mcp-config", MCP_CONFIG]), ("config.py", ["doctor"]),
+                         ("db_pr.py", ["lock", "status"]), ("db_pr.py", ["my-prs"]), ("code_roots.py", ["suggest"])):
         proc = env.run(script, args, stdin="")
         assert proc.returncode == 2 and "사내 기본값 없음" in proc.stderr, (script, proc.stderr)
     assert not (env.home / "config.yaml").exists()
@@ -371,6 +371,168 @@ def test_show_keys_returns_only_requested_values_and_lists_missing():
     assert out["values"] == {"work_dir": full["effective"]["work_dir"], "jira.tools": full["effective"]["jira"]["tools"]}
     assert out["missing"] == ["no.such"] and out["user_config"] == full["user_config"]
     assert env.json("config.py", ["show"]) == full      # --keys 없으면 이전과 같다
+
+
+# -- doctor (읽기 전용 점검) ---------------------------------------------------------------------
+
+
+def _rows(result: dict) -> dict:
+    return {r["check"]: r for r in result["rows"]}
+
+
+def _doctor(env: Env, expect=0, at: dict | None = None, **kw) -> dict:
+    result = env.json("config.py", ["doctor"], expect=expect, env=at or {}, **kw)
+    assert [r["check"] for r in result["rows"]] == ["config", "scripts_path", "clone", "hook", "jira", "gh",
+                                                    "snapshot", "compat", "lock"]
+    assert sum(result["counts"].values()) == 9 and all(len(r["detail"]) <= 80 for r in result["rows"])
+    return result
+
+
+def _ready_env() -> tuple[Env, Path]:
+    clone = Path(_repo()["clone"])
+    env = Env()
+    _setup_read_steps(env, clone)
+    return env, clone
+
+
+def _set_user(env: Env, **top) -> None:
+    cfg = env.config()
+    cfg.update(top)
+    (env.home / "config.yaml").write_text(yaml.safe_dump(cfg, allow_unicode=True), encoding="utf-8")
+
+
+def _tree(*roots: Path) -> list:
+    out = []
+    for root in roots:
+        for path in sorted(root.rglob("*")):
+            if path.is_file():
+                st = path.stat()
+                out.append((str(path), st.st_size, st.st_mtime_ns))
+    return out
+
+
+def test_doctor_all_ok_markdown_fits_1kb_and_changes_nothing():
+    env, clone = _ready_env()
+    before = (_tree(env.base, clone), git(clone, "status", "--porcelain"), git(clone, "for-each-ref"))
+    result = _doctor(env)
+    assert result["counts"] == {"ok": 9, "warn": 0, "fail": 0, "skip": 0}
+    proc = env.run("config.py", ["doctor", "--format", "markdown"])
+    assert proc.returncode == 0 and len(proc.stdout.encode("utf-8")) <= 1024, len(proc.stdout.encode("utf-8"))
+    lines = proc.stdout.rstrip("\n").splitlines()
+    assert lines[0].startswith("| 점검 |") and lines[-1] == "ok 9 · warn 0 · fail 0 · skip 0"
+    assert sum(1 for ln in lines if ln.startswith("| ")) == 10          # 헤더 + 9행, 표는 하나
+    assert "\n  " not in json.dumps(result) and env.run("config.py", ["doctor"]).stdout.count("\n") == 1
+    after = (_tree(env.base, clone), git(clone, "status", "--porcelain"), git(clone, "for-each-ref"))
+    assert after == before, "doctor는 읽기 전용이다 (clone·work_dir·config 불변)"
+    assert not (env.base / "work" / "session.lock").exists()
+
+
+def test_doctor_without_config_fails_config_and_skips_the_rest_without_creating_anything():
+    env = Env()
+    result = _doctor(env, expect=1)
+    assert result["counts"] == {"ok": 0, "warn": 0, "fail": 1, "skip": 8}   # skip은 ok로 세지 않는다
+    rows = _rows(result)
+    assert rows["config"]["status"] == "fail" and "setup" in rows["config"]["next"]
+    assert all(r["status"] == "skip" for k, r in rows.items() if k != "config")
+    assert not env.home.exists()
+    assert env.run("config.py", ["doctor", "--format", "markdown", "--json"]).returncode == 2
+
+
+def test_doctor_empty_jira_mapping_fails_and_exits_1():
+    env, _ = _ready_env()
+    _set_user(env, jira={"mcp_server": ""})
+    jira = _rows(_doctor(env, expect=1))["jira"]
+    assert jira["status"] == "fail" and "mcp_server" in jira["detail"] and "setup 4" in jira["next"]
+    _set_user(env, jira={"mcp_server": "mock-jira", "tools": {"get_issue": ""}})
+    assert "get_issue" in _rows(_doctor(env, expect=1))["jira"]["detail"]
+    _set_user(env, jira={"mcp_server": "mock-jira", "tools": {"get_issue": "jira_fetch_ticket"}})
+    assert "전체 이름" in _rows(_doctor(env, expect=1))["jira"]["detail"]
+    _set_user(env, jira={"mcp_server": "other", "tools": {"get_issue": "mcp__mock-jira__jira_fetch_ticket"}})
+    assert "서버 other의 도구가 아닙니다" in _rows(_doctor(env, expect=1))["jira"]["detail"]
+
+
+def test_doctor_gh_unauth_is_warn_and_exit_0():
+    env, _ = _ready_env()
+    result = _doctor(env, unauth=True)
+    gh = _rows(result)["gh"]
+    assert gh["status"] == "warn" and "gh auth login" in gh["next"]
+    assert result["counts"] == {"ok": 8, "warn": 1, "fail": 0, "skip": 0}
+
+
+def test_doctor_snapshot_age_missing_and_corrupt_meta():
+    from datetime import datetime, timedelta, timezone
+
+    env, _ = _ready_env()
+    meta = env.base / "work" / "snapshot.json"
+    assert _rows(_doctor(env))["snapshot"]["status"] == "ok"
+    later = lambda days: {"TT_NOW": (datetime.now(timezone.utc) + timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%SZ")}  # noqa: E731
+    assert _rows(_doctor(env, at=later(6)))["snapshot"]["status"] == "ok"
+    old = _rows(_doctor(env, at=later(8)))["snapshot"]
+    assert old["status"] == "warn" and "8일" in old["detail"] and "sync" in old["next"]
+    meta.unlink()
+    unknown = _rows(_doctor(env))["snapshot"]
+    assert unknown["status"] == "warn" and "나이 불명" in unknown["detail"]
+    meta.write_text("{깨짐", encoding="utf-8")
+    broken = _doctor(env, expect=1)
+    assert _rows(broken)["snapshot"]["status"] == "fail"
+    meta.write_text(json.dumps({"sha": "abc"}), encoding="utf-8")
+    assert _rows(_doctor(env, expect=1))["snapshot"]["status"] == "fail"
+
+
+def test_doctor_hooks_path_and_missing_snapshot_skip_compat():
+    clone = Path(_repo()["clone"])
+    env = Env()
+    env.init(clone)
+    env.json("config.py", ["sync-scripts-path"])
+    rows = _rows(_doctor(env, expect=1))
+    assert rows["hook"]["status"] == "fail" and "install-hooks" in rows["hook"]["next"]
+    assert rows["snapshot"]["status"] == "warn" and rows["compat"]["status"] == "skip"
+    env.json("config.py", ["install-hooks"])
+    assert _rows(_doctor(env))["hook"]["status"] == "ok"
+    git(clone, "config", "core.hooksPath", "hooks")
+    assert "hooks" in _rows(_doctor(env, expect=1))["hook"]["detail"]
+    # clone이 아니면 hook은 skip
+    _set_user(env, issue_db={"path": str(env.base / "not-a-clone"), "remote": "r"})
+    rows = _rows(_doctor(env, expect=1))
+    assert rows["clone"]["status"] == "fail" and "git clone" in rows["clone"]["next"] and rows["hook"]["status"] == "skip"
+
+
+def test_doctor_compat_is_read_only_and_reports_blocked_writes():
+    env, _ = _ready_env()
+    snap = env.base / "work" / "_snapshot"
+    edit(snap / "issue-db.config.yaml", "schema_version: 1", "schema_version: 2")
+    before = _tree(env.base / "work")
+    rows = _rows(_doctor(env, expect=1))
+    assert rows["compat"]["status"] == "fail" and "schema-too-new" in rows["compat"]["detail"]
+    assert _tree(env.base / "work") == before
+
+
+def test_doctor_lock_held_expired_and_corrupt():
+    env, _ = _ready_env()
+    at = lambda minutes: {"TT_NOW": f"2099-01-01T{minutes // 60:02d}:{minutes % 60:02d}:00Z"}  # noqa: E731
+    env.json("db_pr.py", ["lock", "acquire", "MOCK-1101", "--command", "analyze"], env=at(0))
+    held = _rows(_doctor(env, at=at(5)))["lock"]
+    assert held["status"] == "warn" and "MOCK-1101" in held["detail"] and "--force" in held["next"]
+    # 만료
+    expired = _rows(_doctor(env, at={"TT_NOW": "2099-01-01T06:00:00Z"}))["lock"]
+    assert expired["status"] == "warn" and "만료" in expired["detail"]
+    lock = env.base / "work" / "session.lock"
+    guard_before = (env.base / "work" / "session.guard").exists()
+    lock.write_text("{손상", encoding="utf-8")
+    result = _doctor(env, expect=1)
+    assert _rows(result)["lock"]["status"] == "fail" and result["counts"]["fail"] >= 1
+    assert (env.base / "work" / "session.guard").exists() == guard_before    # lock 파일 guard도 만들지 않는다
+    lock.unlink()    # 손상 lock은 도구가 풀지 못한다: 사용자가 파일을 확인하고 지운다
+    assert _rows(_doctor(env))["lock"]["status"] == "ok"
+
+
+def test_doctor_refactored_helpers_keep_messages():
+    env = Env()
+    env.init(env.base / "db")
+    proc = env.run("config.py", ["set-jira", "--server", "mock-jira", "--get-issue", "jira_fetch_ticket"])
+    assert proc.returncode == 2 and proc.stderr.strip() == "도구 이름은 전체 이름(mcp__<server>__<tool>)이어야 합니다: jira_fetch_ticket"
+    proc = env.run("config.py", ["set-jira", "--server", "mock-jira", "--get-issue", "mcp__other__get_issue"])
+    assert proc.returncode == 2 and proc.stderr.strip() == "mcp__other__get_issue는 서버 mock-jira의 도구가 아닙니다."
 
 
 if __name__ == "__main__":

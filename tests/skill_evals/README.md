@@ -5,7 +5,7 @@
 
 | 파일 | 내용 |
 |---|---|
-| `evals.json` | eval 57개 모두 `prompt`·`setup`·`user_replies`·`assertions` 정의 완료. 1(대표 10), A(안전 10), B(analyze 11), C(수정·검증 9), D(record 5), E(10/04~05 기능 7), F(S6 2), W(W4 질문 수 줄이기 3: 55 코드 프로필 자동 선택, 56 다른 작업 잔여 알림만, 57 심층·탐색 한쪽 사전 결정) |
+| `evals.json` | eval 58개 모두 `prompt`·`setup`·`user_replies`·`assertions` 정의 완료. 1(대표 10), A(안전 10), B(analyze 11), C(수정·검증 9), D(record 5), E(10/04~05 기능 7), F(S6 2), W(W4 질문 수 줄이기 3: 55 코드 프로필 자동 선택, 56 다른 작업 잔여 알림만, 57 심층·탐색 한쪽 사전 결정), W9(58 setup 재점검의 doctor 표). eval 39는 doctor 표 단언 포함 |
 | `trigger_evals.json` | description 트리거 테스트 (`10-skill-eval.md` 표 + near-miss) |
 | `jira/` | eval용 모의 Jira 티켓 (`MOCK-90xx`, `tests/mocks/jira`와 같은 형식) |
 | `scenarios/` | eval용 합성 logcat 시나리오 (`tests/mocks/logcat_gen.py` 형식) |
