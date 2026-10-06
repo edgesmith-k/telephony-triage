@@ -474,7 +474,7 @@ NEW_CAUSE_USER = {"op": "new-cause", "temp_id": "DATA-001-03",
     # write-flow.md §4 "계획에 `set-resolution`이 있거나 새 원인이면 unverified"(옛 §4 L113-114); 사유 어휘는 사용자 결정(contracts.md §3.2 summary 행)
     ([{"op": "new-cause", "temp_id": "DATA-001-03"}], [("DATA-001-03", "unverified", "신규 원인 (new-cause)")]),
     ([{"op": "set-resolution", "cause": "DATA-001-02"}], [("DATA-001-02", "unverified", "해결책 변경 (set-resolution)")]),
-    # db-authoring.md L78·L270: 사용자 진술만 있으면 method "근거: 사용자 진술"(unverified)
+    # db-authoring.md §2 `resolution_verification` 항목: 사용자 진술만 있으면 method "근거: 사용자 진술"(unverified)
     ([NEW_CAUSE_USER], [("DATA-001-03", "unverified", "신규 원인 (new-cause), 근거: 사용자 진술")]),
     # 어휘가 정해지지 않은 op는 op 이름만(어휘를 지어내지 않는다)
     ([{"op": "new-type", "temp_id": "NETWORK-002", "first_cause": {"temp_id": "NETWORK-002-01"}}],

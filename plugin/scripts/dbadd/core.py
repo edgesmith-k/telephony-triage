@@ -69,7 +69,44 @@ def validate_plan(plan: dict, db: Path) -> None:
     if errors:
         first = errors[0]
         where = "/".join(str(p) for p in first.absolute_path) or "(최상위)"
-        raise UsageError(f"계획 형식 오류 ({where}): {first.message[:300]}")
+        suffix, text = _branch_detail(first) or ("", _cap(first.message, 300))
+        raise UsageError(f"계획 형식 오류 ({where}{suffix}): {text}")
+
+
+def _cap(text: str, limit: int) -> str:
+    return text if len(text) <= limit else text[:limit - 1] + "…"
+
+
+def _branch_detail(error) -> tuple[str, str] | None:
+    """oneOf/anyOf 오류가 `op` 판별 값을 가진 분기들이면 그 op의 빠진 필수 필드·허용 밖 필드(필드 구성이 맞으면 하위 값 오류)를 말한다.
+    op별 하드코딩 없이 스키마의 분기(`properties.op.const`)에서 읽는다."""
+    if error.validator not in ("oneOf", "anyOf") or not isinstance(error.instance, dict):
+        return None
+    branches = {}
+    for index, branch in enumerate(error.validator_value):
+        const = (branch.get("properties") or {}).get("op", {}).get("const") if isinstance(branch, dict) else None
+        if const is not None:
+            branches[const] = (index, branch)
+    if not branches:
+        return None
+    allowed = ", ".join(map(str, branches))
+    op = error.instance.get("op")
+    if "op" not in error.instance:
+        return "", _cap(f"op 필드가 없다; 허용 op: {allowed}", 400)
+    if not isinstance(op, str) or op not in branches:
+        return "", _cap(f"알 수 없는 op {str(op)[:60]!r}; 허용 op: {allowed}", 400)
+    index, branch = branches[op]
+    props = branch.get("properties") or {}
+    missing = [k for k in branch.get("required", []) if k not in error.instance]
+    extra = [k for k in error.instance if k not in props] if branch.get("additionalProperties") is False else []
+    parts = ([f"빠진 필드 [{', '.join(missing)}]"] if missing else []) + ([f"허용 밖 필드 [{', '.join(map(str, extra))}]"] if extra else [])
+    if not parts:       # 필드 구성은 맞고 하위 값이 틀리다 — 고른 분기의 가장 관련 있는 오류
+        inner = [e for e in (error.context or []) if e.relative_schema_path and e.relative_schema_path[0] == index]
+        best = jsonschema.exceptions.best_match(inner) if inner else None
+        if best is not None:
+            sub = "/".join(str(x) for x in list(best.absolute_path)[len(error.absolute_path):])
+            parts = [f"{sub or op}: {best.message}"]
+    return f", op={op}", _cap("; ".join(parts) or "필드 값 형식이 스키마와 다르다 (plan.schema.json 참고)", 400)
 
 
 def user_id(arg: str | None, defaults: dict) -> str:

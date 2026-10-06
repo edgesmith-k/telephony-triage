@@ -10,16 +10,17 @@
 
 | 파일 | 내용 | 언제 읽나 |
 |---|---|---|
-| `SKILL.md` | 실행 규칙, `triage.py run` 호출과 `needs_input` 처리(Step 0~5 resolve는 드라이버, `contracts.md §3.2`), 결과 읽기, Step 6 리포트 규칙, Step 7 결정표, Step 8은 `write-flow.md`로. **8KB 이하**(RF-1) | 스킬이 트리거될 때 |
+| `SKILL.md` | 실행 규칙은 `rules.md`로 연결, `triage.py run` 호출과 `needs_input` 처리(Step 0~5 resolve는 드라이버, `contracts.md §3.2`), 결과 읽기, Step 6 리포트 규칙, Step 7 결정표, Step 8은 `write-flow.md`로. **7.5KB 이하**(RF-1, W6 전 8KB) | 스킬이 트리거될 때 |
+| `reference/rules.md` | 실행 규칙(스크립트 호출, 종료 코드 2·S-3 중단, lock, 마스킹, 사용자 확인 지점). 2KB 이하 | analyze(SKILL이 지시), `record`·`verify-fix`·`fix-submitted`·`validate --cause`·`sync-pr`. `search`는 읽기 전용이라 읽지 않는다 |
 | `reference/write-flow.md` | 공통 쓰기 절차(Step 8 방식), analyze 계획 형식, 확인 화면 형식, drift 결정, lock 해제 경로 | Step 7 계획 저장, Step 8, 모든 쓰기 흐름 |
 | `reference/record.md` | `07-workflow.md §record` | `record` 커맨드 |
 | `reference/verify.md` | `07-workflow.md §validate`(`--cause`), `§fix-submitted`, `§verify-fix` | 해당 커맨드 |
 | `reference/sync-pr.md` | `07-workflow.md §sync-pr`, `06-collaboration.md §6.3` sync-pr 절차 (**단일 원본** — `commands/sync-pr.md`는 이 파일을 가리키기만 한다) | `sync-pr` 커맨드, Step 8-2 원격 브랜치 있음 |
 | `reference/search.md` | `03-issue-db.md §5.5`, `09-commands.md` search (**단일 원본** — `commands/search.md`는 이 파일을 가리키기만 한다). 증상 문장을 그대로 `db_search.py`에 넘기고 이슈 번호 줄·유형 > 원인 표로 보인다. 읽기 전용 | `search` 커맨드, 증상만 묻는 "비슷한 이슈·이슈 번호?" |
-| `reference/db-authoring.md` | 아래 "추가 지침" 목록 | 새 원인·유형·시그니처·파서 규칙을 만들 때 |
+| `reference/db-authoring.md` | 아래 "추가 지침" 목록 중 작성 판단만(op·drift·R 표는 스키마·`계획 형식 오류` 메시지·`db_verify`가 대신한다). 11KB 이하(필수 필드 요약 1KB 포함) | 새 원인·유형·시그니처·파서 규칙을 만들 때 |
 | `reference/ril-requests.md`, `fail-causes.md`, `log-tags.md` | 참조 자료 | 로그 해석이 필요할 때 |
 
-- 각 커맨드(`commands/*.md`)는 자기 흐름의 reference 파일을 먼저 읽으라고 지시한다. SKILL.md 본체에 다른 흐름의 절차를 복사하지 않는다. 공통 실행 규칙은 SKILL.md "실행 규칙" 한 곳에 두고, 커맨드에는 그것을 가리키는 한 줄(스킬 없이 스크립트만 부르는 커맨드는 호출 형식·종료 코드 2 한 줄)만 둔다.
+- 각 커맨드(`commands/*.md`)는 자기 흐름의 reference 파일을 먼저 읽으라고 지시한다. SKILL.md 본체에 다른 흐름의 절차를 복사하지 않는다. 공통 실행 규칙은 `reference/rules.md` 한 곳에 두고, 커맨드에는 그것을 가리키는 한 줄(스킬 없이 스크립트만 부르는 커맨드는 호출 형식·종료 코드 2 한 줄)만 둔다.
 - 최신 Claude Code에서 스킬을 슬래시 커맨드로 직접 호출할 수 있고 커맨드가 스킬로 통합됐으면(S1), 흐름별로 스킬을 나누는 안(예: `telephony-triage`, `telephony-record`)도 검토한다. 어느 쪽이든 "한 흐름을 실행할 때 그 흐름의 내용만 로드"가 기준이다.
 
 ## skill-creator 입력

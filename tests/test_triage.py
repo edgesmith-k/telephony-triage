@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -279,14 +280,47 @@ def test_jira_file_requires_dry_run():
     assert proc.returncode == 2 and "--dry-run" in proc.stderr
 
 
-def test_skill_md_is_within_8kb_and_drives_triage():
+def _check_op_summary(path):
+    """db-authoring.md의 'op 필수 키' 요약이 plugin/schemas/plan.schema.json의 op별 required(최상위 키)와 같다."""
+    text = path.read_text(encoding="utf-8")
+    fallback = "여기 없는 op·세부 제약은 `SNAP/schema/plan.schema.json`\n"
+    start = text.index("op 필수 키 (")
+    end = text.index(fallback) + len(fallback)
+    block = text[start:end]
+    assert len(block.encode("utf-8")) <= 1024
+    schema = json.loads((REPO / "plugin" / "schemas" / "plan.schema.json").read_text(encoding="utf-8"))
+    required = {b["properties"]["op"]["const"]: [k for k in b["required"] if k != "op"] for b in schema["$defs"]["operation"]["oneOf"]}
+    seen = {}
+    for line in block.splitlines():
+        match = re.match(r"- `([a-z-]+)`: ([^—]+?)(?: — .*)?$", line)
+        if match:
+            seen[match.group(1)] = {k.strip() for k in match.group(2).split(",")}
+    assert {"new-cause", "new-type", "append", "unresolved", "add-fixture", "verify-resolution", "allow-cause"} <= set(seen)
+    for op, keys in seen.items():
+        assert keys == set(required[op]), (op, keys, required[op])
+
+
+def test_skill_md_is_within_7_5kb_and_drives_triage():
     skill = REPO / "plugin" / "skills" / "telephony-triage" / "SKILL.md"
+    reference = skill.parent / "reference"
     text = skill.read_text(encoding="utf-8")
-    assert len(text.encode("utf-8")) <= 8192
-    for needle in ("triage.py run", "needs_input", "--answer", "S-3", "write-flow.md", "--commit",
-                   "steps-pasted.txt", "--dry-run --jira-file", "analyzer.skill", "계획 형식 오류",
+    assert len(text.encode("utf-8")) <= 7680        # W6: 실행 규칙을 reference/rules.md로 옮긴 뒤의 한도(그 전 8,192B)
+    for needle in ("triage.py run", "needs_input", "--answer", "write-flow.md", "--commit", "reference/rules.md",
+                   "steps-pasted.txt", "--dry-run --jira-file", "analyzer.skill",
                    "must_show", "triage.py explore"):
         assert needle in text, needle
+    rules = (reference / "rules.md").read_text(encoding="utf-8")      # SKILL §실행 규칙이던 내용
+    assert len(rules.encode("utf-8")) <= 2048
+    for needle in ("S-3", "계획 형식 오류", "TT_LOCK_OWNER", "stage --then-summary", "모든 종료 경로에서 푼다", "사용자 확인 후"):
+        assert needle in rules, needle
+    assert len((reference / "db-authoring.md").read_bytes()) <= 11264      # 필수 키 요약 1KB 포함
+    assert len((reference / "write-flow.md").read_bytes()) <= 14344
+    _check_op_summary(reference / "db-authoring.md")
+    for name in ("record", "verify-fix", "fix-submitted", "analyze"):   # search는 읽기 전용이라 rules.md를 읽지 않는다
+        assert "reference/rules.md" in (REPO / "plugin" / "commands" / f"{name}.md").read_text(encoding="utf-8"), name
+    assert "rules.md" not in (REPO / "plugin" / "commands" / "search.md").read_text(encoding="utf-8")
+    for name in ("record.md", "verify.md", "sync-pr.md"):
+        assert "`rules.md`" in (reference / name).read_text(encoding="utf-8") and "SKILL.md" not in (reference / name).read_text(encoding="utf-8"), name
     verify = (REPO / "plugin" / "skills" / "telephony-triage" / "reference" / "verify.md").read_text(encoding="utf-8")
     for needle in ("operations", "snapshot_sha"):
         assert needle in verify, needle

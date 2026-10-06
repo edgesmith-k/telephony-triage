@@ -881,6 +881,70 @@ def test_import_rules_and_new_type_needs_symptom():
     assert apply_json(db, plan, expect=2)["error"].startswith("계획 형식 오류")
 
 
+def _op_of(plan_name: str, op: str) -> dict:
+    return next(o for o in load_plan(plan_name)["operations"] if o["op"] == op)
+
+
+def test_plan_format_error_names_op_missing_and_extra_fields():
+    """`계획 형식 오류` 메시지가 op 이름·빠진 필수 필드·허용 밖 필드를 알려 준다(스키마의 op 하위 스키마에서 읽는다)."""
+    db = git_db()
+    cases = [("p7-analyze-append.plan.json", "append", "cause"),
+             ("p7-analyze-new-cause.plan.json", "new-cause", "body"),
+             ("p7-record-verified.plan.json", "verify-resolution", "verification")]
+    for name, op, required in cases:
+        for broken, expect in (("missing", f"빠진 필드 [{required}]"), ("extra", "허용 밖 필드 [foo]")):
+            plan = load_plan(name)
+            body = next(o for o in plan["operations"] if o["op"] == op)
+            if broken == "missing":
+                del body[required]
+            else:
+                body["foo"] = 1
+            error = apply_json(db, plan, expect=2)["error"]
+            assert error.startswith("계획 형식 오류 (operations/"), error
+            assert f"op={op})" in error and expect in error, (op, broken, error)
+    plan = load_plan("p7-analyze-append.plan.json")
+    plan["operations"][0]["op"] = "no-such-op"
+    error = apply_json(db, plan, expect=2)["error"]
+    assert error.startswith("계획 형식 오류 (operations/0)") and "알 수 없는 op 'no-such-op'" in error
+    assert "허용 op: append" in error and "new-cause" in error
+    plan["operations"][0].pop("op")
+    assert apply_json(db, plan, expect=2)["error"].startswith("계획 형식 오류")
+
+
+def test_plan_format_error_names_nested_value_problem_missing_op_and_truncates():
+    db = git_db()
+
+    def error_of(plan):
+        return apply_json(db, plan, expect=2)["error"]
+
+    def with_cause(change):
+        plan = load_plan("p7-analyze-new-cause.plan.json")
+        change(plan["operations"][0]["cause"])
+        return plan
+
+    err = error_of(with_cause(lambda c: c.pop("resolution_type")))
+    assert err.startswith("계획 형식 오류 (operations/0, op=new-cause)") and "resolution_type" in err
+    err = error_of(with_cause(lambda c: c.update(resolution_verification={"status": "verified"})))
+    assert "op=new-cause" in err and "resolution_verification/status" in err
+    err = error_of(with_cause(lambda c: c["fix"].update(status="fixed")))
+    assert "cause/fix/status" in err and "'fixed'" in err
+    plan = load_plan("p7-record-verified.plan.json")
+    body = next(o for o in plan["operations"] if o["op"] == "verify-resolution")
+    body["verification"]["status"] = "verified"
+    err = error_of(plan)
+    assert "op=verify-resolution" in err and "verification" in err and "'status'" in err
+    del body["verification"]["status"], body["verification"]["evidence"]
+    assert "'evidence' is a required property" in error_of(plan)
+    plan = load_plan("p7-analyze-append.plan.json")
+    del plan["operations"][0]["op"]
+    err = error_of(plan)
+    assert err.startswith("계획 형식 오류 (operations/0)") and "op 필드가 없다; 허용 op: append" in err and "allow-cause" in err
+    plan = load_plan("p7-analyze-append.plan.json")
+    plan["schema_version"] = "x" * 1000
+    err = error_of(plan)
+    assert err.startswith("계획 형식 오류 (schema_version)") and err.endswith("…") and len(err) < 400
+
+
 def test_check_ids_renumber_and_similar():
     db = git_db()
     git(db, "checkout", "-q", "-b", "feature")

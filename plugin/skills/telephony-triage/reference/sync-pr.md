@@ -9,7 +9,7 @@ PR을 올린 뒤 머지 전에 main이 바뀌면, 텍스트 rebase 대신 **원�
 계획이 건드리는 대상이 main에서 바뀌었으면(drift) 사용자가 고른다. 계획은 작성자 PC에만 있으므로 sync-pr는 작성자가 실행한다.
 `commands/sync-pr.md`는 이 파일을 가리키기만 한다.
 
-SKILL.md의 "실행 규칙"을 따른다. 이슈 DB에 쓰므로 세션 lock을 잡고 **끝나는 모든 경로에서 푼다**(`db_pr discard`가 풀고,
+`rules.md`(실행 규칙)를 따른다. 이슈 DB에 쓰므로 세션 lock을 잡고 **끝나는 모든 경로에서 푼다**(`db_pr discard`가 풀고,
 그 밖의 경로는 `S/db_pr.py lock release <작업 키>`). 재적용 이후(stage·확인 화면·커밋·publish·discard)는 `write-flow.md` 3~6번
 그대로이고, 아래는 sync-pr만의 차이다.
 

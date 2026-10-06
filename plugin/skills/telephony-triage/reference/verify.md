@@ -1,6 +1,6 @@
 # 검증·수정 상태 흐름: validate --cause, fix-submitted, verify-fix
 
-세 흐름 모두 **판정·입력 확인 → 사용자 확인 → `write-flow.md`의 공통 쓰기 절차 PR**이다. SKILL.md의 "실행 규칙"을 따른다. 아래 "lock"은 `db_pr lock acquire <작업 키> --command <흐름>`이고 보유 중이면 `write-flow.md` 1번.
+세 흐름 모두 **판정·입력 확인 → 사용자 확인 → `write-flow.md`의 공통 쓰기 절차 PR**이다. `rules.md`(실행 규칙)를 따른다. 아래 "lock"은 `db_pr lock acquire <작업 키> --command <흐름>`이고 보유 중이면 `write-flow.md` 1번.
 계획은 모두 `write-flow.md` §계획 형식이다: `source`·`schema_version`(SNAP `issue-db.config.yaml`)·`started_at`·`base_sha`(`db_pr snapshot`의 `snapshot_sha`)·`jira`·`operations`(op 목록 — `ops` 아님)·`commit_message`·`pr_notes`. `db_verify`의 `suggested_ops`는 `operations`에 넣는다.
 판정은 `db_verify.py`의 출력으로만 한다(항상 회귀·검증 모드: 파일 전체, 모든 active 원인 독립 평가, bonus 0).
 **시각 기준**: 회귀·검증 모드는 로그 시각을 연도 없이 UTC로 읽는다. 그래서 `satisfied_traces`·`trace`의 `ts`는 "파일 시계 그대로(연도 2000)"다.
