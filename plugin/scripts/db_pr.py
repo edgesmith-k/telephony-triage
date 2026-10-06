@@ -5,11 +5,12 @@
     db_pr.py lock acquire <작업 키> [--command <이름>] [--take-over]
     db_pr.py lock release <작업 키> [--force]
     db_pr.py snapshot --job <작업 키>
+    db_pr.py my-prs                           (읽기 전용: 내 열린 PR과 base 이동 여부, sync 6번)
     db_pr.py cleanup (--dry-run | --yes) [--older-than [<days>]]
     db_pr.py preflight --branch <br> [--search <원인 ID|JIRA-KEY>] [--jira <KEY>]
-    db_pr.py stage <plan.json> --wt <dir> --branch <br> [--dry-run]
-    db_pr.py summary <wt>
-    db_pr.py publish <wt> --branch <br> --lease <sha|new> --approved <hash>
+    db_pr.py stage <plan.json> --wt <dir> --branch <br> [--dry-run] [--verbose | --then-summary]
+    db_pr.py summary <wt> [--format json|markdown]
+    db_pr.py publish <wt> --branch <br> --lease <sha|new> --approved <hash> [--commit] [--and-discard]
     db_pr.py discard <wt>
     db_pr.py find-plan --branch <br>          (sync-pr 1~4번 보조: 계획 찾기·원격 변경 확인)
 
@@ -32,10 +33,24 @@ summary 입력), `regress.json`, `pr.json`(summary가 만든 PR 제목·본문·
 → 사용자 clone의 현재 브랜치가 `<base>`이고 깨끗할 때만 `pull --ff-only`(아니면 건너뛰고 사유)
 → **사후 lint**(`db_lint --all --db <snapshot>`, 06-collaboration.md §6.3 ⑤): ID 중복·Jira 중복 등을 `post_lint`로
 보고만 한다(정리는 메인테이너 수동). **사용자 clone에서 checkout은 하지 않는다.** 스냅샷은 읽기 전용이다.
+결과에 `previous_sha`(이전 스냅샷 SHA, 첫 실행·기록 없음 null)·`base_sha_changed`(이전과 달라졌는지, 첫 실행 null)를 싣고,
+`<work_dir>/snapshot.json`(`{sha, base, at}`)을 best-effort로 쓴다(실패해도 snapshot은 성공, `snapshot_meta_written: false`).
 
-`stage` 종료 코드: 하위 결과 집계(1이 하나라도 있으면 1, 없고 3이 있으면 3). drift면 적용 전에 1.
+`my-prs`: 읽기 전용(lock·fetch·쓰기 없음). `gh pr list --author @me --state open`의 PR마다 `git merge-base --is-ancestor
+origin/<base> origin/<head>`로 `base_moved`(true/false, 로컬 원격 ref가 없으면 null)를 붙인다. fetch를 하지 않으므로
+`base_moved`는 마지막 fetch 기준이다(`note`). 출력 `{base, prs|null, warnings, note}`. gh 실패는 `prs: null`+`warnings`, 종료 0.
+config가 없거나 clone이 아니면 2.
+
+`stage` stdout은 기본 요약(통과 단계·apply 세부를 접고 `detail`·`folded`를 붙인다), `--verbose`면 `stage.json`과 같은 전체.
+`stage.json`은 항상 전체다. `stage` 종료 코드: 하위 결과 집계(1이 하나라도 있으면 1, 없고 3이 있으면 3). drift면 적용 전에 1.
+`stage --then-summary`: stage 종료 0·3이면 같은 프로세스에서 `summary --format markdown`을 이어 부르고 stdout은 그 마크다운만
+(`--json`·`--verbose`와 함께 못 쓴다). stage 1·2는 기존 그대로(summary 안 부른다), stage 성공·summary 실패는 종료 2
+(stdout은 stage 요약 JSON + `summary_error`).
 `publish`는 승인 해시·커밋 부모·커밋 메시지·브랜치를 `state.json`과 대조하고(다르면 1), lease push 뒤
 PR을 만들거나(`gh pr create`) 고친다(`gh pr edit`).
+`publish --commit`: 아직 커밋이 없으면(HEAD == base_sha) 승인 해시 → hooksPath(`.githooks`) → `git add -A` → guard 프로필 검사
+→ `git commit -F <작업 디렉터리의 임시 파일>`(pre-commit 실행)을 한 뒤 위 대조·push로 간다. 이미 커밋이 있으면 건너뛴다(멱등).
+`publish --and-discard`: publish 종료 0일 때만 `discard`를 이어 부른다(실패하면 worktree·lock을 남긴다).
 
 `stage`는 계획을 읽을 때 먼저 형식을 검사한다(최상위 키·필수 키, `계획 형식 오류:` 종료 코드 2 — 이전 작업 파일은
 그대로 둔다). 하위 스크립트가 Traceback으로 끝나면 사용자에게는 마지막 줄만 "내부 오류"로 보인다(`_err_brief`).
@@ -66,17 +81,19 @@ from pathlib import Path
 SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS))
 
+import yaml  # noqa: E402
 from common import site_defaults, userconfig, yamlio  # noqa: E402
 from common.buildname import is_valid_branch_name  # noqa: E402
 from common import checks as checks_mod  # noqa: E402
-from common import ghcli  # noqa: E402
+from common import ghcli, session_lock  # noqa: E402
 import db_summary  # noqa: E402
 from common.exitcodes import CHECK_FAILED, OK, USAGE  # noqa: E402
 
-LOCK_FILE = "session.lock"
-SNAPSHOT_DIR = "_snapshot"
-FRESH = timedelta(minutes=10)
-EXPIRE = timedelta(hours=4)
+LOCK_FILE = session_lock.LOCK_FILE
+SNAPSHOT_DIR = session_lock.SNAPSHOT_DIR
+SNAPSHOT_META = session_lock.SNAPSHOT_META   # snapshot이 best-effort로 쓴다 (doctor가 나이를 읽는다)
+FRESH = session_lock.FRESH
+EXPIRE = session_lock.EXPIRE
 STATE, STAGE, PR_FILE, REGRESS, PLAN = "state.json", "stage.json", "pr.json", "regress.json", "plan.json"
 PASTED_STEPS = "steps-pasted.txt"   # 개발자가 붙여넣은 스텝 목록 원문(08-safety.md §8.1) — 작업이 끝나면 지운다
 WORK_FILES = (STATE, STAGE, PR_FILE, REGRESS, PASTED_STEPS)
@@ -89,19 +106,9 @@ class UsageError(Exception):
         self.detail = detail
 
 
-def now() -> datetime:
-    env = os.environ.get("TT_NOW")
-    if env:
-        return datetime.fromisoformat(env.replace("Z", "+00:00")).astimezone(timezone.utc)
-    return datetime.now(timezone.utc)
-
-
-def _iso(dt: datetime) -> str:
-    return dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-
-def _parse(value: str) -> datetime:
-    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+now = session_lock.now
+_iso = session_lock.iso
+_parse = session_lock.parse
 
 
 # -- lock -----------------------------------------------------------------------------
@@ -155,22 +162,12 @@ class Lock:
 
     def read(self) -> dict | None:
         try:
-            data = json.loads(self.path.read_text(encoding="utf-8"))
-            if not isinstance(data, dict) or not all(isinstance(data.get(k), str)
-                    for k in ("job", "started_at", "updated_at")):
-                raise ValueError("invalid lock record")
-            _parse(data["updated_at"])
-            return data
-        except FileNotFoundError:
-            return None
-        except (OSError, ValueError, TypeError) as exc:
-            raise UsageError("session.lock을 읽을 수 없습니다. 손상된 lock을 확인한다.") from exc
+            return session_lock.read(self.work_dir)
+        except session_lock.LockError as exc:
+            raise UsageError(str(exc)) from exc.__cause__
 
     def describe(self, data: dict | None) -> dict | None:
-        if data is None:
-            return None
-        age = now() - _parse(data["updated_at"])
-        return {**data, "expired": age > EXPIRE, "age_sec": int(age.total_seconds())}
+        return session_lock.describe(data)
 
     def write(self, data: dict) -> None:
         userconfig.ensure_private_dir(self.work_dir)
@@ -267,6 +264,17 @@ def snapshot(job: str, cfg: dict, lock: Lock) -> dict:
             raise UsageError(f"{snap}가 worktree가 아닌데 비어 있지 않습니다. 확인 후 지운다.")
         _git(repo, "worktree", "add", "--detach", str(snap), ref)
     sha = _git(snap, "rev-parse", "HEAD").stdout.strip()
+    try:
+        previous = _read_json(lock.work_dir / SNAPSHOT_META)
+    except (OSError, ValueError):
+        previous = None
+    previous_sha = (previous.get("sha") if isinstance(previous, dict) and isinstance(previous.get("sha"), str)
+                    and previous.get("base") == base else None)    # base 브랜치가 바뀌었으면 비교하지 않는다
+    try:
+        _write_json(lock.work_dir / SNAPSHOT_META, {"sha": sha, "base": base, "at": _iso(now())})
+        meta_written = True
+    except OSError:
+        meta_written = False
 
     pulled, reason = False, None
     branch = _git(repo, "rev-parse", "--abbrev-ref", "HEAD", check=False).stdout.strip()
@@ -282,7 +290,8 @@ def snapshot(job: str, cfg: dict, lock: Lock) -> dict:
         else:
             reason = f"pull --ff-only 실패(자동으로 해결하지 않는다): {proc.stderr.strip()[:200]}"
     return {"fetched": fetch.returncode == 0, "snapshot": str(snap), "snapshot_sha": sha,
-            "pulled": pulled, "pull_skipped_reason": reason, "post_lint": post_lint(snap)}
+            "previous_sha": previous_sha, "base_sha_changed": None if previous_sha is None else previous_sha != sha,
+            "snapshot_meta_written": meta_written, "pulled": pulled, "pull_skipped_reason": reason, "post_lint": post_lint(snap)}
 
 
 def post_lint(snap: Path) -> dict:
@@ -480,6 +489,45 @@ def _gh(ctx: Ctx, args: list[str], cwd: Path) -> subprocess.CompletedProcess:
 # -- preflight -----------------------------------------------------------------------------
 
 
+def _open_prs(ctx: Ctx, extra: list[str], runner) -> tuple[list | None, str | None]:
+    """`gh pr list <extra> --state open` → (PR 목록 또는 None, 경고 또는 None). preflight·my-prs 공유."""
+    proc = runner(ctx, ["pr", "list", *extra, "--state", "open", "--json", "number,title,url,headRefName"], ctx.repo)
+    if proc.returncode == 0:
+        try:
+            found = json.loads(proc.stdout or "[]")
+        except ValueError:
+            return None, f"열린 PR을 확인하지 못했다 (gh): JSON 아님 {(proc.stdout or '').strip()[:100]}"
+        if not isinstance(found, list):
+            return None, f"열린 PR을 확인하지 못했다 (gh): 목록이 아님 {(proc.stdout or '').strip()[:100]}"
+        return found, None
+    return None, f"열린 PR을 확인하지 못했다 (gh): {(proc.stderr or '').strip()[:200]}"
+
+
+def my_prs(ctx: Ctx) -> dict:
+    """내 열린 PR과 base 이동 여부 (읽기 전용: fetch·lock·쓰기 없음)."""
+    if not userconfig.get(ctx.cfg, "issue_db.path"):
+        raise UsageError("config가 없거나 issue_db.path가 비어 있다. /telephony-triage:setup을 먼저 한다.")
+    ctx.require_repo()
+    note = "base_moved는 fetch 없이 로컬 원격 ref(origin/*) 기준이다. null이면 그 ref가 없다(미fetch)."
+    try:
+        found, warning = _open_prs(ctx, ["--author", "@me"], _gh)
+    except UsageError as exc:    # gh 시간 초과도 경고로 돌린다 (sync는 계속한다)
+        found, warning = None, f"열린 PR을 확인하지 못했다 (gh): {str(exc)[:200]}"
+    if found is None:
+        return {"base": ctx.base, "prs": None, "warnings": [warning], "note": note}
+    prs = []
+    for pr in found:
+        head = f"refs/remotes/origin/{pr.get('headRefName')}"
+        base = f"refs/remotes/origin/{ctx.base}"
+        moved = None
+        if _ref_sha(ctx.repo, head) and _ref_sha(ctx.repo, base):
+            code = _git(ctx.repo, "merge-base", "--is-ancestor", base, head, check=False).returncode
+            moved = {0: False, 1: True}.get(code)
+        prs.append({"number": pr.get("number"), "title": pr.get("title"), "url": pr.get("url"),
+                    "head": pr.get("headRefName"), "base_moved": moved})
+    return {"base": ctx.base, "prs": prs, "warnings": [], "note": note}
+
+
 def preflight(ctx: Ctx, branch: str, search: str | None, jira: str | None) -> dict:
     ctx.require_repo()
     _check_branch(ctx, branch)
@@ -495,12 +543,9 @@ def preflight(ctx: Ctx, branch: str, search: str | None, jira: str | None) -> di
         ahead = int(_out(_git(ctx.repo, "rev-list", "--count", f"{against}..refs/heads/{branch}", check=False)) or 0)
     open_prs, warnings = None, []
     if search:
-        proc = _gh(ctx, ["pr", "list", "--search", search, "--state", "open", "--json",
-                         "number,title,url,headRefName"], ctx.repo)
-        if proc.returncode == 0:
-            open_prs = json.loads(proc.stdout or "[]")
-        else:
-            warnings.append(f"열린 PR을 확인하지 못했다 (gh): {(proc.stderr or '').strip()[:200]}")
+        open_prs, warning = _open_prs(ctx, ["--search", search], _gh)
+        if warning:
+            warnings.append(warning)
     jira_in_main = None
     if jira:
         names = _out(_git(ctx.repo, "ls-tree", "-r", "--name-only", f"origin/{ctx.base}", check=False)).splitlines()
@@ -659,6 +704,45 @@ def _stage_checks(run: checks_mod.Run) -> dict:
     return out
 
 
+def _brief_checks(checks: dict) -> dict:
+    """통과(code 0)한 단계만 접는다. 비0 단계·skipped는 그대로(실패 세부는 숨기지 않는다)."""
+    from db_verify import brief_rules
+    out: dict = {}
+    for name, step in checks.items():
+        res = step.get("result") if isinstance(step, dict) else None
+        if not isinstance(step, dict) or step.get("code") != OK or not isinstance(res, dict):
+            out[name] = step
+        elif name == "lint":
+            out[name] = {"code": OK, "errors": len(res.get("errors") or []), "warnings": len(res.get("warnings") or [])}
+        elif name == "mask":
+            out[name] = {"code": OK, "checked": res.get("checked")}
+        elif name == "regress":
+            out[name] = {"code": OK, "summary": res.get("summary")}
+        elif name == "verify":
+            out[name] = {"code": OK, "result": brief_rules(res)}
+        else:
+            out[name] = {"code": OK}
+    return out
+
+
+def _brief_stage(result: dict, job_dir: Path) -> dict:
+    """stage의 stdout 요약본. `stage.json`(`result` 그대로)에는 전체가 남는다. 통과한 부분만 접고 비성공은 그대로 둔다."""
+    out = dict(result)
+    if "config_check" in out and isinstance(out["config_check"], dict):
+        cc = out["config_check"]
+        out["config_check"] = {k: cc.get(k) for k in ("for", "writable", "push_allowed", "reasons") if k in cc}
+    applied = out.get("apply")
+    if isinstance(applied, dict) and not out.get("stopped"):
+        out["apply"] = {k: applied[k] for k in ("ids", "changed", "fixtures", "feedback", "pending_included", "rejected")
+                        if k in applied}
+    if isinstance(out.get("checks"), dict):
+        out["checks"] = _brief_checks(out["checks"])
+    out["detail"] = str(job_dir / STAGE)
+    if out != {**result, "detail": out["detail"]}:      # 실제로 접은 것이 있을 때만
+        out["folded"] = f"통과 항목 상세는 접힘 — 전체: 같은 명령에 --verbose 또는 {job_dir / STAGE}"
+    return out
+
+
 # -- summary -------------------------------------------------------------------------------
 
 
@@ -683,7 +767,7 @@ def approved_hash(wt: Path) -> str:
             os.unlink(idx)
 
 
-def summary(ctx: Ctx, wt: Path) -> dict:
+def summary(ctx: Ctx, wt: Path, markdown: bool = False) -> dict:
     job_dir, job = _job_of(wt, ctx)
     _owned_worktree(ctx, wt)
     wt = job_dir / wt.name
@@ -714,13 +798,78 @@ def summary(ctx: Ctx, wt: Path) -> dict:
     state.update(approved_hash=digest, commit_message=scr["commit_message"])
     _write_json(job_dir / STATE, state)
     _write_json(job_dir / PR_FILE, {"title": scr["pr_title"], "body": body, "reviewers": scr["reviewers"]})
-    return {**scr, "pr_body": body, "approved_hash": digest}
+    result = {**scr, "pr_body": body, "approved_hash": digest}
+    if markdown:    # opt-in: 확인 화면 마크다운(JSON 키·상태 파일은 그대로, main이 `_markdown`을 꺼내 출력한다)
+        extras = db_summary.screen_extras(wt, scr, stage_result["apply"].get("operations") or [], digest)
+        result["_markdown"] = db_summary.render_markdown(scr, plan, extras)
+    return result
 
 
 # -- publish -------------------------------------------------------------------------------
 
 
-def publish(ctx: Ctx, wt: Path, branch: str, lease: str, approved: str) -> tuple[dict, int]:
+def _schema_allows_pr_ids(repo: Path, base_sha: str) -> bool:
+    """`base_sha` 커밋의 `schema/plan.schema.json`이 `pr.ids`를 아는가(옛 스키마는 `pr`의 알 수 없는 키를 거부해 재적용이 깨진다)."""
+    proc = _git(repo, "show", f"{base_sha}:schema/plan.schema.json", check=False)
+    try:
+        return "ids" in json.loads(proc.stdout)["properties"]["pr"]["properties"] if proc.returncode == 0 else False
+    except (ValueError, KeyError, TypeError):
+        return False
+
+
+_GUARD_FIX_TAIL = "계획을 고쳐 3번(stage --then-summary)부터 다시 한다."
+
+
+def _guard_problems(plugin_root: str | None, wt: Path) -> list[str]:
+    """guard.py 규칙 3·4(`check_commit`)와 같은 검사·같은 문구. staged 범위로 `PROFILES["guard"]`를 돌린다."""
+    staged = [p for p in _git(wt, "diff", "--cached", "--name-only", "-z").stdout.split("\0") if p]
+    if not staged:
+        return []
+    try:
+        db_cfg = yamlio.load(wt / "issue-db.config.yaml") or {}
+    except (OSError, ValueError):
+        db_cfg = {}
+    except yaml.YAMLError as exc:
+        raise UsageError(f"issue-db.config.yaml을 읽을 수 없다 (YAML 오류): {str(exc)[-300:]}") from exc
+    if not isinstance(db_cfg, dict):
+        raise UsageError("issue-db.config.yaml이 매핑(dict)이 아니다. 이슈 DB 설정 문제다 — 보고하고 멈춘다.")
+    ci_mode = db_cfg.get("ci_mode", "local")
+    branch = _out(_git(wt, "rev-parse", "--abbrev-ref", "HEAD", check=False)) if ci_mode != "actions-build" else ""
+    cctx = checks_mod.Ctx(db=wt, scope="staged", files=staged, branch=branch, ci_mode=ci_mode, db_cfg=db_cfg,
+                          plugin_root=plugin_root)
+    return checks_mod.guard_deny_messages(checks_mod.run_checks(checks_mod.PROFILES["guard"], cctx).steps,
+                                          fix_tail=_GUARD_FIX_TAIL)
+
+
+def _commit_approved(wt: Path, job_dir: Path, state: dict, approved: str) -> tuple[dict, list[str] | None]:
+    """`publish --commit`의 커밋 단계. (commit 정보, 실패 problems 또는 None). 이미 커밋이 있으면 건너뛴다(멱등)."""
+    if _out(_git(wt, "rev-parse", "HEAD", check=False)) != state.get("base_sha"):
+        return {"skipped": "이미 커밋됨"}, None
+    fail = {"committed": False}
+    digest = approved_hash(wt)
+    if digest != approved or digest != state["approved_hash"]:
+        return fail, ["승인 뒤 파일이 바뀌었다 (현재 트리가 승인 해시와 다르다). 확인 화면을 다시 받는다."]
+    hooks = _out(_git(wt, "config", "--get", "core.hooksPath", check=False))
+    if hooks != ".githooks":
+        raise UsageError(f"이 레포의 core.hooksPath가 '{hooks or '(없음)'}'다. 정확히 .githooks여야 커밋할 수 있다 "
+                         "(규칙 5). /telephony-triage:setup 을 다시 실행한다.")
+    _git(wt, "add", "-A")
+    deny = _guard_problems(_PLUGIN_ROOT, wt)
+    if deny:
+        return fail, deny
+    msg_file = job_dir / "commit-msg.txt"      # worktree 밖. 메시지는 셸을 거치지 않는 데이터다
+    msg_file.write_text(state.get("commit_message") or "", encoding="utf-8", newline="\n")
+    try:
+        proc = _git(wt, "commit", "-q", "-F", str(msg_file), check=False)
+    finally:
+        msg_file.unlink(missing_ok=True)
+    if proc.returncode != 0:
+        output = ((proc.stdout or "") + (proc.stderr or "")).strip()
+        return fail, [f"git commit 실패 (pre-commit hook 등): {output[-800:]}"]
+    return {"committed": True, "sha": _out(_git(wt, "rev-parse", "HEAD"))}, None
+
+
+def publish(ctx: Ctx, wt: Path, branch: str, lease: str, approved: str, commit: bool = False) -> tuple[dict, int]:
     job_dir, job = _job_of(wt, ctx)
     _owned_worktree(ctx, wt)
     wt = job_dir / wt.name
@@ -729,7 +878,13 @@ def publish(ctx: Ctx, wt: Path, branch: str, lease: str, approved: str) -> tuple
     stage_result = _read_json(job_dir / STAGE) or {}
     pr_info = _read_json(job_dir / PR_FILE)
     if not state or not state.get("approved_hash") or not pr_info:
-        raise UsageError("승인 정보가 없습니다. stage → summary(확인) → 커밋 뒤에 publish한다.")
+        raise UsageError("승인 정보가 없습니다. stage --then-summary(확인) 뒤 publish --commit한다.")
+    commit_info = None
+    if commit:
+        commit_info, early = _commit_approved(wt, job_dir, state, approved)
+        if early is not None:
+            return {"published": False, "commit": commit_info, "problems": early}, CHECK_FAILED
+    extra = {"commit": commit_info} if commit_info is not None else {}
     problems = []
     tree = _out(_git(wt, "rev-parse", "HEAD^{tree}", check=False))
     if tree != approved or tree != state["approved_hash"]:
@@ -745,13 +900,13 @@ def publish(ctx: Ctx, wt: Path, branch: str, lease: str, approved: str) -> tuple
     if branch != state["branch"] or branch == ctx.base:
         problems.append(f"브랜치 {branch}가 stage한 브랜치 {state['branch']}와 다르거나 base 브랜치다.")
     if problems:
-        return {"published": False, "problems": problems}, CHECK_FAILED
+        return {"published": False, **extra, "problems": problems}, CHECK_FAILED
     lease_arg = (f"--force-with-lease=refs/heads/{branch}:" if lease == "new"
                  else f"--force-with-lease=refs/heads/{branch}:{lease}")
     env = {**os.environ, "TT_PUBLISH_TOKEN": approved}
     push = _git(wt, "push", lease_arg, "origin", f"HEAD:refs/heads/{branch}", check=False, env=env)
     if push.returncode != 0:
-        return {"published": False, "pushed": False,
+        return {"published": False, "pushed": False, **extra,
                 "problems": ["push가 거부됐다 (원격 브랜치가 그 사이 바뀌었거나 lease가 다르다). 원격 상태를 다시 "
                              "확인하고(preflight) 처음부터 다시 한다."],
                 "stderr": push.stderr.strip()[-800:]}, CHECK_FAILED
@@ -787,6 +942,10 @@ def publish(ctx: Ctx, wt: Path, branch: str, lease: str, approved: str) -> tuple
     plan_path = Path(stage_result.get("plan") or job_dir / PLAN)
     plan = json.loads(plan_path.read_text(encoding="utf-8"))
     plan["pr"] = {"number": number, "branch": branch, "head_sha": head}
+    applied_ids = {i["temp_id"]: i["id"] for i in (stage_result.get("apply") or {}).get("ids") or [] if i.get("temp_id")}
+    ids_recorded = bool(applied_ids) and _schema_allows_pr_ids(ctx.repo, state["base_sha"])
+    if ids_recorded:    # summary가 재할당(이전 적용 대비)을 보이는 데 쓴다. 검증에 쓴 base_sha의 스키마가 pr.ids를 알 때만
+        plan["pr"]["ids"] = applied_ids
     plan["base_sha"] = state["base_sha"]
     included = {i["file"]: i for i in plan.get("included_pending") or []}
     inc_dir = job_dir / "included_pending"
@@ -798,8 +957,9 @@ def publish(ctx: Ctx, wt: Path, branch: str, lease: str, approved: str) -> tuple
         included[src.name] = {"file": src.name, "pr": number}
     plan["included_pending"] = sorted(included.values(), key=lambda i: i["file"])
     plan_path.write_text(json.dumps(plan, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
-    result = {"published": True, "pushed": True, "branch": branch, "head_sha": head, "lease": lease,
-              "pr": {"number": number, "url": url, "action": action}, "plan": str(plan_path)}
+    result = {"published": True, "pushed": True, **extra, "branch": branch, "head_sha": head, "lease": lease,
+              "pr": {"number": number, "url": url, "action": action}, "plan": str(plan_path),
+              "pr_ids_recorded": ids_recorded}
     if gh_error:
         result["gh_error"] = f"push는 됐지만 PR {action}에 실패했다: {gh_error}"
         return result, USAGE
@@ -976,40 +1136,50 @@ def build_parser() -> argparse.ArgumentParser:
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--plugin-root", default=None)
     parser.add_argument("--json", action="store_true", help="JSON 출력 (항상 JSON)")
+    parser.add_argument("--verbose", action="store_true", default=argparse.SUPPRESS, help="stage 전체 출력")
     sub = parser.add_subparsers(dest="cmd", required=True)
     lock = sub.add_parser("lock")
     lock_sub = lock.add_subparsers(dest="lock_cmd", required=True)
     lock_sub.add_parser("status")
     p = lock_sub.add_parser("acquire")
-    p.add_argument("job")
-    p.add_argument("--command")
+    p.add_argument("job", metavar="작업 키")
+    p.add_argument("--command", metavar="이름")
     p.add_argument("--take-over", action="store_true")
     p = lock_sub.add_parser("release")
-    p.add_argument("job")
+    p.add_argument("job", metavar="작업 키")
     p.add_argument("--force", action="store_true")
     p = sub.add_parser("snapshot")
-    p.add_argument("--job", required=True)
+    p.add_argument("--job", metavar="작업 키", required=True)
+    sub.add_parser("my-prs")
     p = sub.add_parser("cleanup")
     mode = p.add_mutually_exclusive_group(required=True)
     mode.add_argument("--dry-run", action="store_true")
     mode.add_argument("--yes", action="store_true")
-    p.add_argument("--older-than", type=int, nargs="?", const=90, default=None, metavar="DAYS")
+    p.add_argument("--older-than", type=int, nargs="?", const=90, default=None, metavar="days")
     p = sub.add_parser("preflight")
-    p.add_argument("--branch", required=True)
-    p.add_argument("--search")
-    p.add_argument("--jira")
+    p.add_argument("--branch", metavar="br", required=True)
+    p.add_argument("--search", metavar="원인 ID|JIRA-KEY")
+    p.add_argument("--jira", metavar="KEY")
     p = sub.add_parser("stage")
-    p.add_argument("plan")
-    p.add_argument("--wt", required=True)
-    p.add_argument("--branch", required=True)
+    p.add_argument("plan", metavar="plan.json")
+    p.add_argument("--wt", metavar="dir", required=True)
+    p.add_argument("--branch", metavar="br", required=True)
     p.add_argument("--dry-run", action="store_true")
+    p.add_argument("--verbose", action="store_true", default=argparse.SUPPRESS, help="stdout도 stage.json과 같이 전체 (기본은 통과 항목을 접는다)")
+    p.add_argument("--then-summary", action="store_true",
+                   help="stage 종료 0·3이면 이어서 summary --format markdown을 부르고 그 마크다운만 출력한다 (--json·--verbose와 못 쓴다)")
     p = sub.add_parser("summary")
     p.add_argument("wt")
+    p.add_argument("--format", choices=("json", "markdown"), default="json",
+                   help="markdown: write-flow §4 확인 화면을 마크다운으로 (기본 json, --json과 함께 못 쓴다)")
     p = sub.add_parser("publish")
     p.add_argument("wt")
-    p.add_argument("--branch", required=True)
-    p.add_argument("--lease", required=True, help="원격 브랜치 SHA 또는 new(원격에 없어야 함)")
-    p.add_argument("--approved", required=True)
+    p.add_argument("--branch", metavar="br", required=True)
+    p.add_argument("--lease", metavar="sha|new", required=True, help="원격 브랜치 SHA 또는 new(원격에 없어야 함)")
+    p.add_argument("--approved", metavar="hash", required=True)
+    p.add_argument("--commit", action="store_true",
+                   help="커밋이 없으면 승인 해시·hooksPath·guard 검사를 거쳐 summary의 commit_message로 커밋한 뒤 publish한다 (멱등)")
+    p.add_argument("--and-discard", action="store_true", help="publish 종료 0일 때만 이어서 discard한다")
     p = sub.add_parser("discard")
     p.add_argument("wt")
     p = sub.add_parser("find-plan")
@@ -1044,16 +1214,52 @@ def main(argv: list[str] | None = None) -> int:
                 result = lock.release(args.job, args.force)
                 if not args.force:      # 자기 작업을 끝낼 때(lock이 이미 없어도)
                     _drop_pasted_steps(ctx, args.job)
+        elif args.cmd == "my-prs":
+            result = my_prs(ctx)
         elif args.cmd == "cleanup":
             result = cleanup(ctx, args.yes, args.older_than)
         elif args.cmd == "preflight":
             result = preflight(ctx, args.branch, args.search, args.jira)
         elif args.cmd == "stage":
+            if args.then_summary and (args.json or getattr(args, "verbose", False)):
+                raise UsageError("--then-summary는 --json·--verbose와 함께 쓸 수 없다 (stdout이 마크다운이다).")
             result, code = stage(ctx, Path(args.plan), Path(args.wt), args.branch, args.dry_run)
+            if not getattr(args, "verbose", False):
+                result = _brief_stage(result, _job_of(Path(args.wt), ctx)[0])
+            if args.then_summary and code in (OK, 3):
+                try:
+                    shown = summary(ctx, Path(args.wt), True)["_markdown"]
+                except Exception as exc:    # stage는 성공했다: stage.json·state.json은 남아 있다
+                    reason = str(exc) or type(exc).__name__
+                    print(f"stage 성공, summary 실패: {reason} — db_pr summary {args.wt} --format markdown만 다시 부른다",
+                          file=sys.stderr)
+                    result["summary_error"] = reason
+                    code = USAGE
+                else:
+                    print(shown, end="")
+                    return code
         elif args.cmd == "summary":
-            result = summary(ctx, Path(args.wt))
+            if args.format == "markdown" and args.json:
+                raise UsageError("--format markdown은 --json과 함께 쓸 수 없다.")
+            result = summary(ctx, Path(args.wt), args.format == "markdown")
+            if args.format == "markdown":
+                print(result["_markdown"], end="")
+                return code
         elif args.cmd == "publish":
-            result, code = publish(ctx, Path(args.wt), args.branch, args.lease, args.approved)
+            result, code = publish(ctx, Path(args.wt), args.branch, args.lease, args.approved, args.commit)
+            if args.and_discard:
+                if code == OK:
+                    try:
+                        result["discard"] = discard(ctx, Path(args.wt))
+                    except Exception as exc:    # PR은 이미 만들어졌다: publish를 다시 하지 않는다
+                        result["discard"] = {"discarded": False, "error": str(exc) or type(exc).__name__,
+                                             "next": f"PR은 만들어졌다. publish를 다시 하지 말고 db_pr discard {args.wt}만 다시 한다"}
+                        code = USAGE
+                elif result.get("published"):   # push는 됐고 PR 생성만 실패(gh_error)
+                    result["discard"] = {"discarded": False, "skipped": "PR 생성 실패 — worktree·lock 보존",
+                                         "next": f"push는 됐다. PR을 수동 처리하거나 publish 재시도를 사용자와 정한 뒤 db_pr discard {args.wt}"}
+                else:
+                    result["discard"] = {"discarded": False, "skipped": "publish 실패 — worktree·lock 보존"}
         elif args.cmd == "discard":
             result = discard(ctx, Path(args.wt))
         else:

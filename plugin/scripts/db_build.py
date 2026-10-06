@@ -607,7 +607,7 @@ def build_parser() -> argparse.ArgumentParser:
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--write", action="store_true")
     mode.add_argument("--verify", action="store_true")
-    mode.add_argument("--preview", metavar="OUT_DIR")
+    mode.add_argument("--preview", metavar="out_dir")
     mode.add_argument("--cache-only", action="store_true")
     parser.add_argument("--staged", action="store_true", help="--verify와 함께: index 기준")
     parser.add_argument("--json", action="store_true", help="JSON 출력 (항상 JSON)")

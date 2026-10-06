@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """`gh` CLI 스텁 (15-local-draft.md §15.2). 사내 GHE를 대신한다.
 
-지원: `auth status`, `pr create`, `pr list`(`--search`), `pr view`, `pr edit`.
+지원: `auth status`, `pr create`, `pr list`(`--search`, `--author`), `pr view`, `pr edit`.
 상태는 `tests/mocks/gh-state/prs.json`에 저장한다
 (`MOCK_GH_STATE_DIR`로 바꿀 수 있다).
 
@@ -11,6 +11,9 @@
 동작을 바꾸는 환경변수 (테스트용):
   MOCK_GH_STATE_DIR   상태 파일 디렉토리
   MOCK_GH_UNAUTH=1    `auth status`를 실패시킨다 (setup 9번 경로 시험)
+  MOCK_GH_USER        `--author @me`가 가리키는 사용자 (기본 mock-user). `pr create`가 author로 기록한다
+  MOCK_GH_FAIL_LIST=1 `pr list`를 실패시킨다 (my-prs의 gh 실패 경로 시험)
+  MOCK_GH_BAD_JSON=<문자열>  `pr list`가 그 문자열(1이면 html)을 stdout에 내고 0으로 끝난다 (my-prs 경고 경로 시험)
   GH_HOST             호스트 이름 (없으면 ghe.mock.invalid)
 """
 
@@ -48,6 +51,10 @@ def save_state(state: dict) -> None:
     state_path().write_text(
         json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8", newline="\n"
     )
+
+
+def me() -> str:
+    return os.environ.get("MOCK_GH_USER") or MOCK_USER
 
 
 def host() -> str:
@@ -180,6 +187,7 @@ def cmd_pr(argv: list[str]) -> int:
             "branch": branch,
             "headRefName": branch,
             "headRefOid": head_sha(),
+            "author": me(),
             "state": "OPEN",
             "isDraft": args.draft,
             "reviewers": args.reviewer,
@@ -195,10 +203,21 @@ def cmd_pr(argv: list[str]) -> int:
         parser.add_argument("--search", default=None)
         parser.add_argument("--state", default="open")
         parser.add_argument("--head", default=None)
+        parser.add_argument("--author", default=None)
         parser.add_argument("--json", dest="json_fields", default=None)
         parser.add_argument("--limit", type=int, default=30)
         args, _ = parser.parse_known_args(rest)
+        if os.environ.get("MOCK_GH_FAIL_LIST") == "1":
+            print("gh 스텁: pr list 실패 (MOCK_GH_FAIL_LIST)", file=sys.stderr)
+            return 1
+        bad = os.environ.get("MOCK_GH_BAD_JSON")
+        if bad:
+            print("<html>proxy error</html>" if bad == "1" else bad)
+            return 0
         rows = [p for p in state["prs"] if p["repo"] == repo]
+        if args.author:
+            who = me() if args.author == "@me" else args.author
+            rows = [p for p in rows if p.get("author", MOCK_USER) == who]
         if args.state and args.state != "all":
             rows = [p for p in rows if p["state"] == args.state.upper()]
         if args.head:

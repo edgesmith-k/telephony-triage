@@ -801,10 +801,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--db", default=None)
     scope = parser.add_mutually_exclusive_group(required=True)
     scope.add_argument("--all", action="store_true")
-    scope.add_argument("--ref", metavar="REF")
-    scope.add_argument("--changed", metavar="REF")
+    scope.add_argument("--ref", metavar="ref")
+    scope.add_argument("--changed", metavar="ref")
     scope.add_argument("--staged", action="store_true")
-    parser.add_argument("--residual", action="append", metavar="OLD=NEW")
+    parser.add_argument("--residual", action="append", metavar="옛 ID=새 ID")
     parser.add_argument("--json", action="store_true", help="JSON 출력 (항상 JSON)")
     parser.add_argument("--plugin-root", default=None)
     return parser

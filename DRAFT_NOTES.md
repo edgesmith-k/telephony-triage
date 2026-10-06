@@ -15,7 +15,7 @@
 ## 진행 상태
 
 - 모드: **사외 초안**. 완료 Phase: **D0, 1~13**. RF-0·RF-1 완료.
-- 마지막 전체 테스트: **738개 통과** (10/06, 3F, Ubuntu·Py3.11, 8분). Windows에서는 도구 셸 stdin을 `/dev/null`로, PATH 앞에 실제 Python과 `python3` shim(Store 별칭이면 gh 스텁·git hook이 9009로 실패).
+- 마지막 전체 테스트: **921개 통과** (10/06, W7, `TT_SCHEMA_CHECK=1`, Ubuntu, 10분). Windows에서는 도구 셸 stdin을 `/dev/null`로, PATH 앞에 실제 Python과 `python3` shim(Store 별칭이면 gh 스텁·git hook이 9009로 실패).
 - 사내 확인 항목: `TODO(SITE)` **73곳**(S22 12곳 추가) — `python3 tools/list_site_todos.py`. `REVIEW-OPEN.md` 0건.
 - 안내서(사람용 HTML): `docs/telephony-triage-guide.html` (공유본 https://claude.ai/artifact/1jov1Et4dQUMauFr6aoxWG)
 
@@ -28,7 +28,7 @@
 | ☐ | 항목 | 메모 |
 |---|---|---|
 | ☐ 2 | **사용자 확인** — 위 표, RF-2, 10/05 작업 전체 | 반입 직전에 한꺼번에 |
-| ✅ 3C | 행동 eval — 사외 실행 완료 → 보강 트랙 3C·3D·3E | 사내 S-2에서 54개 다시 |
+| ✅ 3C | 행동 eval — 사외 실행 완료 → 보강 트랙 3C·3D·3E | 사내 S-2에서 `evals.json` 전체(현재 57개) 다시 |
 | ◐ 10 | **반입** | main `7b69cb5` 묶음은 낡음 → 아래 보강 뒤 다시 만든다. 태그 push는 사용자(세션 권한 밖) |
 
 **반입 전 보강 트랙**(사용자 결정 10/05: 시간 여유, 사외에서 최대한 안정화·보완 뒤 반입). 위에서부터 ☐ 첫 항목을 한다. 단계마다 결과 요약 → 사용자 확인.
@@ -40,8 +40,8 @@
 | ✅ 3D | 3C 발견 수정, 재실행 18/26 | 10/05, `history/eval-3d` |
 | ✅ 3E | 결정적 줄 구조화·guard 10 — 행동 16/17, 안전 0 | 10/06, `history/eval-3e` |
 | ✅ 3F | 채점 오판정·guard grep 통독 차단 | 10/06, `CHANGES.md` |
-| ☐ W | **개선 트랙**(토큰·편의·유지·보완, WP 0~12) — `docs/development/IMPROVEMENT_PLAN_2026-10.md` §7 진행 표 | 10/06 계획 작성(커밋 `문서: 개선 트랙 W 계획`). "개선안 진행"으로 시작 |
-| ◐ Z | 마무리: main 병합(PR #5) → `15 §15.4` 재실행 → 새 묶음·sha256 → 사용자 태그 → 2 | 10/06 브랜치 3f1fba9에서 §15.4 9항목 통과(테스트 738·regress 20·offline_eval·eval 54 준비·경계·스키마·뼈대·TODO 73). PR 병합 뒤 main에서 묶음 재생성 |
+| ◐ W | **개선 트랙** — `docs/development/IMPROVEMENT_PLAN_2026-10.md` §7 진행 표 | **W0~W9 ✅**(10/06). 다음 W10(큰 모듈 분할). 중간 판단은 Fable 결정 에이전트에게 묻고 진행(10/06 사용자 지정, 개선안 §8-9). W11 후보: `fix_exec_bits --check`가 기존 100644 파일(gen_contracts·related_tests·bench_scale·tests/test_*)로 실패 — 모드 비트 정책 확정 후 일괄 chmod 또는 검사 범위 조정; TODO(SITE) 셈 기준 통일(`list_site_todos` S번호별 합 140 vs 위 "73곳"), 스키마 Read 0회 미달은 W11 후속. 판정 관례: 변경 전·후 eval을 같은 모델로, 1순위 동작·형식 오류 재시도, 2순위 토큰 W0 폭(출력 9.5%·비용 15.7%), 폭 밖이면 trace(호출 수)로 원인 확인. W2 사내 잔여: 운영 DB 스키마 `pr.ids` PR. 확인 필요: guard가 `cat`·`sed` 로그 원문 읽기를 안 막음(eval 18·40·46·W6 3·31, `99-deferred §E`). "개선안 진행"으로 계속 |
+| ◐ Z | 마무리: main 병합(PR #5) → `make_bundle.py` 실행(종료 3) → 새 묶음·sha256 → 사용자 태그 → 2 | 10/06 브랜치 3f1fba9에서 §15.4 9항목 통과(테스트 738·regress 20·offline_eval·eval 54 준비·경계·스키마·뼈대·TODO 73). PR 병합 뒤 main에서 묶음 재생성 |
 
 RF-5(oFono)·RF-6(커넥터)·RF-8(자동화)은 사내 환경을 알아야 의미가 있어 반입 뒤. RF-9·웹 UI(보류)는 그 뒤 후보. RF 상세는 `docs/development/ARCHITECTURE_REVIEW_2026-10.md` §U.
 
@@ -54,7 +54,7 @@ RF-5(oFono)·RF-6(커넥터)·RF-8(자동화)은 사내 환경을 알아야 의�
 
 ## 막힌 것
 
-- 없음 — 행동 eval은 사내 S-2에서 54개 다시.
+- 없음 — 행동 eval은 사내 S-2에서 `evals.json` 전체(현재 57개) 다시.
 
 ## 결정
 

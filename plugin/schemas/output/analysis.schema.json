@@ -1,0 +1,190 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "analysis.schema.json",
+ "title": "triage.py run 출력 (JOB/analysis.json과 stdout)",
+ "$comment": "플러그인 소유(이슈 DB schema/ 사본 아님, tools/sync_schemas.py가 대조하지 않는다). triage.py는 TT_SCHEMA_CHECK=1일 때만 이 스키마로 run 출력을 검사한다(테스트·CI). contracts-cli.md의 키 트리는 이 파일에서 생성한다(tools/gen_contracts.py). 키 순서는 출력 순서다.",
+ "type": "object",
+ "required": ["status"],
+ "properties": {
+  "status": {"enum": ["ok", "needs_input", "stopped"]}
+ },
+ "allOf": [
+  {"if": {"properties": {"status": {"const": "ok"}}}, "then": {"$ref": "#/$defs/ok"}},
+  {"if": {"properties": {"status": {"const": "needs_input"}}}, "then": {"$ref": "#/$defs/needs_input"}},
+  {"if": {"properties": {"status": {"const": "stopped"}}}, "then": {"$ref": "#/$defs/stopped"}}
+ ],
+ "$defs": {
+  "ok": {
+   "description": "완료. JOB/analysis.json(≤ 4KB, stdout도 같음). 값이 null·빈 목록·빈 객체인 최상위 키는 내지 않는다",
+   "$comment": "required는 fit()이 지우지 않는 최상위 키만이다(triage.py assemble이 null·[]·{} 키를 뺀 뒤 fit). candidates는 후보가 없으면 []라서 빠지고, no_candidate는 후보가 있으면 null이라 빠지므로 required가 아니다. code는 resolve_code가 항상 비어 있지 않은 객체({skipped: true} 이상)를 내고 fit이 건드리지 않는다.",
+   "type": "object",
+   "additionalProperties": false,
+   "required": ["status", "key", "generated_at", "request_hash", "mode", "logs", "code", "files", "truncated"],
+   "properties": {
+    "status": {"const": "ok"},
+    "key": {"type": "string"},
+    "generated_at": {"type": "string"},
+    "request_hash": {"type": "string", "description": "입력 해시(부분별 parts {logs, jira, db, config, plugin, args}, 파싱 전에 계산)"},
+    "run": {"type": "integer", "description": "결과(core)를 계산한 실행 번호"},
+    "reuse": {
+     "type": "object",
+     "description": "{hit: true, run}(재사용) 또는 {hit: false, prev_run, changed[부분] | reason: refresh|cache-missing, added_logs[≤5], prev_top, top_changed}; 첫 실행·--offline-db에는 없음, 4KB 압축 시 added_logs·prev_top 순으로 뺀다",
+     "required": ["hit"],
+     "properties": {
+      "hit": {"type": "boolean"},
+      "run": {"type": "integer"},
+      "prev_run": {"type": ["integer", "null"]},
+      "changed": {"type": "array", "description": "바뀐 입력 부분"},
+      "reason": {"enum": ["refresh", "cache-missing"]},
+      "added_logs": {"type": "array", "maxItems": 5},
+      "prev_top": {"type": "string"},
+      "top_changed": {"type": "boolean"}
+     }
+    },
+    "mode": {"enum": ["write", "read-only", "analysis-only", "offline"]},
+    "read_only_reasons": {"type": "array", "description": "mode: read-only일 때 config.py check 사유(analysis-only면 없음)"},
+    "read_only_hint": {"type": "string", "description": "mode: read-only일 때만, config.py check 사유 메시지, ≤200바이트, 4KB 압축 시 100"},
+    "snapshot": {"type": "object"},
+    "plan": {"type": "object", "description": "analysis-only면 {exists, source, pr_number}만"},
+    "jira": {"type": "object", "description": "failed_step {text(≤120, 4KB 압축 시 60), source}는 있을 때만, 보조 정보"},
+    "step_anchor": {
+     "type": "object",
+     "description": "실패 스텝 앵커·실패 스텝·시계 정렬·스텝 순서 시도가 있을 때만",
+     "required": ["source"],
+     "properties": {
+      "outside_errors": {"type": "integer", "description": "앵커가 있고 Jira 발생 시각이 분석 범위 밖·로그 범위 안일 때 그 시각 근처의 범위 밖 오류 이벤트 수, 0이면 키 없음, 근거·점수에 쓰지 않음"},
+      "source": {"enum": ["log_marker", "steps_file", "step_order", "jira", "symptom_scan"]},
+      "step": {"type": "string", "description": "≤80, 4KB 압축 시 40"},
+      "step_from": {"const": "marker", "description": "마커의 스텝을 쓴 경우만"},
+      "span": {"type": "array", "description": "[시작|null, 실패]"},
+      "jira_gap_min": {},
+      "focus": {"type": "array", "maxItems": 3, "description": "유형 ID"},
+      "clock": {"type": "object", "description": "{mode: manual|none, offset_sec?(manual), reason?(none, \"시계 차 모름\"; 4KB 압축 시 먼저 뺌)}"},
+      "order": {"type": "object", "description": "{matched, observable, missed, last{step(≤40), ts}(step_order일 때, 4KB 압축 시 가장 먼저 뺌), reason?(앵커를 못 정해 jira로 돌아갈 때)}"}
+     }
+    },
+    "existing": {"type": "object"},
+    "open_prs": {"type": "array"},
+    "build": {"type": "object"},
+    "logs": {
+     "type": "object",
+     "properties": {
+      "files": {"type": "array"},
+      "window": {},
+      "range": {"type": "array"},
+      "in_range": {},
+      "clock_anomalies": {"type": "integer"},
+      "events": {"type": "integer"},
+      "uncollected_tags": {"type": "array", "maxItems": 3, "description": "{tag(≤40), lines, warn}; 후보 없음·1위 C=0일 때만, 파서 규칙에 없는 태그 힌트"}
+     }
+    },
+    "candidates": {
+     "type": "array",
+     "maxItems": 3,
+     "items": {"$ref": "#/$defs/candidate"}
+    },
+    "pending_causes": {"type": "array"},
+    "no_candidate": {
+     "type": "object",
+     "required": ["search_hits", "error_events", "error_event_total"],
+     "properties": {
+      "search_hits": {"type": "array"},
+      "error_events": {"type": "array", "maxItems": 8, "description": "{ts, tag, event, phone, request?, error?, code?, reason?, cause?}(각 ≤40자, 있을 때만; 4KB 압축 시 4개·부가 필드 없음)"},
+      "error_event_total": {"type": "integer"}
+     }
+    },
+    "code": {
+     "type": "object",
+     "required": ["skipped"],
+     "properties": {
+      "skipped": {"type": "boolean"},
+      "roots": {},
+      "tree_version": {},
+      "auto": {"const": true, "description": "`true`: `code.auto_select`로 자동 선택했을 때만"},
+      "resolved": {"type": "array"},
+      "moved": {"type": "array"}
+     }
+    },
+    "analyzer": {"type": "object", "description": "{skill, when}"},
+    "explore": {"type": "object", "description": "{reason: no_candidate|cause_unconfirmed, when: ask|always|never}(run은 타임라인을 만들지 않는다)"},
+    "warnings": {"type": "array"},
+    "notes": {"type": "array", "description": "잔여 worktree·도구 브랜치 안내 등"},
+    "lock_owner": {"type": "string"},
+    "lock_released": {"const": true, "description": "analysis-only가 ok로 끝나 lock을 풀었을 때만(lock_owner 없음)"},
+    "files": {"type": "object", "description": "{report, events, match, jira}(4KB 압축 시 report만)"},
+    "must_show": {"type": "array", "maxItems": 6, "items": {"type": "string"}, "description": "리포트 줄 중 꼭 보여야 하는 것, 우선순위 순(4KB 압축 시 줄당 160자·앞 4개)"},
+    "truncated": {"type": "boolean", "description": "4KB로 줄여도 넘으면 true"}
+   }
+  },
+  "candidate": {
+   "type": "object",
+   "additionalProperties": false,
+   "required": ["type", "cause", "score", "confidence", "S", "C", "evidence"],
+   "properties": {
+    "type": {"type": "string"},
+    "cause": {"type": ["string", "null"]},
+    "title": {},
+    "category": {},
+    "score": {"type": "number"},
+    "confidence": {},
+    "S": {"type": "integer"},
+    "C": {"type": "integer"},
+    "phones": {"type": "array"},
+    "evidence": {"type": "array", "maxItems": 10, "items": {"$ref": "#/$defs/evidence"}},
+    "fix_judgement": {},
+    "fix_message": {},
+    "related": {"type": "array"},
+    "resolution": {},
+    "resolution_verification": {},
+    "fix_status": {},
+    "jira_count": {},
+    "jira_recent": {"type": "array"}
+   }
+  },
+  "evidence": {
+   "type": "object",
+   "additionalProperties": false,
+   "description": "마스킹된 근거 줄(report.md의 줄 위치는 analysis.json에 없다)",
+   "required": ["ts", "tag", "msg", "event"],
+   "properties": {
+    "ts": {},
+    "tag": {},
+    "msg": {"description": "마스킹"},
+    "event": {}
+   }
+  },
+  "needs_input": {
+   "description": "사용자 결정 지점. 같은 명령에 --answer kind=값을 붙여 재실행",
+   "type": "object",
+   "additionalProperties": false,
+   "required": ["status", "key", "needs_input"],
+   "properties": {
+    "status": {"const": "needs_input"},
+    "key": {"type": "string"},
+    "needs_input": {
+     "type": "object",
+     "required": ["kind", "question", "options", "answer"],
+     "properties": {
+      "kind": {"enum": ["lock", "plan", "jira", "year", "reanalyze", "open_pr", "logs", "code", "code_confirm", "time", "window"]},
+      "question": {"type": "string"},
+      "options": {"type": "array"},
+      "answer": {"type": "string", "description": "--answer <kind>=<값>"}
+     }
+    },
+    "lock_owner": {"type": ["string", "null"]}
+   }
+  },
+  "stopped": {
+   "description": "사용자 중단(lock 해제)",
+   "type": "object",
+   "additionalProperties": false,
+   "required": ["status", "key", "reason"],
+   "properties": {
+    "status": {"const": "stopped"},
+    "key": {"type": "string"},
+    "reason": {"type": "string"},
+    "lock_released": {"type": "boolean"}
+   }
+  }
+ }
+}

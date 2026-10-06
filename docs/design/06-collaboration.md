@@ -95,7 +95,7 @@ CI 대신 아래 **5단계**로 검증한다. `issue-db.config.yaml`의 `ci_mode
 3. **원격 변경 확인**: `<start_sha>`가 계획의 `pr.head_sha`와 다르면 마지막 publish 뒤 다른 사람(리뷰어 등)이 브랜치에 push한 것이다. `git diff <pr.head_sha> <start_sha>` 요약을 보여주고 **덮어쓰기**(그 변경은 사라진다. 필요하면 먼저 계획에 반영한다) / **중단** 중에서 고르게 한다.
 4. **스키마 확인**: 계획의 `schema_version`이 main과 다르면 `db_migrate upgrade-plan`으로 계획을 올린다. 마이그레이션이 `upgrade_plan()`을 제공하지 않으면 중단하고 계획을 다시 만들라고 안내한다 (6.4).
 5. `db_pr stage <plan.json> --wt <work_dir>/<작업 키>/wt --branch <br>`: 최신 origin/<base>에서 drift 검사 → 적용 → 생성 파일 재생성 → 모든 검사. 새 ID와 fixture 번호는 적용 시점에 다시 할당된다. drift가 있으면 사용자 결정을 계획에 반영하고 `base_sha`를 바꾼 뒤 다시 `stage`한다 (`contracts.md §작업 계획` drift).
-6. `db_pr summary`로 Step 8-5와 같은 **push 전 확인 화면**(ID 재할당 내역, drift 결정 내역 포함)을 보여주고 승인받는다 → 커밋(스킬이 `git add`/`git commit` 별도 호출) → `db_pr publish --lease <start_sha>`. 원격이 그 사이 바뀌었으면 push가 거부되고 2번부터 다시 한다. 커밋 메시지나 PR 제목·본문에 바뀐 ID가 있으면 `publish`가 `gh pr edit`으로 고친다.
+6. `db_pr stage --then-summary`의 출력으로 Step 8-5와 같은 **push 전 확인 화면**(ID 재할당 내역, drift 결정 내역 포함)을 보여주고 승인받는다 → `db_pr publish --lease <start_sha> --commit --and-discard`(커밋은 `--commit`이 한다). 원격이 그 사이 바뀌었으면 push가 거부되고 2번부터 다시 한다. 커밋 메시지나 PR 제목·본문에 바뀐 ID가 있으면 `publish`가 `gh pr edit`으로 고친다.
 7. `db_pr discard` (lock 해제).
 
 - 계획은 작성자 PC에만 있으므로 **sync-pr는 작성자가 실행한다.** 리뷰어는 작성자에게 요청한다. 작성자가 없으면 리뷰어가 아래 "계획이 없는 브랜치" 절차로 할 수 있다. GHE에 "마지막 push한 사람이 아닌 사람의 승인" 규칙이 있어도 작성자가 실행하므로 문제가 없다.

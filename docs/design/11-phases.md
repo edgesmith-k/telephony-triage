@@ -147,7 +147,7 @@
   - 재발 로그 → `db_verify fix` `failed`. `verify-fix {result: failed}` 계획을 적용하면 open 전환, `ref`·`fixed_in`이 `verification_history`로 보존되고 비워짐
   - 증상만 남은 로그 → `partial`, 다른 원인 후보 출력. `partial` 계획 적용 시 `fix-submitted` 유지 + partial 이력
   - 시나리오 흔적 없는 로그 → `unknown`
-  - scenario/recovery 시그니처가 모두 없는 코드 수정 유형 원인 → `db_verify fix`가 판정 없이 `unknown`(필수 시그니처 없음)
+  - scenario/recovery 시그니처가 모두 없는 코드 수정 유형 원인 → W3 전: `db_verify fix`가 판정 없이 `unknown`(필수 시그니처 없음) / W3부터: 종료 코드 2, stdout 없음
   - `fixed_in` 이전 빌드 로그, 빌드 없는 `fixed_in` → `db_verify fix` 중단(종료 코드 2). 빌드 없는 `fixed_in`에 `verify-fix passed` 계획을 적용하면 거부
   - `db_verify resolution`: recovery 없음 + 시나리오 흔적 없음 → `unknown`
   - 손으로 쓴 `record` 계획(`new-cause` + recovery 시그니처)에 `db_verify resolution --cause <temp_id> --plan --draft`로 해결책 적용 후 로그를 판정하면 `passed`이고, 이어서 `add-fixture(kind: resolved)` + `verify-resolution`을 넣은 계획을 `db_pr stage`에 넣으면 새 원인이 `verified`로 들어가고 lint가 통과한다

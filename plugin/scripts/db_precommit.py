@@ -130,19 +130,23 @@ def report(result: dict, code: int) -> None:
               "(CONTRIBUTING.md).", file=sys.stderr)
 
 
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="db_precommit.py", description=__doc__,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--db", metavar="toplevel", required=True, help='이슈 DB toplevel ("$(git rev-parse --show-toplevel)")')
+    parser.add_argument("--staged", action="store_true", default=True, help="index 기준 (기본값)")
+    parser.add_argument("--json", action="store_true", help="JSON 출력 (항상 JSON)")
+    parser.add_argument("--plugin-root", default=None)
+    return parser
+
+
 def main(argv: list[str] | None = None) -> int:
     try:
         sys.stdout.reconfigure(encoding="utf-8")
         sys.stderr.reconfigure(encoding="utf-8")
     except (AttributeError, ValueError):
         pass
-    parser = argparse.ArgumentParser(prog="db_precommit.py", description=__doc__,
-                                     formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--db", required=True, help='이슈 DB toplevel ("$(git rev-parse --show-toplevel)")')
-    parser.add_argument("--staged", action="store_true", default=True, help="index 기준 (기본값)")
-    parser.add_argument("--json", action="store_true", help="JSON 출력 (항상 JSON)")
-    parser.add_argument("--plugin-root", default=None)
-    args = parser.parse_args(argv)
+    args = build_parser().parse_args(argv)
     site_defaults.load_or_exit(args.plugin_root)
     db = Path(args.db)
     if not (db / "issue-db.config.yaml").is_file():

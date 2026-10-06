@@ -26,6 +26,8 @@ jobs:
         run: python tools/check_boundary.py --mode external
       - name: Schema copy in sync
         run: python tools/sync_schemas.py --check
+      - name: Generated contracts in sync (contracts-cli.md, db-authoring 필수 키 요약)
+        run: python tools/gen_contracts.py --check
       - name: Generated fixtures match their scenarios (variant builder is deterministic)
         run: |
           python tests/helpers/make_log_fixtures.py --check
@@ -53,4 +55,6 @@ jobs:
           git config --global user.email "ci@example.invalid"
           git config --global init.defaultBranch main
       - name: pytest
+        env:
+          TT_SCHEMA_CHECK: "1"   # triage.py run 출력 스키마 검사 (tests/conftest.py도 설정)
         run: python -m pytest -q tests

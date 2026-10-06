@@ -491,8 +491,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="match_signatures.py", description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--db", default=None)
-    parser.add_argument("--events", required=True)
-    parser.add_argument("--jira-meta", default=None)
+    parser.add_argument("--events", metavar="json", required=True)
+    parser.add_argument("--jira-meta", metavar="json", default=None)
     parser.add_argument("--regress", action="store_true")
     parser.add_argument("--no-feedback-weight", action="store_true")
     parser.add_argument("--top", type=int, default=3,

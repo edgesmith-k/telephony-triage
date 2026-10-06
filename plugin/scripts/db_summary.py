@@ -13,6 +13,7 @@ from pathlib import Path
 
 from common import masking
 from common.exitcodes import NEEDS_APPROVAL, OK
+from common.fixtures import CAUSE_ID_RE, TYPE_ID_RE
 from common.issuedb import IssueDbError, parse_frontmatter_text
 
 GENERATED_RE = re.compile(r"^(README\.md|STATS\.md|parser-rules/CHANGELOG\.md|[^/]+/README\.md)$")
@@ -254,6 +255,11 @@ def screen(wt: Path, plan: dict, stage_result: dict, state: dict, db_cfg: dict, 
     at_base = {i.get("temp_id"): i.get("id") for i in stage_result.get("ids_at_base") or []}
     ids = [({**i, "expected_at_base": at_base[i["temp_id"]]} if i.get("temp_id") in at_base else dict(i))
            for i in applied.get("ids") or []]
+    recorded = (plan.get("pr") or {}).get("ids")    # publish가 기록한 이전 적용 ID(`{temp_id: id}`). 없으면 previous_id 키를 만들지 않는다
+    if isinstance(recorded, dict):
+        for row in ids:
+            if recorded.get(row.get("temp_id")) not in (None, row["id"]):
+                row["previous_id"] = recorded[row["temp_id"]]
     keys = [i["id"] for i in ids] + [jira.get("key")] if jira else [i["id"] for i in ids]
     for op in applied.get("operations") or []:
         for field in ("cause", "type", "to", "id", "a", "b", "owner"):
@@ -356,3 +362,212 @@ def pr_body(screen: dict, plan: dict) -> str:
     lines.append("승인 필요: " + (", ".join(r["id"] for r in screen["approval_needed"]) + " — 메인테이너 승인 필수"
                                   if screen["approval_needed"] else "없음"))
     return "\n".join(lines) + "\n"
+
+
+# -- 마크다운 렌더 (`db_pr summary --format markdown`) --------------------------------------------
+# `write-flow.md §4`가 정한 확인 화면 절 순서·문구를 코드로 옮긴 것이다. 표 밖의 계산은 거기 적힌 규칙만 쓴다.
+# 규칙이 정하지 않은 경우는 추측하지 않고 원값을 "(규칙 없음 …)"으로 보인다.
+
+TARGET_RE = re.compile(r"^\[([^\]]+)\]")                     # 계획 형식: "[<원인 또는 유형 ID>] add <KEY>: …"
+NO_RULE = "규칙 없음"
+
+
+def _md_cell(value) -> str:
+    return str("" if value is None else value).replace("\\", "\\\\").replace("|", "\\|").replace("\r", " ").replace("\n", " ")
+
+
+def _md_line(value) -> str:
+    """한 줄로 보여야 하는 값(notes·제목·push_note 등): 개행·연속 공백을 공백 하나로. 줄 머리에 가짜 항목을 심지 못하게 한다."""
+    return " ".join(str("" if value is None else value).split())
+
+
+def _fence(text: str, info: str = "") -> str:
+    """내용에 든 가장 긴 백틱 줄보다 한 칸 긴 펜스로 감싼다(내용이 펜스를 닫지 못하게)."""
+    longest = max((len(m) for m in re.findall(r"`+", text)), default=0)
+    fence = "`" * max(3, longest + 1)
+    return f"{fence}{info}\n{text}\n{fence}"
+
+
+def target_id(commit_message: str | None) -> str | None:
+    """대상 원인·유형 ID: 커밋 메시지 머리 `[<원인 또는 유형 ID>]`(write-flow 계획 형식)."""
+    m = TARGET_RE.match(commit_message or "")
+    if m and (CAUSE_ID_RE.fullmatch(m.group(1)) or TYPE_ID_RE.fullmatch(m.group(1))):
+        return m.group(1)
+    return None
+
+
+def target_title(wt: Path, target: str | None) -> str | None:
+    """대상 ID의 제목: 원인이면 소속 유형 type.md의 그 원인 `title`, 유형이면 유형 `title`. 못 찾으면 None."""
+    if not target or not (CAUSE_ID_RE.fullmatch(target) or TYPE_ID_RE.fullmatch(target)):
+        return None
+    type_id = target.rsplit("-", 1)[0] if CAUSE_ID_RE.fullmatch(target) else target
+    for path in sorted(wt.glob(f"*/{type_id}-*/type.md")):
+        try:
+            data = parse_frontmatter_text(path.read_text(encoding="utf-8"), str(path))
+        except (IssueDbError, OSError):
+            continue
+        if target == type_id:
+            return str(data["title"]) if data.get("title") else None
+        for cause in data.get("causes") or []:
+            if isinstance(cause, dict) and cause.get("id") == target and cause.get("title"):
+                return str(cause["title"])
+    return None
+
+
+def id_assignment(row: dict) -> str:
+    """ID 할당 한 줄(write-flow §4 ID 할당 문구). `expected_at_base`(계획 `base_sha` 당시 번호)가 다르면
+    '계획 당시 X → Y (main에 먼저 머지된 원인)', `previous_id`(이전 적용 번호, 계획 `pr.ids` 기록)가 다르면 'X → Y 재할당'."""
+    line = f"{row['temp_id']} → {row['id']}"
+    notes = []
+    base = row.get("expected_at_base")
+    if base not in (None, row["id"]):
+        notes.append(f"계획 당시 {base} → {row['id']} (main에 먼저 머지된 원인)")
+    if row.get("previous_id") not in (None, row["id"]):
+        notes.append(f"{row['previous_id']} → {row['id']} 재할당")
+    return line + (": " + "; ".join(notes) if notes else "")
+
+
+USER_STATEMENT = "근거: 사용자 진술"      # db-authoring.md: 사용자 진술만 있으면 method에 이 문구, status는 unverified
+
+
+def resolution_states(operations: list[dict]) -> list[dict]:
+    """해결책 검증 상태 `[{cause, state, reason}]` — 계획 op만 보고 정한다(type.md 현재 상태는 읽지 않는다).
+
+    write-flow §4: 새 원인이거나 `set-resolution`이 있으면 unverified, 같은 계획의 `verify-resolution`이 적용된 경우만 verified.
+    `state`는 원값(verified/unverified), `reason`은 고정 어휘: "신규 원인 (new-cause)", "해결책 변경 (set-resolution)",
+    새 원인 본문 `resolution_verification.method`가 "근거: 사용자 진술"이면 그 문구를 덧붙인다. `new-type`은 "신규 유형 (new-type)". 어휘가 정해지지 않은 op
+    (verify-resolution)는 op 이름만 보인다(렌더가 괄호로 감싼다). 해결책을 바꾸는 op가 없으면 빈 목록(해당 없음).
+    """
+    reasons: dict[str, list[str]] = {}
+    verified: set[str] = set()
+    for op in operations:
+        kind = op.get("op")
+        body = None
+        if kind == "new-cause" and isinstance(op.get("temp_id"), str):
+            cause, label, body = op["temp_id"], "신규 원인 (new-cause)", op.get("cause")
+        elif kind == "new-type" and isinstance((op.get("first_cause") or {}).get("temp_id"), str):
+            cause, label, body = op["first_cause"]["temp_id"], "신규 유형 (new-type)", op["first_cause"].get("cause")
+        elif kind == "set-resolution" and isinstance(op.get("cause"), str):
+            cause, label = op["cause"], "해결책 변경 (set-resolution)"
+        elif kind == "verify-resolution" and isinstance(op.get("cause"), str):
+            verified.add(op["cause"])
+            reasons.setdefault(op["cause"], [])
+            continue
+        else:
+            continue
+        found = reasons.setdefault(cause, [])
+        found.append(label)
+        if isinstance(body, dict) and USER_STATEMENT in str((body.get("resolution_verification") or {}).get("method") or ""):
+            found.append(USER_STATEMENT)
+    return [{"cause": c, "state": "verified", "reason": "verify-resolution"} if c in verified else
+            {"cause": c, "state": "unverified", "reason": ", ".join(dict.fromkeys(found))} for c, found in reasons.items()]
+
+
+def screen_extras(wt: Path, scr: dict, operations: list[dict], digest: str) -> dict:
+    target = target_id(scr.get("commit_message"))
+    return {"target_id": target, "target_title": target_title(wt, target),
+            "resolution": resolution_states(operations), "approved_hash": digest}
+
+
+def _result_cell(row: dict) -> str:
+    status = row.get("status")
+    if status == "pass":
+        return f"✅ {row['label']}"       # ✅는 status == "pass"일 때만
+    if status == "fail":
+        return f"❌ {row['label']}"
+    return str(row.get("label"))          # skipped·review_required·needs-approval·알 수 없는 status는 원문 그대로
+
+
+def _check_lines(checks: dict) -> list[str]:
+    if "skipped" in checks:
+        return [f"자동 검사: 건너뜀 — {_md_line(checks['skipped'])}"]
+    ok = lambda v: "✅" if v else "❌"  # noqa: E731
+    lint, ids, mask, regress, build = (checks[k] for k in ("lint", "ids", "mask", "regress", "build"))
+    lines = [f"- 스키마·lint {ok(lint['ok'])} (오류 {lint['errors']}건, 경고 {lint['warnings']}건)"]
+    lines += [f"  - lint 오류: {_md_line(f)}" for f in lint["findings"]]
+    if lint["errors"] > len(lint["findings"]):
+        lines.append(f"  - lint 오류 {lint['errors']}건 중 {len(lint['findings'])}건만 표시")
+    lines.append(f"- ID·Jira 중복 {ok(ids['ok'])}")
+    lines += [f"  - 중복: {_md_line(d)}" for d in ids["duplicates"]]
+    lines.append(f"- 마스킹 {ok(mask['ok'])}")
+    if mask["detections"]:
+        lines.append(f"  - 마스킹 검출 {mask['detections']}건")
+    lines.append(f"- fixture 회귀 {ok(regress['ok'])} ({regress['passed']}/{regress['total']})")
+    lines += [f"  - 회귀 실패 fixture: {_md_line(f)}" for f in regress["failed"]]
+    lines.append(f"- 생성 파일 {ok(build['ok'])}")
+    return lines
+
+
+def render_markdown(scr: dict, plan: dict, extra: dict) -> str:
+    """`screen()` 결과를 write-flow §4 확인 화면 마크다운으로. 순수 함수(파일·git을 읽지 않는다)."""
+    jira = scr.get("jira") or {}
+    ids = scr["ids"]
+    target, title = extra.get("target_id"), extra.get("target_title")
+    key = jira.get("key") or target or (ids[0]["id"] if ids else None)
+    head = f"## push 전 확인: {_md_line(key) or '(대상 없음)'}"
+    if target:
+        head += f" → {target} {_md_line(title) if title else '(제목 없음)'}"
+    else:       # 대상 ID(`[<원인 또는 유형 ID>]`)를 못 정하면 조용히 생략하지 않고 원값을 보인다
+        head += f" → ({NO_RULE} — 원값: {_md_line((scr.get('commit_message') or '').splitlines()[0] if scr.get('commit_message') else '') or '없음'})"
+    branch = scr["branch"]
+    prs = scr["open_prs"]
+    open_prs = ("확인 못 함" if prs is None else
+                ", ".join(_md_line(f"#{p.get('number')} {p.get('title')} ({p.get('url')})") for p in prs) or "없음")
+    out = [head, f"구분: {_md_line(scr['source_label'])}",
+           f"브랜치: {branch['name']} ({branch['remote']}) → PR 대상: {branch['base']}",
+           f"리뷰어: {_md_line(', '.join(scr['reviewers'])) or '없음'}", f"열린 PR: {open_prs}", "",
+           "### 변경 파일", "", "| 구분 | 파일 | 변경 |", "|---|---|---|"]
+    out += [f"| {_md_cell(f['kind'])} | {_md_cell(f['path'])} | {_md_cell(f['change'])} |" for f in scr["files"]] \
+        or ["| 없음 | | |"]
+    out += ["", "### ID 할당", ""]
+    rows = [f"- {id_assignment(i)}" for i in ids]
+    pr = plan.get("pr") or {}
+    if ids and (pr.get("number") or pr.get("head_sha")) and not isinstance(pr.get("ids"), dict):
+        rows.append("- 재할당 내역: 확인 불가 (이전 적용 ID 기록 없음)")     # 이 기록 도입 전에 올린 PR
+    rows += [_md_line(f"- fixture: {fx.get('path')} ({fx.get('kind')}, {fx.get('for')})") for fx in scr["fixtures"]]
+    rows += [f"- pending 피드백 포함: {json.dumps(p, ensure_ascii=False)}" for p in scr["pending_included"]]
+    out += rows or ["없음"]
+    if scr.get("fix_changes"):
+        out += ["", "### 수정 상태 변경", ""] + [f"- {_md_line(c['line'])}" for c in scr["fix_changes"]]
+    notes = [_md_line(n) for n in scr["notes"]]
+    drift_notes = [n for n in notes if n.startswith("drift:")]
+    drift = [f"- {n}" for n in drift_notes] + [f"- {json.dumps(d, ensure_ascii=False)}" for d in scr["drift_decisions"]]
+    if drift:
+        out += ["", "### drift 결정 내역", ""] + drift
+    others = [n for n in notes if not n.startswith("drift:")]
+    out += ["", "### 추가 설명", ""] + ([f"- {n}" for n in others] or ["없음"])
+    out += ["", "### README 반영 미리보기", ""]
+    out += [_fence("\n".join(scr["readme_preview"]))] if scr["readme_preview"] else ["없음"]
+    out += ["", "### 주요 diff", ""]
+    if scr["diff"]:
+        out.append(_fence("\n".join(scr["diff"]), "diff"))
+        if scr["diff_truncated"]:
+            out.append(f"전체 {scr['diff_total_lines']}줄 중 {len(scr['diff'])}줄 — '전체 diff 보기'를 고르면 전체를 본다.")
+    else:
+        out.append("없음")
+    out += ["", "### 자동 검사 결과", ""] + _check_lines(scr["checks"])
+    out += ["", "### 검증 결과", ""]
+    if scr["verification"]:
+        out += ["| 규칙 | 결과 | 사유 |", "|---|---|---|"]
+        out += [f"| {_md_cell(r['id'])} | {_md_cell(_result_cell(r))} | "
+                f"{_md_cell(r.get('reason') if r.get('status') != 'skipped' else '')} |" for r in scr["verification"]]
+    elif "skipped" in scr["checks"]:      # 검사를 건너뛰었으면 검증도 못 돌았다 — "없음"으로 두지 않는다
+        out.append(f"검증: 건너뜀 — {_md_line(scr['checks']['skipped'])}")
+    else:
+        out.append("없음")
+    approval = scr["approval_needed"]
+    out += ["", "승인 필요: " + (", ".join(str(r["id"]) for r in approval) + " — 메인테이너 승인 필수"
+                                if approval else "없음")]
+    states = extra.get("resolution") or []
+    if states:
+        for st in states:
+            out.append(f"해결책 검증 상태: {st['cause']} — {st['state']}({st['reason']})")
+    else:       # 해결책을 바꾸는 op(new-cause·new-type·set-resolution·verify-resolution)가 없다 — type.md 현재 상태는 읽지 않는다
+        out.append("해결책 검증 상태: 해당 없음 (이번 계획은 해결책을 바꾸지 않음)")
+    out += ["", "### 커밋 메시지 / PR 제목", "", _fence(scr["commit_message"]), f"PR 제목: {_md_line(scr['pr_title'])}"]
+    if scr.get("push_note"):
+        out.append(_md_line(scr["push_note"]))
+    elif not scr["push_allowed"]:
+        out.append(f"({NO_RULE} — 원값: push_allowed=false)")
+    out += ["", f"approved_hash: {extra['approved_hash']}"]
+    return "\n".join(out) + "\n"

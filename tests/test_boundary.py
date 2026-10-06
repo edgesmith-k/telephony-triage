@@ -294,6 +294,9 @@ def test_second_import_of_same_draft_is_identical(tmp_path):
 def test_plugin_schema_copy_is_in_sync():
     code, out = _run(TOOLS / "sync_schemas.py", "--check")
     assert code == 0, out
+    for path in (REPO / "plugin/schemas/plan.schema.json", REPO / "tests/fixtures/issue-db-sample/schema/plan.schema.json"):
+        pr = json.loads(path.read_text(encoding="utf-8"))["properties"]["pr"]
+        assert "ids" in pr["properties"] and "ids" not in pr["required"], path   # publish가 기록하는 선택 필드(pr.ids)
 
 
 def test_sample_plans_validate_against_plugin_schema_copy():

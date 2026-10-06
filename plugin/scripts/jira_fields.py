@@ -286,16 +286,16 @@ def build_parser() -> argparse.ArgumentParser:
     common.add_argument("--plugin-root", default=argparse.SUPPRESS)
     sub = parser.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("check-key", parents=[common])
-    p.add_argument("key")
+    p.add_argument("key", metavar="KEY")
     p = sub.add_parser("extract", parents=[common])
-    p.add_argument("raw")
+    p.add_argument("raw", metavar="raw.json|yaml")
     p.add_argument("--origin", choices=["mcp", "file"], default="mcp")
-    p.add_argument("--meta-out")
+    p.add_argument("--meta-out", metavar="file")
     p.add_argument("--consume", action="store_true")
-    p.add_argument("--comments", default="all", help="코멘트 예산: all | last:<N> (뒤에서 N개)")
-    p.add_argument("--comment-chars", type=int, default=0, help="코멘트 하나의 최대 글자 수 (0이면 자르지 않음)")
-    p.add_argument("--failed-step", help="실패 스텝 한 줄(선택, 마스킹 후 사용)")
-    p.add_argument("--steps-file", help="시험 절차 첨부 파일(txt/csv/html/zip, 선택). 읽지 못하면 경고만 내고 진행")
+    p.add_argument("--comments", metavar="all|last:N", default="all", help="코멘트 예산: all | last:<N> (뒤에서 N개)")
+    p.add_argument("--comment-chars", metavar="N", type=int, default=0, help="코멘트 하나의 최대 글자 수 (0이면 자르지 않음)")
+    p.add_argument("--failed-step", metavar="한 줄", help="실패 스텝 한 줄(선택, 마스킹 후 사용)")
+    p.add_argument("--steps-file", metavar="파일", help="시험 절차 첨부 파일(txt/csv/html/zip, 선택). 읽지 못하면 경고만 내고 진행")
     return parser
 
 

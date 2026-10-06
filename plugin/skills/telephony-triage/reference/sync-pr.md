@@ -9,8 +9,8 @@ PR을 올린 뒤 머지 전에 main이 바뀌면, 텍스트 rebase 대신 **원�
 계획이 건드리는 대상이 main에서 바뀌었으면(drift) 사용자가 고른다. 계획은 작성자 PC에만 있으므로 sync-pr는 작성자가 실행한다.
 `commands/sync-pr.md`는 이 파일을 가리키기만 한다.
 
-SKILL.md의 "실행 규칙"을 따른다. 이슈 DB에 쓰므로 세션 lock을 잡고 **끝나는 모든 경로에서 푼다**(`db_pr discard`가 풀고,
-그 밖의 경로는 `S/db_pr.py lock release <작업 키>`). 재적용 이후(stage·확인 화면·커밋·publish·discard)는 `write-flow.md` 3~7번
+`rules.md`(실행 규칙)를 따른다. 이슈 DB에 쓰므로 세션 lock을 잡고 **끝나는 모든 경로에서 푼다**(`db_pr discard`가 풀고,
+그 밖의 경로는 `S/db_pr.py lock release <작업 키>`). 재적용 이후(stage·확인 화면·커밋·publish·discard)는 `write-flow.md` 3~6번
 그대로이고, 아래는 sync-pr만의 차이다.
 
 1. **브랜치 선택**: 인자가 있으면 그 브랜치. 없으면 `WD/*/plan.json` 중 `pr.number`가 있는 것을 모아
@@ -28,11 +28,10 @@ SKILL.md의 "실행 규칙"을 따른다. 이슈 DB에 쓰므로 세션 lock을 
    **덮어쓰기 / 중단**(lock 해제)을 묻는다.
 5. **스키마 확인**: 계획의 `schema_version`이 SNAP과 다르면 `S/db_migrate.py upgrade-plan <plan> --db SNAP --write`
    (원본은 `<plan>.v<옛 버전>.bak`). 종료 코드 2(`upgrade_plan()` 없음)면 analyze/record를 다시 해서 계획을 새로 만들라고 안내하고 lock을 풀고 끝낸다.
-6. **재적용 → 확인 → 커밋 → push → 정리**: `write-flow.md` 3~7번을 `WD/<작업 키>/plan.json`, `--wt WD/<작업 키>/wt`, `--branch <br>`로.
+6. **재적용 → 확인 → 커밋 → push → 정리**: `write-flow.md` 3~6번을 `WD/<작업 키>/plan.json`, `--wt WD/<작업 키>/wt`, `--branch <br>`로.
    sync-pr만의 차이:
    - 확인 화면에 **ID 재할당 내역**과 **drift 결정 내역**을 반드시 넣는다(`db_pr summary`가 준다).
-   - 커밋은 메시지 파일(`WD/<작업 키>/commit-message.txt`)로 `git -C <wt> commit -F <메시지 파일>` — 메시지를 shell에 넣지 않는다(5번).
-   - publish는 `--lease <start_sha>`. lease가 거부되면(원격이 또 바뀜) 3번부터 다시. `publish`가 PR 제목·본문의 바뀐 ID를
+   - publish는 `--lease <start_sha> --commit --and-discard`. lease가 거부되면(원격이 또 바뀜) 3번부터 다시. `publish`가 PR 제목·본문의 바뀐 ID를
      `gh pr edit`으로 고치고 계획의 `pr.head_sha`·`base_sha`를 갱신한다.
    - 정리 뒤 사용자 로컬 `<br>`가 있으면 원격 기준으로 다시 받으라고 안내하고, pending 피드백은 `source: analyze` 계획 PR에만
      올라간다고 알린다.

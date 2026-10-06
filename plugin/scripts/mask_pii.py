@@ -167,13 +167,13 @@ def run_events(args, db: Path | None) -> dict:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="mask_pii.py", description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("files", nargs="*")
+    parser.add_argument("files", metavar="file", nargs="*")
     parser.add_argument("--check", action="store_true")
     scope = parser.add_mutually_exclusive_group()
-    scope.add_argument("--changed", metavar="REF")
+    scope.add_argument("--changed", metavar="ref")
     scope.add_argument("--staged", action="store_true")
-    parser.add_argument("--events")
-    parser.add_argument("--out")
+    parser.add_argument("--events", metavar="json")
+    parser.add_argument("--out", metavar="json")
     parser.add_argument("--in-place", action="store_true")
     parser.add_argument("--db", default=None)
     parser.add_argument("--json", action="store_true", help="요약을 JSON으로 (검사·이벤트 모드는 항상 JSON)")

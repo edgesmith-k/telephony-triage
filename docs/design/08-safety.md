@@ -60,7 +60,7 @@
 - Jira 규칙: matcher **`mcp__.*`** (모든 MCP 도구). `guard.py`가 도구 이름 `mcp__<server>__<tool>`에서 `<server>`를 config의 `jira.mcp_server`와 비교해서, **그 서버의 도구만** 판정한다. 다른 서버 도구는 그대로 통과시킨다. 서버 이름을 matcher에 직접 넣지 않는 이유는 서버 이름이 사용자 config에 있고 플러그인 hooks.json은 고정 파일이기 때문이다.
 - `jira.read_tools`는 **전체 도구 이름**(`mcp__<server>__<tool>`)으로 저장하고, guard는 전체 이름으로 비교한다. 플러그인 hook에 전달되는 MCP 도구 이름 형식은 S1·S3에서 확인한다 (`14-site.md §14.2`).
 
-**명령 판정의 한계**: `guard.py`의 명령 파싱은 **최선 노력**이다. `git -C <dir>`, `cd <dir> && git …`, `;`/`&&`/`||`로 이어진 명령, `sh -c "…"`/`bash -c "…"` 한 단계까지 풀어서 판정한다. 변수 치환, 별칭, 스크립트 파일 안의 git 호출은 판정하지 못한다. 그래서 커밋 검사의 **진짜 강제는 git pre-commit hook**이고, Claude hook은 빠른 차단과 우회 방지 역할이다. 워크플로우는 `git add`와 `git commit`을 별도 Bash 호출로 실행해서 guard가 명확하게 보게 한다 (`07-workflow.md §Step 8-6`).
+**명령 판정의 한계**: `guard.py`의 명령 파싱은 **최선 노력**이다. `git -C <dir>`, `cd <dir> && git …`, `;`/`&&`/`||`로 이어진 명령, `sh -c "…"`/`bash -c "…"` 한 단계까지 풀어서 판정한다. 변수 치환, 별칭, 스크립트 파일 안의 git 호출은 판정하지 못한다. 그래서 커밋 검사의 **진짜 강제는 git pre-commit hook**이고, Claude hook은 빠른 차단과 우회 방지 역할이다. 워크플로우는 커밋을 `db_pr publish --commit`이 하게 해서(셸 거치지 않는 `git commit -F`, 승인 해시·`core.hooksPath`·guard와 같은 검사 프로필·pre-commit을 같은 프로세스에서 확인) 스킬이 `git commit`을 직접 부르지 않는다. `publish` 토큰은 옵션과 무관하게 규칙 7로 `ask`다 (`07-workflow.md §Step 8-6`).
 
 | # | Hook | 이벤트 / 매처 | 동작 |
 |---|---|---|---|

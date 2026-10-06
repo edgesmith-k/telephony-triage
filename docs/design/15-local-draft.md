@@ -51,9 +51,12 @@
 
 ## 15.4 사내 반입 전 체크리스트
 
-- [ ] 전체 테스트 통과 (`pytest`, `db_regress --all`, eval 54개 모의 실행, `tools/offline_eval.py` 합성 라벨셋 실행 — 모두 테스트 헬퍼 플러그인 루트에서)
+도구로 실행: `python3 tools/make_bundle.py --label <label>` — auto 항목은 도구가 판정(싼 것부터, 첫 실패에서 중단), manual 3건은 사람. 종료 3 = 묶음 완료·사람 확인 대기.
+
+- [ ] 전체 테스트 통과 (`pytest`, `db_regress --all`, eval 전체(`evals.json`) 준비(`--prepare-only`), `tools/offline_eval.py` 합성 라벨셋 실행 — 모두 테스트 헬퍼 플러그인 루트에서)
 - [ ] 사내 정보 없음: `python3 tools/check_boundary.py --mode external` 종료 코드 0 (사외 CI `.github/workflows/external.yml`도 같은 검사). 그래도 실제 회사명·서버명 등을 쓰지 않았는지 사람이 한 번 검색
 - [ ] `python3 tools/sync_schemas.py --check` 통과 (`plugin/schemas/` 사본 = 샘플 DB `schema/`)
+- [ ] `python3 tools/gen_contracts.py --check` 통과 (`contracts-cli.md`·db-authoring 필수 키 요약 = 코드·스키마)
 - [ ] `plugin/site-defaults.yaml`이 없고 `site-defaults.example.yaml`만 있음. `SITE_PATHS`의 다른 경로(`.draft-manifest.json` 포함)도 비어 있음
 - [ ] 레포 루트에 `.mcp.json`이 없음 (모의 MCP는 `tests/mocks/mcp.json`). `.local-draft`는 반입 묶음에 넣지 않음
 - [ ] `tools/make_db_skeleton.py`로 이슈 DB 뼈대를 만들었고, 뼈대에 유형·Jira·fixture(합성 포함)가 없음
@@ -69,7 +72,7 @@
 |---|---|---|
 | S-0 (선택) | **선행 확인** — 사외 Phase 3(파서·매처)이 끝난 뒤 반입 전에 언제든. 사외 초안의 `parse_logcat.py`(reference 백엔드)와 `match_signatures.py`만 사내로 가져가 **Claude 없이 Python으로** 실제 로그 3~5개(카테고리 섞어서, 듀얼 SIM 포함)에 돌린다. 태그별 빈도, RIL 페어링 성공률, 시각 파싱 실패율, `coverage` 판정(범위 밖·시계 이상 비율), `phone_id` 추출률을 `SITE_PROFILE.md`에만 기록한다. 사외로는 **정성 결론만** 가져간다("페어링 방식 재검토 필요", "슬롯 표기가 문서와 다름" 등). 숫자·로그 반출은 사내 반출 규정을 사용자가 확인한다. 목적: 시그니처 매칭이 실제 logcat에서 통하는지를 S-4까지 기다리지 않고 확인해서, 모델이 안 맞을 때 되돌리는 비용을 줄이는 것. **실행 절차와 결과 읽는 법은 `docs/development/S0_PROBE_CHECKLIST.md`, 지표 도구는 `tools/s0_stats.py`.** S-0는 S-3(`site-defaults.yaml` 작성)보다 앞이라 파서가 종료 코드 2로 멈추므로, `tests/helpers/make_plugin_root.py`의 임시 플러그인 루트를 `--plugin-root`로 준다 | `04-parser-matching.md §5.8`, `contracts.md §3.2`(`parse_logcat`) |
 | S-1 | Phase 0 축약판: `DRAFT_NOTES.md`의 TODO 목록과 `REVIEW-OPEN.md`(사내 정보가 있어야 판단할 수 있는 항목)를 기준으로 확인 목록을 만들고, 사용자에게 샘플(Jira 키 2~3개, 카테고리별 logcat, 16/17 소스 경로, 빌드명)을 받아 `SITE_PROFILE.md` 작성. `REVIEW-OPEN.md` 항목은 처리 방식을 정하거나 사유와 함께 보류로 기록 | `CLAUDE.md`, `12-principles.md`, `DRAFT_NOTES.md`(상태 파일 전체, ≤8KB. 이력 `docs/history/draft-notes-*.md`는 **읽지 않는다**), TODO(SITE) 목록은 `python3 tools/list_site_todos.py`로 뽑는다, `REVIEW-OPEN.md`, `14-site.md §14.2·14.3` |
-| S-2 | 사내 Claude Code 기능 확인(S1): 플러그인 로드, hooks, `${CLAUDE_PLUGIN_ROOT}`, MCP 도구 이름 형식, `@SITE_PROFILE.md` import. `DRAFT_NOTES.md`의 사외 실험 결과와 다른 것만 고친다. 스킬 행동 eval 전체(54개) 재실행 — 사외 3C에서 52개 전부 실행(Sonnet 36/52), 3D·3E 수정 뒤 실패분 재실행(`docs/history/eval-3c-2026-10-05.md`) | `DRAFT_NOTES.md` 해당 절, 실패한 코드 파일, `tests/skill_evals/README.md` |
+| S-2 | 사내 Claude Code 기능 확인(S1): 플러그인 로드, hooks, `${CLAUDE_PLUGIN_ROOT}`, MCP 도구 이름 형식, `@SITE_PROFILE.md` import. `DRAFT_NOTES.md`의 사외 실험 결과와 다른 것만 고친다. 스킬 행동 eval 전체(`evals.json`, 현재 57개) 재실행 — 사외 3C에서 52개 전부 실행(Sonnet 36/52), 3D·3E 수정 뒤 실패분 재실행(`docs/history/eval-3c-2026-10-05.md`) | `DRAFT_NOTES.md` 해당 절, 실패한 코드 파일, `tests/skill_evals/README.md` |
 | S-3 | 사내 값 반영: `plugin/site-defaults.yaml` 작성(Jira 서버·**`jira.tools` 매핑**·read_tools·field_map·timezone, GHE 호스트, reviewers 형식), 이슈 DB `issue-db.config.yaml`(jira_key_regex, build_compare, allow_patterns 등) | `SITE_PROFILE.md`, `site-defaults.example.yaml`, `02-config.md` |
 | S-4a | **기존 data 자산 연결** (`16-existing-assets.md §16.6`): 검증된 기존 파서를 파서 백엔드로 포팅(포팅 전 골든 저장 → 골든 테스트 통과), 기존 분류 `import` PR, 분석 스킬 `analyzers.data` 연결. 이후 S-4에서 data는 가져온 규칙을 실제 fixture로 검증만 한다 | `16-existing-assets.md`, 기존 자산 |
 | S-4 | 실제 로그 반영 (카테고리별 세션 분리 권장): 운영 이슈 DB(뼈대)의 `parser-rules` placeholder를 실제 태그·문구로 바꾸는 PR. 합성 샘플 유형(`tests/fixtures/issue-db-sample/`의 정의) 중 실제로 쓸 것은 시그니처를 실제 문구로 고치고 **실제 마스킹 fixture 1개 이상**을 붙여 `source: import` 계획으로 운영 레포에 넣는다(`db_regress --all`·`db_verify rules` 통과까지 조정). 실제 로그 기반 추가 테스트는 `tests/site/`(SITE_PATHS)에 둔다. **완료 기준에 카테고리 시드 포함**: data 외 5개 카테고리마다 자주 나오는 유형 5~10개를 실제 마스킹 fixture와 함께 `source: import` 계획으로 넣는다(data는 S-4a의 기존 분류 import로 대신). 빈 DB로 파일럿을 시작하면 처리 건마다 새 유형 작성(시그니처·규칙·fixture·R1~R5)이 되어 기여자가 중도에 포기하기 쉽다 | `04-parser-matching.md`, `16-existing-assets.md §16.4`, 테스트 출력 |

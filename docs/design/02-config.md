@@ -55,6 +55,7 @@ work_dir: ~/.telephony-triage/work          # 작업 계획·상태 파일, 읽�
 **코드 경로는 analyze할 때마다 정한다.** Android 버전(16, 17 …)과 브랜치마다 소스 트리 위치가 다르고, 같은 파일도 버전에 따라 경로가 바뀌기 때문이다. `code_profiles`는 고르기 편하게 하는 프리셋일 뿐이고 없어도 된다. 절차는 `07-workflow.md §Step 2-1`이다.
 
 - `roots`의 키는 이슈 DB `issue-db.config.yaml`의 `code_root_keys`에 있는 이름만 쓴다 (기본 `aosp`, `vendor_ril`).
+- `code.auto_select`(선택, 불리언, 기본 `true`): `--code`도 답도 없을 때 대상 버전이 일치하는 `code_profiles` 프로필이 정확히 1개면 묻지 않고 그 프로필을 쓴다(`07-workflow.md §Step 2-1`, 알림 의무). 우선순위는 사용자 config > `site-defaults.yaml` > 내장 기본값 `true`이다(실행할 때 사용자 config·site-defaults에서 직접 읽는다). `setup`이 만드는 config에는 쓰지 않는다. `false`면 항상 묻는다. 값은 불리언(`true`/`false`)만, 따옴표 없이 쓴다. 문자열·0/1·null은 잘못된 값이라 `explore.when`처럼 warnings에 경고(`code.auto_select 값이 잘못됐다(<값>). 묻기로 본다`)하고 묻는 쪽(`false`)으로 본다(묻는 질문에도 표시한다).
 - 이슈 DB의 `code_refs`는 `<root 키>:<루트 기준 상대 경로>` 형식이다 (`03-issue-db.md §5.4`). 그래서 같은 이슈 DB를 어떤 버전 트리에 대해서도 쓸 수 있다.
 - 시각 정렬: Jira 발생 시각(`jira.timezone`)과 logcat 시각(`logcat.timezone`, 연도는 `logcat.year_source`)을 같은 기준(UTC)으로 바꿔서 비교한다. 파서(`parse_logcat.py`)는 **사용자 config를 읽지 않고** 시각을 `--tz/--year` 인자로만 받는다 (Phase 2에서 인자로 구현, Phase 6에서 config 연결). 파서가 읽는 설정은 플러그인 `site-defaults.yaml`의 파서 백엔드·외부 파서 설정뿐이다 (`contracts.md §3.2` 설정 읽기). 형식과 기본값은 Phase 0에서 확인한다(S4, S7).
 - Jira 키 형식은 DB 공통 값이므로 사용자 config가 아니라 `issue-db.config.yaml`의 `jira_key_regex`에 둔다 (5.3).
@@ -69,7 +70,7 @@ setup 커맨드가 순서대로 하는 일:
 7. **스냅샷 기준으로** 이슈 DB의 `schema_version`, `generator_version`, `parser_backend`, `external_parsers`가 플러그인과 호환되는지 확인한다: `config.py check --db <work_dir>/_snapshot --for dry-run` (`06-collaboration.md §6.4`). 오래된 사용자 clone이 아니라 origin/<base> 기준 버전을 본다. 쓰기가 막히는 조건이면 "읽기 전용"이라고 알리고 계속한다.
 8. `db_pr.py lock release setup`.
 9. `gh auth status --hostname <ghe_host>`를 확인한다. **실패하면 로그인 방법을 안내하고 "쓰기 불가(gh 인증 없음)"로 setup을 끝낸다(종료 코드 2).** 1~8의 읽기 설정은 이미 끝났으므로 읽기 전용 분석과 `--dry-run` 연습은 가능하다. gh 인증이 없는 동안은 모든 이슈 DB 쓰기 작업(analyze Step 8의 push, `record`, `sync-pr`, `verify-fix`, `validate --cause`, `fix-submitted`, import/review/move 계획 PR)이 `config.py check`에서 막힌다.
-10. 끝나면 이슈 DB의 `docs/getting-started.md` 위치를 알려준다.
+10. `config.py doctor --format markdown`(읽기 전용 점검 한 장: config·스크립트 경로·clone·hook·Jira 매핑·gh·스냅샷 나이·호환성·lock)의 표를 그대로 보이고, `fail`·`warn` 행의 안내만 전한다(자동 수리 없음). 9번에서 gh 인증이 실패해 setup을 끝내는 경우에도 이 표를 함께 보인다. 이어서 이슈 DB의 `docs/getting-started.md` 위치를 알려준다.
 
 `analyze` 등 다른 커맨드는 config가 없으면 setup으로 유도한다. 플러그인은 SessionStart hook으로 매 세션 `plugin.scripts_path`를 현재 `${CLAUDE_PLUGIN_ROOT}/scripts`로 갱신한다 (플러그인 업데이트 후 경로가 바뀌므로).
 
@@ -81,7 +82,7 @@ setup 커맨드가 순서대로 하는 일:
 >
 > **플랫폼 상수(선택, `site-defaults.yaml`의 `platform`, RF-4)**: 경로·태그·섹션 헤더처럼 사내 환경에 맞춰야 하는 상수를 코드 대신 설정으로 둔다. 키: `name`(지금은 `android`만, 다른 값이면 종료 코드 2 "지원 플랫폼: android"), `source_tree.required_dirs`(aosp 루트에 모두 있어야 하는 상대 경로 목록, 기본 `[frameworks/opt/telephony]`, 비면 오류), `source_tree.version_sources`(트리 버전 추정 `[{file, regex}]`, 순서대로 시도, 그룹 1 = 버전, `re.M`, 기본은 release config → `build/make/core/version_defaults.mk` → `build/core/version_defaults.mk`), `log.phone_id.{tag, msg_prefix, msg_suffix}`(슬롯 표기 정규식 목록, 그룹 1 = 슬롯 번호, 위치마다 순서대로 첫 일치, `[]`이면 그 위치는 슬롯을 뽑지 않는다), `ril.tags`(RIL 줄로 해석할 태그 목록, 기본 `[RILJ]`, `[]`이면 RIL 해석 없음), `bugreport.{wanted_buffers, section_regex, boundary_regex}`(기본 `[system, radio, main]`와 dumpstate 섹션 헤더, `section_regex`는 `(?P<cmd>)` 필수). 생략한 키는 코드 기본값이고 그때 출력은 이전과 같다. 키를 쓰면 그 목록으로 **통째로 바뀐다**(기본에 합쳐지지 않는다). **`parse_logcat.py`·`code_roots.py`가 이 파일에서만 읽으므로 사용자 config로 바꿀 수 없다.** 잘못된 값(모르는 키·정규식 오류·그룹 없음·절대 경로·`..`)은 키 경로를 담아 종료 코드 2로 멈춘다. 값을 바꾸면 파서 출력이 달라질 수 있으므로 이슈 DB에서 `db_regress --all`·`db_verify rules`를 다시 돌린다(캐시 해시·`parser_backend` 버전은 그대로다). 이슈 DB 층의 대응 설정(`parser-rules`의 `phone_id_patterns`·`ril.yaml` `tags`)은 아직 없다.
 >
-> 설정 우선순위: 사용자 config > `plugin/site-defaults.yaml` > 코드 내장 기본값. `plugin/site-defaults.yaml`이 없으면 setup과 모든 커맨드가 멈춘다. `site-defaults.example.yaml`은 코드가 읽지 않고, 사외 테스트 헬퍼가 복사해서 쓴다 (`15-local-draft.md §15.1`). `site-defaults.yaml`에는 `jira.tools`·`jira.field_map`(선택 키 `test_steps`·`failed_step`)·`jira.failed_step_patterns`·`jira.exclude_servers`·`parser.backend`·`external_parsers`·`analyzers`·`explore`(탐색 분석 `when`·`timeline_max_lines`, `07-workflow.md §Step 5-2`)·`failed_step`(실패 스텝 앵커, 위)·`platform`(플랫폼 상수, 위)·`synthetic_allowed`가 들어간다.
+> 설정 우선순위: 사용자 config > `plugin/site-defaults.yaml` > 코드 내장 기본값. `plugin/site-defaults.yaml`이 없으면 setup과 모든 커맨드가 멈춘다. `site-defaults.example.yaml`은 코드가 읽지 않고, 사외 테스트 헬퍼가 복사해서 쓴다 (`15-local-draft.md §15.1`). `site-defaults.yaml`에는 `jira.tools`·`jira.field_map`(선택 키 `test_steps`·`failed_step`)·`jira.failed_step_patterns`·`jira.exclude_servers`·`parser.backend`·`external_parsers`·`analyzers`·`explore`(탐색 분석 `when`·`timeline_max_lines`, `07-workflow.md §Step 5-2`)·`code`(선택, `auto_select`, 위)·`failed_step`(실패 스텝 앵커, 위)·`platform`(플랫폼 상수, 위)·`synthetic_allowed`가 들어간다.
 
 ## 5.3 `issue-db.config.yaml`
 

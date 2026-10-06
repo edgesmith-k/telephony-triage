@@ -20,7 +20,7 @@ TODO(SITE:S3) 플러그인 hook에 보이는 MCP 도구 이름이 `mcp__<server>
 | 4 | 생성 파일 정합성: `git commit`이면 `db_build --verify --staged`(`actions-build`면 생성 파일 staged 거부), `.cache/` staged 거부 | Bash, 이슈 DB |
 | 5 | hook 우회 차단: 커밋의 `--no-verify`·`-n`, `-c core.hooksPath=…`(모든 git 명령), 유효 `core.hooksPath`가 정확히 `.githooks`가 아니면 커밋 거부, `core.hooksPath`를 바꾸거나 해제하는 `git config` 거부(정확히 `.githooks`로 설정은 허용) | Bash, 이슈 DB |
 | 6 | base 브랜치 push 차단: refspec의 대상 ref(없으면 현재 브랜치), `--all`/`--mirror`, push `--no-verify` | Bash, 이슈 DB |
-| 7 | push 확인 강제: 이슈 DB `git push`와 `db_pr.py publish`는 `ask` | Bash |
+| 7 | push 확인 강제: 이슈 DB `git push`와 `db_pr.py publish`는 `ask` (옵션 `--commit`·`--and-discard`와 무관: `publish` 토큰만 본다) | Bash |
 | 8 | 사용자 clone 직접 편집 차단: 대상 파일이 `issue_db.path` 안이면 거부(`work_dir` 아래는 제외) | Write/Edit/MultiEdit/NotebookEdit |
 | 10 | 로그 원문 통독 차단: cat·tac·nl·less·more·bat·strings·zcat·zless·bzcat·xzcat, `head/tail -c`, `unzip -p/-c`가 로그 원문·zip·bugreport·`events*.json`·`jira_raw.json`·`match.json`을 통째로 읽으면 거부(`fixtures/`·`draft/` 제외, 사용자 config와 무관) | Bash |
 
@@ -41,6 +41,7 @@ TODO(SITE:S3) 플러그인 hook에 보이는 MCP 도구 이름이 `mcp__<server>
 
 from __future__ import annotations
 
+import argparse
 import glob
 import json
 import os
@@ -495,24 +496,7 @@ def check_commit(call: GitCall, conf: Config, dec: Decision) -> None:
                      plugin_root=conf.plugin_root)
     # 단계 순서(마스킹 → 캐시 → 생성 파일)와 migrate 브랜치 허용은 common/checks.py guard 프로필이 정한다.
     # 여기서는 실패한 단계를 deny 문구로 바꾼다 (실행 불가 2도 거부다).
-    for res in checks.run_checks(checks.PROFILES["guard"], ctx).steps:
-        if res.code == 0:
-            continue
-        paths = (res.data or {}).get("paths") or []
-        if res.name == "mask":
-            hits = (res.data or {}).get("detections") or []
-            detail = "; ".join(f"{h['path']}:{h['line']} {h['kind']}" for h in hits[:10]) or res.stderr[-300:]
-            dec.deny.append(f"staged 변경에 마스킹 안 된 개인정보가 있다 (규칙 3): {detail}. mask_pii로 마스킹한 뒤 다시 add한다.")
-        elif res.name == "cache":
-            dec.deny.append(f".cache/는 커밋하지 않는다 (규칙 4): {', '.join(paths[:5])}")
-        elif res.script is None:
-            dec.deny.append(f"ci_mode: actions-build — 생성 파일은 머지 후 봇이 만든다. staged에서 뺀다 (규칙 4): "
-                            f"{', '.join(paths)}")
-        else:
-            problems = ("; ".join(f"{p['path']} ({p['status']})" for p in (res.data or {}).get("problems", []))
-                        or res.stderr[-300:])
-            dec.deny.append("생성 파일(README·STATS·CHANGELOG)이 원본과 맞지 않는다 (규칙 4): "
-                            f"{problems}. 직접 고치지 말고 db_build.py --write로 다시 만든 뒤 add한다.")
+    dec.deny.extend(checks.guard_deny_messages(checks.run_checks(checks.PROFILES["guard"], ctx).steps))
 
 
 # -- 로그 원문 통독 차단 (10) ---------------------------------------------------------------
@@ -789,17 +773,20 @@ def judge(event: dict, plugin_root: str | None = None) -> tuple[dict | None, lis
     return dec.output(), dec.warn
 
 
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="guard.py", description=__doc__,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--plugin-root", default=None)
+    return parser
+
+
 def main(argv: list[str] | None = None) -> int:
     try:
         sys.stdout.reconfigure(encoding="utf-8")
         sys.stderr.reconfigure(encoding="utf-8")
     except (AttributeError, ValueError):
         pass
-    import argparse
-    parser = argparse.ArgumentParser(prog="guard.py", description=__doc__,
-                                     formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--plugin-root", default=None)
-    args = parser.parse_args(argv)
+    args = build_parser().parse_args(argv)
     raw = sys.stdin.read()
     try:
         event = json.loads(raw) if raw.strip() else {}

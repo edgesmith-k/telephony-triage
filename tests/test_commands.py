@@ -91,6 +91,33 @@ def test_write_commands_take_session_lock_and_readonly_commands_do_not():
 # -- sync: 본문이 부르는 스크립트 순서 ------------------------------------------------------------
 
 
+REFERENCE = REPO / "plugin" / "skills" / "telephony-triage" / "reference"
+
+
+def test_reference_calls_use_flags_the_scripts_accept():
+    """write-flow.md가 부르는 `--format markdown`이 실제 argparse에 있고 값이 choices에 든다.
+    search.md는 W2 eval 53(출력 토큰 증가)으로 `--brief` JSON 호출을 유지한다(markdown은 opt-in으로만 남김)."""
+    search, flow = (REFERENCE / "search.md").read_text(encoding="utf-8"), (REFERENCE / "write-flow.md").read_text(encoding="utf-8")
+    assert "db_search.py --db SNAP" in search and "--brief" in search and "--format markdown" not in search
+    assert "summary <wt> --format markdown" in flow     # stage 성공·summary 실패 때 다시 부르는 호출
+    assert "stage <plan> --wt <wt> --branch <br> [--dry-run] --then-summary" in flow
+    assert "--commit --and-discard" in flow
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    import db_pr, db_search
+    assert db_search.build_parser().parse_args(["q", "--format", "markdown"]).format == "markdown"
+    assert db_pr.build_parser().parse_args(["summary", "wt", "--format", "markdown"]).format == "markdown"
+    assert db_pr.build_parser().parse_args(["summary", "wt"]).format == "json"
+    parser = db_pr.build_parser()
+    assert parser.parse_args(["stage", "p.json", "--wt", "wt", "--branch", "b", "--then-summary"]).then_summary is True
+    assert parser.parse_args(["stage", "p.json", "--wt", "wt", "--branch", "b"]).then_summary is False
+    pub = parser.parse_args(["publish", "wt", "--branch", "b", "--lease", "new", "--approved", "h", "--commit",
+                             "--and-discard"])
+    assert pub.commit is True and pub.and_discard is True
+    pub = parser.parse_args(["publish", "wt", "--branch", "b", "--lease", "new", "--approved", "h"])
+    assert pub.commit is False and pub.and_discard is False
+
+
+
 def test_sync_sequence_lists_closed_pr_workdir_and_deletes_only_after_yes():
     ws = Workspace()
     plan = ws.plan("MOCK-7001", "p7-analyze-append.plan.json")
@@ -121,6 +148,26 @@ def test_sync_sequence_lists_closed_pr_workdir_and_deletes_only_after_yes():
     done = ws.db_pr("cleanup", "--yes", "--older-than")
     assert not plan.parent.exists() and any(t["kind"] == "job-dir" for t in done["removed"])
     assert (ws.work / "_snapshot").exists(), "스냅샷은 지우지 않는다"
+
+
+def test_sync_and_setup_bodies_list_new_steps_in_order():
+    sync = (COMMANDS / "sync.md").read_text(encoding="utf-8")
+    calls = [sync.index(c) for c in ("lock acquire sync", "snapshot --job sync", "db_build.py --cache-only",
+                                     "lock release sync", "cleanup --dry-run", "db_pr.py my-prs")]
+    assert calls == sorted(calls), "my-prs는 cleanup 뒤(6번, lock 밖)다"
+    assert "base_sha_changed" in sync and "sync-pr" in sync[calls[-1]:] and "안내만" in sync[calls[-1]:]
+    setup = (COMMANDS / "setup.md").read_text(encoding="utf-8")
+    order = [setup.index(c) for c in ("config.py gh-status", "config.py doctor --format markdown", "getting-started.md")]
+    assert order == sorted(order) and "그대로" in setup[order[1]:order[2]]
+    assert "doctor" in setup[order[0]:order[1]], "gh 실패 경로도 doctor 표를 보인다"
+    skill = (REPO / "plugin" / "skills" / "telephony-triage" / "SKILL.md").read_text(encoding="utf-8")
+    assert "config.py doctor --format markdown" in skill
+    assert len(list(COMMANDS.glob("*.md"))) == 12
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    import config, db_pr
+    assert config.build_parser().parse_args(["doctor"]).format == "json"
+    assert config.build_parser().parse_args(["doctor", "--format", "markdown"]).format == "markdown"
+    assert db_pr.build_parser().parse_args(["my-prs"]).cmd == "my-prs"
 
 
 def test_sync_sequence_keeps_recent_or_open_pr_workdirs():

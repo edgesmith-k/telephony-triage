@@ -7,7 +7,8 @@
 ("사내 기본값 없음"). `site-defaults.example.yaml`은 읽지 않는다.
 
 서브커맨드
-  show                         해석된 설정 (우선순위 적용)
+  show [--keys a,b.c]          해석된 설정 (우선순위 적용). --keys면 그 키 값만
+                               `{user_config, values{키: 값}, missing[]}` (점 표기, 없는 키는 missing)
   site-defaults                site-defaults.yaml 내용
   init [--answers <json>]      config 생성 (setup 1). --answers가 없으면 stdin으로 항목별로 묻는다.
                                경로가 없으면 거부한다. 홈·work_dir은 권한 700.
@@ -22,6 +23,9 @@
                                호환성 판정: 스키마·생성기 버전·파서 백엔드·외부 파서, (write면) gh 인증
                                → writable / push_allowed. `migrate/schema-v<N>` 브랜치는 버전을 보지 않는다.
   gh-status                    gh 인증 확인 (setup 9). 실패면 로그인 안내와 종료 코드 2
+  doctor [--format json|markdown]
+                               환경 점검 한 장(config·clone·hook·Jira 매핑·gh·스냅샷·호환성·lock). **읽기 전용**
+                               (mkdir·fetch·lock·쓰기 없음). 행마다 ok|warn|fail|skip. fail이 있으면 종료 코드 1
 """
 
 from __future__ import annotations
@@ -31,14 +35,15 @@ import json
 import re
 import subprocess
 import sys
+from datetime import timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import adapters  # noqa: E402
-from common import compat, dbpath, ghcli, mcptools, site_defaults, userconfig  # noqa: E402
+from common import compat, dbpath, ghcli, mcptools, session_lock, site_defaults, userconfig  # noqa: E402
 from common import compiled as compiled_cache  # noqa: E402
-from common.exitcodes import OK, USAGE  # noqa: E402
+from common.exitcodes import CHECK_FAILED, OK, USAGE  # noqa: E402
 from common.versions import GENERATOR_VERSION, SCHEMA_VERSION  # noqa: E402
 
 SUPPORTED_SCHEMA = (SCHEMA_VERSION, SCHEMA_VERSION)  # (min, max), 06-collaboration.md §6.4
@@ -234,6 +239,18 @@ def cmd_jira_candidates(args, defaults: dict) -> dict:
     }
 
 
+def _tool_problems(server: str, names: list[str]) -> list[str]:
+    """도구 이름이 전체 이름이고 그 서버의 것인지 검사한 문제 목록 (set-jira·doctor 공유)."""
+    problems = []
+    for name in names:
+        hit = TOOL_NAME_RE.match(str(name))
+        if not hit:
+            problems.append(f"도구 이름은 전체 이름(mcp__<server>__<tool>)이어야 합니다: {name}")
+        elif hit.group("server") != server:
+            problems.append(f"{name}는 서버 {server}의 도구가 아닙니다.")
+    return problems
+
+
 def cmd_set_jira(args, defaults: dict) -> dict:
     data = userconfig.load_user()
     if data is None:
@@ -241,12 +258,9 @@ def cmd_set_jira(args, defaults: dict) -> dict:
     tools = {"get_issue": args.get_issue, "search_issues": args.search_issues, "get_comments": args.get_comments}
     tools = {k: v for k, v in tools.items() if v}
     read_tools = [t.strip() for t in (args.read_tools or "").split(",") if t.strip()]
-    for name in list(tools.values()) + read_tools:
-        hit = TOOL_NAME_RE.match(name)
-        if not hit:
-            raise UsageError(f"도구 이름은 전체 이름(mcp__<server>__<tool>)이어야 합니다: {name}")
-        if hit.group("server") != args.server:
-            raise UsageError(f"{name}는 서버 {args.server}의 도구가 아닙니다.")
+    problems = _tool_problems(args.server, list(tools.values()) + read_tools)
+    if problems:
+        raise UsageError(problems[0])
     added = [t for t in tools.values() if t not in read_tools]
     read_tools = sorted(set(read_tools) | set(tools.values()))  # read_tools는 jira.tools 값을 포함한다
     userconfig.set_value(data, "jira.mcp_server", args.server)
@@ -259,6 +273,17 @@ def cmd_set_jira(args, defaults: dict) -> dict:
 def _git_out(repo: Path, *args: str) -> str | None:
     proc = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, encoding="utf-8")
     return proc.stdout.strip() if proc.returncode == 0 else None
+
+
+def _hooks_value(db: Path) -> str | None:
+    return _git_out(db, "config", "--get", "core.hooksPath")
+
+
+def _gh_auth(defaults: dict) -> tuple[str | None, bool, str]:
+    """(호스트, 인증 여부, 메시지) — check·gh-status·doctor 공유."""
+    host = userconfig.get(userconfig.merged(defaults), "issue_db.ghe_host")
+    ok, message = ghcli.auth_status(host)
+    return host, ok, message
 
 
 def _db(args, defaults: dict) -> Path:
@@ -274,7 +299,7 @@ def cmd_install_hooks(args, defaults: dict) -> dict:
                           capture_output=True, text=True, encoding="utf-8")
     if proc.returncode != 0:
         raise UsageError(f"core.hooksPath 설정 실패: {proc.stderr.strip()}")
-    value = _git_out(db, "config", "--get", "core.hooksPath")
+    value = _hooks_value(db)
     if value != ".githooks":
         raise UsageError(f"core.hooksPath가 '{value}'입니다. 정확히 .githooks여야 한다 (08-safety.md §9).")
     return {"db": str(db), "core.hooksPath": value}
@@ -315,8 +340,7 @@ def check(db: Path, defaults: dict, for_: str) -> dict:
     writable = not reasons
     gh = {"checked": False, "ok": None, "host": None}
     if for_ == "write":
-        host = userconfig.get(userconfig.merged(defaults), "issue_db.ghe_host")
-        ok, message = ghcli.auth_status(host)
+        host, ok, message = _gh_auth(defaults)
         gh = {"checked": True, "ok": ok, "host": host}
         if not ok:
             reasons.append({"code": "gh-auth", "message": f"gh 인증 없음 ({host}): gh auth login --hostname {host}"
@@ -345,8 +369,7 @@ def cmd_check(args, defaults: dict) -> tuple[dict, int]:
 
 
 def cmd_gh_status(args, defaults: dict) -> tuple[dict, int]:
-    host = userconfig.get(userconfig.merged(defaults), "issue_db.ghe_host")
-    ok, message = ghcli.auth_status(host)
+    host, ok, message = _gh_auth(defaults)
     result = {"host": host, "ok": ok}
     if not ok:
         result["message"] = (f"쓰기 불가(gh 인증 없음). `gh auth login --hostname {host}`로 로그인한다. "
@@ -354,8 +377,217 @@ def cmd_gh_status(args, defaults: dict) -> tuple[dict, int]:
     return result, (OK if ok else USAGE)
 
 
+# -- doctor (읽기 전용 점검) -----------------------------------------------------------------
+
+SNAPSHOT_STALE_DAYS = 7
+DETAIL_MAX = 80
+
+
+def _row(check: str, status: str, detail: str, next_: str | None = None) -> dict:
+    row = {"check": check, "status": status, "detail": detail if len(detail) <= DETAIL_MAX else detail[:DETAIL_MAX - 1] + "…"}
+    if next_:
+        row["next"] = next_
+    return row
+
+
+def _doctor_rows(args, defaults: dict) -> list[dict]:
+    """점검 행. 행 단위로 예외를 흡수한다(그 행 fail). 앞선 행이 실패하면 의존 행은 skip.
+    아무것도 만들거나 바꾸지 않는다 (mkdir·fetch·lock·쓰기 없음)."""
+    rows: list[dict] = []
+    skip = lambda name, why: rows.append(_row(name, "skip", why))  # noqa: E731
+
+    def guarded(name: str, func) -> None:
+        try:
+            func()
+        except Exception as exc:    # noqa: BLE001 — 한 행의 실패가 표 전체를 막지 않는다
+            rows.append(_row(name, "fail", f"점검 실패: {type(exc).__name__}: {exc}"))
+
+    # 1 config
+    user, cfg = None, None
+    try:
+        user = userconfig.load_user()
+        if user is None:
+            rows.append(_row("config", "fail", "사용자 config 없음", "/telephony-triage:setup"))
+        else:
+            cfg = userconfig.merged(defaults, user)
+            rows.append(_row("config", "ok", "config.yaml 있음"))
+    except Exception as exc:    # noqa: BLE001 — 읽기 실패도 한 행의 fail이다
+        rows.append(_row("config", "fail", f"config 읽기 실패: {exc}", "config.yaml 확인 또는 setup"))
+    ok_cfg = cfg is not None
+
+    # 2 scripts_path
+    def scripts_path():
+        have = userconfig.get(cfg, "plugin.scripts_path")
+        want = str(_plugin_root(args) / "scripts")
+        if have == want:
+            rows.append(_row("scripts_path", "ok", "플러그인 경로와 같음"))
+        else:
+            rows.append(_row("scripts_path", "warn", "config의 경로가 이 플러그인과 다름" if have else "scripts_path 비어 있음",
+                             "config.py sync-scripts-path"))
+    guarded("scripts_path", scripts_path) if ok_cfg else skip("scripts_path", "config 없음")
+
+    # 3 clone
+    repo_box: list = []
+
+    def clone():
+        raw = userconfig.get(cfg, "issue_db.path")
+        if not raw:
+            rows.append(_row("clone", "fail", "issue_db.path 비어 있음", "setup 1"))
+            return
+        repo = Path(str(raw)).expanduser()
+        if (repo / ".git").exists():
+            rows.append(_row("clone", "ok", f"{repo}"))
+            repo_box.append(repo)
+        else:
+            remote = userconfig.get(cfg, "issue_db.remote")
+            rows.append(_row("clone", "fail", "이슈 DB clone 없음", f"git clone {remote} {repo}" if remote else "setup 3"))
+    guarded("clone", clone) if ok_cfg else skip("clone", "config 없음")
+
+    # 4 hook
+    def hook():
+        value = _hooks_value(repo_box[0])
+        if value == ".githooks":
+            rows.append(_row("hook", "ok", "core.hooksPath=.githooks"))
+        else:
+            rows.append(_row("hook", "fail", f"core.hooksPath={value or '(없음)'}", "config.py install-hooks"))
+    guarded("hook", hook) if repo_box else skip("hook", "clone 없음")
+
+    # 5 jira (매핑만 본다)
+    def jira():
+        server = userconfig.get(cfg, "jira.mcp_server")
+        tools = userconfig.get(cfg, "jira.tools", {})
+        read_tools = userconfig.get(cfg, "jira.read_tools", [])
+        hint = "setup 4 (Jira MCP 확인)"
+        if tools is None:
+            tools = {}
+        if read_tools is None:
+            read_tools = []
+        if not isinstance(tools, dict) or not isinstance(read_tools, list):
+            rows.append(_row("jira", "fail", "jira.tools(매핑)·read_tools(목록) 형식 오류", hint))
+            return
+        names = [v for v in tools.values() if v] + read_tools
+        if not server:
+            rows.append(_row("jira", "fail", "jira.mcp_server 비어 있음", hint))
+        elif not tools.get("get_issue"):
+            rows.append(_row("jira", "fail", "jira.tools.get_issue 매핑 비어 있음", hint))
+        else:
+            problems = _tool_problems(str(server), names)
+            if problems:
+                rows.append(_row("jira", "fail", problems[0], hint))
+            else:
+                rows.append(_row("jira", "ok", f"{server} / get_issue 매핑 있음"))
+    guarded("jira", jira) if ok_cfg else skip("jira", "config 없음")
+
+    # 6 gh
+    def gh():
+        host, ok, _message = _gh_auth(defaults)
+        if ok:
+            rows.append(_row("gh", "ok", f"인증됨 ({host})"))
+        else:
+            rows.append(_row("gh", "warn", f"gh 인증 없음 ({host}) — 쓰기 불가", f"gh auth login -h {host}"))
+    guarded("gh", gh) if ok_cfg else skip("gh", "config 없음")
+
+    # 7 snapshot
+    snap_box: list = []
+    work_raw = userconfig.get(cfg, "work_dir") if ok_cfg else None
+    work = Path(str(work_raw)).expanduser() if work_raw else None
+
+    def snapshot():
+        snap_dir = work / session_lock.SNAPSHOT_DIR
+        if not (snap_dir / ".git").exists():
+            rows.append(_row("snapshot", "warn", "읽기 스냅샷 없음", "/telephony-triage:sync"))
+            return
+        snap_box.append(snap_dir)
+        meta_path = work / session_lock.SNAPSHOT_META
+        if not meta_path.is_file():
+            rows.append(_row("snapshot", "warn", "시각 기록 없음 (나이 불명)", "/telephony-triage:sync"))
+            return
+        try:
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
+            age = session_lock.now() - session_lock.parse(meta["at"])
+            sha = str(meta.get("sha") or "")[:7]
+        except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
+            snap_box.clear()
+            rows.append(_row("snapshot", "fail", f"{session_lock.SNAPSHOT_META} 손상: {type(exc).__name__}", "/telephony-triage:sync"))
+            return
+        days = int(age.total_seconds() // 86400)
+        if age > timedelta(days=SNAPSHOT_STALE_DAYS):
+            rows.append(_row("snapshot", "warn", f"{days}일 전 ({sha})", "/telephony-triage:sync"))
+        else:
+            rows.append(_row("snapshot", "ok", f"{days}일 전 ({sha})"))
+    if not ok_cfg:
+        skip("snapshot", "config 없음")
+    elif work is None:
+        skip("snapshot", "work_dir 없음")
+    else:
+        guarded("snapshot", snapshot)
+
+    # 8 compat (<work_dir>/_snapshot 기준)
+    if not snap_box:
+        skip("compat", "스냅샷 없음")
+    else:
+        try:
+            result = check(snap_box[0], defaults, "dry-run")
+            if result["writable"]:
+                rows.append(_row("compat", "ok", "스키마·생성기·파서 호환"))
+            else:
+                codes = ",".join(r["code"] for r in result["reasons"])
+                rows.append(_row("compat", "fail", f"쓰기 막힘: {codes}", "config.py check --for dry-run"))
+        except Exception as exc:    # noqa: BLE001
+            rows.append(_row("compat", "fail", f"판정 실패: {exc}"))
+
+    # 9 lock
+    if not ok_cfg:
+        skip("lock", "config 없음")
+    elif work is None:
+        skip("lock", "work_dir 없음")
+    else:
+        try:
+            held = session_lock.describe(session_lock.read(work))
+            if held is None:
+                rows.append(_row("lock", "ok", "세션 lock 없음"))
+            else:
+                mins = held["age_sec"] // 60
+                state = "만료" if held["expired"] else "보유 중"
+                rows.append(_row("lock", "warn", f"{state}: {held['job']} ({mins}분 전)",
+                                 f"끝난 세션이면 db_pr lock release {held['job']} --force"))
+        except Exception as exc:    # noqa: BLE001 — 손상 lock 포함
+            rows.append(_row("lock", "fail", str(exc) or type(exc).__name__, "lock 파일 확인"))
+    return rows
+
+
+def _doctor_markdown(rows: list[dict], counts: dict) -> str:
+    cell = lambda text: str(text).replace("|", "\\|").replace("\n", " ")  # noqa: E731
+    with_next = any(r.get("next") for r in rows)
+    head = "| 점검 | 상태 | 내용 |" + (" 다음 |" if with_next else "")
+    lines = [head, "|---|---|---|" + ("---|" if with_next else "")]
+    for r in rows:
+        line = f"| {r['check']} | {r['status']} | {cell(r['detail'])} |"
+        if with_next:
+            line += f" {cell(r.get('next', ''))} |"
+        lines.append(line)
+    lines += ["", " · ".join(f"{k} {counts[k]}" for k in ("ok", "warn", "fail", "skip"))]
+    return "\n".join(lines) + "\n"
+
+
+def cmd_doctor(args, defaults: dict) -> tuple[dict, int]:
+    rows = _doctor_rows(args, defaults)
+    counts = {k: sum(1 for r in rows if r["status"] == k) for k in ("ok", "warn", "fail", "skip")}
+    return {"rows": rows, "counts": counts}, (CHECK_FAILED if counts["fail"] else OK)
+
+
+_MISSING = object()
+
+
 def cmd_show(args, defaults: dict) -> dict:
     user = userconfig.load_user()
+    if args.keys:
+        effective = userconfig.merged(defaults, user or {})
+        keys = [k.strip() for k in args.keys.split(",") if k.strip()]
+        found = {k: userconfig.get(effective, k, _MISSING) for k in keys}
+        return {"user_config": str(userconfig.path()) if user is not None else None,
+                "values": {k: v for k, v in found.items() if v is not _MISSING},
+                "missing": [k for k, v in found.items() if v is _MISSING]}
     return {"plugin_root": str(_plugin_root(args)), "site_defaults": str(_plugin_root(args) / site_defaults.FILENAME),
             "user_config": str(userconfig.path()) if user is not None else None,
             "effective": userconfig.merged(defaults, user or {})}
@@ -368,7 +600,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="config.py", description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter, parents=[common])
     sub = parser.add_subparsers(dest="cmd", required=True)
-    sub.add_parser("show", parents=[common])
+    p = sub.add_parser("show", parents=[common])
+    p.add_argument("--keys", metavar="a,b.c", help="쉼표로 구분한 키(점 표기)만 보인다 (예: work_dir,jira.tools)")
     sub.add_parser("site-defaults", parents=[common])
     p = sub.add_parser("init", parents=[common])
     p.add_argument("--answers")
@@ -389,9 +622,12 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("install-hooks", parents=[common])
     p.add_argument("--db", default=None)
     p = sub.add_parser("check", parents=[common])
-    p.add_argument("--db", default=None)
+    p.add_argument("--db", metavar="path", default=None)
     p.add_argument("--for", dest="for_", choices=["write", "dry-run"], default="write")
     sub.add_parser("gh-status", parents=[common])
+    p = sub.add_parser("doctor", parents=[common])
+    p.add_argument("--format", choices=("json", "markdown"), default="json",
+                   help="markdown: 표 하나와 마지막 줄 카운트 (기본 json, --json과 함께 못 쓴다)")
     return parser
 
 
@@ -423,6 +659,15 @@ def main(argv: list[str] | None = None) -> int:
             result = cmd_install_hooks(args, defaults)
         elif args.cmd == "check":
             result, code = cmd_check(args, defaults)
+        elif args.cmd == "doctor":
+            if args.format == "markdown" and getattr(args, "json", False):
+                raise UsageError("--format markdown은 --json과 함께 쓸 수 없다.")
+            result, code = cmd_doctor(args, defaults)
+            if args.format == "markdown":
+                print(_doctor_markdown(result["rows"], result["counts"]), end="")
+                return code
+            print(json.dumps(result, ensure_ascii=False, separators=(",", ":")))
+            return code
         else:
             result, code = cmd_gh_status(args, defaults)
     except UsageError as exc:

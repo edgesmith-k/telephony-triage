@@ -10,16 +10,17 @@
 
 | 파일 | 내용 | 언제 읽나 |
 |---|---|---|
-| `SKILL.md` | 실행 규칙, `triage.py run` 호출과 `needs_input` 처리(Step 0~5 resolve는 드라이버, `contracts.md §3.2`), 결과 읽기, Step 6 리포트 규칙, Step 7 결정표, Step 8은 `write-flow.md`로. **8KB 이하**(RF-1) | 스킬이 트리거될 때 |
+| `SKILL.md` | 실행 규칙은 `rules.md`로 연결, `triage.py run` 호출과 `needs_input` 처리(Step 0~5 resolve는 드라이버, `contracts.md §3.2`), 결과 읽기, Step 6 리포트 규칙, Step 7 결정표, Step 8은 `write-flow.md`로. **7.5KB 이하**(RF-1, W6 전 8KB) | 스킬이 트리거될 때 |
+| `reference/rules.md` | 실행 규칙(스크립트 호출, 종료 코드 2·S-3 중단, lock, 마스킹, 사용자 확인 지점). 2KB 이하 | analyze(SKILL이 지시), `record`·`verify-fix`·`fix-submitted`·`validate --cause`·`sync-pr`. `search`는 읽기 전용이라 읽지 않는다 |
 | `reference/write-flow.md` | 공통 쓰기 절차(Step 8 방식), analyze 계획 형식, 확인 화면 형식, drift 결정, lock 해제 경로 | Step 7 계획 저장, Step 8, 모든 쓰기 흐름 |
 | `reference/record.md` | `07-workflow.md §record` | `record` 커맨드 |
 | `reference/verify.md` | `07-workflow.md §validate`(`--cause`), `§fix-submitted`, `§verify-fix` | 해당 커맨드 |
 | `reference/sync-pr.md` | `07-workflow.md §sync-pr`, `06-collaboration.md §6.3` sync-pr 절차 (**단일 원본** — `commands/sync-pr.md`는 이 파일을 가리키기만 한다) | `sync-pr` 커맨드, Step 8-2 원격 브랜치 있음 |
 | `reference/search.md` | `03-issue-db.md §5.5`, `09-commands.md` search (**단일 원본** — `commands/search.md`는 이 파일을 가리키기만 한다). 증상 문장을 그대로 `db_search.py`에 넘기고 이슈 번호 줄·유형 > 원인 표로 보인다. 읽기 전용 | `search` 커맨드, 증상만 묻는 "비슷한 이슈·이슈 번호?" |
-| `reference/db-authoring.md` | 아래 "추가 지침" 목록 | 새 원인·유형·시그니처·파서 규칙을 만들 때 |
+| `reference/db-authoring.md` | 아래 "추가 지침" 목록 중 작성 판단만(op·drift·R 표는 스키마·`계획 형식 오류` 메시지·`db_verify`가 대신한다). 11KB 이하(필수 필드 요약 1KB 포함) | 새 원인·유형·시그니처·파서 규칙을 만들 때 |
 | `reference/ril-requests.md`, `fail-causes.md`, `log-tags.md` | 참조 자료 | 로그 해석이 필요할 때 |
 
-- 각 커맨드(`commands/*.md`)는 자기 흐름의 reference 파일을 먼저 읽으라고 지시한다. SKILL.md 본체에 다른 흐름의 절차를 복사하지 않는다. 공통 실행 규칙은 SKILL.md "실행 규칙" 한 곳에 두고, 커맨드에는 그것을 가리키는 한 줄(스킬 없이 스크립트만 부르는 커맨드는 호출 형식·종료 코드 2 한 줄)만 둔다.
+- 각 커맨드(`commands/*.md`)는 자기 흐름의 reference 파일을 먼저 읽으라고 지시한다. SKILL.md 본체에 다른 흐름의 절차를 복사하지 않는다. 공통 실행 규칙은 `reference/rules.md` 한 곳에 두고, 커맨드에는 그것을 가리키는 한 줄(스킬 없이 스크립트만 부르는 커맨드는 호출 형식·종료 코드 2 한 줄)만 둔다.
 - 최신 Claude Code에서 스킬을 슬래시 커맨드로 직접 호출할 수 있고 커맨드가 스킬로 통합됐으면(S1), 흐름별로 스킬을 나누는 안(예: `telephony-triage`, `telephony-record`)도 검토한다. 어느 쪽이든 "한 흐름을 실행할 때 그 흐름의 내용만 로드"가 기준이다.
 
 ## skill-creator 입력
@@ -39,7 +40,7 @@ skill-creator 스킬을 실행하고 아래를 입력으로 준다.
   - 생성 파일은 직접 편집하지 않고 `db_build.py`로만 만든다.
   - 이슈 DB 변경은 작업 계획 → `db_pr.py`(stage/summary/publish/discard)로만 한다. 스킬은 이슈 DB 파일을 직접 쓰지 않는다.
   - 사용자 clone에서 `checkout`, `reset`, `clean`을 실행하지 않는다.
-  - `git add`와 `git commit`은 별도 Bash 호출로 실행한다.
+  - 직접 `git commit` 없이 `db_pr publish --commit`으로 커밋한다(승인 뒤). 확인 화면은 `stage --then-summary`의 출력이다.
   - 수동 기록은 분석을 건너뛰어도 검증을 건너뛰지 않는다. `fixed`를 기록하지 않고, 근거 없는 해결책은 `unverified`로 둔다(기록 대상 Jira 자신은 근거가 아니다). 시그니처 없는 새 원인은 사용자가 명시할 때만 `signatures_pending`으로 둔다.
   - 작업을 시작할 때 세션 lock을 잡고, 끝나는 모든 경로(discard, 계획 저장 후 종료, 기록하지 않는 판정, 사용자가 그만둠)에서 푼다.
   - drift가 나오면 자동으로 덮지 않고 항목마다 사용자 결정을 받는다.
@@ -69,7 +70,7 @@ skill-creator 스킬을 실행하고 아래를 입력으로 준다.
 
 ## eval 케이스 (fixture와 가짜 Jira 요약 사용)
 
-실행: `tests/skill_evals/run.py`(기본 `--mode plugin`). `claude -p --plugin-dir`로 실제 플러그인을 불러오고 Jira는 모의 MCP 서버, 분석 스킬은 모의 플러그인으로 붙여 커맨드·스킬 선택·hook(guard·jira_bridge)까지 평가한다. 채점은 실행 기록(도구 호출·드라이버 trace)으로 한다. 상세와 남은 차이는 `tests/skill_evals/README.md` "실행 모드".
+실행: `tests/skill_evals/run.py`(기본 `--mode plugin`). `claude -p --plugin-dir`로 실제 플러그인을 불러오고 Jira는 모의 MCP 서버, 분석 스킬은 모의 플러그인으로 붙여 커맨드·스킬 선택·hook(guard·jira_bridge)까지 평가한다. 채점은 실행 기록(도구 호출·드라이버 trace)으로 한다. 상세와 남은 차이는 `tests/skill_evals/README.md` "실행 모드". 실행마다 토큰(stream-json result의 modelUsage)을 `execution.json` `tokens`에 남기고, `grade.py --token-budget`이 `token_baseline.json` × 여유율로 상한을 판정한다. 상세 README.
 
 1. 없음 + DATA_DISABLED → `DATA-001 > DATA-001-01` 제안, 확인 후 Jira 기록 파일과 피드백 파일 생성
 2. 증상은 DATA-001, 원인이 이슈 DB에 없음(예: APN 불일치) → 새 원인(`temp_id`)과 시그니처 초안, draft worktree 초안 검증 결과 제시
@@ -95,7 +96,7 @@ skill-creator 스킬을 실행하고 아래를 입력으로 준다.
 22. 해결책 문구를 바꾸는 계획 → 해결책 검증 상태가 unverified로 초기화된다고 확인 화면에 표시
 23. verify-fix 로그가 증상은 남고 원인 시그니처는 불충족 → 부분 통과, `fix-submitted` 유지 + `verification_history`에 partial 기록, 다른 원인 후보 제시. "통과로 기록" 선택지를 제시하지 않는다
 24. verify-fix 로그에 시나리오 흔적이 없음(사용자가 "시나리오 했어"라고 말해도) → 판단 불가, 기록하지 않고 필요한 로그 조건 안내
-25. 코드 수정 유형 원인에 `scenario_signatures`·`recovery_signatures`가 모두 없는데 verify-fix 요청 → 판정 전에 중단하고 시그니처 추가를 안내
+25. 코드 수정 유형 원인에 `scenario_signatures`·`recovery_signatures`가 모두 없는데 verify-fix 요청 → 판정이 나오지 않고(`db_verify fix`를 부르지 않거나 종료 코드 2로 거부) 시그니처 추가를 안내
 26. "CALL-001-01 CL 머지됐어, 브랜치 main-dev" (빌드 없음) → `fix-submitted` 흐름, 빌드 없으면 회귀 판정 불가라고 알림, 브랜치 `fix-submit/CALL-001-01`
 27. `validate --cause`인데 원인에 `recovery_signatures`가 없고 로그에 시나리오 흔적도 없음 → unknown, 기록하지 않음
 28. Step 8에서 `issue/<KEY>` 원격 브랜치가 이미 있음 → 원격 SHA가 계획의 `pr.head_sha`와 같으면 "plan으로 브랜치 갱신(lease push)", 다르면 원격 변경 요약과 "덮어쓰기 / 중단" 선택지 제시. 도구 브랜치 `tt/issue/<KEY>` 잔여물만 있으면 삭제할지 묻고, 사용자 로컬 `issue/<KEY>`는 지우지 않는다

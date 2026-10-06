@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 import shutil
@@ -27,11 +28,13 @@ def safety_root(monkeypatch):
 
 
 def test_r6_commit_message_is_file_data(safety_root, tmp_path):
+    """문서는 커밋 메시지를 shell에 싣는 명령을 안내하지 않고 `publish … --commit`에 맡긴다. 메시지가 셸을 거치지
+    않는 데이터라는 검증은 `test_db_pr.py::test_publish_commit_message_with_shell_metacharacters_is_data`가 한다."""
     for relative in ("skills/telephony-triage/reference/write-flow.md", "skills/telephony-triage/reference/sync-pr.md",
                      "skills/telephony-triage/SKILL.md"):
         instructions = (safety_root / relative).read_text(encoding="utf-8")
-        assert "commit -m" not in instructions
-        assert "commit -F" in instructions
+        assert "commit -m" not in instructions and "commit -F" not in instructions
+        assert re.search(r"publish[^\n]*--commit", instructions), relative
     repo = tmp_path / "repo"
     repo.mkdir()
     git(repo, "init", "-q")

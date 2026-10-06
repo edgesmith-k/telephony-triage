@@ -34,6 +34,7 @@ IMS = "ims/IMS-001-ims-registration-failed"
 SIM_LOG = PENDING_DB / DATA / "fixtures/DATA-001-03.log"
 NORMAL_LOG = SAMPLE / DATA / "fixtures/DATA-001.none.log"
 BUILD = "MOCKB77_U2_20260925"
+PLUGIN_SKILL = Path(__file__).resolve().parents[1] / "plugin/skills/telephony-triage"
 
 CALL_CAUSE_SIG = ("        must_event:\n          - {id: regfail, event: ims_registration_failed}\n"
                   "          - {id: dial, event: ims_dial_attempt, fields: {registered: 'false'}}\n"
@@ -346,13 +347,143 @@ def test_fix_stops_without_build_or_required_signatures_and_lint_rules():
     end = text.index("    resolution: 캐리어 설정의 VoLTE")
     type_md.write_text(text[:start] + "    recovery_signatures: []\n    scenario_signatures: []\n" + text[end:],
                        encoding="utf-8", newline="\n")
-    out = verify_fix(db, "call-fixed.log")
-    assert out["judgement"] == "unknown" and "필수 시그니처 없음" in out["reason"] and "C" not in out
+    proc = verify_fix(db, "call-fixed.log", expect=2)       # 흔적 없는 코드 수정 유형은 판정 없이 거부 (W3, 표는 아래 테스트)
+    assert proc.returncode == 2 and proc.stdout == "" and "update-signature" in proc.stderr
 
     edit(type_md, "      status: fix-submitted\n", "      status: fixed\n")
     lint = run_json("db_lint.py", ["--all", "--db", db], expect=1)
     codes = {e["code"] for e in lint["errors"]}
     assert {"fixed-without-verification", "fixed-without-trace"} <= codes
+
+
+# W3: verify-fix 흔적 전제의 스크립트 강제 (05-verification.md §5.12 (2) 전제, 99-deferred.md §F 방안 1·2)
+
+TRACE_BLOCK = ("    scenario_signatures:\n      - id: volte-dial-attempt\n        must_event:\n"
+               "          - {event: ims_dial_attempt}\n        window_sec: 60\n")
+
+
+def set_traces(db: Path, *, scenario: bool, recovery: bool, rtype: str | None = "carrier-config",
+               status: str = "fix-submitted", pending: bool = False) -> Path:
+    """CALL-001-01의 scenario·recovery 시그니처·resolution_type·fix.status를 바꾼다 (둘 다 false면 둘 다 비운다)."""
+    type_md = db / CALL / "type.md"
+    text = type_md.read_text(encoding="utf-8")
+    start = text.index("    recovery_signatures:\n      - id: ims-registered-call-active")
+    end = text.index("    resolution: 캐리어 설정의 VoLTE")
+    rec_block = text[start:text.index("    scenario_signatures:", start)]
+    body = (rec_block if recovery else "    recovery_signatures: []\n") + (TRACE_BLOCK if scenario else "    scenario_signatures: []\n")
+    text = text[:start] + body + text[end:]
+    text = text.replace("    resolution_type: carrier-config\n", f"    resolution_type: {rtype}\n" if rtype else "")
+    text = text.replace("      status: fix-submitted\n", f"      status: {status}\n")
+    if pending:
+        text = text.replace("    status: active\n    title: IMS 미등록\n", "    status: active\n    signatures_pending: true\n    title: IMS 미등록\n")
+    type_md.write_text(text, encoding="utf-8", newline="\n")
+    return type_md
+
+
+BLOCK_HEAD = "CALL-001-01는 코드·설정 수정 유형"
+REGRESSION_LINE = "회귀라면 analyze Step 7로 open 되돌림을 안내한다"      # verify.md fix-submitted 1번 문구
+# (resolution_type, scenario, recovery, 기대 종료 코드, 기대) — 출처: 05 §5.12 (2) 전제, verify.md 3번·5번, 99 §F 방안 1
+FIX_PRECONDITION_TABLE = [
+    *[(t, False, False, 2, "blocked") for t in ("framework-bug", "vendor-ril", "modem", "carrier-config")],
+    ("carrier-config", True, False, 0, "judged"),         # scenario만 있으면 판정
+    ("carrier-config", False, True, 0, "judged"),         # recovery만 있어도 판정
+    *[(t, False, False, 0, "user-confirmation") for t in ("user-setting", "network", "hw")],     # 비코드 유형은 사용자 확인
+]
+
+
+@pytest.mark.parametrize("rtype,scenario,recovery,code,expect", FIX_PRECONDITION_TABLE)
+def test_fix_precondition_table(rtype, scenario, recovery, code, expect):
+    db = copy_db(VERIFY_DB)
+    set_traces(db, scenario=scenario, recovery=recovery, rtype=rtype)
+    if expect == "blocked":
+        proc = verify_fix(db, "call-fixed.log", expect=2)
+        assert proc.returncode == code and proc.stdout == ""
+        err = proc.stderr
+        assert BLOCK_HEAD in err and f"({rtype})" in err and "판정 전에 중단합니다(판단 불가)" in err
+        assert "update-signature" in err and "R1 흔적 검사" in err and "--plan" in err and "--draft" in err
+        assert REGRESSION_LINE not in err               # fix-submitted 원인은 회귀 안내 없음
+        return
+    out = verify_fix(db, "call-fixed.log")              # 종료 코드 0
+    assert out["judgement"] == "passed"
+    if expect == "user-confirmation":
+        assert out.get("user_confirmation_required") is True
+    else:
+        assert "user_confirmation_required" not in out
+
+
+def test_fix_block_order_status_pending_trace_then_fixed_in():
+    """verify.md 3번 나열 순서: status → pending → 흔적 → fixed_in. 첫 번째 걸린 사유 하나만 낸다."""
+    db = copy_db(VERIFY_DB)
+    set_traces(db, scenario=False, recovery=False, status="open")
+    err = verify_fix(db, "call-fixed.log", expect=2).stderr
+    assert "fix.status가 open" in err and "update-signature로 scenario" not in err         # status가 흔적보다 먼저
+    db = copy_db(VERIFY_DB)
+    set_traces(db, scenario=False, recovery=False, pending=True)
+    err = verify_fix(db, "call-fixed.log", expect=2).stderr
+    assert "signatures_pending" in err and BLOCK_HEAD not in err                          # pending이 흔적보다 먼저
+    db = copy_db(VERIFY_DB)
+    type_md = set_traces(db, scenario=False, recovery=False)
+    edit(type_md, "        - {branch: MOCKB77_U2, build: MOCKB77_U2_20260920}", "        - {branch: MOCKB77_U2}")
+    err = verify_fix(db, "call-fixed.log", expect=2).stderr
+    assert BLOCK_HEAD in err and "빌드가 있는 항목이 없습니다" not in err                   # 흔적이 fixed_in보다 먼저
+
+
+def test_fix_block_applies_to_fixed_recheck_with_regression_line():
+    """결정 5: fixed 재검증도 같은 조건이면 막고, fix-submitted 1번의 회귀 안내 한 줄을 더한다."""
+    db = copy_db(VERIFY_DB)
+    set_traces(db, scenario=False, recovery=False, status="fixed")
+    err = verify_fix(db, "call-fixed.log", expect=2).stderr
+    assert BLOCK_HEAD in err and err.rstrip("\n").endswith(REGRESSION_LINE)
+    assert err.count("\n") == 2                       # 같은 오류 한 줄 + 회귀 안내 한 줄
+    assert REGRESSION_LINE in (PLUGIN_SKILL / "reference/verify.md").read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("rtype", [None, "bogus-type"])
+def test_fix_unknown_resolution_type_is_non_code_path_and_lint_rejects_it(rtype):
+    """결정 3: resolution_type이 없거나 허용 밖이면 비코드 취급(사용자 확인) — 막지 않는다. 막는 것은 lint다."""
+    db = copy_db(VERIFY_DB)
+    set_traces(db, scenario=False, recovery=False, rtype=rtype)
+    out = verify_fix(db, "call-fixed.log")
+    assert out["user_confirmation_required"] is True and out["judgement"] == "passed"
+    lint = run_json("db_lint.py", ["--all", "--db", db], expect=1)
+    assert any(e["code"] == "schema" and "resolution_type" in e["message"] for e in lint["errors"]), lint["errors"]
+
+
+def test_fix_blocked_trace_passes_with_update_signature_draft():
+    """update-signature를 넣은 계획의 초안 트리에서는 같은 원인이 판정된다 (--plan --draft)."""
+    src = copy_db(VERIFY_DB)
+    set_traces(src, scenario=False, recovery=False)
+    ws = Workspace(src=src)
+    job = "verify-fix-CALL-001-01-draft"
+    scenario = {"id": "volte-dial-attempt", "must_event": [{"event": "ims_dial_attempt"}], "window_sec": 60}
+    plan = fix_plan([{"op": "update-signature", "owner": "CALL-001-01", "kind": "scenario",
+                      "signature": scenario}], f"verify-fix/CALL-001-01-{BUILD}")
+    plan_path = ws.plan(job, plan)
+    ws.acquire(job)
+    draft = ws.job_dir(job) / "draft"
+    args = ["fix", "--cause", "CALL-001-01", LOGS / "call-fixed.log", "--build", BUILD]
+    blocked = ws.run("db_verify.py", args + ["--db", ws.clone])
+    assert blocked.returncode == 2 and "update-signature" in blocked.stderr
+    out = ws.json("db_verify.py", args + ["--plan", plan_path, "--draft", draft])
+    assert out["judgement"] == "passed" and not out.get("withheld")
+    assert out["trace"]["signature"] == "CALL-001-01/volte-dial-attempt"
+
+
+def test_fix_precondition_rule_text_is_in_docs():
+    """규칙 문구가 문서에 남아 있다 (문서-코드 대조)."""
+    design = Path(__file__).resolve().parents[1] / "docs/design"
+    spec = (design / "05-verification.md").read_text(encoding="utf-8")
+    assert "`db_verify fix`가 종료 코드 2와 다음 할 일(`update-signature` → R1 흔적 검사 통과 → 재실행)로 거부" in spec
+    assert "`db_search`는 원인 항목에 `verify_fix_blocked`를 낸다" in spec
+    assert "필수 시그니처 없음" not in spec
+    deferred = (design / "99-deferred.md").read_text(encoding="utf-8")
+    section = deferred[deferred.index("## F. verify-fix 흔적 검사 강제"):]
+    assert "종료 코드 2" in section and "update-signature" in section and "verify_fix_blocked" in section
+    verify_md = (PLUGIN_SKILL / "reference/verify.md").read_text(encoding="utf-8")
+    assert "`verify_fix_blocked`가 있으면" in verify_md and "필수 시그니처 없음" not in verify_md
+    contracts = (design / "contracts.md").read_text(encoding="utf-8")
+    assert "코드·설정 수정 유형인데 scenario·recovery 시그니처가 모두 없음" in contracts
+    assert "회귀라면 analyze Step 7로 open 되돌림을 안내한다" in contracts
 
 
 def test_verify_fix_plans_reach_stage():
@@ -555,6 +686,84 @@ causes:
           - {event: call_fail_cause, fields: {cause: '99'}}
         window_sec: 60
 """ + _CAUSE_TAIL
+
+
+# -- 출력 다이어트: 기본은 통과한 행만 접는다 ----------------------------------------------------------
+
+
+def _extractor_db() -> Path:
+    db = git_db()
+    edit(db / "parser-rules/extractors.yaml", "    event: ims_registered\n    fields: [transport]",
+         "    event: ims_registered\n    fields: []")
+    return db
+
+
+def _rows(out: dict) -> dict:
+    return {r["id"]: r for r in out["rules"]}
+
+
+def _default_vs_verbose(db: Path) -> tuple[int, dict, dict]:
+    code, _, brief = rules(db)
+    proc = run("db_verify.py", ["rules", "--changed", "HEAD", "--db", db, "--verbose"])
+    assert proc.returncode == code
+    return code, brief, json.loads(proc.stdout)
+
+
+def test_default_output_folds_only_passed_rows_and_keeps_status():
+    """pass 행만 checks를 건수로 접고, 행 6개·status·reason·종료 코드는 --verbose와 같다."""
+    db = git_db()
+    edit(db / CALL / "type.md", CALL_CAUSE_SIG, "        must_event:\n          - {event: ims_dial_attempt}\n"
+                                                "        window_sec: 300\n")
+    code, brief, full = _default_vs_verbose(db)
+    assert code == 1
+    assert [r["id"] for r in brief["rules"]] == [r["id"] for r in full["rules"]] == [f"R{i}" for i in range(1, 7)]
+    for b, f in zip(brief["rules"], full["rules"]):
+        assert (b["status"], b["reason"], b["targets"]) == (f["status"], f["reason"], f["targets"])
+    b, f = _rows(brief), _rows(full)
+    assert b["R1"]["status"] == "pass" and "checks" not in b["R1"]
+    assert b["R1"]["checks_passed"] == len(f["R1"]["checks"]) and set(b["R1"]) <= {
+        "id", "status", "reason", "targets", "review_required", "checks_passed"}
+    assert b["R3"] == f["R3"] and b["R4"] == f["R4"]           # fail 행은 그대로
+    assert b["R5"]["status"] == f["R5"]["status"] == "skipped" and b["R6"]["blocking"] is False
+    assert "folded" in brief and "--verbose" in brief["folded"] and "folded" not in full
+    assert {k: v for k, v in brief.items() if k not in ("rules", "folded")} == {
+        k: v for k, v in full.items() if k != "rules"}
+
+
+def test_default_output_keeps_allow_cause_drafts_and_review_required_rows():
+    db = git_db()
+    new = db / "data/DATA-002-sim-rejected"
+    (new / "fixtures").mkdir(parents=True)
+    (new / "type.md").write_text(DATA_002, encoding="utf-8", newline="\n")
+    shutil.copyfile(SIM_LOG, new / "fixtures/DATA-002-01.log")
+    code, brief, full = _default_vs_verbose(db)
+    assert code == 1 and _rows(brief)["R3"] == _rows(full)["R3"]
+    check = next(c for c in _rows(brief)["R3"]["checks"] if c["target"] == "DATA-002-01")
+    assert check["allow_cause_drafts"]
+
+    db = git_db()
+    edit(db / DATA / "type.md", "tags: [data-evaluation]\n---", DATA_001_03 + "tags: [data-evaluation]\n---")
+    _, brief, full = _default_vs_verbose(db)
+    for rid in ("R1", "R2"):      # review_required skipped는 세부 전부
+        assert _rows(brief)[rid] == _rows(full)[rid] and _rows(brief)[rid]["review_required"] is True
+
+
+def test_brief_row_keeps_skipped_check_inside_pass_row():
+    from db_verify import brief_row
+    row = {"id": "R2", "status": "pass", "reason": "대상 2개 통과", "targets": ["A", "B"], "review_required": False,
+           "checks": [{"target": "A", "status": "pass", "reason": "ok", "review_required": False},
+                      {"target": "B", "status": "skipped", "reason": "시그니처 없음(pending)", "review_required": False}]}
+    out = brief_row(row)
+    assert out["checks_passed"] == 1 and out["checks"] == [row["checks"][1]]
+    assert brief_row({**row, "checks": [row["checks"][0]]}).get("checks") is None
+
+
+def test_default_output_keeps_needs_approval_row_in_full():
+    code, brief, full = _default_vs_verbose(_extractor_db())
+    assert code == 3
+    assert _rows(brief)["R5"] == _rows(full)["R5"] and _rows(brief)["R5"]["status"] == "needs-approval"
+    assert _rows(brief)["R5"]["impact"]
+    assert _rows(brief)["R4"]["status"] == "pass"
 
 
 if __name__ == "__main__":

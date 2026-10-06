@@ -445,8 +445,8 @@ def build_parser() -> argparse.ArgumentParser:
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("category", nargs="?", default=None)
     parser.add_argument("--db", default=None)
-    parser.add_argument("--out", default=None, help="Markdown 리포트를 쓸 파일")
-    parser.add_argument("--as-of", default=None, help="기준일 (기본: 오늘)")
+    parser.add_argument("--out", metavar="file", default=None, help="Markdown 리포트를 쓸 파일")
+    parser.add_argument("--as-of", metavar="YYYY-MM-DD", default=None, help="기준일 (기본: 오늘)")
     parser.add_argument("--json", action="store_true", help="stdout에 JSON")
     parser.add_argument("--plugin-root", default=None)
     return parser

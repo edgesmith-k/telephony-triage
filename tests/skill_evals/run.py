@@ -29,7 +29,7 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 sys.path.insert(0, str(REPO / "tests" / "helpers"))
 from skill_eval_env import build, _bash_path  # noqa: E402
-from grade import grade  # noqa: E402
+from grade import grade, token_record  # noqa: E402
 
 
 def dump(path: Path, value) -> None:
@@ -181,6 +181,27 @@ def derive_outputs(run_dir: Path, events: list[dict], names=REQUIRED_OUTPUTS) ->
     return made
 
 
+def read_events(path: Path) -> tuple[list[dict], dict | None]:
+    """events.jsonl의 (이벤트 목록, 마지막 result 이벤트). JSON이 아닌 줄은 건너뛴다."""
+    events, result = [], None
+    for line in path.read_text(encoding="utf-8").splitlines():
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        events.append(event)
+        if event.get("type") == "result":
+            result = event
+    return events, result
+
+
+def init_model(events: list[dict]) -> str | None:
+    """stream-json init 이벤트가 알려 주는 실제 모델 ID. `--model` 없이 돌렸을 때 기준선 모델의 출처다."""
+    init = next((e for e in events if e.get("type") == "system" and e.get("subtype") == "init"), None)
+    model = (init or {}).get("model")
+    return model if isinstance(model, str) and model else None
+
+
 def classify_result(result: dict | None, returncode: int) -> tuple[str, str]:
     if not result:
         return "error", f"Claude 결과 없음 (exit {returncode})"
@@ -232,6 +253,7 @@ def execute(entry: dict, info: dict, env_dir: Path, run_dir: Path, claude: str,
         command[2:2] = ["--model", model]
     start = time.monotonic()
     result = None
+    events_list: list[dict] = []
     derived: list[str] = []
     with (run_dir / "events.jsonl").open("w", encoding="utf-8") as events, (run_dir / "stderr.log").open("w", encoding="utf-8") as errors:
         proc = subprocess.Popen(command, cwd=env_dir, env=env, stdin=subprocess.PIPE, stdout=events, stderr=errors,
@@ -243,15 +265,7 @@ def execute(entry: dict, info: dict, env_dir: Path, run_dir: Path, claude: str,
             proc.communicate()
             status, reason = "timeout", f"{timeout}초 제한으로 중단. 모의 환경의 lock 상태 확인 필요."
         else:
-            events_list = []
-            for line in (run_dir / "events.jsonl").read_text(encoding="utf-8").splitlines():
-                try:
-                    event = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                events_list.append(event)
-                if event.get("type") == "result":
-                    result = event
+            events_list, result = read_events(run_dir / "events.jsonl")
             status, reason = classify_result(result, proc.returncode)
             if plugin:
                 problem, seen = plugin_check(events_list)
@@ -265,6 +279,7 @@ def execute(entry: dict, info: dict, env_dir: Path, run_dir: Path, claude: str,
     outcome = {"status": status, "reason": reason, "exit_code": proc.returncode,
                "elapsed_seconds": round(time.monotonic() - start, 2),
                "usage": (result or {}).get("usage"), "total_cost_usd": (result or {}).get("total_cost_usd"),
+               "tokens": token_record(result), "model": model, "init_model": init_model(events_list),
                "mode": "plugin" if plugin else "direct", "plugin": (plugin or {}).get("seen"),
                "outputs_derived": derived, "env_stripped": stripped_env}
     dump(run_dir / "execution.json", outcome)

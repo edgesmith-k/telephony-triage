@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """db_search.py — 이슈 DB 검색 (contracts.md §3.2, §renumber 참조, 03-issue-db.md §5.5).
 
-    db_search.py [--db <path>] <keyword|JIRA-KEY|ID> [--limit 20]
+    db_search.py [--db <path>] <keyword|JIRA-KEY|ID> [--limit 20] [--brief] [--format json|markdown]
 
 읽기 전용이다. 질의 종류는 모양으로 정한다.
 
@@ -25,7 +25,14 @@
 더해지고 `results[]` 항목에 `matched[]`, `score`, `phrase`가 붙는다.
 `results[]` 항목은 `kind: type|cause|jira`와 유형·원인·해결책·수정 상태·Jira 요약이다. 원인 항목에는
 `code_refs[{ref, symbol, android_versions}]`(Step 5 resolve 입력)가 붙는다. 스킬·드라이버는 `--limit 3`으로 부른다.
+코드·설정 수정 유형이면서 scenario·recovery 시그니처가 없는 원인(pending 제외)에만 `verify_fix_blocked`(사유 문자열)가 붙는다
+(`db_verify fix`가 종료 코드 2로 거부하는 조건, 99-deferred.md §F). 다른 원인 항목에는 키가 없다.
 `links[]`는 `{from, to, via: merged-into|renumbered, commit?, date?}`. 결과가 없어도 종료 코드 0이다.
+`--brief`(opt-in, 기본 출력은 그대로): 항목에서 `path`·`chain`·`merged_from`·`code_refs`·`resolution_type`·`signatures_pending`·
+`type_title`·`category`와 빈 값·id와 같은 `current`, 최상위 `db`를 뺀다. `links[]`는 그대로. 후보를 훑어볼 때만 쓰고,
+`code_refs`나 병합 체인이 필요한 호출(Step 5 resolve 입력 등)에는 붙이지 않는다.
+`--format markdown`(opt-in, 기본 `json`)은 `search.md §3` 보여주기 규칙대로 마크다운으로 낸다(전체 결과에서 렌더, `--brief`는 무시,
+`--json`과 함께 쓰면 종료 코드 2).
 """
 
 from __future__ import annotations
@@ -124,7 +131,7 @@ class Searcher:
         fix = quality.fix_of(cause)
         records = self.jira_of(cause.id)
         rv = cause.raw.get("resolution_verification")
-        return {
+        entry = {
             "kind": "cause", "id": cause.id, "type": cause.type_id, "type_title": itype.title,
             "category": itype.category, "title": cause.title, "status": cause.status,
             "current": current, "chain": chain, "merged_from": self.merged_from(cause.id),
@@ -141,6 +148,10 @@ class Searcher:
             "jira_latest": str(records[0].get("date", "")) if records else None,
             "path": (itype.path / "type.md").relative_to(self.db.root).as_posix(),
         }
+        if not cause.pending and quality.no_trace(cause):   # 99-deferred.md §F 방안 2: 해당 원인에만 키가 있다
+            entry["verify_fix_blocked"] = (f"코드·설정 수정 유형({cause.raw.get('resolution_type')})에 "
+                                           "scenario·recovery 시그니처 없음 — update-signature 필요")
+        return entry
 
     def jira_entry(self, record: dict) -> dict:
         entry = {"kind": "jira", "key": record.get("key"), "cause": record.get("cause"), "type": record["_type"],
@@ -367,6 +378,116 @@ class Searcher:
         return [x for x in out if x[0] > 0]
 
 
+BRIEF_DROP = ("path", "chain", "merged_from", "code_refs", "resolution_type", "signatures_pending", "type_title",
+              "category")
+
+
+def brief(result: dict) -> dict:
+    """`--brief` 출력: 후보를 훑는 데 필요 없는 키와 빈 값을 뺀다 (`links`·`git_history`는 그대로)."""
+    def slim(entry: dict) -> dict:
+        out = {}
+        for key, value in entry.items():
+            if key in BRIEF_DROP or (key == "current" and value == entry.get("id")):
+                continue
+            if isinstance(value, dict):
+                value = {k: v for k, v in value.items() if v not in (None, "", [], {})}
+            if value in (None, "", [], {}):
+                continue
+            out[key] = value
+        return out
+    return {**{k: v for k, v in result.items() if k not in ("db", "results")},
+            "results": [slim(e) for e in result["results"]]}
+
+
+def _line(value) -> str:
+    return " ".join(str("" if value is None else value).split())
+
+
+def _cell(value) -> str:
+    return _line(value).replace("\\", "\\\\").replace("|", "\\|")
+
+
+def _builds(fixed_in) -> list[str]:
+    out = []
+    for item in fixed_in or []:
+        value = (item.get("build") or item.get("branch")) if isinstance(item, dict) else item
+        if value and str(value) not in out:
+            out.append(str(value))
+    return out
+
+
+def render_markdown(result: dict) -> str:
+    """`search.md §3` 보여주기 규칙: 이슈 번호 줄 → 표(결과 순서 그대로, Jira 항목도 같은 표) → 연관·다른 카테고리 → 옛 ID 연결
+    → 꼬리 문장. 문구가 `search.md`에 없는 값은 원값(`current`, `phrase` 등)을 그대로 보인다."""
+    kind, terms = result.get("kind"), result.get("terms")
+    words = [t["term"] for t in terms or []]
+    head = f'검색: "{_line(result["query"])}" ({kind}' + (f", 단어: {', '.join(words)}" if words else "") + ")"
+    entries = result.get("results") or []
+    out = [head, ""]
+    if not entries:
+        out.append("일치 없음 — 검색 단어: " + ", ".join(words) if words else
+                   ("일치 없음 — 검색 단어(terms): 없음 (불용어뿐)" if kind == "keyword" else f"일치 없음 — {kind} 질의"))
+    groups = [e for e in entries if e["kind"] in ("type", "cause")]
+    keys: list[str] = []
+    for e in groups:
+        keys += [k for k in e.get("jira") or [] if k not in keys]
+    if keys:
+        latest = max((e.get("jira_latest") or "" for e in groups), default="")
+        out.append(f"이슈 번호: {', '.join(keys)}" + (f" (jira_latest {latest})" if latest else ""))
+        capped = [f"{e['id']} jira_count {e['jira_count']} / 표시 {len(e['jira'])}" for e in groups
+                  if (e.get("jira_count") or 0) > len(e.get("jira") or [])]
+        if capped:
+            out.append("최근 5건만 표시: " + ", ".join(capped))
+        out.append("")
+    if entries:
+        out += ["| 유형 > 원인 | 해결책 | 수정 상태 | 최근 Jira | 맞은 단어 |", "|---|---|---|---|---|"]
+    for e in entries:
+        if e["kind"] == "cause":
+            name = f"{e['type_title']} > {e['id']} {e['title']}"
+            rv = e.get("resolution_verification")
+            state = "미검증" if rv in (None, "unverified") else str(rv)
+            res = f"{e.get('resolution') or '—'} ({state})"
+            fix = e.get("fix") or {}
+            builds = _builds(fix.get("fixed_in"))
+            status = f"{fix.get('status')}" + (f" (fixed_in {', '.join(builds)})" if builds else "")
+            recent = f"{e.get('jira_latest') or '—'} ({e.get('jira_count', 0)}건)"
+        elif e["kind"] == "type":
+            name, res, status = f"{e['id']} {e['title']} (type)", "—", e.get("status")
+            recent = f"{e.get('jira_latest') or '—'} ({e.get('jira_count', 0)}건)"
+        else:
+            name = f"Jira {e['key']} (원인 {e.get('cause')}, 유형 {e.get('type')})"
+            res, status, recent = f"note: {e.get('note') or ''}", "—", e.get("date") or "—"
+        if "matched" not in e:
+            hit = "—"
+        else:
+            hit = ", ".join(e["matched"]) + (" (phrase: true)" if e.get("phrase") else "")
+            if not e.get("phrase") and len(e["matched"]) < len(words):
+                hit += " (부분 일치)"
+        out.append(f"| {_cell(name)} | {_cell(res)} | {_cell(status)} | {_cell(recent)} | {_cell(hit)} |")
+    if entries:
+        out.append("")
+    for e in groups:
+        extra = []
+        if e.get("related"):
+            extra.append("연관 " + ", ".join(e["related"]))
+        if e.get("secondary_categories"):
+            extra.append("다른 카테고리 " + ", ".join(e["secondary_categories"]))
+        if e.get("current") not in (None, e["id"]):
+            extra.append(f"current: {e['current']}")
+        if extra:
+            out.append(f"- {e['id']}: " + " / ".join(extra))
+    if result.get("links"):
+        via = {"merged-into": "병합 (merged-into)", "renumbered": "사후 정리 (renumbered)"}
+        out += ["", "옛 ID → 새 ID"]
+        for l in result["links"]:
+            detail = ", ".join(str(x) for x in (via.get(l.get("via"), l.get("via")), l.get("commit"), l.get("date")) if x)
+            out.append(f"- {l['from']} → {l['to']} ({detail})")
+    if entries:
+        out += ["", "이 순위는 검색용이다. 분류를 확정하거나 원인을 단정하는 근거로 쓰지 않는다."]
+    text = "\n".join(out)
+    return re.sub(r"\n{3,}", "\n\n", text) + "\n"
+
+
 def run(args, defaults: dict) -> dict:
     try:
         root = dbpath.resolve(args.db, user_config_path=lambda: userconfig.issue_db_path(defaults))
@@ -387,9 +508,12 @@ def run(args, defaults: dict) -> dict:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="db_search.py", description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("query")
+    parser.add_argument("query", metavar="증상 문장|keyword|JIRA-KEY|ID")
     parser.add_argument("--db", default=None)
     parser.add_argument("--limit", type=int, default=20)
+    parser.add_argument("--brief", action="store_true", help="훑어보기용 요약 출력 (path·chain·code_refs·빈 값 등을 뺀다)")
+    parser.add_argument("--format", choices=("json", "markdown"), default="json",
+                        help="markdown: search.md §3 보여주기 규칙대로 (기본 json, --json·--brief와 함께 못 쓴다/무시)")
     parser.add_argument("--json", action="store_true", help="JSON 출력 (항상 JSON)")
     parser.add_argument("--plugin-root", default=None)
     return parser
@@ -403,10 +527,17 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     defaults = site_defaults.load_or_exit(args.plugin_root)
     try:
+        if args.format == "markdown" and args.json:
+            raise UsageError("--format markdown은 --json과 함께 쓸 수 없다.")
         result = run(args, defaults)
     except UsageError as exc:
         print(str(exc), file=sys.stderr)
         return USAGE
+    if args.format == "markdown":
+        print(render_markdown(result), end="")
+        return OK
+    if args.brief:
+        result = brief(result)
     print(json.dumps(result, ensure_ascii=False, indent=1))
     return OK
 

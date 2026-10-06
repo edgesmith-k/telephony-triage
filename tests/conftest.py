@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import importlib
+import os
 from pathlib import Path
 import sys
 
 import pytest
+
+# W7: triage.py run 출력을 plugin/schemas/output/analysis.schema.json으로 검사한다(위반이면 종료 코드 2)
+os.environ["TT_SCHEMA_CHECK"] = "1"
 
 HELPERS = Path(__file__).resolve().parent / "helpers"
 sys.path.insert(0, str(HELPERS))
@@ -25,6 +29,13 @@ def pytest_sessionstart(session):
 
 
 def pytest_sessionfinish(session, exitstatus):
+    try:
+        _check_shared_variants(session)
+    finally:
+        runner.cleanup_tmp()  # runner.tmp()가 만든 임시 디렉터리 (TT_KEEP_TMP=1이면 남긴다)
+
+
+def _check_shared_variants(session):
     # 공유 변형 트리를 제자리에서 바꾼 테스트가 있으면 새로 만든 것과 달라진다.
     if runner._VARIANT_DIR is None or not runner._VARIANT_DIR.is_dir():
         return

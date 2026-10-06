@@ -13,6 +13,8 @@
 
 from __future__ import annotations
 
+import json
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -315,6 +317,159 @@ def test_glossary_table_reader():
     assert glossary.table(SAMPLE, "없는 섹션") == [] and glossary.table(SAMPLE / "nope", "검색 별칭") == []
     assert (["붙", "접속", "attach"], ["연결", "setup_data_call"]) in glossary.search_aliases(SAMPLE)
     assert any(row[0] == "콜이 끊김" for row in glossary.table(SAMPLE, "표준 용어"))
+
+
+def test_brief_drops_detail_keys_but_keeps_what_skills_read():
+    full = run_json("db_search.py", ["--db", SAMPLE, "로밍"])
+    brief = run_json("db_search.py", ["--db", SAMPLE, "로밍", "--brief"])
+    assert "db" in full and "db" not in brief and brief["links"] == full["links"]
+    assert [(r["kind"], r.get("id") or r.get("key")) for r in brief["results"]] == [
+        (r["kind"], r.get("id") or r.get("key")) for r in full["results"]]
+    dropped = {"path", "chain", "merged_from", "code_refs", "resolution_type", "signatures_pending", "type_title",
+               "category"}
+    for entry in brief["results"]:
+        assert not dropped & set(entry) and "current" not in entry
+        assert all(v not in (None, "", [], {}) for v in entry.values())
+    first = brief["results"][0]
+    assert first["resolution"] == "데이터 로밍 설정을 켠다" and first["fix"]["status"] == "not-a-bug"
+    assert first["jira"] == ["MOCK-1103"] and first["matched"] and "score" in first and first["status"]
+    assert len(json.dumps(brief)) < len(json.dumps(full))
+    # 기본 출력은 그대로 (키 유지)
+    assert dropped <= set(full["results"][0]) | {"type_title"} and "path" in full["results"][0]
+
+
+def test_brief_on_id_query_keeps_related_and_secondary():
+    cause = run_json("db_search.py", ["--db", SAMPLE, "CALL-001-01", "--brief"])["results"][0]
+    assert cause["related"] == ["IMS-001-01"] and cause["secondary_categories"] == ["ims"]
+
+
+# --- --format markdown (search.md §3 보여주기 규칙) -----------------------------------------------------------
+
+def _md(db, query, *extra) -> str:
+    proc = run("db_search.py", ["--db", db, query, "--limit", "10", "--format", "markdown", *extra])
+    assert proc.returncode == 0, proc.stderr
+    return proc.stdout
+
+
+def test_markdown_symptom_sentence_shows_only_keys_present_in_json():
+    query = "데이터 안 붙어, 이런 이슈 있었어? 이슈 번호 알려줘"
+    found = run_json("db_search.py", ["--db", SAMPLE, query, "--limit", "10"])
+    text = _md(SAMPLE, query)
+    assert text.splitlines()[0] == f'검색: "{query}" (keyword, 단어: 데이터, 붙어)'
+    line = next(l for l in text.splitlines() if l.startswith("이슈 번호:"))      # search.md §3-1
+    keys = re.findall(r"[A-Z]+-\d+", line)
+    in_json = {k for r in found["results"] if r["kind"] != "jira" for k in r.get("jira", [])}
+    assert keys and set(keys) <= in_json and len(keys) == len(set(keys))          # 결과에 있는 키만, 중복 없이
+    assert keys[:4] == ["MOCK-1104", "MOCK-1103", "MOCK-1102", "MOCK-1101"]        # 결과 순서
+    assert set(re.findall(r"MOCK-\d+", text)) <= {k for r in found["results"] for k in (r.get("jira") or [r.get("key")])}
+    rows = [l for l in text.splitlines() if l.startswith("| ") and "유형 > 원인" not in l]
+    assert [r.split("|")[1].split()[0] for r in rows][:3] == ["DATA-001", "SETUP_DATA_CALL이", "SETUP_DATA_CALL이"]
+    assert "DATA-001-02 Roaming disabled | 데이터 로밍 설정을 켠다 (미검증)" in text   # §3-2: 미검증이면 그렇다고
+    assert "DATA-001-01 Data disabled | 모바일 데이터 설정을 켠다 (verified)" in text   # 검증됨 문구는 search.md에 없어 원값
+    assert "붙어 (부분 일치)" in text                                              # matched가 terms보다 적으면
+    assert "- CALL-001-01: 연관 IMS-001-01 / 다른 카테고리 ims" in _md(SAMPLE, "CALL-001-01")   # §3-3
+    assert text.rstrip().endswith("이 순위는 검색용이다. 분류를 확정하거나 원인을 단정하는 근거로 쓰지 않는다.")
+
+
+def test_markdown_no_result_and_stopword_only_and_id_queries():
+    assert _md(SAMPLE, "이런 이슈 있었어?").splitlines()[2] == "일치 없음 — 검색 단어(terms): 없음 (불용어뿐)"   # search.md §2 첫 항목
+    none = _md(SAMPLE, "eSIM 다운로드가 안 돼, 이런 이슈 있었어?")
+    assert none.splitlines()[0].endswith("(keyword, 단어: esim, 다운로드)") and "일치 없음 — 검색 단어: esim, 다운로드" in none
+    assert "일치 없음" in _md(SAMPLE, "NOPE-009-01") and "(cause-id)" in _md(SAMPLE, "CALL-001-01").splitlines()[0]
+    assert "(jira)" in _md(SAMPLE, "MOCK-1104").splitlines()[0] and "| Jira MOCK-1104 (" in _md(SAMPLE, "MOCK-1104")
+
+
+def test_markdown_shows_merged_current_and_renumbered_links():
+    db = copy_db(variant_db("issue-db-dup-id"))
+    git(db, "init", "-q", "-b", "main")
+    git(db, "add", "-A")
+    git(db, "commit", "-qm", "merge two PRs")
+    edit(db / DATA / "type.md", "  - id: DATA-001-03\n    status: active\n    title: 무선 꺼짐",
+         "  - id: DATA-001-04\n    status: active\n    title: 무선 꺼짐")
+    git(db, "add", "-A")
+    git(db, "commit", "-qm", "chore: fix duplicated DATA-001-03\n\nRenumbered: DATA-001-03 -> DATA-001-04")
+    text = _md(db, "DATA-001-03")
+    link = next(l for l in text.splitlines() if l.startswith("- DATA-001-03 → DATA-001-04 ("))   # search.md §3-4
+    assert "사후 정리 (renumbered)" in link and re.search(r"[0-9a-f]{7,}", link)
+    merged = copy_db()
+    edit(merged / DATA / "type.md", "  - id: DATA-001-02\n    status: active", "  - id: DATA-001-02\n    status: merged-into:DATA-001-01")
+    text = _md(merged, "DATA-001-02")
+    assert "- DATA-001-02: current: DATA-001-01" in text and "DATA-001-02 → DATA-001-01 (병합 (merged-into))" in text
+
+
+def test_markdown_keeps_result_order_and_jira_rows_carry_matched():
+    found = run_json("db_search.py", ["--db", SAMPLE, "IMS 등록 실패", "--limit", "10"])
+    text = _md(SAMPLE, "IMS 등록 실패")
+    rows = [l for l in text.splitlines() if l.startswith("| ") and "유형 > 원인" not in l]
+    first = lambda e: (e.get("id") or e.get("key"))                      # noqa: E731
+    assert [e["kind"] for e in found["results"]][:2] == ["jira", "type"]   # Jira가 앞에 오는 결과도 순서를 바꾸지 않는다
+    assert len(rows) == len(found["results"])
+    for row, entry in zip(rows, found["results"]):
+        assert first(entry) in row.split("|")[1]
+        assert ", ".join(entry["matched"]) in row                         # Jira 항목의 matched 포함
+
+
+def test_markdown_fixed_phrases_are_in_search_md():
+    """`search.md §3`이 \"tests/test_db_search.py가 대조한다\"고 한 문구들이 실제로 문서에 있는지."""
+    doc = (REPO / "plugin/skills/telephony-triage/reference/search.md").read_text(encoding="utf-8")
+    text = _md(SAMPLE, "데이터 안 붙어") + _md(SAMPLE, "이런 이슈 있었어?") + _md(SAMPLE, "NOPE-009-01")
+    emitted_and_documented = ("이슈 번호", "유형 > 원인", "수정 상태", "최근 Jira", "맞은 단어", "부분 일치", "미검증", "연관",
+                              "다른 카테고리", "일치 없음", "불용어뿐",
+                              "이 순위는 검색용이다. 분류를 확정하거나 원인을 단정하는 근거로 쓰지 않는다.")
+    for phrase in emitted_and_documented:
+        assert phrase in doc and phrase in text + _md(SAMPLE, "CALL-001-01"), phrase
+    assert "옛 ID → 새 ID" in doc and "병합" in doc and "사후 정리" in doc
+
+
+def test_format_json_is_default_and_brief_is_ignored_for_markdown():
+    plain = run("db_search.py", ["--db", SAMPLE, "로밍"])
+    explicit = run("db_search.py", ["--db", SAMPLE, "로밍", "--format", "json"])
+    assert plain.returncode == explicit.returncode == 0 and plain.stdout == explicit.stdout
+    assert _md(SAMPLE, "로밍", "--brief") == _md(SAMPLE, "로밍")
+    both = run("db_search.py", ["--db", SAMPLE, "로밍", "--json", "--format", "markdown"])
+    assert both.returncode == 2 and both.stdout == ""
+
+
+# --- verify_fix_blocked (99-deferred.md §F 방안 2, W3) -----------------------------------------------------------
+
+CAUSE_KEYS = {"kind", "id", "type", "type_title", "category", "title", "status", "current", "chain", "merged_from",
+              "signatures_pending", "resolution", "resolution_type", "resolution_verification", "fix", "related",
+              "secondary_categories", "code_refs", "jira", "jira_count", "jira_latest", "path"}
+BLOCKED_REASON = "코드·설정 수정 유형({rtype})에 scenario·recovery 시그니처 없음 — update-signature 필요"
+
+
+def _cause_entry(db, cause_id: str, *extra) -> dict:
+    return run_json("db_search.py", ["--db", db, cause_id, *extra])["results"][0]
+
+
+def test_verify_fix_blocked_only_on_code_fix_cause_without_traces():
+    """코드·설정 수정 유형 + scenario·recovery 모두 없음 + pending 아님 → 사유 문자열 하나. 그 밖에는 키 자체가 없다."""
+    blocked = _cause_entry(SAMPLE, "IMS-001-01")                    # framework-bug, 시그니처 없음
+    assert blocked["verify_fix_blocked"] == BLOCKED_REASON.format(rtype="framework-bug")
+    assert set(blocked) == CAUSE_KEYS | {"verify_fix_blocked"}
+    for cause_id in ("CALL-001-01",                           # carrier-config + 흔적 있음
+                     "DATA-001-01", "DATA-001-02",            # user-setting (비코드): 사용자 확인 경로
+                     "NETWORK-001-01"):                       # network (비코드)
+        entry = _cause_entry(SAMPLE, cause_id)
+        assert set(entry) == CAUSE_KEYS, cause_id             # 다른 원인 출력은 키가 늘지 않는다
+    pending = _cause_entry(variant_db("issue-db-pending"), "DATA-001-03")
+    assert pending["signatures_pending"] is True and "verify_fix_blocked" not in pending
+
+
+def test_verify_fix_blocked_keeps_other_output_and_markdown_unchanged():
+    """`--brief`는 키를 그대로 남기고, markdown은 렌더하지 않는다(바이트 동일: 키 추가가 마크다운에 새지 않는다)."""
+    assert _cause_entry(SAMPLE, "IMS-001-01", "--brief")["verify_fix_blocked"].startswith("코드·설정 수정 유형(framework-bug)")
+    md = _md(SAMPLE, "IMS-001-01")
+    assert "verify_fix_blocked" not in md and "update-signature 필요" not in md
+    assert md == _md(SAMPLE, "IMS-001-01", "--brief")
+
+
+def test_verify_fix_blocked_text_is_documented():
+    contracts = (REPO / "docs/design/contracts.md").read_text(encoding="utf-8")
+    row = next(line for line in contracts.splitlines() if line.startswith("| `db_search.py`"))
+    assert "verify_fix_blocked" in row and "기본 출력 불변 원칙의 예외" in row
+    assert "`verify_fix_blocked`가 있으면" in (REPO / "plugin/skills/telephony-triage/reference/verify.md"
+                                              ).read_text(encoding="utf-8")
 
 
 if __name__ == "__main__":

@@ -145,9 +145,19 @@ class Workspace:
         env.update({k: str(v) for k, v in self.env(**extra).items()})
         return env
 
-    def ship(self, job: str, branch: str, lease: str = "new", discard: bool = True) -> dict:
-        """stage → summary → 커밋 → publish (→ discard)."""
+    def ship(self, job: str, branch: str, lease: str = "new", discard: bool = True, combined: bool = False) -> dict:
+        """stage → summary → 커밋 → publish (→ discard). `combined`면 `stage --then-summary` →
+        `publish --commit --and-discard` 2회 경로 (반환 키는 같다: summary는 approved_hash만 가진다)."""
         self.acquire(job)
+        if combined:
+            wt = self.wt(job)
+            proc = self.run("db_pr.py", ["stage", self.job_dir(job) / "plan.json", "--wt", wt, "--branch", branch,
+                                         "--then-summary"])
+            assert proc.returncode in (0, 3), f"stage --then-summary: {proc.returncode}\n{proc.stderr[-2000:]}"
+            digest = json.loads((self.job_dir(job) / "state.json").read_text(encoding="utf-8"))["approved_hash"]
+            args = ["publish", wt, "--branch", branch, "--lease", lease, "--approved", digest, "--commit"]
+            pub = self.db_pr(*(args + (["--and-discard"] if discard else [])))
+            return {"stage": proc.stdout, "summary": {"approved_hash": digest}, "publish": pub}
         stage = self.stage(job, branch)
         summary = self.db_pr("summary", self.wt(job))
         self.commit(job)

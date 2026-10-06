@@ -2,7 +2,7 @@
 """db_verify.py — 규칙·해결책·코드 수정 검증 (05-verification.md §5.12, contracts.md §3.2 `db_verify.py` 세부).
 
     db_verify.py rules (--plan <plan.json> [--draft <dir>] | --changed <ref> | --staged)
-                       [--extra <logcat...>] [--extra-normal <logcat...>] [--db <path>]
+                       [--extra <logcat...>] [--extra-normal <logcat...>] [--db <path>] [--verbose]
     db_verify.py resolution --cause <ID> <logcat...> [--plan <plan.json> --draft <dir>] [--db <path>]
     db_verify.py fix --cause <ID> <logcat...> [--build <빌드>] [--plan <plan.json> --draft <dir>] [--db <path>]
 
@@ -35,16 +35,20 @@
 - 종료 코드: R1~R4에 `fail`이 있으면 1, 없고 R5가 `needs-approval`이면 3, 아니면 0. 개발·테스트용으로 환경변수
   `TT_FORCE_VERIFY_EXIT=3`이면 판정 뒤 3을 낸다(실패가 있으면 1).
 
+- 출력: 기본은 R1~R6 행 6개를 모두 내되 **pass 행만** 세부(`checks[]`·`impact`·`rules` 등)를 접는다(`checks_passed: n`,
+  최상위 `folded` 한 줄). fail·skipped·needs-approval·`review_required` 행은 세부 전부(`allow_cause_drafts` 포함).
+  `--verbose`면 전부. 종료 코드·status는 같다. `resolution`·`fix`가 끼우는 `rules`도 같다.
+
 `resolution` — 해결책 검증 판정 (`passed | failed | unknown`, 05-verification.md §5.12 (1))
 - failed: 원인 시그니처 충족. passed: 원인 불충족이고 (a) recovery 시그니처가 있으면 충족, (b) 없으면 증상 불충족이고
   scenario 충족. 그 밖(흔적 시그니처 없음, 시나리오 흔적 없음, 증상 남음, 로그 구간 부족, pending 원인)은 unknown.
 
 `fix` — 코드 수정 검증 판정 (`passed | partial | failed | unknown`, 05-verification.md §5.12 (2))
-- 중단(종료 코드 2): pending 원인, `fix.status`가 `fix-submitted`·`fixed`가 아님, `fixed_in`에 빌드 있는 항목 없음,
-  `--build`가 `build_compare`로 모든 `fixed_in` 빌드보다 이전. 비교할 수 없으면 `build_check: undetermined`로 이어가고
-  스킬이 사용자에게 묻는다.
-- 코드·설정 수정 유형(`framework-bug`, `vendor-ril`, `modem`, `carrier-config`)에 scenario·recovery 시그니처가 모두
-  없으면 판정 없이 unknown(필수 시그니처 없음). 그 밖의 유형은 흔적 대신 사용자 확인(`user_confirmation_required`).
+- 중단(종료 코드 2): pending 원인, `fix.status`가 `fix-submitted`·`fixed`가 아님, 코드·설정 수정 유형(`framework-bug`,
+  `vendor-ril`, `modem`, `carrier-config`)에 scenario·recovery 시그니처가 모두 없음(`--plan --draft`면 계획 적용 후 트리 기준),
+  `fixed_in`에 빌드 있는 항목 없음, `--build`가 `build_compare`로 모든 `fixed_in` 빌드보다 이전(이 순서로 첫 사유 하나).
+  비교할 수 없으면 `build_check: undetermined`로 이어가고 스킬이 사용자에게 묻는다.
+- 비코드 유형(`user-setting`·`network`·`hw`)은 흔적 대신 사용자 확인(`user_confirmation_required`).
 - failed: 원인 시그니처 충족(재발 자체가 시나리오 수행 근거다). unknown: 시나리오 흔적(scenario, 없으면 recovery) 없음.
   partial: 흔적 충족·원인 불충족·증상 남음(다른 원인 후보 `other_candidates`). passed: 흔적 충족·원인 불충족·증상
   불충족·recovery가 있으면 충족. recovery가 있는데 불충족이면 unknown.
@@ -73,14 +77,13 @@ sys.path.insert(0, str(SCRIPTS))
 import db_regress  # noqa: E402
 import match_signatures  # noqa: E402
 import parse_logcat  # noqa: E402
-from common import builds, checks, dbpath, gitscope, issuedb, rulediff, site_defaults, userconfig  # noqa: E402
+from common import builds, checks, dbpath, gitscope, issuedb, quality, rulediff, site_defaults, userconfig  # noqa: E402
 from common.buildname import sanitize_build  # noqa: E402
 from common.exitcodes import CHECK_FAILED, NEEDS_APPROVAL, OK, USAGE  # noqa: E402
 from common.patterns import PatternError, PatternTimeout  # noqa: E402
 from common.signatures import SignatureError, compile_list, compile_signature  # noqa: E402
 
 POSITIVE_KINDS = ("positive", "recurrence", "extra")
-CODE_FIX_TYPES = ("framework-bug", "vendor-ril", "modem", "carrier-config")
 NA, NO_FIXTURE, NO_NEGATIVE, PENDING = "해당 없음", "fixture 없음", "음성 fixture 없음", "시그니처 없음(pending)"
 REVIEW_REASONS = (NO_FIXTURE, NO_NEGATIVE)
 
@@ -700,12 +703,20 @@ def _brief(hits: list[dict]) -> list[dict]:
 
 def _check_fix_target(cause: issuedb.Cause, build: str | None, rules_cfg: list) -> dict:
     fix = cause.raw.get("fix") or {}
-    if cause.pending:
-        raise UsageError(f"{cause.id}는 signatures_pending이라 verify-fix를 할 수 없습니다. 먼저 update-signature로 "
-                         "판별 시그니처를 추가한다.")
     if fix.get("status") not in ("fix-submitted", "fixed"):
         raise UsageError(f"{cause.id}의 fix.status가 {fix.get('status')}입니다. verify-fix는 fix-submitted(재검증이면 "
                          "fixed) 원인만 한다.")
+    if cause.pending:
+        raise UsageError(f"{cause.id}는 signatures_pending이라 verify-fix를 할 수 없습니다. 먼저 update-signature로 "
+                         "판별 시그니처를 추가한다.")
+    if quality.no_trace(cause):     # 05-verification.md §5.12 (2) 전제, 99-deferred.md §F 방안 1
+        msg = (f"{cause.id}는 코드·설정 수정 유형({cause.raw.get('resolution_type')})인데 scenario_signatures·"
+               "recovery_signatures가 모두 없어 판정 전에 중단합니다(판단 불가). 다음: update-signature로 "
+               "scenario/recovery 시그니처 추가 → 초안 R1 흔적 검사 통과 → db_verify fix --plan <plan> --draft <dir>로 "
+               "재실행 (05-verification.md §5.12 (2) 전제).")
+        if fix.get("status") == "fixed":
+            msg += "\n회귀라면 analyze Step 7로 open 되돌림을 안내한다"   # verify.md fix-submitted 1번 문구
+        raise UsageError(msg)
     fixed_in = [f for f in fix.get("fixed_in") or [] if isinstance(f, dict) and f.get("build")]
     if not fixed_in:
         raise UsageError(f"{cause.id}의 fixed_in에 빌드가 있는 항목이 없습니다. 먼저 fix-submitted 커맨드로 빌드를 "
@@ -763,9 +774,6 @@ def judge_fix(run: Run, cause: issuedb.Cause, paths: list[Path]) -> dict:
     has_rec = bool(cause.raw.get("recovery_signatures"))
     has_sce = bool(cause.raw.get("scenario_signatures"))
     out = {"judgement": "unknown", "reason": None, "resolution_type": rtype}
-    if not has_rec and not has_sce and rtype in CODE_FIX_TYPES:
-        return {**out, "reason": "필수 시그니처 없음 — 코드·설정 수정 유형은 scenario_signatures 또는 "
-                                 "recovery_signatures가 있어야 판정한다 (update-signature로 같은 PR에 넣을 수 있다)"}
     doc = run.parse(paths)
     if errors := parse_logcat.observation_errors(doc):
         return {**out, "reason": "파서 관측 불완전 — 판정할 수 없다", "errors": [e["error"] for e in errors]}
@@ -897,32 +905,63 @@ def judge(args, defaults: dict, plugin_root: Path) -> tuple[dict, int]:
 
 # -- CLI -----------------------------------------------------------------------------------
 
+_ROW_KEYS = ("id", "status", "reason", "targets", "review_required", "blocking")
+FOLDED = "통과한 행의 세부(checks 등)는 접힘 — 전체: 같은 명령에 --verbose"
+
+
+def brief_row(row: dict) -> dict:
+    """통과한(pass, review_required 아님) 행만 접는다: 나머지 세부 키를 빼고 `checks`는 통과 항목을 건수
+    (`checks_passed`)로, pass가 아닌 항목(pending skipped 등)은 `checks`로 남긴다. 비성공 행은 그대로."""
+    if row.get("status") != "pass" or row.get("review_required"):
+        return row
+    out = {k: row[k] for k in _ROW_KEYS if k in row}
+    if "checks" in row:
+        out["checks_passed"] = sum(1 for c in row["checks"] if c.get("status") == "pass")
+        rest = [c for c in row["checks"] if c.get("status") != "pass"]
+        if rest:
+            out["checks"] = rest
+    return out
+
+
+def brief_rules(result: dict) -> dict:
+    """`rules` 결과(`{"rules": [R1~R6 행], ...}`)의 기본 출력용 요약본. 행 6개·status·reason·종료 코드는 그대로,
+    접힌 행이 있으면 `folded` 한 줄을 붙인다. 입력은 바꾸지 않는다."""
+    rows = result.get("rules")
+    if not isinstance(rows, list):
+        return result
+    slim = [brief_row(r) for r in rows]
+    if all(a is b for a, b in zip(slim, rows)):
+        return result
+    return {**result, "rules": slim, "folded": FOLDED}
+
 
 def build_parser() -> argparse.ArgumentParser:
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--db", default=argparse.SUPPRESS)
     common.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="JSON 출력 (항상 JSON)")
     common.add_argument("--plugin-root", default=argparse.SUPPRESS)
+    common.add_argument("--verbose", action="store_true", default=argparse.SUPPRESS,
+                        help="통과한 R1~R6 행의 세부까지 전부 (기본은 접는다)")
     parser = argparse.ArgumentParser(prog="db_verify.py", description=__doc__, parents=[common],
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("rules", parents=[common])
     scope = p.add_mutually_exclusive_group(required=True)
-    scope.add_argument("--plan")
-    scope.add_argument("--changed", metavar="REF")
+    scope.add_argument("--plan", metavar="plan.json")
+    scope.add_argument("--changed", metavar="ref")
     scope.add_argument("--staged", action="store_true")
-    p.add_argument("--draft")
-    p.add_argument("--extra", nargs="*", default=[], help="R6 같은 증상 표본 (expect: match)")
-    p.add_argument("--extra-normal", nargs="*", default=[], help="R6 정상 표본 (expect: nomatch)")
+    p.add_argument("--draft", metavar="dir")
+    p.add_argument("--extra", metavar="logcat", nargs="*", default=[], help="R6 같은 증상 표본 (expect: match)")
+    p.add_argument("--extra-normal", metavar="logcat", nargs="*", default=[], help="R6 정상 표본 (expect: nomatch)")
     p.add_argument("--regress-json", help=argparse.SUPPRESS)   # db_pr stage가 이미 돌린 회귀 결과를 넘긴다
     for name in ("resolution", "fix"):
         p = sub.add_parser(name, parents=[common])
-        p.add_argument("logs", nargs="*")
-        p.add_argument("--cause")
-        p.add_argument("--plan")
-        p.add_argument("--draft")
+        p.add_argument("logs", metavar="logcat", nargs="*")
+        p.add_argument("--cause", metavar="ID")
+        p.add_argument("--plan", metavar="plan.json")
+        p.add_argument("--draft", metavar="dir")
         if name == "fix":
-            p.add_argument("--build")
+            p.add_argument("--build", metavar="빌드")
     return parser
 
 
@@ -951,6 +990,11 @@ def main(argv: list[str] | None = None) -> int:
     for item in rows or []:
         if item["status"] in ("fail", "needs-approval"):
             print(f"{item['id']} {item['status']}: {item['reason']}", file=sys.stderr)
+    if not getattr(args, "verbose", False):
+        if args.cmd == "rules":
+            result = brief_rules(result)
+        elif isinstance(result.get("rules"), dict):     # resolution·fix --plan --draft가 끼운 rules
+            result = {**result, "rules": brief_rules(result["rules"])}
     print(json.dumps(result, ensure_ascii=False, indent=1))
     return code
 

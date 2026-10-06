@@ -19,6 +19,7 @@ import yaml
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "tests" / "helpers"))
 
+import mock_env  # noqa: E402
 from runner import SAMPLE, git_db, run_json, run, variant_db  # noqa: E402
 from workspace import PLANS, Workspace, git  # noqa: E402
 
@@ -306,6 +307,56 @@ def test_source_outside_values_dry_run_and_forced_exit_3():
     ws.db_pr("discard", ws.wt("MOCK-7001"))
 
 
+SUMMARY_KEYS = ["source", "source_label", "jira", "branch", "reviewers", "open_prs", "files", "ids", "fixtures",
+                "drift_decisions", "readme_preview", "diff", "diff_total_lines", "diff_truncated", "checks", "verification",
+                "approval_needed", "notes", "commit_message", "pr_title", "push_allowed", "push_note", "pending_included",
+                "pr_body", "approved_hash"]
+
+
+def test_summary_markdown_is_opt_in_and_leaves_json_and_state_files_alone():
+    ws = Workspace()
+    ws.plan("MOCK-7002", "p7-analyze-new-cause.plan.json")
+    ws.put("MOCK-7002", "fixtures/cut-1.log", SIM_LOG)
+    ws.acquire("MOCK-7002")
+    ws.stage("MOCK-7002", "issue/MOCK-7002")
+    wt, job = ws.wt("MOCK-7002"), ws.job_dir("MOCK-7002")
+    default = ws.run("db_pr.py", ["summary", wt])
+    files = {name: (job / name).read_bytes() for name in ("state.json", "pr.json")}
+    shown = json.loads(default.stdout)
+    assert default.returncode == 0 and list(shown) == SUMMARY_KEYS      # 기본 stdout 키 목록·순서 고정
+
+    explicit = ws.run("db_pr.py", ["summary", wt, "--format", "json"])
+    assert explicit.returncode == 0 and explicit.stdout == default.stdout
+    md = ws.run("db_pr.py", ["summary", wt, "--format", "markdown"])
+    assert md.returncode == 0 and md.stdout.startswith("## push 전 확인: MOCK-7002 → DATA-001-03 SIM 미준비\n")
+    assert md.stdout.splitlines()[-1] == f"approved_hash: {shown['approved_hash']}"   # 같은 승인 해시
+    assert "해결책 검증 상태: DATA-001-03 — unverified(신규 원인 (new-cause))" in md.stdout
+    assert "NEW-CAUSE-1 → DATA-001-03" in md.stdout and shown["commit_message"] in md.stdout
+    assert {name: (job / name).read_bytes() for name in files} == files   # state.json·pr.json 바이트 동일
+    assert len(md.stdout.encode()) < len(default.stdout.encode())
+
+    both = ws.run("db_pr.py", ["summary", wt, "--json", "--format", "markdown"])
+    assert both.returncode == 2 and both.stdout == "" and "--json" in both.stderr
+    assert {name: (job / name).read_bytes() for name in files} == files
+    ws.db_pr("discard", wt)
+
+
+def test_summary_markdown_shows_needs_approval_and_dry_run_push_note():
+    ws = Workspace()
+    ws.plan("MOCK-7001", "p7-analyze-append.plan.json")
+    ws.acquire("MOCK-7001")
+    ws.stage("MOCK-7001", "issue/MOCK-7001", expect=3, env={"TT_FORCE_VERIFY_EXIT": "3"})
+    md = ws.run("db_pr.py", ["summary", ws.wt("MOCK-7001"), "--format", "markdown"])
+    assert md.returncode == 0 and "승인 필요: " in md.stdout and "승인 필요: 없음" not in md.stdout
+    assert "메인테이너 승인 필수" in md.stdout
+    ws.db_pr("discard", ws.wt("MOCK-7001"))
+    ws.acquire("MOCK-7001")
+    ws.stage("MOCK-7001", "issue/MOCK-7001", dry_run=True, unauth=True)
+    md = ws.run("db_pr.py", ["summary", ws.wt("MOCK-7001"), "--format", "markdown"], unauth=True)
+    assert "push 불가: gh 인증 없음 (--dry-run)" in md.stdout and md.stdout.splitlines()[-1].startswith("approved_hash: ")
+    ws.db_pr("discard", ws.wt("MOCK-7001"))
+
+
 # -- 재적용·사용자 clone 보호 ---------------------------------------------------------------
 
 
@@ -567,6 +618,75 @@ def test_same_number_race_resolved_by_sync_pr():
     assert f"{DATA_DIR}/fixtures/DATA-001-03.log" in files and f"{DATA_DIR}/fixtures/DATA-001-04.log" in files
 
 
+def _db_with_old_plan_schema():
+    """`pr.ids`를 모르는 옛 plan.schema.json을 가진 이슈 DB(샘플 원본은 건드리지 않는다)."""
+    from runner import copy_db
+    db = copy_db()
+    path = db / "schema" / "plan.schema.json"
+    schema = json.loads(path.read_text(encoding="utf-8"))
+    del schema["properties"]["pr"]["properties"]["ids"]
+    path.write_text(json.dumps(schema, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return db
+
+
+def _ship_for_race(ws):
+    ws.plan("MOCK-7002", "p7-analyze-new-cause.plan.json")
+    ws.put("MOCK-7002", "fixtures/cut-1.log", SIM_LOG)
+    ws.plan("MOCK-7010", radio_off_plan())
+    ws.put("MOCK-7010", "fixtures/cut-1.log", radio_off_log())
+    ws.ship("MOCK-7002", "issue/MOCK-7002")
+    return ws.ship("MOCK-7010", "issue/MOCK-7010")
+
+
+def test_publish_records_pr_ids_and_summary_shows_reassignment_against_previous_apply():
+    ws = Workspace()                      # 샘플 DB 스키마가 pr.ids를 안다 — 사본 바꿔치기 없음
+    out = _ship_for_race(ws)
+    assert out["publish"]["pr_ids_recorded"] is True
+    assert ws.read_plan("MOCK-7010")["pr"]["ids"] == {"NEW-CAUSE-1": "DATA-001-03"}      # publish가 이번 적용을 기록
+    ws.merge("issue/MOCK-7002")
+    found = ws.db_pr("find-plan", "--branch", "issue/MOCK-7010")
+    ws.acquire(found["job"])
+    ws.stage("MOCK-7010", "issue/MOCK-7010")                                           # 기록이 든 계획도 재적용된다(스키마 통과)
+    summary = ws.db_pr("summary", ws.wt("MOCK-7010"))
+    assert summary["ids"][0]["previous_id"] == "DATA-001-03" and summary["ids"][0]["expected_at_base"] == "DATA-001-03"
+    md = ws.run("db_pr.py", ["summary", ws.wt("MOCK-7010"), "--format", "markdown"]).stdout
+    assert ("- NEW-CAUSE-1 → DATA-001-04: 계획 당시 DATA-001-03 → DATA-001-04 (main에 먼저 머지된 원인); "
+            "DATA-001-03 → DATA-001-04 재할당") in md
+    ws.db_pr("discard", ws.wt("MOCK-7010"))
+
+
+def test_publish_skips_pr_ids_when_base_schema_is_old_and_summary_says_unknown():
+    ws = Workspace(src=_db_with_old_plan_schema())      # base_sha 커밋의 스키마가 pr.ids를 모른다 — 기록하면 재적용이 거부된다
+    ws.plan("MOCK-7002", "p7-analyze-new-cause.plan.json")
+    ws.put("MOCK-7002", "fixtures/cut-1.log", SIM_LOG)
+    out = ws.ship("MOCK-7002", "issue/MOCK-7002")
+    assert out["publish"]["pr_ids_recorded"] is False and "ids" not in ws.read_plan("MOCK-7002")["pr"]
+    ws.acquire("MOCK-7002")
+    ws.stage("MOCK-7002", "issue/MOCK-7002")
+    summary = ws.db_pr("summary", ws.wt("MOCK-7002"))
+    assert all("previous_id" not in row for row in summary["ids"])                       # 기록 없으면 키를 넣지 않는다
+    md = ws.run("db_pr.py", ["summary", ws.wt("MOCK-7002"), "--format", "markdown"]).stdout
+    assert "- 재할당 내역: 확인 불가 (이전 적용 ID 기록 없음)" in md
+    ws.db_pr("discard", ws.wt("MOCK-7002"))
+
+
+def test_publish_checks_base_sha_schema_not_the_working_copy():
+    ws = Workspace(src=_db_with_old_plan_schema())      # base_sha 커밋의 스키마는 pr.ids를 모른다
+    ws.plan("MOCK-7002", "p7-analyze-new-cause.plan.json")
+    ws.put("MOCK-7002", "fixtures/cut-1.log", SIM_LOG)
+    ws.acquire("MOCK-7002")
+    ws.stage("MOCK-7002", "issue/MOCK-7002")
+    wt = ws.wt("MOCK-7002")
+    new_schema = (REPO / "plugin" / "schemas" / "plan.schema.json").read_text(encoding="utf-8")
+    (wt / "schema" / "plan.schema.json").write_text(new_schema, encoding="utf-8")       # 작업 사본만 pr.ids를 안다
+    assert "ids" in json.loads(new_schema)["properties"]["pr"]["properties"]
+    summary = ws.db_pr("summary", wt)
+    ws.commit("MOCK-7002")
+    pub = ws.db_pr("publish", wt, "--branch", "issue/MOCK-7002", "--lease", "new", "--approved", summary["approved_hash"])
+    assert pub["pr_ids_recorded"] is False and "ids" not in ws.read_plan("MOCK-7002")["pr"]
+    ws.db_pr("discard", wt)
+
+
 def test_sync_pr_without_plan_only_guides():
     ws = Workspace()
     other = ws.other_clone()
@@ -761,6 +881,70 @@ def test_import_rules_and_new_type_needs_symptom():
     assert apply_json(db, plan, expect=2)["error"].startswith("계획 형식 오류")
 
 
+def _op_of(plan_name: str, op: str) -> dict:
+    return next(o for o in load_plan(plan_name)["operations"] if o["op"] == op)
+
+
+def test_plan_format_error_names_op_missing_and_extra_fields():
+    """`계획 형식 오류` 메시지가 op 이름·빠진 필수 필드·허용 밖 필드를 알려 준다(스키마의 op 하위 스키마에서 읽는다)."""
+    db = git_db()
+    cases = [("p7-analyze-append.plan.json", "append", "cause"),
+             ("p7-analyze-new-cause.plan.json", "new-cause", "body"),
+             ("p7-record-verified.plan.json", "verify-resolution", "verification")]
+    for name, op, required in cases:
+        for broken, expect in (("missing", f"빠진 필드 [{required}]"), ("extra", "허용 밖 필드 [foo]")):
+            plan = load_plan(name)
+            body = next(o for o in plan["operations"] if o["op"] == op)
+            if broken == "missing":
+                del body[required]
+            else:
+                body["foo"] = 1
+            error = apply_json(db, plan, expect=2)["error"]
+            assert error.startswith("계획 형식 오류 (operations/"), error
+            assert f"op={op})" in error and expect in error, (op, broken, error)
+    plan = load_plan("p7-analyze-append.plan.json")
+    plan["operations"][0]["op"] = "no-such-op"
+    error = apply_json(db, plan, expect=2)["error"]
+    assert error.startswith("계획 형식 오류 (operations/0)") and "알 수 없는 op 'no-such-op'" in error
+    assert "허용 op: append" in error and "new-cause" in error
+    plan["operations"][0].pop("op")
+    assert apply_json(db, plan, expect=2)["error"].startswith("계획 형식 오류")
+
+
+def test_plan_format_error_names_nested_value_problem_missing_op_and_truncates():
+    db = git_db()
+
+    def error_of(plan):
+        return apply_json(db, plan, expect=2)["error"]
+
+    def with_cause(change):
+        plan = load_plan("p7-analyze-new-cause.plan.json")
+        change(plan["operations"][0]["cause"])
+        return plan
+
+    err = error_of(with_cause(lambda c: c.pop("resolution_type")))
+    assert err.startswith("계획 형식 오류 (operations/0, op=new-cause)") and "resolution_type" in err
+    err = error_of(with_cause(lambda c: c.update(resolution_verification={"status": "verified"})))
+    assert "op=new-cause" in err and "resolution_verification/status" in err
+    err = error_of(with_cause(lambda c: c["fix"].update(status="fixed")))
+    assert "cause/fix/status" in err and "'fixed'" in err
+    plan = load_plan("p7-record-verified.plan.json")
+    body = next(o for o in plan["operations"] if o["op"] == "verify-resolution")
+    body["verification"]["status"] = "verified"
+    err = error_of(plan)
+    assert "op=verify-resolution" in err and "verification" in err and "'status'" in err
+    del body["verification"]["status"], body["verification"]["evidence"]
+    assert "'evidence' is a required property" in error_of(plan)
+    plan = load_plan("p7-analyze-append.plan.json")
+    del plan["operations"][0]["op"]
+    err = error_of(plan)
+    assert err.startswith("계획 형식 오류 (operations/0)") and "op 필드가 없다; 허용 op: append" in err and "allow-cause" in err
+    plan = load_plan("p7-analyze-append.plan.json")
+    plan["schema_version"] = "x" * 1000
+    err = error_of(plan)
+    assert err.startswith("계획 형식 오류 (schema_version)") and err.endswith("…") and len(err) < 400
+
+
 def test_check_ids_renumber_and_similar():
     db = git_db()
     git(db, "checkout", "-q", "-b", "feature")
@@ -812,6 +996,121 @@ def test_apply_masks_failed_step_and_writes_it_before_note():
     db2 = git_db()
     apply_json(db2, plain)
     assert "failed_step" not in yaml.safe_load((db2 / DATA_DIR / "jira" / "MOCK-7001.yaml").read_text(encoding="utf-8"))
+
+
+# -- 출력 다이어트: stdout만 줄고 stage.json은 전체 -----------------------------------------------------
+
+
+def _stage_file(ws: Workspace, job: str) -> dict:
+    return json.loads((ws.job_dir(job) / "stage.json").read_text(encoding="utf-8"))
+
+
+def _assert_stage_json_is_full(ws: Workspace, job: str, branch: str, expect: int, env: dict | None = None,
+                               dry_run: bool = False) -> tuple[dict, dict]:
+    """기본 stdout을 받고 stage.json이 `--verbose` stdout(변경 전 출력)과 같은지 본다. `(기본 stdout, 전체)`."""
+    brief = ws.stage(job, branch, expect=expect, env=env, dry_run=dry_run)
+    on_disk = _stage_file(ws, job)
+    args = ["stage", ws.job_dir(job) / "plan.json", "--wt", ws.wt(job), "--branch", branch, "--verbose"]
+    full = ws.db_pr(*(args + (["--dry-run"] if dry_run else [])), expect=expect, env=env)
+    for doc in (on_disk, _stage_file(ws, job)):
+        assert {k: v for k, v in doc.items() if k != "worktree"} == {k: v for k, v in full.items() if k != "worktree"}
+    assert "folded" not in full and "detail" not in full, "--verbose는 stage.json과 같은 전체"
+    assert brief["detail"] == str(ws.job_dir(job) / "stage.json")
+    assert ("folded" in brief) == (full.get("stopped") != "drift")
+    # 리터럴: 파일은 요약 전 모양 (folded·checks_passed 없음, apply.operations·regress results 있음)
+    assert "folded" not in on_disk and "checks_passed" not in json.dumps(on_disk)
+    if "apply" in on_disk:
+        assert "operations" in on_disk["apply"]
+        assert on_disk["checks"]["regress"]["result"]["results"]
+        for row in on_disk["checks"]["verify"]["result"]["rules"]:
+            assert row["id"] in ("R4", "R5", "R6") or "checks" in row
+    assert brief["result"] == full["result"] if "result" in full else brief["stopped"] == full["stopped"]
+    return brief, full
+
+
+def test_stage_json_stays_full_on_success_and_default_stdout_is_summary():
+    ws = Workspace()
+    ws.plan("MOCK-7002", "p7-analyze-new-cause.plan.json")
+    ws.put("MOCK-7002", "fixtures/cut-1.log", SIM_LOG)
+    ws.acquire("MOCK-7002")
+    brief, full = _assert_stage_json_is_full(ws, "MOCK-7002", "issue/MOCK-7002", 0)
+    disk = _stage_file(ws, "MOCK-7002")
+    # 파일: 요약 전의 모양 그대로 (operations·verify 행 checks·regress results가 있다)
+    assert "operations" in disk["apply"] and "db" in disk["apply"]
+    rows = {r["id"]: r for r in disk["checks"]["verify"]["result"]["rules"]}
+    assert rows["R1"]["checks"] and disk["checks"]["regress"]["result"]["results"]
+    assert disk["config_check"].keys() > {"for", "writable", "push_allowed", "reasons"}
+    # stdout: 요약
+    assert {"job", "wt", "branch", "tool_branch", "base_sha", "plan", "dry_run", "source", "drift", "ids_at_base",
+            "worktree", "pending_sources", "result", "detail", "folded"} <= set(brief)
+    assert set(brief["config_check"]) == {"for", "writable", "push_allowed", "reasons"}
+    assert set(brief["apply"]) <= {"ids", "changed", "fixtures", "feedback", "pending_included", "rejected"}
+    assert brief["apply"]["ids"] == [{"temp_id": "NEW-CAUSE-1", "id": "DATA-001-03"}]
+    checks = brief["checks"]
+    assert checks["build"] == checks["ids"] == {"code": 0}
+    assert checks["lint"] == {"code": 0, "errors": 0, "warnings": 0} and checks["mask"]["code"] == 0
+    assert checks["regress"]["summary"]["failed"] == 0 and "result" not in checks["regress"]
+    assert checks["verify"]["code"] == 0
+    assert all("checks" not in r for r in checks["verify"]["result"]["rules"] if r["status"] == "pass")
+    # 이어지는 summary 화면은 같다
+    assert ws.db_pr("summary", ws.wt("MOCK-7002"))["approved_hash"]
+    ws.db_pr("discard", ws.wt("MOCK-7002"))
+
+
+def test_stage_json_stays_full_on_failed_check_drift_and_needs_approval():
+    ws = Workspace()
+    job = "review-data-2026-10"
+    ws.plan(job, _review_plan([{"op": "update-signature", "owner": "DATA-001-02", "kind": "cause",
+                                "sig_id": "roaming-disabled",
+                                "signature": {"id": "roaming-disabled", "window_sec": 60,
+                                              "must_event": [{"event": "data_evaluation_rejected"}]}}],
+                              "review/data-2026-10"))
+    ws.acquire(job)
+    brief, full = _assert_stage_json_is_full(ws, job, "review/data-2026-10", 1)
+    assert brief["result"] == "check-failed"
+    assert brief["checks"]["verify"] == full["checks"]["verify"] and brief["checks"]["verify"]["code"] == 1   # 비0 단계는 전체
+    assert any(r["checks"] for r in full["checks"]["verify"]["result"]["rules"] if r["id"] == "R3")
+    ws.db_pr("discard", ws.wt(job))
+
+    ws.plan(job, _review_plan([{"op": "set-resolution", "cause": "DATA-001-02", "resolution": "계획 값"}],
+                              "review/data-2026-10"))
+    ws.push_main(lambda c: _edit(c / DATA_DIR / "type.md", "resolution: 데이터 로밍 설정을 켠다",
+                                 "resolution: 데이터 로밍을 켠다 (다른 PR)"))
+    ws.acquire(job)
+    brief, full = _assert_stage_json_is_full(ws, job, "review/data-2026-10", 1)
+    assert brief["stopped"] == "drift" and brief["drift"] == full["drift"] and brief["next"] == full["next"]
+    ws.db_pr("discard", ws.wt(job))
+
+    ws.plan("MOCK-7001", "p7-analyze-append.plan.json")
+    ws.acquire("MOCK-7001")
+    brief, full = _assert_stage_json_is_full(ws, "MOCK-7001", "issue/MOCK-7001", 3, env={"TT_FORCE_VERIFY_EXIT": "3"})
+    assert brief["result"] == "needs-approval" and brief["checks"]["verify"] == full["checks"]["verify"]
+    assert brief["checks"]["verify"]["code"] == 3
+    assert ws.db_pr("summary", ws.wt("MOCK-7001"))["approval_needed"]
+    ws.db_pr("discard", ws.wt("MOCK-7001"))
+
+
+def test_stage_and_verify_stdout_halved():
+    """완료 기준: MOCK-7002 new-cause 계획의 `verify --plan --draft` + `stage --dry-run` stdout 합이 기본에서 절반 이하."""
+    ws = Workspace()
+    ws.plan("MOCK-7002", "p7-analyze-new-cause.plan.json")
+    ws.put("MOCK-7002", "fixtures/cut-1.log", SIM_LOG)
+    ws.acquire("MOCK-7002")
+    plan = ws.job_dir("MOCK-7002") / "plan.json"
+    sizes = {}
+    for label, extra in (("default", []), ("verbose", ["--verbose"])):
+        draft = ws.job_dir("MOCK-7002") / "draft"
+        verify = ws.run("db_verify.py", ["rules", "--plan", plan, "--draft", draft, "--db", ws.clone, *extra])
+        assert verify.returncode == 0, verify.stderr[-2000:]
+        stage = ws.run("db_pr.py", ["stage", plan, "--wt", ws.wt("MOCK-7002"), "--branch", "issue/MOCK-7002",
+                                    "--dry-run", *extra])
+        assert stage.returncode == 0, stage.stderr[-2000:]
+        sizes[label] = (len(verify.stdout.encode()), len(stage.stdout.encode()))
+    d, v = sum(sizes["default"]), sum(sizes["verbose"])
+    print(f"\nverify+stage stdout bytes: verbose={v} (verify {sizes['verbose'][0]} + stage {sizes['verbose'][1]}) "
+          f"default={d} (verify {sizes['default'][0]} + stage {sizes['default'][1]})")
+    assert d * 2 <= v, sizes
+    ws.db_pr("discard", ws.wt("MOCK-7002"))
 
 
 if __name__ == "__main__":
@@ -905,3 +1204,521 @@ def test_drift_shows_plan_value_and_ids_at_base_for_new_cause_and_resolution():
     summary = ws.db_pr("summary", ws.wt(job))
     assert summary["ids"] == [{"temp_id": "NEW-CAUSE-1", "id": "DATA-001-04", "expected_at_base": "DATA-001-03"}]
     ws.db_pr("discard", ws.wt(job))
+
+
+# -- W5: stage --then-summary · publish --commit · publish --and-discard -------------------------------------------
+
+
+def _state(ws: Workspace, job: str) -> dict:
+    return json.loads((ws.job_dir(job) / "state.json").read_text(encoding="utf-8"))
+
+
+def _staged_job(ws: Workspace, job: str = "MOCK-7002", plan: str = "p7-analyze-new-cause.plan.json") -> Path:
+    ws.plan(job, plan)
+    if plan == "p7-analyze-new-cause.plan.json":
+        ws.put(job, "fixtures/cut-1.log", SIM_LOG)
+    ws.acquire(job)
+    return ws.wt(job)
+
+
+def _then_summary(ws: Workspace, job: str, branch: str, *extra, **kw):
+    return ws.run("db_pr.py", ["stage", ws.job_dir(job) / "plan.json", "--wt", ws.wt(job), "--branch", branch,
+                               "--then-summary", *extra], **kw)
+
+
+def _publish_args(ws: Workspace, job: str, branch: str, *extra, lease: str = "new") -> list:
+    return ["publish", ws.wt(job), "--branch", branch, "--lease", lease,
+            "--approved", _state(ws, job)["approved_hash"], *extra]
+
+
+def test_stage_then_summary_prints_same_markdown_as_summary():
+    ws = Workspace()
+    wt = _staged_job(ws)
+    job = ws.job_dir("MOCK-7002")
+    out = _then_summary(ws, "MOCK-7002", "issue/MOCK-7002")
+    assert out.returncode == 0 and out.stdout.startswith("## push 전 확인: MOCK-7002 → DATA-001-03 SIM 미준비\n")
+    assert not out.stdout.lstrip().startswith("{")                       # stage JSON은 stdout에 없다
+    separate = ws.run("db_pr.py", ["summary", wt, "--format", "markdown"])
+    assert separate.returncode == 0 and out.stdout == separate.stdout    # 같은 바이트
+    state = _state(ws, "MOCK-7002")
+    assert state["approved_hash"] and state["commit_message"] and out.stdout.splitlines()[-1] == \
+        f"approved_hash: {state['approved_hash']}"
+    assert (job / "pr.json").is_file()
+    disk = json.loads((job / "stage.json").read_text(encoding="utf-8"))   # stage.json은 그대로 전체
+    assert "operations" in disk["apply"] and disk["result"] == "ok"
+    ws.db_pr("discard", wt)
+
+
+def test_stage_then_summary_keeps_needs_approval_exit_3():
+    ws = Workspace()
+    wt = _staged_job(ws, "MOCK-7001", "p7-analyze-append.plan.json")
+    out = _then_summary(ws, "MOCK-7001", "issue/MOCK-7001", env={"TT_FORCE_VERIFY_EXIT": "3"})
+    assert out.returncode == 3 and out.stdout.startswith("## push 전 확인: ")
+    assert "메인테이너 승인 필수" in out.stdout and "승인 필요: 없음" not in out.stdout
+    assert _state(ws, "MOCK-7001")["approved_hash"] and (ws.job_dir("MOCK-7001") / "pr.json").is_file()
+    ws.db_pr("discard", wt)
+
+
+def test_stage_then_summary_skips_summary_on_drift_and_check_failure():
+    ws = Workspace()
+    job = "review-data-2026-10"
+    ws.plan(job, _review_plan([{"op": "update-signature", "owner": "DATA-001-02", "kind": "cause",
+                                "sig_id": "roaming-disabled",
+                                "signature": {"id": "roaming-disabled", "window_sec": 60,
+                                              "must_event": [{"event": "data_evaluation_rejected"}]}}],
+                              "review/data-2026-10"))
+    ws.acquire(job)
+    out = _then_summary(ws, job, "review/data-2026-10")
+    assert out.returncode == 1 and json.loads(out.stdout)["result"] == "check-failed"   # 기존 stage 요약 JSON
+    assert _state(ws, job)["approved_hash"] is None and not (ws.job_dir(job) / "pr.json").exists()
+    ws.db_pr("discard", ws.wt(job))
+
+    ws.plan(job, _review_plan([{"op": "set-resolution", "cause": "DATA-001-02", "resolution": "계획 값"}],
+                              "review/data-2026-10"))
+    ws.push_main(lambda c: _edit(c / DATA_DIR / "type.md", "resolution: 데이터 로밍 설정을 켠다",
+                                 "resolution: 데이터 로밍을 켠다 (다른 PR)"))
+    ws.acquire(job)
+    out = _then_summary(ws, job, "review/data-2026-10")
+    assert out.returncode == 1 and json.loads(out.stdout)["stopped"] == "drift"
+    assert _state(ws, job)["approved_hash"] is None and not (ws.job_dir(job) / "pr.json").exists()
+    ws.db_pr("discard", ws.wt(job))
+
+
+def test_stage_then_summary_rejects_json_and_verbose():
+    ws = Workspace()
+    ws.plan("MOCK-7001", "p7-analyze-append.plan.json")
+    ws.acquire("MOCK-7001")
+    for flag in ("--json", "--verbose"):
+        out = _then_summary(ws, "MOCK-7001", "issue/MOCK-7001", flag)
+        assert out.returncode == 2 and out.stdout == "" and "--then-summary" in out.stderr, flag
+    assert not ws.wt("MOCK-7001").exists(), "사용 오류는 stage를 돌리기 전에 난다"
+    ws.db_pr("lock", "release", "MOCK-7001")
+
+
+def test_stage_then_summary_dry_run_shows_push_note():
+    ws = Workspace()
+    wt = _staged_job(ws, "MOCK-7001", "p7-analyze-append.plan.json")
+    out = _then_summary(ws, "MOCK-7001", "issue/MOCK-7001", "--dry-run", unauth=True)
+    assert out.returncode == 0 and "push 불가: gh 인증 없음 (--dry-run)" in out.stdout
+    assert out.stdout.splitlines()[-1].startswith("approved_hash: ")
+    ws.db_pr("discard", wt)
+
+
+def test_stage_then_summary_reports_summary_failure_after_stage(tmp_path):
+    ws = Workspace()
+    wt = _staged_job(ws)
+    shim = tmp_path / "bin"
+    shim.mkdir()
+    real_path = mock_env.env_with_mocks(plugin_root=ws.root)["PATH"]
+    (shim / "gh").write_text('#!/bin/sh\nif [ "$1" = pr ] && [ "$2" = list ]; then echo "not json"; exit 0; fi\n'
+                             f'PATH="{real_path}"; exec gh "$@"\n', encoding="utf-8")
+    (shim / "gh").chmod(0o755)
+    out = _then_summary(ws, "MOCK-7002", "issue/MOCK-7002", env={"PATH": f"{shim}:{real_path}"})
+    assert out.returncode == 2
+    assert "stage 성공, summary 실패:" in out.stderr and f"db_pr summary {wt} --format markdown만 다시 부른다" in out.stderr
+    shown = json.loads(out.stdout)
+    assert shown["result"] == "ok" and shown["summary_error"] and "approved_hash" not in shown
+    assert (ws.job_dir("MOCK-7002") / "stage.json").is_file()
+    retry = ws.run("db_pr.py", ["summary", wt, "--format", "markdown"])      # 안내대로 summary만 다시
+    assert retry.returncode == 0 and retry.stdout.startswith("## push 전 확인")
+    ws.db_pr("discard", wt)
+
+
+def _remote_branch_appears(ws: Workspace, branch: str) -> None:
+    """다른 사람이 같은 이름의 브랜치를 먼저 올렸다 → `--lease new`가 거부된다."""
+    other = ws.other_clone()
+    git(other, "checkout", "-q", "-b", branch, "origin/main")
+    (other / "extra.txt").write_text("리뷰어\n", encoding="utf-8")
+    git(other, "add", "-A")
+    git(other, "commit", "-q", "-m", "다른 사람의 push")
+    git(other, "push", "-q", "origin", f"{branch}:refs/heads/{branch}")
+
+
+def test_publish_commit_commits_approved_message_once_and_pushes():
+    ws = Workspace()
+    wt = _staged_job(ws)
+    assert _then_summary(ws, "MOCK-7002", "issue/MOCK-7002").returncode == 0
+    state = _state(ws, "MOCK-7002")
+    assert git(wt, "rev-parse", "HEAD") == state["base_sha"], "summary까지는 커밋이 없다"
+    out = ws.db_pr(*_publish_args(ws, "MOCK-7002", "issue/MOCK-7002", "--commit"))
+    assert out["published"] is True and out["pushed"] is True
+    assert out["commit"]["committed"] is True and out["commit"]["sha"] == out["head_sha"]
+    assert git(wt, "log", "-1", "--format=%B").strip() == state["commit_message"].strip()
+    assert git(wt, "rev-parse", "HEAD^") == state["base_sha"] and git(wt, "rev-parse", "HEAD^{tree}") == state["approved_hash"]
+    assert git(ws.remote, "rev-parse", "issue/MOCK-7002") == out["head_sha"]
+    assert not (ws.job_dir("MOCK-7002") / "commit-msg.txt").exists(), "메시지 임시 파일은 지운다"
+    assert len(ws.prs()) == 1
+    ws.db_pr("discard", wt)
+
+
+def test_publish_commit_rejects_changes_after_approval_without_committing():
+    ws = Workspace()
+    wt = _staged_job(ws, "MOCK-7001", "p7-analyze-append.plan.json")
+    assert _then_summary(ws, "MOCK-7001", "issue/MOCK-7001").returncode == 0
+    args = _publish_args(ws, "MOCK-7001", "issue/MOCK-7001", "--commit")
+    (wt / "CONTRIBUTING.md").write_text("승인 뒤 수정\n", encoding="utf-8")
+    out = ws.db_pr(*args, expect=1)
+    assert out["published"] is False and out["commit"] == {"committed": False}
+    assert any("승인 뒤 파일이 바뀌었다" in p for p in out["problems"])
+    assert git(wt, "rev-parse", "HEAD") == _state(ws, "MOCK-7001")["base_sha"], "커밋하지 않았다"
+    assert git(ws.remote, "branch", "--list", "issue/MOCK-7001") == ""
+    wrong = list(args)
+    wrong[wrong.index("--approved") + 1] = "0" * 40                      # --approved가 다르면 역시 1
+    assert ws.db_pr(*wrong, expect=1)["commit"] == {"committed": False}
+    ws.db_pr("discard", wt)
+
+
+def test_publish_commit_requires_githooks_hookspath():
+    ws = Workspace()
+    wt = _staged_job(ws, "MOCK-7001", "p7-analyze-append.plan.json")
+    assert _then_summary(ws, "MOCK-7001", "issue/MOCK-7001").returncode == 0
+    git(ws.clone, "config", "core.hooksPath", "hooks")
+    out = ws.run("db_pr.py", _publish_args(ws, "MOCK-7001", "issue/MOCK-7001", "--commit"))
+    assert out.returncode == 2 and "core.hooksPath" in out.stderr and ".githooks" in out.stderr
+    assert git(wt, "rev-parse", "HEAD") == _state(ws, "MOCK-7001")["base_sha"]
+    git(ws.clone, "config", "core.hooksPath", ".githooks")
+    assert ws.db_pr(*_publish_args(ws, "MOCK-7001", "issue/MOCK-7001", "--commit"))["pushed"] is True
+    ws.db_pr("discard", wt)
+
+
+def test_publish_commit_message_with_shell_metacharacters_is_data():
+    ws = Workspace()
+    plan = load_plan("p7-analyze-append.plan.json")
+    plan["commit_message"] = plan["commit_message"] + ' $(touch INJECTED) `touch INJECTED2` "q" \'s\' ; touch INJECTED3'
+    ws.plan("MOCK-7001", plan)
+    wt = ws.wt("MOCK-7001")
+    ws.acquire("MOCK-7001")
+    assert _then_summary(ws, "MOCK-7001", "issue/MOCK-7001").returncode == 0
+    message = _state(ws, "MOCK-7001")["commit_message"]
+    assert "$(touch INJECTED)" in message
+    out = ws.db_pr(*_publish_args(ws, "MOCK-7001", "issue/MOCK-7001", "--commit"))
+    assert git(wt, "log", "-1", "--format=%B").strip() == message.strip()
+    for name in ("INJECTED", "INJECTED2", "INJECTED3"):
+        assert not list(ws.base.rglob(name)) and not (wt / name).exists() and not Path(name).exists(), name
+    assert out["commit"]["committed"] is True
+    ws.db_pr("discard", wt)
+
+
+def test_publish_commit_is_idempotent_after_lease_rejected():
+    ws = Workspace()
+    wt = _staged_job(ws, "MOCK-7001", "p7-analyze-append.plan.json")
+    assert _then_summary(ws, "MOCK-7001", "issue/MOCK-7001").returncode == 0
+    _remote_branch_appears(ws, "issue/MOCK-7001")
+    out = ws.db_pr(*_publish_args(ws, "MOCK-7001", "issue/MOCK-7001", "--commit"), expect=1)
+    assert out["pushed"] is False and out["commit"]["committed"] is True
+    sha = git(wt, "rev-parse", "HEAD")
+    remote = git(ws.remote, "rev-parse", "issue/MOCK-7001")
+    again = ws.db_pr(*_publish_args(ws, "MOCK-7001", "issue/MOCK-7001", "--commit", lease=remote))   # 올바른 lease로 재시도
+    assert again["commit"] == {"skipped": "이미 커밋됨"} and again["published"] is True
+    assert again["head_sha"] == sha == git(wt, "rev-parse", "HEAD"), "커밋을 또 만들지 않는다"
+    assert git(wt, "rev-parse", "HEAD^") == _state(ws, "MOCK-7001")["base_sha"]
+    ws.db_pr("discard", wt)
+
+
+def test_publish_and_discard_cleans_up_after_success():
+    ws = Workspace()
+    wt = _staged_job(ws)
+    assert _then_summary(ws, "MOCK-7002", "issue/MOCK-7002").returncode == 0
+    out = ws.db_pr(*_publish_args(ws, "MOCK-7002", "issue/MOCK-7002", "--commit", "--and-discard"))
+    assert out["published"] is True and out["pr"]["action"] == "created"
+    assert out["discard"]["discarded"] is True and out["discard"]["deleted_branch"] == "tt/issue/MOCK-7002"
+    assert not wt.exists() and not (ws.job_dir("MOCK-7002") / "state.json").exists()
+    assert ws.db_pr("lock", "status")["held"] is False and (ws.job_dir("MOCK-7002") / "plan.json").is_file()
+    assert git(ws.clone, "for-each-ref", "refs/heads/tt/") == ""
+
+
+def test_publish_and_discard_keeps_work_on_publish_failure():
+    ws = Workspace()
+    wt = _staged_job(ws, "MOCK-7001", "p7-analyze-append.plan.json")
+    assert _then_summary(ws, "MOCK-7001", "issue/MOCK-7001").returncode == 0
+    _remote_branch_appears(ws, "issue/MOCK-7001")
+    out = ws.db_pr(*_publish_args(ws, "MOCK-7001", "issue/MOCK-7001", "--commit", "--and-discard"), expect=1)
+    assert out["pushed"] is False
+    assert out["discard"] == {"discarded": False, "skipped": "publish 실패 — worktree·lock 보존"}
+    assert wt.is_dir() and (ws.job_dir("MOCK-7001") / "state.json").is_file()
+    assert ws.db_pr("lock", "status")["held"] is True
+    ws.db_pr("discard", wt)
+
+
+def test_publish_and_discard_reports_discard_failure_exit_2():
+    ws = Workspace()
+    wt = _staged_job(ws, "MOCK-7001", "p7-analyze-append.plan.json")
+    assert _then_summary(ws, "MOCK-7001", "issue/MOCK-7001").returncode == 0
+    git(ws.clone, "worktree", "lock", str(wt))                  # worktree remove --force가 거부한다
+    out = ws.db_pr(*_publish_args(ws, "MOCK-7001", "issue/MOCK-7001", "--commit", "--and-discard"), expect=2)
+    assert out["published"] is True and out["pr"]["url"] and len(ws.prs()) == 1
+    assert out["discard"]["discarded"] is False and out["discard"]["error"]
+    assert out["discard"]["next"] == f"PR은 만들어졌다. publish를 다시 하지 말고 db_pr discard {wt}만 다시 한다"
+    git(ws.clone, "worktree", "unlock", str(wt))
+    assert ws.db_pr("discard", wt)["discarded"] is True and not wt.exists()
+
+
+def test_ship_combined_path_matches_separate_path():
+    ws = Workspace()
+    ws.plan("MOCK-7001", "p7-analyze-append.plan.json")
+    separate = ws.ship("MOCK-7001", "issue/MOCK-7001")
+    ws2 = Workspace()
+    ws2.plan("MOCK-7001", "p7-analyze-append.plan.json")
+    combined = ws2.ship("MOCK-7001", "issue/MOCK-7001", combined=True)
+    a, b = separate["publish"], combined["publish"]
+    assert a["published"] is b["published"] is True and a["pr"]["action"] == b["pr"]["action"]
+    assert separate["summary"]["approved_hash"] == combined["summary"]["approved_hash"]   # 같은 승인 트리
+    assert b["commit"]["committed"] is True and b["discard"]["discarded"] is True
+    assert ws.remote_files("issue/MOCK-7001") == ws2.remote_files("issue/MOCK-7001")
+    assert git(ws.remote, "log", "-1", "--format=%B", "issue/MOCK-7001") == \
+        git(ws2.remote, "log", "-1", "--format=%B", "issue/MOCK-7001")
+    assert not ws2.wt("MOCK-7001").exists() and ws2.db_pr("lock", "status")["held"] is False
+
+
+# -- W5 리뷰 반영: publish --commit의 guard 검사·pre-commit 실패·이미 커밋된 경로, --and-discard 분기 ------------------
+
+
+def _approved_then(ws: Workspace, job: str, branch: str, change) -> Path:
+    """stage → (확인 화면 전) wt를 `change`로 바꾼다 → summary로 승인 해시를 만든다. 승인 해시는 바뀐 트리를 담는다."""
+    wt = _staged_job(ws, job, "p7-analyze-append.plan.json")
+    ws.stage(job, branch)
+    change(wt)
+    ws.db_pr("summary", wt)
+    return wt
+
+
+def _assert_commit_refused(ws: Workspace, wt: Path, job: str, branch: str) -> dict:
+    out = ws.db_pr(*_publish_args(ws, job, branch, "--commit", "--and-discard"), expect=1)
+    assert out["published"] is False and out["commit"] == {"committed": False}
+    assert out["discard"]["skipped"] == "publish 실패 — worktree·lock 보존"
+    assert git(wt, "rev-parse", "HEAD") == _state(ws, job)["base_sha"], "커밋하지 않았다"
+    assert git(ws.remote, "branch", "--list", branch) == "" and wt.is_dir()
+    return out
+
+
+def test_publish_commit_refuses_unmasked_pii_in_approved_tree_rule_3():
+    ws = Workspace()
+    jira = f"{DATA_DIR}/jira/MOCK-1101.yaml"
+    wt = _approved_then(ws, "MOCK-7001", "issue/MOCK-7001", lambda w: (w / jira).write_text(
+        (w / jira).read_text(encoding="utf-8").replace("접수됨", "접수됨 imei=490154203237518"), encoding="utf-8"))
+    out = _assert_commit_refused(ws, wt, "MOCK-7001", "issue/MOCK-7001")
+    text = "\n".join(out["problems"])
+    assert "마스킹 안 된 개인정보가 있다 (규칙 3)" in text and "IMEI" in text
+    assert "계획을 고쳐 3번(stage --then-summary)부터 다시 한다." in text and "직접" not in text and "add한다" not in text
+    ws.db_pr("discard", wt)
+
+
+def test_publish_commit_refuses_hand_edited_generated_file_rule_4():
+    ws = Workspace()
+    wt = _approved_then(ws, "MOCK-7001", "issue/MOCK-7001", lambda w: (w / "README.md").write_text(
+        (w / "README.md").read_text(encoding="utf-8") + "\n손으로 고친 줄\n", encoding="utf-8"))
+    out = _assert_commit_refused(ws, wt, "MOCK-7001", "issue/MOCK-7001")
+    text = "\n".join(out["problems"])
+    assert "생성 파일(README·STATS·CHANGELOG)이 원본과 맞지 않는다 (규칙 4)" in text and "README.md" in text
+    assert "계획을 고쳐 3번(stage --then-summary)부터 다시 한다." in text and "db_build.py --write" not in text
+    ws.db_pr("discard", wt)
+
+
+def test_publish_commit_reports_precommit_failure_without_pushing():
+    ws = Workspace()
+    wt = _staged_job(ws, "MOCK-7001", "p7-analyze-append.plan.json")
+    assert _then_summary(ws, "MOCK-7001", "issue/MOCK-7001").returncode == 0
+    cfg_path = ws.home / "config.yaml"
+    cfg = yaml.safe_load(cfg_path.read_text(encoding="utf-8"))
+    cfg["plugin"]["scripts_path"] = str(ws.base / "nowhere")        # pre-commit hook이 스크립트를 못 찾는다
+    cfg_path.write_text(yaml.safe_dump(cfg, allow_unicode=True), encoding="utf-8")
+    out = ws.db_pr(*_publish_args(ws, "MOCK-7001", "issue/MOCK-7001", "--commit", "--and-discard"), expect=1)
+    assert out["published"] is False and out["commit"] == {"committed": False}
+    assert any("git commit 실패" in p and "scripts_path" in p for p in out["problems"]), out["problems"]
+    assert out["discard"]["discarded"] is False
+    assert git(wt, "rev-parse", "HEAD") == _state(ws, "MOCK-7001")["base_sha"]
+    assert git(ws.remote, "branch", "--list", "issue/MOCK-7001") == "" and not ws.prs()
+    assert not (ws.job_dir("MOCK-7001") / "commit-msg.txt").exists()
+    ws.db_pr("discard", wt)
+
+
+def test_publish_commit_checks_tree_of_already_committed_path():
+    ws = Workspace()
+    wt = _staged_job(ws, "MOCK-7001", "p7-analyze-append.plan.json")
+    assert _then_summary(ws, "MOCK-7001", "issue/MOCK-7001").returncode == 0
+    args = _publish_args(ws, "MOCK-7001", "issue/MOCK-7001", "--commit")
+    (wt / "CONTRIBUTING.md").write_text("승인 뒤 수정\n", encoding="utf-8")
+    ws.commit("MOCK-7001")                                           # 승인 해시와 다른 트리를 이미 커밋했다
+    out = ws.db_pr(*args, expect=1)
+    assert out["published"] is False and out["commit"] == {"skipped": "이미 커밋됨"}
+    assert any("커밋 트리가 승인 해시와 다르다" in p for p in out["problems"])
+    assert git(ws.remote, "branch", "--list", "issue/MOCK-7001") == "" and not ws.prs()
+    ws.db_pr("discard", wt)
+
+
+def test_publish_and_discard_keeps_work_when_only_pr_creation_fails(tmp_path):
+    ws = Workspace()
+    wt = _staged_job(ws, "MOCK-7001", "p7-analyze-append.plan.json")
+    assert _then_summary(ws, "MOCK-7001", "issue/MOCK-7001").returncode == 0
+    shim = tmp_path / "bin"
+    shim.mkdir()
+    real_path = mock_env.env_with_mocks(plugin_root=ws.root)["PATH"]
+    (shim / "gh").write_text('#!/bin/sh\nif [ "$1" = pr ] && [ "$2" = create ]; then echo "boom" >&2; exit 1; fi\n'
+                             f'PATH="{real_path}"; exec gh "$@"\n', encoding="utf-8")
+    (shim / "gh").chmod(0o755)
+    out = ws.db_pr(*_publish_args(ws, "MOCK-7001", "issue/MOCK-7001", "--commit", "--and-discard"),
+                   env={"PATH": f"{shim}:{real_path}"}, expect=2)
+    assert out["published"] is True and out["pushed"] is True and "gh_error" in out and not ws.prs()
+    assert out["discard"]["discarded"] is False
+    assert out["discard"]["skipped"] == "PR 생성 실패 — worktree·lock 보존"
+    assert f"db_pr discard {wt}" in out["discard"]["next"] and "publish" in out["discard"]["next"]
+    assert wt.is_dir() and (ws.job_dir("MOCK-7001") / "state.json").is_file()
+    assert ws.db_pr("lock", "status")["held"] is True
+    assert git(ws.remote, "branch", "--list", "issue/MOCK-7001") != ""      # push는 됐다
+    ws.db_pr("discard", wt)
+
+
+def test_guard_and_db_pr_share_rule_3_4_deny_messages():
+    """guard.py와 db_pr publish --commit의 규칙 3·4 문구는 `checks.guard_deny_messages` 하나에서 나온다 (drift 방지)."""
+    import db_pr
+    from common import checks
+
+    S = checks.StepResult
+    steps = [S("mask", 1, data={"detections": [{"path": "a.yaml", "line": 3, "kind": "IMEI"}]}),
+             S("cache", 1, data={"paths": [".cache/x", ".cache/y"]}),
+             S("generated_staged", 1, data={"paths": ["README.md"]}),                     # script None = actions-build
+             S("generated", 1, script="db_build.py", data={"problems": [{"path": "README.md", "status": "stale"}]})]
+    assert checks.guard_deny_messages(steps) == [          # guard.py의 기존 문구(바이트 동일)
+        "staged 변경에 마스킹 안 된 개인정보가 있다 (규칙 3): a.yaml:3 IMEI. mask_pii로 마스킹한 뒤 다시 add한다.",
+        ".cache/는 커밋하지 않는다 (규칙 4): .cache/x, .cache/y",
+        "ci_mode: actions-build — 생성 파일은 머지 후 봇이 만든다. staged에서 뺀다 (규칙 4): README.md",
+        "생성 파일(README·STATS·CHANGELOG)이 원본과 맞지 않는다 (규칙 4): README.md (stale). "
+        "직접 고치지 말고 db_build.py --write로 다시 만든 뒤 add한다."]
+    tail = db_pr._GUARD_FIX_TAIL
+    assert tail == "계획을 고쳐 3번(stage --then-summary)부터 다시 한다."
+    swapped = checks.guard_deny_messages(steps, fix_tail=tail)
+    assert [m.endswith(tail) for m in swapped] == [True, False, True, True]
+    assert swapped[0].startswith("staged 변경에 마스킹 안 된 개인정보가 있다 (규칙 3): a.yaml:3 IMEI. ")
+    assert swapped[1] == ".cache/는 커밋하지 않는다 (규칙 4): .cache/x, .cache/y"
+    for path in (REPO / "plugin/scripts/guard.py", REPO / "plugin/scripts/db_pr.py"):   # 문구를 다시 복제하지 않았다
+        src = path.read_text(encoding="utf-8")
+        assert "guard_deny_messages" in src and "마스킹 안 된 개인정보" not in src and "원본과 맞지 않는다" not in src, path
+
+
+def test_publish_commit_rejects_non_mapping_or_broken_issue_db_config_as_usage_error():
+    ws = Workspace()
+    wt = _staged_job(ws, "MOCK-7001", "p7-analyze-append.plan.json")
+    assert _then_summary(ws, "MOCK-7001", "issue/MOCK-7001").returncode == 0
+    for text, needle in (("- 목록\n- 이다\n", "매핑"), ("a: [unclosed\n", "YAML")):
+        (wt / "issue-db.config.yaml").write_text(text, encoding="utf-8")
+        state = _state(ws, "MOCK-7001")
+        state["approved_hash"] = _approved_now(wt)                 # 바뀐 트리를 승인한 것으로 맞춘다 (guard 단계까지 가려고)
+        (ws.job_dir("MOCK-7001") / "state.json").write_text(json.dumps(state), encoding="utf-8")
+        out = ws.run("db_pr.py", _publish_args(ws, "MOCK-7001", "issue/MOCK-7001", "--commit"))
+        assert out.returncode == 2 and needle in out.stderr and "Traceback" not in out.stderr, (text, out.stderr[-400:])
+        assert git(wt, "rev-parse", "HEAD") == state["base_sha"]
+    ws.db_pr("discard", wt)
+
+
+def _approved_now(wt: Path) -> str:
+    import db_pr
+    return db_pr.approved_hash(wt)
+
+
+# -- W9: snapshot 메타·my-prs -----------------------------------------------------------------------
+
+
+def test_snapshot_reports_previous_sha_base_change_and_writes_meta_best_effort():
+    ws = Workspace()
+    ws.db_pr("lock", "acquire", "sync", "--command", "sync")
+    first = ws.db_pr("snapshot", "--job", "sync")
+    assert first["previous_sha"] is None and first["base_sha_changed"] is None and first["snapshot_meta_written"] is True
+    meta = json.loads((ws.work / "snapshot.json").read_text(encoding="utf-8"))
+    assert meta["sha"] == first["snapshot_sha"] and meta["base"] == "main" and meta["at"].endswith("Z")
+    same = ws.db_pr("snapshot", "--job", "sync")
+    assert same["previous_sha"] == first["snapshot_sha"] and same["base_sha_changed"] is False
+    new_sha = ws.push_main(lambda p: (p / "NOTE.md").write_text("main 변경\n", encoding="utf-8"))
+    moved = ws.db_pr("snapshot", "--job", "sync")
+    assert moved["snapshot_sha"] == new_sha and moved["previous_sha"] == first["snapshot_sha"]
+    assert moved["base_sha_changed"] is True
+    # 손상된 메타는 "이전 없음"으로 본다
+    (ws.work / "snapshot.json").write_text("{깨짐", encoding="utf-8")
+    broken = ws.db_pr("snapshot", "--job", "sync")
+    assert broken["previous_sha"] is None and broken["base_sha_changed"] is None and broken["snapshot_meta_written"] is True
+    # 이전 메타의 base가 지금 base와 다르면 비교하지 않는다
+    meta_path = ws.work / "snapshot.json"
+    meta_path.write_text(json.dumps({"sha": new_sha, "base": "release", "at": "2026-01-01T00:00:00Z"}), encoding="utf-8")
+    other_base = ws.db_pr("snapshot", "--job", "sync")
+    assert other_base["previous_sha"] is None and other_base["base_sha_changed"] is None
+    # 메타를 쓸 수 없어도 snapshot은 성공한다 (best-effort)
+    (ws.work / "snapshot.json").unlink()
+    (ws.work / "snapshot.json").mkdir()
+    blocked = ws.db_pr("snapshot", "--job", "sync")
+    assert blocked["snapshot_meta_written"] is False and blocked["snapshot_sha"] == new_sha
+    ws.db_pr("lock", "release", "sync")
+
+
+def _listing(*roots: Path) -> list:
+    out = []
+    for root in roots:
+        for path in sorted(root.rglob("*")):
+            st = path.stat()    # 디렉토리도 센다
+            out.append((str(path), path.is_dir(), 0 if path.is_dir() else st.st_size, 0 if path.is_dir() else st.st_mtime_ns))
+    return out
+
+
+def test_my_prs_lists_only_my_open_prs_with_base_moved_and_is_read_only():
+    ws = Workspace()
+    for key in ("MOCK-7001", "MOCK-7002"):
+        ws.plan(key, "p7-analyze-append.plan.json" if key == "MOCK-7001" else "p7-analyze-unresolved.plan.json")
+        ws.ship(key, f"issue/{key}")
+    prs_path = ws.gh_state / "prs.json"
+    state = json.loads(prs_path.read_text(encoding="utf-8"))
+    state["prs"][1]["author"] = "other-user"           # 다른 사람의 PR은 목록에 없다
+    prs_path.write_text(json.dumps(state), encoding="utf-8")
+    git(ws.clone, "fetch", "-q", "origin")
+
+    before = (_listing(ws.work), git(ws.clone, "for-each-ref"), git(ws.clone, "status", "--porcelain"))
+    out = ws.db_pr("my-prs")
+    assert out["base"] == "main" and out["warnings"] == [] and "fetch 없이" in out["note"]
+    assert [(p["number"], p["head"], p["base_moved"]) for p in out["prs"]] == [(1, "issue/MOCK-7001", False)]
+    assert set(out["prs"][0]) == {"number", "title", "url", "head", "base_moved"}
+
+    ws.push_main(lambda p: (p / "NOTE.md").write_text("main 변경\n", encoding="utf-8"))
+    assert ws.db_pr("my-prs")["prs"][0]["base_moved"] is False      # fetch 전: 로컬 ref 기준
+    git(ws.clone, "fetch", "-q", "origin")
+    assert ws.db_pr("my-prs")["prs"][0]["base_moved"] is True
+    git(ws.clone, "update-ref", "-d", "refs/remotes/origin/issue/MOCK-7001")
+    assert ws.db_pr("my-prs")["prs"][0]["base_moved"] is None        # 미fetch 브랜치
+    assert not (ws.work / "session.lock").exists()
+
+    git(ws.clone, "fetch", "-q", "origin")
+    after = (_listing(ws.work), git(ws.clone, "for-each-ref"), git(ws.clone, "status", "--porcelain"))
+    # 읽기 전용: 위의 fetch·push_main 외에 my-prs가 바꾼 것은 없다 (작업 디렉토리·워킹 트리)
+    assert after[0] == before[0] and after[2] == before[2]
+
+
+def test_my_prs_gh_failure_is_a_warning_and_missing_config_stops_with_2():
+    ws = Workspace()
+    out = ws.db_pr("my-prs", env={"MOCK_GH_FAIL_LIST": "1"})
+    assert out["prs"] is None and out["base"] == "main" and "열린 PR을 확인하지 못했다" in out["warnings"][0]
+    for payload in ("1", "null", "{}", "not json"):     # JSON이 아니거나 목록이 아닌 gh 출력도 경고 하나, 종료 0
+        bad = ws.db_pr("my-prs", env={"MOCK_GH_BAD_JSON": payload})
+        assert bad["prs"] is None and len(bad["warnings"]) == 1 and "열린 PR을 확인하지 못했다" in bad["warnings"][0], payload
+    pre = ws.run("db_pr.py", ["preflight", "--branch", "issue/MOCK-7001", "--search", "MOCK-7001"],
+                 env={"MOCK_GH_BAD_JSON": "not json"})
+    assert pre.returncode == 0 and "Traceback" not in pre.stderr
+    out = json.loads(pre.stdout)
+    assert out["open_prs"] is None and "JSON 아님" in out["warnings"][0]
+    from runner import tmp
+    proc = run("db_pr.py", ["my-prs"], env={"TELEPHONY_TRIAGE_HOME": tmp("tt-nohome-") / "h"})
+    assert proc.returncode == 2 and "setup" in proc.stderr
+    plain = tmp("tt-notclone-")
+    ws.run("config.py", ["set", "issue_db.path", plain])
+    assert ws.run("db_pr.py", ["my-prs"]).returncode == 2
+
+
+def test_naive_timestamp_lock_is_corrupt_not_a_traceback():
+    ws = Workspace()
+    lock = ws.work / "session.lock"
+    lock.write_text(json.dumps({"job": "J", "started_at": "2026-01-01T00:00:00", "updated_at": "2026-01-01T00:00:00"}),
+                    encoding="utf-8")
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    from common import session_lock as sl
+    try:
+        sl.read(ws.work)
+        raise AssertionError("naive 시각은 손상으로 봐야 한다")
+    except sl.LockError:
+        pass
+    proc = ws.run("db_pr.py", ["lock", "status"])
+    assert proc.returncode == 2 and "session.lock" in proc.stderr and "Traceback" not in proc.stderr

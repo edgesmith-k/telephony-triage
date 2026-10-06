@@ -7,6 +7,7 @@
 | 파일 | 내용 |
 |---|---|
 | `contracts.md` | **공통 계약 단일 원본**: 스크립트 CLI·`--db`·lock·종료 코드·작업 계획/op/drift·fixture·브랜치·renumber·상태 값·기존 자산 연결 |
+| `contracts-cli.md` | **생성 파일, 직접 수정 금지** (`tools/gen_contracts.py --write`): 스크립트별 서브커맨드·옵션(`build_parser()`)과 `triage.py run` 출력 키(`plugin/schemas/output/analysis.schema.json`). 출력·동작은 `contracts.md §3.2` |
 | `01-architecture.md` | §1 목적과 범위, 레포 2개, 플러그인 레포 구조, 스크립트 책임 매트릭스 |
 | `02-config.md` | 사용자 config·setup, `issue-db.config.yaml` |
 | `03-issue-db.md` | 분류·카테고리 경계, 디렉토리·파일 형식·규칙·README·해결 상태·연관 |

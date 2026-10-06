@@ -49,8 +49,8 @@ def test_stage_plan_exact_args():
         ("mask", "mask_pii.py", ["--check", "--changed", "origin/main", "--db", DB]),
         ("ids", "db_add.py", ["check-ids", "--db", DB]),
         ("regress", "db_regress.py", ["--all", "--db", DB]),
-        ("verify", "db_verify.py", ["rules", "--plan", "/job/plan.json", "--db", DB, "--regress-json",
-                                    "/job/regress.json"]),
+        ("verify", "db_verify.py", ["rules", "--plan", "/job/plan.json", "--db", DB, "--verbose",
+                                    "--regress-json", "/job/regress.json"]),    # stage.json에는 전체를 남긴다
     ]
 
 

@@ -8,7 +8,7 @@
 
 사용자의 문장을 **고치지 않고 그대로** 넘긴다. 조사·불용어 정리와 별칭 확장은 스크립트가 한다. 임의로 키워드로 줄이면 맞는 단어를 놓친다.
 
-`S/db_search.py --db SNAP "<문장>" --limit 10` (SNAP = `<work_dir>/_snapshot`, `work_dir`는 `config.py show`의 값).
+`S/db_search.py --db SNAP "<문장>" --limit 10 --brief` (SNAP = `<work_dir>/_snapshot`, `work_dir`는 `config.py show --keys work_dir`의 값).
 스냅샷이 없으면(`sync`를 한 적이 없음) `--db`를 빼고(cwd의 이슈 DB 또는 config의 clone) "최신 main 기준이 아닐 수 있으니 `sync`를 권한다"고 알린다.
 문장에 Jira 키나 유형·원인 ID가 있으면 그 키로도 한 번 더 검색한다(정확 일치).
 
