@@ -1688,6 +1688,25 @@ def test_my_prs_lists_only_my_open_prs_with_base_moved_and_is_read_only():
     assert after[0] == before[0] and after[2] == before[2]
 
 
+def test_my_prs_compares_against_the_prs_own_base():
+    """base_moved는 config base가 아니라 PR의 baseRefName 기준이다 (W9 보류 → W10)."""
+    ws = Workspace()
+    ws.plan("MOCK-7001", "p7-analyze-append.plan.json")
+    ws.ship("MOCK-7001", "issue/MOCK-7001")
+    git(ws.other_clone(), "push", "-q", "origin", "main:refs/heads/release")
+    prs_path = ws.gh_state / "prs.json"
+    state = json.loads(prs_path.read_text(encoding="utf-8"))
+    state["prs"][0]["baseRefName"] = "release"
+    prs_path.write_text(json.dumps(state), encoding="utf-8")
+
+    ws.push_main(lambda p: (p / "NOTE.md").write_text("main 변경\n", encoding="utf-8"))
+    git(ws.clone, "fetch", "-q", "origin")
+    assert ws.db_pr("my-prs")["prs"][0]["base_moved"] is False     # main은 움직였지만 PR의 base(release)는 그대로
+    ws.push_branch("release", lambda p: (p / "NOTE.md").write_text("release 변경\n", encoding="utf-8"))
+    git(ws.clone, "fetch", "-q", "origin")
+    assert ws.db_pr("my-prs")["prs"][0]["base_moved"] is True
+
+
 def test_my_prs_gh_failure_is_a_warning_and_missing_config_stops_with_2():
     ws = Workspace()
     out = ws.db_pr("my-prs", env={"MOCK_GH_FAIL_LIST": "1"})

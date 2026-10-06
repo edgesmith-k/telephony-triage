@@ -77,9 +77,9 @@ def _load_plan_checked(plan_path: Path, repo: Path, base_sha: str) -> dict:
 # -- preflight -----------------------------------------------------------------------------
 
 
-def _open_prs(ctx: Ctx, extra: list[str], runner) -> tuple[list | None, str | None]:
+def _open_prs(ctx: Ctx, extra: list[str], runner, fields: str = "number,title,url,headRefName") -> tuple[list | None, str | None]:
     """`gh pr list <extra> --state open` → (PR 목록 또는 None, 경고 또는 None). preflight·my-prs 공유."""
-    proc = runner(ctx, ["pr", "list", *extra, "--state", "open", "--json", "number,title,url,headRefName"], ctx.repo)
+    proc = runner(ctx, ["pr", "list", *extra, "--state", "open", "--json", fields], ctx.repo)
     if proc.returncode == 0:
         try:
             found = json.loads(proc.stdout or "[]")
@@ -98,7 +98,7 @@ def my_prs(ctx: Ctx) -> dict:
     ctx.require_repo()
     note = "base_moved는 fetch 없이 로컬 원격 ref(origin/*) 기준이다. null이면 그 ref가 없다(미fetch)."
     try:
-        found, warning = _open_prs(ctx, ["--author", "@me"], _gh)
+        found, warning = _open_prs(ctx, ["--author", "@me"], _gh, "number,title,url,headRefName,baseRefName")
     except UsageError as exc:    # gh 시간 초과도 경고로 돌린다 (sync는 계속한다)
         found, warning = None, f"열린 PR을 확인하지 못했다 (gh): {str(exc)[:200]}"
     if found is None:
@@ -106,7 +106,7 @@ def my_prs(ctx: Ctx) -> dict:
     prs = []
     for pr in found:
         head = f"refs/remotes/origin/{pr.get('headRefName')}"
-        base = f"refs/remotes/origin/{ctx.base}"
+        base = f"refs/remotes/origin/{pr.get('baseRefName') or ctx.base}"   # PR의 base, 없으면 config base
         moved = None
         if _ref_sha(ctx.repo, head) and _ref_sha(ctx.repo, base):
             code = _git(ctx.repo, "merge-base", "--is-ancestor", base, head, check=False).returncode

@@ -184,6 +184,7 @@ def cmd_pr(argv: list[str]) -> int:
             "title": args.title,
             "body": body,
             "base": args.base,
+            "baseRefName": args.base,
             "branch": branch,
             "headRefName": branch,
             "headRefOid": head_sha(),
