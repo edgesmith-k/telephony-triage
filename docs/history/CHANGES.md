@@ -649,3 +649,34 @@
 - 스킬: `reference/search.md`(단일 원본, 읽기 전용: 문장을 그대로 `db_search`, 0건이면 한 번만 명사로 재검색, 이슈 번호 줄 + 유형 > 원인 표). `commands/search.md`는 이를 가리키는 포인터. `SKILL.md`는 표 한 줄 병합 + 8192바이트 안에서 문구 정리(안전 규칙은 유지).
 - 테스트·eval: `tests/test_db_search.py` 7개 추가(증상 문장, 다중 단어, 불용어만, 옛 순서 접두, 별칭 데이터 구동, 정규화, glossary). eval 53(증상 자연어)·54(일치 없음)과 트리거 질의 1개 추가(52 → 54개).
 - 부작용: `triage.py` 후보 없음 절의 `search_hits`(`db_search` 호출)에 부분 일치 꼬리가 섞일 수 있다. 참고용이며 점수·분류에 쓰지 않는다.
+
+## 3C 행동 eval 52개 (2026-10-05)
+
+사외에서 스킬 행동 eval 52개(53·54는 3C 뒤 추가분 제외)를 `run.py --mode plugin`으로 실행했다. 보고서: `docs/history/eval-3c-2026-10-05.md`.
+
+- **Sonnet 52개**: 전 항목 통과 **36/52**, assertion 328/351(**93.4%**), 비용 **$18.28**(평균 $0.35·69초). 안전 위반 **0**(80회 전체). 한도·인증·API 오류 0건, 미실행 없음.
+- **Opus 재실행**: Sonnet 실패 중 (c)·혼합 14개만 돌려 **11/14** 통과, $10.62(같은 14개 Sonnet $4.18의 약 2.5배). Sonnet 재실행(같은 14개)은 3/14, $4.04.
+- **실패 분류**: a 환경·하네스·eval 정의(R4 응답 규칙 공백, 레포 `run.py` 직접 실행, 채점기 오탐), b 스킬 문구·스크립트(거부 뒤 새 유형 누락, 번호 재할당 설명 없음, drift 계획 값 없음, `error_events` 요청·오류 없음, SKILL 문구 삭제), c 모델 능력(결정적 줄 누락, 질문 전 timeline 읽기, 계획 `ops` 키 오류).
+- **당시 흐름별 권장**: verify-fix는 계획 형식 수정 전까지 Opus, 5-2 탐색은 Opus 쪽이 낫다, 리포트 설명 품질도 Opus가 낫다. analyze·record·fix-submitted·sync-pr은 Sonnet.
+- **정정**: (1) Jira 매핑이 비었을 때 멈추는 문구(eval 39)는 X4가 아니라 **RF-1**에서 SKILL.md에서 삭제됐다. (2) 설정 확인 메시지(config check)는 스크립트가 이미 냈지만 triage가 버리고 있었다.
+- 원문 통독은 3C 보고서 수동 집계 8/52였다(3D에서 현재 지표 10/52로 다시 계산).
+
+## 3D 3C 발견 수정 (2026-10-05)
+
+3C에서 나온 b·a 항목을 고쳤다. 보고서: `docs/history/eval-3d-2026-10-05.md`.
+
+- **3D-A (`c0278ee`)**: 계획 형식 검사(`계획 형식 오류`, `_err_brief`로 짧게 표시) / drift에 `plan_value` / 번호 재할당 설명용 `ids_at_base`·`expected_at_base` / `error_events`에 `request`·`error` / 읽기 전용 안내 `read_only_hint` / `step_anchor.outside_errors`(구간 밖 오류 설명). `db_pr.py`·`dbadd/drift.py`·`db_summary.py`·`triage.py`, `contracts.md`·`07-workflow.md` 갱신.
+- **3D-B (`283c485`)**: SKILL.md·`reference/`(explore·verify·write-flow) 문구 복구·정리.
+- **3D-C (`4bbda4e`, `1db990c`)**: eval 하네스·채점·응답 규칙. 원문 통독 지표에서 cut fixture(마스킹된 근거 구간)를 뺌.
+- **`tools/related_tests.py` (`ea4fbf9`)**: 바뀐 파일에서 관련 테스트를 고르고(`--base`·`--files`), `--run`은 pytest와 `check_boundary.py`를 실행한다. **새 테스트 정책**: 기본은 `related_tests.py --run`, 전체 테스트는 도구가 full이라 할 때·Z 직전·요청 시만(`e7c8ede`, `11-phases.md §11.0`).
+- **Sonnet 재실행(같은 26개, `3d-sonnet`)**: 전 항목 통과 12→**18/26**, assertion 150/173→**165/173**(95.4%), 지정 eval 목표 13/19(기준 15/19, 미달), 원문 통독 5→**8/26**(악화), 안전 위반 0, 비용 **$9.45**. 회귀 21·40·47. 남은 문제 제안(b-1~6, a-1~3)이 3E의 입력이다. 보고서: `docs/history/eval-3d-2026-10-05.md`.
+
+## 3E 결정적 줄 구조화 (2026-10-06)
+
+3D 제안(b-1~6, a-1~3)을 모델 문구가 아닌 스크립트·hook 구조로 옮겼다.
+
+- **3E-A (`290f6a7`)**: `analysis.json`의 `must_show`(꼭 보여야 할 줄을 우선순위로, 마지막에 160자 절단·앞 4개), 미수집 태그 `uncollected_tags`(`parse_logcat` 최상위·`logs.uncollected_tags` ≤3), `db_summary`의 `fix_changes`와 PR 본문 '수정 상태 변경' 절, 리포트 심층 분석 칸(분석 스킬 설정 ask/never/없음), 탐색 분석은 동의 뒤 `triage.py explore <KEY>`가 `timeline.md`를 만든다(run은 `explore-input.json`만). `CACHE_FORMAT` 2.
+- **3E-B (`f937db6`, `250b1dd`)**: guard 규칙 10(로그 원문·zip·bugreport 통독 `cat`·`head -c`·`unzip -p` 등 차단, Hook 10종), `grade.py` e40 NameError 수정·`raw_reads_blocked` 지표·e46/e47 순서 채점(`explore` 뒤 timeline 열람), `run.py` 결과 파일 대체 생성(`outputs_derived`)·자식 env 정리·서명(attribution) 끔.
+- **3E-C (`fcfec4d`)**: SKILL·reference 문구(`must_show` 그대로, 탐색은 `triage.py explore` 뒤, 수정 상태 변경 절), `.expect.yaml`은 선택, `14-site.md` S1 확인 항목 추가.
+- 테스트: **734 passed**.
+- Sonnet 재실행: (결과 대기)

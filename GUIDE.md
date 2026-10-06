@@ -347,6 +347,13 @@ claude mcp list               # Jira MCP 사용자 범위 등록 확인
 - 가장 가까운 카테고리에 태그와 함께 넣어 기록.
 - 같은 성격이 3개 이상 쌓이면 메인테이너가 새 카테고리 PR.
 
+### 모델 선택 (3C~3E eval 근거)
+
+- Sonnet 기본: analyze·record·fix-submitted·sync-pr·search·5-1 분석 스킬.
+- verify-fix: 3E 재실행 결과에 따라 정한다. `- verify-fix: (3E 결과 대기)`
+- 5-2 탐색은 Sonnet. 가설 품질이 중요하면 Opus를 고른다.
+- 바꾸는 법: `/model`. 커맨드 frontmatter `model` 고정은 사내 S1 확인 뒤(`14-site.md` S1).
+
 ### 팀 운영
 | 누가 | 무엇을 |
 |---|---|
