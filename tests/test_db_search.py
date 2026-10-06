@@ -247,6 +247,76 @@ def test_failed_step_is_searchable_and_shown_only_when_present():
     assert found["results"][0].get("failed_step") in (None, "3 | Enable data")
 
 
+# --- S6: 증상 문장 검색 (단어별·별칭·순위) ---------------------------------------------------------------------
+
+def _ids(found: dict) -> list[str]:
+    return [r.get("id") or r.get("key") for r in found["results"]]
+
+
+def test_symptom_sentence_finds_data_issue_with_jira_numbers():
+    found = run_json("db_search.py", ["--db", SAMPLE, "데이터 안 붙어, 이런 이슈 있었어? 이슈 번호 알려줘", "--limit", "10"])
+    assert found["kind"] == "keyword" and [t["term"] for t in found["terms"]] == ["데이터", "붙어"]
+    first = found["results"][:3]
+    assert [r["id"] for r in first] == ["DATA-001", "DATA-001-01", "DATA-001-02"]
+    assert all(r["matched"] == ["데이터", "붙어"] and r["phrase"] is False for r in first)
+    assert not any(i.startswith(("SIM-", "SMS-")) for i in _ids(found))
+    assert not any(r["kind"] == "jira" for r in found["results"])
+    assert first[0]["jira"] == ["MOCK-1104", "MOCK-1103", "MOCK-1102", "MOCK-1101"]
+    assert first[1]["jira"] == ["MOCK-1102", "MOCK-1101"] and first[1]["jira_latest"] == "2026-09-12"
+
+
+def test_multiword_query_keeps_phrase_hit_first_and_filters_weak_hits():
+    found = run_json("db_search.py", ["--db", SAMPLE, "IMS 등록 실패", "--limit", "10"])
+    assert _ids(found)[:4] == ["MOCK-2101", "IMS-001", "CALL-001-01", "IMS-001-01"]
+    assert found["results"][0]["phrase"] is True
+    assert "SMS-001" not in _ids(found)
+
+
+def test_stopword_only_query_has_no_terms_and_no_results():
+    found = run_json("db_search.py", ["--db", SAMPLE, "이런 이슈 있었어?"])
+    assert found["terms"] == [] and found["results"] == []
+    none = run_json("db_search.py", ["--db", SAMPLE, "eSIM 다운로드가 안 돼, 이런 이슈 있었어?"])
+    assert none["results"] == []
+
+
+def test_single_term_keeps_old_order_as_prefix():
+    for query in ("IMS", "로밍", "SIM", "않음", "실패"):
+        found = run_json("db_search.py", ["--db", SAMPLE, query, "--limit", "50"])
+        old = [r for r in found["results"] if r["phrase"]]
+        assert old and found["results"][: len(old)] == old, query
+    assert _ids(run_json("db_search.py", ["--db", SAMPLE, "로밍"]))[0] == "DATA-001-02"
+
+
+def test_search_aliases_come_from_glossary_data():
+    db = copy_db()
+    plain = run_json("db_search.py", ["--db", db, "먹통"])
+    assert plain["terms"] == [{"term": "먹통", "aliases": []}] and plain["results"] == []
+    edit(db / "GLOSSARY.md", "| 실패, fail | 실패, fail |", "| 실패, fail | 실패, fail |\n| 먹통 | 서비스 |")
+    found = run_json("db_search.py", ["--db", db, "먹통"])
+    assert found["terms"][0]["aliases"] == ["서비스"] and found["results"][0]["id"] == "NETWORK-001"
+    text = (db / "GLOSSARY.md").read_text(encoding="utf-8")
+    start = text.index("## 검색 별칭")
+    (db / "GLOSSARY.md").write_text(text[:start] + text[text.index("## 상태 용어"):], encoding="utf-8")
+    assert run_json("db_search.py", ["--db", db, "심 인식"])["terms"] == [{"term": "인식", "aliases": []}]
+
+
+def test_particles_and_negation_prefix_are_normalised():
+    found = run_json("db_search.py", ["--db", SAMPLE, "데이터가 안붙어요"])
+    assert [t["term"] for t in found["terms"]] == ["데이터", "붙어요"]
+    assert found["terms"][1]["aliases"] and found["results"][0]["id"] == "DATA-001"
+    assert run_json("db_search.py", ["--db", SAMPLE, "안테나"])["terms"][0]["term"] == "안테나"
+
+
+def test_glossary_table_reader():
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    from common import glossary
+    rows = glossary.table(SAMPLE, "검색 별칭")
+    assert ["붙, 접속, attach", "연결, SETUP_DATA_CALL"] in rows and all(len(r) == 2 for r in rows)
+    assert glossary.table(SAMPLE, "없는 섹션") == [] and glossary.table(SAMPLE / "nope", "검색 별칭") == []
+    assert (["붙", "접속", "attach"], ["연결", "setup_data_call"]) in glossary.search_aliases(SAMPLE)
+    assert any(row[0] == "콜이 끊김" for row in glossary.table(SAMPLE, "표준 용어"))
+
+
 if __name__ == "__main__":
     import pytest
 

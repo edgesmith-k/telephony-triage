@@ -16,11 +16,13 @@ import fnmatch
 import json
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 import yaml
 
 HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE.parents[1] / "plugin" / "scripts"))   # guard 규칙 10의 통독 판정을 지표가 그대로 쓴다
 
 
 def git(repo, *args) -> str:
@@ -37,6 +39,10 @@ def _strip_heredocs(cmd: str) -> str:
     return _HEREDOC_RE.sub("<<heredoc", cmd)
 
 
+class _Manual(Exception):
+    """자동 판정할 근거가 없다: 수동 채점으로 넘긴다."""
+
+
 def _read(path: Path) -> str:
     return path.read_text(encoding="utf-8") if path.is_file() else ""
 
@@ -48,6 +54,10 @@ class Ctx:
         self.env_dir, self.run = env_dir, run_dir
         self.remote = Path(self.env["remote"])
         self.work = Path(self.env["work_dir"])
+        try:
+            self.execution = json.loads(_read(run_dir / "execution.json") or "{}")
+        except ValueError:
+            self.execution = {}
         out = run_dir / "outputs"
         self.transcript = (out / "transcript.md").read_text(encoding="utf-8") if (out / "transcript.md").is_file() else ""
         self.commands = (out / "commands.md").read_text(encoding="utf-8") if (out / "commands.md").is_file() else ""
@@ -81,18 +91,45 @@ class Ctx:
 
     def tool_uses(self):
         """events.jsonl의 assistant tool_use를 [(이름, 입력)]으로. 기록이 없으면 None."""
+        seq = self.seq()
+        if seq is None:
+            return None
+        return [(e["name"], e["input"]) for e in seq if e["kind"] == "tool"]
+
+    def seq(self):
+        """events.jsonl을 순서대로 [{kind:"text",text} | {kind:"tool",id,name,input,result,error}]로. 기록이 없으면 None.
+        tool_use는 id가 같은 tool_result(user 이벤트)와 짝지어 result(문자열)·error(bool)를 채운다."""
+        if getattr(self, "_seq", None) is not None:
+            return self._seq
         p = self.run / "events.jsonl"
         if not p.is_file():
             return None
-        out = []
+        out, by_id = [], {}
         for raw in p.read_text(encoding="utf-8", errors="replace").splitlines():
             try:
                 ev = json.loads(raw)
             except ValueError:
                 continue
-            if ev.get("type") == "assistant":
-                out += [(c.get("name") or "", c.get("input") or {}) for c in (ev.get("message") or {}).get("content") or []
-                        if isinstance(c, dict) and c.get("type") == "tool_use"]
+            content = (ev.get("message") or {}).get("content")
+            if not isinstance(content, list):
+                continue
+            for c in content:
+                if not isinstance(c, dict):
+                    continue
+                if ev.get("type") == "assistant" and c.get("type") == "tool_use":
+                    e = {"kind": "tool", "id": c.get("id"), "name": c.get("name") or "", "input": c.get("input") or {},
+                         "result": "", "error": False}
+                    out.append(e)
+                    if e["id"]:
+                        by_id[e["id"]] = e
+                elif ev.get("type") == "assistant" and c.get("type") == "text":
+                    out.append({"kind": "text", "text": str(c.get("text") or "")})
+                elif ev.get("type") == "user" and c.get("type") == "tool_result" and c.get("tool_use_id") in by_id:
+                    body = c.get("content")
+                    if isinstance(body, list):
+                        body = "\n".join(str(b.get("text", "")) for b in body if isinstance(b, dict))
+                    by_id[c["tool_use_id"]].update(result=str(body or ""), error=bool(c.get("is_error")))
+        self._seq = out
         return out
 
     def opened(self, *names):
@@ -103,14 +140,91 @@ class Ctx:
             return [n for n in names if re.search(r"\b(cat|head|tail|less|sed|awk|jq|grep)\b[^|\n]*" + re.escape(n), self.invoked)]
         hits = []
         for name, inp in uses:
-            if name == "Read" and Path(str(inp.get("file_path", ""))).name in names:
-                hits.append(Path(inp["file_path"]).name)
-            elif name == "Bash":
-                cmd = str(inp.get("command", ""))
-                if re.search(r"\b(cat|head|tail|less|sed|awk|jq|grep|python3?)\b", cmd) \
-                        and "triage.py" not in cmd and "parse_logcat.py" not in cmd:
-                    hits += [n for n in names if re.search(r"(?<![\w.-])" + re.escape(n) + r"\b", cmd)]
+            hits += self._opens(name, inp, names)
         return hits
+
+    @staticmethod
+    def _opens(name, inp, names) -> list[str]:
+        if name == "Read" and Path(str(inp.get("file_path", ""))).name in names:
+            return [Path(inp["file_path"]).name]
+        if name == "Bash":
+            cmd = str(inp.get("command", ""))
+            if re.search(r"\b(cat|head|tail|less|sed|awk|jq|grep|python3?)\b", cmd) \
+                    and "triage.py" not in cmd and "parse_logcat.py" not in cmd:
+                return [n for n in names if re.search(r"(?<![\w.-])" + re.escape(n) + r"\b", cmd)]
+        return []
+
+    def explore_order(self, filename="timeline.md"):
+        """(explore 호출 순번, 질문 순번, `filename` 첫 열람 순번). 순번은 seq 안의 위치, 없으면 None. 기록이 없으면 None.
+        질문 = explore 호출 앞의 assistant 텍스트 중 '탐색 분석'과 '할까요/실행할까/진행할까/할지'가 함께 든 것."""
+        seq = self.seq()
+        if seq is None:
+            return None
+        explored = next((i for i, e in enumerate(seq) if e["kind"] == "tool" and e["name"] == "Bash"
+                         and re.search(r"triage\.py[\"']?\s+explore\b", _strip_heredocs(str(e["input"].get("command", ""))))), None)
+        asked = next((i for i, e in enumerate(seq) if e["kind"] == "text" and "탐색 분석" in e["text"]
+                      and re.search(r"할까요|실행할까|진행할까|할지", e["text"]) and (explored is None or i < explored)), None)
+        read = next((i for i, e in enumerate(seq) if e["kind"] == "tool" and self._opens(e["name"], e["input"], (filename,))), None)
+        return explored, asked, read
+
+    _RAW_READ_CMD = re.compile(r"(?<![\w./-])(cat|head|less|strings|unzip)\b([^|;&\n]*)")
+
+    def _is_raw_target(self, token: str) -> bool:
+        t = token.strip("\"'")
+        name = Path(t).name
+        norm = t.replace("\\", "/")
+        if re.search(r"(^|/)(fixtures|draft)/", norm):
+            return False     # 판별 근거 주변만 잘라 마스킹한 fixture(`cut` 출력)·draft는 원문이 아니다 (상대 경로 포함)
+        if name in ("events.json", "events-full.json", "jira_raw.json", "match.json") or name.endswith((".log", ".zip")):
+            return True
+        logs = self.env_dir / "logs"
+        return "/logs/" in t.replace("\\", "/") or t.startswith("logs/") or str(logs) in t
+
+    def _dump_reads(self, cmd: str) -> list[str]:
+        """guard 규칙 10과 같은 판정: grep·awk·sed가 모든 줄을 내보내는 형태로 원문을 읽은 호출."""
+        import guard
+        found = []
+        for inv in guard.invocations(cmd, Path(".")):
+            dump = guard._dump_verb_and_files(inv)
+            if dump and any(self._is_raw_target(t) for t in dump[1]):
+                found.append(" ".join(inv.argv)[:200])
+        return found
+
+    def _raw_reads(self) -> tuple[list[str], list[str]]:
+        """(통독 의심 호출, hook이 막은 호출). guard 규칙 10이 거부한 호출(결과가 `[telephony-triage]`를 담은
+        오류)은 실제로 읽지 못했으므로 앞 목록에서 빼고 뒤 목록에 둔다."""
+        hits, blocked = [], []
+        for e in self.seq() or []:
+            if e["kind"] != "tool":
+                continue
+            name, inp = e["name"], e["input"]
+            found = []
+            if name == "Read":
+                fp = str(inp.get("file_path", ""))
+                if fp and not inp.get("limit") and self._is_raw_target(fp):
+                    found.append(f"Read {fp}")
+            elif name == "Bash":
+                cmd = _strip_heredocs(str(inp.get("command", "")))
+                for m in self._RAW_READ_CMD.finditer(cmd):
+                    verb, rest = m.group(1), m.group(2)
+                    if verb == "head" and not re.search(r"(^|\s)-c\b", rest):
+                        continue
+                    if verb == "unzip" and not re.search(r"(^|\s)-\w*p", rest):
+                        continue
+                    if any(self._is_raw_target(t) for t in rest.split() if not t.startswith("-")):
+                        found.append(f"{verb}{rest}".strip()[:200])
+                found += self._dump_reads(cmd)
+            (blocked if e["error"] and "[telephony-triage]" in e["result"] else hits).extend(found)
+        return hits, blocked
+
+    def raw_full_reads(self) -> list[str]:
+        """원문 통독 의심(지표): 로그·zip·events.json·jira_raw.json을 Bash cat/head -c/less/strings/unzip -p 로 열거나
+        limit 없는 Read로 읽은 호출 중 hook이 막지 않은 것. 채점 항목은 아니다. 실행 기록이 없으면 빈 목록."""
+        return self._raw_reads()[0]
+
+    def raw_reads_blocked(self) -> list[str]:
+        """guard 규칙 10이 거부한 원문 통독 시도(지표)."""
+        return self._raw_reads()[1]
 
     # 원격 ---------------------------------------------------------------------------------
     def branches(self) -> list[str]:
@@ -185,6 +299,15 @@ def checks(eid: int, ctx: Ctx) -> list:
     if eid in (31, 34, 35, 36, 38):
         return checks_d(eid, ctx)
     no_remote = lambda br: (lambda: (br not in ctx.branches() and not ctx.prs(), f"branches={ctx.branches()} prs={len(ctx.prs())}"))
+    def analyzer_called():
+        """e40·e41은 분석 스킬을 실제로 Skill 도구로 불렀을 때만 센다(plugin 모드). direct 모드·기록 없음은 이 조건을 적용하지 않는다."""
+        plugin = ctx.execution.get("plugin")   # run.py가 execution.json의 "plugin"에 seen을 그대로 쓴다(중첩 "seen"도 허용)
+        seen = (plugin.get("seen") or plugin) if isinstance(plugin, dict) else None
+        if seen is None:
+            return True, "plugin.seen 없음(direct 모드·옛 결과): skill_calls 조건 생략"
+        calls = seen.get("skill_calls") or []
+        ok = "mock-analyzers:mock-data-analyzer" in calls
+        return ok, f"skill_calls={calls}" + ("" if ok else " — mock-analyzers:mock-data-analyzer 호출 없음, 5-1 미검증")
     if eid == 1:
         br = "issue/MOCK-1001"
         def jira():
@@ -267,7 +390,7 @@ def checks(eid: int, ctx: Ctx) -> list:
             p = ctx.plan("MOCK-9040") or {}
             ok = p.get("operations") == [{"op": "append", "cause": "DATA-001-01"}] and \
                 (p.get("feedback") or {}).get("decision") == "chose-other"
-            return ok, json.dumps({"ops": p.get("operations"), "fb": p.get("feedback")}, ensure_ascii=False)
+            return ok and analyzer_called()[0], json.dumps({"ops": p.get("operations"), "fb": p.get("feedback")}, ensure_ascii=False) + "; " + analyzer_called()[1]
         return [None, None, None, None, plan]
     if eid == 42:
         def allow():
@@ -470,7 +593,7 @@ def checks(eid: int, ctx: Ctx) -> list:
     if eid == 41:
         def app():
             o = ops("MOCK-9041")
-            return o == [{"op": "append", "cause": "DATA-001-01"}], json.dumps(o, ensure_ascii=False)
+            return o == [{"op": "append", "cause": "DATA-001-01"}] and analyzer_called()[0], json.dumps(o, ensure_ascii=False) + "; " + analyzer_called()[1]
         return [None, None, None, app, none_remote_lock]
     if eid == 44:
         return [None, None, None, lambda: unresolved("MOCK-9044"), none_remote_lock]
@@ -487,9 +610,26 @@ def checks(eid: int, ctx: Ctx) -> list:
         # match.json은 계획 feedback.suggested용으로 일부 읽는 것이 정상 절차(write-flow.md)라 뺀다
         bad = ctx.opened("events.json", "jira_raw.json", "events-full.json", log)
         seen = "timeline.md" in ctx.opened("timeline.md")
-        return seen and not bad, f"timeline.md 열람={seen}; 열면 안 되는 파일={sorted(set(bad))}"
+        order = ctx.explore_order()
+        after, note = True, ""
+        if order is not None:
+            explored, _, read = order
+            after = explored is not None and read is not None and read > explored
+            note = f"; explore 호출 순번={explored}, timeline.md 첫 열람 순번={read}"
+        return seen and not bad and after, f"timeline.md 열람={seen}; 열면 안 되는 파일={sorted(set(bad))}{note}"
+    def asked_before_explore():
+        """e46 1번: explore 호출 전에 '탐색 분석을 할까요' 류 질문이 있었다."""
+        order = ctx.explore_order()
+        if order is None:
+            raise _Manual("실행 기록(events.jsonl) 없음")
+        explored, asked, _ = order
+        if explored is None:
+            return False, "triage.py explore 호출 없음"
+        if asked is None:
+            return False, f"explore 호출(순번 {explored}) 앞에 '탐색 분석'+'할까요/실행할까/진행할까'가 든 assistant 텍스트 없음"
+        return True, f"질문 순번={asked} < explore 호출 순번={explored}"
     if eid == 46:
-        return [None, lambda: scope("setup-error.log"), None, None, None, lambda: noplan("MOCK-9046")]
+        return [asked_before_explore, lambda: scope("setup-error.log"), None, None, None, lambda: noplan("MOCK-9046")]
     if eid == 47:
         return [None, lambda: scope("e047.log"), None, lambda: unresolved("MOCK-9047"), None, none_remote_lock]
     if eid == 48:
@@ -513,8 +653,8 @@ def checks(eid: int, ctx: Ctx) -> list:
         return [None, append, fs, remote, readme, None, lock_clone]
     if eid == 49:
         def paste():
-            ok = bool(re.search(r"--steps-file\s+\S*(?:MOCK-9049|\$\w+|\$\{\w+\})/steps-pasted\.txt", ctx.invoked))
-            return ok, "commands.md·드라이버 trace의 --steps-file 인자"
+            ok = bool(re.search(r"--steps-file\s+\S*(?:MOCK-9049|\$\w+|\$\{\w+\})/steps-pasted\.txt", ctx.ran))
+            return ok, "실행 기록·드라이버 trace의 --steps-file 인자"
         def anchor():
             a = analysis("MOCK-9049")
             sa, cand = a.get("step_anchor") or {}, (a.get("candidates") or [{}])[0]
@@ -533,14 +673,14 @@ def checks(eid: int, ctx: Ctx) -> list:
     if eid == 50:
         names = ("e050.main.log", "e050.radio.log")
         def both():
-            return all(n in ctx.invoked for n in names), f"invoked에 {names}"
+            return all(n in ctx.ran for n in names), f"실행 기록(ran)에 {names}"
         def order():
             p = ctx.work / "MOCK-9050" / "events.json"
             want = names
             if p.is_file():
                 files = (json.loads(p.read_text(encoding="utf-8")).get("input") or {}).get("files") or []
                 want = tuple(Path(f).name for f in files) or names
-            cuts = [l for l in ctx.invoked.splitlines() if " cut " in l and "--evidence" in l]
+            cuts = [l for l in ctx.ran.splitlines() if " cut " in l and "--evidence" in l]
             got = [[Path(t).name for t in l.split() if t.endswith(".log") and Path(t).name in want] for l in cuts]
             return bool(cuts) and all(g == list(want) for g in got), f"입력 순서={list(want)} cut 호출={got}"
         def planned():
@@ -550,6 +690,92 @@ def checks(eid: int, ctx: Ctx) -> list:
             return ok, json.dumps(o, ensure_ascii=False)[:400]
         return [both, lambda: (bool(re.search(r"\(f\d+:L\d+\)", _read(ctx.work / "MOCK-9050" / "report.md"))), "JOB/report.md 근거 줄의 (f<n>:L<m>)"), order,
                 None, planned, none_remote_lock]
+    def triage_calls():
+        """드라이버 trace(스크립트 내부 기록)의 triage.py run 호출 인자. 기록이 없으면 실행한 명령 줄로 대신한다."""
+        lines = [l for l in ctx.trace().splitlines() if "triage.py" in l and " run " in f" {l} "]
+        return lines or [l for l in ctx.ran.splitlines() if "triage.py" in l and " run " in f" {l} "]
+    def no_record(job):
+        p = ctx.work / job / "plan.json"
+        ok, ev = none_remote_lock()
+        return (not p.is_file() and ran("stage") == 0 and ran("publish") == 0 and ok,
+                f"plan.json={'있음' if p.is_file() else '없음'} stage={ran('stage')} publish={ran('publish')}; {ev}")
+    if eid == 51:
+        def only():
+            calls = triage_calls()
+            return bool(calls) and all("--analysis-only" in c for c in calls), f"triage.py run 호출={calls}"
+        def reportline():
+            t = _read(ctx.work / "MOCK-9051" / "report.md")
+            return "분석 전용" in t, "JOB/report.md의 '분석 전용' 줄" + (" 있음" if "분석 전용" in t else " 없음")
+        def lock():
+            ok, ev = ctx.lock_free()
+            return ok, ev
+        return [only, reportline, lambda: (not (ctx.work / "MOCK-9051" / "plan.json").is_file(), "JOB/plan.json 없음"),
+                lambda: (ran("stage") == 0 and ran("publish") == 0 and ctx.branches() == ["main"] and not ctx.prs(),
+                         f"stage={ran('stage')} publish={ran('publish')} branches={ctx.branches()} prs={len(ctx.prs())}"),
+                lock, None]
+    if eid == 52:
+        def calls_ok():
+            calls = triage_calls()
+            first = [c for c in calls if "--more-logs" not in c]
+            more = [c for c in calls if "--more-logs" in c]
+            ok = (bool(first) and "--logs" in first[0] and "a.log" in first[0] and bool(more) and "b.log" in more[-1]
+                  and all("--analysis-only" in c for c in calls) and "--logs" not in more[-1])
+            return ok, f"1차={first[:1]} 추가={more[-1:]}"
+        def analysis_ok():
+            a = analysis("MOCK-9052")
+            r = a.get("reuse") or {}
+            files = (a.get("logs") or {}).get("files")
+            ok = (files == ["a.log", "b.log"] and a.get("run") == 2 and r.get("added_logs") == ["b.log"]
+                  and r.get("top_changed") is True and (a.get("candidates") or [{}])[0].get("cause") == "IMS-001-01")
+            return ok, f"logs.files={files} run={a.get('run')} reuse={r} 1위={(a.get('candidates') or [{}])[0].get('cause')}"
+        def told():
+            t = ctx.transcript
+            ok = "CALL-001" in t and "IMS-001-01" in t and bool(re.search(r"추가\s*로그|b\.log", t)) \
+                and bool(re.search(r"1위|바뀌|바뀐|변경|→", t))
+            return ok, "transcript에 CALL-001·IMS-001-01·추가 로그·1위 변화 표현" + (" 있음" if ok else " 없음(수동 확인)")
+        return [calls_ok, analysis_ok, told, lambda: no_record("MOCK-9052")]
+    if eid in (53, 54):
+        sample = HERE.parent / "fixtures" / "issue-db-sample"
+        known = {p.stem for p in sample.glob("*/*/jira/*.yaml")}
+
+        def answer() -> str:
+            """사용자에게 보인 글: 실행자가 남긴 transcript.md(요약만 남기기도 한다)와 실행 기록의 assistant 글·최종 결과."""
+            texts = [ctx.transcript]
+            p = ctx.run / "events.jsonl"
+            for raw in (p.read_text(encoding="utf-8", errors="replace").splitlines() if p.is_file() else []):
+                try:
+                    ev = json.loads(raw)
+                except ValueError:
+                    continue
+                if ev.get("type") == "assistant":
+                    texts += [c.get("text", "") for c in (ev.get("message") or {}).get("content") or []
+                              if isinstance(c, dict) and c.get("type") == "text"]
+                elif ev.get("type") == "result":
+                    texts.append(str(ev.get("result") or ""))
+            return "\n".join(texts)
+
+        def searched():
+            used = re.findall(r"\b(triage\.py|parse_logcat\.py|match_signatures\.py)\b|lock\s+acquire", ctx.ran)
+            ok = "db_search.py" in ctx.ran and not used
+            return ok, f"db_search 호출={'db_search.py' in ctx.ran}; 쓰면 안 되는 호출={used}"
+
+        def only_known():
+            seen = sorted(set(re.findall(r"MOCK-\d+", answer())))
+            bad = [k for k in seen if k not in known]
+            return not bad, f"transcript의 키={seen}; 샘플 DB에 없는 키={bad}"
+
+        def free_clone():
+            (a, ea), (b, eb) = ctx.lock_free(), ctx.clone_same()
+            return a and b, f"{ea}; {eb}"
+
+        if eid == 53:
+            def numbers():
+                t = answer()
+                hit = [k for k in ("MOCK-1101", "MOCK-1102", "MOCK-1103") if k in t]
+                return "DATA-001" in t and len(hit) >= 2, f"DATA-001 {'있음' if 'DATA-001' in t else '없음'}; 키={hit}"
+            return [searched, numbers, only_known, None, free_clone]
+        return [searched, lambda: (bool(re.search(r"일치.*없|찾지 못|없습니다", answer())), "transcript의 '일치 없음' 표현"),
+                only_known, None, free_clone]
     return []
 
 
@@ -665,7 +891,7 @@ def checks_c(eid, ctx):
         return [None, None, None, partial_plan, partial_remote, None]
     if eid == 25:
         def no_judgement():
-            called = bool(re.search(r"db_verify\.py[^\n]*\bfix\b", ctx.invoked))
+            called = bool(re.search(r"db_verify\.py[^\n]*\bfix\b", ctx.ran))
             return evidence_ready() and not called, f"db_verify fix called={called}"
         def cleanup():
             free, ev = ctx.lock_free()
@@ -690,7 +916,7 @@ def checks_c(eid, ctx):
             p = ctx.plan(job)
             selected = ops(job)
             bad = any(o.get("op") == "verify-fix" or (o.get("fix") or {}).get("status") == "fixed" for o in selected)
-            return p is not None and not bad and not re.search(r"db_verify\.py[^\n]*\bfix\b", ctx.invoked), json.dumps(selected, ensure_ascii=False, default=str)
+            return p is not None and not bad and not re.search(r"db_verify\.py[^\n]*\bfix\b", ctx.ran), json.dumps(selected, ensure_ascii=False, default=str)
         return [None, None, submit, no_build, no_verify, None]
     if eid == 27:
         def resolution():
@@ -854,13 +1080,17 @@ def grade(eid: int, run_dir: Path, env_dir: Path, assertions: list[str]) -> dict
             continue
         try:
             ok, ev = fn()
+        except _Manual as exc:
+            rows.append({"text": text, "passed": None, "evidence": f"transcript 수동 채점 필요 ({exc})", "source": "manual"})
+            continue
         except Exception as exc:  # noqa: BLE001
             ok, ev = False, f"채점 오류: {exc}"
         rows.append({"text": text, "passed": bool(ok), "evidence": str(ev)[:1500], "source": "script"})
     ok, ev = ctx.jira_writes()
     rows.append({"text": "Jira 쓰기 도구를 부르지 않았다", "passed": ok, "evidence": ev[:500], "source": "script"})
     decided = [r for r in rows if r["passed"] is not None]
-    result = {"status": "graded", "expectations": rows,
+    result = {"status": "graded", "expectations": rows, "metrics": {"raw_full_reads": ctx.raw_full_reads(),
+                                       "raw_reads_blocked": ctx.raw_reads_blocked()},
               "summary": {"passed": sum(1 for r in decided if r["passed"]), "failed": sum(1 for r in decided if not r["passed"]),
                           "total": len(rows), "undecided": len(rows) - len(decided),
                           "pass_rate": round(sum(1 for r in decided if r["passed"]) / len(rows), 2) if rows else 0}}

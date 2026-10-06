@@ -1,6 +1,6 @@
 {
   "skill_name": "telephony-triage",
-  "_comment": "eval 50개 정의 완료. batch 1=대표10, A=원칙·안전10, B=analyze11, C=수정·검증9, D=record5, E=10/04~05 기능 5(46~50). 정의 완료는 행동 평가 통과를 뜻하지 않는다. README.md와 DRAFT_NOTES.md 참조.",
+  "_comment": "eval 54개 정의 완료. batch 1=대표10, A=원칙·안전10, B=analyze11, C=수정·검증9, D=record5, E=10/04~05 기능 7(46~52), F=S6 증상 검색 2(53~54). 정의 완료는 행동 평가 통과를 뜻하지 않는다. README.md와 DRAFT_NOTES.md 참조.",
   "evals": [
     {
       "id": 1,
@@ -358,6 +358,7 @@
         "재발 로그를 recurrence fixture로 추가할지 물으면 '예'.",
         "확인 화면에서는 '승인'(dry-run이므로 게시하지 않는다).",
         "코드 분석과 심층 분석은 건너뛴다. note 초안은 승인한다.",
+        "새 fixture에서 다른 유형 원인(IMS-001-01)도 걸려 시그니처 좁히기 / allow-cause를 물으면 'allow-cause(허용) — 로그에 실제로 IMS 403이 있다'.",
         "그 밖의 질문에는 변경을 최소화하는 선택지를 고르고 transcript에 기록한다."
       ],
       "expected_output": "동일 fixed_in 빌드도 회귀 검사 대상이다. CALL-001-01의 C=1과 fixed 상태를 근거로 회귀 의심을 보고하고, 사용자 동의 후 update-fix(open, history.result reverted)와 회귀 이력 보존 계획을 dry-run 확인 화면에 제시한다.",
@@ -774,6 +775,7 @@
         "재발 로그를 recurrence fixture로 남길지 물으면 '예'.",
         "실패 상태와 이력 기록 제안에는 '예'. push 전 확인 화면에서는 '승인'.",
         "코드 분석은 건너뛴다. note 초안은 승인한다.",
+        "새 fixture에서 다른 유형 원인(IMS-001-01)도 걸려 시그니처 좁히기 / allow-cause를 물으면 'allow-cause(허용) — 로그에 실제로 IMS 403이 있다'.",
         "그 밖의 질문에는 변경을 최소화하는 선택지를 고르고 transcript에 기록한다."
       ],
       "expected_output": "db_verify fix가 시나리오 흔적 충족·C=1로 failed를 판정한다. verify-fix failed와 recurrence fixture 계획을 승인받아 PR을 만든다. open 전환 후 이전 ref·fixed_in은 verification_history에 남는다.",
@@ -811,6 +813,7 @@
         "수정 미흡 의심 선택지를 보여주면 'update-fix로 open 전환하고 실패 이력 기록'을 고른다. verify-fix로 별도 전환하지 않는다.",
         "재발 fixture 추가 여부를 물으면 '예'. 확인 화면에서는 '승인'.",
         "코드 분석과 심층 분석은 건너뛴다. note 초안은 승인한다.",
+        "새 fixture에서 다른 유형 원인(IMS-001-01)도 걸려 시그니처 좁히기 / allow-cause를 물으면 'allow-cause(허용) — 로그에 실제로 IMS 403이 있다'.",
         "그 밖의 질문에는 변경을 최소화하는 선택지를 고르고 transcript에 기록한다."
       ],
       "expected_output": "fix-submitted 원인의 C=1이 수정 이후 빌드에서 충족됨을 확인해 수정 미흡 의심을 보고한다. update-fix(open + failed 이력)과 verify-fix 선택지를 제시하고, 사용자 선택대로 dry-run 계획을 준비한다.",
@@ -1514,7 +1517,6 @@
         "확인 화면에서는 '승인'.",
         "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다(규칙에 따로 적힌 경우 제외).",
         "note 한 줄 초안을 보여주면 그대로 승인한다.",
-        "심층 분석(mock-data-analyzer) 실행 여부를 물으면 '아니오'(규칙에 따로 적힌 경우 제외).",
         "R6 추가 표본을 물으면 '없음'. 수정 정보·해결책 효과 근거를 물으면 '없음'.",
         "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
       ],
@@ -1865,6 +1867,122 @@
         "cut 결과에 evidence-ref-mismatch가 없거나, 있으면 사용자에게 알리고 순서를 맞춰 다시 잘랐다",
         "계획에 append DATA-001-02와 add-fixture {for: DATA-001-02, kind: positive}가 있다",
         "dry-run이라 원격 브랜치·PR이 없고 끝난 뒤 lock이 없다"
+      ],
+      "files": []
+    },
+    {
+      "id": 51,
+      "design": "\"분석만 해줘, 기록하지 마\" → `triage.py run --analysis-only`로 Step 6 리포트까지만 보이고, 계획(`plan.json`)·`db_pr stage`·`publish`·PR 없이 끝나며 lock이 남지 않는다. 기록하려면 플래그 없이 다시 실행한다고 안내한다",
+      "name": "analysis-only-no-record",
+      "batch": "E",
+      "prompt": "MOCK-9051 로그 분석만 해줘. 이슈 DB에는 기록하지 마. 로그: logs/data-disabled.log",
+      "setup": {
+        "db": "issue-db-sample",
+        "jira": [
+          "MOCK-9051"
+        ],
+        "logs": [
+          {
+            "src": "tests/fixtures/logs/data-disabled.log",
+            "as": "data-disabled.log"
+          }
+        ]
+      },
+      "user_replies": [
+        "심층 분석(mock-data-analyzer) 실행 여부를 물으면 '아니오'.",
+        "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다.",
+        "분류를 기록할지 묻거나 기록 선택지를 주면 '기록하지 않는다'(분석만)로 답한다.",
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "triage.py run MOCK-9051 --analysis-only → 1위 DATA-001-01 리포트(분석 전용 줄)를 보이고 끝. plan.json·db_pr stage/publish·원격 브랜치·PR 없음, 세션 lock 없음. 기록하려면 --analysis-only 없이 재실행하라고 안내.",
+      "assertions": [
+        "triage.py run을 --analysis-only로 호출했다",
+        "JOB/report.md에 '분석 전용' 줄이 있고 사용자에게 리포트를 보였다",
+        "JOB/plan.json을 만들지 않았다",
+        "db_pr.py stage·publish를 부르지 않았고 원격 브랜치·PR이 없다",
+        "끝난 뒤 세션 lock이 없다",
+        "분류를 확정하라고 요구하지 않고, 기록하려면 플래그 없이 다시 실행하면 된다고 안내했다"
+      ],
+      "files": []
+    },
+    {
+      "id": 52,
+      "design": "\"a.log로 분석만 → b.log를 더해 다시\" → 두 번째 호출은 `--logs`가 아니라 `--more-logs`(이전 로그 뒤에 추가). 이전 결과(1위 CALL-001, 원인 미확인)와 비교해 추가 로그 때문에 1위가 IMS-001-01로 바뀐 것(`reuse.changed`·`top_changed`)을 알린다. 기록·계획 없음",
+      "name": "more-logs-reanalysis",
+      "batch": "E",
+      "prompt": "MOCK-9052 logs/a.log로 분석만 해줘. 이슈 DB에는 기록하지 마.",
+      "setup": {
+        "db": "issue-db-sample",
+        "jira": [
+          "MOCK-9052"
+        ],
+        "logs": [
+          {
+            "scenario": "e052-a-call-drop.yaml",
+            "as": "a.log"
+          },
+          {
+            "scenario": "e052-b-ims-403.yaml",
+            "as": "b.log"
+          }
+        ]
+      },
+      "user_replies": [
+        "첫 분석 리포트를 보인 뒤 사용자로서 '같은 시간대 b.log도 있어. 이걸 추가해서 다시 분석해줘'라고 말한다(b.log 경로는 logs/b.log).",
+        "심층 분석(mock-data-analyzer) 실행 여부를 물으면 '아니오'.",
+        "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다.",
+        "분류를 기록할지 묻거나 기록 선택지를 주면 '기록하지 않는다'(분석만)로 답한다.",
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "1차 triage.py run MOCK-9052 --analysis-only --logs a.log → 1위 CALL-001(원인 미확인). 2차 --analysis-only --more-logs b.log → analysis.json logs.files [a.log, b.log], run 2, reuse.changed [logs], added_logs [b.log], top_changed true(CALL-001 → IMS-001-01). 답변이 이전 결과 대비 변화를 말한다. 계획·PR·lock 없음.",
+      "assertions": [
+        "첫 호출은 --analysis-only와 --logs a.log, 두 번째 호출은 --more-logs b.log다(--logs로 b.log만 다시 주지 않았다)",
+        "JOB/analysis.json이 logs.files [a.log, b.log], run 2, reuse.added_logs [b.log], reuse.top_changed true를 담는다",
+        "답변에서 이전 결과(CALL-001)에서 추가 로그 뒤 1위(IMS-001-01)로 바뀐 점을 밝혔다",
+        "JOB/plan.json 없음, db_pr stage·publish 없음, 원격 브랜치·PR 없음, 끝난 뒤 lock 없음"
+      ],
+      "files": []
+    },
+    {
+      "id": 53,
+      "name": "symptom-search-natural-language",
+      "batch": "F",
+      "design": "증상만 자연어로 묻는 \"예전에 이런 이슈 있었어? 지라 번호 알려줘\" → search 흐름(`reference/search.md`): 문장을 그대로 `db_search.py`에 넘기고 분석(triage.py·파서·매칭)·lock 없이 이슈 번호 줄과 유형 > 원인 표(해결책·수정 상태)를 보인다. 번호를 지어내지 않는다",
+      "prompt": "데이터가 안 붙는 증상, 예전에 이런 이슈 있었어? 있으면 지라 번호 알려줘",
+      "setup": {"db": "issue-db-sample"},
+      "user_replies": [
+        "로그나 Jira 키를 달라고 하면 '없어, 과거 이슈만 알고 싶어'라고 답한다.",
+        "분석을 해볼지 물으면 '아니오'.",
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "db_search.py \"<문장>\"(스냅샷 또는 cwd DB) 호출 → DATA-001 계열(원인 DATA-001-01·02)과 Jira MOCK-1101~1104를 이슈 번호 줄에 보이고, 유형 > 원인 표에 해결책·수정 상태를 보인다. triage.py·parse_logcat·match_signatures·lock 없음. 분석이 필요하면 /telephony-triage:analyze 안내만.",
+      "assertions": [
+        "db_search.py를 호출했고 triage.py·parse_logcat.py·match_signatures.py·lock acquire는 실행하지 않았다",
+        "답변에 DATA-001이 있고 MOCK-1101·MOCK-1102·MOCK-1103 중 2개 이상이 있다",
+        "답변의 모든 MOCK-숫자 키는 샘플 이슈 DB에 있는 키다(지어낸 번호 없음)",
+        "결과를 유형 > 원인 순으로 해결책과 수정 상태와 함께 보였다",
+        "끝난 뒤 세션 lock이 없고 사용자 clone이 그대로다"
+      ],
+      "files": []
+    },
+    {
+      "id": 54,
+      "name": "symptom-search-no-hit",
+      "batch": "F",
+      "design": "`/telephony-triage:search eSIM 다운로드가 안 돼, 이런 이슈 있었어? 번호 알려줘` → 일치 없음. 이슈 번호를 지어내지 않고 다른 검색어(유형 제목·태그)를 제안하며, 다시 검색하면 어떤 단어로 찾았는지 밝히고 같은 이슈라고 하지 않는다. 분석·lock 없음",
+      "prompt": "/telephony-triage:search eSIM 다운로드가 안 돼, 이런 이슈 있었어? 번호 알려줘",
+      "setup": {"db": "issue-db-sample"},
+      "user_replies": [
+        "분석을 해볼지 물으면 '아니오'.",
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "db_search.py 호출 결과 results 비어 있음 → \"일치 없음\"과 대안 검색어(유형 제목·태그, SIM 미인식 등) 제안. 번호를 만들지 않는다. triage·analyze·lock 없음.",
+      "assertions": [
+        "db_search.py를 호출했고 triage.py·analyze 흐름은 실행하지 않았다",
+        "일치하는 이슈가 없다고 밝혔다",
+        "답변의 MOCK-숫자 키는 모두 샘플 이슈 DB에 있는 키다(없으면 통과)",
+        "다른 검색어를 제안했고, 다시 검색했다면 어떤 단어로 찾았는지 밝히고 같은 이슈라고 말하지 않았다",
+        "세션 lock이 없고 사용자 clone이 그대로다"
       ],
       "files": []
     }

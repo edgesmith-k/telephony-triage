@@ -10,7 +10,7 @@ import/review/move 계획 PR)이 이 순서를 따른다. 사용자의 이슈 DB
 
 | 순서 | 호출 |
 |---|---|
-| 1 | (흐름 시작 때 이미) `db_pr lock acquire <작업 키>` → `db_pr snapshot --job <작업 키>` → `config.py check --db SNAP` → `db_pr preflight --branch <br> --search <원인 ID 또는 KEY> [--jira <KEY>]` |
+| 1 | (흐름 시작 때 이미) `db_pr lock acquire <작업 키>` → `db_pr snapshot --job <작업 키>` → `config.py check --db SNAP [--for dry-run]` → `db_pr preflight --branch <br> --search <원인 ID 또는 KEY> [--jira <KEY>]` |
 | 2 | 로컬·원격 브랜치 검사와 선택 (아래) |
 | 3 | `db_pr stage <plan> --wt <wt> --branch <br> [--dry-run]` — drift면 결정 반영 후 다시 |
 | 4 | `db_pr summary <wt>` → 확인 화면 (승인 / 수정 요청 / 전체 diff / 취소) |
@@ -20,7 +20,7 @@ import/review/move 계획 PR)이 이 순서를 따른다. 사용자의 이슈 DB
 
 ## 계획 형식 (analyze Step 7)
 
-`JOB/plan.json` (`contracts.md §작업 계획`). `jira`에는 요약·설명·코멘트 원문을 두지 않는다. `jira` 블록은 `JOB/jira.json`의 jira 블록을 그대로 복사한다(`key`·`origin`은 스키마 필수). `failed_step`(마스킹된 한 줄, 선택)도 그 안에 있으며, 확인 화면에서 사용자가 지우라고 하면 계획 `jira`에서 뺀다. 새 원인·유형은 커밋 메시지에 `temp_id`를 쓴다(적용 때 치환).
+`JOB/plan.json` (`contracts.md §작업 계획`). 최상위 키는 아래 것만 쓴다(스키마가 다른 키를 거부한다). 필수 `source`·`schema_version`·`started_at`·`base_sha`·`operations` — op 목록 키는 `operations`다(`ops` 아님). verify·record·sync-pr 계획도 같다. `jira`에는 요약·설명·코멘트 원문을 두지 않는다. `jira` 블록은 `JOB/jira.json`의 jira 블록을 그대로 복사한다(`key`·`origin`은 스키마 필수). `failed_step`(마스킹된 한 줄, 선택)도 그 안에 있으며, 확인 화면에서 사용자가 지우라고 하면 계획 `jira`에서 뺀다. 새 원인·유형은 커밋 메시지에 `temp_id`를 쓴다(적용 때 치환).
 
 ```json
 {"source": "analyze", "schema_version": <SNAP issue-db.config.yaml>, "started_at": "<lock 획득 시각>",
@@ -44,7 +44,7 @@ lock 획득·인계 성공 시 반환된 `lock.owner`를 보관하고 이후 모
 
 `S/db_pr.py preflight --branch <br> --search <…> [--jira <KEY>] --json` → `{tool_branch, user_branch: {exists, ahead_of_remote},
 remote_sha, open_prs[], jira_in_main}`.
-- 쓰기 불가(`config.py check`의 `writable`/`push_allowed`가 false, `--dry-run`이면 `--for dry-run`)면 사유를 보여주고 멈춘다.
+- 쓰기 불가(`config.py check --db SNAP [--for dry-run]`의 `writable`/`push_allowed`가 false. `--for`는 `config.py check` 옵션이고 `preflight`에는 없다)면 사유를 보여주고 멈춘다.
 - analyze 계획이 `jira.origin: file`이고 `--dry-run`이 아니면 여기 오기 전에 MCP로 다시 읽었어야 한다(아니면 멈춘다).
 - `jira_in_main`이면(append·unresolved) 기존 분류를 보여주고 유지/재분류(`reclassify`)를 묻는다. 열린 PR이 있으면 링크를 보여주고 계속할지 묻는다.
 
@@ -67,16 +67,15 @@ drift 검사 → worktree 생성 또는 재적용 초기화 → `config.py check
 fixture 번호, 피드백, pending 포함 여부는 계획 `source`로) → `db_build --write` → `db_lint --changed` → `mask_pii --check --changed`
 → `check-ids` → `db_regress --all` → `db_verify rules --plan`.
 
-- **종료 코드 1 + drift 목록** `[{op_index, op, target, field, plan_base_value, current_value}]`: 항목마다 계획 값·main 값을
-  나란히 보여주고 **계획 값 유지 / main 값 유지(그 op 삭제) / 직접 입력**을 묻는다. 결정을 계획에 반영하고 계획의 `base_sha`를
+- **종료 코드 1 + drift 목록** `[{op_index, op, target, field, plan_value, plan_base_value, current_value}]`: 항목마다 **계획 값**(`plan_value` — 이 op가 그 필드에 쓰려는 값, `null`이면 그 필드를 쓰지 않고 대상이 그대로라고 전제), **계획 당시 main 값**(`plan_base_value`), **지금 main 값**(`current_value`)을 나란히 보여주고 **계획 값 유지 / main 값 유지(그 op 삭제) / 직접 입력**을 묻는다. 결정을 계획에 반영하고 계획의 `base_sha`를
   stage가 알려준 기준 SHA로 바꾼 뒤 다시 stage한다. 자동으로 덮지 않는다. 결정마다 계획 `pr_notes`에
-  `drift: <대상> <필드> — <결정> (main 값: <요약>)` 한 줄을 더한다(다음 stage에는 drift가 없으므로 이것이 확인 화면·PR 본문에 남는 유일한 기록이다).
+  `drift: <대상> <필드> — <결정> (계획 값: <요약>, main 값: <요약>)` 한 줄을 더한다(다음 stage에는 drift가 없으므로 이것이 확인 화면·PR 본문에 남는 유일한 기록이다).
 - **종료 코드 1 + 검사 실패**(lint, 마스킹, 회귀, R1~R4): 원인을 보여주고 계획을 고친다. 회귀 실패가 다른 유형 fixture에서
   새 시그니처가 C=1이 된 것이면 "시그니처 좁히기 / `allow-cause`"를 묻는다(`db-authoring.md`).
 - **Jira 중복**: `append`·`unresolved`인데 같은 Jira가 main에 있으면 apply가 거부한다 → 기존 분류를 보여주고 유지/재분류를 묻는다.
   `reclassify`는 그 Jira가 main에 있어야 한다.
 - **종료 코드 3**: 검사는 통과, "승인 필요"(예: R5 기존 이벤트 변경). 확인 화면에 표시하고 진행할 수 있다.
-- **종료 코드 2**: 환경 오류(쓰기 불가 버전, lock 불일치, 스키마 버전 다른 계획 등). 그대로 보고하고 멈춘다.
+- **종료 코드 2**: 환경 오류(쓰기 불가 버전, lock 불일치, 스키마 버전 다른 계획 등). 그대로 보고하고 멈춘다. 단 stderr에 `계획 형식 오류`가 있으면 네가 쓴 계획의 형식 문제다 — 결정 내용(op·값)은 바꾸지 않고 §계획 형식대로 키만 고쳐 다시 stage하고 그 사실을 알린다.
 
 ## 4. push 전 확인 화면 (생략 불가)
 
@@ -92,7 +91,9 @@ fixture 번호, 피드백, pending 포함 여부는 계획 `source`로) → `db_
 ### 변경 파일
 | 구분 | 파일 | 변경 |
 ### ID 할당
-NEW-CAUSE-1 → DATA-001-03   (적용 시점 main 기준. 이전 적용(PR 제목·계획 pr 기록)과 번호가 다르면 "DATA-001-03 → DATA-001-04 재할당"으로 적는다)
+NEW-CAUSE-1 → DATA-001-04   (적용 시점 main 기준. summary `ids[].expected_at_base`(계획 `base_sha` 당시 번호)가 다르면 '계획 당시 DATA-001-03 → DATA-001-04 (main에 먼저 머지된 원인)'으로 적는다. 이전 적용(PR 제목·계획 pr 기록)과 다르면 'DATA-001-03 → DATA-001-04 재할당'.)
+### 수정 상태 변경 (summary fix_changes, 있을 때 — 각 line을 글자 그대로 한 줄씩)
+CALL-001-01: fixed → open (이전 ref MOCKCL-12345·fixed_in MOCKB77_U2_20260920 → verification_history 보존, 결과 reverted)
 ### drift 결정 내역 (있을 때, 계획 pr_notes의 drift 줄)
 ### 추가 설명 (summary notes — 계획 pr_notes 포함)
 ### README 반영 미리보기

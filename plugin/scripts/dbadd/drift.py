@@ -10,7 +10,9 @@ from common import gitscope, issuedb, yamlio
 from common.exitcodes import CHECK_FAILED, OK
 from common.fixtures import parse_name
 
-from .core import HISTORY_FIELDS, RULE_SECTIONS, SIG_LISTS, TEMP_RE, TYPE_ID_RE, UsageError, _db, load_plan
+from .applier import Applier
+from .core import (HISTORY_FIELDS, RULE_SECTIONS, SIG_LISTS, TEMP_RE, TYPE_ID_RE, Reject, Tree, UsageError, _db,
+                   load_plan)
 from .ops.parser_rules import ParserRuleOps
 
 
@@ -62,8 +64,9 @@ def drift_items(plan: dict, base: Snapshot, onto: Snapshot) -> list[dict]:
     ops = plan.get("operations") or []
     planned_fixtures = {op["path"] for op in ops if op.get("op") == "add-fixture"}
 
-    def add(i, op, target, field, a, b):
-        out.append({"op_index": i, "op": op["op"], "target": target, "field": field,
+    def add(i, op, target, field, a, b, plan_value=None):
+        # plan_value: 이 op가 그 field에 쓰는 값 (쓰지 않으면 None). plan_base_value는 계획 당시 main 값.
+        out.append({"op_index": i, "op": op["op"], "target": target, "field": field, "plan_value": plan_value,
                     "plan_base_value": a, "current_value": b})
 
     def check_active(i, op, ident):
@@ -92,24 +95,34 @@ def drift_items(plan: dict, base: Snapshot, onto: Snapshot) -> list[dict]:
                 if t.category != op["category"] or base.type(t.id) is not None:
                     continue
                 if t.title == spec["title"] or t.raw.get("symptom_signatures") == spec["symptom_signatures"]:
-                    add(i, op, t.id, "similar-type", None, {"id": t.id, "title": t.title})
+                    add(i, op, t.id, "similar-type", None, {"id": t.id, "title": t.title},
+                        {"title": spec["title"]})
         elif kind == "reclassify":
             a, b = base.jira(op["jira"]), onto.jira(op["jira"])
             if b is None or str(b.get("cause")) != op["from"]:
-                add(i, op, op["jira"], "cause", a.get("cause") if a else None, b.get("cause") if b else None)
+                add(i, op, op["jira"], "cause", a.get("cause") if a else None, b.get("cause") if b else None,
+                    op.get("to"))
         elif kind in ("update-fix", "verify-fix"):
             if TEMP_RE.fullmatch(op["cause"]):
                 continue
             a, b = (base.cause(op["cause"]) or {}).get("fix"), (onto.cause(op["cause"]) or {}).get("fix")
             if a != b:
-                add(i, op, op["cause"], "fix", a, b)
+                if kind == "update-fix":
+                    pv = op.get("fix")
+                else:
+                    pv = {"result": op.get("result"), "verification": op.get("verification")}
+                add(i, op, op["cause"], "fix", a, b, pv)
         elif kind in ("set-resolution", "verify-resolution"):
             if TEMP_RE.fullmatch(op["cause"]):
                 continue
             ca, cb = base.cause(op["cause"]) or {}, onto.cause(op["cause"]) or {}
             for field in ("resolution", "resolution_verification"):
                 if ca.get(field) != cb.get(field):
-                    add(i, op, op["cause"], field, ca.get(field), cb.get(field))
+                    if kind == "set-resolution":
+                        pv = op.get("resolution") if field == "resolution" else None
+                    else:
+                        pv = op.get("verification") if field == "resolution_verification" else None
+                    add(i, op, op["cause"], field, ca.get(field), cb.get(field), pv)
         elif kind == "update-signature":
             owner = op["owner"]
             if TEMP_RE.fullmatch(owner):
@@ -121,13 +134,13 @@ def drift_items(plan: dict, base: Snapshot, onto: Snapshot) -> list[dict]:
                 sa = next((s for s in ta.get(key) or [] if s.get("id") == op["sig_id"]), None)
                 sb = next((s for s in tb.get(key) or [] if s.get("id") == op["sig_id"]), None)
                 if sa != sb:
-                    add(i, op, f"{owner}/{op['sig_id']}", key, sa, sb)
+                    add(i, op, f"{owner}/{op['sig_id']}", key, sa, sb, op.get("signature"))
             else:
                 sid = op["signature"]["id"]
                 sb = next((s for s in tb.get(key) or [] if s.get("id") == sid), None)
                 sa = next((s for s in ta.get(key) or [] if s.get("id") == sid), None)
                 if sb is not None and sa is None:
-                    add(i, op, f"{owner}/{sid}", key, None, sb)
+                    add(i, op, f"{owner}/{sid}", key, None, sb, op.get("signature"))
         elif kind in ("add-parser-rule", "update-parser-rule"):
             sections = RULE_SECTIONS.get(op["file"], ())
             section = op.get("section") or (sections[0] if sections else None)
@@ -139,32 +152,47 @@ def drift_items(plan: dict, base: Snapshot, onto: Snapshot) -> list[dict]:
             ra, rb = find(base), find(onto)
             if kind == "add-parser-rule":
                 if rb is not None and ra is None:
-                    add(i, op, f"{op['file']}:{key}", section, None, rb)
+                    add(i, op, f"{op['file']}:{key}", section, None, rb, _functional(op.get("rule")))
             elif rb is None or _functional(ra) != _functional(rb):
                 add(i, op, f"{op['file']}:{key}", section, _functional(ra) if ra else None,
-                    _functional(rb) if rb else None)
+                    _functional(rb) if rb else None, _functional(op.get("rule")))
         elif kind == "set-status":
             a, b = base.status(op["id"]), onto.status(op["id"])
             if a != b:
-                add(i, op, op["id"], "status", a, b)
+                add(i, op, op["id"], "status", a, b, op.get("status"))
         elif kind == "allow-cause":
             if op["fixture"] in planned_fixtures or TEMP_RE.search(op["fixture"]):
                 continue
             ea, da = base.expect(op["fixture"])
             eb, db_ = onto.expect(op["fixture"])
             if not eb:
-                add(i, op, op["fixture"], "fixture", ea, eb)
+                add(i, op, op["fixture"], "fixture", ea, eb, None)
                 continue
             for field in ("also_allowed", "expect_top"):
                 if da.get(field) != db_.get(field):
-                    add(i, op, op["fixture"], field, da.get(field), db_.get(field))
+                    add(i, op, op["fixture"], field, da.get(field), db_.get(field),
+                        op.get("cause") if field == "also_allowed" else None)
     return out
+
+
+def _ids_at_base(plan: dict, base_root: Path, plan_path: Path, defaults: dict) -> list[dict] | None:
+    """계획 당시(base_sha) 트리 기준 임시 ID 할당. 새 유형·원인이 없거나 계산할 수 없으면 None."""
+    ops = plan.get("operations")
+    if not isinstance(ops, list) or not any(isinstance(o, dict) and o.get("op") in ("new-cause", "new-type")
+                                            for o in ops):
+        return None
+    try:
+        return Applier(Tree(base_root), plan, plan_path, "-", defaults).assign_ids()
+    except (Reject, UsageError, KeyError, TypeError):
+        return None
 
 
 def cmd_drift(args, defaults: dict) -> tuple[dict, int]:
     db = _db(args)
     plan = load_plan(Path(args.plan))
     base_sha = plan.get("base_sha")
+    if not isinstance(base_sha, str) or not base_sha:
+        raise UsageError("계획에 base_sha가 없습니다 (db_pr snapshot의 snapshot_sha를 넣는다 — write-flow.md §계획 형식).")
     temp = Path(tempfile.mkdtemp(prefix="tt-drift-"))
     try:
         try:
@@ -176,9 +204,10 @@ def cmd_drift(args, defaults: dict) -> tuple[dict, int]:
                 from exc
         try:
             items = drift_items(plan, Snapshot(base_root), Snapshot(onto_root))
+            ids_at_base = _ids_at_base(plan, base_root, Path(args.plan), defaults)
         except issuedb.IssueDbError as exc:
             raise UsageError(str(exc)) from exc
     finally:
         shutil.rmtree(temp, ignore_errors=True)
-    return {"base_sha": base_sha, "onto": args.onto, "onto_sha": onto_sha, "drift": items}, \
-        (CHECK_FAILED if items else OK)
+    return {"base_sha": base_sha, "onto": args.onto, "onto_sha": onto_sha, "drift": items,
+            "ids_at_base": ids_at_base}, (CHECK_FAILED if items else OK)

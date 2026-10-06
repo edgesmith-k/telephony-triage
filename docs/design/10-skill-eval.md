@@ -15,6 +15,7 @@
 | `reference/record.md` | `07-workflow.md §record` | `record` 커맨드 |
 | `reference/verify.md` | `07-workflow.md §validate`(`--cause`), `§fix-submitted`, `§verify-fix` | 해당 커맨드 |
 | `reference/sync-pr.md` | `07-workflow.md §sync-pr`, `06-collaboration.md §6.3` sync-pr 절차 (**단일 원본** — `commands/sync-pr.md`는 이 파일을 가리키기만 한다) | `sync-pr` 커맨드, Step 8-2 원격 브랜치 있음 |
+| `reference/search.md` | `03-issue-db.md §5.5`, `09-commands.md` search (**단일 원본** — `commands/search.md`는 이 파일을 가리키기만 한다). 증상 문장을 그대로 `db_search.py`에 넘기고 이슈 번호 줄·유형 > 원인 표로 보인다. 읽기 전용 | `search` 커맨드, 증상만 묻는 "비슷한 이슈·이슈 번호?" |
 | `reference/db-authoring.md` | 아래 "추가 지침" 목록 | 새 원인·유형·시그니처·파서 규칙을 만들 때 |
 | `reference/ril-requests.md`, `fail-causes.md`, `log-tags.md` | 참조 자료 | 로그 해석이 필요할 때 |
 
@@ -62,6 +63,7 @@ skill-creator 스킬을 실행하고 아래를 입력으로 준다.
 | "CALL-001-01 수정 CL 머지됐어, 이슈 DB에 반영해줘" | "IMS 등록 절차 설명해줘" (개념 질문) |
 | "ABC-777은 내가 APN 설정 고쳐서 해결했어, 이슈 DB에 기록만 해줘" | "이 CL 커밋 메시지 다듬어줘" |
 | "분석은 필요 없고 이 Jira를 DATA-001-02로 히스토리에만 올려줘" | |
+| "데이터 안 붙는 이슈 예전에 있었어? 지라 번호 알려줘" (증상 문장 검색, S6) | |
 
 - 측정: `tests/skill_evals/trigger_real.py`(실제 플러그인 `--plugin-dir`, 처음 4번의 도구 호출 안에 `Skill` 호출이면 트리거). skill-creator `run_eval`은 **첫 도구 호출**만 세서, 로그 분석 요청에서 먼저 `ls`로 로그를 찾는 경우를 미트리거로 잡는다(2026-10-05 측정: 그 방식 recall 0~20%, 실제 플러그인 방식 recall 100%·precision 100%, 24개×2회). description 개선 효과는 실제 플러그인 방식으로 판단한다.
 
@@ -119,5 +121,9 @@ skill-creator 스킬을 실행하고 아래를 입력으로 준다.
 48. Jira 실패 스텝 필드(`5 | 데이터 켜기`)가 있는 이슈(스텝 우선 유형 DB) → 리포트에 실패 스텝을 보이되 점수·S/C에 쓰지 않고, 계획 `jira.failed_step`에 그대로 복사해 PR의 Jira 기록에 `failed_step`이 남고 카테고리 README "자주 실패한 스텝"이 갱신된다
 49. 사용자가 시험 스텝 목록을 대화에 붙여넣음(로그에 스텝 마커 없음, 이슈 DB `step_events` 있음) → `JOB/steps-pasted.txt`에 써서 `--steps-file`로 넘기고, 스텝 순서 기준(`step_order`)으로 마지막 PASS 스텝 이후를 분석해 Jira 시각 근처의 이른 IMS 403이 아니라 DATA-001-01을 1위로 보고한다. 시계 차를 추측하지 않고, 끝난 뒤 `steps-pasted.txt`가 남지 않는다
 50. 로그 두 개(main·radio) → 리포트 근거 줄의 위치 표기 `(f<n>:L<m>)`를 그대로 두고, 그 원인의 양성 fixture를 `parse_logcat.py cut --evidence JOB/match.json`으로 만들 때 triage에 준 로그를 같은 순서로 준다. `evidence-ref-mismatch` 경고가 나오면 사용자에게 알리고 순서를 맞춰 다시 자른다
+51. "분석만 해줘, 기록하지 마" → `triage.py run --analysis-only`로 Step 6 리포트까지만 보이고(5-1·5-2 포함), `plan.json`·`db_pr stage`·`publish`·PR 없이 끝나며 lock이 남지 않는다. 기록하려면 플래그 없이 다시 실행한다고 안내한다(RF-7)
+52. "a.log로 분석만 → b.log를 더해 다시" → 두 번째 호출은 `--logs`가 아니라 `--more-logs`. 이전 결과(1위 CALL-001, 원인 미확인)와 비교해 추가 로그로 1위가 IMS-001-01로 바뀐 것(`reuse.changed`·`top_changed`)을 알린다. 기록·계획 없음(RF-7)
+53. "데이터가 안 붙는 증상, 예전에 이런 이슈 있었어? 있으면 지라 번호 알려줘"(증상만, 로그·키 없음) → analyze가 아니라 search 흐름: 문장을 그대로 `db_search.py`에 넘기고 `triage.py`·파서·lock 없이, 이슈 번호 줄(MOCK-1101~1104)과 유형 > 원인 표(해결책·수정 상태)를 보인다. 지어낸 번호가 없다
+54. "/telephony-triage:search eSIM 다운로드가 안 돼, 이런 이슈 있었어? 번호 알려줘" → 일치 없음. 번호를 지어내지 않고 다른 검색어를 제안하며, 다시 검색하면 쓴 단어를 밝히고 같은 이슈라고 하지 않는다. 분석·lock 없음
 
-- 완료 기준: 트리거 테스트 전 항목, eval 50개(46~50은 10/04~05 기능 추가분) 통과. SKILL.md 본체 500줄 이내, 흐름별 reference 분리("SKILL 구성"). 결과물은 플러그인 `skills/telephony-triage/`에 둔다. `analyze`, `record`, `validate --cause`, `verify-fix`, `fix-submitted` 커맨드가 스킬과 연결되어 동작한다.
+- 완료 기준: 트리거 테스트 전 항목, eval 54개(46~52는 10/04~05 기능 추가분, 53·54는 S6 증상 검색) 통과. SKILL.md 본체 500줄 이내, 흐름별 reference 분리("SKILL 구성"). 결과물은 플러그인 `skills/telephony-triage/`에 둔다. `analyze`, `record`, `validate --cause`, `verify-fix`, `fix-submitted` 커맨드가 스킬과 연결되어 동작한다.

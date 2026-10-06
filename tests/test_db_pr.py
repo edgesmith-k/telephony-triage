@@ -436,6 +436,9 @@ def test_drift_resolution_parser_rule_and_allow_cause():
     assert out["stopped"] == "drift"
     assert [(d["op"], d["target"], d["field"]) for d in out["drift"]] == [("set-resolution", "DATA-001-02",
                                                                             "resolution")]
+    assert out["drift"][0]["plan_value"] == "데이터 로밍 설정을 켜고 요금제를 확인한다"
+    assert out["drift"][0]["plan_base_value"] == "데이터 로밍 설정을 켠다"
+    assert out["drift"][0]["current_value"] == "데이터 로밍을 켠다 (다른 PR)"
     plan = ws.read_plan(job)
     plan["base_sha"] = out["base_sha"]            # 사용자 결정(계획 값 유지)을 반영
     ws.plan(job, plan, base_sha=out["base_sha"])
@@ -457,6 +460,8 @@ def test_drift_resolution_parser_rule_and_allow_cause():
     ws.acquire(job)
     out = ws.stage(job, "review/data-2026-10", expect=1)
     assert out["drift"][0]["op"] == "update-parser-rule"
+    assert out["drift"][0]["plan_value"] == {"patterns": ["evaluation result:\\s*ALLOWED",
+                                                          "evaluation result:\\s*PERMITTED"]}
     ws.db_pr("discard", ws.wt(job))
 
     # allow-cause 대상 fixture의 also_allowed를 main이 먼저 바꿈 → drift
@@ -467,6 +472,7 @@ def test_drift_resolution_parser_rule_and_allow_cause():
     ws.acquire(job)
     out = ws.stage(job, "review/data-2026-10", expect=1)
     assert out["drift"][0]["op"] == "allow-cause" and out["drift"][0]["field"] == "also_allowed"
+    assert out["drift"][0]["plan_value"] == "DATA-001-01" and out["drift"][0]["current_value"] == ["IMS-001-01"]
     ws.db_pr("discard", ws.wt(job))
     assert base != ws.main_sha()
 
@@ -538,9 +544,12 @@ def test_same_number_race_resolved_by_sync_pr():
     ws.acquire(found["job"])
     stage = ws.stage("MOCK-7010", "issue/MOCK-7010")
     assert stage["apply"]["ids"] == [{"temp_id": "NEW-CAUSE-1", "id": "DATA-001-04"}]
+    assert stage["ids_at_base"] == [{"temp_id": "NEW-CAUSE-1", "id": "DATA-001-03"}]
     assert stage["apply"]["fixtures"][0]["name"] == "DATA-001-04.log"
     summary = ws.db_pr("summary", ws.wt("MOCK-7010"))
     assert summary["pr_title"].startswith("[DATA-001-04]")
+    assert summary["ids"][0]["expected_at_base"] == "DATA-001-03"
+    assert "NEW-CAUSE-1 → DATA-001-04 (계획 당시 DATA-001-03)" in summary["pr_body"]
     ws.commit("MOCK-7010")
     ws.db_pr("publish", ws.wt("MOCK-7010"), "--branch", "issue/MOCK-7010", "--lease", found["remote_sha"],
              "--approved", summary["approved_hash"])
@@ -809,3 +818,90 @@ if __name__ == "__main__":
     import pytest
 
     raise SystemExit(pytest.main([__file__, "-q"]))
+
+
+# -- 3D-A: 계획 형식 검사·오류 표시·drift 계획 값·번호 재할당 -----------------------------------------------
+
+
+def _raw_plan(ws: Workspace, job: str, plan: dict) -> None:
+    path = ws.job_dir(job) / "plan.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(plan, ensure_ascii=False), encoding="utf-8")
+
+
+def _stage_raw(ws: Workspace, job: str, branch: str):
+    return ws.run("db_pr.py", ["stage", ws.job_dir(job) / "plan.json", "--wt", ws.wt(job), "--branch", branch])
+
+
+def test_stage_rejects_malformed_plan_before_touching_job():
+    ws = Workspace()
+    job = "MOCK-7300"
+    ws.acquire(job)
+    # e19/e20 모양: operations 대신 ops, base_sha·schema_version·started_at 없음
+    _raw_plan(ws, job, {"source": "analyze", "ops": [{"op": "append", "cause": "DATA-001-01"}]})
+    proc = _stage_raw(ws, job, "issue/MOCK-7300")
+    assert proc.returncode == 2
+    assert proc.stderr.startswith("계획 형식 오류:"), proc.stderr
+    assert "ops" in proc.stderr and "operations" in proc.stderr and "base_sha" in proc.stderr
+    assert "Traceback" not in proc.stderr and "Traceback" not in proc.stdout
+    detail = json.loads(proc.stdout)
+    assert "ops" in detail["unknown_keys"] and "base_sha" in detail["missing_keys"]
+    assert not ws.wt(job).exists() and not (ws.job_dir(job) / "state.json").exists()
+
+    plan = load_plan("p7-analyze-new-cause.plan.json")
+    plan.pop("base_sha", None)
+    _raw_plan(ws, job, plan)
+    proc = _stage_raw(ws, job, "issue/MOCK-7300")
+    assert proc.returncode == 2 and proc.stderr.startswith("계획 형식 오류:") and "base_sha" in proc.stderr
+
+    (ws.job_dir(job) / "plan.json").write_text("{not json", encoding="utf-8")
+    proc = _stage_raw(ws, job, "issue/MOCK-7300")
+    assert proc.returncode == 2 and proc.stderr.startswith("계획 형식 오류: JSON을 읽을 수 없습니다")
+    (ws.job_dir(job) / "plan.json").write_text("[1]", encoding="utf-8")
+    assert _stage_raw(ws, job, "issue/MOCK-7300").returncode == 2
+
+
+def test_stage_internal_error_shows_last_line_without_traceback():
+    ws = Workspace()
+    job = "MOCK-7301"
+    plan = _review_plan([{"op": "append"}], "issue/MOCK-7301")      # cause 없음 → drift 스크립트가 KeyError
+    ws.plan(job, plan, base_sha=ws.main_sha())
+    ws.push_main(lambda c: (c / "NOTE.txt").write_text("main 이동\n", encoding="utf-8"))
+    ws.acquire(job)
+    proc = _stage_raw(ws, job, "issue/MOCK-7301")
+    assert proc.returncode == 2
+    assert "KeyError" in proc.stderr and "내부 오류" in proc.stderr
+    assert "Traceback" not in proc.stderr and "File \"" not in proc.stderr
+
+
+def test_drift_shows_plan_value_and_ids_at_base_for_new_cause_and_resolution():
+    """e16 모양: 계획 당시 값·계획 값·현재 값이 다르고, main이 같은 번호를 먼저 써서 ID가 밀린다."""
+    ws = Workspace()
+    job = "MOCK-7302"
+    plan = radio_off_plan("MOCK-7302")
+    plan["operations"].append({"op": "set-resolution", "cause": "DATA-001-02", "resolution": "계획이 쓰는 해결책"})
+    ws.plan(job, plan)
+    ws.put(job, "fixtures/cut-1.log", radio_off_log())
+    ws.plan("MOCK-7002", "p7-analyze-new-cause.plan.json")          # 다른 사람의 PR이 DATA-001-03을 먼저 쓴다
+    ws.put("MOCK-7002", "fixtures/cut-1.log", SIM_LOG)
+    ws.ship("MOCK-7002", "issue/MOCK-7002")
+    ws.merge("issue/MOCK-7002")
+    ws.push_main(lambda c: _edit(c / DATA_DIR / "type.md", "resolution: 데이터 로밍 설정을 켠다",
+                                 "resolution: main이 바꾼 해결책"))
+    ws.acquire(job)
+    out = ws.stage(job, "issue/MOCK-7302", expect=1)
+    assert out["stopped"] == "drift"
+    item = next(d for d in out["drift"] if d["op"] == "set-resolution")
+    assert item["plan_value"] == "계획이 쓰는 해결책"
+    assert item["plan_base_value"] == "데이터 로밍 설정을 켠다" and item["current_value"] == "main이 바꾼 해결책"
+    assert out["ids_at_base"] == [{"temp_id": "NEW-CAUSE-1", "id": "DATA-001-03"}]
+    assert "plan_value" in out["next"] and "current_value" in out["next"]
+
+    plan = ws.read_plan(job)
+    ws.plan(job, plan, base_sha=out["base_sha"])
+    out = ws.stage(job, "issue/MOCK-7302")          # drift를 다시 돌리지 않아도 계획 당시 번호를 이어받는다
+    assert out["apply"]["ids"] == [{"temp_id": "NEW-CAUSE-1", "id": "DATA-001-04"}]
+    assert out["ids_at_base"] == [{"temp_id": "NEW-CAUSE-1", "id": "DATA-001-03"}]
+    summary = ws.db_pr("summary", ws.wt(job))
+    assert summary["ids"] == [{"temp_id": "NEW-CAUSE-1", "id": "DATA-001-04", "expected_at_base": "DATA-001-03"}]
+    ws.db_pr("discard", ws.wt(job))

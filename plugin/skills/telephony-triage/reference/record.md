@@ -42,7 +42,7 @@ MCP `jira.tools.get_issue`(매핑이 없으면 추측하지 말고 setup 안내)
 
 - 옵션이 있으면 그대로: `--cause` → `append`, `--new-cause <유형>` → `new-cause`, `--new-type <cat>` → `new-type`,
   `--unresolved <유형>` → `unresolved`. ID가 스냅샷에 있고 `active`인지 확인한다(`db_search.py <ID> --db SNAP`).
-- **옵션이 없으면 대화형**: 증상과 원인을 한두 문장으로 받아 `db_search.py "<키워드>" --db SNAP`와
+- **옵션이 없으면 대화형**: 증상과 원인을 한두 문장으로 받아 `db_search.py "<증상 문장 또는 키워드>" --db SNAP`와
   `db_add.py similar "<증상 제목>" --db SNAP`(유사 유형 상위 3개)로 후보를 보여주고 고르게 한다:
   기존 원인 / 기존 유형의 새 원인 / 새 유형 / 원인 미확정.
 

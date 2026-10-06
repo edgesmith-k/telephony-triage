@@ -580,3 +580,112 @@
 - eval이 찾은 결함과 수정:
   - `db_verify.make_draft`: 실행자가 `WD/<KEY>/draft`를 미리 만들면 "등록된 도구 worktree가 아닙니다"로 종료 코드 2. 빈 디렉토리는 치우고 다시 만들고, 도구가 만들지 않은 파일이 있으면 지우지 않고 원인을 말하며 멈춘다. `record.md` 7번에 "draft는 도구가 만든다 — 미리 만들지 않는다".
   - SKILL.md Step 5-1: "(후보 없음·원인 미확인)"이 analyzer에도 걸리는 것처럼 읽혀 C=1이면 분석 스킬 질문을 건너뜀(eval 41). 07 §Step 5-1대로 "analyzer 값이 있으면 C 무관, explore만 후보 없음·원인 미확인"으로. 8KB 유지(8186).
+
+## S5 경계 검사 비밀값 패턴 (리뷰 §Q, 2026-10-05)
+
+- 새 기본 패턴: `aws-access-key`, `slack-token`, `google-api-key`, `atlassian-token`, `package-token`(npm·PyPI), `llm-api-key`, `jwt`(세 조각), `auth-header`(`Bearer`·`Authorization: Basic|token`; Digest는 마스킹 `CRED` 몫이라 제외), `url-credential`(`scheme://user:pass@`), `netrc`(`login … password …`).
+- 넓힘: `private-key`는 PGP `BLOCK`·두 단어 종류까지. `github-token`은 fine-grained `github_pat_`까지(GHE도 같은 접두사. 접두사 없는 옛 GHE 40자 hex는 `secret-assign`만 잡음). `secret-assign`은 키 이름 `*token*`·`*secret*`·`pwd`·`access_key`·`private_key`·`credential(s)`와 JSON 따옴표 키까지.
+- 오탐 방지: 자리표시 값(`<…>`·`${…}`·`xxxx`·`REDACTED`·`EXAMPLE`·서로 다른 문자 6개 미만)은 제외. 대입·헤더 값은 숫자와 글자가 다 있어야 비밀값으로 본다(순수 영문 식별자는 이제 안 걸림). 키 이름 앞뒤는 30자 상한(긴 줄 제곱 시간 방지).
+- 출력 가림: stderr·`--json`·반입 `--check-boundary`는 비밀값의 앞부분과 길이만 보인다. 예외(`boundary-allow.txt`) 대조는 원문으로 끝난 뒤 가린다.
+- 현재 트리 추가 위반 0건, `boundary-allow.txt` 변경 없음. 테스트: `test_secret_patterns_catch_values`(19줄), `test_secret_placeholders_and_code_pass`, `test_secret_assign_long_line_is_fast`.
+
+## I1 공통 이벤트 레코드 common/events.py (리뷰 §J, RF-3 전제, 2026-10-05)
+
+- 새 `plugin/scripts/common/events.py`(표준 라이브러리만): `EVENT_KEYS`·`RIL_KEYS`·`SCHEMA_VERSION`, `Event`·`LineRef`·`RilAnnotation` TypedDict, `make_event`·`derived_event`(예전 `parse_logcat._derived`), `line_ref`·`ref_key`·`ref_label`, `validate_event`·`validate_events`(키 순서, 타입, `source`와 이벤트 이름 공간, `ril`, `line_ref`; 예외 없이 위반 목록).
+- 사용처: reference 백엔드 `_line_record`, `parse_logcat`(파생 이벤트·외부 파서 이벤트 생성, `cut` 앵커의 `ref_key`, `OUTPUT_SCHEMA`), `triage`(`_ref_label`·`_unique_evidence`). 후처리와 builtin 레코드는 그대로. `parse_logcat`에서는 지역 변수 `events`와 겹쳐 `evt`로 import한다.
+- 출력 동일: `test_parse_logcat.py --update`로 스냅샷 diff 없음, 골든 그대로.
+- 문서: `07 §Step 3`에 `ril.paired_ts·latency_ms`와 응답 없는 요청의 `observed_until` 기록, `04 §5.8 (6)`·`contracts.md`·`01`에 코드 위치.
+- 테스트: 새 `tests/test_events.py`(키 순서·기본값, 파생 상속, `line_ref` 도우미, 스냅샷 전체 검증, 깨진 이벤트 22종). `test_parse_logcat`(스냅샷·외부 어댑터)와 `test_golden`(모의 사내 백엔드 raw 출력)에도 `validate_event` 검사.
+- 범위 밖: 파생 이벤트의 `msg` 복사 제거(RF-1).
+
+## I2 platforms/android/ 이동 (리뷰 RF-3, 2026-10-05)
+
+- 새 `plugin/scripts/platforms/android/`: `logcat.py`·`ril.py`(git mv), `backend.py`(← `parser_backends/reference/__init__.py`, `name`·`VERSION` 그대로), `bugreport.py`(← `parse_logcat` extract-bugreport, `BugreportError` → `parse_logcat`이 `UsageError`로), `__init__.py`(← `code_roots`의 `TELEPHONY_DIR`·`VERSION_SOURCES`).
+- 옛 경로 `parser_backends/{logcat,ril,reference}`는 `sys.modules` shim(같은 모듈 객체). 사내 site 백엔드의 `from ..reference import ReferenceBackend` 그대로 동작, SITE_PATHS 변경 없음. 사외 코드는 새 경로로 import.
+- 출력 동일: `test_parse_logcat.py --update` 스냅샷 diff 없음, 골든 그대로, bugreport 추출 결과 동일, `TODO(SITE)` 73곳 그대로.
+- 테스트: 새 `tests/test_platforms.py`(shim 동일성·import 순서·site식 상대 import·계층 가드(`common`→`platforms`는 `stepanchor` 시각 함수만)·bugreport 래퍼), `test_boundary`에 `platforms/` site-import 사례.
+- 범위 밖: `platform:` 키·`platforms.load()`·상수 설정화(RF-4, I3).
+
+## I3 플랫폼 상수 → site-defaults `platform:` (리뷰 RF-4 일부, 2026-10-05)
+
+- 새 키 `site-defaults.yaml` `platform:` — `name`(android만)·`source_tree.{required_dirs, version_sources}`(S11)·`log.phone_id.{tag, msg_prefix, msg_suffix}`(S20)·`ril.tags`(S10)·`bugreport.{wanted_buffers, section_regex, boundary_regex}`(S21). 생략하면 코드 기본값, 키를 쓰면 목록 통째로 교체. 사용자 config로는 못 바꾼다(`userconfig` 안 거침). 잘못된 값은 키 경로와 함께 종료 코드 2. example은 `name: android`만 켜고 나머지는 주석 값(= 기본값).
+- 새 `platforms/__init__.py`: `load(defaults)`·`default()`·`PlatformProfile`·`PlatformConfigError`(I/O·전역 상태 없음). `logcat.PhoneIdRules`(`phone_id()`·`strip()`), `bugreport.BugreportRules`, `android.REQUIRED_DIRS`가 기본값 소유(모듈 상수 객체 그대로).
+- 전달 방식: `parse_logcat.main()`이 프로파일을 한 번 만들어 `run_parse`·`run_markers`·`run_extract_bugreport`에 넘기고(`profile=None`이면 `defaults`에서 직접 만든다, db_regress 등 기존 호출 그대로), 백엔드는 `ParserBackend.configure(profile)`(기본 자기 자신, reference는 복사본)로, `ril.parse(tags=, phone=)`·`bugreport.extract(rules=)`·`code_roots.validate(tree=)`·`estimate_version(sources=)`는 명시 인자로 받는다. 전역·싱글톤은 바꾸지 않는다.
+- 출력 동일: `test_parse_logcat.py --update` 스냅샷 diff 없음, 골든 그대로, bugreport 추출(txt·zip)·not-found 메시지 동일, 캐시 해시·`parser_backend` 확인 그대로, `TODO(SITE)` 73곳(S10 +1, S11 −1 — 마커가 코드에서 example으로 옮겨감). 설정 `version_sources`는 항상 `re.M`이고 기본 첫 항목(앵커 없음)에는 영향 없다.
+- 테스트: 새 `tests/test_platform_profile.py`(기본값 동일성·example 주석 값 = 기본값·검증 오류별 키 경로·CLI 종료 코드 2·슬롯/RIL 태그/bugreport/소스 트리 덮어쓰기 효과·`configure()` 격리·모의 site 백엔드 추종).
+- 범위 밖: 이슈 DB 층 설정(`phone_id_patterns`·`ril.yaml` `tags`), 정규식 문법·시계 기준·mcptools 낱말, `migrate_code_refs`, `--index`.
+
+## I4 YAML C 로더 (yamlio, 2026-10-05)
+
+- `common/yamlio.py`: `LOADER = CSafeLoader`(없으면 `SafeLoader`)와 `safe_load(stream)`(= `yaml.safe_load`와 같되 `LOADER` 사용, 날짜 변환 없음). `loads`·`load`는 이를 거쳐 `normalize`한다.
+- 런타임 직접 호출 6곳을 `yamlio.safe_load`로 교체: `common/site_defaults.py`, `common/compat.py`, `config.py`(`_parse_value`, `YAMLError`용 in-function `import yaml` 유지), `jira_fields.py`, `jira_bridge.py`, `guard.py`(기존 try·except 튜플 그대로). 날짜 정규화 없는 읽기는 그대로 유지한다.
+- 측정(계획 단계, 이 PC): 샘플 DB 파싱 43.7 → 5.2 ms(약 8.4배), `db_build --preview` 159 → 110 ms, `db_lint --all` 263 → 190 ms.
+- 결과 동일: 레포 YAML 153개 SafeLoader와 같은 결과, `db_build --preview` `diff -r` 동일.
+- 차이: 오류 문구가 다르다(줄·열은 같다). libyaml은 `a:\tb`처럼 탭 구분을 받아들인다.
+- 쓰기는 `SafeDumper` 그대로, 헬퍼 없음: C 방출기는 `yamldoc._Dumper.increase_indent` 재정의를 무시한다.
+- 의존성: PyYAML 6.0.3 manylinux wheel은 libyaml을 포함한다(Ubuntu/Py3.11에서 확인, 다른 OS는 미확인). libyaml-dev 없는 sdist 설치는 `SafeLoader`로 폴백(동작은 같고 느리다). 사내 확인: `python3 -c "import yaml; print(yaml.__with_libyaml__)"`.
+- 테스트: 새 `tests/test_yamlio.py`(LOADER 선택·폴백·샘플 DB 결과/오류 위치 동일·날짜 처리·깨진 frontmatter `IssueDbError`·`db_build --preview` 바이트 동일·직접 호출 금지 가드).
+
+## I5 db_pr 확인 화면·PR 본문 → db_summary.py (리뷰 §Q, 2026-10-05)
+
+- `plugin/scripts/db_summary.py` 신설(라이브러리, shebang·main 없음): `screen`(확인 화면 dict), `pr_body`, `search_key`(gh pr list 검색어), `reviewers`, `_status_entries`, `_main_diff`, `_readme_preview`, `_check_rows`, `_verification_rows`, `_file_kind`, `_codeowners`, `_owners_for`, `GENERATED_RE`, `SOURCE_LABELS`. 코드는 이동만 했다.
+- git 호출은 호출자가 `git(repo, *args, check=...)`로 넘긴다(`_status_entries`·`_main_diff`·`screen`의 `git` 인자). `db_pr`가 `__main__`으로 도는 중에 `db_summary`가 `db_pr`를 import하면 두 번째 사본(다른 `UsageError`)이 로드되기 때문이다.
+- `db_pr.summary`는 lock·상태 파일·gh·`approved_hash`만 맡는다(1234 → 991줄). stdout·`pr.json`·`state.json`은 이전과 동일(키 순서 포함).
+- 기존 `tests/test_db_pr.py`·`test_checks.py` 변경 없이 통과.
+- 신규 `tests/test_db_summary.py`: `pr_body`(검사 건너뜀/전체 검사+승인 필요), `_check_rows`·`_verification_rows`(skipped·review_required·NEEDS_APPROVAL), `_file_kind`, `reviewers`(마지막 규칙 우선·생성 파일 제외·`{org}/{team}` 형식·allow-cause 카테고리 오너), `search_key`, 라이브러리 경계(`db_pr` 미로드·main 없음), `db_pr.db_summary` 연결.
+
+## X RF-7 분석 전용·추가 로그 재분석·입력 해시 재사용 (리뷰 RF-7, 2026-10-05)
+
+- **X1 입력 해시·재사용** (`tests/test_triage_reuse.py`): `triage.py` `execute()`를 prepare/inputs/core/assemble로 나누고 입력 해시를 6부분(logs·jira·db·config·plugin·args)으로 계산한다. 모두 같으면 파싱·매칭을 건너뛰고 `JOB/analysis-cache.json`의 core를 다시 보여 준다(`--refresh`는 재사용도 끔). `analysis.json`에 `run`·`reuse`(hit 또는 바뀐 입력·추가 로그·1위 변화), `report.md`에 재사용/재분석 줄, 4KB 압축 때는 `added_logs`·`prev_top` 순으로 제거. `triage-state.json` 스키마 2: `job`(로그·실행 이력 ≤10·캐시 요약)은 세션이 바뀌어도 유지, 스키마 없는 파일은 첫 실행으로 취급. `--offline-db` 출력은 그대로(재사용 키·캐시 없음).
+- **X2 분석 전용 `--analysis-only`** (`tests/test_triage_analysis_only.py`): cleanup·기존 계획 질문·pending 피드백 삭제·열린 PR 확인·재분석 질문을 건너뛴다(기존 계획·분류는 알리기만). 호환성은 `--for dry-run`, 출력 `mode: "analysis-only"`. `ok`로 끝나면 lock을 풀고 `lock_released: true`라 이어지는 `db_pr stage`는 거부된다(`needs_input`에서는 lock 유지). `--jira-file`은 `--analysis-only`만으로도 허용, `--dry-run`·`--offline-db`와 함께 주면 종료 코드 2. `report.md`에 분석 전용 줄·"열린 PR: 확인 안 함"·기존 계획 줄. mode는 입력 해시에 없어 이어서 보통 analyze하면 core를 재사용한다.
+- **X3 추가 로그 `--more-logs`** (`tests/test_triage_more_logs.py`): 이전 분석 로그(`state.job.logs`) 뒤에 붙여 `f<순번>`을 유지하고 같은 경로는 조용히, 내용(sha256)이 같은 다른 경로는 `more-logs-duplicate` 경고로 건너뛴다. `--logs`와 상호 배제, 이전 로그가 없거나 `--offline-db`면 종료 코드 2. 로그 부분 해시가 바뀌어 Step 3~5를 합친 로그 전체로 다시 계산한다. 입력이 달라지면 이전 `analysis.json`·`report.md`를 `JOB/runs/<n>/`에 보관(최근 5개, events·match 제외). 첫 로그가 통화 증상만이고 추가 로그가 원인을 확인해 1위가 바뀌는 `top_changed` 테스트.
+- **X4 스킬·커맨드·eval**: `commands/analyze.md` argument-hint에 `[--analysis-only] [--more-logs <로그...>]`(855바이트). `SKILL.md` analyze 사용법에 두 옵션, §2에 `mode: analysis-only`(Step 6까지만·계획·Step 7·8 없음·lock은 드라이버가 풀었음)와 `reuse.hit`·`reuse.changed`·`top_changed` 보고 규칙을 추가하고 다른 문구를 줄여 8,162바이트(≤8192, reference 변경 없음). eval 51 `analysis-only-no-record`·52 `more-logs-reanalysis`(Jira MOCK-9051·9052, 시나리오 `e052-a-call-drop`·`e052-b-ims-403`)와 `grade.py` 기계 채점. 실행 결과(`workspace/x4`, 1회): 51 통과 7/7(수동 1건 포함), 52 통과 5/5.
+
+## S6 증상 문장 검색 (2026-10-05)
+
+- `db_search.py` keyword 모드: 질의 전체의 부분 일치(옛 동작·옛 순서, `phrase: true`)를 그대로 먼저 보이고, 단어별 검색을 덧붙인다. 한글 토큰에서 불용어·조사(`가`·`에서` 등)·부정 접두(`안붙어` → `붙어`, 별칭 키로 시작하는 `안테나`는 보존)를 떼고, 1글자 한글은 별칭 키와 맞을 때만 별칭으로 검색한다.
+- 별칭은 이슈 DB `GLOSSARY.md`의 `## 검색 별칭` 표(`질의 단어(앞부분)` | `함께 찾을 말`)에서 읽는다(`common/glossary.py` 신설: `table`, `search_aliases`). search 전용이며 분류·매칭·`db_lint`에는 쓰지 않는다. 샘플 DB(= 뼈대 복사본)에 12줄 추가. `db_lint._glossary`는 그대로 뒀다.
+- 점수: 단어마다 위치별 가중치(ID·제목·태그 3, 요약·원인 설명·해결책 2, `## 증상` 본문·원인의 상위 유형·Jira 1)의 최댓값, 맞은 단어 수 `m`이 최대치의 절반 이상인 것만 남기고 Jira는 최대치만. 정렬 `(-m, -score, 유형<원인<Jira, ID)`. 출력에 `terms[]`, 항목별 `matched[]`·`score`·`phrase`, 유형 항목 `jira`(최근 5건)·`jira_latest`, 원인 항목 `jira_latest`를 더했다(원인 `jira` 목록은 그대로).
+- 스킬: `reference/search.md`(단일 원본, 읽기 전용: 문장을 그대로 `db_search`, 0건이면 한 번만 명사로 재검색, 이슈 번호 줄 + 유형 > 원인 표). `commands/search.md`는 이를 가리키는 포인터. `SKILL.md`는 표 한 줄 병합 + 8192바이트 안에서 문구 정리(안전 규칙은 유지).
+- 테스트·eval: `tests/test_db_search.py` 7개 추가(증상 문장, 다중 단어, 불용어만, 옛 순서 접두, 별칭 데이터 구동, 정규화, glossary). eval 53(증상 자연어)·54(일치 없음)과 트리거 질의 1개 추가(52 → 54개).
+- 부작용: `triage.py` 후보 없음 절의 `search_hits`(`db_search` 호출)에 부분 일치 꼬리가 섞일 수 있다. 참고용이며 점수·분류에 쓰지 않는다.
+
+## 3C 행동 eval 52개 (2026-10-05)
+
+사외에서 스킬 행동 eval 52개(53·54는 3C 뒤 추가분 제외)를 `run.py --mode plugin`으로 실행했다. 보고서: `docs/history/eval-3c-2026-10-05.md`.
+
+- **Sonnet 52개**: 전 항목 통과 **36/52**, assertion 328/351(**93.4%**), 비용 **$18.28**(평균 $0.35·69초). 안전 위반 **0**(80회 전체). 한도·인증·API 오류 0건, 미실행 없음.
+- **Opus 재실행**: Sonnet 실패 중 (c)·혼합 14개만 돌려 **11/14** 통과, $10.62(같은 14개 Sonnet $4.18의 약 2.5배). Sonnet 재실행(같은 14개)은 3/14, $4.04.
+- **실패 분류**: a 환경·하네스·eval 정의(R4 응답 규칙 공백, 레포 `run.py` 직접 실행, 채점기 오탐), b 스킬 문구·스크립트(거부 뒤 새 유형 누락, 번호 재할당 설명 없음, drift 계획 값 없음, `error_events` 요청·오류 없음, SKILL 문구 삭제), c 모델 능력(결정적 줄 누락, 질문 전 timeline 읽기, 계획 `ops` 키 오류).
+- **당시 흐름별 권장**: verify-fix는 계획 형식 수정 전까지 Opus, 5-2 탐색은 Opus 쪽이 낫다, 리포트 설명 품질도 Opus가 낫다. analyze·record·fix-submitted·sync-pr은 Sonnet.
+- **정정**: (1) Jira 매핑이 비었을 때 멈추는 문구(eval 39)는 X4가 아니라 **RF-1**에서 SKILL.md에서 삭제됐다. (2) 설정 확인 메시지(config check)는 스크립트가 이미 냈지만 triage가 버리고 있었다.
+- 원문 통독은 3C 보고서 수동 집계 8/52였다(3D에서 현재 지표 10/52로 다시 계산).
+
+## 3D 3C 발견 수정 (2026-10-05)
+
+3C에서 나온 b·a 항목을 고쳤다. 보고서: `docs/history/eval-3d-2026-10-05.md`.
+
+- **3D-A (`c0278ee`)**: 계획 형식 검사(`계획 형식 오류`, `_err_brief`로 짧게 표시) / drift에 `plan_value` / 번호 재할당 설명용 `ids_at_base`·`expected_at_base` / `error_events`에 `request`·`error` / 읽기 전용 안내 `read_only_hint` / `step_anchor.outside_errors`(구간 밖 오류 설명). `db_pr.py`·`dbadd/drift.py`·`db_summary.py`·`triage.py`, `contracts.md`·`07-workflow.md` 갱신.
+- **3D-B (`283c485`)**: SKILL.md·`reference/`(explore·verify·write-flow) 문구 복구·정리.
+- **3D-C (`4bbda4e`, `1db990c`)**: eval 하네스·채점·응답 규칙. 원문 통독 지표에서 cut fixture(마스킹된 근거 구간)를 뺌.
+- **`tools/related_tests.py` (`ea4fbf9`)**: 바뀐 파일에서 관련 테스트를 고르고(`--base`·`--files`), `--run`은 pytest와 `check_boundary.py`를 실행한다. **새 테스트 정책**: 기본은 `related_tests.py --run`, 전체 테스트는 도구가 full이라 할 때·Z 직전·요청 시만(`e7c8ede`, `11-phases.md §11.0`).
+- **Sonnet 재실행(같은 26개, `3d-sonnet`)**: 전 항목 통과 12→**18/26**, assertion 150/173→**165/173**(95.4%), 지정 eval 목표 13/19(기준 15/19, 미달), 원문 통독 5→**8/26**(악화), 안전 위반 0, 비용 **$9.45**. 회귀 21·40·47. 남은 문제 제안(b-1~6, a-1~3)이 3E의 입력이다. 보고서: `docs/history/eval-3d-2026-10-05.md`.
+
+## 3E 결정적 줄 구조화 (2026-10-06)
+
+3D 제안(b-1~6, a-1~3)을 모델 문구가 아닌 스크립트·hook 구조로 옮겼다.
+
+- **3E-A (`290f6a7`)**: `analysis.json`의 `must_show`(꼭 보여야 할 줄을 우선순위로, 마지막에 160자 절단·앞 4개), 미수집 태그 `uncollected_tags`(`parse_logcat` 최상위·`logs.uncollected_tags` ≤3), `db_summary`의 `fix_changes`와 PR 본문 '수정 상태 변경' 절, 리포트 심층 분석 칸(분석 스킬 설정 ask/never/없음), 탐색 분석은 동의 뒤 `triage.py explore <KEY>`가 `timeline.md`를 만든다(run은 `explore-input.json`만). `CACHE_FORMAT` 2.
+- **3E-B (`f937db6`, `250b1dd`)**: guard 규칙 10(로그 원문·zip·bugreport 통독 `cat`·`head -c`·`unzip -p` 등 차단, Hook 10종), `grade.py` e40 NameError 수정·`raw_reads_blocked` 지표·e46/e47 순서 채점(`explore` 뒤 timeline 열람), `run.py` 결과 파일 대체 생성(`outputs_derived`)·자식 env 정리·서명(attribution) 끔.
+- **3E-C (`fcfec4d`)**: SKILL·reference 문구(`must_show` 그대로, 탐색은 `triage.py explore` 뒤, 수정 상태 변경 절), `.expect.yaml`은 선택, `14-site.md` S1 확인 항목 추가.
+- 테스트: **734 passed**.
+- Sonnet 재실행: 17개 실행. 행동 16/17, 채점기 14/17(3F 수정 전)→**16/17**(3F 수정 뒤 재채점, 46·47이 스크립트로 통과, 남은 실패는 e25). 안전 위반 0. 원문 통독 지표 1/17(오탐 — 마스킹 cut 출력)로 3D의 8/17보다 줄었고 guard가 4건을 막았다. 새 구멍 `grep -n "" <로그>`(e2·e40)는 3F에서 막았다. e25는 Sonnet에서 회귀(Opus 7/7). 비용 $7.09. 자세히는 [`eval-3e-2026-10-06.md`](eval-3e-2026-10-06.md).
+
+## 3F 채점 오판정·guard 규칙 10 보강 (2026-10-06)
+
+3E 제안 a-1~3·b-4를 적용했다. 재실행 없이 3E 결과를 다시 채점했다.
+
+- `grade.py`: `explore_order`가 heredoc 본문을 빼고 따옴표 경로(`"…/triage.py" explore`)를 잡으며, 질문 패턴에 "할지"를 더했다. `_is_raw_target`이 상대 `fixtures/`·`draft/` 경로를 원문에서 뺀다. 원문 대상에 `match.json`·`events-full.json`을 더해 guard와 맞췄다.
+- `guard.py` 규칙 10: 빈 패턴·`^`·`.*`·`$`·`.`의 `grep`/`rg`, `awk '{print}'`·`awk 1`, `sed -n p`·`sed -n '1,$p'`·`sed ''`가 원문을 읽으면 거부한다. 구간이 있는 `sed -n 1,200p`·실제 패턴 `grep`·`grep -c`는 통과한다. 지표 `raw_full_reads`가 같은 판정을 쓴다(guard 함수 재사용).
+- 3E 재채점(복사본): 완전 통과 16/17(e25 제외), 46·47 스크립트 통과. 원문 통독 지표는 e2·e40의 `grep -n ""` 2건(실제 통독)만 남았고 오탐은 사라졌다.
+- 미룬 것: verify-fix 흔적 검사 강제(b-5)와 SKILL 5-1 보고 칸 문구(b-6)는 `99-deferred.md §F`.

@@ -67,6 +67,28 @@ parser:
   # site | reference. 사외 초안은 reference, 사내는 포팅 후 site (16-existing-assets.md §16.3)
   backend: reference
 
+# 플랫폼 상수 (RF-4, 02-config.md). 비우면 코드 기본값(아래 주석 값)과 출력이 같다.
+# 사용자 config로 바꿀 수 없다. 바꾸면 이슈 DB에서 db_regress --all을 다시 돌린다.
+platform:
+  name: android                      # 지금은 android만
+  # source_tree:                     # TODO(SITE:S11) 사내 트리의 필수 디렉토리·버전 파일
+  #   required_dirs: [frameworks/opt/telephony]      # aosp 루트 기준, 모두 있어야 함
+  #   version_sources:                               # 순서대로 시도, 그룹 1 = 버전, re.M
+  #     - {file: build/release/release_config_map.textproto, regex: 'RELEASE_PLATFORM_VERSION\D*(\d+)'}
+  #     - {file: build/make/core/version_defaults.mk, regex: '^\s*PLATFORM_VERSION\s*:?=\s*(\d+)'}
+  #     - {file: build/core/version_defaults.mk, regex: '^\s*PLATFORM_VERSION\s*:?=\s*(\d+)'}
+  # log:
+  #   phone_id:                      # TODO(SITE:S20) 슬롯 표기. 그룹 1 = 슬롯 번호. 위치마다 순서대로 첫 일치
+  #     tag: ['^[A-Za-z]+-(\d+)$']                   # 태그에 match
+  #     msg_prefix: ['^\[(?:PHONE|SUB)(\d+)\]\s?']   # 메시지 앞 match, RIL 해석 전 떼어냄
+  #     msg_suffix: ['\s?\[PHONE(\d+)\]$']           # 메시지 끝 search, 떼어냄
+  # ril:
+  #   tags: [RILJ]                   # TODO(SITE:S10) 벤더 RIL 태그(형식은 RILJ와 같아야 함, S9). tags.yaml 매핑도 함께
+  # bugreport:                       # TODO(SITE:S21) dumpstate 섹션 헤더
+  #   wanted_buffers: [system, radio, main]          # ^[a-z]+$, 출력 파일 순서
+  #   section_regex: '^------ (?P<title>.+?) \((?P<cmd>logcat\b[^)]*)\) ------\s*$'   # (?P<cmd>) 필수
+  #   boundary_regex: '^------ .* ------\s*$'
+
 # 어댑터(외부 파서). 사외 초안은 비워 둔다.
 # 형식은 plugin/scripts/adapters/base.py, 예시는 tests/mocks/adapters/site_data_existing.py.
 external_parsers: {}

@@ -13,7 +13,7 @@
       그 흔적을 모아 `step_events[{rule, ts, seq, label}]`(규칙 번호·시각·줄 순번·이름 — 로그 본문 없음, (ts, seq, rule) 순)을
       더한다. 규칙당 1000개·전체 5000개 상한(넘으면 경고 `step-events-truncated`), 잘못된 규칙은 경고 `step-event-rule`.
   extract-bugreport <zip|txt> --out <dir>
-      bugreport에서 logcat 섹션(system/radio/main)과 빌드 정보(build.json)만 꺼낸다.
+      bugreport에서 logcat 섹션(기본 system/radio/main)과 빌드 정보(build.json)만 꺼낸다.
   cut <logcat...> (--evidence <match.json> | --around <ISO 시각> [--seconds 30]) --out <file>
       [--context 20] [--max-lines 100] [--tz <IANA>] [--year <YYYY>] [--rules <db>/parser-rules]
       판별 근거 주변 최소 구간을 마스킹된 상태로만 쓴다(fixture용).
@@ -36,12 +36,10 @@
 from __future__ import annotations
 
 import argparse
-import io
 import json
 import re
 import subprocess
 import sys
-import zipfile
 from datetime import timedelta
 from pathlib import Path
 
@@ -51,11 +49,13 @@ sys.path.insert(0, str(SCRIPTS))
 import adapters  # noqa: E402
 import parser_backends  # noqa: E402
 from common import compat, masking, parser_rules, site_defaults, stepanchor  # noqa: E402
+from common import events as evt  # noqa: E402
 from common.patterns import DEFAULT_TIMEOUT_MS, PatternError, PatternRunner, PatternTimeout  # noqa: E402
 from common.exitcodes import OK, USAGE  # noqa: E402
-from parser_backends import logcat  # noqa: E402
+import platforms  # noqa: E402
+from platforms.android import bugreport, logcat  # noqa: E402
 
-OUTPUT_SCHEMA = 1
+OUTPUT_SCHEMA = evt.SCHEMA_VERSION  # markers 출력도 같은 번호
 DEFAULT_MINUTES = 5
 
 
@@ -64,24 +64,6 @@ class UsageError(Exception):
 
 
 # -- 공통 후처리 ------------------------------------------------------------
-
-
-def _derived(base: dict, event: str, fields: dict, source: str) -> dict:
-    return {
-        "ts": base["ts"],
-        "pid": base.get("pid"),
-        "tid": base.get("tid"),
-        "level": base.get("level"),
-        "tag": base.get("tag"),
-        "msg": base.get("msg"),
-        "phone_id": base.get("phone_id"),
-        "category_hint": base.get("category_hint"),
-        "ril": None,
-        "event": event,
-        "fields": {k: str(v) for k, v in fields.items()},
-        "source": source,
-        "line_ref": base.get("line_ref"),
-    }
 
 
 def _ril_events(rec: dict, rules: parser_rules.Rules, last_ts: str | None) -> list[dict]:
@@ -98,14 +80,13 @@ def _ril_events(rec: dict, rules: parser_rules.Rules, last_ts: str | None) -> li
     out = []
     if ann["dir"] == "resp":
         if ann["error"] not in (None, "NONE"):
-            out.append(_derived(rec, "ril_error", {**base_fields, "error": ann["error"]}, "rules"))
+            out.append(evt.derived_event(rec, "ril_error", {**base_fields, "error": ann["error"]}))
         if ann["latency_ms"] is not None and ann["latency_ms"] > timeout:
             out.append(
-                _derived(
+                evt.derived_event(
                     rec,
                     "ril_timeout",
                     {**base_fields, "latency_ms": ann["latency_ms"], "timeout_ms": timeout},
-                    "rules",
                 )
             )
     elif ann["paired_ts"] is None and last_ts is not None:
@@ -113,7 +94,7 @@ def _ril_events(rec: dict, rules: parser_rules.Rules, last_ts: str | None) -> li
         deadline = logcat.parse_ts(rec["ts"]) + timedelta(milliseconds=timeout)
         if logcat.parse_ts(last_ts) >= deadline:
             out.append(
-                _derived(rec, "ril_no_response", {**base_fields, "timeout_ms": timeout}, "rules")
+                evt.derived_event(rec, "ril_no_response", {**base_fields, "timeout_ms": timeout})
             )
     return out
 
@@ -140,7 +121,7 @@ def _run_extractors(lines: list[dict], rules: parser_rules.Rules, timeout_ms: in
                     for i in hits:
                         groups = pattern.search(msgs[i]).groupdict()
                         fields = {f: groups[f] for f in ex.fields if groups.get(f) is not None}
-                        found.append((i, _derived(lines[i], ex.event, fields, "rules")))
+                        found.append((i, evt.derived_event(lines[i], ex.event, fields)))
                     remaining = [i for i in remaining if i not in hit_set]
             except (PatternTimeout, PatternError) as exc:
                 errors.append({"extractor": ex.id, "error": str(exc)})
@@ -171,8 +152,11 @@ def postprocess(
     last_ts: str | None = None,
     timeout_ms: int | None = None,
     errors: list[dict] | None = None,
+    dropped: dict | None = None,
 ) -> list[dict]:
     """백엔드 출력에 태그 매핑 → 마스킹 → RIL 파생 이벤트 → extractor를 적용한다.
+
+    `dropped`가 dict면 버린 줄을 `(태그, pid, 레벨) → 줄 수`로 센다(`uncollected_tags`용, 원문 태그 그대로 — 쓰는 쪽이 마스킹한다).
 
     줄 레코드(`event: None`)는 `tags.yaml`에 없는 태그면 버린다. builtin 레코드는
     그대로 두고(마스킹만) 줄 레코드와 함께 낸다. 파생 이벤트는 그 줄 바로 뒤에 온다
@@ -184,6 +168,9 @@ def postprocess(
         if rec.get("event") is None:
             category = rules.tag_category(rec["tag"])
             if category is None:
+                if dropped is not None:
+                    key = (rec["tag"], rec.get("pid"), rec.get("level"))
+                    dropped[key] = dropped.get(key, 0) + 1
                 continue
             ann = rec.get("ril")
             if ann:
@@ -298,22 +285,21 @@ def _run_external(
             if window and not (window[0] <= dt <= window[1]):
                 continue
             events.append(
-                {
-                    "ts": logcat.format_ts(dt),
-                    "pid": item.get("pid"),
-                    "tid": item.get("tid"),
-                    "level": item.get("level"),
-                    "tag": item.get("tag"),
-                    "msg": item.get("msg") or "",
-                    "phone_id": item.get("phone_id"),
-                    "category_hint": category,
-                    "ril": None,
-                    "event": name,
-                    "fields": {k: str(v) for k, v in (item.get("fields") or {}).items() if v is not None},
-                    "source": f"external:{module.ADAPTER_NAME}",
+                evt.make_event(
+                    ts=logcat.format_ts(dt),
+                    pid=item.get("pid"),
+                    tid=item.get("tid"),
+                    level=item.get("level"),
+                    tag=item.get("tag"),
+                    msg=item.get("msg") or "",
+                    phone_id=item.get("phone_id"),
+                    category_hint=category,
+                    event=name,
+                    fields={k: str(v) for k, v in (item.get("fields") or {}).items() if v is not None},
+                    source=f"{evt.EXTERNAL_PREFIX}{module.ADAPTER_NAME}",
                     # 외부 파서는 파일만 안다 (줄 번호 없음).
-                    "line_ref": {"file_index": file_index, "line_no": None},
-                }
+                    line_ref=evt.line_ref(file_index),
+                )
             )
     if dropped:
         warnings.append(
@@ -327,17 +313,6 @@ def _ext_warn(category: str, message: str) -> dict:
 
 
 # -- parse -------------------------------------------------------------------
-
-
-def _looks_like_bugreport(path: Path) -> bool:
-    if path.suffix.lower() == ".zip":
-        return True
-    try:
-        with path.open(encoding="utf-8", errors="replace") as fh:
-            head = [fh.readline() for _ in range(5)]
-    except OSError:
-        return False
-    return any(line.startswith("== dumpstate") for line in head)
 
 
 def _window(args) -> tuple | None:
@@ -385,7 +360,44 @@ def _allow_patterns(db_cfg: dict) -> list[str]:
     return list((db_cfg.get("mask") or {}).get("allow_patterns") or [])
 
 
-def run_parse(args, plugin_root: Path, defaults: dict) -> dict:
+def _profile(defaults: dict) -> platforms.PlatformProfile:
+    """site-defaults의 `platform:`을 읽는다. 잘못되면 사용 오류(종료 코드 2)."""
+    try:
+        return platforms.load(defaults)
+    except platforms.PlatformConfigError as exc:
+        raise UsageError(str(exc)) from exc
+
+
+def _load_backend(defaults: dict, profile: platforms.PlatformProfile):
+    backend_name = (defaults.get("parser") or {}).get("backend")
+    try:
+        return parser_backends.load(backend_name).configure(profile)
+    except parser_backends.BackendError as exc:
+        raise UsageError(f"site-defaults.yaml parser.backend: {exc}") from exc
+
+
+UNCOLLECTED_TOP = 5
+
+
+def uncollected_tags(dropped: dict, events: list[dict], masker=None) -> list[dict]:
+    """`tags.yaml`에 없어 버려진 줄의 태그 중, 수집된 줄과 같은 pid에 있는 것만 → `[{tag, lines, warn}]`(상위 5개).
+
+    관측 누락 힌트다(로그에 있었지만 파서 규칙 태그가 아니라 이벤트로 못 뽑힌 줄). pid가 없는 줄은 건너뛴다.
+    """
+    pids = {e.get("pid") for e in events if e.get("event") is None and e.get("pid") is not None}
+    agg: dict[str, list[int]] = {}
+    for (tag, pid, level), n in dropped.items():
+        if pid is None or pid not in pids:
+            continue
+        row = agg.setdefault(str(tag), [0, 0])
+        row[0] += n
+        if level in ("W", "E", "F"):
+            row[1] += n
+    rows = sorted(agg.items(), key=lambda kv: (-kv[1][1], -kv[1][0], kv[0]))[:UNCOLLECTED_TOP]
+    return [{"tag": (masker(tag) if masker else tag)[:40], "lines": v[0], "warn": v[1]} for tag, v in rows]
+
+
+def run_parse(args, plugin_root: Path, defaults: dict, profile: platforms.PlatformProfile | None = None) -> dict:
     paths = [Path(p) for p in args.logs]
     for path in paths:
         if not path.is_file():
@@ -407,11 +419,7 @@ def run_parse(args, plugin_root: Path, defaults: dict) -> dict:
         raise UsageError(f"파서 규칙 오류: {exc}") from exc
     db_cfg = compat.load_db_config(rules_dir.parent)
 
-    backend_name = (defaults.get("parser") or {}).get("backend")
-    try:
-        backend = parser_backends.load(backend_name)
-    except parser_backends.BackendError as exc:
-        raise UsageError(f"site-defaults.yaml parser.backend: {exc}") from exc
+    backend = _load_backend(defaults, profile or _profile(defaults))
 
     masker = None
     if args.mask:
@@ -445,8 +453,10 @@ def run_parse(args, plugin_root: Path, defaults: dict) -> dict:
     timeout_ms = int((db_cfg.get("matcher") or {}).get("pattern_timeout_ms", DEFAULT_TIMEOUT_MS))
     errors: list[dict] = []
     events = backend.parse(paths, args.tz, args.year, window)
+    dropped: dict = {}
     events = postprocess(events, rules, masker=masker, last_ts=coverage["last_ts"],
-                         timeout_ms=timeout_ms, errors=errors)
+                         timeout_ms=timeout_ms, errors=errors, dropped=dropped)
+    uncollected = uncollected_tags(dropped, events, masker)
     for error in errors:
         warnings.append({"code": "pattern-timeout",
                          "message": f"extractor {error['extractor']}: {error['error']}"})
@@ -484,7 +494,7 @@ def run_parse(args, plugin_root: Path, defaults: dict) -> dict:
     elif not args.no_external:
         warnings += compat.check_external(db_cfg, {})
 
-    return {
+    out = {
         "schema": OUTPUT_SCHEMA,
         "backend": {"name": backend.name, "version": backend.version()},
         "external": external_info,
@@ -507,6 +517,9 @@ def run_parse(args, plugin_root: Path, defaults: dict) -> dict:
         "errors": errors,
         "events": events,
     }
+    if uncollected:      # 최상위, 있을 때만(없으면 출력이 이전과 같다)
+        out["uncollected_tags"] = uncollected
+    return out
 
 
 def observation_errors(doc: dict) -> list[dict]:
@@ -649,7 +662,7 @@ def _step_event_hits(raw: list[dict], specs: list[dict | None], paths: list[Path
     return hits
 
 
-def run_markers(args, defaults: dict) -> dict:
+def run_markers(args, defaults: dict, profile: platforms.PlatformProfile | None = None) -> dict:
     """스텝 마커 줄을 모은다. 마커 태그는 `tags.yaml`에 없으므로 `parse` 출력을 쓰지 못하고 백엔드의 줄 레코드를 직접 본다.
 
     원문 줄에서 정규식이 맞는 줄만 골라(시간 상한 `matcher.pattern_timeout_ms`) 그 줄만 마스킹하고, 마스킹된 텍스트에서
@@ -669,11 +682,7 @@ def run_markers(args, defaults: dict) -> dict:
         raise UsageError(str(exc)) from exc
     rules_dir = Path(args.rules)
     db_cfg = compat.load_db_config(rules_dir.parent)
-    backend_name = (defaults.get("parser") or {}).get("backend")
-    try:
-        backend = parser_backends.load(backend_name)
-    except parser_backends.BackendError as exc:
-        raise UsageError(f"site-defaults.yaml parser.backend: {exc}") from exc
+    backend = _load_backend(defaults, profile or _profile(defaults))
 
     conf = defaults.get("failed_step") or {}
     status_map = conf.get("marker_status") if isinstance(conf.get("marker_status"), dict) else None
@@ -755,104 +764,16 @@ def run_markers(args, defaults: dict) -> dict:
 
 # -- extract-bugreport --------------------------------------------------------
 
-# bugreport 섹션 헤더 — TODO(SITE:S21) 사내 실제 문자열로 확인한다.
-# 예: "------ RADIO LOG (logcat -b radio -v threadtime -d *:v) ------"
-SECTION_RE = re.compile(r"^------ (?P<title>.+?) \((?P<cmd>logcat\b[^)]*)\) ------\s*$")
-SECTION_BOUNDARY_RE = re.compile(r"^------ .* ------\s*$")
-BUFFER_RE = re.compile(r"-b\s+(?P<buf>[a-z]+)")
-BUILD_RE = re.compile(r"^Build:\s*(?P<v>.+?)\s*$")
-FINGERPRINT_RE = re.compile(r"^Build fingerprint:\s*'?(?P<v>[^']+?)'?\s*$")
-WANTED_BUFFERS = ("system", "radio", "main")
+# 구현은 `platforms/android/bugreport.py` (RF-3). 여기는 오류를 사용 오류로 바꾸는 래퍼다.
+_looks_like_bugreport = bugreport.looks_like_bugreport
 
 
-def _open_bugreport(path: Path) -> tuple[io.TextIOBase, list]:
-    if path.suffix.lower() == ".zip" or zipfile.is_zipfile(path):
-        zf = zipfile.ZipFile(path)
-        members = [
-            info for info in zf.infolist()
-            if info.filename.lower().endswith(".txt")
-            and Path(info.filename).name.lower().startswith("bugreport")
-        ]
-        if not members:
-            zf.close()
-            raise UsageError(f"{path.name}: bugreport 본문(bugreport-*.txt)이 zip 안에 없습니다.")
-        member = max(members, key=lambda i: i.file_size)
-        return io.TextIOWrapper(zf.open(member), encoding="utf-8", errors="replace"), [zf]
-    return path.open(encoding="utf-8", errors="replace"), []
-
-
-def run_extract_bugreport(args) -> dict:
-    src = Path(args.bugreport)
-    if not src.is_file():
-        raise UsageError(f"bugreport 파일이 없습니다: {src}")
-    out_dir = Path(args.out)
-    out_dir.mkdir(parents=True, exist_ok=True)
-
-    build = {"build": None, "fingerprint": None}
-    writers: dict[str, io.TextIOBase] = {}
-    counts: dict[str, int] = {}
-    current = None
-    in_header = True
-    stream, closers = _open_bugreport(src)
+def run_extract_bugreport(args, profile: platforms.PlatformProfile | None = None) -> dict:
+    rules = profile.bugreport if profile else None
     try:
-        for raw in stream:
-            line = raw.rstrip("\r\n")
-            if SECTION_BOUNDARY_RE.match(line):
-                in_header = False
-                current = None
-                hit = SECTION_RE.match(line)
-                if hit:
-                    buf = BUFFER_RE.search(hit.group("cmd"))
-                    if buf and buf.group("buf") in WANTED_BUFFERS:
-                        current = buf.group("buf")
-                        if current not in writers:
-                            writers[current] = (out_dir / f"logcat-{current}.txt").open(
-                                "w", encoding="utf-8", newline="\n"
-                            )
-                            counts[current] = 0
-                continue
-            if in_header:
-                hit = BUILD_RE.match(line)
-                if hit and build["build"] is None:
-                    build["build"] = hit.group("v")
-                hit = FINGERPRINT_RE.match(line)
-                if hit and build["fingerprint"] is None:
-                    build["fingerprint"] = hit.group("v")
-                continue
-            if current is not None:
-                writers[current].write(line + "\n")
-                counts[current] += 1
-    finally:
-        stream.close()
-        for closer in closers:
-            closer.close()
-        for writer in writers.values():
-            writer.close()
-
-    if not writers:
-        raise UsageError(
-            f"{src.name}: logcat 섹션(system/radio/main)을 찾지 못했습니다. "
-            "섹션 헤더 형식이 다를 수 있습니다 (S21)."
-        )
-    warnings = []
-    if build["fingerprint"] is None:
-        warnings.append({"code": "no-fingerprint", "message": "헤더에 Build fingerprint가 없습니다."})
-    build_json = out_dir / "build.json"
-    build_json.write_text(
-        json.dumps({**build, "source": src.name}, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-        newline="\n",
-    )
-    return {
-        "files": [
-            {"buffer": name, "path": str(out_dir / f"logcat-{name}.txt"), "lines": counts[name]}
-            for name in WANTED_BUFFERS
-            if name in writers
-        ],
-        "build_json": str(build_json),
-        "build": build,
-        "warnings": warnings,
-    }
+        return bugreport.extract(Path(args.bugreport), Path(args.out), rules)
+    except bugreport.BugreportError as exc:
+        raise UsageError(str(exc)) from exc
 
 
 # -- cut ------------------------------------------------------------------------
@@ -891,14 +812,15 @@ def _cut_anchors(args, lines: list) -> tuple[set[int], dict, list[dict]]:
     for e in evidence:
         ref = e.get("line_ref") or {}
         key = (e["ts"], e.get("tag"))
-        i = position.get((ref.get("file_index"), ref.get("line_no"))) if ref.get("line_no") else None
+        ref_pos = evt.ref_key(ref)
+        i = position.get(ref_pos) if ref_pos else None
         if i is not None and (logcat.format_ts(lines[i][1].dt), lines[i][1].tag) == key:
             anchors.add(i)
             by["line_ref"] += 1
             continue
         anchors.update(by_ts_tag.get(key, []))
         by["ts_tag"] += 1
-        mismatch = mismatch or bool(ref.get("line_no"))
+        mismatch = mismatch or ref_pos is not None
     warnings = []
     if mismatch:
         warnings.append({"code": "evidence-ref-mismatch",
@@ -1037,12 +959,13 @@ def main(argv: list[str] | None = None) -> int:
     plugin_root = Path(root_opt) if root_opt else site_defaults.plugin_root()
 
     try:
+        profile = _profile(defaults)
         if args.cmd == "parse":
-            result = run_parse(args, plugin_root, defaults)
+            result = run_parse(args, plugin_root, defaults, profile)
         elif args.cmd == "markers":
-            result = run_markers(args, defaults)
+            result = run_markers(args, defaults, profile)
         elif args.cmd == "extract-bugreport":
-            result = run_extract_bugreport(args)
+            result = run_extract_bugreport(args, profile)
         else:
             result = run_cut(args)
     except UsageError as exc:

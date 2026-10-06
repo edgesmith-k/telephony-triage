@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -83,6 +84,7 @@ def test_each_rule_reports_injected_violation(fake_repo):
         "api_key = abcdefghijklmnopqrstuvwxyz012345",
     ]))
     _write(fake_repo, "plugin/scripts/bad.py", "from parser_backends.site import backend\n")
+    _write(fake_repo, "plugin/scripts/platforms/android/bad.py", "from parser_backends.site import backend\n")
     _write(fake_repo, "plugin/scripts/adapters/uses.py", "from . import site_data_x\n")
     _write(fake_repo, "tests/fixtures/issue-db-x/data/DATA-001-x/fixtures/DATA-001-01.log", "log\n")
     _write(fake_repo, "tests/fixtures/issue-db-x/data/DATA-001-x/fixtures/DATA-001-01.expect.yaml",
@@ -94,6 +96,7 @@ def test_each_rule_reports_injected_violation(fake_repo):
     for rule in ("private-key", "url-host", "email", "ip-address", "long-number", "secret-assign"):
         assert (f"pattern:{rule}", "docs/leak.md") in found, rule
     assert ("site-import", "plugin/scripts/bad.py") in found
+    assert ("site-import", "plugin/scripts/platforms/android/bad.py") in found
     assert ("site-import", "plugin/scripts/adapters/uses.py") in found
     assert ("fixture-origin", "tests/fixtures/issue-db-x/data/DATA-001-x/fixtures/DATA-001-01.log") in found
     assert ("fixture-origin", "tests/fixtures/logs/unknown.log") in found
@@ -129,6 +132,73 @@ def test_allow_file_and_site_patterns(fake_repo):
     assert ("pattern:corp-name", "plugin/scripts/parse_logcat.py") in found
     # 패턴 파일 자체는 SITE_PATHS라 검사하지 않는다
     assert not any(path.startswith("docs/site/") for _, path in found)
+
+
+R = "A1b2C3d4E5f6G7h8"  # 16자 합성 조각 (실제 토큰 아님)
+
+SECRET_LINES = [
+    ("private-key", "-----BEGIN OPENSSH PRIVATE KEY-----"),
+    ("private-key", "-----BEGIN PGP PRIVATE KEY BLOCK-----"),
+    ("github-token", "gh" + "p_" + R + R + "abcd"),
+    ("github-token", "github" + "_pat_" + "11" + R + "_" + R + R),
+    ("aws-access-key", "AK" + "IA" + "Q3EGRIZ7XN4LMDKV"),
+    ("slack-token", "xo" + "xb-" + "1234567890-" + R),
+    ("google-api-key", "AI" + "za" + "Sy" + R + R + "Z"),        # AIza + 35자
+    ("atlassian-token", "ATA" + "TT3x" + R * 3),
+    ("package-token", "np" + "m_" + R + R + "abcd"),
+    ("llm-api-key", "sk-" + "ant-api03-" + R * 2),
+    ("llm-api-key", "sk-" + "proj-" + R + "T3Blbk" + "FJ" + R),
+    ("jwt", "ey" + "JhbGciOiJIUzI1NiJ9.ey" + "JzdWIiOiIxMjM0In0." + R),
+    ("auth-header", "Authorization: Bearer " + R + R),
+    ("auth-header", "Authorization: Basic " + "dXNlcjpwYXNz" + "d29yZDEyMw=="),
+    ("url-credential", "https://kim:" + "s3cr3tPw" + "@build.mock-corp.invalid/x"),
+    ("netrc", "machine ghe.invalid login kim password " + "Pw9xk2LmQ"),
+    ("secret-assign", "aws_secret_access_key = " + R + R),
+    ("secret-assign", '"client_secret": "' + R + R + '"'),
+    ("secret-assign", "JIRA_API_TOKEN=" + R + "9z9z"),
+]
+
+
+@pytest.mark.parametrize("rule,line", SECRET_LINES)
+def test_secret_patterns_catch_values(fake_repo, rule, line):
+    _write(fake_repo, "docs/leak.md", line + "\n")
+    found = boundary.scan(fake_repo, "external")
+    assert (f"pattern:{rule}", "docs/leak.md") in _rules(found)
+    # 출력에는 비밀값 전체가 남지 않는다
+    if rule != "private-key":
+        assert all(line not in f.text for f in found)
+
+
+def test_secret_placeholders_and_code_pass(fake_repo):
+    _write(fake_repo, "docs/howto.md", "\n".join([
+        "-----BEGIN PUBLIC KEY-----",
+        "ghp_<token>",
+        "AKIAIOSFODNN7EXAMPLE",
+        "xoxb-xxxxxxxxxx",
+        "token: <eyJhbGciOiJIUzI1NiJ9.payload>",
+        '-H "Authorization: Bearer $GH_TOKEN"',
+        'Authorization: Digest username="a", response="<CRED#1>"',
+        '<div class="basic label-container">',
+        "https://x-access-token:${GH_TOKEN}@github.com/o/r",
+        "https://user:<password>@ghe.invalid/x",
+        "ssh://git@github.com/o/r",
+        "login kim password ****",
+        "TT_PUBLISH_TOKEN=<approved_hash>",
+        "GH_TOKEN=${{ secrets.GH_TOKEN }}",
+        "token = self._compute_token_for_request",
+        "password: REDACTED_REDACTED_REDACTED1",
+        "api_key: your_api_key_here_1234567890",
+        "risk-free sk-learn",
+    ]) + "\n")
+    assert boundary.scan(fake_repo, "external") == []
+
+
+def test_secret_assign_long_line_is_fast():
+    # 키 이름 앞뒤 상한({0,30}) 덕에 긴 줄에서도 선형 시간
+    regex = dict((n, r) for n, r, _ in boundary.DEFAULT_PATTERNS)["secret-assign"]
+    start = time.monotonic()
+    regex.search("a_" * 100000)
+    assert time.monotonic() - start < 2
 
 
 # ---------------------------------------------------------------- import_draft

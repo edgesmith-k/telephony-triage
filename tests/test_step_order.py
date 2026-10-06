@@ -288,9 +288,14 @@ def test_triage_aligns_failure_window_by_step_order_without_any_clock():
     assert "  - 4 | 망 등록 확인 → 2026-09-20T05:31:30.000Z UNSOL_RESPONSE_NETWORK_STATE_CHANGED" in report
     assert "  - 1 | 비행기 모드 켜기 → 2026-09-20T05:30:05.000Z ConnectivityService" in report
     assert "- 시험 절차: zip 안 run_01/report.html" in report
+    # Jira 발생 시각은 분석 범위 밖: 그 근처 오류 이벤트는 개수·표본만 알리고 근거·점수에는 쓰지 않는다
+    assert sa["outside_errors"] == 2 and "outside_errors" not in json.dumps(done["candidates"])
+    assert "- 분석 범위 밖 오류 이벤트 (Jira 발생 시각 " in report and "ims_registration_failed" in report
+    assert "근거·점수에 쓰지 않음): 2건" in report
     # 끄면(anchor=off) 오늘의 동작: Jira 시각 ±5분 → IMS-001-01이 1위
     off, off_job = _offline(db, _zip(tmp("tt-zip-") / "att.zip"), "--answer", "anchor=off")
     assert _causes(off)[0] == "IMS-001-01" and "order" not in off.get("step_anchor", {})
+    assert "outside_errors" not in off.get("step_anchor", {})                 # 앵커가 없으면 키도 없다
     # 스텝 이름·HTML 문구는 하위 스크립트 인자(trace.jsonl)와 상태 파일에 없다. markers 호출은 한 번, 플래그만 붙는다
     trace = (job / "trace.jsonl").read_text(encoding="utf-8")
     for text in (*STEP_NAMES, "Overall result", "report.html", "가짜"):

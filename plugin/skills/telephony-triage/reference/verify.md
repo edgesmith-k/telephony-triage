@@ -1,6 +1,7 @@
 # 검증·수정 상태 흐름: validate --cause, fix-submitted, verify-fix
 
 세 흐름 모두 **판정·입력 확인 → 사용자 확인 → `write-flow.md`의 공통 쓰기 절차 PR**이다. SKILL.md의 "실행 규칙"을 따른다. 아래 "lock"은 `db_pr lock acquire <작업 키> --command <흐름>`이고 보유 중이면 `write-flow.md` 1번.
+계획은 모두 `write-flow.md` §계획 형식이다: `source`·`schema_version`(SNAP `issue-db.config.yaml`)·`started_at`·`base_sha`(`db_pr snapshot`의 `snapshot_sha`)·`jira`·`operations`(op 목록 — `ops` 아님)·`commit_message`·`pr_notes`. `db_verify`의 `suggested_ops`는 `operations`에 넣는다.
 판정은 `db_verify.py`의 출력으로만 한다(항상 회귀·검증 모드: 파일 전체, 모든 active 원인 독립 평가, bonus 0).
 **시각 기준**: 회귀·검증 모드는 로그 시각을 연도 없이 UTC로 읽는다. 그래서 `satisfied_traces`·`trace`의 `ts`는 "파일 시계 그대로(연도 2000)"다.
 이 시각으로 fixture를 자를 때는 `parse_logcat.py cut <log> --around <ts> --tz UTC`(**`--year` 없이**)로 같은 기준을 쓴다. 리포트에는 파일 시계 시각(월-일 시:분:초)으로 보여준다.
@@ -55,8 +56,7 @@ open ─(fix-submitted)─▶ fix-submitted ─(verify-fix passed)─▶ fixed
    - `open` / `fix-submitted`(빌드 추가·ref 변경) → 진행.
    - `wont-fix` / `not-a-bug` → "수정 CL을 기록하면 상태가 `fix-submitted`로 바뀐다"고 알리고 확인 후 진행.
    - `fixed` → lock 풀고 중단. 회귀라면 analyze Step 7로 open 되돌림을 안내한다(`fixed` → `fix-submitted`는 op가 거부한다).
-2. `--ref`가 `fix_ref_regex`(SNAP `issue-db.config.yaml`)에 맞는지, `--fixed-in` 브랜치가 `build_compare`의 `branch_regex` 중 하나에 맞는지
-   확인한다. **빌드가 없으면** "빌드가 없으면 회귀 판정도 verify-fix 통과도 할 수 없다"고 알리고 계속할지 묻는다(나중에 같은 커맨드로 빌드 추가).
+2. `--ref`가 `fix_ref_regex`(SNAP `issue-db.config.yaml`)에 맞는지, `--fixed-in`이 `build_compare`의 `branch_regex`에 맞는지 확인한다. `branch_regex`는 빌드명 접두사 규칙이다: 빌드가 있으면 빌드명이, 없으면 `<branch>_`가 그 규칙 중 하나에 맞는지 본다. 맞지 않으면 빌드 비교가 `undetermined`가 된다고 알린다. **빌드가 없으면** "빌드가 없으면 회귀 판정도 verify-fix 통과도 할 수 없다"고 알리고 계속할지 묻는다(나중에 같은 커맨드로 빌드 추가).
 3. 코드·설정 수정 유형인데 `scenario_signatures`·`recovery_signatures`가 모두 없으면 "나중에 verify-fix를 하려면 둘 중 하나가 필요하다"고
    알리고 지금 `update-signature`로 함께 추가할지 묻는다(추가하면 `db-authoring.md` 규칙, 초안 검증).
 4. 계획 `WD/fix-submit-<원인 ID>/plan.json`(`source: fix-submitted`, `jira: null`):
@@ -76,7 +76,7 @@ open ─(fix-submitted)─▶ fix-submitted ─(verify-fix passed)─▶ fixed
    fingerprint. 로그가 bugreport면 먼저 추출한다. 빌드를 모르면 묻는다.
 2. 작업 키 `verify-fix-<원인 ID>-<sanitize된 build>`: lock → snapshot → `config.py check`. 여기서부터 중단하거나 기록하지 않고 끝나는
    **모든** 경로는 `lock release <작업 키>`.
-3. 원인 확인(`db_search.py <ID> --db SNAP`):
+3. 원인 확인(`db_search.py <ID> --db SNAP`). 이 확인은 판정(5번)과 따로, 먼저 한다 — 중단 조건이면 `db_verify fix`를 부르지 않는다(같은 Bash 호출로 묶지 않는다):
    - `fix.status`가 `fix-submitted`(재검증이면 `fixed`)가 아니면 중단.
    - `signatures_pending` 원인이면 중단하고 판별 시그니처 추가(`update-signature`)를 안내.
    - 코드·설정 수정 유형인데 scenario·recovery 시그니처가 **둘 다 없으면 판정 전에 중단**하고 시그니처 추가를 안내한다.
@@ -88,11 +88,11 @@ open ─(fix-submitted)─▶ fix-submitted ─(verify-fix passed)─▶ fixed
    → `{judgement, reason, C, S, trace, satisfied_traces, other_candidates, build_check{status}, fix_status, user_confirmation_required, suggested_ops}`.
    - 종료 코드 2(빌드가 fixed_in보다 이전, 상태 부적합 등) → 사유를 보여주고 중단.
    - `build_check.status: undetermined` → 비교 규칙이 없거나 파싱 불가. 두 값을 보여주고 사용자에게 이후 빌드인지 묻는다.
-   - **시나리오 흔적**(`trace`)과 원인 본문의 "재현 시나리오"를 함께 보여주고, 사용자가 그 시나리오를 수행한 로그인지 확인받는다.
+   - **시나리오 흔적**(`trace`)과 원인 본문의 '재현 시나리오' 줄을 그대로 인용해 함께 보여주고, 사용자가 그 시나리오를 수행한 로그인지 확인받는다.
      흔적 시그니처가 있는데 흔적이 없으면 **판단 불가**다. 사용자가 "시나리오 했어"라고 해도 흔적을 대신하지 않는다.
    - 유일한 예외 `user_confirmation_required`(비코드 유형 `user-setting`·`network`·`hw`이고 scenario·recovery 시그니처가 **둘 다 없음**)
      → 사용자 확인을 받고 그 사실을 `verification.note`에 "사용자 확인(흔적 시그니처 없음)"으로 남긴다. 코드·설정 수정 유형에는 이 예외가 없다(3번에서 중단).
-6. 판정별 계획 `WD/<작업 키>/plan.json`(`source: verify-fix`, `jira: null`). `verification`: `{build, date, by, jira?, fixture?, scenario_evidence?, note}`.
+6. 판정별 계획 `WD/<작업 키>/plan.json`(`source: verify-fix`, `jira: null`, 형식은 위 §계획 형식). `verification`: `{build, date, by, jira?, fixture?, scenario_evidence?, note}`.
 
    | 판정 | 조건 | 계획 |
    |---|---|---|

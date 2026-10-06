@@ -94,7 +94,7 @@ sha256sum telephony-triage-import-v1.zip /tmp/issue-db-skeleton-v1.zip   # 사�
 |---|---|---|
 | OS | `lsb_release -a` | **Ubuntu** |
 | Python | `python3 --version` | **3.10+** |
-| 패키지 | `pip install pyyaml jsonschema pytest` (사내 미러) | 의존성은 이 셋뿐 |
+| 패키지 | `pip install pyyaml jsonschema pytest` (사내 미러) | 의존성은 이 셋뿐. `python3 -c "import yaml; print(yaml.__with_libyaml__)"`가 True면 YAML을 C 로더로 읽어 빠르다(False여도 동작) |
 | git | `git --version` | **2.31+** (guard의 `rev-parse --path-format`, worktree `--no-track`, `push --force-with-lease=<ref>:<sha>`) |
 | gh | `gh auth status --hostname <GHE 호스트>` | 실패하면 쓰기 작업 전부 불가(읽기 분석은 가능) |
 | Claude Code | `claude --version`, `claude mcp list` | 플러그인·hooks 지원 버전, Jira MCP 서버 이름과 사용자 범위 등록 (정밀 확인은 S-2) |
@@ -107,6 +107,7 @@ sha256sum ~/telephony-triage-import-v1.zip   # 사외에서 적은 값과 같은
 python3 -m pytest -q tests                    # 사외와 같은 결과여야 한다 (10~15분)
 ```
 사외에서 통과한 테스트가 실패하면 환경 차이(파이썬·git 버전, 로케일, 경로)다. 반입 전에 원인을 잡는다.
+개발 중 코드를 고친 뒤에는 전체 대신 `python3 tools/related_tests.py --run`(바뀐 파일의 관련 테스트 + 경계 검사)을 돌린다. 전체 `pytest tests`는 도구가 `full: true`로 판단할 때, 반입 묶음을 만들기 직전, 요청할 때만 쓴다.
 
 **3) S-0 선행 확인** (권장, Claude 없이 30분) — 사내 로그 형식이 사외 파서 가정과 얼마나 다른지
 ```
@@ -218,7 +219,7 @@ python3 -m pytest -q tests        # 골든 포함, 그 뒤 운영 이슈 DB에 d
   틀 (5줄, 타이핑 2분):
   ```
   [사외 수정 요청 #n]
-  어디: plugin/scripts/parser_backends/logcat.py (슬롯 표기 regex)
+  어디: plugin/scripts/platforms/android/logcat.py (슬롯 표기 regex)
   증상: 사내 로그에서 phone_id 추출률이 매우 낮음. 슬롯 접두어 형식이 사외 가정([PHONE<n>])과 다름
   형식: 메시지 앞에 대괄호+영문 3자+숫자 1자리 (실제 문자는 전달하지 않음)
   요청: 접두어 패턴을 site-defaults 또는 parser-rules 설정으로 뺄 것
@@ -296,7 +297,7 @@ claude mcp list               # Jira MCP 사용자 범위 등록 확인
 |---|---|
 | `analyze <JIRA> [로그...] [--code <프로필>] [--dry-run] [--failed-step <한 줄>] [--steps-file <파일>] [--clock-offset <±시간>] [--analyzer \| --no-analyzer] [--explore \| --no-explore]` | 로그로 이슈 분석하고 분류·기록. 실패 스텝은 선택 보조 정보이고, 시험 절차(`--steps-file`: txt/csv·html·zip·붙여넣기)의 PASS 스텝 순서를 로그의 흔적과 맞춰 분석 범위를 정한다(`--answer anchor=off`로 끔). 맞는 규칙이 없으면 Claude 탐색 분석(가설)을 할지 묻는다 |
 | `record <JIRA> [--cause <ID> \| --new-cause <유형> \| --new-type <카테고리> \| --unresolved <유형>] [--fixture <로그>] [--resolved-fixture <로그>] [--failed-step <한 줄>] [--steps-file <파일>]` | 직접 해결한 이슈를 히스토리만 기록 |
-| `search <키워드\|JIRA\|ID>` | 비슷한 이슈가 있었는지 찾기 |
+| `search <증상 문장\|키워드\|JIRA\|ID>` | 비슷한 이슈가 있었는지 찾기. 예: `search 데이터 안 붙어, 이슈 번호 알려줘` |
 | `fix-submitted <원인 ID> --ref <CL> --fixed-in <브랜치>[:<빌드>]` | 수정 CL이 머지됐을 때 |
 | `verify-fix <원인 ID> <수정 빌드 로그>` | 수정 빌드에서 재발 안 하는지 확인 → fixed |
 | `validate [--cause <원인 ID> <적용 후 로그>] [--extra <로그...>]` | 직접 편집 검사 / 해결책 효과 검증 |
@@ -345,6 +346,13 @@ claude mcp list               # Jira MCP 사용자 범위 등록 확인
 ### 시나리오 5: 기존 카테고리에 안 맞는 이슈
 - 가장 가까운 카테고리에 태그와 함께 넣어 기록.
 - 같은 성격이 3개 이상 쌓이면 메인테이너가 새 카테고리 PR.
+
+### 모델 선택 (3C~3E eval 근거)
+
+- Sonnet 기본: analyze·record·fix-submitted·sync-pr·search·5-1 분석 스킬.
+- verify-fix: 당분간 Opus 권장(Sonnet은 실행마다 갈림, 3E 2/3). 흔적 시그니처 없는 코드 수정 유형을 `db_verify`가 막는 구조 수정 뒤 Sonnet 재검토(반입 뒤)
+- 5-2 탐색은 Sonnet. 가설 품질이 중요하면 Opus를 고른다.
+- 바꾸는 법: `/model`. 커맨드 frontmatter `model` 고정은 사내 S1 확인 뒤(`14-site.md` S1).
 
 ### 팀 운영
 | 누가 | 무엇을 |

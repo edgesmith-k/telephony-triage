@@ -1,0 +1,12 @@
+# eval 52 b.log: IMS 등록이 403으로 실패(a.log의 통화 끊김 원인 → IMS-001-01).
+name: e052-b-ims-403
+start: "2026-09-20T14:33:00+09:00"
+default_phone: 0
+pid: 1600
+tid: 1610
+entries:
+  - {at: 0, tag: ImsResolver, msg: "bound to mock ImsService"}
+  - {after: 3, tag: ImsManager, msg: "register: impu=sip:<IMPU#1>@ims.mnc001.mcc450.3gppnetwork.org"}
+  - {after: 2, tag: ImsRegistration, level: W, msg: "onRegistrationFailed: code=403 reason=FORBIDDEN"}
+  - {after: 30, tag: ImsManager, msg: "register: impu=sip:<IMPU#1>@ims.mnc001.mcc450.3gppnetwork.org"}
+  - {after: 2, tag: ImsRegistration, level: W, msg: "onRegistrationFailed: code=403 reason=FORBIDDEN"}

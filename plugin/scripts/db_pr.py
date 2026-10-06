@@ -17,6 +17,7 @@
 commit_message, staged_at}`), `included_pending/`, `wt/`(작업 worktree). 구현 파일: `stage.json`(stage 결과,
 summary 입력), `regress.json`, `pr.json`(summary가 만든 PR 제목·본문·리뷰어, publish 입력). discard가 지운다.
 붙여넣은 스텝 원문 `steps-pasted.txt`는 discard·`lock release <자기 작업 키>`(--force 아님)·cleanup이 지운다.
+확인 화면·PR 본문 조립은 `db_summary.py`.
 도구 브랜치는 로컬 `tt/<br>`만 만든다. 사용자 clone의 로컬 `<br>`와 워킹 트리는 건드리지 않는다.
 
 세션 lock `<work_dir>/session.lock` = `{job, command, started_at, updated_at}` (사용자별로 한 번에 한 작업)
@@ -36,12 +37,18 @@ summary 입력), `regress.json`, `pr.json`(summary가 만든 PR 제목·본문·
 `publish`는 승인 해시·커밋 부모·커밋 메시지·브랜치를 `state.json`과 대조하고(다르면 1), lease push 뒤
 PR을 만들거나(`gh pr create`) 고친다(`gh pr edit`).
 
+`stage`는 계획을 읽을 때 먼저 형식을 검사한다(최상위 키·필수 키, `계획 형식 오류:` 종료 코드 2 — 이전 작업 파일은
+그대로 둔다). 하위 스크립트가 Traceback으로 끝나면 사용자에게는 마지막 줄만 "내부 오류"로 보인다(`_err_brief`).
+drift가 계산한 `ids_at_base`(계획 당시 기준 임시 ID 할당)는 stage 결과·`state.json`에 싣고, `summary`가 각 ID에
+`expected_at_base`로 붙인다(drift를 건너뛴 재stage는 같은 base_sha의 이전 값을 이어받는다).
+
 시각은 환경변수 `TT_NOW`(ISO, 테스트용)로 바꿀 수 있다.
 """
 
 from __future__ import annotations
 
 import argparse
+import difflib
 import json
 import os
 import re
@@ -59,11 +66,12 @@ from pathlib import Path
 SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS))
 
-from common import masking, site_defaults, userconfig, yamlio  # noqa: E402
+from common import site_defaults, userconfig, yamlio  # noqa: E402
 from common.buildname import is_valid_branch_name  # noqa: E402
 from common import checks as checks_mod  # noqa: E402
 from common import ghcli  # noqa: E402
-from common.exitcodes import CHECK_FAILED, NEEDS_APPROVAL, OK, USAGE  # noqa: E402
+import db_summary  # noqa: E402
+from common.exitcodes import CHECK_FAILED, OK, USAGE  # noqa: E402
 
 LOCK_FILE = "session.lock"
 SNAPSHOT_DIR = "_snapshot"
@@ -74,12 +82,6 @@ PASTED_STEPS = "steps-pasted.txt"   # 개발자가 붙여넣은 스텝 목록 �
 WORK_FILES = (STATE, STAGE, PR_FILE, REGRESS, PASTED_STEPS)
 JOB_KEY_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 TOOL_PREFIX = "tt/"
-GENERATED_RE = re.compile(r"^(README\.md|STATS\.md|parser-rules/CHANGELOG\.md|[^/]+/README\.md)$")
-SOURCE_LABELS = {"analyze": "분석 (analyze)", "record": "수동 기록 (record)", "import": "기존 분류 가져오기 (import)",
-                 "fix-submitted": "수정 CL 반영 (fix-submitted)", "verify-fix": "코드 수정 검증 (verify-fix)",
-                 "validate-cause": "해결책 검증 (validate --cause)", "review": "월간 리뷰 정리 (review)",
-                 "move": "유형 이동·병합 (move)"}
-
 
 class UsageError(Exception):
     def __init__(self, message: str, detail: dict | None = None):
@@ -287,7 +289,7 @@ def post_lint(snap: Path) -> dict:
     """사후 lint (06-collaboration.md §6.3 ⑤). 보고만 한다."""
     code, data, err = run_script("db_lint.py", ["--all", "--db", str(snap)])
     if data is None:
-        return {"ran": False, "error": err.strip()[:300]}
+        return {"ran": False, "error": _err_brief(err)}
     errors = data.get("errors") or []
     dups = [e for e in errors if e.get("code") in ("duplicate-id", "duplicate-jira")]
     out = {"ran": True, "errors": len(errors), "warnings": len(data.get("warnings") or []),
@@ -353,6 +355,66 @@ def _owned_worktree(ctx: Ctx, path: Path) -> None:
     expected = _out(_git(ctx.repo, "rev-parse", "--path-format=absolute", "--git-common-dir"))
     if not _same_path(common, expected):
         raise UsageError(f"다른 저장소 worktree: {path}")
+
+
+def _err_brief(err: str, limit: int = 300) -> str:
+    """하위 스크립트 stderr를 사용자에게 보일 만큼만. Traceback이면 마지막 줄만 내고 내부 오류로 표시한다."""
+    text = (err or "").strip()
+    if any(line.startswith("Traceback (most recent call last)") for line in text.splitlines()):
+        last = next((line.strip() for line in reversed(text.splitlines()) if line.strip()), "")
+        return f"{last} (내부 오류 — 스크립트 버그로 보고)"
+    return text[:limit]
+
+
+PLAN_KEY_ALIASES = {"ops": "operations", "op": "operations", "operation": "operations", "steps": "operations",
+                    "base": "base_sha", "sha": "base_sha", "schema": "schema_version"}
+PLAN_KEY_HELP = {"base_sha": "base_sha = db_pr snapshot의 snapshot_sha",
+                 "schema_version": "schema_version = SNAP issue-db.config.yaml"}
+
+
+def _load_plan_checked(plan_path: Path, repo: Path, base_sha: str) -> dict:
+    """계획 JSON을 읽고 최상위 키를 검사한다 (db_add apply와 같은 `schema/plan.schema.json`, 없으면 최소 검사).
+    잘못되면 `계획 형식 오류:` UsageError — 하위 스크립트의 Traceback까지 가지 않게 한다."""
+    try:
+        plan = json.loads(Path(plan_path).read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise UsageError(f"계획 형식 오류: JSON을 읽을 수 없습니다 ({plan_path}): {str(exc)[:200]}") from exc
+    if not isinstance(plan, dict):
+        raise UsageError(f"계획 형식 오류: 계획은 JSON 객체여야 합니다 ({plan_path})")
+    schema = None
+    proc = _git(repo, "show", f"{base_sha}:schema/plan.schema.json", check=False)
+    if proc.returncode == 0:
+        try:
+            schema = json.loads(proc.stdout)
+        except ValueError:
+            schema = None
+    required = list((schema or {}).get("required") or []) if isinstance(schema, dict) else []
+    props = list(((schema or {}).get("properties") or {}).keys()) if isinstance(schema, dict) else []
+    problems = []
+    if props:
+        unknown = [k for k in plan if k not in props]
+        if unknown:
+            hints = []
+            for key in unknown:
+                near = PLAN_KEY_ALIASES.get(key) or next(iter(difflib.get_close_matches(key, props, 1, 0.6)), None)
+                hints.append(f"{key} (→ {near}?)" if near else key)
+            problems.append("알 수 없는 최상위 키 " + ", ".join(hints))
+    else:
+        required = ["operations", "base_sha"]
+    missing = [k for k in required if k not in plan]
+    if not props:
+        if "operations" in plan and not isinstance(plan["operations"], list):
+            missing.append("operations(목록)")
+        if "base_sha" in plan and not isinstance(plan["base_sha"], str):
+            missing.append("base_sha(문자열)")
+    if missing:
+        problems.append("필수 키 없음: " + ", ".join(missing))
+    if problems:
+        helps = [PLAN_KEY_HELP[k] for k in missing if k in PLAN_KEY_HELP]
+        tail = " — write-flow.md §계획 형식" + (f" ({', '.join(helps)})" if helps else "")
+        raise UsageError("계획 형식 오류: " + "; ".join(problems) + tail,
+                         {"unknown_keys": [k for k in plan if props and k not in props], "missing_keys": missing})
+    return plan
 
 
 def _read_json(path: Path) -> dict | None:
@@ -500,11 +562,19 @@ def stage(ctx: Ctx, plan_path: Path, wt: Path, branch: str, dry_run: bool) -> tu
     base_sha = _ref_sha(ctx.repo, f"refs/remotes/origin/{ctx.base}")
     if not base_sha:
         raise UsageError(f"origin/{ctx.base}가 없습니다.")
-    plan = json.loads(Path(plan_path).read_text(encoding="utf-8"))
+    plan = _load_plan_checked(plan_path, ctx.repo, base_sha)
+    try:
+        old_state = _read_json(job_dir / STATE)
+    except ValueError:
+        old_state = None
     for name in (STAGE, PR_FILE, REGRESS):
         (job_dir / name).unlink(missing_ok=True)
     state = {"base_sha": base_sha, "branch": branch, "approved_hash": None, "commit_message": None,
              "staged_at": _iso(now())}
+    ids_at_base = None   # 계획 당시(plan.base_sha) 트리 기준 임시 ID 할당 — drift가 계산한다
+    if old_state and old_state.get("ids_at_base") and old_state.get("base_sha") == base_sha == plan.get("base_sha"):
+        ids_at_base = old_state["ids_at_base"]
+    state["ids_at_base"] = ids_at_base
     _write_json(job_dir / STATE, state)
     result: dict = {"job": job, "wt": str(wt), "branch": branch, "tool_branch": tool, "base_sha": base_sha,
                     "plan": str(Path(plan_path).resolve()), "dry_run": dry_run, "source": plan.get("source")}
@@ -512,17 +582,23 @@ def stage(ctx: Ctx, plan_path: Path, wt: Path, branch: str, dry_run: bool) -> tu
     if plan.get("base_sha") != base_sha:
         code, data, err = run_script("db_add.py", ["drift", str(plan_path), "--onto", base_sha, "--db", str(ctx.repo)])
         if code == USAGE or data is None:
-            raise UsageError(f"drift 검사 실패: {err.strip()[:300]}")
+            raise UsageError(f"drift 검사 실패: {_err_brief(err)}")
         result["drift"] = data.get("drift") or []
+        ids_at_base = data.get("ids_at_base")
+        state["ids_at_base"] = ids_at_base
+        _write_json(job_dir / STATE, state)
         if code == CHECK_FAILED:
             result["stopped"] = "drift"
-            result["next"] = ("drift 항목마다 계획 값 유지 / main 값 유지(op 삭제) / 직접 입력을 골라 계획에 반영하고 "
+            result["ids_at_base"] = ids_at_base
+            result["next"] = ("drift 항목마다 계획 값(plan_value) 유지 / main 값(current_value) 유지(op 삭제) / 직접 입력을 "
+                              "골라 계획에 반영한다. plan_base_value는 계획 당시 main 값이다. 반영하고 "
                               f"base_sha를 {base_sha}로 바꾼 뒤 다시 stage한다 (contracts.md §작업 계획 drift).")
             _write_json(job_dir / STAGE, result)
             return result, CHECK_FAILED
     else:
         result["drift"] = []
 
+    result["ids_at_base"] = ids_at_base
     result["worktree"] = _prepare_worktree(ctx, wt, tool, base_sha)
     code, check, err = run_script("config.py", ["check", "--db", str(wt), "--for", "dry-run" if dry_run else "write"])
     result["config_check"] = check
@@ -540,7 +616,7 @@ def stage(ctx: Ctx, plan_path: Path, wt: Path, branch: str, dry_run: bool) -> tu
     if code != OK:
         _write_json(job_dir / STAGE, result)
         if code == USAGE:
-            raise UsageError(f"계획을 적용할 수 없습니다: {err.strip()[:500]}", result)
+            raise UsageError(f"계획을 적용할 수 없습니다: {_err_brief(err, 500)}", result)
         result["stopped"] = "apply"
         return result, code
 
@@ -558,10 +634,10 @@ def stage(ctx: Ctx, plan_path: Path, wt: Path, branch: str, dry_run: bool) -> tu
         bad = run.aborted
         if bad.name == "verify":
             # 주의: verify의 실행 불가는 checks 없이 result만 싣고 STAGE도 쓰지 않는다 (기존 동작 유지).
-            raise UsageError(f"db_verify 실행 불가: {bad.stderr[:300]}", result)
+            raise UsageError(f"db_verify 실행 불가: {_err_brief(bad.stderr)}", result)
         checks_so_far = _stage_checks(run)
         _write_json(job_dir / STAGE, {**result, "checks": checks_so_far})
-        raise UsageError(f"{bad.script} 실행 불가: {bad.stderr[:300]}", {**result, "checks": checks_so_far})
+        raise UsageError(f"{bad.script} 실행 불가: {_err_brief(bad.stderr)}", {**result, "checks": checks_so_far})
     if ci_mode != "actions-build":
         checks_out = _stage_checks(run)
     else:
@@ -586,81 +662,6 @@ def _stage_checks(run: checks_mod.Run) -> dict:
 # -- summary -------------------------------------------------------------------------------
 
 
-def _status_entries(wt: Path) -> list[tuple[str, str]]:
-    raw = _git(wt, "status", "--porcelain=v1", "-z", "-uall").stdout
-    out = []
-    for entry in filter(None, raw.split("\0")):
-        out.append((entry[:2], entry[3:]))
-    return out
-
-
-def _file_kind(path: str) -> str:
-    if GENERATED_RE.match(path):
-        return "생성 파일"
-    if "/jira/" in path:
-        return "Jira 기록"
-    if path.startswith("feedback/"):
-        return "피드백"
-    if path.endswith("/type.md"):
-        return "유형"
-    if path.startswith("parser-rules/"):
-        return "파서 규칙"
-    if "/fixtures/" in path:
-        return "fixture"
-    return "기타"
-
-
-def _codeowners(wt: Path) -> list[tuple[str, list[str]]]:
-    path = wt / ".github" / "CODEOWNERS"
-    rules = []
-    if path.is_file():
-        for line in path.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            parts = line.split()
-            rules.append((parts[0], parts[1:]))
-    return rules
-
-
-def _owners_for(rules: list[tuple[str, list[str]]], rel: str) -> list[str]:
-    owners: list[str] = []
-    for pattern, who in rules:   # CODEOWNERS: 마지막으로 맞는 규칙이 이긴다
-        p = pattern.lstrip("/")
-        if (p.endswith("/") and rel.startswith(p)) or rel == p:
-            owners = who
-    return owners
-
-
-def reviewers(wt: Path, paths: list[str], plan: dict, db_cfg: dict) -> list[str]:
-    rules = _codeowners(wt)
-    owners: list[str] = []
-    for rel in paths:
-        if GENERATED_RE.match(rel):   # 생성 파일은 원본 변경을 따라가므로 리뷰어 계산에서 뺀다
-            continue
-        owners += _owners_for(rules, rel)
-        if rel.endswith("/type.md") and (wt / rel).is_file():
-            from common.issuedb import read_frontmatter
-            for sc in read_frontmatter(wt / rel).get("secondary_categories") or []:
-                owners += _owners_for(rules, f"{sc}/")
-    for op in plan.get("operations") or []:
-        if op.get("op") == "allow-cause":
-            name = str(op.get("fixture", "")).split("/")[-1]
-            m = re.match(r"([A-Z][A-Z0-9]*)-\d{3}", name)
-            cat = next((c["key"] for c in db_cfg.get("categories") or [] if m and c.get("id_prefix") == m.group(1)),
-                       None)
-            if cat:
-                owners += _owners_for(rules, f"{cat}/")
-    fmt = str((db_cfg.get("reviewers") or {}).get("format") or "{org}/{team}")
-    out = []
-    for owner in owners:
-        org, _, team = owner.lstrip("@").partition("/")
-        value = fmt.format(org=org, team=team) if team else owner.lstrip("@")
-        if value not in out:
-            out.append(value)
-    return out
-
-
 def approved_hash(wt: Path) -> str:
     """워킹 트리 전체(.gitignore 적용)를 임시 index로 올린 트리 해시. 기존 파일의 모드를 유지하려고
     HEAD에서 시작한다(`read-tree HEAD` → `add -A` → `write-tree`)."""
@@ -682,64 +683,6 @@ def approved_hash(wt: Path) -> str:
             os.unlink(idx)
 
 
-def _verification_rows(stage_result: dict) -> list[dict]:
-    verify = ((stage_result.get("checks") or {}).get("verify") or {}).get("result") or {}
-    rows = []
-    for item in verify.get("rules") or []:
-        shown = {"pass": "통과", "fail": "실패", "needs-approval": "승인 필요", "not-implemented": "미구현(뼈대)"}
-        status = item.get("status")
-        label = shown.get(status) or (f"건너뜀: {item.get('reason')}" if status == "skipped" else status)
-        if status == "skipped" and item.get("review_required"):
-            label = f"검증 못 함 — 리뷰 대상 ({item.get('reason')})"
-        rows.append({"id": item.get("id"), "status": status, "label": label, "reason": item.get("reason"),
-                     "review_required": item.get("review_required", False)})
-    return rows
-
-
-def _check_rows(stage_result: dict) -> dict:
-    checks = stage_result.get("checks") or {}
-    if "skipped" in checks:
-        return {"skipped": checks["skipped"]}
-
-    def res(name):
-        return (checks.get(name) or {}).get("result") or {}
-
-    lint, mask, ids, regress = res("lint"), res("mask"), res("ids"), res("regress")
-    return {
-        "lint": {"ok": (checks.get("lint") or {}).get("code") == OK, "errors": len(lint.get("errors") or []),
-                 "warnings": len(lint.get("warnings") or []),
-                 "findings": [f"{f.get('code')}: {f.get('file')}" for f in (lint.get("errors") or [])][:20]},
-        "ids": {"ok": (checks.get("ids") or {}).get("code") == OK, "duplicates": ids.get("duplicates") or []},
-        "mask": {"ok": (checks.get("mask") or {}).get("code") == OK, "detections": len(mask.get("detections") or [])},
-        "regress": {"ok": (checks.get("regress") or {}).get("code") == OK,
-                    "passed": (regress.get("summary") or {}).get("passed"),
-                    "total": (regress.get("summary") or {}).get("total"),
-                    "failed": [r.get("fixture") for r in regress.get("results") or [] if r.get("status") != "pass"]},
-        "build": {"ok": (checks.get("build") or {}).get("code") == OK},
-    }
-
-
-def _readme_preview(wt: Path, keys: list[str]) -> list[str]:
-    lines = []
-    for path in [wt / "README.md", *sorted(wt.glob("*/README.md"))]:
-        if not path.is_file():
-            continue
-        for line in path.read_text(encoding="utf-8").splitlines():
-            if (line.startswith("|") or line.startswith("###")) and any(k in line for k in keys) and line not in lines:
-                lines.append(line)
-    return lines[:20]
-
-
-def _main_diff(wt: Path, entries: list[tuple[str, str]]) -> tuple[list[str], int]:
-    tracked = [p for s, p in entries if s != "??" and not GENERATED_RE.match(p) and "/fixtures/" not in p]
-    diff = _out(_git(wt, "diff", "--", *tracked, check=False)).splitlines() if tracked else []
-    for status, path in entries:
-        if status == "??" and not GENERATED_RE.match(path) and "/fixtures/" not in path:
-            text = (wt / path).read_text(encoding="utf-8", errors="replace").splitlines()
-            diff += [f"+++ {path} (신규)"] + ["+" + line for line in text]
-    return diff[:50], len(diff)
-
-
 def summary(ctx: Ctx, wt: Path) -> dict:
     job_dir, job = _job_of(wt, ctx)
     _owned_worktree(ctx, wt)
@@ -750,65 +693,7 @@ def summary(ctx: Ctx, wt: Path) -> dict:
     if not state or not stage_result or not stage_result.get("apply"):
         raise UsageError("stage 결과가 없습니다. 먼저 db_pr stage를 한다.")
     plan = json.loads(Path(stage_result["plan"]).read_text(encoding="utf-8"))
-    applied = stage_result["apply"]
     db_cfg = yamlio.load(wt / "issue-db.config.yaml") or {}
-    entries = _status_entries(wt)
-    names = {"??": "신규", " M": "수정", "M ": "수정", " D": "삭제", "D ": "삭제", "A ": "신규"}
-    deleted = {Path(p).name: p for s, p in entries if "D" in s}
-    files = []
-    for status, path in entries:
-        change = names.get(status, status.strip() or "수정")
-        if status == "??" and Path(path).name in deleted and "/jira/" in path:
-            change = f"이동 (← {deleted[Path(path).name]})"
-        elif "D" in status and any(s == "??" and Path(p).name == Path(path).name and "/jira/" in p for s, p in entries):
-            continue
-        files.append({"kind": _file_kind(path), "path": path, "change": change})
-    paths = [p for _, p in entries]
-    jira = plan.get("jira") or {}
-    ids = applied.get("ids") or []
-    keys = [i["id"] for i in ids] + [jira.get("key")] if jira else [i["id"] for i in ids]
-    for op in applied.get("operations") or []:
-        for field in ("cause", "type", "to", "id", "a", "b", "owner"):
-            if isinstance(op.get(field), str):
-                keys.append(op[field])
-    keys = [k for k in keys if k]
-    diff, diff_total = _main_diff(wt, entries)
-    checks = _check_rows(stage_result)
-    verification = _verification_rows(stage_result)
-    approval = [r for r in verification if r["status"] == "needs-approval"]
-    verify_code = ((stage_result.get("checks") or {}).get("verify") or {}).get("code")
-    if verify_code == NEEDS_APPROVAL and not approval:
-        approval = [{"id": "db_verify", "status": "needs-approval", "label": "승인 필요 (종료 코드 3)"}]
-    source = plan.get("source")
-    notes = []
-    if source == "record":
-        notes.append("로그·코드 분석: 하지 않음 (수동 기록)")
-    if jira.get("origin") == "file":
-        notes.append("Jira 메타데이터: 오프라인 파일")
-    new_pending, user_statement = [], False
-    for op in applied.get("operations") or []:
-        body = op.get("cause") if op.get("op") == "new-cause" else (op.get("first_cause") or {}).get("cause") \
-            if op.get("op") == "new-type" else None
-        cid = op.get("temp_id") if op.get("op") == "new-cause" else (op.get("first_cause") or {}).get("temp_id")
-        if isinstance(body, dict):
-            if body.get("signatures_pending") and not body.get("signatures"):
-                new_pending.append(cid)
-            if "사용자 진술" in str((body.get("resolution_verification") or {}).get("method") or ""):
-                user_statement = True
-    if "사용자 진술" in str(jira.get("note") or ""):
-        user_statement = True
-    for cid in new_pending:
-        notes.append(f"{cid}: 시그니처 없음 — 매칭 불가, 리뷰 대상")
-    if user_statement:
-        notes.append("해결책 근거: 사용자 진술 — 카테고리 오너 리뷰 필요")
-    for row in verification:
-        if row["status"] == "skipped" and row.get("review_required"):
-            notes.append(f"{row['id']}: 검증 못 함 — 리뷰 대상 ({row['reason']})")
-    # 계획의 pr_notes: 흐름별 설명(drift 결정, verify-fix 근거, allow-cause 사유 등). 한 번 더 마스킹한다.
-    masker = masking.new_masker(allow_patterns=(db_cfg.get("mask") or {}).get("allow_patterns") or [])
-    notes += [masker(str(n)) for n in plan.get("pr_notes") or [] if str(n).strip()]
-    check = stage_result.get("config_check") or {}
-    push_allowed = bool(check.get("push_allowed")) and not stage_result.get("dry_run")
     push_note = None
     if stage_result.get("dry_run"):
         push_note = "push 안 함: --dry-run"
@@ -817,67 +702,19 @@ def summary(ctx: Ctx, wt: Path) -> dict:
             push_note = "push 불가: gh 인증 없음 (--dry-run)"
     remote_sha = _ref_sha(ctx.repo, f"refs/remotes/origin/{state['branch']}")
     open_prs = None
-    search = jira.get("key") or (ids[0]["id"] if ids else None)
+    search = db_summary.search_key(plan, stage_result["apply"])
     if search:
         proc = _gh(ctx, ["pr", "list", "--search", search, "--state", "open", "--json", "number,title,url"], wt)
         if proc.returncode == 0:
             open_prs = json.loads(proc.stdout or "[]")
-    commit_message = applied.get("commit_message") or ""
-    title = commit_message.splitlines()[0] if commit_message else f"[{job}] {source}"
-    revs = reviewers(wt, paths, plan, db_cfg)
-    screen = {
-        "source": source, "source_label": SOURCE_LABELS.get(source, source),
-        "jira": {"key": jira.get("key"), "origin": jira.get("origin"),
-                 "label": "Jira 메타데이터: 오프라인 파일" if jira.get("origin") == "file" else None},
-        "branch": {"name": state["branch"], "remote": "갱신" if remote_sha else "신규", "remote_sha": remote_sha,
-                   "base": ctx.base},
-        "reviewers": revs, "open_prs": open_prs,
-        "files": files, "ids": ids, "fixtures": applied.get("fixtures") or [],
-        "drift_decisions": stage_result.get("drift") or [],
-        "readme_preview": _readme_preview(wt, keys), "diff": diff, "diff_total_lines": diff_total,
-        "diff_truncated": diff_total > 50, "checks": checks, "verification": verification,
-        "approval_needed": approval, "notes": notes, "commit_message": commit_message, "pr_title": title,
-        "push_allowed": push_allowed, "push_note": push_note, "pending_included": applied.get("pending_included") or [],
-    }
-    body = pr_body(screen, plan)
+    scr = db_summary.screen(wt, plan, stage_result, state, db_cfg, job=job, base=ctx.base, git=_git,
+                            remote_sha=remote_sha, open_prs=open_prs, push_note=push_note)
+    body = db_summary.pr_body(scr, plan)
     digest = approved_hash(wt)
-    state.update(approved_hash=digest, commit_message=commit_message)
+    state.update(approved_hash=digest, commit_message=scr["commit_message"])
     _write_json(job_dir / STATE, state)
-    _write_json(job_dir / PR_FILE, {"title": title, "body": body, "reviewers": revs})
-    return {**screen, "pr_body": body, "approved_hash": digest}
-
-
-def pr_body(screen: dict, plan: dict) -> str:
-    jira = plan.get("jira") or {}
-    lines = ["## 분석 요약", "", f"- 구분: {screen['source_label']}"]
-    if jira:
-        info = ", ".join(f"{k}: {jira[k]}" for k in ("model", "sw", "android_version", "carrier") if jira.get(k))
-        lines.append(f"- Jira: {jira.get('key')}" + (f" ({info})" if info else ""))
-        if jira.get("note"):
-            lines.append(f"- 메모: {jira['note']}")
-    for note in screen["notes"]:
-        lines.append(f"- {note}")
-    if screen["ids"]:
-        lines.append("- ID 할당: " + ", ".join(f"{i['temp_id']} → {i['id']}" for i in screen["ids"]))
-    lines += ["", "### 변경 파일", "", "| 구분 | 파일 | 변경 |", "|---|---|---|"]
-    lines += [f"| {f['kind']} | {f['path']} | {f['change']} |" for f in screen["files"]]
-    checks = screen["checks"]
-    lines += ["", "## 검증 결과", ""]
-    if "skipped" in checks:
-        lines.append(f"- 자동 검사: {checks['skipped']}")
-    else:
-        ok = lambda v: "✅" if v else "❌"  # noqa: E731
-        lines.append(f"- 스키마·lint {ok(checks['lint']['ok'])} (경고 {checks['lint']['warnings']}건) / "
-                     f"ID 중복 {ok(checks['ids']['ok'])} / 마스킹 {ok(checks['mask']['ok'])} / "
-                     f"fixture 회귀 {ok(checks['regress']['ok'])} ({checks['regress']['passed']}/"
-                     f"{checks['regress']['total']}) / 생성 파일 {ok(checks['build']['ok'])}")
-    if screen["verification"]:
-        lines += ["", "| 검증 | 결과 |", "|---|---|"]
-        lines += [f"| {r['id']} | {r['label']} |" for r in screen["verification"]]
-    lines.append("")
-    lines.append("승인 필요: " + (", ".join(r["id"] for r in screen["approval_needed"]) + " — 메인테이너 승인 필수"
-                                  if screen["approval_needed"] else "없음"))
-    return "\n".join(lines) + "\n"
+    _write_json(job_dir / PR_FILE, {"title": scr["pr_title"], "body": body, "reviewers": scr["reviewers"]})
+    return {**scr, "pr_body": body, "approved_hash": digest}
 
 
 # -- publish -------------------------------------------------------------------------------

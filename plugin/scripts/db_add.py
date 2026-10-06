@@ -21,7 +21,9 @@
   `--pending`(pending 피드백)은 `source: analyze`일 때만 받는다.
 
 `drift`: 계획의 `base_sha` 트리와 `<ref>` 트리를 비교해 계획 대상이 바뀐 목록을 낸다(contracts.md §작업 계획
-drift 표). 아무것도 바꾸지 않는다. drift가 있으면 종료 코드 1.
+drift 표). 항목은 `{op_index, op, target, field, plan_value(op가 쓰는 값), plan_base_value(계획 당시 main), current_value}`,
+출력에 `ids_at_base`(계획 당시 트리 기준 임시 ID 할당, 새 유형·원인이 없으면 null)도 낸다. 계획에 `base_sha`가 없으면 종료 코드 2.
+아무것도 바꾸지 않는다. drift가 있으면 종료 코드 1.
 
 `renumber`: 직접 편집한 브랜치에서 "내 ID"(merge-base에 없던 ID)만 다음 빈 번호로 옮긴다(§renumber 참조).
 `check-ids`: 트리 안 ID 중복과, `--base`면 내 ID가 그 ref에 이미 있는지. 있으면 종료 코드 1.

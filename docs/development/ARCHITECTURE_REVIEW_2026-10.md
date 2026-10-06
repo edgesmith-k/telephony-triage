@@ -139,7 +139,7 @@ CLAUDE.md 15KB · AGENTS.md 3KB · SITE_PATHS · README.md(빈 파일)
 | **High** | `parse_logcat parse` 출력이 원 로그의 ~25배 | `T/fixtures/logs/data-disabled.log` 8줄 → `.events.json` 188줄·3.6KB; `dual-sim-ril.log` 11줄 → 304줄 | 로그 1,000줄(±5분 radio)이면 **수십만 바이트** — LLM이 `cat`하면 치명적 | 줄 레코드(`event: None`)마다 `msg` 원문 + 파생 이벤트에 **같은 `msg` 재복사**(`_derived()`), `indent=1` | events.json은 **LLM이 읽지 않는 파일**로 못 박고(이미 SKILL 규칙), driver가 `evidence`(근거 3~10줄)만 analysis.json에 넣는다. 파생 이벤트는 `line_ref`(파일·행)만 갖고 `msg` 복사 제거 (HANDOFF R7 provenance와 같은 수정) — *(2026-10-05: `line_ref` 추가 완료, 파생 이벤트의 `msg` 복사 제거는 아직 열림)* |
 | Medium | Step 1 `db_lint --all --db SNAP` 매 analyze | `K/SKILL.md` Step 1-3, `S/db_pr.py::post_lint` (snapshot이 이미 수행) | 1K~5K (DB가 커질수록) | `sync`가 이미 하고, `snapshot()`도 `post_lint`를 돌린다 → **두 번** | snapshot 결과의 `post_lint` 요약(건수만)만 쓴다. SKILL Step 1-3 삭제 |
 | Medium | `config.py show`가 `effective` 전체(field_map, analyzers, code_profiles, read_tools…)를 출력 | `S/config.py::cmd_show` | 1K~2K | Step 0에서 필요한 것은 `user_config` 유무, `work_dir`, `jira.tools.get_issue` 뿐 | `config.py show --keys work_dir,jira.tools` 또는 driver가 내부에서 읽음 |
-| Medium | `db_pr summary` 확인 화면(README 미리보기 + 주요 diff + 검사표) + `pr_body` | `S/db_pr.py::summary/_readme_preview/_main_diff` | 2K~6K | 필요하다(승인 화면). 다만 diff 50줄 제한은 있고 README 미리보기는 카테고리 README 전체가 바뀌는 구조(기준일) 때문에 소음 | "기준일" 결정성 규칙 재검토(`DRAFT_NOTES` Phase 13 사용자 판단 항목) — README 머리의 기준일을 `STATS.md`로만 옮기면 카테고리 README diff 소음이 사라진다 |
+| Medium | `db_pr summary` 확인 화면(README 미리보기 + 주요 diff + 검사표) + `pr_body` | `S/db_summary.py::screen/_readme_preview/_main_diff`, `pr_body` | 2K~6K | 필요하다(승인 화면). 다만 diff 50줄 제한은 있고 README 미리보기는 카테고리 README 전체가 바뀌는 구조(기준일) 때문에 소음 | "기준일" 결정성 규칙 재검토(`DRAFT_NOTES` Phase 13 사용자 판단 항목) — README 머리의 기준일을 `STATS.md`로만 옮기면 카테고리 README diff 소음이 사라진다 |
 | Medium | reference 중복: op 표가 `D/contracts.md`와 `K/reference/db-authoring.md §4`에 두 번, drift 표도 두 번; sync-pr 절차가 `C/sync-pr.md`(4.9KB)와 `K/reference/sync-pr.md`(4KB)에 두 번 | 파일 비교 | 새 원인 생성 시 +8K | 같은 표를 두 곳에서 유지 | db-authoring을 "작성 규칙 + 예시"만 남기고 op 표는 driver의 `plan validate` 오류 메시지가 대신 설명 (스키마가 source of truth) |
 | Medium | 12개 커맨드 md에 같은 보일러플레이트 4줄("스크립트는 `python3 …`로 호출", "종료 코드 2와 사내 기본값 없음이면 멈춤" 등) | `C/*.md` | 건당 0.3K | 중복 | 공통 실행 규칙을 SKILL.md 상단 한 곳 또는 driver 오류 메시지로 |
 | Low | `guard.py`가 Bash·MCP·Write마다 python 기동 + yaml 로드, `git commit`이면 `mask_pii --check --staged` + `db_build --verify --staged` 서브프로세스 | `hooks.json`, `S/guard.py::check_commit` | token 아님(지연 1~10초) | 올바른 안전장치. 다만 사내 자동화(스케줄러)에서는 hook이 없다 | 자동화 경로에는 같은 규칙을 **driver 내부 함수**로 호출 (§N) |
@@ -332,7 +332,7 @@ EXTERNAL-SAFE (이 레포 그대로; 외부 Codex가 자유롭게 개발·테스
 
 | 모델 | 지금 어디에 (사실상 존재) | 상태 | 조치 |
 |---|---|---|---|
-| **NormalizedLogEvent** | 파서 이벤트 `{ts(UTC ISO), pid, tid, level, tag, msg, phone_id, category_hint, ril{serial,dir,request,error,paired_ts,latency_ms}, event, fields{str}, source}` (`S/parser_backends/base.py` docstring, `D/07 Step 3`) | 안정. 문서로만 정의 | `S/common/events.py`에 `TypedDict` + `validate_event()` + `schema_version`. 파생 이벤트의 `msg` 복사 대신 `line_ref: {file_index, line_no}` 추가 (HANDOFF R7) — *(2026-10-05: `line_ref`는 추가됨(`D/04 §5.8 (6)`), `msg` 복사 제거는 열림. `common/events.py`는 `line_ref`를 포함해야 한다)* |
+| **NormalizedLogEvent** | 파서 이벤트 `{ts(UTC ISO), pid, tid, level, tag, msg, phone_id, category_hint, ril{serial,dir,request,error,paired_ts,latency_ms}, event, fields{str}, source}` (`S/parser_backends/base.py` docstring, `D/07 Step 3`) | 안정. 문서로만 정의 | `S/common/events.py`에 `TypedDict` + `validate_event()` + `schema_version`. 파생 이벤트의 `msg` 복사 대신 `line_ref: {file_index, line_no}` 추가 (HANDOFF R7) — *(2026-10-05: `line_ref`는 추가됨(`D/04 §5.8 (6)`), `msg` 복사 제거는 열림. `common/events.py`는 `line_ref`를 포함해야 한다)* — *I1 완료 (2026-10-05): `S/common/events.py`(`Event`·`LineRef` TypedDict, `make_event`·`derived_event`·`validate_event`, `SCHEMA_VERSION`). 출력 동일. `msg` 복사 제거는 열림* |
 | **ParserBackend** | `base.py` `parse(paths, tz, year, window)`, `coverage()`, `builtin_events()`, `version()` | 안정 | 그대로. `name`·`platform` 속성 추가 |
 | **ExternalParserAdapter** | `adapters/base.py` `ADAPTER_NAME, VERSION, convert(raw, meta)` | 안정 | 그대로 |
 | **NormalizedIssue** | `jira_fields.py extract` 출력 `{key, jira{model,sw,android_version,carrier,occurred_on}, occurred_at, text{summary,description,comments[]}, sim_slot, components[], missing[]}` | 안정 | 이름만 붙이고(`S/common/issue.py`), **Jira 외 소스**(파일, 다른 트래커)도 같은 형식을 내게. `comments`에 `created`·`index`를 넣어 선택 절삭 가능하게 |
@@ -483,7 +483,7 @@ JiraWriter.post_comment  (guard 규칙 2는 Claude 세션 전용이므로, 자�
 
 | 항목 | 근거 | 영향 | 조치 |
 |---|---|---|---|
-| 큰 모듈 | `db_add.py` 1373줄(`Applier` 클래스가 op 16개 처리), `db_pr.py` 1109, `db_verify.py` 910 | 수정 시 넓은 컨텍스트 필요 | `db_add`를 `ops/<op>.py`로 분할(계약은 동일) — **완료 (2026-10-05)**: `db_add.py`는 CLI(112줄), 구현은 `dbadd/`(op 묶음별 믹스인 7개). `db_pr`의 `summary/pr_body`를 `db_summary.py`로(미완) |
+| 큰 모듈 | `db_add.py` 1373줄(`Applier` 클래스가 op 16개 처리), `db_pr.py` 1109, `db_verify.py` 910 | 수정 시 넓은 컨텍스트 필요 | `db_add`를 `ops/<op>.py`로 분할(계약은 동일) — **완료 (2026-10-05)**: `db_add.py`는 CLI(112줄), 구현은 `dbadd/`(op 묶음별 믹스인 7개). `db_pr`의 `summary/pr_body`를 `db_summary.py`로 — **완료 (2026-10-05, I5)**: 조립은 `db_summary.py`(라이브러리), `db_pr.summary`는 lock·상태·gh·승인 해시만 |
 | 검사 오케스트레이션 3곳 | `db_pr.stage`, `db_precommit`, `guard.check_commit`가 각자 lint/mask/build/regress/verify 호출 순서를 가짐 | 규칙 drift | **완료 (2026-10-04, common/checks.py)**: `run_checks(profile, ctx)`와 프로필 stage/precommit/guard, `aggregate` |
 | 서브프로세스 재진입 | `db_pr` → 7개 스크립트 subprocess, 각 스크립트가 `site_defaults.load_or_exit` + 이슈 DB 전체 로드 | 느림(stage 수십 초), 테스트 10분+ | **완료 (2026-10-04)**: `checks.run_script`가 같은 프로세스에서 `main(argv)` 호출(종료 코드 계약 유지, `TT_SCRIPT_SUBPROCESS=1`이면 subprocess) + 정규식 작업 프로세스를 runner마다 띄우지 않고 프로세스 안에서 공유(`common/patterns.py`). `test_db_pr`+`test_checks` 418s → 138s |
 | HANDOFF R1~R15 | lock 비원자(R2), 경로 삭제 안전(R3), `commit -m "<msg>"` 인용(R6), 교차 슬롯 S/C(R1), 회전 파일 RIL(R4), 외부 파서 실패 전파(R5), provenance(R7), 점수 포화(R8) | 정확성·안전 | 그 문서의 I0~I2 (R7 완료·R15 부분 완료 2026-10-05) |
@@ -496,7 +496,7 @@ JiraWriter.post_comment  (guard 규칙 2는 Claude 세션 전용이므로, 자�
 | 재시도·멱등 | `db_pr` lease push·승인 해시로 멱등. git fetch 실패는 보고만 | 자동화에서는 재시도 정책 필요 | §N state.json + 입력 해시 |
 | 커넥터 장애 격리 | 외부 파서 실패는 warning(R5), MCP 부재는 중단 | 자동화에서 한 이슈 실패가 배치를 멈추면 안 됨 | 이슈 단위 `status: error` 기록 후 계속 |
 | 의존성 | `pyyaml`, `jsonschema`, `pytest`만 | 좋음 | 유지. `regex` 모듈 도입은 사내 승인 뒤(가정 18) |
-| 자격증명 | 레포에 없음. `work_dir` 700 | 좋음 | `check_boundary.py`에 secret 패턴 추가 |
+| 자격증명 | 레포에 없음. `work_dir` 700 | 좋음 | `check_boundary.py`에 secret 패턴 추가 — **완료 (2026-10-05, S5)** |
 
 ---
 
@@ -670,11 +670,13 @@ telephony-triage/  (EXTERNAL-SAFE 레포 = canonical)
 
 ### RF-3 — Core / Platform Separation (이동만)
 
+- *I2 완료 (2026-10-05): logcat·ril·reference 백엔드·bugreport 추출·code_roots 상수 2개를 S/platforms/android/로 이동, 옛 경로는 sys.modules shim. 출력 동일. platform: 키·platforms.load()는 RF-4(I3)로.*
+
 - **Goal**: §F 디렉토리. 동작·출력 바이트 동일.
 - **Files to Modify**: `S/parser_backends/__init__.py`(shim: `reference` → `platforms.android.backend`), `S/parse_logcat.py`(bugreport 부분 import), `S/code_roots.py`(상수 → `platforms.load().source_tree`), `S/config.py`(`platform` 키 노출), `plugin/site-defaults.example.yaml`(`platform: android`), `T/mocks/parser_backends/site/__init__.py`(import 경로 — 사내 site 백엔드도 같은 변경이 필요하므로 **re-export shim을 유지**해 사내 수정 0으로).
 - **Files to Add**: `S/platforms/__init__.py`, `S/platforms/android/{__init__,logcat,ril,bugreport,backend}.py`, `tests/test_platforms.py`.
 - **Files to Remove**: `S/parser_backends/{logcat,ril}.py`, `reference/`(shim 모듈만 남김).
-- **Dependencies**: RF-1(events.py).
+- **Dependencies**: RF-1(events.py). *(events.py는 I1 2026-10-05 완료)*
 - **Token Impact**: 사내 포팅 pack이 `platforms/android/`로 명확해짐.
 - **Security Impact**: 없음. `check_boundary`의 import 방향 규칙에 `platforms/*` 포함.
 - **Risk**: `T/fixtures/logs/*.events.json` 스냅샷은 바이트 동일해야 함.
@@ -682,6 +684,8 @@ telephony-triage/  (EXTERNAL-SAFE 레포 = canonical)
 - **Completion Criteria**: `git mv` 중심 diff, 스냅샷 동일.
 
 ### RF-4 — Android Version Adapter (데이터화)
+
+- *I3 일부 완료 (2026-10-05): site-defaults `platform:`(name·source_tree·log.phone_id·ril.tags·bugreport), `platforms.load()`/`PlatformProfile`, 기본값 동일·출력 동일. 남음: 이슈 DB 층(parser-rules phone_id_patterns·ril.yaml tags)·migrate_code_refs·--index.*
 
 - **Goal**: §E의 상수를 설정/데이터로. 새 Android 버전 = 설정 한 줄 + 이슈 DB 규칙 PR.
 - **Files to Modify**: `S/platforms/android/__init__.py`(PROFILE 기본값), `S/code_roots.py`(`required_dirs`, `version_sources` 설정 우선), `S/platforms/android/logcat.py`(`phone_id_patterns` 선택 규칙), `ril.py`(`ril.yaml` `tags:` 선택), `S/common/parser_rules.py`(스키마 선택 필드), 이슈 DB `schema/parser-rules.schema.json`(선택 필드 — schema_version 유지), `D/04 §5.8`, `D/14` S7·S11·S20·S21 반영 위치.
@@ -725,6 +729,7 @@ telephony-triage/  (EXTERNAL-SAFE 레포 = canonical)
 - **Dependencies**: RF-1·6.
 - **Token Impact**: 같은 이슈 재분석 시 driver 재계산 0.
 - **Completion Criteria**: 입력 변경 시에만 재계산되는 테스트.
+- *완료 (2026-10-05, X1~X4): `triage.py run --analysis-only`·`--more-logs`, 입력 해시 6부분 재사용(`analysis-cache.json`, `runs/` 최근 5), 스킬·eval 51·52. RF-6 의존은 생략(Jira는 기존 MCP 파일 경로).*
 
 ### RF-8 — Automation (Scheduler + Jira monitoring + draft comment + approval)
 

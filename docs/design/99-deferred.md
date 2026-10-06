@@ -102,6 +102,19 @@ v1의 실패 스텝은 필드·설명·시험 절차 텍스트와 사용자가 �
 첨부 zip 안의 zip은 읽지 않는다(무시). 되살리려면 깊이·총 크기 상한과 같은 항목 선택 규칙을 재귀로 적용한다(`08-safety.md §8.1`).
 
 
+## E. Read 도구 원문 통독 차단 (사내 S1 뒤)
+
+규칙 10(`08-safety.md §9`)은 Bash 명령만 판정한다. Read 도구가 `limit` 없이 로그 원문·zip·`events.json`·`events-full.json`·`jira_raw.json`·`match.json`을 통째로 읽는 것은 막지 못한다. 사내 Claude Code(S1)에서 PreToolUse hook이 `Read`에 걸리고 입력에 `file_path`·`offset`·`limit`이 오는지 확인한 뒤, `hooks.json`에 matcher `Read`를 더하고 `guard.py check_file`(또는 같은 모양의 함수)에서 **`limit`·`offset` 없는 읽기**가 규칙 10과 같은 원문 대상(같은 이름·내용 판별, `fixtures/`·`draft/` 제외)이면 거부한다. 메시지는 규칙 10과 같게 구간 읽기를 안내한다. 대용량 파일은 Read 도구가 기본 줄 수 상한으로 자르기도 하므로(버전에 따라 다름) 상한이 있는 읽기를 어디까지 허용할지는 S1에서 정한다.
+
+## F. verify-fix 흔적 검사 강제 (반입 뒤)
+
+3E에서 Sonnet은 e25(코드·설정 수정 유형에 scenario·recovery 시그니처가 없음)에서 "판정 전 중단" 규칙을 문구만으로는 지키지 못했다(2/3). 구조로 강제한다.
+
+- 방안 1: `db_verify.py fix`가 코드·설정 수정 유형이면서 scenario·recovery 시그니처가 모두 없을 때 `judgement: unknown`을 내는 대신 **종료 코드 2와 "판정 전 중단 조건" 오류**로 거부한다. 오류에 "update-signature로 scenario/recovery 추가 → 초안 R1 흔적 검사 통과 → 재실행" 안내를 `must_show`처럼 담는다.
+- 방안 2: `db_search.py` 원인 출력에 `verify_fix_blocked: "<사유>"`를 내고 verify.md 3번에 "있으면 `db_verify fix`를 부르지 않는다"를 적는다.
+- 같이 할 것(b-6): SKILL 5-1을 "report.md의 그 칸 줄을 **파일에서 바꿔 쓰고** 답변에도 보인다"로 명확히 한다(e40·e41은 답변만 채우고 `report.md`는 TODO로 남았다).
+- 그때까지 verify-fix는 Opus를 권장한다(`GUIDE.md`).
+
 ---
 
 ## 되살릴 때 바꿀 곳

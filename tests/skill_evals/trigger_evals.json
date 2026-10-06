@@ -1,5 +1,6 @@
 [
   {"query": "ABC-12345 로그 분석해줘, 데이터 안 붙어", "should_trigger": true},
+  {"query": "데이터 안 붙는 이슈 예전에 있었어? 지라 번호 알려줘", "should_trigger": true},
   {"query": "SETUP_DATA_CALL이 안 나가는 원인 찾아줘", "should_trigger": true},
   {"query": "콜이 왜 끊겼는지 logcat 좀 봐줘", "should_trigger": true},
   {"query": "SIM 인식 안 되는 이슈 분류해줘", "should_trigger": true},

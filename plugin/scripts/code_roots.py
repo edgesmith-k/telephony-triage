@@ -6,7 +6,8 @@
         스킬은 여기에 "직접 입력", "코드 분석 건너뛰기"를 더해 사용자에게 묻는다.
     code_roots.py validate <roots> [--version <v>] [--db <path>]
         `<roots>`: 프로필 이름, `aosp=/p,vendor_ril=/q`, 또는 경로 하나(aosp로 간주).
-        키가 `code_root_keys`에 있는지, 경로가 있는지, aosp에 `frameworks/opt/telephony`가 있는지 본다.
+        키가 `code_root_keys`에 있는지, 경로가 있는지, aosp에 필수 디렉토리(`platform.source_tree.required_dirs`,
+        기본 `frameworks/opt/telephony`)가 모두 있는지 본다.
         트리 버전을 추정해 `--version`과 다르면 경고한다. 잘못된 루트는 종료 코드 2.
     code_roots.py resolve <ref> --roots <roots>
         `<root 키>:<상대 경로>` → 절대 경로 (03-issue-db.md §5.4 code_refs).
@@ -15,7 +16,8 @@
     code_roots.py remember <roots>
         직접 입력한 루트를 `recent_code_roots`에 기록한다(최근 5개).
 
-트리 버전 추정 파일은 사내 트리에서 확인한다 — TODO(SITE:S11).
+트리 버전 추정 파일은 `platform.source_tree.version_sources`로 사내 트리에 맞춘다 (`platforms.load()`, 02-config.md).
+`platform:`이 잘못되면 종료 코드 2.
 """
 
 from __future__ import annotations
@@ -32,17 +34,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from common import compat, dbpath, site_defaults, userconfig  # noqa: E402
 from common.exitcodes import OK, USAGE  # noqa: E402
+import platforms  # noqa: E402
+from platforms.android import TELEPHONY_DIR, VERSION_SOURCES  # noqa: E402
 
 DEFAULT_KEYS = ["aosp", "vendor_ril"]
 RECENT_MAX = 5
-TELEPHONY_DIR = "frameworks/opt/telephony"
 SOURCE_SUFFIXES = {".java", ".kt", ".c", ".cc", ".cpp", ".h", ".hpp", ".aidl"}
-# (파일, 정규식) 순서대로 시도한다 — TODO(SITE:S11) 최신 AOSP는 release config 쪽에 있을 수 있다.
-VERSION_SOURCES = [
-    ("build/release/release_config_map.textproto", re.compile(r"RELEASE_PLATFORM_VERSION\D*(\d+)")),
-    ("build/make/core/version_defaults.mk", re.compile(r"^\s*PLATFORM_VERSION\s*:?=\s*(\d+)", re.M)),
-    ("build/core/version_defaults.mk", re.compile(r"^\s*PLATFORM_VERSION\s*:?=\s*(\d+)", re.M)),
-]
 
 
 class UsageError(Exception):
@@ -79,8 +76,16 @@ def parse_roots(text: str, cfg: dict) -> dict[str, str]:
     return {"aosp": text}
 
 
-def estimate_version(aosp: Path) -> str | None:
-    for rel, regex in VERSION_SOURCES:
+def _tree(defaults: dict) -> platforms.SourceTree:
+    """`platform.source_tree`. 잘못되면 사용 오류(종료 코드 2)."""
+    try:
+        return platforms.load(defaults).source_tree
+    except platforms.PlatformConfigError as exc:
+        raise UsageError(str(exc)) from exc
+
+
+def estimate_version(aosp: Path, sources=VERSION_SOURCES) -> str | None:
+    for rel, regex in sources:
         path = aosp / rel
         if path.is_file():
             hit = regex.search(path.read_text(encoding="utf-8", errors="replace"))
@@ -91,20 +96,21 @@ def estimate_version(aosp: Path) -> str | None:
 
 def cmd_suggest(args, defaults) -> dict:
     cfg = _cfg(defaults)
+    sources = _tree(defaults).version_sources
     version = str(args.version) if args.version else None
     profiles = []
     for p in cfg.get("code_profiles") or []:
         roots = {k: str(v) for k, v in (p.get("roots") or {}).items()}
         aosp = Path(roots.get("aosp", "")).expanduser()
         profiles.append({"kind": "profile", "name": p.get("name"), "android_version": str(p.get("android_version")),
-                         "roots": roots, "estimated_version": estimate_version(aosp) if aosp.is_dir() else None})
+                         "roots": roots, "estimated_version": estimate_version(aosp, sources) if aosp.is_dir() else None})
     for p in profiles:
         p["match"] = version is not None and version in (p["android_version"], p["estimated_version"])
     recent = []
     for r in sorted(cfg.get("recent_code_roots") or [], key=lambda r: str(r.get("used_on", "")), reverse=True):
         roots = {k: str(v) for k, v in (r.get("roots") or {}).items()}
         aosp = Path(roots.get("aosp", "")).expanduser()
-        est = estimate_version(aosp) if aosp.is_dir() else None
+        est = estimate_version(aosp, sources) if aosp.is_dir() else None
         recent.append({"kind": "recent", "name": None, "roots": roots, "used_on": r.get("used_on"),
                        "android_version": est, "estimated_version": est, "match": version is not None and est == version})
     ordered = ([p for p in profiles if p["match"]] + [r for r in recent if r["match"]]
@@ -115,7 +121,11 @@ def cmd_suggest(args, defaults) -> dict:
     return {"version": version, "candidates": ordered, "extra_choices": ["직접 입력", "코드 분석 건너뛰기"]}
 
 
-def validate(roots: dict[str, str], keys: list[str], version: str | None) -> dict:
+def validate(roots: dict[str, str], keys: list[str], version: str | None,
+             tree: platforms.SourceTree | None = None) -> dict:
+    """`tree`(`platform.source_tree`)가 없으면 코드 기본값."""
+    required_dirs = tree.required_dirs if tree else (TELEPHONY_DIR,)
+    sources = tree.version_sources if tree else VERSION_SOURCES
     errors, warnings = [], []
     for key, value in sorted(roots.items()):
         if key not in keys:
@@ -129,9 +139,10 @@ def validate(roots: dict[str, str], keys: list[str], version: str | None) -> dic
         errors.append("aosp 루트가 필요합니다.")
     elif Path(aosp).expanduser().is_dir():
         root = Path(aosp).expanduser()
-        if not (root / TELEPHONY_DIR).is_dir():
-            errors.append(f"aosp 루트에 {TELEPHONY_DIR}가 없습니다: {aosp}")
-        estimated = estimate_version(root)
+        for rel in required_dirs:
+            if not (root / rel).is_dir():
+                errors.append(f"aosp 루트에 {rel}가 없습니다: {aosp}")
+        estimated = estimate_version(root, sources)
         if estimated is None:
             warnings.append("트리 버전을 추정하지 못했다 (사용자 입력을 신뢰한다)")
         elif version and estimated != str(version):
@@ -141,7 +152,7 @@ def validate(roots: dict[str, str], keys: list[str], version: str | None) -> dic
 
 
 def cmd_validate(args, defaults) -> tuple[dict, int]:
-    result = validate(parse_roots(args.roots, _cfg(defaults)), _keys(args, defaults), args.version)
+    result = validate(parse_roots(args.roots, _cfg(defaults)), _keys(args, defaults), args.version, _tree(defaults))
     return result, (OK if result["valid"] else USAGE)
 
 

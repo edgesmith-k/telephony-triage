@@ -22,6 +22,7 @@ TODO(SITE:S3) 플러그인 hook에 보이는 MCP 도구 이름이 `mcp__<server>
 | 6 | base 브랜치 push 차단: refspec의 대상 ref(없으면 현재 브랜치), `--all`/`--mirror`, push `--no-verify` | Bash, 이슈 DB |
 | 7 | push 확인 강제: 이슈 DB `git push`와 `db_pr.py publish`는 `ask` | Bash |
 | 8 | 사용자 clone 직접 편집 차단: 대상 파일이 `issue_db.path` 안이면 거부(`work_dir` 아래는 제외) | Write/Edit/MultiEdit/NotebookEdit |
+| 10 | 로그 원문 통독 차단: cat·tac·nl·less·more·bat·strings·zcat·zless·bzcat·xzcat, `head/tail -c`, `unzip -p/-c`가 로그 원문·zip·bugreport·`events*.json`·`jira_raw.json`·`match.json`을 통째로 읽으면 거부(`fixtures/`·`draft/` 제외, 사용자 config와 무관) | Bash |
 
 (1번은 SessionStart의 `config.py sync-scripts-path`다.)
 
@@ -40,6 +41,7 @@ TODO(SITE:S3) 플러그인 hook에 보이는 MCP 도구 이름이 `mcp__<server>
 
 from __future__ import annotations
 
+import glob
 import json
 import os
 import re
@@ -59,6 +61,14 @@ SEPARATORS = {";", "&&", "||", "|", "&", "(", ")", "\n", "|&", ";;"}
 SHELLS = {"sh", "bash", "zsh", "dash", "ksh"}
 MAX_DEPTH = 3
 HEREDOC_RE = re.compile(r"<<-?\s*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\1")
+
+# 규칙 10: 로그 원문 통독 차단
+RAW_ALWAYS_CMDS = {"cat", "tac", "nl", "less", "more", "bat", "strings", "zcat", "zless", "bzcat", "xzcat"}
+RAW_NAMES = {"events.json", "events-full.json", "jira_raw.json", "match.json"}
+RAW_GLOB_MAX = 20
+RAW_SNIFF_BYTES = 8192
+RAW_SNIFF_LINES = 30
+REDIRECT_RE = re.compile(r"^(?:\d*>>?|\d*>&|&>>?)(.*)$")
 
 # git 전역 옵션 중 값을 받는 것 (값이 다음 토큰)
 GIT_GLOBAL_WITH_ARG = {"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--config-env",
@@ -475,8 +485,8 @@ def check_commit(call: GitCall, conf: Config, dec: Decision) -> None:
     if not staged:
         return
     try:
-        import yaml
-        db_cfg = yaml.safe_load((Path(top) / "issue-db.config.yaml").read_text(encoding="utf-8")) or {}
+        from common import yamlio
+        db_cfg = yamlio.safe_load((Path(top) / "issue-db.config.yaml").read_text(encoding="utf-8")) or {}
     except (OSError, ValueError, ImportError):
         db_cfg = {}
     ci_mode = db_cfg.get("ci_mode", "local")
@@ -505,7 +515,235 @@ def check_commit(call: GitCall, conf: Config, dec: Decision) -> None:
                             f"{problems}. 직접 고치지 말고 db_build.py --write로 다시 만든 뒤 add한다.")
 
 
+# -- 로그 원문 통독 차단 (10) ---------------------------------------------------------------
+
+
+def _raw_cmd_verb(inv: Invocation) -> str | None:
+    """원문 통독이 될 수 있는 명령이면 표시용 동사(`cat`, `head -c`, `unzip -p`), 아니면 None."""
+    name = _base(inv.argv[0])
+    flags = [a for a in inv.argv[1:] if a.startswith("-") and a != "-"]
+    if name in RAW_ALWAYS_CMDS:
+        return name
+    if name in ("head", "tail"):
+        for a in flags:
+            if a == "--bytes" or a.startswith("--bytes="):
+                return f"{name} -c"
+            if not a.startswith("--") and "c" in re.split(r"\d", a[1:], 1)[0]:
+                return f"{name} -c"
+    elif name == "unzip":
+        for a in flags:
+            if not a.startswith("--") and ("p" in a[1:] or "c" in a[1:]):
+                return "unzip -p"
+    return None
+
+
+# 모든 줄에 맞는 패턴·스크립트: 통독과 같다 (보수적인 목록만)
+MATCH_ALL_PATTERNS = {"", "^", ".*", "$", ".", "^.*$"}
+MATCH_ALL_AWK = {"{print}", "{print$0}", "1"}
+MATCH_ALL_SED = {"", "p", "1,$p", "0,$p"}
+GREP_NON_DUMP_FLAGS = set("cqlL")   # 개수·존재만 내는 옵션은 통독이 아니다
+
+
+def _words_and_stdin(argv: list[str]) -> tuple[list[str], list[str]]:
+    """플래그를 남기고 출력 리디렉션·heredoc을 뺀 단어와, `<` 입력 파일."""
+    words: list[str] = []
+    stdin: list[str] = []
+    skip = redir_in = False
+    for tok in argv[1:]:
+        if skip:
+            skip = False
+        elif redir_in:
+            redir_in = False
+            stdin.append(tok)
+        elif tok.startswith("<<"):
+            continue
+        elif tok == "<":
+            redir_in = True
+        elif tok.startswith("<") and len(tok) > 1:
+            stdin.append(tok[1:])
+        elif tok and REDIRECT_RE.match(tok):
+            skip = not REDIRECT_RE.match(tok).group(1)
+        else:
+            words.append(tok)
+    return words, stdin
+
+
+def _dump_verb_and_files(inv: Invocation) -> tuple[str, list[str]] | None:
+    """grep·rg·awk·sed가 모든 줄을 내보내는 형태면 (표시 동사, 대상 인자들), 아니면 None."""
+    name = _base(inv.argv[0])
+    if name not in ("grep", "egrep", "fgrep", "rg", "awk", "gawk", "mawk", "sed"):
+        return None
+    words, stdin = _words_and_stdin(inv.argv)
+    pos: list[str] = []
+    pats: list[str] = []
+    short_flags = ""
+    quiet_kinds = False
+    i = 0
+    while i < len(words):
+        w = words[i]
+        i += 1
+        if w == "--":
+            pos += words[i:]
+            break
+        if w.startswith("--") and len(w) > 2:
+            if name in ("grep", "egrep", "fgrep", "rg"):
+                if w.startswith("--regexp="):
+                    pats.append(w.split("=", 1)[1])
+                elif w == "--regexp" and i < len(words):
+                    pats.append(words[i])
+                    i += 1
+                elif w in ("--count", "--quiet", "--silent", "--files-with-matches", "--files-without-match"):
+                    quiet_kinds = True
+            elif name == "sed":
+                if w.startswith("--expression="):
+                    pats.append(w.split("=", 1)[1])
+                elif w == "--expression" and i < len(words):
+                    pats.append(words[i])
+                    i += 1
+                elif w in ("--quiet", "--silent"):
+                    short_flags += "n"
+            continue
+        if w.startswith("-") and len(w) > 1:
+            cluster = w[1:]
+            short_flags += cluster
+            takes = {"grep": "efmAB", "egrep": "efmAB", "fgrep": "efmAB", "rg": "efmABg",
+                     "awk": "Fvf", "gawk": "Fvf", "mawk": "Fvf", "sed": "ef"}[name]
+            # 값을 받는 옵션이 클러스터 끝에 오면 다음 단어가 값, 중간에 오면 나머지가 값
+            for k, ch in enumerate(cluster):
+                if ch in takes:
+                    rest = cluster[k + 1:]
+                    val = rest if rest else (words[i] if i < len(words) else None)
+                    if not rest:
+                        i += 1
+                    if ch == "e" and val is not None:
+                        pats.append(val)
+                    elif ch in "fv" and name in ("awk", "gawk", "mawk", "sed", "grep", "egrep", "fgrep", "rg"):
+                        if ch == "f":
+                            pats.append("\0file")   # 파일에서 읽는 프로그램·패턴: 판단하지 않는다
+                    break
+            continue
+        pos.append(w)
+    if name in ("grep", "egrep", "fgrep", "rg"):
+        if set(short_flags) & GREP_NON_DUMP_FLAGS or quiet_kinds:
+            return None
+        if not pats:
+            if not pos:
+                return None
+            pats, pos = [pos[0]], pos[1:]
+        hit = any(p in MATCH_ALL_PATTERNS for p in pats) and "\0file" not in pats
+        if "v" in short_flags or "--invert-match" in inv.argv:
+            hit = False
+        verb = f"{name} {pats[0]!r}"
+    elif name == "sed":
+        if not pats:
+            if not pos:
+                return None
+            pats, pos = [pos[0]], pos[1:]
+        script = pats[0].replace(" ", "")
+        hit = len(pats) == 1 and "\0file" not in pats and script in MATCH_ALL_SED and "i" not in short_flags
+        verb = f"sed {pats[0]!r}"
+    else:
+        if not pats or "\0file" in pats:
+            if not pos:
+                return None
+            prog, pos = pos[0], pos[1:]
+        else:
+            return None
+        hit = prog.replace(" ", "").rstrip(";") in MATCH_ALL_AWK or prog.replace(" ", "") in ("{print;}",)
+        verb = f"{name} {prog!r}"
+    if not hit:
+        return None
+    return verb, pos + stdin
+
+
+def _raw_args(argv: list[str]) -> list[str]:
+    """위치 인자와 `<` 대상. `>`·`>>`·`2>` 등 출력 리디렉션과 heredoc은 뺀다."""
+    out: list[str] = []
+    skip = False
+    redir_in = False
+    for tok in argv[1:]:
+        if skip:
+            skip = False
+            continue
+        if redir_in:
+            redir_in = False
+            out.append(tok)
+            continue
+        if tok.startswith("<<"):
+            continue
+        if tok == "<":
+            redir_in = True
+            continue
+        if tok.startswith("<") and len(tok) > 1:
+            out.append(tok[1:])
+            continue
+        m = REDIRECT_RE.match(tok)
+        if m:
+            skip = not m.group(1)
+            continue
+        if tok.startswith("-") and tok != "-":
+            continue
+        out.append(tok)
+    return out
+
+
+def _is_raw_file(path: Path) -> bool:
+    real = _norm(path)
+    segs = real.replace("\\", "/").split("/")
+    if "fixtures" in segs[:-1] or "draft" in segs[:-1]:
+        return False
+    if not os.path.isfile(real):
+        return False
+    if path.name in RAW_NAMES:
+        return True
+    with open(real, "rb") as fh:
+        head = fh.read(RAW_SNIFF_BYTES)
+    if head.startswith(b"PK\x03\x04") or head.startswith(b"\x1f\x8b"):
+        return True
+    lines = head.decode("utf-8", errors="replace").splitlines()[:RAW_SNIFF_LINES]
+    try:
+        from platforms.android import logcat   # 이 명령이 나올 때만 불러온다
+    except ImportError:
+        logcat = None
+    for line in lines:
+        if logcat is not None and (logcat.THREADTIME_RE.match(line) or logcat.TIME_RE.match(line)):
+            return True
+        if line.startswith("== dumpstate") or (line.startswith("------ ") and line.rstrip().endswith(" ------")):
+            return True
+    return False
+
+
+def check_raw_read(command: str, cwd: Path, dec: Decision) -> None:
+    for inv in invocations(command, cwd):
+        verb = _raw_cmd_verb(inv)
+        if verb is not None:
+            args = _raw_args(inv.argv)
+        else:
+            dump = _dump_verb_and_files(inv)
+            if dump is None:
+                continue
+            verb, args = dump
+        for arg in args:
+            word = _expand(arg)
+            path = Path(word) if Path(word).is_absolute() else inv.cwd / word
+            cands = [path]
+            if any(ch in word for ch in "*?["):
+                cands = [Path(p) for p in sorted(glob.glob(str(path)))[:RAW_GLOB_MAX]]
+            for cand in cands:
+                try:
+                    hit = _is_raw_file(cand)
+                except OSError:
+                    hit = False
+                if hit:
+                    dec.deny.append(
+                        "로그 원문·zip·events/jira_raw/match.json은 통째로 읽지 않는다(원칙 §로그 원문, "
+                        f"규칙 10: {verb} {arg}). grep -n '<패턴>' <파일> 또는 sed -n '<a>,<b>p' <파일>로 필요한 "
+                        "줄만, bugreport는 parse_logcat.py extract-bugreport. Read 도구도 limit·offset으로 구간만.")
+                    return
+
+
 def check_bash(command: str, cwd: Path, conf: Config, dec: Decision) -> None:
+    check_raw_read(command, cwd, dec)
     for inv in invocations(command, cwd):
         name = _base(inv.argv[0])
         is_db_pr = name == "db_pr.py" or (name.startswith("python")
