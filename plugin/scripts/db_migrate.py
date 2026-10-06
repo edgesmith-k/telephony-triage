@@ -345,7 +345,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--dry-run", action="store_true", help="--to와 함께: 아무것도 쓰지 않고 바뀔 파일만 보인다")
     sub = parser.add_subparsers(dest="cmd")
     p = sub.add_parser("upgrade-plan", parents=[common])
-    p.add_argument("plan")
+    p.add_argument("plan", metavar="plan.json")
     p.add_argument("--write", action="store_true", help="올린 계획으로 파일을 덮어쓴다 (원본은 .v<옛 버전>.bak)")
     return parser
 

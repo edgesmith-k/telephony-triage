@@ -70,6 +70,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import importlib.util
 import io
@@ -111,7 +112,7 @@ EXPLORE_WHEN = ("ask", "always", "never")
 EXPLORE_MAX_LINES = 200
 TIMELINE_FILE = "timeline.md"
 EXPLORE_INPUT_FILE = "explore-input.json"   # `triage.py explore`의 입력(마스킹된 값만). run이 쓰고, 탐색 동의 뒤 subcommand가 읽는다
-MUST_SHOW_MAX = 6                # write_report가 모으는 must_show 상한
+MUST_SHOW_MAX = 6                # render_report가 모으는 must_show 상한
 MUST_SHOW_FIT = 4                # fit이 마지막에 남기는 수
 MUST_SHOW_CLIP = 160
 EXPLORE_HYPOTHESIS = "TODO(LLM) 가설 1~3개 — 로그로 확인 / 코드로 추정 / 반대 근거 / 다음에 받을 로그. 실행하지 않으면 \"탐색 분석 생략: <사유>\". 점수·분류·검증에 쓰지 않는다"
@@ -1461,25 +1462,32 @@ class Driver:
             "files": {"report": str(self.job / "report.md"), "events": str(self.job / "events.json"),
                       "match": str(self.job / "match.json"), "jira": str(self.job / "jira.json")},
         }
+        result["_outside"] = core.get("outside")      # report.md 전용, analysis.json에는 안 나간다
+        report, must_show = self.render_report(result, anchor)
+        result.pop("_outside", None)
+        if must_show:
+            result["must_show"] = must_show
+        # analysis.json 내용을 먼저 확정하고(TT_SCHEMA_CHECK면 검사) 그 뒤에 파일을 쓴다: 위반이면 이전 결과·캐시를 건드리지 않는다
+        final = copy.deepcopy({k: v for k, v in result.items() if v not in (None, [], {})})
+        for cand in final.get("candidates") or []:
+            for e in cand["evidence"]:
+                e.pop("_ref", None)
+        final = fit(final)
+        violation = schema_violation(final)
+        if violation:
+            raise Fail(USAGE, violation)
         if parts is not None and not hit:
             self.archive_previous(request_hash)       # 덮어쓰기 전에 이전 결과를 runs/<n>/에 보관
-        result["_outside"] = core.get("outside")      # report.md 전용, analysis.json에는 안 나간다
-        must_show = self.write_report(result, anchor)
-        result.pop("_outside", None)
+        (self.job / "report.md").write_text(report, encoding="utf-8", newline="\n")
         if core.get("explore_input") is not None:       # 동의 뒤 `triage.py explore`가 읽는다(캐시 적중이어도 다시 쓴다)
             (self.job / EXPLORE_INPUT_FILE).write_text(json.dumps(core["explore_input"], ensure_ascii=False, indent=1) + "\n",
                                                        encoding="utf-8", newline="\n")
-        if must_show:
-            result["must_show"] = must_show
         if parts is not None:
             self.save_job(core, parts, request_hash, run_no, seq, hit, candidates)   # `_ref`를 지우기 전에(리포트 재현용)
         for cand in candidates:
             for e in cand["evidence"]:
                 e.pop("_ref", None)
-        result = fit({k: v for k, v in result.items() if v not in (None, [], {})})
-        violation = schema_violation(result)
-        if violation:
-            raise Fail(USAGE, violation)
+        result = final
         (self.job / "analysis.json").write_text(json.dumps(result, ensure_ascii=False, indent=1) + "\n",
                                                 encoding="utf-8", newline="\n")
         self.run.note("done", candidates=len(candidates), calls=self.run.calls)
@@ -1589,8 +1597,8 @@ class Driver:
         h.update(json.dumps(parts, ensure_ascii=False).encode())
         return h.hexdigest()[:16]
 
-    def write_report(self, r: dict, anchor: dict | None = None) -> list[str]:
-        """`report.md`를 쓰고, 사용자에게 꼭 보여야 하는 줄(`must_show`: 우선순위 순, 줄 앞 "- " 없이, 최대 `MUST_SHOW_MAX`개)을 돌려준다."""
+    def render_report(self, r: dict, anchor: dict | None = None) -> tuple[str, list[str]]:
+        """`report.md` 본문과, 사용자에게 꼭 보여야 하는 줄(`must_show`: 우선순위 순, 줄 앞 "- " 없이, 최대 `MUST_SHOW_MAX`개)을 돌려준다."""
         lines = [f"## {self.key} 분석", ""]
         must: list[tuple[int, str]] = []          # (우선순위, 줄 본문). 이미 마스킹된 값만
 
@@ -1727,8 +1735,7 @@ class Driver:
             lines.append(f"- 열린 PR: {', '.join(str(p.get('url') or p.get('number')) for p in prs) or '없음'}")
         if r["warnings"]:
             lines.append("- 경고: " + "; ".join(r["warnings"]))
-        (self.job / "report.md").write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
-        return [text for _, text in sorted(must, key=lambda m: m[0])][:MUST_SHOW_MAX]
+        return "\n".join(lines) + "\n", [text for _, text in sorted(must, key=lambda m: m[0])][:MUST_SHOW_MAX]
 
     def release(self) -> bool:
         if self.locked and self.run.env.get("TT_LOCK_OWNER"):
@@ -1908,33 +1915,33 @@ def build_parser() -> argparse.ArgumentParser:
     common.add_argument("--json", action="store_true", help="JSON 출력 (항상 JSON)")
     sub = parser.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("run", parents=[common])
-    p.add_argument("key")
+    p.add_argument("key", metavar="KEY")
     logs = p.add_mutually_exclusive_group()
-    logs.add_argument("--logs", nargs="+")
-    logs.add_argument("--more-logs", nargs="+", help="이전 분석의 로그 뒤에 로그를 더해 다시 분석(RF-7). --logs와 함께 못 쓴다")
+    logs.add_argument("--logs", metavar="logcat|bugreport", nargs="+")
+    logs.add_argument("--more-logs", metavar="logcat|bugreport", nargs="+", help="이전 분석의 로그 뒤에 로그를 더해 다시 분석(RF-7). --logs와 함께 못 쓴다")
     src = p.add_mutually_exclusive_group()
-    src.add_argument("--jira-raw")
-    src.add_argument("--jira-file")
-    src.add_argument("--jira-meta")
-    p.add_argument("--code")
+    src.add_argument("--jira-raw", metavar="json")
+    src.add_argument("--jira-file", metavar="yaml")
+    src.add_argument("--jira-meta", metavar="json")
+    p.add_argument("--code", metavar="프로필|경로|skip")
     p.add_argument("--dry-run", action="store_true")
     p.add_argument("--analysis-only", action="store_true", help="이슈 DB에 기록하지 않는 분석 전용(cleanup·기존 계획·열린 PR 건너뜀, ok면 lock 해제). --dry-run과 함께 못 쓴다")
-    p.add_argument("--answer", action="append")
+    p.add_argument("--answer", metavar="kind=값", action="append")
     p.add_argument("--tz")
     p.add_argument("--year", type=int)
     p.add_argument("--minutes", type=float)
     p.add_argument("--refresh", action="store_true", help="같은 세션에서도 스냅샷을 다시 만들고, 같은 입력의 분석 재사용(analysis-cache.json)도 끈다")
-    p.add_argument("--offline-db")
-    p.add_argument("--out")
-    p.add_argument("--failed-step", help="실패 스텝 한 줄(선택, 보조 정보). 마스킹해서만 쓴다")
-    p.add_argument("--steps-file", help="시험 절차 첨부 파일(txt/csv/html/zip, 선택). 읽지 못하면 경고만 내고 진행")
-    p.add_argument("--clock-offset", help="시험 장비 시각 → 단말 logcat 시각 시계 차(단말 = 장비 + 값). 예: +3m, -90s, +00:03:00, 180. "
+    p.add_argument("--offline-db", metavar="db")
+    p.add_argument("--out", metavar="dir")
+    p.add_argument("--failed-step", metavar="한 줄", help="실패 스텝 한 줄(선택, 보조 정보). 마스킹해서만 쓴다")
+    p.add_argument("--steps-file", metavar="파일", help="시험 절차 첨부 파일(txt/csv/html/zip, 선택). 읽지 못하면 경고만 내고 진행")
+    p.add_argument("--clock-offset", metavar="±시간", help="시험 장비 시각 → 단말 logcat 시각 시계 차(단말 = 장비 + 값). 예: +3m, -90s, +00:03:00, 180. "
                                           "없으면 steps-file의 장비 시각은 분석 구간에 쓰지 않는다")
     p = sub.add_parser("explore", parents=[common])
-    p.add_argument("key")
-    p.add_argument("--out", help="`run --offline-db --out`의 JOB 디렉토리(없으면 <work_dir>/<KEY>)")
+    p.add_argument("key", metavar="KEY")
+    p.add_argument("--out", metavar="dir", help="`run --offline-db --out`의 JOB 디렉토리(없으면 <work_dir>/<KEY>)")
     p = sub.add_parser("release", parents=[common])
-    p.add_argument("key")
+    p.add_argument("key", metavar="KEY")
     return parser
 
 
@@ -1949,6 +1956,9 @@ def schema_violation(result: dict) -> str | None:
     """`TT_SCHEMA_CHECK=1`(테스트·CI)일 때만 run 출력을 `schemas/output/analysis.schema.json`으로 검사한다.
 
     위반이면 stderr 한 줄 문구를 돌려준다(호출자가 종료 코드 2). 운영 경로(변수 없음)는 아무것도 하지 않는다.
+    ok는 `assemble`이 fit() 결과를 확정한 직후, 이전 결과 보관·`report.md`·`save_job`·`analysis.json` 쓰기 전에 검사한다
+    (위반이면 `Fail`로 lock을 풀고 끝난다). needs_input·stopped는 테스트 전용 동작이다: `main`이 state를 저장한 뒤 검사하므로
+    위반이면 lock을 유지한 채(stopped는 이미 해제) 출력 없이 종료 2로 끝난다.
     """
     if os.environ.get("TT_SCHEMA_CHECK") != "1":
         return None
@@ -1957,7 +1967,7 @@ def schema_violation(result: dict) -> str | None:
     except ImportError:
         return "[telephony-triage] analysis 스키마 위반: (검사 불가): jsonschema가 없다 — TT_SCHEMA_CHECK=1은 jsonschema가 필요하다"
     validator = jsonschema.Draft202012Validator(json.loads(ANALYSIS_SCHEMA.read_text(encoding="utf-8")))
-    errors = sorted(validator.iter_errors(result), key=lambda e: list(e.absolute_path))
+    errors = sorted(validator.iter_errors(result), key=lambda e: [str(x) for x in e.absolute_path])
     if not errors:
         return None
     err = errors[0]

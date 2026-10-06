@@ -947,21 +947,21 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("rules", parents=[common])
     scope = p.add_mutually_exclusive_group(required=True)
-    scope.add_argument("--plan")
-    scope.add_argument("--changed", metavar="REF")
+    scope.add_argument("--plan", metavar="plan.json")
+    scope.add_argument("--changed", metavar="ref")
     scope.add_argument("--staged", action="store_true")
-    p.add_argument("--draft")
-    p.add_argument("--extra", nargs="*", default=[], help="R6 같은 증상 표본 (expect: match)")
-    p.add_argument("--extra-normal", nargs="*", default=[], help="R6 정상 표본 (expect: nomatch)")
+    p.add_argument("--draft", metavar="dir")
+    p.add_argument("--extra", metavar="logcat", nargs="*", default=[], help="R6 같은 증상 표본 (expect: match)")
+    p.add_argument("--extra-normal", metavar="logcat", nargs="*", default=[], help="R6 정상 표본 (expect: nomatch)")
     p.add_argument("--regress-json", help=argparse.SUPPRESS)   # db_pr stage가 이미 돌린 회귀 결과를 넘긴다
     for name in ("resolution", "fix"):
         p = sub.add_parser(name, parents=[common])
-        p.add_argument("logs", nargs="*")
-        p.add_argument("--cause")
-        p.add_argument("--plan")
-        p.add_argument("--draft")
+        p.add_argument("logs", metavar="logcat", nargs="*")
+        p.add_argument("--cause", metavar="ID")
+        p.add_argument("--plan", metavar="plan.json")
+        p.add_argument("--draft", metavar="dir")
         if name == "fix":
-            p.add_argument("--build")
+            p.add_argument("--build", metavar="빌드")
     return parser
 
 

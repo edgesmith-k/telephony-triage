@@ -1,6 +1,6 @@
 # 01. 전체 구조와 플러그인 레포
 
-> 원본 1장(이전 `CLAUDE.md §1`), 2장, 3장. CLI 옵션과 종료 코드는 `contracts.md §3.2`, `contracts.md §종료 코드`에만 있다.
+> 원본 1장(이전 `CLAUDE.md §1`), 2장, 3장. CLI 옵션 구문은 `contracts-cli.md`(생성), 출력·동작은 `contracts.md §3.2`, 종료 코드는 `contracts.md §종료 코드`에만 있다.
 
 ---
 

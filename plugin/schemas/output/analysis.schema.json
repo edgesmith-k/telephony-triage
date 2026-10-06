@@ -16,9 +16,10 @@
  "$defs": {
   "ok": {
    "description": "완료. JOB/analysis.json(≤ 4KB, stdout도 같음). 값이 null·빈 목록·빈 객체인 최상위 키는 내지 않는다",
+   "$comment": "required는 fit()이 지우지 않는 최상위 키만이다(triage.py assemble이 null·[]·{} 키를 뺀 뒤 fit). candidates는 후보가 없으면 []라서 빠지고, no_candidate는 후보가 있으면 null이라 빠지므로 required가 아니다. code는 resolve_code가 항상 비어 있지 않은 객체({skipped: true} 이상)를 내고 fit이 건드리지 않는다.",
    "type": "object",
    "additionalProperties": false,
-   "required": ["status", "key", "generated_at", "request_hash", "mode", "logs", "files", "truncated"],
+   "required": ["status", "key", "generated_at", "request_hash", "mode", "logs", "code", "files", "truncated"],
    "properties": {
     "status": {"const": "ok"},
     "key": {"type": "string"},

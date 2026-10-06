@@ -380,7 +380,7 @@ def build_parser() -> argparse.ArgumentParser:
                                      formatter_class=argparse.RawDescriptionHelpFormatter, parents=[common])
     sub = parser.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("show", parents=[common])
-    p.add_argument("--keys", help="쉼표로 구분한 키(점 표기)만 보인다 (예: work_dir,jira.tools)")
+    p.add_argument("--keys", metavar="a,b.c", help="쉼표로 구분한 키(점 표기)만 보인다 (예: work_dir,jira.tools)")
     sub.add_parser("site-defaults", parents=[common])
     p = sub.add_parser("init", parents=[common])
     p.add_argument("--answers")
@@ -401,7 +401,7 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("install-hooks", parents=[common])
     p.add_argument("--db", default=None)
     p = sub.add_parser("check", parents=[common])
-    p.add_argument("--db", default=None)
+    p.add_argument("--db", metavar="path", default=None)
     p.add_argument("--for", dest="for_", choices=["write", "dry-run"], default="write")
     sub.add_parser("gh-status", parents=[common])
     return parser

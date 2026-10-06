@@ -508,7 +508,7 @@ def run(args, defaults: dict) -> dict:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="db_search.py", description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("query")
+    parser.add_argument("query", metavar="증상 문장|keyword|JIRA-KEY|ID")
     parser.add_argument("--db", default=None)
     parser.add_argument("--limit", type=int, default=20)
     parser.add_argument("--brief", action="store_true", help="훑어보기용 요약 출력 (path·chain·code_refs·빈 값 등을 뺀다)")

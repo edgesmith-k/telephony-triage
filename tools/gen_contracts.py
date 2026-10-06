@@ -59,7 +59,7 @@ HEADER = """# CLI 계약 (생성)
 
 > 자동 생성 — 직접 수정 금지(`python3 tools/gen_contracts.py --write`). 원본: 각 스크립트의 `build_parser()`,
 > `plugin/schemas/output/analysis.schema.json`(triage 출력), `plugin/schemas/plan.schema.json`(db-authoring 요약).
-> 출력·동작·공통 규칙은 `contracts.md §3.2`(손으로 쓴다). 표·정의가 다르면 코드에서 나온 이 파일이 옵션의 기준이다.
+> 서브커맨드·옵션 구문과 `analysis.json` 키 구조는 이 파일이 기준이다. 출력·동작·공통 규칙과 그 밖의 표·정의는 `contracts.md`(손으로 쓴다)가 기준이다.
 
 표기: `<값>` 위치 인자·옵션 값, `[…]` 선택, `(a | b)` 하나 필수, `[a | b]` 하나까지, `{a,b}` 값 목록, `…` 여러 개.
 """
@@ -91,7 +91,7 @@ def _load_parsers() -> dict[str, argparse.ArgumentParser]:
 def cli_scripts() -> list[str]:
     """`if __name__ == "__main__":`이 있는 plugin/scripts/*.py 이름."""
     return sorted(p.stem for p in SCRIPTS_DIR.glob("*.py")
-                  if re.search(r'^if __name__ == "__main__":', p.read_text(encoding="utf-8"), re.M))
+                  if re.search(r"""^if __name__ == ["']__main__["']:""", p.read_text(encoding="utf-8"), re.M))
 
 
 def _subparsers(parser: argparse.ArgumentParser):
@@ -145,6 +145,8 @@ def _token(action: argparse.Action) -> str:
     if nargs == "?":
         return f"{opt} [{value}]"
     if isinstance(nargs, int):
+        if isinstance(action.metavar, tuple):          # 값마다 이름이 다른 경우 (예: --between <ISO 시작> <ISO 끝>)
+            return " ".join([opt] + [f"<{m}>" for m in action.metavar])
         return " ".join([opt] + [value] * nargs)
     return f"{opt} {value}"
 
@@ -185,7 +187,8 @@ def _describe(action: argparse.Action) -> str | None:
     if action.help:
         bits.append(_clean(action.help))
     default = action.default
-    if default is True or (default not in (None, False, [], argparse.SUPPRESS) and action.nargs != 0):
+    # `in (None, False, …)`은 0 == False라 기본값 0을 숨긴다. 동일성으로 거른다
+    if not (default is None or default is False or default == [] or default is argparse.SUPPRESS):
         bits.append(f"기본 {default}")
     if not bits:
         return None

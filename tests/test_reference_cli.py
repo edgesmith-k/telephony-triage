@@ -77,14 +77,14 @@ def normalize(rest: str) -> list[str]:
     return shlex.split(text)
 
 
-def fragments(names) -> list[tuple[str, str, str, list[str]]]:
+def fragments(names) -> list[tuple[str, str, str, str]]:
     out = []
     for doc in _docs():
         text = re.sub(r"^```.*?^```", "", doc.read_text(encoding="utf-8"), flags=re.S | re.M)
         for m in CODE_SPAN.finditer(text):
             frag = FRAGMENT.search(m.group(1))
             if frag and frag.group(1) in names:
-                out.append((str(doc.relative_to(REPO)), m.group(1), frag.group(1), normalize(frag.group(2))))
+                out.append((str(doc.relative_to(REPO)), m.group(1), frag.group(1), frag.group(2)))
     return out
 
 
@@ -92,18 +92,20 @@ def _subparsers(parser):
     return next((a for a in parser._actions if isinstance(a, argparse._SubParsersAction)), None)
 
 
-def problems(parser: argparse.ArgumentParser, tokens: list[str]) -> list[str]:
+OPTION = re.compile(r"--[a-z][a-z0-9-]*")
+
+
+def problems(parser: argparse.ArgumentParser, rest: str) -> list[str]:
+    """`rest` = 조각에서 스크립트 이름 뒤. 검사 1은 모든 대안의 옵션 이름, 검사 2는 첫 대안으로 실제 파싱."""
     found = []
-    current, sub = parser, _subparsers(parser)
+    tokens = normalize(rest)
+    chain, sub = [parser], _subparsers(parser)        # 서브커맨드 경로(상위 파서 포함)
     pending = 0                                 # 앞 옵션의 값으로 건너뛸 토큰 수(-1: 다음 옵션까지)
-    for tok in tokens:                          # 검사 1: 서브커맨드 이름과 옵션 이름(약어 불가)
+    for tok in tokens:                          # 서브커맨드 경로 찾기(없는 서브커맨드는 실패)
         if tok.startswith("--"):
             opt, _, inline = tok.partition("=")
-            action = current._option_string_actions.get(opt)
-            if action is None:
-                found.append(f"없는 옵션 {opt} ({current.prog})")
-                pending = 0
-            elif inline:
+            action = next((q._option_string_actions[opt] for q in reversed(chain) if opt in q._option_string_actions), None)
+            if action is None or inline:
                 pending = 0
             else:
                 nargs = action.nargs
@@ -112,16 +114,23 @@ def problems(parser: argparse.ArgumentParser, tokens: list[str]) -> list[str]:
             pending -= 1 if pending > 0 else 0
         elif sub is not None and not tok.startswith("-"):
             if tok in sub.choices:
-                current, sub = sub.choices[tok], _subparsers(sub.choices[tok])
+                chain.append(sub.choices[tok])
+                sub = _subparsers(sub.choices[tok])
             elif tok != PH:                     # `<서브커맨드>` 자리 표시는 넘어간다
-                found.append(f"없는 서브커맨드 {tok} ({current.prog})")
+                found.append(f"없는 서브커맨드 {tok} ({chain[-1].prog})")
                 sub = None
             else:
                 sub = None
+    # 검사 1: 원문(모든 대안)의 옵션 이름이 그 서브파서나 상위 파서에 정확히 있다(약어 불가)
+    for opt in OPTION.findall(re.sub(r"<[^<>]*>", PH, rest)):
+        if not any(opt in q._option_string_actions for q in chain):
+            found.append(f"없는 옵션 {opt} ({chain[-1].prog})")
     original = argparse.ArgumentParser.error
-    argparse.ArgumentParser.error = _raise   # 검사 2: 실제 파싱
+    argparse.ArgumentParser.error = _raise   # 검사 2: 첫 대안으로 실제 파싱(남는 인자도 실패)
     try:
-        parser.parse_args(tokens)
+        _, extras = parser.parse_known_args(tokens)
+        if extras:
+            found.append(f"argparse: 남는 인자 {extras}")
     except ArgError as exc:
         msg = str(exc)
         if any(s in msg for s in ARGPARSE_FAILED) and not ("invalid choice" in msg and f"'{PH}'" in msg):
@@ -137,7 +146,7 @@ def test_reference_cli_fragments_match_argparse(parsers):
     frags = fragments(parsers)
     assert len(frags) >= MIN_FRAGMENTS, len(frags)
     assert len({f[2] for f in frags}) >= MIN_SCRIPTS
-    bad = [(path, raw, p) for path, raw, name, tokens in frags for p in [problems(parsers[name], tokens)] if p]
+    bad = [(path, raw, p) for path, raw, name, rest in frags for p in [problems(parsers[name], rest)] if p]
     assert not bad, "\n".join(f"{path}: `{raw}` → {p}" for path, raw, p in bad)
 
 
@@ -145,9 +154,10 @@ def test_reference_cli_fragments_match_argparse(parsers):
     ("db_pr", "stage <plan> --wt <wt> --branch <br> --then-sumary"),   # 오타 옵션
     ("db_build", "--verify --staged --write"),                         # 상호 배제 위반
     ("db_pr", "lokc status"),                                          # 없는 서브커맨드
+    ("db_lint", "(--all | --chnged <ref>) --db <db>"),                 # 두 번째 대안 오타
 ])
 def test_drift_check_catches_bad_fragments(parsers, name, fragment):
-    assert problems(parsers[name], normalize(fragment))
+    assert problems(parsers[name], fragment)
 
 
 def test_gen_contracts_check_is_clean():
