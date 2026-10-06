@@ -97,6 +97,28 @@ class Ctx:
                     lines.append(" ".join([row["script"], *map(str, row.get("args") or [])]))
         return "\n".join(lines)
 
+    def needs_input(self, kind: str | None = None) -> list[str] | None:
+        """드라이버가 `needs_input`으로 멈춘 kind 목록(JOB/trace.jsonl의 `step: needs_input` 줄, 모든 작업 디렉토리).
+        kind를 주면 그 kind만. trace가 하나도 없으면(미실행·기록 없음) None — 0회로 세지 않는다."""
+        kinds, seen = [], False
+        for path in sorted(self.work.glob("*/trace.jsonl")) if self.work.is_dir() else []:
+            seen = True
+            for raw in path.read_text(encoding="utf-8").splitlines():
+                try:
+                    row = json.loads(raw)
+                except ValueError:
+                    continue
+                if row.get("step") == "needs_input":
+                    kinds.append(str(row.get("kind")))
+        if not seen:
+            return None
+        return [k for k in kinds if kind is None or k == kind]
+
+    def texts(self) -> list[str] | None:
+        """assistant 텍스트 조각들(순서대로). 실행 기록(events.jsonl)이 없으면 None."""
+        seq = self.seq()
+        return None if seq is None else [e["text"] for e in seq if e["kind"] == "text"]
+
     def tool_uses(self):
         """events.jsonl의 assistant tool_use를 [(이름, 입력)]으로. 기록이 없으면 None."""
         seq = self.seq()
@@ -306,6 +328,8 @@ def checks(eid: int, ctx: Ctx) -> list:
         return checks_c(eid, ctx)
     if eid in (31, 34, 35, 36, 38):
         return checks_d(eid, ctx)
+    if eid in (55, 56, 57):
+        return checks_w4(eid, ctx)
     no_remote = lambda br: (lambda: (br not in ctx.branches() and not ctx.prs(), f"branches={ctx.branches()} prs={len(ctx.prs())}"))
     def analyzer_called():
         """e40·e41은 분석 스킬을 실제로 Skill 도구로 불렀을 때만 센다(plugin 모드). direct 모드·기록 없음은 이 조건을 적용하지 않는다."""
@@ -785,6 +809,96 @@ def checks(eid: int, ctx: Ctx) -> list:
         return [searched, lambda: (bool(re.search(r"일치.*없|찾지 못|없습니다", answer())), "transcript의 '일치 없음' 표현"),
                 only_known, None, free_clone]
     return []
+
+
+def checks_w4(eid, ctx):
+    """W4(질문 수 줄이기) eval 55~57. 읽을 수 없으면 _Manual(수동 채점), 통과로 세지 않는다."""
+    def no_questions(kind):
+        def check():
+            got = ctx.needs_input(kind)
+            if got is None:
+                raise _Manual("JOB/trace.jsonl 없음")
+            return not got, f"needs_input kind={kind} {len(got)}회"
+        return check
+
+    def said(*patterns):
+        """assistant 텍스트 한 조각 안에 모든 패턴이 있다."""
+        def check():
+            texts = ctx.texts()
+            if texts is None:
+                raise _Manual("실행 기록(events.jsonl) 없음")
+            hit = next((t for t in texts if all(re.search(p, t) for p in patterns)), None)
+            return hit is not None, (hit[:300] if hit else f"{patterns}를 모두 담은 assistant 텍스트 없음")
+        return check
+
+    def asked(topic):
+        """topic을 묻는 질문 조각 수(assistant 텍스트 중 topic과 '할까요/실행할까/진행할까/할지'가 함께 든 것). 기록 없으면 None."""
+        texts = ctx.texts()
+        if texts is None:
+            return None
+        return [t for t in texts if re.search(topic, t) and re.search(r"할까요|실행할까|진행할까|할지", t)]
+
+    if eid == 55:
+        def code_used():
+            ok = bool(re.search(r"code_roots\.py[^\n]*android16-main", ctx.ran)) or "android16-main" in json.dumps(
+                (ctx.plan("MOCK-1001") or {}), ensure_ascii=False)
+            return ok, "실행 기록의 code_roots 호출에 android16-main"
+        def top():
+            cands = (json.loads(_read(ctx.work / "MOCK-1001" / "analysis.json") or "{}").get("candidates") or [{}])
+            return cands[0].get("cause") == "DATA-001-01", f"analysis.json 1위={cands[0].get('cause')}"
+        def jira():
+            t = ctx.show("issue/MOCK-1001", "data/DATA-001-no-setup-data-call/jira/MOCK-1001.yaml")
+            return "cause: DATA-001-01" in t, t or f"branches={ctx.branches()}"
+        def lock_clone():
+            (a, ea), (b, eb) = ctx.lock_free(), ctx.clone_same()
+            return a and b, f"{ea}; {eb}"
+        return [no_questions("code"), said(r"android16-main", r"--code"), code_used, top, jira, lock_clone]
+    if eid == 56:
+        job = "MOCK-8800"
+        def kept():
+            wt = ctx.work / job / "wt"
+            branches = git(Path(ctx.env["issue_db_clone"]), "branch", "--list", f"tt/{job}").split()
+            return wt.is_dir() and bool(branches), f"{wt} {'있음' if wt.is_dir() else '없음'}; tt/{job} 브랜치={'있음' if branches else '없음'}"
+        def no_delete():
+            if ctx.tool_uses() is None:
+                raise _Manual("실행 기록(events.jsonl) 없음")
+            hit = re.findall(r"db_pr\.py[^\n]*\bcleanup\b[^\n]*--yes", ctx.ran)
+            return not hit, f"cleanup --yes 호출={hit}"
+        def told():
+            return said(r"잔여|남은|leftover", r"/telephony-triage:sync")()
+        def dry():
+            a, ea = ctx.lock_free()
+            b, eb = ctx.clone_same()
+            c = "issue/MOCK-1001" not in ctx.branches() and not ctx.prs()
+            return a and b and c, f"{ea}; {eb}; branches={ctx.branches()} prs={len(ctx.prs())}"
+        return [no_questions("cleanup"), kept, no_delete, told, dry]
+    # eid == 57
+    def analyzer_once():
+        got = asked(r"심층 분석|mock-data-analyzer")
+        if got is None:
+            raise _Manual("실행 기록(events.jsonl) 없음")
+        return len(got) == 1, f"심층 분석 질문 {len(got)}개"
+    def explore_not_asked():
+        got = asked(r"탐색 분석|explore")
+        order = ctx.explore_order()
+        if got is None or order is None:
+            raise _Manual("실행 기록(events.jsonl) 없음")
+        analyzer_q = [t for t in (asked(r"심층 분석|mock-data-analyzer") or []) if re.search(r"탐색", t)]
+        return not got and not analyzer_q, f"탐색 질문 {len(got)}개; 심층 분석 질문에 탐색 혼입 {len(analyzer_q)}개"
+    def explored_then_read():
+        order = ctx.explore_order()
+        if order is None:
+            raise _Manual("실행 기록(events.jsonl) 없음")
+        explored, _, read = order
+        return explored is not None and read is not None and read > explored, f"explore 순번={explored}, timeline.md 첫 열람 순번={read}"
+    def unresolved():
+        o = (ctx.plan("MOCK-9044") or {}).get("operations", [])
+        return o == [{"op": "unresolved", "type": "DATA-001"}] or (len(o) == 1 and o[0].get("op") == "unresolved" and o[0].get("type") == "DATA-001"), json.dumps(o, ensure_ascii=False)[:400]
+    def dry():
+        a, ea = ctx.lock_free()
+        c = "issue/MOCK-9044" not in ctx.branches() and not ctx.prs()
+        return a and c, f"{ea}; branches={ctx.branches()} prs={len(ctx.prs())}"
+    return [analyzer_once, explore_not_asked, explored_then_read, unresolved, dry]
 
 
 def checks_c(eid, ctx):

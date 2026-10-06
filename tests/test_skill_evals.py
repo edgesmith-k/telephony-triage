@@ -743,3 +743,39 @@ def test_execute_records_tokens_from_stream_json_result(tmp_path, monkeypatch):
     assert saved["model"] == "m-a"
     assert saved["tokens"]["total"] == 110 and saved["tokens"]["usage_total"] == 100 and saved["usage"]["input_tokens"] == 10
     assert saved["total_cost_usd"] == 0.5
+
+
+def test_w4_prep_evals_defined():
+    by_id = {e["id"]: e for e in _entries()}
+    assert by_id[14]["setup"]["user_config"]["code"] == {"auto_select": False}
+    assert [len(by_id[i]["setup"]["user_config"]["code_profiles"]) for i in (55,)] == [1]
+    assert by_id[56]["setup"]["leftovers"] == [{"job": "MOCK-8800"}]
+    assert by_id[57]["setup"]["user_config"]["explore"] == {"when": "always", "timeline_max_lines": 200}   # user_config는 최상위 키 단위로 덮는다
+
+
+def test_w4_eval_checks_cover_assertions_and_never_pass_unread(tmp_path):
+    import grade as grader
+    for eid, count in ((55, 6), (56, 5), (57, 5)):
+        entry = next(e for e in _entries() if e["id"] == eid)
+        assert len(entry["assertions"]) == count
+    env = tmp_path / "env"
+    run = tmp_path / "run"
+    (env).mkdir(); run.mkdir()
+    (env / "work").mkdir()
+    (env / "env.json").write_text(json.dumps({"remote": str(env), "work_dir": str(env / "work")}), encoding="utf-8")
+    (env / "before.json").write_text("{}", encoding="utf-8")
+    ctx = grader.Ctx(env, run)
+    assert ctx.needs_input("code") is None and ctx.texts() is None   # 기록 없음: 0회로 세지 않는다
+    for eid, count in ((55, 6), (56, 5), (57, 5)):
+        fns = grader.checks(eid, ctx)
+        assert len(fns) == count
+        for fn in fns[:1 if eid == 56 else 2]:   # 56의 둘째 항목은 clone 상태를 본다(이 가짜 환경에는 없다)
+            try:
+                ok, _ = fn()
+            except grader._Manual:
+                continue
+            assert not ok
+    (env / "work" / "MOCK-1001").mkdir()
+    (env / "work" / "MOCK-1001" / "trace.jsonl").write_text(
+        '{"step": "needs_input", "kind": "code"}\n{"step": "needs_input", "kind": "cleanup"}\n', encoding="utf-8")
+    assert ctx.needs_input("code") == ["code"] and ctx.needs_input() == ["code", "cleanup"]

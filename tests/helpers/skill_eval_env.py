@@ -20,6 +20,8 @@ setup 필드 (모두 선택):
     remote_after_pr: {branch, files: {<상대 경로>: <내용>}, message} — 제3자의 원격 PR 변경
     seed_plan: {job, plan, files} — 게시 전 계획을 작업 디렉토리에 보관
     user_config: {...}, site_defaults: {...}, clone_state: {branch, local_branches, dirty}
+    leftovers: [{job, branch?}] — 다른 작업 키가 비정상 종료로 남긴 도구 worktree(`<work_dir>/<job>/wt`)와 도구 브랜치(기본 `tt/<job>`).
+        사용자 clone에 만들고 before.json은 그 뒤에 찍으므로 "그대로 남았나"는 clone_same·존재 확인으로 본다
     analyzer_fail: true — 모의 분석 스킬 실패
     gh_unauth: true  — gh 스텁 인증 실패
 """
@@ -280,6 +282,11 @@ def build(entry: dict, out: Path, direct_tools: bool = True) -> dict:
         extra = json.loads(json.dumps(setup["user_config"]).replace("<MOCK_SRC>", (REPO / "tests" / "mocks" / "src").as_posix()))
         cfg.update(extra)
         cfg_path.write_text(yaml.safe_dump(cfg, allow_unicode=True, sort_keys=False), encoding="utf-8", newline="\n")
+
+    for lo in setup.get("leftovers") or []:   # 다른 작업이 남긴 worktree·도구 브랜치 (before.json 전에 만든다)
+        wt = ws.wt(lo["job"])
+        wt.parent.mkdir(parents=True, exist_ok=True)
+        git(ws.clone, "worktree", "add", "--no-track", "-B", lo.get("branch") or f"tt/{lo['job']}", str(wt), "origin/main")
 
     cs = setup.get("clone_state") or {}
     for br in cs.get("local_branches") or []:   # 사용자의 로컬 브랜치 (도구가 건드리면 안 된다)

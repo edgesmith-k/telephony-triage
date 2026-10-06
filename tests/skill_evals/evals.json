@@ -495,7 +495,7 @@
     },
     {
       "id": 14,
-      "design": "`--code` 없이 실행, Jira가 Android 16 → 16 프로필을 추천하며 코드 경로를 묻는다. 17 트리를 고르면 버전 불일치를 경고한다",
+      "design": "`--code` 없이 실행, Jira가 Android 16 → 16 프로필을 추천하며 코드 경로를 묻는다. 17 트리를 고르면 버전 불일치를 경고한다. W4 이후에도 이 동작(추천 표시 + 질문)을 계속 검증하도록 `code.auto_select: false`로 자동 선택을 끈다",
       "batch": "B",
       "prompt": "MOCK-9014 분석해줘 --dry-run. 로그: logs/data-disabled.log",
       "setup": {
@@ -526,7 +526,10 @@
                 "vendor_ril": "<MOCK_SRC>/android17"
               }
             }
-          ]
+          ],
+          "code": {
+            "auto_select": false
+          }
         }
       },
       "user_replies": [
@@ -1949,7 +1952,9 @@
       "batch": "F",
       "design": "증상만 자연어로 묻는 \"예전에 이런 이슈 있었어? 지라 번호 알려줘\" → search 흐름(`reference/search.md`): 문장을 그대로 `db_search.py`에 넘기고 분석(triage.py·파서·매칭)·lock 없이 이슈 번호 줄과 유형 > 원인 표(해결책·수정 상태)를 보인다. 번호를 지어내지 않는다",
       "prompt": "데이터가 안 붙는 증상, 예전에 이런 이슈 있었어? 있으면 지라 번호 알려줘",
-      "setup": {"db": "issue-db-sample"},
+      "setup": {
+        "db": "issue-db-sample"
+      },
       "user_replies": [
         "로그나 Jira 키를 달라고 하면 '없어, 과거 이슈만 알고 싶어'라고 답한다.",
         "분석을 해볼지 물으면 '아니오'.",
@@ -1971,7 +1976,9 @@
       "batch": "F",
       "design": "`/telephony-triage:search eSIM 다운로드가 안 돼, 이런 이슈 있었어? 번호 알려줘` → 일치 없음. 이슈 번호를 지어내지 않고 다른 검색어(유형 제목·태그)를 제안하며, 다시 검색하면 어떤 단어로 찾았는지 밝히고 같은 이슈라고 하지 않는다. 분석·lock 없음",
       "prompt": "/telephony-triage:search eSIM 다운로드가 안 돼, 이런 이슈 있었어? 번호 알려줘",
-      "setup": {"db": "issue-db-sample"},
+      "setup": {
+        "db": "issue-db-sample"
+      },
       "user_replies": [
         "분석을 해볼지 물으면 '아니오'.",
         "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
@@ -1983,6 +1990,140 @@
         "답변의 MOCK-숫자 키는 모두 샘플 이슈 DB에 있는 키다(없으면 통과)",
         "다른 검색어를 제안했고, 다시 검색했다면 어떤 단어로 찾았는지 밝히고 같은 이슈라고 말하지 않았다",
         "세션 lock이 없고 사용자 clone이 그대로다"
+      ],
+      "files": []
+    },
+    {
+      "id": 55,
+      "name": "code-profile-auto-select",
+      "batch": "W4",
+      "design": "코드 프로필이 정확히 하나이고 Jira Android 버전과 맞음(`code_roots suggest` 추천 기준) + `code.auto_select` 기본값(true) → `code` 질문 없이 그 프로필을 자동 선택하고 리포트 코드 줄·출력 `code.auto`·스킬 한 줄로 알린다(`--code`로 바꿀 수 있다고 안내). 분류는 eval 1과 같다. W4 이전 코드에서는 `code`를 한 번 묻는다(기준선 확인용)",
+      "prompt": "MOCK-1001 로그 분석해줘. 데이터가 안 붙는대. 로그는 logs/data-disabled.log 야",
+      "setup": {
+        "jira": [
+          "MOCK-1001"
+        ],
+        "logs": [
+          {
+            "src": "tests/fixtures/logs/data-disabled.log",
+            "as": "data-disabled.log"
+          }
+        ],
+        "user_config": {
+          "code_profiles": [
+            {
+              "name": "android16-main",
+              "android_version": "16",
+              "roots": {
+                "aosp": "<MOCK_SRC>/android16",
+                "vendor_ril": "<MOCK_SRC>/android16"
+              }
+            }
+          ]
+        }
+      },
+      "user_replies": [
+        "분류 제안(DATA-001-01 Data disabled)에는 '예'.",
+        "심층 분석(mock-data-analyzer) 실행 여부를 물으면 '아니오'.",
+        "push 전 확인 화면에서는 '승인'.",
+        "코드 경로(프로필)를 고르라고 물으면(자동 선택이 안 된 경우) 추천으로 표시된 android16-main을 고르고, 물었다는 사실을 transcript에 적는다.",
+        "코드 분석 진행 확인(code_confirm)을 물으면 '예'.",
+        "note 한 줄 초안을 보여주면 그대로 승인한다.",
+        "탐색 분석(explore) 실행 여부를 물으면 '아니오'.",
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "android16-main 하나뿐이고 Jira Android 16과 일치 → 코드 경로를 묻지 않고 자동 선택, 리포트 코드 줄과 스킬 안내에 '자동 선택: android16-main, --code로 바꿀 수 있다' 표시 → 분류는 eval 1과 같이 DATA-001 > DATA-001-01 제안 후 확인, Jira 기록 PR issue/MOCK-1001.",
+      "assertions": [
+        "코드 경로(code)를 묻지 않았다(needs_input kind=code 0회)",
+        "자동 선택을 사용자에게 알렸다: android16-main이 자동 선택됐고 --code로 바꿀 수 있다는 문구가 assistant 응답에 있다",
+        "자동 선택한 android16-main으로 코드 분석(code_roots)을 했다",
+        "리포트의 1위 분류 후보가 DATA-001-01 (Data disabled)이다",
+        "원격 브랜치 issue/MOCK-1001의 Jira 기록(data/DATA-001-no-setup-data-call/jira/MOCK-1001.yaml)이 cause: DATA-001-01이다",
+        "끝난 뒤 세션 lock이 없고 사용자 clone의 브랜치·HEAD·워킹 트리가 실행 전과 같다"
+      ],
+      "files": []
+    },
+    {
+      "id": 56,
+      "name": "other-job-leftovers-notify-only",
+      "batch": "W4",
+      "design": "작업 디렉토리에 다른 작업 키(MOCK-8800)의 잔여 worktree·도구 브랜치(`tt/MOCK-8800`)가 있다(setup `leftovers`) → analyze는 cleanup을 묻지 않고, 지우지도 않으며, '잔여 … /telephony-triage:sync에서 정리'만 알린다. W4 이전 코드에서는 `cleanup`을 한 번 묻는다(기준선 확인용)",
+      "prompt": "MOCK-1001 분석해줘 --dry-run. 로그: logs/data-disabled.log",
+      "setup": {
+        "jira": [
+          "MOCK-1001"
+        ],
+        "logs": [
+          {
+            "src": "tests/fixtures/logs/data-disabled.log",
+            "as": "data-disabled.log"
+          }
+        ],
+        "leftovers": [
+          {
+            "job": "MOCK-8800"
+          }
+        ]
+      },
+      "user_replies": [
+        "비정상 종료로 남은 worktree·브랜치를 지울지(cleanup) 물으면 '그대로 둔다'(물었다는 사실을 transcript에 적는다).",
+        "분류 제안에는 '예'.",
+        "확인 화면에서는 '승인'(dry-run이므로 여기서 끝난다).",
+        "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다.",
+        "심층 분석(mock-data-analyzer) 실행 여부를 물으면 '아니오'.",
+        "note 한 줄 초안을 보여주면 그대로 승인한다.",
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "다른 작업(MOCK-8800)의 잔여 worktree·tt/MOCK-8800 브랜치가 있어도 cleanup을 묻지 않고 그대로 두며, 사용자에게 잔여가 있고 /telephony-triage:sync에서 정리할 수 있다고 알린 뒤 분석·dry-run 확인 화면까지 진행한다.",
+      "assertions": [
+        "cleanup을 묻지 않았다(needs_input kind=cleanup 0회)",
+        "다른 작업의 잔여 worktree(<work_dir>/MOCK-8800/wt)와 도구 브랜치(tt/MOCK-8800)가 실행 뒤에도 남아 있다",
+        "db_pr cleanup --yes를 실행하지 않았다",
+        "잔여가 있다는 것과 /telephony-triage:sync에서 정리하라는 안내를 사용자에게 알렸다",
+        "dry-run이라 원격 브랜치·PR이 없고 끝난 뒤 lock이 없으며 사용자 clone이 실행 전과 같다"
+      ],
+      "files": []
+    },
+    {
+      "id": 57,
+      "name": "analyzer-explore-one-side-preset",
+      "batch": "W4",
+      "design": "DATA-001 유형 일치·원인 미확인(1위 C=0, eval 44와 같은 듀얼 SIM 로그)이라 5-1(심층 분석)과 5-2(탐색)가 모두 해당하는데 `explore.when: always`로 탐색 쪽은 정해져 있다 → 남은 심층 분석 여부만 한 번(2지선다) 묻고 탐색은 묻지 않고 실행한다. 탐색은 실행이 정해진 뒤에만 timeline.md를 읽는다(`explore_order`). W4 이전 코드에서도 같은 결과이며, 둘 다 물어야 하는 경우의 통합 질문(4지선다)은 이 eval의 범위 밖이다",
+      "prompt": "MOCK-9044 분석해줘 --dry-run. 로그: logs/e057.log",
+      "setup": {
+        "jira": [
+          "MOCK-9044"
+        ],
+        "logs": [
+          {
+            "scenario": "e044-cross-slot.yaml",
+            "as": "e057.log"
+          }
+        ],
+        "user_config": {
+          "explore": {
+            "when": "always",
+            "timeline_max_lines": 200
+          }
+        }
+      },
+      "user_replies": [
+        "심층 분석(mock-data-analyzer) 실행 여부를 물으면 '아니오'.",
+        "탐색 분석(explore) 실행 여부를 물으면 '예'(물었다는 사실을 transcript에 적는다).",
+        "탐색 가설을 채택할지 물으면 '보류'.",
+        "'유형 일치, 원인 미확인' 선택지에서는 '원인 미확정'.",
+        "Jira 기록 note에 가설 한 줄을 남길지 물으면 '아니오'. note 초안을 보여주면 그대로 승인한다.",
+        "확인 화면에서는 '승인'(dry-run).",
+        "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다.",
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "1위 C=0이고 explore.when: always → 탐색 분석은 묻지 않고 실행, 심층 분석(5-1)만 한 번 묻는다(둘을 묶어 묻지 않는다). timeline.md는 explore 호출 뒤에 읽는다. 계획은 unresolved {type: DATA-001}.",
+      "assertions": [
+        "심층 분석(5-1) 여부를 정확히 한 번 물었다",
+        "탐색 분석(5-2) 실행 여부를 묻지 않았고(explore.when: always) 심층 분석 질문에도 탐색이 선택지로 섞이지 않았다",
+        "탐색 분석(triage.py explore)을 실행했고 JOB/timeline.md는 그 호출 뒤에 읽었다",
+        "계획이 unresolved {type: DATA-001}이다",
+        "dry-run이라 원격 브랜치·PR이 없고 끝난 뒤 lock이 없다"
       ],
       "files": []
     }

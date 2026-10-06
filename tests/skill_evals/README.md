@@ -1,11 +1,11 @@
 # telephony-triage 스킬 eval (Phase 13)
 
-`docs/design/10-skill-eval.md`의 eval 54개와 트리거 테스트를 skill-creator 방식으로 돌리는 자료다.
+`docs/design/10-skill-eval.md`의 eval 54개(+ W4 준비용 55~57)와 트리거 테스트를 skill-creator 방식으로 돌리는 자료다.
 스킬 본체는 `plugin/skills/telephony-triage/`.
 
 | 파일 | 내용 |
 |---|---|
-| `evals.json` | eval 54개 모두 `prompt`·`setup`·`user_replies`·`assertions` 정의 완료. 1(대표 10), A(안전 10), B(analyze 11), C(수정·검증 9), D(record 5), E(10/04~05 기능 7), F(S6 2) |
+| `evals.json` | eval 57개 모두 `prompt`·`setup`·`user_replies`·`assertions` 정의 완료. 1(대표 10), A(안전 10), B(analyze 11), C(수정·검증 9), D(record 5), E(10/04~05 기능 7), F(S6 2), W(W4 질문 수 줄이기 3: 55 코드 프로필 자동 선택, 56 다른 작업 잔여 알림만, 57 심층·탐색 한쪽 사전 결정) |
 | `trigger_evals.json` | description 트리거 테스트 (`10-skill-eval.md` 표 + near-miss) |
 | `jira/` | eval용 모의 Jira 티켓 (`MOCK-90xx`, `tests/mocks/jira`와 같은 형식) |
 | `scenarios/` | eval용 합성 logcat 시나리오 (`tests/mocks/logcat_gen.py` 형식) |
@@ -39,6 +39,9 @@ transcript = assistant 텍스트, commands = Bash 명령 표와 오류 여부, n
 `CLAUDE_CODE_CONTAINER_ID`·`TRACEPARENT` 등, `execution.json`의 `env_stripped`)를 받지 않고 `--settings`로 커밋·PR 서명(`Co-Authored-By`·세션 URL)을 끈다.
 
 ## 환경 만들기
+
+`setup`의 선택 키는 `tests/helpers/skill_eval_env.py` 머리말에 정리돼 있다. `leftovers: [{job, branch?}]`는 다른 작업 키가 남긴
+도구 worktree(`<work_dir>/<job>/wt`)와 도구 브랜치(기본 `tt/<job>`)를 사용자 clone에 만든다(eval 56). `before.json`은 그 뒤에 찍는다.
 
 ```sh
 python3 tests/helpers/skill_eval_env.py <eval id> --out tests/skill_evals/workspace/iteration-<N>/env-<id>
@@ -82,6 +85,7 @@ gh PR, lock, 사용자 clone 상태, 원문 PII 노출, Jira 쓰기 도구 호�
 결과는 `grading.json`(`expectations[{text, passed, evidence}]`) — skill-creator viewer 형식.
 "무엇을 실행했나" 판정은 실행 기록(`events.jsonl`의 Bash 명령·MCP 도구 호출 + 드라이버 `trace.jsonl`)으로 한다. 실행자가 쓴
 `commands.md`는 기록이 없는 옛 결과에서만 대신 쓴다(R13).
+`Ctx.needs_input(kind)`는 `JOB/trace.jsonl`의 `needs_input` 줄로 드라이버 질문 횟수를 센다(기록 없으면 `None` → 수동 채점, 0회로 세지 않음). `Ctx.texts()`는 assistant 텍스트 조각이다(55~57).
 `Ctx.invoked`는 `commands.md` 표의 설명 칸까지 섞이므로 긍정 확인(`in_cmd`)에만 쓰고, 부정 확인(e25 `no_judgement`·e26 `no_verify`)과
 순서·존재 확인(e49 `paste`, e50 `both`·`order`)은 `Ctx.ran`(실행 기록)으로 판정한다 — 설명 문장 때문의 거짓 실패(3C)를 없앤다.
 `grading.json`에는 채점 항목이 아닌 `tokens`(실행 기록의 토큰, 미실행이면 `null`)가 항상 붙는다("토큰 기록").
