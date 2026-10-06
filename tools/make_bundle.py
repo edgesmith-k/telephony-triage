@@ -75,7 +75,7 @@ class CheckResult:
 @dataclass
 class Check:
     id: str
-    checklist: int                   # 15-local-draft.md §15.4 항목 번호 (1..9)
+    checklist: int                   # 15-local-draft.md §15.4 항목 번호 (1..10)
     kind: str                        # auto | manual
     fn: Callable | None = None       # fn(ctx) -> CheckResult (manual은 None)
     how: str = ""                    # manual: 사람이 할 일

@@ -64,8 +64,8 @@ Phase 1~13 모의 환경으로 전부 구현           S-2  사내 Claude Code �
 python3 tools/make_bundle.py --label import-v1     # 이 이름이 사내 .draft-manifest.json의 label
 ```
 - 도구가 자동 항목을 싼 것부터 검사하고(첫 실패에서 중단), 모두 통과하면 묶음을 만든다: 레포 zip(`git archive`), 이슈 DB 뼈대 zip, `SHA256SUMS`(`sha256sum -c` 형식), `make_bundle-result.json`, `logs/`. 위치는 기본 `<레포 상위>/tt-import-bundles/<label>/`이다 (`--out`으로 바꾸고, 이미 있으면 `--force`). 전체 pytest를 돌리므로 시간이 걸린다.
-- **종료 3 = 정상 완료**: 자동 검사 통과, 묶음 생성, 사람 확인 3건 대기. 이 도구는 0으로 끝나지 않는다. 종료 1은 자동 검사 실패 또는 `--skip`(묶음 없음, `--skip`은 통과로 세지 않는다), 종료 2는 사용·환경 오류(트리가 깨끗하지 않음, 태그가 다른 커밋을 가리킴 등)다.
-- 사람이 확인할 3건: ① 실제 회사명·서버명·팀명 검색(`grep -rniE '<회사명>|<사내 도메인>' .`), ② `list_site_todos.py` 결과를 직접 봄, ③ `DRAFT_NOTES.md`가 최신인지.
+- **종료 3 = 정상 완료**: 자동 검사 통과, 묶음 생성, 사람 확인 4건 대기. 이 도구는 0으로 끝나지 않는다. 종료 1은 자동 검사 실패 또는 `--skip`(묶음 없음, `--skip`은 통과로 세지 않는다), 종료 2는 사용·환경 오류(트리가 깨끗하지 않음, 태그가 다른 커밋을 가리킴 등)다.
+- 사람이 확인할 4건: ① 실제 회사명·서버명·팀명 검색(`grep -rniE '<회사명>|<사내 도메인>' .`), ② `list_site_todos.py` 결과를 직접 봄, ③ `DRAFT_NOTES.md`가 최신인지, ④ `plugin.json` description에서 "사외 초안"을 빼고 version 확인.
 - 확인을 마치면 도구가 출력한 명령으로 **직접** 태그를 만들고 push한다 (도구는 태그를 만들지 않는다): `git tag import-v1 <HEAD sha> && git push origin import-v1`
 - 사내에서는 `SHA256SUMS`로 대조한다 (`sha256sum -c SHA256SUMS`).
 - `git archive`는 커밋된 파일만 담으므로 `.local-draft`, `tests/skill_evals/workspace/`, `__pycache__` 같은 비추적·무시 파일이 자동으로 빠진다. 도구가 zip 안에 `.local-draft`·`.mcp.json`·`SITE_PATHS` 경로가 없는지도 다시 확인한다.

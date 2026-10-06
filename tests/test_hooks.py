@@ -410,8 +410,9 @@ def test_guard_raw_read_site_defaults_extend_builtins():
 def test_guard_raw_read_bad_site_value_warns_and_uses_builtins():
     d = tmp("tt-rawbad-")
     (d / "x.log").write_text(LOGCAT, encoding="utf-8")
-    kind, err = _raw_guard({"names": "mine.dat"}, "cat x.log", d)
-    assert kind == "deny" and "guard.raw_read" in err
+    for bad in ({"names": "mine.dat"}, {"cmds": ["view"]}, {"names": ["a/b.log"]}):
+        kind, err = _raw_guard(bad, "cat x.log", d)
+        assert kind == "deny" and "guard.raw_read" in err, bad
 
 
 def test_hooks_json_has_eight_rules_wired_to_guard():

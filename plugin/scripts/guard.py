@@ -146,11 +146,13 @@ class Config:
     def _raw_read(self, defaults: dict) -> tuple[set, set]:
         """규칙 10 목록: 내장 ∪ site-defaults `guard.raw_read`. 잘못된 값은 경고하고 내장만 쓴다."""
         names, exempt = set(RAW_NAMES), set(RAW_EXEMPT_DIRS)
-        site = (defaults.get("guard") or {}).get("raw_read") if isinstance(defaults.get("guard"), dict) else None
+        guard = defaults.get("guard")
+        site = guard.get("raw_read") if isinstance(guard, dict) else guard
         if site is None:
             return names, exempt
-        ok = isinstance(site, dict) and all(
-            isinstance(site.get(k, []), list) and all(isinstance(v, str) and v for v in site.get(k, []))
+        ok = isinstance(site, dict) and set(site) <= {"names", "exempt_dirs"} and all(
+            isinstance(site.get(k, []), list)
+            and all(isinstance(v, str) and v and "/" not in v and "\\" not in v for v in site.get(k, []))
             for k in ("names", "exempt_dirs"))
         if not ok:
             self.warnings.append("site-defaults의 guard.raw_read가 {names: [문자열], exempt_dirs: [문자열]} 형식이 "
@@ -688,7 +690,7 @@ def _raw_args(argv: list[str]) -> list[str]:
     return out
 
 
-def _is_raw_file(path: Path, names: set = RAW_NAMES, exempt: set = RAW_EXEMPT_DIRS) -> bool:
+def _is_raw_file(path: Path, names: set, exempt: set) -> bool:
     real = _norm(path)
     segs = real.replace("\\", "/").split("/")
     if exempt & set(segs[:-1]):
@@ -714,8 +716,8 @@ def _is_raw_file(path: Path, names: set = RAW_NAMES, exempt: set = RAW_EXEMPT_DI
     return False
 
 
-def check_raw_read(command: str, cwd: Path, dec: Decision, conf: Config | None = None) -> None:
-    names, exempt = (conf.raw_names, conf.raw_exempt) if conf else (RAW_NAMES, RAW_EXEMPT_DIRS)
+def check_raw_read(command: str, cwd: Path, dec: Decision, conf: Config) -> None:
+    names, exempt = conf.raw_names, conf.raw_exempt
     for inv in invocations(command, cwd):
         verb = _raw_cmd_verb(inv)
         if verb is not None:

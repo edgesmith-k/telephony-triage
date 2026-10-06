@@ -44,7 +44,8 @@ def candidates(root: Path) -> list[Path]:
             ["git", "-C", str(root), "ls-files", "-co", "--exclude-standard", "-z"],
             capture_output=True, check=True,
         ).stdout.decode("utf-8", errors="replace")
-        return sorted(root / p for p in out.split(chr(0)) if p)
+        # 다른 레포의 무시 경로에 풀린 묶음이면 git은 빈 목록을 준다 → rglob
+        return sorted(root / p for p in out.split(chr(0)) if p) or sorted(root.rglob("*"))
     except (OSError, subprocess.CalledProcessError):
         return sorted(root.rglob("*"))
 

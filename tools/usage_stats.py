@@ -53,8 +53,12 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="usage_stats.py", description=__doc__)
     parser.add_argument("--work-dir", help="기본: 사용자 config의 work_dir")
     args = parser.parse_args(argv)
-    work_dir = Path(args.work_dir or userconfig.get(userconfig.load_user() or {}, "work_dir")
-                    or userconfig.builtin()["work_dir"]).expanduser()
+    try:
+        work_dir = Path(args.work_dir or userconfig.get(userconfig.load_user() or {}, "work_dir")
+                        or userconfig.builtin()["work_dir"]).expanduser()
+    except Exception as exc:   # 손상된 config는 환경 오류(2)
+        print(f"config를 읽지 못했다: {exc}", file=sys.stderr)
+        return 2
     if not work_dir.is_dir():
         print(f"work_dir가 없다: {work_dir}", file=sys.stderr)
         return 2
