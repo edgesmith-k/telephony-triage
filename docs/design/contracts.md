@@ -155,7 +155,8 @@
 | `2` | 사용 오류·환경 오류 (인자, 경로, config, git/gh 실패, 버전 불일치로 쓰기 거부, 마스킹 안 된 입력, 다른 작업의 세션 lock) | 중단. 설정 방법을 안내한다 |
 | `3` | **승인 필요** (`needs-approval`). 검사는 통과했지만 사람 승인이 필요한 변화가 있음 (예: R5에서 기존 이벤트 변경) | pre-commit: 경고 후 통과. 확인 화면과 PR 본문에 "승인 필요"로 표시하고, 메인테이너 승인을 리뷰 조건으로 둔다 |
 
-- `3`을 낼 수 있는 스크립트: `db_verify.py rules`, `db_pr.py stage`(하위 결과 집계; `--then-summary`면 종료 3에서도 확인 화면이 나온 정상 경로다).
+- `3`을 낼 수 있는 스크립트: `db_verify.py rules`, `db_pr.py stage`(하위 결과 집계; `--then-summary`면 종료 3에서도 확인 화면이 나온 정상 경로다), `tools/make_bundle.py`.
+- `tools/make_bundle.py`는 `0`을 내지 않는다: 자동 검사가 모두 통과해 묶음을 만들었어도 사람 확인 3건이 남으므로 `3`이 정상 완료다 (`15-local-draft.md §15.4`).
 - `db_pr.py publish --and-discard`: publish 0이고 `discard`가 실패하면 `2`(PR은 만들어졌다 — `discard`만 다시 한다).
 - 여러 검사를 묶는 스크립트(`db_pr stage`, `db_precommit`)는 `1`이 하나라도 있으면 `1`, 없고 `2`가 있으면 `2`(`db_precommit`; `stage`는 `2`에서 중단), 없고 `3`이면 `3`(`db_precommit`은 경고 출력 후 `0`), 모두 통과면 `0`. 집계 구현은 `common/checks.py::aggregate`.
 - 개발·테스트용으로 `TT_FORCE_VERIFY_EXIT=3` 환경변수가 있으면 `db_verify rules`는 판정 뒤 종료 코드 `3`을 낸다 (Phase 7 뼈대에서 종료 코드 `3` 경로를 확인하기 위한 것).

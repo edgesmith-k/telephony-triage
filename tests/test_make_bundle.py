@@ -58,7 +58,7 @@ def _skeleton_dir(tmp: Path) -> Path:
 
 
 def fake_checks(statuses: dict[str, str] | None = None, calls: list | None = None) -> list[mb.Check]:
-    """가짜 자동 검사 3개 + 사람 확인 1개. 뼈대 zip은 run()이 임시 뼈대로 만든다(skeleton 검사가 없으면)."""
+    """가짜 자동 검사 3개 + 사람 확인 1개 + 가짜 뼈대 검사(뼈대 zip 재료)."""
     statuses = statuses or {}
 
     def make(cid):
@@ -68,8 +68,15 @@ def fake_checks(statuses: dict[str, str] | None = None, calls: list | None = Non
             return mb.CheckResult(statuses.get(cid, "pass"), f"{cid} detail")
         return fn
 
+    def skel(ctx):
+        d = ctx.tmp / "skeleton"
+        (d / "schema").mkdir(parents=True)
+        (d / "schema" / "a.yaml").write_text("a: 1\n", encoding="utf-8")
+        return mb.CheckResult("pass", "skeleton")
+
     return [mb.Check("a", 1, "auto", make("a")), mb.Check("b", 2, "auto", make("b")),
-            mb.Check("m", 2, "manual", None, "사람이 확인"), mb.Check("c", 3, "auto", make("c"))]
+            mb.Check("m", 2, "manual", None, "사람이 확인"), mb.Check("c", 3, "auto", make("c")),
+            mb.Check("skel", 7, "auto", skel)]
 
 
 def _zip_names(path: Path) -> list[str]:
@@ -109,7 +116,7 @@ def test_middle_failure_stops_and_leaves_no_bundle(repo, tmp_path):
     res = mb.run(repo, LABEL, out, checks=fake_checks({"b": "fail"}, calls))
     assert res["exit_code"] == 1 and res["complete"] is False and res["bundle"] is None
     status = {c["id"]: c["status"] for c in res["checks"]}
-    assert status == {"a": "pass", "b": "fail", "m": "manual", "c": "not-run"}
+    assert status == {"a": "pass", "b": "fail", "m": "manual", "c": "not-run", "skel": "not-run"}
     assert calls == ["a", "b"]
     assert not out.exists()
 
@@ -216,10 +223,147 @@ def test_out_rules(repo, tmp_path):
     (out / "old.txt").write_text("old", encoding="utf-8")
     args = ["--repo", str(repo), "--label", LABEL, "--out", str(out)]
     assert mb.main(args, checks=fake_checks()) == 2 and (out / "old.txt").exists()
-    assert mb.main([*args, "--force"], checks=fake_checks()) == 3
-    assert not (out / "old.txt").exists() and (out / "SHA256SUMS").is_file()
+    # --force도 이전 묶음이 아닌 디렉토리는 지우지 않는다
+    assert mb.main([*args, "--force"], checks=fake_checks()) == 2 and (out / "old.txt").exists()
+    (out / "old.txt").unlink()
+    assert mb.main([*args, "--force"], checks=fake_checks()) == 3  # 빈 디렉토리는 바꿔 만든다
+    assert (out / "SHA256SUMS").is_file()
+    (out / "marker.txt").write_text("m", encoding="utf-8")
+    assert mb.main([*args, "--force"], checks=fake_checks()) == 3  # 이전 묶음(result json 있음)
+    assert not (out / "marker.txt").exists() and (out / "SHA256SUMS").is_file()
+    assert not [p for p in tmp_path.iterdir() if p.name.startswith(".out.")]
     assert mb.main(["--repo", str(repo), "--label", LABEL, "--out", str(repo / "bundle")], checks=fake_checks()) == 2
     assert not (repo / "bundle").exists()
+
+
+def test_out_rejects_dangerous_paths(repo, tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    (home / "sub").mkdir(parents=True)
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: home))
+    victim = tmp_path / "work" / "keep"
+    victim.mkdir()
+    (victim / "f.txt").write_text("x", encoding="utf-8")
+    bad = [repo, repo / "plugin", repo.parent, tmp_path, Path("/"), home, home.parent, victim / "f.txt"]
+    for path in bad:
+        for force in (False, True):
+            with pytest.raises(mb.UsageError):
+                mb.resolve_out(repo.resolve(), LABEL, path, force)
+    assert (victim / "f.txt").exists() and repo.exists()
+    assert (home / "sub").is_dir()
+    # 홈 아래의 일반 디렉토리는 괜찮다
+    assert mb.resolve_out(repo.resolve(), LABEL, home / "sub" / "new", True) == (home / "sub" / "new").resolve()
+
+
+def test_force_keeps_old_bundle_when_swap_fails(repo, tmp_path, monkeypatch):
+    out = tmp_path / "out"
+    assert mb.run(repo, LABEL, out, checks=fake_checks())["exit_code"] == 3
+    before = (out / "SHA256SUMS").read_text(encoding="utf-8")
+    real = os.rename
+
+    def flaky(src, dst):
+        if Path(src).name.startswith(".out.new") and str(dst) == str(out.resolve()):
+            raise OSError("boom")
+        return real(src, dst)
+
+    monkeypatch.setattr(os, "rename", flaky)
+    with pytest.raises(OSError):
+        mb.run(repo, LABEL, out, checks=fake_checks(), force=True)
+    monkeypatch.undo()
+    assert (out / "SHA256SUMS").read_text(encoding="utf-8") == before
+    assert not [p for p in tmp_path.iterdir() if p.name.startswith(".out.")]
+
+
+def test_default_out_is_sibling_of_repo(repo):
+    res = mb.run(repo, LABEL, None, checks=fake_checks())
+    expected = repo.parent / "tt-import-bundles" / LABEL
+    assert res["exit_code"] == 3 and Path(res["bundle"]["dir"]) == expected.resolve()
+    assert (expected / "SHA256SUMS").is_file()
+
+
+def test_manual_id_cannot_be_skipped(repo, tmp_path):
+    with pytest.raises(mb.UsageError):
+        mb.run(repo, LABEL, tmp_path / "out", checks=fake_checks(), skip=["m"])
+    assert mb.main(["--repo", str(repo), "--label", LABEL, "--out", str(tmp_path / "o"), "--skip", "m"],
+                   checks=fake_checks()) == 2
+
+
+def test_check_writing_into_repo_fails_tree_clean(repo, tmp_path):
+    def dirty(ctx):
+        (ctx.repo / "x.txt").write_text("x", encoding="utf-8")
+        return mb.CheckResult("pass", "ok")
+    out = tmp_path / "out"
+    checks = [mb.Check("w", 1, "auto", dirty), *fake_checks()]
+    res = mb.run(repo, LABEL, out, checks=checks)
+    assert res["exit_code"] == 1 and res["bundle"] is None and res["tree_clean"] is False
+    assert any(c["id"] == "tree-clean" and c["status"] == "fail" for c in res["checks"])
+    assert not out.exists()
+
+
+def test_tree_clean_recorded_when_stopped_early(repo, tmp_path):
+    def dirty_and_fail(ctx):
+        (ctx.repo / "x.txt").write_text("x", encoding="utf-8")
+        return mb.CheckResult("fail", "no")
+    res = mb.run(repo, LABEL, tmp_path / "out", checks=[mb.Check("w", 1, "auto", dirty_and_fail), *fake_checks()])
+    assert res["exit_code"] == 1
+    assert any(c["id"] == "tree-clean" and c["status"] == "fail" for c in res["checks"])
+
+
+def test_skip_plus_error_exits_1(repo, tmp_path):
+    res = mb.run(repo, LABEL, tmp_path / "out", checks=fake_checks({"a": "error"}), skip=["b"])
+    assert res["exit_code"] == 1 and res["bundle"] is None
+
+
+def test_unexpected_exception_is_exit_2(repo, tmp_path, monkeypatch, capsys):
+    def boom(*a, **k):
+        raise RuntimeError("kaboom")
+    monkeypatch.setattr(mb, "run", boom)
+    assert mb.main(["--repo", str(repo), "--label", LABEL, "--out", str(tmp_path / "o")]) == 2
+    assert "kaboom" in capsys.readouterr().err
+
+
+def test_real_check_ids_order_and_manual_items():
+    ids = [c.id for c in mb.CHECKS]
+    assert ids == ["site-paths", "mcp-local", "boundary", "human-search", "schemas", "contracts", "site-todos",
+                   "todos-seen", "draft-notes-size", "draft-notes-fresh", "skeleton", "offline-eval", "regress",
+                   "evals-prepare", "pytest"]
+    manual = [c.id for c in mb.CHECKS if c.kind == "manual"]
+    assert manual == ["human-search", "todos-seen", "draft-notes-fresh"]
+    assert all(c.how for c in mb.CHECKS if c.kind == "manual")
+    assert {c.checklist for c in mb.CHECKS} == set(range(1, 10))
+
+
+def test_checks_use_target_repo_tools(repo, tmp_path, monkeypatch):
+    seen = []
+
+    def fake_run(self, check_id, argv, **kw):
+        seen.append(argv)
+        return 0, "{}"
+    monkeypatch.setattr(mb.Ctx, "run", fake_run)
+    ctx = _ctx(repo, tmp_path)
+    mb.check_boundary(ctx)
+    mb.tool_check("schemas", "sync_schemas.py", ["--check"], "ok")(ctx)
+    mb.check_site_todos(ctx)
+    assert all(str(repo / "tools") in " ".join(a) for a in seen) and len(seen) == 3
+
+
+def test_evals_prepare_output_parsing(monkeypatch):
+    ctx = mb.Ctx(REPO, Path(os.environ.get("TMPDIR", "/tmp")) / "tt-mb-test-ctx", dict(os.environ))
+    ids = [e["id"] for e in json.loads((REPO / "tests/skill_evals/evals.json").read_text(encoding="utf-8"))["evals"]]
+    good = "".join(f"eval {i}: prepared (plugin)\n" for i in ids)
+    monkeypatch.setattr(mb.Ctx, "run", lambda self, *a, **k: (0, good))
+    res = mb.check_evals_prepare(ctx)
+    assert res.status == "pass" and res.data == {"count": len(ids)} and "not executed" in res.detail
+    monkeypatch.setattr(mb.Ctx, "run", lambda self, *a, **k: (0, good.splitlines(True)[0]))
+    assert mb.check_evals_prepare(ctx).status == "fail"
+    monkeypatch.setattr(mb.Ctx, "run", lambda self, *a, **k: (2, "usage"))
+    assert mb.check_evals_prepare(ctx).status == "error"
+
+
+def test_timeout_output_is_decoded_into_log(repo, tmp_path):
+    ctx = _ctx(repo, tmp_path)
+    code, out = ctx.run("slow", [sys.executable, "-c", "import time;print('hi',flush=True);time.sleep(5)"], timeout=1)
+    assert code == 2 and "시간 초과" in out
+    assert "시간 초과" in (ctx.logs / "slow.log").read_text(encoding="utf-8")
 
 
 @pytest.mark.parametrize("label", ["bad label", "a/b", "x..y", "-lead", "end.lock", "한글", "a~b"])

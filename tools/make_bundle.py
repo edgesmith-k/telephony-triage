@@ -7,15 +7,16 @@
 출력할 `git tag … && git push …` 명령은 사용자가 직접 실행한다.
 
 판정 기준은 각 검사 도구의 종료 코드와 이 도구의 파일 검사다. `--skip`한 검사는
-통과로 세지 않고, 하나라도 건너뛰면 묶음을 만들지 않는다. 검사는 레포 트리에
-아무것도 쓰지 않으며(임시 디렉토리 사용), 끝난 뒤 트리가 깨끗한지 다시 확인한다.
+통과로 세지 않고, 하나라도 건너뛰면 묶음을 만들지 않는다. 검사는 임시 디렉토리만
+쓰도록 만들었고, 끝난 뒤 추적·비추적(무시 제외) 파일 기준으로 트리를 바꾸지 않았음을
+확인한다 (`git status --porcelain`; 무시 파일은 보지 않는다).
 
 CLI:
     python3 tools/make_bundle.py --label LABEL [--out DIR] [--force] [--skip ID[,ID]] [--json] [--repo DIR]
 
     --label  묶음 이름. `[A-Za-z0-9._-]+`이고 git 태그 이름으로 쓸 수 있어야 한다.
-    --out    출력 디렉토리 (기본: <레포 상위>/tt-import-bundles/<label>/, 레포 안은 불가)
-    --force  --out이 이미 있으면 지우고 다시 만든다
+    --out    출력 디렉토리 (기본: <레포 상위>/tt-import-bundles/<label>/, 레포 안·레포의 상위·홈·루트는 불가)
+    --force  --out이 비었거나 이전 묶음(make_bundle-result.json 있음)이면 바꿔 만든다. 다른 디렉토리는 지우지 않는다
     --skip   건너뛸 검사 id (쉼표 또는 반복). 건너뛰면 묶음을 만들지 않는다
     --repo   대상 레포 루트 (기본: 이 레포)
 
@@ -30,6 +31,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -95,7 +97,7 @@ class Ctx:
         if self._plugin_root is None:
             out = self.tmp / "plugin-root"
             proc = subprocess.run(
-                [sys.executable, str(REPO / "tests" / "helpers" / "make_plugin_root.py"), "--out", str(out)],
+                [sys.executable, str(self.repo / "tests" / "helpers" / "make_plugin_root.py"), "--out", str(out)],
                 capture_output=True, text=True, encoding="utf-8", errors="replace", env=self.env, cwd=self.tmp,
             )
             if proc.returncode != 0:
@@ -112,11 +114,18 @@ class Ctx:
                                   text=True, encoding="utf-8", errors="replace", timeout=timeout)
             code, out, err = proc.returncode, proc.stdout, proc.stderr
         except subprocess.TimeoutExpired as exc:
-            code, out, err = USAGE, "", f"시간 초과({timeout}초): {' '.join(argv)}\n{exc.stderr or ''}"
+            code, out = USAGE, _text(exc.stdout)
+            err = f"시간 초과({timeout}초): {' '.join(argv)}\n{_text(exc.stderr)}"
         log.write_text(f"$ {' '.join(argv)}\n[exit {code}]\n--- stdout ---\n{out}\n--- stderr ---\n{err}\n",
                        encoding="utf-8")
         self.current_log = f"logs/{check_id}.log"
         return code, (out + ("\n" if out and err else "") + err)
+
+
+def _text(data) -> str:
+    if data is None:
+        return ""
+    return data.decode("utf-8", errors="replace") if isinstance(data, bytes) else str(data)
 
 
 def tail(text: str, lines: int = 20) -> str:
@@ -184,19 +193,19 @@ def check_mcp_local(ctx: Ctx) -> CheckResult:
 
 def tool_check(check_id: str, tool: str, args: list[str], ok_detail: str) -> Callable:
     def fn(ctx: Ctx) -> CheckResult:
-        code, out = ctx.run(check_id, [sys.executable, str(REPO / "tools" / tool), *args])
+        code, out = ctx.run(check_id, [sys.executable, str(ctx.repo / "tools" / tool), *args])
         return from_exit(code, ok_detail, out)
     return fn
 
 
 def check_boundary(ctx: Ctx) -> CheckResult:
-    code, out = ctx.run("boundary", [sys.executable, str(REPO / "tools" / "check_boundary.py"),
+    code, out = ctx.run("boundary", [sys.executable, str(ctx.repo / "tools" / "check_boundary.py"),
                                      "--root", str(ctx.repo), "--mode", "external"])
     return from_exit(code, "check_boundary --mode external 위반 없음", out)
 
 
 def check_site_todos(ctx: Ctx) -> CheckResult:
-    code, out = ctx.run("site-todos", [sys.executable, str(REPO / "tools" / "list_site_todos.py"),
+    code, out = ctx.run("site-todos", [sys.executable, str(ctx.repo / "tools" / "list_site_todos.py"),
                                        "--root", str(ctx.repo), "--json"])
     if code != 0:
         return from_exit(code, "", out)
@@ -244,7 +253,7 @@ def verify_skeleton(root: Path) -> list[str]:
 
 def check_skeleton(ctx: Ctx) -> CheckResult:
     out_dir = ctx.tmp / "skeleton"
-    code, out = ctx.run("skeleton", [sys.executable, str(REPO / "tools" / "make_db_skeleton.py"), str(out_dir)])
+    code, out = ctx.run("skeleton", [sys.executable, str(ctx.repo / "tools" / "make_db_skeleton.py"), str(out_dir)])
     if code != 0:
         return from_exit(code, "", out)
     if not out_dir.is_dir() or not any(out_dir.rglob("*")):
@@ -258,7 +267,7 @@ def check_skeleton(ctx: Ctx) -> CheckResult:
 
 
 def check_offline_eval(ctx: Ctx) -> CheckResult:
-    code, out = ctx.run("offline-eval", [sys.executable, str(REPO / "tools" / "offline_eval.py"),
+    code, out = ctx.run("offline-eval", [sys.executable, str(ctx.repo / "tools" / "offline_eval.py"),
                                          str(ctx.repo / "tests" / "fixtures" / "offline-eval-sample.yaml"),
                                          "--plugin-root", str(ctx.plugin_root()), "--json"])
     if code != 0:
@@ -273,11 +282,9 @@ def check_offline_eval(ctx: Ctx) -> CheckResult:
 
 
 def check_regress(ctx: Ctx) -> CheckResult:
-    sys.path.insert(0, str(REPO))
-    try:
-        from tests.helpers import mock_env
-    finally:
-        sys.path.remove(str(REPO))
+    spec = importlib.util.spec_from_file_location("tt_bundle_mock_env", ctx.repo / "tests" / "helpers" / "mock_env.py")
+    mock_env = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mock_env)
     root = ctx.plugin_root()
     gh_state = ctx.tmp / "gh-state"
     gh_state.mkdir(exist_ok=True)
@@ -409,14 +416,51 @@ def validate_label(label: str) -> None:
         raise UsageError(f"--label을 git 태그 이름으로 쓸 수 없습니다: {label!r}")
 
 
+def _is_previous_bundle(path: Path) -> bool:
+    return path.is_dir() and ((path / "make_bundle-result.json").is_file() or not any(path.iterdir()))
+
+
 def resolve_out(repo: Path, label: str, out: str | Path | None, force: bool) -> Path:
     path = Path(out) if out else repo.parent / "tt-import-bundles" / label
     path = path.resolve()
+    home = Path.home().resolve()
     if path == repo or repo in path.parents:
         raise UsageError(f"--out이 레포 안입니다: {path}")
-    if path.exists() and not force:
-        raise UsageError(f"이미 있습니다: {path} (--force로 지우고 다시 만듭니다)")
+    if path in repo.parents or path == Path(path.anchor):
+        raise UsageError(f"--out이 레포의 상위 디렉토리(또는 루트)입니다: {path}")
+    if path == home or path in home.parents:
+        raise UsageError(f"--out이 홈 디렉토리(또는 그 상위)입니다: {path}")
+    if path.exists() and not path.is_dir():
+        raise UsageError(f"--out이 디렉토리가 아닙니다: {path}")
+    if path.exists():
+        if not force:
+            raise UsageError(f"이미 있습니다: {path} (--force로 바꿔 만듭니다)")
+        if not _is_previous_bundle(path):
+            raise UsageError(f"--force는 빈 디렉토리나 이전 묶음(make_bundle-result.json 있음)만 바꿉니다: {path}")
     return path
+
+
+def install_bundle(built: Path, out_dir: Path) -> None:
+    """새 묶음을 out_dir 옆 임시 이름으로 옮긴 뒤 바꿔 넣는다. 실패하면 옛 묶음을 되돌린다."""
+    out_dir.parent.mkdir(parents=True, exist_ok=True)
+    staged = out_dir.with_name(f".{out_dir.name}.new-{os.getpid()}")
+    old = out_dir.with_name(f".{out_dir.name}.old-{os.getpid()}")
+    shutil.rmtree(staged, ignore_errors=True)
+    try:
+        shutil.move(str(built), str(staged))
+        if out_dir.exists():
+            if not _is_previous_bundle(out_dir):
+                raise UsageError(f"--out이 그 사이 바뀌었습니다: {out_dir}")
+            os.rename(out_dir, old)
+        try:
+            os.rename(staged, out_dir)
+        except OSError:
+            if old.exists():
+                os.rename(old, out_dir)
+            raise
+    finally:
+        shutil.rmtree(staged, ignore_errors=True)
+    shutil.rmtree(old, ignore_errors=True)
 
 
 def check_preconditions(repo: Path, label: str) -> str:
@@ -445,6 +489,9 @@ def run(repo: Path | str, label: str, out: Path | str | None = None, checks: lis
     unknown = skip - {c.id for c in checks}
     if unknown:
         raise UsageError(f"--skip에 없는 검사 id: {', '.join(sorted(unknown))}")
+    manual_ids = skip & {c.id for c in checks if c.kind == "manual"}
+    if manual_ids:
+        raise UsageError(f"사람 확인 항목은 건너뛸 수 없습니다: {', '.join(sorted(manual_ids))}")
     validate_label(label)
     out_dir = resolve_out(repo, label, out, force)
     head_sha = check_preconditions(repo, label)
@@ -489,7 +536,7 @@ def run(repo: Path | str, label: str, out: Path | str | None = None, checks: lis
 
         head_now = git(repo, "rev-parse", "HEAD", check=False).strip()
         tree_clean = status_clean(repo) and head_now == head_sha
-        if not stopped and not tree_clean:
+        if not tree_clean:
             results.append({"id": "tree-clean", "checklist": 1, "kind": "auto", "status": "fail",
                             "detail": "검사 뒤 트리가 더럽거나 HEAD가 바뀌었습니다:\n"
                                       + git(repo, "status", "--porcelain", "--untracked-files=normal").strip()[:600],
@@ -503,11 +550,8 @@ def run(repo: Path | str, label: str, out: Path | str | None = None, checks: lis
         else:
             site_patterns = load_site_paths(repo)
             skeleton = ctx.tmp / "skeleton"
-            if not skeleton.is_dir():  # 주입된 검사 목록에 skeleton이 없을 때도 묶음은 뼈대 zip을 낸다
-                proc = subprocess.run([sys.executable, str(REPO / "tools" / "make_db_skeleton.py"), str(skeleton)],
-                                      capture_output=True, text=True, env=env)
-                if proc.returncode != 0:
-                    raise UsageError(f"뼈대를 만들지 못했습니다: {proc.stderr.strip()[-300:]}")
+            if not skeleton.is_dir():  # skeleton 검사가 만든 뼈대를 묶는다 (다른 도구로 대신 만들지 않는다)
+                raise UsageError("skeleton 검사가 만든 뼈대가 없어 묶음을 만들 수 없습니다")
             built, why = build_bundle(repo, label, head_sha, tmp, skeleton, site_patterns)
             if built is None:
                 results.append({"id": "bundle", "checklist": 5, "kind": "auto", "status": "fail", "detail": why,
@@ -519,16 +563,13 @@ def run(repo: Path | str, label: str, out: Path | str | None = None, checks: lis
                     files.append({"name": zp.name, "sha256": sha256_file(zp), "bytes": zp.stat().st_size})
                 (built / "SHA256SUMS").write_text("".join(f"{f['sha256']}  {f['name']}\n" for f in files),
                                                   encoding="utf-8")
-                if out_dir.exists():
-                    shutil.rmtree(out_dir)
                 bundle_info = {"dir": str(out_dir), "files": files}
                 exit_code = NEEDS_APPROVAL
                 result = _result(label, head_sha, tree_clean, True, results, manual, bundle_info, exit_code)
                 (built / "make_bundle-result.json").write_text(
                     json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
                 shutil.copytree(ctx.logs, built / "logs")
-                out_dir.parent.mkdir(parents=True, exist_ok=True)
-                shutil.move(str(built), str(out_dir))
+                install_bundle(built, out_dir)
         complete = exit_code == NEEDS_APPROVAL
         return _result(label, head_sha, status_clean(repo), complete, results, manual, bundle_info, exit_code)
     finally:
@@ -583,6 +624,9 @@ def main(argv: list[str] | None = None, checks: list[Check] | None = None) -> in
         result = run(args.repo, args.label, args.out, checks=checks, skip=skip, force=args.force)
     except UsageError as exc:
         print(str(exc), file=sys.stderr)
+        return USAGE
+    except Exception as exc:  # 예기치 못한 오류는 트레이스백 대신 종료 2
+        print(f"예기치 못한 오류: {type(exc).__name__}: {exc}", file=sys.stderr)
         return USAGE
     if args.json:
         print(json.dumps(result, ensure_ascii=False, indent=2))
