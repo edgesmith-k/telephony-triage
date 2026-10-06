@@ -175,7 +175,7 @@
 | ✅ | W2 | ✅ 완료(10/06) | ccr-2495ec74-xn15cn · 커밋 `W2: 결정적 렌더링…` | W2 영향 미확인: eval 9·18·20~23·26·31·54. W2 보류: 검색 전용 문구(search.md는 `--brief` JSON 유지, eval 53) |
 | ✅ | W3 | ✅ 완료(10/06) | ccr-2495ec74-xn15cn · 커밋 `W3: verify-fix…` | eval 25 Sonnet 3/3, verify-fix Sonnet 기본. W3 영향 미확인: eval 21·22·26·27·33 |
 | ✅ | W4 | ✅ 완료(10/06) | ccr-2495ec74-xn15cn · 커밋 `W4: 질문 수 줄이기…` | eval 55·56 질문 1→0. 영향 미확인: eval 42·45 등 explore 사용 eval |
-| ☐ | W5 | 계획 확인 중 | ccr-2495ec74-xn15cn | W2 뒤 |
+| ☐ | W5 | 실행 중 | ccr-2495ec74-xn15cn | W2 뒤 |
 | ☐ | W6 | 대기 | | W2·W3 뒤 |
 | ☐ | W7 | 대기 | | W5 뒤, 실행 Opus |
 | ☐ | W8 | 대기 | | 독립 |
