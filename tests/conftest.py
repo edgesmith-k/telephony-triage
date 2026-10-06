@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import importlib
+import os
 from pathlib import Path
 import sys
 
 import pytest
+
+# W7: triage.py run 출력을 plugin/schemas/output/analysis.schema.json으로 검사한다(위반이면 종료 코드 2)
+os.environ["TT_SCHEMA_CHECK"] = "1"
 
 HELPERS = Path(__file__).resolve().parent / "helpers"
 sys.path.insert(0, str(HELPERS))

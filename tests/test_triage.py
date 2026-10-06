@@ -287,7 +287,7 @@ def _check_op_summary(path):
     start = text.index("op 필수 키 (")
     end = text.index(fallback) + len(fallback)
     block = text[start:end]
-    assert len(block.encode("utf-8")) <= 1024
+    assert len(block.encode("utf-8")) <= 1152       # W7 add-fixture 세부 포함(그 전 1,024B, tools/gen_contracts.py BLOCK_MAX)
     schema = json.loads((REPO / "plugin" / "schemas" / "plan.schema.json").read_text(encoding="utf-8"))
     required = {b["properties"]["op"]["const"]: [k for k in b["required"] if k != "op"] for b in schema["$defs"]["operation"]["oneOf"]}
     seen, seen_signature = {}, False
@@ -321,7 +321,7 @@ def test_skill_md_is_within_7_5kb_and_drives_triage():
     assert len(rules.encode("utf-8")) <= 2048
     for needle in ("S-3", "계획 형식 오류", "TT_LOCK_OWNER", "stage --then-summary", "모든 종료 경로에서 푼다", "사용자 확인 후"):
         assert needle in rules, needle
-    assert len((reference / "db-authoring.md").read_bytes()) <= 11264      # 필수 키 요약 1KB 포함
+    assert len((reference / "db-authoring.md").read_bytes()) <= 11392      # 필수 키 요약 포함. W7 add-fixture 세부 포함(그 전 11,264B)
     assert len((reference / "write-flow.md").read_bytes()) <= 14344
     _check_op_summary(reference / "db-authoring.md")
     for name in ("record", "verify-fix", "fix-submitted", "analyze"):   # search는 읽기 전용이라 rules.md를 읽지 않는다
@@ -1002,7 +1002,8 @@ def test_w4_docs_match_the_implementation():
     assert "심층 분석과 탐색 분석을 할까요?" in step5 and "선택지 4개" in step5 and "선택지 2개" in step5
     cfg = (W4_DOCS / "02-config.md").read_text(encoding="utf-8")
     assert "사용자 config > `site-defaults.yaml` > 내장 기본값 `true`" in cfg
-    contracts = (W4_DOCS / "contracts.md").read_text(encoding="utf-8")
+    contracts = "\n".join((W4_DOCS / name).read_text(encoding="utf-8")         # W7: analysis 키 트리는 생성 파일로
+                           for name in ("contracts.md", "contracts-cli.md"))
     assert "(kind: `lock`·`plan`·`jira`" in contracts and "`cleanup`·`plan`" not in contracts
     assert "auto?(`true`: `code.auto_select`" in contracts and "cleanup_targets" in contracts and "notes?(" in contracts
     sync = (REPO / "plugin/commands/sync.md").read_text(encoding="utf-8")

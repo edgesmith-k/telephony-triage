@@ -9,6 +9,8 @@ CLI:
     python3 tools/sync_schemas.py --check [--db <이슈 DB>]   # 다르면 종료 코드 1
     python3 tools/sync_schemas.py --write [--db <이슈 DB>]   # 원본으로 사본을 덮어씀
 
+하위 디렉토리 `plugin/schemas/output/`은 플러그인 소유(이슈 DB 사본 아님)라 대조하지 않는다(최상위 `*.schema.json`만 본다).
+
 `--check`에 `--db`가 없으면 합성 샘플과 대조한다 (변형은 테스트 실행 때 샘플 schema를 그대로 복사해
 만들므로 따로 대조하지 않는다).
 

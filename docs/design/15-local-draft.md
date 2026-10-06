@@ -54,6 +54,7 @@
 - [ ] 전체 테스트 통과 (`pytest`, `db_regress --all`, eval 54개 모의 실행, `tools/offline_eval.py` 합성 라벨셋 실행 — 모두 테스트 헬퍼 플러그인 루트에서)
 - [ ] 사내 정보 없음: `python3 tools/check_boundary.py --mode external` 종료 코드 0 (사외 CI `.github/workflows/external.yml`도 같은 검사). 그래도 실제 회사명·서버명 등을 쓰지 않았는지 사람이 한 번 검색
 - [ ] `python3 tools/sync_schemas.py --check` 통과 (`plugin/schemas/` 사본 = 샘플 DB `schema/`)
+- [ ] `python3 tools/gen_contracts.py --check` 통과 (`contracts-cli.md`·db-authoring 필수 키 요약 = 코드·스키마)
 - [ ] `plugin/site-defaults.yaml`이 없고 `site-defaults.example.yaml`만 있음. `SITE_PATHS`의 다른 경로(`.draft-manifest.json` 포함)도 비어 있음
 - [ ] 레포 루트에 `.mcp.json`이 없음 (모의 MCP는 `tests/mocks/mcp.json`). `.local-draft`는 반입 묶음에 넣지 않음
 - [ ] `tools/make_db_skeleton.py`로 이슈 DB 뼈대를 만들었고, 뼈대에 유형·Jira·fixture(합성 포함)가 없음

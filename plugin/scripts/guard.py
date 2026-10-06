@@ -41,6 +41,7 @@ TODO(SITE:S3) 플러그인 hook에 보이는 MCP 도구 이름이 `mcp__<server>
 
 from __future__ import annotations
 
+import argparse
 import glob
 import json
 import os
@@ -772,17 +773,20 @@ def judge(event: dict, plugin_root: str | None = None) -> tuple[dict | None, lis
     return dec.output(), dec.warn
 
 
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="guard.py", description=__doc__,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--plugin-root", default=None)
+    return parser
+
+
 def main(argv: list[str] | None = None) -> int:
     try:
         sys.stdout.reconfigure(encoding="utf-8")
         sys.stderr.reconfigure(encoding="utf-8")
     except (AttributeError, ValueError):
         pass
-    import argparse
-    parser = argparse.ArgumentParser(prog="guard.py", description=__doc__,
-                                     formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--plugin-root", default=None)
-    args = parser.parse_args(argv)
+    args = build_parser().parse_args(argv)
     raw = sys.stdin.read()
     try:
         event = json.loads(raw) if raw.strip() else {}

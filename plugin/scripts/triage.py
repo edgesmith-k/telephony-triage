@@ -1477,6 +1477,9 @@ class Driver:
             for e in cand["evidence"]:
                 e.pop("_ref", None)
         result = fit({k: v for k, v in result.items() if v not in (None, [], {})})
+        violation = schema_violation(result)
+        if violation:
+            raise Fail(USAGE, violation)
         (self.job / "analysis.json").write_text(json.dumps(result, ensure_ascii=False, indent=1) + "\n",
                                                 encoding="utf-8", newline="\n")
         self.run.note("done", candidates=len(candidates), calls=self.run.calls)
@@ -1939,6 +1942,29 @@ def _emit(result: dict) -> None:
     print(json.dumps(result, ensure_ascii=False, indent=1))
 
 
+ANALYSIS_SCHEMA = SCRIPTS.parent / "schemas" / "output" / "analysis.schema.json"
+
+
+def schema_violation(result: dict) -> str | None:
+    """`TT_SCHEMA_CHECK=1`(테스트·CI)일 때만 run 출력을 `schemas/output/analysis.schema.json`으로 검사한다.
+
+    위반이면 stderr 한 줄 문구를 돌려준다(호출자가 종료 코드 2). 운영 경로(변수 없음)는 아무것도 하지 않는다.
+    """
+    if os.environ.get("TT_SCHEMA_CHECK") != "1":
+        return None
+    try:
+        import jsonschema
+    except ImportError:
+        return "[telephony-triage] analysis 스키마 위반: (검사 불가): jsonschema가 없다 — TT_SCHEMA_CHECK=1은 jsonschema가 필요하다"
+    validator = jsonschema.Draft202012Validator(json.loads(ANALYSIS_SCHEMA.read_text(encoding="utf-8")))
+    errors = sorted(validator.iter_errors(result), key=lambda e: list(e.absolute_path))
+    if not errors:
+        return None
+    err = errors[0]
+    where = "/".join(str(x) for x in err.absolute_path) or "(최상위)"
+    return f"[telephony-triage] analysis 스키마 위반: {where}: {err.message}"
+
+
 def cmd_release(args, defaults: dict) -> int:
     cfg = userconfig.merged(defaults)
     job = Path(str(userconfig.get(cfg, "work_dir"))).expanduser() / args.key
@@ -2021,13 +2047,23 @@ def main(argv: list[str] | None = None) -> int:
     except NeedsInput as exc:
         driver.state.save()
         driver.run.note("needs_input", kind=exc.payload["kind"])
-        _emit({"status": "needs_input", "key": driver.key, "needs_input": exc.payload,
-               "lock_owner": driver.run.env.get("TT_LOCK_OWNER")})
+        out = {"status": "needs_input", "key": driver.key, "needs_input": exc.payload,
+               "lock_owner": driver.run.env.get("TT_LOCK_OWNER")}
+        violation = schema_violation(out)
+        if violation:
+            print(violation, file=sys.stderr)
+            return USAGE
+        _emit(out)
         return OK
     except Stopped as exc:
         driver.release()
         driver.run.note("stopped", reason=str(exc))
-        _emit({"status": "stopped", "key": driver.key, "reason": str(exc), "lock_released": driver.locked})
+        out = {"status": "stopped", "key": driver.key, "reason": str(exc), "lock_released": driver.locked}
+        violation = schema_violation(out)
+        if violation:
+            print(violation, file=sys.stderr)
+            return USAGE
+        _emit(out)
         return OK
     except Fail as exc:
         driver.release()

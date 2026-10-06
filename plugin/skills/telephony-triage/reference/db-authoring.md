@@ -14,7 +14,7 @@ op 필수 키 (`op` 외, plan.schema.json 기준):
 - `unresolved`: type
 - `new-cause`: temp_id, type, cause, body — cause: title·description·signatures·resolution·resolution_type
 - `new-type`: temp_id, category, type, first_cause, body, dir_slug — type: title·summary·symptom_signatures
-- `add-fixture`: for, kind, path
+- `add-fixture`: for, kind, path — kind: positive·negative·fixed·resolved·recurrence·extra; fixed·recurrence면 build 필수; 선택 build·expect·occurred_at
 - `update-signature`: owner, kind, signature
 - `add-parser-rule`: file, rule
 - `update-parser-rule`: file, key, rule

@@ -50,6 +50,7 @@ telephony-triage-plugin/                 # 개발 레포 루트
 ├── tools/boundary-allow.txt            # check_boundary 예외 (사외). 사내 패턴·예외는 docs/site/
 ├── tools/related_tests.py              # 바뀐 파일(git diff·스테이징·untracked)에서 관련 테스트를 골라 `--run`으로 pytest + 경계 검사 실행. 공용 모듈·스키마·헬퍼·의존성 변경이면 `full: true` (11-phases.md §11.0)
 ├── tools/sync_schemas.py               # plugin/schemas/ 사본 ↔ 이슈 DB schema/ 대조
+├── tools/gen_contracts.py              # 계약 생성물: docs/design/contracts-cli.md(build_parser()·analysis 스키마)와 db-authoring.md 필수 키 요약(plan 스키마). --check는 CI
 ├── .github/workflows/external.yml      # 사외 CI (경계 검사·스키마 사본·fixture 생성기 --check·pytest). 사내 Actions(13-actions.md)와 별개
 ├── tools/make_db_skeleton.py            # 합성 샘플에서 운영용 이슈 DB 뼈대 생성 (11-phases.md Phase 1)
 ├── DRAFT_NOTES.md                       # 사외 초안 상태 파일(≤8KB): 진행 상태·막힌 것·활성 트랙·실험 결과 표 (15-local-draft.md)
@@ -129,6 +130,7 @@ telephony-triage-plugin/                 # 개발 레포 루트
     │   ├── triage.py                    # analyze Step 0~4 + Step 5 resolve 드라이버 (contracts.md §3.2)
     │   └── migrations/                  # 0001_xxx.py … 스키마 버전별 마이그레이션
     ├── schemas/                         # 이슈 DB schema/ 사본 (단일 원본은 이슈 DB, tools/sync_schemas.py로 대조)
+    │   └── output/analysis.schema.json   # 플러그인 소유: triage.py run 출력 형식 (TT_SCHEMA_CHECK=1이면 검사, 대조 대상 아님)
     └── hooks/
         └── hooks.json                   # 08-safety.md §9
 ```
