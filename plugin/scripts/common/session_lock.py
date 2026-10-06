@@ -43,7 +43,9 @@ def read(work_dir: Path) -> dict | None:
         if not isinstance(data, dict) or not all(isinstance(data.get(k), str)
                 for k in ("job", "started_at", "updated_at")):
             raise ValueError("invalid lock record")
-        parse(data["updated_at"])
+        for key in ("updated_at", "started_at"):
+            if parse(data[key]).tzinfo is None:     # 시각 계산이 aware 값끼리여야 한다
+                raise ValueError("naive timestamp")
         return data
     except FileNotFoundError:
         return None

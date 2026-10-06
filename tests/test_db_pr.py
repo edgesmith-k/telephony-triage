@@ -1692,11 +1692,33 @@ def test_my_prs_gh_failure_is_a_warning_and_missing_config_stops_with_2():
     ws = Workspace()
     out = ws.db_pr("my-prs", env={"MOCK_GH_FAIL_LIST": "1"})
     assert out["prs"] is None and out["base"] == "main" and "열린 PR을 확인하지 못했다" in out["warnings"][0]
-    bad = ws.db_pr("my-prs", env={"MOCK_GH_BAD_JSON": "1"})     # JSON이 아닌 gh 출력도 경고, 종료 0
-    assert bad["prs"] is None and "열린 PR을 확인하지 못했다" in bad["warnings"][0]
+    for payload in ("1", "null", "{}", "not json"):     # JSON이 아니거나 목록이 아닌 gh 출력도 경고 하나, 종료 0
+        bad = ws.db_pr("my-prs", env={"MOCK_GH_BAD_JSON": payload})
+        assert bad["prs"] is None and len(bad["warnings"]) == 1 and "열린 PR을 확인하지 못했다" in bad["warnings"][0], payload
+    pre = ws.run("db_pr.py", ["preflight", "--branch", "issue/MOCK-7001", "--search", "MOCK-7001"],
+                 env={"MOCK_GH_BAD_JSON": "not json"})
+    assert pre.returncode == 0 and "Traceback" not in pre.stderr
+    out = json.loads(pre.stdout)
+    assert out["open_prs"] is None and "JSON 아님" in out["warnings"][0]
     from runner import tmp
     proc = run("db_pr.py", ["my-prs"], env={"TELEPHONY_TRIAGE_HOME": tmp("tt-nohome-") / "h"})
     assert proc.returncode == 2 and "setup" in proc.stderr
     plain = tmp("tt-notclone-")
     ws.run("config.py", ["set", "issue_db.path", plain])
     assert ws.run("db_pr.py", ["my-prs"]).returncode == 2
+
+
+def test_naive_timestamp_lock_is_corrupt_not_a_traceback():
+    ws = Workspace()
+    lock = ws.work / "session.lock"
+    lock.write_text(json.dumps({"job": "J", "started_at": "2026-01-01T00:00:00", "updated_at": "2026-01-01T00:00:00"}),
+                    encoding="utf-8")
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    from common import session_lock as sl
+    try:
+        sl.read(ws.work)
+        raise AssertionError("naive 시각은 손상으로 봐야 한다")
+    except sl.LockError:
+        pass
+    proc = ws.run("db_pr.py", ["lock", "status"])
+    assert proc.returncode == 2 and "session.lock" in proc.stderr and "Traceback" not in proc.stderr

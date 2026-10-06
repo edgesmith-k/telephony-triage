@@ -359,6 +359,11 @@ def _cause(ctx: Ctx, branch: str, type_glob: str, cid: str) -> dict | None:
     return None
 
 
+# `git [-C <dir>] config [--global|--local|--system] <key> [<value>]` 쓰기 형태. --get·--get-all·--list·-l(읽기)과 `config.py`는 제외
+GIT_CONFIG_WRITE = (r"\bgit(?:\s+-C\s+\S+)?\s+config\s+"
+                    r"(?!(?:--(?:global|local|system)\s+)?(?:--get(?:-all)?\b|--list\b|-l\b))\S")
+
+
 def checks(eid: int, ctx: Ctx) -> list:
     """assertion 순서대로 (함수 | None). 함수는 (passed, evidence)."""
     if eid in (10, 20, 21, 22, 23, 25, 26, 27, 28):
@@ -903,7 +908,7 @@ def checks_w4(eid, ctx):
             ran = ctx.ran
             hit = re.search(r"config\.py[\"']?\s+doctor", ran)
             after = ran[hit.end():] if hit else ""     # doctor 호출 뒤에 수리 명령이 없어야 한다
-            c = bool(hit) and not re.search(r"install-hooks|sync-scripts-path|config\.py\s+set\b|git\b[^\n]*\bconfig\b", after)
+            c = bool(hit) and not re.search(r"install-hooks|sync-scripts-path|config\.py\s+set\b|" + GIT_CONFIG_WRITE, after)
             return a and b and c, f"{ea}; {eb}; doctor 호출 {'있음' if hit else '없음'}, 그 뒤 수리 호출 {'없음' if c else '있음'}"
         return [doctor_ran, pasted, gh_guided, untouched]
     if eid == 55:

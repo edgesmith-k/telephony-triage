@@ -846,3 +846,9 @@ def test_eval58_untouched_check_only_rejects_repairs_after_doctor(tmp_path):
     assert not verdict("python3 $S/config.py doctor --format markdown", "python3 $S/config.py install-hooks")
     assert not verdict("python3 $S/config.py doctor --format markdown; git -C x config core.hooksPath h")
     assert not verdict("python3 $S/config.py gh-status")        # doctor를 부르지 않았다
+    assert verdict("python3 $S/config.py doctor --format markdown; git -C x config --get core.hooksPath")   # 읽기
+    assert verdict("python3 $S/config.py doctor --format markdown", "git config --local --list")
+    assert verdict("git status && python3 $S/config.py doctor --format markdown")                         # config.py는 git config가 아니다
+    assert not verdict("python3 $S/config.py doctor --format markdown", "git config core.hooksPath x")
+    assert not verdict("python3 $S/config.py doctor --format markdown", "git -C x config --unset core.hooksPath")
+    assert not verdict("python3 $S/config.py doctor --format markdown", "git config --global user.name x")

@@ -579,7 +579,6 @@ def test_doctor_worst_case_markdown_fits_1kb():
     env.json("db_pr.py", ["lock", "acquire", "MOCK-1101-long-job-key", "--command", "analyze"])
     proc = env.run("config.py", ["doctor", "--format", "markdown"], unauth=True)
     assert proc.returncode == 1
-    assert sum(r in proc.stdout for r in ("| warn |", "| fail |")) == 2
     assert proc.stdout.count("| fail |") >= 2 and proc.stdout.count("| warn |") >= 3
     assert len(proc.stdout.encode("utf-8")) <= 1024, len(proc.stdout.encode("utf-8"))
 

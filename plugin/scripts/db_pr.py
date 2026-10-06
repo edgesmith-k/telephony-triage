@@ -493,7 +493,13 @@ def _open_prs(ctx: Ctx, extra: list[str], runner) -> tuple[list | None, str | No
     """`gh pr list <extra> --state open` → (PR 목록 또는 None, 경고 또는 None). preflight·my-prs 공유."""
     proc = runner(ctx, ["pr", "list", *extra, "--state", "open", "--json", "number,title,url,headRefName"], ctx.repo)
     if proc.returncode == 0:
-        return json.loads(proc.stdout or "[]"), None
+        try:
+            found = json.loads(proc.stdout or "[]")
+        except ValueError:
+            return None, f"열린 PR을 확인하지 못했다 (gh): JSON 아님 {(proc.stdout or '').strip()[:100]}"
+        if not isinstance(found, list):
+            return None, f"열린 PR을 확인하지 못했다 (gh): 목록이 아님 {(proc.stdout or '').strip()[:100]}"
+        return found, None
     return None, f"열린 PR을 확인하지 못했다 (gh): {(proc.stderr or '').strip()[:200]}"
 
 
@@ -505,7 +511,7 @@ def my_prs(ctx: Ctx) -> dict:
     note = "base_moved는 fetch 없이 로컬 원격 ref(origin/*) 기준이다. null이면 그 ref가 없다(미fetch)."
     try:
         found, warning = _open_prs(ctx, ["--author", "@me"], _gh)
-    except (UsageError, ValueError) as exc:    # gh 시간 초과·JSON이 아닌 출력도 경고로 돌린다 (sync는 계속한다)
+    except UsageError as exc:    # gh 시간 초과도 경고로 돌린다 (sync는 계속한다)
         found, warning = None, f"열린 PR을 확인하지 못했다 (gh): {str(exc)[:200]}"
     if found is None:
         return {"base": ctx.base, "prs": None, "warnings": [warning], "note": note}
