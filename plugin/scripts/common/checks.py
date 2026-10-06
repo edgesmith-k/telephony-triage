@@ -232,7 +232,7 @@ def _stage_steps(ctx: Ctx) -> list[Step]:
         _script_step("ids", "db_add.py", lambda c: ["check-ids", "--db", _db(c)]),
         _script_step("regress", "db_regress.py", lambda c: ["--all", "--db", _db(c)]),
         _script_step("verify", "db_verify.py",
-                     lambda c: ["rules", "--plan", str(c.plan), "--db", _db(c), "--regress-json",
+                     lambda c: ["rules", "--plan", str(c.plan), "--db", _db(c), "--verbose", "--regress-json",
                                 str(c.regress_json)]),
     ]
 

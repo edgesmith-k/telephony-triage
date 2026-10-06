@@ -13,6 +13,7 @@
 
 from __future__ import annotations
 
+import json
 import shutil
 import sys
 from pathlib import Path
@@ -315,6 +316,30 @@ def test_glossary_table_reader():
     assert glossary.table(SAMPLE, "없는 섹션") == [] and glossary.table(SAMPLE / "nope", "검색 별칭") == []
     assert (["붙", "접속", "attach"], ["연결", "setup_data_call"]) in glossary.search_aliases(SAMPLE)
     assert any(row[0] == "콜이 끊김" for row in glossary.table(SAMPLE, "표준 용어"))
+
+
+def test_brief_drops_detail_keys_but_keeps_what_skills_read():
+    full = run_json("db_search.py", ["--db", SAMPLE, "로밍"])
+    brief = run_json("db_search.py", ["--db", SAMPLE, "로밍", "--brief"])
+    assert "db" in full and "db" not in brief and brief["links"] == full["links"]
+    assert [(r["kind"], r.get("id") or r.get("key")) for r in brief["results"]] == [
+        (r["kind"], r.get("id") or r.get("key")) for r in full["results"]]
+    dropped = {"path", "chain", "merged_from", "code_refs", "resolution_type", "signatures_pending", "type_title",
+               "category"}
+    for entry in brief["results"]:
+        assert not dropped & set(entry) and "current" not in entry
+        assert all(v not in (None, "", [], {}) for v in entry.values())
+    first = brief["results"][0]
+    assert first["resolution"] == "데이터 로밍 설정을 켠다" and first["fix"]["status"] == "not-a-bug"
+    assert first["jira"] == ["MOCK-1103"] and first["matched"] and "score" in first and first["status"]
+    assert len(json.dumps(brief)) < len(json.dumps(full))
+    # 기본 출력은 그대로 (키 유지)
+    assert dropped <= set(full["results"][0]) | {"type_title"} and "path" in full["results"][0]
+
+
+def test_brief_on_id_query_keeps_related_and_secondary():
+    cause = run_json("db_search.py", ["--db", SAMPLE, "CALL-001-01", "--brief"])["results"][0]
+    assert cause["related"] == ["IMS-001-01"] and cause["secondary_categories"] == ["ims"]
 
 
 if __name__ == "__main__":

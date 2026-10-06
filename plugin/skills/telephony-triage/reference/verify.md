@@ -26,7 +26,7 @@ open ─(fix-submitted)─▶ fix-submitted ─(verify-fix passed)─▶ fixed
 
 1. 작업 키 `verify-res-<원인 ID>-<YYYYMMDD>`(오늘): `db_pr lock acquire <작업 키> --command validate-cause` →
    `db_pr snapshot --job <작업 키>` → `config.py check --db SNAP`(쓰기 불가면 lock 풀고 멈춤).
-   `db_search.py <원인 ID> --db SNAP`로 원인을 찾는다. `resolution_verification.status`가 이미 `verified`면 재검증인지 묻는다.
+   `db_search.py <원인 ID> --db SNAP --brief`로 원인을 찾는다. `resolution_verification.status`가 이미 `verified`면 재검증인지 묻는다.
 2. 로그가 bugreport면 `parse_logcat.py extract-bugreport`로 logcat만 꺼낸다. 판정:
    `db_verify.py resolution --db SNAP --cause <ID> <logcat...> --json` → `{judgement, reason, C, S, satisfied_traces[{signature, kind, ts}], suggested_ops[]}`.
 

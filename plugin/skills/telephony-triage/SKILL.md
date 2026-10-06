@@ -33,7 +33,7 @@ description: Android Telephony 이슈(data·call·network·sim·sms·ims)를 Jir
 
 ### 1. 드라이버 (Step 0~4)
 
-1. `--jira-file`이 없으면 config(`S/config.py show`)의 `jira.tools.get_issue`(있으면 `get_comments`)를 그 스키마대로 부른다. 비어 있으면 부르지 말고 멈춘다(추측 금지): setup 매핑 안내, 연습은 `--dry-run --jira-file <yaml>`. hook이 원문을
+1. `--jira-file`이 없으면 config(`S/config.py show --keys work_dir,jira.tools`)의 `jira.tools.get_issue`(있으면 `get_comments`)를 그 스키마대로 부른다. 비어 있으면 부르지 말고 멈춘다(추측 금지): setup 매핑 안내, 연습은 `--dry-run --jira-file <yaml>`. hook이 원문을
    `JOB/jira_raw.json`에 두고 마스킹 요약만 보여준다(`saved_to` 없으면 응답을 그 경로에). `--jira-file`은
    `--dry-run`·`--analysis-only` 전용.
 2. `S/triage.py run <KEY> --logs <…>` + 위 옵션(analyzer·explore 외) — lock·스냅샷부터 Step 5 `code_refs` resolve까지 한다. stdout(=`JOB/analysis.json`, ≤4KB)과 `JOB/report.md`만 읽는다.

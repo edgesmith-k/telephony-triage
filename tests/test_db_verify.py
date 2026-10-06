@@ -557,6 +557,84 @@ causes:
 """ + _CAUSE_TAIL
 
 
+# -- 출력 다이어트: 기본은 통과한 행만 접는다 ----------------------------------------------------------
+
+
+def _extractor_db() -> Path:
+    db = git_db()
+    edit(db / "parser-rules/extractors.yaml", "    event: ims_registered\n    fields: [transport]",
+         "    event: ims_registered\n    fields: []")
+    return db
+
+
+def _rows(out: dict) -> dict:
+    return {r["id"]: r for r in out["rules"]}
+
+
+def _default_vs_verbose(db: Path) -> tuple[int, dict, dict]:
+    code, _, brief = rules(db)
+    proc = run("db_verify.py", ["rules", "--changed", "HEAD", "--db", db, "--verbose"])
+    assert proc.returncode == code
+    return code, brief, json.loads(proc.stdout)
+
+
+def test_default_output_folds_only_passed_rows_and_keeps_status():
+    """pass 행만 checks를 건수로 접고, 행 6개·status·reason·종료 코드는 --verbose와 같다."""
+    db = git_db()
+    edit(db / CALL / "type.md", CALL_CAUSE_SIG, "        must_event:\n          - {event: ims_dial_attempt}\n"
+                                                "        window_sec: 300\n")
+    code, brief, full = _default_vs_verbose(db)
+    assert code == 1
+    assert [r["id"] for r in brief["rules"]] == [r["id"] for r in full["rules"]] == [f"R{i}" for i in range(1, 7)]
+    for b, f in zip(brief["rules"], full["rules"]):
+        assert (b["status"], b["reason"], b["targets"]) == (f["status"], f["reason"], f["targets"])
+    b, f = _rows(brief), _rows(full)
+    assert b["R1"]["status"] == "pass" and "checks" not in b["R1"]
+    assert b["R1"]["checks_passed"] == len(f["R1"]["checks"]) and set(b["R1"]) <= {
+        "id", "status", "reason", "targets", "review_required", "checks_passed"}
+    assert b["R3"] == f["R3"] and b["R4"] == f["R4"]           # fail 행은 그대로
+    assert b["R5"]["status"] == f["R5"]["status"] == "skipped" and b["R6"]["blocking"] is False
+    assert "folded" in brief and "--verbose" in brief["folded"] and "folded" not in full
+    assert {k: v for k, v in brief.items() if k not in ("rules", "folded")} == {
+        k: v for k, v in full.items() if k != "rules"}
+
+
+def test_default_output_keeps_allow_cause_drafts_and_review_required_rows():
+    db = git_db()
+    new = db / "data/DATA-002-sim-rejected"
+    (new / "fixtures").mkdir(parents=True)
+    (new / "type.md").write_text(DATA_002, encoding="utf-8", newline="\n")
+    shutil.copyfile(SIM_LOG, new / "fixtures/DATA-002-01.log")
+    code, brief, full = _default_vs_verbose(db)
+    assert code == 1 and _rows(brief)["R3"] == _rows(full)["R3"]
+    check = next(c for c in _rows(brief)["R3"]["checks"] if c["target"] == "DATA-002-01")
+    assert check["allow_cause_drafts"]
+
+    db = git_db()
+    edit(db / DATA / "type.md", "tags: [data-evaluation]\n---", DATA_001_03 + "tags: [data-evaluation]\n---")
+    _, brief, full = _default_vs_verbose(db)
+    for rid in ("R1", "R2"):      # review_required skipped는 세부 전부
+        assert _rows(brief)[rid] == _rows(full)[rid] and _rows(brief)[rid]["review_required"] is True
+
+
+def test_brief_row_keeps_skipped_check_inside_pass_row():
+    from db_verify import brief_row
+    row = {"id": "R2", "status": "pass", "reason": "대상 2개 통과", "targets": ["A", "B"], "review_required": False,
+           "checks": [{"target": "A", "status": "pass", "reason": "ok", "review_required": False},
+                      {"target": "B", "status": "skipped", "reason": "시그니처 없음(pending)", "review_required": False}]}
+    out = brief_row(row)
+    assert out["checks_passed"] == 1 and out["checks"] == [row["checks"][1]]
+    assert brief_row({**row, "checks": [row["checks"][0]]}).get("checks") is None
+
+
+def test_default_output_keeps_needs_approval_row_in_full():
+    code, brief, full = _default_vs_verbose(_extractor_db())
+    assert code == 3
+    assert _rows(brief)["R5"] == _rows(full)["R5"] and _rows(brief)["R5"]["status"] == "needs-approval"
+    assert _rows(brief)["R5"]["impact"]
+    assert _rows(brief)["R4"]["status"] == "pass"
+
+
 if __name__ == "__main__":
     import pytest
 

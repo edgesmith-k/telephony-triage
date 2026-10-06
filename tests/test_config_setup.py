@@ -362,6 +362,17 @@ def _all_tests():
     return [(n, o) for n, o in sorted(globals().items()) if n.startswith("test_") and callable(o)]
 
 
+def test_show_keys_returns_only_requested_values_and_lists_missing():
+    env = Env()
+    env.init(env.base / "db")
+    full = env.json("config.py", ["show"])
+    out = env.json("config.py", ["show", "--keys", "work_dir,jira.tools,no.such"])
+    assert set(out) == {"user_config", "values", "missing"}
+    assert out["values"] == {"work_dir": full["effective"]["work_dir"], "jira.tools": full["effective"]["jira"]["tools"]}
+    assert out["missing"] == ["no.such"] and out["user_config"] == full["user_config"]
+    assert env.json("config.py", ["show"]) == full      # --keys 없으면 이전과 같다
+
+
 if __name__ == "__main__":
     failures = 0
     for name, func in _all_tests():

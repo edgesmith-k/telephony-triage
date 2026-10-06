@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """db_search.py — 이슈 DB 검색 (contracts.md §3.2, §renumber 참조, 03-issue-db.md §5.5).
 
-    db_search.py [--db <path>] <keyword|JIRA-KEY|ID> [--limit 20]
+    db_search.py [--db <path>] <keyword|JIRA-KEY|ID> [--limit 20] [--brief]
 
 읽기 전용이다. 질의 종류는 모양으로 정한다.
 
@@ -26,6 +26,9 @@
 `results[]` 항목은 `kind: type|cause|jira`와 유형·원인·해결책·수정 상태·Jira 요약이다. 원인 항목에는
 `code_refs[{ref, symbol, android_versions}]`(Step 5 resolve 입력)가 붙는다. 스킬·드라이버는 `--limit 3`으로 부른다.
 `links[]`는 `{from, to, via: merged-into|renumbered, commit?, date?}`. 결과가 없어도 종료 코드 0이다.
+`--brief`(opt-in, 기본 출력은 그대로): 항목에서 `path`·`chain`·`merged_from`·`code_refs`·`resolution_type`·`signatures_pending`·
+`type_title`·`category`와 빈 값·id와 같은 `current`, 최상위 `db`를 뺀다. `links[]`는 그대로. 후보를 훑어볼 때만 쓰고,
+`code_refs`나 병합 체인이 필요한 호출(Step 5 resolve 입력 등)에는 붙이지 않는다.
 """
 
 from __future__ import annotations
@@ -367,6 +370,27 @@ class Searcher:
         return [x for x in out if x[0] > 0]
 
 
+BRIEF_DROP = ("path", "chain", "merged_from", "code_refs", "resolution_type", "signatures_pending", "type_title",
+              "category")
+
+
+def brief(result: dict) -> dict:
+    """`--brief` 출력: 후보를 훑는 데 필요 없는 키와 빈 값을 뺀다 (`links`·`git_history`는 그대로)."""
+    def slim(entry: dict) -> dict:
+        out = {}
+        for key, value in entry.items():
+            if key in BRIEF_DROP or (key == "current" and value == entry.get("id")):
+                continue
+            if isinstance(value, dict):
+                value = {k: v for k, v in value.items() if v not in (None, "", [], {})}
+            if value in (None, "", [], {}):
+                continue
+            out[key] = value
+        return out
+    return {**{k: v for k, v in result.items() if k not in ("db", "results")},
+            "results": [slim(e) for e in result["results"]]}
+
+
 def run(args, defaults: dict) -> dict:
     try:
         root = dbpath.resolve(args.db, user_config_path=lambda: userconfig.issue_db_path(defaults))
@@ -390,6 +414,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("query")
     parser.add_argument("--db", default=None)
     parser.add_argument("--limit", type=int, default=20)
+    parser.add_argument("--brief", action="store_true", help="훑어보기용 요약 출력 (path·chain·code_refs·빈 값 등을 뺀다)")
     parser.add_argument("--json", action="store_true", help="JSON 출력 (항상 JSON)")
     parser.add_argument("--plugin-root", default=None)
     return parser
@@ -407,6 +432,8 @@ def main(argv: list[str] | None = None) -> int:
     except UsageError as exc:
         print(str(exc), file=sys.stderr)
         return USAGE
+    if args.brief:
+        result = brief(result)
     print(json.dumps(result, ensure_ascii=False, indent=1))
     return OK
 

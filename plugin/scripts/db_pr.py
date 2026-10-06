@@ -7,7 +7,7 @@
     db_pr.py snapshot --job <작업 키>
     db_pr.py cleanup (--dry-run | --yes) [--older-than [<days>]]
     db_pr.py preflight --branch <br> [--search <원인 ID|JIRA-KEY>] [--jira <KEY>]
-    db_pr.py stage <plan.json> --wt <dir> --branch <br> [--dry-run]
+    db_pr.py stage <plan.json> --wt <dir> --branch <br> [--dry-run] [--verbose]
     db_pr.py summary <wt>
     db_pr.py publish <wt> --branch <br> --lease <sha|new> --approved <hash>
     db_pr.py discard <wt>
@@ -33,7 +33,8 @@ summary 입력), `regress.json`, `pr.json`(summary가 만든 PR 제목·본문·
 → **사후 lint**(`db_lint --all --db <snapshot>`, 06-collaboration.md §6.3 ⑤): ID 중복·Jira 중복 등을 `post_lint`로
 보고만 한다(정리는 메인테이너 수동). **사용자 clone에서 checkout은 하지 않는다.** 스냅샷은 읽기 전용이다.
 
-`stage` 종료 코드: 하위 결과 집계(1이 하나라도 있으면 1, 없고 3이 있으면 3). drift면 적용 전에 1.
+`stage` stdout은 기본 요약(통과 단계·apply 세부를 접고 `detail`·`folded`를 붙인다), `--verbose`면 `stage.json`과 같은 전체.
+`stage.json`은 항상 전체다. `stage` 종료 코드: 하위 결과 집계(1이 하나라도 있으면 1, 없고 3이 있으면 3). drift면 적용 전에 1.
 `publish`는 승인 해시·커밋 부모·커밋 메시지·브랜치를 `state.json`과 대조하고(다르면 1), lease push 뒤
 PR을 만들거나(`gh pr create`) 고친다(`gh pr edit`).
 
@@ -659,6 +660,45 @@ def _stage_checks(run: checks_mod.Run) -> dict:
     return out
 
 
+def _brief_checks(checks: dict) -> dict:
+    """통과(code 0)한 단계만 접는다. 비0 단계·skipped는 그대로(실패 세부는 숨기지 않는다)."""
+    from db_verify import brief_rules
+    out: dict = {}
+    for name, step in checks.items():
+        res = step.get("result") if isinstance(step, dict) else None
+        if not isinstance(step, dict) or step.get("code") != OK or not isinstance(res, dict):
+            out[name] = step
+        elif name == "lint":
+            out[name] = {"code": OK, "errors": len(res.get("errors") or []), "warnings": len(res.get("warnings") or [])}
+        elif name == "mask":
+            out[name] = {"code": OK, "checked": res.get("checked")}
+        elif name == "regress":
+            out[name] = {"code": OK, "summary": res.get("summary")}
+        elif name == "verify":
+            out[name] = {"code": OK, "result": brief_rules(res)}
+        else:
+            out[name] = {"code": OK}
+    return out
+
+
+def _brief_stage(result: dict, job_dir: Path) -> dict:
+    """stage의 stdout 요약본. `stage.json`(`result` 그대로)에는 전체가 남는다. 통과한 부분만 접고 비성공은 그대로 둔다."""
+    out = dict(result)
+    if "config_check" in out and isinstance(out["config_check"], dict):
+        cc = out["config_check"]
+        out["config_check"] = {k: cc.get(k) for k in ("for", "writable", "push_allowed", "reasons") if k in cc}
+    applied = out.get("apply")
+    if isinstance(applied, dict) and not out.get("stopped"):
+        out["apply"] = {k: applied[k] for k in ("ids", "changed", "fixtures", "feedback", "pending_included", "rejected")
+                        if k in applied}
+    if isinstance(out.get("checks"), dict):
+        out["checks"] = _brief_checks(out["checks"])
+    out["detail"] = str(job_dir / STAGE)
+    if out != {**result, "detail": out["detail"]}:      # 실제로 접은 것이 있을 때만
+        out["folded"] = f"통과 항목 상세는 접힘 — 전체: 같은 명령에 --verbose 또는 {job_dir / STAGE}"
+    return out
+
+
 # -- summary -------------------------------------------------------------------------------
 
 
@@ -976,6 +1016,7 @@ def build_parser() -> argparse.ArgumentParser:
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--plugin-root", default=None)
     parser.add_argument("--json", action="store_true", help="JSON 출력 (항상 JSON)")
+    parser.add_argument("--verbose", action="store_true", default=argparse.SUPPRESS, help="stage 전체 출력")
     sub = parser.add_subparsers(dest="cmd", required=True)
     lock = sub.add_parser("lock")
     lock_sub = lock.add_subparsers(dest="lock_cmd", required=True)
@@ -1003,6 +1044,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--wt", required=True)
     p.add_argument("--branch", required=True)
     p.add_argument("--dry-run", action="store_true")
+    p.add_argument("--verbose", action="store_true", default=argparse.SUPPRESS, help="stdout도 stage.json과 같이 전체 (기본은 통과 항목을 접는다)")
     p = sub.add_parser("summary")
     p.add_argument("wt")
     p = sub.add_parser("publish")
@@ -1050,6 +1092,8 @@ def main(argv: list[str] | None = None) -> int:
             result = preflight(ctx, args.branch, args.search, args.jira)
         elif args.cmd == "stage":
             result, code = stage(ctx, Path(args.plan), Path(args.wt), args.branch, args.dry_run)
+            if not getattr(args, "verbose", False):
+                result = _brief_stage(result, _job_of(Path(args.wt), ctx)[0])
         elif args.cmd == "summary":
             result = summary(ctx, Path(args.wt))
         elif args.cmd == "publish":

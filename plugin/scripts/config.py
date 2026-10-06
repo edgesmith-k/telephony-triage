@@ -7,7 +7,8 @@
 ("사내 기본값 없음"). `site-defaults.example.yaml`은 읽지 않는다.
 
 서브커맨드
-  show                         해석된 설정 (우선순위 적용)
+  show [--keys a,b.c]          해석된 설정 (우선순위 적용). --keys면 그 키 값만
+                               `{user_config, values{키: 값}, missing[]}` (점 표기, 없는 키는 missing)
   site-defaults                site-defaults.yaml 내용
   init [--answers <json>]      config 생성 (setup 1). --answers가 없으면 stdin으로 항목별로 묻는다.
                                경로가 없으면 거부한다. 홈·work_dir은 권한 700.
@@ -354,8 +355,18 @@ def cmd_gh_status(args, defaults: dict) -> tuple[dict, int]:
     return result, (OK if ok else USAGE)
 
 
+_MISSING = object()
+
+
 def cmd_show(args, defaults: dict) -> dict:
     user = userconfig.load_user()
+    if args.keys:
+        effective = userconfig.merged(defaults, user or {})
+        keys = [k.strip() for k in args.keys.split(",") if k.strip()]
+        found = {k: userconfig.get(effective, k, _MISSING) for k in keys}
+        return {"user_config": str(userconfig.path()) if user is not None else None,
+                "values": {k: v for k, v in found.items() if v is not _MISSING},
+                "missing": [k for k, v in found.items() if v is _MISSING]}
     return {"plugin_root": str(_plugin_root(args)), "site_defaults": str(_plugin_root(args) / site_defaults.FILENAME),
             "user_config": str(userconfig.path()) if user is not None else None,
             "effective": userconfig.merged(defaults, user or {})}
@@ -368,7 +379,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="config.py", description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter, parents=[common])
     sub = parser.add_subparsers(dest="cmd", required=True)
-    sub.add_parser("show", parents=[common])
+    p = sub.add_parser("show", parents=[common])
+    p.add_argument("--keys", help="쉼표로 구분한 키(점 표기)만 보인다 (예: work_dir,jira.tools)")
     sub.add_parser("site-defaults", parents=[common])
     p = sub.add_parser("init", parents=[common])
     p.add_argument("--answers")

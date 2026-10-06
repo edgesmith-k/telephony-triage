@@ -15,7 +15,7 @@ SKILL.md의 "실행 규칙"(스크립트 호출, `--db` 명시, 종료 코드, �
 
 ## 1. 사전 점검
 
-- `config.py show`(없으면 setup 안내) → `jira_fields.py check-key <KEY>`(맞지 않으면 다시 묻는다) →
+- `config.py show --keys work_dir,jira.tools`(없으면 setup 안내) → `jira_fields.py check-key <KEY>`(맞지 않으면 다시 묻는다) →
   `db_pr lock acquire <KEY> --command record`(보유 중이면 `write-flow.md` 1번) →
   `db_pr cleanup --dry-run`.
 - `WD/<KEY>/plan.json`이 있으면: `source: record`면 이어서/새로 시작을 묻고, 다른 `source`면 "새로 시작(덮어씀)"만.
@@ -34,14 +34,14 @@ MCP `jira.tools.get_issue`(매핑이 없으면 추측하지 말고 setup 안내)
 ## 3. 중복 확인
 
 `db_pr preflight --branch issue/<KEY> --search <KEY> --jira <KEY>`.
-- `jira_in_main` → **중단하고** 기존 분류(`db_search.py <KEY> --db SNAP`)를 보여준 뒤 유지(기록하지 않음, lock 해제) /
+- `jira_in_main` → **중단하고** 기존 분류(`db_search.py <KEY> --db SNAP --brief`)를 보여준 뒤 유지(기록하지 않음, lock 해제) /
   재분류(`reclassify {jira, from, to}`)를 묻는다. 중복 파일을 만들지 않는다.
 - 열린 PR → 링크를 보여주고 계속할지 묻는다(계속해도 같은 Jira 파일을 두 PR이 만들게 된다는 점을 알린다).
 
 ## 4. 분류 정하기
 
 - 옵션이 있으면 그대로: `--cause` → `append`, `--new-cause <유형>` → `new-cause`, `--new-type <cat>` → `new-type`,
-  `--unresolved <유형>` → `unresolved`. ID가 스냅샷에 있고 `active`인지 확인한다(`db_search.py <ID> --db SNAP`).
+  `--unresolved <유형>` → `unresolved`. ID가 스냅샷에 있고 `active`인지 확인한다(`db_search.py <ID> --db SNAP --brief`).
 - **옵션이 없으면 대화형**: 증상과 원인을 한두 문장으로 받아 `db_search.py "<증상 문장 또는 키워드>" --db SNAP`와
   `db_add.py similar "<증상 제목>" --db SNAP`(유사 유형 상위 3개)로 후보를 보여주고 고르게 한다:
   기존 원인 / 기존 유형의 새 원인 / 새 유형 / 원인 미확정.
@@ -91,7 +91,7 @@ MCP `jira.tools.get_issue`(매핑이 없으면 추측하지 말고 setup 안내)
 
 ## 7. 초안 검증
 
-새 원인·유형 또는 시그니처·파서 규칙 변경이 있으면 `db_verify.py rules --plan WD/<KEY>/plan.json --draft WD/<KEY>/draft`(draft는 도구가 만들고 지운다 — 미리 만들지 않는다)로 검증하고
+새 원인·유형 또는 시그니처·파서 규칙 변경이 있으면 `db_verify.py rules --plan WD/<KEY>/plan.json --draft WD/<KEY>/draft --verbose`(draft는 도구가 만들고 지운다 — 미리 만들지 않는다)로 검증하고
 결과표(실행/건너뜀과 사유)를 보여준다. `fail`이면 고친다. 다른 유형의 양성 fixture에서 C=1이면 "시그니처 좁히기 / `allow-cause`"를 묻는다.
 
 어떤 검증이 도는지(`db_pr stage`가 모두 돌린다):

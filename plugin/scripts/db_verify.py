@@ -2,7 +2,7 @@
 """db_verify.py — 규칙·해결책·코드 수정 검증 (05-verification.md §5.12, contracts.md §3.2 `db_verify.py` 세부).
 
     db_verify.py rules (--plan <plan.json> [--draft <dir>] | --changed <ref> | --staged)
-                       [--extra <logcat...>] [--extra-normal <logcat...>] [--db <path>]
+                       [--extra <logcat...>] [--extra-normal <logcat...>] [--db <path>] [--verbose]
     db_verify.py resolution --cause <ID> <logcat...> [--plan <plan.json> --draft <dir>] [--db <path>]
     db_verify.py fix --cause <ID> <logcat...> [--build <빌드>] [--plan <plan.json> --draft <dir>] [--db <path>]
 
@@ -34,6 +34,10 @@
   항목 하나에 대상이 여럿이면 `fail` > 리뷰 필요한 `skipped` > `pass` > 그 밖의 `skipped` 순으로 모은다(`checks[]`에 대상별).
 - 종료 코드: R1~R4에 `fail`이 있으면 1, 없고 R5가 `needs-approval`이면 3, 아니면 0. 개발·테스트용으로 환경변수
   `TT_FORCE_VERIFY_EXIT=3`이면 판정 뒤 3을 낸다(실패가 있으면 1).
+
+- 출력: 기본은 R1~R6 행 6개를 모두 내되 **pass 행만** 세부(`checks[]`·`impact`·`rules` 등)를 접는다(`checks_passed: n`,
+  최상위 `folded` 한 줄). fail·skipped·needs-approval·`review_required` 행은 세부 전부(`allow_cause_drafts` 포함).
+  `--verbose`면 전부. 종료 코드·status는 같다. `resolution`·`fix`가 끼우는 `rules`도 같다.
 
 `resolution` — 해결책 검증 판정 (`passed | failed | unknown`, 05-verification.md §5.12 (1))
 - failed: 원인 시그니처 충족. passed: 원인 불충족이고 (a) recovery 시그니처가 있으면 충족, (b) 없으면 증상 불충족이고
@@ -897,12 +901,43 @@ def judge(args, defaults: dict, plugin_root: Path) -> tuple[dict, int]:
 
 # -- CLI -----------------------------------------------------------------------------------
 
+_ROW_KEYS = ("id", "status", "reason", "targets", "review_required", "blocking")
+FOLDED = "통과한 행의 세부(checks 등)는 접힘 — 전체: 같은 명령에 --verbose"
+
+
+def brief_row(row: dict) -> dict:
+    """통과한(pass, review_required 아님) 행만 접는다: 나머지 세부 키를 빼고 `checks`는 통과 항목을 건수
+    (`checks_passed`)로, pass가 아닌 항목(pending skipped 등)은 `checks`로 남긴다. 비성공 행은 그대로."""
+    if row.get("status") != "pass" or row.get("review_required"):
+        return row
+    out = {k: row[k] for k in _ROW_KEYS if k in row}
+    if "checks" in row:
+        out["checks_passed"] = sum(1 for c in row["checks"] if c.get("status") == "pass")
+        rest = [c for c in row["checks"] if c.get("status") != "pass"]
+        if rest:
+            out["checks"] = rest
+    return out
+
+
+def brief_rules(result: dict) -> dict:
+    """`rules` 결과(`{"rules": [R1~R6 행], ...}`)의 기본 출력용 요약본. 행 6개·status·reason·종료 코드는 그대로,
+    접힌 행이 있으면 `folded` 한 줄을 붙인다. 입력은 바꾸지 않는다."""
+    rows = result.get("rules")
+    if not isinstance(rows, list):
+        return result
+    slim = [brief_row(r) for r in rows]
+    if all(a is b for a, b in zip(slim, rows)):
+        return result
+    return {**result, "rules": slim, "folded": FOLDED}
+
 
 def build_parser() -> argparse.ArgumentParser:
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--db", default=argparse.SUPPRESS)
     common.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="JSON 출력 (항상 JSON)")
     common.add_argument("--plugin-root", default=argparse.SUPPRESS)
+    common.add_argument("--verbose", action="store_true", default=argparse.SUPPRESS,
+                        help="통과한 R1~R6 행의 세부까지 전부 (기본은 접는다)")
     parser = argparse.ArgumentParser(prog="db_verify.py", description=__doc__, parents=[common],
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -951,6 +986,11 @@ def main(argv: list[str] | None = None) -> int:
     for item in rows or []:
         if item["status"] in ("fail", "needs-approval"):
             print(f"{item['id']} {item['status']}: {item['reason']}", file=sys.stderr)
+    if not getattr(args, "verbose", False):
+        if args.cmd == "rules":
+            result = brief_rules(result)
+        elif isinstance(result.get("rules"), dict):     # resolution·fix --plan --draft가 끼운 rules
+            result = {**result, "rules": brief_rules(result["rules"])}
     print(json.dumps(result, ensure_ascii=False, indent=1))
     return code
 

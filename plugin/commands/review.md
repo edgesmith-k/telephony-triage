@@ -14,7 +14,7 @@ argument-hint: "[category]"
    (CODEOWNERS의 카테고리별 오너)를 보여주고, 사용자가 오너인 카테고리를 **묻는다**(전체를 볼 수도 있다).
    종료 코드 2(없는 카테고리 등)면 메시지를 보여주고 다시 묻는다.
 2. **리포트 만들기** — `db_review.py <category> --out <work_dir>/review-<category>-<YYYY-MM>/report.md`
-   (`work_dir`는 `config.py show`의 값, `<YYYY-MM>`은 오늘). `--db`는 주지 않는다(기본값: cwd의 이슈 DB 또는 config의
+   (`work_dir`는 `config.py show --keys work_dir`의 값, `<YYYY-MM>`은 오늘). `--db`는 주지 않는다(기본값: cwd의 이슈 DB 또는 config의
    `issue_db.path`). 리포트 머리의 이슈 DB 경로·커밋을 보여주고, 최신 main 기준이 아니면 먼저 `sync`를 권한다.
 3. **보여주기** — 요약 표(항목별 건수)와 건수가 있는 항목의 목록·조치를 보여준다. "기간 확인 불가"(git 이력 없음)가
    있으면 그렇다고 밝힌다. 리포트 파일 경로를 알려준다.

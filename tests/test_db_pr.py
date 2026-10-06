@@ -814,6 +814,121 @@ def test_apply_masks_failed_step_and_writes_it_before_note():
     assert "failed_step" not in yaml.safe_load((db2 / DATA_DIR / "jira" / "MOCK-7001.yaml").read_text(encoding="utf-8"))
 
 
+# -- 출력 다이어트: stdout만 줄고 stage.json은 전체 -----------------------------------------------------
+
+
+def _stage_file(ws: Workspace, job: str) -> dict:
+    return json.loads((ws.job_dir(job) / "stage.json").read_text(encoding="utf-8"))
+
+
+def _assert_stage_json_is_full(ws: Workspace, job: str, branch: str, expect: int, env: dict | None = None,
+                               dry_run: bool = False) -> tuple[dict, dict]:
+    """기본 stdout을 받고 stage.json이 `--verbose` stdout(변경 전 출력)과 같은지 본다. `(기본 stdout, 전체)`."""
+    brief = ws.stage(job, branch, expect=expect, env=env, dry_run=dry_run)
+    on_disk = _stage_file(ws, job)
+    args = ["stage", ws.job_dir(job) / "plan.json", "--wt", ws.wt(job), "--branch", branch, "--verbose"]
+    full = ws.db_pr(*(args + (["--dry-run"] if dry_run else [])), expect=expect, env=env)
+    for doc in (on_disk, _stage_file(ws, job)):
+        assert {k: v for k, v in doc.items() if k != "worktree"} == {k: v for k, v in full.items() if k != "worktree"}
+    assert "folded" not in full and "detail" not in full, "--verbose는 stage.json과 같은 전체"
+    assert brief["detail"] == str(ws.job_dir(job) / "stage.json")
+    assert ("folded" in brief) == (full.get("stopped") != "drift")
+    # 리터럴: 파일은 요약 전 모양 (folded·checks_passed 없음, apply.operations·regress results 있음)
+    assert "folded" not in on_disk and "checks_passed" not in json.dumps(on_disk)
+    if "apply" in on_disk:
+        assert "operations" in on_disk["apply"]
+        assert on_disk["checks"]["regress"]["result"]["results"]
+        for row in on_disk["checks"]["verify"]["result"]["rules"]:
+            assert row["id"] in ("R4", "R5", "R6") or "checks" in row
+    assert brief["result"] == full["result"] if "result" in full else brief["stopped"] == full["stopped"]
+    return brief, full
+
+
+def test_stage_json_stays_full_on_success_and_default_stdout_is_summary():
+    ws = Workspace()
+    ws.plan("MOCK-7002", "p7-analyze-new-cause.plan.json")
+    ws.put("MOCK-7002", "fixtures/cut-1.log", SIM_LOG)
+    ws.acquire("MOCK-7002")
+    brief, full = _assert_stage_json_is_full(ws, "MOCK-7002", "issue/MOCK-7002", 0)
+    disk = _stage_file(ws, "MOCK-7002")
+    # 파일: 요약 전의 모양 그대로 (operations·verify 행 checks·regress results가 있다)
+    assert "operations" in disk["apply"] and "db" in disk["apply"]
+    rows = {r["id"]: r for r in disk["checks"]["verify"]["result"]["rules"]}
+    assert rows["R1"]["checks"] and disk["checks"]["regress"]["result"]["results"]
+    assert disk["config_check"].keys() > {"for", "writable", "push_allowed", "reasons"}
+    # stdout: 요약
+    assert {"job", "wt", "branch", "tool_branch", "base_sha", "plan", "dry_run", "source", "drift", "ids_at_base",
+            "worktree", "pending_sources", "result", "detail", "folded"} <= set(brief)
+    assert set(brief["config_check"]) == {"for", "writable", "push_allowed", "reasons"}
+    assert set(brief["apply"]) <= {"ids", "changed", "fixtures", "feedback", "pending_included", "rejected"}
+    assert brief["apply"]["ids"] == [{"temp_id": "NEW-CAUSE-1", "id": "DATA-001-03"}]
+    checks = brief["checks"]
+    assert checks["build"] == checks["ids"] == {"code": 0}
+    assert checks["lint"] == {"code": 0, "errors": 0, "warnings": 0} and checks["mask"]["code"] == 0
+    assert checks["regress"]["summary"]["failed"] == 0 and "result" not in checks["regress"]
+    assert checks["verify"]["code"] == 0
+    assert all("checks" not in r for r in checks["verify"]["result"]["rules"] if r["status"] == "pass")
+    # 이어지는 summary 화면은 같다
+    assert ws.db_pr("summary", ws.wt("MOCK-7002"))["approved_hash"]
+    ws.db_pr("discard", ws.wt("MOCK-7002"))
+
+
+def test_stage_json_stays_full_on_failed_check_drift_and_needs_approval():
+    ws = Workspace()
+    job = "review-data-2026-10"
+    ws.plan(job, _review_plan([{"op": "update-signature", "owner": "DATA-001-02", "kind": "cause",
+                                "sig_id": "roaming-disabled",
+                                "signature": {"id": "roaming-disabled", "window_sec": 60,
+                                              "must_event": [{"event": "data_evaluation_rejected"}]}}],
+                              "review/data-2026-10"))
+    ws.acquire(job)
+    brief, full = _assert_stage_json_is_full(ws, job, "review/data-2026-10", 1)
+    assert brief["result"] == "check-failed"
+    assert brief["checks"]["verify"] == full["checks"]["verify"] and brief["checks"]["verify"]["code"] == 1   # 비0 단계는 전체
+    assert any(r["checks"] for r in full["checks"]["verify"]["result"]["rules"] if r["id"] == "R3")
+    ws.db_pr("discard", ws.wt(job))
+
+    ws.plan(job, _review_plan([{"op": "set-resolution", "cause": "DATA-001-02", "resolution": "계획 값"}],
+                              "review/data-2026-10"))
+    ws.push_main(lambda c: _edit(c / DATA_DIR / "type.md", "resolution: 데이터 로밍 설정을 켠다",
+                                 "resolution: 데이터 로밍을 켠다 (다른 PR)"))
+    ws.acquire(job)
+    brief, full = _assert_stage_json_is_full(ws, job, "review/data-2026-10", 1)
+    assert brief["stopped"] == "drift" and brief["drift"] == full["drift"] and brief["next"] == full["next"]
+    ws.db_pr("discard", ws.wt(job))
+
+    ws.plan("MOCK-7001", "p7-analyze-append.plan.json")
+    ws.acquire("MOCK-7001")
+    brief, full = _assert_stage_json_is_full(ws, "MOCK-7001", "issue/MOCK-7001", 3, env={"TT_FORCE_VERIFY_EXIT": "3"})
+    assert brief["result"] == "needs-approval" and brief["checks"]["verify"] == full["checks"]["verify"]
+    assert brief["checks"]["verify"]["code"] == 3
+    assert ws.db_pr("summary", ws.wt("MOCK-7001"))["approval_needed"]
+    ws.db_pr("discard", ws.wt("MOCK-7001"))
+
+
+def test_stage_and_verify_stdout_halved():
+    """완료 기준: MOCK-7002 new-cause 계획의 `verify --plan --draft` + `stage --dry-run` stdout 합이 기본에서 절반 이하."""
+    ws = Workspace()
+    ws.plan("MOCK-7002", "p7-analyze-new-cause.plan.json")
+    ws.put("MOCK-7002", "fixtures/cut-1.log", SIM_LOG)
+    ws.acquire("MOCK-7002")
+    plan = ws.job_dir("MOCK-7002") / "plan.json"
+    sizes = {}
+    for label, extra in (("default", []), ("verbose", ["--verbose"])):
+        draft = ws.job_dir("MOCK-7002") / "draft"
+        verify = ws.run("db_verify.py", ["rules", "--plan", plan, "--draft", draft, "--db", ws.clone, *extra])
+        assert verify.returncode == 0, verify.stderr[-2000:]
+        stage = ws.run("db_pr.py", ["stage", plan, "--wt", ws.wt("MOCK-7002"), "--branch", "issue/MOCK-7002",
+                                    "--dry-run", *extra])
+        assert stage.returncode == 0, stage.stderr[-2000:]
+        sizes[label] = (len(verify.stdout.encode()), len(stage.stdout.encode()))
+    d, v = sum(sizes["default"]), sum(sizes["verbose"])
+    print(f"\nverify+stage stdout bytes: verbose={v} (verify {sizes['verbose'][0]} + stage {sizes['verbose'][1]}) "
+          f"default={d} (verify {sizes['default'][0]} + stage {sizes['default'][1]})")
+    assert d * 2 <= v, sizes
+    ws.db_pr("discard", ws.wt("MOCK-7002"))
+
+
 if __name__ == "__main__":
     import pytest
 

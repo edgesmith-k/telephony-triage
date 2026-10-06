@@ -697,3 +697,7 @@
 ## W0 토큰 측정 (2026-10-06)
 
 `run.py`가 stream-json result의 `usage`·`modelUsage`를 `execution.json` `tokens`(합계는 modelUsage 네 값 합, 빠진 값은 null)와 `model`·`init_model`로 남긴다. `grade.py`는 eval별 토큰 표·`tokens.json`을 내고, `--token-budget`이 추적 파일 `tests/skill_evals/token_baseline.json` × 여유율(`--token-margin`, 기본 1.3)로 상한을 판정한다(초과·미기록 종료 1, 플래그 없으면 채점 결과·종료 코드 불변). `--write-baseline`으로 기준선을 쓴다. 실측(Sonnet 5.5, plugin): eval 1 3회 680,589~743,146(폭 9%), eval 2 1,329,388, eval 45 209,391, 비용 $2.09. 상위 usage와 modelUsage 차이는 보조 Haiku 호출(약 950토큰). 테스트 30→47. 수동 채점·eval 2·45 편차는 하지 않았다.
+
+## W1 출력 다이어트 (2026-10-06)
+
+stdout만 줄이고 `stage.json`·regress 결과 파일은 전체 그대로 둔다(HEAD와 4경로 바이트 비교 동일). `db_pr stage` 기본 stdout은 통과 단계 요약 + `detail`(stage.json 경로)·`folded` 안내, 비0 단계·drift·apply 실패는 전체, `--verbose`로 이전 출력. `db_verify rules`는 R1~R6 행을 모두 내고 pass 행 안의 pass 항목만 `checks_passed`로 접는다(skipped·review_required·fail·needs-approval 전체, 종료 코드·status·`allow_cause_drafts` 불변). opt-in `db_search --brief`, `config.py show --keys`. 스킬·커맨드는 호출 한 줄씩. 샘플(MOCK-7002) verify+stage stdout 15,644→5,214B. eval(Sonnet 5.5, 변경 전→후): 1 −4%, 2 −33%(첫 실행 +6%), 31 −34%, 42 −6%, 53 −15%, 54 −5%. eval 18은 변경 후 2회 모두 변경 전 3회 최댓값×1.1을 넘어 record 흐름의 verify 호출(`record.md` L94)만 `--verbose`로 되돌렸고, 되돌린 뒤 1,011k(변경 전 범위). 31·42는 되돌린 뒤 재측정하지 않았다. 관찰(W1과 별개): eval 18 한 실행에서 `cat logs/e018.log` 통독을 guard가 막지 않았다. 전체 테스트 765 통과.

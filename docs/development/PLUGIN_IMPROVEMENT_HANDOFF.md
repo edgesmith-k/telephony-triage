@@ -118,7 +118,7 @@ Remaining (이 문서 원래 번호): ~~R7 provenance~~(line_ref·event_index·c
 > 2026-10-01 갱신. 순서의 단일 원본은 `DRAFT_NOTES.md` "활성 트랙과 순서" 표다. I0~I2는 리뷰 문서의 **RF-0**에 흡수됐고, 외부 리뷰가 찾은 R7~R11이 추가됐다(리뷰 문서 머리 "외부 리뷰 결과").
 
 1. **Phase 13** (I5) ✅ 10/03 완료(사용자 결정). 결과는 이력 파일 "Phase 13 행동 평가 결과". 남은 실패 4건은 RF-1 후속(아래 2번)과 함께, 트리거는 사내 S-2.
-2. **RF-1 후속**(Phase 13 결과에 따라): ~~R7 provenance(`line_ref`)~~(2026-10-05 완료; `common/events.py`는 `line_ref`를 포함해 남음), `config.py show --keys`, R9 verify-fix 예외·R11 지식 단정, ~~`CLAUDE.md` ≤4KB~~(2026-10-05 완료, §12 → `docs/design/12-principles.md`).
+2. **RF-1 후속**(Phase 13 결과에 따라): ~~R7 provenance(`line_ref`)~~(2026-10-05 완료; `common/events.py`는 `line_ref`를 포함해 남음), ~~`config.py show --keys`~~(2026-10-06 완료), R9 verify-fix 예외·R11 지식 단정, ~~`CLAUDE.md` ≤4KB~~(2026-10-05 완료, §12 → `docs/design/12-principles.md`).
 3. **RF-2**: Phase 13 뒤 반입 staging·crash 복구·경계 검사·사외 CI. 이번 apply 예외 rollback을 전체 트랜잭션 내구성으로 간주하지 않는다.
 
 ## Regression Requirements
