@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import subprocess
 import sys
 from collections import defaultdict
 from pathlib import Path
@@ -36,9 +37,21 @@ TEXT_SUFFIXES = {
 }
 
 
+def candidates(root: Path) -> list[Path]:
+    """git이 추적·비추적(무시 제외)으로 보는 파일. git이 없으면(반입 묶음 등) rglob."""
+    try:
+        out = subprocess.run(
+            ["git", "-C", str(root), "ls-files", "-co", "--exclude-standard", "-z"],
+            capture_output=True, check=True,
+        ).stdout.decode("utf-8", errors="replace")
+        return sorted(root / p for p in out.split(chr(0)) if p)
+    except (OSError, subprocess.CalledProcessError):
+        return sorted(root.rglob("*"))
+
+
 def scan(root: Path) -> dict[str, list[dict]]:
     found: dict[str, list[dict]] = defaultdict(list)
-    for path in sorted(root.rglob("*")):
+    for path in candidates(root):
         if not path.is_file():
             continue
         if any(part in SKIP_DIRS for part in path.relative_to(root).parts):

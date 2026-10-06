@@ -165,7 +165,7 @@ git add -A && git commit -m "사외 초안 반입: import-v1"     # .draft-manif
 1. CLAUDE.md와 docs/design/12-principles.md (원칙)   2. DRAFT_NOTES.md (사외 상태 파일 6KB)   3. docs/design/15-local-draft.md §15.5의 **해당 단계 행**과 그 행의 "읽을 것"
 4. REVIEW-OPEN.md (사내 정보가 있어야 판단할 항목)   5. 14-site.md §14.2 표 (S1~S22 placeholder)
 읽지 않는다: docs/history/ 전체, 11-phases.md, docs/design/의 다른 파일(단계 행이 지정한 절 외), ARCHITECTURE_REVIEW·HANDOFF(개선 작업은 사외 트랙).
-TODO(SITE) 57곳은 문서가 아니라 `python3 tools/list_site_todos.py`로 뽑는다.
+TODO(SITE) 목록은 문서가 아니라 `python3 tools/list_site_todos.py`로 뽑는다.
 
 [지킬 것]
 - 사내 값·코드는 SITE_PATHS에 적힌 경로에만 (SITE_PROFILE.md, docs/site/, plugin/site-defaults.yaml, parser_backends/site/, adapters/site_*, tests/golden/, tests/site/).
