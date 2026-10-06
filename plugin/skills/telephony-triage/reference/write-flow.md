@@ -92,6 +92,8 @@ fixture 번호, 피드백, pending 포함 여부는 계획 `source`로) → `db_
 | 구분 | 파일 | 변경 |
 ### ID 할당
 NEW-CAUSE-1 → DATA-001-04   (적용 시점 main 기준. summary `ids[].expected_at_base`(계획 `base_sha` 당시 번호)가 다르면 '계획 당시 DATA-001-03 → DATA-001-04 (main에 먼저 머지된 원인)'으로 적는다. 이전 적용(PR 제목·계획 pr 기록)과 다르면 'DATA-001-03 → DATA-001-04 재할당'.)
+### 수정 상태 변경 (summary fix_changes, 있을 때 — 각 line을 글자 그대로 한 줄씩)
+CALL-001-01: fixed → open (이전 ref MOCKCL-12345·fixed_in MOCKB77_U2_20260920 → verification_history 보존, 결과 reverted)
 ### drift 결정 내역 (있을 때, 계획 pr_notes의 drift 줄)
 ### 추가 설명 (summary notes — 계획 pr_notes 포함)
 ### README 반영 미리보기

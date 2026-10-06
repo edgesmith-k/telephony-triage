@@ -222,7 +222,7 @@ update-signature는 같은 sig_id 변경, 파서 규칙은 키 추가/기능 필
 | negative | `<유형 ID>.none.log`, `.none.<n≥2>.log` | 이슈 DB 전체에서 S=1 유형 없음 |
 | extra | `<원인 ID>.extra.<n≥1>.log` | 양성과 같음 |
 
-- `.expect.yaml`(같은 이름): `expect_top`, `expect_not`, `also_allowed`, `occurred_at`, `origin: synthetic`.
+- `.expect.yaml`(같은 이름, **선택** — 없으면 위 표 기본 기대값으로 회귀에 든다. 기본과 다를 때만 둔다): `expect_top`, `expect_not`, `also_allowed`, `occurred_at`, `origin: synthetic`.
 - `signatures_pending` 원인의 양성 fixture는 `"<유형 ID>:unresolved"` 기대값으로 회귀에 든다.
 - `also_allowed`는 **같은 로그에 실제로 두 현상이 있을 때만** 쓴다(예: 데이터 fixture에 등록 거절도 실제로 있음).
 - 경로는 유형 디렉토리 기준 상대 경로(`fixtures/DATA-001-03.fixed.BUILD_X.log`)로 참조한다.

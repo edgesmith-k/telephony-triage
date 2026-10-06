@@ -43,19 +43,19 @@ description: Android Telephony 이슈(data·call·network·sim·sms·ims)를 Jir
 
 ### 2. 결과 읽기
 
-- `mode: analysis-only`("분석만", "기록하지 마") → Step 6(5-1·5-2 포함)까지, 계획·Step 7·8 없음(lock 해제됨).
-  기록은 플래그 없이 재실행, 추가 로그는 `--more-logs`. `reuse`(재사용·1위 변화)는 report.md 줄대로 알린다.
-- `mode: read-only` → Step 7 계획 저장까지만이라고 미리 알리고 `read_only_hint`(조치), `snapshot.pull_skipped_reason`, `post_lint.errors`("메인테이너 정리"), `notes`, `warnings`, `plan.pr_number`(→ `sync-pr`)도 알린다.
+- `mode: analysis-only`("분석만", "기록하지 마") → Step 6(5-1·5-2 포함)까지, 계획·Step 7·8 없음(lock 해제됨). 추가 로그는 `--more-logs`.
+- `mode: read-only` → Step 7 계획 저장까지만이라고 미리 알리고 `snapshot.pull_skipped_reason`, `post_lint.errors`("메인테이너 정리"), `notes`, `warnings`, `plan.pr_number`(→ `sync-pr`)도 알린다.
 - 로그 범위·`C: 0`·후보 없음 절은 report.md 문구대로("로그 범위 밖"은 "매칭 없음"과 다르다). `phones`≠`jira.sim_slot`이면 경고.
 - Step 5: `code.resolved` 파일에서 근거 문구의 출력 위치·분기 조건을 찾는다(`grep -n`). `code.moved`는
   "경로 변경"으로 알리고 Step 7에서 `add-code-ref`를 묻는다.
 - Step 5-1 `analyzer`(값이 있으면)·5-2 `explore`(후보 없음·원인 미확인만): `--no-…`·`never`면 생략, `--analyzer`·`--explore`·`always`면
-  실행, 아니면 토큰 추가를 알리고 묻는다(답 전 실행·`timeline.md` 읽기 금지). 5-1은 `analyzer.skill`을 Skill로 부른다. 입력은 `files.events`·로그 경로·상위 후보·마스킹 요약,
-  결과는 `S/mask_pii.py` 후 "심층 분석" 절에만, 다른 원인 의견은 Step 7 선택지로. 5-2는 `explore.md`대로 `JOB/timeline.md`만 읽고 "탐색 분석" 칸에만. 점수와 무관.
+  실행, 아니면 토큰 추가를 알리고 묻는다(답 전 실행 금지). 5-1은 `analyzer.skill`을 Skill로 부른다(입력 `files.events`·로그 경로·상위 후보·마스킹 요약).
+  결과는 `S/mask_pii.py` 후 report.md `심층 분석 (…)` 줄(결과·분석 스킬 의견)에, 다른 원인 의견은 Step 7 선택지로. 5-2는 실행이 정해진 뒤에만
+  `S/triage.py explore <KEY>`를 부르고 그것이 만든 `JOB/timeline.md`만 `explore.md`대로 읽는다. 점수와 무관.
 
 ### Step 6. 리포트
 
-`JOB/report.md`의 `TODO(LLM)` 칸만 채워 보인다. 결정적 칸(후보·점수·근거·실패 스텝·범위·시계·오류 이벤트·해결책·수정 상태)은 그대로 두고 요약하며 빼지 않는다.
+`JOB/report.md`의 `TODO(LLM)` 칸만 채워 보인다. 결정적 칸은 그대로 두고, `analysis.json` `must_show` 줄은 **글자 그대로** 답에 넣는다(요약·생략 금지).
 원인은 **로그로 확인/코드로 추정/placeholder 규칙 결과**를 나누고 반대 근거와 다음 확인을 적는다.
 `fix_judgement`의 `regression-suspected`·`fix-insufficient`는 Step 7에서 묻고, `undetermined`는 SW·`fixed_in`을 나란히.
 
