@@ -43,7 +43,7 @@
 | ◐ W | **개선 트랙** — `docs/development/IMPROVEMENT_PLAN_2026-10.md` §7 진행 표 | **W0~W11 ✅**(W10·W11 10/07, 브랜치 w10/module-split). 다음 W12(문서 정리). W11 보류(사용자 결정): 파생 이벤트 `msg` 복사 제거(스냅샷 재생성 승인), Windows 보정 잔존물 삭제, db-authoring 스키마 요약 확장(W 끝 eval). Windows에서 테스트는 `PYTHONUTF8=1`, 파일은 LF로 쓴다(`test_repo_text_files_use_lf`). 중간 판단은 Fable 결정 에이전트에게 묻고 진행(10/06 사용자 지정, 개선안 §8-9). 판정 관례: 변경 전·후 eval을 같은 모델로, 1순위 동작·형식 오류 재시도, 2순위 토큰 W0 폭(출력 9.5%·비용 15.7%), 폭 밖이면 trace(호출 수)로 원인 확인. W2 사내 잔여: 운영 DB 스키마 `pr.ids` PR. 확인 필요: guard가 `cat`·`sed` 로그 원문 읽기를 안 막음(eval 18·40·46·W6 3·31, `99-deferred §E`). "개선안 진행"으로 계속 |
 | ◐ Z | 마무리: main 병합(PR #5) → `make_bundle.py` 실행(종료 3) → 새 묶음·sha256 → 사용자 태그 → 2 | 10/06 브랜치 3f1fba9에서 §15.4 9항목 통과(테스트 738·regress 20·offline_eval·eval 54 준비·경계·스키마·뼈대·TODO 73). PR 병합 뒤 main에서 묶음 재생성 |
 
-RF-5(oFono)·RF-6(커넥터)·RF-8(자동화)은 사내 환경을 알아야 의미가 있어 반입 뒤. RF-9·웹 UI(보류)는 그 뒤 후보. RF 상세는 `docs/development/ARCHITECTURE_REVIEW_2026-10.md` §U.
+RF-5(oFono)·RF-6(커넥터)·RF-8(자동화)은 사내 환경을 알아야 의미가 있어 반입 뒤. RF-9·웹 UI(보류)는 그 뒤 후보. RF 상세는 `docs/development/ARCHITECTURE_REVIEW_2026-10.md`(색인)·`docs/history/architecture-review-2026-10.md` §U.
 
 ## 사외에서는 못 하는 것 (사내 S-1~S-5)
 
