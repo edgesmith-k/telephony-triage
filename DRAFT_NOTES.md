@@ -37,7 +37,8 @@
 | ✅ S1~S6·I1~I5·X | 반입 전 보강(실패 스텝 표기·리뷰 수정·비밀값 패턴·events·platforms·platform 설정·YAML C 로더·db_summary·RF-7·증상 검색) | 10/05, `CHANGES.md` |
 | ✅ 3C | 행동 eval 52개(Sonnet 36/52, 안전 위반 0) | 10/05, `history/eval-3c` |
 | ✅ 3D | 3C 발견 수정, 재실행 18/26 | 10/05, `history/eval-3d` |
-| ☐ 3E | 결정적 줄 구조화(must_show·explore 분리·guard 10) — Sonnet 재실행 대기 | 10/06 |
+| ✅ 3E | 결정적 줄 구조화·guard 10 — 행동 16/17, 안전 0 | 10/06, `history/eval-3e` |
+| ✅ 3F | 채점 오판정·guard grep 통독 차단 | 10/06, `CHANGES.md` |
 | ☐ Z | 마무리: main 병합 → `15 §15.4` 재실행 → 새 묶음·sha256 → 사용자 태그 → 2 | |
 
 RF-5(oFono)·RF-6(커넥터)·RF-8(자동화)은 사내 환경을 알아야 의미가 있어 반입 뒤. RF-9·웹 UI(보류)는 그 뒤 후보. RF 상세는 `docs/development/ARCHITECTURE_REVIEW_2026-10.md` §U.

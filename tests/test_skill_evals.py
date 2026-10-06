@@ -389,3 +389,43 @@ def test_e46_e47_ask_before_explore_and_read_timeline_after(tmp_path, kwargs, it
     assert fns[0]()[0] is item1, fns[0]()
     assert fns[1]()[0] is scope_ok, fns[1]()
     assert grader.checks(47, ctx)[1]()[0] is scope_ok
+
+
+def test_raw_metric_mirrors_guard_dumps_and_new_targets(tmp_path):
+    env_dir = _synthetic_env(tmp_path)
+    run = run_dir(tmp_path)
+    _write_artifacts(run)
+    _bash_events(run, 'grep -n "" logs/e.log', "grep '.*' logs/e.log", "awk '{print}' logs/e.log", "sed -n p logs/e.log",
+                 "grep -n RILJ logs/e.log", "sed -n 1,200p logs/e.log", "grep -c '' logs/e.log",   # 통과 형태
+                 "cat fixtures/cut-1.log", "cat ./fixtures/cut-1.log", "cat JOB/fixtures/cut-1.log",   # 상대 fixture: 원문 아님
+                 "cat JOB/draft/x.log", "cat JOB/match.json", "less JOB/events-full.json",
+                 "cat <<'EOF'\ncat logs/e.log\nEOF")
+    reads = grader.Ctx(env_dir, run).raw_full_reads()
+    assert [r.split()[0] for r in reads] == ["grep", "grep", "awk", "sed", "cat", "less"], reads
+    assert any("match.json" in r for r in reads) and any("events-full.json" in r for r in reads)
+    assert not any("fixtures" in r or "draft" in r for r in reads)
+
+
+@pytest.mark.parametrize("command,text", [
+    ('python3 "/p/triage.py" explore MOCK-9046', "탐색 분석(explore)을 실행할지 묻는 단계입니다"),   # 따옴표 경로 + 할지
+    ("python3 triage.py explore MOCK-9046", "탐색 분석을 진행할지 묻겠습니다"),
+])
+def test_explore_order_handles_quoted_paths_and_haji_questions(tmp_path, command, text):
+    env_dir = _synthetic_env(tmp_path)
+    run = run_dir(tmp_path)
+    _write_artifacts(run)
+    _seq_events(run, [("text", text), ("tool", "e1", "Bash", {"command": command}, "ok", False),
+                      ("tool", "r1", "Read", {"file_path": "/w/MOCK-9046/timeline.md"}, "x", False)])
+    explored, asked, read = grader.Ctx(env_dir, run).explore_order()
+    assert (asked, explored, read) == (0, 1, 2)
+
+
+def test_explore_order_ignores_explore_text_inside_heredocs(tmp_path):
+    env_dir = _synthetic_env(tmp_path)
+    run = run_dir(tmp_path)
+    _write_artifacts(run)
+    _seq_events(run, [("tool", "h1", "Bash", {"command": "cat > transcript.md <<'EOF'\npython3 triage.py explore X\nEOF"}, "", False),
+                      ("text", "탐색 분석을 실행할까요?"),
+                      ("tool", "e1", "Bash", {"command": "python3 triage.py explore X"}, "ok", False)])
+    explored, asked, _ = grader.Ctx(env_dir, run).explore_order()
+    assert (asked, explored) == (1, 2)

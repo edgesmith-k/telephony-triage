@@ -679,4 +679,13 @@
 - **3E-B (`f937db6`, `250b1dd`)**: guard 규칙 10(로그 원문·zip·bugreport 통독 `cat`·`head -c`·`unzip -p` 등 차단, Hook 10종), `grade.py` e40 NameError 수정·`raw_reads_blocked` 지표·e46/e47 순서 채점(`explore` 뒤 timeline 열람), `run.py` 결과 파일 대체 생성(`outputs_derived`)·자식 env 정리·서명(attribution) 끔.
 - **3E-C (`fcfec4d`)**: SKILL·reference 문구(`must_show` 그대로, 탐색은 `triage.py explore` 뒤, 수정 상태 변경 절), `.expect.yaml`은 선택, `14-site.md` S1 확인 항목 추가.
 - 테스트: **734 passed**.
-- Sonnet 재실행: (결과 대기)
+- Sonnet 재실행: 17개 실행. 행동 16/17, 채점기 14/17(3F 수정 전)→**16/17**(3F 수정 뒤 재채점, 46·47이 스크립트로 통과, 남은 실패는 e25). 안전 위반 0. 원문 통독 지표 1/17(오탐 — 마스킹 cut 출력)로 3D의 8/17보다 줄었고 guard가 4건을 막았다. 새 구멍 `grep -n "" <로그>`(e2·e40)는 3F에서 막았다. e25는 Sonnet에서 회귀(Opus 7/7). 비용 $7.09. 자세히는 [`eval-3e-2026-10-06.md`](eval-3e-2026-10-06.md).
+
+## 3F 채점 오판정·guard 규칙 10 보강 (2026-10-06)
+
+3E 제안 a-1~3·b-4를 적용했다. 재실행 없이 3E 결과를 다시 채점했다.
+
+- `grade.py`: `explore_order`가 heredoc 본문을 빼고 따옴표 경로(`"…/triage.py" explore`)를 잡으며, 질문 패턴에 "할지"를 더했다. `_is_raw_target`이 상대 `fixtures/`·`draft/` 경로를 원문에서 뺀다. 원문 대상에 `match.json`·`events-full.json`을 더해 guard와 맞췄다.
+- `guard.py` 규칙 10: 빈 패턴·`^`·`.*`·`$`·`.`의 `grep`/`rg`, `awk '{print}'`·`awk 1`, `sed -n p`·`sed -n '1,$p'`·`sed ''`가 원문을 읽으면 거부한다. 구간이 있는 `sed -n 1,200p`·실제 패턴 `grep`·`grep -c`는 통과한다. 지표 `raw_full_reads`가 같은 판정을 쓴다(guard 함수 재사용).
+- 3E 재채점(복사본): 완전 통과 16/17(e25 제외), 46·47 스크립트 통과. 원문 통독 지표는 e2·e40의 `grep -n ""` 2건(실제 통독)만 남았고 오탐은 사라졌다.
+- 미룬 것: verify-fix 흔적 검사 강제(b-5)와 SKILL 5-1 보고 칸 문구(b-6)는 `99-deferred.md §F`.

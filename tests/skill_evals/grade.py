@@ -16,11 +16,13 @@ import fnmatch
 import json
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 import yaml
 
 HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE.parents[1] / "plugin" / "scripts"))   # guard 규칙 10의 통독 판정을 지표가 그대로 쓴다
 
 
 def git(repo, *args) -> str:
@@ -154,14 +156,14 @@ class Ctx:
 
     def explore_order(self, filename="timeline.md"):
         """(explore 호출 순번, 질문 순번, `filename` 첫 열람 순번). 순번은 seq 안의 위치, 없으면 None. 기록이 없으면 None.
-        질문 = explore 호출 앞의 assistant 텍스트 중 '탐색 분석'과 '할까요/실행할까/진행할까'가 함께 든 것."""
+        질문 = explore 호출 앞의 assistant 텍스트 중 '탐색 분석'과 '할까요/실행할까/진행할까/할지'가 함께 든 것."""
         seq = self.seq()
         if seq is None:
             return None
         explored = next((i for i, e in enumerate(seq) if e["kind"] == "tool" and e["name"] == "Bash"
-                         and re.search(r"triage\.py\s+explore\b", str(e["input"].get("command", "")))), None)
+                         and re.search(r"triage\.py[\"']?\s+explore\b", _strip_heredocs(str(e["input"].get("command", ""))))), None)
         asked = next((i for i, e in enumerate(seq) if e["kind"] == "text" and "탐색 분석" in e["text"]
-                      and re.search(r"할까요|실행할까|진행할까", e["text"]) and (explored is None or i < explored)), None)
+                      and re.search(r"할까요|실행할까|진행할까|할지", e["text"]) and (explored is None or i < explored)), None)
         read = next((i for i, e in enumerate(seq) if e["kind"] == "tool" and self._opens(e["name"], e["input"], (filename,))), None)
         return explored, asked, read
 
@@ -170,12 +172,23 @@ class Ctx:
     def _is_raw_target(self, token: str) -> bool:
         t = token.strip("\"'")
         name = Path(t).name
-        if "/fixtures/" in t.replace("\\", "/"):
-            return False     # 판별 근거 주변만 잘라 마스킹한 fixture(`cut` 출력)는 원문이 아니다
-        if name in ("events.json", "jira_raw.json") or name.endswith((".log", ".zip")):
+        norm = t.replace("\\", "/")
+        if re.search(r"(^|/)(fixtures|draft)/", norm):
+            return False     # 판별 근거 주변만 잘라 마스킹한 fixture(`cut` 출력)·draft는 원문이 아니다 (상대 경로 포함)
+        if name in ("events.json", "events-full.json", "jira_raw.json", "match.json") or name.endswith((".log", ".zip")):
             return True
         logs = self.env_dir / "logs"
         return "/logs/" in t.replace("\\", "/") or t.startswith("logs/") or str(logs) in t
+
+    def _dump_reads(self, cmd: str) -> list[str]:
+        """guard 규칙 10과 같은 판정: grep·awk·sed가 모든 줄을 내보내는 형태로 원문을 읽은 호출."""
+        import guard
+        found = []
+        for inv in guard.invocations(cmd, Path(".")):
+            dump = guard._dump_verb_and_files(inv)
+            if dump and any(self._is_raw_target(t) for t in dump[1]):
+                found.append(" ".join(inv.argv)[:200])
+        return found
 
     def _raw_reads(self) -> tuple[list[str], list[str]]:
         """(통독 의심 호출, hook이 막은 호출). guard 규칙 10이 거부한 호출(결과가 `[telephony-triage]`를 담은
@@ -200,6 +213,7 @@ class Ctx:
                         continue
                     if any(self._is_raw_target(t) for t in rest.split() if not t.startswith("-")):
                         found.append(f"{verb}{rest}".strip()[:200])
+                found += self._dump_reads(cmd)
             (blocked if e["error"] and "[telephony-triage]" in e["result"] else hits).extend(found)
         return hits, blocked
 

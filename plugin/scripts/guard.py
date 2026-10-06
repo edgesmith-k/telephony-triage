@@ -537,6 +537,125 @@ def _raw_cmd_verb(inv: Invocation) -> str | None:
     return None
 
 
+# 모든 줄에 맞는 패턴·스크립트: 통독과 같다 (보수적인 목록만)
+MATCH_ALL_PATTERNS = {"", "^", ".*", "$", ".", "^.*$"}
+MATCH_ALL_AWK = {"{print}", "{print$0}", "1"}
+MATCH_ALL_SED = {"", "p", "1,$p", "0,$p"}
+GREP_NON_DUMP_FLAGS = set("cqlL")   # 개수·존재만 내는 옵션은 통독이 아니다
+
+
+def _words_and_stdin(argv: list[str]) -> tuple[list[str], list[str]]:
+    """플래그를 남기고 출력 리디렉션·heredoc을 뺀 단어와, `<` 입력 파일."""
+    words: list[str] = []
+    stdin: list[str] = []
+    skip = redir_in = False
+    for tok in argv[1:]:
+        if skip:
+            skip = False
+        elif redir_in:
+            redir_in = False
+            stdin.append(tok)
+        elif tok.startswith("<<"):
+            continue
+        elif tok == "<":
+            redir_in = True
+        elif tok.startswith("<") and len(tok) > 1:
+            stdin.append(tok[1:])
+        elif tok and REDIRECT_RE.match(tok):
+            skip = not REDIRECT_RE.match(tok).group(1)
+        else:
+            words.append(tok)
+    return words, stdin
+
+
+def _dump_verb_and_files(inv: Invocation) -> tuple[str, list[str]] | None:
+    """grep·rg·awk·sed가 모든 줄을 내보내는 형태면 (표시 동사, 대상 인자들), 아니면 None."""
+    name = _base(inv.argv[0])
+    if name not in ("grep", "egrep", "fgrep", "rg", "awk", "gawk", "mawk", "sed"):
+        return None
+    words, stdin = _words_and_stdin(inv.argv)
+    pos: list[str] = []
+    pats: list[str] = []
+    short_flags = ""
+    quiet_kinds = False
+    i = 0
+    while i < len(words):
+        w = words[i]
+        i += 1
+        if w == "--":
+            pos += words[i:]
+            break
+        if w.startswith("--") and len(w) > 2:
+            if name in ("grep", "egrep", "fgrep", "rg"):
+                if w.startswith("--regexp="):
+                    pats.append(w.split("=", 1)[1])
+                elif w == "--regexp" and i < len(words):
+                    pats.append(words[i])
+                    i += 1
+                elif w in ("--count", "--quiet", "--silent", "--files-with-matches", "--files-without-match"):
+                    quiet_kinds = True
+            elif name == "sed":
+                if w.startswith("--expression="):
+                    pats.append(w.split("=", 1)[1])
+                elif w == "--expression" and i < len(words):
+                    pats.append(words[i])
+                    i += 1
+                elif w in ("--quiet", "--silent"):
+                    short_flags += "n"
+            continue
+        if w.startswith("-") and len(w) > 1:
+            cluster = w[1:]
+            short_flags += cluster
+            takes = {"grep": "efmAB", "egrep": "efmAB", "fgrep": "efmAB", "rg": "efmABg",
+                     "awk": "Fvf", "gawk": "Fvf", "mawk": "Fvf", "sed": "ef"}[name]
+            # 값을 받는 옵션이 클러스터 끝에 오면 다음 단어가 값, 중간에 오면 나머지가 값
+            for k, ch in enumerate(cluster):
+                if ch in takes:
+                    rest = cluster[k + 1:]
+                    val = rest if rest else (words[i] if i < len(words) else None)
+                    if not rest:
+                        i += 1
+                    if ch == "e" and val is not None:
+                        pats.append(val)
+                    elif ch in "fv" and name in ("awk", "gawk", "mawk", "sed", "grep", "egrep", "fgrep", "rg"):
+                        if ch == "f":
+                            pats.append("\0file")   # 파일에서 읽는 프로그램·패턴: 판단하지 않는다
+                    break
+            continue
+        pos.append(w)
+    if name in ("grep", "egrep", "fgrep", "rg"):
+        if set(short_flags) & GREP_NON_DUMP_FLAGS or quiet_kinds:
+            return None
+        if not pats:
+            if not pos:
+                return None
+            pats, pos = [pos[0]], pos[1:]
+        hit = any(p in MATCH_ALL_PATTERNS for p in pats) and "\0file" not in pats
+        if "v" in short_flags or "--invert-match" in inv.argv:
+            hit = False
+        verb = f"{name} {pats[0]!r}"
+    elif name == "sed":
+        if not pats:
+            if not pos:
+                return None
+            pats, pos = [pos[0]], pos[1:]
+        script = pats[0].replace(" ", "")
+        hit = len(pats) == 1 and "\0file" not in pats and script in MATCH_ALL_SED and "i" not in short_flags
+        verb = f"sed {pats[0]!r}"
+    else:
+        if not pats or "\0file" in pats:
+            if not pos:
+                return None
+            prog, pos = pos[0], pos[1:]
+        else:
+            return None
+        hit = prog.replace(" ", "").rstrip(";") in MATCH_ALL_AWK or prog.replace(" ", "") in ("{print;}",)
+        verb = f"{name} {prog!r}"
+    if not hit:
+        return None
+    return verb, pos + stdin
+
+
 def _raw_args(argv: list[str]) -> list[str]:
     """위치 인자와 `<` 대상. `>`·`>>`·`2>` 등 출력 리디렉션과 heredoc은 뺀다."""
     out: list[str] = []
@@ -597,9 +716,14 @@ def _is_raw_file(path: Path) -> bool:
 def check_raw_read(command: str, cwd: Path, dec: Decision) -> None:
     for inv in invocations(command, cwd):
         verb = _raw_cmd_verb(inv)
-        if verb is None:
-            continue
-        for arg in _raw_args(inv.argv):
+        if verb is not None:
+            args = _raw_args(inv.argv)
+        else:
+            dump = _dump_verb_and_files(inv)
+            if dump is None:
+                continue
+            verb, args = dump
+        for arg in args:
             word = _expand(arg)
             path = Path(word) if Path(word).is_absolute() else inv.cwd / word
             cands = [path]
