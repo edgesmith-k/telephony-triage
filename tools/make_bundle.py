@@ -331,6 +331,8 @@ CHECKS: list[Check] = [
     Check("schemas", 3, "auto", tool_check("schemas", "sync_schemas.py", ["--check"], "sync_schemas --check 통과")),
     Check("contracts", 4, "auto", tool_check("contracts", "gen_contracts.py", ["--check"],
                                              "gen_contracts --check 통과")),
+    Check("exec-bits", 1, "auto", tool_check("exec-bits", "fix_exec_bits.py", ["--check"],
+                                             "fix_exec_bits --check 통과")),
     Check("site-todos", 8, "auto", check_site_todos),
     Check("todos-seen", 8, "manual", None,
           "python3 tools/list_site_todos.py 결과를 사용자가 직접 보고, 상태 파일에는 개수만 적었는지 확인한다."),

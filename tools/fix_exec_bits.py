@@ -76,6 +76,8 @@ def _has_shebang(path: Path) -> bool:
 
 
 def wanted() -> list[str]:
+    # 무시된 경로(workspace 등)는 대상이 아니다: 추적·비추적(무시 제외)만 본다.
+    visible = set(_git(["ls-files", "-co", "--exclude-standard"]).splitlines())
     paths: set[str] = set()
     for pattern in EXEC_GLOBS:
         for path in REPO.glob(pattern):
@@ -89,7 +91,7 @@ def wanted() -> list[str]:
             continue
         if _has_shebang(path):
             paths.add(rel.as_posix())
-    return sorted(paths)
+    return sorted(paths & visible)
 
 
 def main(argv: list[str] | None = None) -> int:

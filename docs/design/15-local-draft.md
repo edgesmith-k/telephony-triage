@@ -53,7 +53,7 @@
 
 도구로 실행: `python3 tools/make_bundle.py --label <label>` — auto 항목은 도구가 판정(싼 것부터, 첫 실패에서 중단), manual 3건은 사람. 종료 3 = 묶음 완료·사람 확인 대기.
 
-- [ ] 전체 테스트 통과 (`pytest`, `db_regress --all`, eval 전체(`evals.json`) 준비(`--prepare-only`), `tools/offline_eval.py` 합성 라벨셋 실행 — 모두 테스트 헬퍼 플러그인 루트에서)
+- [ ] 전체 테스트 통과 (`pytest`, `db_regress --all`, eval 전체(`evals.json`) 준비(`--prepare-only`), `tools/offline_eval.py` 합성 라벨셋 실행 — 모두 테스트 헬퍼 플러그인 루트에서, `tools/fix_exec_bits.py --check`: 셰뱅 파일은 100755)
 - [ ] 사내 정보 없음: `python3 tools/check_boundary.py --mode external` 종료 코드 0 (사외 CI `.github/workflows/external.yml`도 같은 검사). 그래도 실제 회사명·서버명 등을 쓰지 않았는지 사람이 한 번 검색
 - [ ] `python3 tools/sync_schemas.py --check` 통과 (`plugin/schemas/` 사본 = 샘플 DB `schema/`)
 - [ ] `python3 tools/gen_contracts.py --check` 통과 (`contracts-cli.md`·db-authoring 필수 키 요약 = 코드·스키마)

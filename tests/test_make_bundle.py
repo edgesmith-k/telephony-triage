@@ -323,8 +323,8 @@ def test_unexpected_exception_is_exit_2(repo, tmp_path, monkeypatch, capsys):
 
 def test_real_check_ids_order_and_manual_items():
     ids = [c.id for c in mb.CHECKS]
-    assert ids == ["site-paths", "mcp-local", "boundary", "human-search", "schemas", "contracts", "site-todos",
-                   "todos-seen", "draft-notes-size", "draft-notes-fresh", "skeleton", "offline-eval", "regress",
+    assert ids == ["site-paths", "mcp-local", "boundary", "human-search", "schemas", "contracts", "exec-bits",
+                   "site-todos", "todos-seen", "draft-notes-size", "draft-notes-fresh", "skeleton", "offline-eval", "regress",
                    "evals-prepare", "pytest"]
     manual = [c.id for c in mb.CHECKS if c.kind == "manual"]
     assert manual == ["human-search", "todos-seen", "draft-notes-fresh"]
