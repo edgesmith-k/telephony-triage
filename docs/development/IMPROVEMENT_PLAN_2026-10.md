@@ -106,7 +106,7 @@
 - 실행 모델: Opus. 테스트: `test_triage*`, `test_db_pr`, `test_safety`. 사내 잔여: 없음.
 
 ### W11. 기타 보완 묶음 (X)
-- `README.md` 채우기(요약 + 링크), `plugin.json` description 정리를 반입 체크리스트에 추가, 파생 이벤트 `msg` 복사 제거(`parse_logcat.py::_derived`, `line_ref` 기준; 이벤트 스냅샷 재생성은 사용자 승인), guard 규칙 10의 명령·파일 목록을 `site-defaults.yaml` 선택 키로(`platform`과 같은 방식, 기본값 동일), Windows 보정 잔존물 삭제 여부 사용자 결정, `tools/usage_stats.py`(work_dir에서 PR 소요 시간·취소 비율·질문 횟수 집계, S-7 지표).
+- `README.md` 채우기(요약 + 링크), `plugin.json` description 정리를 반입 체크리스트에 추가, 파생 이벤트 `msg` 복사 제거(`parse_logcat.py::_derived`, `line_ref` 기준; 이벤트 스냅샷 재생성은 사용자 승인), guard 규칙 10의 명령·파일 목록을 `site-defaults.yaml` 선택 키로(`platform`과 같은 방식, 기본값 동일), Windows 보정 잔존물 삭제 여부 사용자 결정, `tools/usage_stats.py`(work_dir에서 PR 소요 시간·취소 비율·질문 횟수 집계, S-7 지표). W7 후속: db-authoring 스키마 요약 확장(eval 3·31이 여전히 `plan.schema.json`을 여는 대상 — add-parser-rule 세부·signature 구조·causeRef/tempCause 참조·timestamp 형식 — 을 `gen_contracts.py` 블록에 넣을지, 한도와 함께 결정; 판정은 같은 모델 eval 3회 이상).
 - 각 항목은 작아서 한 WP로 묶되 커밋은 항목별로.
 - 테스트: `test_parse_logcat`(스냅샷), `test_hooks`, 신규 `test_usage_stats`. 사내 잔여: guard 예외 값·usage 기준치는 사내.
 
@@ -177,7 +177,7 @@
 | ✅ | W4 | ✅ 완료(10/06) | ccr-2495ec74-xn15cn · 커밋 `W4: 질문 수 줄이기…` | eval 55·56 질문 1→0. 영향 미확인: eval 42·45 등 explore 사용 eval |
 | ✅ | W5 | ✅ 완료(10/06) | ccr-2495ec74-xn15cn · 커밋 `W5: 쓰기 흐름 왕복 축소…` | eval 1 Step 8 Bash 6→2, 토큰 699k→386k. 커밋은 `publish --commit`(계약 반전, 사용자 승인). write-flow +348B는 W6에서. 테스트 임시 디렉토리 누수는 별도 chore 커밋으로 정리 |
 | ✅ | W6 | ✅ 완료(10/06) | ccr-2495ec74-xn15cn · 커밋 `W6: reference 축소…` | SKILL 7.0KB·db-authoring 11.1KB·rules.md 1.5KB. search 제외: 읽기 전용, Read 1회·1.5KB 절약. 남은 스키마 열람(add-fixture 세부)은 W7 |
-| ☐ | W7 | 실행 중 | ccr-2495ec74-xn15cn | W5 뒤, 실행 Opus. db-authoring 필수 필드 요약을 스키마에서 생성 |
+| ✅ | W7 | ✅ 완료(10/06) | ccr-2495ec74-xn15cn · 커밋 `W7: 계약 문서 생성…` | 결정은 사용자 위임 결정 에이전트. 스키마는 `plugin/schemas/output/`(sync_schemas 대조 충돌 회피, D2), 검증은 `TT_SCHEMA_CHECK=1`일 때만(D3), db-authoring 한도 1,152/11,392B(D4②). 리뷰 R1~R6 반영(R3(c) 보류). eval 3 7/7·31 6/0/3(수동), 스키마 Read 4·4회 — 0회 미달, 대상은 add-parser-rule·signature·참조 규칙·timestamp → 후속 "db-authoring 스키마 요약 확장"(W11 후보). eval 3 토큰 1.24M(W6 0.82~0.88M, 1회) |
 | ☐ | W8 | 대기 | | 독립 |
 | ☐ | W9 | 대기 | | 독립 |
 | ☐ | W10 | 대기 | | W4 뒤, 실행 Opus |

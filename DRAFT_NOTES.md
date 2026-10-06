@@ -15,7 +15,7 @@
 ## 진행 상태
 
 - 모드: **사외 초안**. 완료 Phase: **D0, 1~13**. RF-0·RF-1 완료.
-- 마지막 전체 테스트: **903개 통과** (10/06, W5, Ubuntu·Py3.11, 10분). Windows에서는 도구 셸 stdin을 `/dev/null`로, PATH 앞에 실제 Python과 `python3` shim(Store 별칭이면 gh 스텁·git hook이 9009로 실패).
+- 마지막 전체 테스트: **921개 통과** (10/06, W7, `TT_SCHEMA_CHECK=1`, Ubuntu, 10분). Windows에서는 도구 셸 stdin을 `/dev/null`로, PATH 앞에 실제 Python과 `python3` shim(Store 별칭이면 gh 스텁·git hook이 9009로 실패).
 - 사내 확인 항목: `TODO(SITE)` **73곳**(S22 12곳 추가) — `python3 tools/list_site_todos.py`. `REVIEW-OPEN.md` 0건.
 - 안내서(사람용 HTML): `docs/telephony-triage-guide.html` (공유본 https://claude.ai/artifact/1jov1Et4dQUMauFr6aoxWG)
 
@@ -40,7 +40,7 @@
 | ✅ 3D | 3C 발견 수정, 재실행 18/26 | 10/05, `history/eval-3d` |
 | ✅ 3E | 결정적 줄 구조화·guard 10 — 행동 16/17, 안전 0 | 10/06, `history/eval-3e` |
 | ✅ 3F | 채점 오판정·guard grep 통독 차단 | 10/06, `CHANGES.md` |
-| ◐ W | **개선 트랙** — `docs/development/IMPROVEMENT_PLAN_2026-10.md` §7 진행 표 | **W0~W6 ✅**(10/06). 다음 W7(계약 생성기 — db-authoring 필수 필드 요약을 스키마에서 생성, 남은 add-fixture 세부 열람 해소). 판정 관례: 변경 전·후 eval을 같은 모델로, 1순위 동작·형식 오류 재시도, 2순위 토큰 W0 폭(출력 9.5%·비용 15.7%), 폭 밖이면 trace(호출 수)로 원인 확인. W2 사내 잔여: 운영 DB 스키마 `pr.ids` PR. 확인 필요: guard가 `cat`·`sed` 로그 원문 읽기를 안 막음(eval 18·40·46·W6 3·31, `99-deferred §E`). "개선안 진행"으로 계속 |
+| ◐ W | **개선 트랙** — `docs/development/IMPROVEMENT_PLAN_2026-10.md` §7 진행 표 | **W0~W7 ✅**(10/06). 다음 W8(반입 묶음 도구 `make_bundle.py`). W7: 결정은 사용자 위임 결정 에이전트(fable)에게 묻고 진행(10/06 사용자 지정), 스키마 Read 0회 미달은 W11 후속. 판정 관례: 변경 전·후 eval을 같은 모델로, 1순위 동작·형식 오류 재시도, 2순위 토큰 W0 폭(출력 9.5%·비용 15.7%), 폭 밖이면 trace(호출 수)로 원인 확인. W2 사내 잔여: 운영 DB 스키마 `pr.ids` PR. 확인 필요: guard가 `cat`·`sed` 로그 원문 읽기를 안 막음(eval 18·40·46·W6 3·31, `99-deferred §E`). "개선안 진행"으로 계속 |
 | ◐ Z | 마무리: main 병합(PR #5) → `15 §15.4` 재실행 → 새 묶음·sha256 → 사용자 태그 → 2 | 10/06 브랜치 3f1fba9에서 §15.4 9항목 통과(테스트 738·regress 20·offline_eval·eval 54 준비·경계·스키마·뼈대·TODO 73). PR 병합 뒤 main에서 묶음 재생성 |
 
 RF-5(oFono)·RF-6(커넥터)·RF-8(자동화)은 사내 환경을 알아야 의미가 있어 반입 뒤. RF-9·웹 UI(보류)는 그 뒤 후보. RF 상세는 `docs/development/ARCHITECTURE_REVIEW_2026-10.md` §U.
