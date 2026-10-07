@@ -388,6 +388,34 @@ def _extract(profile_block, text: str, name: str = "bugreport-a.txt") -> dict:
     return result
 
 
+# AOSP dumpstate 형식 추정(TODO S21): SYSTEM LOG 헤더에 -b가 없다
+AOSP_BUGREPORT = """\
+== dumpstate: 2026-09-22 12:10:00
+Build fingerprint: 'fp/3'
+
+------ SYSTEM LOG (logcat -v threadtime -v printable -d *:v) ------
+09-22 12:00:00.000  1  1 I Sys: s
+------ EVENT LOG (logcat -b events -v threadtime -d *:v) ------
+09-22 12:00:00.000  1  1 I Ev: e
+------ RADIO LOG (logcat -b radio -v threadtime -d *:v) ------
+09-22 12:00:00.000  1  1 I Rad: r
+------ LAST LOGCAT (logcat -L -b all -v threadtime -d *:v) ------
+09-22 12:00:00.000  1  1 I Last: l
+"""
+
+
+def test_aosp_system_log_without_b_goes_to_default_buffer():
+    result = _extract(None, AOSP_BUGREPORT)
+    assert [(f["buffer"], f["lines"]) for f in result["files"]] == [("radio", 1), ("main", 1)]
+    skipped = [w for w in result["warnings"] if w["code"] == "skipped-logcat-sections"]
+    assert len(skipped) == 1 and "EVENT LOG" in skipped[0]["message"]
+    assert "LAST LOGCAT" in skipped[0]["message"]
+    no_b = AOSP_BUGREPORT.replace("-L -b all", "-L")          # -b 없는 -L도 main에 합치지 않는다
+    assert [(f["buffer"], f["lines"]) for f in _extract(None, no_b)["files"]] == [("radio", 1), ("main", 1)]
+    build = json.loads((result["_out"] / "build.json").read_text(encoding="utf-8"))
+    assert build["dumpstate_at"] == "2026-09-22 12:10:00"
+
+
 def test_wanted_buffers_radio_only():
     result = _extract({"bugreport": {"wanted_buffers": ["radio"]}}, BUGREPORT)
     assert [f["buffer"] for f in result["files"]] == ["radio"]

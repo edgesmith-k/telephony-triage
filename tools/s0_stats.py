@@ -11,8 +11,9 @@
 없을 수 있다. 그때는 `python3 tests/helpers/make_plugin_root.py`가 출력하는 임시 루트를 준다.
 
 지표 (파일마다, 그리고 합계):
-- 시각 파싱: 비어 있지 않은 원문 줄 수 대비 줄 레코드(`event` 없음) 수. 모자라면 형식을 못 읽은 줄이 있다.
-- 태그 빈도 상위, RIL 요청 대비 응답 짝 맞춤 비율, `phone_id` 추출 비율.
+- 시각 파싱: 비어 있지 않은 줄 중 reference 줄 해석(`logcat.read_file`)이 읽은 줄 수 — 형식만 본다(태그와 무관).
+- 수집 태그 비율: 읽은 줄 중 `tags.yaml`에 있는 태그라 수집된 줄(`parsed_lines`). 낮으면 태그 매핑이 모자란 것이다.
+- 태그 상위(전체)·미수집 태그 상위, RIL 요청 대비 응답 짝 맞춤 비율, `phone_id` 추출 비율.
 - coverage: 시각 범위, 시계 이상(`backward`/`jump`) 개수, `warnings`·`errors` 개수.
 """
 
@@ -40,17 +41,26 @@ def parse(log: Path, args) -> dict:
     return json.loads(proc.stdout)
 
 
-def stats(log: Path, data: dict) -> dict:
+def _reference_read(args, log: Path):
+    root = Path(args.plugin_root) if args.plugin_root else REPO / "plugin"
+    sys.path.insert(0, str(root / "scripts"))
+    from platforms.android import logcat
+    return logcat.read_file(log, 0, args.tz, args.year)
+
+
+def stats(log: Path, data: dict, args) -> dict:
     events = data["events"]
     lines = [e for e in events if e.get("event") is None]
-    raw = sum(1 for line in log.read_text(encoding="utf-8", errors="replace").splitlines() if line.strip())
+    fmt, st = _reference_read(args, log)    # parse() 뒤에 부른다(사내 기본값 없음 안내가 먼저 나온다)
     req = [e for e in events if (e.get("ril") or {}).get("dir") == "req"]
     paired = [e for e in req if e["ril"].get("paired_ts")]
     slotted = [e for e in lines if e.get("phone_id") is not None]
     coverage = data.get("coverage") or {}
     return {
-        "file": log.name, "raw_lines": raw, "parsed_lines": len(lines),
+        "file": log.name, "raw_lines": st.lines + st.unparsed, "format_lines": st.lines,
+        "parsed_lines": len(lines),
         "tags": collections.Counter(e.get("tag") for e in lines),
+        "all_tags": collections.Counter(line.tag for line in fmt),
         "ril_requests": len(req), "ril_paired": len(paired),
         "slot_lines": len(slotted),
         "first_ts": coverage.get("first_ts"), "last_ts": coverage.get("last_ts"),
@@ -66,11 +76,13 @@ def pct(a: int, b: int) -> str:
 
 def show(s: dict) -> None:
     print(f"[{s['file']}] 백엔드 {s['backend']}")
-    print(f"  시각 파싱: {pct(s['parsed_lines'], s['raw_lines'])}   (모자라면 읽지 못한 줄이 있다)")
+    print(f"  시각 파싱: {pct(s['format_lines'], s['raw_lines'])}   (모자라면 형식을 읽지 못한 줄이 있다)")
+    print(f"  수집 태그 비율: {pct(s['parsed_lines'], s['format_lines'])}   (tags.yaml에 있는 태그의 줄)")
     print(f"  시각 범위: {s['first_ts']} ~ {s['last_ts']}   시계 이상 {s['clock_anomalies']}건")
     print(f"  RIL 짝 맞춤: {pct(s['ril_paired'], s['ril_requests'])}")
     print(f"  phone_id 추출: {pct(s['slot_lines'], s['parsed_lines'])}")
-    print(f"  태그 상위: {s['tags'].most_common(8)}")
+    print(f"  태그 상위(전체): {s['all_tags'].most_common(8)}")
+    print(f"  미수집 태그 상위: {(s['all_tags'] - s['tags']).most_common(5)}")
     print(f"  warnings {s['warnings']} / errors {s['errors']}")
 
 
@@ -89,18 +101,19 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--plugin-root")
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args(argv)
-    results = [stats(Path(p), parse(Path(p), args)) for p in args.logs]
+    results = [stats(Path(p), parse(Path(p), args), args) for p in args.logs]
     if args.json:
         for r in results:
-            r["tags"] = dict(r["tags"])
+            r["tags"], r["all_tags"] = dict(r["tags"]), dict(r["all_tags"])
         print(json.dumps(results, ensure_ascii=False, indent=1))
         return 0
     for r in results:
         show(r)
     if len(results) > 1:
-        total = {k: sum(r[k] for r in results) for k in ("raw_lines", "parsed_lines", "ril_requests", "ril_paired",
+        total = {k: sum(r[k] for r in results) for k in ("raw_lines", "format_lines", "parsed_lines", "ril_requests", "ril_paired",
                                                           "slot_lines", "clock_anomalies")}
-        print(f"[합계 {len(results)}개] 시각 파싱 {pct(total['parsed_lines'], total['raw_lines'])}, "
+        print(f"[합계 {len(results)}개] 시각 파싱 {pct(total['format_lines'], total['raw_lines'])}, "
+              f"수집 태그 {pct(total['parsed_lines'], total['format_lines'])}, "
               f"RIL 짝 {pct(total['ril_paired'], total['ril_requests'])}, "
               f"phone_id {pct(total['slot_lines'], total['parsed_lines'])}, 시계 이상 {total['clock_anomalies']}건")
     return 0

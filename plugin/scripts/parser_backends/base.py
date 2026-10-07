@@ -68,13 +68,14 @@ class ParserBackend(ABC):
     ) -> dict:
         """`{first_ts, last_ts, clock_anomalies: [{ts, kind, delta_sec}], stats}`.
         윈도우와 상관없이 파일 전체를 본다. `stats`는
-        `{lines, unparsed, missing_year, missing_zone}`이고 `parse_logcat.py`가
+        `{lines, unparsed, missing_year, missing_zone, files}`(`files[]` = 파일 순서대로
+        `{lines, unparsed, first_month, last_month}`; 없으면 파일 단위 검사는 생략된다)이고 `parse_logcat.py`가
         경고를 만든 뒤 출력에서 뺀다. 기본 구현은 reference의 공통 줄 해석
         (`platforms/android/logcat.py`)을 쓴다. 형식을 직접 해석하는 백엔드는 바꾼다."""
         from platforms.android import logcat
 
         files = []
-        stats = {"lines": 0, "unparsed": 0, "missing_year": False, "missing_zone": False}
+        stats = {"lines": 0, "unparsed": 0, "missing_year": False, "missing_zone": False, "files": []}
         for index, path in enumerate(paths):
             lines, st = logcat.read_file(path, index, tz, year)
             files.append(lines)
@@ -82,6 +83,8 @@ class ParserBackend(ABC):
             stats["unparsed"] += st.unparsed
             stats["missing_year"] |= st.missing_year
             stats["missing_zone"] |= st.missing_zone
+            stats["files"].append({"lines": st.lines, "unparsed": st.unparsed,
+                                   "first_month": st.first_month, "last_month": st.last_month})
         result = logcat.coverage(files)
         result["stats"] = stats
         return result

@@ -8,7 +8,7 @@
 
     db: ../issue-db-sample        # 선택. --db가 우선
     tz: Asia/Seoul                # 선택. 연도 없는 logcat 시각의 타임존
-    year: 2026                    # 선택
+    year: 2026                    # 선택. 없으면 항목의 occurred_at 현지 연도(tz 기준). 문서 year는 모든 항목이 같은 해일 때만
     minutes: 5                    # 선택. 발생 시각 앞뒤 분
     items:
       - key: MOCK-1
@@ -17,6 +17,8 @@
         sw: ""                    # 선택
         summary: ""               # 선택
         description: ""           # 선택
+        year: 2026                # 선택. 항목별 연도·tz (문서 값보다 우선)
+        tz: Asia/Seoul            # 선택
         failed_step: ""           # 선택. 실패 스텝 한 줄(보조 정보, 후보 동점 정렬의 키워드 보너스·후보 없음 힌트에만 쓴다)
         expect: DATA-001-01       # 정답 원인 ID 또는 unresolved
 
@@ -24,6 +26,7 @@
   - 1위 정확도: 정답이 원인 ID인 항목 중 1위 후보가 정답인 비율
   - 상위 3 포함률: 정답이 원인 ID인 항목 중 상위 3 후보에 정답이 있는 비율
   - 오탐률: 정답이 unresolved인 항목 중 후보를 낸 비율
+  로그 범위 밖(`logs.in_range` false)이거나 이벤트가 0인 항목은 오류로 빼고(분모 제외) 따로 센다.
 
 플러그인 루트: `--plugin-root`, 없으면 `plugin/site-defaults.yaml`이 있을 때 `plugin/`,
 없으면 테스트 헬퍼 루트(`tests/helpers/make_plugin_root.py`)를 임시로 만든다.
@@ -38,7 +41,9 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import yaml
 
@@ -105,11 +110,19 @@ def evaluate_item(root: Path, db: Path, base: Path, doc: dict, item: dict, work:
     minutes = item.get("minutes", doc.get("minutes"))
     if minutes:
         args += ["--minutes", str(minutes)]
-    if doc.get("tz"):
-        args += ["--tz", str(doc["tz"])]
-    if doc.get("year"):
-        args += ["--year", str(doc["year"])]
+    tz = item.get("tz", doc.get("tz"))
+    if tz:
+        args += ["--tz", str(tz)]
     result = {"key": key, "expect": str(item["expect"]), "top": None, "top3": [], "error": None}
+    try:
+        year = item.get("year") or doc.get("year")
+        if not year:
+            occurred = datetime.fromisoformat(str(item["occurred_at"]))
+            year = (occurred.astimezone(ZoneInfo(str(tz))) if tz and occurred.tzinfo else occurred).year
+    except (ValueError, ZoneInfoNotFoundError) as exc:
+        result["error"] = f"occurred_at·tz 해석 실패: {exc}"
+        return result
+    args += ["--year", str(year)]
     proc = _script(root, "triage.py", args)
     if proc.returncode != 0:
         result["error"] = f"triage 종료 {proc.returncode}: {proc.stderr.strip()[:200]}"
@@ -117,6 +130,11 @@ def evaluate_item(root: Path, db: Path, base: Path, doc: dict, item: dict, work:
     analysis = json.loads(proc.stdout)
     if analysis.get("status") != "ok":
         result["error"] = f"triage {analysis.get('status')}: {(analysis.get('needs_input') or {}).get('kind')}"
+        return result
+    logs = analysis.get("logs") or {}
+    if logs.get("in_range") is False or not logs.get("events"):
+        result["error"] = (f"로그 범위 밖 또는 이벤트 0 (in_range={logs.get('in_range')}, "
+                           f"events={logs.get('events')}) — year·tz 확인")
         return result
     candidates = analysis.get("candidates") or []
     result["top3"] = [c["cause"] for c in candidates[:3]]
@@ -143,6 +161,7 @@ def summarize(results: list[dict]) -> dict:
 
     return {
         "total": len(results),
+        "evaluated": len(scored),
         "errors": len(results) - len(scored),
         "positive": len(positive),
         "negative": len(negative),
@@ -168,6 +187,7 @@ def render(results: list[dict], summary: dict) -> str:
             lines.append(f"오류 {r['key']}: {r['error']}")
     lines += [
         "",
+        f"평가 {summary['evaluated']}/전체 {summary['total']}",
         f"항목 {summary['total']}건 (원인 정답 {summary['positive']}, "
         f"unresolved 정답 {summary['negative']}, 오류 {summary['errors']})",
         f"1위 정확도    {_pct(summary['top1_accuracy'])}",
