@@ -256,6 +256,32 @@ def test_offline_eval_counts_false_positive_when_unresolved_expected_but_candida
     assert out["summary"]["false_positive_rate"] == 1.0 and out["items"][0]["verdict"] == "오탐"
 
 
+def test_offline_eval_defaults_year_from_occurred_at(tmp_path):
+    labelset = tmp_path / "noyear.yaml"
+    labelset.write_text(yaml.safe_dump({
+        "db": str(SAMPLE), "tz": "Asia/Seoul",
+        "items": [{"key": "EVAL-1", "occurred_at": "2026-09-20T14:32:10+09:00", "expect": "DATA-001-01",
+                   "logs": [str(SAMPLE / "data/DATA-001-no-setup-data-call/fixtures/DATA-001-01.log")]}],
+    }), encoding="utf-8")
+    proc = _offline(str(labelset), "--json")
+    assert proc.returncode == 0, proc.stderr
+    assert json.loads(proc.stdout)["items"][0]["verdict"] == "1위"
+
+
+def test_offline_eval_out_of_range_item_is_error_not_scored(tmp_path):
+    labelset = tmp_path / "wrongyear.yaml"
+    labelset.write_text(yaml.safe_dump({
+        "db": str(SAMPLE), "tz": "Asia/Seoul",
+        "items": [{"key": "EVAL-1", "year": 2025, "occurred_at": "2026-09-20T14:32:10+09:00",
+                   "expect": "DATA-001-01",
+                   "logs": [str(SAMPLE / "data/DATA-001-no-setup-data-call/fixtures/DATA-001-01.log")]}],
+    }), encoding="utf-8")
+    out = json.loads(_offline(str(labelset), "--json").stdout)
+    assert out["summary"]["errors"] == 1 and out["summary"]["evaluated"] == 0
+    assert out["summary"]["top1_accuracy"] is None
+    assert "평가 0/전체 1" in _offline(str(labelset)).stdout
+
+
 def test_offline_eval_rejects_bad_labelset(tmp_path):
     bad = tmp_path / "bad.yaml"
     bad.write_text("items: [{key: X-1}]\n", encoding="utf-8")

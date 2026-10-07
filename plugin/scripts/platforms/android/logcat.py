@@ -5,7 +5,9 @@
 - 시각: 줄에 연도가 없으면 `year`(없으면 `DEFAULT_YEAR`), 타임존이 없으면
   `tz`(IANA 이름, 없으면 UTC)로 해석해서 **UTC**로 바꾼다. 파서는 사용자
   config를 읽지 않는다 (`02-config.md §4`). 연도 없는 로그가 12월 → 1월로
-  넘어가면 연도를 하나 올린다(`year`는 첫 줄의 연도다).
+  넘어가면 연도를 하나 올린다(`year`는 첫 줄의 연도다). 재부팅으로 시계가
+  `01-01`로 갔다가 돌아오는 것은 해 넘김이 아니다(12월 → 1월만 센다).
+- 입력 인코딩: UTF-8(BOM 허용)과 UTF-16(BOM). `open_log()`가 고른다.
 - 슬롯(`phone_id`): 태그 접미사(`DNC-1`) → 메시지 접두어(`[PHONE1]`, `[SUB1]`)
   → 메시지 끝(`[PHONE1]`, AOSP RILJ 형식) 순서. 없으면 `None`
   (`04-parser-matching.md §5.8 (2)`).
@@ -15,6 +17,7 @@
 
 from __future__ import annotations
 
+import codecs
 import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone, tzinfo
@@ -80,6 +83,8 @@ class FileStats:
     unparsed: int = 0
     missing_year: bool = False
     missing_zone: bool = False
+    first_month: int | None = None  # 연도 없는 줄의 첫/끝 월 (다중 파일 해 넘김 경고용)
+    last_month: int | None = None
 
 
 def get_tz(name: str | None) -> tzinfo:
@@ -117,6 +122,14 @@ def _build(match: re.Match, year: int, tz: tzinfo) -> datetime:
     return local.astimezone(UTC)
 
 
+def open_log(path: str | Path):
+    """로그 텍스트 열기: UTF-16 BOM이면 utf-16, 아니면 utf-8-sig(BOM 제거)."""
+    with open(path, "rb") as fh:
+        head = fh.read(2)
+    enc = "utf-16" if head in (codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE) else "utf-8-sig"
+    return open(path, encoding=enc, errors="replace", newline="")
+
+
 def read_file(
     path: str | Path, file_index: int, tz_name: str | None, year: int | None
 ) -> tuple[list[LogLine], FileStats]:
@@ -124,10 +137,10 @@ def read_file(
     tz = get_tz(tz_name)
     stats = FileStats()
     lines: list[LogLine] = []
-    current_year = year or DEFAULT_YEAR
+    base_year = current_year = year or DEFAULT_YEAR
     prev_month: int | None = None
     buffer = None
-    with open(path, encoding="utf-8", errors="replace", newline="") as fh:
+    with open_log(path) as fh:
         for line_no, raw in enumerate(fh, 1):
             text = raw.rstrip("\r\n")
             if text.startswith("--------- beginning of "):
@@ -142,10 +155,15 @@ def read_file(
                 use_year = int(match.group("year"))
             else:
                 month = int(match.group("mon"))
-                # 12월 → 1월: 해가 넘어갔다 (월이 6 넘게 줄면 해가 넘어간 것으로 본다).
-                if prev_month is not None and prev_month - month >= 6:
+                # 알려진 한계: 11월 → 1월처럼 12월 줄이 없으면 해 넘김을 알 수 없다(월 감소는 재부팅과 구분 불가).
+                # 12월 → 1월: 해가 넘어갔다. 재부팅으로 01-01이 끼었다가 12월로 돌아오면 되돌린다.
+                if prev_month == 12 and month == 1:
                     current_year += 1
-                prev_month = month
+                elif prev_month == 1 and month == 12 and current_year > base_year:
+                    current_year -= 1
+                if stats.first_month is None:
+                    stats.first_month = month
+                stats.last_month = prev_month = month
                 use_year = current_year
                 if year is None:
                     stats.missing_year = True

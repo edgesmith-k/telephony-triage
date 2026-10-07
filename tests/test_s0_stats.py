@@ -40,6 +40,17 @@ def test_foreign_format_shows_up_as_unparsed_lines_and_zero_ril_requests():
     assert "시각 파싱: 2/3 (67%)" in out and "RIL 짝 맞춤: 0/0 (-)" in out and "warnings 1" in out
 
 
+def test_uncollected_tags_are_parsed_lines_and_listed():
+    """형식이 맞는 줄은 태그가 tags.yaml에 없어도 '시각 파싱'에 센다. 미수집 태그는 따로 보인다."""
+    log = tmp("tt-s0-") / "tags.log"
+    log.write_text("09-22 12:00:00.000  1234  1244 D RILJ: [PHONE0] [0041]> SETUP_DATA_CALL apn=default\n"
+                   "09-22 12:00:01.000  1234  1244 I FooService: x\n"
+                   "09-22 12:00:02.000  1234  1244 I BarTag: y\n", encoding="utf-8", newline="\n")
+    out = stats(log)
+    assert "시각 파싱: 3/3 (100%)" in out and "수집 태그 비율: 1/3 (33%)" in out
+    assert "FooService" in out and "BarTag" in out
+
+
 def test_missing_site_defaults_stops_with_guidance():
     proc = subprocess.run([sys.executable, str(REPO / "tools" / "s0_stats.py"), str(LOGS / "dual-sim-ril.log"),
                            "--rules", str(SAMPLE / "parser-rules"), "--tz", "Asia/Seoul"],

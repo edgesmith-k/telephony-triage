@@ -326,6 +326,21 @@ def test_fix_judgements_on_fix_submitted_cause():
     assert res["judgement"] == "passed"
 
 
+def test_fix_unknown_when_one_log_file_is_unreadable(tmp_path):
+    """한 로그 파일을 못 읽으면(형식 불일치) 나머지로 passed가 되지 않는다 — 관측 불완전 → unknown."""
+    src = (LOGS / "call-recurrence.log").read_text(encoding="utf-8")
+    broken = tmp_path / "call-recurrence-broken.log"
+    broken.write_text("".join("X " + line for line in src.splitlines(keepends=True)), encoding="utf-8", newline="\n")
+    out = run_json("db_verify.py", ["resolution", "--cause", "CALL-001-01", LOGS / "call-fixed.log", broken,
+                                    "--db", VERIFY_DB])
+    assert out["judgement"] == "unknown" and "관측 불완전" in out["reason"]
+    u16 = tmp_path / "call-recurrence-u16.log"
+    u16.write_bytes(b"\xff\xfe" + src.encode("utf-16-le"))
+    out = run_json("db_verify.py", ["resolution", "--cause", "CALL-001-01", LOGS / "call-fixed.log", u16,
+                                    "--db", VERIFY_DB])
+    assert out["judgement"] == "failed"
+
+
 def test_fix_stops_without_build_or_required_signatures_and_lint_rules():
     db = copy_db(VERIFY_DB)
     type_md = db / CALL / "type.md"

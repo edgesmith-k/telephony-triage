@@ -8,7 +8,7 @@
 
 #### (1) 원칙: 엔진과 규칙을 분리한다
 
-- `parse_logcat.py`(플러그인)는 **엔진**만 가진다: 포맷 파싱(연도·타임존은 `--tz`/`--year` 인자), 윈도우 자르기, RIL 페어링, 줄 단위 마스킹(`--mask`, extractor 실행 전), extractor 실행기, fixture 최소 구간 자르기(`cut`).
+- `parse_logcat.py`(플러그인)는 **엔진**만 가진다: 포맷 파싱(입력 인코딩 UTF-8(BOM 허용)·UTF-16(BOM), 연도·타임존은 `--tz`/`--year` 인자; 연도 없는 로그의 해 넘김은 12월 → 1월 줄로만 알아본다 — 12월 줄 없이 11월 → 1월로 건너뛰면 올리지 않는다(알려진 한계)), 윈도우 자르기, RIL 페어링, 줄 단위 마스킹(`--mask`, extractor 실행 전), extractor 실행기, fixture 최소 구간 자르기(`cut`).
 - 수집할 태그, RIL 목록, 이벤트 추출 규칙은 **이슈 DB의 `parser-rules/`** 에 둔다. 파서는 실행할 때 `--rules <db>/parser-rules`를 읽는다. analyze에서 `<db>`는 읽기 스냅샷 `<work_dir>/_snapshot`이다 (`07-workflow.md §Step 1`).
 - 새 유형이 추가될 때 플러그인을 다시 배포하지 않고 **이슈 DB PR 하나로 유형 + 파서 규칙 + fixture가 함께** 반영된다. 팀원은 이슈 DB만 최신화하면 된다 (`sync` 또는 analyze Step 1).
 - 엔진을 고쳐야 할 때만 플러그인 PR로 간다. 예: 새 로그 포맷, 새 페어링 방식, 여러 줄 메시지 처리.
@@ -146,7 +146,7 @@ analyze Step 7에서 새 원인/유형을 계획할 때 아래를 점검하고, 
 
 - 시그니처 종류: `symptom_signatures`(유형), `signatures`(원인 판별), `recovery_signatures`(해결 후 정상 동작), `scenario_signatures`(재현 시나리오 수행 흔적). 뒤의 두 가지는 점수에 쓰지 않고 검증에만 쓴다 (`05-verification.md`).
 - **원인 평가 범위** (모드별):
-  - **분석 모드**(analyze Step 4): 2단계. 먼저 모든 active 유형의 S를 구하고, **S=1인 유형의 원인만** C를 평가한다. 리포트 후보는 증상이 확인된 유형 안에서만 나온다.
+  - **분석 모드**(analyze Step 4): 2단계. 먼저 모든 active 유형의 S를 구하고, **S=1인 유형의 원인만** C를 평가한다. 리포트 후보는 증상이 확인된 유형 안에서만 나온다. 후보는 증상 시그니처 충족과 원인 시그니처 충족이 **결합 가능**할 때만 C=1이다: 둘 다 `same_phone`이면 근거의 `phone_id` 집합이 겹치거나 한쪽이 비어 있어야 하고(`null`은 와일드카드), 두 근거 전체의 시각 폭이 `max(두 window_sec)` 이내여야 한다(`match_signatures._compatible`). 결합 쌍이 없으면 "유형 일치, 원인 미확인"(S=1, C=0). **회귀·검증 모드는 결합을 보지 않는다**(C 독립 평가).
   - **회귀·검증 모드**(`--regress`, `db_regress`·`db_verify`): **모든 active 원인의 C를 S와 무관하게 독립 평가**한다. 그래서 다른 유형의 로그에서 원인 시그니처가 잘못 충족되는 것(S=0, C=1)을 R2(다른 원인 C=0), R3, R4가 잡는다 (아래 (4), `05-verification.md §5.12 (1)`).
 - 시그니처 `id`는 소속 유형/원인 안에서 유일하다. **전역 키는 `<유형 ID 또는 원인 ID>/<sig id>`** 이고, 피드백과 통계는 전역 키를 쓴다.
 - **매처와 extractor는 항상 마스킹된 텍스트에 대해 돈다.** 분석에서도 `parse_logcat.py parse --mask`로 각 줄을 extractor 실행 전에 마스킹한다 (`07-workflow.md §Step 3`). fixture도 마스킹돼 있고 마스킹은 멱등이므로 분석과 회귀가 같은 텍스트를 본다. `match_signatures.py`는 `masked: true`가 아닌 입력을 거부한다 (종료 코드 2).

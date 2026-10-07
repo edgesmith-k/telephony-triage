@@ -671,6 +671,62 @@ def test_uncollected_tags_counts_dropped_tags_of_collected_pids_only():
     assert "uncollected_tags" not in _parse([LOG_DIR / "data-connected.log"], "--full", "--mask")
 
 
+def _lines(name: str, *stamps: str) -> Path:
+    path = _tmp() / name
+    path.write_text("".join(f"{s}  1234  1244 D RILJ: x\n" for s in stamps), encoding="utf-8", newline="\n")
+    return path
+
+
+def test_reboot_new_year_line_does_not_shift_later_lines():
+    """재부팅 직후 시계가 01-01이어도 해 넘김이 아니다 (월이 줄었다 늘어도 연도는 그대로)."""
+    log = _lines("reboot.log", "09-22 12:00:00.000", "01-01 00:00:05.000", "09-22 12:05:00.000")
+    data = _parse([log], "--around", "2026-09-22T12:05:00+09:00", "--minutes", "1", tz="Asia/Seoul")
+    assert [e["ts"] for e in data["events"]] == ["2026-09-22T03:05:00.000Z"]
+    assert data["coverage"]["window_in_range"] is not False     # 이전: 범위가 2027까지 늘어 events 0
+    # 12월 중 재부팅: 01-01이 해를 올렸다가 12월로 돌아오면 되돌린다
+    log = _lines("reboot-dec.log", "12-20 10:00:00.000", "01-01 00:00:05.000", "12-20 10:05:00.000")
+    data = _parse([log], tz="UTC")
+    assert [e["ts"][:10] for e in data["events"]] == ["2026-12-20", "2026-12-20", "2027-01-01"]   # 이벤트는 시각순
+
+
+def test_multi_file_year_rollover_warns():
+    one, two = _lines("a.log", "12-31 23:59:00.000"), _lines("b.log", "01-01 00:01:00.000")
+    codes = [w["code"] for w in _parse([one, two], tz="UTC")["warnings"]]
+    assert "year_rollover_ambiguous" in codes
+    assert "year_rollover_ambiguous" not in [w["code"] for w in _parse([one], tz="UTC")["warnings"]]
+
+
+def test_utf16_and_bom_logs_parse_like_utf8():
+    src = LOG_DIR / "dual-sim-ril.log"
+    text = src.read_text(encoding="utf-8")
+    want = [(e["ts"], e["tag"]) for e in _parse([src])["events"] if e["event"] is None]
+    assert want
+    tmp = _tmp()
+    (tmp / "u16.log").write_bytes(b"\xff\xfe" + text.encode("utf-16-le"))
+    (tmp / "u8bom.log").write_bytes(b"\xef\xbb\xbf" + text.encode("utf-8"))
+    for name in ("u16.log", "u8bom.log"):
+        got = [(e["ts"], e["tag"]) for e in _parse([tmp / name])["events"] if e["event"] is None]
+        assert got == want, name
+
+
+def test_zero_lines_is_not_out_of_range():
+    log = _tmp() / "junk.log"
+    log.write_text("not a log line\nanother one\n", encoding="utf-8", newline="\n")
+    data = _parse([log], "--around", "2026-09-22T12:05:00+09:00")
+    assert data["coverage"]["window_in_range"] is None and data["complete"] is False
+    assert {"no-lines-parsed", "file-unparsed"} <= {w["code"] for w in data["warnings"]}
+    assert _parse([log], "--full")["coverage"]["window_in_range"] is None     # window와 무관
+
+
+def test_single_file_and_empty_file_warning_wording():
+    one = _lines("c.log", "01-01 00:00:05.000", "12-31 23:59:00.000")      # 재부팅이 낀 한 파일
+    assert "year_rollover_ambiguous" not in [w["code"] for w in _parse([one], tz="UTC")["warnings"]]
+    empty = _tmp() / "empty.log"
+    empty.write_text("", encoding="utf-8")
+    msgs = [w["message"] for w in _parse([empty], tz="UTC")["warnings"] if w["code"] == "file-unparsed"]
+    assert len(msgs) == 1 and "빈 파일" in msgs[0]
+
+
 def _all_tests():
     return [(n, o) for n, o in sorted(globals().items()) if n.startswith("test_") and callable(o)]
 

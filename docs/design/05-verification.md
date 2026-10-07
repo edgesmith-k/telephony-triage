@@ -76,7 +76,7 @@
     |---|---|
     | **passed** | 원인 시그니처 불충족, 그리고 다음 중 하나: (a) `recovery_signatures`가 있고 충족 / (b) `recovery_signatures`가 없으면 증상 시그니처 불충족 **이고** `scenario_signatures` 충족 |
     | **failed** | 원인 시그니처 충족 |
-    | **unknown** | 위 둘 다 아님: `recovery_signatures`도 `scenario_signatures`도 없는 원인, 시나리오 흔적 없음, 증상이 남음, 로그 구간 부족 |
+    | **unknown** | 위 둘 다 아님: `recovery_signatures`도 `scenario_signatures`도 없는 원인, 시나리오 흔적 없음, 증상이 남음, 로그 구간 부족, 파서 관측 불완전(외부 파서 실패·해석 못 한 파일) |
 
     passed면 로그를 마스킹해서 `resolved` fixture(`fixtures/<원인 ID>.resolved.<n1>.log`)로 추가하고 evidence에 그 경로를 넣는다. unknown이면 필요한 조건(시그니처 추가 또는 로그 조건)을 안내하고 기록하지 않는다.
 - `verified` 전환 PR은 원인 소속 카테고리 오너 리뷰가 필요하다.
@@ -111,7 +111,7 @@ open ──(수정 CL 머지, fix-submitted 커맨드)──▶ fix-submitted �
    | **통과** (`passed`) | 시나리오 흔적 충족, 원인 시그니처 불충족, 증상 시그니처 불충족, `recovery_signatures`가 있으면 충족 |
    | **부분 통과** (`partial`) | 시나리오 흔적 충족, 원인 시그니처 불충족, 증상은 남아 있음 → 같은 증상의 다른 원인일 수 있음. 다른 원인 후보를 보여준다 |
    | **실패** (`failed`) | 원인 시그니처 충족 (재발) |
-   | **판단 불가** (`unknown`) | 시나리오 흔적 없음, 로그 구간 부족 |
+   | **판단 불가** (`unknown`) | 시나리오 흔적 없음, 로그 구간 부족, 파서 관측 불완전(외부 파서 실패·해석 못 한 파일) |
 
 5. 결과로 작업 계획을 만든다 (`verify-fix` op, `contracts.md §작업 계획`).
    - **통과** → `fix.status: fixed`, `fix.verification` 기록. 수정 빌드 로그의 최소 구간을 마스킹해서 **수정 후 fixture** `fixtures/<원인 ID>.fixed.<build>.log`로 추가한다 (기본 기대값 `expect_not: <원인 ID>`, `.expect.yaml` 불필요).

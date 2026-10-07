@@ -338,11 +338,11 @@ def _window(args) -> tuple | None:
     return (center - minutes, center + minutes)
 
 
-def _in_range(window, coverage: dict) -> bool | str:
+def _in_range(window, coverage: dict) -> bool | str | None:
+    if not coverage["first_ts"]:
+        return None  # 해석한 줄이 없다 — window와 무관, "범위 밖"이 아니다
     if window is None:
         return True
-    if not coverage["first_ts"]:
-        return False
     first, last = logcat.parse_ts(coverage["first_ts"]), logcat.parse_ts(coverage["last_ts"])
     start, end = window
     if end < first or start > last:
@@ -353,7 +353,7 @@ def _in_range(window, coverage: dict) -> bool | str:
 
 
 def _read_texts(paths: list[Path]) -> str:
-    return "\n".join(p.read_text(encoding="utf-8", errors="replace") for p in paths)
+    return "\n".join(logcat.open_log(p).read() for p in paths)
 
 
 def _allow_patterns(db_cfg: dict) -> list[str]:
@@ -442,7 +442,20 @@ def run_parse(args, plugin_root: Path, defaults: dict, profile: platforms.Platfo
             {"code": "unparsed-lines", "message": f"형식을 모르는 줄 {stats['unparsed']}개를 건너뛰었습니다."}
         )
     if not stats.get("lines"):
-        warnings.append({"code": "no-lines-parsed", "message": "해석한 logcat 줄이 없습니다."})
+        warnings.append({"code": "no-lines-parsed", "message": "해석한 logcat 줄이 없습니다 — 로그 범위 밖이 아니라 형식·인코딩 문제입니다(S7)."})
+    # 파일 단위: 0줄이거나 절반 넘게 못 읽은 파일이 있으면 그 관측은 불완전하다(complete: false).
+    files = stats.get("files") or []
+    for path, f in zip(paths, files):
+        n = f["lines"] + f["unparsed"]
+        if f["lines"] == 0 or f["unparsed"] * 2 > n:
+            why = "빈 파일" if n == 0 else f"해석한 줄 {f['lines']}/{n} — 형식·인코딩 확인"
+            warnings.append({"code": "file-unparsed", "message": f"{path.name}: {why}. 이 파일의 관측은 불완전하다."})
+    # first/last_month은 연도 없는 줄만 센다. 12월로 끝나는 파일과 1월로 시작하는 파일이 함께 있으면 모호하다.
+    if len(files) > 1 and any(f.get("last_month") == 12 for f in files) and any(
+            f.get("first_month") == 1 for f in files):
+        warnings.append({"code": "year_rollover_ambiguous", "message":
+                         "여러 파일이 해를 넘긴다 — 연도는 파일마다 --year 기준이라 1월 파일이 1년 이를 수 있다. "
+                         "파일을 나눠 --year를 따로 준다."})
     coverage = {
         "first_ts": coverage["first_ts"],
         "last_ts": coverage["last_ts"],
@@ -524,7 +537,7 @@ def run_parse(args, plugin_root: Path, defaults: dict, profile: platforms.Platfo
 
 def observation_errors(doc: dict) -> list[dict]:
     """Missing observations cannot establish absence of a cause."""
-    codes = {"external-parser-failed", "external-parser-mismatch", "parser-backend-mismatch"}
+    codes = {"external-parser-failed", "external-parser-mismatch", "parser-backend-mismatch", "file-unparsed"}
     errors = [{"error": w["message"], "code": w["code"]} for w in doc.get("warnings", [])
               if w.get("code") in codes]
     if (doc.get("external_disabled") or doc.get("complete") is False) and not errors:
@@ -846,7 +859,7 @@ def run_cut(args) -> dict:
     lines = []  # (파일 순번, LogLine, 원문 줄)
     for index, path in enumerate(paths):
         # `read_file`과 같은 방식으로 줄을 센다(`splitlines`는 \x0c 등에서도 끊어 줄 번호가 어긋난다).
-        with open(path, encoding="utf-8", errors="replace", newline="") as fh:
+        with logcat.open_log(path) as fh:
             raw = [text.rstrip("\r\n") for text in fh]
         parsed, _ = logcat.read_file(path, index, args.tz, args.year)
         lines += [(index, line, raw[line.line_no - 1]) for line in parsed]

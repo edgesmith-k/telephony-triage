@@ -392,7 +392,8 @@ class ReportMixin:
         if logs.get("uncollected_tags"):       # 후보 없음·원인 미확인일 때만 core가 채운다
             tags = ", ".join(f"{u['tag']} {u['lines']}줄(W/E {u['warn']})" for u in logs["uncollected_tags"])
             lines.append(add(8, "파서 규칙에 없는 태그 (수집 태그와 같은 프로세스, tags.yaml에 없어 이벤트로 추출 안 됨): " + tags))
-        in_range = {True: "발생 시각 포함", "partial": "일부만 포함", False: "로그 범위 밖"}.get(logs["in_range"], "?")
+        in_range = {True: "발생 시각 포함", "partial": "일부만 포함", False: "로그 범위 밖",
+                    None: "해석한 줄 없음(형식·인코딩)"}.get(logs["in_range"], "?")
         range_text = (f"로그 범위: {logs['range'][0]} ~ {logs['range'][1]} ({in_range}), "
                       f"시계 이상 {'있음' if logs['clock_anomalies'] else '없음'}")
         if not cands or not cands[0]["C"] or logs["in_range"] is not True or logs["clock_anomalies"]:
