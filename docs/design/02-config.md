@@ -131,7 +131,7 @@ quality:                             # 06-collaboration.md §6.5, §6.6
   fix_submitted_max_days: 30       # fix-submitted 후 verify-fix까지 허용 기간
   surge_ratio: 2.0
 mask:                                # 08-safety.md §8
-  allow_patterns: []                 # 마스킹 오탐 예외 정규식 (빌드 번호 등)
+  allow_patterns: []                 # 마스킹 오탐 예외 정규식 (빌드 번호 등). lint가 PII 표본 전체 일치를 거부
 matcher:
   pattern_timeout_ms: 2000           # 시그니처·extractor 정규식 패턴당 실행 시간 상한 (04-parser-matching.md §5.8 (4))
 readme:

@@ -326,6 +326,67 @@ def test_guard_jira_read_only_by_server():
     assert proc.returncode == 0 and not proc.stdout.strip() and "jira.mcp_server" in proc.stderr
 
 
+def _jira(server: str, get_issue: str) -> dict:
+    """테스트 헬퍼 site-defaults의 jira 블록에서 서버·get_issue 이름만 바꾼 것."""
+    base = yaml.safe_load((REPO / "plugin" / "site-defaults.example.yaml").read_text(encoding="utf-8"))["jira"]
+    return {**base, "mcp_server": server, "exclude_servers": [], "tools": {"get_issue": get_issue},
+            "read_tools": [get_issue]}
+
+
+def test_guard_jira_server_name_is_normalized():
+    """R-2: 세션 도구 이름은 서버 이름의 `[^A-Za-z0-9_-]`를 `_`로 쓴다(관측 기반 추정, S1 확인). 플러그인 번들 서버는
+    `mcp__plugin_…` 접두사라 `jira.mcp_server`와 다르다 — `jira.tools` 이름의 접두사로도 판정한다."""
+    home = tmp("tt-home-")
+
+    def judge(root: Path, tool: str) -> str | None:
+        event = {"tool_name": tool, "tool_input": {}, "cwd": str(home)}
+        proc = run("guard.py", [], root=root, env={"TELEPHONY_TRIAGE_HOME": home}, stdin=json.dumps(event))
+        assert proc.returncode == 0, proc.stderr
+        return decision(json.loads(proc.stdout)["hookSpecificOutput"] if proc.stdout.strip() else None)
+
+    dot = plugin_root("jira-dot", jira=_jira("jira.corp", "mcp__jira.corp__get_issue"))
+    assert judge(dot, "mcp__jira_corp__create_issue") == "deny"
+    assert judge(dot, "mcp__jira.corp__create_issue") == "deny"
+    assert judge(dot, "mcp__jira_corp__get_issue") is None
+    bundled = plugin_root("jira-bundled", jira=_jira("jira", "mcp__plugin_corp_jira__get_issue"))
+    assert judge(bundled, "mcp__plugin_corp_jira__add_comment") == "deny"
+    assert judge(bundled, "mcp__plugin_corp_jira__get_issue") is None
+    assert judge(bundled, "mcp__jira__add_comment") == "deny"          # mcp_server 접두사도 그대로
+    assert judge(bundled, "mcp__other__add_comment") is None
+
+
+def test_guard_sees_through_command_wrappers():
+    """R-3: 앞 래퍼(timeout·nice·stdbuf·sudo·ionice·setsid·exec -a·env -u/-S/-C·time -p)를 풀어 규칙 3~7·10을 판정한다."""
+    ws = shared()
+    c = ws.clone
+    publish = f'python3 "{ws.root}/scripts/db_pr.py" publish wt --branch issue/MOCK-1 --lease new --approved x'
+    for prefix in ("timeout 600", "nice -n 5", "nice -5", "stdbuf -oL", "stdbuf -o L", "sudo -u x",
+                   "/usr/bin/timeout --signal=KILL 5", "ionice -c 2 -n 7", "setsid", "exec -a y", "time -p",
+                   "env -u FOO", "FOO=1 timeout -k 5 60 nohup"):
+        assert decision(bash(ws, f"{prefix} {publish}", ws.base)) == "ask", prefix
+    assert decision(bash(ws, 'env -S "python3 db_pr.py publish wt"', ws.base)) == "ask"
+    assert decision(bash(ws, "env --split-string='python3 db_pr.py publish wt'", ws.base)) == "ask"
+    for cmd in ("time -p git commit --no-verify -m x", "env -u FOO git push origin HEAD:main",
+                "timeout -k 5 60 git push origin HEAD:main", "nice git -c core.hooksPath=/dev/null commit -m x",
+                'env -S "git push origin HEAD:main"', "sudo -u x git commit -n -m x",
+                # 짧은 옵션 묶음 끝의 값 옵션(-Eu x)과 묶음 안의 -S
+                "sudo -Eu x git commit --no-verify -m x", "sudo -Hu x git push origin HEAD:main",
+                'env -vS "git push origin HEAD:main"', "env -uFOO git push origin HEAD:main"):
+        assert decision(bash(ws, cmd, c)) == "deny", cmd
+    assert decision(bash(ws, f"sudo -Eu x {publish}", ws.base)) == "ask"
+    # env -C·sudo -D는 작업 디렉토리를 바꾼다(값이 붙은 형태 포함): 다른 곳에서 불러도 이슈 DB로 판정한다
+    for cmd in (f'env -C "{c}" git push origin HEAD:main', f'sudo -D "{c}" git push origin HEAD:main',
+                f'env -C"{c}" git push origin HEAD:main', f'sudo -D"{c}" git push origin HEAD:main',
+                f'env --chdir="{c}" git push origin HEAD:main'):
+        assert decision(bash(ws, cmd, ws.base)) == "deny", cmd
+    d = tmp("tt-wrap-raw-")
+    (d / "x.log").write_text(LOGCAT, encoding="utf-8")
+    for cmd in ("timeout 5 cat x.log", "nice -n 1 grep '' x.log", "env -u X stdbuf -oL cat x.log"):
+        out = bash(ws, cmd, d)
+        assert decision(out) == "deny" and "규칙 10" in out["permissionDecisionReason"], cmd
+    assert decision(bash(ws, "timeout 5 grep -n RILJ x.log", d)) is None
+
+
 def test_guard_blocks_file_tools_in_user_clone_only():
     ws = shared()
     type_md = ws.clone / DATA_DIR / "type.md"

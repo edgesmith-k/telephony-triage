@@ -119,6 +119,34 @@ def test_step_focus_config_checks_one_error_each():
     assert [f["code"] for f in _step_focus_lint("step_focus_bonus_max: 0.05", "step_focus_bonus_max: 0.5")] == ["schema"]
 
 
+MASK_ALLOW = r"    - '^MOCK[AB]\d{2}_U\d+_\d{8}$'"
+
+
+def _mask_allow_lint(*patterns: str) -> list[tuple[str, str]]:
+    """샘플 이슈 DB의 `mask.allow_patterns`에 `patterns`를 더해 린트하고 설정 파일의 `(코드, 메시지)` 오류를 돌려준다."""
+    db = runner_copy(SAMPLE)
+    edit(db / "issue-db.config.yaml", MASK_ALLOW, MASK_ALLOW + "".join(f"\n    - '{p}'" for p in patterns))
+    result = _lint(db, "--all", expect=(0, 1))
+    return [(f["code"], f["message"]) for f in result["errors"] if f["file"] == "issue-db.config.yaml"]
+
+
+def test_mask_allow_patterns_checked():
+    """R-6: 오탐 예외가 모든 IMSI·IP 등을 통과시키는 넓은 패턴이거나 깨진 정규식이면 lint 오류."""
+    assert _mask_allow_lint() == []
+    assert _mask_allow_lint(r"^10\.\d+\.\d+\.\d+$") == []       # 사설 대역 한정 예외는 통과 (IP 표본은 TEST-NET)
+    for broad in (".*", r"\d+", r"[\d.]+", r".+@.+", r"^\d{11}$", r"^010\d{8}$", r"^\+82\d+$", r"^\d{20}$"):
+        assert [c for c, _ in _mask_allow_lint(broad)] == ["mask-allow-too-broad"], broad
+    bad = _mask_allow_lint("(")
+    assert [c for c, _ in bad] == ["schema"] and "allow_patterns" in bad[0][1]
+    assert [c for c, _ in _mask_allow_lint("(a+)+b")] == ["regex-unsafe"]
+    # 표본은 실제 마스커가 그 종류로 잡는 값이어야 한다 (마스커 패턴이 바뀌면 여기서 드러난다)
+    import db_lint
+    from common import masking
+    masker = masking.new_masker()
+    for label, value in db_lint.PII_PROBES.items():
+        assert [h["kind"] for h in masker.find(f"x {value} y")] == [label.split("(")[0]], label
+
+
 def _step_events_lint(body: str) -> list[tuple[str, str]]:
     """샘플 이슈 DB의 `step_events: []`를 `body`로 바꿔 린트하고 설정 파일의 `(코드, 메시지)`를 돌려준다."""
     db = runner_copy(SAMPLE)

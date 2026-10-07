@@ -240,13 +240,13 @@ def cmd_jira_candidates(args, defaults: dict) -> dict:
 
 
 def _tool_problems(server: str, names: list[str]) -> list[str]:
-    """도구 이름이 전체 이름이고 그 서버의 것인지 검사한 문제 목록 (set-jira·doctor 공유)."""
+    """도구 이름이 전체 이름이고 그 서버의 것인지 검사한 문제 목록 (set-jira·doctor 공유). 서버는 정규화 비교."""
     problems = []
     for name in names:
         hit = TOOL_NAME_RE.match(str(name))
         if not hit:
             problems.append(f"도구 이름은 전체 이름(mcp__<server>__<tool>)이어야 합니다: {name}")
-        elif hit.group("server") != server:
+        elif mcptools.server_segment(hit.group("server")) != mcptools.server_segment(server):
             problems.append(f"{name}는 서버 {server}의 도구가 아닙니다.")
     return problems
 

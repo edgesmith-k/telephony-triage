@@ -5,7 +5,8 @@
   여기서 읽지 못하므로, 스킬이 세션에서 보이는 도구 이름을 `--tools-json`으로 넘긴다.
 - `site-defaults.yaml`의 `jira.exclude_servers`(fnmatch 패턴, 기본 `['mock-*']`)에 맞는 서버는
   후보에서 뺀다.
-- 도구 전체 이름은 `mcp__<server>__<tool>`이다 — TODO(SITE:S1) 사내 Claude Code 버전에서 확인한다.
+- 도구 전체 이름은 `mcp__<server>__<tool>`이고, `<server>`의 `[A-Za-z0-9_-]` 밖 글자는 `_`로 바뀐다 — TODO(SITE:S1)
+  사내 Claude Code 버전에서 확인한다 (치환 규칙은 공식 문서에 없어 관측 기반 추정이다).
 - 후보는 이름으로만 고른다. **사용자 확인을 받은 뒤** `config.py set-jira`로 저장한다.
 """
 
@@ -24,8 +25,28 @@ WRITE_WORDS = ("create", "add", "update", "delete", "remove", "transition", "ass
 READ_WORDS = ("get", "search", "list", "read", "fetch", "query", "view", "find", "show", "comments")
 
 
+NAME_RE = re.compile(r"^mcp__(.+?)__(.+)$")
+
+
+def server_segment(server: str) -> str:
+    """세션에 보이는 도구 이름 속 서버 부분 (`jira.corp` → `jira_corp`)."""
+    return re.sub(r"[^A-Za-z0-9_-]", "_", str(server))
+
+
 def full_name(server: str, tool: str) -> str:
-    return f"mcp__{server}__{tool}"
+    return f"mcp__{server_segment(server)}__{tool}"
+
+
+def normalize(name: str) -> str:
+    """`mcp__<server>__<tool>`이면 서버 부분을 정규화한 이름, 아니면 그대로 (멱등)."""
+    hit = NAME_RE.match(str(name))
+    return full_name(hit.group(1), hit.group(2)) if hit else str(name)
+
+
+def server_prefix(name: str) -> str | None:
+    """도구 전체 이름의 정규화된 서버 접두사(`mcp__<server>__`), 형식이 아니면 None."""
+    hit = NAME_RE.match(str(name))
+    return full_name(hit.group(1), "") if hit else None
 
 
 def _words(tool: str) -> list[str]:
@@ -112,10 +133,10 @@ def candidates(servers: dict[str, list[str] | None], exclude: list[str], team_to
                 jira_tools[action].append(full_name(server, tool))
         entry["jira_tools"] = jira_tools
         entry["read_tools"] = sorted(full_name(server, t) for t in tools if is_read(t))
-        prefix = f"mcp__{server}__"
+        prefix = full_name(server, "")
         for action, name in (team_tools or {}).items():  # 팀 기본값(site-defaults)을 먼저 제안
-            if isinstance(name, str) and name.startswith(prefix) and name in entry["tools"]:
-                entry["suggested"][action] = name
+            if isinstance(name, str) and normalize(name).startswith(prefix) and normalize(name) in entry["tools"]:
+                entry["suggested"][action] = normalize(name)
         for action, names in jira_tools.items():
             if action not in entry["suggested"] and names:
                 entry["suggested"][action] = names[0]

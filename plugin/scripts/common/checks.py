@@ -282,7 +282,10 @@ def guard_deny_messages(steps, fix_tail: str | None = None) -> list[str]:
         if res.code == 0:
             continue
         paths = (res.data or {}).get("paths") or []
-        if res.name == "mask":
+        if res.name == "mask" and res.code == 2:
+            deny.append(f"마스킹 검사를 실행하지 못했다 (규칙 3): {res.stderr.strip()[-300:]}. "
+                        "issue-db.config.yaml의 mask.allow_patterns 등 설정을 확인한다.")
+        elif res.name == "mask":
             hits = (res.data or {}).get("detections") or []
             detail = "; ".join(f"{h['path']}:{h['line']} {h['kind']}" for h in hits[:10]) or res.stderr[-300:]
             deny.append(f"staged 변경에 마스킹 안 된 개인정보가 있다 (규칙 3): {detail}. {fix_tail or GUARD_FIX_MASK}")

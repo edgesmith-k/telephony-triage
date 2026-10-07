@@ -160,6 +160,26 @@ def test_jira_tools_from_nonstandard_mock_server():
                                  "--get-issue", "mcp__other__get_issue"]).returncode == 2
 
 
+def test_jira_server_names_are_normalized_like_session_tool_names():
+    """R-2: 세션 도구 이름은 서버 이름의 `[^A-Za-z0-9_-]`를 `_`로 쓴다(관측 기반 추정, S1 확인).
+    후보는 세션 이름으로 만들고, set-jira는 원래 서버 이름과 세션 이름을 같은 서버로 본다(저장값은 그대로)."""
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    from common import mcptools
+    assert mcptools.full_name("jira.corp", "x") == "mcp__jira_corp__x"
+    assert mcptools.full_name("mock-jira", "x") == "mcp__mock-jira__x"
+    once = mcptools.normalize("mcp__jira corp.v2__get_issue")
+    assert once == "mcp__jira_corp_v2__get_issue" == mcptools.normalize(once)
+    (entry,) = mcptools.candidates({"jira.corp": ["get_issue"]}, [], {"get_issue": "mcp__jira.corp__get_issue"})
+    assert entry["tools"] == ["mcp__jira_corp__get_issue"] and entry["suggested"]["get_issue"] == "mcp__jira_corp__get_issue"
+
+    env = Env()
+    env.init(env.base / "db")
+    saved = env.json("config.py", ["set-jira", "--server", "jira.corp", "--get-issue", "mcp__jira_corp__get_issue"])
+    assert saved["tools"]["get_issue"] == "mcp__jira_corp__get_issue" and env.config()["jira"]["mcp_server"] == "jira.corp"
+    assert env.run("config.py", ["set-jira", "--server", "jira.corp",
+                                 "--get-issue", "mcp__jira_other__get_issue"]).returncode == 2
+
+
 def test_excluded_mock_servers():
     root = plugin_root("exclude-mock", jira={**yaml.safe_load(
         (REPO / "plugin/site-defaults.example.yaml").read_text(encoding="utf-8"))["jira"], "exclude_servers": ["mock-*"]})

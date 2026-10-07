@@ -17,16 +17,17 @@ description: Android Telephony 이슈(data·call·network·sim·sms·ims)를 Jir
 
 ## 실행 규칙
 
+`S/` = `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/`(이 경로 그대로. 플러그인 경로 변수는 Bash에 없다).
 스크립트 호출, 종료 코드(2·S-3 중단), lock, 마스킹, 사용자 확인 지점은 **`reference/rules.md`**. analyze도 그 규칙을 따른다: 첫 스크립트 호출 전에 읽는다.
 
 ## analyze
 
-`/telephony-triage:analyze <KEY> [logs...] [--code <프로필|경로>] [--dry-run|--analysis-only] [--more-logs <로그…>] [--jira-file <yaml>] [--failed-step <줄>|--steps-file <path|붙인 목록→JOB/steps-pasted.txt>] [--(no-)analyzer] [--(no-)explore]`
+`/telephony-triage:analyze <KEY> [logs...] [--code <프로필|경로>] [--dry-run|--analysis-only] [--more-logs <로그…>] [--jira-file <yaml>] [--failed-step <줄>|--steps-file <path|붙인 목록→JOB/steps-pasted.txt>] [--clock-offset <±시간>] [--(no-)analyzer] [--(no-)explore]`
 
 ### 1. 드라이버 (Step 0~4)
 
 1. `--jira-file`이 없으면 config(`S/config.py show --keys work_dir,jira.tools`)의 `jira.tools.get_issue`(있으면 `get_comments`)를 그 스키마대로 부른다. 비어 있으면 부르지 말고 멈춘다(추측 금지): `S/config.py doctor --format markdown` 표를 요약 없이 그대로 붙이고 setup 매핑 안내, 연습은 `--dry-run --jira-file <yaml>`. hook이 원문을
-   `JOB/jira_raw.json`에 두고 마스킹 요약만 보여준다(`saved_to` 없으면 응답을 그 경로에). `--jira-file`은
+   `JOB/jira_raw.json`에 두고 마스킹 요약만 보여준다(`saved_to` 없으면 응답을 그 경로에 저장하고 "격리 hook 미동작: Jira 원문이 대화에 들어옴(S1 확인)"을 알린다). `--jira-file`은
    `--dry-run`·`--analysis-only` 전용.
 2. `S/triage.py run <KEY> --logs <…>` + 위 옵션(analyzer·explore 외) — lock·스냅샷부터 Step 5 `code_refs` resolve까지 한다. stdout(=`JOB/analysis.json`, ≤4KB)과 `JOB/report.md`만 읽는다.
 3. `status: needs_input` → `question`·`options`를 보이고 **사용자 답**을 `--answer <kind>=<값>`으로 붙여 같은 명령을 재실행한다. 대신 고르지 않는다.
@@ -75,6 +76,8 @@ description: Android Telephony 이슈(data·call·network·sim·sms·ims)를 Jir
 
 ### Step 8. 적용 → 확인 → 커밋 → PR
 
-`write-flow.md` 그대로: `db_pr stage --then-summary`(출력 = 확인 화면, 생략 불가) → 승인 → `db_pr publish --commit --and-discard`.
+lock·스냅샷·check는 triage.py가 이미 했다. 먼저 `S/db_pr.py preflight --branch issue/<KEY> --search <KEY> --jira <KEY>`로
+write-flow §2(브랜치·`--lease`)만 한다. 열린 PR·`jira_in_main`은 다시 묻지 않되 `analysis.json` `open_prs`에 없던 PR은 알리고 묻는다.
+`write-flow.md` 그대로: `db_pr stage --then-summary`(출력 = 확인 화면, 생략 불가) → 승인 → `db_pr publish --commit --and-discard --json`.
 직접 `git commit` 없음. 취소·dry-run만 `discard`.
 `fixed`는 `verify-fix` 통과로만 기록한다.

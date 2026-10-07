@@ -18,6 +18,8 @@
 - `raw-identifier` 오류: 시그니처·extractor 패턴, Jira `note`, 원인 `cp_evidence`, 유형 본문의 원본 식별자
 - `fixed-token` 경고: 시그니처·extractor가 특정 마스킹 번호(`<CELL#1>`)를 고정
 - `regex-unsafe` 오류: 중첩 수량자·겹치는 선택지 반복·역참조 (04 §5.8 (4), 정적·보수적)
+- `mask-allow-too-broad` 오류: `mask.allow_patterns` 패턴이 합성 PII 표본(IMSI·IMEI·IP·MAC·EMAIL·MSISDN 3형식·ICCID) 하나에
+  통째로 맞음. 같은 목록의 정규식 오류·형식 오류는 `schema`, 안전성은 `regex-unsafe`
 - `step-event` 오류: `issue-db.config.yaml`의 `step_events` 규칙(스텝 → 로그 흔적, 02-config.md §5.3): 대상(`event`·`ril`·`match`)이
   정확히 하나가 아님(`observable: false`면 없어야 함), 없는 `event`(extractor 이벤트·예약 이벤트·`builtin.*`가 아님)·`ext.*`(미지원),
   없는 `ril` 이름, 잘못된 `dir`, `event` 없는 `fields`. 목록·`pattern`·정규식 형식 오류는 `schema`, 패턴 안전성은
@@ -66,6 +68,10 @@ KEBAB_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 SIG_KINDS = ("symptom_signatures", "signatures", "recovery_signatures", "scenario_signatures")
 TYPE_TITLE_MAX, CAUSE_TITLE_MAX = 30, 20
 CODE_FIX_TYPES = ("framework-bug", "vendor-ril", "modem", "carrier-config")
+# mask.allow_patterns 넓이 검사용 합성 PII 표본 (IP는 TEST-NET: 사설 대역 한정 예외는 통과시킨다)
+PII_PROBES = {"IMSI": "450081234567890", "IMEI": "356938035643809", "IP": "203.0.113.7",
+              "MAC": "02:00:00:aa:bb:cc", "EMAIL": "user@example.com", "MSISDN": "010-1234-5678",
+              "MSISDN(하이픈 없음)": "01012345678", "MSISDN(국제)": "+821012345678", "ICCID": "89820012345678901234"}
 
 
 class UsageError(Exception):
@@ -191,6 +197,7 @@ class Linter:
         self.categories = {c["key"]: c for c in cats if c.get("key")}
         self.key_re = self._compile_cfg("jira_key_regex")
         self.fix_ref_re = self._compile_cfg("fix_ref_regex")
+        self._check_mask_allow()
         self.root_keys = set(self.config.get("code_root_keys") or [])
         self.external_cats = set((self.config.get("external_parsers") or {}).keys())
         self.builtin_events = self._builtin_events()
@@ -245,6 +252,31 @@ class Linter:
         except re.error as exc:
             self.err("schema", issuedb.CONFIG, f"{key} 정규식 오류: {exc}")
             return None
+
+    def _check_mask_allow(self) -> None:
+        """`mask.allow_patterns`: 목록·정규식·안전성, 그리고 PII 표본 전체에 맞는 넓은 예외 거부 (08-safety.md §8)."""
+        cfg = issuedb.CONFIG
+        mask = self.config.get("mask")
+        pats = mask.get("allow_patterns") if isinstance(mask, dict) else None
+        if pats is None:
+            return
+        if not isinstance(pats, list) or not all(isinstance(p, str) for p in pats):
+            self.err("schema", cfg, "mask.allow_patterns는 문자열 목록이어야 합니다.")
+            return
+        for pat in pats:
+            try:
+                compiled = re.compile(pat)
+            except re.error as exc:
+                self.err("schema", cfg, f"mask.allow_patterns 정규식 오류 {pat!r}: {exc}")
+                continue
+            unsafe = unsafe_regex(pat)
+            if unsafe:
+                self.err("regex-unsafe", cfg, f"mask.allow_patterns {pat!r}: {unsafe}")
+                continue
+            kind = next((k for k, v in PII_PROBES.items() if compiled.fullmatch(v)), None)
+            if kind:
+                self.err("mask-allow-too-broad", cfg,
+                         f"mask.allow_patterns {pat!r}가 {kind} 표본 전체에 맞는다. 마스킹 예외는 좁게 쓴다.")
 
     def _check_step_focus(self) -> None:
         """`scoring.step_focus_bonus_max`(0~0.1)와 `step_focus`(`min_records` ≥ 1, `map[{pattern, types[], categories[]}]`).

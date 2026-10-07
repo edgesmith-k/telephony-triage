@@ -69,8 +69,8 @@
 | ✅ | V1 | ✅ 완료(10/07) | v/V1-boundary-mode · 커밋 `V1: …` | R-1. 위임 결정 D1 (b)·D2~D5 (a), D4는 가드 삭제 대신 `make_plugin_root` copytree에서 SITE_PATHS 제외(사내 백엔드 혼재도 해결). R-1 근거 정정(manifest 아님, SITE_PROFILE·site-defaults). 리뷰(Fable) 권고 3 반영. 전체 992 통과·4 실패(환경) |
 | ✅ | V2 | ✅ 완료(10/07) | v/V2-bundle-tools · 커밋 `V2: …` | R-19~24. 위임 결정 D1 check-ignore(임시 bare git-dir)·D2 보고만·D3 `plugin.json` version 삭제·D4 보고만. 리뷰(Fable) 차단 1(`.gitignore` `build/`가 추적 fixture 무시 → 루트 앵커+테스트) 수정. 전체 1002 통과·4 실패(환경) |
 | ✅ | V3 | ✅ 완료(10/07) | v/V3-docs-drift · 커밋 `V3: …` | R-25~31. 위임 결정 D1 A(`when`은 코드 값 `ask\|always\|never`, eval 0)·D2 a·D3 a(S-0 pack 75→23KB)·D4 A. 리뷰(Opus) 차단 1(GUIDE §4 설치 순서)·권고 8 반영, S-7 pack은 V 이후 후보. 관련 973 통과·4 실패(환경) |
-| ☐ | V4 | 대기 | | R-2~8, 독립 |
-| ☐ | V5 | 대기 | | R-9~14, 독립 |
+| ✅ | V4 | ✅ 완료(10/07) | v/V4-safety · 커밋 `V4: …` | R-2~8. 위임 결정 D1 합집합 접두사·D2 NUL 제거 검사(+공백 치환)·D3 래퍼 확장 표·D4 `S/` 정의 SKILL+커맨드·D5~D7 (a). 리뷰(Fable) 권고 3+정보 2 반영(묶음 옵션·붙은 chdir, PII 표본, `validate.md` 포함 커맨드 `S/`). 전체 1021 통과·4 실패(환경). eval 1·28·30 통과(1번 토큰 −48%), 43 실패 = 모델이 dry-run에서 Step 7 건너뜀(V4 무관, 후속 후보로 기록) |
+| ☐ | V5 | 계획·결정 완료 | | R-9~14. 계획·결정은 세션 scratchpad `v5/`(D11: golden 바뀌면 멈추고 사용자 승인). 실행 Sonnet |
 | ☐ | V6 | 대기 | | R-15~18, 독립 |
 | ☐ | V7 | 대기 | | R-32~35, V3·V5·V6 뒤 |
 | ☐ | V 끝 | 대기 | | 전체 테스트·eval(결정 (i) 최소)·색인 → Z |

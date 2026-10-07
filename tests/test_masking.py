@@ -275,6 +275,45 @@ def test_mask_pii_check_staged_and_changed():
     assert _run("mask_pii.py", ["--check", "--staged", "--db", str(repo)]).returncode == 1
 
 
+def test_mask_pii_check_does_not_skip_nul_files():
+    """R-5: NUL이 든 파일(잘린 logcat·UTF-16)도 건너뛰지 않는다 — NUL을 지우고 검사하고 `checked`에 센다."""
+    repo = _tmp() / "db"
+    shutil.copytree(SAMPLE, repo)
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "-c", "user.name=t", "-c", "user.email=t@t", "add", "-A")
+    _git(repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "init")
+    fixtures = repo / "data/DATA-001-no-setup-data-call/fixtures"
+    (fixtures / "x.log").write_bytes(b"imsi=450081234567890\0tail\n")                 # 잘린 줄 뒤 NUL
+    (fixtures / "y.log").write_bytes("imsi=450081234567890\n".encode("utf-16-le"))      # UTF-16
+    _git(repo, "add", "-A")
+    for scope in (["--staged"], ["--changed", "main"]):
+        proc = _run("mask_pii.py", ["--check", *scope, "--db", str(repo)])
+        assert proc.returncode == 1, (scope, proc.stdout, proc.stderr)
+        result = json.loads(proc.stdout)
+        assert result["checked"] == 2, scope
+        assert sorted(Path(d["path"]).name for d in result["detections"]) == ["x.log", "y.log"], scope
+
+
+def test_mask_pii_bad_allow_pattern_is_usage_error():
+    """R-6: 컴파일되지 않는 `mask.allow_patterns`는 traceback이 아니라 종료 코드 2와 원인 문구."""
+    repo = _tmp() / "db"
+    shutil.copytree(SAMPLE, repo)
+    cfg = repo / "issue-db.config.yaml"
+    allow = r"    - '^MOCK[AB]\d{2}_U\d+_\d{8}$'"
+    text = cfg.read_text(encoding="utf-8")
+    assert allow in text
+    cfg.write_text(text.replace(allow, "    - '('"), encoding="utf-8", newline="\n")
+    raw = _write(["ip=10.9.8.7"])
+    proc = _run("mask_pii.py", [str(raw), "--check", "--db", str(repo)], cwd=_tmp())
+    assert proc.returncode == 2 and "allow_patterns" in proc.stderr and "Traceback" not in proc.stderr, proc.stderr
+    try:
+        masking.new_masker(allow_patterns=["("])
+    except masking.AllowPatternError as exc:
+        assert "allow_patterns" in str(exc)
+    else:
+        raise AssertionError("AllowPatternError가 나야 한다")
+
+
 # -- parse --mask와 매처 --------------------------------------------------------------
 
 

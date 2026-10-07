@@ -11,11 +11,11 @@
 TODO(SITE:S1) hook 입력 필드(`tool_name`, `tool_input.command|file_path|notebook_path`, `cwd`)와 권한 결정 출력
 형식(`hookSpecificOutput.permissionDecision`)을 사내 Claude Code 버전에서 확인한다 (사외 빈 플러그인 실험도 미확인).
 TODO(SITE:S3) 플러그인 hook에 보이는 MCP 도구 이름이 `mcp__<server>__<tool>`이고 `<server>`가 config
-`jira.mcp_server`와 같은 문자열인지 확인한다 (서버 이름의 특수문자 치환 여부).
+`jira.mcp_server`를 `[^A-Za-z0-9_-]`→`_`로 바꾼 문자열인지 확인한다 (치환 규칙은 관측 기반 추정, `mcptools.server_segment`).
 
 | # | 규칙 | 대상 |
 |---|---|---|
-| 2 | Jira 쓰기 차단: `jira.mcp_server` 서버의 도구 중 `jira.read_tools`(전체 이름)에 없는 것은 거부 | `mcp__.*` |
+| 2 | Jira 쓰기 차단: Jira 서버(`jira.mcp_server`와 `jira.tools` 도구 이름의 서버 접두사, 이름 정규화) 도구 중 `jira.read_tools`(전체 이름, 정규화 비교)에 없는 것은 거부 | `mcp__.*` |
 | 3 | PII 검사: `git commit`이면 `mask_pii --check --staged` | Bash, 이슈 DB |
 | 4 | 생성 파일 정합성: `git commit`이면 `db_build --verify --staged`(`actions-build`면 생성 파일 staged 거부), `.cache/` staged 거부 | Bash, 이슈 DB |
 | 5 | hook 우회 차단: 커밋의 `--no-verify`·`-n`, `-c core.hooksPath=…`(모든 git 명령), 유효 `core.hooksPath`가 정확히 `.githooks`가 아니면 커밋 거부, `core.hooksPath`를 바꾸거나 해제하는 `git config` 거부(정확히 `.githooks`로 설정은 허용) | Bash, 이슈 DB |
@@ -29,12 +29,13 @@ TODO(SITE:S3) 플러그인 hook에 보이는 MCP 도구 이름이 `mcp__<server>
 **레포 판별**: git 규칙은 명령의 작업 디렉토리(cwd, `cd <dir>`, `git -C <dir>`)에서
 `git rev-parse --git-common-dir`를 구해 config `issue_db.path`의 것과 같을 때만(그 worktree·읽기 스냅샷 포함) 적용한다.
 
-**명령 파싱은 최선 노력**이다: `;`/`&&`/`||`/`|`/줄바꿈으로 이은 명령, `cd <dir>`, 앞의 환경변수 대입과 `env`,
-`sh -c`/`bash -c` 안쪽(중첩 한도 있음), heredoc 본문 제외. 변수 치환·별칭·스크립트 파일 안의 git 호출은 보지 못한다.
+**명령 파싱은 최선 노력**이다: `;`/`&&`/`||`/`|`/줄바꿈으로 이은 명령, `cd <dir>`, 앞의 환경변수 대입과
+래퍼(`WRAPPERS`: env·timeout·nice·ionice·stdbuf·sudo·setsid·time·exec·nohup·command), `sh -c`/`bash -c` 안쪽(중첩 한도 있음),
+heredoc 본문 제외. 변수 치환·별칭·백틱·`$( )`·`GIT_DIR=`·표 밖 래퍼·스크립트 파일 안의 git 호출은 보지 못한다.
 진짜 강제는 git hook(pre-commit·pre-push)과 GHE 브랜치 보호다.
 
 **설정 없음**: 사용자 config가 없거나 `issue_db.path`로 레포를 판별할 수 없으면 git·파일 규칙은 적용하지 않는다.
-`jira.mcp_server`가 비어 있으면 Jira 규칙은 적용하지 않고 경고만 한다. `jira.read_tools`가 비어 있으면 그 서버 도구는
+`jira.mcp_server`와 `jira.tools`가 모두 비어 있으면 Jira 규칙은 적용하지 않고 경고만 한다. `jira.read_tools`가 비어 있으면 그 서버 도구는
 모두 거부한다. hook은 모든 도구 호출에 걸리므로, `site-defaults.yaml`이 없어도 guard는 멈추지 않고 사용자 config만으로
 판정한다(경고). 이때 커밋 검사(3·4번)가 부르는 스크립트는 종료 코드 2를 내므로 이슈 DB 커밋은 거부된다.
 """
@@ -54,13 +55,26 @@ from pathlib import Path
 SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS))
 
-from common import checks, site_defaults, userconfig  # noqa: E402
+from common import checks, mcptools, site_defaults, userconfig  # noqa: E402
 
 FILE_TOOLS = {"Write", "Edit", "MultiEdit", "NotebookEdit"}
 HOOKS_PATH_KEY = "core.hookspath"
 SEPARATORS = {";", "&&", "||", "|", "&", "(", ")", "\n", "|&", ";;"}
 SHELLS = {"sh", "bash", "zsh", "dash", "ksh"}
 MAX_DEPTH = 3
+# 다른 명령을 실행하는 앞 래퍼: 이름 → (값을 다음 토큰으로 받는 옵션, 옵션 뒤 건너뛸 위치 인자 수).
+# 값이 붙은 옵션(`-oL`, `--signal=KILL`, `nice -5`)은 한 칸. 표 밖 래퍼(xargs·watch·flock 등)는 보지 못한다.
+WRAPPERS = {
+    "env": ({"-u", "--unset", "-C", "--chdir"}, 0), "command": (set(), 0), "builtin": (set(), 0),
+    "nohup": (set(), 0), "setsid": (set(), 0), "exec": ({"-a"}, 0),
+    "time": ({"-f", "--format", "-o", "--output"}, 0),
+    "timeout": ({"-s", "--signal", "-k", "--kill-after"}, 1), "nice": ({"-n", "--adjustment"}, 0),
+    "ionice": ({"-c", "--class", "-n", "--classdata"}, 0),
+    "stdbuf": ({"-i", "-o", "-e", "--input", "--output", "--error"}, 0),
+    "sudo": ({"-u", "-g", "-h", "-p", "-C", "-D", "-r", "-t", "-U", "-T", "--user", "--group", "--host",
+              "--prompt", "--chdir"}, 0),
+}
+CHDIR_OPTS = {"env": {"-C", "--chdir"}, "sudo": {"-D", "--chdir"}}
 HEREDOC_RE = re.compile(r"<<-?\s*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\1")
 
 # 규칙 10: 로그 원문 통독 차단
@@ -181,14 +195,20 @@ def _common_dir(cwd: Path) -> str | None:
 
 
 def check_mcp(tool: str, conf: Config, dec: Decision) -> None:
+    # Jira 서버 접두사: mcp_server ∪ jira.tools 이름의 서버 (플러그인 번들 `mcp__plugin_…`도 덮는다). 넓을수록 안전 쪽
     server = userconfig.get(conf.cfg, "jira.mcp_server")
-    if not server:
+    tools = userconfig.get(conf.cfg, "jira.tools")
+    prefixes = {mcptools.full_name(str(server), "")} if server else set()
+    prefixes |= {mcptools.server_prefix(v) for v in (tools.values() if isinstance(tools, dict) else [])
+                 if mcptools.server_prefix(v)}
+    if not prefixes:
         dec.warn.append("jira.mcp_server가 비어 있어 Jira 읽기 전용 규칙을 적용하지 않았다 (setup 전).")
         return
-    if not tool.startswith(f"mcp__{server}__"):
+    name = mcptools.normalize(tool)
+    if not any(name.startswith(p) for p in prefixes):
         return   # 다른 MCP 서버 도구는 영향 없음
     read_tools = userconfig.get(conf.cfg, "jira.read_tools") or []
-    if tool not in read_tools:
+    if name not in {mcptools.normalize(t) for t in read_tools}:
         dec.deny.append(f"이 플러그인은 Jira 읽기 전용이다. {tool}은(는) jira.read_tools에 없어 거부한다 (규칙 2).")
 
 
@@ -260,20 +280,53 @@ def _expand(word: str) -> str:
     return os.path.expanduser(os.path.expandvars(word))
 
 
-def _strip_prefix(seg: list[str]) -> list[str]:
-    """앞의 `VAR=값`, `env [-i] VAR=값`, `command`, `exec`, `time`, `nohup`을 뗀다."""
+def _strip_prefix(seg: list[str], cwd: Path) -> tuple[list[str], Path]:
+    """앞의 `VAR=값`과 래퍼(`WRAPPERS`: env·timeout·nice·sudo 등)를 옵션째 뗀다. `env -S`는 풀어 읽고,
+    `env -C`·`sudo -D`는 작업 디렉토리로 반영한다."""
     i = 0
     while i < len(seg):
         tok = seg[i]
+        name = _base(tok)
         if re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", tok):
             i += 1
-        elif tok in ("env", "command", "exec", "time", "nohup", "builtin"):
-            i += 1
-            while tok == "env" and i < len(seg) and seg[i].startswith("-"):
-                i += 1
-        else:
+            continue
+        if name not in WRAPPERS:
             break
-    return seg[i:]
+        with_arg, positional = WRAPPERS[name]
+        i += 1
+        while i < len(seg) and seg[i].startswith("-"):
+            opt = seg[i]
+            if opt == "--":
+                i += 1
+                break
+            # 값 받는 옵션(이름, 값, 차지한 토큰 수): 긴 옵션은 `--x=v`|`--x v`, 짧은 묶음(`-Eu x`, `-vS'…'`, `-C/dir`)은
+            # 값 받는 첫 글자에서 멈추고 묶음 나머지가 값(없으면 다음 토큰)
+            key, value, used = None, None, 1
+            takes = with_arg | ({"-S", "--split-string"} if name == "env" else set())
+            if opt.startswith("--"):
+                key, eq, value = opt.partition("=")
+                if not eq:
+                    value, used = (seg[i + 1], 2) if key in takes and i + 1 < len(seg) else (None, 1)
+            else:
+                for k, ch in enumerate(opt[1:], 1):
+                    if "-" + ch in takes:
+                        key, value = "-" + ch, opt[k + 1:]
+                        if not value:
+                            value, used = (seg[i + 1], 2) if i + 1 < len(seg) else ("", 1)
+                        break
+            if key in ("-S", "--split-string") and value is not None:
+                try:
+                    split = shlex.split(value)
+                except ValueError:
+                    split = value.split()
+                seg = seg[:i] + split + seg[i + used:]
+                continue   # 풀린 토큰을 다시 옵션·명령으로 읽는다
+            if key in CHDIR_OPTS.get(name, set()) and value:
+                d = _expand(value)
+                cwd = Path(d) if Path(d).is_absolute() else cwd / d
+            i += used
+        i += positional
+    return seg[i:], cwd
 
 
 def _base(word: str) -> str:
@@ -290,7 +343,7 @@ class Invocation:
 def invocations(command: str, cwd: Path, depth: int = 0) -> list[Invocation]:
     out: list[Invocation] = []
     for seg in _segments(_tokens(command)):
-        seg = _strip_prefix(seg)
+        seg, seg_cwd = _strip_prefix(seg, cwd)
         if not seg:
             continue
         name = _base(seg[0])
@@ -302,10 +355,10 @@ def invocations(command: str, cwd: Path, depth: int = 0) -> list[Invocation]:
         if name in SHELLS and depth < MAX_DEPTH:
             for i, tok in enumerate(seg[1:], 1):
                 if tok.startswith("-") and not tok.startswith("--") and "c" in tok[1:] and i + 1 < len(seg):
-                    out += invocations(seg[i + 1], cwd, depth + 1)
+                    out += invocations(seg[i + 1], seg_cwd, depth + 1)
                     break
             continue
-        out.append(Invocation(cwd, seg))
+        out.append(Invocation(seg_cwd, seg))
     return out
 
 
