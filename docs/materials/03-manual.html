@@ -1,0 +1,1616 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>telephony-triage 운영 매뉴얼</title>
+<style>
+/* Layout: 왼쪽 고정 목차 + 본문 한 단(≤ 46rem). 휴대폰에서는 목차가 상단 접이식. */
+:root {
+  --bg: #f6f8f9;
+  --surface: #ffffff;
+  --sunken: #eef2f3;
+  --ink: #17232b;
+  --ink-2: #4a5a63;
+  --rule: #d5dee2;
+  --accent: #0b6874;        /* 신호선 청록 */
+  --accent-soft: #dcefF1;
+  --warn: #9a5b00;
+  --warn-soft: #fbf0dc;
+  --bad: #a3262c;
+  --bad-soft: #f8e3e3;
+  --good: #1f6b3a;
+  --good-soft: #e1f1e6;
+  --mark: #ffe58a;
+  --font-body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Consolas, "D2Coding", monospace;
+  --step--1: 0.8125rem;
+  --step-0: 0.96875rem;
+  --step-1: 1.125rem;
+  --step-2: 1.375rem;
+  --step-3: 1.75rem;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f171c; --surface: #152229; --sunken: #1b2b33; --ink: #e3ecef; --ink-2: #9fb2ba; --rule: #2a3d46;
+    --accent: #5cc3cf; --accent-soft: #163a40; --warn: #e2a64a; --warn-soft: #3a2c14; --bad: #f08a8e; --bad-soft: #3d1c1f;
+    --good: #7fcf98; --good-soft: #17331f; --mark: #6b5a12; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f171c; --surface: #152229; --sunken: #1b2b33; --ink: #e3ecef; --ink-2: #9fb2ba; --rule: #2a3d46;
+  --accent: #5cc3cf; --accent-soft: #163a40; --warn: #e2a64a; --warn-soft: #3a2c14; --bad: #f08a8e; --bad-soft: #3d1c1f;
+  --good: #7fcf98; --good-soft: #17331f; --mark: #6b5a12; color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { scroll-padding-top: 1rem; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--font-body); font-size: var(--step-0); line-height: 1.7;
+  -webkit-text-size-adjust: 100%;
+}
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px;
+}
+code, kbd, pre { font-family: var(--font-mono); font-size: 0.875em; }
+:not(pre) > code {
+  background: var(--sunken); border: 1px solid var(--rule); border-radius: 4px;
+  padding: 0.05em 0.35em; overflow-wrap: anywhere;
+}
+
+.shell {
+  display: grid; grid-template-columns: 17rem minmax(0, 1fr); gap: 0 2.5rem;
+  max-width: 76rem; margin: 0 auto; padding-inline: 16px;
+}
+
+/* 목차 */
+.side {
+  position: sticky; top: env(safe-area-inset-top, 0px); align-self: start;
+  max-height: 100vh; overflow-y: auto; padding-block: 1.5rem 2rem;
+  font-size: var(--step--1);
+}
+.brand { display: flex; flex-direction: column; gap: 0.1rem; margin-bottom: 1rem; }
+.brand b { font-size: var(--step-1); letter-spacing: -0.01em; }
+.brand span { color: var(--ink-2); }
+.search { position: relative; margin-bottom: 0.4rem; }
+.search input {
+  width: 100%; padding: 0.55rem 0.7rem; border: 1px solid var(--rule); border-radius: 6px;
+  background: var(--surface); color: var(--ink); font: inherit; font-size: var(--step--1);
+}
+.search-state { color: var(--ink-2); min-height: 1.4em; margin-bottom: 0.6rem; }
+.toc ol { list-style: none; margin: 0; padding: 0; }
+.toc > ol > li { margin-top: 0.55rem; }
+.toc > ol > li > a { font-weight: 600; color: var(--ink); }
+.toc ol ol { padding-left: 0.9rem; border-left: 1px solid var(--rule); margin-top: 0.2rem; }
+.toc ol ol a { color: var(--ink-2); }
+.toc a { text-decoration: none; display: block; padding: 0.12rem 0; }
+.toc a:hover { color: var(--accent); }
+.toc a.on { color: var(--accent); font-weight: 600; }
+.toc-mobile { display: none; }
+
+/* 본문 */
+main { min-width: 0; padding-block: 1.5rem 5rem; max-width: 48rem; }
+.hero { padding-block: 1rem 1.5rem; border-bottom: 2px solid var(--ink); margin-bottom: 1rem; }
+.hero .eyebrow { font-family: var(--font-mono); font-size: var(--step--1); color: var(--accent); letter-spacing: 0.04em; }
+.hero h1 { font-size: var(--step-3); line-height: 1.25; margin: 0.3rem 0 0.6rem; text-wrap: balance; letter-spacing: -0.015em; }
+.hero p { margin: 0; color: var(--ink-2); max-width: 40rem; }
+.meta { display: flex; flex-wrap: wrap; gap: 0.4rem 1.2rem; margin-top: 0.9rem; font-size: var(--step--1); color: var(--ink-2); }
+.meta b { color: var(--ink); font-weight: 600; }
+
+section.chap { padding-top: 1.8rem; }
+section.chap > h2 {
+  font-size: var(--step-2); line-height: 1.3; margin: 0 0 0.4rem; text-wrap: balance;
+  display: flex; gap: 0.6rem; align-items: baseline; letter-spacing: -0.01em;
+}
+section.chap > h2 .no { font-family: var(--font-mono); color: var(--accent); font-size: 0.8em; }
+.sub { padding-top: 1.2rem; }
+.sub > h3 { font-size: var(--step-1); margin: 0 0 0.4rem; text-wrap: balance; }
+.sub > h4, .card h4 { font-size: var(--step-0); margin: 1rem 0 0.3rem; }
+p, ul, ol { margin: 0.5rem 0; }
+ul, ol { padding-left: 1.3rem; }
+li + li { margin-top: 0.2rem; }
+.lead { color: var(--ink-2); }
+
+/* 표 */
+.tbl { overflow-x: auto; margin: 0.7rem 0; border: 1px solid var(--rule); border-radius: 6px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: var(--step--1); line-height: 1.55; }
+th, td { text-align: left; vertical-align: top; padding: 0.5rem 0.65rem; border-bottom: 1px solid var(--rule); }
+th { background: var(--sunken); font-weight: 600; white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+td code { white-space: nowrap; }
+td.wrap code, td code.wrap { white-space: normal; }
+.num { font-variant-numeric: tabular-nums; }
+
+/* 코드 블록 */
+.code { position: relative; margin: 0.7rem 0; }
+pre {
+  margin: 0; padding: 0.8rem 0.9rem; padding-right: 4.2rem; overflow-x: auto;
+  background: var(--sunken); border: 1px solid var(--rule); border-radius: 6px; line-height: 1.55;
+}
+.copy {
+  position: absolute; top: 0.4rem; right: 0.4rem; font: inherit; font-size: 0.75rem;
+  padding: 0.2rem 0.55rem; border-radius: 4px; border: 1px solid var(--rule);
+  background: var(--surface); color: var(--ink-2); cursor: pointer;
+}
+.copy:hover { color: var(--accent); border-color: var(--accent); }
+
+/* 안내 상자 */
+.note { border: 1px solid var(--rule); border-left-width: 4px; border-radius: 6px; padding: 0.6rem 0.85rem; margin: 0.8rem 0; background: var(--surface); }
+.note > :first-child { margin-top: 0; } .note > :last-child { margin-bottom: 0; }
+.note .k { font-weight: 700; font-size: var(--step--1); letter-spacing: 0.03em; display: block; margin-bottom: 0.15rem; }
+.note.rule { border-left-color: var(--accent); } .note.rule .k { color: var(--accent); }
+.note.warn { border-left-color: var(--warn); background: var(--warn-soft); } .note.warn .k { color: var(--warn); }
+.note.plan { border-left-color: var(--ink-2); border-style: dashed; border-left-style: solid; } .note.plan .k { color: var(--ink-2); }
+
+.chip { display: inline-block; font-family: var(--font-mono); font-size: 0.78rem; line-height: 1.4; padding: 0.05rem 0.4rem; border-radius: 999px; border: 1px solid var(--rule); white-space: nowrap; }
+.chip.g { background: var(--good-soft); color: var(--good); border-color: transparent; }
+.chip.w { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
+.chip.b { background: var(--bad-soft); color: var(--bad); border-color: transparent; }
+.chip.a { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+.chip.p { color: var(--ink-2); border-style: dashed; }
+
+/* 커맨드 카드 */
+.card { border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); padding: 0.9rem 1rem; margin: 1rem 0; }
+.card > h3 { margin: 0 0 0.2rem; font-size: var(--step-1); font-family: var(--font-mono); font-weight: 500; overflow-wrap: anywhere; }
+.card .who { font-size: var(--step--1); color: var(--ink-2); margin: 0 0 0.5rem; }
+dl.kv { display: grid; grid-template-columns: 5.5rem minmax(0, 1fr); gap: 0.35rem 0.9rem; margin: 0.4rem 0; }
+dl.kv dt { font-size: var(--step--1); font-weight: 600; color: var(--ink-2); padding-top: 0.15rem; }
+dl.kv dd { margin: 0; min-width: 0; }
+dl.kv dd > :first-child { margin-top: 0; }
+
+/* 흐름 */
+ol.flow { list-style: none; padding: 0; margin: 0.8rem 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr)); gap: 0.5rem; counter-reset: f; }
+ol.flow li { margin: 0; border: 1px solid var(--rule); border-radius: 6px; background: var(--surface); padding: 0.5rem 0.65rem; font-size: var(--step--1); line-height: 1.45; counter-increment: f; }
+ol.flow li::before { content: counter(f); display: block; font-family: var(--font-mono); color: var(--accent); font-weight: 500; }
+ol.flow li.gate { border-color: var(--accent); background: var(--accent-soft); }
+
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: 0.8rem; margin: 0.7rem 0; }
+.two > div { min-width: 0; border: 1px solid var(--rule); border-radius: 6px; padding: 0.6rem 0.85rem; background: var(--surface); }
+.two h4 { margin: 0 0 0.2rem; }
+
+.fig { margin: 0.8rem 0; border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); padding: 0.6rem; overflow-x: auto; }
+.fig svg { display: block; width: 100%; min-width: 640px; height: auto; }
+.fig figcaption { font-size: var(--step--1); color: var(--ink-2); padding: 0.4rem 0.3rem 0; }
+svg .box { fill: var(--surface); stroke: var(--rule); stroke-width: 1.2; }
+svg .box.hl { fill: var(--accent-soft); stroke: var(--accent); }
+svg .box.in { fill: var(--sunken); stroke: var(--rule); }
+svg .box.ext { fill: var(--surface); stroke: var(--ink-2); stroke-dasharray: 4 3; }
+svg text { fill: var(--ink); font-family: var(--font-body); font-size: 13px; }
+svg text.s { fill: var(--ink-2); font-size: 11.5px; }
+svg text.t { font-weight: 600; }
+svg text.m { font-family: var(--font-mono); font-size: 11.5px; fill: var(--ink-2); }
+svg .ln { stroke: var(--ink-2); stroke-width: 1.4; fill: none; }
+svg .ln.acc { stroke: var(--accent); }
+svg .head { fill: var(--ink-2); }
+svg .head.acc { fill: var(--accent); }
+svg text.lab { fill: var(--accent); font-size: 11.5px; font-weight: 600; }
+
+mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius: 2px; }
+.empty { display: none; padding: 1rem; border: 1px dashed var(--rule); border-radius: 6px; color: var(--ink-2); margin-top: 1.5rem; }
+.foot { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--rule); font-size: var(--step--1); color: var(--ink-2); }
+
+@media (max-width: 860px) {
+  .shell { grid-template-columns: minmax(0, 1fr); }
+  .side { display: none; }
+  .toc-mobile {
+    display: block; position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5;
+    background: var(--bg); border-bottom: 1px solid var(--rule); padding-block: 0.5rem; margin-inline: -16px; padding-inline: 16px;
+  }
+  .toc-mobile summary { cursor: pointer; font-weight: 600; font-size: var(--step--1); padding: 0.3rem 0; list-style: none; display: flex; justify-content: space-between; }
+  .toc-mobile summary::after { content: "▾"; color: var(--ink-2); }
+  .toc-mobile[open] summary::after { content: "▴"; }
+  .toc-mobile .inner { max-height: 70vh; overflow-y: auto; padding-bottom: 0.6rem; font-size: var(--step--1); }
+  main { padding-top: 0.5rem; }
+  dl.kv { grid-template-columns: minmax(0, 1fr); gap: 0.1rem; }
+  dl.kv dd { margin-bottom: 0.5rem; }
+}
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+@media print {
+  :root { --bg: #fff; --surface: #fff; --sunken: #f3f3f3; --ink: #000; --ink-2: #333; --rule: #bbb; --accent: #0b5560; color-scheme: light; }
+  body { font-size: 10.5pt; line-height: 1.55; }
+  .side, .toc-mobile, .copy, .search-state, .empty { display: none !important; }
+  .shell { display: block; max-width: none; padding: 0; }
+  main { max-width: none; padding: 0; }
+  .sub[hidden], section.chap[hidden] { display: block !important; }
+  pre { white-space: pre-wrap; overflow: visible; padding-right: 0.9rem; }
+  .tbl, .fig { overflow: visible; }
+  .fig svg { min-width: 0; }
+  section.chap { break-before: page; }
+  section.chap:first-of-type { break-before: auto; }
+  h2, h3, h4 { break-after: avoid; }
+  tr, .card, .note, .code { break-inside: avoid; }
+  a { color: inherit; text-decoration: none; }
+}
+</style>
+</head>
+<body>
+<div class="shell">
+
+<aside class="side" aria-label="목차">
+  <div class="brand"><b>telephony-triage</b><span>사용·운영 매뉴얼</span></div>
+  <div class="search">
+    <label for="q" class="sr" style="position:absolute;left:-9999px">매뉴얼 검색</label>
+    <input id="q" type="search" placeholder="검색 (예: lock, 종료 코드 2, R4)" autocomplete="off">
+  </div>
+  <div class="search-state" id="qs" aria-live="polite"></div>
+  <nav class="toc" id="toc"></nav>
+</aside>
+
+<main id="top">
+  <details class="toc-mobile" id="tocm">
+    <summary>목차 · 검색</summary>
+    <div class="inner">
+      <div class="search" style="margin-top:0.4rem">
+        <label for="q2" style="position:absolute;left:-9999px">매뉴얼 검색</label>
+        <input id="q2" type="search" placeholder="검색" autocomplete="off">
+      </div>
+      <div class="search-state" id="qs2" aria-live="polite"></div>
+      <nav class="toc" id="toc2"></nav>
+    </div>
+  </details>
+
+  <header class="hero">
+    <div class="eyebrow">Claude Code 플러그인 · 사용자와 관리자용</div>
+    <h1>telephony-triage 사용·운영 매뉴얼</h1>
+    <p>Android Telephony 이슈를 Jira와 logcat으로 분석하고, 결과를 팀 이슈 DB(<code>telephony-issue-db</code>)에 PR로 쌓는 도구입니다. 이 문서 하나로 설치, 매일의 사용, 결과 해석, 문제 해결, 이슈 DB 운영까지 이어받을 수 있게 썼습니다.</p>
+    <div class="meta">
+      <span><b>기준</b> 플러그인 레포 main, 2026-10-07</span>
+      <span><b>이슈 DB 스키마</b> v1 · 생성기 v1</span>
+      <span><b>예시 값</b> <code>ABC-12345</code>, <code>ghe.example</code>는 자리표시자</span>
+    </div>
+  </header>
+
+  <!-- ===================================================== 1 -->
+  <section class="chap" id="s1" data-title="개요">
+    <h2><span class="no">1</span>개요</h2>
+
+    <div class="sub" id="s1-what" data-title="하는 일과 하지 않는 일">
+      <h3>하는 일과 하지 않는 일</h3>
+      <p>한 줄 흐름: <b>Jira + 로그 → 파서(이벤트) → 시그니처 매칭 → 원인·해결책 제시 → 사용자 확인 → 이슈 DB에 PR → 리뷰어 머지</b>.</p>
+      <div class="two">
+        <div>
+          <h4>하는 일</h4>
+          <ul>
+            <li>Jira 이슈(읽기)와 logcat·bugreport로 원인 후보, 근거 로그, 해결책, 수정 상태를 리포트로 보여줍니다.</li>
+            <li>판정은 스크립트가 합니다. 증상(S)·원인(C) 시그니처가 맞았는지 0/1로 냅니다.</li>
+            <li>사용자가 분류를 확정하면 작업 계획을 만들고, 최신 main 위에 적용해 확인 화면을 보여준 뒤 승인받아 PR을 올립니다.</li>
+            <li>새 원인·유형·파서 규칙을 넣을 때 자동 검증(R1~R6)을 돌립니다.</li>
+            <li>수정 CL 기록(<code>fix-submitted</code>)과 수정 빌드 검증(<code>verify-fix</code>)으로 수정 상태를 추적합니다.</li>
+            <li>로그·Jira 텍스트의 개인정보를 마스킹하고, 마스킹된 것만 저장합니다.</li>
+          </ul>
+        </div>
+        <div>
+          <h4>하지 않는 일</h4>
+          <ul>
+            <li>Jira에 쓰지 않습니다. 허용 목록에 없는 Jira 도구 호출은 hook이 거부합니다.</li>
+            <li>main에 직접 push하지 않습니다. 항상 브랜치 + PR이고, push 전에 사용자 승인을 받습니다.</li>
+            <li>사용자의 이슈 DB clone에서 브랜치를 바꾸거나 파일을 고치지 않습니다. 작업은 별도 worktree에서 합니다.</li>
+            <li>Claude(LLM)의 의견으로 분류·점수·검증을 정하지 않습니다. LLM 결과는 리포트 보조 칸에만 들어갑니다.</li>
+            <li>건너뛴 검증을 통과로 표시하지 않습니다.</li>
+            <li>Jira 첨부를 자동으로 내려받지 않습니다(v1). 로그 경로는 사용자가 줍니다.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="note rule"><span class="k">원칙</span>판정 기준은 스크립트 출력(S/C)입니다. 분류 확정, 새 유형·원인, 시그니처·파서 규칙 추가, 수정 상태 변경은 사용자 확인 뒤에만 합니다. git 충돌·인증 실패·MCP 부재·버전 불일치는 우회하지 않고 보고합니다.</div>
+    </div>
+
+    <div class="sub" id="s1-parts" data-title="구성 요소">
+      <h3>구성 요소</h3>
+      <p>레포는 두 개입니다. 플러그인(<code>telephony-triage</code>)은 각자의 Claude Code에 설치하는 도구이고, 이슈 DB(<code>telephony-issue-db</code>)는 팀이 함께 쓰는 GHE 레포입니다. 카테고리(data·call·network·sim·sms·ims) &gt; 이슈 유형(증상) &gt; 원인 + 해결책 + Jira 이력으로 쌓입니다.</p>
+      <figure class="fig">
+        <svg viewBox="0 0 820 450" role="img" aria-labelledby="figT">
+          <title id="figT">구성 요소 그림: 사용자 세션, 플러그인 내부, 외부 입력, 로컬 작업 영역, 이슈 DB</title>
+          <defs>
+            <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0,0 L10,5 L0,10 z"/></marker>
+            <marker id="aha" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head acc" d="M0,0 L10,5 L0,10 z"/></marker>
+          </defs>
+          <!-- 사용자 -->
+          <rect class="box" x="16" y="160" width="140" height="78" rx="6"/>
+          <text class="t" x="30" y="188">사용자</text>
+          <text class="s" x="30" y="208">Claude Code 세션</text>
+          <text class="m" x="30" y="226">/telephony-triage:*</text>
+          <!-- 플러그인 -->
+          <rect class="box hl" x="196" y="30" width="300" height="300" rx="8"/>
+          <text class="t" x="212" y="54">telephony-triage 플러그인</text>
+          <rect class="box" x="212" y="68" width="268" height="52" rx="5"/>
+          <text class="t" x="224" y="90">커맨드 12개</text>
+          <text class="s" x="224" y="108">analyze · record · search · sync …</text>
+          <rect class="box" x="212" y="128" width="268" height="52" rx="5"/>
+          <text class="t" x="224" y="150">스킬 telephony-triage</text>
+          <text class="s" x="224" y="168">결과 설명 · 사용자 확인 · 계획 작성</text>
+          <rect class="box" x="212" y="188" width="268" height="52" rx="5"/>
+          <text class="t" x="224" y="210">스크립트 (판정)</text>
+          <text class="s" x="224" y="228">파서 · 매처 · 검증 R1~R6 · db_pr</text>
+          <rect class="box" x="212" y="248" width="268" height="66" rx="5"/>
+          <text class="t" x="224" y="270">hooks (안전장치 10종)</text>
+          <text class="s" x="224" y="288">Jira 읽기 전용 · push 확인</text>
+          <text class="s" x="224" y="304">clone 편집 차단 · Jira 원문 격리</text>
+          <!-- 외부 입력 -->
+          <rect class="box ext" x="560" y="30" width="244" height="58" rx="6"/>
+          <text class="t" x="574" y="54">Jira (MCP)</text>
+          <text class="s" x="574" y="74">read_tools에 있는 도구만</text>
+          <rect class="box ext" x="560" y="104" width="244" height="58" rx="6"/>
+          <text class="t" x="574" y="128">logcat · bugreport</text>
+          <text class="s" x="574" y="148">로컬 파일 경로로 전달</text>
+          <rect class="box ext" x="560" y="178" width="244" height="58" rx="6"/>
+          <text class="t" x="574" y="202">Android 소스 트리</text>
+          <text class="s" x="574" y="222">16/17 code_profiles (선택)</text>
+          <!-- 로컬 작업 영역 -->
+          <rect class="box in" x="196" y="362" width="300" height="74" rx="6"/>
+          <text class="t" x="212" y="386">~/.telephony-triage/</text>
+          <text class="s" x="212" y="406">config.yaml · work/_snapshot(읽기 스냅샷)</text>
+          <text class="s" x="212" y="424">work/&lt;KEY&gt;/ 계획 · worktree · lock</text>
+          <!-- 이슈 DB -->
+          <rect class="box hl" x="560" y="300" width="244" height="136" rx="8"/>
+          <text class="t" x="574" y="324">이슈 DB (GHE)</text>
+          <text class="m" x="574" y="342">telephony-issue-db</text>
+          <text class="s" x="574" y="364">유형 · 원인 · Jira 기록 · fixture</text>
+          <text class="s" x="574" y="382">parser-rules · README/STATS(생성)</text>
+          <text class="s" x="574" y="404">main: 브랜치 보호 + CODEOWNERS</text>
+          <text class="s" x="574" y="422">PR → 카테고리 오너 리뷰 → 머지</text>
+          <!-- 화살표 -->
+          <path class="ln" d="M156,199 L194,199" marker-end="url(#ah)" marker-start="url(#ah)"/>
+          <path class="ln" d="M496,59 L558,59" marker-end="url(#ah)"/>
+          <text class="lab" x="503" y="51">읽기만</text>
+          <path class="ln" d="M558,133 L498,133" marker-end="url(#ah)"/>
+          <text class="lab" x="502" y="125">마스킹</text>
+          <path class="ln" d="M558,207 L498,207" marker-end="url(#ah)"/>
+          <text class="lab" x="502" y="199">코드 읽기</text>
+          <path class="ln" d="M346,330 L346,360" marker-end="url(#ah)"/>
+          <path class="ln" d="M558,380 L498,380" marker-end="url(#ah)"/>
+          <text class="lab" x="503" y="372">fetch</text>
+          <path class="ln acc" d="M498,412 L558,412" marker-end="url(#aha)"/>
+          <text class="lab" x="500" y="430">승인 후 PR</text>
+        </svg>
+        <figcaption>판정은 스크립트, 설명과 사용자 확인은 스킬이 맡습니다. 이슈 DB에 쓰는 길은 "작업 worktree → 확인 화면 승인 → 브랜치 push → PR" 하나뿐입니다.</figcaption>
+      </figure>
+      <div class="tbl"><table>
+        <tr><th>구성</th><th>위치</th><th>역할</th></tr>
+        <tr><td>커맨드</td><td><code>plugin/commands/*.md</code></td><td>얇은 래퍼. 스킬·스크립트를 부르는 입구(12개)</td></tr>
+        <tr><td>스킬</td><td><code>plugin/skills/telephony-triage/</code></td><td>스크립트 출력을 설명하고 사용자 결정을 계획으로 옮김. <code>reference/</code>에 흐름별 절차</td></tr>
+        <tr><td>스크립트</td><td><code>plugin/scripts/</code></td><td>파싱·마스킹·매칭·검증·생성·PR. 결과는 JSON, 종료 코드 0/1/2/3</td></tr>
+        <tr><td>hooks</td><td><code>plugin/hooks/hooks.json</code></td><td>SessionStart 1, PreToolUse(MCP·Bash·파일 도구), PostToolUse(Jira 원문 격리)</td></tr>
+        <tr><td>사이트 설정</td><td><code>plugin/site-defaults.yaml</code></td><td>조직 기본값(Jira 도구 매핑·필드·GHE·파서 백엔드). 없으면 모든 커맨드가 멈춤</td></tr>
+        <tr><td>이슈 DB 설정</td><td><code>issue-db.config.yaml</code></td><td>Jira 키 형식, 카테고리, 점수, 품질 기준, 마스킹 예외 등 팀 공통 값</td></tr>
+      </table></div>
+    </div>
+
+    <div class="sub" id="s1-flow" data-title="분석 한 건의 흐름">
+      <h3>분석 한 건의 흐름</h3>
+      <ol class="flow">
+        <li>세션 lock, 이슈 DB 읽기 스냅샷 최신화</li>
+        <li>Jira 읽기(즉시 마스킹), 발생 시각·Android 버전</li>
+        <li>코드 경로 선택(16/17 프로필)</li>
+        <li>logcat 파싱 + 마스킹, 로그 범위 확인</li>
+        <li>시그니처 매칭: 상위 3개 후보</li>
+        <li>코드 분석, 선택 시 심층·탐색 분석</li>
+        <li>리포트</li>
+        <li class="gate">분류 확정 (사용자)</li>
+        <li>계획 → 최신 main 위 적용 → 검증</li>
+        <li class="gate">push 전 확인 화면 승인 (사용자)</li>
+        <li>PR → 카테고리 오너 머지</li>
+      </ol>
+      <p class="lead">강조된 두 칸이 사람이 결정하는 지점입니다. 그 밖의 단계에서도 lock 보유자, 로그 범위 밖, 코드 경로처럼 결정이 필요하면 도구가 멈추고 묻습니다.</p>
+    </div>
+
+    <div class="sub" id="s1-status" data-title="현재 상태와 수치">
+      <h3>현재 상태와 측정 수치</h3>
+      <ul>
+        <li>개발 단계(사외 초안, Phase D0~13)는 끝났고, 도입 조직 환경에 맞추는 사내 보완 단계(S-1~S-7, <a href="#s7-rollout">7.12</a>)는 아직 남아 있습니다.</li>
+        <li>자동 테스트 약 1,050개, CI(Ubuntu, Python 3.11·3.14) 통과. 샘플 이슈 DB 회귀 fixture 20/20. 스킬 행동 eval 58개 정의.</li>
+        <li>토큰(모의 데이터 eval 기준, Sonnet): analyze부터 기록까지 1건 약 39만 토큰(이전 74만에서 48% 감소). 커맨드 1회 20만~80만 토큰, 약 $0.15~0.5. <b>실제 로그·DB 크기에서는 달라질 수 있습니다.</b></li>
+      </ul>
+      <div class="note plan"><span class="k">예정·알려진 한계</span>
+        <ul>
+          <li>파서 이벤트·태그 규칙은 지금 placeholder입니다. 실제 로그 문구로 바꾸는 일은 S-4에서 합니다. 그 전에는 파일럿에 쓰지 않습니다.</li>
+          <li>사내 마켓플레이스 등록(<code>marketplace.json</code>)은 S-7에서 합니다.</li>
+          <li>계획 없는 브랜치를 자동으로 합치는 3-way replay, 사후 lint 정리 PR 자동화는 v1에 없습니다. 메인테이너가 수동으로 정리합니다.</li>
+          <li>Read 도구로 로그를 한 번에 통째로 읽는 것은 hook이 막지 못합니다(스킬 지침으로만 제한). 사내 S-2 확인 뒤 다룹니다.</li>
+          <li>반입 뒤로 넘긴 항목(작업 상태 JSON 원자 쓰기, 성능 재측정, analyze 질문 수 등)은 <code>docs/development/ARCHITECTURE_REVIEW_2026-10.md</code>에 있습니다.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================================================== 2 -->
+  <section class="chap" id="s2" data-title="요구 사항">
+    <h2><span class="no">2</span>요구 사항</h2>
+
+    <div class="sub" id="s2-env" data-title="실행 환경">
+      <h3>실행 환경 (사용자 PC)</h3>
+      <div class="tbl"><table>
+        <tr><th>항목</th><th>필요 조건</th><th>확인</th><th>없으면</th></tr>
+        <tr><td>OS</td><td><b>Ubuntu</b> (다른 OS는 지원하지 않음)</td><td><code>lsb_release -a</code></td><td>지원 밖</td></tr>
+        <tr><td>Python</td><td><b>3.11 이상</b>. Ubuntu 22.04는 기본 <code>python3</code>가 3.10이므로 <code>python3.11</code> 필요</td><td><code>python3 --version</code></td><td>스크립트가 돌지 않음</td></tr>
+        <tr><td>Python 패키지</td><td><code>pyproject.toml</code>에 고정: PyYAML 6.0.3, jsonschema 4.26.0 외 의존성</td><td><code>pip install .</code></td><td>스크립트 오류</td></tr>
+        <tr><td>git</td><td><b>2.31 이상</b> (<code>rev-parse --path-format</code>, worktree <code>--no-track</code>, <code>push --force-with-lease=&lt;ref&gt;:&lt;sha&gt;</code>)</td><td><code>git --version</code></td><td>guard·PR 흐름 실패</td></tr>
+        <tr><td>gh CLI</td><td>GHE 호스트에 로그인</td><td><code>gh auth status --hostname &lt;GHE 호스트&gt;</code></td><td>쓰기 전부 불가. 읽기 분석과 <code>--dry-run</code>은 가능</td></tr>
+        <tr><td>Claude Code</td><td>플러그인·hooks 지원 버전</td><td><code>claude --version</code></td><td>설치 불가</td></tr>
+        <tr><td>Jira MCP</td><td>조직 Jira MCP 서버가 <b>사용자 범위(user scope)</b>로 등록</td><td><code>claude mcp list</code></td><td>setup이 중단됨. <code>--dry-run --jira-file</code> 연습만 가능</td></tr>
+      </table></div>
+      <p class="lead">YAML C 로더(<code>python3 -c "import yaml; print(yaml.__with_libyaml__)"</code>가 True)가 있으면 이슈 DB를 더 빨리 읽습니다. False여도 동작합니다.</p>
+    </div>
+
+    <div class="sub" id="s2-org" data-title="조직이 준비할 것">
+      <h3>조직이 준비할 것 (관리자)</h3>
+      <ul>
+        <li><b>GHE 레포 3개</b>: 플러그인 레포, 샌드박스 이슈 DB(시험용), 운영 이슈 DB.</li>
+        <li><b>GHE 권한</b>: 운영 이슈 DB main 브랜치 보호(직접 push 금지, PR 필수, CODEOWNERS 승인 1명 이상)를 설정할 수 있어야 합니다. 이 설정이 없으면 로컬 hook이 유일한 방어선이 됩니다.</li>
+        <li><b>팀</b>: 카테고리별 오너 팀 6개(data·call·network·sim·sms·ims)와 메인테이너 팀.</li>
+        <li><b>사이트 설정 파일</b> <code>plugin/site-defaults.yaml</code>(S-3에서 작성, <a href="#s7-site">7.7</a>).</li>
+        <li><b>사내 값</b>: Jira 키 형식, 발생 시각 필드 이름·형식·타임존, Gerrit CL 링크 형식, 빌드명 비교 규칙, Android 16/17 소스 경로.</li>
+        <li><b>시드 자료</b>: 카테고리별 실제 logcat과 정상 로그, 듀얼 SIM 로그, 과거 해결 Jira 20~30건(카테고리별 3건 이상, 오프라인 정확도 평가용).</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ===================================================== 3 -->
+  <section class="chap" id="s3" data-title="설치와 첫 설정">
+    <h2><span class="no">3</span>설치와 첫 설정</h2>
+
+    <div class="sub" id="s3-admin" data-title="관리자 선행 작업">
+      <h3>관리자 선행 작업 (한 번)</h3>
+      <p>팀원이 설치하기 전에 다음이 끝나 있어야 합니다. 순서는 <a href="#s7-rollout">7.12 도입 단계</a>와 같습니다.</p>
+      <ol>
+        <li>플러그인 레포 반입과 테스트 재현: <code>pip install '.[test]'</code> 후 <code>python3 -m pytest -q tests</code>가 사외와 같은 결과인지 확인.</li>
+        <li><code>plugin/site-defaults.yaml</code> 작성과 커밋(S-3). 이 파일이 없으면 setup과 모든 커맨드가 "사내 기본값 없음"으로 멈춥니다.</li>
+        <li>운영 이슈 DB를 뼈대로 만들고 main에 첫 push, 이어서 브랜치 보호와 CODEOWNERS 필수 리뷰를 켭니다. 설정 내용은 이슈 DB <code>docs/branch-protection.md</code>에 기록합니다.</li>
+        <li><code>parser-rules</code>의 placeholder를 실제 태그·문구로 바꾸고 카테고리별 시드 유형을 넣습니다(S-4).</li>
+        <li>샌드박스 이슈 DB에서 dry-run과 실제 PR 1건으로 시험합니다(S-5).</li>
+      </ol>
+      <div class="code"><pre>git clone https://ghe.example/&lt;org&gt;/telephony-triage-plugin.git
+cd telephony-triage-plugin
+python3.11 -m venv .venv &amp;&amp; . .venv/bin/activate
+pip install '.[test]'
+python3 -m pytest -q tests</pre></div>
+    </div>
+
+    <div class="sub" id="s3-user" data-title="사용자 설치 단계">
+      <h3>사용자 설치 단계</h3>
+      <ol>
+        <li>사내 마켓플레이스에서 <code>telephony-triage</code> 플러그인을 설치합니다. <span class="chip p">마켓플레이스 등록은 S-7 예정</span></li>
+        <li>gh 로그인: <code>gh auth login -h &lt;GHE 호스트&gt;</code></li>
+        <li>Jira MCP가 사용자 범위로 등록됐는지 확인: <code>claude mcp list</code></li>
+        <li>Claude Code에서 setup을 실행합니다.</li>
+      </ol>
+      <div class="code"><pre>/telephony-triage:setup</pre></div>
+      <p>setup은 항목을 하나씩 묻습니다: GHE 아이디, 이슈 DB 로컬 clone 경로, 원격 URL, base 브랜치, GHE 호스트, Jira 시각 타임존, logcat 시각 타임존, 연도 결정 방식(<code>jira | file-mtime | ask</code>), logcat 기본 탐색 경로(선택), 작업 디렉토리. 소스 트리 프로필(<code>code_profiles</code>)은 건너뛸 수 있습니다.</p>
+    </div>
+
+    <div class="sub" id="s3-setup" data-title="setup이 하는 일">
+      <h3>setup이 하는 일 (10단계)</h3>
+      <div class="tbl"><table>
+        <tr><th>#</th><th>단계</th><th>스크립트</th><th>확인할 것</th></tr>
+        <tr><td class="num">1</td><td>사용자 config 생성</td><td><code>config.py init --answers</code></td><td><code>~/.telephony-triage/</code>와 작업 디렉토리는 권한 700. 경로가 없으면 그 항목만 다시 물음</td></tr>
+        <tr><td class="num">2</td><td>스크립트 경로 기록</td><td><code>config.py sync-scripts-path</code></td><td>git pre-commit hook이 이 경로를 씀</td></tr>
+        <tr><td class="num">3</td><td>이슈 DB clone 제안</td><td><code>git clone</code></td><td>동의할 때만 실행</td></tr>
+        <tr><td class="num">4</td><td>Jira MCP 도구 매핑</td><td><code>config.py jira-candidates</code>, <code>set-jira</code></td><td><code>get_issue</code>(필수)·<code>search_issues</code>·<code>get_comments</code>와 허용 읽기 도구를 사용자가 확인. 후보가 없으면 setup 중단</td></tr>
+        <tr><td class="num">5</td><td>git hook 설치</td><td><code>config.py install-hooks</code></td><td><code>core.hooksPath</code>가 정확히 <code>.githooks</code></td></tr>
+        <tr><td class="num">6</td><td>읽기 스냅샷 생성</td><td><code>db_pr.py lock acquire setup</code> → <code>snapshot</code></td><td>사용자 clone의 브랜치·워킹 트리는 바뀌지 않음</td></tr>
+        <tr><td class="num">7</td><td>호환성 확인</td><td><code>config.py check --for dry-run</code></td><td><code>writable: false</code>면 "읽기 전용" 안내 후 계속</td></tr>
+        <tr><td class="num">8</td><td>lock 해제</td><td><code>db_pr.py lock release setup</code></td><td>중간에 멈춰도 반드시 해제</td></tr>
+        <tr><td class="num">9</td><td>gh 인증 확인</td><td><code>config.py gh-status</code></td><td>실패하면 "쓰기 불가(gh 인증 없음)"로 setup을 끝냄. 읽기·dry-run은 가능</td></tr>
+        <tr><td class="num">10</td><td>점검 한 장</td><td><code>config.py doctor --format markdown</code></td><td>표를 그대로 보여줌. 이슈 DB <code>docs/getting-started.md</code> 위치 안내</td></tr>
+      </table></div>
+    </div>
+
+    <div class="sub" id="s3-doctor" data-title="doctor로 확인하기">
+      <h3>doctor로 설치 확인하기</h3>
+      <p><code>doctor</code>는 읽기 전용 점검입니다. 아무것도 고치지 않으며, <code>fail</code>·<code>warn</code> 행의 "다음" 열이 할 일입니다. <code>fail</code>이 하나라도 있으면 종료 코드 1, 없으면 0(<code>warn</code>만 있어도 0)입니다. 앞 행이 실패하면 그에 기대는 행은 <code>skip</code>입니다.</p>
+      <div class="code"><pre>S=&lt;config.yaml의 plugin.scripts_path 값&gt;
+python3 "$S/config.py" doctor --format markdown</pre></div>
+      <p class="lead">보통은 Claude Code에서 setup을 다시 실행하면 마지막에 같은 표가 나옵니다. 위 명령은 터미널에서 직접 볼 때 씁니다.</p>
+      <div class="tbl"><table>
+        <tr><th>점검</th><th>상태 / 내용 예</th><th>다음</th></tr>
+        <tr><td><code>config</code></td><td><span class="chip b">fail</span> 사용자 config 없음</td><td><code>/telephony-triage:setup</code></td></tr>
+        <tr><td><code>scripts_path</code></td><td><span class="chip w">warn</span> config의 경로가 이 플러그인과 다름</td><td><code>config.py sync-scripts-path</code></td></tr>
+        <tr><td><code>clone</code></td><td><span class="chip b">fail</span> 이슈 DB clone 없음</td><td><code>git clone &lt;remote&gt; &lt;path&gt;</code></td></tr>
+        <tr><td><code>hook</code></td><td><span class="chip b">fail</span> <code>core.hooksPath=(없음)</code></td><td><code>config.py install-hooks</code></td></tr>
+        <tr><td><code>jira</code></td><td><span class="chip b">fail</span> jira.tools.get_issue 매핑 비어 있음</td><td>setup 4 (Jira MCP 확인)</td></tr>
+        <tr><td><code>gh</code></td><td><span class="chip w">warn</span> gh 인증 없음 (host) — 쓰기 불가</td><td><code>gh auth login -h &lt;host&gt;</code></td></tr>
+        <tr><td><code>snapshot</code></td><td><span class="chip w">warn</span> 읽기 스냅샷 없음 / N일 전 (7일 초과)</td><td><code>/telephony-triage:sync</code></td></tr>
+        <tr><td><code>compat</code></td><td><span class="chip b">fail</span> 쓰기 막힘: <code>schema-too-new</code> 등</td><td><code>config.py check --for dry-run</code>, <a href="#s6-msg">6.2</a></td></tr>
+        <tr><td><code>lock</code></td><td><span class="chip w">warn</span> 보유 중: ABC-12345 (12분 전)</td><td>끝난 세션이면 <code>db_pr lock release ABC-12345 --force</code></td></tr>
+      </table></div>
+    </div>
+
+    <div class="sub" id="s3-practice" data-title="첫 연습 dry-run">
+      <h3>첫 연습: dry-run</h3>
+      <p><code>--dry-run</code>은 확인 화면까지만 가고 아무것도 올리지 않습니다. 작업 worktree와 임시 브랜치를 지우고, 사용자 clone은 바뀌지 않으며, pending 피드백도 만들지 않습니다. gh 로그인 전에도 됩니다. 작업 계획은 남아서 같은 Jira를 다시 analyze하면 이어서 할 수 있습니다.</p>
+      <div class="code"><pre>/telephony-triage:analyze ABC-12345 ~/logs/radio.txt --dry-run
+# Jira MCP 없이 연습할 때 (샘플 Jira 요약 파일)
+/telephony-triage:analyze ABC-12345 ~/logs/radio.txt --dry-run --jira-file ~/samples/ABC-12345.yaml
+/telephony-triage:record ABC-12346 --dry-run</pre></div>
+      <p>이슈 DB의 <code>docs/getting-started.md</code>가 10분 온보딩 순서(설치 → setup → dry-run 연습 → 실제 첫 PR → README·STATS 보는 법)를 담고 있습니다.</p>
+    </div>
+  </section>
+
+  <!-- ===================================================== 4 -->
+  <section class="chap" id="s4" data-title="일상 사용">
+    <h2><span class="no">4</span>일상 사용</h2>
+
+    <div class="sub" id="s4-map" data-title="커맨드 한눈에">
+      <h3>커맨드 한눈에</h3>
+      <p>모든 커맨드는 <code>/telephony-triage:&lt;이름&gt;</code>으로 부릅니다. 로그는 대화에 붙이지 말고 <b>파일 경로</b>로 줍니다.</p>
+      <div class="tbl"><table>
+        <tr><th>커맨드</th><th>언제</th><th>이슈 DB</th><th>lock</th></tr>
+        <tr><td><a href="#c-analyze"><code>analyze</code></a></td><td>로그로 이슈 분석, 분류, 기록</td><td>PR</td><td>잡음</td></tr>
+        <tr><td><a href="#c-record"><code>record</code></a></td><td>직접 해결한 이슈를 분석 없이 기록</td><td>PR</td><td>잡음</td></tr>
+        <tr><td><a href="#c-search"><code>search</code></a></td><td>비슷한 이슈·Jira 번호 찾기</td><td>읽기</td><td>없음</td></tr>
+        <tr><td><a href="#c-sync"><code>sync</code></a></td><td>스냅샷 최신화, 오래된 작업 정리, 내 PR 확인</td><td>읽기</td><td>잡음</td></tr>
+        <tr><td><a href="#c-syncpr"><code>sync-pr</code></a></td><td>내 PR이 머지 대기 중인데 main이 바뀜</td><td>push</td><td>잡음</td></tr>
+        <tr><td><a href="#c-fixsub"><code>fix-submitted</code></a></td><td>수정 CL이 머지됨</td><td>PR</td><td>잡음</td></tr>
+        <tr><td><a href="#c-verifyfix"><code>verify-fix</code></a></td><td>수정 빌드에서 재발 안 하는지 확인</td><td>PR</td><td>잡음</td></tr>
+        <tr><td><a href="#c-validate"><code>validate</code></a></td><td>직접 편집 검사 / 해결책 효과 검증</td><td>읽기 / PR</td><td>없음 / 잡음</td></tr>
+        <tr><td><a href="#c-preview"><code>preview</code></a></td><td>생성 파일(README·STATS·CHANGELOG) 미리보기</td><td>읽기</td><td>없음</td></tr>
+        <tr><td><a href="#c-review"><code>review</code></a></td><td>카테고리 오너 월간 리뷰</td><td>읽기</td><td>없음</td></tr>
+        <tr><td><code>setup</code></td><td>설정 (<a href="#s3-setup">3장</a>)</td><td>읽기</td><td>잠깐</td></tr>
+        <tr><td><a href="#c-migrate"><code>migrate</code></a></td><td>메인테이너: 스키마 올리기</td><td>자기 브랜치</td><td>없음</td></tr>
+      </table></div>
+    </div>
+
+    <div class="sub" id="c-analyze" data-title="analyze">
+      <div class="card">
+        <h3>/telephony-triage:analyze</h3>
+        <p class="who">기여자 · 가장 자주 쓰는 커맨드</p>
+        <dl class="kv">
+          <dt>목적</dt><dd>Jira와 logcat으로 원인을 분석하고, 분류를 확정해 이슈 DB에 PR을 올립니다.</dd>
+          <dt>형식</dt><dd><div class="code"><pre>/telephony-triage:analyze &lt;JIRA-KEY&gt; [logcat 경로...] [--code &lt;프로필|경로&gt;]
+  [--dry-run | --analysis-only] [--more-logs &lt;로그...&gt;] [--jira-file &lt;yaml&gt;]
+  [--failed-step &lt;한 줄&gt;] [--steps-file &lt;파일&gt;] [--clock-offset &lt;±시간&gt;]
+  [--analyzer | --no-analyzer] [--explore | --no-explore]</pre></div></dd>
+          <dt>입력</dt><dd>
+            <div class="tbl"><table>
+              <tr><th>옵션</th><th>뜻</th></tr>
+              <tr><td><code>logcat 경로</code></td><td>logcat(threadtime 기본) 또는 bugreport(<code>.zip</code>·txt). bugreport는 logcat 섹션(system·radio·main)과 빌드 정보만 꺼내 씀</td></tr>
+              <tr><td><code>--code</code></td><td>소스 트리 프로필 이름 또는 aosp 경로. 없으면 버전이 맞는 프로필이 정확히 1개일 때 자동 선택(알림), 아니면 물음</td></tr>
+              <tr><td><code>--dry-run</code></td><td>확인 화면까지만. 아무것도 올리지 않음</td></tr>
+              <tr><td><code>--analysis-only</code></td><td>리포트까지만. 계획·PR 없음, 끝나면 lock 해제. <code>--dry-run</code>과 함께 못 씀</td></tr>
+              <tr><td><code>--more-logs</code></td><td>이전 분석의 로그 뒤에 로그를 더해 전체를 다시 계산. 이전 결과는 <code>runs/&lt;n&gt;/</code>에 최근 5개 보관</td></tr>
+              <tr><td><code>--jira-file</code></td><td>Jira MCP 대신 파일. <code>--dry-run</code> 또는 <code>--analysis-only</code>와 함께만</td></tr>
+              <tr><td><code>--failed-step</code></td><td>실패한 시험 스텝 한 줄(선택). 분석 범위·순위 참고, 점수·S/C에는 안 씀</td></tr>
+              <tr><td><code>--steps-file</code></td><td>시험 절차(txt/csv·html <code>report.html</code>·zip, 또는 붙여넣은 목록). PASS 스텝 순서를 로그 흔적과 맞춰 실패 구간을 정함</td></tr>
+              <tr><td><code>--clock-offset</code></td><td>시험 장비 → 단말 시계 차(단말 = 장비 + 값, 예 <code>+3m</code>, <code>-90s</code>, <code>180</code>). 줄 때만 steps-file의 시각을 씀</td></tr>
+              <tr><td><code>--analyzer</code> / <code>--no-analyzer</code></td><td>카테고리 심층 분석 스킬을 묻지 않고 부름 / 부르지 않음 (토큰 추가)</td></tr>
+              <tr><td><code>--explore</code> / <code>--no-explore</code></td><td>후보 없음·원인 미확인일 때 Claude 가설 분석을 묻지 않고 함 / 안 함</td></tr>
+            </table></div>
+          </dd>
+          <dt>출력</dt><dd>리포트(<code>&lt;work_dir&gt;/&lt;KEY&gt;/report.md</code>), 분류 질문, push 전 확인 화면, PR 링크. 브랜치는 <code>issue/&lt;JIRA-KEY&gt;</code>.</dd>
+          <dt>예시</dt><dd><div class="code"><pre>/telephony-triage:analyze ABC-12345 ~/logs/radio.txt ~/logs/main.txt
+/telephony-triage:analyze ABC-12345 ~/logs/bugreport.zip --code android16-main
+/telephony-triage:analyze ABC-12345 --more-logs ~/logs/radio_2.txt
+/telephony-triage:analyze ABC-12345 ~/logs/radio.txt --analysis-only
+/telephony-triage:analyze ABC-12345 ~/logs/radio.txt --steps-file ~/tests/report.zip --clock-offset +3m</pre></div></dd>
+          <dt>주의</dt><dd><ul>
+            <li>분류 질문에는 예 / 다른 기존 원인 / 새 원인 / 새 유형 / 원인 미확정 중에서 고릅니다. 후보가 없으면 새 유형 / 원인 미확정 / 기록하지 않음만 나옵니다.</li>
+            <li>버전이 안 맞아 쓰기가 막히면 읽기 전용으로 계속하고 계획 저장까지만 합니다(<a href="#s6-msg">6.2</a>).</li>
+            <li>분석 중 main이 바뀌어 계획 대상이 먼저 수정됐으면(drift) 항목마다 계획 값 / main 값 / 직접 입력을 고릅니다.</li>
+            <li>같은 입력으로 다시 돌리면 파싱·매칭을 다시 하지 않고 지난 결과를 다시 보여주며, 리포트에 "재사용"이라고 적습니다. 강제로 다시 계산하려면 입력을 바꾸거나 스크립트의 <code>--refresh</code>를 씁니다.</li>
+            <li>실패 스텝 구간이 너무 좁아 원인이 안 잡히면 <code>--answer anchor=off</code>로 Jira 발생 시각 기준으로 다시 분석합니다(스킬이 안내).</li>
+          </ul></dd>
+        </dl>
+      </div>
+    </div>
+
+    <div class="sub" id="c-record" data-title="record">
+      <div class="card">
+        <h3>/telephony-triage:record</h3>
+        <p class="who">기여자 · 수동 기록</p>
+        <dl class="kv">
+          <dt>목적</dt><dd>스스로 해결한 이슈를 로그 분석·매칭 없이 이슈 DB 히스토리에 남깁니다. 검증과 PR 절차는 analyze와 같고 PR에 "수동 기록"이 붙습니다.</dd>
+          <dt>형식</dt><dd><div class="code"><pre>/telephony-triage:record &lt;JIRA-KEY&gt; [--cause &lt;원인 ID&gt; | --new-cause &lt;유형 ID&gt; | --new-type &lt;category&gt; | --unresolved &lt;유형 ID&gt;]
+  [--fixture &lt;logcat&gt;] [--resolved-fixture &lt;logcat&gt;] [--dry-run] [--jira-file &lt;yaml&gt;]
+  [--failed-step &lt;한 줄&gt;] [--steps-file &lt;파일&gt;]</pre></div></dd>
+          <dt>입력</dt><dd>분류 옵션이 없으면 비슷한 유형을 보여주고 대화로 고릅니다. <code>--fixture</code>는 새 원인의 양성 로그, <code>--resolved-fixture</code>는 해결책 적용 후 로그입니다.</dd>
+          <dt>출력</dt><dd>확인 화면(실행한 검증과 건너뛴 검증, 사유 포함) → PR <code>issue/&lt;JIRA-KEY&gt;</code>.</dd>
+          <dt>예시</dt><dd><div class="code"><pre>/telephony-triage:record ABC-12345 --cause DATA-001-02
+/telephony-triage:record ABC-12346</pre></div></dd>
+          <dt>주의</dt><dd><ul>
+            <li>"고쳤다"는 <code>fix-submitted</code>까지만 기록됩니다. <code>fixed</code>는 <code>verify-fix</code>로만 됩니다.</li>
+            <li>해결책 효과는 근거(다른 Jira 키 또는 적용 후 로그)가 있어야 "검증됨"입니다. 사용자 말만 있으면 "사용자 진술 — 카테고리 오너 리뷰 필요"로 남고 미검증 상태입니다.</li>
+            <li>record는 <code>--jira-file</code>을 <code>--dry-run</code> 없이도 받습니다. 이때 확인 화면과 PR에 "Jira 메타데이터: 오프라인 파일"이 표시됩니다.</li>
+          </ul></dd>
+        </dl>
+      </div>
+    </div>
+
+    <div class="sub" id="c-search" data-title="search">
+      <div class="card">
+        <h3>/telephony-triage:search</h3>
+        <p class="who">누구나 · 읽기 전용</p>
+        <dl class="kv">
+          <dt>목적</dt><dd>이슈 DB에 이미 있는 기록을 찾습니다. 로그·Jira를 분석하지 않습니다.</dd>
+          <dt>형식</dt><dd><code>/telephony-triage:search &lt;증상 문장|keyword|JIRA-KEY|ID&gt;</code></dd>
+          <dt>출력</dt><dd>맨 위에 이슈(Jira) 번호 모음, 이어서 유형 &gt; 원인 · 해결책(검증 여부) · 수정 상태 · 최근 Jira · 맞은 단어. 병합·재번호된 ID는 <code>옛 ID → 새 ID</code>로 연결해 보여줍니다.</dd>
+          <dt>예시</dt><dd><div class="code"><pre>/telephony-triage:search 데이터 안 붙어, 이슈 번호 알려줘
+/telephony-triage:search DATA-001-02
+/telephony-triage:search ABC-12345</pre></div></dd>
+          <dt>주의</dt><dd>검색 순위는 검색용이며 분류 근거가 아닙니다. 결과가 없으면 "일치 없음"과 다른 검색어를 제안하고, 이슈 번호를 지어내지 않습니다. 스냅샷이 없으면 최신 main 기준이 아닐 수 있으니 <code>sync</code>를 권합니다.</dd>
+        </dl>
+      </div>
+    </div>
+
+    <div class="sub" id="c-sync" data-title="sync">
+      <div class="card">
+        <h3>/telephony-triage:sync</h3>
+        <p class="who">누구나 · 최신화</p>
+        <dl class="kv">
+          <dt>목적</dt><dd>이슈 DB 읽기 스냅샷을 최신 origin/main으로 옮기고, 사후 lint 결과와 정리할 작업 디렉토리, 내 열린 PR을 보여줍니다.</dd>
+          <dt>형식</dt><dd><code>/telephony-triage:sync</code></dd>
+          <dt>출력</dt><dd>스냅샷 SHA와 base 변경 한 줄(<code>base 변경 abc1234→def5678</code> / <code>변경 없음</code>), 사후 lint 문제(있으면 "메인테이너 정리 필요"), 90일 넘은 닫힌·머지된 PR의 작업 디렉토리 목록, 내 PR마다 <code>#번호 제목 — base 이동 | 이동 없음 | 확인 불가</code>.</dd>
+          <dt>주의</dt><dd>정리는 사용자가 동의할 때만 지웁니다. base가 이동한 PR에는 <code>sync-pr</code>를 <b>안내만</b> 하고 실행하지 않습니다. 사용자 clone은 현재 브랜치가 base이고 깨끗할 때만 fast-forward합니다.</dd>
+        </dl>
+      </div>
+    </div>
+
+    <div class="sub" id="c-syncpr" data-title="sync-pr">
+      <div class="card">
+        <h3>/telephony-triage:sync-pr</h3>
+        <p class="who">PR 작성자</p>
+        <dl class="kv">
+          <dt>목적</dt><dd>머지 대기 중에 main이 바뀌었을 때, 원래 작업 계획을 최신 main 위에 다시 적용합니다. 새 ID와 fixture 번호는 적용 시점에 다시 할당됩니다.</dd>
+          <dt>형식</dt><dd><code>/telephony-triage:sync-pr [branch]</code> (없으면 계획에 기록된 열린 PR에서 고름)</dd>
+          <dt>출력</dt><dd>확인 화면(ID 재할당 내역, drift 결정 포함) → 승인 → 원격 SHA를 지정한 lease push. 바뀐 ID는 PR 제목·본문에도 반영됩니다.</dd>
+          <dt>주의</dt><dd><ul>
+            <li>계획은 작성자 PC에만 있으므로 <b>작성자가 실행</b>합니다. 다른 PC로 옮기기 전에 끝내 두세요.</li>
+            <li>마지막 publish 뒤 다른 사람이 브랜치에 push했으면 diff를 보여주고 덮어쓰기 / 중단을 묻습니다.</li>
+            <li>계획이 없는 브랜치(직접 편집한 <code>review/</code>, <code>chore/</code> 등)는 수동 절차만 안내합니다(<a href="#s7-review">7.5</a>).</li>
+          </ul></dd>
+        </dl>
+      </div>
+    </div>
+
+    <div class="sub" id="c-fixsub" data-title="fix-submitted">
+      <div class="card">
+        <h3>/telephony-triage:fix-submitted</h3>
+        <p class="who">누구나 · 수정 CL 머지 후</p>
+        <dl class="kv">
+          <dt>목적</dt><dd>원인의 <code>fix.status</code>를 <code>fix-submitted</code>로 바꾸는 PR을 만듭니다.</dd>
+          <dt>형식</dt><dd><code>/telephony-triage:fix-submitted &lt;원인 ID&gt; --ref &lt;CL&gt; --fixed-in &lt;branch&gt;[:&lt;build&gt;]</code> (<code>--fixed-in</code>은 여러 번 가능, 빌드는 선택)</dd>
+          <dt>출력</dt><dd>PR 브랜치 <code>fix-submit/&lt;원인 ID&gt;</code>, 커밋 메시지 <code>[&lt;원인 ID&gt;] fix-submitted: &lt;ref&gt;</code>.</dd>
+          <dt>예시</dt><dd><div class="code"><pre>/telephony-triage:fix-submitted CALL-001-01 --ref &lt;CL&gt; --fixed-in main-dev:BUILD_X</pre></div></dd>
+          <dt>주의</dt><dd><ul>
+            <li><code>--ref</code>는 <code>fix_ref_regex</code>에 맞아야 합니다. 빌드가 없으면 회귀 판정도 verify-fix 통과도 할 수 없습니다. 나중에 같은 커맨드로 빌드를 추가합니다.</li>
+            <li>이미 <code>fixed</code>인 원인은 거부합니다. 회귀라면 analyze 분류 단계에서 open으로 되돌립니다.</li>
+            <li>코드·설정 수정 유형인데 시나리오·복구 시그니처가 없으면 나중의 verify-fix를 위해 지금 추가할지 묻습니다.</li>
+          </ul></dd>
+        </dl>
+      </div>
+    </div>
+
+    <div class="sub" id="c-verifyfix" data-title="verify-fix">
+      <div class="card">
+        <h3>/telephony-triage:verify-fix</h3>
+        <p class="who">누구나 · 수정 빌드 로그가 있을 때</p>
+        <dl class="kv">
+          <dt>목적</dt><dd>수정 빌드 로그로 재발 여부를 판정하고 결과 PR을 만듭니다. 통과해야만 <code>fixed</code>가 됩니다.</dd>
+          <dt>형식</dt><dd><code>/telephony-triage:verify-fix &lt;원인 ID&gt; &lt;수정 빌드 logcat...&gt; [--jira &lt;검증 Jira 키&gt;]</code></dd>
+          <dt>출력</dt><dd>판정(통과·부분 통과·실패·판단 불가, <a href="#s5-verify">5.6</a>)과 근거, PR 브랜치 <code>verify-fix/&lt;원인 ID&gt;-&lt;build&gt;</code>. 통과하면 수정 빌드 로그가 <code>fixed</code> fixture로 회귀 테스트에 들어갑니다.</dd>
+          <dt>예시</dt><dd><div class="code"><pre>/telephony-triage:verify-fix CALL-001-01 ~/logs/after_fix.txt</pre></div></dd>
+          <dt>주의</dt><dd>원인이 <code>fix-submitted</code>(재검증이면 <code>fixed</code>)여야 하고, <code>fixed_in</code>에 빌드가 있어야 하며, 로그 빌드가 그 이후(같은 빌드 포함)여야 합니다. 시나리오 흔적이 없으면 "판단 불가"이고, 사용자 말로 흔적을 대신하지 않습니다.</dd>
+        </dl>
+      </div>
+    </div>
+
+    <div class="sub" id="c-validate" data-title="validate">
+      <div class="card">
+        <h3>/telephony-triage:validate</h3>
+        <p class="who">직접 편집 기여자 · 해결책 검증</p>
+        <dl class="kv">
+          <dt>목적</dt><dd>인자가 없으면 내 브랜치 변경분을 검사합니다(아무것도 바꾸거나 push하지 않음). <code>--cause</code>면 해결책 효과를 로그로 검증하고 통과 시 PR을 만듭니다.</dd>
+          <dt>형식</dt><dd><code>/telephony-triage:validate [--cause &lt;원인 ID&gt; &lt;적용 후 logcat...&gt;] [--extra &lt;logcat...&gt;]</code></dd>
+          <dt>출력</dt><dd>
+            <p>변경분 검사: 검사별 <code>통과 / 실패 / 승인 필요 / 건너뜀(사유)</code> 표. 실행하는 검사는 다음과 같습니다(<code>&lt;ref&gt;</code> = <code>origin/&lt;base&gt;</code>).</p>
+            <div class="code"><pre>db_lint.py --changed &lt;ref&gt; --db &lt;db&gt;
+mask_pii.py --check --changed &lt;ref&gt; --db &lt;db&gt;
+db_regress.py --all --db &lt;db&gt;
+db_verify.py rules --changed &lt;ref&gt; --db &lt;db&gt;      # R1~R5, --extra면 R6
+db_build.py --verify --db &lt;db&gt;</pre></div>
+            <p>해결책 검증: 판정 passed면 <code>verify-res/&lt;원인 ID&gt;-&lt;YYYYMMDD&gt;</code> PR, failed·unknown이면 기록하지 않고 이유를 알림.</p>
+          </dd>
+          <dt>주의</dt><dd>건너뜀은 통과가 아닙니다. 생성 파일 검사가 실패하면 <code>db_build.py --write</code>로 다시 만든 뒤 커밋합니다. R6 실패는 진행을 막지 않고 사용자가 고릅니다.</dd>
+        </dl>
+      </div>
+    </div>
+
+    <div class="sub" id="c-preview" data-title="preview">
+      <div class="card">
+        <h3>/telephony-triage:preview</h3>
+        <p class="who">누구나 · 읽기 전용</p>
+        <dl class="kv">
+          <dt>목적</dt><dd>README·STATS·CHANGELOG 생성 결과를 임시 디렉토리(<code>&lt;work_dir&gt;/preview-&lt;YYYYMMDD-HHMM&gt;</code>)에만 만들어, 지금 커밋된 생성 파일과의 차이를 보여줍니다.</dd>
+          <dt>형식</dt><dd><code>/telephony-triage:preview</code></dd>
+          <dt>주의</dt><dd>대상 워킹 트리와 git 상태는 바뀌지 않습니다. 차이가 없으면 "생성 파일이 최신"이라고 알립니다.</dd>
+        </dl>
+      </div>
+    </div>
+
+    <div class="sub" id="c-review" data-title="review">
+      <div class="card">
+        <h3>/telephony-triage:review</h3>
+        <p class="who">카테고리 오너 · 월 1회 · 읽기 전용</p>
+        <dl class="kv">
+          <dt>목적</dt><dd>카테고리의 품질·해결 상태 리포트를 만듭니다. 정리는 별도 PR로 합니다(<a href="#s7-monthly">7.6</a>).</dd>
+          <dt>형식</dt><dd><code>/telephony-triage:review [category]</code> (없으면 CODEOWNERS 기준 오너 카테고리를 물음)</dd>
+          <dt>출력</dt><dd><code>&lt;work_dir&gt;/review-&lt;category&gt;-&lt;YYYY-MM&gt;/report.md</code>, 항목별 건수 요약. 리포트 머리에 이슈 DB 경로·커밋이 있어 최신 main 기준인지 확인할 수 있습니다.</dd>
+        </dl>
+      </div>
+    </div>
+
+    <div class="sub" id="c-migrate" data-title="migrate">
+      <div class="card">
+        <h3>/telephony-triage:migrate</h3>
+        <p class="who">메인테이너 전용</p>
+        <dl class="kv">
+          <dt>목적</dt><dd>이슈 DB 스키마를 v&lt;N&gt;으로 올립니다. 메인테이너가 자기 <code>migrate/schema-v&lt;N&gt;</code> 브랜치의 워킹 트리를 직접 바꾸는 흐름입니다.</dd>
+          <dt>형식</dt><dd><code>/telephony-triage:migrate --to &lt;N&gt; [--dry-run]</code></dd>
+          <dt>주의</dt><dd>계획·worktree·lock·스냅샷을 쓰지 않고 PR도 만들지 않습니다. push와 PR은 안내만 합니다. 절차는 <a href="#s7-migrate">7.10</a>.</dd>
+        </dl>
+      </div>
+    </div>
+
+    <div class="sub" id="s4-model" data-title="모델과 비용">
+      <h3>모델과 토큰</h3>
+      <ul>
+        <li>기본 모델은 Sonnet입니다(analyze·record·fix-submitted·verify-fix·sync-pr·search·심층 분석). 탐색 분석의 가설 품질이 중요하면 Opus를 고를 수 있습니다. 바꾸는 법: <code>/model</code>.</li>
+        <li>심층 분석(<code>--analyzer</code>)과 탐색 분석(<code>--explore</code>)은 토큰을 더 씁니다. 기본은 실행 전에 묻습니다.</li>
+        <li>토큰을 아끼는 습관: 로그는 경로로 주기, 한 작업이 끝나면 세션 닫기, 오류는 실패한 것만 보기.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ===================================================== 5 -->
+  <section class="chap" id="s5" data-title="결과 읽기">
+    <h2><span class="no">5</span>결과 읽기</h2>
+
+    <div class="sub" id="s5-report" data-title="리포트 줄별 읽기">
+      <h3>분석 리포트 줄별 읽기</h3>
+      <p>리포트 예시(값은 자리표시자, 근거 로그는 마스킹된 상태):</p>
+      <div class="code"><pre>## ABC-12345 분석
+- 분류 후보: data &gt; DATA-001 &gt; DATA-001-02 Roaming disabled (규칙 일치 점수 1.0, 일치 수준 높음 — 진단 확신도 아님)
+- 근거 로그 (마스킹, 슬롯 phone 0):
+  - 09-26 10:05:12.345 DSM-0 ... (f0:L1532)
+- 로그 범위: 10:02 ~ 10:12 (발생 시각 포함), 시계 이상 없음
+- 원인: (로그로 확인한 것 / 코드로 추정한 것 / placeholder 규칙 결과를 나눠 씀)
+- 코드 위치: 파일:라인 + 분기 조건 (분석 트리: android16-main, Android 16)
+- 해결책: 데이터 로밍 설정을 켠다   해결책 검증: ⚠ 미검증
+- 수정 상태: not-a-bug — ...
+- 기존 사례: Jira 1건 (ABC-333)
+- 관련 원인: 없음
+- 기타 후보: DATA-001-01 (규칙 일치 점수 0.4)
+- 심층 분석: 해당 없음(1위 카테고리에 분석 스킬 설정 없음)
+- 열린 PR: 없음</pre></div>
+      <div class="tbl"><table>
+        <tr><th>줄</th><th>읽는 법</th></tr>
+        <tr><td>분류 후보</td><td><code>카테고리 &gt; 유형 &gt; 원인</code>. 원인 자리가 "원인 미확인"이면 증상만 맞은 것(S=1, C=0)</td></tr>
+        <tr><td>근거 로그</td><td>시그니처를 충족한 줄. <code>(f0:L1532)</code>는 입력 로그 순번(0부터)과 줄 번호. 슬롯은 듀얼 SIM에서 판별된 <code>phone_id</code></td></tr>
+        <tr><td>로그 범위</td><td>발생 시각이 로그 안에 있는지. "로그 범위 밖"은 "매칭 없음"과 다릅니다. "해석한 줄 없음(형식·인코딩)"은 형식 문제</td></tr>
+        <tr><td>원인 · 코드 위치</td><td>Claude가 채우는 칸(<code>TODO(LLM)</code>). 판정이 아니라 설명입니다</td></tr>
+        <tr><td>해결책 검증</td><td>"검증됨" 또는 "⚠ 미검증". 미검증이어도 후보로 씁니다(분류는 로그 근거)</td></tr>
+        <tr><td>수정 상태</td><td><code>fix.status</code>와 Jira SW 비교 판단(<a href="#s5-fix">5.4</a>)</td></tr>
+        <tr><td>다른 버전 원인</td><td><a href="#s5-version">5.5</a></td></tr>
+        <tr><td>순위 참고</td><td>점수 동점 후보가 여럿이면 발생 시각 근접·키워드로 정렬했다는 표시. 원인 확정이 아님</td></tr>
+        <tr><td>재사용 / 재분석</td><td>같은 입력이면 "재사용", 입력이 바뀌었으면 "재분석: 실행 m 대비 바뀐 입력 [...] — 1위 X → Y"</td></tr>
+        <tr><td>읽기 전용 / 분석 전용</td><td>쓰기가 막힌 이유 또는 <code>--analysis-only</code> 안내. 리포트를 요약할 때도 빠지지 않는 줄입니다</td></tr>
+        <tr><td>실패 스텝 구간</td><td>steps-file·실패 스텝으로 정한 분석 범위. "스텝 순서 정렬 안 함: &lt;사유&gt;"면 Jira 발생 시각 기준으로 분석한 것</td></tr>
+        <tr><td>심층 / 탐색 분석</td><td>보조 칸. 점수·분류·검증에 쓰지 않습니다. 탐색 분석은 가설 1~3개(로그로 확인한 줄, 코드 추정, 반대 근거, 다음에 받을 로그)</td></tr>
+      </table></div>
+    </div>
+
+    <div class="sub" id="s5-sc" data-title="판정 S와 C">
+      <h3>판정: S와 C</h3>
+      <p>매처는 시그니처마다 0/1을 냅니다. <b>S</b>는 이슈 유형의 증상 시그니처, <b>C</b>는 원인 시그니처 충족 여부입니다. 분류·회귀·검증은 이 값으로 정하고, 점수와 일치 수준은 참고입니다.</p>
+      <div class="tbl"><table>
+        <tr><th>S</th><th>C</th><th>리포트 표현</th><th>다음</th></tr>
+        <tr><td><span class="chip g">1</span></td><td><span class="chip g">1</span></td><td>원인 후보 (점수 보통 1.0)</td><td>분류 수락 또는 다른 원인 선택</td></tr>
+        <tr><td><span class="chip g">1</span></td><td><span class="chip w">0</span></td><td>유형 일치, 원인 미확인 (점수 약 0.4)</td><td>새 원인 작성, 원인 미확정 기록, 탐색 분석</td></tr>
+        <tr><td><span class="chip">0</span></td><td>—</td><td>후보 없음 (S=1인 유형 없음)</td><td>새 유형 / 원인 미확정 / 기록하지 않음</td></tr>
+      </table></div>
+      <ul>
+        <li>분석 모드에서는 S=1인 유형의 원인만 평가하고, 증상 근거와 원인 근거가 같은 슬롯·같은 시간 창 안에 있을 때만 C=1입니다.</li>
+        <li>점수 = 증상 가중치 0.4 × S + 원인 가중치 0.6 × C + 보너스(발생 시각 근접 ≤ 0.1, 키워드 ≤ 0.05), 최대 1. 가중치는 <code>issue-db.config.yaml</code>의 <code>scoring</code>.</li>
+        <li>일치 수준: 점수 ≥ 0.9 높음, ≥ 0.6 중간, 그 외 낮음. <b>진단 확신도가 아니며 자동 게시 근거로 쓰지 않습니다.</b></li>
+        <li>시그니처 수락률 표본이 5건 이상이면 점수에 수락률 가중치가 곱해집니다(분석 모드만).</li>
+        <li>실패 스텝으로 정한 "우선 유형"은 순위에만 반영되고 점수·S·C는 바뀌지 않습니다.</li>
+      </ul>
+    </div>
+
+    <div class="sub" id="s5-nocand" data-title="후보 없음">
+      <h3>후보가 없을 때</h3>
+      <p>초기 DB가 비어 있을 때 가장 흔합니다. 이때도 리포트는 빈손이 아닙니다.</p>
+      <ul>
+        <li><b>설명 기반 유사 후보</b>: 마스킹된 Jira 요약(실패 스텝 포함)으로 검색한 상위 3개. 같은 이슈라는 뜻은 아닙니다.</li>
+        <li><b>오류·거부·타임아웃 이벤트</b>: 카테고리 타임라인에서 뽑은 최대 8줄(마스킹된 값만).</li>
+        <li><b>파서 규칙에 없는 태그</b>: 같은 프로세스에서 <code>tags.yaml</code>에 없어 버려진 태그 상위 3개. 파서가 이벤트를 못 뽑아 후보가 없을 수 있다는 힌트입니다.</li>
+        <li><b>로그 범위·시계 판정</b>.</li>
+        <li>원하면 탐색 분석(Claude 가설)을 실행합니다. 가설을 채택해도 새 유형·원인 초안은 평소처럼 R1~R5 검증과 확인 화면을 거칩니다.</li>
+      </ul>
+    </div>
+
+    <div class="sub" id="s5-fix" data-title="수정 상태 판단">
+      <h3>수정 상태 판단</h3>
+      <p>원인 후보의 <code>fix</code>와 Jira SW를 <code>build_compare</code> 규칙으로 비교합니다. "이후"는 같은 빌드를 포함합니다(≥).</p>
+      <div class="tbl"><table>
+        <tr><th>조건</th><th>판단</th><th>리포트 문구</th></tr>
+        <tr><td>fixed, SW &lt; fixed_in</td><td>이미 수정됨</td><td>BUILD_X에서 수정됨. 빌드 업데이트 후 재확인 권고</td></tr>
+        <tr><td>fixed, SW ≥ fixed_in</td><td><span class="chip b">회귀 의심</span></td><td>수정 빌드 이후(같은 빌드 포함)에서 재발. 회귀 가능성</td></tr>
+        <tr><td>fix-submitted, SW &lt; fixed_in</td><td>수정 대기 빌드</td><td>수정 CL 반영 전 빌드. 업데이트 후 verify-fix 권고</td></tr>
+        <tr><td>fix-submitted, SW ≥ fixed_in</td><td><span class="chip w">수정 미흡 의심</span></td><td>수정 반영 빌드에서 발생. verify-fix 실패 가능성</td></tr>
+        <tr><td>비교 규칙 없음·파싱 불가·빌드 없음</td><td>판단 불가</td><td>두 값을 나란히 보여주고 사용자가 판단</td></tr>
+        <tr><td>open</td><td>미수정</td><td>미수정 원인. 기존 Jira N건</td></tr>
+      </table></div>
+      <p>회귀 의심이면 분류 단계에서 <code>open</code>으로 되돌릴지 묻습니다. 수정 미흡 의심이고 C=1이면 "open으로 되돌리고 실패 이력 기록" 또는 "이 로그로 verify-fix"를 고릅니다.</p>
+    </div>
+
+    <div class="sub" id="s5-version" data-title="다른 버전 원인">
+      <h3>다른 버전 원인</h3>
+      <p>1위 원인에 적용 Android 버전(<code>android_versions</code>)이 지정돼 있고 Jira의 Android 버전과 주 버전이 다르면 리포트에 한 줄이 붙습니다.</p>
+      <div class="code"><pre>- 다른 버전 원인 (Android 16)</pre></div>
+      <ul>
+        <li>표시 전용입니다. 순위·점수·S/C는 바뀌지 않습니다.</li>
+        <li>원인의 <code>android_versions: []</code>(기본)는 전 버전을 뜻하므로 이 줄이 나오지 않습니다. Jira 버전이 숫자 형식(<code>16</code>, <code>16.1</code>)일 때만 비교합니다.</li>
+        <li>보이면 분류를 확정하기 전에 같은 증상의 새 원인인지, 버전 지정이 너무 좁은지 확인합니다.</li>
+      </ul>
+    </div>
+
+    <div class="sub" id="s5-verify" data-title="verify-fix와 해결책 검증 결과">
+      <h3>verify-fix 결과와 해결책 검증 결과</h3>
+      <p>둘 다 회귀·검증 모드(파일 전체, 모든 원인 독립 평가, 보너스 0)로 판정합니다.</p>
+      <h4>verify-fix (코드 수정 검증)</h4>
+      <div class="tbl"><table>
+        <tr><th>판정</th><th>조건</th><th>기록</th></tr>
+        <tr><td><span class="chip g">passed 통과</span></td><td>시나리오 흔적 충족, 원인·증상 시그니처 불충족, 복구 시그니처가 있으면 충족</td><td><code>fixed</code>, 수정 후 fixture 추가</td></tr>
+        <tr><td><span class="chip w">partial 부분 통과</span></td><td>흔적 충족, 원인 불충족, 증상은 남음</td><td>상태 유지 + 이력. 남은 증상은 analyze로 새로 분석. 통과로 기록하는 선택지는 없음</td></tr>
+        <tr><td><span class="chip b">failed 실패</span></td><td>원인 시그니처 충족(재발)</td><td><code>open</code>으로, 이전 ref·fixed_in은 <code>verification_history</code>에 보존. 재발 로그를 recurrence fixture로 넣을지 물음</td></tr>
+        <tr><td><span class="chip">unknown 판단 불가</span></td><td>흔적 없음, 로그 구간 부족, 파서 관측 불완전</td><td>기록 안 함. 필요한 로그 조건 안내</td></tr>
+      </table></div>
+      <p>코드·설정 수정 유형(<code>framework-bug</code>, <code>vendor-ril</code>, <code>modem</code>, <code>carrier-config</code>)은 시나리오 또는 복구 시그니처가 없으면 판정 전에 종료 코드 2로 거부됩니다.</p>
+      <h4>validate --cause (해결책 검증)</h4>
+      <div class="tbl"><table>
+        <tr><th>판정</th><th>조건</th></tr>
+        <tr><td><span class="chip g">passed</span></td><td>원인 시그니처 불충족, 그리고 복구 시그니처 충족(없으면 증상 불충족이고 시나리오 충족)</td></tr>
+        <tr><td><span class="chip b">failed</span></td><td>원인 시그니처 충족</td></tr>
+        <tr><td><span class="chip">unknown</span></td><td>복구·시나리오 시그니처 없음, 흔적 없음, 증상 남음, 구간 부족</td></tr>
+      </table></div>
+    </div>
+
+    <div class="sub" id="s5-confirm" data-title="push 전 확인 화면">
+      <h3>push 전 확인 화면과 검증 결과표</h3>
+      <p>이슈 DB에 쓰는 모든 흐름은 push 전에 이 화면을 그대로 보여주고 승인을 받습니다. 요약하거나 생략하지 않습니다.</p>
+      <p>순서: 머리(대상 → 원인/유형, 구분, 브랜치, 리뷰어, 열린 PR) → 변경 파일 → ID 할당(예 <code>NEW-CAUSE-1 → DATA-001-04</code>) → 수정 상태 변경 → drift 결정 → 추가 설명 → README 반영 미리보기 → 주요 diff → 자동 검사 → 검증 결과 → 커밋 메시지·PR 제목 → <code>approved_hash</code>.</p>
+      <div class="tbl"><table>
+        <tr><th>검증</th><th>무엇을</th><th>통과 기준</th></tr>
+        <tr><td>R1 파서</td><td>대상 원인의 양성 fixture를 새 규칙으로 파싱</td><td>시그니처가 참조하는 태그·이벤트·필드가 추출됨</td></tr>
+        <tr><td>R2 양성</td><td>대상 원인의 양성·재발·추가 fixture</td><td>대상 C=1, 다른 원인 C=0(<code>also_allowed</code> 제외)</td></tr>
+        <tr><td>R3 음성</td><td>음성 fixture, 같은 카테고리 다른 원인 fixture</td><td>대상 C=0 / 증상은 S=0</td></tr>
+        <tr><td>R4 교차 회귀</td><td>전체 fixture (<code>db_regress --all</code>)</td><td>모든 기대값 유지</td></tr>
+        <tr><td>R5 이벤트 diff</td><td>파서 규칙 변경 전후 전체 fixture</td><td>기존 이벤트가 사라지거나 바뀌지 않음. 바뀌면 <span class="chip w">승인 필요</span>(종료 3)</td></tr>
+        <tr><td>R6 추가 표본</td><td>같은 증상 로그·정상 로그(선택)</td><td>결과를 보고 사용자가 판단(실패해도 진행 가능)</td></tr>
+      </table></div>
+      <p>상태는 <code>pass | fail | needs-approval | skipped</code>입니다. <code>skipped</code>에는 사유가 붙고, "fixture 없음"·"음성 fixture 없음"은 <b>"검증 못 함 — 리뷰 대상"</b>으로 표시됩니다.</p>
+      <p>선택지: <b>승인</b> → 커밋·push·PR / <b>수정 요청</b> → 계획을 고쳐 다시 적용하고 다시 확인 / <b>전체 diff 보기</b> / <b>취소</b> → 작업 worktree를 버리고 계획은 남김. 승인 뒤 파일이 하나라도 바뀌면 승인은 무효입니다.</p>
+    </div>
+  </section>
+
+  <!-- ===================================================== 6 -->
+  <section class="chap" id="s6" data-title="문제 해결">
+    <h2><span class="no">6</span>문제 해결</h2>
+
+    <div class="sub" id="s6-exit" data-title="종료 코드">
+      <h3>종료 코드</h3>
+      <p>모든 스크립트가 같은 규칙을 씁니다. 스킬은 종료 코드 2를 받으면 stderr를 그대로 보여주고 멈춥니다.</p>
+      <div class="tbl"><table>
+        <tr><th>코드</th><th>의미</th><th>처리</th></tr>
+        <tr><td class="num"><span class="chip g">0</span></td><td>성공(경고 포함)</td><td>계속</td></tr>
+        <tr><td class="num"><span class="chip b">1</span></td><td>검사 실패. drift(계획 대상이 main에서 바뀜) 포함</td><td>차단. 원인을 보여주고 결정을 받음</td></tr>
+        <tr><td class="num"><span class="chip b">2</span></td><td>사용·환경 오류: 인자, 경로, config, git/gh 실패, 버전 불일치로 쓰기 거부, 마스킹 안 된 입력, 다른 작업의 세션 lock</td><td>중단. 메시지대로 설정을 고침</td></tr>
+        <tr><td class="num"><span class="chip w">3</span></td><td>승인 필요: 검사는 통과했지만 사람 승인이 필요한 변화(예: R5 기존 이벤트 변경)</td><td>pre-commit은 경고 후 통과. 확인 화면·PR에 "승인 필요", 메인테이너 승인이 리뷰 조건</td></tr>
+      </table></div>
+      <ul>
+        <li><code>config.py doctor</code>: <code>fail</code>이 있으면 1, 없으면 0. 자기 실행이 불가능할 때만 2.</li>
+        <li><code>db_pr.py publish --and-discard</code>가 2면 PR은 이미 만들어진 것입니다. <code>discard</code>만 다시 합니다.</li>
+        <li><code>triage.py explore</code>의 1은 "해당 없음"입니다(후보가 C=1이라 탐색 대상 아님).</li>
+        <li><code>tools/make_bundle.py</code>(반입 묶음)는 0을 내지 않습니다. 3이 정상 완료(사람 확인 3건 대기)입니다.</li>
+      </ul>
+    </div>
+
+    <div class="sub" id="s6-msg" data-title="증상 원인 조치 표">
+      <h3>증상 → 원인 → 조치</h3>
+      <p>메시지는 실제 출력 문구입니다(값 부분은 자리표시자).</p>
+      <div class="tbl"><table>
+        <tr><th>증상 / 메시지</th><th>원인</th><th>조치</th></tr>
+        <tr><td>"사내 기본값 없음 (S-3 미완료): …site-defaults.yaml 이(가) 없어 실행할 수 없습니다." (종료 2)</td><td>플러그인에 <code>site-defaults.yaml</code>이 없음</td><td>관리자가 S-3에서 작성·커밋. 사용자는 플러그인을 다시 받음</td></tr>
+        <tr><td>doctor <code>config</code> fail "사용자 config 없음"</td><td>setup 전</td><td><code>/telephony-triage:setup</code></td></tr>
+        <tr><td>doctor <code>jira</code> fail "jira.tools.get_issue 매핑 비어 있음" / analyze가 Jira를 부르지 않고 멈춤</td><td>Jira 도구 매핑 없음</td><td>setup 4단계. MCP를 사용자 범위로 등록했는지 <code>claude mcp list</code>. 연습은 <code>--dry-run --jira-file</code></td></tr>
+        <tr><td>"이 플러그인은 Jira 읽기 전용이다. … jira.read_tools에 없어 거부한다 (규칙 2)."</td><td>허용 목록 밖 Jira 도구 호출</td><td>정상 차단. 필요한 읽기 도구라면 setup에서 <code>read_tools</code>에 추가 확인</td></tr>
+        <tr><td>"격리 hook 미동작: Jira 원문이 대화에 들어옴"</td><td>Jira 응답 원문 격리 hook이 이 Claude Code에서 동작하지 않음</td><td>관리자에게 보고(S-2 확인 항목). 리포트·계획에는 여전히 마스킹 값만 저장됨</td></tr>
+        <tr><td>doctor <code>gh</code> warn "gh 인증 없음 (host) — 쓰기 불가"</td><td>gh 미로그인</td><td><code>gh auth login -h &lt;host&gt;</code>. 그동안 읽기 분석·dry-run만 가능</td></tr>
+        <tr><td>doctor <code>hook</code> fail / "이 레포의 core.hooksPath가 '(없음)'다. 정확히 .githooks여야 커밋할 수 있다 (규칙 5)."</td><td>이슈 DB clone의 git hook 경로 미설정·변경</td><td><code>config.py install-hooks</code> 또는 setup 재실행</td></tr>
+        <tr><td>"다른 작업(ABC-111, analyze)이 lock을 갖고 있습니다…"</td><td>한 사람은 한 번에 한 작업. 이전 세션이 남아 있음</td><td>그 세션이 끝났는지 확인 후 <code>db_pr.py lock release ABC-111 --force</code></td></tr>
+        <tr><td>"같은 작업(ABC-12345)의 lock이 N초 전에 갱신됐습니다…"</td><td>같은 이슈를 다른 세션이 진행 중일 수 있음</td><td>확인 후 이어받기(<code>--take-over</code>, 스킬이 물음)</td></tr>
+        <tr><td>리포트 "읽기 전용: 이슈 DB schema_version … 보다 새롭다. 플러그인을 업데이트한다"</td><td><code>schema-too-new</code></td><td>플러그인 업데이트</td></tr>
+        <tr><td>"… 보다 옛 버전이다. 메인테이너에게 마이그레이션이 필요하다고 알린다."</td><td><code>schema-too-old</code></td><td>메인테이너가 <a href="#s7-migrate">마이그레이션</a></td></tr>
+        <tr><td>"generator_version A ≠ 플러그인 B. 이슈 DB 쓰기 전체를 막는다."</td><td><code>generator-mismatch</code></td><td>플러그인 업데이트(또는 메인테이너의 버전 올림 PR)</td></tr>
+        <tr><td>"백엔드 불일치 — 이슈 DB는 site ≥ x, 현재 reference y. 결과가 팀 기준과 다를 수 있음"</td><td>파서 백엔드 버전 차이</td><td>플러그인·사이트 설정의 <code>parser.backend</code> 확인. 분석은 경고 후 진행, 쓰기는 막힘</td></tr>
+        <tr><td>"외부 파서 불일치 [data] — … 어댑터 없음"</td><td>이슈 DB가 고정한 외부 파서 어댑터가 없거나 낮음</td><td><code>external_parsers</code> 설정과 어댑터 설치 확인</td></tr>
+        <tr><td>리포트 "로그 범위: … (로그 범위 밖)"</td><td>발생 시각이 로그 밖. radio 버퍼가 작으면 흔함</td><td>전체 파싱 여부 질문에 답하거나 그 시각을 담은 로그를 <code>--more-logs</code>로 추가</td></tr>
+        <tr><td>"해석한 logcat 줄이 없습니다 — 로그 범위 밖이 아니라 형식·인코딩 문제입니다"</td><td>줄 형식이 파서 가정과 다름</td><td>파일 형식·인코딩 확인. 반복되면 관리자가 S-0 진단(<a href="#s7-parser">7.8</a>)</td></tr>
+        <tr><td>"시계 이상 있음"</td><td>단말 시각 되감기·점프(재부팅 직후 등)</td><td>도구가 제안하는 증상 시각 후보 중에서 고름</td></tr>
+        <tr><td>"스텝 순서 정렬 안 함: &lt;사유&gt; — Jira 발생 시각 기준으로 분석했다"</td><td>PASS 스텝 흔적을 충분히 못 찾음</td><td>정상 동작. <code>step_events</code> 규칙 보강은 메인테이너</td></tr>
+        <tr><td>"장비 시각 미사용: 시계 정렬 불가(시계 차 모름)"</td><td>steps-file 시각을 단말 시각으로 옮길 수 없음</td><td>알면 <code>--clock-offset</code> 지정</td></tr>
+        <tr><td>"이전 분석 로그가 없다 — --logs로 시작한다" (종료 2)</td><td>첫 분석에 <code>--more-logs</code></td><td>로그 경로를 일반 인자로 주고 시작</td></tr>
+        <tr><td>"base 브랜치(main)로 직접 push하지 않는다 (규칙 6)."</td><td>main 대상 push 시도</td><td>정상 차단. 브랜치 + PR</td></tr>
+        <tr><td>"이슈 DB clone은 도구가 직접 고치지 않는다… (규칙 8)"</td><td>Claude가 사용자 clone 파일을 Write/Edit하려 함</td><td>정상 차단. 도구 변경은 작업 계획으로, 직접 편집은 사용자가</td></tr>
+        <tr><td>"로그 원문·zip·events/jira_raw/match.json은 통째로 읽지 않는다… (규칙 10)"</td><td><code>cat</code> 등으로 로그 원문 통독 시도</td><td><code>grep -n</code>, <code>sed -n 'a,bp'</code>, bugreport는 <code>parse_logcat.py extract-bugreport</code></td></tr>
+        <tr><td>validate "생성 파일" 실패</td><td>README·STATS·CHANGELOG가 데이터와 다름</td><td><code>db_build.py --write --db &lt;db&gt;</code> 후 커밋. 직접 편집 금지</td></tr>
+        <tr><td>pre-commit이 "plugin.scripts_path" 안내와 함께 커밋 거부</td><td>hook이 플러그인 스크립트를 못 찾음</td><td>Claude Code 세션을 한 번 열거나(SessionStart가 갱신) setup. 플러그인 없이 편집하는 사람은 플러그인 레포 clone의 <code>plugin/scripts</code> 지정</td></tr>
+        <tr><td>doctor <code>snapshot</code> warn "N일 전 (…, 7일 초과)"</td><td>오래된 읽기 스냅샷</td><td><code>/telephony-triage:sync</code></td></tr>
+        <tr><td>"계획 형식 오류"</td><td>작업 계획 필드 누락·허용 밖 필드</td><td>메시지의 op·필드대로 계획을 고쳐 다시 실행(스킬이 처리)</td></tr>
+        <tr><td>sync 결과 "ID 중복·Jira 중복"(사후 lint)</td><td>직접 편집 커밋이나 sync-pr 없이 머지</td><td>메인테이너 수동 정리(<a href="#s7-review">7.5</a>)</td></tr>
+      </table></div>
+    </div>
+
+    <div class="sub" id="s6-recover" data-title="복구 경로">
+      <h3>복구 경로</h3>
+      <div class="tbl"><table>
+        <tr><th>상황</th><th>복구</th></tr>
+        <tr><td>세션이 비정상 종료돼 lock이 남음</td><td><code>db_pr.py lock status</code>로 보유자 확인 → 끝난 세션이면 <code>db_pr.py lock release &lt;작업 키&gt; --force</code></td></tr>
+        <tr><td>잔여 worktree·도구 브랜치(<code>tt/*</code>)</td><td>analyze가 개수만 알립니다. <code>/telephony-triage:sync</code>에서 목록을 보고 동의하면 지웁니다(<code>db_pr.py cleanup --dry-run</code> → <code>--yes</code>)</td></tr>
+        <tr><td>확인 화면에서 취소했는데 다시 하고 싶음</td><td>계획이 남아 있으므로 같은 Jira로 analyze를 다시 실행하고 "이어서 하기"를 고릅니다</td></tr>
+        <tr><td>dry-run 계획으로 실제 PR을 만들고 싶음</td><td><code>--dry-run</code> 없이 다시 analyze. Jira를 MCP로 다시 읽어 덮어쓴 뒤 진행합니다</td></tr>
+        <tr><td>push 전에 drift 발생</td><td>항목마다 계획 값 유지 / main 값 유지 / 직접 입력을 고르면 계획이 갱신되고 다시 적용됩니다</td></tr>
+        <tr><td>머지 전에 main이 바뀜</td><td>작성자가 <code>/telephony-triage:sync-pr</code></td></tr>
+        <tr><td>publish 뒤 discard 실패(종료 2)</td><td>PR은 생성됨. <code>db_pr.py discard &lt;wt&gt;</code>만 다시</td></tr>
+        <tr><td>다른 PC로 옮겨야 함</td><td>진행 중인 쓰기 작업을 끝내거나 버린 뒤 옮깁니다. 계획·lock·worktree는 PC에 있고 따라오지 않습니다</td></tr>
+      </table></div>
+    </div>
+  </section>
+
+  <!-- ===================================================== 7 -->
+  <section class="chap" id="s7" data-title="관리자 가이드">
+    <h2><span class="no">7</span>관리자 가이드</h2>
+
+    <div class="sub" id="s7-roles" data-title="역할">
+      <h3>역할</h3>
+      <div class="tbl"><table>
+        <tr><th>누가</th><th>무엇을</th></tr>
+        <tr><td>기여자</td><td>analyze·record로 PR. 머지 대기 중 main이 바뀌면 sync-pr. 직접 편집한 브랜치는 rebase → <code>db_build --write</code> → validate 후 push</td></tr>
+        <tr><td>카테고리 오너</td><td>자기 카테고리 PR 리뷰(다른 카테고리가 내 fixture에 <code>also_allowed</code>를 넣은 PR 포함), 월간 리뷰, 해결책 검증 PR 리뷰</td></tr>
+        <tr><td>메인테이너</td><td>parser-rules·스키마·hook·설정 변경 리뷰, 새 카테고리, 스키마 마이그레이션, 사후 lint 정리, 브랜치 보호 관리, 플러그인 업그레이드</td></tr>
+      </table></div>
+    </div>
+
+    <div class="sub" id="s7-db" data-title="이슈 DB 구조">
+      <h3>이슈 DB 구조</h3>
+      <div class="code"><pre>telephony-issue-db/
+├── README.md, STATS.md               [생성] db_build.py만 만든다
+├── issue-db.config.yaml              팀 공통 설정
+├── CONTRIBUTING.md, GLOSSARY.md      기여 규칙, 표준 용어·카테고리 경계·검색 별칭
+├── docs/ getting-started.md, review-guide.md, branch-protection.md
+├── .githooks/ pre-commit, pre-push   메인테이너 소유
+├── schema/   type·jira·feedback·plan·parser-rules 스키마
+├── templates/ type.md, cause.yaml, jira.yaml
+├── parser-rules/ tags.yaml, ril.yaml, extractors.yaml, CHANGELOG.md[생성]
+├── data/ call/ network/ sim/ sms/ ims/
+│   └── DATA-001-no-setup-data-call/
+│       ├── type.md                   유형 + 원인 정의(시그니처·해결책·fix)
+│       ├── jira/ABC-111.yaml         Jira 한 건 = 파일 하나
+│       └── fixtures/                 마스킹된 최소 logcat
+├── feedback/2026-09/…yaml            분석 제안 수락·거절 기록
+└── .github/ CODEOWNERS, pull_request_template.md</pre></div>
+      <ul>
+        <li>ID: 유형 <code>&lt;id_prefix&gt;-&lt;3자리&gt;</code>, 원인 <code>&lt;유형 ID&gt;-&lt;2자리&gt;</code>. <b>main에 들어간 ID는 바꾸지 않습니다.</b> 폐기·병합은 삭제하지 않고 <code>status</code>(<code>deprecated</code>, <code>merged-into:&lt;ID&gt;</code>)로 표시합니다.</li>
+        <li>Jira 기록에는 구조화 필드(model·sw·android_version·carrier·occurred_on)와 사용자가 확인한 한 줄 <code>note</code>, 마스킹된 실패 스텝 한 줄만 들어갑니다. Jira 원문은 저장하지 않습니다.</li>
+        <li>수정 상태 값: <code>open</code>, <code>fix-submitted</code>, <code>fixed</code>, <code>wont-fix</code>, <code>not-a-bug</code>. <code>fixed</code>는 verify-fix 통과로만 됩니다.</li>
+      </ul>
+    </div>
+
+    <div class="sub" id="s7-protect" data-title="CODEOWNERS와 브랜치 보호">
+      <h3>CODEOWNERS와 브랜치 보호</h3>
+      <div class="code"><pre># 카테고리
+/data/                  @&lt;org&gt;/telephony-data-owners
+/call/                  @&lt;org&gt;/telephony-call-owners
+/network/               @&lt;org&gt;/telephony-network-owners
+/sim/                   @&lt;org&gt;/telephony-sim-owners
+/sms/                   @&lt;org&gt;/telephony-sms-owners
+/ims/                   @&lt;org&gt;/telephony-ims-owners
+# 공통 (모든 카테고리와 모든 기여자 PC에 영향)
+/parser-rules/          @&lt;org&gt;/telephony-issue-db-maintainers
+/schema/  /templates/  /.githooks/  /issue-db.config.yaml  /GLOSSARY.md
+/CONTRIBUTING.md  /docs/  /.gitattributes  /.github/   → maintainers
+# 피드백 기록은 리뷰 불필요
+/feedback/</pre></div>
+      <p>main 보호 설정(GHE에서 설정하고 <code>docs/branch-protection.md</code>에 기록): PR 필수, CODEOWNERS 승인 1명 이상, 직접 push 금지.</p>
+      <div class="note warn"><span class="k">왜 서버 설정이 필수인가</span>Claude hook과 git hook은 로컬 장치라 우회할 수 있습니다. 또 <code>core.hooksPath=.githooks</code>는 main에 커밋된 스크립트를 모든 기여자 PC에서 실행합니다. 서버에서 브랜치 보호와 CODEOWNERS 필수 리뷰가 강제되지 않으면 main 쓰기 권한이 곧 팀 전체 PC의 코드 실행 권한이 됩니다. 보호를 설정할 수 없는 GHE라면 <code>.githooks/</code> 채택을 다시 결정합니다.</div>
+    </div>
+
+    <div class="sub" id="s7-add" data-title="유형 원인 시그니처 fixture 추가와 검토">
+      <h3>유형·원인·시그니처·fixture 추가와 검토</h3>
+      <p>추가는 보통 analyze 분류 단계에서 "새 원인" 또는 "새 유형"을 고르며 시작됩니다. 도구가 제목·해결책·시그니처·파서 규칙·fixture 초안을 만들고 사용자가 모두 승인합니다.</p>
+      <h4>무엇을 함께 넣나</h4>
+      <div class="tbl"><table>
+        <tr><th>점검</th><th>부족하면</th></tr>
+        <tr><td>새 시그니처가 참조하는 태그가 <code>tags.yaml</code>에 있나</td><td>태그 추가. 없으면 파서가 그 로그를 버려 매칭이 안 됨</td></tr>
+        <tr><td>RIL 요청·unsol이 <code>ril.yaml</code>에 있나</td><td>요청 이름·카테고리·timeout 추가</td></tr>
+        <tr><td>판별에 cause 코드·reason 같은 구조화 값이 필요한가</td><td><code>extractors.yaml</code>에 규칙 추가(<code>add-parser-rule</code>) 또는 패턴 추가(<code>update-parser-rule</code>)</td></tr>
+        <tr><td>원인 fixture가 있나</td><td><code>parse_logcat.py cut</code>으로 판별 근거 주변 최소 구간을 잘라 마스킹된 양성 fixture로</td></tr>
+        <tr><td>전체 회귀</td><td>기존 fixture 기대값이 바뀌면 차단·보고</td></tr>
+      </table></div>
+      <h4>작성 규칙</h4>
+      <ul>
+        <li>새 유형은 증상 시그니처가 필수입니다. 새 원인은 record에서만 시그니처를 나중으로 미룰 수 있습니다(<code>signatures_pending</code>, 리뷰 대상).</li>
+        <li>시그니처와 extractor 패턴은 <b>마스킹된 텍스트 기준</b>으로 씁니다. 원본 식별자 패턴(15자리 숫자 등)은 lint가 금지합니다. 토큰은 번호가 아니라 종류(<code>&lt;CELL#\d+&gt;</code>)로 씁니다.</li>
+        <li>태그·정규식은 실제 로그에서 확인한 문구로만 씁니다. extractor <code>id</code>는 kebab-case이고 바꾸지 않습니다.</li>
+        <li>정규식 안전: 중첩 수량자·길이 제한 없는 역참조는 lint가 거부하고, 패턴당 실행 시간 상한(<code>matcher.pattern_timeout_ms</code>, 기본 2000)이 있습니다.</li>
+        <li>코드·설정 수정 유형 원인은 나중에 <code>fixed</code>로 가려면 시나리오 또는 복구 시그니처가 필요합니다.</li>
+        <li>새 시그니처가 <b>다른 유형의 fixture</b>에서도 잡히면(그 로그에 실제로 두 현상이 있을 때) "시그니처 좁히기 / 그 fixture에서 이 원인도 허용(<code>also_allowed</code>)"을 고릅니다. 허용하면 그 카테고리 오너가 리뷰어로 붙습니다.</li>
+      </ul>
+      <h4>fixture 이름</h4>
+      <div class="tbl"><table>
+        <tr><th>종류</th><th>파일명</th><th>기본 기대값</th></tr>
+        <tr><td>양성</td><td><code>&lt;원인 ID&gt;.log</code>, <code>&lt;원인 ID&gt;.2.log</code></td><td>그 원인 C=1, 다른 원인 C=0</td></tr>
+        <tr><td>음성</td><td><code>&lt;유형 ID&gt;.none.log</code></td><td>이슈 DB 전체에서 S=1 유형 없음</td></tr>
+        <tr><td>수정 후</td><td><code>&lt;원인 ID&gt;.fixed.&lt;build&gt;.log</code></td><td>그 원인 C=0</td></tr>
+        <tr><td>해결책 적용 후</td><td><code>&lt;원인 ID&gt;.resolved.1.log</code></td><td>그 원인 C=0</td></tr>
+        <tr><td>재발</td><td><code>&lt;원인 ID&gt;.recurrence.&lt;build&gt;.log</code></td><td>양성과 같음</td></tr>
+        <tr><td>추가 표본</td><td><code>&lt;원인 ID&gt;.extra.1.log</code></td><td>양성과 같음</td></tr>
+      </table></div>
+      <p>기대값을 바꿀 때만 같은 이름의 <code>.expect.yaml</code>을 둡니다(<code>expect_top</code>, <code>expect_not</code>, <code>also_allowed</code>, <code>occurred_at</code>).</p>
+      <h4>새 카테고리</h4>
+      <p>같은 성격의 유형이 3개 이상 쌓이거나 담당 조직이 따로 있을 때 검토합니다. 메인테이너의 직접 편집 브랜치 <code>category/&lt;key&gt;</code>에서 <code>categories</code> 추가, 디렉토리, CODEOWNERS, GLOSSARY 경계, tags·ril 규칙을 넣고 <code>db_build --write</code> → validate → push합니다. 스키마 변경은 필요 없습니다.</p>
+    </div>
+
+    <div class="sub" id="s7-tools" data-title="db_build db_lint db_regress">
+      <h3>db_build · db_lint · db_regress</h3>
+      <p>이슈 DB clone 최상위에서, 플러그인 <code>scripts</code> 경로로 실행합니다(<code>S=</code>는 <code>config.yaml</code>의 <code>plugin.scripts_path</code>).</p>
+      <div class="code"><pre>S=&lt;config.yaml의 plugin.scripts_path 값&gt;
+python3 $S/db_build.py --db . --write            # README·STATS·CHANGELOG 재생성
+python3 $S/db_build.py --db . --verify           # 생성 파일이 최신인지 (커밋 전)
+python3 $S/db_build.py --db . --preview /tmp/pv  # 미리보기만
+python3 $S/db_lint.py --db . --all               # 전체 규칙 검사
+python3 $S/db_lint.py --db . --changed origin/main
+python3 $S/db_regress.py --db . --all            # 전체 fixture 회귀
+python3 $S/db_regress.py --db . --events-diff origin/main   # 파서 규칙 변경 전후 이벤트 (R5)
+python3 $S/db_verify.py rules --db . --changed origin/main  # R1~R5</pre></div>
+      <ul>
+        <li>생성 파일은 같은 데이터면 누가 만들어도 바이트 단위로 같습니다(현재 시각을 쓰지 않음, 정렬·숫자 형식 고정, LF).</li>
+        <li><code>db_build --write</code>는 이슈 DB <code>generator_version</code>과 플러그인 생성기 버전이 다르면 거부합니다(종료 2).</li>
+        <li>직접 편집 기여자는 이 명령들 대신 <code>/telephony-triage:validate</code> 한 번으로 같은 검사를 돌릴 수 있습니다.</li>
+      </ul>
+      <p>검증 체계(로컬 모드 <code>ci_mode: local</code>, 현재 기본)는 5단계입니다.</p>
+      <div class="tbl"><table>
+        <tr><th>단계</th><th>시점</th><th>하는 일</th></tr>
+        <tr><td>① 적용</td><td>모든 쓰기 흐름의 <code>db_pr stage</code></td><td>drift 검사, 적용, 체크리스트, 생성 파일 재생성, 규칙 검증</td></tr>
+        <tr><td>② 커밋</td><td>git pre-commit + Claude hook</td><td>lint, 마스킹, 회귀(변경분, parser-rules 변경이면 전체), 생성 파일</td></tr>
+        <tr><td>③ push 직전</td><td>확인 화면 + <code>db_pr publish</code></td><td>최신 main 위 적용, ID 검사, Jira 중복·열린 PR, 전체 회귀, 승인 해시 확인</td></tr>
+        <tr><td>④ 머지 직전</td><td>리뷰어</td><td>PR 템플릿 체크리스트, 필요하면 sync-pr</td></tr>
+        <tr><td>⑤ 사후</td><td>모든 스냅샷 최신화 직후</td><td>main 전체 lint. 문제는 알리기만, 정리는 메인테이너</td></tr>
+      </table></div>
+    </div>
+
+    <div class="sub" id="s7-review" data-title="PR 리뷰와 머지">
+      <h3>PR 리뷰와 머지</h3>
+      <p>PR 템플릿의 머지 전 체크리스트:</p>
+      <ul>
+        <li>GHE에 충돌 표시가 없다.</li>
+        <li>이 PR의 마지막 push 이후 main에 다른 PR이 머지되지 않았다(머지됐다면 작성자에게 sync-pr 요청).</li>
+        <li>새 유형·원인의 제목·해결책이 CONTRIBUTING.md 작성 규칙에 맞다.</li>
+        <li>parser-rules 변경이나 "승인 필요" 검증 결과가 있으면 메인테이너가 승인했다.</li>
+      </ul>
+      <ul>
+        <li><b>머지는 한 번에 하나씩</b>. 대기 PR이 여럿이면 하나를 머지한 뒤 다음 작성자에게 sync-pr를 요청합니다.</li>
+        <li>PR 하나 = Jira 하나(또는 리뷰 정리 한 묶음). 제목은 <code>[&lt;원인 ID 또는 유형 ID&gt;] &lt;요약&gt;</code>.</li>
+        <li>"검증 못 함 — 리뷰 대상", "사용자 진술 — 카테고리 오너 리뷰 필요" 표시는 리뷰어가 근거를 확인할 항목입니다.</li>
+      </ul>
+      <h4>계획이 없는 브랜치 (직접 편집)</h4>
+      <ol>
+        <li><code>git fetch origin</code> 후 <code>git rebase origin/&lt;base&gt;</code>.</li>
+        <li>충돌이 생성 파일뿐이면 main 쪽을 받고 <code>db_build --write</code>로 다시 만듭니다.</li>
+        <li>새 ID가 main과 겹치면(<code>db_add check-ids --base origin/&lt;base&gt;</code>) <code>db_add renumber &lt;옛 ID&gt;</code> 후 <code>db_lint --residual &lt;옛 ID&gt;=&lt;새 ID&gt;</code>.</li>
+        <li><code>/telephony-triage:validate</code> 통과 후 커밋, <code>TT_PUBLISH_TOKEN=manual git push --force-with-lease</code>(pre-push hook이 토큰 없는 push를 거부).</li>
+      </ol>
+      <h4>사후 lint 정리 (메인테이너, 수동)</h4>
+      <ul>
+        <li><b>main에 같은 ID가 두 번</b>: 먼저 머지된 쪽이 소유. 나중 쪽을 <code>chore/fix-db-&lt;문제 ID&gt;</code>에서 다음 빈 ID로 옮기고, 커밋에 <code>Renumbered: &lt;옛 ID&gt; -&gt; &lt;새 ID&gt;</code> 트레일러를 남깁니다. "main ID는 바꾸지 않는다"의 유일한 예외입니다.</li>
+        <li><b>Jira 중복</b>: 나중에 머지된 쪽 파일을 지우고 두 작성자에게 알립니다. 어느 분류가 맞는지는 작성자와 카테고리 오너가 정합니다.</li>
+      </ul>
+    </div>
+
+    <div class="sub" id="s7-monthly" data-title="월간 리뷰">
+      <h3>월간 리뷰 (카테고리 오너)</h3>
+      <p><code>/telephony-triage:review &lt;category&gt;</code>로 리포트를 만들고, 정리는 <code>review/&lt;category&gt;-&lt;YYYY-MM&gt;</code> PR로 올립니다. (a) 직접 편집 → <code>db_build --write</code> → validate → push, 또는 (b) Claude와 작업 계획(<code>source: review</code>)을 써서 공통 쓰기 절차로 올립니다. 중복 병합은 <code>move/&lt;옛 ID&gt;-to-&lt;새 ID&gt;</code> 브랜치이고 삭제하지 않습니다.</p>
+      <div class="tbl"><table>
+        <tr><th>리포트 항목</th><th>기준</th><th>조치</th></tr>
+        <tr><td>시그니처 없는 원인</td><td><code>signatures_pending</code></td><td>판별 시그니처 추가</td></tr>
+        <tr><td>fixture 없는 원인</td><td>R1·R2 "fixture 없음"</td><td>로그를 받아 fixture 추가</td></tr>
+        <tr><td>오래된 원인 미확정</td><td><code>quality.unresolved_max_days</code>(30) 초과</td><td>원인 확정 또는 담당 지정</td></tr>
+        <tr><td>품질 낮은 시그니처</td><td>수락률 &lt; 0.7 (표본 ≥ 5)</td><td>좁히기 또는 삭제</td></tr>
+        <tr><td>중복 후보</td><td>다른 유형의 증상 시그니처가 같은 fixture에 동시 매칭</td><td><code>merged-into</code>로 병합</td></tr>
+        <tr><td>오래 안 쓰인 원인</td><td><code>stale_months</code>(12) 동안 Jira 없음</td><td>유지 또는 deprecated</td></tr>
+        <tr><td>지원 종료 버전</td><td>원인 버전이 모두 <code>android_versions_supported</code> 밖</td><td>deprecated</td></tr>
+        <tr><td>수정 필요 누적</td><td>open이면서 Jira 많음</td><td>근본 수정 우선순위 제안</td></tr>
+        <tr><td>수정 상태 누락 / 빌드 없는 fix-submitted / fixed 전환 불가</td><td>필수 필드·흔적 시그니처 없음</td><td>보완, 빌드 추가, 시그니처 추가</td></tr>
+        <tr><td>해결책 미검증 방치 / 사용자 진술만</td><td><code>unverified_max_days</code>(60) 초과 / 근거 없음</td><td>검증 담당 지정, 근거 확보</td></tr>
+        <tr><td>수정 검증 대기 방치</td><td>fix-submitted가 30일 초과</td><td>verify-fix 요청</td></tr>
+        <tr><td>verify-fix 실패·부분 통과 이력</td><td><code>verification_history</code></td><td>근본 원인 재검토</td></tr>
+        <tr><td><code>also_allowed</code> 누적</td><td>한 fixture에 3개 이상, 한 원인이 5개 이상 유형에서 허용</td><td>시그니처나 fixture 구간이 넓은지 검토</td></tr>
+        <tr><td>급증</td><td>최근 30일 ≥ 이전 90일 월평균 × 2.0</td><td>원인 조사</td></tr>
+      </table></div>
+    </div>
+
+    <div class="sub" id="s7-site" data-title="사이트 설정 site-defaults.yaml">
+      <h3>사이트 설정: <code>plugin/site-defaults.yaml</code></h3>
+      <p>조직 기본값입니다. 우선순위는 <b>사용자 config &gt; site-defaults.yaml &gt; 코드 내장 기본값</b>입니다. 단, 표에 "고정"으로 표시한 키는 이 파일에서만 읽고 사용자 config로 바꿀 수 없습니다. 견본은 <code>plugin/site-defaults.example.yaml</code>(코드가 읽지 않는 테스트용)입니다.</p>
+      <div class="tbl"><table>
+        <tr><th>키</th><th>뜻</th><th>비고</th></tr>
+        <tr><td><code>synthetic_allowed</code></td><td>합성 fixture 허용</td><td>사내 기본 <code>false</code></td></tr>
+        <tr><td><code>jira.mcp_server</code></td><td>Jira MCP 서버 이름</td><td></td></tr>
+        <tr><td><code>jira.exclude_servers</code></td><td>setup 후보에서 뺄 서버 패턴</td><td>기본 <code>['mock-*']</code></td></tr>
+        <tr><td><code>jira.tools</code></td><td>논리 동작 → 실제 도구 전체 이름. <code>get_issue</code> 필수, <code>search_issues</code>·<code>get_comments</code> 선택</td><td>형식 <code>mcp__&lt;server&gt;__&lt;tool&gt;</code></td></tr>
+        <tr><td><code>jira.read_tools</code></td><td>guard 허용 목록(읽기 도구 전체 이름)</td><td>여기 없는 그 서버 도구는 모두 거부</td></tr>
+        <tr><td><code>jira.timezone</code></td><td>Jira 시각 타임존</td><td>예 <code>Asia/Seoul</code></td></tr>
+        <tr><td><code>jira.field_map</code></td><td>Jira 필드 → 분석 항목: <code>occurred_at</code>, <code>model</code>, <code>sw</code>, <code>android_version</code>, <code>carrier</code>, <code>sim_slot</code>, 선택 <code>test_steps</code>·<code>failed_step</code></td><td>커스텀 필드 포함</td></tr>
+        <tr><td><code>jira.failed_step_patterns</code></td><td>설명에서 실패 스텝 한 줄을 찾는 줄 단위 정규식</td><td>기본 <code>[]</code></td></tr>
+        <tr><td><code>ghe.host</code>, <code>ghe.org</code></td><td>GHE 호스트·조직</td><td></td></tr>
+        <tr><td><code>logcat.timezone</code>, <code>logcat.year_source</code></td><td>연도 없는 logcat 시각 해석, 연도 결정(<code>jira | file-mtime | ask</code>)</td><td></td></tr>
+        <tr><td><code>parser.backend</code></td><td><code>site</code>(포팅한 기존 파서) 또는 <code>reference</code></td><td>사내는 포팅 뒤 <code>site</code></td></tr>
+        <tr><td><code>platform.*</code></td><td>소스 트리 필수 디렉토리·버전 파일, 슬롯 표기(<code>log.phone_id</code>), RIL 태그(<code>ril.tags</code>, 기본 <code>[RILJ]</code>), bugreport 섹션</td><td><b>고정</b>. 키를 쓰면 목록이 통째로 바뀜. 바꾸면 <code>db_regress --all</code> 다시</td></tr>
+        <tr><td><code>external_parsers</code></td><td>외부 파서 어댑터</td><td>사외 초안은 비어 있음</td></tr>
+        <tr><td><code>analyzers.&lt;category&gt;</code></td><td>심층 분석 스킬: <code>skill</code>, <code>when</code>(<code>ask | always | never</code>), <code>inputs</code></td><td></td></tr>
+        <tr><td><code>explore.when</code>, <code>explore.timeline_max_lines</code></td><td>탐색 분석 실행 방식, 타임라인 줄 수 상한(20~1000, 기본 200)</td><td></td></tr>
+        <tr><td><code>code.auto_select</code></td><td>버전이 맞는 프로필이 1개면 자동 선택</td><td>불리언, 기본 <code>true</code></td></tr>
+        <tr><td><code>failed_step.*</code></td><td>스텝 마커 패턴(기본 끔), 분석 창, 시계 차, steps-file 열·상태 낱말, 스텝 순서 정렬 기준</td><td><code>marker_patterns</code>는 <b>고정</b>. YAML에서 <code>no</code>·<code>yes</code>·<code>on</code>·<code>off</code>는 따옴표</td></tr>
+        <tr><td><code>guard.raw_read</code></td><td>원문 통독 차단 대상 파일 이름·제외 디렉토리 추가</td><td><b>고정</b>, 내장 목록에 더해짐</td></tr>
+      </table></div>
+      <p>팀 공통 판정 값은 이슈 DB의 <code>issue-db.config.yaml</code>에 있습니다(부록 <a href="#s9-keys">9.4</a>). 바꾸면 PR이고 메인테이너가 리뷰합니다.</p>
+    </div>
+
+    <div class="sub" id="s7-parser" data-title="파서 규칙 조정 S-0 진단">
+      <h3>파서·규칙 조정과 S-0 진단</h3>
+      <p>규칙(태그, RIL 목록, extractor)은 이슈 DB <code>parser-rules/</code>에 있고, 파서 엔진(형식 파싱, 페어링, 마스킹)은 플러그인에 있습니다. <b>새 유형은 플러그인 재배포 없이 이슈 DB PR 하나</b>로 유형 + 규칙 + fixture가 함께 반영됩니다. 엔진을 고쳐야 할 때(새 로그 포맷, 여러 줄 메시지 등)만 플러그인 PR입니다.</p>
+      <h4>S-0 진단 도구 (Claude 없이 30분)</h4>
+      <p>조직 로그 형식이 파서 가정과 얼마나 다른지 숫자로 봅니다. 출력에는 로그 문구가 없고 태그 이름과 개수·비율만 나옵니다. 결과는 조직 내부 기록(<code>SITE_PROFILE.md</code>)에만 둡니다.</p>
+      <div class="code"><pre>ROOT=$(python3 tests/helpers/make_plugin_root.py | tail -1)   # site-defaults.yaml이 없을 때 임시 루트
+python3 tools/s0_stats.py &lt;logcat1&gt; &lt;logcat2&gt; &lt;logcat3&gt; \
+    --rules &lt;이슈 DB&gt;/parser-rules --tz Asia/Seoul --year 2026 --plugin-root $ROOT</pre></div>
+      <div class="tbl"><table>
+        <tr><th>지표</th><th>나쁘면</th><th>조치</th></tr>
+        <tr><td>시각 파싱 비율</td><td>90% 미만</td><td>줄 형식이 다름 → 파서 코드 수정</td></tr>
+        <tr><td>시계 이상</td><td>1건 이상</td><td>분석 때 증상 시각 스캔 경로 사용</td></tr>
+        <tr><td>수집 태그 비율</td><td>낮음</td><td><code>tags.yaml</code> 매핑 보강</td></tr>
+        <tr><td>RIL 요청</td><td>0건</td><td>RIL 태그 확인. 형식이 같으면 <code>platform.ril.tags</code>, 다르면 파서 포팅</td></tr>
+        <tr><td>RIL 짝 맞춤</td><td>낮음</td><td>로그 회전·문구 차이 확인</td></tr>
+        <tr><td>phone_id 추출</td><td>낮음/0%</td><td><code>platform.log.phone_id</code> 설정</td></tr>
+      </table></div>
+      <p>여러 지표가 동시에 나쁘면 참고 파서 모델이 맞지 않는 것이므로, 검증된 기존 파서를 백엔드로 포팅하는 쪽으로 방향을 정합니다(포팅 전 골든 출력 저장 → 포팅 → 골든 테스트 통과).</p>
+      <div class="note plan"><span class="k">예정</span>S-0 결과로 규칙 초안을 제안하는 <code>tools/s0_suggest.py</code>는 진행 중인 작업이며 아직 없습니다.</div>
+      <h4>규칙 변경 후 확인</h4>
+      <ul>
+        <li>파서 규칙 변경은 메인테이너 리뷰 필수입니다(CODEOWNERS).</li>
+        <li>R5(이벤트 diff)가 기존 이벤트 변화를 보고하면 "승인 필요"가 되고, 영향 표를 PR에 붙입니다.</li>
+        <li><code>platform</code> 키를 바꾸면 파서 출력이 달라질 수 있으므로 이슈 DB에서 <code>db_regress --all</code>과 <code>db_verify rules</code>를 다시 돌립니다.</li>
+        <li>정상 동작 문제(오탐)는 음성 fixture를 추가해 잡습니다. 음성 fixture가 없으면 흔적 검사는 "검증 못 함"입니다.</li>
+      </ul>
+    </div>
+
+    <div class="sub" id="s7-upgrade" data-title="업그레이드와 재반입">
+      <h3>업그레이드·재반입</h3>
+      <h4>플러그인 레포에 새 초안을 반입할 때 (메인테이너)</h4>
+      <div class="code"><pre>git switch -c draft-import/&lt;날짜&gt;
+python3 &lt;새 초안&gt;/tools/import_draft.py &lt;새 초안&gt; --dest . --label import-v2 --dry-run
+python3 &lt;새 초안&gt;/tools/import_draft.py &lt;새 초안&gt; --dest . --label import-v2 --check-boundary
+python3 -m pytest -q tests        # 골든 포함
+# 운영 이슈 DB에서 db_regress --all 확인 뒤 PR → 병합</pre></div>
+      <ul>
+        <li><code>SITE_PATHS</code>에 적힌 조직 전용 경로(<code>site-defaults.yaml</code>, <code>SITE_PROFILE.md</code>, 포팅한 파서, 골든 테스트 등)는 덮어쓰지 않습니다. 통째로 교체하지 마세요.</li>
+        <li>조직에서 공통 파일을 고친 것이 있으면 목록을 보여주고 종료 1로 멈춥니다. 그 변경을 되돌리거나, 요지를 조직 정보 없이 개발 쪽에 전달합니다.</li>
+        <li><code>--check-boundary</code>는 반입 뒤 모습을 조직 패턴으로 검사하고, 위반이면 반입하지 않습니다(종료 1). 적용 중 실패하면 자동으로 되돌립니다.</li>
+        <li>파일 하나를 마지막 반입 버전으로 되돌리기: <code>git restore --source=$(git log -1 --format=%H -- .draft-manifest.json) -- &lt;파일&gt;</code></li>
+      </ul>
+      <h4>사용자 쪽</h4>
+      <ul>
+        <li>플러그인이 업데이트되면 SessionStart hook이 세션마다 <code>plugin.scripts_path</code>를 새 경로로 맞춥니다.</li>
+        <li>업데이트 뒤 쓰기가 막히면 doctor의 <code>compat</code> 행을 봅니다. 플러그인 생성기 버전이 바뀌었으면 이슈 DB 쪽 버전 올림(메인테이너)이 필요합니다.</li>
+        <li>릴리스 노트에 지원 스키마 범위와 생성기 버전을 적습니다.</li>
+      </ul>
+    </div>
+
+    <div class="sub" id="s7-migrate" data-title="스키마 버전 올리기 마이그레이션">
+      <h3>스키마 버전 올리기 (마이그레이션)</h3>
+      <p>현재 이슈 DB 스키마는 v1, 플러그인 지원 범위도 (1, 1)이며 등록된 마이그레이션은 아직 없습니다. 아래는 버전을 올릴 때의 절차입니다.</p>
+      <div class="tbl"><table>
+        <tr><th>이슈 DB 버전</th><th>플러그인 동작</th></tr>
+        <tr><td>지원 범위 안</td><td>정상</td></tr>
+        <tr><td>플러그인 최대보다 새로움</td><td>읽기 전용 분석만. 플러그인 업데이트 안내</td></tr>
+        <tr><td>플러그인 최소보다 옛것</td><td>쓰기 막음. 메인테이너 마이그레이션 안내</td></tr>
+        <tr><td><code>generator_version</code> 불일치 (local/actions 모드)</td><td>이슈 DB 쓰기 전체를 막음</td></tr>
+      </table></div>
+      <ol>
+        <li>마이그레이션을 플러그인 <code>scripts/migrations/NNNN_&lt;설명&gt;.py</code>로 작성합니다. 작업 계획 형식이 바뀌면 옛 계획을 올리는 <code>upgrade_plan()</code>을 함께 넣습니다.</li>
+        <li>열린 PR을 가능한 한 머지하거나 닫고, 마이그레이션 PR이 머지되는 동안 다른 머지를 멈춘다고 공지합니다.</li>
+        <li>메인테이너 clone에서 브랜치를 만들고 실행합니다.</li>
+      </ol>
+      <div class="code"><pre>git switch -c migrate/schema-v2 origin/main
+/telephony-triage:migrate --to 2 --dry-run     # 거칠 단계와 바뀔 파일
+/telephony-triage:migrate --to 2               # 확인 후 워킹 트리 변경, db_build --write, validate 안내
+git push -u origin HEAD                        # 사용자 승인 후. PR은 사내 절차로</pre></div>
+      <ul>
+        <li><code>migrate/schema-v&lt;N&gt;</code> 브랜치에서는 <code>config.py check</code>·pre-commit·validate가 버전 불일치를 막지 않습니다(브랜치 이름으로 판별). 다른 브랜치 이름에서는 <code>--to</code>가 종료 2로 거절합니다.</li>
+        <li>머지 뒤 남은 PR: 계획이 있는 PR은 작성자의 sync-pr가 <code>db_migrate upgrade-plan</code>으로 계획을 올려 다시 적용합니다(<code>upgrade_plan()</code>이 없으면 계획을 새로 만듦). 직접 편집 브랜치는 작성자가 rebase 후 새 형식으로 고칩니다.</li>
+        <li><code>upgrade-plan --write</code>는 원본 계획을 <code>.v&lt;옛 버전&gt;.bak</code>로 남깁니다.</li>
+      </ul>
+    </div>
+
+    <div class="sub" id="s7-backup" data-title="백업과 되돌리기">
+      <h3>백업·되돌리기</h3>
+      <div class="tbl"><table>
+        <tr><th>대상</th><th>어디에</th><th>백업·되돌리기</th></tr>
+        <tr><td>이슈 DB</td><td>GHE 레포 (원본)</td><td>git 이력이 백업입니다. GHE 자체 백업은 조직 정책을 따릅니다. 잘못 머지된 내용은 main에 직접 고치지 않고 PR로 되돌립니다(아래)</td></tr>
+        <tr><td>플러그인 레포</td><td>GHE 레포</td><td>git 이력. 반입 실패는 <code>import_draft.py</code>가 자동 복구, 파일 단위는 <code>git restore --source=…</code></td></tr>
+        <tr><td>사이트 설정</td><td><code>plugin/site-defaults.yaml</code> (플러그인 레포에 커밋)</td><td>git 이력</td></tr>
+        <tr><td>사용자 config</td><td><code>~/.telephony-triage/config.yaml</code></td><td>레포 밖. 잃으면 setup으로 다시 만듭니다</td></tr>
+        <tr><td>작업 계획·lock·worktree·스냅샷</td><td><code>~/.telephony-triage/work/</code></td><td>PC 로컬 전용. 백업 대상이 아닙니다. 끝난 작업은 sync로 정리</td></tr>
+        <tr><td>지난 분석 결과</td><td><code>work/&lt;KEY&gt;/runs/&lt;n&gt;/</code></td><td>재분석 때 이전 리포트·analysis.json을 최근 5개 보관(마스킹된 결과만)</td></tr>
+      </table></div>
+      <h4>머지된 변경을 되돌릴 때</h4>
+      <ul>
+        <li><b>유형·원인을 없애야 하면</b> 지우지 말고 <code>set-status</code>로 <code>deprecated</code> 또는 <code>merged-into:&lt;ID&gt;</code>. main에 들어간 ID는 다른 곳에서 참조되므로 남겨 둡니다.</li>
+        <li><b>잘못된 분류</b>는 <code>reclassify</code>(analyze 분류 단계 또는 리뷰 계획)로 옮깁니다.</li>
+        <li><b>잘못된 수정 상태</b>는 <code>update-fix</code>로 open으로 되돌리며, 이전 값은 <code>verification_history</code>에 남습니다.</li>
+        <li>그 밖의 파일 단위 되돌림은 계획 없는 직접 편집 브랜치(예: <code>chore/…</code>)에서 고치고 <a href="#s7-review">직접 편집 절차</a>(db_build --write → validate → push → PR)로 올립니다.</li>
+      </ul>
+    </div>
+
+    <div class="sub" id="s7-rollout" data-title="도입 단계 S-1~S-7">
+      <h3>도입 단계 (사내 보완 S-0~S-7) <span class="chip p">진행 예정</span></h3>
+      <p>각 단계는 별도 Claude Code 세션으로 하고, 끝날 때마다 <code>SITE_PROFILE.md</code> 진행 상태를 갱신합니다. 세션 입력은 <code>S-n 진행해줘</code>, 읽을 자료는 <code>python3 tools/context_pack.py S-n</code> 출력뿐입니다.</p>
+      <div class="tbl"><table>
+        <tr><th>단계</th><th>할 일</th><th>완료 기준</th></tr>
+        <tr><td>S-0 (선택)</td><td>실제 로그 3~5개로 파서 가정 확인(<a href="#s7-parser">7.8</a>)</td><td>지표 5종 기록, 정성 결론 1줄</td></tr>
+        <tr><td>S-1</td><td>확인 목록(<code>tools/list_site_todos.py</code> + <code>REVIEW-OPEN.md</code>), 샘플 받아 <code>SITE_PROFILE.md</code> 작성</td><td>오프라인 평가 기준(1위 정확도 등) 합의</td></tr>
+        <tr><td>S-2</td><td>사내 Claude Code 기능 확인(플러그인 로드, hooks, MCP 도구 이름), 스킬 eval 재실행</td><td>확인 8항목 기록, 안전 eval 위반 0</td></tr>
+        <tr><td>S-3</td><td><code>site-defaults.yaml</code>, <code>issue-db.config.yaml</code> 사내 값</td><td><code>config.py check</code>·<code>doctor</code> fail 0</td></tr>
+        <tr><td>S-4a</td><td>운영 이슈 DB 생성·보호, 기존 파서 포팅(골든), 기존 data 분류 import, 분석 스킬 연결</td><td>골든 통과, import PR 머지</td></tr>
+        <tr><td>S-4</td><td>placeholder 규칙을 실제 문구로, 카테고리별 유형 5~10개 시드(실제 마스킹 fixture)</td><td>회귀·검증 통과</td></tr>
+        <tr><td>S-5</td><td>dry-run, 샌드박스 PR 1건, 과거 Jira 20~30건 <code>tools/offline_eval.py</code></td><td>S-1 기준치 이상</td></tr>
+        <tr><td>S-6</td><td>남은 검토 항목, 합성 fixture 0건 확인</td><td>미처리 0건</td></tr>
+        <tr><td>S-7</td><td>마켓플레이스 등록, 카테고리별 파일럿 10~20건, 첫 월간 리뷰</td><td>파일럿 지표 보고 후 확대 결정</td></tr>
+      </table></div>
+      <p>파일럿 지표(PR까지 시간, 중도 취소 비율, 작업당 질문 수)는 <code>python3 tools/usage_stats.py</code>로 뽑습니다.</p>
+    </div>
+  </section>
+
+  <!-- ===================================================== 8 -->
+  <section class="chap" id="s8" data-title="보안과 데이터 처리">
+    <h2><span class="no">8</span>보안·데이터 처리</h2>
+
+    <div class="sub" id="s8-mask" data-title="마스킹">
+      <h3>마스킹</h3>
+      <p>이슈 DB에 들어가는 모든 로그·fixture·본문·리포트, 그리고 매칭 전 로그 줄에 적용합니다. 같은 파일 안에서 <b>같은 원래 값은 같은 번호</b>로 바뀌므로 "셀이 바뀌었다", "같은 번호로 재시도했다" 같은 비교 관계가 유지됩니다. 원래 값과 번호의 대응표는 메모리에만 있고 저장하지 않습니다.</p>
+      <div class="tbl"><table>
+        <tr><th>항목</th><th>치환</th></tr>
+        <tr><td>IMSI · IMEI · ICCID</td><td><code>&lt;IMSI#n&gt;</code> <code>&lt;IMEI#n&gt;</code> <code>&lt;ICCID#n&gt;</code></td></tr>
+        <tr><td>SUPI · SUCI · TMSI · GUTI</td><td><code>&lt;SUPI#n&gt;</code> <code>&lt;SUCI#n&gt;</code> <code>&lt;TMSI#n&gt;</code> <code>&lt;GUTI#n&gt;</code></td></tr>
+        <tr><td>MSISDN·전화번호, <code>tel:</code> URI</td><td><code>&lt;MSISDN#n&gt;</code></td></tr>
+        <tr><td>SIP URI · IMPU · IMPI (사용자 부분)</td><td><code>&lt;IMPU#n&gt;</code> <code>&lt;IMPI#n&gt;</code></td></tr>
+        <tr><td>Cell ID · TAC · CI · PCI 등</td><td><code>&lt;CELL#n&gt;</code></td></tr>
+        <tr><td>IP · MAC · 이메일</td><td><code>&lt;IP#n&gt;</code> <code>&lt;MAC#n&gt;</code> <code>&lt;EMAIL#n&gt;</code></td></tr>
+        <tr><td>자격증명(SIP <code>response=</code>·<code>nonce=</code>, AKA RES/AUTN/AUTS, password·token·key 값)</td><td><code>&lt;CRED#n&gt;</code></td></tr>
+      </table></div>
+      <ul>
+        <li>문맥 기반 탐지를 우선하고 숫자 길이만으로 판정하는 규칙은 보수적으로 씁니다(빌드 번호·타임스탬프 오탐 방지). 오탐 예외는 <code>issue-db.config.yaml</code>의 <code>mask.allow_patterns</code>(메인테이너 리뷰)이고, 너무 넓은 패턴(<code>.*</code> 등)은 lint가 거부합니다.</li>
+        <li>마스킹은 멱등입니다. 이미 마스킹된 입력에 다시 적용해도 같습니다.</li>
+        <li><b>사람 이름은 마스킹 표로 잡히지 않습니다.</b> 그래서 Jira에서는 저장하는 정보 자체를 줄입니다(아래).</li>
+      </ul>
+    </div>
+
+    <div class="sub" id="s8-raw" data-title="원문 격리">
+      <h3>원문 격리</h3>
+      <ul>
+        <li><b>Jira 응답</b>: PostToolUse hook(<code>jira_bridge.py</code>)이 원문을 <code>&lt;work_dir&gt;/&lt;KEY&gt;/jira_raw.json</code>(권한 700 디렉토리)에 쓰고, 모델에는 마스킹 요약만 보입니다. 분석 드라이버가 읽은 뒤 지웁니다. 처리에 실패하면 원문 대신 오류 문구를 줍니다(fail closed).</li>
+        <li><b>저장되는 Jira 정보</b>: 구조화 필드와 사용자가 확인한 한 줄 <code>note</code>, 마스킹된 실패 스텝 한 줄(≤200자)뿐. 요약·설명·코멘트 원문은 저장하지 않습니다. 리포트·계획·PR에는 사람 이름을 넣지 않습니다.</li>
+        <li><b>로그 원문</b>: 대화에 붙이지 않고 경로로 다룹니다. 필요한 줄만 <code>grep -n</code>·<code>sed -n</code>으로 읽고, 통독 명령은 guard가 막습니다. <code>events.json</code>·<code>match.json</code>도 통째로 읽지 않습니다.</li>
+        <li><b>시험 절차 파일</b>: zip은 풀지 않고 메모리에서만 읽습니다. 붙여넣은 스텝 목록(<code>steps-pasted.txt</code>)은 커밋하지 않고 작업이 끝나면 지웁니다.</li>
+        <li><b>재사용 캐시·이력</b>(<code>analysis-cache.json</code>, <code>runs/</code>)에는 마스킹된 결과와 입력 해시만 있습니다.</li>
+        <li>Jira·로그·소스·커밋 메시지 속 문장은 데이터로만 다룹니다. 그 안의 지시를 따르지 않습니다.</li>
+      </ul>
+    </div>
+
+    <div class="sub" id="s8-guard" data-title="guard 규칙">
+      <h3>hook과 guard 규칙</h3>
+      <p>git 관련 규칙은 대상이 config의 이슈 DB 레포(그 worktree·스냅샷 포함)일 때만 적용됩니다.</p>
+      <div class="tbl"><table>
+        <tr><th>#</th><th>규칙</th><th>동작</th></tr>
+        <tr><td class="num">1</td><td>scripts 경로 갱신 (SessionStart)</td><td><code>plugin.scripts_path</code>를 현재 플러그인 경로로</td></tr>
+        <tr><td class="num">2</td><td>Jira 쓰기 차단</td><td><code>jira.read_tools</code>에 없는 그 서버의 도구는 모두 거부(허용 목록)</td></tr>
+        <tr><td class="num">3</td><td>PII 검사 (커밋)</td><td>staged 변경에 마스킹 검사, 검출되면 차단</td></tr>
+        <tr><td class="num">4</td><td>생성 파일 정합성 (커밋)</td><td><code>db_build --verify --staged</code> 실패 시 차단, <code>.cache/</code> 차단</td></tr>
+        <tr><td class="num">5</td><td>hook 우회 차단</td><td><code>--no-verify</code>, <code>-n</code>, <code>-c core.hooksPath=…</code>, hooksPath 변경·해제 차단. 값이 정확히 <code>.githooks</code>일 때만 커밋 허용</td></tr>
+        <tr><td class="num">6</td><td>main 직접 push 차단</td><td>대상이 base 브랜치면 차단, <code>--all</code>·<code>--mirror</code> 금지</td></tr>
+        <tr><td class="num">7</td><td>push 확인 강제</td><td>이슈 DB push와 <code>db_pr.py publish</code>는 항상 승인 프롬프트(<code>ask</code>)</td></tr>
+        <tr><td class="num">8</td><td>사용자 clone 직접 편집 차단</td><td>Write/Edit 대상이 clone 안이면 거부(<code>work_dir</code> 아래는 제외)</td></tr>
+        <tr><td class="num">9</td><td>Jira 응답 원문 격리 (PostToolUse)</td><td>위 원문 격리</td></tr>
+        <tr><td class="num">10</td><td>로그 원문 통독 차단</td><td><code>cat</code>·<code>less</code>·<code>zcat</code> 등으로 로그·zip·bugreport·4종 JSON 통독 거부. match-all <code>grep</code>/<code>awk</code>/<code>sed</code>도 거부. fixture·draft 경로 제외</td></tr>
+      </table></div>
+      <p>git hook은 두 개입니다. <code>pre-commit</code>(lint·마스킹·회귀·생성 파일)과 <code>pre-push</code>(main 대상 거부, 승인 토큰 없는 push 거부). 직접 편집 기여자는 validate 통과 후 <code>TT_PUBLISH_TOKEN=manual</code>로 push합니다. 목적은 도구 경로 밖의 실수 방지이지 권한 통제가 아닙니다.</p>
+      <div class="note warn"><span class="k">한계</span>명령 판정은 최선 노력입니다. 변수 치환, 별칭, 스크립트 파일 안의 git 호출, <code>$( )</code>, <code>GIT_DIR=</code> 같은 우회는 보지 못합니다. Read 도구의 통독도 막지 못합니다. 그래서 진짜 강제는 git pre-commit hook과 <b>서버 측 브랜치 보호</b>입니다.</div>
+    </div>
+
+    <div class="sub" id="s8-approve" data-title="승인 지점">
+      <h3>사람의 승인이 필요한 지점</h3>
+      <div class="tbl"><table>
+        <tr><th>지점</th><th>누가</th><th>도구가 하지 않는 것</th></tr>
+        <tr><td>분류 확정(<code>카테고리 &gt; 유형 &gt; 원인</code>)</td><td>분석한 사용자</td><td>대신 고르지 않음. 추정만으로 원인을 만들지 않음</td></tr>
+        <tr><td>새 유형·원인·시그니처·파서 규칙·fixture 초안</td><td>사용자</td><td>모두 승인 전에는 계획에 넣지 않음</td></tr>
+        <tr><td>수정 상태 변경(open 되돌림 등)</td><td>사용자</td><td>회귀 의심이어도 자동으로 바꾸지 않음</td></tr>
+        <tr><td><code>also_allowed</code> 허용 vs 시그니처 좁히기</td><td>사용자</td><td>고를 때까지 멈춤</td></tr>
+        <tr><td>drift 항목별 값</td><td>사용자</td><td>main 변경을 자동으로 덮어쓰지 않음</td></tr>
+        <tr><td>push 전 확인 화면</td><td>사용자</td><td>승인 없이 커밋·push 없음. 승인 뒤 변경되면 무효</td></tr>
+        <tr><td>심층·탐색 분석 실행</td><td>사용자</td><td>토큰 추가 사용 전에 물음(설정·플래그로 미리 정할 수 있음)</td></tr>
+        <tr><td>작업 디렉토리 정리, lock 강제 해제</td><td>사용자</td><td>확인 전에는 지우지 않음</td></tr>
+        <tr><td>PR 머지, "승인 필요" 항목</td><td>카테고리 오너·메인테이너</td><td>도구는 머지하지 않음</td></tr>
+      </table></div>
+    </div>
+  </section>
+
+  <!-- ===================================================== 9 -->
+  <section class="chap" id="s9" data-title="용어집과 부록">
+    <h2><span class="no">9</span>용어집·부록</h2>
+
+    <div class="sub" id="s9-terms" data-title="용어집">
+      <h3>용어집</h3>
+      <div class="tbl"><table>
+        <tr><th>용어</th><th>뜻</th></tr>
+        <tr><td>카테고리</td><td>data·call·network·sim·sms·ims. 사용자가 겪는 증상 기준으로 정함</td></tr>
+        <tr><td>이슈 유형</td><td>사용자가 보는 증상. 증상 시그니처로 판별. ID <code>DATA-001</code></td></tr>
+        <tr><td>원인</td><td>같은 증상 아래의 서로 다른 원인. 판별 시그니처·해결책·수정 상태를 가짐. ID <code>DATA-001-02</code></td></tr>
+        <tr><td>시그니처</td><td>로그 조건 묶음(<code>must_match</code>, <code>must_event</code>, <code>must_not_match</code>, <code>window_sec</code>, <code>sequence</code>). 종류: 증상, 원인, 복구(recovery), 시나리오(scenario)</td></tr>
+        <tr><td>S / C</td><td>증상 / 원인 시그니처 충족 여부(0/1). 판정의 기준</td></tr>
+        <tr><td>일치 수준</td><td>점수 구간(높음·중간·낮음). 진단 확신도가 아님</td></tr>
+        <tr><td>fixture</td><td>이슈 DB에 넣은 마스킹된 최소 logcat. 회귀 테스트 입력</td></tr>
+        <tr><td>회귀·검증 모드</td><td>fixture 전체를 범위로, 모든 원인을 독립 평가, 보너스 0으로 판정하는 모드</td></tr>
+        <tr><td><code>also_allowed</code></td><td>한 fixture에서 C=1이어도 되는 다른 유형의 원인. 같은 로그에 실제로 두 현상이 있을 때만</td></tr>
+        <tr><td>parser-rules</td><td>이슈 DB의 태그·RIL·extractor 규칙. 엔진은 플러그인, 규칙은 이슈 DB</td></tr>
+        <tr><td>파서 백엔드</td><td>로그를 읽는 구현. <code>reference</code>(참고) 또는 <code>site</code>(조직의 검증된 파서 포팅)</td></tr>
+        <tr><td>읽기 스냅샷</td><td><code>work_dir/_snapshot</code>. origin/main을 가리키는 읽기 전용 worktree. 분석은 여기를 읽음</td></tr>
+        <tr><td>작업 worktree</td><td><code>work_dir/&lt;KEY&gt;/wt</code>. 계획을 최신 main 위에 적용하는 곳</td></tr>
+        <tr><td>작업 계획</td><td><code>plan.json</code>. 사용자 결정을 op 목록으로 적은 파일. 로컬 전용</td></tr>
+        <tr><td>drift</td><td>계획을 만든 뒤 main에서 계획 대상이 먼저 바뀐 것</td></tr>
+        <tr><td>세션 lock</td><td>한 사람이 동시에 두 쓰기 작업을 하지 않게 하는 잠금</td></tr>
+        <tr><td>dry-run</td><td>확인 화면까지만 가고 아무것도 올리지 않는 연습 실행</td></tr>
+        <tr><td>분석 전용</td><td><code>--analysis-only</code>. 리포트까지만, 기록 없음</td></tr>
+        <tr><td>심층 분석</td><td>카테고리별 분석 스킬(Step 5-1). 보조 정보</td></tr>
+        <tr><td>탐색 분석</td><td>후보 없음·원인 미확인일 때 Claude가 세우는 가설(Step 5-2). 보조 정보</td></tr>
+        <tr><td>실패 스텝 앵커</td><td>시험 절차의 실패 스텝으로 분석 범위를 정하는 것. 어디를 볼지만 바꾸고 S/C는 로그가 정함</td></tr>
+        <tr><td>사후 lint</td><td>스냅샷 최신화 직후 main 전체 검사. 알리기만 함</td></tr>
+        <tr><td>사외 / 사내</td><td>개발 환경 / 플러그인을 도입한 조직의 환경</td></tr>
+        <tr><td>SITE_PATHS</td><td>조직 전용 값·코드만 두는 경로 목록. 재반입 때 보존</td></tr>
+        <tr><td>placeholder 규칙</td><td>실제 로그로 확인하기 전의 견본 규칙(<code>reason: placeholder</code>). 파일럿 전에 교체</td></tr>
+      </table></div>
+    </div>
+
+    <div class="sub" id="s9-files" data-title="파일 위치표">
+      <h3>부록 A. 파일 위치표</h3>
+      <div class="tbl"><table>
+        <tr><th>파일</th><th>위치</th><th>누가 씀</th></tr>
+        <tr><td>사용자 config</td><td><code>~/.telephony-triage/config.yaml</code></td><td>setup, <code>config.py set</code></td></tr>
+        <tr><td>작업 디렉토리</td><td><code>~/.telephony-triage/work/</code> (기본, 권한 700)</td><td>도구</td></tr>
+        <tr><td>읽기 스냅샷 / 스냅샷 시각</td><td><code>work/_snapshot/</code>, <code>work/snapshot.json</code></td><td>sync, analyze</td></tr>
+        <tr><td>작업별 산출물</td><td><code>work/&lt;KEY&gt;/</code>: <code>analysis.json</code>, <code>report.md</code>, <code>plan.json</code>, <code>wt/</code>, <code>draft/</code>, <code>runs/</code>, <code>timeline.md</code></td><td>도구</td></tr>
+        <tr><td>pending 피드백</td><td><code>~/.telephony-triage/pending-feedback/</code></td><td>도구</td></tr>
+        <tr><td>월간 리뷰 리포트</td><td><code>work/review-&lt;category&gt;-&lt;YYYY-MM&gt;/report.md</code></td><td>review</td></tr>
+        <tr><td>사이트 설정</td><td><code>plugin/site-defaults.yaml</code></td><td>관리자(S-3)</td></tr>
+        <tr><td>hooks 정의</td><td><code>plugin/hooks/hooks.json</code></td><td>플러그인</td></tr>
+        <tr><td>커맨드 / 스킬</td><td><code>plugin/commands/</code>, <code>plugin/skills/telephony-triage/</code></td><td>플러그인</td></tr>
+        <tr><td>이슈 DB 설정</td><td><code>&lt;이슈 DB&gt;/issue-db.config.yaml</code></td><td>메인테이너 PR</td></tr>
+        <tr><td>git hook</td><td><code>&lt;이슈 DB&gt;/.githooks/pre-commit</code>, <code>pre-push</code></td><td>메인테이너</td></tr>
+        <tr><td>조직 진행 기록</td><td><code>SITE_PROFILE.md</code> (플러그인 레포 루트)</td><td>도입 담당</td></tr>
+        <tr><td>설계 문서</td><td><code>docs/design/</code> (지도: <code>README.md</code>, 표·정의 기준: <code>contracts.md</code>)</td><td>개발</td></tr>
+      </table></div>
+    </div>
+
+    <div class="sub" id="s9-exit" data-title="종료 코드표">
+      <h3>부록 B. 종료 코드표</h3>
+      <div class="tbl"><table>
+        <tr><th>코드</th><th>의미</th><th>대표 예</th></tr>
+        <tr><td class="num">0</td><td>성공(경고 포함)</td><td>doctor에 warn만 있음</td></tr>
+        <tr><td class="num">1</td><td>검사 실패, drift</td><td>lint 오류, 회귀 실패, doctor fail 행, 재반입 시 조직이 고친 공통 파일 발견</td></tr>
+        <tr><td class="num">2</td><td>사용·환경 오류</td><td>site-defaults 없음, lock 보유 중, 버전 불일치 쓰기 거부, 마스킹 안 된 입력, <code>--analysis-only</code>와 <code>--dry-run</code> 동시 사용</td></tr>
+        <tr><td class="num">3</td><td>승인 필요</td><td>R5 기존 이벤트 변경(<code>db_verify rules</code>, <code>db_pr stage</code>), <code>make_bundle.py</code> 정상 완료</td></tr>
+      </table></div>
+    </div>
+
+    <div class="sub" id="s9-keys" data-title="설정 키 요약">
+      <h3>부록 C. 설정 키 요약</h3>
+      <h4>사용자 config (<code>~/.telephony-triage/config.yaml</code>)</h4>
+      <div class="tbl"><table>
+        <tr><th>키</th><th>뜻</th></tr>
+        <tr><td><code>user.ghe_id</code></td><td>GHE 아이디(기록의 <code>analyzed_by</code>)</td></tr>
+        <tr><td><code>plugin.scripts_path</code></td><td>플러그인 scripts 경로(자동 갱신)</td></tr>
+        <tr><td><code>issue_db.path</code> · <code>remote</code> · <code>base_branch</code> · <code>ghe_host</code></td><td>이슈 DB clone 경로, 원격, base(기본 main), gh 호스트</td></tr>
+        <tr><td><code>jira.mcp_server</code> · <code>tools</code> · <code>read_tools</code> · <code>timezone</code> · <code>field_map</code></td><td>사이트 설정을 덮어쓸 수 있는 Jira 값</td></tr>
+        <tr><td><code>logcat.timezone</code> · <code>year_source</code></td><td>logcat 시각 해석</td></tr>
+        <tr><td><code>code_profiles</code></td><td>소스 트리 프리셋(<code>name</code>, <code>android_version</code>, <code>roots.aosp</code>, <code>roots.vendor_ril</code>)</td></tr>
+        <tr><td><code>recent_code_roots</code></td><td>직접 입력한 경로 최근 5개(자동)</td></tr>
+        <tr><td><code>log_dir</code> · <code>work_dir</code></td><td>logcat 탐색 경로, 작업 디렉토리</td></tr>
+      </table></div>
+      <h4>이슈 DB (<code>issue-db.config.yaml</code>)</h4>
+      <div class="tbl"><table>
+        <tr><th>키</th><th>뜻</th></tr>
+        <tr><td><code>schema_version</code> · <code>generator_version</code></td><td>구조 버전 · 생성 파일 형식 버전(플러그인과 같아야 쓰기 가능)</td></tr>
+        <tr><td><code>ci_mode</code></td><td><code>local</code>(현재) | <code>actions</code> | <code>actions-build</code></td></tr>
+        <tr><td><code>jira_base_url</code> · <code>jira_key_regex</code></td><td>Jira 링크, 키 형식(입력 검사)</td></tr>
+        <tr><td><code>categories</code></td><td><code>{key, name, id_prefix}</code> 목록, README 순서</td></tr>
+        <tr><td><code>android_versions_supported</code></td><td>지원 버전(지원 종료 판단)</td></tr>
+        <tr><td><code>parser_backend</code> · <code>external_parsers</code></td><td>시그니처가 전제하는 파서 백엔드·외부 파서 최소 버전</td></tr>
+        <tr><td><code>code_root_keys</code></td><td><code>code_refs</code>에 쓰는 루트 키(기본 aosp, vendor_ril)</td></tr>
+        <tr><td><code>fix_ref_regex</code> · <code>build_compare</code></td><td>수정 CL 형식, 빌드 비교 규칙</td></tr>
+        <tr><td><code>scoring</code></td><td>symptom 0.4, cause 0.6, 근접 0.1, 키워드 0.05, 스텝 0.05, 일치 수준 high 0.9 · medium 0.6</td></tr>
+        <tr><td><code>step_focus</code> · <code>step_events</code></td><td>실패 스텝 우선 유형, 스텝 → 로그 흔적 규칙(기본 <code>[]</code>)</td></tr>
+        <tr><td><code>quality</code></td><td>min_samples 5, low_acceptance_rate 0.7, stale_months 12, unresolved 30일, unverified 60일, fix_submitted 30일, surge 2.0</td></tr>
+        <tr><td><code>mask.allow_patterns</code></td><td>마스킹 오탐 예외</td></tr>
+        <tr><td><code>matcher.pattern_timeout_ms</code></td><td>패턴당 실행 시간 상한(2000)</td></tr>
+        <tr><td><code>readme.jira_inline_max</code> · <code>reviewers.format</code></td><td>README 표의 Jira 수, <code>gh pr create --reviewer</code> 형식</td></tr>
+      </table></div>
+    </div>
+
+    <div class="sub" id="s9-docs" data-title="더 읽을 문서">
+      <h3>부록 D. 더 읽을 문서</h3>
+      <div class="tbl"><table>
+        <tr><th>보고 싶은 것</th><th>파일</th></tr>
+        <tr><td>원칙</td><td><code>docs/design/12-principles.md</code></td></tr>
+        <tr><td>워크플로 상세</td><td><code>docs/design/07-workflow.md</code></td></tr>
+        <tr><td>검증 규칙</td><td><code>docs/design/05-verification.md</code></td></tr>
+        <tr><td>협업·PR·마이그레이션</td><td><code>docs/design/06-collaboration.md</code></td></tr>
+        <tr><td>마스킹·hooks</td><td><code>docs/design/08-safety.md</code></td></tr>
+        <tr><td>설정</td><td><code>docs/design/02-config.md</code></td></tr>
+        <tr><td>스크립트 옵션 전체</td><td><code>docs/design/contracts-cli.md</code></td></tr>
+        <tr><td>공통 계약(종료 코드·op·fixture·브랜치)</td><td><code>docs/design/contracts.md</code></td></tr>
+        <tr><td>도입 절차</td><td><code>GUIDE.md §4</code>, <code>docs/design/15-local-draft.md §15.5</code></td></tr>
+        <tr><td>S-0 진단</td><td><code>docs/development/S0_PROBE_CHECKLIST.md</code></td></tr>
+      </table></div>
+    </div>
+  </section>
+
+  <div class="empty" id="empty">검색어와 맞는 절이 없습니다. 다른 낱말(예: 커맨드 이름, 오류 문구 일부)로 찾아보세요.</div>
+
+  <footer class="foot">
+    telephony-triage 사용·운영 매뉴얼 · 플러그인 레포 main(2026-10-07) 기준. 표·정의가 설계 문서와 다르면 <code>docs/design/contracts.md</code>가 맞습니다.
+  </footer>
+</main>
+</div>
+
+<script>
+(function () {
+  var chapters = Array.prototype.slice.call(document.querySelectorAll("section.chap"));
+
+  // 목차 만들기 (두 곳)
+  function buildToc(nav) {
+    var ol = document.createElement("ol");
+    chapters.forEach(function (sec) {
+      var li = document.createElement("li");
+      li.dataset.for = sec.id;
+      var a = document.createElement("a");
+      a.href = "#" + sec.id;
+      a.textContent = sec.querySelector("h2 .no").textContent + ". " + sec.dataset.title;
+      li.appendChild(a);
+      var subs = sec.querySelectorAll(":scope > .sub");
+      if (subs.length) {
+        var inner = document.createElement("ol");
+        subs.forEach(function (s) {
+          var sl = document.createElement("li");
+          sl.dataset.for = s.id;
+          var sa = document.createElement("a");
+          sa.href = "#" + s.id;
+          sa.textContent = s.dataset.title;
+          sl.appendChild(sa);
+          inner.appendChild(sl);
+        });
+        li.appendChild(inner);
+      }
+      ol.appendChild(li);
+    });
+    nav.appendChild(ol);
+  }
+  buildToc(document.getElementById("toc"));
+  buildToc(document.getElementById("toc2"));
+
+  // 휴대폰 목차: 링크를 누르면 닫기
+  var tocm = document.getElementById("tocm");
+  document.getElementById("toc2").addEventListener("click", function (e) {
+    if (e.target.tagName === "A") tocm.open = false;
+  });
+
+  // 검색 (클라이언트 측 필터)
+  var subs = Array.prototype.slice.call(document.querySelectorAll(".sub"));
+  subs.forEach(function (s) { s._text = s.textContent.toLowerCase(); });
+  var inputs = [document.getElementById("q"), document.getElementById("q2")];
+  var states = [document.getElementById("qs"), document.getElementById("qs2")];
+  var empty = document.getElementById("empty");
+
+  function filter(raw) {
+    var q = raw.trim().toLowerCase();
+    var terms = q ? q.split(/\s+/) : [];
+    var hits = 0;
+    subs.forEach(function (s) {
+      var ok = terms.every(function (t) { return s._text.indexOf(t) !== -1; });
+      s.hidden = !ok;
+      if (ok && terms.length) hits++;
+    });
+    chapters.forEach(function (sec) {
+      var any = Array.prototype.some.call(sec.querySelectorAll(":scope > .sub"), function (s) { return !s.hidden; });
+      sec.hidden = !any;
+    });
+    document.querySelectorAll(".toc li[data-for]").forEach(function (li) {
+      var el = document.getElementById(li.dataset.for);
+      li.hidden = el ? el.hidden : false;
+    });
+    var msg = terms.length ? (hits ? hits + "개 절 일치 · Esc로 지우기" : "일치 없음") : "";
+    states.forEach(function (st) { st.textContent = msg; });
+    empty.style.display = terms.length && !hits ? "block" : "none";
+  }
+  inputs.forEach(function (inp, i) {
+    inp.addEventListener("input", function () {
+      inputs[1 - i].value = inp.value;
+      filter(inp.value);
+    });
+    inp.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") { inputs.forEach(function (x) { x.value = ""; }); filter(""); }
+    });
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "/" && document.activeElement.tagName !== "INPUT") {
+      var target = getComputedStyle(document.querySelector(".side")).display === "none" ? inputs[1] : inputs[0];
+      if (target === inputs[1]) tocm.open = true;
+      e.preventDefault(); target.focus();
+    }
+  });
+
+  // 코드 블록 복사
+  document.querySelectorAll("pre").forEach(function (pre) {
+    var wrap = pre.parentElement.classList.contains("code") ? pre.parentElement : null;
+    if (!wrap) {
+      wrap = document.createElement("div"); wrap.className = "code";
+      pre.parentNode.insertBefore(wrap, pre); wrap.appendChild(pre);
+    }
+    var btn = document.createElement("button");
+    btn.type = "button"; btn.className = "copy"; btn.textContent = "복사";
+    btn.setAttribute("aria-label", "코드 복사");
+    btn.addEventListener("click", function () {
+      var text = pre.innerText;
+      function done(label) { btn.textContent = label; setTimeout(function () { btn.textContent = "복사"; }, 1400); }
+      function fallback() {
+        var r = document.createRange(); r.selectNodeContents(pre);
+        var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+        done("선택됨");
+      }
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(function () { done("복사됨"); }, fallback);
+        } else { fallback(); }
+      } catch (err) { fallback(); }
+    });
+    wrap.appendChild(btn);
+  });
+
+  // 현재 위치 표시
+  if ("IntersectionObserver" in window) {
+    var links = {};
+    document.querySelectorAll("#toc a").forEach(function (a) { links[a.getAttribute("href").slice(1)] = a; });
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        if (en.isIntersecting && links[en.target.id]) {
+          Object.keys(links).forEach(function (k) { links[k].classList.remove("on"); });
+          links[en.target.id].classList.add("on");
+        }
+      });
+    }, { rootMargin: "0px 0px -75% 0px" });
+    subs.forEach(function (s) { io.observe(s); });
+  }
+})();
+</script>
+</body>
+</html>

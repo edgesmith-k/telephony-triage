@@ -1,0 +1,1138 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>telephony-triage 사용자 교육</title>
+<style>
+/* Layout: 1280x720 slide stage scaled to fit; under 760px wide the deck becomes one scrolling column. Footer reads like a logcat line. */
+:root {
+  --bg: #eef1f5;
+  --surface: #ffffff;
+  --sunk: #f5f7fa;
+  --ink: #131a26;
+  --muted: #586377;
+  --line: #d6dce5;
+  --accent: #1d4ed8;
+  --accent-ink: #ffffff;
+  --accent-soft: #e3eafc;
+  --signal: #a8570a;
+  --signal-soft: #fbefdd;
+  --ok: #157a3a;
+  --ok-soft: #e1f3e7;
+  --fail: #b42318;
+  --fail-soft: #fbe5e2;
+  --font-sans: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Consolas, "D2Coding", monospace;
+  --fs-title: 60px;
+  --fs-h2: 38px;
+  --fs-lede: 22px;
+  --fs-body: 22px;
+  --fs-small: 17px;
+  --fs-code: 17px;
+  --fs-eyebrow: 14px;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d1117; --surface: #151b24; --sunk: #10151d; --ink: #e6eaf1; --muted: #97a2b4; --line: #283241;
+    --accent: #7da2ff; --accent-ink: #0d1117; --accent-soft: #1a2747; --signal: #f0a650; --signal-soft: #33240f;
+    --ok: #55c483; --ok-soft: #12291c; --fail: #ff8070; --fail-soft: #3a1915; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d1117; --surface: #151b24; --sunk: #10151d; --ink: #e6eaf1; --muted: #97a2b4; --line: #283241;
+  --accent: #7da2ff; --accent-ink: #0d1117; --accent-soft: #1a2747; --signal: #f0a650; --signal-soft: #33240f;
+  --ok: #55c483; --ok-soft: #12291c; --fail: #ff8070; --fail-soft: #3a1915; color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--font-sans); font-size: var(--fs-body); line-height: 1.5;
+  overflow: hidden;
+}
+code, .mono { font-family: var(--font-mono); font-size: 0.86em; }
+code { background: var(--sunk); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; white-space: nowrap; }
+pre code, .wrap code { white-space: normal; }
+a { color: var(--accent); }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+/* ---------- stage ---------- */
+#viewport { position: fixed; inset: 0 0 var(--chrome, 52px) 0; }
+#stage {
+  position: absolute; left: 50%; top: 50%; width: 1280px; height: 720px;
+  transform-origin: center center; transform: translate(-50%, -50%);
+}
+.slide {
+  position: absolute; inset: 0; display: none; flex-direction: column; gap: 22px;
+  padding: 50px 72px 70px; background: var(--surface); overflow: hidden;
+  border: 1px solid var(--line);
+}
+.slide.active { display: flex; }
+.slide > .notes { display: none; }
+
+.foot {
+  position: absolute; left: 72px; right: 72px; bottom: 22px;
+  display: flex; gap: 18px; align-items: baseline;
+  font-family: var(--font-mono); font-size: 13px; color: var(--muted);
+  border-top: 1px solid var(--line); padding-top: 10px;
+}
+.foot .lvl { color: var(--accent); font-weight: 600; }
+.foot .num { margin-left: auto; font-variant-numeric: tabular-nums; }
+
+/* ---------- type ---------- */
+.eyebrow {
+  font-family: var(--font-mono); font-size: var(--fs-eyebrow); letter-spacing: 0.06em;
+  color: var(--accent); text-transform: uppercase; font-weight: 600;
+}
+h1, h2, h3 { margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+h1 { font-size: var(--fs-title); line-height: 1.15; font-weight: 700; }
+h2 { font-size: var(--fs-h2); line-height: 1.2; font-weight: 700; }
+h3 { font-size: 21px; font-weight: 600; }
+.head { display: flex; flex-direction: column; gap: 6px; }
+.lede { font-size: var(--fs-lede); color: var(--muted); margin: 0; max-width: 72ch; }
+p { margin: 0; }
+.small { font-size: var(--fs-small); color: var(--muted); }
+ul.pts { margin: 0; padding-left: 1.1em; display: flex; flex-direction: column; gap: 8px; }
+ul.pts li::marker { color: var(--accent); }
+.hl { color: var(--accent); font-weight: 600; }
+.warn-t { color: var(--signal); font-weight: 600; }
+
+/* ---------- layout ---------- */
+.body { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 18px; }
+.g2 { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+.g3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+.g4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+.g2 > *, .g3 > *, .g4 > * { min-width: 0; }
+.card { background: var(--sunk); border: 1px solid var(--line); border-radius: 8px; padding: 18px 20px; display: flex; flex-direction: column; gap: 8px; }
+.card h3 { font-size: 19px; }
+.card.key { background: var(--accent-soft); border-color: transparent; }
+.card.alert { background: var(--signal-soft); border-color: transparent; }
+.tag {
+  display: inline-block; font-family: var(--font-mono); font-size: 13px; font-weight: 600;
+  padding: 1px 8px; border-radius: 999px; border: 1px solid currentColor; line-height: 1.5; white-space: nowrap;
+}
+.tag.ok { color: var(--ok); background: var(--ok-soft); }
+.tag.fail { color: var(--fail); background: var(--fail-soft); }
+.tag.warn { color: var(--signal); background: var(--signal-soft); }
+.tag.info { color: var(--accent); background: var(--accent-soft); }
+.tag.mute { color: var(--muted); }
+
+/* ---------- tables ---------- */
+.tw { overflow-x: auto; max-width: 100%; }
+table.t { border-collapse: collapse; width: 100%; font-size: 19px; }
+table.t th, table.t td { text-align: left; vertical-align: top; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+table.t th { font-size: 14px; font-weight: 600; color: var(--muted); letter-spacing: 0.03em; border-bottom: 2px solid var(--line); }
+table.t td:first-child { white-space: nowrap; }
+table.t.tight td { padding: 6px 10px; }
+table.t .num { font-variant-numeric: tabular-nums; }
+table.t td.wrap { white-space: normal; width: 46%; }
+
+/* ---------- console / report mock ---------- */
+.console {
+  background: var(--sunk); border: 1px solid var(--line); border-radius: 8px;
+  font-family: var(--font-mono); font-size: var(--fs-code); line-height: 1.55;
+  padding: 14px 18px; overflow-x: auto; white-space: pre; color: var(--ink);
+}
+.console .c { color: var(--muted); }
+.console .k { color: var(--accent); font-weight: 600; }
+.console .w { color: var(--signal); }
+.console .o { color: var(--ok); }
+.console .f { color: var(--fail); }
+.chat { display: flex; flex-direction: column; gap: 12px; font-size: 20px; }
+.msg { display: grid; grid-template-columns: 74px 1fr; gap: 12px; align-items: start; }
+.msg .who { font-family: var(--font-mono); font-size: 13px; font-weight: 600; padding-top: 3px; color: var(--muted); }
+.msg.u .who { color: var(--accent); }
+.msg .what { border-left: 2px solid var(--line); padding: 2px 0 2px 12px; min-width: 0; }
+.msg.u .what { border-left-color: var(--accent); }
+.msg.ask .what { border-left-color: var(--signal); }
+
+/* ---------- diagrams ---------- */
+svg.dia { width: 100%; height: auto; display: block; }
+svg.dia .box { fill: var(--surface); stroke: var(--line); stroke-width: 1.5; }
+svg.dia .box.k { fill: var(--accent-soft); stroke: var(--accent); }
+svg.dia .box.u { fill: var(--signal-soft); stroke: var(--signal); }
+svg.dia .box.d { fill: var(--sunk); stroke: var(--muted); stroke-dasharray: 5 4; }
+svg.dia text { fill: var(--ink); font-family: var(--font-sans); font-size: 17px; }
+svg.dia text.s { fill: var(--muted); font-size: 14px; }
+svg.dia text.m { font-family: var(--font-mono); font-size: 13.5px; fill: var(--muted); }
+svg.dia text.b { font-weight: 600; }
+svg.dia .ln { stroke: var(--muted); stroke-width: 1.6; fill: none; }
+svg.dia .ln.dash { stroke-dasharray: 5 4; }
+svg.dia .ah { fill: var(--muted); }
+
+/* step rail */
+.rail { display: grid; gap: 10px; counter-reset: st; }
+.rail > div { display: grid; grid-template-columns: 34px 1fr; gap: 12px; align-items: start; }
+.rail > div::before {
+  counter-increment: st; content: counter(st);
+  width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--accent); color: var(--accent-ink); font-family: var(--font-mono); font-size: 14px; font-weight: 600;
+}
+.rail > div > * { min-width: 0; }
+
+/* S/C matrix */
+.mx { display: grid; grid-template-columns: 120px 1fr 1fr; grid-template-rows: auto 1fr 1fr; gap: 10px; }
+.mx .ax { font-family: var(--font-mono); font-size: 15px; color: var(--muted); display: grid; place-items: center; text-align: center; }
+.mx .cell { border-radius: 8px; padding: 14px 18px; border: 1px solid var(--line); display: flex; flex-direction: column; gap: 4px; }
+.mx .cell b { font-size: 19px; }
+.mx .cell.best { background: var(--accent-soft); border-color: var(--accent); }
+.mx .cell.mid { background: var(--signal-soft); border-color: transparent; }
+
+/* lifecycle */
+.life { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.state { font-family: var(--font-mono); font-weight: 600; font-size: 18px; padding: 10px 18px; border-radius: 8px; border: 1.5px solid var(--line); background: var(--surface); }
+.state.done { border-color: var(--ok); color: var(--ok); background: var(--ok-soft); }
+.arrow { display: flex; flex-direction: column; align-items: center; font-size: 14px; color: var(--muted); min-width: 140px; }
+.arrow::after { content: "⟶"; font-size: 26px; line-height: 1; color: var(--muted); }
+
+/* timeline S-0..S-7 */
+.tl { display: grid; grid-template-columns: repeat(9, 1fr); gap: 8px; }
+.tl > div { border-top: 4px solid var(--line); padding-top: 10px; display: flex; flex-direction: column; gap: 4px; font-size: 15px; min-width: 0; }
+.tl > div b { font-family: var(--font-mono); font-size: 16px; }
+.tl > div.now { border-top-color: var(--accent); }
+
+/* big numbers */
+.nums { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+.nums > div { border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.nums b { font-size: 40px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.nums span { font-size: 15px; color: var(--muted); }
+
+/* cover */
+.cover { justify-content: center; gap: 28px; }
+.cover .flowline { font-family: var(--font-mono); font-size: 17px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 18px; }
+.agenda { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: repeat(5, auto); grid-auto-flow: column; gap: 6px 40px; counter-reset: ag; }
+.agenda > div { display: grid; grid-template-columns: 44px 1fr auto; gap: 10px; align-items: baseline; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.agenda > div::before { counter-increment: ag; content: counter(ag, decimal-leading-zero); font-family: var(--font-mono); color: var(--accent); font-weight: 600; }
+.agenda .rng { font-family: var(--font-mono); font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* ---------- chrome ---------- */
+#bar {
+  position: fixed; left: 0; right: 0; bottom: 0; height: 52px;
+  padding: 0 16px env(safe-area-inset-bottom, 0px);
+  display: flex; align-items: center; gap: 10px;
+  background: var(--surface); border-top: 1px solid var(--line);
+  font-family: var(--font-mono); font-size: 14px; color: var(--muted);
+}
+#bar button {
+  font: inherit; color: var(--ink); background: var(--sunk); border: 1px solid var(--line);
+  border-radius: 6px; padding: 6px 12px; cursor: pointer;
+}
+#bar button:hover { border-color: var(--accent); }
+#bar button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+#bar .sec { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#bar .hint { white-space: nowrap; }
+#prog { position: fixed; left: 0; right: 0; bottom: 52px; height: 3px; background: var(--line); }
+#prog i { display: block; height: 100%; background: var(--accent); width: 0; transition: width .2s; }
+#notes-panel {
+  position: fixed; left: 0; right: 0; bottom: 55px; max-height: 32vh; overflow: auto;
+  background: var(--sunk); border-top: 2px solid var(--accent);
+  padding: 14px 24px; font-size: 16px; line-height: 1.6; display: none;
+}
+#notes-panel .lab { font-family: var(--font-mono); font-size: 12px; color: var(--accent); font-weight: 600; letter-spacing: .06em; }
+body.show-notes #notes-panel { display: block; }
+@media (prefers-reduced-motion: reduce) { #prog i { transition: none; } }
+
+/* ---------- narrow: one scrolling column ---------- */
+@media (max-width: 760px) {
+  :root { --fs-title: 34px; --fs-h2: 26px; --fs-lede: 17px; --fs-body: 16px; --fs-small: 14px; --fs-code: 13px; --fs-eyebrow: 12px; }
+  body { overflow: auto; height: auto; }
+  html { height: auto; }
+  #viewport { position: static; }
+  #stage { position: static; width: auto; height: auto; transform: none !important; }
+  .slide { position: relative; display: flex; padding: 32px 16px 56px; border: 0; border-bottom: 1px solid var(--line); min-height: 0; overflow: visible; }
+  .foot { left: 16px; right: 16px; bottom: 16px; font-size: 11px; }
+  .foot .lvl, .foot .tagn { display: none; }
+  .g2, .g3, .g4, .nums, .agenda { grid-template-columns: 1fr; }
+  .agenda { grid-template-rows: none; grid-auto-flow: row; }
+  .tw > svg.dia { min-width: 680px; }
+  code { white-space: normal; overflow-wrap: anywhere; }
+  #bar .sec, #count { display: none; }
+  #bar { justify-content: flex-end; }
+  .tl { grid-template-columns: 1fr 1fr; }
+  .mx { grid-template-columns: 70px 1fr 1fr; }
+  table.t { font-size: 14px; }
+  .msg { grid-template-columns: 56px 1fr; }
+  .chat { font-size: 15px; }
+  .arrow { min-width: 0; width: 100%; }
+  body.show-notes .slide > .notes { display: block; background: var(--sunk); border-left: 3px solid var(--accent); padding: 10px 12px; font-size: 14px; }
+  #notes-panel, #prog, #bar .hint, #bar .nav { display: none !important; }
+  #bar { height: auto; position: sticky; padding: 8px 16px calc(8px + env(safe-area-inset-bottom, 0px)); }
+  .nums b { font-size: 30px; }
+}
+
+/* ---------- print: one slide per page, light ---------- */
+@media print {
+  @page { size: 1280px 720px; margin: 0; }
+  :root, :root:not([data-theme="light"]), :root[data-theme="dark"] {
+    --bg: #ffffff; --surface: #ffffff; --sunk: #f5f7fa; --ink: #131a26; --muted: #586377; --line: #d6dce5;
+    --accent: #1d4ed8; --accent-ink: #ffffff; --accent-soft: #e3eafc; --signal: #a8570a; --signal-soft: #fbefdd;
+    --ok: #157a3a; --ok-soft: #e1f3e7; --fail: #b42318; --fail-soft: #fbe5e2; color-scheme: light;
+  }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  html, body { height: auto; overflow: visible; background: #fff; }
+  #bar, #prog, #notes-panel, .slide > .notes { display: none !important; }
+  #viewport { position: static; }
+  #stage { position: static; transform: none !important; width: 1280px; height: auto; }
+  .slide { position: relative; display: flex !important; width: 1280px; height: 720px; border: 0; break-after: page; page-break-after: always; }
+}
+</style>
+</head>
+<body>
+
+<div id="viewport"><div id="stage">
+
+<!-- ================= 0. 표지 ================= -->
+<section class="slide cover" data-sec="시작">
+  <div class="eyebrow">I/telephony-triage · 부서 교육 · 2026-10</div>
+  <h1>telephony-triage<br>처음 쓰는 사람을 위한 1시간</h1>
+  <p class="lede">Jira 이슈와 logcat으로 원인을 찾고, 결과를 팀 이슈 DB에 PR로 쌓는 Claude Code 플러그인입니다.</p>
+  <div class="flowline">Jira + logcat → 파서 → 시그니처 매칭(S/C) → 리포트 → 사용자 확인 → 이슈 DB PR → 오너 리뷰</div>
+  <aside class="notes">오늘 목표는 각자 PC에서 setup을 끝내고 analyze 한 번을 끝까지 돌려볼 수 있게 되는 것입니다. 설계 배경은 짧게, 커맨드와 판정 읽는 법에 시간을 많이 씁니다. 질문은 섹션 끝마다 받습니다.</aside>
+</section>
+
+<section class="slide" data-sec="시작">
+  <div class="head"><div class="eyebrow">목차</div><h2>오늘 다룰 것</h2></div>
+  <div class="agenda">
+    <div><span>왜 만들었나</span><span class="rng">3</span></div>
+    <div><span>전체 구조</span><span class="rng">4–7</span></div>
+    <div><span>설치와 setup</span><span class="rng">8–10</span></div>
+    <div><span>커맨드별 사용법</span><span class="rng">11–17</span></div>
+    <div><span>판정 읽는 법</span><span class="rng">18–21</span></div>
+    <div><span>이슈 DB에 기록하기</span><span class="rng">22–25</span></div>
+    <div><span>오류가 났을 때</span><span class="rng">26–28</span></div>
+    <div><span>안전 장치</span><span class="rng">29–30</span></div>
+    <div><span>관리와 운영</span><span class="rng">31–34</span></div>
+    <div><span>현황 · Q&amp;A</span><span class="rng">35</span></div>
+  </div>
+  <p class="small">키보드 ← → 또는 스페이스로 넘기고, <code>N</code>으로 발표자 노트를 엽니다.</p>
+  <aside class="notes">왼쪽 열이 사용자 관점(무엇을, 어떻게), 오른쪽 열이 결과 해석과 운영입니다. 시간이 모자라면 관리와 운영(31–34)은 카테고리 오너·메인테이너만 따로 봅니다.</aside>
+</section>
+
+<!-- ================= 1. 왜 ================= -->
+<section class="slide" data-sec="1 왜 만들었나">
+  <div class="head"><div class="eyebrow">§1 왜 만들었나</div><h2>같은 이슈를 매번 처음부터 분석하고 있었다</h2></div>
+  <div class="body">
+    <div class="g2">
+      <div class="card alert">
+        <h3>문제</h3>
+        <ul class="pts">
+          <li>비슷한 증상의 이슈를 사람마다 로그부터 다시 읽는다</li>
+          <li>원인과 해결책이 개인 메모·Jira 코멘트에 흩어져 있다</li>
+          <li>"전에 본 것 같은데" 이슈 번호를 찾기 어렵다</li>
+          <li>고친 뒤 재발했는지 확인할 기준 로그가 없다</li>
+        </ul>
+      </div>
+      <div class="card key">
+        <h3>목표</h3>
+        <ul class="pts">
+          <li>로그 판정을 <b>규칙(시그니처)</b>으로 남겨 누구나 같은 결과를 얻는다</li>
+          <li>원인·해결책·Jira 이력을 <b>한 레포</b>(이슈 DB)에 쌓는다</li>
+          <li>기록은 사람이 확인한 것만, <b>PR과 리뷰</b>로 들어간다</li>
+          <li>수정 후 로그로 재발 여부를 <b>회귀 테스트</b>로 지킨다</li>
+        </ul>
+      </div>
+    </div>
+    <p class="small">분류 계층: 카테고리(data · call · network · sim · sms · ims) &gt; 이슈 유형(증상) &gt; 원인 + 해결책 + Jira 이력</p>
+  </div>
+  <aside class="notes">핵심은 "분석 결과를 재사용 가능한 규칙으로 바꾼다"입니다. Claude가 똑똑하게 추측해 주는 도구가 아니라, 팀이 확인한 규칙으로 판정하고 Claude는 설명과 정리를 돕는 구조라는 점을 먼저 강조합니다.</aside>
+</section>
+
+<!-- ================= 2. 구조 ================= -->
+<section class="slide" data-sec="2 전체 구조">
+  <div class="head"><div class="eyebrow">§2 전체 구조</div><h2>한 장으로 보는 흐름</h2></div>
+  <div class="body">
+    <div class="tw"><svg class="dia" viewBox="0 0 1000 410" role="img" aria-label="Jira와 logcat에서 이슈 DB PR까지의 흐름">
+      <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+      <!-- row 1 -->
+      <rect class="box" x="0" y="20" width="200" height="60" rx="8"/>
+      <text x="100" y="46" text-anchor="middle" class="b">Jira 이슈</text>
+      <text x="100" y="67" text-anchor="middle" class="s">MCP, 읽기 전용</text>
+      <rect class="box" x="0" y="100" width="200" height="60" rx="8"/>
+      <text x="100" y="126" text-anchor="middle" class="b">logcat / bugreport</text>
+      <text x="100" y="147" text-anchor="middle" class="s">파일 경로로 전달</text>
+      <rect class="box k" x="260" y="40" width="200" height="100" rx="8"/>
+      <text x="360" y="78" text-anchor="middle" class="b">마스킹 + 파싱</text>
+      <text x="360" y="102" text-anchor="middle" class="m">parse_logcat.py</text>
+      <text x="360" y="122" text-anchor="middle" class="s">→ 이벤트</text>
+      <rect class="box k" x="520" y="40" width="200" height="100" rx="8"/>
+      <text x="620" y="78" text-anchor="middle" class="b">시그니처 매칭</text>
+      <text x="620" y="102" text-anchor="middle" class="m">match_signatures.py</text>
+      <text x="620" y="122" text-anchor="middle" class="s">→ 후보별 S / C</text>
+      <rect class="box" x="780" y="40" width="200" height="100" rx="8"/>
+      <text x="880" y="78" text-anchor="middle" class="b">분석 리포트</text>
+      <text x="880" y="102" text-anchor="middle" class="m">report.md</text>
+      <text x="880" y="122" text-anchor="middle" class="s">Claude가 설명 칸 채움</text>
+      <path class="ln" d="M200,50 L230,50 L230,90 L258,90" marker-end="url(#ah)"/>
+      <path class="ln" d="M200,130 L230,130 L230,90" />
+      <path class="ln" d="M460,90 L518,90" marker-end="url(#ah)"/>
+      <path class="ln" d="M720,90 L778,90" marker-end="url(#ah)"/>
+      <!-- snapshot -->
+      <rect class="box d" x="380" y="190" width="360" height="54" rx="8"/>
+      <text x="560" y="214" text-anchor="middle" class="b">이슈 DB 읽기 스냅샷</text>
+      <text x="560" y="234" text-anchor="middle" class="s">파서 규칙 · 시그니처 · 기존 Jira</text>
+      <path class="ln dash" d="M430,190 L430,142" marker-end="url(#ah)"/>
+      <path class="ln dash" d="M620,190 L620,142" marker-end="url(#ah)"/>
+      <!-- down -->
+      <path class="ln" d="M880,140 L880,288" marker-end="url(#ah)"/>
+      <!-- row 2 (right to left) -->
+      <rect class="box u" x="780" y="290" width="200" height="100" rx="8"/>
+      <text x="880" y="328" text-anchor="middle" class="b">사용자 확인</text>
+      <text x="880" y="352" text-anchor="middle" class="s">분류 확정 · 새 원인</text>
+      <text x="880" y="372" text-anchor="middle" class="s">· 기록 안 함</text>
+      <rect class="box" x="520" y="290" width="200" height="100" rx="8"/>
+      <text x="620" y="328" text-anchor="middle" class="b">작업 계획</text>
+      <text x="620" y="352" text-anchor="middle" class="m">plan.json</text>
+      <text x="620" y="372" text-anchor="middle" class="s">내 PC에만 저장</text>
+      <rect class="box k" x="260" y="290" width="200" height="100" rx="8"/>
+      <text x="360" y="328" text-anchor="middle" class="b">최신 main에 적용</text>
+      <text x="360" y="352" text-anchor="middle" class="m">db_pr stage</text>
+      <text x="360" y="372" text-anchor="middle" class="s">lint · 마스킹 · 회귀 · R1~R6</text>
+      <rect class="box u" x="0" y="290" width="200" height="100" rx="8"/>
+      <text x="100" y="328" text-anchor="middle" class="b">확인 화면 → 승인</text>
+      <text x="100" y="352" text-anchor="middle" class="s">PR 생성</text>
+      <text x="100" y="372" text-anchor="middle" class="s">→ 카테고리 오너 리뷰</text>
+      <path class="ln" d="M778,340 L722,340" marker-end="url(#ah)"/>
+      <path class="ln" d="M518,340 L462,340" marker-end="url(#ah)"/>
+      <path class="ln" d="M258,340 L202,340" marker-end="url(#ah)"/>
+    </svg></div>
+    <p class="small">파란 상자 = 스크립트가 결정적으로 판정, 주황 상자 = 사람이 결정, 점선 = 이슈 DB에서 읽어 오는 규칙.</p>
+  </div>
+  <aside class="notes">위 줄은 분석, 아래 줄은 기록입니다. 판정(파란 상자)은 전부 파이썬 스크립트가 하고, 같은 입력이면 누가 돌려도 같은 결과가 나옵니다. 주황 상자 두 곳에서 반드시 사람이 결정합니다.</aside>
+</section>
+
+<section class="slide" data-sec="2 전체 구조">
+  <div class="head"><div class="eyebrow">§2 전체 구조</div><h2>레포 두 개와 내 PC의 작업 공간</h2></div>
+  <div class="body">
+    <div class="g3">
+      <div class="card">
+        <span class="tag info">플러그인</span>
+        <h3>telephony-triage</h3>
+        <ul class="pts small">
+          <li>커맨드 12개, 스킬 1개, hook</li>
+          <li>파서·매처·검증 스크립트(Python)</li>
+          <li>사내 마켓플레이스에서 설치 <span class="tag mute">예정 S-7</span></li>
+        </ul>
+      </div>
+      <div class="card">
+        <span class="tag info">이슈 DB</span>
+        <h3>telephony-issue-db</h3>
+        <ul class="pts small">
+          <li>사내 GHE 레포. 팀 공용 지식</li>
+          <li>유형·원인·해결책·Jira 기록·fixture·파서 규칙</li>
+          <li>모든 변경은 PR, main 직접 push 금지</li>
+        </ul>
+      </div>
+      <div class="card key">
+        <span class="tag mute">내 PC</span>
+        <h3><code>~/.telephony-triage/</code></h3>
+        <ul class="pts small">
+          <li><code>config.yaml</code> 사용자 설정</li>
+          <li><code>work/_snapshot</code> 분석용 읽기 스냅샷</li>
+          <li><code>work/&lt;KEY&gt;/</code> 리포트·계획·임시 worktree</li>
+        </ul>
+      </div>
+    </div>
+    <div class="card alert">
+      <p><b>내 이슈 DB clone은 도구가 건드리지 않습니다.</b> 분석은 스냅샷에서, 쓰기는 임시 worktree와 도구 브랜치(<code>tt/*</code>)에서 합니다. 내 clone에는 main이고 깨끗할 때 fast-forward만 합니다.</p>
+    </div>
+  </div>
+  <aside class="notes">자주 받는 질문이 "내 clone에서 브랜치를 바꿔 놨는데 괜찮나"입니다. 괜찮습니다. 도구는 clone을 읽기만 하고, 작업은 work 디렉토리 아래에서 합니다. 작업 계획과 lock은 PC에만 있어서 다른 PC로 따라오지 않습니다.</aside>
+</section>
+
+<section class="slide" data-sec="2 전체 구조">
+  <div class="head"><div class="eyebrow">§2 전체 구조</div><h2>이슈 DB 안쪽</h2></div>
+  <div class="body">
+    <div class="g2">
+      <div class="console" style="font-size:15px"><span class="c"># 카테고리 &gt; 유형 &gt; 원인</span>
+data/
+  DATA-001-no-setup-data-call/   <span class="c"># 유형</span>
+    type.md        <span class="c"># 유형 + 원인 정의, 시그니처</span>
+    jira/ABC-12345.yaml          <span class="c"># Jira 1건 = 파일 1개</span>
+    fixtures/DATA-001-02.log     <span class="c"># 마스킹된 최소 로그</span>
+call/  network/  sim/  sms/  ims/
+parser-rules/  tags.yaml  ril.yaml  extractors.yaml
+feedback/      <span class="c"># 후보 수락·거절 기록</span>
+<span class="k">README.md  STATS.md</span>   <span class="c"># [생성] db_build.py만 만든다</span></div>
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <div class="card"><h3>ID 읽는 법</h3><p><code>DATA-001</code> 유형, <code>DATA-001-02</code> 그 유형의 2번 원인. main에 들어간 ID는 바꾸지 않고, 병합·폐기는 <code>status</code>로 표시합니다.</p></div>
+        <div class="card"><h3>사람이 보는 화면</h3><p>README에 카테고리별 유형·원인·해결책·Jira 목록, STATS에 상위 원인과 수정 필요 순위가 생성됩니다.</p></div>
+        <div class="card"><h3>Jira 원문은 없다</h3><p>구조화 필드(모델·SW·Android 버전 등)와 사용자가 확인한 한 줄 요약만 저장합니다.</p></div>
+      </div>
+    </div>
+  </div>
+  <aside class="notes">README와 STATS는 손으로 고치지 않습니다. 고쳐도 다음 생성 때 덮이고, 커밋 hook이 막습니다. fixture는 회귀 테스트의 기준이 되는 로그 조각이라 반드시 마스킹돼 있습니다. 예시의 ID와 Jira 키는 모두 가상의 값입니다.</aside>
+</section>
+
+<section class="slide" data-sec="2 전체 구조">
+  <div class="head"><div class="eyebrow">§2 전체 구조</div><h2>누가 무엇을 결정하나</h2></div>
+  <div class="body">
+    <div class="g3">
+      <div class="card key">
+        <span class="tag info">스크립트</span>
+        <h3>판정</h3>
+        <ul class="pts small">
+          <li>로그 파싱, 이벤트 추출</li>
+          <li>시그니처 S/C, 점수, 순위</li>
+          <li>회귀·검증 R1~R6 통과 여부</li>
+          <li>같은 입력이면 같은 출력</li>
+        </ul>
+      </div>
+      <div class="card">
+        <span class="tag mute">Claude</span>
+        <h3>설명과 정리</h3>
+        <ul class="pts small">
+          <li>리포트 문단, 코드 위치 해설</li>
+          <li>새 원인·시그니처 초안</li>
+          <li>심층·탐색 분석은 <b>보조 의견</b></li>
+          <li>판정을 바꾸지 못한다</li>
+        </ul>
+      </div>
+      <div class="card alert">
+        <span class="tag warn">사람</span>
+        <h3>확정과 승인</h3>
+        <ul class="pts small">
+          <li>분류 확정, 새 유형·원인</li>
+          <li>시그니처·파서 규칙 추가</li>
+          <li>수정 상태 변경</li>
+          <li>push 전 확인 화면 승인, PR 리뷰</li>
+        </ul>
+      </div>
+    </div>
+    <p class="small">LLM이 낸 의견은 리포트에 "추정"으로 표시되고, 점수와 S/C에는 들어가지 않습니다.</p>
+  </div>
+  <aside class="notes">이 슬라이드가 오늘 가장 중요한 원칙입니다. Claude 답변이 그럴듯해도 판정 근거는 스크립트 출력입니다. 리포트에서 "로그로 확인"과 "코드로 추정"이 구분돼 나오는 이유도 이것입니다.</aside>
+</section>
+
+<!-- ================= 3. 설치 ================= -->
+<section class="slide" data-sec="3 설치와 setup">
+  <div class="head"><div class="eyebrow">§3 설치와 setup</div><h2>첫 설치 네 단계</h2></div>
+  <div class="body">
+    <div class="g2">
+      <div class="rail">
+        <div><div><b>플러그인 설치</b><p class="small">사내 마켓플레이스에서 <code>telephony-triage</code> (등록은 S-7 예정)</p></div></div>
+        <div><div><b>이슈 DB clone</b><p class="small">setup이 clone 명령을 제안해 주기도 합니다</p></div></div>
+        <div><div><b><code>/telephony-triage:setup</code></b><p class="small">설정 생성, Jira 도구 매핑, git hook, 스냅샷, 점검 표</p></div></div>
+        <div><div><b>연습 한 번</b><p class="small"><code>/telephony-triage:analyze ABC-12345 ~/logs/radio.txt --dry-run</code><br>아무것도 올리지 않고, gh 로그인 전에도 됩니다</p></div></div>
+      </div>
+      <div class="card">
+        <h3>미리 갖출 것</h3>
+        <div class="tw"><table class="t tight">
+          <tr><td>OS</td><td>Ubuntu (다른 OS 미지원)</td></tr>
+          <tr><td>Python</td><td class="num">3.11 이상</td></tr>
+          <tr><td>git</td><td class="num">2.31 이상</td></tr>
+          <tr><td>gh</td><td><code>gh auth status --hostname ghe.example</code></td></tr>
+          <tr><td>Jira MCP</td><td><b>사용자 범위(user scope)</b>로 등록</td></tr>
+        </table></div>
+        <p class="small">gh 인증이 없으면 쓰기만 막히고 분석과 <code>--dry-run</code>은 됩니다.</p>
+      </div>
+    </div>
+  </div>
+  <aside class="notes">Jira MCP를 특정 프로젝트에만 등록해 둔 경우가 많은데, 그러면 setup이 도구를 못 찾고 멈춥니다. 사용자 범위로 다시 등록하세요. 첫날은 dry-run 연습까지만 해도 충분합니다.</aside>
+</section>
+
+<section class="slide" data-sec="3 설치와 setup">
+  <div class="head"><div class="eyebrow">§3 설치와 setup</div><h2>setup이 하는 일</h2><p class="lede">단계마다 결과를 보여주고, 확인이 필요한 곳에서 묻습니다.</p></div>
+  <div class="body">
+    <div class="tw"><table class="t">
+      <tr><th>단계</th><th>하는 일</th><th>멈추는 경우</th></tr>
+      <tr><td>config</td><td>GHE 아이디, 이슈 DB 경로·URL, base 브랜치, 타임존, 로그 폴더, 작업 디렉토리를 하나씩 묻고 저장</td><td>없는 경로는 그 항목만 다시 묻기</td></tr>
+      <tr><td>Jira MCP</td><td>등록된 MCP에서 <code>get_issue</code> 등 읽기 도구 후보를 고르고 확인받음</td><td><span class="warn-t">후보 없음 → setup 중단</span></td></tr>
+      <tr><td>git hook</td><td>이슈 DB clone에 <code>core.hooksPath=.githooks</code> 설치</td><td>값이 다르면 실패 보고</td></tr>
+      <tr><td>스냅샷</td><td>lock을 잡고 읽기 스냅샷 생성, 버전 호환성 확인</td><td>호환 안 되면 "읽기 전용"으로 계속</td></tr>
+      <tr><td>gh · doctor</td><td>gh 인증 확인 후 <code>config.py doctor</code> 점검 표를 그대로 보여줌</td><td>gh 없음 → 읽기 전용으로 끝</td></tr>
+    </table></div>
+  </div>
+  <aside class="notes">setup은 실제로 10단계지만 묶으면 이 다섯 덩어리입니다. 중간에 멈춰도 잡은 lock은 항상 풀고 끝납니다. 설정을 바꿀 때는 setup을 다시 돌리면 바꿀 항목만 고칩니다.</aside>
+</section>
+
+<section class="slide" data-sec="3 설치와 setup">
+  <div class="head"><div class="eyebrow">§3 설치와 setup</div><h2>doctor 점검 표 읽기</h2><p class="lede">doctor는 읽기 전용입니다. 고치지 않고 <b>다음</b> 열로 할 일을 알려줍니다.</p></div>
+  <div class="body">
+    <div class="tw"><table class="t tight">
+      <tr><th>항목</th><th>상태</th><th>내용</th><th>다음</th></tr>
+      <tr><td>config</td><td><span class="tag ok">ok</span></td><td>config.yaml 있음</td><td></td></tr>
+      <tr><td>clone</td><td><span class="tag ok">ok</span></td><td>~/work/telephony-issue-db</td><td></td></tr>
+      <tr><td>hook</td><td><span class="tag fail">fail</span></td><td>core.hooksPath=(없음)</td><td><code>config.py install-hooks</code></td></tr>
+      <tr><td>jira</td><td><span class="tag fail">fail</span></td><td>jira.tools.get_issue 매핑 비어 있음</td><td>setup의 Jira 단계</td></tr>
+      <tr><td>gh</td><td><span class="tag warn">warn</span></td><td>gh 인증 없음 (ghe.example) — 쓰기 불가</td><td><code>gh auth login -h ghe.example</code></td></tr>
+      <tr><td>snapshot</td><td><span class="tag warn">warn</span></td><td>오래된 스냅샷</td><td><code>/telephony-triage:sync</code></td></tr>
+      <tr><td>compat · lock</td><td><span class="tag ok">ok</span></td><td>스키마·생성기·파서 호환 / 세션 lock 없음</td><td></td></tr>
+    </table></div>
+    <p class="small">예시 화면입니다. 실제 항목: config, scripts_path, clone, hook, jira, gh, snapshot, compat, lock.</p>
+  </div>
+  <aside class="notes">문제가 생기면 먼저 doctor 표를 보세요. fail은 그 기능이 막힌 것이고 warn은 일부만 제한됩니다. 이 표를 그대로 캡처해서 질문하면 지원이 빠릅니다.</aside>
+</section>
+
+<!-- ================= 4. 커맨드 ================= -->
+<section class="slide" data-sec="4 커맨드별 사용법">
+  <div class="head"><div class="eyebrow">§4 커맨드별 사용법</div><h2>커맨드 12개 지도</h2><p class="lede">모두 <code>/telephony-triage:&lt;이름&gt;</code>으로 부릅니다.</p></div>
+  <div class="body">
+    <div class="g4">
+      <div class="card key"><h3>분석·기록</h3><p><code>analyze</code></p><p><code>record</code></p><p class="small">이슈 DB에 PR</p></div>
+      <div class="card key"><h3>수정 상태</h3><p><code>fix-submitted</code></p><p><code>verify-fix</code></p><p><code>validate --cause</code></p><p class="small">이슈 DB에 PR</p></div>
+      <div class="card"><h3>찾기·보기</h3><p><code>search</code></p><p><code>preview</code></p><p><code>review</code></p><p class="small">읽기 전용</p></div>
+      <div class="card"><h3>맞추기·관리</h3><p><code>sync</code> <code>sync-pr</code></p><p><code>validate</code> (인자 없음)</p><p><code>setup</code> <code>migrate</code></p></div>
+    </div>
+    <div class="card alert"><p>이슈 DB에 쓰는 커맨드는 시작할 때 <b>세션 lock</b>을 잡고 끝나는 모든 경로에서 풉니다. 한 사람이 동시에 두 작업을 할 수 없습니다.</p></div>
+  </div>
+  <aside class="notes">대부분의 사용자는 analyze, search, record 세 개면 충분합니다. 수정 상태 커맨드는 CL을 올린 담당자가, migrate는 메인테이너만 씁니다. 읽기 전용 커맨드는 lock을 잡지 않으니 분석 중에도 search는 됩니다.</aside>
+</section>
+
+<section class="slide" data-sec="4 커맨드별 사용법">
+  <div class="head"><div class="eyebrow">§4 커맨드별 사용법</div><h2>analyze: 기본형과 자주 쓰는 옵션</h2></div>
+  <div class="body">
+    <div class="console"><span class="k">/telephony-triage:analyze</span> ABC-12345 ~/logs/radio.txt ~/logs/main.txt</div>
+    <div class="tw"><table class="t tight">
+      <tr><th>옵션</th><th>언제</th></tr>
+      <tr><td><code>--analysis-only</code></td><td>결과만 보고 이슈 DB에 기록하지 않을 때. 리포트로 끝나고 lock을 풂</td></tr>
+      <tr><td><code>--dry-run</code></td><td>기록 흐름을 확인 화면까지 연습. push 없음, gh 인증 불필요</td></tr>
+      <tr><td><code>--more-logs &lt;로그…&gt;</code></td><td>첫 분석 뒤 로그를 더 받았을 때. 이전 로그 뒤에 붙여 전체를 다시 계산</td></tr>
+      <tr><td><code>--code &lt;프로필|경로&gt;</code></td><td>분석할 소스 트리(Android 16/17 등). 없으면 물어봄</td></tr>
+      <tr><td><code>--failed-step</code> · <code>--steps-file</code></td><td>시험 실패 스텝·절차. 분석 구간과 순위 참고만, S/C에는 안 씀</td></tr>
+      <tr><td><code>--jira-file &lt;yaml&gt;</code></td><td>Jira 대신 파일. <code>--dry-run</code>·<code>--analysis-only</code>와만</td></tr>
+    </table></div>
+    <p class="small">로그 자리에 bugreport(.zip/.txt)를 주면 logcat 섹션만 꺼내 씁니다. <code>--analyzer</code>/<code>--explore</code>는 다음 장.</p>
+  </div>
+  <aside class="notes">로그는 채팅에 붙이지 말고 파일 경로로 주세요. 붙이면 마스킹 전 원문이 대화에 들어갑니다. 처음 몇 번은 --analysis-only로 결과만 보는 것을 권합니다.</aside>
+</section>
+
+<section class="slide" data-sec="4 커맨드별 사용법">
+  <div class="head"><div class="eyebrow">§4 커맨드별 사용법</div><h2>analyze 대화는 이렇게 흘러간다</h2></div>
+  <div class="body">
+    <div class="chat">
+      <div class="msg u"><div class="who">나</div><div class="what"><code>/telephony-triage:analyze ABC-12345 ~/logs/radio.txt</code></div></div>
+      <div class="msg"><div class="who">Claude</div><div class="what">스냅샷 최신화, Jira 읽기(마스킹 요약). Android 16 프로필을 추천합니다. 이 소스 트리로 볼까요?</div></div>
+      <div class="msg u"><div class="who">나</div><div class="what">응, 그걸로.</div></div>
+      <div class="msg"><div class="who">Claude</div><div class="what">리포트: 1위 <b>Data &gt; DATA-001 &gt; DATA-001-02</b> (S=1, C=1), 근거 로그 4줄, 해결책, 기존 사례 1건 …</div></div>
+      <div class="msg ask"><div class="who">Claude</div><div class="what">카테고리 분석 스킬로 심층 분석을 할까요? 토큰이 더 듭니다.</div></div>
+      <div class="msg ask"><div class="who">Claude</div><div class="what">이 이슈를 <b>DATA-001-02 Roaming disabled</b>로 분류할까요? 예 / 다른 원인 / 새 원인 / 새 유형 / 원인 미확정</div></div>
+      <div class="msg u"><div class="who">나</div><div class="what">예. → 한 줄 요약 확인 → <b>push 전 확인 화면</b> → 승인 → PR 링크</div></div>
+    </div>
+  </div>
+  <aside class="notes">주황 줄은 Claude가 대신 고르지 않고 반드시 묻는 지점입니다. 답하기 전에는 다음으로 가지 않습니다. 시각이 Jira에 없거나 로그 범위 밖이면 이 사이에 질문이 하나 더 끼어듭니다. 대화 내용은 설명용 예시입니다.</aside>
+</section>
+
+<section class="slide" data-sec="4 커맨드별 사용법">
+  <div class="head"><div class="eyebrow">§4 커맨드별 사용법</div><h2>세 가지 실행 모드 비교</h2></div>
+  <div class="body">
+    <div class="tw"><table class="t">
+      <tr><th></th><th>기본</th><th><code>--analysis-only</code></th><th><code>--dry-run</code></th></tr>
+      <tr><td>어디서 끝나나</td><td>PR 생성</td><td>리포트(Step 6)</td><td>확인 화면</td></tr>
+      <tr><td>분류 확인 질문</td><td>있음</td><td>없음</td><td>있음</td></tr>
+      <tr><td>이슈 DB push</td><td>승인 후</td><td>안 함</td><td>안 함</td></tr>
+      <tr><td>gh 인증</td><td>필요</td><td>불필요</td><td>불필요</td></tr>
+      <tr><td>열린 PR 확인</td><td>함</td><td>"확인 안 함"</td><td>함</td></tr>
+      <tr><td>Jira 대신 파일</td><td>불가</td><td>가능</td><td>가능</td></tr>
+    </table></div>
+    <div class="g2">
+      <p class="small"><b>같은 입력을 다시 돌리면</b> 파싱·매칭 결과를 재사용하고 리포트에 "재사용"이라고 밝힙니다. 재사용은 재검증이 아닙니다.</p>
+      <p class="small"><b><code>--more-logs</code></b>는 이전 결과를 <code>runs/&lt;n&gt;/</code>에 보관하고, 1위가 바뀌면 "1위 X → Y"를 보여줍니다.</p>
+    </div>
+  </div>
+  <aside class="notes">분석 전용으로 본 뒤 기록하고 싶으면 옵션 없이 다시 실행하면 됩니다. 입력이 같으니 분석은 재사용되고, 건너뛴 사전 질문만 그때 나옵니다. --analysis-only와 --dry-run은 함께 쓸 수 없습니다.</aside>
+</section>
+
+<section class="slide" data-sec="4 커맨드별 사용법">
+  <div class="head"><div class="eyebrow">§4 커맨드별 사용법</div><h2>record와 search</h2></div>
+  <div class="body">
+    <div class="g2">
+      <div class="card">
+        <h3>record: 직접 해결한 이슈 남기기</h3>
+        <div class="console" style="font-size:14px"><span class="k">/telephony-triage:record</span> ABC-12345 --cause DATA-001-02
+<span class="k">/telephony-triage:record</span> ABC-12346   <span class="c"># 대화형</span></div>
+        <ul class="pts small">
+          <li>로그 분석·매칭 없이 기록. 검증과 PR 절차는 analyze와 같다</li>
+          <li>확인 화면과 PR에 "수동 기록" 표시</li>
+          <li><code>fixed</code>는 기록 불가. <code>fix-submitted</code>까지만</li>
+          <li>새 원인·유형이면 시그니처 필수, fixture가 없으면 검증은 "건너뜀"</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>search: 전에 본 이슈 찾기</h3>
+        <div class="console" style="font-size:14px"><span class="k">/telephony-triage:search</span> 데이터 안 붙어, 이슈 번호 알려줘
+<span class="k">/telephony-triage:search</span> ABC-12345
+<span class="k">/telephony-triage:search</span> DATA-001-02</div>
+        <ul class="pts small">
+          <li>증상 문장·키워드·Jira 키·ID 모두 받음</li>
+          <li>유형·원인·해결책·수정 상태와 Jira 번호 요약</li>
+          <li>옛 ID → 새 ID 연결도 따라감</li>
+          <li>읽기 전용, lock 없음</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <aside class="notes">record는 지름길이 아닙니다. 쓰기 경로와 검증이 analyze와 똑같고 로그 분석만 건너뜁니다. 분석을 시작하기 전에 search로 이미 기록된 이슈인지 먼저 보는 습관을 권합니다.</aside>
+</section>
+
+<section class="slide" data-sec="4 커맨드별 사용법">
+  <div class="head"><div class="eyebrow">§4 커맨드별 사용법</div><h2>수정 상태: fix-submitted → verify-fix</h2></div>
+  <div class="body">
+    <div class="life">
+      <span class="state">open</span>
+      <span class="arrow"><code>fix-submitted</code></span>
+      <span class="state">fix-submitted</span>
+      <span class="arrow"><code>verify-fix</code> 통과</span>
+      <span class="state done">fixed</span>
+    </div>
+    <div class="console" style="font-size:15px"><span class="k">/telephony-triage:fix-submitted</span> CALL-001-01 --ref &lt;CL&gt; --fixed-in main-dev:BUILD_X
+<span class="k">/telephony-triage:verify-fix</span> CALL-001-01 ~/logs/after_fix.txt</div>
+    <div class="tw"><table class="t tight">
+      <tr><th>판정</th><th>조건</th><th>결과</th></tr>
+      <tr><td><span class="tag ok">passed</span></td><td>시나리오 흔적 있음, 원인·증상 시그니처 불충족</td><td><code>fixed</code> + 수정 후 fixture 추가</td></tr>
+      <tr><td><span class="tag warn">partial</span></td><td>원인은 사라졌지만 증상이 남음</td><td>상태 유지, 이력 기록, 다른 원인 후보</td></tr>
+      <tr><td><span class="tag fail">failed</span></td><td>원인 시그니처 충족(재발)</td><td><code>open</code>으로 되돌림</td></tr>
+      <tr><td><span class="tag mute">unknown</span></td><td>재현 흔적 없음·구간 부족</td><td>기록 안 함, 필요한 로그 안내</td></tr>
+    </table></div>
+  </div>
+  <aside class="notes">fixed는 verify-fix 통과로만 됩니다. "고쳤어요"라는 말만으로는 안 됩니다. 수정 빌드에서 재현 시나리오를 실제로 수행한 흔적이 로그에 있어야 판정합니다. 통과하면 그 로그가 회귀 fixture로 들어가 이후 규칙 변경에서도 재발 판정이 지켜집니다.</aside>
+</section>
+
+<section class="slide" data-sec="4 커맨드별 사용법">
+  <div class="head"><div class="eyebrow">§4 커맨드별 사용법</div><h2>나머지 커맨드는 언제 쓰나</h2></div>
+  <div class="body">
+    <div class="tw"><table class="t">
+      <tr><th>커맨드</th><th>언제</th><th>쓰기</th></tr>
+      <tr><td><code>sync</code></td><td>스냅샷이 오래됐을 때. 오래된 작업 디렉토리 정리, 내 열린 PR 목록</td><td>없음</td></tr>
+      <tr><td><code>sync-pr [브랜치]</code></td><td>내 PR이 머지 대기 중인데 main이 바뀌었을 때</td><td>PR 갱신</td></tr>
+      <tr><td><code>validate</code></td><td>이슈 DB를 직접 편집한 뒤 push 전 검사(lint·마스킹·회귀·R1~R5)</td><td>없음</td></tr>
+      <tr><td><code>validate --cause</code></td><td>해결책 적용 후 로그로 효과 검증 → 통과 시 PR</td><td>PR</td></tr>
+      <tr><td><code>preview</code></td><td>README·STATS 생성 결과를 임시 폴더에 미리보기</td><td>없음</td></tr>
+      <tr><td><code>review [카테고리]</code></td><td>카테고리 오너의 월간 리뷰 리포트</td><td>없음</td></tr>
+      <tr><td><code>migrate --to &lt;N&gt;</code></td><td>메인테이너가 스키마를 올릴 때</td><td>자기 브랜치</td></tr>
+    </table></div>
+  </div>
+  <aside class="notes">sync-pr은 작업 계획이 있는 PC에서만 됩니다. 계획이 PC에만 저장되기 때문입니다. 직접 편집한 브랜치는 계획이 없으니 rebase 후 validate를 돌리고 직접 push합니다.</aside>
+</section>
+
+<!-- ================= 5. 판정 ================= -->
+<section class="slide" data-sec="5 판정 읽는 법">
+  <div class="head"><div class="eyebrow">§5 판정 읽는 법</div><h2>S와 C, 두 개의 0/1</h2><p class="lede">S = 증상(유형) 시그니처 충족, C = 원인 시그니처 충족. 판정은 이 두 값으로 합니다.</p></div>
+  <div class="body">
+    <div class="mx">
+      <div></div><div class="ax">C = 1 원인 확인</div><div class="ax">C = 0 원인 미확인</div>
+      <div class="ax">S = 1<br>증상 확인</div>
+      <div class="cell best"><b>원인 후보</b><span class="small">증상과 원인 근거가 같은 슬롯·같은 시간 창에서 결합될 때만</span></div>
+      <div class="cell mid"><b>유형 일치, 원인 미확인</b><span class="small">새 원인일 수도. 탐색 분석을 제안받음</span></div>
+      <div class="ax">S = 0</div>
+      <div class="cell"><b>분석에서는 후보 아님</b><span class="small">증상이 확인된 유형의 원인만 평가. 회귀 검증에서는 오탐으로 잡힘</span></div>
+      <div class="cell"><b>후보 없음</b><span class="small">"후보 없음" 절에 설명 기반 유사 유형과 타임라인 요약</span></div>
+    </div>
+  </div>
+  <aside class="notes">분석 모드는 2단계입니다. 먼저 모든 유형의 S를 보고, S=1인 유형 안에서만 원인 C를 봅니다. 듀얼 SIM이면 같은 슬롯의 근거끼리만 묶습니다. 회귀·검증 모드는 반대로 모든 원인의 C를 독립적으로 봐서 다른 유형 로그에서의 오탐을 잡습니다.</aside>
+</section>
+
+<section class="slide" data-sec="5 판정 읽는 법">
+  <div class="head"><div class="eyebrow">§5 판정 읽는 법</div><h2>점수와 순위는 정렬용이다</h2></div>
+  <div class="body">
+    <div class="console">score = min(1, 증상가중치×S + 원인가중치×C + bonus)
+bonus = 근접(근거 시각이 발생 시각에 가까울수록) + 키워드(Jira 텍스트와 원인 제목·태그)</div>
+    <div class="g3">
+      <div class="card"><h3>보너스는 동점 정렬만</h3><p class="small">S=C=1이면 점수가 1로 포화돼서 보너스는 같은 점수 안의 순서만 바꿉니다.</p></div>
+      <div class="card alert"><h3>일치 수준 ≠ 확신도</h3><p class="small">"높음·중간·낮음"은 규칙이 얼마나 맞았는지의 구간입니다. 진단 확신도가 아니고 자동 게시 근거로 쓰지 않습니다.</p></div>
+      <div class="card"><h3>실패 스텝은 순위만</h3><p class="small">스텝 기준 우선 유형은 순위 키에만 더해지고 score·S·C는 그대로입니다.</p></div>
+    </div>
+    <p class="small">회귀·검증 모드는 보너스 0, 피드백 가중치 끔. 판정은 S/C 값만 봅니다.</p>
+  </div>
+  <aside class="notes">1위와 2위의 점수 차이를 확신의 차이로 읽지 마세요. 실제 판단은 S와 C, 그리고 근거 로그를 보고 합니다. 가중치 설정을 바꿔도 회귀 결과가 바뀌지 않도록 일부러 이렇게 만들었습니다.</aside>
+</section>
+
+<section class="slide" data-sec="5 판정 읽는 법">
+  <div class="head"><div class="eyebrow">§5 판정 읽는 법</div><h2>리포트 구조</h2></div>
+  <div class="body">
+    <div class="console" style="font-size:14.5px"><span class="k">## ABC-12345 분석</span>
+- 분류 후보: Data &gt; DATA-001 SETUP_DATA_CALL이 발생하지 않음 &gt; DATA-001-02 Roaming disabled
+  (규칙 일치 점수 1.0, 일치 수준 높음 — 진단 확신도 아님)
+- 근거 로그: 시각·태그·메시지 3~10줄, 마스킹, 줄 위치 (f0:L1234)   슬롯: phone 0
+- 로그 범위: 10:02~10:12 (발생 시각 포함), 시계 이상 없음
+- 원인 / 코드 위치: 파일:라인 + 분기 조건 (분석 트리: Android 16)   <span class="c">← 로그 확인과 코드 추정 구분</span>
+- 해결책: 데이터 로밍 설정을 켠다      해결책 검증: <span class="w">미검증</span>
+- 수정 상태: not-a-bug       기존 사례: Jira 1건       관련 원인: 없음
+- 기타 후보: DATA-001-01 (낮음, 이유)
+- 심층 분석 / 탐색 분석: <span class="c">설정·동의했을 때만, 보조 의견</span>
+- 열린 PR: 없음</div>
+    <p class="small"><b>must_show</b> 줄(분석 전용 안내, 1위 변화, 로그 범위 경고 등)은 Claude가 요약하지 않고 글자 그대로 보여줍니다.</p>
+  </div>
+  <aside class="notes">리포트의 결정적인 칸은 스크립트가 채우고, Claude는 설명 칸만 채웁니다. 근거 로그의 f0:L1234는 첫 번째 입력 파일의 1234번째 줄이라 원본에서 바로 찾아볼 수 있습니다.</aside>
+</section>
+
+<section class="slide" data-sec="5 판정 읽는 법">
+  <div class="head"><div class="eyebrow">§5 판정 읽는 법</div><h2>놓치기 쉬운 표시 다섯 가지</h2></div>
+  <div class="body">
+    <div class="tw"><table class="t">
+      <tr><th>표시</th><th>뜻</th><th>할 일</th></tr>
+      <tr><td><span class="tag warn">로그 범위 밖</span></td><td>발생 시각이 로그 시간대에 없음. "매칭 없음"과 다르다</td><td>전체 파싱을 고르거나 맞는 로그를 더 받기</td></tr>
+      <tr><td><span class="tag info">다른 버전 원인</span></td><td>후보 원인이 기록된 Android 버전과 Jira 버전이 다름. 표시만, 순위는 그대로</td><td>버전별 동작 차이를 코드로 확인</td></tr>
+      <tr><td><span class="tag info">파서 규칙에 없는 태그</span></td><td>후보 없음·C=0일 때, 이벤트로 추출되지 않은 태그 목록</td><td>새 파서 규칙 후보로 검토</td></tr>
+      <tr><td><span class="tag mute">시그니처 없는 기존 원인</span></td><td>판별 시그니처가 아직 없는 원인(참고)</td><td>맞다면 시그니처 추가 제안</td></tr>
+      <tr><td><span class="tag mute">추정</span></td><td>심층 분석·탐색 분석(Claude 가설). 점수·분류에 안 씀</td><td>로그·코드로 직접 확인</td></tr>
+    </table></div>
+  </div>
+  <aside class="notes">"다른 버전 원인"은 최근 추가된 표시로, 일부러 순위를 내리지 않습니다. 새 버전에서 진짜 같은 원인일 수도 있기 때문입니다. 탐색 분석은 후보가 없거나 원인 미확인일 때만 제안되고 토큰이 더 들어 실행 전에 묻습니다.</aside>
+</section>
+
+<!-- ================= 6. 기록 ================= -->
+<section class="slide" data-sec="6 이슈 DB에 기록하기">
+  <div class="head"><div class="eyebrow">§6 이슈 DB에 기록하기</div><h2>분류 확정: 내 답이 계획이 된다</h2></div>
+  <div class="body">
+    <div class="tw"><table class="t">
+      <tr><th>내 답</th><th>계획에 들어가는 op</th></tr>
+      <tr><td>예 (1위 수락)</td><td><code>append</code> 그 원인에 Jira 추가</td></tr>
+      <tr><td>다른 기존 원인</td><td><code>append</code> 고른 원인 / 이미 DB에 있는 Jira면 <code>reclassify</code></td></tr>
+      <tr><td>새 원인</td><td><code>new-cause</code> + 시그니처·파서 규칙·fixture 초안</td></tr>
+      <tr><td>새 유형</td><td>유사 유형 3개를 먼저 보고 <code>new-type</code></td></tr>
+      <tr><td>원인 미확정</td><td><code>unresolved</code> 유형에만 기록</td></tr>
+      <tr><td>기록하지 않음</td><td>계획 없이 lock 해제</td></tr>
+    </table></div>
+    <p class="small">계획은 <code>work/&lt;KEY&gt;/plan.json</code>에 저장되고, 커밋 메시지와 한 줄 요약(<code>note</code>)도 이때 확인받습니다.</p>
+  </div>
+  <aside class="notes">추정만으로는 새 원인을 만들지 않습니다. 확신이 없으면 원인 미확정으로 남기는 것이 팀 DB에 더 좋습니다. 회귀 의심이나 수정 미흡이 보이면 이 단계에서 수정 상태를 바꿀지 따로 묻습니다.</aside>
+</section>
+
+<section class="slide" data-sec="6 이슈 DB에 기록하기">
+  <div class="head"><div class="eyebrow">§6 이슈 DB에 기록하기</div><h2>새 규칙은 검증을 통과해야 들어간다</h2></div>
+  <div class="body">
+    <div class="tw"><table class="t tight">
+      <tr><th>검증</th><th>무엇을 보나</th></tr>
+      <tr><td>R1 파서</td><td>새 규칙이 참조하는 태그·이벤트가 실제로 추출되는가</td></tr>
+      <tr><td>R2 양성</td><td>이 로그에서 대상 원인 C=1, 다른 원인 C=0</td></tr>
+      <tr><td>R3 음성</td><td>정상 로그·다른 원인 로그에서 잘못 잡지 않는가</td></tr>
+      <tr><td>R4 교차 회귀</td><td>전체 fixture 기대값 유지</td></tr>
+      <tr><td>R5 이벤트 diff</td><td>파서 규칙 변경 시 기존 이벤트가 바뀌지 않는가. 바뀌면 <span class="warn-t">메인테이너 승인 필요</span></td></tr>
+      <tr><td>R6 추가 표본</td><td>(선택) 같은 증상 다른 로그·정상 로그</td></tr>
+    </table></div>
+    <div class="card alert"><p class="small"><b>다른 유형 fixture에서 새 시그니처가 걸리면</b> 멈추고 묻습니다: 시그니처를 좁힐까요, 아니면 그 로그에 두 현상이 다 있으니 <code>also_allowed</code>로 허용할까요? 허용하면 그 카테고리 오너가 리뷰어로 붙습니다.</p></div>
+  </div>
+  <aside class="notes">건너뛴 검증은 절대 통과로 표시하지 않습니다. fixture가 없으면 "검증 못 함, 리뷰 대상"으로 나옵니다. 새 원인을 만들면 로그에서 근거 주변만 잘라 마스킹한 fixture가 같이 들어갑니다.</aside>
+</section>
+
+<section class="slide" data-sec="6 이슈 DB에 기록하기">
+  <div class="head"><div class="eyebrow">§6 이슈 DB에 기록하기</div><h2>push 전 확인 화면</h2><p class="lede">요약 없이 그대로 보여주고 승인을 받습니다. 승인 뒤 파일이 하나라도 바뀌면 다시 받습니다.</p></div>
+  <div class="body">
+    <div class="console" style="font-size:14px"><span class="k">## push 전 확인: ABC-12345 → DATA-001-02 Roaming disabled</span>
+구분: 분석 (analyze)          브랜치: issue/ABC-12345 (신규) → PR 대상: main
+리뷰어: CODEOWNERS의 data 오너       열린 PR: 없음
+<span class="k">### 변경 파일</span>      Jira 기록 신규 · 피드백 신규 · README/STATS 재생성
+<span class="k">### ID 할당</span>        NEW-CAUSE-1 → DATA-001-03  <span class="c">(새 원인일 때)</span>
+<span class="k">### README 미리보기 / 주요 diff</span>
+<span class="k">### 자동 검사</span>      스키마 <span class="o">✓</span>  ID·Jira 중복 <span class="o">✓</span>  마스킹 <span class="o">✓</span>  fixture 회귀 <span class="o">✓</span> (12/12)
+<span class="k">### 검증</span>           R1 <span class="o">✓</span> R2 <span class="o">✓</span> R3 <span class="o">✓</span> R4 <span class="o">✓</span> R5 <span class="o">✓</span>  R6 추가 표본: 없음
+<span class="k">### 커밋 메시지</span>     [DATA-001-02] add ABC-12345: …</div>
+    <div class="g4">
+      <span class="tag ok" style="text-align:center">승인 → 커밋·push·PR</span>
+      <span class="tag info" style="text-align:center">수정 요청 → 다시 생성</span>
+      <span class="tag mute" style="text-align:center">전체 diff 보기</span>
+      <span class="tag fail" style="text-align:center">취소 → 정리, 계획은 남김</span>
+    </div>
+  </div>
+  <aside class="notes">이 화면이 이슈 DB에 들어가기 전 마지막 관문입니다. 변경 파일, ID, 검사 결과, 커밋 메시지를 꼭 읽고 승인하세요. 승인하면 도구가 커밋 하나를 만들고, 승인 해시가 맞을 때만 push됩니다.</aside>
+</section>
+
+<section class="slide" data-sec="6 이슈 DB에 기록하기">
+  <div class="head"><div class="eyebrow">§6 이슈 DB에 기록하기</div><h2>PR 이후</h2></div>
+  <div class="body">
+    <div class="g2">
+      <div class="card">
+        <h3>브랜치 이름이 곧 작업 종류</h3>
+        <div class="tw"><table class="t tight">
+          <tr><td><code>issue/&lt;KEY&gt;</code></td><td>analyze · record</td></tr>
+          <tr><td><code>fix-submit/&lt;원인&gt;</code></td><td>fix-submitted</td></tr>
+          <tr><td><code>verify-fix/&lt;원인&gt;-&lt;build&gt;</code></td><td>verify-fix</td></tr>
+          <tr><td><code>verify-res/&lt;원인&gt;-&lt;날짜&gt;</code></td><td>validate --cause</td></tr>
+          <tr><td><code>review/&lt;cat&gt;-&lt;YYYY-MM&gt;</code></td><td>월간 리뷰 정리</td></tr>
+        </table></div>
+      </div>
+      <div class="rail">
+        <div><div><b>카테고리 오너가 리뷰</b><p class="small">CODEOWNERS로 자동 지정. PR 본문에 분석 요약·검사·검증 결과</p></div></div>
+        <div><div><b>그사이 main이 바뀌면</b><p class="small"><code>sync</code>가 "base 이동"을 알려줌 → <code>sync-pr</code>로 계획을 최신 main에 다시 적용</p></div></div>
+        <div><div><b>drift가 있으면 묻는다</b><p class="small">계획이 건드린 값을 남이 먼저 바꿨으면: 계획 값 유지 / main 값 유지 / 직접 입력</p></div></div>
+        <div><div><b>머지</b><p class="small">다음 <code>sync</code> 때 모두의 스냅샷에 반영</p></div></div>
+      </div>
+    </div>
+  </div>
+  <aside class="notes">텍스트 rebase로 합치지 않고, 계획을 최신 main 위에 다시 적용하는 방식이라 충돌이 적습니다. 남이 먼저 바꾼 값은 절대 몰래 덮어쓰지 않고 항목마다 물어봅니다.</aside>
+</section>
+
+<!-- ================= 7. 예외 ================= -->
+<section class="slide" data-sec="7 오류가 났을 때">
+  <div class="head"><div class="eyebrow">§7 오류가 났을 때</div><h2>종료 코드부터 본다</h2></div>
+  <div class="body">
+    <div class="tw"><table class="t">
+      <tr><th>코드</th><th>뜻</th><th>Claude가 하는 일</th><th>내가 할 일</th></tr>
+      <tr><td><span class="tag ok">0</span></td><td>성공</td><td>다음 단계</td><td>—</td></tr>
+      <tr><td><span class="tag fail">1</span></td><td>검사 실패 (drift 포함)</td><td>실패 항목과 원인 표시</td><td>내용 보고 고치거나 선택</td></tr>
+      <tr><td><span class="tag fail">2</span></td><td>사용법·환경 오류</td><td><b>메시지를 그대로 보여주고 멈춤</b></td><td>메시지대로 환경 수정</td></tr>
+      <tr><td><span class="tag warn">3</span></td><td>승인 필요</td><td>확인 화면·영향 표 표시</td><td>승인 또는 메인테이너 승인 요청</td></tr>
+    </table></div>
+    <div class="g2">
+      <div class="card"><p class="small"><b>needs_input</b>은 오류가 아닙니다. 분석 중 결정이 필요해 멈춘 것(발생 시각, 소스 트리, lock 이어받기 등)이고, 답하면 이어서 갑니다.</p></div>
+      <div class="card alert"><p class="small">git 충돌·인증 실패·MCP 없음·버전 불일치는 도구가 <b>우회하지 않고 보고</b>합니다. "그냥 진행해"로는 넘어가지 않습니다.</p></div>
+    </div>
+  </div>
+  <aside class="notes">종료 코드 2에서는 Claude가 스스로 해결을 시도하지 않고 멈춥니다. 예외는 계획 형식 오류뿐인데, 이건 메시지대로 계획을 고쳐 다시 실행합니다. 3은 정상 경로일 수 있습니다. 확인 화면도 3으로 나올 수 있습니다.</aside>
+</section>
+
+<section class="slide" data-sec="7 오류가 났을 때">
+  <div class="head"><div class="eyebrow">§7 오류가 났을 때</div><h2>설정·환경 오류와 다음 행동</h2></div>
+  <div class="body">
+    <div class="tw"><table class="t tight">
+      <tr><th>메시지</th><th>다음 행동</th></tr>
+      <tr><td class="wrap"><code>쓰기 불가(gh 인증 없음)</code></td><td><code>gh auth login --hostname ghe.example</code>. 그동안 분석·<code>--dry-run</code>은 가능</td></tr>
+      <tr><td class="wrap">Jira 도구 매핑 비어 있음 / MCP 후보 없음</td><td>Jira MCP를 사용자 범위로 등록 → setup 재실행. 연습은 <code>--dry-run --jira-file &lt;yaml&gt;</code></td></tr>
+      <tr><td class="wrap"><code>lock 보유자는 &lt;작업&gt;입니다</code></td><td>그 세션이 정말 끝났는지 확인 후 해제(<code>--force</code>). 같은 작업이 10분 안에 갱신됐으면 이어받기</td></tr>
+      <tr><td class="wrap">버전 불일치 → 읽기 전용</td><td>분석은 계속, 계획 저장까지만. 플러그인 업데이트 또는 메인테이너에게 마이그레이션 요청</td></tr>
+      <tr><td class="wrap"><code>사내 기본값 없음 (S-3 미완료)</code></td><td>설치본에 사내 설정이 없음. 직접 고치지 말고 메인테이너에게</td></tr>
+      <tr><td class="wrap">hook: <code>core.hooksPath</code>가 <code>.githooks</code>가 아님</td><td>setup 재실행(<code>config.py install-hooks</code>)</td></tr>
+    </table></div>
+  </div>
+  <aside class="notes">대부분은 doctor 표에서 미리 보입니다. lock은 이전 세션이 비정상 종료했을 때 남는데, 다른 창에서 작업 중인 게 아닌지 꼭 확인하고 푸세요. 메시지 문구는 실제 도구 출력에서 가져왔습니다.</aside>
+</section>
+
+<section class="slide" data-sec="7 오류가 났을 때">
+  <div class="head"><div class="eyebrow">§7 오류가 났을 때</div><h2>로그·데이터 오류와 다음 행동</h2></div>
+  <div class="body">
+    <div class="tw"><table class="t tight">
+      <tr><th>메시지</th><th>뜻과 다음 행동</th></tr>
+      <tr><td class="wrap"><code>해석한 logcat 줄이 없습니다 — 로그 범위 밖이 아니라 형식·인코딩 문제</code></td><td>파싱 0줄. 로그 형식이나 인코딩 확인. UTF-8과 BOM 있는 UTF-16은 읽음</td></tr>
+      <tr><td class="wrap"><code>&lt;파일&gt;: 해석한 줄 n/m — 형식·인코딩 확인</code></td><td>절반 넘게 못 읽음. 그 파일의 관측은 불완전으로 처리</td></tr>
+      <tr><td class="wrap"><code>로그 범위 밖이다 … 파일 전체로 다시 파싱할까?</code></td><td>전체 파싱 / 그대로(매칭 없음으로 보고) 중 선택, 또는 맞는 로그 추가</td></tr>
+      <tr><td class="wrap"><code>&lt;파일&gt;:&lt;줄&gt;: YAML 문법 오류</code></td><td>이슈 DB 파일이 깨짐. 줄 위치를 고치고 <code>validate</code></td></tr>
+      <tr><td class="wrap">drift 목록 (종료 코드 1)</td><td>항목마다 계획 값 / main 값 / 직접 입력 선택 후 다시 stage</td></tr>
+      <tr><td class="wrap">같은 Jira가 main에 있음 · 열린 PR 있음</td><td>기존 분류 유지 또는 <code>reclassify</code>. 열린 PR이면 링크 보고 계속할지 결정</td></tr>
+    </table></div>
+  </div>
+  <aside class="notes">"로그 범위 밖"과 "매칭 없음"을 구분하는 게 핵심입니다. 범위 밖인데 매칭 없음으로 읽으면 엉뚱한 결론이 납니다. 발생 시각 근처 로그가 아예 없는 경우라면 로그를 더 받아 --more-logs로 붙이세요.</aside>
+</section>
+
+<!-- ================= 8. 안전 ================= -->
+<section class="slide" data-sec="8 안전 장치">
+  <div class="head"><div class="eyebrow">§8 안전 장치</div><h2>마스킹: 저장되는 것은 토큰뿐</h2></div>
+  <div class="body">
+    <div class="g2">
+      <div class="console" style="font-size:14px;white-space:pre-wrap"><span class="c"># 합성 예시</span>
+<span class="f">전</span>  imsi=001010123456789 msisdn=+15550100
+     ip=10.0.0.5 mCi=12345
+<span class="o">후</span>  imsi=&lt;IMSI#1&gt; msisdn=&lt;MSISDN#1&gt;
+     ip=&lt;IP#1&gt; mCi=&lt;CELL#1&gt;</div>
+      <ul class="pts">
+        <li>IMSI·IMEI·ICCID, 전화번호, SIP URI, 셀 ID, IP·MAC, 인증 값 등을 토큰으로 바꾼다</li>
+        <li><b>같은 값은 같은 번호</b>라서 "셀이 바뀌었다" 같은 비교는 그대로 된다</li>
+        <li>파싱·매칭부터 마스킹된 텍스트로 돈다. 시그니처도 마스킹 기준으로 쓴다</li>
+        <li>Jira는 원문을 모델에 넣지 않고, 구조화 필드와 확인한 요약만 저장</li>
+      </ul>
+    </div>
+    <p class="small">마스킹 안 된 내용이 있으면 커밋이 막힙니다(커밋 hook + pre-commit).</p>
+  </div>
+  <aside class="notes">사람 이름은 마스킹 패턴으로 잡히지 않습니다. 그래서 Jira 원문 자체를 저장하지 않는 쪽으로 설계했습니다. 한 줄 요약을 확인할 때 이름이 들어가 있지 않은지 한 번 더 봐 주세요.</aside>
+</section>
+
+<section class="slide" data-sec="8 안전 장치">
+  <div class="head"><div class="eyebrow">§8 안전 장치</div><h2>guard hook과 사람이 승인하는 곳</h2></div>
+  <div class="body">
+    <div class="g2">
+      <div class="card">
+        <h3>자동으로 막는 것 (hook 10종 중)</h3>
+        <ul class="pts small">
+          <li>Jira 쓰기 도구 호출. 허용 목록의 읽기 도구만</li>
+          <li>main 대상 push, 승인 토큰 없는 push</li>
+          <li><code>--no-verify</code> 같은 hook 우회 커밋</li>
+          <li>Claude가 내 이슈 DB clone 파일을 직접 편집</li>
+          <li>로그 원문을 통째로 읽는 명령(<code>cat</code> 등)</li>
+        </ul>
+      </div>
+      <div class="card alert">
+        <h3>반드시 내가 승인하는 것</h3>
+        <ul class="pts small">
+          <li>분류 확정, 새 유형·원인</li>
+          <li>시그니처·파서 규칙 추가, <code>also_allowed</code></li>
+          <li>수정 상태 변경</li>
+          <li>drift 항목 선택, 오래된 작업 정리</li>
+          <li>push 전 확인 화면 (push마다 권한 프롬프트도 뜸)</li>
+        </ul>
+      </div>
+    </div>
+    <p class="small">로컬 장치는 우회될 수 있어서 <b>GHE 브랜치 보호</b>(main 직접 push 금지, CODEOWNERS 필수 리뷰)가 서버에서 최종 방어선입니다.</p>
+  </div>
+  <aside class="notes">hook 판정은 최선 노력 방식이라 모든 우회를 막지는 못합니다. 그래서 서버 측 브랜치 보호가 전제입니다. 사용자는 이 장치들을 끄려고 하지 말고, 막히면 메시지를 그대로 공유해 주세요.</aside>
+</section>
+
+<!-- ================= 9. 관리 ================= -->
+<section class="slide" data-sec="9 관리와 운영">
+  <div class="head"><div class="eyebrow">§9 관리와 운영</div><h2>역할별로 하는 일</h2></div>
+  <div class="body">
+    <div class="g3">
+      <div class="card"><span class="tag mute">기여자</span><h3>모든 팀원</h3><ul class="pts small"><li>analyze·record로 PR</li><li>main이 바뀌면 <code>sync-pr</code></li><li>직접 편집은 <code>validate</code> 후 push</li></ul></div>
+      <div class="card key"><span class="tag info">카테고리 오너</span><h3>카테고리별</h3><ul class="pts small"><li>자기 카테고리 PR 리뷰</li><li>월 1회 <code>review &lt;카테고리&gt;</code></li><li>미확정 누적, 품질 낮은 시그니처, 중복, 미검증 해결책 정리</li></ul></div>
+      <div class="card alert"><span class="tag warn">메인테이너</span><h3>공통</h3><ul class="pts small"><li>파서 규칙·스키마·hook 변경 리뷰</li><li>새 카테고리, 스키마 마이그레이션</li><li>ID·Jira 중복 사후 정리</li></ul></div>
+    </div>
+    <p class="small">월간 리뷰 정리는 <code>review/&lt;카테고리&gt;-&lt;YYYY-MM&gt;</code> PR로. 중복 원인 병합은 삭제가 아니라 <code>merged-into</code> 상태로 남깁니다.</p>
+  </div>
+  <aside class="notes">리뷰 리포트는 읽기 전용이라 부담 없이 돌려볼 수 있습니다. 정리 작업은 직접 편집하거나 Claude와 작업 계획을 만들어 같은 쓰기 절차로 올립니다.</aside>
+</section>
+
+<section class="slide" data-sec="9 관리와 운영">
+  <div class="head"><div class="eyebrow">§9 관리와 운영</div><h2>유형·원인·시그니처를 바꾸는 절차</h2></div>
+  <div class="body">
+    <div class="g2">
+      <div class="rail">
+        <div><div><b>초안</b><p class="small">새 원인·유형, 시그니처, 파서 규칙(<code>parser-rules/</code>). 시그니처는 마스킹된 로그 기준</p></div></div>
+        <div><div><b>fixture</b><p class="small">근거 주변 최소 구간을 잘라 마스킹. 정상 로그는 음성 fixture</p></div></div>
+        <div><div><b>검증</b><p class="small"><code>db_verify</code> R1~R6, <code>db_regress --all</code></p></div></div>
+        <div><div><b>생성 파일</b><p class="small"><code>db_build.py --write</code>로 README·STATS·CHANGELOG 재생성</p></div></div>
+        <div><div><b>PR → 리뷰</b><p class="small">파서 규칙·공통 변경은 메인테이너 리뷰</p></div></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <div class="card key"><h3>엔진과 규칙은 분리돼 있다</h3><p class="small">새 유형은 코드가 아니라 규칙 파일로 추가합니다. 팀원이 PR만으로 파서를 넓힐 수 있습니다.</p></div>
+        <div class="card"><h3>직접 편집할 때</h3><p class="small">편집 → <code>db_build --write</code> → <code>validate</code> → 커밋 → push. 생성 파일은 손대지 않습니다.</p></div>
+      </div>
+    </div>
+  </div>
+  <aside class="notes">대화로 분석하다가 새 원인이 나오면 이 절차를 도구가 대신 밟아 줍니다. 직접 편집은 리뷰 정리나 대량 수정 때 씁니다. 어느 쪽이든 검증과 생성 파일 규칙은 같습니다.</aside>
+</section>
+
+<section class="slide" data-sec="9 관리와 운영">
+  <div class="head"><div class="eyebrow">§9 관리와 운영</div><h2>버전 업그레이드와 스키마</h2></div>
+  <div class="body">
+    <div class="tw"><table class="t">
+      <tr><th>상황</th><th>플러그인 동작</th><th>할 일</th></tr>
+      <tr><td>이슈 DB 스키마가 지원 범위 안</td><td>정상</td><td>—</td></tr>
+      <tr><td>이슈 DB가 플러그인보다 새 버전</td><td>읽기 전용 분석만</td><td>플러그인 업데이트</td></tr>
+      <tr><td>이슈 DB가 플러그인보다 옛 버전</td><td>쓰기 막힘, 분석 가능</td><td>메인테이너 마이그레이션</td></tr>
+      <tr><td>생성기 버전 불일치</td><td>쓰기 막힘</td><td>플러그인 업데이트</td></tr>
+    </table></div>
+    <div class="card"><p class="small"><b>스키마 올리기(메인테이너)</b>: <code>migrate/schema-v&lt;N&gt;</code> 브랜치 → <code>migrate --to &lt;N&gt;</code> → <code>db_build --write</code> → <code>validate</code> → 승인 후 커밋 → 직접 PR. 머지 뒤 남은 PR은 <code>sync-pr</code>이 계획을 새 스키마로 올립니다.</p></div>
+  </div>
+  <aside class="notes">버전 판정은 config.py check가 하고 doctor의 compat 행에 나옵니다. 마이그레이션 PR을 머지할 때는 다른 PR 머지를 잠시 멈추도록 공지합니다.</aside>
+</section>
+
+<section class="slide" data-sec="9 관리와 운영">
+  <div class="head"><div class="eyebrow">§9 관리와 운영</div><h2>사내 적용 단계 S-0 ~ S-7</h2><p class="lede">사외에서 모의 환경으로 구현을 끝냈고, 사내에서는 실제 값만 끼워 맞춥니다. 아래는 모두 <span class="warn-t">예정</span>입니다.</p></div>
+  <div class="body">
+    <div class="tl">
+      <div><b>S-0</b><span>선택. 실제 로그 형식 선행 확인</span></div>
+      <div><b>S-1</b><span>사내 값 조사, 평가 기준 합의</span></div>
+      <div><b>S-2</b><span>사내 Claude Code 동작 확인</span></div>
+      <div><b>S-3</b><span>사내 설정(site-defaults) 입력</span></div>
+      <div><b>S-4a</b><span>기존 파서 포팅, 분류 import, 분석 스킬 연결</span></div>
+      <div><b>S-4</b><span>카테고리별 실제 로그로 규칙 교체</span></div>
+      <div><b>S-5</b><span>dry-run·샌드박스 PR, 정확도 게이트</span></div>
+      <div><b>S-6</b><span>남은 검토 항목 정리</span></div>
+      <div><b>S-7</b><span>배포, 카테고리별 파일럿</span></div>
+    </div>
+    <div class="g2">
+      <div class="card alert"><p class="small">지금 이슈 DB의 파서 규칙 일부는 <b>placeholder</b>입니다. S-4에서 실제 태그·문구로 바뀌기 전에는 결과에 "placeholder 규칙"이 표시됩니다.</p></div>
+      <div class="card"><p class="small">파일럿은 카테고리별 10~20건, 첫 월간 리뷰 뒤 전체 확대를 결정합니다.</p></div>
+    </div>
+  </div>
+  <aside class="notes">여러분이 이 플러그인을 실제로 받는 시점은 S-7 파일럿입니다. 그 전에 S-5에서 과거 해결 Jira 20~30건으로 정확도를 미리 확인합니다. 파일럿 동안 불편한 점을 모아 주시면 반입 뒤 개선 항목으로 넣습니다.</aside>
+</section>
+
+<!-- ================= 10. 현황 · Q&A ================= -->
+<section class="slide" data-sec="10 현황 · Q&A">
+  <div class="head"><div class="eyebrow">§10 현황 · Q&amp;A</div><h2>현재 상태와 참고 자료</h2></div>
+  <div class="body">
+    <div class="nums">
+      <div><b>~1,050</b><span>자동 테스트 (CI Ubuntu, Python 3.11 · 3.14 통과)</span></div>
+      <div><b>20/20</b><span>샘플 DB 회귀 fixture 통과</span></div>
+      <div><b>58</b><span>skill eval 정의</span></div>
+      <div><b>~39만</b><span>analyze→기록 1건 토큰 (Sonnet, 이전 74만에서 −48%)</span></div>
+    </div>
+    <p class="small">커맨드 1회 약 20만~80만 토큰, $0.15~0.5 수준(Sonnet). 모의 데이터 eval 기준이라 실제 환경에서는 다를 수 있습니다. 기본 모델은 Sonnet, 탐색 가설 품질이 중요하면 Opus.</p>
+    <div class="g3">
+      <div class="card"><h3>사용법</h3><p class="small"><code>GUIDE.md</code> §5·§6<br>이슈 DB <code>docs/getting-started.md</code></p></div>
+      <div class="card"><h3>기여 규칙</h3><p class="small">이슈 DB <code>CONTRIBUTING.md</code><br><code>docs/review-guide.md</code></p></div>
+      <div class="card"><h3>설계</h3><p class="small"><code>docs/design/README.md</code> 지도<br><code>09-commands.md</code> · <code>12-principles.md</code></p></div>
+    </div>
+    <p class="lede" style="color:var(--ink)"><b>질문 받겠습니다.</b></p>
+  </div>
+  <aside class="notes">수치는 2026-10-07 사외 모의 환경 기준입니다. 정확도는 아직 측정 전이고 S-5에서 사내 과거 Jira로 처음 잽니다. 마지막으로 다시 강조할 것: 판정은 스크립트, 기록은 승인 후 PR, Jira는 읽기만.</aside>
+</section>
+
+</div></div>
+
+<div id="notes-panel" aria-live="polite"><div class="lab">발표자 노트</div><div id="notes-body"></div></div>
+<div id="prog"><i></i></div>
+<div id="bar">
+  <button type="button" class="nav" id="prev" aria-label="이전 슬라이드">←</button>
+  <button type="button" class="nav" id="next" aria-label="다음 슬라이드">→</button>
+  <span class="sec" id="sec"></span>
+  <span class="hint">← → 스페이스 · N 노트</span>
+  <button type="button" id="notesBtn" aria-pressed="false">노트</button>
+  <span id="count" class="mono"></span>
+</div>
+
+<script>
+(function () {
+  var slides = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+  var N = slides.length, i = 0;
+  var stage = document.getElementById('stage');
+  var body = document.body;
+  var mq = window.matchMedia('(max-width: 760px)');
+
+  slides.forEach(function (s, k) {
+    var f = document.createElement('div');
+    f.className = 'foot';
+    f.innerHTML = '<span class="lvl">I/</span><span class="tagn">telephony-triage</span><span>' +
+      (s.dataset.sec || '') + '</span><span class="num">' + String(k + 1).padStart(2, '0') + ' / ' + N + '</span>';
+    s.appendChild(f);
+  });
+
+  function fit() {
+    if (mq.matches) { stage.style.transform = ''; return; }
+    var bar = 55;
+    var notes = body.classList.contains('show-notes') ? document.getElementById('notes-panel').offsetHeight : 0;
+    document.documentElement.style.setProperty('--chrome', (bar + notes) + 'px');
+    var w = window.innerWidth - 24, h = window.innerHeight - bar - notes - 24;
+    var s = Math.min(w / 1280, h / 720);
+    stage.style.transform = 'translate(-50%, -50%) scale(' + s + ')';
+  }
+
+  function show(k, scroll) {
+    i = Math.max(0, Math.min(N - 1, k));
+    slides.forEach(function (s, j) { s.classList.toggle('active', j === i); });
+    var n = slides[i].querySelector('.notes');
+    document.getElementById('notes-body').innerHTML = n ? n.innerHTML : '';
+    document.getElementById('count').textContent = (i + 1) + ' / ' + N;
+    document.getElementById('sec').textContent = slides[i].dataset.sec || '';
+    document.querySelector('#prog i').style.width = ((i + 1) / N * 100) + '%';
+    try { history.replaceState(null, '', '#' + (i + 1)); } catch (e) {}
+    if (scroll && mq.matches) slides[i].scrollIntoView({ block: 'start' });
+    fit();
+  }
+
+  function toggleNotes() {
+    var on = body.classList.toggle('show-notes');
+    document.getElementById('notesBtn').setAttribute('aria-pressed', on ? 'true' : 'false');
+    fit();
+  }
+
+  document.addEventListener('keydown', function (e) {
+    if (e.altKey || e.ctrlKey || e.metaKey) return;
+    var k = e.key;
+    if (k === 'ArrowRight' || k === 'PageDown' || (k === ' ' && !e.shiftKey)) { e.preventDefault(); show(i + 1, true); }
+    else if (k === 'ArrowLeft' || k === 'PageUp' || (k === ' ' && e.shiftKey)) { e.preventDefault(); show(i - 1, true); }
+    else if (k === 'Home') { e.preventDefault(); show(0, true); }
+    else if (k === 'End') { e.preventDefault(); show(N - 1, true); }
+    else if (k === 'n' || k === 'N') { toggleNotes(); }
+  });
+
+  document.getElementById('viewport').addEventListener('click', function (e) {
+    if (mq.matches) return;
+    if (e.target.closest('a, button, code, .console, table')) return;
+    if (window.getSelection && String(window.getSelection())) return;
+    if (e.clientX < window.innerWidth * 0.3) show(i - 1); else show(i + 1);
+  });
+  document.getElementById('prev').addEventListener('click', function () { show(i - 1); });
+  document.getElementById('next').addEventListener('click', function () { show(i + 1); });
+  document.getElementById('notesBtn').addEventListener('click', toggleNotes);
+  window.addEventListener('resize', fit);
+  if (mq.addEventListener) mq.addEventListener('change', fit);
+
+  var start = parseInt((location.hash || '').replace('#', ''), 10);
+  show(isNaN(start) ? 0 : start - 1, true);
+})();
+</script>
+</body>
+</html>
