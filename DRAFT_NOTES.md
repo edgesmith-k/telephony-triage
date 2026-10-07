@@ -26,7 +26,7 @@
 
 | ☐ | 항목 | 메모 |
 |---|---|---|
-| ☐ L | **실제 로그 반영 트랙 L1~L3** (10/07 사용자 승인: 샘플 DB 규칙·fixture 정정, 스냅샷 재생성, data on/off·APM 원인·유형 추가) | 자료는 **레포 밖** `%LOCALAPPDATA%/tt-ltrack/`(findings·plan·decisions·r-results·deny.txt — 벤더 문구 있음, 레포 금지). R1~R4 완료. 다음: L1 AOSP 형식 정정(DSMGR·DSM-C/I, DNC 문구, APM 유형 DATA-002) → L3 `tools/s0_suggest.py` → L2 벤더 RIL serial 연결(token=serial 100% 확인). 커밋 전마다 `git diff main... \| grep -iFf deny.txt` 0줄. 사용자 확인 대기: DATA-002 이름·정의, 새 extractor 2건, 14-site §14.1 정정 |
+| ☐ L | **실제 로그 반영 트랙 L1~L3** (10/07 사용자 승인: 샘플 DB 규칙·fixture 정정, 스냅샷 재생성, data on/off·APM 원인·유형 추가) | 자료는 **레포 밖** `%LOCALAPPDATA%/tt-ltrack/`(findings·plan·decisions·r-results·deny.txt — 벤더 문구 있음, 레포 금지). R1~R4 완료. 시작 문구 "**실제 로그 반영 진행**" — 진행 방식은 V와 같다(`REVIEW_FIX_PLAN_2026-10.md §1·§3`: Opus 계획 → Fable 결정 → 실행 → 교차 리뷰 → 테스트 → Fable 승인 → CI 통과 시 병합). 다음: L1 AOSP 형식 정정(DSMGR·DSM-C/I, DNC 문구, APM 유형 DATA-002) → L3 `tools/s0_suggest.py` → L2 벤더 RIL serial 연결(token=serial 100% 확인). 커밋 전마다 `git diff main... \| grep -iFf deny.txt` 0줄. 사용자 확인 대기: DATA-002 이름·정의, 새 extractor 2건, 14-site §14.1 정정 |
 | ☐ Z | **반입 묶음** | 최신 main에서 **Ubuntu로** 먼저 `plugin.json` description에서 "사외 초안"을 빼는 커밋(도구가 첫 검사로 막는다) → `python3 tools/make_bundle.py --label <이름>`(정상 종료 3) → 사람 확인 3건(§15.4: 회사명 검색·TODO 목록·이 파일 최신) → 도구가 출력한 명령으로 사용자가 태그 push. Windows는 환경 실패로 자동 검사가 실패한다 |
 | ☐ R | **사용자 선택** — `12-principles.md` "사용자 clone 예외는 migrate뿐" vs renumber(06 §6.3) 어긋남: (a) 예외에 renumber 추가(추천) / (a') 원칙을 도구 자동 쓰기로 한정 / (b) 06 안내 수정. 코드 변경 없음(V6이 renumber에 브랜치·깨끗함 검사 추가) | 반입 직전 |
 | ☐ 2 | **사용자 확인** — 10/04~05 작업(4a·R8·테스트 DB·검사 통합·4b·step_order·보안·R11·R9·RF-2, `CHANGES.md` 10/04~05 절) | 반입 직전에 한꺼번에 |
