@@ -22,7 +22,9 @@
   `scoring.step_focus_bonus_max`(기본 0.05)를 더해 정렬한다. score·confidence·S·C는 바뀌지 않는다. 우선 유형이 있을 때만
   후보 `bonus.step`과 최상위 `step_focus: {types[], by{유형: ["records:N" | "map"]}}`를 낸다.
 
-`--jira-meta` (분석 모드, 선택): `{key, occurred_at, sw, summary, description, failed_step?}` (`failed_step`은 있을 때만, 키워드 보너스 입력).
+`--jira-meta` (분석 모드, 선택): `{key, occurred_at, sw, summary, description, failed_step?, android_version?}` (`failed_step`은 있을 때만, 키워드 보너스 입력).
+`android_version`은 표시 전용이다: 원인 후보에 `android_versions`(원인 값, 빈 목록 = 전 버전)와 `version_match`(true·false, Jira 버전이 없거나
+원인이 전 버전이거나 원인 없는 후보면 null)를 낼 뿐 순위·score·S/C에는 쓰지 않는다. Jira 값이 `16`·`16.0` 꼴일 때만 주 버전을 비교하고 다른 꼴("Android 16", "17 QPR1")은 null이다.
 `occurred_at`은 타임존 있는 ISO 시각, 텍스트 필드는 마스킹된 것이어야 한다.
 
 컴파일: 시그니처는 매번 `--db`에서 메모리로 컴파일한다 (06-collaboration.md §6.8).
@@ -437,6 +439,12 @@ def _rank_key(c: dict) -> tuple:
     return (-round(c["score"] + focus, 4), -round(b["proximity"] + b["keyword"] + focus, 4), c["type"], c["cause"] or "")
 
 
+def _version_match(cause, jira: dict) -> bool | None:
+    versions = [str(v).strip().split(".")[0] for v in (cause.raw.get("android_versions") or [])] if cause else []
+    found = re.fullmatch(r"\s*(\d+)(?:\.\d+)*\s*", str(jira.get("android_version") or ""))   # "Android 16"·"17 QPR1" 등은 비교하지 않는다
+    return (found.group(1) in versions) if versions and found else None
+
+
 def _candidate(db, itype, cause, S, C, sym, res, jira, occurred, half, scoring, use_bonus,
                stats, min_samples, rules, use_feedback, step_bonus: float = 0.0) -> dict:
     evidence = (res.evidence if res else []) + (sym.evidence if sym else [])
@@ -477,6 +485,8 @@ def _candidate(db, itype, cause, S, C, sym, res, jira, occurred, half, scoring, 
         "feedback": feedback,
         "fix_judgement": judgement,
         "related": _related(db, cause),
+        "android_versions": [str(v) for v in cause.raw.get("android_versions") or []] if cause else [],
+        "version_match": _version_match(cause, jira),
     }
 
 

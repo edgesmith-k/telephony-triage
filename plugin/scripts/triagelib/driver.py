@@ -701,6 +701,8 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
                     "fix_judgement": (c.get("fix_judgement") or {}).get("judgement"),
                     "fix_message": _clip((c.get("fix_judgement") or {}).get("message"), 100),
                     "related": [r.get("cause") for r in c.get("related") or []]}
+            if c.get("version_match") is False:   # 표시 전용 (순위·score 무관)
+                cand["_version_mismatch"] = c.get("android_versions")   # report.md 전용
             if c["cause"]:
                 extra = self.cause_info(c["cause"])
                 cand["_code_refs"] = extra.pop("code_refs")
