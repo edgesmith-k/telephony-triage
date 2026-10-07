@@ -23,7 +23,7 @@ import yaml
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "tests" / "helpers"))
 
-from runner import SAMPLE, plugin_root, tmp  # noqa: E402
+from runner import SAMPLE, copy_db, plugin_root, tmp  # noqa: E402
 
 ROOT = plugin_root()
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -114,3 +114,20 @@ def test_no_direct_yaml_load_in_runtime():
         if re.search(r"\byaml\.(safe_load|load)\(", p.read_text(encoding="utf-8")):
             bad.append(str(p.relative_to(ROOT)))
     assert not bad, f"yamlio.safe_load를 쓸 것: {bad}"
+
+
+@pytest.mark.parametrize("loader", [yaml.SafeLoader, getattr(yaml, "CSafeLoader", yaml.SafeLoader)])
+def test_load_syntax_error_names_file_and_line(monkeypatch, loader):
+    monkeypatch.setattr(yamlio, "LOADER", loader)
+    p = tmp("tt-yamlio-") / "broken.yaml"
+    p.write_text("a: 1\nb: [x\n", encoding="utf-8", newline="\n")
+    with pytest.raises(yamlio.YamlFileError) as info:
+        yamlio.load(p)
+    assert isinstance(info.value, yaml.YAMLError) and info.value.line == 3
+    assert "broken.yaml:3: YAML 문법 오류" in str(info.value)
+    db = copy_db()
+    jira = db / "call/CALL-001-volte-not-working/jira/MOCK-2101.yaml"
+    jira.write_text(jira.read_text(encoding="utf-8") + "x: [unclosed\n", encoding="utf-8", newline="\n")
+    with pytest.raises(issuedb.IssueDbError) as info:
+        issuedb.load(db)
+    assert str(info.value).startswith("call/CALL-001-volte-not-working/jira/MOCK-2101.yaml:")

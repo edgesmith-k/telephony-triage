@@ -73,7 +73,7 @@ from pathlib import Path
 SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS))
 
-from common import site_defaults, userconfig  # noqa: E402
+from common import site_defaults, userconfig, yamlio  # noqa: E402
 import db_summary  # noqa: E402,F401 — test_db_summary가 본다
 from common.exitcodes import OK, USAGE  # noqa: E402
 from dbpr import worktree as _worktree_mod  # noqa: E402
@@ -236,6 +236,9 @@ def main(argv: list[str] | None = None) -> int:
         print(str(exc), file=sys.stderr)
         if exc.detail is not None:
             print(json.dumps(exc.detail, ensure_ascii=False, indent=1))
+        return USAGE
+    except yamlio.YamlFileError as exc:
+        print(str(exc), file=sys.stderr)
         return USAGE
     print(json.dumps(result, ensure_ascii=False, indent=1))
     return code

@@ -106,7 +106,7 @@ CI 대신 아래 **5단계**로 검증한다. `issue-db.config.yaml`의 `ci_mode
 v1에서 도구는 이런 브랜치를 바꾸지 않는다. `sync-pr`는 아래 절차를 안내하고 끝낸다 (`CONTRIBUTING.md`에도 둔다).
 1. 자기 로컬 브랜치에서 `git fetch origin` 후 `git rebase origin/<base>`.
 2. 충돌이 생성 파일(README, 카테고리 README, STATS, CHANGELOG)뿐이면 main 쪽을 받고 `db_build --write`로 다시 만든다. 다른 파일 충돌은 직접 해결한다.
-3. 새로 만든 유형·원인 ID가 main과 겹치면(`db_add check-ids --base origin/<base>`) `db_add renumber <옛 ID>`로 다음 빈 번호로 옮기고 `db_lint --residual <옛 ID>=<새 ID>`로 확인한다.
+3. 2번을 마쳐(리베이스 완료·생성 파일 커밋) 트리가 깨끗하고 현재 브랜치가 base·`tt/*`·detached가 아닌 상태에서만 renumber한다. 새로 만든 유형·원인 ID가 main과 겹치면(`db_add check-ids --base origin/<base>`) `db_add renumber <옛 ID>`로 다음 빈 번호로 옮기고 `db_lint --residual <옛 ID>=<새 ID>`로 확인한다.
 4. `/telephony-triage:validate` 통과 후 커밋하고 `git push --force-with-lease`로 올린다.
 
 **사후 lint(⑤)의 정리 정책** (v1: 도구는 찾아서 알리기만 하고, 정리는 메인테이너가 한다)

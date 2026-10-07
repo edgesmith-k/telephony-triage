@@ -12,7 +12,7 @@ from common.fixtures import parse_name
 
 from .applier import Applier
 from .core import (HISTORY_FIELDS, RULE_SECTIONS, SIG_LISTS, TEMP_RE, TYPE_ID_RE, Reject, Tree, UsageError, _db,
-                   load_plan)
+                   load_plan, validate_plan)
 from .ops.parser_rules import ParserRuleOps
 
 
@@ -203,9 +203,10 @@ def cmd_drift(args, defaults: dict) -> tuple[dict, int]:
             raise UsageError(f"drift 비교용 트리를 꺼낼 수 없습니다 (base_sha {base_sha}가 이 레포에 있는지 확인): {exc}") \
                 from exc
         try:
+            validate_plan(plan, onto_root)   # apply와 같은 트리·스키마(upgrade-plan·main 스키마 변경 뒤에도 맞다)
             items = drift_items(plan, Snapshot(base_root), Snapshot(onto_root))
             ids_at_base = _ids_at_base(plan, base_root, Path(args.plan), defaults)
-        except issuedb.IssueDbError as exc:
+        except (issuedb.IssueDbError, yamlio.YamlFileError) as exc:
             raise UsageError(str(exc)) from exc
     finally:
         shutil.rmtree(temp, ignore_errors=True)

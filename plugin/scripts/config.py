@@ -41,7 +41,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import adapters  # noqa: E402
-from common import compat, dbpath, ghcli, mcptools, session_lock, site_defaults, userconfig  # noqa: E402
+from common import compat, dbpath, ghcli, mcptools, session_lock, site_defaults, userconfig, yamlio  # noqa: E402
 from common import compiled as compiled_cache  # noqa: E402
 from common.exitcodes import CHECK_FAILED, OK, USAGE  # noqa: E402
 from common.versions import GENERATOR_VERSION, SCHEMA_VERSION  # noqa: E402
@@ -670,7 +670,7 @@ def main(argv: list[str] | None = None) -> int:
             return code
         else:
             result, code = cmd_gh_status(args, defaults)
-    except UsageError as exc:
+    except (UsageError, yamlio.YamlFileError) as exc:
         print(str(exc), file=sys.stderr)
         return USAGE
     for reason in (result.get("reasons") or []) if isinstance(result, dict) else []:

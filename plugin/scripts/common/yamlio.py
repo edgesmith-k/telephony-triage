@@ -9,6 +9,7 @@
 - 오류 문구는 다르다(줄·열은 같다).
 - libyaml은 `a:\tb`처럼 탭 구분을 받아들인다.
 쓰기(dump)는 `SafeDumper`를 그대로 쓴다: `yamldoc`의 들여쓰기 재정의가 C 방출기에는 적용되지 않는다.
+`load`(파일)는 문법 오류를 `YamlFileError`(경로·줄 포함, `yaml.YAMLError` 하위)로 올린다.
 """
 
 from __future__ import annotations
@@ -41,6 +42,29 @@ def loads(text: str):
     return normalize(safe_load(text))
 
 
+def _db_relative(path: Path) -> str:
+    """이슈 DB 루트(`issue-db.config.yaml`이 있는 가장 가까운 상위)가 보이면 그 기준 상대 경로, 아니면 그대로."""
+    for parent in path.parents:
+        if (parent / "issue-db.config.yaml").is_file():
+            return path.relative_to(parent).as_posix()
+    return str(path)
+
+
+class YamlFileError(yaml.YAMLError):
+    """파일의 YAML 문법 오류. 기존 `except yaml.YAMLError`도 그대로 잡는다."""
+
+    def __init__(self, path, line, problem):
+        self.path, self.line, self.problem = Path(path), line, problem
+        super().__init__(f"{_db_relative(self.path)}{f':{line}' if line else ''}: YAML 문법 오류: {problem}")
+
+
 def load(path: str | Path):
     with Path(path).open(encoding="utf-8") as fh:
-        return normalize(safe_load(fh))
+        try:
+            return normalize(safe_load(fh))
+        except UnicodeDecodeError as exc:
+            raise YamlFileError(path, None, "UTF-8이 아니다 — UTF-8로 다시 저장한다") from exc
+        except yaml.YAMLError as exc:
+            mark = getattr(exc, "problem_mark", None)
+            raise YamlFileError(path, mark.line + 1 if mark else None,
+                                getattr(exc, "problem", None) or str(exc)) from exc

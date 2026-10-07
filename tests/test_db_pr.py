@@ -20,7 +20,7 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "tests" / "helpers"))
 
 import mock_env  # noqa: E402
-from runner import SAMPLE, git_db, run_json, run, variant_db  # noqa: E402
+from runner import SAMPLE, git_db, plugin_root, run_json, run, variant_db  # noqa: E402
 from workspace import PLANS, Workspace, git  # noqa: E402
 
 SIM_LOG = variant_db("issue-db-pending") / "data/DATA-001-no-setup-data-call/fixtures/DATA-001-03.log"
@@ -1160,17 +1160,17 @@ def test_stage_rejects_malformed_plan_before_touching_job():
     assert _stage_raw(ws, job, "issue/MOCK-7300").returncode == 2
 
 
-def test_stage_internal_error_shows_last_line_without_traceback():
+def test_stage_drift_names_missing_op_field():
     ws = Workspace()
     job = "MOCK-7301"
-    plan = _review_plan([{"op": "append"}], "issue/MOCK-7301")      # cause 없음 → drift 스크립트가 KeyError
+    plan = _review_plan([{"op": "append"}], "issue/MOCK-7301")      # cause 없음 → drift도 apply와 같은 형식 검사
     ws.plan(job, plan, base_sha=ws.main_sha())
     ws.push_main(lambda c: (c / "NOTE.txt").write_text("main 이동\n", encoding="utf-8"))
     ws.acquire(job)
     proc = _stage_raw(ws, job, "issue/MOCK-7301")
     assert proc.returncode == 2
-    assert "KeyError" in proc.stderr and "내부 오류" in proc.stderr
-    assert "Traceback" not in proc.stderr and "File \"" not in proc.stderr
+    assert "빠진 필드 [cause]" in proc.stderr
+    assert "KeyError" not in proc.stderr and "내부 오류" not in proc.stderr and "Traceback" not in proc.stderr
 
 
 def test_drift_shows_plan_value_and_ids_at_base_for_new_cause_and_resolution():
@@ -1741,3 +1741,85 @@ def test_naive_timestamp_lock_is_corrupt_not_a_traceback():
         pass
     proc = ws.run("db_pr.py", ["lock", "status"])
     assert proc.returncode == 2 and "session.lock" in proc.stderr and "Traceback" not in proc.stderr
+
+
+def test_pending_feedback_without_date_is_rejected_with_reason():
+    ws = Workspace()
+    pending = pending_feedback(ws)
+    broken = "".join(l for l in pending.read_text(encoding="utf-8").splitlines(True) if not l.startswith("date:"))
+    pending.write_text(broken, encoding="utf-8", newline="\n")
+    ws.plan("MOCK-7001", "p7-analyze-append.plan.json")
+    ws.acquire("MOCK-7001")
+    out = ws.stage("MOCK-7001", "issue/MOCK-7001", expect=1)
+    assert out["stopped"] == "apply"
+    rejected = out["apply"]["rejected"][0]
+    assert rejected["code"] == "pending-invalid" and pending.name in rejected["message"]
+    assert pending.read_text(encoding="utf-8") == broken
+
+
+def test_stage_apply_crash_is_usage_error_with_cause():
+    root = plugin_root("apply-crash")
+    (root / "scripts" / "db_add.py").write_text('raise RuntimeError("apply 크래시(시험)")\n', encoding="utf-8", newline="\n")
+    ws = Workspace(root=root)
+    ws.plan("MOCK-7001", "p7-analyze-append.plan.json")
+    ws.acquire("MOCK-7001")
+    proc = _stage_raw(ws, "MOCK-7001", "issue/MOCK-7001")
+    assert proc.returncode == 2
+    assert "계획 적용 중 내부 오류:" in proc.stderr and "RuntimeError" in proc.stderr
+    assert json.loads((ws.job_dir("MOCK-7001") / "stage.json").read_text(encoding="utf-8"))["apply"] is None
+
+
+def test_apply_requires_db_and_never_falls_back_to_user_clone():
+    ws = Workspace()
+    plan = ws.plan("MOCK-7001", "p7-analyze-append.plan.json")
+    before = git(ws.clone, "status", "--porcelain")
+    proc = ws.run("db_add.py", ["apply", plan, "--user", "mock-user1"])
+    assert proc.returncode == 2 and "--db" in proc.stderr
+    inside = run("db_add.py", ["apply", str(plan), "--user", "mock-user1"], root=ws.root, env=ws.env(), cwd=ws.clone)
+    assert inside.returncode == 2 and "--db" in inside.stderr
+    assert git(ws.clone, "status", "--porcelain") == before == ""
+
+
+def test_renumber_refuses_base_tool_branch_and_dirty_tree():
+    db = git_db()
+    git(db, "checkout", "-q", "-b", "tt/x")
+    job = db.parent / "job"
+    (job / "fixtures").mkdir(parents=True)
+    (job / "fixtures" / "cut-1.log").write_text(SIM_LOG.read_text(encoding="utf-8"), encoding="utf-8")
+    apply_json(db, load_plan("p7-analyze-new-cause.plan.json"))
+    git(db, "add", "-A")
+    git(db, "commit", "-qm", "새 원인")
+    args = ["renumber", "DATA-001-03", "--base", "main", "--db", db]
+
+    def refused(word: str) -> None:
+        before = git(db, "status", "--porcelain")
+        proc = run("db_add.py", args)
+        assert proc.returncode == 2 and word in proc.stderr, proc.stderr
+        assert git(db, "status", "--porcelain") == before
+
+    refused("브랜치")                      # tt/* 브랜치
+    git(db, "checkout", "-q", "-b", "feature")
+    (db / "stray.txt").write_text("추적 안 됨\n", encoding="utf-8")
+    refused("깨끗")                        # 더러운 트리
+    (db / "stray.txt").unlink()
+    git(db, "checkout", "-q", "main")
+    refused("브랜치")                      # base 브랜치
+
+
+def test_drift_validates_plan_against_onto_schema():
+    ws = Workspace()
+    base = ws.main_sha()
+    plan = _review_plan([{"op": "set-resolution", "cause": "DATA-001-02", "resolution": "새 해결책"}], "review/x")
+    plan["source"] = "chore"            # main의 새 스키마에서만 허용되는 source
+    path = ws.plan("review-x", plan, base_sha=base)
+    ws.push_main(lambda c: _edit(c / "schema" / "plan.schema.json", '"review", "move"]', '"review", "move", "chore"]'))
+    ws.main_sha()
+    proc = ws.run("db_add.py", ["drift", path, "--onto", "origin/main", "--db", ws.clone])
+    assert proc.returncode in (0, 1), proc.stderr
+
+
+def test_renumber_on_detached_head_says_how_to_continue():
+    db = git_db()
+    git(db, "checkout", "-q", "--detach")
+    proc = run("db_add.py", ["renumber", "DATA-001-03", "--base", "main", "--db", db])
+    assert proc.returncode == 2 and "rebase --continue" in proc.stderr

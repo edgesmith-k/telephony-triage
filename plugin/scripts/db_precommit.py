@@ -37,7 +37,7 @@ SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS))
 
 from common import checks as checks_mod  # noqa: E402
-from common import compat, gitscope, site_defaults  # noqa: E402
+from common import compat, gitscope, site_defaults, yamlio  # noqa: E402
 from common.checks import MIGRATE_BRANCH_RE, RULE_FILE_RE, generated_paths  # noqa: E402,F401  (재노출)
 from common.exitcodes import CHECK_FAILED, NEEDS_APPROVAL, OK, USAGE  # noqa: E402
 
@@ -105,7 +105,7 @@ def run(db: Path, plugin_root: str | None) -> tuple[dict, int]:
             add("build", res.code, res.data, res.stderr,
                 note=("생성 파일(README·STATS·CHANGELOG)이 원본과 다르다. 직접 고치지 말고 "
                       "db_build.py --write로 다시 만든 뒤 git add 한다: " + _brief("build", res.code, res.data, res.stderr))
-                if res.code == CHECK_FAILED else None)
+                if res.code == CHECK_FAILED and isinstance(res.data, dict) else None)
         else:
             add(res.name, res.code, res.data, res.stderr)
 
@@ -154,7 +154,7 @@ def main(argv: list[str] | None = None) -> int:
         return USAGE
     try:
         result, code = run(db, args.plugin_root)
-    except gitscope.GitError as exc:
+    except (gitscope.GitError, yamlio.YamlFileError) as exc:
         print(f"{PREFIX} {exc}", file=sys.stderr)
         return USAGE
     report(result, code)

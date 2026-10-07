@@ -224,6 +224,8 @@ def stage(ctx: Ctx, plan_path: Path, wt: Path, branch: str, dry_run: bool) -> tu
         _write_json(job_dir / STAGE, result)
         if code == USAGE:
             raise UsageError(f"계획을 적용할 수 없습니다: {_err_brief(err, 500)}", result)
+        if applied is None:   # 거부(rejected)가 아니라 크래시 — 원인과 2
+            raise UsageError(f"계획 적용 중 내부 오류: {_err_brief(err, 500)}", result)
         result["stopped"] = "apply"
         return result, code
 
@@ -534,7 +536,7 @@ MANUAL_RESYNC = [
     "자기 로컬 브랜치에서 git fetch origin 후 git rebase origin/<base>",
     "충돌이 생성 파일(README, 카테고리 README, STATS, CHANGELOG)뿐이면 main 쪽을 받고 db_build --write로 다시 만든다. "
     "다른 파일 충돌은 직접 해결한다",
-    "새 ID가 main과 겹치면(db_add check-ids --base origin/<base>) db_add renumber <옛 ID>로 옮기고 "
+    "새 ID가 main과 겹치면(db_add check-ids --base origin/<base>) 2번을 마쳐 커밋한 깨끗한 트리에서 db_add renumber <옛 ID>로 옮기고 "
     "db_lint --residual <옛 ID>=<새 ID>로 확인한다",
     "/telephony-triage:validate 통과 후 커밋하고 git push --force-with-lease로 올린다",
 ]

@@ -77,7 +77,7 @@ sys.path.insert(0, str(SCRIPTS))
 import db_regress  # noqa: E402
 import match_signatures  # noqa: E402
 import parse_logcat  # noqa: E402
-from common import builds, checks, dbpath, gitscope, issuedb, quality, rulediff, site_defaults, userconfig  # noqa: E402
+from common import builds, checks, dbpath, gitscope, issuedb, quality, rulediff, site_defaults, userconfig, yamlio  # noqa: E402
 from common.buildname import sanitize_build  # noqa: E402
 from common.exitcodes import CHECK_FAILED, NEEDS_APPROVAL, OK, USAGE  # noqa: E402
 from common.patterns import PatternError, PatternTimeout  # noqa: E402
@@ -983,7 +983,7 @@ def main(argv: list[str] | None = None) -> int:
             result, code = rules(args, defaults, plugin_root)
         else:
             result, code = judge(args, defaults, plugin_root)
-    except UsageError as exc:
+    except (UsageError, yamlio.YamlFileError) as exc:
         print(str(exc), file=sys.stderr)
         return USAGE
     rows = result.get("rules") if args.cmd == "rules" else (result.get("rules") or {}).get("rules")
