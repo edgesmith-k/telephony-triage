@@ -90,7 +90,7 @@
 
 | 서브커맨드 | 사용법 | 옵션 설명 |
 |---|---|---|
-| — | `[--db <DB>] (--write \| --verify \| --preview <out_dir> \| --cache-only) [--staged] [--json] [--plugin-root <PLUGIN_ROOT>]` | `--staged`: --verify와 함께: index 기준; `--json`: JSON 출력 (항상 JSON) |
+| — | `[--db <DB>] (--write \| --verify \| --preview <out_dir>) [--staged] [--json] [--plugin-root <PLUGIN_ROOT>]` | `--staged`: --verify와 함께: index 기준; `--json`: JSON 출력 (항상 JSON) |
 
 ## `db_lint.py`
 

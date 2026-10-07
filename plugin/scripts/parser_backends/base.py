@@ -61,7 +61,7 @@ class ParserBackend(ABC):
 
     @abstractmethod
     def version(self) -> str:
-        """백엔드 버전. 이슈 DB `parser_backend.min_version`과 비교하고 캐시 해시에 넣는다."""
+        """백엔드 버전. 이슈 DB `parser_backend.min_version`과 비교하고 분석 재사용용 이슈 DB 소스 해시(`compiled.source_hash`)에 넣는다."""
 
     def coverage(
         self, paths: Sequence[str | Path], tz: str | None, year: int | None

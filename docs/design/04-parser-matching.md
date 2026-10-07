@@ -176,9 +176,9 @@ feedback_weight가 켜져 있고 해당 시그니처 표본 ≥ min_samples면: 
 - 수락률 = (그 시그니처가 **1위로 제시된** 피드백 중 `decision: accepted`인 건수) / (그 시그니처가 1위로 제시된 피드백 건수). 2위 이하로 제시된 경우는 분모에 넣지 않는다. `decision: manual`(수동 기록)은 제시된 후보가 없으므로 집계하지 않는다 (`06-collaboration.md §6.5`).
 - 발생 시각과 근거 시각은 같은 기준(UTC)으로 바꿔서 비교한다 (`02-config.md §4` 시각 정렬).
 
-#### (3) 캐시
+#### (3) 컴파일
 
-매처는 `.cache/compiled.json`(`06-collaboration.md §6.8`)을 쓰되, 해시가 현재 이슈 DB(`--db`)와 다르면 메모리에서 다시 컴파일한다. 컴파일 함수는 `common/`에 있고 `db_build --cache-only`와 공유한다 (Phase 3에서 구현, 파일 캐시는 Phase 5).
+매처는 매번 이슈 DB(`--db`)에서 시그니처를 메모리로 컴파일한다. 컴파일 함수는 `common/`에 있다. 파일 캐시는 두지 않는다 (`06-collaboration.md §6.8`).
 
 #### (4) 회귀·검증 모드와 fixture 기대값
 

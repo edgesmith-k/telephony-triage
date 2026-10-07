@@ -29,6 +29,11 @@ def test_common_module_is_full():
     assert out["full"] is True and "공용 모듈" in out["reasons"][0]
 
 
+def test_deleted_script_is_full():
+    out = select("plugin/scripts/" + "no_such_" + "deleted.py")   # 삭제된 .py: KeyError 없이 full
+    assert out["full"] is True and any("삭제된 스크립트" in r for r in out["reasons"])
+
+
 def test_always_full_triggers():
     for path in ("tests/conftest.py", "tests/helpers/runner.py", "pyproject.toml", "plugin/schemas/x.json",
                  "plugin/scripts/platforms/__init__.py"):

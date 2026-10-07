@@ -45,7 +45,7 @@
 parse_logcat.py (플러그인 진입점, contracts.md §3.2 계약 유지)
  └─ 파서 백엔드 인터페이스 (plugin/scripts/parser_backends/base.py)
      ├─ site/       ← 기존 검증된 파서를 포팅 (사내 전용, 사외 레포에 없음)
-     └─ reference/  ← 사외 초안의 최소 구현 (모의 환경 테스트용; 구현은 platforms/android/backend.py, 이 경로는 shim)
+     └─ reference/  ← 사외 초안의 최소 구현 (모의 환경 테스트용; 구현은 platforms/android/backend.py, 이 경로는 BACKEND 재수출)
 ```
 
 **백엔드 인터페이스** (사외에서 정의, `contracts.md`에 계약 추가)
@@ -54,7 +54,7 @@ parse_logcat.py (플러그인 진입점, contracts.md §3.2 계약 유지)
 - `version() -> str`: 백엔드 버전 (골든·회귀 기준 고정)
 - 공통 후처리는 플러그인이 한다: 마스킹(extractor 전), `parser-rules` extractor 실행(`builtin` 이벤트와 합침), 태그 → 카테고리 매핑.
 - 백엔드 선택: `site-defaults.yaml`의 `parser.backend: site | reference` (사내는 `site`). 이슈 DB의 `issue-db.config.yaml`의 `parser_backend: {name, min_version}`(`02-config.md §5.3`)과 맞아야 한다. 이름이 다르거나 버전이 낮으면 `config.py check`가 쓰기를 막고(분석은 경고 후 진행), `db_regress`도 결과가 사람마다 달라지지 않도록 멈춘다.
-- **이벤트 존재 검사**: `db_lint`는 시그니처의 `must_event: builtin.*`이 현재 백엔드의 `builtin_events()`에 있는지 검사한다(없으면 오류). 매칭 캐시 해시에 백엔드 이름·버전을 포함한다 (`06-collaboration.md §6.8`).
+- **이벤트 존재 검사**: `db_lint`는 시그니처의 `must_event: builtin.*`이 현재 백엔드의 `builtin_events()`에 있는지 검사한다(없으면 오류).
 - **reference 백엔드의 역할**: 공통 처리(포맷, 연도·타임존, RIL 페어링, 윈도우)는 **제품 수준**이다(Phase 2 완료 기준). "최소"인 것은 builtin 판별 로직이 없다는 점뿐이다. site 백엔드는 공통 처리를 직접 하거나(기존 파서에 있으면), reference의 공통 처리를 재사용하고 builtin 판별만 더할 수 있다.
 
 **포팅 원칙**

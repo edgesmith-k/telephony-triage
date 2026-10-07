@@ -1,8 +1,8 @@
 """예시 마이그레이션 v1 → v2: Jira 파일에 선택 필드 `tags`(문자열 목록)를 더한다 (06-collaboration.md §6.4).
 
 실제 스키마 변경이 아니라 마이그레이션 계약(`db_migrate.py` docstring)을 보여주고 시험하는 예시다.
-`SCHEMA_VERSION`이 1인 동안에는 `db_migrate --to 2`가 플러그인 버전 검사로 거절하므로 v1 DB에는 쓰이지 않는다.
-실제 첫 마이그레이션이 생기면 이 파일을 지우거나 `tests/`로 옮긴다.
+테스트 fixture다. 배포 플러그인에는 없고, `tests/helpers/runner.py:versioned_root(schema≥2)`가 임시 플러그인 루트의
+`scripts/migrations/`로 복사한다(실제 첫 마이그레이션과 `FROM_VERSION`이 겹치지 않게).
 
 `tags`는 선택 필드라 `db_add`(Jira 파일을 만드는 쪽)는 바뀌지 않고, 작업 계획의 op 형식도 그대로다.
 그래서 `upgrade_plan()`은 계획을 그대로 돌려준다 (`schema_version`은 db_migrate가 올린다).

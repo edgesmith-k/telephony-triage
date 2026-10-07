@@ -224,7 +224,6 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
                     "post_lint": {"errors": lint.get("errors"), "warnings": lint.get("warnings"),
                                   "findings": [f"{f.get('code')}: {f.get('file')}" for f in
                                                (lint.get("findings") or [])[:3]]}}
-            self.run.call("1-cache", "db_build.py", ["--cache-only", "--db", self.snap])
             self.state.data["snapshot"] = snap
             self.state.save()
         self.out["snapshot"] = snap

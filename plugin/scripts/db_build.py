@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
-"""db_build.py — 생성 파일과 로컬 캐시 (03-issue-db.md §5.2·§5.6, 06-collaboration.md §6.5·§6.7·§6.8).
+"""db_build.py — 생성 파일 (03-issue-db.md §5.2·§5.6, 06-collaboration.md §6.5·§6.7).
 
-    db_build.py [--db <path>] (--write | --verify [--staged] | --preview <out_dir> | --cache-only)
+    db_build.py [--db <path>] (--write | --verify [--staged] | --preview <out_dir>)
 
 생성 파일 (사람이 고치지 않는다)
 - `README.md`: 전체 인덱스 (§5.6)
 - `<category>/README.md`: 카테고리 상세판 (증상 시그니처 요약, `code_refs`, `android_versions`)
 - `STATS.md`: 통계 (§6.7, 수락률은 §6.5대로 `decision: manual` 제외)
 - `parser-rules/CHANGELOG.md`: 규칙 항목의 이력 필드(`added_for`, `added_on`, `reason`)
-- `.cache/compiled.json`: 매칭 캐시 (§6.8, 커밋하지 않는다)
 
 결정성 (§5.2): 현재 시각을 쓰지 않는다. 기준일은 이슈 DB 안의 가장 최근 Jira `date`다.
 정렬은 카테고리 `categories` 순서, 유형·원인은 ID 순, Jira는 `date` 내림차순 후 키 오름차순.
@@ -16,12 +15,11 @@
 (없으면 `date`)이라 과거 이슈를 한꺼번에 기록해도 최근 건수·급증에 몰리지 않는다.
 
 모드
-- `--write`: 생성 파일과 캐시를 쓴다. `generator_version`이 플러그인 `GENERATOR_VERSION`과
+- `--write`: 생성 파일을 쓴다. `generator_version`이 플러그인 `GENERATOR_VERSION`과
   다르면 종료 코드 2.
 - `--verify [--staged]`: 생성 결과가 워킹 트리(`--staged`면 index)의 파일과 같은지 본다.
   다르면 목록과 종료 코드 1.
 - `--preview <out_dir>`: 생성 파일을 `<out_dir>`에 쓴다. 워킹 트리는 바꾸지 않는다.
-- `--cache-only`: 캐시만 쓴다. 다른 파일은 건드리지 않는다.
 """
 
 from __future__ import annotations
@@ -39,8 +37,7 @@ from pathlib import Path
 SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS))
 
-from common import dbpath, failedstep, gitscope, issuedb, quality, site_defaults, yamlio  # noqa: E402
-from common import compiled as compiled_cache  # noqa: E402
+from common import dbpath, failedstep, gitscope, issuedb, md, quality, site_defaults, yamlio  # noqa: E402
 from common.exitcodes import CHECK_FAILED, OK, USAGE  # noqa: E402
 from common.versions import GENERATOR_VERSION  # noqa: E402
 
@@ -57,10 +54,6 @@ class UsageError(Exception):
 
 
 # -- 공통 -------------------------------------------------------------------------
-
-
-def _cell(text) -> str:
-    return str(text if text is not None else "").replace("|", "\\|").replace("\n", " ").strip()
 
 
 def _ratio(num: int, den: int) -> str:
@@ -131,7 +124,7 @@ class Context:
 
 
 def _cause_cell(ctx: Context, cause: issuedb.Cause) -> str:
-    text = _cell(cause.title)
+    text = md.cell(cause.title)
     related = [str(r) for r in cause.raw.get("related") or []]
     if related:
         text += " ↔ " + ", ".join(related)
@@ -143,7 +136,7 @@ def _cause_cell(ctx: Context, cause: issuedb.Cause) -> str:
 
 
 def _resolution_cell(cause: issuedb.Cause) -> str:
-    text = _cell(cause.raw.get("resolution"))
+    text = md.cell(cause.raw.get("resolution"))
     if (cause.raw.get("resolution_verification") or {}).get("status") != "verified":
         text += " ⚠ 미검증"
     return text
@@ -195,7 +188,7 @@ def _failed_steps_line(ctx: Context, itype: issuedb.IssueType) -> list[str]:
         shown = " ".join(min(originals).split())
         if len(shown) > FAILED_STEP_CLIP:
             shown = shown[: FAILED_STEP_CLIP - 1] + "…"
-        cells.append(f"{_cell(shown)} ({len(originals)}건)")
+        cells.append(f"{md.cell(shown)} ({len(originals)}건)")
     return ["", "- 자주 실패한 스텝: " + "; ".join(cells)]
 
 
@@ -209,9 +202,9 @@ def _signature_summary(sig: dict) -> str:
         parts.append(text)
     for item in sig.get("must_match") or []:
         pattern = item.get("pattern") if isinstance(item, dict) else item
-        parts.append(f"match `{_cell(pattern)}`")
+        parts.append(f"match `{md.code(pattern)}`")
     for pattern in sig.get("must_not_match") or []:
-        parts.append(f"not `{_cell(pattern)}`")
+        parts.append(f"not `{md.code(pattern)}`")
     extra = [f"window {sig.get('window_sec')}s"]
     if sig.get("sequence"):
         extra.append("sequence " + " → ".join(sig["sequence"]))
@@ -229,9 +222,9 @@ def _code_cell(cause: issuedb.Cause) -> str:
     for ref in cause.raw.get("code_refs") or []:
         if not isinstance(ref, dict):
             continue
-        text = f"`{_cell(ref.get('ref'))}`"
+        text = f"`{md.code(ref.get('ref'))}`"
         if ref.get("symbol"):
-            text += f" `{_cell(ref['symbol'])}`"
+            text += f" `{md.code(ref['symbol'])}`"
         if ref.get("android_versions"):
             text += f" ({_versions(ref['android_versions'])})"
         refs.append(text)
@@ -262,7 +255,7 @@ def readme(ctx: Context) -> str:
         out += ["| 날짜 | Jira | 분류 |", "|---|---|---|"]
         for r in recent:
             cause = ctx.causes.get(str(r.get("cause")))
-            label = f"{cause.id} {_cell(cause.title)}" if cause else f"{r['_type']} 원인 미확정"
+            label = f"{cause.id} {md.cell(cause.title)}" if cause else f"{r['_type']} 원인 미확정"
             out.append(f"| {r.get('date')} | {ctx.link(str(r['key']))} | {label} |")
     else:
         out.append("아직 기록된 Jira가 없습니다.")
@@ -276,12 +269,12 @@ def readme(ctx: Context) -> str:
             continue
         for i, itype in enumerate(types, 1):
             rel = ctx.type_rel(itype)
-            out += [f"### {i}. [{_cell(itype.title)}]({rel}/type.md) `{itype.id}`", "",
-                    _cell(itype.raw.get("summary")), "",
+            out += [f"### {i}. [{md.cell(itype.title)}]({rel}/type.md) `{itype.id}`", "",
+                    md.cell(itype.raw.get("summary")), "",
                     "| # | 원인 | 해결책 | 유형 | 수정 상태 | Jira |", "|---|---|---|---|---|---|"]
             for j, cause in enumerate([c for c in itype.causes if c.active], 1):
                 out.append(f"| {i}-{j} | {_cause_cell(ctx, cause)} | {_resolution_cell(cause)} | "
-                           f"{_cell(cause.raw.get('resolution_type'))} | {_fix_cell(cause)} | "
+                           f"{md.cell(cause.raw.get('resolution_type'))} | {_fix_cell(cause)} | "
                            f"{_jira_cell(ctx, ctx.jira_of(cause.id), itype, rel + '/')} |")
             out += _unresolved_line(ctx, itype)
             out.append("")
@@ -300,7 +293,7 @@ def readme(ctx: Context) -> str:
         out += ["| ID | 제목 | 상태 | 새 ID |", "|---|---|---|---|"]
         for ident, title, status in sorted(archived):
             new = status.split(":", 1)[1] if status.startswith("merged-into:") else "-"
-            out.append(f"| {ident} | {_cell(title)} | {status.split(':', 1)[0]} | {new} |")
+            out.append(f"| {ident} | {md.cell(title)} | {status.split(':', 1)[0]} | {new} |")
     else:
         out.append("없음")
     return "\n".join(out) + "\n"
@@ -315,8 +308,8 @@ def category_readme(ctx: Context, cat: dict) -> str:
         return "\n".join(out) + "\n"
     for i, itype in enumerate(types, 1):
         rel = itype.path.name
-        out += [f"## {i}. [{_cell(itype.title)}]({rel}/type.md) `{itype.id}`", "",
-                _cell(itype.raw.get("summary")), ""]
+        out += [f"## {i}. [{md.cell(itype.title)}]({rel}/type.md) `{itype.id}`", "",
+                md.cell(itype.raw.get("summary")), ""]
         if itype.raw.get("secondary_categories"):
             out += [f"- 부 카테고리: {', '.join(itype.raw['secondary_categories'])}"]
         out += ["- 증상 시그니처:"]
@@ -325,7 +318,7 @@ def category_readme(ctx: Context, cat: dict) -> str:
                 "|---|---|---|---|---|---|---|---|"]
         for j, cause in enumerate([c for c in itype.causes if c.active], 1):
             out.append(f"| {i}-{j} | {_cause_cell(ctx, cause)} | {_resolution_cell(cause)} | "
-                       f"{_cell(cause.raw.get('resolution_type'))} | {_fix_cell(cause)} | "
+                       f"{md.cell(cause.raw.get('resolution_type'))} | {_fix_cell(cause)} | "
                        f"{_jira_cell(ctx, ctx.jira_of(cause.id), itype, rel + '/')} | "
                        f"{_versions(cause.raw.get('android_versions'))} | {_code_cell(cause)} |")
         out += _unresolved_line(ctx, itype)
@@ -367,7 +360,7 @@ def stats(ctx: Context) -> str:
     for itype in ctx.types:
         if itype.active:
             records = [r for r in ctx.jira if r["_type"] == itype.id]
-            out.append(f"| {itype.id} | {_cell(itype.title)} | {len(records)} | "
+            out.append(f"| {itype.id} | {md.cell(itype.title)} | {len(records)} | "
                        f"{_count_window(ctx, records, 0, 30)} | {_count_window(ctx, records, 0, 90)} |")
 
     out += ["", "### 원인별", "", "| 원인 | 제목 | 누적 | 최근 30일 | 최근 90일 |", "|---|---|---|---|---|"]
@@ -383,7 +376,7 @@ def stats(ctx: Context) -> str:
         if unresolved:
             rows.append((f"{itype.id}:unresolved", "원인 미확정", unresolved))
     for ident, title, records in rows:
-        out.append(f"| {ident} | {_cell(title)} | {len(records)} | {_count_window(ctx, records, 0, 30)} | "
+        out.append(f"| {ident} | {md.cell(title)} | {len(records)} | {_count_window(ctx, records, 0, 30)} | "
                    f"{_count_window(ctx, records, 0, 90)} |")
 
     top = sorted(((c.id, c.title, _count_window(ctx, ctx.jira_of(c.id), 0, 90)) for c in active_causes),
@@ -392,7 +385,7 @@ def stats(ctx: Context) -> str:
     out += ["", "## Top 10 원인 (최근 90일)", ""]
     if top:
         out += ["| 순위 | 원인 | 제목 | 최근 90일 |", "|---|---|---|---|"]
-        out += [f"| {i} | {ident} | {_cell(title)} | {n} |" for i, (ident, title, n) in enumerate(top, 1)]
+        out += [f"| {i} | {ident} | {md.cell(title)} | {n} |" for i, (ident, title, n) in enumerate(top, 1)]
     else:
         out.append("없음")
 
@@ -404,7 +397,7 @@ def stats(ctx: Context) -> str:
         out += ["", f"### {label}", ""]
         if counts:
             out += ["| 값 | 건수 |", "|---|---|"]
-            out += [f"| {_cell(k)} | {v} |" for k, v in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))]
+            out += [f"| {md.cell(k)} | {v} |" for k, v in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))]
         else:
             out.append("없음")
 
@@ -413,7 +406,7 @@ def stats(ctx: Context) -> str:
     out += ["", "## 수정 상태", "", "open 원인 (Jira 건수 순, 근본 수정 후보):", ""]
     if open_causes:
         out += ["| 원인 | 제목 | Jira |", "|---|---|---|"]
-        out += [f"| {c.id} | {_cell(c.title)} | {n} |" for c, n in open_causes]
+        out += [f"| {c.id} | {md.cell(c.title)} | {n} |" for c, n in open_causes]
     else:
         out.append("없음")
 
@@ -506,7 +499,7 @@ def changelog(ctx: Context) -> str:
     out = ["# parser-rules 변경 이력", "", *ctx.header(),
            "> 규칙 항목의 이력 필드(`added_for`, `added_on`, `reason`)에서 만든다 (04-parser-matching.md §5.8 (2)).",
            "", "| 날짜 | 파일 | 항목 | 추가 대상 | 사유 |", "|---|---|---|---|---|"]
-    out += [f"| {r[0]} | {r[4]} | `{_cell(r[3])}` | {_cell(r[5])} | {_cell(r[6])} |" for r in rows]
+    out += [f"| {r[0]} | {r[4]} | `{md.code(r[3])}` | {md.cell(r[5])} | {md.cell(r[6])} |" for r in rows]
     return "\n".join(out) + "\n"
 
 
@@ -538,16 +531,11 @@ def _load(root: Path) -> issuedb.IssueDb:
         raise UsageError(str(exc)) from exc
 
 
-def run(args, defaults: dict) -> tuple[dict, int]:
+def run(args) -> tuple[dict, int]:
     try:
         repo = dbpath.resolve(args.db)
     except dbpath.DbPathError as exc:
         raise UsageError(str(exc)) from exc
-
-    if args.cache_only:
-        db = _load(repo)
-        path = compiled_cache.write(db, compiled_cache.environment(defaults), GENERATOR_VERSION)
-        return {"mode": "cache-only", "cache": str(path)}, OK
 
     if args.preview:
         db = _load(repo)
@@ -596,8 +584,7 @@ def run(args, defaults: dict) -> tuple[dict, int]:
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(text, encoding="utf-8", newline="\n")
             written.append(rel)
-    cache = compiled_cache.write(db, compiled_cache.environment(defaults), GENERATOR_VERSION)
-    return {"mode": "write", "files": sorted(files), "changed": written, "cache": str(cache)}, OK
+    return {"mode": "write", "files": sorted(files), "changed": written}, OK
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -608,7 +595,6 @@ def build_parser() -> argparse.ArgumentParser:
     mode.add_argument("--write", action="store_true")
     mode.add_argument("--verify", action="store_true")
     mode.add_argument("--preview", metavar="out_dir")
-    mode.add_argument("--cache-only", action="store_true")
     parser.add_argument("--staged", action="store_true", help="--verify와 함께: index 기준")
     parser.add_argument("--json", action="store_true", help="JSON 출력 (항상 JSON)")
     parser.add_argument("--plugin-root", default=None)
@@ -621,11 +607,11 @@ def main(argv: list[str] | None = None) -> int:
     except (AttributeError, ValueError):
         pass
     args = build_parser().parse_args(argv)
-    defaults = site_defaults.load_or_exit(args.plugin_root)
+    site_defaults.load_or_exit(args.plugin_root)
     try:
         if args.staged and not args.verify:
             raise UsageError("--staged는 --verify와 함께 쓴다.")
-        result, code = run(args, defaults)
+        result, code = run(args)
     except (UsageError, yamlio.YamlFileError) as exc:
         print(str(exc), file=sys.stderr)
         return USAGE

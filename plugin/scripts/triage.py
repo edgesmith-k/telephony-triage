@@ -9,7 +9,7 @@
     triage.py run <KEY> --offline-db <path> --out <dir> --logs <logcat...> (--jira-meta <json> | --jira-file <yaml>)
     triage.py release <KEY>
 
-결정적인 순서(키 검사 → lock → cleanup 후보 → 기존 계획 → 스냅샷·사후 lint·캐시 → 호환성 → Jira 추출 →
+결정적인 순서(키 검사 → lock → cleanup 후보 → 기존 계획 → 스냅샷·사후 lint → 호환성 → Jira 추출 →
 열린 PR → 코드 경로 → bugreport·파싱 → 매칭 → 후보별 DB 정보·code_refs resolve)를 기존 스크립트의 `main()`을
 **같은 프로세스에서** 불러 수행한다. 스크립트의 계약(인자·출력·종료 코드)은 그대로이고, 이 파일은 순서와 요약만 맡는다.
 

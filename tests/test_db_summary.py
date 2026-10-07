@@ -16,6 +16,7 @@ SCRIPTS = REPO / "plugin" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import db_summary  # noqa: E402
+from common import md  # noqa: E402
 from common.exitcodes import NEEDS_APPROVAL, OK  # noqa: E402
 
 
@@ -568,7 +569,7 @@ def test_render_heading(jira, target, title, head):
 
 
 def test_md_cell_and_fence():
-    assert db_summary._md_cell("a|b\nc") == "a\\|b c" and db_summary._md_cell(None) == ""
+    assert md.cell("a|b\nc") == "a\\|b c" and md.cell(None) == ""
     assert db_summary._fence("x") == "```\nx\n```"
     assert db_summary._fence("a ```` b", "diff") == "`````diff\na ```` b\n`````"
 

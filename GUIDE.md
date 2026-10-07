@@ -295,7 +295,7 @@ claude mcp list               # Jira MCP 사용자 범위 등록 확인
 3. `/telephony-triage:setup`
    - GHE 아이디, 이슈 DB 경로, 로그 폴더, (선택) Android 16/17 소스 트리 프로필
    - 이미 등록된 Jira MCP를 찾아 도구 매핑을 확인 (팀 기본값이 있으면 확인만)
-   - git pre-commit hook 설치, 매칭 캐시 생성
+   - git pre-commit hook 설치, 읽기 스냅샷 생성
 4. 연습: `/telephony-triage:analyze <샘플키> <로그> --dry-run` (아무것도 올리지 않음. gh 로그인 전에도 가능)
 
 ---

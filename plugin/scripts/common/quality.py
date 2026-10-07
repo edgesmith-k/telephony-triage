@@ -152,7 +152,3 @@ def unsupported_versions(cause: issuedb.Cause, supported: list[str]) -> bool:
     """`android_versions`가 비어 있지 않고 모두 지원 목록 밖. 빈 목록은 전 버전이라 제외."""
     versions = [str(v) for v in cause.raw.get("android_versions") or []]
     return bool(versions) and not (set(versions) & {str(v) for v in supported})
-
-
-def rel_type_md(db: issuedb.IssueDb, itype: issuedb.IssueType) -> str:
-    return (itype.path / "type.md").relative_to(db.root).as_posix()

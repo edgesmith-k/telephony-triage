@@ -135,9 +135,6 @@ def test_sync_sequence_lists_closed_pr_workdir_and_deletes_only_after_yes():
     assert ws.db_pr("lock", "acquire", "sync", "--command", "sync")["acquired"]
     snap = ws.db_pr("snapshot", "--job", "sync")
     assert snap["snapshot_sha"] and "post_lint" in snap
-    snapshot = ws.work / "_snapshot"
-    build = ws.json("db_build.py", ["--cache-only", "--db", snapshot])
-    assert build
     assert ws.db_pr("lock", "release", "sync")["released"] is True
 
     dry = ws.db_pr("cleanup", "--dry-run", "--older-than")
@@ -152,9 +149,10 @@ def test_sync_sequence_lists_closed_pr_workdir_and_deletes_only_after_yes():
 
 def test_sync_and_setup_bodies_list_new_steps_in_order():
     sync = (COMMANDS / "sync.md").read_text(encoding="utf-8")
-    calls = [sync.index(c) for c in ("lock acquire sync", "snapshot --job sync", "db_build.py --cache-only",
+    calls = [sync.index(c) for c in ("lock acquire sync", "snapshot --job sync",
                                      "lock release sync", "cleanup --dry-run", "db_pr.py my-prs")]
-    assert calls == sorted(calls), "my-prs는 cleanup 뒤(6번, lock 밖)다"
+    assert calls == sorted(calls), "my-prs는 cleanup 뒤(5번, lock 밖)다"
+    assert "--cache-only" not in sync, "매칭 파일 캐시는 없다 (06 §6.8)"
     assert "base_sha_changed" in sync and "sync-pr" in sync[calls[-1]:] and "안내만" in sync[calls[-1]:]
     setup = (COMMANDS / "setup.md").read_text(encoding="utf-8")
     order = [setup.index(c) for c in ("config.py gh-status", "config.py doctor --format markdown", "getting-started.md")]

@@ -122,9 +122,6 @@ class Diff:
     def rules_changed(self) -> bool:
         return bool(self.rules)
 
-    def of_kind(self, *kinds: str) -> list[Change]:
-        return [c for c in self.sigs.values() if c.sig.kind in kinds]
-
 
 def _tag_names(rule: dict) -> tuple[str | None, str | None]:
     return rule.get("tag"), rule.get("tag_regex")

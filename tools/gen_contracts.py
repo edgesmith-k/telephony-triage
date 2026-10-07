@@ -29,6 +29,8 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 SCRIPTS_DIR = REPO / "plugin" / "scripts"
+sys.path.insert(0, str(SCRIPTS_DIR))
+from common import md  # noqa: E402
 CLI_DOC = REPO / "docs" / "design" / "contracts-cli.md"
 ANALYSIS_SCHEMA = REPO / "plugin" / "schemas" / "output" / "analysis.schema.json"
 PLAN_SCHEMA = REPO / "plugin" / "schemas" / "plan.schema.json"
@@ -73,7 +75,6 @@ class GenError(Exception):
 
 
 def _load_parsers() -> dict[str, argparse.ArgumentParser]:
-    sys.path.insert(0, str(SCRIPTS_DIR))
     parsers = {}
     for name in SCRIPTS:
         if name in STDIN_ONLY:
@@ -195,10 +196,6 @@ def _describe(action: argparse.Action) -> str | None:
     return f"`{action.option_strings[0] if action.option_strings else action.dest}`: " + ", ".join(bits)
 
 
-def _cell(text: str) -> str:
-    return text.replace("|", "\\|").replace("\n", " ")
-
-
 def _option_notes(parser: argparse.ArgumentParser, skip: set[str]) -> str:
     notes = [d for a in parser._actions if _shown(a) and _key(a) not in skip for d in [_describe(a)] if d]
     return "; ".join(notes)
@@ -235,9 +232,9 @@ def render_script(name: str, parser: argparse.ArgumentParser | None) -> str:
     for leaf_name, leaf in leaves:
         rows.append((leaf_name or "—", _usage(leaf, skip), _option_notes(leaf, skip)))
     for label, usage, notes in rows:
-        usage_cell = f"`{_cell(usage)}`" if usage else ""
+        usage_cell = f"`{md.code(usage)}`" if usage else ""
         label_cell = f"`{label}`" if not label.startswith(("(", "—")) else label
-        out.append(f"| {label_cell} | {usage_cell} | {_cell(notes)} |")
+        out.append(f"| {label_cell} | {usage_cell} | {md.cell(notes)} |")
     out.append("")
     return "\n".join(out)
 

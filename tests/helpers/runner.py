@@ -58,6 +58,9 @@ def versioned_root(schema: int | None = None, generator: int | None = None) -> P
                          for line in text.splitlines()]
                 text = "\n".join(lines) + "\n"
         path.write_text(text, encoding="utf-8")
+        if schema is not None:   # 예시 마이그레이션은 테스트 fixture다 (배포 `scripts/migrations/`는 비어 있다)
+            for module in sorted((REPO / "tests" / "fixtures" / "migrations").glob("*.py")):
+                shutil.copyfile(module, root / "scripts" / "migrations" / module.name)
         _ROOTS[key] = root
     return _ROOTS[key]
 

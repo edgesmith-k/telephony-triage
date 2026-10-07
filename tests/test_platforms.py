@@ -1,4 +1,4 @@
-"""RF-3(I2): `platforms/android/` 이동 — 옛 경로 shim·import 순서·계층 가드·bugreport 래퍼."""
+"""RF-3(I2): `platforms/android/` 이동 — reference 백엔드·계층 가드·bugreport 래퍼."""
 
 from __future__ import annotations
 
@@ -16,59 +16,26 @@ SCRIPTS = REPO / "plugin" / "scripts"
 MOCK_SITE_DIR = REPO / "tests" / "mocks" / "parser_backends" / "site"
 sys.path.insert(0, str(SCRIPTS))
 
-SHIMS = [
-    ("parser_backends.logcat", "platforms.android.logcat"),
-    ("parser_backends.ril", "platforms.android.ril"),
-    ("parser_backends.reference", "platforms.android.backend"),
-]
-SHIM_FILES = {
-    "parser_backends/logcat.py",
-    "parser_backends/ril.py",
-    "parser_backends/reference/__init__.py",
-}
-OLD_IMPL = {"parser_backends.logcat", "parser_backends.ril", "parser_backends.reference"}
-
-
-# -- 1. shim 동일성 ------------------------------------------------------------
-
-
-@pytest.mark.parametrize("old,new", SHIMS)
-def test_shim_is_same_module(old, new):
-    assert importlib.import_module(old) is importlib.import_module(new)
+# -- 1. reference 백엔드 ---------------------------------------------------------
 
 
 def test_reference_backend_identity():
     import parser_backends
     from platforms.android import backend
 
-    old = importlib.import_module("parser_backends.reference")
-    assert old.ReferenceBackend is backend.ReferenceBackend
     assert parser_backends.load("reference") is backend.BACKEND
     assert backend.BACKEND.name == "reference"
     assert backend.BACKEND.version() == backend.VERSION == "0.1.0"
 
 
-# -- 2. import 순서 무관 ---------------------------------------------------------
+def test_old_backend_shims_removed():
+    """R-33: 옛 경로 shim(`sys.modules` 바꿔치기)은 없다. reference 패키지는 BACKEND만 다시 내보낸다."""
+    assert not (SCRIPTS / "parser_backends" / "logcat.py").exists()
+    assert not (SCRIPTS / "parser_backends" / "ril.py").exists()
+    assert "sys.modules" not in (SCRIPTS / "parser_backends" / "reference" / "__init__.py").read_text(encoding="utf-8")
 
 
-@pytest.mark.parametrize("first", ["old", "new"])
-def test_import_order_independent(first):
-    old = "import parser_backends.logcat as ol, parser_backends.ril as orl, parser_backends.reference as orf"
-    new = "import platforms.android.logcat as nl, platforms.android.ril as nrl, platforms.android.backend as nrf"
-    ordered = f"{old}\n{new}" if first == "old" else f"{new}\n{old}"
-    code = (
-        "import sys\n"
-        f"sys.path.insert(0, {str(SCRIPTS)!r})\n"
-        f"{ordered}\n"
-        "assert ol is nl and orl is nrl and orf is nrf\n"
-        "import parser_backends\n"
-        "assert parser_backends.load('reference') is nrf.BACKEND\n"
-    )
-    proc = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
-    assert proc.returncode == 0, proc.stderr
-
-
-# -- 3. site식 상대 import --------------------------------------------------------
+# -- 2. 모의 site 백엔드 ----------------------------------------------------------
 
 
 def _load_mock_site():
@@ -84,14 +51,14 @@ def _load_mock_site():
     return module
 
 
-def test_site_style_relative_import():
+def test_mock_site_backend_extends_reference():
     from platforms.android import backend
 
     site = _load_mock_site()
     assert isinstance(site.BACKEND, backend.ReferenceBackend)
 
 
-# -- 4. 계층 가드 ----------------------------------------------------------------
+# -- 3. 계층 가드 ----------------------------------------------------------------
 
 # common → platforms 허용 목록. 정확히 이것만 허용하고 현실과 다르면 실패한다.
 # stepanchor의 시각 해석 함수가 logcat 스탬프를 쓴다 (시각 helper를 따로 나눌 때 없앤다).
@@ -126,25 +93,14 @@ def test_common_does_not_import_platforms():
     for path, rel in _py_files("common"):
         bad = {
             m for m in _imports(path, rel)
-            if m == "platforms" or m.startswith("platforms.") or m in OLD_IMPL
+            if m == "platforms" or m.startswith("platforms.")
         }
         # `from platforms.android import logcat`은 `platforms`·`platforms.android`·`platforms.android.logcat`로 풀린다.
         # 하위 모듈 이름까지 간 것만 비교한다.
-        bad = {m for m in bad if m.count(".") >= 2 or m in OLD_IMPL}
+        bad = {m for m in bad if m.count(".") >= 2}
         if bad:
             actual[rel] = bad
     assert actual == COMMON_ALLOW
-
-
-def test_old_backend_paths_only_used_by_shims():
-    offenders = {}
-    for path, rel in _py_files():
-        if rel in SHIM_FILES:
-            continue
-        bad = _imports(path, rel) & OLD_IMPL
-        if bad:
-            offenders[rel] = bad
-    assert offenders == {}
 
 
 def test_platforms_do_not_import_core():
@@ -154,14 +110,14 @@ def test_platforms_do_not_import_core():
         bad = set()
         for module in _imports(path, rel):
             top = module.split(".")[0]
-            if top in banned or top.startswith("db_") or module in OLD_IMPL or module.startswith("parser_backends.site"):
+            if top in banned or top.startswith("db_") or module.startswith("parser_backends.site"):
                 bad.add(module)
         if bad:
             offenders[rel] = bad
     assert offenders == {}
 
 
-# -- 5. bugreport 래퍼 ------------------------------------------------------------
+# -- 4. bugreport 래퍼 ------------------------------------------------------------
 
 
 def test_parse_logcat_bugreport_wrapper():
@@ -187,7 +143,7 @@ def test_extract_bugreport_missing_file_exits_2(tmp_path):
     assert f"bugreport 파일이 없습니다: {tmp_path / 'none.txt'}" in proc.stderr
 
 
-# -- 6. code_roots 상수 ------------------------------------------------------------
+# -- 5. code_roots 상수 ------------------------------------------------------------
 
 
 def test_code_roots_constants_come_from_platform():

@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import re
 
-from ..reference import ReferenceBackend
+from platforms.android.backend import ReferenceBackend
 
 VERSION = "0.0.3-mock"
 

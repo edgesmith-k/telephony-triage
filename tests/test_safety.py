@@ -377,7 +377,7 @@ def test_r1_analysis_requires_compatible_symptom_and_cause(
     events = [event("SYM", sym_slot, 0), event("CAUSE", cause_slot, gap)]
     doc = {"masked": True, "events": events, "coverage": {"first_ts": events[0]["ts"],
                                                             "last_ts": events[-1]["ts"]}}
-    signatures = compiled.compile_signatures(db, None)
+    signatures = compiled.compile_signatures(db)
     analysis = matcher.match(doc, db, signatures, regress=False)
     assert analysis["causes"][0]["C"] == expected
     regression = matcher.match(doc, db, signatures, regress=True)
@@ -416,7 +416,7 @@ def test_r4_rotated_response_pairs_before_windowing(safety_root, tmp_path):
     assert request["ril"]["latency_ms"] == 1000
     assert not any(e["event"] == "ril_no_response" for e in doc["events"])
     backend = importlib.import_module("parser_backends.reference").BACKEND
-    logcat = importlib.import_module("parser_backends.logcat")
+    logcat = importlib.import_module("platforms.android.logcat")
     stamp = logcat.parse_ts("2026-09-22T12:00:01.000Z")
     response_only = backend.parse([second, first], "UTC", 2026, (stamp, stamp))
     assert len(response_only) == 1 and response_only[0]["ril"]["latency_ms"] == 1000
