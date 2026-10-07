@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import difflib
+import hashlib
 import json
 import os
 import re
@@ -360,8 +361,9 @@ def summary(ctx: Ctx, wt: Path, markdown: bool = False) -> dict:
     body = db_summary.pr_body(scr, plan)
     digest = approved_hash(wt)
     state.update(approved_hash=digest, commit_message=scr["commit_message"])
-    _write_json(job_dir / STATE, state)
     _write_json(job_dir / PR_FILE, {"title": scr["pr_title"], "body": body, "reviewers": scr["reviewers"]})
+    state["pr_digest"] = hashlib.sha256((job_dir / PR_FILE).read_bytes()).hexdigest()   # 승인 대상에 pr.json 포함
+    _write_json(job_dir / STATE, state)
     result = {**scr, "pr_body": body, "approved_hash": digest}
     if markdown:    # opt-in: 확인 화면 마크다운(JSON 키·상태 파일은 그대로, main이 `_markdown`을 꺼내 출력한다)
         extras = db_summary.screen_extras(wt, scr, stage_result["apply"].get("operations") or [], digest)
@@ -443,6 +445,12 @@ def publish(ctx: Ctx, wt: Path, branch: str, lease: str, approved: str, commit: 
     pr_info = _read_json(job_dir / PR_FILE)
     if not state or not state.get("approved_hash") or not pr_info:
         raise UsageError("승인 정보가 없습니다. stage --then-summary(확인) 뒤 publish --commit한다.")
+    if "pr_digest" not in state:
+        return {"published": False, "problems": ["state.json에 pr_digest가 없다 (이전 버전의 summary). "
+                                                 "summary를 다시 받는다."]}, CHECK_FAILED
+    if state.get("pr_digest") != hashlib.sha256((job_dir / PR_FILE).read_bytes()).hexdigest():
+        return {"published": False, "problems": ["pr.json이 summary 뒤에 바뀌었다 (제목·본문·리뷰어). "
+                                                 "확인 화면을 다시 받는다."]}, CHECK_FAILED
     commit_info = None
     if commit:
         commit_info, early = _commit_approved(wt, job_dir, state, approved)

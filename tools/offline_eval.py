@@ -148,7 +148,7 @@ def summarize(results: list[dict]) -> dict:
     negative = [r for r in scored if r["expect"] == UNRESOLVED]
     for r in scored:
         if r["expect"] == UNRESOLVED:
-            r["verdict"] = "오탐" if r["top3"] else "정답"
+            r["verdict"] = "오탐" if any(c is not None for c in r["top3"]) else "정답"   # cause: null(유형만)은 오탐 아님
         elif r["top"] == r["expect"]:
             r["verdict"] = "1위"
         elif r["expect"] in r["top3"]:
@@ -163,11 +163,13 @@ def summarize(results: list[dict]) -> dict:
         "total": len(results),
         "evaluated": len(scored),
         "errors": len(results) - len(scored),
+        "error_rate": rate(len(results) - len(scored), len(results)),
+        "type_only": sum(bool(r["top3"]) and all(c is None for c in r["top3"]) for r in negative),
         "positive": len(positive),
         "negative": len(negative),
         "top1_accuracy": rate(sum(r["top"] == r["expect"] for r in positive), len(positive)),
         "top3_inclusion": rate(sum(r["expect"] in r["top3"] for r in positive), len(positive)),
-        "false_positive_rate": rate(sum(bool(r["top3"]) for r in negative), len(negative)),
+        "false_positive_rate": rate(sum(r["verdict"] == "오탐" for r in negative), len(negative)),
     }
 
 
@@ -192,7 +194,8 @@ def render(results: list[dict], summary: dict) -> str:
         f"unresolved 정답 {summary['negative']}, 오류 {summary['errors']})",
         f"1위 정확도    {_pct(summary['top1_accuracy'])}",
         f"상위 3 포함률 {_pct(summary['top3_inclusion'])}",
-        f"오탐률        {_pct(summary['false_positive_rate'])}",
+        f"오탐률        {_pct(summary['false_positive_rate'])} (원인 후보 기준, 유형만 {summary['type_only']}건 제외)",
+        f"오류율        {_pct(summary['error_rate'])} ({summary['errors']}/{summary['total']}, 평가에서 제외됨)",
     ]
     return "\n".join(lines)
 

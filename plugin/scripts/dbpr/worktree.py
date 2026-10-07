@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 from datetime import datetime, timedelta, timezone
@@ -282,6 +283,30 @@ def _drop_pasted_steps(ctx: Ctx, job: str) -> None:
         pass    # 지우지 못해도 lock 해제는 끝낸다(남은 파일은 cleanup이 보여준다)
 
 
+JOB_MARKERS = (PLAN, "state.json", "trace.jsonl", "jira_raw.json", "triage-state.json")   # logs/는 흔한 이름이라 표식이 아니다
+RAW_MARKERS = ("logs", "jira_raw.json")
+RETAINED_NOTES = {      # PR 생성 실패라고 단정하지 않는다: PR은 만들어졌는데 번호만 기록되지 않았을 수 있다
+    "unpublished": "미게시 계획 보존 — 재개 또는 명시적 폐기(discard) 필요",
+    "pushed-no-pr": "push 기록 있음, PR 연결 미확인 — 원격 브랜치·열린 PR 확인 후 publish 재시도 또는 "
+                    "`sync-pr <브랜치>`로 복구(discard는 복구가 아니라 중단·로컬 정리)",
+}
+
+
+def _tree_mtime(job_dir: Path) -> float:
+    """폴더 자신·하위 폴더·파일 중 가장 최근 mtime(방금 만든 빈 폴더나 옛 mtime 파일을 복사한 폴더는 최근이다).
+    git worktree(`wt`·`draft`)는 건너뛴다. 훑는 도중 사라진 파일의 OSError는 무시한다."""
+    newest = job_dir.stat().st_mtime
+    for root, dirs, files in os.walk(job_dir):
+        if root == str(job_dir):
+            dirs[:] = [d for d in dirs if d not in ("wt", "draft")]
+        for name in (*dirs, *files):
+            try:
+                newest = max(newest, os.lstat(os.path.join(root, name)).st_mtime)
+            except OSError:
+                pass
+    return newest
+
+
 def cleanup(ctx: Ctx, yes: bool, older_than: int | None) -> dict:
     ctx.require_repo()
     _git(ctx.repo, "worktree", "prune", check=False)
@@ -304,22 +329,37 @@ def cleanup(ctx: Ctx, yes: bool, older_than: int | None) -> dict:
                                      for p in wt_paths)
         if ref not in checked_out or will_free:
             targets.append({"kind": "branch", "name": ref[len("refs/heads/"):]})
+    retained = []
     if older_than is not None:
         limit = now() - timedelta(days=older_than)
         for job_dir in sorted(p for p in ctx.work_dir.iterdir() if p.is_dir()) if ctx.work_dir.is_dir() else []:
-            plan = _read_json(job_dir / PLAN) if job_dir.name not in (SNAPSHOT_DIR, held) else None
-            number = ((plan or {}).get("pr") or {}).get("number")
-            if not number:
+            # 도구가 만든 작업 폴더만: 작업 키 형식 + 표식(그 밖의 하위 폴더·`.` 폴더는 건드리지 않는다)
+            if job_dir.name in (SNAPSHOT_DIR, held) or not JOB_KEY_RE.fullmatch(job_dir.name):
                 continue
-            mtime = max(p.stat().st_mtime for p in job_dir.glob("*.json"))
+            if not any((job_dir / m).exists() for m in JOB_MARKERS):
+                continue
+            mtime = _tree_mtime(job_dir)
             if datetime.fromtimestamp(mtime, timezone.utc) > limit:
+                continue
+            plan = _read_json(job_dir / PLAN)
+            number = ((plan or {}).get("pr") or {}).get("number")
+            if not number and plan is not None:     # 미게시 계획: 일괄 정리에서 빼고 따로 알린다 (S14에서 원문 보존 결정)
+                pushed = bool((plan.get("pr") or {}).get("head_sha"))   # branch는 계획을 만들 때부터 있다(스키마 필수)
+                retained.append({"job": job_dir.name, "path": str(job_dir), "days": (now() - datetime.fromtimestamp(
+                    mtime, timezone.utc)).days, "raw_remains": any((job_dir / m).exists() for m in RAW_MARKERS),
+                    "state": "pushed-no-pr" if pushed else "unpublished",
+                    "note": RETAINED_NOTES["pushed-no-pr" if pushed else "unpublished"]})
+                continue
+            if not number:      # 계획 없는 중단 작업(원문만 남음): 같은 기한이 지나면 디렉토리째
+                targets.append({"kind": "job-dir", "job": job_dir.name, "path": str(job_dir), "pr": None,
+                                "pr_state": None})
                 continue
             proc = _gh(ctx, ["pr", "view", str(number), "--json", "state"], ctx.repo)
             state = (json.loads(proc.stdout) if proc.returncode == 0 and proc.stdout.strip() else {}).get("state")
             if state in ("MERGED", "CLOSED"):
                 targets.append({"kind": "job-dir", "job": job_dir.name, "path": str(job_dir), "pr": number,
                                 "pr_state": state})
-    done = []
+    done, failed = [], []
     if yes:
         # Validate the complete deletion set before the first mutation.
         for t in targets:
@@ -338,9 +378,13 @@ def cleanup(ctx: Ctx, yes: bool, older_than: int | None) -> dict:
                 Path(t["path"]).unlink(missing_ok=True)
             elif t["kind"] == "job-dir":
                 shutil.rmtree(t["path"], ignore_errors=True)
+                if Path(t["path"]).exists():      # 지우지 못했으면 지웠다고 보고하지 않는다
+                    failed.append(t)
+                    continue
             done.append(t)
         _git(ctx.repo, "worktree", "prune", check=False)
         for t in targets:
             if t["kind"] == "branch":
                 _git(ctx.repo, "branch", "-D", t["name"], check=False)
-    return {"dry_run": not yes, "lock_job": held, "targets": targets, "removed": done if yes else []}
+    return {"dry_run": not yes, "lock_job": held, "targets": targets, "removed": done if yes else [],
+            "failed": failed, "retained": retained}

@@ -17,8 +17,8 @@ analyze Step 1만 수행한다 (`07-workflow.md §Step 1`, `09-commands.md` sync
    `config.py check --db <work_dir>/_snapshot --for dry-run`으로 버전 호환성도 확인하고 `writable: false`면 `reasons`를 보여준다.
 3. **lock 해제** — `db_pr.py lock release sync`.
 4. **오래된 작업 디렉토리 후보** — `db_pr.py cleanup --dry-run --older-than` (기본 90일).
-   `targets`에서 닫힌·머지된 PR의 오래된 작업 디렉토리(`kind: job-dir`, `pr`, `pr_state`)와 남은 worktree·도구 브랜치를
-   목록으로 보여준다. 목록이 비면 "정리할 것 없음"으로 끝낸다. 있으면 지울지 **묻고**, 사용자가 동의한 경우에만
+   `targets`에서 닫힌·머지된 PR의 오래된 작업 디렉토리와 계획 없이 원문만 남은 중단 작업(`kind: job-dir`, `pr`(없으면 null), `pr_state`)과 남은 worktree·도구 브랜치를
+   목록으로 보여준다. `retained`(계획 폴더: 경과 일수·경로·원문 잔류 여부·`state`)는 지우지 않고 `note`를 그대로 알린다 — `unpublished`는 "미게시 계획 보존 — 재개 또는 명시적 폐기 필요", `pushed-no-pr`는 "push 기록 있음, PR 연결 미확인 — 원격 브랜치·열린 PR을 확인한 뒤 publish 재시도(열린 PR이 있으면 그 PR을 고친다) 또는 `sync-pr <브랜치>`로 복구"(PR 생성 실패로 단정하지 않는다. discard는 복구가 아니라 중단·로컬 정리). 목록이 비면 "정리할 것 없음"으로 끝낸다. 있으면 지울지 **묻고**, 사용자가 동의한 경우에만
    `db_pr.py cleanup --yes --older-than`을 실행한다. 확인 전에는 아무것도 지우지 않는다.
    analyze가 알린 잔여물(`notes`의 "잔여 worktree·도구 브랜치 n개")도 이 목록에 있으니 여기서 정리한다.
    (4번은 lock을 잡지 않은 채 실행하므로, 다른 세션이 작업 중이면 그 작업 키의 것은 대상에서 빠진다.)

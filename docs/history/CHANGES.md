@@ -769,3 +769,7 @@ L2 수정 라운드: 벤더 그룹 값은 10진 숫자일 때만 쓰고 그 밖(
 ## L 트랙 마무리·원칙 R (2026-10-07)
 
 eval(Sonnet 5.5, 변경 전 `864e7c4` → L2 후, 결정 (g)): 40·44(DSM 줄 형식), 3·4(`log-tags.md`) 채점 동일, 토큰은 W0 폭 안(eval 4 출력 −9.6%로 경계, 턴 수 동일). eval 3의 "`db_verify rules --plan --draft` 결과를 보였다" 단언은 변경 전에도 3회 중 1회 실패해 기존 불안정으로 기록했다. `ril-requests.md`의 `hal` 문단은 벤더 설정이 있어야 쓰이므로 실행하는 eval이 없다. 비용 약 $5. 원칙 R은 사용자 선택 (a): `12-principles.md` 사용자 clone 예외에 직접 편집 브랜치의 `db_add renumber`를 더했다(코드 변경 없음, V6 검사 그대로). G(범용판 별도 레포)는 사용자 지시로 보류.
+
+## 팀 검토 반영 TP-1·TP-2 (2026-10-07, 2차 10/08)
+
+팀 검토 문서 5건(`docs/history/TEAM_PLUGIN_*`)의 판정은 `docs/development/TEAM_PLUGIN_REVIEW_VERDICT_2026-10-07.md`. 사용자 결정: `offline_eval`은 유형만(후보가 있고 전부 `cause: null`) 항목을 오탐에서 빼 `type_only`로 따로 세고 `error_rate`를 보고한다(R-41을 반입 전으로 당김, S-5는 정확도 기준과 오류율 상한 모두 충족, null은 미충족). `db_pr cleanup --older-than`은 도구가 만든 작업 폴더(작업 키 + 표식)만 후보로 하고, 폴더·하위·파일 mtime이 모두 기준일 밖일 때 계획 없이 원문만 남은 중단 작업도 디렉토리째 후보에 넣는다. `plan.json`이 있고 PR 번호가 없는 폴더는 제외하고 `retained`(경과 일수·경로·원문 잔류, 미게시 계획 / push 기록 있음·PR 연결 미확인 두 상태와 복구 안내)로 표시하며(표시만으로 보존 문제가 해결된 것은 아니다), 삭제하고도 남으면 `failed`로 보고한다. 원문 보존은 부분 해결이다: 계획 보존은 원문 무기한 보존이 아니고 미게시 계획 폴더의 원문 잔류는 S14에서 결정한다(90일은 cleanup 실행 시 후보 기준일). `summary`가 `pr.json` sha256을 `state.json`(`pr_digest`)에 저장하고 `publish`가 없거나 다르면 push 없이 종료 1. 프롬프트 주입 eval 59·60(+모의 Jira MOCK-1003·1004, 수동 채점, 실행은 S-2). 14-site S1·S2·S5·S14 행 보강. 검증 기록: 최초 구현의 관련 테스트 통과는 수정 전 상태이고, 2차 수정(소유 확인·mtime·`retained`·`failed`·`type_only` 정의) 뒤 관련 테스트를 다시 돌려 통과시켰다.
