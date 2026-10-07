@@ -32,7 +32,7 @@
 | ☐ 2 | **사용자 확인** — 10/04~05 작업(4a·R8·테스트 DB·검사 통합·4b·step_order·보안·R11·R9·RF-2, `CHANGES.md` 10/04~05 절) | 반입 직전에 한꺼번에 |
 
 반입 뒤 후보: RF-5(oFono)·RF-6(커넥터)·RF-8(자동화)은 사내 환경을 알아야 의미가 있다. RF-9·웹 UI(보류)는 그 뒤. 색인 `docs/development/ARCHITECTURE_REVIEW_2026-10.md`.
-사내로 넘긴 것: 행동 eval 전체(`evals.json`, S-2), db-authoring 스키마 요약 확장(S-2, 스키마 Read 횟수로 판단), 운영 DB 스키마 `pr.ids` 반영(S-3, 뼈대에서), 사내 마켓플레이스 소스 유형 확인 → version 규칙(S-2·S-7, V2에서 `plugin.json` version 삭제 = 커밋 SHA 기준. 반입 직후 캐시 1회 무효화는 무해). V 이후 후보: `import_draft` zip 직접 입력, S-7 pack 40.8KB 축소(R-28과 같은 방식).
+사내로 넘긴 것: 행동 eval 전체(`evals.json`, S-2), db-authoring 스키마 요약 확장(S-2, 스키마 Read 횟수로 판단), 운영 DB 스키마 `pr.ids` 반영(S-3, 뼈대에서), 사내 마켓플레이스 소스 유형 확인 → version 규칙(S-2·S-7, V2에서 `plugin.json` version 삭제 = 커밋 SHA 기준. 반입 직후 캐시 1회 무효화는 무해). V 이후 후보: `import_draft` zip 직접 입력, S-7 pack 40.8KB 축소(R-28과 같은 방식), guard `git -c alias.x=push`·표 밖 래퍼(`eval`·`su -c` 등) 우회(R-42와 함께), analyze `--dry-run`도 Step 7 계획·확인 화면까지 가라는 SKILL 한 줄(V4 eval 43에서 Sonnet이 건너뜀, iteration-1은 통과).
 
 ## 사외에서는 못 하는 것 (사내 S-1~S-5)
 

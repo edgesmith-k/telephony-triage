@@ -368,10 +368,16 @@ def test_guard_sees_through_command_wrappers():
     assert decision(bash(ws, "env --split-string='python3 db_pr.py publish wt'", ws.base)) == "ask"
     for cmd in ("time -p git commit --no-verify -m x", "env -u FOO git push origin HEAD:main",
                 "timeout -k 5 60 git push origin HEAD:main", "nice git -c core.hooksPath=/dev/null commit -m x",
-                'env -S "git push origin HEAD:main"', "sudo -u x git commit -n -m x"):
+                'env -S "git push origin HEAD:main"', "sudo -u x git commit -n -m x",
+                # 짧은 옵션 묶음 끝의 값 옵션(-Eu x)과 묶음 안의 -S
+                "sudo -Eu x git commit --no-verify -m x", "sudo -Hu x git push origin HEAD:main",
+                'env -vS "git push origin HEAD:main"', "env -uFOO git push origin HEAD:main"):
         assert decision(bash(ws, cmd, c)) == "deny", cmd
-    # env -C·sudo -D는 작업 디렉토리를 바꾼다: 다른 곳에서 불러도 이슈 DB로 판정한다
-    for cmd in (f'env -C "{c}" git push origin HEAD:main', f'sudo -D "{c}" git push origin HEAD:main'):
+    assert decision(bash(ws, f"sudo -Eu x {publish}", ws.base)) == "ask"
+    # env -C·sudo -D는 작업 디렉토리를 바꾼다(값이 붙은 형태 포함): 다른 곳에서 불러도 이슈 DB로 판정한다
+    for cmd in (f'env -C "{c}" git push origin HEAD:main', f'sudo -D "{c}" git push origin HEAD:main',
+                f'env -C"{c}" git push origin HEAD:main', f'sudo -D"{c}" git push origin HEAD:main',
+                f'env --chdir="{c}" git push origin HEAD:main'):
         assert decision(bash(ws, cmd, ws.base)) == "deny", cmd
     d = tmp("tt-wrap-raw-")
     (d / "x.log").write_text(LOGCAT, encoding="utf-8")

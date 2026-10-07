@@ -299,25 +299,32 @@ def _strip_prefix(seg: list[str], cwd: Path) -> tuple[list[str], Path]:
             if opt == "--":
                 i += 1
                 break
-            if name == "env" and (opt in ("-S", "--split-string") or opt.startswith("--split-string=")
-                                  or (opt.startswith("-S") and not opt.startswith("--"))):
-                attached = "=" in opt if opt.startswith("--") else len(opt) > 2
-                value = (opt.split("=", 1)[1] if opt.startswith("--") else opt[2:]) if attached \
-                    else (seg[i + 1] if i + 1 < len(seg) else "")
+            # 값 받는 옵션(이름, 값, 차지한 토큰 수): 긴 옵션은 `--x=v`|`--x v`, 짧은 묶음(`-Eu x`, `-vS'…'`, `-C/dir`)은
+            # 값 받는 첫 글자에서 멈추고 묶음 나머지가 값(없으면 다음 토큰)
+            key, value, used = None, None, 1
+            takes = with_arg | ({"-S", "--split-string"} if name == "env" else set())
+            if opt.startswith("--"):
+                key, eq, value = opt.partition("=")
+                if not eq:
+                    value, used = (seg[i + 1], 2) if key in takes and i + 1 < len(seg) else (None, 1)
+            else:
+                for k, ch in enumerate(opt[1:], 1):
+                    if "-" + ch in takes:
+                        key, value = "-" + ch, opt[k + 1:]
+                        if not value:
+                            value, used = (seg[i + 1], 2) if i + 1 < len(seg) else ("", 1)
+                        break
+            if key in ("-S", "--split-string") and value is not None:
                 try:
                     split = shlex.split(value)
                 except ValueError:
                     split = value.split()
-                seg = seg[:i] + split + seg[i + (1 if attached else 2):]
+                seg = seg[:i] + split + seg[i + used:]
                 continue   # 풀린 토큰을 다시 옵션·명령으로 읽는다
-            chdir = CHDIR_OPTS.get(name, set())
-            if opt in chdir and i + 1 < len(seg):
-                d = _expand(seg[i + 1])
+            if key in CHDIR_OPTS.get(name, set()) and value:
+                d = _expand(value)
                 cwd = Path(d) if Path(d).is_absolute() else cwd / d
-            elif opt.startswith("--chdir=") and chdir:
-                d = _expand(opt.split("=", 1)[1])
-                cwd = Path(d) if Path(d).is_absolute() else cwd / d
-            i += 2 if opt in with_arg else 1
+            i += used
         i += positional
     return seg[i:], cwd
 

@@ -274,9 +274,18 @@ def test_script_path_is_defined_where_it_is_substituted():
         assert root not in path.read_text(encoding="utf-8"), path.name
     skill = (SKILL / "SKILL.md").read_text(encoding="utf-8")
     assert f'`S/` = `python3 "{root}/scripts/' in skill
+    # 커맨드 본문이 `S/`를 쓰거나, `S/`를 쓰는 문서(SKILL.md·reference, 그 문서가 가리키는 reference 포함)를 읽게
+    # 하면 그 본문에 정의가 있어야 한다
+    texts = {p.name: p.read_text(encoding="utf-8") for p in [SKILL / "SKILL.md", *(SKILL / "reference").glob("*.md")]}
+    uses = {n for n, t in texts.items() if re.search(r"(?<![A-Za-z])S/", t)}
+    while True:
+        more = {n for n, t in texts.items() if n not in uses and any(u != "SKILL.md" and u in t for u in uses)}
+        if not more:
+            break
+        uses |= more
     for path in sorted((PLUGIN / "commands").glob("*.md")):
         text = path.read_text(encoding="utf-8")
-        if "reference/rules.md" in text:
+        if re.search(r"(?<![A-Za-z])S/", text) or any(n in text for n in uses):
             assert f'python3 "{root}/scripts/<이름>.py"` = `S/`' in text, path.name
     rules = (SKILL / "reference" / "rules.md").read_text(encoding="utf-8")
     assert "`offset`" in rules and "`limit`" in rules

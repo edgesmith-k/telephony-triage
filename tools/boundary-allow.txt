@@ -4,7 +4,7 @@
 # 마스킹 시험용 합성 IMEI·IMSI (공개 예시 값)
 pattern:long-number tests/* ^(450081234567890|450081234567891|356938035643809|490154203237518)$
 # db_lint mask.allow_patterns 넓이 검사 표본 (같은 합성 값)
-pattern:long-number plugin/scripts/db_lint.py ^(450081234567890|356938035643809)$
+pattern:long-number plugin/scripts/db_lint.py ^(450081234567890|356938035643809|01012345678|821012345678|89820012345678901234)$
 
 # 마스킹 시험 입력: 합성 JWT 머리, 문서용 IP
 pattern:secret-assign tests/test_masking.py ^token: eyJhbGciOiJIUzI1NiJ9$

@@ -123,6 +123,8 @@ def main() -> int:
         event = json.loads(sys.stdin.read() or "{}")
     except json.JSONDecodeError:
         return 0
+    if not isinstance(event, dict):   # hook 입력 형식이 아니다: 도구 이름을 모른다
+        return 0
     error = None
     try:
         defaults = site_defaults.load()

@@ -301,6 +301,8 @@ def test_bridge_fails_closed_when_config_unreadable():
     other = run("jira_bridge.py", [], root=plugin_root(), env={"TELEPHONY_TRIAGE_HOME": broken},
                 stdin=json.dumps({"tool_name": "Bash", "tool_input": {}, "tool_response": "x"}))
     assert other.returncode == 0 and other.stdout.strip() == ""        # MCP가 아닌 도구는 그대로
+    odd = run("jira_bridge.py", [], root=plugin_root(), env={"TELEPHONY_TRIAGE_HOME": broken}, stdin="[1, 2]")
+    assert odd.returncode == 0 and odd.stdout.strip() == "", odd.stderr     # dict가 아닌 입력도 종료 0
 
     bare = tmp("tt-bridge-bare-") / "root"
     shutil.copytree(plugin_root(), bare)
