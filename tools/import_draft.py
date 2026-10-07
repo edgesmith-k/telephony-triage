@@ -461,12 +461,14 @@ def main(argv: list[str] | None = None) -> int:
         if args.json:
             print(json.dumps(payload, ensure_ascii=False, indent=2))
         else:
-            print(
-                "기준선 이후 사내에서 고친 사외 파일이 있어 멈춥니다. "
-                "변경 요지를 사용자가 직접 사외에 전달해 반영하거나(파일 반출 없음), 되돌린 뒤 다시 실행하세요 "
-                "(15-local-draft.md §15.6):",
-                file=sys.stderr,
-            )
+            if result["first_import"]:
+                message = ("첫 반입인데 대상에 같은 경로의 다른 파일이 있어 멈춥니다. "
+                           "빈 레포(README 없이)에서 시작하거나 그 파일을 지운 뒤 다시 실행하세요:")
+            else:
+                message = ("기준선 이후 사내에서 고친 사외 파일이 있어 멈춥니다. "
+                           "변경 요지를 사용자가 직접 사외에 전달해 반영하거나(파일 반출 없음), 되돌린 뒤 다시 실행하세요 "
+                           "(15-local-draft.md §15.6):")
+            print(message, file=sys.stderr)
             for item in result["locally_modified"]:
                 print(f"  - {item['path']}", file=sys.stderr)
         return CHECK_FAILED

@@ -102,7 +102,7 @@ external_parsers: {}
 analyzers:
   data:
     skill: mock-data-analyzer          # tests/mocks/skills/data-analyzer/
-    when: ask                          # ask | after_match | always_for_category
+    when: ask                          # ask | always | never
     inputs: [events_json, log_paths, top_candidates, jira_summary]
     max_tokens_hint: medium
 

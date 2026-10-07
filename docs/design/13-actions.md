@@ -7,7 +7,7 @@
 ### 13.1 사용 가능 여부 확인
 
 1. 사내 GHE 레포 상단에 **Actions** 탭이 있는지 확인한다.
-2. 조직에 **self-hosted runner**가 등록돼 있는지 확인한다. 다른 팀 레포의 Actions 실행 기록이 있으면 있는 것이다. runner에 Python 3.10+와 `pyyaml`, `jsonschema`를 설치할 수 있어야 한다.
+2. 조직에 **self-hosted runner**가 등록돼 있는지 확인한다. 다른 팀 레포의 Actions 실행 기록이 있으면 있는 것이다. runner에 Python 3.11+와 `pyyaml`, `jsonschema`를 설치할 수 있어야 한다.
 3. runner가 사내 GHE의 플러그인 레포를 checkout할 수 있는지 확인한다.
 4. (2단계 전환 시) main에 커밋할 수 있는 **봇 계정 또는 GitHub App**을 만들 수 있는지 확인한다.
 

@@ -968,7 +968,7 @@ Windows 전용 보정은 커밋하지 않는다.**
 
 ## 사외 Claude Code 실험 결과 (S1 예비)
 
-> 표는 살아 있는 항목이라 상태 파일 `DRAFT_NOTES.md`로 옮겼다 (2026-10-01).
+> 표는 `tests/mocks/plugin-probe/README.md` '사외 결과'로 옮겼다 (2026-10-07, V3).
 
 ## 가정 (사내에서 확인해야 하는 판단)
 

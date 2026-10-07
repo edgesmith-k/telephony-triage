@@ -17,7 +17,7 @@
 | `07-workflow.md` | analyze Step 0~8, 공통 쓰기 절차, record/validate/fix-submitted/verify-fix/sync-pr |
 | `08-safety.md` | 마스킹, Hooks 10종 |
 | `09-commands.md` | 커맨드 12개 |
-| `10-skill-eval.md` | SKILL.md 구성, 트리거 테스트, eval 54개 |
+| `10-skill-eval.md` | SKILL.md 구성, 트리거 테스트, eval(`tests/skill_evals/evals.json` 전체) |
 | `11-phases.md` | **Phase D0~14** 할 일·완료 기준·읽을 문서 (사외 초안·사내 처음부터 모드만) + **§11.0 작업 방식** |
 | `12-principles.md` | 원본 12장 **원칙**: 사용자 확인, push 전 승인, 작업 계획·drift, 사용자 clone 불변, lock, 생성 파일, ID, 마스킹, 검증 표시, 판정 기준, 우회 금지 |
 | `13-actions.md` | GHE Actions 전환 |
@@ -28,7 +28,7 @@
 | `CLAUDE.md` (루트) | 진입점: 모드 판별(머리말), 작업 방식 요약, 항상 지킬 것 |
 | `GUIDE.md` (루트) | 사람용 총정리 |
 | `REVIEW-OPEN.md` (루트) | 사내 정보가 있어야 판단할 미해결 항목 (S-1 / Phase 0에서 처리) |
-| `DRAFT_NOTES.md` (루트) | 사외 초안 **상태 파일(≤8KB)**: 진행 상태·막힌 것·활성 트랙. 상세 이력은 `docs/history/`(읽지 않는다) |
+| `DRAFT_NOTES.md` (루트) | 사외 초안 **상태 파일(≤8KB)**: 진행 상태·남은 일·막힌 것·결정. 상세 이력은 `docs/history/`(읽지 않는다) |
 | `docs/tasks.md` | 사내 보완 단계(S-0~S-7)별 "읽을 것" 표. `python3 tools/context_pack.py S-n`이 그 파일·절만 출력 |
 | `docs/development/` | 리뷰·인계 문서(`ARCHITECTURE_REVIEW_2026-10.md` 남은 RF·R 항목, 인계 본문은 `docs/history/improvement-handoff-2026-10.md`, `S0_PROBE_CHECKLIST.md`) |
 

@@ -235,3 +235,14 @@ if __name__ == "__main__":
     print("세 번째(사내 수정 후):", out["stopped"]["reason"],
           [i["path"] for i in out["stopped"]["locally_modified"]])
     print("import_draft 재반입 시험 통과")
+
+
+def test_first_import_collision_message(tmp_path):
+    """R-30: 첫 반입 충돌은 '기준선 이후 사내에서 고친' 문구가 아니라 첫 반입 문구로 멈춘다."""
+    source, dest = _dirs(tmp_path)
+    _write(source, "README.md", "draft readme\n")
+    _write(dest, "README.md", "readme created by the hosting site\n")
+    result = subprocess.run([sys.executable, str(TOOL), str(source), "--dest", str(dest)],
+                            capture_output=True, text=True, encoding="utf-8", errors="replace")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "첫 반입" in result.stderr and "기준선 이후" not in result.stderr

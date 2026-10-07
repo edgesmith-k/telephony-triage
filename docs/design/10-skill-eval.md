@@ -127,4 +127,4 @@ skill-creator 스킬을 실행하고 아래를 입력으로 준다.
 53. "데이터가 안 붙는 증상, 예전에 이런 이슈 있었어? 있으면 지라 번호 알려줘"(증상만, 로그·키 없음) → analyze가 아니라 search 흐름: 문장을 그대로 `db_search.py`에 넘기고 `triage.py`·파서·lock 없이, 이슈 번호 줄(MOCK-1101~1104)과 유형 > 원인 표(해결책·수정 상태)를 보인다. 지어낸 번호가 없다
 54. "/telephony-triage:search eSIM 다운로드가 안 돼, 이런 이슈 있었어? 번호 알려줘" → 일치 없음. 번호를 지어내지 않고 다른 검색어를 제안하며, 다시 검색하면 쓴 단어를 밝히고 같은 이슈라고 하지 않는다. 분석·lock 없음
 
-- 완료 기준: 트리거 테스트 전 항목, eval 54개(46~52는 10/04~05 기능 추가분, 53·54는 S6 증상 검색) 통과. SKILL.md 본체 500줄 이내, 흐름별 reference 분리("SKILL 구성"). 결과물은 플러그인 `skills/telephony-triage/`에 둔다. `analyze`, `record`, `validate --cause`, `verify-fix`, `fix-submitted` 커맨드가 스킬과 연결되어 동작한다.
+- 완료 기준: 트리거 테스트 전 항목, eval `evals.json` 전체(46~52는 10/04~05 기능 추가분, 53·54는 S6 증상 검색) 통과. SKILL.md 본체 500줄 이내, 흐름별 reference 분리("SKILL 구성"). 결과물은 플러그인 `skills/telephony-triage/`에 둔다. `analyze`, `record`, `validate --cause`, `verify-fix`, `fix-submitted` 커맨드가 스킬과 연결되어 동작한다.

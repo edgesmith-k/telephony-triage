@@ -7,8 +7,10 @@
 순서: analyze(Step 0~8) → 공통 쓰기 절차 → record → validate → fix-submitted → verify-fix → sync-pr (이슈가 처음 분류되고(분석 또는 수동 기록), 수정되고, 검증되고, 머지 전 재동기화되는 순서).
 
 ```
-/telephony-triage:analyze ABC-12345 ./logcat_radio.txt ./logcat_main.txt [--code android16-main] [--dry-run] [--jira-file <yaml>] [--more-logs <logcat...>] [--analyzer | --no-analyzer]
+/telephony-triage:analyze ABC-12345 ./logcat_radio.txt
 ```
+
+옵션 전체는 `09-commands.md`.
 
 모든 스크립트는 `${CLAUDE_PLUGIN_ROOT}/scripts/`로 호출하고, 결과는 `--json`으로 받는다. `--db`는 `contracts.md §3.2`의 명시 규칙을 따른다: 읽기는 `<work_dir>/_snapshot`, 쓰기는 `<wt>`.
 

@@ -230,3 +230,37 @@ def test_analysis_schema_is_plugin_owned_not_a_db_copy():
     kinds = schema["$defs"]["needs_input"]["properties"]["needs_input"]["properties"]["kind"]["enum"]
     contracts = (REPO / "docs" / "design" / "contracts.md").read_text(encoding="utf-8")
     assert "(kind: " + "·".join(f"`{k}`" for k in kinds) + ";" in contracts
+
+
+def test_contracts_table_lists_every_subcommand():
+    """R-29: contracts.md §3.2 표가 argparse의 모든 서브커맨드(leaf)를 담는다."""
+    sys.path.insert(0, str(REPO / "tools"))
+    import gen_contracts
+    text = (REPO / "docs" / "design" / "contracts.md").read_text(encoding="utf-8")
+    table = text.split("### 스크립트별 출력·동작", 1)[1].split("\n## 종료 코드", 1)[0]
+    listed: dict[str, set[str]] = {}
+    script = ""
+    for line in table.splitlines():
+        cells = [c.strip() for c in line.strip().strip("|").split("|")] if line.startswith("|") else []
+        if len(cells) < 2:
+            continue
+        m = re.fullmatch(r"`(\w+)\.py`", cells[0])
+        script = m.group(1) if m else script
+        listed.setdefault(script, set()).update(re.findall(r"`([^`]+)`", cells[1]))
+    missing = {}
+    for name, parser in gen_contracts._load_parsers().items():
+        if parser is None:
+            continue
+        lost = sorted(leaf for leaf, _ in gen_contracts._leaves(parser) if leaf and leaf not in listed.get(name, set()))
+        if lost:
+            missing[name] = lost
+    assert not missing, missing
+
+
+def test_analyzer_when_values_match_code():
+    """R-27: analyzers.<category>.when 값은 코드·스킬과 같은 ask | always | never 이다."""
+    docs = REPO / "docs" / "design"
+    for path in (docs / "contracts.md", docs / "16-existing-assets.md", PLUGIN / "site-defaults.example.yaml"):
+        text = path.read_text(encoding="utf-8")
+        assert "after_match" not in text and "always_for_category" not in text, path.name
+    assert "`when: ask | always | never`" in (docs / "contracts.md").read_text(encoding="utf-8")
