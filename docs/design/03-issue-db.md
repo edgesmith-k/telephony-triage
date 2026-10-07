@@ -56,7 +56,6 @@ IMS
 telephony-issue-db/
 ├── README.md                          # [생성] 전체 인덱스 (5.6)
 ├── STATS.md                           # [생성] 통계 (06-collaboration.md §6.7)
-├── .cache/compiled.json               # [로컬 생성] 매칭 캐시 (06-collaboration.md §6.8) — .gitignore, 커밋 안 함
 ├── .gitignore                         # .cache/
 ├── .gitattributes                     # * text=auto eol=lf (생성 결과 결정성, 아래)
 ├── .githooks/pre-commit               # git pre-commit hook (06-collaboration.md §6.3) — 메인테이너 소유

@@ -213,7 +213,6 @@ def _setup_read_steps(env: Env, clone: Path) -> dict:
     hooks = env.json("config.py", ["install-hooks"])
     env.json("db_pr.py", ["lock", "acquire", "setup", "--command", "setup"])
     snap = env.json("db_pr.py", ["snapshot", "--job", "setup"])
-    env.json("db_build.py", ["--cache-only", "--db", snap["snapshot"]])
     # 7. 쓰기가 막히는 조건이면 종료 코드 2(읽기 전용)이고 setup은 계속한다
     proc = env.run("config.py", ["check", "--db", snap["snapshot"], "--for", "dry-run"])
     assert proc.returncode in (0, 2), proc.stderr
@@ -232,7 +231,6 @@ def test_setup_with_gh_unauth_finishes_read_setup():
     assert steps["hooks"]["core.hooksPath"] == ".githooks"
     assert git(clone, "config", "--get", "core.hooksPath").strip() == ".githooks"
     snap = Path(steps["snapshot"]["snapshot"])
-    assert (snap / ".cache/compiled.json").is_file()
     assert steps["check"]["writable"] is True and steps["check"]["push_allowed"] is False  # dry-run
     assert steps["check"]["gh"]["checked"] is False
 
@@ -247,7 +245,7 @@ def test_setup_with_gh_unauth_finishes_read_setup():
     ok = env.json("config.py", ["check", "--db", snap, "--for", "write"])
     assert ok["push_allowed"] is True
 
-    # 사용자 clone의 브랜치·워킹 트리·HEAD가 그대로다 (캐시는 스냅샷에만)
+    # 사용자 clone의 브랜치·워킹 트리·HEAD가 그대로다
     after = (git(clone, "rev-parse", "--abbrev-ref", "HEAD"), git(clone, "status", "--porcelain"),
              git(clone, "rev-parse", "HEAD"))
     assert after == before and not (clone / ".cache").exists()

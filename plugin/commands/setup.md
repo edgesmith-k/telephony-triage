@@ -1,5 +1,5 @@
 ---
-description: telephony-triage 사용자 설정 — config 생성, Jira MCP 도구 확인, 이슈 DB hook·읽기 스냅샷·캐시, gh 인증 확인
+description: telephony-triage 사용자 설정 — config 생성, Jira MCP 도구 확인, 이슈 DB hook·읽기 스냅샷, gh 인증 확인
 ---
 
 telephony-triage를 이 사용자 환경에 맞게 설정한다 (`02-config.md §4` setup 1~10).
@@ -27,8 +27,8 @@ telephony-triage를 이 사용자 환경에 맞게 설정한다 (`02-config.md �
    - `config.py set-jira --server <s> --get-issue <전체 이름> [--search-issues ..] [--get-comments ..] --read-tools <a,b,..>`.
      도구 이름은 항상 **전체 이름**(`mcp__<server>__<tool>`)이다. `jira.tools` 값은 `read_tools`에 자동으로 들어간다.
 5. **git hook** — `config.py install-hooks`. 값이 정확히 `.githooks`가 아니면 실패한다(그대로 보고한다).
-6. **읽기 스냅샷과 캐시** — `db_pr.py lock acquire setup --command setup`
-   → `db_pr.py snapshot --job setup` → `db_build.py --cache-only --db <work_dir>/_snapshot`.
+6. **읽기 스냅샷** — `db_pr.py lock acquire setup --command setup`
+   → `db_pr.py snapshot --job setup`.
    - `lock acquire`가 종료 코드 2면 보유자(`holder`)를 보여주고 그 세션이 끝났는지 묻는다. 끝났으면
      `db_pr.py lock release <보유자 작업 키> --force` 후 다시 잡는다. 같은 작업 키(`setup`)가 10분 이내에
      갱신됐다면 사용자 확인 후 `--take-over`로 이어받는다.

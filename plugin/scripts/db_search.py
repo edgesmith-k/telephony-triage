@@ -47,7 +47,7 @@ from pathlib import Path
 SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS))
 
-from common import dbpath, glossary, history, issuedb, quality, site_defaults, typedoc, userconfig, yamlio  # noqa: E402
+from common import dbpath, glossary, history, issuedb, md, quality, site_defaults, typedoc, userconfig, yamlio  # noqa: E402
 from common.exitcodes import OK, USAGE  # noqa: E402
 from common.fixtures import CAUSE_ID_RE, TYPE_ID_RE  # noqa: E402
 
@@ -399,29 +399,12 @@ def brief(result: dict) -> dict:
             "results": [slim(e) for e in result["results"]]}
 
 
-def _line(value) -> str:
-    return " ".join(str("" if value is None else value).split())
-
-
-def _cell(value) -> str:
-    return _line(value).replace("\\", "\\\\").replace("|", "\\|")
-
-
-def _builds(fixed_in) -> list[str]:
-    out = []
-    for item in fixed_in or []:
-        value = (item.get("build") or item.get("branch")) if isinstance(item, dict) else item
-        if value and str(value) not in out:
-            out.append(str(value))
-    return out
-
-
 def render_markdown(result: dict) -> str:
     """`search.md §3` 보여주기 규칙: 이슈 번호 줄 → 표(결과 순서 그대로, Jira 항목도 같은 표) → 연관·다른 카테고리 → 옛 ID 연결
     → 꼬리 문장. 문구가 `search.md`에 없는 값은 원값(`current`, `phrase` 등)을 그대로 보인다."""
     kind, terms = result.get("kind"), result.get("terms")
     words = [t["term"] for t in terms or []]
-    head = f'검색: "{_line(result["query"])}" ({kind}' + (f", 단어: {', '.join(words)}" if words else "") + ")"
+    head = f'검색: "{md.line(result["query"])}" ({kind}' + (f", 단어: {', '.join(words)}" if words else "") + ")"
     entries = result.get("results") or []
     out = [head, ""]
     if not entries:
@@ -448,7 +431,7 @@ def render_markdown(result: dict) -> str:
             state = "미검증" if rv in (None, "unverified") else str(rv)
             res = f"{e.get('resolution') or '—'} ({state})"
             fix = e.get("fix") or {}
-            builds = _builds(fix.get("fixed_in"))
+            builds = md.fixed_in_builds(fix.get("fixed_in"))
             status = f"{fix.get('status')}" + (f" (fixed_in {', '.join(builds)})" if builds else "")
             recent = f"{e.get('jira_latest') or '—'} ({e.get('jira_count', 0)}건)"
         elif e["kind"] == "type":
@@ -463,7 +446,7 @@ def render_markdown(result: dict) -> str:
             hit = ", ".join(e["matched"]) + (" (phrase: true)" if e.get("phrase") else "")
             if not e.get("phrase") and len(e["matched"]) < len(words):
                 hit += " (부분 일치)"
-        out.append(f"| {_cell(name)} | {_cell(res)} | {_cell(status)} | {_cell(recent)} | {_cell(hit)} |")
+        out.append(f"| {md.cell(name)} | {md.cell(res)} | {md.cell(status)} | {md.cell(recent)} | {md.cell(hit)} |")
     if entries:
         out.append("")
     for e in groups:

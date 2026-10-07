@@ -41,7 +41,7 @@
 
 > 같은 입력의 분석 결과만 보고 싶고 이슈 DB에 기록할 생각이 없을 때(`triage.py run --analysis-only`, `--dry-run`과 함께 못 쓴다 → 종료 코드 2). 분석(Step 1~6의 결정적 부분·재사용)은 보통 analyze와 같고, **기록하는 흐름의 사전 질문·부작용만 건너뛴다**.
 
-- **그대로 한다**: 키 검사, lock 획득(스냅샷을 옮기므로), 스냅샷·사후 lint·캐시, 호환성(`--for dry-run`), Jira 읽기(`--jira-file`은 `--dry-run` 없이도 받는다), 로그·코드·Step 3~5, 입력 재사용.
+- **그대로 한다**: 키 검사, lock 획득(스냅샷을 옮기므로), 스냅샷·사후 lint, 호환성(`--for dry-run`), Jira 읽기(`--jira-file`은 `--dry-run` 없이도 받는다), 로그·코드·Step 3~5, 입력 재사용.
 - **건너뛴다**: `db_pr cleanup`(dry-run·yes·질문 모두), 기존 `plan.json` 질문과 pending 피드백 삭제(있는지만 `plan{exists, source, pr_number}`로 알리고 파일은 건드리지 않는다), 열린 PR 확인(`db_pr preflight`·gh 없음, 리포트는 "확인 안 함"이며 "없음"이 아니다), 재분석 질문(`existing`은 알리기만).
 - **끝**: Step 6 리포트까지만 하고 **Step 7(분류 확정)·Step 8로 가지 않는다**. ok로 끝나면 `triage.py`가 lock을 풀고(`lock_released: true`, 붙여넣은 스텝 원문 `steps-pasted.txt`도 지운다) 리포트 첫 줄에 "분석 전용: 이슈 DB에 기록하지 않는다…"를 둔다. 기록하려면 `--analysis-only` 없이 다시 실행한다(mode는 입력 해시에 없으므로 core는 재사용되고 건너뛴 사전 질문이 그때 나온다). needs_input에서는 lock을 유지한다(재실행은 멱등). 붙여넣은 스텝은 lock과 함께 지워지므로, 이어서 기록 실행을 할 때는 `--steps-file`을 다시 써야 한다(안 쓰면 입력 `args`가 바뀌어 core를 다시 계산한다).
 
@@ -83,11 +83,10 @@ git -C <issue_db.path> pull --ff-only
 ```
 
 - **사용자 clone에서 `checkout`하지 않는다.** 현재 브랜치가 base가 아니거나 dirty하면 pull을 건너뛰고 그 사실만 알린다. ff-only가 실패하면 자동으로 해결하지 않고 보고한다.
-- 분석(Step 3~7), 사후 lint, 캐시, `parse_logcat --rules`, 매처, `db_search`, setup의 `--cache-only`는 모두 **스냅샷**(`--db <work_dir>/_snapshot`)을 읽는다. 로컬 main이 오래됐어도 결과가 최신 origin 기준이 된다.
-- 스냅샷은 읽기 전용이다. 쓰는 것은 `.cache/`뿐이고, 커밋하지 않는다.
+- 분석(Step 3~7), 사후 lint, `parse_logcat --rules`, 매처, `db_search`는 모두 **스냅샷**(`--db <work_dir>/_snapshot`)을 읽는다. 로컬 main이 오래됐어도 결과가 최신 origin 기준이 된다.
+- 스냅샷은 읽기 전용이다.
 - `snapshot` 결과의 `previous_sha`·`base_sha_changed`로 이전 스냅샷 대비 base 변경 여부를 알 수 있다(`sync`가 한 줄로 보인다). 시각은 `<work_dir>/snapshot.json`에 남아 `config.py doctor`가 스냅샷 나이를 본다(`contracts.md §3.2`).
 - 최신화 직후 **사후 lint**(`06-collaboration.md §6.3` ⑤): `db_lint --all --db <work_dir>/_snapshot`. 문제가 있으면 보여주고, 메인테이너 정리가 필요하다고 알린다(v1은 도구가 정리 PR을 만들지 않는다). 분석은 계속한다.
-- 캐시가 스냅샷과 다르면 `db_build --cache-only --db <work_dir>/_snapshot`으로 다시 만든다.
 - **작업이 끝나면 lock을 푼다**: Step 8의 `db_pr discard`가 풀고, discard 없이 끝나면(`--analysis-only`는 `triage.py`가 ok에서 자동으로 풀고, 읽기 전용 모드의 계획 저장 후 종료, Step 7에서 계획만 저장하고 끝냄, 사용자가 중간에 그만둠) `db_pr lock release <JIRA-KEY>`를 호출한다.
 
 ### Step 2. Jira 읽기 (읽기 전용)

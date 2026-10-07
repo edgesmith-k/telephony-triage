@@ -5,7 +5,7 @@
     db_pr.py lock acquire <작업 키> [--command <이름>] [--take-over]
     db_pr.py lock release <작업 키> [--force]
     db_pr.py snapshot --job <작업 키>
-    db_pr.py my-prs                           (읽기 전용: 내 열린 PR과 base 이동 여부, sync 6번)
+    db_pr.py my-prs                           (읽기 전용: 내 열린 PR과 base 이동 여부, sync 5번)
     db_pr.py cleanup (--dry-run | --yes) [--older-than [<days>]]
     db_pr.py preflight --branch <br> [--search <원인 ID|JIRA-KEY>] [--jira <KEY>]
     db_pr.py stage <plan.json> --wt <dir> --branch <br> [--dry-run] [--verbose | --then-summary]

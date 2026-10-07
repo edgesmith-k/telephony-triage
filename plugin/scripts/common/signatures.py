@@ -1,7 +1,6 @@
 """시그니처 컴파일과 평가 (04-parser-matching.md §5.11 (1)).
 
-컴파일 (`compile_signature`) — 매처는 메모리 컴파일로 동작한다. 파일 캐시
-(`.cache/compiled.json`)는 Phase 5의 `db_build --cache-only`가 이 함수를 공유한다.
+컴파일 (`compile_signature`) — 매처는 메모리 컴파일로 동작한다 (파일 캐시 없음, 06-collaboration.md §6.8).
 
 의미
 - `must_match: [p]` — AND. 줄 레코드(`event: null`)의 `"TAG: msg"`에 `search`.

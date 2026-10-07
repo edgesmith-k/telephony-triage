@@ -13,7 +13,7 @@ Claude Code에 telephony-triage 플러그인을 설치한다. 설치 방법은 �
 - `~/.telephony-triage/config.yaml` 생성 (GHE 아이디, 이슈 DB clone 경로·원격·GHE 호스트, Jira MCP 서버와 읽기 도구, 타임존, 작업 디렉토리)
 - 이슈 DB clone이 없으면 `git clone` 제안
 - 이슈 DB 레포에 pre-commit hook 설치 (`git config core.hooksPath .githooks`)
-- 읽기 스냅샷과 매칭 캐시 생성
+- 읽기 스냅샷 생성
 - `gh auth status` 확인 — **로그인이 없으면 읽기 전용이다.** 아래 3번 연습은 그대로 할 수 있다.
 
 ## 3. 연습 (`--dry-run`)

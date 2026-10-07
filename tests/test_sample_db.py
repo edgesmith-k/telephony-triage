@@ -106,6 +106,30 @@ def test_plan_signature_rejects_incomplete_named_patterns():
         assert list(validator.iter_errors(plan)), condition
 
 
+def _resolved_defs(name: str) -> dict:
+    """`$defs`의 `#/$defs/x` 참조를 재귀로 풀고 `$comment`·`description`을 뺀다."""
+    defs = json.loads((REPO / "plugin" / "schemas" / name).read_text(encoding="utf-8"))["$defs"]
+
+    def resolve(node):
+        if isinstance(node, list):
+            return [resolve(v) for v in node]
+        if not isinstance(node, dict):
+            return node
+        if str(node.get("$ref", "")).startswith("#/$defs/"):
+            return resolve(defs[node["$ref"].removeprefix("#/$defs/")])
+        return {k: resolve(v) for k, v in node.items() if k not in ("$comment", "description")}
+
+    return {k: resolve(v) for k, v in defs.items()}
+
+
+def test_plan_defs_match_type_defs():
+    """R-34: plan·type 스키마가 같은 이름으로 둔 `$defs`는 내용도 같다 (주석만으로 보장하지 않는다)."""
+    plan, itype = _resolved_defs("plan.schema.json"), _resolved_defs("type.schema.json")
+    shared = sorted(set(plan) & set(itype))
+    assert shared, "공통 $defs가 없다 — 키 이름이 바뀌어 검사가 0건이 됐다"
+    assert [k for k in shared if plan[k] != itype[k]] == []
+
+
 def _normalize(value):
     """YAML이 날짜로 읽은 값을 ISO 문자열로 되돌린다.
 

@@ -54,7 +54,7 @@ def _match_slots(sym_phone: int, cause_phone: int, *, regress=False, same_phone=
               for i, (name, phone) in enumerate((("sym", sym_phone), ("cause", cause_phone)))]
     doc = {"masked": True, "events": events,
            "coverage": {"first_ts": events[0]["ts"], "last_ts": "2026-09-20T05:31:00.000Z"}}
-    result = match_signatures.match(doc, db, compiled.compile_signatures(db, None), regress=regress)
+    result = match_signatures.match(doc, db, compiled.compile_signatures(db), regress=regress)
     assert not result["errors"]
     return result
 

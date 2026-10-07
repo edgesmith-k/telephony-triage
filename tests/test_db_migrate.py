@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Phase 9 완료 기준 확인: 스키마 마이그레이션 `db_migrate.py` (11-phases.md Phase 9).
 
-- 예시 마이그레이션(`scripts/migrations/0001_example_jira_tags.py`)이 샘플 이슈 DB를 v2로 올린다
+- 예시 마이그레이션(fixture `tests/fixtures/migrations/0001_example_jira_tags.py`, 임시 루트의 `scripts/migrations/`로 복사)이 샘플 이슈 DB를 v2로 올린다
 - `migrate/schema-v<N>` 브랜치에서 `migrate --to <N>` 뒤 `config.py check`·pre-commit·validate가 버전 불일치로 막히지 않고 통과한다
 - 다른 브랜치 이름에서는 `--to`가 종료 코드 2이고 버전 불일치는 그대로 막힌다
 - `db_add apply`는 옛 `schema_version` 계획을 거부하고, `upgrade-plan`으로 올린 계획을 `sync-pr`가 새 스키마에 재적용한다
@@ -71,6 +71,14 @@ def plan_v1() -> dict:
 
 
 # -- 예시 마이그레이션 ------------------------------------------------------------------------
+
+
+def test_shipped_plugin_has_no_migrations():
+    """R-32: 예시는 테스트 fixture다. 배포 디렉터리에 두면 사내 첫 실제 v1→v2와 `FROM_VERSION`이 겹쳐 migrate가 멈춘다."""
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    import db_migrate
+
+    assert db_migrate.MIGRATIONS_DIR.is_dir() and db_migrate.load_migrations() == {}
 
 
 def test_example_migration_upgrades_sample():

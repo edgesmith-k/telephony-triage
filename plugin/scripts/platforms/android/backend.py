@@ -4,7 +4,7 @@
 없다. site 백엔드는 이 클래스를 상속해 `detect()`만 구현하면 공통 처리를 그대로
 재사용한다.
 
-구현 위치는 `platforms/android/backend.py`이고 옛 경로 `parser_backends/reference`는 shim이다.
+구현 위치는 `platforms/android/backend.py`이고 `parser_backends/reference`는 BACKEND만 다시 내보낸다.
 """
 
 from __future__ import annotations

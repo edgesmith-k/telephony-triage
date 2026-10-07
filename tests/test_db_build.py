@@ -3,9 +3,9 @@
 
 - 샘플 README가 03-issue-db.md §5.6 구조, 6개 카테고리 모두
 - 0건 카테고리: `issue-db-empty-category/`, `make_db_skeleton.py` 결과
-- 두 번 실행하면 바이트 단위로 같음, `--preview`·`--cache-only`는 워킹 트리를 바꾸지 않음
+- 두 번 실행하면 바이트 단위로 같음, `--preview`는 워킹 트리를 바꾸지 않음
 - `--verify`(워킹 트리·`--staged`), `generator_version` 불일치
-- 캐시 해시가 다르면 매처가 재컴파일
+- 매처는 낡은 `.cache/compiled.json`이 있어도 이슈 DB에서 컴파일한다(파일 캐시 없음)
 - STATS: `decision: manual` 제외, `occurred_on`이 오래된 Jira는 최근 30일·급증에 들어가지 않음
 
 `pytest tests/test_db_build.py`로도, 그냥 실행해도 돈다.
@@ -117,13 +117,11 @@ def test_write_is_deterministic_and_verify():
     assert run("db_build.py", ["--db", db, "--verify", "--staged"]).returncode == 0
 
 
-def test_preview_and_cache_only_leave_worktree_alone():
+def test_preview_leaves_worktree_alone():
     db = git_db()
     before = git(db, "status", "--porcelain")
     _preview(db)
-    result = run_json("db_build.py", ["--db", db, "--cache-only"])
-    assert Path(result["cache"]).is_file()
-    assert git(db, "status", "--porcelain") == before == ""  # .cache/는 .gitignore
+    assert git(db, "status", "--porcelain") == before == ""
     assert not (db / "README.md").exists()
 
 
@@ -143,27 +141,44 @@ def _events_file() -> Path:
     return path
 
 
-def test_matcher_uses_cache_and_recompiles_when_hash_differs():
+def _stale_cache(db: Path) -> None:
+    """옛 형식(V6까지 `db_build --cache-only`가 쓰던) `.cache/compiled.json`. 해시는 현재 소스·환경과 맞추고
+    DATA-001-01 시그니처만 절대 맞지 않는 패턴으로 바꿔 둔다 — 캐시를 믿는 매처라면 판정이 바뀐다."""
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    import yaml
+    from common import compiled, issuedb
+
+    loaded = issuedb.load(db)
+    defaults = yaml.safe_load((runner.plugin_root() / "site-defaults.yaml").read_text(encoding="utf-8"))
+    signatures = {}
+    for itype in loaded.types:
+        if itype.active:
+            signatures[itype.id] = list(itype.raw.get("symptom_signatures") or [])
+            signatures.update({c.id: list(c.raw.get("signatures") or []) for c in itype.causes
+                               if c.active and not c.pending})
+    signatures["DATA-001-01"] = [{"id": "never", "must_match": ["NO_SUCH_TEXT"], "window_sec": 60}]
+    cache = {"format": 1, "hash": compiled.source_hash(db, loaded.config, compiled.environment(defaults)),
+             "signatures": signatures, "acceptance": {}}
+    (db / ".cache").mkdir()
+    (db / ".cache/compiled.json").write_text(json.dumps(cache), encoding="utf-8")
+
+
+def test_matcher_ignores_stale_cache_file():
+    """R-35: 파일 캐시는 없다. 해시가 맞는 낡은 캐시 파일이 있어도 판정은 이슈 DB 소스에서 나온다."""
     db = copy_db()
-    events = _events_file()
-    match = lambda: run_json("match_signatures.py", ["--db", db, "--events", events, "--regress", "--top", "0"])  # noqa: E731
-    assert match()["cache"] == "none"
-    run_json("db_build.py", ["--db", db, "--cache-only"])
-    hit = match()
-    assert hit["cache"] == "hit" and [c["cause"] for c in hit["causes"] if c["C"]] == ["DATA-001-01"]
+    _stale_cache(db)
+    out = run_json("match_signatures.py", ["--db", db, "--events", _events_file(), "--regress", "--top", "0"])
+    assert [c["cause"] for c in out["causes"] if c["C"]] == ["DATA-001-01"] and "cache" not in out
 
-    # 해시는 그대로 두고 캐시의 시그니처를 바꾸면 매처가 캐시를 쓴다는 것이 드러난다
-    cache_path = db / ".cache/compiled.json"
-    cache = json.loads(cache_path.read_text(encoding="utf-8"))
-    cache["signatures"]["DATA-001-01"] = [{"id": "never", "must_match": ["NO_SUCH_TEXT"], "window_sec": 60}]
-    cache_path.write_text(json.dumps(cache), encoding="utf-8")
-    tampered = match()
-    assert tampered["cache"] == "hit" and not any(c["C"] for c in tampered["causes"])
 
-    # 소스가 바뀌면 해시가 달라져 캐시를 버리고 메모리에서 다시 컴파일한다
-    edit(db / "data/DATA-001-no-setup-data-call/type.md", "title: Roaming disabled", "title: Roaming disabled (x)")
-    fresh = match()
-    assert fresh["cache"] == "miss" and [c["cause"] for c in fresh["causes"] if c["C"]] == ["DATA-001-01"]
+def test_md_code_span_keeps_backslash():
+    """R-34: 코드 스팬(정규식)은 `|`만 escape하고 `\\`·연속 공백을 그대로 둔다. 텍스트 셀은 `\\`도 escape하고 공백을 접는다."""
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    from common import md
+
+    assert md.code(r"a\d|b") == r"a\d\|b" and md.cell(r"a\d|b") == r"a\\d\|b"
+    assert md.code("a  b") == "a  b" and md.code(" x\ny ") == "x y"
+    assert md.cell(" a \n  b ") == "a b" and md.cell(None) == md.code(None) == ""
 
 
 def test_stats_excludes_manual_feedback():

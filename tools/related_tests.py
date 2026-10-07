@@ -278,6 +278,9 @@ def select(files: list[str]) -> Selection:
 
         if path.startswith(SCRIPTS + "/") and path.endswith(".py"):
             scripts_touched = True
+            if not (REPO / path).is_file():   # 삭제된 스크립트: import 그래프에 없어 importer를 알 수 없다
+                full(path, "삭제된 스크립트")
+                continue
             # __init__ 변경은 패키지 전체가 바뀐 것으로 본다.
             if name == "__init__.py":
                 pkg = module_name(path[len(SCRIPTS) + 1:])

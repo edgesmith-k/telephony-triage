@@ -206,10 +206,6 @@ class ListSection:
                                "엔티티 단위로 다시 쓸 수 없는 형식이다 (직접 편집으로 정리한다).")
         self.indent = item_indent(lines, self.items[0]) if self.items else 2
 
-    def item_text(self, index: int) -> str:
-        span = self.items[index]
-        return "".join(self.lines[span.start:span.end])
-
     def render(self, old: list, new: list, key_of, flow: bool = False) -> str:
         """`new` 목록을 블록 텍스트로. `key_of(item)`로 옛 항목을 찾아 값이 같으면 원래 텍스트를 쓴다.
 

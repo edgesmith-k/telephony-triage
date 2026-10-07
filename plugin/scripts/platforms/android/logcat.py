@@ -293,11 +293,3 @@ class PhoneIdRules:
 
 
 DEFAULT_PHONE_RULES = PhoneIdRules((TAG_PHONE_RE,), (MSG_PHONE_PREFIX_RE,), (MSG_PHONE_SUFFIX_RE,))
-
-
-def phone_id(tag: str, msg: str) -> int | None:
-    return DEFAULT_PHONE_RULES.phone_id(tag, msg)
-
-
-def strip_phone(msg: str) -> str:
-    return DEFAULT_PHONE_RULES.strip(msg)

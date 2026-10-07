@@ -1,7 +1,2 @@
-"""호환 shim — 실제 코드는 `platforms/android/backend.py` (RF-3, I2).
-사내 site 백엔드의 `from ..reference import ReferenceBackend`가 그대로 동작하도록 같은 모듈 객체를 등록한다."""
-import sys
-
-from platforms.android import backend as _impl
-
-sys.modules[__name__] = _impl
+"""reference 백엔드 — 구현은 `platforms/android/backend.py`. `parser.backend: reference`가 이 패키지의 BACKEND를 쓴다."""
+from platforms.android.backend import BACKEND, ReferenceBackend  # noqa: F401

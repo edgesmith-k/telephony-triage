@@ -160,7 +160,7 @@ v1에서 도구는 이런 브랜치를 바꾸지 않는다. `sync-pr`는 아래 
 ### 6.5 시그니처 품질 피드백
 
 - 모든 analyze와 record는 `03-issue-db.md §5.4 (3)` 피드백 기록을 남긴다. record는 `decision: manual`, `suggested: []`다. `suggested`는 `match_signatures.py` 출력 그대로(원인 ID, 전역 시그니처 키, 점수), `decision`과 `final`은 Step 7 결정에서 온다. 작업 계획의 `feedback`에 담겨서 Step 8에서 파일로 쓰인다.
-- `db_build.py`는 피드백을 집계해서 시그니처(전역 키)별 제안 횟수, 수락률, 1위 제안 정확도를 STATS.md와 `.cache/compiled.json`에 넣는다.
+- `db_build.py`는 피드백을 집계해서 시그니처(전역 키)별 제안 횟수, 수락률, 1위 제안 정확도를 STATS.md에 넣는다.
   - 수락률의 분모는 그 시그니처가 **1위로 제시된** 피드백만이다 (`04-parser-matching.md §5.11 (2)`). 이 "1위"는 스텝 기준 우선 유형 가산이 반영된 순위다(실패 스텝을 준 분석은 같은 로그라도 1위가 달라질 수 있다).
   - `decision: manual`(수동 기록) 피드백은 제시된 후보가 없으므로 수락률·1위 정확도 집계에서 **제외**한다. 분석 건수와 기여 현황에는 "수동 기록"으로 따로 센다.
   - 옛 ID → 새 ID 매핑은 `merged-into:` 체인과 사후 재배치 커밋의 `Renumbered:` 트레일러로 만든다. 머지 전 renumber는 main에 옛 ID가 없으므로 매핑이 필요 없다 (`contracts.md §renumber 참조`).
@@ -206,14 +206,13 @@ v1에서 도구는 이런 브랜치를 바꾸지 않는다. `sync-pr`는 아래 
 - 기여 현황: 월별 분석 건수(analyze / 수동 기록 구분), 기여자 수
 - 시그니처 없는 원인 수, fixture 없는 원인 수 (6.6 기준)
 
-### 6.8 매칭 성능 (컴파일 캐시)
+### 6.8 매칭 성능
 
-- `db_build.py`는 모든 시그니처, extractor, 원인 메타(`fix`, `related`, `status`, 수락률)를 `.cache/compiled.json` 하나로 컴파일하고, 소스 파일들의 해시와 **파서 백엔드·외부 파서 이름·버전**(`16-existing-assets.md §16.3`)을 함께 저장한다. 컴파일 함수는 `common/`에 있다. `--cache-only`는 캐시만 만들고 다른 파일은 건드리지 않는다.
-- analyze의 캐시는 읽기 스냅샷 `<work_dir>/_snapshot/.cache/`에 있다 (`07-workflow.md §Step 1`). 사용자 clone에는 만들지 않는다.
-- 매처는 캐시 해시가 현재 이슈 DB(`--db`)와 같으면 캐시를 쓰고, 다르면 메모리에서 다시 컴파일한다.
+- 매처는 매번 이슈 DB(`--db`, analyze는 스냅샷)에서 시그니처를 메모리로 컴파일한다. 컴파일 함수는 `common/compiled.py`에 있다. **파일 캐시는 두지 않는다**: 측정 결과 컴파일 캐시는 이득이 없었다(hit 판정 비용이 컴파일보다 크다). YAML 로드가 병목으로 측정되면 그때 DB 로드 전 캐시를 둔다.
+- 이슈 DB 소스 해시(소스 파일 + **파서 백엔드·외부 파서 이름·버전**, `16-existing-assets.md §16.3`)는 분석 재사용(`07-workflow.md` 입력 재사용)이 계속 쓴다.
 - 읽기 스냅샷은 세션 lock을 가진 작업만 옮긴다 (`db_pr snapshot --job <작업 키>`, `contracts.md §3.2` `db_pr.py` 세부). v1은 사용자별로 한 번에 한 작업이므로 분석 도중 다른 세션이 스냅샷을 옮기지 않는다. 읽기 전용 커맨드(`search`, `review`, `preview`)는 스냅샷을 옮기지 않고 읽기만 한다.
 - 유형 수백 개, fixture 수천 개 규모를 목표로 한다. 커밋 시(②)에는 변경된 유형과 그 `related`, 같은 카테고리의 fixture만 돌리고(parser-rules 변경이면 전체), push 직전(③)에 전체를 돌린다.
-- 캐시는 커밋하지 않는다 (`.gitignore`).
+- `.cache/`는 커밋하지 않는다 (`.gitignore`, guard 규칙 4·pre-commit이 막는다).
 
 ### 6.9 용어집과 온보딩
 

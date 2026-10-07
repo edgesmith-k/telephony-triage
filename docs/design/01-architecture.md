@@ -104,11 +104,11 @@ telephony-triage-plugin/                 # 개발 레포 루트
     │           ├── fail-causes.md       # DataFailCause, CallFailCause, 등록 reject cause
     │           └── log-tags.md          # 태그 해설 (실제 수집 목록은 이슈 DB parser-rules/tags.yaml)
     ├── scripts/                         # 3.1 매트릭스 참고
-    │   ├── common/                      # config 로드, 이슈 DB 로드, 스키마 검증, git 헬퍼, 로깅, 시그니처 컴파일, 마스킹 함수, `events.py`(파서 출력 이벤트 키 순서·`line_ref`·`validate_event`, 표준 라이브러리만), `yamlio.py`(YAML 읽기 단일 입구, libyaml `CSafeLoader` 있으면 사용), `glossary.py`(GLOSSARY.md 표 읽기: `table`, `search_aliases`)
+    │   ├── common/                      # config 로드, 이슈 DB 로드, 스키마 검증, git 헬퍼, 로깅, 시그니처 컴파일, 마스킹 함수, `events.py`(파서 출력 이벤트 키 순서·`line_ref`·`validate_event`, 표준 라이브러리만), `yamlio.py`(YAML 읽기 단일 입구, libyaml `CSafeLoader` 있으면 사용), `glossary.py`(GLOSSARY.md 표 읽기: `table`, `search_aliases`), `md.py`(마크다운 표 셀·코드 스팬 escape)
     │   ├── config.py
     │   ├── code_roots.py
     │   ├── parse_logcat.py
-    │   ├── parser_backends/             # base.py(인터페이스), reference/(공통 처리, 사외; 호환 shim → platforms/android/backend.py), site/(포팅한 기존 파서, 사내 전용 SITE_PATHS)
+    │   ├── parser_backends/             # base.py(인터페이스), reference/(공통 처리, 사외; platforms/android/backend.py의 BACKEND 재수출), site/(포팅한 기존 파서, 사내 전용 SITE_PATHS)
     │   ├── platforms/                   # `__init__.py`(`load`·`PlatformProfile`: site-defaults `platform:` 검증, RF-4), android/{logcat,ril,bugreport,backend}.py — Android 전용 코드(RF-3). 핵심(common·매처·db_*)은 플랫폼 무관
     │   ├── adapters/                    # Jira 응답 변환, 외부 파서 어댑터 (사내 것은 site_* , SITE_PATHS)
     │   ├── match_signatures.py
@@ -150,7 +150,7 @@ telephony-triage-plugin/                 # 개발 레포 루트
 
 | 스크립트 | 책임 (이것만 한다) | 호출자 |
 |---|---|---|
-| `common/` | config·이슈 DB 로드, 스키마 검증, git 헬퍼, 로깅, **시그니처·extractor 컴파일 함수**(매처와 `db_build --cache-only`가 공유), **마스킹 함수**(`mask_pii`와 `parse_logcat` 공유), **이벤트 레코드 `events.py`**(파서 출력 이벤트 키 순서·`line_ref`·`validate_event`, 표준 라이브러리만), **`yamlio.py`**(YAML 읽기 단일 입구, `CSafeLoader` 있으면 사용), `sanitize_build`, **검사 오케스트레이션 `checks.py`**(프로필 `stage`·`precommit`·`guard`의 단계 목록과 종료 코드 집계 `aggregate`. 하위 스크립트는 같은 프로세스에서 `main(argv)`로 부른다(`run_script`, 종료 코드·stdout JSON·stderr는 subprocess와 같고 `TT_SCRIPT_SUBPROCESS=1`이면 subprocess). top-level import는 stdlib와 `common.exitcodes`뿐이다: guard가 `site-defaults.yaml` 없이도 멈추지 않아야 한다) | 모든 스크립트 |
+| `common/` | config·이슈 DB 로드, 스키마 검증, git 헬퍼, 로깅, **시그니처·extractor 컴파일 함수**(매처·`db_regress`가 공유), **마스킹 함수**(`mask_pii`와 `parse_logcat` 공유), **이벤트 레코드 `events.py`**(파서 출력 이벤트 키 순서·`line_ref`·`validate_event`, 표준 라이브러리만), **`yamlio.py`**(YAML 읽기 단일 입구, `CSafeLoader` 있으면 사용), `sanitize_build`, **검사 오케스트레이션 `checks.py`**(프로필 `stage`·`precommit`·`guard`의 단계 목록과 종료 코드 집계 `aggregate`. 하위 스크립트는 같은 프로세스에서 `main(argv)`로 부른다(`run_script`, 종료 코드·stdout JSON·stderr는 subprocess와 같고 `TT_SCRIPT_SUBPROCESS=1`이면 subprocess). top-level import는 stdlib와 `common.exitcodes`뿐이다: guard가 `site-defaults.yaml` 없이도 멈추지 않아야 한다) | 모든 스크립트 |
 | `config.py` | 사용자 config 로드/검증/갱신, `site-defaults.yaml` 로드(없으면 종료 코드 2), 스키마·생성기·파서 백엔드·외부 파서 버전과 gh 인증 호환성 판정(`check --for write\|dry-run`, `migrate/schema-v<N>` 브랜치는 버전 불일치 예외), **`plugin.scripts_path` 갱신**(`sync-scripts-path`) | 모든 스크립트, setup, SessionStart hook |
 | `platforms/` | `__init__.py`의 `load(defaults)`·`PlatformProfile`(site-defaults `platform:` 검증, 소스 트리·슬롯 표기·RIL 태그·bugreport 섹션 상수, RF-4), `android/`(logcat·ril·bugreport·backend, RF-3) | `parse_logcat.py`, `code_roots.py` |
 | `code_roots.py` | 코드 경로 후보 정렬, 경로 검증, 트리 버전 추정, `<root 키>:` 경로 변환, symbol 검색 | analyze Step 2-1, Step 5 |
@@ -161,7 +161,7 @@ telephony-triage-plugin/                 # 개발 레포 루트
 | `db_search.py` | 이슈 DB 검색 (secondary/related, 옛 ID → 새 ID 연결, 증상 문장 단어별 검색·`## 검색 별칭`·순위) | `search`, `record` 대화형 모드, Phase 11 테스트 |
 | `db_add.py` | 작업 계획(`plan.json`) 적용(`source`별 op 허용 규칙, `schema_version` 검사 포함), **drift 검사**(`drift`), ID·fixture 번호 할당, 브랜치 안 renumber("내 ID"만)·check-ids, 템플릿 생성, 유사 유형 검사 | `db_pr stage`, `db_verify rules --draft`, analyze Step 7·`record` (`similar`) |
 | `db_pr.py` | **이슈 DB 쓰기 오케스트레이션**: 세션 lock(`lock`), 읽기 스냅샷, 잔여 worktree·도구 브랜치(`tt/*`) 정리, 사전 점검(브랜치·열린 PR·Jira 중복), worktree 준비 + drift 검사 + apply + 검사(`stage`), 확인 화면 데이터(`summary`, 조립은 `db_summary.py`), 커밋 + lease push + PR(`publish --commit`), 정리(`discard`, `publish --and-discard`), 작업 상태 파일(`state.json`) | analyze Step 0·1·8, `record`, `sync`, `sync-pr`, `verify-fix`, `validate --cause`, `fix-submitted`, import/review/move 계획 PR |
-| `db_build.py` | 생성 파일(README, 카테고리 README, STATS, CHANGELOG)과 로컬 캐시 생성, 정합성 검증 | `db_pr stage`, `preview`, setup, `db_pr snapshot` 이후 캐시 갱신, `db_precommit`, guard hook 4번 |
+| `db_build.py` | 생성 파일(README, 카테고리 README, STATS, CHANGELOG) 생성, 정합성 검증 | `db_pr stage`, `preview`, `db_precommit`, guard hook 4번 |
 | `db_lint.py` | 정적 검사: 스키마, ID 형식·중복, Jira 중복, 작성 규칙, 용어집, related·code_refs 형식, `fix.ref` 형식(`fix_ref_regex`), 카테고리 목록, fixture 파일명, 시그니처·extractor·`jira/*.yaml` `note`·원인 본문·`cp_evidence` 안의 원본 식별자 패턴, **정규식 안전**(중첩 수량자·무제한 역참조 거부, `04-parser-matching.md §5.8 (4)`), 시그니처 `sequence`의 id 존재·중복, `builtin.*`·`ext.*` 이벤트 참조, 옛 ID 잔존, `.expect.yaml`의 `also_allowed`(자기 원인·같은 유형 원인·없는 ID 금지), 검증 규칙(근거 없는 verified 금지: `verify-resolution`의 evidence 없이 verified 금지, evidence의 Jira 키·fixture 경로 존재), `synthetic_allowed: false`일 때 `origin: synthetic` 경고 | `db_pr stage`, `db_precommit`, Step 1 사후 lint, CI |
 | `db_regress.py` | fixture 회귀: 파서 + 마스킹 + 매처로 기대 결과 확인 (회귀·검증 모드), 파서 규칙 변경 전/후 이벤트 diff | `db_pr stage`, `db_precommit`, `db_verify`, CI |
 | `db_verify.py` | `05-verification.md` 검증: `rules`(R1~R6), `resolution`(해결책 적용 후 로그 판정, 새 원인은 `--plan --draft`), `fix`(verify-fix 판정) | analyze Step 7(`--draft`), `db_pr stage`, `validate`, `record`(`--resolved-fixture`), `verify-fix`, `db_precommit`, CI |

@@ -269,7 +269,7 @@ def prepare(db: issuedb.IssueDb, defaults: dict) -> dict:
         raise UsageError("회귀를 돌릴 수 없습니다 (결과가 사람마다 달라진다): "
                          + "; ".join(m["message"] for m in mismatch))
     try:
-        return compiled_cache.compile_signatures(db, None)
+        return compiled_cache.compile_signatures(db)
     except SignatureError as exc:
         raise UsageError(f"시그니처 오류: {exc}") from exc
 

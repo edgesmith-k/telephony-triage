@@ -285,7 +285,8 @@ def test_phone_id_first_match_and_suffix_rules():
     assert rules.strip("hello <s3>") == "hello"
     assert rules.phone_id("T", "[PHONE1] a") == 1  # 기본 접두어 유지
     # 모듈 함수는 기본 규칙 그대로
-    assert logcat.phone_id("DNC-1", "m") == 1 and logcat.strip_phone("[SUB2] x [PHONE1]") == "x"
+    default = logcat.DEFAULT_PHONE_RULES
+    assert default.phone_id("DNC-1", "m") == 1 and default.strip("[SUB2] x [PHONE1]") == "x"
 
 
 # -- 5. 격리 ------------------------------------------------------------------------------

@@ -25,12 +25,10 @@
 `--jira-meta` (분석 모드, 선택): `{key, occurred_at, sw, summary, description, failed_step?}` (`failed_step`은 있을 때만, 키워드 보너스 입력).
 `occurred_at`은 타임존 있는 ISO 시각, 텍스트 필드는 마스킹된 것이어야 한다.
 
-컴파일: `<db>/.cache/compiled.json`(`db_build.py`가 만든다)의 해시가 현재 이슈 DB·파서
-백엔드·외부 파서와 같으면 캐시의 시그니처를 쓰고, 다르면 메모리에서 다시 컴파일한다
-(06-collaboration.md §6.8). 출력 `cache: hit|miss|none`.
+컴파일: 시그니처는 매번 `--db`에서 메모리로 컴파일한다 (06-collaboration.md §6.8).
 
 출력(JSON, stdout): `{mode, candidates[], pending_causes[], types[], causes[], errors[],
-warnings[], cache, ...}`. 후보 = `{type, cause, title, score, confidence, S, C, signature,
+warnings[], ...}`. 후보 = `{type, cause, title, score, confidence, S, C, signature,
 evidence[], bonus, feedback, fix_judgement, related[]}`. 근거 = `{signature, condition, ts, tag, msg, event, fields,
 phone_id, line_ref, event_index}` (`line_ref`: 이벤트의 로그 줄 위치 `{file_index, line_no}` 또는 null, `event_index`: 입력
 `events[]` 안의 순번 — 입력 문서 순서 기준이다. 점수·판정에는 쓰지 않는다, 04-parser-matching.md §5.8 (6)). 원인 미확인 후보는 `cause: null`.
@@ -286,17 +284,12 @@ def run(args) -> dict:
     jira = _load_json(args.jira_meta, "--jira-meta") if args.jira_meta else {}
     if not isinstance(jira, dict):
         raise UsageError("--jira-meta는 JSON 객체여야 합니다.")
-    cache, cache_status = compiled_cache.load(db, compiled_cache.environment(args.defaults))
     try:
-        compiled = compiled_cache.compile_signatures(db, cache)
+        compiled = compiled_cache.compile_signatures(db)
     except SignatureError as exc:
         raise UsageError(f"시그니처 오류: {exc}") from exc
-    acceptance = ({k: tuple(v) for k, v in cache["acceptance"].items()} if cache is not None
-                  else issuedb.acceptance(db.feedback))
-    result = match(events_doc, db, compiled, regress=bool(args.regress), jira=jira,
-                   no_feedback_weight=args.no_feedback_weight, top=args.top, acceptance=acceptance)
-    result["cache"] = cache_status
-    return result
+    return match(events_doc, db, compiled, regress=bool(args.regress), jira=jira,
+                 no_feedback_weight=args.no_feedback_weight, top=args.top)
 
 
 def _range(events_doc: dict, regress: bool):
