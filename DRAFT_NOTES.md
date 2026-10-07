@@ -16,7 +16,7 @@
 
 ## 진행 상태 (10/07)
 
-- 모드: **사외 초안**. Phase **D0, 1~13** 완료. 반입 전 보강 트랙(S1~S6·I1~I5·X·3C~3F)과 개선 트랙 **W0~W12**, 반입 전 리뷰(10/07) 수정 트랙 **V1~V7·V 끝** 완료, main 병합(PR #8·#9·#11~#19).
+- 모드: **사외 초안**. Phase **D0, 1~13** 완료. 반입 전 보강 트랙(S1~S6·I1~I5·X·3C~3F)과 개선 트랙 **W0~W12**, 반입 전 리뷰(10/07) 수정 트랙 **V1~V7·V 끝**, 실제 로그 반영 트랙 **L1~L3** 완료, main 병합(PR #8·#9·#11~#25).
 - 마지막 전체 테스트: 1086 통과(Windows, 환경 실패 4), `db_regress --all` 23/23 (10/07, L2).
 - 사내 확인 항목: `TODO(SITE)` **76곳** — `python3 tools/list_site_todos.py`. `REVIEW-OPEN.md` 0건.
 - 사내 S 단계 시작: `python3 tools/context_pack.py S-n`(표 `docs/tasks.md`).
@@ -26,10 +26,10 @@
 
 | ☐ | 항목 | 메모 |
 |---|---|---|
-| ☐ L | **실제 로그 반영 트랙 L1~L3** (10/07 사용자 승인: 샘플 DB 규칙·fixture 정정, 스냅샷 재생성, data on/off·APM 원인·유형 추가) | 자료는 **레포 밖** `%LOCALAPPDATA%/tt-ltrack/`(findings·plan·decisions·r-results·deny.txt — 벤더 문구 있음, 레포 금지). R1~R4 완료. 시작 문구 "**실제 로그 반영 진행**" — 진행 방식은 V와 같다(`REVIEW_FIX_PLAN_2026-10.md §1·§3`: Opus 계획 → Fable 결정 → 실행 → 교차 리뷰 → 테스트 → Fable 승인 → CI 통과 시 병합). **L3 완료**(`tools/s0_suggest.py`, 10/07, 리뷰 반영, 실제 로그로 원문 비노출·벤더 층 요청 커버 100% 확인). **L1 완료**(AOSP 형식 정정·DATA-002 APM, 10/07, 리뷰 반영·전체 테스트 통과; eval 40·44 재실행과 `log-tags.md` skill-creator eval은 대기). **L2 완료**(벤더 RIL 층 `platform.ril.vendor` → RIL 이벤트 필드 `hal`, `coverage_tags`, s0_suggest 초안 수용 테스트, 10/07, 리뷰 반영, 실제 로그에 s0_suggest 초안 설정 → 147/147 `responded`; `hal` 읽는 법·`coverage_tags`는 사용자 승인(10/07); `ril-requests.md` 문단은 관련 eval 없음 — skill-creator eval 미실행). 커밋 전마다 `git diff main... \| grep -iFf deny.txt` 0줄. DATA-002 이름·정의·새 extractor 2건·14-site §14.1 정정은 사용자 승인(10/07) |
-| ☐ G | **범용판 별도 레포** (10/07 사용자 지시) | L 트랙 끝난 뒤. **로컬 새 레포**(원격 없음), 범위 = 도메인 중립 코어(이슈 DB·시그니처 엔진·PR 흐름·안전장치, 카테고리·예약 이벤트는 설정으로) + 동작 확인용 최소 예제 팩 1개. 시작은 결합 지점 조사(`plugin/scripts`에서 platforms 밖 Android·RIL 참조 약 30파일) → 분리 설계 확인 → 이전. 이 레포는 바꾸지 않는다 |
+| ✅ L | **실제 로그 반영 트랙 L1~L3 완료**(10/07, PR #23·#24·#25) | L1 AOSP 형식 정정·DATA-002 APM, L3 `tools/s0_suggest.py`, L2 벤더 RIL `hal`·`coverage_tags`. 사용자 승인: DATA-002·extractor 2·14-site §14.1, `hal` 읽는 법·`coverage_tags`. eval(Sonnet, 변경 전 864e7c4→후): 40·44·3·4 동작 동일, 토큰 W0 폭 안(eval 4 출력 −9.6% 경계, eval 3의 `--draft` 단언은 변경 전에도 불안정), `ril-requests.md`를 쓰는 eval 없음. 실행 비용 약 $5. 자료는 레포 밖 `%LOCALAPPDATA%/tt-ltrack/`(벤더 문구, 레포 금지) |
+| ☐ G | **범용판 별도 레포** (10/07 사용자 지시) — **보류(10/07 사용자)** | 재개 시점은 사용자가 정한다. **로컬 새 레포**(원격 없음), 범위 = 도메인 중립 코어(이슈 DB·시그니처 엔진·PR 흐름·안전장치, 카테고리·예약 이벤트는 설정으로) + 동작 확인용 최소 예제 팩 1개. 시작은 결합 지점 조사(`plugin/scripts`에서 platforms 밖 Android·RIL 참조 약 30파일) → 분리 설계 확인 → 이전. 이 레포는 바꾸지 않는다 |
 | ☐ Z | **반입 묶음** | 최신 main에서 **Ubuntu로** 먼저 `plugin.json` description에서 "사외 초안"을 빼는 커밋(도구가 첫 검사로 막는다) → `python3 tools/make_bundle.py --label <이름>`(정상 종료 3) → 사람 확인 3건(§15.4: 회사명 검색·TODO 목록·이 파일 최신) → 도구가 출력한 명령으로 사용자가 태그 push. Windows는 환경 실패로 자동 검사가 실패한다 |
-| ☐ R | **사용자 선택** — `12-principles.md` "사용자 clone 예외는 migrate뿐" vs renumber(06 §6.3) 어긋남: (a) 예외에 renumber 추가(추천) / (a') 원칙을 도구 자동 쓰기로 한정 / (b) 06 안내 수정. 코드 변경 없음(V6이 renumber에 브랜치·깨끗함 검사 추가) | 반입 직전 |
+| ✅ R | **(a) 선택(10/07 사용자)** — `12-principles.md` 사용자 clone 예외에 직접 편집 브랜치의 `db_add renumber` 추가. 코드 변경 없음(V6 검사 그대로) | 완료 |
 | ☐ 2 | **사용자 확인** — 10/04~05 작업(4a·R8·테스트 DB·검사 통합·4b·step_order·보안·R11·R9·RF-2, `CHANGES.md` 10/04~05 절) | 반입 직전에 한꺼번에 |
 
 반입 뒤 후보: RF-5(oFono)·RF-6(커넥터)·RF-8(자동화)은 사내 환경을 알아야 의미가 있다. RF-9·웹 UI(보류)는 그 뒤. 10/07 리뷰의 R-36~R-47·V 후속도 같은 색인 `docs/development/ARCHITECTURE_REVIEW_2026-10.md`.
