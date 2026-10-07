@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """`TODO(SITE:S<n>)` 목록을 뽑는다 (15-local-draft.md §15.4).
 
-반입 전 체크리스트에서 이 결과를 `DRAFT_NOTES.md`의 "사내 확인 목록"에
-S번호별로 묶어서 갱신한다. S번호는 `14-site.md §14.2` 레지스트리 번호다.
+결과는 사용자가 직접 본다. 상태 파일에는 개수만 적는다(목록은 문서에 두지 않는다,
+15-local-draft.md §15.4). S번호는 `14-site.md §14.2` 레지스트리 번호다.
 
 CLI:
     python3 tools/list_site_todos.py [--root <dir>] [--json | --markdown]

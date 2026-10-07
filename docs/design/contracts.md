@@ -23,11 +23,11 @@
 - 모든 스크립트는 `${CLAUDE_PLUGIN_ROOT}/scripts/<이름>.py`로 호출한다 (`01-architecture.md §3`).
 - 결과는 `--json`일 때 stdout에 JSON으로 낸다. 로그 원문은 출력하지 않는다.
 - 종료 코드는 §종료 코드 표를 따른다.
-- **`--db <path>` 기본값** (`guard.py`·`db_pr.py` 제외 전부. `db_pr.py`는 사용자 clone·스냅샷·작업 worktree를 동시에 다루는 오케스트레이터라 `--db`를 받지 않고 항상 config의 `issue_db.path`를 쓴다):
+- **`--db <path>` 기본값** (`--db`를 받는 스크립트·서브커맨드 — 목록은 `contracts-cli.md`. `db_pr.py`는 사용자 clone·스냅샷·작업 worktree를 동시에 다루는 오케스트레이터라 `--db`를 받지 않고 항상 config의 `issue_db.path`를 쓴다):
   1. `--db`를 주면 그 값.
   2. 생략했고 cwd가 이슈 DB 레포(또는 그 worktree) 안이면 `git rev-parse --show-toplevel`. 판별 기준은 toplevel에 `issue-db.config.yaml`이 있는지다.
   3. 그 밖에는 config의 `issue_db.path`.
-- **`--db` 위치**: 서브커맨드가 있는 스크립트(`db_verify`, `db_add`, `db_pr` 등)는 `--db`를 서브커맨드 앞뒤 어디에 줘도 된다(공통 부모 파서). 문서 예시는 서브커맨드 뒤에 쓴다.
+- **`--db` 위치**: 서브커맨드가 있는 스크립트(`db_verify`, `db_add` 등)는 `--db`를 서브커맨드 앞뒤 어디에 줘도 된다(공통 부모 파서). 문서 예시는 서브커맨드 뒤에 쓴다.
 - **명시 규칙**: 아래 호출은 기본값에 기대지 않고 항상 `--db`를 쓴다.
   - analyze·record 읽기(파서·매처·lint·캐시·검색·`config.py check`): `--db <work_dir>/_snapshot` (`07-workflow.md §Step 1`)
   - Step 8, `record`의 쓰기, `sync-pr`, `verify-fix`, `validate --cause`, `fix-submitted`, import/review/move 계획 PR: `--db <wt>` (작업 worktree)
@@ -54,7 +54,7 @@
 | | `install-hooks` | `git config core.hooksPath .githooks`, 값이 정확히 `.githooks`인지 확인 (setup 5) |
 | | `gh-status` | gh 인증 확인 (setup 9). 실패면 로그인 안내와 종료 코드 2 |
 | | `doctor` | 환경 점검 한 장(읽기 전용: mkdir·fetch·lock·쓰기 없음, 자동 수리 없음). `--format json`(기본, 들여쓰기 없음) `{rows: [{check, status, detail(≤80자), next?}], counts: {ok, warn, fail, skip}}`, `--format markdown`은 표 하나와 마지막 줄 카운트(`--json`과 함께 못 쓴다). 행 순서: `config`·`scripts_path`·`clone`·`hook`(`core.hooksPath`)·`jira`(`jira.mcp_server`·`jira.tools.get_issue` 매핑과 도구 이름 형식만, MCP 서버 등록은 보지 않는다)·`gh`(인증 없음은 `warn`: 쓰기만 막힌다)·`snapshot`(`<work_dir>/snapshot.json`의 `at` 기준 7일 초과면 `warn`, 파일 없음 `warn`(나이 불명), 손상 `fail`, 7일 초과는 시각 차(timedelta) 기준)·`compat`(`<work_dir>/_snapshot` 기준 `check --for dry-run`, 쓰기 불가면 `fail`)·`lock`(보유 중·만료 `warn`, 손상 `fail`). 행 단위로 예외를 흡수해 그 행을 `fail`로 두고(`jira.tools`가 매핑이 아니거나 `read_tools`가 목록이 아니면 `jira` 행 `fail` "형식 오류"), `work_dir`가 비어 있으면 `snapshot`·`lock`은 `skip`,  앞선 행(config·clone·스냅샷)이 실패해 점검할 수 없는 행은 `skip`(`ok`로 세지 않는다). 종료 코드는 §종료 코드 |
-| `code_roots.py` | `suggest` / `validate` / `resolve` / `find-symbol` | `validate`는 aosp에 `platform.source_tree.required_dirs`가 모두 있어야 한다(기본 `frameworks/opt/telephony`). 후보, 검증 결과, 경로 |
+| `code_roots.py` | `suggest` / `validate` / `resolve` / `find-symbol` / `remember` | `validate`는 aosp에 `platform.source_tree.required_dirs`가 모두 있어야 한다(기본 `frameworks/opt/telephony`). 후보, 검증 결과, 경로. `remember`는 사용한 코드 경로를 config `recent_code_roots`에 남긴다 |
 | `parse_logcat.py` | `parse` / `markers` | 이벤트 JSON (`07-workflow.md §Step 3`). 이벤트마다 `phone_id`(슬롯, 없으면 `null`)와 `line_ref`(`{file_index(입력 로그 목록의 0부터 순번), line_no(1부터, 외부 파서 이벤트는 null)}` 또는 `null`, 이벤트의 마지막 키, `04-parser-matching.md §5.8 (6)`). 머리에 `coverage: {first_ts, last_ts, window_in_range: true\|partial\|false, clock_anomalies: [{ts, kind: backward\|jump, delta_sec}]}`(`--full`이면 `window_in_range: true`). 최상위 `uncollected_tags: [{tag(마스킹, ≤40), lines, warn(W/E/F 줄 수)}]`(있을 때만, 상위 5개, `(W/E/F 수, 줄 수, 태그)` 내림차순): `tags.yaml`에 없어 줄 레코드로 남지 않고 버려진 줄을, **수집된 줄 레코드와 같은 pid**의 것만 `(태그, pid, 레벨)`로 센 관측 누락 힌트다(pid가 없는 줄은 건너뜀. 분류·점수에 쓰지 않음, `07-workflow.md §Step 3`). `--mask`면 **extractor 실행 전에** 각 줄(백엔드·외부 파서 이벤트의 `msg`·`fields` 포함)을 마스킹하고 `masked: true`, 아니면 `masked: false`. `--no-external`은 분석 모드 디버그용이다 (§기존 자산 연결 계약). `--between`은 명시 구간이다(타임존 있는 ISO 둘, 시작 ≤ 끝이 아니면 종료 코드 2, `input.mode: "between"`, `input.window`는 그 구간). **`markers <logcat...> --rules <db>/parser-rules [--tz] [--year] [--step-events]`**: 시험 자동화의 스텝 마커 줄을 모은다(`07-workflow.md §Step 3`). 마커 태그는 `tags.yaml`에 없으므로 `parse` 출력이 아니라 백엔드의 줄 레코드(`event: null`)에서 `TAG: msg` 전체를 `site-defaults.yaml`의 `failed_step.marker_patterns`(이름 그룹 `step`·`status`)로 찾는다(**사용자 config로 덮어쓸 수 없다**). 패턴은 `matcher.pattern_timeout_ms` 안에서 원문에 돌려 맞은 줄만 고르고, 그 줄만 마스킹한 뒤 마스킹된 텍스트에서 그룹을 다시 뽑는다(원문 값은 출력에 나가지 않는다). 출력 `{schema, markers: [{ts, step, status: start\|pass\|fail, tag, msg(≤200, 마스킹)}], total, truncated, coverage: {first_ts, last_ts}, warnings[]}`(상한 2000, 정규식 오류·시간 초과는 경고 `marker-pattern`). 패턴이 비면 마커 없이 `coverage`만 낸다(**기본은 비어 있다** — 실제 logcat에는 스텝 마커가 없다). **`--step-events`**: 이슈 DB `issue-db.config.yaml`의 `step_events`(`02-config.md §5.3`; 스텝 이름은 인자로 받지 않는다) 규칙마다 로그 흔적을 더한다 — 출력에 `step_events: [{rule(규칙 목록 위치), ts, seq(파서 줄 순번), label(이벤트·요청·태그 이름, 로그 본문 없음)}]`(`(ts, seq, rule)` 순, 규칙당 1000·전체 5000 상한 → 경고 `step-events-truncated`+`truncated_rules`, 잘못된 규칙은 경고 `step-event-rule`로 건너뜀). 한 번의 파싱: `ril` 규칙은 원 레코드의 `ril`(요청·방향), `match`는 마스킹한 `TAG: msg` 검색, `event`는 `postprocess` 이벤트의 이름·`fields` 정규식. 플래그가 없으면 출력은 그대로다 |
 | | `extract-bugreport` | bugreport에서 logcat 섹션(system/radio/main)만 `<dir>/logcat-<buffer>.txt`로, 헤더의 `Build fingerprint`·`Build` 줄만 `<dir>/build.json`으로 꺼낸다. **dumpsys 등 다른 섹션은 읽지 않는다.** 섹션 헤더 형식은 S21. 결과 목록 JSON |
 | | `cut` | 판별 근거(또는 지정 시각) 주변 최소 구간. 마스킹 함수를 거친 **마스킹된 상태로만** 파일을 쓴다. `--evidence`는 근거의 `line_ref`가 가리키는 줄(입력에 있고 (시각, 태그)가 같을 때)을 앵커로 삼고, 아니면 그 근거만 (시각, 태그)가 같은 모든 줄로 대신하며 경고 `evidence-ref-mismatch`를 낸다(`parse`와 **같은 로그를 같은 순서로** 줘야 한다). 출력에 `anchors_by: {line_ref, ts_tag}`(방식별 근거 수). 종료 코드는 그대로다 |
@@ -119,7 +119,8 @@
 
 `db_pr.py` 세부 (오케스트레이션 소유자, `01-architecture.md §3.1`)
 - **도구 브랜치**: `db_pr`는 로컬에 도구 전용 브랜치 `tt/<br>`만 만든다. 사용자 clone의 로컬 브랜치 `<br>`는 만들지도, 덮어쓰지도, 지우지도 않는다. 원격 브랜치 이름은 `<br>`다 (§브랜치).
-- **세션 lock** (v1은 사용자별로 한 번에 한 작업): `<work_dir>/session.lock` = `{job, command, started_at, updated_at}`.
+- **세션 lock** (v1은 사용자별로 한 번에 한 작업): `<work_dir>/session.lock` = `{job, owner, command, started_at, updated_at}`.
+  - `owner`는 `acquire`가 만드는 무작위 토큰이다. 결과의 `lock.owner`를 이후 `db_pr`·`db_verify` 호출에 환경변수 `TT_LOCK_OWNER`로 넘긴다. `updated_at` 갱신(아래 `snapshot`·`stage`·… 항목)과 `--force` 없는 `release`는 `TT_LOCK_OWNER`가 없거나 다르면 종료 코드 2(`lock owner 불일치`).
   - 스냅샷을 옮기거나 worktree를 만드는 흐름(analyze, record, `sync`(작업 키 `sync`), `sync-pr`, `verify-fix`, `validate --cause`, `fix-submitted`, setup 6번(작업 키 `setup`), review/move 계획 PR)은 시작할 때 `lock acquire <작업 키>`로 잡는다. 다른 작업 키의 lock이 있으면 종료 코드 2와 보유자 정보를 낸다. 같은 작업 키의 lock이면: `updated_at`이 **10분 이내**면 다른 세션이 같은 작업을 진행 중일 수 있으므로 종료 코드 2와 보유자 정보를 내고, 사용자가 확인하면 스킬이 `acquire <작업 키> --take-over`로 이어받는다. 10분이 넘었으면 그대로 이어받는다(같은 작업을 하던 이전 세션이 비정상 종료한 경우).
   - `snapshot`, `stage`, `summary`, `publish`, `discard`, `db_verify ... --draft`는 lock이 그 작업 키 것인지 확인하고 `updated_at`을 갱신한다. 아니면 종료 코드 2. 이때 만료 여부는 보지 않는다(만료는 다른 작업이 가져갈 수 있다는 뜻일 뿐, 아직 같은 작업 키가 남아 있으면 그대로 이어간다). (`<wt>`·`<draft>`의 작업 키는 상위 디렉토리 이름이다.)
   - 4시간 넘게 갱신되지 않은 lock은 만료로 보고 `acquire`가 가져온다. 만료 전이라도 사용자가 "그 세션은 끝났다"고 확인하면 스킬이 `release <작업 키> --force`로 푼다. 스크립트는 호출마다 끝나는 프로세스이므로 프로세스 생존 여부로 판단하지 않는다.
@@ -372,7 +373,7 @@ ID가 바뀔 때 함께 바꿔야 하는 참조 목록이다. `db_add renumber`(
 | `db_verify resolution` 판정 | `passed \| failed \| unknown` | `05-verification.md §5.12 (1)` |
 | R1~R6 항목 상태 | `pass \| fail \| needs-approval \| skipped \| not-implemented` | `needs-approval` → 종료 코드 `3`. `skipped`는 `reason` 필수(`해당 없음`, `fixture 없음`, `음성 fixture 없음`, `시그니처 없음(pending)`). `fixture 없음`·`음성 fixture 없음`은 `review_required: true`이고 **통과로 표시하지 않는다**. `not-implemented`는 Phase 7~9 뼈대에서만 썼다(Phase 10부터 내지 않는다) |
 | 피드백 `decision` | `accepted \| chose-other \| new-cause \| new-type \| unresolved \| manual` | `manual`은 `record`(수동 기록). `suggested: []`이고 수락률·1위 정확도 통계에서 제외 |
-| 계획 `source` | `analyze \| record \| import \| fix-submitted \| verify-fix \| validate-cause \| review \| move` (9개) | §작업 계획. 마이그레이션·새 카테고리·사후 정리는 계획이 아니라 직접 편집 브랜치다(§브랜치) |
+| 계획 `source` | `analyze \| record \| import \| fix-submitted \| verify-fix \| validate-cause \| review \| move` (8개) | §작업 계획. 마이그레이션·새 카테고리·사후 정리는 계획이 아니라 직접 편집 브랜치다(§브랜치) |
 | 계획 `jira.origin` | `mcp \| file` | §작업 계획 |
 | `ci_mode` | `local \| actions \| actions-build` | `13-actions.md` |
 
@@ -405,7 +406,7 @@ ID가 바뀔 때 함께 바꿔야 하는 참조 목록이다. `db_add renumber`(
   - `db_lint`: `must_event: ext.<category>.*`은 그 카테고리가 이슈 DB `external_parsers`에 있을 때만 허용한다(없으면 오류).
   - `--no-external`은 분석 모드 디버그용이다. 리포트에 "외부 파서 끔"을 표시하고, `db_regress`·`db_verify`는 이 옵션을 받지 않는다(종료 코드 2).
 - 이벤트 이름 공간: parser-rules extractor 이벤트는 접두어 없음(예: `data_evaluation_rejected`), 백엔드 내장 판별은 `builtin.<category>.<이름>`, 어댑터(외부 파서)는 `ext.<category>.<이름>`. extractor는 `builtin.`/`ext.` 접두어 이벤트를 만들 수 없다.
-- **분석 스킬** `analyzers.<category>`(`site-defaults.yaml` 또는 사용자 config): `skill`, `when: ask | after_match | always_for_category`(기본 `ask`), `inputs`. `ask`는 1위 후보가 그 카테고리일 때 호출 여부를 묻는다. analyze 옵션 `--analyzer`는 묻지 않고 호출하고, `--no-analyzer`는 호출하지 않는다.
+- **분석 스킬** `analyzers.<category>`(`site-defaults.yaml` 또는 사용자 config): `skill`, `when: ask | always | never`(기본 `ask`, `explore.when`과 같은 값), `inputs`. `ask`는 1위 후보가 그 카테고리일 때 호출 여부를 묻는다. analyze 옵션 `--analyzer`는 묻지 않고 호출하고, `--no-analyzer`는 호출하지 않는다. `when: always`는 묻지 않고 호출하고, `never`는 호출하지 않는다(리포트 `심층 분석 생략: analyzers.<category>.when: never`). 다른 값은 `ask`로 처리한다.
 - 마스킹 토큰: `<종류#n>` 번호 토큰(파일 안에서 같은 값 = 같은 번호, 이미 있는 토큰 다음 번호부터, `08-safety.md §8`). 시그니처·extractor는 특정 번호를 고정하지 않는다.
 - 설정 우선순위: 사용자 config > `plugin/site-defaults.yaml` > 코드 내장 기본값. `plugin/site-defaults.yaml`이 없으면 setup과 모든 커맨드·스크립트가 종료 코드 2로 멈춘다. `site-defaults.example.yaml`은 **코드가 읽지 않는다**. 사외 테스트·eval은 테스트 헬퍼 `tests/helpers/make_plugin_root.py`가 example을 `site-defaults.yaml`로 복사한 임시 플러그인 루트를 만들어 `${CLAUDE_PLUGIN_ROOT}`로 준다(`15-local-draft.md §15.1`). 런타임 코드에는 "사내/사외 모드" 판별이 없다.
 - 사내 전용 경로: 레포 루트 `SITE_PATHS` 목록 파일, 재반입은 `tools/import_draft.py`와 반입 기준선 `.draft-manifest.json`(`15-local-draft.md §15.6`). 경계 검사는 `tools/check_boundary.py`(종료 코드 0 위반 없음 / 1 위반 / 2 사용 오류), 반입 때 `import_draft.py --check-boundary`(위반이면 종료 코드 1, 대상 변경 없음).

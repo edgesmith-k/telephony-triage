@@ -54,7 +54,7 @@ telephony-triage-plugin/                 # 개발 레포 루트
 ├── .github/workflows/external.yml      # 사외 CI (경계 검사·스키마 사본·fixture 생성기 --check·pytest). 사내 Actions(13-actions.md)와 별개
 ├── tools/make_db_skeleton.py            # 합성 샘플에서 운영용 이슈 DB 뼈대 생성 (11-phases.md Phase 1)
 ├── tools/make_bundle.py                 # 반입 전 자동 검사 + 반입 묶음(레포 zip·뼈대 zip·SHA256SUMS) 생성, 종료 3 = 완료·사람 확인 대기 (15-local-draft.md §15.4)
-├── DRAFT_NOTES.md                       # 사외 초안 상태 파일(≤8KB): 진행 상태·막힌 것·활성 트랙·실험 결과 표 (15-local-draft.md)
+├── DRAFT_NOTES.md                       # 사외 초안 상태 파일(≤8KB): 진행 상태·남은 일·막힌 것·결정 (15-local-draft.md)
 ├── docs/history/                        # 아카이브(읽지 않음): draft-notes-<날짜>.md(Phase별 상세), CHANGES.md(문서 세트 변경 이력), REVIEW-10/11.md
 ├── tools/list_site_todos.py             # TODO(SITE:S<n>) 목록 추출
 ├── tools/offline_eval.py                # 라벨셋(과거 Jira + 로그 + 정답 원인)으로 analyze --dry-run 1위 정확도·오탐률 측정 (15-local-draft.md §15.5 S-5)
@@ -78,7 +78,7 @@ telephony-triage-plugin/                 # 개발 레포 루트
     │   └── plugin.json                  # name: telephony-triage, description (version 없음 → commit SHA, 15-local-draft.md §15.6)
     ├── commands/                        # 09-commands.md §10 과 같은 목록 (12개)
     │   ├── setup.md                     # /telephony-triage:setup
-    │   ├── analyze.md                   # /telephony-triage:analyze <JIRA-KEY> [logcat...] [--code <프로필|경로>] [--dry-run] [--jira-file <yaml>] [--analyzer | --no-analyzer] [--explore | --no-explore]
+    │   ├── analyze.md                   # /telephony-triage:analyze — 옵션은 09-commands.md §10
     │   ├── record.md                    # /telephony-triage:record <JIRA-KEY> [--cause <원인 ID> | --new-cause <유형 ID> | --new-type <category> | --unresolved <유형 ID>] [--fixture <logcat>] [--resolved-fixture <logcat>] [--dry-run] [--jira-file <yaml>]
     │   ├── sync.md                      # /telephony-triage:sync
     │   ├── search.md                    # /telephony-triage:search <증상 문장|keyword|JIRA-KEY|ID> (reference/search.md를 가리킴)
@@ -138,7 +138,7 @@ telephony-triage-plugin/                 # 개발 레포 루트
         └── hooks.json                   # 08-safety.md §9
 ```
 
-- 스크립트는 Python 3.10+, 표준 라이브러리 중심으로 쓴다. 외부 의존성은 `pyyaml`, `jsonschema` 정도로 최소화한다.
+- 스크립트는 Python 3.11+, 표준 라이브러리 중심으로 쓴다. 외부 의존성은 `pyyaml`, `jsonschema` 정도로 최소화한다.
 - **실행 환경은 Ubuntu(Linux)** 다(사외·사내 동일). `.githooks/pre-commit`은 `#!/bin/sh` 셸 스크립트, PATH 스텁·홈 경로(`~/.telephony-triage/`)·실행 비트 모두 POSIX 기준이다. 다른 OS는 v1 범위 밖이다 (`14-site.md` S15).
 - SKILL.md와 커맨드는 스크립트를 **`${CLAUDE_PLUGIN_ROOT}/scripts/<이름>.py`** 로 호출한다. 설치 위치가 캐시 경로라서 상대 경로로는 동작하지 않는다. 스킬/커맨드 본문에서 `${CLAUDE_PLUGIN_ROOT}`가 실행 시 치환되는지는 S1에서 시험한다 (`14-site.md §14.2`). 치환되지 않으면 config의 `plugin.scripts_path`를 읽어 쓰는 방식으로 바꾼다.
 - Jira MCP는 사내 제공 서버를 쓰므로 `.mcp.json`에 번들하지 않는다. setup에서 **존재 여부와 읽기 도구 목록만 확인**한다.

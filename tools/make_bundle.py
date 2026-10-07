@@ -357,7 +357,7 @@ CHECKS: list[Check] = [
           "python3 tools/list_site_todos.py 결과를 사용자가 직접 보고, 상태 파일에는 개수만 적었는지 확인한다."),
     Check("draft-notes-size", 9, "auto", check_draft_notes_size),
     Check("draft-notes-fresh", 9, "manual", None,
-          "DRAFT_NOTES.md의 진행 상태·막힌 것·활성 트랙·실험 결과 표가 최신인지 사람이 확인한다."),
+          "DRAFT_NOTES.md의 진행 상태·남은 일·막힌 것·결정이 최신인지 사람이 확인한다."),
     Check("skeleton", 7, "auto", check_skeleton),
     Check("offline-eval", 1, "auto", check_offline_eval),
     Check("regress", 1, "auto", check_regress),

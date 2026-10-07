@@ -490,3 +490,8 @@ if __name__ == "__main__":
             print(f"ERR {name}: {type(exc).__name__}: {exc}")
     print(f"\n{len(_all_tests()) - failures}/{len(_all_tests())} 통과")
     raise SystemExit(1 if failures else 0)
+
+
+def test_claude_md_within_4kb():
+    """R-29: CLAUDE.md는 매 세션 로드되므로 4KB 이하로 둔다."""
+    assert len((REPO / "CLAUDE.md").read_bytes()) <= 4096

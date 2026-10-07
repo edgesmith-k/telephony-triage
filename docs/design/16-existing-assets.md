@@ -127,7 +127,7 @@ external_parsers:
 analyzers:
   data:
     skill: <기존 data 분석 스킬 이름>
-    when: ask                    # 기본값. 1위가 data일 때 호출 여부를 묻는다 | after_match(묻지 않고 호출) | always_for_category
+    when: ask                    # 기본값. ask(1위가 data일 때 묻기) | always(묻지 않고 호출) | never
     inputs: [events_json, log_paths, top_candidates, jira_summary]
     max_tokens_hint: medium
 ```
@@ -137,7 +137,7 @@ analyzers:
 - 스킬이 없거나 실패해도 analyze는 계속한다 ("심층 분석 생략: <사유>").
 - **마스킹**: 분석 스킬에는 마스킹된 이벤트와(원문이 필요하면) 로그 경로만 넘긴다. 스킬 출력은 리포트에 넣기 전에 `mask_pii`를 적용하고, PR 본문에는 요약 한두 줄만 넣는다(원문 인용 금지).
 - 분석 스킬이 이슈 DB에 없는 원인을 제시하면, 사용자가 고를 때 `new-cause` 흐름(시그니처 초안·검증 포함)으로 간다. 스킬 의견만으로 원인을 만들지 않는다.
-- 기본값 `ask`는 1위 후보가 그 카테고리일 때 "심층 분석을 실행할까요? (토큰 추가 사용)"를 묻는다. 사내 토큰이 적으므로 파일럿 동안은 `ask`로 두고, 호출 비율과 유용성을 Phase 14에서 본 뒤 `after_match`로 바꿀지 정한다.
+- 기본값 `ask`는 1위 후보가 그 카테고리일 때 "심층 분석을 실행할까요? (토큰 추가 사용)"를 묻는다. 사내 토큰이 적으므로 파일럿 동안은 `ask`로 두고, 호출 비율과 유용성을 Phase 14에서 본 뒤 `always`로 바꿀지 정한다.
 - analyze 옵션: `--analyzer`는 묻지 않고 호출, `--no-analyzer`는 호출하지 않는다.
 - 다른 카테고리도 같은 방식으로 분석 스킬을 붙일 수 있다.
 - 분석 스킬은 1위 후보가 있을 때만 호출된다. 후보 없음·원인 미확인일 때의 Claude 가설은 별도 단계인 **탐색 분석**(`07-workflow.md §Step 5-2`, `explore.when`)이 맡는다. 사내에 범용 로그 분석 스킬이 있어도 v1은 탐색 분석을 스킬 본문(`reference/explore.md`)으로 하고, 그 스킬 연결은 S-4a에서 필요성을 본 뒤 정한다.

@@ -7,7 +7,7 @@
   "required": ["source", "schema_version", "started_at", "base_sha", "operations"],
   "properties": {
     "source": {
-      "description": "계획을 만든 흐름 (9개). 마이그레이션·새 카테고리·사후 정리는 계획이 아니라 직접 편집 브랜치다 (contracts.md §브랜치).",
+      "description": "계획을 만든 흐름 (8개). 마이그레이션·새 카테고리·사후 정리는 계획이 아니라 직접 편집 브랜치다 (contracts.md §브랜치).",
       "enum": ["analyze", "record", "import", "fix-submitted", "verify-fix", "validate-cause", "review", "move"]
     },
     "schema_version": {"type": "integer", "minimum": 1},

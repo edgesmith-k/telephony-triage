@@ -20,7 +20,7 @@ Code 기능" 행). 배포 대상(`plugin/`)이 아니다.
 ## 실행 절차
 
 1. 모의 MCP를 함께 붙여 새 세션을 연다 (불러오는 방법은 사외 Claude Code
-   버전에서 확인해서 `DRAFT_NOTES.md`에 적는다):
+   버전에서 확인해서 아래 '사외 결과' 표에 적는다):
 
    ```sh
    claude --mcp-config tests/mocks/mcp.json
@@ -29,7 +29,23 @@ Code 기능" 행). 배포 대상(`plugin/`)이 아니다.
 2. 이 디렉토리를 로컬 플러그인으로 등록한다 (`/plugin`).
 3. `/probe:ping`을 실행한다.
 4. `tests/mocks/plugin-probe/probe-hook.log`를 본다.
-5. 결과를 `DRAFT_NOTES.md`의 "사외 Claude Code 실험 결과" 표에 적는다.
+5. 결과를 아래 '사외 결과' 표에 적는다 (사내는 `SITE_PROFILE.md`).
+
+## 사외 결과 (S1 예비, 2026-10-01)
+
+2026-10-01, Claude Code 2.1.286(Windows), 헤드리스 `claude -p --plugin-dir <dir> --mcp-config tests/mocks/mcp.json`으로 확인.
+
+| # | 항목 | 사외 결과 | 비고 |
+|---|---|---|---|
+| 1 | 플러그인 로컬 로드 | ✅ `--plugin-dir`로 로드 | init에 `probe@inline`, 슬래시 목록에 `probe:ping`·`probe:probe` |
+| 2 | 커맨드 ↔ 스킬 관계 | ✅ 따로 | 커맨드도 `<plugin>:<name>` 스킬 목록에 같이 뜬다. `/probe:probe`는 스킬 본문만 쓰고 커맨드를 부르지 않는다 |
+| 3 | `${CLAUDE_PLUGIN_ROOT}` 치환 | ✅ 커맨드·스킬 본문, hooks.json 모두 치환 | **Bash 도구 프로세스에는 환경 변수 `CLAUDE_PLUGIN_ROOT`가 없다**(hook 프로세스에는 있음). 본문 치환 경로만 쓴다 |
+| 4 | hooks (SessionStart / PreToolUse / PostToolUse) | ✅ | 실제 `plugin/hooks/hooks.json`: SessionStart가 `scripts_path` 갱신, PostToolUse `jira_bridge.py`가 MCP 결과를 마스킹 요약으로 교체 |
+| 5 | MCP 도구 이름 형식 | ✅ `mcp__mock-jira__jira_fetch_ticket` | hook 입력에 `mcp_server {name, source}` 필드도 있다 |
+| 6 | hook matcher `mcp__.*` | ✅ | guard 규칙 2(쓰기 도구 거부) 동작 |
+| 7 | 권한 결정 필드 | ✅ `hookSpecificOutput.permissionDecision` | `deny` → 실행 안 됨(`PreToolUse:<tool> hook error: <reason>`), `allow` → allowedTools에 없어도 실행, `ask` → allowedTools에 있어도 확인 요구(헤드리스는 거부). guard 규칙 6·8 deny 확인 |
+| 8 | `@SITE_PROFILE.md` import (파일 없음) | ✅ 경고·오류 없음 | 조용히 무시 |
+| — | 모의 MCP 붙이기 | ✅ `--mcp-config tests/mocks/mcp.json` | 레포 루트에서 실행(상대 경로). source `dynamic` |
 
 ## 주의
 

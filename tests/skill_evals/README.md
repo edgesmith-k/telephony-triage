@@ -1,6 +1,6 @@
 # telephony-triage 스킬 eval (Phase 13)
 
-`docs/design/10-skill-eval.md`의 eval 54개(+ W4 준비용 55~57)와 트리거 테스트를 skill-creator 방식으로 돌리는 자료다.
+`evals.json`의 eval 전체(정의 근거 `docs/design/10-skill-eval.md`)와 트리거 테스트를 skill-creator 방식으로 돌리는 자료다.
 스킬 본체는 `plugin/skills/telephony-triage/`.
 
 | 파일 | 내용 |

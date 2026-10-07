@@ -10,10 +10,15 @@ Android Telephony 이슈 분석 도구(Claude Code 플러그인). Jira 이슈와
   자세한 사용법과 범위는 [GUIDE.md](GUIDE.md).
 - 개발자: Claude Code 세션을 이 레포 루트에서 열면 [CLAUDE.md](CLAUDE.md)가 로드된다.
   모드(사외 초안 / 사내 보완 / 사내 처음부터)와 작업 방식은 거기에 있다.
+- 사내 반입·보완 담당자: [GUIDE.md](GUIDE.md) §4.
 - 설계 문서 지도: [docs/design/README.md](docs/design/README.md).
 
 ## 테스트
 
 ```
-python -m pytest tests
+python3 -m venv .venv && . .venv/bin/activate
+pip install '.[test]'
+python3 -m pytest -q tests
 ```
+
+Windows는 `PYTHONUTF8=1`.

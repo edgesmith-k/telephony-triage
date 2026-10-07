@@ -251,6 +251,15 @@ def test_r10_dependency_manifest_has_complete_pins(safety_root):
             assert name in pins, f"unlocked transitive dependency: {raw}"
 
 
+def test_docs_python_version_matches_pyproject():
+    """R-26: 문서의 Python 최소 버전은 pyproject.toml(>=3.11)과 같다."""
+    import tomllib
+    assert tomllib.loads((REPO / "pyproject.toml").read_text(encoding="utf-8"))["project"]["requires-python"] == ">=3.11"
+    for rel in ("GUIDE.md", "docs/design/01-architecture.md", "docs/design/13-actions.md",
+                "docs/design/14-site.md", "AGENTS.md"):
+        assert "3.10+" not in (REPO / rel).read_text(encoding="utf-8"), rel
+
+
 @pytest.fixture
 def draft_import(safety_root):
     target = safety_root / "import_draft.py"

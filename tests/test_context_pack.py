@@ -42,3 +42,16 @@ def test_unknown_pack_exit_2():
     r = subprocess.run([sys.executable, str(ROOT / "tools/context_pack.py"), "S-99"],
                        capture_output=True, text=True, stdin=subprocess.DEVNULL)
     assert r.returncode == 2 and re.search("context_pack", r.stderr)
+
+
+def test_s0_pack_is_small():
+    """R-28: S-0 pack에 contracts.md §3.2 전체(약 57KB)를 싣지 않는다."""
+    out = cp.render("S-0")
+    assert len(out.encode()) < 30_000 and "===== docs/design/contracts.md" not in out
+
+
+def test_s2_pack_has_s1_baseline():
+    """R-25: S-2 pack에 사외 S1 실험 표(probe README)가 들어 있다."""
+    out = cp.render("S-2")
+    assert "===== tests/mocks/plugin-probe/README.md =====" in out
+    assert "Bash 도구 프로세스에는 환경 변수 `CLAUDE_PLUGIN_ROOT`가 없다" in out

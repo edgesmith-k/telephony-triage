@@ -10,7 +10,7 @@ stdin으로 받은 hook 입력 JSON을 그대로 `probe-hook.log`에 한 줄씩 
 - 권한 결정 응답 형식(`allow`/`deny`/`ask`)이 먹히는가
   — `--decide <값>`으로 시험한다. 기본은 아무 결정도 내지 않는다.
 
-결과는 `DRAFT_NOTES.md`의 "사외 Claude Code 실험 결과"에 적는다.
+결과는 `tests/mocks/plugin-probe/README.md`의 '사외 결과' 표에 적는다(사내는 `SITE_PROFILE.md`).
 사내 버전은 다를 수 있으므로 S-2에서 다시 확인한다.
 """
 
@@ -62,7 +62,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.decide:
         # 권한 결정 필드 이름은 버전에 따라 다를 수 있다 (08-safety.md §9).
-        # 실제 필드 이름은 이 실험으로 확인해서 DRAFT_NOTES.md에 적는다.
+        # 실제 필드 이름은 이 실험으로 확인해서 tests/mocks/plugin-probe/README.md '사외 결과' 표에 적는다.
         print(
             json.dumps(
                 {

@@ -78,7 +78,7 @@ python3 tools/make_bundle.py --label import-v1     # 이 이름이 사내 .draft
 ## 4. 사내에서 보완하기
 
 ### 미리 준비할 것
-- Ubuntu PC (다른 OS는 지원하지 않음), Python 3.10+, git, `gh`
+- Ubuntu PC (다른 OS는 지원하지 않음), Python 3.11+, git, `gh`
 - 샘플 Jira 키 2~3개(카테고리가 다른 것), 각 Jira의 발생 시각 필드 이름·형식·타임존
 - 카테고리별 실제 logcat 1개씩 + 정상 로그 1~2개(16/17), 듀얼 SIM 로그 1개 이상
 - Android 16/17 소스 경로, 빌드명 예시 3~5개, GHE 주소·조직·카테고리별 팀 이름, Gerrit CL 링크 예시, Jira URL 예시
@@ -96,8 +96,8 @@ python3 tools/make_bundle.py --label import-v1     # 이 이름이 사내 .draft
 | 항목 | 확인 | 필요 조건 / 이유 |
 |---|---|---|
 | OS | `lsb_release -a` | **Ubuntu** |
-| Python | `python3 --version` | **3.10+** |
-| 패키지 | `pip install pyyaml jsonschema pytest` (사내 미러) | 의존성은 이 셋뿐. `python3 -c "import yaml; print(yaml.__with_libyaml__)"`가 True면 YAML을 C 로더로 읽어 빠르다(False여도 동작) |
+| Python | `python3 --version` | **3.11+** |
+| 패키지 | 사내 미러 접근(`pip download pyyaml` 등)과 `python3.11 --version`(22.04는 `python3`가 3.10) | 의존성은 `pyproject.toml`에 고정돼 있다. `python3 -c "import yaml; print(yaml.__with_libyaml__)"`가 True면 YAML을 C 로더로 읽어 빠르다(False여도 동작) |
 | git | `git --version` | **2.31+** (guard의 `rev-parse --path-format`, worktree `--no-track`, `push --force-with-lease=<ref>:<sha>`) |
 | gh | `gh auth status --hostname <GHE 호스트>` | 실패하면 쓰기 작업 전부 불가(읽기 분석은 가능) |
 | Claude Code | `claude --version`, `claude mcp list` | 플러그인·hooks 지원 버전, Jira MCP 서버 이름과 사용자 범위 등록 (정밀 확인은 S-2) |
@@ -107,6 +107,8 @@ python3 tools/make_bundle.py --label import-v1     # 이 이름이 사내 .draft
 ```
 mkdir -p ~/tt-draft && cd ~/tt-draft && unzip ~/telephony-triage-import-v1.zip
 sha256sum ~/telephony-triage-import-v1.zip   # 사외에서 적은 값과 같은지
+python3.11 -m venv .venv && . .venv/bin/activate   # `python3`가 3.11+면 python3. 3.10이면 python3.11
+pip install '.[test]'   # 사내 미러. 고정 버전이 미러에 없으면 `test_r10_dependency_manifest_has_complete_pins` 1건 실패는 예상, `SITE_PROFILE.md`에 기록
 python3 -m pytest -q tests                    # 사외와 같은 결과여야 한다 (10~15분)
 ```
 사외에서 통과한 테스트가 실패하면 환경 차이(파이썬·git 버전, 로케일, 경로)다. 반입 전에 원인을 잡는다.
@@ -124,7 +126,7 @@ python3 tools/s0_stats.py <logcat1> <logcat2> <logcat3> \
 
 ### 첫 반입
 ```
-git clone <사내 GHE>/<org>/telephony-triage-plugin.git && cd telephony-triage-plugin   # 사내에 만든 빈 레포
+git clone <사내 GHE>/<org>/telephony-triage-plugin.git && cd telephony-triage-plugin   # 사내에 만든 빈 레포 (README·.gitignore 없이 생성 — 초안과 같은 경로의 파일이 있으면 첫 반입이 멈춘다)
 git switch -c draft-import/<날짜>
 python3 ~/tt-draft/tools/import_draft.py ~/tt-draft --dest . --label import-v1 --dry-run
 python3 ~/tt-draft/tools/import_draft.py ~/tt-draft --dest . --label import-v1 --check-boundary   # 첫 반입: 전체 복사 + .draft-manifest.json 생성
@@ -133,7 +135,7 @@ git status --short                                     # .venv/ 등 무시돼야
 git add -A && git commit -m "사외 초안 반입: import-v1"     # .draft-manifest.json 포함 → PR → main 머지
 ```
 - `.local-draft`는 원본에 있어도 가져오지 않는다.
-- 이슈 DB: **샌드박스**는 뼈대를 그대로 push(S-5 시험용). **운영**은 S-4에서 실제 태그·문구·시드 유형을 넣은 뒤 S-7 전에 만든다(placeholder를 운영에 올리지 않는다).
+- 이슈 DB: **샌드박스**는 뼈대를 그대로 push(S-5 시험용). **운영**은 S-4a 시작 때 뼈대로 만든다(브랜치 보호·CODEOWNERS). placeholder 규칙은 S-4에서 실제 태그·문구로 바꾸고, 그 전에는 파일럿·사용자에게 열지 않는다.
 - GHE 서버에서 **브랜치 보호**(main 직접 push 금지, CODEOWNERS 필수 리뷰)를 켠다.
 - Claude Code를 플러그인 레포 루트에서 열고 아래 "첫 사내 세션에 붙여 넣을 컨텍스트"로 S-1을 시작한다.
 
@@ -208,6 +210,7 @@ python3 -m pytest -q tests        # 골든 포함, 그 뒤 운영 이슈 DB에 d
 ```
 - `SITE_PATHS` 경로(사내 코드·값)는 건드리지 않는다.
 - 사내에서 사외 파일을 고친 게 있으면 목록을 보여주고 **멈춘다(종료 코드 1)**. 그 변경 요지를 사용자가 사내 정보 없이 직접 타이핑해 사외에 전달하거나, 되돌린 뒤 다시 실행한다. 이미 새 초안과 같은 사내 수정은 멈추지 않는다.
+- 되돌리기: `git restore --source=$(git log -1 --format=%H -- .draft-manifest.json) -- <파일>` (마지막 반입 커밋의 사외 버전. manifest는 `import_draft.py`만 바꾼다).
 - 새 초안 `SITE_PATHS`에만 있는 줄은 경고로 나온다 — 사내 `SITE_PATHS`에 직접 추가한다(도구는 사내 `SITE_PATHS`를 쓰지 않는다).
 - `--check-boundary`: 반입 뒤 모습을 사내 패턴(`docs/site/boundary-patterns.txt`, 실제 회사·서버·팀 이름)으로 검사한다. 위반이면 **반입하지 않고** 종료 코드 1. 적용 중 실패하면 자동으로 되돌린다.
 - 사외에서 지운 파일은 지우고, 사내에서 새로 만든 비-`SITE_PATHS` 파일은 지우지 않고 알려준다(사내 전용이면 `SITE_PATHS`로).
@@ -255,23 +258,25 @@ python3 -m pytest -q tests        # 골든 포함, 그 뒤 운영 이슈 DB에 d
 
 **떠나기 전 (항상)**
 1. 진행 중인 이슈 DB 쓰기 작업을 끝내거나 버린다 — `plan.json`·lock은 PC에 있어 따라오지 않는다. `python3 plugin/scripts/db_pr.py lock status`, 끝난 작업은 `db_pr.py discard <wt>`. 계획이 있는 열린 PR의 `sync-pr`는 원래 PC에서 하거나, 새 PC에선 수동 재동기화(`06 §6.3`).
-2. 상태 파일 갱신 — 사외 `DRAFT_NOTES.md` "활성 트랙" 상태 칸, 사내 `SITE_PROFILE.md` "진행 상태". 에이전트에게: `지금까지 한 일을 진행 상태에 반영하고 커밋·push해줘.` 같은 트랙을 다른 에이전트가 동시에 하지 않게 상태 칸에 "진행 중 — 브랜치 X"를 적는다.
+2. 상태 파일 갱신 — 사외 `DRAFT_NOTES.md` "진행 상태"·"남은 일", 사내 `SITE_PROFILE.md` "진행 상태". 에이전트에게: `지금까지 한 일을 진행 상태에 반영하고 커밋·push해줘.` 같은 트랙을 다른 에이전트가 동시에 하지 않게 "남은 일"에 "진행 중 — 브랜치 X"를 적는다.
 3. 작업 브랜치에 커밋·push.
 
 **사외, 새 PC**
 ```
 git clone <사외 레포 URL> && cd telephony-triage
-pip install pyyaml jsonschema pytest
+python3.11 -m venv .venv && . .venv/bin/activate   # `python3`가 3.11+면 python3
+pip install '.[test]'
 touch .local-draft            # 안 만들면 Claude Code가 모드를 묻는다 → "사외 초안"
 python3 -m pytest -q tests    # 기준선 (Ubuntu 10~15분)
 ```
-첫 메시지: `DRAFT_NOTES.md의 "활성 트랙과 순서"에서 다음 할 일을 확인하고, 그 작업의 근거 문서만 읽고 시작해줘. docs/history/는 읽지 마.`
+첫 메시지: `DRAFT_NOTES.md의 "남은 일"에서 다음 할 일을 확인하고, 그 작업의 근거 문서만 읽고 시작해줘. docs/history/는 읽지 마.`
 원본 문서 zip·eval 산출물은 레포에 없어도 된다(`docs/design/`이 정본, eval은 새 iteration 경로로 다시 만든다).
 
 **사내, 새 PC** (`SITE_PROFILE.md`가 커밋돼 있어 모드는 자동)
 ```
 git clone <사내 GHE>/<org>/telephony-triage-plugin.git && cd telephony-triage-plugin
-pip install pyyaml jsonschema pytest
+python3.11 -m venv .venv && . .venv/bin/activate   # `python3`가 3.11+면 python3
+pip install '.[test]'
 python3 -m pytest -q tests    # 골든 포함, 이전 PC와 같은 결과여야 한다
 claude mcp list               # Jira MCP 사용자 범위 등록 확인
 ```

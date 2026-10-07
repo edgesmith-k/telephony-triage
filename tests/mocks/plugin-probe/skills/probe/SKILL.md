@@ -18,4 +18,4 @@ description: 빈 플러그인 실험용 스킬. 커맨드와 스킬의 관계, $
 
 - 커맨드(`/probe:ping`)와 이 스킬이 같이 쓰이는가, 따로 부르는가?
 
-결과는 `DRAFT_NOTES.md`의 "사외 Claude Code 실험 결과"에 적는다.
+결과는 `tests/mocks/plugin-probe/README.md`의 '사외 결과' 표에 적는다(사내는 `SITE_PROFILE.md`).

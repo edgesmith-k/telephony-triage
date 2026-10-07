@@ -1,6 +1,6 @@
 {
   "skill_name": "telephony-triage",
-  "_comment": "eval 54개 정의 완료. batch 1=대표10, A=원칙·안전10, B=analyze11, C=수정·검증9, D=record5, E=10/04~05 기능 7(46~52), F=S6 증상 검색 2(53~54). 정의 완료는 행동 평가 통과를 뜻하지 않는다. README.md와 DRAFT_NOTES.md 참조.",
+  "_comment": "eval 정의 완료(개수는 `evals` 배열 길이). batch 1=대표10, A=원칙·안전10, B=analyze11, C=수정·검증9, D=record5, E=10/04~05 기능 7(46~52), F=S6 증상 검색 2(53~54). 정의 완료는 행동 평가 통과를 뜻하지 않는다. README.md와 DRAFT_NOTES.md 참조.",
   "evals": [
     {
       "id": 1,

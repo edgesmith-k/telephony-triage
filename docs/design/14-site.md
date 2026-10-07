@@ -35,7 +35,7 @@
 | S12 | 빌드명 체계: 브랜치 식별, 버전 비교 가능한 부분, 브랜치 이름·fixture 파일명에 쓸 수 없는 문자(`sanitize_build`가 충분한지) | `02-config.md §5.3` `build_compare`, `03-issue-db.md §5.9`, `contracts.md §fixture`·`§브랜치` | Jira의 SW 값과 빌드 서버 명명 규칙 | `build_compare` (Phase 1, 3) |
 | S13 | 마스킹: 사내 로그에 나오는 식별자 형식, 오탐 패턴(사내 빌드 번호 등) | `08-safety.md §8` | 샘플 logcat에 `mask_pii --check` 실행 후 검토 | `mask_pii.py`, `mask.allow_patterns` (Phase 4) |
 | S14 | 보안 규정: 이슈 DB에 올릴 수 있는 로그 범위, 벤더 코드 인용 허용 여부, 이슈 DB 레포 공개 범위 | `03-issue-db.md §5.7`, `08-safety.md §8` | 사내 규정 확인, 사용자 확인 | 5.7 작성 규칙 보완(SITE_PROFILE) (Phase 1) |
-| S15 | 개발 환경: **Ubuntu 버전**(다른 OS는 v1 범위 밖, `01-architecture.md §3`), `python3` 버전(3.10+), pip/사내 미러, git 버전(worktree, `worktree add --no-track`, `push --force-with-lease=<ref>:<sha>` 지원) | `01-architecture.md §3` | 명령으로 확인 | 3장 의존성 (Phase 1) |
+| S15 | 개발 환경: **Ubuntu 버전**(다른 OS는 v1 범위 밖, `01-architecture.md §3`), `python3` 버전(3.11+, 22.04 기본은 3.10 — 3.11 별도 설치), pip/사내 미러, git 버전(worktree, `worktree add --no-track`, `push --force-with-lease=<ref>:<sha>` 지원) | `01-architecture.md §3` | 명령으로 확인 | 3장 의존성 (Phase 1) |
 | S16 | Jira 키 형식 (프로젝트 키 규칙) | `02-config.md §5.3` `jira_key_regex`, `03-issue-db.md §5.4 (2)` | 샘플 Jira 키, 사내 Jira 프로젝트 목록 | `issue-db.config.yaml` `jira_key_regex` (Phase 1), `db_lint` 검사 (Phase 5) |
 | S17 | `jira_base_url` 형식 (이슈 링크 URL) | `02-config.md §5.3` | 브라우저에서 샘플 Jira를 열어 URL 확인 | `issue-db.config.yaml` (Phase 1) |
 | S18 | `fix.ref` 형식: Gerrit CL 번호/URL 또는 커밋 해시 표기 | `02-config.md §5.3` `fix_ref_regex`, `03-issue-db.md §5.4` | 사내 Gerrit CL 링크 예시 | `issue-db.config.yaml` `fix_ref_regex` (Phase 1) |
