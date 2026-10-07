@@ -4,7 +4,9 @@
 반입 전 체크리스트의 자동 항목을 싼 것부터 실행하고(첫 실패에서 중단), 모두 통과하면
 반입 묶음(레포 zip, 이슈 DB 뼈대 zip, SHA256SUMS, 결과 JSON, 로그)을 만든다.
 사람이 확인할 항목(manual)은 판정하지 않고 목록으로 낸다. 태그는 만들지 않는다.
-출력할 `git tag … && git push …` 명령은 사용자가 직접 실행한다.
+출력할 `git tag … && git push …` 명령은 사용자가 직접 실행한다(remote가 하나면 그 이름).
+HEAD가 원격 main에 들어 있는지(`on_remote_main`)는 보고만 한다.
+실행 전 할 일: `plugin/.claude-plugin/plugin.json` description에서 '사외 초안'을 빼고 커밋한다(첫 검사).
 
 판정 기준은 각 검사 도구의 종료 코드와 이 도구의 파일 검사다. `--skip`한 검사는
 통과로 세지 않고, 하나라도 건너뛰면 묶음을 만들지 않는다. 검사는 임시 디렉토리만
@@ -156,6 +158,22 @@ def load_site_paths(repo: Path) -> list[str]:
 
 
 # -- 검사 ----------------------------------------------------------------------------------
+
+
+def check_plugin_json(ctx: Ctx) -> CheckResult:
+    path = ctx.repo / "plugin" / ".claude-plugin" / "plugin.json"
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        return CheckResult("fail", f"{path.name}를 읽을 수 없습니다: {exc}")
+    problems = []
+    if "사외 초안" in str(data.get("description", "")):
+        problems.append("description에서 '사외 초안'을 빼고 커밋한 뒤 실행합니다")
+    if "version" in data:
+        problems.append("version을 두지 않습니다 (marketplace 항목 또는 commit SHA, 15-local-draft.md §15.6)")
+    if problems:
+        return CheckResult("fail", "\n".join(problems))
+    return CheckResult("pass", "plugin.json description 정리됨, version 없음")
 
 
 def check_site_paths(ctx: Ctx) -> CheckResult:
@@ -323,6 +341,7 @@ def check_pytest(ctx: Ctx) -> CheckResult:
 
 
 CHECKS: list[Check] = [
+    Check("plugin-json", 10, "auto", check_plugin_json),
     Check("site-paths", 5, "auto", check_site_paths),
     Check("mcp-local", 6, "auto", check_mcp_local),
     Check("boundary", 2, "auto", check_boundary),
@@ -339,8 +358,6 @@ CHECKS: list[Check] = [
     Check("draft-notes-size", 9, "auto", check_draft_notes_size),
     Check("draft-notes-fresh", 9, "manual", None,
           "DRAFT_NOTES.md의 진행 상태·막힌 것·활성 트랙·실험 결과 표가 최신인지 사람이 확인한다."),
-    Check("plugin-json", 10, "manual", None,
-          "plugin/.claude-plugin/plugin.json: description에서 '사외 초안'을 빼고 version을 확인한다 (반입 전·태그 전)."),
     Check("skeleton", 7, "auto", check_skeleton),
     Check("offline-eval", 1, "auto", check_offline_eval),
     Check("regress", 1, "auto", check_regress),
@@ -484,6 +501,20 @@ def check_preconditions(repo: Path, label: str) -> str:
     return head
 
 
+def _push_remote(repo: Path) -> str:
+    """출력할 push 명령의 remote. 하나뿐이면 그 이름, 아니면 사용자가 채울 자리표시."""
+    remotes = git(repo, "remote", check=False).split()
+    return remotes[0] if len(remotes) == 1 else "<remote>"
+
+
+def on_remote_main(repo: Path) -> bool:
+    """main 브랜치이고 HEAD가 upstream에 들어 있는지 (보고용, 판정하지 않는다)."""
+    if git(repo, "branch", "--show-current", check=False).strip() != "main":
+        return False
+    return subprocess.run(["git", "-C", str(repo), "merge-base", "--is-ancestor", "HEAD", "@{u}"],
+                          capture_output=True).returncode == 0
+
+
 def run(repo: Path | str, label: str, out: Path | str | None = None, checks: list[Check] | None = None,
         skip=(), force: bool = False) -> dict:
     """검사를 돌리고 묶음을 만든다. 결과 dict(`exit_code` 포함)를 준다. 사용·환경 오류는 UsageError."""
@@ -499,6 +530,7 @@ def run(repo: Path | str, label: str, out: Path | str | None = None, checks: lis
     validate_label(label)
     out_dir = resolve_out(repo, label, out, force)
     head_sha = check_preconditions(repo, label)
+    git_info = {"remote": _push_remote(repo), "on_remote_main": on_remote_main(repo)}
 
     env = dict(os.environ)
     env[GUARD_ENV] = "1"
@@ -569,20 +601,21 @@ def run(repo: Path | str, label: str, out: Path | str | None = None, checks: lis
                                                   encoding="utf-8")
                 bundle_info = {"dir": str(out_dir), "files": files}
                 exit_code = NEEDS_APPROVAL
-                result = _result(label, head_sha, tree_clean, True, results, manual, bundle_info, exit_code)
+                result = _result(label, head_sha, tree_clean, True, results, manual, bundle_info, exit_code, git_info)
                 (built / "make_bundle-result.json").write_text(
                     json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
                 shutil.copytree(ctx.logs, built / "logs")
                 install_bundle(built, out_dir)
         complete = exit_code == NEEDS_APPROVAL
-        return _result(label, head_sha, status_clean(repo), complete, results, manual, bundle_info, exit_code)
+        return _result(label, head_sha, status_clean(repo), complete, results, manual, bundle_info, exit_code,
+                       git_info)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
 
-def _result(label, head_sha, tree_clean, complete, checks, manual, bundle, exit_code) -> dict:
+def _result(label, head_sha, tree_clean, complete, checks, manual, bundle, exit_code, git_info) -> dict:
     return {"label": label, "head_sha": head_sha, "tree_clean": tree_clean, "complete": complete,
-            "checks": checks, "manual": manual, "bundle": bundle, "exit_code": exit_code}
+            "checks": checks, "manual": manual, "bundle": bundle, "exit_code": exit_code, **git_info}
 
 
 def format_text(result: dict) -> str:
@@ -603,7 +636,9 @@ def format_text(result: dict) -> str:
         lines.extend(f"  {f['sha256']}  {f['name']} ({f['bytes']}바이트)" for f in b["files"])
         lines.append("")
         lines.append("사람 확인을 마친 뒤 태그를 직접 만들고 push합니다 (이 도구는 태그를 만들지 않습니다):")
-        lines.append(f"  git tag {result['label']} {result['head_sha']} && git push origin {result['label']}")
+        lines.append(f"  git tag {result['label']} {result['head_sha']} && git push {result['remote']} {result['label']}")
+        if not result["on_remote_main"]:
+            lines.append("경고: HEAD가 원격 main에 없습니다 — 병합 후 main에서 다시 만드세요.")
     else:
         lines.append("묶음을 만들지 않았습니다 (자동 검사 실패·건너뜀·오류).")
     return "\n".join(lines)

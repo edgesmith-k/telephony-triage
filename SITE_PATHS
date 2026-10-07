@@ -11,3 +11,5 @@ plugin/scripts/parser_backends/site/
 plugin/scripts/adapters/site_*
 tests/golden/
 tests/site/
+# 루트 마켓플레이스 정의 (사내 소유자·GHE URL, S-7)
+.claude-plugin/

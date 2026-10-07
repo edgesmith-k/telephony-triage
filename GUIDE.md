@@ -60,13 +60,15 @@ Phase 1~13 모의 환경으로 전부 구현           S-2  사내 Claude Code �
 - 사내 **외부 작성 코드 반입 규정**(오픈소스 의존성 승인 포함)을 확인한 뒤 플러그인 레포 + 이슈 DB 뼈대를 반입한다.
 
 **반입 묶음 만들기** (사외 PC, 작업 트리가 깨끗한 상태에서)
+
+실행 전 할 일: `plugin/.claude-plugin/plugin.json` description에서 "사외 초안"을 빼고 커밋한다(도구의 첫 자동 검사 `plugin-json`, version은 두지 않는다).
 ```
 python3 tools/make_bundle.py --label import-v1     # 이 이름이 사내 .draft-manifest.json의 label
 ```
 - 도구가 자동 항목을 싼 것부터 검사하고(첫 실패에서 중단), 모두 통과하면 묶음을 만든다: 레포 zip(`git archive`), 이슈 DB 뼈대 zip, `SHA256SUMS`(`sha256sum -c` 형식), `make_bundle-result.json`, `logs/`. 위치는 기본 `<레포 상위>/tt-import-bundles/<label>/`이다 (`--out`으로 바꾸고, 이미 있으면 `--force`). 전체 pytest를 돌리므로 시간이 걸린다.
-- **종료 3 = 정상 완료**: 자동 검사 통과, 묶음 생성, 사람 확인 4건 대기. 이 도구는 0으로 끝나지 않는다. 종료 1은 자동 검사 실패 또는 `--skip`(묶음 없음, `--skip`은 통과로 세지 않는다), 종료 2는 사용·환경 오류(트리가 깨끗하지 않음, 태그가 다른 커밋을 가리킴 등)다.
-- 사람이 확인할 4건: ① 실제 회사명·서버명·팀명 검색(`grep -rniE '<회사명>|<사내 도메인>' .`), ② `list_site_todos.py` 결과를 직접 봄, ③ `DRAFT_NOTES.md`가 최신인지, ④ `plugin.json` description에서 "사외 초안"을 빼고 version 확인.
-- 확인을 마치면 도구가 출력한 명령으로 **직접** 태그를 만들고 push한다 (도구는 태그를 만들지 않는다): `git tag import-v1 <HEAD sha> && git push origin import-v1`
+- **종료 3 = 정상 완료**: 자동 검사 통과, 묶음 생성, 사람 확인 3건 대기. 이 도구는 0으로 끝나지 않는다. 종료 1은 자동 검사 실패 또는 `--skip`(묶음 없음, `--skip`은 통과로 세지 않는다), 종료 2는 사용·환경 오류(트리가 깨끗하지 않음, 태그가 다른 커밋을 가리킴 등)다.
+- 사람이 확인할 3건: ① 실제 회사명·서버명·팀명 검색(`grep -rniE '<회사명>|<사내 도메인>' .`), ② `list_site_todos.py` 결과를 직접 봄, ③ `DRAFT_NOTES.md`가 최신인지.
+- 확인을 마치면 도구가 출력한 명령으로 **직접** 태그를 만들고 push한다 (도구는 태그를 만들지 않는다): `git tag import-v1 <HEAD sha> && git push <remote> import-v1` (remote는 도구가 출력한 이름. 결과의 `on_remote_main`이 false면 경고가 나온다 — 병합 후 main에서 다시 만든다)
 - 사내에서는 `SHA256SUMS`로 대조한다 (`sha256sum -c SHA256SUMS`).
 - `git archive`는 커밋된 파일만 담으므로 `.local-draft`, `tests/skill_evals/workspace/`, `__pycache__` 같은 비추적·무시 파일이 자동으로 빠진다. 도구가 zip 안에 `.local-draft`·`.mcp.json`·`SITE_PATHS` 경로가 없는지도 다시 확인한다.
 - 전송 수단·승인은 회사 반입 절차를 따른다.
@@ -127,6 +129,7 @@ git switch -c draft-import/<날짜>
 python3 ~/tt-draft/tools/import_draft.py ~/tt-draft --dest . --label import-v1 --dry-run
 python3 ~/tt-draft/tools/import_draft.py ~/tt-draft --dest . --label import-v1 --check-boundary   # 첫 반입: 전체 복사 + .draft-manifest.json 생성
 python3 -m pytest -q tests
+git status --short                                     # .venv/ 등 무시돼야 할 파일이 없는지
 git add -A && git commit -m "사외 초안 반입: import-v1"     # .draft-manifest.json 포함 → PR → main 머지
 ```
 - `.local-draft`는 원본에 있어도 가져오지 않는다.
@@ -204,7 +207,8 @@ python3 <새 초안>/tools/import_draft.py <새 초안> --dest . --label import-
 python3 -m pytest -q tests        # 골든 포함, 그 뒤 운영 이슈 DB에 db_regress --all → 병합
 ```
 - `SITE_PATHS` 경로(사내 코드·값)는 건드리지 않는다.
-- 사내에서 사외 파일을 고친 게 있으면 목록을 보여주고 **멈춘다(종료 코드 1)**. 그 변경 요지를 사용자가 사내 정보 없이 직접 타이핑해 사외에 전달하거나, 되돌린 뒤 다시 실행한다.
+- 사내에서 사외 파일을 고친 게 있으면 목록을 보여주고 **멈춘다(종료 코드 1)**. 그 변경 요지를 사용자가 사내 정보 없이 직접 타이핑해 사외에 전달하거나, 되돌린 뒤 다시 실행한다. 이미 새 초안과 같은 사내 수정은 멈추지 않는다.
+- 새 초안 `SITE_PATHS`에만 있는 줄은 경고로 나온다 — 사내 `SITE_PATHS`에 직접 추가한다(도구는 사내 `SITE_PATHS`를 쓰지 않는다).
 - `--check-boundary`: 반입 뒤 모습을 사내 패턴(`docs/site/boundary-patterns.txt`, 실제 회사·서버·팀 이름)으로 검사한다. 위반이면 **반입하지 않고** 종료 코드 1. 적용 중 실패하면 자동으로 되돌린다.
 - 사외에서 지운 파일은 지우고, 사내에서 새로 만든 비-`SITE_PATHS` 파일은 지우지 않고 알려준다(사내 전용이면 `SITE_PATHS`로).
 - 설계 문서가 바뀌었으면 `14-site.md §14.5`대로 `SITE_PROFILE.md`와 비교해 영향을 본다.

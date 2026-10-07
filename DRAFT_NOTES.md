@@ -27,11 +27,11 @@
 |---|---|---|
 | ☐ V | **리뷰 수정 트랙 V1~V7** (10/07 리뷰 `docs/development/REVIEW_2026-10-07.md` 차단 1·반입 전 34) | "**리뷰 수정 진행**" → `docs/development/REVIEW_FIX_PLAN_2026-10.md §3`. W 끝은 V 끝과 합침 |
 | ☐ W 끝 | **eval 범위 — 결정 (i)로 확정, 아래 옛 메모는 후보 목록으로만** | ① 전체 재실행 생략, 영향 미확인 eval(W2: 9·18·20~23·26·31·54, W3: 21·22·26·27·33, W4: 42·45)도 사내 S-2 전체 재실행으로(추천) ② 영향 미확인 + W11 영향(39·58) 약 15개만 지금(`tests/skill_evals/run.py --execute`, `claude -p`, 전체의 1/3 비용). W10(동작 동일)·W12(문서)는 영향 없음 |
-| ☐ Z | **반입 묶음** | 최신 main에서 **Ubuntu로** `python3 tools/make_bundle.py --label <이름>`(정상 종료 3) → 사람 확인 4건(§15.4: 회사명 검색·TODO 목록·이 파일 최신·`plugin.json` description "사외 초안" 제거와 version) → 도구가 출력한 명령으로 사용자가 태그 push. Windows는 환경 실패로 자동 검사가 실패한다 |
+| ☐ Z | **반입 묶음** | 최신 main에서 **Ubuntu로** 먼저 `plugin.json` description에서 "사외 초안"을 빼는 커밋(도구가 첫 검사로 막는다) → `python3 tools/make_bundle.py --label <이름>`(정상 종료 3) → 사람 확인 3건(§15.4: 회사명 검색·TODO 목록·이 파일 최신) → 도구가 출력한 명령으로 사용자가 태그 push. Windows는 환경 실패로 자동 검사가 실패한다 |
 | ☐ 2 | **사용자 확인** — 10/04~05 작업(4a·R8·테스트 DB·검사 통합·4b·step_order·보안·R11·R9·RF-2, `CHANGES.md` 10/04~05 절) | 반입 직전에 한꺼번에 |
 
 반입 뒤 후보: RF-5(oFono)·RF-6(커넥터)·RF-8(자동화)은 사내 환경을 알아야 의미가 있다. RF-9·웹 UI(보류)는 그 뒤. 색인 `docs/development/ARCHITECTURE_REVIEW_2026-10.md`.
-사내로 넘긴 것: 행동 eval 전체(`evals.json`, S-2), db-authoring 스키마 요약 확장(S-2, 스키마 Read 횟수로 판단), 운영 DB 스키마 `pr.ids` PR(S-3).
+사내로 넘긴 것: 행동 eval 전체(`evals.json`, S-2), db-authoring 스키마 요약 확장(S-2, 스키마 Read 횟수로 판단), 운영 DB 스키마 `pr.ids` PR(S-3), 사내 마켓플레이스 소스 유형 확인 → version 규칙(S-2·S-7, V2에서 `plugin.json` version 삭제 = 커밋 SHA 기준. 반입 직후 캐시 1회 무효화는 무해). V 이후 후보: `import_draft` zip 직접 입력.
 
 ## 사외에서는 못 하는 것 (사내 S-1~S-5)
 

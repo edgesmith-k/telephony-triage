@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import time
@@ -59,6 +60,33 @@ def test_repo_has_no_boundary_violations():
     code, out = _run(CHECK, "--root", str(REPO), "--json")
     assert code == 0, out
     assert out["violations"] == []
+
+
+def test_site_paths_and_gitignore_cover_local_files():
+    """R-22: 루트 마켓플레이스는 사내 소유, 로컬 환경 파일은 무시, plugin.json에 version 없음."""
+    patterns = boundary.load_site_paths(REPO)
+    assert draft.is_site_path(".claude-plugin/marketplace.json", patterns)
+    assert not draft.is_site_path("plugin/.claude-plugin/plugin.json", patterns)
+    for rel in (".venv/x", "build/x", "dist/x", ".claude/settings.local.json"):
+        proc = subprocess.run(["git", "-C", str(REPO), "-c", "core.excludesFile=" + os.devnull,
+                               "check-ignore", "-q", "--no-index", rel])
+        assert proc.returncode == 0, rel
+    # 실제 플러그인만 본다 (모의 플러그인 tests/mocks/plugin-probe 등은 version을 둔다).
+    assert "version" not in json.loads((REPO / "plugin/.claude-plugin/plugin.json").read_text(encoding="utf-8"))
+
+
+def test_no_tracked_file_matches_ignore_rules():
+    """무시 규칙이 추적 파일(예: fixture의 build/)을 덮으면 반입 목록(walk)에서 빠진다."""
+    out = subprocess.run(["git", "-C", str(REPO), "-c", "core.excludesFile=" + os.devnull,
+                          "ls-files", "-ci", "--exclude-standard"],
+                         capture_output=True, text=True, check=True).stdout
+    assert out.strip() == ""
+
+
+def test_external_workflow_only_on_github_com():
+    """R-24: 사외 CI는 github.com에서만 돈다 (사내 GHE에서 대기·실패하지 않게)."""
+    text = (REPO / ".github/workflows/external.yml").read_text(encoding="utf-8")
+    assert text.count("    if: github.server_url == 'https://github.com'\n") == 2
 
 
 @pytest.fixture

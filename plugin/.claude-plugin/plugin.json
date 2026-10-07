@@ -1,5 +1,4 @@
 {
   "name": "telephony-triage",
-  "version": "0.0.1",
   "description": "Android Telephony 이슈를 분석하고 사내 이슈 DB에 누적하는 도구 (개발 중, 사외 초안)"
 }

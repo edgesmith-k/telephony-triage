@@ -39,7 +39,7 @@ v1 범위: logcat(radio/main/system/crash, bugreport는 logcat 섹션만) · Jir
 ```
 telephony-triage-plugin/                 # 개발 레포 루트
 ├── .claude-plugin/
-│   └── marketplace.json                 # 사내 마켓플레이스 정의. 플러그인 source는 ./plugin
+│   └── marketplace.json                 # [사내 전용, SITE_PATHS] 사내 마켓플레이스 정의. 플러그인 source는 ./plugin
 ├── CLAUDE.md                            # 개발 컨텍스트 진입점 (배포 대상 아님, 짧게 유지)
 ├── SITE_PROFILE.md                      # 사내 확인값 기록 (14-site.md, 사내 전용, Phase 0 또는 S-1에서 생성)
 ├── SITE_PATHS                           # 사내 전용 경로 목록 (15-local-draft.md §15.6)
@@ -75,7 +75,7 @@ telephony-triage-plugin/                 # 개발 레포 루트
 └── plugin/                              # 배포되는 플러그인 본체
     ├── site-defaults.example.yaml       # 모의 기본값. 코드는 읽지 않고 테스트 헬퍼가 복사해서 쓴다. 사내 S-3에서 site-defaults.yaml(SITE_PATHS)을 만들며, 없으면 모든 커맨드가 멈춘다 (15-local-draft.md §15.1)
     ├── .claude-plugin/
-    │   └── plugin.json                  # name: telephony-triage, version, description
+    │   └── plugin.json                  # name: telephony-triage, description (version 없음 → commit SHA, 15-local-draft.md §15.6)
     ├── commands/                        # 09-commands.md §10 과 같은 목록 (12개)
     │   ├── setup.md                     # /telephony-triage:setup
     │   ├── analyze.md                   # /telephony-triage:analyze <JIRA-KEY> [logcat...] [--code <프로필|경로>] [--dry-run] [--jira-file <yaml>] [--analyzer | --no-analyzer] [--explore | --no-explore]

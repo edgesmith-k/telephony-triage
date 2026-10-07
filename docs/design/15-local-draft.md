@@ -51,7 +51,7 @@
 
 ## 15.4 사내 반입 전 체크리스트
 
-도구로 실행: `python3 tools/make_bundle.py --label <label>` — auto 항목은 도구가 판정(싼 것부터, 첫 실패에서 중단), manual 4건은 사람. 종료 3 = 묶음 완료·사람 확인 대기.
+도구로 실행: `python3 tools/make_bundle.py --label <label>` — auto 항목은 도구가 판정(싼 것부터, 첫 실패에서 중단), manual 3건은 사람. 종료 3 = 묶음 완료·사람 확인 대기.
 
 - [ ] 전체 테스트 통과 (`pytest`, `db_regress --all`, eval 전체(`evals.json`) 준비(`--prepare-only`), `tools/offline_eval.py` 합성 라벨셋 실행 — 모두 테스트 헬퍼 플러그인 루트에서, `tools/fix_exec_bits.py --check`: 셰뱅 파일은 100755)
 - [ ] 사내 정보 없음: `python3 tools/check_boundary.py --mode external` 종료 코드 0 (사외 CI `.github/workflows/external.yml`도 같은 검사). 그래도 실제 회사명·서버명 등을 쓰지 않았는지 사람이 한 번 검색
@@ -62,7 +62,7 @@
 - [ ] `tools/make_db_skeleton.py`로 이슈 DB 뼈대를 만들었고, 뼈대에 유형·Jira·fixture(합성 포함)가 없음
 - [ ] `python3 tools/list_site_todos.py`가 오류 없이 돌고 결과를 사용자가 봤다 (목록은 문서에 두지 않는다. 상태 파일에는 개수만)
 - [ ] `DRAFT_NOTES.md`(상태 파일, ≤8KB): 진행 상태·막힌 것·활성 트랙·사외 Claude Code 실험 결과 표가 최신. 가정·모의와 실제가 다를 지점 같은 상세는 `docs/history/draft-notes-<날짜>.md`
-- [ ] `plugin/.claude-plugin/plugin.json`의 description에서 "사외 초안"을 빼고 version을 확인한다 (manual)
+- [ ] `plugin/.claude-plugin/plugin.json`의 description에서 "사외 초안"을 빼고 `version`이 없음 (auto, make_bundle 맨 앞 — 실행 전에 정리 커밋)
 - [ ] 플러그인 레포 전체(코드, 테스트, 모의, 합성 샘플, 문서)와 이슈 DB 뼈대를 묶어서 반입
 
 ## 15.5 사내 보완 (Phase S) — 토큰 최소화
@@ -101,16 +101,20 @@ plugin/scripts/parser_backends/site/
 plugin/scripts/adapters/site_*
 tests/golden/
 tests/site/
+.claude-plugin/
 ```
 
+- 루트 `.claude-plugin/`(마켓플레이스 정의, 사내 소유자·GHE URL)은 사내에서 S-7에 만든다. `plugin/.claude-plugin/plugin.json`은 사외 파일이다.
+- **버전**: `plugin.json`에 `version`을 두지 않는다. 사내 마켓플레이스 항목에도 기본으로 두지 않아 git 호스트 마켓플레이스의 commit SHA가 버전이 된다(사내만 바꾼 `site-defaults.yaml`도 main 병합으로 갱신). 고정이 필요하면 사내가 marketplace 항목 `version`만 쓴다(manifest가 항목보다 우선이므로 manifest는 비워 둔다). 사내 마켓플레이스 소스 유형은 S-2·S-7(S1)에서 확인한다.
 - `.local-draft`(사외 PC 전용 표식)는 반입 묶음에 없고, `import_draft.py`는 원본에 있어도 가져오지 않는다.
 
 - 사내 코드는 위 경로에만 둔다. 사외 레포의 파일(예: `parse_logcat.py`)을 사내에서 직접 고쳐야 했다면 그 변경의 요지를 사용자가 **직접 타이핑해** 사외에 전달하고 다음 사외 버전에 반영한다. 사내 사본은 임시로 취급한다. 사내에서 사외로 나가는 것은 **사용자가 직접 타이핑하는 사내 정보 없는 문장**뿐이다(파일·마스킹 로그·diff·요약 파일 반출 없음, 2026-10-01 결정). 도구는 반출물을 만들지 않는다.
 - **재반입 절차** (통째로 교체 금지). 사내 플러그인 레포는 git으로 관리한다.
   1. `git switch -c draft-import/<날짜>`
   2. `tools/import_draft.py <새 사외 초안 경로> --check-boundary`: 반입 기준선 `.draft-manifest.json`(마지막으로 반입한 사외 초안의 버전 표시와 파일 경로·해시 목록)과 비교해서 처리한다.
-     - `SITE_PATHS`에 있는 경로는 건드리지 않는다.
-     - 기준선 이후 사내에서 고친 사외 파일(현재 해시 ≠ 기준선 해시)이 있으면 목록을 보여주고 **멈춘다** (변경 요지를 사용자가 타이핑해 사외에 전달하거나 되돌린 뒤 다시 실행). 기준선에 없던 같은 경로의 사내 파일(첫 반입 포함)도 같다.
+     - 파일 목록은 git 무시 규칙을 따른다: 사내 레포는 `git ls-files -co --exclude-standard`(`git add -A`와 같은 기준), 압축 푼 초안은 그 `.gitignore`만(PC 전역 무시 제외). 반입 뒤 모습(`--check-boundary`·사내 새 파일 보고)에는 들어오는 `.gitignore`도 적용한다.
+     - `SITE_PATHS`에 있는 경로는 건드리지 않는다. 새 초안 `SITE_PATHS`에만 있는 줄은 **보고만** 한다(경고·JSON `site_paths_new`, 멈춘 경우에도). 사내 `SITE_PATHS`에 직접 추가한다.
+     - 기준선 이후 사내에서 고친 사외 파일(현재 해시 ≠ 기준선 해시)이 있으면 목록을 보여주고 **멈춘다** (변경 요지를 사용자가 타이핑해 사외에 전달하거나 되돌린 뒤 다시 실행). 기준선에 없던 같은 경로의 사내 파일(첫 반입 포함)도 같다. 현재 = 새 초안이면 사내에서 고친 것으로 보지 않는다.
      - 새 초안에 있는 파일은 덮어쓴다. 기준선에 있었는데 새 초안에 없는 파일은 사외에서 지운 것이므로 지운다.
      - 기준선에도 새 초안에도 없는 파일(사내에서 새로 만든 비-`SITE_PATHS` 파일)은 **지우지 않고** 목록으로 보고한다. 사내 전용이면 `SITE_PATHS`로 옮기라고 안내한다.
      - 끝나면 새 초안 기준으로 `.draft-manifest.json`을 다시 쓴다(`SITE_PATHS` 파일은 첫 반입 뒤 사내 소유라 기준선에서 뺀다). 첫 반입이면 기준선 없이 전체를 복사하고 기준선을 만든다.

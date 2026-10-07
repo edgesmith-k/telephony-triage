@@ -22,3 +22,9 @@ tests/mocks/plugin-probe/probe-hook.log
 # 스킬 eval 실행 결과 (Phase 13, tests/skill_evals/README.md)
 tests/skill_evals/workspace/
 *.egg-info/
+
+# 로컬 환경 (커밋하지 않는다)
+.venv/
+/build/
+/dist/
+.claude/settings.local.json

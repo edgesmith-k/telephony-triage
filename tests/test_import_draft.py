@@ -157,6 +157,74 @@ def test_import_draft_twice():
         run_scenario(Path(tmp))
 
 
+def _dirs(tmp_path: Path) -> tuple[Path, Path]:
+    source, dest = tmp_path / "draft", tmp_path / "site-repo"
+    _make_draft_v1(source)
+    dest.mkdir()
+    return source, dest
+
+
+def test_ignored_dest_files_not_scanned_or_listed(tmp_path):
+    """R-19: 사내 레포의 git 무시 파일(.venv 등)은 경계 검사·보고 대상이 아니다."""
+    source, dest = _dirs(tmp_path)
+    _write(source, ".gitignore", ".venv/\n")
+    subprocess.run(["git", "init", "-q", str(dest)], check=True)  # 무시 규칙은 반입되는 .gitignore에만 있다
+    host = "pypi.corp-" + "internal.net"  # 이 테스트 파일 자체는 경계 검사에 걸리지 않게 나눠 쓴다
+    _write(dest, ".venv/pip.conf", f"[global]\nindex-url = https://{host}/simple\n")
+    code, out = _run(source, dest, "--check-boundary")
+    assert code == 0, out
+    assert ".venv/pip.conf" not in out["kept_new_in_site"]
+
+
+def test_source_ignored_junk_not_in_baseline(tmp_path):
+    """R-19: 압축 푼 초안의 잡파일(원본 .gitignore 대상)은 반입·기준선에 들어가지 않는다."""
+    source, dest = _dirs(tmp_path)
+    _write(source, ".gitignore", "*.egg-info/\n")
+    _write(source, "foo.egg-info/PKG-INFO", "Name: foo\n")
+    code, out = _run(source, dest)
+    assert code == 0, out
+    files = json.loads((dest / ".draft-manifest.json").read_text(encoding="utf-8"))["files"]
+    assert ".gitignore" in files and not any("egg-info" in rel for rel in files)
+    assert not (dest / "foo.egg-info").exists()
+
+
+def test_source_ignores_pc_global_excludes(tmp_path, monkeypatch):
+    """R-19 보조: 사외 PC 전역 무시는 원본 목록에 적용하지 않는다 (사내에서 재현되지 않음)."""
+    source, dest = _dirs(tmp_path)
+    home = tmp_path / "home"
+    _write(home, ".config/git/ignore", "*.log\n")
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(home / ".config"))
+    _write(source, ".gitignore", "*.egg-info/\n")
+    _write(source, "tests/x.log", "synthetic\n")
+    code, out = _run(source, dest)
+    assert code == 0, out
+    assert (dest / "tests/x.log").is_file()
+
+
+def test_already_equal_to_new_draft_is_not_locally_modified(tmp_path):
+    """R-20: 사내 파일이 이미 새 초안과 같으면 멈추지 않는다."""
+    source, dest = _dirs(tmp_path)
+    assert _run(source, dest)[0] == 0
+    for root in (source, dest):
+        _write(root, "plugin/scripts/config.py", "# v2 config\n")
+    code, out = _run(source, dest)
+    assert code == 0, out
+    assert "plugin/scripts/config.py" in out["unchanged"]
+
+
+def test_new_site_paths_lines_reported(tmp_path):
+    """R-21: 새 초안 SITE_PATHS에만 있는 줄은 보고하고, 사내 SITE_PATHS는 바꾸지 않는다."""
+    source, dest = _dirs(tmp_path)
+    assert _run(source, dest)[0] == 0
+    _write(source, "SITE_PATHS", SITE_PATHS_TEXT + ".claude-plugin/\n")
+    _write(dest, ".claude-plugin/marketplace.json", "{}\n")
+    code, out = _run(source, dest)
+    assert code == 0, out
+    assert out["site_paths_new"] == [".claude-plugin/"]
+    assert (dest / "SITE_PATHS").read_text(encoding="utf-8") == SITE_PATHS_TEXT
+
+
 if __name__ == "__main__":
     with tempfile.TemporaryDirectory(prefix="tt-import-") as tmp:
         out = run_scenario(Path(tmp))
