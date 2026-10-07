@@ -12,3 +12,6 @@ pattern:ip-address tests/test_masking.py ^1\.2\.3\.4$
 
 # 경계 시험이 일부러 넣는 위반 문자열
 pattern:* tests/test_boundary.py
+
+# 교육 자료의 마스킹 전·후 예시: 테스트 PLMN(001-01) 합성 IMSI
+pattern:long-number docs/materials/* ^001010123456789$
