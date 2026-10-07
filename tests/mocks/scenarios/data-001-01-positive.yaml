@@ -3,6 +3,7 @@
 name: DATA-001-01
 start: "2026-09-20T14:30:00+09:00"
 default_phone: 0
+phone_style: aosp
 pid: 1234
 tid: 1244
 build:
@@ -13,10 +14,11 @@ expect:
   occurred_at: "2026-09-20T14:32:10+09:00"
 entries:
   - {at: 0, tag: "DCM-{phone}", msg: "carrier config loaded: carrierId=<CARRIER>"}
-  - {after: 3, tag: "DSM-{phone}", msg: "onDataEnabledChanged: enabled=false reason=USER"}
-  - {after: 0.4, tag: "DSM-{phone}", msg: "isDataEnabled=false (user setting off)"}
+  - {after: 3, tag: "DSMGR-{phone}", msg: "notifyDataEnabledChanged: enabled=false, reason=USER, callingPackage=com.android.settings"}
+  - {after: 0.35, tag: "DSMGR-{phone}", msg: "UserDataEnabled changed to false"}
+  - {after: 0.05, tag: "DSMGR-{phone}", msg: "mIsDataEnabled=false, prevDataEnabled=true"}
   - {after: 1.2, tag: "DNC-{phone}", level: I, msg: "onEvaluateNetworkRequests: reason=DATA_ENABLED_CHANGED"}
-  - {after: 0.3, tag: "DNC-{phone}", level: W, msg: "evaluation result: NOT_ALLOWED reasons=[DATA_DISABLED]"}
-  - {after: 2, tag: "DNC-{phone}", level: W, msg: "evaluation result: NOT_ALLOWED reasons=[DATA_DISABLED]"}
+  - {after: 0.3, tag: "DNC-{phone}", level: W, msg: "Data evaluation: evaluation reason:DATA_ENABLED_CHANGED, Data disallowed reasons: DATA_DISABLED, candidate profile=null"}
+  - {after: 2, tag: "DNC-{phone}", level: W, msg: "Data evaluation: evaluation reason:DATA_ENABLED_CHANGED, Data disallowed reasons: DATA_DISABLED, candidate profile=null"}
   - {after: 8, tag: "DRM-{phone}", msg: "no retry scheduled: setup not allowed"}
-  - {after: 15, tag: "DNC-{phone}", level: W, msg: "evaluation result: NOT_ALLOWED reasons=[DATA_DISABLED]"}
+  - {after: 15, tag: "DNC-{phone}", level: W, msg: "Data evaluation: evaluation reason:DATA_ENABLED_CHANGED, Data disallowed reasons: DATA_DISABLED, candidate profile=null"}

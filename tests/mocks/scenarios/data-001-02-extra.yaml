@@ -3,6 +3,7 @@
 name: DATA-001-02.extra.1
 start: "2026-09-24T21:10:00+09:00"
 default_phone: 0
+phone_style: aosp
 pid: 1290
 tid: 1301
 build:
@@ -12,7 +13,7 @@ expect:
   expect_top: DATA-001-02
 entries:
   - {at: 0, tag: "SST-{phone}", msg: "onRoamingOn: roaming=true"}
-  - {after: 1.5, tag: "DSM-{phone}", msg: "isDataRoamingEnabled=false"}
+  - {after: 1.5, tag: "DSMGR-{phone}", msg: "DataRoamingEnabled changed to false"}
   - {after: 0.8, tag: "DNC-{phone}", level: I, msg: "onEvaluateNetworkRequests: reason=ROAMING_STATE_CHANGED"}
-  - {after: 0.4, tag: "DNC-{phone}", level: W, msg: "evaluation result: NOT_ALLOWED reasons=[ROAMING_DISABLED]"}
-  - {after: 6, tag: "DNC-{phone}", level: W, msg: "evaluation result: NOT_ALLOWED reasons=[ROAMING_DISABLED]"}
+  - {after: 0.4, tag: "DNC-{phone}", level: W, msg: "Data evaluation: evaluation reason:ROAMING_ENABLED_CHANGED, Data disallowed reasons: ROAMING_DISABLED, candidate profile=null"}
+  - {after: 6, tag: "DNC-{phone}", level: W, msg: "Data evaluation: evaluation reason:ROAMING_ENABLED_CHANGED, Data disallowed reasons: ROAMING_DISABLED, candidate profile=null"}

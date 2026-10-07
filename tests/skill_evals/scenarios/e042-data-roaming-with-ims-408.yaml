@@ -8,9 +8,9 @@ expect:
   expect_top: DATA-001-02
 entries:
   - {at: 0, tag: "SST-{phone}", msg: "onRoamingOn: roaming=true"}
-  - {after: 2, tag: "DSM-{phone}", msg: "isDataRoamingEnabled=false"}
+  - {after: 2, tag: "DSMGR-{phone}", msg: "DataRoamingEnabled changed to false"}
   - {after: 1, tag: "DNC-{phone}", level: I, msg: "onEvaluateNetworkRequests: reason=ROAMING_STATE_CHANGED"}
-  - {after: 0.5, tag: "DNC-{phone}", level: W, msg: "evaluation result: NOT_ALLOWED reasons=[ROAMING_DISABLED]"}
+  - {after: 0.5, tag: "DNC-{phone}", level: W, msg: "Data evaluation: evaluation reason:ROAMING_ENABLED_CHANGED, Data disallowed reasons: ROAMING_DISABLED, candidate profile=null"}
   - {after: 5, tag: ImsManager, pid: 1600, tid: 1610, msg: "register: impu=sip:<IMPU#1>@ims.mnc001.mcc450.3gppnetwork.org"}
   - {after: 32, tag: ImsRegistration, pid: 1600, tid: 1610, level: W, msg: "onRegistrationFailed: code=408 reason=REQUEST_TIMEOUT"}
-  - {after: 10, tag: "DNC-{phone}", level: W, msg: "evaluation result: NOT_ALLOWED reasons=[ROAMING_DISABLED]"}
+  - {after: 10, tag: "DNC-{phone}", level: W, msg: "Data evaluation: evaluation reason:ROAMING_ENABLED_CHANGED, Data disallowed reasons: ROAMING_DISABLED, candidate profile=null"}

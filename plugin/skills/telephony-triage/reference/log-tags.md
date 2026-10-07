@@ -10,17 +10,19 @@
 
 | 태그 | 클래스 | 볼 것 |
 |---|---|---|
-| `DNC-<phoneId>` | DataNetworkController | 데이터 평가 결과(`evaluation result: ALLOWED / NOT_ALLOWED reasons=[…]`), 네트워크 요청, setup 시도 |
-| `DN-<name>` | DataNetwork | 개별 데이터 네트워크 상태 전이(connecting/connected/disconnecting), setup 실패 원인(DataFailCause) |
+| `DNC-<phoneId>` | DataNetworkController | 데이터 평가 결과(`Data evaluation: … Data disallowed reasons: … / Data allowed reason: …`), 네트워크 요청, setup 시도, Internet 상태(`Internet data state changed from … to …`), 전체 해제(`onTearDownAllDataNetworks: reason=…`) |
+| `DN-<id>-C`·`DN-<id>-I` | DataNetwork | 개별 데이터 네트워크 상태 전이(connecting/connected/disconnecting), setup 실패 원인(DataFailCause) |
 | `DPM-<phoneId>` | DataProfileManager | APN/데이터 프로파일 선택, 적합한 프로파일 없음 |
 | `DRM-<phoneId>` | DataRetryManager | setup/handover 재시도 규칙과 스케줄, 재시도 중단 |
-| `DSM-<phoneId>` | DataSettingsManager | 모바일 데이터·로밍 설정 변경(`onDataEnabledChanged`) |
+| `DSMGR-<phoneId>` | DataSettingsManager | 모바일 데이터·로밍 설정 변경(`notifyDataEnabledChanged`) |
+| `DSM-C-<phoneId>`·`DSM-I-<phoneId>` | DataServiceManager | 데이터 서비스 요청·응답 |
 | `DCM-<phoneId>` | DataConfigManager | carrier config 기반 데이터 설정(재시도 규칙, 금지 APN 등) |
 | `DSRM-<phoneId>` | DataStallRecoveryManager | data stall 감지와 복구 단계 |
 
 - 레거시 스택(DcTracker/DCT, DataConnection)은 고려하지 않는다.
-- 평가 거부 사유(`reasons=[…]`)의 예: `DATA_DISABLED`, `ROAMING_DISABLED`, `NOT_IN_SERVICE`, `SIM_NOT_READY`, `NO_SUITABLE_DATA_PROFILE`,
+- 평가 거부 사유(`Data disallowed reasons:` 뒤, 공백 구분)의 예: `DATA_DISABLED`, `ROAMING_DISABLED`, `NOT_IN_SERVICE`, `SIM_NOT_READY`, `NO_SUITABLE_DATA_PROFILE`,
   `DATA_RESTRICTED_BY_NETWORK`, `CONCURRENT_VOICE_DATA_NOT_ALLOWED`, `DATA_THROTTLED`. 실제 표기는 버전 소스의 `DataEvaluationReason`으로 확인.
+- 비행기 모드로 끊긴 연결은 `AirplaneModeStats`(`Airplane mode change. Value: true`) → `onTearDownAllDataNetworks: reason=AIRPLANE_MODE_ON` → Internet `DISCONNECTED` 순이고, 사용자가 데이터를 끈 경우는 `DSMGR`의 `enabled=false`가 앞선다. 데이터를 먼저 내리고 라디오(`RADIO_POWER on = false`)를 끈다.
 - 태그 접미사 숫자가 phone id(슬롯)다. 듀얼 SIM 로그에서 슬롯을 섞어 판단하지 않는다.
 
 ## 공통

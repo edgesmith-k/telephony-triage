@@ -110,8 +110,37 @@ def _line(time: str, level: str, tag: str, msg: str, phone: int = 0) -> str:
     return f"09-20 {time}  1234  1244 {level} {tag}: [PHONE{phone}] {msg}"
 
 
-OFF = "onDataEnabledChanged: enabled=false reason=USER"
-REJECTED = "evaluation result: NOT_ALLOWED reasons=[DATA_DISABLED]"
+OFF = "notifyDataEnabledChanged: enabled=false, reason=USER, callingPackage=com.android.settings"
+REJECTED = "Data evaluation: evaluation reason:DATA_ENABLED_CHANGED, Data disallowed reasons: DATA_DISABLED, candidate profile=null"
+
+
+def test_aosp_format_lines_match_data_disabled():
+    # AOSP 형식(접두어 없음): DSMGR 태그 접미사로 슬롯, 평가는 `Data disallowed reasons:` 한 줄
+    stamp = "09-20 14:30:0{}  1234  1244 {} {}: {}"
+    log = _write_log([
+        stamp.format("0.000", "D", "DSMGR-0", OFF),
+        stamp.format("1.000", "W", "DNC-0", REJECTED),
+    ])
+    events = _events(log)
+    parsed = json.loads(events.read_text(encoding="utf-8"))["events"]
+    assert [e["fields"] for e in parsed if e["event"] == "data_setting_changed"] == [
+        {"enabled": "false", "reason": "USER"}]
+    assert [e["fields"]["reasons"] for e in parsed if e["event"] == "data_evaluation_rejected"] == ["DATA_DISABLED"]
+    result = _match(events)
+    assert _S(result, "DATA-001") == 1 and _C(result, "DATA-001-01") == 1
+
+
+def test_apm_fixture_is_data_002_not_data_001_01():
+    # 교차 확인: 비행기 모드 흔적은 DATA-002-01만 충족하고, 설정 OFF 이벤트가 없어 DATA-001-01은 C=0
+    apm = SAMPLE / "data/DATA-002-data-teardown-by-user-action/fixtures/DATA-002-01.log"
+    result = _match(_events(apm), SAMPLE, "--regress")
+    assert _S(result, "DATA-002") == 1 and _C(result, "DATA-002-01") == 1
+    assert _C(result, "DATA-001-01") in (0, None)
+    # 반대로 사용자 데이터 OFF 중 연결 해제 표본은 DATA-002 증상 시그니처의 must_not_match로 S=0
+    off = DATA_DIR / "fixtures/DATA-001-01.extra.1.log"
+    result = _match(_events(off), SAMPLE, "--regress")
+    assert _S(result, "DATA-002") == 0 and _C(result, "DATA-002-01") == 0
+    assert _C(result, "DATA-001-01") == 1
 
 
 # -- 분석 모드 -----------------------------------------------------------------
@@ -137,7 +166,7 @@ def test_data_disabled_is_top_candidate():
 
 def test_cause_log_removed_gives_unresolved_type():
     lines = (DATA_DIR / "fixtures/DATA-001-01.log").read_text(encoding="utf-8").splitlines()
-    kept = [line for line in lines if "onDataEnabledChanged" not in line]
+    kept = [line for line in lines if "notifyDataEnabledChanged" not in line]
     assert len(kept) < len(lines)
     result = _match(_events(_write_log(kept)))
     top = result["candidates"][0]
@@ -159,7 +188,7 @@ def test_negative_fixtures_have_no_symptom():
 def test_cause_without_symptom_only_in_regress():
     # 원인 시그니처(설정 OFF → 거부)는 충족되지만 같은 윈도우에 SETUP_DATA_CALL이 있어 증상은 없다.
     log = _write_log([
-        _line("14:30:00.000", "D", "DSM-0", OFF),
+        _line("14:30:00.000", "D", "DSMGR-0", OFF),
         _line("14:30:01.000", "W", "DNC-0", REJECTED),
         _line("14:30:02.000", "D", "RILJ", "[0041]> SETUP_DATA_CALL apn=default"),
         _line("14:30:03.000", "D", "RILJ", "[0041]< SETUP_DATA_CALL error=NONE cid=1"),
@@ -307,7 +336,7 @@ def test_cross_slot_same_phone():
 def test_symptom_must_not_match_is_per_slot():
     # 슬롯 1의 SETUP_DATA_CALL은 슬롯 0의 증상을 깨지 않는다 (same_phone 기본 true).
     log = _write_log([
-        _line("14:30:00.000", "D", "DSM-0", OFF),
+        _line("14:30:00.000", "D", "DSMGR-0", OFF),
         _line("14:30:01.000", "W", "DNC-0", REJECTED),
         _line("14:30:02.000", "D", "RILJ", "[0041]> SETUP_DATA_CALL apn=default", phone=1),
     ])
@@ -317,13 +346,13 @@ def test_symptom_must_not_match_is_per_slot():
 
 def test_sequence_order_matters():
     in_order = _write_log([
-        _line("14:30:00.000", "D", "DSM-0", OFF),
+        _line("14:30:00.000", "D", "DSMGR-0", OFF),
         _line("14:30:02.000", "W", "DNC-0", REJECTED),
     ])
     reversed_ = _write_log([
         _line("14:30:00.000", "W", "DNC-0", REJECTED),
         _line("14:30:02.000", "W", "DNC-0", REJECTED),
-        _line("14:30:05.000", "D", "DSM-0", OFF),
+        _line("14:30:05.000", "D", "DSMGR-0", OFF),
     ])
     assert _C(_match(_events(in_order)), "DATA-001-01") == 1
     result = _match(_events(reversed_))
@@ -333,7 +362,7 @@ def test_sequence_order_matters():
 
 def test_window_sec_limits_span():
     far = _write_log([
-        _line("14:30:00.000", "D", "DSM-0", OFF),
+        _line("14:30:00.000", "D", "DSMGR-0", OFF),
         _line("14:31:30.000", "W", "DNC-0", REJECTED),  # 90초 뒤 > window_sec 60
     ])
     assert _C(_match(_events(far), SAMPLE, "--regress"), "DATA-001-01") == 0
@@ -389,10 +418,10 @@ def test_bad_signature_is_usage_error():
 def _two_cluster_log() -> Path:
     """60초(window_sec)보다 떨어진 두 군집: A(14:30) DATA-001-01, B(14:33) DATA-001-02. SETUP_DATA_CALL 없음."""
     return _write_log([
-        _line("14:30:03.000", "D", "DSM-0", OFF),
+        _line("14:30:03.000", "D", "DSMGR-0", OFF),
         _line("14:30:04.900", "W", "DNC-0", REJECTED),
         _line("14:33:00.000", "D", "SST-0", "onRoamingOn: roaming=true"),
-        _line("14:33:02.700", "W", "DNC-0", "evaluation result: NOT_ALLOWED reasons=[ROAMING_DISABLED]"),
+        _line("14:33:02.700", "W", "DNC-0", "Data evaluation: evaluation reason:ROAMING_ENABLED_CHANGED, Data disallowed reasons: ROAMING_DISABLED, candidate profile=null"),
     ])
 
 
@@ -512,14 +541,14 @@ def test_event_index_with_unsorted_input():
 def test_duplicate_ts_tag_evidence_is_distinguished():
     # 같은 시각·태그의 줄이 둘 있고 시그니처에 맞는 것은 둘째 줄뿐이다. 근거의 줄 위치가 그 줄을 가리킨다.
     log = _write_log([
-        _line("14:30:00.000", "D", "DSM-0", "isDataEnabled=true"),
-        _line("14:30:00.000", "D", "DSM-0", OFF),
+        _line("14:30:00.000", "D", "DSMGR-0", "mIsDataEnabled=true, prevDataEnabled=false"),
+        _line("14:30:00.000", "D", "DSMGR-0", OFF),
         _line("14:30:02.000", "W", "DNC-0", REJECTED),
     ])
     events = _events(log)
     result = _match(events)
     assert _C(result, "DATA-001-01") == 1
-    (off,) = [e for e in result["candidates"][0]["evidence"] if e["tag"] == "DSM-0"]
+    (off,) = [e for e in result["candidates"][0]["evidence"] if e["tag"] == "DSMGR-0"]
     assert off["line_ref"] == {"file_index": 0, "line_no": 2}
     assert _check_provenance(result, json.loads(events.read_text(encoding="utf-8"))) >= 2
 

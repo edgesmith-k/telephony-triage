@@ -131,7 +131,7 @@ Android 버전과 브랜치마다 소스 트리가 다르므로 **분석할 때�
 - **`--mask`로 각 줄을 extractor 실행 전에 마스킹**한다. 그래서 이벤트의 `msg`와 `fields`가 모두 마스킹돼 있다(`masked: true`). 이후 단계(매칭, 리포트, fixture)는 마스킹된 이벤트만 쓴다 (`04-parser-matching.md §5.11 (1)`).
 - RIL 페어링: `RILJ`의 요청(`[serial]> REQUEST`)과 응답(`[serial]< REQUEST`)을 `(pid, phone_id, serial)` 키로 매칭하고, 응답 없음, 에러 응답, 지연(`ril.yaml` timeout)을 이벤트로 표시한다. 실제 출력 형식은 Phase 0에서 확인한다(S9, 슬롯 표기는 S20).
 - 카테고리별 태그(`tags.yaml`)로 timeline 요약을 만든다. 태그 후보(버전·벤더마다 다르므로 Phase 0에서 확인, S8):
-  - data: **Android 13+ 데이터 스택 태그만** 쓴다 — `DNC-<phoneId>`(DataNetworkController), `DN-…`(DataNetwork), `DPM-<phoneId>`(DataProfileManager), `DRM-<phoneId>`(DataRetryManager), `DSM-<phoneId>`(DataSettingsManager), `DCM-<phoneId>`(DataConfigManager), `DSRM-<phoneId>`(DataStallRecoveryManager). 레거시 스택(DcTracker/DCT, DataConnection)은 고려하지 않는다.
+  - data: **Android 13+ 데이터 스택 태그만** 쓴다 — `DNC-<phoneId>`(DataNetworkController), `DN-<id>-<C|I>`(DataNetwork), `DPM-<phoneId>`(DataProfileManager), `DRM-<phoneId>`(DataRetryManager), `DSMGR-<phoneId>`(DataSettingsManager), `DSM-<C|I>-<phoneId>`(DataServiceManager), `DCM-<phoneId>`(DataConfigManager), `DSRM-<phoneId>`(DataStallRecoveryManager). 레거시 스택(DcTracker/DCT, DataConnection)은 고려하지 않는다.
   - call: GsmCdmaCallTracker, ImsPhoneCallTracker, ImsPhone, Telecom 계열
   - network: ServiceStateTracker 계열 (축약 `SST` 가능성)
   - sim: UiccController, UiccSlot, SubscriptionManagerService 계열 (축약 `SMSVC` 가능성)

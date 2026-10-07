@@ -14,17 +14,17 @@ build:
   build: MOCKA56_U1_20260915
 entries:
   - {at: 0, tag: ImsResolver, msg: "bound to mock ImsService"}
-  - {at: 2, tag: "DSM-{phone}", msg: "onDataEnabledChanged: enabled=true reason=BOOT"}
+  - {at: 2, tag: "DSMGR-{phone}", msg: "notifyDataEnabledChanged: enabled=true, reason=BOOT, callingPackage=com.android.settings"}
   - {at: 5, tag: ConnectivityService, phone: null, msg: "setAirplaneMode enabled=true"}
   - {at: 12, tag: ImsRegistration, level: W, msg: "onRegistrationFailed: code=403 reason=FORBIDDEN"}
   - {at: 20, tag: ConnectivityService, phone: null, msg: "setAirplaneMode enabled=false"}
   - {at: 36, tag: ImsRegistration, level: W, msg: "onRegistrationFailed: code=403 reason=FORBIDDEN"}
   - {at: 90, ril_unsol: UNSOL_RESPONSE_NETWORK_STATE_CHANGED}
-  - {at: 170, tag: "DSM-{phone}", msg: "onDataEnabledChanged: enabled=true reason=USER"}
-  - {at: 183, tag: "DSM-{phone}", msg: "onDataEnabledChanged: enabled=false reason=USER"}
-  - {at: 184, tag: "DSM-{phone}", msg: "isDataEnabled=false (user setting off)"}
+  - {at: 170, tag: "DSMGR-{phone}", msg: "notifyDataEnabledChanged: enabled=true, reason=USER, callingPackage=com.android.settings"}
+  - {at: 183, tag: "DSMGR-{phone}", msg: "notifyDataEnabledChanged: enabled=false, reason=USER, callingPackage=com.android.settings"}
+  - {at: 184, tag: "DSMGR-{phone}", msg: "UserDataEnabled changed to false"}
   - {at: 186, tag: "DNC-{phone}", level: I, msg: "onEvaluateNetworkRequests: reason=DATA_ENABLED_CHANGED"}
-  - {at: 187, tag: "DNC-{phone}", level: W, msg: "evaluation result: NOT_ALLOWED reasons=[DATA_DISABLED]"}
-  - {at: 195, tag: "DNC-{phone}", level: W, msg: "evaluation result: NOT_ALLOWED reasons=[DATA_DISABLED]"}
+  - {at: 187, tag: "DNC-{phone}", level: W, msg: "Data evaluation: evaluation reason:DATA_ENABLED_CHANGED, Data disallowed reasons: DATA_DISABLED, candidate profile=null"}
+  - {at: 195, tag: "DNC-{phone}", level: W, msg: "Data evaluation: evaluation reason:DATA_ENABLED_CHANGED, Data disallowed reasons: DATA_DISABLED, candidate profile=null"}
   - {at: 240, tag: "DRM-{phone}", msg: "no retry scheduled: setup not allowed"}
   - {at: 250, tag: ConnectivityService, phone: null, msg: "setAirplaneMode enabled=true"}

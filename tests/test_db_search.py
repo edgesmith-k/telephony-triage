@@ -2,7 +2,7 @@
 """Phase 11 완료 기준 확인: 병합(`move/...`) 절차와 `db_search.py`의 옛 ID → 새 ID 연결
 (11-phases.md Phase 11, 06-collaboration.md §6.6, contracts.md §renumber 참조).
 
-- 병합: 샘플에 중복 유형 DATA-002(원인 DATA-002-01, 양성 fixture, Jira MOCK-1201)를 둔 main에서
+- 병합: 샘플에 중복 유형 DATA-009(원인 DATA-009-01, 양성 fixture, Jira MOCK-1201)를 둔 main에서
   `source: move` 계획(`new-cause` → `add-fixture`(옛 fixture를 이슈 DB 경로로) → `set-status merged-into` →
   `reclassify`(원인 미확정 Jira는 `<유형 ID>:unresolved`))을 `db_pr stage`로 PR까지 올리고 머지한다. 그 뒤 `db_search`가 옛 ID를 새 ID로 잇는다.
 - 사후 재배치: main에 같은 원인 ID가 두 번 들어온 트리(`issue-db-dup-id`)에서 나중 쪽을 옮긴 커밋에
@@ -28,11 +28,11 @@ from runner import SAMPLE, copy_db, edit, git, run, run_json, variant_db  # noqa
 from workspace import Workspace  # noqa: E402
 
 DATA = "data/DATA-001-no-setup-data-call"
-DATA2 = "data/DATA-002-sim-not-ready"
+DATA2 = "data/DATA-009-sim-not-ready"
 SIM_LOG = variant_db("issue-db-pending") / DATA / "fixtures/DATA-001-03.log"
 
 DATA_002 = """---
-id: DATA-002
+id: DATA-009
 category: data
 secondary_categories: []
 title: SIM 준비 전 데이터 평가 거부
@@ -44,7 +44,7 @@ symptom_signatures:
       - {event: data_evaluation_rejected, fields: {reasons: '.*SIM_NOT_READY.*'}}
     window_sec: 60
 causes:
-  - id: DATA-002-01
+  - id: DATA-009-01
     status: active
     title: SIM 미준비
     description: SIM 로딩 전에 평가가 거부됨
@@ -76,13 +76,13 @@ SIM 로딩 전 데이터 평가 거부.
 
 ## 원인별 상세
 
-### DATA-002-01 SIM 미준비
+### DATA-009-01 SIM 미준비
 
 - 병합 시험용.
 """
 
 JIRA_1201 = """key: MOCK-1201
-cause: DATA-002-01
+cause: DATA-009-01
 date: 2026-09-26
 occurred_on: 2026-09-26
 model: MOCK-A56
@@ -95,15 +95,15 @@ note: 부팅 직후 데이터 안 됨
 
 
 def _source_db() -> Path:
-    """샘플 + 중복 유형 DATA-002 (운영 이슈 DB처럼 lint·회귀를 통과하는 트리)."""
+    """샘플 + 중복 유형 DATA-009 (운영 이슈 DB처럼 lint·회귀를 통과하는 트리)."""
     db = copy_db(SAMPLE, "src")
     (db / DATA2 / "jira").mkdir(parents=True)
     (db / DATA2 / "fixtures").mkdir()
     (db / DATA2 / "type.md").write_text(DATA_002, encoding="utf-8", newline="\n")
     (db / DATA2 / "jira/MOCK-1201.yaml").write_text(JIRA_1201, encoding="utf-8", newline="\n")
-    unresolved = JIRA_1201.replace("MOCK-1201", "MOCK-1202").replace("cause: DATA-002-01", "cause: unresolved")
+    unresolved = JIRA_1201.replace("MOCK-1201", "MOCK-1202").replace("cause: DATA-009-01", "cause: unresolved")
     (db / DATA2 / "jira/MOCK-1202.yaml").write_text(unresolved, encoding="utf-8", newline="\n")
-    shutil.copyfile(SIM_LOG, db / DATA2 / "fixtures/DATA-002-01.log")
+    shutil.copyfile(SIM_LOG, db / DATA2 / "fixtures/DATA-009-01.log")
     return db
 
 
@@ -121,26 +121,26 @@ def _move_plan(old_cause: dict) -> dict:
         "base_sha": None, "jira": None,
         "operations": [
             {"op": "new-cause", "temp_id": "NEW-CAUSE-1", "type": "DATA-001", "cause": body,
-             "body": "- DATA-002-01에서 옮겨 옴 (병합)."},
+             "body": "- DATA-009-01에서 옮겨 옴 (병합)."},
             {"op": "add-fixture", "for": "NEW-CAUSE-1", "kind": "positive",
-             "path": f"{DATA2}/fixtures/DATA-002-01.log"},
-            {"op": "set-status", "id": "DATA-002-01", "status": "merged-into:NEW-CAUSE-1"},
-            {"op": "set-status", "id": "DATA-002", "status": "merged-into:DATA-001"},
-            {"op": "reclassify", "jira": "MOCK-1201", "from": "DATA-002-01", "to": "NEW-CAUSE-1"},
+             "path": f"{DATA2}/fixtures/DATA-009-01.log"},
+            {"op": "set-status", "id": "DATA-009-01", "status": "merged-into:NEW-CAUSE-1"},
+            {"op": "set-status", "id": "DATA-009", "status": "merged-into:DATA-001"},
+            {"op": "reclassify", "jira": "MOCK-1201", "from": "DATA-009-01", "to": "NEW-CAUSE-1"},
             # 원인 미확정 Jira도 흡수하는 유형으로 옮긴다
             {"op": "reclassify", "jira": "MOCK-1202", "from": "unresolved", "to": "DATA-001:unresolved"},
         ],
         "feedback": None,
-        "commit_message": "[DATA-002] move DATA-002 into DATA-001 (NEW-CAUSE-1)",
-        "pr": {"number": None, "branch": "move/DATA-002-to-DATA-001", "head_sha": None},
+        "commit_message": "[DATA-009] move DATA-009 into DATA-001 (NEW-CAUSE-1)",
+        "pr": {"number": None, "branch": "move/DATA-009-to-DATA-001", "head_sha": None},
         "included_pending": [],
     }
 
 
 def test_move_merges_type_and_search_follows_old_ids():
     ws = Workspace(src=_source_db())
-    old = _cause((ws.clone / DATA2 / "type.md").read_text(encoding="utf-8"), "DATA-002-01")
-    job, branch = "move-DATA-002-to-DATA-001", "move/DATA-002-to-DATA-001"
+    old = _cause((ws.clone / DATA2 / "type.md").read_text(encoding="utf-8"), "DATA-009-01")
+    job, branch = "move-DATA-009-to-DATA-001", "move/DATA-009-to-DATA-001"
     ws.plan(job, _move_plan(old))
     out = ws.ship(job, branch)
     stage = out["stage"]
@@ -154,34 +154,34 @@ def test_move_merges_type_and_search_follows_old_ids():
     assert moved["signatures"] == old["signatures"] and moved["status"] == "active"
     old_md = ws.remote_file(branch, f"{DATA2}/type.md")
     assert "status: merged-into:DATA-001\n" in old_md
-    assert _cause(old_md, "DATA-002-01")["status"] == "merged-into:DATA-001-03"
+    assert _cause(old_md, "DATA-009-01")["status"] == "merged-into:DATA-001-03"
     # 삭제하지 않는다: 옛 fixture와 유형 파일은 남고, Jira는 새 유형 디렉토리로 옮겨진다
     files = ws.remote_files(branch)
-    assert f"{DATA2}/fixtures/DATA-002-01.log" in files and f"{DATA}/fixtures/DATA-001-03.log" in files
+    assert f"{DATA2}/fixtures/DATA-009-01.log" in files and f"{DATA}/fixtures/DATA-001-03.log" in files
     assert f"{DATA2}/jira/MOCK-1201.yaml" not in files
     jira = yaml.safe_load(ws.remote_file(branch, f"{DATA}/jira/MOCK-1201.yaml"))
-    assert jira["cause"] == "DATA-001-03" and "reclassified from DATA-002-01" in jira["note"]
+    assert jira["cause"] == "DATA-001-03" and "reclassified from DATA-009-01" in jira["note"]
     assert f"{DATA2}/jira/MOCK-1202.yaml" not in files
     unresolved = yaml.safe_load(ws.remote_file(branch, f"{DATA}/jira/MOCK-1202.yaml"))
-    assert unresolved["cause"] == "unresolved" and "reclassified from DATA-002:unresolved" in unresolved["note"]
+    assert unresolved["cause"] == "unresolved" and "reclassified from DATA-009:unresolved" in unresolved["note"]
     data_section = ws.remote_file(branch, "README.md").split("## Data", 1)[1].split("## Call", 1)[0]
     assert "MOCK-1202" in data_section
-    assert "DATA-002" in ws.remote_file(branch, "README.md").split("## 보관", 1)[1]
+    assert "DATA-009" in ws.remote_file(branch, "README.md").split("## 보관", 1)[1]
 
     ws.merge(branch)
     git(ws.clone, "pull", "-q", "--ff-only")
-    found = run_json("db_search.py", ["--db", ws.clone, "DATA-002-01"])
+    found = run_json("db_search.py", ["--db", ws.clone, "DATA-009-01"])
     assert found["kind"] == "cause-id"
-    assert [r["id"] for r in found["results"]] == ["DATA-002-01", "DATA-001-03"]
+    assert [r["id"] for r in found["results"]] == ["DATA-009-01", "DATA-001-03"]
     assert found["results"][0]["current"] == "DATA-001-03" and found["results"][0]["status"] == \
         "merged-into:DATA-001-03"
-    assert {"from": "DATA-002-01", "to": "DATA-001-03", "via": "merged-into"} in found["links"]
+    assert {"from": "DATA-009-01", "to": "DATA-001-03", "via": "merged-into"} in found["links"]
     new = found["results"][1]
-    assert new["merged_from"] == ["DATA-002-01"] and new["jira"] == ["MOCK-1201"]
+    assert new["merged_from"] == ["DATA-009-01"] and new["jira"] == ["MOCK-1201"]
     # 유형 ID로 찾아도 병합 대상 유형으로 이어진다
-    by_type = run_json("db_search.py", ["--db", ws.clone, "DATA-002"])
+    by_type = run_json("db_search.py", ["--db", ws.clone, "DATA-009"])
     assert by_type["results"][0]["current"] == "DATA-001"
-    assert {"from": "DATA-002", "to": "DATA-001", "via": "merged-into"} in by_type["links"]
+    assert {"from": "DATA-009", "to": "DATA-001", "via": "merged-into"} in by_type["links"]
     # Jira 키로 찾으면 옮겨진 기록과 새 원인
     by_jira = run_json("db_search.py", ["--db", ws.clone, "MOCK-1201"])
     assert by_jira["kind"] == "jira"
@@ -258,13 +258,13 @@ def _ids(found: dict) -> list[str]:
 def test_symptom_sentence_finds_data_issue_with_jira_numbers():
     found = run_json("db_search.py", ["--db", SAMPLE, "데이터 안 붙어, 이런 이슈 있었어? 이슈 번호 알려줘", "--limit", "10"])
     assert found["kind"] == "keyword" and [t["term"] for t in found["terms"]] == ["데이터", "붙어"]
-    first = found["results"][:3]
-    assert [r["id"] for r in first] == ["DATA-001", "DATA-001-01", "DATA-001-02"]
+    first = found["results"][:5]  # data 카테고리 전체가 같은 단어로 걸린다 (DATA-002 포함)
+    assert [r["id"] for r in first] == ["DATA-001", "DATA-002", "DATA-001-01", "DATA-001-02", "DATA-002-01"]
     assert all(r["matched"] == ["데이터", "붙어"] and r["phrase"] is False for r in first)
     assert not any(i.startswith(("SIM-", "SMS-")) for i in _ids(found))
     assert not any(r["kind"] == "jira" for r in found["results"])
     assert first[0]["jira"] == ["MOCK-1104", "MOCK-1103", "MOCK-1102", "MOCK-1101"]
-    assert first[1]["jira"] == ["MOCK-1102", "MOCK-1101"] and first[1]["jira_latest"] == "2026-09-12"
+    assert first[2]["jira"] == ["MOCK-1102", "MOCK-1101"] and first[2]["jira_latest"] == "2026-09-12"
 
 
 def test_multiword_query_keeps_phrase_hit_first_and_filters_weak_hits():
@@ -363,7 +363,7 @@ def test_markdown_symptom_sentence_shows_only_keys_present_in_json():
     assert keys[:4] == ["MOCK-1104", "MOCK-1103", "MOCK-1102", "MOCK-1101"]        # 결과 순서
     assert set(re.findall(r"MOCK-\d+", text)) <= {k for r in found["results"] for k in (r.get("jira") or [r.get("key")])}
     rows = [l for l in text.splitlines() if l.startswith("| ") and "유형 > 원인" not in l]
-    assert [r.split("|")[1].split()[0] for r in rows][:3] == ["DATA-001", "SETUP_DATA_CALL이", "SETUP_DATA_CALL이"]
+    assert [r.split("|")[1].split()[0] for r in rows][:3] == ["DATA-001", "DATA-002", "SETUP_DATA_CALL이"]
     assert "DATA-001-02 Roaming disabled | 데이터 로밍 설정을 켠다 (미검증)" in text   # §3-2: 미검증이면 그렇다고
     assert "DATA-001-01 Data disabled | 모바일 데이터 설정을 켠다 (verified)" in text   # 검증됨 문구는 search.md에 없어 원값
     assert "붙어 (부분 일치)" in text                                              # matched가 terms보다 적으면

@@ -11,18 +11,19 @@
 name: DATA-001.none.2
 start: "2026-09-23T11:00:00+09:00"
 default_phone: 0
+phone_style: aosp
 pid: 1234
 tid: 1244
 expect:
   expect_top: none
 entries:
   # 슬롯 1: 원인 로그(설정 OFF)가 다른 슬롯에 먼저 있다.
-  - {at: 0, tag: "DSM-{phone}", msg: "onDataEnabledChanged: enabled=false reason=USER", phone: 1}
+  - {at: 0, tag: "DSMGR-{phone}", msg: "notifyDataEnabledChanged: enabled=false, reason=USER, callingPackage=com.android.settings", phone: 1}
   # 슬롯 0: 평가가 거부된다. 이 슬롯에는 설정 변경 로그가 없다.
-  - {after: 1, tag: "DNC-{phone}", level: I, msg: "onEvaluateNetworkRequests: reason=NETWORK_REQUEST_ADDED", phone: 0}
-  - {after: 0.5, tag: "DNC-{phone}", level: W, msg: "evaluation result: NOT_ALLOWED reasons=[DATA_DISABLED]", phone: 0}
+  - {after: 1, tag: "DNC-{phone}", level: I, msg: "onEvaluateNetworkRequests: reason=NEW_REQUEST", phone: 0}
+  - {after: 0.5, tag: "DNC-{phone}", level: W, msg: "Data evaluation: evaluation reason:DATA_ENABLED_CHANGED, Data disallowed reasons: DATA_DISABLED, candidate profile=null", phone: 0}
   # 슬롯 0: 사용자가 데이터를 켜서 곧 연결된다 (같은 윈도우 안이라 증상이 깨진다).
-  - {after: 2, tag: "DSM-{phone}", msg: "isDataEnabled=true", phone: 0}
-  - {after: 0.5, tag: "DNC-{phone}", level: I, msg: "evaluation result: ALLOWED reasons=[]", phone: 0}
+  - {after: 2, tag: "DSMGR-{phone}", msg: "mIsDataEnabled=true, prevDataEnabled=false", phone: 0}
+  - {after: 0.5, tag: "DNC-{phone}", level: I, msg: "Data evaluation: evaluation reason:NEW_REQUEST, Data allowed reason: NORMAL, candidate profile=null", phone: 0}
   - {after: 0.3, ril_request: SETUP_DATA_CALL, serial: 41, args: "apn=default", phone: 0}
   - {after: 0.9, ril_response: SETUP_DATA_CALL, serial: 41, result: "error=NONE cid=1", phone: 0}

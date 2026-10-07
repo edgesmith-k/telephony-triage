@@ -1,0 +1,16 @@
+# 음성 fixture: 비행기 모드를 끄고 데이터가 다시 붙는다. 어느 유형도 S=1이면 안 된다.
+# 문구는 AOSP 공개 소스 형식이다 (frameworks/opt/telephony data/).
+name: DATA-002.none
+start: "2026-09-26T09:45:00+09:00"
+default_phone: 0
+phone_style: aosp
+pid: 1290
+tid: 1301
+expect:
+  expect_top: none
+entries:
+  - {at: 0, tag: "AirplaneModeStats", msg: "Airplane mode change. Value: false", phone: null}
+  - {after: 0.01, ril_request: RADIO_POWER, serial: 62, args: "on = true"}
+  - {after: 2.2, ril_request: SETUP_DATA_CALL, serial: 63, args: "apn=default"}
+  - {after: 0.8, ril_response: SETUP_DATA_CALL, serial: 63, result: "error=NONE cid=1"}
+  - {after: 0.1, tag: "DNC-{phone}", level: I, msg: "Internet data state changed from DISCONNECTED to CONNECTED."}

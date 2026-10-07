@@ -29,13 +29,13 @@
 ```yaml
 tags:
   # 태그는 정확한 이름(tag) 또는 정규식(tag_regex).
-  # 데이터 스택은 Android 13+ 구조만 대상으로 한다: DNC-<phoneId>(DataNetworkController), DN-…(DataNetwork), DPM-<phoneId>(DataProfileManager), DRM-<phoneId>(DataRetryManager), DSM-<phoneId>(DataSettingsManager), DCM-<phoneId>(DataConfigManager), DSRM-<phoneId>(DataStallRecoveryManager).
+  # 데이터 스택은 Android 13+ 구조만 대상으로 한다: DNC-<phoneId>(DataNetworkController), DN-<id>-<C|I>(DataNetwork), DPM-<phoneId>(DataProfileManager), DRM-<phoneId>(DataRetryManager), DSMGR-<phoneId>(DataSettingsManager), DSM-<C|I>-<phoneId>(DataServiceManager), DCM-<phoneId>(DataConfigManager), DSRM-<phoneId>(DataStallRecoveryManager).
   # 레거시 데이터 스택(DcTracker/DCT, DataConnection 등)은 고려하지 않는다.
   - {tag_regex: '^DNC-\d+$', category: data, added_for: DATA-001, added_on: 2026-09-27, reason: 초기}
   - {tag_regex: '^DN-.+$',    category: data, added_for: DATA-001, added_on: 2026-09-27, reason: 초기}
   - {tag_regex: '^DPM-\d+$', category: data, added_for: DATA-001, added_on: 2026-09-27, reason: 초기}
   - {tag_regex: '^DRM-\d+$', category: data, added_for: DATA-001, added_on: 2026-09-27, reason: 초기}
-  - {tag_regex: '^DSM-\d+$', category: data, added_for: DATA-001, added_on: 2026-09-27, reason: 초기}   # DataSettingsManager (data enabled/disabled 판별)
+  - {tag_regex: '^DSMGR-\d+$', category: data, added_for: DATA-001, added_on: 2026-09-27, reason: 초기}   # DataSettingsManager (data enabled/disabled 판별)
   - {tag_regex: '^DCM-\d+$', category: data, added_for: DATA-001, added_on: 2026-09-27, reason: 초기}   # DataConfigManager
   - {tag_regex: '^DSRM-\d+$', category: data, added_for: DATA-001, added_on: 2026-09-27, reason: 초기}  # DataStallRecoveryManager
   - {tag: RILJ,                                        category: common, added_for: -, added_on: 2026-09-27, reason: 초기}

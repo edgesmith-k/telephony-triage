@@ -91,14 +91,14 @@ tags: [data-evaluation]
 
 ## 증상 판별 방법
 
-`DNC-<slot>`(DataNetworkController)의 평가 결과가 `NOT_ALLOWED`로 남고, 같은 구간에 `RILJ`의 `SETUP_DATA_CALL` 요청이 없다.
+`DNC-<slot>`(DataNetworkController)의 데이터 평가에 `Data disallowed reasons:`가 남고, 같은 구간에 `RILJ`의 `SETUP_DATA_CALL` 요청이 없다.
 
 ```
-09-20 14:30:04.500  1234  1244 W DNC-0: [PHONE0] evaluation result: NOT_ALLOWED reasons=[DATA_DISABLED]
-09-20 14:30:12.500  1234  1244 D DRM-0: [PHONE0] no retry scheduled: setup not allowed
+09-20 14:30:04.500  1234  1244 W DNC-0: Data evaluation: evaluation reason:DATA_ENABLED_CHANGED, Data disallowed reasons: DATA_DISABLED, candidate profile=null
+09-20 14:30:12.500  1234  1244 D DRM-0: no retry scheduled: setup not allowed
 ```
 
-- 거부 사유(`reasons=[...]`)가 어느 원인인지 정한다.
+- 거부 사유(`Data disallowed reasons:` 뒤, 공백으로 구분)가 어느 원인인지 정한다.
 - 듀얼 SIM에서는 **슬롯(`phone_id`)별로** 본다. 한 슬롯이 정상 연결돼 있어도 다른 슬롯이 거부될 수 있다.
 
 ## 원인별 상세
@@ -107,24 +107,25 @@ tags: [data-evaluation]
 
 - **로그 예시**:
   ```
-  09-20 14:30:03.000  1234  1244 D DSM-0: [PHONE0] onDataEnabledChanged: enabled=false reason=USER
-  09-20 14:30:03.400  1234  1244 D DSM-0: [PHONE0] isDataEnabled=false (user setting off)
-  09-20 14:30:04.600  1234  1244 I DNC-0: [PHONE0] onEvaluateNetworkRequests: reason=DATA_ENABLED_CHANGED
-  09-20 14:30:04.900  1234  1244 W DNC-0: [PHONE0] evaluation result: NOT_ALLOWED reasons=[DATA_DISABLED]
+  09-20 14:30:03.000  1234  1244 D DSMGR-0: notifyDataEnabledChanged: enabled=false, reason=USER, callingPackage=com.android.settings
+  09-20 14:30:03.400  1234  1244 D DSMGR-0: UserDataEnabled changed to false
+  09-20 14:30:04.600  1234  1244 I DNC-0: onEvaluateNetworkRequests: reason=DATA_ENABLED_CHANGED
+  09-20 14:30:04.900  1234  1244 W DNC-0: Data evaluation: evaluation reason:DATA_ENABLED_CHANGED, Data disallowed reasons: DATA_DISABLED, candidate profile=null
   ```
-- **확인 방법**: `DSM-<slot>`에 `onDataEnabledChanged: enabled=false`가 있고, **그 뒤에** 같은 슬롯의 `DNC-<slot>` 평가가 `DATA_DISABLED`로 거부된다. 순서(`sequence`)와 슬롯(`same_phone`)을 함께 본다. "먼저 setup이 실패하고 나중에 사용자가 데이터를 끈" 경우와 구분하기 위해서다.
+- **확인 방법**: `DSMGR-<slot>`에 `notifyDataEnabledChanged: enabled=false`가 있고, **그 뒤에** 같은 슬롯의 `DNC-<slot>` 평가가 `DATA_DISABLED`로 거부된다. 순서(`sequence`)와 슬롯(`same_phone`)을 함께 본다. "먼저 setup이 실패하고 나중에 사용자가 데이터를 끈" 경우와 구분하기 위해서다.
 - **재현 시나리오**: 설정 > 네트워크 > 모바일 데이터 OFF → 데이터를 쓰는 앱 실행 → 평가 로그 확인
 - **해결책**: 모바일 데이터 설정을 켠다. (단말 수정 대상이 아니다.)
 - **코드 위치**: 설정 값은 `DataSettingsManager#isDataEnabled`, 평가는 `DataNetworkController#onEvaluateNetworkRequests`. 실패 코드 상수는 Android 16과 17의 경로가 다르다(`code_refs`의 `android_versions` 참고).
-- **비고**: 로그 문구는 사외 초안의 placeholder다 — TODO(SITE:S9).
+- **비고**: 문구는 AOSP 공개 소스 형식이다(`DataSettingsManager`·`DataEvaluation`). 평가·Internet 상태 줄은 사외 실제 단말 로그로 형식을 확인했고(10/07), `notifyDataEnabledChanged` 줄은 소스 대조만 했다(실제 로그에 데이터 OFF 사례가 없었음). 최종 문구 확인은 사내 S-4. Android 13+ 데이터 스택(AOSP 13~17 동일 형식, Android 17 단말 로그로 형식 확인). 12 이하는 범위 밖 — 사내 S-4에서 단말 버전 확인.
+- 같은 원인이 연결 중에 일어나면 `DN` teardown과 `Internet data state changed from CONNECTED to DISCONNECTED.`가 앞서고(표본 `DATA-001-01.extra.1`), 증상 유형 `DATA-002`도 함께 걸린다. 비행기 모드 흔적이 없으므로 원인은 이쪽이다.
 
 ### DATA-001-02 Roaming disabled
 
 - **로그 예시**:
   ```
-  09-22 08:00:02.000  1234  1250 D DSM-1: [PHONE1] isDataRoamingEnabled=false
-  09-22 08:00:03.000  1234  1250 I DNC-1: [PHONE1] onEvaluateNetworkRequests: reason=ROAMING_STATE_CHANGED
-  09-22 08:00:03.500  1234  1250 W DNC-1: [PHONE1] evaluation result: NOT_ALLOWED reasons=[ROAMING_DISABLED]
+  09-22 08:00:02.000  1234  1250 D DSMGR-1: DataRoamingEnabled changed to false
+  09-22 08:00:03.000  1234  1250 I DNC-1: onEvaluateNetworkRequests: reason=ROAMING_STATE_CHANGED
+  09-22 08:00:03.500  1234  1250 W DNC-1: Data evaluation: evaluation reason:ROAMING_ENABLED_CHANGED, Data disallowed reasons: ROAMING_DISABLED, candidate profile=null
   ```
 - **확인 방법**: 로밍 상태(`SST-<slot>`의 `onRoamingOn`)에서 평가가 `ROAMING_DISABLED`로 거부된다. 데이터 설정 자체는 켜져 있다.
 - **재현 시나리오**: 로밍 SIM 삽입(또는 로밍 망 진입) → 데이터 로밍 OFF 확인 → 데이터를 쓰는 앱 실행

@@ -194,7 +194,7 @@ def test_schemas_are_valid_json_schema():
 def test_type_frontmatter_validates():
     validator = _validator("type.schema.json")
     types = _type_files()
-    assert len(types) == len(CATEGORIES), f"유형 파일 수: {len(types)}"
+    assert len(types) == len(CATEGORIES) + 1, f"유형 파일 수: {len(types)}"  # data만 2개 (DATA-001·002)
     errors: list[str] = []
     for path in types:
         errors += _errors(validator, _frontmatter(path), path.relative_to(SAMPLE).as_posix())
@@ -290,12 +290,13 @@ def test_sample_tree_layout():
 
     for key in CATEGORIES:
         type_dirs = [p for p in (SAMPLE / key).iterdir() if p.is_dir()]
-        assert len(type_dirs) == 1, f"{key}: 유형 디렉토리 {len(type_dirs)}개"
-        type_dir = type_dirs[0]
-        assert re.fullmatch(rf"{TYPE_ID}-[a-z0-9]+(?:-[a-z0-9]+)*", type_dir.name), type_dir.name
-        assert (type_dir / "type.md").exists(), f"{type_dir.name}: type.md 없음"
-        assert (type_dir / "jira").is_dir(), f"{type_dir.name}: jira/ 없음"
-        assert (type_dir / "fixtures").is_dir(), f"{type_dir.name}: fixtures/ 없음"
+        expected = 2 if key == "data" else 1  # data만 DATA-001·DATA-002
+        assert len(type_dirs) == expected, f"{key}: 유형 디렉토리 {len(type_dirs)}개"
+        for type_dir in sorted(type_dirs):
+            assert re.fullmatch(rf"{TYPE_ID}-[a-z0-9]+(?:-[a-z0-9]+)*", type_dir.name), type_dir.name
+            assert (type_dir / "type.md").exists(), f"{type_dir.name}: type.md 없음"
+            assert (type_dir / "jira").is_dir(), f"{type_dir.name}: jira/ 없음"
+            assert (type_dir / "fixtures").is_dir(), f"{type_dir.name}: fixtures/ 없음"
 
 
 def test_no_generated_files_committed():

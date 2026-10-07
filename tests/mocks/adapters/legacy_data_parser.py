@@ -23,9 +23,9 @@ LINE_RE = re.compile(
     r"^(?P<time>\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3})\s+\d+\s+\d+\s+[VDIWEF]\s+(?P<tag>[^:]+?):\s(?P<msg>.*)$"
 )
 RULES = [
-    ("DATA_SETUP_BLOCKED", re.compile(r"^DNC-(\d+)$"), re.compile(r"NOT_ALLOWED\s+reasons=\[(?P<reasons>[^\]]*)\]")),
-    ("USER_DATA_OFF", re.compile(r"^DSM-(\d+)$"), re.compile(r"onDataEnabledChanged:\s*enabled=false\s+reason=(?P<reason>\w+)")),
-    ("DATA_SETTINGS_SEEN", re.compile(r"^DSM-(\d+)$"), re.compile(r"isDataEnabled=(?P<value>\w+)")),
+    ("DATA_SETUP_BLOCKED", re.compile(r"^DNC-(\d+)$"), re.compile(r"Data disallowed reasons:\s*(?P<reasons>[A-Z_ ]+)")),
+    ("USER_DATA_OFF", re.compile(r"^DSMGR-(\d+)$"), re.compile(r"notifyDataEnabledChanged:\s*enabled=false,\s*reason=(?P<reason>\w+)")),
+    ("DATA_SETTINGS_SEEN", re.compile(r"^DSMGR-(\d+)$"), re.compile(r"mIsDataEnabled=(?P<value>\w+)")),
 ]
 
 

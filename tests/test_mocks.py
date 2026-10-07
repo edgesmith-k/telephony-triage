@@ -210,6 +210,15 @@ def test_mock_remote_push_and_pr():
 # -- 3. 합성 logcat ---------------------------------------------------------
 
 
+def test_logcat_phone_style_aosp():
+    with tempfile.TemporaryDirectory(prefix="tt-logcat-") as tmp:
+        info = logcat_gen.generate(REPO / "tests/mocks/scenarios/data-001-none.yaml", Path(tmp))
+        lines = Path(info["files"][0]).read_text(encoding="utf-8").splitlines()
+        assert any(" DSMGR-0: mIsDataEnabled=true, prevDataEnabled=false" in line for line in lines)  # 접두어 없음
+        assert any(line.endswith("SETUP_DATA_CALL apn=default [PHONE0]") for line in lines)  # RILJ 접미사
+        assert not any(": [PHONE0]" in line for line in lines)
+
+
 def test_logcat_generation_slots_and_clock():
     with tempfile.TemporaryDirectory(prefix="tt-logcat-") as tmp:
         out = Path(tmp)
@@ -219,8 +228,9 @@ def test_logcat_generation_slots_and_clock():
         text = Path(info["files"][0]).read_text(encoding="utf-8")
         # 두 슬롯이 한 파일에 섞여 있다 (교차 슬롯 음성 fixture).
         # 슬롯 0에는 거부 로그, 슬롯 1에는 원인 로그(설정 OFF)가 있다.
-        assert "DNC-0:" in text and "DSM-1:" in text
-        assert "[PHONE0]" in text and "[PHONE1]" in text
+        assert "DNC-0:" in text and "DSMGR-1:" in text
+        # AOSP 형식: 데이터 스택은 태그 접미사만, RILJ는 메시지 끝에 [PHONE#]
+        assert "[PHONE0]" in text and ": [PHONE" not in text
         # 합성 fixture 표시
         expect = Path(info["expect"]).read_text(encoding="utf-8")
         assert "origin: synthetic" in expect

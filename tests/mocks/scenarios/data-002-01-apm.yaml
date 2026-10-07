@@ -1,0 +1,24 @@
+# DATA-002-01 양성: 비행기 모드를 켜서 데이터 연결이 끊긴다.
+# 순서(AOSP 실제): AirplaneModeStats → SST powerOff → DNC teardown-all(AIRPLANE_MODE_ON)
+# → Internet CONNECTED→DISCONNECTED → RILJ RADIO_POWER false. 데이터를 먼저 내리고 라디오를 끈다.
+# APM 중 평가 불허 사유에는 DATA_DISABLED가 없다 (DATA-001-01이 걸리면 안 된다).
+# 문구는 AOSP 공개 소스 형식이다 (frameworks/opt/telephony data/).
+name: DATA-002-01
+start: "2026-09-26T09:40:00+09:00"
+default_phone: 0
+phone_style: aosp
+pid: 1290
+tid: 1301
+build:
+  fingerprint: "mock/mocka56/a56:16/MOCKBUILD/MOCKA56_U1_20260920:user/release-keys"
+  build: MOCKA56_U1_20260920
+expect:
+  expect_top: DATA-002-01
+entries:
+  - {at: 0, tag: "AirplaneModeStats", msg: "Airplane mode change. Value: true", phone: null}
+  - {after: 0.01, tag: "SST-{phone}", msg: "powerOffRadioSafely: start"}
+  - {after: 0.01, tag: "DNC-{phone}", level: I, msg: "onTearDownAllDataNetworks: reason=AIRPLANE_MODE_ON"}
+  - {after: 0.01, tag: "DN-17-C", level: I, msg: "DisconnectingState: onTearDown: reason=AIRPLANE_MODE_ON"}
+  - {after: 0.7, tag: "DNC-{phone}", level: I, msg: "Internet data state changed from CONNECTED to DISCONNECTED."}
+  - {after: 0.01, ril_request: RADIO_POWER, serial: 61, args: "on = false"}
+  - {after: 0.5, tag: "DNC-{phone}", level: W, msg: "Data evaluation: evaluation reason:DATA_SERVICE_STATE_CHANGED, Data disallowed reasons: SERVICE_OPTION_NOT_SUPPORTED NOT_IN_SERVICE RADIO_POWER_OFF, candidate profile=null"}

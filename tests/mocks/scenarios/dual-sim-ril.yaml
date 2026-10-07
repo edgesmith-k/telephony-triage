@@ -19,6 +19,6 @@ entries:
   - {after: 1, ril_request: DEACTIVATE_DATA_CALL, serial: 42, phone: 0}
   - {after: 12, ril_response: DEACTIVATE_DATA_CALL, serial: 42, result: "error=NONE", phone: 0}
   - {after: 1, ril_request: SEND_SMS, serial: 43, phone: 1}
-  - {after: 20, tag: "DNC-{phone}", level: I, msg: "evaluation result: ALLOWED reasons=[]", phone: 1}
-  - {after: 20, tag: "DNC-{phone}", level: I, msg: "evaluation result: ALLOWED reasons=[]", phone: 0}
+  - {after: 20, tag: "DNC-{phone}", level: I, msg: "Data evaluation: evaluation reason:NEW_REQUEST, Data allowed reason: NORMAL, candidate profile=null", phone: 1}
+  - {after: 20, tag: "DNC-{phone}", level: I, msg: "Data evaluation: evaluation reason:NEW_REQUEST, Data allowed reason: NORMAL, candidate profile=null", phone: 0}
   - {after: 1, ril_response: SEND_SMS, serial: 43, result: "error=NONE", pid: 2345, phone: 1}

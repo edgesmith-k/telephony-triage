@@ -5,10 +5,11 @@
 name: DATA-001-03
 start: "2026-09-26T09:00:00+09:00"
 default_phone: 0
+phone_style: aosp
 pid: 1234
 tid: 1244
 entries:
-  - {at: 0, tag: "DNC-{phone}", level: I, msg: "onEvaluateNetworkRequests: reason=NETWORK_REQUEST_ADDED"}
-  - {after: 0.4, tag: "DNC-{phone}", level: W, msg: "evaluation result: NOT_ALLOWED reasons=[SIM_NOT_READY]"}
-  - {after: 5, tag: "DNC-{phone}", level: W, msg: "evaluation result: NOT_ALLOWED reasons=[SIM_NOT_READY]"}
+  - {at: 0, tag: "DNC-{phone}", level: I, msg: "onEvaluateNetworkRequests: reason=NEW_REQUEST"}
+  - {after: 0.4, tag: "DNC-{phone}", level: W, msg: "Data evaluation: evaluation reason:DATA_ENABLED_CHANGED, Data disallowed reasons: SIM_NOT_READY, candidate profile=null"}
+  - {after: 5, tag: "DNC-{phone}", level: W, msg: "Data evaluation: evaluation reason:DATA_ENABLED_CHANGED, Data disallowed reasons: SIM_NOT_READY, candidate profile=null"}
   - {after: 3, tag: "DRM-{phone}", msg: "no retry scheduled: setup not allowed"}

@@ -84,7 +84,7 @@ platform:
   #     - {file: build/core/version_defaults.mk, regex: '^\s*PLATFORM_VERSION\s*:?=\s*(\d+)'}
   # log:
   #   phone_id:                      # TODO(SITE:S20) 슬롯 표기. 그룹 1 = 슬롯 번호. 위치마다 순서대로 첫 일치
-  #     tag: ['^[A-Za-z]+-(\d+)$']                   # 태그에 match
+  #     tag: ['^[A-Za-z]+(?:-[CI])?-(\d+)$']                   # 태그에 match
   #     msg_prefix: ['^\[(?:PHONE|SUB)(\d+)\]\s?']   # 메시지 앞 match, RIL 해석 전 떼어냄
   #     msg_suffix: ['\s?\[PHONE(\d+)\]$']           # 메시지 끝 search, 떼어냄
   # ril:

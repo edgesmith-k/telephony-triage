@@ -41,7 +41,7 @@ CALL_CAUSE_SIG = ("        must_event:\n          - {id: regfail, event: ims_reg
                   "        sequence: [regfail, dial]\n        window_sec: 300\n")
 RESOLVED_LOG = """09-27 10:00:00.000  1234  1244 I UiccController: [PHONE0] SIM state changed: LOADED
 09-27 10:00:01.000  1234  1244 I DNC-0: [PHONE0] onEvaluateNetworkRequests: reason=SIM_LOADED
-09-27 10:00:01.200  1234  1244 I DNC-0: [PHONE0] evaluation result: ALLOWED reasons=[]
+09-27 10:00:01.200  1234  1244 I DNC-0: [PHONE0] Data evaluation: evaluation reason:SIM_LOADED, Data allowed reason: NORMAL, candidate profile=null
 09-27 10:00:01.500  1234  1244 D RILJ: [PHONE0] [0051]> SETUP_DATA_CALL apn=default
 09-27 10:00:02.400  1234  1244 D RILJ: [PHONE0] [0051]< SETUP_DATA_CALL error=NONE cid=<CELL#1>
 """
@@ -108,15 +108,15 @@ def test_broad_cause_signature_and_widened_fixed_cause_are_blocked():
     assert f"{CALL}/fixtures/CALL-001-01.fixed.MOCKB77_U2_20260920.log" in rows["R4"]["targets"]
 
     db = git_db()
-    new = db / "data/DATA-002-sim-rejected"
+    new = db / "data/DATA-009-sim-rejected"
     (new / "fixtures").mkdir(parents=True)
     (new / "type.md").write_text(DATA_002, encoding="utf-8", newline="\n")
-    shutil.copyfile(SIM_LOG, new / "fixtures/DATA-002-01.log")
+    shutil.copyfile(SIM_LOG, new / "fixtures/DATA-009-01.log")
     code, rows, _ = rules(db)
     assert code == 1 and rows["R3"]["status"] == "fail"
-    check = next(c for c in rows["R3"]["checks"] if c["target"] == "DATA-002-01")
+    check = next(c for c in rows["R3"]["checks"] if c["target"] == "DATA-009-01")
     assert f"{DATA}/fixtures/DATA-001-01.log" in {h["fixture"] for h in check["hits"]}
-    assert {"op": "allow-cause", "fixture": "fixtures/DATA-001-01.log", "cause": "DATA-002-01"} in check["allow_cause_drafts"]
+    assert {"op": "allow-cause", "fixture": "fixtures/DATA-001-01.log", "cause": "DATA-009-01"} in check["allow_cause_drafts"]
 
 
 def test_cross_category_hit_needs_also_allowed_and_scoring_does_not_matter():
@@ -182,10 +182,10 @@ def test_retemp_drafts_maps_real_ids_back_to_plan_temp_ids():
 
 def test_retemp_drafts_covers_all_op_id_keys():
     from db_verify import _retemp_drafts
-    back = {"DATA-001-03": "NEW-CAUSE-1", "DATA-002-01": "NEW-CAUSE-2"}
+    back = {"DATA-001-03": "NEW-CAUSE-1", "DATA-009-01": "NEW-CAUSE-2"}
     ops = [{"op": "add-fixture", "for": "DATA-001-03", "kind": "fixed", "path": "p"},
            {"op": "verify-fix", "cause": "DATA-001-03", "result": "passed", "verification": {"note": "DATA-001-03"}},
-           {"op": "merge", "a": "DATA-001-03", "b": "DATA-002-01", "id": "DATA-002-01", "owner": "DATA-001-03"},
+           {"op": "merge", "a": "DATA-001-03", "b": "DATA-009-01", "id": "DATA-009-01", "owner": "DATA-001-03"},
            {"op": "verify-fix", "cause": "CALL-001-01"}]
     tree = {"suggested_ops": ops, "cause": "DATA-001-03", "reason": "DATA-001-03 충족", "for": "DATA-001-03"}
     _retemp_drafts(tree, back)
@@ -655,7 +655,7 @@ tags: []
 """
 
 DATA_002 = """---
-id: DATA-002
+id: DATA-009
 category: data
 secondary_categories: []
 title: SIM 때문에 평가가 거부됨
@@ -667,7 +667,7 @@ symptom_signatures:
       - {event: data_evaluation_rejected, fields: {reasons: '.*SIM_NOT_READY.*'}}
     window_sec: 60
 causes:
-  - id: DATA-002-01
+  - id: DATA-009-01
     status: active
     title: 넓은 원인
     description: 거부 사유를 보지 않는 원인 시그니처
@@ -747,13 +747,13 @@ def test_default_output_folds_only_passed_rows_and_keeps_status():
 
 def test_default_output_keeps_allow_cause_drafts_and_review_required_rows():
     db = git_db()
-    new = db / "data/DATA-002-sim-rejected"
+    new = db / "data/DATA-009-sim-rejected"
     (new / "fixtures").mkdir(parents=True)
     (new / "type.md").write_text(DATA_002, encoding="utf-8", newline="\n")
-    shutil.copyfile(SIM_LOG, new / "fixtures/DATA-002-01.log")
+    shutil.copyfile(SIM_LOG, new / "fixtures/DATA-009-01.log")
     code, brief, full = _default_vs_verbose(db)
     assert code == 1 and _rows(brief)["R3"] == _rows(full)["R3"]
-    check = next(c for c in _rows(brief)["R3"]["checks"] if c["target"] == "DATA-002-01")
+    check = next(c for c in _rows(brief)["R3"]["checks"] if c["target"] == "DATA-009-01")
     assert check["allow_cause_drafts"]
 
     db = git_db()

@@ -214,12 +214,25 @@ def test_phone_id_per_slot():
     by_tag = {}
     for e in lines:
         by_tag.setdefault(e["tag"], set()).add(e["phone_id"])
-    assert by_tag["DNC-0"] == {0} and by_tag["DSM-1"] == {1} and by_tag["DSM-0"] == {0}
+    assert by_tag["DNC-0"] == {0} and by_tag["DSMGR-1"] == {1} and by_tag["DSMGR-0"] == {0}
     assert {e["phone_id"] for e in lines if e["tag"] == "RILJ"} == {0}  # 메시지 접두어
 
     data = _parse([LOG_DIR / "dual-sim-ril.log"])
     (uicc,) = _events(data, tag="UiccController", event=None)
     assert uicc["phone_id"] is None  # 접미사·접두어 없는 태그
+
+
+def test_phone_id_data_service_tag_and_ril_suffix():
+    # DSM-C-<n>(DataServiceManager)은 슬롯이 뒤에 오고, DN-<id>-C는 슬롯이 아니다.
+    path = _tmp() / "phone-tags.log"
+    path.write_text(
+        "09-20 14:30:00.000  1234  1244 D DSM-C-0: x\n"
+        "09-20 14:30:00.100  1234  1244 D DN-17-C: y\n"
+        "09-20 14:30:00.200  1234  1244 D RILJ: [0041]> SETUP_DATA_CALL apn=default [PHONE1]\n",
+        encoding="utf-8", newline="\n")
+    data = _parse([path])
+    by_tag = {e["tag"]: e["phone_id"] for e in data["events"] if e["event"] is None}
+    assert by_tag["DSM-C-0"] == 0 and by_tag["DN-17-C"] is None and by_tag["RILJ"] == 1
 
 
 def test_ril_pairing_same_serial_two_slots():

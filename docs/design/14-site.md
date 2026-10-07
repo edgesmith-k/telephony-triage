@@ -5,7 +5,7 @@
 ### 14.1 배경과 원칙
 
 - 이 문서 세트(`CLAUDE.md` + `docs/design/*.md`)는 **사외에서, 사내 로그·Jira MCP·GHE·소스 트리에 접근하지 못한 상태로** 작성됐다. 구조와 절차는 확정이지만, 사내 환경에 따라 달라지는 **값·문구·형식**은 추정(placeholder)이다. 사내에서는 모드에 따라 **사내 보완이면 S-1**(`15-local-draft.md §15.5`), **사내 처음부터면 Phase 0**(14.4)으로 사내 환경을 먼저 확인한다.
-- 이 문서 세트에 나오는 logcat 태그, 로그 문구, RIL 요청 이름, 코드 심볼, 서버·팀 이름은 **예시(placeholder)** 다. 사내에서(S-1~S-4 또는 Phase 0) 실제 Android 16/17 logcat·소스·사내 환경으로 확인하고 반영한다. 단, 데이터 스택 태그는 Android 13+ 형식(`DNC-<n>`, `DN-…`, `DPM-<n>`, `DRM-<n>`, `DSM-<n>`, `DCM-<n>`, `DSRM-<n>`)으로 확정이며, 레거시 데이터 스택(DcTracker/DCT 등)은 고려하지 않는다. 실행 환경은 **Ubuntu**다(`01-architecture.md §3`).
+- 이 문서 세트에 나오는 logcat 태그, 로그 문구, RIL 요청 이름, 코드 심볼, 서버·팀 이름은 **예시(placeholder)** 다. 사내에서(S-1~S-4 또는 Phase 0) 실제 Android 16/17 logcat·소스·사내 환경으로 확인하고 반영한다. 단, 데이터 스택 태그는 Android 13+ 형식(`DNC-<n>`, `DN-<id>-<C|I>`, `DPM-<n>`, `DRM-<n>`, `DSMGR-<n>`, `DSM-<C|I>-<n>`, `DCM-<n>`, `DSRM-<n>`)으로 확정이며(10/07 실제 로그로 정정: DataSettingsManager는 `DSMGR`, `DSM-<C|I>`는 DataServiceManager. Android 13+ 데이터 스택(AOSP 13~17 동일 형식, Android 17 단말 로그로 형식 확인). 12 이하는 범위 밖 — 사내 S-4에서 단말 버전 확인.), 레거시 데이터 스택(DcTracker/DCT 등)은 고려하지 않는다. 실행 환경은 **Ubuntu**다(`01-architecture.md §3`).
 - 사내 자료는 밖으로 가져갈 수 없으므로, 사외에서 문서를 계속 다듬고 사내에서 보완하는 일이 반복된다. 그래서 **사내 확인값은 이 문서 세트에 쓰지 않고 `SITE_PROFILE.md`에 따로 둔다.**
   - 사외에서 새 버전의 문서 세트를 가져와 통째로 덮어써도 사내 확인값이 사라지지 않는다.
   - `CLAUDE.md` 맨 위의 `@SITE_PROFILE.md` import로 매 세션 자동으로 읽힌다. import 동작은 S1에서 확인하고, 동작하지 않으면 세션 시작 시 `SITE_PROFILE.md`를 먼저 읽도록 `CLAUDE.md` 머리말 규칙으로 대신한다.
@@ -28,7 +28,7 @@
 | S5 | GHE: 호스트, org, 팀 이름, `gh` 사용 가능 여부, **브랜치 보호 설정 가능 여부와 권한**(직접 push 금지·CODEOWNERS 필수 리뷰를 서버에서 강제할 수 있는지. 불가하면 `.githooks/` 채택을 재결정, `06-collaboration.md §6.1`) | `02-config.md §4`, `06-collaboration.md §6.1` | `gh auth status`, 조직 설정 확인 | config, CODEOWNERS (Phase 1, 6) |
 | S6 | GHE Actions와 runner 유무 | `13-actions.md` | `13-actions.md §13.1` 절차 | `ci_mode` (Phase 1, 전환 시) |
 | S7 | logcat 수집 형식: 포맷(threadtime/연도/uid), 버퍼 분리(radio/main 파일), 로테이션 파일명, 인코딩, **시각의 연도 유무와 타임존**(단말 로컬 시각인지, Jira 시각과 같은 기준인지) | `07-workflow.md §Step 3` | 사용자가 준 샘플 logcat과 같은 이슈의 Jira 발생 시각 비교 | `platforms/android/logcat.py` 포맷 목록, config `logcat.*` (Phase 2, 6) |
-| S8 | 카테고리별 로그 태그 (데이터 스택은 확정: `DNC-<n>`, `DN-…`, `DPM-<n>`, `DRM-<n>`, `DSM-<n>`, `DCM-<n>`, `DSRM-<n>`) | `04-parser-matching.md §5.8`, `07-workflow.md §Step 3` | 샘플 logcat에서 카테고리별 태그 빈도 집계 | `parser-rules/tags.yaml` (Phase 1) |
+| S8 | 카테고리별 로그 태그 (데이터 스택은 확정: `DNC-<n>`, `DN-<id>-C`·`DN-<id>-I`, `DPM-<n>`, `DRM-<n>`, `DSMGR-<n>`, `DSM-C-<n>`·`DSM-I-<n>`, `DCM-<n>`, `DSRM-<n>`) | `04-parser-matching.md §5.8`, `07-workflow.md §Step 3` | 샘플 logcat에서 카테고리별 태그 빈도 집계 | `parser-rules/tags.yaml` (Phase 1) |
 | S9 | 로그 문구 형식: RILJ 요청/응답, 데이터 평가 거부 사유, LAST_CALL_FAIL_CAUSE, IMS 등록(벤더 ImsService), SMS 송수신 | `03-issue-db.md §5.4`, `04-parser-matching.md §5.8` | 샘플 logcat에서 해당 구간 추출 | `extractors.yaml`, 샘플 시그니처 (Phase 1, 2) |
 | S10 | 벤더 RIL/IMS 로그 태그와 소스 구조 | `02-config.md §4`, `04-parser-matching.md §5.8` | 소스 트리와 로그 확인 | `code_root_keys`, `tags.yaml` (Phase 1), site-defaults `platform.ril.tags` |
 | S11 | 소스 트리: Android 16/17 경로, 트리 버전을 알 수 있는 파일, 주요 심볼 위치 | `07-workflow.md §Step 2-1`, `§Step 5` | 사용자가 알려준 트리에서 확인 | `code_roots.py`, site-defaults `platform.source_tree.*`, 샘플 `code_refs` (Phase 1, 6) |
