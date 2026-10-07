@@ -74,6 +74,39 @@ def test_clean_fake_repo_passes(fake_repo):
     assert boundary.scan(fake_repo, "external") == []
 
 
+@pytest.mark.parametrize("markers, mode", [
+    ((), "external"),
+    ((".draft-manifest.json",), "site"),
+    (("SITE_PROFILE.md",), "site"),
+    ((".local-draft", ".draft-manifest.json"), "external"),
+])
+def test_detect_mode(tmp_path, markers, mode):
+    for name in markers:
+        _write(tmp_path, name, "{}\n")
+    assert boundary.detect_mode(tmp_path) == mode
+
+
+def test_cli_default_mode_in_site_repo(fake_repo):
+    # R-1: 반입(.draft-manifest.json)·S-1(SITE_PROFILE.md)·S-3(site-defaults.yaml) 뒤 사내 레포.
+    # 인자 없는 호출(test_repo_has_no_boundary_violations, related_tests --run)은 site로 통과해야 한다.
+    for rel in (".draft-manifest.json", "SITE_PROFILE.md", "plugin/site-defaults.yaml"):
+        _write(fake_repo, rel, "{}\n")
+    code, out = _run(CHECK, "--root", str(fake_repo), "--json")
+    assert code == 0, out
+    assert out == {"mode": "site", "violations": []}
+
+    code, out = _run(CHECK, "--root", str(fake_repo), "--mode", "external", "--json")
+    assert code == 1, out
+    assert {(v["rule"], v["path"]) for v in out["violations"]} == {
+        ("site-path", "SITE_PROFILE.md"), ("site-path", "plugin/site-defaults.yaml")}
+
+
+def test_cli_default_mode_external_without_markers(fake_repo):
+    code, out = _run(CHECK, "--root", str(fake_repo), "--json")
+    assert code == 0, out
+    assert out["mode"] == "external"
+
+
 def test_each_rule_reports_injected_violation(fake_repo):
     _write(fake_repo, "docs/leak.md", "\n".join([
         "-----BEGIN RSA PRIVATE KEY-----",

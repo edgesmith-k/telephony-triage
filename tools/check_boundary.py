@@ -12,19 +12,22 @@
                    `<…>`·`${…}`·`xxxx`·`REDACTED`·`EXAMPLE`은 제외, 대입 값은 숫자 포함 20자
                    이상), 공인 IP, 15자리 숫자(IMEI·IMSI), 허용 목록 밖 이메일·URL 호스트.
                    비밀값은 출력에서 앞부분만 보인다. 사내는 `docs/site/boundary-patterns.txt`
-                   (SITE_PATHS)에 실제 회사·서버·팀 이름 패턴을 더한다.
+                   (SITE_PATHS)에 실제 회사·서버·팀 이름 패턴을 더한다(모드와 무관).
     site-import    `plugin/scripts/**`가 SITE_PATHS 모듈(`parser_backends.site`,
                    `adapters.site_*`)을 정적으로 import함. 사내 모듈은 동적 로드만 쓴다.
     fixture-origin `tests/` 아래 로그 fixture에 합성 표시가 없음. 이슈 DB fixture는 짝
                    `.expect.yaml`에 `origin: synthetic`, 그 밖의 로그는 같은 디렉토리
                    README.md(또는 상위 README)나 `tests/mocks/log_fixtures.yaml`에 이름이 있어야 한다.
-    site-path      (`--mode external`만) SITE_PATHS 경로에 파일이 있음.
+    site-path      (external 모드만) SITE_PATHS 경로에 파일이 있음.
 
 예외는 `tools/boundary-allow.txt`(사외)와 `docs/site/boundary-allow.txt`(사내)에
 `<규칙> <경로 glob> [<맞은 문자열 정규식>]` 한 줄씩 둔다.
 
 CLI:
     python3 tools/check_boundary.py [--root <레포>] [--mode external|site] [--json]
+
+모드 기본은 자동 판별이다: `.local-draft`가 있으면 external, 없고 `.draft-manifest.json`이나
+`SITE_PROFILE.md`가 있으면 site(사내 레포), 둘 다 없으면 external.
 
 종료 코드 (contracts.md §종료 코드)
     0  위반 없음
@@ -54,6 +57,7 @@ SITE_PATTERNS_FILE = "docs/site/boundary-patterns.txt"
 ALLOW_FILES = ("tools/boundary-allow.txt", "docs/site/boundary-allow.txt")
 SCRIPTS_ROOT = "plugin/scripts"
 LOG_REGISTRY = "tests/mocks/log_fixtures.yaml"
+SITE_MARKERS = (".draft-manifest.json", "SITE_PROFILE.md")
 
 # 문서·예시용으로 쓰는 공개 도메인과 예약 도메인.
 PUBLIC_HOSTS = (
@@ -359,6 +363,13 @@ def scan(root: Path, mode: str, files: dict[str, Path] | None = None) -> list[Fi
     return [_redact(f) for f in findings if not _allowed(f, allow)]
 
 
+def detect_mode(root: Path) -> str:
+    """`CLAUDE.md` 머리말의 표식을 쓰되 `.local-draft`(사외 PC 전용)를 먼저 본다. 틀려도 엄격한 쪽이다."""
+    if (root / ".local-draft").exists():
+        return "external"
+    return "site" if any((root / m).exists() for m in SITE_MARKERS) else "external"
+
+
 def format_findings(findings: list[Finding]) -> str:
     lines = []
     for f in findings:
@@ -372,8 +383,9 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="check_boundary.py", description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--root", default=".", help="검사할 레포 (기본: 현재 디렉토리)")
-    parser.add_argument("--mode", choices=("external", "site"), default="external",
-                        help="external: 사외 레포(SITE_PATHS 경로가 비어 있어야 함) / site: 사내 레포")
+    parser.add_argument("--mode", choices=("external", "site"), default=None,
+                        help="external: 사외 레포(SITE_PATHS 경로가 비어 있어야 함) / site: 사내 레포 "
+                             "(기본: 자동 판별)")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
 
@@ -381,22 +393,24 @@ def main(argv: list[str] | None = None) -> int:
     if not root.is_dir():
         print(f"레포 경로가 없습니다: {root}", file=sys.stderr)
         return USAGE
+    mode = args.mode or detect_mode(root)
+    label = mode if args.mode else f"{mode}, 자동"
     try:
-        findings = scan(root, args.mode)
+        findings = scan(root, mode)
     except (OSError, ValueError, subprocess.SubprocessError) as exc:
         print(str(exc), file=sys.stderr)
         return USAGE
 
     if args.json:
-        print(json.dumps({"mode": args.mode, "violations": [asdict(f) for f in findings]},
+        print(json.dumps({"mode": mode, "violations": [asdict(f) for f in findings]},
                          ensure_ascii=False, indent=2))
     elif findings:
-        print(f"경계 위반 {len(findings)}건 ({args.mode}):", file=sys.stderr)
+        print(f"경계 위반 {len(findings)}건 ({label}):", file=sys.stderr)
         print(format_findings(findings), file=sys.stderr)
         print("예외가 맞으면 tools/boundary-allow.txt(사내는 docs/site/boundary-allow.txt)에 적는다.",
               file=sys.stderr)
     else:
-        print(f"경계 위반 없음 ({args.mode})")
+        print(f"경계 위반 없음 ({label})")
     return VIOLATION if findings else OK
 
 

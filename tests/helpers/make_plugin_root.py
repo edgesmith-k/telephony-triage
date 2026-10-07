@@ -3,8 +3,8 @@
 
 `plugin/`을 임시 디렉토리로 복사하고 `site-defaults.example.yaml`을
 `site-defaults.yaml`로 넣는다. 모든 테스트·eval은 이 루트를
-`${CLAUDE_PLUGIN_ROOT}`로 쓴다. 개발 레포의 `plugin/` 안에는
-`site-defaults.yaml`을 만들지 않는다 (반입 체크리스트 §15.4).
+`${CLAUDE_PLUGIN_ROOT}`로 쓴다. 복사 때 SITE_PATHS 경로는 뺀다(사내 레포에서도
+복사본은 example·모의만 쓴다, §15.6).
 
 CLI:
     python3 tests/helpers/make_plugin_root.py --out <dir> [--with-site-backend]
@@ -28,6 +28,12 @@ TARGET = "site-defaults.yaml"
 MOCK_SITE_BACKEND = REPO / "tests" / "mocks" / "parser_backends" / "site"
 MOCK_ADAPTERS = REPO / "tests" / "mocks" / "adapters"
 
+sys.path.insert(0, str(REPO / "tools"))
+from check_boundary import load_site_paths  # noqa: E402
+from import_draft import is_site_path  # noqa: E402
+
+_SITE_PATTERNS = load_site_paths(REPO)
+
 # 사외 PC(Windows 등)에서 POSIX 스텁을 PATH로 부를 수 있게 하는 런타임 shim.
 # 커밋하지 않는다. 실행 환경은 Ubuntu다 (01-architecture.md §3, 14-site.md S15).
 _WINDOWS = os.name == "nt"
@@ -41,18 +47,12 @@ def make(out: Path | None = None, with_site_backend: bool = False) -> Path:
         out = Path(out)
         if out.exists():
             shutil.rmtree(out)
-    shutil.copytree(PLUGIN, out, dirs_exist_ok=True)
+    shutil.copytree(PLUGIN, out, dirs_exist_ok=True, ignore=_skip_site_paths)
 
     example = out / EXAMPLE
     if not example.is_file():
         raise SystemExit(f"{PLUGIN / EXAMPLE} 이(가) 없습니다.")
     shutil.copyfile(example, out / TARGET)
-
-    if (out / TARGET).is_file() and (PLUGIN / TARGET).is_file():
-        raise SystemExit(
-            f"{PLUGIN / TARGET} 이(가) 개발 레포에 있습니다. "
-            "site-defaults.yaml은 사내 전용입니다 (SITE_PATHS)."
-        )
 
     if with_site_backend:
         if not MOCK_SITE_BACKEND.is_dir():
@@ -67,6 +67,12 @@ def make(out: Path | None = None, with_site_backend: bool = False) -> Path:
 
     _restore_exec_bits(out)
     return out
+
+
+def _skip_site_paths(dirpath: str, names: list[str]) -> set[str]:
+    """사내 `site-defaults.yaml`·파서 백엔드·어댑터가 복사본에 섞이지 않게 한다."""
+    base = Path("plugin") / Path(dirpath).relative_to(PLUGIN)
+    return {n for n in names if is_site_path((base / n).as_posix(), _SITE_PATTERNS)}
 
 
 def _restore_exec_bits(root: Path) -> None:
