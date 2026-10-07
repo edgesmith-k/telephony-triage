@@ -292,7 +292,7 @@ def show(o: dict) -> None:
         print(f"  {r['tag']}: 요청 커버 {r['matched_requests']} ({r['request_coverage']:.0%}), 줄 {r['matched']}/{r['lines']} ({r['ratio']:.0%}) dt_ms={r.get('dt_ms')} 응답쪽 {r.get('resp_side')} -> {r['verdict']}"
               + (f"  초안 일치 {r['draft_matched']}/{r['matched']} ({r['draft_coverage']:.0%})" if "draft_matched" in r else ""))
     if o["ril"]["draft_layers"]:
-        print("  platform:\n    ril:\n      vendor:        # L2 적용 후 유효\n        layers:")
+        print("  platform:\n    ril:\n      vendor:\n        layers:")
         for tag, pat in o["ril"]["draft_layers"].items():
             print(f"          - {{tag: {tag}, patterns: [{y(pat)}]}}")
     s = o["summary"]

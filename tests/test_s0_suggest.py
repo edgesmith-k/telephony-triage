@@ -5,11 +5,13 @@ from __future__ import annotations
 
 import json
 import re
+import textwrap
 import subprocess
 import sys
 from pathlib import Path
 
 import pytest
+import yaml
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "tests" / "helpers"))
@@ -89,6 +91,21 @@ def test_vendor_ril_candidates_and_drafts(run):
     hal, sock = (re.compile(data["ril"]["draft_layers"][t]) for t in ("VRIL_HAL", "VRIL_SOCK"))
     assert hal.search("req serial=41 name=X").group("serial") == "41" and sock.search("resp token=42").group("token") == "42"
     assert "VRIL_MODEM" not in data["ril"]["draft_layers"]
+
+
+def test_printed_vendor_draft_is_accepted_by_platforms_load(run):
+    """출력의 `platform.ril.vendor` 초안을 그대로 붙여 넣으면 `platforms.load`가 받는다(L2 수용)."""
+    out = run().splitlines()
+    start = out.index("  platform:", next(i for i, ln in enumerate(out) if ln.startswith("[4 ")))
+    block = [out[start]]
+    for ln in out[start + 1:]:
+        if not ln.startswith("    "):
+            break
+        block.append(ln)
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    import platforms
+    vendor = platforms.load(yaml.safe_load(textwrap.dedent("\n".join(block)))).ril_vendor
+    assert {"VRIL_HAL", "VRIL_SOCK"} <= {t for t, _ in vendor.layers} and vendor.link_ms == 2000
 
 
 def test_draft_has_no_free_text_and_scatter_gives_no_draft(run):

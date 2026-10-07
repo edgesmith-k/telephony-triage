@@ -77,6 +77,8 @@ def _ril_events(rec: dict, rules: parser_rules.Rules, last_ts: str | None) -> li
         return []
     timeout = int(rule["timeout_ms"])
     base_fields = {"request": ann["request"], "serial": ann["serial"]}
+    if "hal" in ann:  # 벤더 RIL 층 (platform.ril.vendor 있을 때만)
+        base_fields["hal"] = ann["hal"]
     out = []
     if ann["dir"] == "resp":
         if ann["error"] not in (None, "NONE"):

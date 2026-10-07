@@ -89,6 +89,12 @@ platform:
   #     msg_suffix: ['\s?\[PHONE(\d+)\]$']           # 메시지 끝 search, 떼어냄
   # ril:
   #   tags: [RILJ]                   # TODO(SITE:S10) 벤더 RIL 태그(형식은 RILJ와 같아야 함, S9). tags.yaml 매핑도 함께
+  #   vendor:                        # TODO(SITE:S10) 벤더 RIL 층 연결(선택). 없으면 출력이 이전과 같다. 초안: tools/s0_suggest.py
+  #     link_ms: 2000                # RILJ 요청 뒤 HAL 줄을 찾는 시간(기본 2000, 앞쪽 500ms 고정)
+  #     layers:                      # 정확한 태그 이름. 패턴마다 (?P<serial>)·(?P<token>) 중 정확히 하나, 첫 일치만
+  #       - {tag: VRIL_HAL, patterns: ['^req serial=(?P<serial>\d+)']}
+  #       - {tag: VRIL_SOCK, patterns: ['^resp token=(?P<token>\d+)']}
+  #     coverage_tags: [VRIL_MODEM]  # 선택. 정규식 없이 "수집 살아 있음"만 표시(한가한 구간의 unknown 방지)
   # bugreport:                       # TODO(SITE:S21) dumpstate 섹션 헤더
   #   wanted_buffers: [system, radio, main]          # ^[a-z]+$, 출력 파일 순서
   #   section_regex: '^------ (?P<title>.+?) \((?P<cmd>logcat\b[^)]*)\) ------\s*$'   # (?P<cmd>) 필수

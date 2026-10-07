@@ -14,7 +14,7 @@ SCHEMA_VERSION = 1  # events.json 최상위 "schema" (markers 출력도 같은 �
 # 이벤트 키 순서 (출력 JSON의 키 순서와 같다).
 EVENT_KEYS = ("ts", "pid", "tid", "level", "tag", "msg", "phone_id", "category_hint", "ril", "event",
               "fields", "source", "line_ref")
-RIL_KEYS = ("serial", "dir", "request", "error", "paired_ts", "latency_ms")  # + 선택 `observed_until`(응답 없는 요청)
+RIL_KEYS = ("serial", "dir", "request", "error", "paired_ts", "latency_ms")  # + 선택 `observed_until`(응답 없는 요청)·`hal`(벤더 층)
 LINE_REF_KEYS = ("file_index", "line_no")
 
 SOURCE_RULES = "rules"
@@ -37,6 +37,7 @@ class RilAnnotation(TypedDict):
     paired_ts: str | None
     latency_ms: int | None
     observed_until: NotRequired[str]
+    hal: NotRequired[str]   # responded / reached / not_reached / unknown (platform.ril.vendor 있을 때만)
 
 
 class Event(TypedDict):
@@ -177,7 +178,8 @@ def _check_ril(e: dict) -> list[str]:
     if not isinstance(ril, dict):
         return [f"ril은 dict 또는 None: {type(ril).__name__}"]
     keys = list(ril)
-    if keys[:len(RIL_KEYS)] != list(RIL_KEYS) or keys[len(RIL_KEYS):] not in ([], ["observed_until"]):
+    if keys[:len(RIL_KEYS)] != list(RIL_KEYS) or keys[len(RIL_KEYS):] not in (
+            [], ["observed_until"], ["hal"], ["observed_until", "hal"]):
         return [f"ril 키 오류: {keys}"]
     return []
 

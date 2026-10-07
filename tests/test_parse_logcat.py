@@ -14,6 +14,7 @@
 - `sanitize_build`(`A..B`, `X.lock`, 끝 `.`)와 브랜치 이름 검사
 - 마스킹 자리가 extractor보다 앞 (`--mask`·`cut` 자체는 `tests/test_masking.py`)
 - `site-defaults.yaml` 없으면 종료 코드 2
+- 벤더 RIL 층 연결(`platform.ril.vendor`): `hal` 4값·창·coverage_tags·RILJ 짝 유지(설정 없으면 필드 없음)
 
 스냅샷 갱신: `python3 tests/test_parse_logcat.py --update`
 `pytest tests/test_parse_logcat.py`로도, 그냥 실행해도 돈다.
@@ -27,6 +28,7 @@ import subprocess
 import sys
 import tempfile
 import zipfile
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import yaml
@@ -273,6 +275,120 @@ def test_no_response_needs_enough_log_after_request():
     )
     data = _parse([path])
     assert not _events(data, event="ril_no_response"), "파일이 timeout 전에 끝나면 응답 없음이 아니다"
+
+
+# -- 벤더 RIL 층 연결 (선택 platform.ril.vendor, 04 §5.8 (2)) ---------------------
+# placeholder 태그 VRIL_HAL·VRIL_SOCK·VRIL_MODEM과 합성 문구만 쓴다.
+
+VENDOR = {"layers": [{"tag": "VRIL_HAL", "patterns": [r"^req serial=(?P<serial>\d+)(?: name=(?P<request>\w+))?"]},
+                     {"tag": "VRIL_SOCK", "patterns": [r"^resp token=(?P<token>\d+)"]}]}
+REQ41 = (0, 1234, "RILJ", "[PHONE0] [0041]> SETUP_DATA_CALL")
+ERR41 = (0.5, 1234, "RILJ", "[PHONE0] [0041]< SETUP_DATA_CALL error=INSUFFICIENT_RESOURCES")
+HAL41 = (0.005, 900, "VRIL_HAL", "req serial=41 name=SETUP_DATA_CALL")
+_VROOTS: dict[str, Path] = {}
+
+
+def _vendor_parse(rows, vendor=VENDOR) -> dict:
+    """rows: (초, pid, 태그, 메시지). 40초 뒤 꼬리 줄을 붙여 응답 없음(timeout 30s)을 판정할 수 있게 한다."""
+    key = json.dumps(vendor, sort_keys=True)
+    if key not in _VROOTS:
+        root = make_plugin_root.make()
+        if vendor is not None:
+            _set_defaults(root, platform={"name": "android", "ril": {"vendor": vendor}})
+        _VROOTS[key] = root
+    base = datetime(2026, 9, 22, 12, 5)
+    lines = []
+    for t, pid, tag, msg in sorted([*rows, (40, 1234, "Foo", "tail")], key=lambda r: r[0]):
+        at = base + timedelta(seconds=t)
+        lines.append(f"{at:%m-%d %H:%M:%S}.{at.microsecond // 1000:03d}  {pid}  {pid} D {tag}: {msg}\n")
+    path = _tmp() / "v.log"
+    path.write_text("".join(lines), encoding="utf-8", newline="\n")
+    return _parse([path], root=_VROOTS[key])
+
+
+def _hal(data, event: str):
+    (e,) = _events(data, event=event)
+    return e["fields"].get("hal")
+
+
+def test_vendor_hal_reached_not_reached_unknown():
+    assert _hal(_vendor_parse([REQ41, HAL41]), "ril_no_response") == "reached"
+    other = (0.003, 900, "VRIL_HAL", "req serial=40 name=DIAL")
+    assert _hal(_vendor_parse([REQ41, other]), "ril_no_response") == "not_reached"
+    data = _vendor_parse([REQ41])
+    assert _hal(data, "ril_no_response") == "unknown"
+    (req,) = [e for e in data["events"] if e["event"] is None and e["ril"]]
+    assert list(req["ril"])[-2:] == ["observed_until", "hal"] and events.validate_events(data["events"]) == []
+
+
+def test_vendor_hal_link_window():
+    late = (2.5, 900, "VRIL_HAL", "req serial=41")         # link_ms 2000 밖
+    early = (-0.4, 900, "VRIL_HAL", "req serial=41")       # 앞 500ms 안
+    assert _hal(_vendor_parse([REQ41, late]), "ril_no_response") == "not_reached"
+    assert _hal(_vendor_parse([REQ41, early]), "ril_no_response") == "reached"
+
+
+def test_vendor_token_without_rilj_response_is_responded():
+    """소켓 층 응답 토큰은 있는데 RILJ 응답이 없다 → AP 쪽 유실 근거."""
+    tok = (0.4, 900, "VRIL_SOCK", "resp token=41")
+    assert _hal(_vendor_parse([REQ41, HAL41, tok]), "ril_no_response") == "responded"
+
+
+def test_vendor_token_after_rilj_response_within_1s():
+    in_1s = (1.2, 900, "VRIL_SOCK", "resp token=41")       # RILJ 응답(0.5s) + 0.7s
+    past = (1.6, 900, "VRIL_SOCK", "resp token=41")        # + 1.1s
+    data = _vendor_parse([REQ41, HAL41, ERR41, in_1s])
+    assert _hal(data, "ril_error") == "responded"
+    req, resp = [e for e in data["events"] if e["event"] is None and e["ril"]]
+    assert req["ril"]["hal"] == resp["ril"]["hal"] == "responded"
+    assert _hal(_vendor_parse([REQ41, HAL41, ERR41, past]), "ril_error") == "reached"
+
+
+def test_vendor_non_decimal_group_value_is_ignored():
+    """단어 문자 token 그룹에 `0x29` 같은 값이 와도 parse가 죽지 않고 그 줄만 무시한다."""
+    vendor = {"layers": [*VENDOR["layers"][:1], {"tag": "VRIL_SOCK", "patterns": [r"^resp token=(?P<token>\w+)"]}]}
+    rows = [REQ41, HAL41, (0.3, 900, "VRIL_SOCK", "resp token=0x29"), (0.4, 900, "VRIL_SOCK", "resp token=٤١")]
+    assert _hal(_vendor_parse(rows, vendor), "ril_no_response") == "reached"
+
+
+def test_vendor_paired_hal_window_extends_to_response():
+    """짝 있는 요청은 HAL 창 끝이 max(t + link_ms, 응답 + 1s) — 늦은 HAL 줄도 응답 전이면 reached."""
+    late_hal = (3.0, 900, "VRIL_HAL", "req serial=41")
+    late_err = (3.5, 1234, "RILJ", "[PHONE0] [0041]< SETUP_DATA_CALL error=INSUFFICIENT_RESOURCES")
+    assert _hal(_vendor_parse([REQ41, late_hal, late_err]), "ril_error") == "reached"
+    assert _hal(_vendor_parse([REQ41, late_hal]), "ril_no_response") == "not_reached"   # 짝 없으면 link_ms 그대로
+
+
+def test_vendor_lines_do_not_split_rilj_pairing():
+    """벤더 줄(다른 pid)이 요청·응답 사이에 있어도 RILJ 짝이 유지된다(pid 분할 회귀 방지)."""
+    data = _vendor_parse([REQ41, HAL41, (0.2, 900, "VRIL_SOCK", "resp token=41"), ERR41])
+    req, resp = [e for e in data["events"] if e["event"] is None and e["ril"]]
+    assert req["ril"]["latency_ms"] == 500 and resp["ril"]["paired_ts"] == req["ts"]
+    assert all(e["ril"] is None for e in data["events"] if e["tag"].startswith("VRIL_"))
+    assert _events(data, event="ril_error") and not _events(data, event="ril_no_response")
+
+
+def test_vendor_unconfigured_modem_lines_change_nothing():
+    modem = [(-60 + i * 0.008, 901, "VRIL_MODEM", f"frame {i}") for i in range(12000)]
+    base = _vendor_parse([REQ41])
+    data = _vendor_parse([REQ41, *modem])
+    assert _hal(data, "ril_no_response") == "unknown"
+    def view(d):  # line_ref는 끼운 줄만큼 밀린다
+        return [{**e, "line_ref": None} for e in d["events"] if e["ril"] or e["event"]]
+    assert view(data) == view(base)
+
+
+def test_vendor_coverage_tags_turn_idle_unknown_into_not_reached():
+    """HAL·소켓 층은 한가할 때 오래 조용하다 → coverage_tags 줄로 수집이 살아 있음을 안다."""
+    rows = [REQ41, (-100, 900, "VRIL_HAL", "req serial=40"), (-1, 901, "VRIL_MODEM", "frame"), (1, 901, "VRIL_MODEM", "frame")]
+    assert _hal(_vendor_parse(rows), "ril_no_response") == "unknown"
+    assert _hal(_vendor_parse(rows, {**VENDOR, "coverage_tags": ["VRIL_MODEM"]}), "ril_no_response") == "not_reached"
+
+
+def test_vendor_unset_has_no_hal():
+    data = _vendor_parse([REQ41, HAL41], vendor=None)
+    assert "hal" not in _events(data, event="ril_no_response")[0]["fields"]
+    assert all("hal" not in e["ril"] for e in data["events"] if e["ril"])
 
 
 # -- 범위와 시계 -------------------------------------------------------------

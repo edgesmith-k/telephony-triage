@@ -27,11 +27,13 @@ class ReferenceBackend(ParserBackend):
     # 슬롯 표기·RIL 태그. `configure(profile)`이 바꾼 복사본에만 들어간다 (전역 상태 없음).
     _phone = logcat.DEFAULT_PHONE_RULES
     _ril_tags = ril.RIL_TAGS
+    _ril_vendor = None
 
     def configure(self, profile) -> "ReferenceBackend":
         other = copy.copy(self)
         other._phone = profile.phone
         other._ril_tags = profile.ril_tags
+        other._ril_vendor = profile.ril_vendor
         return other
 
     def version(self) -> str:
@@ -123,6 +125,8 @@ class ReferenceBackend(ParserBackend):
                 ril.pair(records)  # Pair the entire capture before window filtering.
                 out.extend(records)
         records, out = out, []
+        if self._ril_vendor:  # 벤더 줄은 다른 버퍼 청크일 수 있어 전체 레코드로 한 번
+            ril.link_vendor(records, self._ril_vendor)
         for rec in records:
             if window and not (window[0] <= rec["_dt"] <= window[1]):
                 continue

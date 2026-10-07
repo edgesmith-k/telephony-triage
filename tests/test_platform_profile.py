@@ -116,6 +116,7 @@ def test_example_commented_values_equal_defaults():
     assert prof.bugreport.section_re.pattern == default.bugreport.section_re.pattern
     assert prof.bugreport.boundary_re.pattern == default.bugreport.boundary_re.pattern
     assert prof.bugreport.wanted_buffers == default.bugreport.wanted_buffers
+    assert [t for t, _ in prof.ril_vendor.layers] == ["VRIL_HAL", "VRIL_SOCK"] and default.ril_vendor is None
 
 
 def test_example_yaml_block_is_loaded_by_test_root():
@@ -147,6 +148,28 @@ BAD = [
     ({"platform": {"log": {"phone_id": {"msg_suffix": "x(\\d)"}}}}, "platform.log.phone_id.msg_suffix"),
     ({"platform": {"ril": {"tags": [""]}}}, "platform.ril.tags[0]"),
     ({"platform": {"ril": {"tags": "RILJ"}}}, "platform.ril.tags"),
+    ({"platform": {"ril": {"vendor": {}}}}, "platform.ril.vendor"),
+    ({"platform": {"ril": {"vendor": {"layers": [], "x": 1}}}}, "platform.ril.vendor.x"),
+    ({"platform": {"ril": {"vendor": {"layers": []}}}}, "platform.ril.vendor.layers"),
+    ({"platform": {"ril": {"vendor": {"link_ms": 0, "layers": [{"tag": "V", "patterns": ["(?P<serial>1)"]}]}}}},
+     "platform.ril.vendor.link_ms"),
+    ({"platform": {"ril": {"vendor": {"layers": [{"tag": "V"}]}}}}, "platform.ril.vendor.layers[0]"),
+    ({"platform": {"ril": {"vendor": {"layers": [{"tag": "V", "patterns": [r"serial=(\d+)"]}]}}}},
+     "platform.ril.vendor.layers[0].patterns[0]"),
+    ({"platform": {"ril": {"vendor": {"layers": [{"tag": "V", "patterns": [r"(?P<serial>\d+) (?P<token>\d+)"]}]}}}},
+     "platform.ril.vendor.layers[0].patterns[0]"),
+    ({"platform": {"ril": {"vendor": {"layers": [{"tag": "V", "patterns": ["(?P<serial>"]}]}}}},
+     "platform.ril.vendor.layers[0].patterns[0]"),
+    ({"platform": {"ril": {"vendor": {"layers": [{"tag": "V", "patterns": ["(?P<serial>1)"]},
+                                                 {"tag": "V", "patterns": ["(?P<token>1)"]}]}}}},
+     "platform.ril.vendor.layers[1].tag"),
+    ({"platform": {"ril": {"vendor": {"layers": [{"tag": "V", "patterns": ["(?P<serial>1)"]}],
+                                      "coverage_tags": [""]}}}}, "platform.ril.vendor.coverage_tags[0]"),
+    # RIL 태그와 겹치면 벤더 줄이 RIL로 해석돼 RILJ 짝이 깨진다
+    ({"platform": {"ril": {"vendor": {"layers": [{"tag": "RILJ", "patterns": ["(?P<serial>1)"]}]}}}},
+     "platform.ril.vendor.layers[0].tag"),
+    ({"platform": {"ril": {"tags": ["RILJ", "VR"], "vendor": {"layers": [{"tag": "V", "patterns": ["(?P<serial>1)"]}],
+                                                              "coverage_tags": ["VR"]}}}}, "platform.ril.vendor.coverage_tags[0]"),
     ({"platform": {"bugreport": {"wanted_buffers": []}}}, "platform.bugreport.wanted_buffers"),
     ({"platform": {"bugreport": {"wanted_buffers": ["Radio"]}}}, "platform.bugreport.wanted_buffers[0]"),
     ({"platform": {"bugreport": {"wanted_buffers": ["../x"]}}}, "platform.bugreport.wanted_buffers[0]"),
@@ -161,6 +184,22 @@ def test_invalid_platform_block(defaults, path):
     with pytest.raises(PlatformConfigError) as info:
         platforms.load(defaults)
     assert f"site-defaults.yaml {path}" in str(info.value)
+
+
+def test_ril_vendor_loads_with_defaults():
+    """`link_ms`·`coverage_tags`는 선택(기본 2000 / 없음), `serial`·`token` 밖 이름 그룹은 무시한다."""
+    prof = platforms.load({"platform": {"ril": {"vendor": {"layers": [
+        {"tag": "VRIL_HAL", "patterns": [r"^req serial=(?P<serial>\d+)(?: name=(?P<request>\w+))?"]},
+        {"tag": "VRIL_SOCK", "patterns": [r"^resp token=(?P<token>\d+)"]}]}}}})
+    v = prof.ril_vendor
+    assert v.link_ms == ril.DEFAULT_LINK_MS == 2000 and v.coverage_tags == frozenset()
+    assert [(t, [p.pattern for p in ps]) for t, ps in v.layers] == [
+        ("VRIL_HAL", [r"^req serial=(?P<serial>\d+)(?: name=(?P<request>\w+))?"]), ("VRIL_SOCK", [r"^resp token=(?P<token>\d+)"])]
+    assert prof.ril_tags == frozenset(ril.RIL_TAGS)
+    full = platforms.load({"platform": {"ril": {"tags": ["RILJ"], "vendor": {
+        "link_ms": 500, "coverage_tags": ["VRIL_MODEM"], "layers": [{"tag": "VRIL_HAL", "patterns": [r"(?P<serial>\d+)"]}]}}}})
+    assert full.ril_vendor.link_ms == 500 and full.ril_vendor.coverage_tags == frozenset({"VRIL_MODEM"})
+    assert platforms.load({"platform": {"ril": {"vendor": None}}}) == platforms.default()
 
 
 def test_generic_name_message():
