@@ -3,7 +3,7 @@
 
 사람의 주의 대신 도구로 경계를 지킨다. 1차 장치는 `SITE_PATHS` 허용 목록이고,
 아래 패턴 검사는 보조다. 검사 대상은 `SITE_PATHS`·`.git`·무시 파일을 뺀 파일이다
-(git 레포면 `git ls-files -co --exclude-standard`, 아니면 디렉토리 전체).
+(git 레포면 `git ls-files -co --exclude-standard`, 아니면 `.gitignore`만 적용한 디렉토리 전체).
 
 규칙
     pattern:<id>   사내 표식 패턴 — 비밀 키(PEM·OPENSSH·PGP), 비밀값(GitHub·AWS·Slack·Google·
@@ -48,7 +48,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from import_draft import ALWAYS_SKIP, is_site_path  # noqa: E402
+from import_draft import ALWAYS_SKIP, is_site_path, walk  # noqa: E402
 
 OK, VIOLATION, USAGE = 0, 1, 2
 
@@ -209,26 +209,8 @@ def _allowed(finding: Finding, allow) -> bool:
 
 
 def list_files(root: Path, site_patterns: list[str]) -> dict[str, Path]:
-    """검사 대상 {상대경로: 절대경로}. SITE_PATHS·무시 파일 제외."""
-    rels: list[str]
-    if (root / ".git").exists():
-        out = subprocess.run(
-            ["git", "-C", str(root), "ls-files", "-co", "--exclude-standard", "-z"],
-            capture_output=True, check=True, timeout=60,
-        ).stdout.decode("utf-8")
-        rels = [r for r in out.split("\0") if r]
-    else:
-        rels = [p.relative_to(root).as_posix() for p in root.rglob("*") if p.is_file()]
-    files = {}
-    for rel in sorted(rels):
-        if any(part in ALWAYS_SKIP for part in rel.split("/")):
-            continue
-        if is_site_path(rel, site_patterns):
-            continue
-        path = root / rel
-        if path.is_file():
-            files[rel] = path
-    return files
+    """검사 대상 {상대경로: 절대경로}. SITE_PATHS·무시 파일 제외 (반입 목록과 같은 기준)."""
+    return walk(root, site_patterns)
 
 
 def _text(path: Path) -> str | None:

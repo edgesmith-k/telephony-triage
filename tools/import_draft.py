@@ -15,6 +15,11 @@
   **지우지 않고** 목록으로 보고한다. 사내 전용이면 `SITE_PATHS`로 옮기라고
   안내한다.
 - `.local-draft`(사외 PC 전용 표식)는 원본에 있어도 가져오지 않는다.
+- 파일 목록은 git 무시 규칙을 따른다: git 레포면 `git ls-files -co --exclude-standard`
+  (`git add -A`와 같은 기준), 아니면 원본 `.gitignore`만 적용한다(PC 전역 무시 제외). 반입 뒤 모습
+  (경계 검사·사내 새 파일 보고)에는 들어오는 `.gitignore`도 적용한다. git 필요.
+- 현재 사내 파일이 이미 새 초안과 같으면 사내에서 고친 것으로 보지 않는다.
+- 새 초안 `SITE_PATHS`에만 있는 줄은 보고만 한다(사내 `SITE_PATHS`는 쓰지 않는다).
 - 끝나면 새 초안 기준으로 `.draft-manifest.json`을 다시 쓴다.
   첫 반입이면 기준선 없이 전체를 복사하고 기준선을 만든다. 첫 반입이라도 대상에
   같은 경로의 다른 파일이 있으면 위 "사내에서 고친 파일"처럼 멈춘다.
@@ -45,6 +50,7 @@ import hashlib
 import json
 import os
 import shutil
+import subprocess
 import sys
 import tempfile
 from datetime import datetime, timezone
@@ -74,17 +80,21 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _read_lines(path: Path) -> list[str]:
+    lines = []
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if line and not line.startswith("#"):
+            lines.append(line)
+    return lines
+
+
 def load_site_paths(dest: Path, source: Path) -> list[str]:
     """`SITE_PATHS` 목록. 사내 레포 것이 우선이고, 없으면 새 초안 것을 쓴다."""
     for base in (dest, source):
         path = base / SITE_PATHS_FILE
         if path.is_file():
-            lines = []
-            for raw in path.read_text(encoding="utf-8").splitlines():
-                line = raw.strip()
-                if line and not line.startswith("#"):
-                    lines.append(line)
-            return lines
+            return _read_lines(path)
     return []
 
 
@@ -105,20 +115,62 @@ def is_site_path(rel: str, patterns: list[str]) -> bool:
     return False
 
 
+def _git(root: Path, args: list[str], stdin: str = "", ok=(0,)) -> str:
+    try:
+        proc = subprocess.run(["git", *args], cwd=root, input=stdin.encode("utf-8"),
+                              capture_output=True, timeout=60)
+    except FileNotFoundError as exc:
+        raise subprocess.SubprocessError(f"git이 필요합니다: {exc}") from exc
+    if proc.returncode not in ok:
+        raise subprocess.SubprocessError(
+            f"git {args[0]} 실패 ({proc.returncode}): {proc.stderr.decode('utf-8', 'replace').strip()}")
+    return proc.stdout.decode("utf-8")
+
+
+def _is_gitignore(rel: str) -> bool:
+    return rel.rsplit("/", 1)[-1] == ".gitignore"
+
+
+def _ignored(work_tree: Path, rels: set[str]) -> set[str]:
+    """`work_tree`의 `.gitignore`들로 무시되는 경로 (PC 전역 무시 제외). 경로는 없어도 된다.
+
+    git 무시 규칙은 레포 안에서만 돈다. 빈 임시 git 디렉토리를 붙여 쓴다
+    (상위 디렉토리, 예를 들어 홈의 git 레포를 찾아가지 않는다).
+    """
+    if not any(_is_gitignore(rel) for rel in rels):  # 없으면 git 없이도 돈다
+        return set()
+    with tempfile.TemporaryDirectory(prefix="tt-ignore-") as git_dir:
+        _git(work_tree, ["init", "-q", "--bare", "--template=", git_dir])
+        # check-ignore는 무시된 것이 없으면 종료 1이다.
+        out = _git(work_tree, ["--git-dir", git_dir, "--work-tree", str(work_tree),
+                               "-c", f"core.excludesFile={os.devnull}",
+                               "check-ignore", "--no-index", "--stdin", "-z"],
+                   "\0".join(sorted(rels)), ok=(0, 1))
+    return {r for r in out.split("\0") if r}
+
+
 def walk(root: Path, site_patterns: list[str]) -> dict[str, Path]:
-    """`SITE_PATHS`와 항상 제외 대상을 뺀 파일 목록 {상대경로: 절대경로}."""
-    out: dict[str, Path] = {}
-    for path in sorted(root.rglob("*")):
-        if not path.is_file():
+    """`SITE_PATHS`·항상 제외 대상·git 무시 파일을 뺀 파일 목록 {상대경로: 절대경로}.
+
+    git 레포(사내 레포)면 `git add -A`와 같은 기준이고, 아니면(압축 푼 초안) 원본
+    `.gitignore`만 적용한다. 사외 PC의 전역 무시는 사내에서 재현되지 않으므로 끈다.
+    """
+    if (root / ".git").exists():
+        out = _git(root, ["ls-files", "-co", "--exclude-standard", "-z"])
+        rels = {r for r in out.split("\0") if r}
+    else:
+        rels = {p.relative_to(root).as_posix() for p in root.rglob("*") if p.is_file()}
+        rels -= _ignored(root, rels)
+    files: dict[str, Path] = {}
+    for rel in sorted(rels):
+        if any(part in ALWAYS_SKIP for part in rel.split("/")):
             continue
-        rel_parts = path.relative_to(root).parts
-        if any(part in ALWAYS_SKIP for part in rel_parts):
-            continue
-        rel = path.relative_to(root).as_posix()
         if is_site_path(rel, site_patterns):
             continue
-        out[rel] = path
-    return out
+        path = root / rel
+        if path.is_file():
+            files[rel] = path
+    return files
 
 
 def load_manifest(dest: Path) -> dict | None:
@@ -149,6 +201,12 @@ def plan(source: Path, dest: Path, label: str | None) -> dict:
         src_files.pop(SITE_PATHS_FILE, None)
     dest_files.pop(SITE_PATHS_FILE, None)
 
+    source_hashes = {rel: sha256(path) for rel, path in src_files.items()}
+    site_paths_new: list[str] = []
+    if (dest / SITE_PATHS_FILE).is_file() and (source / SITE_PATHS_FILE).is_file():
+        site_paths_new = sorted(set(_read_lines(source / SITE_PATHS_FILE))
+                                - set(_read_lines(dest / SITE_PATHS_FILE)))
+
     locally_modified: list[dict] = []
     if not first_import:
         for rel, digest in baseline.items():
@@ -159,11 +217,11 @@ def plan(source: Path, dest: Path, label: str | None) -> dict:
                 # 사내에서 지운 사외 파일. 새 초안에 있으면 다시 놓인다.
                 continue
             now = sha256(current)
-            if now != digest:
+            # 이미 새 초안과 같으면 덮어써도 잃는 것이 없다 (아래에서 unchanged).
+            if now != digest and now != source_hashes.get(rel):
                 locally_modified.append({"path": rel, "baseline": digest, "current": now})
 
     to_write, to_delete, untouched = [], [], []
-    source_hashes = {rel: sha256(path) for rel, path in src_files.items()}
     for rel, path in src_files.items():
         target = _contained(dest, rel)
         if target.is_file() and sha256(target) == source_hashes[rel]:
@@ -187,7 +245,10 @@ def plan(source: Path, dest: Path, label: str | None) -> dict:
         )
         if is_site_path(rel, site_patterns)
     )
-    new_in_site = sorted(rel for rel in dest_files if rel not in baseline and rel not in src_files)
+    new_in_site = {rel for rel in dest_files if rel not in baseline and rel not in src_files}
+    # 반입 뒤 무시될 파일 제외. 기준은 원본 `.gitignore`만이다(사내에만 있는 `.gitignore`는 이미 dest_files에 반영됨).
+    # `final_view`는 반입 뒤 `.gitignore` 전부를 쓴다. 차이는 사내 전용 `.gitignore`가 원본 쪽 무시를 바꾸는 드문 경우뿐이다.
+    new_in_site = sorted(new_in_site - _ignored(source, new_in_site | set(src_files)))
 
     return {
         "first_import": first_import,
@@ -199,6 +260,7 @@ def plan(source: Path, dest: Path, label: str | None) -> dict:
         "unchanged": sorted(untouched),
         "kept_site_paths": site_only,
         "kept_new_in_site": new_in_site,
+        "site_paths_new": site_paths_new,
         "source_files": src_files,
         "source_hashes": source_hashes,
     }
@@ -254,7 +316,13 @@ def final_view(result: dict, dest: Path, staged: dict[str, Path]) -> dict[str, P
     view = {rel: path for rel, path in walk(dest, result["site_patterns"]).items()
             if rel not in result["to_delete"]}
     view.update(staged)
-    return dict(sorted(view.items()))
+    # 들어오는 `.gitignore`가 반입 뒤 무시할 사내 파일(.venv 등)은 뺀다 (반입 뒤 `git add -A`와 같게).
+    with tempfile.TemporaryDirectory(prefix="tt-ignore-") as rules:
+        for rel in filter(_is_gitignore, view):
+            (Path(rules) / rel).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(view[rel], Path(rules) / rel)
+        ignored = _ignored(Path(rules), set(view))
+    return {rel: path for rel, path in sorted(view.items()) if rel not in ignored}
 
 
 def boundary_check(dest: Path):
@@ -341,6 +409,8 @@ def report(result: dict, applied: bool) -> str:
             "사내 전용이면 SITE_PATHS로 옮기세요:"
         )
         lines += [f"  - {rel}" for rel in result["kept_new_in_site"]]
+    if result["site_paths_new"]:
+        lines.append(f"새 초안 SITE_PATHS에만 있는 줄: {', '.join(result['site_paths_new'])} (경고 참고)")
     if result["kept_site_paths"]:
         lines.append(f"SITE_PATHS 경로 {len(result['kept_site_paths'])}개는 건드리지 않았습니다.")
     if not applied:
@@ -373,15 +443,20 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         result = plan(source, dest, args.label)
-    except (OSError, ValueError) as exc:
+    except (OSError, ValueError, subprocess.SubprocessError) as exc:
         print(str(exc), file=sys.stderr)
         return USAGE
+    site_paths_new = result["site_paths_new"]
+    if site_paths_new and not args.json:
+        print(f"경고: 새 초안 SITE_PATHS에만 있는 줄: {', '.join(site_paths_new)} — "
+              "사내 SITE_PATHS에 직접 추가하세요 (아래에서 멈췄다면 추가한 뒤 다시 실행).", file=sys.stderr)
 
     if result["locally_modified"]:
         payload = {
             "status": "stopped",
             "reason": "locally-modified",
             "locally_modified": result["locally_modified"],
+            "site_paths_new": site_paths_new,
         }
         if args.json:
             print(json.dumps(payload, ensure_ascii=False, indent=2))
@@ -407,13 +482,14 @@ def main(argv: list[str] | None = None) -> int:
         import check_boundary
         if args.json:
             print(json.dumps({"status": "stopped", "reason": "boundary",
-                              "violations": [vars(f) for f in exc.findings]}, ensure_ascii=False, indent=2))
+                              "violations": [vars(f) for f in exc.findings],
+                              "site_paths_new": site_paths_new}, ensure_ascii=False, indent=2))
         else:
             print(f"{exc}. 사내 레포는 바뀌지 않았습니다:", file=sys.stderr)
             print(check_boundary.format_findings(exc.findings), file=sys.stderr)
         return CHECK_FAILED
-    except (OSError, ValueError) as exc:
-        print(f"반입 실패 (변경 복구): {exc}", file=sys.stderr)
+    except (OSError, ValueError, subprocess.SubprocessError) as exc:
+        print(f"반입 실패 (사내 레포는 바뀌지 않았거나 되돌렸습니다): {exc}", file=sys.stderr)
         return USAGE
 
     if args.json:

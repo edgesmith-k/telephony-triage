@@ -107,6 +107,6 @@
 
 ### 14.5 사외 문서 업데이트를 사내에 반영할 때
 
-1. 새 문서 세트(`CLAUDE.md`, `GUIDE.md`, `docs/design/`, `docs/history/CHANGES.md`, `REVIEW-OPEN.md`, `DRAFT_NOTES.md`)로 교체한다 (사내 값이 없으므로 그대로 덮어써도 된다). `SITE_PROFILE.md`는 건드리지 않는다. 코드까지 함께 바뀐 사외 초안을 반입할 때는 문서만 교체하지 말고 `15-local-draft.md §15.6` 재반입 절차(`tools/import_draft.py`)를 쓴다.
+1. 새 문서 세트(`CLAUDE.md`, `GUIDE.md`, `docs/design/`, `docs/history/CHANGES.md`, `REVIEW-OPEN.md`, `DRAFT_NOTES.md`)로 교체한다 (사내 값이 없으므로 그대로 덮어써도 된다). `SITE_PROFILE.md`는 건드리지 않는다. 코드까지 함께 바뀐 사외 초안을 반입할 때는 문서만 교체하지 말고 `15-local-draft.md §15.6` 재반입 절차(`tools/import_draft.py`)를 쓴다. 문서만 받을 때도 `import_draft.py`를 쓸 수 있다(이미 새 초안과 같은 파일은 멈추지 않는다).
 2. 사내 Claude Code에 "새 문서 세트의 `docs/history/CHANGES.md`와 `SITE_PROFILE.md`를 비교해서 영향받는 항목을 알려줘"라고 요청한다. 새로 생긴 placeholder(14.2의 새 S 번호 포함)는 14.4 방식으로 확인한다. 바뀐 파일에 대해서는 14.4 1번의 문서 정합성 검토를 다시 한다.
 3. 설계가 바뀐 부분은 이미 구현된 코드와 이슈 DB에 미치는 영향(스키마 변경 → 마이그레이션 필요 여부 포함)을 정리해서 Phase 단위로 반영한다. "진행 상태"의 완료 Phase 중 영향받는 것을 표시한다.

@@ -323,13 +323,52 @@ def test_unexpected_exception_is_exit_2(repo, tmp_path, monkeypatch, capsys):
 
 def test_real_check_ids_order_and_manual_items():
     ids = [c.id for c in mb.CHECKS]
-    assert ids == ["site-paths", "mcp-local", "boundary", "human-search", "schemas", "contracts", "exec-bits",
-                   "site-todos", "todos-seen", "draft-notes-size", "draft-notes-fresh", "plugin-json", "skeleton", "offline-eval", "regress",
-                   "evals-prepare", "pytest"]
+    assert ids == ["plugin-json", "site-paths", "mcp-local", "boundary", "human-search", "schemas", "contracts",
+                   "exec-bits", "site-todos", "todos-seen", "draft-notes-size", "draft-notes-fresh", "skeleton",
+                   "offline-eval", "regress", "evals-prepare", "pytest"]
     manual = [c.id for c in mb.CHECKS if c.kind == "manual"]
-    assert manual == ["human-search", "todos-seen", "draft-notes-fresh", "plugin-json"]
+    assert manual == ["human-search", "todos-seen", "draft-notes-fresh"]
     assert all(c.how for c in mb.CHECKS if c.kind == "manual")
     assert {c.checklist for c in mb.CHECKS} == set(range(1, 11))
+
+
+def _write_plugin_json(repo: Path, data: dict) -> None:
+    path = repo / "plugin" / ".claude-plugin" / "plugin.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "plugin.json")
+
+
+def test_plugin_json_draft_description_fails_first(repo, tmp_path):
+    """R-23: description의 '사외 초안'·version은 사람 확인이 아니라 맨 앞 자동 검사로 잡는다."""
+    _write_plugin_json(repo, {"name": "t", "description": "도구 (개발 중, 사외 초안)"})
+    assert mb.CHECKS[0].id == "plugin-json"
+    res = mb.run(repo, LABEL, tmp_path / "out", checks=[mb.CHECKS[0], *fake_checks()])
+    status = {c["id"]: c["status"] for c in res["checks"]}
+    assert status["plugin-json"] == "fail" and status["a"] == "not-run" and res["exit_code"] == 1
+    _write_plugin_json(repo, {"name": "t", "version": "0.0.1", "description": "도구"})
+    assert mb.check_plugin_json(_ctx(repo, tmp_path)).status == "fail"
+    _write_plugin_json(repo, {"name": "t", "description": "도구"})
+    assert mb.check_plugin_json(_ctx(repo, tmp_path)).status == "pass"
+
+
+def test_push_command_uses_single_remote_name(repo, tmp_path):
+    """R-23: 출력하는 push 명령은 실제 remote 이름을 쓴다 (origin 고정 아님)."""
+    _git(repo, "remote", "add", "telephony", str(tmp_path / "bare.git"))
+    res = mb.run(repo, LABEL, tmp_path / "out", checks=fake_checks())
+    assert f"git push telephony {LABEL}" in mb.format_text(res)
+    _git(repo, "remote", "add", "other", str(tmp_path / "other.git"))
+    res = mb.run(repo, LABEL, tmp_path / "out2", checks=fake_checks())
+    assert f"git push <remote> {LABEL}" in mb.format_text(res)
+
+
+def test_on_remote_main_false_on_feature_branch(repo, tmp_path):
+    """R-23: 기능 브랜치에서 만든 묶음은 원격 main에 없다고 보고한다 (종료 코드는 그대로)."""
+    _git(repo, "switch", "-q", "-c", "feature")
+    res = mb.run(repo, LABEL, tmp_path / "out", checks=fake_checks())
+    assert res["exit_code"] == 3 and res["on_remote_main"] is False
+    assert "HEAD가 원격 main에 없습니다" in mb.format_text(res)
 
 
 def test_checks_use_target_repo_tools(repo, tmp_path, monkeypatch):
