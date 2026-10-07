@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -319,6 +320,76 @@ def test_failed_step_is_schema_valid_and_checked_for_raw_identifiers():
     edit(path, "failed_step: 고객 010-1234-5678 데이터 켜기", "failed_step: " + "x" * 201)
     assert any(e["code"] == "schema" or "failed_step" in str(e) for e in _lint(db, "--all", expect=1)["errors"])
     assert yaml.safe_load(path.read_text(encoding="utf-8"))["note"]
+
+
+BROKEN_YAML_FILES = [
+    f"{C}/jira/MOCK-2101.yaml",
+    "feedback/2026-09/MOCK-1103-20260922T1830.yaml",
+    "issue-db.config.yaml",
+    f"{D}/fixtures/DATA-001-01.expect.yaml",
+    "parser-rules/tags.yaml",
+]
+
+
+def _broken(rel: str) -> Path:
+    db = runner_copy()
+    path = db / rel
+    path.write_text(path.read_text(encoding="utf-8") + "x: [unclosed\n", encoding="utf-8", newline="\n")
+    return db
+
+
+def test_broken_yaml_is_a_lint_finding_not_a_crash():
+    for rel in BROKEN_YAML_FILES:
+        proc = run("db_lint.py", ["--db", _broken(rel), "--all"])
+        assert proc.returncode == 1 and "Traceback" not in proc.stderr, (rel, proc.stderr[-1500:])
+        result = json.loads(proc.stdout)
+        assert [e["file"] for e in result["errors"] if e["code"] == "yaml-syntax"] == [rel], rel
+        if rel.startswith(C):
+            assert result["summary"]["types"] == 6, "깨진 파일 하나가 나머지 검사를 막지 않는다"
+        msg = next(e["message"] for e in result["errors"] if e["code"] == "yaml-syntax")
+        assert msg[0].isdigit() and "행:" in msg and rel not in msg, msg          # 경로를 두 번 쓰지 않는다
+        if rel.endswith("tags.yaml"):
+            assert not [e for e in result["errors"] if e["code"] == "parser-rules"], "같은 원인을 두 번 보고하지 않는다"
+
+
+def test_broken_yaml_is_usage_error_for_build_search_regress():
+    db = _broken(f"{C}/jira/MOCK-2101.yaml")
+    for script, args in (("db_build.py", ["--verify"]), ("db_search.py", ["call"]), ("db_regress.py", ["--all"])):
+        proc = run(script, [*args, "--db", db])
+        assert proc.returncode == 2, (script, proc.returncode, proc.stderr[-800:])
+        assert "MOCK-2101.yaml:" in proc.stderr and "YAML 문법 오류" in proc.stderr and "Traceback" not in proc.stderr
+        assert str(db) not in proc.stderr, "경로는 DB 기준 상대 경로"
+    cfg = _broken("issue-db.config.yaml")
+    for script, args in (("config.py", ["check", "--for", "dry-run"]), ("db_migrate.py", ["--to", "2", "--dry-run"])):
+        proc = run(script, [*args, "--db", cfg])
+        assert proc.returncode == 2 and "issue-db.config.yaml:" in proc.stderr and "Traceback" not in proc.stderr,             (script, proc.returncode, proc.stderr[-800:])
+    expect = _broken(f"{D}/fixtures/DATA-001-01.expect.yaml")
+    proc = run("db_regress.py", ["--db", expect, "--all"])
+    assert proc.returncode == 2 and proc.stderr.startswith(f"{D}/fixtures/DATA-001-01.expect.yaml:"), proc.stderr
+
+
+def test_precommit_broken_yaml_names_file_without_rebuild_hint():
+    db = git_db()
+    path = db / f"{C}/jira/MOCK-2101.yaml"
+    path.write_text(path.read_text(encoding="utf-8") + "x: [unclosed\n", encoding="utf-8", newline="\n")
+    git(db, "add", "-A")
+    proc = run("db_precommit.py", ["--db", db])
+    assert proc.returncode != 0
+    assert "yaml-syntax" in proc.stderr or "YAML 문법 오류" in proc.stderr
+    assert "db_build.py --write" not in proc.stderr and "Traceback" not in proc.stderr and "tt-lint-" not in proc.stderr
+    assert "tt-regress" not in proc.stderr and "tt-verify" not in proc.stderr
+
+
+def test_non_utf8_yaml_is_a_lint_finding():
+    db = runner_copy()
+    path = db / C / "jira" / "MOCK-2101.yaml"
+    path.write_bytes(path.read_bytes() + "note2: 한글\n".encode("cp949"))
+    proc = run("db_lint.py", ["--db", db, "--all"])
+    assert proc.returncode == 1 and "Traceback" not in proc.stderr, proc.stderr[-800:]
+    hit = [e for e in json.loads(proc.stdout)["errors"] if e["code"] == "yaml-syntax"]
+    assert len(hit) == 1 and "UTF-8" in hit[0]["message"]
+    proc = run("db_search.py", ["--db", db, "call"])
+    assert proc.returncode == 2 and "UTF-8" in proc.stderr and "Traceback" not in proc.stderr
 
 
 if __name__ == "__main__":

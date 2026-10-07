@@ -370,7 +370,7 @@ def main(argv: list[str] | None = None) -> int:
     defaults = site_defaults.load_or_exit(args.plugin_root)
     try:
         result, code = cmd_upgrade_plan(args, defaults) if args.cmd == "upgrade-plan" else cmd_migrate(args, defaults)
-    except UsageError as exc:
+    except (UsageError, yamlio.YamlFileError) as exc:
         print(str(exc), file=sys.stderr)
         print(json.dumps({"error": str(exc)}, ensure_ascii=False, indent=1))
         return USAGE

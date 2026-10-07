@@ -626,7 +626,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.staged and not args.verify:
             raise UsageError("--staged는 --verify와 함께 쓴다.")
         result, code = run(args, defaults)
-    except UsageError as exc:
+    except (UsageError, yamlio.YamlFileError) as exc:
         print(str(exc), file=sys.stderr)
         return USAGE
     for problem in result.get("problems") or []:

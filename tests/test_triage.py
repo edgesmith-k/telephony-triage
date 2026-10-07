@@ -760,6 +760,59 @@ def test_offline_meta_failed_step_is_masked_and_used():
     assert analysis["jira"]["failed_step"]["source"] == "field"
 
 
+def test_unexpected_error_releases_lock_and_exits_2():
+    root = plugin_root("triage-crash")
+    (root / "scripts" / "crash_triage.py").write_text(
+        "import triage\n"
+        "from triagelib import driver\n\n\n"
+        "def boom(self, ctx):\n"
+        "    raise RuntimeError('boom')\n\n\n"
+        "driver.Driver.core = boom\n"
+        "raise SystemExit(triage.main())\n", encoding="utf-8", newline="\n")
+    ws = Workspace(root=root)
+    proc = ws.run("crash_triage.py", ["run", "MOCK-1001", "--dry-run", "--jira-file", MOCK_JIRA / "MOCK-1001.yaml",
+                                      "--logs", DATA_LOG, "--code", "skip"])
+    assert proc.returncode == 2, proc.stderr[-1500:]
+    assert "내부 오류" in proc.stderr and "RuntimeError: boom" in proc.stderr and "Traceback" not in proc.stderr
+    assert ws.db_pr("lock", "status")["held"] is False
+    last = json.loads((ws.job_dir("MOCK-1001") / "trace.jsonl").read_text(encoding="utf-8").strip().splitlines()[-1])
+    assert last["step"] == "error" and last["exit"] == 2
+
+
+def _crash_root(name: str, before_raise: str = ""):
+    root = plugin_root(name)
+    (root / "scripts" / "crash_triage.py").write_text(
+        "import triage\n"
+        "from triagelib import driver\n\n\n"
+        "def boom(self, ctx):\n"
+        f"{before_raise}"
+        "    raise RuntimeError('boom')\n\n\n"
+        "driver.Driver.core = boom\n"
+        "raise SystemExit(triage.main())\n", encoding="utf-8", newline="\n")
+    return root
+
+
+def _crash_run(ws: Workspace):
+    return ws.run("crash_triage.py", ["run", "MOCK-1001", "--dry-run", "--jira-file", MOCK_JIRA / "MOCK-1001.yaml",
+                                      "--logs", DATA_LOG, "--code", "skip"])
+
+
+def test_unexpected_error_tells_when_lock_could_not_be_released():
+    root = _crash_root("triage-crash-lock", "    self.release = lambda: False\n")
+    ws = Workspace(root=root)
+    proc = _crash_run(ws)
+    assert proc.returncode == 2 and "lock이 남았을 수 있다" in proc.stderr and "release MOCK-1001" in proc.stderr
+    assert ws.db_pr("lock", "status")["held"] is True
+
+
+def test_unexpected_error_reports_release_even_when_trace_note_fails():
+    root = _crash_root("triage-crash-note", "    self.run.note = lambda *a, **k: (_ for _ in ()).throw(OSError('x'))\n")
+    ws = Workspace(root=root)
+    proc = _crash_run(ws)
+    assert proc.returncode == 2 and "lock을 풀었다" in proc.stderr
+    assert ws.db_pr("lock", "status")["held"] is False
+
+
 if __name__ == "__main__":
     import pytest
 

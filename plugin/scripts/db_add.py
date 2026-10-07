@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """db_add.py — 작업 계획 적용·drift 검사·ID 도구 (contracts.md §작업 계획, §renumber 참조, 01-architecture.md §3.1).
 
-    db_add.py apply <plan.json> [--db <path>] [--pending <file>...] [--user <GHE 아이디>]
+    db_add.py apply <plan.json> --db <path> [--pending <file>...] [--user <GHE 아이디>]
     db_add.py drift <plan.json> --onto <ref> [--db <path>]
     db_add.py renumber <옛 ID> [--base <ref>] [--db <path>]
     db_add.py check-ids [--base <ref>] [--db <path>]
@@ -26,6 +26,7 @@ drift 표). 항목은 `{op_index, op, target, field, plan_value(op가 쓰는 값
 아무것도 바꾸지 않는다. drift가 있으면 종료 코드 1.
 
 `renumber`: 직접 편집한 브랜치에서 "내 ID"(merge-base에 없던 ID)만 다음 빈 번호로 옮긴다(§renumber 참조).
+  현재 브랜치가 base·`tt/*`·detached이거나 워킹 트리가 더러우면 종료 코드 2.
 `check-ids`: 트리 안 ID 중복과, `--base`면 내 ID가 그 ref에 이미 있는지. 있으면 종료 코드 1.
 `similar`: 전체 카테고리에서 제목·증상 시그니처가 비슷한 유형 상위 3개.
 

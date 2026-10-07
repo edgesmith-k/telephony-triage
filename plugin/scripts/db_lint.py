@@ -36,6 +36,7 @@
 - `also-allowed` 오류: 자기 원인·같은 유형 원인·없는 ID
 - `merged-into` 오류: 없는 병합 대상
 - `parser-rules` 오류: 규칙 파일 로드·스키마
+- `yaml-syntax` 오류: YAML 문법 오류(파일·줄). 그 파일만 건너뛰고 검사는 계속(config가 깨지면 검사 불가라 거기서 끝)
 - `synthetic` 경고: `synthetic_allowed: false`인 플러그인에서 `origin: synthetic` fixture
 - `residual-id` 오류: `--residual`로 준 옛 ID가 남아 있음
 
@@ -170,6 +171,7 @@ class Linter:
         self.scope = scope
         self.findings: list[dict] = []
         self.checked = 0
+        self.bad_yaml: set[Path] = set()
 
     # 기록 -----------------------------------------------------------------------
 
@@ -185,13 +187,27 @@ class Linter:
     def warn(self, code, files, message):
         self.add("warning", code, files, message)
 
+    def _yaml(self, path: Path):
+        """`yamlio.load` + 문법 오류는 `yaml-syntax`(파일당 한 번)로 보고하고 None."""
+        try:
+            return yamlio.load(path)
+        except yamlio.YamlFileError as exc:
+            if path not in self.bad_yaml:
+                self.bad_yaml.add(path)
+                self.err("yaml-syntax", path, f"{exc.line or '?'}행: {exc.problem}")
+            return None
+
     # 실행 -----------------------------------------------------------------------
 
     def run(self) -> dict:
         try:
             self.config = issuedb.load_config(self.root)
         except issuedb.IssueDbError as exc:
-            self.err("schema", issuedb.CONFIG, str(exc))
+            cause = exc.__cause__
+            if isinstance(cause, yamlio.YamlFileError):
+                self.err("yaml-syntax", issuedb.CONFIG, f"{cause.line or '?'}행: {cause.problem}")
+            else:
+                self.err("schema", issuedb.CONFIG, str(exc))
             return self.result()
         cats = [c for c in self.config.get("categories") or [] if isinstance(c, dict)]
         self.categories = {c["key"]: c for c in cats if c.get("key")}
@@ -600,7 +616,9 @@ class Linter:
             return
         if self.key_re and self.key_re.fullmatch(item):
             path = type_md.parent / "jira" / f"{item}.yaml"
-            record = yamlio.load(path) if path.is_file() else None
+            record = self._yaml(path) if path.is_file() else None
+            if path in self.bad_yaml:
+                return
             if not record or str(record.get("cause")) != cid:
                 self.err("evidence-missing", type_md, f"{cid}: evidence Jira {item}가 이 원인의 Jira 기록으로 없습니다.")
             return
@@ -685,7 +703,10 @@ class Linter:
                 continue
             if not path.with_name(fx.stem + ".log").is_file():
                 self.err("fixture-orphan", path, f"{path.name}에 맞는 .log가 없습니다.")
-            data = yamlio.load(path) or {}
+            data = self._yaml(path)
+            if path in self.bad_yaml:
+                continue
+            data = data or {}
             if not self._validate("expect", data, path):
                 continue
             target = data.get("expect_top") or fx.cause
@@ -709,7 +730,9 @@ class Linter:
             type_id = str(data.get("id"))
             causes = {str(c.get("id")) for c in data.get("causes") or [] if isinstance(c, dict)}
             for path in sorted((type_md.parent / "jira").glob("*.yaml")):
-                record = yamlio.load(path)
+                record = self._yaml(path)
+                if path in self.bad_yaml:
+                    continue
                 if not isinstance(record, dict):
                     self.err("schema", path, "Jira 기록이 매핑이 아닙니다.")
                     continue
@@ -733,7 +756,9 @@ class Linter:
 
     def _check_feedback(self) -> None:
         for path in sorted((self.root / "feedback").glob("*/*.yaml")):
-            record = yamlio.load(path)
+            record = self._yaml(path)
+            if path in self.bad_yaml:
+                continue
             self._validate("feedback", record if record is not None else {}, path)
 
     def _check_rules(self) -> None:
@@ -744,15 +769,17 @@ class Linter:
         try:
             parser_rules.load(rules_dir)
         except parser_rules.RulesError as exc:
-            self.err("parser-rules", "parser-rules/extractors.yaml", str(exc))
+            cause = exc.__cause__
+            if not (isinstance(cause, yamlio.YamlFileError) and cause.path.name in ("extractors.yaml", "tags.yaml")):
+                self.err("parser-rules", "parser-rules/extractors.yaml", str(exc))   # 문법 오류는 아래 yaml-syntax가 보고한다
         path = rules_dir / "extractors.yaml"
-        data = yamlio.load(path) if path.is_file() else {}
+        data = self._yaml(path) if path.is_file() else {}
         for item in (data or {}).get("extractors") or []:
             if isinstance(item, dict):
                 for pattern in item.get("patterns") or []:
                     self._check_pattern(path, f"extractor {item.get('id')}", str(pattern))
         path = rules_dir / "tags.yaml"
-        data = yamlio.load(path) if path.is_file() else {}
+        data = self._yaml(path) if path.is_file() else {}
         for item in (data or {}).get("tags") or []:
             if isinstance(item, dict) and item.get("tag_regex"):
                 unsafe = unsafe_regex(str(item["tag_regex"]))
@@ -851,7 +878,7 @@ def main(argv: list[str] | None = None) -> int:
     defaults = site_defaults.load_or_exit(args.plugin_root)
     try:
         result, code = run(args, defaults)
-    except UsageError as exc:
+    except (UsageError, yamlio.YamlFileError) as exc:
         print(str(exc), file=sys.stderr)
         return USAGE
     for f in result["errors"] + result["warnings"]:

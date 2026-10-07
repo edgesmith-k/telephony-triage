@@ -63,8 +63,26 @@ def _next_id(old: str, pools: list[dict]) -> str:
     return f"{prefix}-{max(nums or [0]) + 1:03d}"
 
 
+def _require_edit_branch(db: Path, base: str) -> None:
+    """renumber는 직접 편집한 자기 브랜치(≠ base·≠ `tt/*`·detached 아님)의 깨끗한 트리에서만 (06-collaboration.md §6.3)."""
+    try:
+        branch = gitscope.git(db, "rev-parse", "--abbrev-ref", "HEAD").strip()
+        dirty = gitscope.git(db, "status", "--porcelain").strip()
+    except gitscope.GitError as exc:
+        raise UsageError(f"git 상태를 읽지 못했다: {exc}") from exc
+    if branch == "HEAD":
+        raise UsageError("분리된 HEAD라 renumber하지 않는다. 리베이스 중이면 git rebase --continue로 먼저 끝내고 "
+                         "자기 브랜치에서 실행한다 (06-collaboration.md §6.3).")
+    if branch.startswith("tt/") or branch in (base, base.removeprefix("origin/")):
+        raise UsageError(f"현재 브랜치 {branch!r}에서는 renumber하지 않는다. 직접 편집한 자기 브랜치(review/·chore/·category/ 등)에서 "
+                         "실행한다 (06-collaboration.md §6.3).")
+    if dirty:
+        raise UsageError("워킹 트리가 깨끗하지 않다. 커밋하거나 정리한 뒤 다시 실행한다: " + dirty[:1000])
+
+
 def cmd_renumber(args, defaults: dict) -> tuple[dict, int]:
     db = _db(args)
+    _require_edit_branch(db, args.base)
     old = args.old_id
     if not (CAUSE_ID_RE.match(old) or TYPE_ID_RE.match(old)):
         raise UsageError(f"유형·원인 ID 형식이 아닙니다: {old}")

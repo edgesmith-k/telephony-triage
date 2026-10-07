@@ -95,11 +95,22 @@ def read_frontmatter(path: Path) -> dict:
     return parse_frontmatter_text(path.read_text(encoding="utf-8"), str(path))
 
 
+def _yaml(path: Path, root: Path):
+    try:
+        return yamlio.load(path)
+    except yamlio.YamlFileError as exc:
+        try:
+            rel = path.relative_to(root).as_posix()
+        except ValueError:
+            rel = str(path)
+        raise IssueDbError(f"{rel}{f':{exc.line}' if exc.line else ''}: YAML 문법 오류: {exc.problem}") from exc
+
+
 def load_config(root: Path) -> dict:
     path = root / CONFIG
     if not path.is_file():
         raise IssueDbError(f"이슈 DB가 아닙니다(설정 파일 없음): {path}")
-    data = yamlio.load(path)
+    data = _yaml(path, root)
     if not isinstance(data, dict):
         raise IssueDbError(f"{path}: 매핑이어야 합니다.")
     return data
@@ -143,7 +154,7 @@ def load(db_root: str | Path) -> IssueDb:
             )
         types.append(itype)
         for jira in sorted((path.parent / "jira").glob("*.yaml")):
-            record = yamlio.load(jira) or {}
+            record = _yaml(jira, root) or {}
             if not isinstance(record, dict):
                 record = {}
             if record.get("cause"):
@@ -151,7 +162,7 @@ def load(db_root: str | Path) -> IssueDb:
             jira_records.append({**record, "_type": itype.id, "_rel": jira.relative_to(root).as_posix()})
     feedback = []
     for path in sorted((root / "feedback").glob("*/*.yaml")):
-        record = yamlio.load(path)
+        record = _yaml(path, root)
         if isinstance(record, dict):
             feedback.append(record)
     return IssueDb(root=root, config=config, types=types, feedback=feedback, jira_counts=jira_counts,

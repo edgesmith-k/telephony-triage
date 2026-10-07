@@ -43,5 +43,5 @@ analyze Step 8에서 원격 브랜치가 이미 있을 때의 "plan으로 브랜
 직접 편집한 `review/...`, `move/...`, `category/...`, `chore/...` 등은 도구가 바꾸지 않는다. 사용자에게 이 절차를 안내한다:
 1. 자기 로컬 브랜치에서 `git fetch origin` → `git rebase origin/<base>`.
 2. 충돌이 생성 파일(README, 카테고리 README, STATS, CHANGELOG)뿐이면 main 쪽을 받고 `db_build.py --write`로 다시 만든다. 다른 충돌은 직접 해결.
-3. 새로 만든 ID가 main과 겹치면(`db_add.py check-ids --base origin/<base>`) `db_add.py renumber <옛 ID>` → `db_lint.py --residual <옛>=<새>`.
+3. 새로 만든 ID가 main과 겹치면(`db_add.py check-ids --base origin/<base>`) 2번을 마쳐 커밋한 깨끗한 트리에서 `db_add.py renumber <옛 ID>` → `db_lint.py --residual <옛>=<새>`.
 4. `/telephony-triage:validate` 통과 후 커밋하고 `git push --force-with-lease`.

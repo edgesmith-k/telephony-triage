@@ -41,7 +41,7 @@ sys.path.insert(0, str(SCRIPTS))
 
 import match_signatures  # noqa: E402
 import parse_logcat  # noqa: E402
-from common import compat, dbpath, gitscope, issuedb, site_defaults  # noqa: E402
+from common import compat, dbpath, gitscope, issuedb, site_defaults, yamlio  # noqa: E402
 from common import compiled as compiled_cache  # noqa: E402
 from common.exitcodes import CHECK_FAILED, OK, USAGE  # noqa: E402
 from common.fixtures import load_expectation, parse_name  # noqa: E402
@@ -367,7 +367,7 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(run_events_diff(args, defaults, plugin_root), ensure_ascii=False, indent=1))
             return OK
         result, code = run(args, defaults, plugin_root)
-    except UsageError as exc:
+    except (UsageError, yamlio.YamlFileError) as exc:
         print(str(exc), file=sys.stderr)
         return USAGE
     for r in result["results"]:

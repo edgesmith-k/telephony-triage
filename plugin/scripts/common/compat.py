@@ -37,8 +37,7 @@ def load_db_config(db_root: str | Path) -> dict:
     path = Path(db_root) / "issue-db.config.yaml"
     if not path.is_file():
         return {}
-    with path.open(encoding="utf-8") as fh:
-        data = yamlio.safe_load(fh)
+    data = yamlio.load(path)
     return data if isinstance(data, dict) else {}
 
 

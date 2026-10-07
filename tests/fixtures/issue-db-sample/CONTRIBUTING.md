@@ -96,7 +96,7 @@
 - **직접 편집한 브랜치**(계획 없음): 작성자가 직접 재동기화한다.
   1. `git fetch origin` 후 `git rebase origin/main`
   2. 충돌이 생성 파일(README, 카테고리 README, STATS, parser-rules/CHANGELOG)뿐이면 main 쪽을 받고 `db_build --write`로 다시 만든다. 다른 파일 충돌은 직접 해결한다.
-  3. 새 ID가 main과 겹치면 `db_add check-ids --base origin/main`으로 확인하고 `db_add renumber <옛 ID>`로 옮긴 뒤 `db_lint --residual <옛 ID>=<새 ID>`로 잔존을 검사한다.
+  3. 새 ID가 main과 겹치면 `db_add check-ids --base origin/main`으로 확인하고, 2번을 마쳐 커밋한 깨끗한 트리에서 `db_add renumber <옛 ID>`로 옮긴 뒤 `db_lint --residual <옛 ID>=<새 ID>`로 잔존을 검사한다.
   4. `/telephony-triage:validate` 통과 후 `git push --force-with-lease`
 
 ## 6. 하지 않는 것

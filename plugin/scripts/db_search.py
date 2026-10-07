@@ -47,7 +47,7 @@ from pathlib import Path
 SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS))
 
-from common import dbpath, glossary, history, issuedb, quality, site_defaults, typedoc, userconfig  # noqa: E402
+from common import dbpath, glossary, history, issuedb, quality, site_defaults, typedoc, userconfig, yamlio  # noqa: E402
 from common.exitcodes import OK, USAGE  # noqa: E402
 from common.fixtures import CAUSE_ID_RE, TYPE_ID_RE  # noqa: E402
 
@@ -530,7 +530,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.format == "markdown" and args.json:
             raise UsageError("--format markdown은 --json과 함께 쓸 수 없다.")
         result = run(args, defaults)
-    except UsageError as exc:
+    except (UsageError, yamlio.YamlFileError) as exc:
         print(str(exc), file=sys.stderr)
         return USAGE
     if args.format == "markdown":

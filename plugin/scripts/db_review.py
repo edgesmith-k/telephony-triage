@@ -37,7 +37,7 @@ sys.path.insert(0, str(SCRIPTS))
 import db_regress  # noqa: E402
 import match_signatures  # noqa: E402
 import parse_logcat  # noqa: E402
-from common import dbpath, history, issuedb, quality, site_defaults, userconfig  # noqa: E402
+from common import dbpath, history, issuedb, quality, site_defaults, userconfig, yamlio  # noqa: E402
 from common.exitcodes import OK, USAGE  # noqa: E402
 
 TITLE_SIMILARITY = 0.8
@@ -462,7 +462,7 @@ def main(argv: list[str] | None = None) -> int:
     plugin_root = Path(args.plugin_root) if args.plugin_root else site_defaults.plugin_root()
     try:
         report = run(args, defaults, plugin_root)
-    except UsageError as exc:
+    except (UsageError, yamlio.YamlFileError) as exc:
         print(str(exc), file=sys.stderr)
         return USAGE
     text = render(report)

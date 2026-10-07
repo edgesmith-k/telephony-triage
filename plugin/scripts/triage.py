@@ -242,6 +242,20 @@ def main(argv: list[str] | None = None) -> int:
         if exc.detail:
             _emit(exc.detail)
         return exc.code
+    except Exception as exc:  # noqa: BLE001 — 모든 종료 경로에서 lock을 푼다 (12-principles)
+        message = _clip(f"{type(exc).__name__}: {exc}", 300)
+        had_lock = driver.locked
+        try:
+            released = driver.release()
+        except Exception:  # noqa: BLE001 — 정리 중 오류가 원래 오류를 가리지 않게
+            released = False
+        try:
+            driver.run.note("error", exit=USAGE, message=message)
+        except Exception:  # noqa: BLE001
+            pass
+        tail = " — lock을 풀었다" if released else (f" — lock이 남았을 수 있다: triage.py release {driver.key}" if had_lock else "")
+        print(f"triage.py 내부 오류(스크립트 버그로 보고): {message}{tail}", file=sys.stderr)
+        return USAGE
     _emit(result)
     return OK
 

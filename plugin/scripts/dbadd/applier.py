@@ -6,6 +6,8 @@ import re
 from datetime import datetime
 from pathlib import Path
 
+import yaml
+
 from common import yamldoc, yamlio
 from common.buildname import sanitize_build
 from common.exitcodes import CHECK_FAILED, OK
@@ -238,8 +240,11 @@ class Applier(JiraOps, EntityOps, FixOps, ResolutionOps, SignatureOps, FixtureOp
 
     def _pending(self, src: Path) -> str | None:
         text = Path(src).read_text(encoding="utf-8")
-        record = yamlio.loads(text) or {}
-        stamp = datetime.fromisoformat(str(record.get("date")).replace("Z", "+00:00"))
+        try:
+            record = yamlio.loads(text) or {}
+            stamp = datetime.fromisoformat(str(record.get("date")).replace("Z", "+00:00"))
+        except (yaml.YAMLError, AttributeError, ValueError) as exc:
+            raise Reject("pending-invalid", f"pending 피드백 {Path(src).name}을 읽을 수 없다(매핑·date ISO 시각 필요): {exc}") from None
         path = self.tree.root / "feedback" / f"{stamp:%Y-%m}" / Path(src).name
         if self.tree.exists(path):
             self.warnings.append(f"pending 피드백 {Path(src).name}은 이미 이슈 DB에 있어 건너뛰었다.")
@@ -249,6 +254,8 @@ class Applier(JiraOps, EntityOps, FixOps, ResolutionOps, SignatureOps, FixtureOp
 
 
 def cmd_apply(args, defaults: dict) -> tuple[dict, int]:
+    if not args.db:   # 기본값(cwd toplevel·config issue_db.path)은 사용자 clone일 수 있다 — 쓰기는 worktree만
+        raise UsageError("apply는 --db <worktree>가 필요하다 (db_pr stage·db_verify rules --draft가 준다). 사용자 clone에는 쓰지 않는다.")
     db = _db(args)
     plan = load_plan(Path(args.plan))
     validate_plan(plan, db)
