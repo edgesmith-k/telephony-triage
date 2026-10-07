@@ -351,7 +351,7 @@ def verify_logs(dest: Path) -> None:
 
 
 DATA_002 = """---
-id: DATA-002
+id: DATA-009
 category: data
 secondary_categories: []
 title: SETUP_DATA_CALL 요청이 나가지 않음
@@ -363,7 +363,7 @@ symptom_signatures:
       - {event: data_evaluation_rejected}
     window_sec: 60
 causes:
-  - id: DATA-002-01
+  - id: DATA-009-01
     status: active
     title: 레거시 조건에서 평가 불허
     description: 예전 버전에서만 나던 평가 거부
@@ -392,7 +392,7 @@ causes:
     cp_evidence: null
     android_versions: ["14", "15"]
     code_refs: []
-  - id: DATA-002-02
+  - id: DATA-009-02
     status: active
     title: 평가 재요청 누락
     description: RIL 복구 뒤 평가를 다시 요청하지 않음
@@ -429,11 +429,11 @@ tags: [data-evaluation]
 
 ## 원인별 상세
 
-### DATA-002-01 레거시 조건에서 평가 불허
+### DATA-009-01 레거시 조건에서 평가 불허
 
 - 리뷰 시험용.
 
-### DATA-002-02 평가 재요청 누락
+### DATA-009-02 평가 재요청 누락
 
 - 리뷰 시험용.
 """
@@ -459,7 +459,7 @@ DATA_001_03_PENDING = """  - id: DATA-001-03
 # (키, 유형 디렉토리, 원인, date, occurred_on, note)
 REVIEW_JIRA = [
     ("MOCK-1105", "data/DATA-001-no-setup-data-call", "unresolved", "2026-08-01", "2026-07-31", "오래 방치된 원인 미확정"),
-    ("MOCK-1201", "data/DATA-002-legacy-evaluation", "DATA-002-01", "2025-06-02", "2025-06-01", "옛 버전에서 접수"),
+    ("MOCK-1201", "data/DATA-009-legacy-evaluation", "DATA-009-01", "2025-06-02", "2025-06-01", "옛 버전에서 접수"),
     ("MOCK-3102", "network/NETWORK-001-no-service", "NETWORK-001-01", "2026-10-06", "2026-10-05", "급증 시험"),
     ("MOCK-3103", "network/NETWORK-001-no-service", "NETWORK-001-01", "2026-10-12", "2026-10-12", "급증 시험"),
     ("MOCK-3104", "network/NETWORK-001-no-service", "NETWORK-001-01", "2026-07-02", "2026-07-01", "급증 시험(이전 구간)"),
@@ -493,15 +493,15 @@ REVIEW_CASES = """# 리뷰 변형 (Phase 11)
 - 오래된 unresolved: MOCK-1105(2026-08-01 기록) 걸림, MOCK-1104(2026-09-26) 안 걸림
 - 낮은 수락률: DATA-001-01/data-disabled 2/6 걸림, DATA-001-02/roaming-disabled 1/3은 표본 부족
 - 수동 기록 피드백 3건(MOCK-1118~1120)은 수락률에서 빠짐
-- 중복 후보: DATA-001 ↔ DATA-002 (동시 매칭 + 제목 유사도)
-- 지원 종료: DATA-002-01 ["14","15"] 걸림, DATA-001-02 [] 안 걸림
-- fixed 전환 불가: DATA-002-02(vendor-ril), IMS-001-01, SMS-001-01
-- 시그니처 없는 원인: DATA-001-03 / fixture 없는 원인: DATA-002-01, DATA-002-02 (pending은 제외)
+- 중복 후보: DATA-001 ↔ DATA-009 (동시 매칭 + 제목 유사도)
+- 지원 종료: DATA-009-01 ["14","15"] 걸림, DATA-001-02 [] 안 걸림
+- fixed 전환 불가: DATA-009-02(vendor-ril), IMS-001-01, SMS-001-01
+- 시그니처 없는 원인: DATA-001-03 / fixture 없는 원인: DATA-009-01, DATA-009-02 (pending은 제외)
 - 사용자 진술만: DATA-001-03(method), DATA-001-02(MOCK-1103 note)
-- 수정 상태 누락: DATA-002-02 / 빌드 없는 fix-submitted: DATA-002-01
+- 수정 상태 누락: DATA-009-02 / 빌드 없는 fix-submitted: DATA-009-01
 - also_allowed 누적: NETWORK-001-01 fixture 3개, IMS-001-01이 다른 유형 fixture 5개에서 허용
 - 급증: NETWORK-001-01 걸림, SMS-001-01(과거 occurred_on 일괄 기록) 안 걸림
-- 오래 안 쓰인 원인: DATA-002-01(마지막 발생 2025-06-01)
+- 오래 안 쓰인 원인: DATA-009-01(마지막 발생 2025-06-01)
 - 방치 기간(해결책 미검증, 수정 검증 대기)은 git 이력이 필요해서 테스트가 날짜를 지정한 커밋으로 만든다
 """
 
@@ -510,11 +510,11 @@ def review(db: Path) -> None:
     """월간 리뷰(Phase 11) 완료 기준 케이스. 목록은 `REVIEW_CASES`."""
     data = db / "data/DATA-001-no-setup-data-call"
     _edit(data / "type.md", "tags: [data-evaluation]\n---", DATA_001_03_PENDING + "tags: [data-evaluation]\n---")
-    _write(db / "data/DATA-002-legacy-evaluation/type.md", DATA_002)
+    _write(db / "data/DATA-009-legacy-evaluation/type.md", DATA_002)
     _edit(data / "jira/MOCK-1103.yaml", "note: 로밍 SIM 테스트 중 발생, 슬롯 1",
           "note: '로밍 SIM 테스트 중 발생, 슬롯 1. 로밍을 켜니 됐다고 함(근거: 사용자 진술)'")
     for key, rel, cause, when, occurred, note in REVIEW_JIRA:
-        sw, ver = ("MOCKA56_U1_20260901", "15") if "DATA-002" in rel else ("MOCKA56_U1_20260920", "16")
+        sw, ver = ("MOCKA56_U1_20260901", "15") if "DATA-009" in rel else ("MOCKA56_U1_20260920", "16")
         _write(db / rel / "jira" / f"{key}.yaml",
                f"key: {key}\ncause: {cause}\ndate: {when}\noccurred_on: {occurred}\nmodel: MOCK-A56\nsw: {sw}\n"
                f"android_version: \"{ver}\"\ncarrier: MockTel KR\nanalyzed_by: mock-user1\nnote: {note}\n")

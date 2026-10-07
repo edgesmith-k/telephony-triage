@@ -1,8 +1,9 @@
-09-20 14:30:00.000  1234  1244 D DCM-0: [PHONE0] carrier config loaded: carrierId=<CARRIER>
-09-20 14:30:03.000  1234  1244 D DSM-0: [PHONE0] onDataEnabledChanged: enabled=false reason=USER
-09-20 14:30:03.400  1234  1244 D DSM-0: [PHONE0] isDataEnabled=false (user setting off)
-09-20 14:30:04.600  1234  1244 I DNC-0: [PHONE0] onEvaluateNetworkRequests: reason=DATA_ENABLED_CHANGED
-09-20 14:30:04.900  1234  1244 W DNC-0: [PHONE0] evaluation result: NOT_ALLOWED reasons=[DATA_DISABLED]
-09-20 14:30:06.900  1234  1244 W DNC-0: [PHONE0] evaluation result: NOT_ALLOWED reasons=[DATA_DISABLED]
-09-20 14:30:14.900  1234  1244 D DRM-0: [PHONE0] no retry scheduled: setup not allowed
-09-20 14:30:29.900  1234  1244 W DNC-0: [PHONE0] evaluation result: NOT_ALLOWED reasons=[DATA_DISABLED]
+09-20 14:30:00.000  1234  1244 D DCM-0: carrier config loaded: carrierId=<CARRIER>
+09-20 14:30:03.000  1234  1244 D DSMGR-0: notifyDataEnabledChanged: enabled=false, reason=USER, callingPackage=com.android.settings
+09-20 14:30:03.350  1234  1244 D DSMGR-0: UserDataEnabled changed to false
+09-20 14:30:03.400  1234  1244 D DSMGR-0: mIsDataEnabled=false, prevDataEnabled=true
+09-20 14:30:04.600  1234  1244 I DNC-0: onEvaluateNetworkRequests: reason=DATA_ENABLED_CHANGED
+09-20 14:30:04.900  1234  1244 W DNC-0: Data evaluation: evaluation reason:DATA_ENABLED_CHANGED, Data disallowed reasons: DATA_DISABLED, candidate profile=null
+09-20 14:30:06.900  1234  1244 W DNC-0: Data evaluation: evaluation reason:DATA_ENABLED_CHANGED, Data disallowed reasons: DATA_DISABLED, candidate profile=null
+09-20 14:30:14.900  1234  1244 D DRM-0: no retry scheduled: setup not allowed
+09-20 14:30:29.900  1234  1244 W DNC-0: Data evaluation: evaluation reason:DATA_ENABLED_CHANGED, Data disallowed reasons: DATA_DISABLED, candidate profile=null

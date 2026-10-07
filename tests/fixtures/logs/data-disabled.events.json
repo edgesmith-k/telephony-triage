@@ -13,7 +13,7 @@
    "tid": 1244,
    "level": "D",
    "tag": "DCM-0",
-   "msg": "[PHONE0] carrier config loaded: carrierId=<CARRIER>",
+   "msg": "carrier config loaded: carrierId=<CARRIER>",
    "phone_id": 0,
    "category_hint": "data",
    "ril": null,
@@ -30,8 +30,8 @@
    "pid": 1234,
    "tid": 1244,
    "level": "D",
-   "tag": "DSM-0",
-   "msg": "[PHONE0] onDataEnabledChanged: enabled=false reason=USER",
+   "tag": "DSMGR-0",
+   "msg": "notifyDataEnabledChanged: enabled=false, reason=USER, callingPackage=com.android.settings",
    "phone_id": 0,
    "category_hint": "data",
    "ril": null,
@@ -48,8 +48,8 @@
    "pid": 1234,
    "tid": 1244,
    "level": "D",
-   "tag": "DSM-0",
-   "msg": "[PHONE0] onDataEnabledChanged: enabled=false reason=USER",
+   "tag": "DSMGR-0",
+   "msg": "notifyDataEnabledChanged: enabled=false, reason=USER, callingPackage=com.android.settings",
    "phone_id": 0,
    "category_hint": "data",
    "ril": null,
@@ -65,12 +65,12 @@
    }
   },
   {
-   "ts": "2026-09-20T05:30:03.400Z",
+   "ts": "2026-09-20T05:30:03.350Z",
    "pid": 1234,
    "tid": 1244,
    "level": "D",
-   "tag": "DSM-0",
-   "msg": "[PHONE0] isDataEnabled=false (user setting off)",
+   "tag": "DSMGR-0",
+   "msg": "UserDataEnabled changed to false",
    "phone_id": 0,
    "category_hint": "data",
    "ril": null,
@@ -83,12 +83,12 @@
    }
   },
   {
-   "ts": "2026-09-20T05:30:04.600Z",
+   "ts": "2026-09-20T05:30:03.400Z",
    "pid": 1234,
    "tid": 1244,
-   "level": "I",
-   "tag": "DNC-0",
-   "msg": "[PHONE0] onEvaluateNetworkRequests: reason=DATA_ENABLED_CHANGED",
+   "level": "D",
+   "tag": "DSMGR-0",
+   "msg": "mIsDataEnabled=false, prevDataEnabled=true",
    "phone_id": 0,
    "category_hint": "data",
    "ril": null,
@@ -101,12 +101,12 @@
    }
   },
   {
-   "ts": "2026-09-20T05:30:04.900Z",
+   "ts": "2026-09-20T05:30:04.600Z",
    "pid": 1234,
    "tid": 1244,
-   "level": "W",
+   "level": "I",
    "tag": "DNC-0",
-   "msg": "[PHONE0] evaluation result: NOT_ALLOWED reasons=[DATA_DISABLED]",
+   "msg": "onEvaluateNetworkRequests: reason=DATA_ENABLED_CHANGED",
    "phone_id": 0,
    "category_hint": "data",
    "ril": null,
@@ -124,27 +124,7 @@
    "tid": 1244,
    "level": "W",
    "tag": "DNC-0",
-   "msg": "[PHONE0] evaluation result: NOT_ALLOWED reasons=[DATA_DISABLED]",
-   "phone_id": 0,
-   "category_hint": "data",
-   "ril": null,
-   "event": "data_evaluation_rejected",
-   "fields": {
-    "reasons": "DATA_DISABLED"
-   },
-   "source": "rules",
-   "line_ref": {
-    "file_index": 0,
-    "line_no": 5
-   }
-  },
-  {
-   "ts": "2026-09-20T05:30:06.900Z",
-   "pid": 1234,
-   "tid": 1244,
-   "level": "W",
-   "tag": "DNC-0",
-   "msg": "[PHONE0] evaluation result: NOT_ALLOWED reasons=[DATA_DISABLED]",
+   "msg": "Data evaluation: evaluation reason:DATA_ENABLED_CHANGED, Data disallowed reasons: DATA_DISABLED, candidate profile=null",
    "phone_id": 0,
    "category_hint": "data",
    "ril": null,
@@ -157,12 +137,12 @@
    }
   },
   {
-   "ts": "2026-09-20T05:30:06.900Z",
+   "ts": "2026-09-20T05:30:04.900Z",
    "pid": 1234,
    "tid": 1244,
    "level": "W",
    "tag": "DNC-0",
-   "msg": "[PHONE0] evaluation result: NOT_ALLOWED reasons=[DATA_DISABLED]",
+   "msg": "Data evaluation: evaluation reason:DATA_ENABLED_CHANGED, Data disallowed reasons: DATA_DISABLED, candidate profile=null",
    "phone_id": 0,
    "category_hint": "data",
    "ril": null,
@@ -177,12 +157,12 @@
    }
   },
   {
-   "ts": "2026-09-20T05:30:14.900Z",
+   "ts": "2026-09-20T05:30:06.900Z",
    "pid": 1234,
    "tid": 1244,
-   "level": "D",
-   "tag": "DRM-0",
-   "msg": "[PHONE0] no retry scheduled: setup not allowed",
+   "level": "W",
+   "tag": "DNC-0",
+   "msg": "Data evaluation: evaluation reason:DATA_ENABLED_CHANGED, Data disallowed reasons: DATA_DISABLED, candidate profile=null",
    "phone_id": 0,
    "category_hint": "data",
    "ril": null,
@@ -195,12 +175,32 @@
    }
   },
   {
-   "ts": "2026-09-20T05:30:29.900Z",
+   "ts": "2026-09-20T05:30:06.900Z",
    "pid": 1234,
    "tid": 1244,
    "level": "W",
    "tag": "DNC-0",
-   "msg": "[PHONE0] evaluation result: NOT_ALLOWED reasons=[DATA_DISABLED]",
+   "msg": "Data evaluation: evaluation reason:DATA_ENABLED_CHANGED, Data disallowed reasons: DATA_DISABLED, candidate profile=null",
+   "phone_id": 0,
+   "category_hint": "data",
+   "ril": null,
+   "event": "data_evaluation_rejected",
+   "fields": {
+    "reasons": "DATA_DISABLED"
+   },
+   "source": "rules",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 7
+   }
+  },
+  {
+   "ts": "2026-09-20T05:30:14.900Z",
+   "pid": 1234,
+   "tid": 1244,
+   "level": "D",
+   "tag": "DRM-0",
+   "msg": "no retry scheduled: setup not allowed",
    "phone_id": 0,
    "category_hint": "data",
    "ril": null,
@@ -218,7 +218,25 @@
    "tid": 1244,
    "level": "W",
    "tag": "DNC-0",
-   "msg": "[PHONE0] evaluation result: NOT_ALLOWED reasons=[DATA_DISABLED]",
+   "msg": "Data evaluation: evaluation reason:DATA_ENABLED_CHANGED, Data disallowed reasons: DATA_DISABLED, candidate profile=null",
+   "phone_id": 0,
+   "category_hint": "data",
+   "ril": null,
+   "event": null,
+   "fields": {},
+   "source": "backend:reference",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 9
+   }
+  },
+  {
+   "ts": "2026-09-20T05:30:29.900Z",
+   "pid": 1234,
+   "tid": 1244,
+   "level": "W",
+   "tag": "DNC-0",
+   "msg": "Data evaluation: evaluation reason:DATA_ENABLED_CHANGED, Data disallowed reasons: DATA_DISABLED, candidate profile=null",
    "phone_id": 0,
    "category_hint": "data",
    "ril": null,
@@ -229,7 +247,7 @@
    "source": "rules",
    "line_ref": {
     "file_index": 0,
-    "line_no": 8
+    "line_no": 9
    }
   }
  ]

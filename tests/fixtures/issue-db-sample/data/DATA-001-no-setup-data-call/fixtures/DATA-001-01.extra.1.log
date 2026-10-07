@@ -1,0 +1,6 @@
+09-25 10:20:00.000  1290  1301 D DSMGR-0: UserDataEnabled changed to false
+09-25 10:20:00.010  1290  1301 D DSMGR-0: notifyDataEnabledChanged: enabled=false, reason=USER, callingPackage=com.android.settings
+09-25 10:20:00.060  1290  1301 I DN-17-C: ConnectedState: tearDownWhenConditionMet: reason=DATA_DISABLED, timeout=0ms.
+09-25 10:20:00.360  1290  1301 I DNC-0: Internet data state changed from CONNECTED to DISCONNECTED.
+09-25 10:20:00.560  1290  1301 W DNC-0: Data evaluation: evaluation reason:DATA_ENABLED_CHANGED, Data disallowed reasons: DATA_DISABLED, candidate profile=null
+09-25 10:20:12.560  1290  1301 W DNC-0: Data evaluation: evaluation reason:NEW_REQUEST, Data disallowed reasons: DATA_DISABLED, candidate profile=null

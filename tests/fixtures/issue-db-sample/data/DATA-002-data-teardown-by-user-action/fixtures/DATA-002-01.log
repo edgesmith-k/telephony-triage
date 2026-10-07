@@ -1,0 +1,7 @@
+09-26 09:40:00.000  1290  1301 D AirplaneModeStats: Airplane mode change. Value: true
+09-26 09:40:00.010  1290  1301 D SST-0: powerOffRadioSafely: start
+09-26 09:40:00.020  1290  1301 I DNC-0: onTearDownAllDataNetworks: reason=AIRPLANE_MODE_ON
+09-26 09:40:00.030  1290  1301 I DN-17-C: DisconnectingState: onTearDown: reason=AIRPLANE_MODE_ON
+09-26 09:40:00.730  1290  1301 I DNC-0: Internet data state changed from CONNECTED to DISCONNECTED.
+09-26 09:40:00.740  1290  1301 D RILJ: [0061]> RADIO_POWER on = false [PHONE0]
+09-26 09:40:01.240  1290  1301 W DNC-0: Data evaluation: evaluation reason:DATA_SERVICE_STATE_CHANGED, Data disallowed reasons: SERVICE_OPTION_NOT_SUPPORTED NOT_IN_SERVICE RADIO_POWER_OFF, candidate profile=null
