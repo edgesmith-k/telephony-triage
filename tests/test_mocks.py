@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -310,8 +311,6 @@ def test_mock_source_tree_symbol_search():
 
 
 def test_plugin_root_helper_and_missing_site_defaults():
-    # 개발 레포 plugin/ 안에는 site-defaults.yaml 이 없다 (반입 체크리스트 §15.4)
-    assert not (REPO / "plugin" / "site-defaults.yaml").exists()
     assert (REPO / "plugin" / "site-defaults.example.yaml").is_file()
 
     with tempfile.TemporaryDirectory(prefix="tt-plugin-root-") as tmp:
@@ -326,8 +325,10 @@ def test_plugin_root_helper_and_missing_site_defaults():
         assert ok.returncode == 0, ok.stderr
         assert json.loads(ok.stdout)["plugin_root"] == str(root)
 
-        # plugin/ 을 직접 주면 "사내 기본값 없음"으로 종료 코드 2
-        bad_env = mock_env.env_with_mocks(plugin_root=REPO / "plugin")
+        # site-defaults.yaml 없는 루트면 "사내 기본값 없음"으로 종료 코드 2
+        bad_root = make_plugin_root.make(Path(tmp) / "bad")
+        (bad_root / "site-defaults.yaml").unlink()
+        bad_env = mock_env.env_with_mocks(plugin_root=bad_root)
         bad = subprocess.run(
             [sys.executable, str(REPO / "plugin/scripts/config.py"), "show"],
             env=bad_env, capture_output=True, text=True, encoding="utf-8", errors="replace",
@@ -339,6 +340,27 @@ def test_plugin_root_helper_and_missing_site_defaults():
         with_site = make_plugin_root.make(Path(tmp) / "root2", with_site_backend=True)
         assert (with_site / "scripts/parser_backends/site/__init__.py").is_file()
         assert (with_site / "scripts/adapters/site_data_existing.py").is_file()
+
+
+def test_plugin_root_skips_site_paths(tmp_path, monkeypatch):
+    # R-1: 사내 S-3·S-4a 뒤 plugin/에 SITE_PATHS 파일이 있어도 복사본은 example·모의만 쓴다.
+    src = tmp_path / "plugin"
+    shutil.copytree(REPO / "plugin", src, ignore=shutil.ignore_patterns("__pycache__"))
+    (src / "site-defaults.yaml").write_text("REAL\n", encoding="utf-8")
+    (src / "scripts/parser_backends/site").mkdir(parents=True, exist_ok=True)
+    (src / "scripts/parser_backends/site/real.py").write_text("REAL\n", encoding="utf-8")
+    (src / "scripts/adapters/site_real.py").write_text("REAL\n", encoding="utf-8")
+    monkeypatch.setattr(make_plugin_root, "PLUGIN", src)
+
+    plain = make_plugin_root.make(tmp_path / "plain")
+    assert (plain / "site-defaults.yaml").read_bytes() == (src / "site-defaults.example.yaml").read_bytes()
+    assert not (plain / "scripts/parser_backends/site").exists()
+    assert not (plain / "scripts/adapters/site_real.py").exists()
+
+    with_site = make_plugin_root.make(tmp_path / "with_site", with_site_backend=True)
+    assert (with_site / "scripts/parser_backends/site/__init__.py").is_file()
+    assert not (with_site / "scripts/parser_backends/site/real.py").exists()
+    assert not (with_site / "scripts/adapters/site_real.py").exists()
 
 
 def test_site_defaults_example_shape():

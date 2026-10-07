@@ -63,7 +63,7 @@
 
 | ☐ | VP | 상태 | 브랜치·커밋 | 비고 |
 |---|---|---|---|---|
-| ☐ | V1 | 대기 | | R-1 |
+| ✅ | V1 | ✅ 완료(10/07) | v/V1-boundary-mode · 커밋 `V1: …` | R-1. 위임 결정 D1 (b)·D2~D5 (a), D4는 가드 삭제 대신 `make_plugin_root` copytree에서 SITE_PATHS 제외(사내 백엔드 혼재도 해결). R-1 근거 정정(manifest 아님, SITE_PROFILE·site-defaults). 리뷰(Fable) 권고 3 반영. 전체 992 통과·4 실패(환경) |
 | ☐ | V2 | 대기 | | R-19~24, V1 뒤 |
 | ☐ | V3 | 대기 | | R-25~31, V2 뒤 |
 | ☐ | V4 | 대기 | | R-2~8, 독립 |

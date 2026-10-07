@@ -8,7 +8,7 @@
 - 사내 값과 사내 코드는 **`SITE_PATHS`(15.6)에 있는 경로에만** 둔다. 코드의 기본값은 모두 `plugin/site-defaults.yaml`에서 읽고, 사외 초안에는 `plugin/site-defaults.example.yaml`(모의 값)만 둔다. 사내 S-3에서 `site-defaults.yaml`을 만들어 커밋하면 팀원이 설치하는 플러그인에 같이 들어간다. 그래서 사외에서 코드를 다시 고쳐 반입해도 **사내 값이 덮어써지지 않는다.**
   - 사내 값이 들어가는 곳: `SITE_PATHS` 경로(`site-defaults.yaml`, 포팅한 파서 백엔드, 사내 어댑터, 골든, `SITE_PROFILE.md`), 사용자 config, 이슈 DB 레포(`issue-db.config.yaml`, `parser-rules/`, fixture). 모두 사내에만 있다.
   - **설정 우선순위**: 사용자 config > `plugin/site-defaults.yaml` > 코드 내장 기본값. **런타임 코드는 "사내/사외 모드"를 판별하지 않는다** (설치된 플러그인 캐시 경로 옆에는 `SITE_PROFILE.md`도 `.local-draft`도 없으므로 판별할 방법이 없다). `plugin/site-defaults.yaml`이 없으면 setup과 모든 커맨드·스크립트가 "사내 기본값 없음(S-3 미완료)"으로 멈춘다(종료 코드 2). `site-defaults.example.yaml`은 코드가 절대 읽지 않는다.
-  - **사외 테스트·eval**은 테스트 헬퍼 `tests/helpers/make_plugin_root.py`가 `plugin/`을 임시 디렉토리에 복사하고 example을 `site-defaults.yaml`로 넣은 **임시 플러그인 루트**를 만들어 `${CLAUDE_PLUGIN_ROOT}`로 준다. 개발 레포의 `plugin/` 안에는 `site-defaults.yaml`을 만들지 않는다(반입 체크리스트 15.4). "사외 초안 모드/사내 모드"라는 말은 개발 세션의 모드 판별(`CLAUDE.md` 머리말)에만 쓴다.
+  - **사외 테스트·eval**은 테스트 헬퍼 `tests/helpers/make_plugin_root.py`가 `plugin/`을 임시 디렉토리에 복사하고 example을 `site-defaults.yaml`로 넣은 **임시 플러그인 루트**를 만들어 `${CLAUDE_PLUGIN_ROOT}`로 준다. 사외 레포의 `plugin/` 안에는 `site-defaults.yaml`을 만들지 않는다(반입 체크리스트 15.4). 복사 때 `SITE_PATHS` 경로는 빼므로 사내 레포에서도 복사본은 example·모의만 쓴다. "사외 초안 모드/사내 모드"라는 말은 개발 세션의 모드 판별(`CLAUDE.md` 머리말)에만 쓴다.
 - 코드를 사내로 가져가기 전에 **사내 반입 규정**(외부 작성 코드 반입 절차, 오픈소스 의존성 승인)을 사용자가 확인한다.
 - 사외 초안의 진행 상태는 `DRAFT_NOTES.md`(상태 파일, ≤8KB)에, 판단·가정·Phase별 상세는 `docs/history/draft-notes-<날짜>.md`에 기록한다 (사내 Claude Code가 전체 설계 문서를 다시 읽지 않고도 초안 상태를 파악하게).
 
@@ -24,7 +24,7 @@
 | 소스 트리 | `tests/mocks/src/android16/`, `android17/`: `frameworks/opt/telephony` 등 최소 디렉토리와 심볼만 있는 스텁 파일. 한 파일은 16과 17에서 경로가 다르게 두어 `find-symbol`을 시험. 버전 정의 파일도 스텁 | S10, S11 |
 | 빌드명 | `tests/mocks/builds.yaml`: 가상 빌드명 체계와 `build_compare` 예시 | S12 |
 | 사내 Claude Code 기능 | 사외 Claude Code에서 플러그인 로드, hooks, `${CLAUDE_PLUGIN_ROOT}`, MCP 도구 이름 형식, **`CLAUDE.md`의 `@SITE_PROFILE.md` import가 파일이 없을 때 오류·경고를 내는지**를 실험하고 결과를 `DRAFT_NOTES.md`에 기록 (사내 버전과 다를 수 있으므로 사내에서 S1로 재확인). 사외에서는 `SITE_PROFILE.md`가 없어도 머리말 규칙 3(`.local-draft`)으로 판별하므로 경고가 나도 동작에는 문제가 없다 | S1 |
-| 플러그인 루트 | `tests/helpers/make_plugin_root.py`: `plugin/`을 임시 디렉토리에 복사하고 `site-defaults.example.yaml`을 `site-defaults.yaml`로 넣는다. 모든 테스트·eval은 이 루트를 `${CLAUDE_PLUGIN_ROOT}`로 쓴다 (15.1) | S-3 |
+| 플러그인 루트 | `tests/helpers/make_plugin_root.py`: `plugin/`을 임시 디렉토리에 복사하고 `site-defaults.example.yaml`을 `site-defaults.yaml`로 넣는다. 복사 때 `SITE_PATHS` 경로를 뺀다(사내 레포에서도 복사본은 example·모의만). 모든 테스트·eval은 이 루트를 `${CLAUDE_PLUGIN_ROOT}`로 쓴다 (15.1) | S-3 |
 | OS | **Ubuntu(Linux)** 기준으로만 만들고 시험한다. 셸 스크립트(`.githooks/pre-commit`)·PATH 스텁·홈 경로·실행 비트 모두 POSIX 가정. 다른 OS는 v1 범위 밖 | S15 |
 
 - **모드 표식 `.local-draft`**: 사외 PC의 플러그인 레포 루트에 두는 빈 파일. `.gitignore`에 등록하고 반입 묶음에 넣지 않는다. 이 파일이 있으면 매 세션 모드를 묻지 않고 사외 초안으로 판별한다 (`CLAUDE.md` 머리말).
@@ -117,7 +117,7 @@ tests/site/
      - 적용은 staging → 검증 → 활성 전환 순서다: 새 파일을 대상 옆 임시 디렉토리에 복사해 해시를 대조하고, `--check-boundary`면 반입 뒤 모습에 `check_boundary.py --mode site`(사내 패턴 `docs/site/boundary-patterns.txt` 포함)를 돌린다. 위반이면 종료 코드 1이고 대상은 그대로다. 활성 전환 중 실패하면 파일·새 디렉토리·기준선을 되돌린다.
   3. `pytest`(골든 포함), `db_regress --all` 통과 확인 → main에 병합.
   4. 사외에서 설계가 바뀐 부분은 `14-site.md §14.5`대로 영향을 확인한다.
-- **경계 검사** `tools/check_boundary.py` (RF-2): 1차 장치는 `SITE_PATHS` 허용 목록이고 패턴은 보조다. 비밀값은 출력에서 앞부분만 보인다. 규칙: 사내 표식 패턴(비밀 키·비밀값(서비스 토큰·JWT·`Authorization` 헤더·URL/netrc 자격증명·`*token*`/`*secret*` 대입, 자리표시 값 제외)·공인 IP·15자리 숫자·허용 목록 밖 이메일/URL 호스트 + 사내 `docs/site/boundary-patterns.txt`), `plugin/scripts/**`의 SITE_PATHS 모듈 정적 import, 합성 표시 없는 로그 fixture, (`--mode external`) SITE_PATHS 경로 존재. 예외는 `tools/boundary-allow.txt`(사외)·`docs/site/boundary-allow.txt`(사내)에 값까지 좁게 적는다. 사외 CI와 반입 `--check-boundary`에서 돈다.
+- **경계 검사** `tools/check_boundary.py` (RF-2): 1차 장치는 `SITE_PATHS` 허용 목록이고 패턴은 보조다. 비밀값은 출력에서 앞부분만 보인다. 규칙: 사내 표식 패턴(비밀 키·비밀값(서비스 토큰·JWT·`Authorization` 헤더·URL/netrc 자격증명·`*token*`/`*secret*` 대입, 자리표시 값 제외)·공인 IP·15자리 숫자·허용 목록 밖 이메일/URL 호스트 + 사내 `docs/site/boundary-patterns.txt`), `plugin/scripts/**`의 SITE_PATHS 모듈 정적 import, 합성 표시 없는 로그 fixture, (`--mode external`) SITE_PATHS 경로 존재. 예외는 `tools/boundary-allow.txt`(사외)·`docs/site/boundary-allow.txt`(사내)에 값까지 좁게 적는다. 사외 CI와 반입 `--check-boundary`에서 돈다. `--mode`를 생략하면 자동 판별한다: `.local-draft`가 있으면 external, 없고 `.draft-manifest.json`이나 `SITE_PROFILE.md`가 있으면 site, 둘 다 없으면 external(사외 CI·`make_bundle.py`는 `--mode external` 명시).
 - 이슈 DB 스키마 사본 `plugin/schemas/`: 단일 원본은 이슈 DB `schema/`. `tools/sync_schemas.py --check [--db <이슈 DB>]`로 대조하고, 다르면 사용자에게 보고한 뒤 `--write`로 갱신한다.
 - `tools/import_draft.py`와 `SITE_PATHS`는 사외 초안(Phase D0)에서 만든다. `.gitignore`가 아니라 **목록 파일**로 관리한다(사내에서는 이 경로들을 커밋해야 하므로). `.draft-manifest.json`은 사내에서 `import_draft.py`가 쓰고 커밋한다.
 - 사내에서 발견한 설계 문제는 사내 정보를 뺀 문장으로 요약해서 사외 문서(이 문서 세트)에 반영한다.
