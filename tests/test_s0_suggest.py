@@ -28,7 +28,10 @@ def _log() -> str:
                  (t + 0.05, 2000, "VRIL_HAL", f"req serial={s} name=SETUP {SENTINEL} {NUMBER}"),
                  (t + 0.5, 2000, "VRIL_SOCK", f"resp token={s} {SENTINEL}"),
                  (t + 0.5, 1000, "RILJ", f"[{s}]< SETUP_DATA_CALL error=NONE [PHONE0]"),
-                 (t + 0.06, 2000, "VRIL_FREE", f"{SENTINEL} {'Alice Bob Carol Dave Erin'.split()[i]} sent req {s}"),
+                 (t + 0.06, 2000, "VRIL_FREE", f"{SENTINEL} {'Alice Bob Carol Dave Erin'.split()[i]} {s}"),
+                 (t + 0.08, 2000, "VRIL_MIX", f"{'Alpha Beta Gamma Delta Eps'.split()[i]}Cmd serial {s}")]
+        rows += [(t + 0.01 * k, 2000, "VRIL_MIX", "heartbeat ok") for k in range(3, 12)]
+        rows += [
                  (t + 0.07, 2000, "VRIL_APN", f"apn=internet.example.com serial={s}")]
     for i in range(30):
         rows.append((i * 0.5, 2000, "VRIL_MODEM", f"data 0xdeadbeef{i:02x} len=12 {SENTINEL}"))
@@ -92,10 +95,27 @@ def test_draft_has_no_free_text_and_scatter_gives_no_draft(run):
     data = json.loads(run("--json"))
     layers = data["ril"]["draft_layers"]
     rows = {r["tag"]: r for r in data["ril"]["tags"]}
-    assert "VRIL_FREE" not in layers and "분산" in rows["VRIL_FREE"]["verdict"]       # 줄마다 다른 접두어는 초안을 내지 않는다
-    assert "example.com" not in json.dumps(layers) and layers["VRIL_APN"] == r"^apn=\S+ serial=(?P<serial>\d+)"
+    assert "VRIL_FREE" not in layers and "분산" in rows["VRIL_FREE"]["verdict"]       # 접두어도 꼬리도 줄마다 다르면 초안 없음
+    assert "example.com" not in json.dumps(layers) and SENTINEL not in json.dumps(layers)
+    assert re.search(layers["VRIL_APN"], "apn=internet.example.com serial=43").group("serial") == "43"
     assert rows["VRIL_HAL"]["draft_matched"] == 5 and rows["VRIL_HAL"]["draft_coverage"] == 1.0
-    assert SENTINEL not in json.dumps(layers)
+
+
+def test_candidate_is_judged_by_request_coverage_and_draft_uses_common_tail(run):
+    row = {r["tag"]: r for r in json.loads(run("--json"))["ril"]["tags"]}["VRIL_MIX"]
+    assert row["ratio"] < 0.5 and row["request_coverage"] == 1.0 and row["verdict"] == "후보"   # 줄 비율이 낮아도 요청 커버율로 후보
+    data = json.loads(run("--json"))
+    pat = data["ril"]["draft_layers"]["VRIL_MIX"]
+    assert pat == r"^.*?\bserial (?P<serial>\d+)" and "Cmd" not in pat                       # 메서드명은 초안에 없다
+    assert row["draft_coverage"] == 1.0 and re.match(pat, "ZetaCmd serial 44").group("serial") == "44"
+
+
+def test_missing_site_defaults_gives_guidance_and_exit_2():
+    root = tmp("tt-s0s-root-")
+    (root / "scripts").mkdir()
+    proc = subprocess.run([sys.executable, str(REPO / "tools" / "s0_suggest.py"), "x.log", "--rules", "r", "--tz", "UTC",
+                           "--plugin-root", str(root)], capture_output=True, text=True, encoding="utf-8")
+    assert proc.returncode == 2 and "make_plugin_root.py" in proc.stderr and "Traceback" not in proc.stderr
 
 
 def test_json_keys_and_shapes_off_by_default(run):

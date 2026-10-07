@@ -36,6 +36,8 @@ AOSP_CATEGORIES = [
     (r"(?:SST|ServiceStateTracker)(?:-\d+)?", "network"), (r"Ims\w*", "ims"),
     (r"Uicc\w*|SubscriptionManagerService", "sim"), (r"Sms\w*", "sms"),
     (r"AirplaneModeStats|CarrierConfig\w*", "common"),
+    (r"GsmCdmaCallTracker|EmergencyNumberTracker|SimultaneousCallingTracker", "call"),
+    (r"NetworkTypeController|CellularNetworkService|NRM-[CI]-\d+|CSST|LocaleTracker-\d+|NitzStateMachineImpl|SatelliteController", "network"),
 ]
 NUM = re.compile(r"0x[0-9a-fA-F]+|\d+")
 WINDOW = 2.0  # ponytail: RILJ 요청/응답 +-2s 고정 창. 사내 분포(R4)를 보고 조정
@@ -188,41 +190,54 @@ def ril_section(lines, ril_tags, phone, ril, masker, min_count) -> dict:
             for rq, rs in reqs.get(int(m.group()), ()):
                 d = min((abs(ts - rq), 0), (abs(ts - rs), 1) if rs else (1e9, 1))
                 if d[0] <= WINDOW and (best is None or d < best[0]):
-                    best = (d, ts - rq)
+                    best = (d, ts - rq, (int(m.group()), rq))
             if best:
-                hits[ln.tag].append((best[1], best[0][1], ln.msg[:m.start()], ln.msg))
+                hits[ln.tag].append((best[1], best[0][1], ln.msg[:m.start()], ln.msg, best[2]))
                 break
     rows, draft = [], {}
+    n_reqs = sum(len(v) for v in reqs.values())
     for tag, n in total.items():
         h = hits.get(tag, [])
         if n < min_count:
             continue
-        ratio = len(h) / n
-        verdict = "후보" if len(h) >= min_count and ratio >= 0.5 else (
-            "대량·무관 — 설정하지 않음" if ratio < 0.2 and n >= 3 * min_count else "참고(일치 부족)")
-        row = {"tag": tag, "lines": n, "matched": len(h), "ratio": round(ratio, 2), "verdict": verdict}
+        ratio, nreq = len(h) / n, len({x[4] for x in h})
+        cover = nreq / n_reqs if n_reqs else 0.0           # 판정은 RILJ 요청 커버율, 줄 비율은 참고
+        verdict = "후보" if nreq >= min_count and cover >= 0.5 else (
+            "대량·무관 — 설정하지 않음" if cover < 0.2 and n >= 3 * min_count else "참고(일치 부족)")
+        row = {"tag": tag, "lines": n, "matched": len(h), "ratio": round(ratio, 2), "matched_requests": nreq,
+               "request_coverage": round(cover, 2), "verdict": verdict}
         if h:
-            dts = [d * 1000 for d, _, _, _ in h]
+            dts = [d * 1000 for d, *_ in h]
             row["dt_ms"] = {"min": round(min(dts)), "median": round(statistics.median(dts)), "max": round(max(dts))}
             row["resp_side"] = round(sum(h_[1] for h_ in h) / len(h), 2)
         if verdict == "후보":
             name = "token" if row["resp_side"] > 0.5 else "serial"
-            shapes = collections.Counter(prefix_shape(masker, x[2]) for x in h)
-            top, cnt = shapes.most_common(1)[0]
-            if cnt < min_count:
-                row["verdict"] = "후보 — 모양 분산(초안 없음)"
+            shapes = [prefix_shape(masker, x[2]) for x in h]
+            tails = collections.Counter(t.group() for t in (re.search(r"[A-Za-z_]+[^\w\x01-\x03]{0,2}$", sh) for sh in shapes) if t)
+            tail, tn = tails.most_common(1)[0] if tails else ("", 0)
+            top, cnt = collections.Counter(shapes).most_common(1)[0]
+            if tn >= 0.8 * len(h) and tn >= min_count:     # 공통 꼬리(숫자 바로 앞 단어): 벤더 접두어·메서드명이 남지 않는다
+                pat = r"^.*?\b" + prefix_regex(tail) + rf"(?P<{name}>\d+)"    # match·search 어느 쪽이든 동작
+            elif cnt >= min_count:
+                pat = "^" + prefix_regex(top) + rf"(?P<{name}>\d+)"
             else:
-                pat = "^" + prefix_regex(top) + f"(?P<{name}>\\d+)"
+                pat = None
+                row["verdict"] = "후보 — 모양 분산(초안 없음)"
+            if pat:
                 ok = sum(bool(re.search(pat, x[3])) for x in h)     # 마스킹 전 원문에 다시 맞춘다(출력은 개수만)
                 draft[tag] = pat
                 row["draft_matched"], row["draft_coverage"] = ok, round(ok / len(h), 2)
         rows.append(row)
-    rows.sort(key=lambda r: (-r["matched"], -r["lines"]))
+    rows.sort(key=lambda r: (-r["matched_requests"], -r["lines"]))
     return {"tags": rows[:15], "draft_layers": draft, "ril_requests": sum(len(v) for v in reqs.values())}
 
 
 def analyze(args) -> dict:
     root = Path(args.plugin_root) if args.plugin_root else s0_stats.REPO / "plugin"
+    if not (root / "site-defaults.yaml").is_file():
+        print(f"종료 코드 2: 사내 기본값 없음 ({root / 'site-defaults.yaml'}). 사외에서는 `python3 tests/helpers/make_plugin_root.py`가 "
+              "출력하는 루트를 --plugin-root로 준다.", file=sys.stderr)
+        raise SystemExit(2)
     sys.path.insert(0, str(root / "scripts"))
     from common.masking import new_masker
     from platforms import load
@@ -274,7 +289,7 @@ def show(o: dict) -> None:
             print(f"        {p}: [{', '.join(y(x) for x in pats)}]")
     print(f"[4 RIL 계열 태그 후보] RILJ 요청 {o['ril']['ril_requests']}건")
     for r in o["ril"]["tags"]:
-        print(f"  {r['tag']}: 일치 {r['matched']}/{r['lines']} ({r['ratio']:.0%}) dt_ms={r.get('dt_ms')} 응답쪽 {r.get('resp_side')} -> {r['verdict']}"
+        print(f"  {r['tag']}: 요청 커버 {r['matched_requests']} ({r['request_coverage']:.0%}), 줄 {r['matched']}/{r['lines']} ({r['ratio']:.0%}) dt_ms={r.get('dt_ms')} 응답쪽 {r.get('resp_side')} -> {r['verdict']}"
               + (f"  초안 일치 {r['draft_matched']}/{r['matched']} ({r['draft_coverage']:.0%})" if "draft_matched" in r else ""))
     if o["ril"]["draft_layers"]:
         print("  platform:\n    ril:\n      vendor:        # L2 적용 후 유효\n        layers:")
