@@ -33,7 +33,7 @@
 | S10 | 벤더 RIL/IMS 로그 태그와 소스 구조 | `02-config.md §4`, `04-parser-matching.md §5.8` | 소스 트리와 로그 확인 | `code_root_keys`, `tags.yaml` (Phase 1), site-defaults `platform.ril.tags` |
 | S11 | 소스 트리: Android 16/17 경로, 트리 버전을 알 수 있는 파일, 주요 심볼 위치 | `07-workflow.md §Step 2-1`, `§Step 5` | 사용자가 알려준 트리에서 확인 | `code_roots.py`, site-defaults `platform.source_tree.*`, 샘플 `code_refs` (Phase 1, 6) |
 | S12 | 빌드명 체계: 브랜치 식별, 버전 비교 가능한 부분, 브랜치 이름·fixture 파일명에 쓸 수 없는 문자(`sanitize_build`가 충분한지) | `02-config.md §5.3` `build_compare`, `03-issue-db.md §5.9`, `contracts.md §fixture`·`§브랜치` | Jira의 SW 값과 빌드 서버 명명 규칙 | `build_compare` (Phase 1, 3) |
-| S13 | 마스킹: 사내 로그에 나오는 식별자 형식, 오탐 패턴(사내 빌드 번호 등) | `08-safety.md §8` | 샘플 logcat에 `mask_pii --check` 실행 후 검토 | `mask_pii.py`, `mask.allow_patterns` (Phase 4) |
+| S13 | 마스킹: 사내 로그에 나오는 식별자 형식, 오탐 패턴(사내 빌드 번호 등) | `08-safety.md §8` | 샘플 logcat에 `mask_pii --check` 실행 후 검토 | `mask_pii.py`, `mask.allow_patterns` (Phase 4). 보강 후보: APN·`apn=` 값(`s0_suggest --shapes` 출력에 나올 수 있다) |
 | S14 | 보안 규정: 이슈 DB에 올릴 수 있는 로그 범위, 벤더 코드 인용 허용 여부, 이슈 DB 레포 공개 범위 | `03-issue-db.md §5.7`, `08-safety.md §8` | 사내 규정 확인, 사용자 확인 | 5.7 작성 규칙 보완(SITE_PROFILE) (Phase 1) |
 | S15 | 개발 환경: **Ubuntu 버전**(다른 OS는 v1 범위 밖, `01-architecture.md §3`), `python3` 버전(3.11+, 22.04 기본은 3.10 — 3.11 별도 설치), pip/사내 미러, git 버전(worktree, `worktree add --no-track`, `push --force-with-lease=<ref>:<sha>` 지원) | `01-architecture.md §3` | 명령으로 확인 | 3장 의존성 (Phase 1) |
 | S16 | Jira 키 형식 (프로젝트 키 규칙) | `02-config.md §5.3` `jira_key_regex`, `03-issue-db.md §5.4 (2)` | 샘플 Jira 키, 사내 Jira 프로젝트 목록 | `issue-db.config.yaml` `jira_key_regex` (Phase 1), `db_lint` 검사 (Phase 5) |

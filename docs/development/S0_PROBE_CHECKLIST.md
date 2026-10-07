@@ -32,6 +32,21 @@ python3 tools/s0_stats.py <logcat 1> <logcat 2> ... \
 - `--year`: 로그 첫 줄의 연도. 연도가 로그에 있으면 생략 가능.
 - 출력에는 로그 문구가 없다. 태그 이름과 개수·비율만 나온다.
 
+### 제안 받기 (`tools/s0_suggest.py`)
+
+```
+python3 tools/s0_suggest.py <logcat 1> <logcat 2> ... \
+    --rules <parser-rules 디렉토리> --tz Asia/Seoul --year 2026 \
+    --plugin-root <위 임시 루트> [--min-count 3] [--shapes '<태그 정규식>'] [--json]
+```
+
+- 5개 절이 나온다: 줄 형식 판정 / 미수집 태그 후보와 `tags.yaml` diff(수집 규칙 중 0줄인 항목 포함) / 슬롯 표기 후보와 `platform.log.phone_id` 초안 / RIL 계열 태그 후보와 `platform.ril.vendor.layers` 초안(serial·token 일치율, 대량·무관 태그는 "설정하지 않음") / 파싱률 요약. `--shapes`는 지정한 태그의 상위 메시지 모양(기본 끔).
+- 읽는 법: 일치율이 높은 태그만 초안을 믿는다. 작은 serial은 우연히 겹칠 수 있으니 일치율·Δt 표를 사람이 본다. 초안 정규식은 그룹 앞 접두어까지만 있고, 숫자·`=값`·마스커 토큰은 일반화된다. 초안은 원문 히트 줄에 다시 맞춰 일치 수·커버율을 보여 준다(접두어 모양이 줄마다 다르면 "모양 분산(초안 없음)").
+- `--shapes`는 마스킹되지 않은 설정값(APN 등)이 나올 수 있다. 사내 `SITE_PROFILE.md`에만 둔다. (S-13 마스커 보강 후보: APN·`apn=` 값 규칙.)
+- **제안은 사용자 확인 후에만** `tags.yaml` PR·`site-defaults.yaml`에 옮긴다. 도구는 파일을 쓰지 않는다.
+- **출력은 사내 전용이다. 사외로 가져가지 않는다**(모양도 문구다). 결과는 `SITE_PROFILE.md`에만 적는다.
+- 벤더 태그·클래스 이름은 레포 문서·테스트에 쓰지 않고 `docs/site/boundary-patterns.txt`(사내)에 적는다.
+
 ## 결과 읽는 법
 
 | 지표 | 정상일 때 | 이렇게 나오면 | 의미와 다음 행동 |

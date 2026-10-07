@@ -4,12 +4,12 @@
 
 | pack | 읽을 것 | 비고 |
 |---|---|---|
-| S-0 | `docs/design/04-parser-matching.md §5.8`, `docs/development/S0_PROBE_CHECKLIST.md` | 선택. CLI는 `parse_logcat.py --help`·`s0_stats.py --help` |
+| S-0 | `docs/design/04-parser-matching.md §5.8`, `docs/development/S0_PROBE_CHECKLIST.md` | 선택. CLI는 `parse_logcat.py --help`·`s0_stats.py --help`·`s0_suggest.py --help` |
 | S-1 | `docs/design/12-principles.md`, `DRAFT_NOTES.md`, `REVIEW-OPEN.md`, `docs/design/14-site.md §14.2·14.3` | 이력 `docs/history/draft-notes-*.md`는 읽지 않는다. TODO(SITE)는 `python3 tools/list_site_todos.py` |
 | S-2 | `DRAFT_NOTES.md`, `tests/skill_evals/README.md`, `tests/mocks/plugin-probe/README.md` | 실패한 코드 파일을 더 읽는다 |
 | S-3 | `plugin/site-defaults.example.yaml`, `docs/design/02-config.md` | |
 | S-4a | `docs/design/16-existing-assets.md` | 기존 자산(파서·분류·분석 스킬) 추가 |
-| S-4 | `docs/design/04-parser-matching.md`, `docs/design/16-existing-assets.md §16.4` | 테스트 출력 추가 |
+| S-4 | `docs/design/04-parser-matching.md`, `docs/design/16-existing-assets.md §16.4` | 테스트 출력 추가. tags.yaml diff·슬롯·벤더 RIL 초안은 `s0_suggest.py --help` |
 | S-5 | — | 실패 시 해당 `07-workflow.md` 절만 |
 | S-6 | `REVIEW-OPEN.md` | |
 | S-7 | `docs/design/14-site.md §14.2`, `docs/design/06-collaboration.md §6.6·6.9`, `docs/design/01-architecture.md §3` | `14-site.md §14.2`는 S2 행만 본다 |
