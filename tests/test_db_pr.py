@@ -1351,6 +1351,33 @@ def test_publish_commit_commits_approved_message_once_and_pushes():
     ws.db_pr("discard", wt)
 
 
+def test_publish_rejects_pr_json_edited_after_summary():
+    ws = Workspace()
+    wt = _staged_job(ws)
+    assert _then_summary(ws, "MOCK-7002", "issue/MOCK-7002").returncode == 0
+    pr_file = ws.job_dir("MOCK-7002") / "pr.json"
+    pr = json.loads(pr_file.read_text(encoding="utf-8"))
+    pr["body"] += " 승인 뒤 덧붙인 문장"
+    pr_file.write_text(json.dumps(pr), encoding="utf-8")
+    out = ws.db_pr(*_publish_args(ws, "MOCK-7002", "issue/MOCK-7002", "--commit"), expect=1)
+    assert out["published"] is False and any("pr.json" in p for p in out["problems"])
+    assert git(ws.remote, "branch", "--list", "issue/MOCK-7002") == ""
+    ws.db_pr("discard", wt)
+
+
+def test_publish_asks_for_new_summary_when_state_has_no_pr_digest():
+    ws = Workspace()
+    wt = _staged_job(ws)
+    assert _then_summary(ws, "MOCK-7002", "issue/MOCK-7002").returncode == 0
+    state_file = ws.job_dir("MOCK-7002") / "state.json"
+    state = json.loads(state_file.read_text(encoding="utf-8"))
+    del state["pr_digest"]                                     # 이전 버전 summary가 만든 state
+    state_file.write_text(json.dumps(state), encoding="utf-8")
+    out = ws.db_pr(*_publish_args(ws, "MOCK-7002", "issue/MOCK-7002", "--commit"), expect=1)
+    assert any("pr_digest가 없다" in p and "summary를 다시" in p for p in out["problems"])
+    ws.db_pr("discard", wt)
+
+
 def test_publish_commit_rejects_changes_after_approval_without_committing():
     ws = Workspace()
     wt = _staged_job(ws, "MOCK-7001", "p7-analyze-append.plan.json")

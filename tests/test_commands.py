@@ -128,9 +128,7 @@ def test_sync_sequence_lists_closed_pr_workdir_and_deletes_only_after_yes():
     state = json.loads(prs_path.read_text(encoding="utf-8"))
     state["prs"][0]["state"] = "CLOSED"
     prs_path.write_text(json.dumps(state), encoding="utf-8")
-    old = time.time() - 120 * 86400
-    for path in ws.job_dir("MOCK-7001").glob("*.json"):
-        os.utime(path, (old, old))
+    _age(ws.job_dir("MOCK-7001"))
 
     assert ws.db_pr("lock", "acquire", "sync", "--command", "sync")["acquired"]
     snap = ws.db_pr("snapshot", "--job", "sync")
@@ -145,6 +143,95 @@ def test_sync_sequence_lists_closed_pr_workdir_and_deletes_only_after_yes():
     done = ws.db_pr("cleanup", "--yes", "--older-than")
     assert not plan.parent.exists() and any(t["kind"] == "job-dir" for t in done["removed"])
     assert (ws.work / "_snapshot").exists(), "스냅샷은 지우지 않는다"
+
+
+def _age(path: Path, days: int = 120) -> None:
+    old = time.time() - days * 86400
+    for p in [path, *path.rglob("*")]:
+        os.utime(p, (old, old))
+
+
+def _raw_job(ws, name: str, *, age: int | None = 120, logs: bool = True) -> Path:
+    job = ws.work / name
+    job.mkdir(parents=True)
+    (job / "jira_raw.json").write_text("{}", encoding="utf-8")
+    if logs:
+        (job / "logs").mkdir()
+        (job / "logs" / "radio.txt").write_text("raw", encoding="utf-8")
+    if age:
+        _age(job, age)
+    return job
+
+
+def test_cleanup_older_than_candidates_are_tool_jobs_only_and_dry_run_equals_yes():
+    ws = Workspace()
+    raw = _raw_job(ws, "RAW-1")                                      # 원문만 남은 중단 작업(plan.json 없음)
+    recent = _raw_job(ws, "RECENT-1", age=None)
+    copied = _raw_job(ws, "COPIED-1", age=None)                      # 방금 만든 폴더에 옛 mtime 파일을 복사
+    old = time.time() - 120 * 86400
+    os.utime(copied / "jira_raw.json", (old, old))
+    empty = ws.work / "EMPTY-NEW"
+    (empty / "logs").mkdir(parents=True)                             # 방금 만든 빈 폴더(표식만)
+    photos = ws.work / "photos"                                      # 도구와 무관한 폴더
+    photos.mkdir()
+    (photos / "a.jpg").write_text("x", encoding="utf-8")
+    hidden = ws.work / ".cache"
+    hidden.mkdir()
+    (hidden / "x").write_text("x", encoding="utf-8")
+    logs_only = ws.work / "photos2"                                  # 작업 키 형식 이름 + logs/만(표식 아님)
+    (logs_only / "logs").mkdir(parents=True)
+    (logs_only / "logs" / "a.txt").write_text("x", encoding="utf-8")
+    for d in (photos, hidden, logs_only):
+        _age(d)
+    unpub = ws.plan("MOCK-7003", "p7-analyze-append.plan.json").parent   # 미게시 계획(PR 없음)
+    (unpub / "logs").mkdir()
+    (unpub / "logs" / "radio.txt").write_text("raw", encoding="utf-8")
+    _age(unpub)
+    pushed = ws.plan("MOCK-7006", "p7-analyze-append.plan.json").parent      # push 기록 있음·PR 번호 없음
+    plan_file = pushed / "plan.json"
+    doc = json.loads(plan_file.read_text(encoding="utf-8"))
+    doc["pr"] = {"number": None, "branch": "issue/MOCK-7006", "head_sha": "a" * 40}
+    plan_file.write_text(json.dumps(doc), encoding="utf-8")
+    _age(pushed)
+    locked = ws.plan("MOCK-7005", "p7-analyze-append.plan.json").parent
+    assert ws.acquire("MOCK-7005")["acquired"]
+    _age(locked)
+
+    dry = ws.db_pr("cleanup", "--dry-run", "--older-than")
+    jobs = {t["job"]: t for t in dry["targets"] if t["kind"] == "job-dir"}
+    assert set(jobs) == {"RAW-1"} and jobs["RAW-1"]["pr"] is None
+    kept = {r["job"]: r for r in dry["retained"]}
+    assert set(kept) == {"MOCK-7003", "MOCK-7006"} and kept["MOCK-7003"]["raw_remains"] is True
+    assert kept["MOCK-7003"]["state"] == "unpublished" and "미게시 계획 보존" in kept["MOCK-7003"]["note"]
+    assert kept["MOCK-7006"]["state"] == "pushed-no-pr" and kept["MOCK-7006"]["raw_remains"] is False
+    assert "PR 연결 미확인" in kept["MOCK-7006"]["note"] and "sync-pr" in kept["MOCK-7006"]["note"]
+    assert "생성 실패" not in kept["MOCK-7006"]["note"]
+    assert kept["MOCK-7003"]["days"] >= 119 and kept["MOCK-7003"]["path"] == str(unpub)
+    assert dry["removed"] == [] and raw.exists(), "dry-run은 지우지 않는다"
+
+    done = ws.db_pr("cleanup", "--yes", "--older-than")
+    assert [t["job"] for t in done["removed"] if t["kind"] == "job-dir"] == list(jobs)    # dry-run 목록 = --yes 대상
+    assert done["failed"] == [] and {r["job"]: r["state"] for r in done["retained"]} == {r["job"]: r["state"] for r in dry["retained"]}
+    assert not raw.exists()
+    for keep in (recent, copied, empty, photos, hidden, logs_only, unpub, pushed, locked):
+        assert keep.exists(), keep
+
+
+def test_cleanup_older_than_reports_failed_when_directory_remains(tmp_path, monkeypatch):
+    import importlib
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    sys.path.insert(0, str(REPO / "tests"))
+    from test_safety import safety_ctx
+    module, ctx = safety_ctx(tmp_path)
+    job = ctx.work_dir / "RAW-9"
+    (job / "logs").mkdir(parents=True)
+    (job / "logs" / "r.txt").write_text("raw", encoding="utf-8")
+    (job / "jira_raw.json").write_text("{}", encoding="utf-8")
+    _age(job)
+    monkeypatch.setattr(module.shutil, "rmtree", lambda *a, **k: None)      # 지우지 못하는 상황
+    out = module.cleanup(ctx, True, 90)
+    assert [t["job"] for t in out["failed"]] == ["RAW-9"] and out["removed"] == []
+    assert job.exists()
 
 
 def test_sync_and_setup_bodies_list_new_steps_in_order():
@@ -252,6 +339,33 @@ def test_offline_eval_counts_false_positive_when_unresolved_expected_but_candida
     assert proc.returncode == 0, proc.stderr
     out = json.loads(proc.stdout)
     assert out["summary"]["false_positive_rate"] == 1.0 and out["items"][0]["verdict"] == "오탐"
+
+
+def _summ(**kw):
+    sys.path.insert(0, str(REPO / "tools"))
+    import offline_eval
+    base = {"key": "K", "expect": "unresolved", "error": None, "top3": [], "top": None}
+    return offline_eval.summarize([{**base, **r} for r in kw["items"]])
+
+
+def test_offline_eval_type_only_candidate_is_not_false_positive_and_error_rate_reported():
+    s = _summ(items=[{"top3": [None], "top": None},                       # 유형만(cause: null)
+                     {"top3": ["DATA-001-01"], "top": "DATA-001-01"},     # 원인 후보 = 오탐
+                     {"error": "triage 종료 1"}])
+    assert s["type_only"] == 1 and s["false_positive_rate"] == 0.5
+    assert s["error_rate"] == round(1 / 3, 4)
+
+
+def test_offline_eval_type_only_counts_only_all_none_unresolved_and_edge_groups():
+    assert _summ(items=[{"top3": [None, "X-01"], "top": None}])["type_only"] == 0     # 혼합: 오탐이지 유형만 아님
+    mixed = _summ(items=[{"top3": [None, "X-01"], "top": None}])
+    assert mixed["false_positive_rate"] == 1.0
+    assert _summ(items=[{"top3": []}])["type_only"] == 0                              # 빈 목록
+    pos = _summ(items=[{"expect": "X-01", "top3": [None, "X-01"], "top": None}])
+    assert pos["type_only"] == 0 and pos["top3_inclusion"] == 1.0                     # 양성은 세지 않는다
+    allerr = _summ(items=[{"error": "e"}, {"error": "e"}])
+    assert allerr["error_rate"] == 1.0 and allerr["false_positive_rate"] is None and allerr["top1_accuracy"] is None
+    assert _summ(items=[{"expect": "X-01", "top3": ["X-01"], "top": "X-01"}])["false_positive_rate"] is None   # 평가군 없음
 
 
 def test_offline_eval_defaults_year_from_occurred_at(tmp_path):

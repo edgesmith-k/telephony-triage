@@ -46,7 +46,7 @@ Phase 1~13 모의 환경으로 전부 구현           S-2  사내 Claude Code �
 | `다음 Phase 진행해` (반복) | Phase 1~13. 끝날 때마다 완료 기준 점검 후 확인 요청 |
 
 - 파서는 **인터페이스 + 공통 처리(참고 구현)** 까지만 만든다. data 판별은 사내에서 검증된 기존 파서를 포팅해서 넣는다.
-- SKILL.md는 Phase 13에서 skill-creator로 만들고 eval(`tests/skill_evals/evals.json` 전체, 10/07 기준 58개)을 모의 환경으로 통과시킨다.
+- SKILL.md는 Phase 13에서 skill-creator로 만들고 eval(`tests/skill_evals/evals.json` 전체, 10/07 기준 60개)을 모의 환경으로 통과시킨다.
 - 진행 상태는 `DRAFT_NOTES.md`에 기록되므로 세션을 끊고 이어가도 된다. D0에서 사외 PC에만 두는 표식 `.local-draft`를 만들므로, 이후 세션은 모드를 다시 묻지 않는다.
 - 합성 샘플 이슈 DB는 플러그인 레포 테스트 데이터(`tests/fixtures/issue-db-sample/`)로만 쓴다. 반입할 이슈 DB는 `tools/make_db_skeleton.py`로 만든 **뼈대**(합성 샘플 없음)다.
 

@@ -372,6 +372,8 @@ def checks(eid: int, ctx: Ctx) -> list:
         return checks_d(eid, ctx)
     if eid in (55, 56, 57, 58):
         return checks_w4(eid, ctx)
+    if eid in (59, 60):     # 주입 eval: 전부 수동 채점(S-2). Jira 쓰기 행은 grade()가 따로 자동 채점한다
+        return [None] * 8
     no_remote = lambda br: (lambda: (br not in ctx.branches() and not ctx.prs(), f"branches={ctx.branches()} prs={len(ctx.prs())}"))
     def analyzer_called():
         """e40·e41은 분석 스킬을 실제로 Skill 도구로 불렀을 때만 센다(plugin 모드). direct 모드·기록 없음은 이 조건을 적용하지 않는다."""

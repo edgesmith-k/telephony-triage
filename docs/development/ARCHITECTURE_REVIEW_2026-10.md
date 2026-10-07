@@ -37,7 +37,8 @@ R1~R11은 완료.
 | R-38 중복 로직 통합(git 래퍼·`UsageError`·`SITE_PATHS` 로더·`_db`) | 사내 첫 안정 뒤 |
 | R-39 파서 후속(RIL pid 교대, `cut`·`coverage` 백엔드 우회 등) | S-4a·S10 뒤 |
 | R-40 성능(결합 O(N×M), parse 출력 크기, find-symbol walk, DB YAML 로드 0.69~1.09s·`source_hash` 전체 읽기 — V7 측정) | 사내 로그·DB 크기로 재측정 뒤 |
-| R-41 offline_eval 지표 정의 | S-5 |
+| R-41 offline_eval 지표 정의 | **반입 전 완료**(10/07 팀 검토 TP-1: `cause: null`은 오탐 아님·`type_only`·`error_rate`) |
+| 팀 검토(10/07, `TEAM_PLUGIN_REVIEW_VERDICT_2026-10-07.md`) 파일럿 뒤: 검색 결과에 snapshot SHA 표시(U4), `fit()` 생략 표시 `omitted`(T0), 공유 전 report.md 검사(G5), IDEAS 5·8(`docs/history/TEAM_PLUGIN_EXPANSION_IDEAS_2026-10-07.md`) | 파일럿 뒤 |
 | R-42 사용자 clone 변경 Bash 경로 + guard `git -c alias.x=push`·표 밖 래퍼(`eval`·`su -c` 등) | 사내 사용 패턴 본 뒤 |
 | R-43 setup read_tools 축소 | S-3 |
 | R-44 analyze 질문 수 | 사내 파일럿 뒤 |
