@@ -445,6 +445,24 @@ def test_failed_step_feeds_keyword_bonus_only_in_analysis_mode():
     assert all(c["bonus"] == {"proximity": 0.0, "keyword": 0.0} for c in reg)
 
 
+def test_version_match_is_display_only():
+    events = _events(_two_cluster_log(), around="2026-09-20T14:31:30+09:00")
+    base = {"key": "MOCK-V1", "sw": "MOCKA56_U1_20260915", "summary": ""}
+
+    def run(**extra):
+        return {c["cause"]: c for c in _tie_cands(_match(events, SAMPLE, "--no-feedback-weight", jira={**base, **extra}))}
+    none, same, other, dotted = (run(), run(android_version="16"), run(android_version="15"), run(android_version="16.0"))
+    assert none["DATA-001-01"]["version_match"] is None and none["DATA-001-01"]["android_versions"] == ["16", "17"]
+    assert same["DATA-001-01"]["version_match"] is True and dotted["DATA-001-01"]["version_match"] is True
+    assert other["DATA-001-01"]["version_match"] is False
+    assert other["DATA-001-02"]["version_match"] is None and other["DATA-001-02"]["android_versions"] == []   # 전 버전
+    for odd in ("Android 16", "Baklava", "17 QPR1", "16 (B)"):   # 정수·정수.정수 꼴이 아니면 비교하지 않는다
+        assert run(android_version=odd)["DATA-001-01"]["version_match"] is None
+    for r in (same, other):   # 순위·score·S·C 불변
+        key = lambda x: [(k, c["score"], c["bonus"], c["S"], c["C"]) for k, c in x.items()]  # noqa: E731
+        assert key(r) == key(none)
+
+
 # -- 근거 출처 (line_ref, event_index) ----------------------------------------------
 
 

@@ -107,6 +107,23 @@ def test_analysis_is_small_deterministic_and_writes_report_and_trace():
     assert all("exit" in row and "ms" in row for row in trace if row.get("script"))
 
 
+def test_version_mismatch_is_report_only(monkeypatch):
+    monkeypatch.setenv("TT_SCHEMA_CHECK", "1")
+    doc, items = _items()
+    work = tmp("tt-triage-")
+    item = items[0]
+    meta = work / "m.json"
+    meta.write_text(json.dumps({"key": item["key"], "occurred_at": item["occurred_at"], "summary": item.get("summary", ""),
+                                "android_version": "15"}), encoding="utf-8")
+    logs = [str((LABELSET.parent / p).resolve()) for p in item["logs"]]
+    out = work / "out"
+    result = run_json("triage.py", ["run", item["key"], "--offline-db", SAMPLE, "--out", out, "--logs", *logs,
+                                    "--jira-meta", meta, "--tz", doc["tz"], "--year", doc["year"]])
+    assert result["candidates"][0]["cause"] == "DATA-001-01"       # 원인 android_versions: 16·17
+    assert "다른 버전 원인 (Android 16, 17)" in (out / "report.md").read_text(encoding="utf-8")
+    assert "version_mismatch" not in (out / "analysis.json").read_text(encoding="utf-8")
+
+
 def test_analysis_is_trimmed_to_4kb_when_evidence_is_large(tmp_path):
     sys.path.insert(0, str(plugin_root() / "scripts"))
     import importlib

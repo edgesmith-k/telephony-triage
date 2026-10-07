@@ -281,6 +281,7 @@ class ReportMixin:
         # analysis.json 내용을 먼저 확정하고(TT_SCHEMA_CHECK면 검사) 그 뒤에 파일을 쓴다: 위반이면 이전 결과·캐시를 건드리지 않는다
         final = copy.deepcopy({k: v for k, v in result.items() if v not in (None, [], {})})
         for cand in final.get("candidates") or []:
+            cand.pop("_version_mismatch", None)
             for e in cand["evidence"]:
                 e.pop("_ref", None)
         final = fit(final)
@@ -296,6 +297,7 @@ class ReportMixin:
         if parts is not None:
             self.save_job(core, parts, request_hash, run_no, seq, hit, candidates)   # `_ref`를 지우기 전에(리포트 재현용)
         for cand in candidates:
+            cand.pop("_version_mismatch", None)
             for e in cand["evidence"]:
                 e.pop("_ref", None)
         result = final
@@ -415,6 +417,8 @@ class ReportMixin:
             verified = "검증됨" if top.get("resolution_verification") == "verified" else "⚠ 미검증"
             lines.append(f"- 해결책: {top.get('resolution') or '-'}   해결책 검증: {verified}")
             lines.append(f"- 수정 상태: {top.get('fix_status') or '-'} — {top.get('fix_message') or '-'}")
+            if top.get("_version_mismatch"):
+                lines.append(f"- 다른 버전 원인 (Android {', '.join(top['_version_mismatch'])})")
             lines.append(f"- 기존 사례: Jira {top.get('jira_count') or 0}건 ({', '.join(top.get('jira_recent') or []) or '-'})")
             lines.append(f"- 관련 원인: {', '.join(top['related']) or '없음'}")
         others = [f"{c['cause'] or c['type']} (규칙 일치 점수 {c['score']})" for c in cands[1:]]

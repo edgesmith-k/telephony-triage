@@ -23,7 +23,7 @@
 `failed_step {text, source}`(`--failed-step`·`--steps-file`까지 반영한 최종 값, source는 cli|field|description|test_steps|steps_file),
 `jira.failed_step`(그 값의 text), `warnings[]`. 보조 정보일 뿐이며 `missing`에 넣지 않는다.
 `--failed-step <한 줄>`·`--steps-file <파일>`은 record 흐름이 쓴다(우선순위 cli > 자동 > steps-file, 모두 마스킹 후 정규화).
-`--meta-out`이면 `match_signatures.py --jira-meta` 입력 `{key, occurred_at, sw, summary, description}`을 쓴다(`failed_step`은 있을 때만 더한다).
+`--meta-out`이면 `match_signatures.py --jira-meta` 입력 `{key, occurred_at, sw, summary, description}`을 쓴다(`failed_step`·`android_version`은 있을 때만 더한다).
 `--consume`이면 읽은 원본 파일을 지운다(원문을 work_dir에 남기지 않기 위해서다, 08-safety.md §8.1).
 
 `field_map` 경로 표기: 점으로 잇고, 목록은 `[]`로 펼친다(`fields.components[].name`). 경로가 비었거나
@@ -323,6 +323,8 @@ def main(argv: list[str] | None = None) -> int:
         if args.meta_out:
             meta = {"key": result["key"], "sw": result["jira"].get("sw"),
                     "summary": result["text"]["summary"], "description": result["text"]["description"]}
+            if result["jira"].get("android_version"):
+                meta["android_version"] = result["jira"]["android_version"]
             if result["occurred_at"]:
                 meta["occurred_at"] = result["occurred_at"]
             fs = result.get("failed_step") or result.get("failed_step_auto")
