@@ -25,7 +25,7 @@
 
 ## 2. Jira 메타데이터
 
-MCP `jira.tools.get_issue`(매핑이 없으면 추측하지 말고 setup 안내)를 부르면 hook이 원문을 `WD/<KEY>/jira_raw.json`에 두고 마스킹 요약만 보여준다(결과에 `saved_to`가 없으면 응답을 그 경로에 저장). `jira_fields.py extract WD/<KEY>/jira_raw.json --origin mcp --db SNAP --consume --comments last:3`(파일이면 `<yaml> --origin file`)로 읽는다.
+MCP `jira.tools.get_issue`(매핑이 없으면 추측하지 말고 setup 안내)를 부르면 hook이 원문을 `WD/<KEY>/jira_raw.json`에 두고 마스킹 요약만 보여준다(결과에 `saved_to`가 없으면 응답을 그 경로에 저장하고 "격리 hook 미동작: Jira 원문이 대화에 들어왔다(S1 확인)"고 알린다). `jira_fields.py extract WD/<KEY>/jira_raw.json --origin mcp --db SNAP --consume --comments last:3`(파일이면 `<yaml> --origin file`)로 읽는다.
 `--failed-step <한 줄>`·`--steps-file <파일>`(선택)이 있으면 `extract`에 그대로 넘긴다(우선순위 cli > Jira 자동 > 파일). 실패 스텝은 선택 값이라 없어도 묻지 않고 멈추지 않으며, 파일을 읽지 못하면 `warnings`만 보여주고 진행한다. 값은 보조 정보일 뿐 분류에 쓰지 않는다.
 `--steps-file`은 txt/csv·html(`report.html`)·zip(안의 파일 하나)이다. 개발자가 스텝 목록을 대화에 붙이면 `WD/<KEY>/steps-pasted.txt`에 쓰고 그 경로를 `--steps-file`로 준다(도구가 읽을 때 마스킹, 커밋하지 않는다, discard·lock release가 지운다). 시험 장비 시각은 시계가 단말과 다를 수 있어 `record`에서는 실패 스텝 이름만 쓴다(`--clock-offset`은 analyze의 구간 계산용).
 `jira` 블록(model, sw, android_version, carrier, occurred_on)을 채우고, `missing`은 사용자에게 묻는다. `date`는 오늘.

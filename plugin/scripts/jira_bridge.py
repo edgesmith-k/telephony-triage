@@ -2,14 +2,16 @@
 """jira_bridge.py — Jira MCP 응답 원문을 모델 대신 파일로 받는 PostToolUse hook (08-safety.md §8.1·§9 9번).
 
 stdin: hook 입력 `{tool_name, tool_input, tool_response, ...}`. `tool_name`이 config `jira.tools.get_issue`
-또는 `jira.tools.get_comments`(전체 이름)일 때만 동작한다. 그 밖의 도구는 아무것도 출력하지 않는다(원래 결과 그대로).
+또는 `jira.tools.get_comments`(전체 이름, 서버 이름 정규화 비교 — `mcptools.normalize`)일 때만 동작한다. 그 밖의 도구는 아무것도 출력하지 않는다(원래 결과 그대로).
 
 1. 응답에서 이슈 키를 찾아 `jira_key_regex`(스냅샷 또는 사용자 clone의 `issue-db.config.yaml`)로 검사한다.
 2. 원문을 `<work_dir>/<KEY>/jira_raw.json`(디렉토리 권한 700)에 쓴다. `get_comments` 응답은 같은 파일의 `comments`에 합친다.
    `triage.py run`이 이 파일을 `jira_fields.py extract --consume`으로 읽고 지운다.
 3. 모델에는 `hookSpecificOutput.updatedToolOutput`으로 **마스킹된 요약**(요약·설명 앞부분·코멘트 마지막 3개)만 준다.
 
-실패하면 원문을 내보내지 않고 오류 문구로 바꾼다(fail closed). 출력 필드 이름은 Claude Code hooks 문서의
+실패하면 원문을 내보내지 않고 오류 문구로 바꾼다(fail closed). 설정(`config.yaml`·`site-defaults.yaml`)을 읽지 못해
+대상인지 판정할 수 없으면 모든 `mcp__` 결과를 오류 문구로 바꾼다(guard가 같은 상태에서 모든 `mcp__` 호출을 거부하는 범위와 같다).
+`site-defaults.yaml`이 없으면 guard처럼 사용자 config만으로 판정한다. 종료 코드는 항상 0. 출력 필드 이름은 Claude Code hooks 문서의
 PostToolUse `updatedToolOutput`이다 — TODO(SITE:S1) 사내 Claude Code 버전에서 원문이 대체되는지 확인한다.
 """
 
@@ -23,7 +25,7 @@ from pathlib import Path
 SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS))
 
-from common import compat, site_defaults, userconfig  # noqa: E402
+from common import compat, mcptools, site_defaults, userconfig  # noqa: E402
 import jira_fields  # noqa: E402
 
 BRIEF_COMMENTS = "last:3"
@@ -68,7 +70,8 @@ def target(event: dict, cfg: dict) -> str | None:
     """대상 논리 동작(`get_issue`·`get_comments`) 또는 None."""
     tools = (cfg.get("jira") or {}).get("tools") or {}
     tool = event.get("tool_name")
-    return next((k for k in ("get_issue", "get_comments") if tools.get(k) and tools[k] == tool), None)
+    return next((k for k in ("get_issue", "get_comments")
+                 if tools.get(k) and mcptools.normalize(tools[k]) == mcptools.normalize(tool)), None)
 
 
 def bridge(event: dict, cfg: dict, kind: str) -> str:
@@ -120,19 +123,34 @@ def main() -> int:
         event = json.loads(sys.stdin.read() or "{}")
     except json.JSONDecodeError:
         return 0
+    error = None
     try:
         defaults = site_defaults.load()
     except site_defaults.SiteDefaultsMissing:
-        return 0    # 사내 기본값 없음: Jira 매핑도 없으므로 대상 도구가 없다
-    cfg = userconfig.merged(defaults)
-    kind = target(event, cfg)
-    if kind is None:
-        return 0
+        defaults = {}    # guard와 같게: 사용자 config만으로 판정한다
+    except Exception as exc:  # noqa: BLE001
+        defaults, error = {}, exc
     try:
-        text = bridge(event, cfg, kind)
-    except Exception as exc:  # noqa: BLE001 — 실패해도 원문을 내보내지 않는다
-        print(f"jira_bridge: {exc}", file=sys.stderr)
-        text = f"telephony-triage: Jira 응답 처리 실패({type(exc).__name__}) — 원문은 표시하지 않는다."
+        user = userconfig.load_user() or {}
+    except Exception as exc:  # noqa: BLE001
+        user, error = {}, exc
+    try:
+        cfg = userconfig.merged(defaults, user)
+        kind = target(event, cfg)
+    except Exception as exc:  # noqa: BLE001
+        kind, error = None, exc
+    if kind is None:
+        if error is None or not str(event.get("tool_name") or "").startswith("mcp__"):
+            return 0
+        print(f"jira_bridge: {error}", file=sys.stderr)
+        text = (f"telephony-triage: 설정을 읽지 못해({type(error).__name__}) Jira 응답 격리 여부를 판정하지 못했다 "
+                "— 원문은 표시하지 않는다.")
+    else:
+        try:
+            text = bridge(event, cfg, kind)
+        except Exception as exc:  # noqa: BLE001 — 실패해도 원문을 내보내지 않는다
+            print(f"jira_bridge: {exc}", file=sys.stderr)
+            text = f"telephony-triage: Jira 응답 처리 실패({type(exc).__name__}) — 원문은 표시하지 않는다."
     print(json.dumps({"hookSpecificOutput": {"hookEventName": "PostToolUse", "updatedToolOutput": text}},
                      ensure_ascii=False))
     return 0

@@ -239,6 +239,10 @@ def execute(entry: dict, info: dict, env_dir: Path, run_dir: Path, claude: str,
         # MCP 도구는 서버 단위로 허용한다 — Jira 쓰기 차단은 권한 거부가 아니라 guard hook이 해야 평가가 된다.
         # Bash는 매번 사용자 셸 프로필로 PATH를 다시 잡으므로(gh 스텁이 빠진다) env.sh를 명령마다 source하게 한다.
         env["CLAUDE_ENV_FILE"] = str(env_dir / "env.sh")
+        # 실제 설치처럼 Bash에는 CLAUDE_PLUGIN_ROOT가 없다: 모델은 SKILL.md·커맨드 본문에 치환된 `S/` 경로를 써야 한다.
+        env.pop("CLAUDE_PLUGIN_ROOT", None)
+        with (env_dir / "env.sh").open("a", encoding="utf-8", newline="\n") as stream:
+            stream.write("unset CLAUDE_PLUGIN_ROOT\n")
         command = [claude, "-p", *common, "--mcp-config", plugin["mcp_config"],
                    "--permission-prompt-tool", f"mcp__{APPROVER}__approve",
                    *[a for d in plugin["plugin_dirs"] for a in ("--plugin-dir", d)],

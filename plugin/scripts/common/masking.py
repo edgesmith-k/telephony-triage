@@ -120,12 +120,21 @@ def _android_masked(value: str) -> bool:
     return bool(value) and set(value) <= set("*xX")
 
 
+class AllowPatternError(ValueError):
+    """`mask.allow_patterns`의 정규식이 컴파일되지 않는다."""
+
+
 class Masker:
     """번호 대응표를 가진 마스커. `masker(text)`로 텍스트를, `mask_value(v)`로 필드 값을
     마스킹한다. 한 파일(분석 1회) 동안 같은 인스턴스를 쓴다."""
 
     def __init__(self, allow_patterns: Iterable[str] = (), existing_text: str | None = None):
-        self.allow = [re.compile(p) for p in allow_patterns or ()]
+        self.allow = []
+        for p in allow_patterns or ():
+            try:
+                self.allow.append(re.compile(p))
+            except (re.error, TypeError) as exc:
+                raise AllowPatternError(f"mask.allow_patterns 정규식 오류 {p!r}: {exc}") from exc
         self.tables: dict[str, dict[str, int]] = {}
         self.next: dict[str, int] = {}
         self.counts: dict[str, int] = {}

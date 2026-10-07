@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 import sys
 from pathlib import Path
 
@@ -250,6 +251,69 @@ def test_bridge_ignores_other_tools():
     event = {"tool_name": "mcp__other__get_issue", "tool_input": {}, "tool_response": "secret"}
     proc = _bridge(ws, json.dumps(event))
     assert proc.returncode == 0 and proc.stdout.strip() == ""
+
+
+def _bridge_home(config: str | None = None) -> Path:
+    home = tmp("tt-bridge-home-")
+    (home / "config.yaml").write_text(config if config is not None else f"work_dir: {(home / 'work').as_posix()}\n",
+                                      encoding="utf-8")
+    return home
+
+
+def _get_issue_event(tool: str) -> str:
+    issue = {"key": "MOCK-1001", "fields": {"summary": "데이터 안 됨 imsi=450081234567890", "description": "재현"}}
+    return json.dumps({"tool_name": tool, "tool_input": {"ticket": "MOCK-1001"},
+                       "tool_response": json.dumps(issue, ensure_ascii=False)}, ensure_ascii=False)
+
+
+def _site_jira(server: str, get_issue: str) -> dict:
+    base = yaml.safe_load((REPO / "plugin" / "site-defaults.example.yaml").read_text(encoding="utf-8"))["jira"]
+    return {**base, "mcp_server": server, "tools": {"get_issue": get_issue}, "read_tools": [get_issue]}
+
+
+def test_bridge_matches_normalized_server_name():
+    """R-2: `jira.tools`에 원래 서버 이름(`jira.corp`)이 있어도 세션 이름(`jira_corp`)의 응답을 격리한다."""
+    root = plugin_root("bridge-dot", jira=_site_jira("jira.corp", "mcp__jira.corp__get_issue"))
+    home = _bridge_home()
+    proc = run("jira_bridge.py", [], root=root, env={"TELEPHONY_TRIAGE_HOME": home},
+               stdin=_get_issue_event("mcp__jira_corp__get_issue"))
+    assert proc.returncode == 0 and proc.stdout.strip(), proc.stderr
+    shown = json.loads(proc.stdout)["hookSpecificOutput"]["updatedToolOutput"]
+    assert "saved_to" in shown and "450081234567890" not in shown
+    assert (home / "work" / "MOCK-1001" / "jira_raw.json").is_file()
+
+
+def test_bridge_fails_closed_when_config_unreadable():
+    """R-4: 설정을 읽지 못하면 traceback·종료 1이 아니라 종료 0 + 오류 문구(원문 없음). site-defaults가 없으면
+    guard처럼 사용자 config로 판정한다."""
+    broken = _bridge_home("jira: [unclosed\n  : :\n")
+    # 사용자 config에만 있던 매핑(지금은 읽을 수 없음): 대상인지 모르므로 mcp__ 결과를 오류 문구로
+    proc = run("jira_bridge.py", [], root=plugin_root(), env={"TELEPHONY_TRIAGE_HOME": broken},
+               stdin=_get_issue_event("mcp__jira_corp__get_issue"))
+    assert proc.returncode == 0, proc.stderr
+    shown = json.loads(proc.stdout)["hookSpecificOutput"]["updatedToolOutput"]
+    assert "설정을 읽지 못해" in shown and "450081234567890" not in shown and "데이터 안 됨" not in shown
+    # site-defaults 매핑의 도구는 그대로 격리된다(마스킹 요약만)
+    proc = run("jira_bridge.py", [], root=plugin_root(), env={"TELEPHONY_TRIAGE_HOME": broken},
+               stdin=_get_issue_event("mcp__mock-jira__jira_fetch_ticket"))
+    assert proc.returncode == 0, proc.stderr
+    assert "450081234567890" not in json.loads(proc.stdout)["hookSpecificOutput"]["updatedToolOutput"]
+    other = run("jira_bridge.py", [], root=plugin_root(), env={"TELEPHONY_TRIAGE_HOME": broken},
+                stdin=json.dumps({"tool_name": "Bash", "tool_input": {}, "tool_response": "x"}))
+    assert other.returncode == 0 and other.stdout.strip() == ""        # MCP가 아닌 도구는 그대로
+
+    bare = tmp("tt-bridge-bare-") / "root"
+    shutil.copytree(plugin_root(), bare)
+    (bare / "site-defaults.yaml").unlink()
+    home = _bridge_home()
+    user = yaml.safe_load((home / "config.yaml").read_text(encoding="utf-8"))
+    user["jira"] = {"tools": {"get_issue": "mcp__mock-jira__jira_fetch_ticket"}}
+    (home / "config.yaml").write_text(yaml.safe_dump(user), encoding="utf-8")
+    proc = run("jira_bridge.py", [], root=bare, env={"TELEPHONY_TRIAGE_HOME": home},
+               stdin=_get_issue_event("mcp__mock-jira__jira_fetch_ticket"))
+    assert proc.returncode == 0 and proc.stdout.strip(), proc.stderr
+    shown = json.loads(proc.stdout)["hookSpecificOutput"]["updatedToolOutput"]
+    assert "450081234567890" not in shown and "데이터 안 됨" not in shown
 
 
 def test_lock_held_by_other_job_is_a_question_and_release_other_continues():

@@ -264,3 +264,31 @@ def test_analyzer_when_values_match_code():
         text = path.read_text(encoding="utf-8")
         assert "after_match" not in text and "always_for_category" not in text, path.name
     assert "`when: ask | always | never`" in (docs / "contracts.md").read_text(encoding="utf-8")
+
+
+def test_script_path_is_defined_where_it_is_substituted():
+    """R-7: `${CLAUDE_PLUGIN_ROOT}`는 SKILL.md·커맨드 본문에서만 치환되고 Bash 환경에는 없다. 그래서 `S/` 정의는
+    그 본문에 있어야 하고, Read로 읽는 reference/에는 이 변수를 두지 않는다."""
+    root = "${CLAUDE_PLUGIN_ROOT}"
+    for path in sorted((SKILL / "reference").glob("*.md")):
+        assert root not in path.read_text(encoding="utf-8"), path.name
+    skill = (SKILL / "SKILL.md").read_text(encoding="utf-8")
+    assert f'`S/` = `python3 "{root}/scripts/' in skill
+    for path in sorted((PLUGIN / "commands").glob("*.md")):
+        text = path.read_text(encoding="utf-8")
+        if "reference/rules.md" in text:
+            assert f'python3 "{root}/scripts/<이름>.py"` = `S/`' in text, path.name
+    rules = (SKILL / "reference" / "rules.md").read_text(encoding="utf-8")
+    assert "`offset`" in rules and "`limit`" in rules
+    usage = next(line for line in skill.splitlines() if line.startswith("`/telephony-triage:analyze"))
+    assert "--clock-offset" in usage
+    plugin = json.loads((PLUGIN / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
+    assert plugin["author"]["name"]
+
+
+def test_step8_runs_preflight_before_stage():
+    """R-8: Step 8은 stage 전에 preflight를 다시 불러 브랜치·`--lease`를 정한다 (triage.py는 그 값을 넘기지 않는다)."""
+    skill = (SKILL / "SKILL.md").read_text(encoding="utf-8")
+    step8 = skill.split("### Step 8", 1)[1]
+    assert "db_pr.py preflight" in step8 and step8.index("db_pr.py preflight") < step8.index("stage")
+    assert "open_prs" in step8      # 새로 보인 열린 PR만 다시 알린다

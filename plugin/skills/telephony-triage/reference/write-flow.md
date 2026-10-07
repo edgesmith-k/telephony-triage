@@ -9,12 +9,12 @@ main 기준 다음 번호로 정해진다. 계획이 건드리는 대상이 그�
 
 | 순서 | 호출 |
 |---|---|
-| 1 | (흐름 시작 때 이미) `db_pr lock acquire <작업 키>` → `db_pr snapshot --job <작업 키>` → `config.py check --db SNAP [--for dry-run]` → `db_pr preflight --branch <br> --search <원인 ID 또는 KEY> [--jira <KEY>]` |
+| 1 | (흐름 시작 때 이미. analyze는 preflight만 Step 8 직전에 다시) `db_pr lock acquire <작업 키>` → `db_pr snapshot --job <작업 키>` → `config.py check --db SNAP [--for dry-run]` → `db_pr preflight --branch <br> --search <원인 ID 또는 KEY> [--jira <KEY>]` |
 | 2 | 로컬·원격 브랜치 검사와 선택 (아래) |
 | 3 | `db_pr stage <plan> --wt <wt> --branch <br> [--dry-run] --then-summary` — drift면 결정 반영 후 다시 |
 | 4 | 확인 화면 = 3의 출력 그대로 (승인 / 수정 요청 / 전체 diff / 취소) |
 | 5 | `db_pr publish <wt> --branch <br> --lease <sha\|new> --approved <hash> --commit --and-discard` → PR 링크 (커밋·push·PR·정리) |
-| 6 | 정리: 5의 `--and-discard`가 한다 (worktree·`tt/<br>`·state 삭제, lock 해제). 취소·dry-run·discard 실패 때만 `db_pr discard <wt>` |
+| 6 | 정리: 5의 `--and-discard`가 한다(worktree·`tt/<br>`·state 삭제, lock 해제). 그 밖은 §6 |
 
 ## 계획 형식 (analyze Step 7)
 

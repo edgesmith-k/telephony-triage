@@ -279,6 +279,16 @@ def test_db_precommit_reexports_generated_paths():
     assert db_precommit.generated_paths is checks.generated_paths
 
 
+def test_guard_deny_says_mask_check_could_not_run_on_exit_2():
+    """R-6: mask 단계 종료 2(allow_patterns 정규식 오류 등)는 "개인정보가 있다"가 아니라 "실행하지 못했다"로 거부한다."""
+    broken = checks.StepResult("mask", 2, stderr="mask.allow_patterns 정규식 오류 '(': missing ), unterminated subpattern")
+    (msg,) = checks.guard_deny_messages([broken])
+    assert "실행하지 못했다" in msg and "allow_patterns" in msg and "개인정보" not in msg
+    found = checks.StepResult("mask", 1, data={"detections": [{"path": "a.yaml", "line": 3, "kind": "IMEI"}]})
+    (msg,) = checks.guard_deny_messages([found])
+    assert "마스킹 안 된 개인정보" in msg and "a.yaml:3 IMEI" in msg
+
+
 def test_checks_imports_only_stdlib_and_exitcodes():
     """guard는 site-defaults가 없어도 멈추면 안 되므로 checks.py는 site_defaults·yaml을 가져오지 않는다."""
     tree = ast.parse(Path(checks.__file__).read_text(encoding="utf-8"))

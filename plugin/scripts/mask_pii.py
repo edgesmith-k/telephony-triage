@@ -8,6 +8,7 @@
         검사 모드. 마스킹되지 않은 식별자가 있으면 목록(JSON)과 종료 코드 1.
         --staged는 index 내용, --changed는 `git merge-base <ref> HEAD` 이후 바뀐 파일의
         워킹 트리 내용을 본다(contracts.md §3.2 공통 규칙). 값은 출력하지 않는다.
+        NUL이 든 파일도 건너뛰지 않는다(NUL을 지운 줄과 공백으로 바꾼 줄을 함께 검사). `mask.allow_patterns` 정규식 오류는 종료 코드 2.
     mask_pii.py --events <json> --out <json> [--db <path>]
         외부에서 받은 이벤트 JSON의 `msg`와 `fields`를 마스킹하고 `masked: true`를 붙인다.
         `events` 목록이 없는 JSON(예: Jira 응답)은 모든 문자열 값을 마스킹한다
@@ -75,7 +76,16 @@ def _scope_files(db: Path, changed: str | None, staged: bool) -> list[tuple[str,
             path = db / name
             if path.is_file():
                 out.append((name, path.read_bytes()))
-    return [(name, data.decode("utf-8", errors="replace")) for name, data in out if b"\0" not in data]
+    return [(name, _without_nul(data.decode("utf-8", errors="replace"))) for name, data in out]
+
+
+def _without_nul(text: str) -> str:
+    """NUL이 든 줄은 NUL을 지운 것(UTF-16·NUL 패딩)과 공백으로 바꾼 것(지우면 앞뒤 값이 붙는 경우)을 탭으로 이어
+    한 줄로 검사한다(건너뛰지 않는다). 줄 번호는 그대로다."""
+    if "\0" not in text:
+        return text
+    return "\n".join(f"{line.replace(chr(0), '')}\t{line.replace(chr(0), ' ')}" if "\0" in line else line
+                     for line in text.split("\n"))
 
 
 def run_check(args, db: Path | None) -> dict:
@@ -211,7 +221,7 @@ def main(argv: list[str] | None = None) -> int:
                 if args.json:
                     print(json.dumps(result, ensure_ascii=False), file=sys.stderr)
                 return OK
-    except (UsageError, dbpath.DbPathError) as exc:
+    except (UsageError, dbpath.DbPathError, masking.AllowPatternError) as exc:
         print(str(exc), file=sys.stderr)
         return USAGE
     print(json.dumps(result, ensure_ascii=False, indent=1))

@@ -65,6 +65,7 @@ gh 스텁 상태, Jira 티켓 디렉토리, 로그를 만든다. `env.sh`(export
 | 분석 스킬 | 모의 플러그인 스킬 `mock-analyzers:mock-data-analyzer` | `run.py`를 Bash로 |
 | guard hook | 걸린다(MCP·Bash·Write/Edit) | 안 걸린다 |
 | MCP 권한 | 서버 단위 허용 — Jira 쓰기 차단은 권한 거부가 아니라 guard가 해야 통과 | — |
+| Bash의 `CLAUDE_PLUGIN_ROOT` | 없음(실제 설치와 같게, `env.sh` 끝에서 unset) — 스킬·커맨드 본문의 `S/` 경로를 써야 한다 | 있음(프롬프트가 이 변수를 쓴다) |
 
 **plugin 모드 환경 정보**: `env.json`에는 direct 모드용 키(`jira_call`·`jira_tools_list`·`analyzer_run`)를 넣지 않는다(`run.py`가
 `build(direct_tools=False)`로 부른다). 3C의 e40·e41은 실행자가 `env.json`을 보고 분석 스크립트를 Bash로 직접 돌려 Skill 경로(5-1)를
