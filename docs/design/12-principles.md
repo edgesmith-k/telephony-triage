@@ -6,7 +6,7 @@
 - 분류 확정, 새 유형/원인 생성, 시그니처와 파서 규칙 추가, 수정 상태 변경은 **항상 사용자 확인 후** 진행한다.
 - GitHub push 전에는 **변경 파일, ID 할당, README 미리보기, diff, 검사·검증 결과(실행/건너뜀과 사유), 커밋 메시지를 보여주고 승인받는다** (`07-workflow.md §Step 8`의 5번). 승인 없이는 push하지 않고, 승인 후 파일이 바뀌면 다시 승인받는다.
 - 도구가 만드는 이슈 DB 변경은 **작업 계획을 최신 main 위에 적용**하는 방식으로만 만들고, 절차는 `db_pr.py`가 한다. 텍스트 rebase로 병합하지 않는다. 계획이 건드리는 대상이 그사이 main에서 바뀌었으면(drift) 자동으로 덮지 않고 사용자에게 묻는다 (`contracts.md §작업 계획`). 예외: 스키마 마이그레이션·새 카테고리·사후 정리는 계획 op로 표현할 수 없으므로 메인테이너가 자기 로컬 브랜치에서 직접 편집한다 (`06-collaboration.md §6.3·6.4·6.10`).
-- **사용자의 이슈 DB clone은 브랜치도 파일도 바꾸지 않는다.** 분석은 읽기 스냅샷(`<work_dir>/_snapshot`), 쓰기는 작업 worktree와 도구 브랜치(`tt/*`)를 쓴다. 사용자 clone에는 fetch와 조건부 `pull --ff-only`만 한다. 유일한 명시적 예외는 메인테이너가 `migrate/schema-v<N>` 브랜치에서 실행하는 `migrate` 커맨드다(그 브랜치의 워킹 트리를 바꾼다).
+- **사용자의 이슈 DB clone은 브랜치도 파일도 바꾸지 않는다.** 분석은 읽기 스냅샷(`<work_dir>/_snapshot`), 쓰기는 작업 worktree와 도구 브랜치(`tt/*`)를 쓴다. 사용자 clone에는 fetch와 조건부 `pull --ff-only`만 한다. 명시적 예외는 둘이다: 메인테이너가 `migrate/schema-v<N>` 브랜치에서 실행하는 `migrate` 커맨드(그 브랜치의 워킹 트리를 바꾼다), 그리고 사용자가 자기 직접 편집 브랜치에서 직접 실행하는 `db_add renumber`(base·`tt/*`·detached가 아니고 트리가 깨끗할 때만, `06-collaboration.md §6.3`).
 - 다른 유형의 fixture에서 새 시그니처가 걸리면(R3·R4) 시그니처를 좁힐지 `also_allowed`로 허용할지 **사용자가 고른다**. 몰래 좁히거나 몰래 허용하지 않는다 (`contracts.md §fixture`).
 - 사용자별로 **한 번에 한 작업**만 스냅샷을 옮기거나 worktree를 만든다(세션 lock). 작업이 끝나는 모든 경로에서 lock을 푼다 (`contracts.md §3.2` `db_pr.py` 세부).
 - 생성 파일(README, STATS, CHANGELOG)은 `db_build.py`로만 만들고 직접 편집하지 않는다. 캐시는 커밋하지 않는다. Jira 한 건은 파일 하나다.
