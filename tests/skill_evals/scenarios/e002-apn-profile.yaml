@@ -8,6 +8,6 @@ entries:
   - {at: 0, tag: "DCM-{phone}", msg: "carrier config loaded: carrierId=<CARRIER>"}
   - {after: 2, tag: "DPM-{phone}", level: W, msg: "no data profile matches the SIM: apnTypes=default,supl"}
   - {after: 1, tag: "DNC-{phone}", level: I, msg: "onEvaluateNetworkRequests: reason=DATA_PROFILES_CHANGED"}
-  - {after: 0.5, tag: "DNC-{phone}", level: W, msg: "evaluation result: NOT_ALLOWED reasons=[NO_SUITABLE_DATA_PROFILE]"}
-  - {after: 20, tag: "DNC-{phone}", level: W, msg: "evaluation result: NOT_ALLOWED reasons=[NO_SUITABLE_DATA_PROFILE]"}
+  - {after: 0.5, tag: "DNC-{phone}", level: W, msg: "Data evaluation: evaluation reason:DATA_ENABLED_CHANGED, Data disallowed reasons: NO_SUITABLE_DATA_PROFILE, candidate profile=null"}
+  - {after: 20, tag: "DNC-{phone}", level: W, msg: "Data evaluation: evaluation reason:DATA_ENABLED_CHANGED, Data disallowed reasons: NO_SUITABLE_DATA_PROFILE, candidate profile=null"}
   - {after: 3, tag: "DRM-{phone}", msg: "no retry scheduled: no suitable data profile"}

@@ -1,0 +1,5 @@
+09-26 09:45:00.000  1290  1301 D AirplaneModeStats: Airplane mode change. Value: false
+09-26 09:45:00.010  1290  1301 D RILJ: [0062]> RADIO_POWER on = true [PHONE0]
+09-26 09:45:02.210  1290  1301 D RILJ: [0063]> SETUP_DATA_CALL apn=default [PHONE0]
+09-26 09:45:03.010  1290  1301 D RILJ: [0063]< SETUP_DATA_CALL error=NONE cid=<CELL#1> [PHONE0]
+09-26 09:45:03.110  1290  1301 I DNC-0: Internet data state changed from DISCONNECTED to CONNECTED.

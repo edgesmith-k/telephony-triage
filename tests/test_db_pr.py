@@ -37,21 +37,21 @@ def load_plan(name: str) -> dict:
 
 
 def radio_off_plan(key: str = "MOCK-7010") -> dict:
-    """p7-analyze-new-cause와 같은 유형·번호 자리에 다른 원인(RADIO_POWER_OFF)을 넣는 계획."""
+    """p7-analyze-new-cause와 같은 유형·번호 자리에 다른 원인(DATA_THROTTLED)을 넣는 계획."""
     plan = load_plan("p7-analyze-new-cause.plan.json")
     plan["jira"]["key"] = key
     cause = plan["operations"][0]["cause"]
     cause["title"] = "무선 꺼짐"
     cause["description"] = "무선이 꺼진 상태에서 데이터 평가가 거부됨"
     cause["signatures"][0]["id"] = "radio-off"
-    cause["signatures"][0]["must_event"][0]["fields"]["reasons"] = ".*RADIO_POWER_OFF.*"
+    cause["signatures"][0]["must_event"][0]["fields"]["reasons"] = ".*DATA_THROTTLED.*"
     plan["commit_message"] = f"[NEW-CAUSE-1] add {key}: 무선 꺼짐으로 평가 거부"
     plan["pr"]["branch"] = f"issue/{key}"
     return plan
 
 
 def radio_off_log() -> str:
-    return SIM_LOG.read_text(encoding="utf-8").replace("SIM_NOT_READY", "RADIO_POWER_OFF")
+    return SIM_LOG.read_text(encoding="utf-8").replace("SIM_NOT_READY", "DATA_THROTTLED")
 
 
 def front(text: str) -> dict:
@@ -498,7 +498,7 @@ def test_drift_resolution_parser_rule_and_allow_cause():
 
     # parser-rules: 이력 필드만 바뀌면 drift 아님, 기능 필드가 바뀌면 drift
     rule_op = {"op": "update-parser-rule", "file": "extractors.yaml", "key": "data-evaluation-allowed",
-               "rule": {"patterns": ["evaluation result:\\s*ALLOWED", "evaluation result:\\s*PERMITTED"],
+               "rule": {"patterns": ["Data allowed reason:\\s*[A-Z_]+", "Data permitted reason:\\s*[A-Z_]+"],
                         "reason": "문구 변형 추가", "added_on": "2026-10-01"}}
     ws.plan(job, _review_plan([rule_op], "review/data-2026-10"), base_sha=ws.main_sha())
     ws.push_main(lambda c: _edit(c / "parser-rules/extractors.yaml", "reason: 정상 동작(해결 후) 판별용",
@@ -506,13 +506,13 @@ def test_drift_resolution_parser_rule_and_allow_cause():
     ws.acquire(job)
     assert ws.stage(job, "review/data-2026-10")["drift"] == []
     ws.db_pr("discard", ws.wt(job))
-    ws.push_main(lambda c: _edit(c / "parser-rules/extractors.yaml", "'evaluation result:\\s*ALLOWED'",
-                                 "'evaluation result:\\s*ALLOWED\\b'"))
+    ws.push_main(lambda c: _edit(c / "parser-rules/extractors.yaml", "'Data allowed reason:\\s*[A-Z_]+'",
+                                 "'Data allowed reason:\\s*[A-Z_]+\\b'"))
     ws.acquire(job)
     out = ws.stage(job, "review/data-2026-10", expect=1)
     assert out["drift"][0]["op"] == "update-parser-rule"
-    assert out["drift"][0]["plan_value"] == {"patterns": ["evaluation result:\\s*ALLOWED",
-                                                          "evaluation result:\\s*PERMITTED"]}
+    assert out["drift"][0]["plan_value"] == {"patterns": ["Data allowed reason:\\s*[A-Z_]+",
+                                                          "Data permitted reason:\\s*[A-Z_]+"]}
     ws.db_pr("discard", ws.wt(job))
 
     # allow-cause 대상 fixture의 also_allowed를 main이 먼저 바꿈 → drift

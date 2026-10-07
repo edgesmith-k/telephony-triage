@@ -3,6 +3,7 @@
 name: DATA-001-02
 start: "2026-09-22T08:00:00+09:00"
 default_phone: 1
+phone_style: aosp
 pid: 1234
 tid: 1250
 build:
@@ -13,8 +14,8 @@ expect:
   occurred_at: "2026-09-22T08:05:00+09:00"
 entries:
   - {at: 0, tag: "SST-{phone}", msg: "onRoamingOn: roaming=true"}
-  - {after: 2, tag: "DSM-{phone}", msg: "isDataRoamingEnabled=false"}
+  - {after: 2, tag: "DSMGR-{phone}", msg: "DataRoamingEnabled changed to false"}
   - {after: 1, tag: "DNC-{phone}", level: I, msg: "onEvaluateNetworkRequests: reason=ROAMING_STATE_CHANGED"}
-  - {after: 0.5, tag: "DNC-{phone}", level: W, msg: "evaluation result: NOT_ALLOWED reasons=[ROAMING_DISABLED]"}
-  - {after: 10, tag: "DNC-{phone}", level: W, msg: "evaluation result: NOT_ALLOWED reasons=[ROAMING_DISABLED]"}
+  - {after: 0.5, tag: "DNC-{phone}", level: W, msg: "Data evaluation: evaluation reason:ROAMING_ENABLED_CHANGED, Data disallowed reasons: ROAMING_DISABLED, candidate profile=null"}
+  - {after: 10, tag: "DNC-{phone}", level: W, msg: "Data evaluation: evaluation reason:ROAMING_ENABLED_CHANGED, Data disallowed reasons: ROAMING_DISABLED, candidate profile=null"}
   - {after: 5, tag: "DRM-{phone}", msg: "no retry scheduled: setup not allowed"}

@@ -345,7 +345,7 @@ def test_broken_yaml_is_a_lint_finding_not_a_crash():
         result = json.loads(proc.stdout)
         assert [e["file"] for e in result["errors"] if e["code"] == "yaml-syntax"] == [rel], rel
         if rel.startswith(C):
-            assert result["summary"]["types"] == 6, "깨진 파일 하나가 나머지 검사를 막지 않는다"
+            assert result["summary"]["types"] == 7, "깨진 파일 하나가 나머지 검사를 막지 않는다"
         msg = next(e["message"] for e in result["errors"] if e["code"] == "yaml-syntax")
         assert msg[0].isdigit() and "행:" in msg and rel not in msg, msg          # 경로를 두 번 쓰지 않는다
         if rel.endswith("tags.yaml"):

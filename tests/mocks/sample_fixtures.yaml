@@ -16,6 +16,9 @@ fixtures:
   - {scenario: data-001-02-extra.yaml,        type_dir: data/DATA-001-no-setup-data-call,        name: DATA-001-02.extra.1,  kind: extra}
   - {scenario: data-001-none.yaml,            type_dir: data/DATA-001-no-setup-data-call,        name: DATA-001.none,    kind: negative}
   - {scenario: data-001-none-cross-slot.yaml, type_dir: data/DATA-001-no-setup-data-call,        name: DATA-001.none.2,  kind: negative}
+  - {scenario: data-001-01-teardown.yaml,     type_dir: data/DATA-001-no-setup-data-call,        name: DATA-001-01.extra.1, kind: extra}
+  - {scenario: data-002-01-apm.yaml,          type_dir: data/DATA-002-data-teardown-by-user-action, name: DATA-002-01,   kind: positive}
+  - {scenario: data-002-none.yaml,            type_dir: data/DATA-002-data-teardown-by-user-action, name: DATA-002.none, kind: negative}
 
   # --- call ---
   - {scenario: call-001-01-positive.yaml,     type_dir: call/CALL-001-volte-not-working,         name: CALL-001-01,      kind: positive}

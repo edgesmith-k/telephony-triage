@@ -54,7 +54,7 @@ THRESHOLDS = {
 }
 
 _STAMP = re.compile(r"^(\d\d)-(\d\d) (\d\d):(\d\d):(\d\d)\.(\d{3})  (\d+)  (\d+) ([VDIWEFA]) (.*)$")
-_NOISE_TAGS = ["DSM-0", "DPM-0", "DCM-0", "DSRM-0", "SST", "ImsManager"]
+_NOISE_TAGS = ["DSMGR-0", "DPM-0", "DCM-0", "DSRM-0", "SST", "ImsManager"]
 _NOISE_MSGS = ["periodic check ok", "heartbeat tick", "state unchanged", "poll complete", "cache refreshed"]
 _BASE = datetime(2026, 9, 21, 10, 0, 0, tzinfo=timezone.utc)
 _STEP_MS = 20  # 줄 사이 최소 간격 (시각이 줄 순서대로 늘도록)

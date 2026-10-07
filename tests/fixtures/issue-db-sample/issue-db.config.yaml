@@ -55,6 +55,7 @@ step_focus:                          # 04-parser-matching.md §5.11 (2): 실패 
 # 맞는 규칙이 없는 스텝은 관측 불가(건너뜀, 놓친 것으로 세지 않음). 아래는 placeholder 예시 — TODO(SITE:S22)
 # - {pattern: '(?i)(CP|모뎀|AT\s*cmd)', observable: false}
 # - {pattern: '(?i)(비행기|airplane).*(켜|\bon\b)',  match: '^ConnectivityService: setAirplaneMode enabled=true'}
+#   (AOSP 실제 흔적 예: `AirplaneModeStats: Airplane mode change. Value: true`)
 # - {pattern: '(?i)(비행기|airplane).*(끄|\boff\b)', match: '^ConnectivityService: setAirplaneMode enabled=false'}
 # - {pattern: '(?i)(망|network)\s*등록', ril: UNSOL_RESPONSE_NETWORK_STATE_CHANGED}
 # - {pattern: '(?i)데이터.*켜', event: data_setting_changed, fields: {enabled: '^true$'}}

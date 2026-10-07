@@ -3,11 +3,12 @@
 name: data-setup-error
 start: "2026-09-21T10:00:00+09:00"
 default_phone: 0
+phone_style: aosp
 pid: 1234
 tid: 1244
 entries:
-  - {at: 0, tag: "DSM-{phone}", msg: "isDataEnabled=true"}
-  - {after: 0.5, tag: "DNC-{phone}", level: I, msg: "evaluation result: ALLOWED reasons=[]"}
+  - {at: 0, tag: "DSMGR-{phone}", msg: "mIsDataEnabled=true, prevDataEnabled=false"}
+  - {after: 0.5, tag: "DNC-{phone}", level: I, msg: "Data evaluation: evaluation reason:NEW_REQUEST, Data allowed reason: NORMAL, candidate profile=null"}
   - {after: 0.3, ril_request: SETUP_DATA_CALL, serial: 51, args: "apn=default"}
   - {after: 1.1, ril_response: SETUP_DATA_CALL, serial: 51, result: "error=MISSING_UNKNOWN_APN"}
   - {after: 0.2, tag: "DN-default-2", level: W, msg: "onSetupResponse: fail cause=MISSING_UNKNOWN_APN"}

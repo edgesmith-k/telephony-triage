@@ -19,13 +19,13 @@
 | `issue-db-empty-category/` | sms·ims 유형을 뺀 변형. README의 0건 카테고리 표시 (Phase 5) |
 | `issue-db-pending/` | `signatures_pending` 원인 DATA-001-03과 그 양성 fixture. 회귀 기대값 `DATA-001:unresolved` (Phase 5) |
 | `issue-db-verify/` | 검증(Phase 10): CALL-001-01을 `fix-submitted`(빌드 있는 `fixed_in`)로 되돌리고 수정 후 fixture를 뺀 트리. 같은 증상의 다른 원인 CALL-001-02(망 거절 cause 31, scenario만 있음)와 그 양성 fixture가 있다 |
-| `issue-db-review/` | 월간 리뷰(Phase 11): §6.6 항목마다 걸리는 경우와 안 걸리는 경우(중복 유형 DATA-002, pending DATA-001-03, 낮은 수락률·수동 기록 피드백, 급증·과거 일괄 기록, `also_allowed` 누적 등). 목록은 `tests/helpers/make_variant_dbs.py`의 `REVIEW_CASES`, 시험은 `tests/test_db_review.py`(기준일 `--as-of 2026-10-20`). 방치 기간 항목은 git 이력이 필요해서 테스트가 날짜 지정 커밋으로 만든다 |
+| `issue-db-review/` | 월간 리뷰(Phase 11): §6.6 항목마다 걸리는 경우와 안 걸리는 경우(중복 유형 DATA-009, pending DATA-001-03, 낮은 수락률·수동 기록 피드백, 급증·과거 일괄 기록, `also_allowed` 누적 등). 목록은 `tests/helpers/make_variant_dbs.py`의 `REVIEW_CASES`, 시험은 `tests/test_db_review.py`(기준일 `--as-of 2026-10-20`). 방치 기간 항목은 git 이력이 필요해서 테스트가 날짜 지정 커밋으로 만든다 |
 | `issue-db-dup-id/` | 머지 간격으로 같은 ID(DATA-001-03 두 번)와 같은 Jira(MOCK-1101 두 곳)가 들어온 트리. 사후 lint 보고 (Phase 7) |
 | `verify-logs/` | **이슈 DB가 아니다.** `db_verify fix`·`resolution` 입력 로그(수정 후·재발·증상만 남음·시나리오 없음, 마스킹됨). 목록은 그 안의 `README.md` |
 
 ## 합성 샘플 이슈 DB (`issue-db-sample/`)
 
-- 카테고리 6개에 유형 1개씩, 원인 7개(DATA-001만 2개), Jira 기록 9건, 피드백 3건.
+- 카테고리 6개에 유형 7개(data만 DATA-001·002 2개), 원인 8개(DATA-001만 2개), Jira 기록 9건, 피드백 3건.
 - fixture는 모두 **합성**이다(`origin: synthetic`). `tests/mocks/scenarios/`의 시나리오에서
   `tests/helpers/make_sample_fixtures.py`가 만들고, **마스킹 함수를 거친 뒤** 쓴다(Phase 4). 목록은 `tests/mocks/sample_fixtures.yaml`.
   - 다시 만들기: `python3 tests/helpers/make_sample_fixtures.py`

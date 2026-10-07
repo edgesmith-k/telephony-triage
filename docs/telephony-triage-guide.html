@@ -295,8 +295,8 @@ html{scroll-behavior:smooth}
 - 분류 후보: data &gt; DATA-001 &gt; DATA-001-02 Roaming disabled (규칙 일치 점수 1.0, 신뢰도 높음)
 - 근거 로그 (마스킹, 슬롯 phone 1):
   - 08:00:00 SST-1 [PHONE1] onRoamingOn: roaming=true
-  - 08:00:02 DSM-1 [PHONE1] isDataRoamingEnabled=false
-  - 08:00:03 DNC-1 [PHONE1] evaluation result: NOT_ALLOWED reasons=[ROAMING_DISABLED]
+  - 08:00:02 DSMGR-1 DataRoamingEnabled changed to false
+  - 08:00:03 DNC-1 Data evaluation: … Data disallowed reasons: ROAMING_DISABLED
 - 로그 범위: 07:58 ~ 08:09 (발생 시각 포함), 시계 이상 없음
 - 해결책: 데이터 로밍 설정을 켠다      수정 상태: not-a-bug
 - 기존 사례: Jira 1건 (ABC-333)
@@ -714,20 +714,19 @@ note: 모바일 데이터 OFF 상태에서 접수됨
 
 <span class="c"># fixtures/DATA-001-02.log  (마스킹된 최소 logcat)</span>
 08:00:00.000 D SST-1: [PHONE1] onRoamingOn: roaming=true
-08:00:02.000 D DSM-1: [PHONE1] isDataRoamingEnabled=false
-08:00:03.500 W DNC-1: [PHONE1] evaluation result:
-               NOT_ALLOWED reasons=[ROAMING_DISABLED]
+08:00:02.000 D DSMGR-1: DataRoamingEnabled changed to false
+08:00:03.500 W DNC-1: Data evaluation: evaluation reason:ROAMING_ENABLED_CHANGED,
+               Data disallowed reasons: ROAMING_DISABLED, candidate profile=null
 
 <span class="c"># parser-rules/extractors.yaml</span>
 - id: data-evaluation-rejected
   tag_regex: '^DNC-\d+$'
   patterns:
-    - 'evaluation result:\s*NOT_ALLOWED
-       \s+reasons=\[(?P&lt;reasons&gt;[^\]]*)\]'
+    - 'Data disallowed reasons:\s*(?P&lt;reasons&gt;[A-Z_ ]+)'
   event: data_evaluation_rejected</code></pre>
 </div>
 </div>
-<p class="sub">로그 태그·문구는 사외에서 만든 placeholder입니다. 데이터 스택 태그 형식(<code>DNC-&lt;n&gt;</code>, <code>DSM-&lt;n&gt;</code> 등 Android 13+)만 확정이고, 실제 문구는 사내 S-4에서 바꿉니다.</p>
+<p class="sub">로그 태그·문구 중 data 외에는 사외에서 만든 placeholder입니다. 데이터 스택 태그 형식(<code>DNC-&lt;n&gt;</code>, <code>DSMGR-&lt;n&gt;</code> 등 Android 13+)와 data 문구의 AOSP 형식만 확정이고, 나머지 문구는 사내 S-4에서 바꿉니다.</p>
 </section>
 
 <!-- 08 -->

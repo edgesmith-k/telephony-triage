@@ -26,7 +26,7 @@ from runner import copy_db, edit, run, run_json, tmp, variant_db  # noqa: E402
 REVIEW_DB = variant_db("issue-db-review")
 AS_OF = "2026-10-20"
 DATA = "data/DATA-001-no-setup-data-call"
-DATA2 = "data/DATA-002-legacy-evaluation"
+DATA2 = "data/DATA-009-legacy-evaluation"
 
 
 def _review(db: Path, *extra: str) -> dict:
@@ -49,7 +49,7 @@ def _commit(repo: Path, when: str, message: str) -> None:
 
 
 def _dated_repo() -> Path:
-    """2026-06-01 커밋(DATA-002-02는 아직 open, DATA-001-02 해결책은 옛 문구) → 2026-10-10 커밋(최종 트리)."""
+    """2026-06-01 커밋(DATA-009-02는 아직 open, DATA-001-02 해결책은 옛 문구) → 2026-10-10 커밋(최종 트리)."""
     db = copy_db(REVIEW_DB)
     subprocess.run(["git", "-C", str(db), "init", "-q", "-b", "main"], check=True)
     data2 = db / DATA2 / "type.md"
@@ -70,20 +70,22 @@ def test_review_report_catches_every_planted_case():
     assert report["as_of"] == AS_OF and report["category"] is None and report["head"] is None
     assert _ids(report, "pending-signatures") == ["DATA-001-03"]
     # pending 원인은 "fixture 없는 원인"이 아니라 "시그니처 없는 원인"으로 센다
-    assert _ids(report, "no-fixture") == ["DATA-002-01", "DATA-002-02"]
+    assert _ids(report, "no-fixture") == ["DATA-009-01", "DATA-009-02"]
     assert _ids(report, "stale-unresolved", "jira") == ["MOCK-1105"]          # MOCK-1104(24일)는 아님
     low = _item(report, "low-acceptance")["entries"]
     assert [(e["signature"], e["accepted"], e["total"]) for e in low] == [("DATA-001-01/data-disabled", 2, 6)]
     dup = _item(report, "duplicate-candidates")["entries"]
-    assert [d["types"] for d in dup] == [["DATA-001", "DATA-002"]]
-    assert dup[0]["fixtures"] and dup[0]["title_similarity"] >= 0.8
+    # DATA-002-01(APM) fixture 하나가 DATA-001(평가 불허+SETUP 없음)·DATA-009 증상과도 동시에 걸려 DATA-002가 낀 후보 둘이 생긴다.
+    # 제목 유사도는 없다(title_similarity None). 사용자 데이터 OFF 표본(extra.1)은 must_not_match로 DATA-002 S=0이라 관여하지 않는다.
+    assert [d["types"] for d in dup] == [["DATA-001", "DATA-002"], ["DATA-001", "DATA-009"], ["DATA-002", "DATA-009"]]
+    assert dup[1]["fixtures"] and dup[1]["title_similarity"] >= 0.8  # 심은 중복 후보는 제목도 비슷하다
     # 지원 종료: 빈 android_versions(DATA-001-02 등)는 전 버전이라 제외
-    assert _ids(report, "unsupported-versions") == ["DATA-002-01"]
-    assert _ids(report, "stale-causes") == ["DATA-002-01"]
-    assert _ids(report, "no-trace-signatures") == ["DATA-002-02", "IMS-001-01", "SMS-001-01"]
-    assert _ids(report, "fix-fields-missing") == ["DATA-002-02"]
+    assert _ids(report, "unsupported-versions") == ["DATA-009-01"]
+    assert _ids(report, "stale-causes") == ["DATA-009-01"]
+    assert _ids(report, "no-trace-signatures") == ["DATA-009-02", "IMS-001-01", "SMS-001-01"]
+    assert _ids(report, "fix-fields-missing") == ["DATA-009-02"]
     assert _item(report, "fix-fields-missing")["entries"][0]["missing"] == ["ref", "fixed_in"]
-    assert _ids(report, "fix-submitted-no-build") == ["DATA-002-01"]
+    assert _ids(report, "fix-submitted-no-build") == ["DATA-009-01"]
     statement = {e["cause"]: e["sources"] for e in _item(report, "user-statement-only")["entries"]}
     assert statement == {"DATA-001-02": ["jira:MOCK-1103"], "DATA-001-03": ["method"]}
     assert _ids(report, "verification-failures") == ["CALL-001-01", "IMS-001-01"]
@@ -127,17 +129,17 @@ def test_stale_periods_come_from_git_history():
     unverified = _ids(report, "unverified-stale")
     # 2026-06-01부터 unverified → 141일 > 60일. DATA-001-02는 해결책이 2026-10-10에 바뀌어 10일째.
     # DATA-001-03은 pending이라 검증할 수 없으므로 뺀다.
-    assert "NETWORK-001-01" in unverified and "DATA-002-01" in unverified
+    assert "NETWORK-001-01" in unverified and "DATA-009-01" in unverified
     assert "DATA-001-02" not in unverified and "DATA-001-03" not in unverified
     assert _item(report, "unverified-stale")["undetermined"] == []
-    # fix-submitted: SIM-001-01·DATA-002-01은 2026-06-01부터, DATA-002-02는 2026-10-10에 들어감(10일)
-    assert _ids(report, "fix-submitted-stale") == ["DATA-002-01", "SIM-001-01"]
+    # fix-submitted: SIM-001-01·DATA-009-01은 2026-06-01부터, DATA-009-02는 2026-10-10에 들어감(10일)
+    assert _ids(report, "fix-submitted-stale") == ["DATA-009-01", "SIM-001-01"]
     entry = _item(report, "fix-submitted-stale")["entries"][1]
     assert (entry["since"], entry["days"]) == ("2026-06-01", 141)
-    # Jira 없는 DATA-002-02는 2026-06-01에 생겼으므로 12개월이 안 됐다. 1년 뒤에는 오래 안 쓰인 원인이다.
-    assert _ids(report, "stale-causes") == ["DATA-002-01"]
+    # Jira 없는 DATA-009-02는 2026-06-01에 생겼으므로 12개월이 안 됐다. 1년 뒤에는 오래 안 쓰인 원인이다.
+    assert _ids(report, "stale-causes") == ["DATA-009-01"]
     later = run_json("db_review.py", ["--db", db, "--as-of", "2027-07-01", "--json"])
-    assert "DATA-002-02" in _ids(later, "stale-causes")
+    assert "DATA-009-02" in _ids(later, "stale-causes")
     # 커밋 전 워킹 트리 변경으로 생긴 상태는 기간을 모른다
     edit(db / "network/NETWORK-001-no-service/type.md", "      status: open\n", "      status: fix-submitted\n")
     edit(db / "network/NETWORK-001-no-service/type.md", "      ref: null\n", "      ref: MOCKCL-22222\n")
@@ -155,7 +157,7 @@ def test_review_is_read_only_and_writes_markdown():
     text = out.read_text(encoding="utf-8")
     assert text.startswith("# 월간 리뷰 리포트 — data (2026-10-20)")
     assert "오너: @mock-org/telephony-data-owners" in text
-    assert "## 중복 후보" in text and "DATA-001 SETUP_DATA_CALL이 발생하지 않음 ↔ DATA-002" in text
+    assert "## 중복 후보" in text and "DATA-001 SETUP_DATA_CALL이 발생하지 않음 ↔ DATA-009" in text
     assert "수동 기록(`decision: manual`) 4건은 수락률에서 뺐다" in text
     status = subprocess.run(["git", "-C", str(db), "status", "--porcelain"], capture_output=True, text=True)
     assert status.stdout == ""
@@ -171,12 +173,12 @@ def test_stats_on_review_db():
     assert "> 기준일: 2026-10-18" in stats
     surge = stats.split("## 급증 원인", 1)[1].split("\n## ", 1)[0]
     assert "| NETWORK-001-01 | 3 |" in surge and "SMS-001-01" not in surge
-    assert "### 유형별" in stats and "| DATA-002 | SETUP_DATA_CALL 요청이 나가지 않음 | 1 |" in stats
+    assert "### 유형별" in stats and "| DATA-009 | SETUP_DATA_CALL 요청이 나가지 않음 | 1 |" in stats
     quality_section = stats.split("## 시그니처 품질", 1)[1].split("\n## ", 1)[0]
     assert "| `DATA-001-01/data-disabled` | 6 | 2 | 0.33 | 예 |" in quality_section
     checks = stats.split("## 품질 점검", 1)[1]
     assert "시그니처 없는 원인: 1 (DATA-001-03)" in checks
-    assert "fixture 없는 원인: 2 (DATA-002-01, DATA-002-02)" in checks
+    assert "fixture 없는 원인: 2 (DATA-009-01, DATA-009-02)" in checks
     assert "| 2026-10 | 7 | 3 |" in stats   # 기여 현황: 분석 7, 수동 기록 3
 
 

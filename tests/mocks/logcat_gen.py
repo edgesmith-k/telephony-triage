@@ -5,8 +5,9 @@
 출력을 낸다(난수 없음). 사외 초안의 모든 fixture는 이것으로 만든다.
 
 확정된 것과 placeholder
-- **데이터 스택 태그는 확정 형식**이다: `DNC-<n>`, `DN-…`, `DPM-<n>`,
-  `DRM-<n>`, `DSM-<n>`, `DCM-<n>`, `DSRM-<n>` (Android 13+, `14-site.md §14.1`).
+- **데이터 스택 태그는 확정 형식**이다: `DNC-<n>`, `DN-<id>-<C|I>`, `DPM-<n>`,
+  `DRM-<n>`, `DSMGR-<n>`, `DSM-<C|I>-<n>`, `DCM-<n>`, `DSRM-<n>`
+  (Android 13+, `14-site.md §14.1`).
 - 그 밖의 태그, 로그 문구, RIL 출력 형식, 슬롯 표기(`[PHONE<n>]`),
   bugreport 섹션 헤더는 **placeholder**다. 사내에서 S7·S9·S20·S21로 확인한다
   (`14-site.md §14.2`).
@@ -48,6 +49,7 @@ RADIO_TAG_PREFIXES = (
     "DN-",
     "DPM-",
     "DRM-",
+    "DSMGR-",
     "DSM-",
     "DCM-",
     "DSRM-",
@@ -65,6 +67,9 @@ RIL_UNSOL_FMT = "[UNSL]< {name}{args}"
 
 # TODO(SITE:S20) 슬롯 표기. 메시지 접두어는 사내 실제 형식으로 바꾼다.
 PHONE_PREFIX_FMT = "[PHONE{phone}] "
+# 시나리오 `phone_style: aosp` — AOSP 실제 형식: 데이터 스택은 태그 접미사만,
+# RILJ(`ril_*`)는 메시지 끝에 `[PHONE#]`. 기본 `prefix`는 위 접두어(placeholder).
+PHONE_SUFFIX_FMT = " [PHONE{phone}]"
 
 
 class ScenarioError(Exception):
@@ -107,6 +112,9 @@ class Generator:
         self.default_pid = int(scenario.get("pid", 1234))
         self.default_tid = int(scenario.get("tid", self.default_pid + 10))
         self.phone_prefix = bool(scenario.get("phone_prefix", True))
+        self.phone_style = scenario.get("phone_style", "prefix")
+        if self.phone_style not in ("prefix", "aosp"):
+            raise ScenarioError(f"알 수 없는 phone_style: {self.phone_style}")
         self.clock_offset = timedelta(0)
         self.cursor = 0.0  # start로부터의 초
         # (버퍼, 줄)을 **낸 순서 그대로** 쌓는다. 합친 파일은 이 순서를 쓰고
@@ -146,8 +154,12 @@ class Generator:
             return None if value is None else int(value)
         return self.default_phone
 
-    def _message(self, entry: dict, body: str, phone: int | None) -> str:
+    def _message(self, entry: dict, body: str, phone: int | None, ril: bool = False) -> str:
         msg = _render(body, phone, entry.get("serial"))
+        if self.phone_style == "aosp":
+            if ril and phone is not None and entry.get("phone_prefix", True):
+                msg += PHONE_SUFFIX_FMT.format(phone=phone)
+            return msg
         if self.phone_prefix and phone is not None and entry.get("phone_prefix", True):
             msg = PHONE_PREFIX_FMT.format(phone=phone) + msg
         return msg
@@ -162,7 +174,7 @@ class Generator:
             args = entry.get("args", "")
             args = f" {args}" if args else ""
             body = RIL_REQUEST_FMT.format(serial=serial, name=name, args=args)
-            self._emit(ts, entry, entry.get("tag", "RILJ"), self._message(entry, body, phone))
+            self._emit(ts, entry, entry.get("tag", "RILJ"), self._message(entry, body, phone, ril=True))
             return
 
         if "ril_response" in entry:
@@ -170,7 +182,7 @@ class Generator:
             serial = int(entry.get("serial", 1))
             result = entry.get("result", "error=NONE")
             body = RIL_RESPONSE_FMT.format(serial=serial, name=name, result=result)
-            self._emit(ts, entry, entry.get("tag", "RILJ"), self._message(entry, body, phone))
+            self._emit(ts, entry, entry.get("tag", "RILJ"), self._message(entry, body, phone, ril=True))
             return
 
         if "ril_unsol" in entry:
@@ -178,7 +190,7 @@ class Generator:
             args = entry.get("args", "")
             args = f" {args}" if args else ""
             body = RIL_UNSOL_FMT.format(name=name, args=args)
-            self._emit(ts, entry, entry.get("tag", "RILJ"), self._message(entry, body, phone))
+            self._emit(ts, entry, entry.get("tag", "RILJ"), self._message(entry, body, phone, ril=True))
             return
 
         if "tag" not in entry or "msg" not in entry:

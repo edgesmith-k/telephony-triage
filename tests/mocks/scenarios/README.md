@@ -8,6 +8,7 @@ name: DATA-001-01            # 기본 파일명 (--name으로 덮어쓸 수 있�
 start: "2026-09-20T14:30:00+09:00"   # 첫 줄의 시각
 default_phone: 0             # 슬롯 기본값. null이면 슬롯 표기 없음
 phone_prefix: true           # 메시지 앞에 [PHONE<n>] 을 붙인다 (TODO(SITE:S20))
+phone_style: prefix          # `aosp`: 접두어 없음, `ril_*` 줄 끝에 ` [PHONE<n>]` (AOSP 실제 형식)
 pid: 1234                    # 기본 pid
 tid: 1244                    # 기본 tid
 build:                       # --bugreport 로 감쌀 때 헤더에 들어간다
@@ -16,7 +17,7 @@ build:                       # --bugreport 로 감쌀 때 헤더에 들어간다
 expect:                      # 있으면 <name>.expect.yaml 을 함께 쓴다
   expect_top: DATA-001-01    # origin: synthetic 은 생성기가 항상 더한다
 entries:
-  - {at: 0,     tag: "DSM-{phone}", msg: "..."}
+  - {at: 0,     tag: "DSMGR-{phone}", msg: "..."}
   - {after: 2,  tag: "DNC-{phone}", msg: "...", level: W}
   - {after: 1,  ril_request: SETUP_DATA_CALL, serial: 41, args: "apn=<APN>"}
   - {after: 0.8, ril_response: SETUP_DATA_CALL, serial: 41, result: "error=OP_NOT_ALLOWED"}
@@ -42,8 +43,8 @@ entries:
 
 ## 확정된 것과 placeholder
 
-- **데이터 스택 태그는 확정 형식**이다: `DNC-<n>`, `DN-…`, `DPM-<n>`,
-  `DRM-<n>`, `DSM-<n>`, `DCM-<n>`, `DSRM-<n>` (Android 13+).
+- **데이터 스택 태그는 확정 형식**이다: `DNC-<n>`, `DN-<id>-<C|I>`, `DPM-<n>`,
+  `DRM-<n>`, `DSMGR-<n>`, `DSM-<C|I>-<n>`, `DCM-<n>`, `DSRM-<n>` (Android 13+).
   레거시 데이터 스택(DcTracker/DCT)은 쓰지 않는다.
 - 그 밖의 태그, 로그 문구, RIL 출력 형식(`[0041]> NAME`), 슬롯 메시지 접두어
   (`[PHONE0]`), bugreport 섹션 헤더는 **placeholder**다.
@@ -58,6 +59,9 @@ fixture가 되는지는 `tests/mocks/sample_fixtures.yaml`에 있고,
 | 파일 | 쓰임 | fixture |
 |---|---|---|
 | `data-001-01-positive.yaml` | DATA-001-01(데이터 설정 꺼짐) 양성. 슬롯 0 | `DATA-001-01.log` |
+| `data-001-01-teardown.yaml` | DATA-001-01 추가 표본: 연결 중 사용자 데이터 OFF → DN teardown → Internet CONNECTED→DISCONNECTED → 평가 불허. DATA-002 증상도 걸리지만 APM 흔적이 없다 | `DATA-001-01.extra.1.log` |
+| `data-002-01-apm.yaml` | DATA-002-01(비행기 모드) 양성. 실제 순서: Stats → SST powerOff → teardown-all → Internet DISCONNECTED → `RADIO_POWER on = false` | `DATA-002-01.log` |
+| `data-002-none.yaml` | 음성(비행기 모드 해제 후 재연결) | `DATA-002.none.log` |
 | `data-001-02-roaming.yaml` | DATA-001-02(로밍 꺼짐) 양성. 슬롯 1 | `DATA-001-02.log` |
 | `data-001-02-extra.yaml` | DATA-001-02 추가 표본 | `DATA-001-02.extra.1.log` |
 | `data-001-none.yaml` | 음성(정상 데이터 연결) | `DATA-001.none.log` |

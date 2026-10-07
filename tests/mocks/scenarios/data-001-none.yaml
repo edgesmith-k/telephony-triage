@@ -2,15 +2,16 @@
 name: DATA-001.none
 start: "2026-09-23T09:00:00+09:00"
 default_phone: 0
+phone_style: aosp
 pid: 1234
 tid: 1244
 expect:
   expect_top: none
 entries:
   - {at: 0, tag: "DCM-{phone}", msg: "carrier config loaded: carrierId=<CARRIER>"}
-  - {after: 1, tag: "DSM-{phone}", msg: "isDataEnabled=true"}
-  - {after: 0.5, tag: "DNC-{phone}", level: I, msg: "onEvaluateNetworkRequests: reason=NETWORK_REQUEST_ADDED"}
-  - {after: 0.2, tag: "DNC-{phone}", level: I, msg: "evaluation result: ALLOWED reasons=[]"}
+  - {after: 1, tag: "DSMGR-{phone}", msg: "mIsDataEnabled=true, prevDataEnabled=false"}
+  - {after: 0.5, tag: "DNC-{phone}", level: I, msg: "onEvaluateNetworkRequests: reason=NEW_REQUEST"}
+  - {after: 0.2, tag: "DNC-{phone}", level: I, msg: "Data evaluation: evaluation reason:NEW_REQUEST, Data allowed reason: NORMAL, candidate profile=null"}
   - {after: 0.3, ril_request: SETUP_DATA_CALL, serial: 41, args: "apn=default"}
   - {after: 0.9, ril_response: SETUP_DATA_CALL, serial: 41, result: "error=NONE cid=1"}
   - {after: 0.2, tag: "DN-default-1", level: I, msg: "onConnected: state=CONNECTED"}

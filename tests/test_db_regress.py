@@ -35,7 +35,7 @@ def _by_name(result) -> dict:
 
 def test_all_sample_fixtures_pass():
     result = _regress(SAMPLE, expect=0)
-    assert result["summary"]["total"] == 20 and result["summary"]["failed"] == 0
+    assert result["summary"]["total"] == 23 and result["summary"]["failed"] == 0
     rows = _by_name(result)
     assert rows["CALL-001-01.log"]["C"] == ["CALL-001-01", "IMS-001-01"]  # also_allowed로 통과
     assert rows["CALL-001-01.fixed.MOCKB77_U2_20260920.log"]["expect"] == "expect_not: CALL-001-01"
@@ -46,7 +46,7 @@ def test_broken_negative_fixture_reports_type_and_signature():
     db = copy_db()
     log = db / D / "fixtures/DATA-001.none.log"
     kept = [line for line in log.read_text(encoding="utf-8").splitlines(keepends=True) if "SETUP_DATA_CALL" not in line]
-    kept = [line.replace("evaluation result: ALLOWED reasons=[]", "evaluation result: NOT_ALLOWED reasons=[CONGESTED]")
+    kept = [line.replace("Data allowed reason: NORMAL", "Data disallowed reasons: CONGESTED")
             for line in kept]
     log.write_text("".join(kept), encoding="utf-8", newline="\n")
     proc = run("db_regress.py", ["--db", db, "--all"])
@@ -108,7 +108,7 @@ def test_changed_and_staged_scope():
     # parser-rules가 바뀌면 전체로 확장한다 (contracts.md §3.2 범위 확장 규칙)
     edit(repo / "parser-rules/ril.yaml", "reason: 초기}", "reason: 초기 (수정)}")
     expanded = _regress(repo, "--changed", "main", expect=0)
-    assert expanded["summary"]["expanded"] is True and expanded["summary"]["total"] == 20
+    assert expanded["summary"]["expanded"] is True and expanded["summary"]["total"] == 23
 
 
 def test_backend_mismatch_and_no_external_are_usage_errors():

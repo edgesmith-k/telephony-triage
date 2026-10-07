@@ -59,7 +59,7 @@ BEGINNING_PREFIX = "--------- "
 
 # 슬롯 기본 표기. 사내 값은 `platform.log.phone_id`로 덮어쓴다 (`platforms.load()`, 02-config.md).
 # 태그 접미사는 "이름-숫자" 한 마디만 본다(DN-17-C 같은 DataNetwork 태그는 슬롯이 아니다).
-TAG_PHONE_RE = re.compile(r"^[A-Za-z]+-(\d+)$")
+TAG_PHONE_RE = re.compile(r"^[A-Za-z]+(?:-[CI])?-(\d+)$")
 MSG_PHONE_PREFIX_RE = re.compile(r"^\[(?:PHONE|SUB)(\d+)\]\s?")
 MSG_PHONE_SUFFIX_RE = re.compile(r"\s?\[PHONE(\d+)\]$")
 

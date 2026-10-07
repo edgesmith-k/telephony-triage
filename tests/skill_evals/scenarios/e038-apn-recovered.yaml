@@ -7,7 +7,7 @@ tid: 1244
 entries:
   - {at: 0, tag: "DPM-{phone}", msg: "APN settings reset: data profiles updated"}
   - {after: 1, tag: "DNC-{phone}", msg: "onEvaluateNetworkRequests: reason=DATA_PROFILES_CHANGED"}
-  - {after: 0.5, tag: "DNC-{phone}", level: I, msg: "evaluation result: ALLOWED"}
+  - {after: 0.5, tag: "DNC-{phone}", level: I, msg: "Data evaluation: evaluation reason:NEW_REQUEST, Data allowed reason: NORMAL, candidate profile=null"}
   - {after: 0.5, ril_request: SETUP_DATA_CALL, serial: 38, args: "apn=<APN>"}
   - {after: 1, ril_response: SETUP_DATA_CALL, serial: 38, result: "error=NONE cid=1"}
   - {after: 1, tag: "DN-{phone}", msg: "data network connected: cid=1"}

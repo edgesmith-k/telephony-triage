@@ -1,8 +1,9 @@
 # 수집할 logcat 태그 (04-parser-matching.md §5.8 (2))
 #
-# 데이터 스택 태그는 Android 13+ 형식으로 **확정**이다: DNC-<n>, DN-…, DPM-<n>,
-# DRM-<n>, DSM-<n>, DCM-<n>, DSRM-<n>. 레거시 데이터 스택(DcTracker/DCT)은
-# 고려하지 않는다 (플러그인 레포 `docs/design/14-site.md §14.1`).
+# 데이터 스택 태그는 Android 13+ 형식으로 **확정**이다: DNC-<n>, DN-<id>-<C|I>,
+# DPM-<n>, DRM-<n>, DSMGR-<n>(DataSettingsManager), DSM-<C|I>-<n>(DataServiceManager),
+# DCM-<n>, DSRM-<n>. 레거시 데이터 스택(DcTracker/DCT)은 고려하지 않는다
+# (플러그인 레포 `docs/design/14-site.md §14.1`).
 #
 # 그 밖의 태그는 **placeholder**다 — TODO(SITE:S9). 사내 실제 logcat으로
 # 확인하고 바꾼다 (14-site.md §14.2).
@@ -13,7 +14,8 @@ tags:
   - {tag_regex: '^DN-.+$',     category: data, added_for: DATA-001, added_on: 2026-09-28, reason: 초기 (DataNetwork)}
   - {tag_regex: '^DPM-\d+$',   category: data, added_for: DATA-001, added_on: 2026-09-28, reason: 초기 (DataProfileManager)}
   - {tag_regex: '^DRM-\d+$',   category: data, added_for: DATA-001, added_on: 2026-09-28, reason: 초기 (DataRetryManager)}
-  - {tag_regex: '^DSM-\d+$',   category: data, added_for: DATA-001-01, added_on: 2026-09-28, reason: data enabled/disabled 판별 (DataSettingsManager)}
+  - {tag_regex: '^DSMGR-\d+$', category: data, added_for: DATA-001-01, added_on: 2026-09-28, reason: data enabled/disabled 판별 (DataSettingsManager)}
+  - {tag_regex: '^DSM-[CI]-\d+$', category: data, added_for: '-', added_on: 2026-10-07, reason: 데이터 서비스 요청·응답 (DataServiceManager)}
   - {tag_regex: '^DCM-\d+$',   category: data, added_for: DATA-001, added_on: 2026-09-28, reason: 초기 (DataConfigManager)}
   - {tag_regex: '^DSRM-\d+$',  category: data, added_for: DATA-001, added_on: 2026-09-28, reason: 초기 (DataStallRecoveryManager)}
 

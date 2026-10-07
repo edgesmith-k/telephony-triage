@@ -60,7 +60,7 @@
 - **원인 병합**: 옛 원인 `status: merged-into:<원인 ID>` + Jira `cause` 갱신.
 - 브랜치는 `move/<옛 ID>-to-<새 ID>`, 계획 `source: move`, op 조합은 `new-cause` → `add-fixture` → `set-status` → `reclassify`다.
   1. `new-cause`: 옛 원인 내용(제목·설명·시그니처·해결책·`resolution_type`·`android_versions`·`code_refs`)을 복사하고 `temp_id`를 붙인다.
-  2. `add-fixture`: `for`는 그 `temp_id`, `path`에 옛 fixture의 **이슈 DB 기준 경로**(예: `data/DATA-002-.../fixtures/DATA-002-01.log`)를 쓰면 새 원인 이름으로 복사된다.
+  2. `add-fixture`: `for`는 그 `temp_id`, `path`에 옛 fixture의 **이슈 DB 기준 경로**(예: `data/DATA-009-.../fixtures/DATA-009-01.log`)를 쓰면 새 원인 이름으로 복사된다.
   3. `set-status`: 옛 원인은 `merged-into:<temp_id>`, 유형 병합이면 옛 유형은 `merged-into:<유형 ID>`.
   4. `reclassify`: 옛 원인의 Jira마다 `from: <옛 원인 ID>`, `to: <temp_id>`. 파일이 새 유형 디렉토리로 옮겨진다.
      옛 유형의 원인 미확정 Jira는 `from: unresolved`, `to: <흡수하는 유형 ID>:unresolved`로 옮긴다(원인 미확정 그대로).

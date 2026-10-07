@@ -7,7 +7,9 @@
 #   금지한다 (08-safety.md §8).
 # - id는 시그니처가 참조하므로 바꾸지 않는다.
 #
-# 아래 로그 문구는 **placeholder**다 — TODO(SITE:S9). 사내 실제 logcat으로
+# data 문구는 AOSP 공개 소스(frameworks/opt/telephony data/ 의
+# DataSettingsManager·DataEvaluation·DataNetworkController) 형식이다.
+# 그 밖의 로그 문구는 **placeholder**다 — TODO(SITE:S9). 사내 실제 logcat으로
 # 확인하고 바꾼다 (14-site.md §14.2).
 
 extractors:
@@ -18,7 +20,7 @@ extractors:
     reason: 데이터 평가 거부 사유 추출
     tag_regex: '^DNC-\d+$'
     patterns:
-      - 'evaluation result:\s*NOT_ALLOWED\s+reasons=\[(?P<reasons>[^\]]*)\]'
+      - 'Data disallowed reasons:\s*(?P<reasons>[A-Z_ ]+)'
     event: data_evaluation_rejected
     fields: [reasons]
 
@@ -28,7 +30,7 @@ extractors:
     reason: 정상 동작(해결 후) 판별용
     tag_regex: '^DNC-\d+$'
     patterns:
-      - 'evaluation result:\s*ALLOWED'
+      - 'Data allowed reason:\s*[A-Z_]+'
     event: data_evaluation_allowed
     fields: []
 
@@ -36,11 +38,31 @@ extractors:
     added_for: DATA-001-01
     added_on: 2026-09-28
     reason: 모바일 데이터 설정 변경 판별
-    tag_regex: '^DSM-\d+$'
+    tag_regex: '^DSMGR-\d+$'
     patterns:
-      - 'onDataEnabledChanged:\s*enabled=(?P<enabled>true|false)(?:\s+reason=(?P<reason>\S+))?'
+      - 'notifyDataEnabledChanged:\s*enabled=(?P<enabled>true|false)(?:,\s*reason=(?P<reason>[A-Z_]+))?'
     event: data_setting_changed
     fields: [enabled, reason]
+
+  - id: data-internet-state-changed
+    added_for: DATA-002
+    added_on: 2026-10-07
+    reason: 인터넷 데이터 연결 상태 변화 (DataNetworkController.java)
+    tag_regex: '^DNC-\d+$'
+    patterns:
+      - 'Internet data state changed from (?P<from>[A-Z_]+) to (?P<to>[A-Z_]+)'
+    event: data_internet_state_changed
+    fields: [from, to]
+
+  - id: data-teardown-all
+    added_for: DATA-002-01
+    added_on: 2026-10-07
+    reason: 전체 데이터 네트워크 해제 사유 (DataNetworkController.java onTearDownAllDataNetworks)
+    tag_regex: '^DNC-\d+$'
+    patterns:
+      - 'onTearDownAllDataNetworks:\s*reason=(?P<reason>[A-Z_]+)'
+    event: data_teardown_all
+    fields: [reason]
 
   # --- call ---
   - id: ims-dial-attempt

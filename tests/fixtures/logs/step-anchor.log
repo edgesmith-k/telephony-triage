@@ -4,10 +4,10 @@
 09-20 14:30:36.000  1234  1244 W ImsRegistration: [PHONE0] onRegistrationFailed: code=403 reason=FORBIDDEN
 09-20 14:30:40.000  1234  1244 D TestRunner: Step 3 PASS
 09-20 14:33:00.000  1234  1244 D TestRunner: Step 5 START
-09-20 14:33:03.000  1234  1244 D DSM-0: [PHONE0] onDataEnabledChanged: enabled=false reason=USER
-09-20 14:33:04.000  1234  1244 D DSM-0: [PHONE0] isDataEnabled=false (user setting off)
+09-20 14:33:03.000  1234  1244 D DSMGR-0: [PHONE0] notifyDataEnabledChanged: enabled=false, reason=USER, callingPackage=com.android.settings
+09-20 14:33:04.000  1234  1244 D DSMGR-0: [PHONE0] UserDataEnabled changed to false
 09-20 14:33:06.000  1234  1244 I DNC-0: [PHONE0] onEvaluateNetworkRequests: reason=DATA_ENABLED_CHANGED
-09-20 14:33:07.000  1234  1244 W DNC-0: [PHONE0] evaluation result: NOT_ALLOWED reasons=[DATA_DISABLED]
-09-20 14:33:15.000  1234  1244 W DNC-0: [PHONE0] evaluation result: NOT_ALLOWED reasons=[DATA_DISABLED]
+09-20 14:33:07.000  1234  1244 W DNC-0: [PHONE0] Data evaluation: evaluation reason:DATA_ENABLED_CHANGED, Data disallowed reasons: DATA_DISABLED, candidate profile=null
+09-20 14:33:15.000  1234  1244 W DNC-0: [PHONE0] Data evaluation: evaluation reason:DATA_ENABLED_CHANGED, Data disallowed reasons: DATA_DISABLED, candidate profile=null
 09-20 14:33:30.000  1234  1244 D TestRunner: Step 5 FAIL
 09-20 14:34:00.000  1234  1244 D DRM-0: [PHONE0] no retry scheduled: setup not allowed

@@ -10,8 +10,8 @@ build:
   fingerprint: "mock/mocka56/a56:16/MOCKBUILD/MOCKA56_U1_20260915:user/release-keys"
   build: MOCKA56_U1_20260915
 entries:
-  - {at: 0, tag: "DSM-{phone}", msg: "onDataEnabledChanged: enabled=false reason=USER"}
-  - {after: 1, tag: "DNC-{phone}", level: W, msg: "evaluation result: NOT_ALLOWED reasons=[DATA_DISABLED]"}
+  - {at: 0, tag: "DSMGR-{phone}", msg: "notifyDataEnabledChanged: enabled=false, reason=USER, callingPackage=com.android.settings"}
+  - {after: 1, tag: "DNC-{phone}", level: W, msg: "Data evaluation: evaluation reason:DATA_ENABLED_CHANGED, Data disallowed reasons: DATA_DISABLED, candidate profile=null"}
   - {after: 1, tag: ActivityManager, buffer: main, msg: "모의 main 버퍼 줄"}
   - {after: 0.5, tag: SubscriptionManagerService, buffer: system, msg: "모의 system 버퍼 줄"}
   - {after: 1, ril_request: SETUP_DATA_CALL, serial: 41, args: "apn=default"}

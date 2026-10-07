@@ -54,7 +54,7 @@
         ],
         "code_refs": []
       },
-      "body": "- **로그 예시**:\n  ```\n  W DNC-0: [PHONE0] evaluation result: NOT_ALLOWED reasons=[NO_SUITABLE_DATA_PROFILE]\n  ```\n- **확인 방법**: DPM에서 SIM에 맞는 프로파일이 없다는 로그와 평가 거부 사유 NO_SUITABLE_DATA_PROFILE\n- **재현 시나리오**: 새 캐리어 SIM 삽입 → 데이터 사용\n- **해결책**: 캐리어 설정에 APN 프로파일 추가\n- **코드 위치**: 미확인\n- **비고**: 없음"
+      "body": "- **로그 예시**:\n  ```\n  W DNC-0: Data evaluation: evaluation reason:DATA_PROFILES_CHANGED, Data disallowed reasons: NO_SUITABLE_DATA_PROFILE, candidate profile=null\n  ```\n- **확인 방법**: DPM에서 SIM에 맞는 프로파일이 없다는 로그와 평가 거부 사유 NO_SUITABLE_DATA_PROFILE\n- **재현 시나리오**: 새 캐리어 SIM 삽입 → 데이터 사용\n- **해결책**: 캐리어 설정에 APN 프로파일 추가\n- **코드 위치**: 미확인\n- **비고**: 없음"
     },
     {
       "op": "add-fixture",

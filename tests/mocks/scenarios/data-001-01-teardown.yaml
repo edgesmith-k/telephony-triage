@@ -1,0 +1,22 @@
+# DATA-001-01 추가 표본: 연결된 상태에서 사용자가 모바일 데이터를 끈다.
+# 설정 OFF → DN teardown → Internet CONNECTED→DISCONNECTED → 평가 불허(DATA_DISABLED).
+# DATA-002 증상(Internet 연결이 끊김)도 걸리지만 APM 흔적이 없어 DATA-002-01은 C=0이다.
+# 문구는 AOSP 공개 소스 형식이다 (frameworks/opt/telephony data/).
+name: DATA-001-01.extra.1
+start: "2026-09-25T10:20:00+09:00"
+default_phone: 0
+phone_style: aosp
+pid: 1290
+tid: 1301
+build:
+  fingerprint: "mock/mocka56/a56:16/MOCKBUILD/MOCKA56_U1_20260920:user/release-keys"
+  build: MOCKA56_U1_20260920
+expect:
+  expect_top: DATA-001-01
+entries:
+  - {at: 0, tag: "DSMGR-{phone}", msg: "UserDataEnabled changed to false"}
+  - {after: 0.01, tag: "DSMGR-{phone}", msg: "notifyDataEnabledChanged: enabled=false, reason=USER, callingPackage=com.android.settings"}
+  - {after: 0.05, tag: "DN-17-C", level: I, msg: "ConnectedState: tearDownWhenConditionMet: reason=DATA_DISABLED, timeout=0ms."}
+  - {after: 0.3, tag: "DNC-{phone}", level: I, msg: "Internet data state changed from CONNECTED to DISCONNECTED."}
+  - {after: 0.2, tag: "DNC-{phone}", level: W, msg: "Data evaluation: evaluation reason:DATA_ENABLED_CHANGED, Data disallowed reasons: DATA_DISABLED, candidate profile=null"}
+  - {after: 12, tag: "DNC-{phone}", level: W, msg: "Data evaluation: evaluation reason:NEW_REQUEST, Data disallowed reasons: DATA_DISABLED, candidate profile=null"}

@@ -6,6 +6,6 @@
 09-22 12:00:02.400  1234  1244 D RILJ: [PHONE0] [0042]> DEACTIVATE_DATA_CALL
 09-22 12:00:14.400  1234  1244 D RILJ: [PHONE0] [0042]< DEACTIVATE_DATA_CALL error=NONE
 09-22 12:00:15.400  1234  1244 D RILJ: [PHONE1] [0043]> SEND_SMS
-09-22 12:00:35.400  1234  1244 I DNC-1: [PHONE1] evaluation result: ALLOWED reasons=[]
-09-22 12:00:55.400  1234  1244 I DNC-0: [PHONE0] evaluation result: ALLOWED reasons=[]
+09-22 12:00:35.400  1234  1244 I DNC-1: [PHONE1] Data evaluation: evaluation reason:NEW_REQUEST, Data allowed reason: NORMAL, candidate profile=null
+09-22 12:00:55.400  1234  1244 I DNC-0: [PHONE0] Data evaluation: evaluation reason:NEW_REQUEST, Data allowed reason: NORMAL, candidate profile=null
 09-22 12:00:56.400  2345  2345 D RILJ: [PHONE1] [0043]< SEND_SMS error=NONE

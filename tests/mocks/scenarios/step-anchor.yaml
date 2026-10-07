@@ -17,10 +17,10 @@ entries:
   - {at: 36, tag: ImsRegistration, level: W, msg: "onRegistrationFailed: code=403 reason=FORBIDDEN"}
   - {at: 40, tag: TestRunner, phone: null, msg: "Step 3 PASS"}
   - {at: 180, tag: TestRunner, phone: null, msg: "Step 5 START"}
-  - {at: 183, tag: "DSM-{phone}", msg: "onDataEnabledChanged: enabled=false reason=USER"}
-  - {at: 184, tag: "DSM-{phone}", msg: "isDataEnabled=false (user setting off)"}
+  - {at: 183, tag: "DSMGR-{phone}", msg: "notifyDataEnabledChanged: enabled=false, reason=USER, callingPackage=com.android.settings"}
+  - {at: 184, tag: "DSMGR-{phone}", msg: "UserDataEnabled changed to false"}
   - {at: 186, tag: "DNC-{phone}", level: I, msg: "onEvaluateNetworkRequests: reason=DATA_ENABLED_CHANGED"}
-  - {at: 187, tag: "DNC-{phone}", level: W, msg: "evaluation result: NOT_ALLOWED reasons=[DATA_DISABLED]"}
-  - {at: 195, tag: "DNC-{phone}", level: W, msg: "evaluation result: NOT_ALLOWED reasons=[DATA_DISABLED]"}
+  - {at: 187, tag: "DNC-{phone}", level: W, msg: "Data evaluation: evaluation reason:DATA_ENABLED_CHANGED, Data disallowed reasons: DATA_DISABLED, candidate profile=null"}
+  - {at: 195, tag: "DNC-{phone}", level: W, msg: "Data evaluation: evaluation reason:DATA_ENABLED_CHANGED, Data disallowed reasons: DATA_DISABLED, candidate profile=null"}
   - {at: 210, tag: TestRunner, phone: null, msg: "Step 5 FAIL"}
   - {at: 240, tag: "DRM-{phone}", msg: "no retry scheduled: setup not allowed"}
