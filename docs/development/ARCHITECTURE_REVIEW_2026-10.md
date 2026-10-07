@@ -26,6 +26,28 @@
 
 R1~R11은 완료.
 
+## 반입 전 리뷰(10/07) 남은 항목
+
+`docs/development/REVIEW_2026-10-07.md`의 R-1~R-35는 V1~V7에서 완료(`REVIEW_FIX_PLAN_2026-10.md §4`). 반입 뒤로 넘긴 것은 그 문서의 "권고(반입 뒤)"·"보류/기각" 절에 위치·제안이 있다.
+
+| 항목 | 언제 |
+|---|---|
+| R-36 작업 상태 JSON 원자 쓰기·손상 처리 | 반입 뒤 |
+| R-37 `db_build --verify` 지워진 카테고리 README | 반입 뒤 |
+| R-38 중복 로직 통합(git 래퍼·`UsageError`·`SITE_PATHS` 로더·`_db`) | 사내 첫 안정 뒤 |
+| R-39 파서 후속(RIL pid 교대, `cut`·`coverage` 백엔드 우회 등) | S-4a·S10 뒤 |
+| R-40 성능(결합 O(N×M), parse 출력 크기, find-symbol walk, DB YAML 로드 0.69~1.09s·`source_hash` 전체 읽기 — V7 측정) | 사내 로그·DB 크기로 재측정 뒤 |
+| R-41 offline_eval 지표 정의 | S-5 |
+| R-42 사용자 clone 변경 Bash 경로 + guard `git -c alias.x=push`·표 밖 래퍼(`eval`·`su -c` 등) | 사내 사용 패턴 본 뒤 |
+| R-43 setup read_tools 축소 | S-3 |
+| R-44 analyze 질문 수 | 사내 파일럿 뒤 |
+| R-45 문서 구조(write-flow §4 → contracts, `triage.py` 표 셀) | 급하지 않음 |
+| R-46 drift 검사 확장·`analysis.schema.json` 닫기 | 사내 문서 변경 시작 뒤 |
+| R-47 테스트 속도(`Workspace()` 템플릿) | 사내 CI 기준 뒤 |
+| V 후속: S-7 pack 40.8KB 축소, `import_draft` zip 직접 입력, `triage.py run` mode가 `--dry-run`에도 `write`, eval 45 "extract-bugreport" 단언 문구, 다중 파일 연도는 경고만(D2), `default_buffer`·unparsed 50% 설정화(S21·S7) | 반입 뒤 |
+| 버전·빌드별 로그 형식(10/07 위임 결정): 형식 너그럽게(선택 필드·섹션 헤더 패턴 목록)는 S-0에서 실제 차이(`s0_stats`·`S0_PROBE_CHECKLIST`)를 본 뒤. 빌드별 로그 프로필(`platform.log` 조건 목록, 선택 키는 bugreport `build.json` fingerprint)은 `platform:` 한 벌이 안 맞을 때만(RF-4 잔여). Jira 버전 불일치 원인의 **순위 내리기는 안 함**(기본 `android_versions: []`라 거의 안 발동, 새 버전의 진짜 일치를 내리는 역효과) — 표시는 반입 전에 함 | S-0 뒤 |
+| 보류: A2 setup stdio MCP 직접 실행(S-2 뒤), A3 외부 파서 어댑터 층(S-4a 뒤), A7 `failedstep` 다중 형식(S22 뒤), A13 `fix_exec_bits.py`, B7 wheelhouse(사내 반입 규정) | 표시한 단계 뒤 |
+
 ## 인용되는 결정
 
 - **RF-2**: 경계 검사 규칙 a~d와 반입 절차의 근거 (위 표).

@@ -16,8 +16,8 @@
 
 ## 진행 상태 (10/07)
 
-- 모드: **사외 초안**. Phase **D0, 1~13** 완료. 반입 전 보강 트랙(S1~S6·I1~I5·X·3C~3F)과 개선 트랙 **W0~W12** 완료, main 병합(PR #8·#9).
-- 마지막 전체 테스트: 984 통과(Windows, 환경 실패 4), CI Ubuntu Py3.11·3.14 통과 (10/07, PR #9).
+- 모드: **사외 초안**. Phase **D0, 1~13** 완료. 반입 전 보강 트랙(S1~S6·I1~I5·X·3C~3F)과 개선 트랙 **W0~W12**, 반입 전 리뷰(10/07) 수정 트랙 **V1~V7·V 끝** 완료, main 병합(PR #8·#9·#11~#19).
+- 마지막 전체 테스트: 1045 통과(Windows, 환경 실패 4), `db_regress --all` 20/20, CI Ubuntu Py3.11·3.14 통과 (10/07, V 끝).
 - 사내 확인 항목: `TODO(SITE)` **73곳** — `python3 tools/list_site_todos.py`. `REVIEW-OPEN.md` 0건.
 - 사내 S 단계 시작: `python3 tools/context_pack.py S-n`(표 `docs/tasks.md`).
 - 안내서(사람용 HTML): `docs/telephony-triage-guide.html` (공유본 https://claude.ai/artifact/1jov1Et4dQUMauFr6aoxWG)
@@ -26,13 +26,12 @@
 
 | ☐ | 항목 | 메모 |
 |---|---|---|
-| ☐ V | **리뷰 수정 트랙 V1~V7** (10/07 리뷰 `docs/development/REVIEW_2026-10-07.md` 차단 1·반입 전 34) | "**리뷰 수정 진행**" → `docs/development/REVIEW_FIX_PLAN_2026-10.md §3`. W 끝은 V 끝과 합침 |
-| ☐ W 끝 | **eval 범위 — 결정 (i)로 확정, 아래 옛 메모는 후보 목록으로만** | ① 전체 재실행 생략, 영향 미확인 eval(W2: 9·18·20~23·26·31·54, W3: 21·22·26·27·33, W4: 42·45)도 사내 S-2 전체 재실행으로(추천) ② 영향 미확인 + W11 영향(39·58) 약 15개만 지금(`tests/skill_evals/run.py --execute`, `claude -p`, 전체의 1/3 비용). W10(동작 동일)·W12(문서)는 영향 없음 |
 | ☐ Z | **반입 묶음** | 최신 main에서 **Ubuntu로** 먼저 `plugin.json` description에서 "사외 초안"을 빼는 커밋(도구가 첫 검사로 막는다) → `python3 tools/make_bundle.py --label <이름>`(정상 종료 3) → 사람 확인 3건(§15.4: 회사명 검색·TODO 목록·이 파일 최신) → 도구가 출력한 명령으로 사용자가 태그 push. Windows는 환경 실패로 자동 검사가 실패한다 |
+| ☐ R | **사용자 선택** — `12-principles.md` "사용자 clone 예외는 migrate뿐" vs renumber(06 §6.3) 어긋남: (a) 예외에 renumber 추가(추천) / (a') 원칙을 도구 자동 쓰기로 한정 / (b) 06 안내 수정. 코드 변경 없음(V6이 renumber에 브랜치·깨끗함 검사 추가) | 반입 직전 |
 | ☐ 2 | **사용자 확인** — 10/04~05 작업(4a·R8·테스트 DB·검사 통합·4b·step_order·보안·R11·R9·RF-2, `CHANGES.md` 10/04~05 절) | 반입 직전에 한꺼번에 |
 
-반입 뒤 후보: RF-5(oFono)·RF-6(커넥터)·RF-8(자동화)은 사내 환경을 알아야 의미가 있다. RF-9·웹 UI(보류)는 그 뒤. 색인 `docs/development/ARCHITECTURE_REVIEW_2026-10.md`.
-사내로 넘긴 것: 행동 eval 전체(`evals.json`, S-2), db-authoring 스키마 요약 확장(S-2, 스키마 Read 횟수로 판단), 운영 DB 스키마 `pr.ids` 반영(S-3, 뼈대에서), 사내 마켓플레이스 소스 유형 확인 → version 규칙(S-2·S-7, V2에서 `plugin.json` version 삭제 = 커밋 SHA 기준. 반입 직후 캐시 1회 무효화는 무해). V 이후 후보: `import_draft` zip 직접 입력, S-7 pack 40.8KB 축소(R-28과 같은 방식), guard `git -c alias.x=push`·표 밖 래퍼(`eval`·`su -c` 등) 우회(R-42와 함께), analyze `--dry-run`도 Step 7 계획·확인 화면까지 가라는 SKILL 한 줄(V4 eval 43에서 Sonnet이 건너뜀, iteration-1은 통과).
+반입 뒤 후보: RF-5(oFono)·RF-6(커넥터)·RF-8(자동화)은 사내 환경을 알아야 의미가 있다. RF-9·웹 UI(보류)는 그 뒤. 10/07 리뷰의 R-36~R-47·V 후속도 같은 색인 `docs/development/ARCHITECTURE_REVIEW_2026-10.md`.
+사내로 넘긴 것: 행동 eval 전체(`evals.json`, S-2), db-authoring 스키마 요약 확장(S-2, 스키마 Read 횟수로 판단), 운영 DB 스키마 `pr.ids` 반영(S-3, 뼈대에서), 사내 마켓플레이스 소스 유형 확인 → version 규칙(S-2·S-7, V2에서 `plugin.json` version 삭제 = 커밋 SHA 기준. 반입 직후 캐시 1회 무효화는 무해).
 
 ## 사외에서는 못 하는 것 (사내 S-1~S-5)
 
