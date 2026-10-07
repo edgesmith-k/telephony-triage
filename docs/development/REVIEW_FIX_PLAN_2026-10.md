@@ -73,6 +73,6 @@
 | ✅ | V5 | ✅ 완료(10/07) | v/V5-s0-parser · 커밋 `V5: …` | R-9~14. 위임 결정 D1~D11(D11 스냅샷 변경 없어 중단 없음). 리뷰(Opus) 권고 4 반영(`-L` 섹션 건너뜀, 단일 파일 경고, 11→1월 한계 문서화, 빈 파일 문구). 전체 1030 통과·4 실패(환경), fixtures·스냅샷 불변, eval 0 |
 | ✅ | V6 | ✅ 완료(10/07) | v/V6-core-errors · 커밋 `V6: …` | R-15~18. 위임 결정 D1~D4·D6 (a), D5 (b) 12-principles 미변경. 리뷰(Opus) 권고 A1~A8 반영(같은 뿌리 traceback 3곳 포함, A9 보류). 전체 1046 통과·4 실패(환경), eval 0(V 끝 후보 16). **사용자 선택 대기**: 12-principles "유일한 예외 migrate" vs renumber(06 §6.3) 어긋남 — (a) 예외에 renumber 추가 / (a') 원칙을 도구 자동 쓰기로 한정 / (b) 06 안내 수정, 코드 변경 없음 |
 | ✅ | V7 | ✅ 완료(10/07) | v/V7-cleanup · 커밋 `V7: …` | R-32~35. 위임 결정 D1~D8(D6 매칭 캐시 삭제 = DRAFT_NOTES (j)). 리뷰(Fable) 권고 반영(남은 캐시 문구, `related_tests` 삭제 파일 가드). +256/−417, 생성물 81파일 바이트 동일. 전체 1044 통과·4 실패(환경), eval 58 6/6 |
-| ☐ | V 끝 | 대기 | | 전체 테스트·eval(결정 (i) 최소)·색인 → Z |
+| ✅ | V 끝 | ✅ 완료(10/07) | v/V-end · 커밋 `V 끝: …` | 전체 1045 통과·4 실패(환경), `db_regress --all` 20/20(임시 플러그인 루트), check_boundary·sync_schemas·gen_contracts 통과. eval(결정 (i), Fable 선정) 22·26·42·45 통과 — 22가 dry-run Step 7 경로 통과해 V4 eval 43은 모델 변동으로 종결. R-36~R-47·V 후속·버전별 로그는 `ARCHITECTURE_REVIEW_2026-10.md` 색인 |
 
 상태 값은 W와 같다(`IMPROVEMENT_PLAN_2026-10.md §7` 끝).
