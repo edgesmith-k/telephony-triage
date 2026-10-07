@@ -26,7 +26,7 @@
 
 | ☐ | 항목 | 메모 |
 |---|---|---|
-| ☐ L | **실제 로그 반영 트랙 L1~L3** (10/07 사용자 승인: 샘플 DB 규칙·fixture 정정, 스냅샷 재생성, data on/off·APM 원인·유형 추가) | 자료는 **레포 밖** `%LOCALAPPDATA%/tt-ltrack/`(findings·plan·decisions·r-results·deny.txt — 벤더 문구 있음, 레포 금지). R1~R4 완료. 시작 문구 "**실제 로그 반영 진행**" — 진행 방식은 V와 같다(`REVIEW_FIX_PLAN_2026-10.md §1·§3`: Opus 계획 → Fable 결정 → 실행 → 교차 리뷰 → 테스트 → Fable 승인 → CI 통과 시 병합). **L1 완료**(AOSP 형식 정정·DATA-002 APM, 10/07, 리뷰 반영·전체 테스트 통과; eval 40·44 재실행과 `log-tags.md` skill-creator eval은 대기). 다음: L3 `tools/s0_suggest.py` → L2 벤더 RIL serial 연결(token=serial 100% 확인). 커밋 전마다 `git diff main... \| grep -iFf deny.txt` 0줄. DATA-002 이름·정의·새 extractor 2건·14-site §14.1 정정은 사용자 승인(10/07) |
+| ☐ L | **실제 로그 반영 트랙 L1~L3** (10/07 사용자 승인: 샘플 DB 규칙·fixture 정정, 스냅샷 재생성, data on/off·APM 원인·유형 추가) | 자료는 **레포 밖** `%LOCALAPPDATA%/tt-ltrack/`(findings·plan·decisions·r-results·deny.txt — 벤더 문구 있음, 레포 금지). R1~R4 완료. 시작 문구 "**실제 로그 반영 진행**" — 진행 방식은 V와 같다(`REVIEW_FIX_PLAN_2026-10.md §1·§3`: Opus 계획 → Fable 결정 → 실행 → 교차 리뷰 → 테스트 → Fable 승인 → CI 통과 시 병합). **L3 `tools/s0_suggest.py` 구현·테스트 완료(10/07, 리뷰 대기; 실제 로그 확인·`platforms.load` 수용 검증은 L2 뒤)**. **L1 완료**(AOSP 형식 정정·DATA-002 APM, 10/07, 리뷰 반영·전체 테스트 통과; eval 40·44 재실행과 `log-tags.md` skill-creator eval은 대기). 다음: L2 벤더 RIL serial 연결(token=serial 100% 확인). L2: s0_suggest 초안이 `platforms.load`에 수용되는지 테스트 추가. 커밋 전마다 `git diff main... \| grep -iFf deny.txt` 0줄. DATA-002 이름·정의·새 extractor 2건·14-site §14.1 정정은 사용자 승인(10/07) |
 | ☐ G | **범용판 별도 레포** (10/07 사용자 지시) | L 트랙 끝난 뒤. **로컬 새 레포**(원격 없음), 범위 = 도메인 중립 코어(이슈 DB·시그니처 엔진·PR 흐름·안전장치, 카테고리·예약 이벤트는 설정으로) + 동작 확인용 최소 예제 팩 1개. 시작은 결합 지점 조사(`plugin/scripts`에서 platforms 밖 Android·RIL 참조 약 30파일) → 분리 설계 확인 → 이전. 이 레포는 바꾸지 않는다 |
 | ☐ Z | **반입 묶음** | 최신 main에서 **Ubuntu로** 먼저 `plugin.json` description에서 "사외 초안"을 빼는 커밋(도구가 첫 검사로 막는다) → `python3 tools/make_bundle.py --label <이름>`(정상 종료 3) → 사람 확인 3건(§15.4: 회사명 검색·TODO 목록·이 파일 최신) → 도구가 출력한 명령으로 사용자가 태그 push. Windows는 환경 실패로 자동 검사가 실패한다 |
 | ☐ R | **사용자 선택** — `12-principles.md` "사용자 clone 예외는 migrate뿐" vs renumber(06 §6.3) 어긋남: (a) 예외에 renumber 추가(추천) / (a') 원칙을 도구 자동 쓰기로 한정 / (b) 06 안내 수정. 코드 변경 없음(V6이 renumber에 브랜치·깨끗함 검사 추가) | 반입 직전 |
@@ -58,4 +58,4 @@
 - (h) W11 보류 3건(위임 결정, 10/07): 파생 이벤트 `msg` 복사 제거 폐기, Windows 보정 유지, db-authoring 스키마 요약은 사내 S-2.
 - (i) eval은 변경과 관련된 최소만 사외에서 돌린다: 각 VP는 바꾼 스킬·흐름의 eval만, V 끝은 W 영향 미확인 목록 중 아직 관련 있는 것만 골라서. 전체 재실행은 사내 S-2. (10/07, 사용자)
 - (j) 매칭 컴파일 캐시(`.cache/compiled.json`)를 삭제한다: 240유형·3.5k Jira에서 DB 로드(0.69~1.09s)에 캐시 hit 판정(+0.35~0.67s)이 더해질 뿐 컴파일은 1ms, 해시가 플러그인 코드를 보지 않아 판정을 캐시 파일에 좌우시켰다. `source_hash`(분석 재사용)·`.cache/` 커밋 차단은 유지. (10/07, 위임 결정, V7)
-- 사내 로그가 모의와 다를 때 가장 먼저: `docs/development/S0_PROBE_CHECKLIST.md` + `tools/s0_stats.py`.
+- 사내 로그가 모의와 다를 때 가장 먼저: `docs/development/S0_PROBE_CHECKLIST.md` + `tools/s0_stats.py`, 설정 초안은 `tools/s0_suggest.py`(사내 전용 출력).
