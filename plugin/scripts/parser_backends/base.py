@@ -52,7 +52,8 @@ class ParserBackend(ABC):
         그 줄 레코드의 값을 그대로 가진다. 줄 위치를 줄 수 없는 백엔드는 `None`을 줘도 된다(`postprocess`가 빠진 키를
         `None`으로 채운다). 경로·본문은 넣지 않는다 (04-parser-matching.md §5.8 (6)).
         레코드 형식·검사: `common/events.py` (`Event`, `validate_event`).
-        RIL 페어링은 윈도우를 자르기 **전에** 파일 전체로 한다."""
+        RIL 페어링은 윈도우를 자르기 **전에** 파일 전체로 한다. `parse`를 직접 구현하는 site 백엔드는 페어링 뒤
+        `platforms.android.ril.link_vendor`(설정 `platform.ril.vendor`가 있을 때)도 불러야 reference와 출력이 같다."""
 
     @abstractmethod
     def builtin_events(self) -> list[str]:

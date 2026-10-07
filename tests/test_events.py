@@ -111,6 +111,7 @@ BAD = {
     "ril on named event": _good(source="backend:r", event="builtin.a.b", ril=_ril()),
     "unknown ril key": _good(ril={**_ril(), "extra": 1}),
     "ril key order": _good(ril=dict(reversed(list(_ril().items())))),
+    "hal before observed_until": _good(ril={**_ril(), "hal": "reached", "observed_until": "t"}),
     "bad ts": _good(ts="2026-09-20 05:30:03"),
     "ts without ms": _good(ts="2026-09-20T05:30:03Z"),
     "msg None": _good(msg=None),
@@ -121,6 +122,12 @@ BAD = {
 @pytest.mark.parametrize("name", list(BAD))
 def test_bad_events_flagged(name):
     assert events.validate_event(copy.deepcopy(BAD[name])), name
+
+
+def test_ril_optional_tail_keys_ok():
+    """벤더 RIL 층 `hal`: 응답 레코드엔 `observed_until`이 없으므로 꼬리 4가지를 모두 허용한다."""
+    for tail in ({}, {"observed_until": "t"}, {"hal": "reached"}, {"observed_until": "t", "hal": "unknown"}):
+        assert events.validate_event(_good(ril={**_ril(), **tail})) == [], tail
 
 
 def test_validate_events_prefix():

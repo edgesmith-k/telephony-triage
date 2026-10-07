@@ -37,6 +37,7 @@ class PlatformProfile:
     phone: logcat.PhoneIdRules
     ril_tags: frozenset
     bugreport: bugreport.BugreportRules
+    ril_vendor: ril.VendorRules | None = None   # 선택 `platform.ril.vendor`. None이면 출력이 이전과 같다
 
 
 def default(name: str = "android") -> PlatformProfile:
@@ -132,17 +133,61 @@ def _phone_rules(raw, base: str) -> logcat.PhoneIdRules:
     return logcat.PhoneIdRules(fields["tag"], fields["msg_prefix"], fields["msg_suffix"])
 
 
+def _tag(value, path: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise _err(path, "비어 있지 않은 문자열이어야 합니다.")
+    return value
+
+
 def _ril_tags(raw, base: str) -> frozenset:
-    node = _mapping(raw, base, ("tags",))
+    node = _mapping(raw, base, ("tags", "vendor"))
     if "tags" not in node:
         return frozenset(ril.RIL_TAGS)
     path = f"{base}.tags"
-    tags = []
-    for i, tag in enumerate(_list(node["tags"], path, non_empty=False)):
-        if not isinstance(tag, str) or not tag.strip():
-            raise _err(f"{path}[{i}]", "비어 있지 않은 문자열이어야 합니다.")
-        tags.append(tag)
-    return frozenset(tags)
+    return frozenset(_tag(t, f"{path}[{i}]") for i, t in enumerate(_list(node["tags"], path, non_empty=False)))
+
+
+def _no_ril_tag(tag: str, path: str, ril_tags: frozenset) -> str:
+    # 벤더 줄이 RIL로 해석되면 pair()의 pid 분할이 RILJ 짝을 깬다.
+    if tag in ril_tags:
+        raise _err(path, f"platform.ril.tags와 겹칩니다: {tag}")
+    return tag
+
+
+def _ril_vendor(raw, base: str, ril_tags: frozenset) -> ril.VendorRules | None:
+    """`platform.ril.vendor`: `layers`(필수)·`link_ms`(기본 2000)·`coverage_tags`(기본 없음)."""
+    node = _mapping(raw, base, ("tags", "vendor"))
+    if node.get("vendor") is None:
+        return None
+    at = f"{base}.vendor"
+    spec = _mapping(node["vendor"], at, ("link_ms", "layers", "coverage_tags"))
+    if "layers" not in spec:
+        raise _err(at, "'layers'가 필요합니다.")
+    link = spec.get("link_ms", ril.DEFAULT_LINK_MS)
+    if not isinstance(link, int) or isinstance(link, bool) or link <= 0:
+        raise _err(f"{at}.link_ms", f"양의 정수(ms)여야 합니다: {link!r}")
+    path, layers = f"{at}.layers", {}
+    for i, item in enumerate(_list(spec["layers"], path, non_empty=True)):
+        li = f"{path}[{i}]"
+        item = _mapping(item, li, ("tag", "patterns"))
+        for key in ("tag", "patterns"):
+            if key not in item:
+                raise _err(li, f"'{key}'가 필요합니다.")
+        tag = _no_ril_tag(_tag(item["tag"], f"{li}.tag"), f"{li}.tag", ril_tags)
+        if tag in layers:
+            raise _err(f"{li}.tag", f"중복 태그입니다: {tag}")
+        pats = []
+        for j, raw_pat in enumerate(_list(item["patterns"], f"{li}.patterns", non_empty=True)):
+            pp = f"{li}.patterns[{j}]"
+            pat = _compile(raw_pat, pp, groups=0)
+            # 그 밖 이름 그룹은 무시한다(나중에 그룹을 더해도 설정 호환).
+            if ("serial" in pat.groupindex) == ("token" in pat.groupindex):
+                raise _err(pp, "이름 그룹 (?P<serial>...)·(?P<token>...) 중 정확히 하나가 필요합니다.")
+            pats.append(pat)
+        layers[tag] = tuple(pats)
+    cpath = f"{at}.coverage_tags"
+    coverage = frozenset(_no_ril_tag(_tag(t, f"{cpath}[{i}]"), f"{cpath}[{i}]", ril_tags) for i, t in enumerate(_list(spec.get("coverage_tags", []), cpath, non_empty=False)))
+    return ril.VendorRules(tuple(layers.items()), link, coverage)
 
 
 def _bugreport(raw, base: str) -> bugreport.BugreportRules:
@@ -175,10 +220,12 @@ def load(defaults: dict | None) -> PlatformProfile:
     name = node.get("name", "android")
     if name not in SUPPORTED:
         raise _err("platform.name", f"지원 플랫폼: {', '.join(SUPPORTED)} ({name!r})")
+    ril_tags = _ril_tags(node.get("ril"), "platform.ril")
     return PlatformProfile(
         name=name,
         source_tree=_source_tree(node.get("source_tree"), "platform.source_tree"),
         phone=_phone_rules(node.get("log"), "platform.log"),
-        ril_tags=_ril_tags(node.get("ril"), "platform.ril"),
+        ril_tags=ril_tags,
         bugreport=_bugreport(node.get("bugreport"), "platform.bugreport"),
+        ril_vendor=_ril_vendor(node.get("ril"), "platform.ril", ril_tags),
     )
