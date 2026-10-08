@@ -294,7 +294,7 @@ html{scroll-behavior:smooth}
 <dt>화면 예시</dt><dd><div class="screen"><span class="q">## ABC-12345 분석</span>
 - 분류 후보: data &gt; DATA-001 &gt; DATA-001-02 Roaming disabled (규칙 일치 점수 1.0, 신뢰도 높음)
 - 근거 로그 (마스킹, 슬롯 phone 1):
-  - 08:00:00 SST-1 [PHONE1] onRoamingOn: roaming=true
+  - 08:00:00 SST-1 onRoamingOn: roaming=true
   - 08:00:02 DSMGR-1 DataRoamingEnabled changed to false
   - 08:00:03 DNC-1 Data evaluation: … Data disallowed reasons: ROAMING_DISABLED
 - 로그 범위: 07:58 ~ 08:09 (발생 시각 포함), 시계 이상 없음
@@ -713,7 +713,7 @@ android_version: "16"
 note: 모바일 데이터 OFF 상태에서 접수됨
 
 <span class="c"># fixtures/DATA-001-02.log  (마스킹된 최소 logcat)</span>
-08:00:00.000 D SST-1: [PHONE1] onRoamingOn: roaming=true
+08:00:00.000 D SST-1: onRoamingOn: roaming=true
 08:00:02.000 D DSMGR-1: DataRoamingEnabled changed to false
 08:00:03.500 W DNC-1: Data evaluation: evaluation reason:ROAMING_ENABLED_CHANGED,
                Data disallowed reasons: ROAMING_DISABLED, candidate profile=null

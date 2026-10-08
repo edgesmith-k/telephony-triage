@@ -296,19 +296,38 @@ body.show-notes #notes-panel { display: block; }
 <section class="slide" data-sec="시작">
   <div class="head"><div class="eyebrow">목차</div><h2>오늘 다룰 것</h2></div>
   <div class="agenda">
-    <div><span>왜 만들었나</span><span class="rng">3</span></div>
-    <div><span>전체 구조</span><span class="rng">4–7</span></div>
-    <div><span>설치와 setup</span><span class="rng">8–10</span></div>
-    <div><span>커맨드별 사용법</span><span class="rng">11–17</span></div>
-    <div><span>판정 읽는 법</span><span class="rng">18–21</span></div>
-    <div><span>이슈 DB에 기록하기</span><span class="rng">22–25</span></div>
-    <div><span>오류가 났을 때</span><span class="rng">26–28</span></div>
-    <div><span>안전 장치</span><span class="rng">29–30</span></div>
-    <div><span>관리와 운영</span><span class="rng">31–34</span></div>
-    <div><span>현황 · Q&amp;A</span><span class="rng">35</span></div>
+    <div><span>처음 듣는 말</span><span class="rng">3</span></div>
+    <div><span>왜 만들었나</span><span class="rng">4</span></div>
+    <div><span>전체 구조</span><span class="rng">5–8</span></div>
+    <div><span>설치와 setup</span><span class="rng">9–11</span></div>
+    <div><span>커맨드별 사용법</span><span class="rng">12–18</span></div>
+    <div><span>판정 읽는 법</span><span class="rng">19–22</span></div>
+    <div><span>이슈 DB에 기록하기</span><span class="rng">23–26</span></div>
+    <div><span>오류가 났을 때</span><span class="rng">27–29</span></div>
+    <div><span>안전 장치</span><span class="rng">30–31</span></div>
+    <div><span>관리와 운영</span><span class="rng">32–35</span></div>
+    <div><span>현황 · Q&amp;A</span><span class="rng">36</span></div>
   </div>
   <p class="small">키보드 ← → 또는 스페이스로 넘기고, <code>N</code>으로 발표자 노트를 엽니다.</p>
-  <aside class="notes">왼쪽 열이 사용자 관점(무엇을, 어떻게), 오른쪽 열이 결과 해석과 운영입니다. 시간이 모자라면 관리와 운영(31–34)은 카테고리 오너·메인테이너만 따로 봅니다.</aside>
+  <aside class="notes">왼쪽 열이 사용자 관점(무엇을, 어떻게), 오른쪽 열이 결과 해석과 운영입니다. 시간이 모자라면 관리와 운영(32–35)은 카테고리 오너·메인테이너만 따로 봅니다.</aside>
+</section>
+
+<section class="slide" data-sec="시작">
+  <div class="head"><div class="eyebrow">시작하기 전에</div><h2>처음 듣는 말 여덟 개</h2><p class="lede">오늘 나오는 낯선 말은 거의 이 여덟 개입니다. 막히면 이 장으로 돌아오세요.</p></div>
+  <div class="body">
+    <div class="tw"><table class="t tight">
+      <tr><th>말</th><th>쉽게 말하면</th><th>예</th></tr>
+      <tr><td><b>이슈 DB</b></td><td>팀이 함께 쓰는 사례집 레포</td><td>"이 증상은 이 원인, 이렇게 해결"</td></tr>
+      <tr><td><b>유형 · 원인</b></td><td>유형은 보이는 증상, 원인은 그 이유</td><td>데이터 안 붙음 · 로밍 설정 꺼짐</td></tr>
+      <tr><td><b>시그니처</b></td><td>로그에서 증상·원인을 알아보는 조건</td><td>"거부 사유 ROAMING_DISABLED 줄이 있다"</td></tr>
+      <tr><td><b>S · C</b></td><td>증상 조건, 원인 조건이 맞았나 (0 또는 1)</td><td>S=1, C=1이면 원인 후보</td></tr>
+      <tr><td><b>fixture</b></td><td>원인마다 붙여 두는 짧은 기준 로그</td><td>규칙을 바꿀 때마다 결과가 그대로인지 확인</td></tr>
+      <tr><td><b>마스킹</b></td><td>개인정보를 표시로 바꾸기</td><td><code>imsi=001010…</code> → <code>&lt;IMSI#1&gt;</code></td></tr>
+      <tr><td><b>작업 계획</b></td><td>"무엇을 바꿀지" 할 일 목록. 최신 main 위에 다시 적용</td><td>"ABC-12345를 DATA-001-02에 추가"</td></tr>
+      <tr><td><b>스냅샷 · lock</b></td><td>분석용 이슈 DB 복사본 · 동시 작업 막는 잠금</td><td>내 clone은 도구가 건드리지 않음</td></tr>
+    </table></div>
+  </div>
+  <aside class="notes">용어를 먼저 맞추면 뒤 슬라이드가 훨씬 빨리 넘어갑니다. 특히 S와 C, fixture, 작업 계획 세 가지는 오늘 계속 나옵니다. 정확한 정의는 매뉴얼 9장 용어집에 있습니다.</aside>
 </section>
 
 <!-- ================= 1. 왜 ================= -->
@@ -538,14 +557,14 @@ feedback/      <span class="c"># 후보 수락·거절 기록</span>
   <div class="body">
     <div class="tw"><table class="t">
       <tr><th>단계</th><th>하는 일</th><th>멈추는 경우</th></tr>
-      <tr><td>config</td><td>GHE 아이디, 이슈 DB 경로·URL, base 브랜치, 타임존, 로그 폴더, 작업 디렉토리를 하나씩 묻고 저장</td><td>없는 경로는 그 항목만 다시 묻기</td></tr>
+      <tr><td>config</td><td>GHE 아이디, 이슈 DB 경로·URL, base 브랜치, 타임존, 로그 폴더, 작업 디렉토리를 하나씩 묻고, <b>팀 기본값과 다른 답만</b> 저장</td><td>없는 경로는 그 항목만 다시 묻기</td></tr>
       <tr><td>Jira MCP</td><td>등록된 MCP에서 <code>get_issue</code> 등 읽기 도구 후보를 고르고 확인받음</td><td><span class="warn-t">후보 없음 → setup 중단</span></td></tr>
       <tr><td>git hook</td><td>이슈 DB clone에 <code>core.hooksPath=.githooks</code> 설치</td><td>값이 다르면 실패 보고</td></tr>
       <tr><td>스냅샷</td><td>lock을 잡고 읽기 스냅샷 생성, 버전 호환성 확인</td><td>호환 안 되면 "읽기 전용"으로 계속</td></tr>
       <tr><td>gh · doctor</td><td>gh 인증 확인 후 <code>config.py doctor</code> 점검 표를 그대로 보여줌</td><td>gh 없음 → 읽기 전용으로 끝</td></tr>
     </table></div>
   </div>
-  <aside class="notes">setup은 실제로 10단계지만 묶으면 이 다섯 덩어리입니다. 중간에 멈춰도 잡은 lock은 항상 풀고 끝납니다. 설정을 바꿀 때는 setup을 다시 돌리면 바꿀 항목만 고칩니다.</aside>
+  <aside class="notes">setup은 실제로 10단계지만 묶으면 이 다섯 덩어리입니다. 중간에 멈춰도 잡은 lock은 항상 풀고 끝납니다. 팀 기본값과 같은 답은 저장하지 않으므로, 관리자가 팀 기본값을 바꾸면 내 설정도 따라갑니다. 설정을 바꿀 때는 setup을 다시 돌리면 바꿀 항목만 고칩니다.</aside>
 </section>
 
 <section class="slide" data-sec="3 설치와 setup">
@@ -695,7 +714,7 @@ feedback/      <span class="c"># 후보 수락·거절 기록</span>
   <div class="body">
     <div class="tw"><table class="t">
       <tr><th>커맨드</th><th>언제</th><th>쓰기</th></tr>
-      <tr><td><code>sync</code></td><td>스냅샷이 오래됐을 때. 오래된 작업 디렉토리 정리, 내 열린 PR 목록</td><td>없음</td></tr>
+      <tr><td><code>sync</code></td><td>스냅샷이 오래됐을 때. 오래된 작업 디렉토리 정리, 내 열린 PR 목록. push 안 한 계획은 지우지 않고 "보존"으로 알려 줌</td><td>없음</td></tr>
       <tr><td><code>sync-pr [브랜치]</code></td><td>내 PR이 머지 대기 중인데 main이 바뀌었을 때</td><td>PR 갱신</td></tr>
       <tr><td><code>validate</code></td><td>이슈 DB를 직접 편집한 뒤 push 전 검사(lint·마스킹·회귀·R1~R5)</td><td>없음</td></tr>
       <tr><td><code>validate --cause</code></td><td>해결책 적용 후 로그로 효과 검증 → 통과 시 PR</td><td>PR</td></tr>
@@ -900,6 +919,7 @@ bonus = 근접(근거 시각이 발생 시각에 가까울수록) + 키워드(Ji
       <tr><td class="wrap"><code>로그 범위 밖이다 … 파일 전체로 다시 파싱할까?</code></td><td>전체 파싱 / 그대로(매칭 없음으로 보고) 중 선택, 또는 맞는 로그 추가</td></tr>
       <tr><td class="wrap"><code>&lt;파일&gt;:&lt;줄&gt;: YAML 문법 오류</code></td><td>이슈 DB 파일이 깨짐. 줄 위치를 고치고 <code>validate</code></td></tr>
       <tr><td class="wrap">drift 목록 (종료 코드 1)</td><td>항목마다 계획 값 / main 값 / 직접 입력 선택 후 다시 stage</td></tr>
+      <tr><td class="wrap">sync: <code>push 기록 있음, PR 연결 미확인</code></td><td>원격 브랜치·열린 PR을 먼저 확인. 없으면 publish 재시도 또는 <code>sync-pr &lt;브랜치&gt;</code></td></tr>
       <tr><td class="wrap">같은 Jira가 main에 있음 · 열린 PR 있음</td><td>기존 분류 유지 또는 <code>reclassify</code>. 열린 PR이면 링크 보고 계속할지 결정</td></tr>
     </table></div>
   </div>
@@ -1011,19 +1031,19 @@ bonus = 근접(근거 시각이 발생 시각에 가까울수록) + 키워드(Ji
   <div class="head"><div class="eyebrow">§9 관리와 운영</div><h2>사내 적용 단계 S-0 ~ S-7</h2><p class="lede">사외에서 모의 환경으로 구현을 끝냈고, 사내에서는 실제 값만 끼워 맞춥니다. 아래는 모두 <span class="warn-t">예정</span>입니다.</p></div>
   <div class="body">
     <div class="tl">
-      <div><b>S-0</b><span>선택. 실제 로그 형식 선행 확인</span></div>
+      <div><b>S-0</b><span>선택. 실제 로그 형식 선행 확인, 설정 초안 제안 도구</span></div>
       <div><b>S-1</b><span>사내 값 조사, 평가 기준 합의</span></div>
       <div><b>S-2</b><span>사내 Claude Code 동작 확인</span></div>
       <div><b>S-3</b><span>사내 설정(site-defaults) 입력</span></div>
       <div><b>S-4a</b><span>기존 파서 포팅, 분류 import, 분석 스킬 연결</span></div>
       <div><b>S-4</b><span>카테고리별 실제 로그로 규칙 교체</span></div>
-      <div><b>S-5</b><span>dry-run·샌드박스 PR, 정확도 게이트</span></div>
+      <div><b>S-5</b><span>dry-run·샌드박스 PR, 정확도·오류율 게이트</span></div>
       <div><b>S-6</b><span>남은 검토 항목 정리</span></div>
       <div><b>S-7</b><span>배포, 카테고리별 파일럿</span></div>
     </div>
     <div class="g2">
-      <div class="card alert"><p class="small">지금 이슈 DB의 파서 규칙 일부는 <b>placeholder</b>입니다. S-4에서 실제 태그·문구로 바뀌기 전에는 결과에 "placeholder 규칙"이 표시됩니다.</p></div>
-      <div class="card"><p class="small">파일럿은 카테고리별 10~20건, 첫 월간 리뷰 뒤 전체 확대를 결정합니다.</p></div>
+      <div class="card alert"><p class="small">data 규칙은 실제 단말 로그와 AOSP 소스로 형식을 확인했습니다. 나머지 카테고리의 규칙은 아직 <b>placeholder</b>이고, S-4에서 실제 태그·문구로 바뀌기 전에는 결과에 "placeholder 규칙"이 표시됩니다.</p></div>
+      <div class="card"><p class="small">파일럿은 카테고리별 10~20건, 첫 월간 리뷰 뒤 전체 확대를 결정합니다. 지표는 PR까지 시간, 중도 취소 비율, 작업당 저장된 답 수, PR 연결 미확인 건수입니다.</p></div>
     </div>
   </div>
   <aside class="notes">여러분이 이 플러그인을 실제로 받는 시점은 S-7 파일럿입니다. 그 전에 S-5에서 과거 해결 Jira 20~30건으로 정확도를 미리 확인합니다. 파일럿 동안 불편한 점을 모아 주시면 반입 뒤 개선 항목으로 넣습니다.</aside>
@@ -1034,9 +1054,9 @@ bonus = 근접(근거 시각이 발생 시각에 가까울수록) + 키워드(Ji
   <div class="head"><div class="eyebrow">§10 현황 · Q&amp;A</div><h2>현재 상태와 참고 자료</h2></div>
   <div class="body">
     <div class="nums">
-      <div><b>~1,050</b><span>자동 테스트 (CI Ubuntu, Python 3.11 · 3.14 통과)</span></div>
-      <div><b>20/20</b><span>샘플 DB 회귀 fixture 통과</span></div>
-      <div><b>58</b><span>skill eval 정의</span></div>
+      <div><b>~1,100</b><span>자동 테스트 (CI Ubuntu, Python 3.11 · 3.14 통과)</span></div>
+      <div><b>23/23</b><span>샘플 DB 회귀 fixture 통과</span></div>
+      <div><b>60</b><span>skill eval 정의</span></div>
       <div><b>~39만</b><span>analyze→기록 1건 토큰 (Sonnet, 이전 74만에서 −48%)</span></div>
     </div>
     <p class="small">커맨드 1회 약 20만~80만 토큰, $0.15~0.5 수준(Sonnet). 모의 데이터 eval 기준이라 실제 환경에서는 다를 수 있습니다. 기본 모델은 Sonnet, 탐색 가설 품질이 중요하면 Opus.</p>
@@ -1047,7 +1067,7 @@ bonus = 근접(근거 시각이 발생 시각에 가까울수록) + 키워드(Ji
     </div>
     <p class="lede" style="color:var(--ink)"><b>질문 받겠습니다.</b></p>
   </div>
-  <aside class="notes">수치는 2026-10-07 사외 모의 환경 기준입니다. 정확도는 아직 측정 전이고 S-5에서 사내 과거 Jira로 처음 잽니다. 마지막으로 다시 강조할 것: 판정은 스크립트, 기록은 승인 후 PR, Jira는 읽기만.</aside>
+  <aside class="notes">수치는 2026-10-08 사외 모의 환경 기준입니다. 정확도는 아직 측정 전이고 S-5에서 사내 과거 Jira로 처음 잽니다. 마지막으로 다시 강조할 것: 판정은 스크립트, 기록은 승인 후 PR, Jira는 읽기만.</aside>
 </section>
 
 </div></div>
