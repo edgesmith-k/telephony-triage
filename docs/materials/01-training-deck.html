@@ -301,15 +301,15 @@ body.show-notes #notes-panel { display: block; }
     <div><span>전체 구조</span><span class="rng">5–8</span></div>
     <div><span>설치와 setup</span><span class="rng">9–11</span></div>
     <div><span>커맨드별 사용법</span><span class="rng">12–18</span></div>
-    <div><span>판정 읽는 법</span><span class="rng">19–22</span></div>
-    <div><span>이슈 DB에 기록하기</span><span class="rng">23–26</span></div>
-    <div><span>오류가 났을 때</span><span class="rng">27–29</span></div>
-    <div><span>안전 장치</span><span class="rng">30–31</span></div>
-    <div><span>관리와 운영</span><span class="rng">32–35</span></div>
-    <div><span>현황 · Q&amp;A</span><span class="rng">36</span></div>
+    <div><span>판정 읽는 법</span><span class="rng">19–23</span></div>
+    <div><span>이슈 DB에 기록하기</span><span class="rng">24–27</span></div>
+    <div><span>오류가 났을 때</span><span class="rng">28–30</span></div>
+    <div><span>안전 장치</span><span class="rng">31–33</span></div>
+    <div><span>관리와 운영</span><span class="rng">34–37</span></div>
+    <div><span>현황 · Q&amp;A</span><span class="rng">38</span></div>
   </div>
   <p class="small">키보드 ← → 또는 스페이스로 넘기고, <code>N</code>으로 발표자 노트를 엽니다.</p>
-  <aside class="notes">왼쪽 열이 사용자 관점(무엇을, 어떻게), 오른쪽 열이 결과 해석과 운영입니다. 시간이 모자라면 관리와 운영(32–35)은 카테고리 오너·메인테이너만 따로 봅니다.</aside>
+  <aside class="notes">왼쪽 열이 사용자 관점(무엇을, 어떻게), 오른쪽 열이 결과 해석과 운영입니다. 시간이 모자라면 관리와 운영(34–37)은 카테고리 오너·메인테이너만 따로 봅니다.</aside>
 </section>
 
 <section class="slide" data-sec="시작">
@@ -430,7 +430,7 @@ body.show-notes #notes-panel { display: block; }
         <span class="tag info">플러그인</span>
         <h3>telephony-triage</h3>
         <ul class="pts small">
-          <li>커맨드 12개, 스킬 1개, hook</li>
+          <li>커맨드 13개, 스킬 1개, hook</li>
           <li>파서·매처·검증 스크립트(Python)</li>
           <li>사내 마켓플레이스에서 설치 <span class="tag mute">예정 S-7</span></li>
         </ul>
@@ -587,17 +587,17 @@ feedback/      <span class="c"># 후보 수락·거절 기록</span>
 
 <!-- ================= 4. 커맨드 ================= -->
 <section class="slide" data-sec="4 커맨드별 사용법">
-  <div class="head"><div class="eyebrow">§4 커맨드별 사용법</div><h2>커맨드 12개 지도</h2><p class="lede">모두 <code>/telephony-triage:&lt;이름&gt;</code>으로 부릅니다.</p></div>
+  <div class="head"><div class="eyebrow">§4 커맨드별 사용법</div><h2>커맨드 13개 지도</h2><p class="lede">모두 <code>/telephony-triage:&lt;이름&gt;</code>으로 부릅니다. 분석·검색·기록은 말로 요청해도 연결됩니다.</p></div>
   <div class="body">
     <div class="g4">
       <div class="card key"><h3>분석·기록</h3><p><code>analyze</code></p><p><code>record</code></p><p class="small">이슈 DB에 PR</p></div>
       <div class="card key"><h3>수정 상태</h3><p><code>fix-submitted</code></p><p><code>verify-fix</code></p><p><code>validate --cause</code></p><p class="small">이슈 DB에 PR</p></div>
-      <div class="card"><h3>찾기·보기</h3><p><code>search</code></p><p><code>preview</code></p><p><code>review</code></p><p class="small">읽기 전용</p></div>
+      <div class="card"><h3>찾기·보기</h3><p><code>search</code></p><p><code>preview</code></p><p><code>review</code></p><p><code>help</code></p><p class="small">읽기 전용</p></div>
       <div class="card"><h3>맞추기·관리</h3><p><code>sync</code> <code>sync-pr</code></p><p><code>validate</code> (인자 없음)</p><p><code>setup</code> <code>migrate</code></p></div>
     </div>
     <div class="card alert"><p>이슈 DB에 쓰는 커맨드는 시작할 때 <b>세션 lock</b>을 잡고 끝나는 모든 경로에서 풉니다. 한 사람이 동시에 두 작업을 할 수 없습니다.</p></div>
   </div>
-  <aside class="notes">대부분의 사용자는 analyze, search, record 세 개면 충분합니다. 수정 상태 커맨드는 CL을 올린 담당자가, migrate는 메인테이너만 씁니다. 읽기 전용 커맨드는 lock을 잡지 않으니 분석 중에도 search는 됩니다.</aside>
+  <aside class="notes">대부분의 사용자는 analyze, search, record 세 개면 충분합니다. 수정 상태 커맨드는 CL을 올린 담당자가, migrate는 메인테이너만 씁니다. 읽기 전용 커맨드는 lock을 잡지 않으니 분석 중에도 search는 됩니다. 어떤 커맨드를 쓸지 모르면 help를 먼저 부르면 됩니다. 커맨드 없이 "ABC-12345 로그 분석해줘"처럼 말해도 스킬이 analyze·search·record·fix-submitted·verify-fix·sync-pr 흐름으로 연결됩니다(모의 환경 측정에서 트리거 문장 24개×2회 recall·precision 100%, 사내는 S-2에서 재측정. validate --cause는 스킬 설명에는 있지만 측정 문장에는 없습니다). setup·sync·preview·review·migrate와 인자 없는 validate는 커맨드로 실행하세요.</aside>
 </section>
 
 <section class="slide" data-sec="4 커맨드별 사용법">
@@ -789,7 +789,31 @@ bonus = 근접(근거 시각이 발생 시각에 가까울수록) + 키워드(Ji
       <tr><td><span class="tag mute">추정</span></td><td>심층 분석·탐색 분석(Claude 가설). 점수·분류에 안 씀</td><td>로그·코드로 직접 확인</td></tr>
     </table></div>
   </div>
-  <aside class="notes">"다른 버전 원인"은 최근 추가된 표시로, 일부러 순위를 내리지 않습니다. 새 버전에서 진짜 같은 원인일 수도 있기 때문입니다. 탐색 분석은 후보가 없거나 원인 미확인일 때만 제안되고 토큰이 더 들어 실행 전에 묻습니다.</aside>
+  <aside class="notes">"다른 버전 원인"은 최근 추가된 표시로, 일부러 순위를 내리지 않습니다. 새 버전에서 진짜 같은 원인일 수도 있기 때문입니다. 탐색 분석은 후보가 없거나 원인 미확인일 때만 제안되고 토큰이 더 들어 실행 전에 묻습니다. 자세한 흐름은 다음 장.</aside>
+</section>
+
+<section class="slide" data-sec="5 판정 읽는 법">
+  <div class="head"><div class="eyebrow">§5 판정 읽는 법</div><h2>규칙에 없는 이슈가 오면: 탐색 분석</h2><p class="lede">후보가 없거나 1위 원인이 미확인일 때, 동의하면 Claude가 원인 가설을 세웁니다.</p></div>
+  <div class="body">
+    <div class="g2">
+      <div class="card key"><h3>Claude가 하는 일</h3>
+        <ul class="pts small">
+          <li>마스킹된 타임라인(<code>timeline.md</code>)과 고른 소스 트리만 읽음. 로그 원문은 안 읽음</li>
+          <li>가설 1~3개: 가설 / 로그로 확인한 줄 / 코드로 추정한 위치 / 반대 근거 / 다음 확인</li>
+          <li>가설이 없으면 "가설 없음"과 다음에 받을 로그</li>
+        </ul>
+      </div>
+      <div class="card alert"><h3>하지 않는 일</h3>
+        <ul class="pts small">
+          <li>판정·점수·순위 없음. 리포트 "탐색 분석 (추정)" 칸에만</li>
+          <li>자동 등록 없음. 가설만으로 원인·계획을 만들지 않음</li>
+          <li>묻기 전 실행 없음(<code>--explore</code>·<code>explore.when: always</code>면 바로, <code>--no-explore</code>·<code>never</code>면 생략)</li>
+        </ul>
+      </div>
+    </div>
+    <div class="console" style="font-size:15px"><span class="c"># 채택하면</span> 후보 없음 → 탐색 분석 → 가설 채택 → 새 유형(원인) 초안 + 시그니처·fixture → R1~R5 검증 → 확인 화면 → PR</div>
+  </div>
+  <aside class="notes">규칙에 없는 이슈가 와도 빈손이 아닙니다. 동의하면 triage.py explore가 마스킹된 타임라인을 만들고, Claude가 그 타임라인과 소스를 보고 가설을 근거·반대 근거와 함께 씁니다. 가설은 판정이 아니라 사람이 고를 출발점입니다. 채택하면 "로그로 확인" 줄이 시그니처 초안이 되고, 그다음은 평소와 같은 R1~R5 검증과 확인 화면입니다. 보류하면 원인 미확정으로 남기고 note에 가설 한 줄을 남길지 묻습니다. 토큰이 더 들어 기본은 실행 전에 묻습니다.</aside>
 </section>
 
 <!-- ================= 6. 기록 ================= -->
@@ -953,13 +977,13 @@ bonus = 근접(근거 시각이 발생 시각에 가까울수록) + 키워드(Ji
   <div class="body">
     <div class="g2">
       <div class="card">
-        <h3>자동으로 막는 것 (hook 10종 중)</h3>
+        <h3>자동으로 막는 것 (hook 10종 중) — 언제</h3>
         <ul class="pts small">
-          <li>Jira 쓰기 도구 호출. 허용 목록의 읽기 도구만</li>
-          <li>main 대상 push, 승인 토큰 없는 push</li>
-          <li><code>--no-verify</code> 같은 hook 우회 커밋</li>
-          <li>Claude가 내 이슈 DB clone 파일을 직접 편집</li>
-          <li>로그 원문을 통째로 읽는 명령(<code>cat</code> 등)</li>
+          <li>Jira 쓰기 도구 호출 — <b>MCP 도구를 부르기 직전</b>. 허용 목록의 읽기 도구만</li>
+          <li>main 대상 push, 승인 토큰 없는 push — <b>git push 직전</b>(Claude 밖 터미널도)</li>
+          <li><code>--no-verify</code> 같은 hook 우회 커밋 — <b>git commit 직전</b></li>
+          <li>Claude가 내 이슈 DB clone 파일을 직접 편집 — <b>Write·Edit 직전</b></li>
+          <li>로그 원문을 통째로 읽는 명령(<code>cat</code> 등) — <b>Bash 실행 직전</b></li>
         </ul>
       </div>
       <div class="card alert">
@@ -975,7 +999,42 @@ bonus = 근접(근거 시각이 발생 시각에 가까울수록) + 키워드(Ji
     </div>
     <p class="small">로컬 장치는 우회될 수 있어서 <b>GHE 브랜치 보호</b>(main 직접 push 금지, CODEOWNERS 필수 리뷰)가 서버에서 최종 방어선입니다.</p>
   </div>
-  <aside class="notes">hook 판정은 최선 노력 방식이라 모든 우회를 막지는 못합니다. 그래서 서버 측 브랜치 보호가 전제입니다. 사용자는 이 장치들을 끄려고 하지 말고, 막히면 메시지를 그대로 공유해 주세요.</aside>
+  <aside class="notes">hook 판정은 최선 노력 방식이라 모든 우회를 막지는 못합니다. 그래서 서버 측 브랜치 보호가 전제입니다. 사용자는 이 장치들을 끄려고 하지 말고, 막히면 메시지를 그대로 공유해 주세요. 어느 순간에 걸리는지는 다음 장.</aside>
+</section>
+
+<section class="slide" data-sec="8 안전 장치">
+  <div class="head"><div class="eyebrow">§8 안전 장치</div><h2>안전장치가 걸리는 순간</h2><p class="lede">Claude가 도구를 부르기 직전과 결과를 받은 직후, 그리고 git 커밋·push 순간. 걸리면 메시지에 규칙 번호와 할 일이 있습니다.</p></div>
+  <div class="body">
+    <div class="g4">
+      <div class="card key"><h3>도구 호출 직전</h3><p class="small">PreToolUse</p>
+        <ul class="pts small">
+          <li>MCP: Jira 읽기 도구만 통과(2)</li>
+          <li>Bash: 이슈 DB git commit·push 검사(3~7), 로그 통독 차단(10)</li>
+          <li>Write·Edit: 내 clone 파일이면 거부(8)</li>
+        </ul>
+      </div>
+      <div class="card key"><h3>결과 직후</h3><p class="small">PostToolUse</p>
+        <ul class="pts small">
+          <li>Jira 도구 결과만: 원문은 파일로, 모델에는 마스킹 요약(9)</li>
+          <li>실패하면 원문 대신 오류 문구</li>
+        </ul>
+      </div>
+      <div class="card"><h3>커밋 순간</h3><p class="small">git pre-commit</p>
+        <ul class="pts small">
+          <li>lint·마스킹·회귀·생성 파일 검사</li>
+          <li>터미널에서 직접 커밋해도 걸림</li>
+        </ul>
+      </div>
+      <div class="card"><h3>push 순간</h3><p class="small">git pre-push</p>
+        <ul class="pts small">
+          <li>main 대상 거부</li>
+          <li>승인 토큰 없으면 거부. 직접 편집은 validate 뒤 <code>TT_PUBLISH_TOKEN=manual</code></li>
+        </ul>
+      </div>
+    </div>
+    <p class="small">적용되지 않는 경우: 이슈 DB가 아닌 레포의 git, config 없을 때의 git·파일 규칙, Jira 서버 설정(<code>jira.mcp_server</code>·<code>jira.tools</code>)이 모두 비어 있을 때의 Jira 규칙, 다른 MCP 서버, Read·Glob·Grep(hook 없음). 세션 시작 때는 경로 갱신 hook만 돕니다.</p>
+  </div>
+  <aside class="notes">세 순간만 기억하면 됩니다. 도구를 부르기 직전, Jira 결과를 받은 직후, 그리고 git 커밋과 push. 거부 메시지에는 규칙 번호와 대신 할 일이 들어 있으니 그대로 따르면 됩니다. 예를 들어 로그 통독이 막히면 grep -n이나 sed -n으로 구간만 읽으라고 안내합니다. 자세한 표는 매뉴얼 8장입니다.</aside>
 </section>
 
 <!-- ================= 9. 관리 ================= -->

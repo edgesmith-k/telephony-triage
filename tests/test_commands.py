@@ -32,7 +32,7 @@ from workspace import Workspace  # noqa: E402
 COMMANDS = REPO / "plugin" / "commands"
 DOCS = REPO / "docs" / "design"
 EXPECTED = ["setup", "analyze", "record", "sync", "search", "sync-pr", "preview", "review", "validate",
-            "verify-fix", "fix-submitted", "migrate"]
+            "verify-fix", "fix-submitted", "migrate", "help"]
 SKILL_LINKED = ["analyze", "record", "verify-fix", "fix-submitted", "validate"]
 NO_ARGS = ["setup", "sync", "preview"]
 
@@ -49,12 +49,12 @@ def _frontmatter(name: str) -> dict:
 
 def test_command_files_match_design_lists():
     files = sorted(p.stem for p in COMMANDS.glob("*.md"))
-    assert files == sorted(EXPECTED) and len(files) == 12
+    assert files == sorted(EXPECTED) and len(files) == 13
     table = (DOCS / "09-commands.md").read_text(encoding="utf-8")
     names = re.findall(r"^\| `([a-z-]+)[ `]", table, re.M)
     assert sorted(set(names)) == sorted(EXPECTED)
     arch = (DOCS / "01-architecture.md").read_text(encoding="utf-8")
-    assert "commands/" in arch and "(12개)" in arch
+    assert "commands/" in arch and "(13개)" in arch
 
 
 def test_every_command_has_description_and_argument_hint_where_it_takes_args():
@@ -74,7 +74,7 @@ def test_skill_linked_commands_call_the_skill_and_others_call_scripts_only():
 
 
 def test_commands_stop_on_missing_site_defaults():
-    for name in EXPECTED:
+    for name in [n for n in EXPECTED if n != "help"]:      # help는 파일만 읽는다(스크립트 없음)
         text = (COMMANDS / f"{name}.md").read_text(encoding="utf-8")
         assert "S-3" in text, f"{name}: 사내 기본값 없음 중단 규칙 없음"
 
@@ -86,8 +86,24 @@ def test_write_commands_take_session_lock_and_readonly_commands_do_not():
     for name, path in (("sync", COMMANDS / "sync.md"), ("sync-pr", reference)):
         text = path.read_text(encoding="utf-8")
         assert "lock acquire" in text and "lock release" in text, name
-    for name in ("search", "preview", "review"):
+    for name in ("search", "preview", "review", "help"):
         assert "lock acquire" not in (COMMANDS / f"{name}.md").read_text(encoding="utf-8"), name
+
+
+def test_help_lists_commands_from_files_and_recommends_only_existing_ones():
+    """help는 목록을 적지 않고 commands/*.md frontmatter에서 만든다. 상황별 추천 표의 커맨드는 실제 파일이어야 한다."""
+    text = (COMMANDS / "help.md").read_text(encoding="utf-8")
+    assert "${CLAUDE_PLUGIN_ROOT}/commands/*.md" in text and "argument-hint" in text and "description" in text
+    assert "${CLAUDE_PLUGIN_ROOT}/scripts/" not in text, "help는 스크립트를 부르지 않는다 (site-defaults 검사 제외의 근거)"
+    assert "`[a-z-]+`" in text and "소문자" in text, "커맨드 이름은 소문자 [a-z-]+ 만 파일로 찾는다 (경로 이탈 방지)"
+    table = text.split("## 상황별 추천", 1)[1].split("\n## ", 1)[0]
+    rows = re.findall(r"^\|[^|\n]+\| `([a-z-]+)([^`]*)`", table, re.M)
+    names = {name for name, _ in rows}
+    files = {p.stem for p in COMMANDS.glob("*.md")}
+    assert names and names <= files, names - files
+    for name, rest in rows:       # 추천 표의 옵션은 그 커맨드의 argument-hint에 있는 것만
+        hint = str(_frontmatter(name).get("argument-hint") or "")
+        assert set(re.findall(r"--[A-Za-z0-9-]+", rest)) <= set(re.findall(r"--[A-Za-z0-9-]+", hint)), (name, rest)
 
 
 # -- sync: 본문이 부르는 스크립트 순서 ------------------------------------------------------------
@@ -249,7 +265,7 @@ def test_sync_and_setup_bodies_list_new_steps_in_order():
     assert "doctor" in setup[order[0]:order[1]], "gh 실패 경로도 doctor 표를 보인다"
     skill = (REPO / "plugin" / "skills" / "telephony-triage" / "SKILL.md").read_text(encoding="utf-8")
     assert "config.py doctor --format markdown" in skill
-    assert len(list(COMMANDS.glob("*.md"))) == 12
+    assert len(list(COMMANDS.glob("*.md"))) == 13
     sys.path.insert(0, str(REPO / "plugin" / "scripts"))
     import config, db_pr
     assert config.build_parser().parse_args(["doctor"]).format == "json"

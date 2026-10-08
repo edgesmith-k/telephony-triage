@@ -163,7 +163,7 @@
 - 읽을 문서: `contracts.md §renumber 참조·상태 값`, `06-collaboration.md §6.5·6.6·6.7`, `03-issue-db.md §5.5`
 
 ### Phase 12. 나머지 커맨드
-- 할 일: `09-commands.md §10`의 12개 커맨드를 얇은 래퍼로 만든다. 인자 없는 `validate`는 스크립트만 호출하므로 여기서 완성한다. `analyze`, `record`, `validate --cause`, `verify-fix`, `fix-submitted`는 Phase 13의 스킬을 호출하는 형태로 먼저 틀만 만든다. `commands/analyze.md` 예:
+- 할 일: `09-commands.md §10`의 13개 커맨드를 얇은 래퍼로 만든다. 인자 없는 `validate`는 스크립트만 호출하므로 여기서 완성한다. `analyze`, `record`, `validate --cause`, `verify-fix`, `fix-submitted`는 Phase 13의 스킬을 호출하는 형태로 먼저 틀만 만든다. `commands/analyze.md` 예:
 
   ```markdown
   ---
@@ -178,7 +178,7 @@
 
   (`${CLAUDE_PLUGIN_ROOT}`가 본문에서 치환되지 않으면(S1) `plugin.scripts_path`를 쓰는 문구로 바꾼다.)
   `tools/offline_eval.py <라벨셋.yaml>`도 여기서 만든다: 항목마다 `analyze --dry-run --jira-file`과 같은 경로(파서 → 매처)를 스크립트로 돌려 1위 정확도, 상위 3 포함률, 오탐률을 표로 낸다(스킬을 부르지 않는다). 사외는 합성 라벨셋(`tests/fixtures/offline-eval-sample.yaml`)으로 시험한다.
-- 완료 기준: 로컬에서 플러그인을 로드한 뒤 `setup`, `sync`, `search`, `sync-pr`, `preview`, `review`, `migrate`가 동작하고, `validate`(인자 없음)가 lint·전체 회귀·R1~R5를 실행한다. `sync` 끝에 닫힌 PR의 오래된 작업 디렉토리 후보가 나오고 확인 전에는 지워지지 않는다. `offline_eval.py`가 합성 라벨셋에서 정확도 표를 낸다. 스킬 연결 커맨드 5개는 로드되고 인자 힌트가 보인다. `commands/` 파일 목록(12개)이 `01-architecture.md §3`, `09-commands.md §10`과 같다.
+- 완료 기준: 로컬에서 플러그인을 로드한 뒤 `setup`, `sync`, `search`, `sync-pr`, `preview`, `review`, `migrate`, `help`가 동작하고, `validate`(인자 없음)가 lint·전체 회귀·R1~R5를 실행한다. `sync` 끝에 닫힌 PR의 오래된 작업 디렉토리 후보가 나오고 확인 전에는 지워지지 않는다. `offline_eval.py`가 합성 라벨셋에서 정확도 표를 낸다. 스킬 연결 커맨드 5개는 로드되고 인자 힌트가 보인다. `commands/` 파일 목록(13개)이 `01-architecture.md §3`, `09-commands.md §10`과 같다.
 - 읽을 문서: `09-commands.md`, `01-architecture.md §3`, `07-workflow.md §validate·sync-pr·record`, `contracts.md §3.2`
 
 ### Phase 13. SKILL.md (skill-creator 사용)
