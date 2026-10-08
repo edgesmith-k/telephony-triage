@@ -217,7 +217,7 @@ html{scroll-behavior:smooth}
 <p class="sub">무엇을 만드는지, 누가 쓰는지, 어디까지 만들어졌는지.</p>
 
 <div class="grid3">
-  <div class="card stat"><b>12</b><span>슬래시 커맨드 (<code>/telephony-triage:*</code>)</span></div>
+  <div class="card stat"><b>13</b><span>슬래시 커맨드 (<code>/telephony-triage:*</code>)</span></div>
   <div class="card stat"><b>9</b><span>Hooks (Claude 8 + Jira 응답 격리 1)</span></div>
   <div class="card stat"><b>6</b><span>카테고리: data · call · network · sim · sms · ims</span></div>
   <div class="card stat"><b>≈18k</b><span>Python 줄 수 (plugin/scripts + tools)</span></div>
@@ -228,7 +228,7 @@ html{scroll-behavior:smooth}
 <div class="grid2">
   <div class="card">
     <h4>플러그인 <code>telephony-triage</code></h4>
-    <p>Claude Code에 설치하는 도구. 스킬 1개, 커맨드 12개, hooks, Python 스크립트(파서·매처·검증기·PR 오케스트레이터)로 구성됩니다.</p>
+    <p>Claude Code에 설치하는 도구. 스킬 1개, 커맨드 13개, hooks, Python 스크립트(파서·매처·검증기·PR 오케스트레이터)로 구성됩니다.</p>
   </div>
   <div class="card">
     <h4>이슈 DB <code>telephony-issue-db</code></h4>
@@ -577,8 +577,8 @@ NEW-CAUSE-1 → DATA-001-03</div></dd>
 ├── .github/workflows/external.yml  <span class="c"># 사외 CI: 경계 검사·스키마 사본·pytest</span>
 ├── <span class="t">plugin/</span>                    <span class="c"># ★ 배포되는 플러그인 본체 (${CLAUDE_PLUGIN_ROOT})</span>
 │   ├── .claude-plugin/plugin.json
-│   ├── commands/              <span class="c"># 12개: analyze record search sync sync-pr preview review</span>
-│   │                          <span class="c">#        validate verify-fix fix-submitted setup migrate</span>
+│   ├── commands/              <span class="c"># 13개: analyze record search sync sync-pr preview review</span>
+│   │                          <span class="c">#        validate verify-fix fix-submitted setup migrate help</span>
 │   ├── skills/telephony-triage/
 │   │   ├── SKILL.md           <span class="c"># analyze 핵심 흐름 + 실행 규칙 (8KB)</span>
 │   │   └── reference/         <span class="c"># write-flow, db-authoring, record, verify, sync-pr, log-tags ...</span>

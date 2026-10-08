@@ -73,10 +73,11 @@ telephony-triage-plugin/                 # 개발 레포 루트
 │   ├── test_golden.py                   # 골든 비교 테스트 (사외에는 모의 골든으로 틀만)
 │   └── test_*.py
 └── plugin/                              # 배포되는 플러그인 본체
-    ├── site-defaults.example.yaml       # 모의 기본값. 코드는 읽지 않고 테스트 헬퍼가 복사해서 쓴다. 사내 S-3에서 site-defaults.yaml(SITE_PATHS)을 만들며, 없으면 모든 커맨드가 멈춘다 (15-local-draft.md §15.1)
+    ├── site-defaults.example.yaml       # 모의 기본값. 코드는 읽지 않고 테스트 헬퍼가 복사해서 쓴다. 사내 S-3에서 site-defaults.yaml(SITE_PATHS)을 만들며, 없으면 모든 커맨드(help 제외)가 멈춘다 (15-local-draft.md §15.1)
     ├── .claude-plugin/
     │   └── plugin.json                  # name: telephony-triage, description (version 없음 → commit SHA, 15-local-draft.md §15.6)
-    ├── commands/                        # 09-commands.md §10 과 같은 목록 (12개)
+    ├── commands/                        # 09-commands.md §10 과 같은 목록 (13개)
+    │   ├── help.md                      # /telephony-triage:help [커맨드] — 목록은 commands/*.md frontmatter에서 (읽기 전용)
     │   ├── setup.md                     # /telephony-triage:setup
     │   ├── analyze.md                   # /telephony-triage:analyze — 옵션은 09-commands.md §10
     │   ├── record.md                    # /telephony-triage:record <JIRA-KEY> [--cause <원인 ID> | --new-cause <유형 ID> | --new-type <category> | --unresolved <유형 ID>] [--fixture <logcat>] [--resolved-fixture <logcat>] [--dry-run] [--jira-file <yaml>]
