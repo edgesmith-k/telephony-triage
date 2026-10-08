@@ -29,7 +29,7 @@
 | ✅ L | 실제 로그 반영 트랙 L1~L3 완료(10/07, PR #23~#25) | 세부·eval 결과는 `CHANGES.md` L1~L3. 자료는 레포 밖 `%LOCALAPPDATA%/tt-ltrack/`(벤더 문구, 레포 금지) |
 | ☐ G | **범용판 별도 레포** (10/07 사용자 지시) — **보류(10/07 사용자)** | 재개 시점은 사용자가 정한다. **로컬 새 레포**(원격 없음), 범위 = 도메인 중립 코어(이슈 DB·시그니처 엔진·PR 흐름·안전장치, 카테고리·예약 이벤트는 설정으로) + 동작 확인용 최소 예제 팩 1개. 시작은 결합 지점 조사(`plugin/scripts`에서 platforms 밖 Android·RIL 참조 약 30파일) → 분리 설계 확인 → 이전. 이 레포는 바꾸지 않는다 |
 | ☐ Z | **반입 묶음** | 최신 main에서 **Ubuntu로** 먼저 `plugin.json` description에서 "사외 초안"을 빼는 커밋(도구가 첫 검사로 막는다) → `python3 tools/make_bundle.py --label <이름>`(정상 종료 3) → 사람 확인 3건(§15.4: 회사명 검색·TODO 목록·이 파일 최신) → 도구가 출력한 명령으로 사용자가 태그 push. Windows는 환경 실패로 자동 검사가 실패한다 |
-| ✅ 2 | 10/04~05 작업(RF-2 포함) 사용자 확인 — 결정 7건 승인(10/08) | R8 동점 정렬·실패 구간 기본값·S5 탐지 범위·I3 `platform.*`·RF-7 재사용·S6 순위·행동 규칙. 세부는 `CHANGES.md` 10/04~05 절 |
+| ✅ 2 | 10/04~05 작업(RF-2 포함) 사용자 확인(10/08) | 승인 7건: R8 동점·실패 구간 기본값·S5 범위·I3 `platform.*`·RF-7 재사용·S6 순위·행동 규칙 |
 
 반입 뒤 후보: RF-5(oFono)·RF-6(커넥터)·RF-8(자동화)은 사내 환경을 알아야 의미가 있다. RF-9·웹 UI(보류)는 그 뒤. 10/07 리뷰의 R-36~R-47·V 후속도 같은 색인 `docs/development/ARCHITECTURE_REVIEW_2026-10.md`. 팀 검토(10/07) 판정(원문 보존은 부분 해결 — 미게시 계획 폴더의 원문 잔류는 S14): `docs/development/TEAM_PLUGIN_REVIEW_VERDICT_2026-10-07.md`(원문·포털·확장 아이디어 설계 제안 초안은 `docs/history/TEAM_PLUGIN_*`, 파일럿 뒤 재검토).
 사내로 넘긴 것: 행동 eval 전체(`evals.json`, S-2; 주입 eval 59·60 포함), 코드 Read line 힌트(T4, S-2 측정 뒤)·offline_eval 오류율 상한(S-1 합의, S-5)·`max_tokens_hint` 처리(S-4a)·setup Jira 없음 중단(U1, S-3), db-authoring 스키마 요약 확장(S-2, 스키마 Read 횟수로 판단), 운영 DB 스키마 `pr.ids` 반영(S-3, 뼈대에서), 사내 마켓플레이스 소스 유형 확인 → version 규칙(S-2·S-7, V2에서 `plugin.json` version 삭제 = 커밋 SHA 기준. 반입 직후 캐시 1회 무효화는 무해).
