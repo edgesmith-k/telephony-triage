@@ -144,6 +144,13 @@ pre {
 .note.rule { border-left-color: var(--accent); } .note.rule .k { color: var(--accent); }
 .note.warn { border-left-color: var(--warn); background: var(--warn-soft); } .note.warn .k { color: var(--warn); }
 .note.plan { border-left-color: var(--ink-2); border-style: dashed; border-left-style: solid; } .note.plan .k { color: var(--ink-2); }
+.note.easy { border-left-color: var(--good); background: var(--good-soft); } .note.easy .k { color: var(--good); }
+.note.new { border-left-color: var(--accent); background: var(--accent-soft); } .note.new .k { color: var(--accent); }
+/* 핵심 개념 카드 */
+.concepts { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 0.6rem; margin: 0.7rem 0; }
+.concepts > div { min-width: 0; border: 1px solid var(--rule); border-radius: 6px; padding: 0.55rem 0.8rem; background: var(--surface); font-size: var(--step--1); line-height: 1.55; }
+.concepts b { display: block; font-size: var(--step-0); margin-bottom: 0.15rem; }
+.concepts i { font-style: normal; color: var(--ink-2); }
 
 .chip { display: inline-block; font-family: var(--font-mono); font-size: 0.78rem; line-height: 1.4; padding: 0.05rem 0.4rem; border-radius: 999px; border: 1px solid var(--rule); white-space: nowrap; }
 .chip.g { background: var(--good-soft); color: var(--good); border-color: transparent; }
@@ -257,11 +264,390 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
     <h1>telephony-triage 사용·운영 매뉴얼</h1>
     <p>Android Telephony 이슈를 Jira와 logcat으로 분석하고, 결과를 팀 이슈 DB(<code>telephony-issue-db</code>)에 PR로 쌓는 도구입니다. 이 문서 하나로 설치, 매일의 사용, 결과 해석, 문제 해결, 이슈 DB 운영까지 이어받을 수 있게 썼습니다.</p>
     <div class="meta">
-      <span><b>기준</b> 플러그인 레포 main, 2026-10-07</span>
+      <span><b>기준</b> 플러그인 레포 main, 2026-10-08</span>
       <span><b>이슈 DB 스키마</b> v1 · 생성기 v1</span>
       <span><b>예시 값</b> <code>ABC-12345</code>, <code>ghe.example</code>는 자리표시자</span>
     </div>
   </header>
+
+  <!-- ===================================================== 0 -->
+  <section class="chap" id="s0" data-title="처음 읽는다면">
+    <h2><span class="no">0</span>처음 읽는다면</h2>
+
+    <div class="sub" id="s0-path" data-title="역할별 읽는 순서">
+      <h3>역할별 읽는 순서</h3>
+      <p>이 문서를 처음부터 끝까지 읽을 필요는 없습니다. 내 역할에 맞는 장만 읽고, 나머지는 막혔을 때 검색으로 찾으면 됩니다.</p>
+      <div class="tbl"><table>
+        <tr><th>나는</th><th>먼저 읽을 것</th><th>필요할 때</th></tr>
+        <tr><td><b>처음 쓰는 팀원</b></td><td><a href="#s0-concepts">0.2 핵심 개념</a>, <a href="#s3-user">3.2 설치</a>, <a href="#s3-practice">3.5 dry-run 연습</a>, <a href="#s4-map">4.1 커맨드 한눈에</a></td><td><a href="#s5">5장 결과 읽기</a>, <a href="#s6">6장 문제 해결</a></td></tr>
+        <tr><td><b>카테고리 오너</b></td><td>위 내용과 <a href="#s7-review">PR 리뷰와 머지</a>, <a href="#s7-monthly">월간 리뷰</a></td><td><a href="#s7-add">유형·원인 추가와 검토</a></td></tr>
+        <tr><td><b>메인테이너·도입 담당</b></td><td><a href="#s2">2장 요구 사항</a>, <a href="#s3-admin">3.1 관리자 선행 작업</a>, <a href="#s7-rollout">도입 단계</a></td><td><a href="#s7">7장</a> 나머지, <a href="#s8">8장 보안</a></td></tr>
+      </table></div>
+    </div>
+
+    <div class="sub" id="s0-concepts" data-title="핵심 개념 쉽게">
+      <h3>꼭 알아야 할 개념 여덟 가지</h3>
+      <p>이 도구의 낯선 말은 대부분 아래 여덟 가지로 설명됩니다. 정확한 정의는 <a href="#s9-terms">용어집</a>에 있습니다.</p>
+      <div class="concepts">
+        <div><b>이슈 DB</b>팀이 함께 쓰는 <i>사례집</i>입니다. "이 증상은 이 원인이었고 이렇게 고쳤다"를 GHE 레포에 쌓습니다.</div>
+        <div><b>유형과 원인</b>유형은 사용자가 보는 <i>증상</i>, 원인은 그 증상을 만든 <i>이유</i>입니다. 예를 들어 "데이터가 안 붙음"이 유형이고 "로밍 설정이 꺼짐"이 원인입니다.</div>
+        <div><b>시그니처</b>로그에서 그 증상이나 원인을 알아보는 <i>판별 조건</i>입니다. "이 문구가 이 시간 안에 나오면"처럼 적습니다.</div>
+        <div><b>S와 C</b>S는 증상 조건이 맞았는지, C는 원인 조건이 맞았는지입니다. 둘 다 0 아니면 1이고, 판정은 이 두 값으로만 합니다.</div>
+        <div><b>fixture</b>원인마다 붙여 두는 <i>기준 로그</i>입니다. 개인정보를 가린 짧은 조각이고, 규칙을 바꿀 때마다 이 로그로 결과가 그대로인지 다시 확인합니다.</div>
+        <div><b>마스킹</b>IMSI, 전화번호, IP 같은 값을 <code>&lt;IMSI#1&gt;</code> 같은 표시로 바꾸는 일입니다. 저장되는 로그는 모두 마스킹된 것입니다.</div>
+        <div><b>작업 계획</b>"이 Jira를 이 원인에 추가" 같은 <i>할 일 목록</i>입니다. 파일을 바로 고치지 않고 이 목록을 최신 main 위에 다시 적용해 PR을 만듭니다.</div>
+        <div><b>스냅샷과 lock</b>스냅샷은 분석할 때 읽는 이슈 DB 복사본입니다. 내 clone은 건드리지 않습니다. lock은 한 사람이 쓰기 작업 두 개를 동시에 하지 못하게 막습니다.</div>
+      </div>
+      <div class="note easy"><span class="k">한 문장으로</span>로그는 스크립트가 규칙대로 판정하고, Claude는 설명을 돕고, 기록은 사람이 확인한 것만 PR로 들어갑니다.</div>
+    </div>
+
+    <div class="sub" id="s0-design" data-title="현재 설계 한 장">
+      <h3>현재 설계 한 장</h3>
+      <p>플러그인은 층 다섯 개로 나뉩니다. 위층은 아래층의 결과를 바꾸지 못합니다. 예를 들어 Claude가 그럴듯한 의견을 내도 S/C 판정과 점수는 스크립트 출력 그대로입니다.</p>
+<figure class="fig"><svg viewBox="0 0 826 526" role="img" aria-labelledby="arcT"><title id="arcT">계층별 설계도</title><defs><marker id="arh" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0,0 L10,5 L0,10 z"/></marker><marker id="arha" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head acc" d="M0,0 L10,5 L0,10 z"/></marker></defs><text class="lab" x="16" y="46">결정</text>
+<text class="lab" x="16" y="136">입구</text>
+<text class="lab" x="16" y="226">설명·질문</text>
+<text class="lab" x="16" y="336">판정·적용</text>
+<text class="lab" x="16" y="466">저장</text>
+<rect class="box hl" x="90" y="20" width="520" height="50" rx="6"/>
+<text class="t" x="102" y="42">사용자</text>
+<text class="s" x="102" y="60">분류 확정 · 새 원인 승인 · push 전 확인 화면 승인</text>
+<rect class="box" x="90" y="110" width="520" height="50" rx="6"/>
+<text class="t" x="102" y="132">커맨드 12개</text>
+<text class="s" x="102" y="150">analyze · record · search · sync · sync-pr · fix-submitted · verify-fix …</text>
+<rect class="box" x="90" y="200" width="520" height="66" rx="6"/>
+<text class="t" x="102" y="222">스킬 telephony-triage</text>
+<text class="s" x="102" y="240">스크립트 출력을 설명하고, 물어보고, 사용자 결정을 작업 계획(plan.json)으로 적음</text>
+<text class="s" x="102" y="257">흐름별 절차는 reference/ 11개 문서</text>
+<rect class="box" x="90" y="300" width="124" height="112" rx="6"/>
+<text class="t" x="102" y="322">분석</text>
+<text class="s" x="102" y="340">triage.py</text>
+<text class="s" x="102" y="357">parse_logcat</text>
+<text class="s" x="102" y="374">mask_pii</text>
+<text class="s" x="102" y="391">match_signatures</text>
+<rect class="box" x="222" y="300" width="124" height="112" rx="6"/>
+<text class="t" x="234" y="322">기록</text>
+<text class="s" x="234" y="340">db_pr · db_add</text>
+<text class="s" x="234" y="357">db_build · db_lint</text>
+<text class="s" x="234" y="374">db_regress</text>
+<text class="s" x="234" y="391">db_verify</text>
+<rect class="box" x="354" y="300" width="124" height="112" rx="6"/>
+<text class="t" x="366" y="322">조회</text>
+<text class="s" x="366" y="340">db_search</text>
+<text class="s" x="366" y="357">db_review</text>
+<text class="s" x="366" y="374">db_summary</text>
+<rect class="box" x="486" y="300" width="124" height="112" rx="6"/>
+<text class="t" x="498" y="322">설정</text>
+<text class="s" x="498" y="340">config.py</text>
+<text class="s" x="498" y="357">setup · doctor</text>
+<text class="s" x="498" y="374">db_migrate</text>
+<rect class="box in" x="640" y="110" width="170" height="302" rx="6"/>
+<text class="t" x="652" y="132">hooks</text>
+<text class="s" x="652" y="150">guard.py</text>
+<text class="s" x="652" y="167">Jira 쓰기 차단</text>
+<text class="s" x="652" y="184">main push 차단</text>
+<text class="s" x="652" y="201">clone 직접 편집 차단</text>
+<text class="s" x="652" y="218">로그 원문 통독 차단</text>
+<text class="s" x="652" y="235"></text>
+<text class="s" x="652" y="252">jira_bridge.py</text>
+<text class="s" x="652" y="269">Jira 원문 격리</text>
+<text class="s" x="652" y="286"></text>
+<text class="s" x="652" y="303">git hook</text>
+<text class="s" x="652" y="320">pre-commit · pre-push</text>
+<rect class="box in" x="90" y="446" width="250" height="66" rx="6"/>
+<text class="t" x="102" y="468">내 PC  ~/.telephony-triage</text>
+<text class="s" x="102" y="486">config.yaml · work/_snapshot</text>
+<text class="s" x="102" y="503">work/&lt;KEY&gt;/ 계획 · 리포트 · worktree</text>
+<rect class="box hl" x="360" y="446" width="250" height="66" rx="6"/>
+<text class="t" x="372" y="468">이슈 DB (GHE)</text>
+<text class="s" x="372" y="486">유형 · 원인 · Jira 기록 · fixture · parser-rules</text>
+<text class="s" x="372" y="503">main 보호 + CODEOWNERS 리뷰</text>
+<rect class="box ext" x="640" y="446" width="170" height="66" rx="6"/>
+<text class="t" x="652" y="468">외부 입력</text>
+<text class="s" x="652" y="486">Jira MCP (읽기)</text>
+<text class="s" x="652" y="503">logcat · 소스 트리</text>
+<path class="ln acc" d="M350,70 L350,108" marker-end="url(#arha)"/>
+<path class="ln" d="M350,160 L350,198" marker-end="url(#arh)"/>
+<path class="ln" d="M350,266 L350,298" marker-end="url(#arh)"/>
+<path class="ln" d="M200,412 L200,444" marker-end="url(#arh)"/>
+<path class="ln acc" d="M480,412 L480,444" marker-end="url(#arha)"/>
+<path class="ln" d="M612,240 L638,240" marker-end="url(#arh)"/>
+<text class="lab" x="370" y="92">명령</text>
+<text class="lab" x="208" y="436">계획 · 리포트</text>
+<text class="lab" x="488" y="436">PR (승인 뒤)</text></svg><figcaption>위에서 아래로 내려갈수록 결정이 기계적입니다. 사람은 확정하고, 스킬은 설명하고 묻고, 스크립트가 판정하고 적용합니다. hooks는 Claude가 도구를 부를 때마다 옆에서 검사합니다.</figcaption></figure>
+      <div class="tbl"><table>
+        <tr><th>층</th><th>누가</th><th>하는 일</th><th>하지 않는 일</th></tr>
+        <tr><td>결정</td><td>사용자</td><td>분류 확정, 새 유형·원인 승인, push 전 확인 화면 승인</td><td>파일을 직접 고치지 않아도 됩니다. 도구가 계획대로 만듭니다</td></tr>
+        <tr><td>입구</td><td>커맨드</td><td>인자를 받아 스킬의 해당 절차를 부름</td><td>판단하지 않음</td></tr>
+        <tr><td>설명·질문</td><td>스킬(Claude)</td><td>리포트 설명 칸 채우기, 질문하기, 답을 작업 계획으로 적기</td><td>판정·점수 결정, 이슈 DB 파일 직접 쓰기</td></tr>
+        <tr><td>판정·적용</td><td>스크립트</td><td>파싱, 마스킹, 매칭, 검증, 계획 적용, 커밋·push·PR</td><td>사용자 확인 없이 기록하기</td></tr>
+        <tr><td>안전장치</td><td>hooks</td><td>Claude가 도구를 부를 때마다 검사해 위험한 호출을 거부</td><td>모든 우회를 막지는 못함. 서버 브랜치 보호가 최종 방어선</td></tr>
+      </table></div>
+    </div>
+
+    <div class="sub" id="s0-cmdmap" data-title="커맨드별 동작 지도">
+      <h3>커맨드별 동작 지도</h3>
+      <p>커맨드는 모두 같은 스킬을 부르고, 이슈 DB에 쓰는 커맨드는 모두 같은 <a href="#s0-seq">공통 쓰기 절차</a>로 끝납니다. 그래서 그림 네 장으로 열두 커맨드를 거의 다 설명할 수 있습니다.</p>
+      <div class="tbl"><table>
+        <tr><th>커맨드</th><th>무엇을</th><th>주요 스크립트</th><th>이슈 DB</th><th>그림</th></tr>
+        <tr><td><code>setup</code></td><td>설정 만들기, Jira 도구 연결, hook 설치, 점검 표</td><td><code>config.py</code>, <code>db_pr.py snapshot</code></td><td>읽기</td><td><a href="#s3-setup">3.3 표</a></td></tr>
+        <tr><td><code>analyze</code></td><td>로그 분석, 분류 확정, 기록</td><td><code>triage.py run</code>, <code>db_pr.py</code></td><td>PR</td><td>A 다음 B</td></tr>
+        <tr><td><code>record</code></td><td>로그 분석 없이 직접 해결한 이슈 기록</td><td><code>db_add.py similar</code>, <code>db_pr.py</code></td><td>PR</td><td>B</td></tr>
+        <tr><td><code>search</code></td><td>이미 기록된 이슈 찾기</td><td><code>db_search.py</code></td><td>읽기</td><td>없음</td></tr>
+        <tr><td><code>sync</code></td><td>스냅샷 최신화, 정리 후보, 내 PR 확인</td><td><code>db_pr.py snapshot · cleanup · my-prs</code></td><td>읽기</td><td>D</td></tr>
+        <tr><td><code>sync-pr</code></td><td>main이 바뀐 뒤 내 PR에 계획 다시 적용</td><td><code>db_pr.py find-plan</code></td><td>PR 갱신</td><td>D 다음 B</td></tr>
+        <tr><td><code>fix-submitted</code></td><td>수정 CL과 빌드 기록</td><td><code>db_pr.py</code></td><td>PR</td><td>B</td></tr>
+        <tr><td><code>verify-fix</code></td><td>수정 빌드 로그로 재발 여부 판정</td><td><code>db_verify.py fix</code></td><td>PR</td><td>C 다음 B</td></tr>
+        <tr><td><code>validate</code></td><td>직접 편집 검사, 또는 <code>--cause</code>로 해결책 효과 검증</td><td><code>db_lint</code>, <code>db_regress</code>, <code>db_verify.py</code></td><td>읽기, <code>--cause</code>는 PR</td><td><code>--cause</code>는 C와 같은 모양, 이어서 B</td></tr>
+        <tr><td><code>preview</code></td><td>생성 파일 미리보기</td><td><code>db_build.py --preview</code></td><td>읽기</td><td>없음</td></tr>
+        <tr><td><code>review</code></td><td>카테고리 월간 리뷰 리포트</td><td><code>db_review.py</code></td><td>읽기</td><td>없음</td></tr>
+        <tr><td><code>migrate</code></td><td>메인테이너가 스키마 버전 올리기</td><td><code>db_migrate.py</code></td><td>자기 브랜치</td><td><a href="#s7-migrate">7장</a></td></tr>
+      </table></div>
+    </div>
+
+    <div class="sub" id="s0-seq" data-title="시퀀스 다이어그램">
+      <h3>시퀀스 다이어그램</h3>
+      <p>세로선은 참여자, 가로 화살표는 호출 순서입니다. 실선은 호출, 점선은 결과, <b>굵은 글씨의 강조색 화살표는 사람이 결정하는 곳</b>입니다. 회색 상자는 그 참여자가 안에서 하는 일입니다.</p>
+      <h4>A. analyze: 분석에서 분류 확정까지</h4>
+<figure class="fig"><svg viewBox="0 0 940 762" role="img" aria-labelledby="sqAT">
+<title id="sqAT">analyze 분석 단계 시퀀스</title><defs>
+<marker id="sqAh" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0,0 L10,5 L0,10 z"/></marker>
+<marker id="sqAha" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head acc" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+<rect class="box hl" x="28" y="8" width="134" height="44" rx="6"/>
+<text class="t" x="95" y="27" text-anchor="middle">사용자</text>
+<text class="m" x="95" y="44" text-anchor="middle">엔지니어</text>
+<path class="ln" stroke-dasharray="3 4" d="M95,52 L95,758" opacity="0.6"/>
+<rect class="box" x="178" y="8" width="134" height="44" rx="6"/>
+<text class="t" x="245" y="27" text-anchor="middle">Claude</text>
+<text class="m" x="245" y="44" text-anchor="middle">스킬</text>
+<path class="ln" stroke-dasharray="3 4" d="M245,52 L245,758" opacity="0.6"/>
+<rect class="box" x="328" y="8" width="134" height="44" rx="6"/>
+<text class="t" x="395" y="27" text-anchor="middle">hooks</text>
+<text class="m" x="395" y="44" text-anchor="middle">guard · bridge</text>
+<path class="ln" stroke-dasharray="3 4" d="M395,52 L395,758" opacity="0.6"/>
+<rect class="box" x="478" y="8" width="134" height="44" rx="6"/>
+<text class="t" x="545" y="27" text-anchor="middle">triage.py</text>
+<text class="m" x="545" y="44" text-anchor="middle">파서 · 매처</text>
+<path class="ln" stroke-dasharray="3 4" d="M545,52 L545,758" opacity="0.6"/>
+<rect class="box" x="628" y="8" width="134" height="44" rx="6"/>
+<text class="t" x="695" y="27" text-anchor="middle">Jira MCP</text>
+<text class="m" x="695" y="44" text-anchor="middle">읽기 전용</text>
+<path class="ln" stroke-dasharray="3 4" d="M695,52 L695,758" opacity="0.6"/>
+<rect class="box" x="778" y="8" width="134" height="44" rx="6"/>
+<text class="t" x="845" y="27" text-anchor="middle">이슈 DB</text>
+<text class="m" x="845" y="44" text-anchor="middle">GHE</text>
+<path class="ln" stroke-dasharray="3 4" d="M845,52 L845,758" opacity="0.6"/>
+<path class="ln" d="M95,78 L243,78" marker-end="url(#sqAh)"/>
+<text class="s" x="103" y="72">/analyze KEY 로그 경로</text>
+<rect class="box in" x="335" y="96" width="265" height="26" rx="4"/>
+<text class="s" x="345" y="113">guard: 허용 목록의 Jira 읽기 도구만 통과</text>
+<path class="ln" d="M245,148 L693,148" marker-end="url(#sqAh)"/>
+<text class="s" x="253" y="142">get_issue</text>
+<path class="ln" stroke-dasharray="5 4" d="M695,182 L397,182" marker-end="url(#sqAh)"/>
+<text class="s" x="403" y="176">응답 원문</text>
+<rect class="box in" x="335" y="200" width="354" height="26" rx="4"/>
+<text class="s" x="345" y="217">jira_bridge: 원문은 작업 폴더에, 모델에는 마스킹 요약만</text>
+<path class="ln" stroke-dasharray="5 4" d="M395,252 L247,252" marker-end="url(#sqAh)"/>
+<text class="s" x="253" y="246">마스킹된 요약</text>
+<path class="ln" d="M245,286 L543,286" marker-end="url(#sqAh)"/>
+<text class="s" x="253" y="280">triage.py run KEY --logs …</text>
+<path class="ln" d="M545,320 L843,320" marker-end="url(#sqAh)"/>
+<text class="s" x="553" y="314">fetch, 읽기 스냅샷 갱신</text>
+<rect class="box in" x="485" y="338" width="374" height="26" rx="4"/>
+<text class="s" x="495" y="355">lock · 로그 파싱과 마스킹 · 시그니처 매칭(S/C) · 코드 위치</text>
+<path class="ln" stroke-dasharray="2 4" d="M14,386 L940,386"/>
+<text class="lab" x="16" y="402">결정이 필요할 때: 발생 시각, 소스 트리, 로그 범위 밖, lock 이어받기</text>
+<path class="ln" stroke-dasharray="5 4" d="M545,436 L247,436" marker-end="url(#sqAh)"/>
+<text class="s" x="253" y="430">needs_input + 선택지</text>
+<path class="ln acc" d="M245,470 L97,470" marker-end="url(#sqAha)"/>
+<text class="lab" x="103" y="464">질문 (대신 고르지 않음)</text>
+<path class="ln acc" d="M95,504 L243,504" marker-end="url(#sqAha)"/>
+<text class="lab" x="103" y="498">답</text>
+<path class="ln" d="M245,538 L543,538" marker-end="url(#sqAh)"/>
+<text class="s" x="253" y="532">같은 명령 + --answer 로 재실행</text>
+<path class="ln" stroke-dasharray="2 4" d="M14,568 L940,568"/>
+<text class="lab" x="16" y="584">판정이 끝나면</text>
+<path class="ln" stroke-dasharray="5 4" d="M545,618 L247,618" marker-end="url(#sqAh)"/>
+<text class="s" x="253" y="612">analysis.json · report.md</text>
+<path class="ln" d="M245,652 L97,652" marker-end="url(#sqAh)"/>
+<text class="s" x="103" y="646">리포트 (Claude는 설명 칸만 채움)</text>
+<path class="ln acc" d="M95,686 L243,686" marker-end="url(#sqAha)"/>
+<text class="lab" x="103" y="680">분류 확정: 예 / 다른 원인 / 새 원인 / 새 유형 / 미확정</text>
+<rect class="box in" x="185" y="704" width="420" height="26" rx="4"/>
+<text class="s" x="195" y="721">plan.json 저장, 이어서 그림 B의 공통 쓰기 절차</text>
+</svg><figcaption>굵은 글씨의 강조색 화살표는 사람이 결정하는 곳입니다. <code>--analysis-only</code>면 리포트에서 끝나고 lock을 풉니다.</figcaption></figure>
+      <h4>B. 공통 쓰기 절차: 계획 적용에서 PR까지</h4>
+<figure class="fig"><svg viewBox="0 0 984 762" role="img" aria-labelledby="sqBT">
+<title id="sqBT">공통 쓰기 절차 시퀀스</title><defs>
+<marker id="sqBh" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0,0 L10,5 L0,10 z"/></marker>
+<marker id="sqBha" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head acc" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+<rect class="box hl" x="28" y="8" width="134" height="44" rx="6"/>
+<text class="t" x="95" y="27" text-anchor="middle">사용자</text>
+<text class="m" x="95" y="44" text-anchor="middle">엔지니어</text>
+<path class="ln" stroke-dasharray="3 4" d="M95,52 L95,758" opacity="0.6"/>
+<rect class="box" x="178" y="8" width="134" height="44" rx="6"/>
+<text class="t" x="245" y="27" text-anchor="middle">Claude</text>
+<text class="m" x="245" y="44" text-anchor="middle">스킬</text>
+<path class="ln" stroke-dasharray="3 4" d="M245,52 L245,758" opacity="0.6"/>
+<rect class="box" x="328" y="8" width="134" height="44" rx="6"/>
+<text class="t" x="395" y="27" text-anchor="middle">db_pr.py</text>
+<text class="m" x="395" y="44" text-anchor="middle">적용 · 게시</text>
+<path class="ln" stroke-dasharray="3 4" d="M395,52 L395,758" opacity="0.6"/>
+<rect class="box" x="478" y="8" width="134" height="44" rx="6"/>
+<text class="t" x="545" y="27" text-anchor="middle">작업 worktree</text>
+<text class="m" x="545" y="44" text-anchor="middle">tt/&lt;브랜치&gt;</text>
+<path class="ln" stroke-dasharray="3 4" d="M545,52 L545,758" opacity="0.6"/>
+<rect class="box" x="628" y="8" width="134" height="44" rx="6"/>
+<text class="t" x="695" y="27" text-anchor="middle">hooks</text>
+<text class="m" x="695" y="44" text-anchor="middle">guard · bridge</text>
+<path class="ln" stroke-dasharray="3 4" d="M695,52 L695,758" opacity="0.6"/>
+<rect class="box" x="778" y="8" width="134" height="44" rx="6"/>
+<text class="t" x="845" y="27" text-anchor="middle">이슈 DB</text>
+<text class="m" x="845" y="44" text-anchor="middle">GHE</text>
+<path class="ln" stroke-dasharray="3 4" d="M845,52 L845,758" opacity="0.6"/>
+<path class="ln" d="M245,78 L393,78" marker-end="url(#sqBh)"/>
+<text class="s" x="253" y="72">preflight: 브랜치 · 열린 PR · 같은 Jira</text>
+<path class="ln" d="M245,112 L393,112" marker-end="url(#sqBh)"/>
+<text class="s" x="253" y="106">stage plan.json --then-summary</text>
+<path class="ln" d="M395,146 L543,146" marker-end="url(#sqBh)"/>
+<text class="s" x="403" y="140">최신 main 위에 계획 적용</text>
+<rect class="box in" x="485" y="164" width="408" height="26" rx="4"/>
+<text class="s" x="495" y="181">새 ID 할당 · README/STATS 생성 · lint · 마스킹 · 회귀 · R1~R6</text>
+<path class="ln" stroke-dasharray="2 4" d="M14,212 L984,212"/>
+<text class="lab" x="16" y="228">drift가 있으면 (종료 코드 1)</text>
+<path class="ln" stroke-dasharray="5 4" d="M395,262 L247,262" marker-end="url(#sqBh)"/>
+<text class="s" x="253" y="256">drift 목록</text>
+<path class="ln acc" d="M245,296 L97,296" marker-end="url(#sqBha)"/>
+<text class="lab" x="103" y="290">계획 값 / main 값 / 직접 입력</text>
+<path class="ln acc" d="M95,330 L243,330" marker-end="url(#sqBha)"/>
+<text class="lab" x="103" y="324">선택, 계획 고쳐 다시 stage</text>
+<path class="ln" stroke-dasharray="2 4" d="M14,360 L984,360"/>
+<text class="lab" x="16" y="376">검사를 통과하면</text>
+<path class="ln" stroke-dasharray="5 4" d="M395,410 L247,410" marker-end="url(#sqBh)"/>
+<text class="s" x="253" y="404">확인 화면 + approved_hash</text>
+<path class="ln acc" d="M245,444 L97,444" marker-end="url(#sqBha)"/>
+<text class="lab" x="103" y="438">확인 화면 그대로 보여주기</text>
+<path class="ln acc" d="M95,478 L243,478" marker-end="url(#sqBha)"/>
+<text class="lab" x="103" y="472">승인 (수정 요청 · 전체 diff · 취소도 가능)</text>
+<path class="ln" d="M245,512 L393,512" marker-end="url(#sqBh)"/>
+<text class="s" x="253" y="506">publish --approved &lt;hash&gt; --commit</text>
+<rect class="box in" x="635" y="530" width="336" height="26" rx="4"/>
+<text class="s" x="645" y="547">push 권한 확인 · pre-commit · pre-push(main 거부)</text>
+<path class="ln" d="M395,582 L843,582" marker-end="url(#sqBh)"/>
+<text class="s" x="403" y="576">브랜치 push, PR 생성</text>
+<path class="ln" stroke-dasharray="5 4" d="M845,616 L397,616" marker-end="url(#sqBh)"/>
+<text class="s" x="403" y="610">PR 번호</text>
+<rect class="box in" x="335" y="634" width="257" height="26" rx="4"/>
+<text class="s" x="345" y="651">worktree · 도구 브랜치 정리, lock 해제</text>
+<path class="ln" stroke-dasharray="5 4" d="M395,686 L247,686" marker-end="url(#sqBh)"/>
+<text class="s" x="253" y="680">PR 링크</text>
+<rect class="box in" x="785" y="704" width="190" height="26" rx="4"/>
+<text class="s" x="795" y="721">카테고리 오너가 리뷰하고 머지</text>
+</svg><figcaption>analyze 기록, record, fix-submitted, verify-fix, validate --cause, sync-pr가 모두 이 절차를 씁니다. 승인 뒤 파일이 바뀌면 승인은 무효이고 다시 확인합니다.</figcaption></figure>
+      <h4>C. verify-fix: 수정 빌드 검증</h4>
+<figure class="fig"><svg viewBox="0 0 989 520" role="img" aria-labelledby="sqCT">
+<title id="sqCT">verify-fix 시퀀스</title><defs>
+<marker id="sqCh" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0,0 L10,5 L0,10 z"/></marker>
+<marker id="sqCha" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head acc" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+<rect class="box hl" x="28" y="8" width="174" height="44" rx="6"/>
+<text class="t" x="115" y="27" text-anchor="middle">사용자</text>
+<text class="m" x="115" y="44" text-anchor="middle">엔지니어</text>
+<path class="ln" stroke-dasharray="3 4" d="M115,52 L115,516" opacity="0.6"/>
+<rect class="box" x="218" y="8" width="174" height="44" rx="6"/>
+<text class="t" x="305" y="27" text-anchor="middle">Claude</text>
+<text class="m" x="305" y="44" text-anchor="middle">스킬</text>
+<path class="ln" stroke-dasharray="3 4" d="M305,52 L305,516" opacity="0.6"/>
+<rect class="box" x="408" y="8" width="174" height="44" rx="6"/>
+<text class="t" x="495" y="27" text-anchor="middle">db_pr · db_search</text>
+<text class="m" x="495" y="44" text-anchor="middle">준비 · 조회</text>
+<path class="ln" stroke-dasharray="3 4" d="M495,52 L495,516" opacity="0.6"/>
+<rect class="box" x="598" y="8" width="174" height="44" rx="6"/>
+<text class="t" x="685" y="27" text-anchor="middle">db_verify.py</text>
+<text class="m" x="685" y="44" text-anchor="middle">판정</text>
+<path class="ln" stroke-dasharray="3 4" d="M685,52 L685,516" opacity="0.6"/>
+<path class="ln" d="M115,78 L303,78" marker-end="url(#sqCh)"/>
+<text class="s" x="123" y="72">/verify-fix 원인 ID 수정 빌드 로그</text>
+<path class="ln" d="M305,112 L493,112" marker-end="url(#sqCh)"/>
+<text class="s" x="313" y="106">lock · 스냅샷 · 쓰기 가능 확인</text>
+<path class="ln" d="M305,146 L493,146" marker-end="url(#sqCh)"/>
+<text class="s" x="313" y="140">원인 조회</text>
+<path class="ln" stroke-dasharray="5 4" d="M495,180 L307,180" marker-end="url(#sqCh)"/>
+<text class="s" x="313" y="174">fix 상태 · fixed_in 빌드 · 흔적 시그니처</text>
+<path class="ln" stroke-dasharray="2 4" d="M14,210 L989,210"/>
+<text class="lab" x="16" y="226">fix-submitted가 아니거나 빌드·흔적 시그니처가 없으면 여기서 멈춤</text>
+<path class="ln" d="M305,260 L683,260" marker-end="url(#sqCh)"/>
+<text class="s" x="313" y="254">db_verify fix --build &lt;빌드&gt;</text>
+<rect class="box in" x="625" y="278" width="355" height="26" rx="4"/>
+<text class="s" x="635" y="295">회귀·검증 모드: 파일 전체, 모든 원인 독립 평가, 보너스 0</text>
+<path class="ln" stroke-dasharray="5 4" d="M685,330 L307,330" marker-end="url(#sqCh)"/>
+<text class="s" x="313" y="324">판정 · 근거 · 제안 op</text>
+<path class="ln acc" d="M305,364 L117,364" marker-end="url(#sqCha)"/>
+<text class="lab" x="123" y="358">판정 결과를 보여주고 기록할지 확인</text>
+<path class="ln" stroke-dasharray="2 4" d="M14,394 L989,394"/>
+<text class="lab" x="16" y="410">결과별 기록: passed는 fixed와 수정 후 fixture · failed는 open으로 되돌림 · partial은 상태 유지 · unknown은 기록 안 함</text>
+<path class="ln acc" d="M115,444 L303,444" marker-end="url(#sqCha)"/>
+<text class="lab" x="123" y="438">확인</text>
+<rect class="box in" x="245" y="462" width="500" height="26" rx="4"/>
+<text class="s" x="255" y="479">계획 작성, 이어서 그림 B</text>
+</svg><figcaption><code>fixed</code>는 이 흐름의 passed로만 됩니다. 시나리오 흔적이 로그에 없으면 사용자 말로 대신하지 않고 unknown입니다.</figcaption></figure>
+      <h4>D. sync와 sync-pr: 최신화와 PR 재동기화</h4>
+<figure class="fig"><svg viewBox="0 0 902 680" role="img" aria-labelledby="sqDT">
+<title id="sqDT">sync와 sync-pr 시퀀스</title><defs>
+<marker id="sqDh" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0,0 L10,5 L0,10 z"/></marker>
+<marker id="sqDha" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head acc" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+<rect class="box hl" x="28" y="8" width="174" height="44" rx="6"/>
+<text class="t" x="115" y="27" text-anchor="middle">사용자</text>
+<text class="m" x="115" y="44" text-anchor="middle">엔지니어</text>
+<path class="ln" stroke-dasharray="3 4" d="M115,52 L115,676" opacity="0.6"/>
+<rect class="box" x="218" y="8" width="174" height="44" rx="6"/>
+<text class="t" x="305" y="27" text-anchor="middle">Claude</text>
+<text class="m" x="305" y="44" text-anchor="middle">스킬</text>
+<path class="ln" stroke-dasharray="3 4" d="M305,52 L305,676" opacity="0.6"/>
+<rect class="box" x="408" y="8" width="174" height="44" rx="6"/>
+<text class="t" x="495" y="27" text-anchor="middle">db_pr.py</text>
+<text class="m" x="495" y="44" text-anchor="middle">lock · 스냅샷</text>
+<path class="ln" stroke-dasharray="3 4" d="M495,52 L495,676" opacity="0.6"/>
+<rect class="box" x="598" y="8" width="174" height="44" rx="6"/>
+<text class="t" x="685" y="27" text-anchor="middle">이슈 DB</text>
+<text class="m" x="685" y="44" text-anchor="middle">GHE</text>
+<path class="ln" stroke-dasharray="3 4" d="M685,52 L685,676" opacity="0.6"/>
+<path class="ln" d="M115,78 L303,78" marker-end="url(#sqDh)"/>
+<text class="s" x="123" y="72">/sync</text>
+<path class="ln" d="M305,112 L493,112" marker-end="url(#sqDh)"/>
+<text class="s" x="313" y="106">lock acquire sync</text>
+<path class="ln" d="M495,146 L683,146" marker-end="url(#sqDh)"/>
+<text class="s" x="503" y="140">fetch origin/main</text>
+<rect class="box in" x="435" y="164" width="457" height="26" rx="4"/>
+<text class="s" x="445" y="181">스냅샷 이동 · 사후 lint · 내 clone은 main이고 깨끗할 때만 fast-forward</text>
+<path class="ln" d="M305,216 L493,216" marker-end="url(#sqDh)"/>
+<text class="s" x="313" y="210">lock release, cleanup --dry-run</text>
+<path class="ln" stroke-dasharray="5 4" d="M495,250 L307,250" marker-end="url(#sqDh)"/>
+<text class="s" x="313" y="244">정리 후보 · 지우지 않을 보존 목록</text>
+<path class="ln acc" d="M305,284 L117,284" marker-end="url(#sqDha)"/>
+<text class="lab" x="123" y="278">지울지 묻기 (보존 목록은 안내만)</text>
+<path class="ln" d="M305,318 L493,318" marker-end="url(#sqDh)"/>
+<text class="s" x="313" y="312">my-prs</text>
+<path class="ln" stroke-dasharray="5 4" d="M495,352 L307,352" marker-end="url(#sqDh)"/>
+<text class="s" x="313" y="346">내 PR마다 base 이동 여부</text>
+<path class="ln" d="M305,386 L117,386" marker-end="url(#sqDh)"/>
+<text class="s" x="123" y="380">base가 움직였으면 sync-pr 안내</text>
+<path class="ln" stroke-dasharray="2 4" d="M14,416 L902,416"/>
+<text class="lab" x="16" y="432">sync-pr: PR 작성자 PC에서</text>
+<path class="ln" d="M115,466 L303,466" marker-end="url(#sqDh)"/>
+<text class="s" x="123" y="460">/sync-pr [브랜치]</text>
+<path class="ln" d="M305,500 L493,500" marker-end="url(#sqDh)"/>
+<text class="s" x="313" y="494">find-plan</text>
+<rect class="box in" x="435" y="518" width="279" height="26" rx="4"/>
+<text class="s" x="445" y="535">계획이 없는 브랜치면 수동 절차만 안내하고 끝</text>
+<path class="ln" d="M305,570 L493,570" marker-end="url(#sqDh)"/>
+<text class="s" x="313" y="564">lock · 스냅샷 · preflight</text>
+<path class="ln acc" d="M305,604 L117,604" marker-end="url(#sqDha)"/>
+<text class="lab" x="123" y="598">마지막 publish 뒤 원격이 바뀌었으면 덮어쓰기 / 중단</text>
+<rect class="box in" x="245" y="622" width="321" height="26" rx="4"/>
+<text class="s" x="255" y="639">그림 B로 계획 재적용, 같은 PR을 lease push로 갱신</text>
+</svg><figcaption>sync는 이슈 DB를 쓰지 않습니다. sync-pr는 계획이 있는 PC에서만 되고, 새 ID는 그때의 main 기준으로 다시 정해집니다.</figcaption></figure>
+    </div>
+  </section>
 
   <!-- ===================================================== 1 -->
   <section class="chap" id="s1" data-title="개요">
@@ -399,13 +785,13 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
     <div class="sub" id="s1-status" data-title="현재 상태와 수치">
       <h3>현재 상태와 측정 수치</h3>
       <ul>
-        <li>개발 단계(사외 초안, Phase D0~13)는 끝났고, 도입 조직 환경에 맞추는 사내 보완 단계(S-1~S-7, <a href="#s7-rollout">7.12</a>)는 아직 남아 있습니다.</li>
-        <li>자동 테스트 약 1,050개, CI(Ubuntu, Python 3.11·3.14) 통과. 샘플 이슈 DB 회귀 fixture 20/20. 스킬 행동 eval 58개 정의.</li>
+        <li>개발 단계(사외 초안, Phase D0~13)와 실제 로그 반영 트랙(L1~L3), 반입 전 3차 검토 반영까지 끝났습니다. 도입 조직 환경에 맞추는 사내 보완 단계(S-0~S-7, <a href="#s7-rollout">7.12</a>)는 아직 남아 있습니다.</li>
+        <li>자동 테스트 약 1,100개, CI(Ubuntu, Python 3.11·3.14) 통과. 샘플 이슈 DB 회귀 fixture 23/23. 스킬 행동 eval 60개 정의.</li>
         <li>토큰(모의 데이터 eval 기준, Sonnet): analyze부터 기록까지 1건 약 39만 토큰(이전 74만에서 48% 감소). 커맨드 1회 20만~80만 토큰, 약 $0.15~0.5. <b>실제 로그·DB 크기에서는 달라질 수 있습니다.</b></li>
       </ul>
       <div class="note plan"><span class="k">예정·알려진 한계</span>
         <ul>
-          <li>파서 이벤트·태그 규칙은 지금 placeholder입니다. 실제 로그 문구로 바꾸는 일은 S-4에서 합니다. 그 전에는 파일럿에 쓰지 않습니다.</li>
+          <li>data 카테고리의 태그와 문구는 실제 단말 로그와 AOSP 공개 소스로 형식을 확인했습니다. 예를 들어 데이터 설정 태그는 <code>DSMGR-&lt;n&gt;</code>이고, 평가 거부는 <code>Data disallowed reasons:</code> 한 줄입니다. 나머지 카테고리의 규칙은 아직 placeholder이고 S-4에서 실제 문구로 바꿉니다. 그 전에는 파일럿에 쓰지 않습니다.</li>
           <li>사내 마켓플레이스 등록(<code>marketplace.json</code>)은 S-7에서 합니다.</li>
           <li>계획 없는 브랜치를 자동으로 합치는 3-way replay, 사후 lint 정리 PR 자동화는 v1에 없습니다. 메인테이너가 수동으로 정리합니다.</li>
           <li>Read 도구로 로그를 한 번에 통째로 읽는 것은 hook이 막지 못합니다(스킬 지침으로만 제한). 사내 S-2 확인 뒤 다룹니다.</li>
@@ -458,7 +844,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
         <li>플러그인 레포 반입과 테스트 재현: <code>pip install '.[test]'</code> 후 <code>python3 -m pytest -q tests</code>가 사외와 같은 결과인지 확인.</li>
         <li><code>plugin/site-defaults.yaml</code> 작성과 커밋(S-3). 이 파일이 없으면 setup과 모든 커맨드가 "사내 기본값 없음"으로 멈춥니다.</li>
         <li>운영 이슈 DB를 뼈대로 만들고 main에 첫 push, 이어서 브랜치 보호와 CODEOWNERS 필수 리뷰를 켭니다. 설정 내용은 이슈 DB <code>docs/branch-protection.md</code>에 기록합니다.</li>
-        <li><code>parser-rules</code>의 placeholder를 실제 태그·문구로 바꾸고 카테고리별 시드 유형을 넣습니다(S-4).</li>
+        <li><code>parser-rules</code>의 placeholder를 실제 태그·문구로 바꾸고 카테고리별 시드 유형을 넣습니다(S-4). 초안은 <code>tools/s0_suggest.py</code>가 제안합니다(<a href="#s7-parser">7.8</a>).</li>
         <li>샌드박스 이슈 DB에서 dry-run과 실제 PR 1건으로 시험합니다(S-5).</li>
       </ol>
       <div class="code"><pre>git clone https://ghe.example/&lt;org&gt;/telephony-triage-plugin.git
@@ -478,6 +864,7 @@ python3 -m pytest -q tests</pre></div>
       </ol>
       <div class="code"><pre>/telephony-triage:setup</pre></div>
       <p>setup은 항목을 하나씩 묻습니다: GHE 아이디, 이슈 DB 로컬 clone 경로, 원격 URL, base 브랜치, GHE 호스트, Jira 시각 타임존, logcat 시각 타임존, 연도 결정 방식(<code>jira | file-mtime | ask</code>), logcat 기본 탐색 경로(선택), 작업 디렉토리. 소스 트리 프로필(<code>code_profiles</code>)은 건너뛸 수 있습니다.</p>
+      <div class="note easy"><span class="k">답한 값만 저장합니다</span>필수 항목과, 팀 기본값과 다르게 답한 항목만 내 config에 저장합니다. 나머지는 저장하지 않으므로 관리자가 <code>site-defaults.yaml</code>의 팀 기본값을 바꾸면 그대로 따라갑니다. 예외로 base 브랜치와 작업 디렉토리는 팀 기본값을 상속하지 않습니다. 예전에 만든 config를 이 방식으로 바꾸려면 <code>config.py init --force</code>로 다시 만들거나 해당 키를 지웁니다.</div>
     </div>
 
     <div class="sub" id="s3-setup" data-title="setup이 하는 일">
@@ -565,7 +952,7 @@ python3 "$S/config.py" doctor --format markdown</pre></div>
           <dt>입력</dt><dd>
             <div class="tbl"><table>
               <tr><th>옵션</th><th>뜻</th></tr>
-              <tr><td><code>logcat 경로</code></td><td>logcat(threadtime 기본) 또는 bugreport(<code>.zip</code>·txt). bugreport는 logcat 섹션(system·radio·main)과 빌드 정보만 꺼내 씀</td></tr>
+              <tr><td><code>logcat 경로</code></td><td>logcat(threadtime 기본) 또는 bugreport(<code>.zip</code>·txt). bugreport는 logcat 섹션(system·radio·main)과 빌드 정보만 꺼내 씀. 이전 부팅 버퍼(<code>-L</code>)는 섞지 않고 건너뜀. 꺼낸 파일은 <code>logs/&lt;이름&gt;-&lt;경로 해시&gt;/</code>에 두어 이름이 같은 bugreport끼리 덮어쓰지 않음</td></tr>
               <tr><td><code>--code</code></td><td>소스 트리 프로필 이름 또는 aosp 경로. 없으면 버전이 맞는 프로필이 정확히 1개일 때 자동 선택(알림), 아니면 물음</td></tr>
               <tr><td><code>--dry-run</code></td><td>확인 화면까지만. 아무것도 올리지 않음</td></tr>
               <tr><td><code>--analysis-only</code></td><td>리포트까지만. 계획·PR 없음, 끝나면 lock 해제. <code>--dry-run</code>과 함께 못 씀</td></tr>
@@ -641,6 +1028,8 @@ python3 "$S/config.py" doctor --format markdown</pre></div>
           <dt>목적</dt><dd>이슈 DB 읽기 스냅샷을 최신 origin/main으로 옮기고, 사후 lint 결과와 정리할 작업 디렉토리, 내 열린 PR을 보여줍니다.</dd>
           <dt>형식</dt><dd><code>/telephony-triage:sync</code></dd>
           <dt>출력</dt><dd>스냅샷 SHA와 base 변경 한 줄(<code>base 변경 abc1234→def5678</code> / <code>변경 없음</code>), 사후 lint 문제(있으면 "메인테이너 정리 필요"), 90일 넘은 닫힌·머지된 PR의 작업 디렉토리 목록, 내 PR마다 <code>#번호 제목 — base 이동 | 이동 없음 | 확인 불가</code>.</dd>
+          <dt>정리 대상</dt><dd>지울 후보는 PR이 닫히거나 머지된 오래된 작업 폴더, 계획 없이 원문만 남은 중단 작업, 남은 worktree·도구 브랜치입니다. 기준일은 기본 90일이고 후보를 고르는 기준일 뿐 자동 삭제가 아닙니다. 계획은 있는데 PR 번호가 없는 폴더는 지우지 않고 따로 보여줍니다.
+            <ul><li><b>미게시 계획 보존</b>: push하지 않은 계획입니다. 이어서 하거나 명시적으로 폐기합니다.</li><li><b>push 기록 있음, PR 연결 미확인</b>: 원격 브랜치와 열린 PR을 확인한 뒤 publish를 다시 하거나 <code>sync-pr &lt;브랜치&gt;</code>로 복구합니다. PR 생성 실패로 단정하지 않습니다.</li></ul></dd>
           <dt>주의</dt><dd>정리는 사용자가 동의할 때만 지웁니다. base가 이동한 PR에는 <code>sync-pr</code>를 <b>안내만</b> 하고 실행하지 않습니다. 사용자 clone은 현재 브랜치가 base이고 깨끗할 때만 fast-forward합니다.</dd>
         </dl>
       </div>
@@ -652,6 +1041,7 @@ python3 "$S/config.py" doctor --format markdown</pre></div>
         <p class="who">PR 작성자</p>
         <dl class="kv">
           <dt>목적</dt><dd>머지 대기 중에 main이 바뀌었을 때, 원래 작업 계획을 최신 main 위에 다시 적용합니다. 새 ID와 fixture 번호는 적용 시점에 다시 할당됩니다.</dd>
+          <dt>쉽게</dt><dd>git rebase로 글자를 합치는 대신 "무엇을 하려 했는지" 목록을 새 main에 처음부터 다시 실행합니다. 그래서 충돌이 거의 없고, 남이 먼저 바꾼 값(drift)이 있을 때만 어느 쪽을 쓸지 묻습니다.</dd>
           <dt>형식</dt><dd><code>/telephony-triage:sync-pr [branch]</code> (없으면 계획에 기록된 열린 PR에서 고름)</dd>
           <dt>출력</dt><dd>확인 화면(ID 재할당 내역, drift 결정 포함) → 승인 → 원격 SHA를 지정한 lease push. 바뀐 ID는 PR 제목·본문에도 반영됩니다.</dd>
           <dt>주의</dt><dd><ul>
@@ -735,7 +1125,7 @@ db_build.py --verify --db &lt;db&gt;</pre></div>
         <dl class="kv">
           <dt>목적</dt><dd>카테고리의 품질·해결 상태 리포트를 만듭니다. 정리는 별도 PR로 합니다(<a href="#s7-monthly">7.6</a>).</dd>
           <dt>형식</dt><dd><code>/telephony-triage:review [category]</code> (없으면 CODEOWNERS 기준 오너 카테고리를 물음)</dd>
-          <dt>출력</dt><dd><code>&lt;work_dir&gt;/review-&lt;category&gt;-&lt;YYYY-MM&gt;/report.md</code>, 항목별 건수 요약. 리포트 머리에 이슈 DB 경로·커밋이 있어 최신 main 기준인지 확인할 수 있습니다.</dd>
+          <dt>출력</dt><dd><code>&lt;work_dir&gt;/review-&lt;category&gt;-&lt;YYYY-MM&gt;/report.md</code>, 항목별 건수 요약. 리포트 머리에 이슈 DB 경로·커밋·브랜치와 커밋 안 된 변경 여부가 나옵니다. 내 clone이 base 브랜치가 아니거나 변경이 있으면, 병합되지 않은 변경이 리포트에 섞였을 수 있다고 알립니다. 확실히 main 기준으로 보려면 <code>sync</code>로 스냅샷을 최신화한 뒤 그 스냅샷을 읽게 합니다.</dd>
         </dl>
       </div>
     </div>
@@ -772,7 +1162,7 @@ db_build.py --verify --db &lt;db&gt;</pre></div>
       <div class="code"><pre>## ABC-12345 분석
 - 분류 후보: data &gt; DATA-001 &gt; DATA-001-02 Roaming disabled (규칙 일치 점수 1.0, 일치 수준 높음 — 진단 확신도 아님)
 - 근거 로그 (마스킹, 슬롯 phone 0):
-  - 09-26 10:05:12.345 DSM-0 ... (f0:L1532)
+  - 09-26 10:05:12.345 DNC-0 Data evaluation: ... Data disallowed reasons: ROAMING_DISABLED ... (f0:L1532)
 - 로그 범위: 10:02 ~ 10:12 (발생 시각 포함), 시계 이상 없음
 - 원인: (로그로 확인한 것 / 코드로 추정한 것 / placeholder 규칙 결과를 나눠 씀)
 - 코드 위치: 파일:라인 + 분기 조건 (분석 트리: android16-main, Android 16)
@@ -792,6 +1182,7 @@ db_build.py --verify --db &lt;db&gt;</pre></div>
         <tr><td>해결책 검증</td><td>"검증됨" 또는 "⚠ 미검증". 미검증이어도 후보로 씁니다(분류는 로그 근거)</td></tr>
         <tr><td>수정 상태</td><td><code>fix.status</code>와 Jira SW 비교 판단(<a href="#s5-fix">5.4</a>)</td></tr>
         <tr><td>다른 버전 원인</td><td><a href="#s5-version">5.5</a></td></tr>
+        <tr><td>RIL 이벤트의 <code>hal</code></td><td>사내에서 벤더 RIL 층 연결(<a href="#s7-site">7.7</a> <code>platform.ril.vendor</code>)을 켰을 때만 나옵니다. RILJ 요청이 벤더 층 어디까지 갔는지입니다. <code>responded</code>: 벤더 소켓 층에 응답이 있음, RILJ 응답이 없으면 AP 쪽 전달 유실 근거. <code>reached</code>: HAL까지 갔고 응답은 없음, 모뎀·벤더 쪽을 봄. <code>not_reached</code>: 주변에 벤더 줄은 있는데 이 요청만 없음, 같은 창에 다른 요청의 HAL 줄이 있을 때만 AP 쪽 근거. <code>unknown</code>: 벤더 줄이 수집되지 않음, 판단 근거로 쓰지 않음</td></tr>
         <tr><td>순위 참고</td><td>점수 동점 후보가 여럿이면 발생 시각 근접·키워드로 정렬했다는 표시. 원인 확정이 아님</td></tr>
         <tr><td>재사용 / 재분석</td><td>같은 입력이면 "재사용", 입력이 바뀌었으면 "재분석: 실행 m 대비 바뀐 입력 [...] — 1위 X → Y"</td></tr>
         <tr><td>읽기 전용 / 분석 전용</td><td>쓰기가 막힌 이유 또는 <code>--analysis-only</code> 안내. 리포트를 요약할 때도 빠지지 않는 줄입니다</td></tr>
@@ -803,6 +1194,7 @@ db_build.py --verify --db &lt;db&gt;</pre></div>
     <div class="sub" id="s5-sc" data-title="판정 S와 C">
       <h3>판정: S와 C</h3>
       <p>매처는 시그니처마다 0/1을 냅니다. <b>S</b>는 이슈 유형의 증상 시그니처, <b>C</b>는 원인 시그니처 충족 여부입니다. 분류·회귀·검증은 이 값으로 정하고, 점수와 일치 수준은 참고입니다.</p>
+      <div class="note easy"><span class="k">예로 보면</span>로밍 중 데이터가 안 붙는 로그라고 합시다. "데이터 연결 시도가 없다"는 증상 조건이 맞으면 S=1입니다. 같은 슬롯, 같은 시간대에 "로밍 설정이 꺼져서 거부됨" 줄이 있으면 로밍 원인의 C=1입니다. 증상만 맞고 아는 원인이 하나도 맞지 않으면 S=1, C=0이고, 이때가 새 원인을 등록할 기회입니다.</div>
       <div class="tbl"><table>
         <tr><th>S</th><th>C</th><th>리포트 표현</th><th>다음</th></tr>
         <tr><td><span class="chip g">1</span></td><td><span class="chip g">1</span></td><td>원인 후보 (점수 보통 1.0)</td><td>분류 수락 또는 다른 원인 선택</td></tr>
@@ -859,6 +1251,7 @@ db_build.py --verify --db &lt;db&gt;</pre></div>
     <div class="sub" id="s5-verify" data-title="verify-fix와 해결책 검증 결과">
       <h3>verify-fix 결과와 해결책 검증 결과</h3>
       <p>둘 다 회귀·검증 모드(파일 전체, 모든 원인 독립 평가, 보너스 0)로 판정합니다.</p>
+      <div class="note easy"><span class="k">두 검증의 차이</span>verify-fix는 "코드를 고친 빌드에서 재발하지 않는가"를 봅니다. 통과하면 원인이 fixed가 됩니다. validate --cause는 "해결책(예: 설정 켜기)을 적용하면 정말 풀리는가"를 봅니다. 통과하면 해결책이 검증됨으로 바뀝니다. 둘 다 재현 시나리오를 실제로 수행한 흔적이 로그에 있어야 판정합니다.</div>
       <h4>verify-fix (코드 수정 검증)</h4>
       <div class="tbl"><table>
         <tr><th>판정</th><th>조건</th><th>기록</th></tr>
@@ -880,6 +1273,7 @@ db_build.py --verify --db &lt;db&gt;</pre></div>
     <div class="sub" id="s5-confirm" data-title="push 전 확인 화면">
       <h3>push 전 확인 화면과 검증 결과표</h3>
       <p>이슈 DB에 쓰는 모든 흐름은 push 전에 이 화면을 그대로 보여주고 승인을 받습니다. 요약하거나 생략하지 않습니다.</p>
+      <div class="note easy"><span class="k">이 화면에서 볼 세 가지</span>첫째, 변경 파일과 ID가 내가 의도한 것인지 봅니다. 둘째, 자동 검사와 검증에 실패나 "건너뜀"이 없는지 봅니다. 건너뜀은 통과가 아닙니다. 셋째, 커밋 메시지와 한 줄 요약에 사람 이름이나 원문이 들어가지 않았는지 봅니다.</div>
       <p>순서: 머리(대상 → 원인/유형, 구분, 브랜치, 리뷰어, 열린 PR) → 변경 파일 → ID 할당(예 <code>NEW-CAUSE-1 → DATA-001-04</code>) → 수정 상태 변경 → drift 결정 → 추가 설명 → README 반영 미리보기 → 주요 diff → 자동 검사 → 검증 결과 → 커밋 메시지·PR 제목 → <code>approved_hash</code>.</p>
       <div class="tbl"><table>
         <tr><th>검증</th><th>무엇을</th><th>통과 기준</th></tr>
@@ -902,6 +1296,7 @@ db_build.py --verify --db &lt;db&gt;</pre></div>
     <div class="sub" id="s6-exit" data-title="종료 코드">
       <h3>종료 코드</h3>
       <p>모든 스크립트가 같은 규칙을 씁니다. 스킬은 종료 코드 2를 받으면 stderr를 그대로 보여주고 멈춥니다.</p>
+      <div class="note easy"><span class="k">외우는 법</span>0은 계속, 1은 내용을 고칠 것, 2는 환경을 고칠 것, 3은 사람 승인이 필요함입니다. 1과 3은 정상 흐름에서도 나옵니다.</div>
       <div class="tbl"><table>
         <tr><th>코드</th><th>의미</th><th>처리</th></tr>
         <tr><td class="num"><span class="chip g">0</span></td><td>성공(경고 포함)</td><td>계속</td></tr>
@@ -948,6 +1343,7 @@ db_build.py --verify --db &lt;db&gt;</pre></div>
         <tr><td>validate "생성 파일" 실패</td><td>README·STATS·CHANGELOG가 데이터와 다름</td><td><code>db_build.py --write --db &lt;db&gt;</code> 후 커밋. 직접 편집 금지</td></tr>
         <tr><td>pre-commit이 "plugin.scripts_path" 안내와 함께 커밋 거부</td><td>hook이 플러그인 스크립트를 못 찾음</td><td>Claude Code 세션을 한 번 열거나(SessionStart가 갱신) setup. 플러그인 없이 편집하는 사람은 플러그인 레포 clone의 <code>plugin/scripts</code> 지정</td></tr>
         <tr><td>doctor <code>snapshot</code> warn "N일 전 (…, 7일 초과)"</td><td>오래된 읽기 스냅샷</td><td><code>/telephony-triage:sync</code></td></tr>
+        <tr><td>publish가 push 없이 종료 1, "summary를 다시 받는다"</td><td>확인 화면을 만든 뒤 PR 제목·본문 내용이 바뀌었거나, 이전 버전 도구로 만든 확인 화면</td><td>확인 화면을 다시 받아 다시 승인합니다. 승인 화면과 실제 PR 내용이 어긋나지 않게 막는 장치입니다</td></tr>
         <tr><td>"계획 형식 오류"</td><td>작업 계획 필드 누락·허용 밖 필드</td><td>메시지의 op·필드대로 계획을 고쳐 다시 실행(스킬이 처리)</td></tr>
         <tr><td>sync 결과 "ID 중복·Jira 중복"(사후 lint)</td><td>직접 편집 커밋이나 sync-pr 없이 머지</td><td>메인테이너 수동 정리(<a href="#s7-review">7.5</a>)</td></tr>
       </table></div>
@@ -963,6 +1359,7 @@ db_build.py --verify --db &lt;db&gt;</pre></div>
         <tr><td>dry-run 계획으로 실제 PR을 만들고 싶음</td><td><code>--dry-run</code> 없이 다시 analyze. Jira를 MCP로 다시 읽어 덮어쓴 뒤 진행합니다</td></tr>
         <tr><td>push 전에 drift 발생</td><td>항목마다 계획 값 유지 / main 값 유지 / 직접 입력을 고르면 계획이 갱신되고 다시 적용됩니다</td></tr>
         <tr><td>머지 전에 main이 바뀜</td><td>작성자가 <code>/telephony-triage:sync-pr</code></td></tr>
+        <tr><td>sync가 "push 기록 있음, PR 연결 미확인"을 보여줌</td><td>원격 브랜치와 열린 PR을 먼저 확인합니다. 열린 PR이 있으면 그 PR을 고치고, 없으면 publish를 다시 하거나 <code>/telephony-triage:sync-pr &lt;브랜치&gt;</code>로 복구합니다. 폐기(discard)는 복구가 아니라 로컬 정리입니다</td></tr>
         <tr><td>publish 뒤 discard 실패(종료 2)</td><td>PR은 생성됨. <code>db_pr.py discard &lt;wt&gt;</code>만 다시</td></tr>
         <tr><td>다른 PC로 옮겨야 함</td><td>진행 중인 쓰기 작업을 끝내거나 버린 뒤 옮깁니다. 계획·lock·worktree는 PC에 있고 따라오지 않습니다</td></tr>
       </table></div>
@@ -1157,7 +1554,7 @@ python3 $S/db_verify.py rules --db . --changed origin/main  # R1~R5</pre></div>
         <tr><td><code>ghe.host</code>, <code>ghe.org</code></td><td>GHE 호스트·조직</td><td></td></tr>
         <tr><td><code>logcat.timezone</code>, <code>logcat.year_source</code></td><td>연도 없는 logcat 시각 해석, 연도 결정(<code>jira | file-mtime | ask</code>)</td><td></td></tr>
         <tr><td><code>parser.backend</code></td><td><code>site</code>(포팅한 기존 파서) 또는 <code>reference</code></td><td>사내는 포팅 뒤 <code>site</code></td></tr>
-        <tr><td><code>platform.*</code></td><td>소스 트리 필수 디렉토리·버전 파일, 슬롯 표기(<code>log.phone_id</code>), RIL 태그(<code>ril.tags</code>, 기본 <code>[RILJ]</code>), bugreport 섹션</td><td><b>고정</b>. 키를 쓰면 목록이 통째로 바뀜. 바꾸면 <code>db_regress --all</code> 다시</td></tr>
+        <tr><td><code>platform.*</code></td><td>소스 트리 필수 디렉토리·버전 파일, 슬롯 표기(<code>log.phone_id</code>), RIL 태그(<code>ril.tags</code>, 기본 <code>[RILJ]</code>), 벤더 RIL 층 연결(<code>ril.vendor</code>, 선택: <code>layers</code>·<code>link_ms</code>·<code>coverage_tags</code>, 초안은 <code>s0_suggest.py</code>), bugreport 섹션</td><td><b>고정</b>. 키를 쓰면 목록이 통째로 바뀜. 바꾸면 <code>db_regress --all</code> 다시</td></tr>
         <tr><td><code>external_parsers</code></td><td>외부 파서 어댑터</td><td>사외 초안은 비어 있음</td></tr>
         <tr><td><code>analyzers.&lt;category&gt;</code></td><td>심층 분석 스킬: <code>skill</code>, <code>when</code>(<code>ask | always | never</code>), <code>inputs</code></td><td></td></tr>
         <tr><td><code>explore.when</code>, <code>explore.timeline_max_lines</code></td><td>탐색 분석 실행 방식, 타임라인 줄 수 상한(20~1000, 기본 200)</td><td></td></tr>
@@ -1186,7 +1583,15 @@ python3 tools/s0_stats.py &lt;logcat1&gt; &lt;logcat2&gt; &lt;logcat3&gt; \
         <tr><td>phone_id 추출</td><td>낮음/0%</td><td><code>platform.log.phone_id</code> 설정</td></tr>
       </table></div>
       <p>여러 지표가 동시에 나쁘면 참고 파서 모델이 맞지 않는 것이므로, 검증된 기존 파서를 백엔드로 포팅하는 쪽으로 방향을 정합니다(포팅 전 골든 출력 저장 → 포팅 → 골든 테스트 통과).</p>
-      <div class="note plan"><span class="k">예정</span>S-0 결과로 규칙 초안을 제안하는 <code>tools/s0_suggest.py</code>는 진행 중인 작업이며 아직 없습니다.</div>
+      <h4>설정 초안 받기 (<code>tools/s0_suggest.py</code>)</h4>
+      <p>같은 로그로 설정 초안을 제안받습니다. 결과는 <code>tags.yaml</code>에 더할 태그 diff, 슬롯 표기(<code>platform.log.phone_id</code>) 초안, 벤더 RIL 층(<code>platform.ril.vendor.layers</code>) 초안, 파싱률 요약입니다.</p>
+      <div class="code"><pre>python3 tools/s0_suggest.py &lt;logcat1&gt; &lt;logcat2&gt;   --rules &lt;이슈 DB&gt;/parser-rules --tz Asia/Seoul --year 2026 --plugin-root $ROOT   [--min-count 3] [--shapes '&lt;태그 정규식&gt;'] [--json]</pre></div>
+      <ul>
+        <li>도구는 파일을 쓰지 않습니다. 초안은 사용자가 확인한 뒤에만 <code>tags.yaml</code> PR이나 <code>site-defaults.yaml</code>에 옮깁니다.</li>
+        <li>출력은 사내 전용입니다. 메시지 모양도 로그 문구이므로 사외로 가져가지 않고 <code>SITE_PROFILE.md</code>에만 적습니다.</li>
+        <li>일치율이 높은 태그의 초안만 믿습니다. 작은 serial 숫자는 우연히 겹칠 수 있으니 일치율과 시간 차 표를 사람이 봅니다.</li>
+        <li><code>coverage_tags</code>는 도구가 제안하지 않습니다. 벤더 경로에서 몇 초 간격으로 꾸준히 찍히는 태그를 사람이 골라 적습니다. 없으면 한가한 구간의 응답 없는 요청이 <code>hal: unknown</code>이 됩니다.</li>
+      </ul>
       <h4>규칙 변경 후 확인</h4>
       <ul>
         <li>파서 규칙 변경은 메인테이너 리뷰 필수입니다(CODEOWNERS).</li>
@@ -1271,15 +1676,15 @@ git push -u origin HEAD                        # 사용자 승인 후. PR은 사
         <tr><th>단계</th><th>할 일</th><th>완료 기준</th></tr>
         <tr><td>S-0 (선택)</td><td>실제 로그 3~5개로 파서 가정 확인(<a href="#s7-parser">7.8</a>)</td><td>지표 5종 기록, 정성 결론 1줄</td></tr>
         <tr><td>S-1</td><td>확인 목록(<code>tools/list_site_todos.py</code> + <code>REVIEW-OPEN.md</code>), 샘플 받아 <code>SITE_PROFILE.md</code> 작성</td><td>오프라인 평가 기준(1위 정확도 등) 합의</td></tr>
-        <tr><td>S-2</td><td>사내 Claude Code 기능 확인(플러그인 로드, hooks, MCP 도구 이름), 스킬 eval 재실행</td><td>확인 8항목 기록, 안전 eval 위반 0</td></tr>
+        <tr><td>S-2</td><td>사내 Claude Code 기능 확인(플러그인 로드, hooks, MCP 도구 이름), 실제 Jira MCP로 Jira 원문 격리 확인, 스킬 eval 전체 재실행(프롬프트 주입 eval 59·60 포함)</td><td>확인 8항목 기록, 안전 eval 위반 0</td></tr>
         <tr><td>S-3</td><td><code>site-defaults.yaml</code>, <code>issue-db.config.yaml</code> 사내 값</td><td><code>config.py check</code>·<code>doctor</code> fail 0</td></tr>
-        <tr><td>S-4a</td><td>운영 이슈 DB 생성·보호, 기존 파서 포팅(골든), 기존 data 분류 import, 분석 스킬 연결</td><td>골든 통과, import PR 머지</td></tr>
+        <tr><td>S-4a</td><td>운영 이슈 DB 생성·보호, 기존 파서 포팅(골든), 기존 data 분류 import, 분석 스킬 연결. 벤더 RIL 태그 초안은 <code>s0_suggest.py</code></td><td>골든 통과(실제 골든 폴더가 사내 백엔드로 실행되는지, 기대값을 일부러 바꾸면 실패하는지까지 확인), import PR 머지</td></tr>
         <tr><td>S-4</td><td>placeholder 규칙을 실제 문구로, 카테고리별 유형 5~10개 시드(실제 마스킹 fixture)</td><td>회귀·검증 통과</td></tr>
-        <tr><td>S-5</td><td>dry-run, 샌드박스 PR 1건, 과거 Jira 20~30건 <code>tools/offline_eval.py</code></td><td>S-1 기준치 이상</td></tr>
+        <tr><td>S-5</td><td>dry-run, 샌드박스 PR 1건, 과거 Jira 20~30건 <code>tools/offline_eval.py</code>. 평가군은 조정용과 최종 확인용으로 나눕니다. 듀얼 SIM·재부팅·시계 차·마스킹을 실제 로그로 따로 보고, PR 연결 실패 복구도 한 번 해 봅니다</td><td>최종 확인용 평가군이 정확도 기준과 오류율 상한을 <b>둘 다</b> 충족(지표가 없으면 미충족)</td></tr>
         <tr><td>S-6</td><td>남은 검토 항목, 합성 fixture 0건 확인</td><td>미처리 0건</td></tr>
-        <tr><td>S-7</td><td>마켓플레이스 등록, 카테고리별 파일럿 10~20건, 첫 월간 리뷰</td><td>파일럿 지표 보고 후 확대 결정</td></tr>
+        <tr><td>S-7</td><td>마켓플레이스 등록, 카테고리별 파일럿 10~20건, 첫 월간 리뷰. 사람 절차도 시험합니다: 작성자 부재 시 PR 인수, 플러그인 업데이트·되돌리기, 신규 사용자 혼자 설치부터 재개까지</td><td>파일럿 지표 보고 후 확대 결정</td></tr>
       </table></div>
-      <p>파일럿 지표(PR까지 시간, 중도 취소 비율, 작업당 질문 수)는 <code>python3 tools/usage_stats.py</code>로 뽑습니다.</p>
+      <p>파일럿 지표는 <code>python3 tools/usage_stats.py</code>로 뽑습니다: PR까지 걸린 시간, 중도 취소 비율, 작업당 저장된 답 수(질문 수 근사), push 기록은 있으나 PR 연결이 확인되지 않은 건수. PR 완료는 PR 번호가 기록된 작업만 셉니다. 사용자 수락률은 정답 정확도가 아닙니다. 틀린 1위를 받아들일 수도 있기 때문입니다.</p>
     </div>
   </section>
 
@@ -1399,7 +1804,7 @@ git push -u origin HEAD                        # 사용자 승인 후. PR은 사
         <tr><td>사용자 config</td><td><code>~/.telephony-triage/config.yaml</code></td><td>setup, <code>config.py set</code></td></tr>
         <tr><td>작업 디렉토리</td><td><code>~/.telephony-triage/work/</code> (기본, 권한 700)</td><td>도구</td></tr>
         <tr><td>읽기 스냅샷 / 스냅샷 시각</td><td><code>work/_snapshot/</code>, <code>work/snapshot.json</code></td><td>sync, analyze</td></tr>
-        <tr><td>작업별 산출물</td><td><code>work/&lt;KEY&gt;/</code>: <code>analysis.json</code>, <code>report.md</code>, <code>plan.json</code>, <code>wt/</code>, <code>draft/</code>, <code>runs/</code>, <code>timeline.md</code></td><td>도구</td></tr>
+        <tr><td>작업별 산출물</td><td><code>work/&lt;KEY&gt;/</code>: <code>analysis.json</code>, <code>report.md</code>, <code>logs/</code>(bugreport에서 꺼낸 logcat), <code>plan.json</code>, <code>wt/</code>, <code>draft/</code>, <code>runs/</code>, <code>timeline.md</code></td><td>도구</td></tr>
         <tr><td>pending 피드백</td><td><code>~/.telephony-triage/pending-feedback/</code></td><td>도구</td></tr>
         <tr><td>월간 리뷰 리포트</td><td><code>work/review-&lt;category&gt;-&lt;YYYY-MM&gt;/report.md</code></td><td>review</td></tr>
         <tr><td>사이트 설정</td><td><code>plugin/site-defaults.yaml</code></td><td>관리자(S-3)</td></tr>
@@ -1478,7 +1883,7 @@ git push -u origin HEAD                        # 사용자 승인 후. PR은 사
   <div class="empty" id="empty">검색어와 맞는 절이 없습니다. 다른 낱말(예: 커맨드 이름, 오류 문구 일부)로 찾아보세요.</div>
 
   <footer class="foot">
-    telephony-triage 사용·운영 매뉴얼 · 플러그인 레포 main(2026-10-07) 기준. 표·정의가 설계 문서와 다르면 <code>docs/design/contracts.md</code>가 맞습니다.
+    telephony-triage 사용·운영 매뉴얼 · 플러그인 레포 main(2026-10-08) 기준. 표·정의가 설계 문서와 다르면 <code>docs/design/contracts.md</code>가 맞습니다.
   </footer>
 </main>
 </div>

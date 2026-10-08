@@ -235,14 +235,13 @@ html { scroll-behavior: smooth; }
     </div>
     <figure class="log" aria-label="분석 화면 예시(합성 데이터)">
       <header><span>analyze ABC-12345 radio.txt</span><span>예시 · 합성 로그</span></header>
-<pre><span class="d">10-07 14:02:11.204</span> <span class="tag">RILJ</span>    [PHONE0] &gt; SETUP_DATA_CALL
-<span class="d">10-07 14:02:11.390</span> <span class="tag">DataNetworkController</span> evaluate
-<span class="h"><span class="d">10-07 14:02:13.871</span> <span class="tag">RILJ</span>    [PHONE0] &lt; SETUP_DATA_CALL error</span>
-<span class="d">10-07 14:02:13.902</span> <span class="tag">DataNetwork</span> state -&gt; Disconnected
-<span class="h"><span class="d">10-07 14:02:14.015</span> <span class="tag">DataRetryManager</span> schedule retry</span>
+<pre><span class="d">10-07 14:02:11.204</span> <span class="tag">SST-0</span>   onRoamingOn: roaming=true
+<span class="h"><span class="d">10-07 14:02:11.390</span> <span class="tag">DSMGR-0</span> DataRoamingEnabled changed to false</span>
+<span class="h"><span class="d">10-07 14:02:13.871</span> <span class="tag">DNC-0</span>   … reasons: ROAMING_DISABLED</span>
+<span class="d">10-07 14:02:13.902</span> <span class="tag">DRM-0</span>   no retry scheduled: setup not allowed
 <span class="d">10-07 14:02:14.020</span> <span class="tag">ImsPhone</span> sip &lt;SIP#1&gt; imsi &lt;IMSI#1&gt;</pre>
       <div class="verdict">
-        <div class="row"><span>후보 1위</span><b>DATA-001-02</b><span class="pill ok">S 일치</span><span class="pill ok">C 일치</span></div>
+        <div class="row"><span>후보 1위</span><b>DATA-001-02 로밍 설정 꺼짐</b><span class="pill ok">S 일치</span><span class="pill ok">C 일치</span></div>
         <div class="row" style="color:var(--log-dim)"><span>설명·근거 정리</span><span class="pill ai">Claude 보조</span><span>분류 확정은 사용자</span></div>
       </div>
     </figure>
@@ -365,6 +364,7 @@ html { scroll-behavior: smooth; }
           <ul>
             <li>파서 → 매처 → 검증의 출력이 판정 기준</li>
             <li>같은 로그, 같은 규칙이면 같은 결과</li>
+            <li>data 규칙은 실제 단말 로그와 AOSP 공개 소스로 형식을 확인</li>
             <li>이슈 DB에 파서 백엔드 버전을 기록해 팀원 간 결과 일치</li>
           </ul>
         </div>
@@ -379,11 +379,11 @@ html { scroll-behavior: smooth; }
       </div>
       <div>
         <div class="nums">
-          <div class="num"><b>약 1,050</b><span>자동 테스트. CI(Ubuntu, Python 3.11 · 3.14) 통과</span></div>
-          <div class="num"><b>20 / 20</b><span>샘플 이슈 DB 회귀 fixture 통과</span></div>
-          <div class="num"><b>58</b><span>skill eval 시나리오 정의</span></div>
+          <div class="num"><b>약 1,100</b><span>자동 테스트. CI(Ubuntu, Python 3.11 · 3.14) 통과</span></div>
+          <div class="num"><b>23 / 23</b><span>샘플 이슈 DB 회귀 fixture 통과</span></div>
+          <div class="num"><b>60</b><span>skill eval 시나리오 정의</span></div>
         </div>
-        <p class="small muted" style="margin-top:10px">2026-10-07 기준 개발 환경 실측. 규칙을 추가할 때마다 새 규칙이 해당 로그를 잡는지, 정상 로그를 잘못 잡지 않는지, 기존 분류를 깨지 않는지 회귀로 확인합니다.</p>
+        <p class="small muted" style="margin-top:10px">2026-10-08 기준 개발 환경 실측. 규칙을 추가할 때마다 새 규칙이 해당 로그를 잡는지, 정상 로그를 잘못 잡지 않는지, 기존 분류를 깨지 않는지 회귀로 확인합니다.</p>
       </div>
     </div>
   </div>
@@ -420,7 +420,7 @@ html { scroll-behavior: smooth; }
           <div class="bar"></div>
           <h3>설치와 환경 확인</h3>
           <ol>
-            <li><span class="s">S-0</span><span>사내 로그 형식 사전 점검 (선택, Claude 없이 30분)</span></li>
+            <li><span class="s">S-0</span><span>사내 로그 형식 사전 점검과 설정 초안 제안 (선택, Claude 없이 30분)</span></li>
             <li><span class="s">S-1</span><span>사내 값 조사, 오프라인 평가 기준(1위 정확도 등) 합의</span></li>
             <li><span class="s">S-2</span><span>사내 Claude Code에서 플러그인·hook·Jira MCP 동작 확인</span></li>
           </ol>
@@ -455,7 +455,7 @@ html { scroll-behavior: smooth; }
           <li>과거 해결 Jira 20~30건 목록(정확도 평가용)</li>
         </ul>
       </div>
-      <p class="small muted">파일럿 지표(PR까지 걸린 시간, 중도 취소 비율, 작업당 질문 수)는 플러그인에 포함된 집계 도구로 뽑습니다.</p>
+      <p class="small muted">파일럿 지표(PR까지 걸린 시간, 중도 취소 비율, 작업당 질문 수에 해당하는 저장된 답 수, PR 연결이 확인되지 않은 건수)는 플러그인에 포함된 집계 도구로 뽑습니다.</p>
     </div>
   </div>
 </section>
@@ -537,7 +537,7 @@ html { scroll-behavior: smooth; }
 </section>
 
 <footer>
-  <div class="wrap">telephony-triage · 수치는 2026-10-07 개발 환경 실측이며 토큰·비용은 모의 데이터 eval 기준입니다. 로그·화면 예시는 합성 데이터입니다.</div>
+  <div class="wrap">telephony-triage · 수치는 2026-10-08 개발 환경 실측이며 토큰·비용은 모의 데이터 eval 기준입니다. 로그·화면 예시는 합성 데이터입니다.</div>
 </footer>
 
 <script>
