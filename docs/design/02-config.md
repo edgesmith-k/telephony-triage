@@ -61,7 +61,7 @@ work_dir: ~/.telephony-triage/work          # 작업 계획·상태 파일, 읽�
 - Jira 키 형식은 DB 공통 값이므로 사용자 config가 아니라 `issue-db.config.yaml`의 `jira_key_regex`에 둔다 (5.3).
 
 setup 커맨드가 순서대로 하는 일:
-1. config가 없으면 항목별로 묻고 생성한다. 경로는 존재 여부를 검증한다. `code_profiles`는 건너뛸 수 있다. `~/.telephony-triage/`와 `work_dir`는 권한 `700`으로 만든다(작업 계획에 Jira 요약이 들어가므로).
+1. config가 없으면 항목별로 묻고 생성한다. **답한 값만 저장한다**: 필수 항목과, 선택 항목 중 팀 기본값(`site-defaults.yaml`·내장 기본값)과 다른 답만 쓰고(그리고 `plugin.scripts_path`), 나머지는 저장하지 않아 이후 팀 기본값 변경을 그대로 상속한다. 경로는 존재 여부를 검증한다. `code_profiles`는 건너뛸 수 있다. `~/.telephony-triage/`와 `work_dir`는 권한 `700`으로 만든다(작업 계획에 Jira 요약이 들어가므로). 제약: `issue_db.base_branch`·`work_dir`는 `site-defaults.yaml`에서 상속되지 않는다(이슈 DB `.githooks/pre-push`가 사용자 config에서 이 두 값을 직접 읽고 site-defaults를 보지 않으므로, 팀 기본값으로 지원하려면 pre-push도 같이 바꾼다). `init`으로 이미 만든 개발·연습 config는 자동으로 상속형이 되지 않는다. 팀 기본값을 따르게 하려면 `config.py init --force`로 다시 만들거나 해당 키를 config.yaml에서 지운다.
 2. `plugin.scripts_path`를 `${CLAUDE_PLUGIN_ROOT}/scripts`로 기록한다 (`config.py sync-scripts-path`).
 3. 이슈 DB 경로에 clone이 없으면 `git clone`을 제안한다.
 4. 이미 등록된 Jira MCP를 찾는다(사용자 범위 등록 필요, 못 찾으면 등록 범위를 안내. `site-defaults.yaml`의 `jira.exclude_servers`(기본 `['mock-*']`, 테스트 헬퍼 복사본은 `[]`)에 맞는 서버는 후보에서 제외). 도구 목록에서 `jira.tools` 후보(get/issue, search, comment 계열)를 골라 사용자 확인을 받고(`site-defaults.yaml`의 팀 기본값이 있으면 그것을 먼저 제안), 이어서 서버의 도구 목록을 읽어서 이름으로 읽기 도구 후보(get/search/list/read/fetch 계열)를 고르고, **사용자에게 확인받아** `jira.read_tools`에 **전체 도구 이름**(`mcp__<server>__<tool>`)으로 저장한다. 서버가 없으면 사내 MCP 등록 방법을 안내하고 중단한다. 도구 이름 형식은 S1·S3에서 확인한다.

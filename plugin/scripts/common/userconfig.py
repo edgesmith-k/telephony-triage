@@ -44,7 +44,10 @@ def builtin() -> dict:
 
 
 def from_site_defaults(defaults: dict) -> dict:
-    """site-defaults.yaml 값을 사용자 config 키 공간으로 옮긴 것."""
+    """site-defaults.yaml 값을 사용자 config 키 공간으로 옮긴 것.
+
+    issue_db.base_branch·work_dir는 옮기지 않는다 — 이슈 DB `.githooks/pre-push`가 사용자 config에서 이 두 값을 직접 읽고
+    (기본 main·<home>/work) site-defaults를 보지 않으므로, 팀 기본값으로 지원하려면 pre-push도 같이 바꾼다."""
     out: dict = {}
     jira = defaults.get("jira") or {}
     if jira:

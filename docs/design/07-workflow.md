@@ -122,7 +122,7 @@ Android 버전과 브랜치마다 소스 트리가 다르므로 **분석할 때�
 6. **건너뛰기**를 고르면 Step 5를 생략하고, 리포트에 "코드 미확인"으로 표시한다. 이 경우 새 원인/유형의 `code_refs`는 비워두고 `db_lint.py`는 경고만 낸다.
 
 ### Step 3. logcat 파싱 (`parse_logcat.py`) → 마스킹
-- **bugreport 입력**: logcat 인자가 bugreport(`.zip`, 또는 파일 머리가 `== dumpstate`)면 먼저 `parse_logcat.py extract-bugreport <파일> --out <work_dir>/<KEY>/logs/`로 logcat 섹션(system/radio/main)과 헤더의 빌드 정보(`build.json`)만 꺼내고, 꺼낸 logcat 파일로 아래를 진행한다. **dumpsys 등 다른 섹션은 읽지 않는다** (`contracts.md §3.2`, 형식은 S21).
+- **bugreport 입력**: logcat 인자가 bugreport(`.zip`, 또는 파일 머리가 `== dumpstate`)면 먼저 `parse_logcat.py extract-bugreport <파일> --out <work_dir>/<KEY>/logs/<파일 이름(확장자 제외)>-<경로 해시 8자>/`로 logcat 섹션(system/radio/main)과 헤더의 빌드 정보(`build.json`)만 꺼내고(같은 이름의 bugreport 여러 개가 서로 덮지 않는다), 꺼낸 logcat 파일로 아래를 진행한다. **dumpsys 등 다른 섹션은 읽지 않는다** (`contracts.md §3.2`, 형식은 S21).
 - 파서 규칙은 스냅샷의 `parser-rules/`에서 읽는다: `parse_logcat.py parse <logcat...> --around <발생 시각> --minutes 5 --rules <work_dir>/_snapshot/parser-rules --tz <logcat.timezone> --year <연도> --mask` (`04-parser-matching.md §5.8`).
 - 입력 포맷: `threadtime` 기본. 연도 포함, `-v uid`, `-b radio` 등 변형도 허용한다. 연도가 없으면 스킬이 `logcat.year_source`로 연도를 정하고(`jira`면 발생 시각의 연도. Jira에 발생 시각이 없으면 묻지 않고 로그 파일 시각의 연도를 임시로 쓰고 경고한 뒤 시각 후보 단계로 간다. `ask`면 선택지를 주고 묻는다) 타임존은 `logcat.timezone`으로 넘겨서 UTC로 바꾼다 (S7).
 - 파싱은 `site-defaults.yaml`의 `parser.backend`(사내 `site` = 포팅한 기존 파서, 사외 `reference`)가 하고, 마스킹·extractor·태그 매핑은 `parse_logcat.py`가 한다 (`16-existing-assets.md §16.3`). 백엔드가 이슈 DB의 `parser_backend`와 맞지 않으면 경고하고, 리포트에 "백엔드 불일치 — 결과가 팀 기준과 다를 수 있음"을 표시한다.

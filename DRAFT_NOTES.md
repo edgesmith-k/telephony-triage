@@ -14,10 +14,10 @@
 - 테스트는 `tools/related_tests.py --run`(관련만). 전체는 도구가 full이라 할 때·반입 직전·요청 시.
 - 진행 중 판단은 Fable 결정 에이전트에게 묻는다(10/06 사용자 지정). 원칙상 사용자 승인 대상(이슈 DB push, main 병합·태그 등 사용자가 지시하지 않은 외부 동작)은 사용자에게.
 
-## 진행 상태 (10/07)
+## 진행 상태 (10/08)
 
-- 모드: **사외 초안**. Phase **D0, 1~13** 완료. 반입 전 보강 트랙(S1~S6·I1~I5·X·3C~3F)과 개선 트랙 **W0~W12**, 반입 전 리뷰(10/07) 수정 트랙 **V1~V7·V 끝**, 실제 로그 반영 트랙 **L1~L3** 완료, main 병합(PR #8·#9·#11~#25).
-- 마지막 전체 테스트: 1086 통과(Windows, 환경 실패 4), `db_regress --all` 23/23 (10/07, L2).
+- 모드: **사외 초안**. Phase **D0, 1~13** 완료. 반입 전 보강 트랙(S1~S6·I1~I5·X·3C~3F)과 개선 트랙 **W0~W12**, 반입 전 리뷰(10/07) 수정 트랙 **V1~V7·V 끝**, 실제 로그 반영 트랙 **L1~L3** 완료, main 병합(PR #8·#9·#11~#25). 반입 전 3차 검토(A1~A4·B1·B2·문서) 반영(10/08).
+- 마지막 전체 테스트: 1101 통과, 4 실패(알려진 환경 실패), 1 skip (10/08). `db_regress --all` 23/23 (10/07).
 - 사내 확인 항목: `TODO(SITE)` **78곳** — `python3 tools/list_site_todos.py`. `REVIEW-OPEN.md` 0건.
 - 사내 S 단계 시작: `python3 tools/context_pack.py S-n`(표 `docs/tasks.md`).
 - 안내서(사람용 HTML): `docs/telephony-triage-guide.html` (공유본 https://claude.ai/artifact/1jov1Et4dQUMauFr6aoxWG)
@@ -26,10 +26,9 @@
 
 | ☐ | 항목 | 메모 |
 |---|---|---|
-| ✅ L | **실제 로그 반영 트랙 L1~L3 완료**(10/07, PR #23·#24·#25) | L1 AOSP 형식 정정·DATA-002 APM, L3 `tools/s0_suggest.py`, L2 벤더 RIL `hal`·`coverage_tags`. 사용자 승인: DATA-002·extractor 2·14-site §14.1, `hal` 읽는 법·`coverage_tags`. eval(Sonnet, 변경 전 864e7c4→후): 40·44·3·4 동작 동일, 토큰 W0 폭 안(eval 4 출력 −9.6% 경계, eval 3의 `--draft` 단언은 변경 전에도 불안정), `ril-requests.md`를 쓰는 eval 없음. 실행 비용 약 $5. 자료는 레포 밖 `%LOCALAPPDATA%/tt-ltrack/`(벤더 문구, 레포 금지) |
+| ✅ L | 실제 로그 반영 트랙 L1~L3 완료(10/07, PR #23~#25) | 세부·eval 결과는 `CHANGES.md` L1~L3. 자료는 레포 밖 `%LOCALAPPDATA%/tt-ltrack/`(벤더 문구, 레포 금지) |
 | ☐ G | **범용판 별도 레포** (10/07 사용자 지시) — **보류(10/07 사용자)** | 재개 시점은 사용자가 정한다. **로컬 새 레포**(원격 없음), 범위 = 도메인 중립 코어(이슈 DB·시그니처 엔진·PR 흐름·안전장치, 카테고리·예약 이벤트는 설정으로) + 동작 확인용 최소 예제 팩 1개. 시작은 결합 지점 조사(`plugin/scripts`에서 platforms 밖 Android·RIL 참조 약 30파일) → 분리 설계 확인 → 이전. 이 레포는 바꾸지 않는다 |
 | ☐ Z | **반입 묶음** | 최신 main에서 **Ubuntu로** 먼저 `plugin.json` description에서 "사외 초안"을 빼는 커밋(도구가 첫 검사로 막는다) → `python3 tools/make_bundle.py --label <이름>`(정상 종료 3) → 사람 확인 3건(§15.4: 회사명 검색·TODO 목록·이 파일 최신) → 도구가 출력한 명령으로 사용자가 태그 push. Windows는 환경 실패로 자동 검사가 실패한다 |
-| ✅ R | **(a) 선택(10/07 사용자)** — `12-principles.md` 사용자 clone 예외에 직접 편집 브랜치의 `db_add renumber` 추가. 코드 변경 없음(V6 검사 그대로) | 완료 |
 | ☐ 2 | **사용자 확인** — 10/04~05 작업(4a·R8·테스트 DB·검사 통합·4b·step_order·보안·R11·R9·RF-2, `CHANGES.md` 10/04~05 절) | 반입 직전에 한꺼번에 |
 
 반입 뒤 후보: RF-5(oFono)·RF-6(커넥터)·RF-8(자동화)은 사내 환경을 알아야 의미가 있다. RF-9·웹 UI(보류)는 그 뒤. 10/07 리뷰의 R-36~R-47·V 후속도 같은 색인 `docs/development/ARCHITECTURE_REVIEW_2026-10.md`. 팀 검토(10/07) 판정(원문 보존은 부분 해결 — 미게시 계획 폴더의 원문 잔류는 S14): `docs/development/TEAM_PLUGIN_REVIEW_VERDICT_2026-10-07.md`(원문·포털·확장 아이디어 설계 제안 초안은 `docs/history/TEAM_PLUGIN_*`, 파일럿 뒤 재검토).
@@ -41,6 +40,7 @@
 - report.html의 실제 표 구조, PASS/FAIL 표기 (S22)
 - 스텝 → 로그 흔적 대응표(`step_events`) 내용, 장비와 단말의 시계 관계, Jira 발생 시각의 기준 시계 (S22)
 - 정확도 평가: 과거 해결 Jira 20~30건 라벨셋으로 `tools/offline_eval.py` (S-5), 기준점 구간 기본값 조정
+- 3차 검토 사내 확인 C1~C8은 §15.5 행(S-2·S-4a·S-5·S-7)에, 파일럿 뒤 판단 D1~D6은 `docs/tasks.md` S-7 비고에 있다.
 
 ## 막힌 것
 
@@ -58,4 +58,5 @@
 - (h) W11 보류 3건(위임 결정, 10/07): 파생 이벤트 `msg` 복사 제거 폐기, Windows 보정 유지, db-authoring 스키마 요약은 사내 S-2.
 - (i) eval은 변경과 관련된 최소만 사외에서 돌린다: 각 VP는 바꾼 스킬·흐름의 eval만, V 끝은 W 영향 미확인 목록 중 아직 관련 있는 것만 골라서. 전체 재실행은 사내 S-2. (10/07, 사용자)
 - (j) 매칭 컴파일 캐시(`.cache/compiled.json`)를 삭제한다: 240유형·3.5k Jira에서 DB 로드(0.69~1.09s)에 캐시 hit 판정(+0.35~0.67s)이 더해질 뿐 컴파일은 1ms, 해시가 플러그인 코드를 보지 않아 판정을 캐시 파일에 좌우시켰다. `source_hash`(분석 재사용)·`.cache/` 커밋 차단은 유지. (10/07, 위임 결정, V7)
+- (k) 3차 검토 §8 — 하지 않는다 (10/08): 토큰 절감 위해 확인·승인·경고 생략 / 변경분만 전달 / 측정 없는 캐시 복원·스트리밍·병렬화·모듈 개편 / 반입 전 웹 포털·범용판·자동 게시 / placeholder·Windows 차이를 결함 집계 / 기존 기능 재구현 / 테스트 수·수락률 하나로 품질 보증 / 복구 편의로 승인·버전 검사·lock 우회 / 모든 권고를 반입 차단 조건으로.
 - 사내 로그가 모의와 다를 때 가장 먼저: `docs/development/S0_PROBE_CHECKLIST.md` + `tools/s0_stats.py`, 설정 초안은 `tools/s0_suggest.py`(사내 전용 출력).

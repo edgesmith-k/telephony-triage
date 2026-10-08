@@ -3,6 +3,8 @@ import os
 import sys
 from pathlib import Path
 
+import pytest
+
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "tools"))
 import usage_stats  # noqa: E402
@@ -31,3 +33,13 @@ def test_three_numbers_from_three_jobs(tmp_path):
     assert (s["cancelled"], s["started"], s["pr_jobs"]) == (1, 3, 1)
     assert s["pr_minutes"] == 30
     assert s["questions"] == (1 + 3 + 0) / 3
+
+
+@pytest.mark.parametrize("pushed_files", [["state.json"], []])     # push 기록은 state.json 유무와 무관하게 취소가 아니다
+def test_pr_counts_only_with_number_and_pushed_without_pr_is_separate(tmp_path, pushed_files):
+    # pr.branch는 계획 시작부터 있으므로 pr 키 유무로 PR 완료를 판단하지 않는다
+    _job(tmp_path, "B-1", {"started_at": START, "pr": {"number": None, "branch": "issue/MOCK-1", "head_sha": None}}, {})
+    _job(tmp_path, "B-2", {"started_at": START, "pr": {"number": None, "branch": "issue/MOCK-2", "head_sha": "a" * 40}},
+         {}, files=pushed_files)
+    s = usage_stats.stats(tmp_path)
+    assert (s["started"], s["pr_jobs"], s["cancelled"], s["pushed_no_pr"]) == (2, 0, 1, 1)

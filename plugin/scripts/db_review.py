@@ -19,8 +19,9 @@
 - 수락률은 `issuedb.acceptance()`(1위로 제시된 피드백만 분모, `decision: manual` 제외, §6.5).
 
 출력: 기본은 Markdown 리포트(stdout). `--out`이면 그 파일에 Markdown을 쓴다. `--json`이면 stdout에 JSON
-`{db, head, as_of, category, owners, thresholds, feedback, items[{key, title, criterion, action, count, entries[],
-undetermined[]}]}`. 종료 코드: 0(리포트), 2(사용·환경 오류).
+`{db, head, branch, dirty, as_of, category, owners, thresholds, feedback, items[{key, title, criterion, action, count,
+entries[], undetermined[]}]}`(`branch`는 detached면 null, `dirty`는 커밋 안 된 변경 유무, git 최상위가 아니면 셋 다 null).
+종료 코드: 0(리포트), 2(사용·환경 오류).
 """
 
 from __future__ import annotations
@@ -377,9 +378,10 @@ class Review:
 
 def render(report: dict) -> str:
     scope = report["category"] or "전체"
+    git = (f" @ `{report['head'][:12]}` ({report.get('branch') or 'detached'}"
+           + (", 커밋 안 된 변경 포함" if report.get("dirty") else "") + ")") if report.get("head") else ""
     out = [f"# 월간 리뷰 리포트 — {scope} ({report['as_of']})", "",
-           f"> 이슈 DB: `{report['db']}`" + (f" @ `{report['head'][:12]}`" if report.get("head") else "")
-           + f" · 기준일 {report['as_of']} · 로컬 리포트(push 안 함)",
+           f"> 이슈 DB: `{report['db']}`{git} · 기준일 {report['as_of']} · 로컬 리포트(push 안 함)",
            f"> 피드백 {report['feedback']['total']}건 중 수동 기록(`decision: manual`) {report['feedback']['manual']}건은 "
            "수락률에서 뺐다.", ""]
     if report["category"]:
@@ -424,11 +426,17 @@ def run(args, defaults: dict, plugin_root: Path) -> dict:
         items = Review(db, args.category, as_of, plugin_root, defaults).run()
     except db_regress.UsageError as exc:
         raise UsageError(str(exc)) from exc
-    head = history._git(Path(root), "rev-parse", "HEAD") if history.is_repo(Path(root)) else None
+    repo = history.is_repo(Path(root))
+    head = history._git(Path(root), "rev-parse", "HEAD") if repo else None
+    # 작업 트리를 읽으므로 HEAD만으로는 부족하다: 브랜치(detached면 None)와 커밋 안 된 변경 유무를 같이 적는다
+    branch = ((history._git(Path(root), "branch", "--show-current") or "").strip() or None) if repo else None
+    dirty = bool((history._git(Path(root), "--no-optional-locks", "status", "--porcelain") or "").strip()) if repo else None
     manual = sum(1 for f in db.feedback if f.get("decision") == "manual")
     return {
         "db": str(root),
         "head": head.strip() if head else None,
+        "branch": branch,
+        "dirty": dirty,
         "as_of": as_of.isoformat(),
         "category": args.category,
         "owners": _owners(Path(root), keys),

@@ -120,6 +120,55 @@ def test_more_logs_rerun_is_idempotent_and_same_content_other_path_warns():
     assert len(list((ws.job_dir(KEY) / "runs").iterdir())) == 1
 
 
+def _bugreport(sub: str, src: Path) -> Path:
+    path = tmp("tt-br-") / sub / "bugreport.txt"
+    path.parent.mkdir(parents=True)
+    path.write_text("== dumpstate: 2026-09-20 14:40:00\nBuild fingerprint: 'mock/fp'\n\n"
+                    "------ RADIO LOG (logcat -b radio -v threadtime -d *:v) ------\n"
+                    + src.read_text(encoding="utf-8"), encoding="utf-8", newline="\n")
+    return path
+
+
+def _input_files(ws: Workspace) -> list[Path]:
+    return [Path(f) for f in json.loads((ws.job_dir(KEY) / "events.json").read_text(encoding="utf-8"))["input"]["files"]]
+
+
+def test_same_name_bugreports_extract_to_separate_dirs():
+    ws = Workspace()
+    b = LOGS / "ims-registration-failed.log"
+    _first(ws, _bugreport("a", A), _bugreport("b", b))
+    files = _input_files(ws)
+    assert len({f.parent for f in files}) == 2
+    assert [f.read_text(encoding="utf-8").splitlines() for f in files] == \
+           [A.read_text(encoding="utf-8").splitlines(), b.read_text(encoding="utf-8").splitlines()]
+    # --more-logs로 세 번째(다른 이름)를 더해도 추출 파일 셋 모두 남아 있고 고유 디렉터리이며, 근거 줄 추출(cut --evidence)이 된다
+    c = LOGS / "sms-send-failed.log"
+    more = _more(ws, c)
+    assert more["logs"]["files"] == ["logcat-radio.txt", "logcat-radio.txt", c.name]     # 추출 파일 이름만(동명으로 보임, R6)
+    files = _input_files(ws)
+    assert len(files) == 3 and all(f.is_file() for f in files) and len({f.parent for f in files}) == 3
+    out = tmp("tt-br-") / "cut.log"
+    proc = ws.run("parse_logcat.py", ["cut", *files, "--evidence", ws.job_dir(KEY) / "match.json", "--out", out,
+                                      "--tz", "Asia/Seoul", "--year", "2026"])
+    assert proc.returncode == 0 and out.is_file(), proc.stderr
+
+
+def test_moved_bugreport_hits_cache_and_recorded_extract_paths_still_exist():
+    """같은 bugreport를 다른 경로로 주면 로그 부분 해시(이름·sha)가 같아 캐시가 적중하고, 적중 시 `events.json`은 이전
+    것을 재사용하므로 `input.files`는 옛 dest(첫 경로 해시) 폴더를 가리킨다 — 그 폴더는 지우지 않으므로 파일이 있어야 한다."""
+    ws = Workspace()
+    first = _first(ws, _bugreport("a", A))
+    assert "reuse" not in first
+    before = _input_files(ws)
+    moved = tmp("tt-br-") / "moved" / "bugreport.txt"
+    moved.parent.mkdir(parents=True)
+    shutil.copyfile(_bugreport("src", A), moved)
+    again = _first(ws, moved)
+    assert again["reuse"] == {"hit": True, "run": 1}
+    files = _input_files(ws)
+    assert files == before and all(f.is_file() for f in files)
+
+
 def test_more_logs_without_previous_logs_is_usage_error():
     ws = Workspace()
     proc = ws.run("triage.py", [*BASE, "--more-logs", A])

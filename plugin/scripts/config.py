@@ -12,6 +12,7 @@
   site-defaults                site-defaults.yaml 내용
   init [--answers <json>]      config 생성 (setup 1). --answers가 없으면 stdin으로 항목별로 묻는다.
                                경로가 없으면 거부한다. 홈·work_dir은 권한 700.
+                               답한 값만 저장(선택 항목은 팀 기본값과 다를 때만, 나머지는 site-defaults·내장 기본값 상속).
   set <key> <value>            값 하나 바꾸기 (경로 값은 존재 검증)
   sync-scripts-path            plugin.scripts_path = ${CLAUDE_PLUGIN_ROOT}/scripts (setup 2, SessionStart hook)
   jira-candidates [--mcp-config <json>...] [--tools-json <json>]
@@ -149,19 +150,21 @@ def cmd_init(args, defaults: dict) -> dict:
             else:
                 raise UsageError(f"{key}: 올바른 값을 받지 못했습니다.")
 
-    data = userconfig.deep_merge(userconfig.builtin(), userconfig.from_site_defaults(defaults))
-    for key, _, _kind, _ in FIELDS:
+    data: dict = {}
+    for key, _, _kind, required in FIELDS:
         value = answers.get(key)
-        if value not in (None, ""):
-            userconfig.set_value(data, key, value)
+        if value in (None, "") or (not required and value == _default_for(key, defaults)):
+            continue        # 답하지 않았거나 팀 기본값과 같으면 저장하지 않는다(이후 팀 기본값 변경을 상속)
+        userconfig.set_value(data, key, value)
     data.setdefault("plugin", {})["scripts_path"] = str(_plugin_root(args) / "scripts")
+    effective = userconfig.merged(defaults, data)
     userconfig.ensure_private_dir(userconfig.home())
-    userconfig.ensure_private_dir(Path(userconfig.get(data, "work_dir")).expanduser())
+    userconfig.ensure_private_dir(Path(userconfig.get(effective, "work_dir")).expanduser())
     path = userconfig.save(data)
-    clone = Path(userconfig.get(data, "issue_db.path")).expanduser()
+    clone = Path(userconfig.get(effective, "issue_db.path")).expanduser()
     return {"config": str(path), "clone_exists": clone.is_dir() and (clone / ".git").exists(),
             "suggest_clone": None if (clone / ".git").exists() else
-            f"git clone {userconfig.get(data, 'issue_db.remote')} {clone}"}
+            f"git clone {userconfig.get(effective, 'issue_db.remote')} {clone}"}
 
 
 def _parse_value(text: str):

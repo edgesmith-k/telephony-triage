@@ -49,7 +49,7 @@
 |---|---|---|
 | `config.py` | `show` / `check` / `sync-scripts-path` / `set` | config 내용(`--keys`면 점 표기 키만 `{user_config, values{키: 값}, missing[]}`, 없으면 이전과 같다), 호환성 판정(`writable`, `push_allowed`, 사유). `--for`의 기본값은 `write`(스키마·생성기·파서 백엔드·외부 파서 버전 + gh 인증). `dry-run`은 버전만 보고 gh 인증은 보지 않는다(`push_allowed: false`). `--db`의 현재 브랜치가 `migrate/schema-v<N>`이면 스키마·생성기 버전 불일치를 차단하지 않고 gh 인증만 본다(마이그레이션이 버전을 올리는 커밋이므로, `06-collaboration.md §6.4`) |
 | | `site-defaults` | `site-defaults.yaml` 내용 |
-| | `init` | config 생성 (setup 1). `--answers`가 없으면 stdin으로 항목별로 묻는다. 경로가 없으면 거부한다. 홈·work_dir은 권한 700 |
+| | `init` | config 생성 (setup 1). `--answers`가 없으면 stdin으로 항목별로 묻는다. 경로가 없으면 거부한다. 홈·work_dir은 권한 700. 답한 값만 저장(선택 항목은 팀 기본값과 다를 때만, 나머지는 site-defaults·내장 기본값 상속) |
 | | `jira-candidates` | 등록된 MCP 서버에서 `jira.tools`·읽기 도구 후보 (setup 4). `exclude_servers` 적용 |
 | | `set-jira` | 사용자가 확인한 값을 저장. `read_tools`에 `jira.tools` 값을 포함한다 |
 | | `install-hooks` | `git config core.hooksPath .githooks`, 값이 정확히 `.githooks`인지 확인 (setup 5) |
@@ -85,7 +85,7 @@
 | | `discard` | 정리 결과 |
 | | `find-plan` | sync-pr 1~4번 보조: 계획 찾기·원격 변경 확인 |
 | `db_precommit.py` | — | 검사 요약 (git pre-commit hook 전용) |
-| `db_review.py` | — | 리뷰 리포트(Markdown, `--out`이면 그 파일). `--json`이면 `{db, head, as_of, category, owners, thresholds, feedback{total, manual, used_for_acceptance}, summary, items[{key, title, criterion, action, count, entries[], undetermined[]}]}`. 읽기 전용(lock·스냅샷 없음). 기준일은 실행일(`--as-of`로 바꿈). 항목 판정 세부는 아래 `db_review.py` 세부 |
+| `db_review.py` | — | 리뷰 리포트(Markdown, `--out`이면 그 파일). `--json`이면 `{db, head, branch, dirty, as_of, category, owners, thresholds, feedback{total, manual, used_for_acceptance}, summary, items[{key, title, criterion, action, count, entries[], undetermined[]}]}`(`branch`는 detached면 null, `dirty`는 커밋 안 된 변경·새 파일 유무, git 최상위가 아니면 `head`·`branch`·`dirty` 모두 null). 읽기 전용(lock·스냅샷 없음). 기준일은 실행일(`--as-of`로 바꿈). 항목 판정 세부는 아래 `db_review.py` 세부 |
 | `db_migrate.py` | (`--to`) / `upgrade-plan` | 마이그레이션 결과 / 새 스키마로 올린 계획 (마이그레이션 모듈이 `upgrade_plan()`을 제공할 때만, 없으면 종료 코드 2). `--to`는 **`--db`의 워킹 트리를 직접 바꾼다**: `--db`가 이슈 DB clone이고 현재 브랜치가 `migrate/schema-v<N>`이며 깨끗할 때만 실행한다(아니면 종료 코드 2). 메인테이너가 자기 로컬 브랜치에서 직접 편집하는 흐름이므로 계획·worktree·lock을 쓰지 않는다 (`06-collaboration.md §6.4`). `--to <N>`은 플러그인 `SCHEMA_VERSION` ≥ N > 이슈 DB 버전일 때만(아니면 종료 코드 2), 현재 브랜치는 **정확히** `migrate/schema-v<N>`(`config.py check`의 예외는 `migrate/schema-v<숫자>` 패턴 전체). `--dry-run`은 브랜치·깨끗함을 보지 않고 아무것도 쓰지 않는다. 마이그레이션은 메모리에서 모두 적용한 뒤 한 번에 쓰므로 실패하면 트리가 그대로다. `schema_version`은 db_migrate가 올리고, `generator_version`은 `ci_mode`가 `actions-build`가 아니면 플러그인 값으로 함께 맞춘다(`db_build --write`가 두 값이 같아야 돌기 때문). 마이그레이션 모듈 계약: `FROM_VERSION`·`TO_VERSION`·`migrate(tree)`·(선택)`upgrade_plan(plan)`. `upgrade-plan`은 계획의 `schema_version`을 `--db`의 버전까지 올리고(`--write`면 원본을 `<plan>.v<옛 버전>.bak`으로 남기고 덮어씀), 그 사이 `upgrade_plan()`이 없는 마이그레이션이 있으면 종료 코드 2 |
 | `guard.py` | — | stdin: hook 입력 JSON → 권한 결정 JSON (`08-safety.md §9`) |
 | `jira_bridge.py` | — | stdin: PostToolUse hook 입력 JSON. 도구가 config `jira.tools.get_issue`·`get_comments`(서버 이름 정규화 비교)일 때만 `{hookSpecificOutput: {hookEventName: PostToolUse, updatedToolOutput}}`: 원문은 `<work_dir>/<KEY>/jira_raw.json`(키는 `jira_key_regex` 검사, `get_comments`는 `comments`에 합침), 모델에는 마스킹 요약(요약·설명 앞부분·코멘트 마지막 3개, 각 200자). 실패하면 원문 대신 오류 문구(fail closed). 설정을 읽지 못하면 모든 `mcp__` 결과를 오류 문구로. 다른 도구는 출력 없음. 항상 종료 코드 0 (`08-safety.md §9` 9번) |

@@ -30,13 +30,19 @@
 
 플러그인 루트: `--plugin-root`, 없으면 `plugin/site-defaults.yaml`이 있을 때 `plugin/`,
 없으면 테스트 헬퍼 루트(`tests/helpers/make_plugin_root.py`)를 임시로 만든다.
+`--json`의 `meta`(텍스트는 머리 한 줄): `plugin_repo`(이 도구가 들어 있는 레포의 git SHA·dirty), `db`(DB의 git SHA·dirty),
+`plugin_root`(실제 실행 루트 경로·임시 여부), `site_defaults_sha256`, `labelset_sha256`, Python 버전, 실행 인자 — 결과를 어느
+코드·DB·설정·라벨셋으로 냈는지 식별한다(비밀값·원문 없음). 항목에는 `logs_sha256`(입력 로그 해시)과 `backend`·`external`
+(`events.json`의 파서 백엔드·외부 파서, 못 읽으면 null)을 더한다.
 종료 코드: 0 = 실행 완료, 2 = 사용 오류.
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import platform
 import shutil
 import subprocess
 import sys
@@ -50,9 +56,20 @@ import yaml
 REPO = Path(__file__).resolve().parents[1]
 UNRESOLVED = "unresolved"
 
+sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+from common import history  # noqa: E402
+
 
 class EvalError(Exception):
     pass
+
+
+def _git_state(path: Path) -> dict:
+    """git 최상위 레포면 {sha, dirty}, 아니면 둘 다 None (상위 레포 SHA를 DB 것으로 적지 않는다)."""
+    if not history.is_repo(path):
+        return {"sha": None, "dirty": None}
+    return {"sha": (history._git(path, "rev-parse", "HEAD") or "").strip() or None,
+            "dirty": bool((history._git(path, "--no-optional-locks", "status", "--porcelain") or "").strip())}
 
 
 def _plugin_root(explicit: str | None) -> tuple[Path, bool]:
@@ -113,7 +130,9 @@ def evaluate_item(root: Path, db: Path, base: Path, doc: dict, item: dict, work:
     tz = item.get("tz", doc.get("tz"))
     if tz:
         args += ["--tz", str(tz)]
-    result = {"key": key, "expect": str(item["expect"]), "top": None, "top3": [], "error": None}
+    result = {"key": key, "expect": str(item["expect"]), "top": None, "top3": [], "error": None,
+              "logs_sha256": [hashlib.sha256(Path(p).read_bytes()).hexdigest() if Path(p).is_file() else None for p in logs],
+              "backend": None, "external": None}
     try:
         year = item.get("year") or doc.get("year")
         if not year:
@@ -128,6 +147,11 @@ def evaluate_item(root: Path, db: Path, base: Path, doc: dict, item: dict, work:
         result["error"] = f"triage 종료 {proc.returncode}: {proc.stderr.strip()[:200]}"
         return result
     analysis = json.loads(proc.stdout)
+    try:    # 작업 디렉터리를 지우기 전에 파서 백엔드·외부 파서를 events.json에서 읽어 둔다
+        events = json.loads((job / "events.json").read_text(encoding="utf-8"))
+        result["backend"], result["external"] = events.get("backend"), events.get("external")
+    except (OSError, ValueError, AttributeError):
+        pass
     if analysis.get("status") != "ok":
         result["error"] = f"triage {analysis.get('status')}: {(analysis.get('needs_input') or {}).get('kind')}"
         return result
@@ -228,6 +252,13 @@ def main(argv: list[str] | None = None) -> int:
             raise EvalError(f"이슈 DB가 아닙니다: {db}")
         root, made = _plugin_root(args.plugin_root)
         temp_root = root if made else None
+        site_yaml = root / "site-defaults.yaml"
+        meta = {"plugin_repo": _git_state(REPO), "db": _git_state(db),
+                "plugin_root": {"path": str(root), "temporary": made},
+                "site_defaults_sha256": hashlib.sha256(site_yaml.read_bytes()).hexdigest() if site_yaml.is_file() else None,
+                "labelset_sha256": hashlib.sha256(label_path.read_bytes()).hexdigest(),
+                "python": platform.python_version(),
+                "argv": list(sys.argv[1:] if argv is None else argv)}
         work = Path(tempfile.mkdtemp(prefix="tt-offline-eval-"))
         try:
             results = [evaluate_item(root, db, base, doc, item, work) for item in doc["items"]]
@@ -242,8 +273,14 @@ def main(argv: list[str] | None = None) -> int:
 
     summary = summarize(results)
     if args.json:
-        print(json.dumps({"summary": summary, "items": results}, ensure_ascii=False, indent=1))
+        print(json.dumps({"meta": meta, "summary": summary, "items": results}, ensure_ascii=False, indent=1))
     else:
+        def s(g: dict) -> str:
+            return "-" if not g["sha"] else g["sha"][:12] + ("+dirty" if g["dirty"] else "")
+
+        pr = meta["plugin_root"]
+        print(f"meta: 플러그인 {s(meta['plugin_repo'])} · DB {s(meta['db'])} · 플러그인 루트 {pr['path']}"
+              f"{'(임시)' if pr['temporary'] else ''} · 라벨셋 sha256 {meta['labelset_sha256'][:12]} · Python {meta['python']}")
         print(render(results, summary))
     return 0
 

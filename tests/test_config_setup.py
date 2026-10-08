@@ -91,10 +91,11 @@ def test_init_interactive_rejects_bad_paths():
     result = json.loads(proc.stdout)
     assert result["suggest_clone"].startswith("git clone https://ghe.mock.invalid/")
     cfg = env.config()
-    assert cfg["issue_db"]["path"] == str(clone) and cfg["issue_db"]["base_branch"] == "main"
-    assert cfg["issue_db"]["ghe_host"] == "ghe.mock.invalid"
-    assert cfg["jira"]["timezone"] == "Asia/Seoul" and cfg["logcat"]["timezone"] == "UTC"
-    assert "log_dir" not in cfg
+    # 팀 기본값과 같은 답(base_branch·ghe_host·jira.timezone·year_source)은 저장하지 않고 상속한다
+    assert cfg["issue_db"] == {"path": str(clone), "remote": "https://ghe.mock.invalid/mock-org/telephony-issue-db.git"}
+    assert "jira" not in cfg and cfg["logcat"] == {"timezone": "UTC"} and "log_dir" not in cfg
+    eff = env.json("config.py", ["show", "--keys", "issue_db.base_branch,issue_db.ghe_host,jira.timezone"])["values"]
+    assert eff == {"issue_db.base_branch": "main", "issue_db.ghe_host": "ghe.mock.invalid", "jira.timezone": "Asia/Seoul"}
     assert cfg["plugin"]["scripts_path"] == str(env.root / "scripts")
     assert (env.base / "work").is_dir()
     if POSIX:
@@ -109,6 +110,19 @@ def test_init_interactive_rejects_bad_paths():
     proc = other.run("config.py", ["init", "--answers", bad])
     assert proc.returncode == 2 and "issue_db.path" in proc.stderr and "log_dir" in proc.stderr
     assert not (other.home / "config.yaml").exists()
+
+
+def test_init_saves_only_answers_so_team_default_changes_flow_through():
+    root = make_plugin_root.make()      # 캐시된 plugin_root()의 site-defaults를 고치지 않도록 새 루트
+    env = Env(root=root)
+    env.init(env.base / "db")
+    assert "explore" not in env.config() and "jira" not in env.config()
+    assert env.json("config.py", ["show", "--keys", "explore.when"])["values"] == {"explore.when": "ask"}
+    path = root / "site-defaults.yaml"
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    data["explore"]["when"] = "never"
+    path.write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8", newline="\n")
+    assert env.json("config.py", ["show", "--keys", "explore.when"])["values"] == {"explore.when": "never"}
 
 
 def test_set_and_sync_scripts_path():
