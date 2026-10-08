@@ -166,6 +166,20 @@ def test_review_is_read_only_and_writes_markdown():
     assert md.returncode == 0 and md.stdout.startswith("# 월간 리뷰 리포트 — 전체")
 
 
+def test_report_shows_branch_and_uncommitted_changes():
+    db = _dated_repo()
+    clean = _review(db)
+    assert (clean["branch"], clean["dirty"]) == ("main", False)
+    subprocess.run(["git", "-C", str(db), "switch", "-qc", "review-wip"], check=True)
+    (db / "wip-note.md").write_text("x\n", encoding="utf-8")
+    wip = _review(db)
+    assert (wip["branch"], wip["dirty"], wip["head"]) == ("review-wip", True, clean["head"])
+    md = run("db_review.py", ["--db", db, "--as-of", AS_OF]).stdout
+    assert "review-wip" in md and "커밋 안 된 변경 포함" in md
+    plain = _review(copy_db(REVIEW_DB))       # git 최상위가 아니면 셋 다 null
+    assert (plain["head"], plain["branch"], plain["dirty"]) == (None, None, None)
+
+
 def test_stats_on_review_db():
     out = tmp("tt-preview-")
     run_json("db_build.py", ["--db", REVIEW_DB, "--preview", out])

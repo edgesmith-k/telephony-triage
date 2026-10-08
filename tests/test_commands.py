@@ -11,8 +11,10 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+import platform
 import re
 import subprocess
 import sys
@@ -319,11 +321,23 @@ def test_offline_eval_prints_accuracy_table_on_synthetic_labelset():
     assert summary["false_positive_rate"] == 0.0
     verdicts = {r["key"]: r["verdict"] for r in out["items"]}
     assert verdicts["EVAL-1"] == "1위" and verdicts["EVAL-7"] == "정답" and verdicts["EVAL-8"] == "미스"
+    meta = out["meta"]
+    assert meta["labelset_sha256"] == hashlib.sha256((REPO / "tests/fixtures/offline-eval-sample.yaml").read_bytes()).hexdigest()
+    assert meta["python"] == platform.python_version() and meta["argv"][-1] == "--json"
+    assert set(meta["plugin_repo"]) == set(meta["db"]) == {"sha", "dirty"}
+    assert meta["db"] == {"sha": None, "dirty": None}   # 샘플 DB는 플러그인 레포 하위 폴더(git 최상위 아님)
+    root = Path(meta["plugin_root"]["path"])
+    assert meta["plugin_root"]["temporary"] is True and not root.exists()      # 임시 루트는 실행 뒤 지운다
+    assert meta["site_defaults_sha256"] == hashlib.sha256((REPO / "plugin/site-defaults.example.yaml").read_bytes()).hexdigest()
+    item = out["items"][0]
+    assert item["logs_sha256"] and all(len(h) == 64 for h in item["logs_sha256"])
+    assert item["backend"]["name"] and "version" in item["backend"] and item["external"] == []    # 외부 파서 없음
 
 
 def test_offline_eval_text_table_has_the_three_metrics():
     proc = _offline(str(REPO / "tests" / "fixtures" / "offline-eval-sample.yaml"))
     assert proc.returncode == 0, proc.stderr
+    assert proc.stdout.startswith("meta: ")
     for label in ("1위 정확도", "상위 3 포함률", "오탐률", "EVAL-8"):
         assert label in proc.stdout
 

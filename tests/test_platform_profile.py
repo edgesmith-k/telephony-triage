@@ -456,6 +456,23 @@ def test_aosp_system_log_without_b_goes_to_default_buffer():
     assert build["dumpstate_at"] == "2026-09-22 12:10:00"
 
 
+@pytest.mark.parametrize("last_cmd", ["-L -b radio", "-b radio -L"])
+def test_last_logcat_with_radio_buffer_is_not_mixed_into_current_radio(last_cmd):
+    # 이전 부팅 섹션은 -b 위치와 무관하게 -L을 먼저 봐서 현재 radio에 섞지 않는다
+    text = AOSP_BUGREPORT.replace("-L -b all", last_cmd)
+    result = _extract(None, text)
+    assert [(f["buffer"], f["lines"]) for f in result["files"]] == [("radio", 1), ("main", 1)]
+    radio = (result["_out"] / "logcat-radio.txt").read_text(encoding="utf-8")
+    assert "Rad: r" in radio and "Last: l" not in radio
+    skipped = next(w for w in result["warnings"] if w["code"] == "skipped-logcat-sections")
+    assert "LAST LOGCAT(last)" in skipped["message"]
+    # 이전 부팅 섹션만 있으면 현행대로 추출 버퍼 없음(BugreportError); `last`를 wanted_buffers에 넣으면 꺼낸다
+    only_last = text.split("------ SYSTEM LOG", 1)[0] + text[text.index("------ LAST LOGCAT"):]
+    with pytest.raises(bugreport.BugreportError):
+        _extract(None, only_last)
+    assert [(f["buffer"], f["lines"]) for f in _extract({"bugreport": {"wanted_buffers": ["last"]}}, only_last)["files"]] == [("last", 1)]
+
+
 def test_wanted_buffers_radio_only():
     result = _extract({"bugreport": {"wanted_buffers": ["radio"]}}, BUGREPORT)
     assert [f["buffer"] for f in result["files"]] == ["radio"]

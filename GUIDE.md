@@ -169,7 +169,7 @@ git add -A && git commit -m "사외 초안 반입: import-v1"     # .draft-manif
 [읽을 것 — 이것만]
 `python3 tools/context_pack.py S-n` 출력(그 단계의 §15.5 행·비고·읽을 파일과 절, 목록은 docs/tasks.md). CLAUDE.md는 자동 로드.
 읽지 않는다: docs/history/ 전체, 11-phases.md, pack에 없는 docs/design/ 파일, ARCHITECTURE_REVIEW(개선 작업은 사외 트랙).
-파일럿 지표(PR까지 시간·중도 취소 비율·작업당 질문 수)는 `python3 tools/usage_stats.py`로 뽑는다.
+파일럿 지표(PR까지 시간·중도 취소 비율·작업당 저장된 답 수(질문 수 근사), push 기록 있음·PR 연결 미확인 건수)는 `python3 tools/usage_stats.py`로 뽑는다.
 TODO(SITE) 목록은 문서가 아니라 `python3 tools/list_site_todos.py`로 뽑는다.
 
 [지킬 것]

@@ -26,7 +26,7 @@ class BugreportError(Exception):
 SECTION_RE = re.compile(r"^------ (?P<title>.+?) \((?P<cmd>logcat\b[^)]*)\) ------\s*$")
 SECTION_BOUNDARY_RE = re.compile(r"^------ .* ------\s*$")
 BUFFER_RE = re.compile(r"-b\s+(?P<buf>[a-z]+)")
-LAST_RE = re.compile(r"\s-L\b")  # 이전 부팅 logcat — 현재 버퍼와 섞지 않는다
+LAST_RE = re.compile(r"\s-L\b")  # 이전 부팅 logcat(`-b`보다 먼저 판별) — 기본 wanted_buffers에서는 skip, `last`를 넣으면 추출
 BUILD_RE = re.compile(r"^Build:\s*(?P<v>.+?)\s*$")
 FINGERPRINT_RE = re.compile(r"^Build fingerprint:\s*'?(?P<v>[^']+?)'?\s*$")
 DUMPSTATE_RE = re.compile(r"^== dumpstate:\s*(?P<v>.+?)\s*$")
@@ -98,8 +98,9 @@ def extract(src: Path, out_dir: Path, rules: BugreportRules | None = None) -> di
                 current = None
                 hit = rules.section_re.match(line)
                 if hit:
-                    buf = BUFFER_RE.search(hit.group("cmd"))
-                    name = buf.group("buf") if buf else "last" if LAST_RE.search(hit.group("cmd")) else rules.default_buffer
+                    cmd = hit.group("cmd")
+                    buf = BUFFER_RE.search(cmd)
+                    name = "last" if LAST_RE.search(cmd) else buf.group("buf") if buf else rules.default_buffer
                     if name in rules.wanted_buffers:
                         current = name
                         if current not in writers:

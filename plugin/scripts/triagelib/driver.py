@@ -406,7 +406,9 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
             if not parser._looks_like_bugreport(p):
                 out.append(p)
                 continue
-            dest = self.job / "logs" / re.sub(r"[^A-Za-z0-9._-]", "_", p.stem)
+            # 같은 이름(a/bugreport.txt, b/bugreport.txt)이 서로 덮지 않도록 해석된 경로 해시를 붙인다
+            # ponytail: 경로 해시 8자, 충돌은 이론상 가능하나 한 작업의 입력 수가 작아 무시. 늘면 16자
+            dest = self.job / "logs" / f"{re.sub(r'[^A-Za-z0-9._-]', '_', p.stem)}-{_digest(str(p))[:8]}"
             _, data, _ = self.run.call("3-bugreport", "parse_logcat.py", ["extract-bugreport", p, "--out", dest])
             out += [Path(f["path"]) for f in (data or {}).get("files") or []]
             build = {k: v for k, v in ((data or {}).get("build") or {}).items() if v} or build
@@ -419,7 +421,7 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
     def auto_select(self) -> bool:
         """`code.auto_select`: 사용자 config > site-defaults > 기본 true (02-config.md). 유효 값은 불리언뿐이고(`type(v) is bool`),
         그 밖(문자열·0/1·null)은 `explore.when`처럼 warnings에 남기고 묻는 쪽(false)으로 본다."""
-        # `from_site_defaults`를 거치지 않는다(setup이 그 결과를 사용자 config에 저장하므로 site-defaults 값이 복사된다)
+        # site-defaults를 직접 본다: from_site_defaults는 code 키를 옮기지 않는다(setup도 code를 사용자 config에 쓰지 않는다)
         value = True
         for source in (userconfig.load_user() or {}, self.defaults):
             node = source.get("code")

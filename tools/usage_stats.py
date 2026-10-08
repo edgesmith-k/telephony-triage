@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """파일럿 지표 3개를 work_dir에서 뽑는다 (15-local-draft.md §15.5 S-7).
 
-PR까지 걸린 평균 시간, 중도 취소 비율, 작업당 평균 질문 수를 줄 글로 낸다.
+PR까지 걸린 평균 시간, 중도 취소 비율, 작업당 저장된 답 수(질문 수 근사)를 줄 글로 낸다.
+PR 완료는 `plan.json`의 `pr.number`가 있을 때만 세고, push 기록 있음·PR 연결 미확인(`pr.head_sha`만 있음)은 따로 센다.
 
 CLI:
     python3 tools/usage_stats.py [--work-dir <dir>]    (기본: 사용자 config의 work_dir)
@@ -28,7 +29,7 @@ def _json(path: Path) -> dict:
 
 
 def stats(work_dir: Path) -> dict:
-    pr_secs, questions, started, cancelled = [], [], 0, 0
+    pr_secs, questions, started, cancelled, pushed = [], [], 0, 0, 0
     for job in sorted(p for p in work_dir.iterdir() if p.is_dir() and p.name != session_lock.SNAPSHOT_DIR):
         answers = _json(job / "triage-state.json").get("answers")
         if isinstance(answers, dict):
@@ -37,15 +38,18 @@ def stats(work_dir: Path) -> dict:
         if not plan.get("started_at"):
             continue
         started += 1
-        if plan.get("pr"):
+        pr = plan.get("pr") or {}
+        if pr.get("number"):
             # ponytail: mtime≈마지막 쓰기(재승인·sync-pr마다 갱신), 정확히 하려면 gh createdAt
             t0 = session_lock.parse(plan["started_at"])
             end = datetime.fromtimestamp((job / "plan.json").stat().st_mtime, t0.tzinfo)
             pr_secs.append((end - t0).total_seconds())
+        elif pr.get("head_sha"):
+            pushed += 1          # push 기록 있음·PR 연결 미확인 (gh 실패 또는 URL에서 번호를 못 뽑음, publish.py:505-516)
         elif not (job / "state.json").exists() and not (job / "wt").exists():
             cancelled += 1
     return {"pr_minutes": sum(pr_secs) / len(pr_secs) / 60 if pr_secs else None, "pr_jobs": len(pr_secs),
-            "cancelled": cancelled, "started": started,
+            "pushed_no_pr": pushed, "cancelled": cancelled, "started": started,
             "questions": sum(questions) / len(questions) if questions else None, "q_jobs": len(questions)}
 
 
@@ -68,9 +72,10 @@ def main(argv: list[str] | None = None) -> int:
         return "n/a" if v is None else f"{v:.1f}{unit}"
 
     print(f"PR까지 평균 {num(s['pr_minutes'], '분')} (PR 작업 {s['pr_jobs']}건)")
+    print(f"push 기록 있음·PR 연결 미확인 {s['pushed_no_pr']}건")
     ratio = f" ({s['cancelled'] / s['started']:.0%})" if s["started"] else ""
     print(f"중도 취소 {s['cancelled']}/{s['started']}{ratio}")
-    print(f"작업당 평균 질문 {num(s['questions'], '개')} (작업 {s['q_jobs']}건)")
+    print(f"작업당 평균 저장된 답 수(질문 수 근사) {num(s['questions'], '개')} (작업 {s['q_jobs']}건)")
     return 0
 
 

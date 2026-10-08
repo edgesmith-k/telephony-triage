@@ -10,11 +10,12 @@ telephony-triage를 이 사용자 환경에 맞게 설정한다 (`02-config.md �
    - 없으면 아래 항목을 사용자에게 하나씩 묻는다(괄호 안 기본값은 `show`의 `effective`에 있다):
      GHE 아이디, 이슈 DB 로컬 clone 경로, 이슈 DB 원격 URL, base 브랜치, GHE 호스트, Jira 시각 타임존,
      logcat 시각 타임존, 연도 결정 방식(`jira | file-mtime | ask`), logcat 기본 탐색 경로(선택),
-     작업 디렉토리. `code_profiles`는 건너뛸 수 있다.
+     작업 디렉토리. `code_profiles`는 건너뛸 수 있다(기본값과 같은 답은 저장되지 않고 팀 기본값을 따른다).
    - 답을 JSON(`{"user.ghe_id": ..., "issue_db.path": ..., ...}`)으로 임시 파일에 쓰고
      `config.py init --answers <파일>`을 실행한다. 경로가 없으면 거부되므로(종료 코드 2) 그 항목만 다시 묻는다.
      홈(`~/.telephony-triage/`)과 작업 디렉토리는 권한 700으로 만들어진다.
-   - 있으면 바꿀 항목만 `config.py set <키> <값>`으로 고친다.
+   - 있으면 바꿀 항목만 `config.py set <키> <값>`으로 고친다. 예전 `init`이 저장한 팀 기본값 복사본을 상속형으로 바꾸려면
+     `config.py init --force`로 다시 만들거나 해당 키를 config.yaml에서 지운다.
 2. **스크립트 경로** — `config.py sync-scripts-path`.
 3. **이슈 DB clone** — `init` 결과의 `suggest_clone`이 있으면 그 `git clone` 명령을 제안하고, 사용자가 동의하면 실행한다.
 4. **Jira MCP** — `config.py jira-candidates`로 이미 등록된 MCP 서버의 도구에서 후보를 고른다.
