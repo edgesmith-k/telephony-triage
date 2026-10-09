@@ -41,15 +41,17 @@ def _ids(report: dict, key: str, field: str = "cause") -> list:
     return [e.get(field) for e in _item(report, key)["entries"]]
 
 
-def _commit(repo: Path, when: str, message: str) -> None:
+def _commit(repo: Path, when: str, message: str, author: str = "tt") -> None:
     env = {**os.environ, "GIT_AUTHOR_DATE": f"{when}T12:00:00+0900", "GIT_COMMITTER_DATE": f"{when}T12:00:00+0900"}
-    for args in (["add", "-A"], ["-c", "user.name=tt", "-c", "user.email=tt@example.invalid", "commit", "-qm", message]):
+    for args in (["add", "-A"], ["-c", f"user.name={author}", "-c", "user.email=tt@example.invalid", "commit", "-qm",
+                                 message]):
         proc = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, env=env)
         assert proc.returncode == 0, proc.stderr
 
 
 def _dated_repo() -> Path:
-    """2026-06-01 커밋(DATA-009-02는 아직 open, DATA-001-02 해결책은 옛 문구) → 2026-10-10 커밋(최종 트리)."""
+    """2026-06-01 커밋(작성자 mock-a. DATA-009-02는 아직 open, DATA-001-02 해결책은 옛 문구)
+    → 2026-10-10 커밋(작성자 mock-b, 최종 트리)."""
     db = copy_db(REVIEW_DB)
     subprocess.run(["git", "-C", str(db), "init", "-q", "-b", "main"], check=True)
     data2 = db / DATA2 / "type.md"
@@ -58,10 +60,10 @@ def _dated_repo() -> Path:
     final1 = data1.read_text(encoding="utf-8")
     edit(data2, "    fix:\n      status: fix-submitted\n      ref: null", "    fix:\n      status: open\n      ref: null")
     edit(data1, "    resolution: 데이터 로밍 설정을 켠다", "    resolution: 로밍 설정을 확인한다")
-    _commit(db, "2026-06-01", "init")
+    _commit(db, "2026-06-01", "init", author="mock-a")
     data2.write_text(final2, encoding="utf-8", newline="\n")
     data1.write_text(final1, encoding="utf-8", newline="\n")
-    _commit(db, "2026-10-10", "update")
+    _commit(db, "2026-10-10", "update", author="mock-b")
     return db
 
 
@@ -135,7 +137,10 @@ def test_stale_periods_come_from_git_history():
     # fix-submitted: SIM-001-01·DATA-009-01은 2026-06-01부터, DATA-009-02는 2026-10-10에 들어감(10일)
     assert _ids(report, "fix-submitted-stale") == ["DATA-009-01", "SIM-001-01"]
     entry = _item(report, "fix-submitted-stale")["entries"][1]
-    assert (entry["since"], entry["days"]) == ("2026-06-01", 141)
+    assert (entry["since"], entry["days"], entry["by"]) == ("2026-06-01", 141, "mock-a")
+    # 기록자는 상태가 시작된 커밋의 작성자다. DATA-009-01의 type.md는 10-10에 mock-b가 바꿨지만 상태는 그대로다.
+    first = _item(report, "fix-submitted-stale")["entries"][0]
+    assert (first["cause"], first["by"]) == ("DATA-009-01", "mock-a") and "기록: mock-a" in first["text"]
     # Jira 없는 DATA-009-02는 2026-06-01에 생겼으므로 12개월이 안 됐다. 1년 뒤에는 오래 안 쓰인 원인이다.
     assert _ids(report, "stale-causes") == ["DATA-009-01"]
     later = run_json("db_review.py", ["--db", db, "--as-of", "2027-07-01", "--json"])

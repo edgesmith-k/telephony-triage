@@ -3,6 +3,8 @@
 - `since()`: 원인이 지금 상태(예: `fix.status: fix-submitted`)에 들어간 날. `type.md`를 바꾼 커밋을
   최신부터 거슬러 보며 조건이 계속 참인 가장 오래된 커밋의 커미터 날짜를 쓴다. 이슈 DB 파일에는
   상태 전환 날짜가 없으므로(`fix`·`resolution_verification`에 날짜 필드 없음) git 이력이 유일한 근거다.
+  `since_by()`는 그 커밋의 작성자 이름(git author, 그 상태를 기록한 사람)도 낸다. 리뷰가 누구에게
+  요청할지 보여주는 데 쓴다(이메일은 내지 않는다).
 - `renumbered()`: 커밋 메시지의 `Renumbered: <옛 ID> -> <새 ID>` 트레일러 (사후 정리 커밋).
 
 git 레포가 아니거나 이력이 없으면 `since()`는 `(None, "no-history")`를 낸다. 워킹 트리에만 있는
@@ -50,18 +52,19 @@ class History:
     def __init__(self, root: Path):
         self.root = Path(root)
         self.enabled = is_repo(self.root)
-        self._commits: dict[str, list[tuple[str, date]]] = {}
+        self._commits: dict[str, list[tuple[str, date, str]]] = {}
         self._docs: dict[tuple[str, str], dict | None] = {}
 
-    def commits(self, rel: str) -> list[tuple[str, date]]:
-        """`rel`을 바꾼 커밋 `(sha, 커미터 날짜)` 최신순."""
+    def commits(self, rel: str) -> list[tuple[str, date, str]]:
+        """`rel`을 바꾼 커밋 `(sha, 커미터 날짜, 작성자 이름)` 최신순."""
         if rel not in self._commits:
-            out = _git(self.root, "log", "--format=%H %cs", "HEAD", "--", rel) if self.enabled else None
+            out = _git(self.root, "log", "--format=%H%x1f%cs%x1f%an", "HEAD", "--", rel) if self.enabled else None
             rows = []
             for line in (out or "").splitlines():
-                sha, _, when = line.partition(" ")
+                sha, _, rest = line.partition("")
+                when, _, author = rest.partition("")
                 try:
-                    rows.append((sha, date.fromisoformat(when.strip())))
+                    rows.append((sha, date.fromisoformat(when.strip()), author.strip()))
                 except ValueError:
                     continue
             self._commits[rel] = rows
@@ -85,19 +88,24 @@ class History:
 
     def since(self, rel: str, cause_id: str, pred: Callable[[dict], bool]) -> tuple[date | None, str]:
         """원인 `cause_id`가 `pred`를 만족한 연속 구간의 시작일. `(날짜, "git")` 또는 `(None, 사유)`."""
+        return self.since_by(rel, cause_id, pred)[:2]
+
+    def since_by(self, rel: str, cause_id: str,
+                 pred: Callable[[dict], bool]) -> tuple[date | None, str, str | None]:
+        """`since()`에 그 시작 커밋의 작성자 이름을 더한 `(날짜, "git", 작성자)` 또는 `(None, 사유, None)`."""
         commits = self.commits(rel)
         if not commits:
-            return None, "no-history"
+            return None, "no-history", None
         start = None
-        for sha, when in commits:
+        for sha, when, author in commits:
             doc = self.frontmatter(sha, rel)
             cause = _find_cause(doc, cause_id)
             if cause is None or not pred(cause):
                 break
-            start = when
+            start = (when, author or None)
         if start is None:
-            return None, "uncommitted"
-        return start, "git"
+            return None, "uncommitted", None
+        return start[0], "git", start[1]
 
     def renumbered(self) -> list[dict]:
         """`Renumbered:` 트레일러 `[{from, to, commit, date}]` (오래된 커밋부터)."""
