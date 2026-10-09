@@ -277,6 +277,19 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
         <div><b>작업 계획</b>"이 Jira를 이 원인에 추가" 같은 <i>할 일 목록</i>입니다. 파일을 바로 고치지 않고 이 목록을 최신 상태 위에 다시 적용해 PR을 만듭니다.</div>
         <div><b>스냅샷과 lock</b>스냅샷은 분석할 때 읽는 이슈 DB 복사본이라 내 원본을 건드리지 않습니다. lock은 한 사람이 쓰기 작업 두 개를 동시에 못 하게 막습니다.</div>
       </div>
+
+      <h3>마스킹은 이렇게 바뀝니다</h3>
+      <figure class="fig"><svg viewBox="0 0 820 210" role="img" aria-labelledby="mkT"><title id="mkT">마스킹 전과 후 (합성 예시)</title><defs><marker id="mkh" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head acc" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+<text class="lab" x="20" y="18">원본 로그 (내 PC에만, 저장 안 함)</text>
+<rect class="box ext" x="20" y="26" width="780" height="62" rx="6"/>
+<text class="m" x="32" y="50">… RILJ : [0451]&lt; SETUP_DATA_CALL … addresses=10.45.3.7/32 imsi=001010123456789</text>
+<text class="m" x="32" y="72">… RILJ : [0457]&lt; DEACTIVATE_DATA_CALL … addresses=10.45.3.7/32</text>
+<path class="ln acc" d="M410,90 L410,118" marker-end="url(#mkh)"/><text class="lab" x="420" y="110">mask_pii</text>
+<text class="lab" x="20" y="134">마스킹 뒤 (DB·리포트·매칭에 쓰는 것)</text>
+<rect class="box hl" x="20" y="142" width="780" height="62" rx="6"/>
+<text class="m" x="32" y="166">… RILJ : [0451]&lt; SETUP_DATA_CALL … addresses=&lt;IP#1&gt;/32 imsi=&lt;IMSI#1&gt;</text>
+<text class="m" x="32" y="188">… RILJ : [0457]&lt; DEACTIVATE_DATA_CALL … addresses=&lt;IP#1&gt;/32</text>
+</svg><figcaption>합성 예시입니다. 같은 파일 안에서 같은 값은 같은 번호(<code>&lt;IP#1&gt;</code>)로 바뀌어 "같은 주소로 붙었다가 끊겼다" 같은 관계는 남습니다. 원래 값과 번호의 대응표는 저장하지 않습니다.</figcaption></figure>
       <h3>분류는 세 단계입니다</h3>
       <figure class="fig"><svg viewBox="0 0 820 360" role="img" aria-labelledby="taxT"><title id="taxT">분류 구조: 카테고리, 유형, 원인 (합성 샘플)</title><defs><marker id="txh" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0,0 L10,5 L0,10 z"/></marker></defs>
 <text class="lab" x="20" y="14">카테고리</text><text class="lab" x="190" y="14">유형 (증상)</text><text class="lab" x="480" y="14">원인 (이유 + 해결책)</text>
@@ -883,6 +896,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
 <text class="s" x="620" y="112">main 직접 push 불가</text><text class="s" x="620" y="130">카테고리 담당자</text><text class="s" x="620" y="148">(CODEOWNERS) 리뷰 필수</text><text class="s" x="620" y="176">PC 설정과 무관하게</text><text class="s" x="620" y="194">서버가 강제</text>
 </svg><figcaption>①②는 Claude Code 세션 안에서만, ③은 이슈 DB 레포에서 커밋·push할 때, ④는 누가 어디서 push하든 걸립니다.</figcaption></figure>
       <div class="note warn"><span class="k">한계</span>①~③은 PC에서 동작하는 장치라 최선 노력입니다. 복잡한 명령이나 스크립트 안의 호출은 놓칠 수 있고, Claude의 Read 도구로 로그를 통째로 읽는 것도 막지 못합니다(스킬 지침으로만 제한). 그래서 ④ 서버 브랜치 보호가 반드시 켜져 있어야 합니다.</div>
+      <p>위 네 겹은 <b>동작</b>을 막는 장치입니다. 들어가는 <b>규칙</b>의 품질은 자동 검증 R1~R6이 지킵니다(<a href="06-contributor-guide.html#g3r">기여자 가이드 3절</a>). R1~R6, 행동 eval, 정확도 평가가 각각 무엇을 재고 누가 만드는지는 <a href="17-glossary.html#t8">용어집 8절</a>에 있습니다.</p>
     </section>
 
     <section class="chap" id="c9" data-title="왜 이런 장치를 두었나">
@@ -891,6 +905,24 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
       <p>도구를 쓰다 보면 "왜 여기서 멈추지?", "왜 이건 못 하게 하지?" 싶은 순간이 있습니다. 대부분 아래 중 하나이고, 모두 실제로 생길 수 있는 사고 하나씩을 막으려고 둔 것입니다.</p>
 
       <div class="sub" id="c9a" data-title="동시 작업과 충돌"><h3>동시 작업과 충돌</h3>
+      <figure class="fig"><svg viewBox="0 0 820 300" role="img" aria-labelledby="ccT"><title id="ccT">두 사람이 동시에 새 원인을 만들 때</title>
+<text class="t" x="20" y="22">두 사람이 같은 날 DATA-001 아래에 새 원인을 하나씩 만들면</text>
+<rect class="box ext" x="20" y="40" width="380" height="244" rx="6"/>
+<text class="t" x="34" y="64">파일을 바로 고쳐 rebase하면</text>
+<text class="s" x="34" y="92">A: DATA-001-03 만들고 PR</text><text class="s" x="34" y="112">B: DATA-001-03 만들고 PR (A 병합 전이라 같은 번호)</text>
+<text class="s" x="34" y="140">A 병합 → B rebase</text>
+<text class="w" x="34" y="164">type.md 같은 줄 충돌, README·STATS 충돌</text>
+<text class="w" x="34" y="184">손으로 풀다 놓치면 ID 중복이 main에 들어감</text>
+<text class="s" x="34" y="220">→ 사람이 매번 충돌 해결</text>
+<rect class="box hl" x="420" y="40" width="380" height="244" rx="6"/>
+<text class="t" x="434" y="64">작업 계획을 다시 적용하면 (이 도구)</text>
+<text class="s" x="434" y="92">A 계획: "DATA-001에 새 원인 추가" → 03 할당, PR</text><text class="s" x="434" y="112">B 계획: "DATA-001에 새 원인 추가" → 03 할당, PR</text>
+<text class="s" x="434" y="140">A 병합 → B가 sync-pr</text>
+<text class="s" x="434" y="164">B의 계획을 새 main 위에서 다시 실행</text>
+<text class="s" x="434" y="184">→ 다음 빈 번호 DATA-001-04 할당</text>
+<text class="s" x="434" y="204">→ README·STATS는 새로 생성</text>
+<text class="s" x="434" y="240">→ 충돌 없음, 같은 PR이 갱신됨</text>
+</svg><figcaption>계획에는 "무엇을 할지"만 있고 실제 번호는 적용할 때 정합니다. 그래서 동시에 작업해도 번호가 겹치지 않습니다.</figcaption></figure>
       <div class="tbl why"><table>
         <tr><th>장치</th><th>언제 걸리나</th><th>왜</th><th>없으면</th></tr>
         <tr><td><b>세션 lock</b></td><td>분석·기록·sync처럼 스냅샷을 옮기거나 작업 공간을 만드는 흐름을 시작할 때</td><td>한 PC의 스냅샷과 작업 공간은 하나뿐입니다. 두 작업이 동시에 옮기면 분석 도중 DB가 바뀌거나 작업 공간이 섞입니다</td><td>창 두 개에서 분석하다 한쪽 결과가 다른 쪽 DB 상태로 나옴</td></tr>
@@ -899,6 +931,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
         <tr><td><b>작업 계획 재적용</b></td><td>모든 기록</td><td>파일 diff를 rebase하면 YAML 충돌과 ID 중복이 납니다. "무엇을 할지"만 적어 두고 최신 main 위에서 다시 실행합니다</td><td>PR 대기 중 main이 바뀌면 수동 충돌 해결</td></tr>
         <tr><td>drift 질문</td><td>계획이 고치려는 곳을 그사이 다른 사람이 바꿨을 때</td><td>남의 변경을 조용히 덮지 않으려고, 계획 값과 main 값 중 무엇을 쓸지 묻습니다</td><td>동료가 고친 해결책이 내 PR로 되돌려짐</td></tr>
         <tr><td>새 ID는 적용할 때 할당</td><td>새 유형·원인 기록</td><td>두 사람이 동시에 새 원인을 만들면 둘 다 같은 다음 번호를 쓰게 됩니다. 최신 main 기준으로 적용 시점에 정합니다</td><td>DATA-003이 두 개 생김</td></tr>
+
       </table></div></div>
 
       <div class="sub" id="c9b" data-title="확인과 승인"><h3>확인과 승인</h3>

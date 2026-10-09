@@ -1,0 +1,427 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>telephony-triage 확장 아이디어</title>
+<style>
+/* Layout: 왼쪽 고정 목차 + 본문 한 단(≤ 46rem). 휴대폰에서는 목차가 상단 접이식. */
+:root {
+  --bg: #f6f8f9;
+  --surface: #ffffff;
+  --sunken: #eef2f3;
+  --ink: #17232b;
+  --ink-2: #4a5a63;
+  --rule: #d5dee2;
+  --accent: #0b6874;        /* 신호선 청록 */
+  --accent-soft: #dcefF1;
+  --warn: #9a5b00;
+  --warn-soft: #fbf0dc;
+  --bad: #a3262c;
+  --bad-soft: #f8e3e3;
+  --good: #1f6b3a;
+  --good-soft: #e1f1e6;
+  --mark: #ffe58a;
+  --font-body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Consolas, "D2Coding", monospace;
+  --step--1: 0.8125rem;
+  --step-0: 0.96875rem;
+  --step-1: 1.125rem;
+  --step-2: 1.375rem;
+  --step-3: 1.75rem;
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+html { scroll-padding-top: 1rem; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--font-body); font-size: var(--step-0); line-height: 1.7;
+  -webkit-text-size-adjust: 100%;
+}
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px;
+}
+code, kbd, pre { font-family: var(--font-mono); font-size: 0.875em; }
+:not(pre) > code {
+  background: var(--sunken); border: 1px solid var(--rule); border-radius: 4px;
+  padding: 0.05em 0.35em; overflow-wrap: anywhere;
+}
+
+.shell {
+  display: grid; grid-template-columns: 17rem minmax(0, 1fr); gap: 0 2.5rem;
+  max-width: 76rem; margin: 0 auto; padding-inline: 16px;
+}
+
+/* 목차 */
+.side {
+  position: sticky; top: env(safe-area-inset-top, 0px); align-self: start;
+  max-height: 100vh; overflow-y: auto; padding-block: 1.5rem 2rem;
+  font-size: var(--step--1);
+}
+.brand { display: flex; flex-direction: column; gap: 0.1rem; margin-bottom: 1rem; }
+.brand b { font-size: var(--step-1); letter-spacing: -0.01em; }
+.brand span { color: var(--ink-2); }
+.search { position: relative; margin-bottom: 0.4rem; }
+.search input {
+  width: 100%; padding: 0.55rem 0.7rem; border: 1px solid var(--rule); border-radius: 6px;
+  background: var(--surface); color: var(--ink); font: inherit; font-size: var(--step--1);
+}
+.search-state { color: var(--ink-2); min-height: 1.4em; margin-bottom: 0.6rem; }
+.toc ol { list-style: none; margin: 0; padding: 0; }
+.toc > ol > li { margin-top: 0.55rem; }
+.toc > ol > li > a { font-weight: 600; color: var(--ink); }
+.toc ol ol { padding-left: 0.9rem; border-left: 1px solid var(--rule); margin-top: 0.2rem; }
+.toc ol ol a { color: var(--ink-2); }
+.toc a { text-decoration: none; display: block; padding: 0.12rem 0; }
+.toc a:hover { color: var(--accent); }
+.toc a.on { color: var(--accent); font-weight: 600; }
+.toc-mobile { display: none; }
+
+/* 본문 */
+main { min-width: 0; padding-block: 1.5rem 5rem; max-width: 48rem; }
+.hero { padding-block: 1rem 1.5rem; border-bottom: 2px solid var(--ink); margin-bottom: 1rem; }
+.hero .eyebrow { font-family: var(--font-mono); font-size: var(--step--1); color: var(--accent); letter-spacing: 0.04em; }
+.hero h1 { font-size: var(--step-3); line-height: 1.25; margin: 0.3rem 0 0.6rem; text-wrap: balance; letter-spacing: -0.015em; }
+.hero p { margin: 0; color: var(--ink-2); max-width: 40rem; }
+.meta { display: flex; flex-wrap: wrap; gap: 0.4rem 1.2rem; margin-top: 0.9rem; font-size: var(--step--1); color: var(--ink-2); }
+.meta b { color: var(--ink); font-weight: 600; }
+
+section.chap { padding-top: 1.8rem; }
+section.chap > h2 {
+  font-size: var(--step-2); line-height: 1.3; margin: 0 0 0.4rem; text-wrap: balance;
+  display: flex; gap: 0.6rem; align-items: baseline; letter-spacing: -0.01em;
+}
+section.chap > h2 .no { font-family: var(--font-mono); color: var(--accent); font-size: 0.8em; }
+.sub { padding-top: 1.2rem; }
+.sub > h3 { font-size: var(--step-1); margin: 0 0 0.4rem; text-wrap: balance; }
+.sub > h4, .card h4 { font-size: var(--step-0); margin: 1rem 0 0.3rem; }
+p, ul, ol { margin: 0.5rem 0; }
+ul, ol { padding-left: 1.3rem; }
+li + li { margin-top: 0.2rem; }
+.lead { color: var(--ink-2); }
+
+/* 표 */
+.tbl { overflow-x: auto; margin: 0.7rem 0; border: 1px solid var(--rule); border-radius: 6px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: var(--step--1); line-height: 1.55; }
+th, td { text-align: left; vertical-align: top; padding: 0.5rem 0.65rem; border-bottom: 1px solid var(--rule); }
+th { background: var(--sunken); font-weight: 600; white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+td code { white-space: nowrap; }
+td.wrap code, td code.wrap { white-space: normal; }
+.num { font-variant-numeric: tabular-nums; }
+
+/* 코드 블록 */
+.code { position: relative; margin: 0.7rem 0; }
+pre {
+  margin: 0; padding: 0.8rem 0.9rem; padding-right: 4.2rem; overflow-x: auto;
+  background: var(--sunken); border: 1px solid var(--rule); border-radius: 6px; line-height: 1.55;
+}
+.copy {
+  position: absolute; top: 0.4rem; right: 0.4rem; font: inherit; font-size: 0.75rem;
+  padding: 0.2rem 0.55rem; border-radius: 4px; border: 1px solid var(--rule);
+  background: var(--surface); color: var(--ink-2); cursor: pointer;
+}
+.copy:hover { color: var(--accent); border-color: var(--accent); }
+
+/* 안내 상자 */
+.note { border: 1px solid var(--rule); border-left-width: 4px; border-radius: 6px; padding: 0.6rem 0.85rem; margin: 0.8rem 0; background: var(--surface); }
+.note > :first-child { margin-top: 0; } .note > :last-child { margin-bottom: 0; }
+.note .k { font-weight: 700; font-size: var(--step--1); letter-spacing: 0.03em; display: block; margin-bottom: 0.15rem; }
+.note.rule { border-left-color: var(--accent); } .note.rule .k { color: var(--accent); }
+.note.warn { border-left-color: var(--warn); background: var(--warn-soft); } .note.warn .k { color: var(--warn); }
+.note.plan { border-left-color: var(--ink-2); border-style: dashed; border-left-style: solid; } .note.plan .k { color: var(--ink-2); }
+.note.easy { border-left-color: var(--good); background: var(--good-soft); } .note.easy .k { color: var(--good); }
+.note.new { border-left-color: var(--accent); background: var(--accent-soft); } .note.new .k { color: var(--accent); }
+/* 핵심 개념 카드 */
+.concepts { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 0.6rem; margin: 0.7rem 0; }
+.concepts > div { min-width: 0; border: 1px solid var(--rule); border-radius: 6px; padding: 0.55rem 0.8rem; background: var(--surface); font-size: var(--step--1); line-height: 1.55; }
+.concepts b { display: block; font-size: var(--step-0); margin-bottom: 0.15rem; }
+.concepts i { font-style: normal; color: var(--ink-2); }
+
+.chip { display: inline-block; font-family: var(--font-mono); font-size: 0.78rem; line-height: 1.4; padding: 0.05rem 0.4rem; border-radius: 999px; border: 1px solid var(--rule); white-space: nowrap; }
+.chip.g { background: var(--good-soft); color: var(--good); border-color: transparent; }
+.chip.w { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
+.chip.b { background: var(--bad-soft); color: var(--bad); border-color: transparent; }
+.chip.a { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+.chip.p { color: var(--ink-2); border-style: dashed; }
+
+/* 커맨드 카드 */
+.card { border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); padding: 0.9rem 1rem; margin: 1rem 0; }
+.card > h3 { margin: 0 0 0.2rem; font-size: var(--step-1); font-family: var(--font-mono); font-weight: 500; overflow-wrap: anywhere; }
+.card .who { font-size: var(--step--1); color: var(--ink-2); margin: 0 0 0.5rem; }
+dl.kv { display: grid; grid-template-columns: 5.5rem minmax(0, 1fr); gap: 0.35rem 0.9rem; margin: 0.4rem 0; }
+dl.kv dt { font-size: var(--step--1); font-weight: 600; color: var(--ink-2); padding-top: 0.15rem; }
+dl.kv dd { margin: 0; min-width: 0; }
+dl.kv dd > :first-child { margin-top: 0; }
+
+/* 흐름 */
+ol.flow { list-style: none; padding: 0; margin: 0.8rem 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr)); gap: 0.5rem; counter-reset: f; }
+ol.flow li { margin: 0; border: 1px solid var(--rule); border-radius: 6px; background: var(--surface); padding: 0.5rem 0.65rem; font-size: var(--step--1); line-height: 1.45; counter-increment: f; }
+ol.flow li::before { content: counter(f); display: block; font-family: var(--font-mono); color: var(--accent); font-weight: 500; }
+ol.flow li.gate { border-color: var(--accent); background: var(--accent-soft); }
+
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: 0.8rem; margin: 0.7rem 0; }
+.two > div { min-width: 0; border: 1px solid var(--rule); border-radius: 6px; padding: 0.6rem 0.85rem; background: var(--surface); }
+.two h4 { margin: 0 0 0.2rem; }
+
+.fig { margin: 0.8rem 0; border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); padding: 0.6rem; overflow-x: auto; }
+.fig svg { display: block; width: 100%; min-width: 640px; height: auto; }
+.fig figcaption { font-size: var(--step--1); color: var(--ink-2); padding: 0.4rem 0.3rem 0; }
+svg .box { fill: var(--surface); stroke: var(--rule); stroke-width: 1.2; }
+svg .box.hl { fill: var(--accent-soft); stroke: var(--accent); }
+svg .box.in { fill: var(--sunken); stroke: var(--rule); }
+svg .box.ext { fill: var(--surface); stroke: var(--ink-2); stroke-dasharray: 4 3; }
+svg text { fill: var(--ink); font-family: var(--font-body); font-size: 13px; }
+svg text.s { fill: var(--ink-2); font-size: 11.5px; }
+svg text.t { font-weight: 600; }
+svg text.m { font-family: var(--font-mono); font-size: 11.5px; fill: var(--ink-2); }
+svg .ln { stroke: var(--ink-2); stroke-width: 1.4; fill: none; }
+svg .ln.acc { stroke: var(--accent); }
+svg .head { fill: var(--ink-2); }
+svg .head.acc { fill: var(--accent); }
+svg text.lab { fill: var(--accent); font-size: 11.5px; font-weight: 600; }
+
+mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius: 2px; }
+.empty { display: none; padding: 1rem; border: 1px dashed var(--rule); border-radius: 6px; color: var(--ink-2); margin-top: 1.5rem; }
+.foot { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--rule); font-size: var(--step--1); color: var(--ink-2); }
+
+@media (max-width: 860px) {
+  .shell { grid-template-columns: minmax(0, 1fr); }
+  .side { display: none; }
+  .toc-mobile {
+    display: block; position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5;
+    background: var(--bg); border-bottom: 1px solid var(--rule); padding-block: 0.5rem; margin-inline: -16px; padding-inline: 16px;
+  }
+  .toc-mobile summary { cursor: pointer; font-weight: 600; font-size: var(--step--1); padding: 0.3rem 0; list-style: none; display: flex; justify-content: space-between; }
+  .toc-mobile summary::after { content: "▾"; color: var(--ink-2); }
+  .toc-mobile[open] summary::after { content: "▴"; }
+  .toc-mobile .inner { max-height: 70vh; overflow-y: auto; padding-bottom: 0.6rem; font-size: var(--step--1); }
+  main { padding-top: 0.5rem; }
+  dl.kv { grid-template-columns: minmax(0, 1fr); gap: 0.1rem; }
+  dl.kv dd { margin-bottom: 0.5rem; }
+}
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+@media print {
+  :root { --bg: #fff; --surface: #fff; --sunken: #f3f3f3; --ink: #000; --ink-2: #333; --rule: #bbb; --accent: #0b5560; color-scheme: light; }
+  body { font-size: 10.5pt; line-height: 1.55; }
+  .side, .toc-mobile, .copy, .search-state, .empty { display: none !important; }
+  .shell { display: block; max-width: none; padding: 0; }
+  main { max-width: none; padding: 0; }
+  .sub[hidden], section.chap[hidden] { display: block !important; }
+  pre { white-space: pre-wrap; overflow: visible; padding-right: 0.9rem; }
+  .tbl, .fig { overflow: visible; }
+  .fig svg { min-width: 0; }
+  section.chap { break-before: page; }
+  section.chap:first-of-type { break-before: auto; }
+  h2, h3, h4 { break-after: avoid; }
+  tr, .card, .note, .code { break-inside: avoid; }
+  a { color: inherit; text-decoration: none; }
+}
+.first { color: var(--ink-2); font-size: var(--step--1); margin: 0.1rem 0 0.6rem; }
+.fig svg circle.dot { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 2; }
+.idea td:first-child { width: 7rem; font-weight: 600; color: var(--ink-2); background: var(--sunken); }
+.rule-list { counter-reset: r; list-style: none; padding-left: 0; }
+.rule-list li { counter-increment: r; padding-left: 2rem; position: relative; margin: 0.45rem 0; }
+.rule-list li::before { content: counter(r); position: absolute; left: 0; top: 0.1rem; width: 1.4rem; height: 1.4rem; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-weight: 700; font-size: 0.8rem; display: grid; place-items: center; }
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="side">
+    <div class="brand"><b>telephony-triage</b><span>확장 아이디어</span></div>
+    <nav class="toc" id="toc" aria-label="목차"></nav>
+  </aside>
+  <main>
+    <details class="toc-mobile"><summary>목차</summary><div class="inner" id="toc-m"></div></details>
+    <header class="hero">
+      <div class="eyebrow">IDEAS · 쌓인 데이터와 흐름을 더 쓰는 법</div>
+      <h1>이 도구로 더 할 수 있는 것</h1>
+      <p>이슈 DB와 판정·검증 흐름을 다른 업무에 넓혀 쓰는 아이디어 12개입니다. 아이디어마다 흐름 그림, 좋아지는 것, 필요한 것, 원칙과 맞는지, 시점을 붙였습니다.</p>
+      <div class="meta"><span><b>기준</b> main 2026-10-09</span><span><b>대상</b> 도입 검토자, 팀 리더, 메인테이너</span><span><b>상태</b> 후보 (확정 계획 아님)</span></div>
+    </header>
+    <section class="chap" id="x1" data-title="한눈에 보기">
+      <h2><span class="no">1</span>한눈에 보기</h2>
+      <p class="first">이 절에서 알 수 있는 것: 아이디어 12개의 효과·노력과 추천 순서</p>
+      <p>이 도구가 쌓는 것은 "어떤 증상이 어떤 원인이었고, 어떻게 고쳤고, 정말 고쳐졌나"입니다. 이 데이터와 이미 있는 판정·검증 흐름을 다른 일에도 쓸 수 있습니다. 아이디어는 모두 <b>도입과 파일럿이 끝난 뒤</b>의 후보이고, 지금 확정된 계획이 아닙니다.</p>
+<figure class="fig"><svg viewBox="0 0 820 380" role="img" aria-labelledby="mxT"><title id="mxT">아이디어 지도: 효과와 노력</title><rect class="box" x="70" y="30" width="720" height="300" rx="6"/><rect class="box hl" x="70" y="30" width="360.0" height="150.0" rx="6" opacity=".55"/><path class="ln" d="M430.0,30 L430.0,330 M70,180.0 L790,180.0" stroke-dasharray="4 4"/><text class="lab" x="80" y="50">먼저 할 것 (효과 큼 · 노력 작음)</text><text class="s" x="440.0" y="50">크게 투자할 것</text><text class="s" x="80" y="320">쉬운 개선</text><text class="s" x="440.0" y="320">나중에</text><text class="t" x="390.0" y="364">노력 →</text><text class="t" x="16" y="180.0">효과</text><text class="t" x="16" y="198.0">↑</text><circle class="dot" cx="331" cy="154" r="15"/><text class="t" x="327" y="159">1</text><circle class="dot" cx="298" cy="193" r="15"/><text class="t" x="294" y="198">2</text><circle class="dot" cx="199" cy="144" r="15"/><text class="t" x="195" y="149">3</text><circle class="dot" cx="397" cy="138" r="15"/><text class="t" x="393" y="143">4</text><circle class="dot" cx="595" cy="76" r="15"/><text class="t" x="591" y="81">5</text><circle class="dot" cx="278" cy="154" r="15"/><text class="t" x="274" y="159">6</text><circle class="dot" cx="232" cy="128" r="15"/><text class="t" x="228" y="133">7</text><circle class="dot" cx="562" cy="102" r="15"/><text class="t" x="558" y="107">8</text><circle class="dot" cx="364" cy="219" r="15"/><text class="t" x="360" y="224">9</text><circle class="dot" cx="496" cy="211" r="15"/><text class="t" x="488" y="216">10</text><circle class="dot" cx="694" cy="128" r="15"/><text class="t" x="686" y="133">11</text><circle class="dot" cx="661" cy="206" r="15"/><text class="t" x="653" y="211">12</text></svg><figcaption>번호는 아래 아이디어 번호입니다. 위치는 판단치이고 측정값이 아닙니다. 파일럿 결과를 보고 다시 놓습니다.</figcaption></figure>
+      <h3>추천 순서</h3>
+<figure class="fig"><svg viewBox="0 0 820 250" role="img" aria-labelledby="rmT"><title id="rmT">추천 순서</title><defs><marker id="rmh" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0,0 L10,5 L0,10 z"/></marker></defs><path class="ln" d="M20,18 L800,18" marker-end="url(#rmh)"/><rect class="box hl" x="20" y="30" width="250" height="208" rx="6"/><text class="t" x="32" y="54">파일럿 직후</text><text class="s" x="32" y="72">데이터·알림만 붙이면 됨</text><rect class="box in" x="32" y="86" width="226" height="28" rx="5"/><text class="s" x="42" y="104">3 신규 입사자 교육</text><rect class="box in" x="32" y="122" width="226" height="28" rx="5"/><text class="s" x="42" y="140">6 방치·급증 알림</text><rect class="box in" x="32" y="158" width="226" height="28" rx="5"/><text class="s" x="42" y="176">7 재발 조기 경보</text><rect class="box in" x="32" y="194" width="226" height="28" rx="5"/><text class="s" x="42" y="212">1 릴리스 대시보드</text><rect class="box" x="285" y="30" width="250" height="208" rx="6"/><text class="t" x="297" y="54">사내 구조를 안 뒤</text><text class="s" x="297" y="72">사내 시스템 연결 필요</text><rect class="box in" x="297" y="86" width="226" height="28" rx="5"/><text class="s" x="307" y="104">4 벤더 전달 리포트</text><rect class="box in" x="297" y="122" width="226" height="28" rx="5"/><text class="s" x="307" y="140">5 수정 검증 자동 실행</text><rect class="box in" x="297" y="158" width="226" height="28" rx="5"/><text class="s" x="307" y="176">8 Jira 접수 1차 분석</text><rect class="box in" x="297" y="194" width="226" height="28" rx="5"/><text class="s" x="307" y="212">2 테스트 케이스 개선</text><rect class="box" x="550" y="30" width="250" height="208" rx="6"/><text class="t" x="562" y="54">더 길게</text><text class="s" x="562" y="72">설계·투자 결정 필요</text><rect class="box in" x="562" y="86" width="226" height="28" rx="5"/><text class="s" x="572" y="104">9 규칙 변경 영향 화면</text><rect class="box in" x="562" y="122" width="226" height="28" rx="5"/><text class="s" x="572" y="140">10 읽기 전용 웹 포털</text><rect class="box in" x="562" y="158" width="226" height="28" rx="5"/><text class="s" x="572" y="176">11 다른 팀 범용판</text><rect class="box in" x="562" y="194" width="226" height="28" rx="5"/><text class="s" x="572" y="212">12 다른 플랫폼</text></svg></figure>
+      <div class="note rule"><span class="k">그림 읽는 법</span>아래 아이디어마다 흐름 그림이 있습니다. <b>강조 칸</b>은 사람이 결정하는 곳, <b>회색 칸</b>은 이미 있는 기능, <b>점선 칸</b>은 새로 필요한 것입니다.</div>
+    </section>
+    <section class="chap" id="x2" data-title="이미 쌓인 데이터를 더 쓰기">
+      <h2><span class="no">2</span>이미 쌓인 데이터를 더 쓰기</h2>
+      <div class="sub" id="i1" data-title="1. 릴리스 품질 대시보드"><h3>1. 릴리스 품질 대시보드</h3>
+      <p class="lead">빌드마다 열린 원인·회귀 의심을 한 화면에</p>
+      <figure class="fig"><svg viewBox="0 0 820 130" role="img" aria-labelledby="i1T"><title id="i1T">릴리스 품질 대시보드</title><defs><marker id="i1h" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0,0 L10,5 L0,10 z"/></marker></defs><rect class="box in" x="20" y="16" width="178" height="96" rx="6"/><text class="t" x="30" y="40">이슈 DB</text><text class="s" x="30" y="62">Jira 기록 (SW·모델)</text><text class="s" x="30" y="79">원인 수정 상태·fixed_in</text><path class="ln" d="M200,64 L218,64" marker-end="url(#i1h)"/><rect class="box in" x="220" y="16" width="178" height="96" rx="6"/><text class="t" x="230" y="40">집계</text><text class="s" x="230" y="62">빌드별 open 원인</text><text class="s" x="230" y="79">회귀 의심·수정 미흡</text><path class="ln" d="M401,64 L419,64" marker-end="url(#i1h)"/><rect class="box" x="421" y="16" width="178" height="96" rx="6"/><text class="t" x="431" y="40">대시보드</text><text class="s" x="431" y="62">릴리스 후보 빌드의</text><text class="s" x="431" y="79">남은 위험 목록</text><path class="ln" d="M602,64 L620,64" marker-end="url(#i1h)"/><rect class="box hl" x="622" y="16" width="178" height="96" rx="6"/><text class="t" x="632" y="40">릴리스 회의</text><text class="s" x="632" y="62">보류·진행 판단</text></svg></figure>
+      <div class="tbl idea"><table>
+        <tr><td>좋아지는 것</td><td>릴리스 판정 회의에서 &quot;이 빌드에 아직 열린 telephony 원인이 몇 개인가&quot;를 바로 봄</td></tr>
+        <tr><td>필요한 것</td><td>STATS가 이미 모델·SW·버전별 분포를 냄. 빌드 비교 규칙(build_compare)이 사내 빌드명에 맞게 설정돼 있어야 함</td></tr>
+        <tr><td>원칙 확인</td><td>읽기만 함. 판정은 기존 매칭 결과 그대로</td></tr>
+        <tr><td>시점</td><td>파일럿 뒤 (데이터가 쌓인 뒤)</td></tr>
+      </table></div></div>
+      <div class="sub" id="i2" data-title="2. 테스트 케이스 개선"><h3>2. 테스트 케이스 개선</h3>
+      <p class="lead">어떤 테스트 스텝에서 어떤 원인이 자주 나는지</p>
+      <figure class="fig"><svg viewBox="0 0 820 130" role="img" aria-labelledby="i2T"><title id="i2T">테스트 케이스 개선</title><defs><marker id="i2h" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0,0 L10,5 L0,10 z"/></marker></defs><rect class="box in" x="20" y="16" width="178" height="96" rx="6"/><text class="t" x="30" y="40">Jira 기록</text><text class="s" x="30" y="62">실패 스텝 한 줄</text><text class="s" x="30" y="79">(마스킹)</text><path class="ln" d="M200,64 L218,64" marker-end="url(#i2h)"/><rect class="box in" x="220" y="16" width="178" height="96" rx="6"/><text class="t" x="230" y="40">원인별 묶기</text><text class="s" x="230" y="62">스텝 × 원인</text><text class="s" x="230" y="79">빈도 표</text><path class="ln" d="M401,64 L419,64" marker-end="url(#i2h)"/><rect class="box hl" x="421" y="16" width="178" height="96" rx="6"/><text class="t" x="431" y="40">TC 담당자</text><text class="s" x="431" y="62">자주 실패하는 스텝</text><text class="s" x="431" y="79">재현 조건 보강</text><path class="ln" d="M602,64 L620,64" marker-end="url(#i2h)"/><rect class="box" x="622" y="16" width="178" height="96" rx="6"/><text class="t" x="632" y="40">시나리오 시그니처</text><text class="s" x="632" y="62">verify-fix에 쓰는</text><text class="s" x="632" y="79">재현 흔적 규칙</text></svg></figure>
+      <div class="tbl idea"><table>
+        <tr><td>좋아지는 것</td><td>테스트 절차의 약한 곳을 찾고, 같은 정보로 수정 검증용 재현 흔적 규칙도 채움</td></tr>
+        <tr><td>필요한 것</td><td>Jira에 실패 스텝 필드가 있어야 함(사내 S-1·S-3에서 확인)</td></tr>
+        <tr><td>원칙 확인</td><td>실패 스텝은 분석 범위만 정하고 판정에 쓰지 않는다는 결정(10/04) 유지</td></tr>
+        <tr><td>시점</td><td>파일럿 뒤</td></tr>
+      </table></div></div>
+      <div class="sub" id="i3" data-title="3. 신규 입사자 교육"><h3>3. 신규 입사자 교육</h3>
+      <p class="lead">실제 해결 사례를 교재로</p>
+      <figure class="fig"><svg viewBox="0 0 820 130" role="img" aria-labelledby="i3T"><title id="i3T">신규 입사자 교육</title><defs><marker id="i3h" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0,0 L10,5 L0,10 z"/></marker></defs><rect class="box in" x="20" y="16" width="178" height="96" rx="6"/><text class="t" x="30" y="40">이슈 DB</text><text class="s" x="30" y="62">유형별 대표 원인</text><text class="s" x="30" y="79">+ 마스킹된 fixture</text><path class="ln" d="M200,64 L218,64" marker-end="url(#i3h)"/><rect class="box" x="220" y="16" width="178" height="96" rx="6"/><text class="t" x="230" y="40">연습 문제</text><text class="s" x="230" y="62">fixture로 dry-run</text><text class="s" x="230" y="79">&quot;원인을 맞혀 보세요&quot;</text><path class="ln" d="M401,64 L419,64" marker-end="url(#i3h)"/><rect class="box hl" x="421" y="16" width="178" height="96" rx="6"/><text class="t" x="431" y="40">답 맞추기</text><text class="s" x="431" y="62">도구 판정과</text><text class="s" x="431" y="79">본인 판단 비교</text><path class="ln" d="M602,64 L620,64" marker-end="url(#i3h)"/><rect class="box in" x="622" y="16" width="178" height="96" rx="6"/><text class="t" x="632" y="40">해설</text><text class="s" x="632" y="62">근거 로그 줄 ·</text><text class="s" x="632" y="79">해결책 · 코드 위치</text></svg></figure>
+      <div class="tbl idea"><table>
+        <tr><td>좋아지는 것</td><td>telephony 신규 인력이 실제 사례로 로그 보는 법을 익힘. 시니어 시간을 덜 씀</td></tr>
+        <tr><td>필요한 것</td><td>dry-run은 이미 있음(아무것도 올리지 않음). 연습용 문제 선정만 필요</td></tr>
+        <tr><td>원칙 확인</td><td>fixture는 이미 마스킹돼 있어 교육 자료로 써도 됨</td></tr>
+        <tr><td>시점</td><td>파일럿 뒤 바로 가능</td></tr>
+      </table></div></div>
+      <div class="sub" id="i4" data-title="4. 벤더·모뎀 쪽 전달 리포트"><h3>4. 벤더·모뎀 쪽 전달 리포트</h3>
+      <p class="lead">AP·CP 판단 근거를 정리해 넘기기</p>
+      <figure class="fig"><svg viewBox="0 0 820 130" role="img" aria-labelledby="i4T"><title id="i4T">벤더·모뎀 쪽 전달 리포트</title><defs><marker id="i4h" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0,0 L10,5 L0,10 z"/></marker></defs><rect class="box in" x="20" y="16" width="178" height="96" rx="6"/><text class="t" x="30" y="40">분석 결과</text><text class="s" x="30" y="62">RIL 요청이 어디까지 갔나</text><text class="s" x="30" y="79">(응답·HAL 도달·미도달)</text><path class="ln" d="M200,64 L218,64" marker-end="url(#i4h)"/><rect class="box in" x="220" y="16" width="178" height="96" rx="6"/><text class="t" x="230" y="40">근거 정리</text><text class="s" x="230" y="62">마스킹된 근거 줄</text><text class="s" x="230" y="79">+ 시각 순서</text><path class="ln" d="M401,64 L419,64" marker-end="url(#i4h)"/><rect class="box" x="421" y="16" width="178" height="96" rx="6"/><text class="t" x="431" y="40">전달 초안</text><text class="s" x="431" y="62">벤더용 요약</text><text class="s" x="431" y="79">(사내 양식)</text><path class="ln" d="M602,64 L620,64" marker-end="url(#i4h)"/><rect class="box hl" x="622" y="16" width="178" height="96" rx="6"/><text class="t" x="632" y="40">담당자 검토</text><text class="s" x="632" y="62">보낼지 결정</text></svg></figure>
+      <div class="tbl idea"><table>
+        <tr><td>좋아지는 것</td><td>&quot;AP 문제인지 모뎀 문제인지&quot;를 근거와 함께 빠르게 넘김. 왕복 횟수 감소</td></tr>
+        <tr><td>필요한 것</td><td>벤더 RIL 층 연결(platform.ril.vendor)이 사내에서 켜져 있어야 함(S-4a)</td></tr>
+        <tr><td>원칙 확인</td><td>마스킹된 내용만. 외부 전달은 사내 반출 규정을 따름. 사람이 보낼지 결정</td></tr>
+        <tr><td>시점</td><td>S-4a 뒤</td></tr>
+      </table></div></div>
+    </section>
+    <section class="chap" id="x3" data-title="사람이 챙기던 일을 자동으로">
+      <h2><span class="no">3</span>사람이 챙기던 일을 자동으로</h2>
+      <div class="sub" id="i5" data-title="5. 수정 검증 자동 실행"><h3>5. 수정 검증 자동 실행</h3>
+      <p class="lead">테스트 장비 로그로 verify-fix를 자동으로</p>
+      <figure class="fig"><svg viewBox="0 0 820 130" role="img" aria-labelledby="i5T"><title id="i5T">수정 검증 자동 실행</title><defs><marker id="i5h" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0,0 L10,5 L0,10 z"/></marker></defs><rect class="box ext" x="20" y="16" width="138" height="96" rx="6"/><text class="t" x="30" y="40">테스트 장비</text><text class="s" x="30" y="62">수정 빌드로</text><text class="s" x="30" y="79">시나리오 실행</text><path class="ln" d="M160,64 L178,64" marker-end="url(#i5h)"/><rect class="box ext" x="180" y="16" width="138" height="96" rx="6"/><text class="t" x="190" y="40">로그 수집</text><text class="s" x="190" y="62">빌드·원인 ID와</text><text class="s" x="190" y="79">함께 저장</text><path class="ln" d="M321,64 L339,64" marker-end="url(#i5h)"/><rect class="box in" x="341" y="16" width="138" height="96" rx="6"/><text class="t" x="351" y="40">verify-fix</text><text class="s" x="351" y="62">스크립트가 판정</text><text class="s" x="351" y="79">passed / failed</text><path class="ln" d="M481,64 L499,64" marker-end="url(#i5h)"/><rect class="box in" x="501" y="16" width="138" height="96" rx="6"/><text class="t" x="511" y="40">PR</text><text class="s" x="511" y="62">결과 기록 계획</text><path class="ln" d="M642,64 L660,64" marker-end="url(#i5h)"/><rect class="box hl" x="662" y="16" width="138" height="96" rx="6"/><text class="t" x="672" y="40">담당자 승인</text><text class="s" x="672" y="62">fixed 반영</text></svg></figure>
+      <div class="tbl idea"><table>
+        <tr><td>좋아지는 것</td><td>fix-submitted 방치가 사라짐. 고친 버그가 정말 고쳐졌는지 자동 확인</td></tr>
+        <tr><td>필요한 것</td><td>사내 테스트 장비가 로그를 모으는 구조, 원인별 재현 시나리오 시그니처</td></tr>
+        <tr><td>원칙 확인</td><td>판정은 스크립트, 반영은 사람 승인. 자동 게시는 별도 품질 기준을 통과할 때만(결정 10/01)</td></tr>
+        <tr><td>시점</td><td>사내 로그 구조를 안 뒤</td></tr>
+      </table></div></div>
+      <div class="sub" id="i6" data-title="6. 방치·급증 알림"><h3>6. 방치·급증 알림</h3>
+      <p class="lead">월간 리뷰를 기다리지 않고 알려주기</p>
+      <figure class="fig"><svg viewBox="0 0 820 130" role="img" aria-labelledby="i6T"><title id="i6T">방치·급증 알림</title><defs><marker id="i6h" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0,0 L10,5 L0,10 z"/></marker></defs><rect class="box in" x="20" y="16" width="178" height="96" rx="6"/><text class="t" x="30" y="40">정기 실행</text><text class="s" x="30" y="62">리뷰 리포트</text><text class="s" x="30" y="79">(읽기 전용)</text><path class="ln" d="M200,64 L218,64" marker-end="url(#i6h)"/><rect class="box in" x="220" y="16" width="178" height="96" rx="6"/><text class="t" x="230" y="40">조건</text><text class="s" x="230" y="62">30일 넘은 방치</text><text class="s" x="230" y="79">급증 원인</text><path class="ln" d="M401,64 L419,64" marker-end="url(#i6h)"/><rect class="box" x="421" y="16" width="178" height="96" rx="6"/><text class="t" x="431" y="40">알림</text><text class="s" x="431" y="62">기록자·담당자에게</text><text class="s" x="431" y="79">GHE 이슈·메신저</text><path class="ln" d="M602,64 L620,64" marker-end="url(#i6h)"/><rect class="box hl" x="622" y="16" width="178" height="96" rx="6"/><text class="t" x="632" y="40">사람</text><text class="s" x="632" y="62">verify-fix 실행</text><text class="s" x="632" y="79">원인 조사</text></svg></figure>
+      <div class="tbl idea"><table>
+        <tr><td>좋아지는 것</td><td>리뷰 목록을 찾아보지 않아도 할 일이 사람에게 감</td></tr>
+        <tr><td>필요한 것</td><td>알림 채널(GHE 이슈 또는 사내 메신저) 연결. RF-8</td></tr>
+        <tr><td>원칙 확인</td><td>읽기와 알림만. DB를 고치지 않음</td></tr>
+        <tr><td>시점</td><td>파일럿 뒤</td></tr>
+      </table></div></div>
+      <div class="sub" id="i7" data-title="7. 재발 조기 경보"><h3>7. 재발 조기 경보</h3>
+      <p class="lead">고친 원인이 다시 나오면 즉시</p>
+      <figure class="fig"><svg viewBox="0 0 820 130" role="img" aria-labelledby="i7T"><title id="i7T">재발 조기 경보</title><defs><marker id="i7h" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0,0 L10,5 L0,10 z"/></marker></defs><rect class="box in" x="20" y="16" width="138" height="96" rx="6"/><text class="t" x="30" y="40">새 분석</text><text class="s" x="30" y="62">누군가 analyze</text><path class="ln" d="M160,64 L178,64" marker-end="url(#i7h)"/><rect class="box in" x="180" y="16" width="138" height="96" rx="6"/><text class="t" x="190" y="40">수정 상태 판단</text><text class="s" x="190" y="62">fixed 원인이</text><text class="s" x="190" y="79">수정 빌드 이후에 매칭</text><path class="ln" d="M321,64 L339,64" marker-end="url(#i7h)"/><rect class="box in" x="341" y="16" width="138" height="96" rx="6"/><text class="t" x="351" y="40">회귀 의심</text><text class="s" x="351" y="62">리포트에 표시</text><text class="s" x="351" y="79">(이미 있음)</text><path class="ln" d="M481,64 L499,64" marker-end="url(#i7h)"/><rect class="box" x="501" y="16" width="138" height="96" rx="6"/><text class="t" x="511" y="40">알림</text><text class="s" x="511" y="62">그 원인의 수정 담당·</text><text class="s" x="511" y="79">카테고리 담당자</text><path class="ln" d="M642,64 L660,64" marker-end="url(#i7h)"/><rect class="box hl" x="662" y="16" width="138" height="96" rx="6"/><text class="t" x="672" y="40">사람</text><text class="s" x="672" y="62">open 되돌림 판단</text></svg></figure>
+      <div class="tbl idea"><table>
+        <tr><td>좋아지는 것</td><td>회귀를 분석한 사람만 아는 게 아니라 수정한 사람에게 바로 전달</td></tr>
+        <tr><td>필요한 것</td><td>회귀 의심 판정은 이미 있음. 알림 연결만 필요(아이디어 6과 같은 채널)</td></tr>
+        <tr><td>원칙 확인</td><td>상태 변경은 자동으로 하지 않음. 사람 확인 뒤에만</td></tr>
+        <tr><td>시점</td><td>파일럿 뒤</td></tr>
+      </table></div></div>
+      <div class="sub" id="i8" data-title="8. Jira 접수 시 1차 분석"><h3>8. Jira 접수 시 1차 분석</h3>
+      <p class="lead">담당자가 열기 전에 리포트가 준비됨</p>
+      <figure class="fig"><svg viewBox="0 0 820 130" role="img" aria-labelledby="i8T"><title id="i8T">Jira 접수 시 1차 분석</title><defs><marker id="i8h" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0,0 L10,5 L0,10 z"/></marker></defs><rect class="box ext" x="20" y="16" width="138" height="96" rx="6"/><text class="t" x="30" y="40">새 Jira</text><text class="s" x="30" y="62">첨부 로그 포함</text><path class="ln" d="M160,64 L178,64" marker-end="url(#i8h)"/><rect class="box ext" x="180" y="16" width="138" height="96" rx="6"/><text class="t" x="190" y="40">첨부 받기</text><text class="s" x="190" y="62">커넥터 (RF-6)</text><path class="ln" d="M321,64 L339,64" marker-end="url(#i8h)"/><rect class="box in" x="341" y="16" width="138" height="96" rx="6"/><text class="t" x="351" y="40">분석 전용 실행</text><text class="s" x="351" y="62">--analysis-only</text><text class="s" x="351" y="79">기록 없음</text><path class="ln" d="M481,64 L499,64" marker-end="url(#i8h)"/><rect class="box" x="501" y="16" width="138" height="96" rx="6"/><text class="t" x="511" y="40">리포트 전달</text><text class="s" x="511" y="62">담당자에게</text><text class="s" x="511" y="79">(Jira에는 쓰지 않음)</text><path class="ln" d="M642,64 L660,64" marker-end="url(#i8h)"/><rect class="box hl" x="662" y="16" width="138" height="96" rx="6"/><text class="t" x="672" y="40">담당자</text><text class="s" x="672" y="62">확정·기록</text></svg></figure>
+      <div class="tbl idea"><table>
+        <tr><td>좋아지는 것</td><td>담당자가 이슈를 열 때 후보 3개와 근거가 이미 있음. 첫 응답 시간 단축</td></tr>
+        <tr><td>필요한 것</td><td>Jira 첨부를 받는 커넥터(RF-6), 실행 환경, 비용 상한</td></tr>
+        <tr><td>원칙 확인</td><td>Jira 읽기 전용 유지(댓글 금지) → 리포트는 다른 채널로. 확정은 사람</td></tr>
+        <tr><td>시점</td><td>사내 환경을 안 뒤</td></tr>
+      </table></div></div>
+    </section>
+    <section class="chap" id="x4" data-title="보기 쉽게">
+      <h2><span class="no">4</span>보기 쉽게</h2>
+      <div class="sub" id="i9" data-title="9. 규칙 변경 영향 화면"><h3>9. 규칙 변경 영향 화면</h3>
+      <p class="lead">파서 규칙을 바꾸면 무엇이 달라지나</p>
+      <figure class="fig"><svg viewBox="0 0 820 130" role="img" aria-labelledby="i9T"><title id="i9T">규칙 변경 영향 화면</title><defs><marker id="i9h" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0,0 L10,5 L0,10 z"/></marker></defs><rect class="box in" x="20" y="16" width="178" height="96" rx="6"/><text class="t" x="30" y="40">규칙 PR</text><text class="s" x="30" y="62">태그·추출 규칙 변경</text><path class="ln" d="M200,64 L218,64" marker-end="url(#i9h)"/><rect class="box in" x="220" y="16" width="178" height="96" rx="6"/><text class="t" x="230" y="40">의미 비교</text><text class="s" x="230" y="62">바뀐 이벤트 계산</text><text class="s" x="230" y="79">(rulediff, 이미 있음)</text><path class="ln" d="M401,64 L419,64" marker-end="url(#i9h)"/><rect class="box" x="421" y="16" width="178" height="96" rx="6"/><text class="t" x="431" y="40">영향 화면</text><text class="s" x="431" y="62">어느 fixture·원인이</text><text class="s" x="431" y="79">어떻게 바뀌나</text><path class="ln" d="M602,64 L620,64" marker-end="url(#i9h)"/><rect class="box hl" x="622" y="16" width="178" height="96" rx="6"/><text class="t" x="632" y="40">메인테이너</text><text class="s" x="632" y="62">승인 판단</text></svg></figure>
+      <div class="tbl idea"><table>
+        <tr><td>좋아지는 것</td><td>&quot;승인 필요&quot; 표를 읽기 쉬운 화면으로. 규칙 리뷰가 빨라짐</td></tr>
+        <tr><td>필요한 것</td><td>의미 단위 변경 계산은 이미 있음. 화면만 새로</td></tr>
+        <tr><td>원칙 확인</td><td>판정 로직은 그대로, 보여주는 방식만</td></tr>
+        <tr><td>시점</td><td>파일럿 뒤</td></tr>
+      </table></div></div>
+      <div class="sub" id="i10" data-title="10. 읽기 전용 웹 포털"><h3>10. 읽기 전용 웹 포털</h3>
+      <p class="lead">설치 없이 검색·통계 보기</p>
+      <figure class="fig"><svg viewBox="0 0 820 130" role="img" aria-labelledby="i10T"><title id="i10T">읽기 전용 웹 포털</title><defs><marker id="i10h" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0,0 L10,5 L0,10 z"/></marker></defs><rect class="box in" x="20" y="16" width="178" height="96" rx="6"/><text class="t" x="30" y="40">이슈 DB</text><text class="s" x="30" y="62">main</text><path class="ln" d="M200,64 L218,64" marker-end="url(#i10h)"/><rect class="box in" x="220" y="16" width="178" height="96" rx="6"/><text class="t" x="230" y="40">빌드</text><text class="s" x="230" y="62">검색 색인 ·</text><text class="s" x="230" y="79">STATS</text><path class="ln" d="M401,64 L419,64" marker-end="url(#i10h)"/><rect class="box" x="421" y="16" width="178" height="96" rx="6"/><text class="t" x="431" y="40">웹 화면</text><text class="s" x="431" y="62">검색 · 통계 ·</text><text class="s" x="431" y="79">유형·원인 열람</text><path class="ln" d="M602,64 L620,64" marker-end="url(#i10h)"/><rect class="box" x="622" y="16" width="178" height="96" rx="6"/><text class="t" x="632" y="40">누구나</text><text class="s" x="632" y="62">기획·QA·관리자도</text><text class="s" x="632" y="79">설치 없이</text></svg></figure>
+      <div class="tbl idea"><table>
+        <tr><td>좋아지는 것</td><td>플러그인을 안 쓰는 사람(QA, 기획, 관리자)도 사례를 찾아봄</td></tr>
+        <tr><td>필요한 것</td><td>사내 웹 호스팅. 마스킹된 DB만 노출. 분석 결과만 소비하는 화면이 생기면 출력 계약 재검토</td></tr>
+        <tr><td>원칙 확인</td><td>읽기 전용. 쓰기는 지금처럼 PR로만</td></tr>
+        <tr><td>시점</td><td>파일럿 뒤 (보류 중)</td></tr>
+      </table></div></div>
+    </section>
+    <section class="chap" id="x5" data-title="더 넓게">
+      <h2><span class="no">5</span>더 넓게</h2>
+      <div class="sub" id="i11" data-title="11. 다른 팀으로 넓히기 (범용판)"><h3>11. 다른 팀으로 넓히기 (범용판)</h3>
+      <p class="lead">같은 구조를 오디오·카메라 등 다른 도메인에</p>
+      <figure class="fig"><svg viewBox="0 0 820 130" role="img" aria-labelledby="i11T"><title id="i11T">다른 팀으로 넓히기 (범용판)</title><defs><marker id="i11h" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0,0 L10,5 L0,10 z"/></marker></defs><rect class="box in" x="20" y="16" width="178" height="96" rx="6"/><text class="t" x="30" y="40">공통 코어</text><text class="s" x="30" y="62">이슈 DB · 시그니처 엔진</text><text class="s" x="30" y="79">PR 흐름 · 안전장치</text><path class="ln" d="M200,64 L218,64" marker-end="url(#i11h)"/><rect class="box ext" x="220" y="16" width="178" height="96" rx="6"/><text class="t" x="230" y="40">도메인 팩</text><text class="s" x="230" y="62">카테고리 · 태그 ·</text><text class="s" x="230" y="79">로그 파서</text><path class="ln" d="M401,64 L419,64" marker-end="url(#i11h)"/><rect class="box ext" x="421" y="16" width="178" height="96" rx="6"/><text class="t" x="431" y="40">그 팀 이슈 DB</text><text class="s" x="431" y="62">별도 레포</text><path class="ln" d="M602,64 L620,64" marker-end="url(#i11h)"/><rect class="box hl" x="622" y="16" width="178" height="96" rx="6"/><text class="t" x="632" y="40">그 팀 담당자</text><text class="s" x="632" y="62">리뷰·병합</text></svg></figure>
+      <div class="tbl idea"><table>
+        <tr><td>좋아지는 것</td><td>검증된 운영 구조(판정·승인·안전장치)를 재사용. 팀마다 처음부터 만들지 않음</td></tr>
+        <tr><td>필요한 것</td><td>Android·RIL에 묶인 곳(약 30파일)을 분리하는 설계. 별도 로컬 레포에서 시작(10/07 보류)</td></tr>
+        <tr><td>원칙 확인</td><td>판정 결정성·사람 승인 원칙을 코어가 그대로 가짐</td></tr>
+        <tr><td>시점</td><td>보류, 재개 시점은 사용자 결정</td></tr>
+      </table></div></div>
+      <div class="sub" id="i12" data-title="12. 다른 플랫폼 지원"><h3>12. 다른 플랫폼 지원</h3>
+      <p class="lead">Android 외 텔레포니 스택</p>
+      <figure class="fig"><svg viewBox="0 0 820 130" role="img" aria-labelledby="i12T"><title id="i12T">다른 플랫폼 지원</title><defs><marker id="i12h" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0,0 L10,5 L0,10 z"/></marker></defs><rect class="box ext" x="20" y="16" width="178" height="96" rx="6"/><text class="t" x="30" y="40">플랫폼 어댑터</text><text class="s" x="30" y="62">로그 형식 · 버전 ·</text><text class="s" x="30" y="79">소스 구조</text><path class="ln" d="M200,64 L218,64" marker-end="url(#i12h)"/><rect class="box in" x="220" y="16" width="178" height="96" rx="6"/><text class="t" x="230" y="40">공통 파서</text><text class="s" x="230" y="62">이벤트로 변환</text><path class="ln" d="M401,64 L419,64" marker-end="url(#i12h)"/><rect class="box in" x="421" y="16" width="178" height="96" rx="6"/><text class="t" x="431" y="40">같은 매칭</text><text class="s" x="431" y="62">시그니처 · S/C</text><path class="ln" d="M602,64 L620,64" marker-end="url(#i12h)"/><rect class="box in" x="622" y="16" width="178" height="96" rx="6"/><text class="t" x="632" y="40">같은 이슈 DB</text><text class="s" x="632" y="62">플랫폼 표시만 추가</text></svg></figure>
+      <div class="tbl idea"><table>
+        <tr><td>좋아지는 것</td><td>같은 팀이 다른 플랫폼 이슈도 같은 방식으로 관리</td></tr>
+        <tr><td>필요한 것</td><td>플랫폼 분리 구조는 일부 완료(RF-3·RF-4). 실제 대상 플랫폼 결정(RF-5)</td></tr>
+        <tr><td>원칙 확인</td><td>변화 없음</td></tr>
+        <tr><td>시점</td><td>사내 환경을 안 뒤</td></tr>
+      </table></div></div>
+    </section>
+    <section class="chap" id="x6" data-title="아이디어를 고를 때 지킬 것">
+      <h2><span class="no">6</span>아이디어를 고를 때 지킬 것</h2>
+      <p class="first">이 절에서 알 수 있는 것: 새 아이디어를 평가하는 다섯 가지 질문</p>
+      <ol class="rule-list">
+        <li><b>판정은 여전히 스크립트가 하나?</b> LLM이 원인을 정하거나 점수를 바꾸면 안 됩니다. 보조 정보는 보조 칸에만.</li>
+        <li><b>기록은 사람이 승인하나?</b> 자동으로 DB에 반영하려면 신뢰도 점수가 아니라 별도 품질 기준을 통과해야 합니다(결정 10/01).</li>
+        <li><b>Jira는 읽기만 하나?</b> 결과를 Jira 댓글로 쓰지 않습니다. 다른 채널로 전달합니다.</li>
+        <li><b>마스킹된 것만 다루나?</b> 화면·알림·외부 전달 모두 마스킹된 값만. 사외 반출은 사내 규정을 따릅니다.</li>
+        <li><b>비용 상한이 있나?</b> 자동 실행은 토큰을 계속 씁니다. 건당 비용과 하루 상한을 먼저 정합니다.</li>
+      </ol>
+      <p class="foot">관련 문서: 한계와 보완(<code>08-limitations.html</code>)의 "파일럿 뒤", "v1 밖" 항목, 설계 안내(<code>04-design.html</code>) 10장 설계 원칙.</p>
+    </section>
+  </main>
+</div>
+<script>
+(function () {
+  var secs = Array.prototype.slice.call(document.querySelectorAll("section.chap"));
+  function build() {
+    var ol = document.createElement("ol");
+    secs.forEach(function (s) {
+      var li = document.createElement("li"), a = document.createElement("a");
+      a.href = "#" + s.id; a.textContent = s.querySelector("h2 .no").textContent + ". " + s.dataset.title;
+      li.appendChild(a);
+      var subs = s.querySelectorAll(":scope > .sub");
+      if (subs.length) {
+        var inner = document.createElement("ol");
+        subs.forEach(function (u) {
+          var l2 = document.createElement("li"), a2 = document.createElement("a");
+          a2.href = "#" + u.id; a2.textContent = u.dataset.title; l2.appendChild(a2); inner.appendChild(l2);
+        });
+        li.appendChild(inner);
+      }
+      ol.appendChild(li);
+    });
+    return ol;
+  }
+  document.getElementById("toc").appendChild(build());
+  document.getElementById("toc-m").appendChild(build());
+  document.querySelectorAll("#toc-m a").forEach(function (a) {
+    a.addEventListener("click", function () { a.closest("details").open = false; });
+  });
+  if ("IntersectionObserver" in window) {
+    var links = document.querySelectorAll("#toc > ol > li > a");
+    var io = new IntersectionObserver(function (es) {
+      es.forEach(function (e) {
+        if (!e.isIntersecting) return;
+        links.forEach(function (l) { l.classList.toggle("on", l.getAttribute("href") === "#" + e.target.id); });
+      });
+    }, { rootMargin: "0px 0px -70% 0px" });
+    secs.forEach(function (s) { io.observe(s); });
+  }
+})();
+</script>
+</body>
+</html>

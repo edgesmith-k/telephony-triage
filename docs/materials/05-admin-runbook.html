@@ -1,0 +1,453 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>telephony-triage 관리자 런북</title>
+<style>
+/* Layout: 왼쪽 고정 목차 + 본문 한 단(≤ 46rem). 휴대폰에서는 목차가 상단 접이식. */
+:root {
+  --bg: #f6f8f9;
+  --surface: #ffffff;
+  --sunken: #eef2f3;
+  --ink: #17232b;
+  --ink-2: #4a5a63;
+  --rule: #d5dee2;
+  --accent: #0b6874;        /* 신호선 청록 */
+  --accent-soft: #dcefF1;
+  --warn: #9a5b00;
+  --warn-soft: #fbf0dc;
+  --bad: #a3262c;
+  --bad-soft: #f8e3e3;
+  --good: #1f6b3a;
+  --good-soft: #e1f1e6;
+  --mark: #ffe58a;
+  --font-body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Consolas, "D2Coding", monospace;
+  --step--1: 0.8125rem;
+  --step-0: 0.96875rem;
+  --step-1: 1.125rem;
+  --step-2: 1.375rem;
+  --step-3: 1.75rem;
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+html { scroll-padding-top: 1rem; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--font-body); font-size: var(--step-0); line-height: 1.7;
+  -webkit-text-size-adjust: 100%;
+}
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px;
+}
+code, kbd, pre { font-family: var(--font-mono); font-size: 0.875em; }
+:not(pre) > code {
+  background: var(--sunken); border: 1px solid var(--rule); border-radius: 4px;
+  padding: 0.05em 0.35em; overflow-wrap: anywhere;
+}
+
+.shell {
+  display: grid; grid-template-columns: 17rem minmax(0, 1fr); gap: 0 2.5rem;
+  max-width: 76rem; margin: 0 auto; padding-inline: 16px;
+}
+
+/* 목차 */
+.side {
+  position: sticky; top: env(safe-area-inset-top, 0px); align-self: start;
+  max-height: 100vh; overflow-y: auto; padding-block: 1.5rem 2rem;
+  font-size: var(--step--1);
+}
+.brand { display: flex; flex-direction: column; gap: 0.1rem; margin-bottom: 1rem; }
+.brand b { font-size: var(--step-1); letter-spacing: -0.01em; }
+.brand span { color: var(--ink-2); }
+.search { position: relative; margin-bottom: 0.4rem; }
+.search input {
+  width: 100%; padding: 0.55rem 0.7rem; border: 1px solid var(--rule); border-radius: 6px;
+  background: var(--surface); color: var(--ink); font: inherit; font-size: var(--step--1);
+}
+.search-state { color: var(--ink-2); min-height: 1.4em; margin-bottom: 0.6rem; }
+.toc ol { list-style: none; margin: 0; padding: 0; }
+.toc > ol > li { margin-top: 0.55rem; }
+.toc > ol > li > a { font-weight: 600; color: var(--ink); }
+.toc ol ol { padding-left: 0.9rem; border-left: 1px solid var(--rule); margin-top: 0.2rem; }
+.toc ol ol a { color: var(--ink-2); }
+.toc a { text-decoration: none; display: block; padding: 0.12rem 0; }
+.toc a:hover { color: var(--accent); }
+.toc a.on { color: var(--accent); font-weight: 600; }
+.toc-mobile { display: none; }
+
+/* 본문 */
+main { min-width: 0; padding-block: 1.5rem 5rem; max-width: 48rem; }
+.hero { padding-block: 1rem 1.5rem; border-bottom: 2px solid var(--ink); margin-bottom: 1rem; }
+.hero .eyebrow { font-family: var(--font-mono); font-size: var(--step--1); color: var(--accent); letter-spacing: 0.04em; }
+.hero h1 { font-size: var(--step-3); line-height: 1.25; margin: 0.3rem 0 0.6rem; text-wrap: balance; letter-spacing: -0.015em; }
+.hero p { margin: 0; color: var(--ink-2); max-width: 40rem; }
+.meta { display: flex; flex-wrap: wrap; gap: 0.4rem 1.2rem; margin-top: 0.9rem; font-size: var(--step--1); color: var(--ink-2); }
+.meta b { color: var(--ink); font-weight: 600; }
+
+section.chap { padding-top: 1.8rem; }
+section.chap > h2 {
+  font-size: var(--step-2); line-height: 1.3; margin: 0 0 0.4rem; text-wrap: balance;
+  display: flex; gap: 0.6rem; align-items: baseline; letter-spacing: -0.01em;
+}
+section.chap > h2 .no { font-family: var(--font-mono); color: var(--accent); font-size: 0.8em; }
+.sub { padding-top: 1.2rem; }
+.sub > h3 { font-size: var(--step-1); margin: 0 0 0.4rem; text-wrap: balance; }
+.sub > h4, .card h4 { font-size: var(--step-0); margin: 1rem 0 0.3rem; }
+p, ul, ol { margin: 0.5rem 0; }
+ul, ol { padding-left: 1.3rem; }
+li + li { margin-top: 0.2rem; }
+.lead { color: var(--ink-2); }
+
+/* 표 */
+.tbl { overflow-x: auto; margin: 0.7rem 0; border: 1px solid var(--rule); border-radius: 6px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: var(--step--1); line-height: 1.55; }
+th, td { text-align: left; vertical-align: top; padding: 0.5rem 0.65rem; border-bottom: 1px solid var(--rule); }
+th { background: var(--sunken); font-weight: 600; white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+td code { white-space: nowrap; }
+td.wrap code, td code.wrap { white-space: normal; }
+.num { font-variant-numeric: tabular-nums; }
+
+/* 코드 블록 */
+.code { position: relative; margin: 0.7rem 0; }
+pre {
+  margin: 0; padding: 0.8rem 0.9rem; padding-right: 4.2rem; overflow-x: auto;
+  background: var(--sunken); border: 1px solid var(--rule); border-radius: 6px; line-height: 1.55;
+}
+.copy {
+  position: absolute; top: 0.4rem; right: 0.4rem; font: inherit; font-size: 0.75rem;
+  padding: 0.2rem 0.55rem; border-radius: 4px; border: 1px solid var(--rule);
+  background: var(--surface); color: var(--ink-2); cursor: pointer;
+}
+.copy:hover { color: var(--accent); border-color: var(--accent); }
+
+/* 안내 상자 */
+.note { border: 1px solid var(--rule); border-left-width: 4px; border-radius: 6px; padding: 0.6rem 0.85rem; margin: 0.8rem 0; background: var(--surface); }
+.note > :first-child { margin-top: 0; } .note > :last-child { margin-bottom: 0; }
+.note .k { font-weight: 700; font-size: var(--step--1); letter-spacing: 0.03em; display: block; margin-bottom: 0.15rem; }
+.note.rule { border-left-color: var(--accent); } .note.rule .k { color: var(--accent); }
+.note.warn { border-left-color: var(--warn); background: var(--warn-soft); } .note.warn .k { color: var(--warn); }
+.note.plan { border-left-color: var(--ink-2); border-style: dashed; border-left-style: solid; } .note.plan .k { color: var(--ink-2); }
+.note.easy { border-left-color: var(--good); background: var(--good-soft); } .note.easy .k { color: var(--good); }
+.note.new { border-left-color: var(--accent); background: var(--accent-soft); } .note.new .k { color: var(--accent); }
+/* 핵심 개념 카드 */
+.concepts { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 0.6rem; margin: 0.7rem 0; }
+.concepts > div { min-width: 0; border: 1px solid var(--rule); border-radius: 6px; padding: 0.55rem 0.8rem; background: var(--surface); font-size: var(--step--1); line-height: 1.55; }
+.concepts b { display: block; font-size: var(--step-0); margin-bottom: 0.15rem; }
+.concepts i { font-style: normal; color: var(--ink-2); }
+
+.chip { display: inline-block; font-family: var(--font-mono); font-size: 0.78rem; line-height: 1.4; padding: 0.05rem 0.4rem; border-radius: 999px; border: 1px solid var(--rule); white-space: nowrap; }
+.chip.g { background: var(--good-soft); color: var(--good); border-color: transparent; }
+.chip.w { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
+.chip.b { background: var(--bad-soft); color: var(--bad); border-color: transparent; }
+.chip.a { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+.chip.p { color: var(--ink-2); border-style: dashed; }
+
+/* 커맨드 카드 */
+.card { border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); padding: 0.9rem 1rem; margin: 1rem 0; }
+.card > h3 { margin: 0 0 0.2rem; font-size: var(--step-1); font-family: var(--font-mono); font-weight: 500; overflow-wrap: anywhere; }
+.card .who { font-size: var(--step--1); color: var(--ink-2); margin: 0 0 0.5rem; }
+dl.kv { display: grid; grid-template-columns: 5.5rem minmax(0, 1fr); gap: 0.35rem 0.9rem; margin: 0.4rem 0; }
+dl.kv dt { font-size: var(--step--1); font-weight: 600; color: var(--ink-2); padding-top: 0.15rem; }
+dl.kv dd { margin: 0; min-width: 0; }
+dl.kv dd > :first-child { margin-top: 0; }
+
+/* 흐름 */
+ol.flow { list-style: none; padding: 0; margin: 0.8rem 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr)); gap: 0.5rem; counter-reset: f; }
+ol.flow li { margin: 0; border: 1px solid var(--rule); border-radius: 6px; background: var(--surface); padding: 0.5rem 0.65rem; font-size: var(--step--1); line-height: 1.45; counter-increment: f; }
+ol.flow li::before { content: counter(f); display: block; font-family: var(--font-mono); color: var(--accent); font-weight: 500; }
+ol.flow li.gate { border-color: var(--accent); background: var(--accent-soft); }
+
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: 0.8rem; margin: 0.7rem 0; }
+.two > div { min-width: 0; border: 1px solid var(--rule); border-radius: 6px; padding: 0.6rem 0.85rem; background: var(--surface); }
+.two h4 { margin: 0 0 0.2rem; }
+
+.fig { margin: 0.8rem 0; border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); padding: 0.6rem; overflow-x: auto; }
+.fig svg { display: block; width: 100%; min-width: 640px; height: auto; }
+.fig figcaption { font-size: var(--step--1); color: var(--ink-2); padding: 0.4rem 0.3rem 0; }
+svg .box { fill: var(--surface); stroke: var(--rule); stroke-width: 1.2; }
+svg .box.hl { fill: var(--accent-soft); stroke: var(--accent); }
+svg .box.in { fill: var(--sunken); stroke: var(--rule); }
+svg .box.ext { fill: var(--surface); stroke: var(--ink-2); stroke-dasharray: 4 3; }
+svg text { fill: var(--ink); font-family: var(--font-body); font-size: 13px; }
+svg text.s { fill: var(--ink-2); font-size: 11.5px; }
+svg text.t { font-weight: 600; }
+svg text.m { font-family: var(--font-mono); font-size: 11.5px; fill: var(--ink-2); }
+svg .ln { stroke: var(--ink-2); stroke-width: 1.4; fill: none; }
+svg .ln.acc { stroke: var(--accent); }
+svg .head { fill: var(--ink-2); }
+svg .head.acc { fill: var(--accent); }
+svg text.lab { fill: var(--accent); font-size: 11.5px; font-weight: 600; }
+
+mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius: 2px; }
+.empty { display: none; padding: 1rem; border: 1px dashed var(--rule); border-radius: 6px; color: var(--ink-2); margin-top: 1.5rem; }
+.foot { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--rule); font-size: var(--step--1); color: var(--ink-2); }
+
+@media (max-width: 860px) {
+  .shell { grid-template-columns: minmax(0, 1fr); }
+  .side { display: none; }
+  .toc-mobile {
+    display: block; position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5;
+    background: var(--bg); border-bottom: 1px solid var(--rule); padding-block: 0.5rem; margin-inline: -16px; padding-inline: 16px;
+  }
+  .toc-mobile summary { cursor: pointer; font-weight: 600; font-size: var(--step--1); padding: 0.3rem 0; list-style: none; display: flex; justify-content: space-between; }
+  .toc-mobile summary::after { content: "▾"; color: var(--ink-2); }
+  .toc-mobile[open] summary::after { content: "▴"; }
+  .toc-mobile .inner { max-height: 70vh; overflow-y: auto; padding-bottom: 0.6rem; font-size: var(--step--1); }
+  main { padding-top: 0.5rem; }
+  dl.kv { grid-template-columns: minmax(0, 1fr); gap: 0.1rem; }
+  dl.kv dd { margin-bottom: 0.5rem; }
+}
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+@media print {
+  :root { --bg: #fff; --surface: #fff; --sunken: #f3f3f3; --ink: #000; --ink-2: #333; --rule: #bbb; --accent: #0b5560; color-scheme: light; }
+  body { font-size: 10.5pt; line-height: 1.55; }
+  .side, .toc-mobile, .copy, .search-state, .empty { display: none !important; }
+  .shell { display: block; max-width: none; padding: 0; }
+  main { max-width: none; padding: 0; }
+  .sub[hidden], section.chap[hidden] { display: block !important; }
+  pre { white-space: pre-wrap; overflow: visible; padding-right: 0.9rem; }
+  .tbl, .fig { overflow: visible; }
+  .fig svg { min-width: 0; }
+  section.chap { break-before: page; }
+  section.chap:first-of-type { break-before: auto; }
+  h2, h3, h4 { break-after: avoid; }
+  tr, .card, .note, .code { break-inside: avoid; }
+  a { color: inherit; text-decoration: none; }
+}
+.first { color: var(--ink-2); font-size: var(--step--1); margin: 0.1rem 0 0.6rem; }
+.cal { display: grid; grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr)); gap: 0.6rem; margin: 0.8rem 0; }
+.cal > div { min-width: 0; border: 1px solid var(--rule); border-top: 4px solid var(--accent); border-radius: 6px; background: var(--surface); padding: 0.55rem 0.75rem; font-size: var(--step--1); line-height: 1.5; }
+.cal > div.lite { border-top-color: var(--ink-2); }
+.cal li b { display: inline; font-size: inherit; margin: 0; }
+.cal > div > b { display: block; font-size: var(--step-0); margin-bottom: 0.1rem; }
+.cal .who { color: var(--ink-2); display: block; margin-bottom: 0.3rem; }
+.cal ul { margin: 0; padding-left: 1rem; }
+.check { list-style: none; padding-left: 0; }
+.check li { padding-left: 1.6rem; position: relative; }
+.check li::before { content: "☐"; position: absolute; left: 0.2rem; color: var(--accent); }
+.dont td:first-child { width: 12rem; font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="side">
+    <div class="brand"><b>telephony-triage</b><span>관리자 런북</span></div>
+    <nav class="toc" id="toc" aria-label="목차"></nav>
+  </aside>
+  <main>
+    <details class="toc-mobile"><summary>목차</summary><div class="inner" id="toc-m"></div></details>
+
+    <header class="hero">
+      <div class="eyebrow">RUNBOOK · 관리자용 실무 안내</div>
+      <h1>언제, 무엇을 하면 되나</h1>
+      <p>이슈 DB와 플러그인을 운영하는 사람을 위한 안내입니다. 매일·매주·매월 할 일과, 문제가 생겼을 때 어디부터 볼지를 순서대로 정리했습니다. 명령 옵션과 메시지별 조치 같은 세부 내용은 운영 매뉴얼(<code>03-manual.html</code>) 6·7장에 있고, 여기서는 그 장으로 연결만 합니다.</p>
+      <div class="meta"><span><b>기준</b> main 2026-10-09</span><span><b>대상</b> 메인테이너, 카테고리 담당자, 도입 담당자</span><span><b>읽는 시간</b> 약 12분</span></div>
+    </header>
+
+    <section class="chap" id="r1" data-title="관리자 역할">
+      <h2><span class="no">1</span>관리자 역할</h2>
+      <p class="first">이 절에서 알 수 있는 것: 관리자 역할 세 가지와 각자 맡는 일</p>
+      <div class="tbl"><table>
+        <tr><th>역할</th><th>누가</th><th>맡는 일</th></tr>
+        <tr><td><b>카테고리 담당자</b></td><td>data·call·network·sim·sms·ims 카테고리마다 한 팀 (CODEOWNERS)</td><td>자기 카테고리 PR 리뷰·병합, 월간 리뷰, 해결책·수정 검증 요청</td></tr>
+        <tr><td><b>메인테이너</b></td><td>이슈 DB 공통 영역 담당 팀</td><td>파서 규칙·스키마·hook·설정 변경 리뷰, 새 카테고리, 스키마 버전 올리기, DB 사후 정리, 브랜치 보호 관리, 플러그인 업데이트</td></tr>
+        <tr><td><b>도입 담당자</b></td><td>사내 도입을 맡은 사람 (보통 메인테이너가 겸함)</td><td>사이트 설정, 운영 DB 생성, 사내 보완 단계(S-0~S-7), 파일럿 지표 수집</td></tr>
+      </table></div>
+      <div class="note rule"><span class="k">원칙</span>도구는 PR을 병합하지 않습니다. 병합과 "승인 필요" 항목 판단은 항상 사람(카테고리 담당자·메인테이너)이 합니다.</div>
+    </section>
+
+    <section class="chap" id="r2" data-title="처음 한 번">
+      <h2><span class="no">2</span>처음 한 번: 팀원이 설치하기 전에</h2>
+      <p class="first">이 절에서 알 수 있는 것: 도입 전에 끝내야 할 준비와, 빠뜨리면 생기는 일</p>
+      <div class="tbl"><table>
+        <tr><th>할 일</th><th>빠뜨리면</th><th>자세히</th></tr>
+        <tr><td><ul class="check"><li>GHE 레포 3개: 플러그인, 샌드박스 이슈 DB(시험용), 운영 이슈 DB</li></ul></td><td>시험 PR이 운영 DB에 섞임</td><td><a href="03-manual.html#s2-org">매뉴얼 2.2</a></td></tr>
+        <tr><td><ul class="check"><li><code>plugin/site-defaults.yaml</code> 작성·커밋 (S-3)</li></ul></td><td><b>setup과 모든 커맨드가 "사내 기본값 없음"으로 멈춤</b> (help 제외)</td><td><a href="03-manual.html#s7-site">매뉴얼 7.8</a></td></tr>
+        <tr><td><ul class="check"><li>운영 DB를 뼈대로 만들고 main에 첫 push</li><li>main 브랜치 보호: PR 필수, 직접 push 금지, CODEOWNERS 승인 1명 이상</li><li>설정 내용을 DB의 <code>docs/branch-protection.md</code>에 기록</li></ul></td><td>PC의 hook이 유일한 방어선이 됨. hook은 우회할 수 있고, main에 쓸 수 있는 사람이 모든 기여자 PC에서 돌아갈 hook 스크립트를 바꿀 수 있게 됨</td><td><a href="03-manual.html#s7-protect">매뉴얼 7.3</a></td></tr>
+        <tr><td><ul class="check"><li>카테고리 담당 팀 6개와 메인테이너 팀을 CODEOWNERS에 연결</li></ul></td><td>리뷰 요청이 아무에게도 가지 않음</td><td><a href="03-manual.html#s7-protect">매뉴얼 7.3</a></td></tr>
+        <tr><td><ul class="check"><li>파서 규칙의 예시 값(placeholder)을 실제 태그·문구로 교체, 카테고리별 시드 유형 5~10개 (S-4)</li></ul></td><td>예시 규칙으로 판정해 결과를 믿을 수 없음. 빈 DB로 시작하면 처리할 때마다 새 유형을 만들어야 해서 기여자가 지침</td><td><a href="03-manual.html#s7-parser">매뉴얼 7.9</a>, <a href="03-manual.html#s7-rollout">7.13</a></td></tr>
+        <tr><td><ul class="check"><li>샌드박스에서 dry-run과 실제 PR 1건 (S-5)</li><li>사내 마켓플레이스 등록 (S-7)</li></ul></td><td>설치·권한 문제를 팀원이 처음 발견함</td><td><a href="03-manual.html#s7-rollout">매뉴얼 7.13</a></td></tr>
+      </table></div>
+    </section>
+
+    <section class="chap" id="r3" data-title="정기 작업 달력">
+      <h2><span class="no">3</span>정기 작업 달력</h2>
+      <p class="first">이 절에서 알 수 있는 것: 주기별로 할 일. 이것만 지키면 DB가 스스로 망가지지 않습니다</p>
+      <div class="cal">
+        <div><b>매일</b><span class="who">카테고리 담당자</span><ul><li>들어온 PR 리뷰 (6절 체크리스트)</li><li><b>한 번에 하나씩</b> 병합</li><li>병합 뒤 다른 대기 PR 작성자에게 <code>sync-pr</code> 요청</li></ul></div>
+        <div><b>매주</b><span class="who">메인테이너</span><ul><li><code>sync</code> 결과의 사후 검사 경고 확인 (ID 중복·Jira 중복이면 5절)</li><li>오래 열린 PR 점검, 작성자 부재면 7절</li></ul></div>
+        <div><b>매월</b><span class="who">카테고리 담당자</span><ul><li><code>/telephony-triage:review &lt;카테고리&gt;</code></li><li>방치 항목은 리포트의 "기록: 이름"에게 요청</li><li>정리 내용은 <code>review/…</code> PR로</li><li>STATS의 급증·수락률 확인</li></ul></div>
+        <div class="lite"><b>분기</b><span class="who">메인테이너</span><ul><li>지원 Android 버전(<code>android_versions_supported</code>) 갱신</li><li>오래 안 쓰인 원인·지원 종료 원인 폐기 정리</li><li>10절 숫자 점검</li></ul></div>
+        <div class="lite"><b>플러그인 업데이트 때</b><span class="who">메인테이너</span><ul><li>릴리스 노트에 지원 스키마·생성기 버전</li><li>버전이 바뀌면 DB 쪽 버전 올림 PR</li><li>팀원에게 업데이트 공지</li></ul></div>
+      </div>
+      <div class="note easy"><span class="k">월간 리뷰가 잡아 주는 것</span>시그니처 없는 원인, fixture 없는 원인, 오래 미확정인 Jira, 수락률 낮은 시그니처, 중복 후보, 오래 안 쓰인 원인, 수정 검증 대기 방치(30일), 해결책 미검증 방치(60일), 급증. 기준값은 이슈 DB의 <code>issue-db.config.yaml</code>에 있고 바꾸려면 PR입니다. 항목별 조치는 <a href="03-manual.html#s7-monthly">매뉴얼 7.7</a>.</div>
+    </section>
+
+    <section class="chap" id="r4" data-title="&quot;막혔어요&quot; 대응">
+      <h2><span class="no">4</span>사용자가 "막혔어요" 할 때</h2>
+      <p class="first">이 절에서 알 수 있는 것: 문의가 오면 어디부터 볼지</p>
+      <p>먼저 사용자에게 <code>/telephony-triage:setup</code>을 다시 실행해 달라고 하세요. 마지막에 나오는 점검 표(doctor)의 <code>fail</code>·<code>warn</code> 행이 원인을 거의 다 알려줍니다. 점검 표는 읽기만 하고 아무것도 고치지 않습니다.</p>
+      <figure class="fig"><svg viewBox="0 0 820 430" role="img" aria-labelledby="dgT"><title id="dgT">막혔을 때 판단 흐름</title><defs><marker id="dgh" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+<rect class="box hl" x="210" y="14" width="400" height="56" rx="6"/><text class="t" x="222" y="36">사용자: "막혔어요"</text><text class="s" x="222" y="56">setup 다시 실행 → 점검 표에서 fail·warn 행 찾기</text>
+<path class="ln" d="M410,70 L410,94 M112,94 L712,94"/>
+<path class="ln" d="M112,94 L112,118" marker-end="url(#dgh)"/><path class="ln" d="M312,94 L312,118" marker-end="url(#dgh)"/><path class="ln" d="M512,94 L512,118" marker-end="url(#dgh)"/><path class="ln" d="M712,94 L712,118" marker-end="url(#dgh)"/>
+<rect class="box" x="20" y="120" width="185" height="96" rx="6"/><text class="t" x="32" y="142">사이트 설정 없음</text><text class="s" x="32" y="160">모든 커맨드가 바로 멈춤</text><text class="s" x="32" y="180">관리자: S-3 값 커밋</text><text class="s" x="32" y="198">사용자: 플러그인 다시 받기</text>
+<rect class="box" x="220" y="120" width="185" height="96" rx="6"/><text class="t" x="232" y="142">config · scripts_path</text><text class="s" x="232" y="160">setup 전, 경로 어긋남</text><text class="s" x="232" y="180">setup 실행</text><text class="s" x="232" y="198">세션 한 번 다시 열기</text>
+<rect class="box" x="420" y="120" width="185" height="96" rx="6"/><text class="t" x="432" y="142">jira</text><text class="s" x="432" y="160">Jira 도구 연결 안 됨</text><text class="s" x="432" y="180">setup 4단계 다시</text><text class="s" x="432" y="198">MCP 등록 확인</text>
+<rect class="box" x="620" y="120" width="185" height="96" rx="6"/><text class="t" x="632" y="142">gh (warn)</text><text class="s" x="632" y="160">GHE 로그인 안 됨</text><text class="s" x="632" y="180">gh auth login -h 호스트</text><text class="s" x="632" y="198">그동안 읽기 분석만 가능</text>
+<rect class="box" x="20" y="230" width="185" height="96" rx="6"/><text class="t" x="32" y="252">hook</text><text class="s" x="32" y="270">git hook 경로 꺼짐</text><text class="s" x="32" y="290">config.py install-hooks</text><text class="s" x="32" y="308">또는 setup 다시</text>
+<rect class="box" x="220" y="230" width="185" height="96" rx="6"/><text class="t" x="232" y="252">compat</text><text class="s" x="232" y="270">DB와 플러그인 버전 다름</text><text class="s" x="232" y="290">DB가 새것: 플러그인 업데이트</text><text class="s" x="232" y="308">DB가 옛것: 메인테이너가 올림</text>
+<rect class="box" x="420" y="230" width="185" height="96" rx="6"/><text class="t" x="432" y="252">lock</text><text class="s" x="432" y="270">다른 작업이 잡고 있음</text><text class="s" x="432" y="290">그 세션이 끝났는지 확인</text><text class="s" x="432" y="308">끝났으면 lock release --force</text>
+<rect class="box" x="620" y="230" width="185" height="96" rx="6"/><text class="t" x="632" y="252">snapshot (warn)</text><text class="s" x="632" y="270">7일 넘게 갱신 안 됨</text><text class="s" x="632" y="290">/telephony-triage:sync</text>
+<rect class="box ext" x="20" y="350" width="785" height="62" rx="6"/><text class="t" x="32" y="372">모두 ok인데 막힘</text><text class="s" x="32" y="392">메시지 원문 그대로 <a href="03-manual.html#s6-msg">매뉴얼 6.3</a> 표에서 찾기 → 없거나 "내부 오류"면 메시지 마지막 줄을 메인테이너에게 보고 (우회하지 않음)</text>
+</svg><figcaption>점검 표의 행 이름 그대로입니다. <code>fail</code>은 그 상태로는 기록할 수 없고, <code>warn</code>은 쓸 수는 있지만 일부가 제한됩니다.</figcaption></figure>
+      <div class="note warn"><span class="k">하지 말 것</span>막힌 걸 풀려고 hook을 끄거나(<code>--no-verify</code>), main에 직접 push하거나, 버전 검사를 건너뛰지 않습니다. 그 장치가 막는 사고가 그대로 생깁니다. 막힘의 원인을 고치세요.</div>
+    </section>
+
+    <section class="chap" id="r5" data-title="DB에 문제가 생겼을 때">
+      <h2><span class="no">5</span>DB에 문제가 생겼을 때</h2>
+      <p class="first">이 절에서 알 수 있는 것: 운영 중 생길 수 있는 DB 문제와 처리 방법</p>
+      <div class="tbl"><table>
+        <tr><th>상황</th><th>어떻게 알게 되나</th><th>처리</th><th>자세히</th></tr>
+        <tr><td><b>main에 같은 ID가 두 번</b></td><td><code>sync</code> 뒤 사후 검사 경고</td><td>먼저 병합된 쪽이 주인. 나중 쪽을 <code>chore/fix-db-…</code> 브랜치에서 다음 빈 ID로 옮기고 커밋에 <code>Renumbered:</code> 표시. "main의 ID는 바꾸지 않는다"의 유일한 예외</td><td><a href="03-manual.html#s7-review">매뉴얼 7.6</a></td></tr>
+        <tr><td><b>같은 Jira가 두 번 기록</b></td><td>사후 검사 경고</td><td>나중에 병합된 파일을 지우고 두 작성자에게 알림. 어느 분류가 맞는지는 작성자와 카테고리 담당자가 정함</td><td><a href="03-manual.html#s7-review">매뉴얼 7.6</a></td></tr>
+        <tr><td><b>잘못 병합된 PR</b></td><td>리뷰·사용자 신고</td><td>main을 직접 고치지 않고 PR로 되돌림. 원인·유형은 지우지 말고 폐기·병합 상태로, 잘못된 분류는 재분류, 잘못된 수정 상태는 open으로 되돌림(이전 값은 이력에 남음)</td><td><a href="03-manual.html#s7-backup">매뉴얼 7.12</a></td></tr>
+        <tr><td><b>오탐 신고</b> ("이 원인이 아닌데 1위로 나와요")</td><td>사용자 신고, 월간 리뷰 "수락률 낮은 시그니처"</td><td>그 로그 구간을 음성 fixture로 추가하고 시그니처를 좁히는 PR. 회귀 검사가 다른 사례를 깨지 않는지 확인</td><td><a href="03-manual.html#s7-add">매뉴얼 7.4</a></td></tr>
+        <tr><td><b>급증</b></td><td>월간 리뷰 "급증"</td><td>최근 30일이 이전 월평균의 2배 이상. 특정 빌드·모델·통신사에 몰렸는지 STATS 분포로 보고 원인 조사</td><td><a href="03-manual.html#s7-monthly">매뉴얼 7.7</a></td></tr>
+        <tr><td><b>Jira 원문 격리가 안 됨</b></td><td>사용자가 "격리 hook 미동작" 메시지 보고</td><td>그 Claude Code 버전에서 hook이 동작하는지 확인(S-2 항목). 그 사이에도 리포트·계획에는 마스킹 값만 저장됨</td><td><a href="03-manual.html#s6-msg">매뉴얼 6.3</a></td></tr>
+      </table></div>
+    </section>
+
+    <section class="chap" id="r6" data-title="PR 리뷰와 병합">
+      <h2><span class="no">6</span>PR 리뷰와 병합</h2>
+      <p class="first">이 절에서 알 수 있는 것: 리뷰할 때 볼 것과, 병합 순서를 지켜야 하는 이유</p>
+      <figure class="fig"><svg viewBox="0 0 820 250" role="img" aria-labelledby="pmT"><title id="pmT">PR 리뷰와 병합 흐름</title><defs><marker id="pmh" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0,0 L10,5 L0,10 z"/></marker><marker id="pmha" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head acc" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+<rect class="box" x="20" y="40" width="150" height="60" rx="6"/><text class="t" x="32" y="64">PR 도착</text><text class="s" x="32" y="84">리뷰어 자동 지정</text>
+<rect class="box" x="210" y="20" width="250" height="100" rx="6"/><text class="t" x="222" y="42">체크리스트</text><text class="s" x="222" y="62">① 충돌 표시 없음</text><text class="s" x="222" y="79">② 마지막 push 뒤 main 안 바뀜</text><text class="s" x="222" y="96">③ 제목·해결책이 작성 규칙에 맞음</text><text class="s" x="222" y="113">④ "승인 필요"는 메인테이너 승인</text>
+<rect class="box hl" x="500" y="40" width="130" height="60" rx="6"/><text class="t" x="512" y="64">병합</text><text class="s" x="512" y="84">한 번에 하나</text>
+<rect class="box" x="670" y="40" width="135" height="60" rx="6"/><text class="t" x="682" y="64">다음 PR 작성자</text><text class="s" x="682" y="84">에게 sync-pr 요청</text>
+<path class="ln" d="M170,70 L208,70" marker-end="url(#pmh)"/><path class="ln acc" d="M460,70 L498,70" marker-end="url(#pmha)"/><path class="ln" d="M630,70 L668,70" marker-end="url(#pmh)"/>
+<path class="ln" d="M335,120 L335,170" marker-end="url(#pmh)"/><text class="s" x="345" y="150">② 아니면</text>
+<rect class="box in" x="210" y="172" width="400" height="60" rx="6"/><text class="t" x="222" y="194">작성자가 sync-pr → 같은 PR이 최신 main 기준으로 갱신</text><text class="s" x="222" y="214">작성자가 없으면 리뷰어가 직접 편집 절차로 맞춤 (7절)</text>
+<path class="ln" d="M737,100 L737,202 L612,202" marker-end="url(#pmh)"/>
+<path class="ln" d="M210,202 L95,202 L95,102" marker-end="url(#pmh)"/><text class="s" x="104" y="190">다시 리뷰</text>
+</svg><figcaption>병합할 때마다 main이 바뀌므로, 남은 PR은 그 위에 다시 맞춘 뒤 병합합니다.</figcaption></figure>
+      <div class="note rule"><span class="k">왜 한 번에 하나씩</span>PR 둘을 연달아 병합하면, 둘 다 같은 "다음 번호"로 새 원인을 만들었을 때 ID가 겹칩니다. 하나를 병합하고 다음 PR을 <code>sync-pr</code>로 맞추면 새 ID가 최신 main 기준으로 다시 정해져 겹치지 않습니다.</div>
+      <p>PR 본문의 "검증 못 함 — 리뷰 대상", "사용자 진술 — 카테고리 오너 리뷰 필요" 표시는 리뷰어가 근거를 직접 확인할 항목입니다. 다른 카테고리가 내 fixture에 <code>also_allowed</code>를 넣은 PR에도 리뷰어로 붙습니다.</p>
+    </section>
+
+    <section class="chap" id="r7" data-title="사람이 바뀔 때">
+      <h2><span class="no">7</span>사람이 바뀔 때</h2>
+      <p class="first">이 절에서 알 수 있는 것: 작성자 부재, 담당자 교체, 퇴사 때 챙길 것</p>
+      <div class="tbl"><table>
+        <tr><th>상황</th><th>알아 둘 점</th><th>처리</th></tr>
+        <tr><td><b>작성자가 없는 열린 PR</b></td><td>작업 계획은 작성자 PC에만 있어서 다른 사람은 <code>sync-pr</code>를 못 함</td><td>리뷰어가 "계획이 없는 브랜치" 절차로 맞춤: rebase → 생성 파일 다시 만들기(<code>db_build --write</code>) → <code>validate</code> → <code>TT_PUBLISH_TOKEN=manual</code>로 push. 손이 많이 가면 PR을 닫고 같은 Jira를 새로 분석</td></tr>
+        <tr><td><b>카테고리 담당자 교체</b></td><td>리뷰 요청은 CODEOWNERS로 감</td><td>CODEOWNERS 팀 구성원 변경(GHE 팀 관리) 또는 CODEOWNERS 수정 PR</td></tr>
+        <tr><td><b>퇴사·장기 부재</b></td><td>그 사람 PC의 진행 중 작업(계획·lock·작업 공간)은 사라짐. 병합된 기록은 DB에 그대로</td><td>열린 PR은 위처럼 인수하거나 닫기. 월간 리뷰에서 그 사람이 "기록"으로 나온 방치 항목은 새 담당 지정</td></tr>
+        <tr><td><b>사용자가 PC를 바꿈</b></td><td>계획·lock·작업 공간은 PC 로컬이라 따라오지 않음</td><td>진행 중인 쓰기 작업을 끝내거나 버린 뒤 옮기고, 새 PC에서 setup</td></tr>
+      </table></div>
+    </section>
+
+    <section class="chap" id="r8" data-title="변경 관리">
+      <h2><span class="no">8</span>변경 관리</h2>
+      <p class="first">이 절에서 알 수 있는 것: 규칙·플러그인·스키마를 바꿀 때 지킬 순서</p>
+
+      <figure class="fig"><svg viewBox="0 0 820 300" role="img" aria-labelledby="wcT"><title id="wcT">무엇을 어디서 바꾸나</title>
+<rect class="box" x="20" y="16" width="380" height="270" rx="8"/>
+<text class="t" x="34" y="40">플러그인 레포 (도구)</text><text class="s" x="34" y="58">각자의 Claude Code에 설치되는 것</text>
+<rect class="box in" x="34" y="72" width="352" height="42" rx="6"/><text class="t" x="46" y="90">엔진 코드</text><text class="s" x="46" y="106">파서 · 매처 · 검증 · PR 스크립트</text>
+<rect class="box in" x="34" y="122" width="352" height="42" rx="6"/><text class="t" x="46" y="140">스킬 · 커맨드 · hooks</text><text class="s" x="46" y="156">Claude가 따르는 절차, 안전장치</text>
+<rect class="box in" x="34" y="172" width="352" height="42" rx="6"/><text class="t" x="46" y="190">site-defaults.yaml</text><text class="s" x="46" y="206">사내 Jira·GHE·파서 백엔드 값</text>
+<text class="lab" x="34" y="240">반영: 플러그인 업데이트 (각자 받아야 함)</text><text class="s" x="34" y="262">리뷰: 메인테이너</text>
+<rect class="box hl" x="420" y="16" width="380" height="270" rx="8"/>
+<text class="t" x="434" y="40">이슈 DB (팀 지식)</text><text class="s" x="434" y="58">팀이 함께 쓰는 GHE 레포</text>
+<rect class="box" x="434" y="72" width="352" height="42" rx="6"/><text class="t" x="446" y="90">유형 · 원인 · 시그니처 · fixture</text><text class="s" x="446" y="106">리뷰: 카테고리 담당자</text>
+<rect class="box" x="434" y="122" width="352" height="42" rx="6"/><text class="t" x="446" y="140">parser-rules (태그 · RIL · extractor)</text><text class="s" x="446" y="156">리뷰: 메인테이너, 이벤트 변화는 승인 필요</text>
+<rect class="box" x="434" y="172" width="352" height="42" rx="6"/><text class="t" x="446" y="190">issue-db.config.yaml · schema</text><text class="s" x="446" y="206">기준값 · 형식. 리뷰: 메인테이너</text>
+<text class="lab" x="434" y="240">반영: PR 병합 즉시 (다음 분석부터)</text><text class="s" x="434" y="262">플러그인 재배포 필요 없음</text>
+</svg><figcaption>새 로그 문구나 원인은 이슈 DB만 바꾸면 됩니다. 새 로그 형식처럼 해석 방법 자체가 바뀔 때만 플러그인을 바꿉니다.</figcaption></figure>
+      <div class="tbl"><table>
+        <tr><th>무엇을 바꾸나</th><th>어디서</th><th>지킬 것</th><th>자세히</th></tr>
+        <tr><td>유형·원인·시그니처·fixture</td><td>이슈 DB PR</td><td>보통 분석 중 "새 원인·새 유형" 선택으로 시작. 자동 검증 R1~R6과 회귀 통과</td><td><a href="03-manual.html#s7-add">매뉴얼 7.4</a></td></tr>
+        <tr><td>파서 규칙 (태그·RIL·extractor)</td><td>이슈 DB PR, 메인테이너 리뷰 필수</td><td>이벤트 변화(R5)가 나오면 "승인 필요" → 영향 표를 PR에 붙이고 메인테이너가 승인. 플러그인 재배포는 필요 없음</td><td><a href="03-manual.html#s7-parser">매뉴얼 7.9</a></td></tr>
+        <tr><td>팀 공통 기준값 (<code>issue-db.config.yaml</code>)</td><td>이슈 DB PR, 메인테이너 리뷰</td><td>방치 기준일, 점수, 마스킹 예외 등. 마스킹 예외를 너무 넓게(<code>.*</code>) 쓰면 lint가 거부</td><td><a href="03-manual.html#s9-keys">매뉴얼 9.4</a></td></tr>
+        <tr><td>사이트 설정 (<code>site-defaults.yaml</code>)</td><td>플러그인 레포</td><td><code>platform.*</code>를 바꾸면 파서 출력이 달라질 수 있어 DB에서 전체 회귀를 다시 돌림</td><td><a href="03-manual.html#s7-site">매뉴얼 7.8</a></td></tr>
+        <tr><td>플러그인 업데이트</td><td>플러그인 레포 → 마켓플레이스</td><td>새 초안은 <code>import_draft.py</code>로 반입(사내 전용 경로 보존, 통째 교체 금지). 생성기 버전이 바뀌면 DB 버전 올림 PR이 먼저. 되돌리기 절차는 파일럿(S-7)에서 확정</td><td><a href="03-manual.html#s7-upgrade">매뉴얼 7.10</a></td></tr>
+        <tr><td>스키마 버전 올리기</td><td>메인테이너 <code>migrate/schema-v&lt;N&gt;</code> 브랜치</td><td>열린 PR을 최대한 정리하고 병합 중지 공지 → <code>migrate --dry-run</code> → 실행 → PR. 남은 PR은 작성자의 sync-pr가 계획을 새 형식으로 올림</td><td><a href="03-manual.html#s7-migrate">매뉴얼 7.11</a></td></tr>
+      </table></div>
+    </section>
+
+    <section class="chap" id="r9" data-title="하면 안 되는 것">
+      <h2><span class="no">9</span>하면 안 되는 것 5가지</h2>
+      <p class="first">이 절에서 알 수 있는 것: 급할 때 손이 가기 쉬운 지름길과 그 결과</p>
+      <div class="tbl dont"><table>
+        <tr><th>하지 말 것</th><th>대신</th><th>왜</th></tr>
+        <tr><td>main 직접 수정·push</td><td>항상 브랜치 + PR</td><td>리뷰 없는 변경이 팀 전체 분석에 바로 반영됨</td></tr>
+        <tr><td>README·STATS·CHANGELOG 손편집</td><td><code>db_build.py --write</code></td><td>데이터와 어긋나고 다음 커밋 검사에서 막힘</td></tr>
+        <tr><td>hook 끄기·버전 검사 건너뛰기</td><td>막힌 원인을 고침 (4절)</td><td>개인정보나 깨진 파일이 커밋됨</td></tr>
+        <tr><td>원인·유형 파일 삭제</td><td>폐기(<code>deprecated</code>)·병합(<code>merged-into</code>) 상태로</td><td>예전 Jira 기록과 PR이 그 ID를 가리키고 있어 이력이 끊김</td></tr>
+        <tr><td>사내 로그·값을 사외로 가져가기</td><td>사람이 직접 쓴 사내 정보 없는 문장만</td><td>사외 개발은 합성 데이터로만 재현하는 것이 원칙</td></tr>
+      </table></div>
+    </section>
+
+    <section class="chap" id="r10" data-title="볼 숫자">
+      <h2><span class="no">10</span>볼 숫자</h2>
+      <p class="first">이 절에서 알 수 있는 것: 도구가 잘 쓰이고 있는지 판단할 숫자와 나쁠 때 할 일</p>
+      <div class="tbl"><table>
+        <tr><th>숫자</th><th>어디서</th><th>나쁘면</th></tr>
+        <tr><td>시그니처 수락률 (1위 후보를 사용자가 받아들인 비율)</td><td>STATS "수락률 하위 10개", 월간 리뷰 (0.7 미만, 표본 5건 이상)</td><td>시그니처 좁히기·음성 fixture 추가. 단, 수락률은 정답률이 아님(틀린 1위를 받아들일 수도 있음)</td></tr>
+        <tr><td>방치 건수 (수정 검증 대기, 해결책 미검증, 미확정 Jira)</td><td>월간 리뷰</td><td>기록자에게 요청, 담당 지정</td></tr>
+        <tr><td>시그니처·fixture 없는 원인 수</td><td>STATS</td><td>로그를 받아 보강. 이 수가 크면 다음 분석이 그 원인을 못 찾음</td></tr>
+        <tr><td>PR까지 걸린 시간, 중도 취소 비율, 작업당 질문 수</td><td><code>tools/usage_stats.py</code> (사용자 PC마다 실행해 모음)</td><td>취소가 많으면 기여 부담이 큰 것. 어느 단계에서 멈추는지 사용자에게 확인</td></tr>
+        <tr><td>정확도 (1위 정확도, 상위 3개 포함률, 오탐률)</td><td><code>tools/offline_eval.py</code> (해결된 과거 Jira 라벨셋)</td><td>도입 때 정한 기준 미달이면 파일럿 전에 시그니처·규칙 조정</td></tr>
+      </table></div>
+      <p class="foot">기준값과 명령 옵션은 운영 매뉴얼(<code>03-manual.html</code>)과 <code>docs/design/06-collaboration.md</code>가 원본입니다. 구조와 흐름은 설계 안내(<code>04-design.html</code>)에 있습니다.</p>
+    </section>
+  </main>
+</div>
+<script>
+(function () {
+  var secs = Array.prototype.slice.call(document.querySelectorAll("section.chap"));
+  function build() {
+    var ol = document.createElement("ol");
+    secs.forEach(function (s) {
+      var li = document.createElement("li"), a = document.createElement("a");
+      a.href = "#" + s.id; a.textContent = s.querySelector("h2 .no").textContent + ". " + s.dataset.title;
+      li.appendChild(a);
+      var subs = s.querySelectorAll(":scope > .sub");
+      if (subs.length) {
+        var inner = document.createElement("ol");
+        subs.forEach(function (u) {
+          var l2 = document.createElement("li"), a2 = document.createElement("a");
+          a2.href = "#" + u.id; a2.textContent = u.dataset.title; l2.appendChild(a2); inner.appendChild(l2);
+        });
+        li.appendChild(inner);
+      }
+      ol.appendChild(li);
+    });
+    return ol;
+  }
+  document.getElementById("toc").appendChild(build());
+  document.getElementById("toc-m").appendChild(build());
+  document.querySelectorAll("#toc-m a").forEach(function (a) {
+    a.addEventListener("click", function () { a.closest("details").open = false; });
+  });
+  if ("IntersectionObserver" in window) {
+    var links = document.querySelectorAll("#toc > ol > li > a");
+    var io = new IntersectionObserver(function (es) {
+      es.forEach(function (e) {
+        if (!e.isIntersecting) return;
+        links.forEach(function (l) { l.classList.toggle("on", l.getAttribute("href") === "#" + e.target.id); });
+      });
+    }, { rootMargin: "0px 0px -70% 0px" });
+    secs.forEach(function (s) { io.observe(s); });
+  }
+})();
+</script>
+</body>
+</html>

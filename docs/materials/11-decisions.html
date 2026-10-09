@@ -1,0 +1,444 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>telephony-triage 설계 결정 기록</title>
+<style>
+/* Layout: 왼쪽 고정 목차 + 본문 한 단(≤ 46rem). 휴대폰에서는 목차가 상단 접이식. */
+:root {
+  --bg: #f6f8f9;
+  --surface: #ffffff;
+  --sunken: #eef2f3;
+  --ink: #17232b;
+  --ink-2: #4a5a63;
+  --rule: #d5dee2;
+  --accent: #0b6874;        /* 신호선 청록 */
+  --accent-soft: #dcefF1;
+  --warn: #9a5b00;
+  --warn-soft: #fbf0dc;
+  --bad: #a3262c;
+  --bad-soft: #f8e3e3;
+  --good: #1f6b3a;
+  --good-soft: #e1f1e6;
+  --mark: #ffe58a;
+  --font-body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Consolas, "D2Coding", monospace;
+  --step--1: 0.8125rem;
+  --step-0: 0.96875rem;
+  --step-1: 1.125rem;
+  --step-2: 1.375rem;
+  --step-3: 1.75rem;
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+html { scroll-padding-top: 1rem; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--font-body); font-size: var(--step-0); line-height: 1.7;
+  -webkit-text-size-adjust: 100%;
+}
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px;
+}
+code, kbd, pre { font-family: var(--font-mono); font-size: 0.875em; }
+:not(pre) > code {
+  background: var(--sunken); border: 1px solid var(--rule); border-radius: 4px;
+  padding: 0.05em 0.35em; overflow-wrap: anywhere;
+}
+
+.shell {
+  display: grid; grid-template-columns: 17rem minmax(0, 1fr); gap: 0 2.5rem;
+  max-width: 76rem; margin: 0 auto; padding-inline: 16px;
+}
+
+/* 목차 */
+.side {
+  position: sticky; top: env(safe-area-inset-top, 0px); align-self: start;
+  max-height: 100vh; overflow-y: auto; padding-block: 1.5rem 2rem;
+  font-size: var(--step--1);
+}
+.brand { display: flex; flex-direction: column; gap: 0.1rem; margin-bottom: 1rem; }
+.brand b { font-size: var(--step-1); letter-spacing: -0.01em; }
+.brand span { color: var(--ink-2); }
+.search { position: relative; margin-bottom: 0.4rem; }
+.search input {
+  width: 100%; padding: 0.55rem 0.7rem; border: 1px solid var(--rule); border-radius: 6px;
+  background: var(--surface); color: var(--ink); font: inherit; font-size: var(--step--1);
+}
+.search-state { color: var(--ink-2); min-height: 1.4em; margin-bottom: 0.6rem; }
+.toc ol { list-style: none; margin: 0; padding: 0; }
+.toc > ol > li { margin-top: 0.55rem; }
+.toc > ol > li > a { font-weight: 600; color: var(--ink); }
+.toc ol ol { padding-left: 0.9rem; border-left: 1px solid var(--rule); margin-top: 0.2rem; }
+.toc ol ol a { color: var(--ink-2); }
+.toc a { text-decoration: none; display: block; padding: 0.12rem 0; }
+.toc a:hover { color: var(--accent); }
+.toc a.on { color: var(--accent); font-weight: 600; }
+.toc-mobile { display: none; }
+
+/* 본문 */
+main { min-width: 0; padding-block: 1.5rem 5rem; max-width: 48rem; }
+.hero { padding-block: 1rem 1.5rem; border-bottom: 2px solid var(--ink); margin-bottom: 1rem; }
+.hero .eyebrow { font-family: var(--font-mono); font-size: var(--step--1); color: var(--accent); letter-spacing: 0.04em; }
+.hero h1 { font-size: var(--step-3); line-height: 1.25; margin: 0.3rem 0 0.6rem; text-wrap: balance; letter-spacing: -0.015em; }
+.hero p { margin: 0; color: var(--ink-2); max-width: 40rem; }
+.meta { display: flex; flex-wrap: wrap; gap: 0.4rem 1.2rem; margin-top: 0.9rem; font-size: var(--step--1); color: var(--ink-2); }
+.meta b { color: var(--ink); font-weight: 600; }
+
+section.chap { padding-top: 1.8rem; }
+section.chap > h2 {
+  font-size: var(--step-2); line-height: 1.3; margin: 0 0 0.4rem; text-wrap: balance;
+  display: flex; gap: 0.6rem; align-items: baseline; letter-spacing: -0.01em;
+}
+section.chap > h2 .no { font-family: var(--font-mono); color: var(--accent); font-size: 0.8em; }
+.sub { padding-top: 1.2rem; }
+.sub > h3 { font-size: var(--step-1); margin: 0 0 0.4rem; text-wrap: balance; }
+.sub > h4, .card h4 { font-size: var(--step-0); margin: 1rem 0 0.3rem; }
+p, ul, ol { margin: 0.5rem 0; }
+ul, ol { padding-left: 1.3rem; }
+li + li { margin-top: 0.2rem; }
+.lead { color: var(--ink-2); }
+
+/* 표 */
+.tbl { overflow-x: auto; margin: 0.7rem 0; border: 1px solid var(--rule); border-radius: 6px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: var(--step--1); line-height: 1.55; }
+th, td { text-align: left; vertical-align: top; padding: 0.5rem 0.65rem; border-bottom: 1px solid var(--rule); }
+th { background: var(--sunken); font-weight: 600; white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+td code { white-space: nowrap; }
+td.wrap code, td code.wrap { white-space: normal; }
+.num { font-variant-numeric: tabular-nums; }
+
+/* 코드 블록 */
+.code { position: relative; margin: 0.7rem 0; }
+pre {
+  margin: 0; padding: 0.8rem 0.9rem; padding-right: 4.2rem; overflow-x: auto;
+  background: var(--sunken); border: 1px solid var(--rule); border-radius: 6px; line-height: 1.55;
+}
+.copy {
+  position: absolute; top: 0.4rem; right: 0.4rem; font: inherit; font-size: 0.75rem;
+  padding: 0.2rem 0.55rem; border-radius: 4px; border: 1px solid var(--rule);
+  background: var(--surface); color: var(--ink-2); cursor: pointer;
+}
+.copy:hover { color: var(--accent); border-color: var(--accent); }
+
+/* 안내 상자 */
+.note { border: 1px solid var(--rule); border-left-width: 4px; border-radius: 6px; padding: 0.6rem 0.85rem; margin: 0.8rem 0; background: var(--surface); }
+.note > :first-child { margin-top: 0; } .note > :last-child { margin-bottom: 0; }
+.note .k { font-weight: 700; font-size: var(--step--1); letter-spacing: 0.03em; display: block; margin-bottom: 0.15rem; }
+.note.rule { border-left-color: var(--accent); } .note.rule .k { color: var(--accent); }
+.note.warn { border-left-color: var(--warn); background: var(--warn-soft); } .note.warn .k { color: var(--warn); }
+.note.plan { border-left-color: var(--ink-2); border-style: dashed; border-left-style: solid; } .note.plan .k { color: var(--ink-2); }
+.note.easy { border-left-color: var(--good); background: var(--good-soft); } .note.easy .k { color: var(--good); }
+.note.new { border-left-color: var(--accent); background: var(--accent-soft); } .note.new .k { color: var(--accent); }
+/* 핵심 개념 카드 */
+.concepts { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 0.6rem; margin: 0.7rem 0; }
+.concepts > div { min-width: 0; border: 1px solid var(--rule); border-radius: 6px; padding: 0.55rem 0.8rem; background: var(--surface); font-size: var(--step--1); line-height: 1.55; }
+.concepts b { display: block; font-size: var(--step-0); margin-bottom: 0.15rem; }
+.concepts i { font-style: normal; color: var(--ink-2); }
+
+.chip { display: inline-block; font-family: var(--font-mono); font-size: 0.78rem; line-height: 1.4; padding: 0.05rem 0.4rem; border-radius: 999px; border: 1px solid var(--rule); white-space: nowrap; }
+.chip.g { background: var(--good-soft); color: var(--good); border-color: transparent; }
+.chip.w { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
+.chip.b { background: var(--bad-soft); color: var(--bad); border-color: transparent; }
+.chip.a { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+.chip.p { color: var(--ink-2); border-style: dashed; }
+
+/* 커맨드 카드 */
+.card { border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); padding: 0.9rem 1rem; margin: 1rem 0; }
+.card > h3 { margin: 0 0 0.2rem; font-size: var(--step-1); font-family: var(--font-mono); font-weight: 500; overflow-wrap: anywhere; }
+.card .who { font-size: var(--step--1); color: var(--ink-2); margin: 0 0 0.5rem; }
+dl.kv { display: grid; grid-template-columns: 5.5rem minmax(0, 1fr); gap: 0.35rem 0.9rem; margin: 0.4rem 0; }
+dl.kv dt { font-size: var(--step--1); font-weight: 600; color: var(--ink-2); padding-top: 0.15rem; }
+dl.kv dd { margin: 0; min-width: 0; }
+dl.kv dd > :first-child { margin-top: 0; }
+
+/* 흐름 */
+ol.flow { list-style: none; padding: 0; margin: 0.8rem 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr)); gap: 0.5rem; counter-reset: f; }
+ol.flow li { margin: 0; border: 1px solid var(--rule); border-radius: 6px; background: var(--surface); padding: 0.5rem 0.65rem; font-size: var(--step--1); line-height: 1.45; counter-increment: f; }
+ol.flow li::before { content: counter(f); display: block; font-family: var(--font-mono); color: var(--accent); font-weight: 500; }
+ol.flow li.gate { border-color: var(--accent); background: var(--accent-soft); }
+
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: 0.8rem; margin: 0.7rem 0; }
+.two > div { min-width: 0; border: 1px solid var(--rule); border-radius: 6px; padding: 0.6rem 0.85rem; background: var(--surface); }
+.two h4 { margin: 0 0 0.2rem; }
+
+.fig { margin: 0.8rem 0; border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); padding: 0.6rem; overflow-x: auto; }
+.fig svg { display: block; width: 100%; min-width: 640px; height: auto; }
+.fig figcaption { font-size: var(--step--1); color: var(--ink-2); padding: 0.4rem 0.3rem 0; }
+svg .box { fill: var(--surface); stroke: var(--rule); stroke-width: 1.2; }
+svg .box.hl { fill: var(--accent-soft); stroke: var(--accent); }
+svg .box.in { fill: var(--sunken); stroke: var(--rule); }
+svg .box.ext { fill: var(--surface); stroke: var(--ink-2); stroke-dasharray: 4 3; }
+svg text { fill: var(--ink); font-family: var(--font-body); font-size: 13px; }
+svg text.s { fill: var(--ink-2); font-size: 11.5px; }
+svg text.t { font-weight: 600; }
+svg text.m { font-family: var(--font-mono); font-size: 11.5px; fill: var(--ink-2); }
+svg .ln { stroke: var(--ink-2); stroke-width: 1.4; fill: none; }
+svg .ln.acc { stroke: var(--accent); }
+svg .head { fill: var(--ink-2); }
+svg .head.acc { fill: var(--accent); }
+svg text.lab { fill: var(--accent); font-size: 11.5px; font-weight: 600; }
+
+mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius: 2px; }
+.empty { display: none; padding: 1rem; border: 1px dashed var(--rule); border-radius: 6px; color: var(--ink-2); margin-top: 1.5rem; }
+.foot { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--rule); font-size: var(--step--1); color: var(--ink-2); }
+
+@media (max-width: 860px) {
+  .shell { grid-template-columns: minmax(0, 1fr); }
+  .side { display: none; }
+  .toc-mobile {
+    display: block; position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5;
+    background: var(--bg); border-bottom: 1px solid var(--rule); padding-block: 0.5rem; margin-inline: -16px; padding-inline: 16px;
+  }
+  .toc-mobile summary { cursor: pointer; font-weight: 600; font-size: var(--step--1); padding: 0.3rem 0; list-style: none; display: flex; justify-content: space-between; }
+  .toc-mobile summary::after { content: "▾"; color: var(--ink-2); }
+  .toc-mobile[open] summary::after { content: "▴"; }
+  .toc-mobile .inner { max-height: 70vh; overflow-y: auto; padding-bottom: 0.6rem; font-size: var(--step--1); }
+  main { padding-top: 0.5rem; }
+  dl.kv { grid-template-columns: minmax(0, 1fr); gap: 0.1rem; }
+  dl.kv dd { margin-bottom: 0.5rem; }
+}
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+@media print {
+  :root { --bg: #fff; --surface: #fff; --sunken: #f3f3f3; --ink: #000; --ink-2: #333; --rule: #bbb; --accent: #0b5560; color-scheme: light; }
+  body { font-size: 10.5pt; line-height: 1.55; }
+  .side, .toc-mobile, .copy, .search-state, .empty { display: none !important; }
+  .shell { display: block; max-width: none; padding: 0; }
+  main { max-width: none; padding: 0; }
+  .sub[hidden], section.chap[hidden] { display: block !important; }
+  pre { white-space: pre-wrap; overflow: visible; padding-right: 0.9rem; }
+  .tbl, .fig { overflow: visible; }
+  .fig svg { min-width: 0; }
+  section.chap { break-before: page; }
+  section.chap:first-of-type { break-before: auto; }
+  h2, h3, h4 { break-after: avoid; }
+  tr, .card, .note, .code { break-inside: avoid; }
+  a { color: inherit; text-decoration: none; }
+}
+.first { color: var(--ink-2); font-size: var(--step--1); margin: 0.1rem 0 0.6rem; }
+.fig svg text.w { fill: var(--warn); font-size: 11.5px; font-weight: 600; }
+.adr td:first-child { width: 7rem; font-weight: 600; color: var(--ink-2); background: var(--sunken); }
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="side">
+    <div class="brand"><b>telephony-triage</b><span>설계 결정 기록</span></div>
+    <nav class="toc" id="toc" aria-label="목차"></nav>
+  </aside>
+  <main>
+    <details class="toc-mobile"><summary>목차</summary><div class="inner" id="toc-m"></div></details>
+    <header class="hero">
+      <div class="eyebrow">DECISIONS · 왜 이렇게 만들었나</div>
+      <h1>설계 결정 기록</h1>
+      <p>주요 설계 결정 14개를 하나씩, 고려한 대안과 함께 기록했습니다. 장치별 짧은 이유는 설계 안내 9장에 있고, 여기는 그 바탕이 된 선택을 다룹니다.</p>
+      <div class="meta"><span><b>기준</b> main 2026-10-09</span><span><b>대상</b> 설계를 바꾸려는 사람, 리뷰어</span><span><b>읽는 시간</b> 약 15분</span></div>
+    </header>
+    <section class="chap" id="a0" data-title="한눈에 보기">
+      <h2><span class="no">0</span>한눈에 보기</h2>
+      <p class="first">이 절에서 알 수 있는 것: 주요 결정 14개가 무엇을 지키려는지</p>
+      <p>설계를 바꾸려는 사람, "이건 왜 이렇게 했어?"가 궁금한 사람을 위한 기록입니다. 결정마다 배경, 고려한 대안, 선택한 이유, 그 대가와 대가를 줄이는 방법을 적었습니다. 결정을 바꾸려면 여기 적힌 "대가"와 "근거"를 먼저 보세요.</p>
+<figure class="fig"><svg viewBox="0 0 820 340" role="img" aria-labelledby="ovT"><title id="ovT">결정 지도</title><rect class="box hl" x="20" y="12" width="150" height="48" rx="6"/><text class="t" x="30" y="32">신뢰</text><text class="s" x="30" y="50">판정을 믿을 수 있게</text><rect class="box" x="20" y="72" width="150" height="44" rx="5"/><text class="lab" x="28" y="89">1</text><text class="s" x="46" y="89">판정은 스크립트가,</text><text class="s" x="46" y="106">LLM은 보조로</text><rect class="box" x="20" y="124" width="150" height="44" rx="5"/><text class="lab" x="28" y="141">2</text><text class="s" x="46" y="141">실패 스텝과</text><text class="s" x="46" y="158">Claude 가설은 …</text><rect class="box hl" x="178" y="12" width="150" height="48" rx="6"/><text class="t" x="188" y="32">협업</text><text class="s" x="188" y="50">여러 사람이 함께 쓰게</text><rect class="box" x="178" y="72" width="150" height="44" rx="5"/><text class="lab" x="186" y="89">3</text><text class="s" x="204" y="89">도구와 데이터를 두</text><text class="s" x="204" y="106">레포로</text><rect class="box" x="178" y="124" width="150" height="44" rx="5"/><text class="lab" x="186" y="141">4</text><text class="s" x="204" y="141">이슈 DB는</text><text class="s" x="204" y="158">GitHub 레포 +…</text><rect class="box" x="178" y="176" width="150" height="44" rx="5"/><text class="lab" x="186" y="193">5</text><text class="s" x="204" y="193">파일 대신 작업</text><text class="s" x="204" y="210">계획을 최신 main…</text><rect class="box" x="178" y="228" width="150" height="44" rx="5"/><text class="lab" x="186" y="245">6</text><text class="s" x="204" y="245">사용자의 clone은</text><text class="s" x="204" y="262">건드리지 않음</text><rect class="box" x="178" y="280" width="150" height="44" rx="5"/><text class="lab" x="186" y="297">7</text><text class="s" x="204" y="297">한 사람은 한 번에</text><text class="s" x="204" y="314">한 작업 (세션 lo…</text><rect class="box hl" x="335" y="12" width="150" height="48" rx="6"/><text class="t" x="345" y="32">안전</text><text class="s" x="345" y="50">실수와 위험을 막게</text><rect class="box" x="335" y="72" width="150" height="44" rx="5"/><text class="lab" x="343" y="89">8</text><text class="s" x="361" y="89">push 전 확인</text><text class="s" x="361" y="106">화면과 승인 지문</text><rect class="box" x="335" y="124" width="150" height="44" rx="5"/><text class="lab" x="343" y="141">9</text><text class="s" x="361" y="141">Jira는 읽기만,</text><text class="s" x="361" y="158">원문은 격리</text><rect class="box" x="335" y="176" width="150" height="44" rx="5"/><text class="lab" x="343" y="193">10</text><text class="s" x="361" y="193">최종 방어선은 서버</text><text class="s" x="361" y="210">브랜치 보호</text><rect class="box hl" x="492" y="12" width="150" height="48" rx="6"/><text class="t" x="502" y="32">판정</text><text class="s" x="502" y="50">상태와 검증을 정직하게</text><rect class="box" x="492" y="72" width="150" height="44" rx="5"/><text class="lab" x="500" y="89">11</text><text class="s" x="518" y="89">fixed는 수정</text><text class="s" x="518" y="106">검증 통과로만</text><rect class="box" x="492" y="124" width="150" height="44" rx="5"/><text class="lab" x="500" y="141">12</text><text class="s" x="518" y="141">건너뛴 검증은 통과가</text><text class="s" x="518" y="158">아님</text><rect class="box" x="492" y="176" width="150" height="44" rx="5"/><text class="lab" x="500" y="193">13</text><text class="s" x="518" y="193">자동 게시는 별도</text><text class="s" x="518" y="210">품질 기준으로만</text><rect class="box hl" x="650" y="12" width="150" height="48" rx="6"/><text class="t" x="660" y="32">개발</text><text class="s" x="660" y="50">만드는 방식</text><rect class="box" x="650" y="72" width="150" height="44" rx="5"/><text class="lab" x="658" y="89">14</text><text class="s" x="676" y="89">사외에서 초안,</text><text class="s" x="676" y="106">사내에서 보완</text></svg><figcaption>번호는 아래 절 번호입니다.</figcaption></figure>
+      <div class="note rule"><span class="k">그림 읽는 법</span>결정마다 대안 비교 그림이 있습니다. <b>강조 상자</b>가 선택한 것, 점선 상자가 고려했지만 고르지 않은 것입니다. + 는 장점, 주황 − 는 단점입니다.</div>
+    </section>
+    <section class="chap" id="d1" data-title="판정은 스크립트가, LLM은 보조로">
+      <h2><span class="no">1</span>판정은 스크립트가, LLM은 보조로</h2>
+      <p class="first">신뢰 · 설계 초기 · (c) 10/04</p>
+      <div class="note new"><span class="k">결정</span>원인 판정(S/C)과 점수·검증은 결정적인 스크립트 출력으로만 한다. Claude의 결과는 리포트 보조 칸에만.</div>
+      <p><b>배경</b>: 팀이 함께 쌓는 DB라서, 같은 로그를 누가 언제 돌려도 같은 결과가 나와야 기록을 믿을 수 있다.</p>
+      <figure class="fig"><svg viewBox="0 0 820 164" role="img" aria-labelledby="d1cT"><title id="d1cT">판정은 스크립트가, LLM은 보조로</title><rect class="box ext" x="20" y="12" width="380" height="140" rx="6"/><text class="t" x="32" y="36">LLM이 판정</text><text class="s" x="32" y="60">+ 처음 보는 이슈도 답을 냄</text><text class="s" x="32" y="79">+ 규칙 작성 부담 없음</text><text class="w" x="32" y="98">− 돌릴 때마다 답이 다를 수 있음</text><text class="w" x="32" y="117">− 틀린 기록을 걸러낼 기준이 없음</text><rect class="box hl" x="420" y="12" width="380" height="140" rx="6"/><text class="t" x="432" y="36">규칙(시그니처)이 판정</text><text class="lab" x="754" y="36">선택</text><text class="s" x="432" y="60">+ 항상 같은 결과</text><text class="s" x="432" y="79">+ fixture로 회귀 확인 가능</text><text class="s" x="432" y="98">+ 왜 그 후보인지 근거 줄이 있음</text><text class="w" x="432" y="117">− 규칙에 없으면 &quot;후보 없음&quot;</text></svg></figure>
+      <div class="tbl adr"><table>
+        <tr><td>대가와 대응</td><td>규칙에 없는 이슈는 못 찾는다 → 탐색 분석(가설은 보조 칸)으로 새 규칙을 만들게 했다.</td></tr>
+        <tr><td>근거 문서</td><td><code>12-principles.md, 결정 (c)</code></td></tr>
+      </table></div>
+    </section>
+    <section class="chap" id="d2" data-title="실패 스텝과 Claude 가설은 판정에 쓰지 않음">
+      <h2><span class="no">2</span>실패 스텝과 Claude 가설은 판정에 쓰지 않음</h2>
+      <p class="first">신뢰 · 10/04</p>
+      <div class="note new"><span class="k">결정</span>테스트 실패 스텝과 탐색 분석 가설은 분석 범위·순위·검색·리포트 보조에만 쓴다.</div>
+      <p><b>배경</b>: 실패 스텝은 &quot;어디를 볼지&quot;에는 유용하지만 원인 자체의 증거는 아니다.</p>
+      <figure class="fig"><svg viewBox="0 0 820 145" role="img" aria-labelledby="d2cT"><title id="d2cT">실패 스텝과 Claude 가설은 판정에 쓰지 않음</title><rect class="box ext" x="20" y="12" width="380" height="121" rx="6"/><text class="t" x="32" y="36">판정에 반영</text><text class="s" x="32" y="60">+ 후보 순위가 직관과 더 맞을 수 있음</text><text class="w" x="32" y="79">− 같은 로그라도 Jira 입력에 따라 판정이 바뀜</text><text class="w" x="32" y="98">− 검증(R1~R6) 기준이 흔들림</text><rect class="box hl" x="420" y="12" width="380" height="121" rx="6"/><text class="t" x="432" y="36">범위·순위 보조만</text><text class="lab" x="754" y="36">선택</text><text class="s" x="432" y="60">+ 판정은 로그 근거로 고정</text><text class="s" x="432" y="79">+ 보조 정보는 그대로 활용</text><text class="w" x="432" y="98">− 동점 정렬 정도의 효과만</text></svg></figure>
+      <div class="tbl adr"><table>
+        <tr><td>대가와 대응</td><td>실패 스텝으로 범위를 좁혀도 S/C는 로그가 정한다.</td></tr>
+        <tr><td>근거 문서</td><td><code>DRAFT_NOTES 결정 (c)</code></td></tr>
+      </table></div>
+    </section>
+    <section class="chap" id="d3" data-title="도구와 데이터를 두 레포로">
+      <h2><span class="no">3</span>도구와 데이터를 두 레포로</h2>
+      <p class="first">협업 · 설계 초기</p>
+      <div class="note new"><span class="k">결정</span>플러그인(도구)과 이슈 DB(데이터)를 별도 레포로 둔다.</div>
+      <p><b>배경</b>: 플러그인은 설치될 때 캐시 경로로 복사되므로 그 안에서 git push를 할 수 없다. 또 규칙은 자주, 도구는 드물게 바뀐다.</p>
+      <figure class="fig"><svg viewBox="0 0 820 145" role="img" aria-labelledby="d3cT"><title id="d3cT">도구와 데이터를 두 레포로</title><rect class="box ext" x="20" y="12" width="380" height="121" rx="6"/><text class="t" x="32" y="36">한 레포</text><text class="s" x="32" y="60">+ 관리할 레포가 하나</text><text class="w" x="32" y="79">− 설치본 안에서 push 불가</text><text class="w" x="32" y="98">− 규칙 하나 바꿔도 플러그인 재배포</text><rect class="box hl" x="420" y="12" width="380" height="121" rx="6"/><text class="t" x="432" y="36">두 레포</text><text class="lab" x="754" y="36">선택</text><text class="s" x="432" y="60">+ 새 규칙·원인은 DB PR 하나로 반영</text><text class="s" x="432" y="79">+ 도구 업데이트와 지식 축적이 독립</text><text class="w" x="432" y="98">− 버전 호환 검사가 필요</text></svg></figure>
+      <div class="tbl adr"><table>
+        <tr><td>대가와 대응</td><td>DB 스키마·생성기 버전과 플러그인 지원 범위를 비교하는 호환 검사(읽기 전용 전환, 쓰기 차단)를 넣었다.</td></tr>
+        <tr><td>근거 문서</td><td><code>01-architecture.md §2.1</code></td></tr>
+      </table></div>
+    </section>
+    <section class="chap" id="d4" data-title="이슈 DB는 GitHub 레포 + PR">
+      <h2><span class="no">4</span>이슈 DB는 GitHub 레포 + PR</h2>
+      <p class="first">협업 · 설계 초기</p>
+      <div class="note new"><span class="k">결정</span>이슈 DB를 사내 GHE git 레포로 두고, 모든 변경은 브랜치 + PR + 카테고리 담당자 리뷰로 반영한다.</div>
+      <p><b>배경</b>: 기록이 곧 팀의 판단 기준이 되므로, 누가 무엇을 왜 바꿨는지 남고 되돌릴 수 있어야 한다.</p>
+      <figure class="fig"><svg viewBox="0 0 820 164" role="img" aria-labelledby="d4cT"><title id="d4cT">이슈 DB는 GitHub 레포 + PR</title><rect class="box ext" x="20" y="12" width="380" height="140" rx="6"/><text class="t" x="32" y="36">DB·위키에 바로 쓰기</text><text class="s" x="32" y="60">+ 입력이 빠름</text><text class="w" x="32" y="79">− 리뷰 없이 반영</text><text class="w" x="32" y="98">− 변경 이력·되돌리기가 약함</text><rect class="box hl" x="420" y="12" width="380" height="140" rx="6"/><text class="t" x="432" y="36">git 레포 + PR</text><text class="lab" x="754" y="36">선택</text><text class="s" x="432" y="60">+ 카테고리별 담당자 리뷰(CODEOWNERS)</text><text class="s" x="432" y="79">+ 모든 변경 이력과 되돌리기</text><text class="s" x="432" y="98">+ fixture로 자동 회귀</text><text class="w" x="432" y="117">− 리뷰 대기 시간</text></svg></figure>
+      <div class="tbl adr"><table>
+        <tr><td>대가와 대응</td><td>리뷰 병목 → 한 번에 하나씩 병합 + sync-pr로 충돌을 없애고, 파일럿에서 PR까지 걸린 시간을 잰다.</td></tr>
+        <tr><td>근거 문서</td><td><code>01-architecture.md §1, 06-collaboration.md</code></td></tr>
+      </table></div>
+    </section>
+    <section class="chap" id="d5" data-title="파일 대신 작업 계획을 최신 main에 다시 적용">
+      <h2><span class="no">5</span>파일 대신 작업 계획을 최신 main에 다시 적용</h2>
+      <p class="first">협업 · 설계 초기</p>
+      <div class="note new"><span class="k">결정</span>도구는 파일을 직접 고쳐 rebase하지 않고, &quot;무엇을 할지&quot;(계획)를 최신 main 위에서 다시 실행해 PR을 만든다. 새 ID는 적용할 때 정한다.</div>
+      <p><b>배경</b>: 여러 사람이 동시에 같은 유형에 원인을 추가하면 파일 충돌과 ID 중복이 생긴다.</p>
+      <figure class="fig"><svg viewBox="0 0 820 164" role="img" aria-labelledby="d5cT"><title id="d5cT">파일 대신 작업 계획을 최신 main에 다시 적용</title><rect class="box ext" x="20" y="12" width="380" height="140" rx="6"/><text class="t" x="32" y="36">파일 편집 + rebase</text><text class="s" x="32" y="60">+ 익숙한 git 방식</text><text class="w" x="32" y="79">− type.md·README 충돌</text><text class="w" x="32" y="98">− ID 중복이 main에 들어갈 위험</text><rect class="box hl" x="420" y="12" width="380" height="140" rx="6"/><text class="t" x="432" y="36">계획 재적용</text><text class="lab" x="754" y="36">선택</text><text class="s" x="432" y="60">+ 텍스트 충돌 없음</text><text class="s" x="432" y="79">+ ID는 최신 main 기준 다음 번호</text><text class="s" x="432" y="98">+ 남의 변경은 drift로 물어봄</text><text class="w" x="432" y="117">− 계획 파일이 만든 PC에만 있음</text></svg></figure>
+      <div class="tbl adr"><table>
+        <tr><td>대가와 대응</td><td>다른 PC에서는 sync-pr 불가 → 작성자 부재 시 리뷰어가 직접 편집 절차로 인수.</td></tr>
+        <tr><td>근거 문서</td><td><code>06-collaboration.md §6.3, contracts.md §작업 계획</code></td></tr>
+      </table></div>
+    </section>
+    <section class="chap" id="d6" data-title="사용자의 clone은 건드리지 않음">
+      <h2><span class="no">6</span>사용자의 clone은 건드리지 않음</h2>
+      <p class="first">협업 · 설계 초기</p>
+      <div class="note new"><span class="k">결정</span>분석은 읽기 스냅샷, 쓰기는 별도 작업 공간과 도구 브랜치(tt/*)에서 한다. 사용자 clone에는 fetch와 조건부 fast-forward만.</div>
+      <p><b>배경</b>: 사용자가 직접 편집하던 내용이 도구 때문에 망가지면 도구를 믿지 않게 된다.</p>
+      <figure class="fig"><svg viewBox="0 0 820 145" role="img" aria-labelledby="d6cT"><title id="d6cT">사용자의 clone은 건드리지 않음</title><rect class="box ext" x="20" y="12" width="380" height="121" rx="6"/><text class="t" x="32" y="36">사용자 clone에서 작업</text><text class="s" x="32" y="60">+ 구조가 단순</text><text class="w" x="32" y="79">− 미커밋 변경이 덮이거나 브랜치가 바뀜</text><text class="w" x="32" y="98">− 분석 결과에 미완성 편집이 섞임</text><rect class="box hl" x="420" y="12" width="380" height="121" rx="6"/><text class="t" x="432" y="36">스냅샷 + 작업 공간</text><text class="lab" x="754" y="36">선택</text><text class="s" x="432" y="60">+ 내 작업과 도구 작업 분리</text><text class="s" x="432" y="79">+ 분석 대상 DB가 고정</text><text class="w" x="432" y="98">− 디스크 사용·정리 필요</text></svg></figure>
+      <div class="tbl adr"><table>
+        <tr><td>대가와 대응</td><td>남은 작업 공간은 sync가 목록을 보여주고 동의를 받아 지운다.</td></tr>
+        <tr><td>근거 문서</td><td><code>12-principles.md, 08-safety.md 규칙 8</code></td></tr>
+      </table></div>
+    </section>
+    <section class="chap" id="d7" data-title="한 사람은 한 번에 한 작업 (세션 lock)">
+      <h2><span class="no">7</span>한 사람은 한 번에 한 작업 (세션 lock)</h2>
+      <p class="first">협업 · 설계 초기</p>
+      <div class="note new"><span class="k">결정</span>스냅샷을 옮기거나 작업 공간을 만드는 흐름은 lock을 잡는다. 같은 작업의 lock이 10분 안에 갱신됐으면 이어받을지 묻는다.</div>
+      <p><b>배경</b>: 한 PC의 스냅샷과 작업 공간은 하나뿐이다.</p>
+      <figure class="fig"><svg viewBox="0 0 820 145" role="img" aria-labelledby="d7cT"><title id="d7cT">한 사람은 한 번에 한 작업 (세션 lock)</title><rect class="box ext" x="20" y="12" width="380" height="121" rx="6"/><text class="t" x="32" y="36">동시 작업 허용</text><text class="s" x="32" y="60">+ 창 여러 개로 병렬 작업</text><text class="w" x="32" y="79">− 분석 도중 DB가 바뀜</text><text class="w" x="32" y="98">− 작업 공간이 섞임</text><rect class="box hl" x="420" y="12" width="380" height="121" rx="6"/><text class="t" x="432" y="36">세션 lock</text><text class="lab" x="754" y="36">선택</text><text class="s" x="432" y="60">+ 결과가 섞이지 않음</text><text class="s" x="432" y="79">+ 비정상 종료는 10분 뒤 자동 이어받기</text><text class="w" x="432" y="98">− 동시에 두 이슈를 못 함</text></svg></figure>
+      <div class="tbl adr"><table>
+        <tr><td>대가와 대응</td><td>한 작업을 끝내고 다음으로. 남은 lock은 보유자 확인 뒤 강제 해제.</td></tr>
+        <tr><td>근거 문서</td><td><code>contracts.md §3.2 lock</code></td></tr>
+      </table></div>
+    </section>
+    <section class="chap" id="d8" data-title="push 전 확인 화면과 승인 지문">
+      <h2><span class="no">8</span>push 전 확인 화면과 승인 지문</h2>
+      <p class="first">안전 · 설계 초기</p>
+      <div class="note new"><span class="k">결정</span>push 직전에 변경 파일·diff·검증 결과·커밋 메시지를 한 번에 보여주고 승인받는다. 승인한 내용의 지문(approved_hash)과 실제 push가 다르면 거부한다.</div>
+      <p><b>배경</b>: 사람이 본 것만 팀 DB에 올라가야 한다.</p>
+      <figure class="fig"><svg viewBox="0 0 820 145" role="img" aria-labelledby="d8cT"><title id="d8cT">push 전 확인 화면과 승인 지문</title><rect class="box ext" x="20" y="12" width="380" height="121" rx="6"/><text class="t" x="32" y="36">커밋 후 바로 push</text><text class="s" x="32" y="60">+ 빠름</text><text class="w" x="32" y="79">− 무엇이 올라갔는지 사람이 모름</text><rect class="box hl" x="420" y="12" width="380" height="121" rx="6"/><text class="t" x="432" y="36">확인 화면 + 지문 대조</text><text class="lab" x="754" y="36">선택</text><text class="s" x="432" y="60">+ 본 것과 올라간 것이 같음을 보장</text><text class="s" x="432" y="79">+ 승인 뒤 바뀌면 다시 확인</text><text class="w" x="432" y="98">− 승인 단계 한 번 추가</text></svg></figure>
+      <div class="tbl adr"><table>
+        <tr><td>대가와 대응</td><td>확인 화면은 요약하지 않고 그대로 보여주게 해 Claude가 내용을 바꿔 말할 여지를 없앴다.</td></tr>
+        <tr><td>근거 문서</td><td><code>12-principles.md, 07-workflow.md Step 8</code></td></tr>
+      </table></div>
+    </section>
+    <section class="chap" id="d9" data-title="Jira는 읽기만, 원문은 격리">
+      <h2><span class="no">9</span>Jira는 읽기만, 원문은 격리</h2>
+      <p class="first">안전 · 설계 초기</p>
+      <div class="note new"><span class="k">결정</span>허용한 Jira 읽기 도구만 통과시키고(허용 목록), Jira 응답 원문은 PC 작업 폴더에 두고 Claude에게는 마스킹 요약만 보인다. 처리 실패 시 원문 대신 오류.</div>
+      <p><b>배경</b>: Jira 본문에는 개인정보와, Claude를 조종하려는 문장이 섞일 수 있다.</p>
+      <figure class="fig"><svg viewBox="0 0 820 164" role="img" aria-labelledby="d9cT"><title id="d9cT">Jira는 읽기만, 원문은 격리</title><rect class="box ext" x="20" y="12" width="380" height="140" rx="6"/><text class="t" x="32" y="36">금지 목록 방식</text><text class="s" x="32" y="60">+ 설정이 쉬움</text><text class="w" x="32" y="79">− 새 쓰기 도구가 생기면 뚫림</text><rect class="box hl" x="420" y="12" width="380" height="140" rx="6"/><text class="t" x="432" y="36">허용 목록 + 원문 격리</text><text class="lab" x="754" y="36">선택</text><text class="s" x="432" y="60">+ Jira 변경 불가</text><text class="s" x="432" y="79">+ 원문이 대화에 들어오지 않음</text><text class="s" x="432" y="98">+ 실패하면 안전한 쪽(오류)</text><text class="w" x="432" y="117">− 읽기 도구를 설정에 등록해야 함</text></svg></figure>
+      <div class="tbl adr"><table>
+        <tr><td>대가와 대응</td><td>결과를 Jira 댓글로 남길 수 없다 → 확장 아이디어도 다른 채널로 전달하도록 설계.</td></tr>
+        <tr><td>근거 문서</td><td><code>08-safety.md 규칙 2·9</code></td></tr>
+      </table></div>
+    </section>
+    <section class="chap" id="d10" data-title="최종 방어선은 서버 브랜치 보호">
+      <h2><span class="no">10</span>최종 방어선은 서버 브랜치 보호</h2>
+      <p class="first">안전 · 설계 초기</p>
+      <div class="note new"><span class="k">결정</span>Claude hook과 git hook은 빠른 차단·설명용(최선 노력)이고, main 보호와 CODEOWNERS 필수 리뷰는 GHE 서버가 강제한다.</div>
+      <p><b>배경</b>: PC의 장치는 명령 형태를 다 볼 수 없고 설정으로 끌 수 있다.</p>
+      <figure class="fig"><svg viewBox="0 0 820 145" role="img" aria-labelledby="d10cT"><title id="d10cT">최종 방어선은 서버 브랜치 보호</title><rect class="box ext" x="20" y="12" width="380" height="121" rx="6"/><text class="t" x="32" y="36">PC hook만</text><text class="s" x="32" y="60">+ 서버 권한 불필요</text><text class="w" x="32" y="79">− 우회 가능</text><text class="w" x="32" y="98">− main 쓰기 권한 = 모든 기여자 PC의 hook 실행 권한</text><rect class="box hl" x="420" y="12" width="380" height="121" rx="6"/><text class="t" x="432" y="36">hook + 서버 보호</text><text class="lab" x="754" y="36">선택</text><text class="s" x="432" y="60">+ 실수는 PC에서 빨리 막음</text><text class="s" x="432" y="79">+ 우회해도 서버에서 막힘</text><text class="w" x="432" y="98">− GHE 관리 권한 필요</text></svg></figure>
+      <div class="tbl adr"><table>
+        <tr><td>대가와 대응</td><td>서버 보호를 설정할 수 없는 GHE면 git hook 방식 채택부터 다시 결정한다.</td></tr>
+        <tr><td>근거 문서</td><td><code>08-safety.md §9, 06-collaboration.md §6.1</code></td></tr>
+      </table></div>
+    </section>
+    <section class="chap" id="d11" data-title="fixed는 수정 검증 통과로만">
+      <h2><span class="no">11</span>fixed는 수정 검증 통과로만</h2>
+      <p class="first">판정 · 10/04</p>
+      <div class="note new"><span class="k">결정</span>수정 상태 fixed는 verify-fix 통과로만. 코드·설정 수정 유형은 재현 시나리오 흔적이 필수이고, 흔적 규칙이 없는 비코드 유형만 사용자 확인으로 판정해 기록에 남긴다.</div>
+      <p><b>배경</b>: &quot;고쳤다&quot;는 말만으로 닫으면 재발을 놓친다.</p>
+      <figure class="fig"><svg viewBox="0 0 820 145" role="img" aria-labelledby="d11cT"><title id="d11cT">fixed는 수정 검증 통과로만</title><rect class="box ext" x="20" y="12" width="380" height="121" rx="6"/><text class="t" x="32" y="36">사람이 fixed 표시</text><text class="s" x="32" y="60">+ 간단, 바로 닫힘</text><text class="w" x="32" y="79">− 재현 안 한 &quot;고침&quot;도 fixed</text><text class="w" x="32" y="98">− 회귀 판단 기준이 흐려짐</text><rect class="box hl" x="420" y="12" width="380" height="121" rx="6"/><text class="t" x="432" y="36">검증 통과로만</text><text class="lab" x="754" y="36">선택</text><text class="s" x="432" y="60">+ fixed = 실제로 확인됨</text><text class="s" x="432" y="79">+ 수정 후 기준 로그가 회귀에 추가</text><text class="w" x="432" y="98">− 검증을 안 돌리면 fix-submitted에 머묾</text></svg></figure>
+      <div class="tbl adr"><table>
+        <tr><td>대가와 대응</td><td>방치 → 월간 리뷰가 30일 초과 건을 기록자와 함께 표시(10/09), 알림·자동 검증은 확장 후보.</td></tr>
+        <tr><td>근거 문서</td><td><code>DRAFT_NOTES 결정 (e), 05-verification.md §5.12</code></td></tr>
+      </table></div>
+    </section>
+    <section class="chap" id="d12" data-title="건너뛴 검증은 통과가 아님">
+      <h2><span class="no">12</span>건너뛴 검증은 통과가 아님</h2>
+      <p class="first">판정 · 설계 초기</p>
+      <div class="note new"><span class="k">결정</span>fixture가 없어 못 돌린 검증은 skipped로 따로 표시하고 리뷰 대상으로 붙인다.</div>
+      <p><b>배경</b>: &quot;통과&quot; 표시를 믿을 수 있어야 리뷰가 빨라진다.</p>
+      <figure class="fig"><svg viewBox="0 0 820 145" role="img" aria-labelledby="d12cT"><title id="d12cT">건너뛴 검증은 통과가 아님</title><rect class="box ext" x="20" y="12" width="380" height="121" rx="6"/><text class="t" x="32" y="36">못 돌리면 통과 처리</text><text class="s" x="32" y="60">+ 화면이 깔끔</text><text class="w" x="32" y="79">− 검증 안 된 규칙이 통과로 보임</text><rect class="box hl" x="420" y="12" width="380" height="121" rx="6"/><text class="t" x="432" y="36">skipped + 리뷰 대상</text><text class="lab" x="754" y="36">선택</text><text class="s" x="432" y="60">+ 통과 표시의 신뢰 유지</text><text class="s" x="432" y="79">+ 리뷰어가 볼 곳이 명확</text><text class="w" x="432" y="98">− 확인 화면에 경고가 늘 수 있음</text></svg></figure>
+      <div class="tbl adr"><table>
+        <tr><td>대가와 대응</td><td>fixture 없는 원인 수를 STATS와 월간 리뷰로 관리.</td></tr>
+        <tr><td>근거 문서</td><td><code>12-principles.md, contracts.md §상태 값</code></td></tr>
+      </table></div>
+    </section>
+    <section class="chap" id="d13" data-title="자동 게시는 별도 품질 기준으로만">
+      <h2><span class="no">13</span>자동 게시는 별도 품질 기준으로만</h2>
+      <p class="first">판정 · 10/01</p>
+      <div class="note new"><span class="k">결정</span>앞으로 자동화(RF-8)를 하더라도 confidence 점수가 아니라 별도 품질 게이트를 통과할 때만 자동 게시한다.</div>
+      <p><b>배경</b>: 점수는 규칙 일치 정도이지 진단 확신도가 아니다.</p>
+      <figure class="fig"><svg viewBox="0 0 820 145" role="img" aria-labelledby="d13cT"><title id="d13cT">자동 게시는 별도 품질 기준으로만</title><rect class="box ext" x="20" y="12" width="380" height="121" rx="6"/><text class="t" x="32" y="36">점수가 높으면 자동 게시</text><text class="s" x="32" y="60">+ 빠름</text><text class="w" x="32" y="79">− 점수 1.0도 틀릴 수 있음</text><rect class="box hl" x="420" y="12" width="380" height="121" rx="6"/><text class="t" x="432" y="36">별도 품질 게이트</text><text class="lab" x="754" y="36">선택</text><text class="s" x="432" y="60">+ 게시 기준을 따로 검증</text><text class="s" x="432" y="79">+ 사람 승인 원칙과 양립</text><text class="w" x="432" y="98">− 게이트 설계가 필요</text></svg></figure>
+      <div class="tbl adr"><table>
+        <tr><td>대가와 대응</td><td>자동화는 파일럿 뒤 사내 환경을 안 다음에 설계.</td></tr>
+        <tr><td>근거 문서</td><td><code>DRAFT_NOTES 결정 (b)</code></td></tr>
+      </table></div>
+    </section>
+    <section class="chap" id="d14" data-title="사외에서 초안, 사내에서 보완">
+      <h2><span class="no">14</span>사외에서 초안, 사내에서 보완</h2>
+      <p class="first">개발 · 10/01 · 10/04 · 10/05</p>
+      <div class="note new"><span class="k">결정</span>사외에서 합성 데이터로 최대한 완성·안정화하고, 사내에서는 실제 값만 채운다. 사내→사외로는 사람이 직접 쓴 사내 정보 없는 문장만 가져온다.</div>
+      <p><b>배경</b>: 사내 정보를 밖으로 가져올 수 없고, 사내 작업 시간은 비싸다.</p>
+      <figure class="fig"><svg viewBox="0 0 820 145" role="img" aria-labelledby="d14cT"><title id="d14cT">사외에서 초안, 사내에서 보완</title><rect class="box ext" x="20" y="12" width="380" height="121" rx="6"/><text class="t" x="32" y="36">사내에서 처음부터</text><text class="s" x="32" y="60">+ 실제 데이터로 바로 개발</text><text class="w" x="32" y="79">− 사내 시간이 많이 듦</text><rect class="box hl" x="420" y="12" width="380" height="121" rx="6"/><text class="t" x="432" y="36">사외 초안 + 사내 보완</text><text class="lab" x="754" y="36">선택</text><text class="s" x="432" y="60">+ 사내 작업은 값 채우기·확인 위주</text><text class="s" x="432" y="79">+ 경계 검사로 사내 정보 유입 차단</text><text class="w" x="432" y="98">− 실제 로그 검증은 반입 뒤</text></svg></figure>
+      <div class="tbl adr"><table>
+        <tr><td>대가와 대응</td><td>실제 로그 문구·정확도는 사내 S-4·S-5 전에는 파일럿에 쓰지 않는다. 반입 전 스키마는 직접 고치고, 배포 뒤에는 항상 버전을 올린다(결정 d).</td></tr>
+        <tr><td>근거 문서</td><td><code>DRAFT_NOTES 결정 (a)·(d)·(f), 15-local-draft.md</code></td></tr>
+      </table></div>
+    </section>
+  </main>
+</div>
+<script>
+(function () {
+  var secs = Array.prototype.slice.call(document.querySelectorAll("section.chap"));
+  function build() {
+    var ol = document.createElement("ol");
+    secs.forEach(function (s) {
+      var li = document.createElement("li"), a = document.createElement("a");
+      a.href = "#" + s.id; a.textContent = s.querySelector("h2 .no").textContent + ". " + s.dataset.title;
+      li.appendChild(a);
+      var subs = s.querySelectorAll(":scope > .sub");
+      if (subs.length) {
+        var inner = document.createElement("ol");
+        subs.forEach(function (u) {
+          var l2 = document.createElement("li"), a2 = document.createElement("a");
+          a2.href = "#" + u.id; a2.textContent = u.dataset.title; l2.appendChild(a2); inner.appendChild(l2);
+        });
+        li.appendChild(inner);
+      }
+      ol.appendChild(li);
+    });
+    return ol;
+  }
+  document.getElementById("toc").appendChild(build());
+  document.getElementById("toc-m").appendChild(build());
+  document.querySelectorAll("#toc-m a").forEach(function (a) {
+    a.addEventListener("click", function () { a.closest("details").open = false; });
+  });
+  if ("IntersectionObserver" in window) {
+    var links = document.querySelectorAll("#toc > ol > li > a");
+    var io = new IntersectionObserver(function (es) {
+      es.forEach(function (e) {
+        if (!e.isIntersecting) return;
+        links.forEach(function (l) { l.classList.toggle("on", l.getAttribute("href") === "#" + e.target.id); });
+      });
+    }, { rootMargin: "0px 0px -70% 0px" });
+    secs.forEach(function (s) { io.observe(s); });
+  }
+})();
+</script>
+</body>
+</html>

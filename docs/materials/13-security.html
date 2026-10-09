@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>telephony-triage 보안과 데이터</title>
+<style>
+/* Layout: 왼쪽 고정 목차 + 본문 한 단(≤ 46rem). 휴대폰에서는 목차가 상단 접이식. */
+:root {
+  --bg: #f6f8f9;
+  --surface: #ffffff;
+  --sunken: #eef2f3;
+  --ink: #17232b;
+  --ink-2: #4a5a63;
+  --rule: #d5dee2;
+  --accent: #0b6874;        /* 신호선 청록 */
+  --accent-soft: #dcefF1;
+  --warn: #9a5b00;
+  --warn-soft: #fbf0dc;
+  --bad: #a3262c;
+  --bad-soft: #f8e3e3;
+  --good: #1f6b3a;
+  --good-soft: #e1f1e6;
+  --mark: #ffe58a;
+  --font-body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Consolas, "D2Coding", monospace;
+  --step--1: 0.8125rem;
+  --step-0: 0.96875rem;
+  --step-1: 1.125rem;
+  --step-2: 1.375rem;
+  --step-3: 1.75rem;
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+html { scroll-padding-top: 1rem; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--font-body); font-size: var(--step-0); line-height: 1.7;
+  -webkit-text-size-adjust: 100%;
+}
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px;
+}
+code, kbd, pre { font-family: var(--font-mono); font-size: 0.875em; }
+:not(pre) > code {
+  background: var(--sunken); border: 1px solid var(--rule); border-radius: 4px;
+  padding: 0.05em 0.35em; overflow-wrap: anywhere;
+}
+
+.shell {
+  display: grid; grid-template-columns: 17rem minmax(0, 1fr); gap: 0 2.5rem;
+  max-width: 76rem; margin: 0 auto; padding-inline: 16px;
+}
+
+/* 목차 */
+.side {
+  position: sticky; top: env(safe-area-inset-top, 0px); align-self: start;
+  max-height: 100vh; overflow-y: auto; padding-block: 1.5rem 2rem;
+  font-size: var(--step--1);
+}
+.brand { display: flex; flex-direction: column; gap: 0.1rem; margin-bottom: 1rem; }
+.brand b { font-size: var(--step-1); letter-spacing: -0.01em; }
+.brand span { color: var(--ink-2); }
+.search { position: relative; margin-bottom: 0.4rem; }
+.search input {
+  width: 100%; padding: 0.55rem 0.7rem; border: 1px solid var(--rule); border-radius: 6px;
+  background: var(--surface); color: var(--ink); font: inherit; font-size: var(--step--1);
+}
+.search-state { color: var(--ink-2); min-height: 1.4em; margin-bottom: 0.6rem; }
+.toc ol { list-style: none; margin: 0; padding: 0; }
+.toc > ol > li { margin-top: 0.55rem; }
+.toc > ol > li > a { font-weight: 600; color: var(--ink); }
+.toc ol ol { padding-left: 0.9rem; border-left: 1px solid var(--rule); margin-top: 0.2rem; }
+.toc ol ol a { color: var(--ink-2); }
+.toc a { text-decoration: none; display: block; padding: 0.12rem 0; }
+.toc a:hover { color: var(--accent); }
+.toc a.on { color: var(--accent); font-weight: 600; }
+.toc-mobile { display: none; }
+
+/* 본문 */
+main { min-width: 0; padding-block: 1.5rem 5rem; max-width: 48rem; }
+.hero { padding-block: 1rem 1.5rem; border-bottom: 2px solid var(--ink); margin-bottom: 1rem; }
+.hero .eyebrow { font-family: var(--font-mono); font-size: var(--step--1); color: var(--accent); letter-spacing: 0.04em; }
+.hero h1 { font-size: var(--step-3); line-height: 1.25; margin: 0.3rem 0 0.6rem; text-wrap: balance; letter-spacing: -0.015em; }
+.hero p { margin: 0; color: var(--ink-2); max-width: 40rem; }
+.meta { display: flex; flex-wrap: wrap; gap: 0.4rem 1.2rem; margin-top: 0.9rem; font-size: var(--step--1); color: var(--ink-2); }
+.meta b { color: var(--ink); font-weight: 600; }
+
+section.chap { padding-top: 1.8rem; }
+section.chap > h2 {
+  font-size: var(--step-2); line-height: 1.3; margin: 0 0 0.4rem; text-wrap: balance;
+  display: flex; gap: 0.6rem; align-items: baseline; letter-spacing: -0.01em;
+}
+section.chap > h2 .no { font-family: var(--font-mono); color: var(--accent); font-size: 0.8em; }
+.sub { padding-top: 1.2rem; }
+.sub > h3 { font-size: var(--step-1); margin: 0 0 0.4rem; text-wrap: balance; }
+.sub > h4, .card h4 { font-size: var(--step-0); margin: 1rem 0 0.3rem; }
+p, ul, ol { margin: 0.5rem 0; }
+ul, ol { padding-left: 1.3rem; }
+li + li { margin-top: 0.2rem; }
+.lead { color: var(--ink-2); }
+
+/* 표 */
+.tbl { overflow-x: auto; margin: 0.7rem 0; border: 1px solid var(--rule); border-radius: 6px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: var(--step--1); line-height: 1.55; }
+th, td { text-align: left; vertical-align: top; padding: 0.5rem 0.65rem; border-bottom: 1px solid var(--rule); }
+th { background: var(--sunken); font-weight: 600; white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+td code { white-space: nowrap; }
+td.wrap code, td code.wrap { white-space: normal; }
+.num { font-variant-numeric: tabular-nums; }
+
+/* 코드 블록 */
+.code { position: relative; margin: 0.7rem 0; }
+pre {
+  margin: 0; padding: 0.8rem 0.9rem; padding-right: 4.2rem; overflow-x: auto;
+  background: var(--sunken); border: 1px solid var(--rule); border-radius: 6px; line-height: 1.55;
+}
+.copy {
+  position: absolute; top: 0.4rem; right: 0.4rem; font: inherit; font-size: 0.75rem;
+  padding: 0.2rem 0.55rem; border-radius: 4px; border: 1px solid var(--rule);
+  background: var(--surface); color: var(--ink-2); cursor: pointer;
+}
+.copy:hover { color: var(--accent); border-color: var(--accent); }
+
+/* 안내 상자 */
+.note { border: 1px solid var(--rule); border-left-width: 4px; border-radius: 6px; padding: 0.6rem 0.85rem; margin: 0.8rem 0; background: var(--surface); }
+.note > :first-child { margin-top: 0; } .note > :last-child { margin-bottom: 0; }
+.note .k { font-weight: 700; font-size: var(--step--1); letter-spacing: 0.03em; display: block; margin-bottom: 0.15rem; }
+.note.rule { border-left-color: var(--accent); } .note.rule .k { color: var(--accent); }
+.note.warn { border-left-color: var(--warn); background: var(--warn-soft); } .note.warn .k { color: var(--warn); }
+.note.plan { border-left-color: var(--ink-2); border-style: dashed; border-left-style: solid; } .note.plan .k { color: var(--ink-2); }
+.note.easy { border-left-color: var(--good); background: var(--good-soft); } .note.easy .k { color: var(--good); }
+.note.new { border-left-color: var(--accent); background: var(--accent-soft); } .note.new .k { color: var(--accent); }
+/* 핵심 개념 카드 */
+.concepts { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 0.6rem; margin: 0.7rem 0; }
+.concepts > div { min-width: 0; border: 1px solid var(--rule); border-radius: 6px; padding: 0.55rem 0.8rem; background: var(--surface); font-size: var(--step--1); line-height: 1.55; }
+.concepts b { display: block; font-size: var(--step-0); margin-bottom: 0.15rem; }
+.concepts i { font-style: normal; color: var(--ink-2); }
+
+.chip { display: inline-block; font-family: var(--font-mono); font-size: 0.78rem; line-height: 1.4; padding: 0.05rem 0.4rem; border-radius: 999px; border: 1px solid var(--rule); white-space: nowrap; }
+.chip.g { background: var(--good-soft); color: var(--good); border-color: transparent; }
+.chip.w { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
+.chip.b { background: var(--bad-soft); color: var(--bad); border-color: transparent; }
+.chip.a { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+.chip.p { color: var(--ink-2); border-style: dashed; }
+
+/* 커맨드 카드 */
+.card { border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); padding: 0.9rem 1rem; margin: 1rem 0; }
+.card > h3 { margin: 0 0 0.2rem; font-size: var(--step-1); font-family: var(--font-mono); font-weight: 500; overflow-wrap: anywhere; }
+.card .who { font-size: var(--step--1); color: var(--ink-2); margin: 0 0 0.5rem; }
+dl.kv { display: grid; grid-template-columns: 5.5rem minmax(0, 1fr); gap: 0.35rem 0.9rem; margin: 0.4rem 0; }
+dl.kv dt { font-size: var(--step--1); font-weight: 600; color: var(--ink-2); padding-top: 0.15rem; }
+dl.kv dd { margin: 0; min-width: 0; }
+dl.kv dd > :first-child { margin-top: 0; }
+
+/* 흐름 */
+ol.flow { list-style: none; padding: 0; margin: 0.8rem 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr)); gap: 0.5rem; counter-reset: f; }
+ol.flow li { margin: 0; border: 1px solid var(--rule); border-radius: 6px; background: var(--surface); padding: 0.5rem 0.65rem; font-size: var(--step--1); line-height: 1.45; counter-increment: f; }
+ol.flow li::before { content: counter(f); display: block; font-family: var(--font-mono); color: var(--accent); font-weight: 500; }
+ol.flow li.gate { border-color: var(--accent); background: var(--accent-soft); }
+
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: 0.8rem; margin: 0.7rem 0; }
+.two > div { min-width: 0; border: 1px solid var(--rule); border-radius: 6px; padding: 0.6rem 0.85rem; background: var(--surface); }
+.two h4 { margin: 0 0 0.2rem; }
+
+.fig { margin: 0.8rem 0; border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); padding: 0.6rem; overflow-x: auto; }
+.fig svg { display: block; width: 100%; min-width: 640px; height: auto; }
+.fig figcaption { font-size: var(--step--1); color: var(--ink-2); padding: 0.4rem 0.3rem 0; }
+svg .box { fill: var(--surface); stroke: var(--rule); stroke-width: 1.2; }
+svg .box.hl { fill: var(--accent-soft); stroke: var(--accent); }
+svg .box.in { fill: var(--sunken); stroke: var(--rule); }
+svg .box.ext { fill: var(--surface); stroke: var(--ink-2); stroke-dasharray: 4 3; }
+svg text { fill: var(--ink); font-family: var(--font-body); font-size: 13px; }
+svg text.s { fill: var(--ink-2); font-size: 11.5px; }
+svg text.t { font-weight: 600; }
+svg text.m { font-family: var(--font-mono); font-size: 11.5px; fill: var(--ink-2); }
+svg .ln { stroke: var(--ink-2); stroke-width: 1.4; fill: none; }
+svg .ln.acc { stroke: var(--accent); }
+svg .head { fill: var(--ink-2); }
+svg .head.acc { fill: var(--accent); }
+svg text.lab { fill: var(--accent); font-size: 11.5px; font-weight: 600; }
+
+mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius: 2px; }
+.empty { display: none; padding: 1rem; border: 1px dashed var(--rule); border-radius: 6px; color: var(--ink-2); margin-top: 1.5rem; }
+.foot { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--rule); font-size: var(--step--1); color: var(--ink-2); }
+
+@media (max-width: 860px) {
+  .shell { grid-template-columns: minmax(0, 1fr); }
+  .side { display: none; }
+  .toc-mobile {
+    display: block; position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5;
+    background: var(--bg); border-bottom: 1px solid var(--rule); padding-block: 0.5rem; margin-inline: -16px; padding-inline: 16px;
+  }
+  .toc-mobile summary { cursor: pointer; font-weight: 600; font-size: var(--step--1); padding: 0.3rem 0; list-style: none; display: flex; justify-content: space-between; }
+  .toc-mobile summary::after { content: "▾"; color: var(--ink-2); }
+  .toc-mobile[open] summary::after { content: "▴"; }
+  .toc-mobile .inner { max-height: 70vh; overflow-y: auto; padding-bottom: 0.6rem; font-size: var(--step--1); }
+  main { padding-top: 0.5rem; }
+  dl.kv { grid-template-columns: minmax(0, 1fr); gap: 0.1rem; }
+  dl.kv dd { margin-bottom: 0.5rem; }
+}
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+@media print {
+  :root { --bg: #fff; --surface: #fff; --sunken: #f3f3f3; --ink: #000; --ink-2: #333; --rule: #bbb; --accent: #0b5560; color-scheme: light; }
+  body { font-size: 10.5pt; line-height: 1.55; }
+  .side, .toc-mobile, .copy, .search-state, .empty { display: none !important; }
+  .shell { display: block; max-width: none; padding: 0; }
+  main { max-width: none; padding: 0; }
+  .sub[hidden], section.chap[hidden] { display: block !important; }
+  pre { white-space: pre-wrap; overflow: visible; padding-right: 0.9rem; }
+  .tbl, .fig { overflow: visible; }
+  .fig svg { min-width: 0; }
+  section.chap { break-before: page; }
+  section.chap:first-of-type { break-before: auto; }
+  h2, h3, h4 { break-after: avoid; }
+  tr, .card, .note, .code { break-inside: avoid; }
+  a { color: inherit; text-decoration: none; }
+}
+
+.first { color: var(--ink-2); font-size: var(--step--1); margin: 0.1rem 0 0.6rem; }
+.fig svg text.w { fill: var(--warn); font-size: 11.5px; font-weight: 600; }
+.k1 td:first-child { width: 10rem; font-weight: 600; }
+.rule-list { counter-reset: r; list-style: none; padding-left: 0; }
+.rule-list li { counter-increment: r; padding-left: 2rem; position: relative; margin: 0.45rem 0; }
+.rule-list li::before { content: counter(r); position: absolute; left: 0; top: 0.1rem; width: 1.4rem; height: 1.4rem; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-weight: 700; font-size: 0.8rem; display: grid; place-items: center; }
+.check { list-style: none; padding-left: 0; }
+.check li { padding-left: 1.6rem; position: relative; }
+.check li::before { content: "☐"; position: absolute; left: 0.2rem; color: var(--accent); }
+
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="side">
+    <div class="brand"><b>telephony-triage</b><span>보안과 데이터</span></div>
+    <nav class="toc" id="toc" aria-label="목차"></nav>
+  </aside>
+  <main>
+    <details class="toc-mobile"><summary>목차</summary><div class="inner" id="toc-m"></div></details>
+    <header class="hero">
+      <div class="eyebrow">SECURITY · 보안팀·결재자 검토용</div>
+      <h1>데이터는 어디에 머무나</h1>
+      <p>개인정보와 사내 정보가 어디에 저장되고 어디로 가지 않는지, 어떤 위협을 어떻게 막는지 정리했습니다.</p>
+      <div class="meta"><span><b>기준</b> main 2026-10-09</span><span><b>대상</b> 보안 검토자, 관리자</span><span><b>읽는 시간</b> 약 7분</span></div>
+    </header>
+    <section class="chap" id="s1" data-title="한 장 요약">
+      <h2><span class="no">1</span>한 장 요약</h2>
+      <p class="first">이 절에서 알 수 있는 것: 원문이 어디에 머물고 무엇이 밖으로 나가는지</p>
+<figure class="fig"><svg viewBox="0 0 820 360" role="img" aria-labelledby="tbT"><title id="tbT">데이터 흐름과 경계</title><defs><marker id="tbh" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0,0 L10,5 L0,10 z"/></marker><marker id="tbha" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head acc" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+<rect class="box ext" x="14" y="14" width="250" height="330" rx="10"/><text class="lab" x="26" y="34">내 PC (원문이 있는 곳)</text>
+<rect class="box" x="30" y="50" width="218" height="54" rx="6"/><text class="t" x="42" y="72">Jira 응답 원문</text><text class="s" x="42" y="90">작업 폴더(권한 700), 읽고 지움</text>
+<rect class="box" x="30" y="120" width="218" height="54" rx="6"/><text class="t" x="42" y="142">로그 원문</text><text class="s" x="42" y="160">경로로만 다룸, 통째로 읽기 차단</text>
+<rect class="box in" x="30" y="198" width="218" height="60" rx="6"/><text class="t" x="42" y="220">마스킹 (mask_pii)</text><text class="s" x="42" y="238">같은 값 = 같은 번호</text><text class="s" x="42" y="252">대응표는 저장 안 함</text>
+<rect class="box" x="30" y="274" width="218" height="54" rx="6"/><text class="t" x="42" y="296">리포트 · 계획 · 이력</text><text class="s" x="42" y="314">마스킹된 값만</text>
+<path class="ln" d="M248,77 C272,77 272,222 250,222" marker-end="url(#tbh)"/><path class="ln" d="M139,174 L139,196"/><path class="ln" d="M139,258 L139,272" marker-end="url(#tbh)"/>
+<rect class="box" x="300" y="14" width="230" height="330" rx="10"/><text class="lab" x="312" y="34">Claude 대화</text>
+<rect class="box hl" x="316" y="110" width="198" height="72" rx="6"/><text class="t" x="328" y="132">마스킹 요약만</text><text class="s" x="328" y="150">Jira 원문은 들어오지 않음</text><text class="s" x="328" y="168">본문 속 지시는 따르지 않음</text>
+<rect class="box in" x="316" y="200" width="198" height="60" rx="6"/><text class="t" x="328" y="222">판정은 하지 않음</text><text class="s" x="328" y="240">설명 · 질문 · 초안만</text>
+<path class="ln acc" d="M248,226 C280,226 280,150 314,150" marker-end="url(#tbha)"/>
+<rect class="box hl" x="566" y="14" width="240" height="330" rx="10"/><text class="lab" x="578" y="34">팀 이슈 DB (GHE)</text>
+<rect class="box" x="582" y="50" width="208" height="72" rx="6"/><text class="t" x="594" y="72">마스킹된 fixture</text><text class="s" x="594" y="90">판별에 필요한 최소 구간</text><text class="s" x="594" y="108">20~100줄</text>
+<rect class="box" x="582" y="134" width="208" height="72" rx="6"/><text class="t" x="594" y="156">Jira 기록</text><text class="s" x="594" y="174">구조화 필드 + 확인한 한 줄</text><text class="s" x="594" y="192">원문·이름 없음</text>
+<rect class="box" x="582" y="218" width="208" height="54" rx="6"/><text class="t" x="594" y="240">들어가는 길은 하나</text><text class="s" x="594" y="258">확인 화면 승인 → PR → 리뷰</text>
+<text class="s" x="582" y="300">커밋 전 개인정보 검사 (hook)</text><text class="s" x="582" y="318">서버 브랜치 보호 · 담당자 리뷰</text>
+<path class="ln acc" d="M248,300 C420,300 420,245 580,245" marker-end="url(#tbha)"/><text class="lab" x="330" y="318">승인 뒤에만</text>
+</svg><figcaption>원문은 왼쪽 상자(내 PC)를 벗어나지 않습니다. 가운데(Claude)와 오른쪽(팀 DB)에는 마스킹된 것만 갑니다.</figcaption></figure>
+    </section>
+    <section class="chap" id="s2" data-title="무엇이 어디에 저장되나">
+      <h2><span class="no">2</span>무엇이 어디에 저장되나</h2>
+      <p class="first">이 절에서 알 수 있는 것: 저장 위치별 내용과 보존</p>
+      <div class="tbl "><table><tr><th>위치</th><th>저장되는 것</th><th>보존</th></tr><tr><td>내 PC <code>~/.telephony-triage/</code></td><td>설정, 이슈 DB 읽기 스냅샷</td><td>계속</td></tr><tr><td>내 PC 작업 폴더 <code>work/&lt;KEY&gt;/</code></td><td>Jira 응답 원문(권한 700, 분석이 읽은 뒤 지움), 리포트·계획(마스킹), 재분석용 이력 최근 5개(마스킹)</td><td>끝난 작업은 sync가 정리 후보로 보여줌. 올리지 않은 작업의 원문 보존 기간은 사내 결정(S14)</td></tr><tr><td>Claude 대화</td><td>마스킹된 요약, 마스킹된 로그 구간</td><td>Claude Code 정책</td></tr><tr><td>팀 이슈 DB</td><td>유형·원인·해결책, 마스킹된 fixture, Jira 구조화 필드(모델·SW·버전·통신사·발생일)와 확인한 한 줄, 마스킹된 실패 스텝 한 줄(200자 이내)</td><td>git 이력으로 영구</td></tr><tr><td>Jira</td><td>바뀌는 것 없음 (읽기만)</td><td>—</td></tr></table></div>
+      <p>Jira 요약·설명·댓글 원문과 사람 이름은 팀 DB·리포트·PR 어디에도 넣지 않습니다.</p>
+    </section>
+    <section class="chap" id="s3" data-title="마스킹 항목">
+      <h2><span class="no">3</span>마스킹 항목</h2>
+      <p class="first">이 절에서 알 수 있는 것: 자동으로 가리는 값</p>
+      <div class="tbl "><table><tr><th>항목</th><th>바뀌는 모양</th></tr><tr><td>IMSI · IMEI · ICCID</td><td><code>&lt;IMSI#n&gt;</code> <code>&lt;IMEI#n&gt;</code> <code>&lt;ICCID#n&gt;</code></td></tr><tr><td>SUPI · SUCI · TMSI · GUTI</td><td><code>&lt;SUPI#n&gt;</code> 등</td></tr><tr><td>전화번호, tel: URI</td><td><code>&lt;MSISDN#n&gt;</code></td></tr><tr><td>SIP URI · IMPU · IMPI (사용자 부분)</td><td><code>&lt;IMPU#n&gt;</code> <code>&lt;IMPI#n&gt;</code></td></tr><tr><td>Cell ID · TAC · CI · PCI 등</td><td><code>&lt;CELL#n&gt;</code></td></tr><tr><td>IP · MAC · 이메일</td><td><code>&lt;IP#n&gt;</code> <code>&lt;MAC#n&gt;</code> <code>&lt;EMAIL#n&gt;</code></td></tr><tr><td>자격 증명 (SIP response·nonce, AKA 값, password·token·key)</td><td><code>&lt;CRED#n&gt;</code></td></tr></table></div>
+      <p>같은 파일 안에서 같은 값은 같은 번호로 바뀌어 비교 관계가 남습니다. 빌드 번호·시각을 잘못 가리지 않도록 문맥 기반 탐지를 우선합니다. 오탐 예외는 팀 설정(메인테이너 리뷰)이고, 너무 넓은 예외는 검사가 거부합니다. 이미 마스킹된 입력에 다시 적용해도 결과가 같습니다.</p>
+      <div class="note warn"><span class="k">한계</span>사람 이름은 정해진 형식이 없어 패턴으로 잡지 못합니다. 그래서 Jira에서 저장하는 정보 자체를 최소화했습니다.</div>
+    </section>
+    <section class="chap" id="s4" data-title="위협과 대응">
+      <h2><span class="no">4</span>위협과 대응</h2>
+      <p class="first">이 절에서 알 수 있는 것: 무엇을 걱정하고 어떻게 막나</p>
+      <div class="tbl "><table><tr><th>위협</th><th>대응</th><th>남는 위험</th></tr><tr><td>개인정보가 팀 DB에 들어감</td><td>마스킹, 커밋 전 개인정보 검사(Claude hook + git pre-commit), 확인 화면</td><td>이름 등 패턴 없는 값 → 저장 최소화</td></tr><tr><td>개인정보가 Claude 대화에 들어감</td><td>Jira 원문 격리, 로그 원문 통째로 읽기 차단</td><td>Read 도구 통독은 지침으로만 제한(S-2 뒤 대책)</td></tr><tr><td>Jira가 바뀜</td><td>허용 목록 읽기 도구만 통과, 그 밖은 거부</td><td>—</td></tr><tr><td>Jira 본문의 지시 주입</td><td>원문을 대화에 넣지 않음, 본문 문장은 데이터로만 취급, 주입 eval 59·60</td><td>실제 환경 측정은 S-2</td></tr><tr><td>리뷰 없는 main 변경</td><td>서버 브랜치 보호 + CODEOWNERS 필수 리뷰, main push 차단 hook</td><td>서버 설정이 없으면 PC 장치만 남음</td></tr><tr><td>승인과 다른 내용 push</td><td>승인 지문 대조, pre-push 검사</td><td>—</td></tr><tr><td>검사 우회</td><td>--no-verify·hook 경로 변경 차단</td><td>복잡한 명령 형태는 최선 노력 → 서버 보호가 최종</td></tr><tr><td>사내 정보가 사외로</td><td>경계 검사(<code>check_boundary.py</code>), 사내 값은 정해진 경로에만, 사외로는 사람이 쓴 문장만</td><td>—</td></tr></table></div>
+
+    </section>
+    <section class="chap" id="s5" data-title="필요한 권한">
+      <h2><span class="no">5</span>필요한 권한</h2>
+      <p class="first">이 절에서 알 수 있는 것: 누구에게 어떤 권한이 필요한가</p>
+      <div class="tbl "><table><tr><th>누가</th><th>권한</th></tr><tr><td>사용자</td><td>이슈 DB 레포에 브랜치 push와 PR 생성(GHE), 사용자 범위로 등록된 Jira MCP의 읽기 도구</td></tr><tr><td>카테고리 담당자</td><td>자기 카테고리 경로의 PR 승인 (CODEOWNERS)</td></tr><tr><td>메인테이너</td><td>공통 영역 승인, 브랜치 보호 설정, 플러그인 배포</td></tr></table></div>
+      <p class="foot">상세: <code>docs/design/08-safety.md</code>, 운영 매뉴얼 8장. 한계 전체는 <a href="08-limitations.html">한계와 보완</a>.</p>
+    </section>
+  </main>
+</div>
+<script>
+(function () {
+  var secs = Array.prototype.slice.call(document.querySelectorAll("section.chap"));
+  function build() {
+    var ol = document.createElement("ol");
+    secs.forEach(function (s) {
+      var li = document.createElement("li"), a = document.createElement("a");
+      a.href = "#" + s.id; a.textContent = s.querySelector("h2 .no").textContent + ". " + s.dataset.title;
+      li.appendChild(a);
+      var subs = s.querySelectorAll(":scope > .sub");
+      if (subs.length) {
+        var inner = document.createElement("ol");
+        subs.forEach(function (u) {
+          var l2 = document.createElement("li"), a2 = document.createElement("a");
+          a2.href = "#" + u.id; a2.textContent = u.dataset.title; l2.appendChild(a2); inner.appendChild(l2);
+        });
+        li.appendChild(inner);
+      }
+      ol.appendChild(li);
+    });
+    return ol;
+  }
+  document.getElementById("toc").appendChild(build());
+  document.getElementById("toc-m").appendChild(build());
+  document.querySelectorAll("#toc-m a").forEach(function (a) {
+    a.addEventListener("click", function () { a.closest("details").open = false; });
+  });
+  if ("IntersectionObserver" in window) {
+    var links = document.querySelectorAll("#toc > ol > li > a");
+    var io = new IntersectionObserver(function (es) {
+      es.forEach(function (e) {
+        if (!e.isIntersecting) return;
+        links.forEach(function (l) { l.classList.toggle("on", l.getAttribute("href") === "#" + e.target.id); });
+      });
+    }, { rootMargin: "0px 0px -70% 0px" });
+    secs.forEach(function (s) { io.observe(s); });
+  }
+})();
+</script>
+</body>
+</html>
