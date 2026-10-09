@@ -184,13 +184,14 @@ v1에서 도구는 이런 브랜치를 바꾸지 않는다. `sync-pr`는 아래 
 | 수정 상태 누락 | `fix-submitted`인데 `ref`/`fixed_in`(브랜치) 없음, `fixed`인데 `verification`/`fixed_in` 빌드 없음 | 보완 |
 | fixed 전환 불가 | 코드·설정 수정 유형인데 `scenario_signatures`와 `recovery_signatures`가 모두 없음 (`fix-submitted`면 verify-fix 불가) | 시그니처 추가 |
 | 빌드 없는 fix-submitted | `fixed_in`에 빌드가 없어 `03-issue-db.md §5.9` 판정 불가 | `fix-submitted` 커맨드로 빌드 추가 |
-| 해결책 미검증 방치 | `resolution_verification: unverified`가 `quality.unverified_max_days` 초과 | 검증 담당자 지정 |
+| 해결책 미검증 방치 | `resolution_verification: unverified`가 `quality.unverified_max_days` 초과 | 검증 담당자 지정 (기록자 표시: 아래) |
 | 사용자 진술만 있는 해결책 | `resolution_verification: unverified`이고 `method` 또는 소속 Jira 기록 `note`에 "근거: 사용자 진술"이 있는 원인 (`record`에서 근거 없이 "효과 있었다"고 한 경우) | 카테고리 오너가 근거(다른 Jira, `resolved` fixture)를 받아 `verify-resolution` 또는 유지 판단 |
-| 수정 검증 대기 방치 | `fix-submitted`가 `quality.fix_submitted_max_days` 초과 | `verify-fix` 요청 |
+| 수정 검증 대기 방치 | `fix-submitted`가 `quality.fix_submitted_max_days` 초과 | 기록자에게 `verify-fix` 요청 (기록자 표시: 아래) |
 | 수정 검증 실패·부분 통과 이력 | `verification_history`에 `failed` 또는 `partial`이 있는 원인 | 근본 원인 재검토, 남은 증상 분석 |
 | `also_allowed` 누적 | 한 fixture의 `also_allowed`에 3개 이상, 또는 한 원인이 5개 이상의 다른 유형 fixture에서 허용됨 (`contracts.md §fixture`) | 그 원인의 시그니처가 너무 넓은지, 또는 fixture 구간이 너무 긴지 검토 |
 | 급증 | 최근 30일 발생이 이전 90일 월평균 × `quality.surge_ratio` 이상 (발생 기준일은 Jira 기록의 `occurred_on`, 없으면 `date`) | 원인 조사 |
 
+- **방치 기간과 기록자**: 두 "방치" 항목의 기간은 그 상태가 된 날부터 센다. 이슈 DB 파일에는 상태 전환 날짜·기록자 필드가 없으므로 git 이력(`common/history.py`)으로 구한다: 그 상태가 계속 참인 가장 오래된 `type.md` 커밋의 날짜와 **작성자 이름**(git author, 이메일은 내지 않음). 리포트 항목에 `by`와 "기록: <이름>"으로 보인다. 도구 경로의 커밋은 기록한 사용자의 git 신원으로 만들어지고 PR 머지 뒤에도 작성자가 유지되므로 그 사람이 검증 요청 대상이다. 커밋 전 상태나 이력이 없으면 "기간 확인 불가"로 따로 낸다.
 - **유형 병합**: 흡수되는 유형의 `status`를 `merged-into:<유형 ID>`로 바꾸고, 그 원인들은 흡수하는 유형의 원인으로 새 ID를 받아 옮긴다. 옛 원인에는 `status: merged-into:<새 원인 ID>`를 남기고 삭제하지 않는다. Jira 파일은 새 유형 디렉토리로 이동하고 `cause`를 새 ID로 바꾼다 (`reclassify`). 브랜치는 `move/...`, 계획 `source: move`, op 조합: `new-cause`(옛 원인 내용 복사, `temp_id`) → `add-fixture`(옛 fixture 파일 경로를 `path`로, 새 원인 이름으로 복사) → `set-status merged-into`(옛 원인·옛 유형) → `reclassify`(Jira 각각. 원인 미확정 Jira는 `to: <흡수하는 유형 ID>:unresolved`).
 - **원인 병합**: 옛 원인 `status: merged-into:<원인 ID>` (`set-status`), Jira `cause` 갱신 (`reclassify`). 같은 `source: move` 계획.
 

@@ -281,15 +281,17 @@ class Review:
         for c in causes:
             if not now_pred(c):
                 continue
-            since, source = self.history.since(self.type_md(c), c.id, old_pred_for(c))
+            since, source, by = self.history.since_by(self.type_md(c), c.id, old_pred_for(c))
             if since is None:
                 unknown.append({"cause": c.id, "reason": source, "text": f"{c.id} {c.title} (기간 확인 불가: {source})"})
                 continue
             days = (self.as_of - since).days
             if days > limit:
-                entries.append({"cause": c.id, "since": since.isoformat(), "days": days,
-                                "text": f"{c.id} {c.title} ({since.isoformat()}부터 {days}일)"})
-        criterion = f"{state_text}가 `quality.{limit_key}`({limit}일) 초과 (그 상태가 된 날은 git 이력 기준)"
+                who = f", 기록: {by}" if by else ""
+                entries.append({"cause": c.id, "since": since.isoformat(), "days": days, "by": by,
+                                "text": f"{c.id} {c.title} ({since.isoformat()}부터 {days}일{who})"})
+        criterion = (f"{state_text}가 `quality.{limit_key}`({limit}일) 초과 (그 상태가 된 날과 기록자는 git 이력 기준, "
+                     "기록자 = 그 상태를 만든 커밋의 작성자)")
         return key, title, criterion, action, entries, unknown
 
     # 중복 후보 -----------------------------------------------------------------------
