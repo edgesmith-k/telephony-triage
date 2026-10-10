@@ -14,13 +14,13 @@
 - 테스트는 `tools/related_tests.py --run`(관련만). 전체는 도구가 full이라 할 때·반입 직전·요청 시.
 - 진행 중 판단은 Fable 결정 에이전트에게 묻는다(10/06 사용자 지정). 원칙상 사용자 승인 대상(이슈 DB push, main 병합·태그 등 사용자가 지시하지 않은 외부 동작)은 사용자에게.
 
-## 진행 상태 (10/09)
+## 진행 상태 (10/10)
 
 - 모드: **사외 초안**. Phase **D0, 1~13** 완료. 반입 전 보강 트랙(S1~S6·I1~I5·X·3C~3F)과 개선 트랙 **W0~W12**, 반입 전 리뷰(10/07) 수정 트랙 **V1~V7·V 끝**, 실제 로그 반영 트랙 **L1~L3** 완료, main 병합(PR #8·#9·#11~#30). 반입 전 3차 검토(A1~A4·B1·B2·문서) 반영(10/08).
 - 마지막 전체 테스트: 1102 통과, 4 실패(알려진 환경), 1 skip (10/08). `db_regress --all` 23/23 (10/07).
 - 사내 확인 항목: `TODO(SITE)` **78곳** — `python3 tools/list_site_todos.py`. `REVIEW-OPEN.md` 0건.
 - 사내 S 단계 시작: `python3 tools/context_pack.py S-n`(표 `docs/tasks.md`).
-- 안내서(사람용 HTML): `docs/telephony-triage-guide.html` (공유본 https://claude.ai/artifact/1jov1Et4dQUMauFr6aoxWG)
+- 안내서(사람용 HTML): `docs/telephony-triage-guide.html` (공유본 https://claude.ai/artifact/1jov1Et4dQUMauFr6aoxWG). 역할별 문서 19개: `docs/materials/00-index.html`(PR #33·#34)
 
 ## 남은 일
 
@@ -28,7 +28,7 @@
 |---|---|---|
 | ✅ L | 실제 로그 반영 트랙 L1~L3 완료(10/07, PR #23~#25) | 세부·eval 결과는 `CHANGES.md` L1~L3. 자료는 레포 밖 `%LOCALAPPDATA%/tt-ltrack/`(벤더 문구, 레포 금지) |
 | ☐ G | **범용판 별도 레포** (10/07 사용자 지시) — **보류(10/07 사용자)** | 재개 시점은 사용자가 정한다. **로컬 새 레포**(원격 없음), 범위 = 도메인 중립 코어(이슈 DB·시그니처 엔진·PR 흐름·안전장치, 카테고리·예약 이벤트는 설정으로) + 동작 확인용 최소 예제 팩 1개. 시작은 결합 지점 조사(`plugin/scripts`에서 platforms 밖 Android·RIL 참조 약 30파일) → 분리 설계 확인 → 이전. 이 레포는 바꾸지 않는다 |
-| ☐ Z | **반입 묶음** | 최신 main에서 **Ubuntu로** 먼저 `plugin.json` description에서 "사외 초안"을 빼는 커밋(도구가 첫 검사로 막는다) → `python3 tools/make_bundle.py --label <이름>`(정상 종료 3) → 사람 확인 3건(§15.4: 회사명 검색·TODO 목록·이 파일 최신) → 도구가 출력한 명령으로 사용자가 태그 push. Windows는 환경 실패로 자동 검사가 실패한다 |
+| ☐ Z | **반입 묶음** — 생성됨, **태그 push만 남음** | WSL Ubuntu에서 `make_bundle.py --label import-<날짜>`(정상 종료 3). 반입 직전 사람 확인 3건(§15.4) 뒤 도구가 출력한 명령으로 사용자가 태그 push. main이 바뀌면 새 라벨로 다시 만든다 |
 | ✅ 2 | 10/04~05 작업(RF-2 포함) 사용자 확인(10/08) | 승인 7건: R8 동점·실패 구간 기본값·S5 범위·I3 `platform.*`·RF-7 재사용·S6 순위·행동 규칙 |
 
 반입 뒤 후보: RF-5(oFono)·RF-6(커넥터)·RF-8(자동화)은 사내 환경을 알아야 의미가 있다. RF-9·웹 UI(보류)는 그 뒤. 10/07 리뷰의 R-36~R-47·V 후속도 같은 색인 `docs/development/ARCHITECTURE_REVIEW_2026-10.md`. 팀 검토(10/07) 판정(원문 보존은 부분 해결 — 미게시 계획 폴더의 원문 잔류는 S14): `docs/development/TEAM_PLUGIN_REVIEW_VERDICT_2026-10-07.md`(원문·포털·확장 아이디어 설계 제안 초안은 `docs/history/TEAM_PLUGIN_*`, 파일럿 뒤 재검토).
