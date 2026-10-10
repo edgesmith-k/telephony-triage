@@ -91,6 +91,14 @@ class Context:
         self.base_url = str(self.config.get("jira_base_url") or "")
         self.inline_max = int((self.config.get("readme") or {}).get("jira_inline_max", 3))
         self.jira = sorted(db.jira, key=_jira_sort_key)
+        # 원인·유형별 사전을 한 번만 만든다(원인마다 전체 Jira를 훑으면 1000유형에서 100초대). 정렬된 순서 그대로 담는다.
+        self._by_cause: dict[str, list[dict]] = {}
+        self._unresolved_by_type: dict[str, list[dict]] = {}
+        for r in self.jira:
+            cause = str(r.get("cause"))
+            self._by_cause.setdefault(cause, []).append(r)
+            if cause == "unresolved":
+                self._unresolved_by_type.setdefault(r["_type"], []).append(r)
         dates = [d for d in (_day(r.get("date")) for r in self.jira) if d]
         self.base = max(dates) if dates else None
         self.types = sorted(db.types, key=lambda t: t.id)
@@ -113,10 +121,10 @@ class Context:
         return [t for t in self.types if t.category == category and (t.active or not active)]
 
     def jira_of(self, cause_id: str) -> list[dict]:
-        return [r for r in self.jira if str(r.get("cause")) == cause_id]
+        return list(self._by_cause.get(cause_id, ()))       # 복사본: 호출자가 바꿔도 사전은 그대로
 
     def unresolved_of(self, itype: issuedb.IssueType) -> list[dict]:
-        return [r for r in self.jira if r["_type"] == itype.id and str(r.get("cause")) == "unresolved"]
+        return list(self._unresolved_by_type.get(itype.id, ()))
 
 
 

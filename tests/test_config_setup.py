@@ -591,9 +591,14 @@ def test_doctor_lock_held_expired_and_corrupt():
     guard_before = (env.base / "work" / "session.guard").exists()
     lock.write_text("{손상", encoding="utf-8")
     result = _doctor(env, expect=1)
-    assert _rows(result)["lock"]["status"] == "fail" and result["counts"]["fail"] >= 1
+    row = _rows(result)["lock"]
+    assert row["status"] == "fail" and result["counts"]["fail"] >= 1
+    assert "--force" in row["next"] and "session.lock" in row["next"]
     assert (env.base / "work" / "session.guard").exists() == guard_before    # lock 파일 guard도 만들지 않는다
-    lock.unlink()    # 손상 lock은 도구가 풀지 못한다: 사용자가 파일을 확인하고 지운다
+    # 손상 lock은 사용자가 확인한 뒤 --force로 푼다: 지우지 않고 .corrupt-<ts>로 옮긴다
+    out = env.json("db_pr.py", ["lock", "release", "MOCK-1101", "--force"])
+    assert out["corrupt"] is True and not lock.exists()
+    assert [p.read_text(encoding="utf-8") for p in (env.base / "work").glob("session.lock.corrupt-*")] == ["{손상"]
     assert _rows(_doctor(env))["lock"]["status"] == "ok"
 
 

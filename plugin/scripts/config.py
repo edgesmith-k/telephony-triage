@@ -626,7 +626,9 @@ def _doctor_rows(args, defaults: dict) -> list[dict]:
                 rows.append(_row("lock", "warn", f"{state}: {held['job']} ({mins}분 전)",
                                  f"끝난 세션이면 db_pr lock release {held['job']} --force"))
         except Exception as exc:    # noqa: BLE001 — 손상 lock 포함
-            rows.append(_row("lock", "fail", str(exc) or type(exc).__name__, "lock 파일 확인"))
+            rows.append(_row("lock", "fail", str(exc) or type(exc).__name__,
+                             f"lock 파일 확인: {work / session_lock.LOCK_FILE} — 그 세션이 끝났으면 "
+                             "db_pr lock release <작업 키> --force(.corrupt-<ts>로 백업 후 제거)"))
     return rows
 
 

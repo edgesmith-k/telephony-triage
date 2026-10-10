@@ -201,6 +201,22 @@ def test_stats_on_review_db():
     assert "| 2026-10 | 7 | 3 |" in stats   # 기여 현황: 분석 7, 수동 기록 3
 
 
+
+def test_jira_index_equals_linear_scan():
+    """E-4: 원인별 사전이 선형 필터와 같은 원소를 같은 순서(db.jira 순서)로 돌려준다."""
+    from datetime import date
+
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    import db_review
+    from common import issuedb
+
+    db = issuedb.load(REVIEW_DB)
+    review = db_review.Review(db, None, date.fromisoformat(AS_OF), REPO / "plugin", {})
+    ids = {str(r.get("cause")) for r in db.jira} | {c.id for c in review.causes} | {"없는-원인"}
+    assert any(review.jira_of(i) for i in ids)
+    for cause_id in ids:
+        assert review.jira_of(cause_id) == [r for r in db.jira if str(r.get("cause")) == cause_id], cause_id
+
 if __name__ == "__main__":
     import pytest
 

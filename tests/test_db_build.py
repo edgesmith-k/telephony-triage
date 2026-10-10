@@ -217,6 +217,26 @@ def test_changelog_from_history_fields():
     assert "| 2026-09-28 | ril.yaml `requests` | `SETUP_DATA_CALL` | DATA-001 | 초기 |" in text
 
 
+def test_jira_index_equals_linear_scan():
+    """E-4: 원인·유형 사전이 선형 필터와 같은 원소를 같은 순서로 돌려준다 (출력 바이트 동일의 전제)."""
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    import db_build
+    from common import issuedb
+
+    for src in (SAMPLE, variant_db("issue-db-review")):
+        ctx = db_build.Context(issuedb.load(src))
+        ids = {str(r.get("cause")) for r in ctx.jira} | set(ctx.causes) | {"unresolved", "없는-원인"}
+        assert any(ctx.jira_of(i) for i in ids)
+        for cause_id in ids:
+            assert ctx.jira_of(cause_id) == [r for r in ctx.jira if str(r.get("cause")) == cause_id], cause_id
+        for itype in ctx.types:
+            assert ctx.unresolved_of(itype) == [r for r in ctx.jira if r["_type"] == itype.id
+                                                and str(r.get("cause")) == "unresolved"], itype.id
+        some = next(i for i in sorted(ids) if ctx.jira_of(i))
+        ctx.jira_of(some).clear()                            # 돌려준 목록을 바꿔도 사전은 그대로
+        assert ctx.jira_of(some)
+
+
 def _all_tests():
     return [(n, o) for n, o in sorted(globals().items()) if n.startswith("test_") and callable(o)]
 

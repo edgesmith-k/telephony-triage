@@ -147,7 +147,7 @@ v1에서 도구는 이런 브랜치를 바꾸지 않는다. `sync-pr`는 아래 
 | 지원 범위 안 | 정상 |
 | 플러그인 max보다 새 버전 | **읽기 전용 분석만** 하고 이슈 DB 쓰기 전체를 막는다. 플러그인 업데이트를 안내한다. |
 | 플러그인 min보다 옛 버전 | **쓰기를 막고**, 메인테이너에게 마이그레이션이 필요하다고 안내한다. 분석은 가능하다. |
-| `generator_version` 불일치, `ci_mode: local`/`actions` | **이슈 DB 쓰기 전체를 막는다** (읽기 전용 분석). 생성 파일이 PR에 들어가므로 다른 버전으로 만들면 정합성 검사가 깨지기 때문이다. 업데이트를 안내한다. |
+| `generator_version` 불일치, `ci_mode: local`/`actions` | **이슈 DB 쓰기 전체를 막는다** (읽기 전용 분석). 생성 파일이 PR에 들어가므로 다른 버전으로 만들면 정합성 검사가 깨지기 때문이다. 업데이트를 안내한다. 플러그인만 올라갔으면 메인테이너가 아래 "버전 올림 순서" 대로 `migrate --to <현재 스키마>`로 맞춘다. |
 | `generator_version` 불일치, `ci_mode: actions-build` | 영향 없음 (생성 파일은 머지 후 봇이 만든다) |
 
 - "이슈 DB 쓰기 전체" = analyze Step 8, `record`, `sync-pr`, `verify-fix`, `validate --cause`, `fix-submitted`, import/review/move 계획 PR, 직접 편집 브랜치의 pre-commit·`validate`. 판정은 `config.py check --db <스냅샷 또는 wt>`가 한다(오래된 사용자 clone이 아니라 origin/<base> 기준 버전을 읽는다). `db_pr stage`가 시작 시 다시 확인한다. **예외는 `migrate/schema-v<N>` 브랜치뿐이다**: 메인테이너가 버전을 올리는 브랜치이므로 그 브랜치에서는 `config.py check`·pre-commit·`validate`가 스키마·생성기 버전 불일치를 차단하지 않고 gh 인증만 본다(브랜치 이름으로 판별).
@@ -155,6 +155,13 @@ v1에서 도구는 이런 브랜치를 바꾸지 않는다. `sync-pr`는 아래 
 - 마이그레이션 PR을 머지하기 전에 열린 PR을 가능한 한 머지하거나 닫고, 머지되는 동안 다른 PR 머지를 멈춘다 (공지). 머지 후 남은 PR은 이렇게 올린다:
   - 계획이 있는 PR: 작업 계획의 `schema_version`이 다르므로 `db_add apply`가 거부한다. `sync-pr`가 `db_migrate upgrade-plan`으로 계획을 올린 뒤 재적용한다. `upgrade_plan()`이 없으면 analyze/record를 다시 해서 계획을 새로 만든다.
   - 직접 편집한 브랜치: 작성자가 rebase한 뒤 자기 변경분(새로 만든 파일)을 새 스키마 형식으로 직접 고치고 `validate` 후 push한다. `db_migrate --to`는 `migrate/schema-v<N>` 브랜치에서만 실행되고 main이 이미 v<N>이면 바꿀 것이 없으므로 쓰지 않는다.
+- **버전 올림 순서와 되돌리기** (스키마 또는 생성기 버전이 바뀌는 플러그인 배포):
+  1. **공지·병합 중지**: 이슈 DB PR 병합을 멈춘다(열린 PR은 가능한 한 먼저 머지하거나 닫는다).
+  2. **플러그인 먼저**: `SCHEMA_VERSION`/`GENERATOR_VERSION`과 `migrations/NNNN_*.py`가 든 플러그인을 병합·배포한다. 이때부터 3이 끝날 때까지 팀원은 옛 DB에 새 플러그인이라 `schema-too-old`(지원 범위 min이 N이면) 또는 `generator-mismatch`로 **읽기 전용 기간**이다. 공지에 적는다. 순서를 바꿔 DB를 먼저 올리면 옛 플러그인이 `schema-too-new`로 전원 읽기 전용이 되고, 새 플러그인 없이는 `migrate` 자체가 거부된다(`--to`가 플러그인 `SCHEMA_VERSION`보다 크면 종료 2).
+  3. **migrate PR**: 메인테이너가 `migrate/schema-v<N>`에서 `migrate --dry-run` → `--to N` → `db_build --write` → `validate` → 커밋 → PR → 머지. 스키마는 그대로이고 생성기만 바뀌었으면 같은 브랜치 이름(`migrate/schema-v<현재>`)에서 `--to <현재>`가 `generator_version`만 맞춘다(`ci_mode: actions-build`는 맞추지 않는다).
+  4. **재개**: 공지를 푼다. 남은 PR은 위 항목대로 올린다(`sync-pr`의 `upgrade-plan` / 직접 편집 브랜치 rebase).
+  - **되돌리기**: `db_migrate`에 다운그레이드는 없다. (a) migrate PR 머지 전 → 브랜치를 버리고 플러그인을 이전 SHA로 되돌린다(S2 절차, `SITE_PROFILE.md`). (b) 머지 후 → 다시 병합 중지 → 이슈 DB에서 migrate 커밋을 `git revert`하는 PR(그 사이 머지된 새 형식 PR이 있으면 함께 revert하거나 작성자가 옛 형식으로 다시 올린다) → 머지 → 플러그인을 이전 SHA로 → 이전 플러그인으로 `db_build --write`를 다시 돌린다(생성기 버전이 되돌아가므로) → 재개. 어느 경우든 `validate`와 `config.py check --for write`가 통과한 뒤에만 재개한다.
+  - 배포 전에 샌드박스 이슈 DB에서 1~4와 (b)를 한 번 돌린다(S-7 파일럿의 되돌리기 복구 시험). 2·3의 차단/통과는 `tests/test_db_migrate.py`가 고정한다.
 - 플러그인 릴리스 노트에 지원 스키마 범위와 생성기 버전을 적는다.
 
 ### 6.5 시그니처 품질 피드백
