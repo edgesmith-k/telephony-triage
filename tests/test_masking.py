@@ -135,6 +135,23 @@ DETECT = [
     ("ro.serialno=R58M12ABCDE", "SERIAL", "R58M12ABCDE"),
     ("serial=R58M12ABCDE", "SERIAL", "R58M12ABCDE"),
     ("SerialNumber: R58M12ABCDE", "SERIAL", "R58M12ABCDE"),
+    # 리뷰 후속: getprop·JSON 따옴표 키·대소문자 변형·접두 키
+    ("[ro.serialno]: [R3CN30ABCDE]", "SERIAL", "R3CN30ABCDE"),
+    ('{"eid":"89049032004008882600012345678901"}', "EID", "89049032004008882600012345678901"),
+    ('{"mac":"aabbccddeeff"}', "MAC", "aabbccddeeff"),
+    ('{"latitude":37.566535}', "GEO", "37.566535"),
+    ('{"pass":"hunter2"}', "CRED", "hunter2"),
+    ('{"pin":"1234"}', "CRED", "1234"),
+    ('{"serial":"R58M12ABCDE"}', "SERIAL", "R58M12ABCDE"),
+    ('{"Ki":"0123456789abcdef0123456789abcdef"}', "CRED", "0123456789abcdef0123456789abcdef"),
+    ('{"imei":"490154203237518"}', "IMEI", "490154203237518"),
+    ("authorization: bearer Ab12Cd34Ef56Gh78Ij90", "CRED", "Ab12Cd34Ef56Gh78Ij90"),
+    ("OPC=00112233445566778899aabbccddeeff", "CRED", "00112233445566778899aabbccddeeff"),
+    ("KI=0123456789abcdef0123456789abcdef", "CRED", "0123456789abcdef0123456789abcdef"),
+    ("mSerial=R58M12ABCDE", "SERIAL", "R58M12ABCDE"),
+    ("sn=R58M12ABCDE", "SERIAL", "R58M12ABCDE"),
+    ("mPin=1234", "CRED", "1234"),
+    ("wifiMacAddress=aabbccddeeff", "MAC", "aabbccddeeff"),
 ]
 
 # 바뀌면 안 되는 줄 (빌드 번호·타임스탬프·일반 숫자·설정 키·Android 자체 마스킹)
@@ -163,6 +180,15 @@ KEEP = [
     "mac state=CONNECTED",
     "network 5G",
     "2026-09-20 14:30:00.123 build 20260915",
+    # 리뷰 후속: 상태값·시퀀스 번호·소문자 AKA 유사 키·낱말 끝 키
+    "IccCardState {mCardState=CARDSTATE_PRESENT,pin1=PINSTATE_ENABLED_NOT_VERIFIED,pin2=PINSTATE_ENABLED_NOT_VERIFIED}",
+    "pin=disabled pin=ready pass=PASSED pass=OK pass=true pass=3",
+    "passthrough=enabled mPin1State=ENABLED",
+    "SN=12345678 PDCP",
+    "RLC sn: 1234567",
+    "mSerial=41 serial=0042",
+    "ki=0123456789abcdef0123456789abcdef ck=0123456789abcdef",
+    "together=aabbccddeeff",
 ]
 
 
@@ -235,7 +261,7 @@ def _fixture_lines() -> list[str]:
 def test_gate_does_not_change_result():
     """`Rule.gate`는 성능용이다: 게이트를 모두 끈 RULES와 출력이 같아야 한다."""
     import dataclasses
-    lines = [t for t, _, _ in DETECT] + KEEP + _fixture_lines()
+    lines = [t for t, _, _ in DETECT] + KEEP + _fixture_lines() + ["paſs=hunter2", "PİN=1234"]
     gated = [masking.new_masker()(t) for t in lines]
     original = masking.RULES
     masking.RULES = tuple(dataclasses.replace(r, gate=()) for r in original)
@@ -244,6 +270,27 @@ def test_gate_does_not_change_result():
     finally:
         masking.RULES = original
     assert any(r.gate for r in original)
+
+
+def test_imei_spelling_variants_share_number():
+    out = masking.new_masker()("IMEI: 49-015420-323751-8 imei=490154203237518 imei: 49 015420 323751 8")
+    assert out == "IMEI: <IMEI#1> imei=<IMEI#1> imei: <IMEI#1>", out
+    masker = masking.new_masker()
+    masker("imei=490154203237518")
+    assert masker.mask_value("49-015420-323751-8") == "<IMEI#1>"
+
+
+def test_gate_off_for_non_ascii():
+    """`(?i)`는 `ſ`→s·`İ`→i도 맞추므로 ASCII 아닌 줄은 게이트를 끈다(게이트 때문에 놓치지 않는다)."""
+    assert masking.new_masker()("paſs=hunter2") == "paſs=<CRED#1>"
+    assert masking.new_masker()("PİN=1234") == "PİN=<CRED#1>"
+
+
+def test_db_lint_state_patterns_are_not_raw_identifiers():
+    """상태값을 겨냥한 시그니처 패턴이 `raw-identifier`로 걸리지 않는다."""
+    import db_lint
+    for pattern in (r"pin1=PINSTATE_\w+", r"pass=(?:true|false)", r"SN=\d+ PDCP"):
+        assert db_lint.raw_identifier_in_pattern(pattern) is None, pattern
 
 
 def test_allow_patterns():

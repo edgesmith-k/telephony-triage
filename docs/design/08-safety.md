@@ -11,8 +11,8 @@
 | 항목 | 탐지 방법 (참고) | 치환 |
 |---|---|---|
 | IMSI | 키 이름 문맥(`imsi=`, `IMSI:` 등) 우선, 문맥 없는 15자리는 MCC/MNC 유효성 확인 | `<IMSI#n>` (MCC/MNC 유지 옵션) |
-| IMEI | 키 이름 문맥 우선(`imei`·`imeisv`·`meid`·`device_id`; 구분자(`-`·공백) 포함 14~16자리, 뒤에 `_`·영문이 붙어도 값 부분), 문맥 없는 15자리 + Luhn, 문맥 없는 `NN-NNNNNN-NNNNNN-N` + Luhn | `<IMEI#n>` |
-| EID (eUICC) | 키 이름 문맥 `eid=` 32자리 | `<EID#n>` |
+| IMEI | 키 이름 문맥 우선(`imei`·`imeisv`·`meid`·`device_id`, 앞에 `m` 허용; 구분자(`-`·공백) 포함 14~16자리, 키에 붙은 값·뒤에 `_`·영문이 붙은 값도 값 부분), 문맥 없는 15자리 + Luhn, 문맥 없는 `NN-NNNNNN-NNNNNN-N` + Luhn. 같은 IMEI의 표기 변형(공백·대시)은 같은 번호 | `<IMEI#n>` |
+| EID (eUICC) | 키 이름 문맥 `eid` 32자리 | `<EID#n>` |
 | ICCID | `89`로 시작하는 19~20자리 + 문맥 | `<ICCID#n>` |
 | SUPI / SUCI | `imsi-…`, `suci-…` 형식 | `<SUPI#n>` / `<SUCI#n>` |
 | TMSI / GUTI / 5G-GUTI | 키 이름 문맥 | `<TMSI#n>` / `<GUTI#n>` |
@@ -20,17 +20,18 @@
 | SIP URI / IMPU / IMPI | `sip:…@…`, `tel:…`, IMS 도메인의 사용자 부분 | 사용자 부분만 `<IMPU#n>` / `<IMPI#n>` (도메인은 유지 옵션) |
 | Cell ID / TAC / CI / PCI 등 셀 식별자 | `mCi=`, `mTac=`, `cid=` 등 키 이름 문맥 | `<CELL#n>` |
 | IP 주소 | IPv4/IPv6. IPv4 값 바로 앞이 `version`·`build`·`release`·`rev`·`fw`·`sw`·`baseband`·`kernel`·`v` 문맥이면 제외(버전 문자열) | `<IP#n>` |
-| MAC 주소 | 6옥텟 `:`·`-` 형식(`-` 형식은 숫자만이면 제외), 키 문맥(`mac=`·`bssid=`·`hwaddr=` 등)의 12 hex | `<MAC#n>` |
-| GPS 좌표 | `lat=`/`lon=`/`mLatitude=` 등 키 문맥의 소수 3자리 이상, `gps`·`fused`·`network`·`passive` 뒤의 `위도,경도` 쌍(소수 4자리 이상) | `<GEO#n>` |
-| 장치 serial | `ro.serialno`·`serialno`·`serial_number`·`sn` 키(6자 이상), `serial=`은 8자 이상 영문+숫자 혼합만(숫자뿐인 RIL serial 제외) | `<SERIAL#n>` |
+| MAC 주소 | 6옥텟 `:`·`-` 형식(`-` 형식은 숫자만이면 제외), 키 문맥(`mac`·`mac_address`·`bssid`·`hwaddr`·`ether`·`bd_addr`, 낱말이 앞에 붙은 `…MacAddress`)의 12 hex | `<MAC#n>` |
+| GPS 좌표 | `lat`·`latitude`·`lon`·`longitude`·`lng`·`altitude`(앞에 `m` 허용) 키 문맥의 소수 3자리 이상, `gps`·`fused`·`network`·`passive` 뒤의 `위도,경도` 쌍(소수 4자리 이상) | `<GEO#n>` |
+| 장치 serial | `ro.serialno`·`ro.boot.serialno`·`serialno`·`serial_number` 키(6자 이상, getprop `[ro.serialno]: [값]` 포함). `sn`(6자 이상)·`serial`·`mSerial`(8자 이상)은 영문+숫자 혼합만(시퀀스 번호·숫자뿐인 RIL serial 제외) | `<SERIAL#n>` |
 | 이메일 | 이메일 형식 | `<EMAIL#n>` |
-| 자격증명 성격 값 | SIP `Authorization`/`WWW-Authenticate` 헤더의 `response=`, `nonce=`, `cnonce=`; AKA `RES`/`AUTN`/`AUTS`/`Ki`/`Kc`/`CK`/`IK`/`OPc`; 키 이름 문맥 `password`, `passwd`, `pwd`, `secret`, `token`, `key`, `pass`, `pin`, `puk`의 값(`pin`·`puk`의 숫자 값은 4자리 이상); `Bearer <토큰>`·JWT(`eyJ…`) (IMS REGISTER 로그가 fixture에 들어가므로 필요) | `<CRED#n>` |
+| 자격증명 성격 값 | SIP `Authorization`/`WWW-Authenticate` 헤더의 `response=`, `nonce=`, `cnonce=`; AKA `RES`/`AUTN`/`AUTS`/`Ki`/`Kc`/`CK`/`IK`/`OPc`/`OP`/`K`(16 hex 이상, 대소문자 구분 — `KI`·`KC`·`OPC` 대문자 변형은 받고 소문자 `ki`·`ck`는 받지 않음); 키 이름 문맥 `password`, `passwd`, `pwd`, `secret`, `token`, `key`의 값; `pin`·`puk`(앞에 `m` 허용)은 숫자 4~8자리만; `pass`·`passcode`는 상태 낱말(`enabled`·`ready`·`ok`·`passed`·`true` 등)·대문자 열거형·3자리 이하 숫자 제외; `Bearer <토큰>`(대소문자 무관)·JWT(`eyJ…`) (IMS REGISTER 로그가 fixture에 들어가므로 필요) | `<CRED#n>` |
 
 - **번호 토큰(가명화)**: 같은 파일(분석 1회) 안에서 **같은 원래 값은 같은 번호**, 다른 값은 다른 번호로 바꾼다(`<CELL#1>`, `<CELL#2>`). 번호는 파일 안에서 처음 나온 순서로 매긴다. 그래서 "셀이 바뀌었다", "같은 번호로 재시도했다" 같은 **값 비교 관계가 마스킹 뒤에도 보존**되고, 기존 파서의 판별 로직이 마스킹된 fixture에서도 같게 동작한다 (`16-existing-assets.md §16.3`). 원래 값과 번호의 대응표는 메모리에만 두고 저장하지 않는다.
 - 시그니처와 extractor는 특정 번호(`#1`)가 아니라 토큰 종류(`<CELL#\d+>`)나 "같은 토큰/다른 토큰" 관계로만 쓴다 (`db_lint`가 특정 번호 고정을 경고).
 - **문맥 기반 탐지를 우선**하고, 숫자 길이만으로 판정하는 규칙은 보수적으로 쓴다 (빌드 번호, 타임스탬프 오탐 방지).
 - 알려진 한계: 문맥 없는 15자리에 `_`·영문이 바로 붙은 값(`…518_slot1`)은 잡지 않는다(빌드 번호 오탐 방지, 키 문맥이 있으면 잡는다). 사람 이름·자유 텍스트, 소수 2자리 좌표, 키 없는 serial, 16진 IMEI 변형도 잡지 않는다 — 사내 로그 표본으로 다시 본다(TODO(SITE:S13)).
-- 성능: 마스킹은 줄마다 도는 hot path다. 키 이름 문맥 규칙은 소문자 줄에 그 키 부분문자열이 있을 때만 돈다(`Rule.gate`, 결과 불변 — `test_gate_does_not_change_result`).
+- 키 이름은 따로 적지 않으면 대소문자를 가리지 않고(AKA 키만 구분), `key=v`·`key: v`·JSON `"key":"v"` 형식을 모두 받는다.
+- 성능: 마스킹은 줄마다 도는 hot path다. 키 이름 문맥 규칙은 소문자 줄에 그 키 부분문자열이 있을 때만 돈다(`Rule.gate`, 결과 불변 — `test_gate_does_not_change_result`). ASCII가 아닌 줄은 게이트를 끈다(`(?i)`가 `ſ`·`İ`도 맞추기 때문).
 - 오탐 예외는 `issue-db.config.yaml`의 `mask.allow_patterns`로 관리한다 (메인테이너 리뷰). `db_lint`가 정규식 오류(`schema`)·안전성(`regex-unsafe`)과 대표 PII 표본 전체에 맞는 넓은 패턴(`mask-allow-too-broad`, 예: `.*`)을 오류로 낸다. 정규식이 틀리면 `mask_pii`는 종료 코드 2다.
 - Android 자체 마스킹(`***`, `xxxxxx`)은 그대로 둔다.
 - extractor와 매처는 항상 마스킹된 텍스트에 대해 돈다. 그래서 시그니처와 extractor 패턴은 마스킹 이후 텍스트 기준으로 작성하고, 그 안의 원본 식별자 패턴은 `db_lint`가 금지한다 (`04-parser-matching.md §5.11 (1)`).
