@@ -300,16 +300,20 @@ def test_guard_ignores_other_repos_and_missing_config():
 # -- Claude hook: Jira, 파일 도구 ----------------------------------------------------------------
 
 
-def test_guard_jira_read_only_by_server():
+def test_guard_jira_named_servers_deny_writes():
     ws = shared()
     for tool in JIRA_TOOLS:
         assert decision(guard(ws, tool, {}, ws.base)) is None, tool
     for tool in ("mcp__mock-jira__jira_add_comment", "mcp__mock-jira__jira_transition_ticket"):
         out = guard(ws, tool, {}, ws.base)
         assert decision(out) == "deny" and "Jira 읽기 전용" in out["permissionDecisionReason"]
-    # 다른 MCP 서버 도구는 영향이 없다 (쓰기처럼 보이는 이름이어도)
-    for tool in ("mcp__other-server__create_issue", "mcp__mock-jira-2__jira_add_comment"):
-        assert decision(guard(ws, tool, {}, ws.base)) is None, tool
+    # 다른 MCP 서버 도구는 영향이 없다 (쓰기처럼 보이는 이름이어도, 대상 레포 인자가 없으면)
+    assert decision(guard(ws, "mcp__other-server__create_issue", {}, ws.base)) is None
+    # 설정되지 않은 서버라도 이름에 jira/atlassian이 들면 쓰기형 도구는 거부, 읽기형은 통과
+    for tool in ("mcp__jira-prod__add_comment", "mcp__atlassian__transition_issue", "mcp__mock-jira-2__jira_add_comment"):
+        out = guard(ws, tool, {}, ws.base)
+        assert decision(out) == "deny" and "Jira/Atlassian" in out["permissionDecisionReason"], tool
+    assert decision(guard(ws, "mcp__atlassian__search_issues", {}, ws.base)) is None
     # read_tools가 비어 있으면 그 서버 도구는 모두 거부
     cfg_path = ws.home / "config.yaml"
     saved = cfg_path.read_text(encoding="utf-8")
@@ -318,12 +322,14 @@ def test_guard_jira_read_only_by_server():
         assert decision(guard(ws, JIRA_TOOLS[0], {}, ws.base)) == "deny"
     finally:
         cfg_path.write_text(saved, encoding="utf-8")
-    # jira.mcp_server가 비어 있으면 적용하지 않고 경고만 (setup 전)
+    # jira.mcp_server가 비어 있어도(setup 전) 이름 기반 거부는 적용하고 경고한다
     root = plugin_root("no-jira-server", jira={"exclude_servers": []})
     home = tmp("tt-home-")
-    event = {"tool_name": "mcp__mock-jira__jira_add_comment", "tool_input": {}, "cwd": str(ws.base)}
-    proc = run("guard.py", [], root=root, env={"TELEPHONY_TRIAGE_HOME": home}, stdin=json.dumps(event))
-    assert proc.returncode == 0 and not proc.stdout.strip() and "jira.mcp_server" in proc.stderr
+    for tool, want in (("mcp__mock-jira__jira_add_comment", "deny"), ("mcp__mock-jira__jira_fetch_ticket", None)):
+        event = {"tool_name": tool, "tool_input": {}, "cwd": str(ws.base)}
+        proc = run("guard.py", [], root=root, env={"TELEPHONY_TRIAGE_HOME": home}, stdin=json.dumps(event))
+        out = json.loads(proc.stdout)["hookSpecificOutput"] if proc.stdout.strip() else None
+        assert proc.returncode == 0 and decision(out) == want and "jira.mcp_server" in proc.stderr, tool
 
 
 def _jira(server: str, get_issue: str) -> dict:
@@ -474,6 +480,189 @@ def test_guard_raw_read_bad_site_value_warns_and_uses_builtins():
     for bad in ({"names": "mine.dat"}, {"cmds": ["view"]}, {"names": ["a/b.log"]}):
         kind, err = _raw_guard(bad, "cat x.log", d)
         assert kind == "deny" and "guard.raw_read" in err, bad
+
+
+# -- Claude hook: gh·MCP 이슈 DB 쓰기 (11), clone 불변 (8), 파서 빈틈, 의존성 없음 ---------------------
+
+DB_SLUG = "mock-org/telephony-issue-db"
+
+
+def _repo_with_origin(url: str) -> Path:
+    path = tmp("tt-gh-repo-") / "r"
+    subprocess.run(["git", "init", "-q", "-b", "main", str(path)], check=True)
+    subprocess.run(["git", "-C", str(path), "remote", "add", "origin", url], check=True)
+    return path
+
+
+def test_guard_gh_write_only_for_issue_db_repo():
+    ws = shared()
+    c = ws.clone
+    plugin_repo = _repo_with_origin("https://ghe.mock.invalid/other/repo")
+    wt = ws.work / "wt-gh"
+    git(c, "worktree", "add", "-q", "--detach", str(wt), "origin/main")
+    try:
+        cases = [("gh pr list --state open", c, None),
+                 (f"gh pr create -R {DB_SLUG} -t x", plugin_repo, "ask"),
+                 (f"gh pr create -R {DB_SLUG} -t x", ws.base, "ask"),
+                 ("gh pr create -t x", plugin_repo, None),
+                 ("gh pr merge 12 --admin", wt, "deny"),
+                 (f"gh api -X PUT repos/{DB_SLUG}/contents/x", plugin_repo, "ask"),
+                 (f"gh api repos/{DB_SLUG}/pulls", plugin_repo, None),
+                 ("gh api -X PUT repos/other/repo/contents/x", c, None),
+                 (f"GH_REPO=ghe.mock.invalid/{DB_SLUG} gh issue comment 1 -b hi", plugin_repo, "ask"),
+                 ("gh api graphql -f query='mutation { mergePullRequest(input: {}) { clientMutationId } }'", c, "ask"),
+                 ("gh api graphql -f query='query { viewer { login } }'", c, None),
+                 ("gh pr edit 3 --add-label x", c, "ask"), ("gh pr view 3", wt, None), ("gh auth status", c, None)]
+        for cmd, cwd, want in cases:
+            out = bash(ws, cmd, cwd)
+            assert decision(out) == want, (cmd, cwd)
+            if want == "deny":
+                assert "머지" in out["permissionDecisionReason"]
+    finally:
+        gitp(c, "worktree", "remove", "--force", str(wt))
+
+
+def test_guard_gh_env_repo_and_api_endpoint():
+    ws = shared()
+    plain = tmp("tt-gh-plain-")
+    db_origin = _repo_with_origin(f"git@ghe.mock.invalid:{DB_SLUG}.git")   # 다른 clone: origin 슬러그로 판정
+    cases = [(f"GH_REPO={DB_SLUG} gh release create v1", plain, "ask"),
+             (f"env GH_REPO=https://ghe.mock.invalid/{DB_SLUG}.git gh label delete x", plain, "ask"),
+             (f"gh api --method=GET repos/{DB_SLUG}/contents/x", plain, None),
+             (f"gh api -F name=v repos/{DB_SLUG}/labels", plain, "ask"),
+             (f"gh api --method=DELETE repos/{DB_SLUG.upper()}/git/refs/heads/x", plain, "ask"),
+             (f"gh api -X POST repos/{{owner}}/{{repo}}/issues -f title=x", db_origin, "ask"),
+             ("gh pr create -t x", db_origin, "ask"),
+             (f"gh pr create --repo=ssh://git@ghe.mock.invalid/{DB_SLUG} -t x", plain, "ask"),
+             (f"gh pr create -R other.host.invalid/{DB_SLUG} -t x", plain, None),   # host가 다르다
+             (f"gh issue list -R {DB_SLUG}", plain, None), (f"gh run rerun 5 -R {DB_SLUG}", plain, "ask"),
+             (f"gh repo clone {DB_SLUG}", plain, None)]
+    for cmd, cwd, want in cases:
+        assert decision(bash(ws, cmd, cwd)) == want, cmd
+    # 사용자 config가 없으면 gh 규칙을 적용하지 않는다
+    empty = {"TELEPHONY_TRIAGE_HOME": tmp("tt-nohome-")}
+    assert decision(bash(ws, f"gh pr merge 1 -R {DB_SLUG}", plain, env=empty)) is None
+
+
+def test_guard_mcp_write_tools_targeting_issue_db():
+    ws = shared()
+    db = {"owner": "mock-org", "repo": "telephony-issue-db"}
+    cases = [("mcp__github__push_files", db, "ask"), ("mcp__github__merge_pull_request", db, "deny"),
+             ("mcp__github__create_or_update_file", {"owner": "other", "repo": "x"}, None),
+             ("mcp__github__get_file_contents", db, None),
+             ("mcp__github__update_pull_request", {"url": f"https://ghe.mock.invalid/{DB_SLUG}/pull/3"}, "ask"),
+             ("mcp__github__create_repository", {"name": "telephony-issue-db"}, None)]
+    for tool, tool_input, want in cases:
+        assert decision(guard(ws, tool, tool_input, ws.base)) == want, tool
+    # setup 전(config에 issue_db 없음)은 판정하지 않는다
+    empty = {"TELEPHONY_TRIAGE_HOME": tmp("tt-nohome-")}
+    assert decision(guard(ws, "mcp__github__push_files", db, ws.base, env=empty)) is None
+
+
+def test_guard_git_dir_work_tree_and_env_forms():
+    ws = shared()
+    c = ws.clone
+    deny = [f'git --git-dir "{c}/.git" --work-tree "{c}" commit --no-verify -m x',
+            f'git --work-tree="{c}" --git-dir="{c}/.git" commit -n -m x',
+            f'GIT_DIR="{c}/.git" git push origin HEAD:main',
+            f'env GIT_WORK_TREE="{c}" GIT_DIR="{c}/.git" git commit --no-verify -m x',
+            f'GIT_CONFIG_PARAMETERS="\'core.hooksPath=/dev/null\'" git -C "{c}" commit -m x',
+            f'GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0=x git -C "{c}" push origin HEAD:refs/heads/a',
+            f'GIT_INDEX_FILE=/tmp/idx git -C "{c}" commit -m x']
+    for cmd in deny:
+        assert decision(bash(ws, cmd, ws.base)) == "deny", cmd
+    assert decision(bash(ws, f'GIT_DIR="{c}/.git" git push origin HEAD:refs/heads/issue/X-1', ws.base)) == "ask"
+    # 다른 레포 경로면 어떤 규칙도 적용하지 않는다
+    other = tmp("tt-other-gitdir-") / "r"
+    subprocess.run(["git", "init", "-q", "-b", "main", str(other)], check=True)
+    for cmd in deny:
+        assert decision(bash(ws, cmd.replace(str(c), str(other)), ws.base)) is None, cmd
+
+
+def test_guard_eval_and_xargs_wrappers():
+    ws = shared()
+    c = ws.clone
+    assert decision(bash(ws, f'eval "git -C {c} push origin HEAD:refs/heads/main"', ws.base)) == "deny"
+    assert decision(bash(ws, f"xargs -n1 git -C {c} push origin HEAD:main < list", ws.base)) == "deny"
+    assert decision(bash(ws, "xargs -I{} echo {} < list", ws.base)) is None
+    assert decision(bash(ws, "xargs -i echo {} < list", ws.base)) is None
+
+
+def test_guard_blocks_clone_mutation_from_bash():
+    ws = shared()
+    c = ws.clone
+    wt = ws.work / "MOCK-7101" / "wt"
+    git(c, "worktree", "add", "-q", "--detach", str(wt), "origin/main")
+    try:
+        for cmd, cwd in ((f'git -C "{c}" reset --hard', ws.base), (f'cd "{c}" && git checkout -- README.md', ws.base),
+                         (f'git -C "{c}" switch -c feature/x origin/main', ws.base), ("git branch -D old", c),
+                         ("git stash", c), ("git pull --rebase", c), ("git worktree remove x", c),
+                         ("gh pr checkout 3", c)):
+            out = bash(ws, cmd, cwd)
+            assert decision(out) == "deny" and "규칙 8" in out["permissionDecisionReason"], cmd
+        for cmd in (f'git -C "{c}" fetch origin', f'git -C "{c}" branch -a', f'git -C "{c}" stash list',
+                    f'git -C "{c}" status', f'git -C "{wt}" checkout -b tt/x', f'git -C "{wt}" reset --hard'):
+            assert decision(bash(ws, cmd, ws.base)) is None, cmd
+    finally:
+        gitp(c, "worktree", "remove", "--force", str(wt))
+
+
+def test_guard_blocks_file_writes_into_clone_from_bash():
+    ws = shared()
+    c = ws.clone
+    for cmd, cwd in ((f'echo x > "{c}/jira/MOCK-1.yaml"', ws.base), (f'echo x >>"{c}/README.md"', ws.base),
+                     (f'echo x &> "{c}/a.txt"', ws.base), (f'echo x | tee -a "{c}/README.md"', ws.base),
+                     (f'sed -i s/a/b/ "{c}/x.yaml"', ws.base), (f'perl -pi -e s/a/b/ "{c}/x.yaml"', ws.base),
+                     (f'rm -rf "{c}/causes"', ws.base), (f'cp /tmp/x "{c}/README.md"', ws.base),
+                     ("touch new.txt", c), (f'sort -o "{c}/x" /tmp/y', ws.base), (f'echo x > "{c}/.git/hooks/x"', ws.base)):
+        out = bash(ws, cmd, cwd)
+        assert decision(out) == "deny" and "규칙 8" in out["permissionDecisionReason"], cmd
+    for cmd in (f'echo x > "{ws.work}/MOCK-1/wt/jira/MOCK-1.yaml"', f'cp "{c}/README.md" /tmp/x',
+                f'grep -n x "{c}/README.md" > /tmp/out 2>&1', f'sed -n 1,5p "{c}/README.md"',
+                f'sed s/a/b/ "{c}/README.md" > /tmp/out', f'cat "{c}/README.md" >&2'):
+        assert decision(bash(ws, cmd, ws.base)) is None, cmd
+
+
+def test_guard_migrate_branch_creation_asks():
+    ws = Workspace()
+    c = ws.clone
+    cmd = f'git -C "{c}" switch -c migrate/schema-v3 origin/main'
+    out = bash(ws, cmd, ws.base)
+    assert decision(out) == "ask" and "migrate" in out["permissionDecisionReason"]
+    assert decision(bash(ws, f'git -C "{c}" checkout -b migrate/schema-v3 origin/main', ws.base)) == "ask"
+    (c / "dirty.txt").write_text("x\n", encoding="utf-8")
+    assert decision(bash(ws, cmd, ws.base)) == "deny"
+    (c / "dirty.txt").unlink()
+    assert decision(bash(ws, f'git -C "{c}" switch -c feature/x origin/main', ws.base)) == "deny"
+
+
+def _no_yaml_env(ws: Workspace) -> dict:
+    d = tmp("tt-noyaml-")
+    (d / "yaml.py").write_text('raise ImportError("PyYAML 없음 (테스트)")\n', encoding="utf-8")
+    return {**ws.env(), "PYTHONPATH": str(d)}
+
+
+def test_guard_without_pyyaml_denies_mcp_and_asks_risky_bash():
+    ws = shared()
+    env = _no_yaml_env(ws)
+
+    def judge(tool: str, tool_input: dict):
+        event = {"tool_name": tool, "tool_input": tool_input, "cwd": str(ws.base)}
+        proc = run("guard.py", [], root=ws.root, cwd=ws.base, env=env, stdin=json.dumps(event))
+        assert proc.returncode == 0 and "Traceback" not in proc.stderr, proc.stderr
+        out = json.loads(proc.stdout)["hookSpecificOutput"] if proc.stdout.strip() else None
+        return out, proc.stderr
+
+    out, _ = judge(JIRA_TOOLS[0], {})
+    assert decision(out) == "deny" and "의존성 없음" in out["permissionDecisionReason"]
+    for cmd in (f'git -C "{ws.clone}" status', f"gh pr list -R {DB_SLUG}",
+                f'python3 "{ws.root}/scripts/db_pr.py" publish wt --branch issue/MOCK-1'):
+        out, _ = judge("Bash", {"command": cmd})
+        assert decision(out) == "ask" and "레포 판별 불가" in out["permissionDecisionReason"], cmd
+    out, err = judge("Bash", {"command": "echo hi"})
+    assert out is None and "의존성 없음" in err
+    out, _ = judge("Write", {"file_path": str(ws.base / "x.txt")})
+    assert decision(out) == "ask"
 
 
 def test_hooks_json_has_eight_rules_wired_to_guard():

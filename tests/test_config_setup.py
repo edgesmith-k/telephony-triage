@@ -412,11 +412,14 @@ def _rows(result: dict) -> dict:
     return {r["check"]: r for r in result["rows"]}
 
 
+DOCTOR_ROWS = ["python", "deps", "config", "scripts_path", "clone", "hook", "guard", "jira", "gh", "snapshot", "compat",
+               "lock"]
+
+
 def _doctor(env: Env, expect=0, at: dict | None = None, **kw) -> dict:
     result = env.json("config.py", ["doctor"], expect=expect, env=at or {}, **kw)
-    assert [r["check"] for r in result["rows"]] == ["config", "scripts_path", "clone", "hook", "jira", "gh",
-                                                    "snapshot", "compat", "lock"]
-    assert sum(result["counts"].values()) == 9 and all(len(r["detail"]) <= 80 for r in result["rows"])
+    assert [r["check"] for r in result["rows"]] == DOCTOR_ROWS
+    assert sum(result["counts"].values()) == 12 and all(len(r["detail"]) <= 80 for r in result["rows"])
     return result
 
 
@@ -446,25 +449,52 @@ def test_doctor_all_ok_markdown_fits_1kb_and_changes_nothing():
     env, clone = _ready_env()
     before = (_tree(env.base, clone), git(clone, "status", "--porcelain"), git(clone, "for-each-ref"))
     result = _doctor(env)
-    assert result["counts"] == {"ok": 9, "warn": 0, "fail": 0, "skip": 0}
+    assert result["counts"] == {"ok": 12, "warn": 0, "fail": 0, "skip": 0}
     proc = env.run("config.py", ["doctor", "--format", "markdown"])
     assert proc.returncode == 0 and len(proc.stdout.encode("utf-8")) <= 1024, len(proc.stdout.encode("utf-8"))
     lines = proc.stdout.rstrip("\n").splitlines()
-    assert lines[0].startswith("| 점검 |") and lines[-1] == "ok 9 · warn 0 · fail 0 · skip 0"
-    assert sum(1 for ln in lines if ln.startswith("| ")) == 10          # 헤더 + 9행, 표는 하나
+    assert lines[0].startswith("| 점검 |") and lines[-1] == "ok 12 · warn 0 · fail 0 · skip 0"
+    assert sum(1 for ln in lines if ln.startswith("| ")) == 13          # 헤더 + 12행, 표는 하나
     assert "\n  " not in json.dumps(result) and env.run("config.py", ["doctor"]).stdout.count("\n") == 1
     after = (_tree(env.base, clone), git(clone, "status", "--porcelain"), git(clone, "for-each-ref"))
     assert after == before, "doctor는 읽기 전용이다 (clone·work_dir·config 불변)"
     assert not (env.base / "work" / "session.lock").exists()
 
 
+def test_doctor_python_deps_and_guard_selftest_rows():
+    env, _ = _ready_env()
+    rows = _rows(_doctor(env))
+    assert rows["python"]["status"] == "ok" and rows["deps"]["status"] == "ok" and "PyYAML" in rows["deps"]["detail"]
+    assert rows["guard"] == {"check": "guard", "status": "ok", "detail": "deny 2/2"}
+    # guard.py가 깨진 플러그인 루트: guard 행 fail, 종료 1
+    import shutil
+    broken = tmp("tt-broken-guard-") / "root"
+    shutil.copytree(env.root, broken)
+    guard_py = broken / "scripts" / "guard.py"
+    text = guard_py.read_text(encoding="utf-8")
+    guard_py.write_text(text.replace("from __future__ import annotations\n",
+                                     "from __future__ import annotations\nraise SystemExit(1)\n", 1), encoding="utf-8")
+    result = env.json("config.py", ["doctor"], expect=1, root=broken)
+    guard = _rows(result)["guard"]
+    assert guard["status"] == "fail" and "응답 구조 불일치" in guard["detail"] and "guard.py" in guard["next"]
+
+
+def test_config_without_pyyaml_exits_2_with_install_hint():
+    env = Env()
+    fake = tmp("tt-noyaml-")
+    (fake / "yaml.py").write_text('raise ImportError("PyYAML 없음 (테스트)")\n', encoding="utf-8")
+    proc = env.run("config.py", ["doctor"], env={"PYTHONPATH": str(fake)})
+    assert proc.returncode == 2 and "의존성 없음" in proc.stderr and "Traceback" not in proc.stderr, proc.stderr
+
+
 def test_doctor_without_config_fails_config_and_skips_the_rest_without_creating_anything():
     env = Env()
     result = _doctor(env, expect=1)
-    assert result["counts"] == {"ok": 0, "warn": 0, "fail": 1, "skip": 8}   # skip은 ok로 세지 않는다
+    assert result["counts"] == {"ok": 3, "warn": 0, "fail": 1, "skip": 8}   # skip은 ok로 세지 않는다
     rows = _rows(result)
     assert rows["config"]["status"] == "fail" and "setup" in rows["config"]["next"]
-    assert all(r["status"] == "skip" for k, r in rows.items() if k != "config")
+    assert rows["guard"] == {"check": "guard", "status": "ok", "detail": "deny 1/1"}   # config 없이도 이름 기반 deny
+    assert all(r["status"] == "skip" for k, r in rows.items() if k not in ("config", "python", "deps", "guard"))
     assert not env.home.exists()
     assert env.run("config.py", ["doctor", "--format", "markdown", "--json"]).returncode == 2
 
@@ -487,7 +517,7 @@ def test_doctor_gh_unauth_is_warn_and_exit_0():
     result = _doctor(env, unauth=True)
     gh = _rows(result)["gh"]
     assert gh["status"] == "warn" and "gh auth login" in gh["next"]
-    assert result["counts"] == {"ok": 8, "warn": 1, "fail": 0, "skip": 0}
+    assert result["counts"] == {"ok": 11, "warn": 1, "fail": 0, "skip": 0}
 
 
 def test_doctor_snapshot_age_missing_and_corrupt_meta():

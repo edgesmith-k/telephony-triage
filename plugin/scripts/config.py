@@ -25,7 +25,8 @@
                                → writable / push_allowed. `migrate/schema-v<N>` 브랜치는 버전을 보지 않는다.
   gh-status                    gh 인증 확인 (setup 9). 실패면 로그인 안내와 종료 코드 2
   doctor [--format json|markdown]
-                               환경 점검 한 장(config·clone·hook·Jira 매핑·gh·스냅샷·호환성·lock). **읽기 전용**
+                               환경 점검 한 장(python·deps·config·clone·hook·guard 자가시험·Jira 매핑·gh·스냅샷·
+                               호환성·lock). **읽기 전용**
                                (mkdir·fetch·lock·쓰기 없음). 행마다 ok|warn|fail|skip. fail이 있으면 종료 코드 1
 """
 
@@ -41,11 +42,17 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import adapters  # noqa: E402
-from common import compat, dbpath, ghcli, mcptools, session_lock, site_defaults, userconfig, yamlio  # noqa: E402
-from common import compiled as compiled_cache  # noqa: E402
 from common.exitcodes import CHECK_FAILED, OK, USAGE  # noqa: E402
 from common.versions import GENERATOR_VERSION, SCHEMA_VERSION  # noqa: E402
+
+# 의존성(PyYAML 등)이 없으면 traceback 대신 안내하고 종료 2(자기 실행 불가)로 멈춘다 (`main`)
+try:
+    import adapters  # noqa: E402
+    from common import compat, dbpath, ghcli, mcptools, session_lock, site_defaults, userconfig, yamlio  # noqa: E402
+    from common import compiled as compiled_cache  # noqa: E402
+    IMPORT_ERROR: ImportError | None = None
+except ImportError as _exc:   # noqa: BLE001
+    IMPORT_ERROR = _exc
 
 SUPPORTED_SCHEMA = (SCHEMA_VERSION, SCHEMA_VERSION)  # (min, max), 06-collaboration.md §6.4
 MIGRATE_BRANCH_RE = re.compile(r"^migrate/schema-v\d+$")
@@ -384,6 +391,8 @@ def cmd_gh_status(args, defaults: dict) -> tuple[dict, int]:
 
 SNAPSHOT_STALE_DAYS = 7
 DETAIL_MAX = 80
+MIN_PYTHON = (3, 11)   # pyproject requires-python
+GUARD_SELFTEST_TIMEOUT = 20
 
 
 def _row(check: str, status: str, detail: str, next_: str | None = None) -> dict:
@@ -391,6 +400,35 @@ def _row(check: str, status: str, detail: str, next_: str | None = None) -> dict
     if next_:
         row["next"] = next_
     return row
+
+
+def _guard_selftest(args, clone: Path | None) -> dict:
+    """guard.py에 거부돼야 할 hook 입력을 주고 응답 구조·결정을 본다: (1) 이름에 jira가 든 서버의 쓰기 도구(설정과
+    무관하게 deny), (2) clone이 있으면 clone 파일 Write(deny)."""
+    root = _plugin_root(args)
+    home = str(Path.home())
+    events = [{"hook_event_name": "PreToolUse", "tool_name": "mcp__probe-jira__jira_add_comment", "tool_input": {},
+               "cwd": home}]
+    if clone is not None:
+        events.append({"hook_event_name": "PreToolUse", "tool_name": "Write",
+                       "tool_input": {"file_path": str(clone / "README.md")}, "cwd": home})
+    for event in events:
+        try:
+            proc = subprocess.run([sys.executable, str(root / "scripts" / "guard.py"), "--plugin-root", str(root)],
+                                  input=json.dumps(event), capture_output=True, text=True, encoding="utf-8",
+                                  errors="replace", timeout=GUARD_SELFTEST_TIMEOUT)
+        except subprocess.TimeoutExpired:
+            return _row("guard", "fail", f"응답 없음 ({GUARD_SELFTEST_TIMEOUT}s 초과)", "guard.py 직접 실행해 stderr 확인")
+        try:
+            out = json.loads(proc.stdout)["hookSpecificOutput"] if proc.stdout.strip() else {}
+        except (ValueError, KeyError, TypeError):
+            out = {}
+        if proc.returncode != 0 or not isinstance(out, dict) or out.get("hookEventName") != "PreToolUse" \
+                or out.get("permissionDecision") != "deny":
+            got = out.get("permissionDecision") if isinstance(out, dict) else None
+            return _row("guard", "fail", f"응답 구조 불일치: {event['tool_name']} 종료 {proc.returncode}·결정 {got or '없음'}",
+                        "guard.py 직접 실행해 stderr 확인")
+    return _row("guard", "ok", f"deny {len(events)}/{len(events)}")
 
 
 def _doctor_rows(args, defaults: dict) -> list[dict]:
@@ -404,6 +442,25 @@ def _doctor_rows(args, defaults: dict) -> list[dict]:
             func()
         except Exception as exc:    # noqa: BLE001 — 한 행의 실패가 표 전체를 막지 않는다
             rows.append(_row(name, "fail", f"점검 실패: {type(exc).__name__}: {exc}"))
+
+    # 0 python·deps (config보다 먼저: 이것이 깨지면 나머지 판정이 무의미하다)
+    if sys.version_info >= MIN_PYTHON:
+        rows.append(_row("python", "ok", ".".join(map(str, sys.version_info[:3]))))
+    else:
+        rows.append(_row("python", "fail", ".".join(map(str, sys.version_info[:3])),
+                         f"Python {'.'.join(map(str, MIN_PYTHON))}+"))
+
+    def deps():
+        try:
+            import jsonschema  # noqa: F401
+            import yaml
+        except ImportError as exc:
+            rows.append(_row("deps", "fail", f"{exc.name or exc} 없음", "pip install (pyproject 의존성)"))
+            return
+        from importlib.metadata import version
+        libyaml = "libyaml" if getattr(yaml, "CSafeLoader", None) else "pure"
+        rows.append(_row("deps", "ok", f"PyYAML {yaml.__version__}({libyaml})·jsonschema {version('jsonschema')}"))
+    guarded("deps", deps)
 
     # 1 config
     user, cfg = None, None
@@ -454,6 +511,9 @@ def _doctor_rows(args, defaults: dict) -> list[dict]:
         else:
             rows.append(_row("hook", "fail", f"core.hooksPath={value or '(없음)'}", "config.py install-hooks"))
     guarded("hook", hook) if repo_box else skip("hook", "clone 없음")
+
+    # 4b guard 자가시험 (읽기 전용: guard는 판정만 한다)
+    guarded("guard", lambda: rows.append(_guard_selftest(args, repo_box[0] if repo_box else None)))
 
     # 5 jira (매핑만 본다)
     def jira():
@@ -640,6 +700,10 @@ def main(argv: list[str] | None = None) -> int:
     except (AttributeError, ValueError):
         pass
     args = build_parser().parse_args(argv)
+    if IMPORT_ERROR is not None:
+        print(f"의존성 없음: {getattr(IMPORT_ERROR, 'name', None) or IMPORT_ERROR} — pyproject 의존성(PyYAML·jsonschema)을 "
+              f"설치한 뒤 다시 실행한다 ({type(IMPORT_ERROR).__name__}: {IMPORT_ERROR})", file=sys.stderr)
+        return USAGE
     # 어떤 서브커맨드든 사내 기본값이 먼저다. 없으면 종료 코드 2 (example은 읽지 않는다).
     defaults = site_defaults.load_or_exit(getattr(args, "plugin_root", None))
     code = OK

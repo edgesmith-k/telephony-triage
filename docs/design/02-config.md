@@ -70,7 +70,7 @@ setup 커맨드가 순서대로 하는 일:
 7. **스냅샷 기준으로** 이슈 DB의 `schema_version`, `generator_version`, `parser_backend`, `external_parsers`가 플러그인과 호환되는지 확인한다: `config.py check --db <work_dir>/_snapshot --for dry-run` (`06-collaboration.md §6.4`). 오래된 사용자 clone이 아니라 origin/<base> 기준 버전을 본다. 쓰기가 막히는 조건이면 "읽기 전용"이라고 알리고 계속한다.
 8. `db_pr.py lock release setup`.
 9. `gh auth status --hostname <ghe_host>`를 확인한다. **실패하면 로그인 방법을 안내하고 "쓰기 불가(gh 인증 없음)"로 setup을 끝낸다(종료 코드 2).** 1~8의 읽기 설정은 이미 끝났으므로 읽기 전용 분석과 `--dry-run` 연습은 가능하다. gh 인증이 없는 동안은 모든 이슈 DB 쓰기 작업(analyze Step 8의 push, `record`, `sync-pr`, `verify-fix`, `validate --cause`, `fix-submitted`, import/review/move 계획 PR)이 `config.py check`에서 막힌다.
-10. `config.py doctor --format markdown`(읽기 전용 점검 한 장: config·스크립트 경로·clone·hook·Jira 매핑·gh·스냅샷 나이·호환성·lock)의 표를 그대로 보이고, `fail`·`warn` 행의 안내만 전한다(자동 수리 없음). 9번에서 gh 인증이 실패해 setup을 끝내는 경우에도 이 표를 함께 보인다. 이어서 이슈 DB의 `docs/getting-started.md` 위치를 알려준다.
+10. `config.py doctor --format markdown`(읽기 전용 점검 한 장: Python 버전·의존성·config·스크립트 경로·clone·hook·guard 자가시험·Jira 매핑·gh·스냅샷 나이·호환성·lock)의 표를 그대로 보이고, `fail`·`warn` 행의 안내만 전한다(자동 수리 없음). 9번에서 gh 인증이 실패해 setup을 끝내는 경우에도 이 표를 함께 보인다. 이어서 이슈 DB의 `docs/getting-started.md` 위치를 알려준다.
 
 `analyze` 등 다른 커맨드는 config가 없으면 setup으로 유도한다. 플러그인은 SessionStart hook으로 매 세션 `plugin.scripts_path`를 현재 `${CLAUDE_PLUGIN_ROOT}/scripts`로 갱신한다 (플러그인 업데이트 후 경로가 바뀌므로).
 

@@ -335,6 +335,20 @@ def test_bridge_fails_closed_when_config_unreadable():
     assert "450081234567890" not in shown and "데이터 안 됨" not in shown
 
 
+def test_bridge_without_pyyaml_hides_raw():
+    """의존성(PyYAML) import 실패: 종료 1(원문 노출)이 아니라 종료 0 + 오류 문구. MCP가 아닌 도구는 그대로."""
+    fake = tmp("tt-noyaml-")
+    (fake / "yaml.py").write_text('raise ImportError("PyYAML 없음 (테스트)")\n', encoding="utf-8")
+    env = {"TELEPHONY_TRIAGE_HOME": _bridge_home(), "PYTHONPATH": str(fake)}
+    proc = run("jira_bridge.py", [], root=plugin_root(), env=env, stdin=_get_issue_event("mcp__mock-jira__jira_fetch_ticket"))
+    assert proc.returncode == 0 and "Traceback" not in proc.stderr, proc.stderr
+    shown = json.loads(proc.stdout)["hookSpecificOutput"]["updatedToolOutput"]
+    assert "의존성" in shown and "450081234567890" not in shown and "데이터 안 됨" not in shown
+    other = run("jira_bridge.py", [], root=plugin_root(), env=env,
+                stdin=json.dumps({"tool_name": "Bash", "tool_input": {}, "tool_response": "x"}))
+    assert other.returncode == 0 and other.stdout.strip() == ""
+
+
 def test_lock_held_by_other_job_is_a_question_and_release_other_continues():
     ws = Workspace()
     ws.acquire("MOCK-9999")

@@ -20,8 +20,12 @@ import subprocess
 from pathlib import Path
 
 PROTOCOL_VERSION = "2025-06-18"
+# 쓰기형 단어. 뒷줄은 비Jira MCP(GitHub 등)의 이슈 DB 쓰기 판정(guard 규칙 11)용이다. `request`는 넣지 않는다
+# (`pull_request_read`가 걸린다). Jira 쪽은 read_tools가 명시 허용 목록이라 늘려도 안전 쪽이다.
 WRITE_WORDS = ("create", "add", "update", "delete", "remove", "transition", "assign", "post", "edit",
-               "set", "link", "upload", "attach", "move", "close", "reopen", "worklog", "write")
+               "set", "link", "upload", "attach", "move", "close", "reopen", "worklog", "write",
+               "push", "merge", "fork", "dispatch", "trigger", "resolve", "unresolve", "enable", "disable", "submit",
+               "cancel", "rerun", "dismiss", "lock", "unlock", "archive", "rename")
 READ_WORDS = ("get", "search", "list", "read", "fetch", "query", "view", "find", "show", "comments")
 
 
