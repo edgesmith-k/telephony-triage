@@ -26,6 +26,8 @@ summary 입력), `regress.json`, `pr.json`(summary가 만든 PR 제목·본문·
 - 같은 작업 키: `updated_at`이 10분 이내면 다른 세션이 진행 중일 수 있으므로 종료 코드 2
   (사용자가 확인하면 `--take-over`로 이어받는다). 10분이 넘었으면 그대로 이어받는다.
 - `release --force`는 보유자와 상관없이 푼다(사용자가 "그 세션은 끝났다"고 확인한 경우).
+- 손상된 lock(읽을 수 없음)은 `acquire`·`touch`·`release`(--force 없음)가 종료 코드 2로 멈춘다. `release <아무 작업 키> --force`만
+  `session.lock.corrupt-<UTC ts>`(같은 이름이 있으면 `-1`, `-2`…)로 옮기고 푼다. 지우지 않는다(사후 확인용).
 - 프로세스 생존 여부로 판단하지 않는다(스크립트는 호출마다 끝난다).
 
 읽기 스냅샷 `snapshot --job <작업 키>`: `git -C <issue_db.path> fetch origin` → lock 확인(그 작업 키,

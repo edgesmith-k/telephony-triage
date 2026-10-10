@@ -41,6 +41,14 @@ def test_release_force_backs_up_corrupt_lock():
     assert ws.db_pr("lock", "status")["held"] is False            # 백업은 lock으로 읽지 않는다
     assert ws.acquire("MOCK-1102")["acquired"] is True
 
+    # 같은 초에 또 깨지면 앞 백업을 덮지 않고 -1, -2를 붙인다
+    for n in (1, 2):
+        lock.write_text(f"{{손상{n}", encoding="utf-8")
+        out = ws.db_pr("lock", "release", "MOCK-1102", "--force", env={"TT_NOW": "2099-01-02T03:04:05Z"})
+        assert out["backup"].endswith(f"session.lock.corrupt-20990102T030405Z-{n}")
+    assert sorted(p.read_text(encoding="utf-8") for p in ws.work.glob("session.lock.corrupt-*")) == \
+        ["{손상", "{손상1", "{손상2"]
+
 
 if __name__ == "__main__":
     test_release_force_backs_up_corrupt_lock()

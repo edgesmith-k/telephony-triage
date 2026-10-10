@@ -155,7 +155,11 @@ class Lock:
                 raise UsageError(f"session.lock을 읽을 수 없습니다(손상): {self.path}. 내용을 확인한 뒤 그 세션이 끝났으면 "
                                  f"lock release {job} --force로 백업(.corrupt-<ts>)하고 제거한다.") from exc.__cause__
             # 지우지 않고 옮긴다: 어떤 세션이 쓰다 깨졌는지 나중에 볼 수 있게. acquire·touch는 손상 lock에서 계속 실패한다.
-            backup = self.work_dir / f"{LOCK_FILE}.corrupt-{_iso(now()).replace('-', '').replace(':', '')}"
+            stem = f"{LOCK_FILE}.corrupt-{_iso(now()).replace('-', '').replace(':', '')}"
+            backup, n = self.work_dir / stem, 0
+            while backup.exists():               # 같은 초에 또 깨진 lock: 앞 백업을 덮지 않는다
+                n += 1
+                backup = self.work_dir / f"{stem}-{n}"
             os.replace(self.path, backup)
             return {"released": True, "forced": True, "corrupt": True, "backup": str(backup), "previous": None}
         if held is None:

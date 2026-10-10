@@ -10,7 +10,8 @@
 - 워킹 트리가 깨끗함 (untracked 포함, `.gitignore` 대상 제외)
 - 이슈 DB 스키마 버전 < N ≤ 플러그인 `SCHEMA_VERSION`, 그 사이 모든 버전의 마이그레이션이 있음
 `--dry-run`은 아무것도 쓰지 않고 바뀔 파일만 보여주므로 브랜치·깨끗함은 보지 않는다.
-`--to <현재 스키마>`는 `generator_version`만 플러그인 값으로 맞춘다(같은 브랜치·깨끗함 조건, `actions-build`는 제외).
+`--to <현재 스키마>`는 `generator_version`만 플러그인 값으로 올린다(같은 브랜치·깨끗함 조건, `actions-build`는 제외).
+`generator_version`은 올리기만 한다: 이슈 DB 값이 플러그인보다 크거나 정수가 아니면 종료 코드 2(`actions-build`는 보지 않는다).
 
 마이그레이션은 `scripts/migrations/NNNN_<설명>.py`다. 모듈 계약:
     FROM_VERSION, TO_VERSION   정수. 체인은 `FROM_VERSION`으로 이어진다.
@@ -248,6 +249,14 @@ def cmd_migrate(args, defaults: dict) -> tuple[dict, int]:
                          "플러그인을 새 버전으로 업데이트한 뒤 실행한다.")
     if target < current:
         raise UsageError(f"이슈 DB가 이미 v{current}입니다 (요청 v{target}). 되돌리는 마이그레이션은 지원하지 않는다.")
+    actions_build = config.get("ci_mode", "local") == "actions-build"
+    db_generator = config.get("generator_version")
+    if not actions_build:
+        if not isinstance(db_generator, int) or isinstance(db_generator, bool):
+            raise UsageError(f"{CONFIG}의 generator_version이 정수가 아닙니다: {db_generator!r}")
+        if db_generator > GENERATOR_VERSION:     # 낮추지 않는다: 이 플러그인이 옛 버전이다
+            raise UsageError(f"이슈 DB generator_version {db_generator}이 플러그인 {GENERATOR_VERSION}보다 새롭습니다. "
+                             "플러그인을 업데이트한다.")
     if not args.dry_run:
         branch = _require_migrate_branch(db, target)
     else:
@@ -263,9 +272,8 @@ def cmd_migrate(args, defaults: dict) -> tuple[dict, int]:
         except Exception as exc:  # noqa: BLE001
             raise UsageError(f"마이그레이션 {step.name} 실패: {type(exc).__name__}: {exc}. 아무것도 바꾸지 않았습니다.") from exc
 
-    generator = {"from": config.get("generator_version"), "to": config.get("generator_version"), "synced": False}
-    actions_build = config.get("ci_mode", "local") == "actions-build"
-    generator_behind = not actions_build and config.get("generator_version") != GENERATOR_VERSION
+    generator = {"from": db_generator, "to": db_generator, "synced": False}
+    generator_behind = not actions_build and db_generator < GENERATOR_VERSION
     text = tree.read(CONFIG) or ""
     if steps:
         text = _set_config_int(text, "schema_version", target)

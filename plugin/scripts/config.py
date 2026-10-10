@@ -337,8 +337,12 @@ def check(db: Path, defaults: dict, for_: str) -> dict:
                             f"이슈 DB schema_version {schema}가 플러그인 지원 범위 {SUPPORTED_SCHEMA}보다 옛 버전이다. "
                             "메인테이너에게 마이그레이션이 필요하다고 알린다."})
         if cfg.get("ci_mode", "local") != "actions-build" and generator != GENERATOR_VERSION:
+            if isinstance(generator, int) and not isinstance(generator, bool) and generator < GENERATOR_VERSION:
+                hint = f"메인테이너: migrate/schema-v{schema} 브랜치에서 migrate --to <현재 스키마>로 맞춘다."
+            else:
+                hint = "플러그인을 업데이트한다."
             reasons.append({"code": "generator-mismatch", "message":
-                            f"generator_version {generator} ≠ 플러그인 {GENERATOR_VERSION}. 이슈 DB 쓰기 전체를 막는다."})
+                            f"generator_version {generator} ≠ 플러그인 {GENERATOR_VERSION}. 이슈 DB 쓰기 전체를 막는다. {hint}"})
         reasons += compat.check_parser_backend(cfg, env["backend"]["name"], str(env["backend"]["version"]))
         configured = {}
         for category, conf in (defaults.get("external_parsers") or {}).items():

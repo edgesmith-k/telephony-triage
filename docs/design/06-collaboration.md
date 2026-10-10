@@ -157,7 +157,7 @@ v1에서 도구는 이런 브랜치를 바꾸지 않는다. `sync-pr`는 아래 
   - 직접 편집한 브랜치: 작성자가 rebase한 뒤 자기 변경분(새로 만든 파일)을 새 스키마 형식으로 직접 고치고 `validate` 후 push한다. `db_migrate --to`는 `migrate/schema-v<N>` 브랜치에서만 실행되고 main이 이미 v<N>이면 바꿀 것이 없으므로 쓰지 않는다.
 - **버전 올림 순서와 되돌리기** (스키마 또는 생성기 버전이 바뀌는 플러그인 배포):
   1. **공지·병합 중지**: 이슈 DB PR 병합을 멈춘다(열린 PR은 가능한 한 먼저 머지하거나 닫는다).
-  2. **플러그인 먼저**: `SCHEMA_VERSION`/`GENERATOR_VERSION`과 `migrations/NNNN_*.py`가 든 플러그인을 병합·배포한다. 이때부터 3이 끝날 때까지 팀원은 옛 DB에 새 플러그인이라 `schema-too-old`(지원 범위 min이 N이면) 또는 `generator-mismatch`로 **읽기 전용 기간**이다. 공지에 적는다. 순서를 바꿔 DB를 먼저 올리면 옛 플러그인이 `schema-too-new`로 전원 읽기 전용이 되고, 새 플러그인 없이는 `migrate` 자체가 거부된다(`--to`가 플러그인 `SCHEMA_VERSION`보다 크면 종료 2).
+  2. **플러그인 먼저**: `SCHEMA_VERSION`/`GENERATOR_VERSION`과 `migrations/NNNN_*.py`가 든 플러그인을 병합·배포한다. 이때부터 3이 끝날 때까지 팀원은 옛 DB에 새 플러그인이라 `schema-too-old`(지원 범위 min이 N이면) 또는 `generator-mismatch`로 쓰기가 막히는 **읽기 전용 기간이 생길 수 있다**. 공지에 적는다. 순서를 바꿔 DB를 먼저 올리면 옛 플러그인이 `schema-too-new`로 전원 읽기 전용이 되고, 새 플러그인 없이는 `migrate` 자체가 거부된다(`--to`가 플러그인 `SCHEMA_VERSION`보다 크면 종료 2).
   3. **migrate PR**: 메인테이너가 `migrate/schema-v<N>`에서 `migrate --dry-run` → `--to N` → `db_build --write` → `validate` → 커밋 → PR → 머지. 스키마는 그대로이고 생성기만 바뀌었으면 같은 브랜치 이름(`migrate/schema-v<현재>`)에서 `--to <현재>`가 `generator_version`만 맞춘다(`ci_mode: actions-build`는 맞추지 않는다).
   4. **재개**: 공지를 푼다. 남은 PR은 위 항목대로 올린다(`sync-pr`의 `upgrade-plan` / 직접 편집 브랜치 rebase).
   - **되돌리기**: `db_migrate`에 다운그레이드는 없다. (a) migrate PR 머지 전 → 브랜치를 버리고 플러그인을 이전 SHA로 되돌린다(S2 절차, `SITE_PROFILE.md`). (b) 머지 후 → 다시 병합 중지 → 이슈 DB에서 migrate 커밋을 `git revert`하는 PR(그 사이 머지된 새 형식 PR이 있으면 함께 revert하거나 작성자가 옛 형식으로 다시 올린다) → 머지 → 플러그인을 이전 SHA로 → 이전 플러그인으로 `db_build --write`를 다시 돌린다(생성기 버전이 되돌아가므로) → 재개. 어느 경우든 `validate`와 `config.py check --for write`가 통과한 뒤에만 재개한다.

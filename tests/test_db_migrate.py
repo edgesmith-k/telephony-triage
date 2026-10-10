@@ -168,6 +168,30 @@ def test_generator_only_sync_on_current_schema():
     assert yaml.safe_load((ab / CONFIG).read_text(encoding="utf-8"))["generator_version"] == 1
 
 
+def test_generator_version_is_never_lowered_or_non_integer():
+    """generator_version은 올리기만 한다: DB 값이 플러그인보다 크면(플러그인이 옛 것) 종료 2, 정수가 아니어도 종료 2."""
+    for value, needle in (("3", "플러그인을 업데이트"), ('"1"', "정수가 아닙니다")):
+        db = migrate_branch_db("migrate/schema-v1")
+        edit_cfg = (db / CONFIG).read_text(encoding="utf-8").replace("generator_version: 1", f"generator_version: {value}")
+        (db / CONFIG).write_text(edit_cfg, encoding="utf-8", newline="\n")
+        git(db, "commit", "-qam", "generator")
+        for extra in ((), ("--dry-run",)):
+            out = migrate(db, "--to", "1", *extra, root=versioned_root(), expect=2)
+            assert needle in out["error"], out
+        assert (db / CONFIG).read_text(encoding="utf-8") == edit_cfg and git(db, "status", "--porcelain") == ""
+    db = migrate_branch_db("migrate/schema-v1")
+    edit_cfg = (db / CONFIG).read_text(encoding="utf-8").replace("generator_version: 1", "generator_version: 3")
+    (db / CONFIG).write_text(edit_cfg, encoding="utf-8", newline="\n")
+    git(db, "commit", "-qam", "generator")
+    git(db, "switch", "-q", "-c", "other")
+    msg = next(r["message"] for r in check(db, root=versioned_root())["reasons"] if r["code"] == "generator-mismatch")
+    assert "플러그인을 업데이트" in msg
+    low = git_db()
+    msg = next(r["message"] for r in check(low, root=versioned_root(generator=2))["reasons"]
+               if r["code"] == "generator-mismatch")
+    assert "migrate --to" in msg
+
+
 # -- 실행 조건 (종료 코드 2) --------------------------------------------------------------------
 
 
