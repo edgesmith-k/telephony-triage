@@ -357,15 +357,20 @@ def match(events_doc: dict, db: issuedb.IssueDb, compiled: dict, *, regress: boo
         for itype in db.types:
             if not itype.active:
                 continue
+            n_err = len(errors)
             symptoms = [] if regress else _all_satisfied(evaluator, compiled[itype.id], occurred, errors)
             sym = (_first_satisfied(evaluator, compiled[itype.id], occurred, errors) if regress
                    else next(iter(symptoms), None))
-            S = 1 if sym else 0
-            types_out.append({
+            # 충족 없음 + 이 유형 평가 중 새 오류(시간 초과·정규식 오류) → 판정 불가(S: None), 0으로 단정하지 않는다
+            S = 1 if sym else (None if len(errors) > n_err else 0)
+            entry = {
                 "type": itype.id, "S": S,
                 "signature": sym.key if sym else None,
                 "evidence": sym.evidence if sym else [],
-            })
+            }
+            if S is None:
+                entry["error"] = _error_text(errors[n_err])
+            types_out.append(entry)
             if S:
                 pending += [{"type": itype.id, "cause": c.id, "title": c.title}
                             for c in itype.causes if c.active and c.pending]
@@ -376,19 +381,23 @@ def match(events_doc: dict, db: issuedb.IssueDb, compiled: dict, *, regress: boo
                 if not cause.active or cause.pending:
                     continue
                 candidate_sym = sym
+                n_err = len(errors)
                 if regress:
                     res = _first_satisfied(evaluator, compiled[cause.id], occurred, errors)
                 else:
                     matches = _all_satisfied(evaluator, compiled[cause.id], occurred, errors)
                     pair = next(((s, c) for c in matches for s in symptoms if _compatible(s, c)), None)
                     candidate_sym, res = pair if pair else (sym, None)
-                C = 1 if res else 0
-                causes_out.append({"type": itype.id, "cause": cause.id, "S": S, "C": C,
-                                   "signature": res.key if res else None})
+                C = 1 if res else (None if len(errors) > n_err else 0)
+                centry = {"type": itype.id, "cause": cause.id, "S": S, "C": C,
+                          "signature": res.key if res else None}
+                if C is None:
+                    centry["error"] = _error_text(errors[n_err])
+                causes_out.append(centry)
                 if not C:
                     continue
-                any_cause = True
-                candidates.append(_candidate(db, itype, cause, S, C, candidate_sym, res, jira, occurred, half,
+                any_cause = True       # 회귀 모드는 S가 판정 불가(None)여도 원인을 평가한다 — 점수 계산에서는 0
+                candidates.append(_candidate(db, itype, cause, S or 0, C, candidate_sym, res, jira, occurred, half,
                                              scoring, use_bonus, stats, min_samples, rules, use_feedback,
                                              focus_max if itype.id in focus_map else 0.0))
             if S and not any_cause:
@@ -402,8 +411,8 @@ def match(events_doc: dict, db: issuedb.IssueDb, compiled: dict, *, regress: boo
     candidates.sort(key=_rank_key)
     omitted = None
     if top:   # --top N: 후보 N개, 유형·원인은 충족된 것만, pending 원인 N개 (판정 목록 전체는 --top 0)
-        kept_types = [t for t in types_out if t["S"]]
-        kept_causes = [c for c in causes_out if c["C"]]
+        kept_types = [t for t in types_out if t["S"] or t["S"] is None]   # 판정 불가(None)도 남긴다
+        kept_causes = [c for c in causes_out if c["C"] or c["C"] is None]
         omitted = {"types": len(types_out) - len(kept_types), "causes": len(causes_out) - len(kept_causes),
                    "pending_causes": max(0, len(pending) - top), "candidates": max(0, len(candidates) - top)}
         types_out, causes_out, pending = kept_types, kept_causes, pending[:top]
@@ -427,6 +436,11 @@ def match(events_doc: dict, db: issuedb.IssueDb, compiled: dict, *, regress: boo
     if omitted is not None:
         result["omitted"] = omitted
     return result
+
+
+def _error_text(err: dict) -> str:
+    """`errors[]` 항목 하나를 `<시그니처 키>: <오류>` 한 줄로."""
+    return f"{err.get('signature')}: {err.get('error')}"
 
 
 def _rank_key(c: dict) -> tuple:

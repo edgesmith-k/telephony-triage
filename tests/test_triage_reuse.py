@@ -301,10 +301,48 @@ def test_explore_timeline_is_not_a_cache_file_and_is_reproduced_on_a_hit():
     assert done["timeline"] == "timeline.md" and done["lines"] == done["total"] > 0
     made = (job / "timeline.md").read_bytes()
     cache = json.loads((job / "analysis-cache.json").read_text(encoding="utf-8"))
-    assert "timeline" not in cache["files"] and cache["format"] == 2 and cache["core"]["explore_input"]["limit"] == 200
+    assert "timeline" not in cache["files"] and cache["format"] == 3 and cache["core"]["explore_input"]["limit"] == 200
     second = _run(ws, "--answer", "time=2026-09-27T18:02:03+09:00", logs=log)                                      # 타임라인을 만든 뒤에도 적중
     assert second["reuse"] == {"hit": True, "run": 1}
     assert not (job / "timeline.md").exists() and (job / "explore-input.json").is_file()   # run은 이전 타임라인을 지운다
     again = ws.json("triage.py", ["explore", KEY])
     assert again == done and (job / "timeline.md").read_bytes() == made
     assert "- 탐색 분석 (추정, timeline.md" in (job / "report.md").read_text(encoding="utf-8")
+
+
+def _slow_symptom(c: Path) -> None:
+    """DATA-001 증상 시그니처를 시간 초과하는 정규식으로 (`pattern_timeout_ms: 300`)."""
+    cfg = c / "issue-db.config.yaml"
+    cfg.write_text(cfg.read_text(encoding="utf-8").replace("pattern_timeout_ms: 2000", "pattern_timeout_ms: 300"),
+                   encoding="utf-8", newline="\n")
+    type_md = c / "data/DATA-001-no-setup-data-call/type.md"
+    text = type_md.read_text(encoding="utf-8")
+    start, end = text.index("  - id: no-setup-data-call-request"), text.index("causes:")
+    type_md.write_text(text[:start] + "  - id: slow-symptom\n    must_match: ['(a+)+$']\n    window_sec: 60\n" + text[end:],
+                       encoding="utf-8", newline="\n")
+
+
+def test_run_with_matcher_errors_writes_no_cache_and_next_run_recomputes():
+    """시그니처 시간 초과(판정 불가 유형)가 있는 실행은 analysis-cache.json을 쓰지 않는다 — 같은 입력도 다시 계산한다."""
+    ws = Workspace()
+    ws.push_main(_slow_symptom)
+    log = tmp("tt-reuse-slow-") / "slow.log"
+    log.write_text(LOG.read_text(encoding="utf-8") + "09-20 14:30:40.000  1234  1244 D DNC-0: " + "a" * 40 + "!\n",
+                   encoding="utf-8", newline="\n")
+    first = _run(ws, logs=log)
+    assert first["unjudged"]["count"] >= 1, first
+    job = ws.job_dir(KEY)
+    assert not (job / "analysis-cache.json").exists()
+    state = _state(ws)
+    assert not state["job"].get("cache") and state["job"]["runs"][-1]["n"] == 1
+    assert any(r.get("step") == "cache-skipped" for r in _trace(ws))
+    n = len(_trace(ws))
+    second = _run(ws, logs=log)            # 같은 입력: 재사용하지 않고 다시 파싱·매칭한다
+    assert not (second.get("reuse") or {}).get("hit"), second.get("reuse")
+    assert {"3-parse", "4-match"} <= {r.get("step") for r in _since(ws, n)}
+    assert [r["reused"] for r in _state(ws)["job"]["runs"]] == [False, False]
+    ws.json("triage.py", ["release", KEY])
+    ws.push_main(lambda c: shutil.copytree(SAMPLE, c, dirs_exist_ok=True))   # 정상 DB로 되돌린다
+    third = _run(ws, logs=log)
+    assert not (third.get("reuse") or {}).get("hit") and "unjudged" not in third, third
+    assert (job / "analysis-cache.json").is_file()

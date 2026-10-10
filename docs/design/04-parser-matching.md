@@ -113,7 +113,7 @@ analyze Step 7에서 새 원인/유형을 계획할 때 아래를 점검하고, 
 - extractor `id`는 kebab-case이고 바꾸지 않는다. 시그니처가 참조하기 때문이다.
 - 기존 extractor를 수정하면 그것을 쓰는 모든 원인의 fixture 회귀가 통과해야 한다. `parser-rules/` 변경이 있으면 커밋 시점 회귀도 전체 fixture로 돈다 (`contracts.md §3.2` 범위 확장 규칙).
 - `parser-rules/` 변경은 이슈 DB 메인테이너 리뷰가 필수다 (`06-collaboration.md §6.1`).
-- **정규식 안전**: 규칙과 시그니처의 정규식은 모든 기여자의 매처·pre-commit·CI에서 전체 로그에 실행된다. `db_lint`는 중첩 수량자(`(a+)+`, `(a|a)*` 류)와 길이 제한 없는 역참조를 거부한다(정적 검사, 보수적). 매처와 extractor는 패턴당 실행 시간 상한 `matcher.pattern_timeout_ms`(`issue-db.config.yaml`, 기본 2000)를 두고, 초과하면 그 시그니처(또는 extractor)를 결과에 `error`로 표시하고 분석은 계속한다. 회귀·검증 모드에서는 실패로 본다.
+- **정규식 안전**: 규칙과 시그니처의 정규식은 모든 기여자의 매처·pre-commit·CI에서 전체 로그에 실행된다. `db_lint`는 중첩 수량자(`(a+)+`, `(a|a)*` 류)와 길이 제한 없는 역참조를 거부한다(정적 검사, 보수적). 매처와 extractor는 패턴당 실행 시간 상한 `matcher.pattern_timeout_ms`(`issue-db.config.yaml`, 기본 2000)를 두고, 초과하면 그 시그니처(또는 extractor)를 결과에 `error`로 표시하고 분석은 계속한다. 충족된 시그니처 없이 오류가 난 유형·원인은 `S: null`·`C: null`(판정 불가)로 내고, 분석 리포트는 "판정 불가 유형" 줄(must_show)·후보가 없으면 "판정 불완전" 머리줄을 내며 그 실행은 재사용 캐시에 저장하지 않는다(`contracts.md §3.2` `triage.py`). 회귀·검증 모드에서는 실패로 본다.
 
 #### (5) 스텝 마커 스캔과 명시 구간 (선택)
 
@@ -192,7 +192,7 @@ feedback_weight가 켜져 있고 해당 시그니처 표본 ≥ min_samples면: 
 - **판정은 S/C 값만으로 한다.** 점수(S=1, C=1 → 1.0 / S=0, C=1 → 0.6 / S=1, C=0 → 0.4)와 신뢰도는 결과표의 참고 값이고 판정에 쓰지 않는다. `scoring` 값(`cause_weight`, `confidence`)을 바꿔도 회귀·검증 결과가 바뀌지 않게 하기 위해서다 (`contracts.md §fixture` 기대값, `05-verification.md` R2·R3).
 - `db_regress`, `db_verify`(rules, resolution, fix)는 항상 이 모드를 쓴다.
 
-**기대값**: fixture 종류별 기본 기대값과 `.expect.yaml` 필드는 `contracts.md §fixture`에만 있다. 요약하면 양성은 "대상 원인 C=1, `also_allowed`를 제외한 다른 모든 active 원인 C=0"(이슈 DB 전체 기준), `fixed`/`resolved`는 `expect_not: <원인 ID>`(C=0), `recurrence`/`extra`는 양성과 같고, 음성(`none`)은 "S=1인 유형 없음"이다. 같은 로그에 실제로 다른 유형의 현상도 있으면 `.expect.yaml`의 `also_allowed`에 그 원인을 적는다(`allow-cause` op).
+**기대값**: fixture 종류별 기본 기대값과 `.expect.yaml` 필드는 `contracts.md §fixture`에만 있다. 요약하면 양성은 "대상 원인 C=1, 소속 유형 S=1, `also_allowed`를 제외한 다른 모든 active 원인 C=0"(이슈 DB 전체 기준), `fixed`/`resolved`는 `expect_not: <원인 ID>`(C=0), `recurrence`/`extra`는 양성과 같고, 음성(`none`)은 "S=1인 유형 없음"이다. 같은 로그에 실제로 다른 유형의 현상도 있으면 `.expect.yaml`의 `also_allowed`에 그 원인을 적는다(`allow-cause` op).
 
 - `status`가 `active`가 아닌 원인의 fixture는 회귀에서 제외한다. `signatures_pending` 원인의 양성 fixture는 제외하지 않고 `"<유형 ID>:unresolved"` 기대값으로 돈다 (`contracts.md §fixture`).
 - `.expect.yaml`의 `occurred_at`(선택)은 판정에 쓰지 않고, 결과 표에 참고로 보여준다.

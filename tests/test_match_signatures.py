@@ -385,6 +385,47 @@ def test_slow_regex_times_out_and_others_continue():
         assert result["candidates"][0]["cause"] == "DATA-001-01"
 
 
+
+SLOW_SYMPTOM = ("  - id: slow-symptom\n    must_match: ['(a+)+$']\n    window_sec: 60\n")
+
+
+def _slow_log() -> list[str]:
+    lines = (DATA_DIR / "fixtures/DATA-001-01.log").read_text(encoding="utf-8").splitlines()
+    return lines + ["09-20 14:30:40.000  1234  1244 D DNC-0: " + "a" * 40 + "!"]
+
+
+def test_timed_out_type_is_null_not_zero_and_kept_by_top():
+    """증상 시그니처가 시간 초과로 평가 못 되면 그 유형은 S=0이 아니라 판정 불가(S: null)이고 --top에서도 남는다."""
+    db = _copy_db()
+    _edit(db / "issue-db.config.yaml", "pattern_timeout_ms: 2000", "pattern_timeout_ms: 300")
+    type_md = db / "data/DATA-001-no-setup-data-call/type.md"
+    text = type_md.read_text(encoding="utf-8")
+    start = text.index("  - id: no-setup-data-call-request")
+    end = text.index("causes:")
+    type_md.write_text(text[:start] + SLOW_SYMPTOM + text[end:], encoding="utf-8", newline="\n")
+    events = _events(_write_log(_slow_log()), db)
+    result = _match(events, db, "--top", "3")
+    row = next(t for t in result["types"] if t["type"] == "DATA-001")
+    assert row["S"] is None and row["error"].startswith("DATA-001/slow-symptom: "), row
+    assert result["errors"][0]["signature"] == "DATA-001/slow-symptom"
+    assert all(t["S"] in (0, 1) for t in result["types"] if t["type"] != "DATA-001")
+    assert result["omitted"]["types"] == len(_match(events, db)["types"]) - len(result["types"])
+    full = _match(events, db)   # --top 0: 다른 유형은 0/1 그대로
+    assert all(t["S"] in (0, 1) and "error" not in t for t in full["types"] if t["type"] != "DATA-001")
+    regress = _match(events, db, "--regress")   # 회귀 모드: S null이어도 원인은 평가된다(점수 계산이 깨지지 않는다)
+    assert _S(regress, "DATA-001") is None and _C(regress, "DATA-001-01") == 1
+
+
+def test_type_with_one_timed_out_and_one_satisfied_signature_is_s1():
+    db = _copy_db()
+    _edit(db / "issue-db.config.yaml", "pattern_timeout_ms: 2000", "pattern_timeout_ms: 300")
+    _edit(db / "data/DATA-001-no-setup-data-call/type.md", "causes:\n", SLOW_SYMPTOM + "causes:\n")
+    result = _match(_events(_write_log(_slow_log()), db), db)
+    row = next(t for t in result["types"] if t["type"] == "DATA-001")
+    assert row["S"] == 1 and "error" not in row
+    assert [e["signature"] for e in result["errors"]] == ["DATA-001/slow-symptom"]
+
+
 # -- 입력 검사 ------------------------------------------------------------------
 
 

@@ -228,7 +228,7 @@
         "거부 뒤 다른 후보·새 원인·새 유형·원인 미확정 선택지를 다시 보여줬다",
         "사용자가 고르기 전에 분류를 확정하지 않았다",
         "계획 operations가 unresolved {type: DATA-001}이다",
-        "계획 feedback decision이 unresolved이고 suggested에 DATA-001-01이 있다",
+        "계획 feedback decision이 unresolved이고, stage 뒤 plan.json·피드백 파일 suggested에 DATA-001-01이 있다(LLM이 적지 않음 — stage가 match.json에서 채움)",
         "dry-run이라 원격 브랜치·PR이 없고 끝난 뒤 lock이 없다"
       ],
       "files": [],
@@ -1715,7 +1715,7 @@
       "expected_output": "S=1 유형 없음 → 후보 없음 절 → 탐색 분석 여부 질문 → 승인 → timeline.md만 읽고 SETUP_DATA_CALL MISSING_UNKNOWN_APN 둘레의 가설(APN 설정 누락 등)을 로그 줄 인용·반대 근거·다음 확인과 함께 '탐색 분석 (추정)' 칸에 씀(코드 근거 없음 명시) → 선택지 3개 그대로 → 기록하지 않음 → lock 해제.",
       "assertions": [
         "탐색 분석을 시작하기 전에 실행 여부를 물었다",
-        "JOB/timeline.md를 읽었고 events.json·jira_raw.json·로그 원문은 읽지 않았다(match.json은 계획 feedback용 일부만)",
+        "JOB/timeline.md를 읽었고 events.json·jira_raw.json·로그 원문은 읽지 않았다(match.json은 읽지 않는다 — suggested는 stage가 채움)",
         "리포트 '탐색 분석 (추정)' 칸에 가설이 1~3개 있고 가설마다 로그로 확인(timeline.md 줄 인용)·반대 근거·다음 확인이 있다",
         "가설에 점수·확신도를 매기지 않았고 코드 분석을 건너뛰어 '코드 근거 없음'을 밝혔다",
         "Step 7 선택지가 새 유형 / 원인 미확정 / 기록하지 않음 그대로이고 가설로 op를 만들지 않았다",
@@ -1752,7 +1752,7 @@
       "expected_output": "DATA-001 C=0 → --explore라 묻지 않고 timeline.md로 가설(슬롯 1 데이터 OFF 흔적은 슬롯 0 거부와 슬롯이 달라 반대 근거) → 보류 → unresolved {type: DATA-001}, note에 마스킹된 가설 한 줄 → dry-run 확인 화면 → discard.",
       "assertions": [
         "--explore라 탐색 분석 실행 여부를 묻지 않고 실행했다",
-        "JOB/timeline.md를 읽었고 events.json·jira_raw.json·로그 원문은 읽지 않았다(match.json은 계획 feedback용 일부만)",
+        "JOB/timeline.md를 읽었고 events.json·jira_raw.json·로그 원문은 읽지 않았다(match.json은 읽지 않는다 — suggested는 stage가 채움)",
         "리포트에 DATA-001 '유형 일치, 원인 미확인'과 '탐색 분석 (추정)' 칸이 있고, 슬롯 1 흔적을 쓰는 가설에는 슬롯이 다르다는 반대 근거가 있다",
         "가설로 원인을 정하거나 op를 만들지 않았고 계획이 unresolved {type: DATA-001} 하나다",
         "보류 뒤 note에 가설 한 줄을 남길지 물었고 note가 사람 이름·원문 식별자 없는 한 줄이다",

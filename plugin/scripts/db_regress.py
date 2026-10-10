@@ -138,6 +138,10 @@ def judge(item: dict, result: dict) -> dict:
     elif top:
         if not C.get(top):
             reasons.append({"kind": "missing", "cause": top, "message": f"{top}가 C=0이다"})
+        owner = cause_type.get(top) or fx.type_id
+        if S.get(owner) == 0:      # None(판정 불가)은 이미 kind: error로 실패
+            reasons.append({"kind": "missing-symptom", "type": owner, "signature": None,
+                            "message": f"{owner}의 증상이 잡히지 않았다 (S=0) — 양성 fixture는 소속 유형 S=1이어야 한다"})
         for cause in unexpected({top}):
             reasons.append({"kind": "cause", "cause": cause, "signature": cause_key[cause],
                             "message": f"{cause}도 C=1이다"})

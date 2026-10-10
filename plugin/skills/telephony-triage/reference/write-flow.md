@@ -26,7 +26,7 @@ main 기준 다음 번호로 정해진다. 계획이 건드리는 대상이 그�
  "jira": {"key": "<KEY>", "origin": "<mcp|file>", <JOB/jira.json의 jira 블록의 나머지 필드(있으면 `failed_step` 포함)>,
           "date": "<오늘>", "note": "<확인받은 한 줄>"},
  "operations": [...], "extra_samples": [...],
- "feedback": {"date": "<지금, 타임존 포함>", "suggested": [<후보: {cause, signature, score} — JOB/match.json. 원인 미확인 후보(`cause: null`)는 넣지 않는다(스키마가 거부한다: `cause`는 원인 ID 문자열만)>],
+ "feedback": {"date": "<지금, 타임존 포함>", "suggested": [<비워 둔다 — db_pr stage가 JOB/match.json 후보(cause≠null, 순위순 {cause, signature, score})로 채운다. 직접 적은 값이 다르면 stage 종료 2>],
               "decision": "<SKILL.md Step 7 표>", "final": "<원인 ID | temp_id | unresolved>"},
  "commit_message": "[<원인 또는 유형 ID>] add <KEY>: <요약>",
  "pr_notes": ["<리뷰어가 알아야 할 결정 한 줄씩(선택): allow-cause 사유, 분석 스킬 의견을 고른 이유 등. summary가 자동으로 붙이는 것은 넣지 않는다>"],

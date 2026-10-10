@@ -800,6 +800,22 @@ def test_uncollected_tags_counts_dropped_tags_of_collected_pids_only():
     assert "uncollected_tags" not in _parse([LOG_DIR / "data-connected.log"], "--full", "--mask")
 
 
+def test_unextracted_warn_counts_collected_tag_lines_without_events():
+    """수집 태그(DNC-0)의 W 줄인데 extractor 문구와 달라 이벤트가 없으면 `unextracted_warn`(최상위)에 센다."""
+    log = _tmp() / "w.log"
+    log.write_text("\n".join([
+        "09-20 14:30:04.600  1234  1244 I DNC-0: onEvaluateNetworkRequests: reason=DATA_ENABLED_CHANGED",
+        "09-20 14:30:04.900  1234  1244 W DNC-0: Data evaluation: reasons=[DATA_DISABLED]",
+        "09-20 14:30:05.900  1234  1244 W DNC-0: Data evaluation: reasons=[DATA_DISABLED]",
+        "09-20 14:30:06.900  1234  1244 W DNC-0: Data evaluation: evaluation reason:X, Data disallowed reasons: DATA_DISABLED",
+    ]) + "\n", encoding="utf-8")
+    data = _parse([log], "--full", "--mask")
+    assert data["unextracted_warn"] == {"lines": 2, "tags": [{"tag": "DNC-0", "lines": 2}]}, data.get("unextracted_warn")
+    # 미추출 W/E 줄이 없으면 키가 없다(기존 출력 불변)
+    assert "unextracted_warn" not in _parse([SAMPLE_DB / "data/DATA-001-no-setup-data-call/fixtures/DATA-001-01.log"],
+                                            "--full", "--mask")
+
+
 def _lines(name: str, *stamps: str) -> Path:
     path = _tmp() / name
     path.write_text("".join(f"{s}  1234  1244 D RILJ: x\n" for s in stamps), encoding="utf-8", newline="\n")

@@ -16,6 +16,18 @@ from .core import (ERROR_EVENT_RE, EXPLORE_INPUT_FILE, EXPLORE_MAX_LINES, EXPLOR
 from .report import ReportMixin, _ref_label, _unique_evidence
 
 
+def _unjudged(match: dict) -> dict | None:
+    """match.json에서 판정 불가(시그니처 시간 초과·오류로 `S: null`) 유형 요약. 오류가 없으면 None.
+    충족된 유형의 다른 시그니처만 오류였으면 `count` 0에 `errors`만 채운다."""
+    errors = match.get("errors") or []
+    types = [t["type"] for t in match.get("types") or [] if t.get("S") is None]
+    if not errors and not types:
+        return None
+    return {"count": len(types), "types": types[:5],
+            "errors": [{"signature": _clip(e.get("signature"), 80), "error": _clip(e.get("error"), 80)}
+                       for e in errors[:2]]}
+
+
 class Driver(AnchorMixin, CacheMixin, ReportMixin):
     def __init__(self, args, defaults: dict):
         self.args = args
@@ -721,6 +733,11 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         for cand in candidates:
             cand.pop("_code_refs", None)
         extra_warnings = [_clip(w.get("message"), 120) for w in (events.get("warnings") or []) + (match.get("warnings") or [])]
+        unjudged = _unjudged(match)
+        if unjudged:
+            err = (unjudged.get("errors") or [{}])[0]
+            extra_warnings.append(_clip(f"판정 불가 유형 {unjudged['count']}개 — 시그니처 시간 초과·오류: "
+                                        f"{err.get('signature')}: {err.get('error')}", 120))
         if cov.get("clock_anomalies"):
             extra_warnings.append("시계 이상(재부팅·NITZ 전 가능) — 증상 시각 스캔(--answer time=…)을 제안한다")
         member = self.steps_info()[3]
@@ -729,7 +746,7 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
             "around": around, "anchor": anchor, "outside": outside, "candidates": candidates,
             "pending_causes": [{"cause": p["cause"], "title": _clip(p.get("title"), 50)}
                                for p in match.get("pending_causes") or []][:TOP],
-            "no_candidate": no_candidate, "code": code_out, "analyzer": analyzer, "explore": explore,
+            "no_candidate": no_candidate, "unjudged": unjudged, "code": code_out, "analyzer": analyzer, "explore": explore,
             "explore_input": explore_input,
             "logs": {"files": [p.name for p in logs], "window": (events.get("input") or {}).get("window"),
                      "range": [cov.get("first_ts"), cov.get("last_ts")], "in_range": cov.get("window_in_range"),

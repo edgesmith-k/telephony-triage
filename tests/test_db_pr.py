@@ -1850,3 +1850,83 @@ def test_renumber_on_detached_head_says_how_to_continue():
     git(db, "checkout", "-q", "--detach")
     proc = run("db_add.py", ["renumber", "DATA-001-03", "--base", "main", "--db", db])
     assert proc.returncode == 2 and "rebase --continue" in proc.stderr
+
+
+# -- 묶음 B: D2(ii) feedback.suggested는 stage가 JOB/match.json에서 채운다 ----------------------------------------------
+
+
+def _match_json(key: str, candidates: list[dict]) -> str:
+    return json.dumps({"schema": 1, "mode": "analysis", "jira": {"key": key}, "candidates": candidates},
+                      ensure_ascii=False)
+
+
+MATCH_CANDS = [{"type": "DATA-001", "cause": "DATA-001-02", "signature": "DATA-001-02/roaming-disabled", "score": 0.92,
+                "S": 1, "C": 1},
+               {"type": "DATA-002", "cause": None, "signature": None, "score": 0.3, "S": 1, "C": 0}]
+
+
+def test_stage_fills_feedback_suggested_from_match_json():
+    ws = Workspace()
+    job = "MOCK-7001"
+    plan = load_plan("p7-analyze-append.plan.json")
+    plan["feedback"]["suggested"] = []
+    ws.plan(job, plan, match=None)
+    ws.put(job, "match.json", _match_json("MOCK-7001", MATCH_CANDS))
+    ws.acquire(job)
+    first = ws.stage(job, "issue/MOCK-7001")
+    assert first["feedback_check"] == {"status": "filled", "count": 1}, first.get("feedback_check")
+    want = [{"cause": "DATA-001-02", "signature": "DATA-001-02/roaming-disabled", "score": 0.92}]
+    assert ws.read_plan(job)["feedback"]["suggested"] == want
+    fb = yaml.safe_load((ws.wt(job) / first["apply"]["feedback"]).read_text(encoding="utf-8"))
+    assert fb["suggested"] == want
+    stage_json = json.loads((ws.job_dir(job) / "stage.json").read_text(encoding="utf-8"))
+    assert stage_json["feedback_check"]["status"] == "filled"
+    plan_bytes = (ws.job_dir(job) / "plan.json").read_bytes()
+    snap1 = _wt_snapshot(ws.wt(job))
+    second = ws.stage(job, "issue/MOCK-7001")           # 채움은 멱등: 다시 stage하면 verified, 결과 같음
+    assert second["feedback_check"] == {"status": "verified", "count": 1}
+    assert (ws.job_dir(job) / "plan.json").read_bytes() == plan_bytes and _wt_snapshot(ws.wt(job)) == snap1
+    ws.db_pr("discard", ws.wt(job))
+
+
+def test_stage_rejects_suggested_mismatch_and_missing_match_json():
+    ws = Workspace()
+    job = "MOCK-7001"
+    ws.acquire(job)
+    plan = load_plan("p7-analyze-append.plan.json")
+    ws.plan(job, plan, match=None)
+    ws.put(job, "match.json", _match_json("MOCK-7001", [{**MATCH_CANDS[0], "score": 0.5}]))
+    proc = _stage_raw(ws, job, "issue/MOCK-7001")                       # (a) 값이 다르다
+    assert proc.returncode == 2 and "feedback.suggested" in proc.stderr, proc.stderr
+    detail = json.loads(proc.stdout)
+    assert detail["plan"][0]["score"] == 0.92 and detail["match"][0]["score"] == 0.5
+    assert not ws.wt(job).exists() and not (ws.job_dir(job) / "state.json").exists()
+
+    (ws.job_dir(job) / "match.json").unlink()                           # (b) 근거 없음
+    proc = _stage_raw(ws, job, "issue/MOCK-7001")
+    assert proc.returncode == 2 and "feedback.suggested" in proc.stderr and "match.json" in proc.stderr
+    assert json.loads(proc.stdout)["plan"] == plan["feedback"]["suggested"]
+
+    ws.put(job, "match.json", _match_json("MOCK-9999", MATCH_CANDS))     # (c) 다른 작업의 결과
+    proc = _stage_raw(ws, job, "issue/MOCK-7001")
+    assert proc.returncode == 2 and "feedback.suggested" in proc.stderr and "MOCK-9999" in proc.stderr
+    assert not ws.wt(job).exists() and not (ws.job_dir(job) / "state.json").exists()
+
+
+def test_stage_skips_feedback_check_for_record_and_republished_plan():
+    ws = Workspace()
+    ws.plan("MOCK-7005", "p7-record-pending.plan.json")
+    ws.put("MOCK-7005", "fixtures/cut-1.log", SIM_LOG)
+    ws.acquire("MOCK-7005")
+    rec = ws.stage("MOCK-7005", "issue/MOCK-7005", expect=(0, 3))
+    assert rec["feedback_check"] == {"status": "n/a"}
+    ws.db_pr("discard", ws.wt("MOCK-7005"))
+
+    job = "MOCK-7001"
+    plan = load_plan("p7-analyze-append.plan.json")
+    plan["pr"]["head_sha"] = "1234567"
+    ws.plan(job, plan, match=None)                                       # match.json 없음 + suggested 있음
+    ws.acquire(job)
+    again = ws.stage(job, "issue/MOCK-7001")
+    assert again["feedback_check"] == {"status": "skipped", "reason": "재적용"}
+    ws.db_pr("discard", ws.wt(job))

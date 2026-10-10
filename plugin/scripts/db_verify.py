@@ -454,10 +454,11 @@ def r3(run: Run, t: Targets) -> dict:
         if not fixtures:
             checks.append(_check(cid, "skipped", NO_NEGATIVE, kind="cause"))
             continue
-        hits = []
+        hits, errored = [], []
         for item in fixtures:
             if cid in item["expect"].also_allowed:
                 continue
+            errored += _errored(run, item)
             if run.C(_paths(item), cid):
                 sig = next((c["signature"] for c in run.result(_paths(item))["causes"] if c["cause"] == cid), None)
                 hits.append({"fixture": item["rel"], "kind": item["fx"].kind, "signature": sig,
@@ -465,7 +466,10 @@ def r3(run: Run, t: Targets) -> dict:
         if hits:
             checks.append(_check(cid, "fail", f"{cid}: C=1 — {', '.join(h['fixture'] for h in hits)}", kind="cause",
                                  signatures=keys, hits=hits,
-                                 allow_cause_drafts=[h["allow_cause_draft"] for h in hits if h["allow_cause_draft"]]))
+                                 allow_cause_drafts=[h["allow_cause_draft"] for h in hits if h["allow_cause_draft"]],
+                                 **({"errors": errored} if errored else {})))
+        elif errored:
+            checks.append(_check(cid, "fail", _errored_reason(errored), kind="cause", signatures=keys, errors=errored))
         else:
             checks.append(_check(cid, "pass", f"음성·다른 원인 fixture {len(fixtures)}개에서 C=0", kind="cause",
                                  signatures=keys))
@@ -478,15 +482,28 @@ def r3(run: Run, t: Targets) -> dict:
         hits = [{"fixture": i["rel"], "signature": next((x["signature"] for x in run.result(_paths(i))["types"]
                                                         if x["type"] == tid), None)}
                 for i in negatives if run.S(_paths(i), tid)]
+        errored = [e for i in negatives for e in _errored(run, i)]
         if hits:
             checks.append(_check(tid, "fail", f"{tid}: 음성 fixture에서 S=1 — {', '.join(h['fixture'] for h in hits)}",
-                                 kind="symptom", signatures=keys, hits=hits))
+                                 kind="symptom", signatures=keys, hits=hits, **({"errors": errored} if errored else {})))
+        elif errored:
+            checks.append(_check(tid, "fail", _errored_reason(errored), kind="symptom", signatures=keys, errors=errored))
         else:
             checks.append(_check(tid, "pass", f"음성 fixture {len(negatives)}개에서 S=0", kind="symptom",
                                  signatures=keys))
     for cid in t.pending:
         checks.append(_check(cid, "skipped", PENDING, kind="cause"))
     return aggregate("R3", checks)
+
+
+def _errored(run: Run, item: dict) -> list[dict]:
+    """fixture 결과에 시그니처·extractor 오류가 있으면 [{fixture, errors}] — 그 fixture의 C/S는 판정 불가다."""
+    errors = run.result(_paths(item)).get("errors") or []
+    return [{"fixture": item["rel"], "errors": errors[:3]}] if errors else []
+
+
+def _errored_reason(errored: list[dict]) -> str:
+    return f"{', '.join(e['fixture'] for e in errored)}: 시그니처·extractor 오류 — 판정 불가"
 
 
 def r4(run: Run, regress: dict | None) -> tuple[dict, dict]:
@@ -540,7 +557,9 @@ def r6(run: Run, t: Targets, samples: list[tuple[Path, str]]) -> dict:
         res = run.result([path])
         c1 = sorted(c["cause"] for c in res["causes"] if c["C"])
         s1 = sorted(x["type"] for x in res["types"] if x["S"])
-        if expect == "nomatch":
+        if res.get("errors"):       # 시그니처·extractor 오류: 판정 불가 — 통과로 보이지 않게 한다
+            ok, why = False, f"{path.name}: 시그니처·extractor 오류 — 판정 불가"
+        elif expect == "nomatch":
             ok = not s1
             why = "S=0" if ok else f"S=1: {', '.join(s1)}"
         elif causes:
@@ -554,7 +573,7 @@ def r6(run: Run, t: Targets, samples: list[tuple[Path, str]]) -> dict:
         else:
             ok, why = True, "검증 대상 없음"
         rows.append({"sample": str(path), "expect": expect, "status": "pass" if ok else "fail", "reason": why,
-                     "C": c1, "S": s1})
+                     "C": c1, "S": s1, **({"errors": res["errors"][:3]} if res.get("errors") else {})})
     failed = [r for r in rows if r["status"] == "fail"]
     return {"id": "R6", "status": "fail" if failed else "pass",
             "reason": (f"표본 {len(failed)}/{len(rows)}개 기대와 다름 (사용자가 진행 여부를 고른다)" if failed

@@ -248,10 +248,15 @@ stdin: PostToolUse hook 입력 JSON (argparse 없음)
   - jira_count?
   - jira_recent?
 - pending_causes?
+- unjudged?(시그니처 시간 초과·오류로 S를 정하지 못한 유형(match.json types[].S null). 있을 때만, 캐시 저장 안 함)
+  - count
+  - types?[≤5]
+  - errors?[≤2]({signature, error(≤80)}; 4KB 압축 시 types→errors 순으로 뺌)
 - no_candidate?
   - search_hits
   - error_events[≤8]({ts, tag, event, phone, request?, error?, code?, reason?, cause?}(각 ≤40자, 있을 때만; 4KB 압축 시 4개·부가 필드 없음))
   - error_event_total
+  - unextracted_warn?(수집 태그 W/E/F 줄 중 이벤트로 추출 안 된 줄 수(parse_logcat unextracted_warn.lines, 있을 때만))
 - code
   - skipped
   - roots?

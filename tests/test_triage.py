@@ -894,7 +894,7 @@ def test_no_candidate_error_events_carry_request_and_error_and_report_lists_them
     assert rows[0]["error"] == "INSUFFICIENT_RESOURCES" and rows[0]["phone"] == 1
     assert len((out / "analysis.json").read_bytes()) <= 4096
     report = (out / "report.md").read_text(encoding="utf-8")
-    assert "- 오류·거부·타임아웃 이벤트: 1건" in report
+    assert "- 오류·거부·타임아웃 이벤트: 추출 이벤트 기준 1건" in report
     assert "  - 2026-09-22T12:00:01.000Z RILJ ril_error request=SETUP_DATA_CALL error=INSUFFICIENT_RESOURCES (phone 1)" in report
 
 
@@ -1162,3 +1162,79 @@ def test_w4_docs_match_the_implementation():
     assert "심층 분석과 탐색 분석을 할까요?" in skill and "`notes`는 항상 알린다" in skill and "`--code`로 변경 가능" in skill
     doc = (REPO / "plugin/scripts/triage.py").read_text(encoding="utf-8").split('"""')[1]
     assert "`cleanup`(yes|no)" not in doc and "`code`(프로필|경로|skip)" in doc
+
+
+# -- 묶음 B: 판정 불가 유형(매처 오류)·미추출 W/E 줄 ------------------------------------------------------------
+
+
+def _slow_symptom_db() -> Path:
+    """DATA-001 증상 시그니처를 시간 초과하는 정규식으로 바꾼 샘플 DB 사본 (`pattern_timeout_ms: 300`)."""
+    db = tmp("tt-slowdb-") / "db"
+    shutil.copytree(SAMPLE, db)
+    cfg = db / "issue-db.config.yaml"
+    cfg.write_text(cfg.read_text(encoding="utf-8").replace("pattern_timeout_ms: 2000", "pattern_timeout_ms: 300"),
+                   encoding="utf-8", newline="\n")
+    type_md = db / "data/DATA-001-no-setup-data-call/type.md"
+    text = type_md.read_text(encoding="utf-8")
+    start, end = text.index("  - id: no-setup-data-call-request"), text.index("causes:")
+    type_md.write_text(text[:start] + "  - id: slow-symptom\n    must_match: ['(a+)+$']\n    window_sec: 60\n" + text[end:],
+                       encoding="utf-8", newline="\n")
+    return db
+
+
+def _slow_log() -> Path:
+    log = tmp("tt-slowlog-") / "slow.log"
+    log.write_text(DATA_LOG.read_text(encoding="utf-8") + "09-20 14:30:40.000  1234  1244 D DNC-0: " + "a" * 40 + "!\n",
+                   encoding="utf-8", newline="\n")
+    return log
+
+
+def _meta(out: Path, key: str, **fields) -> Path:
+    meta = out.parent / f"{out.name}.meta.json"
+    meta.write_text(json.dumps({"key": key, "summary": "", **fields}), encoding="utf-8")
+    return meta
+
+
+def test_matcher_timeout_is_must_shown_and_not_cached():
+    db = _slow_symptom_db()
+    out = tmp("tt-triage-") / "x"
+    meta = _meta(out, "MOCK-7410", occurred_at="2026-09-20T05:30:05.000Z")
+    analysis = run_json("triage.py", ["run", "MOCK-7410", "--offline-db", db, "--out", out, "--logs", _slow_log(),
+                                      "--jira-meta", meta, "--tz", "Asia/Seoul", "--year", 2026])
+    assert analysis["status"] == "ok", analysis
+    assert analysis["unjudged"]["count"] >= 1 and "DATA-001" in analysis["unjudged"]["types"], analysis["unjudged"]
+    assert any(m.startswith("판정 불가 유형:") for m in analysis["must_show"]), analysis["must_show"]
+    assert any("판정 불가 유형" in w for w in analysis["warnings"])
+    assert len((out / "analysis.json").read_bytes()) <= 4096
+    report = (out / "report.md").read_text(encoding="utf-8")
+    assert not analysis.get("candidates")
+    assert "**판정 불완전**" in report and "**후보 없음**" not in report, report
+
+
+def test_time_candidates_question_mentions_unjudged_types():
+    out = tmp("tt-triage-") / "x"
+    meta = _meta(out, "MOCK-7411")
+    ask = run_json("triage.py", ["run", "MOCK-7411", "--offline-db", _slow_symptom_db(), "--out", out,
+                                 "--logs", _slow_log(), "--jira-meta", meta, "--tz", "Asia/Seoul", "--year", 2026])
+    assert ask["status"] == "needs_input" and ask["needs_input"]["kind"] == "time", ask
+    assert "판정 불가 유형" in ask["needs_input"]["question"], ask
+
+
+def test_no_candidate_shows_unextracted_warn_lines():
+    """수집 태그(DNC-0)의 W 줄이 extractor 문구와 달라 이벤트가 0건이면, 후보 없음 절에 미추출 줄 수를 보인다."""
+    log = tmp("tt-unext-") / "unext.log"
+    log.write_text("09-20 14:30:04.600  1234  1244 I DNC-0: onEvaluateNetworkRequests: reason=DATA_ENABLED_CHANGED\n"
+                   "09-20 14:30:04.900  1234  1244 W DNC-0: Data evaluation: reasons=[DATA_DISABLED]\n"
+                   "09-20 14:30:06.900  1234  1244 W DNC-0: Data evaluation: reasons=[DATA_DISABLED]\n",
+                   encoding="utf-8", newline="\n")
+    out = tmp("tt-triage-") / "x"
+    meta = _meta(out, "MOCK-7412", occurred_at="2026-09-20T05:30:05.000Z")
+    analysis = run_json("triage.py", ["run", "MOCK-7412", "--offline-db", SAMPLE, "--out", out, "--logs", log,
+                                      "--jira-meta", meta, "--tz", "Asia/Seoul", "--year", 2026])
+    assert not analysis.get("candidates"), analysis
+    assert analysis["no_candidate"]["unextracted_warn"] == 2, analysis["no_candidate"]
+    assert "_unextracted_tags" not in analysis["no_candidate"]
+    report = (out / "report.md").read_text(encoding="utf-8")
+    line = "오류·거부·타임아웃 이벤트: 추출 이벤트 기준 0건 (수집 태그 W/E 줄 중 이벤트로 추출 안 된 줄 2건: DNC-0 2줄)"
+    assert f"- {line}" in report, report
+    assert line in analysis["must_show"], analysis["must_show"]

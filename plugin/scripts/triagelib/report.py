@@ -165,6 +165,8 @@ def fit(result: dict) -> dict:
               lambda: result.update(files={"report": result["files"]["report"]}),
               lambda: cands and cands[0].update(evidence=cands[0]["evidence"][:3]),
               lambda: _trim_error_events(result),
+              lambda: (result.get("unjudged") or {}).pop("types", None),
+              lambda: (result.get("unjudged") or {}).pop("errors", None),
               lambda: _drop_order_last(result),
               lambda: _drop_clock_reason(result),
               lambda: _drop_focus(result),
@@ -226,7 +228,12 @@ class ReportMixin:
                     hits.append({"id": ident, "kind": r.get("kind"), "title": _clip(r.get("title") or r.get("note"), 60)})
         errors = [self.error_row(e) for e in events.get("events") or []
                   if e.get("event") and ERROR_EVENT_RE.search(str(e["event"]))]
-        return {"search_hits": hits, "error_events": errors[:8], "error_event_total": len(errors)}
+        out = {"search_hits": hits, "error_events": errors[:8], "error_event_total": len(errors)}
+        unext = events.get("unextracted_warn") or {}
+        if unext.get("lines"):     # 수집 태그 W/E 줄인데 이벤트로 추출 안 된 줄 (parse_logcat, 있을 때만)
+            out["unextracted_warn"] = unext["lines"]
+            out["_unextracted_tags"] = unext.get("tags") or []    # report.md 전용, analysis.json에는 안 나간다
+        return out
 
     @staticmethod
     def error_row(e: dict) -> dict:
@@ -262,6 +269,7 @@ class ReportMixin:
             "logs": core["logs"],
             "candidates": candidates,
             "pending_causes": core["pending_causes"],
+            "unjudged": core.get("unjudged"),
             "no_candidate": core["no_candidate"],
             "code": {**core["code"], "auto": True} if self.code_auto and not core["code"].get("skipped") else core["code"],
             "analyzer": core["analyzer"],
@@ -280,6 +288,7 @@ class ReportMixin:
             result["must_show"] = must_show
         # analysis.json 내용을 먼저 확정하고(TT_SCHEMA_CHECK면 검사) 그 뒤에 파일을 쓴다: 위반이면 이전 결과·캐시를 건드리지 않는다
         final = copy.deepcopy({k: v for k, v in result.items() if v not in (None, [], {})})
+        (final.get("no_candidate") or {}).pop("_unextracted_tags", None)   # report.md 전용
         for cand in final.get("candidates") or []:
             cand.pop("_version_mismatch", None)
             for e in cand["evidence"]:
@@ -361,6 +370,7 @@ class ReportMixin:
         if self.focus:
             lines.append("- 스텝 기준 우선 유형 (순위 참고만, 점수·S/C 불변): " + ", ".join(self.focus))
         cands = r["candidates"]
+        unjudged = r.get("unjudged") or {}
         if cands:
             top = cands[0]
             label = {"high": "높음", "medium": "중간", "low": "낮음"}.get(top["confidence"], top["confidence"])
@@ -376,30 +386,45 @@ class ReportMixin:
                 n = sum(1 for c in cands if c["score"] == top["score"])
                 lines.append(f"- 순위 참고: 규칙 일치 점수 동점 후보 {n}개 — 발생 시각 근접·키워드 근거 순으로 정렬했다(원인 확정 아님)")
         else:
-            lines.append("- 분류 후보: **후보 없음** (S=1인 유형 없음)")
+            if unjudged.get("count"):
+                lines.append(f"- 분류 후보: **판정 불완전** — S=1인 유형 없음, 판정 불가 유형 {unjudged['count']}개 "
+                             "(후보 없음으로 단정하지 않음)")
+            else:
+                lines.append("- 분류 후보: **후보 없음** (S=1인 유형 없음)")
             hints = r.get("no_candidate") or {}
             lines.append("- 설명 기반 유사 후보: " + (", ".join(f"{h['id']} {h['title']}" for h in hints.get("search_hits") or [])
                                                  or "없음"))
-            lines.append(f"- 오류·거부·타임아웃 이벤트: {hints.get('error_event_total', 0)}건")
+            total, unext = hints.get("error_event_total", 0), hints.get("unextracted_warn")
+            text = f"오류·거부·타임아웃 이벤트: 추출 이벤트 기준 {total}건"
+            if unext:
+                tags = ", ".join(f"{t['tag']} {t['lines']}줄" for t in hints.get("_unextracted_tags") or [])
+                text += f" (수집 태그 W/E 줄 중 이벤트로 추출 안 된 줄 {unext}건" + (f": {tags}" if tags else "") + ")"
+            lines.append(add(9, text) if unext and not total else f"- {text}")
             lines += [f"  - {_error_line(e)}" for e in (hints.get("error_events") or [])[:8]]
+        if unjudged:
+            err = (unjudged.get("errors") or [{}])[0]
+            ids = ", ".join(unjudged.get("types") or [])
+            lines.append(add(6, f"판정 불가 유형: {unjudged['count']}개" + (f" ({ids})" if ids else "")
+                                + f" — 시그니처 시간 초과·오류 {err.get('signature')}: {err.get('error')}. "
+                                "후보 순위·'후보 없음'은 불완전하다 (matcher.pattern_timeout_ms·시그니처 확인)"))
         if anchor and (not cands or not cands[0]["C"]):
             lines.append("- 힌트: 실패 스텝 구간 기준으로 좁게 분석했다. 원인이 스텝 시작 전에 있었을 수 있다 — "
                          "`--answer anchor=off`로 다시 실행하면 Jira 발생 시각 기준 범위로 넓힌다")
         outside = r.get("_outside")
         if outside and outside.get("total"):
-            lines.append(add(7, f"분석 범위 밖 오류 이벤트 (Jira 발생 시각 {outside['at']} 근처, 근거·점수에 쓰지 않음): "
+            lines.append(add(8, f"분석 범위 밖 오류 이벤트 (Jira 발생 시각 {outside['at']} 근처, 근거·점수에 쓰지 않음): "
                                 f"{outside['total']}건"))
             lines += [f"  - {_error_line(e)}" for e in outside["rows"][:3]]
         logs = r["logs"]
         if logs.get("uncollected_tags"):       # 후보 없음·원인 미확인일 때만 core가 채운다
             tags = ", ".join(f"{u['tag']} {u['lines']}줄(W/E {u['warn']})" for u in logs["uncollected_tags"])
-            lines.append(add(8, "파서 규칙에 없는 태그 (수집 태그와 같은 프로세스, tags.yaml에 없어 이벤트로 추출 안 됨): " + tags))
+            lines.append(add(9, "파서 규칙에 없는 태그 (수집 태그와 같은 프로세스, tags.yaml에 없어 이벤트로 추출 안 됨): " + tags))
         in_range = {True: "발생 시각 포함", "partial": "일부만 포함", False: "로그 범위 밖",
                     None: "해석한 줄 없음(형식·인코딩)"}.get(logs["in_range"], "?")
         range_text = (f"로그 범위: {logs['range'][0]} ~ {logs['range'][1]} ({in_range}), "
                       f"시계 이상 {'있음' if logs['clock_anomalies'] else '없음'}")
         if not cands or not cands[0]["C"] or logs["in_range"] is not True or logs["clock_anomalies"]:
-            lines.append(add(6, range_text))
+            lines.append(add(7, range_text))
         else:
             lines.append(f"- {range_text}")
         lines.append("- 원인: TODO(LLM) — 로그로 확인한 것 / 코드로 추정한 것 / placeholder 규칙 결과를 나눠 쓴다")
