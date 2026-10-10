@@ -117,7 +117,7 @@ python3 -m pytest -q tests                    # 사외와 같은 결과여야 �
 **3) S-0 선행 확인** (권장, Claude 없이 30분) — 사내 로그 형식이 사외 파서 가정과 얼마나 다른지
 ```
 ROOT=$(python3 tests/helpers/make_plugin_root.py | tail -1)   # site-defaults.yaml 없이 돌리는 임시 루트
-unzip ~/issue-db-skeleton-v1.zip -d ~/tt-skel
+unzip ~/issue-db-skeleton-import-v1.zip -d ~/tt-skel
 python3 tools/s0_stats.py <logcat1> <logcat2> <logcat3> \
     --rules ~/tt-skel/parser-rules --tz Asia/Seoul --year 2026 --plugin-root $ROOT
 ```

@@ -55,3 +55,39 @@ def test_s2_pack_has_s1_baseline():
     out = cp.render("S-2")
     assert "===== tests/mocks/plugin-probe/README.md =====" in out
     assert "Bash 도구 프로세스에는 환경 변수 `CLAUDE_PLUGIN_ROOT`가 없다" in out
+
+
+def test_row_filter_keeps_header_and_one_row():
+    out = cp.render("S-7")
+    head = "===== docs/design/14-site.md §14.2:S2 ====="
+    assert head in out
+    sec = out.split(head, 1)[1].split("\n=====", 1)[0]
+    assert "| S2 |" in sec and "| S1 |" not in sec and "| S3 |" not in sec
+    assert "| # | 항목 |" in sec                      # 표 머리는 남는다
+    assert len(sec.encode()) < 1024
+
+
+def test_row_filter_unknown_row_raises():
+    body = cp.section((ROOT / "docs/design/14-site.md").read_text(encoding="utf-8"), "14.2")
+    try:
+        cp.filter_rows(body, "S99")
+    except LookupError:
+        return
+    raise AssertionError("LookupError 기대")
+
+
+def test_s1_s2_packs_exclude_external_only_sections():
+    for p in ("S-1", "S-2"):
+        out = cp.render(p)
+        assert "새 세션 시작" not in out and "☐ Z" not in out and "사외 초안 모드로 진행해" not in out, p
+        assert "## 결정" in out and "## 사내로 넘긴 것" in out and "## 진행 상태" in out, p
+
+
+def test_site_profile_warning(tmp_path):
+    assert cp.site_profile_warning(tmp_path) is None            # 사외: 파일 없음
+    f = tmp_path / "SITE_PROFILE.md"
+    f.write_bytes(b"x" * 4096)
+    assert cp.site_profile_warning(tmp_path) is None
+    f.write_bytes(b"x" * 4097)
+    w = cp.site_profile_warning(tmp_path)
+    assert w and "4097" in w and "14.3" in w

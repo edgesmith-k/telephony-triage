@@ -72,7 +72,7 @@
 - (날짜) <항목> : <초기값> → <현재 값> (이슈 DB PR 링크)
 ```
 
-- `SITE_PROFILE.md`는 `CLAUDE.md`가 **매 세션 import**하므로 짧게 유지한다(진행 상태, 확인값 요약, 설계 변경 요약). 확인 근거(로그 파일·행 번호, 긴 설명)는 import하지 않는 `docs/site/evidence.md`(사내 전용)에 둔다.
+- `SITE_PROFILE.md`는 `CLAUDE.md`가 **매 세션 import**하므로 **4KB 이하로 유지한다**(`CLAUDE.md`와 같은 기준. 진행 상태, 확인값 요약, 설계 변경 요약). `tools/context_pack.py`가 넘으면 경고한다(종료 코드는 그대로). 확인 근거(로그 파일·행 번호, 긴 설명)는 import하지 않는 `docs/site/evidence.md`(사내 전용)에 둔다.
 - "진행 상태"는 Phase가 끝나고 사용자 확인을 받을 때마다 갱신한다. 새 세션은 이 절을 보고 어디서 이어갈지 정한다.
 
 ### 14.4 Phase 0: 사내 환경 확인 (Phase 1보다 먼저)

@@ -63,7 +63,7 @@
 - [ ] `python3 tools/list_site_todos.py`가 오류 없이 돌고 결과를 사용자가 봤다 (목록은 문서에 두지 않는다. 상태 파일에는 개수만)
 - [ ] `DRAFT_NOTES.md`(상태 파일, ≤8KB): 진행 상태·남은 일·막힌 것·결정이 최신. 가정·모의와 실제가 다를 지점 같은 상세는 `docs/history/draft-notes-<날짜>.md`
 - [ ] `plugin/.claude-plugin/plugin.json`의 description에서 "사외 초안"을 빼고 `version`이 없음 (auto, make_bundle 맨 앞 — 실행 전에 정리 커밋)
-- [ ] 플러그인 레포 전체(코드, 테스트, 모의, 합성 샘플, 문서)와 이슈 DB 뼈대를 묶어서 반입
+- [ ] 플러그인 레포 전체(코드, 테스트, 모의, 합성 샘플, 문서)와 이슈 DB 뼈대를 묶어서 반입 (`docs/materials/`(사람용 HTML 스냅샷)도 `git archive`에 들고 `check_boundary --mode external` 범위다 — 예외는 `tools/boundary-allow.txt`의 `docs/materials/*` 패턴뿐. 반입 뒤 갱신 의무 없음)
 
 ## 15.5 사내 보완 (Phase S) — 토큰 최소화
 
