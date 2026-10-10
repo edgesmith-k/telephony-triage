@@ -883,7 +883,7 @@ score = min(1, base + bonus)
 <tr><td>7</td><td>push 확인 강제</td><td>PreToolUse Bash (<code>git push</code>)</td><td>권한 결정을 <code>ask</code>로 반환해 승인 프롬프트를 띄움</td></tr>
 <tr><td>8</td><td>사용자 clone 직접 편집 차단</td><td>PreToolUse <code>Write|Edit|…</code></td><td>대상 경로가 사용자 clone 안이면 거부. Bash로 clone 본체의 브랜치·파일을 바꾸는 git·파일 쓰기도 거부(<code>migrate/schema-v&lt;N&gt;</code> 브랜치 만들기는 ask)</td></tr>
 <tr><td>9</td><td>Jira 응답 원문 격리</td><td>PostToolUse <code>mcp__.*</code></td><td>원문은 권한 700 디렉토리 파일로, 모델에는 마스킹 요약만 (실패 시 fail closed)</td></tr>
-<tr><td>10</td><td>로그 원문 통독 차단</td><td>PreToolUse Bash</td><td><code>cat</code> 등으로 로그 원문·zip·events/match.json을 통째로 읽으면 거부. Read 도구는 지침으로만 제한(소스 파일도 <code>grep -n</code> 적중 주변 ≤200줄, 미적중이면 "코드 위치 미확인")</td></tr>
+<tr><td>10</td><td>로그 원문 통독 차단</td><td>PreToolUse Bash</td><td><code>cat</code> 등으로 로그 원문·zip·events/match.json을 통째로 읽으면 거부. Read 도구는 지침으로만 제한(소스 파일도 <code>grep -n</code> 적중 주변 ≤200줄·파일당 Read ≤2회, 미적중이면 "코드 위치 미확인")</td></tr>
 <tr><td>11</td><td>이슈 DB 원격 쓰기 확인</td><td>PreToolUse Bash(<code>gh</code>)·<code>mcp__.*</code></td><td>이슈 DB 대상 <code>gh</code>·GitHub MCP 쓰기는 <code>ask</code>, PR 머지는 거부 (10·11번은 기존 matcher에서 판정, hook은 10종)</td></tr>
 </table></div>
 
@@ -945,7 +945,7 @@ score = min(1, base + bonus)
 <h2><span class="num">20</span>한계</h2>
 <div class="tbl"><table>
 <tr><th>한계</th><th>내용</th><th>영향</th></tr>
-<tr><td>로그 문구가 placeholder</td><td>태그·문구·RIL 이름은 사외에서 사내 자료 없이 쓴 예시. 사내 실제 logcat과 다를 수 있음 (TODO(SITE) 78곳, 실패 스텝 관련 S22 포함)</td><td>사내 S-1~S-4에서 확인·교체 필요. S-0 통계로 차이를 먼저 측정</td></tr>
+<tr><td>로그 문구가 placeholder</td><td>태그·문구·RIL 이름은 사외에서 사내 자료 없이 쓴 예시. 사내 실제 logcat과 다를 수 있음 (TODO(SITE) 79곳, 실패 스텝 관련 S22 포함)</td><td>사내 S-1~S-4에서 확인·교체 필요. S-0 통계로 차이를 먼저 측정</td></tr>
 <tr><td>알려진 패턴만 잡음</td><td>시그니처가 없는 새 증상은 "후보 없음"으로 나옴. 유사 후보와 오류 이벤트 목록만 제공</td><td>사전 품질이 곧 도구 품질. 초기에는 시드 유형 5~10개/카테고리 필요. 보완: <a href="#unknown">탐색 분석 (Step 5-2)</a></td></tr>
 <tr><td>점수는 규칙 일치 수준</td><td>S=C=1이면 score가 1.0으로 포화. 동점은 근접·키워드로 정렬하도록 고쳤지만(R8), score 자체는 진단 확신도가 아님</td><td><code>confidence: high</code>를 자동 게시 근거로 쓰지 않음 (별도 품질 게이트 필요)</td></tr>
 <tr><td>실패 스텝 기준점은 대응표가 있어야 동작</td><td>로그에 스텝 표식이 없고 장비 시계가 달라, 스텝 순서 정렬은 <code>step_events</code> 대응표에 의존. 원인이 마지막 PASS 스텝보다 훨씬 앞이면 구간 밖이 될 수 있음</td><td>사내 S22에서 대응표 작성, 구간 기본값 조정. 의심되면 <code>--answer anchor=off</code></td></tr>
@@ -1086,7 +1086,7 @@ score = min(1, base + bonus)
 <tr><td>진행 중</td><td>RF-2와 10/04 개선 1~6단계 구현 완료, 사용자 확인 대기 → 보안 검토 → 반입. 순서는 <code>DRAFT_NOTES.md</code> "다음 할 일"</td></tr>
 <tr><td>테스트</td><td><code>pytest tests</code> 465개 통과 (Ubuntu 약 23분)</td></tr>
 <tr><td>스킬 평가</td><td>행동 45개 중 41개 통과 (실패 4건은 RF-2에서 수정). 10/04 새 기능은 행동 평가 전. 트리거 recall 26~33%</td></tr>
-<tr><td>사내 확인 항목</td><td>TODO(SITE) 78곳 (<code>python3 tools/list_site_todos.py</code>, S22 실패 스텝 12곳 포함), REVIEW-OPEN 0건</td></tr>
+<tr><td>사내 확인 항목</td><td>TODO(SITE) 79곳 (<code>python3 tools/list_site_todos.py</code>, S22 실패 스텝 12곳 포함), REVIEW-OPEN 0건</td></tr>
 <tr><td>사외에서 못 하는 것</td><td>실제 로그 문구·태그, report.html 구조, 스텝 → 로그 흔적 대응표, 장비·단말 시계 관계, 실제 Jira 필드 이름, 정확도 평가 (사내 S-1~S-5)</td></tr>
 <tr><td>경계 원칙</td><td>사내 값·코드는 <code>SITE_PATHS</code> 경로에만. 사내→사외 반출은 사용자가 직접 타이핑한, 사내 정보 없는 문장뿐</td></tr>
 </table></div>

@@ -19,7 +19,7 @@
 - 모드: **사외 초안**. Phase **D0, 1~13** 완료. 반입 전 보강 트랙(S1~S6·I1~I5·X·3C~3F)과 개선 트랙 **W0~W12**, 반입 전 리뷰(10/07) 수정 트랙 **V1~V7·V 끝**, 실제 로그 반영 트랙 **L1~L3** 완료, 반입 전 3차 검토(A1~A4·B1·B2·문서) 반영(10/08), 설명 정리(PR #31). main 병합 PR #8·#9·#11~#34 + 이번 브랜치 `ccr-d022623a-2f4vdx`.
 - 반입 전 4차 검토(10/10, 9관점) → 묶음 A~G 반영(이번 브랜치).
 - 마지막 전체 테스트: <전체 테스트 결과: 메인이 채움>. `db_regress --all` 23/23 (10/07).
-- 사내 확인 항목: `TODO(SITE)` **78곳** — `python3 tools/list_site_todos.py`. `REVIEW-OPEN.md` 0건.
+- 사내 확인 항목: `TODO(SITE)` **79곳** — `python3 tools/list_site_todos.py`. `REVIEW-OPEN.md` 0건.
 - 사내 S 단계 시작: `python3 tools/context_pack.py S-n`(표 `docs/tasks.md`).
 - 안내서(사람용 HTML): `docs/telephony-triage-guide.html` (공유본 https://claude.ai/artifact/1jov1Et4dQUMauFr6aoxWG)
 

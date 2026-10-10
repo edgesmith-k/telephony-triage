@@ -1740,7 +1740,7 @@ python3 tools/s0_stats.py &lt;logcat1&gt; &lt;logcat2&gt; &lt;logcat3&gt; \
         <tr><td>시계 이상</td><td>1건 이상</td><td>분석 때 증상 시각 스캔 경로 사용</td></tr>
         <tr><td>수집 태그 비율</td><td>낮음</td><td><code>tags.yaml</code> 매핑 보강</td></tr>
         <tr><td>RIL 요청</td><td>0건</td><td>RIL 태그 확인. 형식이 같으면 <code>platform.ril.tags</code>, 다르면 파서 포팅</td></tr>
-        <tr><td>RIL 짝 맞춤</td><td>낮음</td><td>로그 회전·문구 차이 확인. 짝 맞춤 경계는 캡처(디렉터리·회전 이름)·에포크(시계 역행·점프·부팅 줄)·pid이고, <code>--------- beginning of &lt;buffer&gt;</code> 줄은 경계가 아닙니다(병합 logcat에서 그 버퍼의 첫 줄 위치일 뿐)</td></tr>
+        <tr><td>RIL 짝 맞춤</td><td>낮음</td><td>로그 회전·문구 차이 확인. 짝 맞춤 경계는 캡처(디렉터리·회전 이름)·에포크(시계 역행·점프·부팅 줄)·pid이고, <code>--------- beginning of &lt;buffer&gt;</code> 줄은 경계가 아닙니다. 관측 끝은 같은 pid의 마지막 줄(병합 logcat에서 그 버퍼의 첫 줄 위치일 뿐)</td></tr>
         <tr><td>phone_id 추출</td><td>낮음/0%</td><td><code>platform.log.phone_id</code> 설정</td></tr>
       </table></div>
       <p>여러 지표가 동시에 나쁘면 참고 파서 모델이 맞지 않는 것이므로, 검증된 기존 파서를 백엔드로 포팅하는 쪽으로 방향을 정합니다(포팅 전 골든 출력 저장 → 포팅 → 골든 테스트 통과).</p>
@@ -1917,7 +1917,7 @@ git push -u origin HEAD                        # 사용자 승인 후. PR은 사
         <li><code>jira.mcp_server</code>와 <code>jira.tools</code>가 모두 비어 있을 때(setup 전): Jira 규칙은 적용하지 않고 경고만 냅니다 — "jira.mcp_server가 비어 있어 Jira 읽기 전용 규칙을 적용하지 않았다 (setup 전)." 반대로 config는 있는데 <code>jira.read_tools</code>가 비어 있으면 그 서버 도구는 모두 거부됩니다.</li>
         <li>다른 MCP 서버의 도구: 설정을 읽을 수 있을 때는 2번·9번 모두 통과합니다. <code>config.yaml</code>·<code>site-defaults.yaml</code>을 읽지 못하면 9번은 모든 <code>mcp__</code> 결과를 오류 문구로 바꿉니다(guard가 같은 상태에서 거부하는 범위와 같음).</li>
         <li><code>site-defaults.yaml</code>이 없을 때: guard는 멈추지 않고 "site-defaults.yaml이 없다 (S-3 미완료). 사용자 config만으로 판정한다."라고 경고한 뒤 사용자 config로 판정합니다. 단 커밋 검사(3·4번)가 부르는 스크립트가 종료 코드 2를 내므로 이슈 DB 커밋은 거부됩니다.</li>
-        <li>Read·Glob·Grep 도구: hook이 없습니다. 로그 통독 차단은 Bash 명령에만 걸리고, Read 도구는 스킬 지침에만 기댑니다: 로그·<code>events.json</code>·<code>match.json</code>·소스 파일(<code>code.resolved</code>)은 통째로 읽지 않고 <code>grep -n</code> 적중 줄 주변만 <code>offset</code>·<code>limit</code>(≤200줄)로, 같은 구간은 다시 읽지 않으며, 소스에서 <code>grep -n</code>이 맞지 않으면 추정하지 않고 "코드 위치 미확인"으로 적습니다.</li>
+        <li>Read·Glob·Grep 도구: hook이 없습니다. 로그 통독 차단은 Bash 명령에만 걸리고, Read 도구는 스킬 지침에만 기댑니다: 로그·<code>events.json</code>·<code>match.json</code>·소스 파일(<code>code.resolved</code>)은 통째로 읽지 않고 <code>grep -n</code> 적중 줄 주변만 <code>offset</code>·<code>limit</code>(≤200줄)로, 같은 구간은 다시 읽지 않으며(소스는 파일당 Read ≤2회), 소스에서 <code>grep -n</code>이 맞지 않으면 추정하지 않고 "코드 위치 미확인"으로 적습니다.</li>
         <li>PyYAML 등 의존성이 없거나 guard 자체가 내부 오류를 내면: MCP 도구는 거부(Jira 쓰기 차단은 guard가 유일한 장치), Bash의 <code>git</code>·<code>gh</code>·<code>db_pr.py publish</code>·파일 쓰기와 Write·Edit 도구는 "레포 판별 불가 — 직접 확인한다"로 승인 프롬프트(<code>ask</code>), 그 밖의 Bash는 경고만 하고 통과합니다. doctor의 <code>python</code>·<code>deps</code>·<code>guard</code>(자가시험) 행이 이 상태를 먼저 보입니다.</li>
       </ul>
       <h4>git hook 두 개</h4>
