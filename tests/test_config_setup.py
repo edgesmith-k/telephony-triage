@@ -556,7 +556,7 @@ def test_doctor_hooks_path_and_missing_snapshot_skip_compat():
     env.init(clone)
     env.json("config.py", ["sync-scripts-path"])
     rows = _rows(_doctor(env, expect=1))
-    assert rows["hook"]["status"] == "fail" and "install-hooks" in rows["hook"]["next"]
+    assert rows["hook"]["status"] == "fail" and "setup" in rows["hook"]["next"]
     assert rows["snapshot"]["status"] == "warn" and rows["compat"]["status"] == "skip"
     env.json("config.py", ["install-hooks"])
     assert _rows(_doctor(env))["hook"]["status"] == "ok"

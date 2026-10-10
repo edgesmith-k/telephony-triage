@@ -60,7 +60,9 @@ def load_or_exit(root: Path | None = None) -> dict:
 
 def explain(exc: SiteDefaultsMissing) -> str:
     lines = [
-        "사내 기본값 없음 (S-3 미완료): "
+        "플러그인 관리자가 사이트 설정(site-defaults.yaml)을 아직 올리지 않았습니다. "
+        "이 메시지를 관리자에게 전달하세요.",
+        "  [관리자] 사내 기본값 없음 (S-3 미완료): "
         f"{exc.root / FILENAME} 이(가) 없어 실행할 수 없습니다.",
         "  - 사내: S-3에서 site-defaults.yaml을 만들어 커밋하세요 "
         "(15-local-draft.md §15.5).",

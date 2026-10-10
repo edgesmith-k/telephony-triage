@@ -165,18 +165,18 @@ def cmd_explore(args, defaults: dict) -> int:
     """
     cfg = userconfig.merged(defaults)
     if not re.fullmatch(r"[A-Za-z0-9._-]+", args.key):
-        print(f"Jira 키 형식이 아니다: {args.key}", file=sys.stderr)
+        print(f"Jira 키 형식이 아닙니다: {args.key} — 키를 확인한 뒤 다시 실행한다", file=sys.stderr)
         return USAGE
     job = Path(args.out).expanduser().resolve() if args.out else Path(str(userconfig.get(cfg, "work_dir"))).expanduser() / args.key
     if not job.is_dir():
-        print(f"작업 디렉토리가 없다: {job} — 먼저 triage.py run을 실행한다", file=sys.stderr)
+        print(f"작업 디렉토리가 없습니다: {job} — 이 키로 analyze를 먼저 실행한다(스크립트: triage.py run)", file=sys.stderr)
         return USAGE
     input_path, events_path = job / EXPLORE_INPUT_FILE, job / "events.json"
     if not input_path.is_file():
         print(f"탐색 분석 해당 없음: {EXPLORE_INPUT_FILE}가 없다(후보 확정·explore.when: never·run 전)", file=sys.stderr)
         return CHECK_FAILED
     if not events_path.is_file():
-        print(f"events.json이 없다: {events_path} — triage.py run을 다시 실행한다", file=sys.stderr)
+        print(f"events.json이 없습니다: {events_path} — 이 키로 analyze를 다시 실행한다(스크립트: triage.py run)", file=sys.stderr)
         return USAGE
     try:
         spec = json.loads(input_path.read_text(encoding="utf-8"))
@@ -254,7 +254,9 @@ def main(argv: list[str] | None = None) -> int:
         except Exception:  # noqa: BLE001
             pass
         tail = " — lock을 풀었다" if released else (f" — lock이 남았을 수 있다: triage.py release {driver.key}" if had_lock else "")
-        print(f"triage.py 내부 오류(스크립트 버그로 보고): {message}{tail}", file=sys.stderr)
+        trace = driver.job / "trace.jsonl" if driver.job else f"<work_dir>/{driver.key}/trace.jsonl"
+        print(f"triage.py 내부 오류 — 스크립트 버그입니다. 이 메시지와 {trace}(마스킹된 호출 기록, 로그 원문 없음)를 "
+              f"플러그인 관리자에게 전달하세요: {message}{tail}", file=sys.stderr)
         return USAGE
     _emit(result)
     return OK

@@ -408,6 +408,9 @@ def _row(check: str, status: str, detail: str, next_: str | None = None) -> dict
     return row
 
 
+GUARD_NEXT = "관리자에게 알린다(guard.py 직접 실행해 stderr 확인)"
+
+
 def _guard_selftest(args, clone: Path | None) -> dict:
     """guard.py에 거부돼야 할 hook 입력을 주고 응답 구조·결정을 본다: (1) 이름에 jira가 든 서버의 쓰기 도구(설정과
     무관하게 deny), (2) clone이 있으면 clone 파일 Write(deny)."""
@@ -428,7 +431,7 @@ def _guard_selftest(args, clone: Path | None) -> dict:
                                   input=json.dumps(event), capture_output=True, text=True, encoding="utf-8",
                                   errors="replace", timeout=GUARD_SELFTEST_TIMEOUT)
         except subprocess.TimeoutExpired:
-            return _row("guard", "fail", f"응답 없음 ({GUARD_SELFTEST_TIMEOUT}s 초과)", "guard.py 직접 실행해 stderr 확인")
+            return _row("guard", "fail", f"응답 없음 ({GUARD_SELFTEST_TIMEOUT}s 초과)", GUARD_NEXT)
         try:
             out = json.loads(proc.stdout)["hookSpecificOutput"] if proc.stdout.strip() else {}
         except (ValueError, KeyError, TypeError):
@@ -437,11 +440,11 @@ def _guard_selftest(args, clone: Path | None) -> dict:
                 or out.get("permissionDecision") != "deny":
             got = out.get("permissionDecision") if isinstance(out, dict) else None
             return _row("guard", "fail", f"응답 구조 불일치: {event['tool_name']} 종료 {proc.returncode}·결정 {got or '없음'}",
-                        "guard.py 직접 실행해 stderr 확인")
+                        GUARD_NEXT)
         reason = str(out.get("permissionDecisionReason") or "")
         if "의존성 없음" in reason or "내부 오류" in reason:   # 판정이 아니라 degraded 거부다
             return _row("guard", "fail", f"{'hook python3' if other else 'guard'}: {reason.removeprefix('[telephony-triage] ')}",
-                        f"{python}에 pyproject 의존성 설치" if "의존성 없음" in reason else "guard.py 직접 실행해 stderr 확인")
+                        f"{python}에 pyproject 의존성을 설치한다" if "의존성 없음" in reason else GUARD_NEXT)
     return _row("guard", "ok", f"deny {len(events)}/{len(events)}" + (" (hook python3≠doctor python)" if other else ""))
 
 
@@ -462,7 +465,7 @@ def _doctor_rows(args, defaults: dict) -> list[dict]:
         rows.append(_row("python", "ok", ".".join(map(str, sys.version_info[:3]))))
     else:
         rows.append(_row("python", "fail", ".".join(map(str, sys.version_info[:3])),
-                         f"Python {'.'.join(map(str, MIN_PYTHON))}+"))
+                         f"Python {'.'.join(map(str, MIN_PYTHON))}+ 를 설치한다"))
 
     def deps():
         # PyYAML이 없으면 config.py는 import에서 종료 2로 멈춘다(여기까지 오지 않는다). jsonschema만 따로 본다.
@@ -470,7 +473,7 @@ def _doctor_rows(args, defaults: dict) -> list[dict]:
         try:
             import jsonschema  # noqa: F401
         except ImportError:
-            rows.append(_row("deps", "fail", "jsonschema 없음", "pip install (pyproject 의존성)"))
+            rows.append(_row("deps", "fail", "jsonschema 없음", "pyproject 의존성을 설치한다(pip install)"))
             return
         from importlib.metadata import version
         libyaml = "libyaml" if getattr(yaml, "CSafeLoader", None) else "pure"
@@ -482,12 +485,12 @@ def _doctor_rows(args, defaults: dict) -> list[dict]:
     try:
         user = userconfig.load_user()
         if user is None:
-            rows.append(_row("config", "fail", "사용자 config 없음", "/telephony-triage:setup"))
+            rows.append(_row("config", "fail", "사용자 config 없음", "/telephony-triage:setup 을 실행한다"))
         else:
             cfg = userconfig.merged(defaults, user)
             rows.append(_row("config", "ok", "config.yaml 있음"))
     except Exception as exc:    # noqa: BLE001 — 읽기 실패도 한 행의 fail이다
-        rows.append(_row("config", "fail", f"config 읽기 실패: {exc}", "config.yaml 확인 또는 setup"))
+        rows.append(_row("config", "fail", f"config 읽기 실패: {exc}", "/telephony-triage:setup 을 다시 실행한다(config.yaml 손상)"))
     ok_cfg = cfg is not None
 
     # 2 scripts_path
@@ -498,7 +501,7 @@ def _doctor_rows(args, defaults: dict) -> list[dict]:
             rows.append(_row("scripts_path", "ok", "플러그인 경로와 같음"))
         else:
             rows.append(_row("scripts_path", "warn", "config의 경로가 이 플러그인과 다름" if have else "scripts_path 비어 있음",
-                             "config.py sync-scripts-path"))
+                             "새 세션을 시작하면 자동으로 맞춘다. 계속 다르면 관리자에게 알린다"))
     guarded("scripts_path", scripts_path) if ok_cfg else skip("scripts_path", "config 없음")
 
     # 3 clone
@@ -507,7 +510,7 @@ def _doctor_rows(args, defaults: dict) -> list[dict]:
     def clone():
         raw = userconfig.get(cfg, "issue_db.path")
         if not raw:
-            rows.append(_row("clone", "fail", "issue_db.path 비어 있음", "setup 1"))
+            rows.append(_row("clone", "fail", "issue_db.path 비어 있음", "/telephony-triage:setup 에서 이슈 DB 경로(1번)를 다시 입력한다"))
             return
         repo = Path(str(raw)).expanduser()
         if (repo / ".git").exists():
@@ -515,7 +518,8 @@ def _doctor_rows(args, defaults: dict) -> list[dict]:
             repo_box.append(repo)
         else:
             remote = userconfig.get(cfg, "issue_db.remote")
-            rows.append(_row("clone", "fail", "이슈 DB clone 없음", f"git clone {remote} {repo}" if remote else "setup 3"))
+            rows.append(_row("clone", "fail", "이슈 DB clone 없음", f"터미널에서 git clone {remote} {repo} 실행" if remote
+                                 else "/telephony-triage:setup 3번(clone)을 다시 한다"))
     guarded("clone", clone) if ok_cfg else skip("clone", "config 없음")
 
     # 4 hook
@@ -524,7 +528,7 @@ def _doctor_rows(args, defaults: dict) -> list[dict]:
         if value == ".githooks":
             rows.append(_row("hook", "ok", "core.hooksPath=.githooks"))
         else:
-            rows.append(_row("hook", "fail", f"core.hooksPath={value or '(없음)'}", "config.py install-hooks"))
+            rows.append(_row("hook", "fail", f"core.hooksPath={value or '(없음)'}", "/telephony-triage:setup 을 다시 실행한다(hook 설치 단계)"))
     guarded("hook", hook) if repo_box else skip("hook", "clone 없음")
 
     # 4b guard 자가시험 (읽기 전용: guard는 판정만 한다)
@@ -535,7 +539,7 @@ def _doctor_rows(args, defaults: dict) -> list[dict]:
         server = userconfig.get(cfg, "jira.mcp_server")
         tools = userconfig.get(cfg, "jira.tools", {})
         read_tools = userconfig.get(cfg, "jira.read_tools", [])
-        hint = "setup 4 (Jira MCP 확인)"
+        hint = "/telephony-triage:setup 4번(Jira MCP 매핑)을 다시 한다"
         if tools is None:
             tools = {}
         if read_tools is None:
@@ -562,7 +566,7 @@ def _doctor_rows(args, defaults: dict) -> list[dict]:
         if ok:
             rows.append(_row("gh", "ok", f"인증됨 ({host})"))
         else:
-            rows.append(_row("gh", "warn", f"gh 인증 없음 ({host}) — 쓰기 불가", f"gh auth login -h {host}"))
+            rows.append(_row("gh", "warn", f"gh 인증 없음 ({host}) — 쓰기 불가", f"터미널에서 gh auth login -h {host} 실행"))
     guarded("gh", gh) if ok_cfg else skip("gh", "config 없음")
 
     # 7 snapshot
@@ -573,12 +577,12 @@ def _doctor_rows(args, defaults: dict) -> list[dict]:
     def snapshot():
         snap_dir = work / session_lock.SNAPSHOT_DIR
         if not (snap_dir / ".git").exists():
-            rows.append(_row("snapshot", "warn", "읽기 스냅샷 없음", "/telephony-triage:sync"))
+            rows.append(_row("snapshot", "warn", "읽기 스냅샷 없음", "/telephony-triage:sync 를 실행한다"))
             return
         snap_box.append(snap_dir)
         meta_path = work / session_lock.SNAPSHOT_META
         if not meta_path.is_file():
-            rows.append(_row("snapshot", "warn", "시각 기록 없음 (나이 불명)", "/telephony-triage:sync"))
+            rows.append(_row("snapshot", "warn", "시각 기록 없음 (나이 불명)", "/telephony-triage:sync 를 실행한다"))
             return
         try:
             meta = json.loads(meta_path.read_text(encoding="utf-8"))
@@ -586,11 +590,11 @@ def _doctor_rows(args, defaults: dict) -> list[dict]:
             sha = str(meta.get("sha") or "")[:7]
         except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
             snap_box.clear()
-            rows.append(_row("snapshot", "fail", f"{session_lock.SNAPSHOT_META} 손상: {type(exc).__name__}", "/telephony-triage:sync"))
+            rows.append(_row("snapshot", "fail", f"{session_lock.SNAPSHOT_META} 손상: {type(exc).__name__}", "/telephony-triage:sync 를 실행한다"))
             return
         days = int(age.total_seconds() // 86400)
         if age > timedelta(days=SNAPSHOT_STALE_DAYS):
-            rows.append(_row("snapshot", "warn", f"{days}일 전 ({sha}, {SNAPSHOT_STALE_DAYS}일 초과)", "/telephony-triage:sync"))
+            rows.append(_row("snapshot", "warn", f"{days}일 전 ({sha}, {SNAPSHOT_STALE_DAYS}일 초과)", "/telephony-triage:sync 를 실행한다"))
         else:
             rows.append(_row("snapshot", "ok", f"{days}일 전 ({sha})"))
     if not ok_cfg:
@@ -610,7 +614,7 @@ def _doctor_rows(args, defaults: dict) -> list[dict]:
                 rows.append(_row("compat", "ok", "스키마·생성기·파서 호환"))
             else:
                 codes = ",".join(r["code"] for r in result["reasons"])
-                rows.append(_row("compat", "fail", f"쓰기 막힘: {codes}", "config.py check --for dry-run"))
+                rows.append(_row("compat", "fail", f"쓰기 막힘: {codes}", "플러그인을 업데이트하거나 관리자에게 사유를 알린다"))
         except Exception as exc:    # noqa: BLE001
             rows.append(_row("compat", "fail", f"판정 실패: {exc}"))
 
@@ -628,7 +632,7 @@ def _doctor_rows(args, defaults: dict) -> list[dict]:
                 mins = held["age_sec"] // 60
                 state = "만료" if held["expired"] else "보유 중"
                 rows.append(_row("lock", "warn", f"{state}: {held['job']} ({mins}분 전)",
-                                 f"끝난 세션이면 db_pr lock release {held['job']} --force"))
+                                 f"그 세션이 끝났는지 확인 → 끝났으면 db_pr lock release {held['job']} --force"))
         except Exception as exc:    # noqa: BLE001 — 손상 lock 포함
             rows.append(_row("lock", "fail", str(exc) or type(exc).__name__,
                              f"lock 파일 확인: {work / session_lock.LOCK_FILE} — 그 세션이 끝났으면 "

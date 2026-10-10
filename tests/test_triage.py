@@ -805,6 +805,7 @@ def test_unexpected_error_releases_lock_and_exits_2():
                                       "--logs", DATA_LOG, "--code", "skip"])
     assert proc.returncode == 2, proc.stderr[-1500:]
     assert "내부 오류" in proc.stderr and "RuntimeError: boom" in proc.stderr and "Traceback" not in proc.stderr
+    assert str(ws.job_dir("MOCK-1001") / "trace.jsonl") in proc.stderr and "관리자에게 전달" in proc.stderr
     assert ws.db_pr("lock", "status")["held"] is False
     last = json.loads((ws.job_dir("MOCK-1001") / "trace.jsonl").read_text(encoding="utf-8").strip().splitlines()[-1])
     assert last["step"] == "error" and last["exit"] == 2
