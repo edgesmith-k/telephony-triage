@@ -70,7 +70,8 @@ def _ril_events(rec: dict, rules: parser_rules.Rules, last_ts: str | None) -> li
     ann = rec.get("ril")
     if not ann or ann["dir"] not in ("req", "resp"):
         return []
-    # 다른 장치·재시작·시계 불연속은 이 요청의 관측을 연장하지 않는다.
+    # 관측 끝은 같은 세그먼트 안 같은 pid의 마지막 줄(ril.py). 다른 장치·재시작·시계 불연속·다른 프로세스 줄은
+    # 이 요청의 관측을 연장하지 않는다.
     last_ts = ann.get("observed_until", rec["ts"])
     rule = rules.requests.get(ann["request"])
     if not rule:

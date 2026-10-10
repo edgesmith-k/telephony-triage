@@ -229,6 +229,12 @@ def extract(raw: dict, cfg: dict, db: Path | None, origin: str, last: int | None
     }
 
     slot = lookup(raw, fmap["sim_slot"]) if fmap.get("sim_slot") else None
+    # 선택 필드 객체({value, id, self(URL)…})는 `value`만 쓴다. 그 밖의 객체·목록은 버린다(마스킹 안 된 id·URL이 리포트에 나가지 않게).
+    # TODO(SITE:S20) 사내 Jira 슬롯 값의 기준(0/1-based) 확인 뒤 phone_id 기준으로 여기서 정규화한다.
+    if isinstance(slot, dict):
+        slot = slot.get("value")
+    if isinstance(slot, (dict, list, bool)):
+        slot = None
     comps = lookup(raw, fmap.get("components") or "fields.components[].name") or []
     if not isinstance(comps, list):
         comps = [comps]

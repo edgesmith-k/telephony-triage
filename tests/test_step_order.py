@@ -366,7 +366,7 @@ def test_fit_drops_order_last_before_clock_reason_before_focus():
                                 "clock": {"mode": "none", "reason": "시계 차 모름"}}}
 
     def size(r: dict) -> int:
-        return len(triage.dumps(r).encode("utf-8"))   # analysis.json 파일과 같은 직렬화
+        return len(triage.dumps(r).encode("utf-8")) + 1   # analysis.json 파일 바이트(끝 개행 포함)
 
     n = 3000
     while size(make(n)) <= triage.ANALYSIS_MAX:

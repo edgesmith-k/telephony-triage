@@ -132,7 +132,7 @@ def test_analysis_is_trimmed_to_4kb_when_evidence_is_large(tmp_path):
     result = {"warnings": ["w" * 120] * 10, "files": {"report": "r", "events": "e"},
               "candidates": [{"cause": f"C-{i}", "evidence": [dict(big) for _ in range(10)]} for i in range(3)]}
     out = triage.fit(result)
-    assert len(triage.dumps(out).encode("utf-8")) <= 4096   # analysis.json 파일과 같은 직렬화(compact)
+    assert len(triage.dumps(out).encode("utf-8")) + 1 <= 4096   # analysis.json 파일 바이트(compact, 끝 개행 포함)
     assert out["candidates"][0]["evidence"] and out["truncated"] is False
 
 
@@ -667,7 +667,7 @@ def test_fit_keeps_first_must_show_and_stays_within_4kb():
     result = {"warnings": ["w" * 120] * 10, "files": {"report": "r", "events": "e"}, "read_only_hint": "힌트" * 80,
               "must_show": must, "candidates": [{"cause": f"C-{i}", "evidence": [dict(big) for _ in range(10)]} for i in range(3)]}
     out = triage.fit(result)
-    assert len(triage.dumps(out).encode("utf-8")) <= 4096 and out["truncated"] is False
+    assert len(triage.dumps(out).encode("utf-8")) + 1 <= 4096 and out["truncated"] is False
     assert out["must_show"][0].startswith("분석 전용:")
     # must_show만 커서 다른 줄임으로 부족하면 마지막에 줄당 160자로 자르고 앞 4개만 남긴다
     clipped = triage.fit({"files": {"report": "r"}, "must_show": must})
@@ -1343,7 +1343,7 @@ def test_top_candidate_slot_mismatch_is_must_shown():
     assert analysis["jira"]["sim_slot"] == "1" and analysis["candidates"][0]["phones"] == [0]
     line = next(m for m in analysis["must_show"] if m.startswith("슬롯 불일치:"))
     assert "phone 0" in line and "Jira SIM 슬롯은 1" in line and len(line) <= 160 and f"- {line}" in report
-    for extra in ({"sim_slot": "0"}, {}, {"sim_slot": "SIM"}):
+    for extra in ({"sim_slot": "0"}, {}, {"sim_slot": "SIM"}, {"sim_slot": "-1"}, {"sim_slot": "1 of 2"}):
         other, report = _run_custom(lines, "MOCK-7423", **extra)
         assert not any(m.startswith("슬롯 불일치:") for m in other.get("must_show") or [])
         assert "슬롯 불일치:" not in report

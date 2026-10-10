@@ -131,3 +131,18 @@ def test_extract_failed_step_field_is_masked_and_not_missing():
 if __name__ == "__main__":
     import pytest
     raise SystemExit(pytest.main([__file__, "-q"]))
+
+
+def test_sim_slot_select_object_uses_value_and_drops_other_objects():
+    tmp = Path(tempfile.mkdtemp())
+    text = (MOCK_JIRA / "MOCK-1001.yaml").read_text(encoding="utf-8")
+    cases = {"select": ('{value: "1", id: "10101", self: "https://jira.example/rest/api/2/customFieldOption/10101"}', "1"),
+             "other": ('{id: "10101", self: "https://jira.example/x"}', None),
+             "list": ('["1", "2"]', None)}
+    for name, (body, want) in cases.items():
+        raw = tmp / f"{name}.yaml"
+        raw.write_text(re.sub(r'(?m)^(\s*customfield_10006:).*$', lambda m: f"{m.group(1)} {body}", text), encoding="utf-8")
+        meta = tmp / f"{name}.json"
+        out = run_json("jira_fields.py", ["extract", raw, "--origin", "file", "--db", SAMPLE, "--meta-out", meta], env=_home())
+        assert out["sim_slot"] == want, name
+        assert "10101" not in meta.read_text(encoding="utf-8") and "jira.example" not in json.dumps(out)

@@ -29,9 +29,10 @@ def dumps(result: dict) -> str:
 
 
 def _slot_number(value) -> int | None:
-    """Jira SIM 슬롯 값의 첫 정수(없으면 None). 0/1 기준은 사내 S20 확인 사항이라 그대로 비교한다."""
-    found = re.search(r"\d+", str(value)) if value not in (None, "") else None
-    return int(found.group()) if found else None
+    """Jira SIM 슬롯 값 안의 정수가 정확히 하나이고 음수가 아닐 때만 그 값(그 외 None — 경고하지 않음).
+    0/1 기준은 사내 S20 확인 사항이라 그대로 비교한다(정규화는 jira_fields.py)."""
+    found = re.findall(r"-?\d+", str(value)) if value not in (None, "") else []
+    return int(found[0]) if len(found) == 1 and not found[0].startswith("-") else None
 
 
 def _unique_evidence(evidence: list) -> list:
@@ -158,8 +159,8 @@ def _drop_read_only_hint_if_shown(result: dict) -> None:
 def fit(result: dict) -> dict:
     """analysis.json을 ≤ 4KB로 줄인다: (읽기 전용 줄 중복) → 다른 후보 근거 → 근거 줄 수 → 메시지 길이 → 경고 순,
     마지막으로 must_show 항목을 160자로 줄이고 앞 4개만 남긴다(`truncated` 의미는 그대로: 그래도 넘으면 true)."""
-    def size() -> int:
-        return len(dumps(result).encode("utf-8"))
+    def size() -> int:   # 파일 바이트(끝 개행 포함)
+        return len(dumps(result).encode("utf-8")) + 1
 
     cands = result.get("candidates") or []
     steps = []
@@ -407,8 +408,9 @@ class ReportMixin:
                 lines.append(add(7, f"슬롯 불일치: 1위 후보 근거는 phone {','.join(map(str, top['phones']))}, Jira SIM 슬롯은 "
                                     f"{_clip(str(jira_slot), 20)} — 다른 슬롯의 로그로 판정됐을 수 있다(교차 슬롯 원인이 아니면 재검토)"))
             if top.get("clock_flags"):
-                lines.append(add(8, "시계 이상 구간의 근거: 1위 후보의 순서(sequence)·시간창 판정은 시각 재정렬 기준이라 신뢰가 낮다 — "
-                                    f"근거 줄의 (f:L) 위치로 순서를 확인한다 [{', '.join(top['clock_flags'])}]"))
+                lines.append(add(8, "시계 이상 구간의 근거: 1위의 순서·시간창 판정은 시각 재정렬 기준이라 신뢰가 낮다 — 근거 (f:L) 위치로 "
+                                    "순서 확인(이어 붙인(버퍼별 덤프) 파일이면 줄 순서가 시각 순서가 아니다) "
+                                    f"[{', '.join(top['clock_flags'])}]"))
             if (len(cands) > 1 and cands[1]["score"] == top["score"]
                     and (cands[1]["S"], cands[1]["C"]) == (top["S"], top["C"])):
                 n = sum(1 for c in cands if c["score"] == top["score"])

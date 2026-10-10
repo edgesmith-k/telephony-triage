@@ -460,6 +460,16 @@ def test_r4_buffer_header_is_not_a_boundary(safety_root, tmp_path):
     assert any(e["event"] == "ril_no_response" for e in doc["events"])
 
 
+def test_r4_other_process_lines_after_ril_crash_do_not_prove_no_response(safety_root, tmp_path):
+    """phone 프로세스 크래시(같은 pid FATAL) 뒤 다른 pid 줄만 이어지면 응답 없음으로 단정하지 않는다."""
+    path = tmp_path / "radio.log"
+    path.write_text(ril_line(0, "[0043]> SEND_SMS") + "--------- beginning of crash\n" +
+                    "09-22 12:00:01.000  1234  1234 E AndroidRuntime: FATAL EXCEPTION: main (synthetic)\n" +
+                    "09-22 12:01:31.000  2345  2345 I DNC-0: [PHONE0] tail\n", encoding="utf-8")
+    doc = parse_synthetic(safety_root, [path])
+    assert not any(e["event"] == "ril_no_response" for e in doc["events"])
+
+
 def test_r4_reused_serial_after_boot_is_not_paired(safety_root, tmp_path):
     path = tmp_path / "radio.log"
     path.write_text(ril_line(0, "[0043]> SEND_SMS") +
