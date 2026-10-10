@@ -219,7 +219,7 @@ Android 버전과 브랜치마다 소스 트리가 다르므로 **분석할 때�
 
 "이 이슈를 `Data > DATA-001 > DATA-001-02 Roaming disabled`로 분류할까요?"
 - **예** → 계획에 `append DATA-001-02`.
-- **다른 기존 원인** → 사용자가 고른 원인으로 `append`. 이어서 한 번 묻는다(기본 "아니오", record에는 없음): 고른 원인이 `analysis.json` 후보에서 C=1이면 이 로그를 `add-fixture {for: <원인>, kind: extra}`(`parse_logcat.py cut --evidence JOB/match.json`)로 넣을지, C=0이거나 후보에 없으면 fixture 대신 "시그니처가 이 로그를 못 잡는다 — `update-signature` 검토"를 `pr_notes`에 남길지. C=0 로그를 양성으로 넣으면 회귀가 실패하기 때문이다. 거절하면 `append`만 넣고, 추정으로 fixture·시그니처를 만들지 않는다.
+- **다른 기존 원인** → 사용자가 고른 원인으로 `append`. 이어서 한 번 묻는다(기본 "아니오", record에는 없음): 고른 원인이 `analysis.json` 후보에서 C=1이면 이 로그를 `add-fixture {for: <원인>, kind: extra}`로 넣을지 — `parse_logcat.py cut --around <JOB/match.json에서 그 원인 후보의 evidence 시각>`으로 자른다(`cut --evidence`는 1위 후보 근거로 자르므로 쓰지 않는다). 계획에 넣으면 `db_verify rules --plan --draft`의 R4(회귀)로 그 fixture에서 고른 원인 C=1을 확인하고, 실패면 fixture를 빼고 아래 `update-signature` 검토 제안으로 바꾼다. C=0이거나 후보에 없으면 fixture 대신 "시그니처가 이 로그를 못 잡는다 — `update-signature` 검토"를 `pr_notes`에 남길지. C=0 로그를 양성으로 넣으면 회귀가 실패하기 때문이다. 고른 원인이 `analysis.json` `unjudged.causes`에 있으면(match.json `causes[].C`가 `null`, 원인 시그니처 판정 불가 — 후보의 `C`는 정수라 후보 목록으로는 구분되지 않는다) fixture·시그니처 제안을 하지 않는다. 거절하면 `append`만 넣고, 추정으로 fixture·시그니처를 만들지 않는다.
 - **이미 이슈 DB에 있는 Jira를 다른 원인으로** → `reclassify {jira, from, to}`.
 - **유형은 맞지만 새 원인** → `new-cause` (`temp_id` 필수). 원인 제목, 해결책, 수정 상태, 시그니처, 본문(재현 시나리오 포함) 초안을 `03-issue-db.md §5.7` 규칙대로 만들어 승인받는다. 코드·설정 수정 유형이면 `recovery_signatures`/`scenario_signatures` 초안도 제안한다.
 - **새 유형** → `db_add.py similar --db <work_dir>/_snapshot`으로 유사 유형 상위 3개를 먼저 보여준 뒤, 카테고리를 확인하고 `new-type`. 증상/원인 시그니처 초안을 모두 승인받는다.
