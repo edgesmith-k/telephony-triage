@@ -490,7 +490,9 @@ def _doctor_rows(args, defaults: dict) -> list[dict]:
             cfg = userconfig.merged(defaults, user)
             rows.append(_row("config", "ok", "config.yaml 있음"))
     except Exception as exc:    # noqa: BLE001 — 읽기 실패도 한 행의 fail이다
-        rows.append(_row("config", "fail", f"config 읽기 실패: {exc}", "/telephony-triage:setup 을 다시 실행한다(config.yaml 손상)"))
+        # init --force도 기존 파일을 먼저 읽으므로 손상 파일에서는 실패한다 → 파일을 옮긴 뒤 setup
+        rows.append(_row("config", "fail", f"config 읽기 실패: {exc}",
+                         f"손상된 {userconfig.path()}를 다른 이름으로 옮긴 뒤 /telephony-triage:setup 을 실행한다"))
     ok_cfg = cfg is not None
 
     # 2 scripts_path

@@ -29,7 +29,7 @@ main 기준 다음 번호로 정해진다. 계획이 건드리는 대상이 그�
  "feedback": {"date": "<지금, 타임존 포함>", "suggested": [<비워 둔다 — db_pr stage가 JOB/match.json 후보(cause≠null, 순위순 {cause, signature, score})로 채운다. 직접 적은 값이 다르면 stage 종료 2>],
               "decision": "<SKILL.md Step 7 표>", "final": "<원인 ID | temp_id | unresolved>"},
  "commit_message": "[<원인 또는 유형 ID>] add <KEY>: <요약>",
- "pr_notes": ["<리뷰어가 알아야 할 결정 한 줄씩(선택): allow-cause 사유, 분석 스킬 의견을 고른 이유 등. summary가 자동으로 붙이는 것은 넣지 않는다>"],
+ "pr_notes": ["<리뷰어가 알아야 할 결정 한 줄씩(선택): allow-cause 사유, chose-other의 `update-signature` 검토 등. summary가 자동으로 붙이는 것은 넣지 않는다>"],
  "pr": {"number": null, "branch": "issue/<KEY>", "head_sha": null}, "included_pending": []}
 ```
 

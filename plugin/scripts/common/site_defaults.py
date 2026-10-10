@@ -64,15 +64,15 @@ def explain(exc: SiteDefaultsMissing) -> str:
         "이 메시지를 관리자에게 전달하세요.",
         "  [관리자] 사내 기본값 없음 (S-3 미완료): "
         f"{exc.root / FILENAME} 이(가) 없어 실행할 수 없습니다.",
-        "  - 사내: S-3에서 site-defaults.yaml을 만들어 커밋하세요 "
+        "    - 사내: S-3에서 site-defaults.yaml을 만들어 커밋하세요 "
         "(15-local-draft.md §15.5).",
     ]
     if exc.has_example:
         lines.append(
-            "  - 사외 테스트: 개발 레포의 plugin/ 을 직접 ${CLAUDE_PLUGIN_ROOT}로 주지 말고,"
+            "    - 사외 테스트: 개발 레포의 plugin/ 을 직접 ${CLAUDE_PLUGIN_ROOT}로 주지 말고,"
         )
         lines.append(
-            "    tests/helpers/make_plugin_root.py 가 만든 임시 플러그인 루트를 쓰세요 "
+            "      tests/helpers/make_plugin_root.py 가 만든 임시 플러그인 루트를 쓰세요 "
             "(15-local-draft.md §15.1)."
         )
     return "\n".join(lines)

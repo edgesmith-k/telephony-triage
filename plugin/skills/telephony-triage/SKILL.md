@@ -6,7 +6,7 @@ description: Android Telephony 이슈(data·call·network·sim·sms·ims)를 Jir
 # telephony-triage
 
 **스크립트 출력으로 판단하고, 사람 확인을 받고, 계획을 최신 main 위에 적용해 PR로
-올린다.** 결과를 설명하고 사용자 결정을 계획에 옮길 뿐 이슈 DB 파일을 직접 쓰지 않는다.
+올린다.** 이슈 DB 파일은 직접 쓰지 않는다.
 
 | 언제 | `reference/` |
 |---|---|
@@ -17,8 +17,8 @@ description: Android Telephony 이슈(data·call·network·sim·sms·ims)를 Jir
 
 ## 실행 규칙
 
-`S/` = `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/`(이 경로 그대로. 플러그인 경로 변수는 Bash에 없다).
-스크립트 호출, 종료 코드(2·S-3 중단), lock, 마스킹, 사용자 확인 지점은 **`reference/rules.md`**. analyze도 그 규칙을 따른다: 첫 스크립트 호출 전에 읽는다.
+`S/` = `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/`(이 경로 그대로).
+스크립트 호출, 종료 코드(2·S-3 중단), lock, 마스킹, 사용자 확인 지점은 **`reference/rules.md`** — analyze도 첫 스크립트 호출 전에 읽는다.
 
 ## analyze
 
@@ -27,7 +27,7 @@ description: Android Telephony 이슈(data·call·network·sim·sms·ims)를 Jir
 ### 1. 드라이버 (Step 0~4)
 
 1. `--jira-file`이 없으면 config(`S/config.py show --keys work_dir,jira.tools`)의 `jira.tools.get_issue`(있으면 `get_comments`)를 그 스키마대로 부른다. 비어 있으면 부르지 말고 멈춘다(추측 금지): `S/config.py doctor --format markdown` 표를 요약 없이 그대로 붙이고 setup 매핑 안내, 연습은 `--dry-run --jira-file <yaml>`. hook이 원문을
-   `JOB/jira_raw.json`에 두고 마스킹 요약만 보여준다(`saved_to` 없으면 응답을 그 경로에 저장하고 "격리 hook 미동작: Jira 원문이 대화에 들어옴(S1 확인)"을 알린다). `--jira-file`은
+   `JOB/jira_raw.json`에 두고 마스킹 요약만 보여준다(`saved_to` 없으면 응답을 그 경로에 저장하고 "격리 hook 미동작(Jira 원문 노출, S1 확인)"을 알린다). `--jira-file`은
    `--dry-run`·`--analysis-only` 전용.
 2. `S/triage.py run <KEY> --logs <…>` + 위 옵션(analyzer·explore 외) — lock·스냅샷부터 Step 5 `code_refs` resolve까지 한다. stdout(=`JOB/analysis.json`, ≤4KB)과 `JOB/report.md`만 읽는다.
 3. `status: needs_input` → `question`·`options`를 보이고 **사용자 답**을 `--answer <kind>=<값>`으로 붙여 같은 명령을 재실행한다. 대신 고르지 않는다.
@@ -36,20 +36,20 @@ description: Android Telephony 이슈(data·call·network·sim·sms·ims)를 Jir
 
 ### 2. 결과 읽기
 
-- `mode: analysis-only`("분석만", "기록하지 마") → Step 6(5-1·5-2 포함)까지, 계획·Step 7·8 없음(lock 해제됨). 추가 로그는 `--more-logs`.
+- `mode: analysis-only`("분석만", "기록하지 마") → Step 6(5-1·5-2 포함)까지, 계획·Step 7·8 없음. 추가 로그는 `--more-logs`.
 - `mode: read-only` → Step 7 계획 저장까지만이라고 알리고 `snapshot.pull_skipped_reason`, `post_lint.errors`("메인테이너 정리"), `warnings`, `plan.pr_number`(→ `sync-pr`)도 알린다.
 - `notes`는 항상 알린다. `code.auto`면 "<roots> 자동 선택, `--code`로 변경 가능"도.
 - 로그 범위·`C: 0`·후보 없음은 report.md대로("로그 범위 밖"≠"매칭 없음"). `phones`≠`jira.sim_slot`이면 경고.
 - Step 5: `code.resolved` 파일에서 근거 문구의 출력 위치·분기 조건을 찾는다. `code.moved`는
   "경로 변경"으로 알리고 Step 7에서 `add-code-ref`를 묻는다.
 - Step 5-1 `analyzer`(값이 있으면)·5-2 `explore`(후보 없음·원인 미확인만): `--no-…`·`never`면 생략, `--analyzer`·`--explore`·`always`면
-  실행, 아니면 토큰 추가를 알리고 묻는다(답 전 실행 금지). 둘 다 묻게 되면 "심층 분석과 탐색 분석을 할까요?" 한 질문(`explore.md`), 한쪽만이면 그쪽만. 5-1은 `analyzer.skill`을 Skill로 부른다(입력 `files.events`·로그 경로·상위 후보·마스킹 요약).
+  실행, 아니면 토큰 추가를 알리고 묻는다(답 전 실행 금지). 둘 다 물으면 "심층 분석과 탐색 분석을 할까요?" 한 질문(`explore.md`). 5-1은 `analyzer.skill`을 Skill로 부른다(입력 `files.events`·로그 경로·상위 후보·마스킹 요약).
   결과는 `S/mask_pii.py` 후 report.md `심층 분석 (…)` 줄에, 다른 원인 의견은 Step 7 선택지로. 5-2는 실행이 정해진 뒤에만
-  `S/triage.py explore <KEY>`를 부르고 그것이 만든 `JOB/timeline.md`만 `explore.md`대로 읽는다.
+  `S/triage.py explore <KEY>`, 그 `JOB/timeline.md`만 `explore.md`대로 읽는다.
 
 ### Step 6. 리포트
 
-`JOB/report.md`의 `TODO(LLM)` 칸만 채워 보인다. 결정적 칸은 두고, `analysis.json` `must_show` 줄은 **글자 그대로** 답에 넣는다(요약·생략 금지).
+`JOB/report.md`의 `TODO(LLM)` 칸만 채워 보인다. `analysis.json` `must_show` 줄은 **글자 그대로** 답에 넣는다(요약·생략 금지).
 원인은 **로그로 확인/코드로 추정/placeholder 규칙 결과**를 나누고 반대 근거와 다음 확인을 적는다.
 `fix_judgement`의 `regression-suspected`·`fix-insufficient`는 Step 7에서 묻고, `undetermined`는 SW·`fixed_in`을 나란히.
 
@@ -65,8 +65,9 @@ description: Android Telephony 이슈(data·call·network·sim·sms·ims)를 Jir
 | 증상이 새것 | `S/db_add.py similar` 3개를 먼저 보이고 `new-type` + `append` | `new-type` |
 | 원인 미확정 | `unresolved {type}` | `unresolved` |
 
-- 거부하면 다른 기존 원인·새 원인·새 유형·원인 미확정을 다시 보인다. 추정만으로·`unjudged`면 원인·유형을 안 만든다. 후보 없으면 "새 유형 / 원인 미확정 / 기록하지 않음"만.
-- 새 원인·유형은 `db-authoring.md`대로 초안을 만들고 모두 승인받는다(fixture는 `parse_logcat.py cut --evidence JOB/match.json`).
+- 거부하면 표의 다른 선택지를 다시 보인다. 추정만으로·`unjudged`면 원인·유형을 안 만든다. 후보 없으면 "새 유형 / 원인 미확정 / 기록하지 않음"만.
+- `chose-other`면 한 번 묻는다(기본 아니오): 고른 원인이 후보에서 C=1이면 이 로그를 `add-fixture {kind: extra}`(`cut --evidence`)로 넣을지, C=0·후보 밖이면 `update-signature` 검토를 `pr_notes`에 남길지. 거절하면 `append`만.
+- 새 원인·유형은 `db-authoring.md`대로 초안을 만들고 모두 승인받는다.
 - 물어보고 넣는 op: 회귀 의심·수정 미흡의 `update-fix`(실패 이력) 또는 verify-fix, `add-related`, `add-code-ref`, `update-signature`,
   `set-resolution`(검증 상태 초기화 안내), `set-status`.
 - 시그니처·파서 규칙·새 원인이 있으면 `S/db_verify.py rules --plan JOB/plan.json --draft JOB/draft` 표를 보인다(`skipped`는 통과
@@ -76,7 +77,7 @@ description: Android Telephony 이슈(data·call·network·sim·sms·ims)를 Jir
 
 ### Step 8. 적용 → 확인 → 커밋 → PR
 
-lock·스냅샷·check는 triage.py가 이미 했다. 먼저 `S/db_pr.py preflight --branch issue/<KEY> --search <KEY> --jira <KEY>`로
+lock·스냅샷·check는 이미 됐다. 먼저 `S/db_pr.py preflight --branch issue/<KEY> --search <KEY> --jira <KEY>`로
 write-flow §2(브랜치·`--lease`)만 한다. 열린 PR·`jira_in_main`은 다시 묻지 않되 `analysis.json` `open_prs`에 없던 PR은 알리고 묻는다.
 `write-flow.md` 그대로: `db_pr stage --then-summary`(출력 = 확인 화면, 생략 불가) → 승인 → `db_pr publish --commit --and-discard --json`.
 직접 `git commit` 없음. 취소·dry-run만 `discard`.

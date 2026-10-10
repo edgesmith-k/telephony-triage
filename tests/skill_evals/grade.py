@@ -474,7 +474,7 @@ def checks(eid: int, ctx: Ctx) -> list:
             ok = p.get("operations") == [{"op": "append", "cause": "DATA-001-01"}] and \
                 (p.get("feedback") or {}).get("decision") == "chose-other"
             return ok and analyzer_called()[0], json.dumps({"ops": p.get("operations"), "fb": p.get("feedback")}, ensure_ascii=False) + "; " + analyzer_called()[1]
-        return [None, None, None, None, plan]
+        return [None, None, None, None, plan, None]   # 6: fixture·시그니처 검토 질문 1회는 수동 채점
     if eid == 42:
         def allow():
             p = ctx.plan("MOCK-9042") or {}

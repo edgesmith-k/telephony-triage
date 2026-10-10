@@ -507,6 +507,12 @@ def test_doctor_without_config_fails_config_and_skips_the_rest_without_creating_
     assert all(r["status"] == "skip" for k, r in rows.items() if k not in ("config", "python", "deps", "guard"))
     assert not env.home.exists()
     assert env.run("config.py", ["doctor", "--format", "markdown", "--json"]).returncode == 2
+    # 손상 config: init --force도 먼저 읽다 실패하므로 파일을 옮기고 setup하라고 안내한다
+    env.home.mkdir(parents=True)
+    (env.home / "config.yaml").write_text("work_dir: [깨짐\n", encoding="utf-8")
+    broken = _rows(_doctor(env, expect=1))["config"]
+    assert broken["status"] == "fail" and "config 읽기 실패" in broken["detail"]
+    assert "옮긴 뒤" in broken["next"] and "/telephony-triage:setup" in broken["next"]
 
 
 def test_doctor_empty_jira_mapping_fails_and_exits_1():
@@ -556,7 +562,7 @@ def test_doctor_hooks_path_and_missing_snapshot_skip_compat():
     env.init(clone)
     env.json("config.py", ["sync-scripts-path"])
     rows = _rows(_doctor(env, expect=1))
-    assert rows["hook"]["status"] == "fail" and "setup" in rows["hook"]["next"]
+    assert rows["hook"]["status"] == "fail" and "hook 설치" in rows["hook"]["next"]
     assert rows["snapshot"]["status"] == "warn" and rows["compat"]["status"] == "skip"
     env.json("config.py", ["install-hooks"])
     assert _rows(_doctor(env))["hook"]["status"] == "ok"
@@ -566,6 +572,16 @@ def test_doctor_hooks_path_and_missing_snapshot_skip_compat():
     _set_user(env, issue_db={"path": str(env.base / "not-a-clone"), "remote": "r"})
     rows = _rows(_doctor(env, expect=1))
     assert rows["clone"]["status"] == "fail" and "git clone" in rows["clone"]["next"] and rows["hook"]["status"] == "skip"
+
+
+def test_doctor_next_slash_commands_exist():
+    """doctor "다음" 열이 안내하는 `/telephony-triage:<이름>`은 plugin/commands/<이름>.md로 실제 있어야 한다."""
+    import re
+    source = (REPO / "plugin" / "scripts" / "config.py").read_text(encoding="utf-8")
+    names = set(re.findall(r"/telephony-triage:([a-z][a-z-]*)", source))
+    assert names, "doctor 안내에 슬래시 커맨드가 없다"
+    missing = sorted(n for n in names if not (REPO / "plugin" / "commands" / f"{n}.md").is_file())
+    assert not missing, missing
 
 
 def test_doctor_compat_is_read_only_and_reports_blocked_writes():

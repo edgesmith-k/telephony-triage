@@ -63,6 +63,8 @@ op 필수 키 (`op` 외, plan.schema.json 기준):
 
 **새 원인·유형을 계획할 때 점검** (부족하면 op 초안을 만들어 승인받는다): 시그니처가 참조하는 태그가 `tags.yaml`에 있나(없으면 파서가 그 줄을 버려 매칭이 안 된다), RIL 요청/unsol이 `ril.yaml`에 있나, cause 코드·reason·state 값이 필요한가(extractor 추가·`update-parser-rule`), 원인 fixture가 있나(`cut` 뒤 `add-fixture kind: positive`). 부족한 것은 `add-parser-rule` 등 op로 만든다.
 
+`chose-other`는 C=1일 때만 `extra` fixture를 제안(C=0 양성은 회귀 실패 → `update-signature` 검토).
+
 - 규칙만으로 표현이 안 되면 원인은 추가하되 **엔진 개선 요청 초안**(필요 기능, 마스킹 예시, 원인 ID)을 보인다.
 - 기존 extractor를 바꾸면 그것을 쓰는 모든 원인의 fixture 회귀가 통과해야 하고 R5가 "승인 필요"가 될 수 있다. `parser-rules/` 변경은 메인테이너 리뷰 필수다.
 - fixture 자르기: 근거 기반(기존 원인) `parse_logcat.py cut <log> --evidence <match.json> --out WD/<KEY>/fixtures/cut-<n>.log --rules SNAP/parser-rules [--tz --year]`(parse와 같은 로그·순서). 시각 기반(새 원인·유형, resolved/fixed) `cut <log> --around <ISO 시각> --seconds 30 --out …`. 원인마다 양성 1개 이상, 판별에 필요한 최소 구간(20~100줄).

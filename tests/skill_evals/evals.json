@@ -1483,6 +1483,7 @@
       "user_replies": [
         "심층 분석(mock-data-analyzer)을 실행할지 물으면 '예'.",
         "분류를 물을 때 분석 스킬 의견(DATA-001-01)이 선택지에 있으면 그것을 고른다.",
+        "fixture 추가(add-fixture)나 시그니처 검토(update-signature)를 남길지 물으면 '아니오'.",
         "확인 화면에서는 '승인'.",
         "코드 경로를 물으면 '5) 코드 분석 건너뛰기'를 고른다.",
         "note 한 줄 초안을 보여주면 그대로 승인한다.",
@@ -1494,7 +1495,8 @@
         "분석 스킬 입력에 마스킹된 이벤트 JSON 경로를 넘겼다(원문 로그 내용을 넘기지 않음)",
         "리포트에 '심층 분석 (mock-data-analyzer)' 절과 '분석 스킬 의견'이 있다",
         "리포트의 1위 후보와 점수는 매처 출력 그대로다(DATA-001-02)",
-        "계획이 append DATA-001-01이고 feedback decision이 chose-other다"
+        "계획이 append DATA-001-01이고 feedback decision이 chose-other다",
+        "chose-other 뒤 fixture 추가·시그니처 검토를 한 번만 묻고 거절을 따랐다(계획에 add-fixture·update-signature op 없음)"
       ],
       "files": []
     },
