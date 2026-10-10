@@ -34,7 +34,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
+import shutil
 import subprocess
 import sys
 from datetime import timedelta
@@ -407,6 +409,10 @@ def _guard_selftest(args, clone: Path | None) -> dict:
     무관하게 deny), (2) clone이 있으면 clone 파일 Write(deny)."""
     root = _plugin_root(args)
     home = str(Path.home())
+    # hooks.json은 `python3`(PATH)로 guard를 부른다: 같은 해석기로 시험한다(의존성이 그 해석기에 있어야 한다)
+    python = shutil.which("python3")
+    other = python is not None and os.path.realpath(python) != os.path.realpath(sys.executable)
+    python = python or sys.executable
     events = [{"hook_event_name": "PreToolUse", "tool_name": "mcp__probe-jira__jira_add_comment", "tool_input": {},
                "cwd": home}]
     if clone is not None:
@@ -414,7 +420,7 @@ def _guard_selftest(args, clone: Path | None) -> dict:
                        "tool_input": {"file_path": str(clone / "README.md")}, "cwd": home})
     for event in events:
         try:
-            proc = subprocess.run([sys.executable, str(root / "scripts" / "guard.py"), "--plugin-root", str(root)],
+            proc = subprocess.run([python, str(root / "scripts" / "guard.py"), "--plugin-root", str(root)],
                                   input=json.dumps(event), capture_output=True, text=True, encoding="utf-8",
                                   errors="replace", timeout=GUARD_SELFTEST_TIMEOUT)
         except subprocess.TimeoutExpired:
@@ -428,7 +434,11 @@ def _guard_selftest(args, clone: Path | None) -> dict:
             got = out.get("permissionDecision") if isinstance(out, dict) else None
             return _row("guard", "fail", f"응답 구조 불일치: {event['tool_name']} 종료 {proc.returncode}·결정 {got or '없음'}",
                         "guard.py 직접 실행해 stderr 확인")
-    return _row("guard", "ok", f"deny {len(events)}/{len(events)}")
+        reason = str(out.get("permissionDecisionReason") or "")
+        if "의존성 없음" in reason or "내부 오류" in reason:   # 판정이 아니라 degraded 거부다
+            return _row("guard", "fail", f"{'hook python3' if other else 'guard'}: {reason.removeprefix('[telephony-triage] ')}",
+                        f"{python}에 pyproject 의존성 설치" if "의존성 없음" in reason else "guard.py 직접 실행해 stderr 확인")
+    return _row("guard", "ok", f"deny {len(events)}/{len(events)}" + (" (hook python3≠doctor python)" if other else ""))
 
 
 def _doctor_rows(args, defaults: dict) -> list[dict]:
@@ -451,11 +461,12 @@ def _doctor_rows(args, defaults: dict) -> list[dict]:
                          f"Python {'.'.join(map(str, MIN_PYTHON))}+"))
 
     def deps():
+        # PyYAML이 없으면 config.py는 import에서 종료 2로 멈춘다(여기까지 오지 않는다). jsonschema만 따로 본다.
+        import yaml
         try:
             import jsonschema  # noqa: F401
-            import yaml
-        except ImportError as exc:
-            rows.append(_row("deps", "fail", f"{exc.name or exc} 없음", "pip install (pyproject 의존성)"))
+        except ImportError:
+            rows.append(_row("deps", "fail", "jsonschema 없음", "pip install (pyproject 의존성)"))
             return
         from importlib.metadata import version
         libyaml = "libyaml" if getattr(yaml, "CSafeLoader", None) else "pure"

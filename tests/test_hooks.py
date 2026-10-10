@@ -665,6 +665,76 @@ def test_guard_without_pyyaml_denies_mcp_and_asks_risky_bash():
     assert decision(out) == "ask"
 
 
+def test_guard_review_followups_redirects_and_input_redirects():
+    """리뷰 후속: 공백 없는 리디렉션(`>`·`>>`·`>|`)은 쓰기, 입력 리디렉션·fd 복제·따옴표 속 `>`는 쓰기가 아니다."""
+    ws = shared()
+    c = ws.clone
+    for cmd, cwd in ((f"echo x>{c}/f", ws.base), (f"echo x>>{c}/f", ws.base), (f"echo x>|{c}/f", ws.base),
+                     ("printf x>f", c), (f"echo x 2>{c}/err", ws.base)):
+        out = bash(ws, cmd, cwd)
+        assert decision(out) == "deny" and "규칙 8" in out["permissionDecisionReason"], cmd
+    for cmd, cwd in (('echo "a>b"', c), ("git status 2>&1", c), ("ls 2>/dev/null", c), ("echo x >&2", c),
+                     (f"sort < {c}/README.md > /tmp/o", ws.base), (f"tee /tmp/o < {c}/README.md", ws.base),
+                     (f"cat <<EOF > /tmp/o\n{c}/x\nEOF", ws.base), (f"wc -l <{c}/README.md", ws.base)):
+        assert decision(bash(ws, cmd, cwd)) is None, cmd
+
+
+def test_guard_review_followups_git_subcommands_and_perl():
+    ws = shared()
+    c = ws.clone
+    for cmd in ("git bisect start", "git bisect good", "git symbolic-ref HEAD refs/heads/x", "git sparse-checkout set a",
+                "git submodule update --init", "git filter-branch --tree-filter true HEAD", "git branch -c a b",
+                "git branch --copy a b", "git clean -fd", f"perl -i.bak -pe s/a/b/ {c}/x.yaml",
+                f"perl -pi -e s/a/b/ {c}/x.yaml"):
+        out = bash(ws, cmd, c)
+        assert decision(out) == "deny" and "규칙 8" in out["permissionDecisionReason"], cmd
+    for cmd in ("git bisect log", "git symbolic-ref HEAD", "git clean -n", "git clean --dry-run", "git clean -nd",
+                "git sparse-checkout list", "git submodule status", f"perl -Mstrict -ne print {c}/README.md",
+                f"perl -MFile::Basename -e 1 {c}/README.md"):
+        assert decision(bash(ws, cmd, c)) is None, cmd
+
+
+def test_guard_review_followups_gh_api_method_and_merge_endpoints():
+    ws = shared()
+    plain = tmp("tt-gh-plain-")
+    cases = [(f"gh api -X GET repos/{DB_SLUG}/issues -f state=open", None),
+             (f"gh api --method GET repos/{DB_SLUG}/pulls -F per_page=5", None),
+             (f"gh api repos/{DB_SLUG}/issues -f title=x", "ask"),
+             (f"gh api -X PUT repos/{DB_SLUG}/pulls/3/merge", "deny"),
+             (f"gh api -X POST repos/{DB_SLUG}/merges -f base=main -f head=x", "deny"),
+             (f"gh api repos/{DB_SLUG}/pulls/3/merge", None)]   # GET: 머지 가능 여부 조회
+    for cmd, want in cases:
+        assert decision(bash(ws, cmd, plain)) == want, cmd
+
+
+def test_guard_review_followups_mcp_verb_position():
+    ws = shared()
+    db = {"owner": "mock-org", "repo": "telephony-issue-db"}
+    for tool, want in (("mcp__github__disable_pr_auto_merge", "ask"), ("mcp__github__enable_pr_auto_merge", "ask"),
+                       ("mcp__github__list_triggers", None), ("mcp__github__request_copilot_review", "ask"),
+                       ("mcp__github__run_secret_scanning", "ask"), ("mcp__github__pull_request_read", None),
+                       ("mcp__github__merge_pull_request", "deny")):
+        assert decision(guard(ws, tool, db, ws.base)) == want, tool
+    # 미설정 jira/atlassian 서버: 읽기 동사로 시작하는 도구는 접두사가 쓰기 단어처럼 보여도 통과
+    for tool in ("mcp__atlassian__get_issue_links", "mcp__atlassian__list_assignees", "mcp__jira-prod__jira_get_attachments",
+                 "mcp__atlassian__getJiraIssue"):
+        assert decision(guard(ws, tool, {}, ws.base)) is None, tool
+    for tool in ("mcp__atlassian__addCommentToJiraIssue", "mcp__jira-prod__jira_add_comment"):
+        assert decision(guard(ws, tool, {}, ws.base)) == "deny", tool
+    # 설정된 서버는 그대로 read_tools 허용 목록
+    assert decision(guard(ws, "mcp__mock-jira__jira_get_links", {}, ws.base)) == "deny"
+
+
+def test_guard_without_pyyaml_asks_file_writes():
+    ws = shared()
+    env = _no_yaml_env(ws)
+    for cmd, want in ((f'echo x > "{ws.clone}/README.md"', "ask"), ("echo hi 2>/dev/null", None)):
+        event = {"tool_name": "Bash", "tool_input": {"command": cmd}, "cwd": str(ws.base)}
+        proc = run("guard.py", [], root=ws.root, cwd=ws.base, env=env, stdin=json.dumps(event))
+        out = json.loads(proc.stdout)["hookSpecificOutput"] if proc.stdout.strip() else None
+        assert proc.returncode == 0 and decision(out) == want, cmd
+
+
 def test_hooks_json_has_eight_rules_wired_to_guard():
     hooks = json.loads((REPO / "plugin" / "hooks" / "hooks.json").read_text(encoding="utf-8"))["hooks"]
     assert "sync-scripts-path" in hooks["SessionStart"][0]["hooks"][0]["command"]

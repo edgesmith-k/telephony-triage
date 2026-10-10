@@ -101,7 +101,10 @@ RAW_EXEMPT_DIRS = {"fixtures", "draft"}
 RAW_GLOB_MAX = 20
 RAW_SNIFF_BYTES = 8192
 RAW_SNIFF_LINES = 30
-REDIRECT_RE = re.compile(r"^(?:\d*>>?|\d*>&|&>>?)(.*)$")
+REDIRECT_RE = re.compile(r"^(?:\d*>&|&>>?|\d*>>?\|?)(.*)$")
+# 따옴표 밖 연산자 묶음(`>>`, `2>&`, `>|`, `&&` …)을 하나씩 나눈다
+OPS_RE = re.compile(r">>\||>>|>&|>\||&>>|&>|\|\||&&|\|&|;;|[;&|()>]")
+OP_CHARS = set(";&|()>")
 
 # git 전역 옵션 중 값을 받는 것 (값이 다음 토큰)
 GIT_GLOBAL_WITH_ARG = {"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--config-env",
@@ -323,7 +326,7 @@ def check_mcp_db_write(tool: str, part: str, tool_input: dict, conf: Config, dec
                 break
     if not _same_repo(slug, conf.remote_slug):
         return
-    if any(w.startswith("merge") for w in re.split(r"[^a-z0-9]+", part.lower())):
+    if mcptools.verb(part) == "merge":   # 동사 자리만: `disable_pr_auto_merge`는 ask
         dec.deny.append(f"이슈 DB PR 머지는 리뷰어가 GHE에서 한다. 도구가 머지하지 않는다 (규칙 6·7: {tool}).")
     else:
         dec.ask.append(f"이슈 DB 원격을 바꾸는 MCP 도구다({tool}). 변경·검증 결과를 보고 승인한 뒤에만 진행한다 (규칙 7).")
@@ -370,13 +373,28 @@ def _strip_heredocs(command: str) -> str:
 
 def _tokens(command: str) -> list[str]:
     text = _strip_heredocs(command).replace("\n", " \n ")
-    lex = shlex.shlex(text, posix=True, punctuation_chars=";&|()")
+    # `>`도 연산자 글자로 둔다: 공백 없이 붙은 리디렉션(`echo x>f`, `>>f`, `>|f`)을 따옴표 밖에서만 나눈다
+    lex = shlex.shlex(text, posix=True, punctuation_chars=";&|()>")
     lex.whitespace = " \t\r"
     lex.whitespace_split = True
     try:
-        return list(lex)
+        raw = list(lex)
     except ValueError:   # 따옴표 불균형 등: 공백으로만 나눈다 (보수적)
         return re.split(r"[ \t\r]+", text)
+    out: list[str] = []
+    prev_op = False
+    for tok in raw:
+        if tok and set(tok) <= OP_CHARS:
+            for op in OPS_RE.findall(tok):
+                if op[0] == ">" and out and out[-1].isdigit() and not prev_op:
+                    out[-1] += op          # `2>`·`2>&`: 앞 숫자는 fd
+                else:
+                    out.append(op)
+                prev_op = True
+        else:
+            out.append(tok)
+            prev_op = False
+    return out
 
 
 def _segments(tokens: list[str]) -> list[list[str]]:
@@ -970,8 +988,8 @@ def _gh_words(argv: list[str]) -> list[str]:
 
 
 def _gh_api(argv: list[str]) -> tuple[str | None, bool]:
-    """`gh api`의 (엔드포인트, 쓰기 여부). 메서드가 GET이 아니거나 필드·`--input`이 있으면 쓰기,
-    `graphql`은 필드 값에 `mutation`이 있거나 `--input`일 때만 쓰기."""
+    """`gh api`의 (엔드포인트, 쓰기 여부). 메서드를 밝히면 GET이 아닐 때만 쓰기, 밝히지 않으면 필드·`--input`이
+    있을 때 쓰기(gh 기본 POST). `graphql`은 필드 값에 `mutation`이 있거나 `--input`일 때만 쓰기."""
     args = argv[argv.index("api") + 1:]
     endpoint, method, fields, has_input = None, None, [], False
     i = 0
@@ -995,7 +1013,9 @@ def _gh_api(argv: list[str]) -> tuple[str | None, bool]:
         i += 1
     if endpoint == "graphql":
         return endpoint, has_input or any("mutation" in f for f in fields)
-    return endpoint, (method is not None and method != "GET") or bool(fields) or has_input
+    if method is not None:   # 메서드를 밝히면 그것만 본다(`-X GET -f k=v`는 쿼리 문자열이다)
+        return endpoint, method != "GET"
+    return endpoint, bool(fields) or has_input   # gh는 필드가 있으면 POST로 보낸다
 
 
 def _gh_kind(argv: list[str]) -> str:
@@ -1004,7 +1024,10 @@ def _gh_kind(argv: list[str]) -> str:
     group = words[0] if words else ""
     action = words[1] if len(words) > 1 else ""
     if group == "api":
-        return "write" if _gh_api(argv)[1] else "read"
+        endpoint, write = _gh_api(argv)
+        if write and re.search(r"/pulls/[^/]+/merge/?$|/merges/?$", (endpoint or "").split("?", 1)[0]):
+            return "merge"
+        return "write" if write else "read"
     if group == "pr":
         if action == "merge":
             return "merge"
@@ -1062,8 +1085,14 @@ def check_gh(inv: Invocation, conf: Config, dec: Decision) -> None:
 CLONE_MUTATION_MSG = ("사용자 clone의 브랜치·파일은 도구가 바꾸지 않는다 (규칙 8). 분석은 _snapshot, "
                       "쓰기는 db_pr의 작업 worktree")
 CLONE_GIT_SUBS = {"checkout", "switch", "reset", "merge", "rebase", "pull", "clean", "rm", "mv", "apply", "am",
-                  "cherry-pick", "revert", "restore", "update-ref", "read-tree", "checkout-index"}
-BRANCH_MUTATING = {"-D", "-d", "-M", "-m", "-f", "--delete", "--move", "--force"}
+                  "cherry-pick", "revert", "restore", "update-ref", "read-tree", "checkout-index", "filter-branch",
+                  "filter-repo"}
+BRANCH_MUTATING = {"-D", "-d", "-M", "-m", "-f", "-c", "-C", "--delete", "--move", "--force", "--copy"}
+# 서브커맨드별 첫 인자로 쓰기를 정하는 것: 이름 → 바꾸는 동작
+CLONE_GIT_ACTIONS = {"worktree": {"add", "remove", "prune", "move"},
+                     "bisect": {"start", "good", "bad", "new", "old", "skip", "reset", "run", "replay"},
+                     "sparse-checkout": {"set", "add", "init", "disable", "reapply"},
+                     "submodule": {"update", "add", "deinit"}}
 MIGRATE_RE = re.compile(r"^migrate/schema-v\d+$")
 # 파일을 쓰는 명령: 이름 → (값을 다음 토큰으로 받는 옵션, 대상 위치 인자: "last"|"all"|"rest")
 FILE_WRITERS = {
@@ -1076,29 +1105,68 @@ FILE_WRITERS = {
 }
 
 
+def _perl_cluster(x: str) -> tuple[bool, str | None]:
+    """perl 짧은 옵션 묶음 하나: (in-place `-i` 여부, 코드 위치). 코드 위치는 "next"(다음 토큰이 코드)·"here"(묶음
+    나머지가 코드)·None. 값을 받는 옵션(`-M`·`-m`·`-I`·`-x`·`-0`, 숫자가 붙은 `-l`)에서 멈춘다(`-Mstrict`의 i는 -i가 아니다).
+    `-i`는 묶음 나머지를 백업 확장자로 먹는다."""
+    for j in range(1, len(x)):
+        ch = x[j]
+        if ch == "i":
+            return True, None
+        if ch in "eE":
+            return False, "next" if j == len(x) - 1 else "here"
+        if ch in "MmIx0" or (ch == "l" and x[j + 1:j + 2].isdigit()):
+            return False, None
+    return False, None
+
+
+def _perl_inplace_files(rest: list[str]) -> list[str]:
+    inplace, script_given, pos, i = False, False, [], 0
+    while i < len(rest):
+        x = rest[i]
+        if x == "--":
+            pos += rest[i + 1:]
+            break
+        if x.startswith("-") and not x.startswith("--") and len(x) > 1:
+            ip, code = _perl_cluster(x)
+            inplace = inplace or ip
+            if code:
+                script_given = True
+                i += 2 if code == "next" else 1
+                continue
+        elif not x.startswith("-"):
+            pos.append(x)
+        i += 1
+    if not inplace:
+        return []
+    return pos if script_given else pos[1:]
+
+
 def _write_targets(inv: Invocation) -> list[str]:
     """이 호출이 쓰는 파일 경로(펼치기 전 단어): 출력 리디렉션 대상, tee·cp·mv·rm 등의 대상, `sed -i`·`perl -i`·
     `sort -o`·`unzip -d`·`tar -x -C`·`dd of=`."""
     argv = inv.argv
     out: list[str] = []
     rest: list[str] = []
-    skip_next = False
-    for k, tok in enumerate(argv):   # argv[0]도 본다: `&>`는 `&` 뒤 새 조각의 첫 토큰이 된다
-        if skip_next:
-            skip_next = False
-            out.append(tok)
+    pending = None   # 값이 다음 토큰인 리디렉션: "out"(쓰기 대상)·"dup"(fd 복제)·"in"(입력, 쓰기 아님)
+    for k, tok in enumerate(argv):   # argv[0]도 본다: 리디렉션이 맨 앞에 올 수 있다
+        if pending is not None:
+            if pending == "out" or (pending == "dup" and not (tok.isdigit() or tok == "-")):
+                out.append(tok)
+            pending = None
             continue
-        m = REDIRECT_RE.match(tok) if tok and not tok.startswith("<") else None
+        if tok.startswith("<"):   # 입력 리디렉션·heredoc·here-string은 쓰기가 아니다
+            if tok in ("<", "<<", "<<-", "<<<"):
+                pending = "in"
+            continue
+        m = REDIRECT_RE.match(tok) if tok else None
         if m:
             target = m.group(1)
-            dup = ">&" in tok[:len(tok) - len(target)] or target.startswith("&")
-            target = target[1:] if target.startswith("&") else target
-            if dup and (target.isdigit() or target == "-"):
-                continue   # fd 복제(`2>&1`, `>&2`)
-            if target:
+            dup = ">&" in tok[:len(tok) - len(target)]
+            if not target:
+                pending = "dup" if dup else "out"
+            elif not (dup and (target.isdigit() or target == "-")):
                 out.append(target)
-            else:
-                skip_next = k + 1 < len(argv)
             continue
         if k:
             rest.append(tok)
@@ -1120,21 +1188,22 @@ def _write_targets(inv: Invocation) -> list[str]:
                 pos.append(a)
             i += 1
         out += pos[-1:] if which == "last" else pos[1:] if which == "rest" else pos
-    elif name in ("sed", "perl"):
+    elif name == "sed":
         if any(x.startswith("--in-place") or re.match(r"^-[A-Za-z]*i", x) for x in rest):
-            script_ends = "ef" if name == "sed" else "eE"
             pos, script_given, i = [], False, 0
             while i < len(rest):
                 x = rest[i]
                 if x.startswith(("--expression=", "--file=")):
                     script_given = True
-                elif x in ("--expression", "--file") or (re.match(r"^-[A-Za-z]+$", x) and x[-1] in script_ends):
-                    script_given = True   # 다음 토큰이 스크립트·코드
+                elif x in ("--expression", "--file") or (re.match(r"^-[A-Za-z]+$", x) and x[-1] in "ef"):
+                    script_given = True   # 다음 토큰이 스크립트
                     i += 1
                 elif not x.startswith("-"):
                     pos.append(x)
                 i += 1
             out += pos if script_given else pos[1:]
+    elif name == "perl":
+        out += _perl_inplace_files(rest)
     elif name == "sort":
         for i, a in enumerate(rest):
             if a in ("-o", "--output") and i + 1 < len(rest):
@@ -1178,8 +1247,13 @@ def check_clone_git(call: GitCall, conf: Config, dec: Decision) -> None:
         mutating = not args or args[0] not in ("list", "show")
     elif sub == "branch":
         mutating = any(a in BRANCH_MUTATING or a.split("=", 1)[0] in BRANCH_MUTATING for a in args)
-    elif sub == "worktree":
-        mutating = bool(args) and args[0] in ("add", "remove", "prune", "move")
+    elif sub in CLONE_GIT_ACTIONS:
+        action = next((a for a in args if not a.startswith("-")), "")
+        mutating = action in CLONE_GIT_ACTIONS[sub]
+    elif sub == "symbolic-ref":   # `symbolic-ref HEAD refs/heads/x`(인자 2개)·`-d`는 HEAD를 바꾼다
+        mutating = len([a for a in args if not a.startswith("-")]) >= 2 or any(a in ("-d", "--delete") for a in args)
+    elif sub == "clean":          # `-n`·`--dry-run`은 지울 목록만 보인다
+        mutating = not any(a == "--dry-run" or (re.match(r"^-[A-Za-z]+$", a) and "n" in a) for a in args)
     else:
         mutating = sub in CLONE_GIT_SUBS
     if not mutating or not conf.is_clone_body(call.cwd):
@@ -1268,11 +1342,13 @@ def _degraded(event: dict, why: str) -> tuple[dict | None, list[str]]:
             invs = invocations(str(tool_input.get("command") or ""), Path(str(event.get("cwd") or os.getcwd())))
             names = [_base(i.argv[0]) for i in invs]
             risky = any(n in ("git", "gh") for n in names) or any(
-                "publish" in i.argv and any(_base(a) == "db_pr.py" for a in i.argv) for i in invs)
+                "publish" in i.argv and any(_base(a) == "db_pr.py" for a in i.argv) for i in invs) or any(
+                not _expand(t).startswith("/dev/") for i in invs for t in _write_targets(i))   # 파일 쓰기(clone일 수 있다)
         except Exception:  # noqa: BLE001 — 파싱도 못 하면 사람에게 넘긴다
             pass
         if risky:
-            return _decision("ask", f"{why}: 레포 판별 불가 — git·gh·publish는 직접 확인한다. {INSTALL_HINT}."), []
+            return _decision("ask", f"{why}: 레포 판별 불가 — git·gh·publish·파일 쓰기는 직접 확인한다. "
+                                    f"{INSTALL_HINT}."), []
         return None, [f"{why}: Bash 규칙을 적용하지 못했다. {INSTALL_HINT}."]
     return None, [f"{why}. {INSTALL_HINT}."]
 

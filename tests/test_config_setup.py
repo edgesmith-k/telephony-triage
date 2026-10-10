@@ -477,6 +477,16 @@ def test_doctor_python_deps_and_guard_selftest_rows():
     result = env.json("config.py", ["doctor"], expect=1, root=broken)
     guard = _rows(result)["guard"]
     assert guard["status"] == "fail" and "응답 구조 불일치" in guard["detail"] and "guard.py" in guard["next"]
+    # 의존성 없음으로 degraded 거부하는 guard(결정은 deny지만 판정이 아니다): fail
+    degraded = tmp("tt-degraded-guard-") / "root"
+    shutil.copytree(env.root, degraded)
+    guard_py = degraded / "scripts" / "guard.py"
+    text = guard_py.read_text(encoding="utf-8")
+    needle = "    from common import checks, mcptools, site_defaults, userconfig"
+    assert needle in text
+    guard_py.write_text(text.replace(needle, '    raise ImportError("시험용 의존성 없음")\n' + needle, 1), encoding="utf-8")
+    guard = _rows(env.json("config.py", ["doctor"], expect=1, root=degraded))["guard"]
+    assert guard["status"] == "fail" and "의존성 없음" in guard["detail"], guard
 
 
 def test_config_without_pyyaml_exits_2_with_install_hint():

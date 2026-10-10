@@ -20,12 +20,19 @@ import subprocess
 from pathlib import Path
 
 PROTOCOL_VERSION = "2025-06-18"
-# 쓰기형 단어. 뒷줄은 비Jira MCP(GitHub 등)의 이슈 DB 쓰기 판정(guard 규칙 11)용이다. `request`는 넣지 않는다
-# (`pull_request_read`가 걸린다). Jira 쪽은 read_tools가 명시 허용 목록이라 늘려도 안전 쪽이다.
+# 쓰기형 단어(완전 일치, 끝의 s·es 허용). 뒷줄은 비Jira MCP(GitHub 등)의 이슈 DB 쓰기 판정(guard 규칙 11)용이다.
+# Jira 쪽은 read_tools가 명시 허용 목록이라 늘려도 안전 쪽이다.
 WRITE_WORDS = ("create", "add", "update", "delete", "remove", "transition", "assign", "post", "edit",
                "set", "link", "upload", "attach", "move", "close", "reopen", "worklog", "write",
                "push", "merge", "fork", "dispatch", "trigger", "resolve", "unresolve", "enable", "disable", "submit",
                "cancel", "rerun", "dismiss", "lock", "unlock", "archive", "rename")
+# 동사 자리(첫 단어)에 올 때만 쓰기인 단어: `request_copilot_review`·`run_secret_scanning`. 다른 자리의 `request`는
+# 읽기일 수 있다(`pull_request_read`).
+WRITE_VERBS = ("request", "run", "approve", "comment", "reply")
+# 동사 자리에 오면 읽기: `list_triggers`·`get_issue_links`·`list_assignees`
+READ_VERBS = ("get", "search", "list", "read", "fetch", "query", "view", "find", "show", "lookup", "download", "check")
+# 동사 앞에 붙는 제품·서버 이름 (`jira_get_attachments`의 동사는 get)
+NAME_WORDS = ("jira", "confluence", "atlassian", "github", "gh", "ghe", "mcp")
 READ_WORDS = ("get", "search", "list", "read", "fetch", "query", "view", "find", "show", "comments")
 
 
@@ -54,11 +61,30 @@ def server_prefix(name: str) -> str | None:
 
 
 def _words(tool: str) -> list[str]:
-    return [w for w in re.split(r"[^a-z0-9]+", tool.lower()) if w]
+    """단어 목록 (`_`·`-`·camelCase 경계로 나눔, 소문자)."""
+    text = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", str(tool))
+    return [w for w in re.split(r"[^a-z0-9]+", text.lower()) if w]
+
+
+def verb(tool: str) -> str:
+    """동사 자리 단어: 제품·서버 이름(`NAME_WORDS`)을 건너뛴 첫 단어 (없으면 빈 문자열)."""
+    words = _words(tool)
+    return next((w for w in words if w not in NAME_WORDS), words[0] if words else "")
+
+
+def _is_write_word(w: str) -> bool:
+    return w in WRITE_WORDS or (w.endswith("s") and w[:-1] in WRITE_WORDS) or (w.endswith("es") and w[:-2] in WRITE_WORDS)
 
 
 def is_write(tool: str) -> bool:
-    return any(w in WRITE_WORDS or w.startswith(WRITE_WORDS) for w in _words(tool))
+    """쓰기형 도구인가. 동사가 읽기 동사면 읽기, 동사가 쓰기 동사면 쓰기, 아니면 쓰기 단어가 하나라도 있으면 쓰기
+    (단어 완전 일치 — 접두사로 맞추지 않는다: `list_assignees`·`get_issue_links`는 읽기)."""
+    v = verb(tool)
+    if v in READ_VERBS:
+        return False
+    if v in WRITE_VERBS:
+        return True
+    return any(_is_write_word(w) for w in _words(tool))
 
 
 def classify(tool: str) -> set[str]:
