@@ -1,0 +1,421 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>telephony-triage 사용자 가이드</title>
+<style>
+/* Layout: 왼쪽 고정 목차 + 본문 한 단(≤ 46rem). 휴대폰에서는 목차가 상단 접이식. */
+:root {
+  --bg: #f6f8f9;
+  --surface: #ffffff;
+  --sunken: #eef2f3;
+  --ink: #17232b;
+  --ink-2: #4a5a63;
+  --rule: #d5dee2;
+  --accent: #0b6874;        /* 신호선 청록 */
+  --accent-soft: #dcefF1;
+  --warn: #9a5b00;
+  --warn-soft: #fbf0dc;
+  --bad: #a3262c;
+  --bad-soft: #f8e3e3;
+  --good: #1f6b3a;
+  --good-soft: #e1f1e6;
+  --mark: #ffe58a;
+  --font-body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Consolas, "D2Coding", monospace;
+  --step--1: 0.8125rem;
+  --step-0: 0.96875rem;
+  --step-1: 1.125rem;
+  --step-2: 1.375rem;
+  --step-3: 1.75rem;
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+html { scroll-padding-top: 1rem; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--font-body); font-size: var(--step-0); line-height: 1.7;
+  -webkit-text-size-adjust: 100%;
+}
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px;
+}
+code, kbd, pre { font-family: var(--font-mono); font-size: 0.875em; }
+:not(pre) > code {
+  background: var(--sunken); border: 1px solid var(--rule); border-radius: 4px;
+  padding: 0.05em 0.35em; overflow-wrap: anywhere;
+}
+
+.shell {
+  display: grid; grid-template-columns: 17rem minmax(0, 1fr); gap: 0 2.5rem;
+  max-width: 76rem; margin: 0 auto; padding-inline: 16px;
+}
+
+/* 목차 */
+.side {
+  position: sticky; top: env(safe-area-inset-top, 0px); align-self: start;
+  max-height: 100vh; overflow-y: auto; padding-block: 1.5rem 2rem;
+  font-size: var(--step--1);
+}
+.brand { display: flex; flex-direction: column; gap: 0.1rem; margin-bottom: 1rem; }
+.brand b { font-size: var(--step-1); letter-spacing: -0.01em; }
+.brand span { color: var(--ink-2); }
+.search { position: relative; margin-bottom: 0.4rem; }
+.search input {
+  width: 100%; padding: 0.55rem 0.7rem; border: 1px solid var(--rule); border-radius: 6px;
+  background: var(--surface); color: var(--ink); font: inherit; font-size: var(--step--1);
+}
+.search-state { color: var(--ink-2); min-height: 1.4em; margin-bottom: 0.6rem; }
+.toc ol { list-style: none; margin: 0; padding: 0; }
+.toc > ol > li { margin-top: 0.55rem; }
+.toc > ol > li > a { font-weight: 600; color: var(--ink); }
+.toc ol ol { padding-left: 0.9rem; border-left: 1px solid var(--rule); margin-top: 0.2rem; }
+.toc ol ol a { color: var(--ink-2); }
+.toc a { text-decoration: none; display: block; padding: 0.12rem 0; }
+.toc a:hover { color: var(--accent); }
+.toc a.on { color: var(--accent); font-weight: 600; }
+.toc-mobile { display: none; }
+
+/* 본문 */
+main { min-width: 0; padding-block: 1.5rem 5rem; max-width: 48rem; }
+.hero { padding-block: 1rem 1.5rem; border-bottom: 2px solid var(--ink); margin-bottom: 1rem; }
+.hero .eyebrow { font-family: var(--font-mono); font-size: var(--step--1); color: var(--accent); letter-spacing: 0.04em; }
+.hero h1 { font-size: var(--step-3); line-height: 1.25; margin: 0.3rem 0 0.6rem; text-wrap: balance; letter-spacing: -0.015em; }
+.hero p { margin: 0; color: var(--ink-2); max-width: 40rem; }
+.meta { display: flex; flex-wrap: wrap; gap: 0.4rem 1.2rem; margin-top: 0.9rem; font-size: var(--step--1); color: var(--ink-2); }
+.meta b { color: var(--ink); font-weight: 600; }
+
+section.chap { padding-top: 1.8rem; }
+section.chap > h2 {
+  font-size: var(--step-2); line-height: 1.3; margin: 0 0 0.4rem; text-wrap: balance;
+  display: flex; gap: 0.6rem; align-items: baseline; letter-spacing: -0.01em;
+}
+section.chap > h2 .no { font-family: var(--font-mono); color: var(--accent); font-size: 0.8em; }
+.sub { padding-top: 1.2rem; }
+.sub > h3 { font-size: var(--step-1); margin: 0 0 0.4rem; text-wrap: balance; }
+.sub > h4, .card h4 { font-size: var(--step-0); margin: 1rem 0 0.3rem; }
+p, ul, ol { margin: 0.5rem 0; }
+ul, ol { padding-left: 1.3rem; }
+li + li { margin-top: 0.2rem; }
+.lead { color: var(--ink-2); }
+
+/* 표 */
+.tbl { overflow-x: auto; margin: 0.7rem 0; border: 1px solid var(--rule); border-radius: 6px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: var(--step--1); line-height: 1.55; }
+th, td { text-align: left; vertical-align: top; padding: 0.5rem 0.65rem; border-bottom: 1px solid var(--rule); }
+th { background: var(--sunken); font-weight: 600; white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+td code { white-space: nowrap; }
+td.wrap code, td code.wrap { white-space: normal; }
+.num { font-variant-numeric: tabular-nums; }
+
+/* 코드 블록 */
+.code { position: relative; margin: 0.7rem 0; }
+pre {
+  margin: 0; padding: 0.8rem 0.9rem; padding-right: 4.2rem; overflow-x: auto;
+  background: var(--sunken); border: 1px solid var(--rule); border-radius: 6px; line-height: 1.55;
+}
+.copy {
+  position: absolute; top: 0.4rem; right: 0.4rem; font: inherit; font-size: 0.75rem;
+  padding: 0.2rem 0.55rem; border-radius: 4px; border: 1px solid var(--rule);
+  background: var(--surface); color: var(--ink-2); cursor: pointer;
+}
+.copy:hover { color: var(--accent); border-color: var(--accent); }
+
+/* 안내 상자 */
+.note { border: 1px solid var(--rule); border-left-width: 4px; border-radius: 6px; padding: 0.6rem 0.85rem; margin: 0.8rem 0; background: var(--surface); }
+.note > :first-child { margin-top: 0; } .note > :last-child { margin-bottom: 0; }
+.note .k { font-weight: 700; font-size: var(--step--1); letter-spacing: 0.03em; display: block; margin-bottom: 0.15rem; }
+.note.rule { border-left-color: var(--accent); } .note.rule .k { color: var(--accent); }
+.note.warn { border-left-color: var(--warn); background: var(--warn-soft); } .note.warn .k { color: var(--warn); }
+.note.plan { border-left-color: var(--ink-2); border-style: dashed; border-left-style: solid; } .note.plan .k { color: var(--ink-2); }
+.note.easy { border-left-color: var(--good); background: var(--good-soft); } .note.easy .k { color: var(--good); }
+.note.new { border-left-color: var(--accent); background: var(--accent-soft); } .note.new .k { color: var(--accent); }
+/* 핵심 개념 카드 */
+.concepts { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 0.6rem; margin: 0.7rem 0; }
+.concepts > div { min-width: 0; border: 1px solid var(--rule); border-radius: 6px; padding: 0.55rem 0.8rem; background: var(--surface); font-size: var(--step--1); line-height: 1.55; }
+.concepts b { display: block; font-size: var(--step-0); margin-bottom: 0.15rem; }
+.concepts i { font-style: normal; color: var(--ink-2); }
+
+.chip { display: inline-block; font-family: var(--font-mono); font-size: 0.78rem; line-height: 1.4; padding: 0.05rem 0.4rem; border-radius: 999px; border: 1px solid var(--rule); white-space: nowrap; }
+.chip.g { background: var(--good-soft); color: var(--good); border-color: transparent; }
+.chip.w { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
+.chip.b { background: var(--bad-soft); color: var(--bad); border-color: transparent; }
+.chip.a { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+.chip.p { color: var(--ink-2); border-style: dashed; }
+
+/* 커맨드 카드 */
+.card { border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); padding: 0.9rem 1rem; margin: 1rem 0; }
+.card > h3 { margin: 0 0 0.2rem; font-size: var(--step-1); font-family: var(--font-mono); font-weight: 500; overflow-wrap: anywhere; }
+.card .who { font-size: var(--step--1); color: var(--ink-2); margin: 0 0 0.5rem; }
+dl.kv { display: grid; grid-template-columns: 5.5rem minmax(0, 1fr); gap: 0.35rem 0.9rem; margin: 0.4rem 0; }
+dl.kv dt { font-size: var(--step--1); font-weight: 600; color: var(--ink-2); padding-top: 0.15rem; }
+dl.kv dd { margin: 0; min-width: 0; }
+dl.kv dd > :first-child { margin-top: 0; }
+
+/* 흐름 */
+ol.flow { list-style: none; padding: 0; margin: 0.8rem 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr)); gap: 0.5rem; counter-reset: f; }
+ol.flow li { margin: 0; border: 1px solid var(--rule); border-radius: 6px; background: var(--surface); padding: 0.5rem 0.65rem; font-size: var(--step--1); line-height: 1.45; counter-increment: f; }
+ol.flow li::before { content: counter(f); display: block; font-family: var(--font-mono); color: var(--accent); font-weight: 500; }
+ol.flow li.gate { border-color: var(--accent); background: var(--accent-soft); }
+
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: 0.8rem; margin: 0.7rem 0; }
+.two > div { min-width: 0; border: 1px solid var(--rule); border-radius: 6px; padding: 0.6rem 0.85rem; background: var(--surface); }
+.two h4 { margin: 0 0 0.2rem; }
+
+.fig { margin: 0.8rem 0; border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); padding: 0.6rem; overflow-x: auto; }
+.fig svg { display: block; width: 100%; min-width: 640px; height: auto; }
+.fig figcaption { font-size: var(--step--1); color: var(--ink-2); padding: 0.4rem 0.3rem 0; }
+svg .box { fill: var(--surface); stroke: var(--rule); stroke-width: 1.2; }
+svg .box.hl { fill: var(--accent-soft); stroke: var(--accent); }
+svg .box.in { fill: var(--sunken); stroke: var(--rule); }
+svg .box.ext { fill: var(--surface); stroke: var(--ink-2); stroke-dasharray: 4 3; }
+svg text { fill: var(--ink); font-family: var(--font-body); font-size: 13px; }
+svg text.s { fill: var(--ink-2); font-size: 11.5px; }
+svg text.t { font-weight: 600; }
+svg text.m { font-family: var(--font-mono); font-size: 11.5px; fill: var(--ink-2); }
+svg .ln { stroke: var(--ink-2); stroke-width: 1.4; fill: none; }
+svg .ln.acc { stroke: var(--accent); }
+svg .head { fill: var(--ink-2); }
+svg .head.acc { fill: var(--accent); }
+svg text.lab { fill: var(--accent); font-size: 11.5px; font-weight: 600; }
+
+mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius: 2px; }
+.empty { display: none; padding: 1rem; border: 1px dashed var(--rule); border-radius: 6px; color: var(--ink-2); margin-top: 1.5rem; }
+.foot { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--rule); font-size: var(--step--1); color: var(--ink-2); }
+
+@media (max-width: 860px) {
+  .shell { grid-template-columns: minmax(0, 1fr); }
+  .side { display: none; }
+  .toc-mobile {
+    display: block; position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5;
+    background: var(--bg); border-bottom: 1px solid var(--rule); padding-block: 0.5rem; margin-inline: -16px; padding-inline: 16px;
+  }
+  .toc-mobile summary { cursor: pointer; font-weight: 600; font-size: var(--step--1); padding: 0.3rem 0; list-style: none; display: flex; justify-content: space-between; }
+  .toc-mobile summary::after { content: "▾"; color: var(--ink-2); }
+  .toc-mobile[open] summary::after { content: "▴"; }
+  .toc-mobile .inner { max-height: 70vh; overflow-y: auto; padding-bottom: 0.6rem; font-size: var(--step--1); }
+  main { padding-top: 0.5rem; }
+  dl.kv { grid-template-columns: minmax(0, 1fr); gap: 0.1rem; }
+  dl.kv dd { margin-bottom: 0.5rem; }
+}
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+@media print {
+  :root { --bg: #fff; --surface: #fff; --sunken: #f3f3f3; --ink: #000; --ink-2: #333; --rule: #bbb; --accent: #0b5560; color-scheme: light; }
+  body { font-size: 10.5pt; line-height: 1.55; }
+  .side, .toc-mobile, .copy, .search-state, .empty { display: none !important; }
+  .shell { display: block; max-width: none; padding: 0; }
+  main { max-width: none; padding: 0; }
+  .sub[hidden], section.chap[hidden] { display: block !important; }
+  pre { white-space: pre-wrap; overflow: visible; padding-right: 0.9rem; }
+  .tbl, .fig { overflow: visible; }
+  .fig svg { min-width: 0; }
+  section.chap { break-before: page; }
+  section.chap:first-of-type { break-before: auto; }
+  h2, h3, h4 { break-after: avoid; }
+  tr, .card, .note, .code { break-inside: avoid; }
+  a { color: inherit; text-decoration: none; }
+}
+.first { color: var(--ink-2); font-size: var(--step--1); margin: 0.1rem 0 0.6rem; }
+.fig svg text.w { fill: var(--warn); font-size: 11.5px; font-weight: 600; }
+.say td:first-child { font-style: normal; }
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="side">
+    <div class="brand"><b>telephony-triage</b><span>사용자 가이드</span></div>
+    <nav class="toc" id="toc" aria-label="목차"></nav>
+  </aside>
+  <main>
+    <details class="toc-mobile"><summary>목차</summary><div class="inner" id="toc-m"></div></details>
+
+    <header class="hero">
+      <div class="eyebrow">USER GUIDE · 처음 쓰는 사람을 위한 안내</div>
+      <h1>Jira 번호와 로그만 주면 됩니다</h1>
+      <p>Telephony 이슈를 분석하는 엔지니어를 위한 안내입니다. 설치, 첫 연습, 요청하는 법, 리포트 읽는 법만 담았습니다. 기록·PR은 기여자 가이드, 구조는 설계 안내, 세부 옵션은 운영 매뉴얼에 있습니다.</p>
+      <div class="meta"><span><b>기준</b> main 2026-10-09</span><span><b>대상</b> 처음 쓰는 팀원</span><span><b>읽는 시간</b> 약 10분</span></div>
+    </header>
+
+    <section class="chap" id="u1" data-title="3분 요약">
+      <h2><span class="no">1</span>3분 요약</h2>
+      <p class="first">이 절에서 알 수 있는 것: 내가 하는 일과 도구가 하는 일</p>
+      <ol class="flow" aria-label="사용 흐름">
+        <li>"ABC-12345 로그 분석해줘" + 로그 파일 경로</li>
+        <li>도구가 Jira·로그를 읽고 과거 사례와 비교</li>
+        <li>리포트: 원인 후보, 근거 로그, 해결책</li>
+        <li class="gate">내가 원인을 확정 (또는 미확정)</li>
+        <li class="gate">확인 화면을 보고 승인</li>
+        <li>PR이 올라가고 담당자가 리뷰</li>
+      </ol>
+      <div class="two">
+        <div><h4>내가 하는 일</h4><ul><li>Jira 번호와 로그 <b>파일 경로</b>를 준다 (로그를 대화에 붙이지 않음)</li><li>질문에 답한다 (발생 시각, 소스 트리 등)</li><li>원인을 확정하고, 올라갈 내용을 승인한다</li></ul></div>
+        <div><h4>도구가 하는 일</h4><ul><li>개인정보를 가리고(마스킹) 로그를 해석</li><li>과거 사례와 비교해 후보 3개를 근거와 함께 제시</li><li>기록할 변경을 만들고 검사한 뒤 PR까지</li></ul></div>
+      </div>
+      <div class="note rule"><span class="k">알아 둘 것</span>판정(어떤 원인이 맞았나)은 스크립트가 규칙대로 합니다. Claude는 설명을 채우고 질문할 뿐 판정을 바꾸지 않습니다. 그래서 같은 로그는 언제 돌려도 같은 후보가 나옵니다.</div>
+    </section>
+
+    <section class="chap" id="u2" data-title="설치">
+      <h2><span class="no">2</span>설치 (처음 한 번, 약 10분)</h2>
+      <p class="first">이 절에서 알 수 있는 것: 설치 순서와 setup이 묻는 것</p>
+      <ol class="flow" aria-label="설치 순서">
+        <li>사내 마켓플레이스에서 플러그인 설치</li>
+        <li><code>gh auth login -h &lt;GHE 호스트&gt;</code></li>
+        <li><code>claude mcp list</code>로 Jira 연결 확인</li>
+        <li class="gate"><code>/telephony-triage:setup</code></li>
+      </ol>
+      <p>setup은 하나씩 묻습니다: GHE 아이디, 이슈 DB clone 경로와 원격 주소, Jira·logcat 시각의 타임존, 로그 연도를 정하는 방법, 작업 폴더. 팀 기본값과 같으면 그대로 넘기면 되고, 다르게 답한 값만 저장됩니다.</p>
+      <p>마지막에 <b>점검 표</b>가 나옵니다. 모든 행이 <code>ok</code>면 끝입니다. <code>fail</code>·<code>warn</code> 행은 "다음" 열의 안내대로 하면 됩니다. GHE 로그인이 안 됐으면(<code>gh warn</code>) 분석과 연습은 되지만 기록(PR)은 못 합니다.</p>
+      <div class="note warn"><span class="k">"사내 기본값 없음"으로 멈추면</span>관리자가 사이트 설정을 아직 올리지 않은 상태입니다. 관리자에게 알리고 기다립니다.</div>
+    </section>
+
+    <section class="chap" id="u3" data-title="첫 연습">
+      <h2><span class="no">3</span>첫 연습: dry-run</h2>
+      <p class="first">이 절에서 알 수 있는 것: 아무것도 올리지 않고 전 과정을 따라 해 보는 법</p>
+      <p><code>--dry-run</code>은 확인 화면까지만 가고 아무것도 올리지 않습니다. 내 clone도 바뀌지 않고, GHE 로그인 전에도 됩니다.</p>
+      <div class="code"><pre>/telephony-triage:analyze ABC-12345 ~/logs/radio.txt --dry-run
+# Jira 연결 없이 연습할 때 (샘플 Jira 요약 파일)
+/telephony-triage:analyze ABC-12345 ~/logs/radio.txt --dry-run --jira-file ~/samples/ABC-12345.yaml</pre></div>
+      <p>연습한 계획은 남아 있어서, 나중에 같은 Jira로 <code>--dry-run</code> 없이 다시 실행하면 이어서 진짜로 올릴 수 있습니다. 이슈 DB의 <code>docs/getting-started.md</code>에 10분 온보딩 순서가 있습니다.</p>
+    </section>
+
+    <section class="chap" id="u4" data-title="요청하는 법">
+      <h2><span class="no">4</span>요청하는 법</h2>
+      <p class="first">이 절에서 알 수 있는 것: 말로 요청하는 예시와 꼭 커맨드로 해야 하는 것</p>
+      <p>커맨드를 외우지 않아도 됩니다. 말로 요청하면 같은 흐름으로 연결됩니다. 로그는 이때도 파일 경로로 줍니다.</p>
+      <div class="tbl say"><table>
+        <tr><th>이렇게 말하면</th><th>하는 일</th></tr>
+        <tr><td>"ABC-12345 로그 분석해줘, 데이터 안 붙어. 로그는 ~/logs/radio.txt"</td><td>분석 (analyze)</td></tr>
+        <tr><td>"데이터 안 붙는 이슈 예전에 있었어? 지라 번호 알려줘"</td><td>검색 (search)</td></tr>
+        <tr><td>"ABC-777은 APN 설정 고쳐서 해결했어, 기록만 해줘"</td><td>수동 기록 (record)</td></tr>
+        <tr><td>"CALL-001-01 수정 CL 머지됐어, 이슈 DB에 반영해줘"</td><td>수정 CL 기록 (fix-submitted)</td></tr>
+        <tr><td>"CALL-001-01 수정 빌드 로그로 재발 안 하는지 확인해줘"</td><td>수정 검증 (verify-fix)</td></tr>
+      </table></div>
+      <p><b>커맨드로 실행할 것</b>: <code>setup</code>, <code>sync</code>(DB 최신화·정리), <code>preview</code>, <code>review</code>, <code>migrate</code>, 인자 없는 <code>validate</code>. 무엇을 쓸지 모르면 <code>/telephony-triage:help</code>.</p>
+    </section>
+
+    <section class="chap" id="u5" data-title="리포트 읽는 법">
+      <h2><span class="no">5</span>리포트 읽는 법</h2>
+      <p class="first">이 절에서 알 수 있는 것: 리포트에서 먼저 볼 줄과 오해하기 쉬운 줄</p>
+      <figure class="fig"><svg viewBox="0 0 820 380" role="img" aria-labelledby="rpT"><title id="rpT">분석 리포트 읽는 법 (예시)</title><defs><marker id="rph" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head acc" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+<rect class="box in" x="20" y="14" width="500" height="352" rx="8"/>
+<text class="t" x="34" y="40">ABC-12345 분석</text>
+<text class="m" x="34" y="68">분류 후보: data &gt; DATA-001 &gt; DATA-001-02</text>
+<text class="m" x="34" y="86">  Roaming disabled</text>
+<text class="m" x="34" y="104">  (규칙 일치 점수 1.0, 일치 수준 높음)</text>
+<text class="m" x="34" y="132">근거 로그 (마스킹, 슬롯 phone 0):</text>
+<text class="m" x="34" y="150">  10:05:12 … disallowed reasons: ROAMING_DISABLED</text>
+<text class="m" x="34" y="178">로그 범위: 10:02 ~ 10:12 (발생 시각 포함)</text>
+<text class="m" x="34" y="206">원인 · 코드 위치: (Claude가 채우는 설명 칸)</text>
+<text class="m" x="34" y="234">해결책: 데이터 로밍 설정을 켠다</text>
+<text class="w" x="34" y="252">  해결책 검증: ⚠ 미검증</text>
+<text class="m" x="34" y="280">수정 상태: not-a-bug</text>
+<text class="m" x="34" y="308">기존 사례: Jira 1건 (ABC-333)</text>
+<text class="m" x="34" y="336">기타 후보: DATA-001-01 (점수 0.4)</text>
+<path class="ln acc" d="M542,76 L524,76" marker-end="url(#rph)"/><text class="lab" x="548" y="72">카테고리 &gt; 유형 &gt; 원인</text><text class="s" x="548" y="89">"원인 미확인"이면 증상만 맞은 것</text>
+<path class="ln acc" d="M542,104 L524,104" marker-end="url(#rph)"/><text class="lab" x="548" y="108">규칙이 얼마나 맞았나</text><text class="s" x="548" y="125">진단 확신도가 아님</text>
+<path class="ln acc" d="M542,148 L524,148" marker-end="url(#rph)"/><text class="lab" x="548" y="152">판정에 쓴 실제 줄. 먼저 확인</text>
+<path class="ln acc" d="M542,178 L524,178" marker-end="url(#rph)"/><text class="lab" x="548" y="182">"범위 밖"은 "매칭 없음"과 다름</text><text class="s" x="548" y="199">발생 시각이 로그에 없으면 판단 불가</text>
+<path class="ln acc" d="M542,214 L524,206" marker-end="url(#rph)"/><text class="lab" x="548" y="222">설명일 뿐, 판정이 아님</text>
+<path class="ln acc" d="M542,252 L524,252" marker-end="url(#rph)"/><text class="lab" x="548" y="256">미검증이어도 후보는 로그 근거</text>
+<path class="ln acc" d="M542,280 L524,280" marker-end="url(#rph)"/><text class="lab" x="548" y="284">수정 상태 판단은 아래 그림</text>
+</svg><figcaption>합성 예시입니다. 실제 리포트에는 소스 코드 위치, 다른 버전 원인, 열린 PR 같은 줄이 더 있습니다. 줄별 설명 전체는 <a href="03-manual.html#s5-report">매뉴얼 5.1</a>.</figcaption></figure>
+
+      <h3>후보가 없을 때</h3>
+      <p>DB가 아직 작을 때 가장 흔합니다. 그래도 리포트는 빈손이 아닙니다: Jira 설명으로 찾은 비슷한 사례 3개, 로그의 오류·거부·타임아웃 줄(최대 8줄), 파서가 모르는 태그(규칙이 없어 놓쳤을 수 있다는 힌트), 로그 범위 판정. 원하면 <b>탐색 분석</b>으로 Claude의 원인 가설 1~3개를 받을 수 있습니다. 토큰을 더 쓰므로 실행 전에 묻습니다. 가설은 "추정" 칸에만 들어가고 판정에는 쓰이지 않습니다.</p>
+
+      <h3>수정 상태 문구 읽기</h3>
+      <figure class="fig"><svg viewBox="0 0 820 280" role="img" aria-labelledby="fxT"><title id="fxT">Jira SW 빌드와 수정 빌드 비교</title><defs><marker id="fxh" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+<path class="ln" d="M30,60 L790,60" marker-end="url(#fxh)"/><text class="s" x="700" y="48">빌드 순서 →</text>
+<path class="ln acc" d="M410,30 L410,265" stroke-dasharray="5 4"/><text class="lab" x="418" y="44">수정 반영 빌드 (fixed_in)</text>
+<text class="t" x="40" y="88">Jira SW가 수정 빌드보다 이전</text><text class="t" x="430" y="88">Jira SW가 수정 빌드와 같거나 이후</text>
+<rect class="box" x="30" y="104" width="370" height="64" rx="6"/><text class="t" x="44" y="128">fixed 원인 → 이미 수정됨</text><text class="s" x="44" y="148">빌드를 업데이트한 뒤 재확인 권고</text>
+<rect class="box" x="420" y="104" width="370" height="64" rx="6"/><text class="t" x="434" y="128">fixed 원인 → 회귀 의심</text><text class="s" x="434" y="148">고친 뒤 다시 발생. open으로 되돌릴지 물음</text>
+<rect class="box" x="30" y="184" width="370" height="64" rx="6"/><text class="t" x="44" y="208">fix-submitted 원인 → 수정 대기 빌드</text><text class="s" x="44" y="228">업데이트 후 verify-fix 권고</text>
+<rect class="box" x="420" y="184" width="370" height="64" rx="6"/><text class="t" x="434" y="208">fix-submitted 원인 → 수정 미흡 의심</text><text class="s" x="434" y="228">수정 빌드에서 발생. verify-fix 실패 가능성</text>
+</svg><figcaption><code>open</code> 원인은 "미수정 원인, 기존 Jira N건"입니다. 빌드 이름을 비교할 수 없으면 "판단 불가"로 두 값을 나란히 보여주고 사용자가 판단합니다.</figcaption></figure>
+    </section>
+
+    <section class="chap" id="u6" data-title="분석 뒤에 할 일">
+      <h2><span class="no">6</span>분석 뒤에 할 일</h2>
+      <p class="first">이 절에서 알 수 있는 것: 리포트를 본 뒤의 선택지</p>
+      <div class="tbl"><table>
+        <tr><th>상황</th><th>할 일</th></tr>
+        <tr><td>1위 후보가 맞다</td><td>"예"로 확정 → 확인 화면 승인 → PR. 자세한 건 <a href="06-contributor-guide.html">기여자 가이드</a></td></tr>
+        <tr><td>다른 후보가 맞다 / 새 원인이다</td><td>그 항목을 고름. 새 원인·유형이면 도구가 초안을 만들고 내가 확인</td></tr>
+        <tr><td>원인을 아직 모르겠다</td><td>"원인 미확정"으로 기록하거나, 기록하지 않고 끝냄</td></tr>
+        <tr><td>리포트만 보고 기록은 안 하고 싶다</td><td><code>--analysis-only</code>로 실행하거나 확인 화면에서 취소. 계획은 남아 나중에 이어서 할 수 있음</td></tr>
+        <tr><td>로그를 더 줘야 한다 (범위 밖 등)</td><td><code>--more-logs</code>로 로그 추가해 다시 분석</td></tr>
+      </table></div>
+    </section>
+
+    <section class="chap" id="u7" data-title="토큰 아끼기">
+      <h2><span class="no">7</span>토큰과 모델</h2>
+      <p class="first">이 절에서 알 수 있는 것: 비용을 줄이는 습관</p>
+      <ul>
+        <li>기본 모델은 Sonnet입니다. 탐색 분석의 가설 품질이 중요하면 <code>/model</code>로 Opus를 고를 수 있습니다.</li>
+        <li>로그는 파일 경로로 줍니다. 대화에 붙이면 토큰이 크게 늘고 개인정보도 대화에 남습니다.</li>
+        <li>한 작업이 끝나면 세션을 닫습니다. 이전 대화가 계속 쌓이면 매번 다시 읽습니다.</li>
+        <li>심층 분석·탐색 분석은 토큰을 더 쓰므로 필요할 때만 "예"라고 답합니다.</li>
+      </ul>
+      <p>모의 데이터 기준 분석부터 기록까지 1건에 약 39만 토큰(약 $0.4)입니다. 실제 bugreport는 더 클 수 있습니다.</p>
+    </section>
+
+    <section class="chap" id="u8" data-title="막혔을 때">
+      <h2><span class="no">8</span>막혔을 때</h2>
+      <p class="first">이 절에서 알 수 있는 것: 혼자 먼저 해 볼 것과 물어볼 곳</p>
+      <ol class="flow" aria-label="막혔을 때">
+        <li><code>/telephony-triage:setup</code> 다시 실행</li>
+        <li>점검 표의 fail·warn 행 "다음" 안내대로</li>
+        <li>메시지 원문으로 <a href="03-manual.html#s6-msg">매뉴얼 6.3</a> 검색</li>
+        <li class="gate">그래도 안 되면 메시지 그대로 관리자에게</li>
+      </ol>
+      <div class="note warn"><span class="k">하지 말 것</span>막힌 걸 풀려고 hook을 끄거나(<code>--no-verify</code>) main에 직접 push하지 않습니다. 도구가 거부하는 건 대부분 실수를 막는 장치입니다. 이유는 <a href="04-design.html#c9">설계 안내 9장</a>에 있습니다.</div>
+      <p class="foot">더 볼 곳: 기록과 PR은 <a href="06-contributor-guide.html">기여자 가이드</a>, 구조와 이유는 <a href="04-design.html">설계 안내</a>, 모든 옵션과 메시지는 <a href="03-manual.html">운영 매뉴얼</a>.</p>
+    </section>
+  </main>
+</div>
+<script>
+(function () {
+  var secs = Array.prototype.slice.call(document.querySelectorAll("section.chap"));
+  function build() {
+    var ol = document.createElement("ol");
+    secs.forEach(function (s) {
+      var li = document.createElement("li"), a = document.createElement("a");
+      a.href = "#" + s.id; a.textContent = s.querySelector("h2 .no").textContent + ". " + s.dataset.title;
+      li.appendChild(a);
+      var subs = s.querySelectorAll(":scope > .sub");
+      if (subs.length) {
+        var inner = document.createElement("ol");
+        subs.forEach(function (u) {
+          var l2 = document.createElement("li"), a2 = document.createElement("a");
+          a2.href = "#" + u.id; a2.textContent = u.dataset.title; l2.appendChild(a2); inner.appendChild(l2);
+        });
+        li.appendChild(inner);
+      }
+      ol.appendChild(li);
+    });
+    return ol;
+  }
+  document.getElementById("toc").appendChild(build());
+  document.getElementById("toc-m").appendChild(build());
+  document.querySelectorAll("#toc-m a").forEach(function (a) {
+    a.addEventListener("click", function () { a.closest("details").open = false; });
+  });
+  if ("IntersectionObserver" in window) {
+    var links = document.querySelectorAll("#toc > ol > li > a");
+    var io = new IntersectionObserver(function (es) {
+      es.forEach(function (e) {
+        if (!e.isIntersecting) return;
+        links.forEach(function (l) { l.classList.toggle("on", l.getAttribute("href") === "#" + e.target.id); });
+      });
+    }, { rootMargin: "0px 0px -70% 0px" });
+    secs.forEach(function (s) { io.observe(s); });
+  }
+})();
+</script>
+</body>
+</html>

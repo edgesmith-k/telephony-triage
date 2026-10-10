@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>telephony-triage 용어집</title>
+<style>
+/* Layout: 왼쪽 고정 목차 + 본문 한 단(≤ 46rem). 휴대폰에서는 목차가 상단 접이식. */
+:root {
+  --bg: #f6f8f9;
+  --surface: #ffffff;
+  --sunken: #eef2f3;
+  --ink: #17232b;
+  --ink-2: #4a5a63;
+  --rule: #d5dee2;
+  --accent: #0b6874;        /* 신호선 청록 */
+  --accent-soft: #dcefF1;
+  --warn: #9a5b00;
+  --warn-soft: #fbf0dc;
+  --bad: #a3262c;
+  --bad-soft: #f8e3e3;
+  --good: #1f6b3a;
+  --good-soft: #e1f1e6;
+  --mark: #ffe58a;
+  --font-body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Consolas, "D2Coding", monospace;
+  --step--1: 0.8125rem;
+  --step-0: 0.96875rem;
+  --step-1: 1.125rem;
+  --step-2: 1.375rem;
+  --step-3: 1.75rem;
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+html { scroll-padding-top: 1rem; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--font-body); font-size: var(--step-0); line-height: 1.7;
+  -webkit-text-size-adjust: 100%;
+}
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px;
+}
+code, kbd, pre { font-family: var(--font-mono); font-size: 0.875em; }
+:not(pre) > code {
+  background: var(--sunken); border: 1px solid var(--rule); border-radius: 4px;
+  padding: 0.05em 0.35em; overflow-wrap: anywhere;
+}
+
+.shell {
+  display: grid; grid-template-columns: 17rem minmax(0, 1fr); gap: 0 2.5rem;
+  max-width: 76rem; margin: 0 auto; padding-inline: 16px;
+}
+
+/* 목차 */
+.side {
+  position: sticky; top: env(safe-area-inset-top, 0px); align-self: start;
+  max-height: 100vh; overflow-y: auto; padding-block: 1.5rem 2rem;
+  font-size: var(--step--1);
+}
+.brand { display: flex; flex-direction: column; gap: 0.1rem; margin-bottom: 1rem; }
+.brand b { font-size: var(--step-1); letter-spacing: -0.01em; }
+.brand span { color: var(--ink-2); }
+.search { position: relative; margin-bottom: 0.4rem; }
+.search input {
+  width: 100%; padding: 0.55rem 0.7rem; border: 1px solid var(--rule); border-radius: 6px;
+  background: var(--surface); color: var(--ink); font: inherit; font-size: var(--step--1);
+}
+.search-state { color: var(--ink-2); min-height: 1.4em; margin-bottom: 0.6rem; }
+.toc ol { list-style: none; margin: 0; padding: 0; }
+.toc > ol > li { margin-top: 0.55rem; }
+.toc > ol > li > a { font-weight: 600; color: var(--ink); }
+.toc ol ol { padding-left: 0.9rem; border-left: 1px solid var(--rule); margin-top: 0.2rem; }
+.toc ol ol a { color: var(--ink-2); }
+.toc a { text-decoration: none; display: block; padding: 0.12rem 0; }
+.toc a:hover { color: var(--accent); }
+.toc a.on { color: var(--accent); font-weight: 600; }
+.toc-mobile { display: none; }
+
+/* 본문 */
+main { min-width: 0; padding-block: 1.5rem 5rem; max-width: 48rem; }
+.hero { padding-block: 1rem 1.5rem; border-bottom: 2px solid var(--ink); margin-bottom: 1rem; }
+.hero .eyebrow { font-family: var(--font-mono); font-size: var(--step--1); color: var(--accent); letter-spacing: 0.04em; }
+.hero h1 { font-size: var(--step-3); line-height: 1.25; margin: 0.3rem 0 0.6rem; text-wrap: balance; letter-spacing: -0.015em; }
+.hero p { margin: 0; color: var(--ink-2); max-width: 40rem; }
+.meta { display: flex; flex-wrap: wrap; gap: 0.4rem 1.2rem; margin-top: 0.9rem; font-size: var(--step--1); color: var(--ink-2); }
+.meta b { color: var(--ink); font-weight: 600; }
+
+section.chap { padding-top: 1.8rem; }
+section.chap > h2 {
+  font-size: var(--step-2); line-height: 1.3; margin: 0 0 0.4rem; text-wrap: balance;
+  display: flex; gap: 0.6rem; align-items: baseline; letter-spacing: -0.01em;
+}
+section.chap > h2 .no { font-family: var(--font-mono); color: var(--accent); font-size: 0.8em; }
+.sub { padding-top: 1.2rem; }
+.sub > h3 { font-size: var(--step-1); margin: 0 0 0.4rem; text-wrap: balance; }
+.sub > h4, .card h4 { font-size: var(--step-0); margin: 1rem 0 0.3rem; }
+p, ul, ol { margin: 0.5rem 0; }
+ul, ol { padding-left: 1.3rem; }
+li + li { margin-top: 0.2rem; }
+.lead { color: var(--ink-2); }
+
+/* 표 */
+.tbl { overflow-x: auto; margin: 0.7rem 0; border: 1px solid var(--rule); border-radius: 6px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: var(--step--1); line-height: 1.55; }
+th, td { text-align: left; vertical-align: top; padding: 0.5rem 0.65rem; border-bottom: 1px solid var(--rule); }
+th { background: var(--sunken); font-weight: 600; white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+td code { white-space: nowrap; }
+td.wrap code, td code.wrap { white-space: normal; }
+.num { font-variant-numeric: tabular-nums; }
+
+/* 코드 블록 */
+.code { position: relative; margin: 0.7rem 0; }
+pre {
+  margin: 0; padding: 0.8rem 0.9rem; padding-right: 4.2rem; overflow-x: auto;
+  background: var(--sunken); border: 1px solid var(--rule); border-radius: 6px; line-height: 1.55;
+}
+.copy {
+  position: absolute; top: 0.4rem; right: 0.4rem; font: inherit; font-size: 0.75rem;
+  padding: 0.2rem 0.55rem; border-radius: 4px; border: 1px solid var(--rule);
+  background: var(--surface); color: var(--ink-2); cursor: pointer;
+}
+.copy:hover { color: var(--accent); border-color: var(--accent); }
+
+/* 안내 상자 */
+.note { border: 1px solid var(--rule); border-left-width: 4px; border-radius: 6px; padding: 0.6rem 0.85rem; margin: 0.8rem 0; background: var(--surface); }
+.note > :first-child { margin-top: 0; } .note > :last-child { margin-bottom: 0; }
+.note .k { font-weight: 700; font-size: var(--step--1); letter-spacing: 0.03em; display: block; margin-bottom: 0.15rem; }
+.note.rule { border-left-color: var(--accent); } .note.rule .k { color: var(--accent); }
+.note.warn { border-left-color: var(--warn); background: var(--warn-soft); } .note.warn .k { color: var(--warn); }
+.note.plan { border-left-color: var(--ink-2); border-style: dashed; border-left-style: solid; } .note.plan .k { color: var(--ink-2); }
+.note.easy { border-left-color: var(--good); background: var(--good-soft); } .note.easy .k { color: var(--good); }
+.note.new { border-left-color: var(--accent); background: var(--accent-soft); } .note.new .k { color: var(--accent); }
+/* 핵심 개념 카드 */
+.concepts { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 0.6rem; margin: 0.7rem 0; }
+.concepts > div { min-width: 0; border: 1px solid var(--rule); border-radius: 6px; padding: 0.55rem 0.8rem; background: var(--surface); font-size: var(--step--1); line-height: 1.55; }
+.concepts b { display: block; font-size: var(--step-0); margin-bottom: 0.15rem; }
+.concepts i { font-style: normal; color: var(--ink-2); }
+
+.chip { display: inline-block; font-family: var(--font-mono); font-size: 0.78rem; line-height: 1.4; padding: 0.05rem 0.4rem; border-radius: 999px; border: 1px solid var(--rule); white-space: nowrap; }
+.chip.g { background: var(--good-soft); color: var(--good); border-color: transparent; }
+.chip.w { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
+.chip.b { background: var(--bad-soft); color: var(--bad); border-color: transparent; }
+.chip.a { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+.chip.p { color: var(--ink-2); border-style: dashed; }
+
+/* 커맨드 카드 */
+.card { border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); padding: 0.9rem 1rem; margin: 1rem 0; }
+.card > h3 { margin: 0 0 0.2rem; font-size: var(--step-1); font-family: var(--font-mono); font-weight: 500; overflow-wrap: anywhere; }
+.card .who { font-size: var(--step--1); color: var(--ink-2); margin: 0 0 0.5rem; }
+dl.kv { display: grid; grid-template-columns: 5.5rem minmax(0, 1fr); gap: 0.35rem 0.9rem; margin: 0.4rem 0; }
+dl.kv dt { font-size: var(--step--1); font-weight: 600; color: var(--ink-2); padding-top: 0.15rem; }
+dl.kv dd { margin: 0; min-width: 0; }
+dl.kv dd > :first-child { margin-top: 0; }
+
+/* 흐름 */
+ol.flow { list-style: none; padding: 0; margin: 0.8rem 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr)); gap: 0.5rem; counter-reset: f; }
+ol.flow li { margin: 0; border: 1px solid var(--rule); border-radius: 6px; background: var(--surface); padding: 0.5rem 0.65rem; font-size: var(--step--1); line-height: 1.45; counter-increment: f; }
+ol.flow li::before { content: counter(f); display: block; font-family: var(--font-mono); color: var(--accent); font-weight: 500; }
+ol.flow li.gate { border-color: var(--accent); background: var(--accent-soft); }
+
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: 0.8rem; margin: 0.7rem 0; }
+.two > div { min-width: 0; border: 1px solid var(--rule); border-radius: 6px; padding: 0.6rem 0.85rem; background: var(--surface); }
+.two h4 { margin: 0 0 0.2rem; }
+
+.fig { margin: 0.8rem 0; border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); padding: 0.6rem; overflow-x: auto; }
+.fig svg { display: block; width: 100%; min-width: 640px; height: auto; }
+.fig figcaption { font-size: var(--step--1); color: var(--ink-2); padding: 0.4rem 0.3rem 0; }
+svg .box { fill: var(--surface); stroke: var(--rule); stroke-width: 1.2; }
+svg .box.hl { fill: var(--accent-soft); stroke: var(--accent); }
+svg .box.in { fill: var(--sunken); stroke: var(--rule); }
+svg .box.ext { fill: var(--surface); stroke: var(--ink-2); stroke-dasharray: 4 3; }
+svg text { fill: var(--ink); font-family: var(--font-body); font-size: 13px; }
+svg text.s { fill: var(--ink-2); font-size: 11.5px; }
+svg text.t { font-weight: 600; }
+svg text.m { font-family: var(--font-mono); font-size: 11.5px; fill: var(--ink-2); }
+svg .ln { stroke: var(--ink-2); stroke-width: 1.4; fill: none; }
+svg .ln.acc { stroke: var(--accent); }
+svg .head { fill: var(--ink-2); }
+svg .head.acc { fill: var(--accent); }
+svg text.lab { fill: var(--accent); font-size: 11.5px; font-weight: 600; }
+
+mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius: 2px; }
+.empty { display: none; padding: 1rem; border: 1px dashed var(--rule); border-radius: 6px; color: var(--ink-2); margin-top: 1.5rem; }
+.foot { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--rule); font-size: var(--step--1); color: var(--ink-2); }
+
+@media (max-width: 860px) {
+  .shell { grid-template-columns: minmax(0, 1fr); }
+  .side { display: none; }
+  .toc-mobile {
+    display: block; position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5;
+    background: var(--bg); border-bottom: 1px solid var(--rule); padding-block: 0.5rem; margin-inline: -16px; padding-inline: 16px;
+  }
+  .toc-mobile summary { cursor: pointer; font-weight: 600; font-size: var(--step--1); padding: 0.3rem 0; list-style: none; display: flex; justify-content: space-between; }
+  .toc-mobile summary::after { content: "▾"; color: var(--ink-2); }
+  .toc-mobile[open] summary::after { content: "▴"; }
+  .toc-mobile .inner { max-height: 70vh; overflow-y: auto; padding-bottom: 0.6rem; font-size: var(--step--1); }
+  main { padding-top: 0.5rem; }
+  dl.kv { grid-template-columns: minmax(0, 1fr); gap: 0.1rem; }
+  dl.kv dd { margin-bottom: 0.5rem; }
+}
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+@media print {
+  :root { --bg: #fff; --surface: #fff; --sunken: #f3f3f3; --ink: #000; --ink-2: #333; --rule: #bbb; --accent: #0b5560; color-scheme: light; }
+  body { font-size: 10.5pt; line-height: 1.55; }
+  .side, .toc-mobile, .copy, .search-state, .empty { display: none !important; }
+  .shell { display: block; max-width: none; padding: 0; }
+  main { max-width: none; padding: 0; }
+  .sub[hidden], section.chap[hidden] { display: block !important; }
+  pre { white-space: pre-wrap; overflow: visible; padding-right: 0.9rem; }
+  .tbl, .fig { overflow: visible; }
+  .fig svg { min-width: 0; }
+  section.chap { break-before: page; }
+  section.chap:first-of-type { break-before: auto; }
+  h2, h3, h4 { break-after: avoid; }
+  tr, .card, .note, .code { break-inside: avoid; }
+  a { color: inherit; text-decoration: none; }
+}
+
+.first { color: var(--ink-2); font-size: var(--step--1); margin: 0.1rem 0 0.6rem; }
+.fig svg text.w { fill: var(--warn); font-size: 11.5px; font-weight: 600; }
+.k1 td:first-child { width: 10rem; font-weight: 600; }
+.rule-list { counter-reset: r; list-style: none; padding-left: 0; }
+.rule-list li { counter-increment: r; padding-left: 2rem; position: relative; margin: 0.45rem 0; }
+.rule-list li::before { content: counter(r); position: absolute; left: 0; top: 0.1rem; width: 1.4rem; height: 1.4rem; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-weight: 700; font-size: 0.8rem; display: grid; place-items: center; }
+.check { list-style: none; padding-left: 0; }
+.check li { padding-left: 1.6rem; position: relative; }
+.check li::before { content: "☐"; position: absolute; left: 0.2rem; color: var(--accent); }
+
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="side">
+    <div class="brand"><b>telephony-triage</b><span>용어집</span></div>
+    <nav class="toc" id="toc" aria-label="목차"></nav>
+  </aside>
+  <main>
+    <details class="toc-mobile"><summary>목차</summary><div class="inner" id="toc-m"></div></details>
+    <header class="hero">
+      <div class="eyebrow">GLOSSARY · 낯선 말 모음</div>
+      <h1>용어집</h1>
+      <p>문서와 도구 화면에 나오는 용어를 묶음별로 정리했습니다. 정확한 정의가 다르면 <code>docs/design/contracts.md</code>가 맞습니다.</p>
+      <div class="meta"><span><b>기준</b> main 2026-10-09</span><span><b>용어</b> 52개</span></div>
+    </header>
+    <section class="chap" id="t0" data-title="관계도">
+      <h2><span class="no">0</span>관계도</h2>
+      <p class="first">이 절에서 알 수 있는 것: 용어가 서로 어떻게 이어지는지</p>
+<figure class="fig"><svg viewBox="0 0 820 250" role="img" aria-labelledby="cmT"><title id="cmT">용어 관계도</title><defs><marker id="cmh" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+<rect class="box hl" x="20" y="20" width="120" height="44" rx="6"/><text class="t" x="32" y="47">카테고리</text>
+<rect class="box hl" x="180" y="20" width="140" height="44" rx="6"/><text class="t" x="192" y="47">유형 (증상)</text>
+<rect class="box hl" x="360" y="20" width="140" height="44" rx="6"/><text class="t" x="372" y="47">원인</text>
+<path class="ln" d="M140,42 L178,42" marker-end="url(#cmh)"/><path class="ln" d="M320,42 L358,42" marker-end="url(#cmh)"/>
+<rect class="box" x="180" y="100" width="140" height="44" rx="6"/><text class="t" x="192" y="120">증상 시그니처</text><text class="s" x="192" y="137">맞으면 S=1</text>
+<rect class="box" x="360" y="100" width="140" height="44" rx="6"/><text class="t" x="372" y="120">원인 시그니처</text><text class="s" x="372" y="137">맞으면 C=1</text>
+<path class="ln" d="M250,64 L250,98" marker-end="url(#cmh)"/><path class="ln" d="M430,64 L430,98" marker-end="url(#cmh)"/>
+<rect class="box" x="540" y="20" width="260" height="44" rx="6"/><text class="t" x="552" y="40">해결책 · 수정 상태</text><text class="s" x="552" y="57">해결책 검증 / open → fixed</text>
+<rect class="box" x="540" y="80" width="260" height="44" rx="6"/><text class="t" x="552" y="100">fixture</text><text class="s" x="552" y="117">마스킹된 기준 로그, 회귀에 사용</text>
+<rect class="box" x="540" y="140" width="260" height="44" rx="6"/><text class="t" x="552" y="160">Jira 기록</text><text class="s" x="552" y="177">이 원인이었던 이슈들</text>
+<path class="ln" d="M500,42 L538,42" marker-end="url(#cmh)"/><path class="ln" d="M500,50 C520,50 520,102 538,102" marker-end="url(#cmh)"/><path class="ln" d="M500,58 C515,58 515,162 538,162" marker-end="url(#cmh)"/>
+<rect class="box in" x="20" y="180" width="300" height="56" rx="6"/><text class="t" x="32" y="202">parser-rules (태그 · RIL · extractor)</text><text class="s" x="32" y="222">로그 줄 → 이벤트. 시그니처는 이벤트로 씀</text>
+<path class="ln" d="M170,180 L170,150 L248,150" marker-end="url(#cmh)"/>
+</svg><figcaption>이슈 DB 안의 용어가 서로 어떻게 이어지는지입니다. 파서 규칙이 로그를 이벤트로 바꾸고, 시그니처가 이벤트로 S·C를 판정합니다.</figcaption></figure>
+    </section>
+    <section class="chap" id="t1" data-title="분류">
+      <h2><span class="no">1</span>분류</h2>
+      <p class="first">이 절에서 알 수 있는 것: 분류 관련 용어</p>
+      <div class="tbl k1"><table><tr><th>용어</th><th>뜻</th></tr><tr><td><b>카테고리</b></td><td>data·call·network·sim·sms·ims. 사용자가 겪는 증상 기준</td></tr><tr><td><b>유형</b></td><td>사용자가 보는 증상. 증상 시그니처로 판별. 예: DATA-001</td></tr><tr><td><b>원인</b></td><td>같은 증상 아래의 서로 다른 이유. 판별 시그니처·해결책·수정 상태를 가짐. 예: DATA-001-02</td></tr><tr><td><b>원인 미확정 (unresolved)</b></td><td>증상은 맞지만 원인을 모를 때의 기록</td></tr><tr><td><b>시그니처 대기 (pending)</b></td><td>판별 조건 없이 먼저 등록한 원인. 매칭이 판정하지 못함</td></tr><tr><td><b>active · deprecated · merged-into</b></td><td>원인·유형 자체의 상태. active만 매칭 후보</td></tr></table></div>
+
+    </section>
+    <section class="chap" id="t2" data-title="판정">
+      <h2><span class="no">2</span>판정</h2>
+      <p class="first">이 절에서 알 수 있는 것: 판정 관련 용어</p>
+      <div class="tbl k1"><table><tr><th>용어</th><th>뜻</th></tr><tr><td><b>시그니처</b></td><td>로그 조건 묶음. 종류: 증상, 원인, 복구(recovery), 시나리오(scenario)</td></tr><tr><td><b>S / C</b></td><td>증상 / 원인 시그니처 충족 여부(0/1). 판정의 기준</td></tr><tr><td><b>규칙 일치 점수 · 일치 수준</b></td><td>규칙과 얼마나 맞았나. 진단 확신도가 아님</td></tr><tr><td><b>이벤트</b></td><td>파서가 로그 줄에서 뽑은 구조화된 사건</td></tr><tr><td><b>parser-rules</b></td><td>이슈 DB의 태그·RIL·extractor 규칙. 엔진은 플러그인, 규칙은 DB</td></tr><tr><td><b>파서 백엔드</b></td><td>로그를 읽는 구현. reference(참고) 또는 site(사내 포팅)</td></tr><tr><td><b>로그 범위</b></td><td>발생 시각이 로그 안에 있는지. &quot;범위 밖&quot;은 &quot;매칭 없음&quot;과 다름</td></tr><tr><td><b>심층 분석 · 탐색 분석</b></td><td>카테고리 분석 스킬, Claude 가설. 모두 보조 정보</td></tr></table></div>
+
+    </section>
+    <section class="chap" id="t3" data-title="검증">
+      <h2><span class="no">3</span>검증</h2>
+      <p class="first">이 절에서 알 수 있는 것: 검증 관련 용어</p>
+      <div class="tbl k1"><table><tr><th>용어</th><th>뜻</th></tr><tr><td><b>fixture</b></td><td>원인마다 붙인 마스킹된 최소 로그. 회귀 테스트 입력</td></tr><tr><td><b>회귀·검증 모드</b></td><td>fixture 전체 범위, 모든 원인 독립 평가로 판정하는 모드</td></tr><tr><td><b>R1 파서</b></td><td>새 규칙이 쓰는 태그·이벤트가 이 원인의 기준 로그에서 실제로 뽑히나</td></tr><tr><td><b>R2 양성</b></td><td>기준 로그에서 이 원인만 C=1, 다른 원인은 C=0인가</td></tr><tr><td><b>R3 음성</b></td><td>정상 로그·다른 원인 로그·고친 뒤 로그를 잘못 잡지 않나</td></tr><tr><td><b>R4 교차 회귀</b></td><td>이슈 DB 모든 fixture의 기대 결과가 그대로인가. 실패하면 push 차단</td></tr><tr><td><b>R5 이벤트 변화</b></td><td>파서 규칙을 바꿀 때 기존 이벤트가 사라지거나 바뀌지 않나. 바뀌면 메인테이너 승인 필요</td></tr><tr><td><b>R6 추가 표본</b></td><td>사용자가 준 다른 로그로 확인(선택). 실패해도 진행 여부는 사용자가 고름</td></tr><tr><td><b>skipped</b></td><td>검증을 못 돌림. 통과가 아니며 리뷰 대상</td></tr><tr><td><b>also_allowed</b></td><td>한 fixture에서 다른 유형의 원인도 C=1이어도 된다는 허용. 실제로 두 현상이 있을 때만</td></tr><tr><td><b>수정 상태</b></td><td>open · fix-submitted · fixed · wont-fix · not-a-bug. fixed는 verify-fix 통과로만</td></tr><tr><td><b>해결책 검증</b></td><td>해결책이 효과 있었는지. 미검증 / 검증됨(근거 필수)</td></tr></table></div>
+
+    </section>
+    <section class="chap" id="t4" data-title="작업 흐름">
+      <h2><span class="no">4</span>작업 흐름</h2>
+      <p class="first">이 절에서 알 수 있는 것: 작업 흐름 관련 용어</p>
+      <div class="tbl k1"><table><tr><th>용어</th><th>뜻</th></tr><tr><td><b>작업 계획 (plan.json)</b></td><td>사용자 결정을 할 일 목록으로 적은 파일. 내 PC에만</td></tr><tr><td><b>읽기 스냅샷</b></td><td>분석이 읽는 이슈 DB 복사본. 내 clone과 분리</td></tr><tr><td><b>작업 worktree</b></td><td>계획을 최신 main 위에 적용하는 임시 작업 공간</td></tr><tr><td><b>drift</b></td><td>계획을 만든 뒤 main에서 계획 대상이 먼저 바뀐 것. 자동으로 덮지 않고 물음</td></tr><tr><td><b>세션 lock</b></td><td>한 사람이 동시에 두 쓰기 작업을 하지 않게 하는 잠금</td></tr><tr><td><b>확인 화면</b></td><td>push 직전 변경·검증 결과·커밋 메시지를 보여주는 화면</td></tr><tr><td><b>승인 지문 (approved_hash)</b></td><td>승인한 내용의 해시. 실제 push와 다르면 거부</td></tr><tr><td><b>dry-run</b></td><td>확인 화면까지만 가고 아무것도 올리지 않는 연습</td></tr><tr><td><b>분석 전용 (--analysis-only)</b></td><td>리포트까지만, 기록 없음</td></tr><tr><td><b>사후 검사 (사후 lint)</b></td><td>스냅샷 최신화 직후 main 전체 검사. 알리기만 함</td></tr></table></div>
+
+    </section>
+    <section class="chap" id="t5" data-title="안전">
+      <h2><span class="no">5</span>안전</h2>
+      <p class="first">이 절에서 알 수 있는 것: 안전 관련 용어</p>
+      <div class="tbl k1"><table><tr><th>용어</th><th>뜻</th></tr><tr><td><b>마스킹</b></td><td>개인정보를 &lt;IMSI#1&gt; 같은 표시로 바꿈. 같은 값은 같은 번호</td></tr><tr><td><b>원문 격리</b></td><td>Jira 응답 원문을 PC에 두고 Claude에는 마스킹 요약만</td></tr><tr><td><b>guard</b></td><td>Claude가 도구를 부를 때 위험한 호출을 거부하는 hook</td></tr><tr><td><b>pre-commit · pre-push</b></td><td>이슈 DB 커밋·push 때 도는 git hook</td></tr><tr><td><b>CODEOWNERS</b></td><td>경로별 리뷰 담당 지정. 카테고리별 담당자 리뷰를 강제</td></tr></table></div>
+
+    </section>
+    <section class="chap" id="t6" data-title="도입">
+      <h2><span class="no">6</span>도입</h2>
+      <p class="first">이 절에서 알 수 있는 것: 도입 관련 용어</p>
+      <div class="tbl k1"><table><tr><th>용어</th><th>뜻</th></tr><tr><td><b>사외 / 사내</b></td><td>개발 환경 / 도입 조직 환경</td></tr><tr><td><b>S-0~S-7</b></td><td>사내 보완 단계</td></tr><tr><td><b>SITE_PATHS</b></td><td>사내 전용 값·코드만 두는 경로. 재반입 때 보존</td></tr><tr><td><b>site-defaults.yaml</b></td><td>사내 기본값(Jira·GHE·파서 백엔드). 없으면 커맨드가 멈춤</td></tr><tr><td><b>placeholder 규칙</b></td><td>실제 로그로 확인하기 전의 예시 규칙. 파일럿 전에 교체</td></tr><tr><td><b>반입 묶음</b></td><td>사외 초안을 사내로 가져가는 zip 묶음. make_bundle.py로 만듦</td></tr></table></div>
+
+    </section>
+    <section class="chap" id="t7" data-title="평가">
+      <h2><span class="no">7</span>평가</h2>
+      <p class="first">이 절에서 알 수 있는 것: 평가 관련 용어</p>
+      <div class="tbl k1"><table><tr><th>용어</th><th>뜻</th></tr><tr><td><b>행동 eval</b></td><td>Claude가 스킬 지침대로 행동하는지 재는 시나리오 시험. evals.json 60개</td></tr><tr><td><b>주입 eval</b></td><td>Jira 본문 속 지시를 따르지 않는지 보는 eval (59·60번)</td></tr><tr><td><b>정확도 평가 (오프라인 평가)</b></td><td>해결된 과거 Jira 라벨셋으로 매칭 정확도를 재는 S-5 관문. offline_eval.py</td></tr><tr><td><b>라벨셋</b></td><td>정확도 평가 입력. Jira 키·로그 경로·발생 시각·정답 원인 ID 또는 unresolved</td></tr><tr><td><b>자동 테스트</b></td><td>플러그인 코드 단위 테스트(pytest, 약 1,100개). CI에서 실행</td></tr></table></div>
+
+    </section>
+    <section class="chap" id="t8" data-title="검증과 평가는 누가 어떻게 만드나">
+      <h2><span class="no">8</span>검증과 평가는 누가 어떻게 만드나</h2>
+      <p class="first">이 절에서 알 수 있는 것: R1~R6, eval, 정확도 평가의 차이</p>
+<figure class="fig"><svg viewBox="0 0 820 470" role="img" aria-labelledby="evT"><title id="evT">검증과 평가 세 가지 비교</title>
+<text class="lab" x="20" y="60">무엇을 확인</text><text class="lab" x="20" y="140">대상</text><text class="lab" x="20" y="210">누가 만드나</text><text class="lab" x="20" y="340">어떻게 돌리나</text><text class="lab" x="20" y="420">언제</text>
+<rect class="box hl" x="120" y="12" width="222" height="446" rx="8"/><text class="t" x="132" y="36">규칙 검증 R1~R6</text>
+<text class="s" x="132" y="60">새 규칙이 의도한 로그만</text><text class="s" x="132" y="78">잡는지, 기존 분류를</text><text class="s" x="132" y="96">깨지 않는지</text>
+<text class="s" x="132" y="140">이슈 DB 규칙</text><text class="s" x="132" y="158">(시그니처·파서 규칙)</text>
+<text class="s" x="132" y="210">검증 규칙: 플러그인 개발자</text><text class="s" x="132" y="228">로그(fixture): 기여자</text><text class="s" x="132" y="246">— 기록할 때 Claude가</text><text class="s" x="132" y="264">근거 구간을 잘라 마스킹한</text><text class="s" x="132" y="282">초안을 기여자가 승인</text>
+<text class="s" x="132" y="340">도구가 자동 (db_verify)</text><text class="s" x="132" y="358">Claude 판단 없음</text>
+<text class="s" x="132" y="420">규칙이 바뀌는 기록마다</text><text class="s" x="132" y="438">초안 · push 전 · 커밋 때</text>
+<rect class="box" x="358" y="12" width="222" height="446" rx="8"/><text class="t" x="370" y="36">행동 eval (60개)</text>
+<text class="s" x="370" y="60">Claude가 스킬 지침대로</text><text class="s" x="370" y="78">행동하는지 (확인 질문,</text><text class="s" x="370" y="96">승인 전 push 안 함 등)</text>
+<text class="s" x="370" y="140">플러그인의 스킬·커맨드</text><text class="s" x="370" y="158">·hook</text>
+<text class="s" x="370" y="210">플러그인 개발자</text><text class="s" x="370" y="228">— evals.json에 시나리오마다</text><text class="s" x="370" y="246">요청 문장, 모의 Jira·로그,</text><text class="s" x="370" y="264">사용자 대답, 채점 항목</text><text class="s" x="370" y="282">(안전 10개, 주입 59·60 포함)</text>
+<text class="s" x="370" y="340">run.py가 실제 Claude Code에</text><text class="s" x="370" y="358">플러그인을 붙여 실행,</text><text class="s" x="370" y="376">grade.py가 도구 호출 기록</text><text class="s" x="370" y="394">으로 채점 (API 비용 듦)</text>
+<text class="s" x="370" y="420">스킬을 바꿀 때 · 사내 S-2</text>
+<rect class="box" x="596" y="12" width="210" height="446" rx="8"/><text class="t" x="608" y="36">정확도 평가 (S-5)</text>
+<text class="s" x="608" y="60">매칭이 실제 이슈에서</text><text class="s" x="608" y="78">맞는지 (1위 정확도,</text><text class="s" x="608" y="96">상위 3, 오탐률, 오류율)</text>
+<text class="s" x="608" y="140">이슈 DB 규칙 + 파서</text>
+<text class="s" x="608" y="210">사내 도입 담당자와</text><text class="s" x="608" y="228">카테고리 담당자</text><text class="s" x="608" y="246">— 해결된 과거 Jira 20~30건</text><text class="s" x="608" y="264">에 정답 원인을 붙인</text><text class="s" x="608" y="282">라벨셋 (조정용/확인용)</text>
+<text class="s" x="608" y="340">offline_eval.py</text><text class="s" x="608" y="358">스크립트만 (Claude 없음)</text>
+<text class="s" x="608" y="420">파일럿 전 관문</text>
+</svg><figcaption>팀원이 평소에 만나는 것은 왼쪽(R1~R6)뿐입니다. 가운데는 플러그인을 고치는 사람이, 오른쪽은 도입 담당자가 다룹니다. 플러그인 코드 자체는 별도로 자동 테스트(약 1,100개, CI)가 확인합니다.</figcaption></figure>
+    </section>
+  </main>
+</div>
+<script>
+(function () {
+  var secs = Array.prototype.slice.call(document.querySelectorAll("section.chap"));
+  function build() {
+    var ol = document.createElement("ol");
+    secs.forEach(function (s) {
+      var li = document.createElement("li"), a = document.createElement("a");
+      a.href = "#" + s.id; a.textContent = s.querySelector("h2 .no").textContent + ". " + s.dataset.title;
+      li.appendChild(a);
+      var subs = s.querySelectorAll(":scope > .sub");
+      if (subs.length) {
+        var inner = document.createElement("ol");
+        subs.forEach(function (u) {
+          var l2 = document.createElement("li"), a2 = document.createElement("a");
+          a2.href = "#" + u.id; a2.textContent = u.dataset.title; l2.appendChild(a2); inner.appendChild(l2);
+        });
+        li.appendChild(inner);
+      }
+      ol.appendChild(li);
+    });
+    return ol;
+  }
+  document.getElementById("toc").appendChild(build());
+  document.getElementById("toc-m").appendChild(build());
+  document.querySelectorAll("#toc-m a").forEach(function (a) {
+    a.addEventListener("click", function () { a.closest("details").open = false; });
+  });
+  if ("IntersectionObserver" in window) {
+    var links = document.querySelectorAll("#toc > ol > li > a");
+    var io = new IntersectionObserver(function (es) {
+      es.forEach(function (e) {
+        if (!e.isIntersecting) return;
+        links.forEach(function (l) { l.classList.toggle("on", l.getAttribute("href") === "#" + e.target.id); });
+      });
+    }, { rootMargin: "0px 0px -70% 0px" });
+    secs.forEach(function (s) { io.observe(s); });
+  }
+})();
+</script>
+</body>
+</html>
