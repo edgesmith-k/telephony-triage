@@ -817,10 +817,36 @@ def test_r3_and_r6_report_pattern_errors_as_fail_not_pass():
     neg.write_text(neg.read_text(encoding="utf-8") + slow, encoding="utf-8", newline="\n")
     sample = db.parent / "normal-slow.log"
     sample.write_text(NORMAL_LOG.read_text(encoding="utf-8") + slow, encoding="utf-8", newline="\n")
-    code, rows, _ = rules(db, "--extra-normal", sample)
+    code, rows, _ = rules(db, "--extra-normal", sample, "--verbose")
     assert code == 1 and rows["R3"]["status"] == "fail", rows["R3"]
     check = next(c for c in rows["R3"]["checks"] if c["target"] == "DATA-001-02")
     assert check["status"] == "fail" and "판정 불가" in check["reason"], check
     assert any(e["fixture"].endswith("DATA-001.none.log") for e in check["errors"])
     r6 = next(s for s in rows["R6"]["samples"] if s["sample"] == str(sample))
-    assert r6["status"] == "fail" and "판정 불가" in r6["reason"] and r6["errors"], r6
+    # 정상 표본은 유형 S만 본다 — 원인 시그니처 오류는 판정을 막지 않으므로 표시만(other_errors)
+    assert r6["status"] == "pass" and "errors" not in r6 and r6["other_errors"][0]["signature"] == "DATA-001-02/slow", r6
+
+    # 정상 표본에서 증상 시그니처가 오류면 판정 불가 fail
+    edit(db / DATA / "type.md", "causes:\n", "  - id: slow-symptom\n    must_match: ['(a+)+$']\n    window_sec: 60\ncauses:\n")
+    code, rows, _ = rules(db, "--extra-normal", sample, "--verbose")
+    r6 = next(s for s in rows["R6"]["samples"] if s["sample"] == str(sample))
+    assert r6["status"] == "fail" and "판정 불가" in r6["reason"] and r6["errors"][0]["signature"] == "DATA-001/slow-symptom", r6
+
+
+def test_r3_ignores_other_targets_signature_errors_but_shows_them():
+    """대상과 다른 원인의 시그니처 오류는 대상 R3를 fail로 만들지 않고 other_errors로만 보인다."""
+    db = git_db()
+    edit(db / "issue-db.config.yaml", "pattern_timeout_ms: 2000", "pattern_timeout_ms: 300")
+    edit(db / DATA / "type.md", "      - id: roaming-disabled\n",
+         "      - id: slow\n        must_match: ['(a+)+$']\n        window_sec: 60\n      - id: roaming-disabled\n")
+    neg = db / DATA / "fixtures/DATA-001.none.log"
+    neg.write_text(neg.read_text(encoding="utf-8") + "09-20 14:30:40.000  1234  1244 D DNC-0: " + "a" * 40 + "!\n",
+                   encoding="utf-8", newline="\n")
+    git(db, "add", "-A")
+    git(db, "commit", "-qm", "느린 시그니처는 이미 main에 있다")
+    edit(db / DATA / "type.md", "        same_phone: true\n        window_sec: 60\n",
+         "        same_phone: true\n        window_sec: 90\n")        # 대상: DATA-001-01만 바뀜
+    code, rows, _ = rules(db, "--verbose")
+    check = next(c for c in rows["R3"]["checks"] if c["target"] == "DATA-001-01")
+    assert check["status"] == "pass" and "errors" not in check, check
+    assert any(e["fixture"].endswith("DATA-001.none.log") for e in check["other_errors"]) and "다른 시그니처 오류" in check["note"]

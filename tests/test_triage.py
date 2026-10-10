@@ -1236,6 +1236,57 @@ def test_no_candidate_shows_unextracted_warn_lines():
     assert analysis["no_candidate"]["unextracted_warn"] == 2, analysis["no_candidate"]
     assert "_unextracted_tags" not in analysis["no_candidate"]
     report = (out / "report.md").read_text(encoding="utf-8")
-    line = "오류·거부·타임아웃 이벤트: 추출 이벤트 기준 0건 (수집 태그 W/E 줄 중 이벤트로 추출 안 된 줄 2건: DNC-0 2줄)"
+    line = "오류·거부·타임아웃 이벤트: 추출 이벤트 기준 0건 (수집 태그 W/E/F 줄 중 이벤트로 추출 안 된 줄 2건: DNC-0 2줄)"
     assert f"- {line}" in report, report
     assert line in analysis["must_show"], analysis["must_show"]
+
+
+DATA_DISABLED_SIG = ("      - id: data-disabled\n        must_event:\n"
+                     "          - {id: setting-off, event: data_setting_changed, fields: {enabled: 'false'}}\n"
+                     "          - {id: rejected, event: data_evaluation_rejected, fields: {reasons: '.*DATA_DISABLED.*'}}\n"
+                     "        sequence: [setting-off, rejected]\n        same_phone: true\n        window_sec: 60\n")
+
+
+def test_cause_timeout_is_cause_unjudged_not_unconfirmed_and_error_comes_from_unjudged_item():
+    """원인 시그니처만 시간 초과(C: null)면 '원인 미확인'이 아니라 '원인 판정 불가'이고, 대표 오류는 판정된 유형의
+    다른 시그니처 오류가 아니라 판정 불가 원인의 오류다."""
+    db = tmp("tt-slowcause-") / "db"
+    shutil.copytree(SAMPLE, db)
+    cfg = db / "issue-db.config.yaml"
+    cfg.write_text(cfg.read_text(encoding="utf-8").replace("pattern_timeout_ms: 2000", "pattern_timeout_ms: 300"),
+                   encoding="utf-8", newline="\n")
+    type_md = db / "data/DATA-001-no-setup-data-call/type.md"
+    text = type_md.read_text(encoding="utf-8")
+    assert DATA_DISABLED_SIG in text
+    text = text.replace(DATA_DISABLED_SIG, "      - id: slow-cause\n        must_match: ['(a+)+$']\n        window_sec: 60\n", 1)
+    # 충족되는 유형에 오류 나는 시그니처를 하나 더 둔다 — errors[0]은 이것이지만 판정에는 영향이 없다
+    text = text.replace("causes:\n", "  - id: slow-symptom\n    must_match: ['(a+)+$']\n    window_sec: 60\ncauses:\n", 1)
+    type_md.write_text(text, encoding="utf-8", newline="\n")
+    out = tmp("tt-triage-") / "x"
+    meta = _meta(out, "MOCK-7413", occurred_at="2026-09-20T05:30:05.000Z")
+    analysis = run_json("triage.py", ["run", "MOCK-7413", "--offline-db", db, "--out", out, "--logs", _slow_log(),
+                                      "--jira-meta", meta, "--tz", "Asia/Seoul", "--year", 2026])
+    top = analysis["candidates"][0]
+    assert top["type"] == "DATA-001" and top["cause"] is None and "_cause_unjudged" not in top
+    u = analysis["unjudged"]
+    assert u["count"] == 0 and u["cause_count"] == 1 and u["causes"] == ["DATA-001-01"], u
+    assert u["errors"][0]["signature"] == "DATA-001-01/slow-cause", u
+    report = (out / "report.md").read_text(encoding="utf-8")
+    assert "DATA-001 > 원인 판정 불가(" in report and "> 원인 미확인 (" not in report and "유형 일치·원인 판정 불가)" in report, report
+    line = next(m for m in analysis["must_show"] if m.startswith("판정 불가 유형:"))
+    assert line.startswith("판정 불가 유형: 0·원인 1개 (DATA-001-01) — 시그니처 시간 초과·오류 DATA-001-01/slow-cause"), line
+    assert any(w.startswith("판정 불가 유형 0·원인 1개") for w in analysis["warnings"])
+
+
+def test_fit_keeps_must_show_priority_and_unjudged_count_under_4kb():
+    """4KB 압축: must_show는 우선순위대로 앞 4개만 남고(판정 불가 줄 순위는 그대로), unjudged는 count가 남는다."""
+    sys.path.insert(0, str(plugin_root() / "scripts"))
+    from triagelib.report import fit
+    must = [f"줄{i} " + "가" * 150 for i in range(6)]
+    result = {"status": "ok", "key": "X", "must_show": list(must), "warnings": ["w" * 300] * 5,
+              "unjudged": {"count": 1, "types": ["DATA-001"], "cause_count": 1, "causes": ["DATA-001-01"],
+                           "errors": [{"signature": "DATA-001/s", "error": "e" * 80}] * 2},
+              "files": {"report": "r", "events": "e" * 500, "match": "m" * 500}, "pad": "p" * 2000}
+    out = fit(result)
+    assert [m[:2] for m in out["must_show"]] == ["줄0", "줄1", "줄2", "줄3"]
+    assert out["unjudged"]["count"] == 1 and "types" not in out["unjudged"] and "causes" not in out["unjudged"]

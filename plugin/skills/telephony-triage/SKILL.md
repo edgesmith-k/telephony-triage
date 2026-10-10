@@ -65,7 +65,7 @@ description: Android Telephony 이슈(data·call·network·sim·sms·ims)를 Jir
 | 증상이 새것 | `S/db_add.py similar` 3개를 먼저 보이고 `new-type` + `append` | `new-type` |
 | 원인 미확정 | `unresolved {type}` | `unresolved` |
 
-- 거부하면 다른 기존 원인·새 원인·새 유형·원인 미확정을 다시 보인다. 추정만으로 원인을 만들지 않는다. 후보 없으면 "새 유형 / 원인 미확정 / 기록하지 않음"만.
+- 거부하면 다른 기존 원인·새 원인·새 유형·원인 미확정을 다시 보인다. 추정만으로·`unjudged`면 원인·유형을 안 만든다. 후보 없으면 "새 유형 / 원인 미확정 / 기록하지 않음"만.
 - 새 원인·유형은 `db-authoring.md`대로 초안을 만들고 모두 승인받는다(fixture는 `parse_logcat.py cut --evidence JOB/match.json`).
 - 물어보고 넣는 op: 회귀 의심·수정 미흡의 `update-fix`(실패 이력) 또는 verify-fix, `add-related`, `add-code-ref`, `update-signature`,
   `set-resolution`(검증 상태 초기화 안내), `set-status`.

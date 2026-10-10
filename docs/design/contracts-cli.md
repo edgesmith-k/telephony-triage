@@ -248,10 +248,12 @@ stdin: PostToolUse hook 입력 JSON (argparse 없음)
   - jira_count?
   - jira_recent?
 - pending_causes?
-- unjudged?(시그니처 시간 초과·오류로 S를 정하지 못한 유형(match.json types[].S null). 있을 때만, 캐시 저장 안 함)
+- unjudged?(시그니처 시간 초과·오류로 S·C를 정하지 못한 유형·원인(match.json types[].S·causes[].C null). count = 유형 수. 있을 때만, 캐시 저장 안 함)
   - count
   - types?[≤5]
-  - errors?[≤2]({signature, error(≤80)}; 4KB 압축 시 types→errors 순으로 뺌)
+  - cause_count?(C를 정하지 못한 원인 수(match.json causes[].C null, 있을 때만))
+  - causes?[≤5](그 원인 ID(있을 때만))
+  - errors?[≤2]({signature, error(≤80)} — 판정 불가 항목의 오류(없으면 매처 errors[]); 4KB 압축 시 types→causes→errors 순으로 뺌)
 - no_candidate?
   - search_hits
   - error_events[≤8]({ts, tag, event, phone, request?, error?, code?, reason?, cause?}(각 ≤40자, 있을 때만; 4KB 압축 시 4개·부가 필드 없음))

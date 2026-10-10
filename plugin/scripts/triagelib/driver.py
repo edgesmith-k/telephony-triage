@@ -17,15 +17,32 @@ from .report import ReportMixin, _ref_label, _unique_evidence
 
 
 def _unjudged(match: dict) -> dict | None:
-    """match.json에서 판정 불가(시그니처 시간 초과·오류로 `S: null`) 유형 요약. 오류가 없으면 None.
-    충족된 유형의 다른 시그니처만 오류였으면 `count` 0에 `errors`만 채운다."""
+    """match.json에서 판정 불가(시그니처 시간 초과·오류로 `S: null`·`C: null`) 유형·원인 요약. 오류가 없으면 None.
+    대표 오류는 판정 불가 항목의 `error`에서 고른다. 충족된 유형의 다른 시그니처만 오류였으면(S/C 영향 없음)
+    `count` 0에 `errors`만 채운다(그래도 재사용 캐시는 쓰지 않는다)."""
     errors = match.get("errors") or []
-    types = [t["type"] for t in match.get("types") or [] if t.get("S") is None]
-    if not errors and not types:
+    types = [t for t in match.get("types") or [] if t.get("S") is None]
+    causes = [c for c in match.get("causes") or [] if c.get("C") is None]
+    if not errors and not types and not causes:
         return None
-    return {"count": len(types), "types": types[:5],
-            "errors": [{"signature": _clip(e.get("signature"), 80), "error": _clip(e.get("error"), 80)}
-                       for e in errors[:2]]}
+    picked = []
+    for item in types + causes:
+        sig, _, msg = str(item.get("error") or "").partition(": ")
+        if sig and {"signature": sig, "error": msg} not in picked:
+            picked.append({"signature": sig, "error": msg})
+    if not picked:
+        picked = [{"signature": e.get("signature") or e.get("extractor") or e.get("code"), "error": e.get("error")}
+                  for e in errors]
+    out = {"count": len(types), "types": [t["type"] for t in types][:5]}
+    if causes:
+        out.update(cause_count=len(causes), causes=[c["cause"] for c in causes][:5])
+    out["errors"] = [{"signature": _clip(e["signature"], 80), "error": _clip(e["error"], 80)} for e in picked[:2]]
+    return out
+
+
+def _unjudged_label(u: dict) -> str:
+    """`판정 불가 유형 N개` 또는 `판정 불가 유형 N·원인 M개`."""
+    return f"판정 불가 유형 {u['count']}" + (f"·원인 {u['cause_count']}개" if u.get("cause_count") else "개")
 
 
 class Driver(AnchorMixin, CacheMixin, ReportMixin):
@@ -702,6 +719,8 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         match_meta = self.write_meta(anchor)
         match = self.match(events_path, match_meta, self.job / "match.json")
         self.focus = list((match.get("step_focus") or {}).get("types") or [])
+        unjudged = _unjudged(match)
+        cause_unjudged = {c["type"] for c in match.get("causes") or [] if c.get("C") is None}
         candidates = []
         for c in match.get("candidates") or []:
             cand = {"type": c["type"], "cause": c["cause"], "title": _clip(c.get("title"), 60),
@@ -715,6 +734,8 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
                     "fix_judgement": (c.get("fix_judgement") or {}).get("judgement"),
                     "fix_message": _clip((c.get("fix_judgement") or {}).get("message"), 100),
                     "related": [r.get("cause") for r in c.get("related") or []]}
+            if c["cause"] is None and c["type"] in cause_unjudged:   # report.md 전용: 원인 미확인이 아니라 판정 불가
+                cand["_cause_unjudged"] = True
             if c.get("version_match") is False:   # 표시 전용 (순위·score 무관)
                 cand["_version_mismatch"] = c.get("android_versions")   # report.md 전용
             if c["cause"]:
@@ -733,10 +754,9 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         for cand in candidates:
             cand.pop("_code_refs", None)
         extra_warnings = [_clip(w.get("message"), 120) for w in (events.get("warnings") or []) + (match.get("warnings") or [])]
-        unjudged = _unjudged(match)
         if unjudged:
             err = (unjudged.get("errors") or [{}])[0]
-            extra_warnings.append(_clip(f"판정 불가 유형 {unjudged['count']}개 — 시그니처 시간 초과·오류: "
+            extra_warnings.append(_clip(f"{_unjudged_label(unjudged)} — 시그니처 시간 초과·오류: "
                                         f"{err.get('signature')}: {err.get('error')}", 120))
         if cov.get("clock_anomalies"):
             extra_warnings.append("시계 이상(재부팅·NITZ 전 가능) — 증상 시각 스캔(--answer time=…)을 제안한다")

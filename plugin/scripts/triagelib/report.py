@@ -166,6 +166,7 @@ def fit(result: dict) -> dict:
               lambda: cands and cands[0].update(evidence=cands[0]["evidence"][:3]),
               lambda: _trim_error_events(result),
               lambda: (result.get("unjudged") or {}).pop("types", None),
+              lambda: (result.get("unjudged") or {}).pop("causes", None),
               lambda: (result.get("unjudged") or {}).pop("errors", None),
               lambda: _drop_order_last(result),
               lambda: _drop_clock_reason(result),
@@ -291,6 +292,7 @@ class ReportMixin:
         (final.get("no_candidate") or {}).pop("_unextracted_tags", None)   # report.md 전용
         for cand in final.get("candidates") or []:
             cand.pop("_version_mismatch", None)
+            cand.pop("_cause_unjudged", None)
             for e in cand["evidence"]:
                 e.pop("_ref", None)
         final = fit(final)
@@ -307,6 +309,7 @@ class ReportMixin:
             self.save_job(core, parts, request_hash, run_no, seq, hit, candidates)   # `_ref`를 지우기 전에(리포트 재현용)
         for cand in candidates:
             cand.pop("_version_mismatch", None)
+            cand.pop("_cause_unjudged", None)
             for e in cand["evidence"]:
                 e.pop("_ref", None)
         result = final
@@ -374,10 +377,15 @@ class ReportMixin:
         if cands:
             top = cands[0]
             label = {"high": "높음", "medium": "중간", "low": "낮음"}.get(top["confidence"], top["confidence"])
-            cause = f"{top['cause']} {top['title']}" if top["cause"] else "원인 미확인"
+            if top["cause"]:
+                cause = f"{top['cause']} {top['title']}"
+            elif top.get("_cause_unjudged"):    # 원인 시그니처 오류(C: null): 원인 미확인으로 단정하지 않는다
+                cause = "원인 판정 불가(시그니처 시간 초과·오류 — 원인 미확인으로 단정하지 않음)"
+            else:
+                cause = "원인 미확인"
             lines.append(f"- 분류 후보: {top.get('category')} > {top['type']} > {cause} "
                          f"(규칙 일치 점수 {top['score']}, 일치 수준 {label} — 진단 확신도 아님"
-                         f"{'' if top['C'] else ', 유형 일치·원인 미확인'})")
+                         f"{'' if top['C'] else (', 유형 일치·원인 판정 불가' if top.get('_cause_unjudged') else ', 유형 일치·원인 미확인')})")
             lines.append(f"- 근거 로그 (마스킹, 슬롯 phone {','.join(map(str, top['phones'])) or '?'}):")
             lines += [f"  - {e['ts']} {e['tag']} {e['msg']}" + (f" ({e['_ref']})" if e.get("_ref") else "")
                       for e in top["evidence"]]
@@ -398,15 +406,19 @@ class ReportMixin:
             text = f"오류·거부·타임아웃 이벤트: 추출 이벤트 기준 {total}건"
             if unext:
                 tags = ", ".join(f"{t['tag']} {t['lines']}줄" for t in hints.get("_unextracted_tags") or [])
-                text += f" (수집 태그 W/E 줄 중 이벤트로 추출 안 된 줄 {unext}건" + (f": {tags}" if tags else "") + ")"
+                text += f" (수집 태그 W/E/F 줄 중 이벤트로 추출 안 된 줄 {unext}건" + (f": {tags}" if tags else "") + ")"
             lines.append(add(9, text) if unext and not total else f"- {text}")
             lines += [f"  - {_error_line(e)}" for e in (hints.get("error_events") or [])[:8]]
         if unjudged:
             err = (unjudged.get("errors") or [{}])[0]
-            ids = ", ".join(unjudged.get("types") or [])
-            lines.append(add(6, f"판정 불가 유형: {unjudged['count']}개" + (f" ({ids})" if ids else "")
-                                + f" — 시그니처 시간 초과·오류 {err.get('signature')}: {err.get('error')}. "
-                                "후보 순위·'후보 없음'은 불완전하다 (matcher.pattern_timeout_ms·시그니처 확인)"))
+            where = f"시그니처 시간 초과·오류 {err.get('signature')}: {err.get('error')}"
+            if unjudged.get("count") or unjudged.get("cause_count"):
+                ids = ", ".join((unjudged.get("types") or []) + (unjudged.get("causes") or []))
+                n = f"{unjudged['count']}" + (f"·원인 {unjudged['cause_count']}" if unjudged.get("cause_count") else "")
+                lines.append(add(6, f"판정 불가 유형: {n}개" + (f" ({ids})" if ids else "") + f" — {where}. "
+                                    "후보 순위·'후보 없음'·'원인 미확인'은 불완전하다 (matcher.pattern_timeout_ms·시그니처 확인)"))
+            else:     # 충족된 유형의 다른 시그니처만 오류: S/C는 그대로, 근거 선택만 달라질 수 있다
+                lines.append(add(6, f"{where} — 충족된 유형의 다른 시그니처라 S/C는 그대로(근거 선택은 달라질 수 있다)"))
         if anchor and (not cands or not cands[0]["C"]):
             lines.append("- 힌트: 실패 스텝 구간 기준으로 좁게 분석했다. 원인이 스텝 시작 전에 있었을 수 있다 — "
                          "`--answer anchor=off`로 다시 실행하면 Jira 발생 시각 기준 범위로 넓힌다")

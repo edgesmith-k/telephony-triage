@@ -84,7 +84,7 @@
      "items": {"$ref": "#/$defs/candidate"}
     },
     "pending_causes": {"type": "array"},
-    "unjudged": {"type": "object", "required": ["count"], "properties": {"count": {"type": "integer"}, "types": {"type": "array", "maxItems": 5}, "errors": {"type": "array", "maxItems": 2, "description": "{signature, error(≤80)}; 4KB 압축 시 types→errors 순으로 뺌"}}, "description": "시그니처 시간 초과·오류로 S를 정하지 못한 유형(match.json types[].S null). 있을 때만, 캐시 저장 안 함"},
+    "unjudged": {"type": "object", "required": ["count"], "properties": {"count": {"type": "integer"}, "types": {"type": "array", "maxItems": 5}, "cause_count": {"type": "integer", "description": "C를 정하지 못한 원인 수(match.json causes[].C null, 있을 때만)"}, "causes": {"type": "array", "maxItems": 5, "description": "그 원인 ID(있을 때만)"}, "errors": {"type": "array", "maxItems": 2, "description": "{signature, error(≤80)} — 판정 불가 항목의 오류(없으면 매처 errors[]); 4KB 압축 시 types→causes→errors 순으로 뺌"}}, "description": "시그니처 시간 초과·오류로 S·C를 정하지 못한 유형·원인(match.json types[].S·causes[].C null). count = 유형 수. 있을 때만, 캐시 저장 안 함"},
     "no_candidate": {
      "type": "object",
      "required": ["search_hits", "error_events", "error_event_total"],

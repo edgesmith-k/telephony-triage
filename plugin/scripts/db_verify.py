@@ -454,11 +454,11 @@ def r3(run: Run, t: Targets) -> dict:
         if not fixtures:
             checks.append(_check(cid, "skipped", NO_NEGATIVE, kind="cause"))
             continue
-        hits, errored = [], []
+        hits, errored, other = [], [], []
         for item in fixtures:
             if cid in item["expect"].also_allowed:
                 continue
-            errored += _errored(run, item)
+            errored += _errored(run, item, {cid}, other)
             if run.C(_paths(item), cid):
                 sig = next((c["signature"] for c in run.result(_paths(item))["causes"] if c["cause"] == cid), None)
                 hits.append({"fixture": item["rel"], "kind": item["fx"].kind, "signature": sig,
@@ -467,12 +467,13 @@ def r3(run: Run, t: Targets) -> dict:
             checks.append(_check(cid, "fail", f"{cid}: C=1 — {', '.join(h['fixture'] for h in hits)}", kind="cause",
                                  signatures=keys, hits=hits,
                                  allow_cause_drafts=[h["allow_cause_draft"] for h in hits if h["allow_cause_draft"]],
-                                 **({"errors": errored} if errored else {})))
+                                 **_err_extra(errored, other)))
         elif errored:
-            checks.append(_check(cid, "fail", _errored_reason(errored), kind="cause", signatures=keys, errors=errored))
+            checks.append(_check(cid, "fail", _errored_reason(errored), kind="cause", signatures=keys,
+                                 **_err_extra(errored, other)))
         else:
             checks.append(_check(cid, "pass", f"음성·다른 원인 fixture {len(fixtures)}개에서 C=0", kind="cause",
-                                 signatures=keys))
+                                 signatures=keys, **_err_extra([], other)))
     negatives = _negatives(run)
     for tid in sorted(t.symptom):
         keys = [c.sig.key for c in t.symptom[tid]]
@@ -482,24 +483,48 @@ def r3(run: Run, t: Targets) -> dict:
         hits = [{"fixture": i["rel"], "signature": next((x["signature"] for x in run.result(_paths(i))["types"]
                                                         if x["type"] == tid), None)}
                 for i in negatives if run.S(_paths(i), tid)]
-        errored = [e for i in negatives for e in _errored(run, i)]
+        other = []
+        errored = [e for i in negatives for e in _errored(run, i, {tid}, other)]
         if hits:
             checks.append(_check(tid, "fail", f"{tid}: 음성 fixture에서 S=1 — {', '.join(h['fixture'] for h in hits)}",
-                                 kind="symptom", signatures=keys, hits=hits, **({"errors": errored} if errored else {})))
+                                 kind="symptom", signatures=keys, hits=hits, **_err_extra(errored, other)))
         elif errored:
-            checks.append(_check(tid, "fail", _errored_reason(errored), kind="symptom", signatures=keys, errors=errored))
+            checks.append(_check(tid, "fail", _errored_reason(errored), kind="symptom", signatures=keys,
+                                 **_err_extra(errored, other)))
         else:
             checks.append(_check(tid, "pass", f"음성 fixture {len(negatives)}개에서 S=0", kind="symptom",
-                                 signatures=keys))
+                                 signatures=keys, **_err_extra([], other)))
     for cid in t.pending:
         checks.append(_check(cid, "skipped", PENDING, kind="cause"))
     return aggregate("R3", checks)
 
 
-def _errored(run: Run, item: dict) -> list[dict]:
-    """fixture 결과에 시그니처·extractor 오류가 있으면 [{fixture, errors}] — 그 fixture의 C/S는 판정 불가다."""
-    errors = run.result(_paths(item)).get("errors") or []
-    return [{"fixture": item["rel"], "errors": errors[:3]}] if errors else []
+def _split_errors(errors: list[dict], owners: set[str]) -> tuple[list[dict], list[dict]]:
+    """오류를 (대상 판정을 막는 것, 다른 시그니처 오류)로 나눈다. 시그니처 오류는 키 앞부분(`<유형·원인 ID>/`)이
+    `owners`일 때만 대상 오류다. extractor·관측 오류(시그니처 키 없음)는 이벤트 자체가 빠질 수 있어 항상 대상 오류다."""
+    mine, other = [], []
+    for e in errors:
+        sig = e.get("signature")
+        (mine if not sig or str(sig).split("/", 1)[0] in owners else other).append(e)
+    return mine, other
+
+
+def _errored(run: Run, item: dict, owners: set[str], other: list[dict]) -> list[dict]:
+    """fixture 결과에 대상(`owners`) 시그니처·extractor 오류가 있으면 [{fixture, errors}] — 대상의 C/S는 판정 불가다.
+    다른 시그니처 오류는 `other`에 모은다(실패로 보지 않고 표시만)."""
+    mine, rest = _split_errors(run.result(_paths(item)).get("errors") or [], owners)
+    if rest:
+        other.append({"fixture": item["rel"], "errors": rest[:3]})
+    return [{"fixture": item["rel"], "errors": mine[:3]}] if mine else []
+
+
+def _err_extra(errored: list[dict], other: list[dict]) -> dict:
+    """check 행에 붙일 `errors`(대상 판정 불가)·`other_errors`(다른 시그니처 오류 — 표시만) 키."""
+    out = {"errors": errored} if errored else {}
+    if other:
+        out["other_errors"] = other
+        out["note"] = f"다른 시그니처 오류 {len(other)}개 fixture (대상 판정에는 영향 없음)"
+    return out
 
 
 def _errored_reason(errored: list[dict]) -> str:
@@ -550,6 +575,7 @@ def r6(run: Run, t: Targets, samples: list[tuple[Path, str]]) -> dict:
                 "blocking": False}
     causes = [c for c in t.r2 if not run.db.cause_by_id(c).pending]
     types = sorted(t.symptom) or sorted({run.db.cause_by_id(c).type_id for c in t.r2})
+    all_types = {x.id for x in run.db.types}
     rows = []
     for path, expect in samples:
         if not path.is_file():
@@ -557,7 +583,10 @@ def r6(run: Run, t: Targets, samples: list[tuple[Path, str]]) -> dict:
         res = run.result([path])
         c1 = sorted(c["cause"] for c in res["causes"] if c["C"])
         s1 = sorted(x["type"] for x in res["types"] if x["S"])
-        if res.get("errors"):       # 시그니처·extractor 오류: 판정 불가 — 통과로 보이지 않게 한다
+        # 대상(정상 표본이면 모든 유형의 증상, 아니면 대상 원인·유형) 시그니처·extractor 오류: 판정 불가 — 통과로 보이지 않게 한다
+        owners = all_types if expect == "nomatch" else set(causes) if causes else set(types)
+        mine, other = _split_errors(res.get("errors") or [], owners)
+        if mine:
             ok, why = False, f"{path.name}: 시그니처·extractor 오류 — 판정 불가"
         elif expect == "nomatch":
             ok = not s1
@@ -573,7 +602,8 @@ def r6(run: Run, t: Targets, samples: list[tuple[Path, str]]) -> dict:
         else:
             ok, why = True, "검증 대상 없음"
         rows.append({"sample": str(path), "expect": expect, "status": "pass" if ok else "fail", "reason": why,
-                     "C": c1, "S": s1, **({"errors": res["errors"][:3]} if res.get("errors") else {})})
+                     "C": c1, "S": s1, **({"errors": mine[:3]} if mine else {}),
+                     **({"other_errors": other[:3]} if other else {})})
     failed = [r for r in rows if r["status"] == "fail"]
     return {"id": "R6", "status": "fail" if failed else "pass",
             "reason": (f"표본 {len(failed)}/{len(rows)}개 기대와 다름 (사용자가 진행 여부를 고른다)" if failed
