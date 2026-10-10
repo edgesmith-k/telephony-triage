@@ -15,6 +15,7 @@
   본다. `phone_id: null` 레코드는 어느 슬롯과도 맞는다. false면 슬롯을 가리지 않는다.
 - `sequence: [id...]` — 구간 안에서 각 조건의 **첫 충족 레코드**가 나열 순서대로
   앞선다(시각, 같으면 입력 순서). `must_not_match`는 넣을 수 없다.
+  시계 이상 구간의 근거·같은 파일 줄 순서 역전은 `Result.flags`로 표시만 한다(판정 불변).
 - 패턴이 시간 상한을 넘기면(`common/patterns.py`) 그 시그니처는 `error`이고 불충족이다.
 """
 
@@ -126,6 +127,7 @@ class Result:
     same_phone: bool = True
     window_sec: float = 0
     window: tuple[datetime, datetime] | None = None
+    flags: list[str] = field(default_factory=list)  # "clock_anomaly" | "line_order" (표시만)
 
 
 def _parse_ts(value: str) -> datetime:
@@ -136,8 +138,14 @@ class Evaluator:
     """한 이벤트 목록에 대해 시그니처를 평가한다. 패턴 결과는 캐시한다."""
 
     def __init__(self, events: list[dict], lo: datetime | None, hi: datetime | None,
-                 timeout_ms: int | None = None, ids: list[int] | None = None):
+                 timeout_ms: int | None = None, ids: list[int] | None = None,
+                 anomalies: list[tuple[datetime, datetime]] = (),
+                 line_order_tolerance_sec: float | None = None):
         # `ids[i]`: `events[i]`의 원래 입력 문서 `events[]` 안 순번 (근거 `event_index`). 없으면 `i`.
+        # `anomalies`: 시계 이상 의심 시각 구간. `line_order_tolerance_sec`: sequence 이웃 근거가
+        # 같은 파일에서 줄 순서는 거꾸로인데 시각이 이만큼 이상 앞서면 `line_order`(없으면 검사 안 함).
+        self.anomalies = list(anomalies)
+        self.line_order_tolerance_sec = line_order_tolerance_sec
         self.events = events
         self.ids = ids
         self.dts = [_parse_ts(e["ts"]) for e in events]
@@ -243,8 +251,28 @@ class Evaluator:
             seen.add(indices)
             evidence = self._evidence(sig, indices)
             results.append(Result(sig.key, True, evidence=evidence, same_phone=sig.same_phone,
-                                  window_sec=sig.window_sec, window=(found[2], found[3])))
+                                  window_sec=sig.window_sec, window=(found[2], found[3]),
+                                  flags=self._flags(sig, indices)))
         return results
+
+    def _flags(self, sig: Signature, indices: tuple[int, ...]) -> list[str]:
+        """판정에 쓰지 않는 신뢰 표시. 근거가 시계 이상 구간에 걸치거나 sequence 줄 순서가 역전됐는가."""
+        flags = []
+        dts = [self.dts[i] for i in indices]
+        start, end = min(dts), max(dts)
+        if any(a <= end and start <= b for a, b in self.anomalies):
+            flags.append("clock_anomaly")
+        if sig.sequence and self.line_order_tolerance_sec is not None:
+            order = {c.id: n for n, c in enumerate(sig.positives) if c.id}
+            seq = [indices[order[s]] for s in sig.sequence]
+            for x, y in zip(seq, seq[1:]):
+                rx, ry = self.events[x].get("line_ref"), self.events[y].get("line_ref")
+                if (rx and ry and rx.get("line_no") and ry.get("line_no")
+                        and rx["file_index"] == ry["file_index"] and ry["line_no"] < rx["line_no"]
+                        and (self.dts[y] - self.dts[x]).total_seconds() >= self.line_order_tolerance_sec):
+                    flags.append("line_order")
+                    break
+        return sorted(set(flags))
 
     def _evidence(self, sig: Signature, indices: tuple[int, ...]) -> list[dict]:
         evidence = []

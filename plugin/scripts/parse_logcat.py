@@ -70,7 +70,7 @@ def _ril_events(rec: dict, rules: parser_rules.Rules, last_ts: str | None) -> li
     ann = rec.get("ril")
     if not ann or ann["dir"] not in ("req", "resp"):
         return []
-    # A different buffer/device/restart cannot extend this request's observation.
+    # 다른 장치·재시작·시계 불연속은 이 요청의 관측을 연장하지 않는다.
     last_ts = ann.get("observed_until", rec["ts"])
     rule = rules.requests.get(ann["request"])
     if not rule:

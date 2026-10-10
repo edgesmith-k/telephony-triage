@@ -96,19 +96,18 @@ class ReferenceBackend(ParserBackend):
             stem = re.sub(r"\.\d+$", "", path.name)
             stem = re.sub(r"[._-]\d+(?=\.log$)", "", stem)
             chunks: dict[tuple, list[dict]] = {}
-            previous, epoch = {}, 0
+            prev, epoch = None, 0
             for line in lines:
-                prev = previous.get(line.buffer)
                 delta = (line.dt - prev).total_seconds() if prev else 0
                 if (delta < -logcat.BACKWARD_THRESHOLD_SEC or delta >= logcat.JUMP_THRESHOLD_SEC
                         or line.tag == "boot_progress_start"
                         or (line.tag.lower() == "kernel" and line.msg.startswith("Linux version "))):
                     epoch += 1
-                previous[line.buffer] = line.dt
-                chunks.setdefault((line.buffer, epoch), []).append(self._line_record(line))
-            for (buffer, segment), records in chunks.items():
-                # A file containing a discontinuity cannot safely join another file.
-                key = (path.parent, stem, buffer, (index, segment) if epoch else None)
+                prev = line.dt
+                chunks.setdefault(epoch, []).append(self._line_record(line))
+            for segment, records in chunks.items():
+                # 불연속이 있는 파일은 다른 파일과 잇지 않는다.
+                key = (path.parent, stem, (index, segment) if epoch else None)
                 streams.setdefault(key, []).append(records)
         for chunks in streams.values():
             chunks.sort(key=lambda records: records[0]["_dt"])
@@ -125,7 +124,7 @@ class ReferenceBackend(ParserBackend):
                 ril.pair(records)  # Pair the entire capture before window filtering.
                 out.extend(records)
         records, out = out, []
-        if self._ril_vendor:  # 벤더 줄은 다른 버퍼 청크일 수 있어 전체 레코드로 한 번
+        if self._ril_vendor:  # 벤더 줄은 다른 에포크·파일일 수 있어 전체 레코드로 한 번
             ril.link_vendor(records, self._ril_vendor)
         for rec in records:
             if window and not (window[0] <= rec["_dt"] <= window[1]):

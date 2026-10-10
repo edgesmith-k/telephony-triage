@@ -14,7 +14,7 @@
 **같은 프로세스에서** 불러 수행한다. 스크립트의 계약(인자·출력·종료 코드)은 그대로이고, 이 파일은 순서와 요약만 맡는다.
 
 출력 (`JOB` = `<work_dir>/<KEY>`, `--offline-db`면 `--out`)
-- `JOB/analysis.json` (≤ 4KB): LLM이 읽는 유일한 분석 결과. stdout에도 같은 내용을 낸다.
+- `JOB/analysis.json` (≤ 4KB, 공백 없는 compact JSON): LLM이 읽는 유일한 분석 결과. stdout에도 같은 내용을 낸다.
 - `JOB/report.md`: Step 6 리포트 초안(결정적인 칸은 채우고, 원인 설명·코드 위치는 `TODO(LLM)`로 둔다).
 - `JOB/trace.jsonl`: 호출마다 `{ts, step, script, args, exit, ms, out_bytes, stderr}` 한 줄.
 - `JOB/explore-input.json`: 후보 없음·원인 미확인(1위 C=0)이고 `explore.when`이 `never`가 아닐 때만. 탐색 분석 입력(마스킹된 값만:
@@ -22,8 +22,9 @@
 - `triage.py explore <KEY> [--out <dir>]`: 사용자가 탐색 분석에 동의한 뒤(또는 `--explore`·`explore.when: always`) `JOB/explore-input.json`과
   `events.json`으로 `JOB/timeline.md`(마스킹된 요약 타임라인, 줄 수 상한 기본 200)를 만들고 `report.md`의 탐색 분석 줄을 갱신한다.
   출력 `{timeline, lines, total}`. 종료 코드 1 = 해당 없음(입력 파일 없음), 2 = 사용 오류·`events.json` 없음. lock·trace는 쓰지 않는다.
-- `analysis.json`의 `must_show`(있을 때만, ≤4줄·줄당 ≤160자): 리포트 줄 중 사용자에게 꼭 보여야 하는 것(분석 전용·읽기 전용·1위 변화 재분석·실패 스텝·
-  장비 시각 미사용·로그 범위 이상·범위 밖 오류·파서 규칙에 없는 태그). `report.md`의 줄과 같은 문구다.
+- `analysis.json`의 `must_show`(있을 때만, ≤6줄·4KB 압축 시 4줄·줄당 ≤160자): 리포트 줄 중 사용자에게 꼭 보여야 하는 것(분석 전용·읽기 전용·
+  1위 변화 재분석·실패 스텝·장비 시각 미사용·판정 불가 유형·원인·슬롯 불일치·시계 이상 구간 근거·로그 범위 이상·범위 밖 오류·
+  파서 규칙에 없는 태그·미추출 W/E 줄, 순서는 `07-workflow.md §Step 6`). `report.md`의 줄과 같은 문구다.
 - `JOB/analysis-cache.json`: 입력 해시(`request_hash`, 부분별 `parts`)가 같으면 파싱·매칭을 다시 하지 않고 이 core를 다시 보여 준다
   (RF-7, `07-workflow.md §입력 재사용`). `--offline-db`·`--refresh`·`needs_input`/오류 실행은 쓰지도 읽지도 않는다. 마스킹된 값만 담는다.
 - `--analysis-only`(RF-7): 이슈 DB에 기록하지 않는 분석 전용 실행. `--dry-run`과 함께 못 쓴다(종료 코드 2). lock·스냅샷·Jira·코드·파싱·매칭·
@@ -87,7 +88,7 @@ from triagelib.cache import State  # noqa: E402
 from triagelib.core import (ANALYSIS_MAX, EXPLORE_DONE_LINE, EXPLORE_INPUT_FILE, STATE_FILE, TIMELINE_FILE,  # noqa: E402,F401
                             Fail, NeedsInput, Runner, Stopped, _clip)
 from triagelib.driver import Driver  # noqa: E402
-from triagelib.report import _unique_evidence, fit, schema_violation, timeline  # noqa: E402,F401 — 테스트가 쓴다
+from triagelib.report import _unique_evidence, dumps, fit, schema_violation, timeline  # noqa: E402,F401 — 테스트가 쓴다
 
 
 # -- CLI ------------------------------------------------------------------------------------------
@@ -132,7 +133,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _emit(result: dict) -> None:
-    print(json.dumps(result, ensure_ascii=False, indent=1))
+    print(dumps(result))
 
 
 def cmd_release(args, defaults: dict) -> int:

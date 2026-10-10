@@ -242,6 +242,7 @@ stdin: PostToolUse hook 입력 JSON (argparse 없음)
   - fix_judgement?
   - fix_message?
   - related?
+  - clock_flags?
   - resolution?
   - resolution_verification?
   - fix_status?

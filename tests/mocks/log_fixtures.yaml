@@ -19,3 +19,4 @@ fixtures:
   - {name: clock-anomaly,           scenario: clock-anomaly.yaml,            desc: 시계 역행·점프}
   - {name: step-anchor,             scenario: step-anchor.yaml,              desc: 스텝 마커(Step 3 PASS·Step 5 FAIL) + IMS 403·데이터 설정 OFF}
   - {name: step-order,              scenario: step-order.yaml,               desc: 스텝 마커 없는 로그 — 비행기 모드·망 등록 unsol·데이터 설정 변경 흔적 + 이른 IMS 403}
+  - {name: ril-buffer-header,       scenario: ril-buffer-header.yaml,        desc: 파일 중간 버퍼 헤더 뒤 RIL 응답 (헤더는 짝 맞춤 경계가 아님)}

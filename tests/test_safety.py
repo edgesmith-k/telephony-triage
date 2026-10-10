@@ -422,7 +422,7 @@ def test_r4_rotated_response_pairs_before_windowing(safety_root, tmp_path):
     assert len(response_only) == 1 and response_only[0]["ril"]["latency_ms"] == 1000
 
 
-@pytest.mark.parametrize("boundary", ["buffer-file", "device-directory", "buffer-header", "clock", "boot", "pid"])
+@pytest.mark.parametrize("boundary", ["buffer-file", "device-directory", "clock", "boot", "pid"])
 def test_r4_unrelated_coverage_does_not_prove_no_response(safety_root, tmp_path, boundary):
     first = tmp_path / "radio.log"
     first.write_text(ril_line(0, "[0043]> SEND_SMS"), encoding="utf-8")
@@ -431,10 +431,9 @@ def test_r4_unrelated_coverage_does_not_prove_no_response(safety_root, tmp_path,
     if boundary == "device-directory":
         second = tmp_path / "other-device" / "radio.log"
         second.parent.mkdir()
-    elif boundary in ("buffer-header", "clock", "boot", "pid"):
+    elif boundary in ("clock", "boot", "pid"):
         second = first
-        prefix = {"buffer-header": "--------- beginning of main\n", "clock":
-                  "09-22 11:59:00.000  1234  1234 I DNC-0: clock reset\n",
+        prefix = {"clock": "09-22 11:59:00.000  1234  1234 I DNC-0: clock reset\n",
                   "boot": "09-22 12:00:01.000  1  1 I boot_progress_start: 1\n", "pid": ""}[boundary]
         if boundary == "pid":
             tail = ril_line(60, "[UNSL]< UNSOL_RESPONSE_NEW_SMS", pid=2345)
@@ -443,6 +442,22 @@ def test_r4_unrelated_coverage_does_not_prove_no_response(safety_root, tmp_path,
     paths = [first] if first == second else [first, second]
     doc = parse_synthetic(safety_root, paths)
     assert not any(e["event"] == "ril_no_response" for e in doc["events"])
+
+
+def test_r4_buffer_header_is_not_a_boundary(safety_root, tmp_path):
+    """`beginning of <buffer>`는 병합 logcat에서 그 버퍼의 첫 줄 위치일 뿐이다(04 §5.8 (2))."""
+    path = tmp_path / "radio.log"
+    path.write_text(ril_line(0, "[0100]> SETUP_DATA_CALL") + "--------- beginning of crash\n" +
+                    ril_line(40, "[0100]< SETUP_DATA_CALL error=NONE"), encoding="utf-8")
+    doc = parse_synthetic(safety_root, [path])
+    rils = [e for e in doc["events"] if e.get("ril")]
+    assert rils and all(e["ril"]["latency_ms"] == 40000 for e in rils)
+    assert any(e["event"] == "ril_timeout" for e in doc["events"])
+    # 헤더 뒤에도 같은 RILJ 흐름이 이어지면 관측이 계속된 것이다(응답 없음 판정 가능).
+    path.write_text(ril_line(0, "[0043]> SEND_SMS") + "--------- beginning of main\n" +
+                    ril_line(60, "[UNSL]< UNSOL_RESPONSE_NEW_SMS"), encoding="utf-8")
+    doc = parse_synthetic(safety_root, [path])
+    assert any(e["event"] == "ril_no_response" for e in doc["events"])
 
 
 def test_r4_reused_serial_after_boot_is_not_paired(safety_root, tmp_path):

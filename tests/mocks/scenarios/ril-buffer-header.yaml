@@ -1,0 +1,15 @@
+# 파서 fixture: 파일 중간 버퍼 헤더 (04-parser-matching.md §5.8 (2)).
+#  - 병합 logcat에서 `--------- beginning of crash`는 crash 버퍼의 첫 줄이 나온 자리일 뿐이다.
+#  - 헤더 뒤 RILJ 응답은 앞 요청과 짝지어져야 한다: SETUP_DATA_CALL 40초 → ril_timeout(30000ms).
+# RIL 출력 형식과 문구는 placeholder다(dual-sim-ril.yaml과 같은 형식).
+name: ril-buffer-header
+start: "2026-09-22T12:00:00+09:00"
+default_phone: 0
+pid: 1234
+tid: 1244
+entries:
+  - {at: 0, ril_request: SETUP_DATA_CALL, serial: 100, args: "apn=default"}
+  - {beginning_of: crash}
+  - {after: 20, tag: AndroidRuntime, level: E, buffer: crash, pid: 4321, phone: null, msg: "FATAL EXCEPTION: main (synthetic)"}
+  - {after: 20, ril_response: SETUP_DATA_CALL, serial: 100, result: "error=NONE"}
+  - {after: 5, tag: "DNC-{phone}", level: I, msg: "tail"}

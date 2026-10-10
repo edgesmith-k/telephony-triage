@@ -136,6 +136,7 @@
     "fix_judgement": {},
     "fix_message": {},
     "related": {"type": "array"},
+    "clock_flags": {"type": "array", "items": {"enum": ["clock_anomaly", "line_order"]}},
     "resolution": {},
     "resolution_verification": {},
     "fix_status": {},

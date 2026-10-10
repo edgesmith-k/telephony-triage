@@ -1,0 +1,102 @@
+{
+ "coverage": {
+  "first_ts": "2026-09-22T03:00:00.000Z",
+  "last_ts": "2026-09-22T03:00:45.000Z",
+  "window_in_range": true,
+  "clock_anomalies": []
+ },
+ "warnings": [],
+ "events": [
+  {
+   "ts": "2026-09-22T03:00:00.000Z",
+   "pid": 1234,
+   "tid": 1244,
+   "level": "D",
+   "tag": "RILJ",
+   "msg": "[PHONE0] [0100]> SETUP_DATA_CALL apn=default",
+   "phone_id": 0,
+   "category_hint": "data",
+   "ril": {
+    "serial": 100,
+    "dir": "req",
+    "request": "SETUP_DATA_CALL",
+    "error": null,
+    "paired_ts": "2026-09-22T03:00:40.000Z",
+    "latency_ms": 40000
+   },
+   "event": null,
+   "fields": {},
+   "source": "backend:reference",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 1
+   }
+  },
+  {
+   "ts": "2026-09-22T03:00:40.000Z",
+   "pid": 1234,
+   "tid": 1244,
+   "level": "D",
+   "tag": "RILJ",
+   "msg": "[PHONE0] [0100]< SETUP_DATA_CALL error=NONE",
+   "phone_id": 0,
+   "category_hint": "data",
+   "ril": {
+    "serial": 100,
+    "dir": "resp",
+    "request": "SETUP_DATA_CALL",
+    "error": "NONE",
+    "paired_ts": "2026-09-22T03:00:00.000Z",
+    "latency_ms": 40000
+   },
+   "event": null,
+   "fields": {},
+   "source": "backend:reference",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 4
+   }
+  },
+  {
+   "ts": "2026-09-22T03:00:40.000Z",
+   "pid": 1234,
+   "tid": 1244,
+   "level": "D",
+   "tag": "RILJ",
+   "msg": "[PHONE0] [0100]< SETUP_DATA_CALL error=NONE",
+   "phone_id": 0,
+   "category_hint": "data",
+   "ril": null,
+   "event": "ril_timeout",
+   "fields": {
+    "request": "SETUP_DATA_CALL",
+    "serial": "100",
+    "latency_ms": "40000",
+    "timeout_ms": "30000"
+   },
+   "source": "rules",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 4
+   }
+  },
+  {
+   "ts": "2026-09-22T03:00:45.000Z",
+   "pid": 1234,
+   "tid": 1244,
+   "level": "I",
+   "tag": "DNC-0",
+   "msg": "[PHONE0] tail",
+   "phone_id": 0,
+   "category_hint": "data",
+   "ril": null,
+   "event": null,
+   "fields": {},
+   "source": "backend:reference",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 5
+   }
+  }
+ ]
+}

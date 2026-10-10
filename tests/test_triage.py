@@ -132,7 +132,7 @@ def test_analysis_is_trimmed_to_4kb_when_evidence_is_large(tmp_path):
     result = {"warnings": ["w" * 120] * 10, "files": {"report": "r", "events": "e"},
               "candidates": [{"cause": f"C-{i}", "evidence": [dict(big) for _ in range(10)]} for i in range(3)]}
     out = triage.fit(result)
-    assert len(json.dumps(out, ensure_ascii=False, indent=1).encode("utf-8")) <= 4096
+    assert len(triage.dumps(out).encode("utf-8")) <= 4096   # analysis.json 파일과 같은 직렬화(compact)
     assert out["candidates"][0]["evidence"] and out["truncated"] is False
 
 
@@ -667,7 +667,7 @@ def test_fit_keeps_first_must_show_and_stays_within_4kb():
     result = {"warnings": ["w" * 120] * 10, "files": {"report": "r", "events": "e"}, "read_only_hint": "힌트" * 80,
               "must_show": must, "candidates": [{"cause": f"C-{i}", "evidence": [dict(big) for _ in range(10)]} for i in range(3)]}
     out = triage.fit(result)
-    assert len(json.dumps(out, ensure_ascii=False, indent=1).encode("utf-8")) <= 4096 and out["truncated"] is False
+    assert len(triage.dumps(out).encode("utf-8")) <= 4096 and out["truncated"] is False
     assert out["must_show"][0].startswith("분석 전용:")
     # must_show만 커서 다른 줄임으로 부족하면 마지막에 줄당 160자로 자르고 앞 4개만 남긴다
     clipped = triage.fit({"files": {"report": "r"}, "must_show": must})
@@ -1290,3 +1290,64 @@ def test_fit_keeps_must_show_priority_and_unjudged_count_under_4kb():
     out = fit(result)
     assert [m[:2] for m in out["must_show"]] == ["줄0", "줄1", "줄2", "줄3"]
     assert out["unjudged"]["count"] == 1 and "types" not in out["unjudged"] and "causes" not in out["unjudged"]
+
+
+# -- compact JSON · 시계 이상 근거 · 슬롯 불일치 (must_show) --------------------------------------------------
+
+
+def test_analysis_json_is_compact_and_equals_stdout():
+    doc, items = _items()
+    out = tmp("tt-triage-") / "a"
+    meta = _meta(out, items[0]["key"], occurred_at=items[0]["occurred_at"])
+    logs = [str((LABELSET.parent / p).resolve()) for p in items[0]["logs"]]
+    proc = run("triage.py", ["run", items[0]["key"], "--offline-db", SAMPLE, "--out", out, "--logs", *logs,
+                             "--jira-meta", meta, "--tz", doc["tz"], "--year", doc["year"]])
+    assert proc.returncode == 0, proc.stderr
+    text = (out / "analysis.json").read_text(encoding="utf-8")
+    assert "\n " not in text and text == _triage_module().dumps(json.loads(text)) + "\n"
+    assert proc.stdout.strip() == text.strip()
+
+
+def _run_custom(lines: list[str], key: str, **meta_fields) -> tuple[dict, str]:
+    out = tmp("tt-triage-") / "x"
+    log = out.parent / "custom.log"
+    log.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
+    meta = _meta(out, key, occurred_at="2026-09-20T05:30:05.000Z", **meta_fields)
+    analysis = run_json("triage.py", ["run", key, "--offline-db", SAMPLE, "--out", out, "--logs", log,
+                                      "--jira-meta", meta, "--tz", "Asia/Seoul", "--year", 2026])
+    assert len((out / "analysis.json").read_bytes()) <= 4096
+    return analysis, (out / "report.md").read_text(encoding="utf-8")
+
+
+OFF_LINE = "09-20 {}  1234  1244 D DSMGR-0: [PHONE0] notifyDataEnabledChanged: enabled=false, reason=USER, callingPackage=com.android.settings"
+REJECTED_LINE = ("09-20 {}  1234  1244 W DNC-0: [PHONE0] Data evaluation: evaluation reason:DATA_ENABLED_CHANGED, "
+                 "Data disallowed reasons: DATA_DISABLED, candidate profile=null")
+
+
+def test_clock_flagged_top_candidate_is_must_shown():
+    analysis, report = _run_custom([REJECTED_LINE.format("14:30:10.000"), OFF_LINE.format("14:30:02.000")], "MOCK-7420")
+    top = analysis["candidates"][0]
+    assert top["cause"] == "DATA-001-01" and top["clock_flags"] == ["clock_anomaly", "line_order"]
+    line = next(m for m in analysis["must_show"] if m.startswith("시계 이상 구간의 근거:"))
+    assert len(line) <= 160 and line.endswith("[clock_anomaly, line_order]") and f"- {line}" in report
+    order = [m.split(":")[0] for m in analysis["must_show"]]
+    assert order.index("시계 이상 구간의 근거") < order.index("로그 범위")
+    plain, _ = _run_custom([OFF_LINE.format("14:30:00.000"), REJECTED_LINE.format("14:30:02.000")], "MOCK-7421")
+    assert "clock_flags" not in plain["candidates"][0]
+    assert not any(m.startswith("시계 이상 구간의 근거:") for m in plain.get("must_show") or [])
+
+
+def test_top_candidate_slot_mismatch_is_must_shown():
+    lines = [OFF_LINE.format("14:30:00.000"), REJECTED_LINE.format("14:30:02.000")]
+    analysis, report = _run_custom(lines, "MOCK-7422", sim_slot="1")
+    assert analysis["jira"]["sim_slot"] == "1" and analysis["candidates"][0]["phones"] == [0]
+    line = next(m for m in analysis["must_show"] if m.startswith("슬롯 불일치:"))
+    assert "phone 0" in line and "Jira SIM 슬롯은 1" in line and len(line) <= 160 and f"- {line}" in report
+    for extra in ({"sim_slot": "0"}, {}, {"sim_slot": "SIM"}):
+        other, report = _run_custom(lines, "MOCK-7423", **extra)
+        assert not any(m.startswith("슬롯 불일치:") for m in other.get("must_show") or [])
+        assert "슬롯 불일치:" not in report
+    # 시계 이상과 같이 나오면 슬롯 불일치가 앞, 둘 다 로그 범위 줄보다 앞
+    both, _ = _run_custom([REJECTED_LINE.format("14:30:10.000"), OFF_LINE.format("14:30:02.000")], "MOCK-7424", sim_slot="1")
+    order = [m.split(":")[0] for m in both["must_show"]]
+    assert order.index("슬롯 불일치") < order.index("시계 이상 구간의 근거") < order.index("로그 범위")

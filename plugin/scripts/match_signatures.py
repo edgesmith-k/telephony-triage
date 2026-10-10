@@ -31,7 +31,8 @@
 
 출력(JSON, stdout): `{mode, candidates[], pending_causes[], types[], causes[], errors[],
 warnings[], ...}`. 후보 = `{type, cause, title, score, confidence, S, C, signature,
-evidence[], bonus, feedback, fix_judgement, related[]}`. 근거 = `{signature, condition, ts, tag, msg, event, fields,
+evidence[], bonus, feedback, fix_judgement, related[], clock_flags?[clock_anomaly|line_order]}`
+(`clock_flags`는 근거가 시계 이상 구간에 걸치거나 sequence 근거의 같은 파일 줄 순서가 역전됐을 때만, 표시 전용). 근거 = `{signature, condition, ts, tag, msg, event, fields,
 phone_id, line_ref, event_index}` (`line_ref`: 이벤트의 로그 줄 위치 `{file_index, line_no}` 또는 null, `event_index`: 입력
 `events[]` 안의 순번 — 입력 문서 순서 기준이다. 점수·판정에는 쓰지 않는다, 04-parser-matching.md §5.8 (6)). 원인 미확인 후보는 `cause: null`.
 `--top N`(기본 3)은 후보 N개와 함께 `types[]`는 S=1, `causes[]`는 C=1인 것만, `pending_causes[]`는 N개만 내고
@@ -44,7 +45,7 @@ import argparse
 import json
 import re
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 SCRIPTS = Path(__file__).resolve().parent
@@ -55,6 +56,7 @@ from common import compiled as compiled_cache  # noqa: E402
 from common.exitcodes import OK, USAGE  # noqa: E402
 from common.patterns import DEFAULT_TIMEOUT_MS  # noqa: E402
 from common.signatures import Evaluator, SignatureError  # noqa: E402
+from platforms.android.logcat import BACKWARD_THRESHOLD_SEC  # noqa: E402
 
 OUTPUT_SCHEMA = 1
 DEFAULT_SCORING = {
@@ -310,11 +312,30 @@ def _range(events_doc: dict, regress: bool):
     return events, lo, hi, window, order
 
 
+def _clock_regions(events_doc: dict) -> list[tuple[datetime, datetime]]:
+    """`coverage.clock_anomalies` → 시계 이상 의심 시각 구간. 역행(ts T, delta d<0)은 두 번 지나는
+    `[T, T+|d|]`, 점프(d>0)는 비는 `(T−d, T)`(양 끝 줄은 각자 제 시계라 뺀다). 근거 표시(`clock_flags`)에만 쓴다(판정 불변)."""
+    regions = []
+    for item in (events_doc.get("coverage") or {}).get("clock_anomalies") or []:
+        try:
+            ts, delta = _parse_iso(item["ts"], "clock_anomalies"), timedelta(seconds=abs(float(item["delta_sec"])))
+        except (KeyError, TypeError, ValueError, UsageError):
+            continue
+        eps = timedelta(microseconds=1)
+        regions.append((ts, ts + delta) if item.get("kind") == "backward" else (ts - delta + eps, ts - eps))
+    return regions
+
+
+def _evaluator(events_doc: dict, events, lo, hi, timeout_ms, ids) -> Evaluator:
+    return Evaluator(events, lo, hi, timeout_ms, ids, anomalies=_clock_regions(events_doc),
+                     line_order_tolerance_sec=BACKWARD_THRESHOLD_SEC)
+
+
 def evaluator_for(events_doc: dict, db: issuedb.IssueDb) -> Evaluator:
     """회귀·검증 모드 평가기 (파일 전체 범위, 이슈 DB의 패턴 시간 상한). 호출자가 닫는다."""
     events, lo, hi, _, ids = _range(events_doc, True)
     timeout_ms = int((db.config.get("matcher") or {}).get("pattern_timeout_ms", DEFAULT_TIMEOUT_MS))
-    return Evaluator(events, lo, hi, timeout_ms, ids)
+    return _evaluator(events_doc, events, lo, hi, timeout_ms, ids)
 
 
 def match(events_doc: dict, db: issuedb.IssueDb, compiled: dict, *, regress: bool, jira: dict | None = None,
@@ -352,7 +373,7 @@ def match(events_doc: dict, db: issuedb.IssueDb, compiled: dict, *, regress: boo
     types_out, causes_out, candidates, pending = [], [], [], []
     own = evaluator is None
     if own:
-        evaluator = Evaluator(events, lo, hi, timeout_ms, ids)
+        evaluator = _evaluator(events_doc, events, lo, hi, timeout_ms, ids)
     try:
         for itype in db.types:
             if not itype.active:
@@ -481,6 +502,7 @@ def _candidate(db, itype, cause, S, C, sym, res, jira, occurred, half, scoring, 
     if cause is not None and use_bonus:  # 분석 모드에서만 (회귀·검증 모드는 Jira가 없다)
         judgement = fix_judgement(cause, jira.get("sw"), rules, db.jira_counts.get(cause.id, 0))
     bonus = {"proximity": round(proximity, 4), "keyword": round(keyword, 4)}
+    flags = sorted(set((res.flags if res else []) + (sym.flags if sym else [])))
     if step_bonus > 0:
         bonus["step"] = round(step_bonus, 4)
     return {
@@ -501,6 +523,7 @@ def _candidate(db, itype, cause, S, C, sym, res, jira, occurred, half, scoring, 
         "related": _related(db, cause),
         "android_versions": [str(v) for v in cause.raw.get("android_versions") or []] if cause else [],
         "version_match": _version_match(cause, jira),
+        **({"clock_flags": flags} if flags else {}),
     }
 
 

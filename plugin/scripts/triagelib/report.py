@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import json
 import os
+import re
 
 from common import events, masking
 from common.exitcodes import USAGE
@@ -20,6 +21,17 @@ def _top_label(candidates: list) -> str | None:
 
 
 _ref_label = events.ref_label   # report.md 전용 `f<순번>:L<줄>`
+
+
+def dumps(result: dict) -> str:
+    """analysis.json·stdout 공통 직렬화(compact JSON, 들여쓰기 없음). 4KB 예산도 이 바이트로 잰다."""
+    return json.dumps(result, ensure_ascii=False, separators=(",", ":"))
+
+
+def _slot_number(value) -> int | None:
+    """Jira SIM 슬롯 값의 첫 정수(없으면 None). 0/1 기준은 사내 S20 확인 사항이라 그대로 비교한다."""
+    found = re.search(r"\d+", str(value)) if value not in (None, "") else None
+    return int(found.group()) if found else None
 
 
 def _unique_evidence(evidence: list) -> list:
@@ -147,7 +159,7 @@ def fit(result: dict) -> dict:
     """analysis.json을 ≤ 4KB로 줄인다: (읽기 전용 줄 중복) → 다른 후보 근거 → 근거 줄 수 → 메시지 길이 → 경고 순,
     마지막으로 must_show 항목을 160자로 줄이고 앞 4개만 남긴다(`truncated` 의미는 그대로: 그래도 넘으면 true)."""
     def size() -> int:
-        return len(json.dumps(result, ensure_ascii=False, indent=1).encode("utf-8"))
+        return len(dumps(result).encode("utf-8"))
 
     cands = result.get("candidates") or []
     steps = []
@@ -313,7 +325,7 @@ class ReportMixin:
             for e in cand["evidence"]:
                 e.pop("_ref", None)
         result = final
-        (self.job / "analysis.json").write_text(json.dumps(result, ensure_ascii=False, indent=1) + "\n",
+        (self.job / "analysis.json").write_text(dumps(result) + "\n",
                                                 encoding="utf-8", newline="\n")
         self.run.note("done", candidates=len(candidates), calls=self.run.calls)
         return result
@@ -389,6 +401,14 @@ class ReportMixin:
             lines.append(f"- 근거 로그 (마스킹, 슬롯 phone {','.join(map(str, top['phones'])) or '?'}):")
             lines += [f"  - {e['ts']} {e['tag']} {e['msg']}" + (f" ({e['_ref']})" if e.get("_ref") else "")
                       for e in top["evidence"]]
+            jira_slot = (r.get("jira") or {}).get("sim_slot")
+            slot = _slot_number(jira_slot)
+            if slot is not None and top["phones"] and slot not in top["phones"]:
+                lines.append(add(7, f"슬롯 불일치: 1위 후보 근거는 phone {','.join(map(str, top['phones']))}, Jira SIM 슬롯은 "
+                                    f"{_clip(str(jira_slot), 20)} — 다른 슬롯의 로그로 판정됐을 수 있다(교차 슬롯 원인이 아니면 재검토)"))
+            if top.get("clock_flags"):
+                lines.append(add(8, "시계 이상 구간의 근거: 1위 후보의 순서(sequence)·시간창 판정은 시각 재정렬 기준이라 신뢰가 낮다 — "
+                                    f"근거 줄의 (f:L) 위치로 순서를 확인한다 [{', '.join(top['clock_flags'])}]"))
             if (len(cands) > 1 and cands[1]["score"] == top["score"]
                     and (cands[1]["S"], cands[1]["C"]) == (top["S"], top["C"])):
                 n = sum(1 for c in cands if c["score"] == top["score"])
@@ -407,7 +427,7 @@ class ReportMixin:
             if unext:
                 tags = ", ".join(f"{t['tag']} {t['lines']}줄" for t in hints.get("_unextracted_tags") or [])
                 text += f" (수집 태그 W/E/F 줄 중 이벤트로 추출 안 된 줄 {unext}건" + (f": {tags}" if tags else "") + ")"
-            lines.append(add(9, text) if unext and not total else f"- {text}")
+            lines.append(add(11, text) if unext and not total else f"- {text}")
             lines += [f"  - {_error_line(e)}" for e in (hints.get("error_events") or [])[:8]]
         if unjudged:
             err = (unjudged.get("errors") or [{}])[0]
@@ -424,19 +444,19 @@ class ReportMixin:
                          "`--answer anchor=off`로 다시 실행하면 Jira 발생 시각 기준 범위로 넓힌다")
         outside = r.get("_outside")
         if outside and outside.get("total"):
-            lines.append(add(8, f"분석 범위 밖 오류 이벤트 (Jira 발생 시각 {outside['at']} 근처, 근거·점수에 쓰지 않음): "
+            lines.append(add(10, f"분석 범위 밖 오류 이벤트 (Jira 발생 시각 {outside['at']} 근처, 근거·점수에 쓰지 않음): "
                                 f"{outside['total']}건"))
             lines += [f"  - {_error_line(e)}" for e in outside["rows"][:3]]
         logs = r["logs"]
         if logs.get("uncollected_tags"):       # 후보 없음·원인 미확인일 때만 core가 채운다
             tags = ", ".join(f"{u['tag']} {u['lines']}줄(W/E {u['warn']})" for u in logs["uncollected_tags"])
-            lines.append(add(9, "파서 규칙에 없는 태그 (수집 태그와 같은 프로세스, tags.yaml에 없어 이벤트로 추출 안 됨): " + tags))
+            lines.append(add(11, "파서 규칙에 없는 태그 (수집 태그와 같은 프로세스, tags.yaml에 없어 이벤트로 추출 안 됨): " + tags))
         in_range = {True: "발생 시각 포함", "partial": "일부만 포함", False: "로그 범위 밖",
                     None: "해석한 줄 없음(형식·인코딩)"}.get(logs["in_range"], "?")
         range_text = (f"로그 범위: {logs['range'][0]} ~ {logs['range'][1]} ({in_range}), "
                       f"시계 이상 {'있음' if logs['clock_anomalies'] else '없음'}")
         if not cands or not cands[0]["C"] or logs["in_range"] is not True or logs["clock_anomalies"]:
-            lines.append(add(7, range_text))
+            lines.append(add(9, range_text))
         else:
             lines.append(f"- {range_text}")
         lines.append("- 원인: TODO(LLM) — 로그로 확인한 것 / 코드로 추정한 것 / placeholder 규칙 결과를 나눠 쓴다")

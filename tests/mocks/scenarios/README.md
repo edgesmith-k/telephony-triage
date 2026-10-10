@@ -40,6 +40,7 @@ entries:
 | `clock_jump_sec` | 이 항목부터 시각이 튄다. 음수면 뒤로 간다 |
 | `repeat`, `every` | 같은 항목을 N번, `every`초 간격으로. `msg`의 `{i}`는 1부터 |
 | `ril_request` / `ril_response` / `ril_unsol` | RILJ 줄을 만든다. `serial`, `args`, `result` |
+| `beginning_of` | `--------- beginning of <buffer>` 줄을 낸다(합친 파일에만, 버퍼별 파일·bugreport 제외). 시각을 옮기지 않는다 |
 
 ## 확정된 것과 placeholder
 
@@ -85,6 +86,7 @@ fixture가 되는지는 `tests/mocks/sample_fixtures.yaml`에 있고,
 | `call-drop.yaml` | 연결된 VoLTE 통화 끊김 | 파서 `call-drop.log` |
 | `sim-absent.yaml` | SIM 없음 (슬롯 1) | 파서 `sim-absent.log` |
 | `dual-sim-ril.yaml` | 같은 serial을 두 슬롯이 씀, 지연(`ril_timeout`), 응답 없음(`ril_no_response`), pid 변경, 슬롯 없는 줄 | 파서 `dual-sim-ril.log` |
+| `ril-buffer-header.yaml` | 파일 중간 `beginning of crash` 헤더 뒤 RIL 응답(40초) — 헤더가 짝 맞춤 경계가 아님(`ril_timeout`) | 파서 `ril-buffer-header.log` |
 | `clock-anomaly.yaml` | 시계 역행(-8초)·점프(+2시간, 판정 기준 3600초 이상) (`coverage.clock_anomalies` 시험) | 파서 `clock-anomaly.log` |
 | `bugreport-wrap.yaml` | `--bugreport txt|zip` 래핑과 `extract-bugreport` 시험 (system·radio·main·events 버퍼 + 가짜 dumpsys) | — |
 | `step-anchor.yaml` | 시험 자동화 스텝 마커(`TestRunner: Step N START/PASS/FAIL`) + Step 3 IMS 403(PASS), Step 5 데이터 설정 OFF(FAIL). Jira 발생 시각 14:31(Step 3 쪽). 실패 스텝 앵커 시험 (`tests/test_step_anchor.py`) | 파서 `step-anchor.log` |

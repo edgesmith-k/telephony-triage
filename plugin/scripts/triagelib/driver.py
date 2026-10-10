@@ -292,8 +292,9 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
                 meta.pop("failed_step", None)
             meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=1), encoding="utf-8", newline="\n")
             info = {"key": self.key, "origin": "file", "occurred_at": meta.get("occurred_at"), "sw": meta.get("sw"),
-                    "summary": meta.get("summary") or "", "missing": [], "logcat": {}}
-            self.out["jira"] = {k: info[k] for k in ("origin", "occurred_at", "sw")}
+                    "summary": meta.get("summary") or "", "missing": [], "logcat": {},
+                    "sim_slot": None if meta.get("sim_slot") in (None, "") else str(meta["sim_slot"])}
+            self.out["jira"] = {k: info[k] for k in ("origin", "occurred_at", "sw", "sim_slot")}
             self.out_failed_step()
             return info
         raw_default = self.job / "jira_raw.json"
@@ -733,7 +734,8 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
                                  for e in _unique_evidence(c.get("evidence") or [])[:10]],
                     "fix_judgement": (c.get("fix_judgement") or {}).get("judgement"),
                     "fix_message": _clip((c.get("fix_judgement") or {}).get("message"), 100),
-                    "related": [r.get("cause") for r in c.get("related") or []]}
+                    "related": [r.get("cause") for r in c.get("related") or []],
+                    **({"clock_flags": c["clock_flags"]} if c.get("clock_flags") else {})}   # 표시 전용 (판정 불변)
             if c["cause"] is None and c["type"] in cause_unjudged:   # report.md 전용: 원인 미확인이 아니라 판정 불가
                 cand["_cause_unjudged"] = True
             if c.get("version_match") is False:   # 표시 전용 (순위·score 무관)
