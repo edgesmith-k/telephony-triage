@@ -240,7 +240,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
       <div class="eyebrow">DESIGN · 처음 보는 사람을 위한 설계 안내</div>
       <h1>telephony-triage는 어떻게 동작하나</h1>
       <p>Android Telephony 이슈의 원인을 로그로 찾고, 확인된 원인을 팀 이슈 DB에 쌓는 도구입니다. 이 문서는 코드를 몰라도 구조와 흐름을 이해할 수 있게 썼습니다. 정확한 정의와 옵션은 11장의 개발자용 문서에 있습니다.</p>
-      <div class="meta"><span><b>기준</b> main 2026-10-09</span><span><b>대상</b> 처음 쓰는 사람, 도입 검토자, 설계를 바꾸려는 사람</span><span><b>읽는 시간</b> 약 25분</span></div>
+      <div class="meta"><span><b>기준</b> main 2026-10-10</span><span><b>대상</b> 처음 쓰는 사람, 도입 검토자, 설계를 바꾸려는 사람</span><span><b>읽는 시간</b> 약 25분</span></div>
     </header>
 
     <section class="chap" id="c1" data-title="한눈에 보기">
@@ -271,7 +271,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
         <div><b>이슈 DB</b>팀이 함께 쓰는 사례집입니다. "이 증상은 이 원인이었고 이렇게 고쳤다"를 GitHub 레포에 쌓습니다.</div>
         <div><b>유형과 원인</b>유형은 사용자가 보는 <i>증상</i>, 원인은 그 증상을 만든 <i>이유</i>입니다. "데이터가 안 붙음"이 유형, "모바일 데이터가 꺼져 있음"이 원인입니다.</div>
         <div><b>시그니처</b>로그에서 증상이나 원인을 알아보는 <i>판별 조건</i>입니다. "이 문구가 60초 안에 이 순서로 나오면"처럼 적습니다.</div>
-        <div><b>S와 C</b>S는 증상 조건, C는 원인 조건이 맞았는지입니다. 둘 다 0 아니면 1이고, 판정은 이 두 값으로만 합니다.</div>
+        <div><b>S와 C</b>S는 증상 조건, C는 원인 조건이 맞았는지입니다. 둘 다 0 아니면 1이고(시그니처 시간 초과·오류면 판정 불가), 판정은 이 두 값으로만 합니다.</div>
         <div><b>fixture</b>원인마다 붙여 두는 <i>기준 로그</i>입니다. 규칙을 바꿀 때마다 이 로그로 결과가 그대로인지 다시 확인합니다.</div>
         <div><b>마스킹</b>IMSI, 전화번호, IP 같은 값을 <code>&lt;IMSI#1&gt;</code> 같은 표시로 바꾸는 일입니다. 저장되는 로그는 모두 마스킹된 것입니다.</div>
         <div><b>작업 계획</b>"이 Jira를 이 원인에 추가" 같은 <i>할 일 목록</i>입니다. 파일을 바로 고치지 않고 이 목록을 최신 상태 위에 다시 적용해 PR을 만듭니다.</div>
@@ -956,9 +956,10 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
       <div class="sub" id="c9d" data-title="저장소 보호"><h3>저장소 보호</h3>
       <div class="tbl why"><table>
         <tr><th>장치</th><th>언제 걸리나</th><th>왜</th><th>없으면</th></tr>
-        <tr><td><b>내 clone 편집 차단</b></td><td>Claude가 이슈 DB clone 안의 파일을 쓰려 할 때</td><td>사용자가 하던 작업과 도구 작업을 분리합니다. 도구는 별도 작업 공간에서만 씁니다</td><td>내 미커밋 변경이 덮이거나 브랜치가 바뀜</td></tr>
+        <tr><td><b>내 clone 편집 차단</b></td><td>Claude가 이슈 DB clone 안의 파일을 쓰거나 Bash로 clone 브랜치·파일을 바꾸려 할 때</td><td>사용자가 하던 작업과 도구 작업을 분리합니다. 도구는 별도 작업 공간에서만 씁니다</td><td>내 미커밋 변경이 덮이거나 브랜치가 바뀜</td></tr>
         <tr><td><b>main 직접 push 차단</b></td><td><code>git push</code> 대상이 main일 때</td><td>모든 변경은 PR과 담당자 리뷰를 거쳐야 합니다</td><td>리뷰 없는 변경이 팀 전체에 바로 반영</td></tr>
         <tr><td>hook 끄기 차단</td><td><code>--no-verify</code>, hooksPath 변경</td><td>검사를 끄는 지름길을 막습니다</td><td>개인정보·깨진 파일이 커밋됨</td></tr>
+        <tr><td>원격 쓰기 확인</td><td>이슈 DB 대상 <code>gh</code>·GitHub MCP 쓰기를 하려 할 때</td><td>PR·이슈 변경은 승인 질문을 거치고, 머지는 리뷰어 몫이라 거부합니다</td><td>리뷰 없이 도구가 PR을 머지</td></tr>
         <tr><td>pre-push 승인 확인</td><td>이슈 DB에 push할 때</td><td>도구가 승인받은 내용과 실제 push가 같은지 봅니다. 권한 통제가 아니라 실수 방지입니다</td><td>승인 없이 손으로 push한 실수가 그대로 올라감</td></tr>
         <tr><td>생성 파일은 도구로만</td><td>README·STATS 손편집</td><td>데이터에서 자동으로 만드는 파일이라 손으로 고치면 실제 데이터와 어긋납니다</td><td>README와 실제 DB가 다름</td></tr>
       </table></div></div>
@@ -969,6 +970,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
         <tr><td><b>fixed는 수정 검증으로만</b></td><td>수정 상태를 fixed로 바꾸려 할 때</td><td>"고쳤어요"라는 말만으로 닫으면 재발을 놓칩니다. 수정 빌드 로그와 재현 흔적이 필요합니다</td><td>고쳐지지 않은 버그가 fixed로 남음</td></tr>
         <tr><td>건너뜀 ≠ 통과</td><td>fixture가 없어 검증을 못 했을 때</td><td>"skipped"로 따로 표시하고 리뷰가 필요하다고 붙입니다</td><td>검증 안 된 규칙이 "통과"로 보임</td></tr>
         <tr><td>로그 범위 확인</td><td>로그가 발생 시각을 덮지 않을 때</td><td>그 경우 "원인 없음"이 아니라 "판단 불가"입니다</td><td>엉뚱한 구간을 보고 원인 없다고 결론</td></tr>
+        <tr><td>판정 불가 ≠ 후보 없음</td><td>시그니처가 시간 초과·정규식 오류로 끝났을 때</td><td>S·C를 0이 아니라 null로 두고 "판정 불가 유형" 줄을 꼭 보여줍니다. 후보가 없어도 "후보 없음" 대신 "판정 불완전"이고, 이 결과는 재사용 캐시에 남기지 않습니다. 회귀·검증에서도 통과로 보지 않습니다</td><td>오류 난 규칙이 "안 맞음"으로 보여 엉뚱한 새 유형이 생김</td></tr>
         <tr><td>사이트 설정 없으면 멈춤</td><td><code>site-defaults.yaml</code>이 없을 때</td><td>사내 실제 값 없이 예시 값으로 돌면 그럴듯하게 틀린 결과가 나옵니다</td><td>모르는 사이에 예시 규칙으로 판정</td></tr>
         <tr><td>우회하지 않고 보고</td><td>git 충돌, 인증 실패, MCP 없음, 버전 불일치</td><td>자동 우회는 문제를 숨기고 다른 곳에서 더 크게 터집니다</td><td>원인 모를 데이터 꼬임</td></tr>
       </table></div></div>

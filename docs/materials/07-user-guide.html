@@ -237,7 +237,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
       <div class="eyebrow">USER GUIDE · 처음 쓰는 사람을 위한 안내</div>
       <h1>Jira 번호와 로그만 주면 됩니다</h1>
       <p>Telephony 이슈를 분석하는 엔지니어를 위한 안내입니다. 설치, 첫 연습, 요청하는 법, 리포트 읽는 법만 담았습니다. 기록·PR은 기여자 가이드, 구조는 설계 안내, 세부 옵션은 운영 매뉴얼에 있습니다.</p>
-      <div class="meta"><span><b>기준</b> main 2026-10-09</span><span><b>대상</b> 처음 쓰는 팀원</span><span><b>읽는 시간</b> 약 10분</span></div>
+      <div class="meta"><span><b>기준</b> main 2026-10-10</span><span><b>대상</b> 처음 쓰는 팀원</span><span><b>읽는 시간</b> 약 10분</span></div>
     </header>
 
     <section class="chap" id="u1" data-title="3분 요약">
@@ -269,7 +269,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
       </ol>
       <p>setup은 하나씩 묻습니다: GHE 아이디, 이슈 DB clone 경로와 원격 주소, Jira·logcat 시각의 타임존, 로그 연도를 정하는 방법, 작업 폴더. 팀 기본값과 같으면 그대로 넘기면 되고, 다르게 답한 값만 저장됩니다.</p>
       <p>마지막에 <b>점검 표</b>가 나옵니다. 모든 행이 <code>ok</code>면 끝입니다. <code>fail</code>·<code>warn</code> 행은 "다음" 열의 안내대로 하면 됩니다. GHE 로그인이 안 됐으면(<code>gh warn</code>) 분석과 연습은 되지만 기록(PR)은 못 합니다.</p>
-      <div class="note warn"><span class="k">"사내 기본값 없음"으로 멈추면</span>관리자가 사이트 설정을 아직 올리지 않은 상태입니다. 관리자에게 알리고 기다립니다.</div>
+      <div class="note warn"><span class="k">"사이트 설정을 아직 올리지 않았습니다"로 멈추면</span>관리자가 사이트 설정(<code>site-defaults.yaml</code>)을 아직 올리지 않은 상태입니다. 메시지를 그대로 관리자에게 전달하고 기다립니다.</div>
     </section>
 
     <section class="chap" id="u3" data-title="첫 연습">
@@ -325,7 +325,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
 </svg><figcaption>합성 예시입니다. 실제 리포트에는 소스 코드 위치, 다른 버전 원인, 열린 PR 같은 줄이 더 있습니다. 줄별 설명 전체는 <a href="03-manual.html#s5-report">매뉴얼 5.1</a>.</figcaption></figure>
 
       <h3>후보가 없을 때</h3>
-      <p>DB가 아직 작을 때 가장 흔합니다. 그래도 리포트는 빈손이 아닙니다: Jira 설명으로 찾은 비슷한 사례 3개, 로그의 오류·거부·타임아웃 줄(최대 8줄), 파서가 모르는 태그(규칙이 없어 놓쳤을 수 있다는 힌트), 로그 범위 판정. 원하면 <b>탐색 분석</b>으로 Claude의 원인 가설 1~3개를 받을 수 있습니다. 토큰을 더 쓰므로 실행 전에 묻습니다. 가설은 "추정" 칸에만 들어가고 판정에는 쓰이지 않습니다.</p>
+      <p>DB가 아직 작을 때 가장 흔합니다. 그래도 리포트는 빈손이 아닙니다: Jira 설명으로 찾은 비슷한 사례 3개, 로그의 오류·거부·타임아웃 줄(최대 8줄, 이벤트로 추출 안 된 W/E/F 줄 수도 함께), 파서가 모르는 태그(규칙이 없어 놓쳤을 수 있다는 힌트), 로그 범위 판정. 원하면 <b>탐색 분석</b>으로 Claude의 원인 가설 1~3개를 받을 수 있습니다. 토큰을 더 쓰므로 실행 전에 묻습니다. 가설은 "추정" 칸에만 들어가고 판정에는 쓰이지 않습니다. 첫 줄이 "<b>판정 불완전</b>"이면 후보가 없는 것이 아니라 시그니처 시간 초과·오류로 판정을 못 한 것입니다. 새 유형을 만들지 말고 관리자에게 알립니다.</p>
 
       <h3>수정 상태 문구 읽기</h3>
       <figure class="fig"><svg viewBox="0 0 820 280" role="img" aria-labelledby="fxT"><title id="fxT">Jira SW 빌드와 수정 빌드 비교</title><defs><marker id="fxh" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0,0 L10,5 L0,10 z"/></marker></defs>
@@ -371,7 +371,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
         <li><code>/telephony-triage:setup</code> 다시 실행</li>
         <li>점검 표의 fail·warn 행 "다음" 안내대로</li>
         <li>메시지 원문으로 <a href="03-manual.html#s6-msg">매뉴얼 6.3</a> 검색</li>
-        <li class="gate">그래도 안 되면 메시지 그대로 관리자에게</li>
+        <li class="gate">그래도 안 되면 메시지 그대로 관리자에게("내부 오류"면 안내된 <code>trace.jsonl</code>도 함께)</li>
       </ol>
       <div class="note warn"><span class="k">하지 말 것</span>막힌 걸 풀려고 hook을 끄거나(<code>--no-verify</code>) main에 직접 push하지 않습니다. 도구가 거부하는 건 대부분 실수를 막는 장치입니다. 이유는 <a href="04-design.html#c9">설계 안내 9장</a>에 있습니다.</div>
       <p class="foot">더 볼 곳: 기록과 PR은 <a href="06-contributor-guide.html">기여자 가이드</a>, 구조와 이유는 <a href="04-design.html">설계 안내</a>, 모든 옵션과 메시지는 <a href="03-manual.html">운영 매뉴얼</a>.</p>
