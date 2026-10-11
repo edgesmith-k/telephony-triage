@@ -395,6 +395,22 @@ def test_bridge_records_approved_comment_post():
     assert json.loads((job / "post.approved.json").read_text(encoding="utf-8"))["used_at"] == result["posted_at"]
     assert "게시했다 (MOCK-1001, comment mock-c-1)" in shown and "응답 원문 표식" not in shown
 
+    # 성공 응답의 빈 error 칸(null·""·false)은 실패가 아니다
+    for empty in (None, "", False):
+        approved["used_at"] = None
+        (job / "post.approved.json").write_text(json.dumps(approved), encoding="utf-8")
+        shown = bridge(_note_event("MOCK-1001", body, {"id": "c-5", "error": empty}))
+        result = json.loads((job / "post.result.json").read_text(encoding="utf-8"))
+        assert result["status"] == "posted" and result["comment_id"] == "c-5" and "게시했다" in shown, empty
+    # 처리 중 예외(결과 파일을 쓸 수 없음): fail-closed 문구, 게시됐을 수 있으므로 used_at을 남겨 재게시를 막는다
+    approved["used_at"] = None
+    (job / "post.approved.json").write_text(json.dumps(approved), encoding="utf-8")
+    (job / "post.result.json").unlink()
+    (job / "post.result.json").mkdir()
+    shown = bridge(_note_event("MOCK-1001", body, {"ok": True, "comment_id": "c-6"}))
+    assert "게시는 됐을 수 있다" in shown and "c-6" not in shown
+    assert json.loads((job / "post.approved.json").read_text(encoding="utf-8"))["used_at"]
+    (job / "post.result.json").rmdir()
     for key in ("../MOCK-1001", 1001):                     # 키 형식 불일치: 기록하지 않고 fail-closed 문구
         shown = bridge(_note_event(key, body, {"ok": True}))
         assert "게시는 됐을 수 있다" in shown and "다시 게시하지 않는다" in shown

@@ -375,6 +375,7 @@ def _approve(ws: Workspace, job_key: str, body: str, **over) -> Path:
     job = ws.job_dir(job_key)
     job.mkdir(parents=True, exist_ok=True)
     (job / "post.approved.json").write_text(json.dumps(record, ensure_ascii=False), encoding="utf-8")
+    (job / "post.md").write_text(issuepost.normalize_body(body) + "\n", encoding="utf-8")
     (job / "post.result.json").unlink(missing_ok=True)
     return job
 
@@ -394,7 +395,13 @@ def test_guard_jira_post_requires_approval():
     from common import issuepost
     assert decision(ok) == "ask" and "MOCK-7101" in ok["permissionDecisionReason"]
     assert issuepost.body_sha256(body)[:12] in ok["permissionDecisionReason"]
-    assert decision(post({"ticket": "MOCK-7101", "text": body.replace("\n", "\r\n") + "  \n"})) == "ask"   # (c) 정규화
+    assert decision(post({"ticket": "MOCK-7101", "text": body.replace("\n", "\r\n")})) == "ask"     # (c) CRLF만 다름
+    assert decision(post({"ticket": "MOCK-7101", "text": body + "\n"})) == "ask"                 # 끝 줄바꿈 하나
+    # 정규화 sha는 같아도 실제로 올라가는 글자가 post.md와 다르면 거부(줄 끝 공백·앞뒤 빈 줄·NFD)
+    import unicodedata
+    for variant in (body.replace("\n", "  \n"), "\n" + body + "\n\n", unicodedata.normalize("NFD", body)):
+        out = post({"ticket": "MOCK-7101", "text": variant})
+        assert decision(out) == "deny" and "글자 그대로" in out["permissionDecisionReason"], repr(variant[:20])
     assert decision(post({"ticket": "MOCK-7199", "text": body})) == "deny"                # (a) 승인 기록 없음
     out = post({"ticket": "MOCK-7101", "text": body + "!"})                               # (b) 본문 다름
     assert decision(out) == "deny" and "sha256" in out["permissionDecisionReason"]
@@ -415,6 +422,21 @@ def test_guard_jira_post_requires_approval():
                                           encoding="utf-8")
     out = post({"ticket": "MOCK-7105", "text": body})
     assert decision(out) == "deny" and "이미 게시" in out["permissionDecisionReason"]
+    job = _approve(ws, "MOCK-7107", body)                                               # 결과 불명은 늘 거부
+    (job / "post.result.json").write_text(json.dumps({"status": "unknown", "body_sha256": issuepost.body_sha256(body)}),
+                                          encoding="utf-8")
+    assert "불명" in post({"ticket": "MOCK-7107", "text": body})["permissionDecisionReason"]
+    # --again 승인(again: true)이면 같은 본문의 posted 이력을 건너뛴다(만료·used_at은 그대로)
+    job = _approve(ws, "MOCK-7108", body, again=True)
+    (job / "post.result.json").write_text(json.dumps({"status": "posted", "body_sha256": issuepost.body_sha256(body)}),
+                                          encoding="utf-8")
+    assert decision(post({"ticket": "MOCK-7108", "text": body})) == "ask"
+    job = _approve(ws, "MOCK-7108", body, again=True, used_at="2026-01-01T00:00:00+00:00")
+    assert decision(post({"ticket": "MOCK-7108", "text": body})) == "deny"
+    (job / "post.md").unlink()                                                          # post.md 없음
+    _approve(ws, "MOCK-7109", body)
+    (ws.job_dir("MOCK-7109") / "post.md").unlink()
+    assert "post.md" in post({"ticket": "MOCK-7109", "text": body})["permissionDecisionReason"]
     job = _approve(ws, "MOCK-7106", body)
     (job / "post.approved.json").write_text("{깨짐", encoding="utf-8")                   # (i) 손상
     out = post({"ticket": "MOCK-7106", "text": body})
@@ -445,6 +467,24 @@ def test_guard_jira_post_requires_approval():
     proc = run("guard.py", [], root=root, env={"TELEPHONY_TRIAGE_HOME": home}, stdin=json.dumps(event))
     out = json.loads(proc.stdout)["hookSpecificOutput"]
     assert decision(out) == "deny" and "Jira 서버" in out["permissionDecisionReason"]
+
+
+def test_guard_denies_direct_writes_to_post_records():
+    """승인·결과 기록(`<work_dir>/<KEY>/post.approved.json`·`post.result.json`)은 approve·jira_bridge만 쓴다:
+    파일 도구와 Bash 파일 쓰기(규칙 8과 같은 판별)는 거부. 같은 JOB의 다른 파일(post.fill.json)은 그대로."""
+    ws = shared()
+    job = ws.job_dir("MOCK-7201")
+    job.mkdir(parents=True, exist_ok=True)
+    for name in ("post.approved.json", "post.result.json"):
+        for tool in ("Write", "Edit", "MultiEdit"):
+            out = guard(ws, tool, {"file_path": str(job / name), "content": "{}"}, ws.base)
+            assert decision(out) == "deny" and "approve" in out["permissionDecisionReason"], (tool, name)
+        for cmd in (f"echo '{{}}' > {job / name}", f"rm -f {job / name}", f"cp /tmp/x {job / name}",
+                    f"cd {job} && tee {name} < /dev/null", f"sed -i s/a/b/ {job / name}"):
+            assert decision(bash(ws, cmd, ws.base)) == "deny", cmd
+    assert decision(guard(ws, "Write", {"file_path": str(job / "post.fill.json"), "content": "{}"}, ws.base)) is None
+    assert decision(bash(ws, f"cat {job / 'post.approved.json'}", ws.base)) is None
+    assert decision(bash(ws, f"echo x > {job / 'post.fill.json'}", ws.base)) is None
 
 
 def test_guard_sees_through_command_wrappers():

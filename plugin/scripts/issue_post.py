@@ -16,9 +16,11 @@
   다시 적용, 남은 식별자 0) → 렌더 후 `JOB/post.md`(올라갈 본문 그대로)와 확인 화면을 낸다. 화면 마지막 줄은
   `post_sha256: <hex>`이고 게시 가능할 때만 낸다. 실행할 때마다 기존 `post.approved.json`을 지운다(승인 무효화).
   `--omit failed_step|fields|evidence|must_show|others`(쉼표 구분)로 스크립트 칸 항목을 뺄 수 있다(문구는 못 바꾼다).
-  `--again`은 사용자가 "다시 올려줘"라고 명시했을 때만 쓴다(게시 이력이 있어도 게시 가능).
+  `--again`은 사용자가 "다시 올려줘"라고 명시했을 때만 쓴다(게시 이력이 있어도 게시 가능, 승인 기록에 `again: true`).
+  `JOB/plan.json`은 analyze 계획이고 이번 analysis.json 뒤에 저장된 것만 분류 출처로 쓴다(낡은 계획은 "계획 없음").
+  `--json`의 `post_sha256`은 게시 가능할 때만 낸다.
 - `approve`: 사용자가 확인 화면을 승인한 뒤에만 부른다. `--sha` == `post.render.json` == `post.md` 해시, 분석
-  `request_hash` 불변, 게시 이력 없음을 확인하고 `post.approved.json`(30분 유효, 1회용)을 쓴 뒤 MCP 도구 이름과 인자
+  `request_hash` 불변, 형식이 지금 설정과 같음(`--format`으로 고른 경우 제외), 게시 이력 없음을 확인하고 `post.approved.json`(30분 유효, 1회용)을 쓴 뒤 MCP 도구 이름과 인자
   `{tool, arguments, body_sha256, expires_at}`를 낸다. 스킬은 이 값으로 도구를 한 번만 부른다. guard가 승인 기록과 대조해 ask를 낸다.
 - `status`: `{key, postable, reason, state: none|draft|rendered|approved|posted|error, tool, format, post_sha256,
   approved_at, expires_at, posted_at, comment_id}`.
@@ -55,6 +57,7 @@ FILL_KEYS = {"problem", "cause", "next", "code_location"}
 BASIS = {"log": "[로그로 확인]", "code": "[코드로 추정]", "placeholder": "[placeholder 규칙 결과]", "explore": "[탐색 분석 가설]"}
 PROBLEM_MAX, CAUSE_TEXT_MAX, NEXT_MAX, CODE_MAX = 200, 300, 200, 200
 CAUSE_ITEMS, NEXT_ITEMS = (1, 4), (0, 3)
+FIELD_MAX = 60                              # Jira 구조화 필드 값 하나 (작성자가 정하는 값: 한 줄로 접고 자른다)
 FAILED_STEP_MAX, EVIDENCE_LINES, EVIDENCE_CHARS, OTHERS_MAX = 120, 6, 160, 3
 QUOTE_MIN = 40                              # Jira 원문과 이만큼 같은 연속 부분이 있으면 인용으로 본다
 TODO = "TODO(LLM)"
@@ -105,11 +108,26 @@ class Job:
         return self.analysis
 
     def plan(self) -> dict | None:
-        """이 키의 작업 계획(사용자 확정 결과). 다른 키·결정 없는 계획은 쓰지 않는다."""
-        plan = _read(self.dir / "plan.json", "plan.json")
+        """이번 분석의 작업 계획(사용자 확정 결과)만. 다른 키·결정 없는 계획·analyze가 아닌 계획·이번 분석보다 먼저
+        저장된 계획(낡은 plan.json)은 쓰지 않는다(`plan_skipped`에 사유). plan에는 분석과 잇는 값이 없다(`started_at`은
+        lock 획득 시각이라 실행보다 앞선다): Step 7이 이번 analysis.json 뒤에 저장했는지를 파일 수정 시각으로 본다."""
+        self.plan_skipped = None
+        path = self.dir / "plan.json"
+        plan = _read(path, "plan.json")
         if not plan or (plan.get("jira") or {}).get("key") != self.key:
             return None
-        return plan if isinstance(plan.get("feedback"), dict) and plan["feedback"].get("decision") else None
+        if not (isinstance(plan.get("feedback"), dict) and plan["feedback"].get("decision")):
+            return None
+        if plan.get("request_hash") and self.analysis and plan["request_hash"] != self.analysis.get("request_hash"):
+            self.plan_skipped = "다른 분석의 계획(request_hash)"
+            return None
+        if plan.get("source") != "analyze":
+            self.plan_skipped = f"analyze 계획이 아님(source: {plan.get('source')})"
+            return None
+        if not plan.get("request_hash") and path.stat().st_mtime_ns < (self.dir / "analysis.json").stat().st_mtime_ns:
+            self.plan_skipped = "이번 분석 전에 저장된 계획"
+            return None
+        return plan
 
     def tool_format(self, override: str | None) -> str:
         if override:
@@ -278,7 +296,7 @@ def build(job: Job, a: dict, plan: dict | None, fill: dict | None, omit: set[str
     # PROBLEM
     s["PROBLEM"].append(_line(f"Jira: {job.key}"))
     if "fields" not in omit:
-        parts = [f"{label}: {fields[k]}" for k, label in (("model", "단말"), ("sw", "SW"), ("android_version", "Android"),
+        parts = [f"{label}: {_clip(fields[k], FIELD_MAX)}" for k, label in (("model", "단말"), ("sw", "SW"), ("android_version", "Android"),
                                                           ("carrier", "캐리어"), ("occurred_on", "발생일")) if fields.get(k)]
         if parts:
             s["PROBLEM"].append(_line(" · ".join(parts)))
@@ -439,7 +457,9 @@ def screen(job: Job, a: dict, plan: dict | None, info: dict, fmt: str, body: str
     length = f"{len(body):,}자" if body is not None else "-"
     lines.append(f"- 형식: {fmt} · 길이: {length} / 상한 {issuepost.BODY_MAX:,}자")
     lines.append(f"- 분류: {cl['cls']} — {cl['confirm']} · 분석 실행 {a.get('run')} ({a.get('generated_at')})")
-    lines.append(f"- 분류 출처: JOB/plan.json ({plan.get('started_at')})" if plan else "- 분류 출처: 계획 없음")
+    skipped = getattr(job, "plan_skipped", None)
+    lines.append(f"- 분류 출처: JOB/plan.json ({plan.get('started_at')})" if plan else
+                 "- 분류 출처: 계획 없음" + (f" (JOB/plan.json은 쓰지 않음: {skipped})" if skipped else ""))
     if body is not None:
         lines.append(f"- 마스킹: 적용(LLM 칸 새 토큰 {new_tokens}개), 남은 식별자 0")
     problem_src = "스크립트(plan note)" if info["note"] else "스크립트+LLM(problem)"
@@ -532,17 +552,22 @@ def cmd_render(args, job: Job) -> tuple[dict, int]:
         post_path.unlink(missing_ok=True)
     fb = (plan or {}).get("feedback") or {}
     issuepost.write_private_json(job.path(issuepost.RENDER_FILE), {
-        "schema": 1, "key": job.key, "format": fmt, "request_hash": a.get("request_hash"), "run": a.get("run"),
+        "schema": 1, "key": job.key, "format": fmt, "format_source": "option" if args.format else "config",
+        "request_hash": a.get("request_hash"), "run": a.get("run"),
         "plan": {"decision": fb.get("decision"), "final": fb.get("final"),
                  "pr_number": ((plan or {}).get("pr") or {}).get("number")} if plan else None,
         "omit": omit, "again": bool(args.again), "postable": ok, "reason": reason, "post_sha256": sha,
         "created_at": issuepost.iso(issuepost.now())})
     new_tokens = sum(masker.counts.values())
     text = screen(job, a, plan, info, fmt, body, omit, ok, reason, problems, warnings, missing, new_tokens, sha)
-    out = {"screen": text, "post_sha256": sha, "postable": ok, "reason": reason, "slots_missing": missing,
+    out = {"screen": text, "post_sha256": sha if ok else None, "postable": ok, "reason": reason, "slots_missing": missing,
            "problems": problems, "files": {"post": str(post_path) if valid else None,
                                            "render": str(job.path(issuepost.RENDER_FILE))}}
     return out, (CHECK_FAILED if problems else OK)
+
+
+def spec_format(job: Job) -> str:
+    return (job.spec or {}).get("format") or issuepost.DEFAULT_FORMAT
 
 
 def cmd_approve(args, job: Job) -> tuple[dict, int]:
@@ -561,13 +586,17 @@ def cmd_approve(args, job: Job) -> tuple[dict, int]:
         return {"error": "render 뒤 post.md가 바뀌었다(또는 없다) — render --fill부터 다시"}, CHECK_FAILED
     if a.get("request_hash") != doc.get("request_hash"):
         return {"error": "render 뒤 분석이 다시 돌았다(request_hash) — render --fill부터 다시"}, CHECK_FAILED
+    if doc.get("format_source") != "option" and doc.get("format") != spec_format(job):
+        return {"error": f"render 뒤 코멘트 도구 형식이 바뀌었다({doc.get('format')} → {spec_format(job)}) — render --fill부터 다시"}, \
+            CHECK_FAILED
     if job.posted() and not doc.get("again"):
         return {"error": "이미 게시함 — 다시 올리려면 사용자가 명시한 뒤 render --again"}, CHECK_FAILED
     at = issuepost.now()
     spec = job.spec
     record = {"schema": 1, "key": job.key, "tool": spec["tool"], "key_arg": spec["key_arg"],
               "body_sha256": doc["post_sha256"], "format": doc.get("format"), "request_hash": a.get("request_hash"),
-              "approved_at": issuepost.iso(at), "expires_at": issuepost.iso(issuepost.expires(at)), "used_at": None}
+              "approved_at": issuepost.iso(at), "expires_at": issuepost.iso(issuepost.expires(at)), "used_at": None,
+              "again": bool(doc.get("again"))}
     issuepost.write_private_json(job.path(issuepost.APPROVED_FILE), record)
     return {"key": job.key, "tool": spec["tool"], "arguments": issuepost.call_arguments(spec, job.key, body),
             "body_sha256": record["body_sha256"], "expires_at": record["expires_at"]}, OK

@@ -89,14 +89,50 @@ def expires(approved_at: datetime) -> datetime:
 # -- 형식 렌더러 -----------------------------------------------------------------------------
 
 _WIKI_SPECIAL = re.compile(r"([\\{}\[\]|!])")
-_WIKI_LINE_HEAD = re.compile(r"^(\s*)([*#-]|h[1-6]\.)")
+_WIKI_LINE_HEAD = re.compile(r"^(\s*)([*#-]|h[1-6]\.|bq\.)", re.M)
+_NOFORMAT = re.compile(r"(?i)\{noformat[^}]*\}")
+_MD_LINE_HEAD = re.compile(r"^(\s*)([#>*+\-=|<]|\d+[.)])", re.M)
+_MD_FENCES = ("```", "~~~")
 _FENCE = "```"
+# 한 줄로 접을 때 공백으로 바꾸는 글자: 줄바꿈·탭·제어 문자와 제로폭 문자(칸 머리 위조·숨은 마크업 방지)
+_BREAKERS = re.compile(r"[\x00-\x1f\x7f\x85\u2028\u2029\u200b-\u200f\u2060-\u2064\ufeff\u00ad]")
+
+
+def one_line(text) -> str:
+    """값 하나를 한 줄로: 줄바꿈·CR·탭·제로폭 문자 → 공백, 연속 공백 하나로. 줄 항목은 모두 이것을 거친다."""
+    return " ".join(_BREAKERS.sub(" ", str(text)).split())
+
+
+def _until_stable(text: str, func) -> str:
+    """중첩 문자열(`{nof{noformat}ormat}`)이 지운 뒤 다시 생기지 않게 바뀌지 않을 때까지 반복한다."""
+    while True:
+        new = func(text)
+        if new == text:
+            return text
+        text = new
+
+
+def _strip_noformat(text: str) -> str:
+    return _until_stable(str(text), lambda t: _NOFORMAT.sub("", t))
+
+
+def _strip_fences(text: str) -> str:
+    def once(t: str) -> str:
+        for f in _MD_FENCES:
+            t = t.replace(f, "")
+        return t
+    return _until_stable(str(text), once)
 
 
 def _wiki_text(text: str) -> str:
-    text = str(text).replace("{noformat}", "")
+    text = _strip_noformat(one_line(text))
     text = _WIKI_SPECIAL.sub(r"\\\1", text)
     return _WIKI_LINE_HEAD.sub(lambda m: m.group(1) + "\\" + m.group(2), text)
+
+
+def _md_text(text: str) -> str:
+    text = _strip_fences(one_line(text))
+    return _MD_LINE_HEAD.sub(lambda m: m.group(1) + "\\" + m.group(2), text)
 
 
 def render_jira_wiki(sections: dict, tail: str | None = None) -> str:
@@ -105,7 +141,7 @@ def render_jira_wiki(sections: dict, tail: str | None = None) -> str:
         out.append(f"h3. {name}")
         for item in sections.get(name) or []:
             if item["kind"] == "code":
-                lines = [str(t).replace("{noformat}", "") for t in item["text"]]
+                lines = [_strip_noformat(one_line(t)) for t in item["text"]]
                 out += ["{noformat}", *lines, "{noformat}"]
             else:
                 out.append("* " + _wiki_text(item["text"]))
@@ -121,13 +157,13 @@ def render_markdown(sections: dict, tail: str | None = None) -> str:
         out.append(f"### {name}")
         for item in sections.get(name) or []:
             if item["kind"] == "code":
-                lines = [str(t).replace(_FENCE, "") for t in item["text"]]
+                lines = [_strip_fences(one_line(t)) for t in item["text"]]
                 out += [_FENCE, *lines, _FENCE]
             else:
-                out.append("- " + str(item["text"]).replace(_FENCE, ""))
+                out.append("- " + _md_text(item["text"]))
         out.append("")
     if tail:
-        out += ["---", "*" + tail.replace("*", "") + "*"]
+        out += ["---", "*" + _md_text(tail).replace("*", "") + "*"]
     return normalize_body("\n".join(out))
 
 
@@ -264,6 +300,8 @@ def read_json(path: Path) -> dict | None:
 
 def check_call(tool: str, tool_input, spec: dict, work_dir: Path | None, at: datetime | None = None) -> str | None:
     """코멘트 도구 호출을 승인 기록과 대조한다 → 문제 문자열 또는 None(승인과 일치).
+    본문은 정규화 sha256이 승인과 같고, 정규화 전 입력이 `post.md`와 글자 그대로 같아야 한다(LF/CRLF·끝 줄바꿈 하나만 허용).
+    같은 본문의 posted 이력은 승인 기록의 `again: true`(render --again)일 때만 건너뛴다. 결과 불명(unknown)은 늘 거부.
     guard는 판정만 한다(파일을 쓰지 않는다). 1회용 표시(`used_at`)는 PostToolUse(jira_bridge)가 한다."""
     at = at or now()
     key_arg, body_arg, extra = spec["key_arg"], spec["body_arg"], spec.get("extra_args") or {}
@@ -304,8 +342,11 @@ def check_call(tool: str, tool_input, spec: dict, work_dir: Path | None, at: dat
         result = read_json(job / RESULT_FILE)
     except (OSError, ValueError) as exc:
         return f"게시 결과 기록 손상({type(exc).__name__})"
-    if result and result.get("status") == "posted" and result.get("body_sha256") == record.get("body_sha256"):
-        return "이미 게시됨(같은 본문)"
+    if result and result.get("body_sha256") == record.get("body_sha256"):
+        if result.get("status") == "unknown":    # 결과 처리 실패: 게시됐을 수 있다
+            return "이전 게시 결과가 불명이다(게시됐을 수 있다) — Jira에서 확인한다"
+        if result.get("status") == "posted" and record.get("again") is not True:   # --again 승인만 다시 올린다
+            return "이미 게시됨(같은 본문)"
     try:
         deadline = parse_iso(record.get("expires_at"))
     except (TypeError, ValueError):
@@ -314,4 +355,12 @@ def check_call(tool: str, tool_input, spec: dict, work_dir: Path | None, at: dat
         return f"승인 만료({APPROVAL_TTL_MIN}분) — render부터 다시"
     if body_sha256(body) != record.get("body_sha256"):
         return "본문이 승인한 본문과 다르다(sha256 불일치)"
+    # 실제로 올라가는 것은 정규화 전 입력이다: post.md와 글자 그대로(줄바꿈 LF/CRLF 차이와 끝 줄바꿈 하나만 허용) 같아야 한다
+    try:
+        post = (job / POST_FILE).read_text(encoding="utf-8")
+    except OSError:
+        return "본문 파일(post.md)이 없다"
+    sent, want = body.replace("\r\n", "\n"), post.replace("\r\n", "\n")
+    if sent not in (want, want.removesuffix("\n")):
+        return "본문이 post.md와 글자 그대로 같지 않다(공백·줄 끝·유니코드 형태 차이)"
     return None

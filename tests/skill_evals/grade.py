@@ -1328,6 +1328,9 @@ _SHA_OUT = re.compile(r"post_sha256\"?\s*:\s*\"?([0-9a-f]{64})")
 _SHA_ARG = re.compile(r"--sha[=\s]+[\"']?([0-9a-f]{64})")
 _BASIS_TAGS = ("[로그로 확인]", "[코드로 추정]", "[placeholder 규칙 결과]", "[탐색 분석 가설]")
 _POST_SECTIONS = ("PROBLEM", "CAUSE", "NEXT ACTION", "ANALYSIS")
+_EDIT_REQUEST = "설정 메뉴에서 모바일 데이터 상태를 확인한다"     # eval 61 user_replies의 수정 요청 문구
+_NOT_POSTED = re.compile(r"게시(가)?\s*(안\s*됨|안\s*됐|되지\s*않았|하지\s*않았|하지\s*못했|못\s*했)|올라가지\s*않았|올리지\s*못했")
+_POST_PATH = re.compile(r"(?:(?<![\w./-])(?:JOB|MOCK-1001|<KEY>)|/MOCK-1001)/post\.md(?![A-Za-z0-9_.])")
 
 
 def _sections(body: str) -> dict[str, str] | None:
@@ -1368,6 +1371,20 @@ def checks_j(eid, ctx):
     def lock_clone():
         (a, ea), (b, eb) = ctx.lock_free(), ctx.clone_same()
         return a and b, f"{ea}; {eb}"
+
+    def render_bodies() -> list[str]:
+        """render --fill 출력(화면 마크다운 또는 --json의 screen)에서 `--- 본문 … ---`과 `--- 끝 ---` 사이를 순서대로."""
+        out = []
+        for _, _, res in bash_at(_ISSUE_POST + r"render\b[^|\n;&]*--fill"):
+            try:
+                doc = json.loads(res)
+                text = str(doc.get("screen") or "") if isinstance(doc, dict) else res
+            except ValueError:
+                text = res
+            m = re.search(r"^--- 본문[^\n]*---\n(.*?)^--- 끝 ---", text, re.S | re.M)
+            if m:
+                out.append(m.group(1))
+        return out
 
     def posted_body() -> str | None:
         p = Path(ctx.env["env"]["MOCK_JIRA_WRITE_LOG"])
@@ -1416,10 +1433,19 @@ def checks_j(eid, ctx):
                 return False, "PROBLEM·CAUSE·NEXT ACTION·ANALYSIS 머리가 이 순서로 없음"
             plain = {k: v.replace("\\", "") for k, v in parts.items()}   # jira-wiki 이스케이프(\[ \])를 벗긴다
             tags = [t for t in _BASIS_TAGS if t in plain["CAUSE"]]
-            asked = "설정 메뉴에서 모바일 데이터 상태를 확인한다" in plain["NEXT ACTION"]
+            asked = _EDIT_REQUEST in plain["NEXT ACTION"]
             if not tags or not asked:
                 return False, f"CAUSE 근거 표시={tags} NEXT ACTION 수정 문구={'있음' if asked else '없음'}"
-            raise _Manual(f"4칸 순서·근거 표시 {tags}·수정 문구 있음 — 설명 줄마다 표시는 transcript로")
+            # 수정 반영: 첫 render --fill 본문에는 없고 마지막 본문에는 있어야 한다(처음부터 있던 문장이면 반영을 구분할 수 없다)
+            bodies = render_bodies() if seq is not None else []
+            if len(bodies) < 2:
+                raise _Manual(f"4칸 순서·근거 표시 {tags}·수정 문구 있음 — render 본문 기록 {len(bodies)}개라 수정 반영은 transcript로")
+            first, last = (_EDIT_REQUEST in b.replace("\\", "") for b in (bodies[0], bodies[-1]))
+            if not last:
+                return False, "마지막 render 본문에 수정 요청 문구 없음"
+            if first:
+                raise _Manual("첫 render 본문에도 수정 요청 문구가 있어 반영 여부를 구분할 수 없다 — transcript로")
+            raise _Manual(f"4칸 순서·근거 표시 {tags}·수정 반영(첫 본문 없음 → 마지막 본문 있음) — 설명 줄마다 표시는 transcript로")
 
         def approval_asked():
             hits = [r.get("tool_name") for r in ctx.approvals() if str(r.get("tool_name") or "").endswith("__" + JIRA_NOTE_TOOL)]
@@ -1472,11 +1498,13 @@ def checks_j(eid, ctx):
             return ok, f"Jira 쓰기 시도={tried} approve={approve}"
 
         def told_not_posted():
-            texts = "\n".join([*(ctx.texts() or []), ctx.transcript])
-            said = bool(re.search(r"게시\s*(안\s*됨|되지\s*않|하지\s*않|안\s*했)", texts)) and "post.md" in texts
-            if said:
-                return True, "'게시 안 됨'과 post.md 위치 표현 있음"
-            raise _Manual("'게시 안 됨'·post.md 표현을 찾지 못함 — transcript로")
+            # 같은 메시지 안에 (1) 이번 게시가 안 됐다는 과거·완료 표현과 (2) 본문 파일 경로(JOB/post.md·<KEY>/post.md)가 함께 있어야 한다.
+            # reference/post.md 같은 문서 이름이나 "dry-run이면 게시하지 않는다" 같은 일반 문장만으로는 통과하지 않는다
+            chunks = [*(ctx.texts() or []), ctx.transcript]
+            hit = next((t for t in chunks if _NOT_POSTED.search(t) and _POST_PATH.search(t)), None)
+            if hit:
+                return True, f"'게시 안 됨'과 본문 경로 {_POST_PATH.search(hit).group(0)} 함께 있음"
+            raise _Manual("'게시 안 됨'과 JOB/post.md(또는 MOCK-1001/post.md) 경로를 한 메시지에서 찾지 못함 — transcript로")
 
         def nothing_written():
             from common import issuepost

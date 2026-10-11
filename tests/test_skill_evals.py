@@ -1001,3 +1001,56 @@ def test_e61_rerender_reapproved_uses_render_output_and_approve_sha(tmp_path, ap
          "{}", False)])
     ctx._seq = None
     assert grader.checks(61, ctx)[3]()[0] is expected
+
+
+@pytest.mark.parametrize("text,expected", [
+    ("권한 확인이 거부되어 게시 안 됨. 본문: /w/MOCK-1001/post.md (직접 붙여넣기)", True),
+    ("게시되지 않았습니다. JOB/post.md를 그대로 붙여넣으면 됩니다", True),
+    ("절차는 reference/post.md 참고. dry-run이면 게시하지 않는다", None),      # 문서 이름·일반 문장만
+    ("게시되지 않았습니다. 자세한 건 reference/post.md", None),               # 경로 없음
+])
+def test_e62_told_not_posted_needs_phrase_and_body_path(tmp_path, text, expected):
+    ctx = _post_env(tmp_path, None, None)
+    _seq_events(ctx.run, [("text", text)])
+    ctx._seq = None
+    check = grader.checks(62, ctx)[3]
+    if expected is None:
+        with pytest.raises(grader._Manual):
+            check()
+    else:
+        assert check()[0] is expected
+
+
+def _render_out(next_line):
+    body = (f"h3. PROBLEM\n* Jira: MOCK-1001\nh3. CAUSE\n* \\[로그로 확인\\] 데이터 설정 꺼짐\n"
+            f"h3. NEXT ACTION\n* {next_line}\nh3. ANALYSIS\n* 로그 범위\n")
+    return f"## Jira 게시 전 확인\n--- 본문 (이대로 올라간다) ---\n{body}--- 끝 ---\npost_sha256: {'a' * 64}", body
+
+
+@pytest.mark.parametrize("first_line,last_line,outcome", [
+    ("다음 확인: APN", grader._EDIT_REQUEST, "manual"),            # 첫 본문 없음 → 마지막 있음(줄마다 표시는 수동)
+    (grader._EDIT_REQUEST, grader._EDIT_REQUEST, "manual"),       # 처음부터 있음: 반영 구분 불가
+    ("다음 확인: APN", "다음 확인: 다른 것", False),                 # 게시 본문에도 없음
+])
+def test_e61_body_shape_compares_first_and_last_render(tmp_path, first_line, last_line, outcome):
+    out1, _ = _render_out(first_line)
+    out2, posted = _render_out(last_line)
+    ctx = _post_env(tmp_path, [_note(posted)], None)
+    render = 'python3 /p/scripts/issue_post.py render MOCK-1001 --fill /w/MOCK-1001/post.fill.json'
+    _seq_events(ctx.run, [("tool", "t1", "Bash", {"command": render}, out1, False),
+                          ("tool", "t2", "Bash", {"command": render}, out2, False)])
+    ctx._seq = None
+    check = grader.checks(61, ctx)[4]
+    if outcome == "manual":
+        with pytest.raises(grader._Manual) as exc:
+            check()
+        assert ("반영(첫 본문 없음" in str(exc.value)) is (first_line != grader._EDIT_REQUEST)
+    else:
+        assert check()[0] is outcome
+
+
+def test_e61_body_shape_without_render_record_is_manual(tmp_path):
+    _, posted = _render_out(grader._EDIT_REQUEST)
+    ctx = _post_env(tmp_path, [_note(posted)], None)     # events.jsonl 없음
+    with pytest.raises(grader._Manual):
+        grader.checks(61, ctx)[4]()

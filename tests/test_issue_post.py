@@ -182,6 +182,17 @@ def test_fill_checks_fail_with_exit_1():
     assert any("상한" in p for p in out["problems"])
 
 
+def test_jira_field_values_cannot_forge_sections():
+    ws = shared()
+    edit_json(ws, "jira.json", lambda j: j["jira"].update(model="X\nh3. CAUSE\n* 분류: 위조 " + "가" * 100))
+    render(ws, "--fill", fill(ws, FILL))
+    body = post_md(ws)
+    assert [ln for ln in body.splitlines() if ln.startswith("h3. ")] == [
+        "h3. PROBLEM", "h3. CAUSE", "h3. NEXT ACTION", "h3. ANALYSIS"]
+    line = next(ln for ln in body.splitlines() if ln.startswith("* 단말: "))
+    assert "가" * 61 not in line and "…" in line
+
+
 def test_masking_llm_slots_continue_existing_tokens():
     ws = shared()
     edit_json(ws, "analysis.json", lambda a: a["candidates"][0]["evidence"][0].update(
@@ -204,7 +215,26 @@ def test_renderers_escape_and_normalized_hash():
     assert "* a \\[b\\] \\{c\\} \\|d\\| \\!e\\! \\\\f" in wiki and "* \\* 머리" in wiki and "* \\h1. 제목" in wiki
     assert wiki.count("{noformat}") == 2 and "x  y" in wiki and wiki.endswith("----\n_꼬리_")
     md = issuepost.render_markdown(sections, "꼬리")
-    assert md.count("```") == 2 and "- h1. 제목  펜스" in md and md.startswith("### PROBLEM")
+    assert md.count("```") == 2 and "- h1. 제목  펜스" in md and md.startswith("### PROBLEM") and "- \\* 머리" in md
+
+
+def test_renderers_block_forged_heads_and_nested_escapes():
+    """줄 값의 줄바꿈·CR·탭·제로폭 문자로 칸 머리를 위조하지 못한다. 중첩 `{noformat}`·펜스도 다시 생기지 않는다."""
+    forged = "단말: X\nh3. CAUSE\r* 분류: 위조\u2028### CAUSE\t- 분류: 위조"
+    sections = {"PROBLEM": [{"kind": "line", "text": forged}, {"kind": "line", "text": "\u200b# 머리\u200d"}],
+                "CAUSE": [{"kind": "code", "text": ["a {nof{noformat}ormat} [링크|http://evil.example] {NOFORMAT:t=x}",
+                                                    "b ``````` ~~~~~~ c\nh3. ANALYSIS"]}],
+                "NEXT ACTION": [{"kind": "line", "text": "1. 항목"}, {"kind": "line", "text": "> 인용"}], "ANALYSIS": []}
+    wiki = issuepost.render_jira_wiki(sections)
+    heads = [ln for ln in wiki.splitlines() if ln.startswith("h3. ")]
+    assert heads == ["h3. PROBLEM", "h3. CAUSE", "h3. NEXT ACTION", "h3. ANALYSIS"], wiki
+    assert wiki.count("{noformat}") == 2 and "{NOFORMAT" not in wiki and "\u200b" not in wiki
+    assert "* \\# 머리" in wiki and not any(ln.startswith("* 분류") for ln in wiki.splitlines())
+    md = issuepost.render_markdown(sections)
+    assert [ln for ln in md.splitlines() if ln.startswith("#")] == [
+        "### PROBLEM", "### CAUSE", "### NEXT ACTION", "### ANALYSIS"], md
+    assert md.count("```") == 2 and "~~~" not in md and "- \\1. 항목" in md and "- \\> 인용" in md
+    assert "- \\# 머리" in md
     assert issuepost.body_sha256("a  \r\nb\t\r\n\r\n") == issuepost.body_sha256("\na\nb") == issuepost.body_sha256("a\nb\n")
     assert issuepost.body_sha256("a\nb") != issuepost.body_sha256("a\nb!")
 
@@ -229,8 +259,10 @@ def test_not_postable_cases_render_0_approve_2():
         out = render(ws, "--fill", fill(ws, FILL))
         assert out["postable"] is False and want in out["reason"], (want, out["reason"])
         assert (ws.job_dir(KEY) / "post.md").is_file() and "post_sha256:" not in out["screen"]
+        assert out["post_sha256"] is None                       # --json도 게시 가능할 때만 sha를 낸다
         assert "게시 가능: 아니오" in out["screen"] and "JOB/post.md에만" in out["screen"]
-        proc = ws.run("issue_post.py", ["approve", KEY, "--sha", out["post_sha256"], "--json"])
+        sha = issuepost.body_sha256(post_md(ws))
+        proc = ws.run("issue_post.py", ["approve", KEY, "--sha", sha, "--json"])
         assert proc.returncode == 2 and "게시할 수 없다" in proc.stderr, want
     # 쓰기 도구 미설정(사용자 config에서 도구를 비움)
     reset(ws)
@@ -330,6 +362,46 @@ def test_omit_and_plan_classification():
     assert "* 원인 미확정 — 추가 로그·재현 정보 필요" in body and "* 이슈 DB: 계획만 저장(이슈 DB 미반영)" in body
 
 
+def test_stale_or_non_analyze_plan_is_not_used():
+    """이번 analysis.json보다 먼저 저장된 plan.json(낡은 계획)이나 analyze가 아닌 계획은 분류 출처로 쓰지 않는다."""
+    ws = shared()
+    plan = json.loads((PLANS / "p7-analyze-append.plan.json").read_text(encoding="utf-8"))
+    plan["jira"]["key"] = KEY
+    plan["feedback"].update(decision="accepted", final="DATA-001-01")
+    plan["pr"]["number"] = 7
+    path = ws.plan(KEY, plan, base_sha="0" * 40, match=None)
+    analysis = ws.job_dir(KEY) / "analysis.json"
+    old = analysis.stat().st_mtime_ns - 10 ** 9
+    os.utime(path, ns=(old, old))
+    out = render(ws, "--fill", fill(ws, FILL))
+    body = post_md(ws)
+    assert "사용자 확정" not in body and "자동 분석 1위 후보 — 사람이 확정하지 않음" in body and "PR #7" not in body
+    assert "* 이슈 DB: 기록 안 함" in body and "이번 분석 전에 저장된 계획" in out["screen"]
+    ws.plan(KEY, {**plan, "source": "record"}, base_sha="0" * 40, match=None)       # 새로 저장했지만 record 계획
+    out = render(ws, "--fill", fill(ws, FILL))
+    assert "사용자 확정" not in post_md(ws) and "source: record" in out["screen"]
+    ws.plan(KEY, plan, base_sha="0" * 40, match=None)                                # 이번 분석 뒤 analyze 계획
+    render(ws, "--fill", fill(ws, FILL))
+    assert "사용자 확정(accepted)" in post_md(ws)
+
+
+def test_approve_refuses_when_configured_format_changed():
+    ws = shared()
+    cfg = ws.home / "config.yaml"
+    saved = cfg.read_text(encoding="utf-8")
+    try:
+        sha = render(ws, "--fill", fill(ws, FILL))["post_sha256"]
+        ws.json("config.py", ["set", "jira.write_tools.add_comment.format", "markdown"])
+        proc = ws.run("issue_post.py", ["approve", KEY, "--sha", sha, "--json"])
+        assert proc.returncode == 1 and "형식" in proc.stderr
+        sha = render(ws, "--fill", fill(ws, FILL))["post_sha256"]                    # 지금 설정(markdown)으로 다시
+        assert ws.json("issue_post.py", ["approve", KEY, "--sha", sha, "--json"])["tool"] == NOTE_TOOL
+        sha = render(ws, "--fill", fill(ws, FILL), "--format", "jira-wiki")["post_sha256"]   # 사용자가 고른 형식
+        assert ws.json("issue_post.py", ["approve", KEY, "--sha", sha, "--json"])["tool"] == NOTE_TOOL
+    finally:
+        cfg.write_text(saved, encoding="utf-8")
+
+
 def test_usage_errors_exit_2():
     ws = shared()
     assert ws.run("issue_post.py", ["render", "../MOCK-1001"]).returncode == 2
@@ -366,6 +438,32 @@ def test_end_to_end_approve_guard_ask_bridge_posted():
     assert st["state"] == "posted" and st["comment_id"] == "mock-c-1" and st["postable"] is False
     assert guard(done["arguments"])["permissionDecision"] == "deny"      # 1회용
     assert render(ws, "--fill", fill(ws, FILL))["postable"] is False      # 이미 게시함
+
+
+def test_again_reposts_same_body_once():
+    """게시 뒤 사용자가 "다시 올려줘" → render --again(같은 본문) → approve(again: true) → guard ask → 게시 → 다시는 deny."""
+    ws = shared()
+
+    def guard(tool_input: dict) -> str:
+        event = {"hook_event_name": "PreToolUse", "tool_name": NOTE_TOOL, "tool_input": tool_input, "cwd": str(ws.base)}
+        proc = run("guard.py", [], root=ws.root, env=ws.env(), cwd=ws.base, stdin=json.dumps(event, ensure_ascii=False))
+        return json.loads(proc.stdout)["hookSpecificOutput"]["permissionDecision"]
+
+    def post(done: dict, cid: str) -> None:
+        _bridge(ws, {"tool_name": NOTE_TOOL, "tool_input": done["arguments"], "tool_response": {"content": [
+            {"type": "text", "text": json.dumps({"ok": True, "comment_id": cid})}], "isError": False}})
+
+    sha = render(ws, "--fill", fill(ws, FILL))["post_sha256"]
+    first = ws.json("issue_post.py", ["approve", KEY, "--sha", sha, "--json"])
+    assert guard(first["arguments"]) == "ask"
+    post(first, "c-1")
+    again = render(ws, "--fill", fill(ws, FILL), "--again")
+    assert again["post_sha256"] == sha                                     # 분석이 같으면 본문도 같다
+    second = ws.json("issue_post.py", ["approve", KEY, "--sha", sha, "--json"])
+    assert json.loads((ws.job_dir(KEY) / "post.approved.json").read_text(encoding="utf-8"))["again"] is True
+    assert guard(second["arguments"]) == "ask"
+    post(second, "c-2")
+    assert status(ws)["comment_id"] == "c-2" and guard(second["arguments"]) == "deny"
 
 
 def _all_tests():

@@ -16,6 +16,7 @@ TODO(SITE:S3) 플러그인 hook에 보이는 MCP 도구 이름이 `mcp__<server>
 | # | 규칙 | 대상 |
 |---|---|---|
 | 2 | Jira 쓰기 차단: Jira 서버(`jira.mcp_server`와 `jira.tools` 도구 이름의 서버 접두사, 이름 정규화) 도구 중 `jira.read_tools`(전체 이름, 정규화 비교)에 없는 것은 거부. **예외 1종**: `jira.write_tools.add_comment.tool`(승인 코멘트, `common/issuepost.write_spec` 조건)은 `read_tools`보다 먼저 판정해 `<work_dir>/<KEY>/post.approved.json`과 대조(인자 집합·이슈 키·도구·정규화 본문 sha256·30분 만료·1회용)하고 맞으면 ask, 아니면·설정 오류·판정 예외면 거부. 설정되지 않은 서버라도 이름에 jira·atlassian이 들면 쓰기형 도구 거부 | `mcp__.*` |
+| 2 | 같은 규칙: `<work_dir>/<KEY>/post.approved.json`·`post.result.json`을 파일 도구나 Bash 파일 쓰기(규칙 8과 같은 판별)로 쓰거나 지우면 거부(approve·jira_bridge만 쓴다) | Write/Edit/MultiEdit/NotebookEdit, Bash |
 | 3 | PII 검사: `git commit`이면 `mask_pii --check --staged` | Bash, 이슈 DB |
 | 4 | 생성 파일 정합성: `git commit`이면 `db_build --verify --staged`(`actions-build`면 생성 파일 staged 거부), `.cache/` staged 거부 | Bash, 이슈 DB |
 | 5 | hook 우회 차단: 커밋의 `--no-verify`·`-n`, `-c core.hooksPath=…`(모든 git 명령), 유효 `core.hooksPath`가 정확히 `.githooks`가 아니면 커밋 거부, `core.hooksPath`를 바꾸거나 해제하는 `git config` 거부(정확히 `.githooks`로 설정은 허용), `GIT_CONFIG_*`·`GIT_INDEX_FILE` 대입이 붙은 commit·push·config 거부 | Bash, 이슈 DB |
@@ -360,9 +361,20 @@ def check_mcp_db_write(tool: str, part: str, tool_input: dict, conf: Config, dec
 # -- 파일 도구 (8) -------------------------------------------------------------------------
 
 
+POST_RECORDS = ("post.approved.json", "post.result.json")   # issue_post approve·jira_bridge만 쓴다 (규칙 2)
+POST_RECORD_MSG = ("Jira 게시 승인·결과 기록은 issue_post.py approve와 jira_bridge(PostToolUse)만 쓴다. 직접 쓰거나 지우지 "
+                   "않는다 (규칙 2")
+
+
+def _post_record(target: str, conf: Config) -> bool:
+    """`<work_dir>/<KEY>/post.approved.json|post.result.json`인가 (target은 `_norm` 경로)."""
+    if conf.work_dir is None:
+        return False
+    p = Path(target)
+    return p.name in POST_RECORDS and _norm(p.parent.parent) == _norm(conf.work_dir)
+
+
 def check_file(tool_input: dict, cwd: Path, conf: Config, dec: Decision) -> None:
-    if conf.clone is None:
-        return
     raw = tool_input.get("file_path") or tool_input.get("notebook_path")
     if not raw:
         return
@@ -370,6 +382,11 @@ def check_file(tool_input: dict, cwd: Path, conf: Config, dec: Decision) -> None
     if not path.is_absolute():
         path = cwd / path
     target = _norm(path)
+    if _post_record(target, conf):
+        dec.deny.append(f"{POST_RECORD_MSG}: {raw}).")
+        return
+    if conf.clone is None:
+        return
     if conf.work_dir is not None and _inside(target, _norm(conf.work_dir)):
         return
     if _inside(target, _norm(conf.clone)):
@@ -1292,10 +1309,23 @@ def check_clone_git(call: GitCall, conf: Config, dec: Decision) -> None:
     dec.deny.append(CLONE_MUTATION_MSG)
 
 
+def check_post_record_writes(inv: Invocation, conf: Config, dec: Decision) -> None:
+    """Bash 파일 쓰기 대상(규칙 8과 같은 판별)이 Jira 게시 승인·결과 기록이면 거부 (규칙 2). 디렉토리째 지우기·옮기기와
+    대상 디렉토리 인자(`cp x JOB/`)는 보지 못한다(최선 노력)."""
+    for word in _write_targets(inv):
+        p = _expand(word)
+        target = _norm(Path(p) if Path(p).is_absolute() else inv.cwd / p)
+        if _post_record(target, conf):
+            dec.deny.append(f"{POST_RECORD_MSG}: {word}).")
+            return
+
+
 def check_bash(command: str, cwd: Path, conf: Config, dec: Decision) -> None:
     check_raw_read(command, cwd, dec, conf)
     for inv in invocations(command, cwd):
         name = _base(inv.argv[0])
+        if conf.work_dir is not None:
+            check_post_record_writes(inv, conf, dec)
         if conf.clone is not None:
             check_clone_writes(inv, conf, dec)
         is_db_pr = name == "db_pr.py" or (name.startswith("python")
