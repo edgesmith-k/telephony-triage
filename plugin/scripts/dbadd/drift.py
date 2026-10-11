@@ -98,9 +98,9 @@ def drift_items(plan: dict, base: Snapshot, onto: Snapshot) -> list[dict]:
                     add(i, op, t.id, "similar-type", None, {"id": t.id, "title": t.title},
                         {"title": spec["title"]})
         elif kind == "reclassify":
-            a, b = base.jira(op["jira"]), onto.jira(op["jira"])
+            a, b = base.jira(op["issue"]), onto.jira(op["issue"])
             if b is None or str(b.get("cause")) != op["from"]:
-                add(i, op, op["jira"], "cause", a.get("cause") if a else None, b.get("cause") if b else None,
+                add(i, op, op["issue"], "cause", a.get("cause") if a else None, b.get("cause") if b else None,
                     op.get("to"))
         elif kind in ("update-fix", "verify-fix"):
             if TEMP_RE.fullmatch(op["cause"]):

@@ -11,11 +11,11 @@
 TODO(SITE:S1) hook 입력 필드(`tool_name`, `tool_input.command|file_path|notebook_path`, `cwd`)와 권한 결정 출력
 형식(`hookSpecificOutput.permissionDecision`)을 사내 Claude Code 버전에서 확인한다 (사외 빈 플러그인 실험도 미확인).
 TODO(SITE:S3) 플러그인 hook에 보이는 MCP 도구 이름이 `mcp__<server>__<tool>`이고 `<server>`가 config
-`jira.mcp_server`를 `[^A-Za-z0-9_-]`→`_`로 바꾼 문자열인지 확인한다 (치환 규칙은 관측 기반 추정, `mcptools.server_segment`).
+`tracker.mcp_server`를 `[^A-Za-z0-9_-]`→`_`로 바꾼 문자열인지 확인한다 (치환 규칙은 관측 기반 추정, `mcptools.server_segment`).
 
 | # | 규칙 | 대상 |
 |---|---|---|
-| 2 | Jira 쓰기 차단: Jira 서버(`jira.mcp_server`와 `jira.tools` 도구 이름의 서버 접두사, 이름 정규화) 도구 중 `jira.read_tools`(전체 이름, 정규화 비교)에 없는 것은 거부. **예외 1종**: `jira.write_tools.add_comment.tool`(승인 코멘트, `common/issuepost.write_spec` 조건)은 `read_tools`보다 먼저 판정해 `<work_dir>/<KEY>/post.approved.json`과 대조(인자 집합·이슈 키·도구·정규화 본문 sha256·30분 만료·1회용)하고 맞으면 ask, 아니면·설정 오류·판정 예외면 거부. 설정되지 않은 서버라도 이름에 jira·atlassian이 들면 쓰기형 도구 거부 | `mcp__.*` |
+| 2 | Jira 쓰기 차단: Jira 서버(`tracker.mcp_server`와 `tracker.tools` 도구 이름의 서버 접두사, 이름 정규화) 도구 중 `tracker.read_tools`(전체 이름, 정규화 비교)에 없는 것은 거부. **예외 1종**: `tracker.write_tools.add_comment.tool`(승인 코멘트, `common/issuepost.write_spec` 조건)은 `read_tools`보다 먼저 판정해 `<work_dir>/<KEY>/post.approved.json`과 대조(인자 집합·이슈 키·도구·정규화 본문 sha256·30분 만료·1회용)하고 맞으면 ask, 아니면·설정 오류·판정 예외면 거부. 설정되지 않은 서버라도 이름에 jira·atlassian이 들면 쓰기형 도구 거부. 옛 설정 키(`jira:` 등, `userconfig.legacy_problems`)가 남아 있으면 모든 MCP 호출 거부 | `mcp__.*` |
 | 2 | 같은 규칙: `<work_dir>/<KEY>/post.approved.json`·`post.result.json`을 파일 도구나 Bash 파일 쓰기(규칙 8과 같은 판별)로 쓰거나 지우면 거부(approve·jira_bridge만 쓴다) | Write/Edit/MultiEdit/NotebookEdit, Bash |
 | 3 | PII 검사: `git commit`이면 `mask_pii --check --staged` | Bash, 이슈 DB |
 | 4 | 생성 파일 정합성: `git commit`이면 `db_build --verify --staged`(`actions-build`면 생성 파일 staged 거부), `.cache/` staged 거부 | Bash, 이슈 DB |
@@ -24,7 +24,7 @@ TODO(SITE:S3) 플러그인 hook에 보이는 MCP 도구 이름이 `mcp__<server>
 | 7 | push 확인 강제: 이슈 DB `git push`와 `db_pr.py publish`는 `ask` (옵션 `--commit`·`--and-discard`와 무관: `publish` 토큰만 본다) | Bash |
 | 8 | 사용자 clone 직접 편집 차단: 대상 파일이 `issue_db.path` 안이면 거부(`work_dir` 아래는 제외) | Write/Edit/MultiEdit/NotebookEdit |
 | 8 | 같은 규칙, Bash: clone 본체에서 브랜치·파일을 바꾸는 git·`gh pr checkout`, clone 안으로의 파일 쓰기(리디렉션·tee·cp·rm·`sed -i` 등) 거부. migrate 브랜치 생성(깨끗한 트리)은 ask | Bash, clone 본체 |
-| 10 | 로그 원문 통독 차단: cat·tac·nl·less·more·bat·strings·zcat·zless·bzcat·xzcat, `head/tail -c`, `unzip -p/-c`가 로그 원문·zip·bugreport·`events*.json`·`jira_raw.json`·`match.json`을 통째로 읽으면 거부(`fixtures/`·`draft/` 제외, 사용자 config와 무관) | Bash |
+| 10 | 로그 원문 통독 차단: cat·tac·nl·less·more·bat·strings·zcat·zless·bzcat·xzcat, `head/tail -c`, `unzip -p/-c`가 로그 원문·zip·bugreport·`events*.json`·`issue_raw.json`·`match.json`을 통째로 읽으면 거부(`fixtures/`·`draft/` 제외, 사용자 config와 무관) | Bash |
 | 11 | 이슈 DB 원격 쓰기 확인: 대상이 이슈 DB인 `gh` 쓰기는 ask·`pr merge`는 거부, 비Jira MCP 쓰기형 도구(`owner`/`repo` 인자)도 같게 | Bash, `mcp__.*` |
 
 (1번은 SessionStart의 `config.py sync-scripts-path`다.)
@@ -40,8 +40,8 @@ TODO(SITE:S3) 플러그인 hook에 보이는 MCP 도구 이름이 `mcp__<server>
 
 **설정 없음**: 사용자 config가 없거나 `issue_db.path`로 레포를 판별할 수 없으면 git·파일 규칙은 적용하지 않는다.
 `issue_db.remote`가 없으면 11번을 적용하지 않는다.
-`jira.mcp_server`와 `jira.tools`가 모두 비어 있으면 설정 서버 규칙은 적용하지 않고 경고만 한다(이름 기반 거부는 적용). `jira.read_tools`가 비어 있으면 그 서버 도구는
-모두 거부한다. `jira.write_tools`가 없으면 코멘트 예외가 없다(모든 Jira 쓰기 거부). 사용자 config가 없으면 승인 기록을 찾을 수
+`tracker.mcp_server`와 `tracker.tools`가 모두 비어 있으면 설정 서버 규칙은 적용하지 않고 경고만 한다(이름 기반 거부는 적용). `tracker.read_tools`가 비어 있으면 그 서버 도구는
+모두 거부한다. `tracker.write_tools`가 없으면 코멘트 예외가 없다(모든 Jira 쓰기 거부). 사용자 config가 없으면 승인 기록을 찾을 수
 없으므로 코멘트 도구도 거부한다. hook은 모든 도구 호출에 걸리므로, `site-defaults.yaml`이 없어도 guard는 멈추지 않고 사용자 config만으로
 판정한다(경고). 이때 커밋 검사(3·4번)가 부르는 스크립트는 종료 코드 2를 내므로 이슈 DB 커밋은 거부된다.
 
@@ -99,7 +99,7 @@ HEREDOC_RE = re.compile(r"<<-?\s*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\1")
 
 # 규칙 10: 로그 원문 통독 차단
 RAW_ALWAYS_CMDS = {"cat", "tac", "nl", "less", "more", "bat", "strings", "zcat", "zless", "bzcat", "xzcat"}
-RAW_NAMES = {"events.json", "events-full.json", "jira_raw.json", "match.json"}
+RAW_NAMES = {"events.json", "events-full.json", "issue_raw.json", "match.json"}
 RAW_EXEMPT_DIRS = {"fixtures", "draft"}
 RAW_GLOB_MAX = 20
 RAW_SNIFF_BYTES = 8192
@@ -213,6 +213,8 @@ class Config:
             ok = isinstance(raw, str) and raw.strip() and os.path.isabs(os.path.expanduser(raw))
             if ok and not any(_inside(c, _norm(p.work_dir)) for c in clones):
                 p.exempt = p.work_dir
+        # 옛 설정 키(jira: 등)가 남아 있으면 규칙 2의 설정 서버가 비어 보인다 → check_mcp가 모든 MCP를 거부한다(fail-closed)
+        self.legacy = userconfig.legacy_problems(defaults, self.user)
         problems = userconfig.profile_problems(self.user) if self.user else []
         if problems:
             self.warnings.append("사용자 config 플랫폼 프로필 문제(보호는 유지, 잘못된 work_dir은 예외 근거로 쓰지 않는다): "
@@ -365,7 +367,11 @@ def _origin_slug(cwd: Path) -> tuple | None:
 
 
 def check_mcp(tool: str, tool_input: dict, conf: Config, dec: Decision) -> None:
-    # Jira 서버 접두사: mcp_server ∪ jira.tools 이름의 서버 (플러그인 번들 `mcp__plugin_…`도 덮는다). 넓을수록 안전 쪽
+    if conf.legacy:
+        dec.deny.append(f"옛 설정 키가 남아 있다: {'; '.join(conf.legacy[:3])} — tracker:로 바꾼다 (규칙 2). "
+                        f"{tool} 호출을 거부한다.")
+        return
+    # Jira 서버 접두사: mcp_server ∪ tracker.tools 이름의 서버 (플러그인 번들 `mcp__plugin_…`도 덮는다). 넓을수록 안전 쪽
     prefixes = issuepost.jira_prefixes(conf.cfg)
     name = mcptools.normalize(tool)
     # 설정된 코멘트 도구는 read_tools보다 먼저 본다: read_tools에 넣어도 승인을 건너뛸 수 없다.
@@ -379,13 +385,13 @@ def check_mcp(tool: str, tool_input: dict, conf: Config, dec: Decision) -> None:
             check_jira_post(tool, tool_input, spec, conf, dec)
         return
     if prefixes and any(name.startswith(p) for p in prefixes):
-        read_tools = userconfig.get(conf.cfg, "jira.read_tools") or []
+        read_tools = userconfig.get(conf.cfg, "tracker.read_tools") or []
         if name not in {mcptools.normalize(t) for t in read_tools}:
-            dec.deny.append(f"이 플러그인은 Jira 읽기 전용이다(예외: 승인한 코멘트 추가 1종, jira.write_tools.add_comment). "
-                            f"{tool}은(는) jira.read_tools에 없어 거부한다 (규칙 2).")
+            dec.deny.append(f"이 플러그인은 Jira 읽기 전용이다(예외: 승인한 코멘트 추가 1종, tracker.write_tools.add_comment). "
+                            f"{tool}은(는) tracker.read_tools에 없어 거부한다 (규칙 2).")
         return
     if not prefixes:
-        dec.warn.append("jira.mcp_server가 비어 있어 Jira 읽기 전용 규칙을 적용하지 않았다 (setup 전).")
+        dec.warn.append("tracker.mcp_server가 비어 있어 Jira 읽기 전용 규칙을 적용하지 않았다 (setup 전).")
     hit = mcptools.NAME_RE.match(tool)
     srv, part = (hit.group(1), hit.group(2)) if hit else ("", tool)
     # 설정되지 않은 서버라도 이름에 jira/atlassian이 들면 쓰기형 도구는 거부한다 (서버 이름 휴리스틱)
@@ -1105,7 +1111,7 @@ def check_raw_read(command: str, cwd: Path, dec: Decision, conf: Config) -> None
                     hit = False
                 if hit:
                     dec.deny.append(
-                        "로그 원문·zip·events/jira_raw/match.json은 통째로 읽지 않는다(원칙 §로그 원문, "
+                        "로그 원문·zip·events/issue_raw/match.json은 통째로 읽지 않는다(원칙 §로그 원문, "
                         f"규칙 10: {verb} {arg}). grep -n '<패턴>' <파일> 또는 sed -n '<a>,<b>p' <파일>로 필요한 "
                         "줄만, bugreport는 parse_logcat.py extract-bugreport. Read 도구도 limit·offset으로 구간만.")
                     return

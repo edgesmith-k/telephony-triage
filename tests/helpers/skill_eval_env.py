@@ -97,7 +97,7 @@ NEW_DATA_CAUSE = """  - id: DATA-001-03
     resolution_verification: {status: unverified}
     fix: {status: not-a-bug, ref: null, fixed_in: [], verification: null, verification_history: []}
     related: []
-    android_versions: []
+    platform_versions: []
     code_refs: []
 """
 
@@ -128,10 +128,10 @@ def main_e015(root: Path, ws: Workspace) -> str:
     Android 17 트리에서는 그 파일이 fail/ 아래로 옮겨져 있어 "경로 변경"을 찾아야 한다."""
     old = ("      - ref: aosp:frameworks/base/telephony/java/android/telephony/DataFailCause.java\n"
            "        symbol: DataFailCause#toString\n"
-           "        android_versions: [\"16\"]\n"
+           "        platform_versions: [\"16\"]\n"
            "      - ref: aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/fail/DataFailCause.java\n"
            "        symbol: DataFailCause#toString\n"
-           "        android_versions: [\"17\"]\n")
+           "        platform_versions: [\"17\"]\n")
     new = ("      - ref: aosp:frameworks/base/telephony/java/android/telephony/DataFailCause.java\n"
            "        symbol: DataFailCause#toString\n")
     _edit_type(root, "DATA-001", old, new)

@@ -39,7 +39,7 @@ def load_plan(name: str) -> dict:
 def radio_off_plan(key: str = "MOCK-7010") -> dict:
     """p7-analyze-new-cause와 같은 유형·번호 자리에 다른 원인(DATA_THROTTLED)을 넣는 계획."""
     plan = load_plan("p7-analyze-new-cause.plan.json")
-    plan["jira"]["key"] = key
+    plan["issue"]["key"] = key
     cause = plan["operations"][0]["cause"]
     cause["title"] = "무선 꺼짐"
     cause["description"] = "무선이 꺼진 상태에서 데이터 평가가 거부됨"
@@ -65,7 +65,7 @@ def cause_of(type_md: str, cause_id: str) -> dict | None:
 def pending_feedback(ws: Workspace, key: str = "MOCK-1199") -> Path:
     path = ws.home / "pending-feedback" / f"{key}-20260928T0900.yaml"
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(f"jira: {key}\ndate: 2026-09-28T09:00+09:00\nby: mock-user1\nsuggested: []\n"
+    path.write_text(f"issue: {key}\ndate: 2026-09-28T09:00+09:00\nby: mock-user1\nsuggested: []\n"
                     "decision: unresolved\nfinal: unresolved\n", encoding="utf-8")
     return path
 
@@ -86,7 +86,7 @@ def test_each_op_reaches_pr():
     ws = Workspace()
     ws.plan("MOCK-7001", "p7-analyze-append.plan.json")
     ws.ship("MOCK-7001", "issue/MOCK-7001")
-    jira = yaml.safe_load(ws.remote_file("issue/MOCK-7001", f"{DATA_DIR}/jira/MOCK-7001.yaml"))
+    jira = yaml.safe_load(ws.remote_file("issue/MOCK-7001", f"{DATA_DIR}/issues/MOCK-7001.yaml"))
     assert jira["cause"] == "DATA-001-02" and jira["analyzed_by"] == "mock-user1"
 
     ws.plan("MOCK-7002", "p7-analyze-new-cause.plan.json")
@@ -111,12 +111,12 @@ def test_each_op_reaches_pr():
 
     ws.plan("MOCK-7004", "p7-analyze-unresolved.plan.json")
     ws.ship("MOCK-7004", "issue/MOCK-7004")
-    assert yaml.safe_load(ws.remote_file("issue/MOCK-7004", f"{DATA_DIR}/jira/MOCK-7004.yaml"))["cause"] == \
+    assert yaml.safe_load(ws.remote_file("issue/MOCK-7004", f"{DATA_DIR}/issues/MOCK-7004.yaml"))["cause"] == \
         "unresolved"
 
     ws.plan("review-data-2026-10", "p7-review-reclassify.plan.json")
     ws.ship("review-data-2026-10", "review/data-2026-10")
-    moved = yaml.safe_load(ws.remote_file("review/data-2026-10", f"{DATA_DIR}/jira/MOCK-1104.yaml"))
+    moved = yaml.safe_load(ws.remote_file("review/data-2026-10", f"{DATA_DIR}/issues/MOCK-1104.yaml"))
     assert moved["cause"] == "DATA-001-01" and "reclassified from unresolved" in moved["note"]
 
     titles = {p["branch"]: p["title"] for p in ws.prs()}
@@ -131,7 +131,7 @@ def test_each_op_reaches_pr():
 def test_reclassify_needs_jira_in_main_and_append_stops_on_existing():
     ws = Workspace()
     plan = load_plan("p7-review-reclassify.plan.json")
-    plan["operations"][0]["jira"] = "MOCK-9999"
+    plan["operations"][0]["issue"] = "MOCK-9999"
     ws.plan("review-x", plan)
     ws.acquire("review-x")
     out = ws.stage("review-x", "review/x", expect=1)
@@ -139,14 +139,14 @@ def test_reclassify_needs_jira_in_main_and_append_stops_on_existing():
     ws.db_pr("discard", ws.wt("review-x"))
 
     plan = load_plan("p7-analyze-append.plan.json")
-    plan["jira"]["key"] = "MOCK-1101"
+    plan["issue"]["key"] = "MOCK-1101"
     ws.plan("MOCK-1101", plan)
     ws.acquire("MOCK-1101")
     out = ws.stage("MOCK-1101", "issue/MOCK-1101", expect=1)
     rejected = out["apply"]["rejected"][0]
-    assert rejected["code"] == "jira-exists" and rejected["existing"]["cause"] == "DATA-001-01"
-    pre = ws.db_pr("preflight", "--branch", "issue/MOCK-1101", "--search", "MOCK-1101", "--jira", "MOCK-1101")
-    assert pre["jira_in_main"]["cause"] == "DATA-001-01"
+    assert rejected["code"] == "issue-exists" and rejected["existing"]["cause"] == "DATA-001-01"
+    pre = ws.db_pr("preflight", "--branch", "issue/MOCK-1101", "--search", "MOCK-1101", "--issue", "MOCK-1101")
+    assert pre["issue_in_main"]["cause"] == "DATA-001-01"
     ws.db_pr("discard", ws.wt("MOCK-1101"))
 
 
@@ -164,7 +164,7 @@ def test_record_labels_pending_rules_and_sync_keeps_pending():
     assert stage["apply"]["pending_included"] == [], "record에는 pending 피드백을 넣지 않는다"
     summary = ws.db_pr("summary", ws.wt("MOCK-7005"))
     assert summary["source_label"].startswith("수동 기록")
-    assert summary["jira"]["label"] == "Jira 메타데이터: 오프라인 파일"
+    assert summary["issue"]["label"] == "Jira 메타데이터: 오프라인 파일"
     notes = " / ".join(summary["notes"])
     assert "로그·코드 분석: 하지 않음" in notes and "시그니처 없음" in notes and "사용자 진술" in notes
     # 계획 pr_notes는 확인 화면·PR 본문에 들어가고 한 번 더 마스킹된다 (Phase 13)
@@ -195,7 +195,7 @@ def test_record_labels_pending_rules_and_sync_keeps_pending():
     ws.db_pr("discard", ws.wt("MOCK-7005"))
     type_md = ws.remote_file("issue/MOCK-7005", f"{DATA_DIR}/type.md")
     assert cause_of(type_md, "DATA-001-03")["signatures_pending"] is True
-    assert ws.remote_file("issue/MOCK-7005", f"{DATA_DIR}/jira/MOCK-7001.yaml") is not None, "최신 main 위"
+    assert ws.remote_file("issue/MOCK-7005", f"{DATA_DIR}/issues/MOCK-7001.yaml") is not None, "최신 main 위"
     assert pub["pr"]["number"] == ws.read_plan("MOCK-7005")["pr"]["number"]
 
 
@@ -203,7 +203,7 @@ def test_pending_only_in_record_and_pending_feedback_only_in_analyze():
     db = git_db()
     plan = load_plan("p7-record-pending.plan.json")
     plan["source"] = "analyze"
-    plan["jira"]["origin"] = "mcp"
+    plan["issue"]["origin"] = "mcp"
     job = db.parent / "job"
     (job / "fixtures").mkdir(parents=True, exist_ok=True)
     (job / "fixtures" / "cut-1.log").write_text(SIM_LOG.read_text(encoding="utf-8"), encoding="utf-8")
@@ -269,7 +269,7 @@ def test_verify_resolution_and_update_fix_rules():
     assert apply_json(db, later_set, expect=1)["rejected"][0]["code"] == "order"
 
     fix_plan = {"source": "fix-submitted", "schema_version": 1, "started_at": "2026-09-29T10:00+09:00",
-                "base_sha": "0" * 40, "jira": None, "commit_message": "[X] fix-submitted",
+                "base_sha": "0" * 40, "issue": None, "commit_message": "[X] fix-submitted",
                 "operations": [{"op": "update-fix", "cause": "CALL-001-01",
                                 "fix": {"status": "fix-submitted", "ref": "MOCKCL-2", "fixed_in": [
                                     {"branch": "MOCKB77_U2", "build": "MOCKB77_U2_20261001"}]}}]}
@@ -307,7 +307,7 @@ def test_source_outside_values_dry_run_and_forced_exit_3():
     ws.db_pr("discard", ws.wt("MOCK-7001"))
 
 
-SUMMARY_KEYS = ["source", "source_label", "jira", "branch", "reviewers", "open_prs", "files", "ids", "fixtures",
+SUMMARY_KEYS = ["source", "source_label", "issue", "branch", "reviewers", "open_prs", "files", "ids", "fixtures",
                 "drift_decisions", "readme_preview", "diff", "diff_total_lines", "diff_truncated", "checks", "verification",
                 "approval_needed", "notes", "commit_message", "pr_title", "push_allowed", "push_note", "pending_included",
                 "pr_body", "approved_hash"]
@@ -470,7 +470,7 @@ def test_step8_2_branch_states():
 
 def _review_plan(ops: list[dict], branch: str) -> dict:
     return {"source": "review", "schema_version": 1, "started_at": "2026-10-01T10:00+09:00", "base_sha": "0" * 40,
-            "jira": None, "operations": ops, "feedback": None, "commit_message": f"[DATA-001] review: {branch}",
+            "issue": None, "operations": ops, "feedback": None, "commit_message": f"[DATA-001] review: {branch}",
             "pr": {"number": None, "branch": branch, "head_sha": None}, "included_pending": []}
 
 
@@ -845,7 +845,7 @@ def test_post_lint_reports_duplicates_without_changes():
     ws.acquire("sync")
     out = ws.db_pr("snapshot", "--job", "sync")
     codes = {d["code"] for d in out["post_lint"]["duplicates"]}
-    assert codes == {"duplicate-id", "duplicate-jira"}
+    assert codes == {"duplicate-id", "duplicate-issue"}
     assert "메인테이너" in out["post_lint"]["notice"]
     assert git(ws.clone, "rev-parse", "HEAD") == head and git(ws.clone, "status", "--porcelain") == ""
     ws.db_pr("lock", "release", "sync")
@@ -983,9 +983,9 @@ def test_check_ids_renumber_and_similar():
 def test_apply_masks_failed_step_and_writes_it_before_note():
     db = git_db()
     plan = load_plan("p7-analyze-append.plan.json")
-    plan["jira"]["failed_step"] = "고객 010-1234-5678  데이터 켜기"
+    plan["issue"]["failed_step"] = "고객 010-1234-5678  데이터 켜기"
     apply_json(db, plan)
-    text = (db / DATA_DIR / "jira" / "MOCK-7001.yaml").read_text(encoding="utf-8")
+    text = (db / DATA_DIR / "issues" / "MOCK-7001.yaml").read_text(encoding="utf-8")
     record = yaml.safe_load(text)
     assert "010-1234-5678" not in text and "<MSISDN#" in record["failed_step"] and "  " not in record["failed_step"]
     keys = list(record)
@@ -995,7 +995,7 @@ def test_apply_masks_failed_step_and_writes_it_before_note():
     plain = load_plan("p7-analyze-append.plan.json")
     db2 = git_db()
     apply_json(db2, plain)
-    assert "failed_step" not in yaml.safe_load((db2 / DATA_DIR / "jira" / "MOCK-7001.yaml").read_text(encoding="utf-8"))
+    assert "failed_step" not in yaml.safe_load((db2 / DATA_DIR / "issues" / "MOCK-7001.yaml").read_text(encoding="utf-8"))
 
 
 # -- 출력 다이어트: stdout만 줄고 stage.json은 전체 -----------------------------------------------------
@@ -1520,7 +1520,7 @@ def _assert_commit_refused(ws: Workspace, wt: Path, job: str, branch: str) -> di
 
 def test_publish_commit_refuses_unmasked_pii_in_approved_tree_rule_3():
     ws = Workspace()
-    jira = f"{DATA_DIR}/jira/MOCK-1101.yaml"
+    jira = f"{DATA_DIR}/issues/MOCK-1101.yaml"
     wt = _approved_then(ws, "MOCK-7001", "issue/MOCK-7001", lambda w: (w / jira).write_text(
         (w / jira).read_text(encoding="utf-8").replace("접수됨", "접수됨 imei=490154203237518"), encoding="utf-8"))
     out = _assert_commit_refused(ws, wt, "MOCK-7001", "issue/MOCK-7001")
@@ -1856,7 +1856,7 @@ def test_renumber_on_detached_head_says_how_to_continue():
 
 
 def _match_json(key: str, candidates: list[dict]) -> str:
-    return json.dumps({"schema": 1, "mode": "analysis", "jira": {"key": key}, "candidates": candidates},
+    return json.dumps({"schema": 1, "mode": "analysis", "issue": {"key": key}, "candidates": candidates},
                       ensure_ascii=False)
 
 

@@ -94,7 +94,7 @@ def test_mock_jira_mcp_reads_issue():
     assert by_id[1]["result"]["serverInfo"]["name"] == "mock-jira"
 
     names = [t["name"] for t in by_id[2]["result"]["tools"]]
-    # 도구 이름은 일부러 비표준이다. jira.tools 매핑을 반드시 거치게 하기 위해서다.
+    # 도구 이름은 일부러 비표준이다. tracker.tools 매핑을 반드시 거치게 하기 위해서다.
     assert names == [
         "jira_fetch_ticket",
         "jira_query_tickets",
@@ -106,7 +106,7 @@ def test_mock_jira_mcp_reads_issue():
 
     ticket = json.loads(by_id[3]["result"]["content"][0]["text"])
     assert ticket["key"] == "MOCK-1001"
-    # 커스텀 필드 이름도 일부러 사내와 다를 법한 이름이다 (jira.field_map 경유 강제).
+    # 커스텀 필드 이름도 일부러 사내와 다를 법한 이름이다 (tracker.field_map 경유 강제).
     assert "customfield_10001" in ticket["fields"]
     assert by_id[3]["result"]["isError"] is False
 
@@ -403,14 +403,14 @@ def test_site_defaults_example_shape():
         (REPO / "plugin" / "site-defaults.example.yaml").read_text(encoding="utf-8")
     )
     assert data["synthetic_allowed"] is True
-    assert data["jira"]["exclude_servers"] == []
-    assert data["jira"]["tools"]["get_issue"].startswith("mcp__mock-jira__")
+    assert data["tracker"]["exclude_servers"] == []
+    assert data["tracker"]["tools"]["get_issue"].startswith("mcp__mock-jira__")
     assert data["parser"]["backend"] == "reference"
     assert data["external_parsers"] == {}
     assert data["analyzers"]["data"]["when"] == "ask"
     # read_tools 는 tools 값을 모두 포함해야 한다
     # (contracts.md §기존 자산 연결 계약)
-    assert set(data["jira"]["tools"].values()) <= set(data["jira"]["read_tools"])
+    assert set(data["tracker"]["tools"].values()) <= set(data["tracker"]["read_tools"])
 
 
 # -- 7·8. 실행 비트와 .mcp.json ---------------------------------------------

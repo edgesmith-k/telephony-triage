@@ -231,8 +231,8 @@ class Ctx:
         return explored, asked, read
 
     _RAW_READ_CMD = re.compile(r"(?<![\w./-])(cat|head|less|strings|unzip)\b([^|;&\n]*)")
-    # 드라이버 JSON(events·match·jira_raw)은 한 줄로 쓰여 grep 적중 하나가 파일 전체다. python open()도 통째로 읽는다
-    _JSON_TARGET = r"(?<![\w.-])(?:events|events-full|match|jira_raw)\.json\b"
+    # 드라이버 JSON(events·match·issue_raw)은 한 줄로 쓰여 grep 적중 하나가 파일 전체다. python open()도 통째로 읽는다
+    _JSON_TARGET = r"(?<![\w.-])(?:events|events-full|match|issue_raw)\.json\b"
     _JSON_GREP = re.compile(r"(?<![\w./-])grep\b[^|;&\n]*?" + _JSON_TARGET)
     _JSON_OPEN = re.compile(r"\bopen\(\s*[^)\n]*?" + _JSON_TARGET)
 
@@ -242,7 +242,7 @@ class Ctx:
         norm = t.replace("\\", "/")
         if re.search(r"(^|/)(fixtures|draft)/", norm):
             return False     # 판별 근거 주변만 잘라 마스킹한 fixture(`cut` 출력)·draft는 원문이 아니다 (상대 경로 포함)
-        if name in ("events.json", "events-full.json", "jira_raw.json", "match.json") or name.endswith((".log", ".zip")):
+        if name in ("events.json", "events-full.json", "issue_raw.json", "match.json") or name.endswith((".log", ".zip")):
             return True
         logs = self.env_dir / "logs"
         return "/logs/" in t.replace("\\", "/") or t.startswith("logs/") or str(logs) in t
@@ -289,8 +289,8 @@ class Ctx:
         return hits, blocked
 
     def raw_full_reads(self) -> list[str]:
-        """원문 통독 의심(지표): 로그·zip·events.json·jira_raw.json을 Bash cat/head -c/less/strings/unzip -p 로 열거나
-        limit 없는 Read로 읽은 호출, 한 줄 JSON(events·match·jira_raw)을 grep하거나 python `open()`으로 연 호출 중 hook이 막지 않은 것. 채점 항목은 아니다. 실행 기록이 없으면 빈 목록."""
+        """원문 통독 의심(지표): 로그·zip·events.json·issue_raw.json을 Bash cat/head -c/less/strings/unzip -p 로 열거나
+        limit 없는 Read로 읽은 호출, 한 줄 JSON(events·match·issue_raw)을 grep하거나 python `open()`으로 연 호출 중 hook이 막지 않은 것. 채점 항목은 아니다. 실행 기록이 없으면 빈 목록."""
         return self._raw_reads()[0]
 
     def raw_reads_blocked(self) -> list[str]:
@@ -443,7 +443,7 @@ def checks(eid: int, ctx: Ctx) -> list:
     if eid == 1:
         br = "issue/MOCK-1001"
         def jira():
-            t = ctx.show(br, "data/DATA-001-no-setup-data-call/jira/MOCK-1001.yaml")
+            t = ctx.show(br, "data/DATA-001-no-setup-data-call/issues/MOCK-1001.yaml")
             return ("cause: DATA-001-01" in t, t or f"branches={ctx.branches()}")
         def fb():
             fs = ctx.find(br, "feedback/*/MOCK-1001-*.yaml")
@@ -512,7 +512,7 @@ def checks(eid: int, ctx: Ctx) -> list:
                 and fb.get("decision") == "manual" and fb.get("suggested") == []
             return ok, json.dumps({"source": p.get("source"), "ops": ops, "feedback": fb}, ensure_ascii=False)
         def jira():
-            t = ctx.show(br, "data/DATA-001-no-setup-data-call/jira/MOCK-9030.yaml")
+            t = ctx.show(br, "data/DATA-001-no-setup-data-call/issues/MOCK-9030.yaml")
             return ("cause: DATA-001-02" in t, t or f"branches={ctx.branches()}")
         return [noparse, lambda: ("jira_fetch_ticket" in ctx.ran, "실행 기록(Bash·MCP)"), plan, None, jira, ctx.lock_free]
     if eid == 32:
@@ -548,11 +548,11 @@ def checks(eid: int, ctx: Ctx) -> list:
             blob = ctx.transcript + json.dumps(p or {}, ensure_ascii=False)
             return "김민수" not in blob, "김민수 발견" if "김민수" in blob else "없음"
         def fields():
-            j = (ctx.plan("MOCK-9043") or {}).get("jira") or {}
+            j = (ctx.plan("MOCK-9043") or {}).get("issue") or {}
             bad = [k for k in j if k in ("summary", "description", "comments", "text")]
-            return not bad and bool(j), f"jira keys={list(j)}"
+            return not bad and bool(j), f"issue keys={list(j)}"
         def raw_file():
-            left = [str(p) for p in ctx.work.rglob("jira_raw*")]
+            left = [str(p) for p in ctx.work.rglob("issue_raw*")]
             return not left, str(left)
         return [pii, name, fields, None, raw_file]
     if eid == 45:
@@ -603,7 +603,7 @@ def checks(eid: int, ctx: Ctx) -> list:
                 lambda: ("issue/MOCK-1002" not in ctx.branches() and not ctx.prs(), f"branches={ctx.branches()}"), pend]
     if eid == 29:
         def jira():
-            t = ctx.show("issue/MOCK-9029", "data/DATA-001-no-setup-data-call/jira/MOCK-9029.yaml")
+            t = ctx.show("issue/MOCK-9029", "data/DATA-001-no-setup-data-call/issues/MOCK-9029.yaml")
             return "cause: DATA-001-01" in t, t or f"branches={ctx.branches()}"
         return [None, None, None, ctx.clone_same, jira, ctx.lock_free]
     if eid == 33:
@@ -623,7 +623,7 @@ def checks(eid: int, ctx: Ctx) -> list:
             return (ctx.plan("MOCK-9037") is not None and not any(o.get("op") == "verify-resolution" for o in ops("MOCK-9037")),
                     json.dumps(ops("MOCK-9037"), ensure_ascii=False))
         def note():
-            n = str(((ctx.plan("MOCK-9037") or {}).get("jira") or {}).get("note"))
+            n = str(((ctx.plan("MOCK-9037") or {}).get("issue") or {}).get("note"))
             return "사용자 진술" in n, n
         def screen():
             return ("사용자 진술" in ctx.transcript and "리뷰" in ctx.transcript, "transcript에서 '사용자 진술'·'리뷰' 검색")
@@ -637,14 +637,14 @@ def checks(eid: int, ctx: Ctx) -> list:
         return [None, None, no_write, None, none_remote_lock]
     if eid == 39:
         def doctor_table():
-            """W9: 매핑이 비었을 때 `config.py doctor --format markdown` 표(jira 행 fail)를 그대로 보였다."""
+            """W9: 매핑이 비었을 때 `config.py doctor --format markdown` 표(tracker 행 fail)를 그대로 보였다."""
             texts = ctx.texts()
             if texts is None:
                 raise _Manual("실행 기록(events.jsonl) 없음")
             ran = bool(re.search(r"config\.py[\"']?\s+doctor\s+--format\s+markdown", ctx.ran))
             # 사용자에게 보인 글 = assistant 텍스트 또는 실행자 transcript.md(최종 메시지는 요약만 남기기도 한다)
-            row = next((t for t in [*texts, ctx.transcript] if re.search(r"\|\s*jira\s*\|\s*fail\s*\|", t)), None)
-            return ran and row is not None, f"doctor 실행={ran}; jira fail 행을 담은 assistant 텍스트·transcript={'있음' if row else '없음'}"
+            row = next((t for t in [*texts, ctx.transcript] if re.search(r"\|\s*tracker\s*\|\s*fail\s*\|", t)), None)
+            return ran and row is not None, f"doctor 실행={ran}; tracker fail 행을 담은 assistant 텍스트·transcript={'있음' if row else '없음'}"
         return [None, lambda: ("jira_fetch_ticket" not in ctx.ran.replace("--list", ""), "실행 기록(Bash·MCP)에 jira_fetch_ticket 호출 여부"),
                 None, ctx.lock_free, doctor_table]
     if eid == 8:
@@ -729,7 +729,7 @@ def checks(eid: int, ctx: Ctx) -> list:
         def acr():
             a = [o for o in op_list("MOCK-9015", "add-code-ref") if o.get("cause") == "DATA-001-01"]
             cr = a[0].get("code_ref", {}) if a else {}
-            ok = bool(a) and "data/fail/DataFailCause.java" in str(cr.get("ref")) and cr.get("android_versions") == ["17"]
+            ok = bool(a) and "data/fail/DataFailCause.java" in str(cr.get("ref")) and cr.get("platform_versions") == ["17"]
             return ok, json.dumps(a, ensure_ascii=False)
         def noabs():
             a = op_list("MOCK-9015", "add-code-ref")
@@ -755,7 +755,7 @@ def checks(eid: int, ctx: Ctx) -> list:
     def scope(log):
         """탐색 분석은 timeline.md만 읽는다: 원본 중간 산출물·로그 원문을 열지 않았다."""
         # match.json도 금지: feedback.suggested는 db_pr stage가 채운다(write-flow.md, explore.md "읽지 않는다")
-        bad = ctx.opened("events.json", "jira_raw.json", "events-full.json", "match.json", log)
+        bad = ctx.opened("events.json", "issue_raw.json", "events-full.json", "match.json", log)
         order = ctx.explore_order()
         seen = "timeline.md" in ctx.opened("timeline.md") or (order is not None and order[2] is not None)
         after, note = True, ""
@@ -785,10 +785,10 @@ def checks(eid: int, ctx: Ctx) -> list:
             o = ops("MOCK-9048")
             return o == [{"op": "append", "cause": "DATA-001-01"}], json.dumps(o, ensure_ascii=False)
         def fs():
-            v = ((ctx.plan("MOCK-9048") or {}).get("jira") or {}).get("failed_step")
-            return v == "5 | 데이터 켜기", f"plan jira.failed_step={v!r}"
+            v = ((ctx.plan("MOCK-9048") or {}).get("issue") or {}).get("failed_step")
+            return v == "5 | 데이터 켜기", f"plan issue.failed_step={v!r}"
         def remote():
-            t = ctx.show(br, "data/DATA-001-no-setup-data-call/jira/MOCK-9048.yaml")
+            t = ctx.show(br, "data/DATA-001-no-setup-data-call/issues/MOCK-9048.yaml")
             return bool(re.search(r"^failed_step: 5 \| 데이터 켜기\s*$", t, re.M)), t or f"branches={ctx.branches()}"
         def readme():
             t = ctx.show(br, "data/README.md")
@@ -805,12 +805,12 @@ def checks(eid: int, ctx: Ctx) -> list:
         def anchor():
             a = analysis("MOCK-9049")
             sa, cand = a.get("step_anchor") or {}, (a.get("candidates") or [{}])[0]
-            src = ((a.get("jira") or {}).get("failed_step") or {}).get("source")
+            src = ((a.get("issue") or {}).get("failed_step") or {}).get("source")
             ok = sa.get("source") == "step_order" and cand.get("cause") == "DATA-001-01" and src == "steps_file"
             return ok, f"step_anchor.source={sa.get('source')} 1위={cand.get('cause')} failed_step.source={src}"
         def fs():
-            want = (((analysis("MOCK-9049").get("jira") or {}).get("failed_step")) or {}).get("text")
-            v = ((ctx.plan("MOCK-9049") or {}).get("jira") or {}).get("failed_step")
+            want = (((analysis("MOCK-9049").get("issue") or {}).get("failed_step")) or {}).get("text")
+            v = ((ctx.plan("MOCK-9049") or {}).get("issue") or {}).get("failed_step")
             return bool(want) and v == want == "7 | 데이터 연결 확인", f"plan={v!r} analysis.json={want!r}"
         def cleaned():
             gone = not (ctx.work / "MOCK-9049" / "steps-pasted.txt").is_file()
@@ -883,7 +883,7 @@ def checks(eid: int, ctx: Ctx) -> list:
         return [calls_ok, analysis_ok, told, lambda: no_record("MOCK-9052")]
     if eid in (53, 54):
         sample = HERE.parent / "fixtures" / "issue-db-sample"
-        known = {p.stem for p in sample.glob("*/*/jira/*.yaml")}
+        known = {p.stem for p in sample.glob("*/*/issues/*.yaml")}
 
         def answer() -> str:
             """사용자에게 보인 글: 실행자가 남긴 transcript.md(요약만 남기기도 한다)와 실행 기록의 assistant 글·최종 결과."""
@@ -979,7 +979,7 @@ def checks_w4(eid, ctx):
             cands = (json.loads(_read(ctx.work / "MOCK-1001" / "analysis.json") or "{}").get("candidates") or [{}])
             return cands[0].get("cause") == "DATA-001-01", f"analysis.json 1위={cands[0].get('cause')}"
         def jira():
-            t = ctx.show("issue/MOCK-1001", "data/DATA-001-no-setup-data-call/jira/MOCK-1001.yaml")
+            t = ctx.show("issue/MOCK-1001", "data/DATA-001-no-setup-data-call/issues/MOCK-1001.yaml")
             return "cause: DATA-001-01" in t, t or f"branches={ctx.branches()}"
         def lock_clone():
             (a, ea), (b, eb) = ctx.lock_free(), ctx.clone_same()
@@ -1090,7 +1090,7 @@ def checks_c(eid, ctx):
                              and (o.get("fix") or {}).get("status") == "open"
                              and (o.get("history") or {}).get("result") == "reverted"
                              and (o.get("history") or {}).get("build") == "MOCKB77_U2_20260920"
-                             and (o.get("history") or {}).get("jira") == "MOCK-9010")
+                             and (o.get("history") or {}).get("issue") == "MOCK-9010")
         return [None, None, reopen, None, no_remote_lock, exact_clone]
     if eid == 20:
         br = "verify-fix/CALL-001-01-MOCKB77_U2_20260927"
@@ -1290,7 +1290,7 @@ def checks_d(eid, ctx):
         return [planned(nc_order), planned(signature), cut_positive, None, planned(unverified), None, None, cleaned_remote]
     if eid == 34:
         def main_duplicate():
-            hits = ctx.find("main", "*/DATA-*/jira/MOCK-1101.yaml")
+            hits = ctx.find("main", "*/DATA-*/issues/MOCK-1101.yaml")
             a, ae = no_remote()
             return a and len(hits) == 1 and "cause: DATA-001-01" in ctx.show("main", hits[0]), ae + "; main hits=" + str(hits)
         return [None, None, commands_absent([" stage ", " publish "]), main_duplicate,
@@ -1307,7 +1307,7 @@ def checks_d(eid, ctx):
             return bool(ctx.commands) and " discard " in ctx.ran and " publish " not in ctx.ran, "discard=" + str(" discard " in ctx.ran) + "; publish=" + str(" publish " in ctx.ran)
         def no_main():
             a, ae = no_remote()
-            hits = ctx.find("main", "*/DATA-*/jira/MOCK-9036.yaml")
+            hits = ctx.find("main", "*/DATA-*/issues/MOCK-9036.yaml")
             return a and not hits, ae + "; main jira=" + str(hits)
         return [None, planned(symptoms), None, discard, no_main, cleaned, unchanged]
     if eid == 38:

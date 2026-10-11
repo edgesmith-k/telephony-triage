@@ -61,7 +61,7 @@ def _rep_str(dumper, data):
             return dumper.represent_date(datetime.date.fromisoformat(data))
         except ValueError:
             pass
-    # 따옴표가 필요한 문자열(숫자·불리언·null처럼 읽히는 값)은 큰따옴표로 쓴다: android_versions: ["16"]
+    # 따옴표가 필요한 문자열(숫자·불리언·null처럼 읽히는 값)은 큰따옴표로 쓴다: platform_versions: ["16"]
     if dumper.resolve(yaml.ScalarNode, data, (True, False)) != "tag:yaml.org,2002:str":
         return dumper.represent_scalar("tag:yaml.org,2002:str", data, style='"')
     return dumper.represent_str(data)

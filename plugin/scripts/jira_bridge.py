@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """jira_bridge.py — Jira MCP 응답 원문을 모델 대신 파일로 받는 PostToolUse hook (08-safety.md §8.1·§9 9번).
 
-stdin: hook 입력 `{tool_name, tool_input, tool_response, ...}`. `tool_name`이 config `jira.tools.get_issue`
-또는 `jira.tools.get_comments`(전체 이름, 서버 이름 정규화 비교 — `mcptools.normalize`)일 때만 동작한다. 그 밖의 도구는 아무것도 출력하지 않는다(원래 결과 그대로).
+stdin: hook 입력 `{tool_name, tool_input, tool_response, ...}`. `tool_name`이 config `tracker.tools.get_issue`
+또는 `tracker.tools.get_comments`(전체 이름, 서버 이름 정규화 비교 — `mcptools.normalize`)일 때만 동작한다. 그 밖의 도구는 아무것도 출력하지 않는다(원래 결과 그대로).
 
-1. 응답에서 이슈 키를 찾아 `jira_key_regex`(스냅샷 또는 사용자 clone의 `issue-db.config.yaml`)로 검사한다.
-2. 원문을 `<work_dir>/<KEY>/jira_raw.json`(디렉토리 권한 700)에 쓴다. `get_comments` 응답은 같은 파일의 `comments`에 합친다.
+1. 응답에서 이슈 키를 찾아 `tracker.key_regex`(스냅샷 또는 사용자 clone의 `issue-db.config.yaml`)로 검사한다.
+2. 원문을 `<work_dir>/<KEY>/issue_raw.json`(디렉토리 권한 700)에 쓴다. `get_comments` 응답은 같은 파일의 `comments`에 합친다.
    `triage.py run`이 이 파일을 `jira_fields.py extract --consume`으로 읽고 지운다.
 3. 모델에는 `hookSpecificOutput.updatedToolOutput`으로 **마스킹된 요약**(요약·설명 앞부분·코멘트 마지막 3개)만 준다.
 
-**승인 코멘트 게시 결과**(`add_comment`): `tool_name`이 유효한 `jira.write_tools.add_comment.tool`(정규화 비교,
+**승인 코멘트 게시 결과**(`add_comment`): `tool_name`이 유효한 `tracker.write_tools.add_comment.tool`(정규화 비교,
 `common/issuepost.write_spec`)이면 `bridge_post`가 `<work_dir>/<KEY>/post.result.json`(posted|error)을 쓰고, 성공이면
 `post.approved.json`에 `used_at`을 남긴다(1회용). 실패 응답(`isError` 또는 참인 `error` 값)이면 승인을 소모하지 않는다.
 결과 처리 중 예외면 게시됐을 수 있으므로 `post.result.json` status unknown과 `used_at`을 남겨 재게시를 막는다. 모델에는 게시 요약만
@@ -99,8 +99,9 @@ def _key_regex(cfg: dict) -> re.Pattern:
     work = Path(str(userconfig.get(cfg, "work_dir"))).expanduser()
     for db in (work / "_snapshot", Path(str(userconfig.get(cfg, "issue_db.path") or "")).expanduser()):
         conf = compat.load_db_config(db) if (db / "issue-db.config.yaml").is_file() else {}
-        if conf.get("jira_key_regex"):
-            return re.compile(str(conf["jira_key_regex"]))
+        tracker = conf.get("tracker") if isinstance(conf.get("tracker"), dict) else {}
+        if tracker.get("key_regex"):
+            return re.compile(str(tracker["key_regex"]))
     return re.compile(jira_fields.DEFAULT_KEY_RE)
 
 
@@ -114,7 +115,7 @@ def _find_key(data, tool_input: dict, kre: re.Pattern) -> str | None:
 
 def target(event: dict, cfg: dict) -> str | None:
     """대상 논리 동작(`get_issue`·`get_comments`·`add_comment`) 또는 None. `add_comment`는 유효한 코멘트 도구 설정만."""
-    tools = (cfg.get("jira") or {}).get("tools") or {}
+    tools = (cfg.get("tracker") or {}).get("tools") or {}
     tool = event.get("tool_name")
     spec, _err = issuepost.write_spec(cfg)
     if spec and spec["tool"] == mcptools.normalize(tool):
@@ -184,7 +185,7 @@ def bridge(event: dict, cfg: dict, kind: str) -> str:
     if key is None:
         return "telephony-triage: Jira 응답에서 형식에 맞는 이슈 키를 찾지 못해 저장하지 않았다(원문은 표시하지 않는다)."
     job = userconfig.ensure_private_dir(Path(str(userconfig.get(cfg, "work_dir"))).expanduser() / key)
-    raw_path = job / "jira_raw.json"
+    raw_path = job / "issue_raw.json"
     raw = {}
     if raw_path.is_file():
         try:
@@ -286,6 +287,16 @@ def main() -> int:
         user = userconfig.load_user() or {}
     except Exception as exc:  # noqa: BLE001
         user, error = {}, exc
+    legacy = userconfig.legacy_problems(defaults, user) if error is None else []
+    if legacy:      # 옛 설정 키: 설정 오류와 같은 범위(모든 mcp__)의 원문을 숨긴다(guard는 모든 MCP를 거부한다)
+        if not str(event.get("tool_name") or "").startswith("mcp__"):
+            return 0
+        print(f"jira_bridge: 옛 설정 키 {legacy}", file=sys.stderr)
+        text = ("telephony-triage: 옛 설정 키(" + "; ".join(legacy) + ")가 남아 Jira 응답 격리 여부를 판정하지 못했다 "
+                "— 원문은 표시하지 않는다. tracker:로 바꾼 뒤 config.py doctor로 확인한다.")
+        print(json.dumps({"hookSpecificOutput": {"hookEventName": "PostToolUse", "updatedToolOutput": text}},
+                         ensure_ascii=False))
+        return 0
     try:
         _PROFILES.clear()
         _PROFILES.update(userconfig.profiles(defaults, user))

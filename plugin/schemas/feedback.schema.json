@@ -1,12 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "feedback/<YYYY-MM>/<JIRA-KEY>-<timestamp>.yaml (03-issue-db.md §5.4 (3))",
+  "title": "feedback/<YYYY-MM>/<KEY>-<timestamp>.yaml (03-issue-db.md §5.4 (3))",
   "description": "분석 제안 수락/거절 기록. decision: manual은 수동 기록(record)이고 suggested가 비어 있으며 수락률·1위 정확도 통계에서 제외한다 (06-collaboration.md §6.5).",
   "type": "object",
   "additionalProperties": false,
-  "required": ["jira", "date", "by", "suggested", "decision", "final"],
+  "required": ["issue", "date", "by", "suggested", "decision", "final"],
   "properties": {
-    "jira": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9]*-[0-9]+$"},
+    "issue": {"type": "string", "pattern": "^(?!.*\\.\\.)[A-Za-z0-9][A-Za-z0-9_.-]{0,140}-[0-9]{1,10}$"},
     "date": {
       "description": "계획의 feedback.date (Step 7 저장 시각). 파일명 timestamp도 같은 값이다.",
       "type": "string",

@@ -22,12 +22,12 @@
 
 스크립트가 준 순서 그대로 보인다(다시 순위를 매기지 않는다. `matched`·`score` 순위가 이미 계산돼 있다).
 
-1. **이슈 번호** 줄 먼저: 원인·유형의 `jira`에서 Jira 키를 중복 없이 모으고 `jira_latest`(가장 최근 날짜)를 붙인다. 키는 결과에 있는 것만 쓴다.
-2. 표: 유형 > 원인 | 해결책(`resolution_verification` — 미검증이면 그렇다고) | 수정 상태(`fix.status`, `fixed_in`) | 최근 Jira(`jira_count`건) | 맞은 단어(`matched`).
+1. **이슈 번호** 줄 먼저: 원인·유형의 `issues`에서 Jira 키를 중복 없이 모으고 `issue_latest`(가장 최근 날짜)를 붙인다. 키는 결과에 있는 것만 쓴다.
+2. 표: 유형 > 원인 | 해결책(`resolution_verification` — 미검증이면 그렇다고) | 수정 상태(`fix.status`, `fixed_in`) | 최근 Jira(`issue_count`건) | 맞은 단어(`matched`).
    질의 단어 일부만 맞으면(`matched`가 `terms`보다 적으면) "부분 일치"로 표시한다. `phrase: true`는 질의 전체가 그대로 들어 있는 결과다.
 3. 연관(`related`), 다른 카테고리(`secondary_categories`)가 있으면 함께 보인다.
 4. `links[]`가 있으면 `옛 ID → 새 ID`(`merged-into` 병합 / `renumbered` 사후 정리, 커밋·날짜)를 보이고, `current`(병합 체인의 끝)가 있으면 지금 봐야 할 ID를 알린다.
-5. `kind`(type-id / cause-id / jira / keyword)를 밝힌다.
+5. `kind`(type-id / cause-id / issue / keyword)를 밝힌다.
 
 이 순위는 검색용이다. 분류를 확정하거나 원인을 단정하는 근거로 쓰지 않는다.
 

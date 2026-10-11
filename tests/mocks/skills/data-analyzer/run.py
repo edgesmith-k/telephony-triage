@@ -8,7 +8,7 @@ LLM 없이 `analyzers.data` 호출 경로만 확인한다. 같은 입력이면 �
     {"events_json": "<경로>", "log_paths": ["<경로>"],
      "top_candidates": [{"type": "DATA-001", "cause": "DATA-001-01",
                          "score": 1.0, "confidence": "high"}],
-     "jira_summary": "<마스킹된 한두 줄>"}
+     "issue_summary": "<마스킹된 한두 줄>"}
 
 출력 JSON:
     {"skill": "mock-data-analyzer", "summary": "<한 줄>",

@@ -6,7 +6,7 @@
 읽기 전용이다. 질의 종류는 모양으로 정한다.
 
 - 유형 ID(`DATA-001`)·원인 ID(`DATA-001-01`): 그 엔티티. 없는 ID여도 옛 ID 연결을 찾는다.
-- Jira 키(`jira_key_regex`): 그 Jira 기록과 소속 원인(또는 유형).
+- Jira 키(`tracker.key_regex`): 그 Jira 기록과 소속 원인(또는 유형).
 - 그 밖: 키워드 또는 증상 문장. 유형(제목·요약·태그), 원인(제목·설명·해결책), Jira(`note`)에서 대소문자 무시 부분 일치.
   질의 전체의 부분 일치 결과가 먼저(옛 순서 그대로, `phrase: true`), 이어서 **단어별 검색**이 덧붙는다: 질의를 단어로 쪼개
   불용어(`이런 이슈 있었어?`)·조사·부정 접두(`안붙어`)를 떼고, 이슈 DB `GLOSSARY.md`의 `## 검색 별칭`으로 별칭을 더해
@@ -21,10 +21,10 @@
   옛 ID 엔티티도 그대로 보이고, 옮겨간 엔티티를 `renumbered[]`와 결과에 함께 보인다. 새 ID로 찾으면
   어디서 옮겨왔는지 보인다.
 
-출력(JSON): `{query, kind: type-id|cause-id|jira|keyword, results[], links[], git_history}`. keyword면 `terms[{term, aliases[]}]`가
+출력(JSON): `{query, kind: type-id|cause-id|issue|keyword, results[], links[], git_history}`. keyword면 `terms[{term, aliases[]}]`가
 더해지고 `results[]` 항목에 `matched[]`, `score`, `phrase`가 붙는다.
-`results[]` 항목은 `kind: type|cause|jira`와 유형·원인·해결책·수정 상태·Jira 요약이다. 원인 항목에는
-`code_refs[{ref, symbol, android_versions}]`(Step 5 resolve 입력)가 붙는다. 스킬·드라이버는 `--limit 3`으로 부른다.
+`results[]` 항목은 `kind: type|cause|issue`와 유형·원인·해결책·수정 상태·Jira 요약이다. 원인 항목에는
+`code_refs[{ref, symbol, platform_versions}]`(Step 5 resolve 입력)가 붙는다. 스킬·드라이버는 `--limit 3`으로 부른다.
 코드·설정 수정 유형이면서 scenario·recovery 시그니처가 없는 원인(pending 제외)에만 `verify_fix_blocked`(사유 문자열)가 붙는다
 (`db_verify fix`가 종료 코드 2로 거부하는 조건, 99-deferred.md §F). 다른 원인 항목에는 키가 없다.
 `links[]`는 `{from, to, via: merged-into|renumbered, commit?, date?}`. 결과가 없어도 종료 코드 0이다.
@@ -63,9 +63,9 @@ STOPWORDS = frozenset("""안 못 안돼 안됨 안되 안돼요 안되요 안되
 같은 관련 관련된 혹시 좀 전에 예전에 과거 과거에 뭐 뭐야 어떤 케이스 사례 문제 현상 증상 경우 때 건 the a an any is are was were be
 issue issues ticket tickets similar there have has had did does do we not no number numbers""".split())
 WEIGHT_STRONG, WEIGHT_MID, WEIGHT_WEAK = 3, 2, 1
-KIND_ORDER = {"type": 0, "cause": 1, "jira": 2}
+KIND_ORDER = {"type": 0, "cause": 1, "issue": 2}
 SYMPTOM_RE = re.compile(r"^## 증상\n(.*?)(?=^## |\Z)", re.M | re.S)
-CODE_REF_FIELDS = ("ref", "symbol", "android_versions")   # Step 5 resolve에 필요한 것만 (contracts.md §3.2)
+CODE_REF_FIELDS = ("ref", "symbol", "platform_versions")   # Step 5 resolve에 필요한 것만 (contracts.md §3.2)
 
 
 class UsageError(Exception):
@@ -121,9 +121,9 @@ class Searcher:
             "secondary_categories": list(itype.raw.get("secondary_categories") or []),
             "causes": [{"id": c.id, "title": c.title, "status": c.status} for c in itype.causes],
             "unresolved": sorted(str(r.get("key")) for r in records if str(r.get("cause")) == "unresolved"),
-            "jira_count": len(records),
-            "jira": [str(r.get("key")) for r in newest[:JIRA_SHOWN]],
-            "jira_latest": str(newest[0].get("date", "")) if newest else None,
+            "issue_count": len(records),
+            "issues": [str(r.get("key")) for r in newest[:JIRA_SHOWN]],
+            "issue_latest": str(newest[0].get("date", "")) if newest else None,
             "path": (itype.path / "type.md").relative_to(self.db.root).as_posix(),
         }
 
@@ -145,9 +145,9 @@ class Searcher:
             "secondary_categories": list(itype.raw.get("secondary_categories") or []),
             "code_refs": [{k: ref.get(k) for k in CODE_REF_FIELDS if ref.get(k) not in (None, "", [])}
                           for ref in cause.raw.get("code_refs") or [] if isinstance(ref, dict)],
-            "jira": [str(r.get("key")) for r in records[:JIRA_SHOWN]],
-            "jira_count": len(records),
-            "jira_latest": str(records[0].get("date", "")) if records else None,
+            "issues": [str(r.get("key")) for r in records[:JIRA_SHOWN]],
+            "issue_count": len(records),
+            "issue_latest": str(records[0].get("date", "")) if records else None,
             "path": (itype.path / "type.md").relative_to(self.db.root).as_posix(),
         }
         if not cause.pending and quality.no_trace(cause):   # 99-deferred.md §F 방안 2: 해당 원인에만 키가 있다
@@ -156,7 +156,7 @@ class Searcher:
         return entry
 
     def jira_entry(self, record: dict) -> dict:
-        entry = {"kind": "jira", "key": record.get("key"), "cause": record.get("cause"), "type": record["_type"],
+        entry = {"kind": "issue", "key": record.get("key"), "cause": record.get("cause"), "type": record["_type"],
                  "date": str(record.get("date", "")), "occurred_on": str(record.get("occurred_on") or "") or None,
                  "note": record.get("note"), "path": record["_rel"]}
         if record.get("failed_step"):
@@ -201,7 +201,8 @@ class Searcher:
         return out
 
     def search(self, query: str) -> dict:
-        key_re = re.compile(str(self.db.config.get("jira_key_regex") or r"[A-Z][A-Z0-9]+-\d+"))
+        tracker = self.db.config.get("tracker") if isinstance(self.db.config.get("tracker"), dict) else {}
+        key_re = re.compile(str(tracker.get("key_regex") or r"[A-Z][A-Z0-9]+-\d+"))
         results: list[dict] = []
         renumbered: list[dict] = []
         if CAUSE_ID_RE.fullmatch(query) or TYPE_ID_RE.fullmatch(query):
@@ -223,7 +224,7 @@ class Searcher:
             if kind == "type-id" and entry:
                 results += [self.cause_entry(self.causes[c["id"]]) for c in entry["causes"]]
         elif key_re.fullmatch(query):
-            kind = "jira"
+            kind = "issue"
             record = self.jira_by_key.get(query)
             if record:
                 results.append(self.jira_entry(record))
@@ -256,7 +257,7 @@ class Searcher:
         extra = [x for x in scored if (x[2]["kind"], x[2].get("id") or x[2].get("key")) not in seen]
         m_max = max([m for m, _, _ in scored] or [0])
         keep = max(1, math.ceil(m_max / 2))
-        extra = [x for x in extra if x[0] >= keep and (x[2]["kind"] != "jira" or x[0] == m_max)]
+        extra = [x for x in extra if x[0] >= keep and (x[2]["kind"] != "issue" or x[0] == m_max)]
         extra.sort(key=lambda x: (-x[0], -x[1], KIND_ORDER[x[2]["kind"]], str(x[2].get("id") or x[2].get("key"))))
         for _, _, entry in extra:
             entry["phrase"] = False
@@ -415,12 +416,12 @@ def render_markdown(result: dict) -> str:
     groups = [e for e in entries if e["kind"] in ("type", "cause")]
     keys: list[str] = []
     for e in groups:
-        keys += [k for k in e.get("jira") or [] if k not in keys]
+        keys += [k for k in e.get("issues") or [] if k not in keys]
     if keys:
-        latest = max((e.get("jira_latest") or "" for e in groups), default="")
-        out.append(f"이슈 번호: {', '.join(keys)}" + (f" (jira_latest {latest})" if latest else ""))
-        capped = [f"{e['id']} jira_count {e['jira_count']} / 표시 {len(e['jira'])}" for e in groups
-                  if (e.get("jira_count") or 0) > len(e.get("jira") or [])]
+        latest = max((e.get("issue_latest") or "" for e in groups), default="")
+        out.append(f"이슈 번호: {', '.join(keys)}" + (f" (issue_latest {latest})" if latest else ""))
+        capped = [f"{e['id']} issue_count {e['issue_count']} / 표시 {len(e['issues'])}" for e in groups
+                  if (e.get("issue_count") or 0) > len(e.get("issues") or [])]
         if capped:
             out.append("최근 5건만 표시: " + ", ".join(capped))
         out.append("")
@@ -435,10 +436,10 @@ def render_markdown(result: dict) -> str:
             fix = e.get("fix") or {}
             builds = md.fixed_in_builds(fix.get("fixed_in"))
             status = f"{fix.get('status')}" + (f" (fixed_in {', '.join(builds)})" if builds else "")
-            recent = f"{e.get('jira_latest') or '—'} ({e.get('jira_count', 0)}건)"
+            recent = f"{e.get('issue_latest') or '—'} ({e.get('issue_count', 0)}건)"
         elif e["kind"] == "type":
             name, res, status = f"{e['id']} {e['title']} (type)", "—", e.get("status")
-            recent = f"{e.get('jira_latest') or '—'} ({e.get('jira_count', 0)}건)"
+            recent = f"{e.get('issue_latest') or '—'} ({e.get('issue_count', 0)}건)"
         else:
             name = f"Jira {e['key']} (원인 {e.get('cause')}, 유형 {e.get('type')})"
             res, status, recent = f"note: {e.get('note') or ''}", "—", e.get("date") or "—"

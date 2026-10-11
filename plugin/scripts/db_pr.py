@@ -7,7 +7,7 @@
     db_pr.py snapshot --job <작업 키>
     db_pr.py my-prs                           (읽기 전용: 내 열린 PR과 base 이동 여부, sync 5번)
     db_pr.py cleanup (--dry-run | --yes) [--older-than [<days>]]
-    db_pr.py preflight --branch <br> [--search <원인 ID|JIRA-KEY>] [--jira <KEY>]
+    db_pr.py preflight --branch <br> [--search <원인 ID|JIRA-KEY>] [--issue <KEY>]
     db_pr.py stage <plan.json> --wt <dir> --branch <br> [--dry-run] [--verbose | --then-summary]
     db_pr.py summary <wt> [--format json|markdown]
     db_pr.py publish <wt> --branch <br> --lease <sha|new> --approved <hash> [--commit] [--and-discard]
@@ -138,7 +138,7 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("preflight")
     p.add_argument("--branch", metavar="br", required=True)
     p.add_argument("--search", metavar="원인 ID|JIRA-KEY")
-    p.add_argument("--jira", metavar="KEY")
+    p.add_argument("--issue", metavar="KEY")
     p = sub.add_parser("stage")
     p.add_argument("plan", metavar="plan.json")
     p.add_argument("--wt", metavar="dir", required=True)
@@ -208,7 +208,7 @@ def main(argv: list[str] | None = None) -> int:
         elif args.cmd == "cleanup":
             result = cleanup(ctx, args.yes, args.older_than)
         elif args.cmd == "preflight":
-            result = preflight(ctx, args.branch, args.search, args.jira)
+            result = preflight(ctx, args.branch, args.search, args.issue)
         elif args.cmd == "stage":
             if args.then_summary and (args.json or getattr(args, "verbose", False)):
                 raise UsageError("--then-summary는 --json·--verbose와 함께 쓸 수 없다 (stdout이 마크다운이다).")

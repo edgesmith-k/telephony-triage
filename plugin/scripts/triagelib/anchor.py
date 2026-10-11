@@ -38,7 +38,7 @@ class AnchorMixin:
     def resolve_failed_step(self, auto: dict | None, masker) -> dict | None:
         """auto(이미 마스킹) + 이번 실행의 플래그 → 마스킹된 {text, source} | None. 원문은 이 함수 안에서만 쓴다."""
         a = self.args
-        patterns = userconfig.get(self.cfg, "jira.failed_step_patterns") or []
+        patterns = userconfig.get(self.cfg, "tracker.failed_step_patterns") or []
         result, warns = failedstep.resolve(getattr(a, "failed_step", None), auto, getattr(a, "steps_file", None), patterns, masker,
                                            userconfig.get(self.cfg, "failed_step") or {})
         for w in warns:
@@ -47,21 +47,21 @@ class AnchorMixin:
         return result
 
     def apply_failed_step(self, data: dict, meta_path: Path) -> None:
-        """`jira.json`(extract 결과)에 실패 스텝을 맞춘다. 바뀐 것이 있을 때만 `jira.json`·`jira_meta.json`을 다시 쓴다."""
+        """`issue.json`(extract 결과)에 실패 스텝을 맞춘다. 바뀐 것이 있을 때만 `issue.json`·`issue_meta.json`을 다시 쓴다."""
         for w in data.get("warnings") or []:
             if w not in self.warnings:
                 self.warnings.append(str(w))
         self.failed_step = self.resolve_failed_step(data.get("failed_step_auto"), self.masker())
         if self.failed_step == data.get("failed_step"):
             return
-        jira = data.setdefault("jira", {})
+        jira = data.setdefault("issue", {})
         if self.failed_step:
             data["failed_step"] = self.failed_step
             jira["failed_step"] = self.failed_step["text"]
         else:
             data.pop("failed_step", None)
             jira.pop("failed_step", None)
-        (self.job / "jira.json").write_text(json.dumps(data, ensure_ascii=False, indent=1) + "\n",
+        (self.job / "issue.json").write_text(json.dumps(data, ensure_ascii=False, indent=1) + "\n",
                                             encoding="utf-8", newline="\n")
         if meta_path.is_file():
             meta = json.loads(meta_path.read_text(encoding="utf-8"))
@@ -73,7 +73,7 @@ class AnchorMixin:
 
     def out_failed_step(self) -> None:
         if self.failed_step:
-            self.out["jira"]["failed_step"] = {"text": _clip(self.failed_step["text"], 120),
+            self.out["issue"]["failed_step"] = {"text": _clip(self.failed_step["text"], 120),
                                                "source": self.failed_step["source"]}
 
     def year(self, info: dict, logs: list[Path]) -> int | None:
@@ -90,7 +90,7 @@ class AnchorMixin:
         mtime_year = datetime.fromtimestamp(logs[0].stat().st_mtime).year
         if source == "file-mtime":
             return mtime_year
-        if source == "jira" or not source:
+        if source == "tracker" or not source:
             # Jira 발생 시각이 없다 → 묻지 않고 시각 후보(Step 2 --full)로 간다. 연도는 파일 시각으로 임시로 정한다.
             self.warnings.append(f"Jira 발생 시각이 없어 logcat 연도를 로그 파일 시각({mtime_year})으로 임시로 정했다. "
                                  "다르면 --year로 다시 실행한다.")
@@ -171,7 +171,7 @@ class AnchorMixin:
             anchor["order"] = span["order"]
         if jira_at:
             gap = stepanchor.gap_minutes(fail, jira_at)
-            anchor["jira_gap_min"] = round(gap, 1)
+            anchor["issue_gap_min"] = round(gap, 1)
             limit = conf.get("disagree_minutes", stepanchor.DEFAULT_DISAGREE_MINUTES)
             if isinstance(limit, (int, float)) and not isinstance(limit, bool) and gap > limit:
                 hint = " (Jira 시각이 장비 시각이면 시계 차 때문일 수 있다)" if span["source"] in ("steps_file", "step_order") else ""
@@ -253,7 +253,7 @@ class AnchorMixin:
             text, _ = failedstep.read_lines(steps_file)     # 읽지 못한 경고는 resolve_failed_step이 이미 냈다
             if text is None:
                 return None
-            patterns = userconfig.get(self.cfg, "jira.failed_step_patterns") or []
+            patterns = userconfig.get(self.cfg, "tracker.failed_step_patterns") or []
             step, line = failedstep.find_line(text, patterns)
             label = failedstep.normalize(self.masker()(failedstep.numbered(step, line) or ""), 80)
         if not line:
@@ -317,9 +317,9 @@ class AnchorMixin:
         if anchor:
             out = {"source": anchor["source"], "step": _clip(_step_label(anchor.get("step")), 80),
                    "step_from": anchor["step_from"] if anchor["step_from"] != "failed_step" else None,
-                   "span": [anchor["start"], anchor["fail"]], "jira_gap_min": anchor.get("jira_gap_min")}
+                   "span": [anchor["start"], anchor["fail"]], "issue_gap_min": anchor.get("issue_gap_min")}
         elif self.failed_step or self.clock or self.order_fail:
-            out = {"source": "jira" if info.get("occurred_at") and not self.answer("time") else "symptom_scan"}
+            out = {"source": "issue" if info.get("occurred_at") and not self.answer("time") else "symptom_scan"}
         else:
             return None
         if anchor and anchor.get("order"):

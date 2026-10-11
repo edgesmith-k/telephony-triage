@@ -77,10 +77,10 @@
           "pattern": "^[a-z][a-z0-9_]*:[^/\\\\][^:]*$"
         },
         "symbol": {"type": "string", "minLength": 1},
-        "android_versions": {"$ref": "#/$defs/androidVersions"}
+        "platform_versions": {"$ref": "#/$defs/platformVersions"}
       }
     },
-    "androidVersions": {
+    "platformVersions": {
       "description": "빈 목록은 전 버전 (03-issue-db.md §5.4 (1))",
       "type": "array",
       "items": {"type": "string", "pattern": "^[0-9]+$"},
@@ -134,7 +134,7 @@
         "build": {"type": "string", "minLength": 1},
         "date": {"$ref": "#/$defs/isoDate"},
         "by": {"type": "string", "minLength": 1},
-        "jira": {"type": "string"},
+        "issue": {"type": "string"},
         "fixture": {"$ref": "#/$defs/fixturePath"},
         "scenario_evidence": {"type": "string", "minLength": 1},
         "note": {"type": "string"}
@@ -150,7 +150,7 @@
         "build": {"type": "string", "minLength": 1},
         "date": {"$ref": "#/$defs/isoDate"},
         "by": {"type": "string", "minLength": 1},
-        "jira": {"type": "string"},
+        "issue": {"type": "string"},
         "fixture": {"$ref": "#/$defs/fixturePath"},
         "ref": {"type": ["string", "null"]},
         "fixed_in": {"$ref": "#/$defs/fixedIn"},
@@ -200,7 +200,7 @@
     "cause": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "status", "title", "description", "signatures", "recovery_signatures", "scenario_signatures", "resolution", "resolution_type", "resolution_verification", "fix", "related", "android_versions", "code_refs"],
+      "required": ["id", "status", "title", "description", "signatures", "recovery_signatures", "scenario_signatures", "resolution", "resolution_type", "resolution_verification", "fix", "related", "platform_versions", "code_refs"],
       "properties": {
         "id": {"$ref": "#/$defs/causeId"},
         "status": {"$ref": "#/$defs/causeStatus"},
@@ -219,7 +219,7 @@
         "fix": {"$ref": "#/$defs/fix"},
         "related": {"type": "array", "items": {"$ref": "#/$defs/causeId"}, "uniqueItems": true},
         "cp_evidence": {"type": ["string", "null"]},
-        "android_versions": {"$ref": "#/$defs/androidVersions"},
+        "platform_versions": {"$ref": "#/$defs/platformVersions"},
         "code_refs": {"type": "array", "items": {"$ref": "#/$defs/codeRef"}}
       },
       "allOf": [

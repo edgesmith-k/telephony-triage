@@ -192,11 +192,11 @@ def test_stats_excludes_manual_feedback():
 
 def test_stats_use_occurred_on_for_recent_counts():
     db = copy_db()
-    jira_dir = db / "network/NETWORK-001-no-service/jira"
+    jira_dir = db / "network/NETWORK-001-no-service/issues"
     for n in range(3):
         (jira_dir / f"MOCK-31{n + 10}.yaml").write_text(
             f"key: MOCK-31{n + 10}\ncause: NETWORK-001-01\ndate: 2026-09-27\noccurred_on: 2025-01-1{n}\n"
-            "model: MOCK-A56\nsw: MOCKA56_U1_20260901\nandroid_version: \"16\"\nanalyzed_by: mock-user1\n",
+            "model: MOCK-A56\nsw: MOCKA56_U1_20260901\nplatform_version: \"16\"\nanalyzed_by: mock-user1\n",
             encoding="utf-8")
     text = (_preview(db) / "STATS.md").read_text(encoding="utf-8")
     assert "| NETWORK-001-01 | 망 등록 거절 | 4 | 1 | 1 |" in text  # 누적 4, 최근 30·90일 1
@@ -242,7 +242,7 @@ def _all_tests():
 
 
 def _set_steps(db: Path, steps: dict) -> None:
-    jira = db / "data/DATA-001-no-setup-data-call/jira"
+    jira = db / "data/DATA-001-no-setup-data-call/issues"
     for key, step in steps.items():
         path = jira / f"{key}.yaml"
         text = path.read_text(encoding="utf-8")

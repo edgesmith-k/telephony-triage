@@ -87,9 +87,9 @@ def test_example_migration_upgrades_sample():
     assert out["mode"] == "migrate" and out["from"] == 1 and out["to"] == 2
     assert [s["file"] for s in out["steps"]] == ["0001_example_jira_tags.py"] and out["steps"][0]["upgrade_plan"]
     assert schema_version(db) == 2
-    jira_files = sorted(SAMPLE.glob("*/*/jira/*.yaml"))
+    jira_files = sorted(SAMPLE.glob("*/*/issues/*.yaml"))
     assert jira_files and len(out["changed"]) == len(jira_files) + 2      # Jira 파일 + config + Jira 스키마
-    validator = Draft202012Validator(json.loads((db / "schema/jira.schema.json").read_text(encoding="utf-8")))
+    validator = Draft202012Validator(json.loads((db / "schema/issue.schema.json").read_text(encoding="utf-8")))
     for path in jira_files:
         moved = db / path.relative_to(SAMPLE)
         text = moved.read_text(encoding="utf-8")
@@ -98,7 +98,7 @@ def test_example_migration_upgrades_sample():
         data["date"] = str(data["date"])
         data.pop("occurred_on", None)
         assert not list(validator.iter_errors(data)), path.name
-    assert json.loads((db / "schema/jira.schema.json").read_text(encoding="utf-8"))["properties"]["tags"]["type"] == "array"
+    assert json.loads((db / "schema/issue.schema.json").read_text(encoding="utf-8"))["properties"]["tags"]["type"] == "array"
     assert git(db, "status", "--porcelain").count("\n") == len(out["changed"])
 
 
@@ -420,7 +420,7 @@ def test_sync_pr_reapplies_upgraded_plan_on_new_schema():
     ws.db_pr("discard", ws.wt(found["job"]))
     cfg = yaml.safe_load(ws.remote_file("issue/MOCK-7002", CONFIG))
     assert cfg["schema_version"] == 2
-    jira = ws.remote_file("issue/MOCK-7002", "data/DATA-001-no-setup-data-call/jira/MOCK-7002.yaml")
+    jira = ws.remote_file("issue/MOCK-7002", "data/DATA-001-no-setup-data-call/issues/MOCK-7002.yaml")
     assert jira and "key: MOCK-7002" in jira
 
 

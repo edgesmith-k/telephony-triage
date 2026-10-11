@@ -2,28 +2,28 @@
 """jira_fields.py — Jira 응답에서 분석 항목 추출 (07-workflow.md §Step 0·2, 16-existing-assets.md §16.1, 08-safety.md §8.1).
 
     jira_fields.py check-key <KEY> [--db <path>]
-        `jira_key_regex`(이슈 DB `issue-db.config.yaml`)로 키를 검사한다. 맞지 않으면 종료 코드 1.
+        `tracker.key_regex`(이슈 DB `issue-db.config.yaml`)로 키를 검사한다. 맞지 않으면 종료 코드 1.
         작업 키·경로·브랜치로 쓰기 전에 부른다(contracts.md §3.2 작업 키 검증).
     jira_fields.py extract <raw.json|raw.yaml> [--origin mcp|file] [--db <path>]
                            [--meta-out <file>] [--consume] [--comments all|last:<N>] [--comment-chars <N>]
-        Jira MCP `get_issue` 응답(스킬이 파일로 저장) 또는 `--jira-file` YAML을 읽어
-        `jira.field_map`(사용자 config > site-defaults)으로 구조화 필드를 뽑고, 텍스트 필드
+        Jira MCP `get_issue` 응답(스킬이 파일로 저장) 또는 `--issue-file` YAML을 읽어
+        `tracker.field_map`(사용자 config > site-defaults)으로 구조화 필드를 뽑고, 텍스트 필드
         (요약·설명·코멘트 본문)는 **읽은 직후 마스킹**한다. 코멘트 작성자 같은 사람 이름 필드는 내지 않는다.
 
 출력(JSON):
     {key, key_valid, origin,
-     jira: {key, origin, model, sw, android_version, carrier, occurred_on},   # 계획 `jira` 블록 초안(date·note 제외)
-     occurred_at: <UTC ISO | null>, occurred_at_local: <jira.timezone ISO | null>,
-     logcat: {tz, year},                        # parse_logcat --tz/--year 값 (year_source: jira일 때 발생 연도)
+     issue: {key, origin, model, sw, platform_version, carrier, occurred_on},   # 계획 `issue` 블록 초안(date·note 제외)
+     occurred_at: <UTC ISO | null>, occurred_at_local: <tracker.timezone ISO | null>,
+     logcat: {tz, year},                        # parse_logcat --tz/--year 값 (year_source: tracker일 때 발생 연도)
      sim_slot, components[], text: {summary, description, comments[], comments_total},   # 마스킹됨
                                                 # --comments last:N면 뒤에서 N개, --comment-chars면 하나당 N자
      missing[], meta_out}
 선택 키(실패 스텝은 선택 값이라 **있을 때만** 나온다, 07-workflow.md §Step 2): `text.test_steps`(마스킹, ≤1000자),
 `failed_step_auto {text, source}`(Jira에서 자동으로 얻은 값: field > description > test_steps),
 `failed_step {text, source}`(`--failed-step`·`--steps-file`까지 반영한 최종 값, source는 cli|field|description|test_steps|steps_file),
-`jira.failed_step`(그 값의 text), `warnings[]`. 보조 정보일 뿐이며 `missing`에 넣지 않는다.
+`issue.failed_step`(그 값의 text), `warnings[]`. 보조 정보일 뿐이며 `missing`에 넣지 않는다.
 `--failed-step <한 줄>`·`--steps-file <파일>`은 record 흐름이 쓴다(우선순위 cli > 자동 > steps-file, 모두 마스킹 후 정규화).
-`--meta-out`이면 `match_signatures.py --jira-meta` 입력 `{key, occurred_at, sw, summary, description}`을 쓴다(`failed_step`·`android_version`·`sim_slot`은 있을 때만 더한다).
+`--meta-out`이면 `match_signatures.py --issue-meta` 입력 `{key, occurred_at, sw, summary, description}`을 쓴다(`failed_step`·`platform_version`·`sim_slot`은 있을 때만 더한다).
 `--consume`이면 읽은 원본 파일을 지운다(원문을 work_dir에 남기지 않기 위해서다, 08-safety.md §8.1).
 
 `field_map` 경로 표기: 점으로 잇고, 목록은 `[]`로 펼친다(`fields.components[].name`). 경로가 비었거나
@@ -48,7 +48,7 @@ from common import compat, dbpath, failedstep, masking, site_defaults, userconfi
 from common.exitcodes import CHECK_FAILED, OK, USAGE  # noqa: E402
 
 DEFAULT_KEY_RE = r"[A-Z][A-Z0-9]+-\d+"
-STRUCTURED = ("model", "sw", "android_version", "carrier")
+STRUCTURED = ("model", "sw", "platform_version", "carrier")
 TEXT_DEFAULTS = {
     "summary": ["fields.summary", "summary"],
     "description": ["fields.description", "description"],
@@ -74,7 +74,8 @@ def _db_cfg(db: Path | None) -> dict:
 
 
 def key_regex(db: Path | None) -> re.Pattern:
-    return re.compile(str(_db_cfg(db).get("jira_key_regex") or DEFAULT_KEY_RE))
+    tracker = _db_cfg(db).get("tracker")
+    return re.compile(str((tracker.get("key_regex") if isinstance(tracker, dict) else None) or DEFAULT_KEY_RE))
 
 
 def lookup(node, path: str):
@@ -181,7 +182,7 @@ def _failed_step_part(raw, fmap, jira_cfg, text, masker, cli, steps_file, step_c
 
 def extract(raw: dict, cfg: dict, db: Path | None, origin: str, last: int | None = None,
             chars: int = 0, failed_step: str | None = None, steps_file: str | None = None) -> dict:
-    jira_cfg = cfg.get("jira") or {}
+    jira_cfg = cfg.get("tracker") or {}
     fmap = jira_cfg.get("field_map") or {}
     jtz = _zone(jira_cfg.get("timezone"), "Jira")
     logcat_cfg = cfg.get("logcat") or {}
@@ -243,7 +244,7 @@ def extract(raw: dict, cfg: dict, db: Path | None, origin: str, last: int | None
 
     local = when.astimezone(jtz) if when else None
     year = None
-    if when and (logcat_cfg.get("year_source") or "jira") == "jira":
+    if when and (logcat_cfg.get("year_source") or "tracker") == "tracker":
         year = when.astimezone(ltz).year
     jira_block = {"key": key, "origin": origin, **structured}
     if local:
@@ -256,10 +257,10 @@ def extract(raw: dict, cfg: dict, db: Path | None, origin: str, last: int | None
         "key": key,
         "key_valid": bool(key and kre.fullmatch(key)),
         "origin": origin,
-        "jira": jira_block,
+        "issue": jira_block,
         "occurred_at": when.astimezone(timezone.utc).isoformat() if when else None,
         "occurred_at_local": local.isoformat() if local else None,
-        "logcat": {"tz": str(ltz.key), "year": year, "year_source": logcat_cfg.get("year_source") or "jira"},
+        "logcat": {"tz": str(ltz.key), "year": year, "year_source": logcat_cfg.get("year_source") or "tracker"},
         "sim_slot": None if slot in (None, "") else str(slot),
         "components": [str(c) for c in comps],
         "text": text,
@@ -313,6 +314,9 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     defaults = site_defaults.load_or_exit(getattr(args, "plugin_root", None))
     try:
+        legacy = userconfig.legacy_problems(defaults, userconfig.load_user())
+        if legacy:      # 옛 설정 키는 자동 변환하지 않는다(fail-closed, guard도 모든 MCP를 거부한다)
+            raise UsageError("옛 설정 키: " + "; ".join(legacy))
         db = _db(getattr(args, "db", None))
         if args.cmd == "check-key":
             ok = bool(key_regex(db).fullmatch(args.key))
@@ -327,10 +331,10 @@ def main(argv: list[str] | None = None) -> int:
                          comment_budget(args.comments), args.comment_chars,
                          args.failed_step, args.steps_file)
         if args.meta_out:
-            meta = {"key": result["key"], "sw": result["jira"].get("sw"),
+            meta = {"key": result["key"], "sw": result["issue"].get("sw"),
                     "summary": result["text"]["summary"], "description": result["text"]["description"]}
-            if result["jira"].get("android_version"):
-                meta["android_version"] = result["jira"]["android_version"]
+            if result["issue"].get("platform_version"):
+                meta["platform_version"] = result["issue"]["platform_version"]
             if result["occurred_at"]:
                 meta["occurred_at"] = result["occurred_at"]
             if result.get("sim_slot"):

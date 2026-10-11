@@ -248,7 +248,7 @@ def test_raw_full_reads_metric(tmp_path):
     (run / "outputs" / "transcript.md").write_text("t", encoding="utf-8")
     (run / "outputs" / "commands.md").write_text("c", encoding="utf-8")
     _bash_events(run, "cat logs/e.log", "head -c 100000 logs/e.log", "head -n 20 logs/e.log", "grep X logs/e.log",
-                 "unzip -p logs/a.zip", "cat notes.txt", "less jira_raw.json", "strings logs/e.log | head",
+                 "unzip -p logs/a.zip", "cat notes.txt", "less issue_raw.json", "strings logs/e.log | head",
                  extra=[("Read", {"file_path": "/x/logs/e.log"}),
                         ("Read", {"file_path": "/x/logs/e.log", "limit": 50}),
                         ("Read", {"file_path": "/x/events.json"}),
@@ -894,9 +894,9 @@ def test_e39_doctor_table_from_text_or_transcript(tmp_path, where, ok):
     env_dir = _synthetic_env(tmp_path)
     run = run_dir(tmp_path)
     _write_artifacts(run)
-    table = "| jira | fail | jira.tools.get_issue 매핑 비어 있음 | setup 4번 |"
+    table = "| tracker | fail | tracker.tools.get_issue 매핑 비어 있음 | setup 4번 |"
     items = [("tool", "d1", "Bash", {"command": "python3 S/config.py doctor --format markdown"}, table, False),
-             ("text", table if where == "text" else "jira만 fail입니다.")]
+             ("text", table if where == "text" else "tracker만 fail입니다.")]
     _seq_events(run, items)
     if where == "transcript":
         (run / "outputs" / "transcript.md").write_text(f"# t\n{table}\n", encoding="utf-8")
@@ -1098,7 +1098,7 @@ def _platform_ctx(tmp_path, *commands):
       'python3 "/p/scripts/config.py" site-defaults'], True, True),
     (['python3 /p/scripts/triage.py run MOCK-1001 --platform=ofono && python3 /p/scripts/db_pr.py lock release MOCK-1001'],
      True, False),                                             # 이후 db_pr에 플랫폼 빠짐
-    (['python3 /p/scripts/config.py show --keys work_dir,jira.tools',              # triage 앞 호출은 세지 않는다
+    (['python3 /p/scripts/config.py show --keys work_dir,tracker.tools',              # triage 앞 호출은 세지 않는다
       'python3 /p/scripts/triage.py run MOCK-1001 --platform ofono',
       'python3 /p/scripts/db_search.py MOCK-1001 --platform ofono --json'], True, True),
     (['python3 /p/scripts/triage.py run MOCK-1001 --platform ofono',

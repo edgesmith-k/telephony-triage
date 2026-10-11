@@ -33,7 +33,7 @@ causes:
       verification_history: []
     related: []
     cp_evidence: 거절 코드 자체는 CP에서 올라온다. DM 로그의 NAS 구간(등록 요청~거절 응답)을 함께 받아 거절 원인 값을 확인한다. CP 티켓은 TODO(SITE) — 사내에서 실제 티켓 번호를 연결한다.
-    android_versions: []
+    platform_versions: []
     code_refs: []
 tags: [registration]
 ---

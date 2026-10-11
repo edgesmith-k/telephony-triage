@@ -23,18 +23,18 @@ description: Telephony 이슈(Android·oFono 등; data·call·network·sim·sms�
 
 ## analyze
 
-`/telephony-triage:analyze <KEY> [logs...]` + `--code`·`--dry-run|--analysis-only`·`--more-logs`·`--jira-file`·`--failed-step|--steps-file`(붙인 목록→`JOB/steps-pasted.txt`)·`--clock-offset`·`--(no-)analyzer`·`--(no-)explore`
+`/telephony-triage:analyze <KEY> [logs...]` + `--code`·`--dry-run|--analysis-only`·`--more-logs`·`--issue-file`·`--failed-step|--steps-file`(붙인 목록→`JOB/steps-pasted.txt`)·`--clock-offset`·`--(no-)analyzer`·`--(no-)explore`
 
 ### 1. 드라이버 (Step 0~4)
 
 플랫폼(이슈 DB가 따로): 사용자가 말했거나 `analysis.json`에 `platform`이 있으면 1단계 config부터 `triage`·`config`·`issue_post`·`code_roots`·`db_{pr,verify,add,search,review}`에 `--platform <이름>`을 붙인다(나머지엔 안 붙임). `platform-mismatch`는 우회 금지.
 
-1. `--jira-file`이 없으면 config(`S/config.py show --keys work_dir,jira.tools`)의 `jira.tools.get_issue`(있으면 `get_comments`)를 그 스키마대로 부른다. 비어 있으면 추측하지 말고 멈춘다: `S/config.py doctor --format markdown` 표를 그대로 붙이고 setup 매핑 안내, 연습은 `--dry-run --jira-file <yaml>`. hook이 원문을
-   `JOB/jira_raw.json`에 두고 마스킹 요약만 보여준다(`saved_to` 없으면 응답을 그 경로에 저장하고 "격리 hook 미동작(S1 확인)"을 알린다). `--jira-file`은
+1. `--issue-file`이 없으면 config(`S/config.py show --keys work_dir,tracker.tools`)의 `get_issue`(있으면 `get_comments`)를 그 스키마대로 부른다. 비어 있으면 추측하지 말고 멈춘다: `S/config.py doctor --format markdown` 표를 그대로 붙이고 setup 매핑 안내, 연습은 `--dry-run --issue-file <yaml>`. hook이 원문을
+   `JOB/issue_raw.json`에 두고 마스킹 요약만 보여준다(`saved_to` 없으면 응답을 그 경로에 저장하고 "격리 hook 미동작(S1 확인)"을 알린다). `--issue-file`은
    `--dry-run`·`--analysis-only` 전용.
 2. `S/triage.py run <KEY> --logs <…>` + 위 옵션(analyzer·explore 외). stdout(=`JOB/analysis.json`)과 `JOB/report.md`만 읽는다.
 3. `status: needs_input` → `question`·`options`를 보이고 **사용자 답**을 `--answer <kind>=<값>`으로 붙여 같은 명령을 재실행한다.
-   `jira`는 1번 뒤, `logs`는 `--logs`를 붙여 재실행. `stopped`는 이유만.
+   `issue`는 1번 뒤, `logs`는 `--logs`를 붙여 재실행. `stopped`는 이유만.
 4. 종료 코드 1 → 키를 다시 묻는다.
 
 ### 2. 결과 읽기
@@ -63,7 +63,7 @@ description: Telephony 이슈(Android·oFono 등; data·call·network·sim·sms�
 | 사용자 결정 | op | `decision` |
 |---|---|---|
 | 1위 수락 / 다른 기존 원인 | `append {cause}` | `accepted` / `chose-other` |
-| DB에 있는 Jira를 다른 원인으로 | `reclassify {jira, from, to}` | `chose-other` |
+| DB에 있는 Jira를 다른 원인으로 | `reclassify {issue, from, to}` | `chose-other` |
 | 원인이 새것 | `new-cause`(`temp_id`) + 파서 규칙·fixture + `append` | `new-cause` |
 | 증상이 새것 | `S/db_add.py similar --db SNAP` 3개를 먼저 보이고 `new-type` + `append` | `new-type` |
 | 원인 미확정 | `unresolved {type}` | `unresolved` |
@@ -79,8 +79,8 @@ description: Telephony 이슈(Android·oFono 등; data·call·network·sim·sms�
 
 ### Step 8. 적용 → 확인 → 커밋 → PR
 
-먼저 `S/db_pr.py preflight --branch issue/<KEY> --search <KEY> --jira <KEY>`로
-write-flow §2(브랜치·`--lease`)만 한다. 열린 PR·`jira_in_main`은 다시 묻지 않되 `open_prs`에 없던 PR은 알리고 묻는다.
+먼저 `S/db_pr.py preflight --branch issue/<KEY> --search <KEY> --issue <KEY>`로
+write-flow §2(브랜치·`--lease`)만 한다. 열린 PR·`issue_in_main`은 다시 묻지 않되 `open_prs`에 없던 PR은 알리고 묻는다.
 `write-flow.md` 그대로: `db_pr stage --then-summary`(출력 = 확인 화면, 생략 불가) → 승인 → `db_pr publish --commit --and-discard --json`.
 취소·dry-run만 `discard`(직접 `git commit` 없음).
 

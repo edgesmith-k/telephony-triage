@@ -106,10 +106,10 @@ def _check_feedback_suggested(plan: dict, plan_path: Path, job_dir: Path) -> dic
         match = json.loads(match_path.read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
         raise UsageError(f"계획 feedback.suggested 검사 불가: {match_path}을 읽을 수 없다 ({str(exc)[:200]})") from exc
-    plan_key = (plan.get("jira") or {}).get("key")
-    match_key = (match.get("jira") or {}).get("key")
+    plan_key = (plan.get("issue") or {}).get("key")
+    match_key = (match.get("issue") or {}).get("key")
     if match_key != plan_key:
-        raise UsageError(f"계획 feedback.suggested 검사 불가: {match_path}의 jira.key({match_key})가 계획 jira.key"
+        raise UsageError(f"계획 feedback.suggested 검사 불가: {match_path}의 issue.key({match_key})가 계획 issue.key"
                          f"({plan_key})와 다르다 — 다른 작업의 분석 결과다", {"plan_key": plan_key, "match_key": match_key})
     expected = [{"cause": c["cause"], "signature": c.get("signature"), "score": c.get("score")}
                 for c in match.get("candidates") or [] if isinstance(c, dict) and c.get("cause") is not None]
@@ -184,13 +184,13 @@ def preflight(ctx: Ctx, branch: str, search: str | None, jira: str | None) -> di
         open_prs, warning = _open_prs(ctx, ["--search", search], _gh)
         if warning:
             warnings.append(warning)
-    jira_in_main = None
+    issue_in_main = None
     if jira:
         names = _out(_git(ctx.repo, "ls-tree", "-r", "--name-only", f"origin/{ctx.base}", check=False)).splitlines()
-        hit = next((n for n in names if re.fullmatch(rf"[^/]+/[^/]+/jira/{re.escape(jira)}\.yaml", n)), None)
+        hit = next((n for n in names if re.fullmatch(rf"[^/]+/[^/]+/issues/{re.escape(jira)}\.yaml", n)), None)
         if hit:
             record = yamlio.loads(_out(_git(ctx.repo, "show", f"origin/{ctx.base}:{hit}", check=False))) or {}
-            jira_in_main = {"path": hit, "cause": record.get("cause")}
+            issue_in_main = {"path": hit, "cause": record.get("cause")}
     return {
         "branch": branch,
         "tool_branch": {"name": tool, "exists": bool(tool_sha), "sha": tool_sha, "worktree": tool_wt,
@@ -198,7 +198,7 @@ def preflight(ctx: Ctx, branch: str, search: str | None, jira: str | None) -> di
         "user_branch": {"exists": bool(user_sha), "sha": user_sha, "ahead_of_remote": ahead},
         "remote_sha": remote_sha,
         "open_prs": open_prs,
-        "jira_in_main": jira_in_main,
+        "issue_in_main": issue_in_main,
         "warnings": warnings,
     }
 

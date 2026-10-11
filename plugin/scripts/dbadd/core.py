@@ -22,7 +22,7 @@ SIG_LISTS = {"symptom": "symptom_signatures", "cause": "signatures", "recovery":
              "scenario": "scenario_signatures"}
 CAUSE_KEYS_DEFAULT = ["id", "status", "title", "description", "signatures", "recovery_signatures",
                       "scenario_signatures", "resolution", "resolution_type", "resolution_verification", "fix",
-                      "related", "android_versions", "code_refs"]
+                      "related", "platform_versions", "code_refs"]
 TYPE_KEYS = ["id", "category", "secondary_categories", "title", "summary", "status", "symptom_signatures",
              "causes", "tags"]
 FIXTURE_REF_KINDS = ("positive", "recurrence", "extra")
@@ -117,7 +117,7 @@ def user_id(arg: str | None, defaults: dict) -> str:
 
 
 def plan_day(plan: dict) -> str:
-    jira = plan.get("jira") or {}
+    jira = plan.get("issue") or {}
     return str(jira.get("date") or str(plan.get("started_at", ""))[:10])
 
 
@@ -167,7 +167,7 @@ class Tree:
             self.docs[doc.id] = doc
         self.writes: dict[Path, str] = {}
         self.deletes: set[Path] = set()
-        self.base_jira = {p.stem: p for p in self.root.glob("*/*/jira/*.yaml")}
+        self.base_jira = {p.stem: p for p in self.root.glob("*/*/issues/*.yaml")}
         self.rule_docs: dict[str, dict] = {}
 
     # 조회
@@ -194,9 +194,9 @@ class Tree:
         return path.read_text(encoding="utf-8") if path.is_file() else None
 
     def jira_files(self) -> dict[str, Path]:
-        found = {p.stem: p for p in self.root.glob("*/*/jira/*.yaml") if p not in self.deletes}
+        found = {p.stem: p for p in self.root.glob("*/*/issues/*.yaml") if p not in self.deletes}
         for p in self.writes:
-            if p.parent.name == "jira" and p.suffix == ".yaml":
+            if p.parent.name == "issues" and p.suffix == ".yaml":
                 found[p.stem] = p
         return found
 

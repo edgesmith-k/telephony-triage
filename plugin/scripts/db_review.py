@@ -154,7 +154,7 @@ class Review:
                 continue
             age = quality.days_ago(r, self.as_of, "date")
             if age is not None and age > int(q["unresolved_max_days"]):
-                stale_unresolved.append({"jira": r.get("key"), "type": r["_type"], "date": str(r.get("date")),
+                stale_unresolved.append({"issue": r.get("key"), "type": r["_type"], "date": str(r.get("date")),
                                          "days": age,
                                          "text": f"{r.get('key')} ({r['_type']}, 기록 {r.get('date')}, {age}일)"})
         self.add("stale-unresolved", "오래된 원인 미확정",
@@ -202,19 +202,19 @@ class Review:
                  "유지 또는 원인 `status: deprecated`", stale, stale_unknown)
 
         self.add("unsupported-versions", "지원 종료 버전",
-                 f"원인의 `android_versions`가 비어 있지 않고 모두 `{self.supported_key}`({', '.join(self.supported)}) "
+                 f"원인의 `platform_versions`가 비어 있지 않고 모두 `{self.supported_key}`({', '.join(self.supported)}) "
                  "밖 (빈 목록 = 전 버전이므로 제외)",
                  "원인 `status: deprecated`",
-                 [{"cause": c.id, "versions": [str(v) for v in c.raw.get("android_versions") or []],
-                   "text": f"{c.id} {c.title} (android_versions: "
-                           f"{', '.join(str(v) for v in c.raw.get('android_versions') or [])})"}
+                 [{"cause": c.id, "versions": [str(v) for v in c.raw.get("platform_versions") or []],
+                   "text": f"{c.id} {c.title} (platform_versions: "
+                           f"{', '.join(str(v) for v in c.raw.get('platform_versions') or [])})"}
                   for c in causes if quality.unsupported_versions(c, self.supported)])
 
         open_rows = sorted(((c, len(self.jira_of(c.id))) for c in causes
                             if quality.fix_of(c).get("status") == "open"), key=lambda x: (-x[1], x[0].id))
-        self.add("open-with-jira", "수정 필요 누적", "`fix.status: open`이면서 Jira가 있는 원인 (Jira 건수 순)",
+        self.add("open-with-issues", "수정 필요 누적", "`fix.status: open`이면서 Jira가 있는 원인 (Jira 건수 순)",
                  "근본 수정 우선순위 제안",
-                 [{"cause": c.id, "jira": n, "text": f"{c.id} {c.title} (Jira {n}건)"} for c, n in open_rows if n])
+                 [{"cause": c.id, "issues": n, "text": f"{c.id} {c.title} (Jira {n}건)"} for c, n in open_rows if n])
 
         self.add("fix-fields-missing", "수정 상태 누락",
                  "`fix-submitted`인데 `ref`/`fixed_in`(브랜치) 없음, `fixed`인데 `verification`/`fixed_in` 빌드 없음",

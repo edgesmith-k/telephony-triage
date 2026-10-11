@@ -6,7 +6,7 @@
 - `analysis.json` ≤ 4KB, 같은 입력이면 같은 결과(생성 시각 제외).
 - 전체 경로(Workspace): needs_input(코드 경로·Jira·lock) → `--answer`로 재실행 → 후보, lock 보유, `release`로 해제.
   사용자 clone은 브랜치·워킹 트리가 그대로다.
-- `jira_bridge.py`(PostToolUse): 원문은 `JOB/jira_raw.json`으로만, 모델에는 마스킹 요약만.
+- `jira_bridge.py`(PostToolUse): 원문은 `JOB/issue_raw.json`으로만, 모델에는 마스킹 요약만.
 - `match_signatures --top`의 types·causes 절삭, `db_search`의 `code_refs`, `jira_fields --comments` 예산.
 """
 
@@ -42,7 +42,7 @@ def _offline(item: dict, doc: dict, out: Path) -> dict:
                                 "summary": item.get("summary", "")}, ensure_ascii=False), encoding="utf-8")
     logs = [str((LABELSET.parent / p).resolve()) for p in item["logs"]]
     return run_json("triage.py", ["run", item["key"], "--offline-db", SAMPLE, "--out", out, "--logs", *logs,
-                                  "--jira-meta", meta, "--tz", doc["tz"], "--year", doc["year"]])
+                                  "--issue-meta", meta, "--tz", doc["tz"], "--year", doc["year"]])
 
 
 def _legacy(item: dict, doc: dict, work: Path) -> list[dict]:
@@ -56,7 +56,7 @@ def _legacy(item: dict, doc: dict, work: Path) -> list[dict]:
     meta = work / f"{item['key']}.jira.json"
     meta.write_text(json.dumps({"key": item["key"], "occurred_at": item["occurred_at"],
                                 "summary": item.get("summary", "")}, ensure_ascii=False), encoding="utf-8")
-    return run_json("match_signatures.py", ["--db", SAMPLE, "--events", path, "--jira-meta", meta,
+    return run_json("match_signatures.py", ["--db", SAMPLE, "--events", path, "--issue-meta", meta,
                                             "--top", "3"])["candidates"]
 
 
@@ -114,12 +114,12 @@ def test_version_mismatch_is_report_only(monkeypatch):
     item = items[0]
     meta = work / "m.json"
     meta.write_text(json.dumps({"key": item["key"], "occurred_at": item["occurred_at"], "summary": item.get("summary", ""),
-                                "android_version": "15"}), encoding="utf-8")
+                                "platform_version": "15"}), encoding="utf-8")
     logs = [str((LABELSET.parent / p).resolve()) for p in item["logs"]]
     out = work / "out"
     result = run_json("triage.py", ["run", item["key"], "--offline-db", SAMPLE, "--out", out, "--logs", *logs,
-                                    "--jira-meta", meta, "--tz", doc["tz"], "--year", doc["year"]])
-    assert result["candidates"][0]["cause"] == "DATA-001-01"       # 원인 android_versions: 16·17
+                                    "--issue-meta", meta, "--tz", doc["tz"], "--year", doc["year"]])
+    assert result["candidates"][0]["cause"] == "DATA-001-01"       # 원인 platform_versions: 16·17
     assert "다른 버전 원인 (Android 16, 17)" in (out / "report.md").read_text(encoding="utf-8")
     assert "version_mismatch" not in (out / "analysis.json").read_text(encoding="utf-8")
 
@@ -156,7 +156,7 @@ def _clone_state(ws: Workspace) -> tuple[str, str, str]:
 def test_full_run_stops_for_code_choice_then_finishes_and_keeps_lock_until_release():
     ws = Workspace()
     before = _clone_state(ws)
-    args = ["run", "MOCK-1001", "--dry-run", "--jira-file", MOCK_JIRA / "MOCK-1001.yaml", "--logs", DATA_LOG]
+    args = ["run", "MOCK-1001", "--dry-run", "--issue-file", MOCK_JIRA / "MOCK-1001.yaml", "--logs", DATA_LOG]
     first = ws.json("triage.py", args)
     assert first["status"] == "needs_input" and first["needs_input"]["kind"] == "code"
     assert any(o["value"] == "skip" for o in first["needs_input"]["options"])
@@ -165,7 +165,7 @@ def test_full_run_stops_for_code_choice_then_finishes_and_keeps_lock_until_relea
     assert done["status"] == "ok" and done["mode"] == "write"
     assert done["candidates"][0]["cause"] == "DATA-001-01"
     assert done["candidates"][0]["resolution"] and done["code"] == {"skipped": True}
-    assert done["jira"]["origin"] == "file" and done["snapshot"]["sha"]
+    assert done["issue"]["origin"] == "file" and done["snapshot"]["sha"]
     job = ws.job_dir("MOCK-1001")
     assert len((job / "analysis.json").read_bytes()) <= 4096 and (job / "report.md").is_file()
     status = ws.db_pr("lock", "status")
@@ -187,7 +187,7 @@ def test_full_run_stops_for_code_choice_then_finishes_and_keeps_lock_until_relea
 def test_full_run_resolves_code_refs_against_the_chosen_tree():
     ws = Workspace()
     src = REPO / "tests" / "mocks" / "src" / "android16"
-    done = ws.json("triage.py", ["run", "MOCK-1001", "--dry-run", "--jira-file", MOCK_JIRA / "MOCK-1001.yaml",
+    done = ws.json("triage.py", ["run", "MOCK-1001", "--dry-run", "--issue-file", MOCK_JIRA / "MOCK-1001.yaml",
                                  "--logs", DATA_LOG, "--code", src])
     assert done["status"] == "ok", done
     code = done["code"]
@@ -205,7 +205,7 @@ def test_jira_without_time_offers_time_candidates_instead_of_asking_year():
     ws = Workspace()
     log = tmp("tt-triage-year-") / "roaming.log"
     log.write_bytes((REPO / "tests/fixtures/logs/data-roaming-disabled.log").read_bytes())  # mtime = 오늘
-    args = ["run", "MOCK-9005", "--dry-run", "--jira-file", REPO / "tests/skill_evals/jira/MOCK-9005.yaml",
+    args = ["run", "MOCK-9005", "--dry-run", "--issue-file", REPO / "tests/skill_evals/jira/MOCK-9005.yaml",
             "--logs", log, "--code", "skip"]
     ask = ws.json("triage.py", args)
     assert ask["status"] == "needs_input" and ask["needs_input"]["kind"] == "time", ask
@@ -224,7 +224,7 @@ def test_time_question_warns_about_clock_anomalies():
     ws = Workspace()
     log = tmp("tt-triage-clock-") / "clock-anomaly.log"
     log.write_bytes((REPO / "tests/fixtures/logs/clock-anomaly.log").read_bytes())
-    args = ["run", "MOCK-9005", "--dry-run", "--jira-file", REPO / "tests/skill_evals/jira/MOCK-9005.yaml",
+    args = ["run", "MOCK-9005", "--dry-run", "--issue-file", REPO / "tests/skill_evals/jira/MOCK-9005.yaml",
             "--logs", log, "--code", "skip"]
     ask = ws.json("triage.py", args)
     assert ask["status"] == "needs_input" and ask["needs_input"]["kind"] == "time", ask
@@ -239,7 +239,7 @@ def test_full_run_asks_for_jira_and_reads_what_the_bridge_saved():
     ws = Workspace()
     args = ["run", "MOCK-1001", "--logs", DATA_LOG, "--code", "skip"]
     ask = ws.json("triage.py", args)
-    assert ask["status"] == "needs_input" and ask["needs_input"]["kind"] == "jira"
+    assert ask["status"] == "needs_input" and ask["needs_input"]["kind"] == "issue"
     assert ask["needs_input"]["tool"] == "mcp__mock-jira__jira_fetch_ticket"
 
     issue = yaml.safe_load((MOCK_JIRA / "MOCK-1001.yaml").read_text(encoding="utf-8"))
@@ -249,12 +249,12 @@ def test_full_run_asks_for_jira_and_reads_what_the_bridge_saved():
     proc = _bridge(ws, json.dumps(event, ensure_ascii=False))
     assert proc.returncode == 0, proc.stderr
     shown = json.loads(proc.stdout)["hookSpecificOutput"]["updatedToolOutput"]
-    raw = ws.job_dir("MOCK-1001") / "jira_raw.json"
+    raw = ws.job_dir("MOCK-1001") / "issue_raw.json"
     assert raw.is_file() and "mock.reporter" not in shown and "customfield_10002" not in shown
     assert "데이터가 연결되지 않음" in shown
 
     done = ws.json("triage.py", args)
-    assert done["status"] == "ok" and done["jira"]["origin"] == "mcp"
+    assert done["status"] == "ok" and done["issue"]["origin"] == "mcp"
     assert done["candidates"][0]["cause"] == "DATA-001-01"
     assert not raw.exists(), "추출 뒤 원문은 지운다(--consume)"
     ws.json("triage.py", ["release", "MOCK-1001"])
@@ -287,26 +287,26 @@ def _get_issue_event(tool: str) -> str:
 
 
 def _site_jira(server: str, get_issue: str) -> dict:
-    base = yaml.safe_load((REPO / "plugin" / "site-defaults.example.yaml").read_text(encoding="utf-8"))["jira"]
+    base = yaml.safe_load((REPO / "plugin" / "site-defaults.example.yaml").read_text(encoding="utf-8"))["tracker"]
     return {**base, "mcp_server": server, "tools": {"get_issue": get_issue}, "read_tools": [get_issue]}
 
 
 def test_bridge_matches_normalized_server_name():
     """R-2: `jira.tools`에 원래 서버 이름(`jira.corp`)이 있어도 세션 이름(`jira_corp`)의 응답을 격리한다."""
-    root = plugin_root("bridge-dot", jira=_site_jira("jira.corp", "mcp__jira.corp__get_issue"))
+    root = plugin_root("bridge-dot", tracker=_site_jira("jira.corp", "mcp__jira.corp__get_issue"))
     home = _bridge_home()
     proc = run("jira_bridge.py", [], root=root, env={"TELEPHONY_TRIAGE_HOME": home},
                stdin=_get_issue_event("mcp__jira_corp__get_issue"))
     assert proc.returncode == 0 and proc.stdout.strip(), proc.stderr
     shown = json.loads(proc.stdout)["hookSpecificOutput"]["updatedToolOutput"]
     assert "saved_to" in shown and "450081234567890" not in shown
-    assert (home / "work" / "MOCK-1001" / "jira_raw.json").is_file()
+    assert (home / "work" / "MOCK-1001" / "issue_raw.json").is_file()
 
 
 def test_bridge_fails_closed_when_config_unreadable():
     """R-4: 설정을 읽지 못하면 traceback·종료 1이 아니라 종료 0 + 오류 문구(원문 없음). site-defaults가 없으면
     guard처럼 사용자 config로 판정한다."""
-    broken = _bridge_home("jira: [unclosed\n  : :\n")
+    broken = _bridge_home("tracker: [unclosed\n  : :\n")
     # 사용자 config에만 있던 매핑(지금은 읽을 수 없음): 대상인지 모르므로 mcp__ 결과를 오류 문구로
     proc = run("jira_bridge.py", [], root=plugin_root(), env={"TELEPHONY_TRIAGE_HOME": broken},
                stdin=_get_issue_event("mcp__jira_corp__get_issue"))
@@ -329,7 +329,7 @@ def test_bridge_fails_closed_when_config_unreadable():
     (bare / "site-defaults.yaml").unlink()
     home = _bridge_home()
     user = yaml.safe_load((home / "config.yaml").read_text(encoding="utf-8"))
-    user["jira"] = {"tools": {"get_issue": "mcp__mock-jira__jira_fetch_ticket"}}
+    user["tracker"] = {"tools": {"get_issue": "mcp__mock-jira__jira_fetch_ticket"}}
     (home / "config.yaml").write_text(yaml.safe_dump(user), encoding="utf-8")
     proc = run("jira_bridge.py", [], root=bare, env={"TELEPHONY_TRIAGE_HOME": home},
                stdin=_get_issue_event("mcp__mock-jira__jira_fetch_ticket"))
@@ -423,7 +423,7 @@ def test_bridge_records_approved_comment_post():
 def test_lock_held_by_other_job_is_a_question_and_release_other_continues():
     ws = Workspace()
     ws.acquire("MOCK-9999")
-    args = ["run", "MOCK-1001", "--dry-run", "--jira-file", MOCK_JIRA / "MOCK-1001.yaml", "--logs", DATA_LOG,
+    args = ["run", "MOCK-1001", "--dry-run", "--issue-file", MOCK_JIRA / "MOCK-1001.yaml", "--logs", DATA_LOG,
             "--code", "skip"]
     ask = ws.json("triage.py", args)
     assert ask["needs_input"]["kind"] == "lock" and "MOCK-9999" in ask["needs_input"]["question"]
@@ -433,10 +433,10 @@ def test_lock_held_by_other_job_is_a_question_and_release_other_continues():
 
 def test_invalid_key_is_exit_1_and_errors_after_lock_release_it():
     ws = Workspace(build=False)
-    bad = ws.run("triage.py", ["run", "bad-key", "--dry-run", "--jira-file", MOCK_JIRA / "MOCK-1001.yaml",
+    bad = ws.run("triage.py", ["run", "bad-key", "--dry-run", "--issue-file", MOCK_JIRA / "MOCK-1001.yaml",
                                "--logs", DATA_LOG])
     assert bad.returncode == 1 and "형식" in bad.stderr
-    missing = ws.run("triage.py", ["run", "MOCK-1001", "--dry-run", "--jira-file", MOCK_JIRA / "MOCK-1001.yaml",
+    missing = ws.run("triage.py", ["run", "MOCK-1001", "--dry-run", "--issue-file", MOCK_JIRA / "MOCK-1001.yaml",
                                    "--logs", ws.base / "no-such.log", "--code", "skip"])
     assert missing.returncode == 2 and "로그 파일이 없습니다" in missing.stderr
     assert ws.db_pr("lock", "status")["held"] is False, "오류로 끝나면 lock을 푼다"
@@ -444,7 +444,7 @@ def test_invalid_key_is_exit_1_and_errors_after_lock_release_it():
 
 def test_jira_file_requires_dry_run():
     ws = Workspace(build=False)
-    proc = ws.run("triage.py", ["run", "MOCK-1001", "--jira-file", MOCK_JIRA / "MOCK-1001.yaml"])
+    proc = ws.run("triage.py", ["run", "MOCK-1001", "--issue-file", MOCK_JIRA / "MOCK-1001.yaml"])
     assert proc.returncode == 2 and "--dry-run" in proc.stderr
 
 
@@ -482,7 +482,7 @@ def test_skill_md_is_within_7_5kb_and_drives_triage():
     text = skill.read_text(encoding="utf-8")
     assert len(text.encode("utf-8")) <= 7680        # W6: 실행 규칙을 reference/rules.md로 옮긴 뒤의 한도(그 전 8,192B)
     for needle in ("triage.py run", "needs_input", "--answer", "write-flow.md", "--commit", "reference/rules.md",
-                   "steps-pasted.txt", "--dry-run --jira-file", "analyzer.skill",
+                   "steps-pasted.txt", "--dry-run --issue-file", "analyzer.skill",
                    "must_show", "triage.py explore"):
         assert needle in text, needle
     rules = (reference / "rules.md").read_text(encoding="utf-8")      # SKILL §실행 규칙이던 내용
@@ -523,7 +523,7 @@ def test_match_top_trims_types_and_causes_but_top_0_keeps_everything():
 def test_db_search_cause_has_code_refs_projection():
     out = run_json("db_search.py", ["DATA-001-01", "--db", SAMPLE, "--limit", "3"])
     cause = next(r for r in out["results"] if r.get("id") == "DATA-001-01")
-    assert cause["code_refs"] and set().union(*map(set, cause["code_refs"])) <= {"ref", "symbol", "android_versions"}
+    assert cause["code_refs"] and set().union(*map(set, cause["code_refs"])) <= {"ref", "symbol", "platform_versions"}
     assert cause["code_refs"][0]["ref"].startswith("aosp:")
 
 
@@ -627,7 +627,7 @@ def test_explore_never_skips_timeline_but_says_so():
     meta.write_text(json.dumps({"key": item["key"], "occurred_at": item["occurred_at"]}), encoding="utf-8")
     logs = [str((LABELSET.parent / p).resolve()) for p in item["logs"]]
     analysis = run_json("triage.py", ["run", item["key"], "--offline-db", SAMPLE, "--out", out, "--logs", *logs,
-                                      "--jira-meta", meta, "--tz", doc["tz"], "--year", doc["year"]],
+                                      "--issue-meta", meta, "--tz", doc["tz"], "--year", doc["year"]],
                         root=plugin_root(explore={"when": "never"}))
     assert analysis["explore"] == {"reason": "no_candidate", "when": "never"}
     assert not (out / "timeline.md").exists() and not (out / "explore-input.json").exists()
@@ -694,7 +694,7 @@ def _e004_offline(out: Path, *extra) -> dict:
     meta = gen / "m.json"
     meta.write_text(json.dumps({"key": "MOCK-9004", "occurred_at": "2026-09-27T18:02:03+09:00", "summary": "3G call drop"}),
                     encoding="utf-8")
-    return run_json("triage.py", ["run", "MOCK-9004", "--offline-db", SAMPLE, "--out", out, "--logs", log, "--jira-meta", meta,
+    return run_json("triage.py", ["run", "MOCK-9004", "--offline-db", SAMPLE, "--out", out, "--logs", log, "--issue-meta", meta,
                                   "--tz", "Asia/Seoul", "--year", "2026", *extra])
 
 
@@ -723,7 +723,7 @@ def test_confirmed_top_has_no_uncollected_tags_and_no_range_must_show():
 
 def test_analysis_only_report_line_is_first_must_show():
     ws = Workspace()
-    done = ws.json("triage.py", ["run", "MOCK-1001", "--analysis-only", "--jira-file", MOCK_JIRA / "MOCK-1001.yaml",
+    done = ws.json("triage.py", ["run", "MOCK-1001", "--analysis-only", "--issue-file", MOCK_JIRA / "MOCK-1001.yaml",
                                  "--logs", DATA_LOG, "--answer", "code=skip"])
     report = (ws.job_dir("MOCK-1001") / "report.md").read_text(encoding="utf-8").splitlines()
     assert done["must_show"][0].startswith("분석 전용:") and f"- {done['must_show'][0]}" in report
@@ -758,7 +758,7 @@ def _analyzer_report(cfg: dict) -> str:
     meta.write_text(json.dumps({"key": items[0]["key"], "occurred_at": items[0]["occurred_at"]}), encoding="utf-8")
     logs = [str((LABELSET.parent / p).resolve()) for p in items[0]["logs"]]
     run_json("triage.py", ["run", items[0]["key"], "--offline-db", SAMPLE, "--out", out, "--logs", *logs,
-                           "--jira-meta", meta, "--tz", doc["tz"], "--year", doc["year"]], root=plugin_root(**cfg))
+                           "--issue-meta", meta, "--tz", doc["tz"], "--year", doc["year"]], root=plugin_root(**cfg))
     return (out / "report.md").read_text(encoding="utf-8")
 
 
@@ -782,7 +782,7 @@ def _offline_with(item: dict, doc: dict, out: Path, *extra, meta_extra: dict | N
                     encoding="utf-8")
     logs = [str((LABELSET.parent / p).resolve()) for p in item["logs"]]
     return run_json("triage.py", ["run", item["key"], "--offline-db", SAMPLE, "--out", out, "--logs", *logs,
-                                  "--jira-meta", meta, "--tz", doc["tz"], "--year", doc["year"], *extra])
+                                  "--issue-meta", meta, "--tz", doc["tz"], "--year", doc["year"], *extra])
 
 
 def test_absent_failed_step_is_byte_identical_even_with_steps_file_without_fail_line():
@@ -795,9 +795,9 @@ def test_absent_failed_step_is_byte_identical_even_with_steps_file_without_fail_
         withfile = _offline_with(item, doc, work / "b", "--steps-file", steps)
         strip = lambda r: {k: v for k, v in r.items() if k not in ("generated_at", "files")}  # noqa: E731
         assert strip(plain) == strip(withfile)
-        assert "failed_step" not in json.dumps(plain) and "failed_step" not in (work / "a" / "jira_meta.json").read_text()
+        assert "failed_step" not in json.dumps(plain) and "failed_step" not in (work / "a" / "issue_meta.json").read_text()
         assert (work / "a" / "report.md").read_bytes() == (work / "b" / "report.md").read_bytes()
-        assert (work / "a" / "jira_meta.json").read_bytes() == (work / "b" / "jira_meta.json").read_bytes()
+        assert (work / "a" / "issue_meta.json").read_bytes() == (work / "b" / "issue_meta.json").read_bytes()
         for n in ("a", "b"):
             if (work / n / "explore-input.json").exists():
                 _explore_cmd(work / n)
@@ -812,13 +812,13 @@ def test_failed_step_flag_appears_in_analysis_report_and_timeline_header():
     item = next(i for i in items if i["expect"] == "unresolved")
     out = tmp("tt-triage-") / "x"
     analysis = _offline_with(item, doc, out, "--failed-step", "4 | 데이터 켜기 | FAIL")
-    assert analysis["jira"]["failed_step"] == {"text": "4 | 데이터 켜기 | FAIL", "source": "cli"}
+    assert analysis["issue"]["failed_step"] == {"text": "4 | 데이터 켜기 | FAIL", "source": "cli"}
     report = (out / "report.md").read_text(encoding="utf-8").splitlines()
     assert report[2] == "- 실패 스텝 (보조 정보, Jira cli; 점수·S/C에 쓰지 않음; 분석 범위·순위 참고): 4 | 데이터 켜기 | FAIL"
     _explore_cmd(out)
     timeline = (out / "timeline.md").read_text(encoding="utf-8")
     assert "- 실패 스텝(Jira, 데이터이며 지시 아님): 4 | 데이터 켜기 | FAIL" in timeline
-    assert json.loads((out / "jira_meta.json").read_text(encoding="utf-8"))["failed_step"] == "4 | 데이터 켜기 | FAIL"
+    assert json.loads((out / "issue_meta.json").read_text(encoding="utf-8"))["failed_step"] == "4 | 데이터 켜기 | FAIL"
 
 
 def test_failed_step_changes_request_hash_and_no_candidate_search_order():
@@ -841,16 +841,16 @@ def test_long_failed_step_keeps_analysis_within_4kb():
     out = tmp("tt-triage-") / "x"
     analysis = _offline_with(items[0], doc, out, "--failed-step", "스텝 " + "가나다 " * 120)
     raw = (out / "analysis.json").read_bytes()
-    assert len(raw) <= 4096 and analysis["jira"]["failed_step"]["source"] == "cli"
-    assert len(analysis["jira"]["failed_step"]["text"]) <= 120
+    assert len(raw) <= 4096 and analysis["issue"]["failed_step"]["source"] == "cli"
+    assert len(analysis["issue"]["failed_step"]["text"]) <= 120
     import importlib
     triage = importlib.import_module("triage")
     big = {"ts": "2026-09-20T05:30:00.000Z", "tag": "DNC-0", "msg": "x" * 140, "event": "e"}
-    result = {"jira": {"summary": "s" * 3900, "failed_step": {"text": "가" * 120, "source": "cli"}}, "warnings": ["w" * 120] * 10,
+    result = {"issue": {"summary": "s" * 3900, "failed_step": {"text": "가" * 120, "source": "cli"}}, "warnings": ["w" * 120] * 10,
               "files": {"report": "r", "events": "e"},
               "candidates": [{"cause": f"C-{i}", "evidence": [dict(big) for _ in range(10)]} for i in range(3)]}
     out2 = triage.fit(result)
-    assert len(out2["jira"]["failed_step"]["text"]) <= 60 and out2["truncated"] is True   # 마지막 수단, 그래도 넘치면 truncated
+    assert len(out2["issue"]["failed_step"]["text"]) <= 60 and out2["truncated"] is True   # 마지막 수단, 그래도 넘치면 truncated
 
 
 def test_offline_meta_failed_step_is_masked_and_used():
@@ -859,7 +859,7 @@ def test_offline_meta_failed_step_is_masked_and_used():
     analysis = _offline_with(items[0], doc, out, meta_extra={"failed_step": "고객 010-1234-5678 데이터 켜기"})
     assert "010-1234-5678" not in json.dumps(analysis, ensure_ascii=False)
     assert "010-1234-5678" not in (out / "report.md").read_text(encoding="utf-8")
-    assert analysis["jira"]["failed_step"]["source"] == "field"
+    assert analysis["issue"]["failed_step"]["source"] == "field"
 
 
 def test_unexpected_error_releases_lock_and_exits_2():
@@ -872,7 +872,7 @@ def test_unexpected_error_releases_lock_and_exits_2():
         "driver.Driver.core = boom\n"
         "raise SystemExit(triage.main())\n", encoding="utf-8", newline="\n")
     ws = Workspace(root=root)
-    proc = ws.run("crash_triage.py", ["run", "MOCK-1001", "--dry-run", "--jira-file", MOCK_JIRA / "MOCK-1001.yaml",
+    proc = ws.run("crash_triage.py", ["run", "MOCK-1001", "--dry-run", "--issue-file", MOCK_JIRA / "MOCK-1001.yaml",
                                       "--logs", DATA_LOG, "--code", "skip"])
     assert proc.returncode == 2, proc.stderr[-1500:]
     assert "내부 오류" in proc.stderr and "RuntimeError: boom" in proc.stderr and "Traceback" not in proc.stderr
@@ -896,7 +896,7 @@ def _crash_root(name: str, before_raise: str = ""):
 
 
 def _crash_run(ws: Workspace):
-    return ws.run("crash_triage.py", ["run", "MOCK-1001", "--dry-run", "--jira-file", MOCK_JIRA / "MOCK-1001.yaml",
+    return ws.run("crash_triage.py", ["run", "MOCK-1001", "--dry-run", "--issue-file", MOCK_JIRA / "MOCK-1001.yaml",
                                       "--logs", DATA_LOG, "--code", "skip"])
 
 
@@ -959,7 +959,7 @@ def test_no_candidate_error_events_carry_request_and_error_and_report_lists_them
     meta.write_text(json.dumps({"key": "MOCK-7400", "occurred_at": "2026-09-22T12:00:01.000Z", "summary": ""}),
                     encoding="utf-8")
     analysis = run_json("triage.py", ["run", "MOCK-7400", "--offline-db", SAMPLE, "--out", out, "--logs", log,
-                                      "--jira-meta", meta, "--tz", "UTC", "--year", 2026])
+                                      "--issue-meta", meta, "--tz", "UTC", "--year", 2026])
     assert not analysis.get("candidates")
     rows = analysis["no_candidate"]["error_events"]
     assert rows[0]["event"] == "ril_error" and rows[0]["request"] == "SETUP_DATA_CALL"
@@ -975,7 +975,7 @@ def test_read_only_mode_shows_update_hint_in_analysis_and_report():
     ws.push_main(lambda c: (c / "issue-db.config.yaml").write_text(
         (c / "issue-db.config.yaml").read_text(encoding="utf-8").replace("schema_version: 1", "schema_version: 99"),
         encoding="utf-8", newline="\n"))
-    args = ["run", "MOCK-1001", "--dry-run", "--jira-file", MOCK_JIRA / "MOCK-1001.yaml", "--logs", DATA_LOG,
+    args = ["run", "MOCK-1001", "--dry-run", "--issue-file", MOCK_JIRA / "MOCK-1001.yaml", "--logs", DATA_LOG,
             "--answer", "code=skip"]
     done = ws.json("triage.py", args)
     assert done["status"] == "ok" and done["mode"] == "read-only"
@@ -997,7 +997,7 @@ W4_DOCS = REPO / "docs" / "design"
 
 def _profile(name: str, version: str, tree: Path | str | None = None) -> dict:
     tree = str(tree or SRC / f"android{version}")
-    return {"name": name, "android_version": version, "roots": {"aosp": tree, "vendor_ril": tree}}
+    return {"name": name, "platform_version": version, "roots": {"aosp": tree, "vendor_ril": tree}}
 
 
 def _w4_config(ws: Workspace, **extra) -> None:
@@ -1009,7 +1009,7 @@ def _w4_config(ws: Workspace, **extra) -> None:
 
 def _w4_run(ws: Workspace, *extra, jira: Path | None = None) -> dict:
     mode = [] if "--analysis-only" in extra else ["--dry-run"]
-    args = ["run", W4_KEY, *mode, "--jira-file", jira or MOCK_JIRA / f"{W4_KEY}.yaml", "--logs", DATA_LOG, *extra]
+    args = ["run", W4_KEY, *mode, "--issue-file", jira or MOCK_JIRA / f"{W4_KEY}.yaml", "--logs", DATA_LOG, *extra]
     return ws.json("triage.py", args)
 
 
@@ -1204,7 +1204,7 @@ def test_step8_current_key_tool_branch_still_asks_and_stops_when_declined():
     done = _w4_run(ws, "--answer", "code=skip")
     assert done["status"] == "ok" and len(done["notes"]) == 1 and "브랜치 1개" in done["notes"][0]   # 알리기만 한다
     assert git(ws.clone, "branch", "--list", f"tt/issue/{W4_KEY}"), "지우지 않는다"
-    pre = ws.db_pr("preflight", "--branch", f"issue/{W4_KEY}", "--search", W4_KEY, "--jira", W4_KEY)
+    pre = ws.db_pr("preflight", "--branch", f"issue/{W4_KEY}", "--search", W4_KEY, "--issue", W4_KEY)
     assert pre["tool_branch"]["exists"] is True and not pre["tool_branch"].get("worktree")
     step8 = (W4_DOCS / "07-workflow.md").read_text(encoding="utf-8")
     assert "이전 작업의 잔여물이다. 삭제할지 묻는다 (`db_pr cleanup`). 삭제하지 않으면 중단한다." in step8
@@ -1226,7 +1226,7 @@ def test_w4_docs_match_the_implementation():
     assert "사용자 config > `site-defaults.yaml` > 내장 기본값 `true`" in cfg
     contracts = "\n".join((W4_DOCS / name).read_text(encoding="utf-8")         # W7: analysis 키 트리는 생성 파일로
                            for name in ("contracts.md", "contracts-cli.md"))
-    assert "(kind: `lock`·`plan`·`jira`" in contracts and "`cleanup`·`plan`" not in contracts
+    assert "(kind: `lock`·`plan`·`issue`" in contracts and "`cleanup`·`plan`" not in contracts
     assert "auto?(`true`: `code.auto_select`" in contracts and "cleanup_targets" in contracts and "notes?(" in contracts
     sync = (REPO / "plugin/commands/sync.md").read_text(encoding="utf-8")
     assert "analyze가 알린 잔여물" in sync
@@ -1272,7 +1272,7 @@ def test_matcher_timeout_is_must_shown_and_not_cached():
     out = tmp("tt-triage-") / "x"
     meta = _meta(out, "MOCK-7410", occurred_at="2026-09-20T05:30:05.000Z")
     analysis = run_json("triage.py", ["run", "MOCK-7410", "--offline-db", db, "--out", out, "--logs", _slow_log(),
-                                      "--jira-meta", meta, "--tz", "Asia/Seoul", "--year", 2026])
+                                      "--issue-meta", meta, "--tz", "Asia/Seoul", "--year", 2026])
     assert analysis["status"] == "ok", analysis
     assert analysis["unjudged"]["count"] >= 1 and "DATA-001" in analysis["unjudged"]["types"], analysis["unjudged"]
     assert any(m.startswith("판정 불가 유형:") for m in analysis["must_show"]), analysis["must_show"]
@@ -1287,7 +1287,7 @@ def test_time_candidates_question_mentions_unjudged_types():
     out = tmp("tt-triage-") / "x"
     meta = _meta(out, "MOCK-7411")
     ask = run_json("triage.py", ["run", "MOCK-7411", "--offline-db", _slow_symptom_db(), "--out", out,
-                                 "--logs", _slow_log(), "--jira-meta", meta, "--tz", "Asia/Seoul", "--year", 2026])
+                                 "--logs", _slow_log(), "--issue-meta", meta, "--tz", "Asia/Seoul", "--year", 2026])
     assert ask["status"] == "needs_input" and ask["needs_input"]["kind"] == "time", ask
     assert "판정 불가 유형" in ask["needs_input"]["question"], ask
 
@@ -1302,7 +1302,7 @@ def test_no_candidate_shows_unextracted_warn_lines():
     out = tmp("tt-triage-") / "x"
     meta = _meta(out, "MOCK-7412", occurred_at="2026-09-20T05:30:05.000Z")
     analysis = run_json("triage.py", ["run", "MOCK-7412", "--offline-db", SAMPLE, "--out", out, "--logs", log,
-                                      "--jira-meta", meta, "--tz", "Asia/Seoul", "--year", 2026])
+                                      "--issue-meta", meta, "--tz", "Asia/Seoul", "--year", 2026])
     assert not analysis.get("candidates"), analysis
     assert analysis["no_candidate"]["unextracted_warn"] == 2, analysis["no_candidate"]
     assert "_unextracted_tags" not in analysis["no_candidate"]
@@ -1336,7 +1336,7 @@ def test_cause_timeout_is_cause_unjudged_not_unconfirmed_and_error_comes_from_un
     out = tmp("tt-triage-") / "x"
     meta = _meta(out, "MOCK-7413", occurred_at="2026-09-20T05:30:05.000Z")
     analysis = run_json("triage.py", ["run", "MOCK-7413", "--offline-db", db, "--out", out, "--logs", _slow_log(),
-                                      "--jira-meta", meta, "--tz", "Asia/Seoul", "--year", 2026])
+                                      "--issue-meta", meta, "--tz", "Asia/Seoul", "--year", 2026])
     top = analysis["candidates"][0]
     assert top["type"] == "DATA-001" and top["cause"] is None and "_cause_unjudged" not in top
     u = analysis["unjudged"]
@@ -1372,7 +1372,7 @@ def test_analysis_json_is_compact_and_equals_stdout():
     meta = _meta(out, items[0]["key"], occurred_at=items[0]["occurred_at"])
     logs = [str((LABELSET.parent / p).resolve()) for p in items[0]["logs"]]
     proc = run("triage.py", ["run", items[0]["key"], "--offline-db", SAMPLE, "--out", out, "--logs", *logs,
-                             "--jira-meta", meta, "--tz", doc["tz"], "--year", doc["year"]])
+                             "--issue-meta", meta, "--tz", doc["tz"], "--year", doc["year"]])
     assert proc.returncode == 0, proc.stderr
     text = (out / "analysis.json").read_text(encoding="utf-8")
     assert "\n " not in text and text == _triage_module().dumps(json.loads(text)) + "\n"
@@ -1385,7 +1385,7 @@ def _run_custom(lines: list[str], key: str, **meta_fields) -> tuple[dict, str]:
     log.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
     meta = _meta(out, key, occurred_at="2026-09-20T05:30:05.000Z", **meta_fields)
     analysis = run_json("triage.py", ["run", key, "--offline-db", SAMPLE, "--out", out, "--logs", log,
-                                      "--jira-meta", meta, "--tz", "Asia/Seoul", "--year", 2026])
+                                      "--issue-meta", meta, "--tz", "Asia/Seoul", "--year", 2026])
     assert len((out / "analysis.json").read_bytes()) <= 4096
     return analysis, (out / "report.md").read_text(encoding="utf-8")
 
@@ -1411,7 +1411,7 @@ def test_clock_flagged_top_candidate_is_must_shown():
 def test_top_candidate_slot_mismatch_is_must_shown():
     lines = [OFF_LINE.format("14:30:00.000"), REJECTED_LINE.format("14:30:02.000")]
     analysis, report = _run_custom(lines, "MOCK-7422", sim_slot="1")
-    assert analysis["jira"]["sim_slot"] == "1" and analysis["candidates"][0]["phones"] == [0]
+    assert analysis["issue"]["sim_slot"] == "1" and analysis["candidates"][0]["phones"] == [0]
     line = next(m for m in analysis["must_show"] if m.startswith("슬롯 불일치:"))
     assert "phone 0" in line and "Jira SIM 슬롯은 1" in line and len(line) <= 160 and f"- {line}" in report
     for extra in ({"sim_slot": "0"}, {}, {"sim_slot": "SIM"}, {"sim_slot": "-1"}, {"sim_slot": "1 of 2"}):

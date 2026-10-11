@@ -13,7 +13,7 @@
     "schema_version": {"type": "integer", "minimum": 1},
     "started_at": {"$ref": "#/$defs/timestamp"},
     "base_sha": {"$ref": "#/$defs/sha"},
-    "jira": {
+    "issue": {
       "oneOf": [
         {"type": "null"},
         {
@@ -21,14 +21,14 @@
           "additionalProperties": false,
           "required": ["key", "origin"],
           "properties": {
-            "key": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9]*-[0-9]+$"},
+            "key": {"type": "string", "pattern": "^(?!.*\\.\\.)[A-Za-z0-9][A-Za-z0-9_.-]{0,140}-[0-9]{1,10}$"},
             "origin": {
-              "description": "mcp: Jira MCP로 읽음, file: --jira-file. 기록 파일에는 쓰지 않는다.",
+              "description": "mcp: Jira MCP로 읽음, file: --issue-file. 기록 파일에는 쓰지 않는다.",
               "enum": ["mcp", "file"]
             },
             "model": {"type": "string"},
             "sw": {"type": "string"},
-            "android_version": {"type": "string", "pattern": "^[0-9]+$"},
+            "platform_version": {"type": "string", "pattern": "^[0-9]+$"},
             "carrier": {"type": "string"},
             "date": {"$ref": "#/$defs/isoDate"},
             "occurred_on": {"$ref": "#/$defs/isoDate"},
@@ -120,7 +120,7 @@
     "causeRefOrUnresolved": {
       "oneOf": [{"$ref": "#/$defs/causeId"}, {"$ref": "#/$defs/tempCause"}, {"const": "unresolved"}]
     },
-    "jiraKey": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9]*-[0-9]+$"},
+    "issueKey": {"type": "string", "pattern": "^(?!.*\\.\\.)[A-Za-z0-9][A-Za-z0-9_.-]{0,140}-[0-9]{1,10}$"},
     "signature": {
       "$comment": "형식은 type.schema.json의 signature와 같다 (04-parser-matching.md §5.11 (1)).",
       "type": "object",
@@ -195,7 +195,7 @@
         },
         "related": {"type": "array", "items": {"$ref": "#/$defs/causeId"}, "uniqueItems": true},
         "cp_evidence": {"type": ["string", "null"]},
-        "android_versions": {"type": "array", "items": {"type": "string", "pattern": "^[0-9]+$"}, "uniqueItems": true},
+        "platform_versions": {"type": "array", "items": {"type": "string", "pattern": "^[0-9]+$"}, "uniqueItems": true},
         "code_refs": {"type": "array", "items": {"$ref": "#/$defs/codeRef"}}
       }
     },
@@ -206,7 +206,7 @@
       "properties": {
         "ref": {"type": "string", "pattern": "^[a-z][a-z0-9_]*:[^/\\\\][^:]*$"},
         "symbol": {"type": "string", "minLength": 1},
-        "android_versions": {"type": "array", "items": {"type": "string", "pattern": "^[0-9]+$"}, "uniqueItems": true}
+        "platform_versions": {"type": "array", "items": {"type": "string", "pattern": "^[0-9]+$"}, "uniqueItems": true}
       }
     },
     "fixedIn": {
@@ -226,7 +226,7 @@
         "build": {"type": "string", "minLength": 1},
         "date": {"$ref": "#/$defs/isoDate"},
         "by": {"type": "string", "minLength": 1},
-        "jira": {"$ref": "#/$defs/jiraKey"},
+        "issue": {"$ref": "#/$defs/issueKey"},
         "fixture": {"type": "string", "minLength": 1},
         "scenario_evidence": {"type": "string", "minLength": 1},
         "method": {"type": "string", "minLength": 1},
@@ -300,10 +300,10 @@
         {
           "type": "object",
           "additionalProperties": false,
-          "required": ["op", "jira", "from", "to"],
+          "required": ["op", "issue", "from", "to"],
           "properties": {
             "op": {"const": "reclassify"},
-            "jira": {"$ref": "#/$defs/jiraKey"},
+            "issue": {"$ref": "#/$defs/issueKey"},
             "from": {"$ref": "#/$defs/causeRefOrUnresolved"},
             "to": {
               "$comment": "원인 ID(temp_id 포함) 또는 <유형 ID>:unresolved(원인 미확정 Jira를 다른 유형으로 옮김, 유형 병합)",
@@ -336,7 +336,7 @@
               "properties": {
                 "result": {"enum": ["failed", "reverted"]},
                 "build": {"type": "string", "minLength": 1},
-                "jira": {"$ref": "#/$defs/jiraKey"},
+                "issue": {"$ref": "#/$defs/issueKey"},
                 "fixture": {"type": "string", "minLength": 1},
                 "note": {"type": "string"}
               }

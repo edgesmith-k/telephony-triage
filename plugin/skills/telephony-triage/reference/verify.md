@@ -1,7 +1,7 @@
 # 검증·수정 상태 흐름: validate --cause, fix-submitted, verify-fix
 
 세 흐름 모두 **판정·입력 확인 → 사용자 확인 → `write-flow.md`의 공통 쓰기 절차 PR**이다. `rules.md`(실행 규칙)를 따른다. 아래 "lock"은 `db_pr lock acquire <작업 키> --command <흐름>`이고 보유 중이면 `write-flow.md` 1번.
-계획은 모두 `write-flow.md` §계획 형식이다: `source`·`schema_version`(SNAP `issue-db.config.yaml`)·`started_at`·`base_sha`(`db_pr snapshot`의 `snapshot_sha`)·`jira`·`operations`(op 목록 — `ops` 아님)·`commit_message`·`pr_notes`. `db_verify`의 `suggested_ops`는 `operations`에 넣는다.
+계획은 모두 `write-flow.md` §계획 형식이다: `source`·`schema_version`(SNAP `issue-db.config.yaml`)·`started_at`·`base_sha`(`db_pr snapshot`의 `snapshot_sha`)·`issue`·`operations`(op 목록 — `ops` 아님)·`commit_message`·`pr_notes`. `db_verify`의 `suggested_ops`는 `operations`에 넣는다.
 판정은 `db_verify.py`의 출력으로만 한다(항상 회귀·검증 모드: 파일 전체, 모든 active 원인 독립 평가, bonus 0).
 **시각 기준**: 회귀·검증 모드는 로그 시각을 연도 없이 UTC로 읽는다. 그래서 `satisfied_traces`·`trace`의 `ts`는 "파일 시계 그대로(연도 2000)"다.
 이 시각으로 fixture를 자를 때는 `parse_logcat.py cut <log> --around <ts> --tz UTC`(**`--year` 없이**)로 같은 기준을 쓴다. 리포트에는 파일 시계 시각(월-일 시:분:초)으로 보여준다.
@@ -39,7 +39,7 @@ open ─(fix-submitted)─▶ fix-submitted ─(verify-fix passed)─▶ fixed
    `lock release <작업 키>`. **failed** → 해결책이 효과가 없다고 보고하고 `set-resolution`이나 새 분석(analyze)을 제안한다.
    계획을 만들지 않고 `lock release <작업 키>`.
 4. **passed** → `parse_logcat.py cut <log> --around <satisfied_traces의 시각> --out WD/<작업 키>/fixtures/resolved-1.log` 후 계획
-   `WD/<작업 키>/plan.json`(`source: validate-cause`, `jira: null`):
+   `WD/<작업 키>/plan.json`(`source: validate-cause`, `issue: null`):
    `add-fixture {for: <ID>, kind: resolved, path}` → `verify-resolution {cause: <ID>, verification: {method: <요약>, evidence: [<fixture 경로>, (선택) Jira 키], by, date}}`(`status` 없음 — `db_verify` `suggested_ops` 그대로).
    커밋 메시지 `[<ID>] verify-resolution: <요약>`.
 5. 공통 쓰기 절차. 브랜치 `verify-res/<원인 ID>-<YYYYMMDD>`, 리뷰어는 원인 카테고리 오너.
@@ -59,7 +59,7 @@ open ─(fix-submitted)─▶ fix-submitted ─(verify-fix passed)─▶ fixed
 2. `--ref`가 `fix_ref_regex`(SNAP `issue-db.config.yaml`)에 맞는지, `--fixed-in`이 `build_compare`의 `branch_regex`에 맞는지 확인한다. `branch_regex`는 빌드명 접두사 규칙이다: 빌드가 있으면 빌드명이, 없으면 `<branch>_`가 그 규칙 중 하나에 맞는지 본다. 맞지 않으면 빌드 비교가 `undetermined`가 된다고 알린다. **빌드가 없으면** "빌드가 없으면 회귀 판정도 verify-fix 통과도 할 수 없다"고 알리고 계속할지 묻는다(나중에 같은 커맨드로 빌드 추가).
 3. 코드·설정 수정 유형인데 `scenario_signatures`·`recovery_signatures`가 모두 없으면 "나중에 verify-fix를 하려면 둘 중 하나가 필요하다"고
    알리고 지금 `update-signature`로 함께 추가할지 묻는다(추가하면 `db-authoring.md` 규칙, 초안 검증).
-4. 계획 `WD/fix-submit-<원인 ID>/plan.json`(`source: fix-submitted`, `jira: null`):
+4. 계획 `WD/fix-submit-<원인 ID>/plan.json`(`source: fix-submitted`, `issue: null`):
    `update-fix {cause, fix: {status: fix-submitted, ref, fixed_in: [{branch, build?}]}}` (+선택 `update-signature`).
    빌드는 `sanitize_build`를 거친 값이 적용 때 쓰인다. 커밋 메시지 `[<원인 ID>] fix-submitted: <ref>`.
 5. 공통 쓰기 절차. 브랜치 `fix-submit/<원인 ID>`.
@@ -69,10 +69,10 @@ open ─(fix-submitted)─▶ fix-submitted ─(verify-fix passed)─▶ fixed
 ## verify-fix (코드 수정 검증)
 
 ```
-/telephony-triage:verify-fix <원인 ID> <수정 빌드 logcat...> [--jira <검증 Jira>]
+/telephony-triage:verify-fix <원인 ID> <수정 빌드 logcat...> [--issue <검증 Jira>]
 ```
 
-1. **빌드 확인을 먼저** 한다(작업 키에 빌드가 들어가므로): Jira SW(`--jira`면 `jira_fields.py`로), bugreport `build.json`, 또는 logcat
+1. **빌드 확인을 먼저** 한다(작업 키에 빌드가 들어가므로): Jira SW(`--issue`면 `jira_fields.py`로), bugreport `build.json`, 또는 logcat
    fingerprint. 로그가 bugreport면 먼저 추출한다. 빌드를 모르면 묻는다.
 2. 작업 키 `verify-fix-<원인 ID>-<sanitize된 build>`: lock → snapshot → `config.py check`. 여기서부터 중단하거나 기록하지 않고 끝나는
    **모든** 경로는 `lock release <작업 키>`.
@@ -91,7 +91,7 @@ open ─(fix-submitted)─▶ fix-submitted ─(verify-fix passed)─▶ fixed
      흔적 시그니처가 있는데 흔적이 없으면 **판단 불가**다. 사용자가 "시나리오 했어"라고 해도 흔적을 대신하지 않는다.
    - 유일한 예외 `user_confirmation_required`(비코드 유형 `user-setting`·`network`·`hw`이고 scenario·recovery 시그니처가 **둘 다 없음**)
      → 사용자 확인을 받고 그 사실을 `verification.note`에 "사용자 확인(흔적 시그니처 없음)"으로 남긴다. 코드·설정 수정 유형에는 이 예외가 없다(3번에서 중단).
-6. 판정별 계획 `WD/<작업 키>/plan.json`(`source: verify-fix`, `jira: null`, 형식은 위 §계획 형식). `verification`: `{build, date, by, jira?, fixture?, scenario_evidence?, note}`.
+6. 판정별 계획 `WD/<작업 키>/plan.json`(`source: verify-fix`, `issue: null`, 형식은 위 §계획 형식). `verification`: `{build, date, by, issue?, fixture?, scenario_evidence?, note}`.
 
    | 판정 | 조건 | 계획 |
    |---|---|---|

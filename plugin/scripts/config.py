@@ -15,18 +15,18 @@
                                답한 값만 저장(선택 항목은 팀 기본값과 다를 때만, 나머지는 site-defaults·내장 기본값 상속).
   set <key> <value>            값 하나 바꾸기 (경로 값은 존재 검증)
   sync-scripts-path            plugin.scripts_path = ${CLAUDE_PLUGIN_ROOT}/scripts (setup 2, SessionStart hook)
-  jira-candidates [--mcp-config <json>...] [--tools-json <json>]
-                               등록된 MCP 서버에서 jira.tools·읽기 도구 후보 (setup 4). exclude_servers 적용
-  set-jira --server <s> --get-issue <전체 이름> [--search-issues ..] [--get-comments ..] [--read-tools a,b]
-                               사용자가 확인한 값을 저장. read_tools에 jira.tools 값을 포함한다
+  tracker-candidates [--mcp-config <json>...] [--tools-json <json>]
+                               등록된 MCP 서버에서 tracker.tools·읽기 도구 후보 (setup 4). exclude_servers 적용
+  set-tracker --server <s> --get-issue <전체 이름> [--search-issues ..] [--get-comments ..] [--read-tools a,b]
+                               사용자가 확인한 값을 저장. read_tools에 tracker.tools 값을 포함한다
   install-hooks [--db <path>]  git config core.hooksPath .githooks, 값이 정확히 .githooks인지 확인 (setup 5)
   check [--db <path>] [--for write|dry-run]
                                호환성 판정: 스키마·생성기 버전·파서 백엔드·외부 파서, (write면) gh 인증
                                → writable / push_allowed. `migrate/schema-v<N>` 브랜치는 버전을 보지 않는다.
   gh-status                    gh 인증 확인 (setup 9). 실패면 로그인 안내와 종료 코드 2
   doctor [--format json|markdown]
-                               환경 점검 한 장(python·deps·config·clone·hook·guard 자가시험·Jira 매핑·Jira 코멘트
-                               도구(jira_post)·gh·스냅샷·호환성·lock). **읽기 전용**
+                               환경 점검 한 장(python·deps·config·clone·hook·guard 자가시험·Jira 매핑(tracker)·Jira 코멘트
+                               도구(tracker_post)·gh·스냅샷·호환성·lock). **읽기 전용**
                                (mkdir·fetch·lock·쓰기 없음). 행마다 ok|warn|fail|skip. fail이 있으면 종료 코드 1
 """
 
@@ -61,7 +61,7 @@ except ImportError as _exc:   # noqa: BLE001
 
 SUPPORTED_SCHEMA = (SCHEMA_VERSION, SCHEMA_VERSION)  # (min, max), 06-collaboration.md §6.4
 MIGRATE_BRANCH_RE = re.compile(r"^migrate/schema-v\d+$")
-YEAR_SOURCES = ("jira", "file-mtime", "ask")
+YEAR_SOURCES = ("tracker", "file-mtime", "ask")
 TOOL_NAME_RE = re.compile(r"^mcp__(?P<server>[^_].*?)__(?P<tool>[^_].*)$")
 
 # setup 1에서 묻는 항목: (키, 질문, 종류, 필수)
@@ -71,9 +71,9 @@ FIELDS = [
     ("issue_db.remote", "이슈 DB 원격 URL", "text", True),
     ("issue_db.base_branch", "base 브랜치", "text", False),
     ("issue_db.ghe_host", "GHE 호스트 (gh의 GH_HOST)", "text", False),
-    ("jira.timezone", "Jira 시각 타임존 (IANA)", "tz", False),
+    ("tracker.timezone", "Jira 시각 타임존 (IANA)", "tz", False),
     ("logcat.timezone", "logcat 시각 타임존 (IANA)", "tz", False),
-    ("logcat.year_source", "연도 결정 방식 (jira | file-mtime | ask)", "year-source", False),
+    ("logcat.year_source", "연도 결정 방식 (tracker | file-mtime | ask)", "year-source", False),
     ("log_dir", "logcat 기본 탐색 경로 (선택, 빈 값이면 건너뜀)", "dir", False),
     ("work_dir", "작업 디렉토리 (작업 계획·스냅샷·lock)", "work-dir", False),
 ]
@@ -259,9 +259,9 @@ def cmd_sync_scripts_path(args, defaults: dict) -> dict:
     return {"config": str(userconfig.path()), "scripts_path": scripts, "changed": old != scripts}
 
 
-def cmd_jira_candidates(args, defaults: dict) -> dict:
+def cmd_tracker_candidates(args, defaults: dict) -> dict:
     merged = userconfig.merged(defaults)
-    exclude = list(userconfig.get(merged, "jira.exclude_servers", []) or [])
+    exclude = list(userconfig.get(merged, "tracker.exclude_servers", []) or [])
     servers: dict[str, list[str] | None] = {}
     errors: dict[str, str] = {}
     if args.tools_json:
@@ -279,20 +279,20 @@ def cmd_jira_candidates(args, defaults: dict) -> dict:
         except (ValueError, OSError, subprocess.TimeoutExpired) as exc:
             servers[name] = None
             errors[name] = str(exc)
-    team = userconfig.get(defaults, "jira.tools", {}) or {}
+    team = userconfig.get(defaults, "tracker.tools", {}) or {}
     result = mcptools.candidates(servers, exclude, team, errors)
-    usable = [s for s in result if not s["excluded"] and s["jira_tools"].get("get_issue")]
+    usable = [s for s in result if not s["excluded"] and s["tracker_tools"].get("get_issue")]
     return {
         "exclude_servers": exclude,
         "servers": result,
         "usable": [s["server"] for s in usable],
-        "next": ("사용자에게 서버와 jira.tools·read_tools를 확인받고 config.py set-jira로 저장한다"
+        "next": ("사용자에게 서버와 tracker.tools·read_tools를 확인받고 config.py set-tracker로 저장한다"
                  if usable else "Jira MCP를 찾지 못했다. 사용자 범위(user scope)로 등록하는 방법을 안내하고 중단한다"),
     }
 
 
 def _tool_problems(server: str, names: list[str]) -> list[str]:
-    """도구 이름이 전체 이름이고 그 서버의 것인지 검사한 문제 목록 (set-jira·doctor 공유). 서버는 정규화 비교."""
+    """도구 이름이 전체 이름이고 그 서버의 것인지 검사한 문제 목록 (set-tracker·doctor 공유). 서버는 정규화 비교."""
     problems = []
     for name in names:
         hit = TOOL_NAME_RE.match(str(name))
@@ -303,7 +303,7 @@ def _tool_problems(server: str, names: list[str]) -> list[str]:
     return problems
 
 
-def cmd_set_jira(args, defaults: dict) -> dict:
+def cmd_set_tracker(args, defaults: dict) -> dict:
     data = userconfig.load_user()
     if data is None:
         raise UsageError("config가 없습니다. 먼저 config.py init을 한다.")
@@ -314,10 +314,10 @@ def cmd_set_jira(args, defaults: dict) -> dict:
     if problems:
         raise UsageError(problems[0])
     added = [t for t in tools.values() if t not in read_tools]
-    read_tools = sorted(set(read_tools) | set(tools.values()))  # read_tools는 jira.tools 값을 포함한다
-    userconfig.set_value(data, "jira.mcp_server", args.server)
-    userconfig.set_value(data, "jira.tools", tools)
-    userconfig.set_value(data, "jira.read_tools", read_tools)
+    read_tools = sorted(set(read_tools) | set(tools.values()))  # read_tools는 tracker.tools 값을 포함한다
+    userconfig.set_value(data, "tracker.mcp_server", args.server)
+    userconfig.set_value(data, "tracker.tools", tools)
+    userconfig.set_value(data, "tracker.read_tools", read_tools)
     userconfig.save(data)
     return {"mcp_server": args.server, "tools": tools, "read_tools": read_tools, "added_to_read_tools": added}
 
@@ -456,7 +456,7 @@ GUARD_NEXT = "관리자에게 알린다(guard.py 직접 실행해 stderr 확인)
 
 def _guard_selftest(args, clone: Path | None, cfg: dict | None = None) -> dict:
     """guard.py에 거부돼야 할 hook 입력을 주고 응답 구조·결정을 본다: (1) 이름에 jira가 든 서버의 쓰기 도구(설정과
-    무관하게 deny), (2) clone이 있으면 clone 파일 Write(deny), (3) 코멘트 도구 설정(`jira.write_tools.add_comment`)이
+    무관하게 deny), (2) clone이 있으면 clone 파일 Write(deny), (3) 코멘트 도구 설정(`tracker.write_tools.add_comment`)이
     유효하면 승인 기록 없는 게시(deny). `cfg`는 site-defaults와 사용자 config를 합친 값(사용자 config가 없으면 site만)."""
     root = _plugin_root(args)
     home = str(Path.home())
@@ -595,44 +595,50 @@ def _doctor_rows(args, defaults: dict) -> list[dict]:
     guarded("guard", lambda: rows.append(_guard_selftest(args, repo_box[0] if repo_box else None,
                                                          cfg if ok_cfg else userconfig.merged(defaults, {}, platform=_platform(args)))))
 
-    # 5 jira (매핑만 본다)
-    def jira():
-        server = userconfig.get(cfg, "jira.mcp_server")
-        tools = userconfig.get(cfg, "jira.tools", {})
-        read_tools = userconfig.get(cfg, "jira.read_tools", [])
+    # 5 tracker (매핑만 본다). 옛 설정 키(jira: 등)가 남아 있으면 fail — guard가 모든 MCP를 거부한다
+    def tracker():
+        legacy = userconfig.legacy_problems(defaults, user)
+        if legacy:
+            rows.append(_row("tracker", "fail", f"옛 설정 키: {legacy[0]}",
+                             f"{userconfig.path()}·site-defaults의 옛 키 이름을 바꾼다(jira:→tracker:, "
+                             "year_source: jira→tracker, code_profiles[].android_version→platform_version)"))
+            return
+        server = userconfig.get(cfg, "tracker.mcp_server")
+        tools = userconfig.get(cfg, "tracker.tools", {})
+        read_tools = userconfig.get(cfg, "tracker.read_tools", [])
         hint = "/telephony-triage:setup 4번(Jira MCP 매핑)을 다시 한다"
         if tools is None:
             tools = {}
         if read_tools is None:
             read_tools = []
         if not isinstance(tools, dict) or not isinstance(read_tools, list):
-            rows.append(_row("jira", "fail", "jira.tools(매핑)·read_tools(목록) 형식 오류", hint))
+            rows.append(_row("tracker", "fail", "tracker.tools(매핑)·read_tools(목록) 형식 오류", hint))
             return
         names = [v for v in tools.values() if v] + read_tools
         if not server:
-            rows.append(_row("jira", "fail", "jira.mcp_server 비어 있음", hint))
+            rows.append(_row("tracker", "fail", "tracker.mcp_server 비어 있음", hint))
         elif not tools.get("get_issue"):
-            rows.append(_row("jira", "fail", "jira.tools.get_issue 매핑 비어 있음", hint))
+            rows.append(_row("tracker", "fail", "tracker.tools.get_issue 매핑 비어 있음", hint))
         else:
             problems = _tool_problems(str(server), names)
             if problems:
-                rows.append(_row("jira", "fail", problems[0], hint))
+                rows.append(_row("tracker", "fail", problems[0], hint))
             else:
-                rows.append(_row("jira", "ok", f"{server} / get_issue 매핑 있음"))
-    guarded("jira", jira) if ok_cfg else skip("jira", "config 없음")
+                rows.append(_row("tracker", "ok", f"{server} / get_issue 매핑 있음"))
+    guarded("tracker", tracker) if ok_cfg else skip("tracker", "config 없음")
 
-    # 5b jira_post (승인 코멘트 도구 설정만 본다. 호출하지 않는다)
-    def jira_post():
+    # 5b tracker_post (승인 코멘트 도구 설정만 본다. 호출하지 않는다)
+    def tracker_post():
         spec, problems = issuepost.spec_check(cfg)
-        hint = "site-defaults 또는 config.py set jira.write_tools.add_comment.*"
+        hint = "site-defaults 또는 config.py set tracker.write_tools.add_comment.*"
         if problems:
             level, why = problems[0]
-            rows.append(_row("jira_post", level, why, "read_tools에서 코멘트 도구를 뺀다" if level == "fail" else hint))
+            rows.append(_row("tracker_post", level, why, "read_tools에서 코멘트 도구를 뺀다" if level == "fail" else hint))
         elif spec is None:
-            rows.append(_row("jira_post", "skip", "게시 기능 꺼짐(본문 파일만)"))
+            rows.append(_row("tracker_post", "skip", "게시 기능 꺼짐(본문 파일만)"))
         else:
-            rows.append(_row("jira_post", "ok", f"{spec['tool']} / {spec['format']}"))
-    guarded("jira_post", jira_post) if ok_cfg else skip("jira_post", "config 없음")
+            rows.append(_row("tracker_post", "ok", f"{spec['tool']} / {spec['format']}"))
+    guarded("tracker_post", tracker_post) if ok_cfg else skip("tracker_post", "config 없음")
 
     # 6 gh
     def gh():
@@ -762,7 +768,7 @@ def build_parser() -> argparse.ArgumentParser:
                                      formatter_class=argparse.RawDescriptionHelpFormatter, parents=[common])
     sub = parser.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("show", parents=[common])
-    p.add_argument("--keys", metavar="a,b.c", help="쉼표로 구분한 키(점 표기)만 보인다 (예: work_dir,jira.tools)")
+    p.add_argument("--keys", metavar="a,b.c", help="쉼표로 구분한 키(점 표기)만 보인다 (예: work_dir,tracker.tools)")
     sub.add_parser("site-defaults", parents=[common])
     p = sub.add_parser("init", parents=[common])
     p.add_argument("--answers")
@@ -771,10 +777,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("key")
     p.add_argument("value")
     sub.add_parser("sync-scripts-path", parents=[common])
-    p = sub.add_parser("jira-candidates", parents=[common])
+    p = sub.add_parser("tracker-candidates", parents=[common])
     p.add_argument("--mcp-config", action="append")
     p.add_argument("--tools-json")
-    p = sub.add_parser("set-jira", parents=[common])
+    p = sub.add_parser("set-tracker", parents=[common])
     p.add_argument("--server", required=True)
     p.add_argument("--get-issue", required=True)
     p.add_argument("--search-issues")
@@ -814,6 +820,10 @@ def main(argv: list[str] | None = None) -> int:
                     args.platform_problems = problems
                     if problems and args.cmd != "doctor":
                         print(f"경고: 사용자 config({userconfig.path()}) 플랫폼 설정 문제 — " + "; ".join(problems), file=sys.stderr)
+                    legacy = userconfig.legacy_problems(defaults, userconfig.load_user())
+                    if legacy and args.cmd != "doctor":     # 고치는 길(show·set)은 돈다. doctor는 tracker 행 fail
+                        print("경고: 옛 설정 키 — " + "; ".join(legacy) + " (고치기 전까지 다른 스크립트는 종료 2, "
+                              "guard는 모든 MCP 거부)", file=sys.stderr)
                 else:
                     args.platform_name, _cfg = platform_session.resolve(defaults, getattr(args, "platform", None))
             except platforms.PlatformConfigError as exc:
@@ -834,10 +844,10 @@ def main(argv: list[str] | None = None) -> int:
             result = cmd_set(args, defaults)
         elif args.cmd == "sync-scripts-path":
             result = cmd_sync_scripts_path(args, defaults)
-        elif args.cmd == "jira-candidates":
-            result = cmd_jira_candidates(args, defaults)
-        elif args.cmd == "set-jira":
-            result = cmd_set_jira(args, defaults)
+        elif args.cmd == "tracker-candidates":
+            result = cmd_tracker_candidates(args, defaults)
+        elif args.cmd == "set-tracker":
+            result = cmd_set_tracker(args, defaults)
         elif args.cmd == "install-hooks":
             result = cmd_install_hooks(args, defaults)
         elif args.cmd == "check":

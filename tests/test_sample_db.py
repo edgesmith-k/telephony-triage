@@ -42,7 +42,7 @@ import make_sample_fixtures  # noqa: E402
 
 SCHEMAS = [
     "type.schema.json",
-    "jira.schema.json",
+    "issue.schema.json",
     "feedback.schema.json",
     "plan.schema.json",
     "parser-rules.schema.json",
@@ -202,8 +202,8 @@ def test_type_frontmatter_validates():
 
 
 def test_jira_records_validate():
-    validator = _validator("jira.schema.json")
-    records = sorted(SAMPLE.glob("*/*/jira/*.yaml"))
+    validator = _validator("issue.schema.json")
+    records = sorted(SAMPLE.glob("*/*/issues/*.yaml"))
     assert records, "Jira 기록이 없습니다."
     errors: list[str] = []
     for path in records:
@@ -222,7 +222,7 @@ def test_feedback_records_validate():
     for path in records:
         data = _load_yaml(path)
         errors += _errors(validator, data, path.relative_to(SAMPLE).as_posix())
-        if not path.name.startswith(str(data.get("jira")) + "-"):
+        if not path.name.startswith(str(data.get("issue")) + "-"):
             errors.append(f"{path.name}: 파일명이 jira 키로 시작하지 않습니다")
     assert not errors, "\n".join(errors)
 
@@ -280,7 +280,7 @@ def test_sample_tree_layout():
         "docs/branch-protection.md",
         "templates/type.md",
         "templates/cause.yaml",
-        "templates/jira.yaml",
+        "templates/issue.yaml",
         "parser-rules/tags.yaml",
         "parser-rules/ril.yaml",
         "parser-rules/extractors.yaml",
@@ -295,7 +295,7 @@ def test_sample_tree_layout():
         for type_dir in sorted(type_dirs):
             assert re.fullmatch(rf"{TYPE_ID}-[a-z0-9]+(?:-[a-z0-9]+)*", type_dir.name), type_dir.name
             assert (type_dir / "type.md").exists(), f"{type_dir.name}: type.md 없음"
-            assert (type_dir / "jira").is_dir(), f"{type_dir.name}: jira/ 없음"
+            assert (type_dir / "issues").is_dir(), f"{type_dir.name}: issues/ 없음"
             assert (type_dir / "fixtures").is_dir(), f"{type_dir.name}: fixtures/ 없음"
 
 
@@ -407,7 +407,7 @@ def test_jira_cause_exists():
     causes = _load_all_causes()
     errors: list[str] = []
     keys: dict[str, str] = {}
-    for path in sorted(SAMPLE.glob("*/*/jira/*.yaml")):
+    for path in sorted(SAMPLE.glob("*/*/issues/*.yaml")):
         data = _load_yaml(path)
         rel = path.relative_to(SAMPLE).as_posix()
         if data["key"] in keys:
@@ -424,7 +424,7 @@ def test_jira_cause_exists():
 
 def test_verification_references_exist():
     errors: list[str] = []
-    jira_keys = {p.stem for p in SAMPLE.glob("*/*/jira/*.yaml")}
+    jira_keys = {p.stem for p in SAMPLE.glob("*/*/issues/*.yaml")}
     for path in _type_files():
         data = _frontmatter(path)
         type_dir = path.parent
@@ -517,7 +517,7 @@ def test_skeleton_has_no_types_and_validates():
             assert (out / key / ".gitkeep").exists(), f"뼈대에 {key}/ 가 없습니다."
         for name in SCHEMAS:
             assert (out / "schema" / name).exists(), f"뼈대에 {name}이 없습니다."
-        for name in ("type.md", "cause.yaml", "jira.yaml"):
+        for name in ("type.md", "cause.yaml", "issue.yaml"):
             assert (out / "templates" / name).exists(), f"뼈대에 템플릿 {name}이 없습니다."
 
         validator = Draft202012Validator(

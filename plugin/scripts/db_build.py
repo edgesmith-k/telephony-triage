@@ -5,7 +5,7 @@
 
 생성 파일 (사람이 고치지 않는다)
 - `README.md`: 전체 인덱스 (§5.6)
-- `<category>/README.md`: 카테고리 상세판 (증상 시그니처 요약, `code_refs`, `android_versions`)
+- `<category>/README.md`: 카테고리 상세판 (증상 시그니처 요약, `code_refs`, `platform_versions`)
 - `STATS.md`: 통계 (§6.7, 수락률은 §6.5대로 `decision: manual` 제외)
 - `parser-rules/CHANGELOG.md`: 규칙 항목의 이력 필드(`added_for`, `added_on`, `reason`)
 
@@ -89,8 +89,9 @@ class Context:
         self.db = db
         self.config = db.config
         self.categories = [c for c in self.config.get("categories") or [] if isinstance(c, dict)]
-        self.base_url = str(self.config.get("jira_base_url") or "")
-        self.inline_max = int((self.config.get("readme") or {}).get("jira_inline_max", 3))
+        tracker = self.config.get("tracker") if isinstance(self.config.get("tracker"), dict) else {}
+        self.base_url = str(tracker.get("base_url") or "")
+        self.inline_max = int((self.config.get("readme") or {}).get("issue_inline_max", 3))
         self.jira = sorted(db.jira, key=_jira_sort_key)
         # 원인·유형별 사전을 한 번만 만든다(원인마다 전체 Jira를 훑으면 1000유형에서 100초대). 정렬된 순서 그대로 담는다.
         self._by_cause: dict[str, list[dict]] = {}
@@ -170,7 +171,7 @@ def _jira_cell(ctx: Context, records: list[dict], itype: issuedb.IssueType, base
     shown = ", ".join(ctx.link(str(r["key"])) for r in records[: ctx.inline_max])
     text = f"{len(records)}건: {shown}"
     if len(records) > ctx.inline_max:
-        text += f", … [전체]({base_rel}jira/)"
+        text += f", … [전체]({base_rel}issues/)"
     return text
 
 
@@ -244,8 +245,8 @@ def _code_cell(cause: issuedb.Cause) -> str:
         text = f"`{md.code(ref.get('ref'))}`"
         if ref.get("symbol"):
             text += f" `{md.code(ref['symbol'])}`"
-        if ref.get("android_versions"):
-            text += f" ({_versions(ref['android_versions'])})"
+        if ref.get("platform_versions"):
+            text += f" ({_versions(ref['platform_versions'])})"
         refs.append(text)
     return "<br>".join(refs) if refs else "-"
 
@@ -339,7 +340,7 @@ def category_readme(ctx: Context, cat: dict) -> str:
             out.append(f"| {i}-{j} | {_cause_cell(ctx, cause)} | {_resolution_cell(cause)} | "
                        f"{md.cell(cause.raw.get('resolution_type'))} | {_fix_cell(cause)} | "
                        f"{_jira_cell(ctx, ctx.jira_of(cause.id), itype, rel + '/')} | "
-                       f"{_versions(cause.raw.get('android_versions'))} | {_code_cell(cause)} |")
+                       f"{_versions(cause.raw.get('platform_versions'))} | {_code_cell(cause)} |")
         out += _unresolved_line(ctx, itype)
         out += _failed_steps_line(ctx, itype)
         out.append("")
@@ -409,7 +410,7 @@ def stats(ctx: Context) -> str:
         out.append("없음")
 
     out += ["", "## 분포"]
-    for field_name, label in (("model", "모델"), ("sw", "SW"), ("android_version", f"{_platform_label(ctx)} 버전"),
+    for field_name, label in (("model", "모델"), ("sw", "SW"), ("platform_version", f"{_platform_label(ctx)} 버전"),
                               ("carrier", "캐리어")):
         counts = Counter(str(r.get(field_name)) if r.get(field_name) not in (None, "") else "(없음)"
                          for r in ctx.jira)

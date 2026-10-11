@@ -45,7 +45,7 @@ class EntityOps:
             "signatures": signatures, "recovery_signatures": body.get("recovery_signatures") or [],
             "scenario_signatures": body.get("scenario_signatures") or [], "resolution": body["resolution"],
             "resolution_type": body["resolution_type"], "resolution_verification": rv, "fix": fix,
-            "related": [], "android_versions": body.get("android_versions") or [],
+            "related": [], "platform_versions": body.get("platform_versions") or [],
             "code_refs": body.get("code_refs") or [],
         }
         for ref in values["code_refs"]:

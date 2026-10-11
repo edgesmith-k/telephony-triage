@@ -2,7 +2,7 @@
 
 `--platform`(CLI) > `TT_PLATFORM`(triage가 하위 스크립트에 넘긴다) > 사용자 config `platform` > site-defaults `platform.name`.
 고른 플랫폼은 `platform.enabled`에 있어야 한다(`platforms.select`). 사용자 config의 플랫폼 키 오류(`platforms.<p>`에
-경로 프로필 밖 키 등)도 여기서 거부한다. 결과 cfg는 `userconfig.merged(…, platform=…)`이다.
+경로 프로필 밖 키 등)와 옛 설정 키(`userconfig.legacy_problems`)도 여기서 거부한다. 결과 cfg는 `userconfig.merged(…, platform=…)`이다.
 
 레지스트리(`platforms/__init__.py`)는 사용자 config를 모른다 — 둘을 잇는 곳은 이 모듈뿐이다.
 """
@@ -29,6 +29,9 @@ def resolve(defaults: dict, cli: str | None = None, user: dict | None = None) ->
     problems = userconfig.profile_problems(user)
     if problems:
         raise PlatformConfigError(f"사용자 config({userconfig.path()}): " + "; ".join(problems))
+    legacy = userconfig.legacy_problems(defaults, user)
+    if legacy:      # 옛 설정 키(jira: 등)는 자동 변환하지 않는다 — 고치기 전까지 멈춘다(guard는 모든 MCP 거부)
+        raise PlatformConfigError("옛 설정 키: " + "; ".join(legacy) + " — config.py doctor로 확인한다")
     name = select(defaults, cli, userconfig.selected_hint(user))
     if name == userconfig.TOP_PROFILE:      # 기본 플랫폼은 이전과 같은 호출(같은 결과)
         return name, userconfig.merged(defaults, user) if given else userconfig.merged(defaults)

@@ -5,10 +5,10 @@
                [--residual <옛 ID>=<새 ID> ...]
 
 검사 (코드 — 수준)
-- `schema` 오류: 유형 frontmatter·Jira·피드백·`.expect.yaml`을 이슈 DB `schema/`로 검사
+- `schema` 오류: 유형 frontmatter·이슈 기록(Jira)·피드백·`.expect.yaml`을 이슈 DB `schema/`로 검사
 - `category`·`id-format`·`id-prefix`·`type-dir` 오류: 카테고리 목록, ID 형식·접두어, 유형 디렉토리 이름
-- `duplicate-id`·`duplicate-jira` 오류: ID 중복, 같은 Jira 키가 둘 이상
-- `jira-key`·`jira-cause` 오류: `jira_key_regex`, 파일 이름, `cause`가 그 유형의 원인인지
+- `duplicate-id`·`duplicate-issue` 오류: ID 중복, 같은 Jira 키가 둘 이상
+- `issue-key`·`issue-cause` 오류: `tracker.key_regex`, 파일 이름, `cause`가 그 유형의 원인인지
 - `glossary`·`title-length` 경고: 금지 동의어(GLOSSARY.md), 제목 길이 (§5.7 (2))
 - `related` 오류: 없는 원인, 한쪽만 있는 related
 - `code-ref` 오류: `<root 키>:<상대 경로>` 형식, 절대 경로, `code_root_keys`
@@ -214,7 +214,7 @@ class Linter:
             return self.result()
         cats = [c for c in self.config.get("categories") or [] if isinstance(c, dict)]
         self.categories = {c["key"]: c for c in cats if c.get("key")}
-        self.key_re = self._compile_cfg("jira_key_regex")
+        self.key_re = self._compile_cfg("tracker.key_regex")
         self.fix_ref_re = self._compile_cfg("fix_ref_regex")
         self._check_mask_allow()
         self.root_keys = set(self.config.get("code_root_keys") or [])
@@ -264,7 +264,9 @@ class Linter:
     # 준비 -----------------------------------------------------------------------
 
     def _compile_cfg(self, key: str):
-        value = self.config.get(key)
+        value = self.config
+        for part in key.split("."):     # 점 표기(`tracker.key_regex`)
+            value = value.get(part) if isinstance(value, dict) else None
         if not value:
             return None
         try:
@@ -455,7 +457,7 @@ class Linter:
         import jsonschema
 
         out = {}
-        for name in ("type", "jira", "feedback", "expect"):
+        for name in ("type", "issue", "feedback", "expect"):
             path = self.root / "schema" / f"{name}.schema.json"
             if path.is_file():
                 out[name] = jsonschema.Draft202012Validator(json.loads(path.read_text(encoding="utf-8")))
@@ -637,7 +639,7 @@ class Linter:
                 self.err("evidence-missing", type_md, f"{cid}: evidence fixture {item}가 없습니다.")
             return
         if self.key_re and self.key_re.fullmatch(item):
-            path = type_md.parent / "jira" / f"{item}.yaml"
+            path = type_md.parent / "issues" / f"{item}.yaml"
             record = self._yaml(path) if path.is_file() else None
             if path in self.bad_yaml:
                 return
@@ -751,25 +753,25 @@ class Linter:
         for type_md, data in self.types:
             type_id = str(data.get("id"))
             causes = {str(c.get("id")) for c in data.get("causes") or [] if isinstance(c, dict)}
-            for path in sorted((type_md.parent / "jira").glob("*.yaml")):
+            for path in sorted((type_md.parent / "issues").glob("*.yaml")):
                 record = self._yaml(path)
                 if path in self.bad_yaml:
                     continue
                 if not isinstance(record, dict):
                     self.err("schema", path, "Jira 기록이 매핑이 아닙니다.")
                     continue
-                self._validate("jira", record, path)
+                self._validate("issue", record, path)
                 key = str(record.get("key"))
                 if self.key_re and not self.key_re.fullmatch(key):
-                    self.err("jira-key", path, f"Jira 키 {key}가 jira_key_regex에 맞지 않습니다.")
+                    self.err("issue-key", path, f"Jira 키 {key}가 tracker.key_regex에 맞지 않습니다.")
                 if path.stem != key:
-                    self.err("jira-key", path, f"파일 이름({path.name})이 키({key})와 다릅니다.")
+                    self.err("issue-key", path, f"파일 이름({path.name})이 키({key})와 다릅니다.")
                 if key in seen:
-                    self.err("duplicate-jira", [path, seen[key]], f"Jira {key}가 두 곳에 있습니다.")
+                    self.err("duplicate-issue", [path, seen[key]], f"Jira {key}가 두 곳에 있습니다.")
                 seen.setdefault(key, path)
                 cause = str(record.get("cause"))
                 if cause != "unresolved" and cause not in causes:
-                    self.err("jira-cause", path, f"cause {cause}가 유형 {type_id}의 원인이 아닙니다.")
+                    self.err("issue-cause", path, f"cause {cause}가 유형 {type_id}의 원인이 아닙니다.")
                 for field in ("note", "failed_step"):
                     if record.get(field):
                         for hit in masking.new_masker().find(str(record[field])):

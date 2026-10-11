@@ -2,7 +2,7 @@
 
 ```
 /telephony-triage:record <JIRA-KEY> [--cause <원인 ID> | --new-cause <유형 ID> | --new-type <category> | --unresolved <유형 ID>]
-                         [--fixture <logcat>] [--resolved-fixture <logcat>] [--dry-run] [--jira-file <yaml>]
+                         [--fixture <logcat>] [--resolved-fixture <logcat>] [--dry-run] [--issue-file <yaml>]
                          [--failed-step <한 줄>] [--steps-file <파일>]
 ```
 
@@ -15,27 +15,27 @@
 
 ## 1. 사전 점검
 
-- `config.py show --keys work_dir,jira.tools`(없으면 setup 안내) → `jira_fields.py check-key <KEY>`(맞지 않으면 다시 묻는다) →
+- `config.py show --keys work_dir,tracker.tools`(없으면 setup 안내) → `jira_fields.py check-key <KEY>`(맞지 않으면 다시 묻는다) →
   `db_pr lock acquire <KEY> --command record`(보유 중이면 `write-flow.md` 1번) →
   `db_pr cleanup --dry-run`.
 - `WD/<KEY>/plan.json`이 있으면: `source: record`면 이어서/새로 시작을 묻고, 다른 `source`면 "새로 시작(덮어씀)"만.
 - `db_pr snapshot --job <KEY>` → `config.py check --db SNAP`(`--dry-run`이면 `--for dry-run`). **쓰기 불가면 사유를 보여주고
   lock을 풀고 멈춘다**(record는 쓰기만 하는 흐름이라 읽기 전용 모드가 없다).
-- `--jira-file`은 `--dry-run` 없이도 받는다(`jira.origin: file`). 확인 화면에 "Jira 메타데이터: 오프라인 파일"이 나온다.
+- `--issue-file`은 `--dry-run` 없이도 받는다(`issue.origin: file`). 확인 화면에 "Jira 메타데이터: 오프라인 파일"이 나온다.
 
 ## 2. Jira 메타데이터
 
-MCP `jira.tools.get_issue`(매핑이 없으면 추측하지 말고 setup 안내)를 부르면 hook이 원문을 `WD/<KEY>/jira_raw.json`에 두고 마스킹 요약만 보여준다(결과에 `saved_to`가 없으면 응답을 그 경로에 저장하고 "격리 hook 미동작: Jira 원문이 대화에 들어왔다(S1 확인)"고 알린다). `jira_fields.py extract WD/<KEY>/jira_raw.json --origin mcp --db SNAP --consume --comments last:3`(파일이면 `<yaml> --origin file`)로 읽는다.
+MCP `tracker.tools.get_issue`(매핑이 없으면 추측하지 말고 setup 안내)를 부르면 hook이 원문을 `WD/<KEY>/issue_raw.json`에 두고 마스킹 요약만 보여준다(결과에 `saved_to`가 없으면 응답을 그 경로에 저장하고 "격리 hook 미동작: Jira 원문이 대화에 들어왔다(S1 확인)"고 알린다). `jira_fields.py extract WD/<KEY>/issue_raw.json --origin mcp --db SNAP --consume --comments last:3`(파일이면 `<yaml> --origin file`)로 읽는다.
 `--failed-step <한 줄>`·`--steps-file <파일>`(선택)이 있으면 `extract`에 그대로 넘긴다(우선순위 cli > Jira 자동 > 파일). 실패 스텝은 선택 값이라 없어도 묻지 않고 멈추지 않으며, 파일을 읽지 못하면 `warnings`만 보여주고 진행한다. 값은 보조 정보일 뿐 분류에 쓰지 않는다.
 `--steps-file`은 txt/csv·html(`report.html`)·zip(안의 파일 하나)이다. 개발자가 스텝 목록을 대화에 붙이면 `WD/<KEY>/steps-pasted.txt`에 쓰고 그 경로를 `--steps-file`로 준다(도구가 읽을 때 마스킹, 커밋하지 않는다, discard·lock release가 지운다). 시험 장비 시각은 시계가 단말과 다를 수 있어 `record`에서는 실패 스텝 이름만 쓴다(`--clock-offset`은 analyze의 구간 계산용).
-`jira` 블록(model, sw, android_version, carrier, occurred_on)을 채우고, `missing`은 사용자에게 묻는다. `date`는 오늘.
+`issue` 블록(model, sw, platform_version, carrier, occurred_on)을 채우고, `missing`은 사용자에게 묻는다. `date`는 오늘.
 `note`는 마스킹된 요약으로 한 줄 초안을 만들어 확인받는다(사람 이름·전화번호·IMEI 금지).
 
 ## 3. 중복 확인
 
-`db_pr preflight --branch issue/<KEY> --search <KEY> --jira <KEY>`.
-- `jira_in_main` → **중단하고** 기존 분류(`db_search.py <KEY> --db SNAP --brief`)를 보여준 뒤 유지(기록하지 않음, lock 해제) /
-  재분류(`reclassify {jira, from, to}`)를 묻는다. 중복 파일을 만들지 않는다.
+`db_pr preflight --branch issue/<KEY> --search <KEY> --issue <KEY>`.
+- `issue_in_main` → **중단하고** 기존 분류(`db_search.py <KEY> --db SNAP --brief`)를 보여준 뒤 유지(기록하지 않음, lock 해제) /
+  재분류(`reclassify {issue, from, to}`)를 묻는다. 중복 파일을 만들지 않는다.
 - 열린 PR → 링크를 보여주고 계속할지 묻는다(계속해도 같은 Jira 파일을 두 PR이 만들게 된다는 점을 알린다).
 
 ## 4. 분류 정하기
@@ -83,7 +83,7 @@ MCP `jira.tools.get_issue`(매핑이 없으면 추측하지 말고 setup 안내)
 
 ## 6. 작업 계획
 
-`WD/<KEY>/plan.json`: `source: record`, `schema_version`, `started_at`, `base_sha`(스냅샷 SHA), `jira`(origin 포함),
+`WD/<KEY>/plan.json`: `source: record`, `schema_version`, `started_at`, `base_sha`(스냅샷 SHA), `issue`(origin 포함),
 `operations`(새 원인·유형이면 `new-cause`/`new-type` 뒤에 이 Jira 기록용 **`append {cause: <temp_id>}`**를 꼭 넣는다 — `new-cause`는 원인만 만든다),
 `feedback: {date: <지금>, suggested: [], decision: manual, final: <원인 ID | temp_id | unresolved>}`,
 `commit_message: "[<ID>] record <KEY>: <요약>"`, `pr: {number: null, branch: issue/<KEY>, head_sha: null}`, `included_pending: []`.

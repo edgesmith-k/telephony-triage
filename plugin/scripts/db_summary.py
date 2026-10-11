@@ -35,7 +35,7 @@ def _status_entries(wt: Path, git) -> list[tuple[str, str]]:
 def _file_kind(path: str) -> str:
     if GENERATED_RE.match(path):
         return "생성 파일"
-    if "/jira/" in path:
+    if "/issues/" in path:
         return "Jira 기록"
     if path.startswith("feedback/"):
         return "피드백"
@@ -222,7 +222,7 @@ def fix_changes(wt: Path, entries: list[tuple[str, str]], operations: list[dict]
 def search_key(plan: dict, applied: dict) -> str | None:
     """열린 PR을 찾는 gh 검색어: Jira 키, 없으면 첫 할당 ID."""
     ids = applied.get("ids") or []
-    return (plan.get("jira") or {}).get("key") or (ids[0]["id"] if ids else None)
+    return (plan.get("issue") or {}).get("key") or (ids[0]["id"] if ids else None)
 
 
 def screen(wt: Path, plan: dict, stage_result: dict, state: dict, db_cfg: dict, *, job: str, base: str, git,
@@ -235,13 +235,13 @@ def screen(wt: Path, plan: dict, stage_result: dict, state: dict, db_cfg: dict, 
     files = []
     for status, path in entries:
         change = names.get(status, status.strip() or "수정")
-        if status == "??" and Path(path).name in deleted and "/jira/" in path:
+        if status == "??" and Path(path).name in deleted and "/issues/" in path:
             change = f"이동 (← {deleted[Path(path).name]})"
-        elif "D" in status and any(s == "??" and Path(p).name == Path(path).name and "/jira/" in p for s, p in entries):
+        elif "D" in status and any(s == "??" and Path(p).name == Path(path).name and "/issues/" in p for s, p in entries):
             continue
         files.append({"kind": _file_kind(path), "path": path, "change": change})
     paths = [p for _, p in entries]
-    jira = plan.get("jira") or {}
+    jira = plan.get("issue") or {}
     at_base = {i.get("temp_id"): i.get("id") for i in stage_result.get("ids_at_base") or []}
     ids = [({**i, "expected_at_base": at_base[i["temp_id"]]} if i.get("temp_id") in at_base else dict(i))
            for i in applied.get("ids") or []]
@@ -303,8 +303,8 @@ def screen(wt: Path, plan: dict, stage_result: dict, state: dict, db_cfg: dict, 
     revs = reviewers(wt, paths, plan, db_cfg)
     result = {
         "source": source, "source_label": SOURCE_LABELS.get(source, source),
-        "jira": {"key": jira.get("key"), "origin": jira.get("origin"),
-                 "label": "Jira 메타데이터: 오프라인 파일" if jira.get("origin") == "file" else None},
+        "issue": {"key": jira.get("key"), "origin": jira.get("origin"),
+                  "label": "Jira 메타데이터: 오프라인 파일" if jira.get("origin") == "file" else None},
         "branch": {"name": state["branch"], "remote": "갱신" if remote_sha else "신규", "remote_sha": remote_sha,
                    "base": base},
         "reviewers": revs, "open_prs": open_prs,
@@ -322,10 +322,10 @@ def screen(wt: Path, plan: dict, stage_result: dict, state: dict, db_cfg: dict, 
 
 
 def pr_body(screen: dict, plan: dict) -> str:
-    jira = plan.get("jira") or {}
+    jira = plan.get("issue") or {}
     lines = ["## 분석 요약", "", f"- 구분: {screen['source_label']}"]
     if jira:
-        info = ", ".join(f"{k}: {jira[k]}" for k in ("model", "sw", "android_version", "carrier") if jira.get(k))
+        info = ", ".join(f"{k}: {jira[k]}" for k in ("model", "sw", "platform_version", "carrier") if jira.get(k))
         lines.append(f"- Jira: {jira.get('key')}" + (f" ({info})" if info else ""))
         if jira.get("note"):
             lines.append(f"- 메모: {jira['note']}")
@@ -486,7 +486,7 @@ def _check_lines(checks: dict) -> list[str]:
 
 def render_markdown(scr: dict, plan: dict, extra: dict) -> str:
     """`screen()` 결과를 write-flow §4 확인 화면 마크다운으로. 순수 함수(파일·git을 읽지 않는다)."""
-    jira = scr.get("jira") or {}
+    jira = scr.get("issue") or {}
     ids = scr["ids"]
     target, title = extra.get("target_id"), extra.get("target_title")
     key = jira.get("key") or target or (ids[0]["id"] if ids else None)

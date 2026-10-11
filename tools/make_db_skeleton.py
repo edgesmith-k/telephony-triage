@@ -11,7 +11,7 @@ fixture·피드백 기록을 뺀** 것이 뼈대다. 반입·사내 운영 레�
     빈 카테고리 디렉토리(.gitkeep)와 feedback/(.gitkeep)
 
 들어가지 않는 것
-    유형 디렉토리(type.md, jira/, fixtures/), 피드백 파일,
+    유형 디렉토리(type.md, issues/, fixtures/), 피드백 파일,
     생성 파일(README.md, 카테고리 README.md, STATS.md, parser-rules/CHANGELOG.md)
     — 생성 파일은 첫 PR 때 `db_build.py --write`가 만든다 (Phase 5).
 
@@ -116,7 +116,7 @@ def _platform_config(text: str, spec, version: str) -> str:
     """샘플(기본 플랫폼) 설정을 다른 플랫폼 설정으로 바꾼다. 바꿀 줄이 없으면 멈춘다(샘플이 바뀐 것)."""
     edits = [
         (r"(?m)^schema_version:", lambda m: f"platform: {spec.name}                      # 17-platforms §4\n{m[0]}"),
-        (r"(?m)^android_versions_supported:.*$",
+        (r"(?m)^platform_versions_supported:.*$",
          lambda m: "platform_versions_supported: []      # TODO(SITE) 이 플랫폼에서 지원하는 버전"),
         (r"(?m)^(parser_backend:[^\n]*\n  name: )\S+[^\n]*\n  min_version: \S+",
          lambda m: f"{m[1]}{spec.default_backend}\n  min_version: {version}"),

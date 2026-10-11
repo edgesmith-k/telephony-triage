@@ -18,7 +18,7 @@ analyzers:
   data:
     skill: mock-data-analyzer
     when: ask                  # 기본값. 1위가 data일 때 호출 여부를 묻는다
-    inputs: [events_json, log_paths, top_candidates, jira_summary]
+    inputs: [events_json, log_paths, top_candidates, issue_summary]
     max_tokens_hint: medium
 ```
 
@@ -32,7 +32,7 @@ analyzers:
 | `events_json` | 파서 이벤트 JSON **경로** (마스킹된 상태) |
 | `log_paths` | 로그 파일 경로 목록 |
 | `top_candidates` | 상위 후보 `[{type, cause, score, confidence}]` |
-| `jira_summary` | 마스킹된 Jira 요약 한두 줄 |
+| `issue_summary` | 마스킹된 Jira 요약 한두 줄 |
 
 원문 로그를 통째로 넘기지 않는다.
 

@@ -73,7 +73,7 @@ def verify_fix(db: Path, log: str, build: str | None = BUILD, cause: str = "CALL
 
 def apply_plan(db: Path, operations: list[dict], source: str = "verify-fix", expect=0) -> dict:
     plan = {"source": source, "schema_version": 1, "started_at": "2026-09-29T10:00+09:00",
-            "base_sha": "0" * 40, "jira": None, "operations": operations,
+            "base_sha": "0" * 40, "issue": None, "operations": operations,
             "commit_message": "[CALL-001-01] verify-fix", "pr": {"number": None, "branch": "x", "head_sha": None},
             "included_pending": []}
     path = db.parent / "job" / "plan.json"
@@ -83,7 +83,7 @@ def apply_plan(db: Path, operations: list[dict], source: str = "verify-fix", exp
 
 
 def fix_plan(ops: list[dict], branch: str) -> dict:
-    return {"source": "verify-fix", "schema_version": 1, "started_at": "2026-09-29T10:00+09:00", "jira": None,
+    return {"source": "verify-fix", "schema_version": 1, "started_at": "2026-09-29T10:00+09:00", "issue": None,
             "operations": ops, "commit_message": f"[CALL-001-01] verify-fix: {branch}",
             "pr": {"number": None, "branch": branch, "head_sha": None}, "included_pending": []}
 
@@ -632,7 +632,7 @@ DATA_001_03 = """  - id: DATA-001-03
     fix: {status: open, ref: null, fixed_in: [], verification: null, verification_history: []}
     related: []
     cp_evidence: null
-    android_versions: []
+    platform_versions: []
     code_refs: []
 """
 
@@ -644,7 +644,7 @@ _CAUSE_TAIL = """    recovery_signatures: []
     fix: {status: open, ref: null, fixed_in: [], verification: null, verification_history: []}
     related: []
     cp_evidence: null
-    android_versions: []
+    platform_versions: []
     code_refs: []
 tags: []
 ---

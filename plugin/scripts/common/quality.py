@@ -144,12 +144,12 @@ def user_statement_sources(cause: issuedb.Cause, jira: list[dict]) -> list[str]:
         out.append("method")
     for record in jira:
         if str(record.get("cause")) == cause.id and USER_STATEMENT in str(record.get("note") or ""):
-            out.append(f"jira:{record.get('key')}")
+            out.append(f"issue:{record.get('key')}")
     return out
 
 
 def unsupported_versions(cause: issuedb.Cause, supported: list[str]) -> bool:
-    """`android_versions`(이름은 그대로, 뜻은 플랫폼 버전 — 17-platforms K9)가 비어 있지 않고 모두 지원 목록 밖.
+    """`platform_versions`(플랫폼 버전)가 비어 있지 않고 모두 지원 목록 밖.
     빈 목록은 전 버전이라 제외."""
-    versions = [str(v) for v in cause.raw.get("android_versions") or []]
+    versions = [str(v) for v in cause.raw.get("platform_versions") or []]
     return bool(versions) and not (set(versions) & {str(v) for v in supported})

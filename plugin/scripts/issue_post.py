@@ -6,9 +6,9 @@
     issue_post.py render  <KEY> [--fill <json>] [--format jira-wiki|markdown] [--omit a,b] [--again] [--json]
     issue_post.py approve <KEY> --sha <post_sha256> [--json]
 
-`JOB` = `<work_dir>/<KEY>`. 입력은 모두 이미 마스킹된 파일이다: `JOB/analysis.json`, `JOB/jira.json`(원문 인용 검사용 텍스트는
+`JOB` = `<work_dir>/<KEY>`. 입력은 모두 이미 마스킹된 파일이다: `JOB/analysis.json`, `JOB/issue.json`(원문 인용 검사용 텍스트는
 본문에 넣지 않는다), `JOB/plan.json`(있으면), `JOB/triage-state.json`, 스냅샷 `issue-db.config.yaml`(`mask.allow_patterns`,
-`jira_key_regex`).
+`tracker.key_regex`).
 
 - `render`: 스크립트가 결정적인 칸을 채우고 LLM 칸(`problem`·`cause`·`next`·`code_location`)은 `--fill`의 JSON에서 받는다.
   `--fill`이 없으면 LLM 칸을 `TODO(LLM)`로 둔 초안 화면만 낸다(해시 줄 없음). `--fill`이 있으면 검사(형식·basis·길이·TODO·
@@ -26,7 +26,7 @@
   approved_at, expires_at, posted_at, comment_id}`.
 
 게시 가능(postable) 조건(첫 실패가 `reason`): 코멘트 도구 설정 유효 → analysis.json `status: ok` → `mode` write·read-only →
-`triage-state.json` 마지막 실행의 `request_hash`가 같고 `dry_run`이 거짓 → `jira.origin: mcp` → 게시 이력 없음(또는 `--again`).
+`triage-state.json` 마지막 실행의 `request_hash`가 같고 `dry_run`이 거짓 → `issue.origin: mcp` → 게시 이력 없음(또는 `--again`).
 게시 가능하지 않아도 render는 본문 파일을 만든다(직접 붙여넣기 대안). lock은 잡지 않는다: `JOB/post*` 파일만 쓰고
 git·clone·스냅샷·worktree를 건드리지 않는다.
 
@@ -91,7 +91,8 @@ class Job:
         work = Path(str(userconfig.get(self.cfg, "work_dir"))).expanduser()
         self.snap = work / session_lock.SNAPSHOT_DIR
         db_cfg = compat.load_db_config(self.snap) if (self.snap / "issue-db.config.yaml").is_file() else {}
-        key_re = re.compile(str(db_cfg.get("jira_key_regex") or DEFAULT_KEY_RE))
+        tracker = db_cfg.get("tracker") if isinstance(db_cfg.get("tracker"), dict) else {}
+        key_re = re.compile(str(tracker.get("key_regex") or DEFAULT_KEY_RE))
         self.key = args.key
         if not issuepost.KEY_SAFE_RE.fullmatch(self.key) or not key_re.fullmatch(self.key):
             raise Usage(f"Jira 키 형식이 아니다: {self.key}")
@@ -121,7 +122,7 @@ class Job:
         self.plan_skipped = None
         path = self.dir / "plan.json"
         plan = _read(path, "plan.json")
-        if not plan or (plan.get("jira") or {}).get("key") != self.key:
+        if not plan or (plan.get("issue") or {}).get("key") != self.key:
             return None
         if not (isinstance(plan.get("feedback"), dict) and plan["feedback"].get("decision")):
             return None
@@ -139,7 +140,7 @@ class Job:
     def tool_format(self, override: str | None) -> str:
         if override:
             return override
-        fmt = (self.spec or {}).get("format") or userconfig.get(self.cfg, "jira.write_tools.add_comment.format")
+        fmt = (self.spec or {}).get("format") or userconfig.get(self.cfg, "tracker.write_tools.add_comment.format")
         return fmt if fmt in issuepost.FORMATS else issuepost.DEFAULT_FORMAT
 
     def posted(self) -> bool:
@@ -149,7 +150,7 @@ class Job:
         """(게시 가능, 첫 실패 사유). `history=False`면 게시 이력(6번)은 보지 않는다(approve가 따로 종료 1로 본다)."""
         if self.spec is None:
             return False, (f"코멘트 도구 설정 오류: {self.spec_err}" if self.spec_err
-                           else "쓰기 도구 미설정(jira.write_tools.add_comment)")
+                           else "쓰기 도구 미설정(tracker.write_tools.add_comment)")
         a = self.analysis
         if not a or a.get("status") != "ok":
             return False, "분석 결과(analysis.json status: ok)가 없다"
@@ -165,8 +166,8 @@ class Job:
             return False, "분석 상태(triage-state.json)가 analysis.json과 다르다 — 다시 분석한다"
         if last.get("dry_run") is not False:
             return False, "--dry-run 실행 결과는 게시하지 않는다" if last.get("dry_run") else "실행 기록에 dry-run 여부가 없다 — 다시 분석한다"
-        if (a.get("jira") or {}).get("origin") != "mcp":
-            return False, f"Jira가 MCP에서 오지 않았다(origin: {(a.get('jira') or {}).get('origin')})"
+        if (a.get("issue") or {}).get("origin") != "mcp":
+            return False, f"Jira가 MCP에서 오지 않았다(origin: {(a.get('issue') or {}).get('origin')})"
         if history and self.posted() and not again:
             r = self.result
             return False, (f"이미 게시함(comment {r.get('comment_id') or '?'}, {r.get('posted_at')}) — "
@@ -295,19 +296,19 @@ IN_RANGE = {True: "발생 시각 포함", "partial": "발생 시각 일부", Fal
 
 def build(job: Job, a: dict, plan: dict | None, fill: dict | None, omit: set[str]) -> tuple[dict, str, dict]:
     """(sections, tail, info). fill이 None이면 LLM 칸은 TODO(LLM)."""
-    jira_doc = _read(job.path("jira.json"), "jira.json") or {}
-    fields = jira_doc.get("jira") or {}
-    note = ((plan or {}).get("jira") or {}).get("note")
+    jira_doc = _read(job.path("issue.json"), "issue.json") or {}
+    fields = jira_doc.get("issue") or {}
+    note = ((plan or {}).get("issue") or {}).get("note")
     cl = classify(a, plan)
     s = {name: [] for name in issuepost.SECTIONS}
     # PROBLEM
     s["PROBLEM"].append(_line(f"Jira: {job.key}"))
     if "fields" not in omit:
-        parts = [f"{label}: {_clip(fields[k], FIELD_MAX)}" for k, label in (("model", "단말"), ("sw", "SW"), ("android_version", _platform_label(a)),
+        parts = [f"{label}: {_clip(fields[k], FIELD_MAX)}" for k, label in (("model", "단말"), ("sw", "SW"), ("platform_version", _platform_label(a)),
                                                           ("carrier", "캐리어"), ("occurred_on", "발생일")) if fields.get(k)]
         if parts:
             s["PROBLEM"].append(_line(" · ".join(parts)))
-    step = (a.get("jira") or {}).get("failed_step")
+    step = (a.get("issue") or {}).get("failed_step")
     if "failed_step" not in omit and isinstance(step, dict) and step.get("text"):
         s["PROBLEM"].append(_line(f"실패 스텝(보조 정보): {_clip(step['text'], FAILED_STEP_MAX)}"))
     if note:
@@ -420,11 +421,11 @@ def check_fill(raw, need_problem: bool, code_skipped: bool, masker, quote_src: l
         problems.append("problem은 문자열 또는 null이다")
     elif need_problem:
         if not (problem or "").strip():
-            problems.append("problem(증상 한 줄)이 필요하다(plan의 jira.note가 없다)")
+            problems.append("problem(증상 한 줄)이 필요하다(plan의 issue.note가 없다)")
         else:
             texts.append(("problem", problem, PROBLEM_MAX))
     elif problem:
-        warnings.append("plan의 jira.note가 있어 problem은 무시했다")
+        warnings.append("plan의 issue.note가 있어 problem은 무시했다")
     cause = raw.get("cause")
     if not isinstance(cause, list) or not CAUSE_ITEMS[0] <= len(cause) <= CAUSE_ITEMS[1]:
         problems.append(f"cause는 {CAUSE_ITEMS[0]}~{CAUSE_ITEMS[1]}개 목록이다")

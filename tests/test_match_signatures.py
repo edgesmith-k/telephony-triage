@@ -72,9 +72,9 @@ def _events(log: Path, db: Path = SAMPLE, around: str | None = None, masked: boo
 def _match(events: Path, db: Path = SAMPLE, *extra: str, jira: dict | None = None, expect_code: int = 0):
     args = ["--db", str(db), "--events", str(events), "--top", "0", *extra]
     if jira is not None:
-        path = _tmp() / "jira.json"
+        path = _tmp() / "issue.json"
         path.write_text(json.dumps(jira, ensure_ascii=False), encoding="utf-8")
-        args += ["--jira-meta", str(path)]
+        args += ["--issue-meta", str(path)]
     proc = _script("match_signatures.py", args)
     assert proc.returncode == expect_code, proc.stderr
     return json.loads(proc.stdout) if proc.returncode == 0 else proc.stderr
@@ -267,7 +267,7 @@ def test_status_filter_and_pending_causes():
     resolution_verification: {status: unverified}
     fix: {status: open, ref: null, fixed_in: [], verification: null, verification_history: []}
     related: []
-    android_versions: []
+    platform_versions: []
     code_refs: []
 tags: [data-evaluation]""")
     for mode in ([], ["--regress"]):
@@ -574,13 +574,13 @@ def test_version_match_is_display_only():
 
     def run(**extra):
         return {c["cause"]: c for c in _tie_cands(_match(events, SAMPLE, "--no-feedback-weight", jira={**base, **extra}))}
-    none, same, other, dotted = (run(), run(android_version="16"), run(android_version="15"), run(android_version="16.0"))
-    assert none["DATA-001-01"]["version_match"] is None and none["DATA-001-01"]["android_versions"] == ["16", "17"]
+    none, same, other, dotted = (run(), run(platform_version="16"), run(platform_version="15"), run(platform_version="16.0"))
+    assert none["DATA-001-01"]["version_match"] is None and none["DATA-001-01"]["platform_versions"] == ["16", "17"]
     assert same["DATA-001-01"]["version_match"] is True and dotted["DATA-001-01"]["version_match"] is True
     assert other["DATA-001-01"]["version_match"] is False
-    assert other["DATA-001-02"]["version_match"] is None and other["DATA-001-02"]["android_versions"] == []   # 전 버전
+    assert other["DATA-001-02"]["version_match"] is None and other["DATA-001-02"]["platform_versions"] == []   # 전 버전
     for odd in ("Android 16", "Baklava", "17 QPR1", "16 (B)"):   # 정수·정수.정수 꼴이 아니면 비교하지 않는다
-        assert run(android_version=odd)["DATA-001-01"]["version_match"] is None
+        assert run(platform_version=odd)["DATA-001-01"]["version_match"] is None
     for r in (same, other):   # 순위·score·S·C 불변
         key = lambda x: [(k, c["score"], c["bonus"], c["S"], c["C"]) for k, c in x.items()]  # noqa: E731
         assert key(r) == key(none)

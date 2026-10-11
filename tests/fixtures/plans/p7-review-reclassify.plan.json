@@ -3,11 +3,11 @@
   "schema_version": 1,
   "started_at": "2026-10-01T10:00+09:00",
   "base_sha": "0000000000000000000000000000000000000000",
-  "jira": null,
+  "issue": null,
   "operations": [
     {
       "op": "reclassify",
-      "jira": "MOCK-1104",
+      "issue": "MOCK-1104",
       "from": "unresolved",
       "to": "DATA-001-01"
     }

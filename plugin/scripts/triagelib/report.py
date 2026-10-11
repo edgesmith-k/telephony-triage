@@ -116,7 +116,7 @@ def timeline(key: str, events: dict, around: str | None, limit: int,
 
 
 def _clip_failed_step(result: dict, limit: int) -> None:
-    fs = (result.get("jira") or {}).get("failed_step")
+    fs = (result.get("issue") or {}).get("failed_step")
     if fs:
         fs["text"] = _clip(fs["text"], limit)
 
@@ -279,7 +279,7 @@ class ReportMixin:
             "read_only_reasons": self.out.get("read_only_reasons"),
             "read_only_hint": self.out.get("read_only_hint"),
             "snapshot": self.out.get("snapshot"), "plan": self.out.get("plan"),
-            "jira": self.out.get("jira"), "step_anchor": self.anchor_out(anchor, info, core.get("outside")),
+            "issue": self.out.get("issue"), "step_anchor": self.anchor_out(anchor, info, core.get("outside")),
             "existing": self.out.get("existing"), "open_prs": self.out.get("open_prs"),
             "build": self.out.get("build"),
             "logs": core["logs"],
@@ -295,7 +295,7 @@ class ReportMixin:
             "lock_owner": None if released else self.run.env.get("TT_LOCK_OWNER"),
             "lock_released": True if released else None,
             "files": {"report": str(self.job / "report.md"), "events": str(self.job / "events.json"),
-                      "match": str(self.job / "match.json"), "jira": str(self.job / "jira.json")},
+                      "match": str(self.job / "match.json"), "issue": str(self.job / "issue.json")},
         }
         result["_outside"] = core.get("outside")      # report.md 전용, analysis.json에는 안 나간다
         report, must_show = self.render_report(result, anchor)
@@ -368,8 +368,8 @@ class ReportMixin:
             text = f"재분석: 실행 {reuse.get('prev_run')} 대비 {what}{added}{top}"
             lines.append(add(3, text) if reuse.get("top_changed") else f"- {text}")
         if anchor:
-            jira_at = (r.get("jira") or {}).get("occurred_at")
-            gap = anchor.get("jira_gap_min")
+            jira_at = (r.get("issue") or {}).get("occurred_at")
+            gap = anchor.get("issue_gap_min")
             manual = self.clock or {}
             jira_part = f" (Jira 발생 시각 {jira_at} / {gap:g}분 차이)" if jira_at and gap is not None else ""
             order = anchor.get("order")
@@ -404,7 +404,7 @@ class ReportMixin:
             lines.append(f"- 근거 로그 (마스킹, 슬롯 phone {','.join(map(str, top['phones'])) or '?'}):")
             lines += [f"  - {e['ts']} {e['tag']} {e['msg']}" + (f" ({e['_ref']})" if e.get("_ref") else "")
                       for e in top["evidence"]]
-            jira_slot = (r.get("jira") or {}).get("sim_slot")
+            jira_slot = (r.get("issue") or {}).get("sim_slot")
             slot = _slot_number(jira_slot)
             if slot is not None and top["phones"] and slot not in top["phones"]:
                 lines.append(add(7, f"슬롯 불일치: 1위 후보 근거는 phone {','.join(map(str, top['phones']))}, Jira SIM 슬롯은 "
@@ -480,7 +480,7 @@ class ReportMixin:
             lines.append(f"- 수정 상태: {top.get('fix_status') or '-'} — {top.get('fix_message') or '-'}")
             if top.get("_version_mismatch"):
                 lines.append(f"- 다른 버전 원인 ({self.platform_label} {', '.join(top['_version_mismatch'])})")
-            lines.append(f"- 기존 사례: Jira {top.get('jira_count') or 0}건 ({', '.join(top.get('jira_recent') or []) or '-'})")
+            lines.append(f"- 기존 사례: Jira {top.get('issue_count') or 0}건 ({', '.join(top.get('issue_recent') or []) or '-'})")
             lines.append(f"- 관련 원인: {', '.join(top['related']) or '없음'}")
         others = [f"{c['cause'] or c['type']} (규칙 일치 점수 {c['score']})" for c in cands[1:]]
         lines.append(f"- 기타 후보: {', '.join(others) or '없음'}")

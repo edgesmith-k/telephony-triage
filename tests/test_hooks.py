@@ -37,7 +37,7 @@ def shared() -> Workspace:
     global _WS
     if _WS is None:
         _WS = Workspace()
-        _WS.json("config.py", ["set-jira", "--server", "mock-jira", "--get-issue", JIRA_TOOLS[0],
+        _WS.json("config.py", ["set-tracker", "--server", "mock-jira", "--get-issue", JIRA_TOOLS[0],
                                "--search-issues", JIRA_TOOLS[1], "--get-comments", JIRA_TOOLS[2]])
     return _WS
 
@@ -85,14 +85,14 @@ def test_precommit_blocks_manual_readme_pii_and_bad_scripts_path():
     assert proc.returncode != 0 and "README.md" in proc.stderr and "db_build.py --write" in proc.stderr
 
     # PII: Jira 기록 note에 원본 IMEI
-    jira = (ws.clone / DATA_DIR / "jira" / "MOCK-1101.yaml").read_text(encoding="utf-8")
-    branch_with_change(ws, "issue/MOCK-1101", f"{DATA_DIR}/jira/MOCK-1101.yaml",
+    jira = (ws.clone / DATA_DIR / "issues" / "MOCK-1101.yaml").read_text(encoding="utf-8")
+    branch_with_change(ws, "issue/MOCK-1101", f"{DATA_DIR}/issues/MOCK-1101.yaml",
                        jira.replace("접수됨", "접수됨 imei=490154203237518"))
     proc = gitp(ws.clone, "commit", "-qm", "PII", env=ws.hook_env())
     assert proc.returncode != 0 and "mask" in proc.stderr and "IMEI" in proc.stderr
 
     # 정상 변경은 통과한다 (마스킹된 note)
-    branch_with_change(ws, "issue/MOCK-1101", f"{DATA_DIR}/jira/MOCK-1101.yaml",
+    branch_with_change(ws, "issue/MOCK-1101", f"{DATA_DIR}/issues/MOCK-1101.yaml",
                        jira.replace("접수됨", "접수됨 (<IMEI#1>)"))
     proc = gitp(ws.clone, "commit", "-qm", "정상", env=ws.hook_env())
     assert proc.returncode == 0, proc.stderr
@@ -227,8 +227,8 @@ def test_guard_commit_requires_exact_hookspath():
 
 def test_guard_commit_checks_pii_and_generated_files():
     ws = Workspace()
-    jira = ws.clone / DATA_DIR / "jira" / "MOCK-1101.yaml"
-    branch_with_change(ws, "issue/MOCK-1101", f"{DATA_DIR}/jira/MOCK-1101.yaml",
+    jira = ws.clone / DATA_DIR / "issues" / "MOCK-1101.yaml"
+    branch_with_change(ws, "issue/MOCK-1101", f"{DATA_DIR}/issues/MOCK-1101.yaml",
                        jira.read_text(encoding="utf-8").replace("접수됨", "접수됨 imei=490154203237518"))
     out = bash(ws, 'git commit -m "x"', ws.clone)
     assert decision(out) == "deny" and "규칙 3" in out["permissionDecisionReason"]
@@ -318,30 +318,30 @@ def test_guard_jira_named_servers_deny_writes():
     cfg_path = ws.home / "config.yaml"
     saved = cfg_path.read_text(encoding="utf-8")
     try:
-        ws.json("config.py", ["set", "jira.read_tools", "[]"])
+        ws.json("config.py", ["set", "tracker.read_tools", "[]"])
         assert decision(guard(ws, JIRA_TOOLS[0], {}, ws.base)) == "deny"
     finally:
         cfg_path.write_text(saved, encoding="utf-8")
-    # jira.mcp_server가 비어 있어도(setup 전) 이름 기반 거부는 적용하고 경고한다
-    root = plugin_root("no-jira-server", jira={"exclude_servers": []})
+    # tracker.mcp_server가 비어 있어도(setup 전) 이름 기반 거부는 적용하고 경고한다
+    root = plugin_root("no-jira-server", tracker={"exclude_servers": []})
     home = tmp("tt-home-")
     for tool, want in (("mcp__mock-jira__jira_add_comment", "deny"), ("mcp__mock-jira__jira_fetch_ticket", None)):
         event = {"tool_name": tool, "tool_input": {}, "cwd": str(ws.base)}
         proc = run("guard.py", [], root=root, env={"TELEPHONY_TRIAGE_HOME": home}, stdin=json.dumps(event))
         out = json.loads(proc.stdout)["hookSpecificOutput"] if proc.stdout.strip() else None
-        assert proc.returncode == 0 and decision(out) == want and "jira.mcp_server" in proc.stderr, tool
+        assert proc.returncode == 0 and decision(out) == want and "tracker.mcp_server" in proc.stderr, tool
 
 
 def _jira(server: str, get_issue: str) -> dict:
     """테스트 헬퍼 site-defaults의 jira 블록에서 서버·get_issue 이름만 바꾼 것."""
-    base = yaml.safe_load((REPO / "plugin" / "site-defaults.example.yaml").read_text(encoding="utf-8"))["jira"]
+    base = yaml.safe_load((REPO / "plugin" / "site-defaults.example.yaml").read_text(encoding="utf-8"))["tracker"]
     return {**base, "mcp_server": server, "exclude_servers": [], "tools": {"get_issue": get_issue},
             "read_tools": [get_issue]}
 
 
 def test_guard_jira_server_name_is_normalized():
     """R-2: 세션 도구 이름은 서버 이름의 `[^A-Za-z0-9_-]`를 `_`로 쓴다(관측 기반 추정, S1 확인). 플러그인 번들 서버는
-    `mcp__plugin_…` 접두사라 `jira.mcp_server`와 다르다 — `jira.tools` 이름의 접두사로도 판정한다."""
+    `mcp__plugin_…` 접두사라 `tracker.mcp_server`와 다르다 — `tracker.tools` 이름의 접두사로도 판정한다."""
     home = tmp("tt-home-")
 
     def judge(root: Path, tool: str) -> str | None:
@@ -350,11 +350,11 @@ def test_guard_jira_server_name_is_normalized():
         assert proc.returncode == 0, proc.stderr
         return decision(json.loads(proc.stdout)["hookSpecificOutput"] if proc.stdout.strip() else None)
 
-    dot = plugin_root("jira-dot", jira=_jira("jira.corp", "mcp__jira.corp__get_issue"))
+    dot = plugin_root("jira-dot", tracker=_jira("jira.corp", "mcp__jira.corp__get_issue"))
     assert judge(dot, "mcp__jira_corp__create_issue") == "deny"
     assert judge(dot, "mcp__jira.corp__create_issue") == "deny"
     assert judge(dot, "mcp__jira_corp__get_issue") is None
-    bundled = plugin_root("jira-bundled", jira=_jira("jira", "mcp__plugin_corp_jira__get_issue"))
+    bundled = plugin_root("jira-bundled", tracker=_jira("jira", "mcp__plugin_corp_jira__get_issue"))
     assert judge(bundled, "mcp__plugin_corp_jira__add_comment") == "deny"
     assert judge(bundled, "mcp__plugin_corp_jira__get_issue") is None
     assert judge(bundled, "mcp__jira__add_comment") == "deny"          # mcp_server 접두사도 그대로
@@ -450,11 +450,11 @@ def test_guard_jira_post_requires_approval():
     cfg_path = ws.home / "config.yaml"
     saved = cfg_path.read_text(encoding="utf-8")
     try:
-        ws.json("config.py", ["set", "jira.read_tools", json.dumps([*JIRA_TOOLS, NOTE_TOOL])])
+        ws.json("config.py", ["set", "tracker.read_tools", json.dumps([*JIRA_TOOLS, NOTE_TOOL])])
         out = post({"ticket": "MOCK-7101", "text": body})
         assert decision(out) == "deny" and "설정 오류" in out["permissionDecisionReason"]
         cfg_path.write_text(saved, encoding="utf-8")
-        ws.json("config.py", ["set", "jira.write_tools.add_comment.extra_args", '{"visibility": "internal"}'])
+        ws.json("config.py", ["set", "tracker.write_tools.add_comment.extra_args", '{"visibility": "internal"}'])
         assert decision(post({"ticket": "MOCK-7101", "text": body, "visibility": "internal"})) == "ask"
         assert decision(post({"ticket": "MOCK-7101", "text": body, "visibility": "public"})) == "deny"   # (f) 고정 값
         assert decision(post({"ticket": "MOCK-7101", "text": body})) == "deny"
@@ -462,7 +462,7 @@ def test_guard_jira_post_requires_approval():
         cfg_path.write_text(saved, encoding="utf-8")
     # (l) 코멘트 도구 서버가 Jira 서버가 아니면 무효: 그 도구 호출은 거부
     home = tmp("tt-home-")
-    root = plugin_root("jira-dot", jira=_jira("jira.corp", "mcp__jira.corp__get_issue"))
+    root = plugin_root("jira-dot", tracker=_jira("jira.corp", "mcp__jira.corp__get_issue"))
     event = {"tool_name": NOTE_TOOL, "tool_input": {"ticket": "MOCK-7101", "text": body}, "cwd": str(home)}
     proc = run("guard.py", [], root=root, env={"TELEPHONY_TRIAGE_HOME": home}, stdin=json.dumps(event))
     out = json.loads(proc.stdout)["hookSpecificOutput"]
@@ -545,7 +545,7 @@ def test_guard_blocks_whole_raw_log_reads():
     (d / "logs" / "a.log").write_text(LOGCAT, encoding="utf-8")
     (d / "a.txt").write_text("hello\n", encoding="utf-8")
     (d / "br.zip").write_bytes(b"PK\x03\x04" + b"\0" * 100)
-    (d / "jira_raw.json").write_text("{}", encoding="utf-8")
+    (d / "issue_raw.json").write_text("{}", encoding="utf-8")
     for name in ("timeline.md", "report.md", "commit-message.txt"):
         (d / name).write_text("text\n", encoding="utf-8")
     fx = ws.work / "JOB" / "fixtures"
@@ -553,7 +553,7 @@ def test_guard_blocks_whole_raw_log_reads():
     (fx / "X.log").write_text(LOGCAT, encoding="utf-8")
     deny = ["cat x.log", "cat a.txt x.log", "cat < x.log", 'sh -c "cat x.log"', "cat logs/*.log",
             "head -c 5000 x.log", "tail -c5000 x.log", "unzip -p br.zip", "unzip -pq br.zip", "strings br.zip",
-            f"cat {d}/jira_raw.json", "echo hi && cat x.log",
+            f"cat {d}/issue_raw.json", "echo hi && cat x.log",
             # 모든 줄에 맞는 패턴·스크립트는 통독과 같다
             'grep "" x.log', 'grep -n "" x.log', "grep -n '' x.log | head -40", "grep '.*' x.log", "grep -e '' x.log",
             "grep '^' x.log", "grep -n '$' x.log", "grep . x.log", "rg '' x.log", "grep -n '' < x.log",
@@ -736,14 +736,14 @@ def test_guard_blocks_clone_mutation_from_bash():
 def test_guard_blocks_file_writes_into_clone_from_bash():
     ws = shared()
     c = ws.clone
-    for cmd, cwd in ((f'echo x > "{c}/jira/MOCK-1.yaml"', ws.base), (f'echo x >>"{c}/README.md"', ws.base),
+    for cmd, cwd in ((f'echo x > "{c}/issues/MOCK-1.yaml"', ws.base), (f'echo x >>"{c}/README.md"', ws.base),
                      (f'echo x &> "{c}/a.txt"', ws.base), (f'echo x | tee -a "{c}/README.md"', ws.base),
                      (f'sed -i s/a/b/ "{c}/x.yaml"', ws.base), (f'perl -pi -e s/a/b/ "{c}/x.yaml"', ws.base),
                      (f'rm -rf "{c}/causes"', ws.base), (f'cp /tmp/x "{c}/README.md"', ws.base),
                      ("touch new.txt", c), (f'sort -o "{c}/x" /tmp/y', ws.base), (f'echo x > "{c}/.git/hooks/x"', ws.base)):
         out = bash(ws, cmd, cwd)
         assert decision(out) == "deny" and "규칙 8" in out["permissionDecisionReason"], cmd
-    for cmd in (f'echo x > "{ws.work}/MOCK-1/wt/jira/MOCK-1.yaml"', f'cp "{c}/README.md" /tmp/x',
+    for cmd in (f'echo x > "{ws.work}/MOCK-1/wt/issues/MOCK-1.yaml"', f'cp "{c}/README.md" /tmp/x',
                 f'grep -n x "{c}/README.md" > /tmp/out 2>&1', f'sed -n 1,5p "{c}/README.md"',
                 f'sed s/a/b/ "{c}/README.md" > /tmp/out', f'cat "{c}/README.md" >&2'):
         assert decision(bash(ws, cmd, ws.base)) is None, cmd

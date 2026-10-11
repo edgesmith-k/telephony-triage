@@ -3,11 +3,11 @@
 - 서버 목록: Claude Code MCP 설정 JSON의 `mcpServers`(기본은 사용자 범위 `~/.claude.json`).
   stdio 서버는 직접 띄워 `initialize` → `tools/list`로 도구 이름을 읽는다. 원격(http/sse) 서버는
   여기서 읽지 못하므로, 스킬이 세션에서 보이는 도구 이름을 `--tools-json`으로 넘긴다.
-- `site-defaults.yaml`의 `jira.exclude_servers`(fnmatch 패턴, 기본 `['mock-*']`)에 맞는 서버는
+- `site-defaults.yaml`의 `tracker.exclude_servers`(fnmatch 패턴, 기본 `['mock-*']`)에 맞는 서버는
   후보에서 뺀다.
 - 도구 전체 이름은 `mcp__<server>__<tool>`이고, `<server>`의 `[A-Za-z0-9_-]` 밖 글자는 `_`로 바뀐다 — TODO(SITE:S1)
   사내 Claude Code 버전에서 확인한다 (치환 규칙은 공식 문서에 없어 관측 기반 추정이다).
-- 후보는 이름으로만 고른다. **사용자 확인을 받은 뒤** `config.py set-jira`로 저장한다.
+- 후보는 이름으로만 고른다. **사용자 확인을 받은 뒤** `config.py set-tracker`로 저장한다.
 """
 
 from __future__ import annotations
@@ -152,22 +152,22 @@ def candidates(servers: dict[str, list[str] | None], exclude: list[str], team_to
         tools = servers[server]
         excluded = any(fnmatch.fnmatch(server, pattern) for pattern in exclude or [])
         entry = {"server": server, "excluded": excluded, "error": (errors or {}).get(server),
-                 "tools": [], "jira_tools": {}, "read_tools": [], "suggested": {}}
+                 "tools": [], "tracker_tools": {}, "read_tools": [], "suggested": {}}
         if excluded or tools is None:
             out.append(entry)
             continue
         entry["tools"] = sorted(full_name(server, t) for t in tools)
-        jira_tools: dict[str, list[str]] = {"get_issue": [], "search_issues": [], "get_comments": []}
+        tracker_tools: dict[str, list[str]] = {"get_issue": [], "search_issues": [], "get_comments": []}
         for tool in sorted(tools):
             for action in classify(tool):
-                jira_tools[action].append(full_name(server, tool))
-        entry["jira_tools"] = jira_tools
+                tracker_tools[action].append(full_name(server, tool))
+        entry["tracker_tools"] = tracker_tools
         entry["read_tools"] = sorted(full_name(server, t) for t in tools if is_read(t))
         prefix = full_name(server, "")
         for action, name in (team_tools or {}).items():  # 팀 기본값(site-defaults)을 먼저 제안
             if isinstance(name, str) and normalize(name).startswith(prefix) and normalize(name) in entry["tools"]:
                 entry["suggested"][action] = normalize(name)
-        for action, names in jira_tools.items():
+        for action, names in tracker_tools.items():
             if action not in entry["suggested"] and names:
                 entry["suggested"][action] = names[0]
         out.append(entry)

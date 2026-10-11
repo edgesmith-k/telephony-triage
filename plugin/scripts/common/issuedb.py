@@ -2,7 +2,7 @@
 
 - `<db>/issue-db.config.yaml`
 - 유형: `<db>/<category>/<TYPE-ID-slug>/type.md`의 YAML frontmatter
-- Jira 기록: `<유형 디렉토리>/jira/<KEY>.yaml` (원인별 건수만 쓴다)
+- 이슈 기록: `<유형 디렉토리>/issues/<KEY>.yaml` (원인별 건수만 쓴다)
 - 피드백: `<db>/feedback/<YYYY-MM>/*.yaml`
 
 스키마 검증은 `db_lint`(Phase 5)가 한다. 여기서는 매처가 쓰는 구조만 만든다.
@@ -166,7 +166,7 @@ def load(db_root: str | Path) -> IssueDb:
                 )
             )
         types.append(itype)
-        for jira in sorted((path.parent / "jira").glob("*.yaml")):
+        for jira in sorted((path.parent / "issues").glob("*.yaml")):
             record = _yaml(jira, root) or {}
             if not isinstance(record, dict):
                 record = {}

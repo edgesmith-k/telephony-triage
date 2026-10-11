@@ -30,7 +30,7 @@ N = "network/NETWORK-001-no-service"
 # (코드, 파일) — 11-phases.md Phase 5 완료 기준의 오류 목록 순서
 EXPECTED = [
     ("duplicate-id", "sms/SMS-001-sms-send-failed/type.md"),               # ID 중복
-    ("duplicate-jira", f"{C}/jira/MOCK-1101.yaml"),                         # Jira 중복
+    ("duplicate-issue", f"{C}/issues/MOCK-1101.yaml"),                         # Jira 중복
     ("glossary", f"{C}/type.md"),                                           # 금지 동의어 (경고)
     ("related", f"{N}/type.md"),                                            # 없는 related
     ("code-ref", f"{D}/type.md"),                                           # 절대 경로 code_refs
@@ -49,7 +49,7 @@ EXPECTED = [
     ("fixed-token", f"{N}/type.md"),                                        # 특정 마스킹 번호 고정 (경고)
     ("regex-unsafe", "ims/IMS-001-ims-registration-failed/type.md"),        # 중첩 수량자
     ("sequence", f"{C}/type.md"),                                           # sequence 없는 id·중복·must_not_match
-    ("raw-identifier", f"{N}/jira/MOCK-3101.yaml"),                         # note의 원본 전화번호
+    ("raw-identifier", f"{N}/issues/MOCK-3101.yaml"),                         # note의 원본 전화번호
     ("raw-identifier", f"{N}/type.md"),                                     # cp_evidence의 원본 전화번호
     ("also-allowed", f"{D}/fixtures/DATA-001-01.expect.yaml"),              # 자기·같은 유형·없는 ID
     ("evidence-missing", f"{C}/type.md"),                                   # 없는 fixture 경로·Jira 키
@@ -211,7 +211,7 @@ def test_step_events_schema_and_regex_safety():
 def test_residual_ids():
     result = _lint(SAMPLE, "--all", "--residual", "DATA-001-02=DATA-001-09", expect=1)
     files = {f["file"] for f in result["errors"] if f["code"] == "residual-id"}
-    assert {f"{D}/type.md", f"{D}/jira/MOCK-1103.yaml", f"{D}/fixtures/DATA-001-02.log"} <= files
+    assert {f"{D}/type.md", f"{D}/issues/MOCK-1103.yaml", f"{D}/fixtures/DATA-001-02.log"} <= files
     assert _lint(SAMPLE, "--all", "--residual", "DATA-001-77=DATA-001-78", expect=0)["errors"] == []
 
 
@@ -225,13 +225,13 @@ def test_synthetic_fixtures_warn_when_not_allowed():
 
 def test_changed_and_staged_scope():
     repo = git_db()
-    note = repo / N / "jira/MOCK-3101.yaml"
+    note = repo / N / "issues/MOCK-3101.yaml"
     edit(note, "note: 등록 거절 코드 13 반복", "note: 고객 010-1234-5678 등록 거절 코드 13 반복")
     changed = _lint(repo, "--changed", "main", expect=1)
-    assert _pairs(changed) == {("raw-identifier", f"{N}/jira/MOCK-3101.yaml")}
+    assert _pairs(changed) == {("raw-identifier", f"{N}/issues/MOCK-3101.yaml")}
     assert _lint(repo, "--staged", expect=0)["errors"] == []  # 아직 index에 없다
     git(repo, "add", "-A")
-    assert _pairs(_lint(repo, "--staged", expect=1)) == {("raw-identifier", f"{N}/jira/MOCK-3101.yaml")}
+    assert _pairs(_lint(repo, "--staged", expect=1)) == {("raw-identifier", f"{N}/issues/MOCK-3101.yaml")}
     edit(note, "고객 010-1234-5678 ", "")  # 워킹 트리만 고쳐도 index 기준이라 여전히 걸린다
     assert _lint(repo, "--staged", expect=1)["errors"]
     assert _lint(repo, "--ref", "HEAD", expect=0)["errors"] == []
@@ -259,7 +259,7 @@ NEW_FIXED_CAUSE = """  - id: DATA-001-04
       verification_history: []
     related: []
     cp_evidence: null
-    android_versions: []
+    platform_versions: []
     code_refs: []
 tags: [data-evaluation]"""
 
@@ -310,7 +310,7 @@ def _all_tests():
 def test_failed_step_is_schema_valid_and_checked_for_raw_identifiers():
     import yaml
     db = runner_copy()
-    path = db / "data/DATA-001-no-setup-data-call/jira/MOCK-1101.yaml"
+    path = db / "data/DATA-001-no-setup-data-call/issues/MOCK-1101.yaml"
     edit(path, "note: 모바일", "failed_step: 3 | Enable data\nnote: 모바일")
     assert _lint(db, "--all", expect=0)["errors"] == []
     edit(path, "failed_step: 3 | Enable data", "failed_step: 고객 010-1234-5678 데이터 켜기")
@@ -323,7 +323,7 @@ def test_failed_step_is_schema_valid_and_checked_for_raw_identifiers():
 
 
 BROKEN_YAML_FILES = [
-    f"{C}/jira/MOCK-2101.yaml",
+    f"{C}/issues/MOCK-2101.yaml",
     "feedback/2026-09/MOCK-1103-20260922T1830.yaml",
     "issue-db.config.yaml",
     f"{D}/fixtures/DATA-001-01.expect.yaml",
@@ -353,7 +353,7 @@ def test_broken_yaml_is_a_lint_finding_not_a_crash():
 
 
 def test_broken_yaml_is_usage_error_for_build_search_regress():
-    db = _broken(f"{C}/jira/MOCK-2101.yaml")
+    db = _broken(f"{C}/issues/MOCK-2101.yaml")
     for script, args in (("db_build.py", ["--verify"]), ("db_search.py", ["call"]), ("db_regress.py", ["--all"])):
         proc = run(script, [*args, "--db", db])
         assert proc.returncode == 2, (script, proc.returncode, proc.stderr[-800:])
@@ -370,7 +370,7 @@ def test_broken_yaml_is_usage_error_for_build_search_regress():
 
 def test_precommit_broken_yaml_names_file_without_rebuild_hint():
     db = git_db()
-    path = db / f"{C}/jira/MOCK-2101.yaml"
+    path = db / f"{C}/issues/MOCK-2101.yaml"
     path.write_text(path.read_text(encoding="utf-8") + "x: [unclosed\n", encoding="utf-8", newline="\n")
     git(db, "add", "-A")
     proc = run("db_precommit.py", ["--db", db])
@@ -382,7 +382,7 @@ def test_precommit_broken_yaml_names_file_without_rebuild_hint():
 
 def test_non_utf8_yaml_is_a_lint_finding():
     db = runner_copy()
-    path = db / C / "jira" / "MOCK-2101.yaml"
+    path = db / C / "issues" / "MOCK-2101.yaml"
     path.write_bytes(path.read_bytes() + "note2: 한글\n".encode("cp949"))
     proc = run("db_lint.py", ["--db", db, "--all"])
     assert proc.returncode == 1 and "Traceback" not in proc.stderr, proc.stderr[-800:]

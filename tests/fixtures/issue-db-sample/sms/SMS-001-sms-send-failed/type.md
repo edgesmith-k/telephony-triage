@@ -35,7 +35,7 @@ causes:
       verification_history: []
     related: []
     cp_evidence: null
-    android_versions: []
+    platform_versions: []
     code_refs: []
 tags: [smsc]
 ---

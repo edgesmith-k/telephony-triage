@@ -101,7 +101,7 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         return self.state.answers.get(kind)
 
     def jira_tool(self, name: str) -> str | None:
-        return userconfig.get(self.cfg, f"jira.tools.{name}") or None
+        return userconfig.get(self.cfg, f"tracker.tools.{name}") or None
 
     # Step 0 ---------------------------------------------------------------------------------------
 
@@ -120,18 +120,18 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         if self.offline:
             if not a.out:
                 raise Fail(USAGE, "--offline-db에는 --out <dir>이 필요하다.")
-            if not (a.jira_meta or a.jira_file):
-                raise Fail(USAGE, "--offline-db에는 --jira-meta 또는 --jira-file이 필요하다.")
+            if not (a.issue_meta or a.issue_file):
+                raise Fail(USAGE, "--offline-db에는 --issue-meta 또는 --issue-file이 필요하다.")
             return
-        if a.jira_meta:
-            raise Fail(USAGE, "--jira-meta는 --offline-db(오프라인 평가)에서만 쓴다.")
-        if a.jira_file and not (a.dry_run or self.analysis_only):
-            raise Fail(USAGE, "--jira-file은 --dry-run 또는 --analysis-only와 함께만 받는다(실제 PR은 Jira MCP 값으로만 만든다).")
+        if a.issue_meta:
+            raise Fail(USAGE, "--issue-meta는 --offline-db(오프라인 평가)에서만 쓴다.")
+        if a.issue_file and not (a.dry_run or self.analysis_only):
+            raise Fail(USAGE, "--issue-file은 --dry-run 또는 --analysis-only와 함께만 받는다(실제 PR은 Jira MCP 값으로만 만든다).")
         if userconfig.load_user() is None:
             raise Fail(USAGE, "사용자 config가 없다. /telephony-triage:setup을 먼저 실행한다.")
-        if not (a.jira_raw or a.jira_file) and not self.jira_tool("get_issue"):
-            raise Fail(USAGE, "jira.tools.get_issue 매핑이 비어 있다. 도구 이름을 추측하지 말고 /telephony-triage:setup의 "
-                              "Jira 도구 매핑을 확인한다(연습은 --dry-run --jira-file <yaml>).")
+        if not (a.issue_raw or a.issue_file) and not self.jira_tool("get_issue"):
+            raise Fail(USAGE, "tracker.tools.get_issue 매핑이 비어 있다. 도구 이름을 추측하지 말고 /telephony-triage:setup의 "
+                              "Jira 도구 매핑을 확인한다(연습은 --dry-run --issue-file <yaml>).")
 
     def check_key(self) -> None:
         if self.offline:
@@ -244,7 +244,7 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
                 raise NeedsInput("plan", f"이 Jira의 작업 계획이 이미 있다(source: {source}). 어떻게 할까?", options,
                                  pr_number=(plan.get("pr") or {}).get("number"))
             info.update(source=source, choice=choice, pr_number=(plan.get("pr") or {}).get("number"),
-                        jira_origin=(plan.get("jira") or {}).get("origin"))
+                        issue_origin=(plan.get("issue") or {}).get("origin"))
             if not self.state.data.get("pending_cleared"):
                 pending = userconfig.pending_feedback_dir(self.cfg)
                 removed = [p.name for p in pending.glob(f"{self.key}-*.yaml")] if pending.is_dir() else []
@@ -311,9 +311,9 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
 
     def jira(self) -> dict:
         a = self.args
-        meta_path = self.job / "jira_meta.json"
-        if self.offline and a.jira_meta:
-            meta = json.loads(Path(a.jira_meta).read_text(encoding="utf-8"))
+        meta_path = self.job / "issue_meta.json"
+        if self.offline and a.issue_meta:
+            meta = json.loads(Path(a.issue_meta).read_text(encoding="utf-8"))
             masker = self.masker()
             auto = None
             if meta.get("failed_step"):
@@ -327,21 +327,21 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
             info = {"key": self.key, "origin": "file", "occurred_at": meta.get("occurred_at"), "sw": meta.get("sw"),
                     "summary": meta.get("summary") or "", "missing": [], "logcat": {},
                     "sim_slot": None if meta.get("sim_slot") in (None, "") else str(meta["sim_slot"])}
-            self.out["jira"] = {k: info[k] for k in ("origin", "occurred_at", "sw", "sim_slot")}
+            self.out["issue"] = {k: info[k] for k in ("origin", "occurred_at", "sw", "sim_slot")}
             self.out_failed_step()
             return info
-        raw_default = self.job / "jira_raw.json"
-        reuse = self.state.data.get("jira_done") and (self.job / "jira.json").is_file()
-        if a.jira_raw and not Path(a.jira_raw).is_file() and reuse:
+        raw_default = self.job / "issue_raw.json"
+        reuse = self.state.data.get("issue_done") and (self.job / "issue.json").is_file()
+        if a.issue_raw and not Path(a.issue_raw).is_file() and reuse:
             source, origin = None, None    # 첫 실행이 --consume으로 지웠다
-        elif a.jira_raw or a.jira_file:
-            source, origin = Path(a.jira_raw or a.jira_file), "mcp" if a.jira_raw else "file"
+        elif a.issue_raw or a.issue_file:
+            source, origin = Path(a.issue_raw or a.issue_file), "mcp" if a.issue_raw else "file"
         elif raw_default.is_file():
             source, origin = raw_default, "mcp"
         elif reuse:
             source, origin = None, None
         else:
-            raise NeedsInput("jira", "Jira MCP로 이슈를 읽는다. 응답은 hook이 JOB/jira_raw.json에 저장하고 마스킹 요약만 보여준다. "
+            raise NeedsInput("issue", "Jira MCP로 이슈를 읽는다. 응답은 hook이 JOB/issue_raw.json에 저장하고 마스킹 요약만 보여준다. "
                                      "읽은 뒤 같은 명령을 다시 실행한다.", [],
                              tool=self.jira_tool("get_issue"), comments_tool=self.jira_tool("get_comments"),
                              save_to=str(raw_default))
@@ -350,24 +350,24 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
             if origin == "mcp":
                 argv.append("--consume")   # 원문을 work_dir에 남기지 않는다 (08-safety.md §8.1)
             _, data, _ = self.run.call("2-jira", "jira_fields.py", argv)
-            (self.job / "jira.json").write_text(json.dumps(data, ensure_ascii=False, indent=1) + "\n",
-                                                encoding="utf-8", newline="\n")
-            self.state.data["jira_done"] = True
+            (self.job / "issue.json").write_text(json.dumps(data, ensure_ascii=False, indent=1) + "\n",
+                                                 encoding="utf-8", newline="\n")
+            self.state.data["issue_done"] = True
             self.state.save()
-        data = json.loads((self.job / "jira.json").read_text(encoding="utf-8"))
+        data = json.loads((self.job / "issue.json").read_text(encoding="utf-8"))
         if data.get("key") and data["key"] != self.key:
             raise Fail(USAGE, f"Jira 응답의 키({data['key']})가 {self.key}와 다르다.")
         self.apply_failed_step(data, meta_path)
         text = data.get("text") or {}
         info = {"key": self.key, "origin": data.get("origin"), "occurred_at": data.get("occurred_at"),
-                "sw": (data.get("jira") or {}).get("sw"), "android_version": (data.get("jira") or {}).get("android_version"),
+                "sw": (data.get("issue") or {}).get("sw"), "platform_version": (data.get("issue") or {}).get("platform_version"),
                 "sim_slot": data.get("sim_slot"), "summary": text.get("summary") or "", "missing": data.get("missing") or [],
-                "logcat": data.get("logcat") or {}, "jira_block": data.get("jira") or {}}
-        self.out["jira"] = {"origin": info["origin"], "occurred_at": info["occurred_at"], "sw": info["sw"],
-                            "android_version": info["android_version"], "sim_slot": info["sim_slot"],
-                            "summary": _clip(info["summary"], 160),
-                            "description": _clip(text.get("description"), 240),
-                            "comments": len(text.get("comments") or []), "missing": info["missing"]}
+                "logcat": data.get("logcat") or {}, "jira_block": data.get("issue") or {}}
+        self.out["issue"] = {"origin": info["origin"], "occurred_at": info["occurred_at"], "sw": info["sw"],
+                             "platform_version": info["platform_version"], "sim_slot": info["sim_slot"],
+                             "summary": _clip(info["summary"], 160),
+                             "description": _clip(text.get("description"), 240),
+                             "comments": len(text.get("comments") or []), "missing": info["missing"]}
         self.out_failed_step()
         return info
 
@@ -382,7 +382,7 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
 
     def existing_record(self) -> None:
         _, data, _ = self.run.call("2-existing", "db_search.py", [self.key, "--db", self.snap, "--limit", SEARCH_LIMIT])
-        record = next((r for r in (data or {}).get("results") or [] if r.get("kind") == "jira"), None)
+        record = next((r for r in (data or {}).get("results") or [] if r.get("kind") == "issue"), None)
         if record:
             self.out["existing"] = {"cause": record.get("cause"), "type": record.get("type"), "date": record.get("date")}
             if self.analysis_only:
@@ -399,7 +399,7 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         cached = self.state.data.get("preflight")
         if cached is None:   # 같은 세션의 재실행은 다시 fetch하지 않는다
             _, data, _ = self.run.call("2-preflight", "db_pr.py", ["preflight", "--branch", f"issue/{self.key}",
-                                                                  "--search", self.key, "--jira", self.key])
+                                                                  "--search", self.key, "--issue", self.key])
             cached = {"prs": [{"number": p.get("number"), "url": p.get("url")}
                               for p in (data or {}).get("open_prs") or []],
                       "warnings": [_clip(w, 160) for w in (data or {}).get("warnings") or []]}
@@ -504,7 +504,7 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
 
     def code_question(self, version: str | None, suggested: dict, text: str | None = None) -> NeedsInput:
         options = [{"value": c.get("name") or ",".join(f"{k}={v}" for k, v in (c.get("roots") or {}).items()),
-                    "label": f"{c.get('name') or '최근'} {self.platform_label} {c.get('android_version') or '?'}"
+                    "label": f"{c.get('name') or '최근'} {self.platform_label} {c.get('platform_version') or '?'}"
                              + (" (추천)" if c.get("recommended") else "")}
                    for c in suggested.get("candidates") or []]
         options += [{"value": "<경로 또는 키=경로,…>", "label": "직접 입력"},
@@ -603,7 +603,7 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
     def match(self, events: Path, meta: Path | None, out: Path, regress: bool = False) -> dict:
         argv = ["--db", self.snap, "--events", events, "--top", 0 if regress else TOP]
         if meta is not None:
-            argv += ["--jira-meta", meta]
+            argv += ["--issue-meta", meta]
         if regress:
             argv.append("--regress")
         _, data, _ = self.run.call("4-match" if not regress else "2-time", "match_signatures.py", argv)
@@ -622,8 +622,8 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         fix = entry.get("fix") or {}
         return {"resolution": _clip(entry.get("resolution"), 120),
                 "resolution_verification": entry.get("resolution_verification"),
-                "fix_status": fix.get("status"), "jira_count": entry.get("jira_count"),
-                "jira_recent": (entry.get("jira") or [])[:3], "code_refs": entry.get("code_refs") or []}
+                "fix_status": fix.get("status"), "issue_count": entry.get("issue_count"),
+                "issue_recent": (entry.get("issues") or [])[:3], "code_refs": entry.get("code_refs") or []}
 
     def resolve_code(self, code: dict | None, version: str | None, candidates: list[dict]) -> dict:
         if not code or code.get("skipped"):
@@ -631,7 +631,7 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         resolved, moved = [], []
         for cand in candidates:
             for ref in cand.pop("_code_refs", []):
-                versions = [str(v) for v in ref.get("android_versions") or []]
+                versions = [str(v) for v in ref.get("platform_versions") or []]
                 if versions and version and str(version) not in versions:
                     continue
                 code_rc, data, _ = self.run.call("5-resolve", "code_roots.py",
@@ -709,21 +709,21 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
             if not self.analysis_only:
                 self.open_prs()
         logs = self.logs()
-        version = info.get("android_version") or None
+        version = info.get("platform_version") or None
         code = self.code(version)
         tz = self.args.tz or (info.get("logcat") or {}).get("tz")
         year = self.year(info, logs)
         return {"info": info, "logs": logs, "version": version, "code": code, "tz": tz, "year": year}
 
     def write_meta(self, anchor: dict | None) -> Path | None:
-        """`time` 답을 jira_meta.json에, 앵커가 있으면 match_meta.json(근접 중심 = 스텝 실패 시각)에 쓴다 → 매처에 줄 메타 경로."""
-        meta_path = self.job / "jira_meta.json"
+        """`time` 답을 issue_meta.json에, 앵커가 있으면 match_meta.json(근접 중심 = 스텝 실패 시각)에 쓴다 → 매처에 줄 메타 경로."""
+        meta_path = self.job / "issue_meta.json"
         if self.answer("time"):
             meta = json.loads(meta_path.read_text(encoding="utf-8")) if meta_path.is_file() else {"key": self.key}
             meta["occurred_at"] = self.answer("time")
             meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=1), encoding="utf-8", newline="\n")
         match_meta = meta_path if meta_path.is_file() else None
-        if anchor:      # 근접 보너스 중심을 스텝 실패 시각으로. jira_meta.json은 건드리지 않는다
+        if anchor:      # 근접 보너스 중심을 스텝 실패 시각으로. issue_meta.json은 건드리지 않는다
             base = json.loads(meta_path.read_text(encoding="utf-8")) if match_meta else {"key": self.key}
             match_meta = self.job / "match_meta.json"
             match_meta.write_text(json.dumps({**base, "occurred_at": anchor["fail"]}, ensure_ascii=False, indent=1),
@@ -772,7 +772,7 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
             if c["cause"] is None and c["type"] in cause_unjudged:   # report.md 전용: 원인 미확인이 아니라 판정 불가
                 cand["_cause_unjudged"] = True
             if c.get("version_match") is False:   # 표시 전용 (순위·score 무관)
-                cand["_version_mismatch"] = c.get("android_versions")   # report.md 전용
+                cand["_version_mismatch"] = c.get("platform_versions")   # report.md 전용
             if c["cause"]:
                 extra = self.cause_info(c["cause"])
                 cand["_code_refs"] = extra.pop("code_refs")

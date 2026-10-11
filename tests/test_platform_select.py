@@ -90,7 +90,7 @@ def test_selection_must_be_enabled_and_installed(monkeypatch):
 
 
 USER = {"issue_db": {"path": "/x/android-db", "remote": "https://ghe.mock.invalid/o/android-db.git"},
-        "work_dir": "/x/work", "code_profiles": [{"name": "a16"}], "jira": {"mcp_server": "mock-jira"},
+        "work_dir": "/x/work", "code_profiles": [{"name": "a16"}], "tracker": {"mcp_server": "mock-jira"},
         "platform": "android",
         "platforms": {"ofono": {"issue_db": {"path": "/x/ofono-db"}, "log_dir": "/x/logs-ofono"}}}
 
@@ -109,7 +109,7 @@ def test_merged_other_platform_does_not_inherit_paths(home):
     assert cfg["issue_db"] == {"base_branch": "main", "ghe_host": "ghe.mock.invalid", "path": "/x/ofono-db"}
     assert cfg["work_dir"] == str(home / "work-ofono")
     assert cfg["code_profiles"] == [] and cfg["recent_code_roots"] == [] and cfg["log_dir"] == "/x/logs-ofono"
-    assert cfg["jira"]["mcp_server"] == "mock-jira"            # Jira는 공유
+    assert cfg["tracker"]["mcp_server"] == "mock-jira"            # Jira는 공유
     assert "platforms" not in cfg
 
 
@@ -117,7 +117,7 @@ def test_profile_helpers(home):
     assert userconfig.profile_key("android", "work_dir") == "work_dir"
     assert userconfig.profile_key("ofono", "issue_db.path") == "platforms.ofono.issue_db.path"
     with pytest.raises(ValueError):
-        userconfig.profile_key("ofono", "jira.mcp_server")
+        userconfig.profile_key("ofono", "tracker.mcp_server")
     assert userconfig.pending_feedback_dir(userconfig.merged({}, USER)) == home / "pending-feedback"
     assert userconfig.pending_feedback_dir(userconfig.merged({}, USER, platform="ofono")) == home / "pending-feedback-ofono"
     profs = userconfig.profiles({}, USER)
@@ -162,7 +162,7 @@ def test_config_set_and_show_platform_profile():
     data = yaml.safe_load((h / "config.yaml").read_text(encoding="utf-8"))
     assert data["platforms"]["ofono"]["issue_db"]["path"] == str(h / "ofono-db")
     assert data["issue_db"]["path"] == str(h / "db")
-    proc = run("config.py", ["set", "--platform", "ofono", "jira.mcp_server", "x"], root=root, env=env)
+    proc = run("config.py", ["set", "--platform", "ofono", "tracker.mcp_server", "x"], root=root, env=env)
     assert proc.returncode == 2 and "플랫폼 프로필 키가 아닙니다" in proc.stderr
     show = json.loads(run("config.py", ["show", "--platform", "ofono", "--keys", "work_dir,issue_db.path"],
                           root=root, env=env).stdout)
@@ -247,7 +247,7 @@ def test_triage_offline_platform_mismatch_stops():
     out = tmp("tt-triage-") / "job"
     meta = out.parent / "meta.json"
     meta.write_text(json.dumps({"key": "MOCK-1", "occurred_at": "2026-09-20T05:32:00Z", "summary": "x"}), encoding="utf-8")
-    args = ["run", "MOCK-1", "--offline-db", SAMPLE, "--out", out, "--logs", DATA_LOG, "--jira-meta", meta,
+    args = ["run", "MOCK-1", "--offline-db", SAMPLE, "--out", out, "--logs", DATA_LOG, "--issue-meta", meta,
             "--platform", "ofono"]
     proc = run("triage.py", args, root=_root_on(), env={"TELEPHONY_TRIAGE_HOME": tmp("tt-home-")})
     assert proc.returncode == 2 and "플랫폼 불일치" in proc.stderr
@@ -299,7 +299,7 @@ def test_profile_paths_must_not_overlap(home):
 @pytest.mark.parametrize("prefix,needle", [
     ("platform: foo\n", "설치된 플랫폼이 아닙니다"),
     ("platform: Ofono\n", "플랫폼 이름"),
-    ("platform_versions_supported: ['2']\n", "중 하나만 둔다"),
+    ("android_versions_supported: ['2']\n", "중 하나만 둔다"),
 ])
 def test_db_lint_platform_config(prefix, needle):
     db = tmp("tt-lint-") / "db"

@@ -20,7 +20,10 @@ schema: 1
 # 사내 기본값은 false이고, 이 example(테스트 헬퍼 복사본)만 true다 (15-local-draft.md §15.2).
 synthetic_allowed: true
 
-jira:
+tracker:
+  # 이슈 트래커 종류 (jira | …). 없으면 jira.
+  kind: jira
+
   # 모의 MCP 서버 이름. 사내 setup은 exclude_servers로 mock-* 를 후보에서 뺀다.
   mcp_server: mock-jira
 
@@ -59,7 +62,7 @@ jira:
     occurred_at: fields.customfield_10001
     model: fields.customfield_10002
     sw: fields.customfield_10003
-    android_version: fields.customfield_10004
+    platform_version: fields.customfield_10004
     carrier: fields.customfield_10005
     sim_slot: fields.customfield_10006      # TODO(SITE:S20) 사내 Jira에 슬롯 필드가 있는지
     test_steps: fields.customfield_10007    # TODO(SITE:S22) 시험 절차 필드가 있는지 (선택)
@@ -78,7 +81,7 @@ ghe:
 
 logcat:
   timezone: Asia/Seoul        # TODO(SITE:S7) logcat 시각 타임존
-  year_source: jira           # jira | file-mtime | ask
+  year_source: tracker        # tracker | file-mtime | ask
 
 parser:
   # site | reference. 사외 초안은 reference, 사내는 포팅 후 site (16-existing-assets.md §16.3)
@@ -131,7 +134,7 @@ analyzers:
   data:
     skill: mock-data-analyzer          # tests/mocks/skills/data-analyzer/
     when: ask                          # ask | always | never
-    inputs: [events_json, log_paths, top_candidates, jira_summary]
+    inputs: [events_json, log_paths, top_candidates, issue_summary]
     max_tokens_hint: medium            # TODO(SITE:S10) 플러그인은 이 키를 읽지 않는다(S-4a에서 쓸지 지울지 결정)
 
 # 탐색 분석: 후보 없음·원인 미확인일 때 Claude가 타임라인으로 가설을 세운다 (07-workflow.md §Step 5-2)

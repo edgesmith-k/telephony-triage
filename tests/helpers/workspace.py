@@ -129,7 +129,7 @@ class Workspace:
         suggested = (plan.get("feedback") or {}).get("suggested") or []
         if plan.get("source") != "analyze" or not suggested:
             return
-        doc = {"_ws_auto": True, "schema": 1, "mode": "analysis", "jira": {"key": (plan.get("jira") or {}).get("key")},
+        doc = {"_ws_auto": True, "schema": 1, "mode": "analysis", "issue": {"key": (plan.get("issue") or {}).get("key")},
                "candidates": [{"type": str(c["cause"]).rsplit("-", 1)[0], "cause": c["cause"],
                                "signature": c.get("signature"), "score": c.get("score"), "S": 1, "C": 1}
                               for c in suggested]}

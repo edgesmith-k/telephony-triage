@@ -23,15 +23,15 @@ telephony-triage를 이 사용자 환경에 맞게 설정한다 (`02-config.md �
      `config.py init --force`로 다시 만들거나 해당 키를 config.yaml에서 지운다.
 2. **스크립트 경로** — `config.py sync-scripts-path`.
 3. **이슈 DB clone** — `init` 결과의 `suggest_clone`이 있으면 그 `git clone` 명령을 제안하고, 사용자가 동의하면 실행한다.
-4. **Jira MCP** — `config.py jira-candidates`로 이미 등록된 MCP 서버의 도구에서 후보를 고른다.
+4. **Jira MCP** — `config.py tracker-candidates`로 이미 등록된 MCP 서버의 도구에서 후보를 고른다.
    - `usable`이 비어 있으면: "사용자 범위(user scope)로 사내 Jira MCP를 등록해야 한다(다른 프로젝트에만 등록돼
      있을 수 있음)"고 안내하고 **setup을 중단**한다.
    - 원격 서버라 `error`가 있으면, 이 세션에서 보이는 그 서버의 도구 이름을 `{"<server>": ["mcp__<server>__<tool>", ...]}`
      JSON으로 써서 `--tools-json <파일>`로 다시 부른다.
    - 서버를 고르고, `suggested`(팀 기본값이 먼저)의 `get_issue`(필수)·`search_issues`·`get_comments`를
      보여주고 **사용자 확인**을 받는다. 이어서 `read_tools` 후보를 보여주고 허용할 읽기 도구를 **확인**받는다.
-   - `config.py set-jira --server <s> --get-issue <전체 이름> [--search-issues ..] [--get-comments ..] --read-tools <a,b,..>`.
-     도구 이름은 항상 **전체 이름**(`mcp__<server>__<tool>`)이다. `jira.tools` 값은 `read_tools`에 자동으로 들어간다.
+   - `config.py set-tracker --server <s> --get-issue <전체 이름> [--search-issues ..] [--get-comments ..] --read-tools <a,b,..>`.
+     도구 이름은 항상 **전체 이름**(`mcp__<server>__<tool>`)이다. `tracker.tools` 값은 `read_tools`에 자동으로 들어간다.
 5. **git hook** — `config.py install-hooks`. 값이 정확히 `.githooks`가 아니면 실패한다(그대로 보고한다).
 6. **읽기 스냅샷** — `db_pr.py lock acquire setup --command setup`
    → `db_pr.py snapshot --job setup`.

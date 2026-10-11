@@ -27,7 +27,7 @@ from pathlib import Path
 
 from . import mcptools
 
-SPEC_PATH = ("jira", "write_tools", "add_comment")
+SPEC_PATH = ("tracker", "write_tools", "add_comment")
 SPEC_KEYS = {"tool", "key_arg", "body_arg", "extra_args", "format"}
 WRITE_TOOL_KINDS = {"add_comment"}          # write_tools에 허용하는 키는 이것 하나다
 APPROVAL_TTL_MIN = 30                       # 승인 유효 시간(분). 설정 키는 두지 않는다
@@ -37,7 +37,7 @@ DEFAULT_FORMAT = "jira-wiki"
 COMMENT_WORDS = {"comment", "comments", "note", "notes"}
 FORBIDDEN_WORDS = {"delete", "remove", "transition", "assign", "update", "edit", "attach", "upload", "link", "move",
                    "close", "reopen", "worklog", "set", "resolve"}
-# 경로 안전 키 형식 (TODO(SITE:S16)과 같은 형식). jira_key_regex보다 먼저 본다(작업 디렉토리 이름이 된다)
+# 경로 안전 키 형식 (TODO(SITE:S16)과 같은 형식). tracker.key_regex보다 먼저 본다(작업 디렉토리 이름이 된다)
 KEY_SAFE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*-\d+$")
 
 SECTIONS = ("PROBLEM", "CAUSE", "NEXT ACTION", "ANALYSIS")
@@ -191,9 +191,9 @@ def _get(cfg: dict, path: tuple):
 
 
 def jira_prefixes(cfg: dict) -> set[str]:
-    """Jira 서버 접두사 = `jira.mcp_server` ∪ `jira.tools` 도구 이름의 서버 (guard 규칙 2와 같은 집합)."""
-    server = _get(cfg, ("jira", "mcp_server"))
-    tools = _get(cfg, ("jira", "tools"))
+    """Jira 서버 접두사 = `tracker.mcp_server` ∪ `tracker.tools` 도구 이름의 서버 (guard 규칙 2와 같은 집합)."""
+    server = _get(cfg, ("tracker", "mcp_server"))
+    tools = _get(cfg, ("tracker", "tools"))
     prefixes = {mcptools.full_name(str(server), "")} if server else set()
     prefixes |= {mcptools.server_prefix(v) for v in (tools.values() if isinstance(tools, dict) else [])
                  if mcptools.server_prefix(v)}
@@ -207,24 +207,24 @@ def raw_tool(cfg: dict) -> str | None:
 
 
 def spec_check(cfg: dict, prefixes: set[str] | None = None) -> tuple[dict | None, list[tuple[str, str]]]:
-    """`jira.write_tools.add_comment` → (spec 또는 None, 문제 [(warn|fail, 사유)]).
+    """`tracker.write_tools.add_comment` → (spec 또는 None, 문제 [(warn|fail, 사유)]).
     설정이 없거나 `tool`이 비어 있으면 (None, []) — 게시 기능 꺼짐. 문제가 하나라도 있으면 spec은 None이다(무효).
     fail은 승인 생략 경로(도구가 read_tools에 있음)다."""
     prefixes = jira_prefixes(cfg) if prefixes is None else prefixes
-    wt = _get(cfg, ("jira", "write_tools"))
+    wt = _get(cfg, ("tracker", "write_tools"))
     if wt in (None, {}):
         return None, []
     if not isinstance(wt, dict):
-        return None, [("warn", "jira.write_tools가 객체가 아니다")]
+        return None, [("warn", "tracker.write_tools가 객체가 아니다")]
     problems: list[tuple[str, str]] = []
     extra_kinds = sorted(set(wt) - WRITE_TOOL_KINDS)
     if extra_kinds:
-        problems.append(("warn", f"jira.write_tools에는 add_comment만 둔다({', '.join(map(str, extra_kinds))} 불가)"))
+        problems.append(("warn", f"tracker.write_tools에는 add_comment만 둔다({', '.join(map(str, extra_kinds))} 불가)"))
     raw = wt.get("add_comment")
     if raw is None and not problems:
         return None, []
     if not isinstance(raw, dict):
-        return None, problems + [("warn", "jira.write_tools.add_comment가 객체가 아니다")]
+        return None, problems + [("warn", "tracker.write_tools.add_comment가 객체가 아니다")]
     tool = raw.get("tool")
     if tool is None or tool == "":      # 도구를 비우면 꺼진다(사용자 config에서 끄는 방법, deep_merge라 {}로는 못 끈다)
         return None, problems
@@ -239,7 +239,7 @@ def spec_check(cfg: dict, prefixes: set[str] | None = None) -> tuple[dict | None
         problems.append(("warn", f"add_comment.tool이 전체 이름(mcp__<server>__<tool>)이 아니다: {tool}"))
     else:
         if mcptools.server_prefix(name) not in prefixes:
-            problems.append(("warn", f"{tool}의 서버가 Jira 서버(jira.mcp_server·jira.tools)가 아니다"))
+            problems.append(("warn", f"{tool}의 서버가 Jira 서버(tracker.mcp_server·tracker.tools)가 아니다"))
         words = set(mcptools._words(hit.group(2)))
         if not words & COMMENT_WORDS:
             problems.append(("warn", f"{tool} 이름에 comment·note 단어가 없다"))
@@ -255,9 +255,9 @@ def spec_check(cfg: dict, prefixes: set[str] | None = None) -> tuple[dict | None
     fmt = raw.get("format") or DEFAULT_FORMAT
     if fmt not in FORMATS:
         problems.append(("warn", f"add_comment.format은 {'|'.join(FORMATS)} 중 하나다: {fmt}"))
-    read_tools = _get(cfg, ("jira", "read_tools")) or []
+    read_tools = _get(cfg, ("tracker", "read_tools")) or []
     if isinstance(read_tools, list) and name in {mcptools.normalize(str(t)) for t in read_tools}:
-        problems.insert(0, ("fail", f"{tool}이(가) jira.read_tools에 있다(승인 생략 경로)"))
+        problems.insert(0, ("fail", f"{tool}이(가) tracker.read_tools에 있다(승인 생략 경로)"))
     if problems:
         return None, problems
     return {"tool": name, "key_arg": key_arg, "body_arg": body_arg, "extra_args": dict(extra), "format": fmt}, []

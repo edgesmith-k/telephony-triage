@@ -254,8 +254,8 @@ def verify_skeleton(root: Path) -> list[str]:
             problems.append(f"피드백 파일: {rel}")
         elif parts[0] not in SKELETON_NON_CATEGORY and len(parts) > 1 and rel != f"{parts[0]}/.gitkeep":
             problems.append(f"카테고리에 .gitkeep 외 파일(유형·fixture 의심): {rel}")
-        if "jira" in parts[:-1] or "fixtures" in parts[:-1]:
-            problems.append(f"jira/fixtures 디렉토리: {rel}")
+        if "issues" in parts[:-1] or "fixtures" in parts[:-1]:
+            problems.append(f"issues/fixtures 디렉토리: {rel}")
         if parts[0] not in SKELETON_NON_CATEGORY and (path.name == "type.md" or path.name.endswith(".expect.yaml")):
             problems.append(f"유형·fixture 파일: {rel}")
         try:

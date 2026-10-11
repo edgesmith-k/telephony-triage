@@ -42,7 +42,8 @@ class Applier(JiraOps, EntityOps, FixOps, ResolutionOps, SignatureOps, FixtureOp
         self.jira_checks: list[tuple[int, str, str]] = []      # (op, cause, Jira 키) 적용 후 확인
         self.warnings: list[str] = []
         self.allow = [str(p) for p in ((self.config.get("mask") or {}).get("allow_patterns") or [])]
-        self.key_re = re.compile(str(self.config.get("jira_key_regex") or r"[A-Z][A-Z0-9]+-\d+"))
+        tracker = self.config.get("tracker") if isinstance(self.config.get("tracker"), dict) else {}
+        self.key_re = re.compile(str(tracker.get("key_regex") or r"[A-Z][A-Z0-9]+-\d+"))
         ref_re = self.config.get("fix_ref_regex")
         self.fix_ref_re = re.compile(str(ref_re)) if ref_re else None
 
@@ -223,15 +224,15 @@ class Applier(JiraOps, EntityOps, FixOps, ResolutionOps, SignatureOps, FixtureOp
     def _feedback(self, feedback: dict | None) -> str | None:
         if not feedback:
             return None
-        jira = self.plan.get("jira")
+        jira = self.plan.get("issue")
         if not jira:
-            self.warnings.append("jira가 없는 계획이라 피드백을 쓰지 않았다.")
+            self.warnings.append("issue가 없는 계획이라 피드백을 쓰지 않았다.")
             return None
         if self.source == "import":
             self.warnings.append("import 계획은 피드백을 기록하지 않는다 (16-existing-assets.md §16.4).")
             return None
         stamp = datetime.fromisoformat(str(feedback["date"]).replace("Z", "+00:00"))
-        record = {"jira": jira["key"], "date": feedback["date"], "by": self.user,
+        record = {"issue": jira["key"], "date": feedback["date"], "by": self.user,
                   "suggested": feedback.get("suggested") or [], "decision": feedback["decision"],
                   "final": feedback["final"]}
         path = self.tree.root / "feedback" / f"{stamp:%Y-%m}" / f"{jira['key']}-{stamp:%Y%m%dT%H%M}.yaml"

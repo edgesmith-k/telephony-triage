@@ -157,8 +157,8 @@ def test_triage_offline_switches_platform():
     work = tmp("tt-ofono-triage-")
     meta = work / "meta.json"
     meta.write_text(json.dumps({"key": "MOCK-9001", "occurred_at": "2026-09-20T05:32:10Z", "summary": "x",
-                                "android_version": "3"}), encoding="utf-8")
-    base = ["run", "MOCK-9001", "--offline-db", variant_db("issue-db-ofono"), "--logs", ISO_LOG, "--jira-meta", meta]
+                                "platform_version": "3"}), encoding="utf-8")
+    base = ["run", "MOCK-9001", "--offline-db", variant_db("issue-db-ofono"), "--logs", ISO_LOG, "--issue-meta", meta]
     env = {"TELEPHONY_TRIAGE_HOME": work / "home"}
     result = run_json("triage.py", [*base, "--out", work / "job", "--platform", "ofono"], root=root, env=env)
     assert result["platform"] == "ofono" and result["candidates"][0]["type"] == "DATA-001"

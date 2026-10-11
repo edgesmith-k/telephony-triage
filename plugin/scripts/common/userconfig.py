@@ -47,8 +47,8 @@ def path() -> Path:
 def builtin() -> dict:
     return {
         "issue_db": {"base_branch": "main"},
-        "jira": {"tools": {}, "read_tools": [], "field_map": {}},
-        "logcat": {"year_source": "jira"},
+        "tracker": {"tools": {}, "read_tools": [], "field_map": {}},
+        "logcat": {"year_source": "tracker"},
         "code_profiles": [],
         "recent_code_roots": [],
         "work_dir": str(home() / "work"),
@@ -61,9 +61,9 @@ def from_site_defaults(defaults: dict) -> dict:
     issue_db.base_branch·work_dir는 옮기지 않는다 — 이슈 DB `.githooks/pre-push`가 사용자 config에서 이 두 값을 직접 읽고
     (기본 main·<home>/work) site-defaults를 보지 않으므로, 팀 기본값으로 지원하려면 pre-push도 같이 바꾼다."""
     out: dict = {}
-    jira = defaults.get("jira") or {}
-    if jira:
-        out["jira"] = {k: copy.deepcopy(v) for k, v in jira.items()}
+    tracker = defaults.get("tracker") or {}
+    if tracker:
+        out["tracker"] = {k: copy.deepcopy(v) for k, v in tracker.items()}
     if defaults.get("logcat"):
         out["logcat"] = copy.deepcopy(defaults["logcat"])
     if defaults.get("analyzers"):   # 분석 스킬은 site-defaults 또는 사용자 config (16-existing-assets.md §16.5)
@@ -75,6 +75,27 @@ def from_site_defaults(defaults: dict) -> dict:
     ghe = defaults.get("ghe") or {}
     if ghe.get("host"):
         out.setdefault("issue_db", {})["ghe_host"] = ghe["host"]
+    return out
+
+
+def legacy_problems(defaults: dict | None, user: dict | None) -> list[str]:
+    """옛 설정 키(jira → tracker 개명 전 형식). 자동 변환하지 않고 감지만 한다 — 옛 `jira:`를 조용히 무시하면 guard 규칙 2의
+    설정 서버가 비어 이름 휴리스틱 밖 서버의 쓰기가 열리므로, 하나라도 있으면 호출자가 fail-closed로 멈춘다."""
+    out: list[str] = []
+    for where, data in (("site-defaults", defaults), ("사용자 config", user)):
+        if not isinstance(data, dict):
+            continue
+        if "jira" in data:
+            out.append(f"{where}: 옛 키 `jira:` → `tracker:`로 바꾼다 (+ `kind: jira`).")
+        logcat = data.get("logcat")
+        if isinstance(logcat, dict) and logcat.get("year_source") == "jira":
+            out.append(f"{where}: `logcat.year_source: jira` → `tracker`로 바꾼다.")
+        if where == "사용자 config":
+            for _name, at, prof in _raw_profiles(data):
+                items = prof.get("code_profiles")
+                for i, item in enumerate(items if isinstance(items, list) else []):
+                    if isinstance(item, dict) and "android_version" in item:
+                        out.append(f"{where}: `{at}code_profiles[{i}].android_version` → `platform_version`로 바꾼다.")
     return out
 
 

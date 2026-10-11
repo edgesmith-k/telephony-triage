@@ -78,7 +78,7 @@ class CacheMixin:
     def inputs(self, ctx: dict) -> dict:
         """결과를 정하는 입력의 부분별 해시(각 16자리 hex). 바뀐 부분 이름을 알려 주는 데 쓴다. mode·dry-run은 넣지 않는다."""
         a = self.args
-        jira_path = self.job / "jira.json"
+        jira_path = self.job / "issue.json"
         user = dict(userconfig.load_user() or {})
         user.pop("recent_code_roots", None)      # 코드 경로를 처음 쓸 때 도구가 기록한다 — 결과와 무관
         code = ctx["code"] or {}
@@ -98,7 +98,7 @@ class CacheMixin:
         plugin = [version, CACHE_FORMAT] + [[p.relative_to(SCRIPTS).as_posix(), _file_sha(p)] for p in scripts]
         return {
             "logs": _digest([{"name": f["name"], "sha": f["sha"]} for f in self.log_inputs]),
-            "jira": _file_sha(jira_path) if jira_path.is_file() else None,
+            "issue": _file_sha(jira_path) if jira_path.is_file() else None,
             "db": compiled.source_hash(self.snap, compat.load_db_config(self.snap), compiled.environment(self.defaults, self.platform))[:16],
             "config": _digest({"site": self.defaults, "user": user}),
             "plugin": _digest(plugin),

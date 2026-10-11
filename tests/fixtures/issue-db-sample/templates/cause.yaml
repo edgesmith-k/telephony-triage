@@ -13,5 +13,5 @@
     resolution_verification: {status: unverified}
     fix: {status: {{open|fix-submitted|wont-fix|not-a-bug}}, ref: null, fixed_in: [], verification: null, verification_history: []}
     related: []
-    android_versions: []
+    platform_versions: []
     code_refs: []
