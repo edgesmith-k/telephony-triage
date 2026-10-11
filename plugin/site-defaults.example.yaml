@@ -83,11 +83,21 @@ logcat:
 parser:
   # site | reference. 사외 초안은 reference, 사내는 포팅 후 site (16-existing-assets.md §16.3)
   backend: reference
+  # by_platform:                     # 기본 아닌 플랫폼의 백엔드(키 = 플랫폼 이름). 없으면 그 플랫폼 기본(ofono → ofono_reference)
+  #   ofono: ofono_reference
 
 # 플랫폼 상수 (RF-4, 02-config.md). 비우면 코드 기본값(아래 주석 값)과 출력이 같다.
 # 사용자 config로 바꿀 수 없다. 바꾸면 이슈 DB에서 db_regress --all을 다시 돌린다.
 platform:
-  name: android                      # 지금은 android만
+  name: android                      # 팀 기본 플랫폼. 아래 상수 키는 이 플랫폼 것
+# (17-platforms) platform.enabled: 이 설치에서 쓸 플랫폼 목록(기본 플랫폼 포함). 없으면 [name]. 예:
+#   enabled: [android, ofono]
+# platform.others.<이름>: 기본 아닌 플랫폼의 상수(그 플랫폼이 받는 키만, ofono: source_tree·log·protocols). 예:
+#   others:
+#     ofono:
+#       source_tree: {required_dirs: [src]}            # TODO(SITE:S27)
+#       protocols: {dbus: {tags: [daemon-a]}}           # TODO(SITE:S26) 짝 규칙 태그(프로토콜이 생기면)
+# 사용자 config의 platform(개인 기본)·platforms.<이름>(경로 프로필)은 02-config.md §4. 이슈 DB는 issue-db.config.yaml의 platform.
   # source_tree:                     # TODO(SITE:S11) 사내 트리의 필수 디렉토리·버전 파일
   #   required_dirs: [frameworks/opt/telephony]      # aosp 루트 기준, 모두 있어야 함
   #   version_sources:                               # 순서대로 시도, 그룹 1 = 버전, re.M

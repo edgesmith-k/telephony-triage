@@ -50,6 +50,8 @@ sys.path.insert(0, str(SCRIPTS))
 from common import dbpath, glossary, history, issuedb, md, quality, site_defaults, typedoc, userconfig, yamlio  # noqa: E402
 from common.exitcodes import OK, USAGE  # noqa: E402
 from common.fixtures import CAUSE_ID_RE, TYPE_ID_RE  # noqa: E402
+from platforms import PlatformConfigError  # noqa: E402
+from platforms import session as platform_session  # noqa: E402
 
 JIRA_SHOWN = 5
 TOKEN_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.+-]*|[가-힣]+")
@@ -473,8 +475,8 @@ def render_markdown(result: dict) -> str:
 
 def run(args, defaults: dict) -> dict:
     try:
-        root = dbpath.resolve(args.db, user_config_path=lambda: userconfig.issue_db_path(defaults))
-    except dbpath.DbPathError as exc:
+        root = platform_session.resolve_db(defaults, getattr(args, "platform", None), args.db)[1]
+    except (dbpath.DbPathError, PlatformConfigError) as exc:
         raise UsageError(str(exc)) from exc
     try:
         db = issuedb.load(root)
@@ -493,6 +495,7 @@ def build_parser() -> argparse.ArgumentParser:
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("query", metavar="증상 문장|keyword|JIRA-KEY|ID")
     parser.add_argument("--db", default=None)
+    platform_session.add_arg(parser)
     parser.add_argument("--limit", type=int, default=20)
     parser.add_argument("--brief", action="store_true", help="훑어보기용 요약 출력 (path·chain·code_refs·빈 값 등을 뺀다)")
     parser.add_argument("--format", choices=("json", "markdown"), default="json",

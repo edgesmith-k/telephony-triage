@@ -1,5 +1,7 @@
 # RIL 요청·unsol 참고
 
+> Android 플랫폼 기준이다. 다른 플랫폼(예: oFono)은 그 플랫폼 이슈 DB의 `parser-rules`를 본다.
+
 `RILJ` 로그를 해석할 때 참고한다. **판별 기준은 이슈 DB `parser-rules/ril.yaml`이다** — 여기 없는 요청을 시그니처에 쓰려면
 `ril.yaml`에 이름·카테고리·timeout을 추가하는 `add-parser-rule` op가 필요하다(`db-authoring.md` §4 파서 규칙).
 이름과 출력 형식은 버전·HAL에 따라 다르므로 사내 로그로 확인해야 하는 **예시**다(TODO(SITE:S9)).

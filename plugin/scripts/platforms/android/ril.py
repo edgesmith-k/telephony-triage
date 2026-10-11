@@ -18,10 +18,10 @@ from __future__ import annotations
 
 import bisect
 import re
-from dataclasses import dataclass
 from datetime import timedelta
 
 from . import logcat
+from platforms.base import DEFAULT_LINK_MS, VendorRules  # noqa: F401  (계약 타입, 기존 경로로 다시 내보낸다)
 
 RIL_TAGS = {"RILJ"}
 
@@ -75,9 +75,10 @@ def pair(records: list[dict]) -> None:
     양쪽 `ril.paired_ts`(상대편 시각)와 `ril.latency_ms`를 채운다.
     """
     # Split observations on radio-process restart, even if serials are reused.
+    # 자기 주석만 본다(`PairProtocol` 계약): 다른 프로토콜 주석(`proto` 키가 있는 것)은 분할·짝에 쓰지 않는다.
     segments, current, radio_pid = [], [], None
     for rec in records:
-        if rec.get("ril"):
+        if _own(rec.get("ril")):
             if radio_pid is not None and rec["pid"] != radio_pid:
                 segments.append(current)
                 current = []
@@ -89,11 +90,16 @@ def pair(records: list[dict]) -> None:
         _pair_segment(segment)
 
 
+def _own(ann) -> bool:
+    """이 프로토콜(ril)의 주석인가. android 주석에는 `proto` 키가 없다(다른 프로토콜만 단다)."""
+    return bool(ann) and "proto" not in ann
+
+
 def _pair_segment(records: list[dict]) -> None:
     pending: dict[tuple, list[dict]] = {}
     for rec in records:
         ann = rec.get("ril")
-        if not ann or ann["serial"] is None:
+        if not _own(ann) or ann["serial"] is None:
             continue
         key = (rec["pid"], rec["phone_id"], ann["serial"])
         if ann["dir"] == "req":
@@ -118,27 +124,17 @@ def _pair_segment(records: list[dict]) -> None:
         last_by_pid[rec["pid"]] = rec["ts"]
     for rec in records:
         ann = rec.get("ril")
-        if ann and ann["dir"] == "req" and ann["paired_ts"] is None:
+        if _own(ann) and ann["dir"] == "req" and ann["paired_ts"] is None:
             ann["observed_until"] = last_by_pid[rec["pid"]]
 
 
-# -- 벤더 RIL 층 (선택) ----------------------------------------------------------
+# -- 벤더 RIL 층 (선택). 규칙 타입 `VendorRules`·기본 `DEFAULT_LINK_MS`는 `platforms/base.py` ----------------
 
-DEFAULT_LINK_MS = 2000
 # ponytail: 고정 창(HAL 앞 500ms·커버 ±60s·응답 토큰과 짝 있는 HAL 끝 = 짝+1s/짝 없으면 토큰 120s) — 사내 실제 로그 분포로 조정, 단말마다 다르면 설정 키로
 HAL_BEFORE = timedelta(milliseconds=500)
 COVER = timedelta(seconds=60)
 TOKEN_AFTER_RESP = timedelta(seconds=1)
 TOKEN_UNPAIRED = timedelta(seconds=120)
-
-
-@dataclass(frozen=True)
-class VendorRules:
-    """`layers`: `((tag, (패턴, ...)), ...)` — 패턴마다 이름 그룹 `serial`·`token` 중 정확히 하나(값은 10진 숫자).
-    `coverage_tags`: 정규식 없이 "수집 살아 있음"만 표시하는 태그(정확한 이름)."""
-    layers: tuple
-    link_ms: int = DEFAULT_LINK_MS
-    coverage_tags: frozenset = frozenset()
 
 
 def _within(times: list, lo, hi) -> bool:

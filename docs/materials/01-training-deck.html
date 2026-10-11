@@ -368,7 +368,7 @@ body.show-notes #notes-panel { display: block; }
       <!-- row 1 -->
       <rect class="box" x="0" y="20" width="200" height="60" rx="8"/>
       <text x="100" y="46" text-anchor="middle" class="b">Jira 이슈</text>
-      <text x="100" y="67" text-anchor="middle" class="s">MCP, 읽기 전용</text>
+      <text x="100" y="67" text-anchor="middle" class="s">MCP, 읽기 + 승인 코멘트</text>
       <rect class="box" x="0" y="100" width="200" height="60" rx="8"/>
       <text x="100" y="126" text-anchor="middle" class="b">logcat / bugreport</text>
       <text x="100" y="147" text-anchor="middle" class="s">파일 경로로 전달</text>
@@ -557,6 +557,7 @@ feedback/      <span class="c"># 후보 수락·거절 기록</span>
   <div class="body">
     <div class="tw"><table class="t">
       <tr><th>단계</th><th>하는 일</th><th>멈추는 경우</th></tr>
+      <tr><td>플랫폼</td><td>(켠 플랫폼이 둘 이상일 때만) 어느 플랫폼을 설정할지 묻고, 다른 플랫폼은 경로 프로필(clone·작업 디렉토리)만 더함. Jira·gh 설정은 공유</td><td>—</td></tr>
       <tr><td>config</td><td>GHE 아이디, 이슈 DB 경로·URL, base 브랜치, 타임존, 로그 폴더, 작업 디렉토리를 하나씩 묻고, <b>팀 기본값과 다른 답만</b> 저장</td><td>없는 경로는 그 항목만 다시 묻기</td></tr>
       <tr><td>Jira MCP</td><td>등록된 MCP에서 <code>get_issue</code> 등 읽기 도구 후보를 고르고 확인받음</td><td><span class="warn-t">후보 없음 → setup 중단</span></td></tr>
       <tr><td>git hook</td><td>이슈 DB clone에 <code>core.hooksPath=.githooks</code> 설치</td><td>값이 다르면 실패 보고</td></tr>
@@ -580,7 +581,7 @@ feedback/      <span class="c"># 후보 수락·거절 기록</span>
       <tr><td>snapshot</td><td><span class="tag warn">warn</span></td><td>오래된 스냅샷</td><td><code>/telephony-triage:sync</code> 를 실행한다</td></tr>
       <tr><td>compat · lock</td><td><span class="tag ok">ok</span></td><td>스키마·생성기·파서 호환 / 세션 lock 없음</td><td></td></tr>
     </table></div>
-    <p class="small">예시 화면입니다. 실제 항목: python, deps, config, scripts_path, clone, hook, guard(자가시험), jira, gh, snapshot, compat, lock.</p>
+    <p class="small">예시 화면입니다. 실제 항목: python, deps, config, platform(켠 플랫폼이 둘 이상일 때만), scripts_path, clone, hook, guard(자가시험, 예 <code>deny 3/3</code>), jira, jira_post(Jira 게시 도구: ok / skip 게시 꺼짐 / fail 코멘트 도구가 read_tools에 있음), gh, snapshot, compat, lock.</p>
   </div>
   <aside class="notes">문제가 생기면 먼저 doctor 표를 보세요. fail은 그 기능이 막힌 것이고 warn은 일부만 제한됩니다. 이 표를 그대로 캡처해서 질문하면 지원이 빠릅니다.</aside>
 </section>
@@ -595,7 +596,7 @@ feedback/      <span class="c"># 후보 수락·거절 기록</span>
       <div class="card"><h3>찾기·보기</h3><p><code>search</code></p><p><code>preview</code></p><p><code>review</code></p><p><code>help</code></p><p class="small">읽기 전용</p></div>
       <div class="card"><h3>맞추기·관리</h3><p><code>sync</code> <code>sync-pr</code></p><p><code>validate</code> (인자 없음)</p><p><code>setup</code> <code>migrate</code></p></div>
     </div>
-    <div class="card alert"><p>이슈 DB에 쓰는 커맨드는 시작할 때 <b>세션 lock</b>을 잡고 끝나는 모든 경로에서 풉니다. 한 사람이 동시에 두 작업을 할 수 없습니다.</p></div>
+    <div class="card alert"><p>이슈 DB에 쓰는 커맨드는 시작할 때 <b>세션 lock</b>을 잡고 끝나는 모든 경로에서 풉니다. 한 사람이 같은 이슈 DB(플랫폼)에서 동시에 두 작업을 할 수 없습니다(android 작업과 oFono 작업은 동시에 가능).</p></div>
   </div>
   <aside class="notes">대부분의 사용자는 analyze, search, record 세 개면 충분합니다. 수정 상태 커맨드는 CL을 올린 담당자가, migrate는 메인테이너만 씁니다. 읽기 전용 커맨드는 lock을 잡지 않으니 분석 중에도 search는 됩니다. 어떤 커맨드를 쓸지 모르면 help를 먼저 부르면 됩니다. 커맨드 없이 "ABC-12345 로그 분석해줘"처럼 말해도 스킬이 analyze·search·record·fix-submitted·verify-fix·sync-pr 흐름으로 연결됩니다(모의 환경 측정에서 트리거 문장 24개×2회 recall·precision 100%, 사내는 S-2에서 재측정. validate --cause는 스킬 설명에는 있지만 측정 문장에는 없습니다). setup·sync·preview·review·migrate와 인자 없는 validate는 커맨드로 실행하세요.</aside>
 </section>
@@ -612,6 +613,7 @@ feedback/      <span class="c"># 후보 수락·거절 기록</span>
       <tr><td><code>--code &lt;프로필|경로&gt;</code></td><td>분석할 소스 트리(Android 16/17 등). 없으면 물어봄</td></tr>
       <tr><td><code>--failed-step</code> · <code>--steps-file</code></td><td>시험 실패 스텝·절차. 분석 구간과 순위 참고만, S/C에는 안 씀</td></tr>
       <tr><td><code>--jira-file &lt;yaml&gt;</code></td><td>Jira 대신 파일. <code>--dry-run</code>·<code>--analysis-only</code>와만</td></tr>
+      <tr><td><code>--platform &lt;이름&gt;</code></td><td>Android가 아닌 플랫폼(oFono 등) 이슈 DB로 분석. 이슈 DB 선언과 다르면 <code>platform-mismatch</code>로 멈춤</td></tr>
     </table></div>
     <p class="small">로그 자리에 bugreport(.zip/.txt)를 주면 logcat 섹션만 꺼내 씁니다. <code>--analyzer</code>/<code>--explore</code>는 다음 장.</p>
   </div>
@@ -629,6 +631,7 @@ feedback/      <span class="c"># 후보 수락·거절 기록</span>
       <div class="msg ask"><div class="who">Claude</div><div class="what">카테고리 분석 스킬로 심층 분석을 할까요? 토큰이 더 듭니다.</div></div>
       <div class="msg ask"><div class="who">Claude</div><div class="what">이 이슈를 <b>DATA-001-02 Roaming disabled</b>로 분류할까요? 예 / 다른 원인 / 새 원인 / 새 유형 / 원인 미확정</div></div>
       <div class="msg u"><div class="who">나</div><div class="what">예. → 한 줄 요약 확인 → <b>push 전 확인 화면</b> → 승인 → PR 링크</div></div>
+      <div class="msg ask"><div class="who">Claude</div><div class="what">(선택) 분석 결과를 Jira 코멘트로 올릴까요? 예면 PROBLEM / CAUSE / NEXT ACTION / ANALYSIS 확인 화면 → 승인 → 권한 확인 → 코멘트 1건 게시</div></div>
     </div>
   </div>
   <aside class="notes">주황 줄은 Claude가 대신 고르지 않고 반드시 묻는 지점입니다. 답하기 전에는 다음으로 가지 않습니다. 시각이 Jira에 없거나 로그 범위 밖이면 이 사이에 질문이 하나 더 끼어듭니다. 대화 내용은 설명용 예시입니다.</aside>
@@ -645,6 +648,7 @@ feedback/      <span class="c"># 후보 수락·거절 기록</span>
       <tr><td>gh 인증</td><td>필요</td><td>불필요</td><td>불필요</td></tr>
       <tr><td>열린 PR 확인</td><td>함</td><td>"확인 안 함"</td><td>함</td></tr>
       <tr><td>Jira 대신 파일</td><td>불가</td><td>가능</td><td>가능</td></tr>
+      <tr><td>Jira 결과 게시 질문</td><td>게시 가능할 때 1회</td><td>없음</td><td>없음</td></tr>
     </table></div>
     <div class="g2">
       <p class="small"><b>같은 입력을 다시 돌리면</b> 파싱·매칭 결과를 재사용하고 리포트에 "재사용"이라고 밝힙니다. 재사용은 재검증이 아닙니다. 시그니처 시간 초과·오류로 판정 불가 유형이 있던 실행은 저장하지 않아 다음 실행이 다시 계산합니다.</p>
@@ -980,7 +984,7 @@ bonus = 근접(근거 시각이 발생 시각에 가까울수록) + 키워드(Ji
       <div class="card">
         <h3>자동으로 막는 것 (hook 10종 중) — 언제</h3>
         <ul class="pts small">
-          <li>Jira 쓰기 도구 호출 — <b>MCP 도구를 부르기 직전</b>. 허용 목록의 읽기 도구만(이름에 jira·atlassian이 든 서버의 쓰기 도구도)</li>
+          <li>Jira 쓰기 도구 호출 — <b>MCP 도구를 부르기 직전</b>. 허용 목록의 읽기 도구만(이름에 jira·atlassian이 든 서버의 쓰기 도구도). 예외는 확인 화면에서 승인한 코멘트 1건(승인 기록과 맞을 때만 권한 질문)</li>
           <li>main 대상 push, 승인 토큰 없는 push — <b>git push 직전</b>(Claude 밖 터미널도)</li>
           <li><code>--no-verify</code> 같은 hook 우회 커밋 — <b>git commit 직전</b></li>
           <li>Claude가 내 이슈 DB clone 파일을 직접 편집하거나 clone 브랜치를 바꿈 — <b>Write·Edit·Bash 직전</b></li>
@@ -996,6 +1000,7 @@ bonus = 근접(근거 시각이 발생 시각에 가까울수록) + 키워드(Ji
           <li>수정 상태 변경</li>
           <li>drift 항목 선택, 오래된 작업 정리</li>
           <li>push 전 확인 화면 (push마다 권한 프롬프트도 뜸)</li>
+          <li>Jira 결과 코멘트 확인 화면 (게시 직전 권한 프롬프트도 뜸)</li>
         </ul>
       </div>
     </div>
@@ -1010,14 +1015,14 @@ bonus = 근접(근거 시각이 발생 시각에 가까울수록) + 키워드(Ji
     <div class="g4">
       <div class="card key"><h3>도구 호출 직전</h3><p class="small">PreToolUse</p>
         <ul class="pts small">
-          <li>MCP: Jira 읽기 도구만 통과(2)</li>
+          <li>MCP: Jira 읽기 도구와 승인한 코멘트 1건만 통과(2)</li>
           <li>Bash: 이슈 DB git commit·push 검사(3~7), 로그 통독 차단(10)</li>
           <li>Write·Edit: 내 clone 파일이면 거부(8)</li>
         </ul>
       </div>
       <div class="card key"><h3>결과 직후</h3><p class="small">PostToolUse</p>
         <ul class="pts small">
-          <li>Jira 도구 결과만: 원문은 파일로, 모델에는 마스킹 요약(9)</li>
+          <li>Jira 도구 결과만: 원문은 파일로, 모델에는 마스킹 요약. 코멘트 게시 결과는 기록 파일로(9)</li>
           <li>실패하면 원문 대신 오류 문구</li>
         </ul>
       </div>
@@ -1115,9 +1120,9 @@ bonus = 근접(근거 시각이 발생 시각에 가까울수록) + 키워드(Ji
   <div class="head"><div class="eyebrow">§10 현황 · Q&amp;A</div><h2>현재 상태와 참고 자료</h2></div>
   <div class="body">
     <div class="nums">
-      <div><b>~1,100</b><span>자동 테스트 (CI Ubuntu, Python 3.11 · 3.14 통과)</span></div>
+      <div><b>1,412</b><span>자동 테스트 (CI Ubuntu, Python 3.11 · 3.14 통과)</span></div>
       <div><b>23/23</b><span>샘플 DB 회귀 fixture 통과</span></div>
-      <div><b>60</b><span>skill eval 정의</span></div>
+      <div><b>65</b><span>skill eval 정의</span></div>
       <div><b>~39만</b><span>analyze→기록 1건 토큰 (Sonnet, 이전 74만에서 −48%)</span></div>
     </div>
     <p class="small">커맨드 1회 약 20만~80만 토큰, $0.15~0.5 수준(Sonnet). 모의 데이터 eval 기준이라 실제 환경에서는 다를 수 있습니다. 기본 모델은 Sonnet, 탐색 가설 품질이 중요하면 Opus.</p>
@@ -1128,7 +1133,7 @@ bonus = 근접(근거 시각이 발생 시각에 가까울수록) + 키워드(Ji
     </div>
     <p class="lede" style="color:var(--ink)"><b>질문 받겠습니다.</b></p>
   </div>
-  <aside class="notes">수치는 2026-10-08 사외 모의 환경 기준입니다. 정확도는 아직 측정 전이고 S-5에서 사내 과거 Jira로 처음 잽니다. 마지막으로 다시 강조할 것: 판정은 스크립트, 기록은 승인 후 PR, Jira는 읽기만.</aside>
+  <aside class="notes">수치는 2026-10-11 사외 모의 환경 기준입니다(토큰은 10-08 측정). 정확도는 아직 측정 전이고 S-5에서 사내 과거 Jira로 처음 잽니다. 마지막으로 다시 강조할 것: 판정은 스크립트, 기록은 승인 후 PR, Jira는 읽기와 승인한 코멘트만.</aside>
 </section>
 
 </div></div>

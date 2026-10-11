@@ -6,13 +6,14 @@ import json
 import re
 from pathlib import Path
 
+import platforms
 from common import compat, events, failedstep, masking, stepanchor, userconfig
 from common.exitcodes import CHECK_FAILED, USAGE
 
 from .anchor import AnchorMixin, _parse_ts
 from .cache import CacheMixin, State, _digest, _file_sha
 from .core import (ERROR_EVENT_RE, EXPLORE_INPUT_FILE, EXPLORE_MAX_LINES, EXPLORE_WHEN, Fail, NeedsInput, Runner,
-                   SEARCH_LIMIT, SNAPSHOT_DIR, STATE_FILE, Stopped, TIMELINE_FILE, TOP, _clip, _module)
+                   SEARCH_LIMIT, SNAPSHOT_DIR, STATE_FILE, Stopped, TIMELINE_FILE, TOP, _clip)
 from .report import ReportMixin, _ref_label, _unique_evidence
 
 
@@ -49,15 +50,19 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
     def __init__(self, args, defaults: dict):
         self.args = args
         self.defaults = defaults
-        self.cfg = userconfig.merged(defaults)
+        # 선택 플랫폼(triage.py main이 `platforms.session.resolve`로 정한다). 하위 스크립트에는 TT_PLATFORM으로 넘긴다
+        self.platform = getattr(args, "platform_name", None) or userconfig.TOP_PROFILE
+        self.cfg = userconfig.merged(defaults, platform=self.platform)
         self.key = args.key
         self.offline = args.offline_db is not None
         self.analysis_only = bool(getattr(args, "analysis_only", False))   # 이슈 DB에 기록하지 않는 분석 전용(RF-7)
         self.run = Runner(args.plugin_root)
+        self.run.env[platforms.ENV] = self.platform
         self.state = State(None)
         self.job: Path | None = None
         self.snap: Path | None = None
         self.locked = False
+        self._platform_spec: platforms.PlatformSpec | None = None
         self.warnings: list[str] = []
         self.notes: list[str] = []
         self.out: dict = {"key": self.key}
@@ -76,6 +81,21 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         self.reuse: dict | None = None           # 재사용 결정 {hit, run, reason?, changed?} — 오프라인·첫 실행은 None
 
     # 공통 ---------------------------------------------------------------------------------------
+
+    @property
+    def platform_spec(self) -> platforms.PlatformSpec:
+        """선택 플랫폼의 계약. 잘못되면 사용 오류(종료 코드 2)."""
+        if self._platform_spec is None:
+            try:
+                self._platform_spec = platforms.get(self.platform)
+            except platforms.PlatformConfigError as exc:
+                raise Fail(USAGE, str(exc)) from exc
+        return self._platform_spec
+
+    @property
+    def platform_label(self) -> str:
+        """리포트·질문 라벨 ("Android")."""
+        return self.platform_spec.label
 
     def answer(self, kind: str):
         return self.state.answers.get(kind)
@@ -135,6 +155,16 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
             self.job = userconfig.ensure_private_dir(wd / self.key)
         self.run.open_trace(self.job / "trace.jsonl")
         self.state = State(None if self.offline else self.job / STATE_FILE)
+        if self.offline:   # 오프라인 DB는 스냅샷·config check를 거치지 않으므로 여기서 플랫폼 선언을 대조한다
+            mismatch = compat.check_platform(compat.load_db_config(self.snap), self.platform)
+            if mismatch:
+                raise Fail(USAGE, mismatch[0]["message"])
+        else:      # 다시 실행할 때 플랫폼이 다르면 이어 가지 않는다(작업 디렉토리는 플랫폼 work_dir에 있지만 상태로도 막는다)
+            recorded = self.state.data.get("platform")
+            if recorded and recorded != self.platform:
+                raise Fail(USAGE, f"이 작업은 {recorded} 플랫폼이다 — --platform {recorded}로 다시 실행한다")
+            if self.platform != userconfig.TOP_PROFILE and recorded != self.platform:
+                self.state.data["platform"] = self.platform
         self.given: dict[str, str] = {}
         for item in self.args.answer or []:
             kind, sep, value = item.partition("=")
@@ -216,14 +246,14 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
             info.update(source=source, choice=choice, pr_number=(plan.get("pr") or {}).get("number"),
                         jira_origin=(plan.get("jira") or {}).get("origin"))
             if not self.state.data.get("pending_cleared"):
-                pending = userconfig.home() / "pending-feedback"
+                pending = userconfig.pending_feedback_dir(self.cfg)
                 removed = [p.name for p in pending.glob(f"{self.key}-*.yaml")] if pending.is_dir() else []
                 for name in removed:
                     (pending / name).unlink(missing_ok=True)
                 info["pending_removed"] = len(removed)
                 self.state.data["pending_cleared"] = True
                 self.state.save()
-        pending = userconfig.home() / "pending-feedback"
+        pending = userconfig.pending_feedback_dir(self.cfg)
         others = [p for p in pending.glob("*.yaml") if not p.name.startswith(f"{self.key}-")] if pending.is_dir() else []
         if others:
             self.notes.append(f"다른 Jira의 pending 피드백 {len(others)}건이 이번 PR에 함께 올라간다")
@@ -263,6 +293,9 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
                                         expect=(0, 2))
         if code == 2 and not isinstance(data, dict):
             raise Fail(USAGE, err.strip())
+        mismatch = [r for r in data.get("reasons") or [] if r.get("code") == compat.PLATFORM_MISMATCH]
+        if mismatch:      # 다른 플랫폼 이슈 DB: 읽기 전용으로도 계속하지 않는다(K5)
+            raise Fail(USAGE, str(mismatch[0].get("message")))
         ok = data["push_allowed"] if for_ == "write" else data["writable"]
         self.out["mode"] = "analysis-only" if self.analysis_only else "write" if ok else "read-only"
         if not ok and not self.analysis_only:
@@ -430,10 +463,10 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
             self.state.save()
             self.log_inputs = [{"path": str(p), "name": p.name, "sha": _file_sha(p), "size": p.stat().st_size}
                                for p in resolved]
-        parser = _module("parse_logcat")
+        capture = self.platform_spec.capture
         out, build = [], {}
         for p in resolved:
-            if not parser._looks_like_bugreport(p):
+            if capture is None or not capture.looks_like(p):
                 out.append(p)
                 continue
             # 같은 이름(a/bugreport.txt, b/bugreport.txt)이 서로 덮지 않도록 해석된 경로 해시를 붙인다
@@ -471,12 +504,12 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
 
     def code_question(self, version: str | None, suggested: dict, text: str | None = None) -> NeedsInput:
         options = [{"value": c.get("name") or ",".join(f"{k}={v}" for k, v in (c.get("roots") or {}).items()),
-                    "label": f"{c.get('name') or '최근'} Android {c.get('android_version') or '?'}"
+                    "label": f"{c.get('name') or '최근'} {self.platform_label} {c.get('android_version') or '?'}"
                              + (" (추천)" if c.get("recommended") else "")}
                    for c in suggested.get("candidates") or []]
         options += [{"value": "<경로 또는 키=경로,…>", "label": "직접 입력"},
                     {"value": "skip", "label": "코드 분석 건너뛰기(로그 기반 분석만)"}]
-        text = text or f"코드 경로를 고른다 (대상: Android {version or '?'})."
+        text = text or f"코드 경로를 고른다 (대상: {self.platform_label} {version or '?'})."
         return NeedsInput("code", text + (" (code.auto_select 값이 잘못돼 묻기로 본다)" if self.auto_invalid else ""), options)
 
     @staticmethod

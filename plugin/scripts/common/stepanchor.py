@@ -269,24 +269,24 @@ def steps_file_times(line, tz, year, ref_dt=None):
     첫 시각이 시작, 둘째가 실패이고 하나뿐이면 실패 시각이다. 오프셋 있는 ISO는 그대로, 오프셋 없는 ISO와
     logcat 스탬프(`MM-DD HH:MM:SS(.mmm)`)는 `tz`·`year`로, 시각만(`HH:MM:SS`)은 `ref_dt`(Jira 발생 시각 또는
     로그 첫 시각)의 날짜를 쓰고 `ref_dt`보다 12시간 넘게 앞서면 하루 뒤로 본다. 줄 원문은 돌려주지 않는다."""
-    from platforms.android import logcat
+    from common import logtime
 
     ref = _ts(ref_dt) if ref_dt else None
     found: list[datetime] = []
     for m in _TS_RE.finditer(str(line or "")):
         dt = None
         if m.group("iso"):
-            dt = logcat.normalize_ts(m.group("iso").replace(" ", "T", 1), tz, year)
+            dt = logtime.normalize_ts(m.group("iso").replace(" ", "T", 1), tz, year)
         elif m.group("stamp"):
             text = m.group("stamp").replace("T", " ")
             if "." not in text:
                 text += ".000"
-            dt = logcat.normalize_ts(text, tz, year)
+            dt = logtime.normalize_ts(text, tz, year)
         elif ref is not None:
             h, mi, rest = m.group("time").split(":", 2)
             sec, _, frac = rest.partition(".")
             try:
-                zone = logcat.get_tz(tz)
+                zone = logtime.get_tz(tz)
                 local_ref = ref.astimezone(zone)
                 naive = datetime(local_ref.year, local_ref.month, local_ref.day, int(h), int(mi), int(sec),
                                  int((frac or "0")[:6].ljust(6, "0")))

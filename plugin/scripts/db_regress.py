@@ -265,7 +265,7 @@ def run_events_diff(args, defaults: dict, plugin_root: Path) -> dict:
 
 def prepare(db: issuedb.IssueDb, defaults: dict) -> dict:
     """파서 백엔드·외부 파서가 이슈 DB 고정값과 같은지 확인하고 시그니처를 컴파일한다 (다르면 UsageError)."""
-    env = compiled_cache.environment(defaults)
+    env = compiled_cache.environment(defaults, compat.db_platform(db.config))   # DB가 선언한 플랫폼의 백엔드 (K6)
     mismatch = compat.check_parser_backend(db.config, env["backend"]["name"], str(env["backend"]["version"]))
     configured = {cat: {**info, "available": True} for cat, info in env["external"].items()}
     mismatch += compat.check_external(db.config, configured)

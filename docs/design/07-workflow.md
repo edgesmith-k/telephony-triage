@@ -57,6 +57,7 @@
 
 ### Step 0. 사전 점검
 - config를 로드한다. 없으면 setup으로 유도한다.
+- **플랫폼**(`17-platforms.md`): `--platform`(스킬은 사용자가 플랫폼을 말했을 때만 붙인다) > config·site 기본으로 정하고, 이후 경로(clone·`work_dir`·lock)는 그 플랫폼 프로필이다. `triage.py`는 하위 스크립트에 `TT_PLATFORM`으로 넘긴다. 스냅샷·이슈 DB 선언이 다른 플랫폼이면 `platform-mismatch`로 멈춘다(읽기 전용으로 계속하지 않는다).
 - **Jira 키를 먼저 검사한다**: `jira_key_regex`(`02-config.md §5.3`, 스냅샷이 아직 없으면 사용자 clone의 `issue-db.config.yaml`)에 맞지 않으면 다시 묻는다. 키를 작업 키·경로·브랜치로 쓰기 전에 한다 (`contracts.md §3.2` 작업 키 검증).
 - `db_pr lock acquire <JIRA-KEY>`로 세션 lock을 잡는다(`--analysis-only`도 잡고, ok로 끝나면 `triage.py`가 푼다). 다른 작업의 lock이 있으면 보유자(작업 키, 명령, 마지막 갱신 시각)를 보여준다. 사용자가 그 세션이 끝났다고 확인하면 `db_pr lock release <그 작업 키> --force` 후 다시 잡고, 아니면 중단한다. 같은 Jira의 lock이 10분 이내에 갱신됐으면 "다른 세션이 같은 이슈를 진행 중일 수 있다"고 보여주고, 사용자가 확인하면 `acquire <JIRA-KEY> --take-over`로 이어받는다 (`contracts.md §3.2` 세션 lock).
 - (`--analysis-only`면 이 항목과 아래 기존 계획 항목을 건너뛴다 — `§분석 전용`) `db_pr cleanup --dry-run`으로 비정상 종료로 남은 worktree(`<work_dir>/*/wt`, `*/draft`)와 도구 브랜치(`tt/*`)를 찾는다. **묻지 않고 지우지도 않는다**(`--yes`를 부르지 않고, `--answer cleanup=yes`가 있어도 지우지 않는다). 대상이 있으면 `triage-state.json`에 `cleanup_targets=<n>`(`cleanup_done`과 함께, 세션마다 한 번 점검)을 남기고 `analysis.json` `notes`로 "잔여 worktree·도구 브랜치 n개(붙여넣은 스텝 원문이 남아 있을 수 있음) — `/telephony-triage:sync`에서 정리"를 알린다. `cleanup_targets`가 있으면 `needs_input` 뒤 ok 출력에도 매번 낸다. 정리는 `/telephony-triage:sync`가 묻고 한다. 현재 작업 키의 worktree는 대상이 아니다(도구 브랜치는 목록에 나올 수 있다).

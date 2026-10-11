@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
@@ -48,12 +49,11 @@ sys.path.insert(0, str(SCRIPTS))
 
 import adapters  # noqa: E402
 import parser_backends  # noqa: E402
-from common import compat, masking, parser_rules, site_defaults, stepanchor  # noqa: E402
+from common import compat, logtime, masking, parser_rules, site_defaults, stepanchor  # noqa: E402
 from common import events as evt  # noqa: E402
 from common.patterns import DEFAULT_TIMEOUT_MS, PatternError, PatternRunner, PatternTimeout  # noqa: E402
 from common.exitcodes import OK, USAGE  # noqa: E402
 import platforms  # noqa: E402
-from platforms.android import bugreport, logcat  # noqa: E402
 
 OUTPUT_SCHEMA = evt.SCHEMA_VERSION  # markers 출력도 같은 번호
 DEFAULT_MINUTES = 5
@@ -94,8 +94,8 @@ def _ril_events(rec: dict, rules: parser_rules.Rules, last_ts: str | None) -> li
             )
     elif ann["paired_ts"] is None and last_ts is not None:
         # 파일이 요청 + timeout 이후까지 있는데 응답이 없을 때만 "응답 없음"이다.
-        deadline = logcat.parse_ts(rec["ts"]) + timedelta(milliseconds=timeout)
-        if logcat.parse_ts(last_ts) >= deadline:
+        deadline = logtime.parse_ts(rec["ts"]) + timedelta(milliseconds=timeout)
+        if logtime.parse_ts(last_ts) >= deadline:
             out.append(
                 evt.derived_event(rec, "ril_no_response", {**base_fields, "timeout_ms": timeout})
             )
@@ -291,7 +291,7 @@ def _run_external(
             if name is not None and not str(name).startswith(prefix):
                 dropped += 1
                 continue
-            dt = logcat.normalize_ts(item.get("ts"), tz, year)
+            dt = logtime.normalize_ts(item.get("ts"), tz, year)
             if dt is None:
                 dropped += 1
                 continue
@@ -299,7 +299,7 @@ def _run_external(
                 continue
             events.append(
                 evt.make_event(
-                    ts=logcat.format_ts(dt),
+                    ts=logtime.format_ts(dt),
                     pid=item.get("pid"),
                     tid=item.get("tid"),
                     level=item.get("level"),
@@ -333,7 +333,7 @@ def _window(args) -> tuple | None:
         return None
     if args.between:
         try:
-            start, end = logcat.parse_ts(args.between[0]), logcat.parse_ts(args.between[1])
+            start, end = logtime.parse_ts(args.between[0]), logtime.parse_ts(args.between[1])
         except ValueError as exc:
             raise UsageError(
                 f"--between은 타임존이 있는 ISO 시각 둘이어야 합니다(예: 2026-09-20T14:32:00+09:00): {exc}"
@@ -342,7 +342,7 @@ def _window(args) -> tuple | None:
             raise UsageError(f"--between의 시작이 끝보다 늦습니다: {args.between[0]} > {args.between[1]}")
         return (start, end)
     try:
-        center = logcat.parse_ts(args.around)
+        center = logtime.parse_ts(args.around)
     except ValueError as exc:
         raise UsageError(
             f"--around는 타임존이 있는 ISO 시각이어야 합니다(예: 2026-09-20T14:32:10+09:00): {exc}"
@@ -356,7 +356,7 @@ def _in_range(window, coverage: dict) -> bool | str | None:
         return None  # 해석한 줄이 없다 — window와 무관, "범위 밖"이 아니다
     if window is None:
         return True
-    first, last = logcat.parse_ts(coverage["first_ts"]), logcat.parse_ts(coverage["last_ts"])
+    first, last = logtime.parse_ts(coverage["first_ts"]), logtime.parse_ts(coverage["last_ts"])
     start, end = window
     if end < first or start > last:
         return False
@@ -366,27 +366,57 @@ def _in_range(window, coverage: dict) -> bool | str | None:
 
 
 def _read_texts(paths: list[Path]) -> str:
-    return "\n".join(logcat.open_log(p).read() for p in paths)
+    return "\n".join(logtime.open_log(p).read() for p in paths)
 
 
 def _allow_patterns(db_cfg: dict) -> list[str]:
     return list((db_cfg.get("mask") or {}).get("allow_patterns") or [])
 
 
-def _profile(defaults: dict) -> platforms.PlatformProfile:
-    """site-defaults의 `platform:`을 읽는다. 잘못되면 사용 오류(종료 코드 2)."""
+def _platform_name(defaults: dict, db_cfg: dict | None) -> str:
+    """파싱 플랫폼(17-platforms K6). `--rules`의 이슈 DB가 있으면 **그 선언**(`platform`, 없으면 android)이고, 환경변수
+    `TT_PLATFORM`(triage가 넘긴 세션 선택)이 그와 다르면 사용 오류다. DB가 없으면(cut·extract-bugreport)
+    `TT_PLATFORM`, 그다음 site-defaults `platform.name`. 사용자 config는 읽지 않는다."""
+    env = os.environ.get(platforms.ENV) or None
+    if db_cfg:
+        declared = compat.db_platform(db_cfg)
+        if env and env != declared:
+            raise UsageError(compat.check_platform(db_cfg, env)[0]["message"])
+        return declared
+    return env or platforms.default_name(defaults)
+
+
+def _profile(defaults: dict, db_cfg: dict | None = None) -> platforms.PlatformProfile:
+    """그 플랫폼의 site-defaults 상수(`platform:`·`platform.others.<p>`). 이슈 DB에 고정된 파싱이므로 `platform.enabled`와
+    무관하게 설치된 플랫폼이면 된다. 잘못되면 사용 오류(종료 코드 2)."""
     try:
-        return platforms.load(defaults)
+        return platforms.load(defaults, _platform_name(defaults, db_cfg), require_enabled=False)
     except platforms.PlatformConfigError as exc:
         raise UsageError(str(exc)) from exc
 
 
 def _load_backend(defaults: dict, profile: platforms.PlatformProfile):
-    backend_name = (defaults.get("parser") or {}).get("backend")
     try:
-        return parser_backends.load(backend_name).configure(profile)
+        backend_name = platforms.backend_name(defaults, profile.name)
+    except platforms.PlatformConfigError as exc:
+        raise UsageError(str(exc)) from exc
+    try:
+        backend = parser_backends.load(backend_name)
     except parser_backends.BackendError as exc:
         raise UsageError(f"site-defaults.yaml parser.backend: {exc}") from exc
+    if backend.platform != profile.name:
+        raise UsageError(f"site-defaults.yaml parser.backend: 백엔드 '{backend_name}'은(는) {backend.platform} 플랫폼용입니다 "
+                         f"(선택한 플랫폼: {profile.name}).")
+    return backend.configure(profile)
+
+
+def _capture_input(path: Path, profile: platforms.PlatformProfile) -> None:
+    """묶음 입력(bugreport 등)을 parse·markers에 바로 주면 사용 오류다."""
+    capture = profile.spec.capture
+    if capture is not None and capture.looks_like(path):
+        raise UsageError(
+            f"{path.name}은(는) bugreport입니다. 먼저 extract-bugreport로 logcat 섹션을 꺼내세요."
+        )
 
 
 UNCOLLECTED_TOP = 5
@@ -415,12 +445,10 @@ def run_parse(args, plugin_root: Path, defaults: dict, profile: platforms.Platfo
     for path in paths:
         if not path.is_file():
             raise UsageError(f"로그 파일이 없습니다: {path}")
-        if _looks_like_bugreport(path):
-            raise UsageError(
-                f"{path.name}은(는) bugreport입니다. 먼저 extract-bugreport로 logcat 섹션을 꺼내세요."
-            )
+        profile = profile or _profile(defaults, compat.load_db_config(Path(args.rules).parent))
+        _capture_input(path, profile)
     try:
-        logcat.get_tz(args.tz)
+        logtime.get_tz(args.tz)
     except ValueError as exc:
         raise UsageError(str(exc)) from exc
     window = _window(args)
@@ -432,7 +460,7 @@ def run_parse(args, plugin_root: Path, defaults: dict, profile: platforms.Platfo
         raise UsageError(f"파서 규칙 오류: {exc}") from exc
     db_cfg = compat.load_db_config(rules_dir.parent)
 
-    backend = _load_backend(defaults, profile or _profile(defaults))
+    backend = _load_backend(defaults, profile or _profile(defaults, db_cfg))
 
     masker = None
     if args.mask:
@@ -448,7 +476,7 @@ def run_parse(args, plugin_root: Path, defaults: dict, profile: platforms.Platfo
         warnings.append({"code": "tz_assumed_utc", "message": "--tz가 없어 logcat 시각을 UTC로 해석했습니다."})
     if stats.get("missing_year"):
         warnings.append(
-            {"code": "year_assumed", "message": f"--year가 없어 연도를 {logcat.DEFAULT_YEAR}로 해석했습니다."}
+            {"code": "year_assumed", "message": f"--year가 없어 연도를 {logtime.DEFAULT_YEAR}로 해석했습니다."}
         )
     if stats.get("unparsed"):
         warnings.append(
@@ -534,8 +562,8 @@ def run_parse(args, plugin_root: Path, defaults: dict, profile: platforms.Platfo
             "year": args.year,
             "mode": "full" if args.full else "between" if args.between else "around",
             "window": None if window is None else {
-                "start": logcat.format_ts(window[0]),
-                "end": logcat.format_ts(window[1]),
+                "start": logtime.format_ts(window[0]),
+                "end": logtime.format_ts(window[1]),
             },
         },
         "coverage": coverage,
@@ -703,17 +731,15 @@ def run_markers(args, defaults: dict, profile: platforms.PlatformProfile | None 
     for path in paths:
         if not path.is_file():
             raise UsageError(f"로그 파일이 없습니다: {path}")
-        if _looks_like_bugreport(path):
-            raise UsageError(
-                f"{path.name}은(는) bugreport입니다. 먼저 extract-bugreport로 logcat 섹션을 꺼내세요."
-            )
+        profile = profile or _profile(defaults, compat.load_db_config(Path(args.rules).parent))
+        _capture_input(path, profile)
     try:
-        logcat.get_tz(args.tz)
+        logtime.get_tz(args.tz)
     except ValueError as exc:
         raise UsageError(str(exc)) from exc
     rules_dir = Path(args.rules)
     db_cfg = compat.load_db_config(rules_dir.parent)
-    backend = _load_backend(defaults, profile or _profile(defaults))
+    backend = _load_backend(defaults, profile or _profile(defaults, db_cfg))
 
     conf = defaults.get("failed_step") or {}
     status_map = conf.get("marker_status") if isinstance(conf.get("marker_status"), dict) else None
@@ -795,15 +821,19 @@ def run_markers(args, defaults: dict, profile: platforms.PlatformProfile | None 
 
 # -- extract-bugreport --------------------------------------------------------
 
-# 구현은 `platforms/android/bugreport.py` (RF-3). 여기는 오류를 사용 오류로 바꾸는 래퍼다.
-_looks_like_bugreport = bugreport.looks_like_bugreport
+# 구현은 플랫폼의 `SPEC.capture`(android: `platforms/android/bugreport.py`, RF-3). 여기는 오류를 사용 오류로 바꾸는 래퍼다.
+# 옛 이름: 기본 플랫폼의 판별 함수 (`SPEC.capture.looks_like`와 같은 객체).
+_looks_like_bugreport = platforms.default().spec.capture.looks_like
 
 
 def run_extract_bugreport(args, profile: platforms.PlatformProfile | None = None) -> dict:
-    rules = profile.bugreport if profile else None
+    profile = profile or platforms.default()
+    capture = profile.spec.capture
+    if capture is None:
+        raise UsageError(f"이 플랫폼({profile.name})은 묶음 입력 추출을 지원하지 않는다.")
     try:
-        return bugreport.extract(Path(args.bugreport), Path(args.out), rules)
-    except bugreport.BugreportError as exc:
+        return capture.extract(Path(args.bugreport), Path(args.out), profile.bugreport)
+    except capture.error as exc:
         raise UsageError(str(exc)) from exc
 
 
@@ -819,7 +849,7 @@ def _cut_anchors(args, lines: list) -> tuple[set[int], dict, list[dict]]:
     `line_ref`가 있었는데 못 쓴 경우 경고 `evidence-ref-mismatch`를 낸다 (04-parser-matching.md §5.8 (6))."""
     if args.around:
         try:
-            center = logcat.parse_ts(args.around)
+            center = logtime.parse_ts(args.around)
         except ValueError as exc:
             raise UsageError(f"--around는 타임존이 있는 ISO 시각이어야 합니다: {exc}") from exc
         span = timedelta(seconds=args.seconds)
@@ -836,7 +866,7 @@ def _cut_anchors(args, lines: list) -> tuple[set[int], dict, list[dict]]:
     position = {(fi, line.line_no): i for i, (fi, line, _) in enumerate(lines)}
     by_ts_tag: dict[tuple, list[int]] = {}
     for i, (_, line, _) in enumerate(lines):
-        by_ts_tag.setdefault((logcat.format_ts(line.dt), line.tag), []).append(i)
+        by_ts_tag.setdefault((logtime.format_ts(line.dt), line.tag), []).append(i)
     anchors: set[int] = set()
     by = {"line_ref": 0, "ts_tag": 0}
     mismatch = False
@@ -845,7 +875,7 @@ def _cut_anchors(args, lines: list) -> tuple[set[int], dict, list[dict]]:
         key = (e["ts"], e.get("tag"))
         ref_pos = evt.ref_key(ref)
         i = position.get(ref_pos) if ref_pos else None
-        if i is not None and (logcat.format_ts(lines[i][1].dt), lines[i][1].tag) == key:
+        if i is not None and (logtime.format_ts(lines[i][1].dt), lines[i][1].tag) == key:
             anchors.add(i)
             by["line_ref"] += 1
             continue
@@ -860,7 +890,7 @@ def _cut_anchors(args, lines: list) -> tuple[set[int], dict, list[dict]]:
     return anchors, by, warnings
 
 
-def run_cut(args) -> dict:
+def run_cut(args, profile: platforms.PlatformProfile | None = None) -> dict:
     """판별 근거(또는 지정 시각) 주변 최소 구간을 **마스킹해서** 파일로 쓴다.
 
     앵커 줄 앞뒤 `--context` 줄(파일 순서)을 합치고, `--max-lines`를 넘으면 context를
@@ -871,15 +901,16 @@ def run_cut(args) -> dict:
         if not path.is_file():
             raise UsageError(f"로그 파일이 없습니다: {path}")
     try:
-        logcat.get_tz(args.tz)
+        logtime.get_tz(args.tz)
     except ValueError as exc:
         raise UsageError(str(exc)) from exc
+    read_file = (profile or platforms.default()).spec.log.read_file
     lines = []  # (파일 순번, LogLine, 원문 줄)
     for index, path in enumerate(paths):
         # `read_file`과 같은 방식으로 줄을 센다(`splitlines`는 \x0c 등에서도 끊어 줄 번호가 어긋난다).
-        with logcat.open_log(path) as fh:
+        with logtime.open_log(path) as fh:
             raw = [text.rstrip("\r\n") for text in fh]
-        parsed, _ = logcat.read_file(path, index, args.tz, args.year)
+        parsed, _ = read_file(path, index, args.tz, args.year)
         lines += [(index, line, raw[line.line_no - 1]) for line in parsed]
     anchors, anchors_by, warnings = _cut_anchors(args, lines)
     if not anchors:
@@ -990,7 +1021,8 @@ def main(argv: list[str] | None = None) -> int:
     plugin_root = Path(root_opt) if root_opt else site_defaults.plugin_root()
 
     try:
-        profile = _profile(defaults)
+        db_cfg = compat.load_db_config(Path(args.rules).parent) if args.cmd in ("parse", "markers") else None
+        profile = _profile(defaults, db_cfg)
         if args.cmd == "parse":
             result = run_parse(args, plugin_root, defaults, profile)
         elif args.cmd == "markers":
@@ -998,7 +1030,7 @@ def main(argv: list[str] | None = None) -> int:
         elif args.cmd == "extract-bugreport":
             result = run_extract_bugreport(args, profile)
         else:
-            result = run_cut(args)
+            result = run_cut(args, profile)
     except UsageError as exc:
         print(str(exc), file=sys.stderr)
         return USAGE

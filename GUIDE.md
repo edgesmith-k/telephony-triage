@@ -8,6 +8,7 @@
 |---|---|
 | **플러그인** `telephony-triage` | Claude Code에 설치하는 도구. Jira + logcat으로 이슈를 분석하고, 결과를 이슈 DB에 PR로 올린다 |
 | **이슈 DB** `telephony-issue-db` | 사내 GitHub 레포. 카테고리(data/call/network/sim/sms/ims) > 이슈 유형(증상) > 원인 + 해결책 + Jira 이력. README가 사람이 보는 목록 |
+| **플랫폼** | Android가 기본. 팀이 켠 다른 플랫폼(예: oFono)은 동작·원인·해결책이 달라 **이슈 DB를 따로** 둔다. 분석할 때 `--platform <이름>`으로 고르면 이슈 DB·파서·경로가 같이 바뀐다(`docs/design/17-platforms.md`). oFono는 아직 뼈대(형식 가정)이고 실제 규칙은 사내 로그를 받은 뒤 만든다(수집 안내 `docs/development/OFONO_LOG_COLLECTION.md`) |
 
 한 줄 흐름: **Jira + 로그 → 파서(이벤트) → 시그니처 매칭 → 원인·해결책 제시 → 사용자 확인 → 이슈 DB에 PR → 리뷰어 머지**
 
@@ -297,6 +298,7 @@ claude mcp list               # Jira MCP 사용자 범위 등록 확인
    - 이미 등록된 Jira MCP를 찾아 도구 매핑을 확인 (팀 기본값이 있으면 확인만)
    - git pre-commit hook 설치, 읽기 스냅샷 생성
 4. 연습: `/telephony-triage:analyze <샘플키> <로그> --dry-run` (아무것도 올리지 않음. gh 로그인 전에도 가능)
+5. (팀이 플랫폼을 둘 이상 켰을 때) setup이 어느 플랫폼을 설정할지 묻는다. 다른 플랫폼도 쓰면 setup을 한 번 더 해서 그 플랫폼을 고른다 — 그 플랫폼의 이슈 DB clone·작업 폴더(기본 `~/.telephony-triage/work-<이름>`)만 따로 묻고 Jira·gh 설정은 같이 쓴다. 분석은 `analyze <JIRA> <로그> --platform <이름>`(말로 "oFono 로그로 분석해줘"도 된다). 플랫폼과 이슈 DB가 맞지 않으면 `platform-mismatch`로 멈춘다
 
 ---
 
@@ -383,7 +385,8 @@ claude mcp list               # Jira MCP 사용자 범위 등록 확인
 - 사용자의 이슈 DB clone은 **브랜치를 바꾸거나 파일을 고치지 않음** (작업은 임시 폴더에서, 최신화는 main이고 깨끗할 때 fast-forward만. Claude의 Write/Edit 도구로 clone 안 파일을 쓰는 것도 차단)
 - `git pre-push` hook이 main 대상 push와 승인 토큰 없는 push를 거부. 단, 로컬 장치는 우회 가능하므로 **GHE 브랜치 보호(직접 push 금지, CODEOWNERS 필수 리뷰)가 서버에서 켜져 있어야 함**
 - 검증을 건너뛴 항목은 **통과로 표시하지 않음**
-- 한 사람이 동시에 두 작업을 하지 않음 (세션 lock. 이전 세션이 비정상 종료했으면 확인 후 해제)
+- 한 사람이 같은 이슈 DB(플랫폼)에서 동시에 두 작업을 하지 않음 (세션 lock, 플랫폼마다 하나라 Android 작업과 oFono 작업은 동시에 가능. 이전 세션이 비정상 종료했으면 확인 후 해제)
+- 플랫폼과 이슈 DB가 다르면 분석·쓰기를 멈춤(`platform-mismatch`). guard는 설정된 모든 플랫폼의 clone·작업 폴더를 보호
 - 분석 중에 main에서 바뀐 내용을 **자동으로 덮어쓰지 않음** (drift를 물어봄)
 
 ## 8. 문서 위치
@@ -397,6 +400,7 @@ claude mcp list               # Jira MCP 사용자 범위 등록 확인
 | 사외 초안·사내 보완 절차 | `docs/design/15-local-draft.md` |
 | 기존 Jira MCP·파서·분류·분석 스킬 활용 | `docs/design/16-existing-assets.md` |
 | 사내 확인 항목 목록 | `docs/design/14-site.md` |
+| 플랫폼 분리·새 플랫폼 추가 절차 | `docs/design/17-platforms.md` |
 | 워크플로우 상세 | `docs/design/07-workflow.md` |
 | 공통 규칙 원본 | `docs/design/contracts.md` |
 | 사내 정보가 있어야 판단할 남은 항목 | `REVIEW-OPEN.md` |

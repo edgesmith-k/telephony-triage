@@ -250,11 +250,11 @@ main { max-width: 64rem; }
       <div class="eyebrow">QUICK REFERENCE · 인쇄용 한 장</div>
       <h1>빠른 참조 카드</h1>
       <p>자주 쓰는 커맨드, 요청 문장, 리포트 볼 곳, 막혔을 때를 한 장에 모았습니다.</p>
-      <div class="meta"><span><b>기준</b> main 2026-10-10</span></div>
+      <div class="meta"><span><b>기준</b> main 2026-10-11</span></div>
     </header>
     <div class="cards">
       <div><h3>커맨드 13개</h3><p><code>/telephony-triage:&lt;이름&gt;</code></p><table><tr><td><code>analyze</code></td><td>로그로 분석·분류·기록</td></tr><tr><td><code>record</code></td><td>분석 없이 기록</td></tr><tr><td><code>search</code></td><td>비슷한 이슈 찾기</td></tr><tr><td><code>sync</code></td><td>DB 최신화·정리·내 PR</td></tr><tr><td><code>sync-pr</code></td><td>main 바뀐 뒤 내 PR 맞추기</td></tr><tr><td><code>fix-submitted</code></td><td>수정 CL 기록</td></tr><tr><td><code>verify-fix</code></td><td>수정 빌드 재발 확인</td></tr><tr><td><code>validate</code></td><td>직접 편집 검사 / --cause 해결책 검증</td></tr><tr><td><code>preview</code></td><td>README·STATS 미리보기</td></tr><tr><td><code>review</code></td><td>월간 리뷰 리포트</td></tr><tr><td><code>setup</code></td><td>설정·점검 표</td></tr><tr><td><code>migrate</code></td><td>스키마 올리기(메인테이너)</td></tr><tr><td><code>help</code></td><td>커맨드 안내</td></tr></table></div>
-      <div><h3>말로 요청</h3><ul><li>"ABC-12345 로그 분석해줘, 로그는 ~/logs/radio.txt"</li><li>"데이터 안 붙는 이슈 예전에 있었어?"</li><li>"ABC-777은 APN 고쳐서 해결, 기록만 해줘"</li><li>"CALL-001-01 수정 CL 머지됐어"</li><li>"CALL-001-01 수정 빌드 로그로 재발 확인해줘"</li></ul><p>로그는 항상 <b>파일 경로</b>로.</p>
+      <div><h3>말로 요청</h3><ul><li>"ABC-12345 로그 분석해줘, 로그는 ~/logs/radio.txt"</li><li>"데이터 안 붙는 이슈 예전에 있었어?"</li><li>"ABC-777은 APN 고쳐서 해결, 기록만 해줘"</li><li>"CALL-001-01 수정 CL 머지됐어"</li><li>"CALL-001-01 수정 빌드 로그로 재발 확인해줘"</li><li>(분석 뒤) "결과 Jira에 올려줘" → 본문 확인 화면 승인 후 코멘트 1건</li><li>"oFono 로그로 ABC-1 분석해줘" → <code>--platform ofono</code></li></ul><p>로그는 항상 <b>파일 경로</b>로.</p>
         <h3 style="margin-top:.6rem">처음 연습</h3><p><code>analyze ABC-1 ~/logs/radio.txt --dry-run</code><br>아무것도 올리지 않음.</p></div>
       <div><h3>리포트에서 먼저 볼 것</h3><ol><li><b>분류 후보</b>: 카테고리 &gt; 유형 &gt; 원인. "원인 미확인" = 증상만 맞음</li><li><b>근거 로그</b>: 판정에 쓴 줄. 직접 확인</li><li><b>로그 범위</b>: "범위 밖" ≠ "매칭 없음"</li><li><b>수정 상태</b>: 회귀 의심·수정 미흡 의심 확인</li></ol><p>점수는 확신도가 아님. Claude 칸은 설명일 뿐.</p></div>
       <div><h3>분류 고르기</h3><table><tr><td>증상·원인 같음</td><td>Jira 기록만</td></tr><tr><td>증상 같고 원인 다름</td><td>새 원인</td></tr><tr><td>증상이 처음</td><td>새 유형</td></tr><tr><td>원인 모름</td><td>원인 미확정</td></tr></table>

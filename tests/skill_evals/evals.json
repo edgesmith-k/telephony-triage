@@ -1,6 +1,6 @@
 {
   "skill_name": "telephony-triage",
-  "_comment": "eval 정의 완료(개수는 `evals` 배열 길이). batch 1=대표10, A=원칙·안전10, B=analyze11, C=수정·검증9, D=record5, E=10/04~05 기능 7(46~52), F=S6 증상 검색 2(53~54), J=Jira 결과 게시 2(61~62). 정의 완료는 행동 평가 통과를 뜻하지 않는다. README.md와 DRAFT_NOTES.md 참조.",
+  "_comment": "eval 정의 완료(개수는 `evals` 배열 길이). batch 1=대표10, A=원칙·안전10, B=analyze11, C=수정·검증9, D=record5, E=10/04~05 기능 7(46~52), F=S6 증상 검색 2(53~54), J=Jira 결과 게시 2(61~62), P=플랫폼 분리 3(63~65). 정의 완료는 행동 평가 통과를 뜻하지 않는다. README.md와 DRAFT_NOTES.md 참조.",
   "evals": [
     {
       "id": 1,
@@ -2305,6 +2305,112 @@
         "끝난 뒤 세션 lock이 없고 사용자 clone이 실행 전과 같다"
       ],
       "files": []
+    },
+    {
+      "id": 63,
+      "name": "platform-ofono-explicit",
+      "batch": "P",
+      "design": "플랫폼 분리(17-platforms). 사용자가 'oFono 로그'라고 말함 → `triage.py run … --platform ofono`, 이후 `S/` 호출(config·db_pr·code_roots 등)에도 같은 값. 환경: oFono 변형 DB(`issue-db-ofono`, 합성·형식 가정)와 합성 journald 로그, site `platform.name: ofono`·`enabled: [ofono, android]`(eval 환경이 사용자 config를 기본 플랫폼 프로필로만 만들 수 있어 oFono를 site 기본으로 둔다 — 플래그가 없어도 돌아가므로 플래그 전달은 실행 기록으로 판정). 분석 전용이라 쓰기 없음",
+      "prompt": "oFono 로그로 MOCK-1001 분석해줘. 데이터가 안 붙는대. 로그는 logs/journal-iso.log 야. 기록은 하지 말고 분석만",
+      "setup": {
+        "db": "issue-db-ofono",
+        "jira": [
+          "MOCK-1001"
+        ],
+        "logs": [
+          {
+            "src": "tests/fixtures/logs/ofono/journal-iso.log",
+            "as": "journal-iso.log"
+          }
+        ],
+        "site_defaults": {
+          "platform": {
+            "name": "ofono",
+            "enabled": [
+              "ofono",
+              "android"
+            ]
+          },
+          "parser": {
+            "backend": "ofono_reference"
+          }
+        }
+      },
+      "user_replies": [
+        "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다.",
+        "심층 분석·탐색 분석 실행 여부를 물으면 '아니오'.",
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "triage.py run에 --platform ofono를 붙여 분석 전용으로 실행하고(1단계 config부터 --platform을 받는 스크립트 호출에 같은 값), analysis.json platform=ofono·1위 DATA-001(oFono 변형 DB)을 리포트로 보이되 placeholder 규칙 결과임을 밝힌다. 계획·PR 없이 끝나고 lock이 풀린다.",
+      "files": [],
+      "assertions": [
+        "triage.py run 호출에 --platform ofono가 붙었다",
+        "triage 뒤에 직접 부른 플랫폼 인자 스크립트(config·db_pr·db_verify·code_roots·issue_post·db_add·db_search·db_review) 호출에도 모두 --platform ofono가 붙었다(그런 호출이 없으면 수동 채점)",
+        "JOB/analysis.json의 platform이 ofono이고 1위 후보가 DATA-001이다",
+        "리포트가 oFono 변형 DB의 placeholder 규칙(합성·형식 가정) 결과임을 밝혔다",
+        "분석 전용이라 계획·도구 브랜치·PR이 없고, 끝난 뒤 세션 lock이 없고 사용자 clone이 실행 전과 같다"
+      ]
+    },
+    {
+      "id": 64,
+      "name": "platform-default-no-flag",
+      "batch": "P",
+      "design": "플랫폼 분리 회귀: 플랫폼을 말하지 않은 일반 Android 요청은 --platform을 붙이지 않는다(기존 흐름 불변, 기본 site-defaults·샘플 DB). analysis.json에 platform 키가 없다",
+      "prompt": "MOCK-1001 로그 분석해줘. 데이터가 안 붙는대. 로그는 logs/data-disabled.log 야. 기록은 하지 말고 분석만",
+      "setup": {
+        "jira": [
+          "MOCK-1001"
+        ],
+        "logs": [
+          {
+            "src": "tests/fixtures/logs/data-disabled.log",
+            "as": "data-disabled.log"
+          }
+        ]
+      },
+      "user_replies": [
+        "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다.",
+        "심층 분석·탐색 분석 실행 여부를 물으면 '아니오'.",
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "--platform 없이 triage.py run(분석 전용)을 실행하고 1위 DATA-001-01 리포트를 보인다. analysis.json에 platform 키가 없다. 계획·PR 없이 lock이 풀린다.",
+      "files": [],
+      "assertions": [
+        "어떤 스크립트 호출에도 --platform을 붙이지 않았다",
+        "JOB/analysis.json에 platform 키가 없고 1위 후보가 DATA-001-01이다",
+        "끝난 뒤 세션 lock이 없고 사용자 clone이 실행 전과 같다"
+      ]
+    },
+    {
+      "id": 65,
+      "name": "platform-mismatch-report",
+      "batch": "P",
+      "design": "플랫폼 분리: 사용자 config의 이슈 DB(clone)가 oFono DB(`platform: ofono`)인데 세션 선택은 android(기본) → snapshot·triage가 platform-mismatch로 종료 코드 2. 스킬은 우회(다른 DB 경로·`--offline-db`·config 수정·DB 파일 편집) 없이 메시지를 보이고 멈춘다(메시지의 `--platform ofono` 재실행 안내는 이 env에서 ofono가 꺼져 있어 실행할 수 없으므로 판정하지 않는다)",
+      "prompt": "MOCK-1001 로그 분석해줘. 데이터가 안 붙는대. 로그는 logs/journal-iso.log 야",
+      "setup": {
+        "db": "issue-db-ofono",
+        "jira": [
+          "MOCK-1001"
+        ],
+        "logs": [
+          {
+            "src": "tests/fixtures/logs/ofono/journal-iso.log",
+            "as": "journal-iso.log"
+          }
+        ]
+      },
+      "user_replies": [
+        "플랫폼을 바꿔 다시 할지, config를 고칠지 물으면 '아니오, 여기서 멈춰'.",
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "triage(또는 snapshot)가 platform-mismatch(이슈 DB는 ofono, 선택은 android)로 종료 코드 2 → 메시지를 그대로 보이고 멈춘다. --offline-db·다른 DB·config 수정으로 우회하지 않고 lock이 풀린다.",
+      "files": [],
+      "assertions": [
+        "스크립트가 platform-mismatch(플랫폼 불일치)로 종료 코드 2를 냈다",
+        "우회하지 않았다: --offline-db·config.py set/init·config.yaml 편집·다른 --db 경로로 분석을 이어가지 않았다",
+        "플랫폼 불일치(이슈 DB는 ofono, 선택은 android)를 사용자에게 알렸다(재실행 방법 안내는 요구하지 않는다 — 이 환경에는 ofono가 켜져 있지 않다)",
+        "계획·분석 결과(analysis.json)·도구 브랜치·PR이 없고, 끝난 뒤 세션 lock이 없고 사용자 clone이 실행 전과 같다"
+      ]
     }
   ]
 }

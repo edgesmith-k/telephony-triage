@@ -907,7 +907,7 @@ def test_e39_doctor_table_from_text_or_transcript(tmp_path, where, ok):
 
 def test_jira_post_evals_defined():
     by_id = {e["id"]: e for e in _entries()}
-    assert len(by_id) == 62
+    assert len(by_id) == 65
     assert by_id[8]["name"] == "jira-comment-request-gated" and len(by_id[8]["assertions"]) == 4
     for eid, count in ((61, 10), (62, 6)):
         e = by_id[eid]
@@ -1054,3 +1054,97 @@ def test_e61_body_shape_without_render_record_is_manual(tmp_path):
     ctx = _post_env(tmp_path, [_note(posted)], None)     # events.jsonl 없음
     with pytest.raises(grader._Manual):
         grader.checks(61, ctx)[4]()
+
+
+
+# --- 플랫폼 분리 (배치 P, eval 63~65, 17-platforms) --------------------------------------------------------
+
+def test_platform_evals_defined_and_checks_cover_assertions(tmp_path):
+    by_id = {e["id"]: e for e in _entries()}
+    for eid, count in ((63, 5), (64, 3), (65, 4)):
+        e = by_id[eid]
+        assert e["batch"] == "P" and len(e["assertions"]) == count, eid
+        assert len(grader.checks(eid, grader.Ctx(_synthetic_env(tmp_path / str(eid)), run_dir(tmp_path / str(eid))))) == count
+    assert by_id[63]["setup"]["db"] == by_id[65]["setup"]["db"] == "issue-db-ofono"
+    assert by_id[63]["setup"]["logs"][0]["src"] == by_id[65]["setup"]["logs"][0]["src"] == "tests/fixtures/logs/ofono/journal-iso.log"
+    assert by_id[63]["setup"]["site_defaults"]["platform"]["enabled"] == ["ofono", "android"]
+    assert "db" not in by_id[64]["setup"] and "site_defaults" not in by_id[65]["setup"]   # 64 기본 흐름, 65는 android 선택 + oFono DB
+    assert "oFono" in by_id[63]["prompt"] and "oFono" not in by_id[64]["prompt"] + by_id[65]["prompt"]
+
+
+def test_e63_platform_env_puts_profile_under_platforms(tmp_path):
+    """eval 63 환경: site 기본 ofono라 사용자 config 경로 프로필이 platforms.ofono에 들어간다(최상위 android 프로필 없음)."""
+    import skill_eval_env
+    import yaml
+
+    entry = next(e for e in _entries() if e["id"] == 63)
+    info = skill_eval_env.build(entry, tmp_path / "env")
+    cfg = yaml.safe_load((Path(info["env"]["TELEPHONY_TRIAGE_HOME"]) / "config.yaml").read_text(encoding="utf-8"))
+    assert "issue_db" not in cfg and cfg["platforms"]["ofono"]["issue_db"]["path"] == info["issue_db_clone"]
+    assert cfg["platforms"]["ofono"]["work_dir"] == info["work_dir"]
+
+
+def _platform_ctx(tmp_path, *commands):
+    env_dir = _synthetic_env(tmp_path)
+    run = run_dir(tmp_path)
+    _write_artifacts(run)
+    _bash_events(run, *commands)
+    return grader.Ctx(env_dir, run), Path(json.loads((env_dir / "env.json").read_text(encoding="utf-8"))["work_dir"])
+
+
+@pytest.mark.parametrize("commands,flag_ok,later_ok", [
+    (['python3 "/p/scripts/triage.py" run MOCK-1001 --logs logs/a.log --analysis-only --platform ofono',
+      'python3 "/p/scripts/config.py" show --platform ofono --keys work_dir',
+      'python3 "/p/scripts/config.py" site-defaults'], True, True),
+    (['python3 /p/scripts/triage.py run MOCK-1001 --platform=ofono && python3 /p/scripts/db_pr.py lock release MOCK-1001'],
+     True, False),                                             # 이후 db_pr에 플랫폼 빠짐
+    (['python3 /p/scripts/config.py show --keys work_dir,jira.tools',              # triage 앞 호출은 세지 않는다
+      'python3 /p/scripts/triage.py run MOCK-1001 --platform ofono',
+      'python3 /p/scripts/db_search.py MOCK-1001 --platform ofono --json'], True, True),
+    (['python3 /p/scripts/triage.py run MOCK-1001 --platform ofono',
+      'python3 /p/scripts/db_add.py similar --db /w/_snapshot "x"'], True, False),  # 새 플랫폼 인자 스크립트도 센다
+    (['python3 /p/scripts/triage.py run MOCK-1001 --logs logs/a.log'], False, "manual"),   # triage 뒤 호출 0회 = 수동
+])
+def test_e63_platform_flag_checks(tmp_path, commands, flag_ok, later_ok):
+    ctx, _ = _platform_ctx(tmp_path, *commands)
+    fns = grader.checks(63, ctx)
+    assert fns[0]()[0] is flag_ok
+    if later_ok == "manual":
+        with pytest.raises(grader._Manual):
+            fns[1]()
+    else:
+        assert fns[1]()[0] is later_ok
+
+
+def test_e63_e64_analysis_json_checks(tmp_path):
+    ctx, work = _platform_ctx(tmp_path, "python3 /p/scripts/triage.py run MOCK-1001 --logs logs/a.log")
+    assert grader.checks(63, ctx)[2]()[0] is False                      # analysis.json 없음 = 실패
+    (work / "MOCK-1001").mkdir()
+    (work / "MOCK-1001" / "analysis.json").write_text(json.dumps(
+        {"platform": "ofono", "candidates": [{"type": "DATA-001", "cause": "DATA-001-01"}]}), encoding="utf-8")
+    assert grader.checks(63, ctx)[2]()[0] is True
+    assert grader.checks(64, ctx)[1]()[0] is False                      # android 흐름에 platform 키가 있으면 실패
+    assert grader.checks(64, ctx)[0]()[0] is True                       # --platform 없음
+    flagged, _ = _platform_ctx(tmp_path / "f", "python3 /p/scripts/triage.py run MOCK-1001 --platform android")
+    assert grader.checks(64, flagged)[0]()[0] is False
+
+
+def test_e65_mismatch_bypass_and_guidance_checks(tmp_path):
+    env_dir = _synthetic_env(tmp_path)
+    run = run_dir(tmp_path)
+    _write_artifacts(run)
+    msg = ("Exit code 2\ndb_pr.py snapshot --job 종료 코드 2: 플랫폼 불일치 — 이슈 DB는 ofono, 선택한 플랫폼은 android. "
+           "`--platform ofono`로 다시 실행하거나 config의 issue_db.path를 확인한다")
+    _seq_events(run, [("tool", "t1", "Bash", {"command": "python3 /p/scripts/triage.py run MOCK-1001 --logs logs/j.log"}, msg, True),
+                      ("text", "플랫폼 불일치로 멈췄습니다. `--platform ofono`로 다시 하거나 config의 issue_db.path를 확인하세요.")])
+    fns = grader.checks(65, grader.Ctx(env_dir, run))
+    assert fns[0]()[0] is True and fns[1]()[0] is True and fns[2]()[0] is True
+    _seq_events(run, [("tool", "t1", "Bash", {"command": "python3 /p/scripts/triage.py run MOCK-1001 --offline-db /tmp/db"}, "{}", False),
+                      ("tool", "t2", "Edit", {"file_path": "/h/.telephony-triage/config.yaml"}, "ok", False)])
+    fns = grader.checks(65, grader.Ctx(env_dir, run))
+    assert fns[0]()[0] is False and fns[1]()[0] is False
+    _seq_events(run, [("text", "이슈 DB가 ofono 플랫폼이라 불일치로 멈췄습니다.")])   # 재실행 안내 없이 알리기만 해도 통과
+    assert grader.checks(65, grader.Ctx(env_dir, run))[2]()[0] is True
+    with pytest.raises(grader._Manual):                                  # 실행 기록 없음은 통과로 세지 않는다
+        (run / "events.jsonl").unlink()
+        grader.checks(65, grader.Ctx(env_dir, run))[0]()

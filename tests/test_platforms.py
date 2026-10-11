@@ -61,15 +61,25 @@ def test_mock_site_backend_extends_reference():
 # -- 3. 계층 가드 ----------------------------------------------------------------
 
 # common → platforms 허용 목록. 정확히 이것만 허용하고 현실과 다르면 실패한다.
-# stepanchor의 시각 해석 함수가 logcat 스탬프를 쓴다 (시각 helper를 따로 나눌 때 없앤다).
-COMMON_ALLOW = {"common/stepanchor.py": {"platforms.android.logcat"}}
+# 시각 helper는 `common/logtime.py`로 나눴다(17-platforms 묶음 1). common은 platforms를 import하지 않는다.
+COMMON_ALLOW = {}
+
+
+_DYNAMIC_IMPORTS = {"import_module", "__import__"}
 
 
 def _imports(path: Path, rel: str) -> set[str]:
-    """파일의 모든 import(함수 안 포함)를 절대 모듈 이름으로 푼다. `from a import b`는 `a`와 `a.b` 둘 다."""
+    """파일의 모든 import(함수 안 포함)를 절대 모듈 이름으로 푼다. `from a import b`는 `a`와 `a.b` 둘 다.
+    `importlib.import_module("x")`·`__import__("x")`처럼 첫 인자가 문자열 상수인 동적 import도 넣는다."""
     package = rel.removesuffix(".py").split("/")[:-1]  # `__init__.py`도 포함 패키지가 기준이다
     found: set[str] = set()
     for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+        if isinstance(node, ast.Call) and node.args and isinstance(node.args[0], ast.Constant) \
+                and isinstance(node.args[0].value, str):
+            func = node.func
+            fname = func.attr if isinstance(func, ast.Attribute) else func.id if isinstance(func, ast.Name) else None
+            if fname in _DYNAMIC_IMPORTS:
+                found.add(node.args[0].value)
         if isinstance(node, ast.Import):
             found.update(alias.name for alias in node.names)
         elif isinstance(node, ast.ImportFrom):
@@ -95,12 +105,67 @@ def test_common_does_not_import_platforms():
             m for m in _imports(path, rel)
             if m == "platforms" or m.startswith("platforms.")
         }
-        # `from platforms.android import logcat`은 `platforms`·`platforms.android`·`platforms.android.logcat`로 풀린다.
-        # 하위 모듈 이름까지 간 것만 비교한다.
-        bad = {m for m in bad if m.count(".") >= 2}
         if bad:
             actual[rel] = bad
     assert actual == COMMON_ALLOW
+
+
+@pytest.mark.parametrize("src", [
+    "import platforms\n",
+    "from platforms import load\n",
+    "import platforms.android\n",
+    "from platforms import android\n",
+    "from platforms.android import logcat\n",
+    "def f():\n    import importlib\n    return importlib.import_module('platforms.android')\n",
+    "from importlib import import_module\nimport_module('platforms')\n",
+    "__import__('platforms.base')\n",
+])
+def test_import_scan_catches_every_form(tmp_path, src):
+    """계층 검사(`_imports`)가 모든 import 형식을 잡는다 — 필터로 빠지는 형식이 없다."""
+    path = tmp_path / "x.py"
+    path.write_text(src, encoding="utf-8")
+    assert any(m == "platforms" or m.startswith("platforms.") for m in _imports(path, "common/x.py"))
+
+
+def _platform_names() -> list[str]:
+    import platforms
+
+    return platforms.known()
+
+
+@pytest.mark.parametrize("name", _platform_names())
+def test_platform_does_not_import_other_platforms(name):
+    """`platforms/<a>`는 `platforms/<b>`를 import하지 않는다(17-platforms §2-5). 공용은 `platforms.base`와 레지스트리 밖 모듈."""
+    others = set(_platform_names()) - {name}
+    offenders = {}
+    for path, rel in _py_files(f"platforms/{name}"):
+        bad = {m for m in _imports(path, rel)
+               if m.startswith("platforms.") and m.split(".")[1] in others}
+        if bad:
+            offenders[rel] = bad
+    assert offenders == {}
+
+
+@pytest.mark.parametrize("name", _platform_names())
+def test_platform_init_imports_are_light(name):
+    """`platforms/<p>/__init__.py`는 표준 라이브러리, 같은 패키지 하위 모듈, `platforms.base`, `common.logtime`·`common.events`만
+    import한다(guard 규칙 10이 레지스트리로 불러오므로 가벼워야 한다, 17-platforms §2-5)."""
+    path = SCRIPTS / "platforms" / name / "__init__.py"
+    rel = f"platforms/{name}/__init__.py"
+    allowed_prefix = (f"platforms.{name}", "platforms.base", "common.logtime", "common.events")
+    bad = set()
+    for module in _imports(path, rel):
+        top = module.split(".")[0]
+        if top in sys.stdlib_module_names or top == "__future__":
+            continue
+        if module in ("platforms", "common"):           # `from platforms.base import X`·`from common import logtime`의 부모
+            continue
+        if any(module == p or module.startswith(p + ".") for p in allowed_prefix):
+            continue
+        if module.startswith("common.") and module.split(".")[1] in ("logtime", "events"):
+            continue
+        bad.add(module)
+    assert bad == set()
 
 
 def test_platforms_do_not_import_core():

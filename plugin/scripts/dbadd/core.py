@@ -8,7 +8,7 @@ from pathlib import Path
 
 import jsonschema
 
-from common import dbpath, issuedb, userconfig
+from common import compat, dbpath, issuedb, userconfig
 from common.typedoc import TypeDoc, TypeDocError
 
 
@@ -130,10 +130,19 @@ def _num(ident: str) -> int:
 
 
 def _db(args) -> Path:
+    """`--db` > cwd의 이슈 DB > 선택 플랫폼 프로필의 `issue_db.path`. main이 정한 `platform_name`이 있으면 DB 선언과 대조한다
+    (다르면 `platform-mismatch` 사용 오류)."""
+    name = getattr(args, "platform_name", None)
     try:
-        return dbpath.resolve(args.db, user_config_path=lambda: userconfig.issue_db_path({}))
+        root = dbpath.resolve(args.db, user_config_path=lambda: userconfig.issue_db_path(
+            getattr(args, "platform_defaults", None) or {}, name))
     except dbpath.DbPathError as exc:
         raise UsageError(str(exc)) from exc
+    if name:
+        problems = compat.check_platform(compat.load_db_config(root), name)
+        if problems:
+            raise UsageError(problems[0]["message"])
+    return root
 
 
 # -- 트리 (적용 대상, 메모리) ----------------------------------------------------------

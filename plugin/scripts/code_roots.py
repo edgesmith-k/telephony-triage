@@ -35,9 +35,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from common import compat, dbpath, site_defaults, userconfig  # noqa: E402
 from common.exitcodes import OK, USAGE  # noqa: E402
 import platforms  # noqa: E402
-from platforms.android import TELEPHONY_DIR, VERSION_SOURCES  # noqa: E402
+from platforms import session as platform_session  # noqa: E402
 
-DEFAULT_KEYS = ["aosp", "vendor_ril"]
+# 플랫폼 상수는 레지스트리(`platforms.get`)에서 온다. `validate()`·`estimate_version()`의 인자 기본값은 기본 플랫폼 것이다.
+_DEFAULT_SPEC = platforms.get(platforms.DEFAULT_NAME)
+TELEPHONY_DIR = _DEFAULT_SPEC.source_tree.required_dirs[0]   # 옛 이름 (기본 플랫폼의 첫 필수 디렉토리)
+VERSION_SOURCES = _DEFAULT_SPEC.source_tree.version_sources
+DEFAULT_KEYS = list(_DEFAULT_SPEC.default_root_keys)
 RECENT_MAX = 5
 SOURCE_SUFFIXES = {".java", ".kt", ".c", ".cc", ".cpp", ".h", ".hpp", ".aidl"}
 
@@ -46,19 +50,35 @@ class UsageError(Exception):
     pass
 
 
+_SESSION: tuple[str, dict] | None = None     # main이 정한 (플랫폼, cfg). 없으면 처음 부를 때 정한다
+
+
+def _session(defaults: dict) -> tuple[str, dict]:
+    """선택 플랫폼과 그 플랫폼 경로 프로필 cfg(`--platform` > TT_PLATFORM > 사용자 config > site). 잘못되면 사용 오류."""
+    global _SESSION
+    if _SESSION is None:
+        try:
+            _SESSION = platform_session.resolve(defaults)
+        except platforms.PlatformConfigError as exc:
+            raise UsageError(str(exc)) from exc
+    return _SESSION
+
+
 def _cfg(defaults: dict) -> dict:
-    return userconfig.merged(defaults)
+    return _session(defaults)[1]
 
 
-def _keys(args, defaults) -> list[str]:
+def _keys(args, defaults, spec: platforms.PlatformSpec | None = None) -> list[str]:
+    fallback = list(spec.default_root_keys) if spec else DEFAULT_KEYS
     try:
-        db = dbpath.resolve(getattr(args, "db", None), user_config_path=lambda: userconfig.issue_db_path(defaults))
+        db = dbpath.resolve(getattr(args, "db", None),
+                            user_config_path=lambda: userconfig.issue_db_path(defaults, _session(defaults)[0]))
     except dbpath.DbPathError:
-        return DEFAULT_KEYS
-    return list(compat.load_db_config(db).get("code_root_keys") or DEFAULT_KEYS)
+        return fallback
+    return list(compat.load_db_config(db).get("code_root_keys") or fallback)
 
 
-def parse_roots(text: str, cfg: dict) -> dict[str, str]:
+def parse_roots(text: str, cfg: dict, primary: str = _DEFAULT_SPEC.primary_root) -> dict[str, str]:
     for profile in cfg.get("code_profiles") or []:
         if profile.get("name") == text:
             return {k: str(v) for k, v in (profile.get("roots") or {}).items()}
@@ -73,15 +93,20 @@ def parse_roots(text: str, cfg: dict) -> dict[str, str]:
                 raise UsageError(f"루트는 <키>=<경로> 형식이다: {part}")
             out[key.strip()] = value.strip()
         return out
-    return {"aosp": text}
+    return {primary: text}
+
+
+def _profile(defaults: dict) -> platforms.PlatformProfile:
+    """site-defaults `platform:`(소스 트리·주 루트 키·라벨). 잘못되면 사용 오류(종료 코드 2)."""
+    try:
+        return platforms.load(defaults, _session(defaults)[0])
+    except platforms.PlatformConfigError as exc:
+        raise UsageError(str(exc)) from exc
 
 
 def _tree(defaults: dict) -> platforms.SourceTree:
     """`platform.source_tree`. 잘못되면 사용 오류(종료 코드 2)."""
-    try:
-        return platforms.load(defaults).source_tree
-    except platforms.PlatformConfigError as exc:
-        raise UsageError(str(exc)) from exc
+    return _profile(defaults).source_tree
 
 
 def estimate_version(aosp: Path, sources=VERSION_SOURCES) -> str | None:
@@ -96,12 +121,13 @@ def estimate_version(aosp: Path, sources=VERSION_SOURCES) -> str | None:
 
 def cmd_suggest(args, defaults) -> dict:
     cfg = _cfg(defaults)
-    sources = _tree(defaults).version_sources
+    profile = _profile(defaults)
+    sources, primary = profile.source_tree.version_sources, profile.spec.primary_root
     version = str(args.version) if args.version else None
     profiles = []
     for p in cfg.get("code_profiles") or []:
         roots = {k: str(v) for k, v in (p.get("roots") or {}).items()}
-        aosp = Path(roots.get("aosp", "")).expanduser()
+        aosp = Path(roots.get(primary, "")).expanduser()
         profiles.append({"kind": "profile", "name": p.get("name"), "android_version": str(p.get("android_version")),
                          "roots": roots, "estimated_version": estimate_version(aosp, sources) if aosp.is_dir() else None})
     for p in profiles:
@@ -109,7 +135,7 @@ def cmd_suggest(args, defaults) -> dict:
     recent = []
     for r in sorted(cfg.get("recent_code_roots") or [], key=lambda r: str(r.get("used_on", "")), reverse=True):
         roots = {k: str(v) for k, v in (r.get("roots") or {}).items()}
-        aosp = Path(roots.get("aosp", "")).expanduser()
+        aosp = Path(roots.get(primary, "")).expanduser()
         est = estimate_version(aosp, sources) if aosp.is_dir() else None
         recent.append({"kind": "recent", "name": None, "roots": roots, "used_on": r.get("used_on"),
                        "android_version": est, "estimated_version": est, "match": version is not None and est == version})
@@ -122,10 +148,12 @@ def cmd_suggest(args, defaults) -> dict:
 
 
 def validate(roots: dict[str, str], keys: list[str], version: str | None,
-             tree: platforms.SourceTree | None = None) -> dict:
-    """`tree`(`platform.source_tree`)가 없으면 코드 기본값."""
-    required_dirs = tree.required_dirs if tree else (TELEPHONY_DIR,)
-    sources = tree.version_sources if tree else VERSION_SOURCES
+             tree: platforms.SourceTree | None = None, spec: platforms.PlatformSpec | None = None) -> dict:
+    """`tree`(`platform.source_tree`)가 없으면 `spec`(없으면 기본 플랫폼)의 코드 기본값."""
+    spec = spec or _DEFAULT_SPEC
+    tree = tree or spec.source_tree
+    required_dirs, sources = tree.required_dirs, tree.version_sources
+    primary = spec.primary_root
     errors, warnings = [], []
     for key, value in sorted(roots.items()):
         if key not in keys:
@@ -133,26 +161,28 @@ def validate(roots: dict[str, str], keys: list[str], version: str | None,
             continue
         if value and not Path(value).expanduser().is_dir():
             errors.append(f"{key}: 경로가 없습니다: {value}")
-    aosp = roots.get("aosp")
+    aosp = roots.get(primary)
     estimated = None
     if not aosp:
-        errors.append("aosp 루트가 필요합니다.")
+        errors.append(f"{primary} 루트가 필요합니다.")
     elif Path(aosp).expanduser().is_dir():
         root = Path(aosp).expanduser()
         for rel in required_dirs:
             if not (root / rel).is_dir():
-                errors.append(f"aosp 루트에 {rel}가 없습니다: {aosp}")
+                errors.append(f"{primary} 루트에 {rel}가 없습니다: {aosp}")
         estimated = estimate_version(root, sources)
         if estimated is None:
             warnings.append("트리 버전을 추정하지 못했다 (사용자 입력을 신뢰한다)")
         elif version and estimated != str(version):
-            warnings.append(f"트리 버전 {estimated}가 대상 Android {version}과 다르다. 계속할지 묻는다.")
+            warnings.append(f"트리 버전 {estimated}가 대상 {spec.label} {version}과 다르다. 계속할지 묻는다.")
     return {"roots": roots, "valid": not errors, "errors": errors, "warnings": warnings,
             "estimated_version": estimated, "version": version}
 
 
 def cmd_validate(args, defaults) -> tuple[dict, int]:
-    result = validate(parse_roots(args.roots, _cfg(defaults)), _keys(args, defaults), args.version, _tree(defaults))
+    profile = _profile(defaults)
+    result = validate(parse_roots(args.roots, _cfg(defaults), profile.spec.primary_root), _keys(args, defaults, profile.spec),
+                      args.version, profile.source_tree, profile.spec)
     return result, (OK if result["valid"] else USAGE)
 
 
@@ -165,7 +195,7 @@ def _split_ref(ref: str) -> tuple[str, str]:
 
 
 def cmd_resolve(args, defaults) -> tuple[dict, int]:
-    roots = parse_roots(args.roots, _cfg(defaults))
+    roots = parse_roots(args.roots, _cfg(defaults), _profile(defaults).spec.primary_root)
     key, rel = _split_ref(args.ref)
     if key not in roots:
         raise UsageError(f"루트 '{key}'가 없습니다 (주어진 루트: {', '.join(sorted(roots))}).")
@@ -177,7 +207,7 @@ def cmd_resolve(args, defaults) -> tuple[dict, int]:
 
 
 def cmd_find_symbol(args, defaults) -> dict:
-    roots = parse_roots(args.roots, _cfg(defaults))
+    roots = parse_roots(args.roots, _cfg(defaults), _profile(defaults).spec.primary_root)
     cls, sep, member = args.symbol.partition("#")
     name_re = re.compile(rf"\b(?:class|interface|enum|object)\s+{re.escape(cls)}\b") if sep else None
     member_re = re.compile(rf"\b{re.escape(member if sep else cls)}\s*\(")
@@ -217,12 +247,13 @@ def cmd_remember(args, defaults) -> dict:
     data = userconfig.load_user()
     if data is None:
         raise UsageError("config가 없습니다. 먼저 setup을 한다.")
-    roots = parse_roots(args.roots, _cfg(defaults))
-    recent = [r for r in data.get("recent_code_roots") or [] if (r.get("roots") or {}) != roots]
+    roots = parse_roots(args.roots, _cfg(defaults), _profile(defaults).spec.primary_root)
+    key = userconfig.profile_key(_session(defaults)[0], "recent_code_roots")   # 선택 플랫폼 프로필에 기록한다
+    recent = [r for r in userconfig.get(data, key) or [] if (r.get("roots") or {}) != roots]
     recent.insert(0, {"roots": roots, "used_on": date.today().isoformat()})
-    data["recent_code_roots"] = recent[:RECENT_MAX]
+    userconfig.set_value(data, key, recent[:RECENT_MAX])
     userconfig.save(data)
-    return {"recent_code_roots": data["recent_code_roots"]}
+    return {"recent_code_roots": userconfig.get(data, key)}
 
 
 def _allow_common_anywhere(parser: argparse.ArgumentParser) -> None:
@@ -235,6 +266,8 @@ def _allow_common_anywhere(parser: argparse.ArgumentParser) -> None:
                     sub.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="JSON 출력 (항상 JSON)")
                 if "--plugin-root" not in opts:
                     sub.add_argument("--plugin-root", default=argparse.SUPPRESS)
+                if "--platform" not in opts:
+                    sub.add_argument("--platform", metavar="이름", default=argparse.SUPPRESS, help=platform_session.HELP)
                 _allow_common_anywhere(sub)
 
 
@@ -243,6 +276,7 @@ def build_parser() -> argparse.ArgumentParser:
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--plugin-root", default=None)
     parser.add_argument("--json", action="store_true", help="JSON 출력 (항상 JSON)")
+    platform_session.add_arg(parser)
     sub = parser.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("suggest")
     p.add_argument("--version", metavar="v")
@@ -270,7 +304,14 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     defaults = site_defaults.load_or_exit(args.plugin_root)
     code = OK
+    global _SESSION
+    _SESSION = None
     try:
+        if args.platform:
+            try:
+                _SESSION = platform_session.resolve(defaults, args.platform)
+            except platforms.PlatformConfigError as exc:
+                raise UsageError(str(exc)) from exc
         if args.cmd == "suggest":
             result = cmd_suggest(args, defaults)
         elif args.cmd == "validate":

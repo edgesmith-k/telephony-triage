@@ -49,7 +49,8 @@ sys.path.insert(0, str(SCRIPTS))
 
 from common import compat, issuepost, masking, session_lock, site_defaults, userconfig  # noqa: E402
 from common.exitcodes import CHECK_FAILED, OK, USAGE  # noqa: E402
-from platforms.android.logcat import STAMP_RE, THREADTIME_RE, TIME_RE  # noqa: E402
+import platforms  # noqa: E402
+from platforms import session as platform_session  # noqa: E402
 
 DEFAULT_KEY_RE = r"[A-Z][A-Z0-9]+-\d+"     # jira_fields.DEFAULT_KEY_RE와 같다
 OMIT_KEYS = ("failed_step", "fields", "evidence", "must_show", "others")
@@ -83,7 +84,10 @@ class Job:
         user = userconfig.load_user()
         if user is None:
             raise Usage("사용자 config가 없다 — /telephony-triage:setup 을 먼저 한다")
-        self.cfg = userconfig.merged(defaults, user)
+        try:     # 선택 플랫폼의 work_dir(`--platform` > TT_PLATFORM > 사용자 config > site)
+            self.platform, self.cfg = platform_session.resolve(defaults, getattr(args, "platform", None), user)
+        except platforms.PlatformConfigError as exc:
+            raise Usage(str(exc)) from exc
         work = Path(str(userconfig.get(self.cfg, "work_dir"))).expanduser()
         self.snap = work / session_lock.SNAPSHOT_DIR
         db_cfg = compat.load_db_config(self.snap) if (self.snap / "issue-db.config.yaml").is_file() else {}
@@ -95,6 +99,9 @@ class Job:
         self.dir = work / self.key
         self.spec, self.spec_err = issuepost.write_spec(self.cfg)
         self.analysis = _read(self.dir / "analysis.json", "analysis.json")
+        done = (self.analysis or {}).get("platform") or userconfig.TOP_PROFILE
+        if self.analysis and done != self.platform:      # 다른 플랫폼 분석을 다른 플랫폼 설정으로 게시하지 않는다
+            raise Usage(f"이 분석은 {done} 플랫폼이다(선택한 플랫폼: {self.platform}) — --platform {done}으로 다시 실행한다")
         self.render_doc = _read(self.dir / issuepost.RENDER_FILE, issuepost.RENDER_FILE)
         self.approved = _read(self.dir / issuepost.APPROVED_FILE, issuepost.APPROVED_FILE)
         self.result = _read(self.dir / issuepost.RESULT_FILE, issuepost.RESULT_FILE)
@@ -296,7 +303,7 @@ def build(job: Job, a: dict, plan: dict | None, fill: dict | None, omit: set[str
     # PROBLEM
     s["PROBLEM"].append(_line(f"Jira: {job.key}"))
     if "fields" not in omit:
-        parts = [f"{label}: {_clip(fields[k], FIELD_MAX)}" for k, label in (("model", "단말"), ("sw", "SW"), ("android_version", "Android"),
+        parts = [f"{label}: {_clip(fields[k], FIELD_MAX)}" for k, label in (("model", "단말"), ("sw", "SW"), ("android_version", _platform_label(a)),
                                                           ("carrier", "캐리어"), ("occurred_on", "발생일")) if fields.get(k)]
         if parts:
             s["PROBLEM"].append(_line(" · ".join(parts)))
@@ -355,10 +362,30 @@ def build(job: Job, a: dict, plan: dict | None, fill: dict | None, omit: set[str
 # -- fill 검사 -----------------------------------------------------------------------------------
 
 
-def _raw_log_line(text: str) -> bool:
-    for m in STAMP_RE.finditer(text):
-        sub = text[m.start():]
-        if THREADTIME_RE.match(sub) or TIME_RE.match(sub):
+def _platform_label(a: dict) -> str:
+    """Jira 플랫폼 버전 칸 라벨 (`analysis.json`의 `platform`, 없으면 기본 플랫폼)."""
+    try:
+        return platforms.label(a.get("platform") or platforms.DEFAULT_NAME)
+    except platforms.PlatformConfigError as exc:
+        raise Usage(f"analysis.json platform: {exc}") from exc
+
+
+def raw_finders() -> tuple[list, list[str]]:
+    """`(find_raw 목록, 경고)`. 설치된 플랫폼 **전부**(`platforms.known()`, 설정과 무관)의 합집합으로 본다 — 게시 본문의
+    원문 줄 검사는 넓을수록 안전하다. 불러오지 못한 플랫폼은 빼고 경고한다(나머지로 계속)."""
+    finders, errors = platforms.known_raw_line_finders()
+    warnings = [f"플랫폼 {name}을(를) 불러오지 못해 그 형식의 원문 줄 검사는 건너뛰었다 ({type(exc).__name__}: {exc})"
+                for name, exc in errors]
+    return [find for _, _, find, _ in finders], warnings
+
+
+def _raw_log_line(text: str, finders: list) -> bool:
+    """판별 함수가 예외를 내면 원문으로 본다(fail-closed)."""
+    for find in finders:
+        try:
+            if find(text):
+                return True
+        except Exception:  # noqa: BLE001
             return True
     return False
 
@@ -374,10 +401,14 @@ def _quoted(text: str, sources: list[str]) -> bool:
     return False
 
 
-def check_fill(raw, need_problem: bool, code_skipped: bool, masker, quote_src: list[str]) -> tuple[dict | None, list[str], list[str]]:
-    """(마스킹된 fill 또는 None, problems, warnings)."""
+def check_fill(raw, need_problem: bool, code_skipped: bool, masker, quote_src: list[str],
+               finders: list | None = None) -> tuple[dict | None, list[str], list[str]]:
+    """(마스킹된 fill 또는 None, problems, warnings). `finders`가 없으면 `raw_finders()`."""
     problems: list[str] = []
     warnings: list[str] = []
+    if finders is None:
+        finders, finder_warnings = raw_finders()
+        warnings += finder_warnings
     if not isinstance(raw, dict):
         return None, ["fill이 JSON 객체가 아니다"], warnings
     unknown = sorted(set(raw) - FILL_KEYS)
@@ -431,7 +462,7 @@ def check_fill(raw, need_problem: bool, code_skipped: bool, masker, quote_src: l
             problems.append(f"{name}: {len(value)}자 > 상한 {limit}자")
         if "TODO" in value:
             problems.append(f"{name}: TODO가 남았다")
-        if _raw_log_line(value):
+        if _raw_log_line(value, finders):
             problems.append(f"{name}: 로그 원문 줄 모양이다(근거 로그는 스크립트 칸에만)")
         m = masker.mask(value.strip())
         if _quoted(m, quote_src):
@@ -630,6 +661,7 @@ def build_parser() -> argparse.ArgumentParser:
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--plugin-root", default=None)
     common.add_argument("--json", action="store_true", help="JSON 출력")
+    platform_session.add_arg(common)
     sub = parser.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("status", parents=[common])
     p.add_argument("key", metavar="KEY")

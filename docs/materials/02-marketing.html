@@ -225,7 +225,7 @@ html { scroll-behavior: smooth; }
     <div class="copy">
       <div class="eyebrow">Claude Code 플러그인 · Android Telephony</div>
       <h1>Telephony 이슈 원인은 스크립트가 판정하고, 팀의 판단은 이슈 DB에 쌓입니다</h1>
-      <p class="lead">Jira 이슈와 logcat을 받아 시그니처로 원인 후보와 해결책을 찾고, 엔지니어가 확인한 결과를 사내 GitHub 이슈 DB에 PR로 남깁니다. Jira는 읽기만 하고, 저장되는 로그는 모두 마스킹됩니다.</p>
+      <p class="lead">Jira 이슈와 logcat을 받아 시그니처로 원인 후보와 해결책을 찾고, 엔지니어가 확인한 결과를 사내 GitHub 이슈 DB에 PR로 남깁니다. Jira는 읽기와, 확인 화면에서 승인한 결과 코멘트 추가만 하고, 저장되는 로그는 모두 마스킹됩니다.</p>
       <div class="cta-row">
         <a class="btn primary" href="#contact">도입 문의</a>
         <a class="btn ghost" href="#how">작동 방식 보기</a>
@@ -303,8 +303,8 @@ html { scroll-behavior: smooth; }
         </article>
         <article class="feat">
           <div class="k">Jira MCP</div>
-          <h3>Jira 연동 (읽기 전용)</h3>
-          <p>이미 등록된 Jira MCP를 찾아 구조화 필드와 발생 시각을 읽습니다. 쓰기 도구 호출은 차단됩니다.</p>
+          <h3>Jira 연동 (읽기 + 승인한 코멘트)</h3>
+          <p>이미 등록된 Jira MCP를 찾아 구조화 필드와 발생 시각을 읽습니다. 분석 결과는 확인 화면에서 승인하면 코멘트 1건(PROBLEM / CAUSE / NEXT ACTION / ANALYSIS)으로 올릴 수 있고, 그 밖의 쓰기 도구 호출은 차단됩니다.</p>
           <ul><li>모델·SW·Android 버전 필드 매핑</li><li>시험 절차의 PASS 스텝으로 분석 구간 지정(선택)</li></ul>
         </article>
         <article class="feat">
@@ -382,11 +382,11 @@ html { scroll-behavior: smooth; }
       </div>
       <div>
         <div class="nums">
-          <div class="num"><b>약 1,100</b><span>자동 테스트. CI(Ubuntu, Python 3.11 · 3.14) 통과</span></div>
+          <div class="num"><b>1,412</b><span>자동 테스트. CI(Ubuntu, Python 3.11 · 3.14) 통과</span></div>
           <div class="num"><b>23 / 23</b><span>샘플 이슈 DB 회귀 fixture 통과</span></div>
-          <div class="num"><b>60</b><span>skill eval 시나리오 정의</span></div>
+          <div class="num"><b>65</b><span>skill eval 시나리오 정의</span></div>
         </div>
-        <p class="small muted" style="margin-top:10px">2026-10-08 기준 개발 환경 실측. 규칙을 추가할 때마다 새 규칙이 해당 로그를 잡는지, 정상 로그를 잘못 잡지 않는지, 기존 분류를 깨지 않는지 회귀로 확인합니다.</p>
+        <p class="small muted" style="margin-top:10px">2026-10-11 기준 개발 환경 실측(토큰은 10-08). 규칙을 추가할 때마다 새 규칙이 해당 로그를 잡는지, 정상 로그를 잘못 잡지 않는지, 기존 분류를 깨지 않는지 회귀로 확인합니다.</p>
       </div>
     </div>
   </div>
@@ -404,8 +404,8 @@ html { scroll-behavior: smooth; }
             <tr><td>원문 격리</td><td>Jira 응답 원문은 모델 컨텍스트에 넣지 않고 권한 700 작업 폴더에 둔 뒤 읽고 지웁니다. 모델에는 마스킹된 요약만 보입니다. 처리에 실패하면 원문 대신 오류를 돌려줍니다.</td></tr>
             <tr><td>저장 범위</td><td>이슈 DB에는 Jira 구조화 필드와 사용자가 확인한 한 줄 요약만 남습니다. 요약·설명·코멘트 원문은 저장하지 않습니다.</td></tr>
             <tr><td>승인 후 PR</td><td>이슈 DB 쓰기는 확인 화면 → 승인 → 브랜치 PR입니다. main 대상 push와 승인 토큰 없는 push는 pre-push hook이 거부합니다. 서버 측 브랜치 보호와 CODEOWNERS 필수 리뷰를 함께 켜도록 안내합니다.</td></tr>
-            <tr><td>Jira 읽기 전용</td><td>허용 목록에 없는 Jira 도구 호출은 모두 거부합니다.</td></tr>
-            <tr><td>작업 격리</td><td>분석은 별도 읽기 스냅샷에서 합니다. 사용자의 이슈 DB clone은 브랜치도 파일도 바꾸지 않습니다. 동시 작업은 세션 lock으로 막습니다.</td></tr>
+            <tr><td>Jira 쓰기 제한</td><td>허용 목록의 읽기 도구와, 확인 화면에서 승인한 본문의 코멘트 추가만 통과합니다(본문이 바뀌면 다시 승인). 필드 수정·상태 전환·이슈 생성은 모두 거부합니다.</td></tr>
+            <tr><td>작업 격리</td><td>분석은 별도 읽기 스냅샷에서 합니다. 사용자의 이슈 DB clone은 브랜치도 파일도 바꾸지 않습니다. 같은 이슈 DB(플랫폼)의 동시 작업은 세션 lock으로 막습니다.</td></tr>
           </tbody>
         </table>
       </div>
@@ -505,10 +505,10 @@ html { scroll-behavior: smooth; }
           <ul><li>사내 파서·분석 스킬을 연결</li><li>Android 버전별 소스 프로필</li></ul>
         </article>
         <article class="feat">
-          <div class="k">구조 준비됨</div>
+          <div class="k">뼈대 있음</div>
           <h3>다른 플랫폼</h3>
-          <p>Android 전용 코드(logcat·RIL·bugreport 해석)는 플랫폼 폴더로 분리돼 있습니다. 새 플랫폼은 어댑터만 추가하고 매칭·이슈 DB·PR 흐름은 그대로 씁니다.</p>
-          <ul><li>현재 지원: Android</li><li>후보: Linux 텔레포니 스택(oFono 등), 도입 후 결정</li></ul>
+          <p>Android 전용 코드(logcat·RIL·bugreport 해석)는 플랫폼 폴더로 분리돼 있고, 동작·원인·해결책이 달라 플랫폼마다 이슈 DB를 따로 둡니다. 새 플랫폼은 플랫폼 폴더와 설정으로 추가하고 매칭·PR 흐름은 그대로 씁니다.</p>
+          <ul><li>현재 지원: Android (기본)</li><li>oFono: 뼈대(로그 형식은 가정, 실제 규칙은 사내 로그를 받은 뒤)</li></ul>
         </article>
         <article class="feat">
           <div class="k">계획</div>
@@ -517,7 +517,7 @@ html { scroll-behavior: smooth; }
           <ul><li>공통 코어 분리 설계 단계</li><li>판정 결정성·사람 승인 원칙은 그대로</li></ul>
         </article>
       </div>
-      <p class="small muted">"구조 준비됨"은 코드 구조가 분리돼 있다는 뜻이며 다른 플랫폼 지원이 완성됐다는 뜻은 아닙니다. 대상 플랫폼과 범용판 착수 시점은 파일럿 뒤에 정합니다.</p>
+      <p class="small muted">"뼈대 있음"은 플랫폼 분리와 oFono 뼈대가 들어갔다는 뜻이며 oFono 지원이 완성됐다는 뜻은 아닙니다. 대상 플랫폼과 범용판 착수 시점은 파일럿 뒤에 정합니다.</p>
     </div>
   </div>
 </section>
@@ -533,7 +533,7 @@ html { scroll-behavior: smooth; }
         </details>
         <details>
           <summary>Jira에 코멘트나 상태 변경을 하나요?</summary>
-          <p>하지 않습니다. Jira는 읽기 전용이고, 허용 목록 밖의 Jira 도구 호출은 hook이 거부합니다.</p>
+          <p>상태 변경은 하지 않습니다. 분석 결과 코멘트는 엔지니어가 확인 화면에서 본문을 승인했을 때만 1건 올리고(본문이 바뀌면 다시 승인), 그 밖의 Jira 도구 호출은 hook이 거부합니다.</p>
         </details>
         <details>
           <summary>이슈 DB에는 어떤 정보가 남나요?</summary>
@@ -549,7 +549,7 @@ html { scroll-behavior: smooth; }
         </details>
         <details>
           <summary>Android가 아닌 플랫폼이나 다른 팀에서도 쓸 수 있나요?</summary>
-          <p>그렇게 설계했습니다. Android 전용 코드는 플랫폼 어댑터로 분리돼 있어, 새 플랫폼은 로그 해석 부분만 추가하면 판정·이슈 DB·PR 흐름을 그대로 씁니다. 다른 도메인 팀을 위한 범용판은 계획 단계입니다. 지금 지원하는 플랫폼은 Android입니다.</p>
+          <p>그렇게 설계했습니다. Android 전용 코드는 플랫폼 어댑터로 분리돼 있어, 새 플랫폼은 로그 해석 부분만 추가하면 판정·이슈 DB·PR 흐름을 그대로 씁니다. 다른 도메인 팀을 위한 범용판은 계획 단계입니다. 플랫폼마다 이슈 DB를 따로 두고 <code>--platform</code>으로 고릅니다. 지금 실제로 지원하는 플랫폼은 Android이고 oFono는 뼈대 단계입니다.</p>
         </details>
       </div>
     </div>
@@ -575,7 +575,7 @@ html { scroll-behavior: smooth; }
 </section>
 
 <footer>
-  <div class="wrap">telephony-triage · 수치는 2026-10-08 개발 환경 실측이며 토큰·비용은 모의 데이터 eval 기준입니다. 로그·화면 예시는 합성 데이터입니다.</div>
+  <div class="wrap">telephony-triage · 수치는 2026-10-11 개발 환경 실측(토큰 10-08)이며 토큰·비용은 모의 데이터 eval 기준입니다. 로그·화면 예시는 합성 데이터입니다.</div>
 </footer>
 
 <script>

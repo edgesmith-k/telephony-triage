@@ -159,6 +159,38 @@ def _inside(path: str, root: str) -> bool:
     return path == root or path.startswith(root.rstrip(os.sep) + os.sep)
 
 
+class GuardProfile:
+    """플랫폼 경로 프로필 하나(17-platforms): clone·work_dir·base·원격. 사용자 config의 **모든** 프로필을 보호한다
+    (`platform.enabled`·선택 플랫폼과 무관 — 플러그인을 두 벌 설치해도 서로 보호된다)."""
+
+    def __init__(self, name: str, cfg: dict, has_user: bool):
+        self.name = name
+        self.clone = None
+        self.clone_common = None
+        self.work_dir = None
+        self.exempt = None          # 규칙 8 제외 근거로 쓸 work_dir(절대 경로이고 어떤 clone도 포함하지 않을 때만, Config가 정한다)
+        if has_user:
+            db = cfg.get("issue_db") if isinstance(cfg.get("issue_db"), dict) else {}
+            clone = db.get("path")
+            if isinstance(clone, str) and clone.strip() and Path(clone).expanduser().is_dir():
+                self.clone = Path(clone).expanduser()
+                self.clone_common = _common_dir(self.clone)
+            self.work_dir = Path(str(userconfig.get(cfg, "work_dir"))).expanduser()
+        self.base = str(userconfig.get(cfg, "issue_db.base_branch") or "main")
+        remote = userconfig.get(cfg, "issue_db.remote") if has_user else None
+        self.remote_slug = _repo_slug(str(remote)) if remote else None
+        self._clone_git_dir: str | None = None
+
+    def is_clone_body(self, cwd: Path) -> bool:
+        """cwd가 이 프로필 clone 본체(작업 worktree·`_snapshot`이 아닌)인가. git dir(`<clone>/.git`)로 비교한다 —
+        worktree의 git dir은 `<clone>/.git/worktrees/<이름>`이라 다르다."""
+        if self.clone is None:
+            return False
+        if self._clone_git_dir is None:
+            self._clone_git_dir = _git_dir(self.clone) or ""
+        return bool(self._clone_git_dir) and _git_dir(cwd) == self._clone_git_dir
+
+
 class Config:
     def __init__(self, plugin_root: str | None = None):
         self.warnings: list[str] = []
@@ -168,22 +200,26 @@ class Config:
             defaults = {}
             self.warnings.append("site-defaults.yaml이 없다 (S-3 미완료). 사용자 config만으로 판정한다.")
         self.plugin_root = plugin_root
+        self._raw_sniffers: list | None = None
         self.raw_names, self.raw_exempt = self._raw_read(defaults)
         self.user = userconfig.load_user()
         self.cfg = userconfig.merged(defaults, self.user or {})
-        self.clone = None
-        self.clone_common = None
-        self.work_dir = None
-        if self.user:
-            clone = userconfig.get(self.user, "issue_db.path")
-            if clone and Path(str(clone)).expanduser().is_dir():
-                self.clone = Path(str(clone)).expanduser()
-                self.clone_common = _common_dir(self.clone)
-            self.work_dir = Path(str(userconfig.get(self.cfg, "work_dir"))).expanduser()
-        self.base = str(userconfig.get(self.cfg, "issue_db.base_branch") or "main")
-        remote = userconfig.get(self.cfg, "issue_db.remote") if self.user else None
-        self.remote_slug = _repo_slug(str(remote)) if remote else None
-        self._clone_git_dir: str | None = None
+        cfgs = userconfig.profiles(defaults, self.user, invalid_names=True) if self.user else {userconfig.TOP_PROFILE: self.cfg}
+        self.profiles = [GuardProfile(name, cfg, bool(self.user)) for name, cfg in cfgs.items()]
+        # 잘못된 프로필도 보호 대상에는 넣는다. 다만 잘못된 work_dir(상대·빈 값·clone을 포함)은 규칙 8 제외 근거로 쓰지 않는다
+        clones = [_norm(p.clone) for p in self.profiles if p.clone is not None]
+        for p in self.profiles:
+            raw = userconfig.get(cfgs[p.name], "work_dir")
+            ok = isinstance(raw, str) and raw.strip() and os.path.isabs(os.path.expanduser(raw))
+            if ok and not any(_inside(c, _norm(p.work_dir)) for c in clones):
+                p.exempt = p.work_dir
+        problems = userconfig.profile_problems(self.user) if self.user else []
+        if problems:
+            self.warnings.append("사용자 config 플랫폼 프로필 문제(보호는 유지, 잘못된 work_dir은 예외 근거로 쓰지 않는다): "
+                                 + "; ".join(problems[:5]))
+        top = self.profiles[0]            # 기본 플랫폼 프로필(옛 단일 프로필 속성)
+        self.clone, self.clone_common, self.work_dir = top.clone, top.clone_common, top.work_dir
+        self.base, self.remote_slug = top.base, top.remote_slug
 
     def _raw_read(self, defaults: dict) -> tuple[set, set]:
         """규칙 10 목록: 내장 ∪ site-defaults `guard.raw_read`. 잘못된 값은 경고하고 내장만 쓴다."""
@@ -202,18 +238,61 @@ class Config:
             return names, exempt
         return names | set(site.get("names", [])), exempt | set(site.get("exempt_dirs", []))
 
+    def raw_sniffers(self) -> list:
+        """규칙 10 머리 판별: 설치된 플랫폼 **전부**(`platforms.known()`, 설정과 무관)의 원문 줄·묶음 입력 머리 판별 합집합.
+        규칙 10 명령이 나올 때만 플랫폼 모듈을 불러온다. 플랫폼마다 따로 불러와 하나가 깨져도 나머지는 쓰고, 하나라도
+        깨졌거나 레지스트리를 못 쓰면 경고하고 최소 내장 판별(`RAW_FALLBACK_SNIFFERS`)을 더한다 — 이전보다 약해지지 않는다."""
+        if self._raw_sniffers is not None:
+            return self._raw_sniffers
+        sniffers: list = []
+        broken = False
+        try:
+            import platforms
+            finders, errors = platforms.known_raw_line_finders()
+            for name, exc in errors:
+                broken = True
+                self.warnings.append(f"규칙 10: 플랫폼 {name}을(를) 불러오지 못해 내장 최소 판별로 대신한다 ({type(exc).__name__}: {exc})")
+            for _name, raw_line, _find, sniff in finders:
+                sniffers.append(raw_line)
+                if sniff is not None:
+                    sniffers.append(sniff)
+        except Exception as exc:   # noqa: BLE001 — import·레지스트리 오류여도 hook은 멈추지 않는다
+            broken = True
+            self.warnings.append(f"규칙 10: 플랫폼 레지스트리를 쓰지 못해 내장 최소 판별만 쓴다 ({type(exc).__name__}: {exc})")
+            sniffers = []
+        if broken or not sniffers:
+            sniffers += RAW_FALLBACK_SNIFFERS
+        self._raw_sniffers = sniffers
+        return sniffers
+
     @property
     def git_rules(self) -> bool:
-        return self.clone_common is not None
+        return any(p.clone_common is not None for p in self.profiles)
+
+    @property
+    def clones(self) -> list[Path]:
+        return [p.clone for p in self.profiles if p.clone is not None]
+
+    @property
+    def work_dirs(self) -> list[Path]:
+        return [p.work_dir for p in self.profiles if p.work_dir is not None]
+
+    @property
+    def remote_slugs(self) -> list[str]:
+        return [p.remote_slug for p in self.profiles if p.remote_slug is not None]
 
     def is_clone_body(self, cwd: Path) -> bool:
-        """cwd가 사용자 clone 본체(작업 worktree·`_snapshot`이 아닌)인가. git dir(`<clone>/.git`)로 비교한다 —
-        worktree의 git dir은 `<clone>/.git/worktrees/<이름>`이라 다르다."""
-        if self.clone is None:
-            return False
-        if self._clone_git_dir is None:
-            self._clone_git_dir = _git_dir(self.clone) or ""
-        return bool(self._clone_git_dir) and _git_dir(cwd) == self._clone_git_dir
+        """cwd가 어느 프로필이든 사용자 clone 본체인가."""
+        return any(p.is_clone_body(cwd) for p in self.profiles)
+
+    def profile_of_common(self, common: str | None) -> GuardProfile | None:
+        """git common dir이 같은 프로필(그 이슈 DB clone·worktree·스냅샷). 없으면 None."""
+        if common is None:
+            return None
+        return next((p for p in self.profiles if p.clone_common is not None and p.clone_common == common), None)
+
+    def same_db_repo(self, slug) -> bool:
+        return any(_same_repo(slug, s) for s in self.remote_slugs)
 
 
 def _git(cwd: Path, *args: str) -> subprocess.CompletedProcess:
@@ -321,7 +400,18 @@ def check_jira_post(tool: str, tool_input: dict, spec: dict, conf: Config, dec: 
     """승인한 Jira 코멘트 게시 (규칙 2 예외). 승인 기록과 맞으면 ask(권한 확인은 그대로 뜬다), 아니면 deny.
     대조 중 예외도 deny다. "내부 오류"·"의존성 없음" 문구는 쓰지 않는다(doctor가 degraded 판별에 쓴다)."""
     try:
-        problem = issuepost.check_call(tool, tool_input, spec, conf.work_dir)
+        # 프로필마다 승인 기록과 대조한다. 하나라도 맞으면 그 승인이다. 아니면 승인 기록이 있는 프로필의 문제를 보인다
+        problems = []
+        for prof in conf.profiles:
+            got = issuepost.check_call(tool, tool_input, spec, prof.work_dir)
+            if got is None:
+                problems = []
+                break
+            key = tool_input.get(spec["key_arg"]) if isinstance(tool_input, dict) else None
+            has_record = prof.work_dir is not None and isinstance(key, str) and issuepost.KEY_SAFE_RE.fullmatch(key) \
+                and (prof.work_dir / key / issuepost.APPROVED_FILE).is_file()
+            problems.insert(0, got) if has_record else problems.append(got)
+        problem = problems[0] if problems else None
     except Exception as exc:  # noqa: BLE001 — 판정하지 못하면 거부한다
         problem = f"승인 기록 판정 실패({type(exc).__name__})"
     if problem:
@@ -339,7 +429,7 @@ MCP_REPO_KEYS = ("repository", "full_name", "repo_url", "url")
 def check_mcp_db_write(tool: str, part: str, tool_input: dict, conf: Config, dec: Decision) -> None:
     """비Jira MCP의 쓰기형 도구가 이슈 DB 레포를 대상으로 하면 ask, 머지면 deny (규칙 11).
     대상은 `owner`+`repo`(GitHub MCP 표준 인자) 또는 레포 문자열 인자로만 안다. 없으면 판정하지 않는다."""
-    if conf.remote_slug is None or not mcptools.is_write(part) or not isinstance(tool_input, dict):
+    if not conf.remote_slugs or not mcptools.is_write(part) or not isinstance(tool_input, dict):
         return
     slug = None
     owner, repo = tool_input.get("owner"), tool_input.get("repo")
@@ -350,7 +440,7 @@ def check_mcp_db_write(tool: str, part: str, tool_input: dict, conf: Config, dec
             if isinstance(tool_input.get(key), str) and _repo_slug(tool_input[key]):
                 slug = _repo_slug(tool_input[key])
                 break
-    if not _same_repo(slug, conf.remote_slug):
+    if slug is None or not conf.same_db_repo(slug):
         return
     if mcptools.verb(part) == "merge":   # 동사 자리만: `disable_pr_auto_merge`는 ask
         dec.deny.append(f"이슈 DB PR 머지는 리뷰어가 GHE에서 한다. 도구가 머지하지 않는다 (규칙 6·7: {tool}).")
@@ -367,11 +457,22 @@ POST_RECORD_MSG = ("Jira 게시 승인·결과 기록은 issue_post.py approve�
 
 
 def _post_record(target: str, conf: Config) -> bool:
-    """`<work_dir>/<KEY>/post.approved.json|post.result.json`인가 (target은 `_norm` 경로)."""
-    if conf.work_dir is None:
-        return False
+    """어느 프로필이든 `<work_dir>/<KEY>/post.approved.json|post.result.json`인가 (target은 `_norm` 경로)."""
     p = Path(target)
-    return p.name in POST_RECORDS and _norm(p.parent.parent) == _norm(conf.work_dir)
+    return p.name in POST_RECORDS and any(_norm(p.parent.parent) == _norm(w) for w in conf.work_dirs)
+
+
+def _in_clone(target: str, conf: Config) -> bool:
+    """어느 프로필이든 clone 안이고, 그 clone **안에 들어 있는** (유효한) work_dir 안이 아닌가 (target은 `_norm` 경로).
+    가장 구체적인 경로 기준이다: clone을 포함하는 work_dir은 그 clone의 보호를 풀지 못한다."""
+    exempts = [_norm(p.exempt) for p in conf.profiles if p.exempt is not None]
+    for clone in (_norm(c) for c in conf.clones):
+        if not _inside(target, clone):
+            continue
+        if any(w != clone and _inside(w, clone) and _inside(target, w) for w in exempts):
+            continue
+        return True
+    return False
 
 
 def check_file(tool_input: dict, cwd: Path, conf: Config, dec: Decision) -> None:
@@ -385,11 +486,7 @@ def check_file(tool_input: dict, cwd: Path, conf: Config, dec: Decision) -> None
     if _post_record(target, conf):
         dec.deny.append(f"{POST_RECORD_MSG}: {raw}).")
         return
-    if conf.clone is None:
-        return
-    if conf.work_dir is not None and _inside(target, _norm(conf.work_dir)):
-        return
-    if _inside(target, _norm(conf.clone)):
+    if _in_clone(target, conf):
         dec.deny.append("이슈 DB clone은 도구가 직접 고치지 않는다. 직접 편집은 사용자가 한다 "
                         f"(규칙 8: {raw}). 도구 변경은 작업 계획과 db_pr stage로 작업 worktree에서 만든다.")
 
@@ -683,7 +780,7 @@ def _branch_name(ref: str) -> str:
     return ref[len("refs/heads/"):] if ref.startswith("refs/heads/") else ref
 
 
-def check_push(call: GitCall, conf: Config, dec: Decision) -> None:
+def check_push(call: GitCall, conf: "Config | GuardProfile", dec: Decision) -> None:
     pos, flags = push_targets(call.args)
     if flags.get("no-verify"):
         dec.deny.append("git push의 --no-verify는 pre-push 검사를 건너뛰므로 금지한다 (규칙 5).")
@@ -949,7 +1046,24 @@ def _raw_args(argv: list[str]) -> list[str]:
     return out
 
 
-def _is_raw_file(path: Path, names: set, exempt: set) -> bool:
+# 규칙 10 최소 내장 판별: 플랫폼 레지스트리(또는 플랫폼 하나)를 못 불러올 때만 더한다. 플랫폼 판별보다 넓게 잡는다
+# (줄 맨 앞 logcat 스탬프 — threadtime·time 형식을 모두 덮는다 — 와 bugreport 머리). 원문 차단은 넓을수록 안전하다.
+_RAW_FALLBACK_STAMP = re.compile(r"^(?:\d{4}-)?\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d{3,9}\s")
+RAW_FALLBACK_SNIFFERS = [
+    lambda line: bool(_RAW_FALLBACK_STAMP.match(line)),
+    lambda line: line.startswith("== dumpstate") or (line.startswith("------ ") and line.rstrip().endswith(" ------")),
+]
+
+
+def _sniff_hit(sniff, line: str) -> bool:
+    """판별 함수 하나. 예외가 나면 원문으로 본다(fail-closed — 판별이 깨져 원문 통독이 통과되지 않게)."""
+    try:
+        return bool(sniff(line))
+    except Exception:  # noqa: BLE001
+        return True
+
+
+def _is_raw_file(path: Path, names: set, exempt: set, sniffers=()) -> bool:
     real = _norm(path)
     segs = real.replace("\\", "/").split("/")
     if exempt & set(segs[:-1]):
@@ -963,16 +1077,8 @@ def _is_raw_file(path: Path, names: set, exempt: set) -> bool:
     if head.startswith(b"PK\x03\x04") or head.startswith(b"\x1f\x8b"):
         return True
     lines = head.decode("utf-8", errors="replace").splitlines()[:RAW_SNIFF_LINES]
-    try:
-        from platforms.android import logcat   # 이 명령이 나올 때만 불러온다
-    except ImportError:
-        logcat = None
-    for line in lines:
-        if logcat is not None and (logcat.THREADTIME_RE.match(line) or logcat.TIME_RE.match(line)):
-            return True
-        if line.startswith("== dumpstate") or (line.startswith("------ ") and line.rstrip().endswith(" ------")):
-            return True
-    return False
+    sniffers = sniffers() if callable(sniffers) else sniffers   # 머리를 볼 때만 플랫폼 모듈을 불러온다
+    return any(_sniff_hit(sniff, line) for line in lines for sniff in sniffers)
 
 
 def check_raw_read(command: str, cwd: Path, dec: Decision, conf: Config) -> None:
@@ -994,7 +1100,7 @@ def check_raw_read(command: str, cwd: Path, dec: Decision, conf: Config) -> None
                 cands = [Path(p) for p in sorted(glob.glob(str(path)))[:RAW_GLOB_MAX]]
             for cand in cands:
                 try:
-                    hit = _is_raw_file(cand, names, exempt)
+                    hit = _is_raw_file(cand, names, exempt, conf.raw_sniffers)
                 except OSError:
                     hit = False
                 if hit:
@@ -1092,7 +1198,7 @@ def _gh_targets_db(inv: Invocation, conf: Config) -> bool:
         endpoint = _gh_api(argv)[0] or ""
         m = re.search(r"(?:^|/)repos/([^/]+)/([^/?#]+)", endpoint)
         if m and not any(t.startswith(("{", ":")) for t in m.groups()):
-            return _same_repo(_repo_slug(f"{m.group(1)}/{m.group(2)}"), conf.remote_slug)
+            return conf.same_db_repo(_repo_slug(f"{m.group(1)}/{m.group(2)}"))
     repo = inv.env.get("GH_REPO")
     for i, tok in enumerate(argv[1:], 1):
         if tok in ("-R", "--repo") and i + 1 < len(argv):
@@ -1100,14 +1206,14 @@ def _gh_targets_db(inv: Invocation, conf: Config) -> bool:
         elif tok.startswith("--repo="):
             repo = tok.split("=", 1)[1]
     if repo:
-        return _same_repo(_repo_slug(_expand(repo)), conf.remote_slug)
-    if conf.clone_common is not None and _common_dir(inv.cwd) == conf.clone_common:
+        return conf.same_db_repo(_repo_slug(_expand(repo)))
+    if any(p.clone_common is not None for p in conf.profiles) and conf.profile_of_common(_common_dir(inv.cwd)):
         return True
-    return _same_repo(_origin_slug(inv.cwd), conf.remote_slug)
+    return conf.same_db_repo(_origin_slug(inv.cwd))
 
 
 def check_gh(inv: Invocation, conf: Config, dec: Decision) -> None:
-    if conf.user is None or conf.remote_slug is None:
+    if conf.user is None or not conf.remote_slugs:
         return
     kind = _gh_kind(inv.argv)
     if kind == "local":
@@ -1269,15 +1375,11 @@ def _write_targets(inv: Invocation) -> list[str]:
 
 
 def check_clone_writes(inv: Invocation, conf: Config, dec: Decision) -> None:
-    """Bash 명령의 파일 쓰기 대상이 사용자 clone 안이면 거부 (`<work_dir>` 아래는 제외)."""
-    clone = _norm(conf.clone)
-    work = _norm(conf.work_dir) if conf.work_dir is not None else None
+    """Bash 명령의 파일 쓰기 대상이 어느 프로필이든 사용자 clone 안이면 거부 (어느 `<work_dir>` 아래든 제외)."""
     for word in _write_targets(inv):
         p = _expand(word)
         target = _norm(Path(p) if Path(p).is_absolute() else inv.cwd / p)
-        if work and _inside(target, work):
-            continue
-        if _inside(target, clone):
+        if _in_clone(target, conf):
             dec.deny.append(f"{CLONE_MUTATION_MSG}: {word}")
             return
 
@@ -1324,9 +1426,9 @@ def check_bash(command: str, cwd: Path, conf: Config, dec: Decision) -> None:
     check_raw_read(command, cwd, dec, conf)
     for inv in invocations(command, cwd):
         name = _base(inv.argv[0])
-        if conf.work_dir is not None:
+        if conf.work_dirs:
             check_post_record_writes(inv, conf, dec)
-        if conf.clone is not None:
+        if conf.clones:
             check_clone_writes(inv, conf, dec)
         is_db_pr = name == "db_pr.py" or (name.startswith("python")
                                            and any(_base(a) == "db_pr.py" for a in inv.argv[1:]))
@@ -1343,7 +1445,8 @@ def check_bash(command: str, cwd: Path, conf: Config, dec: Decision) -> None:
         check_clone_git(call, conf, dec)
         if call.sub not in ("commit", "config", "push") and not call.overrides_hooks_path():
             continue
-        if _common_dir(call.cwd) != conf.clone_common:
+        prof = conf.profile_of_common(_common_dir(call.cwd))
+        if prof is None:
             continue   # 이슈 DB가 아니다: 어떤 git 규칙도 적용하지 않는다
         if call.overrides_hooks_path():
             dec.deny.append("git -c core.hooksPath=… 로 hook을 바꾸는 것은 금지다 (규칙 5).")
@@ -1356,7 +1459,7 @@ def check_bash(command: str, cwd: Path, conf: Config, dec: Decision) -> None:
         elif call.sub == "config":
             check_config(call, dec)
         elif call.sub == "push":
-            check_push(call, conf, dec)
+            check_push(call, prof, dec)     # base 브랜치는 cwd가 속한 프로필의 것
 
 
 # -- 진입점 ----------------------------------------------------------------------------------
@@ -1368,13 +1471,14 @@ def judge(event: dict, plugin_root: str | None = None) -> tuple[dict | None, lis
     cwd = Path(str(event.get("cwd") or os.getcwd()))
     conf = Config(plugin_root)
     dec = Decision()
-    dec.warn += conf.warnings
     if tool.startswith("mcp__"):
         check_mcp(tool, tool_input, conf, dec)
     elif tool in FILE_TOOLS:
         check_file(tool_input, cwd, conf, dec)
     elif tool == "Bash":
         check_bash(str(tool_input.get("command") or ""), cwd, conf, dec)
+    # 설정 경고는 검사 **뒤에** 합친다 — 검사 중에 늦게 생기는 경고(규칙 10 fail-soft)도 빠지지 않게. 순서는 설정 경고가 먼저.
+    dec.warn[:0] = conf.warnings
     return dec.output(), dec.warn
 
 

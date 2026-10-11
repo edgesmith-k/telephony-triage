@@ -47,6 +47,8 @@ SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS))
 
 from common import site_defaults  # noqa: E402
+from platforms import PlatformConfigError  # noqa: E402
+from platforms import session as platform_session  # noqa: E402
 from common.exitcodes import USAGE  # noqa: E402
 from dbadd.applier import cmd_apply  # noqa: E402
 from dbadd.core import UsageError  # noqa: E402
@@ -63,6 +65,7 @@ def build_parser() -> argparse.ArgumentParser:
     common.add_argument("--db", default=argparse.SUPPRESS)
     common.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="JSON 출력 (항상 JSON)")
     common.add_argument("--plugin-root", default=argparse.SUPPRESS)
+    common.add_argument("--platform", metavar="이름", default=argparse.SUPPRESS, help=platform_session.HELP)
     parser = argparse.ArgumentParser(prog="db_add.py", description=__doc__, parents=[common],
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -85,6 +88,7 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+USER_FLOW = {"similar"}   # 사용자 세션 흐름 서브커맨드 (나머지는 DB 고정)
 COMMANDS = {"apply": cmd_apply, "drift": cmd_drift, "renumber": cmd_renumber, "check-ids": cmd_check_ids,
             "similar": cmd_similar}
 
@@ -95,13 +99,21 @@ def main(argv: list[str] | None = None) -> int:
     except (AttributeError, ValueError):
         pass
     args = build_parser().parse_args(argv)
-    for name, default in (("db", None), ("plugin_root", None)):
+    for name, default in (("db", None), ("plugin_root", None), ("platform", None)):
         if not hasattr(args, name):
             setattr(args, name, default)
     defaults = site_defaults.load_or_exit(args.plugin_root)
     try:
+        args.platform_defaults = defaults
+        if args.cmd in USER_FLOW:
+            # 사용자 흐름: 선택 플랫폼(--platform > TT_PLATFORM > 사용자 config > site)과 DB 선언을 대조한다
+            args.platform_name = platform_session.resolve(defaults, args.platform)[0]
+        else:
+            # DB 고정(db_pr·db_verify·검사 단계가 이 DB에 대고 부른다): DB 선언을 따르고, --platform이나 TT_PLATFORM이
+            # 있을 때만 대조한다(설정 없는 CI·pre-commit에서 site 기본 플랫폼과 비교해 비기본 DB를 막지 않게)
+            args.platform_name = args.platform or platform_session.env_name()
         result, code = COMMANDS[args.cmd](args, defaults)
-    except UsageError as exc:
+    except (UsageError, PlatformConfigError) as exc:
         print(str(exc), file=sys.stderr)
         print(json.dumps({"error": str(exc)}, ensure_ascii=False, indent=1))
         return USAGE

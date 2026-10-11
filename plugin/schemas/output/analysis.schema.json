@@ -23,6 +23,7 @@
    "properties": {
     "status": {"const": "ok"},
     "key": {"type": "string"},
+    "platform": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$", "description": "선택 플랫폼. 기본 플랫폼(android)이면 내지 않는다 (17-platforms K8)"},
     "generated_at": {"type": "string"},
     "request_hash": {"type": "string", "description": "입력 해시(부분별 parts {logs, jira, db, config, plugin, args}, 파싱 전에 계산)"},
     "run": {"type": "integer", "description": "결과(core)를 계산한 실행 번호"},

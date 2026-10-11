@@ -14,9 +14,11 @@ import re
 from pathlib import Path
 
 from . import yamlio
+from .userconfig import TOP_PROFILE
 
 BACKEND_MISMATCH = "parser-backend-mismatch"
 EXTERNAL_MISMATCH = "external-parser-mismatch"
+PLATFORM_MISMATCH = "platform-mismatch"
 
 
 def parse_version(value) -> tuple[int, ...]:
@@ -39,6 +41,24 @@ def load_db_config(db_root: str | Path) -> dict:
         return {}
     data = yamlio.load(path)
     return data if isinstance(data, dict) else {}
+
+
+def db_platform(db_cfg: dict) -> str:
+    """이슈 DB가 선언한 플랫폼(`issue-db.config.yaml` 최상위 `platform`). 없으면 기본 플랫폼(android, 17-platforms K5)."""
+    value = (db_cfg or {}).get("platform")
+    return str(value) if value not in (None, "") else TOP_PROFILE
+
+
+def check_platform(db_cfg: dict, name: str) -> list[dict]:
+    """세션에서 고른 플랫폼과 이슈 DB 선언이 다르면 `platform-mismatch`. 경고로 끝내는 백엔드 불일치와 달리 **거부**다
+    (원인·해결책이 다른 DB에 대고 매칭하는 것은 의미가 없다). 호출자: config check·driver 1-check·db_pr snapshot·stage·publish."""
+    declared = db_platform(db_cfg)
+    if declared == name:
+        return []
+    other = "" if name == TOP_PROFILE else f"platforms.{name}."
+    return [{"code": PLATFORM_MISMATCH,
+             "message": (f"플랫폼 불일치 — 이슈 DB는 {declared}, 선택한 플랫폼은 {name}. `--platform {declared}`로 다시 "
+                         f"실행하거나 config의 {other}issue_db.path를 확인한다")}]
 
 
 def check_parser_backend(db_cfg: dict, name: str, version: str) -> list[dict]:

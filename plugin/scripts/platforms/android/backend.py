@@ -100,8 +100,7 @@ class ReferenceBackend(ParserBackend):
             for line in lines:
                 delta = (line.dt - prev).total_seconds() if prev else 0
                 if (delta < -logcat.BACKWARD_THRESHOLD_SEC or delta >= logcat.JUMP_THRESHOLD_SEC
-                        or line.tag == "boot_progress_start"
-                        or (line.tag.lower() == "kernel" and line.msg.startswith("Linux version "))):
+                        or logcat.epoch_break(line)):
                     epoch += 1
                 prev = line.dt
                 chunks.setdefault(epoch, []).append(self._line_record(line))

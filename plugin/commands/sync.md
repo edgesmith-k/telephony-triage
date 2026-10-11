@@ -4,6 +4,7 @@ description: 이슈 DB 읽기 스냅샷 최신화 (사후 lint, 오래된 작업
 
 analyze Step 1만 수행한다 (`07-workflow.md §Step 1`, `09-commands.md` sync).
 스크립트: `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/<이름>.py"`(결과 JSON). 종료 코드 2면 메시지를 그대로 보이고 멈춘다(예: 사내 기본값 없음 S-3).
+플랫폼: 사용자가 플랫폼을 말했으면(`--platform <이름>`, 예: oFono) `triage`·`config`·`issue_post`·`code_roots`·`db_pr`·`db_verify`·`db_add`·`db_search`·`db_review` 호출에 `--platform <이름>`을 붙이고, 그 밖 스크립트에는 붙이지 않는다. 그 밖 스크립트의 `--db`에는 그 플랫폼의 `SNAP`(읽기, `<work_dir>/_snapshot`) 또는 clone(`issue_db.path`)을 준다(`config.py show --platform <이름> --keys work_dir,issue_db.path`).
 
 **사용자 clone의 브랜치와 워킹 트리는 바꾸지 않는다.** 1~4번 중 어디서 멈추든 lock을 잡았다면 반드시 푼다(5번은 lock이 필요 없다).
 

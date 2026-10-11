@@ -40,6 +40,8 @@ import match_signatures  # noqa: E402
 import parse_logcat  # noqa: E402
 from common import dbpath, history, issuedb, quality, site_defaults, userconfig, yamlio  # noqa: E402
 from common.exitcodes import OK, USAGE  # noqa: E402
+from platforms import PlatformConfigError  # noqa: E402
+from platforms import session as platform_session  # noqa: E402
 
 TITLE_SIMILARITY = 0.8
 COMATCH_KINDS = ("positive", "recurrence", "extra")
@@ -96,7 +98,7 @@ class Review:
         self.plugin_root = plugin_root
         self.defaults = defaults
         self.q = {**DEFAULTS, **(db.config.get("quality") or {})}
-        self.supported = [str(v) for v in db.config.get("android_versions_supported") or []]
+        self.supported_key, self.supported = issuedb.supported_versions(db.config)
         self.types = sorted(db.types, key=lambda t: t.id)
         self.type_by_id = {t.id: t for t in self.types}
         self.causes = [c for t in self.types if t.active for c in t.causes if c.active]
@@ -200,7 +202,7 @@ class Review:
                  "유지 또는 원인 `status: deprecated`", stale, stale_unknown)
 
         self.add("unsupported-versions", "지원 종료 버전",
-                 f"원인의 `android_versions`가 비어 있지 않고 모두 `android_versions_supported`({', '.join(self.supported)}) "
+                 f"원인의 `android_versions`가 비어 있지 않고 모두 `{self.supported_key}`({', '.join(self.supported)}) "
                  "밖 (빈 목록 = 전 버전이므로 제외)",
                  "원인 `status: deprecated`",
                  [{"cause": c.id, "versions": [str(v) for v in c.raw.get("android_versions") or []],
@@ -413,8 +415,8 @@ def render(report: dict) -> str:
 
 def run(args, defaults: dict, plugin_root: Path) -> dict:
     try:
-        root = dbpath.resolve(args.db, user_config_path=lambda: userconfig.issue_db_path(defaults))
-    except dbpath.DbPathError as exc:
+        root = platform_session.resolve_db(defaults, getattr(args, "platform", None), args.db)[1]
+    except (dbpath.DbPathError, PlatformConfigError) as exc:
         raise UsageError(str(exc)) from exc
     try:
         db = issuedb.load(root)
@@ -446,7 +448,7 @@ def run(args, defaults: dict, plugin_root: Path) -> dict:
         "category": args.category,
         "owners": _owners(Path(root), keys),
         "thresholds": {**DEFAULTS, **(db.config.get("quality") or {}),
-                       "android_versions_supported": db.config.get("android_versions_supported") or []},
+                       "android_versions_supported": db.config.get(issuedb.supported_versions(db.config)[0]) or []},
         "feedback": {"total": len(db.feedback), "manual": manual, "used_for_acceptance": len(db.feedback) - manual},
         "summary": {i["key"]: i["count"] for i in items},
         "items": items,
@@ -458,6 +460,7 @@ def build_parser() -> argparse.ArgumentParser:
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("category", nargs="?", default=None)
     parser.add_argument("--db", default=None)
+    platform_session.add_arg(parser)
     parser.add_argument("--out", metavar="file", default=None, help="Markdown 리포트를 쓸 파일")
     parser.add_argument("--as-of", metavar="YYYY-MM-DD", default=None, help="기준일 (기본: 오늘)")
     parser.add_argument("--json", action="store_true", help="stdout에 JSON")

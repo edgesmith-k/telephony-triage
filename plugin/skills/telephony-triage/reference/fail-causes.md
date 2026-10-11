@@ -1,5 +1,7 @@
 # 실패 원인 코드 참고
 
+> Android 플랫폼 기준이다. 다른 플랫폼(예: oFono)은 그 플랫폼 이슈 DB의 `parser-rules`를 본다.
+
 로그의 원인 코드를 사람이 읽는 말로 옮길 때 참고한다. 표준 값(3GPP)은 안정적이지만 Android 열거 이름과 벤더 확장 코드는 버전·벤더마다
 다르므로, 결론에 쓸 때는 대상 버전 소스(`DataFailCause`, `CallFailCause`, `ImsReasonInfo`, `SmsManager`)로 확인한다.
 원인 시그니처에 코드를 쓸 때는 extractor가 뽑은 필드(`fields: {cause: '^31$'}`)로 쓴다.

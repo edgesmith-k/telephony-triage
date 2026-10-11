@@ -36,6 +36,8 @@
 - `also-allowed` 오류: 자기 원인·같은 유형 원인·없는 ID
 - `merged-into` 오류: 없는 병합 대상
 - `parser-rules` 오류: 규칙 파일 로드·스키마
+- `config` 오류: `platform`이 이름 형식이 아니거나 설치되지 않은 플랫폼, 지원 버전 키 두 이름(`platform_versions_supported`·
+  `android_versions_supported`)을 함께 둠 (17-platforms K5·K9)
 - `yaml-syntax` 오류: YAML 문법 오류(파일·줄). 그 파일만 건너뛰고 검사는 계속(config가 깨지면 검사 불가라 거기서 끝)
 - `synthetic` 경고: `synthetic_allowed: false`인 플러그인에서 `origin: synthetic` fixture
 - `residual-id` 오류: `--residual`로 준 옛 ID가 남아 있음
@@ -59,7 +61,8 @@ SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS))
 
 import parser_backends  # noqa: E402
-from common import dbpath, gitscope, issuedb, masking, parser_rules, site_defaults, yamlio  # noqa: E402
+import platforms  # noqa: E402
+from common import compat, dbpath, gitscope, issuedb, masking, parser_rules, site_defaults, yamlio  # noqa: E402
 from common.exitcodes import CHECK_FAILED, OK, USAGE  # noqa: E402
 from common.fixtures import CAUSE_ID_RE, TYPE_ID_RE, parse_name  # noqa: E402
 from common.signatures import SignatureError, compile_signature  # noqa: E402
@@ -216,6 +219,7 @@ class Linter:
         self._check_mask_allow()
         self.root_keys = set(self.config.get("code_root_keys") or [])
         self.external_cats = set((self.config.get("external_parsers") or {}).keys())
+        self._check_platform_config()
         self.builtin_events = self._builtin_events()
         self.validators = self._validators()
         self.glossary = self._glossary()
@@ -422,8 +426,26 @@ class Linter:
             if "dir" in item and item["dir"] not in ("req", "resp", "unsol"):
                 self.err("step-event", cfg, f"{where}.dir은 req|resp|unsol이어야 합니다: {item['dir']!r}")
 
+    def _check_platform_config(self) -> None:
+        """`platform`(17-platforms K5): 플랫폼 이름 형식이고 설치된 플랫폼이어야 한다. 지원 버전 키는 새 이름
+        (`platform_versions_supported`)과 옛 이름(`android_versions_supported`) 중 하나만 둔다."""
+        value = self.config.get("platform")
+        if value is not None:
+            if not isinstance(value, str) or not platforms.NAME_RE.fullmatch(value):
+                self.err("config", issuedb.CONFIG, f"platform은 플랫폼 이름(소문자·숫자·_)이어야 합니다: {value!r}")
+            elif value not in platforms.known():
+                self.err("config", issuedb.CONFIG, f"platform: 설치된 플랫폼이 아닙니다: {value} "
+                                                   f"(지원 플랫폼: {', '.join(platforms.known())})")
+        if all(self.config.get(k) is not None for k in issuedb.SUPPORTED_VERSION_KEYS):
+            self.err("config", issuedb.CONFIG, f"{' / '.join(issuedb.SUPPORTED_VERSION_KEYS)} 중 하나만 둔다"
+                                               "(새 이름을 쓰고 옛 이름은 지운다).")
+
     def _builtin_events(self) -> set[str]:
-        name = (self.defaults.get("parser") or {}).get("backend")
+        """이슈 DB가 선언한 플랫폼의 파서 백엔드 builtin 이벤트 (K6)."""
+        try:
+            name = platforms.backend_name(self.defaults, compat.db_platform(self.config))
+        except platforms.PlatformConfigError:
+            return set()
         try:
             return set(parser_backends.load(name).builtin_events())
         except parser_backends.BackendError:

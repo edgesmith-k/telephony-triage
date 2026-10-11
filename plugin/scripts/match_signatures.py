@@ -56,7 +56,7 @@ from common import compiled as compiled_cache  # noqa: E402
 from common.exitcodes import OK, USAGE  # noqa: E402
 from common.patterns import DEFAULT_TIMEOUT_MS  # noqa: E402
 from common.signatures import Evaluator, SignatureError  # noqa: E402
-from platforms.android.logcat import BACKWARD_THRESHOLD_SEC  # noqa: E402
+from common.logtime import BACKWARD_THRESHOLD_SEC  # noqa: E402
 
 OUTPUT_SCHEMA = 1
 DEFAULT_SCORING = {

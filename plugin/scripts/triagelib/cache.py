@@ -48,8 +48,11 @@ class State:
     def reset(self, owner: str | None) -> None:
         answers = self.data.get("answers") or {}
         # 새 세션: 답·진행 상태는 버리고 `job`(로그·실행 이력·캐시 요약)만 남긴다 — 세션이 바뀌어도 같은 입력이면 재사용한다
+        platform = self.data.get("platform")      # 기본 아닌 플랫폼 작업 표시는 세션이 바뀌어도 남긴다
         self.data = {"owner": owner, "answers": answers if self.data.get("owner") == owner else {},
                      "job": self.data.get("job") or {}}
+        if platform:
+            self.data["platform"] = platform
 
     @property
     def answers(self) -> dict:
@@ -96,7 +99,7 @@ class CacheMixin:
         return {
             "logs": _digest([{"name": f["name"], "sha": f["sha"]} for f in self.log_inputs]),
             "jira": _file_sha(jira_path) if jira_path.is_file() else None,
-            "db": compiled.source_hash(self.snap, compat.load_db_config(self.snap), compiled.environment(self.defaults))[:16],
+            "db": compiled.source_hash(self.snap, compat.load_db_config(self.snap), compiled.environment(self.defaults, self.platform))[:16],
             "config": _digest({"site": self.defaults, "user": user}),
             "plugin": _digest(plugin),
             "args": _digest({"tz": ctx["tz"], "year": ctx["year"], "minutes": a.minutes,

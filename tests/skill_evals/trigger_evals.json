@@ -6,6 +6,7 @@
   {"query": "SIM 인식 안 되는 이슈 분류해줘", "should_trigger": true},
   {"query": "Telephony 이슈 DB에서 찾아줘. 이 이슈 기존에 비슷한 거 있었어?", "should_trigger": true},
   {"query": "SMS 전송 실패 로그 분석해줘", "should_trigger": true},
+  {"query": "oFono 단말 journald 로그로 MOCK-2001 데이터 연결 실패 원인 분석해줘", "should_trigger": true},
   {"query": "IMS 등록이 계속 실패하는데 원인 봐줘", "should_trigger": true},
   {"query": "서비스 없음 이슈 로그 봐줘", "should_trigger": true},
   {"query": "CALL-001-01 수정 빌드 로그로 재발 안 하는지 확인해줘", "should_trigger": true},
