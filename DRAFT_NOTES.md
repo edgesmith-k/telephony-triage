@@ -22,7 +22,9 @@
 - 4차 반영 eval (10/11, Sonnet, plugin): 6·14·15·39·40·46·47·55·58 → 56/57. 실패 e47(python으로 `match.json` 열람, c) → `explore.md` 보강 뒤 재실행 통과·원문 열람 0.
   채점기: e39 doctor 표를 transcript에서도 인정, e46·47 `scope()`에 `match.json` 금지, `raw_full_reads`에 한 줄 JSON grep·python `open()` 추가.
   남은 관찰(반입 후): `events.json`·`match.json`이 한 줄이라 rules.md의 `grep -n` 지침이 통독이 된다. 탐색 가설·분석 스킬 결과의 `mask_pii` 미경유(e40·46·47, c).
-- 사내 확인 항목: `TODO(SITE)` **79곳** — `python3 tools/list_site_todos.py`. `REVIEW-OPEN.md` 0건.
+- Jira 결과 게시(10/11, 사용자 요청): analyze Step 9, `issue_post.py`(PROBLEM/CAUSE/NEXT ACTION/ANALYSIS, 승인 후 코멘트 1종), guard 규칙 2 승인 기록 대조. 설계→구현→리뷰(P0 0·P1 5 반영)→테스트: 전체 1216 통과, db_regress 23/23, eval 8·62 통과·61 10/11(확인 화면 잘라 봄, c → post.md 보강).
+  남은 것: 같은 응답의 병렬 이중 호출은 권한 확인으로만 막음(guard는 판정만). 사내 확인 S23(코멘트 도구·형식·규정).
+- 사내 확인 항목: `TODO(SITE)` **85곳** — `python3 tools/list_site_todos.py`. `REVIEW-OPEN.md` 0건.
 - 사내 S 단계 시작: `python3 tools/context_pack.py S-n`(표 `docs/tasks.md`).
 - 안내서(사람용 HTML): `docs/telephony-triage-guide.html` (공유본 https://claude.ai/artifact/1jov1Et4dQUMauFr6aoxWG). 역할별 문서 19개: `docs/materials/00-index.html`(PR #33·#34)
 

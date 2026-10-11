@@ -466,7 +466,7 @@ def screen(job: Job, a: dict, plan: dict | None, info: dict, fmt: str, body: str
     lines.append(f"- 칸 출처: PROBLEM {problem_src} · CAUSE 스크립트+LLM(cause) · NEXT ACTION 스크립트+LLM(next) · "
                  "ANALYSIS 스크립트(+LLM code_location)")
     lines.append(f"- 빠진 항목(--omit): {', '.join(omit) if omit else '없음'}")
-    lines.append(f"- 게시 가능: 예" if ok else f"- 게시 가능: 아니오 — {reason} (본문은 JOB/post.md에만 남는다)")
+    lines.append("- 게시 가능: 예" if ok else f"- 게시 가능: 아니오 — {reason} (본문은 JOB/post.md에만 남는다)")
     lines += [f"- 경고: {w}" for w in warnings]
     if missing:
         lines.append(f"- LLM 칸 미작성: {', '.join(missing)} — JOB/{issuepost.FILL_FILE}을 쓰고 render --fill로 다시 한다")
