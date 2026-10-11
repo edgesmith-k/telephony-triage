@@ -24,14 +24,14 @@
   남은 관찰(반입 후): `events.json`·`match.json`이 한 줄이라 rules.md의 `grep -n` 지침이 통독이 된다. 탐색 가설·분석 스킬 결과의 `mask_pii` 미경유(e40·46·47, c).
 - 사내 확인 항목: `TODO(SITE)` **79곳** — `python3 tools/list_site_todos.py`. `REVIEW-OPEN.md` 0건.
 - 사내 S 단계 시작: `python3 tools/context_pack.py S-n`(표 `docs/tasks.md`).
-- 안내서(사람용 HTML): `docs/telephony-triage-guide.html` (공유본 https://claude.ai/artifact/1jov1Et4dQUMauFr6aoxWG)
+- 안내서(사람용 HTML): `docs/telephony-triage-guide.html` (공유본 https://claude.ai/artifact/1jov1Et4dQUMauFr6aoxWG). 역할별 문서 19개: `docs/materials/00-index.html`(PR #33·#34)
 
 ## 남은 일 (사외 전용)
 
 | ☐ | 항목 | 메모 |
 |---|---|---|
 | ☐ G | **범용판 별도 레포** (10/07 사용자 지시) — **보류(10/07 사용자)** | 재개 시점은 사용자가 정한다. **로컬 새 레포**(원격 없음), 범위 = 도메인 중립 코어 + 최소 예제 팩 1개. 시작은 결합 지점 조사(`plugin/scripts` 약 30파일) → 분리 설계 확인 → 이전. 이 레포는 바꾸지 않는다 |
-| ☐ Z | **반입 묶음** | 최신 main에서 **Ubuntu로** `python3 tools/make_bundle.py --label <이름>`(정상 종료 3) → 사람 확인 3건(§15.4: 회사명 검색·TODO 목록·이 파일 최신) → 도구가 출력한 명령으로 사용자가 태그 push. Windows는 환경 실패로 자동 검사가 실패한다 |
+| ☐ Z | **반입 묶음** — 10/10 생성분은 이번 병합으로 main이 바뀌어 **새 라벨로 다시 만든다** | 최신 main에서 WSL Ubuntu로 `python3 tools/make_bundle.py --label import-<날짜>`(정상 종료 3) → 사람 확인 3건(§15.4: 회사명 검색·TODO 목록·이 파일 최신) → 도구가 출력한 명령으로 사용자가 태그 push. Windows는 환경 실패로 자동 검사가 실패한다 |
 
 ## 사내로 넘긴 것
 
