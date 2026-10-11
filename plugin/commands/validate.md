@@ -5,6 +5,7 @@ argument-hint: "[--cause <원인 ID> <적용 후 logcat...>] [--extra <logcat...
 
 `$ARGUMENTS`로 두 가지 형태를 구분한다 (`07-workflow.md §validate`, `09-commands.md` validate).
 스크립트: `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/<이름>.py"` = `S/`(결과 JSON). 종료 코드 2면 메시지를 그대로 보이고 멈춘다(예: 사내 기본값 없음 S-3).
+플랫폼: 사용자가 플랫폼을 말했으면(`--platform <이름>`, 예: oFono) `config.py`·`db_pr.py`·`db_verify.py`·`code_roots.py`·`issue_post.py` 호출마다 `--platform <이름>`을 붙이고, 그 옵션이 없는 스크립트에는 그 플랫폼 경로(`config.py show --platform <이름> --keys work_dir,issue_db.path`)를 `--db`로 준다(이슈 DB·작업 폴더가 플랫폼마다 따로). 말하지 않았으면 붙이지 않는다.
 
 ## `--cause`가 있으면: 해결책 검증
 

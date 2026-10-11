@@ -4,6 +4,7 @@ description: 이슈 DB 생성 파일(README, STATS, CHANGELOG) 미리보기 — 
 
 생성 결과를 임시 디렉토리에만 만들어 보여준다 (`03-issue-db.md §5.6`, `09-commands.md` preview). **읽기 전용**이다.
 스크립트: `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/<이름>.py"`(결과 JSON). 종료 코드 2면 메시지를 그대로 보이고 멈춘다(예: 사내 기본값 없음 S-3).
+플랫폼: 사용자가 플랫폼을 말했으면(`--platform <이름>`, 예: oFono) `config.py`·`db_pr.py`·`db_verify.py`·`code_roots.py`·`issue_post.py` 호출마다 `--platform <이름>`을 붙이고, 그 옵션이 없는 스크립트에는 그 플랫폼 경로(`config.py show --platform <이름> --keys work_dir,issue_db.path`)를 `--db`로 준다(이슈 DB·작업 폴더가 플랫폼마다 따로). 말하지 않았으면 붙이지 않는다.
 
 1. **대상 정하기** — cwd가 이슈 DB 레포(또는 worktree) 안이면 그 트리, 아니면 config의 clone이 대상이다(`--db`를 주지 않는다).
 2. **미리보기 만들기** — 임시 디렉토리(`<work_dir>/preview-<YYYYMMDD-HHMM>`)에

@@ -6,6 +6,11 @@ telephony-triage를 이 사용자 환경에 맞게 설정한다 (`02-config.md �
 스크립트: `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/<이름>.py"`(결과 JSON). 종료 코드 2면 메시지를 그대로 보이고 멈춘다(예: 사내 기본값 없음 S-3).
 각 단계의 결과를 짧게 보여주고, **사용자 확인이 필요한 곳에서는 반드시 묻는다.**
 
+0. **플랫폼** — `config.py site-defaults`의 `platform.enabled`가 2개 이상일 때만 어느 플랫폼을 설정할지 묻는다(없거나 1개면 묻지 않고 지금 흐름 그대로).
+   android가 아닌 플랫폼을 고르면 1·3·5·6·7·8·10번의 모든 스크립트 호출에 `--platform <이름>`을 붙인다: 1번은 그 플랫폼의 이슈 DB clone 경로·원격·작업 디렉토리만 묻고
+   `config.py init --platform <이름> --answers <파일>`(기존 config에 그 프로필만 더한다. config가 없으면 공통 항목과 그 프로필만 만든다 — 따로 설치)
+   또는 기존 프로필이면 `config.py set --platform <이름> <키> <값>`. Jira(4)·gh(9)는 플랫폼끼리 공유하므로 이미 설정됐으면 다시 하지 않는다.
+   플랫폼마다 clone·작업 디렉토리가 달라야 한다(겹치면 거부·경고). 다른 플랫폼도 쓰려면 setup을 한 번 더 한다.
 1. **config 만들기** — `config.py show`로 기존 config를 확인한다.
    - 없으면 아래 항목을 사용자에게 하나씩 묻는다(괄호 안 기본값은 `show`의 `effective`에 있다):
      GHE 아이디, 이슈 DB 로컬 clone 경로, 이슈 DB 원격 URL, base 브랜치, GHE 호스트, Jira 시각 타임존,

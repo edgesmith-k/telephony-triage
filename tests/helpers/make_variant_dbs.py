@@ -15,6 +15,7 @@
 | `issue-db-step-focus/` | 스텝 기준 우선 유형(순위 참고): `step_focus.map`(`데이터` → DATA-001)과 DATA-001의 같은 스텝(`5 | 데이터 켜기`) Jira 기록 2건 |
 | `issue-db-step-events/` | 스텝 순서 정렬: `step_events` 규칙 10개(CP는 관측 불가, 비행기 모드 켜기·끄기는 `match`, 망 등록은 `ril`, 데이터 켜기·끄기는 `event`) |
 | `issue-db-review/` | 월간 리뷰(Phase 11): §6.6 항목마다 걸리는 경우와 걸리지 않는 경우 (`REVIEW_CASES`) |
+| `issue-db-ofono/` | oFono 플랫폼 뼈대 DB(17-platforms §5, **합성·형식 가정·placeholder**): `platform: ofono`, `ofono_reference` 백엔드, placeholder 태그(`ofonod`·`daemon-a`·`daemon-b`)·extractor 1개, 유형 `DATA-001`과 양성 fixture(`tests/fixtures/logs/ofono/journal-iso.log`) 하나 |
 | `verify-logs/` | 이슈 DB가 아니다. `db_verify fix`·`resolution` 입력 로그(수정 후·재발·증상만 남음·시나리오 없음, 마스킹됨) |
 
 CLI:
@@ -565,6 +566,99 @@ def step_events(db: Path) -> None:
     _sub(db / "issue-db.config.yaml", r"step_events: \[\][^\n]*", STEP_EVENTS.replace("\\", "\\\\"))
 
 
+
+OFONO_LOG = REPO / "tests" / "fixtures" / "logs" / "ofono" / "journal-iso.log"
+OFONO_TAGS = """# [합성·형식 가정·placeholder] oFono 뼈대 DB의 태그 (17-platforms §5). TODO(SITE:S25)
+# `ofonod`는 공개 upstream 이름, `daemon-a`·`daemon-b`는 사내 구성요소 자리(placeholder)다.
+tags:
+  - {tag: ofonod,   category: common, added_for: '-', added_on: 2026-10-11, reason: placeholder (oFono 데몬)}
+  - {tag: daemon-a, category: data,   added_for: DATA-001, added_on: 2026-10-11, reason: placeholder (데이터 구성요소)}
+  - {tag: daemon-b, category: call,   added_for: '-', added_on: 2026-10-11, reason: placeholder (통화 구성요소)}
+"""
+OFONO_RIL = """# [합성·형식 가정·placeholder] 짝 규칙(RIL 계층·D-Bus 등)은 실제 로그를 받은 뒤 정한다. TODO(SITE:S26)
+# 스키마가 항목 1개 이상을 요구해서 둔 자리표시 항목이다 (17-platforms R7).
+unsolicited:
+  - {name: PLACEHOLDER_UNSOL, category: common, added_for: '-', added_on: 2026-10-11, reason: placeholder (스키마 최소 항목)}
+"""
+OFONO_EXTRACTORS = """# [합성·형식 가정·placeholder] 실제 로그 문구가 아니다. TODO(SITE:S25)
+extractors:
+  - id: data-connect-failed
+    added_for: DATA-001
+    added_on: 2026-10-11
+    reason: placeholder (데이터 연결 실패 사유)
+    tag: daemon-a
+    patterns:
+      - 'connect failed: reason=(?P<reason>\\S+)'
+    event: data_connect_failed
+    fields: [reason]
+"""
+OFONO_TYPE = """---
+id: DATA-001
+category: data
+secondary_categories: []
+title: 데이터 연결 실패 (placeholder)
+summary: oFono 뼈대 DB의 합성 유형이다. 실제 원인·해결책이 아니다
+status: active
+symptom_signatures:
+  - id: data-connect-failed
+    must_event:
+      - {event: data_connect_failed}
+    window_sec: 60
+causes:
+  - id: DATA-001-01
+    status: active
+    title: 연결 거절 (placeholder)
+    description: 합성 원인. 실제 로그를 받은 뒤 다시 정한다
+    signatures:
+      - id: connect-failed-reason
+        must_event:
+          - {event: data_connect_failed, fields: {reason: '.+'}}
+        window_sec: 60
+    recovery_signatures: []
+    scenario_signatures: []
+    resolution: placeholder
+    resolution_type: network
+    resolution_verification: {status: unverified}
+    fix: {status: open, ref: null, fixed_in: [], verification: null, verification_history: []}
+    related: []
+    cp_evidence: null
+    android_versions: ["2"]            # 플랫폼 버전(K9). placeholder
+    code_refs: []
+tags: []
+---
+
+## 증상
+
+**합성·형식 가정·placeholder.** oFono 플랫폼 전환 시험용 유형이다 (17-platforms §5).
+"""
+
+
+def ofono(db: Path) -> None:
+    """oFono 플랫폼 뼈대 DB(17-platforms §5): 유형·Jira·피드백을 비우고 placeholder 규칙과 합성 유형 하나를 넣는다."""
+    cfg = db / "issue-db.config.yaml"
+    _edit(cfg, "schema_version: 1\n", "platform: ofono                      # 17-platforms §4. TODO(SITE:S28)\nschema_version: 1\n")
+    _edit(cfg, 'android_versions_supported: ["16", "17"]',
+          'platform_versions_supported: ["2"]   # placeholder. TODO(SITE:S28)')
+    _edit(cfg, "  name: reference                    # 사외 초안은 reference. 사내 포팅 후 site (S-4a)\n  min_version: 0.1.0",
+          "  name: ofono_reference\n  min_version: 0.0.1")
+    _edit(cfg, "code_root_keys: [aosp, vendor_ril]", "code_root_keys: [ofono]")
+    for category in sorted(p for p in db.iterdir() if p.is_dir() and any(p.glob("*-*/type.md"))):
+        for type_dir in sorted(category.iterdir()):
+            if type_dir.is_dir():
+                shutil.rmtree(type_dir)
+        _write(category / ".gitkeep", "")
+    shutil.rmtree(db / "feedback")
+    _write(db / "feedback" / ".gitkeep", "")
+    _write(db / "parser-rules/tags.yaml", OFONO_TAGS)
+    _write(db / "parser-rules/ril.yaml", OFONO_RIL)
+    _write(db / "parser-rules/extractors.yaml", OFONO_EXTRACTORS)
+    data = db / "data/DATA-001-data-connect-failed"
+    _write(data / "type.md", OFONO_TYPE)
+    (data / "fixtures").mkdir(parents=True)
+    shutil.copyfile(OFONO_LOG, data / "fixtures/DATA-001-01.log")
+    _write(data / "fixtures/DATA-001-01.expect.yaml",
+           "expect_top: DATA-001-01\noccurred_at: '2026-09-20T14:32:10+09:00'\norigin: synthetic\n")
+
 VARIANTS = {
     "issue-db-lint-errors": lint_errors,
     "issue-db-empty-category": empty_category,
@@ -574,6 +668,7 @@ VARIANTS = {
     "issue-db-review": review,
     "issue-db-step-focus": step_focus,
     "issue-db-step-events": step_events,
+    "issue-db-ofono": ofono,
     "verify-logs": verify_logs,
 }
 

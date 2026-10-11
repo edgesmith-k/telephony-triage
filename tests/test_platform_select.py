@@ -142,7 +142,7 @@ def test_compiled_environment_platform():
     defaults = yaml.safe_load((REPO / "plugin" / "site-defaults.example.yaml").read_text(encoding="utf-8"))
     assert compiled.environment(defaults) == compiled.environment(defaults, "android")
     other = compiled.environment({**defaults, "platform": ON}, "ofono")
-    assert other["backend"] == {"name": "ofono_reference", "version": None} and other["external"] == {}
+    assert other["backend"] == {"name": "ofono_reference", "version": "0.0.1"} and other["external"] == {}   # 묶음 3 백엔드
 
 
 # -- CLI: config set/show --platform ---------------------------------------------------------
@@ -235,10 +235,12 @@ def test_parse_logcat_db_platform_vs_env():
     assert proc.returncode == 2 and "플랫폼 불일치" in proc.stderr
     same = run("parse_logcat.py", args, root=root, env={platforms.ENV: "android"})
     assert same.returncode == 0, same.stderr
-    # DB 고정 도구(K6): ofono를 켜지 않은 설치도 ofono DB 선언을 따른다(백엔드가 아직 없어 종료 2로 "없습니다")
+    # DB 고정 도구(K6): ofono를 켜지 않은 설치도 ofono DB 선언을 따른다(ofono_reference 백엔드 → logcat 줄은 해석 못 함)
     db = ofono_db()
     proc = run("parse_logcat.py", ["parse", DATA_LOG, "--rules", db / "parser-rules", "--full"])
-    assert proc.returncode == 2 and "ofono_reference" in proc.stderr and "켜져 있지 않습니다" not in proc.stderr
+    assert proc.returncode == 0 and "켜져 있지 않습니다" not in proc.stderr, proc.stderr
+    out = json.loads(proc.stdout)
+    assert out["backend"]["name"] == "ofono_reference" and "file-unparsed" in {w["code"] for w in out["warnings"]}
 
 
 def test_triage_offline_platform_mismatch_stops():

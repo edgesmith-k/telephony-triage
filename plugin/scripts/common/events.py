@@ -14,7 +14,9 @@ SCHEMA_VERSION = 1  # events.json 최상위 "schema" (markers 출력도 같은 �
 # 이벤트 키 순서 (출력 JSON의 키 순서와 같다).
 EVENT_KEYS = ("ts", "pid", "tid", "level", "tag", "msg", "phone_id", "category_hint", "ril", "event",
               "fields", "source", "line_ref")
-RIL_KEYS = ("serial", "dir", "request", "error", "paired_ts", "latency_ms")  # + 선택 `observed_until`(응답 없는 요청)·`hal`(벤더 층)
+RIL_KEYS = ("serial", "dir", "request", "error", "paired_ts", "latency_ms")
+# 선택 키(있으면 이 순서): `proto`(ril 아닌 짝 프로토콜, 17-platforms)·`observed_until`(응답 없는 요청)·`hal`(벤더 층)
+RIL_OPTIONAL_KEYS = ("proto", "observed_until", "hal")
 LINE_REF_KEYS = ("file_index", "line_no")
 
 SOURCE_RULES = "rules"
@@ -36,6 +38,7 @@ class RilAnnotation(TypedDict):
     error: str | None
     paired_ts: str | None
     latency_ms: int | None
+    proto: NotRequired[str]  # 짝 프로토콜 이름. ril이 아닌 프로토콜만 단다 (`platforms.base.PairProtocol`)
     observed_until: NotRequired[str]
     hal: NotRequired[str]   # responded / reached / not_reached / unknown (platform.ril.vendor 있을 때만)
 
@@ -178,8 +181,8 @@ def _check_ril(e: dict) -> list[str]:
     if not isinstance(ril, dict):
         return [f"ril은 dict 또는 None: {type(ril).__name__}"]
     keys = list(ril)
-    if keys[:len(RIL_KEYS)] != list(RIL_KEYS) or keys[len(RIL_KEYS):] not in (
-            [], ["observed_until"], ["hal"], ["observed_until", "hal"]):
+    tail = keys[len(RIL_KEYS):]
+    if keys[:len(RIL_KEYS)] != list(RIL_KEYS) or tail != [k for k in RIL_OPTIONAL_KEYS if k in tail]:
         return [f"ril 키 오류: {keys}"]
     return []
 

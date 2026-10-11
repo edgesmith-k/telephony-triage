@@ -218,7 +218,7 @@ v1에서 도구는 이런 브랜치를 바꾸지 않는다. `sync-pr`는 아래 
 
 - 매처는 매번 이슈 DB(`--db`, analyze는 스냅샷)에서 시그니처를 메모리로 컴파일한다. 컴파일 함수는 `common/compiled.py`에 있다. **파일 캐시는 두지 않는다**: 측정 결과 컴파일 캐시는 이득이 없었다(hit 판정 비용이 컴파일보다 크다). YAML 로드가 병목으로 측정되면 그때 DB 로드 전 캐시를 둔다.
 - 이슈 DB 소스 해시(소스 파일 + **파서 백엔드·외부 파서 이름·버전**, `16-existing-assets.md §16.3`)는 분석 재사용(`07-workflow.md` 입력 재사용)이 계속 쓴다.
-- 읽기 스냅샷은 세션 lock을 가진 작업만 옮긴다 (`db_pr snapshot --job <작업 키>`, `contracts.md §3.2` `db_pr.py` 세부). v1은 사용자별로 한 번에 한 작업이므로 분석 도중 다른 세션이 스냅샷을 옮기지 않는다. 읽기 전용 커맨드(`search`, `review`, `preview`)는 스냅샷을 옮기지 않고 읽기만 한다.
+- 읽기 스냅샷은 세션 lock을 가진 작업만 옮긴다 (`db_pr snapshot --job <작업 키>`, `contracts.md §3.2` `db_pr.py` 세부). v1은 사용자·이슈 DB(플랫폼)별로 한 번에 한 작업이므로 분석 도중 다른 세션이 스냅샷을 옮기지 않는다. 읽기 전용 커맨드(`search`, `review`, `preview`)는 스냅샷을 옮기지 않고 읽기만 한다.
 - 유형 수백 개, fixture 수천 개 규모를 목표로 한다. 커밋 시(②)에는 변경된 유형과 그 `related`, 같은 카테고리의 fixture만 돌리고(parser-rules 변경이면 전체), push 직전(③)에 전체를 돌린다.
 - `.cache/`는 커밋하지 않는다 (`.gitignore`, guard 규칙 4·pre-commit이 막는다).
 

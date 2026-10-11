@@ -7,7 +7,7 @@
 ## 1. 목적과 범위
 
 Android Telephony 이슈 도구. Jira 이슈와 logcat을 받아 원인·해결책을 분석하고, 결과를 **카테고리 > 이슈 유형(증상) > 원인**으로 사내 GitHub 이슈 DB 레포(`telephony-issue-db`)에 누적한다. 팀원들이 같은 DB에 계속 기여하며 시그니처 품질과 해결 상태를 관리한다.
-v1 범위: logcat(radio/main/system/crash, bugreport는 logcat 섹션만) · Jira **읽기 + 승인한 코멘트 추가 1종** · GHE 브랜치+PR(main 직접 push 금지) · CI 없음(`ci_mode: local`) · 카테고리 data/call/network/sim/sms/ims · 사용자별 한 번에 한 작업. 제외: CP 로그 파싱, Jira 필드 수정·상태 전환·이슈 생성·첨부, 3-way replay. 상세 표는 `GUIDE.md §1`.
+v1 범위: logcat(radio/main/system/crash, bugreport는 logcat 섹션만) · Jira **읽기 + 승인한 코멘트 추가 1종** · GHE 브랜치+PR(main 직접 push 금지) · CI 없음(`ci_mode: local`) · 카테고리 data/call/network/sim/sms/ims · 사용자·이슈 DB(플랫폼)별 한 번에 한 작업 · 플랫폼(Android 기본, 팀이 켠 그 밖 플랫폼)마다 이슈 DB 하나(`17-platforms.md`). 제외: CP 로그 파싱, Jira 필드 수정·상태 전환·이슈 생성·첨부, 3-way replay. 상세 표는 `GUIDE.md §1`.
 
 ---
 
@@ -110,8 +110,8 @@ telephony-triage-plugin/                 # 개발 레포 루트
     │   ├── config.py
     │   ├── code_roots.py
     │   ├── parse_logcat.py
-    │   ├── parser_backends/             # base.py(인터페이스), reference/(공통 처리, 사외; platforms/android/backend.py의 BACKEND 재수출), site/(포팅한 기존 파서, 사내 전용 SITE_PATHS)
-    │   ├── platforms/                   # `__init__.py`(`load`·`PlatformProfile`: site-defaults `platform:` 검증, RF-4), android/{logcat,ril,bugreport,backend}.py — Android 전용 코드(RF-3). 핵심(common·매처·db_*)은 플랫폼 무관
+    │   ├── parser_backends/             # base.py(인터페이스, 백엔드 `platform` 속성·`log_format()`), reference/(android, platforms/android/backend.py의 BACKEND 재수출), <p>_reference/(그 플랫폼 BACKEND 재수출, 예: ofono_reference), site/(포팅한 기존 파서, 사내 전용 SITE_PATHS)
+    │   ├── platforms/                   # 플랫폼 레지스트리(17-platforms.md): `__init__.py`(known·get·load·select·enabled·backend_name·label·원문 줄 판별), base.py(계약 PlatformSpec·LogFormat·PairProtocol·CaptureSpec·SourceTree), session.py(사용자 세션 선택·`--platform`), android/{logcat,ril,bugreport,backend}.py, ofono/(뼈대, 형식 가정 placeholder). 핵심(common·매처·db_*)은 플랫폼 이름을 모른다
     │   ├── adapters/                    # Jira 응답 변환, 외부 파서 어댑터 (사내 것은 site_* , SITE_PATHS)
     │   ├── match_signatures.py
     │   ├── mask_pii.py
@@ -155,7 +155,7 @@ telephony-triage-plugin/                 # 개발 레포 루트
 |---|---|---|
 | `common/` | config·이슈 DB 로드, 스키마 검증, git 헬퍼, 로깅, **시그니처·extractor 컴파일 함수**(매처·`db_regress`가 공유), **마스킹 함수**(`mask_pii`와 `parse_logcat` 공유), **이벤트 레코드 `events.py`**(파서 출력 이벤트 키 순서·`line_ref`·`validate_event`, 표준 라이브러리만), **`yamlio.py`**(YAML 읽기 단일 입구, `CSafeLoader` 있으면 사용), `sanitize_build`, **검사 오케스트레이션 `checks.py`**(프로필 `stage`·`precommit`·`guard`의 단계 목록과 종료 코드 집계 `aggregate`. 하위 스크립트는 같은 프로세스에서 `main(argv)`로 부른다(`run_script`, 종료 코드·stdout JSON·stderr는 subprocess와 같고 `TT_SCRIPT_SUBPROCESS=1`이면 subprocess). top-level import는 stdlib와 `common.exitcodes`뿐이다: guard가 `site-defaults.yaml` 없이도 멈추지 않아야 한다) | 모든 스크립트 |
 | `config.py` | 사용자 config 로드/검증/갱신, `site-defaults.yaml` 로드(없으면 종료 코드 2), 스키마·생성기·파서 백엔드·외부 파서 버전과 gh 인증 호환성 판정(`check --for write\|dry-run`, `migrate/schema-v<N>` 브랜치는 버전 불일치 예외), **`plugin.scripts_path` 갱신**(`sync-scripts-path`) | 모든 스크립트, setup, SessionStart hook |
-| `platforms/` | `__init__.py`의 `load(defaults)`·`PlatformProfile`(site-defaults `platform:` 검증, 소스 트리·슬롯 표기·RIL 태그·bugreport 섹션 상수, RF-4), `android/`(logcat·ril·bugreport·backend, RF-3) | `parse_logcat.py`, `code_roots.py` |
+| `platforms/` | 플랫폼 레지스트리(`17-platforms.md`): `<name>/__init__.py`의 `SPEC: PlatformSpec`을 이름으로 불러온다(`get`·`known`). `load(defaults, name)`·`PlatformProfile`(site-defaults `platform:`·`platform.others.<name>` 검증, 소스 트리·슬롯 표기·짝 규칙 태그·묶음 입력 섹션 상수, RF-4), `select`(`--platform` > `TT_PLATFORM` > 사용자 config `platform` > site `platform.name`, `platform.enabled` 관문), `backend_name`, 원문 줄 판별(guard 규칙 10·Jira 게시 검사). `session.py`는 선택과 사용자 config 프로필을 잇는다. 플랫폼 코드: `android/`(logcat·ril·bugreport·backend), `ofono/`(뼈대) | `parse_logcat.py`, `code_roots.py`, `config.py`, `triage.py`, `db_*`, guard |
 | `code_roots.py` | 코드 경로 후보 정렬, 경로 검증, 트리 버전 추정, `<root 키>:` 경로 변환, symbol 검색 | analyze Step 2-1, Step 5 |
 | `parse_logcat.py` | logcat → 이벤트 JSON (**파서 백엔드 선택·호출**(`parser_backends/`, 포맷·연도·타임존·윈도우·RIL 페어링·`phone_id`·`coverage`·builtin 판별은 백엔드), bugreport에서 logcat 섹션만 추출(`extract-bugreport`, 구현 `platforms/android/bugreport.py`), 외부 파서(어댑터) 실행, 백엔드·외부 파서 불일치 경고, `--mask`면 extractor 전 줄 단위 마스킹(백엔드·외부 파서 이벤트 포함), extractor 실행), **fixture 최소 구간 자르기**(`cut`, `common/` 마스킹 함수로 마스킹 후 저장) | analyze Step 3·7, `record`(`--fixture`), `verify-fix`, `validate --cause`, `db_regress` |
 | `mask_pii.py` | 마스킹 치환(파일), 외부 이벤트 JSON 마스킹(`--events`), `--check` 검출. 마스킹 함수 자체는 `common/`에 있고 `parse_logcat`이 공유 | `db_add`, `db_precommit`, `db_pr stage`, guard hook 3번 |

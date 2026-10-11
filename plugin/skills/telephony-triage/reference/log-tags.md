@@ -1,5 +1,7 @@
 # logcat 태그 참고
 
+> Android 플랫폼 기준이다. 다른 플랫폼(예: oFono)은 그 플랫폼 이슈 DB의 `parser-rules`를 본다.
+
 로그를 해석할 때 참고한다. **판별 기준은 이슈 DB `parser-rules/tags.yaml`이다** — 여기 표는 해석 보조일 뿐이고, 새 태그를 시그니처에
 쓰려면 `tags.yaml`에 있어야 한다(없으면 파서가 그 줄을 버린다, `db-authoring.md` §4 파서 규칙).
 

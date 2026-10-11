@@ -428,6 +428,8 @@ def checks(eid: int, ctx: Ctx) -> list:
         return [None] * 8
     if eid in (61, 62):
         return checks_j(eid, ctx)
+    if eid in (63, 64, 65):
+        return checks_p(eid, ctx)
     no_remote = lambda br: (lambda: (br not in ctx.branches() and not ctx.prs(), f"branches={ctx.branches()} prs={len(ctx.prs())}"))
     def analyzer_called():
         """e40·e41은 분석 스킬을 실제로 Skill 도구로 불렀을 때만 센다(plugin 모드). direct 모드·기록 없음은 이 조건을 적용하지 않는다."""
@@ -1339,6 +1341,102 @@ def _sections(body: str) -> dict[str, str] | None:
     if [h[2] for h in heads] != list(_POST_SECTIONS):
         return None
     return {name: body[end:(heads[i + 1][0] if i + 1 < len(heads) else len(body))] for i, (_, end, name) in enumerate(heads)}
+
+
+# --- 플랫폼 분리 (배치 P, eval 63~65, docs/design/17-platforms.md) ---------------------------------------------
+
+PLATFORM_SCRIPTS = ("config", "db_pr", "db_verify", "code_roots", "issue_post")   # --platform을 받는 사용자 세션 스크립트(triage 밖)
+_SCRIPT_CALL = re.compile(r"\b(triage|config|db_pr|db_verify|code_roots|issue_post)\.py[\"']?([^\n;&|]*)")
+_PLATFORM_FLAG = re.compile(r"--platform(?:\s+|=)([A-Za-z0-9_]+)")
+
+
+def platform_calls(commands: list[str]) -> list[tuple[str, str, str | None]]:
+    """Bash 명령 목록 → [(스크립트, 인자 문자열, --platform 값 | None)]. 줄·`;`·`&&`·`|` 단위로 나눈 최선 노력 판정."""
+    out = []
+    for cmd in commands:
+        for m in _SCRIPT_CALL.finditer(cmd):
+            flag = _PLATFORM_FLAG.search(m.group(2))
+            out.append((m.group(1), m.group(2).strip(), flag.group(1) if flag else None))
+    return out
+
+
+def checks_p(eid, ctx):
+    """플랫폼 분리 eval 63~65. 실행 기록(events.jsonl)이 없으면 _Manual(수동 채점), 통과로 세지 않는다."""
+    def bash() -> list[str]:
+        uses = ctx.tool_uses()
+        if uses is None:
+            raise _Manual("실행 기록(events.jsonl) 없음")
+        return [_strip_heredocs(str(i.get("command", ""))) for n, i in uses if n == "Bash"]
+
+    def analysis():
+        text = _read(ctx.work / "MOCK-1001" / "analysis.json")
+        return json.loads(text) if text else None
+
+    def untouched():
+        tool = [b for b in ctx.branches() if b.startswith(("issue/", "tt/"))]
+        (a, ea), (b, eb) = ctx.lock_free(), ctx.clone_same()
+        plan = ctx.plan("MOCK-1001")
+        ok = a and b and not tool and not ctx.prs() and plan is None
+        return ok, f"{ea}; {eb}; 도구 브랜치={tool} prs={len(ctx.prs())} plan={'있음' if plan else '없음'}"
+
+    if eid == 63:
+        def triage_flag():
+            runs = [c for c in platform_calls(bash()) if c[0] == "triage" and c[1].startswith("run")]
+            ok = bool(runs) and all(c[2] == "ofono" for c in runs)
+            return ok, f"triage run {len(runs)}회, --platform={[c[2] for c in runs]}"
+        def later_flags():
+            calls = [c for c in platform_calls(bash()) if c[0] in PLATFORM_SCRIPTS and not c[1].startswith("site-defaults")]
+            bad = [f"{c[0]}.py {c[1][:60]}" for c in calls if c[2] != "ofono"]
+            return not bad, f"플랫폼 인자 스크립트 호출 {len(calls)}회" + (f", --platform ofono 없음: {bad[:3]}" if bad else "")
+        def result():
+            data = analysis()
+            if data is None:
+                return False, "JOB/analysis.json 없음"
+            top = (data.get("candidates") or [{}])[0]
+            ok = data.get("platform") == "ofono" and top.get("type") == "DATA-001"
+            return ok, f"platform={data.get('platform')} 1위={top.get('type')}/{top.get('cause')}"
+        return [triage_flag, later_flags, result, None, untouched]
+    if eid == 64:
+        def no_flag():
+            hits = [c for c in bash() if "--platform" in c]
+            return not hits, f"--platform 붙은 명령 {len(hits)}개" + (f": {hits[0][:120]}" if hits else "")
+        def result():
+            data = analysis()
+            if data is None:
+                return False, "JOB/analysis.json 없음"
+            top = (data.get("candidates") or [{}])[0]
+            ok = "platform" not in data and top.get("cause") == "DATA-001-01"
+            return ok, f"platform 키 {'있음' if 'platform' in data else '없음'}, 1위={top.get('cause')}"
+        def lock_clone():
+            (a, ea), (b, eb) = ctx.lock_free(), ctx.clone_same()
+            return a and b, f"{ea}; {eb}"
+        return [no_flag, result, lock_clone]
+    if eid == 65:
+        def mismatch():
+            seq = ctx.seq()
+            if seq is None:
+                raise _Manual("실행 기록(events.jsonl) 없음")
+            hits = [e for e in seq if e["kind"] == "tool" and re.search(r"플랫폼 불일치|platform-mismatch", str(e.get("result") or ""))]
+            ok = any(e.get("error") or re.search(r"(?:Exit code|종료 코드) 2", str(e.get("result") or "")) for e in hits)
+            return ok, f"불일치 결과 {len(hits)}건" + (f": {str(hits[0].get('result'))[:200]}" if hits else "")
+        def no_bypass():
+            cmds = bash()
+            bad = [c for c in cmds if re.search(r"--offline-db|config\.py[\"']?\s+(?:set|init)\b|(?:parse_logcat|match_signatures)\.py", c)]
+            edits = [str(i.get("file_path", "")) for n, i in (ctx.tool_uses() or []) if n in ("Write", "Edit", "MultiEdit")
+                     and str(i.get("file_path", "")).endswith(("config.yaml", "issue-db.config.yaml"))]
+            return not bad and not edits, f"우회 명령 {bad[:2]}, 설정 편집 {edits[:2]}"
+        def guided():
+            texts = ctx.texts()
+            if texts is None:
+                raise _Manual("실행 기록(events.jsonl) 없음")
+            hit = next((t for t in texts if "--platform" in t and re.search(r"issue_db|config", t)), None)
+            return hit is not None, (hit[:300] if hit else "--platform·config(issue_db.path) 안내 없음")
+        def nothing_left():
+            ok, ev = untouched()
+            data = analysis()
+            return ok and data is None, f"{ev}; analysis.json {'있음' if data else '없음'}"
+        return [mismatch, no_bypass, guided, nothing_left]
+    raise ValueError(eid)
 
 
 def checks_j(eid, ctx):

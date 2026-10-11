@@ -9,9 +9,9 @@
 | RF-0 기준선·쓰기 안전 | 완료 |
 | RF-1 토큰·컨텍스트 | 완료 (행동 평가 후속은 사내 S-2). 파생 이벤트 `msg` 복사 제거는 보류(W11, 스냅샷 재생성 사용자 승인) |
 | RF-2 사외/사내 경계 | 완료 (2026-10-03). `tools/check_boundary.py`, `import_draft.py` staging·rollback, `plugin/schemas/`, `.github/workflows/external.yml`. pre-commit 연결은 선택, 안 함 |
-| RF-3 코어/플랫폼 분리 | 완료 (android 백엔드 이동). 남은 것은 RF-4로 |
+| RF-3 코어/플랫폼 분리 | 완료 (android 백엔드 이동, 10/11 다중 플랫폼 레지스트리 `platforms/<이름>/SPEC`·계약 `platforms/base.py`, 핵심 모듈의 android 직접 import 제거, `docs/design/17-platforms.md`). 남은 것은 RF-4로 |
 | RF-4 Android 버전 어댑터 | 일부 (`platform:` 키·`platforms.load()`). 남음: 이슈 DB 층(`phone_id_patterns`·`ril.yaml tags`), `migrate_code_refs`, `--index` |
-| RF-5 oFono 등 다중 플랫폼 | 사내 환경을 안 뒤(반입 뒤) |
+| RF-5 oFono 등 다중 플랫폼 | 뼈대 완료 (10/11): 플랫폼 선택(`--platform`)·경로 프로필·플랫폼별 lock·이슈 DB 분리(`platform-mismatch`)·guard 다중 프로필, `platforms/ofono` 형식 가정 placeholder + 합성 로그 전환 검증. 남음: 실제 oFono 파서 규칙·이슈 DB 내용(S24~S29, 사내 로그 확보 뒤 `docs/development/OFONO_LOG_COLLECTION.md`), `17-platforms.md` §미룬 것 |
 | RF-6 커넥터 | 사내 환경을 안 뒤(반입 뒤) |
 | RF-7 워크플로 엔진 | 분석 전용·`--more-logs`·입력 해시 재사용 완료 (X1~X4) |
 | RF-8 자동화 | 사내 환경을 안 뒤(반입 뒤). 아래 결정 (b) |

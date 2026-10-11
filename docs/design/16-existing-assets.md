@@ -48,8 +48,11 @@
 parse_logcat.py (플러그인 진입점, contracts.md §3.2 계약 유지)
  └─ 파서 백엔드 인터페이스 (plugin/scripts/parser_backends/base.py)
      ├─ site/       ← 기존 검증된 파서를 포팅 (사내 전용, 사외 레포에 없음)
-     └─ reference/  ← 사외 초안의 최소 구현 (모의 환경 테스트용; 구현은 platforms/android/backend.py, 이 경로는 BACKEND 재수출)
+     ├─ reference/  ← 사외 초안의 최소 구현 (모의 환경 테스트용; 구현은 platforms/android/backend.py, 이 경로는 BACKEND 재수출)
+     └─ <p>_reference/ ← android 밖 플랫폼의 기본 백엔드 (예: ofono_reference = platforms/ofono/backend.py 재수출, 형식 가정 placeholder)
 ```
+
+**백엔드 이름 공간(플랫폼별, `17-platforms.md`)**: `reference`·`site`는 android 백엔드다(`ParserBackend.platform` 기본 `"android"`). 다른 플랫폼의 백엔드는 `<플랫폼>_reference`(사외 기본, `SPEC.default_backend`)와 사내 포팅본(예: `<플랫폼>_site`, 사내 전용 `SITE_PATHS`)처럼 이름에 플랫폼을 붙이고 클래스 속성 `platform`에 그 플랫폼 이름을 둔다. 선택은 기본 플랫폼이면 `parser.backend`, 그 밖은 `parser.by_platform.<플랫폼>`(없으면 `SPEC.default_backend`)이고, 불러온 백엔드의 `platform`이 파싱 플랫폼과 다르면 종료 코드 2다. 플랫폼마다 이슈 DB가 따로이므로 그 DB의 `parser_backend.name`도 그 플랫폼 백엔드 이름이다 — 옛 플러그인(플랫폼 선언을 모름)이 oFono DB를 android로 오인해도 백엔드 이름 불일치로 쓰기가 막힌다.
 
 **백엔드 인터페이스** (사외에서 정의, `contracts.md`에 계약 추가)
 - `parse(paths, tz, year, window) -> events[]`: 포맷 처리, 시간 정렬, RIL 요청/응답 페어링, 윈도우 자르기

@@ -1,0 +1,4 @@
+2026-09-20T14:32:09.100000+09:00 dut ofonod[812]: src/example.c:example_cb() /modem_0 context activate requested
+2026-09-20T14:32:10.200000+09:00 dut daemon-a[901]: data connect failed: reason=PLACEHOLDER_REASON
+2026-09-20T14:32:10.350000+09:00 dut daemon-a[901]: retry scheduled: placeholder
+2026-09-20T14:32:12.000000+09:00 dut ofonod[812]: src/example.c:example_cb() /modem_0 context activate done: placeholder
