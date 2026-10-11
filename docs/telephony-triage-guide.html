@@ -221,7 +221,7 @@ html{scroll-behavior:smooth}
   <div class="card stat"><b>9</b><span>Hooks (Claude 8 + Jira 응답 격리 1)</span></div>
   <div class="card stat"><b>6</b><span>카테고리: data · call · network · sim · sms · ims</span></div>
   <div class="card stat"><b>≈18k</b><span>Python 줄 수 (plugin/scripts + tools)</span></div>
-  <div class="card stat"><b>__PYTEST_COUNT__</b><span>pytest 통과 (10/11 기준)</span></div>
+  <div class="card stat"><b>1,412</b><span>pytest 통과 (10/11 기준)</span></div>
   <div class="card stat"><b>65</b><span>스킬 행동 평가 항목 (전체 재실행은 사내 S-2)</span></div>
 </div>
 
@@ -1100,7 +1100,7 @@ score = min(1, base + bonus)
 <tr><th>항목</th><th>현재</th></tr>
 <tr><td>완료 Phase</td><td>D0, 1~13 (사외 초안 모드)</td></tr>
 <tr><td>진행 중</td><td>RF-2, 10/04 개선, 10/11 Jira 결과 게시·플랫폼 분리 구현 완료, 사용자 확인 대기 → 보안 검토 → 반입. 순서는 <code>DRAFT_NOTES.md</code> "다음 할 일"</td></tr>
-<tr><td>테스트</td><td><code>pytest tests</code> __PYTEST_COUNT__개 통과</td></tr>
+<tr><td>테스트</td><td><code>pytest tests</code> 1,412개 통과</td></tr>
 <tr><td>스킬 평가</td><td>행동 eval 65개(61·62 Jira 결과 게시, 63~65 플랫폼 분리). 사외에서는 바꾼 흐름의 eval만 돌리고 전체 재실행은 사내 S-2. 트리거 recall 26~33%</td></tr>
 <tr><td>사내 확인 항목</td><td>TODO(SITE) 100곳 (<code>python3 tools/list_site_todos.py</code>, 레지스트리 S1~S29: S22 실패 스텝 12곳, S23 Jira 코멘트 쓰기 5곳, S24~S29 oFono 포함), REVIEW-OPEN 0건</td></tr>
 <tr><td>사외에서 못 하는 것</td><td>실제 로그 문구·태그, report.html 구조, 스텝 → 로그 흔적 대응표, 장비·단말 시계 관계, 실제 Jira 필드 이름, 정확도 평가 (사내 S-1~S-5)</td></tr>
