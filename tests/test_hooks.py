@@ -531,7 +531,7 @@ def test_guard_gh_env_repo_and_api_endpoint():
              (f"gh api --method=GET repos/{DB_SLUG}/contents/x", plain, None),
              (f"gh api -F name=v repos/{DB_SLUG}/labels", plain, "ask"),
              (f"gh api --method=DELETE repos/{DB_SLUG.upper()}/git/refs/heads/x", plain, "ask"),
-             (f"gh api -X POST repos/{{owner}}/{{repo}}/issues -f title=x", db_origin, "ask"),
+             ("gh api -X POST repos/{owner}/{repo}/issues -f title=x", db_origin, "ask"),
              ("gh pr create -t x", db_origin, "ask"),
              (f"gh pr create --repo=ssh://git@ghe.mock.invalid/{DB_SLUG} -t x", plain, "ask"),
              (f"gh pr create -R other.host.invalid/{DB_SLUG} -t x", plain, None),   # host가 다르다
