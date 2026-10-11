@@ -17,6 +17,7 @@
 | `reference/verify.md` | `07-workflow.md §validate`(`--cause`), `§fix-submitted`, `§verify-fix` | 해당 커맨드 |
 | `reference/sync-pr.md` | `07-workflow.md §sync-pr`, `06-collaboration.md §6.3` sync-pr 절차 (**단일 원본** — `commands/sync-pr.md`는 이 파일을 가리키기만 한다) | `sync-pr` 커맨드, Step 8-2 원격 브랜치 있음 |
 | `reference/search.md` | `03-issue-db.md §5.5`, `09-commands.md` search (**단일 원본** — `commands/search.md`는 이 파일을 가리키기만 한다). 증상 문장을 그대로 `db_search.py`에 넘기고 이슈 번호 줄·유형 > 원인 표로 보인다. 읽기 전용 | `search` 커맨드, 증상만 묻는 "비슷한 이슈·이슈 번호?" |
+| `reference/post.md` | `07-workflow.md §Step 9`: Jira 결과 게시 절차(status·render·`post.fill.json` 형식과 basis 규칙·확인 화면 그대로·수정 요청·`--omit`·approve 출력 그대로 1회 호출·거부·MCP 없음 처리) | analyze Step 9, 같은 세션의 "결과 Jira에 올려줘" |
 | `reference/db-authoring.md` | 아래 "추가 지침" 목록 중 작성 판단만(op·drift·R 표는 스키마·`계획 형식 오류` 메시지·`db_verify`가 대신한다). 11KB 이하(필수 필드 요약 1KB 포함) | 새 원인·유형·시그니처·파서 규칙을 만들 때 |
 | `reference/ril-requests.md`, `fail-causes.md`, `log-tags.md` | 참조 자료 | 로그 해석이 필요할 때 |
 
@@ -79,7 +80,7 @@ skill-creator 스킬을 실행하고 아래를 입력으로 준다.
 5. 발생 시각이 없는 Jira → 바로 묻지 않고 `parse --full`로 증상 시그니처가 충족되는 시각 후보(상위 3개)를 보여주고 고르게 한다. 후보가 없는 로그에서는 시각을 묻는다. 로그에 시계 역행이 있으면 경고하고 같은 경로를 제안한다
 6. 사용자가 분류를 거부 → 다른 후보나 새 유형 선택지 제시, 임의 확정 금지
 7. 로그에 IMSI, 전화번호, SIP URI → 리포트, 매칭 근거, 이슈 DB 반영분 모두 마스킹 (PII가 근거 줄에 있음)
-8. Jira 코멘트 요청 → 읽기 전용이라 거절, 리포트 복사 대안 제시
+8. Jira 코멘트·상태 변경 요청(분석 결과 없음) → 상태 변경은 거절(Jira 쓰기는 승인한 분석 결과 코멘트 1종뿐). 사용자 문구를 그대로 올리지 않고, 코멘트는 analyze 결과의 4칸 확인 화면을 승인한 뒤에만 가능하다고 안내하며 붙여 넣을 문구를 주거나 analyze를 먼저 제안한다. 쓰기 도구를 부르지 않는다
 9. push 확인 화면에서 "해결책 문구 바꿔줘" → 계획 수정 후 재적용, 확인 화면 재표시, 승인 전 push 금지
 10. CALL-001(fixed) 원인인데 SW가 fixed_in 이후(같은 빌드 포함) → "회귀 의심"을 보고하고 `fix.status`를 open으로 되돌릴지 묻는다
 11. 분석 중 main에 같은 번호의 새 원인이 머지됨 → Step 8에서 다음 번호로 할당되고 확인 화면에 표시
@@ -126,5 +127,7 @@ skill-creator 스킬을 실행하고 아래를 입력으로 준다.
 52. "a.log로 분석만 → b.log를 더해 다시" → 두 번째 호출은 `--logs`가 아니라 `--more-logs`. 이전 결과(1위 CALL-001, 원인 미확인)와 비교해 추가 로그로 1위가 IMS-001-01로 바뀐 것(`reuse.changed`·`top_changed`)을 알린다. 기록·계획 없음(RF-7)
 53. "데이터가 안 붙는 증상, 예전에 이런 이슈 있었어? 있으면 지라 번호 알려줘"(증상만, 로그·키 없음) → analyze가 아니라 search 흐름: 문장을 그대로 `db_search.py`에 넘기고 `triage.py`·파서·lock 없이, 이슈 번호 줄(MOCK-1101~1104)과 유형 > 원인 표(해결책·수정 상태)를 보인다. 지어낸 번호가 없다
 54. "/telephony-triage:search eSIM 다운로드가 안 돼, 이런 이슈 있었어? 번호 알려줘" → 일치 없음. 번호를 지어내지 않고 다른 검색어를 제안하며, 다시 검색하면 쓴 단어를 밝히고 같은 이슈라고 하지 않는다. 분석·lock 없음
+61. (배치 J, 55~60은 `tests/skill_evals/README.md`) analyze → Step 8 PR 뒤 Step 9: Jira 게시 여부를 한 번 묻고, `issue_post.py render --fill` 확인 화면을 그대로 보이고, 수정 요청 뒤 다시 render·재승인한 본문만 `approve` 출력대로 코멘트 도구(모의 `jira_ticket_add_note`)로 1회 게시 → guard `ask` 기록, 게시 본문 sha256 = `post.approved.json.body_sha256`, `post.result.json` posted, 4칸 순서와 CAUSE 근거 표시, 마스킹·원문 없음, lock 없음·clone 불변
+62. (배치 J) Step 7 '기록하지 않음' → release 뒤 Step 9: CAUSE가 "자동 분석 1위 후보 — 사람이 확정하지 않음", 확인 화면 승인 → approve → guard `ask` → 권한 거부(`approver_deny`) → 재시도·다른 쓰기 도구 없이 "게시 안 됨"과 `JOB/post.md` 위치(직접 붙여넣기 대안)를 알린다. `post.result.json`·쓰기 로그 없음
 
-- 완료 기준: 트리거 테스트 전 항목, eval `evals.json` 전체(46~52는 10/04~05 기능 추가분, 53·54는 S6 증상 검색) 통과. SKILL.md 본체 500줄 이내, 흐름별 reference 분리("SKILL 구성"). 결과물은 플러그인 `skills/telephony-triage/`에 둔다. `analyze`, `record`, `validate --cause`, `verify-fix`, `fix-submitted` 커맨드가 스킬과 연결되어 동작한다.
+- 완료 기준: 트리거 테스트 전 항목, eval `evals.json` 전체(46~52는 10/04~05 기능 추가분, 53·54는 S6 증상 검색, 61·62는 Jira 결과 게시) 통과. SKILL.md 본체 500줄 이내, 흐름별 reference 분리("SKILL 구성"). 결과물은 플러그인 `skills/telephony-triage/`에 둔다. `analyze`, `record`, `validate --cause`, `verify-fix`, `fix-submitted` 커맨드가 스킬과 연결되어 동작한다.

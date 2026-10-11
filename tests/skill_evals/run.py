@@ -86,9 +86,11 @@ def prepare_plugin_mode(entry: dict, info: dict, env_dir: Path) -> dict:
     dump(mcp, {"mcpServers": {
         "mock-jira": {"command": sys.executable, "args": [(MOCKS / "jira_mcp" / "server.py").as_posix()],
                       "env": {k: info["env"][k] for k in ("MOCK_JIRA_DIR", "MOCK_JIRA_WRITE_LOG", "PYTHONIOENCODING")}},
-        # guard의 ask(예: publish 규칙 7)에 사람 대신 답하고 요청을 기록한다(`approvals.json`)
+        # guard의 ask(예: publish 규칙 7)에 사람 대신 답하고 요청을 기록한다(`approvals.json`).
+        # setup.approver_deny면 모든 ask를 거부한다(권한 거부 경로, eval 62)
         APPROVER: {"command": sys.executable, "args": [(MOCKS / "approver_mcp" / "server.py").as_posix()],
-                   "env": {"MOCK_APPROVALS_LOG": str(env_dir / "approvals.json"), "PYTHONIOENCODING": "utf-8"}}}})
+                   "env": {"MOCK_APPROVALS_LOG": str(env_dir / "approvals.json"), "PYTHONIOENCODING": "utf-8",
+                           **({"EVAL_APPROVER_DENY": "1"} if setup.get("approver_deny") else {})}}}})
     return {"plugin_dirs": [info["plugin_root"], str(analyzer)], "mcp_config": str(mcp)}
 
 

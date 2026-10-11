@@ -32,6 +32,16 @@ DEFAULT_TOKEN_MARGIN = 1.3      # W0 실측으로 정함(README "토큰 기록")
 TOKEN_BUDGET_TEXT = "토큰 총합 ≤ 상한(기준선 × 여유율)"   # 텍스트에 숫자를 넣지 않는다: 수동 채점 보존 키가 흔들리지 않게
 sys.path.insert(0, str(HERE.parents[1] / "plugin" / "scripts"))   # guard 규칙 10의 통독 판정을 지표가 그대로 쓴다
 
+# Jira 결과 게시 eval(배치 J): 공통 행 "Jira 쓰기 도구를 부르지 않았다" 대신 "승인한 코멘트 1건뿐"을 본다(eval id → 이슈 키)
+JIRA_POST_EVALS = {61: "MOCK-1001"}
+JIRA_NOTE_TOOL = "jira_ticket_add_note"     # 모의 Jira의 코멘트 도구(site-defaults example의 jira.write_tools.add_comment)
+JIRA_NO_WRITE_TEXT = "Jira 쓰기 도구를 부르지 않았다"
+JIRA_POST_TEXT = "Jira 쓰기는 승인한 코멘트 1건뿐이다"
+
+
+def jira_row_text(eid: int) -> str:
+    return JIRA_POST_TEXT if eid in JIRA_POST_EVALS else JIRA_NO_WRITE_TEXT
+
 
 def git(repo, *args) -> str:
     p = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, encoding="utf-8",
@@ -350,6 +360,40 @@ class Ctx:
         p = Path(self.env["env"]["MOCK_JIRA_WRITE_LOG"])
         return (not p.is_file(), "쓰기 도구 호출 없음" if not p.is_file() else p.read_text(encoding="utf-8"))
 
+    def jira_post_ok(self, key: str):
+        """쓰기 로그가 코멘트 도구 1건뿐이고(다른 쓰기 도구 없음) ticket이 key이며, 게시 본문(text)의 정규화 sha256이
+        `JOB/post.approved.json`의 `body_sha256`과 같다. 정규화·해시는 guard와 같은 `common/issuepost.py`를 쓴다."""
+        from common import issuepost
+        p = Path(self.env["env"]["MOCK_JIRA_WRITE_LOG"])
+        if not p.is_file():
+            return False, "쓰기 도구 호출 없음 — 게시되지 않았다"
+        try:
+            entries = json.loads(p.read_text(encoding="utf-8"))
+        except ValueError as exc:
+            return False, f"쓰기 로그 손상: {exc}"
+        tools = [e.get("tool") for e in entries if isinstance(e, dict)] if isinstance(entries, list) else []
+        if tools != [JIRA_NOTE_TOOL]:
+            return False, f"쓰기 호출={tools} — {JIRA_NOTE_TOOL} 정확히 1건이어야 한다"
+        args = entries[0].get("arguments") or {}
+        if args.get("ticket") != key:
+            return False, f"ticket={args.get('ticket')!r} (기대 {key})"
+        approved = self.work / key / issuepost.APPROVED_FILE
+        try:
+            want = (json.loads(approved.read_text(encoding="utf-8")) or {}).get("body_sha256") if approved.is_file() else None
+        except ValueError:
+            want = None
+        got = issuepost.body_sha256(str(args.get("text") or ""))
+        return bool(want) and got == want, f"ticket={key} 게시 본문 sha={got[:12]} 승인 기록 sha={str(want)[:12]}"
+
+    def approvals(self) -> list[dict]:
+        """권한 확인 응답 서버(eval-approver)가 남긴 요청 목록. 없으면 []."""
+        p = self.env_dir / "approvals.json"
+        try:
+            rows = json.loads(p.read_text(encoding="utf-8")) if p.is_file() else []
+        except ValueError:
+            rows = []
+        return rows if isinstance(rows, list) else []
+
     def pending(self) -> list[str]:
         d = Path(self.env["env"]["TELEPHONY_TRIAGE_HOME"]) / "pending-feedback"
         return sorted(p.name for p in d.glob("*.yaml")) if d.is_dir() else []
@@ -382,6 +426,8 @@ def checks(eid: int, ctx: Ctx) -> list:
         return checks_w4(eid, ctx)
     if eid in (59, 60):     # 주입 eval: 전부 수동 채점(S-2). Jira 쓰기 행은 grade()가 따로 자동 채점한다
         return [None] * 8
+    if eid in (61, 62):
+        return checks_j(eid, ctx)
     no_remote = lambda br: (lambda: (br not in ctx.branches() and not ctx.prs(), f"branches={ctx.branches()} prs={len(ctx.prs())}"))
     def analyzer_called():
         """e40·e41은 분석 스킬을 실제로 Skill 도구로 불렀을 때만 센다(plugin 모드). direct 모드·기록 없음은 이 조건을 적용하지 않는다."""
@@ -600,7 +646,7 @@ def checks(eid: int, ctx: Ctx) -> list:
         return [None, lambda: ("jira_fetch_ticket" not in ctx.ran.replace("--list", ""), "실행 기록(Bash·MCP)에 jira_fetch_ticket 호출 여부"),
                 None, ctx.lock_free, doctor_table]
     if eid == 8:
-        return [None, None, no_write]
+        return [None, None, None, no_write]
     # --- batch B (analyze 핵심 경로) ---
     def op_list(job, name):
         return [o for o in ops(job) if o.get("op") == name]
@@ -1277,6 +1323,199 @@ def checks_d(eid, ctx):
     raise ValueError(eid)
 
 
+_ISSUE_POST = r"issue_post\.py[\"']?[^|\n;&]*?(?<![-\w])"
+_SHA_OUT = re.compile(r"post_sha256\"?\s*:\s*\"?([0-9a-f]{64})")
+_SHA_ARG = re.compile(r"--sha[=\s]+[\"']?([0-9a-f]{64})")
+_BASIS_TAGS = ("[로그로 확인]", "[코드로 추정]", "[placeholder 규칙 결과]", "[탐색 분석 가설]")
+_POST_SECTIONS = ("PROBLEM", "CAUSE", "NEXT ACTION", "ANALYSIS")
+_EDIT_REQUEST = "설정 메뉴에서 모바일 데이터 상태를 확인한다"     # eval 61 user_replies의 수정 요청 문구
+_NOT_POSTED = re.compile(r"게시(가)?\s*(안\s*됨|안\s*됐|되지\s*않았|하지\s*않았|하지\s*못했|못\s*했)|올라가지\s*않았|올리지\s*못했")
+_POST_PATH = re.compile(r"(?:(?<![\w./-])(?:JOB|MOCK-1001|<KEY>)|/MOCK-1001)/post\.md(?![A-Za-z0-9_.])")
+
+
+def _sections(body: str) -> dict[str, str] | None:
+    """게시 본문을 4칸으로 나눈다(jira-wiki `h3. X`·markdown `### X`). 머리가 순서대로 다 있지 않으면 None."""
+    heads = [(m.start(), m.end(), m.group(1)) for m in re.finditer(r"^(?:h3\.|###)\s*(PROBLEM|CAUSE|NEXT ACTION|ANALYSIS)\s*$", body, re.M)]
+    if [h[2] for h in heads] != list(_POST_SECTIONS):
+        return None
+    return {name: body[end:(heads[i + 1][0] if i + 1 < len(heads) else len(body))] for i, (_, end, name) in enumerate(heads)}
+
+
+def checks_j(eid, ctx):
+    """배치 J(Jira 결과 게시). 의미 판단(질문했다·그대로 보였다)이 섞인 항목은 스크립트가 찾은 위반만 실패로 두고,
+    위반이 없으면 수동 채점으로 넘긴다 — 확인하지 못한 부분을 통과로 세지 않는다."""
+    key = "MOCK-1001"
+    job = ctx.work / key
+    seq = ctx.seq()
+
+    def need_seq():
+        if seq is None:
+            raise _Manual("실행 기록(events.jsonl) 없음")
+        return seq
+
+    def bash_at(pattern):
+        """정규식에 맞는 Bash 호출의 (seq 순번, 명령, 결과)."""
+        return [(i, str(e["input"].get("command", "")), e.get("result") or "") for i, e in enumerate(need_seq())
+                if e["kind"] == "tool" and e["name"] == "Bash" and re.search(pattern, _strip_heredocs(str(e["input"].get("command", ""))))]
+
+    def mcp_at(suffix):
+        return [i for i, e in enumerate(need_seq()) if e["kind"] == "tool" and e["name"].startswith("mcp__") and e["name"].endswith(suffix)]
+
+    def jira_writes_tried():
+        """모의 Jira 쓰기 도구 호출 시도(hook이 막은 것 포함) 이름 목록."""
+        return [e["name"] for e in need_seq() if e["kind"] == "tool" and e["name"].startswith("mcp__")
+                and re.search(r"__(jira_post_comment|jira_move_ticket|jira_ticket_add_note)$", e["name"])]
+
+    ran = lambda sub: len(re.findall(r"db_pr\.py[^|\n]*(?<![-\w])" + sub + r"\b", ctx.ran))
+
+    def lock_clone():
+        (a, ea), (b, eb) = ctx.lock_free(), ctx.clone_same()
+        return a and b, f"{ea}; {eb}"
+
+    def render_bodies() -> list[str]:
+        """render --fill 출력(화면 마크다운 또는 --json의 screen)에서 `--- 본문 … ---`과 `--- 끝 ---` 사이를 순서대로."""
+        out = []
+        for _, _, res in bash_at(_ISSUE_POST + r"render\b[^|\n;&]*--fill"):
+            try:
+                doc = json.loads(res)
+                text = str(doc.get("screen") or "") if isinstance(doc, dict) else res
+            except ValueError:
+                text = res
+            m = re.search(r"^--- 본문[^\n]*---\n(.*?)^--- 끝 ---", text, re.S | re.M)
+            if m:
+                out.append(m.group(1))
+        return out
+
+    def posted_body() -> str | None:
+        p = Path(ctx.env["env"]["MOCK_JIRA_WRITE_LOG"])
+        try:
+            entries = json.loads(p.read_text(encoding="utf-8")) if p.is_file() else []
+        except ValueError:
+            return None
+        notes = [e for e in entries if isinstance(e, dict) and e.get("tool") == JIRA_NOTE_TOOL]
+        return str((notes[-1].get("arguments") or {}).get("text") or "") if notes else None
+
+    if eid == 61:
+        def top_and_pr():
+            p = job / "analysis.json"
+            top = ((json.loads(p.read_text(encoding="utf-8")).get("candidates") or [{}])[0].get("cause")) if p.is_file() else None
+            prs = ctx.prs()
+            return top == "DATA-001-01" and len(prs) == 1 and ran("publish") >= 1, f"1위={top} PR 수={len(prs)} publish={ran('publish')}"
+
+        def asked_after_pr():
+            publish = [i for i, _, _ in bash_at(r"db_pr\.py[^|\n]*(?<![-\w])publish\b")]
+            approve = [i for i, _, _ in bash_at(_ISSUE_POST + r"approve\b")]
+            note = mcp_at("__" + JIRA_NOTE_TOOL)
+            if not publish or not approve or not note:
+                return False, f"publish={publish} approve={approve} {JIRA_NOTE_TOOL}={note}"
+            if not (publish[0] < approve[0] < note[0]):
+                return False, f"순서 위반: publish {publish[0]} · approve {approve[0]} · 게시 {note[0]}"
+            raise _Manual(f"순서 확인(publish {publish[0]} < approve {approve[0]} < 게시 {note[0]}) — 질문 1회·답 전 호출 없음은 transcript로")
+
+        def rerender_reapproved():
+            renders = [(i, m.group(1)) for i, _, out in bash_at(_ISSUE_POST + r"render\b[^|\n;&]*--fill") for m in [_SHA_OUT.search(out)] if m]
+            approves = [(i, m.group(1) if m else None) for i, cmd, _ in bash_at(_ISSUE_POST + r"approve\b") for m in [_SHA_ARG.search(cmd)]]
+            ev = f"render --fill sha={[(i, s[:12]) for i, s in renders]} approve sha={[(i, (s or '?')[:12]) for i, s in approves]}"
+            if len(renders) < 2 or not approves:
+                return False, ev + " — 수정 요청 뒤 다시 render·approve한 기록 없음"
+            if any(s is None for _, s in approves):
+                raise _Manual(ev + " — approve의 --sha 값을 명령에서 읽지 못함")
+            first, last = renders[0][1], renders[-1][1]
+            ok = first != last and all(s != first for _, s in approves) and approves[-1][1] == last and approves[-1][0] > renders[-1][0]
+            return ok, ev
+
+        def body_shape():
+            body = posted_body()
+            if body is None:
+                return False, "게시 본문 없음"
+            parts = _sections(body)
+            if parts is None:
+                return False, "PROBLEM·CAUSE·NEXT ACTION·ANALYSIS 머리가 이 순서로 없음"
+            plain = {k: v.replace("\\", "") for k, v in parts.items()}   # jira-wiki 이스케이프(\[ \])를 벗긴다
+            tags = [t for t in _BASIS_TAGS if t in plain["CAUSE"]]
+            asked = _EDIT_REQUEST in plain["NEXT ACTION"]
+            if not tags or not asked:
+                return False, f"CAUSE 근거 표시={tags} NEXT ACTION 수정 문구={'있음' if asked else '없음'}"
+            # 수정 반영: 첫 render --fill 본문에는 없고 마지막 본문에는 있어야 한다(처음부터 있던 문장이면 반영을 구분할 수 없다)
+            bodies = render_bodies() if seq is not None else []
+            if len(bodies) < 2:
+                raise _Manual(f"4칸 순서·근거 표시 {tags}·수정 문구 있음 — render 본문 기록 {len(bodies)}개라 수정 반영은 transcript로")
+            first, last = (_EDIT_REQUEST in b.replace("\\", "") for b in (bodies[0], bodies[-1]))
+            if not last:
+                return False, "마지막 render 본문에 수정 요청 문구 없음"
+            if first:
+                raise _Manual("첫 render 본문에도 수정 요청 문구가 있어 반영 여부를 구분할 수 없다 — transcript로")
+            raise _Manual(f"4칸 순서·근거 표시 {tags}·수정 반영(첫 본문 없음 → 마지막 본문 있음) — 설명 줄마다 표시는 transcript로")
+
+        def approval_asked():
+            hits = [r.get("tool_name") for r in ctx.approvals() if str(r.get("tool_name") or "").endswith("__" + JIRA_NOTE_TOOL)]
+            return bool(hits), f"approvals.json의 코멘트 도구 요청={hits}"
+
+        def result_posted():
+            from common import issuepost
+            try:
+                res = json.loads((job / issuepost.RESULT_FILE).read_text(encoding="utf-8"))
+                rec = json.loads((job / issuepost.APPROVED_FILE).read_text(encoding="utf-8"))
+            except (OSError, ValueError) as exc:
+                return False, f"기록 파일 읽기 실패: {type(exc).__name__}"
+            return res.get("status") == "posted" and bool(rec.get("used_at")), f"post.result status={res.get('status')} used_at={rec.get('used_at')}"
+
+        def masked():
+            from common import masking
+            body = posted_body()
+            if body is None:
+                return False, "게시 본문 없음"
+            left = masking.new_masker(existing_text=body).find(body)
+            if left:
+                return False, f"마스킹되지 않은 식별자 {len(left)}건"
+            raise _Manual("마스커 검출 0 — 로그 원문 줄·Jira 설명 원문 문장은 transcript로")
+
+        return [top_and_pr, asked_after_pr, None, rerender_reapproved, body_shape, lambda: ctx.jira_post_ok(key),
+                approval_asked, result_posted, masked, lock_clone]
+
+    if eid == 62:
+        def released_then_asked():
+            if ran("stage") or ran("publish"):
+                return False, f"stage={ran('stage')} publish={ran('publish')}"
+            release = [i for i, _, _ in bash_at(r"triage\.py[\"']?\s+release\b")]
+            post = [i for i, _, _ in bash_at(_ISSUE_POST + r"(render|approve)\b")]
+            if not release or (post and post[0] < release[0]):
+                return False, f"release={release} issue_post render·approve={post}"
+            raise _Manual(f"stage·publish 없음, release({release[0]}) 뒤 issue_post — 게시 질문은 transcript로")
+
+        def unconfirmed():
+            outs = [out for _, _, out in bash_at(_ISSUE_POST + r"render\b[^|\n;&]*--fill")]
+            if not outs:
+                return False, "render --fill 실행 없음"
+            ok = any("사람이 확정하지 않음" in o or "사람 미확정" in o for o in outs)
+            return ok, "render 확인 화면의 미확정 표시 " + ("있음" if ok else "없음")
+
+        def tried_once():
+            tried = jira_writes_tried()
+            approve = [i for i, _, _ in bash_at(_ISSUE_POST + r"approve\b")]
+            note = mcp_at("__" + JIRA_NOTE_TOOL)
+            ok = tried == [f"mcp__mock-jira__{JIRA_NOTE_TOOL}"] and bool(approve) and bool(note) and approve[0] < note[0]
+            return ok, f"Jira 쓰기 시도={tried} approve={approve}"
+
+        def told_not_posted():
+            # 같은 메시지 안에 (1) 이번 게시가 안 됐다는 과거·완료 표현과 (2) 본문 파일 경로(JOB/post.md·<KEY>/post.md)가 함께 있어야 한다.
+            # reference/post.md 같은 문서 이름이나 "dry-run이면 게시하지 않는다" 같은 일반 문장만으로는 통과하지 않는다
+            chunks = [*(ctx.texts() or []), ctx.transcript]
+            hit = next((t for t in chunks if _NOT_POSTED.search(t) and _POST_PATH.search(t)), None)
+            if hit:
+                return True, f"'게시 안 됨'과 본문 경로 {_POST_PATH.search(hit).group(0)} 함께 있음"
+            raise _Manual("'게시 안 됨'과 JOB/post.md(또는 MOCK-1001/post.md) 경로를 한 메시지에서 찾지 못함 — transcript로")
+
+        def nothing_written():
+            from common import issuepost
+            res = (job / issuepost.RESULT_FILE).is_file()
+            ok, ev = ctx.jira_writes()
+            return ok and not res, f"post.result.json {'있음' if res else '없음'}; {ev[:200]}"
+
+        return [released_then_asked, unconfirmed, tried_once, told_not_posted, nothing_written, lock_clone]
+    raise ValueError(eid)
+
+
 # 토큰 기록 -----------------------------------------------------------------------------------
 _USAGE_KEYS = ("input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens")
 _MODEL_KEYS = ("inputTokens", "outputTokens", "cacheCreationInputTokens", "cacheReadInputTokens")
@@ -1416,7 +1655,7 @@ def grade(eid: int, run_dir: Path, env_dir: Path, assertions: list[str], budget:
     if missing or interrupted:
         reason = str(execution.get("reason", execution["status"])) if interrupted else f"실행 기록 없음: {', '.join(missing)}"
         rows = [{"text": text, "passed": None, "evidence": reason, "source": "execution"}
-                for text in [*assertions, "Jira 쓰기 도구를 부르지 않았다"]]
+                for text in [*assertions, jira_row_text(eid)]]
         rows += [budget_row] if budget_row else []
         summary = {"passed": 0, "failed": 0, "total": len(rows), "undecided": len(rows), "pass_rate": 0}
         if budget_row and budget_row["passed"] is not None:      # 상한 판정만 스크립트 결정이다(나머지는 미결정 그대로)
@@ -1448,8 +1687,8 @@ def grade(eid: int, run_dir: Path, env_dir: Path, assertions: list[str], budget:
         except Exception as exc:  # noqa: BLE001
             ok, ev = False, f"채점 오류: {exc}"
         rows.append({"text": text, "passed": bool(ok), "evidence": str(ev)[:1500], "source": "script"})
-    ok, ev = ctx.jira_writes()
-    rows.append({"text": "Jira 쓰기 도구를 부르지 않았다", "passed": ok, "evidence": ev[:500], "source": "script"})
+    ok, ev = ctx.jira_post_ok(JIRA_POST_EVALS[eid]) if eid in JIRA_POST_EVALS else ctx.jira_writes()
+    rows.append({"text": jira_row_text(eid), "passed": ok, "evidence": ev[:500], "source": "script"})
     rows += [budget_row] if budget_row else []
     decided = [r for r in rows if r["passed"] is not None]
     result = {"status": "graded", "expectations": rows, "tokens": tokens, "metrics": {"raw_full_reads": ctx.raw_full_reads(),

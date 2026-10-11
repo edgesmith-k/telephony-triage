@@ -14,6 +14,7 @@ description: Android Telephony 이슈(data·call·network·sim·sms·ims)를 Jir
 | 새 원인·유형·시그니처·파서 규칙·fixture, Step 7 op 필드 | `db-authoring.md` |
 | `record` / `verify-fix`·`fix-submitted`·`validate --cause` / `sync-pr` / 증상만 "비슷한 이슈·이슈 번호?"(search, analyze 아님) | `record.md` / `verify.md` / `sync-pr.md` / `search.md` |
 | 로그 해석 | `log-tags.md`, `ril-requests.md`, `fail-causes.md` |
+| Step 9·"결과 Jira에 올려줘" | `post.md` |
 
 ## 실행 규칙
 
@@ -30,7 +31,7 @@ description: Android Telephony 이슈(data·call·network·sim·sms·ims)를 Jir
    `JOB/jira_raw.json`에 두고 마스킹 요약만 보여준다(`saved_to` 없으면 응답을 그 경로에 저장하고 "격리 hook 미동작(Jira 원문 노출, S1 확인)"을 알린다). `--jira-file`은
    `--dry-run`·`--analysis-only` 전용.
 2. `S/triage.py run <KEY> --logs <…>` + 위 옵션(analyzer·explore 외). stdout(=`JOB/analysis.json`)과 `JOB/report.md`만 읽는다.
-3. `status: needs_input` → `question`·`options`를 보이고 **사용자 답**을 `--answer <kind>=<값>`으로 붙여 같은 명령을 재실행한다. 대신 고르지 않는다.
+3. `status: needs_input` → `question`·`options`를 보이고 **사용자 답**을 `--answer <kind>=<값>`으로 붙여 같은 명령을 재실행한다(대신 고르지 않는다).
    `jira`는 1번 뒤, `logs`는 `--logs`를 붙여 재실행. `stopped`는 이유만.
 4. 종료 코드 1 → 키를 다시 묻는다.
 
@@ -66,8 +67,7 @@ description: Android Telephony 이슈(data·call·network·sim·sms·ims)를 Jir
 | 원인 미확정 | `unresolved {type}` | `unresolved` |
 
 - 거부하면 표의 다른 선택지를 다시 보인다. 추정만으로·`unjudged`면 원인·유형을 안 만든다. 후보 없으면 "새 유형 / 원인 미확정 / 기록하지 않음"만.
-- `chose-other`면 한 번 묻는다(기본 아니오): 고른 원인이 후보에서 C=1이면 `add-fixture {kind: extra}`로 넣을지(`cut --around <match.json 그 후보 근거 시각>`, 아래 `db_verify` R4 실패면 빼고 다음으로), C=0·후보 밖이면 `update-signature` 검토를 `pr_notes`에 남길지. `unjudged.causes`면 묻지 않는다. 거절하면 `append`만.
-- 새 원인·유형은 `db-authoring.md`대로 초안을 만들고 모두 승인받는다.
+- `chose-other`면 한 번 묻는다(기본 아니오): 고른 원인이 후보에서 C=1이면 `add-fixture {kind: extra}`로 넣을지(`db-authoring.md`, `db_verify` R4 실패면 빼고 다음으로), C=0·후보 밖이면 `update-signature` 검토를 `pr_notes`에 남길지. `unjudged.causes`면 묻지 않는다. 거절하면 `append`만.
 - 물어보고 넣는 op: 회귀 의심·수정 미흡의 `update-fix`(실패 이력) 또는 verify-fix, `add-related`, `add-code-ref`, `update-signature`,
   `set-resolution`(검증 상태 초기화 안내), `set-status`.
 - 시그니처·파서 규칙·새 원인·fixture가 있으면 `S/db_verify.py rules --plan JOB/plan.json --draft JOB/draft` 표를 보인다(`skipped`는 통과
@@ -80,5 +80,8 @@ description: Android Telephony 이슈(data·call·network·sim·sms·ims)를 Jir
 lock·스냅샷·check는 이미 됐다. 먼저 `S/db_pr.py preflight --branch issue/<KEY> --search <KEY> --jira <KEY>`로
 write-flow §2(브랜치·`--lease`)만 한다. 열린 PR·`jira_in_main`은 다시 묻지 않되 `open_prs`에 없던 PR은 알리고 묻는다.
 `write-flow.md` 그대로: `db_pr stage --then-summary`(출력 = 확인 화면, 생략 불가) → 승인 → `db_pr publish --commit --and-discard --json`.
-직접 `git commit` 없음. 취소·dry-run만 `discard`.
-`fixed`는 `verify-fix` 통과로만 기록한다.
+취소·dry-run만 `discard`(직접 `git commit` 없음).
+
+### Step 9. Jira 게시 (선택)
+
+`post.md`대로: PR 링크·`release` 뒤 `postable: true`면 한 번 묻고(기본 아니오), 승인한 본문만 올린다.

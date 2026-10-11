@@ -6,7 +6,7 @@
 
 스크립트 이름(related_tests.py가 이 파일을 고르도록): config.py code_roots.py parse_logcat.py mask_pii.py jira_fields.py
 match_signatures.py db_search.py db_add.py db_build.py db_lint.py db_regress.py db_verify.py db_pr.py db_precommit.py
-db_review.py db_migrate.py guard.py jira_bridge.py triage.py gen_contracts.py analysis.schema.json
+db_review.py db_migrate.py guard.py jira_bridge.py triage.py issue_post.py gen_contracts.py analysis.schema.json
 """
 
 from __future__ import annotations

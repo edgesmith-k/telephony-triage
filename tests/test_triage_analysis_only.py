@@ -70,6 +70,7 @@ def test_analysis_only_skips_write_flow_and_releases_lock():
     assert "- 기존 작업 계획: 있음(분석 전용이라 건드리지 않음)" in report
     state = json.loads((ws.job_dir(KEY) / "triage-state.json").read_text(encoding="utf-8"))
     assert state["job"]["runs"][-1]["mode"] == "analysis-only" and state["owner"] is None
+    assert state["job"]["runs"][-1]["dry_run"] is False       # 분석 전용은 dry-run이 아니다(게시는 mode로 막는다)
 
 
 def test_analysis_only_then_stage_is_refused():

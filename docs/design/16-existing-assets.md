@@ -19,8 +19,11 @@
       get_comments: mcp__<server>__<tool>  # 선택 (get_issue가 코멘트를 주면 생략)
     read_tools: [...]                     # guard 허용 목록 = tools 값 + 사용자가 추가 확인한 읽기 도구
     field_map: {...}                      # 응답 필드 → 분석 항목 (기존)
+    write_tools:                          # 선택. Jira 쓰기는 코멘트 추가 1종뿐 (07-workflow.md §Step 9)
+      add_comment: {tool: mcp__<server>__<tool>, key_arg: <이슈 키 인자>, body_arg: <본문 인자>, extra_args: {}, format: jira-wiki}  # read_tools에 넣지 않는다, TODO(SITE:S23)
   ```
   - setup이 서버의 도구 목록에서 이름으로 후보를 골라 채우고(get/issue, search, comment 계열), **사용자가 확인**한다.
+  - 코멘트 도구(`write_tools.add_comment`)는 setup이 고르지 않는 팀 기본값이다. 도구 이름·인자를 매핑해 두면 스킬은 `issue_post.py approve` 출력의 도구·인자만 쓰고, guard가 승인 기록(본문 해시·키·30분·1회)과 대조한 뒤 `ask`로 허용한다. 그 밖의 Jira 쓰기(필드 수정·상태 전환·이슈 생성·첨부)는 매핑할 곳이 없고 거부된다.
   - 팀 공용 기본값은 `plugin/site-defaults.yaml`의 `jira.tools`/`jira.field_map`에 둔다. 팀이 같은 MCP 구현을 쓰면 개인 설정은 서버 이름만 확인하면 된다.
   - 응답 형식 차이는 `field_map`의 경로 표기(예: `fields.customfield_10001`, `fields.components[].name`)로 흡수한다. 경로로 표현이 안 되면 `plugin/scripts/adapters/jira_<구현>.py`에 변환 함수를 둔다.
 - 사외 모의 Jira MCP(`mock-jira`)는 도구 이름을 일부러 비표준(`jira_fetch_ticket` 등, `15-local-draft.md §15.2`)으로 만들어 매핑 경로를 반드시 거치게 한다.

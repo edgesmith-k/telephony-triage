@@ -175,6 +175,16 @@ stdin: PostToolUse hook 입력 JSON (argparse 없음)
 | `explore` | `<KEY> [--out <dir>]` | `--out`: `run --offline-db --out`의 JOB 디렉토리(없으면 <work_dir>/<KEY>) |
 | `release` | `<KEY>` |  |
 
+## `issue_post.py`
+
+공통 옵션(모든 서브커맨드): `--plugin-root <PLUGIN_ROOT>`; `--json` — JSON 출력
+
+| 서브커맨드 | 사용법 | 옵션 설명 |
+|---|---|---|
+| `status` | `<KEY>` |  |
+| `render` | `<KEY> [--fill <json>] [--format {jira-wiki,markdown}] [--omit <a,b>] [--again]` | `--fill`: LLM 칸 JSON {problem, cause[{basis, text}], next[], code_location}; `--format`: 본문 형식(기본: 코멘트 도구 설정, 없으면 jira-wiki); `--omit`: 뺄 스크립트 칸 항목: failed_step\|fields\|evidence\|must_show\|others; `--again`: 게시 이력이 있어도 다시 올린다(사용자가 명시했을 때만) |
+| `approve` | `<KEY> --sha <post_sha256>` | `--sha`: 확인 화면 마지막 줄의 post_sha256 |
+
 ## `triage.py run` → analysis.json 키
 
 원본 `plugin/schemas/output/analysis.schema.json`. `키?`는 있을 때만, `(…)`는 설명, `[≤N]`은 목록 상한(`[]`는 상한 없는 객체 목록).

@@ -7,7 +7,7 @@
 ## 1. 목적과 범위
 
 Android Telephony 이슈 도구. Jira 이슈와 logcat을 받아 원인·해결책을 분석하고, 결과를 **카테고리 > 이슈 유형(증상) > 원인**으로 사내 GitHub 이슈 DB 레포(`telephony-issue-db`)에 누적한다. 팀원들이 같은 DB에 계속 기여하며 시그니처 품질과 해결 상태를 관리한다.
-v1 범위: logcat(radio/main/system/crash, bugreport는 logcat 섹션만) · Jira **읽기 전용** · GHE 브랜치+PR(main 직접 push 금지) · CI 없음(`ci_mode: local`) · 카테고리 data/call/network/sim/sms/ims · 사용자별 한 번에 한 작업. 제외: CP 로그 파싱, Jira 쓰기, 3-way replay. 상세 표는 `GUIDE.md §1`.
+v1 범위: logcat(radio/main/system/crash, bugreport는 logcat 섹션만) · Jira **읽기 + 승인한 코멘트 추가 1종** · GHE 브랜치+PR(main 직접 push 금지) · CI 없음(`ci_mode: local`) · 카테고리 data/call/network/sim/sms/ims · 사용자별 한 번에 한 작업. 제외: CP 로그 파싱, Jira 필드 수정·상태 전환·이슈 생성·첨부, 3-way replay. 상세 표는 `GUIDE.md §1`.
 
 ---
 
@@ -98,6 +98,7 @@ telephony-triage-plugin/                 # 개발 레포 루트
     │           ├── record.md            # 수동 기록 흐름
     │           ├── verify.md            # validate --cause, fix-submitted, verify-fix 흐름
     │           ├── explore.md           # analyze Step 5-2 탐색 분석 (후보 없음·원인 미확인일 때 Claude 가설)
+    │           ├── post.md              # analyze Step 9 Jira 결과 게시 (4칸 코멘트, 확인 화면 승인 후 1건)
     │           ├── sync-pr.md           # sync-pr 흐름
     │           ├── search.md            # search 흐름: 증상 문장 그대로 db_search, 이슈 번호 줄·유형 > 원인 표 (읽기 전용)
     │           ├── db-authoring.md      # 구성 목록은 10-skill-eval.md §skill-creator 입력
@@ -105,7 +106,7 @@ telephony-triage-plugin/                 # 개발 레포 루트
     │           ├── fail-causes.md       # DataFailCause, CallFailCause, 등록 reject cause
     │           └── log-tags.md          # 태그 해설 (실제 수집 목록은 이슈 DB parser-rules/tags.yaml)
     ├── scripts/                         # 3.1 매트릭스 참고
-    │   ├── common/                      # config 로드, 이슈 DB 로드, 스키마 검증, git 헬퍼, 로깅, 시그니처 컴파일, 마스킹 함수, `events.py`(파서 출력 이벤트 키 순서·`line_ref`·`validate_event`, 표준 라이브러리만), `yamlio.py`(YAML 읽기 단일 입구, libyaml `CSafeLoader` 있으면 사용), `glossary.py`(GLOSSARY.md 표 읽기: `table`, `search_aliases`), `md.py`(마크다운 표 셀·코드 스팬 escape)
+    │   ├── common/                      # config 로드, 이슈 DB 로드, 스키마 검증, git 헬퍼, 로깅, 시그니처 컴파일, 마스킹 함수, `events.py`(파서 출력 이벤트 키 순서·`line_ref`·`validate_event`, 표준 라이브러리만), `yamlio.py`(YAML 읽기 단일 입구, libyaml `CSafeLoader` 있으면 사용), `glossary.py`(GLOSSARY.md 표 읽기: `table`, `search_aliases`), `md.py`(마크다운 표 셀·코드 스팬 escape), `issuepost.py`(Jira 코멘트 본문 정규화·해시·렌더러·도구 인자 매핑·승인 대조, 표준 라이브러리만, guard와 공유)
     │   ├── config.py
     │   ├── code_roots.py
     │   ├── parse_logcat.py
@@ -129,7 +130,8 @@ telephony-triage-plugin/                 # 개발 레포 루트
     │   ├── db_review.py
     │   ├── db_migrate.py
     │   ├── guard.py                     # Claude hook 판정기 (08-safety.md §9)
-    │   ├── jira_bridge.py               # PostToolUse hook: Jira MCP 원문 → JOB/jira_raw.json, 모델에는 마스킹 요약 (08-safety.md §9)
+    │   ├── jira_bridge.py               # PostToolUse hook: Jira MCP 원문 → JOB/jira_raw.json, 모델에는 마스킹 요약. 승인 코멘트 게시 결과 → JOB/post.result.json (08-safety.md §9)
+    │   ├── issue_post.py                # analyze Step 9: Jira 코멘트 본문(4칸) 렌더·승인 기록 (07-workflow.md §Step 9). 공용 판정은 common/issuepost.py
     │   ├── triage.py                    # analyze Step 0~4 + Step 5 resolve 드라이버 (contracts.md §3.2). CLI만. 구현은 triagelib/
     │   ├── triagelib/                   # core(상수·오류·Runner), cache(State·캐시 믹스인), anchor(실패 스텝·앵커 믹스인), report(fit·스키마 검사·report.md 믹스인), driver(Driver)
     │   └── migrations/                  # 0001_xxx.py … 스키마 버전별 마이그레이션
@@ -170,8 +172,9 @@ telephony-triage-plugin/                 # 개발 레포 루트
 | `db_review.py` | 월간 리뷰 리포트 (시그니처 없는 원인, fixture 없이 검증된 원인 포함) | `review` |
 | `db_migrate.py` | 스키마 마이그레이션 실행(`--to`, 메인테이너의 `migrate/schema-v<N>` 브랜치 워킹 트리를 직접 바꿈), 옛 스키마 계획 올리기(`upgrade-plan`) | `migrate`, `sync-pr`(옛 스키마 계획) |
 | `guard.py` | Claude hook 입력(도구 이름, 명령, 파일 경로)을 받아 허용/차단/ask 판정 (Bash·MCP·Write/Edit) | `hooks.json` |
-| `jira_bridge.py` | 설정된 Jira `get_issue`·`get_comments` MCP 응답 원문을 `<work_dir>/<KEY>/jira_raw.json`에 쓰고 모델에 보이는 결과를 마스킹 요약으로 바꾼다(PostToolUse `updatedToolOutput`) | `hooks.json` |
+| `jira_bridge.py` | 설정된 Jira `get_issue`·`get_comments` MCP 응답 원문을 `<work_dir>/<KEY>/jira_raw.json`에 쓰고 모델에 보이는 결과를 마스킹 요약으로 바꾼다(PostToolUse `updatedToolOutput`). 설정된 코멘트 도구(`jira.write_tools.add_comment`) 응답이면 `post.result.json`을 쓰고 승인 기록에 `used_at`을 남긴다 | `hooks.json` |
 | `triage.py` | **analyze 드라이버**: Step 0~4와 Step 5 `code_refs` resolve를 위 스크립트의 `main()`을 같은 프로세스에서 불러 순서대로 수행, `analysis.json`(≤4KB)·`report.md` 초안·`trace.jsonl`, 후보 없음·원인 미확인이면 Step 5-2 입력 `timeline.md`. `--analysis-only`면 기록하지 않는 분석 전용(쓰기 흐름의 사전 질문 생략, ok에서 lock 해제). 사용자 결정 지점은 `needs_input`. 자체 판정 로직은 없다(요약·절삭만) | analyze(SKILL.md), `tools/offline_eval.py`(`--offline-db`) |
+| `issue_post.py` | analyze Step 9: `analysis.json`·`jira.json`·`plan.json`(마스킹본)으로 PROBLEM/CAUSE/NEXT ACTION/ANALYSIS 코멘트 본문을 렌더(결정적 칸 + 검증한 LLM 칸, 재마스킹)해 확인 화면을 내고(`render`), 승인한 본문의 해시를 기록하고 호출할 도구·인자를 낸다(`approve`). Jira를 직접 부르지 않고 lock·git을 건드리지 않는다 | analyze Step 9(`post.md`) |
 
 - 검사 로직은 각 담당 스크립트에만 둔다. 다른 스크립트는 호출만 한다.
 - `record`는 매처와 코드 분석을 쓰지 않지만 쓰기 경로(`db_pr stage --then-summary` → `publish --commit --and-discard`)와 검사는 analyze와 같다 (`07-workflow.md §record`).

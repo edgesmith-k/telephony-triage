@@ -222,6 +222,8 @@ class CacheMixin:
         top = candidates[0] if candidates else None
         runs = list(job.get("runs") or [])
         runs.append({"n": seq, "at": _now(), "request_hash": request_hash, "mode": self.out.get("mode"),
+                     # dry-run이면 analysis.json `mode`는 write와 같다. 게시 판정(issue_post postable)이 이 값으로 구분한다
+                     "dry_run": bool(getattr(self.args, "dry_run", False)),
                      "logs": [f["name"] for f in self.log_inputs],
                      "top": {k: top[k] for k in ("type", "cause", "score", "S", "C")} if top else None, "reused": hit})
         job["runs"] = runs[-RUNS_KEEP:]

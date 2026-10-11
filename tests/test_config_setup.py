@@ -412,14 +412,15 @@ def _rows(result: dict) -> dict:
     return {r["check"]: r for r in result["rows"]}
 
 
-DOCTOR_ROWS = ["python", "deps", "config", "scripts_path", "clone", "hook", "guard", "jira", "gh", "snapshot", "compat",
-               "lock"]
+DOCTOR_MD_MAX = 1152    # doctor markdown 바이트 상한 (jira_post 행을 더해 1,024B에서 늘림)
+DOCTOR_ROWS = ["python", "deps", "config", "scripts_path", "clone", "hook", "guard", "jira", "jira_post", "gh", "snapshot",
+               "compat", "lock"]
 
 
 def _doctor(env: Env, expect=0, at: dict | None = None, **kw) -> dict:
     result = env.json("config.py", ["doctor"], expect=expect, env=at or {}, **kw)
     assert [r["check"] for r in result["rows"]] == DOCTOR_ROWS
-    assert sum(result["counts"].values()) == 12 and all(len(r["detail"]) <= 80 for r in result["rows"])
+    assert sum(result["counts"].values()) == 13 and all(len(r["detail"]) <= 80 for r in result["rows"])
     return result
 
 
@@ -445,16 +446,16 @@ def _tree(*roots: Path) -> list:
     return out
 
 
-def test_doctor_all_ok_markdown_fits_1kb_and_changes_nothing():
+def test_doctor_all_ok_markdown_fits_budget_and_changes_nothing():
     env, clone = _ready_env()
     before = (_tree(env.base, clone), git(clone, "status", "--porcelain"), git(clone, "for-each-ref"))
     result = _doctor(env)
-    assert result["counts"] == {"ok": 12, "warn": 0, "fail": 0, "skip": 0}
+    assert result["counts"] == {"ok": 13, "warn": 0, "fail": 0, "skip": 0}
     proc = env.run("config.py", ["doctor", "--format", "markdown"])
-    assert proc.returncode == 0 and len(proc.stdout.encode("utf-8")) <= 1024, len(proc.stdout.encode("utf-8"))
+    assert proc.returncode == 0 and len(proc.stdout.encode("utf-8")) <= DOCTOR_MD_MAX, len(proc.stdout.encode("utf-8"))
     lines = proc.stdout.rstrip("\n").splitlines()
-    assert lines[0].startswith("| 점검 |") and lines[-1] == "ok 12 · warn 0 · fail 0 · skip 0"
-    assert sum(1 for ln in lines if ln.startswith("| ")) == 13          # 헤더 + 12행, 표는 하나
+    assert lines[0].startswith("| 점검 |") and lines[-1] == "ok 13 · warn 0 · fail 0 · skip 0"
+    assert sum(1 for ln in lines if ln.startswith("| ")) == 14          # 헤더 + 13행, 표는 하나
     assert "\n  " not in json.dumps(result) and env.run("config.py", ["doctor"]).stdout.count("\n") == 1
     after = (_tree(env.base, clone), git(clone, "status", "--porcelain"), git(clone, "for-each-ref"))
     assert after == before, "doctor는 읽기 전용이다 (clone·work_dir·config 불변)"
@@ -465,7 +466,7 @@ def test_doctor_python_deps_and_guard_selftest_rows():
     env, _ = _ready_env()
     rows = _rows(_doctor(env))
     assert rows["python"]["status"] == "ok" and rows["deps"]["status"] == "ok" and "PyYAML" in rows["deps"]["detail"]
-    assert rows["guard"] == {"check": "guard", "status": "ok", "detail": "deny 2/2"}
+    assert rows["guard"] == {"check": "guard", "status": "ok", "detail": "deny 3/3"}   # 코멘트 도구 승인 없는 게시 포함
     # guard.py가 깨진 플러그인 루트: guard 행 fail, 종료 1
     import shutil
     broken = tmp("tt-broken-guard-") / "root"
@@ -500,10 +501,11 @@ def test_config_without_pyyaml_exits_2_with_install_hint():
 def test_doctor_without_config_fails_config_and_skips_the_rest_without_creating_anything():
     env = Env()
     result = _doctor(env, expect=1)
-    assert result["counts"] == {"ok": 3, "warn": 0, "fail": 1, "skip": 8}   # skip은 ok로 세지 않는다
+    assert result["counts"] == {"ok": 3, "warn": 0, "fail": 1, "skip": 9}   # skip은 ok로 세지 않는다
     rows = _rows(result)
     assert rows["config"]["status"] == "fail" and "setup" in rows["config"]["next"]
-    assert rows["guard"] == {"check": "guard", "status": "ok", "detail": "deny 1/1"}   # config 없이도 이름 기반 deny
+    # config 없이도 이름 기반 deny, site의 코멘트 도구는 승인 기록을 찾을 수 없어(work_dir 없음) deny
+    assert rows["guard"] == {"check": "guard", "status": "ok", "detail": "deny 2/2"}
     assert all(r["status"] == "skip" for k, r in rows.items() if k not in ("config", "python", "deps", "guard"))
     assert not env.home.exists()
     assert env.run("config.py", ["doctor", "--format", "markdown", "--json"]).returncode == 2
@@ -528,12 +530,35 @@ def test_doctor_empty_jira_mapping_fails_and_exits_1():
     assert "서버 other의 도구가 아닙니다" in _rows(_doctor(env, expect=1))["jira"]["detail"]
 
 
+def test_doctor_jira_post_row_skip_ok_warn_fail():
+    """승인 코멘트 도구 설정(`jira.write_tools.add_comment`): 없으면 skip, 유효하면 ok, 서버·단어·인자 오류는 warn,
+    read_tools에 있으면(승인 생략 경로) fail. 설정이 무효면 guard 자가시험은 코멘트 입력을 넣지 않는다."""
+    env, _ = _ready_env()
+    rows = _rows(_doctor(env))
+    assert rows["jira_post"] == {"check": "jira_post", "status": "ok",
+                                 "detail": "mcp__mock-jira__jira_ticket_add_note / jira-wiki"}
+    _set_user(env, jira={"write_tools": {"add_comment": {"tool": ""}}})     # 도구를 비우면 꺼진다
+    assert _rows(_doctor(env))["jira_post"] == {"check": "jira_post", "status": "skip", "detail": "게시 기능 꺼짐(본문 파일만)"}
+    _set_user(env, jira={"write_tools": {"add_comment": {"tool": "mcp__other__add_note"}}})
+    rows = _rows(_doctor(env))
+    assert rows["jira_post"]["status"] == "warn" and "Jira 서버" in rows["jira_post"]["detail"]
+    assert "write_tools" in rows["jira_post"]["next"] and rows["guard"]["detail"] == "deny 2/2"
+    _set_user(env, jira={"write_tools": {"add_comment": {"tool": "mcp__mock-jira__jira_add_worklog_note"}}})
+    assert "금지 단어" in _rows(_doctor(env))["jira_post"]["detail"]
+    _set_user(env, jira={"write_tools": {"transition": {"tool": "mcp__mock-jira__jira_move_ticket"}}})
+    assert "add_comment만" in _rows(_doctor(env))["jira_post"]["detail"]
+    read = ["mcp__mock-jira__jira_fetch_ticket", "mcp__mock-jira__jira_ticket_add_note"]
+    _set_user(env, jira={"read_tools": read})
+    row = _rows(_doctor(env, expect=1))["jira_post"]
+    assert row["status"] == "fail" and "read_tools" in row["detail"] and "read_tools" in row["next"]
+
+
 def test_doctor_gh_unauth_is_warn_and_exit_0():
     env, _ = _ready_env()
     result = _doctor(env, unauth=True)
     gh = _rows(result)["gh"]
     assert gh["status"] == "warn" and "gh auth login" in gh["next"]
-    assert result["counts"] == {"ok": 11, "warn": 1, "fail": 0, "skip": 0}
+    assert result["counts"] == {"ok": 12, "warn": 1, "fail": 0, "skip": 0}
 
 
 def test_doctor_snapshot_age_missing_and_corrupt_meta():
@@ -664,7 +689,7 @@ def test_doctor_snapshot_age_uses_exact_timedelta():
     assert over["status"] == "warn" and "7일" in over["detail"]
 
 
-def test_doctor_worst_case_markdown_fits_1kb():
+def test_doctor_worst_case_markdown_fits_budget():
     clone = Path(_repo()["clone"])
     env = Env()
     env.init(clone)    # hook·snapshot·jira 문제, lock 보유, gh 인증 없음
@@ -673,7 +698,7 @@ def test_doctor_worst_case_markdown_fits_1kb():
     proc = env.run("config.py", ["doctor", "--format", "markdown"], unauth=True)
     assert proc.returncode == 1
     assert proc.stdout.count("| fail |") >= 2 and proc.stdout.count("| warn |") >= 3
-    assert len(proc.stdout.encode("utf-8")) <= 1024, len(proc.stdout.encode("utf-8"))
+    assert len(proc.stdout.encode("utf-8")) <= DOCTOR_MD_MAX, len(proc.stdout.encode("utf-8"))
 
 
 if __name__ == "__main__":
