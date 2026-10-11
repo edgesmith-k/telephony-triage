@@ -14,6 +14,8 @@ import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 
+from platforms.base import cfg_compile, cfg_list, cfg_mapping, config_error
+
 from . import logcat
 
 
@@ -47,6 +49,29 @@ class BugreportRules:
 
 
 DEFAULT_RULES = BugreportRules()
+
+
+def configure_rules(rules: BugreportRules, raw, base: str) -> BugreportRules:
+    """site-defaults `platform.bugreport` 블록(`CaptureSpec.configure`). 검증해 `rules`를 덮어쓴 복사본을 준다."""
+    node = cfg_mapping(raw, base, ("wanted_buffers", "section_regex", "boundary_regex"))
+    section, boundary, wanted = rules.section_re, rules.boundary_re, rules.wanted_buffers
+    if "wanted_buffers" in node:
+        path = f"{base}.wanted_buffers"
+        items = cfg_list(node["wanted_buffers"], path, non_empty=True)
+        for i, name in enumerate(items):
+            if not isinstance(name, str) or not re.fullmatch(r"[a-z]+", name):
+                raise config_error(f"{path}[{i}]", f"소문자 영문 버퍼 이름이어야 합니다: {name!r}")
+        if len(set(items)) != len(items):
+            raise config_error(path, "중복이 있습니다.")
+        wanted = tuple(items)
+    if "section_regex" in node:
+        path = f"{base}.section_regex"
+        section = cfg_compile(node["section_regex"], path, groups=0)
+        if "cmd" not in section.groupindex:
+            raise config_error(path, "이름 그룹 (?P<cmd>...)가 필요합니다.")
+    if "boundary_regex" in node:
+        boundary = cfg_compile(node["boundary_regex"], f"{base}.boundary_regex", groups=0)
+    return BugreportRules(section, boundary, wanted, rules.default_buffer)
 
 
 def open_bugreport(path: Path) -> tuple[io.TextIOBase, list]:

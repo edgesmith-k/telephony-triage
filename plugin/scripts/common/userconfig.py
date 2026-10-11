@@ -6,12 +6,18 @@
 우선순위: **사용자 config > 플러그인 `site-defaults.yaml` > 코드 내장 기본값**.
 `site-defaults.yaml`이 없으면 호출자가 먼저 종료 코드 2로 멈춘다(`site_defaults.load_or_exit`).
 `site-defaults.example.yaml`은 읽지 않는다.
+
+플랫폼 프로필(17-platforms §3): 최상위 경로 키(`PROFILE_KEYS`)는 기본 플랫폼(`TOP_PROFILE`, android) 프로필이고, 그 밖 플랫폼은
+`platforms.<이름>:` 아래에 같은 키만 둔다(그 밖 키는 거부, RF-4 — 플랫폼 상수는 site-defaults에서만). `merged(…, platform=p)`가
+그 플랫폼의 실제 config를 준다. 다른 플랫폼은 기본 플랫폼 경로를 **물려받지 않는다**(ofono가 android clone을 가리키지 않게).
+플랫폼 이름 검증·`enabled` 관문은 `platforms.select`가 한다(`common/`은 `platforms`를 import하지 않는다).
 """
 
 from __future__ import annotations
 
 import copy
 import os
+import re
 import stat
 from pathlib import Path
 
@@ -21,6 +27,11 @@ from . import yamlio
 
 HOME_ENV = "TELEPHONY_TRIAGE_HOME"
 FILENAME = "config.yaml"
+# 최상위 키 = 이 플랫폼의 프로필 (`platforms.DEFAULT_NAME`과 같아야 한다, 테스트로 확인)
+TOP_PROFILE = "android"
+# 플랫폼별 경로 프로필 키. `platforms.<p>`에는 이 키만 둘 수 있다
+PROFILE_KEYS = ("issue_db", "work_dir", "log_dir", "code_profiles", "recent_code_roots")
+_PLATFORM_NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 
 
 def home() -> Path:
@@ -84,9 +95,94 @@ def load_user() -> dict | None:
     return data if isinstance(data, dict) else {}
 
 
-def merged(defaults: dict, user: dict | None = None) -> dict:
+def merged(defaults: dict, user: dict | None = None, platform: str | None = None) -> dict:
+    """실제로 쓰는 config. `platform`이 없거나 `TOP_PROFILE`이면 이전과 같은 dict(사용자 `platform`·`platforms` 키만 뺀다).
+    그 밖이면 경로 프로필을 그 플랫폼 것으로 바꾸고 `platform: <이름>`을 넣는다."""
     user = load_user() if user is None else user
-    return deep_merge(deep_merge(builtin(), from_site_defaults(defaults)), user or {})
+    user = user or {}
+    base_user = {k: v for k, v in user.items() if k not in ("platform", "platforms")}
+    out = deep_merge(deep_merge(builtin(), from_site_defaults(defaults)), base_user)
+    if not platform or platform == TOP_PROFILE:
+        return out
+    for key in PROFILE_KEYS:
+        out.pop(key, None)
+    issue_db = {"base_branch": "main"}
+    ghe = (defaults.get("ghe") or {}).get("host")
+    if ghe:
+        issue_db["ghe_host"] = ghe
+    out.update({"issue_db": issue_db, "work_dir": str(home() / f"work-{platform}"), "code_profiles": [],
+                "recent_code_roots": []})
+    prof = (user.get("platforms") or {}).get(platform) if isinstance(user.get("platforms"), dict) else None
+    out = deep_merge(out, {k: v for k, v in (prof or {}).items() if k in PROFILE_KEYS} if isinstance(prof, dict) else {})
+    out["platform"] = platform
+    return out
+
+
+def selected_hint(user: dict | None) -> str | None:
+    """사용자 config의 개인 기본 플랫폼(`platform`). 검증은 `platforms.select`."""
+    value = (user or {}).get("platform")
+    return value if isinstance(value, str) and value else None
+
+
+def profile_problems(user: dict | None) -> list[str]:
+    """사용자 config의 플랫폼 키 오류: `platform`이 이름 형식이 아님, `platforms`가 매핑이 아님, 이름 형식·`TOP_PROFILE`,
+    `platforms.<p>`에 `PROFILE_KEYS` 밖 키(RF-4)."""
+    user = user or {}
+    out = []
+    if "platform" in user and (not isinstance(user["platform"], str) or not _PLATFORM_NAME_RE.fullmatch(user["platform"])):
+        out.append(f"platform: 플랫폼 이름이 아닙니다: {user['platform']!r}")
+    profs = user.get("platforms")
+    if profs is None:
+        return out
+    if not isinstance(profs, dict):
+        return out + ["platforms: 매핑이어야 합니다."]
+    for name, prof in profs.items():
+        if not isinstance(name, str) or not _PLATFORM_NAME_RE.fullmatch(name):
+            out.append(f"platforms.{name}: 플랫폼 이름이 아닙니다.")
+        elif name == TOP_PROFILE:
+            out.append(f"platforms.{name}: {TOP_PROFILE} 프로필은 최상위 키에 둔다.")
+        elif not isinstance(prof, dict):
+            out.append(f"platforms.{name}: 매핑이어야 합니다.")
+        else:
+            for key in prof:
+                if key not in PROFILE_KEYS:
+                    out.append(f"platforms.{name}.{key}: 플랫폼 프로필에 둘 수 없는 키입니다 "
+                               f"(허용: {', '.join(PROFILE_KEYS)}. 플랫폼 상수는 site-defaults에서만 바꾼다).")
+    return out
+
+
+def profiles(defaults: dict, user: dict | None = None) -> dict[str, dict]:
+    """사용자 config에 있는 **모든** 프로필의 실제 config `{이름: cfg}`(`TOP_PROFILE` 먼저). `enabled`와 무관하다 —
+    guard·pre-push가 어느 플랫폼의 clone·work_dir이든 보호하도록."""
+    user = load_user() if user is None else user
+    out = {TOP_PROFILE: merged(defaults, user)}
+    profs = (user or {}).get("platforms")
+    if isinstance(profs, dict):
+        for name, prof in profs.items():
+            if isinstance(name, str) and _PLATFORM_NAME_RE.fullmatch(name) and name != TOP_PROFILE and isinstance(prof, dict):
+                out[name] = merged(defaults, user, platform=name)
+    return out
+
+
+def profile_key(platform: str | None, key: str) -> str:
+    """사용자 config에 쓸 키 경로: 기본 플랫폼이면 `key`, 그 밖이면 `platforms.<p>.<key>`. `PROFILE_KEYS` 밖이면 ValueError."""
+    if not platform or platform == TOP_PROFILE:
+        return key
+    if key.split(".")[0] not in PROFILE_KEYS:
+        raise ValueError(f"{key}는 플랫폼 프로필 키가 아닙니다 (허용: {', '.join(PROFILE_KEYS)}).")
+    return f"platforms.{platform}.{key}"
+
+
+def platform_of(cfg: dict) -> str:
+    """`merged()` 결과의 플랫폼 이름."""
+    return cfg.get("platform") or TOP_PROFILE
+
+
+def pending_feedback_dir(cfg: dict) -> Path:
+    """보류 피드백 폴더: 기본 플랫폼은 `<home>/pending-feedback`, 그 밖은 `<home>/pending-feedback-<p>`
+    (다른 플랫폼 피드백이 다른 이슈 DB로 올라가지 않게)."""
+    p = platform_of(cfg)
+    return home() / ("pending-feedback" if p == TOP_PROFILE else f"pending-feedback-{p}")
 
 
 def get(data: dict, dotted: str, default=None):
@@ -130,9 +226,9 @@ def save(data: dict) -> Path:
     return p
 
 
-def issue_db_path(defaults: dict):
-    """`dbpath.resolve`의 ③(사용자 config `issue_db.path`)."""
+def issue_db_path(defaults: dict, platform: str | None = None):
+    """`dbpath.resolve`의 ③(사용자 config `issue_db.path`, 선택 플랫폼 프로필의 값)."""
     user = load_user()
     if not user:
         return None
-    return get(user, "issue_db.path")
+    return get(user, profile_key(platform, "issue_db.path"))

@@ -159,6 +159,36 @@ def _inside(path: str, root: str) -> bool:
     return path == root or path.startswith(root.rstrip(os.sep) + os.sep)
 
 
+class GuardProfile:
+    """플랫폼 경로 프로필 하나(17-platforms): clone·work_dir·base·원격. 사용자 config의 **모든** 프로필을 보호한다
+    (`platform.enabled`·선택 플랫폼과 무관 — 플러그인을 두 벌 설치해도 서로 보호된다)."""
+
+    def __init__(self, name: str, cfg: dict, has_user: bool):
+        self.name = name
+        self.clone = None
+        self.clone_common = None
+        self.work_dir = None
+        if has_user:
+            clone = userconfig.get(cfg, "issue_db.path")
+            if clone and Path(str(clone)).expanduser().is_dir():
+                self.clone = Path(str(clone)).expanduser()
+                self.clone_common = _common_dir(self.clone)
+            self.work_dir = Path(str(userconfig.get(cfg, "work_dir"))).expanduser()
+        self.base = str(userconfig.get(cfg, "issue_db.base_branch") or "main")
+        remote = userconfig.get(cfg, "issue_db.remote") if has_user else None
+        self.remote_slug = _repo_slug(str(remote)) if remote else None
+        self._clone_git_dir: str | None = None
+
+    def is_clone_body(self, cwd: Path) -> bool:
+        """cwd가 이 프로필 clone 본체(작업 worktree·`_snapshot`이 아닌)인가. git dir(`<clone>/.git`)로 비교한다 —
+        worktree의 git dir은 `<clone>/.git/worktrees/<이름>`이라 다르다."""
+        if self.clone is None:
+            return False
+        if self._clone_git_dir is None:
+            self._clone_git_dir = _git_dir(self.clone) or ""
+        return bool(self._clone_git_dir) and _git_dir(cwd) == self._clone_git_dir
+
+
 class Config:
     def __init__(self, plugin_root: str | None = None):
         self.warnings: list[str] = []
@@ -172,19 +202,11 @@ class Config:
         self.raw_names, self.raw_exempt = self._raw_read(defaults)
         self.user = userconfig.load_user()
         self.cfg = userconfig.merged(defaults, self.user or {})
-        self.clone = None
-        self.clone_common = None
-        self.work_dir = None
-        if self.user:
-            clone = userconfig.get(self.user, "issue_db.path")
-            if clone and Path(str(clone)).expanduser().is_dir():
-                self.clone = Path(str(clone)).expanduser()
-                self.clone_common = _common_dir(self.clone)
-            self.work_dir = Path(str(userconfig.get(self.cfg, "work_dir"))).expanduser()
-        self.base = str(userconfig.get(self.cfg, "issue_db.base_branch") or "main")
-        remote = userconfig.get(self.cfg, "issue_db.remote") if self.user else None
-        self.remote_slug = _repo_slug(str(remote)) if remote else None
-        self._clone_git_dir: str | None = None
+        cfgs = userconfig.profiles(defaults, self.user) if self.user else {userconfig.TOP_PROFILE: self.cfg}
+        self.profiles = [GuardProfile(name, cfg, bool(self.user)) for name, cfg in cfgs.items()]
+        top = self.profiles[0]            # 기본 플랫폼 프로필(옛 단일 프로필 속성)
+        self.clone, self.clone_common, self.work_dir = top.clone, top.clone_common, top.work_dir
+        self.base, self.remote_slug = top.base, top.remote_slug
 
     def _raw_read(self, defaults: dict) -> tuple[set, set]:
         """규칙 10 목록: 내장 ∪ site-defaults `guard.raw_read`. 잘못된 값은 경고하고 내장만 쓴다."""
@@ -232,16 +254,32 @@ class Config:
 
     @property
     def git_rules(self) -> bool:
-        return self.clone_common is not None
+        return any(p.clone_common is not None for p in self.profiles)
+
+    @property
+    def clones(self) -> list[Path]:
+        return [p.clone for p in self.profiles if p.clone is not None]
+
+    @property
+    def work_dirs(self) -> list[Path]:
+        return [p.work_dir for p in self.profiles if p.work_dir is not None]
+
+    @property
+    def remote_slugs(self) -> list[str]:
+        return [p.remote_slug for p in self.profiles if p.remote_slug is not None]
 
     def is_clone_body(self, cwd: Path) -> bool:
-        """cwd가 사용자 clone 본체(작업 worktree·`_snapshot`이 아닌)인가. git dir(`<clone>/.git`)로 비교한다 —
-        worktree의 git dir은 `<clone>/.git/worktrees/<이름>`이라 다르다."""
-        if self.clone is None:
-            return False
-        if self._clone_git_dir is None:
-            self._clone_git_dir = _git_dir(self.clone) or ""
-        return bool(self._clone_git_dir) and _git_dir(cwd) == self._clone_git_dir
+        """cwd가 어느 프로필이든 사용자 clone 본체인가."""
+        return any(p.is_clone_body(cwd) for p in self.profiles)
+
+    def profile_of_common(self, common: str | None) -> GuardProfile | None:
+        """git common dir이 같은 프로필(그 이슈 DB clone·worktree·스냅샷). 없으면 None."""
+        if common is None:
+            return None
+        return next((p for p in self.profiles if p.clone_common is not None and p.clone_common == common), None)
+
+    def same_db_repo(self, slug) -> bool:
+        return any(_same_repo(slug, s) for s in self.remote_slugs)
 
 
 def _git(cwd: Path, *args: str) -> subprocess.CompletedProcess:
@@ -349,7 +387,18 @@ def check_jira_post(tool: str, tool_input: dict, spec: dict, conf: Config, dec: 
     """승인한 Jira 코멘트 게시 (규칙 2 예외). 승인 기록과 맞으면 ask(권한 확인은 그대로 뜬다), 아니면 deny.
     대조 중 예외도 deny다. "내부 오류"·"의존성 없음" 문구는 쓰지 않는다(doctor가 degraded 판별에 쓴다)."""
     try:
-        problem = issuepost.check_call(tool, tool_input, spec, conf.work_dir)
+        # 프로필마다 승인 기록과 대조한다. 하나라도 맞으면 그 승인이다. 아니면 승인 기록이 있는 프로필의 문제를 보인다
+        problems = []
+        for prof in conf.profiles:
+            got = issuepost.check_call(tool, tool_input, spec, prof.work_dir)
+            if got is None:
+                problems = []
+                break
+            key = tool_input.get(spec["key_arg"]) if isinstance(tool_input, dict) else None
+            has_record = prof.work_dir is not None and isinstance(key, str) and issuepost.KEY_SAFE_RE.fullmatch(key) \
+                and (prof.work_dir / key / issuepost.APPROVED_FILE).is_file()
+            problems.insert(0, got) if has_record else problems.append(got)
+        problem = problems[0] if problems else None
     except Exception as exc:  # noqa: BLE001 — 판정하지 못하면 거부한다
         problem = f"승인 기록 판정 실패({type(exc).__name__})"
     if problem:
@@ -367,7 +416,7 @@ MCP_REPO_KEYS = ("repository", "full_name", "repo_url", "url")
 def check_mcp_db_write(tool: str, part: str, tool_input: dict, conf: Config, dec: Decision) -> None:
     """비Jira MCP의 쓰기형 도구가 이슈 DB 레포를 대상으로 하면 ask, 머지면 deny (규칙 11).
     대상은 `owner`+`repo`(GitHub MCP 표준 인자) 또는 레포 문자열 인자로만 안다. 없으면 판정하지 않는다."""
-    if conf.remote_slug is None or not mcptools.is_write(part) or not isinstance(tool_input, dict):
+    if not conf.remote_slugs or not mcptools.is_write(part) or not isinstance(tool_input, dict):
         return
     slug = None
     owner, repo = tool_input.get("owner"), tool_input.get("repo")
@@ -378,7 +427,7 @@ def check_mcp_db_write(tool: str, part: str, tool_input: dict, conf: Config, dec
             if isinstance(tool_input.get(key), str) and _repo_slug(tool_input[key]):
                 slug = _repo_slug(tool_input[key])
                 break
-    if not _same_repo(slug, conf.remote_slug):
+    if slug is None or not conf.same_db_repo(slug):
         return
     if mcptools.verb(part) == "merge":   # 동사 자리만: `disable_pr_auto_merge`는 ask
         dec.deny.append(f"이슈 DB PR 머지는 리뷰어가 GHE에서 한다. 도구가 머지하지 않는다 (규칙 6·7: {tool}).")
@@ -395,11 +444,16 @@ POST_RECORD_MSG = ("Jira 게시 승인·결과 기록은 issue_post.py approve�
 
 
 def _post_record(target: str, conf: Config) -> bool:
-    """`<work_dir>/<KEY>/post.approved.json|post.result.json`인가 (target은 `_norm` 경로)."""
-    if conf.work_dir is None:
-        return False
+    """어느 프로필이든 `<work_dir>/<KEY>/post.approved.json|post.result.json`인가 (target은 `_norm` 경로)."""
     p = Path(target)
-    return p.name in POST_RECORDS and _norm(p.parent.parent) == _norm(conf.work_dir)
+    return p.name in POST_RECORDS and any(_norm(p.parent.parent) == _norm(w) for w in conf.work_dirs)
+
+
+def _in_clone(target: str, conf: Config) -> bool:
+    """어느 프로필이든 clone 안이고, 어느 프로필의 work_dir 안도 아닌가 (target은 `_norm` 경로)."""
+    if any(_inside(target, _norm(w)) for w in conf.work_dirs):
+        return False
+    return any(_inside(target, _norm(c)) for c in conf.clones)
 
 
 def check_file(tool_input: dict, cwd: Path, conf: Config, dec: Decision) -> None:
@@ -413,11 +467,7 @@ def check_file(tool_input: dict, cwd: Path, conf: Config, dec: Decision) -> None
     if _post_record(target, conf):
         dec.deny.append(f"{POST_RECORD_MSG}: {raw}).")
         return
-    if conf.clone is None:
-        return
-    if conf.work_dir is not None and _inside(target, _norm(conf.work_dir)):
-        return
-    if _inside(target, _norm(conf.clone)):
+    if _in_clone(target, conf):
         dec.deny.append("이슈 DB clone은 도구가 직접 고치지 않는다. 직접 편집은 사용자가 한다 "
                         f"(규칙 8: {raw}). 도구 변경은 작업 계획과 db_pr stage로 작업 worktree에서 만든다.")
 
@@ -711,7 +761,7 @@ def _branch_name(ref: str) -> str:
     return ref[len("refs/heads/"):] if ref.startswith("refs/heads/") else ref
 
 
-def check_push(call: GitCall, conf: Config, dec: Decision) -> None:
+def check_push(call: GitCall, conf: "Config | GuardProfile", dec: Decision) -> None:
     pos, flags = push_targets(call.args)
     if flags.get("no-verify"):
         dec.deny.append("git push의 --no-verify는 pre-push 검사를 건너뛰므로 금지한다 (규칙 5).")
@@ -1129,7 +1179,7 @@ def _gh_targets_db(inv: Invocation, conf: Config) -> bool:
         endpoint = _gh_api(argv)[0] or ""
         m = re.search(r"(?:^|/)repos/([^/]+)/([^/?#]+)", endpoint)
         if m and not any(t.startswith(("{", ":")) for t in m.groups()):
-            return _same_repo(_repo_slug(f"{m.group(1)}/{m.group(2)}"), conf.remote_slug)
+            return conf.same_db_repo(_repo_slug(f"{m.group(1)}/{m.group(2)}"))
     repo = inv.env.get("GH_REPO")
     for i, tok in enumerate(argv[1:], 1):
         if tok in ("-R", "--repo") and i + 1 < len(argv):
@@ -1137,14 +1187,14 @@ def _gh_targets_db(inv: Invocation, conf: Config) -> bool:
         elif tok.startswith("--repo="):
             repo = tok.split("=", 1)[1]
     if repo:
-        return _same_repo(_repo_slug(_expand(repo)), conf.remote_slug)
-    if conf.clone_common is not None and _common_dir(inv.cwd) == conf.clone_common:
+        return conf.same_db_repo(_repo_slug(_expand(repo)))
+    if any(p.clone_common is not None for p in conf.profiles) and conf.profile_of_common(_common_dir(inv.cwd)):
         return True
-    return _same_repo(_origin_slug(inv.cwd), conf.remote_slug)
+    return conf.same_db_repo(_origin_slug(inv.cwd))
 
 
 def check_gh(inv: Invocation, conf: Config, dec: Decision) -> None:
-    if conf.user is None or conf.remote_slug is None:
+    if conf.user is None or not conf.remote_slugs:
         return
     kind = _gh_kind(inv.argv)
     if kind == "local":
@@ -1306,15 +1356,11 @@ def _write_targets(inv: Invocation) -> list[str]:
 
 
 def check_clone_writes(inv: Invocation, conf: Config, dec: Decision) -> None:
-    """Bash 명령의 파일 쓰기 대상이 사용자 clone 안이면 거부 (`<work_dir>` 아래는 제외)."""
-    clone = _norm(conf.clone)
-    work = _norm(conf.work_dir) if conf.work_dir is not None else None
+    """Bash 명령의 파일 쓰기 대상이 어느 프로필이든 사용자 clone 안이면 거부 (어느 `<work_dir>` 아래든 제외)."""
     for word in _write_targets(inv):
         p = _expand(word)
         target = _norm(Path(p) if Path(p).is_absolute() else inv.cwd / p)
-        if work and _inside(target, work):
-            continue
-        if _inside(target, clone):
+        if _in_clone(target, conf):
             dec.deny.append(f"{CLONE_MUTATION_MSG}: {word}")
             return
 
@@ -1361,9 +1407,9 @@ def check_bash(command: str, cwd: Path, conf: Config, dec: Decision) -> None:
     check_raw_read(command, cwd, dec, conf)
     for inv in invocations(command, cwd):
         name = _base(inv.argv[0])
-        if conf.work_dir is not None:
+        if conf.work_dirs:
             check_post_record_writes(inv, conf, dec)
-        if conf.clone is not None:
+        if conf.clones:
             check_clone_writes(inv, conf, dec)
         is_db_pr = name == "db_pr.py" or (name.startswith("python")
                                            and any(_base(a) == "db_pr.py" for a in inv.argv[1:]))
@@ -1380,7 +1426,8 @@ def check_bash(command: str, cwd: Path, conf: Config, dec: Decision) -> None:
         check_clone_git(call, conf, dec)
         if call.sub not in ("commit", "config", "push") and not call.overrides_hooks_path():
             continue
-        if _common_dir(call.cwd) != conf.clone_common:
+        prof = conf.profile_of_common(_common_dir(call.cwd))
+        if prof is None:
             continue   # 이슈 DB가 아니다: 어떤 git 규칙도 적용하지 않는다
         if call.overrides_hooks_path():
             dec.deny.append("git -c core.hooksPath=… 로 hook을 바꾸는 것은 금지다 (규칙 5).")
@@ -1393,7 +1440,7 @@ def check_bash(command: str, cwd: Path, conf: Config, dec: Decision) -> None:
         elif call.sub == "config":
             check_config(call, dec)
         elif call.sub == "push":
-            check_push(call, conf, dec)
+            check_push(call, prof, dec)     # base 브랜치는 cwd가 속한 프로필의 것
 
 
 # -- 진입점 ----------------------------------------------------------------------------------

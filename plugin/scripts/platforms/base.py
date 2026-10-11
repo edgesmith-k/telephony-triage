@@ -18,6 +18,52 @@ from pathlib import Path
 from typing import Callable
 
 
+# -- site-defaults 블록 검증 도구 (레지스트리와 플랫폼의 `CaptureSpec.configure`가 같이 쓴다) ------------------
+
+CONFIG_FILE = "site-defaults.yaml"
+
+
+class PlatformConfigError(Exception):
+    """`platform:` 블록이 잘못됐거나 플랫폼을 불러올 수 없다. 메시지에 키 경로가 들어 있다."""
+
+
+def config_error(path: str, why: str) -> PlatformConfigError:
+    return PlatformConfigError(f"{CONFIG_FILE} {path}: {why}")
+
+
+def cfg_mapping(value, path: str, allowed: tuple[str, ...] | None = None) -> dict:
+    """None → `{}`. 매핑이 아니거나 `allowed` 밖 키가 있으면 오류."""
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise config_error(path, "매핑이어야 합니다.")
+    if allowed is not None:
+        for key in value:
+            if key not in allowed:
+                raise config_error(f"{path}.{key}", f"알 수 없는 키입니다 (허용: {', '.join(allowed)}).")
+    return value
+
+
+def cfg_list(value, path: str, *, non_empty: bool) -> list:
+    if not isinstance(value, list):
+        raise config_error(path, "목록이어야 합니다.")
+    if non_empty and not value:
+        raise config_error(path, "비어 있으면 안 됩니다.")
+    return value
+
+
+def cfg_compile(value, path: str, flags: int = 0, *, groups: int = 1) -> re.Pattern:
+    if not isinstance(value, str) or not value:
+        raise config_error(path, "비어 있지 않은 정규식 문자열이어야 합니다.")
+    try:
+        pattern = re.compile(value, flags)
+    except re.error as exc:
+        raise config_error(path, f"정규식 오류: {exc}") from exc
+    if pattern.groups < groups:
+        raise config_error(path, "캡처 그룹이 하나 이상 있어야 합니다 (그룹 1 = 값).")
+    return pattern
+
+
 @dataclass(frozen=True)
 class LogLine:
     file_index: int
@@ -101,7 +147,14 @@ class LogFormat:
 
 @dataclass(frozen=True)
 class PairProtocol:
-    """요청-응답 짝 규칙. 플랫폼마다 0개 이상. `name == "ril"`이면 site-defaults `platform.ril` 블록이 태그를 덮는다."""
+    """요청-응답 짝 규칙. 플랫폼마다 0개 이상.
+
+    태그 덮어쓰기(RF-4): `name == "ril"`이면 site-defaults `platform.ril.tags`(기존 키), 그 밖은
+    `<블록>.protocols.<name>.tags`(`block_keys`에 `protocols`가 있는 플랫폼). 결과는 `PlatformProfile.protocol_tags`.
+
+    주석은 이벤트의 `ril` 칸을 같이 쓴다. `name != "ril"`인 프로토콜은 주석에 `proto: <name>`을 단다.
+    `pair`는 **자기 주석만** 다룬다(`proto`가 자기 이름인 것, "ril"이면 `proto`가 없는 것) — 다른 프로토콜 주석은
+    짝·pid 분할에 쓰지 않는다."""
     name: str
     default_tags: frozenset
     annotate: Callable[..., dict | None]     # (tag, msg, tags, phone) → {serial, dir, request, error, ...} | None
@@ -110,12 +163,17 @@ class PairProtocol:
 
 @dataclass(frozen=True)
 class CaptureSpec:
-    """bugreport류 묶음 입력. 없는 플랫폼은 `PlatformSpec.capture = None`."""
+    """bugreport류 묶음 입력. 없는 플랫폼은 `PlatformSpec.capture = None`.
+
+    site-defaults의 `block_key` 블록(`block_keys`에 있어야 받는다)은 `configure(default_rules, raw, path)`가 검증해
+    덮어쓴 복사본을 준다. 레지스트리는 규칙의 모양을 모른다. 오류는 `PlatformConfigError`(`config_error`)."""
     looks_like: Callable[[Path], bool]
     extract: Callable[..., dict]             # (src, out_dir, rules) → {files, build_json, build, warnings}
     error: type
-    default_rules: object                    # site-defaults 블록(`block_keys`의 capture 키)으로 덮어쓴 복사본의 원본
+    default_rules: object                    # 플랫폼 고유 규칙 객체 (android: `BugreportRules`)
     sniff_line: Callable[[str], bool]        # guard 규칙 10 머리 판별
+    block_key: str = ""                      # site-defaults 블록 키 (android: "bugreport"). 비면 덮어쓰기 없음
+    configure: Callable[..., object] | None = None   # (default_rules, raw 블록 | None, 키 경로) → 규칙
 
 
 @dataclass(frozen=True)

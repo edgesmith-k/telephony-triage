@@ -9,7 +9,7 @@ import subprocess
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from common import userconfig
+from common import compat, userconfig
 from common.buildname import is_valid_branch_name
 from common import checks as checks_mod
 from common import ghcli
@@ -51,6 +51,9 @@ def snapshot(job: str, cfg: dict, lock: Lock) -> dict:
             raise UsageError(f"{snap}가 worktree가 아닌데 비어 있지 않습니다. 확인 후 지운다.")
         _git(repo, "worktree", "add", "--detach", str(snap), ref)
     sha = _git(snap, "rev-parse", "HEAD").stdout.strip()
+    mismatch = compat.check_platform(compat.load_db_config(snap), userconfig.platform_of(cfg))
+    if mismatch:
+        raise UsageError(mismatch[0]["message"], {"code": mismatch[0]["code"], "snapshot": str(snap)})
     try:
         previous = _read_json(lock.work_dir / SNAPSHOT_META)
     except (OSError, ValueError):
@@ -123,7 +126,7 @@ class Ctx:
             raise UsageError(f"issue_db.path가 git clone이 아닙니다: {self.repo} (setup 3에서 clone한다)")
 
     def pending_dir(self) -> Path:
-        return userconfig.home() / "pending-feedback"
+        return userconfig.pending_feedback_dir(self.cfg)
 
 
 def _job_of(wt: Path, ctx: Ctx) -> tuple[Path, str]:

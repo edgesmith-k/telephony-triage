@@ -37,7 +37,7 @@ from pathlib import Path
 SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS))
 
-from common import dbpath, failedstep, gitscope, issuedb, md, quality, site_defaults, yamlio  # noqa: E402
+from common import compat, dbpath, failedstep, gitscope, issuedb, md, quality, site_defaults, yamlio  # noqa: E402
 from common.exitcodes import CHECK_FAILED, OK, USAGE  # noqa: E402
 from common.versions import GENERATOR_VERSION  # noqa: E402
 import platforms  # noqa: E402
@@ -201,9 +201,14 @@ def _failed_steps_line(ctx: Context, itype: issuedb.IssueType) -> list[str]:
     return ["", "- 자주 실패한 스텝: " + "; ".join(cells)]
 
 
-def _platform_label() -> str:
-    """생성 파일 표 머리의 플랫폼 라벨. 아직 DB 선언(`platform`)은 읽지 않고 기본 플랫폼이다(17-platforms 묶음 2에서 바꾼다)."""
-    return platforms.label(platforms.DEFAULT_NAME)
+def _platform_label(ctx) -> str:
+    """생성 파일 표 머리의 플랫폼 라벨: 이슈 DB 선언(`platform`, 없으면 android)의 `SPEC.label`.
+    설치되지 않은 이름이면(db_lint `config` 오류) 이름 그대로 쓴다 — 생성은 멈추지 않는다."""
+    name = compat.db_platform(ctx.config)
+    try:
+        return platforms.label(name)
+    except platforms.PlatformConfigError:
+        return name
 
 
 def _signature_summary(sig: dict) -> str:
@@ -328,7 +333,7 @@ def category_readme(ctx: Context, cat: dict) -> str:
             out += [f"- 부 카테고리: {', '.join(itype.raw['secondary_categories'])}"]
         out += ["- 증상 시그니처:"]
         out += [f"  - {_signature_summary(sig)}" for sig in itype.raw.get("symptom_signatures") or []]
-        out += ["", f"| # | 원인 | 해결책 | 유형 | 수정 상태 | Jira | {_platform_label()} | 코드 |",
+        out += ["", f"| # | 원인 | 해결책 | 유형 | 수정 상태 | Jira | {_platform_label(ctx)} | 코드 |",
                 "|---|---|---|---|---|---|---|---|"]
         for j, cause in enumerate([c for c in itype.causes if c.active], 1):
             out.append(f"| {i}-{j} | {_cause_cell(ctx, cause)} | {_resolution_cell(cause)} | "
@@ -404,7 +409,7 @@ def stats(ctx: Context) -> str:
         out.append("없음")
 
     out += ["", "## 분포"]
-    for field_name, label in (("model", "모델"), ("sw", "SW"), ("android_version", f"{_platform_label()} 버전"),
+    for field_name, label in (("model", "모델"), ("sw", "SW"), ("android_version", f"{_platform_label(ctx)} 버전"),
                               ("carrier", "캐리어")):
         counts = Counter(str(r.get(field_name)) if r.get(field_name) not in (None, "") else "(없음)"
                          for r in ctx.jira)

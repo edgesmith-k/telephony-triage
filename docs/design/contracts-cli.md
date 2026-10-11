@@ -8,7 +8,7 @@
 
 ## `config.py`
 
-공통 옵션(모든 서브커맨드): `--json` — JSON 출력 (항상 JSON); `--plugin-root <PLUGIN_ROOT>` — 플러그인 루트 (기본: ${CLAUDE_PLUGIN_ROOT})
+공통 옵션(모든 서브커맨드): `--json` — JSON 출력 (항상 JSON); `--plugin-root <PLUGIN_ROOT>` — 플러그인 루트 (기본: ${CLAUDE_PLUGIN_ROOT}); `--platform <이름>` — 플랫폼(경로 프로필·이슈 DB). 없으면 TT_PLATFORM > 사용자 config platform > site-defaults platform.name
 
 | 서브커맨드 | 사용법 | 옵션 설명 |
 |---|---|---|
@@ -26,7 +26,7 @@
 
 ## `code_roots.py`
 
-공통 옵션(모든 서브커맨드): `--json` — JSON 출력 (항상 JSON); `--plugin-root <PLUGIN_ROOT>`
+공통 옵션(모든 서브커맨드): `--json` — JSON 출력 (항상 JSON); `--plugin-root <PLUGIN_ROOT>`; `--platform <이름>` — 플랫폼(이슈 DB·파서·설정 묶음). 없으면 TT_PLATFORM > 사용자 config platform > site-defaults platform.name
 
 | 서브커맨드 | 사용법 | 옵션 설명 |
 |---|---|---|
@@ -106,7 +106,7 @@
 
 ## `db_verify.py`
 
-공통 옵션(모든 서브커맨드): `--db <DB>`; `--json` — JSON 출력 (항상 JSON); `--plugin-root <PLUGIN_ROOT>`; `--verbose` — 통과한 R1~R6 행의 세부까지 전부 (기본은 접는다); `--draft <dir>`
+공통 옵션(모든 서브커맨드): `--db <DB>`; `--json` — JSON 출력 (항상 JSON); `--plugin-root <PLUGIN_ROOT>`; `--platform <이름>` — 플랫폼(이슈 DB·파서·설정 묶음). 없으면 TT_PLATFORM > 사용자 config platform > site-defaults platform.name; `--verbose` — 통과한 R1~R6 행의 세부까지 전부 (기본은 접는다); `--draft <dir>`
 
 | 서브커맨드 | 사용법 | 옵션 설명 |
 |---|---|---|
@@ -116,7 +116,7 @@
 
 ## `db_pr.py`
 
-공통 옵션(모든 서브커맨드): `--json` — JSON 출력 (항상 JSON); `--plugin-root <PLUGIN_ROOT>`
+공통 옵션(모든 서브커맨드): `--json` — JSON 출력 (항상 JSON); `--plugin-root <PLUGIN_ROOT>`; `--platform <이름>` — 플랫폼(이슈 DB·파서·설정 묶음). 없으면 TT_PLATFORM > 사용자 config platform > site-defaults platform.name
 
 | 서브커맨드 | 사용법 | 옵션 설명 |
 |---|---|---|
@@ -167,7 +167,7 @@ stdin: PostToolUse hook 입력 JSON (argparse 없음)
 
 ## `triage.py`
 
-공통 옵션(모든 서브커맨드): `--plugin-root <PLUGIN_ROOT>`; `--json` — JSON 출력 (항상 JSON)
+공통 옵션(모든 서브커맨드): `--plugin-root <PLUGIN_ROOT>`; `--json` — JSON 출력 (항상 JSON); `--platform <이름>` — 플랫폼(이슈 DB·파서·설정 묶음). 없으면 TT_PLATFORM > 사용자 config platform > site-defaults platform.name
 
 | 서브커맨드 | 사용법 | 옵션 설명 |
 |---|---|---|
@@ -177,7 +177,7 @@ stdin: PostToolUse hook 입력 JSON (argparse 없음)
 
 ## `issue_post.py`
 
-공통 옵션(모든 서브커맨드): `--plugin-root <PLUGIN_ROOT>`; `--json` — JSON 출력
+공통 옵션(모든 서브커맨드): `--plugin-root <PLUGIN_ROOT>`; `--json` — JSON 출력; `--platform <이름>` — 플랫폼(이슈 DB·파서·설정 묶음). 없으면 TT_PLATFORM > 사용자 config platform > site-defaults platform.name
 
 | 서브커맨드 | 사용법 | 옵션 설명 |
 |---|---|---|
@@ -195,6 +195,7 @@ stdin: PostToolUse hook 입력 JSON (argparse 없음)
 완료. JOB/analysis.json(≤ 4KB, stdout도 같음). 값이 null·빈 목록·빈 객체인 최상위 키는 내지 않는다
 
 - key
+- platform?(선택 플랫폼. 기본 플랫폼(android)이면 내지 않는다 (17-platforms K8))
 - generated_at
 - request_hash(입력 해시(부분별 parts {logs, jira, db, config, plugin, args}, 파싱 전에 계산))
 - run?(결과(core)를 계산한 실행 번호)

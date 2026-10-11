@@ -82,6 +82,8 @@ from common.buildname import sanitize_build  # noqa: E402
 from common.exitcodes import CHECK_FAILED, NEEDS_APPROVAL, OK, USAGE  # noqa: E402
 from common.patterns import PatternError, PatternTimeout  # noqa: E402
 from common.signatures import SignatureError, compile_list, compile_signature  # noqa: E402
+import platforms  # noqa: E402
+from platforms import session as platform_session  # noqa: E402
 
 POSITIVE_KINDS = ("positive", "recurrence", "extra")
 NA, NO_FIXTURE, NO_NEGATIVE, PENDING = "해당 없음", "fixture 없음", "음성 fixture 없음", "시그니처 없음(pending)"
@@ -107,11 +109,26 @@ def _git(repo: Path, *args: str) -> subprocess.CompletedProcess:
 # -- draft worktree -----------------------------------------------------------------------
 
 
+_SESSION: tuple[str, dict] | None = None     # main이 정한 (플랫폼, cfg). 없으면 처음 부를 때 정한다
+
+
+def _session(defaults: dict) -> tuple[str, dict]:
+    """선택 플랫폼과 그 cfg(`--platform` > TT_PLATFORM > 사용자 config > site). 잘못되면 사용 오류."""
+    global _SESSION
+    if _SESSION is None:
+        try:
+            _SESSION = platform_session.resolve(defaults)
+        except platforms.PlatformConfigError as exc:
+            raise UsageError(str(exc)) from exc
+    return _SESSION
+
+
 def _check_lock(job: str, defaults: dict) -> None:
     from db_pr import Lock, UsageError as LockError
-    work_dir = Path(str(userconfig.get(userconfig.merged(defaults), "work_dir"))).expanduser()
+    platform, cfg = _session(defaults)
+    work_dir = Path(str(userconfig.get(cfg, "work_dir"))).expanduser()
     try:
-        Lock(work_dir).touch(job)
+        Lock(work_dir, platform).touch(job)
     except LockError as exc:
         raise UsageError(str(exc)) from exc
 
@@ -127,7 +144,7 @@ def make_draft(plan: Path, draft: Path, defaults: dict, plugin_root: str | None)
     except WorktreeError as exc:
         raise UsageError(str(exc)) from exc
     _check_lock(draft.parent.name, defaults)
-    cfg = userconfig.merged(defaults)
+    cfg = _session(defaults)[1]
     repo = Path(str(userconfig.get(cfg, "issue_db.path") or "")).expanduser()
     base = userconfig.get(cfg, "issue_db.base_branch") or "main"
     _git(repo, "worktree", "prune")
@@ -150,8 +167,8 @@ def make_draft(plan: Path, draft: Path, defaults: dict, plugin_root: str | None)
 
 def _draft_ctx(defaults: dict):
     from db_pr import Ctx, Lock
-    cfg = userconfig.merged(defaults)
-    return Ctx(cfg, Lock(Path(str(userconfig.get(cfg, "work_dir"))).expanduser()))
+    platform, cfg = _session(defaults)
+    return Ctx(cfg, Lock(Path(str(userconfig.get(cfg, "work_dir"))).expanduser(), platform))
 
 
 def remove_draft(draft: Path, defaults: dict) -> None:
@@ -989,6 +1006,7 @@ def build_parser() -> argparse.ArgumentParser:
     common.add_argument("--db", default=argparse.SUPPRESS)
     common.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="JSON 출력 (항상 JSON)")
     common.add_argument("--plugin-root", default=argparse.SUPPRESS)
+    common.add_argument("--platform", metavar="이름", default=argparse.SUPPRESS, help=platform_session.HELP)
     common.add_argument("--verbose", action="store_true", default=argparse.SUPPRESS,
                         help="통과한 R1~R6 행의 세부까지 전부 (기본은 접는다)")
     parser = argparse.ArgumentParser(prog="db_verify.py", description=__doc__, parents=[common],
@@ -1020,14 +1038,21 @@ def main(argv: list[str] | None = None) -> int:
     except (AttributeError, ValueError):
         pass
     args = build_parser().parse_args(argv)
-    for name in ("db", "plugin_root"):
+    for name in ("db", "plugin_root", "platform"):
         if not hasattr(args, name):
             setattr(args, name, None)
     if not hasattr(args, "build"):
         args.build = None
     defaults = site_defaults.load_or_exit(args.plugin_root)
     plugin_root = Path(args.plugin_root) if args.plugin_root else site_defaults.plugin_root()
+    global _SESSION
+    _SESSION = None
     try:
+        if args.platform:
+            try:
+                _SESSION = platform_session.resolve(defaults, args.platform)
+            except platforms.PlatformConfigError as exc:
+                raise UsageError(str(exc)) from exc
         if args.cmd == "rules":
             result, code = rules(args, defaults, plugin_root)
         else:

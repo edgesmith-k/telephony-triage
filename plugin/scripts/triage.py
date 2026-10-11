@@ -82,7 +82,9 @@ from pathlib import Path
 SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS))
 
-from common import events, site_defaults, userconfig  # noqa: E402
+from common import events, site_defaults, userconfig, yamlio  # noqa: E402
+import platforms  # noqa: E402
+from platforms import session as platform_session  # noqa: E402
 from common.exitcodes import CHECK_FAILED, OK, USAGE  # noqa: E402
 from triagelib.cache import State  # noqa: E402
 from triagelib.core import (ANALYSIS_MAX, EXPLORE_DONE_LINE, EXPLORE_INPUT_FILE, STATE_FILE, TIMELINE_FILE,  # noqa: E402,F401
@@ -100,6 +102,7 @@ def build_parser() -> argparse.ArgumentParser:
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--plugin-root", default=None)
     common.add_argument("--json", action="store_true", help="JSON 출력 (항상 JSON)")
+    platform_session.add_arg(common)
     sub = parser.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("run", parents=[common])
     p.add_argument("key", metavar="KEY")
@@ -137,10 +140,11 @@ def _emit(result: dict) -> None:
 
 
 def cmd_release(args, defaults: dict) -> int:
-    cfg = userconfig.merged(defaults)
+    cfg = args.platform_cfg
     job = Path(str(userconfig.get(cfg, "work_dir"))).expanduser() / args.key
     state = State(job / STATE_FILE)
     runner = Runner(args.plugin_root)
+    runner.env[platforms.ENV] = args.platform_name
     if state.data.get("owner"):
         runner.env["TT_LOCK_OWNER"] = state.data["owner"]
     if not re.fullmatch(r"[A-Za-z0-9._-]+", args.key) or not job.is_dir():
@@ -164,7 +168,7 @@ def cmd_explore(args, defaults: dict) -> int:
     lock·trace·스냅샷은 건드리지 않는다. 종료 코드 0 = 완료, 1 = 해당 없음(입력 파일 없음: 후보 확정·`explore.when: never`·run 전),
     2 = 사용 오류(키 형식·작업 디렉토리·`events.json` 없음·입력 파일 손상).
     """
-    cfg = userconfig.merged(defaults)
+    cfg = args.platform_cfg
     if not re.fullmatch(r"[A-Za-z0-9._-]+", args.key):
         print(f"Jira 키 형식이 아니다: {args.key} — 키를 확인한 뒤 다시 실행한다", file=sys.stderr)
         return USAGE
@@ -208,6 +212,11 @@ def main(argv: list[str] | None = None) -> int:
         pass
     args = build_parser().parse_args(argv)
     defaults = site_defaults.load_or_exit(args.plugin_root)
+    try:
+        args.platform_name, args.platform_cfg = platform_session.resolve(defaults, args.platform)
+    except (platforms.PlatformConfigError, yamlio.YamlFileError) as exc:
+        print(str(exc), file=sys.stderr)
+        return USAGE
     if args.cmd == "release":
         return cmd_release(args, defaults)
     if args.cmd == "explore":

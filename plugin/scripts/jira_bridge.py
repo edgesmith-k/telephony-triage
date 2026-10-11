@@ -20,6 +20,10 @@ stdin: hook 입력 `{tool_name, tool_input, tool_response, ...}`. `tool_name`이
 의존성(PyYAML 등) import가 실패해도 같다(종료 1로 끝나 원문이 새지 않게). `site-defaults.yaml`이 없으면 guard처럼
 사용자 config만으로 판정한다. 종료 코드는 항상 0. 출력 필드 이름은 Claude Code hooks 문서의
 PostToolUse `updatedToolOutput`이다 — TODO(SITE:S1) 사내 Claude Code 버전에서 원문이 대체되는지 확인한다.
+
+**플랫폼**(17-platforms): hook에는 `--platform`이 없다. 작업 디렉토리 `<work_dir>/<KEY>/`가 있는 플랫폼 프로필(사용자 config의
+모든 프로필)을 쓴다 — 게시 결과는 승인 기록(`post.approved.json`)이 있는 프로필을 먼저 본다. 여럿이면 가장 최근에 바뀐 것,
+없으면 기본 선택(TT_PLATFORM > 사용자 config `platform` > site-defaults). 프로필이 하나면 이전과 같다.
 """
 
 from __future__ import annotations
@@ -36,6 +40,7 @@ sys.path.insert(0, str(SCRIPTS))
 try:
     from common import compat, issuepost, masking, mcptools, site_defaults, userconfig  # noqa: E402
     import jira_fields  # noqa: E402
+    import platforms  # noqa: E402
     IMPORT_ERROR: Exception | None = None
 except ImportError as _exc:   # noqa: BLE001
     IMPORT_ERROR = _exc
@@ -63,6 +68,20 @@ def _payload(response):
             data = yamlio.safe_load(response)
             return data if isinstance(data, (dict, list)) else {"text": response}
     return response
+
+
+_PROFILES: dict[str, dict] = {}     # main이 채운다: 사용자 config의 모든 플랫폼 프로필 cfg
+
+
+def _job_cfg(cfg: dict, key: str, marker: str | None = None) -> dict:
+    """`<work_dir>/<KEY>/`가 있는 프로필의 cfg(설명은 모듈 docstring). 없으면 `cfg`(기본 선택)."""
+    cands = [c for c in _PROFILES.values() if (Path(str(userconfig.get(c, "work_dir"))).expanduser() / key).is_dir()]
+    if marker:
+        marked = [c for c in cands if (Path(str(userconfig.get(c, "work_dir"))).expanduser() / key / marker).is_file()]
+        cands = marked or cands
+    if not cands:
+        return cfg
+    return max(cands, key=lambda c: (Path(str(userconfig.get(c, "work_dir"))).expanduser() / key).stat().st_mtime)
 
 
 def _key_regex(cfg: dict) -> re.Pattern:
@@ -109,6 +128,7 @@ def bridge_post(event: dict, cfg: dict) -> str:
     key = tool_input.get(spec["key_arg"]) if isinstance(tool_input, dict) else None
     if not isinstance(key, str) or not issuepost.KEY_SAFE_RE.fullmatch(key):
         return POST_FAILED
+    cfg = _job_cfg(cfg, key, issuepost.APPROVED_FILE)
     job = userconfig.ensure_private_dir(Path(str(userconfig.get(cfg, "work_dir"))).expanduser() / key)
     sha = issuepost.body_sha256(str(tool_input.get(spec["body_arg"]) or ""))
     approved_path = job / issuepost.APPROVED_FILE
@@ -147,6 +167,7 @@ def bridge(event: dict, cfg: dict, kind: str) -> str:
     key = _find_key(data, event.get("tool_input") or {}, kre)
     if key is None:
         return "telephony-triage: Jira 응답에서 형식에 맞는 이슈 키를 찾지 못해 저장하지 않았다(원문은 표시하지 않는다)."
+    cfg = _job_cfg(cfg, key)
     job = userconfig.ensure_private_dir(Path(str(userconfig.get(cfg, "work_dir"))).expanduser() / key)
     raw_path = job / "jira_raw.json"
     raw = {}
@@ -190,7 +211,7 @@ def mark_unknown(event: dict, cfg: dict) -> None:
         key = tool_input.get(spec["key_arg"])
         if not isinstance(key, str) or not issuepost.KEY_SAFE_RE.fullmatch(key):
             return
-        job = Path(str(userconfig.get(cfg, "work_dir"))).expanduser() / key
+        job = Path(str(userconfig.get(_job_cfg(cfg, key, issuepost.APPROVED_FILE), "work_dir"))).expanduser() / key
         if not job.is_dir():
             return
         at = issuepost.iso(issuepost.now())
@@ -245,7 +266,15 @@ def main() -> int:
     except Exception as exc:  # noqa: BLE001
         user, error = {}, exc
     try:
-        cfg = userconfig.merged(defaults, user)
+        _PROFILES.clear()
+        _PROFILES.update(userconfig.profiles(defaults, user))
+        cfg = _PROFILES[userconfig.TOP_PROFILE]
+        if len(_PROFILES) > 1:
+            try:
+                chosen = platforms.select(defaults, None, userconfig.selected_hint(user))
+            except platforms.PlatformConfigError:
+                chosen = userconfig.TOP_PROFILE
+            cfg = _PROFILES.get(chosen, cfg)
         kind = target(event, cfg)
     except Exception as exc:  # noqa: BLE001
         kind, error = None, exc

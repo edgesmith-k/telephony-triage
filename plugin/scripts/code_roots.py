@@ -35,6 +35,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from common import compat, dbpath, site_defaults, userconfig  # noqa: E402
 from common.exitcodes import OK, USAGE  # noqa: E402
 import platforms  # noqa: E402
+from platforms import session as platform_session  # noqa: E402
 
 # 플랫폼 상수는 레지스트리(`platforms.get`)에서 온다. `validate()`·`estimate_version()`의 인자 기본값은 기본 플랫폼 것이다.
 _DEFAULT_SPEC = platforms.get(platforms.DEFAULT_NAME)
@@ -49,14 +50,29 @@ class UsageError(Exception):
     pass
 
 
+_SESSION: tuple[str, dict] | None = None     # main이 정한 (플랫폼, cfg). 없으면 처음 부를 때 정한다
+
+
+def _session(defaults: dict) -> tuple[str, dict]:
+    """선택 플랫폼과 그 플랫폼 경로 프로필 cfg(`--platform` > TT_PLATFORM > 사용자 config > site). 잘못되면 사용 오류."""
+    global _SESSION
+    if _SESSION is None:
+        try:
+            _SESSION = platform_session.resolve(defaults)
+        except platforms.PlatformConfigError as exc:
+            raise UsageError(str(exc)) from exc
+    return _SESSION
+
+
 def _cfg(defaults: dict) -> dict:
-    return userconfig.merged(defaults)
+    return _session(defaults)[1]
 
 
 def _keys(args, defaults, spec: platforms.PlatformSpec | None = None) -> list[str]:
     fallback = list(spec.default_root_keys) if spec else DEFAULT_KEYS
     try:
-        db = dbpath.resolve(getattr(args, "db", None), user_config_path=lambda: userconfig.issue_db_path(defaults))
+        db = dbpath.resolve(getattr(args, "db", None),
+                            user_config_path=lambda: userconfig.issue_db_path(defaults, _session(defaults)[0]))
     except dbpath.DbPathError:
         return fallback
     return list(compat.load_db_config(db).get("code_root_keys") or fallback)
@@ -83,7 +99,7 @@ def parse_roots(text: str, cfg: dict, primary: str = _DEFAULT_SPEC.primary_root)
 def _profile(defaults: dict) -> platforms.PlatformProfile:
     """site-defaults `platform:`(소스 트리·주 루트 키·라벨). 잘못되면 사용 오류(종료 코드 2)."""
     try:
-        return platforms.load(defaults)
+        return platforms.load(defaults, _session(defaults)[0])
     except platforms.PlatformConfigError as exc:
         raise UsageError(str(exc)) from exc
 
@@ -179,7 +195,7 @@ def _split_ref(ref: str) -> tuple[str, str]:
 
 
 def cmd_resolve(args, defaults) -> tuple[dict, int]:
-    roots = parse_roots(args.roots, _cfg(defaults))
+    roots = parse_roots(args.roots, _cfg(defaults), _profile(defaults).spec.primary_root)
     key, rel = _split_ref(args.ref)
     if key not in roots:
         raise UsageError(f"루트 '{key}'가 없습니다 (주어진 루트: {', '.join(sorted(roots))}).")
@@ -191,7 +207,7 @@ def cmd_resolve(args, defaults) -> tuple[dict, int]:
 
 
 def cmd_find_symbol(args, defaults) -> dict:
-    roots = parse_roots(args.roots, _cfg(defaults))
+    roots = parse_roots(args.roots, _cfg(defaults), _profile(defaults).spec.primary_root)
     cls, sep, member = args.symbol.partition("#")
     name_re = re.compile(rf"\b(?:class|interface|enum|object)\s+{re.escape(cls)}\b") if sep else None
     member_re = re.compile(rf"\b{re.escape(member if sep else cls)}\s*\(")
@@ -231,12 +247,13 @@ def cmd_remember(args, defaults) -> dict:
     data = userconfig.load_user()
     if data is None:
         raise UsageError("config가 없습니다. 먼저 setup을 한다.")
-    roots = parse_roots(args.roots, _cfg(defaults))
-    recent = [r for r in data.get("recent_code_roots") or [] if (r.get("roots") or {}) != roots]
+    roots = parse_roots(args.roots, _cfg(defaults), _profile(defaults).spec.primary_root)
+    key = userconfig.profile_key(_session(defaults)[0], "recent_code_roots")   # 선택 플랫폼 프로필에 기록한다
+    recent = [r for r in userconfig.get(data, key) or [] if (r.get("roots") or {}) != roots]
     recent.insert(0, {"roots": roots, "used_on": date.today().isoformat()})
-    data["recent_code_roots"] = recent[:RECENT_MAX]
+    userconfig.set_value(data, key, recent[:RECENT_MAX])
     userconfig.save(data)
-    return {"recent_code_roots": data["recent_code_roots"]}
+    return {"recent_code_roots": userconfig.get(data, key)}
 
 
 def _allow_common_anywhere(parser: argparse.ArgumentParser) -> None:
@@ -249,6 +266,8 @@ def _allow_common_anywhere(parser: argparse.ArgumentParser) -> None:
                     sub.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="JSON 출력 (항상 JSON)")
                 if "--plugin-root" not in opts:
                     sub.add_argument("--plugin-root", default=argparse.SUPPRESS)
+                if "--platform" not in opts:
+                    sub.add_argument("--platform", metavar="이름", default=argparse.SUPPRESS, help=platform_session.HELP)
                 _allow_common_anywhere(sub)
 
 
@@ -257,6 +276,7 @@ def build_parser() -> argparse.ArgumentParser:
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--plugin-root", default=None)
     parser.add_argument("--json", action="store_true", help="JSON 출력 (항상 JSON)")
+    platform_session.add_arg(parser)
     sub = parser.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("suggest")
     p.add_argument("--version", metavar="v")
@@ -284,7 +304,14 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     defaults = site_defaults.load_or_exit(args.plugin_root)
     code = OK
+    global _SESSION
+    _SESSION = None
     try:
+        if args.platform:
+            try:
+                _SESSION = platform_session.resolve(defaults, args.platform)
+            except platforms.PlatformConfigError as exc:
+                raise UsageError(str(exc)) from exc
         if args.cmd == "suggest":
             result = cmd_suggest(args, defaults)
         elif args.cmd == "validate":

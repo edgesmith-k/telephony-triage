@@ -15,17 +15,22 @@ from . import issuedb
 from .signatures import compile_list
 
 
-def environment(defaults: dict) -> dict:
-    """현재 플러그인 환경의 파서 백엔드·외부 파서 `{backend: {name, version}, external: {...}}`."""
+def environment(defaults: dict, platform: str | None = None) -> dict:
+    """현재 플러그인 환경의 파서 백엔드·외부 파서 `{backend: {name, version}, external: {...}}`.
+
+    `platform`(없으면 site 기본 플랫폼)의 백엔드(`platforms.backend_name`)를 본다. 외부 파서(`external_parsers`)는
+    기본 플랫폼만 쓴다 — 그 밖 플랫폼은 `{}`(17-platforms, 다음 작업)."""
     import parser_backends
 
-    name = (defaults.get("parser") or {}).get("backend")
+    base = ((defaults.get("platform") or {}) if isinstance(defaults.get("platform"), dict) else {}).get("name", "android")
+    platform = platform or base
+    name = parser_backends.name_for(defaults, platform)
     try:
         version = parser_backends.load(name).version()
     except parser_backends.BackendError:
         version = None
     external = {}
-    for category, conf in sorted((defaults.get("external_parsers") or {}).items()):
+    for category, conf in sorted(((defaults.get("external_parsers") or {}) if platform == base else {}).items()):
         conf = conf or {}
         external[category] = {"adapter": conf.get("adapter"), "version": conf.get("version")}
     return {"backend": {"name": name, "version": version}, "external": external}

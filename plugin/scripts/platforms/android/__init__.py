@@ -44,6 +44,8 @@ SPEC = PlatformSpec(
         error=bugreport.BugreportError,
         default_rules=bugreport.DEFAULT_RULES,
         sniff_line=bugreport.sniff_line,
+        block_key="bugreport",
+        configure=bugreport.configure_rules,
     ),
     default_backend="reference",
     block_keys=("source_tree", "log", "ril", "bugreport"),

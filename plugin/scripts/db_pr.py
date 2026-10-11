@@ -21,7 +21,10 @@ summary 입력), `regress.json`, `pr.json`(summary가 만든 PR 제목·본문·
 확인 화면·PR 본문 조립은 `db_summary.py`.
 도구 브랜치는 로컬 `tt/<br>`만 만든다. 사용자 clone의 로컬 `<br>`와 워킹 트리는 건드리지 않는다.
 
-세션 lock `<work_dir>/session.lock` = `{job, command, started_at, updated_at}` (사용자별로 한 번에 한 작업)
+세션 lock `<work_dir>/session.lock` = `{job, command, started_at, updated_at[, platform]}` (사용자·이슈 DB(플랫폼)별로 한 번에
+한 작업: lock은 선택 플랫폼의 `work_dir`에 있고, `platform`은 기본 플랫폼이 아닐 때만 기록한다)
+플랫폼: `--platform <이름>`(없으면 TT_PLATFORM > 사용자 config `platform` > site-defaults). 경로·clone·lock은 그 플랫폼 프로필이다.
+snapshot·stage·publish는 이슈 DB 선언(`platform`)이 선택 플랫폼과 다르면 `platform-mismatch`로 종료 코드 2.
 - 다른 작업 키의 lock이 있으면 종료 코드 2와 보유자 정보. 4시간 넘게 갱신되지 않은 lock은 만료로 보고 가져온다.
 - 같은 작업 키: `updated_at`이 10분 이내면 다른 세션이 진행 중일 수 있으므로 종료 코드 2
   (사용자가 확인하면 `--take-over`로 이어받는다). 10분이 넘었으면 그대로 이어받는다.
@@ -75,7 +78,9 @@ from pathlib import Path
 SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS))
 
-from common import site_defaults, userconfig, yamlio  # noqa: E402
+from common import compat, site_defaults, userconfig, yamlio  # noqa: E402
+import platforms  # noqa: E402
+from platforms import session as platform_session  # noqa: E402
 import db_summary  # noqa: E402,F401 — test_db_summary가 본다
 from common.exitcodes import OK, USAGE  # noqa: E402
 from dbpr import worktree as _worktree_mod  # noqa: E402
@@ -99,6 +104,8 @@ def _allow_common_anywhere(parser: argparse.ArgumentParser) -> None:
                     sub.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="JSON 출력 (항상 JSON)")
                 if "--plugin-root" not in opts:
                     sub.add_argument("--plugin-root", default=argparse.SUPPRESS)
+                if "--platform" not in opts:
+                    sub.add_argument("--platform", metavar="이름", default=argparse.SUPPRESS, help=platform_session.HELP)
                 _allow_common_anywhere(sub)
 
 
@@ -107,6 +114,7 @@ def build_parser() -> argparse.ArgumentParser:
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--plugin-root", default=None)
     parser.add_argument("--json", action="store_true", help="JSON 출력 (항상 JSON)")
+    platform_session.add_arg(parser)
     parser.add_argument("--verbose", action="store_true", default=argparse.SUPPRESS, help="stage 전체 출력")
     sub = parser.add_subparsers(dest="cmd", required=True)
     lock = sub.add_parser("lock")
@@ -167,11 +175,22 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     defaults = site_defaults.load_or_exit(args.plugin_root)
     _worktree_mod._PLUGIN_ROOT = args.plugin_root   # publish도 worktree._PLUGIN_ROOT를 읽는다
-    cfg = userconfig.merged(defaults)
-    lock = Lock(Path(str(userconfig.get(cfg, "work_dir"))).expanduser())
+    try:
+        platform, cfg = platform_session.resolve(defaults, args.platform)
+    except (platforms.PlatformConfigError, yamlio.YamlFileError) as exc:
+        print(str(exc), file=sys.stderr)
+        return USAGE
+    lock = Lock(Path(str(userconfig.get(cfg, "work_dir"))).expanduser(), platform)
     ctx = Ctx(cfg, lock)
     code = OK
     try:
+        if args.cmd in ("stage", "publish"):
+            # 쓰기 대상 이슈 DB(stage는 읽기 스냅샷, publish는 작업 worktree)의 선언이 선택 플랫폼과 같아야 한다
+            target = Path(args.wt) if args.cmd == "publish" else ctx.work_dir / "_snapshot"
+            mismatch = compat.check_platform(compat.load_db_config(target), platform) \
+                if (target / "issue-db.config.yaml").is_file() else []
+            if mismatch:
+                raise UsageError(mismatch[0]["message"], {"code": mismatch[0]["code"], "db": str(target)})
         if args.cmd == "snapshot":
             result = snapshot(args.job, cfg, lock)
         elif args.cmd == "lock":

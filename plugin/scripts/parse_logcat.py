@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
@@ -372,16 +373,33 @@ def _allow_patterns(db_cfg: dict) -> list[str]:
     return list((db_cfg.get("mask") or {}).get("allow_patterns") or [])
 
 
-def _profile(defaults: dict) -> platforms.PlatformProfile:
-    """site-defaults의 `platform:`을 읽는다. 잘못되면 사용 오류(종료 코드 2)."""
+def _platform_name(defaults: dict, db_cfg: dict | None) -> str:
+    """파싱 플랫폼(17-platforms K6). `--rules`의 이슈 DB가 있으면 **그 선언**(`platform`, 없으면 android)이고, 환경변수
+    `TT_PLATFORM`(triage가 넘긴 세션 선택)이 그와 다르면 사용 오류다. DB가 없으면(cut·extract-bugreport)
+    `TT_PLATFORM`, 그다음 site-defaults `platform.name`. 사용자 config는 읽지 않는다."""
+    env = os.environ.get(platforms.ENV) or None
+    if db_cfg:
+        declared = compat.db_platform(db_cfg)
+        if env and env != declared:
+            raise UsageError(compat.check_platform(db_cfg, env)[0]["message"])
+        return declared
+    return env or platforms.default_name(defaults)
+
+
+def _profile(defaults: dict, db_cfg: dict | None = None) -> platforms.PlatformProfile:
+    """그 플랫폼의 site-defaults 상수(`platform:`·`platform.others.<p>`). 이슈 DB에 고정된 파싱이므로 `platform.enabled`와
+    무관하게 설치된 플랫폼이면 된다. 잘못되면 사용 오류(종료 코드 2)."""
     try:
-        return platforms.load(defaults)
+        return platforms.load(defaults, _platform_name(defaults, db_cfg), require_enabled=False)
     except platforms.PlatformConfigError as exc:
         raise UsageError(str(exc)) from exc
 
 
 def _load_backend(defaults: dict, profile: platforms.PlatformProfile):
-    backend_name = platforms.backend_name(defaults, profile.name)
+    try:
+        backend_name = platforms.backend_name(defaults, profile.name)
+    except platforms.PlatformConfigError as exc:
+        raise UsageError(str(exc)) from exc
     try:
         backend = parser_backends.load(backend_name)
     except parser_backends.BackendError as exc:
@@ -427,7 +445,7 @@ def run_parse(args, plugin_root: Path, defaults: dict, profile: platforms.Platfo
     for path in paths:
         if not path.is_file():
             raise UsageError(f"로그 파일이 없습니다: {path}")
-        profile = profile or _profile(defaults)
+        profile = profile or _profile(defaults, compat.load_db_config(Path(args.rules).parent))
         _capture_input(path, profile)
     try:
         logtime.get_tz(args.tz)
@@ -442,7 +460,7 @@ def run_parse(args, plugin_root: Path, defaults: dict, profile: platforms.Platfo
         raise UsageError(f"파서 규칙 오류: {exc}") from exc
     db_cfg = compat.load_db_config(rules_dir.parent)
 
-    backend = _load_backend(defaults, profile or _profile(defaults))
+    backend = _load_backend(defaults, profile or _profile(defaults, db_cfg))
 
     masker = None
     if args.mask:
@@ -713,7 +731,7 @@ def run_markers(args, defaults: dict, profile: platforms.PlatformProfile | None 
     for path in paths:
         if not path.is_file():
             raise UsageError(f"로그 파일이 없습니다: {path}")
-        profile = profile or _profile(defaults)
+        profile = profile or _profile(defaults, compat.load_db_config(Path(args.rules).parent))
         _capture_input(path, profile)
     try:
         logtime.get_tz(args.tz)
@@ -721,7 +739,7 @@ def run_markers(args, defaults: dict, profile: platforms.PlatformProfile | None 
         raise UsageError(str(exc)) from exc
     rules_dir = Path(args.rules)
     db_cfg = compat.load_db_config(rules_dir.parent)
-    backend = _load_backend(defaults, profile or _profile(defaults))
+    backend = _load_backend(defaults, profile or _profile(defaults, db_cfg))
 
     conf = defaults.get("failed_step") or {}
     status_map = conf.get("marker_status") if isinstance(conf.get("marker_status"), dict) else None
@@ -1003,7 +1021,8 @@ def main(argv: list[str] | None = None) -> int:
     plugin_root = Path(root_opt) if root_opt else site_defaults.plugin_root()
 
     try:
-        profile = _profile(defaults)
+        db_cfg = compat.load_db_config(Path(args.rules).parent) if args.cmd in ("parse", "markers") else None
+        profile = _profile(defaults, db_cfg)
         if args.cmd == "parse":
             result = run_parse(args, plugin_root, defaults, profile)
         elif args.cmd == "markers":

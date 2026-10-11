@@ -75,9 +75,10 @@ def pair(records: list[dict]) -> None:
     양쪽 `ril.paired_ts`(상대편 시각)와 `ril.latency_ms`를 채운다.
     """
     # Split observations on radio-process restart, even if serials are reused.
+    # 자기 주석만 본다(`PairProtocol` 계약): 다른 프로토콜 주석(`proto` 키가 있는 것)은 분할·짝에 쓰지 않는다.
     segments, current, radio_pid = [], [], None
     for rec in records:
-        if rec.get("ril"):
+        if _own(rec.get("ril")):
             if radio_pid is not None and rec["pid"] != radio_pid:
                 segments.append(current)
                 current = []
@@ -89,11 +90,16 @@ def pair(records: list[dict]) -> None:
         _pair_segment(segment)
 
 
+def _own(ann) -> bool:
+    """이 프로토콜(ril)의 주석인가. android 주석에는 `proto` 키가 없다(다른 프로토콜만 단다)."""
+    return bool(ann) and "proto" not in ann
+
+
 def _pair_segment(records: list[dict]) -> None:
     pending: dict[tuple, list[dict]] = {}
     for rec in records:
         ann = rec.get("ril")
-        if not ann or ann["serial"] is None:
+        if not _own(ann) or ann["serial"] is None:
             continue
         key = (rec["pid"], rec["phone_id"], ann["serial"])
         if ann["dir"] == "req":
@@ -118,7 +124,7 @@ def _pair_segment(records: list[dict]) -> None:
         last_by_pid[rec["pid"]] = rec["ts"]
     for rec in records:
         ann = rec.get("ril")
-        if ann and ann["dir"] == "req" and ann["paired_ts"] is None:
+        if _own(ann) and ann["dir"] == "req" and ann["paired_ts"] is None:
             ann["observed_until"] = last_by_pid[rec["pid"]]
 
 

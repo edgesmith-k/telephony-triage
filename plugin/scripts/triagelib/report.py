@@ -7,7 +7,7 @@ import json
 import os
 import re
 
-from common import events, masking
+from common import events, masking, userconfig
 from common.exitcodes import USAGE
 
 from .anchor import _parse_ts, _step_label
@@ -270,7 +270,9 @@ class ReportMixin:
             run_no = self.reuse["run"] if hit else seq     # 결과를 계산한 실행 번호
             reuse = self.reuse_out(candidates, parts, runs) if self.reuse else None
         result = {
-            "status": "ok", "key": self.key, "generated_at": _now(),
+            "status": "ok", "key": self.key,
+            "platform": None if self.platform == userconfig.TOP_PROFILE else self.platform,   # 기본 플랫폼이면 내지 않는다(K8)
+            "generated_at": _now(),
             "request_hash": request_hash or self.request_hash(logs, core["around"], anchor),
             "run": run_no, "reuse": reuse,
             "mode": self.out.get("mode", "offline" if self.offline else "write"),

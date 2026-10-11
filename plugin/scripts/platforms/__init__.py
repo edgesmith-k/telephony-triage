@@ -18,8 +18,8 @@ site-defaults에 `platform.name`이 없을 때만 쓴다.
 
 from __future__ import annotations
 
-import dataclasses
 import importlib
+import os
 import pkgutil
 import re
 from dataclasses import dataclass
@@ -31,20 +31,21 @@ from platforms.base import (  # noqa: F401  (계약 타입을 `platforms.X`로�
     LogFormat,
     PairProtocol,
     PhoneIdRules,
+    PlatformConfigError,
     PlatformSpec,
     SourceTree,
     VendorRules,
+    cfg_compile as _compile,
+    cfg_list as _list,
+    cfg_mapping,
+    config_error as _err,
 )
 
 NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 DEFAULT_NAME = "android"
+ENV = "TT_PLATFORM"            # 프로세스 간 선택 전달(triage → 하위 스크립트). 사람이 직접 쓰지 않는다
 _NOT_PLATFORMS = {"base"}
-_FILE = "site-defaults.yaml"
 _SPECS: dict[str, PlatformSpec] = {}
-
-
-class PlatformConfigError(Exception):
-    """`platform:` 블록이 잘못됐거나 플랫폼을 불러올 수 없다. 메시지에 키 경로가 들어 있다."""
 
 
 @dataclass(frozen=True)
@@ -56,6 +57,7 @@ class PlatformProfile:
     bugreport: object | None                   # `SPEC.capture.default_rules` 형식 (capture 없는 플랫폼은 None)
     ril_vendor: VendorRules | None = None      # 선택 `platform.ril.vendor`. None이면 출력이 이전과 같다
     spec: PlatformSpec | None = None           # 레지스트리가 항상 채운다
+    protocol_tags: tuple = ()                  # `((프로토콜 이름, frozenset 태그), ...)` — `SPEC.protocols` 순서, ril은 `ril_tags`
 
 
 # -- 레지스트리 --------------------------------------------------------------------
@@ -65,7 +67,7 @@ def known() -> list[str]:
     """설치된 플랫폼 이름(`platforms/` 아래 패키지, 정렬). 메시지 "지원 플랫폼: …"에 쓴다."""
     return sorted(
         info.name for info in pkgutil.iter_modules(__path__)
-        if info.ispkg and info.name not in _NOT_PLATFORMS and NAME_RE.match(info.name)
+        if info.ispkg and info.name not in _NOT_PLATFORMS and NAME_RE.fullmatch(info.name)
     )
 
 
@@ -75,7 +77,7 @@ def _unsupported(name) -> str:
 
 def get(name: str) -> PlatformSpec:
     """이름 → `SPEC`. 이름 검증 → `platforms.<name>` 패키지 import → `SPEC` 타입·이름 확인. 오류는 `PlatformConfigError`."""
-    if not isinstance(name, str) or not NAME_RE.match(name) or name in _NOT_PLATFORMS:
+    if not isinstance(name, str) or not NAME_RE.fullmatch(name) or name in _NOT_PLATFORMS:
         raise PlatformConfigError(_unsupported(name))
     if name in _SPECS:
         return _SPECS[name]
@@ -102,35 +104,12 @@ def label(name: str) -> str:
     return get(name).label
 
 
-def _err(path: str, why: str) -> PlatformConfigError:
-    return PlatformConfigError(f"{_FILE} {path}: {why}")
-
-
 def _mapping(value, path: str, allowed: tuple[str, ...]) -> dict:
-    if value is None:
-        return {}
-    if not isinstance(value, dict):
-        raise _err(path, "매핑이어야 합니다.")
-    for key in value:
-        if key not in allowed:
-            raise _err(f"{path}.{key}", f"알 수 없는 키입니다 (허용: {', '.join(allowed)}).")
-    return value
+    return cfg_mapping(value, path, allowed)
 
 
 def _mapping_any(value, path: str) -> dict:
-    if value is None:
-        return {}
-    if not isinstance(value, dict):
-        raise _err(path, "매핑이어야 합니다.")
-    return value
-
-
-def _list(value, path: str, *, non_empty: bool) -> list:
-    if not isinstance(value, list):
-        raise _err(path, "목록이어야 합니다.")
-    if non_empty and not value:
-        raise _err(path, "비어 있으면 안 됩니다.")
-    return value
+    return cfg_mapping(value, path)
 
 
 def _rel_path(value, path: str) -> str:
@@ -141,18 +120,6 @@ def _rel_path(value, path: str) -> str:
     if ".." in PurePosixPath(value).parts or ".." in PureWindowsPath(value).parts:
         raise _err(path, f"'..'를 쓸 수 없습니다: {value}")
     return value
-
-
-def _compile(value, path: str, flags: int = 0, *, groups: int = 1) -> re.Pattern:
-    if not isinstance(value, str) or not value:
-        raise _err(path, "비어 있지 않은 정규식 문자열이어야 합니다.")
-    try:
-        pattern = re.compile(value, flags)
-    except re.error as exc:
-        raise _err(path, f"정규식 오류: {exc}") from exc
-    if pattern.groups < groups:
-        raise _err(path, "캡처 그룹이 하나 이상 있어야 합니다 (그룹 1 = 값).")
-    return pattern
 
 
 def _source_tree(raw, base: str, tree: SourceTree) -> SourceTree:
@@ -245,29 +212,6 @@ def _ril_vendor(raw, base: str, ril_tags: frozenset) -> VendorRules | None:
     return VendorRules(tuple(layers.items()), link, coverage)
 
 
-def _bugreport(raw, base: str, rules):
-    """묶음 입력 블록(`bugreport`). `rules`(`SPEC.capture.default_rules`)를 덮어쓴 복사본을 준다."""
-    node = _mapping(raw, base, ("wanted_buffers", "section_regex", "boundary_regex"))
-    section, boundary, wanted = rules.section_re, rules.boundary_re, rules.wanted_buffers
-    if "wanted_buffers" in node:
-        path = f"{base}.wanted_buffers"
-        items = _list(node["wanted_buffers"], path, non_empty=True)
-        for i, name in enumerate(items):
-            if not isinstance(name, str) or not re.fullmatch(r"[a-z]+", name):
-                raise _err(f"{path}[{i}]", f"소문자 영문 버퍼 이름이어야 합니다: {name!r}")
-        if len(set(items)) != len(items):
-            raise _err(path, "중복이 있습니다.")
-        wanted = tuple(items)
-    if "section_regex" in node:
-        path = f"{base}.section_regex"
-        section = _compile(node["section_regex"], path, groups=0)
-        if "cmd" not in section.groupindex:
-            raise _err(path, "이름 그룹 (?P<cmd>...)가 필요합니다.")
-    if "boundary_regex" in node:
-        boundary = _compile(node["boundary_regex"], f"{base}.boundary_regex", groups=0)
-    return dataclasses.replace(rules, section_re=section, boundary_re=boundary, wanted_buffers=wanted)
-
-
 def _block(defaults: dict | None) -> dict:
     return _mapping_any((defaults or {}).get("platform"), "platform")
 
@@ -307,63 +251,130 @@ def _default_ril_tags(spec: PlatformSpec) -> frozenset:
     return frozenset(proto.default_tags) if proto else frozenset()
 
 
+def _protocol_tags(spec: PlatformSpec, block: dict, base: str, ril_tags: frozenset) -> tuple:
+    """`(이름, 태그)` 목록. ril은 `ril_tags`(`<블록>.ril.tags`), 그 밖은 `<블록>.protocols.<이름>.tags`(없으면 기본)."""
+    names = tuple(p.name for p in spec.protocols)
+    node = _mapping(block.get("protocols"), f"{base}.protocols", tuple(n for n in names if n != "ril"))
+    out = []
+    for proto in spec.protocols:
+        if proto.name == "ril":
+            out.append((proto.name, ril_tags))
+            continue
+        at = f"{base}.protocols.{proto.name}"
+        conf = _mapping(node.get(proto.name), at, ("tags",))
+        if "tags" in conf:
+            path = f"{at}.tags"
+            tags = frozenset(_tag(t, f"{path}[{i}]") for i, t in enumerate(_list(conf["tags"], path, non_empty=False)))
+        else:
+            tags = frozenset(proto.default_tags)
+        out.append((proto.name, tags))
+    return tuple(out)
+
+
 def default(name: str = DEFAULT_NAME) -> PlatformProfile:
     """코드 기본값 프로파일. 패턴은 `SPEC`의 객체 그대로다."""
     spec = get(name)
+    ril_tags = _default_ril_tags(spec)
     return PlatformProfile(
         name=name,
         source_tree=spec.source_tree,
         phone=spec.phone,
-        ril_tags=_default_ril_tags(spec),
+        ril_tags=ril_tags,
         bugreport=spec.capture.default_rules if spec.capture else None,
         spec=spec,
+        protocol_tags=tuple((p.name, ril_tags if p.name == "ril" else frozenset(p.default_tags)) for p in spec.protocols),
     )
 
 
-def load(defaults: dict | None, name: str | None = None) -> PlatformProfile:
-    """site-defaults dict(없으면 None)의 `platform:`을 검증해 `name`(없으면 기본 플랫폼)의 프로파일로 준다.
-
-    오류는 `PlatformConfigError`. 기본 플랫폼의 상수는 `platform:` 블록, 그 밖은 `platform.others.<name>`이다.
-    `name`은 `enabled(defaults)`에 있어야 한다."""
-    node = _block(defaults)
-    base_name = node.get("name", DEFAULT_NAME)
-    base_spec = _spec_at(base_name, "platform.name")
-    _mapping(node, "platform", ("name",) + base_spec.block_keys + ("enabled", "others"))
-    on = enabled(defaults)
-    others = _mapping_any(node.get("others"), "platform.others")
-    for key in others:
-        if key == base_name or key not in on:
-            raise _err(f"platform.others.{key}", "platform.enabled에 있는 기본 아닌 플랫폼이어야 합니다.")
-    name = base_name if name is None else name
-    if name not in on:
-        raise PlatformConfigError(f"플랫폼 '{name}'이(가) 켜져 있지 않습니다 (platform.enabled: {', '.join(on)}).")
-    if name == base_name:
-        spec, block, base = base_spec, node, "platform"
-    else:
-        spec, base = get(name), f"platform.others.{name}"
-        block = _mapping(others.get(name), base, spec.block_keys)
+def _build(spec: PlatformSpec, name: str, block: dict, base: str) -> PlatformProfile:
     ril_tags = _ril_tags(block.get("ril"), f"{base}.ril", _default_ril_tags(spec))
+    capture = spec.capture
+    rules = None
+    if capture is not None:
+        rules = capture.default_rules
+        if capture.block_key and capture.configure is not None:
+            rules = capture.configure(rules, block.get(capture.block_key), f"{base}.{capture.block_key}")
     return PlatformProfile(
         name=name,
         source_tree=_source_tree(block.get("source_tree"), f"{base}.source_tree", spec.source_tree),
         phone=_phone_rules(block.get("log"), f"{base}.log", spec.phone),
         ril_tags=ril_tags,
-        bugreport=_bugreport(block.get("bugreport"), f"{base}.bugreport", spec.capture.default_rules) if spec.capture else None,
+        bugreport=rules,
         ril_vendor=_ril_vendor(block.get("ril"), f"{base}.ril", ril_tags),
         spec=spec,
+        protocol_tags=_protocol_tags(spec, block, base, ril_tags),
     )
 
 
-def backend_name(defaults: dict | None, name: str | None = None):
-    """플랫폼의 파서 백엔드 이름. 기본 플랫폼은 `parser.backend`(값 그대로, 검증은 `parser_backends.load`),
-    그 밖은 `parser.by_platform.<name>`, 없으면 `SPEC.default_backend`."""
+def _others(node: dict, base_name: str) -> dict:
+    """`platform.others`: 키는 설치된 기본 아닌 플랫폼, 값은 그 플랫폼 `block_keys`만 받는 블록. 내용까지 모두 검증한다."""
+    others = _mapping_any(node.get("others"), "platform.others")
+    for key, block in others.items():
+        at = f"platform.others.{key}"
+        if key == base_name:
+            raise _err(at, "기본 플랫폼(platform.name)의 상수는 platform: 블록에 둔다.")
+        spec = _spec_at(key, at)
+        _build(spec, key, _mapping(block, at, spec.block_keys), at)
+    return others
+
+
+def load(defaults: dict | None, name: str | None = None, *, require_enabled: bool = True) -> PlatformProfile:
+    """site-defaults dict(없으면 None)의 `platform:`을 검증해 `name`(없으면 기본 플랫폼)의 프로파일로 준다.
+
+    오류는 `PlatformConfigError`. 기본 플랫폼의 상수는 `platform:` 블록, 그 밖은 `platform.others.<name>`이다.
+    `platform.others`는 요청한 플랫폼과 상관없이 모두 검증한다.
+    `require_enabled`(사용자 세션 흐름, 기본)면 `name`이 `enabled(defaults)`에 있어야 한다. 이슈 DB에 고정된 도구
+    (db_regress·db_lint·`parse_logcat --rules`, 17-platforms K6)는 False로 불러 DB가 선언한 플랫폼이 설치돼 있기만 하면 쓴다."""
+    node = _block(defaults)
+    base_name = node.get("name", DEFAULT_NAME)
+    base_spec = _spec_at(base_name, "platform.name")
+    _mapping(node, "platform", ("name",) + base_spec.block_keys + ("enabled", "others"))
+    on = enabled(defaults)
+    others = _others(node, base_name)
+    name = base_name if name is None else name
+    if require_enabled and name not in on:
+        raise PlatformConfigError(f"플랫폼 '{name}'이(가) 켜져 있지 않습니다 (platform.enabled: {', '.join(on)}).")
+    if name == base_name:
+        return _build(base_spec, name, node, "platform")
+    spec = get(name)
+    base = f"platform.others.{name}"
+    return _build(spec, name, _mapping(others.get(name), base, spec.block_keys), base)
+
+
+def backend_name(defaults: dict | None, name: str | None = None) -> str:
+    """플랫폼의 파서 백엔드 이름. 모든 플랫폼이 같은 규칙이다: 지정값이 있으면 그것, 없으면 `SPEC.default_backend`.
+    지정값은 기본 플랫폼이면 `parser.backend`, 그 밖은 `parser.by_platform.<name>`. 이름 검증은 `parser_backends.load`.
+    `parser.by_platform`은 매핑이어야 하고 키는 설치된 기본 아닌 플랫폼이어야 한다(아니면 `PlatformConfigError`)."""
     parser = (defaults or {}).get("parser") or {}
-    if name is None or name == default_name(defaults):
-        return parser.get("backend")
-    by = parser.get("by_platform")
-    if isinstance(by, dict) and by.get(name):
-        return by[name]
-    return get(name).default_backend
+    base_name = default_name(defaults)
+    by = cfg_mapping(parser.get("by_platform"), "parser.by_platform")
+    for key in by:
+        if key == base_name:
+            raise _err(f"parser.by_platform.{key}", "기본 플랫폼의 백엔드는 parser.backend에 둔다.")
+        _spec_at(key, f"parser.by_platform.{key}")
+    name = base_name if name is None else name
+    chosen = parser.get("backend") if name == base_name else by.get(name)
+    return chosen if chosen else get(name).default_backend
+
+
+def select(defaults: dict | None, cli: str | None = None, user: str | None = None) -> str:
+    """사용자 세션 흐름의 플랫폼 선택(17-platforms K3): `--platform`(cli) > 환경변수 `TT_PLATFORM` > 사용자 config
+    `platform`(user) > site-defaults `platform.name` > `DEFAULT_NAME`. 고른 이름은 `platform.enabled`에 있어야 하고
+    불러올 수 있어야 한다(아니면 `PlatformConfigError`, 호출자가 종료 코드 2)."""
+    for where, value in (("--platform", cli), (ENV, os.environ.get(ENV)), ("사용자 config platform", user)):
+        if value:
+            name, source = value, where
+            break
+    else:
+        name, source = default_name(defaults), "site-defaults platform.name"
+    try:
+        get(name)
+    except PlatformConfigError as exc:
+        raise PlatformConfigError(f"{source}: {exc}") from exc
+    on = enabled(defaults)
+    if name not in on:
+        raise PlatformConfigError(f"{source}: 플랫폼 '{name}'이(가) 켜져 있지 않습니다 (platform.enabled: {', '.join(on)}).")
+    return name
 
 
 def known_raw_line_finders() -> tuple[list[tuple], list[tuple[str, Exception]]]:

@@ -50,6 +50,7 @@ sys.path.insert(0, str(SCRIPTS))
 from common import compat, issuepost, masking, session_lock, site_defaults, userconfig  # noqa: E402
 from common.exitcodes import CHECK_FAILED, OK, USAGE  # noqa: E402
 import platforms  # noqa: E402
+from platforms import session as platform_session  # noqa: E402
 
 DEFAULT_KEY_RE = r"[A-Z][A-Z0-9]+-\d+"     # jira_fields.DEFAULT_KEY_RE와 같다
 OMIT_KEYS = ("failed_step", "fields", "evidence", "must_show", "others")
@@ -83,7 +84,10 @@ class Job:
         user = userconfig.load_user()
         if user is None:
             raise Usage("사용자 config가 없다 — /telephony-triage:setup 을 먼저 한다")
-        self.cfg = userconfig.merged(defaults, user)
+        try:     # 선택 플랫폼의 work_dir(`--platform` > TT_PLATFORM > 사용자 config > site)
+            self.platform, self.cfg = platform_session.resolve(defaults, getattr(args, "platform", None), user)
+        except platforms.PlatformConfigError as exc:
+            raise Usage(str(exc)) from exc
         work = Path(str(userconfig.get(self.cfg, "work_dir"))).expanduser()
         self.snap = work / session_lock.SNAPSHOT_DIR
         db_cfg = compat.load_db_config(self.snap) if (self.snap / "issue-db.config.yaml").is_file() else {}
@@ -654,6 +658,7 @@ def build_parser() -> argparse.ArgumentParser:
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--plugin-root", default=None)
     common.add_argument("--json", action="store_true", help="JSON 출력")
+    platform_session.add_arg(common)
     sub = parser.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("status", parents=[common])
     p.add_argument("key", metavar="KEY")

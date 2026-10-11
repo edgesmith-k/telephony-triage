@@ -51,10 +51,14 @@ def _locked(method):
 
 
 class Lock:
-    def __init__(self, work_dir: Path):
+    """세션 lock. 플랫폼(이슈 DB)마다 그 플랫폼 `work_dir`에 따로 있다 — android·ofono 작업을 동시에 할 수 있다
+    (사용자·이슈 DB별 한 번에 한 작업). 기록의 `platform`은 기본 플랫폼이 아닐 때만 넣는다(기존 기록 불변)."""
+
+    def __init__(self, work_dir: Path, platform: str | None = None):
         self.work_dir = work_dir
         self.path = work_dir / LOCK_FILE
         self.owner = os.environ.get("TT_LOCK_OWNER")
+        self.platform = platform if platform and platform != userconfig.TOP_PROFILE else None
 
     @contextmanager
     def guard(self):
@@ -124,6 +128,8 @@ class Lock:
         self.owner = uuid.uuid4().hex
         data = {"job": job, "owner": self.owner, "command": command or (held or {}).get("command"), "started_at": started,
                 "updated_at": stamp}
+        if self.platform:
+            data["platform"] = self.platform
         self.write(data)
         return {"acquired": True, "lock": self.describe(data),
                 "taken_over": bool(taken_from), "previous": taken_from}
@@ -139,7 +145,7 @@ class Lock:
                              {"holder": held})
         self.check_owner(held)
         held.update(updated_at=_iso(now()))
-        self.write({k: held[k] for k in ("job", "owner", "command", "started_at", "updated_at")})
+        self.write({k: held[k] for k in ("job", "owner", "command", "started_at", "updated_at", "platform") if k in held})
         return held
 
     def check_owner(self, held: dict) -> None:

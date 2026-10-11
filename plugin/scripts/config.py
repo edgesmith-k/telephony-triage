@@ -53,6 +53,8 @@ try:
     from common import compat, dbpath, ghcli, mcptools, session_lock, site_defaults, userconfig, yamlio  # noqa: E402
     from common import compiled as compiled_cache  # noqa: E402
     from common import issuepost  # noqa: E402
+    import platforms  # noqa: E402
+    from platforms import session as platform_session  # noqa: E402
     IMPORT_ERROR: ImportError | None = None
 except ImportError as _exc:   # noqa: BLE001
     IMPORT_ERROR = _exc
@@ -115,8 +117,17 @@ def validate(kind: str, value) -> str | None:
     return None
 
 
-def _default_for(key: str, defaults: dict):
-    return userconfig.get(userconfig.merged(defaults, {}), key)
+def _default_for(key: str, defaults: dict, platform: str | None = None):
+    return userconfig.get(userconfig.merged(defaults, {}, platform=platform), key)
+
+
+def _platform(args) -> str:
+    """main이 정한 선택 플랫폼(`--platform` > TT_PLATFORM > 사용자 config > site)."""
+    return getattr(args, "platform_name", None) or userconfig.TOP_PROFILE
+
+
+def _other(args) -> bool:
+    return _platform(args) != userconfig.TOP_PROFILE
 
 
 # -- 서브커맨드 ---------------------------------------------------------------------------
@@ -124,13 +135,21 @@ def _default_for(key: str, defaults: dict):
 
 def cmd_init(args, defaults: dict) -> dict:
     existing = userconfig.load_user()
-    if existing is not None and not args.force:
+    platform = _platform(args)
+    if _other(args):
+        # 기본 아닌 플랫폼: 기존 config에 그 플랫폼의 경로 프로필(`platforms.<p>`)만 더한다(Jira·gh 설정은 공유).
+        if existing is None:
+            raise UsageError(f"config가 없습니다. 먼저 --platform 없이 setup(config.py init)을 한다 ({platform}은 그 뒤 추가).")
+        if (existing.get("platforms") or {}).get(platform) is not None and not args.force:
+            raise UsageError(f"플랫폼 {platform} 프로필이 이미 있습니다 (바꾸려면 set --platform {platform}, 다시 만들려면 --force)")
+    elif existing is not None and not args.force:
         raise UsageError(f"config가 이미 있습니다: {userconfig.path()} (바꾸려면 set, 다시 만들려면 --force)")
+    fields = [f for f in FIELDS if not _other(args) or f[0].split(".")[0] in userconfig.PROFILE_KEYS]
     answers = {}
     if args.answers:
         answers = json.loads(Path(args.answers).read_text(encoding="utf-8"))
         errors = []
-        for key, _, kind, required in FIELDS:
+        for key, _, kind, required in fields:
             value = answers.get(key)
             if required and value in (None, ""):
                 errors.append(f"{key}: 값이 필요합니다")
@@ -139,8 +158,8 @@ def cmd_init(args, defaults: dict) -> dict:
         if errors:
             raise UsageError("config 값이 잘못됐습니다:\n  " + "\n  ".join(errors))
     else:
-        for key, question, kind, required in FIELDS:
-            default = _default_for(key, defaults)
+        for key, question, kind, required in fields:
+            default = _default_for(key, defaults, platform)
             for _attempt in range(3):
                 hint = f" [{default}]" if default not in (None, "", [], {}) else ""
                 print(f"{question}{hint}: ", end="", file=sys.stderr, flush=True)
@@ -161,13 +180,18 @@ def cmd_init(args, defaults: dict) -> dict:
                 raise UsageError(f"{key}: 올바른 값을 받지 못했습니다.")
 
     data: dict = {}
-    for key, _, _kind, required in FIELDS:
+    for key, _, _kind, required in fields:
         value = answers.get(key)
-        if value in (None, "") or (not required and value == _default_for(key, defaults)):
+        if value in (None, "") or (not required and value == _default_for(key, defaults, platform)):
             continue        # 답하지 않았거나 팀 기본값과 같으면 저장하지 않는다(이후 팀 기본값 변경을 상속)
         userconfig.set_value(data, key, value)
-    data.setdefault("plugin", {})["scripts_path"] = str(_plugin_root(args) / "scripts")
-    effective = userconfig.merged(defaults, data)
+    if _other(args):
+        full = dict(existing)
+        full["platforms"] = {**(existing.get("platforms") or {}), platform: data}
+        data = full
+    else:
+        data.setdefault("plugin", {})["scripts_path"] = str(_plugin_root(args) / "scripts")
+    effective = userconfig.merged(defaults, data, platform=platform)
     userconfig.ensure_private_dir(userconfig.home())
     userconfig.ensure_private_dir(Path(userconfig.get(effective, "work_dir")).expanduser())
     path = userconfig.save(data)
@@ -198,9 +222,15 @@ def cmd_set(args, defaults: dict) -> dict:
     msg = validate(kind, value)
     if msg:
         raise UsageError(f"{args.key}: {msg}")
-    userconfig.set_value(data, args.key, value)
+    if args.key.split(".")[0] in ("platform", "platforms"):
+        raise UsageError(f"{args.key}: 플랫폼 키는 set --platform <이름> <프로필 키>로 쓴다(개인 기본 플랫폼은 config.yaml의 platform).")
+    try:
+        key = userconfig.profile_key(_platform(args), args.key)
+    except ValueError as exc:
+        raise UsageError(f"--platform {_platform(args)}: {exc}") from exc
+    userconfig.set_value(data, key, value)
     userconfig.save(data)
-    return {"config": str(userconfig.path()), "key": args.key, "value": value}
+    return {"config": str(userconfig.path()), "key": key, "value": value}
 
 
 def _plugin_root(args) -> Path:
@@ -301,7 +331,7 @@ def _gh_auth(defaults: dict) -> tuple[str | None, bool, str]:
 
 def _db(args, defaults: dict) -> Path:
     try:
-        return dbpath.resolve(args.db, user_config_path=lambda: userconfig.issue_db_path(defaults))
+        return dbpath.resolve(args.db, user_config_path=lambda: userconfig.issue_db_path(defaults, _platform(args)))
     except dbpath.DbPathError as exc:
         raise UsageError(str(exc)) from exc
 
@@ -318,16 +348,17 @@ def cmd_install_hooks(args, defaults: dict) -> dict:
     return {"db": str(db), "core.hooksPath": value}
 
 
-def check(db: Path, defaults: dict, for_: str) -> dict:
+def check(db: Path, defaults: dict, for_: str, platform: str | None = None) -> dict:
     cfg = compat.load_db_config(db)
     if not cfg:
         raise UsageError(f"이슈 DB 설정을 읽을 수 없습니다: {db}")
+    platform = platform or userconfig.TOP_PROFILE
     branch = _git_out(db, "rev-parse", "--abbrev-ref", "HEAD")
     migrate = bool(branch and MIGRATE_BRANCH_RE.match(branch))
-    reasons: list[dict] = []
+    reasons: list[dict] = compat.check_platform(cfg, platform)     # migrate 브랜치에서도 본다
     schema = cfg.get("schema_version")
     generator = cfg.get("generator_version")
-    env = compiled_cache.environment(defaults)
+    env = compiled_cache.environment(defaults, platform)
     if not migrate:
         if not isinstance(schema, int) or schema > SUPPORTED_SCHEMA[1]:
             reasons.append({"code": "schema-too-new", "message":
@@ -346,7 +377,9 @@ def check(db: Path, defaults: dict, for_: str) -> dict:
                             f"generator_version {generator} ≠ 플러그인 {GENERATOR_VERSION}. 이슈 DB 쓰기 전체를 막는다. {hint}"})
         reasons += compat.check_parser_backend(cfg, env["backend"]["name"], str(env["backend"]["version"]))
         configured = {}
-        for category, conf in (defaults.get("external_parsers") or {}).items():
+        # 외부 파서는 site 기본 플랫폼만 쓴다(그 밖 플랫폼은 다음 작업, 17-platforms)
+        external = (defaults.get("external_parsers") or {}) if platform == platforms.default_name(defaults) else {}
+        for category, conf in external.items():
             try:
                 module = adapters.load((conf or {}).get("adapter"))
                 configured[category] = {"adapter": module.ADAPTER_NAME,
@@ -380,7 +413,7 @@ def check(db: Path, defaults: dict, for_: str) -> dict:
 
 
 def cmd_check(args, defaults: dict) -> tuple[dict, int]:
-    result = check(_db(args, defaults), defaults, args.for_)
+    result = check(_db(args, defaults), defaults, args.for_, _platform(args))
     ok = result["push_allowed"] if args.for_ == "write" else result["writable"]
     return result, (OK if ok else USAGE)
 
@@ -493,13 +526,23 @@ def _doctor_rows(args, defaults: dict) -> list[dict]:
         if user is None:
             rows.append(_row("config", "fail", "사용자 config 없음", "/telephony-triage:setup 을 실행한다"))
         else:
-            cfg = userconfig.merged(defaults, user)
+            cfg = userconfig.merged(defaults, user, platform=_platform(args))
             rows.append(_row("config", "ok", "config.yaml 있음"))
     except Exception as exc:    # noqa: BLE001 — 읽기 실패도 한 행의 fail이다
         # init --force도 기존 파일을 먼저 읽으므로 손상 파일에서는 실패한다 → 파일을 옮긴 뒤 setup
         rows.append(_row("config", "fail", f"config 읽기 실패: {exc}",
                          f"손상된 {userconfig.path()}를 다른 이름으로 옮긴 뒤 /telephony-triage:setup 을 실행한다"))
     ok_cfg = cfg is not None
+
+    # 1b platform — 켠 플랫폼이 둘 이상이거나 선택·프로필 오류가 있을 때만(기본 설치는 표가 이전과 같다)
+    def platform_row():
+        error = getattr(args, "platform_error", None)
+        on = platforms.enabled(defaults)
+        if error:
+            rows.append(_row("platform", "fail", error, "--platform·config의 platform·platforms.<이름>을 고친다"))
+        elif len(on) > 1:
+            rows.append(_row("platform", "ok", f"{_platform(args)} (켠 플랫폼: {', '.join(on)})"))
+    guarded("platform", platform_row)
 
     # 2 scripts_path
     def scripts_path():
@@ -541,7 +584,7 @@ def _doctor_rows(args, defaults: dict) -> list[dict]:
 
     # 4b guard 자가시험 (읽기 전용: guard는 판정만 한다)
     guarded("guard", lambda: rows.append(_guard_selftest(args, repo_box[0] if repo_box else None,
-                                                         cfg if ok_cfg else userconfig.merged(defaults, {}))))
+                                                         cfg if ok_cfg else userconfig.merged(defaults, {}, platform=_platform(args)))))
 
     # 5 jira (매핑만 본다)
     def jira():
@@ -631,7 +674,7 @@ def _doctor_rows(args, defaults: dict) -> list[dict]:
         skip("compat", "스냅샷 없음")
     else:
         try:
-            result = check(snap_box[0], defaults, "dry-run")
+            result = check(snap_box[0], defaults, "dry-run", _platform(args))
             if result["writable"]:
                 rows.append(_row("compat", "ok", "스키마·생성기·파서 호환"))
             else:
@@ -688,7 +731,7 @@ _MISSING = object()
 def cmd_show(args, defaults: dict) -> dict:
     user = userconfig.load_user()
     if args.keys:
-        effective = userconfig.merged(defaults, user or {})
+        effective = userconfig.merged(defaults, user or {}, platform=_platform(args))
         keys = [k.strip() for k in args.keys.split(",") if k.strip()]
         found = {k: userconfig.get(effective, k, _MISSING) for k in keys}
         return {"user_config": str(userconfig.path()) if user is not None else None,
@@ -696,13 +739,15 @@ def cmd_show(args, defaults: dict) -> dict:
                 "missing": [k for k, v in found.items() if v is _MISSING]}
     return {"plugin_root": str(_plugin_root(args)), "site_defaults": str(_plugin_root(args) / site_defaults.FILENAME),
             "user_config": str(userconfig.path()) if user is not None else None,
-            "effective": userconfig.merged(defaults, user or {})}
+            "effective": userconfig.merged(defaults, user or {}, platform=_platform(args))}
 
 
 def build_parser() -> argparse.ArgumentParser:
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="JSON 출력 (항상 JSON)")
     common.add_argument("--plugin-root", default=argparse.SUPPRESS, help="플러그인 루트 (기본: ${CLAUDE_PLUGIN_ROOT})")
+    common.add_argument("--platform", metavar="이름", default=argparse.SUPPRESS,
+                        help="플랫폼(경로 프로필·이슈 DB). 없으면 TT_PLATFORM > 사용자 config platform > site-defaults platform.name")
     parser = argparse.ArgumentParser(prog="config.py", description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter, parents=[common])
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -751,6 +796,17 @@ def main(argv: list[str] | None = None) -> int:
     defaults = site_defaults.load_or_exit(getattr(args, "plugin_root", None))
     code = OK
     try:
+        if args.cmd != "site-defaults":
+            try:
+                args.platform_name, _cfg = platform_session.resolve(defaults, getattr(args, "platform", None))
+            except platforms.PlatformConfigError as exc:
+                if args.cmd != "doctor":
+                    raise UsageError(str(exc)) from exc
+                args.platform_name, args.platform_error = None, str(exc)    # doctor는 표의 fail 행으로 보인다
+            except yamlio.YamlFileError:
+                if args.cmd != "doctor":
+                    raise
+                args.platform_name = None       # 손상된 config는 doctor의 config 행이 보인다
         if args.cmd == "site-defaults":
             result = defaults
         elif args.cmd == "show":

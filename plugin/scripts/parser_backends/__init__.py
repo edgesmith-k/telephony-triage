@@ -21,6 +21,17 @@ class BackendError(Exception):
     """백엔드를 불러올 수 없다 (이름·모듈·인터페이스 오류)."""
 
 
+def name_for(defaults: dict | None, platform: str | None = None) -> str | None:
+    """플랫폼의 백엔드 이름(`platforms.backend_name`). 설정이 잘못돼 정할 수 없으면 None(호출자가 버전 없음으로 다룬다).
+    `common/`은 `platforms`를 직접 import하지 않으므로 여기서 잇는다."""
+    import platforms
+
+    try:
+        return platforms.backend_name(defaults, platform)
+    except platforms.PlatformConfigError:
+        return None
+
+
 def load(name: str) -> ParserBackend:
     if not isinstance(name, str) or not _NAME_RE.match(name):
         raise BackendError(f"파서 백엔드 이름이 잘못됐습니다: {name!r}")
