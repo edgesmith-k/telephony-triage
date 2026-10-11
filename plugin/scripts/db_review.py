@@ -40,6 +40,8 @@ import match_signatures  # noqa: E402
 import parse_logcat  # noqa: E402
 from common import dbpath, history, issuedb, quality, site_defaults, userconfig, yamlio  # noqa: E402
 from common.exitcodes import OK, USAGE  # noqa: E402
+from platforms import PlatformConfigError  # noqa: E402
+from platforms import session as platform_session  # noqa: E402
 
 TITLE_SIMILARITY = 0.8
 COMATCH_KINDS = ("positive", "recurrence", "extra")
@@ -413,8 +415,8 @@ def render(report: dict) -> str:
 
 def run(args, defaults: dict, plugin_root: Path) -> dict:
     try:
-        root = dbpath.resolve(args.db, user_config_path=lambda: userconfig.issue_db_path(defaults))
-    except dbpath.DbPathError as exc:
+        root = platform_session.resolve_db(defaults, getattr(args, "platform", None), args.db)[1]
+    except (dbpath.DbPathError, PlatformConfigError) as exc:
         raise UsageError(str(exc)) from exc
     try:
         db = issuedb.load(root)
@@ -458,6 +460,7 @@ def build_parser() -> argparse.ArgumentParser:
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("category", nargs="?", default=None)
     parser.add_argument("--db", default=None)
+    platform_session.add_arg(parser)
     parser.add_argument("--out", metavar="file", default=None, help="Markdown 리포트를 쓸 파일")
     parser.add_argument("--as-of", metavar="YYYY-MM-DD", default=None, help="기준일 (기본: 오늘)")
     parser.add_argument("--json", action="store_true", help="stdout에 JSON")

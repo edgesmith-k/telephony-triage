@@ -2,7 +2,7 @@
 
 > 10/11 사용자 요청. oFono는 Android와 동작·로그·원인·해결책이 달라 **플랫폼마다 이슈 DB를 따로** 둔다. 플랫폼은 계속 더할 수 있어야 한다(이름을 하드코딩하지 않는다). 표·정의가 다르면 `contracts.md`가 맞다. 사내 고유 구성요소 이름은 쓰지 않는다(placeholder `daemon-a`·`daemon-b`, `14-site.md` S24~S29).
 
-android만 쓰는 설치(site-defaults에 `platform.enabled`·`others`·`parser.by_platform`이 없고 사용자 config에 `platform`·`platforms`가 없음)는 경로·lock 위치·lock JSON·`config.py show/doctor`·guard 판정·pre-push·`analysis.json`·`report.md`·이벤트·`db_regress`·골든이 모두 이전과 바이트 단위로 같다. 이슈 DB에 `platform`이 없으면 android다.
+android만 쓰는 설치(site-defaults에 `platform.enabled`·`others`·`parser.by_platform`이 없고 사용자 config에 `platform`·`platforms`가 없음)는 경로·lock 위치·lock JSON·`config.py show/doctor`·guard 판정(규칙 10 제외)·pre-push·`analysis.json`·`report.md`·이벤트·`db_regress`·골든이 모두 이전과 바이트 단위로 같다. 이슈 DB에 `platform`이 없으면 android다. 예외: guard 규칙 10과 Jira 게시 원문 줄 검사는 **설치된 모든 플랫폼** 형식(`known()` 합집합, §5)을 원문으로 보므로 android 단독 설치도 journald·BSD syslog 모양 줄을 거부한다(더 엄격한 쪽).
 
 ## 1. 계약 (`plugin/scripts/platforms/`)
 
@@ -37,8 +37,8 @@ parser_backends/<p>_reference/          # 그 플랫폼 BACKEND 재수출 (andro
 ### 1-2. 계층 규칙 (테스트로 강제)
 
 - `common/`은 `platforms`를 import하지 않는다. 핵심(매처·`db_*`·guard·`config.py` 등)은 레지스트리 경유로만 플랫폼을 쓴다(`platforms.android` 직접 import 없음).
-- `platforms/<a>`는 `platforms/<b>`를 import하지 않는다. `platforms.base`·`common.logtime`·`common.events`만 쓴다.
-- `platforms/<p>/__init__.py`는 표준 라이브러리 + 같은 패키지 + `platforms.base`·`common.logtime`만(guard가 규칙 10에서 불러오므로 가벼워야 한다).
+- `platforms/<a>`는 `platforms/<b>`를 import하지 않는다(공용은 `platforms.base`와 레지스트리 밖 모듈: `common.logtime`·`common.events`, 백엔드 `backend.py`는 `parser_backends.base`도). 플랫폼 코드는 핵심 스크립트(`parse_logcat`·`triage`·`config`·`code_roots`·`db_*`)와 `parser_backends.site`를 import하지 않는다.
+- `platforms/<p>/__init__.py`는 표준 라이브러리 + 같은 패키지 하위 모듈 + `platforms.base`·`common.logtime`·`common.events`만(guard가 규칙 10에서 불러오므로 가벼워야 한다. `backend.py`는 `__init__`이 불러오지 않는다). 검사는 `tests/test_platforms.py`.
 
 ## 2. 선택·경로·프로필 규칙
 
@@ -47,12 +47,13 @@ parser_backends/<p>_reference/          # 그 플랫폼 BACKEND 재수출 (andro
 | site-defaults | `platform.name`, `platform.enabled`, `platform.others.<p>`, `parser.by_platform.<p>` | 팀 기본, 켤 수 있는 플랫폼, 그 밖 플랫폼의 상수·백엔드 (`02-config.md`) |
 | 사용자 config | `platform` | 개인 기본 선택(`enabled` 안의 이름) |
 | 사용자 config | `platforms.<p>.{issue_db, work_dir, log_dir, code_profiles, recent_code_roots}` | 경로 프로필(`PROFILE_KEYS`). 최상위 같은 키 = android 프로필 |
-| CLI | `--platform <p>` | `triage.py`·`config.py`·`db_pr.py`·`db_verify.py`·`issue_post.py`·`code_roots.py` |
+| CLI | `--platform <p>` | `triage.py`·`config.py`·`db_pr.py`·`db_verify.py`·`issue_post.py`·`code_roots.py`·`db_add.py`·`db_search.py`·`db_review.py`(그 밖 스크립트 — `mask_pii`·`parse_logcat` 등 — 은 받지 않는다) |
 | env | `TT_PLATFORM` | triage → 하위 스크립트(사람이 쓰지 않는다) |
 
 - 선택 순서: `--platform` > `TT_PLATFORM` > 사용자 config `platform` > site `platform.name` > `android`. `enabled` 관문은 **사용자 세션 흐름만** 적용한다. DB에 고정된 도구(`db_regress`·`db_lint`·`parse_logcat --rules`)는 DB 선언 플랫폼(설치돼 있으면 허용).
 - 프로필: android가 아닌 플랫폼의 cfg는 공통 키에 `platforms.<p>`를 얹은 것이고 android 값을 **물려받지 않는다**(ofono 프로필이 실수로 android clone을 가리킬 수 없다). 기본 `work_dir` `<home>/work-<p>`, 보류 피드백 `<home>/pending-feedback-<p>`. 최상위 프로필 없는 config(따로 설치)도 된다.
 - 경로 규칙(`userconfig.path_problems`): `work_dir`·`issue_db.path`는 비어 있지 않은 절대 경로(`~` 허용), `work_dir`은 clone 밖, 프로필끼리 `work_dir`·clone·원격 겹침 금지. `platforms.<p>`의 프로필 밖 키(예: `source_tree`)는 거부(RF-4). `config.py show`·`set`·`doctor`는 이런 문제가 있어도 동작하고(set 경고, doctor `platform` 행 fail), 그 밖 스크립트는 종료 코드 2.
+- `--db`가 없을 때의 대체 경로(사용자 config `issue_db.path`, `common/dbpath`의 ③)도 **선택 플랫폼** 프로필의 값이다(`db_add`·`db_search`·`db_review`·`config`·`code_roots`). 이 스크립트들도 이슈 DB 선언과 선택 플랫폼을 대조한다(`platform-mismatch`). 단 `db_add`의 `apply`·`drift`·`renumber`·`check-ids`는 `db_pr publish`·`db_verify`·stage 검사가 그 DB에 대고 부르는 **DB 고정** 하위 명령이라 DB 선언을 따르고, `--platform`·`TT_PLATFORM`이 있을 때만 대조한다(사용자 config 없이 도는 비기본 DB 검사가 막히지 않게). 사용자 흐름인 `similar`는 항상 대조한다.
 - 쓰기: `config.py set --platform <p> <키>`·`code_roots remember`는 `profile_key(p, key)`(android면 그 키, 그 밖 `platforms.<p>.<키>`)에 쓴다. `config.py init --platform <p>`는 그 프로필만 더한다(Jira·gh 설정은 공유).
 - 출력: `analysis.json`·lock 기록·`triage-state.json`의 `platform`은 android가 아닐 때만. 라벨은 `SPEC.label`. 같은 작업 키를 다른 플랫폼으로 다시 실행하면 종료 코드 2.
 

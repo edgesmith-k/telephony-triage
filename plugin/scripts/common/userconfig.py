@@ -26,6 +26,7 @@ import yaml
 from . import yamlio
 
 HOME_ENV = "TELEPHONY_TRIAGE_HOME"
+PLATFORM_ENV = "TT_PLATFORM"   # = `platforms.ENV` (common은 platforms를 import하지 않는다, 테스트가 같은지 본다)
 FILENAME = "config.yaml"
 # 최상위 키 = 이 플랫폼의 프로필 (`platforms.DEFAULT_NAME`과 같아야 한다, 테스트로 확인)
 TOP_PROFILE = "android"
@@ -300,9 +301,20 @@ def save(data: dict) -> Path:
     return p
 
 
+def selected_name(defaults: dict | None, user: dict | None) -> str:
+    """선택 플랫폼 **이름만**: `TT_PLATFORM` > 사용자 config `platform` > site-defaults `platform.name` > 기본.
+    `--platform`(CLI)과 `platform.enabled` 검증은 호출부(`platforms.session`)가 한다 — `common`은 `platforms`를 모른다."""
+    site = (defaults or {}).get("platform")
+    site_name = site.get("name") if isinstance(site, dict) else None
+    return os.environ.get(PLATFORM_ENV) or selected_hint(user) or (site_name if isinstance(site_name, str) and site_name
+                                                                     else None) or TOP_PROFILE
+
+
 def issue_db_path(defaults: dict, platform: str | None = None):
-    """`dbpath.resolve`의 ③(사용자 config `issue_db.path`, 선택 플랫폼 프로필의 값)."""
+    """`dbpath.resolve`의 ③(사용자 config `issue_db.path`, 선택 플랫폼 프로필의 값). `platform`이 없으면
+    `selected_name`(TT_PLATFORM > 사용자 config `platform` > site `platform.name`)의 프로필이다 — 비기본 플랫폼을 고른
+    상태에서 android 프로필의 DB를 조용히 읽지 않게."""
     user = load_user()
     if not user:
         return None
-    return get(user, profile_key(platform, "issue_db.path"))
+    return get(user, profile_key(platform or selected_name(defaults, user), "issue_db.path"))

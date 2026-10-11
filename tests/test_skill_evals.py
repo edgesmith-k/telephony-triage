@@ -1098,12 +1098,22 @@ def _platform_ctx(tmp_path, *commands):
       'python3 "/p/scripts/config.py" site-defaults'], True, True),
     (['python3 /p/scripts/triage.py run MOCK-1001 --platform=ofono && python3 /p/scripts/db_pr.py lock release MOCK-1001'],
      True, False),                                             # 이후 db_pr에 플랫폼 빠짐
-    (['python3 /p/scripts/triage.py run MOCK-1001 --logs logs/a.log'], False, True),
+    (['python3 /p/scripts/config.py show --keys work_dir,jira.tools',              # triage 앞 호출은 세지 않는다
+      'python3 /p/scripts/triage.py run MOCK-1001 --platform ofono',
+      'python3 /p/scripts/db_search.py MOCK-1001 --platform ofono --json'], True, True),
+    (['python3 /p/scripts/triage.py run MOCK-1001 --platform ofono',
+      'python3 /p/scripts/db_add.py similar --db /w/_snapshot "x"'], True, False),  # 새 플랫폼 인자 스크립트도 센다
+    (['python3 /p/scripts/triage.py run MOCK-1001 --logs logs/a.log'], False, "manual"),   # triage 뒤 호출 0회 = 수동
 ])
 def test_e63_platform_flag_checks(tmp_path, commands, flag_ok, later_ok):
     ctx, _ = _platform_ctx(tmp_path, *commands)
     fns = grader.checks(63, ctx)
-    assert fns[0]()[0] is flag_ok and fns[1]()[0] is later_ok
+    assert fns[0]()[0] is flag_ok
+    if later_ok == "manual":
+        with pytest.raises(grader._Manual):
+            fns[1]()
+    else:
+        assert fns[1]()[0] is later_ok
 
 
 def test_e63_e64_analysis_json_checks(tmp_path):
@@ -1133,6 +1143,8 @@ def test_e65_mismatch_bypass_and_guidance_checks(tmp_path):
                       ("tool", "t2", "Edit", {"file_path": "/h/.telephony-triage/config.yaml"}, "ok", False)])
     fns = grader.checks(65, grader.Ctx(env_dir, run))
     assert fns[0]()[0] is False and fns[1]()[0] is False
+    _seq_events(run, [("text", "이슈 DB가 ofono 플랫폼이라 불일치로 멈췄습니다.")])   # 재실행 안내 없이 알리기만 해도 통과
+    assert grader.checks(65, grader.Ctx(env_dir, run))[2]()[0] is True
     with pytest.raises(grader._Manual):                                  # 실행 기록 없음은 통과로 세지 않는다
         (run / "events.jsonl").unlink()
         grader.checks(65, grader.Ctx(env_dir, run))[0]()

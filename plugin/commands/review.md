@@ -5,7 +5,7 @@ argument-hint: "[category]"
 
 카테고리 오너의 월간 리뷰 리포트를 만든다 (`06-collaboration.md §6.6`, `09-commands.md` review).
 스크립트: `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/<이름>.py"`(결과 JSON). 종료 코드 2면 메시지를 그대로 보이고 멈춘다(예: 사내 기본값 없음 S-3).
-플랫폼: 사용자가 플랫폼을 말했으면(`--platform <이름>`, 예: oFono) `config.py`·`db_pr.py`·`db_verify.py`·`code_roots.py`·`issue_post.py` 호출마다 `--platform <이름>`을 붙이고, 그 옵션이 없는 스크립트에는 그 플랫폼 경로(`config.py show --platform <이름> --keys work_dir,issue_db.path`)를 `--db`로 준다(이슈 DB·작업 폴더가 플랫폼마다 따로). 말하지 않았으면 붙이지 않는다.
+플랫폼: 사용자가 플랫폼을 말했으면(`--platform <이름>`, 예: oFono) `triage`·`config`·`issue_post`·`code_roots`·`db_pr`·`db_verify`·`db_add`·`db_search`·`db_review` 호출에 `--platform <이름>`을 붙이고, 그 밖 스크립트에는 붙이지 않는다. 그 밖 스크립트의 `--db`에는 그 플랫폼의 `SNAP`(읽기, `<work_dir>/_snapshot`) 또는 clone(`issue_db.path`)을 준다(`config.py show --platform <이름> --keys work_dir,issue_db.path`).
 
 이 커맨드는 **읽기 전용**이다. 세션 lock을 잡지 않고, 읽기 스냅샷을 옮기지 않으며, 이슈 DB를 바꾸거나 push하지 않는다.
 

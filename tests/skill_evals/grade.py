@@ -1345,8 +1345,8 @@ def _sections(body: str) -> dict[str, str] | None:
 
 # --- 플랫폼 분리 (배치 P, eval 63~65, docs/design/17-platforms.md) ---------------------------------------------
 
-PLATFORM_SCRIPTS = ("config", "db_pr", "db_verify", "code_roots", "issue_post")   # --platform을 받는 사용자 세션 스크립트(triage 밖)
-_SCRIPT_CALL = re.compile(r"\b(triage|config|db_pr|db_verify|code_roots|issue_post)\.py[\"']?([^\n;&|]*)")
+PLATFORM_SCRIPTS = ("config", "db_pr", "db_verify", "code_roots", "issue_post", "db_add", "db_search", "db_review")   # --platform을 받는 스크립트(triage 밖)
+_SCRIPT_CALL = re.compile(r"\b(triage|config|db_pr|db_verify|code_roots|issue_post|db_add|db_search|db_review)\.py[\"']?([^\n;&|]*)")
 _PLATFORM_FLAG = re.compile(r"--platform(?:\s+|=)([A-Za-z0-9_]+)")
 
 
@@ -1385,9 +1385,15 @@ def checks_p(eid, ctx):
             ok = bool(runs) and all(c[2] == "ofono" for c in runs)
             return ok, f"triage run {len(runs)}회, --platform={[c[2] for c in runs]}"
         def later_flags():
-            calls = [c for c in platform_calls(bash()) if c[0] in PLATFORM_SCRIPTS and not c[1].startswith("site-defaults")]
+            seq = platform_calls(bash())
+            first = next((i for i, c in enumerate(seq) if c[0] == "triage" and c[1].startswith("run")), None)
+            if first is None:
+                return False, "triage run 호출 없음"
+            calls = [c for c in seq[first + 1:] if c[0] in PLATFORM_SCRIPTS and not c[1].startswith("site-defaults")]
+            if not calls:       # 분석 전용 흐름은 triage 뒤 호출이 없을 수 있다 — 통과로 세지 않는다
+                raise _Manual("triage 뒤 플랫폼 인자 스크립트 호출 없음")
             bad = [f"{c[0]}.py {c[1][:60]}" for c in calls if c[2] != "ofono"]
-            return not bad, f"플랫폼 인자 스크립트 호출 {len(calls)}회" + (f", --platform ofono 없음: {bad[:3]}" if bad else "")
+            return not bad, f"triage 뒤 플랫폼 인자 스크립트 호출 {len(calls)}회" + (f", --platform ofono 없음: {bad[:3]}" if bad else "")
         def result():
             data = analysis()
             if data is None:
@@ -1429,8 +1435,8 @@ def checks_p(eid, ctx):
             texts = ctx.texts()
             if texts is None:
                 raise _Manual("실행 기록(events.jsonl) 없음")
-            hit = next((t for t in texts if "--platform" in t and re.search(r"issue_db|config", t)), None)
-            return hit is not None, (hit[:300] if hit else "--platform·config(issue_db.path) 안내 없음")
+            hit = next((t for t in texts if re.search(r"불일치|mismatch", t) and "ofono" in t), None)
+            return hit is not None, (hit[:300] if hit else "플랫폼 불일치(ofono) 알림 없음")
         def nothing_left():
             ok, ev = untouched()
             data = analysis()

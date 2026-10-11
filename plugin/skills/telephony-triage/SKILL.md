@@ -18,22 +18,22 @@ description: Telephony 이슈(Android·oFono 등; data·call·network·sim·sms�
 
 ## 실행 규칙
 
-`S/` = `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/`(이 경로 그대로).
-스크립트 호출·종료 코드(2·S-3 중단)·lock·마스킹·확인 지점은 **`reference/rules.md`**(analyze도 첫 스크립트 호출 전에 읽는다).
+`S/` = `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/`.
+스크립트 호출·종료 코드·lock·마스킹·확인 지점은 **`reference/rules.md`**(analyze도 첫 스크립트 호출 전에 읽는다).
 
 ## analyze
 
-`/telephony-triage:analyze <KEY> [logs...]` + `--code`·`--dry-run|--analysis-only`·`--more-logs`·`--jira-file`·`--failed-step|--steps-file`(붙인 목록→`JOB/steps-pasted.txt`)·`--clock-offset`·`--(no-)analyzer`·`--(no-)explore`·`--platform`
+`/telephony-triage:analyze <KEY> [logs...]` + `--code`·`--dry-run|--analysis-only`·`--more-logs`·`--jira-file`·`--failed-step|--steps-file`(붙인 목록→`JOB/steps-pasted.txt`)·`--clock-offset`·`--(no-)analyzer`·`--(no-)explore`
 
 ### 1. 드라이버 (Step 0~4)
 
-플랫폼(이슈 DB가 따로): 사용자가 말했거나(예: oFono) `analysis.json`에 `platform`이 있으면 `--platform <이름>`을 triage와 이후 모든 `S/` 호출에 붙인다. `platform-mismatch`(종료 2)는 우회 없이 안내.
+플랫폼(이슈 DB가 따로): 사용자가 말했거나 `analysis.json`에 `platform`이 있으면 1단계 config부터 `triage`·`config`·`issue_post`·`code_roots`·`db_{pr,verify,add,search,review}`에 `--platform <이름>`을 붙인다(나머지엔 안 붙임). `platform-mismatch`는 우회 금지.
 
 1. `--jira-file`이 없으면 config(`S/config.py show --keys work_dir,jira.tools`)의 `jira.tools.get_issue`(있으면 `get_comments`)를 그 스키마대로 부른다. 비어 있으면 추측하지 말고 멈춘다: `S/config.py doctor --format markdown` 표를 그대로 붙이고 setup 매핑 안내, 연습은 `--dry-run --jira-file <yaml>`. hook이 원문을
    `JOB/jira_raw.json`에 두고 마스킹 요약만 보여준다(`saved_to` 없으면 응답을 그 경로에 저장하고 "격리 hook 미동작(S1 확인)"을 알린다). `--jira-file`은
    `--dry-run`·`--analysis-only` 전용.
 2. `S/triage.py run <KEY> --logs <…>` + 위 옵션(analyzer·explore 외). stdout(=`JOB/analysis.json`)과 `JOB/report.md`만 읽는다.
-3. `status: needs_input` → `question`·`options`를 보이고 **사용자 답**을 `--answer <kind>=<값>`으로 붙여 같은 명령을 재실행한다(대신 고르지 않는다).
+3. `status: needs_input` → `question`·`options`를 보이고 **사용자 답**을 `--answer <kind>=<값>`으로 붙여 같은 명령을 재실행한다.
    `jira`는 1번 뒤, `logs`는 `--logs`를 붙여 재실행. `stopped`는 이유만.
 4. 종료 코드 1 → 키를 다시 묻는다.
 
@@ -65,7 +65,7 @@ description: Telephony 이슈(Android·oFono 등; data·call·network·sim·sms�
 | 1위 수락 / 다른 기존 원인 | `append {cause}` | `accepted` / `chose-other` |
 | DB에 있는 Jira를 다른 원인으로 | `reclassify {jira, from, to}` | `chose-other` |
 | 원인이 새것 | `new-cause`(`temp_id`) + 파서 규칙·fixture + `append` | `new-cause` |
-| 증상이 새것 | `S/db_add.py similar` 3개를 먼저 보이고 `new-type` + `append` | `new-type` |
+| 증상이 새것 | `S/db_add.py similar --db SNAP` 3개를 먼저 보이고 `new-type` + `append` | `new-type` |
 | 원인 미확정 | `unresolved {type}` | `unresolved` |
 
 - 거부하면 표의 다른 선택지를 다시 보인다. 추정만으로·`unjudged`면 원인·유형을 안 만든다. 후보 없으면 "새 유형 / 원인 미확정 / 기록하지 않음"만.

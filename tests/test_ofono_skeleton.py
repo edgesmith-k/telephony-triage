@@ -285,3 +285,208 @@ def test_check_boundary_external():
     proc = subprocess.run([sys.executable, str(REPO / "tools" / "check_boundary.py"), "--mode", "external"],
                           capture_output=True, text=True, encoding="utf-8", cwd=REPO)
     assert proc.returncode == 0, proc.stdout + proc.stderr
+
+
+# -- 리뷰 3 반영: 오프셋 이상값·오탐/미탐·guard·issue_post -----------------------------------------------
+
+
+def test_bad_zone_offsets_are_unparsed(tmp_path):
+    path = _write(tmp_path, "zone.log", [
+        "2026-09-20T14:32:09+24:00 dut daemon-a[1]: offset 24h",          # 해석 못 함 (예외로 멈추지 않는다)
+        "2026-09-20T14:32:09+09:75 dut daemon-a[1]: offset 75 min",       # 해석 못 함
+        "2026-09-20T14:32:09+0900 dut daemon-a[1]: no colon",
+        "2026-09-20T14:32:09-03:30 dut daemon-a[1]: negative",
+    ])
+    lines, stats = journal.read_file(path, 0, "America/New_York", None)   # 줄의 오프셋이 --tz보다 우선
+    assert (stats.lines, stats.unparsed) == (2, 2)
+    assert lines[0].dt == datetime(2026, 9, 20, 5, 32, 9, tzinfo=UTC)
+    assert lines[1].dt == datetime(2026, 9, 20, 18, 2, 9, tzinfo=UTC)
+
+
+RAW_LINES = [
+    "2026-09-20T14:32:09.100000+09:00 dut ofonod[812]: src/example.c:example_cb() /modem_0 x",
+    "2026-09-20T14:32:09Z dut kernel: Linux version 0.0.0-placeholder",
+    "Sep 20 14:32:11 dut daemon-b[902]: call setup failed: cause=PLACEHOLDER",
+    "Sep  2 04:00:00 dut-01.lab systemd[1]: Started placeholder.",
+    "Sep 20 14:32:11 dut kernel: [  12.3] placeholder",
+]
+SENTENCES = [
+    "Sep 20 14:32:11 단말 재부팅: 확인됨",
+    "2026-09-20T14:32:09 단말 상태: 정상",
+    "2026-09-20T14:32:09+09:00 기준 modem 상태: OOS",
+    "Sep 20 14:32:11 에 data connect 실패",
+    "14:32:11 data connect failed",
+    "Sept 20 14:32:11 a b: c",
+]
+
+
+@pytest.mark.parametrize("line", RAW_LINES)
+def test_raw_line_detects_assumed_formats(line):
+    assert journal.raw_line(line) and journal.find_raw(f"근거: {line}")
+
+
+@pytest.mark.parametrize("text", SENTENCES)
+def test_plain_sentences_are_not_raw(text):
+    assert not journal.raw_line(text) and not journal.find_raw(f"원인은 {text}")
+    assert not journal.find_raw("원인은 Oct 10 09:00:00 회의 결과: 미정")
+
+
+def _guard(path: Path):
+    import guard
+
+    out, _ = guard.judge({"tool_name": "Bash", "tool_input": {"command": f"cat {path}"}, "cwd": str(path.parent)},
+                         str(REPO / "plugin"))
+    return (out or {}).get("hookSpecificOutput", {}).get("permissionDecision")
+
+
+def test_guard_rule10_journald_vs_sentences(tmp_path, monkeypatch):
+    monkeypatch.setenv("TELEPHONY_TRIAGE_HOME", str(tmp_path / "home"))
+    for i, line in enumerate(RAW_LINES):
+        assert _guard(_write(tmp_path, f"raw{i}.txt", ["메모", line])) == "deny", line
+    assert _guard(_write(tmp_path, "notes.txt", SENTENCES)) is None
+
+
+def test_issue_post_fill_journald_vs_sentences():
+    import issue_post
+
+    def problems(text):
+        masker = masking.new_masker(existing_text="", allow_patterns=[])
+        raw = {"problem": "증상 한 줄", "cause": [{"basis": "log", "text": text}], "next": [], "code_location": None}
+        return [p for p in issue_post.check_fill(raw, True, True, masker, [], None)[1] if "로그 원문 줄 모양" in p]
+
+    for line in RAW_LINES:
+        assert problems("근거 " + line), line
+    for text in SENTENCES:
+        assert not problems(text), text
+
+
+# -- 백엔드: 커널 배너 에포크·회전 파일 잇기 --------------------------------------------------------------
+
+
+def _dbus_backend():
+    from platforms.ofono.backend import BACKEND
+
+    spec = platforms.get("ofono")
+    proto = platforms.PairProtocol(name="dbus", default_tags=frozenset({"dbus-mon"}), annotate=_fake_dbus_annotate,
+                                   pair=_fake_dbus_pair)
+    profile = platforms.PlatformProfile(name="ofono", source_tree=spec.source_tree, phone=spec.phone,
+                                        ril_tags=frozenset(), bugreport=None,
+                                        spec=dataclasses.replace(spec, protocols=(proto,)),
+                                        protocol_tags=(("dbus", frozenset({"dbus-mon"})),))
+    return BACKEND.configure(profile)
+
+
+def _paired(out) -> list:
+    return [e["ril"]["latency_ms"] for e in out if e["ril"]]
+
+
+def test_kernel_banner_splits_epoch(tmp_path):
+    call = "2026-09-20T05:00:00.000Z dut dbus-mon[200]: call 1 Activate"
+    reply = "2026-09-20T05:00:00.500Z dut dbus-mon[200]: reply 1 Activate"
+    banner = "2026-09-20T05:00:00.200Z dut kernel: Linux version 0.0.0-placeholder"
+    backend = _dbus_backend()
+    assert _paired(backend.parse([_write(tmp_path, "a.log", [call, reply])], None, None, None)) == [500, 500]
+    out = backend.parse([_write(tmp_path, "b.log", [call, banner, reply])], None, None, None)
+    assert _paired(out) == [None, None] and len(out) == 3                  # 재부팅 너머로 짝짓지 않는다
+
+
+def test_rotated_files_are_joined(tmp_path):
+    call = "2026-09-20T05:00:00.000Z dut dbus-mon[200]: call 1 Activate"
+    reply = "2026-09-20T05:00:00.500Z dut dbus-mon[200]: reply 1 Activate"
+    backend = _dbus_backend()
+    rot = tmp_path / "rot"
+    rot.mkdir()
+    older, newer = _write(rot, "syslog.1", [call]), _write(rot, "syslog", [reply])
+    assert _paired(backend.parse([newer, older], None, None, None)) == [500, 500]     # 같은 수집(회전 이름)은 잇는다
+    other = tmp_path / "other"
+    other.mkdir()
+    a, b = _write(other, "first.log", [call]), _write(other, "second.log", [reply])
+    assert _paired(backend.parse([a, b], None, None, None)) == [None, None]           # 다른 수집은 잇지 않는다
+
+
+# -- 리뷰 3 반영: DB를 읽는 스크립트의 플랫폼 선택·대조 ---------------------------------------------------
+
+NINE = {"triage", "config", "db_pr", "db_verify", "issue_post", "code_roots", "db_add", "db_search", "db_review"}
+
+
+def test_platform_option_scripts():
+    """`--platform`을 받는 스크립트는 이 9개다. 스킬·커맨드 본문에서 `S/<script>.py … --platform`으로 나오는 스크립트는
+    그 부분집합이어야 한다(문서가 실제로 없는 옵션을 붙이라고 하지 않게)."""
+    import re
+
+    have = {p.stem for p in SCRIPTS.glob("*.py")
+            if re.search(r'"--platform"|session\.add_arg\(', p.read_text(encoding="utf-8"))}
+    assert have == NINE
+    docs = [*(REPO / "plugin" / "skills").rglob("*.md"), *(REPO / "plugin" / "commands").rglob("*.md")]
+    named = {m.group(1) for d in docs for line in d.read_text(encoding="utf-8").splitlines() if "--platform" in line
+             for m in re.finditer(r"S/([a-z_]+)\.py", line)}
+    assert named <= NINE, named - NINE
+
+
+def test_issue_db_path_follows_selected_platform(tmp_path, monkeypatch):
+    from common import userconfig
+
+    assert userconfig.PLATFORM_ENV == platforms.ENV
+    monkeypatch.setenv(userconfig.HOME_ENV, str(tmp_path / "home"))
+    monkeypatch.delenv(platforms.ENV, raising=False)
+    user = {"issue_db": {"path": "/a"}, "platforms": {"ofono": {"issue_db": {"path": "/o"}}}}
+    userconfig.save(user)
+    assert userconfig.issue_db_path({}) == "/a"
+    assert userconfig.issue_db_path({"platform": {"name": "ofono"}}) == "/o"            # site 기본
+    monkeypatch.setenv(platforms.ENV, "ofono")
+    assert userconfig.issue_db_path({}) == "/o"                                          # TT_PLATFORM
+    assert userconfig.issue_db_path({}, "android") == "/a"                               # 명시가 우선
+    monkeypatch.delenv(platforms.ENV)
+    userconfig.save({**user, "platform": "ofono"})
+    assert userconfig.issue_db_path({}) == "/o"                                          # 사용자 config platform
+
+
+def _db_cmds(db) -> list[tuple[str, list]]:
+    return [("db_search.py", ["DATA-001", "--db", db]), ("db_review.py", ["--db", db, "--json"]),
+            ("db_add.py", ["similar", "데이터", "--db", db])]
+
+
+def test_db_reading_scripts_check_platform():
+    on = plugin_root("ofono-on", platform=ON)
+    env = {"TELEPHONY_TRIAGE_HOME": tmp("tt-home-")}
+    ofono_db = variant_db("issue-db-ofono")
+    for script, args in _db_cmds(ofono_db):
+        proc = run(script, args, env=env)                                   # 선택 android(기본) ↔ DB ofono
+        assert proc.returncode == 2 and "플랫폼 불일치" in proc.stderr, (script, proc.stderr)
+        ok = run(script, [*args, "--platform", "ofono"], root=on, env=env)
+        assert ok.returncode == 0, (script, ok.stderr)
+        envd = run(script, args, root=on, env={**env, platforms.ENV: "ofono"})
+        assert envd.returncode == 0, (script, envd.stderr)
+    for script, args in _db_cmds(SAMPLE):
+        proc = run(script, [*args, "--platform", "ofono"], root=on, env=env)
+        assert proc.returncode == 2 and "이슈 DB는 android, 선택한 플랫폼은 ofono" in proc.stderr, script
+        assert run(script, args, env=env).returncode == 0, script        # android 그대로
+
+
+def test_db_add_db_fixed_subcommands_follow_db():
+    """apply·drift·renumber·check-ids는 DB 고정: 선택 플랫폼과 무관하게 DB 선언을 따르고 --platform·TT_PLATFORM이 있을 때만 대조."""
+    env = {"TELEPHONY_TRIAGE_HOME": tmp("tt-home-")}
+    ofono_db = variant_db("issue-db-ofono")
+    assert run("db_add.py", ["check-ids", "--db", ofono_db], env=env).returncode == 0
+    proc = run("db_add.py", ["check-ids", "--db", ofono_db, "--platform", "android"], env=env)
+    assert proc.returncode == 2 and "플랫폼 불일치" in proc.stderr
+    proc = run("db_add.py", ["check-ids", "--db", SAMPLE], env={**env, platforms.ENV: "ofono"})
+    assert proc.returncode == 2 and "플랫폼 불일치" in proc.stderr
+
+
+def test_db_search_fallback_uses_selected_profile():
+    """`--db` 없이(cwd가 이슈 DB 아님) 사용자 config `platform: ofono`면 ofono 프로필의 DB를 읽는다(android DB를 조용히 읽지 않는다)."""
+    import yaml
+
+    on = plugin_root("ofono-on", platform=ON)
+    home = tmp("tt-home-")
+    work = tmp("tt-cwd-")
+    ofono_db = variant_db("issue-db-ofono")
+    cfg = {"issue_db": {"path": str(SAMPLE)}, "platform": "ofono",
+           "platforms": {"ofono": {"issue_db": {"path": str(ofono_db)}, "work_dir": str(home / "work-ofono")}}}
+    (home / "config.yaml").write_text(yaml.safe_dump(cfg, allow_unicode=True), encoding="utf-8")
+    result = run_json("db_search.py", ["DATA-001"], root=on, env={"TELEPHONY_TRIAGE_HOME": home}, cwd=work)
+    assert result["db"] == str(ofono_db)
+    result = run_json("db_search.py", ["DATA-001", "--platform", "android"], root=on,
+                      env={"TELEPHONY_TRIAGE_HOME": home}, cwd=work)
+    assert result["db"] == str(SAMPLE)

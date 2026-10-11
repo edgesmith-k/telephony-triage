@@ -4,10 +4,12 @@ oFono 플랫폼의 로그 줄 해석(17-platforms 설계 §5). 실제 사내 로
 타임존·연도·호스트 칸)은 아직 모른다. 아래 두 형식은 공개 도구의 기본 출력을 **가정**한 것이고 합성 로그로만 시험했다.
 
 - (a) `journalctl -o short-iso-precise`: `2026-09-20T14:32:09.100000+09:00 host ident[pid]: msg`
-  (타임존이 없으면 `tz`, 소수점 자리는 1~9).
+  (타임존이 없으면 `tz`, 소수점 자리는 1~9, 오프셋 `Z`·`±HH:MM`·`±HHMM`. 범위 밖 오프셋 줄은 해석 못 함으로 센다).
 - (b) RFC3164 syslog / `journalctl -o short`: `Sep 20 14:32:11[.ffffff] host ident[pid]: msg`.
   연도·타임존이 없으므로 `year`(없으면 `DEFAULT_YEAR`)·`tz`와 12월 → 1월 해 넘김 규칙을 쓴다(logcat과 같은 규칙,
   시각 함수는 `common.logtime`).
+- 호스트 칸은 ASCII 호스트 이름(`[A-Za-z0-9][A-Za-z0-9_.-]*`), ident는 ASCII `[A-Za-z0-9_.@-]+`만 받는다 — 스탬프로
+  시작하는 보통 문장(한국어 낱말이 host·ident 자리에 오는 것)을 원문 줄로 보지 않는다(guard 규칙 10·Jira 게시 검사 오탐).
 - `tag = ident`, `pid`는 없으면 0, `tid = None`, `level = "I"`(short 출력에는 우선순위가 없다, TODO(SITE:S24)).
   `host`는 줄 객체에 넣지 않는다(PII일 수 있다).
 - `-- `로 시작하는 journalctl 안내 줄(`-- Boot ...`, `-- No entries --` 등)은 건너뛴다(해석 못 한 줄로 세지 않는다).
@@ -26,7 +28,9 @@ from pathlib import Path
 from common.logtime import DEFAULT_YEAR, UTC, get_tz, micro, open_log
 from platforms.base import FileStats, LogLine
 
-_TAIL = r"\s+(?P<host>\S+)\s+(?P<ident>[^\s\[:]+)(?:\[(?P<pid>\d+)\])?:\s?(?P<msg>.*)$"
+# host·ident는 ASCII 토큰만 받는다(`Sep 20 14:32:11 단말 재부팅: 확인됨` 같은 보통 문장을 원문 줄로 보지 않게).
+_TAIL = (r"\s+(?P<host>[A-Za-z0-9][A-Za-z0-9_.-]*)\s+(?P<ident>[A-Za-z0-9_.@-]+)(?:\[(?P<pid>\d+)\])?:"
+         r"\s?(?P<msg>.*)$")
 ISO_STAMP = (
     r"(?P<year>\d{4})-(?P<mon>\d{2})-(?P<day>\d{2})T(?P<h>\d{2}):(?P<mi>\d{2}):(?P<s>\d{2})"
     r"(?:\.(?P<frac>\d{1,9}))?(?P<zone>Z|[+-]\d{2}:?\d{2})?"
@@ -45,11 +49,14 @@ DEFAULT_LEVEL = "I"
 
 
 def _zone(text: str) -> timezone:
+    """`Z`·`+09:00`·`+0900` → timezone. 시 ≥ 24·분 ≥ 60이면 ValueError(그 줄은 해석 못 함으로 센다)."""
     if text == "Z":
         return UTC
     text = text.replace(":", "")
-    sign = -1 if text[0] == "-" else 1
-    return timezone(sign * timedelta(hours=int(text[1:3]), minutes=int(text[3:5])))
+    hours, minutes = int(text[1:3]), int(text[3:5])
+    if hours > 23 or minutes > 59:
+        raise ValueError(f"타임존 오프셋 범위 밖: {text}")
+    return timezone((-1 if text[0] == "-" else 1) * timedelta(hours=hours, minutes=minutes))
 
 
 def _match(text: str) -> re.Match | None:
@@ -78,7 +85,11 @@ def read_file(path: str | Path, file_index: int, tz_name: str | None, year: int 
             groups = hit.groupdict()
             if groups.get("year"):
                 use_year, month = int(groups["year"]), int(groups["mon"])
-                zone = _zone(groups["zone"]) if groups.get("zone") else None
+                try:
+                    zone = _zone(groups["zone"]) if groups.get("zone") else None
+                except ValueError:  # 이상 오프셋
+                    stats.unparsed += 1
+                    continue
             else:
                 month = MONTHS[groups["bmon"]]
                 # 해 넘김은 logcat과 같은 규칙(12월 → 1월만 센다, 재부팅으로 끼었다 돌아오면 되돌린다).

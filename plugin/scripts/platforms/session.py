@@ -55,6 +55,28 @@ def resolve_lenient(defaults: dict, cli: str | None = None, user: dict | None = 
     return name, cfg, problems
 
 
+def resolve_db(defaults: dict, cli: str | None, db_arg) -> tuple[str, "object"]:
+    """사용자 흐름의 이슈 DB 읽기(db_add similar·db_search·db_review): 선택 플랫폼(`resolve`) → DB 경로(`--db` > cwd의
+    이슈 DB > 그 플랫폼 프로필의 `issue_db.path`) → DB 선언 대조(`check_db`, `--db`를 준 경우도). `(이름, 경로)`.
+    오류는 `PlatformConfigError`·`dbpath.DbPathError`(호출자가 종료 코드 2)."""
+    from common import dbpath
+
+    name = resolve(defaults, cli)[0]
+    root = dbpath.resolve(db_arg, user_config_path=lambda: userconfig.issue_db_path(defaults, name))
+    check_db(name, root)
+    return name, root
+
+
+def check_db(name: str, db_root) -> None:
+    """선택 플랫폼과 이슈 DB 선언(`issue-db.config.yaml` `platform`)을 대조한다. 다르면 `PlatformConfigError`
+    (`platform-mismatch` 메시지, 호출자가 종료 코드 2). db_add·db_search·db_review가 쓴다."""
+    from common import compat
+
+    problems = compat.check_platform(compat.load_db_config(db_root), name)
+    if problems:
+        raise PlatformConfigError(problems[0]["message"])
+
+
 def env_name() -> str | None:
     import os
 

@@ -72,11 +72,11 @@
 
 | 서브커맨드 | 사용법 | 옵션 설명 |
 |---|---|---|
-| — | `<증상 문장\|keyword\|JIRA-KEY\|ID> [--db <DB>] [--limit <LIMIT>] [--brief] [--format {json,markdown}] [--json] [--plugin-root <PLUGIN_ROOT>]` | `--limit`: 기본 20; `--brief`: 훑어보기용 요약 출력 (path·chain·code_refs·빈 값 등을 뺀다); `--format`: markdown: search.md §3 보여주기 규칙대로 (기본 json, --json·--brief와 함께 못 쓴다/무시), 기본 json; `--json`: JSON 출력 (항상 JSON) |
+| — | `<증상 문장\|keyword\|JIRA-KEY\|ID> [--db <DB>] [--platform <이름>] [--limit <LIMIT>] [--brief] [--format {json,markdown}] [--json] [--plugin-root <PLUGIN_ROOT>]` | `--platform`: 플랫폼(이슈 DB·파서·설정 묶음). 없으면 TT_PLATFORM > 사용자 config platform > site-defaults platform.name; `--limit`: 기본 20; `--brief`: 훑어보기용 요약 출력 (path·chain·code_refs·빈 값 등을 뺀다); `--format`: markdown: search.md §3 보여주기 규칙대로 (기본 json, --json·--brief와 함께 못 쓴다/무시), 기본 json; `--json`: JSON 출력 (항상 JSON) |
 
 ## `db_add.py`
 
-공통 옵션(모든 서브커맨드): `--db <DB>`; `--json` — JSON 출력 (항상 JSON); `--plugin-root <PLUGIN_ROOT>`
+공통 옵션(모든 서브커맨드): `--db <DB>`; `--json` — JSON 출력 (항상 JSON); `--plugin-root <PLUGIN_ROOT>`; `--platform <이름>` — 플랫폼(이슈 DB·파서·설정 묶음). 없으면 TT_PLATFORM > 사용자 config platform > site-defaults platform.name
 
 | 서브커맨드 | 사용법 | 옵션 설명 |
 |---|---|---|
@@ -144,7 +144,7 @@
 
 | 서브커맨드 | 사용법 | 옵션 설명 |
 |---|---|---|
-| — | `[<category>] [--db <DB>] [--out <file>] [--as-of <YYYY-MM-DD>] [--json] [--plugin-root <PLUGIN_ROOT>]` | `--out`: Markdown 리포트를 쓸 파일; `--as-of`: 기준일 (기본: 오늘); `--json`: stdout에 JSON |
+| — | `[<category>] [--db <DB>] [--platform <이름>] [--out <file>] [--as-of <YYYY-MM-DD>] [--json] [--plugin-root <PLUGIN_ROOT>]` | `--platform`: 플랫폼(이슈 DB·파서·설정 묶음). 없으면 TT_PLATFORM > 사용자 config platform > site-defaults platform.name; `--out`: Markdown 리포트를 쓸 파일; `--as-of`: 기준일 (기본: 오늘); `--json`: stdout에 JSON |
 
 ## `db_migrate.py`
 
