@@ -366,6 +366,20 @@ def backend_name(defaults: dict | None, name: str | None = None):
     return get(name).default_backend
 
 
+def known_raw_line_finders() -> tuple[list[tuple], list[tuple[str, Exception]]]:
+    """설치된 플랫폼 **전부**(`known()`, 켠 것과 무관)의 `(name, raw_line, find_raw, sniff_line | None)`과
+    불러오지 못한 플랫폼 `(name, 예외)` 목록. 원문 로그 차단(guard 규칙 10·issue_post fill 검사)용 — 판별은 넓을수록
+    안전하므로 설정(`platform.enabled`)을 보지 않고, 플랫폼마다 따로 불러와 하나가 깨져도 나머지는 쓴다."""
+    finders, errors = [], []
+    for name in known():
+        try:
+            spec = get(name)
+            finders.append((name, spec.log.raw_line, spec.log.find_raw, spec.capture.sniff_line if spec.capture else None))
+        except Exception as exc:  # noqa: BLE001 — 하위 의존성 누락·SPEC 오류 모두 그 플랫폼만 뺀다
+            errors.append((name, exc))
+    return finders, errors
+
+
 def raw_line_finders(defaults: dict | None) -> list[tuple]:
     """켠 플랫폼마다 `(raw_line, find_raw, sniff_line | None)`. 원문 로그 판별(guard 규칙 10·issue_post fill 검사)은 합집합으로 본다."""
     out = []

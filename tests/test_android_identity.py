@@ -167,7 +167,9 @@ def test_no_android_module_import_outside_platforms():
         rel = path.relative_to(scripts).as_posix()
         if rel.startswith("platforms/") or rel in allowed:
             continue
-        if re.search(r"^\s*(from\s+platforms\.android\b|import\s+platforms\.android\b)",
-                     path.read_text(encoding="utf-8"), re.M):
+        text = path.read_text(encoding="utf-8")
+        if re.search(r"^\s*(from\s+platforms\.android\b|import\s+platforms\.android\b"
+                     r"|from\s+platforms\s+import\s+(?:\(\s*)?(?:[\w\s,]*,\s*)?android\b)", text, re.M) \
+                or re.search(r"""import_module\(\s*["']platforms\.android""", text):
             offenders.append(rel)
     assert offenders == []

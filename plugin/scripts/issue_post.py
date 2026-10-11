@@ -83,7 +83,6 @@ class Job:
         user = userconfig.load_user()
         if user is None:
             raise Usage("사용자 config가 없다 — /telephony-triage:setup 을 먼저 한다")
-        self.defaults = defaults
         self.cfg = userconfig.merged(defaults, user)
         work = Path(str(userconfig.get(self.cfg, "work_dir"))).expanduser()
         self.snap = work / session_lock.SNAPSHOT_DIR
@@ -364,16 +363,24 @@ def _platform_label(a: dict) -> str:
         raise Usage(f"analysis.json platform: {exc}") from exc
 
 
-def raw_finders(defaults: dict | None) -> list:
-    """켠 플랫폼의 `find_raw`(문장 안 원문 로그 줄 판별) 목록 — 합집합으로 본다."""
-    try:
-        return [find for _, find, _ in platforms.raw_line_finders(defaults)]
-    except platforms.PlatformConfigError as exc:
-        raise Usage(str(exc)) from exc
+def raw_finders() -> tuple[list, list[str]]:
+    """`(find_raw 목록, 경고)`. 설치된 플랫폼 **전부**(`platforms.known()`, 설정과 무관)의 합집합으로 본다 — 게시 본문의
+    원문 줄 검사는 넓을수록 안전하다. 불러오지 못한 플랫폼은 빼고 경고한다(나머지로 계속)."""
+    finders, errors = platforms.known_raw_line_finders()
+    warnings = [f"플랫폼 {name}을(를) 불러오지 못해 그 형식의 원문 줄 검사는 건너뛰었다 ({type(exc).__name__}: {exc})"
+                for name, exc in errors]
+    return [find for _, _, find, _ in finders], warnings
 
 
 def _raw_log_line(text: str, finders: list) -> bool:
-    return any(find(text) for find in finders)
+    """판별 함수가 예외를 내면 원문으로 본다(fail-closed)."""
+    for find in finders:
+        try:
+            if find(text):
+                return True
+        except Exception:  # noqa: BLE001
+            return True
+    return False
 
 
 def _quoted(text: str, sources: list[str]) -> bool:
@@ -389,10 +396,12 @@ def _quoted(text: str, sources: list[str]) -> bool:
 
 def check_fill(raw, need_problem: bool, code_skipped: bool, masker, quote_src: list[str],
                finders: list | None = None) -> tuple[dict | None, list[str], list[str]]:
-    """(마스킹된 fill 또는 None, problems, warnings)."""
-    finders = finders if finders is not None else raw_finders(None)
+    """(마스킹된 fill 또는 None, problems, warnings). `finders`가 없으면 `raw_finders()`."""
     problems: list[str] = []
     warnings: list[str] = []
+    if finders is None:
+        finders, finder_warnings = raw_finders()
+        warnings += finder_warnings
     if not isinstance(raw, dict):
         return None, ["fill이 JSON 객체가 아니다"], warnings
     unknown = sorted(set(raw) - FILL_KEYS)
@@ -533,8 +542,7 @@ def cmd_render(args, job: Job) -> tuple[dict, int]:
     code_skipped = (a.get("code") or {}).get("skipped", True)
     missing: list[str] = []
     if args.fill and not problems:
-        fill, p, warnings = check_fill(raw, not info["note"], code_skipped, masker, info["quote_src"],
-                                       raw_finders(job.defaults))
+        fill, p, warnings = check_fill(raw, not info["note"], code_skipped, masker, info["quote_src"])
         problems += p
     if not args.fill:
         missing = (["problem"] if not info["note"] else []) + ["cause"]

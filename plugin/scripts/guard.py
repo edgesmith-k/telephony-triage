@@ -168,7 +168,6 @@ class Config:
             defaults = {}
             self.warnings.append("site-defaults.yaml이 없다 (S-3 미완료). 사용자 config만으로 판정한다.")
         self.plugin_root = plugin_root
-        self.defaults = defaults
         self._raw_sniffers: list | None = None
         self.raw_names, self.raw_exempt = self._raw_read(defaults)
         self.user = userconfig.load_user()
@@ -205,26 +204,29 @@ class Config:
         return names | set(site.get("names", [])), exempt | set(site.get("exempt_dirs", []))
 
     def raw_sniffers(self) -> list:
-        """규칙 10 머리 판별: 켠 플랫폼(`platform.enabled`)마다 원문 줄·묶음 입력 머리 판별 함수의 합집합.
-        규칙 10 명령이 나올 때만 플랫폼 모듈을 불러온다. 플랫폼 설정이 잘못되면 경고하고 기본 플랫폼 판별을,
-        불러올 수 없으면 경고하고 이름 기반 판정만 쓴다(fail-soft)."""
+        """규칙 10 머리 판별: 설치된 플랫폼 **전부**(`platforms.known()`, 설정과 무관)의 원문 줄·묶음 입력 머리 판별 합집합.
+        규칙 10 명령이 나올 때만 플랫폼 모듈을 불러온다. 플랫폼마다 따로 불러와 하나가 깨져도 나머지는 쓰고, 하나라도
+        깨졌거나 레지스트리를 못 쓰면 경고하고 최소 내장 판별(`RAW_FALLBACK_SNIFFERS`)을 더한다 — 이전보다 약해지지 않는다."""
         if self._raw_sniffers is not None:
             return self._raw_sniffers
         sniffers: list = []
+        broken = False
         try:
             import platforms
-            try:
-                finders = platforms.raw_line_finders(self.defaults)
-            except platforms.PlatformConfigError as exc:
-                self.warnings.append(f"규칙 10: 플랫폼 설정 오류로 기본 플랫폼 판별만 쓴다 ({exc})")
-                finders = platforms.raw_line_finders(None)
-            for raw_line, _find, sniff in finders:
+            finders, errors = platforms.known_raw_line_finders()
+            for name, exc in errors:
+                broken = True
+                self.warnings.append(f"규칙 10: 플랫폼 {name}을(를) 불러오지 못해 내장 최소 판별로 대신한다 ({type(exc).__name__}: {exc})")
+            for _name, raw_line, _find, sniff in finders:
                 sniffers.append(raw_line)
                 if sniff is not None:
                     sniffers.append(sniff)
-        except Exception as exc:   # noqa: BLE001 — import·플랫폼 모듈 오류여도 hook은 멈추지 않는다
-            self.warnings.append(f"규칙 10: 플랫폼 모듈을 불러오지 못해 이름 기반 판정만 쓴다 ({type(exc).__name__})")
+        except Exception as exc:   # noqa: BLE001 — import·레지스트리 오류여도 hook은 멈추지 않는다
+            broken = True
+            self.warnings.append(f"규칙 10: 플랫폼 레지스트리를 쓰지 못해 내장 최소 판별만 쓴다 ({type(exc).__name__}: {exc})")
             sniffers = []
+        if broken or not sniffers:
+            sniffers += RAW_FALLBACK_SNIFFERS
         self._raw_sniffers = sniffers
         return sniffers
 
@@ -975,6 +977,23 @@ def _raw_args(argv: list[str]) -> list[str]:
     return out
 
 
+# 규칙 10 최소 내장 판별: 플랫폼 레지스트리(또는 플랫폼 하나)를 못 불러올 때만 더한다. 플랫폼 판별보다 넓게 잡는다
+# (줄 맨 앞 logcat 스탬프 — threadtime·time 형식을 모두 덮는다 — 와 bugreport 머리). 원문 차단은 넓을수록 안전하다.
+_RAW_FALLBACK_STAMP = re.compile(r"^(?:\d{4}-)?\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d{3,9}\s")
+RAW_FALLBACK_SNIFFERS = [
+    lambda line: bool(_RAW_FALLBACK_STAMP.match(line)),
+    lambda line: line.startswith("== dumpstate") or (line.startswith("------ ") and line.rstrip().endswith(" ------")),
+]
+
+
+def _sniff_hit(sniff, line: str) -> bool:
+    """판별 함수 하나. 예외가 나면 원문으로 본다(fail-closed — 판별이 깨져 원문 통독이 통과되지 않게)."""
+    try:
+        return bool(sniff(line))
+    except Exception:  # noqa: BLE001
+        return True
+
+
 def _is_raw_file(path: Path, names: set, exempt: set, sniffers=()) -> bool:
     real = _norm(path)
     segs = real.replace("\\", "/").split("/")
@@ -990,7 +1009,7 @@ def _is_raw_file(path: Path, names: set, exempt: set, sniffers=()) -> bool:
         return True
     lines = head.decode("utf-8", errors="replace").splitlines()[:RAW_SNIFF_LINES]
     sniffers = sniffers() if callable(sniffers) else sniffers   # 머리를 볼 때만 플랫폼 모듈을 불러온다
-    return any(sniff(line) for line in lines for sniff in sniffers)
+    return any(_sniff_hit(sniff, line) for line in lines for sniff in sniffers)
 
 
 def check_raw_read(command: str, cwd: Path, dec: Decision, conf: Config) -> None:
@@ -1386,13 +1405,14 @@ def judge(event: dict, plugin_root: str | None = None) -> tuple[dict | None, lis
     cwd = Path(str(event.get("cwd") or os.getcwd()))
     conf = Config(plugin_root)
     dec = Decision()
-    dec.warn += conf.warnings
     if tool.startswith("mcp__"):
         check_mcp(tool, tool_input, conf, dec)
     elif tool in FILE_TOOLS:
         check_file(tool_input, cwd, conf, dec)
     elif tool == "Bash":
         check_bash(str(tool_input.get("command") or ""), cwd, conf, dec)
+    # 설정 경고는 검사 **뒤에** 합친다 — 검사 중에 늦게 생기는 경고(규칙 10 fail-soft)도 빠지지 않게. 순서는 설정 경고가 먼저.
+    dec.warn[:0] = conf.warnings
     return dec.output(), dec.warn
 
 

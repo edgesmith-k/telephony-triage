@@ -194,3 +194,11 @@ def test_raw_line_finders_union(fake_platforms):
     assert one == [(android.logcat.raw_line, android.logcat.find_raw, android.bugreport.sniff_line)]
     two = platforms.raw_line_finders({"platform": {"enabled": ["android", "second"]}})
     assert len(two) == 2 and two[1][2] is None
+
+
+def test_known_raw_line_finders_isolates_broken_platform(fake_platforms):
+    fake_platforms("broken", "import no_such_dependency_xyz\n")
+    finders, errors = platforms.known_raw_line_finders()
+    assert [f[0] for f in finders] == [n for n in platforms.known() if n != "broken"]
+    assert finders[0][1:] == (android.logcat.raw_line, android.logcat.find_raw, android.bugreport.sniff_line)
+    assert [(n, type(e)) for n, e in errors] == [("broken", ModuleNotFoundError)]

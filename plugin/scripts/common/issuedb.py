@@ -121,7 +121,8 @@ SUPPORTED_VERSION_KEYS = ("platform_versions_supported", "android_versions_suppo
 
 
 def supported_versions(config: dict) -> tuple[str, list[str]]:
-    """`(실제로 쓴 키 이름, 버전 문자열 목록)`. 두 키가 모두 없으면 옛 이름과 빈 목록."""
+    """`(실제로 쓴 키 이름, 버전 문자열 목록)`. 새 키가 **있으면**(빈 목록 포함, null은 없는 것) 옛 키 값과 상관없이 새 키를
+    쓴다. 두 키가 모두 없으면 옛 이름과 빈 목록. 두 키가 함께 있으면 db_lint 오류로 하는 것은 17-platforms 묶음 2다."""
     for key in SUPPORTED_VERSION_KEYS:
         if config.get(key) is not None:
             return key, [str(v) for v in config.get(key) or []]
