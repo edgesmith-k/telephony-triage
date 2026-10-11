@@ -9,7 +9,7 @@ import subprocess
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from common import compat, userconfig
+from common import compat, userconfig, yamlio
 from common.buildname import is_valid_branch_name
 from common import checks as checks_mod
 from common import ghcli
@@ -34,6 +34,22 @@ def _git(repo: Path, *args: str, check: bool = True, env: dict | None = None) ->
     return proc
 
 
+def ref_platform_mismatch(repo: Path, ref: str, platform: str) -> list[dict] | None:
+    """`<ref>:issue-db.config.yaml`의 플랫폼 선언과 `platform` 대조 → 불일치 사유 목록(같으면 []). 읽을 수 없으면 None."""
+    proc = _git(repo, "show", f"{ref}:issue-db.config.yaml", check=False)
+    if proc.returncode != 0:
+        return None
+    try:
+        data = yamlio.safe_load(proc.stdout)
+    except Exception:   # noqa: BLE001 — YAML 오류는 대조 불가(뒤의 파일 대조·lint가 본다)
+        return None
+    return compat.check_platform(data if isinstance(data, dict) else {}, platform)
+
+
+def _platform_error(mismatch: list[dict], where: str) -> UsageError:
+    return UsageError(mismatch[0]["message"], {"code": mismatch[0]["code"], "db": where})
+
+
 def snapshot(job: str, cfg: dict, lock: Lock) -> dict:
     repo = Path(str(userconfig.get(cfg, "issue_db.path") or "")).expanduser()
     if not (repo / ".git").exists():
@@ -43,17 +59,31 @@ def snapshot(job: str, cfg: dict, lock: Lock) -> dict:
     lock.touch(job)
     ref = f"origin/{base}"
     snap = lock.work_dir / SNAPSHOT_DIR
+    platform = userconfig.platform_of(cfg)
+    # 플랫폼 선언은 worktree를 만들기 전에 원격 ref에서 대조한다(다른 플랫폼 clone에 worktree를 남기지 않게)
+    mismatch = ref_platform_mismatch(repo, ref, platform)
+    if mismatch:
+        raise _platform_error(mismatch, f"{repo} ({ref})")
     _git(repo, "worktree", "prune")
+    created = False
     if (snap / ".git").exists():
+        here = _git(snap, "rev-parse", "--path-format=absolute", "--git-common-dir", check=False).stdout.strip()
+        want = _git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir", check=False).stdout.strip()
+        if here and want and Path(here).resolve() != Path(want).resolve():
+            raise UsageError(f"{snap}는 다른 clone({here})의 worktree다(issue_db.path를 바꿨다). 그 clone에서 "
+                             f"`git worktree remove --force {snap}`로 지운 뒤 다시 snapshot한다.")
         _git(snap, "checkout", "--detach", "-f", ref)
     else:
         if snap.exists() and any(snap.iterdir()):
             raise UsageError(f"{snap}가 worktree가 아닌데 비어 있지 않습니다. 확인 후 지운다.")
         _git(repo, "worktree", "add", "--detach", str(snap), ref)
+        created = True
     sha = _git(snap, "rev-parse", "HEAD").stdout.strip()
-    mismatch = compat.check_platform(compat.load_db_config(snap), userconfig.platform_of(cfg))
-    if mismatch:
-        raise UsageError(mismatch[0]["message"], {"code": mismatch[0]["code"], "snapshot": str(snap)})
+    mismatch = compat.check_platform(compat.load_db_config(snap), platform)
+    if mismatch:      # 원격 ref를 읽지 못했을 때의 대조. 이번에 만든 worktree는 지운다
+        if created:
+            _git(repo, "worktree", "remove", "--force", str(snap), check=False)
+        raise _platform_error(mismatch, str(snap))
     try:
         previous = _read_json(lock.work_dir / SNAPSHOT_META)
     except (OSError, ValueError):

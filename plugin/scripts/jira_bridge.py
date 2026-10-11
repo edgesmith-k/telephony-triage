@@ -21,14 +21,18 @@ stdin: hook 입력 `{tool_name, tool_input, tool_response, ...}`. `tool_name`이
 사용자 config만으로 판정한다. 종료 코드는 항상 0. 출력 필드 이름은 Claude Code hooks 문서의
 PostToolUse `updatedToolOutput`이다 — TODO(SITE:S1) 사내 Claude Code 버전에서 원문이 대체되는지 확인한다.
 
-**플랫폼**(17-platforms): hook에는 `--platform`이 없다. 작업 디렉토리 `<work_dir>/<KEY>/`가 있는 플랫폼 프로필(사용자 config의
-모든 프로필)을 쓴다 — 게시 결과는 승인 기록(`post.approved.json`)이 있는 프로필을 먼저 본다. 여럿이면 가장 최근에 바뀐 것,
-없으면 기본 선택(TT_PLATFORM > 사용자 config `platform` > site-defaults). 프로필이 하나면 이전과 같다.
+**플랫폼**(17-platforms): hook에는 `--platform`이 없다.
+- Jira 읽기 결과는 **선택 플랫폼** 프로필의 work_dir에 둔다(TT_PLATFORM > 사용자 config `platform` > site-defaults). 스킬이
+  triage보다 먼저 Jira를 읽어도 선택 플랫폼으로 간다. 키 정규식도 그 프로필의 이슈 DB에서 읽는다.
+- 게시 결과는 **게시 본문 sha256이 승인 기록과 같은 프로필**(guard와 같은 기준)에 기록한다. 맞는 프로필이 없으면 fail-closed:
+  그 KEY 승인이 있는 모든 프로필에 `used_at`과 결과 불명(unknown)을 남긴다. 결과 처리 중 예외(mark_unknown)도 같다.
+프로필이 하나면 이전과 같다.
 """
 
 from __future__ import annotations
 
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -73,15 +77,22 @@ def _payload(response):
 _PROFILES: dict[str, dict] = {}     # main이 채운다: 사용자 config의 모든 플랫폼 프로필 cfg
 
 
-def _job_cfg(cfg: dict, key: str, marker: str | None = None) -> dict:
-    """`<work_dir>/<KEY>/`가 있는 프로필의 cfg(설명은 모듈 docstring). 없으면 `cfg`(기본 선택)."""
-    cands = [c for c in _PROFILES.values() if (Path(str(userconfig.get(c, "work_dir"))).expanduser() / key).is_dir()]
-    if marker:
-        marked = [c for c in cands if (Path(str(userconfig.get(c, "work_dir"))).expanduser() / key / marker).is_file()]
-        cands = marked or cands
-    if not cands:
-        return cfg
-    return max(cands, key=lambda c: (Path(str(userconfig.get(c, "work_dir"))).expanduser() / key).stat().st_mtime)
+def _approved_cfgs(cfg: dict, key: str) -> list[tuple[dict, dict | None]]:
+    """그 KEY 승인 기록이 있는 프로필 `[(cfg, 승인 기록 또는 None(손상))]`. 프로필 목록이 비면 `cfg` 하나만 본다."""
+    out = []
+    for c in (_PROFILES.values() or [cfg]):
+        path = Path(str(userconfig.get(c, "work_dir"))).expanduser() / key / issuepost.APPROVED_FILE
+        if path.is_file():
+            try:
+                out.append((c, issuepost.read_json(path)))
+            except (OSError, ValueError):
+                out.append((c, None))
+    return out
+
+
+def _post_cfg(cfg: dict, key: str, sha: str) -> dict | None:
+    """게시 본문 sha256이 승인 기록과 같은 프로필의 cfg(여럿이면 첫 프로필 순서). 없으면 None."""
+    return next((c for c, rec in _approved_cfgs(cfg, key) if rec and rec.get("body_sha256") == sha), None)
 
 
 def _key_regex(cfg: dict) -> re.Pattern:
@@ -128,9 +139,14 @@ def bridge_post(event: dict, cfg: dict) -> str:
     key = tool_input.get(spec["key_arg"]) if isinstance(tool_input, dict) else None
     if not isinstance(key, str) or not issuepost.KEY_SAFE_RE.fullmatch(key):
         return POST_FAILED
-    cfg = _job_cfg(cfg, key, issuepost.APPROVED_FILE)
-    job = userconfig.ensure_private_dir(Path(str(userconfig.get(cfg, "work_dir"))).expanduser() / key)
     sha = issuepost.body_sha256(str(tool_input.get(spec["body_arg"]) or ""))
+    if len(_PROFILES) > 1:
+        chosen = _post_cfg(cfg, key, sha)
+        if chosen is None:      # 어느 승인과도 맞지 않는다: 재게시를 막고(fail-closed) 결과 불명으로 남긴다
+            mark_unknown(event, cfg)
+            return POST_FAILED
+        cfg = chosen
+    job = userconfig.ensure_private_dir(Path(str(userconfig.get(cfg, "work_dir"))).expanduser() / key)
     approved_path = job / issuepost.APPROVED_FILE
     try:
         approved = issuepost.read_json(approved_path)
@@ -167,7 +183,6 @@ def bridge(event: dict, cfg: dict, kind: str) -> str:
     key = _find_key(data, event.get("tool_input") or {}, kre)
     if key is None:
         return "telephony-triage: Jira 응답에서 형식에 맞는 이슈 키를 찾지 못해 저장하지 않았다(원문은 표시하지 않는다)."
-    cfg = _job_cfg(cfg, key)
     job = userconfig.ensure_private_dir(Path(str(userconfig.get(cfg, "work_dir"))).expanduser() / key)
     raw_path = job / "jira_raw.json"
     raw = {}
@@ -211,14 +226,20 @@ def mark_unknown(event: dict, cfg: dict) -> None:
         key = tool_input.get(spec["key_arg"])
         if not isinstance(key, str) or not issuepost.KEY_SAFE_RE.fullmatch(key):
             return
-        job = Path(str(userconfig.get(_job_cfg(cfg, key, issuepost.APPROVED_FILE), "work_dir"))).expanduser() / key
-        if not job.is_dir():
-            return
+        # 그 KEY 승인이 있는 모든 프로필(어느 것으로 게시됐는지 모르므로 fail-closed). 승인이 없으면 선택 프로필의 작업 디렉토리
+        cfgs = [c for c, _rec in _approved_cfgs(cfg, key)] or [cfg]
         at = issuepost.iso(issuepost.now())
         sha = issuepost.body_sha256(str(tool_input.get(spec["body_arg"]) or ""))
     except Exception as exc:  # noqa: BLE001
         print(f"jira_bridge: 결과 불명 기록 실패: {exc}", file=sys.stderr)
         return
+    for c in cfgs:
+        job = Path(str(userconfig.get(c, "work_dir"))).expanduser() / key
+        if job.is_dir():
+            _mark_unknown_job(job, key, spec, sha, at)
+
+
+def _mark_unknown_job(job: Path, key: str, spec: dict, sha: str, at: str) -> None:
     try:     # 1회용 표시를 먼저: 결과 파일을 못 써도 재게시는 막는다
         approved_path = job / issuepost.APPROVED_FILE
         approved = issuepost.read_json(approved_path)
@@ -269,12 +290,15 @@ def main() -> int:
         _PROFILES.clear()
         _PROFILES.update(userconfig.profiles(defaults, user))
         cfg = _PROFILES[userconfig.TOP_PROFILE]
-        if len(_PROFILES) > 1:
+        if len(_PROFILES) > 1 or os.environ.get(platforms.ENV) or userconfig.selected_hint(user) \
+                or platforms.default_name(defaults) != userconfig.TOP_PROFILE:
+            # 선택 플랫폼(TT_PLATFORM > 사용자 config platform > site). 잘못되면 기본 프로필(읽기 결과 위치만 정한다)
             try:
                 chosen = platforms.select(defaults, None, userconfig.selected_hint(user))
             except platforms.PlatformConfigError:
                 chosen = userconfig.TOP_PROFILE
-            cfg = _PROFILES.get(chosen, cfg)
+            cfg = _PROFILES.get(chosen) or (cfg if chosen == userconfig.TOP_PROFILE
+                                            else userconfig.merged(defaults, user, platform=chosen))
         kind = target(event, cfg)
     except Exception as exc:  # noqa: BLE001
         kind, error = None, exc

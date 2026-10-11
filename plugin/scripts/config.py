@@ -136,15 +136,15 @@ def _other(args) -> bool:
 def cmd_init(args, defaults: dict) -> dict:
     existing = userconfig.load_user()
     platform = _platform(args)
-    if _other(args):
+    if _other(args) and existing is not None:
         # 기본 아닌 플랫폼: 기존 config에 그 플랫폼의 경로 프로필(`platforms.<p>`)만 더한다(Jira·gh 설정은 공유).
-        if existing is None:
-            raise UsageError(f"config가 없습니다. 먼저 --platform 없이 setup(config.py init)을 한다 ({platform}은 그 뒤 추가).")
+        # config가 없으면 공통 키(최상위)와 `platforms.<p>`를 함께 만든다(android 최상위 프로필 없이 — 따로 설치)
         if (existing.get("platforms") or {}).get(platform) is not None and not args.force:
             raise UsageError(f"플랫폼 {platform} 프로필이 이미 있습니다 (바꾸려면 set --platform {platform}, 다시 만들려면 --force)")
     elif existing is not None and not args.force:
         raise UsageError(f"config가 이미 있습니다: {userconfig.path()} (바꾸려면 set, 다시 만들려면 --force)")
-    fields = [f for f in FIELDS if not _other(args) or f[0].split(".")[0] in userconfig.PROFILE_KEYS]
+    fresh = existing is None
+    fields = [f for f in FIELDS if not _other(args) or fresh or f[0].split(".")[0] in userconfig.PROFILE_KEYS]
     answers = {}
     if args.answers:
         answers = json.loads(Path(args.answers).read_text(encoding="utf-8"))
@@ -180,16 +180,20 @@ def cmd_init(args, defaults: dict) -> dict:
                 raise UsageError(f"{key}: 올바른 값을 받지 못했습니다.")
 
     data: dict = {}
+    profile: dict = {}
     for key, _, _kind, required in fields:
         value = answers.get(key)
         if value in (None, "") or (not required and value == _default_for(key, defaults, platform)):
             continue        # 답하지 않았거나 팀 기본값과 같으면 저장하지 않는다(이후 팀 기본값 변경을 상속)
-        userconfig.set_value(data, key, value)
-    if _other(args):
+        is_profile = _other(args) and key.split(".")[0] in userconfig.PROFILE_KEYS
+        userconfig.set_value(profile if is_profile else data, key, value)
+    if _other(args) and not fresh:
         full = dict(existing)
-        full["platforms"] = {**(existing.get("platforms") or {}), platform: data}
+        full["platforms"] = {**(existing.get("platforms") or {}), platform: profile}
         data = full
     else:
+        if _other(args):
+            data["platforms"] = {platform: profile}
         data.setdefault("plugin", {})["scripts_path"] = str(_plugin_root(args) / "scripts")
     effective = userconfig.merged(defaults, data, platform=platform)
     userconfig.ensure_private_dir(userconfig.home())
@@ -230,7 +234,12 @@ def cmd_set(args, defaults: dict) -> dict:
         raise UsageError(f"--platform {_platform(args)}: {exc}") from exc
     userconfig.set_value(data, key, value)
     userconfig.save(data)
-    return {"config": str(userconfig.path()), "key": key, "value": value}
+    out = {"config": str(userconfig.path()), "key": key, "value": value}
+    problems = userconfig.profile_problems(data)
+    if problems:     # 저장은 한다(고치는 중일 수 있다). 남은 문제를 보인다 — 고치기 전까지 다른 스크립트는 종료 2
+        out["problems"] = problems
+        print("경고: 플랫폼 프로필 문제가 남았다 — " + "; ".join(problems), file=sys.stderr)
+    return out
 
 
 def _plugin_root(args) -> Path:
@@ -536,10 +545,10 @@ def _doctor_rows(args, defaults: dict) -> list[dict]:
 
     # 1b platform — 켠 플랫폼이 둘 이상이거나 선택·프로필 오류가 있을 때만(기본 설치는 표가 이전과 같다)
     def platform_row():
-        error = getattr(args, "platform_error", None)
+        error = getattr(args, "platform_error", None) or "; ".join(getattr(args, "platform_problems", None) or [])
         on = platforms.enabled(defaults)
         if error:
-            rows.append(_row("platform", "fail", error, "--platform·config의 platform·platforms.<이름>을 고친다"))
+            rows.append(_row("platform", "fail", error, f"{userconfig.path()}의 platform·platforms.<이름>을 고친다"))
         elif len(on) > 1:
             rows.append(_row("platform", "ok", f"{_platform(args)} (켠 플랫폼: {', '.join(on)})"))
     guarded("platform", platform_row)
@@ -726,6 +735,7 @@ def cmd_doctor(args, defaults: dict) -> tuple[dict, int]:
 
 
 _MISSING = object()
+LENIENT_CMDS = ("show", "set", "doctor")      # 플랫폼 키 문제가 있어도 도는 하위 명령(고치는 길)
 
 
 def cmd_show(args, defaults: dict) -> dict:
@@ -798,7 +808,14 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.cmd != "site-defaults":
             try:
-                args.platform_name, _cfg = platform_session.resolve(defaults, getattr(args, "platform", None))
+                if args.cmd in LENIENT_CMDS:
+                    # 사용자 config의 플랫폼 키 문제가 있어도 고칠 수 있게 돈다(경고·doctor fail 행). 그 밖은 사용 오류
+                    args.platform_name, _cfg, problems = platform_session.resolve_lenient(defaults, getattr(args, "platform", None))
+                    args.platform_problems = problems
+                    if problems and args.cmd != "doctor":
+                        print(f"경고: 사용자 config({userconfig.path()}) 플랫폼 설정 문제 — " + "; ".join(problems), file=sys.stderr)
+                else:
+                    args.platform_name, _cfg = platform_session.resolve(defaults, getattr(args, "platform", None))
             except platforms.PlatformConfigError as exc:
                 if args.cmd != "doctor":
                     raise UsageError(str(exc)) from exc

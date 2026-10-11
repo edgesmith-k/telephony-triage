@@ -11,8 +11,9 @@
 #
 # 설정: ~/.telephony-triage/config.yaml (TELEPHONY_TRIAGE_HOME로 바꿀 수 있다)의
 # issue_db.base_branch(기본 main)와 work_dir(기본 <home>/work). config가 없어도 기본값으로 검사한다.
-# 플랫폼(17-platforms): 레포 최상위 issue-db.config.yaml의 `platform`(없으면 android)이 android가 아니면
-# 그 플랫폼 프로필 platforms.<p>.issue_db.base_branch·platforms.<p>.work_dir(기본 <home>/work-<p>)를 쓴다.
+# 플랫폼(17-platforms): push하는 커밋(로컬 ref tip, 지우기뿐이면 HEAD)의 issue-db.config.yaml `platform`(없으면 android)이
+# android가 아니면 그 플랫폼 프로필 platforms.<p>.issue_db.base_branch·platforms.<p>.work_dir(기본 <home>/work-<p>)를 쓴다.
+# 워킹 트리 파일은 보지 않는다. 선언을 읽을 수 없거나 커밋마다 다르면 거부한다(fail-closed).
 
 command -v python3 >/dev/null 2>&1 || { echo "[telephony-triage pre-push] python3를 찾을 수 없다." >&2; exit 1; }
 
@@ -33,14 +34,38 @@ try:
         cfg = yaml.safe_load(fh) or {}
 except Exception:
     cfg = {}
-platform = "android"
-try:
-    top = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True).stdout.strip()
-    import yaml
-    with open(os.path.join(top, "issue-db.config.yaml"), encoding="utf-8") as fh:
-        platform = str((yaml.safe_load(fh) or {}).get("platform") or "android")
-except Exception:
-    platform = "android"
+lines = [l.split() for l in os.environ.get("TT_PUSH_REFS", "").splitlines() if l.strip()]
+
+
+def deny(msg):
+    print(f"{PREFIX} push를 거부했다: {msg}", file=sys.stderr)
+    sys.exit(1)
+
+
+def declared_platform(rev):
+    proc = subprocess.run(["git", "show", f"{rev}:issue-db.config.yaml"], capture_output=True, text=True)
+    if proc.returncode != 0:
+        return None
+    try:
+        import yaml
+    except ImportError:     # PyYAML 없는 python3: 최상위 `platform:` 줄만 본다
+        import re
+        m = re.search(r"^platform:[ \t]*['\"]?([A-Za-z0-9_]+)", proc.stdout, re.M)
+        return m.group(1) if m else "android"
+    try:
+        data = yaml.safe_load(proc.stdout) or {}
+    except Exception:
+        return None
+    return str(data.get("platform") or "android") if isinstance(data, dict) else None
+
+
+revs = [p[1] for p in lines if len(p) == 4 and p[1] != ZERO] or ["HEAD"]
+found = {declared_platform(r) for r in revs}
+if None in found:
+    deny("push하는 커밋의 issue-db.config.yaml에서 플랫폼 선언을 읽을 수 없다.")
+if len(found) != 1:
+    deny(f"push하는 커밋들의 플랫폼 선언이 서로 다르다: {', '.join(sorted(found))}")
+platform = found.pop()
 if platform == "android":
     prof, default_work = cfg, os.path.join(home, "work")
 else:
@@ -52,17 +77,11 @@ work_dir = os.path.expanduser(str(prof.get("work_dir") or default_work))
 token = os.environ.get("TT_PUBLISH_TOKEN", "")
 
 
-def deny(msg):
-    print(f"{PREFIX} push를 거부했다: {msg}", file=sys.stderr)
-    sys.exit(1)
-
-
 def tree_of(sha):
     proc = subprocess.run(["git", "rev-parse", f"{sha}^{{tree}}"], capture_output=True, text=True)
     return proc.stdout.strip() if proc.returncode == 0 else None
 
 
-lines = [l.split() for l in os.environ.get("TT_PUSH_REFS", "").splitlines() if l.strip()]
 for parts in lines:
     if len(parts) == 4 and parts[2] == f"refs/heads/{base}":
         deny(f"base 브랜치({base})에 직접 push하지 않는다. 브랜치를 올리고 PR을 만든다.")

@@ -35,6 +35,26 @@ def resolve(defaults: dict, cli: str | None = None, user: dict | None = None) ->
     return name, userconfig.merged(defaults, user, platform=name)
 
 
+def resolve_lenient(defaults: dict, cli: str | None = None, user: dict | None = None) -> tuple[str, dict, list[str]]:
+    """`resolve`와 같되 사용자 config의 플랫폼 키 문제는 **경고 목록**으로 돌려준다(config.py show·set·doctor가 고칠 수
+    있게). 사용자 `platform`이 켜지지 않은 이름이면 site 기본으로 대신한다. `--platform`(cli)이 잘못되면 그대로 오류다."""
+    given = user is not None
+    user = userconfig.load_user() if user is None else user
+    problems = userconfig.profile_problems(user)
+    try:
+        name = select(defaults, cli, userconfig.selected_hint(user))
+    except PlatformConfigError as exc:
+        if cli:
+            raise
+        problems.append(str(exc))
+        name = select(defaults, None, None)
+    if name == userconfig.TOP_PROFILE:
+        cfg = userconfig.merged(defaults, user) if given else userconfig.merged(defaults)
+    else:
+        cfg = userconfig.merged(defaults, user, platform=name)
+    return name, cfg, problems
+
+
 def env_name() -> str | None:
     import os
 

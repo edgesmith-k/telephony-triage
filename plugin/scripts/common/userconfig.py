@@ -104,6 +104,12 @@ def merged(defaults: dict, user: dict | None = None, platform: str | None = None
     out = deep_merge(deep_merge(builtin(), from_site_defaults(defaults)), base_user)
     if not platform or platform == TOP_PROFILE:
         return out
+    prof = (user.get("platforms") or {}).get(platform) if isinstance(user.get("platforms"), dict) else None
+    return _with_profile(out, defaults, platform, prof)
+
+
+def _with_profile(out: dict, defaults: dict, platform: str, prof) -> dict:
+    """공통 키만 남긴 `out`에 플랫폼 경로 프로필(`prof`, `PROFILE_KEYS`만)과 그 기본값을 얹는다."""
     for key in PROFILE_KEYS:
         out.pop(key, None)
     issue_db = {"base_branch": "main"}
@@ -112,7 +118,6 @@ def merged(defaults: dict, user: dict | None = None, platform: str | None = None
         issue_db["ghe_host"] = ghe
     out.update({"issue_db": issue_db, "work_dir": str(home() / f"work-{platform}"), "code_profiles": [],
                 "recent_code_roots": []})
-    prof = (user.get("platforms") or {}).get(platform) if isinstance(user.get("platforms"), dict) else None
     out = deep_merge(out, {k: v for k, v in (prof or {}).items() if k in PROFILE_KEYS} if isinstance(prof, dict) else {})
     out["platform"] = platform
     return out
@@ -138,7 +143,7 @@ def profile_problems(user: dict | None) -> list[str]:
         return out + ["platforms: 매핑이어야 합니다."]
     for name, prof in profs.items():
         if not isinstance(name, str) or not _PLATFORM_NAME_RE.fullmatch(name):
-            out.append(f"platforms.{name}: 플랫폼 이름이 아닙니다.")
+            out.append(f"platforms.{name}: 플랫폼 이름이 아닙니다(소문자·숫자·_).")
         elif name == TOP_PROFILE:
             out.append(f"platforms.{name}: {TOP_PROFILE} 프로필은 최상위 키에 둔다.")
         elif not isinstance(prof, dict):
@@ -148,19 +153,88 @@ def profile_problems(user: dict | None) -> list[str]:
                 if key not in PROFILE_KEYS:
                     out.append(f"platforms.{name}.{key}: 플랫폼 프로필에 둘 수 없는 키입니다 "
                                f"(허용: {', '.join(PROFILE_KEYS)}. 플랫폼 상수는 site-defaults에서만 바꾼다).")
+    return out + path_problems(user)
+
+
+def _abs_path(value) -> str | None:
+    """비어 있지 않은 절대 경로(`~` 허용)면 정규화한 문자열, 아니면 None."""
+    if not isinstance(value, str) or not value.strip():
+        return None
+    p = os.path.expanduser(value)
+    return os.path.normpath(p) if os.path.isabs(p) else None
+
+
+def _within(outer: str, inner: str) -> bool:
+    return inner == outer or inner.startswith(outer.rstrip(os.sep) + os.sep)
+
+
+def _raw_profiles(user: dict) -> list[tuple[str, str, dict]]:
+    """`(이름, 키 경로 접두사, 프로필 원본)`. 최상위는 경로 키가 있거나 `platforms`가 없을 때만 있는 것으로 본다."""
+    out = []
+    profs = user.get("platforms") if isinstance(user.get("platforms"), dict) else {}
+    if any(k in user for k in PROFILE_KEYS) or not profs:
+        out.append((TOP_PROFILE, "", {k: user[k] for k in PROFILE_KEYS if k in user}))
+    for name, prof in profs.items():
+        if isinstance(prof, dict):
+            out.append((str(name), f"platforms.{name}.", prof))
     return out
 
 
-def profiles(defaults: dict, user: dict | None = None) -> dict[str, dict]:
+def path_problems(user: dict | None) -> list[str]:
+    """프로필 경로 값 검사(guard 규칙 8의 제외 근거가 되므로): `work_dir`·`issue_db.path`는 비어 있지 않은 절대 경로(`~` 허용),
+    어떤 work_dir도 어떤 clone을 포함하거나 같으면 안 된다, 프로필끼리 work_dir·clone·원격(`issue_db.remote`)이 겹치면 안 된다."""
+    user = user or {}
+    out: list[str] = []
+    works, clones, remotes = [], [], []
+    for name, at, prof in _raw_profiles(user):
+        if "work_dir" in prof:
+            work = _abs_path(prof["work_dir"])
+            if work is None:
+                out.append(f"{at}work_dir: 비어 있지 않은 절대 경로여야 합니다: {prof['work_dir']!r}")
+        else:
+            work = os.path.normpath(str(home() / ("work" if name == TOP_PROFILE else f"work-{name}")))
+        if work:
+            works.append((at + "work_dir", work))
+        db = prof.get("issue_db")
+        if db is not None and not isinstance(db, dict):
+            out.append(f"{at}issue_db: 매핑이어야 합니다.")
+            continue
+        if isinstance(db, dict) and "path" in db:
+            clone = _abs_path(db["path"])
+            if clone is None:
+                out.append(f"{at}issue_db.path: 비어 있지 않은 절대 경로여야 합니다: {db['path']!r}")
+            else:
+                clones.append((at + "issue_db.path", clone))
+        if isinstance(db, dict) and db.get("remote"):
+            remotes.append((at + "issue_db.remote", str(db["remote"]).strip().rstrip("/").removesuffix(".git").lower()))
+    for kind, items in (("work_dir", works), ("clone", clones), ("원격", remotes)):
+        for i, (ka, va) in enumerate(items):
+            for kb, vb in items[i + 1:]:
+                if va == vb:
+                    out.append(f"{kb}: {ka}와 같은 {kind}입니다(플랫폼마다 따로 둔다).")
+    for kw, work in works:
+        for kc, clone in clones:
+            if _within(work, clone):
+                out.append(f"{kw}: {kc}(clone)를 포함하거나 같습니다 — work_dir은 clone 밖에 둔다.")
+    return out
+
+
+def profiles(defaults: dict, user: dict | None = None, *, invalid_names: bool = False) -> dict[str, dict]:
     """사용자 config에 있는 **모든** 프로필의 실제 config `{이름: cfg}`(`TOP_PROFILE` 먼저). `enabled`와 무관하다 —
-    guard·pre-push가 어느 플랫폼의 clone·work_dir이든 보호하도록."""
+    guard·pre-push가 어느 플랫폼의 clone·work_dir이든 보호하도록. `invalid_names`면 이름이 잘못된 프로필
+    (`platforms.oFono`·`platforms.android` 등)도 `"platforms.<이름>"` 키로 넣는다(guard: 보호는 넓을수록 안전)."""
     user = load_user() if user is None else user
     out = {TOP_PROFILE: merged(defaults, user)}
     profs = (user or {}).get("platforms")
     if isinstance(profs, dict):
         for name, prof in profs.items():
-            if isinstance(name, str) and _PLATFORM_NAME_RE.fullmatch(name) and name != TOP_PROFILE and isinstance(prof, dict):
+            if not isinstance(prof, dict):
+                continue
+            if isinstance(name, str) and _PLATFORM_NAME_RE.fullmatch(name) and name != TOP_PROFILE:
                 out[name] = merged(defaults, user, platform=name)
+            elif invalid_names:
+                key = f"platforms.{name}"
+                out[key] = _with_profile(merged(defaults, user), defaults, re.sub(r"[^A-Za-z0-9_-]", "_", str(name)), prof)
     return out
 
 

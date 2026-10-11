@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import sys
 from pathlib import Path
@@ -255,15 +256,39 @@ def test_triage_offline_platform_mismatch_stops():
 
 def test_db_pr_snapshot_platform_mismatch():
     ws = Workspace(root=_root_on(), build=False)
+    other = Path(make_repo.make(SAMPLE, ws.base / "other-android")["clone"])     # 실수로 ofono 프로필이 android DB를 가리킨다
     cfg = yaml.safe_load((ws.home / "config.yaml").read_text(encoding="utf-8"))
-    # 실수로 ofono 프로필이 android clone을 가리킨다
-    cfg["platforms"] = {"ofono": {"issue_db": {"path": str(ws.clone)}, "work_dir": str(ws.base / "work-ofono")}}
+    cfg["platforms"] = {"ofono": {"issue_db": {"path": str(other), "remote": "https://ghe.mock.invalid/o/x.git"},
+                                  "work_dir": str(ws.base / "work-ofono")}}
     (ws.home / "config.yaml").write_text(yaml.safe_dump(cfg, allow_unicode=True), encoding="utf-8")
     acquired = ws.db_pr("--platform", "ofono", "lock", "acquire", "OFN-9")
     proc = ws.run("db_pr.py", ["--platform", "ofono", "snapshot", "--job", "OFN-9"],
                   env={"TT_LOCK_OWNER": acquired["lock"]["owner"]})
     assert proc.returncode == 2 and "platform-mismatch" in proc.stdout and "이슈 DB는 android" in proc.stderr
+    # 원격 ref에서 먼저 대조하므로 다른 플랫폼 clone에 _snapshot worktree를 만들지 않는다
+    assert not (ws.base / "work-ofono" / "_snapshot").exists()
+    assert "work-ofono" not in git(other, "worktree", "list")
     ws.db_pr("--platform", "ofono", "lock", "release", "OFN-9", "--force")
+
+
+def test_profile_paths_must_not_overlap(home):
+    clone = str(home / "db")
+    base = {"issue_db": {"path": clone, "remote": "https://ghe.mock.invalid/o/a.git"}, "work_dir": str(home / "w")}
+    cases = [
+        ({"ofono": {"work_dir": str(home)}}, "clone)를 포함하거나 같습니다"),            # clone 상위
+        ({"ofono": {"work_dir": clone}}, "clone)를 포함하거나 같습니다"),
+        ({"ofono": {"work_dir": ""}}, "절대 경로"),
+        ({"ofono": {"work_dir": "work"}}, "절대 경로"),
+        ({"ofono": {"work_dir": str(home / "w")}}, "같은 work_dir"),
+        ({"ofono": {"issue_db": {"path": clone}}}, "같은 clone"),
+        ({"ofono": {"issue_db": {"remote": "https://ghe.mock.invalid/o/A"}}}, "같은 원격"),
+        ({"ofono": {"issue_db": "oops"}}, "매핑이어야"),
+    ]
+    for profs, needle in cases:
+        problems = userconfig.profile_problems({**base, "platforms": profs})
+        assert any(needle in p for p in problems), (profs, problems)
+    assert userconfig.profile_problems({**base, "platforms": {"ofono": {"work_dir": str(home / "w2")}}}) == []
+    assert userconfig.profile_problems(base) == []
 
 
 # -- 이슈 DB 키 --------------------------------------------------------------------------------
@@ -289,3 +314,129 @@ def test_db_lint_ofono_declaration_passes_config_check():
     proc = run("db_lint.py", ["--all", "--db", ofono_db()])
     out = json.loads(proc.stdout)
     assert not [e for e in out["errors"] if e["code"] == "config"]
+
+
+# -- 따로 설치(site 기본 ofono, android 최상위 프로필 없음) (리뷰 P1-3) ---------------------------------
+
+
+def test_ofono_only_install_setup_and_tools():
+    root = plugin_root("ofono-site", platform={"name": "ofono"})
+    h = tmp("tt-home-")
+    env = {"TELEPHONY_TRIAGE_HOME": h}
+    side = tmp("tt-side-")
+    info = make_repo.make(ofono_db(), side / "repo")
+    clone = Path(info["clone"])
+    answers = side / "ans.json"
+    answers.write_text(json.dumps({"user.ghe_id": "u", "issue_db.path": str(clone),
+                                   "issue_db.remote": "https://ghe.mock.invalid/o/ofono-db.git"}), encoding="utf-8")
+    proc = run("config.py", ["init", "--answers", answers], root=root, env=env)
+    assert proc.returncode == 0, proc.stderr
+    data = yaml.safe_load((h / "config.yaml").read_text(encoding="utf-8"))
+    assert "issue_db" not in data and data["platforms"]["ofono"]["issue_db"]["path"] == str(clone)
+    assert data["user"]["ghe_id"] == "u" and data["plugin"]["scripts_path"]
+    show = json.loads(run("config.py", ["show", "--keys", "work_dir,issue_db.path"], root=root, env=env).stdout)
+    assert show["values"] == {"work_dir": str(h / "work-ofono"), "issue_db.path": str(clone)}
+    check = run("config.py", ["check", "--for", "dry-run"], root=root, env=env)
+    assert "platform-mismatch" not in check.stdout
+    doctor = json.loads(run("config.py", ["doctor"], root=root, env=env).stdout)
+    rows = {r["check"]: r for r in doctor["rows"]}
+    assert rows["config"]["status"] == "ok" and rows["clone"]["status"] == "ok" and "platform" not in rows
+    # guard: ofono clone 보호, lock은 ofono work_dir
+    event = {"hook_event_name": "PreToolUse", "tool_name": "Write", "tool_input": {"file_path": str(clone / "x.md")},
+             "cwd": str(h)}
+    out = run("guard.py", [], root=root, env=env, stdin=json.dumps(event))
+    assert json.loads(out.stdout)["hookSpecificOutput"]["permissionDecision"] == "deny"
+    lock = json.loads(run("db_pr.py", ["lock", "acquire", "OFN-1"], root=root, env=env).stdout)
+    assert lock["lock"]["platform"] == "ofono" and (h / "work-ofono" / "session.lock").is_file()
+    run("db_pr.py", ["lock", "release", "OFN-1", "--force"], root=root, env=env)
+    # pre-push: 최상위 프로필 없이 platforms.ofono(base main)로 판정
+    git(clone, "config", "core.hooksPath", ".githooks")
+    (clone / "CONTRIBUTING.md").write_text("편집\n", encoding="utf-8")
+    git(clone, "add", "-A")
+    git(clone, "commit", "-q", "--no-verify", "-m", "편집")
+    hook_env = dict(os.environ, TELEPHONY_TRIAGE_HOME=str(h), TT_PUBLISH_TOKEN="manual")
+    proc = __import__("subprocess").run(["git", "-C", str(clone), "push", "-q", "origin", "HEAD:refs/heads/main"],
+                                        capture_output=True, text=True, env=hook_env)
+    assert proc.returncode != 0 and "base 브랜치(main)" in proc.stderr
+
+
+# -- 플랫폼 키 문제가 있어도 config show·set·doctor는 돈다 (리뷰 P2-3) ------------------------------------
+
+
+def test_config_fix_path_with_profile_problems():
+    root = _root_on()
+    h = tmp("tt-home-")
+    env = {"TELEPHONY_TRIAGE_HOME": h}
+    (h / "config.yaml").write_text(yaml.safe_dump({"issue_db": {"path": str(h / "db")}, "work_dir": str(h / "w"),
+                                                   "platforms": {"ofono": {"source_tree": {}, "work_dir": str(h / "w")}}}),
+                                   encoding="utf-8")
+    show = run("config.py", ["show", "--keys", "work_dir"], root=root, env=env)
+    assert show.returncode == 0 and "platforms.ofono.source_tree" in show.stderr
+    doctor = json.loads(run("config.py", ["doctor"], root=root, env=env).stdout)
+    row = next(r for r in doctor["rows"] if r["check"] == "platform")
+    assert row["status"] == "fail"
+    out = run("config.py", ["set", "--platform", "ofono", "work_dir", str(h / "w-ofono")], root=root, env=env)
+    assert out.returncode == 0 and json.loads(out.stdout)["problems"]       # source_tree는 아직 남았다
+    proc = run("db_pr.py", ["lock", "status"], root=root, env=env)
+    assert proc.returncode == 2 and "source_tree" in proc.stderr               # 그 밖 스크립트는 멈춘다
+    check = run("config.py", ["check", "--for", "dry-run", "--db", SAMPLE], root=root, env=env)
+    assert check.returncode == 2
+
+
+# -- 알려진 공백: stage·publish 불일치, triage 재실행 불일치, issue_post 분석 플랫폼 ---------------------
+
+
+def _ofono_ws() -> Workspace:
+    ws = Workspace(root=_root_on(), build=False)
+    cfg = yaml.safe_load((ws.home / "config.yaml").read_text(encoding="utf-8"))
+    cfg["platforms"] = {"ofono": {"work_dir": str(ws.base / "work-ofono")}}
+    (ws.home / "config.yaml").write_text(yaml.safe_dump(cfg, allow_unicode=True), encoding="utf-8")
+    return ws
+
+
+def test_db_pr_stage_and_publish_refuse_other_platform_db():
+    ws = _ofono_ws()
+    owork = ws.base / "work-ofono"
+    (owork / "_snapshot").mkdir(parents=True)
+    shutil.copyfile(SAMPLE / "issue-db.config.yaml", owork / "_snapshot" / "issue-db.config.yaml")   # android 선언
+    plan = owork / "OFN-3" / "plan.json"
+    plan.parent.mkdir(parents=True)
+    plan.write_text("{}", encoding="utf-8")
+    proc = ws.run("db_pr.py", ["--platform", "ofono", "stage", plan, "--wt", owork / "OFN-3" / "wt", "--branch", "issue/OFN-3"])
+    assert proc.returncode == 2 and "플랫폼 불일치" in proc.stderr and "platform-mismatch" in proc.stdout
+    wt = owork / "OFN-3" / "wt"
+    wt.mkdir()
+    shutil.copyfile(SAMPLE / "issue-db.config.yaml", wt / "issue-db.config.yaml")
+    proc = ws.run("db_pr.py", ["--platform", "ofono", "publish", wt, "--branch", "issue/OFN-3", "--lease", "new",
+                               "--approved", "0" * 40])
+    assert proc.returncode == 2 and "플랫폼 불일치" in proc.stderr
+
+
+def test_triage_rerun_with_other_platform_stops():
+    ws = _ofono_ws()
+    job = ws.work / "MOCK-7501"
+    job.mkdir(parents=True)
+    (job / "triage-state.json").write_text(json.dumps({"platform": "ofono"}), encoding="utf-8")
+    proc = ws.run("triage.py", ["run", "MOCK-7501", "--logs", DATA_LOG])
+    assert proc.returncode == 2 and "이 작업은 ofono 플랫폼이다" in proc.stderr
+    assert not (ws.work / "session.lock").exists()
+
+
+def test_issue_post_refuses_analysis_of_other_platform():
+    ws = _ofono_ws()
+    for work, analysis in ((ws.base / "work-ofono", {"status": "ok"}), (ws.work, {"status": "ok", "platform": "ofono"})):
+        (work / "MOCK-7601").mkdir(parents=True, exist_ok=True)
+        (work / "MOCK-7601" / "analysis.json").write_text(json.dumps(analysis), encoding="utf-8")
+    proc = ws.run("issue_post.py", ["status", "MOCK-7601", "--platform", "ofono"])
+    assert proc.returncode == 2 and "이 분석은 android 플랫폼이다" in proc.stderr
+    proc = ws.run("issue_post.py", ["status", "MOCK-7601"])
+    assert proc.returncode == 2 and "이 분석은 ofono 플랫폼이다" in proc.stderr
+
+
+def test_ref_platform_mismatch_helper():
+    from dbpr.worktree import ref_platform_mismatch
+    info = make_repo.make(ofono_db(), tmp("tt-repo-") / "r")
+    clone = Path(info["clone"])
+    assert ref_platform_mismatch(clone, "origin/main", "ofono") == []
+    assert ref_platform_mismatch(clone, "origin/main", "android")[0]["code"] == "platform-mismatch"
+    assert ref_platform_mismatch(clone, "origin/nosuch", "android") is None

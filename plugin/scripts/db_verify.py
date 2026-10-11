@@ -77,7 +77,7 @@ sys.path.insert(0, str(SCRIPTS))
 import db_regress  # noqa: E402
 import match_signatures  # noqa: E402
 import parse_logcat  # noqa: E402
-from common import builds, checks, dbpath, gitscope, issuedb, quality, rulediff, site_defaults, userconfig, yamlio  # noqa: E402
+from common import builds, checks, compat, dbpath, gitscope, issuedb, quality, rulediff, site_defaults, userconfig, yamlio  # noqa: E402
 from common.buildname import sanitize_build  # noqa: E402
 from common.exitcodes import CHECK_FAILED, NEEDS_APPROVAL, OK, USAGE  # noqa: E402
 from common.patterns import PatternError, PatternTimeout  # noqa: E402
@@ -155,9 +155,22 @@ def make_draft(plan: Path, draft: Path, defaults: dict, plugin_root: str | None)
             raise UsageError(f"draft 경로에 도구가 만들지 않은 파일이 있다: {draft} — draft는 도구가 만든다. 내용을 옮기고 지운 뒤 다시 실행")
         else:
             remove_draft(draft, defaults)
+    from db_pr import UsageError as DbPrError
+    from dbpr.worktree import ref_platform_mismatch
+    platform = _session(defaults)[0]
+    try:      # 플랫폼 선언 대조(db_pr snapshot·stage·publish와 같게): 다른 플랫폼 이슈 DB로 검증하지 않는다
+        mismatch = ref_platform_mismatch(repo, f"origin/{base}", platform)
+    except DbPrError as exc:
+        raise UsageError(str(exc)) from exc
+    if mismatch:
+        raise UsageError(mismatch[0]["message"])
     proc = _git(repo, "worktree", "add", "--detach", str(draft), f"origin/{base}")
     if proc.returncode != 0:
         raise UsageError(f"draft worktree를 만들 수 없습니다: {proc.stderr.strip()}")
+    mismatch = compat.check_platform(compat.load_db_config(draft), platform)
+    if mismatch:
+        remove_draft(draft, defaults)
+        raise UsageError(mismatch[0]["message"])
     applied = _script("db_add.py", ["apply", str(plan), "--db", str(draft)], plugin_root)
     if applied.returncode != 0:
         remove_draft(draft, defaults)

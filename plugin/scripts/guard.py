@@ -168,10 +168,12 @@ class GuardProfile:
         self.clone = None
         self.clone_common = None
         self.work_dir = None
+        self.exempt = None          # 규칙 8 제외 근거로 쓸 work_dir(절대 경로이고 어떤 clone도 포함하지 않을 때만, Config가 정한다)
         if has_user:
-            clone = userconfig.get(cfg, "issue_db.path")
-            if clone and Path(str(clone)).expanduser().is_dir():
-                self.clone = Path(str(clone)).expanduser()
+            db = cfg.get("issue_db") if isinstance(cfg.get("issue_db"), dict) else {}
+            clone = db.get("path")
+            if isinstance(clone, str) and clone.strip() and Path(clone).expanduser().is_dir():
+                self.clone = Path(clone).expanduser()
                 self.clone_common = _common_dir(self.clone)
             self.work_dir = Path(str(userconfig.get(cfg, "work_dir"))).expanduser()
         self.base = str(userconfig.get(cfg, "issue_db.base_branch") or "main")
@@ -202,8 +204,19 @@ class Config:
         self.raw_names, self.raw_exempt = self._raw_read(defaults)
         self.user = userconfig.load_user()
         self.cfg = userconfig.merged(defaults, self.user or {})
-        cfgs = userconfig.profiles(defaults, self.user) if self.user else {userconfig.TOP_PROFILE: self.cfg}
+        cfgs = userconfig.profiles(defaults, self.user, invalid_names=True) if self.user else {userconfig.TOP_PROFILE: self.cfg}
         self.profiles = [GuardProfile(name, cfg, bool(self.user)) for name, cfg in cfgs.items()]
+        # 잘못된 프로필도 보호 대상에는 넣는다. 다만 잘못된 work_dir(상대·빈 값·clone을 포함)은 규칙 8 제외 근거로 쓰지 않는다
+        clones = [_norm(p.clone) for p in self.profiles if p.clone is not None]
+        for p in self.profiles:
+            raw = userconfig.get(cfgs[p.name], "work_dir")
+            ok = isinstance(raw, str) and raw.strip() and os.path.isabs(os.path.expanduser(raw))
+            if ok and not any(_inside(c, _norm(p.work_dir)) for c in clones):
+                p.exempt = p.work_dir
+        problems = userconfig.profile_problems(self.user) if self.user else []
+        if problems:
+            self.warnings.append("사용자 config 플랫폼 프로필 문제(보호는 유지, 잘못된 work_dir은 예외 근거로 쓰지 않는다): "
+                                 + "; ".join(problems[:5]))
         top = self.profiles[0]            # 기본 플랫폼 프로필(옛 단일 프로필 속성)
         self.clone, self.clone_common, self.work_dir = top.clone, top.clone_common, top.work_dir
         self.base, self.remote_slug = top.base, top.remote_slug
@@ -450,10 +463,16 @@ def _post_record(target: str, conf: Config) -> bool:
 
 
 def _in_clone(target: str, conf: Config) -> bool:
-    """어느 프로필이든 clone 안이고, 어느 프로필의 work_dir 안도 아닌가 (target은 `_norm` 경로)."""
-    if any(_inside(target, _norm(w)) for w in conf.work_dirs):
-        return False
-    return any(_inside(target, _norm(c)) for c in conf.clones)
+    """어느 프로필이든 clone 안이고, 그 clone **안에 들어 있는** (유효한) work_dir 안이 아닌가 (target은 `_norm` 경로).
+    가장 구체적인 경로 기준이다: clone을 포함하는 work_dir은 그 clone의 보호를 풀지 못한다."""
+    exempts = [_norm(p.exempt) for p in conf.profiles if p.exempt is not None]
+    for clone in (_norm(c) for c in conf.clones):
+        if not _inside(target, clone):
+            continue
+        if any(w != clone and _inside(w, clone) and _inside(target, w) for w in exempts):
+            continue
+        return True
+    return False
 
 
 def check_file(tool_input: dict, cwd: Path, conf: Config, dec: Decision) -> None:

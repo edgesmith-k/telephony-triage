@@ -99,6 +99,9 @@ class Job:
         self.dir = work / self.key
         self.spec, self.spec_err = issuepost.write_spec(self.cfg)
         self.analysis = _read(self.dir / "analysis.json", "analysis.json")
+        done = (self.analysis or {}).get("platform") or userconfig.TOP_PROFILE
+        if self.analysis and done != self.platform:      # 다른 플랫폼 분석을 다른 플랫폼 설정으로 게시하지 않는다
+            raise Usage(f"이 분석은 {done} 플랫폼이다(선택한 플랫폼: {self.platform}) — --platform {done}으로 다시 실행한다")
         self.render_doc = _read(self.dir / issuepost.RENDER_FILE, issuepost.RENDER_FILE)
         self.approved = _read(self.dir / issuepost.APPROVED_FILE, issuepost.APPROVED_FILE)
         self.result = _read(self.dir / issuepost.RESULT_FILE, issuepost.RESULT_FILE)
