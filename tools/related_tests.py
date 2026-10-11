@@ -132,8 +132,8 @@ def _is_pkg(path: str) -> bool:
     return path.endswith("__init__.py")
 
 
-def import_edges(mods: dict[str, str]) -> dict[str, set[str]]:
-    """importer -> 그가 쓰는 모듈 집합 (plugin/scripts 안만)."""
+def import_edges(mods: dict[str, str], kind: str = "all") -> dict[str, set[str]]:
+    """importer -> 그가 쓰는 모듈 집합 (plugin/scripts 안만). kind: all | import(import 문만) | name(이름 문자열 호출만)."""
     edges: dict[str, set[str]] = {m: set() for m in mods}
     for mod, rel in mods.items():
         try:
@@ -143,11 +143,11 @@ def import_edges(mods: dict[str, str]) -> dict[str, set[str]]:
         pkg = mod if _is_pkg(rel) else mod.rpartition(".")[0]
         for node in ast.walk(tree):
             targets: list[str] = []
-            if isinstance(node, ast.Import):
+            if isinstance(node, ast.Import) and kind != "name":
                 for alias in node.names:
                     parts = alias.name.split(".")
                     targets += [".".join(parts[:i]) for i in range(1, len(parts) + 1)]
-            elif isinstance(node, ast.ImportFrom):
+            elif isinstance(node, ast.ImportFrom) and kind != "name":
                 base = node.module or ""
                 if node.level:
                     anchor = pkg.split(".") if pkg else []
@@ -156,7 +156,7 @@ def import_edges(mods: dict[str, str]) -> dict[str, set[str]]:
                 parts = base.split(".") if base else []
                 targets += [".".join(parts[:i]) for i in range(1, len(parts) + 1)]
                 targets += [f"{base}.{a.name}" if base else a.name for a in node.names]
-            elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+            elif isinstance(node, ast.Constant) and isinstance(node.value, str) and kind != "import":
                 # 다른 스크립트를 이름(`db_pr.py`)으로 부르는 호출(같은 프로세스 호출, subprocess)
                 targets += [m for m in re.findall(r"\b(\w+)\.py\b", node.value)]
             edges[mod].update(t for t in targets if t in mods and t != mod)
@@ -256,6 +256,7 @@ def select(files: list[str]) -> Selection:
     tests = test_files()
     mods = script_modules()
     edges = import_edges(mods)
+    by_import, by_name = import_edges(mods, "import"), import_edges(mods, "name")
     scripts_touched = False
 
     def add(path: str, found: set[str], note: str = "") -> None:
@@ -287,9 +288,13 @@ def select(files: list[str]) -> Selection:
                 changed = [m for m in mods if m == pkg or m.startswith(pkg + ".")]
             else:
                 changed = [module_name(path[len(SCRIPTS) + 1:])]
+            # import는 끝까지 따라가고, 이름 문자열 호출(`db_pr.py`)은 한 단계만 본다: 이름으로 부르는 쪽의
+            # importer까지 번지면 문서·메시지 속 스크립트 이름 하나로 거의 모든 모듈이 importer가 된다.
             importers: set[str] = set()
             for mod in changed:
-                importers |= reverse_closure(edges, mod)
+                importers |= reverse_closure(by_import, mod)
+            reach = set(changed) | importers
+            importers |= {m for m, used in by_name.items() if used & reach}
             importers -= set(changed)
             unit = units(edges)
             count = len({unit[m] for m in importers} - {unit[m] for m in changed})

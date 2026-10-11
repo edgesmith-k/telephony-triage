@@ -110,6 +110,48 @@ DETECT = [
     ("AKA AUTN=00112233445566778899aabbccddeeff", "CRED", "00112233445566778899aabbccddeeff"),
     ("wifi password=hunter2", "CRED", "hunter2"),
     ("oauth token: eyJhbGciOiJIUzI1NiJ9", "CRED", "eyJhbGciOiJIUzI1NiJ9"),
+    # 구분자·붙은 IMEI, IMEISV, EID, MAC 변형, GPS, AKA 키, PIN/PUK, Bearer, 장치 serial (P0-4)
+    ("IMEI: 49-015420-323751-8", "IMEI", "49-015420-323751-8"),
+    ("imei: 35 209900 176148 1", "IMEI", "35 209900 176148 1"),
+    ("imeisv=4901542032375101", "IMEI", "4901542032375101"),
+    ("IMEI490154203237518 done", "IMEI", "490154203237518"),
+    ("imei=490154203237518_1", "IMEI", "490154203237518"),
+    ("49-015420-323751-8 attached", "IMEI", "49-015420-323751-8"),   # 문맥 없는 대시형 + Luhn
+    ("eid=89049032004008882600012345678901", "EID", "89049032004008882600012345678901"),
+    ("bssid AA-BB-CC-DD-EE-FF", "MAC", "AA-BB-CC-DD-EE-FF"),
+    ("mac=aabbccddeeff", "MAC", "aabbccddeeff"),
+    ("lat=37.5665 lon=126.9780", "GEO", "37.5665"),
+    ("mLatitude=37.5665", "GEO", "37.5665"),
+    ("Location[gps 37.566535,126.977969]", "GEO", "37.566535,126.977969"),
+    ("Location[network 37.566535,126.977969]", "GEO", "37.566535,126.977969"),
+    ("Ki=0123456789abcdef0123456789abcdef", "CRED", "0123456789abcdef0123456789abcdef"),
+    ("Kc: 0123456789abcdef", "CRED", "0123456789abcdef"),
+    ("OPc=00112233445566778899aabbccddeeff", "CRED", "00112233445566778899aabbccddeeff"),
+    ("pin=1234", "CRED", "1234"),
+    ("puk=12345678", "CRED", "12345678"),
+    ("pass=hunter2 user=foo", "CRED", "hunter2"),
+    ("Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJFakeExample01.sigExample23", "CRED",   # 합성(자리표시) JWT
+     "eyJhbGciOiJIUzI1NiJ9.eyJFakeExample01.sigExample23"),
+    ("ro.serialno=R58M12ABCDE", "SERIAL", "R58M12ABCDE"),
+    ("serial=R58M12ABCDE", "SERIAL", "R58M12ABCDE"),
+    ("SerialNumber: R58M12ABCDE", "SERIAL", "R58M12ABCDE"),
+    # 리뷰 후속: getprop·JSON 따옴표 키·대소문자 변형·접두 키
+    ("[ro.serialno]: [R3CN30ABCDE]", "SERIAL", "R3CN30ABCDE"),
+    ('{"eid":"89049032004008882600012345678901"}', "EID", "89049032004008882600012345678901"),
+    ('{"mac":"aabbccddeeff"}', "MAC", "aabbccddeeff"),
+    ('{"latitude":37.566535}', "GEO", "37.566535"),
+    ('{"pass":"hunter2"}', "CRED", "hunter2"),
+    ('{"pin":"1234"}', "CRED", "1234"),
+    ('{"serial":"R58M12ABCDE"}', "SERIAL", "R58M12ABCDE"),
+    ('{"Ki":"0123456789abcdef0123456789abcdef"}', "CRED", "0123456789abcdef0123456789abcdef"),
+    ('{"imei":"490154203237518"}', "IMEI", "490154203237518"),
+    ("authorization: bearer Ab12Cd34Ef56Gh78Ij90", "CRED", "Ab12Cd34Ef56Gh78Ij90"),
+    ("OPC=00112233445566778899aabbccddeeff", "CRED", "00112233445566778899aabbccddeeff"),
+    ("KI=0123456789abcdef0123456789abcdef", "CRED", "0123456789abcdef0123456789abcdef"),
+    ("mSerial=R58M12ABCDE", "SERIAL", "R58M12ABCDE"),
+    ("sn=R58M12ABCDE", "SERIAL", "R58M12ABCDE"),
+    ("mPin=1234", "CRED", "1234"),
+    ("wifiMacAddress=aabbccddeeff", "MAC", "aabbccddeeff"),
 ]
 
 # 바뀌면 안 되는 줄 (빌드 번호·타임스탬프·일반 숫자·설정 키·Android 자체 마스킹)
@@ -126,6 +168,27 @@ KEEP = [
     "imsi=310260xxxxxxxxx iccid=89************ ***",   # Android 자체 마스킹
     "RIL version 1.6 uptime 12:34:56 build 20260915",
     "carrierId=1839 mccmnc=45008 subId=2 slot=1",
+    # 새 규칙의 과잉 방지 (P0-4)
+    "version 1.2.3.4",
+    "RIL version 1.2.3.4 baseband 10.3.4.5",
+    "app version=10.5.6.7",
+    "req serial=41 name=SETUP_DATA_CALL",              # RIL serial
+    "pinState=ENABLED_VERIFIED PIN1 retry=3",
+    "puk1 retries remaining 10",
+    "lat=0 lon=0 latency_ms=120",
+    "addr 0x7f3a2b1c key=0x1a2b3c4d5e6f",
+    "mac state=CONNECTED",
+    "network 5G",
+    "2026-09-20 14:30:00.123 build 20260915",
+    # 리뷰 후속: 상태값·시퀀스 번호·소문자 AKA 유사 키·낱말 끝 키
+    "IccCardState {mCardState=CARDSTATE_PRESENT,pin1=PINSTATE_ENABLED_NOT_VERIFIED,pin2=PINSTATE_ENABLED_NOT_VERIFIED}",
+    "pin=disabled pin=ready pass=PASSED pass=OK pass=true pass=3",
+    "passthrough=enabled mPin1State=ENABLED",
+    "SN=12345678 PDCP",
+    "RLC sn: 1234567",
+    "mSerial=41 serial=0042",
+    "ki=0123456789abcdef0123456789abcdef ck=0123456789abcdef",
+    "together=aabbccddeeff",
 ]
 
 
@@ -162,6 +225,72 @@ def test_deterministic_and_idempotent():
     assert first == [masking.new_masker()(t) for t in lines]
     for once in first:
         assert masking.new_masker(once)(once) == once, f"멱등 아님: {once!r}"
+
+
+def test_two_values_get_two_numbers():
+    assert masking.new_masker()("CK=00112233445566778899aabbccddeeff IK=ffeeddccbbaa99887766554433221100") \
+        == "CK=<CRED#1> IK=<CRED#2>"
+    assert masking.new_masker()("lat=37.5665 lon=126.9780") == "lat=<GEO#1> lon=<GEO#2>"
+
+
+def test_ipv4_after_version_context_is_kept():
+    for text in ("version 1.2.3.4", "RIL version 1.2.3.4", "app version=10.5.6.7"):
+        assert masking.new_masker()(text) == text
+    assert masking.new_masker()("ip=1.2.3.4 version 10.6.7.8") == "ip=<IP#1> version 10.6.7.8"
+    assert masking.new_masker()("peer 1.2.3.4") == "peer <IP#1>"  # 문맥 없으면 안전 쪽
+
+
+def test_pin_puk_values_need_four_digits():
+    assert masking.new_masker()("pin: 3") == "pin: 3"
+    assert masking.new_masker()("pin=null puk=unknown") == "pin=null puk=unknown"
+    assert masking.new_masker()("pin=1234") == "pin=<CRED#1>"
+    assert masking.new_masker()("pin=****") == "pin=****"  # Android 자체 마스킹
+
+
+def test_find_reports_new_kinds():
+    found = masking.new_masker().find("eid=89049032004008882600012345678901 lat=37.5665 serial=R58M12ABCDE")
+    assert [f["kind"] for f in found] == ["EID", "GEO", "SERIAL"]
+    assert all(set(f) == {"kind", "start", "end"} for f in found)
+
+
+def _fixture_lines() -> list[str]:
+    logs = sorted(set((REPO / "tests").glob("fixtures/**/*.log")) | set((REPO / "tests").glob("skill_evals/**/*.log")))
+    return [line for log in logs for line in log.read_text(encoding="utf-8", errors="replace").splitlines()]
+
+
+def test_gate_does_not_change_result():
+    """`Rule.gate`는 성능용이다: 게이트를 모두 끈 RULES와 출력이 같아야 한다."""
+    import dataclasses
+    lines = [t for t, _, _ in DETECT] + KEEP + _fixture_lines() + ["paſs=hunter2", "PİN=1234"]
+    gated = [masking.new_masker()(t) for t in lines]
+    original = masking.RULES
+    masking.RULES = tuple(dataclasses.replace(r, gate=()) for r in original)
+    try:
+        assert [masking.new_masker()(t) for t in lines] == gated
+    finally:
+        masking.RULES = original
+    assert any(r.gate for r in original)
+
+
+def test_imei_spelling_variants_share_number():
+    out = masking.new_masker()("IMEI: 49-015420-323751-8 imei=490154203237518 imei: 49 015420 323751 8")
+    assert out == "IMEI: <IMEI#1> imei=<IMEI#1> imei: <IMEI#1>", out
+    masker = masking.new_masker()
+    masker("imei=490154203237518")
+    assert masker.mask_value("49-015420-323751-8") == "<IMEI#1>"
+
+
+def test_gate_off_for_non_ascii():
+    """`(?i)`는 `ſ`→s·`İ`→i도 맞추므로 ASCII 아닌 줄은 게이트를 끈다(게이트 때문에 놓치지 않는다)."""
+    assert masking.new_masker()("paſs=hunter2") == "paſs=<CRED#1>"
+    assert masking.new_masker()("PİN=1234") == "PİN=<CRED#1>"
+
+
+def test_db_lint_state_patterns_are_not_raw_identifiers():
+    """상태값을 겨냥한 시그니처 패턴이 `raw-identifier`로 걸리지 않는다."""
+    import db_lint
+    for pattern in (r"pin1=PINSTATE_\w+", r"pass=(?:true|false)", r"SN=\d+ PDCP"):
+        assert db_lint.raw_identifier_in_pattern(pattern) is None, pattern
 
 
 def test_allow_patterns():

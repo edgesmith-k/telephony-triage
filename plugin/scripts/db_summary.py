@@ -269,6 +269,11 @@ def screen(wt: Path, plan: dict, stage_result: dict, state: dict, db_cfg: dict, 
         notes.append("로그·코드 분석: 하지 않음 (수동 기록)")
     if jira.get("origin") == "file":
         notes.append("Jira 메타데이터: 오프라인 파일")
+    fcheck = stage_result.get("feedback_check") or {}
+    if fcheck.get("status") in ("filled", "verified"):
+        notes.append(f"제시 후보(match.json): {fcheck.get('count', 0)}개")
+    elif fcheck.get("status") == "no-match-json":
+        notes.append("제시 후보 기록 없음 — match.json 없음(수락률 통계 제외)")
     new_pending, user_statement = [], False
     for op in applied.get("operations") or []:
         body = op.get("cause") if op.get("op") == "new-cause" else (op.get("first_cause") or {}).get("cause") \

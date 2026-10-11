@@ -84,13 +84,15 @@
      "items": {"$ref": "#/$defs/candidate"}
     },
     "pending_causes": {"type": "array"},
+    "unjudged": {"type": "object", "required": ["count"], "properties": {"count": {"type": "integer"}, "types": {"type": "array", "maxItems": 5}, "cause_count": {"type": "integer", "description": "C를 정하지 못한 원인 수(match.json causes[].C null, 있을 때만)"}, "causes": {"type": "array", "maxItems": 5, "description": "그 원인 ID(있을 때만)"}, "errors": {"type": "array", "maxItems": 2, "description": "{signature, error(≤80)} — 판정 불가 항목의 오류(없으면 매처 errors[]); 4KB 압축 시 types→causes→errors 순으로 뺌"}}, "description": "시그니처 시간 초과·오류로 S·C를 정하지 못한 유형·원인(match.json types[].S·causes[].C null). count = 유형 수. 있을 때만, 캐시 저장 안 함"},
     "no_candidate": {
      "type": "object",
      "required": ["search_hits", "error_events", "error_event_total"],
      "properties": {
       "search_hits": {"type": "array"},
       "error_events": {"type": "array", "maxItems": 8, "description": "{ts, tag, event, phone, request?, error?, code?, reason?, cause?}(각 ≤40자, 있을 때만; 4KB 압축 시 4개·부가 필드 없음)"},
-      "error_event_total": {"type": "integer"}
+      "error_event_total": {"type": "integer"},
+      "unextracted_warn": {"type": "integer", "description": "수집 태그 W/E/F 줄 중 이벤트로 추출 안 된 줄 수(parse_logcat unextracted_warn.lines, 있을 때만)"}
      }
     },
     "code": {
@@ -134,6 +136,7 @@
     "fix_judgement": {},
     "fix_message": {},
     "related": {"type": "array"},
+    "clock_flags": {"type": "array", "items": {"enum": ["clock_anomaly", "line_order"]}},
     "resolution": {},
     "resolution_verification": {},
     "fix_status": {},

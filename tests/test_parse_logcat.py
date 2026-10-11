@@ -6,6 +6,7 @@
 - 연도 없는 threadtime + `--tz`/`--year` → UTC, 형식 변형(연도·uid·zone·time)
 - 듀얼 SIM `phone_id`(태그 접미사·메시지 접두어, 없으면 null)
 - 같은 serial을 두 슬롯이 쓰는 로그의 슬롯별 RIL 페어링, 지연·무응답·에러, pid 키
+- 파일 중간 `beginning of <buffer>` 줄은 RIL 짝 맞춤 경계가 아님
 - `coverage.window_in_range`(true/partial/false), `clock_anomalies`
 - `extract-bugreport`(zip·txt): logcat 섹션만, dumpsys 문자열 없음, build.json fingerprint
 - `parser-rules/`만 바꿔도 결과가 바뀜, 규칙 스키마 검증, builtin./ext. 접두어 거부
@@ -262,6 +263,18 @@ def test_ril_pairing_same_serial_two_slots():
                if e["event"] is None and e["ril"] and e["ril"]["serial"] == 43 and e["ril"]["dir"] == "resp"]
     assert late["pid"] == 2345 and late["ril"]["paired_ts"] is None
     assert all(e["source"] == "rules" for e in data["events"] if e["event"])
+
+
+def test_buffer_header_mid_file_does_not_break_ril_pairing():
+    data = _parse([LOG_DIR / "ril-buffer-header.log"])
+    (slow,) = _events(data, event="ril_timeout")
+    assert slow["fields"] == {"request": "SETUP_DATA_CALL", "serial": "100",
+                              "latency_ms": "40000", "timeout_ms": "30000"}
+    (req,) = [e for e in data["events"] if e["event"] is None and e["ril"] and e["ril"]["dir"] == "req"]
+    (resp,) = [e for e in data["events"] if e["event"] is None and e["ril"] and e["ril"]["dir"] == "resp"]
+    assert req["ril"]["paired_ts"] == resp["ts"] and resp["ril"]["paired_ts"] == req["ts"]
+    assert data["coverage"]["clock_anomalies"] == []
+    assert not _events(data, event="ril_no_response")
 
 
 def test_no_response_needs_enough_log_after_request():
@@ -798,6 +811,22 @@ def test_uncollected_tags_counts_dropped_tags_of_collected_pids_only():
     assert "ForeignTag" not in json.dumps(data["uncollected_tags"])
     # 없으면 키가 없다(기존 출력 불변)
     assert "uncollected_tags" not in _parse([LOG_DIR / "data-connected.log"], "--full", "--mask")
+
+
+def test_unextracted_warn_counts_collected_tag_lines_without_events():
+    """수집 태그(DNC-0)의 W 줄인데 extractor 문구와 달라 이벤트가 없으면 `unextracted_warn`(최상위)에 센다."""
+    log = _tmp() / "w.log"
+    log.write_text("\n".join([
+        "09-20 14:30:04.600  1234  1244 I DNC-0: onEvaluateNetworkRequests: reason=DATA_ENABLED_CHANGED",
+        "09-20 14:30:04.900  1234  1244 W DNC-0: Data evaluation: reasons=[DATA_DISABLED]",
+        "09-20 14:30:05.900  1234  1244 W DNC-0: Data evaluation: reasons=[DATA_DISABLED]",
+        "09-20 14:30:06.900  1234  1244 W DNC-0: Data evaluation: evaluation reason:X, Data disallowed reasons: DATA_DISABLED",
+    ]) + "\n", encoding="utf-8")
+    data = _parse([log], "--full", "--mask")
+    assert data["unextracted_warn"] == {"lines": 2, "tags": [{"tag": "DNC-0", "lines": 2}]}, data.get("unextracted_warn")
+    # 미추출 W/E 줄이 없으면 키가 없다(기존 출력 불변)
+    assert "unextracted_warn" not in _parse([SAMPLE_DB / "data/DATA-001-no-setup-data-call/fixtures/DATA-001-01.log"],
+                                            "--full", "--mask")
 
 
 def _lines(name: str, *stamps: str) -> Path:

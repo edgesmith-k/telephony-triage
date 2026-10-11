@@ -360,6 +360,59 @@ def test_sequence_order_matters():
     assert result["candidates"][0]["cause"] is None
 
 
+def test_sequence_satisfied_across_clock_backward_is_flagged():
+    # 줄 순서는 거부 → (시계 8초 역행) → 설정 OFF. 시각 재정렬 뒤에는 OFF → 거부라 sequence가 충족된다.
+    # 판정은 바꾸지 않고 후보에 clock_flags로 표시만 한다(04 §5.11 (1)).
+    events = _events(_write_log([
+        _line("14:30:10.000", "W", "DNC-0", REJECTED),
+        _line("14:30:02.000", "D", "DSMGR-0", OFF),
+    ]))
+    doc = json.loads(events.read_text(encoding="utf-8"))
+    assert doc["coverage"]["clock_anomalies"][0]["kind"] == "backward"
+    result = _match(events)
+    assert _C(result, "DATA-001-01") == 1
+    assert result["candidates"][0]["cause"] == "DATA-001-01"
+    assert result["candidates"][0]["clock_flags"] == ["clock_anomaly", "line_order"]
+    # 역행 뒤에 순서대로 다시 나온 거부가 근거가 되면 줄 순서는 맞다 → 구간 표시만
+    result = _match(_events(_write_log([
+        _line("14:30:10.000", "W", "DNC-0", REJECTED),
+        _line("14:30:02.000", "D", "DSMGR-0", OFF),
+        _line("14:30:03.000", "W", "DNC-0", REJECTED),
+    ])))
+    assert _C(result, "DATA-001-01") == 1 and result["candidates"][0]["clock_flags"] == ["clock_anomaly"]
+    # 대조: 시계 이상이 없으면 키가 없다
+    in_order = _match(_events(_write_log([
+        _line("14:30:00.000", "D", "DSMGR-0", OFF),
+        _line("14:30:02.000", "W", "DNC-0", REJECTED),
+    ])))
+    assert all("clock_flags" not in c for c in in_order["candidates"])
+
+
+def test_clock_jump_region_flags_only_evidence_spanning_gap():
+    # 점프(+2시간)가 비우는 시각대에 걸친 근거만 표시한다. 점프 뒤에만 있는 근거는 표시하지 않는다.
+    after_only = _match(_events(_write_log([
+        _line("14:30:00.000", "I", "DNC-0", "tail"),
+        _line("16:30:01.000", "D", "DSMGR-0", OFF),
+        _line("16:30:02.000", "W", "DNC-0", REJECTED),
+    ])))
+    top = after_only["candidates"][0]
+    assert top["cause"] == "DATA-001-01" and "clock_flags" not in top
+    # 구간: 역행은 닫힌 [T, T+|d|], 점프는 양 끝 줄을 뺀 (T−d, T). 근거 범위가 점프를 가로지르면 표시된다.
+    import match_signatures
+    from common.signatures import Evaluator, compile_signature
+    doc = {"coverage": {"clock_anomalies": [{"ts": "2026-09-20T07:30:01.000Z", "kind": "jump", "delta_sec": 7201.0}]}}
+    (lo, hi), = match_signatures._clock_regions(doc)
+    t0, t1 = match_signatures._parse_iso("2026-09-20T05:30:00.000Z", "t"), match_signatures._parse_iso("2026-09-20T07:30:01.000Z", "t")
+    assert t0 < lo < hi < t1
+    rows = [{"ts": "2026-09-20T05:30:00.000Z", "tag": "A", "msg": "a", "event": None, "phone_id": 0},
+            {"ts": "2026-09-20T07:30:01.000Z", "tag": "B", "msg": "b", "event": None, "phone_id": 0}]
+    sig = compile_signature({"id": "x", "must_match": ["^A: a", "^B: b"], "window_sec": 10000}, "T")
+    with Evaluator(rows, t0, t1, anomalies=[(lo, hi)]) as ev:
+        assert ev.evaluate(sig).flags == ["clock_anomaly"]
+    with Evaluator(rows, t0, t1) as ev:
+        assert ev.evaluate(sig).satisfied and ev.evaluate(sig).flags == []
+
+
 def test_window_sec_limits_span():
     far = _write_log([
         _line("14:30:00.000", "D", "DSMGR-0", OFF),
@@ -383,6 +436,47 @@ def test_slow_regex_times_out_and_others_continue():
         assert [e["signature"] for e in result["errors"]] == ["DATA-001-02/slow"], result["errors"]
         assert "timeout" in result["errors"][0]["error"]
         assert result["candidates"][0]["cause"] == "DATA-001-01"
+
+
+
+SLOW_SYMPTOM = ("  - id: slow-symptom\n    must_match: ['(a+)+$']\n    window_sec: 60\n")
+
+
+def _slow_log() -> list[str]:
+    lines = (DATA_DIR / "fixtures/DATA-001-01.log").read_text(encoding="utf-8").splitlines()
+    return lines + ["09-20 14:30:40.000  1234  1244 D DNC-0: " + "a" * 40 + "!"]
+
+
+def test_timed_out_type_is_null_not_zero_and_kept_by_top():
+    """증상 시그니처가 시간 초과로 평가 못 되면 그 유형은 S=0이 아니라 판정 불가(S: null)이고 --top에서도 남는다."""
+    db = _copy_db()
+    _edit(db / "issue-db.config.yaml", "pattern_timeout_ms: 2000", "pattern_timeout_ms: 300")
+    type_md = db / "data/DATA-001-no-setup-data-call/type.md"
+    text = type_md.read_text(encoding="utf-8")
+    start = text.index("  - id: no-setup-data-call-request")
+    end = text.index("causes:")
+    type_md.write_text(text[:start] + SLOW_SYMPTOM + text[end:], encoding="utf-8", newline="\n")
+    events = _events(_write_log(_slow_log()), db)
+    result = _match(events, db, "--top", "3")
+    row = next(t for t in result["types"] if t["type"] == "DATA-001")
+    assert row["S"] is None and row["error"].startswith("DATA-001/slow-symptom: "), row
+    assert result["errors"][0]["signature"] == "DATA-001/slow-symptom"
+    assert all(t["S"] in (0, 1) for t in result["types"] if t["type"] != "DATA-001")
+    assert result["omitted"]["types"] == len(_match(events, db)["types"]) - len(result["types"])
+    full = _match(events, db)   # --top 0: 다른 유형은 0/1 그대로
+    assert all(t["S"] in (0, 1) and "error" not in t for t in full["types"] if t["type"] != "DATA-001")
+    regress = _match(events, db, "--regress")   # 회귀 모드: S null이어도 원인은 평가된다(점수 계산이 깨지지 않는다)
+    assert _S(regress, "DATA-001") is None and _C(regress, "DATA-001-01") == 1
+
+
+def test_type_with_one_timed_out_and_one_satisfied_signature_is_s1():
+    db = _copy_db()
+    _edit(db / "issue-db.config.yaml", "pattern_timeout_ms: 2000", "pattern_timeout_ms: 300")
+    _edit(db / "data/DATA-001-no-setup-data-call/type.md", "causes:\n", SLOW_SYMPTOM + "causes:\n")
+    result = _match(_events(_write_log(_slow_log()), db), db)
+    row = next(t for t in result["types"] if t["type"] == "DATA-001")
+    assert row["S"] == 1 and "error" not in row
+    assert [e["signature"] for e in result["errors"]] == ["DATA-001/slow-symptom"]
 
 
 # -- 입력 검사 ------------------------------------------------------------------

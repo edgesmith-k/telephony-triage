@@ -132,7 +132,7 @@ def test_analysis_is_trimmed_to_4kb_when_evidence_is_large(tmp_path):
     result = {"warnings": ["w" * 120] * 10, "files": {"report": "r", "events": "e"},
               "candidates": [{"cause": f"C-{i}", "evidence": [dict(big) for _ in range(10)]} for i in range(3)]}
     out = triage.fit(result)
-    assert len(json.dumps(out, ensure_ascii=False, indent=1).encode("utf-8")) <= 4096
+    assert len(triage.dumps(out).encode("utf-8")) + 1 <= 4096   # analysis.json 파일 바이트(compact, 끝 개행 포함)
     assert out["candidates"][0]["evidence"] and out["truncated"] is False
 
 
@@ -333,6 +333,20 @@ def test_bridge_fails_closed_when_config_unreadable():
     assert proc.returncode == 0 and proc.stdout.strip(), proc.stderr
     shown = json.loads(proc.stdout)["hookSpecificOutput"]["updatedToolOutput"]
     assert "450081234567890" not in shown and "데이터 안 됨" not in shown
+
+
+def test_bridge_without_pyyaml_hides_raw():
+    """의존성(PyYAML) import 실패: 종료 1(원문 노출)이 아니라 종료 0 + 오류 문구. MCP가 아닌 도구는 그대로."""
+    fake = tmp("tt-noyaml-")
+    (fake / "yaml.py").write_text('raise ImportError("PyYAML 없음 (테스트)")\n', encoding="utf-8")
+    env = {"TELEPHONY_TRIAGE_HOME": _bridge_home(), "PYTHONPATH": str(fake)}
+    proc = run("jira_bridge.py", [], root=plugin_root(), env=env, stdin=_get_issue_event("mcp__mock-jira__jira_fetch_ticket"))
+    assert proc.returncode == 0 and "Traceback" not in proc.stderr, proc.stderr
+    shown = json.loads(proc.stdout)["hookSpecificOutput"]["updatedToolOutput"]
+    assert "의존성" in shown and "450081234567890" not in shown and "데이터 안 됨" not in shown
+    other = run("jira_bridge.py", [], root=plugin_root(), env=env,
+                stdin=json.dumps({"tool_name": "Bash", "tool_input": {}, "tool_response": "x"}))
+    assert other.returncode == 0 and other.stdout.strip() == ""
 
 
 def test_lock_held_by_other_job_is_a_question_and_release_other_continues():
@@ -653,7 +667,7 @@ def test_fit_keeps_first_must_show_and_stays_within_4kb():
     result = {"warnings": ["w" * 120] * 10, "files": {"report": "r", "events": "e"}, "read_only_hint": "힌트" * 80,
               "must_show": must, "candidates": [{"cause": f"C-{i}", "evidence": [dict(big) for _ in range(10)]} for i in range(3)]}
     out = triage.fit(result)
-    assert len(json.dumps(out, ensure_ascii=False, indent=1).encode("utf-8")) <= 4096 and out["truncated"] is False
+    assert len(triage.dumps(out).encode("utf-8")) + 1 <= 4096 and out["truncated"] is False
     assert out["must_show"][0].startswith("분석 전용:")
     # must_show만 커서 다른 줄임으로 부족하면 마지막에 줄당 160자로 자르고 앞 4개만 남긴다
     clipped = triage.fit({"files": {"report": "r"}, "must_show": must})
@@ -791,6 +805,7 @@ def test_unexpected_error_releases_lock_and_exits_2():
                                       "--logs", DATA_LOG, "--code", "skip"])
     assert proc.returncode == 2, proc.stderr[-1500:]
     assert "내부 오류" in proc.stderr and "RuntimeError: boom" in proc.stderr and "Traceback" not in proc.stderr
+    assert str(ws.job_dir("MOCK-1001") / "trace.jsonl") in proc.stderr and "관리자에게 전달" in proc.stderr
     assert ws.db_pr("lock", "status")["held"] is False
     last = json.loads((ws.job_dir("MOCK-1001") / "trace.jsonl").read_text(encoding="utf-8").strip().splitlines()[-1])
     assert last["step"] == "error" and last["exit"] == 2
@@ -880,7 +895,7 @@ def test_no_candidate_error_events_carry_request_and_error_and_report_lists_them
     assert rows[0]["error"] == "INSUFFICIENT_RESOURCES" and rows[0]["phone"] == 1
     assert len((out / "analysis.json").read_bytes()) <= 4096
     report = (out / "report.md").read_text(encoding="utf-8")
-    assert "- 오류·거부·타임아웃 이벤트: 1건" in report
+    assert "- 오류·거부·타임아웃 이벤트: 추출 이벤트 기준 1건" in report
     assert "  - 2026-09-22T12:00:01.000Z RILJ ril_error request=SETUP_DATA_CALL error=INSUFFICIENT_RESOURCES (phone 1)" in report
 
 
@@ -1148,3 +1163,191 @@ def test_w4_docs_match_the_implementation():
     assert "심층 분석과 탐색 분석을 할까요?" in skill and "`notes`는 항상 알린다" in skill and "`--code`로 변경 가능" in skill
     doc = (REPO / "plugin/scripts/triage.py").read_text(encoding="utf-8").split('"""')[1]
     assert "`cleanup`(yes|no)" not in doc and "`code`(프로필|경로|skip)" in doc
+
+
+# -- 묶음 B: 판정 불가 유형(매처 오류)·미추출 W/E 줄 ------------------------------------------------------------
+
+
+def _slow_symptom_db() -> Path:
+    """DATA-001 증상 시그니처를 시간 초과하는 정규식으로 바꾼 샘플 DB 사본 (`pattern_timeout_ms: 300`)."""
+    db = tmp("tt-slowdb-") / "db"
+    shutil.copytree(SAMPLE, db)
+    cfg = db / "issue-db.config.yaml"
+    cfg.write_text(cfg.read_text(encoding="utf-8").replace("pattern_timeout_ms: 2000", "pattern_timeout_ms: 300"),
+                   encoding="utf-8", newline="\n")
+    type_md = db / "data/DATA-001-no-setup-data-call/type.md"
+    text = type_md.read_text(encoding="utf-8")
+    start, end = text.index("  - id: no-setup-data-call-request"), text.index("causes:")
+    type_md.write_text(text[:start] + "  - id: slow-symptom\n    must_match: ['(a+)+$']\n    window_sec: 60\n" + text[end:],
+                       encoding="utf-8", newline="\n")
+    return db
+
+
+def _slow_log() -> Path:
+    log = tmp("tt-slowlog-") / "slow.log"
+    log.write_text(DATA_LOG.read_text(encoding="utf-8") + "09-20 14:30:40.000  1234  1244 D DNC-0: " + "a" * 40 + "!\n",
+                   encoding="utf-8", newline="\n")
+    return log
+
+
+def _meta(out: Path, key: str, **fields) -> Path:
+    meta = out.parent / f"{out.name}.meta.json"
+    meta.write_text(json.dumps({"key": key, "summary": "", **fields}), encoding="utf-8")
+    return meta
+
+
+def test_matcher_timeout_is_must_shown_and_not_cached():
+    db = _slow_symptom_db()
+    out = tmp("tt-triage-") / "x"
+    meta = _meta(out, "MOCK-7410", occurred_at="2026-09-20T05:30:05.000Z")
+    analysis = run_json("triage.py", ["run", "MOCK-7410", "--offline-db", db, "--out", out, "--logs", _slow_log(),
+                                      "--jira-meta", meta, "--tz", "Asia/Seoul", "--year", 2026])
+    assert analysis["status"] == "ok", analysis
+    assert analysis["unjudged"]["count"] >= 1 and "DATA-001" in analysis["unjudged"]["types"], analysis["unjudged"]
+    assert any(m.startswith("판정 불가 유형:") for m in analysis["must_show"]), analysis["must_show"]
+    assert any("판정 불가 유형" in w for w in analysis["warnings"])
+    assert len((out / "analysis.json").read_bytes()) <= 4096
+    report = (out / "report.md").read_text(encoding="utf-8")
+    assert not analysis.get("candidates")
+    assert "**판정 불완전**" in report and "**후보 없음**" not in report, report
+
+
+def test_time_candidates_question_mentions_unjudged_types():
+    out = tmp("tt-triage-") / "x"
+    meta = _meta(out, "MOCK-7411")
+    ask = run_json("triage.py", ["run", "MOCK-7411", "--offline-db", _slow_symptom_db(), "--out", out,
+                                 "--logs", _slow_log(), "--jira-meta", meta, "--tz", "Asia/Seoul", "--year", 2026])
+    assert ask["status"] == "needs_input" and ask["needs_input"]["kind"] == "time", ask
+    assert "판정 불가 유형" in ask["needs_input"]["question"], ask
+
+
+def test_no_candidate_shows_unextracted_warn_lines():
+    """수집 태그(DNC-0)의 W 줄이 extractor 문구와 달라 이벤트가 0건이면, 후보 없음 절에 미추출 줄 수를 보인다."""
+    log = tmp("tt-unext-") / "unext.log"
+    log.write_text("09-20 14:30:04.600  1234  1244 I DNC-0: onEvaluateNetworkRequests: reason=DATA_ENABLED_CHANGED\n"
+                   "09-20 14:30:04.900  1234  1244 W DNC-0: Data evaluation: reasons=[DATA_DISABLED]\n"
+                   "09-20 14:30:06.900  1234  1244 W DNC-0: Data evaluation: reasons=[DATA_DISABLED]\n",
+                   encoding="utf-8", newline="\n")
+    out = tmp("tt-triage-") / "x"
+    meta = _meta(out, "MOCK-7412", occurred_at="2026-09-20T05:30:05.000Z")
+    analysis = run_json("triage.py", ["run", "MOCK-7412", "--offline-db", SAMPLE, "--out", out, "--logs", log,
+                                      "--jira-meta", meta, "--tz", "Asia/Seoul", "--year", 2026])
+    assert not analysis.get("candidates"), analysis
+    assert analysis["no_candidate"]["unextracted_warn"] == 2, analysis["no_candidate"]
+    assert "_unextracted_tags" not in analysis["no_candidate"]
+    report = (out / "report.md").read_text(encoding="utf-8")
+    line = "오류·거부·타임아웃 이벤트: 추출 이벤트 기준 0건 (수집 태그 W/E/F 줄 중 이벤트로 추출 안 된 줄 2건: DNC-0 2줄)"
+    assert f"- {line}" in report, report
+    assert line in analysis["must_show"], analysis["must_show"]
+
+
+DATA_DISABLED_SIG = ("      - id: data-disabled\n        must_event:\n"
+                     "          - {id: setting-off, event: data_setting_changed, fields: {enabled: 'false'}}\n"
+                     "          - {id: rejected, event: data_evaluation_rejected, fields: {reasons: '.*DATA_DISABLED.*'}}\n"
+                     "        sequence: [setting-off, rejected]\n        same_phone: true\n        window_sec: 60\n")
+
+
+def test_cause_timeout_is_cause_unjudged_not_unconfirmed_and_error_comes_from_unjudged_item():
+    """원인 시그니처만 시간 초과(C: null)면 '원인 미확인'이 아니라 '원인 판정 불가'이고, 대표 오류는 판정된 유형의
+    다른 시그니처 오류가 아니라 판정 불가 원인의 오류다."""
+    db = tmp("tt-slowcause-") / "db"
+    shutil.copytree(SAMPLE, db)
+    cfg = db / "issue-db.config.yaml"
+    cfg.write_text(cfg.read_text(encoding="utf-8").replace("pattern_timeout_ms: 2000", "pattern_timeout_ms: 300"),
+                   encoding="utf-8", newline="\n")
+    type_md = db / "data/DATA-001-no-setup-data-call/type.md"
+    text = type_md.read_text(encoding="utf-8")
+    assert DATA_DISABLED_SIG in text
+    text = text.replace(DATA_DISABLED_SIG, "      - id: slow-cause\n        must_match: ['(a+)+$']\n        window_sec: 60\n", 1)
+    # 충족되는 유형에 오류 나는 시그니처를 하나 더 둔다 — errors[0]은 이것이지만 판정에는 영향이 없다
+    text = text.replace("causes:\n", "  - id: slow-symptom\n    must_match: ['(a+)+$']\n    window_sec: 60\ncauses:\n", 1)
+    type_md.write_text(text, encoding="utf-8", newline="\n")
+    out = tmp("tt-triage-") / "x"
+    meta = _meta(out, "MOCK-7413", occurred_at="2026-09-20T05:30:05.000Z")
+    analysis = run_json("triage.py", ["run", "MOCK-7413", "--offline-db", db, "--out", out, "--logs", _slow_log(),
+                                      "--jira-meta", meta, "--tz", "Asia/Seoul", "--year", 2026])
+    top = analysis["candidates"][0]
+    assert top["type"] == "DATA-001" and top["cause"] is None and "_cause_unjudged" not in top
+    u = analysis["unjudged"]
+    assert u["count"] == 0 and u["cause_count"] == 1 and u["causes"] == ["DATA-001-01"], u
+    assert u["errors"][0]["signature"] == "DATA-001-01/slow-cause", u
+    report = (out / "report.md").read_text(encoding="utf-8")
+    assert "DATA-001 > 원인 판정 불가(" in report and "> 원인 미확인 (" not in report and "유형 일치·원인 판정 불가)" in report, report
+    line = next(m for m in analysis["must_show"] if m.startswith("판정 불가 유형:"))
+    assert line.startswith("판정 불가 유형: 0·원인 1개 (DATA-001-01) — 시그니처 시간 초과·오류 DATA-001-01/slow-cause"), line
+    assert any(w.startswith("판정 불가 유형 0·원인 1개") for w in analysis["warnings"])
+
+
+def test_fit_keeps_must_show_priority_and_unjudged_count_under_4kb():
+    """4KB 압축: must_show는 우선순위대로 앞 4개만 남고(판정 불가 줄 순위는 그대로), unjudged는 count가 남는다."""
+    sys.path.insert(0, str(plugin_root() / "scripts"))
+    from triagelib.report import fit
+    must = [f"줄{i} " + "가" * 150 for i in range(6)]
+    result = {"status": "ok", "key": "X", "must_show": list(must), "warnings": ["w" * 300] * 5,
+              "unjudged": {"count": 1, "types": ["DATA-001"], "cause_count": 1, "causes": ["DATA-001-01"],
+                           "errors": [{"signature": "DATA-001/s", "error": "e" * 80}] * 2},
+              "files": {"report": "r", "events": "e" * 500, "match": "m" * 500}, "pad": "p" * 2000}
+    out = fit(result)
+    assert [m[:2] for m in out["must_show"]] == ["줄0", "줄1", "줄2", "줄3"]
+    assert out["unjudged"]["count"] == 1 and "types" not in out["unjudged"] and "causes" not in out["unjudged"]
+
+
+# -- compact JSON · 시계 이상 근거 · 슬롯 불일치 (must_show) --------------------------------------------------
+
+
+def test_analysis_json_is_compact_and_equals_stdout():
+    doc, items = _items()
+    out = tmp("tt-triage-") / "a"
+    meta = _meta(out, items[0]["key"], occurred_at=items[0]["occurred_at"])
+    logs = [str((LABELSET.parent / p).resolve()) for p in items[0]["logs"]]
+    proc = run("triage.py", ["run", items[0]["key"], "--offline-db", SAMPLE, "--out", out, "--logs", *logs,
+                             "--jira-meta", meta, "--tz", doc["tz"], "--year", doc["year"]])
+    assert proc.returncode == 0, proc.stderr
+    text = (out / "analysis.json").read_text(encoding="utf-8")
+    assert "\n " not in text and text == _triage_module().dumps(json.loads(text)) + "\n"
+    assert proc.stdout.strip() == text.strip()
+
+
+def _run_custom(lines: list[str], key: str, **meta_fields) -> tuple[dict, str]:
+    out = tmp("tt-triage-") / "x"
+    log = out.parent / "custom.log"
+    log.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
+    meta = _meta(out, key, occurred_at="2026-09-20T05:30:05.000Z", **meta_fields)
+    analysis = run_json("triage.py", ["run", key, "--offline-db", SAMPLE, "--out", out, "--logs", log,
+                                      "--jira-meta", meta, "--tz", "Asia/Seoul", "--year", 2026])
+    assert len((out / "analysis.json").read_bytes()) <= 4096
+    return analysis, (out / "report.md").read_text(encoding="utf-8")
+
+
+OFF_LINE = "09-20 {}  1234  1244 D DSMGR-0: [PHONE0] notifyDataEnabledChanged: enabled=false, reason=USER, callingPackage=com.android.settings"
+REJECTED_LINE = ("09-20 {}  1234  1244 W DNC-0: [PHONE0] Data evaluation: evaluation reason:DATA_ENABLED_CHANGED, "
+                 "Data disallowed reasons: DATA_DISABLED, candidate profile=null")
+
+
+def test_clock_flagged_top_candidate_is_must_shown():
+    analysis, report = _run_custom([REJECTED_LINE.format("14:30:10.000"), OFF_LINE.format("14:30:02.000")], "MOCK-7420")
+    top = analysis["candidates"][0]
+    assert top["cause"] == "DATA-001-01" and top["clock_flags"] == ["clock_anomaly", "line_order"]
+    line = next(m for m in analysis["must_show"] if m.startswith("시계 이상 구간의 근거:"))
+    assert len(line) <= 160 and line.endswith("[clock_anomaly, line_order]") and f"- {line}" in report
+    order = [m.split(":")[0] for m in analysis["must_show"]]
+    assert order.index("시계 이상 구간의 근거") < order.index("로그 범위")
+    plain, _ = _run_custom([OFF_LINE.format("14:30:00.000"), REJECTED_LINE.format("14:30:02.000")], "MOCK-7421")
+    assert "clock_flags" not in plain["candidates"][0]
+    assert not any(m.startswith("시계 이상 구간의 근거:") for m in plain.get("must_show") or [])
+
+
+def test_top_candidate_slot_mismatch_is_must_shown():
+    lines = [OFF_LINE.format("14:30:00.000"), REJECTED_LINE.format("14:30:02.000")]
+    analysis, report = _run_custom(lines, "MOCK-7422", sim_slot="1")
+    assert analysis["jira"]["sim_slot"] == "1" and analysis["candidates"][0]["phones"] == [0]
+    line = next(m for m in analysis["must_show"] if m.startswith("슬롯 불일치:"))
+    assert "phone 0" in line and "Jira SIM 슬롯은 1" in line and len(line) <= 160 and f"- {line}" in report
+    for extra in ({"sim_slot": "0"}, {}, {"sim_slot": "SIM"}, {"sim_slot": "-1"}, {"sim_slot": "1 of 2"}):
+        other, report = _run_custom(lines, "MOCK-7423", **extra)
+        assert not any(m.startswith("슬롯 불일치:") for m in other.get("must_show") or [])
+        assert "슬롯 불일치:" not in report
+    # 시계 이상과 같이 나오면 슬롯 불일치가 앞, 둘 다 로그 범위 줄보다 앞
+    both, _ = _run_custom([REJECTED_LINE.format("14:30:10.000"), OFF_LINE.format("14:30:02.000")], "MOCK-7424", sim_slot="1")
+    order = [m.split(":")[0] for m in both["must_show"]]
+    assert order.index("슬롯 불일치") < order.index("시계 이상 구간의 근거") < order.index("로그 범위")

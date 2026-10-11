@@ -97,8 +97,12 @@ class Workspace:
     def wt(self, job: str) -> Path:
         return self.work / job / "wt"
 
-    def plan(self, job: str, name_or_plan, base_sha: str | None = None, **over) -> Path:
-        """계획을 `<work_dir>/<job>/plan.json`에 쓴다. `base_sha`는 기본으로 지금 origin/main."""
+    def plan(self, job: str, name_or_plan, base_sha: str | None = None, match: str | None = "auto", **over) -> Path:
+        """계획을 `<work_dir>/<job>/plan.json`에 쓴다. `base_sha`는 기본으로 지금 origin/main.
+
+        `match="auto"`(기본): analyze 계획의 `feedback.suggested`가 비어 있지 않으면 그 후보로 `<job>/match.json`을
+        써 준다(`db_pr stage`가 suggested를 match.json과 대조한다, contracts.md §stage). 테스트가 직접 둔 match.json은
+        건드리지 않고, 이 헬퍼가 썼던 것만 계획에 맞게 다시 쓰거나 지운다. `match=None`이면 아무것도 안 한다."""
         if isinstance(name_or_plan, dict):
             plan = json.loads(json.dumps(name_or_plan))
         else:
@@ -108,7 +112,28 @@ class Workspace:
         path = self.job_dir(job) / "plan.json"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8")
+        if match == "auto":
+            self._auto_match(job, plan)
         return path
+
+    def _auto_match(self, job: str, plan: dict) -> None:
+        mpath = self.job_dir(job) / "match.json"
+        if mpath.is_file():
+            try:
+                auto = json.loads(mpath.read_text(encoding="utf-8")).get("_ws_auto")
+            except ValueError:
+                auto = False
+            if not auto:
+                return
+            mpath.unlink()
+        suggested = (plan.get("feedback") or {}).get("suggested") or []
+        if plan.get("source") != "analyze" or not suggested:
+            return
+        doc = {"_ws_auto": True, "schema": 1, "mode": "analysis", "jira": {"key": (plan.get("jira") or {}).get("key")},
+               "candidates": [{"type": str(c["cause"]).rsplit("-", 1)[0], "cause": c["cause"],
+                               "signature": c.get("signature"), "score": c.get("score"), "S": 1, "C": 1}
+                              for c in suggested]}
+        mpath.write_text(json.dumps(doc, ensure_ascii=False, indent=1), encoding="utf-8")
 
     def read_plan(self, job: str) -> dict:
         return json.loads((self.job_dir(job) / "plan.json").read_text(encoding="utf-8"))

@@ -11,7 +11,8 @@ stdin: hook 입력 `{tool_name, tool_input, tool_response, ...}`. `tool_name`이
 
 실패하면 원문을 내보내지 않고 오류 문구로 바꾼다(fail closed). 설정(`config.yaml`·`site-defaults.yaml`)을 읽지 못해
 대상인지 판정할 수 없으면 모든 `mcp__` 결과를 오류 문구로 바꾼다(guard가 같은 상태에서 모든 `mcp__` 호출을 거부하는 범위와 같다).
-`site-defaults.yaml`이 없으면 guard처럼 사용자 config만으로 판정한다. 종료 코드는 항상 0. 출력 필드 이름은 Claude Code hooks 문서의
+의존성(PyYAML 등) import가 실패해도 같다(종료 1로 끝나 원문이 새지 않게). `site-defaults.yaml`이 없으면 guard처럼
+사용자 config만으로 판정한다. 종료 코드는 항상 0. 출력 필드 이름은 Claude Code hooks 문서의
 PostToolUse `updatedToolOutput`이다 — TODO(SITE:S1) 사내 Claude Code 버전에서 원문이 대체되는지 확인한다.
 """
 
@@ -25,8 +26,13 @@ from pathlib import Path
 SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS))
 
-from common import compat, mcptools, site_defaults, userconfig  # noqa: E402
-import jira_fields  # noqa: E402
+# 의존성(PyYAML 등)이 없으면 import가 터진다: 종료 1이면 원문이 그대로 모델에 가므로 받아 두고 `main`에서 막는다.
+try:
+    from common import compat, mcptools, site_defaults, userconfig  # noqa: E402
+    import jira_fields  # noqa: E402
+    IMPORT_ERROR: Exception | None = None
+except ImportError as _exc:   # noqa: BLE001
+    IMPORT_ERROR = _exc
 
 BRIEF_COMMENTS = "last:3"
 BRIEF_CHARS = 200
@@ -124,6 +130,15 @@ def main() -> int:
     except json.JSONDecodeError:
         return 0
     if not isinstance(event, dict):   # hook 입력 형식이 아니다: 도구 이름을 모른다
+        return 0
+    if IMPORT_ERROR is not None:      # 대상 판정 불가: guard와 같은 범위(모든 mcp__)의 원문을 숨긴다
+        if not str(event.get("tool_name") or "").startswith("mcp__"):
+            return 0
+        print(f"jira_bridge: {IMPORT_ERROR}", file=sys.stderr)
+        text = (f"telephony-triage: 의존성 없음({type(IMPORT_ERROR).__name__}: {IMPORT_ERROR})으로 Jira 응답 격리 여부를 "
+                "판정하지 못했다 — 원문은 표시하지 않는다. pyproject 의존성 설치 후 config.py doctor로 확인한다.")
+        print(json.dumps({"hookSpecificOutput": {"hookEventName": "PostToolUse", "updatedToolOutput": text}},
+                         ensure_ascii=False))
         return 0
     error = None
     try:

@@ -50,7 +50,8 @@ def read(work_dir: Path) -> dict | None:
     except FileNotFoundError:
         return None
     except (OSError, ValueError, TypeError) as exc:
-        raise LockError("session.lock을 읽을 수 없습니다. 손상된 lock을 확인한다.") from exc
+        raise LockError("session.lock을 읽을 수 없습니다(손상). 그 세션이 끝났으면 "
+                        "`db_pr lock release <작업 키> --force`가 `.corrupt-<ts>`로 백업하고 푼다.") from exc
 
 
 def describe(data: dict | None) -> dict | None:

@@ -89,7 +89,7 @@ extractors:
 
 추출된 이벤트는 파서 출력 JSON에 `{event, fields, ts, tag, msg, phone_id}`로 들어간다. `--mask`면 extractor는 **마스킹된 줄**에 돈다. 그래서 extractor 패턴도 마스킹 이후 텍스트 기준으로 쓰고, 원본 식별자 패턴은 `db_lint`가 금지한다.
 
-**슬롯(`phone_id`)**: 듀얼 SIM 단말에서는 두 슬롯의 로그가 한 파일에 섞인다. 파서는 모든 이벤트에 `phone_id`(정수 또는 `null`)를 넣는다. 추출원은 순서대로 태그 접미사(`DNC-1` → 1), 메시지 접두어(`[PHONE1]`, `[SUB1]` 등, 실제 표기는 S20에서 확인해 `site-defaults.yaml`의 `platform.log.phone_id`로 바꾼다), 없으면 `null`. RIL로 해석하는 태그는 `platform.ril.tags`(기본 `RILJ`)다. 시그니처는 기본적으로 **같은 슬롯 안에서만** 충족된다 (5.11 (1) `same_phone`). RIL 페어링 키는 `(pid, phone_id, serial)`이고 `phone_id`를 못 뽑으면 `(pid, serial)`이다. phone 프로세스 재시작이나 슬롯별 serial 충돌로 요청·응답이 잘못 짝지어지는 것을 막기 위해 pid를 포함한다.
+**슬롯(`phone_id`)**: 듀얼 SIM 단말에서는 두 슬롯의 로그가 한 파일에 섞인다. 파서는 모든 이벤트에 `phone_id`(정수 또는 `null`)를 넣는다. 추출원은 순서대로 태그 접미사(`DNC-1` → 1), 메시지 접두어(`[PHONE1]`, `[SUB1]` 등, 실제 표기는 S20에서 확인해 `site-defaults.yaml`의 `platform.log.phone_id`로 바꾼다), 없으면 `null`. RIL로 해석하는 태그는 `platform.ril.tags`(기본 `RILJ`)다. 시그니처는 기본적으로 **같은 슬롯 안에서만** 충족된다 (5.11 (1) `same_phone`). RIL 페어링 키는 `(pid, phone_id, serial)`이고 `phone_id`를 못 뽑으면 `(pid, serial)`이다. phone 프로세스 재시작이나 슬롯별 serial 충돌로 요청·응답이 잘못 짝지어지는 것을 막기 위해 pid를 포함한다. 짝 맞춤 범위는 같은 캡처(같은 디렉터리의 회전 이름) 안에서 시계 역행·점프·부팅 줄로 나눈 에포크이고, 그 안에서 `pid`가 바뀌면 다시 나눈다. `--------- beginning of <buffer>` 줄은 경계가 아니다(병합 logcat에서는 그 버퍼의 첫 줄이 나온 자리일 뿐이다). 이어 붙인 파일은 헤더 지점의 시각 역행이 에포크 경계가 된다. 응답 없음(`ril_no_response`) 판정의 관측 끝은 그 세그먼트 안에서 **요청과 같은 pid의 마지막 줄**이다 — 같은 RILJ 프로세스의 줄이 이어지면 관측이 계속된 것이고, 다른 프로세스 줄(예: phone 프로세스 크래시 뒤)은 관측을 늘리지 않는다. 알려진 한계: 이어 붙인 파일에서 뒤 버퍼의 첫 줄이 앞 버퍼의 끝보다 늦으면 같은 pid 줄로 관측 끝이 연장될 수 있다.
 
 **벤더 RIL 층(선택)**: `site-defaults.yaml`의 `platform.ril.vendor`(S10, `02-config.md`)가 있으면 백엔드가 짝 맞춤 뒤·윈도우 전에 전체 레코드로 RILJ 요청을 벤더 층 줄과 serial로 잇는다(`ril.link_vendor`). 벤더 줄에는 `ril`을 달지 않는다(달면 pid 분할이 RILJ 짝을 깬다). 결과는 요청·짝 응답 줄 레코드의 `ril.hal`과 RIL 파생 이벤트(`ril_error`·`ril_timeout`·`ril_no_response`)의 필드 `hal`이다 — 새 이벤트는 없다. 값: `responded`(소켓 층에 같은 serial의 응답 토큰, 창 `[요청, RILJ 응답 + 1s]`, 응답 없으면 `[요청, +120s]`) / `reached`(HAL 층에 같은 serial, 창 `[요청 − 0.5s, 요청 + link_ms]`, 짝 있는 요청은 끝이 `max(요청 + link_ms, RILJ 응답 + 1s)`) / `not_reached`(±60s에 벤더 층·`coverage_tags` 줄은 있는데 이 serial 없음) / `unknown`(±60s에 그런 줄이 없음 = 수집 안 됨, 판단 없음). HAL·소켓 층은 한가할 때 수 분씩 조용하므로 꾸준히 찍히는 태그를 `coverage_tags`(정확한 이름, 정규식 없음)에 넣어야 한가한 구간이 `unknown`으로 빠지지 않는다. 짝 없는 응답에는 달지 않는다. serial은 프로세스 전역으로 가정하고, 재시작 뒤 재사용은 시간 창으로만 막는다(드물게 거짓 `responded`). 설정이 없으면 필드 자체가 없어 출력은 이전과 같다. 시그니처는 `must_event: {event: ril_no_response, fields: {hal: not_reached}}`처럼 쓸 수 있으나, **그 fixture에는 같은 serial의 벤더 층 줄과 주변 `coverage_tags` 줄(마스킹)을 포함해야 한다** — `cut`은 근거 줄 ±context만 남기므로 빠지면 `unknown`이 되어 `db_regress`가 실패한다. 직접 `parse`를 구현하는 site 백엔드는 `link_vendor`도 불러야 같은 출력이다(`parser_backends/base.py`).
 
@@ -113,7 +113,7 @@ analyze Step 7에서 새 원인/유형을 계획할 때 아래를 점검하고, 
 - extractor `id`는 kebab-case이고 바꾸지 않는다. 시그니처가 참조하기 때문이다.
 - 기존 extractor를 수정하면 그것을 쓰는 모든 원인의 fixture 회귀가 통과해야 한다. `parser-rules/` 변경이 있으면 커밋 시점 회귀도 전체 fixture로 돈다 (`contracts.md §3.2` 범위 확장 규칙).
 - `parser-rules/` 변경은 이슈 DB 메인테이너 리뷰가 필수다 (`06-collaboration.md §6.1`).
-- **정규식 안전**: 규칙과 시그니처의 정규식은 모든 기여자의 매처·pre-commit·CI에서 전체 로그에 실행된다. `db_lint`는 중첩 수량자(`(a+)+`, `(a|a)*` 류)와 길이 제한 없는 역참조를 거부한다(정적 검사, 보수적). 매처와 extractor는 패턴당 실행 시간 상한 `matcher.pattern_timeout_ms`(`issue-db.config.yaml`, 기본 2000)를 두고, 초과하면 그 시그니처(또는 extractor)를 결과에 `error`로 표시하고 분석은 계속한다. 회귀·검증 모드에서는 실패로 본다.
+- **정규식 안전**: 규칙과 시그니처의 정규식은 모든 기여자의 매처·pre-commit·CI에서 전체 로그에 실행된다. `db_lint`는 중첩 수량자(`(a+)+`, `(a|a)*` 류)와 길이 제한 없는 역참조를 거부한다(정적 검사, 보수적). 매처와 extractor는 패턴당 실행 시간 상한 `matcher.pattern_timeout_ms`(`issue-db.config.yaml`, 기본 2000)를 두고, 초과하면 그 시그니처(또는 extractor)를 결과에 `error`로 표시하고 분석은 계속한다. 충족된 시그니처 없이 오류가 난 유형·원인은 `S: null`·`C: null`(판정 불가)로 내고, 분석 리포트는 "판정 불가 유형" 줄(must_show)·후보가 없으면 "판정 불완전" 머리줄을 내며 그 실행은 재사용 캐시에 저장하지 않는다(`contracts.md §3.2` `triage.py`). 회귀·검증 모드에서는 실패로 본다.
 
 #### (5) 스텝 마커 스캔과 명시 구간 (선택)
 
@@ -143,7 +143,7 @@ analyze Step 7에서 새 원인/유형을 계획할 때 아래를 점검하고, 
 | `must_not_match: [p]` | 같은 윈도우 안에 하나라도 매칭되면 이 시그니처는 불충족이다. |
 | `window_sec` | 슬라이딩 윈도우 길이. 분석 범위(분석 모드: 발생 시각 ±5분, `07-workflow.md §Step 3` / 회귀·검증 모드: 파일 전체) 안에서 조건을 모두 만족하는 길이 `window_sec`의 구간이 하나라도 있으면 충족이다. |
 | `same_phone: true` (선택, 기본 `true`) | 시그니처의 모든 조건이 **같은 `phone_id`** 의 이벤트로 충족되어야 한다. `phone_id: null` 이벤트는 와일드카드다(어느 슬롯과도 맞음). DDS 전환처럼 슬롯을 가로지르는 원인은 `false`로 둔다. 회귀·검증 모드도 같다 (5.8 (2) 슬롯). |
-| `sequence: [id1, id2, ...]` (선택) | 순서 조건. `must_match`·`must_event` 항목에 선택 `id`를 붙이고, 여기 나열한 순서대로 각 조건의 **첫 충족 시각이 단조 증가**해야 충족이다. "설정 OFF → 이후 SETUP_DATA_CALL 없음"과 "SETUP_DATA_CALL 실패 → 이후 설정 OFF"를 구분할 때 쓴다. 없으면 순서를 보지 않는다. `must_not_match`는 넣을 수 없다. `db_lint`가 id 존재·중복을 검사한다. |
+| `sequence: [id1, id2, ...]` (선택) | 순서 조건. `must_match`·`must_event` 항목에 선택 `id`를 붙이고, 여기 나열한 순서대로 각 조건의 **첫 충족 시각이 단조 증가**해야 충족이다. "설정 OFF → 이후 SETUP_DATA_CALL 없음"과 "SETUP_DATA_CALL 실패 → 이후 설정 OFF"를 구분할 때 쓴다. 없으면 순서를 보지 않는다. `must_not_match`는 넣을 수 없다. `db_lint`가 id 존재·중복을 검사한다. 시각은 재정렬된 값이므로 시계 역행 구간에서는 거짓 충족이 가능하다. 매처는 근거가 `coverage.clock_anomalies` 의심 구간에 걸치거나 같은 파일의 줄 순서가 역전되면 후보에 `clock_flags`를 달아 표시만 한다(판정 불변). |
 | 한 원인/유형에 시그니처 여러 개 | **OR**. 하나라도 충족하면 그 원인/유형이 충족이다. |
 
 - 시그니처 종류: `symptom_signatures`(유형), `signatures`(원인 판별), `recovery_signatures`(해결 후 정상 동작), `scenario_signatures`(재현 시나리오 수행 흔적). 뒤의 두 가지는 점수에 쓰지 않고 검증에만 쓴다 (`05-verification.md`).
@@ -192,7 +192,7 @@ feedback_weight가 켜져 있고 해당 시그니처 표본 ≥ min_samples면: 
 - **판정은 S/C 값만으로 한다.** 점수(S=1, C=1 → 1.0 / S=0, C=1 → 0.6 / S=1, C=0 → 0.4)와 신뢰도는 결과표의 참고 값이고 판정에 쓰지 않는다. `scoring` 값(`cause_weight`, `confidence`)을 바꿔도 회귀·검증 결과가 바뀌지 않게 하기 위해서다 (`contracts.md §fixture` 기대값, `05-verification.md` R2·R3).
 - `db_regress`, `db_verify`(rules, resolution, fix)는 항상 이 모드를 쓴다.
 
-**기대값**: fixture 종류별 기본 기대값과 `.expect.yaml` 필드는 `contracts.md §fixture`에만 있다. 요약하면 양성은 "대상 원인 C=1, `also_allowed`를 제외한 다른 모든 active 원인 C=0"(이슈 DB 전체 기준), `fixed`/`resolved`는 `expect_not: <원인 ID>`(C=0), `recurrence`/`extra`는 양성과 같고, 음성(`none`)은 "S=1인 유형 없음"이다. 같은 로그에 실제로 다른 유형의 현상도 있으면 `.expect.yaml`의 `also_allowed`에 그 원인을 적는다(`allow-cause` op).
+**기대값**: fixture 종류별 기본 기대값과 `.expect.yaml` 필드는 `contracts.md §fixture`에만 있다. 요약하면 양성은 "대상 원인 C=1, 소속 유형 S=1, `also_allowed`를 제외한 다른 모든 active 원인 C=0"(이슈 DB 전체 기준), `fixed`/`resolved`는 `expect_not: <원인 ID>`(C=0), `recurrence`/`extra`는 양성과 같고, 음성(`none`)은 "S=1인 유형 없음"이다. 같은 로그에 실제로 다른 유형의 현상도 있으면 `.expect.yaml`의 `also_allowed`에 그 원인을 적는다(`allow-cause` op).
 
 - `status`가 `active`가 아닌 원인의 fixture는 회귀에서 제외한다. `signatures_pending` 원인의 양성 fixture는 제외하지 않고 `"<유형 ID>:unresolved"` 기대값으로 돈다 (`contracts.md §fixture`).
 - `.expect.yaml`의 `occurred_at`(선택)은 판정에 쓰지 않고, 결과 표에 참고로 보여준다.

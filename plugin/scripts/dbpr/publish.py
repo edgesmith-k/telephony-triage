@@ -75,6 +75,55 @@ def _load_plan_checked(plan_path: Path, repo: Path, base_sha: str) -> dict:
     return plan
 
 
+def _suggested_key(items: list) -> list:
+    """`feedback.suggested` 비교용 정규화: [(cause, signature, round(score, 4))]."""
+    out = []
+    for c in items or []:
+        try:
+            score = round(float(c.get("score")), 4)
+        except (TypeError, ValueError, AttributeError):
+            score = None
+        out.append((c.get("cause"), c.get("signature"), score) if isinstance(c, dict) else (None, None, None))
+    return out
+
+
+def _check_feedback_suggested(plan: dict, plan_path: Path, job_dir: Path) -> dict:
+    """analyze 계획의 `feedback.suggested`는 `JOB/match.json` 후보(cause≠null, 순위순 {cause, signature, score})다.
+    비어 있으면 채워 계획 파일을 다시 쓰고, 다르면 거부한다(LLM이 적은 값을 그대로 쓰지 않는다). → `feedback_check`"""
+    fb = plan.get("feedback")
+    if not isinstance(fb, dict) or fb.get("decision") == "manual" or plan.get("source") != "analyze":
+        return {"status": "n/a"}
+    if (plan.get("pr") or {}).get("head_sha"):
+        return {"status": "skipped", "reason": "재적용"}     # 이미 publish된 계획(sync-pr): 첫 stage에서 검증됐다
+    suggested = fb.get("suggested") or []
+    match_path = job_dir / "match.json"
+    if not match_path.is_file():
+        if suggested:
+            raise UsageError(f"계획 feedback.suggested 근거 없음: {match_path}이 없다 — analyze 계획의 suggested는 "
+                             "stage가 match.json에서 채운다. 분석 결과가 없으면 []로 둔다", {"plan": suggested})
+        return {"status": "no-match-json", "count": 0}
+    try:
+        match = json.loads(match_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise UsageError(f"계획 feedback.suggested 검사 불가: {match_path}을 읽을 수 없다 ({str(exc)[:200]})") from exc
+    plan_key = (plan.get("jira") or {}).get("key")
+    match_key = (match.get("jira") or {}).get("key")
+    if match_key != plan_key:
+        raise UsageError(f"계획 feedback.suggested 검사 불가: {match_path}의 jira.key({match_key})가 계획 jira.key"
+                         f"({plan_key})와 다르다 — 다른 작업의 분석 결과다", {"plan_key": plan_key, "match_key": match_key})
+    expected = [{"cause": c["cause"], "signature": c.get("signature"), "score": c.get("score")}
+                for c in match.get("candidates") or [] if isinstance(c, dict) and c.get("cause") is not None]
+    if not suggested:
+        if expected:
+            fb["suggested"] = expected
+            _write_json(plan_path, plan)
+        return {"status": "filled", "count": len(expected)}
+    if _suggested_key(suggested) != _suggested_key(expected):
+        raise UsageError("계획 feedback.suggested가 JOB/match.json 후보와 다르다 — 비워 두면 stage가 채운다",
+                         {"plan": suggested, "match": expected})
+    return {"status": "verified", "count": len(expected)}
+
+
 # -- preflight -----------------------------------------------------------------------------
 
 
@@ -171,6 +220,7 @@ def stage(ctx: Ctx, plan_path: Path, wt: Path, branch: str, dry_run: bool) -> tu
     if not base_sha:
         raise UsageError(f"origin/{ctx.base}가 없습니다.")
     plan = _load_plan_checked(plan_path, ctx.repo, base_sha)
+    feedback_check = _check_feedback_suggested(plan, Path(plan_path), job_dir)
     try:
         old_state = _read_json(job_dir / STATE)
     except ValueError:
@@ -185,7 +235,8 @@ def stage(ctx: Ctx, plan_path: Path, wt: Path, branch: str, dry_run: bool) -> tu
     state["ids_at_base"] = ids_at_base
     _write_json(job_dir / STATE, state)
     result: dict = {"job": job, "wt": str(wt), "branch": branch, "tool_branch": tool, "base_sha": base_sha,
-                    "plan": str(Path(plan_path).resolve()), "dry_run": dry_run, "source": plan.get("source")}
+                    "plan": str(Path(plan_path).resolve()), "dry_run": dry_run, "source": plan.get("source"),
+                    "feedback_check": feedback_check}
 
     if plan.get("base_sha") != base_sha:
         code, data, err = run_script("db_add.py", ["drift", str(plan_path), "--onto", base_sha, "--db", str(ctx.repo)])

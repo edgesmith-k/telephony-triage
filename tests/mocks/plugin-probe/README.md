@@ -16,6 +16,7 @@ Code 기능" 행). 배포 대상(`plugin/`)이 아니다.
 | 6 | hook matcher 정규식 | `hooks.json`의 `mcp__.*` matcher가 실제로 MCP 도구에 걸리는지 |
 | 7 | 권한 결정 필드 | hook이 `allow`/`deny`/`ask`를 냈을 때 세션이 그대로 따르는지 |
 | 8 | **`@SITE_PROFILE.md` import** | 레포 루트 `CLAUDE.md`의 첫 줄 `@SITE_PROFILE.md`가 **파일이 없을 때** 오류인지 경고인지 조용한지 |
+| 9 | hook 종료 코드 1·2 동작 | PreToolUse hook이 종료 1(비차단 오류)·2(차단)로 끝날 때 도구가 실행되는지·stderr가 어디 보이는지. guard·jira_bridge가 의존성 import 실패에도 종료 0 + 결정 JSON을 내는 근거다 (`08-safety.md §9` 의존성 없음). **사내 S1에서 확인** (사외 결과 없음) |
 
 ## 실행 절차
 

@@ -83,7 +83,7 @@ def test_extract_without_failed_step_fields_adds_no_keys():
     assert not {"failed_step", "failed_step_auto", "warnings"} & set(out)
     assert "failed_step" not in out["jira"] and "test_steps" not in out["text"]
     assert set(json.loads(meta.read_text(encoding="utf-8"))) == {"key", "sw", "summary", "description", "occurred_at",
-                                                                  "android_version"}   # MOCK-1001은 Android 버전이 있다
+                                                                  "android_version", "sim_slot"}   # MOCK-1001은 Android 버전·SIM 슬롯이 있다
 
 
 def test_meta_out_android_version_only_when_present():
@@ -97,6 +97,19 @@ def test_meta_out_android_version_only_when_present():
         run_json("jira_fields.py", ["extract", raw, "--origin", "file", "--db", SAMPLE, "--meta-out", meta], env=_home())
         metas.append(json.loads(meta.read_text(encoding="utf-8")))
     assert metas[0]["android_version"] == "16" and "android_version" not in metas[1]
+
+
+def test_meta_out_sim_slot_only_when_present():
+    tmp = Path(tempfile.mkdtemp())
+    text = (MOCK_JIRA / "MOCK-1001.yaml").read_text(encoding="utf-8")
+    metas = []
+    for name, body in (("with", text), ("without", re.sub(r"(?m)^.*customfield_10006.*\n", "", text))):
+        raw = tmp / f"{name}.yaml"
+        raw.write_text(body, encoding="utf-8")
+        meta = tmp / f"{name}.json"
+        run_json("jira_fields.py", ["extract", raw, "--origin", "file", "--db", SAMPLE, "--meta-out", meta], env=_home())
+        metas.append(json.loads(meta.read_text(encoding="utf-8")))
+    assert metas[0]["sim_slot"] == "0" and "sim_slot" not in metas[1]
 
 
 def test_extract_failed_step_field_is_masked_and_not_missing():
@@ -118,3 +131,18 @@ def test_extract_failed_step_field_is_masked_and_not_missing():
 if __name__ == "__main__":
     import pytest
     raise SystemExit(pytest.main([__file__, "-q"]))
+
+
+def test_sim_slot_select_object_uses_value_and_drops_other_objects():
+    tmp = Path(tempfile.mkdtemp())
+    text = (MOCK_JIRA / "MOCK-1001.yaml").read_text(encoding="utf-8")
+    cases = {"select": ('{value: "1", id: "10101", self: "https://jira.example/rest/api/2/customFieldOption/10101"}', "1"),
+             "other": ('{id: "10101", self: "https://jira.example/x"}', None),
+             "list": ('["1", "2"]', None)}
+    for name, (body, want) in cases.items():
+        raw = tmp / f"{name}.yaml"
+        raw.write_text(re.sub(r'(?m)^(\s*customfield_10006:).*$', lambda m: f"{m.group(1)} {body}", text), encoding="utf-8")
+        meta = tmp / f"{name}.json"
+        out = run_json("jira_fields.py", ["extract", raw, "--origin", "file", "--db", SAMPLE, "--meta-out", meta], env=_home())
+        assert out["sim_slot"] == want, name
+        assert "10101" not in meta.read_text(encoding="utf-8") and "jira.example" not in json.dumps(out)

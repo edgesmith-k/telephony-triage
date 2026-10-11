@@ -244,7 +244,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
       <div class="eyebrow">GLOSSARY · 낯선 말 모음</div>
       <h1>용어집</h1>
       <p>문서와 도구 화면에 나오는 용어를 묶음별로 정리했습니다. 정확한 정의가 다르면 <code>docs/design/contracts.md</code>가 맞습니다.</p>
-      <div class="meta"><span><b>기준</b> main 2026-10-09</span><span><b>용어</b> 52개</span></div>
+      <div class="meta"><span><b>기준</b> main 2026-10-10</span><span><b>용어</b> 52개</span></div>
     </header>
     <section class="chap" id="t0" data-title="관계도">
       <h2><span class="no">0</span>관계도</h2>
@@ -280,7 +280,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
     <section class="chap" id="t3" data-title="검증">
       <h2><span class="no">3</span>검증</h2>
       <p class="first">이 절에서 알 수 있는 것: 검증 관련 용어</p>
-      <div class="tbl k1"><table><tr><th>용어</th><th>뜻</th></tr><tr><td><b>fixture</b></td><td>원인마다 붙인 마스킹된 최소 로그. 회귀 테스트 입력</td></tr><tr><td><b>회귀·검증 모드</b></td><td>fixture 전체 범위, 모든 원인 독립 평가로 판정하는 모드</td></tr><tr><td><b>R1 파서</b></td><td>새 규칙이 쓰는 태그·이벤트가 이 원인의 기준 로그에서 실제로 뽑히나</td></tr><tr><td><b>R2 양성</b></td><td>기준 로그에서 이 원인만 C=1, 다른 원인은 C=0인가</td></tr><tr><td><b>R3 음성</b></td><td>정상 로그·다른 원인 로그·고친 뒤 로그를 잘못 잡지 않나</td></tr><tr><td><b>R4 교차 회귀</b></td><td>이슈 DB 모든 fixture의 기대 결과가 그대로인가. 실패하면 push 차단</td></tr><tr><td><b>R5 이벤트 변화</b></td><td>파서 규칙을 바꿀 때 기존 이벤트가 사라지거나 바뀌지 않나. 바뀌면 메인테이너 승인 필요</td></tr><tr><td><b>R6 추가 표본</b></td><td>사용자가 준 다른 로그로 확인(선택). 실패해도 진행 여부는 사용자가 고름</td></tr><tr><td><b>skipped</b></td><td>검증을 못 돌림. 통과가 아니며 리뷰 대상</td></tr><tr><td><b>also_allowed</b></td><td>한 fixture에서 다른 유형의 원인도 C=1이어도 된다는 허용. 실제로 두 현상이 있을 때만</td></tr><tr><td><b>수정 상태</b></td><td>open · fix-submitted · fixed · wont-fix · not-a-bug. fixed는 verify-fix 통과로만</td></tr><tr><td><b>해결책 검증</b></td><td>해결책이 효과 있었는지. 미검증 / 검증됨(근거 필수)</td></tr></table></div>
+      <div class="tbl k1"><table><tr><th>용어</th><th>뜻</th></tr><tr><td><b>fixture</b></td><td>원인마다 붙인 마스킹된 최소 로그. 회귀 테스트 입력</td></tr><tr><td><b>회귀·검증 모드</b></td><td>fixture 전체 범위, 모든 원인 독립 평가로 판정하는 모드</td></tr><tr><td><b>R1 파서</b></td><td>새 규칙이 쓰는 태그·이벤트가 이 원인의 기준 로그에서 실제로 뽑히나</td></tr><tr><td><b>R2 양성</b></td><td>기준 로그에서 이 원인만 C=1(소속 유형도 S=1), 다른 원인은 C=0인가</td></tr><tr><td><b>R3 음성</b></td><td>정상 로그·다른 원인 로그·고친 뒤 로그를 잘못 잡지 않나. 대상 시그니처가 시간 초과·오류면 통과가 아니라 판정 불가 fail</td></tr><tr><td><b>R4 교차 회귀</b></td><td>이슈 DB 모든 fixture의 기대 결과가 그대로인가. 실패하면 push 차단</td></tr><tr><td><b>R5 이벤트 변화</b></td><td>파서 규칙을 바꿀 때 기존 이벤트가 사라지거나 바뀌지 않나. 바뀌면 메인테이너 승인 필요</td></tr><tr><td><b>R6 추가 표본</b></td><td>사용자가 준 다른 로그로 확인(선택). 대상 시그니처 오류는 판정 불가 fail. 실패해도 진행 여부는 사용자가 고름</td></tr><tr><td><b>skipped</b></td><td>검증을 못 돌림. 통과가 아니며 리뷰 대상</td></tr><tr><td><b>also_allowed</b></td><td>한 fixture에서 다른 유형의 원인도 C=1이어도 된다는 허용. 실제로 두 현상이 있을 때만</td></tr><tr><td><b>수정 상태</b></td><td>open · fix-submitted · fixed · wont-fix · not-a-bug. fixed는 verify-fix 통과로만</td></tr><tr><td><b>해결책 검증</b></td><td>해결책이 효과 있었는지. 미검증 / 검증됨(근거 필수)</td></tr></table></div>
 
     </section>
     <section class="chap" id="t4" data-title="작업 흐름">

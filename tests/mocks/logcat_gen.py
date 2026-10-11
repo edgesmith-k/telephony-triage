@@ -32,6 +32,7 @@ import yaml
 
 LEVELS = {"V", "D", "I", "W", "E", "F"}
 BUFFERS = ("main", "radio", "system", "crash", "events")
+HEADER = "__header__"  # `beginning_of` 항목 표식 (합친 파일에만 낸다)
 
 # bugreport 섹션 헤더 — TODO(SITE:S21) 사내 실제 문자열 확인
 BUGREPORT_SECTIONS = {
@@ -165,6 +166,13 @@ class Generator:
         return msg
 
     def _one(self, entry: dict) -> None:
+        if "beginning_of" in entry:
+            # 병합 logcat에서 그 버퍼의 첫 줄이 나온 자리. 합친 파일에만 낸다.
+            buffer_name = entry["beginning_of"]
+            if buffer_name not in BUFFERS:
+                raise ScenarioError(f"알 수 없는 버퍼: {buffer_name}")
+            self.records.append((HEADER, f"--------- beginning of {buffer_name}"))
+            return
         ts = self._advance(entry)
         phone = self._entry_phone(entry)
 
@@ -216,7 +224,8 @@ class Generator:
                 self._one(step)
         buffers: dict[str, list[str]] = {}
         for buffer_name, line in self.records:
-            buffers.setdefault(buffer_name, []).append(line)
+            if buffer_name != HEADER:  # 버퍼별 파일·bugreport 섹션에는 넣지 않는다
+                buffers.setdefault(buffer_name, []).append(line)
         return buffers
 
     def merged(self) -> list[str]:

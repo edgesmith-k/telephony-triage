@@ -1,0 +1,5 @@
+09-22 12:00:00.000  1234  1244 D RILJ: [PHONE0] [0100]> SETUP_DATA_CALL apn=default
+--------- beginning of crash
+09-22 12:00:20.000  4321  4321 E AndroidRuntime: FATAL EXCEPTION: main (synthetic)
+09-22 12:00:40.000  1234  1244 D RILJ: [PHONE0] [0100]< SETUP_DATA_CALL error=NONE
+09-22 12:00:45.000  1234  1244 I DNC-0: [PHONE0] tail

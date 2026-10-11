@@ -654,3 +654,24 @@ def test_render_markdown_collapses_newlines_in_check_details_and_fixture_paths()
                  "- fixture: fixtures/a ### 가짜3.log (positive, X)"):
         assert line in text.splitlines(), line
     assert not [l for l in text.splitlines() if l.startswith("### 가짜")]
+
+
+def test_summary_notes_show_suggested_source():
+    """stage의 feedback_check가 확인 화면 notes에 드러난다 (채움·대조 → 제시 후보 수, match.json 없음 → 통계 제외)."""
+    sys.path.insert(0, str(REPO / "tests" / "helpers"))
+    from runner import variant_db
+    from workspace import Workspace
+    ws = Workspace()
+    ws.plan("MOCK-7001", "p7-analyze-append.plan.json")       # 헬퍼가 suggested로 match.json을 둔다 → verified
+    ws.acquire("MOCK-7001")
+    ws.stage("MOCK-7001", "issue/MOCK-7001")
+    assert "제시 후보(match.json): 1개" in ws.db_pr("summary", ws.wt("MOCK-7001"))["notes"]
+    ws.db_pr("discard", ws.wt("MOCK-7001"))
+    other = Workspace()
+    other.plan("MOCK-7002", "p7-analyze-new-cause.plan.json")  # suggested [] + match.json 없음
+    other.put("MOCK-7002", "fixtures/cut-1.log",
+              variant_db("issue-db-pending") / "data/DATA-001-no-setup-data-call/fixtures/DATA-001-03.log")
+    other.acquire("MOCK-7002")
+    other.stage("MOCK-7002", "issue/MOCK-7002", expect=(0, 3))
+    notes = other.db_pr("summary", other.wt("MOCK-7002"))["notes"]
+    assert "제시 후보 기록 없음 — match.json 없음(수락률 통계 제외)" in notes, notes

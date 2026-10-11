@@ -2,7 +2,8 @@
 
 - `GENERATOR_VERSION`: 생성 파일(README, STATS, CHANGELOG) 형식. 이슈 DB
   `issue-db.config.yaml`의 `generator_version`과 같아야 `db_build.py --write`를 할 수 있다.
-  생성 결과가 바뀌는 플러그인 변경은 항상 이 값을 올린다.
+  생성 결과가 바뀌는 플러그인 변경은 항상 이 값을 올린다. 생성기만 올리면 메인테이너가
+  `migrate/schema-v<현재>` 브랜치에서 `db_migrate --to <현재>`로 이슈 DB 값을 맞춘다(06-collaboration.md §6.4).
 - `SCHEMA_VERSION`: 이 플러그인이 읽고 쓰는 이슈 DB 스키마 버전 (`schema_version`).
 """
 

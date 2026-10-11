@@ -10,6 +10,8 @@
 - 워킹 트리가 깨끗함 (untracked 포함, `.gitignore` 대상 제외)
 - 이슈 DB 스키마 버전 < N ≤ 플러그인 `SCHEMA_VERSION`, 그 사이 모든 버전의 마이그레이션이 있음
 `--dry-run`은 아무것도 쓰지 않고 바뀔 파일만 보여주므로 브랜치·깨끗함은 보지 않는다.
+`--to <현재 스키마>`는 `generator_version`만 플러그인 값으로 올린다(같은 브랜치·깨끗함 조건, `actions-build`는 제외).
+`generator_version`은 올리기만 한다: 이슈 DB 값이 플러그인보다 크거나 정수가 아니면 종료 코드 2(`actions-build`는 보지 않는다).
 
 마이그레이션은 `scripts/migrations/NNNN_<설명>.py`다. 모듈 계약:
     FROM_VERSION, TO_VERSION   정수. 체인은 `FROM_VERSION`으로 이어진다.
@@ -247,6 +249,14 @@ def cmd_migrate(args, defaults: dict) -> tuple[dict, int]:
                          "플러그인을 새 버전으로 업데이트한 뒤 실행한다.")
     if target < current:
         raise UsageError(f"이슈 DB가 이미 v{current}입니다 (요청 v{target}). 되돌리는 마이그레이션은 지원하지 않는다.")
+    actions_build = config.get("ci_mode", "local") == "actions-build"
+    db_generator = config.get("generator_version")
+    if not actions_build:
+        if not isinstance(db_generator, int) or isinstance(db_generator, bool):
+            raise UsageError(f"{CONFIG}의 generator_version이 정수가 아닙니다: {db_generator!r}")
+        if db_generator > GENERATOR_VERSION:     # 낮추지 않는다: 이 플러그인이 옛 버전이다
+            raise UsageError(f"이슈 DB generator_version {db_generator}이 플러그인 {GENERATOR_VERSION}보다 새롭습니다. "
+                             "플러그인을 업데이트한다.")
     if not args.dry_run:
         branch = _require_migrate_branch(db, target)
     else:
@@ -262,24 +272,36 @@ def cmd_migrate(args, defaults: dict) -> tuple[dict, int]:
         except Exception as exc:  # noqa: BLE001
             raise UsageError(f"마이그레이션 {step.name} 실패: {type(exc).__name__}: {exc}. 아무것도 바꾸지 않았습니다.") from exc
 
-    generator = {"from": config.get("generator_version"), "to": config.get("generator_version"), "synced": False}
+    generator = {"from": db_generator, "to": db_generator, "synced": False}
+    generator_behind = not actions_build and db_generator < GENERATOR_VERSION
     text = tree.read(CONFIG) or ""
     if steps:
         text = _set_config_int(text, "schema_version", target)
-        if config.get("ci_mode", "local") != "actions-build" and config.get("generator_version") != GENERATOR_VERSION:
-            text = _set_config_int(text, "generator_version", GENERATOR_VERSION)
-            generator.update({"to": GENERATOR_VERSION, "synced": True})
+    if generator_behind:
+        # 스키마는 그대로이고 생성기만 올라간 경우도 같은 브랜치 조건으로 여기서 맞춘다 (06-collaboration.md §6.4)
+        text = _set_config_int(text, "generator_version", GENERATOR_VERSION)
+        generator.update({"to": GENERATOR_VERSION, "synced": True})
+    if steps or generator["synced"]:
         tree.write(CONFIG, text)
     changed = tree.changed() if args.dry_run else tree.commit()
+    generator_only = not steps and generator["synced"]
     result = {
-        "mode": "dry-run" if args.dry_run else "migrate", "db": str(db), "branch": branch,
+        "mode": "dry-run" if args.dry_run else ("generator-sync" if generator_only else "migrate"),
+        "db": str(db), "branch": branch,
         "from": current, "to": target if steps else current, "steps": [s.summary() for s in steps],
         "generator_version": generator, "changed": changed,
-        "next": ([] if args.dry_run or not steps else
+        "next": ([] if args.dry_run or not (steps or generator_only) else
                  ["db_build.py --write", "validate", f"git commit (브랜치 {branch})", "git push -u origin HEAD"]),
     }
-    if not steps:
+    if generator_only:
+        if args.dry_run:
+            result["generator_sync"] = True
+        done = "맞출 예정입니다(dry-run)." if args.dry_run else "맞췄습니다."
+        result["message"] = f"스키마는 v{current} 그대로, generator_version {generator['from']}→{GENERATOR_VERSION}만 {done}"
+    elif not steps:
         result["message"] = f"이슈 DB가 이미 v{current}입니다. 바꿀 것이 없습니다."
+        if actions_build:
+            result["message"] += " (ci_mode actions-build: generator_version은 맞추지 않는다)"
     return result, OK
 
 

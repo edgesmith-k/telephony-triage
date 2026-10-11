@@ -221,6 +221,10 @@ class Ctx:
         return explored, asked, read
 
     _RAW_READ_CMD = re.compile(r"(?<![\w./-])(cat|head|less|strings|unzip)\b([^|;&\n]*)")
+    # 드라이버 JSON(events·match·jira_raw)은 한 줄로 쓰여 grep 적중 하나가 파일 전체다. python open()도 통째로 읽는다
+    _JSON_TARGET = r"(?<![\w.-])(?:events|events-full|match|jira_raw)\.json\b"
+    _JSON_GREP = re.compile(r"(?<![\w./-])grep\b[^|;&\n]*?" + _JSON_TARGET)
+    _JSON_OPEN = re.compile(r"\bopen\(\s*[^)\n]*?" + _JSON_TARGET)
 
     def _is_raw_target(self, token: str) -> bool:
         t = token.strip("\"'")
@@ -266,13 +270,17 @@ class Ctx:
                         continue
                     if any(self._is_raw_target(t) for t in rest.split() if not t.startswith("-")):
                         found.append(f"{verb}{rest}".strip()[:200])
-                found += self._dump_reads(cmd)
+                dumps = self._dump_reads(cmd)
+                found += dumps
+                if not dumps:
+                    found += [m.group(0)[:200] for m in self._JSON_GREP.finditer(cmd)]
+                found += [m.group(0)[:200] for m in self._JSON_OPEN.finditer(str(inp.get("command", "")))]
             (blocked if e["error"] and "[telephony-triage]" in e["result"] else hits).extend(found)
         return hits, blocked
 
     def raw_full_reads(self) -> list[str]:
         """원문 통독 의심(지표): 로그·zip·events.json·jira_raw.json을 Bash cat/head -c/less/strings/unzip -p 로 열거나
-        limit 없는 Read로 읽은 호출 중 hook이 막지 않은 것. 채점 항목은 아니다. 실행 기록이 없으면 빈 목록."""
+        limit 없는 Read로 읽은 호출, 한 줄 JSON(events·match·jira_raw)을 grep하거나 python `open()`으로 연 호출 중 hook이 막지 않은 것. 채점 항목은 아니다. 실행 기록이 없으면 빈 목록."""
         return self._raw_reads()[0]
 
     def raw_reads_blocked(self) -> list[str]:
@@ -474,7 +482,7 @@ def checks(eid: int, ctx: Ctx) -> list:
             ok = p.get("operations") == [{"op": "append", "cause": "DATA-001-01"}] and \
                 (p.get("feedback") or {}).get("decision") == "chose-other"
             return ok and analyzer_called()[0], json.dumps({"ops": p.get("operations"), "fb": p.get("feedback")}, ensure_ascii=False) + "; " + analyzer_called()[1]
-        return [None, None, None, None, plan]
+        return [None, None, None, None, plan, None]   # 6: fixture·시그니처 검토 질문 1회는 수동 채점
     if eid == 42:
         def allow():
             p = ctx.plan("MOCK-9042") or {}
@@ -586,8 +594,9 @@ def checks(eid: int, ctx: Ctx) -> list:
             if texts is None:
                 raise _Manual("실행 기록(events.jsonl) 없음")
             ran = bool(re.search(r"config\.py[\"']?\s+doctor\s+--format\s+markdown", ctx.ran))
-            row = next((t for t in texts if re.search(r"\|\s*jira\s*\|\s*fail\s*\|", t)), None)
-            return ran and row is not None, f"doctor 실행={ran}; jira fail 행을 담은 assistant 텍스트={'있음' if row else '없음'}"
+            # 사용자에게 보인 글 = assistant 텍스트 또는 실행자 transcript.md(최종 메시지는 요약만 남기기도 한다)
+            row = next((t for t in [*texts, ctx.transcript] if re.search(r"\|\s*jira\s*\|\s*fail\s*\|", t)), None)
+            return ran and row is not None, f"doctor 실행={ran}; jira fail 행을 담은 assistant 텍스트·transcript={'있음' if row else '없음'}"
         return [None, lambda: ("jira_fetch_ticket" not in ctx.ran.replace("--list", ""), "실행 기록(Bash·MCP)에 jira_fetch_ticket 호출 여부"),
                 None, ctx.lock_free, doctor_table]
     if eid == 8:
@@ -697,8 +706,8 @@ def checks(eid: int, ctx: Ctx) -> list:
         return ok and not p.is_file(), f"{ev}; plan.json={'있음' if p.is_file() else '없음'}"
     def scope(log):
         """탐색 분석은 timeline.md만 읽는다: 원본 중간 산출물·로그 원문을 열지 않았다."""
-        # match.json은 계획 feedback.suggested용으로 일부 읽는 것이 정상 절차(write-flow.md)라 뺀다
-        bad = ctx.opened("events.json", "jira_raw.json", "events-full.json", log)
+        # match.json도 금지: feedback.suggested는 db_pr stage가 채운다(write-flow.md, explore.md "읽지 않는다")
+        bad = ctx.opened("events.json", "jira_raw.json", "events-full.json", "match.json", log)
         order = ctx.explore_order()
         seen = "timeline.md" in ctx.opened("timeline.md") or (order is not None and order[2] is not None)
         after, note = True, ""

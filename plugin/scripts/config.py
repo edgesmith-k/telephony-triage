@@ -25,7 +25,8 @@
                                → writable / push_allowed. `migrate/schema-v<N>` 브랜치는 버전을 보지 않는다.
   gh-status                    gh 인증 확인 (setup 9). 실패면 로그인 안내와 종료 코드 2
   doctor [--format json|markdown]
-                               환경 점검 한 장(config·clone·hook·Jira 매핑·gh·스냅샷·호환성·lock). **읽기 전용**
+                               환경 점검 한 장(python·deps·config·clone·hook·guard 자가시험·Jira 매핑·gh·스냅샷·
+                               호환성·lock). **읽기 전용**
                                (mkdir·fetch·lock·쓰기 없음). 행마다 ok|warn|fail|skip. fail이 있으면 종료 코드 1
 """
 
@@ -33,7 +34,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
+import shutil
 import subprocess
 import sys
 from datetime import timedelta
@@ -41,11 +44,17 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import adapters  # noqa: E402
-from common import compat, dbpath, ghcli, mcptools, session_lock, site_defaults, userconfig, yamlio  # noqa: E402
-from common import compiled as compiled_cache  # noqa: E402
 from common.exitcodes import CHECK_FAILED, OK, USAGE  # noqa: E402
 from common.versions import GENERATOR_VERSION, SCHEMA_VERSION  # noqa: E402
+
+# 의존성(PyYAML 등)이 없으면 traceback 대신 안내하고 종료 2(자기 실행 불가)로 멈춘다 (`main`)
+try:
+    import adapters  # noqa: E402
+    from common import compat, dbpath, ghcli, mcptools, session_lock, site_defaults, userconfig, yamlio  # noqa: E402
+    from common import compiled as compiled_cache  # noqa: E402
+    IMPORT_ERROR: ImportError | None = None
+except ImportError as _exc:   # noqa: BLE001
+    IMPORT_ERROR = _exc
 
 SUPPORTED_SCHEMA = (SCHEMA_VERSION, SCHEMA_VERSION)  # (min, max), 06-collaboration.md §6.4
 MIGRATE_BRANCH_RE = re.compile(r"^migrate/schema-v\d+$")
@@ -328,8 +337,12 @@ def check(db: Path, defaults: dict, for_: str) -> dict:
                             f"이슈 DB schema_version {schema}가 플러그인 지원 범위 {SUPPORTED_SCHEMA}보다 옛 버전이다. "
                             "메인테이너에게 마이그레이션이 필요하다고 알린다."})
         if cfg.get("ci_mode", "local") != "actions-build" and generator != GENERATOR_VERSION:
+            if isinstance(generator, int) and not isinstance(generator, bool) and generator < GENERATOR_VERSION:
+                hint = f"메인테이너: migrate/schema-v{schema} 브랜치에서 migrate --to <현재 스키마>로 맞춘다."
+            else:
+                hint = "플러그인을 업데이트한다."
             reasons.append({"code": "generator-mismatch", "message":
-                            f"generator_version {generator} ≠ 플러그인 {GENERATOR_VERSION}. 이슈 DB 쓰기 전체를 막는다."})
+                            f"generator_version {generator} ≠ 플러그인 {GENERATOR_VERSION}. 이슈 DB 쓰기 전체를 막는다. {hint}"})
         reasons += compat.check_parser_backend(cfg, env["backend"]["name"], str(env["backend"]["version"]))
         configured = {}
         for category, conf in (defaults.get("external_parsers") or {}).items():
@@ -384,6 +397,8 @@ def cmd_gh_status(args, defaults: dict) -> tuple[dict, int]:
 
 SNAPSHOT_STALE_DAYS = 7
 DETAIL_MAX = 80
+MIN_PYTHON = (3, 11)   # pyproject requires-python
+GUARD_SELFTEST_TIMEOUT = 20
 
 
 def _row(check: str, status: str, detail: str, next_: str | None = None) -> dict:
@@ -391,6 +406,46 @@ def _row(check: str, status: str, detail: str, next_: str | None = None) -> dict
     if next_:
         row["next"] = next_
     return row
+
+
+GUARD_NEXT = "관리자에게 알린다(guard.py 직접 실행해 stderr 확인)"
+
+
+def _guard_selftest(args, clone: Path | None) -> dict:
+    """guard.py에 거부돼야 할 hook 입력을 주고 응답 구조·결정을 본다: (1) 이름에 jira가 든 서버의 쓰기 도구(설정과
+    무관하게 deny), (2) clone이 있으면 clone 파일 Write(deny)."""
+    root = _plugin_root(args)
+    home = str(Path.home())
+    # hooks.json은 `python3`(PATH)로 guard를 부른다: 같은 해석기로 시험한다(의존성이 그 해석기에 있어야 한다)
+    python = shutil.which("python3")
+    other = python is not None and os.path.realpath(python) != os.path.realpath(sys.executable)
+    python = python or sys.executable
+    events = [{"hook_event_name": "PreToolUse", "tool_name": "mcp__probe-jira__jira_add_comment", "tool_input": {},
+               "cwd": home}]
+    if clone is not None:
+        events.append({"hook_event_name": "PreToolUse", "tool_name": "Write",
+                       "tool_input": {"file_path": str(clone / "README.md")}, "cwd": home})
+    for event in events:
+        try:
+            proc = subprocess.run([python, str(root / "scripts" / "guard.py"), "--plugin-root", str(root)],
+                                  input=json.dumps(event), capture_output=True, text=True, encoding="utf-8",
+                                  errors="replace", timeout=GUARD_SELFTEST_TIMEOUT)
+        except subprocess.TimeoutExpired:
+            return _row("guard", "fail", f"응답 없음 ({GUARD_SELFTEST_TIMEOUT}s 초과)", GUARD_NEXT)
+        try:
+            out = json.loads(proc.stdout)["hookSpecificOutput"] if proc.stdout.strip() else {}
+        except (ValueError, KeyError, TypeError):
+            out = {}
+        if proc.returncode != 0 or not isinstance(out, dict) or out.get("hookEventName") != "PreToolUse" \
+                or out.get("permissionDecision") != "deny":
+            got = out.get("permissionDecision") if isinstance(out, dict) else None
+            return _row("guard", "fail", f"응답 구조 불일치: {event['tool_name']} 종료 {proc.returncode}·결정 {got or '없음'}",
+                        GUARD_NEXT)
+        reason = str(out.get("permissionDecisionReason") or "")
+        if "의존성 없음" in reason or "내부 오류" in reason:   # 판정이 아니라 degraded 거부다
+            return _row("guard", "fail", f"{'hook python3' if other else 'guard'}: {reason.removeprefix('[telephony-triage] ')}",
+                        f"{python}에 pyproject 의존성을 설치한다" if "의존성 없음" in reason else GUARD_NEXT)
+    return _row("guard", "ok", f"deny {len(events)}/{len(events)}" + (" (hook python3≠doctor python)" if other else ""))
 
 
 def _doctor_rows(args, defaults: dict) -> list[dict]:
@@ -405,17 +460,39 @@ def _doctor_rows(args, defaults: dict) -> list[dict]:
         except Exception as exc:    # noqa: BLE001 — 한 행의 실패가 표 전체를 막지 않는다
             rows.append(_row(name, "fail", f"점검 실패: {type(exc).__name__}: {exc}"))
 
+    # 0 python·deps (config보다 먼저: 이것이 깨지면 나머지 판정이 무의미하다)
+    if sys.version_info >= MIN_PYTHON:
+        rows.append(_row("python", "ok", ".".join(map(str, sys.version_info[:3]))))
+    else:
+        rows.append(_row("python", "fail", ".".join(map(str, sys.version_info[:3])),
+                         f"Python {'.'.join(map(str, MIN_PYTHON))}+ 를 설치한다"))
+
+    def deps():
+        # PyYAML이 없으면 config.py는 import에서 종료 2로 멈춘다(여기까지 오지 않는다). jsonschema만 따로 본다.
+        import yaml
+        try:
+            import jsonschema  # noqa: F401
+        except ImportError:
+            rows.append(_row("deps", "fail", "jsonschema 없음", "pyproject 의존성을 설치한다(pip install)"))
+            return
+        from importlib.metadata import version
+        libyaml = "libyaml" if getattr(yaml, "CSafeLoader", None) else "pure"
+        rows.append(_row("deps", "ok", f"PyYAML {yaml.__version__}({libyaml})·jsonschema {version('jsonschema')}"))
+    guarded("deps", deps)
+
     # 1 config
     user, cfg = None, None
     try:
         user = userconfig.load_user()
         if user is None:
-            rows.append(_row("config", "fail", "사용자 config 없음", "/telephony-triage:setup"))
+            rows.append(_row("config", "fail", "사용자 config 없음", "/telephony-triage:setup 을 실행한다"))
         else:
             cfg = userconfig.merged(defaults, user)
             rows.append(_row("config", "ok", "config.yaml 있음"))
     except Exception as exc:    # noqa: BLE001 — 읽기 실패도 한 행의 fail이다
-        rows.append(_row("config", "fail", f"config 읽기 실패: {exc}", "config.yaml 확인 또는 setup"))
+        # init --force도 기존 파일을 먼저 읽으므로 손상 파일에서는 실패한다 → 파일을 옮긴 뒤 setup
+        rows.append(_row("config", "fail", f"config 읽기 실패: {exc}",
+                         f"손상된 {userconfig.path()}를 다른 이름으로 옮긴 뒤 /telephony-triage:setup 을 실행한다"))
     ok_cfg = cfg is not None
 
     # 2 scripts_path
@@ -426,7 +503,7 @@ def _doctor_rows(args, defaults: dict) -> list[dict]:
             rows.append(_row("scripts_path", "ok", "플러그인 경로와 같음"))
         else:
             rows.append(_row("scripts_path", "warn", "config의 경로가 이 플러그인과 다름" if have else "scripts_path 비어 있음",
-                             "config.py sync-scripts-path"))
+                             "새 세션을 시작하면 자동으로 맞춘다. 계속 다르면 관리자에게 알린다"))
     guarded("scripts_path", scripts_path) if ok_cfg else skip("scripts_path", "config 없음")
 
     # 3 clone
@@ -435,7 +512,7 @@ def _doctor_rows(args, defaults: dict) -> list[dict]:
     def clone():
         raw = userconfig.get(cfg, "issue_db.path")
         if not raw:
-            rows.append(_row("clone", "fail", "issue_db.path 비어 있음", "setup 1"))
+            rows.append(_row("clone", "fail", "issue_db.path 비어 있음", "/telephony-triage:setup 에서 이슈 DB 경로(1번)를 다시 입력한다"))
             return
         repo = Path(str(raw)).expanduser()
         if (repo / ".git").exists():
@@ -443,7 +520,8 @@ def _doctor_rows(args, defaults: dict) -> list[dict]:
             repo_box.append(repo)
         else:
             remote = userconfig.get(cfg, "issue_db.remote")
-            rows.append(_row("clone", "fail", "이슈 DB clone 없음", f"git clone {remote} {repo}" if remote else "setup 3"))
+            rows.append(_row("clone", "fail", "이슈 DB clone 없음", f"터미널에서 git clone {remote} {repo} 실행" if remote
+                                 else "/telephony-triage:setup 3번(clone)을 다시 한다"))
     guarded("clone", clone) if ok_cfg else skip("clone", "config 없음")
 
     # 4 hook
@@ -452,15 +530,18 @@ def _doctor_rows(args, defaults: dict) -> list[dict]:
         if value == ".githooks":
             rows.append(_row("hook", "ok", "core.hooksPath=.githooks"))
         else:
-            rows.append(_row("hook", "fail", f"core.hooksPath={value or '(없음)'}", "config.py install-hooks"))
+            rows.append(_row("hook", "fail", f"core.hooksPath={value or '(없음)'}", "/telephony-triage:setup 을 다시 실행한다(hook 설치 단계)"))
     guarded("hook", hook) if repo_box else skip("hook", "clone 없음")
+
+    # 4b guard 자가시험 (읽기 전용: guard는 판정만 한다)
+    guarded("guard", lambda: rows.append(_guard_selftest(args, repo_box[0] if repo_box else None)))
 
     # 5 jira (매핑만 본다)
     def jira():
         server = userconfig.get(cfg, "jira.mcp_server")
         tools = userconfig.get(cfg, "jira.tools", {})
         read_tools = userconfig.get(cfg, "jira.read_tools", [])
-        hint = "setup 4 (Jira MCP 확인)"
+        hint = "/telephony-triage:setup 4번(Jira MCP 매핑)을 다시 한다"
         if tools is None:
             tools = {}
         if read_tools is None:
@@ -487,7 +568,7 @@ def _doctor_rows(args, defaults: dict) -> list[dict]:
         if ok:
             rows.append(_row("gh", "ok", f"인증됨 ({host})"))
         else:
-            rows.append(_row("gh", "warn", f"gh 인증 없음 ({host}) — 쓰기 불가", f"gh auth login -h {host}"))
+            rows.append(_row("gh", "warn", f"gh 인증 없음 ({host}) — 쓰기 불가", f"터미널에서 gh auth login -h {host} 실행"))
     guarded("gh", gh) if ok_cfg else skip("gh", "config 없음")
 
     # 7 snapshot
@@ -498,12 +579,12 @@ def _doctor_rows(args, defaults: dict) -> list[dict]:
     def snapshot():
         snap_dir = work / session_lock.SNAPSHOT_DIR
         if not (snap_dir / ".git").exists():
-            rows.append(_row("snapshot", "warn", "읽기 스냅샷 없음", "/telephony-triage:sync"))
+            rows.append(_row("snapshot", "warn", "읽기 스냅샷 없음", "/telephony-triage:sync 를 실행한다"))
             return
         snap_box.append(snap_dir)
         meta_path = work / session_lock.SNAPSHOT_META
         if not meta_path.is_file():
-            rows.append(_row("snapshot", "warn", "시각 기록 없음 (나이 불명)", "/telephony-triage:sync"))
+            rows.append(_row("snapshot", "warn", "시각 기록 없음 (나이 불명)", "/telephony-triage:sync 를 실행한다"))
             return
         try:
             meta = json.loads(meta_path.read_text(encoding="utf-8"))
@@ -511,11 +592,11 @@ def _doctor_rows(args, defaults: dict) -> list[dict]:
             sha = str(meta.get("sha") or "")[:7]
         except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
             snap_box.clear()
-            rows.append(_row("snapshot", "fail", f"{session_lock.SNAPSHOT_META} 손상: {type(exc).__name__}", "/telephony-triage:sync"))
+            rows.append(_row("snapshot", "fail", f"{session_lock.SNAPSHOT_META} 손상: {type(exc).__name__}", "/telephony-triage:sync 를 실행한다"))
             return
         days = int(age.total_seconds() // 86400)
         if age > timedelta(days=SNAPSHOT_STALE_DAYS):
-            rows.append(_row("snapshot", "warn", f"{days}일 전 ({sha}, {SNAPSHOT_STALE_DAYS}일 초과)", "/telephony-triage:sync"))
+            rows.append(_row("snapshot", "warn", f"{days}일 전 ({sha}, {SNAPSHOT_STALE_DAYS}일 초과)", "/telephony-triage:sync 를 실행한다"))
         else:
             rows.append(_row("snapshot", "ok", f"{days}일 전 ({sha})"))
     if not ok_cfg:
@@ -535,7 +616,7 @@ def _doctor_rows(args, defaults: dict) -> list[dict]:
                 rows.append(_row("compat", "ok", "스키마·생성기·파서 호환"))
             else:
                 codes = ",".join(r["code"] for r in result["reasons"])
-                rows.append(_row("compat", "fail", f"쓰기 막힘: {codes}", "config.py check --for dry-run"))
+                rows.append(_row("compat", "fail", f"쓰기 막힘: {codes}", "플러그인을 업데이트하거나 관리자에게 사유를 알린다"))
         except Exception as exc:    # noqa: BLE001
             rows.append(_row("compat", "fail", f"판정 실패: {exc}"))
 
@@ -553,9 +634,11 @@ def _doctor_rows(args, defaults: dict) -> list[dict]:
                 mins = held["age_sec"] // 60
                 state = "만료" if held["expired"] else "보유 중"
                 rows.append(_row("lock", "warn", f"{state}: {held['job']} ({mins}분 전)",
-                                 f"끝난 세션이면 db_pr lock release {held['job']} --force"))
+                                 f"그 세션이 끝났는지 확인 → 끝났으면 db_pr lock release {held['job']} --force"))
         except Exception as exc:    # noqa: BLE001 — 손상 lock 포함
-            rows.append(_row("lock", "fail", str(exc) or type(exc).__name__, "lock 파일 확인"))
+            rows.append(_row("lock", "fail", str(exc) or type(exc).__name__,
+                             f"lock 파일 확인: {work / session_lock.LOCK_FILE} — 그 세션이 끝났으면 "
+                             "db_pr lock release <작업 키> --force(.corrupt-<ts>로 백업 후 제거)"))
     return rows
 
 
@@ -640,6 +723,10 @@ def main(argv: list[str] | None = None) -> int:
     except (AttributeError, ValueError):
         pass
     args = build_parser().parse_args(argv)
+    if IMPORT_ERROR is not None:
+        print(f"의존성 없음: {getattr(IMPORT_ERROR, 'name', None) or IMPORT_ERROR} — pyproject 의존성(PyYAML·jsonschema)을 "
+              f"설치한 뒤 다시 실행한다 ({type(IMPORT_ERROR).__name__}: {IMPORT_ERROR})", file=sys.stderr)
+        return USAGE
     # 어떤 서브커맨드든 사내 기본값이 먼저다. 없으면 종료 코드 2 (example은 읽지 않는다).
     defaults = site_defaults.load_or_exit(getattr(args, "plugin_root", None))
     code = OK

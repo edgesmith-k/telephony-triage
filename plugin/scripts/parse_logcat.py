@@ -70,7 +70,8 @@ def _ril_events(rec: dict, rules: parser_rules.Rules, last_ts: str | None) -> li
     ann = rec.get("ril")
     if not ann or ann["dir"] not in ("req", "resp"):
         return []
-    # A different buffer/device/restart cannot extend this request's observation.
+    # 관측 끝은 같은 세그먼트 안 같은 pid의 마지막 줄(ril.py). 다른 장치·재시작·시계 불연속·다른 프로세스 줄은
+    # 이 요청의 관측을 연장하지 않는다.
     last_ts = ann.get("observed_until", rec["ts"])
     rule = rules.requests.get(ann["request"])
     if not rule:
@@ -155,10 +156,13 @@ def postprocess(
     timeout_ms: int | None = None,
     errors: list[dict] | None = None,
     dropped: dict | None = None,
+    unextracted: dict | None = None,
 ) -> list[dict]:
     """백엔드 출력에 태그 매핑 → 마스킹 → RIL 파생 이벤트 → extractor를 적용한다.
 
     `dropped`가 dict면 버린 줄을 `(태그, pid, 레벨) → 줄 수`로 센다(`uncollected_tags`용, 원문 태그 그대로 — 쓰는 쪽이 마스킹한다).
+    `unextracted`가 dict면 수집 태그의 W/E/F 줄 중 이벤트(RIL 파생·extractor·같은 줄의 builtin)를 하나도 못 낸 줄을
+    `마스킹된 태그 → 줄 수`로 센다(`unextracted_warn`용, 정규식 추가 없음).
 
     줄 레코드(`event: None`)는 `tags.yaml`에 없는 태그면 버린다. builtin 레코드는
     그대로 두고(마스킹만) 줄 레코드와 함께 낸다. 파생 이벤트는 그 줄 바로 뒤에 온다
@@ -189,12 +193,19 @@ def postprocess(
     extracted = _run_extractors([kept[i] for i in line_pos], rules, timeout_ms, errors)
     by_pos = dict(zip(line_pos, extracted))
 
+    builtin_refs = ({evt.ref_key(r.get("line_ref")) for r in kept if r.get("event") is not None} - {None}
+                    if unextracted is not None else set())
     out: list[dict] = []
     for i, rec in enumerate(kept):
         out.append(rec)
         if i in by_pos:
-            out.extend(_ril_events(rec, rules, last_ts))
+            derived = _ril_events(rec, rules, last_ts)
+            out.extend(derived)
             out.extend(by_pos[i])
+            if (unextracted is not None and rec.get("level") in ("W", "E", "F") and not derived and not by_pos[i]
+                    and evt.ref_key(rec.get("line_ref")) not in builtin_refs):
+                tag = str(rec.get("tag"))
+                unextracted[tag] = unextracted.get(tag, 0) + 1
     return out
 
 
@@ -469,8 +480,9 @@ def run_parse(args, plugin_root: Path, defaults: dict, profile: platforms.Platfo
     errors: list[dict] = []
     events = backend.parse(paths, args.tz, args.year, window)
     dropped: dict = {}
+    unextracted: dict = {}
     events = postprocess(events, rules, masker=masker, last_ts=coverage["last_ts"],
-                         timeout_ms=timeout_ms, errors=errors, dropped=dropped)
+                         timeout_ms=timeout_ms, errors=errors, dropped=dropped, unextracted=unextracted)
     uncollected = uncollected_tags(dropped, events, masker)
     for error in errors:
         warnings.append({"code": "pattern-timeout",
@@ -534,6 +546,10 @@ def run_parse(args, plugin_root: Path, defaults: dict, profile: platforms.Platfo
     }
     if uncollected:      # 최상위, 있을 때만(없으면 출력이 이전과 같다)
         out["uncollected_tags"] = uncollected
+    if unextracted:      # 같은 규칙: 수집 태그 W/E/F 줄인데 이벤트로 추출 안 된 줄 (후보 없음 힌트, 분류·점수에 안 씀)
+        rows = sorted(unextracted.items(), key=lambda kv: (-kv[1], kv[0]))[:UNCOLLECTED_TOP]
+        out["unextracted_warn"] = {"lines": sum(unextracted.values()),
+                                   "tags": [{"tag": tag[:40], "lines": n} for tag, n in rows]}
     return out
 
 

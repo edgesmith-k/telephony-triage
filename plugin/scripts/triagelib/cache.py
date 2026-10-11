@@ -204,9 +204,11 @@ class CacheMixin:
         return r
 
     def save_job(self, core: dict, parts: dict, request_hash: str, run_no: int, seq: int, hit: bool, candidates: list) -> None:
-        """계산한 실행이면 `analysis-cache.json`을, 모든 성공 실행이면 state의 `job` 절(실행 이력)을 갱신한다. 마스킹된 값·경로·sha만."""
+        """계산한 실행이면(판정 불가 유형·시그니처 오류가 없을 때만) `analysis-cache.json`을, 모든 성공 실행이면 state의 `job` 절(실행 이력)을 갱신한다. 마스킹된 값·경로·sha만."""
         job = self.state.job
-        if not hit:
+        if not hit and core.get("unjudged"):   # 시그니처 시간 초과·오류(비결정적)가 있는 결과는 재사용하지 않는다
+            self.run.note("cache-skipped", unjudged=core["unjudged"].get("count"))
+        elif not hit:
             files = {}
             for name in ("events", "match"):
                 st = (self.job / CACHE_FILES[name]).stat()

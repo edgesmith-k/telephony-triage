@@ -1,7 +1,8 @@
 """logcat 줄 해석과 시각 처리 (reference 백엔드의 공통 처리, 16-existing-assets.md §16.3).
 
 - 형식: `threadtime`(기본), 연도 포함(`-v year`), `-v uid`, `-v zone`, `time`.
-  `--------- beginning of <buffer>` 줄은 건너뛴다.
+  `--------- beginning of <buffer>` 줄은 건너뛴다. **버퍼 경계로 쓰지 않는다** —
+  병합 logcat에서 이 줄은 그 버퍼의 첫 줄이 나온 자리일 뿐이다.
 - 시각: 줄에 연도가 없으면 `year`(없으면 `DEFAULT_YEAR`), 타임존이 없으면
   `tz`(IANA 이름, 없으면 UTC)로 해석해서 **UTC**로 바꾼다. 파서는 사용자
   config를 읽지 않는다 (`02-config.md §4`). 연도 없는 로그가 12월 → 1월로
@@ -74,7 +75,6 @@ class LogLine:
     level: str
     tag: str
     msg: str
-    buffer: str | None = None
 
 
 @dataclass
@@ -139,12 +139,9 @@ def read_file(
     lines: list[LogLine] = []
     base_year = current_year = year or DEFAULT_YEAR
     prev_month: int | None = None
-    buffer = None
     with open_log(path) as fh:
         for line_no, raw in enumerate(fh, 1):
             text = raw.rstrip("\r\n")
-            if text.startswith("--------- beginning of "):
-                buffer = text.removeprefix("--------- beginning of ").strip()
             if not text.strip() or text.startswith(BEGINNING_PREFIX):
                 continue
             match = THREADTIME_RE.match(text) or TIME_RE.match(text)
@@ -185,7 +182,6 @@ def read_file(
                     level=match.group("level"),
                     tag=match.group("tag").strip(),
                     msg=match.group("msg") or "",
-                    buffer=buffer,
                 )
             )
             stats.lines += 1

@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import json
 import os
+import re
 
 from common import events, masking
 from common.exitcodes import USAGE
@@ -20,6 +21,18 @@ def _top_label(candidates: list) -> str | None:
 
 
 _ref_label = events.ref_label   # report.md 전용 `f<순번>:L<줄>`
+
+
+def dumps(result: dict) -> str:
+    """analysis.json·stdout 공통 직렬화(compact JSON, 들여쓰기 없음). 4KB 예산도 이 바이트로 잰다."""
+    return json.dumps(result, ensure_ascii=False, separators=(",", ":"))
+
+
+def _slot_number(value) -> int | None:
+    """Jira SIM 슬롯 값 안의 정수가 정확히 하나이고 음수가 아닐 때만 그 값(그 외 None — 경고하지 않음).
+    0/1 기준은 사내 S20 확인 사항이라 그대로 비교한다(정규화는 jira_fields.py)."""
+    found = re.findall(r"-?\d+", str(value)) if value not in (None, "") else []
+    return int(found[0]) if len(found) == 1 and not found[0].startswith("-") else None
 
 
 def _unique_evidence(evidence: list) -> list:
@@ -146,8 +159,8 @@ def _drop_read_only_hint_if_shown(result: dict) -> None:
 def fit(result: dict) -> dict:
     """analysis.json을 ≤ 4KB로 줄인다: (읽기 전용 줄 중복) → 다른 후보 근거 → 근거 줄 수 → 메시지 길이 → 경고 순,
     마지막으로 must_show 항목을 160자로 줄이고 앞 4개만 남긴다(`truncated` 의미는 그대로: 그래도 넘으면 true)."""
-    def size() -> int:
-        return len(json.dumps(result, ensure_ascii=False, indent=1).encode("utf-8"))
+    def size() -> int:   # 파일 바이트(끝 개행 포함)
+        return len(dumps(result).encode("utf-8")) + 1
 
     cands = result.get("candidates") or []
     steps = []
@@ -165,6 +178,9 @@ def fit(result: dict) -> dict:
               lambda: result.update(files={"report": result["files"]["report"]}),
               lambda: cands and cands[0].update(evidence=cands[0]["evidence"][:3]),
               lambda: _trim_error_events(result),
+              lambda: (result.get("unjudged") or {}).pop("types", None),
+              lambda: (result.get("unjudged") or {}).pop("causes", None),
+              lambda: (result.get("unjudged") or {}).pop("errors", None),
               lambda: _drop_order_last(result),
               lambda: _drop_clock_reason(result),
               lambda: _drop_focus(result),
@@ -226,7 +242,12 @@ class ReportMixin:
                     hits.append({"id": ident, "kind": r.get("kind"), "title": _clip(r.get("title") or r.get("note"), 60)})
         errors = [self.error_row(e) for e in events.get("events") or []
                   if e.get("event") and ERROR_EVENT_RE.search(str(e["event"]))]
-        return {"search_hits": hits, "error_events": errors[:8], "error_event_total": len(errors)}
+        out = {"search_hits": hits, "error_events": errors[:8], "error_event_total": len(errors)}
+        unext = events.get("unextracted_warn") or {}
+        if unext.get("lines"):     # 수집 태그 W/E 줄인데 이벤트로 추출 안 된 줄 (parse_logcat, 있을 때만)
+            out["unextracted_warn"] = unext["lines"]
+            out["_unextracted_tags"] = unext.get("tags") or []    # report.md 전용, analysis.json에는 안 나간다
+        return out
 
     @staticmethod
     def error_row(e: dict) -> dict:
@@ -262,6 +283,7 @@ class ReportMixin:
             "logs": core["logs"],
             "candidates": candidates,
             "pending_causes": core["pending_causes"],
+            "unjudged": core.get("unjudged"),
             "no_candidate": core["no_candidate"],
             "code": {**core["code"], "auto": True} if self.code_auto and not core["code"].get("skipped") else core["code"],
             "analyzer": core["analyzer"],
@@ -280,8 +302,10 @@ class ReportMixin:
             result["must_show"] = must_show
         # analysis.json 내용을 먼저 확정하고(TT_SCHEMA_CHECK면 검사) 그 뒤에 파일을 쓴다: 위반이면 이전 결과·캐시를 건드리지 않는다
         final = copy.deepcopy({k: v for k, v in result.items() if v not in (None, [], {})})
+        (final.get("no_candidate") or {}).pop("_unextracted_tags", None)   # report.md 전용
         for cand in final.get("candidates") or []:
             cand.pop("_version_mismatch", None)
+            cand.pop("_cause_unjudged", None)
             for e in cand["evidence"]:
                 e.pop("_ref", None)
         final = fit(final)
@@ -298,10 +322,11 @@ class ReportMixin:
             self.save_job(core, parts, request_hash, run_no, seq, hit, candidates)   # `_ref`를 지우기 전에(리포트 재현용)
         for cand in candidates:
             cand.pop("_version_mismatch", None)
+            cand.pop("_cause_unjudged", None)
             for e in cand["evidence"]:
                 e.pop("_ref", None)
         result = final
-        (self.job / "analysis.json").write_text(json.dumps(result, ensure_ascii=False, indent=1) + "\n",
+        (self.job / "analysis.json").write_text(dumps(result) + "\n",
                                                 encoding="utf-8", newline="\n")
         self.run.note("done", candidates=len(candidates), calls=self.run.calls)
         return result
@@ -361,45 +386,79 @@ class ReportMixin:
         if self.focus:
             lines.append("- 스텝 기준 우선 유형 (순위 참고만, 점수·S/C 불변): " + ", ".join(self.focus))
         cands = r["candidates"]
+        unjudged = r.get("unjudged") or {}
         if cands:
             top = cands[0]
             label = {"high": "높음", "medium": "중간", "low": "낮음"}.get(top["confidence"], top["confidence"])
-            cause = f"{top['cause']} {top['title']}" if top["cause"] else "원인 미확인"
+            if top["cause"]:
+                cause = f"{top['cause']} {top['title']}"
+            elif top.get("_cause_unjudged"):    # 원인 시그니처 오류(C: null): 원인 미확인으로 단정하지 않는다
+                cause = "원인 판정 불가(시그니처 시간 초과·오류 — 원인 미확인으로 단정하지 않음)"
+            else:
+                cause = "원인 미확인"
             lines.append(f"- 분류 후보: {top.get('category')} > {top['type']} > {cause} "
                          f"(규칙 일치 점수 {top['score']}, 일치 수준 {label} — 진단 확신도 아님"
-                         f"{'' if top['C'] else ', 유형 일치·원인 미확인'})")
+                         f"{'' if top['C'] else (', 유형 일치·원인 판정 불가' if top.get('_cause_unjudged') else ', 유형 일치·원인 미확인')})")
             lines.append(f"- 근거 로그 (마스킹, 슬롯 phone {','.join(map(str, top['phones'])) or '?'}):")
             lines += [f"  - {e['ts']} {e['tag']} {e['msg']}" + (f" ({e['_ref']})" if e.get("_ref") else "")
                       for e in top["evidence"]]
+            jira_slot = (r.get("jira") or {}).get("sim_slot")
+            slot = _slot_number(jira_slot)
+            if slot is not None and top["phones"] and slot not in top["phones"]:
+                lines.append(add(7, f"슬롯 불일치: 1위 후보 근거는 phone {','.join(map(str, top['phones']))}, Jira SIM 슬롯은 "
+                                    f"{_clip(str(jira_slot), 20)} — 다른 슬롯의 로그로 판정됐을 수 있다(교차 슬롯 원인이 아니면 재검토)"))
+            if top.get("clock_flags"):
+                lines.append(add(8, "시계 이상 구간의 근거: 1위의 순서·시간창 판정은 시각 재정렬 기준이라 신뢰가 낮다 — 근거 (f:L) 위치로 "
+                                    "순서 확인(이어 붙인(버퍼별 덤프) 파일이면 줄 순서가 시각 순서가 아니다) "
+                                    f"[{', '.join(top['clock_flags'])}]"))
             if (len(cands) > 1 and cands[1]["score"] == top["score"]
                     and (cands[1]["S"], cands[1]["C"]) == (top["S"], top["C"])):
                 n = sum(1 for c in cands if c["score"] == top["score"])
                 lines.append(f"- 순위 참고: 규칙 일치 점수 동점 후보 {n}개 — 발생 시각 근접·키워드 근거 순으로 정렬했다(원인 확정 아님)")
         else:
-            lines.append("- 분류 후보: **후보 없음** (S=1인 유형 없음)")
+            if unjudged.get("count"):
+                lines.append(f"- 분류 후보: **판정 불완전** — S=1인 유형 없음, 판정 불가 유형 {unjudged['count']}개 "
+                             "(후보 없음으로 단정하지 않음)")
+            else:
+                lines.append("- 분류 후보: **후보 없음** (S=1인 유형 없음)")
             hints = r.get("no_candidate") or {}
             lines.append("- 설명 기반 유사 후보: " + (", ".join(f"{h['id']} {h['title']}" for h in hints.get("search_hits") or [])
                                                  or "없음"))
-            lines.append(f"- 오류·거부·타임아웃 이벤트: {hints.get('error_event_total', 0)}건")
+            total, unext = hints.get("error_event_total", 0), hints.get("unextracted_warn")
+            text = f"오류·거부·타임아웃 이벤트: 추출 이벤트 기준 {total}건"
+            if unext:
+                tags = ", ".join(f"{t['tag']} {t['lines']}줄" for t in hints.get("_unextracted_tags") or [])
+                text += f" (수집 태그 W/E/F 줄 중 이벤트로 추출 안 된 줄 {unext}건" + (f": {tags}" if tags else "") + ")"
+            lines.append(add(11, text) if unext and not total else f"- {text}")
             lines += [f"  - {_error_line(e)}" for e in (hints.get("error_events") or [])[:8]]
+        if unjudged:
+            err = (unjudged.get("errors") or [{}])[0]
+            where = f"시그니처 시간 초과·오류 {err.get('signature')}: {err.get('error')}"
+            if unjudged.get("count") or unjudged.get("cause_count"):
+                ids = ", ".join((unjudged.get("types") or []) + (unjudged.get("causes") or []))
+                n = f"{unjudged['count']}" + (f"·원인 {unjudged['cause_count']}" if unjudged.get("cause_count") else "")
+                lines.append(add(6, f"판정 불가 유형: {n}개" + (f" ({ids})" if ids else "") + f" — {where}. "
+                                    "후보 순위·'후보 없음'·'원인 미확인'은 불완전하다 (matcher.pattern_timeout_ms·시그니처 확인)"))
+            else:     # 충족된 유형의 다른 시그니처만 오류: S/C는 그대로, 근거 선택만 달라질 수 있다
+                lines.append(add(6, f"{where} — 충족된 유형의 다른 시그니처라 S/C는 그대로(근거 선택은 달라질 수 있다)"))
         if anchor and (not cands or not cands[0]["C"]):
             lines.append("- 힌트: 실패 스텝 구간 기준으로 좁게 분석했다. 원인이 스텝 시작 전에 있었을 수 있다 — "
                          "`--answer anchor=off`로 다시 실행하면 Jira 발생 시각 기준 범위로 넓힌다")
         outside = r.get("_outside")
         if outside and outside.get("total"):
-            lines.append(add(7, f"분석 범위 밖 오류 이벤트 (Jira 발생 시각 {outside['at']} 근처, 근거·점수에 쓰지 않음): "
+            lines.append(add(10, f"분석 범위 밖 오류 이벤트 (Jira 발생 시각 {outside['at']} 근처, 근거·점수에 쓰지 않음): "
                                 f"{outside['total']}건"))
             lines += [f"  - {_error_line(e)}" for e in outside["rows"][:3]]
         logs = r["logs"]
         if logs.get("uncollected_tags"):       # 후보 없음·원인 미확인일 때만 core가 채운다
             tags = ", ".join(f"{u['tag']} {u['lines']}줄(W/E {u['warn']})" for u in logs["uncollected_tags"])
-            lines.append(add(8, "파서 규칙에 없는 태그 (수집 태그와 같은 프로세스, tags.yaml에 없어 이벤트로 추출 안 됨): " + tags))
+            lines.append(add(11, "파서 규칙에 없는 태그 (수집 태그와 같은 프로세스, tags.yaml에 없어 이벤트로 추출 안 됨): " + tags))
         in_range = {True: "발생 시각 포함", "partial": "일부만 포함", False: "로그 범위 밖",
                     None: "해석한 줄 없음(형식·인코딩)"}.get(logs["in_range"], "?")
         range_text = (f"로그 범위: {logs['range'][0]} ~ {logs['range'][1]} ({in_range}), "
                       f"시계 이상 {'있음' if logs['clock_anomalies'] else '없음'}")
         if not cands or not cands[0]["C"] or logs["in_range"] is not True or logs["clock_anomalies"]:
-            lines.append(add(6, range_text))
+            lines.append(add(9, range_text))
         else:
             lines.append(f"- {range_text}")
         lines.append("- 원인: TODO(LLM) — 로그로 확인한 것 / 코드로 추정한 것 / placeholder 규칙 결과를 나눠 쓴다")

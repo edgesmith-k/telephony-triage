@@ -100,6 +100,9 @@ class Review:
         self.types = sorted(db.types, key=lambda t: t.id)
         self.type_by_id = {t.id: t for t in self.types}
         self.causes = [c for t in self.types if t.active for c in t.causes if c.active]
+        self._by_cause: dict[str, list[dict]] = {}          # 원인별 Jira를 한 번만 모은다(db.jira 순서 그대로)
+        for r in db.jira:
+            self._by_cause.setdefault(str(r.get("cause")), []).append(r)
         self.history = history.History(db.root)
         self.items: list[dict] = []
 
@@ -117,7 +120,7 @@ class Review:
         return [c for c in self.causes if self.in_scope(c.id)]
 
     def jira_of(self, cause_id: str) -> list[dict]:
-        return [r for r in self.db.jira if str(r.get("cause")) == cause_id]
+        return list(self._by_cause.get(cause_id, ()))
 
     def type_md(self, cause: issuedb.Cause) -> str:
         return (self.type_by_id[cause.type_id].path / "type.md").relative_to(self.db.root).as_posix()

@@ -249,6 +249,7 @@ decision: accepted                     # accepted | chose-other | new-cause | ne
 final: DATA-001-02
 ```
 
+- analyze의 `suggested`는 `db_pr stage`가 `JOB/match.json` 후보(`cause`가 있는 것, 순위순 `{cause, signature, score}`)로 채운다. 계획에는 `[]`로 두고, 직접 적은 값이 match.json과 다르면 stage가 거부한다. match.json이 없으면 `[]` 그대로다(`contracts.md §3.2` `stage`).
 - 수동 기록(`record`)은 `decision: manual`, `suggested: []`로 쓴다. 매처가 제시한 후보가 없으므로 **시그니처 수락률·1위 정확도 통계에서 제외**한다 (`06-collaboration.md §6.5`).
 
 - 분석이 PR로 끝나면 같은 PR에 들어간다. 항상 새 파일이므로 충돌하지 않는다.

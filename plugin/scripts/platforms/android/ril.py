@@ -111,10 +111,15 @@ def _pair_segment(records: list[dict]) -> None:
                 ann["paired_ts"] = req["ts"]
                 ann["latency_ms"] = latency
                 break
+    # 관측 끝 = 세그먼트 안 그 요청과 같은 pid(RIL 프로세스)의 마지막 줄. 다른 프로세스 줄은 RILJ 흐름이
+    # 이어졌다는 근거가 아니다(phone 프로세스 크래시 뒤 다른 pid 줄로 응답 없음을 단정하지 않는다).
+    last_by_pid: dict = {}
+    for rec in records:
+        last_by_pid[rec["pid"]] = rec["ts"]
     for rec in records:
         ann = rec.get("ril")
         if ann and ann["dir"] == "req" and ann["paired_ts"] is None:
-            ann["observed_until"] = records[-1]["ts"]
+            ann["observed_until"] = last_by_pid[rec["pid"]]
 
 
 # -- 벤더 RIL 층 (선택) ----------------------------------------------------------

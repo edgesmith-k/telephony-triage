@@ -91,10 +91,11 @@ gh PR, lock, 사용자 clone 상태, 원문 PII 노출, Jira 쓰기 도구 호�
 순서·존재 확인(e49 `paste`, e50 `both`·`order`)은 `Ctx.ran`(실행 기록)으로 판정한다 — 설명 문장 때문의 거짓 실패(3C)를 없앤다.
 `grading.json`에는 채점 항목이 아닌 `tokens`(실행 기록의 토큰, 미실행이면 `null`)가 항상 붙는다("토큰 기록").
 `grading.json`에는 채점 항목이 아닌 `metrics.raw_full_reads`가 붙는다: 원문 통독 의심 호출(env `logs/`·`*.log`·`*.zip`·`events.json`·
-`jira_raw.json`에 대한 Bash `cat`/`head -c`/`less`/`strings`/`unzip -p`, `limit` 없는 `Read`). 실행 기록이 없으면 빈 목록이다.
+`jira_raw.json`에 대한 Bash `cat`/`head -c`/`less`/`strings`/`unzip -p`, `limit` 없는 `Read`, 한 줄로 쓰인 드라이버 JSON(`events`·`match`·`jira_raw`)에 대한
+`grep`(적중 하나가 파일 전체)과 python `open()`). 실행 기록이 없으면 빈 목록이다.
 `metrics.raw_reads_blocked`는 guard 규칙 10(`08-safety.md §9`)이 거부한 같은 종류의 시도다: `tool_use.id`와 짝이 되는 `tool_result`가
 오류이고 `[telephony-triage]`를 담은 호출은 `raw_full_reads`에서 빼고 여기에 센다(읽지 못했으므로 통독이 아니다). 다른 오류는 그대로 센다.
-e46·e47 `scope()`는 `timeline.md` 첫 열람이 `triage.py explore` Bash 호출 뒤여야 통과한다. e46 1번은 그 호출 앞 assistant 텍스트에
+e46·e47 `scope()`는 `timeline.md` 첫 열람이 `triage.py explore` Bash 호출 뒤여야 통과하고, `match.json`을 열면(python 포함) 실패한다(`suggested`는 stage가 채운다). e46 1번은 그 호출 앞 assistant 텍스트에
 '탐색 분석'과 '할까요'(또는 '실행할까'·'진행할까')가 함께 있어야 통과하고, 실행 기록이 없으면 수동 채점으로 남는다.
 
 **R4 응답 규칙(e10·e20·e21)**: 새 fixture에서 다른 유형 원인(IMS-001-01)도 걸려 시그니처 좁히기 / `allow-cause`를 물으면 실행자는

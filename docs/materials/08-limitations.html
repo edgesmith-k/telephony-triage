@@ -238,7 +238,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
       <div class="eyebrow">LIMITATIONS · 현재 한계, 단점, 보완 방법</div>
       <h1>아직 안 되는 것과 그 대응</h1>
       <p>도입을 검토하거나 운영하는 사람이 알아야 할 한계를 숨김없이 정리했습니다. 항목마다 영향, 지금의 대응, 보완 방법, 언제 해소되는지를 붙였습니다. 대부분은 사내 환경에서 실제 로그와 사람으로 확인해야 풀리는 것들입니다.</p>
-      <div class="meta"><span><b>기준</b> main 2026-10-09 (사외 초안 완료, 사내 보완 전)</span><span><b>대상</b> 도입 검토자, 관리자</span><span><b>읽는 시간</b> 약 12분</span></div>
+      <div class="meta"><span><b>기준</b> main 2026-10-10 (사외 초안 완료, 사내 보완 전)</span><span><b>대상</b> 도입 검토자, 관리자</span><span><b>읽는 시간</b> 약 12분</span></div>
     </header>
 
     <section class="chap" id="l1" data-title="한눈에 보기">
@@ -297,7 +297,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
       <p class="first">이 절에서 알 수 있는 것: 일부러 그렇게 만들어서 생기는 단점과 감수한 이유</p>
       <div class="tbl lim"><table>
         <tr><th>한계</th><th>영향</th><th>지금의 대응 / 보완</th><th>언제</th></tr>
-        <tr><td>규칙에 없는 이슈는 못 찾음</td><td>처음 보는 증상은 후보 없음. 판정이 규칙 기반이라 LLM처럼 "그럴듯한 답"을 내지 않음</td><td>후보가 없어도 유사 사례·오류 줄·모르는 태그를 보여줌. 탐색 분석으로 가설을 받고, 채택하면 새 규칙으로 등록</td><td class="when">지금</td></tr>
+        <tr><td>규칙에 없는 이슈는 못 찾음</td><td>처음 보는 증상은 후보 없음. 판정이 규칙 기반이라 LLM처럼 "그럴듯한 답"을 내지 않음</td><td>후보가 없어도 유사 사례·오류 줄·모르는 태그를 보여줌. 시그니처 시간 초과·오류가 있으면 "후보 없음"으로 단정하지 않고 "판정 불완전"으로 표시. 탐색 분석으로 가설을 받고, 채택하면 새 규칙으로 등록</td><td class="when">지금</td></tr>
         <tr><td>초기 기여 부담</td><td>DB가 비어 있으면 처리할 때마다 새 유형을 만들어야 해서 기여자가 지침</td><td>카테고리별 시드 유형 5~10개를 먼저 넣고 시작. 기존 분류는 <code>import</code>로 가져옴</td><td class="when">S-4·S-4a</td></tr>
         <tr><td>계획이 만든 PC에만 있음</td><td>다른 PC나 다른 사람은 그 PR을 <code>sync-pr</code>로 맞출 수 없음</td><td>작성자가 맞추거나, 리뷰어가 직접 편집 절차로 인수</td><td class="when">v1 밖</td></tr>
         <tr><td>원격 변경을 자동으로 합치지 않음</td><td>내 PR 브랜치에 남이 push하면 덮어쓰기 / 중단만 고를 수 있음</td><td>남의 변경은 먼저 계획에 반영. 계획 없는 브랜치 자동 병합(3-way)도 v1에 없음</td><td class="when">v1 밖</td></tr>

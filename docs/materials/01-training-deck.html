@@ -574,13 +574,13 @@ feedback/      <span class="c"># 후보 수락·거절 기록</span>
       <tr><th>항목</th><th>상태</th><th>내용</th><th>다음</th></tr>
       <tr><td>config</td><td><span class="tag ok">ok</span></td><td>config.yaml 있음</td><td></td></tr>
       <tr><td>clone</td><td><span class="tag ok">ok</span></td><td>~/work/telephony-issue-db</td><td></td></tr>
-      <tr><td>hook</td><td><span class="tag fail">fail</span></td><td>core.hooksPath=(없음)</td><td><code>config.py install-hooks</code></td></tr>
-      <tr><td>jira</td><td><span class="tag fail">fail</span></td><td>jira.tools.get_issue 매핑 비어 있음</td><td>setup의 Jira 단계</td></tr>
-      <tr><td>gh</td><td><span class="tag warn">warn</span></td><td>gh 인증 없음 (ghe.example) — 쓰기 불가</td><td><code>gh auth login -h ghe.example</code></td></tr>
-      <tr><td>snapshot</td><td><span class="tag warn">warn</span></td><td>오래된 스냅샷</td><td><code>/telephony-triage:sync</code></td></tr>
+      <tr><td>hook</td><td><span class="tag fail">fail</span></td><td>core.hooksPath=(없음)</td><td>setup 을 다시 실행한다(hook 설치 단계)</td></tr>
+      <tr><td>jira</td><td><span class="tag fail">fail</span></td><td>jira.tools.get_issue 매핑 비어 있음</td><td>setup 4번(Jira MCP 매핑)을 다시 한다</td></tr>
+      <tr><td>gh</td><td><span class="tag warn">warn</span></td><td>gh 인증 없음 (ghe.example) — 쓰기 불가</td><td>터미널에서 <code>gh auth login -h ghe.example</code> 실행</td></tr>
+      <tr><td>snapshot</td><td><span class="tag warn">warn</span></td><td>오래된 스냅샷</td><td><code>/telephony-triage:sync</code> 를 실행한다</td></tr>
       <tr><td>compat · lock</td><td><span class="tag ok">ok</span></td><td>스키마·생성기·파서 호환 / 세션 lock 없음</td><td></td></tr>
     </table></div>
-    <p class="small">예시 화면입니다. 실제 항목: config, scripts_path, clone, hook, jira, gh, snapshot, compat, lock.</p>
+    <p class="small">예시 화면입니다. 실제 항목: python, deps, config, scripts_path, clone, hook, guard(자가시험), jira, gh, snapshot, compat, lock.</p>
   </div>
   <aside class="notes">문제가 생기면 먼저 doctor 표를 보세요. fail은 그 기능이 막힌 것이고 warn은 일부만 제한됩니다. 이 표를 그대로 캡처해서 질문하면 지원이 빠릅니다.</aside>
 </section>
@@ -647,7 +647,7 @@ feedback/      <span class="c"># 후보 수락·거절 기록</span>
       <tr><td>Jira 대신 파일</td><td>불가</td><td>가능</td><td>가능</td></tr>
     </table></div>
     <div class="g2">
-      <p class="small"><b>같은 입력을 다시 돌리면</b> 파싱·매칭 결과를 재사용하고 리포트에 "재사용"이라고 밝힙니다. 재사용은 재검증이 아닙니다.</p>
+      <p class="small"><b>같은 입력을 다시 돌리면</b> 파싱·매칭 결과를 재사용하고 리포트에 "재사용"이라고 밝힙니다. 재사용은 재검증이 아닙니다. 시그니처 시간 초과·오류로 판정 불가 유형이 있던 실행은 저장하지 않아 다음 실행이 다시 계산합니다.</p>
       <p class="small"><b><code>--more-logs</code></b>는 이전 결과를 <code>runs/&lt;n&gt;/</code>에 보관하고, 1위가 바뀌면 "1위 X → Y"를 보여줍니다.</p>
     </div>
   </div>
@@ -737,7 +737,7 @@ feedback/      <span class="c"># 후보 수락·거절 기록</span>
       <div class="cell mid"><b>유형 일치, 원인 미확인</b><span class="small">새 원인일 수도. 탐색 분석을 제안받음</span></div>
       <div class="ax">S = 0</div>
       <div class="cell"><b>분석에서는 후보 아님</b><span class="small">증상이 확인된 유형의 원인만 평가. 회귀 검증에서는 오탐으로 잡힘</span></div>
-      <div class="cell"><b>후보 없음</b><span class="small">"후보 없음" 절에 설명 기반 유사 유형과 타임라인 요약</span></div>
+      <div class="cell"><b>후보 없음</b><span class="small">"후보 없음" 절에 설명 기반 유사 유형과 타임라인 요약. 시그니처 시간 초과·오류(S=null)가 있으면 "판정 불완전"으로 표시하고 단정하지 않음</span></div>
     </div>
   </div>
   <aside class="notes">분석 모드는 2단계입니다. 먼저 모든 유형의 S를 보고, S=1인 유형 안에서만 원인 C를 봅니다. 듀얼 SIM이면 같은 슬롯의 근거끼리만 묶습니다. 회귀·검증 모드는 반대로 모든 원인의 C를 독립적으로 봐서 다른 유형 로그에서의 오탐을 잡습니다.</aside>
@@ -765,6 +765,7 @@ bonus = 근접(근거 시각이 발생 시각에 가까울수록) + 키워드(Ji
 - 분류 후보: Data &gt; DATA-001 SETUP_DATA_CALL이 발생하지 않음 &gt; DATA-001-02 Roaming disabled
   (규칙 일치 점수 1.0, 일치 수준 높음 — 진단 확신도 아님)
 - 근거 로그: 시각·태그·메시지 3~10줄, 마스킹, 줄 위치 (f0:L1234)   슬롯: phone 0
+- <span class="c">(해당할 때만)</span> 판정 불가 유형 · 슬롯 불일치 · 시계 이상 구간의 근거
 - 로그 범위: 10:02~10:12 (발생 시각 포함), 시계 이상 없음
 - 원인 / 코드 위치: 파일:라인 + 분기 조건 (분석 트리: Android 16)   <span class="c">← 로그 확인과 코드 추정 구분</span>
 - 해결책: 데이터 로밍 설정을 켠다      해결책 검증: <span class="w">미검증</span>
@@ -772,7 +773,7 @@ bonus = 근접(근거 시각이 발생 시각에 가까울수록) + 키워드(Ji
 - 기타 후보: DATA-001-01 (낮음, 이유)
 - 심층 분석 / 탐색 분석: <span class="c">설정·동의했을 때만, 보조 의견</span>
 - 열린 PR: 없음</div>
-    <p class="small"><b>must_show</b> 줄(분석 전용 안내, 1위 변화, 로그 범위 경고 등)은 Claude가 요약하지 않고 글자 그대로 보여줍니다.</p>
+    <p class="small"><b>must_show</b> 줄(분석 전용 안내, 1위 변화, 판정 불가 유형, 슬롯 불일치, 시계 이상 근거, 로그 범위 경고 등)은 Claude가 요약하지 않고 글자 그대로 보여줍니다.</p>
   </div>
   <aside class="notes">리포트의 결정적인 칸은 스크립트가 채우고, Claude는 설명 칸만 채웁니다. 근거 로그의 f0:L1234는 첫 번째 입력 파일의 1234번째 줄이라 원본에서 바로 찾아볼 수 있습니다.</aside>
 </section>
@@ -823,7 +824,7 @@ bonus = 근접(근거 시각이 발생 시각에 가까울수록) + 키워드(Ji
     <div class="tw"><table class="t">
       <tr><th>내 답</th><th>계획에 들어가는 op</th></tr>
       <tr><td>예 (1위 수락)</td><td><code>append</code> 그 원인에 Jira 추가</td></tr>
-      <tr><td>다른 기존 원인</td><td><code>append</code> 고른 원인 / 이미 DB에 있는 Jira면 <code>reclassify</code></td></tr>
+      <tr><td>다른 기존 원인</td><td><code>append</code> 고른 원인 / 이미 DB에 있는 Jira면 <code>reclassify</code>. 이어서 C=1이면 fixture(<code>extra</code>) 추가, C=0이면 시그니처 검토 메모를 넣을지 한 번 더 물음(기본 아니오)</td></tr>
       <tr><td>새 원인</td><td><code>new-cause</code> + 시그니처·파서 규칙·fixture 초안</td></tr>
       <tr><td>새 유형</td><td>유사 유형 3개를 먼저 보고 <code>new-type</code></td></tr>
       <tr><td>원인 미확정</td><td><code>unresolved</code> 유형에만 기록</td></tr>
@@ -840,8 +841,8 @@ bonus = 근접(근거 시각이 발생 시각에 가까울수록) + 키워드(Ji
     <div class="tw"><table class="t tight">
       <tr><th>검증</th><th>무엇을 보나</th></tr>
       <tr><td>R1 파서</td><td>새 규칙이 참조하는 태그·이벤트가 실제로 추출되는가</td></tr>
-      <tr><td>R2 양성</td><td>이 로그에서 대상 원인 C=1, 다른 원인 C=0</td></tr>
-      <tr><td>R3 음성</td><td>정상 로그·다른 원인 로그에서 잘못 잡지 않는가</td></tr>
+      <tr><td>R2 양성</td><td>이 로그에서 대상 원인 C=1·소속 유형 S=1, 다른 원인 C=0</td></tr>
+      <tr><td>R3 음성</td><td>정상 로그·다른 원인 로그에서 잘못 잡지 않는가(시그니처 오류면 통과가 아니라 판정 불가 fail)</td></tr>
       <tr><td>R4 교차 회귀</td><td>전체 fixture 기대값 유지</td></tr>
       <tr><td>R5 이벤트 diff</td><td>파서 규칙 변경 시 기존 이벤트가 바뀌지 않는가. 바뀌면 <span class="warn-t">메인테이너 승인 필요</span></td></tr>
       <tr><td>R6 추가 표본</td><td>(선택) 같은 증상 다른 로그·정상 로그</td></tr>
@@ -924,10 +925,10 @@ bonus = 근접(근거 시각이 발생 시각에 가까울수록) + 키워드(Ji
       <tr><th>메시지</th><th>다음 행동</th></tr>
       <tr><td class="wrap"><code>쓰기 불가(gh 인증 없음)</code></td><td><code>gh auth login --hostname ghe.example</code>. 그동안 분석·<code>--dry-run</code>은 가능</td></tr>
       <tr><td class="wrap">Jira 도구 매핑 비어 있음 / MCP 후보 없음</td><td>Jira MCP를 사용자 범위로 등록 → setup 재실행. 연습은 <code>--dry-run --jira-file &lt;yaml&gt;</code></td></tr>
-      <tr><td class="wrap"><code>lock 보유자는 &lt;작업&gt;입니다</code></td><td>그 세션이 정말 끝났는지 확인 후 해제(<code>--force</code>). 같은 작업이 10분 안에 갱신됐으면 이어받기</td></tr>
+      <tr><td class="wrap"><code>lock 보유자는 &lt;작업&gt;입니다</code></td><td>그 세션이 정말 끝났는지 확인 후 해제(<code>db_pr lock release &lt;작업&gt; --force</code>, 손상된 lock은 <code>.corrupt-&lt;ts&gt;</code>로 백업 후 제거). 같은 작업이 10분 안에 갱신됐으면 이어받기</td></tr>
       <tr><td class="wrap">버전 불일치 → 읽기 전용</td><td>분석은 계속, 계획 저장까지만. 플러그인 업데이트 또는 메인테이너에게 마이그레이션 요청</td></tr>
-      <tr><td class="wrap"><code>사내 기본값 없음 (S-3 미완료)</code></td><td>설치본에 사내 설정이 없음. 직접 고치지 말고 메인테이너에게</td></tr>
-      <tr><td class="wrap">hook: <code>core.hooksPath</code>가 <code>.githooks</code>가 아님</td><td>setup 재실행(<code>config.py install-hooks</code>)</td></tr>
+      <tr><td class="wrap"><code>플러그인 관리자가 사이트 설정(site-defaults.yaml)을 아직 올리지 않았습니다</code></td><td>설치본에 사내 설정이 없음(둘째 줄 "[관리자] 사내 기본값 없음 (S-3 미완료)"). 직접 고치지 말고 메시지를 관리자에게</td></tr>
+      <tr><td class="wrap">hook: <code>core.hooksPath</code>가 <code>.githooks</code>가 아님</td><td><code>/telephony-triage:setup</code> 을 다시 실행(hook 설치 단계)</td></tr>
     </table></div>
   </div>
   <aside class="notes">대부분은 doctor 표에서 미리 보입니다. lock은 이전 세션이 비정상 종료했을 때 남는데, 다른 창에서 작업 중인 게 아닌지 꼭 확인하고 푸세요. 메시지 문구는 실제 도구 출력에서 가져왔습니다.</aside>
@@ -961,7 +962,7 @@ bonus = 근접(근거 시각이 발생 시각에 가까울수록) + 키워드(Ji
 <span class="o">후</span>  imsi=&lt;IMSI#1&gt; msisdn=&lt;MSISDN#1&gt;
      ip=&lt;IP#1&gt; mCi=&lt;CELL#1&gt;</div>
       <ul class="pts">
-        <li>IMSI·IMEI·ICCID, 전화번호, SIP URI, 셀 ID, IP·MAC, 인증 값 등을 토큰으로 바꾼다</li>
+        <li>IMSI·IMEI·EID·ICCID, 전화번호, SIP URI, 셀 ID, IP·MAC, GPS 좌표, 장치 serial, 인증 값(pin·puk·Bearer 포함) 등을 토큰으로 바꾼다</li>
         <li><b>같은 값은 같은 번호</b>라서 "셀이 바뀌었다" 같은 비교는 그대로 된다</li>
         <li>파싱·매칭부터 마스킹된 텍스트로 돈다. 시그니처도 마스킹 기준으로 쓴다</li>
         <li>Jira는 원문을 모델에 넣지 않고, 구조화 필드와 확인한 요약만 저장</li>
@@ -979,10 +980,11 @@ bonus = 근접(근거 시각이 발생 시각에 가까울수록) + 키워드(Ji
       <div class="card">
         <h3>자동으로 막는 것 (hook 10종 중) — 언제</h3>
         <ul class="pts small">
-          <li>Jira 쓰기 도구 호출 — <b>MCP 도구를 부르기 직전</b>. 허용 목록의 읽기 도구만</li>
+          <li>Jira 쓰기 도구 호출 — <b>MCP 도구를 부르기 직전</b>. 허용 목록의 읽기 도구만(이름에 jira·atlassian이 든 서버의 쓰기 도구도)</li>
           <li>main 대상 push, 승인 토큰 없는 push — <b>git push 직전</b>(Claude 밖 터미널도)</li>
           <li><code>--no-verify</code> 같은 hook 우회 커밋 — <b>git commit 직전</b></li>
-          <li>Claude가 내 이슈 DB clone 파일을 직접 편집 — <b>Write·Edit 직전</b></li>
+          <li>Claude가 내 이슈 DB clone 파일을 직접 편집하거나 clone 브랜치를 바꿈 — <b>Write·Edit·Bash 직전</b></li>
+          <li>이슈 DB 대상 <code>gh</code>·GitHub MCP 쓰기는 승인 질문, PR 머지는 거부 — <b>도구를 부르기 직전</b></li>
           <li>로그 원문을 통째로 읽는 명령(<code>cat</code> 등) — <b>Bash 실행 직전</b></li>
         </ul>
       </div>

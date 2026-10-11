@@ -133,6 +133,22 @@ def test_pattern_timeout_is_failure():
     assert [r["kind"] for r in row["reasons"]] == ["error"] and row["reasons"][0]["signature"] == "DATA-001-02/slow"
 
 
+def test_positive_fixture_without_symptom_fails_missing_symptom():
+    """D1(c): 양성 fixture는 소속 유형 S=1이어야 한다 — 원인만 잡히고 증상이 안 잡히면(S=0) missing-symptom 실패."""
+    db = copy_db()
+    log = db / D / "fixtures/DATA-001-01.log"
+    # 증상 시그니처의 must_not_match(SETUP_DATA_CALL 요청)를 걸리게 한다 — 원인 줄은 그대로 둔다
+    log.write_text(log.read_text(encoding="utf-8")
+                   + "09-20 14:30:05.000  1234  1244 D RILJ: [PHONE0] [0042]> SETUP_DATA_CALL apn=<APN>\n",
+                   encoding="utf-8", newline="\n")
+    result = _regress(db, expect=1)
+    row = _by_name(result)["DATA-001-01.log"]
+    assert row["status"] == "fail" and "DATA-001" not in row["S"] and "DATA-001-01" in row["C"], row
+    assert [r["kind"] for r in row["reasons"]] == ["missing-symptom"], row["reasons"]
+    assert row["reasons"][0]["type"] == "DATA-001" and row["allow_cause_drafts"] == []
+    assert result["summary"]["failed"] == 1
+
+
 def _all_tests():
     return [(n, o) for n, o in sorted(globals().items()) if n.startswith("test_") and callable(o)]
 

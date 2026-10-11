@@ -302,7 +302,15 @@ class AnchorMixin:
                     + ("." if options else " — 후보가 없으니 시각을 묻는다."))
         if jumps:
             question += f" 로그에 시계 이상(역행·점프) {jumps}건 — 후보 시각이 실제와 다를 수 있다(재부팅·NITZ 전 가능)."
-        raise NeedsInput("time", question, options, log_range=[cov.get("first_ts"), cov.get("last_ts")])
+        extra = {}
+        if hits.get("errors"):      # 판정 불가 유형(S: null)은 후보 시각에서 빠진다 — 숨기지 않는다
+            n = sum(1 for t in hits.get("types") or [] if t.get("S") is None)
+            m = sum(1 for c in hits.get("causes") or [] if c.get("C") is None)
+            label = f"판정 불가 유형 {n}" + (f"·원인 {m}개" if m else "개")
+            question += (f" {label}(시그니처 시간 초과·오류) — 후보 시각이 빠졌을 수 있다." if n else
+                         f" {label}(시그니처 시간 초과·오류) — 후보 시각(증상)은 영향 없음.")
+            extra["unjudged"] = n
+        raise NeedsInput("time", question, options, log_range=[cov.get("first_ts"), cov.get("last_ts")], **extra)
 
     def anchor_out(self, anchor: dict | None, info: dict, outside: dict | None = None) -> dict | None:
         """`analysis.json`의 `step_anchor`: 앵커가 있거나 실패 스텝이 있을 때만(없으면 키가 없다)."""
