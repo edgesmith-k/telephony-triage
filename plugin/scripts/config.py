@@ -25,8 +25,8 @@
                                → writable / push_allowed. `migrate/schema-v<N>` 브랜치는 버전을 보지 않는다.
   gh-status                    gh 인증 확인 (setup 9). 실패면 로그인 안내와 종료 코드 2
   doctor [--format json|markdown]
-                               환경 점검 한 장(python·deps·config·clone·hook·guard 자가시험·Jira 매핑·gh·스냅샷·
-                               호환성·lock). **읽기 전용**
+                               환경 점검 한 장(python·deps·config·clone·hook·guard 자가시험·Jira 매핑·Jira 코멘트
+                               도구(jira_post)·gh·스냅샷·호환성·lock). **읽기 전용**
                                (mkdir·fetch·lock·쓰기 없음). 행마다 ok|warn|fail|skip. fail이 있으면 종료 코드 1
 """
 
@@ -52,6 +52,7 @@ try:
     import adapters  # noqa: E402
     from common import compat, dbpath, ghcli, mcptools, session_lock, site_defaults, userconfig, yamlio  # noqa: E402
     from common import compiled as compiled_cache  # noqa: E402
+    from common import issuepost  # noqa: E402
     IMPORT_ERROR: ImportError | None = None
 except ImportError as _exc:   # noqa: BLE001
     IMPORT_ERROR = _exc
@@ -411,9 +412,10 @@ def _row(check: str, status: str, detail: str, next_: str | None = None) -> dict
 GUARD_NEXT = "관리자에게 알린다(guard.py 직접 실행해 stderr 확인)"
 
 
-def _guard_selftest(args, clone: Path | None) -> dict:
+def _guard_selftest(args, clone: Path | None, cfg: dict | None = None) -> dict:
     """guard.py에 거부돼야 할 hook 입력을 주고 응답 구조·결정을 본다: (1) 이름에 jira가 든 서버의 쓰기 도구(설정과
-    무관하게 deny), (2) clone이 있으면 clone 파일 Write(deny)."""
+    무관하게 deny), (2) clone이 있으면 clone 파일 Write(deny), (3) 코멘트 도구 설정(`jira.write_tools.add_comment`)이
+    유효하면 승인 기록 없는 게시(deny). `cfg`는 site-defaults와 사용자 config를 합친 값(사용자 config가 없으면 site만)."""
     root = _plugin_root(args)
     home = str(Path.home())
     # hooks.json은 `python3`(PATH)로 guard를 부른다: 같은 해석기로 시험한다(의존성이 그 해석기에 있어야 한다)
@@ -425,6 +427,10 @@ def _guard_selftest(args, clone: Path | None) -> dict:
     if clone is not None:
         events.append({"hook_event_name": "PreToolUse", "tool_name": "Write",
                        "tool_input": {"file_path": str(clone / "README.md")}, "cwd": home})
+    spec, _err = issuepost.write_spec(cfg or {})
+    if spec:
+        events.append({"hook_event_name": "PreToolUse", "tool_name": spec["tool"], "cwd": home,
+                       "tool_input": {spec["key_arg"]: "SELFTEST-0", spec["body_arg"]: "selftest"}})
     for event in events:
         try:
             proc = subprocess.run([python, str(root / "scripts" / "guard.py"), "--plugin-root", str(root)],
@@ -534,7 +540,8 @@ def _doctor_rows(args, defaults: dict) -> list[dict]:
     guarded("hook", hook) if repo_box else skip("hook", "clone 없음")
 
     # 4b guard 자가시험 (읽기 전용: guard는 판정만 한다)
-    guarded("guard", lambda: rows.append(_guard_selftest(args, repo_box[0] if repo_box else None)))
+    guarded("guard", lambda: rows.append(_guard_selftest(args, repo_box[0] if repo_box else None,
+                                                         cfg if ok_cfg else userconfig.merged(defaults, {}))))
 
     # 5 jira (매핑만 본다)
     def jira():
@@ -561,6 +568,19 @@ def _doctor_rows(args, defaults: dict) -> list[dict]:
             else:
                 rows.append(_row("jira", "ok", f"{server} / get_issue 매핑 있음"))
     guarded("jira", jira) if ok_cfg else skip("jira", "config 없음")
+
+    # 5b jira_post (승인 코멘트 도구 설정만 본다. 호출하지 않는다)
+    def jira_post():
+        spec, problems = issuepost.spec_check(cfg)
+        hint = "site-defaults 또는 config.py set jira.write_tools.add_comment.*"
+        if problems:
+            level, why = problems[0]
+            rows.append(_row("jira_post", level, why, "read_tools에서 코멘트 도구를 뺀다" if level == "fail" else hint))
+        elif spec is None:
+            rows.append(_row("jira_post", "skip", "게시 기능 꺼짐(본문 파일만)"))
+        else:
+            rows.append(_row("jira_post", "ok", f"{spec['tool']} / {spec['format']}"))
+    guarded("jira_post", jira_post) if ok_cfg else skip("jira_post", "config 없음")
 
     # 6 gh
     def gh():

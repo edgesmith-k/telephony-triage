@@ -100,6 +100,7 @@ def test_mock_jira_mcp_reads_issue():
         "jira_query_tickets",
         "jira_ticket_comments",
         "jira_post_comment",
+        "jira_ticket_add_note",
         "jira_move_ticket",
     ]
 
@@ -118,6 +119,28 @@ def test_mock_jira_mcp_has_write_tools_for_guard_test():
     responses = _mcp_roundtrip([{"jsonrpc": "2.0", "id": 1, "method": "tools/list"}])
     names = {t["name"] for t in responses[0]["result"]["tools"]}
     assert {"jira_post_comment", "jira_move_ticket"} <= names
+
+
+def test_mock_jira_add_note_records_write_and_comment_id():
+    """승인 코멘트용 `jira_ticket_add_note {ticket, text}`: 쓰기 로그에 남고 `comment_id`를 돌려준다.
+    없는 티켓이면 isError이고 기록하지 않는다."""
+    with tempfile.TemporaryDirectory(prefix="tt-jira-write-") as tmp:
+        log = Path(tmp) / "jira-writes.json"
+        env = {**mock_env.env_with_mocks(), "MOCK_JIRA_WRITE_LOG": str(log)}
+        call = REPO / "tests" / "mocks" / "jira_mcp" / "call.py"
+
+        def run(*args):
+            return subprocess.run([sys.executable, str(call), *args], capture_output=True, text=True,
+                                  encoding="utf-8", errors="replace", env=env)
+
+        proc = run("mcp__mock-jira__jira_ticket_add_note", json.dumps({"ticket": "MOCK-1001", "text": "h3. PROBLEM"}))
+        assert proc.returncode == 0, proc.stderr
+        assert json.loads(proc.stdout) == {"ok": True, "ticket": "MOCK-1001", "comment_id": "mock-c-1"}
+        assert json.loads(log.read_text(encoding="utf-8")) == [
+            {"tool": "jira_ticket_add_note", "arguments": {"ticket": "MOCK-1001", "text": "h3. PROBLEM"}}]
+        proc = run("jira_ticket_add_note", json.dumps({"ticket": "MOCK-9999", "text": "x"}))
+        assert proc.returncode == 1 and "not found" in proc.stdout
+        assert len(json.loads(log.read_text(encoding="utf-8"))) == 1
 
 
 # -- 2. 모의 원격과 gh 스텁 --------------------------------------------------

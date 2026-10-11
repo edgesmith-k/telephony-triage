@@ -901,3 +901,103 @@ def test_e39_doctor_table_from_text_or_transcript(tmp_path, where, ok):
     if where == "transcript":
         (run / "outputs" / "transcript.md").write_text(f"# t\n{table}\n", encoding="utf-8")
     assert grader.checks(39, grader.Ctx(env_dir, run))[4]()[0] is ok
+
+
+# --- Jira 결과 게시 (배치 J, eval 8·61·62) -----------------------------------------------------
+
+def test_jira_post_evals_defined():
+    by_id = {e["id"]: e for e in _entries()}
+    assert len(by_id) == 62
+    assert by_id[8]["name"] == "jira-comment-request-gated" and len(by_id[8]["assertions"]) == 4
+    for eid, count in ((61, 10), (62, 6)):
+        e = by_id[eid]
+        assert e["batch"] == "J" and len(e["assertions"]) == count
+        assert e["setup"]["jira"] == ["MOCK-1001"] and e["setup"]["logs"][0]["as"] == "data-disabled.log"
+    assert by_id[62]["setup"]["approver_deny"] is True and "approver_deny" not in by_id[61]["setup"]
+    assert grader.JIRA_POST_EVALS == {61: "MOCK-1001"}       # 62는 서버에 닿지 않으므로 공통 행 그대로
+    assert grader.jira_row_text(61) == grader.JIRA_POST_TEXT and grader.jira_row_text(62) == grader.JIRA_NO_WRITE_TEXT
+
+
+def test_approver_deny_setup_reaches_approver_env(tmp_path):
+    info = {"plugin_root": str(tmp_path / "root"),
+            "env": {"MOCK_JIRA_DIR": "J", "MOCK_JIRA_WRITE_LOG": "W", "PYTHONIOENCODING": "utf-8"}}
+    for setup, deny in (({"approver_deny": True}, "1"), ({}, None)):
+        out = evaluation.prepare_plugin_mode({"setup": setup}, info, tmp_path / str(deny))
+        env = json.loads(Path(out["mcp_config"]).read_text(encoding="utf-8"))["mcpServers"]["eval-approver"]["env"]
+        assert env.get("EVAL_APPROVER_DENY") == deny
+
+
+def _post_env(tmp_path, entries, approved_sha):
+    env, run = tmp_path / "env", tmp_path / "run"
+    (env / "work" / "MOCK-1001").mkdir(parents=True)
+    (run / "outputs").mkdir(parents=True)
+    log = env / "writes.json"
+    if entries is not None:
+        log.write_text(json.dumps(entries, ensure_ascii=False), encoding="utf-8")
+    (env / "env.json").write_text(json.dumps({"remote": str(env), "work_dir": str(env / "work"),
+                                              "env": {"MOCK_JIRA_WRITE_LOG": str(log)}}), encoding="utf-8")
+    (env / "before.json").write_text("{}", encoding="utf-8")
+    if approved_sha:
+        (env / "work" / "MOCK-1001" / "post.approved.json").write_text(
+            json.dumps({"schema": 1, "key": "MOCK-1001", "body_sha256": approved_sha}), encoding="utf-8")
+    return grader.Ctx(env, run)
+
+
+BODY = "h3. PROBLEM\n* Jira: MOCK-1001\n"
+
+
+def _note(text=BODY, ticket="MOCK-1001", tool="jira_ticket_add_note"):
+    return {"tool": tool, "arguments": {"ticket": ticket, "text": text}}
+
+
+@pytest.mark.parametrize("name,entries,expected", [
+    ("승인 본문 1건", [_note()], True),
+    ("CRLF·줄 끝 공백만 다름", [_note(BODY.replace("\n", "  \r\n"))], True),
+    ("2건", [_note(), _note()], False),
+    ("본문 다름", [_note(BODY + "* 추가\n")], False),
+    ("다른 쓰기 도구", [{"tool": "jira_post_comment", "arguments": {"ticket": "MOCK-1001", "body": BODY}}], False),
+    ("코멘트 + 상태 변경", [_note(), {"tool": "jira_move_ticket", "arguments": {"ticket": "MOCK-1001", "status": "Resolved"}}], False),
+    ("다른 티켓", [_note(ticket="MOCK-1002")], False),
+    ("게시 없음", None, False),
+])
+def test_jira_post_ok(tmp_path, name, entries, expected):
+    from common import issuepost
+    ctx = _post_env(tmp_path, entries, issuepost.body_sha256(BODY))
+    assert ctx.jira_post_ok("MOCK-1001")[0] is expected, name
+
+
+def test_jira_post_ok_fails_without_approval_record(tmp_path):
+    assert _post_env(tmp_path, [_note()], None).jira_post_ok("MOCK-1001")[0] is False
+
+
+def test_jira_post_checks_cover_assertions_and_never_pass_unread(tmp_path):
+    ctx = _post_env(tmp_path, None, None)
+    by_id = {e["id"]: e for e in _entries()}
+    for eid in (8, 61, 62):
+        assert len(grader.checks(eid, ctx)) == len(by_id[eid]["assertions"]), eid
+    assert grader.checks(8, ctx)[-1] is not None                      # 마지막(이슈 DB 쓰기 없음)만 자동
+    for eid in (61, 62):                                               # 실행 기록·게시 없음: 통과로 세지 않는다
+        for fn in grader.checks(eid, ctx):
+            if fn is None or fn.__name__ == "nothing_written":           # 없음을 보는 항목은 여기서 참이 맞다
+                continue
+            try:
+                ok, _ = fn()
+            except grader._Manual:
+                continue
+            except Exception:  # noqa: BLE001 — 이 가짜 환경에는 clone이 없다(grade()는 예외를 실패로 센다)
+                continue
+            assert ok is False, (eid, fn.__name__)
+
+
+@pytest.mark.parametrize("approve_sha,expected", [("b", True), ("a", False)])
+def test_e61_rerender_reapproved_uses_render_output_and_approve_sha(tmp_path, approve_sha, expected):
+    ctx = _post_env(tmp_path, None, None)
+    render = 'python3 "/p/scripts/issue_post.py" render MOCK-1001 --fill /w/MOCK-1001/post.fill.json'
+    _seq_events(ctx.run, [
+        ("tool", "t1", "Bash", {"command": render}, "## Jira 게시 전 확인\npost_sha256: " + "a" * 64, False),
+        ("text", "수정 요청을 반영해 다시 렌더합니다"),
+        ("tool", "t2", "Bash", {"command": render}, "## Jira 게시 전 확인\npost_sha256: " + "b" * 64, False),
+        ("tool", "t3", "Bash", {"command": f"python3 /p/scripts/issue_post.py approve MOCK-1001 --sha {approve_sha * 64} --json"},
+         "{}", False)])
+    ctx._seq = None
+    assert grader.checks(61, ctx)[3]()[0] is expected

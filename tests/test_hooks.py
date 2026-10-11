@@ -361,6 +361,92 @@ def test_guard_jira_server_name_is_normalized():
     assert judge(bundled, "mcp__other__add_comment") is None
 
 
+NOTE_TOOL = "mcp__mock-jira__jira_ticket_add_note"     # site-defaults(example) jira.write_tools.add_comment
+
+
+def _approve(ws: Workspace, job_key: str, body: str, **over) -> Path:
+    """`issue_post.py approve`가 쓰는 승인 기록을 직접 만든다(guard 판정만 본다)."""
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    from common import issuepost
+    at = issuepost.now()
+    record = {"schema": 1, "key": job_key, "tool": NOTE_TOOL, "key_arg": "ticket", "body_sha256": issuepost.body_sha256(body),
+              "format": "jira-wiki", "request_hash": "0" * 16, "approved_at": issuepost.iso(at),
+              "expires_at": issuepost.iso(issuepost.expires(at)), "used_at": None, **over}
+    job = ws.job_dir(job_key)
+    job.mkdir(parents=True, exist_ok=True)
+    (job / "post.approved.json").write_text(json.dumps(record, ensure_ascii=False), encoding="utf-8")
+    (job / "post.result.json").unlink(missing_ok=True)
+    return job
+
+
+def test_guard_jira_post_requires_approval():
+    """규칙 2 예외: 설정된 코멘트 도구는 승인 기록(인자 집합·키·도구·정규화 본문 sha256·30분·1회용)과 맞을 때만 ask,
+    그 밖에는 deny. 다른 Jira 쓰기 도구는 승인 기록이 있어도 deny(읽기 전용)."""
+    ws = shared()
+    body = "h3. PROBLEM\n* Jira: MOCK-7101\n\nh3. CAUSE\n* 분류: 후보 없음"
+    _approve(ws, "MOCK-7101", body)
+
+    def post(tool_input: dict, tool: str = NOTE_TOOL, **kw) -> dict | None:
+        return guard(ws, tool, tool_input, ws.base, **kw)
+
+    ok = post({"ticket": "MOCK-7101", "text": body})                                       # (j) 정상 → ask
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    from common import issuepost
+    assert decision(ok) == "ask" and "MOCK-7101" in ok["permissionDecisionReason"]
+    assert issuepost.body_sha256(body)[:12] in ok["permissionDecisionReason"]
+    assert decision(post({"ticket": "MOCK-7101", "text": body.replace("\n", "\r\n") + "  \n"})) == "ask"   # (c) 정규화
+    assert decision(post({"ticket": "MOCK-7199", "text": body})) == "deny"                # (a) 승인 기록 없음
+    out = post({"ticket": "MOCK-7101", "text": body + "!"})                               # (b) 본문 다름
+    assert decision(out) == "deny" and "sha256" in out["permissionDecisionReason"]
+    _approve(ws, "MOCK-7102", body, key="MOCK-7101")                                      # (d) 기록의 키가 다름
+    assert decision(post({"ticket": "MOCK-7102", "text": body})) == "deny"
+    for tool in ("mcp__mock-jira__jira_post_comment", "mcp__mock-jira__jira_move_ticket",
+                 "mcp__mock-jira__jira_add_comment"):                                    # (e) 다른 쓰기 도구
+        out = post({"ticket": "MOCK-7101", "body": body}, tool=tool)
+        assert decision(out) == "deny" and "Jira 읽기 전용" in out["permissionDecisionReason"], tool
+    assert decision(post({"ticket": "MOCK-7101", "text": body, "status": "Resolved"})) == "deny"   # (f) 모르는 인자
+    _approve(ws, "MOCK-7103", body, expires_at="2000-01-01T00:00:00+00:00")             # (g) 만료
+    out = post({"ticket": "MOCK-7103", "text": body})
+    assert decision(out) == "deny" and "만료" in out["permissionDecisionReason"]
+    _approve(ws, "MOCK-7104", body, used_at="2026-01-01T00:00:00+00:00")                # (h) 1회용
+    assert decision(post({"ticket": "MOCK-7104", "text": body})) == "deny"
+    job = _approve(ws, "MOCK-7105", body)
+    (job / "post.result.json").write_text(json.dumps({"status": "posted", "body_sha256": issuepost.body_sha256(body)}),
+                                          encoding="utf-8")
+    out = post({"ticket": "MOCK-7105", "text": body})
+    assert decision(out) == "deny" and "이미 게시" in out["permissionDecisionReason"]
+    job = _approve(ws, "MOCK-7106", body)
+    (job / "post.approved.json").write_text("{깨짐", encoding="utf-8")                   # (i) 손상
+    out = post({"ticket": "MOCK-7106", "text": body})
+    assert decision(out) == "deny" and "내부 오류" not in out["permissionDecisionReason"]
+    for key in ("../MOCK-7101", "MOCK-7101/../MOCK-7101", 7101):                         # (n) 경로 탈출·형식
+        assert decision(post({"ticket": key, "text": body})) == "deny", key
+    # (m) 사용자 config 없음: 승인 기록을 찾을 수 없다
+    out = post({"ticket": "MOCK-7101", "text": body}, env={"TELEPHONY_TRIAGE_HOME": tmp("tt-nohome-")})
+    assert decision(out) == "deny" and "사용자 config 없음" in out["permissionDecisionReason"]
+    # (k) 코멘트 도구를 read_tools에 넣어도 승인을 건너뛸 수 없다(설정 오류로 거부)
+    cfg_path = ws.home / "config.yaml"
+    saved = cfg_path.read_text(encoding="utf-8")
+    try:
+        ws.json("config.py", ["set", "jira.read_tools", json.dumps([*JIRA_TOOLS, NOTE_TOOL])])
+        out = post({"ticket": "MOCK-7101", "text": body})
+        assert decision(out) == "deny" and "설정 오류" in out["permissionDecisionReason"]
+        cfg_path.write_text(saved, encoding="utf-8")
+        ws.json("config.py", ["set", "jira.write_tools.add_comment.extra_args", '{"visibility": "internal"}'])
+        assert decision(post({"ticket": "MOCK-7101", "text": body, "visibility": "internal"})) == "ask"
+        assert decision(post({"ticket": "MOCK-7101", "text": body, "visibility": "public"})) == "deny"   # (f) 고정 값
+        assert decision(post({"ticket": "MOCK-7101", "text": body})) == "deny"
+    finally:
+        cfg_path.write_text(saved, encoding="utf-8")
+    # (l) 코멘트 도구 서버가 Jira 서버가 아니면 무효: 그 도구 호출은 거부
+    home = tmp("tt-home-")
+    root = plugin_root("jira-dot", jira=_jira("jira.corp", "mcp__jira.corp__get_issue"))
+    event = {"tool_name": NOTE_TOOL, "tool_input": {"ticket": "MOCK-7101", "text": body}, "cwd": str(home)}
+    proc = run("guard.py", [], root=root, env={"TELEPHONY_TRIAGE_HOME": home}, stdin=json.dumps(event))
+    out = json.loads(proc.stdout)["hookSpecificOutput"]
+    assert decision(out) == "deny" and "Jira 서버" in out["permissionDecisionReason"]
+
+
 def test_guard_sees_through_command_wrappers():
     """R-3: 앞 래퍼(timeout·nice·stdbuf·sudo·ionice·setsid·exec -a·env -u/-S/-C·time -p)를 풀어 규칙 3~7·10을 판정한다."""
     ws = shared()

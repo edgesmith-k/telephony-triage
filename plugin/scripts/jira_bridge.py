@@ -9,6 +9,11 @@ stdin: hook 입력 `{tool_name, tool_input, tool_response, ...}`. `tool_name`이
    `triage.py run`이 이 파일을 `jira_fields.py extract --consume`으로 읽고 지운다.
 3. 모델에는 `hookSpecificOutput.updatedToolOutput`으로 **마스킹된 요약**(요약·설명 앞부분·코멘트 마지막 3개)만 준다.
 
+**승인 코멘트 게시 결과**(`add_comment`): `tool_name`이 유효한 `jira.write_tools.add_comment.tool`(정규화 비교,
+`common/issuepost.write_spec`)이면 `bridge_post`가 `<work_dir>/<KEY>/post.result.json`(posted|error)을 쓰고, 성공이면
+`post.approved.json`에 `used_at`을 남긴다(1회용). 실패 응답(`isError`)이면 승인을 소모하지 않는다. 모델에는 게시 요약만
+보이고 응답 원문은 보이지 않는다. 응답 형식(comment id 위치)은 TODO(SITE:S23).
+
 실패하면 원문을 내보내지 않고 오류 문구로 바꾼다(fail closed). 설정(`config.yaml`·`site-defaults.yaml`)을 읽지 못해
 대상인지 판정할 수 없으면 모든 `mcp__` 결과를 오류 문구로 바꾼다(guard가 같은 상태에서 모든 `mcp__` 호출을 거부하는 범위와 같다).
 의존성(PyYAML 등) import가 실패해도 같다(종료 1로 끝나 원문이 새지 않게). `site-defaults.yaml`이 없으면 guard처럼
@@ -28,7 +33,7 @@ sys.path.insert(0, str(SCRIPTS))
 
 # 의존성(PyYAML 등)이 없으면 import가 터진다: 종료 1이면 원문이 그대로 모델에 가므로 받아 두고 `main`에서 막는다.
 try:
-    from common import compat, mcptools, site_defaults, userconfig  # noqa: E402
+    from common import compat, issuepost, masking, mcptools, site_defaults, userconfig  # noqa: E402
     import jira_fields  # noqa: E402
     IMPORT_ERROR: Exception | None = None
 except ImportError as _exc:   # noqa: BLE001
@@ -36,6 +41,10 @@ except ImportError as _exc:   # noqa: BLE001
 
 BRIEF_COMMENTS = "last:3"
 BRIEF_CHARS = 200
+POST_ERROR_CHARS = 200
+COMMENT_ID_KEYS = ("id", "commentId", "comment_id")   # TODO(SITE:S23) 응답의 comment id 위치
+POST_FAILED = ("telephony-triage: Jira 코멘트 게시 결과 처리 실패 — 게시는 됐을 수 있다. "
+               "Jira에서 확인하고 다시 게시하지 않는다(응답 원문은 표시하지 않는다).")
 
 
 def _payload(response):
@@ -73,11 +82,61 @@ def _find_key(data, tool_input: dict, kre: re.Pattern) -> str | None:
 
 
 def target(event: dict, cfg: dict) -> str | None:
-    """대상 논리 동작(`get_issue`·`get_comments`) 또는 None."""
+    """대상 논리 동작(`get_issue`·`get_comments`·`add_comment`) 또는 None. `add_comment`는 유효한 코멘트 도구 설정만."""
     tools = (cfg.get("jira") or {}).get("tools") or {}
     tool = event.get("tool_name")
+    spec, _err = issuepost.write_spec(cfg)
+    if spec and spec["tool"] == mcptools.normalize(tool):
+        return "add_comment"
     return next((k for k in ("get_issue", "get_comments")
                  if tools.get(k) and mcptools.normalize(tools[k]) == mcptools.normalize(tool)), None)
+
+
+def _comment_id(data):
+    if isinstance(data, dict):
+        for node in (data, data.get("comment") if isinstance(data.get("comment"), dict) else None):
+            for k in COMMENT_ID_KEYS:
+                if node and isinstance(node.get(k), (str, int)) and str(node.get(k)):
+                    return str(node[k])
+    return None
+
+
+def bridge_post(event: dict, cfg: dict) -> str:
+    """승인 코멘트 게시 결과를 `post.result.json`에 기록한다. 성공이면 승인에 `used_at`을 남긴다(1회용)."""
+    spec, _err = issuepost.write_spec(cfg)
+    tool_input = event.get("tool_input") or {}
+    key = tool_input.get(spec["key_arg"]) if isinstance(tool_input, dict) else None
+    if not isinstance(key, str) or not issuepost.KEY_SAFE_RE.fullmatch(key):
+        return POST_FAILED
+    job = userconfig.ensure_private_dir(Path(str(userconfig.get(cfg, "work_dir"))).expanduser() / key)
+    sha = issuepost.body_sha256(str(tool_input.get(spec["body_arg"]) or ""))
+    approved_path = job / issuepost.APPROVED_FILE
+    try:
+        approved = issuepost.read_json(approved_path)
+    except (OSError, ValueError):
+        approved = None
+    response = event.get("tool_response")
+    data = _payload(response)
+    at = issuepost.iso(issuepost.now())
+    base = {"schema": 1, "key": key, "tool": spec["tool"], "body_sha256": sha,
+            "approved_at": (approved or {}).get("approved_at")}
+    failed = (isinstance(response, dict) and response.get("isError") is True) or (
+        isinstance(data, dict) and "error" in data and not data.get("ok"))
+    if failed:
+        detail = data.get("error") if isinstance(data, dict) and "error" in data else data
+        error = masking.new_masker().mask(json.dumps(detail, ensure_ascii=False)
+                                          if not isinstance(detail, str) else detail)[:POST_ERROR_CHARS]
+        issuepost.write_private_json(job / issuepost.RESULT_FILE, {**base, "status": "error", "at": at, "error": error})
+        return (f"telephony-triage: Jira 코멘트 게시 실패({key}) — 승인은 소모하지 않았다(응답 원문은 표시하지 않는다). "
+                f"기록: {job / issuepost.RESULT_FILE}")
+    comment_id = _comment_id(data)
+    issuepost.write_private_json(job / issuepost.RESULT_FILE,
+                                 {**base, "status": "posted", "at": at, "posted_at": at, "comment_id": comment_id})
+    if approved is not None and approved.get("body_sha256") == sha:
+        approved["used_at"] = at
+        issuepost.write_private_json(approved_path, approved)
+    return (f"telephony-triage: Jira 코멘트를 게시했다 ({key}, comment {comment_id or '?'}). 응답 원문은 표시하지 않는다. "
+            f"기록: {job / issuepost.RESULT_FILE}")
 
 
 def bridge(event: dict, cfg: dict, kind: str) -> str:
@@ -164,10 +223,11 @@ def main() -> int:
                 "— 원문은 표시하지 않는다.")
     else:
         try:
-            text = bridge(event, cfg, kind)
+            text = bridge_post(event, cfg) if kind == "add_comment" else bridge(event, cfg, kind)
         except Exception as exc:  # noqa: BLE001 — 실패해도 원문을 내보내지 않는다
             print(f"jira_bridge: {exc}", file=sys.stderr)
-            text = f"telephony-triage: Jira 응답 처리 실패({type(exc).__name__}) — 원문은 표시하지 않는다."
+            text = POST_FAILED if kind == "add_comment" else \
+                f"telephony-triage: Jira 응답 처리 실패({type(exc).__name__}) — 원문은 표시하지 않는다."
     print(json.dumps({"hookSpecificOutput": {"hookEventName": "PostToolUse", "updatedToolOutput": text}},
                      ensure_ascii=False))
     return 0

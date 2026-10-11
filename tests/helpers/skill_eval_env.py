@@ -24,6 +24,7 @@ setup 필드 (모두 선택):
         사용자 clone에 만들고 before.json은 그 뒤에 찍으므로 "그대로 남았나"는 clone_same·존재 확인으로 본다
     analyzer_fail: true — 모의 분석 스킬 실패
     gh_unauth: true  — gh 스텁 인증 실패
+    approver_deny: true — 권한 확인 응답 서버(eval-approver)가 모든 ask를 거부한다(`run.py`가 `EVAL_APPROVER_DENY=1`로 붙인다, eval 62)
 """
 
 from __future__ import annotations

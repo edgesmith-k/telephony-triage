@@ -10,6 +10,9 @@
   두어 `jira.field_map`을 반드시 거치게 한다.
 - 쓰기 도구(`jira_post_comment`, `jira_move_ticket`)는 guard 차단 테스트용이다.
   실제로 데이터를 바꾸지 않고 "차단되지 않았다"는 표식만 남긴다.
+- `jira_ticket_add_note {ticket, text}`는 승인한 코멘트 게시용 쓰기 도구다(논리 동작 add_comment,
+  site-defaults `jira.write_tools.add_comment`). guard가 승인 기록과 대조한 뒤 ask로 허용한다.
+  인자 이름을 일부러 `text`로 둬 `body_arg` 매핑을 반드시 거치게 한다. 호출은 같은 쓰기 로그에 남는다.
 - 등록은 레포 루트 `.mcp.json`이 아니라 `tests/mocks/mcp.json`에 둔다.
   사내에서 가짜 Jira가 진짜로 잡히지 않게 하기 위해서다.
 
@@ -85,6 +88,15 @@ TOOLS = [
         },
     },
     {
+        "name": "jira_ticket_add_note",
+        "description": "[쓰기] 코멘트를 단다 (논리 동작: add_comment). guard가 승인 기록과 대조한 뒤 ask로 허용한다.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"ticket": {"type": "string"}, "text": {"type": "string"}},
+            "required": ["ticket", "text"],
+        },
+    },
+    {
         "name": "jira_move_ticket",
         "description": "[쓰기] 상태를 바꾼다. guard가 막아야 한다.",
         "inputSchema": {
@@ -95,7 +107,8 @@ TOOLS = [
     },
 ]
 
-WRITE_TOOLS = {"jira_post_comment", "jira_move_ticket"}
+WRITE_TOOLS = {"jira_post_comment", "jira_move_ticket", "jira_ticket_add_note"}
+NOTE_TOOL = "jira_ticket_add_note"
 
 
 def load_ticket(key: str) -> dict | None:
@@ -116,9 +129,9 @@ def all_tickets() -> list[dict]:
     return out
 
 
-def record_write(tool: str, arguments: dict) -> None:
+def record_write(tool: str, arguments: dict) -> int:
     """쓰기 도구가 실제로 불린 것을 남긴다. guard 차단 테스트가 이 파일이
-    비어 있는지로 "막혔다"를 확인한다."""
+    비어 있는지로 "막혔다"를 확인한다. 기록 뒤 로그 항목 수를 돌려준다."""
     log = _write_log()
     log.parent.mkdir(parents=True, exist_ok=True)
     entries = []
@@ -131,6 +144,7 @@ def record_write(tool: str, arguments: dict) -> None:
     log.write_text(
         json.dumps(entries, ensure_ascii=False, indent=2), encoding="utf-8", newline="\n"
     )
+    return len(entries)
 
 
 def call_tool(name: str, arguments: dict) -> tuple[object, bool]:
@@ -167,6 +181,13 @@ def call_tool(name: str, arguments: dict) -> tuple[object, bool]:
                 continue
             hits.append({"key": ticket["key"], "summary": fields.get("summary")})
         return {"total": len(hits), "issues": hits[:limit]}, False
+
+    if name == NOTE_TOOL:
+        ticket = arguments.get("ticket", "")
+        if load_ticket(ticket) is None:
+            return {"error": "not found", "ticket": ticket}, True
+        count = record_write(name, arguments)
+        return {"ok": True, "ticket": ticket, "comment_id": f"mock-c-{count}"}, False
 
     if name in WRITE_TOOLS:
         record_write(name, arguments)

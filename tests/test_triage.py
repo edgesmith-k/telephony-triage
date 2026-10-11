@@ -171,6 +171,9 @@ def test_full_run_stops_for_code_choice_then_finishes_and_keeps_lock_until_relea
     status = ws.db_pr("lock", "status")
     assert status["lock"]["job"] == "MOCK-1001" and status["lock"]["owner"] == done["lock_owner"]
     assert _clone_state(ws) == before, "사용자 clone은 그대로"
+    # dry-run 실행은 상태 파일 runs에 표시된다(analysis.json mode는 write 그대로, 게시 판정 issue_post가 본다)
+    state = json.loads((job / "triage-state.json").read_text(encoding="utf-8"))
+    assert state["job"]["runs"][-1]["dry_run"] is True
 
     # 같은 세션 재실행은 lock을 다시 묻지 않고 같은 결과를 낸다(멱등)
     again = ws.json("triage.py", [*args, "--answer", "code=skip"])
@@ -347,6 +350,58 @@ def test_bridge_without_pyyaml_hides_raw():
     other = run("jira_bridge.py", [], root=plugin_root(), env=env,
                 stdin=json.dumps({"tool_name": "Bash", "tool_input": {}, "tool_response": "x"}))
     assert other.returncode == 0 and other.stdout.strip() == ""
+
+
+NOTE_TOOL = "mcp__mock-jira__jira_ticket_add_note"
+
+
+def _note_event(key, text: str, result: dict, is_error: bool = False) -> str:
+    return json.dumps({"tool_name": NOTE_TOOL, "tool_input": {"ticket": key, "text": text},
+                       "tool_response": {"content": [{"type": "text", "text": json.dumps(result, ensure_ascii=False)}],
+                                         "isError": is_error}}, ensure_ascii=False)
+
+
+def test_bridge_records_approved_comment_post():
+    """승인 코멘트 게시 결과: 성공이면 post.result.json posted + 승인 used_at(1회용), 실패(isError)면 error이고 승인을
+    소모하지 않는다. 모델에는 응답 원문을 보이지 않는다. 키 형식이 다르면 fail-closed 문구."""
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    from common import issuepost
+    home = _bridge_home()
+    job = home / "work" / "MOCK-1001"
+    job.mkdir(parents=True)
+    body = "h3. PROBLEM\n* Jira: MOCK-1001"
+    approved = {"schema": 1, "key": "MOCK-1001", "tool": NOTE_TOOL, "key_arg": "ticket",
+                "body_sha256": issuepost.body_sha256(body), "approved_at": "2026-10-11T00:00:00+00:00",
+                "expires_at": "2026-10-11T00:30:00+00:00", "used_at": None}
+    (job / "post.approved.json").write_text(json.dumps(approved), encoding="utf-8")
+    env = {"TELEPHONY_TRIAGE_HOME": home}
+
+    def bridge(stdin: str) -> str:
+        proc = run("jira_bridge.py", [], root=plugin_root(), env=env, stdin=stdin)
+        assert proc.returncode == 0, proc.stderr
+        return json.loads(proc.stdout)["hookSpecificOutput"]["updatedToolOutput"]
+
+    shown = bridge(_note_event("MOCK-1001", body, {"error": "권한 없음 imsi=450081234567890"}, is_error=True))
+    result = json.loads((job / "post.result.json").read_text(encoding="utf-8"))
+    assert result["status"] == "error" and "450081234567890" not in result["error"] and "게시 실패" in shown
+    assert "450081234567890" not in shown and "권한 없음" not in shown
+    assert json.loads((job / "post.approved.json").read_text(encoding="utf-8"))["used_at"] is None   # 소모하지 않음
+
+    shown = bridge(_note_event("MOCK-1001", body, {"ok": True, "ticket": "MOCK-1001", "comment_id": "mock-c-1",
+                                                   "echo": "응답 원문 표식"}))
+    result = json.loads((job / "post.result.json").read_text(encoding="utf-8"))
+    assert result["status"] == "posted" and result["comment_id"] == "mock-c-1" and result["body_sha256"] == approved["body_sha256"]
+    assert result["approved_at"] == approved["approved_at"] and (job / "post.result.json").stat().st_mode & 0o077 == 0
+    assert json.loads((job / "post.approved.json").read_text(encoding="utf-8"))["used_at"] == result["posted_at"]
+    assert "게시했다 (MOCK-1001, comment mock-c-1)" in shown and "응답 원문 표식" not in shown
+
+    for key in ("../MOCK-1001", 1001):                     # 키 형식 불일치: 기록하지 않고 fail-closed 문구
+        shown = bridge(_note_event(key, body, {"ok": True}))
+        assert "게시는 됐을 수 있다" in shown and "다시 게시하지 않는다" in shown
+    # 설정에 없는 쓰기 도구(guard가 막는 도구)는 결과를 다루지 않는다
+    proc = run("jira_bridge.py", [], root=plugin_root(), env=env,
+               stdin=json.dumps({"tool_name": "mcp__mock-jira__jira_post_comment", "tool_input": {}, "tool_response": "x"}))
+    assert proc.returncode == 0 and proc.stdout.strip() == ""
 
 
 def test_lock_held_by_other_job_is_a_question_and_release_other_continues():
