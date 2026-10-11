@@ -237,7 +237,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
       <div class="eyebrow">USER GUIDE · 처음 쓰는 사람을 위한 안내</div>
       <h1>Jira 번호와 로그만 주면 됩니다</h1>
       <p>Telephony 이슈를 분석하는 엔지니어를 위한 안내입니다. 설치, 첫 연습, 요청하는 법, 리포트 읽는 법만 담았습니다. 기록·PR은 기여자 가이드, 구조는 설계 안내, 세부 옵션은 운영 매뉴얼에 있습니다.</p>
-      <div class="meta"><span><b>기준</b> main 2026-10-10</span><span><b>대상</b> 처음 쓰는 팀원</span><span><b>읽는 시간</b> 약 10분</span></div>
+      <div class="meta"><span><b>기준</b> main 2026-10-11</span><span><b>대상</b> 처음 쓰는 팀원</span><span><b>읽는 시간</b> 약 10분</span></div>
     </header>
 
     <section class="chap" id="u1" data-title="3분 요약">
@@ -250,6 +250,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
         <li class="gate">내가 원인을 확정 (또는 미확정)</li>
         <li class="gate">확인 화면을 보고 승인</li>
         <li>PR이 올라가고 담당자가 리뷰</li>
+        <li class="gate">(선택) 결과를 Jira 코멘트로: 본문 확인 → 승인</li>
       </ol>
       <div class="two">
         <div><h4>내가 하는 일</h4><ul><li>Jira 번호와 로그 <b>파일 경로</b>를 준다 (로그를 대화에 붙이지 않음)</li><li>질문에 답한다 (발생 시각, 소스 트리 등)</li><li>원인을 확정하고, 올라갈 내용을 승인한다</li></ul></div>
@@ -289,6 +290,8 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
       <div class="tbl say"><table>
         <tr><th>이렇게 말하면</th><th>하는 일</th></tr>
         <tr><td>"ABC-12345 로그 분석해줘, 데이터 안 붙어. 로그는 ~/logs/radio.txt"</td><td>분석 (analyze)</td></tr>
+        <tr><td>"oFono 로그로 ABC-12345 분석해줘"</td><td>oFono 이슈 DB로 분석 (analyze <code>--platform ofono</code>, 사이트에서 oFono를 켰을 때)</td></tr>
+        <tr><td>(분석을 마친 같은 세션에서) "결과 Jira에 올려줘"</td><td>Jira 결과 게시 (확인 화면 승인 후 코멘트 1건)</td></tr>
         <tr><td>"데이터 안 붙는 이슈 예전에 있었어? 지라 번호 알려줘"</td><td>검색 (search)</td></tr>
         <tr><td>"ABC-777은 APN 설정 고쳐서 해결했어, 기록만 해줘"</td><td>수동 기록 (record)</td></tr>
         <tr><td>"CALL-001-01 수정 CL 머지됐어, 이슈 DB에 반영해줘"</td><td>수정 CL 기록 (fix-submitted)</td></tr>
@@ -345,6 +348,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
       <div class="tbl"><table>
         <tr><th>상황</th><th>할 일</th></tr>
         <tr><td>1위 후보가 맞다</td><td>"예"로 확정 → 확인 화면 승인 → PR. 자세한 건 <a href="06-contributor-guide.html">기여자 가이드</a></td></tr>
+        <tr><td>결과를 Jira에도 남기고 싶다</td><td>PR 링크 뒤 "분석 결과를 Jira 코멘트로 올릴까요?"에 예(기본 아니오). PROBLEM / CAUSE / NEXT ACTION / ANALYSIS 본문 확인 화면 → 승인 → 권한 확인에서 허용하면 코멘트 1건 게시. 본문을 고치면 다시 승인. <code>--dry-run</code>·<code>--analysis-only</code>면 묻지 않음</td></tr>
         <tr><td>다른 후보가 맞다 / 새 원인이다</td><td>그 항목을 고름. 새 원인·유형이면 도구가 초안을 만들고 내가 확인</td></tr>
         <tr><td>원인을 아직 모르겠다</td><td>"원인 미확정"으로 기록하거나, 기록하지 않고 끝냄</td></tr>
         <tr><td>리포트만 보고 기록은 안 하고 싶다</td><td><code>--analysis-only</code>로 실행하거나 확인 화면에서 취소. 계획은 남아 나중에 이어서 할 수 있음</td></tr>

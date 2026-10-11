@@ -239,7 +239,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
       <div class="eyebrow">IDEAS · 쌓인 데이터와 흐름을 더 쓰는 법</div>
       <h1>이 도구로 더 할 수 있는 것</h1>
       <p>이슈 DB와 판정·검증 흐름을 다른 업무에 넓혀 쓰는 아이디어 12개입니다. 아이디어마다 흐름 그림, 좋아지는 것, 필요한 것, 원칙과 맞는지, 시점을 붙였습니다.</p>
-      <div class="meta"><span><b>기준</b> main 2026-10-10</span><span><b>대상</b> 도입 검토자, 팀 리더, 메인테이너</span><span><b>상태</b> 후보 (확정 계획 아님)</span></div>
+      <div class="meta"><span><b>기준</b> main 2026-10-11</span><span><b>대상</b> 도입 검토자, 팀 리더, 메인테이너</span><span><b>상태</b> 후보 (확정 계획 아님)</span></div>
     </header>
     <section class="chap" id="x1" data-title="한눈에 보기">
       <h2><span class="no">1</span>한눈에 보기</h2>
@@ -324,7 +324,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
       <div class="tbl idea"><table>
         <tr><td>좋아지는 것</td><td>담당자가 이슈를 열 때 후보 3개와 근거가 이미 있음. 첫 응답 시간 단축</td></tr>
         <tr><td>필요한 것</td><td>Jira 첨부를 받는 커넥터(RF-6), 실행 환경, 비용 상한</td></tr>
-        <tr><td>원칙 확인</td><td>Jira 읽기 전용 유지(댓글 금지) → 리포트는 다른 채널로. 확정은 사람</td></tr>
+        <tr><td>원칙 확인</td><td>Jira 쓰기는 사람이 확인 화면에서 승인한 코멘트 1건만(analyze Step 9). 자동으로 댓글을 달려면 별도 품질 기준이 먼저 → 그 전에는 리포트를 다른 채널로. 확정은 사람</td></tr>
         <tr><td>시점</td><td>사내 환경을 안 뒤</td></tr>
       </table></div></div>
     </section>
@@ -365,7 +365,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
       <figure class="fig"><svg viewBox="0 0 820 130" role="img" aria-labelledby="i12T"><title id="i12T">다른 플랫폼 지원</title><defs><marker id="i12h" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0,0 L10,5 L0,10 z"/></marker></defs><rect class="box ext" x="20" y="16" width="178" height="96" rx="6"/><text class="t" x="30" y="40">플랫폼 어댑터</text><text class="s" x="30" y="62">로그 형식 · 버전 ·</text><text class="s" x="30" y="79">소스 구조</text><path class="ln" d="M200,64 L218,64" marker-end="url(#i12h)"/><rect class="box in" x="220" y="16" width="178" height="96" rx="6"/><text class="t" x="230" y="40">공통 파서</text><text class="s" x="230" y="62">이벤트로 변환</text><path class="ln" d="M401,64 L419,64" marker-end="url(#i12h)"/><rect class="box in" x="421" y="16" width="178" height="96" rx="6"/><text class="t" x="431" y="40">같은 매칭</text><text class="s" x="431" y="62">시그니처 · S/C</text><path class="ln" d="M602,64 L620,64" marker-end="url(#i12h)"/><rect class="box in" x="622" y="16" width="178" height="96" rx="6"/><text class="t" x="632" y="40">같은 이슈 DB</text><text class="s" x="632" y="62">플랫폼 표시만 추가</text></svg></figure>
       <div class="tbl idea"><table>
         <tr><td>좋아지는 것</td><td>같은 팀이 다른 플랫폼 이슈도 같은 방식으로 관리</td></tr>
-        <tr><td>필요한 것</td><td>플랫폼 분리 구조는 일부 완료(RF-3·RF-4). 실제 대상 플랫폼 결정(RF-5)</td></tr>
+        <tr><td>필요한 것</td><td>플랫폼 분리는 완료(10/11: 플랫폼별 이슈 DB·<code>--platform</code>·플랫폼별 lock, <code>17-platforms.md</code>), oFono는 가정 형식 뼈대. 실제 로그 형식·파서 규칙·이슈 DB 내용(사내 S24~S29)</td></tr>
         <tr><td>원칙 확인</td><td>변화 없음</td></tr>
         <tr><td>시점</td><td>사내 환경을 안 뒤</td></tr>
       </table></div></div>
@@ -376,7 +376,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
       <ol class="rule-list">
         <li><b>판정은 여전히 스크립트가 하나?</b> LLM이 원인을 정하거나 점수를 바꾸면 안 됩니다. 보조 정보는 보조 칸에만.</li>
         <li><b>기록은 사람이 승인하나?</b> 자동으로 DB에 반영하려면 신뢰도 점수가 아니라 별도 품질 기준을 통과해야 합니다(결정 10/01).</li>
-        <li><b>Jira는 읽기만 하나?</b> 결과를 Jira 댓글로 쓰지 않습니다. 다른 채널로 전달합니다.</li>
+        <li><b>Jira 쓰기는 승인한 코멘트뿐인가?</b> Jira에는 사람이 확인 화면에서 승인한 본문의 코멘트 1건만 남깁니다. 필드 수정·상태 전환·이슈 생성은 하지 않고, 승인 없이 자동으로 다는 댓글은 별도 품질 기준 전에는 다른 채널로 전달합니다.</li>
         <li><b>마스킹된 것만 다루나?</b> 화면·알림·외부 전달 모두 마스킹된 값만. 사외 반출은 사내 규정을 따릅니다.</li>
         <li><b>비용 상한이 있나?</b> 자동 실행은 토큰을 계속 씁니다. 건당 비용과 하루 상한을 먼저 정합니다.</li>
       </ol>
