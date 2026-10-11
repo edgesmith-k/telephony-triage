@@ -96,7 +96,7 @@ class Review:
         self.plugin_root = plugin_root
         self.defaults = defaults
         self.q = {**DEFAULTS, **(db.config.get("quality") or {})}
-        self.supported = [str(v) for v in db.config.get("android_versions_supported") or []]
+        self.supported_key, self.supported = issuedb.supported_versions(db.config)
         self.types = sorted(db.types, key=lambda t: t.id)
         self.type_by_id = {t.id: t for t in self.types}
         self.causes = [c for t in self.types if t.active for c in t.causes if c.active]
@@ -200,7 +200,7 @@ class Review:
                  "유지 또는 원인 `status: deprecated`", stale, stale_unknown)
 
         self.add("unsupported-versions", "지원 종료 버전",
-                 f"원인의 `android_versions`가 비어 있지 않고 모두 `android_versions_supported`({', '.join(self.supported)}) "
+                 f"원인의 `android_versions`가 비어 있지 않고 모두 `{self.supported_key}`({', '.join(self.supported)}) "
                  "밖 (빈 목록 = 전 버전이므로 제외)",
                  "원인 `status: deprecated`",
                  [{"cause": c.id, "versions": [str(v) for v in c.raw.get("android_versions") or []],
@@ -446,7 +446,7 @@ def run(args, defaults: dict, plugin_root: Path) -> dict:
         "category": args.category,
         "owners": _owners(Path(root), keys),
         "thresholds": {**DEFAULTS, **(db.config.get("quality") or {}),
-                       "android_versions_supported": db.config.get("android_versions_supported") or []},
+                       "android_versions_supported": db.config.get(issuedb.supported_versions(db.config)[0]) or []},
         "feedback": {"total": len(db.feedback), "manual": manual, "used_for_acceptance": len(db.feedback) - manual},
         "summary": {i["key"]: i["count"] for i in items},
         "items": items,

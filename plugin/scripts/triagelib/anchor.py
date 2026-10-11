@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from common import compat, failedstep, stepanchor, userconfig
-from platforms.android import logcat as lc
+from common import logtime as lc
 
 from .core import NeedsInput, _clip
 

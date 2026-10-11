@@ -168,6 +168,8 @@ class Config:
             defaults = {}
             self.warnings.append("site-defaults.yaml이 없다 (S-3 미완료). 사용자 config만으로 판정한다.")
         self.plugin_root = plugin_root
+        self.defaults = defaults
+        self._raw_sniffers: list | None = None
         self.raw_names, self.raw_exempt = self._raw_read(defaults)
         self.user = userconfig.load_user()
         self.cfg = userconfig.merged(defaults, self.user or {})
@@ -201,6 +203,30 @@ class Config:
                                  "아니다. 내장 목록만 쓴다.")
             return names, exempt
         return names | set(site.get("names", [])), exempt | set(site.get("exempt_dirs", []))
+
+    def raw_sniffers(self) -> list:
+        """규칙 10 머리 판별: 켠 플랫폼(`platform.enabled`)마다 원문 줄·묶음 입력 머리 판별 함수의 합집합.
+        규칙 10 명령이 나올 때만 플랫폼 모듈을 불러온다. 플랫폼 설정이 잘못되면 경고하고 기본 플랫폼 판별을,
+        불러올 수 없으면 경고하고 이름 기반 판정만 쓴다(fail-soft)."""
+        if self._raw_sniffers is not None:
+            return self._raw_sniffers
+        sniffers: list = []
+        try:
+            import platforms
+            try:
+                finders = platforms.raw_line_finders(self.defaults)
+            except platforms.PlatformConfigError as exc:
+                self.warnings.append(f"규칙 10: 플랫폼 설정 오류로 기본 플랫폼 판별만 쓴다 ({exc})")
+                finders = platforms.raw_line_finders(None)
+            for raw_line, _find, sniff in finders:
+                sniffers.append(raw_line)
+                if sniff is not None:
+                    sniffers.append(sniff)
+        except Exception as exc:   # noqa: BLE001 — import·플랫폼 모듈 오류여도 hook은 멈추지 않는다
+            self.warnings.append(f"규칙 10: 플랫폼 모듈을 불러오지 못해 이름 기반 판정만 쓴다 ({type(exc).__name__})")
+            sniffers = []
+        self._raw_sniffers = sniffers
+        return sniffers
 
     @property
     def git_rules(self) -> bool:
@@ -949,7 +975,7 @@ def _raw_args(argv: list[str]) -> list[str]:
     return out
 
 
-def _is_raw_file(path: Path, names: set, exempt: set) -> bool:
+def _is_raw_file(path: Path, names: set, exempt: set, sniffers=()) -> bool:
     real = _norm(path)
     segs = real.replace("\\", "/").split("/")
     if exempt & set(segs[:-1]):
@@ -963,16 +989,8 @@ def _is_raw_file(path: Path, names: set, exempt: set) -> bool:
     if head.startswith(b"PK\x03\x04") or head.startswith(b"\x1f\x8b"):
         return True
     lines = head.decode("utf-8", errors="replace").splitlines()[:RAW_SNIFF_LINES]
-    try:
-        from platforms.android import logcat   # 이 명령이 나올 때만 불러온다
-    except ImportError:
-        logcat = None
-    for line in lines:
-        if logcat is not None and (logcat.THREADTIME_RE.match(line) or logcat.TIME_RE.match(line)):
-            return True
-        if line.startswith("== dumpstate") or (line.startswith("------ ") and line.rstrip().endswith(" ------")):
-            return True
-    return False
+    sniffers = sniffers() if callable(sniffers) else sniffers   # 머리를 볼 때만 플랫폼 모듈을 불러온다
+    return any(sniff(line) for line in lines for sniff in sniffers)
 
 
 def check_raw_read(command: str, cwd: Path, dec: Decision, conf: Config) -> None:
@@ -994,7 +1012,7 @@ def check_raw_read(command: str, cwd: Path, dec: Decision, conf: Config) -> None
                 cands = [Path(p) for p in sorted(glob.glob(str(path)))[:RAW_GLOB_MAX]]
             for cand in cands:
                 try:
-                    hit = _is_raw_file(cand, names, exempt)
+                    hit = _is_raw_file(cand, names, exempt, conf.raw_sniffers)
                 except OSError:
                     hit = False
                 if hit:

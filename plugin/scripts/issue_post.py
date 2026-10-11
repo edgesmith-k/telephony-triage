@@ -49,7 +49,7 @@ sys.path.insert(0, str(SCRIPTS))
 
 from common import compat, issuepost, masking, session_lock, site_defaults, userconfig  # noqa: E402
 from common.exitcodes import CHECK_FAILED, OK, USAGE  # noqa: E402
-from platforms.android.logcat import STAMP_RE, THREADTIME_RE, TIME_RE  # noqa: E402
+import platforms  # noqa: E402
 
 DEFAULT_KEY_RE = r"[A-Z][A-Z0-9]+-\d+"     # jira_fields.DEFAULT_KEY_RE와 같다
 OMIT_KEYS = ("failed_step", "fields", "evidence", "must_show", "others")
@@ -83,6 +83,7 @@ class Job:
         user = userconfig.load_user()
         if user is None:
             raise Usage("사용자 config가 없다 — /telephony-triage:setup 을 먼저 한다")
+        self.defaults = defaults
         self.cfg = userconfig.merged(defaults, user)
         work = Path(str(userconfig.get(self.cfg, "work_dir"))).expanduser()
         self.snap = work / session_lock.SNAPSHOT_DIR
@@ -296,7 +297,7 @@ def build(job: Job, a: dict, plan: dict | None, fill: dict | None, omit: set[str
     # PROBLEM
     s["PROBLEM"].append(_line(f"Jira: {job.key}"))
     if "fields" not in omit:
-        parts = [f"{label}: {_clip(fields[k], FIELD_MAX)}" for k, label in (("model", "단말"), ("sw", "SW"), ("android_version", "Android"),
+        parts = [f"{label}: {_clip(fields[k], FIELD_MAX)}" for k, label in (("model", "단말"), ("sw", "SW"), ("android_version", _platform_label(a)),
                                                           ("carrier", "캐리어"), ("occurred_on", "발생일")) if fields.get(k)]
         if parts:
             s["PROBLEM"].append(_line(" · ".join(parts)))
@@ -355,12 +356,24 @@ def build(job: Job, a: dict, plan: dict | None, fill: dict | None, omit: set[str
 # -- fill 검사 -----------------------------------------------------------------------------------
 
 
-def _raw_log_line(text: str) -> bool:
-    for m in STAMP_RE.finditer(text):
-        sub = text[m.start():]
-        if THREADTIME_RE.match(sub) or TIME_RE.match(sub):
-            return True
-    return False
+def _platform_label(a: dict) -> str:
+    """Jira 플랫폼 버전 칸 라벨 (`analysis.json`의 `platform`, 없으면 기본 플랫폼)."""
+    try:
+        return platforms.label(a.get("platform") or platforms.DEFAULT_NAME)
+    except platforms.PlatformConfigError as exc:
+        raise Usage(f"analysis.json platform: {exc}") from exc
+
+
+def raw_finders(defaults: dict | None) -> list:
+    """켠 플랫폼의 `find_raw`(문장 안 원문 로그 줄 판별) 목록 — 합집합으로 본다."""
+    try:
+        return [find for _, find, _ in platforms.raw_line_finders(defaults)]
+    except platforms.PlatformConfigError as exc:
+        raise Usage(str(exc)) from exc
+
+
+def _raw_log_line(text: str, finders: list) -> bool:
+    return any(find(text) for find in finders)
 
 
 def _quoted(text: str, sources: list[str]) -> bool:
@@ -374,8 +387,10 @@ def _quoted(text: str, sources: list[str]) -> bool:
     return False
 
 
-def check_fill(raw, need_problem: bool, code_skipped: bool, masker, quote_src: list[str]) -> tuple[dict | None, list[str], list[str]]:
+def check_fill(raw, need_problem: bool, code_skipped: bool, masker, quote_src: list[str],
+               finders: list | None = None) -> tuple[dict | None, list[str], list[str]]:
     """(마스킹된 fill 또는 None, problems, warnings)."""
+    finders = finders if finders is not None else raw_finders(None)
     problems: list[str] = []
     warnings: list[str] = []
     if not isinstance(raw, dict):
@@ -431,7 +446,7 @@ def check_fill(raw, need_problem: bool, code_skipped: bool, masker, quote_src: l
             problems.append(f"{name}: {len(value)}자 > 상한 {limit}자")
         if "TODO" in value:
             problems.append(f"{name}: TODO가 남았다")
-        if _raw_log_line(value):
+        if _raw_log_line(value, finders):
             problems.append(f"{name}: 로그 원문 줄 모양이다(근거 로그는 스크립트 칸에만)")
         m = masker.mask(value.strip())
         if _quoted(m, quote_src):
@@ -518,7 +533,8 @@ def cmd_render(args, job: Job) -> tuple[dict, int]:
     code_skipped = (a.get("code") or {}).get("skipped", True)
     missing: list[str] = []
     if args.fill and not problems:
-        fill, p, warnings = check_fill(raw, not info["note"], code_skipped, masker, info["quote_src"])
+        fill, p, warnings = check_fill(raw, not info["note"], code_skipped, masker, info["quote_src"],
+                                       raw_finders(job.defaults))
         problems += p
     if not args.fill:
         missing = (["problem"] if not info["note"] else []) + ["cause"]

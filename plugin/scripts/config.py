@@ -103,10 +103,10 @@ def validate(kind: str, value) -> str | None:
         p = Path(text).expanduser()
         return None if (p.is_dir() or p.parent.is_dir()) else f"상위 디렉토리가 없습니다: {p.parent}"
     if kind == "tz":
-        from platforms.android import logcat
+        from common import logtime
 
         try:
-            logcat.get_tz(text)
+            logtime.get_tz(text)
         except ValueError as exc:
             return str(exc)
         return None

@@ -18,10 +18,10 @@ from __future__ import annotations
 
 import bisect
 import re
-from dataclasses import dataclass
 from datetime import timedelta
 
 from . import logcat
+from platforms.base import DEFAULT_LINK_MS, VendorRules  # noqa: F401  (계약 타입, 기존 경로로 다시 내보낸다)
 
 RIL_TAGS = {"RILJ"}
 
@@ -122,23 +122,13 @@ def _pair_segment(records: list[dict]) -> None:
             ann["observed_until"] = last_by_pid[rec["pid"]]
 
 
-# -- 벤더 RIL 층 (선택) ----------------------------------------------------------
+# -- 벤더 RIL 층 (선택). 규칙 타입 `VendorRules`·기본 `DEFAULT_LINK_MS`는 `platforms/base.py` ----------------
 
-DEFAULT_LINK_MS = 2000
 # ponytail: 고정 창(HAL 앞 500ms·커버 ±60s·응답 토큰과 짝 있는 HAL 끝 = 짝+1s/짝 없으면 토큰 120s) — 사내 실제 로그 분포로 조정, 단말마다 다르면 설정 키로
 HAL_BEFORE = timedelta(milliseconds=500)
 COVER = timedelta(seconds=60)
 TOKEN_AFTER_RESP = timedelta(seconds=1)
 TOKEN_UNPAIRED = timedelta(seconds=120)
-
-
-@dataclass(frozen=True)
-class VendorRules:
-    """`layers`: `((tag, (패턴, ...)), ...)` — 패턴마다 이름 그룹 `serial`·`token` 중 정확히 하나(값은 10진 숫자).
-    `coverage_tags`: 정규식 없이 "수집 살아 있음"만 표시하는 태그(정확한 이름)."""
-    layers: tuple
-    link_ms: int = DEFAULT_LINK_MS
-    coverage_tags: frozenset = frozenset()
 
 
 def _within(times: list, lo, hi) -> bool:

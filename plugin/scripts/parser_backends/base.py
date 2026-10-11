@@ -30,6 +30,8 @@ class ParserBackend(ABC):
 
     #: 백엔드 이름. 이벤트 `source`는 `backend:<name>`이다.
     name: str = ""
+    #: 이 백엔드가 해석하는 플랫폼(`platforms.<이름>`). 기본은 android(기존 site 백엔드 호환).
+    platform: str = "android"
 
     def configure(self, profile) -> "ParserBackend":
         """`platforms.PlatformProfile`(site-defaults `platform:`)을 반영한 백엔드를 준다 (옵트인).
@@ -52,7 +54,7 @@ class ParserBackend(ABC):
         그 줄 레코드의 값을 그대로 가진다. 줄 위치를 줄 수 없는 백엔드는 `None`을 줘도 된다(`postprocess`가 빠진 키를
         `None`으로 채운다). 경로·본문은 넣지 않는다 (04-parser-matching.md §5.8 (6)).
         레코드 형식·검사: `common/events.py` (`Event`, `validate_event`).
-        RIL 페어링은 윈도우를 자르기 **전에** 파일 전체로 한다. `parse`를 직접 구현하는 site 백엔드는 페어링 뒤
+        RIL 페어링은 윈도우를 자르기 **전에** 파일 전체로 한다. `parse`를 직접 구현하는 android site 백엔드는 페어링 뒤
         `platforms.android.ril.link_vendor`(설정 `platform.ril.vendor`가 있을 때)도 불러야 reference와 출력이 같다."""
 
     @abstractmethod
@@ -64,6 +66,12 @@ class ParserBackend(ABC):
     def version(self) -> str:
         """백엔드 버전. 이슈 DB `parser_backend.min_version`과 비교하고 분석 재사용용 이슈 DB 소스 해시(`compiled.source_hash`)에 넣는다."""
 
+    def log_format(self):
+        """줄 해석 형식(`platforms.base.LogFormat`). 기본은 `platform`의 `SPEC.log`다."""
+        import platforms
+
+        return platforms.get(self.platform).log
+
     def coverage(
         self, paths: Sequence[str | Path], tz: str | None, year: int | None
     ) -> dict:
@@ -71,14 +79,15 @@ class ParserBackend(ABC):
         윈도우와 상관없이 파일 전체를 본다. `stats`는
         `{lines, unparsed, missing_year, missing_zone, files}`(`files[]` = 파일 순서대로
         `{lines, unparsed, first_month, last_month}`; 없으면 파일 단위 검사는 생략된다)이고 `parse_logcat.py`가
-        경고를 만든 뒤 출력에서 뺀다. 기본 구현은 reference의 공통 줄 해석
-        (`platforms/android/logcat.py`)을 쓴다. 형식을 직접 해석하는 백엔드는 바꾼다."""
-        from platforms.android import logcat
+        경고를 만든 뒤 출력에서 뺀다. 기본 구현은 `log_format().read_file`(android는 `platforms/android/logcat.py`)과
+        시계 이상 계산 `common.logtime.coverage`를 쓴다. 형식을 직접 해석하는 백엔드는 바꾼다."""
+        from common import logtime
 
+        read_file = self.log_format().read_file
         files = []
         stats = {"lines": 0, "unparsed": 0, "missing_year": False, "missing_zone": False, "files": []}
         for index, path in enumerate(paths):
-            lines, st = logcat.read_file(path, index, tz, year)
+            lines, st = read_file(path, index, tz, year)
             files.append(lines)
             stats["lines"] += st.lines
             stats["unparsed"] += st.unparsed
@@ -86,6 +95,6 @@ class ParserBackend(ABC):
             stats["missing_zone"] |= st.missing_zone
             stats["files"].append({"lines": st.lines, "unparsed": st.unparsed,
                                    "first_month": st.first_month, "last_month": st.last_month})
-        result = logcat.coverage(files)
+        result = logtime.coverage(files)
         result["stats"] = stats
         return result

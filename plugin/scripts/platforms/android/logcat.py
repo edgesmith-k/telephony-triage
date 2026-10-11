@@ -18,32 +18,29 @@
 
 from __future__ import annotations
 
-import codecs
 import re
-from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone, tzinfo
 from pathlib import Path
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-UTC = timezone.utc
-
-# `--year`가 없고 줄에도 연도가 없을 때 쓰는 연도. 결과가 실행 날짜에 따라
-# 달라지지 않게 고정값을 쓴다(윤년이라 02-29도 해석된다). 경고를 함께 낸다.
-DEFAULT_YEAR = 2000
-
-# 시계 이상 판정 (coverage.clock_anomalies). 한 파일 안에서 앞 줄보다
-# BACKWARD_THRESHOLD_SEC 넘게 이르면 역행, JUMP_THRESHOLD_SEC 이상 늦으면 점프.
-# 조용한 구간과 시계 점프는 로그만으로 구분할 수 없으므로 점프 기준은 크게 잡았다.
-# TODO(SITE:S7) 사내 로그(NITZ 전·재부팅 직후)로 기준을 확인한다.
-BACKWARD_THRESHOLD_SEC = 1.0
-JUMP_THRESHOLD_SEC = 3600.0
-
-_STAMP = (
-    r"(?:(?P<year>\d{4})-)?(?P<mon>\d{2})-(?P<day>\d{2})\s+"
-    r"(?P<h>\d{2}):(?P<mi>\d{2}):(?P<s>\d{2})\.(?P<frac>\d{3,9})"
-    r"(?:\s+(?P<zone>[+-]\d{4}))?"
+# 시각 처리는 플랫폼 무관(`common/logtime.py`), 줄·통계·슬롯 타입은 계약(`platforms/base.py`)이다.
+# 기존 import 경로(`platforms.android.logcat.X`)가 같은 객체를 쓰도록 다시 내보낸다.
+from common.logtime import (  # noqa: F401
+    BACKWARD_THRESHOLD_SEC,
+    DEFAULT_YEAR,
+    JUMP_THRESHOLD_SEC,
+    STAMP_RE,
+    UTC,
+    coverage,
+    format_ts,
+    get_tz,
+    normalize_ts,
+    open_log,
+    parse_ts,
 )
-STAMP_RE = re.compile(_STAMP)
+from common.logtime import STAMP as _STAMP
+from common.logtime import build as _build
+from common.logtime import micro as _micro  # noqa: F401
+from common.logtime import zone_offset as _zone_offset  # noqa: F401
+from platforms.base import FileStats, LogLine, PhoneIdRules
 
 # threadtime (+ year / zone / uid): "MM-DD HH:MM:SS.mmm [UID] PID TID L TAG: msg"
 THREADTIME_RE = re.compile(
@@ -63,71 +60,6 @@ BEGINNING_PREFIX = "--------- "
 TAG_PHONE_RE = re.compile(r"^[A-Za-z]+(?:-[CI])?-(\d+)$")
 MSG_PHONE_PREFIX_RE = re.compile(r"^\[(?:PHONE|SUB)(\d+)\]\s?")
 MSG_PHONE_SUFFIX_RE = re.compile(r"\s?\[PHONE(\d+)\]$")
-
-
-@dataclass(frozen=True)
-class LogLine:
-    file_index: int
-    line_no: int
-    dt: datetime  # UTC
-    pid: int
-    tid: int | None
-    level: str
-    tag: str
-    msg: str
-
-
-@dataclass
-class FileStats:
-    lines: int = 0
-    unparsed: int = 0
-    missing_year: bool = False
-    missing_zone: bool = False
-    first_month: int | None = None  # 연도 없는 줄의 첫/끝 월 (다중 파일 해 넘김 경고용)
-    last_month: int | None = None
-
-
-def get_tz(name: str | None) -> tzinfo:
-    """IANA 이름 → tzinfo. 없으면 UTC. 모르는 이름이면 ValueError."""
-    if not name or name.upper() == "UTC":
-        return UTC
-    try:
-        return ZoneInfo(name)
-    except (ZoneInfoNotFoundError, ValueError) as exc:
-        raise ValueError(f"알 수 없는 타임존: {name}") from exc
-
-
-def _zone_offset(zone: str) -> timezone:
-    sign = -1 if zone[0] == "-" else 1
-    minutes = int(zone[1:3]) * 60 + int(zone[3:5])
-    return timezone(sign * timedelta(minutes=minutes))
-
-
-def _micro(frac: str) -> int:
-    return int(frac[:6].ljust(6, "0"))
-
-
-def _build(match: re.Match, year: int, tz: tzinfo) -> datetime:
-    naive = datetime(
-        year,
-        int(match.group("mon")),
-        int(match.group("day")),
-        int(match.group("h")),
-        int(match.group("mi")),
-        int(match.group("s")),
-        _micro(match.group("frac")),
-    )
-    zone = match.group("zone")
-    local = naive.replace(tzinfo=_zone_offset(zone) if zone else tz)
-    return local.astimezone(UTC)
-
-
-def open_log(path: str | Path):
-    """로그 텍스트 열기: UTF-16 BOM이면 utf-16, 아니면 utf-8-sig(BOM 제거)."""
-    with open(path, "rb") as fh:
-        head = fh.read(2)
-    enc = "utf-16" if head in (codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE) else "utf-8-sig"
-    return open(path, encoding=enc, errors="replace", newline="")
 
 
 def read_file(
@@ -188,104 +120,23 @@ def read_file(
     return lines, stats
 
 
-def format_ts(dt: datetime) -> str:
-    """UTC ISO 문자열 (밀리초, `Z`). 같은 형식끼리는 문자열 비교가 시각 비교와 같다."""
-    dt = dt.astimezone(UTC)
-    return f"{dt:%Y-%m-%dT%H:%M:%S}.{dt.microsecond // 1000:03d}Z"
+def raw_line(line: str) -> bool:
+    """줄 맨 앞이 logcat 원문 줄인가 (guard 규칙 10 머리 판별, `LogFormat.raw_line`)."""
+    return bool(THREADTIME_RE.match(line) or TIME_RE.match(line))
 
 
-def parse_ts(value: str) -> datetime:
-    """오프셋 있는 ISO 시각(`Z` 포함) → UTC datetime. 오프셋이 없으면 ValueError."""
-    dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    if dt.tzinfo is None:
-        raise ValueError(f"타임존 없는 시각: {value}")
-    return dt.astimezone(UTC)
+def find_raw(text: str) -> bool:
+    """문장 안 어디든 logcat 원문 줄 모양이 끼었나 (issue_post fill 검사, `LogFormat.find_raw`)."""
+    for m in STAMP_RE.finditer(text):
+        sub = text[m.start():]
+        if THREADTIME_RE.match(sub) or TIME_RE.match(sub):
+            return True
+    return False
 
 
-def normalize_ts(value, tz_name: str | None, year: int | None) -> datetime | None:
-    """외부 파서가 준 시각을 UTC로 바꾼다. ISO(오프셋 있거나 없음) 또는
-    logcat 스탬프(`MM-DD HH:MM:SS.mmm`, 연도 포함 가능)를 받는다. 모르면 None."""
-    if isinstance(value, datetime):
-        dt = value if value.tzinfo else value.replace(tzinfo=get_tz(tz_name))
-        return dt.astimezone(UTC)
-    if not isinstance(value, str) or not value.strip():
-        return None
-    text = value.strip()
-    try:
-        dt = datetime.fromisoformat(text.replace("Z", "+00:00"))
-    except ValueError:
-        match = STAMP_RE.fullmatch(text)
-        if not match:
-            return None
-        use_year = int(match.group("year")) if match.group("year") else (year or DEFAULT_YEAR)
-        try:
-            return _build(match, use_year, get_tz(tz_name))
-        except ValueError:
-            return None
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=get_tz(tz_name))
-    return dt.astimezone(UTC)
-
-
-def coverage(files: list[list[LogLine]]) -> dict:
-    """파일 시각 범위와 시계 이상. 이상 판정은 파일마다 파일 순서로 한다."""
-    first = last = None
-    anomalies: list[dict] = []
-    for lines in files:
-        prev = None
-        for line in lines:
-            if first is None or line.dt < first:
-                first = line.dt
-            if last is None or line.dt > last:
-                last = line.dt
-            if prev is not None:
-                delta = (line.dt - prev).total_seconds()
-                kind = None
-                if delta < -BACKWARD_THRESHOLD_SEC:
-                    kind = "backward"
-                elif delta >= JUMP_THRESHOLD_SEC:
-                    kind = "jump"
-                if kind:
-                    anomalies.append(
-                        {"ts": format_ts(line.dt), "kind": kind, "delta_sec": round(delta, 3)}
-                    )
-            prev = line.dt
-    return {
-        "first_ts": format_ts(first) if first else None,
-        "last_ts": format_ts(last) if last else None,
-        "clock_anomalies": anomalies,
-    }
-
-
-@dataclass(frozen=True)
-class PhoneIdRules:
-    """슬롯 표기 규칙. 위치마다 패턴을 순서대로 보고 첫 일치를 쓴다. 그룹 1 = 슬롯 번호."""
-
-    tag: tuple[re.Pattern, ...]      # 태그에 match
-    prefix: tuple[re.Pattern, ...]   # 메시지 앞에 match
-    suffix: tuple[re.Pattern, ...]   # 메시지 끝쪽에 search
-
-    def phone_id(self, tag: str, msg: str) -> int | None:
-        for patterns, text, search in ((self.tag, tag, False), (self.prefix, msg, False), (self.suffix, msg, True)):
-            for pattern in patterns:
-                hit = pattern.search(text) if search else pattern.match(text)
-                if hit and (hit.group(1) or "").isdecimal():
-                    return int(hit.group(1))
-        return None
-
-    def strip(self, msg: str) -> str:
-        """슬롯 표기를 뗀 메시지 (RIL 줄 해석용. 이벤트의 `msg`는 원문 그대로 둔다)."""
-        for pattern in self.prefix:
-            hit = pattern.match(msg)
-            if hit:
-                msg = msg[hit.end():]
-                break
-        for pattern in self.suffix:
-            hit = pattern.search(msg)
-            if hit:
-                msg = msg[:hit.start()] + msg[hit.end():]
-                break
-        return msg
+def epoch_break(line: LogLine) -> bool:
+    """재부팅 표시 줄 (`LogFormat.epoch_break`). 시계 역행·점프는 백엔드가 따로 본다."""
+    return line.tag == "boot_progress_start" or (line.tag.lower() == "kernel" and line.msg.startswith("Linux version "))
 
 
 DEFAULT_PHONE_RULES = PhoneIdRules((TAG_PHONE_RE,), (MSG_PHONE_PREFIX_RE,), (MSG_PHONE_SUFFIX_RE,))

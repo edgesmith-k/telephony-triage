@@ -76,6 +76,12 @@ def looks_like_bugreport(path: Path) -> bool:
     return any(line.startswith("== dumpstate") for line in head)
 
 
+def sniff_line(line: str) -> bool:
+    """줄이 bugreport 머리(dumpstate 헤더·섹션 구분 줄) 모양인가 (guard 규칙 10, `CaptureSpec.sniff_line`).
+    설정(`platform.bugreport`)과 무관한 고정 판별이다."""
+    return line.startswith("== dumpstate") or (line.startswith("------ ") and line.rstrip().endswith(" ------"))
+
+
 def extract(src: Path, out_dir: Path, rules: BugreportRules | None = None) -> dict:
     rules = rules or DEFAULT_RULES
     if not src.is_file():

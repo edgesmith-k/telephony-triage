@@ -61,8 +61,8 @@ def test_mock_site_backend_extends_reference():
 # -- 3. 계층 가드 ----------------------------------------------------------------
 
 # common → platforms 허용 목록. 정확히 이것만 허용하고 현실과 다르면 실패한다.
-# stepanchor의 시각 해석 함수가 logcat 스탬프를 쓴다 (시각 helper를 따로 나눌 때 없앤다).
-COMMON_ALLOW = {"common/stepanchor.py": {"platforms.android.logcat"}}
+# 시각 helper는 `common/logtime.py`로 나눴다(17-platforms 묶음 1). common은 platforms를 import하지 않는다.
+COMMON_ALLOW = {}
 
 
 def _imports(path: Path, rel: str) -> set[str]:

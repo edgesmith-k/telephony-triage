@@ -6,13 +6,14 @@ import json
 import re
 from pathlib import Path
 
+import platforms
 from common import compat, events, failedstep, masking, stepanchor, userconfig
 from common.exitcodes import CHECK_FAILED, USAGE
 
 from .anchor import AnchorMixin, _parse_ts
 from .cache import CacheMixin, State, _digest, _file_sha
 from .core import (ERROR_EVENT_RE, EXPLORE_INPUT_FILE, EXPLORE_MAX_LINES, EXPLORE_WHEN, Fail, NeedsInput, Runner,
-                   SEARCH_LIMIT, SNAPSHOT_DIR, STATE_FILE, Stopped, TIMELINE_FILE, TOP, _clip, _module)
+                   SEARCH_LIMIT, SNAPSHOT_DIR, STATE_FILE, Stopped, TIMELINE_FILE, TOP, _clip)
 from .report import ReportMixin, _ref_label, _unique_evidence
 
 
@@ -58,6 +59,7 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         self.job: Path | None = None
         self.snap: Path | None = None
         self.locked = False
+        self._platform_spec: platforms.PlatformSpec | None = None
         self.warnings: list[str] = []
         self.notes: list[str] = []
         self.out: dict = {"key": self.key}
@@ -76,6 +78,21 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         self.reuse: dict | None = None           # 재사용 결정 {hit, run, reason?, changed?} — 오프라인·첫 실행은 None
 
     # 공통 ---------------------------------------------------------------------------------------
+
+    @property
+    def platform_spec(self) -> platforms.PlatformSpec:
+        """플랫폼 계약(site-defaults `platform.name`). 잘못되면 사용 오류(종료 코드 2)."""
+        if self._platform_spec is None:
+            try:
+                self._platform_spec = platforms.get(platforms.default_name(self.defaults))
+            except platforms.PlatformConfigError as exc:
+                raise Fail(USAGE, str(exc)) from exc
+        return self._platform_spec
+
+    @property
+    def platform_label(self) -> str:
+        """리포트·질문 라벨 ("Android")."""
+        return self.platform_spec.label
 
     def answer(self, kind: str):
         return self.state.answers.get(kind)
@@ -430,10 +447,10 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
             self.state.save()
             self.log_inputs = [{"path": str(p), "name": p.name, "sha": _file_sha(p), "size": p.stat().st_size}
                                for p in resolved]
-        parser = _module("parse_logcat")
+        capture = self.platform_spec.capture
         out, build = [], {}
         for p in resolved:
-            if not parser._looks_like_bugreport(p):
+            if capture is None or not capture.looks_like(p):
                 out.append(p)
                 continue
             # 같은 이름(a/bugreport.txt, b/bugreport.txt)이 서로 덮지 않도록 해석된 경로 해시를 붙인다
@@ -471,12 +488,12 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
 
     def code_question(self, version: str | None, suggested: dict, text: str | None = None) -> NeedsInput:
         options = [{"value": c.get("name") or ",".join(f"{k}={v}" for k, v in (c.get("roots") or {}).items()),
-                    "label": f"{c.get('name') or '최근'} Android {c.get('android_version') or '?'}"
+                    "label": f"{c.get('name') or '최근'} {self.platform_label} {c.get('android_version') or '?'}"
                              + (" (추천)" if c.get("recommended") else "")}
                    for c in suggested.get("candidates") or []]
         options += [{"value": "<경로 또는 키=경로,…>", "label": "직접 입력"},
                     {"value": "skip", "label": "코드 분석 건너뛰기(로그 기반 분석만)"}]
-        text = text or f"코드 경로를 고른다 (대상: Android {version or '?'})."
+        text = text or f"코드 경로를 고른다 (대상: {self.platform_label} {version or '?'})."
         return NeedsInput("code", text + (" (code.auto_select 값이 잘못돼 묻기로 본다)" if self.auto_invalid else ""), options)
 
     @staticmethod
