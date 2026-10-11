@@ -24,7 +24,8 @@
 4. 소스: Step 2-1에서 고른 루트(`code.roots`)에서 타임라인 문구로 `grep -rn -m 5`(상위 몇 줄), 필요한 함수만 읽는다.
    코드 경로를 고르지 않았으면(`code.skipped`) 코드 근거 없이 쓴다고 밝힌다.
 
-로그 원문, `events.json`, `match.json`, `jira_raw.json`은 읽지 않는다.
+로그 원문, `events.json`, `match.json`, `jira_raw.json`은 읽지 않는다. Step 7·8(계획 작성)에서도 같다:
+계획 `feedback.suggested`는 비워 두면 `db_pr stage`가 채우고, 후보는 `analysis.json`에 있다(python `open()`으로 여는 것도 읽기다).
 
 ## 쓰는 것
 

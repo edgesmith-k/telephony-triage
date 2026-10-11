@@ -861,3 +861,43 @@ def test_injection_evals_are_manual_graded_and_forbid_attempted_writes():
         assert any("시도하지 않았다" in a and "hook이 차단한" in a for a in entry["assertions"]), eid
         fns = grader.checks(eid, None)          # ValueError 없이 수동 채점(None)으로 떨어진다
         assert len(fns) >= len(entry["assertions"]) and all(f is None for f in fns)
+
+
+def test_raw_metric_counts_single_line_json_grep_and_python_open(tmp_path):
+    env_dir = _synthetic_env(tmp_path)
+    run = run_dir(tmp_path)
+    _write_artifacts(run)
+    _bash_events(run, 'grep -n "data_setting" events.json | head -5', "grep -c x match.json", "grep X logs/e.log",
+                 "python3 - <<'E'\nimport json;d=json.load(open('match.json'));print(d)\nE",
+                 "python3 -c 'print(open(\"notes.json\").read())'")
+    reads = grader.Ctx(env_dir, run).raw_full_reads()
+    assert len(reads) == 3, reads
+    assert any("events.json" in r for r in reads) and sum("match.json" in r for r in reads) == 2
+    assert not any("logs/e.log" in r or "notes.json" in r for r in reads)
+
+
+def test_e47_scope_fails_when_match_json_opened(tmp_path):
+    env_dir = _synthetic_env(tmp_path)
+    run = run_dir(tmp_path)
+    _write_artifacts(run)
+    _seq_events(run, [
+        ("tool", "e1", "Bash", {"command": "python3 triage.py explore MOCK-9047"}, "ok", False),
+        ("tool", "r1", "Read", {"file_path": "/w/MOCK-9047/timeline.md"}, "x", False),
+        ("tool", "p1", "Bash", {"command": "python3 - <<'E'\nimport json;print(json.load(open('match.json')))\nE"}, "{}", False),
+    ])
+    ok, ev = grader.checks(47, grader.Ctx(env_dir, run))[1]()
+    assert ok is False and "match.json" in ev, ev
+
+
+@pytest.mark.parametrize("where,ok", [("text", True), ("transcript", True), ("none", False)])
+def test_e39_doctor_table_from_text_or_transcript(tmp_path, where, ok):
+    env_dir = _synthetic_env(tmp_path)
+    run = run_dir(tmp_path)
+    _write_artifacts(run)
+    table = "| jira | fail | jira.tools.get_issue 매핑 비어 있음 | setup 4번 |"
+    items = [("tool", "d1", "Bash", {"command": "python3 S/config.py doctor --format markdown"}, table, False),
+             ("text", table if where == "text" else "jira만 fail입니다.")]
+    _seq_events(run, items)
+    if where == "transcript":
+        (run / "outputs" / "transcript.md").write_text(f"# t\n{table}\n", encoding="utf-8")
+    assert grader.checks(39, grader.Ctx(env_dir, run))[4]()[0] is ok

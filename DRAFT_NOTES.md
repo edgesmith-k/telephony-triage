@@ -19,6 +19,9 @@
 - 모드: **사외 초안**. Phase **D0, 1~13** 완료. 반입 전 보강 트랙(S1~S6·I1~I5·X·3C~3F)과 개선 트랙 **W0~W12**, 반입 전 리뷰(10/07) 수정 트랙 **V1~V7·V 끝**, 실제 로그 반영 트랙 **L1~L3** 완료, 반입 전 3차 검토(A1~A4·B1·B2·문서) 반영(10/08), 설명 정리(PR #31). main 병합 PR #8·#9·#11~#34 + 이번 브랜치 `ccr-d022623a-2f4vdx`.
 - 반입 전 4차 검토(10/10, 9관점) → 묶음 A~G 반영(이번 브랜치).
 - 마지막 전체 테스트(10/11, Linux): 1168건 중 1167 통과·1 실패(`test_related_tests` — 0f1b9ef로 고친 뒤 그 파일 10건 통과), skip 0. `db_regress --all` 23/23, 게이트 5종 통과 (10/11).
+- 4차 반영 eval (10/11, Sonnet, plugin): 6·14·15·39·40·46·47·55·58 → 56/57. 실패 e47(python으로 `match.json` 열람, c) → `explore.md` 보강 뒤 재실행 통과·원문 열람 0.
+  채점기: e39 doctor 표를 transcript에서도 인정, e46·47 `scope()`에 `match.json` 금지, `raw_full_reads`에 한 줄 JSON grep·python `open()` 추가.
+  남은 관찰(반입 후): `events.json`·`match.json`이 한 줄이라 rules.md의 `grep -n` 지침이 통독이 된다. 탐색 가설·분석 스킬 결과의 `mask_pii` 미경유(e40·46·47, c).
 - 사내 확인 항목: `TODO(SITE)` **79곳** — `python3 tools/list_site_todos.py`. `REVIEW-OPEN.md` 0건.
 - 사내 S 단계 시작: `python3 tools/context_pack.py S-n`(표 `docs/tasks.md`).
 - 안내서(사람용 HTML): `docs/telephony-triage-guide.html` (공유본 https://claude.ai/artifact/1jov1Et4dQUMauFr6aoxWG)
