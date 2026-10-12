@@ -28,3 +28,10 @@
 ## 남은 관찰 (10/12 옮김)
 
   남은 관찰(반입 후): `events.json`·`match.json`이 한 줄이라 `grep -n` 지침이 통독이 된다. 탐색 가설·분석 스킬 결과의 `mask_pii` 미경유(c). 같은 응답의 병렬 이중 게시는 권한 확인으로만 막음.
+
+## 트래커 범용화 결과 (10/12)
+
+- 묶음 1(형식 이름)·2(레지스트리·Jira 어댑터)·3(GitHub 어댑터·모의 MCP·eval 66·67·문서·HTML). jira 동작은 기준 50124da와 바이트 동일(C1~C16·골든·LEGACY, 허용 차이는 승인 기록 `kind: jira`뿐).
+- 묶음 3 리뷰(P0 없음): P1-1 설정 밖 GitHub MCP 등록의 트래커 레포 쓰기 미차단 → 사내가 Jira라 막지 않고 18장 "알려진 한계"(결정 (o)). P1-2 eval 66 채점 거짓 실패 → 수정. P2: release·explore 작업 키 정규화·`..` 거부, 옛 승인 기록 문구 → 수정. 나머지(search_issues 원문, Windows 예약 이름, URL 호스트)는 18장 §8.
+- 전체 pytest 1,640 통과(21분 44초). eval(Sonnet, run tr-sonnet-a): 8·14·39·47·61·66·67 기계 채점 실패 0.
+- **관찰 — eval 63**: "oFono 로그로…" 요청에 `triage.py run`에 `--platform ofono`를 붙이지 않음(2회 재실행 같음). 변경 전 트리 fdf3ced도 같은 모델로 같은 실패 → 이 작업의 회귀가 아니라 지금 모델 동작. eval 환경의 site 기본이 ofono라 결과는 oFono로 맞다. 스킬 문구 보강은 따로(사내 S-2 eval 전체 재실행 때 함께 판단).

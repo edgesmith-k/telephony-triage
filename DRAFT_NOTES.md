@@ -14,12 +14,12 @@
 - 테스트는 `tools/related_tests.py --run`(관련만). 전체는 도구가 full이라 할 때·반입 직전·요청 시.
 - 진행 중 판단은 Fable 결정 에이전트에게 묻는다(10/06 사용자 지정). 원칙상 사용자 승인 대상(이슈 DB push, main 병합·태그 등 사용자가 지시하지 않은 외부 동작)은 사용자에게.
 
-## 진행 상태 (10/10)
+## 진행 상태 (10/12)
 
 - 모드: **사외 초안**. Phase **D0, 1~13** 완료. 반입 전 보강 트랙(S1~S6·I1~I5·X·3C~3F)과 개선 트랙 **W0~W12**, 반입 전 리뷰(10/07) 수정 트랙 **V1~V7·V 끝**, 실제 로그 반영 트랙 **L1~L3** 완료, 반입 전 3차 검토(A1~A4·B1·B2·문서) 반영(10/08), 설명 정리(PR #31). main 병합 PR #8~#38.
 - 10/11: 4차 검토 묶음 A~G(PR #36), Jira 결과 게시(PR #37), 플랫폼 분리(결정 (m), S24~S29). 상세·남은 관찰은 `docs/history/draft-notes-2026-10.md`.
-- **진행 중 (10/12)**: 트래커 범용화(jira→tracker) 묶음 1·2 완료, 묶음 3 WIP — 다음 세션은 `docs/development/tracker-handoff/README.md`부터.
-- 사내 확인 항목: `TODO(SITE)` **100곳** — `python3 tools/list_site_todos.py`. `REVIEW-OPEN.md` 0건.
+- 10/12: 트래커 범용화(결정 (n)·(o), `18-trackers.md`, GitHub 실험적), "사내 설정 시작". 전체 1,640 통과, eval 결과·63 관찰은 history.
+- 사내 확인 항목: `TODO(SITE)` **104곳** — `python3 tools/list_site_todos.py`. `REVIEW-OPEN.md` 0건.
 - 사내 시작: **"사내 설정 시작"** → `python3 tools/site_step.py`가 `SITE_PROFILE.md`(트래커 jira)를 만들고 S-1~S-7을 한 단계씩 낸다(결정 (o)).
 - 안내서(사람용 HTML): `docs/telephony-triage-guide.html` (공유본 https://claude.ai/artifact/1jov1Et4dQUMauFr6aoxWG). 역할별 문서 19개: `docs/materials/00-index.html`
 
