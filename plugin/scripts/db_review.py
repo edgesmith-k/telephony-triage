@@ -2,6 +2,7 @@
 """db_review.py — 월간 리뷰 리포트 (06-collaboration.md §6.6, contracts.md §3.2).
 
     db_review.py [--db <path>] [category] [--out <file>] [--as-of <YYYY-MM-DD>] [--json]
+    db_review.py [--db <path>] --owners
 
 읽기 전용이다. 이슈 DB를 바꾸지 않고, 세션 lock을 잡지 않으며 스냅샷을 옮기지 않는다
 (`review` 커맨드가 부른다). 카테고리를 주면 그 카테고리만, 없으면 전체를 본다.
@@ -21,6 +22,7 @@
 출력: 기본은 Markdown 리포트(stdout). `--out`이면 그 파일에 Markdown을 쓴다. `--json`이면 stdout에 JSON
 `{db, head, branch, dirty, as_of, category, owners, thresholds, feedback, items[{key, title, criterion, action, count,
 entries[], undetermined[]}]}`(`branch`는 detached면 null, `dirty`는 커밋 안 된 변경 유무, git 최상위가 아니면 셋 다 null).
+`--owners`면 리뷰를 돌리지 않고 stdout에 JSON `{db, categories, owners}`만 낸다(카테고리·`--out`·`--as-of`와 함께 쓰면 2).
 종료 코드: 0(리포트), 2(사용·환경 오류).
 """
 
@@ -413,7 +415,7 @@ def render(report: dict) -> str:
     return "\n".join(out) + "\n"
 
 
-def run(args, defaults: dict, plugin_root: Path) -> dict:
+def _db_and_keys(args, defaults: dict) -> tuple[Path, issuedb.IssueDb, list[str]]:
     try:
         root = platform_session.resolve_db(defaults, getattr(args, "platform", None), args.db)[1]
     except (dbpath.DbPathError, PlatformConfigError) as exc:
@@ -422,7 +424,11 @@ def run(args, defaults: dict, plugin_root: Path) -> dict:
         db = issuedb.load(root)
     except issuedb.IssueDbError as exc:
         raise UsageError(str(exc)) from exc
-    keys = [c.get("key") for c in db.config.get("categories") or [] if isinstance(c, dict)]
+    return root, db, [c.get("key") for c in db.config.get("categories") or [] if isinstance(c, dict)]
+
+
+def run(args, defaults: dict, plugin_root: Path) -> dict:
+    root, db, keys = _db_and_keys(args, defaults)
     if args.category and args.category not in keys:
         raise UsageError(f"카테고리 {args.category}가 issue-db.config.yaml categories에 없습니다 ({', '.join(keys)}).")
     try:
@@ -464,6 +470,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--out", metavar="file", default=None, help="Markdown 리포트를 쓸 파일")
     parser.add_argument("--as-of", metavar="YYYY-MM-DD", default=None, help="기준일 (기본: 오늘)")
     parser.add_argument("--json", action="store_true", help="stdout에 JSON")
+    parser.add_argument("--owners", action="store_true", help="카테고리·CODEOWNERS 오너만 JSON으로 낸다(리뷰를 돌리지 않는다)")
     parser.add_argument("--plugin-root", default=None)
     return parser
 
@@ -474,9 +481,17 @@ def main(argv: list[str] | None = None) -> int:
     except (AttributeError, ValueError):
         pass
     args = build_parser().parse_args(argv)
+    if args.owners and (args.category or args.out or args.as_of):
+        print("--owners는 카테고리·--out·--as-of와 함께 쓸 수 없습니다.", file=sys.stderr)
+        return USAGE
     defaults = site_defaults.load_or_exit(args.plugin_root)
     plugin_root = Path(args.plugin_root) if args.plugin_root else site_defaults.plugin_root()
     try:
+        if args.owners:   # review 커맨드 1단계: 카테고리를 묻기 전에 오너만 보인다
+            root, _, keys = _db_and_keys(args, defaults)
+            print(json.dumps({"db": str(root), "categories": keys, "owners": _owners(Path(root), keys)},
+                             ensure_ascii=False, indent=1))
+            return OK
         report = run(args, defaults, plugin_root)
     except (UsageError, yamlio.YamlFileError) as exc:
         print(str(exc), file=sys.stderr)

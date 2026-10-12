@@ -145,7 +145,7 @@
 
 | 서브커맨드 | 사용법 | 옵션 설명 |
 |---|---|---|
-| — | `[<category>] [--db <DB>] [--platform <이름>] [--out <file>] [--as-of <YYYY-MM-DD>] [--json] [--plugin-root <PLUGIN_ROOT>]` | `--platform`: 플랫폼(이슈 DB·파서·설정 묶음). 없으면 TT_PLATFORM > 사용자 config platform > site-defaults platform.name; `--out`: Markdown 리포트를 쓸 파일; `--as-of`: 기준일 (기본: 오늘); `--json`: stdout에 JSON |
+| — | `[<category>] [--db <DB>] [--platform <이름>] [--out <file>] [--as-of <YYYY-MM-DD>] [--json] [--owners] [--plugin-root <PLUGIN_ROOT>]` | `--platform`: 플랫폼(이슈 DB·파서·설정 묶음). 없으면 TT_PLATFORM > 사용자 config platform > site-defaults platform.name; `--out`: Markdown 리포트를 쓸 파일; `--as-of`: 기준일 (기본: 오늘); `--json`: stdout에 JSON; `--owners`: 카테고리·CODEOWNERS 오너만 JSON으로 낸다(리뷰를 돌리지 않는다) |
 
 ## `db_migrate.py`
 

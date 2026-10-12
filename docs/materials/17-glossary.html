@@ -304,7 +304,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
     <section class="chap" id="t7" data-title="평가">
       <h2><span class="no">7</span>평가</h2>
       <p class="first">이 절에서 알 수 있는 것: 평가 관련 용어</p>
-      <div class="tbl k1"><table><tr><th>용어</th><th>뜻</th></tr><tr><td><b>행동 eval</b></td><td>Claude가 스킬 지침대로 행동하는지 재는 시나리오 시험. evals.json 67개</td></tr><tr><td><b>주입 eval</b></td><td>Jira 본문 속 지시를 따르지 않는지 보는 eval (59·60번)</td></tr><tr><td><b>정확도 평가 (오프라인 평가)</b></td><td>해결된 과거 Jira 라벨셋으로 매칭 정확도를 재는 S-5 관문. offline_eval.py</td></tr><tr><td><b>라벨셋</b></td><td>정확도 평가 입력. Jira 키·로그 경로·발생 시각·정답 원인 ID 또는 unresolved</td></tr><tr><td><b>자동 테스트</b></td><td>플러그인 코드 단위 테스트(pytest, 1,669개). CI에서 실행</td></tr></table></div>
+      <div class="tbl k1"><table><tr><th>용어</th><th>뜻</th></tr><tr><td><b>행동 eval</b></td><td>Claude가 스킬 지침대로 행동하는지 재는 시나리오 시험. evals.json 67개</td></tr><tr><td><b>주입 eval</b></td><td>Jira 본문 속 지시를 따르지 않는지 보는 eval (59·60번)</td></tr><tr><td><b>정확도 평가 (오프라인 평가)</b></td><td>해결된 과거 Jira 라벨셋으로 매칭 정확도를 재는 S-5 관문. offline_eval.py</td></tr><tr><td><b>라벨셋</b></td><td>정확도 평가 입력. Jira 키·로그 경로·발생 시각·정답 원인 ID 또는 unresolved</td></tr><tr><td><b>자동 테스트</b></td><td>플러그인 코드 단위 테스트(pytest, 1,678개). CI에서 실행</td></tr></table></div>
 
     </section>
     <section class="chap" id="t8" data-title="검증과 평가는 누가 어떻게 만드나">
@@ -330,7 +330,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
 <text class="s" x="608" y="210">사내 도입 담당자와</text><text class="s" x="608" y="228">카테고리 담당자</text><text class="s" x="608" y="246">— 해결된 과거 Jira 20~30건</text><text class="s" x="608" y="264">에 정답 원인을 붙인</text><text class="s" x="608" y="282">라벨셋 (조정용/확인용)</text>
 <text class="s" x="608" y="340">offline_eval.py</text><text class="s" x="608" y="358">스크립트만 (Claude 없음)</text>
 <text class="s" x="608" y="420">파일럿 전 관문</text>
-</svg><figcaption>팀원이 평소에 만나는 것은 왼쪽(R1~R6)뿐입니다. 가운데는 플러그인을 고치는 사람이, 오른쪽은 도입 담당자가 다룹니다. 플러그인 코드 자체는 별도로 자동 테스트(1,669개, CI)가 확인합니다.</figcaption></figure>
+</svg><figcaption>팀원이 평소에 만나는 것은 왼쪽(R1~R6)뿐입니다. 가운데는 플러그인을 고치는 사람이, 오른쪽은 도입 담당자가 다룹니다. 플러그인 코드 자체는 별도로 자동 테스트(1,678개, CI)가 확인합니다.</figcaption></figure>
     </section>
   </main>
 </div>

@@ -1896,6 +1896,8 @@ def load_baseline(path: Path) -> dict:
     evals = data.get("evals") if isinstance(data, dict) else None
     if not isinstance(evals, dict) or not evals or not all(isinstance(v, dict) and _int(v.get("total")) is not None for v in evals.values()):
         raise ValueError(f"토큰 기준선 형식 오류: {path} (비어 있지 않은 evals.<id>.total 정수 필요)")
+    if not isinstance(data.get("model"), str) or not data["model"]:
+        raise ValueError(f"토큰 기준선 형식 오류: {path} (model 필요 — 모델이 같은 run만 판정한다)")
     return data
 
 
@@ -1903,17 +1905,44 @@ def token_limit(baseline_total: int, margin: float) -> int:
     return math.ceil(round(baseline_total * margin, 6))
 
 
-def token_budget_row(eid: int, tokens: dict | None, budget: dict | None) -> dict | None:
-    """상한 판정 항목. 예산을 안 쓰거나 기준선에 eval이 없거나 실행하지 않았으면 None(항목을 만들지 않는다)."""
-    entry = ((budget or {}).get("baseline") or {}).get("evals", {}).get(str(eid))
+def run_model(execution: dict) -> str | None:
+    """run의 모델: `init_model`(init 이벤트, 실제로 돈 모델) → 없을 때만 `model`(--model 값, 별칭일 수 있다).
+    by_model로 추정하지 않는다(보조 모델이 섞인다)."""
+    for m in (execution.get("init_model"), execution.get("model")):
+        if isinstance(m, str) and m:
+            return m
+    return None
+
+
+def _usd(v) -> str:
+    return "미기록" if _num(v) is None else f"${v:.3f}"
+
+
+def token_budget_row(eid: int, tokens: dict | None, budget: dict | None, model: str | None = None) -> dict | None:
+    """상한 판정 항목. 예산을 안 쓰거나 기준선에 eval이 없거나 실행하지 않았으면 None(항목을 만들지 않는다).
+    model = run_model(execution). 기준선 모델과 다르거나 어느 쪽이 미기록이면 판정 보류(`hold: true`)."""
+    baseline = (budget or {}).get("baseline") or {}
+    entry = baseline.get("evals", {}).get(str(eid))
     if entry is None or tokens is None:
         return None
     margin = budget["margin"]
     limit, total = token_limit(entry["total"], margin), tokens.get("total")
     if total is None:
-        return {"text": TOKEN_BUDGET_TEXT, "passed": None, "evidence": "토큰 미기록(판정 보류)", "source": "script"}
-    return {"text": TOKEN_BUDGET_TEXT, "passed": total <= limit, "source": "script",
-            "evidence": f"total={total} 상한={limit} (기준선 {entry['total']} × 여유율 {margin})"}
+        return {"text": TOKEN_BUDGET_TEXT, "passed": None, "evidence": "토큰 미기록(판정 보류)", "source": "script",
+                "hold": False}
+    base_model = baseline.get("model")
+    if not base_model or not model:
+        return {"text": TOKEN_BUDGET_TEXT, "passed": None, "source": "script", "hold": True,
+                "evidence": f"모델 미기록(run {model or '-'}, 기준선 {base_model or '-'}) — 판정 보류"}
+    if base_model != model:
+        return {"text": TOKEN_BUDGET_TEXT, "passed": None, "source": "script", "hold": True,
+                "evidence": f"모델 불일치(run {model}, 기준선 {base_model}) — 판정 보류"}
+    cr = tokens.get("cache_read")
+    share = "미기록" if cr is None or not total else f"{cr / total:.0%}"
+    # 판정은 total만 본다. 비용·캐시 비율은 보고용(캐시 구성에 따라 토큰과 비용이 따로 움직인다, README "토큰 기록")
+    return {"text": TOKEN_BUDGET_TEXT, "passed": total <= limit, "source": "script", "hold": False,
+            "evidence": f"total={total} 상한={limit} (기준선 {entry['total']} × 여유율 {margin}) "
+                        f"cost={_usd(tokens.get('total_cost_usd'))} (기준선 {_usd(entry.get('total_cost_usd'))}) cache_read={share}"}
 
 
 def token_cells(tokens: dict | None) -> list[str]:
@@ -1937,26 +1966,43 @@ def token_table(rows: list[dict]) -> str:
     return "\n".join(" | ".join(c.ljust(w) for c, w in zip(row, widths)).rstrip() for row in [head, *body])
 
 
-def write_baseline(path: Path, runs: dict[int, list[dict]], model: str, commit: str, dirty: bool) -> tuple[dict, dict[int, int]]:
-    """runs: {eval id: [tokens...]}. total이 기록된 run만 센다(빠진 run 수는 두 번째 반환값 {eval id: 수}). 대표값은 total이 가장
-    큰 run(상한 판정이 보수적). 기존 파일의 margin_default·margin_basis와 이번에 재지 않은 eval은 유지한다.
-    기록할 eval이 없거나, 기존 파일이 깨졌거나, 기존 파일과 모델이 다르면 ValueError(파일을 쓰지 않는다)."""
+_BASELINE_KEYS = ("total", "num_turns", "input", "output", "cache_creation", "cache_read", "total_cost_usd")
+
+
+def run_commit(runs: dict[int, list[dict]]) -> tuple[str, bool]:
+    """run 시점 커밋(run.py가 execution.json에 남긴 repo_commit·repo_dirty). 모두 기록되고 같아야 한다. dirty는 하나라도면 True.
+    채점 시점 HEAD로 대신하지 않는다(ValueError)."""
+    items = [r for rs in runs.values() for r in rs]
+    missing = [r for r in items if not r.get("commit") or not isinstance(r.get("dirty"), bool)]
+    if missing:
+        raise ValueError(f"run 시점 커밋 미기록 run {len(missing)}개 (run.py --execute로 다시 잰다)")
+    commits = sorted({r["commit"] for r in items})
+    if len(commits) != 1:
+        raise ValueError(f"run 시점 커밋이 다르다: {commits}")
+    return commits[0], any(r["dirty"] for r in items)
+
+
+def write_baseline(path: Path, runs: dict[int, list[dict]], model: str) -> tuple[dict, dict[int, int]]:
+    """runs: {eval id: [{tokens, commit, dirty, undecided}...]}. total이 기록된 run만 센다(빠진 run 수는 두 번째 반환값
+    {eval id: 수}). 대표값은 total이 가장 큰 run(상한 판정이 보수적). 기존 파일의 margin_default·margin_basis와 이번에 재지 않은
+    eval은 유지한다. 기록할 eval이 없거나, run 시점 커밋이 없거나 섞였거나, 기존 파일이 깨졌거나, 기존 파일과 모델이 다르면
+    ValueError(파일을 쓰지 않는다)."""
     old = load_baseline(path) if Path(path).is_file() else {}
     if old and old.get("model") != model:
         raise ValueError(f"기존 기준선의 모델({old.get('model')})과 다르다({model}). 덮어쓰지 않는다: {path}")
+    commit, dirty = run_commit(runs)
     evals, skipped, recorded = dict(old.get("evals") or {}), {}, []
     for eid, items in sorted(runs.items()):
-        kept = [t for t in items if t.get("total") is not None]
+        kept = [r for r in items if r["tokens"].get("total") is not None]
         if len(kept) < len(items):
             skipped[eid] = len(items) - len(kept)
         if not kept:
             continue
         recorded.append(eid)
-        best = max(kept, key=lambda t: t["total"])
-        evals[str(eid)] = {"total": best["total"], "num_turns": best.get("num_turns"),
-                           "total_cost_usd": best.get("total_cost_usd"),
-                           "runs": [{"total": t["total"], "num_turns": t.get("num_turns"),
-                                     "total_cost_usd": t.get("total_cost_usd")} for t in kept]}
+        best = max(kept, key=lambda r: r["tokens"]["total"])["tokens"]
+        evals[str(eid)] = {**{k: best.get(k) for k in _BASELINE_KEYS}, "commit": commit, "dirty": dirty,
+                           "runs": [{**{k: r["tokens"].get(k) for k in _BASELINE_KEYS}, "undecided": r.get("undecided")}
+                                    for r in kept]}
     if not recorded:
         raise ValueError(f"기록할 eval이 없다: total이 기록된 run 없음 (빠진 run 수 {skipped})")
     data = {"model": model, "date": date.today().isoformat(), "commit": commit, "dirty": dirty,
@@ -1976,7 +2022,7 @@ def grade(eid: int, run_dir: Path, env_dir: Path, assertions: list[str], budget:
     execution = json.loads(execution_path.read_text(encoding="utf-8")) if execution_path.is_file() else {}
     interrupted = execution.get("status") in ("blocked", "error", "timeout")
     tokens = execution_tokens(execution)
-    budget_row = token_budget_row(eid, tokens, budget)
+    budget_row = token_budget_row(eid, tokens, budget, run_model(execution))
     if missing or interrupted:
         reason = str(execution.get("reason", execution["status"])) if interrupted else f"실행 기록 없음: {', '.join(missing)}"
         rows = [{"text": text, "passed": None, "evidence": reason, "source": "execution"}
@@ -2029,9 +2075,14 @@ def grade(eid: int, run_dir: Path, env_dir: Path, assertions: list[str], budget:
     return result
 
 
-def _git_head() -> tuple[str, bool]:
-    repo = HERE.parents[1]
-    return git(repo, "rev-parse", "HEAD").strip(), bool(git(repo, "status", "--porcelain").strip())
+def baseline_exclusion(execution: dict, result: dict) -> str | None:
+    """기준선 후보에서 뺄 이유. 완료된 실행·채점(graded)이고 토큰 상한 외 실패 항목이 없어야 한다(미결정·수동 항목은 허용)."""
+    if execution.get("status") != "completed":
+        return f"실행 상태 {execution.get('status') or '기록 없음'}"
+    if result["status"] != "graded":
+        return f"채점 상태 {result['status']}"
+    failed = [x for x in result["expectations"] if x["text"] != TOKEN_BUDGET_TEXT and x["passed"] is False]
+    return f"실패 항목 {len(failed)}개" if failed else None
 
 
 def main() -> int:
@@ -2076,16 +2127,22 @@ def main() -> int:
             tokens = r.get("tokens")
             row = next((x for x in r["expectations"] if x["text"] == TOKEN_BUDGET_TEXT), None)
             entry = ((budget or {}).get("baseline") or {}).get("evals", {}).get(str(e["id"]))
-            verdict = "-" if budget is None else ("기준선 없음" if entry is None else
-                      "미실행" if tokens is None else {True: "통과", False: "초과", None: "미기록"}[row["passed"]])
+            execution = json.loads(_read(run_dir / "execution.json") or "{}")
+            model = run_model(execution)
+            held = ("모델 불일치" if model and budget["baseline"].get("model") else "모델 미기록") if row and row.get("hold") else None
+            verdict = "-" if budget is None else ("기준선 없음" if entry is None else "미실행" if tokens is None else
+                      held or {True: "통과", False: "초과", None: "미기록"}[row["passed"]])
             if row and row["passed"] is not True:
                 exit_code = 1
             table.append({"eid": e["id"], "status": r["status"], "tokens": tokens, "budget": budget is not None,
                           "limit": None if entry is None else token_limit(entry["total"], budget["margin"]), "verdict": verdict})
-            if tokens is not None:
-                measured.setdefault(e["id"], []).append(tokens)
-                execution = json.loads(_read(run_dir / "execution.json") or "{}")
-                model = execution.get("model") or execution.get("init_model")   # --model 값 → init 이벤트. by_model로 추정하지 않는다
+            why = baseline_exclusion(execution, r)
+            if args.write_baseline and why:
+                print(f"기준선 제외: {it.name} eval {e['id']} — {why}", file=sys.stderr)
+            if tokens is not None and not why:
+                undecided = sum(1 for x in r["expectations"] if x["text"] != TOKEN_BUDGET_TEXT and x["passed"] is None)
+                measured.setdefault(e["id"], []).append({"tokens": tokens, "commit": execution.get("repo_commit"),
+                                                         "dirty": execution.get("repo_dirty"), "undecided": undecided})
                 models.add(model) if model else None
                 undetermined += not model
         if table:
@@ -2096,9 +2153,8 @@ def main() -> int:
             print(f"기준선을 쓰지 않음: 측정된 eval {sorted(measured)}, 모델 {sorted(models)}, 모델 미기록 run {undetermined} "
                   "(모든 run의 모델이 하나로 정해져야 한다)", file=sys.stderr)
             return 2
-        commit, dirty = _git_head()
         try:
-            data, skipped = write_baseline(Path(args.write_baseline), measured, next(iter(models)), commit, dirty)
+            data, skipped = write_baseline(Path(args.write_baseline), measured, next(iter(models)))
         except ValueError as exc:
             print(f"기준선을 쓰지 않음: {exc}", file=sys.stderr)
             return 2

@@ -111,7 +111,7 @@ description에 대한 정적 리뷰는 실제 Claude 스킬 자동 선택 및 �
 
 ## 토큰 기록
 
-`run.py --execute`는 stream-json `result` 이벤트에서 토큰을 읽어 `execution.json`의 `tokens`에 남긴다(기존 `usage`·`total_cost_usd`는 그대로, `model`은 `--model` 값 또는 `null`).
+`run.py --execute`는 stream-json `result` 이벤트에서 토큰을 읽어 `execution.json`의 `tokens`에 남긴다(기존 `usage`·`total_cost_usd`는 그대로, `model`은 `--model` 값 또는 `null`). 실행 시작 때의 레포 커밋도 `repo_commit`·`repo_dirty`로 남긴다(못 읽으면 `null`, iteration 디렉토리가 레포 안이면 그 디렉토리는 dirty 판정에서 뺀다).
 `prepare-only`는 `tokens`가 없다(표에서 "미실행"). 시간 초과 등 result가 없으면 값이 모두 `null`이다.
 
 ```
@@ -126,6 +126,7 @@ tokens: {input, output, cache_creation, cache_read, total,   # modelUsage 모델
   옛 `execution.json`(modelUsage 없음)은 `usage_total`만 채우고 `total`은 `null`이다. `total`을 `usage_total`로 대신하지 않는다.
 - 정수가 아닌 값·빠진 키는 `null`이고 0으로 채우지 않는다. 합은 구성 값이 하나라도 `null`이면 `null`이다. 표에서 `null`은 "미기록", 실행하지 않은(없음·prepared) eval은 "미실행"이다.
 - 이벤트 로그(`events.jsonl`)를 합산한 하한값은 만들지 않는다(후속).
+- **토큰과 비용은 따로 움직인다.** 캐시 읽기·쓰기 구성에 따라 단가가 달라서다. eval 1 W0 실측: 712,767토큰 $0.444, 743,146토큰 $0.408. 판정은 `total`로만 하고 비용·`cache_read` 비율은 근거에 보고만 한다.
 
 `grade.py`는 iteration마다 eval별 표(`eval | status | input | cache_create | cache_read | output | total | usage_total | turns | cost | 상한 | 판정`)를 출력하고
 같은 내용을 `<iteration>/tokens.json`(작업 폴더, 커밋 대상 아님)에 쓴다. 기준선 없음 → "기준선 없음", `--token-budget` 없음 → "-".
@@ -137,9 +138,10 @@ python3 tests/skill_evals/grade.py <iteration> --eval 1 2 45 --token-budget [PAT
 ```
 
 - `--token-budget`은 `token_baseline.json`(PATH 생략 시 `tests/skill_evals/token_baseline.json`)을 읽어 eval마다 상한 = 기준선 `total` × 여유율(올림)로 판정한다. 숫자를 직접 받지 않는다. 반복 경로 뒤에 둔다.
-- 기준선에 그 eval이 있으면 채점 항목 "토큰 총합 ≤ 상한(기준선 × 여유율)"(source `script`, 근거에 실제 값·상한)이 하나 늘고, 초과는 실패, `total`이 `null`이면 판정 보류(`passed: null`)다. 기준선에 없으면 항목을 만들지 않는다. 기준선에 있어도 실행하지 않은(미실행) eval에는 판정 항목을 만들지 않고 종료 코드에 영향이 없다(표에 "미실행"). 통과가 아니다. 중단(incomplete)된 run은 상한 항목만 결정되면 `summary`에 반영하고 나머지는 미결정 그대로다.
+- 기준선에 그 eval이 있으면 채점 항목 "토큰 총합 ≤ 상한(기준선 × 여유율)"(source `script`, 근거 `total=… 상한=… (기준선 … × 여유율 …) cost=$x (기준선 $y) cache_read=…%`)이 하나 늘고, 초과는 실패, `total`이 `null`이면 판정 보류(`passed: null`)다.
+  run 모델은 `init_model`(실제로 돈 모델), 없을 때만 `model`(`--model` 값)이다. 기준선 `model`과 다르거나 어느 쪽이 미기록이면 판정 보류(`passed: null`, 항목 `hold: true`, 표 "모델 불일치"/"모델 미기록")다. 별칭으로 돌린 run(`--model sonnet`)도 `init_model`이 기준선 모델과 같으면 판정하고, `--model`이 같아도 `init_model`이 다르면 보류다. 기준선 파일에 `model`이 없으면 형식 오류(종료 2)다. 기준선에 없으면 항목을 만들지 않는다. 기준선에 있어도 실행하지 않은(미실행) eval에는 판정 항목을 만들지 않고 종료 코드에 영향이 없다(표에 "미실행"). 통과가 아니다. 중단(incomplete)된 run은 상한 항목만 결정되면 `summary`에 반영하고 나머지는 미결정 그대로다.
 - 여유율: `--token-margin` > 기준선 파일의 `margin_default` > 코드 상수 `DEFAULT_TOKEN_MARGIN`. 지금 값은 1.3이다. 근거(W0 실측, `claude-sonnet-5-5`, 10/06): eval 1을 3회 돌려 총합 680,589~743,146(최소 대비 폭 9%, 턴 20~22). 기준선 대표값은 최댓값이므로 1.3은 관측 폭의 약 3배 여유다. eval 2·45는 1회씩이라 편차를 재지 않았다. 표본이 적어 넉넉히 잡았고, 오판정이 잦으면 run을 늘려 기준선을 다시 쓴다.
-- 종료 코드: 판정 항목 가운데 초과 또는 미기록이 하나라도 있으면 1, 기준선 파일이 없거나 JSON·형식 오류이면 2(메시지 출력). `--token-budget`이 없으면 채점 결과·종료 코드가 이전과 같다.
+- 종료 코드: 판정 항목 가운데 초과·토큰 미기록·모델 불일치·모델 미기록이 하나라도 있으면 1, 기준선 파일이 없거나 JSON·형식 오류이면 2(메시지 출력). `--token-budget`이 없으면 채점 결과·종료 코드가 이전과 같다.
 
 ### 기준선
 
@@ -147,11 +149,13 @@ python3 tests/skill_evals/grade.py <iteration> --eval 1 2 45 --token-budget [PAT
 python3 tests/skill_evals/grade.py <iteration>... --eval 1 2 45 --write-baseline tests/skill_evals/token_baseline.json
 ```
 
-기준선은 같은 모델로 잰 `--execute` iteration(여러 개 가능)에서 만든다. eval마다 `total`이 기록된 run을 모아 `runs`에 남기고 **대표값은 `total`이 가장 큰 run**이다(상한 판정이 보수적).
-모델은 `execution.json`의 `model`(`--model` 값) → `init_model`(stream-json init 이벤트) 순으로 정하고 모든 run이 같은 하나여야 한다. `by_model` 키로는 추정하지 않는다(보조 모델이 항상 섞인다). 기준선 실측은 `--model`에 전체 모델 ID(예: claude-sonnet-5-5)를 준다. 별칭이면 기록도 별칭이다.
+기준선은 같은 모델로 잰 `--execute` iteration(여러 개 가능)에서 만든다. 후보는 실행 `completed`·채점 `graded`이고 토큰 상한 외 실패 항목이 없는 run뿐이다(미결정·수동 항목은 허용하고 run마다 `undecided` 수를 남긴다). 뺀 run은 이유와 함께 stderr에 낸다.
+eval마다 `total`이 기록된 run을 모아 `runs`에 남기고 **대표값은 `total`이 가장 큰 run**이다(상한 판정이 보수적). run·대표값마다 `input`·`output`·`cache_creation`·`cache_read`·`total_cost_usd`도 남긴다(보고용).
+`commit`·`dirty`는 run 시점 기록(`repo_commit`·`repo_dirty`)에서 가져와 eval 항목마다 남기고, 최상위 값은 마지막으로 쓴 것이다(호환용). 모든 run이 같은 커밋이어야 하고 `dirty`는 하나라도면 참이다. 채점 시점 HEAD로 대신하지 않는다. 지금 `token_baseline.json`(10/06)의 `commit`은 이 변경 전이라 채점 시점 값이다.
+모델은 `execution.json`의 `init_model`(stream-json init 이벤트) → 없을 때만 `model`(`--model` 값) 순으로 정하고 모든 run이 같은 하나여야 한다. `by_model` 키로는 추정하지 않는다(보조 모델이 항상 섞인다). 기준선 실측은 `--model`에 전체 모델 ID(예: claude-sonnet-5-5)를 준다. 별칭으로 돌려도 init 이벤트가 있으면 전체 ID로 기록된다(없으면 별칭).
 `total`이 `null`인 run은 빠진 수를 출력하고 제외한다. 이미 있는 파일은 이번에 재지 않은 eval과 `margin_default`·`margin_basis`를 유지한다.
 
-`--write-baseline`은 측정된 eval이 없거나, 모델을 정할 수 없거나, 기존 파일과 모델이 다르거나, 기존 파일이 깨졌으면 파일을 쓰지 않고 종료 코드 2다.
+`--write-baseline`은 후보 run이 없거나, 모델을 정할 수 없거나, run 시점 커밋이 없거나 섞였거나, 기존 파일과 모델이 다르거나, 기존 파일이 깨졌으면 파일을 쓰지 않고 종료 코드 2다.
 
 ```
 {"model", "date", "commit", "dirty", "margin_default", "margin_basis",

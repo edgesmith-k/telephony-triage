@@ -11,7 +11,7 @@ argument-hint: "[category]"
 
 인자: `$ARGUMENTS` (카테고리 키, 선택)
 
-1. **카테고리 정하기** — 인자가 있으면 그 카테고리. 없으면 `db_review.py --json`을 먼저 한 번 돌려 `owners`
+1. **카테고리 정하기** — 인자가 있으면 그 카테고리. 없으면 `db_review.py --owners`(리뷰는 돌리지 않는다)로 `categories`와 `owners`
    (CODEOWNERS의 카테고리별 오너)를 보여주고, 사용자가 오너인 카테고리를 **묻는다**(전체를 볼 수도 있다).
    종료 코드 2(없는 카테고리 등)면 메시지를 보여주고 다시 묻는다.
 2. **리포트 만들기** — `db_review.py <category> --out <work_dir>/review-<category>-<YYYY-MM>/report.md`

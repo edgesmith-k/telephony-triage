@@ -91,8 +91,8 @@ MCP `tracker.tools.get_issue`(매핑이 없으면 추측하지 말고 setup 안�
 
 ## 7. 초안 검증
 
-새 원인·유형 또는 시그니처·파서 규칙 변경이 있으면 `db_verify.py rules --plan WD/<KEY>/plan.json --draft WD/<KEY>/draft --verbose`(draft는 도구가 만들고 지운다 — 미리 만들지 않는다)로 검증하고
-결과표(실행/건너뜀과 사유)를 보여준다. `fail`이면 고친다. 다른 유형의 양성 fixture에서 C=1이면 "시그니처 좁히기 / `allow-cause`"를 묻는다.
+새 원인·유형 또는 시그니처·파서 규칙 변경이 있으면 `db_verify.py rules --plan WD/<KEY>/plan.json --draft WD/<KEY>/draft`(draft는 도구가 만들고 지운다 — 미리 만들지 않는다)로 검증하고
+결과표(실행/건너뜀과 사유)를 보여준다. 기본 출력은 통과 행만 접는다(fail·skipped·needs-approval·review_required·allow_cause_drafts는 그대로). 접힌 세부가 필요하면 같은 명령에 `--verbose`. `fail`이면 고친다. 다른 유형의 양성 fixture에서 C=1이면 "시그니처 좁히기 / `allow-cause`"를 묻는다.
 
 어떤 검증이 도는지(`db_pr stage`가 모두 돌린다):
 

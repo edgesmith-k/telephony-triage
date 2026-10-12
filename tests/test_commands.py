@@ -136,6 +136,22 @@ def test_reference_calls_use_flags_the_scripts_accept():
     assert pub.commit is False and pub.and_discard is False
 
 
+def test_token_waste_wording_in_review_record_and_search():
+    """review 1단계는 오너만(`--owners`, 전체 리뷰 안 돌림), record 초안 검증은 기본(접힌) 출력, search는 질의가
+    keyword일 때만 키·ID로 다시 검색한다."""
+    review = (COMMANDS / "review.md").read_text(encoding="utf-8")
+    assert "db_review.py --owners" in review and "`db_review.py --json`을 먼저" not in review
+    record = (REFERENCE / "record.md").read_text(encoding="utf-8")
+    line = next(l for l in record.splitlines() if "db_verify.py rules --plan" in l and "--draft" in l)
+    assert "--verbose" not in line.split("`")[1]
+    assert "접힌 세부가 필요하면 같은 명령에 `--verbose`" in record
+    search = (REFERENCE / "search.md").read_text(encoding="utf-8")
+    assert "최상위 `kind`(질의 종류)가 `keyword`이고" in search
+    assert "최상위 `kind`가 `type-id`·`cause-id`·`issue`이면 다시 부르지 않는다(결과 항목의 `kind`(type·cause·issue)와 다르다)" in search
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    import db_review
+    assert db_review.build_parser().parse_args(["--owners"]).owners is True
+
 
 def test_sync_sequence_lists_closed_pr_workdir_and_deletes_only_after_yes():
     ws = Workspace()

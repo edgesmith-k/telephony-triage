@@ -10,7 +10,7 @@
 
 `S/db_search.py --db SNAP "<문장>" --limit 10 --brief` (SNAP = `<work_dir>/_snapshot`, `work_dir`는 `config.py show --keys work_dir`의 값).
 스냅샷이 없으면(`sync`를 한 적이 없음) `--db`를 빼고(cwd의 이슈 DB 또는 config의 clone) "최신 main 기준이 아닐 수 있으니 `sync`를 권한다"고 알린다.
-문장에 Jira 키나 유형·원인 ID가 있으면 그 키로도 한 번 더 검색한다(정확 일치).
+첫 검색 출력의 최상위 `kind`(질의 종류)가 `keyword`이고 문장에 Jira 키나 유형·원인 ID가 있으면 그 키로 한 번 더 검색한다(정확 일치·ID 연결). 질의 자체가 키·ID여서 최상위 `kind`가 `type-id`·`cause-id`·`issue`이면 다시 부르지 않는다(결과 항목의 `kind`(type·cause·issue)와 다르다).
 
 ## 2. 결과가 0건일 때
 

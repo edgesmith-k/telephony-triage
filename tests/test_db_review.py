@@ -124,6 +124,30 @@ def test_category_scope_and_owners():
     assert proc.returncode == 2 and "nope" in proc.stderr
 
 
+def test_owners_only_lists_categories_and_owners_without_review(monkeypatch, capsys):
+    """review 커맨드 1단계: 리뷰를 돌리지 않고 카테고리·CODEOWNERS 오너만 낸다."""
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    import db_review
+    from runner import plugin_root
+
+    def no_review(self):
+        raise AssertionError("--owners는 리뷰를 돌리지 않는다")
+
+    monkeypatch.setattr(db_review.Review, "run", no_review)
+    assert db_review.main(["--db", str(REVIEW_DB), "--owners", "--plugin-root", str(plugin_root())]) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert set(out) == {"db", "categories", "owners"} and out["db"] == str(REVIEW_DB)
+    assert "sms" in out["categories"] and set(out["owners"]) == set(out["categories"])
+    assert out["owners"]["sms"] == ["@mock-org/telephony-sms-owners"]
+    assert out["owners"] == _review(REVIEW_DB)["owners"]
+    for extra in (["sms"], ["--out", str(tmp() / "r.md")], ["--as-of", AS_OF]):
+        proc = run("db_review.py", ["--db", REVIEW_DB, "--owners", *extra])
+        assert proc.returncode == 2 and "--owners" in proc.stderr and not proc.stdout, extra
+    missing = tmp() / "none"                                    # DB 오류는 리뷰와 같은 메시지·종료 코드
+    owners, review = (run("db_review.py", ["--db", missing, flag]) for flag in ("--owners", "--json"))
+    assert owners.returncode == review.returncode == 2 and owners.stderr == review.stderr and owners.stderr
+
+
 def test_stale_periods_come_from_git_history():
     db = _dated_repo()
     report = _review(db)
