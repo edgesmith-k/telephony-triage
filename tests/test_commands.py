@@ -172,7 +172,7 @@ def _age(path: Path, days: int = 120) -> None:
 def _raw_job(ws, name: str, *, age: int | None = 120, logs: bool = True) -> Path:
     job = ws.work / name
     job.mkdir(parents=True)
-    (job / "jira_raw.json").write_text("{}", encoding="utf-8")
+    (job / "issue_raw.json").write_text("{}", encoding="utf-8")
     if logs:
         (job / "logs").mkdir()
         (job / "logs" / "radio.txt").write_text("raw", encoding="utf-8")
@@ -181,13 +181,30 @@ def _raw_job(ws, name: str, *, age: int | None = 120, logs: bool = True) -> Path
     return job
 
 
+def test_cleanup_sees_jobs_left_with_pre_rename_file_names():
+    """개명 전 작업 파일(jira_raw.json·jira.json·jira_meta.json)만 남은 옛 JOB도 cleanup 대상이고 원문 잔여로 보인다(방어)."""
+    ws = Workspace()
+    for name, files in (("OLD-1", ("jira_raw.json",)), ("OLD-2", ("jira.json", "jira_meta.json"))):
+        job = ws.work / name
+        job.mkdir(parents=True)
+        for f in files:
+            (job / f).write_text("{}", encoding="utf-8")
+        _age(job, 120)
+    unpub = ws.plan("MOCK-7003", "p7-analyze-append.plan.json").parent
+    (unpub / "jira_raw.json").write_text("{}", encoding="utf-8")
+    _age(unpub)
+    dry = ws.db_pr("cleanup", "--dry-run", "--older-than")
+    assert {t["job"] for t in dry["targets"] if t["kind"] == "job-dir"} == {"OLD-1", "OLD-2"}
+    assert {r["job"]: r["raw_remains"] for r in dry["retained"]} == {"MOCK-7003": True}
+
+
 def test_cleanup_older_than_candidates_are_tool_jobs_only_and_dry_run_equals_yes():
     ws = Workspace()
     raw = _raw_job(ws, "RAW-1")                                      # 원문만 남은 중단 작업(plan.json 없음)
     recent = _raw_job(ws, "RECENT-1", age=None)
     copied = _raw_job(ws, "COPIED-1", age=None)                      # 방금 만든 폴더에 옛 mtime 파일을 복사
     old = time.time() - 120 * 86400
-    os.utime(copied / "jira_raw.json", (old, old))
+    os.utime(copied / "issue_raw.json", (old, old))
     empty = ws.work / "EMPTY-NEW"
     (empty / "logs").mkdir(parents=True)                             # 방금 만든 빈 폴더(표식만)
     photos = ws.work / "photos"                                      # 도구와 무관한 폴더
@@ -244,7 +261,7 @@ def test_cleanup_older_than_reports_failed_when_directory_remains(tmp_path, monk
     job = ctx.work_dir / "RAW-9"
     (job / "logs").mkdir(parents=True)
     (job / "logs" / "r.txt").write_text("raw", encoding="utf-8")
-    (job / "jira_raw.json").write_text("{}", encoding="utf-8")
+    (job / "issue_raw.json").write_text("{}", encoding="utf-8")
     _age(job)
     monkeypatch.setattr(module.shutil, "rmtree", lambda *a, **k: None)      # 지우지 못하는 상황
     out = module.cleanup(ctx, True, 90)

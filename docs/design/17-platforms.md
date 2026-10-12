@@ -54,7 +54,7 @@ parser_backends/<p>_reference/          # 그 플랫폼 BACKEND 재수출 (andro
 - 프로필: android가 아닌 플랫폼의 cfg는 공통 키에 `platforms.<p>`를 얹은 것이고 android 값을 **물려받지 않는다**(ofono 프로필이 실수로 android clone을 가리킬 수 없다). 기본 `work_dir` `<home>/work-<p>`, 보류 피드백 `<home>/pending-feedback-<p>`. 최상위 프로필 없는 config(따로 설치)도 된다.
 - 경로 규칙(`userconfig.path_problems`): `work_dir`·`issue_db.path`는 비어 있지 않은 절대 경로(`~` 허용), `work_dir`은 clone 밖, 프로필끼리 `work_dir`·clone·원격 겹침 금지. `platforms.<p>`의 프로필 밖 키(예: `source_tree`)는 거부(RF-4). `config.py show`·`set`·`doctor`는 이런 문제가 있어도 동작하고(set 경고, doctor `platform` 행 fail), 그 밖 스크립트는 종료 코드 2.
 - `--db`가 없을 때의 대체 경로(사용자 config `issue_db.path`, `common/dbpath`의 ③)도 **선택 플랫폼** 프로필의 값이다(`db_add`·`db_search`·`db_review`·`config`·`code_roots`). 이 스크립트들도 이슈 DB 선언과 선택 플랫폼을 대조한다(`platform-mismatch`). 단 `db_add`의 `apply`·`drift`·`renumber`·`check-ids`는 `db_pr publish`·`db_verify`·stage 검사가 그 DB에 대고 부르는 **DB 고정** 하위 명령이라 DB 선언을 따르고, `--platform`·`TT_PLATFORM`이 있을 때만 대조한다(사용자 config 없이 도는 비기본 DB 검사가 막히지 않게). 사용자 흐름인 `similar`는 항상 대조한다.
-- 쓰기: `config.py set --platform <p> <키>`·`code_roots remember`는 `profile_key(p, key)`(android면 그 키, 그 밖 `platforms.<p>.<키>`)에 쓴다. `config.py init --platform <p>`는 그 프로필만 더한다(Jira·gh 설정은 공유).
+- 쓰기: `config.py set --platform <p> <키>`·`code_roots remember`는 `profile_key(p, key)`(android면 그 키, 그 밖 `platforms.<p>.<키>`)에 쓴다. `config.py init --platform <p>`는 그 프로필만 더한다(트래커(`tracker.*`)·gh 설정은 공유).
 - 출력: `analysis.json`·lock 기록·`triage-state.json`의 `platform`은 android가 아닐 때만. 라벨은 `SPEC.label`. 같은 작업 키를 다른 플랫폼으로 다시 실행하면 종료 코드 2.
 
 ## 3. 플랫폼별 lock
@@ -64,7 +64,7 @@ lock·`session.guard`는 각 플랫폼 `work_dir`에 있다(`Lock(work_dir, plat
 ## 4. 이슈 DB 분리와 `platform-mismatch`
 
 - 선언: `issue-db.config.yaml` 최상위 `platform: <name>`(없으면 android, android 샘플에는 넣지 않는다). `db_lint`가 형식과 설치 여부(`known()`)를 본다.
-- 버전 키: `platform_versions_supported`(새 키)가 먼저, 없으면 `android_versions_supported`. 둘 다 있으면 `db_lint` config 오류.
+- 버전 키: `platform_versions_supported`. 옛 이름 `android_versions_supported`는 읽지 않고 `db_lint` config 오류다(트래커 범용화 때 원칙 (d)로 정리, `18-trackers.md` T4).
 - 세션 선택과 DB 선언이 다르면 **거부**(`platform-mismatch`, `contracts.md §공통 규칙`). 분석도 멈춘다(읽기 전용으로 계속하지 않는다). 원인·해결책이 다른 DB에 대고 매칭하는 것은 의미가 없기 때문이다.
 - 옛 플러그인 + oFono DB: 옛 플러그인은 `platform`을 모르고 android로 보지만, oFono DB의 `parser_backend.name`(`ofono_reference`)이 백엔드 불일치를 일으켜 쓰기가 막힌다. oFono DB는 이 플랫폼 분리가 들어간 플러그인부터 쓴다.
 - 카테고리 목록은 그 DB의 `categories`, 로그 출처 → 카테고리 매핑은 그 DB의 `parser-rules/tags.yaml`이 정한다(코드에 카테고리 6종 가정 없음).
@@ -101,7 +101,7 @@ lock·`session.guard`는 각 플랫폼 `work_dir`에 있다(`Lock(work_dir, plat
 | K6 | DB에 고정된 도구는 DB 선언 플랫폼, 사용자 세션 흐름은 선택과 DB 선언을 대조 | oFono DB의 CI는 사용자 config 없이 돈다. `parse_logcat`은 사용자 config를 읽지 않는다 |
 | K7 | **RF-4 유지**: 플랫폼 상수(정규식·디렉토리·태그·섹션 헤더)는 site-defaults에서만. 사용자 config는 이름 선택과 경로 프로필만, `platforms.<p>`의 그 밖 키는 거부 | 상수는 결정적 파서 출력과 이슈 DB 회귀 기준을 정한다. 사람마다 다르면 같은 fixture가 다르게 판정된다. 이번 요구는 "어느 상수 묶음을 쓸지 고르기"다 |
 | K8 | 출력 `platform` 키는 android 아닐 때만, 라벨은 `SPEC.label` | android 바이트 불변, 기존 "있을 때만" 키 관례 |
-| K9 | 스키마 필드 `android_version(s)`·`code_profiles[].android_version`은 이름 유지, 의미만 "플랫폼 버전". DB 키는 `platform_versions_supported`(옛 키 대체) | 개명은 이슈 DB 마이그레이션이 필요하다. jira→tracker 개명과 함께 한다 |
+| K9 | (해소, 트래커 범용화) 스키마 필드 `android_version(s)`·`code_profiles[].android_version`·`field_map.android_version`을 `platform_version(s)`로 개명했다. DB 키는 `platform_versions_supported` 하나(옛 키는 읽지 않고 `db_lint` config 오류) | 처음에는 이슈 DB 마이그레이션이 필요해 미뤘다. 배포된 이슈 DB가 없어 원칙 (d)로 v1을 직접 고쳤다(`18-trackers.md` T4·T10). 옛 사용자 config 키는 감지만 한다(T5) |
 | K10 | 짝 규칙은 `SPEC.protocols`(0개 이상), 비-ril은 `proto` 주석, `pair`는 자기 주석만. `ril.yaml` 요청 이름은 DB 전체에서 유일 | oFono는 RIL 계층과 D-Bus 등 둘 이상일 수 있다 |
 | K11 | 카테고리는 플랫폼 DB `categories`, 출처 → 카테고리는 플랫폼 DB `tags.yaml` | 코드에 카테고리 가정 없음(조사 결과) |
 
@@ -111,6 +111,5 @@ lock·`session.guard`는 각 플랫폼 `work_dir`에 있다(`Lock(work_dir, plat
 
 - **oFono 실제 파서 규칙·이슈 DB 내용**: 사내 로그를 받은 뒤 사내 모드에서(S24~S29, `docs/development/OFONO_LOG_COLLECTION.md`). 지금 `platforms/ofono`는 형식 가정(journald `short-iso-precise`·BSD syslog) placeholder이고 합성 로그로 전환만 검증한다. 실제 로그·형식은 사외로 가져오지 않는다.
 - **`external_parsers`는 기본 플랫폼만** 쓴다(그 밖 플랫폼은 `{}`). 비기본 플랫폼 어댑터는 필요할 때 `platform.others`·DB `external_parsers`와 함께 정한다.
-- **Jira 필드 플랫폼별 덮어쓰기**: `jira.field_map` 등은 플랫폼끼리 공유한다. oFono Jira 프로젝트가 다르면 `platforms.<p>.jira` 덮어쓰기(`PROFILE_KEYS` 확장)를 다음 작업으로(S28).
-- **스키마 필드 개명**(`android_version(s)` → 플랫폼 중립 이름): jira→tracker 개명과 함께(K9).
+- **트래커 설정 플랫폼별 덮어쓰기**: `tracker.*`(트래커 종류·`field_map` 등)는 플랫폼끼리 공유한다. oFono 트래커나 프로젝트가 다르면 `platforms.<p>.tracker` 덮어쓰기(`PROFILE_KEYS` 확장)를 다음 작업으로(S28·S32, `18-trackers.md` T9).
 - parser-rules 스키마가 `ril.yaml` 항목 1개 이상을 요구해 oFono DB에 placeholder 항목이 필요하다 — 실제 짝 규칙이 정해질 때 프로토콜별 파일 체계와 함께 스키마를 고친다.

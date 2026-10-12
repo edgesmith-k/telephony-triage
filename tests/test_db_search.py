@@ -61,7 +61,7 @@ causes:
     fix: {status: open, ref: null, fixed_in: [], verification: null, verification_history: []}
     related: []
     cp_evidence: null
-    android_versions: []
+    platform_versions: []
     code_refs: []
 tags: [data-evaluation]
 ---
@@ -87,7 +87,7 @@ date: 2026-09-26
 occurred_on: 2026-09-26
 model: MOCK-A56
 sw: MOCKA56_U1_20260920
-android_version: "16"
+platform_version: "16"
 carrier: MockTel KR
 analyzed_by: mock-user1
 note: 부팅 직후 데이터 안 됨
@@ -97,12 +97,12 @@ note: 부팅 직후 데이터 안 됨
 def _source_db() -> Path:
     """샘플 + 중복 유형 DATA-009 (운영 이슈 DB처럼 lint·회귀를 통과하는 트리)."""
     db = copy_db(SAMPLE, "src")
-    (db / DATA2 / "jira").mkdir(parents=True)
+    (db / DATA2 / "issues").mkdir(parents=True)
     (db / DATA2 / "fixtures").mkdir()
     (db / DATA2 / "type.md").write_text(DATA_002, encoding="utf-8", newline="\n")
-    (db / DATA2 / "jira/MOCK-1201.yaml").write_text(JIRA_1201, encoding="utf-8", newline="\n")
+    (db / DATA2 / "issues/MOCK-1201.yaml").write_text(JIRA_1201, encoding="utf-8", newline="\n")
     unresolved = JIRA_1201.replace("MOCK-1201", "MOCK-1202").replace("cause: DATA-009-01", "cause: unresolved")
-    (db / DATA2 / "jira/MOCK-1202.yaml").write_text(unresolved, encoding="utf-8", newline="\n")
+    (db / DATA2 / "issues/MOCK-1202.yaml").write_text(unresolved, encoding="utf-8", newline="\n")
     shutil.copyfile(SIM_LOG, db / DATA2 / "fixtures/DATA-009-01.log")
     return db
 
@@ -114,11 +114,11 @@ def _cause(type_md: str, cause_id: str) -> dict:
 
 def _move_plan(old_cause: dict) -> dict:
     body = {k: old_cause[k] for k in ("title", "description", "signatures", "recovery_signatures",
-                                      "scenario_signatures", "resolution", "resolution_type", "android_versions",
+                                      "scenario_signatures", "resolution", "resolution_type", "platform_versions",
                                       "code_refs")}
     return {
         "source": "move", "schema_version": 1, "started_at": "2026-10-20T10:00+09:00",
-        "base_sha": None, "jira": None,
+        "base_sha": None, "issue": None,
         "operations": [
             {"op": "new-cause", "temp_id": "NEW-CAUSE-1", "type": "DATA-001", "cause": body,
              "body": "- DATA-009-01에서 옮겨 옴 (병합)."},
@@ -126,9 +126,9 @@ def _move_plan(old_cause: dict) -> dict:
              "path": f"{DATA2}/fixtures/DATA-009-01.log"},
             {"op": "set-status", "id": "DATA-009-01", "status": "merged-into:NEW-CAUSE-1"},
             {"op": "set-status", "id": "DATA-009", "status": "merged-into:DATA-001"},
-            {"op": "reclassify", "jira": "MOCK-1201", "from": "DATA-009-01", "to": "NEW-CAUSE-1"},
+            {"op": "reclassify", "issue": "MOCK-1201", "from": "DATA-009-01", "to": "NEW-CAUSE-1"},
             # 원인 미확정 Jira도 흡수하는 유형으로 옮긴다
-            {"op": "reclassify", "jira": "MOCK-1202", "from": "unresolved", "to": "DATA-001:unresolved"},
+            {"op": "reclassify", "issue": "MOCK-1202", "from": "unresolved", "to": "DATA-001:unresolved"},
         ],
         "feedback": None,
         "commit_message": "[DATA-009] move DATA-009 into DATA-001 (NEW-CAUSE-1)",
@@ -158,11 +158,11 @@ def test_move_merges_type_and_search_follows_old_ids():
     # 삭제하지 않는다: 옛 fixture와 유형 파일은 남고, Jira는 새 유형 디렉토리로 옮겨진다
     files = ws.remote_files(branch)
     assert f"{DATA2}/fixtures/DATA-009-01.log" in files and f"{DATA}/fixtures/DATA-001-03.log" in files
-    assert f"{DATA2}/jira/MOCK-1201.yaml" not in files
-    jira = yaml.safe_load(ws.remote_file(branch, f"{DATA}/jira/MOCK-1201.yaml"))
+    assert f"{DATA2}/issues/MOCK-1201.yaml" not in files
+    jira = yaml.safe_load(ws.remote_file(branch, f"{DATA}/issues/MOCK-1201.yaml"))
     assert jira["cause"] == "DATA-001-03" and "reclassified from DATA-009-01" in jira["note"]
-    assert f"{DATA2}/jira/MOCK-1202.yaml" not in files
-    unresolved = yaml.safe_load(ws.remote_file(branch, f"{DATA}/jira/MOCK-1202.yaml"))
+    assert f"{DATA2}/issues/MOCK-1202.yaml" not in files
+    unresolved = yaml.safe_load(ws.remote_file(branch, f"{DATA}/issues/MOCK-1202.yaml"))
     assert unresolved["cause"] == "unresolved" and "reclassified from DATA-009:unresolved" in unresolved["note"]
     data_section = ws.remote_file(branch, "README.md").split("## Data", 1)[1].split("## Call", 1)[0]
     assert "MOCK-1202" in data_section
@@ -177,16 +177,16 @@ def test_move_merges_type_and_search_follows_old_ids():
         "merged-into:DATA-001-03"
     assert {"from": "DATA-009-01", "to": "DATA-001-03", "via": "merged-into"} in found["links"]
     new = found["results"][1]
-    assert new["merged_from"] == ["DATA-009-01"] and new["jira"] == ["MOCK-1201"]
+    assert new["merged_from"] == ["DATA-009-01"] and new["issues"] == ["MOCK-1201"]
     # 유형 ID로 찾아도 병합 대상 유형으로 이어진다
     by_type = run_json("db_search.py", ["--db", ws.clone, "DATA-009"])
     assert by_type["results"][0]["current"] == "DATA-001"
     assert {"from": "DATA-009", "to": "DATA-001", "via": "merged-into"} in by_type["links"]
     # Jira 키로 찾으면 옮겨진 기록과 새 원인
     by_jira = run_json("db_search.py", ["--db", ws.clone, "MOCK-1201"])
-    assert by_jira["kind"] == "jira"
+    assert by_jira["kind"] == "issue"
     assert [(r["kind"], r.get("id") or r.get("key")) for r in by_jira["results"]] == [
-        ("jira", "MOCK-1201"), ("cause", "DATA-001-03")]
+        ("issue", "MOCK-1201"), ("cause", "DATA-001-03")]
 
 
 def test_renumbered_trailer_links_old_and_new_id():
@@ -222,13 +222,13 @@ def test_keyword_and_jira_search_on_sample():
     first = found["results"][0]
     assert (first["kind"], first["id"]) == ("cause", "DATA-001-02")
     assert first["resolution"] == "데이터 로밍 설정을 켠다" and first["fix"]["status"] == "not-a-bug"
-    assert first["jira"] == ["MOCK-1103"] and found["git_history"] is False
-    assert any(r["kind"] == "jira" and r["key"] == "MOCK-1103" for r in found["results"])
+    assert first["issues"] == ["MOCK-1103"] and found["git_history"] is False
+    assert any(r["kind"] == "issue" and r["key"] == "MOCK-1103" for r in found["results"])
     limited = run_json("db_search.py", ["--db", SAMPLE, "않음", "--limit", "2"])
     assert len(limited["results"]) == 2
     jira = run_json("db_search.py", ["--db", SAMPLE, "MOCK-1104"])
     assert [(r["kind"], r.get("id") or r.get("key")) for r in jira["results"]] == [
-        ("jira", "MOCK-1104"), ("type", "DATA-001")]
+        ("issue", "MOCK-1104"), ("type", "DATA-001")]
     call = run_json("db_search.py", ["--db", SAMPLE, "CALL-001-01"])
     assert call["results"][0]["related"] == ["IMS-001-01"]
     assert call["results"][0]["secondary_categories"] == ["ims"]
@@ -240,9 +240,9 @@ def test_keyword_and_jira_search_on_sample():
 def test_failed_step_is_searchable_and_shown_only_when_present():
     from runner import copy_db
     db = copy_db()
-    edit(db / "data/DATA-001-no-setup-data-call/jira/MOCK-1101.yaml", "note: 모바일", "failed_step: 3 | Enable data\nnote: 모바일")
+    edit(db / "data/DATA-001-no-setup-data-call/issues/MOCK-1101.yaml", "note: 모바일", "failed_step: 3 | Enable data\nnote: 모바일")
     found = run_json("db_search.py", ["--db", db, "enable data"])
-    jira = [r for r in found["results"] if r["kind"] == "jira"]
+    jira = [r for r in found["results"] if r["kind"] == "issue"]
     assert [r["key"] for r in jira] == ["MOCK-1101"] and jira[0]["failed_step"] == "3 | Enable data"
     other = run_json("db_search.py", ["--db", db, "MOCK-1102"])
     assert "failed_step" not in other["results"][0]
@@ -262,9 +262,9 @@ def test_symptom_sentence_finds_data_issue_with_jira_numbers():
     assert [r["id"] for r in first] == ["DATA-001", "DATA-002", "DATA-001-01", "DATA-001-02", "DATA-002-01"]
     assert all(r["matched"] == ["데이터", "붙어"] and r["phrase"] is False for r in first)
     assert not any(i.startswith(("SIM-", "SMS-")) for i in _ids(found))
-    assert not any(r["kind"] == "jira" for r in found["results"])
-    assert first[0]["jira"] == ["MOCK-1104", "MOCK-1103", "MOCK-1102", "MOCK-1101"]
-    assert first[2]["jira"] == ["MOCK-1102", "MOCK-1101"] and first[2]["jira_latest"] == "2026-09-12"
+    assert not any(r["kind"] == "issue" for r in found["results"])
+    assert first[0]["issues"] == ["MOCK-1104", "MOCK-1103", "MOCK-1102", "MOCK-1101"]
+    assert first[2]["issues"] == ["MOCK-1102", "MOCK-1101"] and first[2]["issue_latest"] == "2026-09-12"
 
 
 def test_multiword_query_keeps_phrase_hit_first_and_filters_weak_hits():
@@ -332,7 +332,7 @@ def test_brief_drops_detail_keys_but_keeps_what_skills_read():
         assert all(v not in (None, "", [], {}) for v in entry.values())
     first = brief["results"][0]
     assert first["resolution"] == "데이터 로밍 설정을 켠다" and first["fix"]["status"] == "not-a-bug"
-    assert first["jira"] == ["MOCK-1103"] and first["matched"] and "score" in first and first["status"]
+    assert first["issues"] == ["MOCK-1103"] and first["matched"] and "score" in first and first["status"]
     assert len(json.dumps(brief)) < len(json.dumps(full))
     # 기본 출력은 그대로 (키 유지)
     assert dropped <= set(full["results"][0]) | {"type_title"} and "path" in full["results"][0]
@@ -358,10 +358,10 @@ def test_markdown_symptom_sentence_shows_only_keys_present_in_json():
     assert text.splitlines()[0] == f'검색: "{query}" (keyword, 단어: 데이터, 붙어)'
     line = next(l for l in text.splitlines() if l.startswith("이슈 번호:"))      # search.md §3-1
     keys = re.findall(r"[A-Z]+-\d+", line)
-    in_json = {k for r in found["results"] if r["kind"] != "jira" for k in r.get("jira", [])}
+    in_json = {k for r in found["results"] if r["kind"] != "issue" for k in r.get("issues", [])}
     assert keys and set(keys) <= in_json and len(keys) == len(set(keys))          # 결과에 있는 키만, 중복 없이
     assert keys[:4] == ["MOCK-1104", "MOCK-1103", "MOCK-1102", "MOCK-1101"]        # 결과 순서
-    assert set(re.findall(r"MOCK-\d+", text)) <= {k for r in found["results"] for k in (r.get("jira") or [r.get("key")])}
+    assert set(re.findall(r"MOCK-\d+", text)) <= {k for r in found["results"] for k in (r.get("issues") or [r.get("key")])}
     rows = [l for l in text.splitlines() if l.startswith("| ") and "유형 > 원인" not in l]
     assert [r.split("|")[1].split()[0] for r in rows][:3] == ["DATA-001", "DATA-002", "SETUP_DATA_CALL이"]
     assert "DATA-001-02 Roaming disabled | 데이터 로밍 설정을 켠다 (미검증)" in text   # §3-2: 미검증이면 그렇다고
@@ -376,7 +376,7 @@ def test_markdown_no_result_and_stopword_only_and_id_queries():
     none = _md(SAMPLE, "eSIM 다운로드가 안 돼, 이런 이슈 있었어?")
     assert none.splitlines()[0].endswith("(keyword, 단어: esim, 다운로드)") and "일치 없음 — 검색 단어: esim, 다운로드" in none
     assert "일치 없음" in _md(SAMPLE, "NOPE-009-01") and "(cause-id)" in _md(SAMPLE, "CALL-001-01").splitlines()[0]
-    assert "(jira)" in _md(SAMPLE, "MOCK-1104").splitlines()[0] and "| Jira MOCK-1104 (" in _md(SAMPLE, "MOCK-1104")
+    assert "(issue)" in _md(SAMPLE, "MOCK-1104").splitlines()[0] and "| Jira MOCK-1104 (" in _md(SAMPLE, "MOCK-1104")
 
 
 def test_markdown_shows_merged_current_and_renumbered_links():
@@ -402,7 +402,7 @@ def test_markdown_keeps_result_order_and_jira_rows_carry_matched():
     text = _md(SAMPLE, "IMS 등록 실패")
     rows = [l for l in text.splitlines() if l.startswith("| ") and "유형 > 원인" not in l]
     first = lambda e: (e.get("id") or e.get("key"))                      # noqa: E731
-    assert [e["kind"] for e in found["results"]][:2] == ["jira", "type"]   # Jira가 앞에 오는 결과도 순서를 바꾸지 않는다
+    assert [e["kind"] for e in found["results"]][:2] == ["issue", "type"]   # Jira가 앞에 오는 결과도 순서를 바꾸지 않는다
     assert len(rows) == len(found["results"])
     for row, entry in zip(rows, found["results"]):
         assert first(entry) in row.split("|")[1]
@@ -434,7 +434,7 @@ def test_format_json_is_default_and_brief_is_ignored_for_markdown():
 
 CAUSE_KEYS = {"kind", "id", "type", "type_title", "category", "title", "status", "current", "chain", "merged_from",
               "signatures_pending", "resolution", "resolution_type", "resolution_verification", "fix", "related",
-              "secondary_categories", "code_refs", "jira", "jira_count", "jira_latest", "path"}
+              "secondary_categories", "code_refs", "issues", "issue_count", "issue_latest", "path"}
 BLOCKED_REASON = "코드·설정 수정 유형({rtype})에 scenario·recovery 시그니처 없음 — update-signature 필요"
 
 

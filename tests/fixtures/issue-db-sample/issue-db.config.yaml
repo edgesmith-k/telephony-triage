@@ -8,8 +8,10 @@ schema_version: 1
 generator_version: 1
 ci_mode: local                       # local | actions | actions-build (13-actions.md)
 
-jira_base_url: https://jira.mock.invalid/browse/   # TODO(SITE:S17) 사내 Jira URL
-jira_key_regex: '[A-Z][A-Z0-9]+-\d+'               # TODO(SITE:S16) 사내 Jira 키 형식
+tracker:                             # 이슈 트래커 (kind가 없으면 jira)
+  kind: jira
+  base_url: https://jira.mock.invalid/browse/   # TODO(SITE:S17) 사내 Jira URL
+  key_regex: '[A-Z][A-Z0-9]+-\d+'               # TODO(SITE:S16) 사내 Jira 키 형식
 
 categories:                          # README 표시 순서, 이름, ID 접두어
   - {key: data,    name: Data,    id_prefix: DATA}
@@ -19,7 +21,7 @@ categories:                          # README 표시 순서, 이름, ID 접두�
   - {key: sms,     name: SMS,     id_prefix: SMS}
   - {key: ims,     name: IMS,     id_prefix: IMS}
 
-android_versions_supported: ["16", "17"]
+platform_versions_supported: ["16", "17"]
 
 parser_backend:                      # 16-existing-assets.md §16.3
   name: reference                    # 사외 초안은 reference. 사내 포팅 후 site (S-4a)
@@ -84,7 +86,7 @@ matcher:
   pattern_timeout_ms: 2000           # 04-parser-matching.md §5.8 (4)
 
 readme:
-  jira_inline_max: 3
+  issue_inline_max: 3
 
 reviewers:                           # TODO(SITE:S19) gh pr create --reviewer 형식
   format: '{org}/{team}'

@@ -121,9 +121,9 @@ def evaluate_item(root: Path, db: Path, base: Path, doc: dict, item: dict, work:
             "summary": item.get("summary", ""), "description": item.get("description", "")}
     if item.get("failed_step"):
         meta["failed_step"] = str(item["failed_step"])
-    meta_path = job / "jira_input.json"
+    meta_path = job / "issue_input.json"
     meta_path.write_text(json.dumps(meta, ensure_ascii=False), encoding="utf-8")
-    args = ["run", key, "--offline-db", str(db), "--out", str(job), "--logs", *logs, "--jira-meta", str(meta_path)]
+    args = ["run", key, "--offline-db", str(db), "--out", str(job), "--logs", *logs, "--issue-meta", str(meta_path)]
     minutes = item.get("minutes", doc.get("minutes"))
     if minutes:
         args += ["--minutes", str(minutes)]

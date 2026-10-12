@@ -1,11 +1,11 @@
-"""실패 스텝(선택 입력) 추출·정규화 (07-workflow.md §Step 2, 02-config.md §jira.failed_step_patterns).
+"""실패 스텝(선택 입력) 추출·정규화 (07-workflow.md §Step 2, 02-config.md §tracker.failed_step_patterns).
 
 이슈에는 시험 절차와 실패한 스텝이 있을 수 있다. Jira 필드나 설명에 있을 때도 있고, 첨부에만 있을 때도 있고,
 읽을 수 없을 때도 있다. **실패 스텝은 선택 값이다.** 없거나 읽지 못해도 동작은 이 값이 없던 때와 같다
 (질문 없음, 중단 없음, 출력 키 없음). 보조 정보일 뿐이며 S/C 점수·회귀·검증에는 쓰지 않는다.
 
 순수 함수(표준 라이브러리만)다. 정규식 오류는 경고로 바꾸고 예외를 내지 않는다.
-패턴 표기는 사내마다 다르다 — TODO(SITE:S22) (`plugin/site-defaults.yaml`의 `jira.failed_step_patterns`).
+패턴 표기는 사내마다 다르다 — TODO(SITE:S22) (`plugin/site-defaults.yaml`의 `tracker.failed_step_patterns`).
 
 시험 절차(steps-file)는 txt/csv/tsv, html(`report.html` 등), zip(안의 파일 하나)이다. 시험은 **첫 FAIL 스텝에서 멈추므로**
 FAIL 스텝이 마지막으로 실행된 스텝이다. `read_source`가 텍스트로 바꾸고 `parse_steps`가 스텝 목록으로 만든다.

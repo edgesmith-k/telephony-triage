@@ -100,7 +100,7 @@ open ──(수정 CL 머지, fix-submitted 커맨드)──▶ fix-submitted �
 - "시나리오 흔적 충족" = `scenario_signatures`가 있으면 그것이 충족, 없으면 `recovery_signatures`가 충족. 판정은 시나리오 흔적 충족을 전제로 한다. **흔적이 없으면 판단 불가**다. 사용자 말만으로 흔적을 대신하지 않는다.
 - 그 밖의 유형(`user-setting`, `network`, `hw`)은 두 시그니처가 없어도 되지만, 없으면 흔적 판정 대신 사용자 확인을 받고 그 사실을 `verification.note`에 남긴다.
 
-**`/telephony-triage:verify-fix <원인 ID> <수정 빌드 logcat...> [--jira <검증 Jira>]`** (절차 전체는 `07-workflow.md §verify-fix`)
+**`/telephony-triage:verify-fix <원인 ID> <수정 빌드 logcat...> [--issue <검증 Jira>]`** (절차 전체는 `07-workflow.md §verify-fix`)
 1. 원인의 `fix.status`가 `fix-submitted`(또는 재검증이면 `fixed`)인지 확인한다. 아니면 중단한다.
 2. `fixed_in`에 빌드가 있는 항목이 없으면 중단하고 `fix-submitted` 커맨드로 빌드를 먼저 추가하라고 안내한다 (`verify-fix` passed의 전제, `contracts.md §작업 계획`). 로그의 빌드가 `fixed_in` 이후(≥, 같은 빌드 포함)인지 `build_compare`로 확인한다. 이전 빌드면 중단한다. 비교 규칙이 없거나 파싱 불가면 사용자에게 묻는다.
 3. **시나리오 흔적 확인**: 위 전제대로 흔적을 찾아 원인 본문의 "재현 시나리오"와 함께 보여준다.
@@ -128,7 +128,7 @@ verification:
   build: <검증 빌드>
   date: 2026-10-05
   by: <GHE 아이디>
-  jira: ABC-13000                 # 선택, 검증 Jira
+  issue: ABC-13000                # 선택, 검증 Jira
   fixture: fixtures/DATA-001-03.fixed.BUILD_X.log   # 유형 디렉토리 기준 상대 경로
   scenario_evidence: DATA-001-03/data-connect-attempt   # 충족한 scenario/recovery 시그니처 전역 키
   note: 로밍 SIM 재현 시나리오 3회 수행, 재발 없음

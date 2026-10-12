@@ -12,13 +12,14 @@
 
 | 서브커맨드 | 사용법 | 옵션 설명 |
 |---|---|---|
-| `show` | `[--keys <a,b.c>]` | `--keys`: 쉼표로 구분한 키(점 표기)만 보인다 (예: work_dir,jira.tools) |
+| `show` | `[--keys <a,b.c>]` | `--keys`: 쉼표로 구분한 키(점 표기)만 보인다 (예: work_dir,tracker.tools) |
 | `site-defaults` |  |  |
 | `init` | `[--answers <ANSWERS>] [--force]` |  |
 | `set` | `<key> <value>` |  |
 | `sync-scripts-path` |  |  |
-| `jira-candidates` | `[--mcp-config <MCP_CONFIG>]... [--tools-json <TOOLS_JSON>]` |  |
-| `set-jira` | `--server <SERVER> --get-issue <GET_ISSUE> [--search-issues <SEARCH_ISSUES>] [--get-comments <GET_COMMENTS>] [--read-tools <READ_TOOLS>]` |  |
+| `tracker-candidates` | `[--mcp-config <MCP_CONFIG>]... [--tools-json <TOOLS_JSON>]` |  |
+| `set-tracker` | `--server <SERVER> --get-issue <GET_ISSUE> [--search-issues <SEARCH_ISSUES>] [--get-comments <GET_COMMENTS>] [--read-tools <READ_TOOLS>]` |  |
+| `rename-legacy` | `[--apply]` | `--apply`: 변경 목록대로 사용자 config.yaml을 쓴다(없으면 목록만) |
 | `install-hooks` | `[--db <DB>]` |  |
 | `check` | `[--db <path>] [--for {write,dry-run}]` | `--for`: 기본 write |
 | `gh-status` |  |  |
@@ -66,7 +67,7 @@
 
 | 서브커맨드 | 사용법 | 옵션 설명 |
 |---|---|---|
-| — | `[--db <DB>] --events <json> [--jira-meta <json>] [--regress] [--no-feedback-weight] [--top <TOP>] [--json] [--plugin-root <PLUGIN_ROOT>]` | `--top`: 후보 수. types·causes는 충족된 것만, pending은 N개 (0이면 전부), 기본 3; `--json`: JSON 출력 (항상 JSON) |
+| — | `[--db <DB>] --events <json> [--issue-meta <json>] [--regress] [--no-feedback-weight] [--top <TOP>] [--json] [--plugin-root <PLUGIN_ROOT>]` | `--top`: 후보 수. types·causes는 충족된 것만, pending은 N개 (0이면 전부), 기본 3; `--json`: JSON 출력 (항상 JSON) |
 
 ## `db_search.py`
 
@@ -127,7 +128,7 @@
 | `snapshot` | `--job <작업 키>` |  |
 | `my-prs` |  |  |
 | `cleanup` | `(--dry-run \| --yes) [--older-than [<days>]]` |  |
-| `preflight` | `--branch <br> [--search <원인 ID\|JIRA-KEY>] [--jira <KEY>]` |  |
+| `preflight` | `--branch <br> [--search <원인 ID\|JIRA-KEY>] [--issue <KEY>]` |  |
 | `stage` | `<plan.json> --wt <dir> --branch <br> [--dry-run] [--verbose] [--then-summary]` | `--verbose`: stdout도 stage.json과 같이 전체 (기본은 통과 항목을 접는다); `--then-summary`: stage 종료 0·3이면 이어서 summary --format markdown을 부르고 그 마크다운만 출력한다 (--json·--verbose와 못 쓴다) |
 | `summary` | `<wt> [--format {json,markdown}]` | `--format`: markdown: write-flow §4 확인 화면을 마크다운으로 (기본 json, --json과 함께 못 쓴다), 기본 json |
 | `publish` | `<wt> --branch <br> --lease <sha\|new> --approved <hash> [--commit] [--and-discard]` | `--lease`: 원격 브랜치 SHA 또는 new(원격에 없어야 함); `--commit`: 커밋이 없으면 승인 해시·hooksPath·guard 검사를 거쳐 summary의 commit_message로 커밋한 뒤 publish한다 (멱등); `--and-discard`: publish 종료 0일 때만 이어서 discard한다 |
@@ -171,7 +172,7 @@ stdin: PostToolUse hook 입력 JSON (argparse 없음)
 
 | 서브커맨드 | 사용법 | 옵션 설명 |
 |---|---|---|
-| `run` | `<KEY> [--logs <logcat\|bugreport>... \| --more-logs <logcat\|bugreport>...] [--jira-raw <json> \| --jira-file <yaml> \| --jira-meta <json>] [--code <프로필\|경로\|skip>] [--dry-run] [--analysis-only] [--answer <kind=값>]... [--tz <TZ>] [--year <YEAR>] [--minutes <MINUTES>] [--refresh] [--offline-db <db>] [--out <dir>] [--failed-step <한 줄>] [--steps-file <파일>] [--clock-offset <±시간>]` | `--more-logs`: 이전 분석의 로그 뒤에 로그를 더해 다시 분석(RF-7). --logs와 함께 못 쓴다; `--analysis-only`: 이슈 DB에 기록하지 않는 분석 전용(cleanup·기존 계획·열린 PR 건너뜀, ok면 lock 해제). --dry-run과 함께 못 쓴다; `--refresh`: 같은 세션에서도 스냅샷을 다시 만들고, 같은 입력의 분석 재사용(analysis-cache.json)도 끈다; `--failed-step`: 실패 스텝 한 줄(선택, 보조 정보). 마스킹해서만 쓴다; `--steps-file`: 시험 절차 첨부 파일(txt/csv/html/zip, 선택). 읽지 못하면 경고만 내고 진행; `--clock-offset`: 시험 장비 시각 → 단말 logcat 시각 시계 차(단말 = 장비 + 값). 예: +3m, -90s, +00:03:00, 180. 없으면 steps-file의 장비 시각은 분석 구간에 쓰지 않는다 |
+| `run` | `<KEY> [--logs <logcat\|bugreport>... \| --more-logs <logcat\|bugreport>...] [--issue-raw <json> \| --issue-file <yaml> \| --issue-meta <json>] [--code <프로필\|경로\|skip>] [--dry-run] [--analysis-only] [--answer <kind=값>]... [--tz <TZ>] [--year <YEAR>] [--minutes <MINUTES>] [--refresh] [--offline-db <db>] [--out <dir>] [--failed-step <한 줄>] [--steps-file <파일>] [--clock-offset <±시간>]` | `--more-logs`: 이전 분석의 로그 뒤에 로그를 더해 다시 분석(RF-7). --logs와 함께 못 쓴다; `--analysis-only`: 이슈 DB에 기록하지 않는 분석 전용(cleanup·기존 계획·열린 PR 건너뜀, ok면 lock 해제). --dry-run과 함께 못 쓴다; `--refresh`: 같은 세션에서도 스냅샷을 다시 만들고, 같은 입력의 분석 재사용(analysis-cache.json)도 끈다; `--failed-step`: 실패 스텝 한 줄(선택, 보조 정보). 마스킹해서만 쓴다; `--steps-file`: 시험 절차 첨부 파일(txt/csv/html/zip, 선택). 읽지 못하면 경고만 내고 진행; `--clock-offset`: 시험 장비 시각 → 단말 logcat 시각 시계 차(단말 = 장비 + 값). 예: +3m, -90s, +00:03:00, 180. 없으면 steps-file의 장비 시각은 분석 구간에 쓰지 않는다 |
 | `explore` | `<KEY> [--out <dir>]` | `--out`: `run --offline-db --out`의 JOB 디렉토리(없으면 <work_dir>/<KEY>) |
 | `release` | `<KEY>` |  |
 
@@ -197,7 +198,7 @@ stdin: PostToolUse hook 입력 JSON (argparse 없음)
 - key
 - platform?(선택 플랫폼. 기본 플랫폼(android)이면 내지 않는다 (17-platforms K8))
 - generated_at
-- request_hash(입력 해시(부분별 parts {logs, jira, db, config, plugin, args}, 파싱 전에 계산))
+- request_hash(입력 해시(부분별 parts {logs, issue, db, config, plugin, args}, 파싱 전에 계산))
 - run?(결과(core)를 계산한 실행 번호)
 - reuse?({hit: true, run}(재사용) 또는 {hit: false, prev_run, changed[부분] | reason: refresh|cache-missing, added_logs[≤5], prev_top, top_changed}; 첫 실행·--offline-db에는 없음, 4KB 압축 시 added_logs·prev_top 순으로 뺀다)
   - hit
@@ -213,17 +214,17 @@ stdin: PostToolUse hook 입력 JSON (argparse 없음)
 - read_only_hint?(mode: read-only일 때만, config.py check 사유 메시지, ≤200바이트, 4KB 압축 시 100)
 - snapshot?
 - plan?(analysis-only면 {exists, source, pr_number}만)
-- jira?(failed_step {text(≤120, 4KB 압축 시 60), source}는 있을 때만, 보조 정보)
+- issue?(failed_step {text(≤120, 4KB 압축 시 60), source}는 있을 때만, 보조 정보)
 - step_anchor?(실패 스텝 앵커·실패 스텝·시계 정렬·스텝 순서 시도가 있을 때만)
   - outside_errors?(앵커가 있고 Jira 발생 시각이 분석 범위 밖·로그 범위 안일 때 그 시각 근처의 범위 밖 오류 이벤트 수, 0이면 키 없음, 근거·점수에 쓰지 않음)
-  - source: log_marker | steps_file | step_order | jira | symptom_scan
+  - source: log_marker | steps_file | step_order | issue | symptom_scan
   - step?(≤80, 4KB 압축 시 40)
   - step_from?(마커의 스텝을 쓴 경우만): "marker"
   - span?([시작|null, 실패])
-  - jira_gap_min?
+  - issue_gap_min?
   - focus?[≤3](유형 ID)
   - clock?({mode: manual|none, offset_sec?(manual), reason?(none, "시계 차 모름"; 4KB 압축 시 먼저 뺌)})
-  - order?({matched, observable, missed, last{step(≤40), ts}(step_order일 때, 4KB 압축 시 가장 먼저 뺌), reason?(앵커를 못 정해 jira로 돌아갈 때)})
+  - order?({matched, observable, missed, last{step(≤40), ts}(step_order일 때, 4KB 압축 시 가장 먼저 뺌), reason?(앵커를 못 정해 issue로 돌아갈 때)})
 - existing?
 - open_prs?
 - build?
@@ -257,8 +258,8 @@ stdin: PostToolUse hook 입력 JSON (argparse 없음)
   - resolution?
   - resolution_verification?
   - fix_status?
-  - jira_count?
-  - jira_recent?
+  - issue_count?
+  - issue_recent?
 - pending_causes?
 - unjudged?(시그니처 시간 초과·오류로 S·C를 정하지 못한 유형·원인(match.json types[].S·causes[].C null). count = 유형 수. 있을 때만, 캐시 저장 안 함)
   - count
@@ -284,7 +285,7 @@ stdin: PostToolUse hook 입력 JSON (argparse 없음)
 - notes?(잔여 worktree·도구 브랜치 안내 등)
 - lock_owner?
 - lock_released?(analysis-only가 ok로 끝나 lock을 풀었을 때만(lock_owner 없음)): true
-- files({report, events, match, jira}(4KB 압축 시 report만))
+- files({report, events, match, issue}(4KB 압축 시 report만))
 - must_show?[≤6](리포트 줄 중 꼭 보여야 하는 것, 우선순위 순(4KB 압축 시 줄당 160자·앞 4개))
 - truncated(4KB로 줄여도 넘으면 true)
 
@@ -294,7 +295,7 @@ stdin: PostToolUse hook 입력 JSON (argparse 없음)
 
 - key
 - needs_input
-  - kind: lock | plan | jira | year | reanalyze | open_pr | logs | code | code_confirm | time | window
+  - kind: lock | plan | issue | year | reanalyze | open_pr | logs | code | code_confirm | time | window
   - question
   - options
   - answer(--answer <kind>=<값>)

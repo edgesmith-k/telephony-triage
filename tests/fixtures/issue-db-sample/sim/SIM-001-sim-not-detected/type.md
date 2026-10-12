@@ -39,7 +39,7 @@ causes:
       verification_history: []
     related: []
     cp_evidence: null
-    android_versions: ["17"]
+    platform_versions: ["17"]
     code_refs:
       - ref: vendor_ril:vendor/mockril/libril/mock_ril.c
         symbol: mock_ril_get_sim_status

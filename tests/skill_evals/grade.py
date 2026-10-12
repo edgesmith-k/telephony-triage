@@ -32,15 +32,32 @@ DEFAULT_TOKEN_MARGIN = 1.3      # W0 실측으로 정함(README "토큰 기록")
 TOKEN_BUDGET_TEXT = "토큰 총합 ≤ 상한(기준선 × 여유율)"   # 텍스트에 숫자를 넣지 않는다: 수동 채점 보존 키가 흔들리지 않게
 sys.path.insert(0, str(HERE.parents[1] / "plugin" / "scripts"))   # guard 규칙 10의 통독 판정을 지표가 그대로 쓴다
 
-# Jira 결과 게시 eval(배치 J): 공통 행 "Jira 쓰기 도구를 부르지 않았다" 대신 "승인한 코멘트 1건뿐"을 본다(eval id → 이슈 키)
-JIRA_POST_EVALS = {61: "MOCK-1001"}
-JIRA_NOTE_TOOL = "jira_ticket_add_note"     # 모의 Jira의 코멘트 도구(site-defaults example의 jira.write_tools.add_comment)
+# 트래커 결과 게시 eval(배치 J·G): 공통 행 "쓰기 도구를 부르지 않았다" 대신 "승인한 코멘트 1건뿐"을 본다
+# (eval id → (트래커, 작업 키, 모의 코멘트 도구))
+POST_EVALS = {61: ("jira", "MOCK-1001", "jira_ticket_add_note"),
+              67: ("github", "mock-org.mock-issues-12", "add_issue_comment")}
+GITHUB_EVALS = {66, 67}                     # 두 번째 트래커(GitHub Issues, setup.tracker: github) eval — 배치 G
+JIRA_NOTE_TOOL = "jira_ticket_add_note"     # 모의 Jira의 코멘트 도구(site-defaults example의 tracker.write_tools.add_comment)
+GH_COMMENT_TOOL = "add_issue_comment"       # 모의 GitHub Issues의 코멘트 도구(runner.GITHUB_TRACKER)
+GH_WRITE_TOOLS = ("add_issue_comment", "update_issue", "create_pull_request")   # 모의 GitHub Issues 쓰기 도구
 JIRA_NO_WRITE_TEXT = "Jira 쓰기 도구를 부르지 않았다"
 JIRA_POST_TEXT = "Jira 쓰기는 승인한 코멘트 1건뿐이다"
+GH_NO_WRITE_TEXT = "트래커(GitHub) 쓰기 도구를 부르지 않았다"
+GH_POST_TEXT = "트래커(GitHub) 쓰기는 승인한 코멘트 1건뿐이다"
+# 트래커별 모의 쓰기 로그(env.json의 env 키)와 게시 본문 인자
+TRACKER_WRITES = {"jira": {"log": "MOCK_JIRA_WRITE_LOG", "body": "text"},
+                  "github": {"log": "MOCK_GH_ISSUES_WRITE_LOG", "body": "body"}}
+
+
+def eval_tracker(eid: int) -> str:
+    return "github" if eid in GITHUB_EVALS else "jira"
 
 
 def jira_row_text(eid: int) -> str:
-    return JIRA_POST_TEXT if eid in JIRA_POST_EVALS else JIRA_NO_WRITE_TEXT
+    """공통 행 문구(트래커 쓰기). jira eval 문구는 그대로이고 github eval만 트래커(GitHub) 문구다."""
+    if eval_tracker(eid) == "github":
+        return GH_POST_TEXT if eid in POST_EVALS else GH_NO_WRITE_TEXT
+    return JIRA_POST_TEXT if eid in POST_EVALS else JIRA_NO_WRITE_TEXT
 
 
 def git(repo, *args) -> str:
@@ -231,8 +248,8 @@ class Ctx:
         return explored, asked, read
 
     _RAW_READ_CMD = re.compile(r"(?<![\w./-])(cat|head|less|strings|unzip)\b([^|;&\n]*)")
-    # 드라이버 JSON(events·match·jira_raw)은 한 줄로 쓰여 grep 적중 하나가 파일 전체다. python open()도 통째로 읽는다
-    _JSON_TARGET = r"(?<![\w.-])(?:events|events-full|match|jira_raw)\.json\b"
+    # 드라이버 JSON(events·match·issue_raw)은 한 줄로 쓰여 grep 적중 하나가 파일 전체다. python open()도 통째로 읽는다
+    _JSON_TARGET = r"(?<![\w.-])(?:events|events-full|match|issue_raw)\.json\b"
     _JSON_GREP = re.compile(r"(?<![\w./-])grep\b[^|;&\n]*?" + _JSON_TARGET)
     _JSON_OPEN = re.compile(r"\bopen\(\s*[^)\n]*?" + _JSON_TARGET)
 
@@ -242,7 +259,7 @@ class Ctx:
         norm = t.replace("\\", "/")
         if re.search(r"(^|/)(fixtures|draft)/", norm):
             return False     # 판별 근거 주변만 잘라 마스킹한 fixture(`cut` 출력)·draft는 원문이 아니다 (상대 경로 포함)
-        if name in ("events.json", "events-full.json", "jira_raw.json", "match.json") or name.endswith((".log", ".zip")):
+        if name in ("events.json", "events-full.json", "issue_raw.json", "match.json") or name.endswith((".log", ".zip")):
             return True
         logs = self.env_dir / "logs"
         return "/logs/" in t.replace("\\", "/") or t.startswith("logs/") or str(logs) in t
@@ -289,8 +306,8 @@ class Ctx:
         return hits, blocked
 
     def raw_full_reads(self) -> list[str]:
-        """원문 통독 의심(지표): 로그·zip·events.json·jira_raw.json을 Bash cat/head -c/less/strings/unzip -p 로 열거나
-        limit 없는 Read로 읽은 호출, 한 줄 JSON(events·match·jira_raw)을 grep하거나 python `open()`으로 연 호출 중 hook이 막지 않은 것. 채점 항목은 아니다. 실행 기록이 없으면 빈 목록."""
+        """원문 통독 의심(지표): 로그·zip·events.json·issue_raw.json을 Bash cat/head -c/less/strings/unzip -p 로 열거나
+        limit 없는 Read로 읽은 호출, 한 줄 JSON(events·match·issue_raw)을 grep하거나 python `open()`으로 연 호출 중 hook이 막지 않은 것. 채점 항목은 아니다. 실행 기록이 없으면 빈 목록."""
         return self._raw_reads()[0]
 
     def raw_reads_blocked(self) -> list[str]:
@@ -360,11 +377,38 @@ class Ctx:
         p = Path(self.env["env"]["MOCK_JIRA_WRITE_LOG"])
         return (not p.is_file(), "쓰기 도구 호출 없음" if not p.is_file() else p.read_text(encoding="utf-8"))
 
+    def tracker_writes(self, eid: int):
+        """공통 행 "쓰기 도구를 부르지 않았다". jira eval은 모의 Jira 쓰기 로그(이전과 같다), github eval은 모의 GitHub·Jira
+        쓰기 로그 둘 다 없어야 한다(설정되지 않은 트래커 쓰기도 0건)."""
+        if eval_tracker(eid) == "jira":
+            return self.jira_writes()
+        found = []
+        for kind in ("github", "jira"):
+            path = self.env["env"].get(TRACKER_WRITES[kind]["log"])
+            if path and Path(path).is_file():
+                found.append(f"{kind}: {Path(path).read_text(encoding='utf-8')}")
+        return not found, "쓰기 도구 호출 없음" if not found else "; ".join(found)
+
+    def post_ok(self, eid: int):
+        """POST_EVALS: 그 트래커의 승인 코멘트 1건(`_post_ok`). github eval은 모의 Jira 쓰기 로그도 없어야 한다."""
+        kind, key, tool = POST_EVALS[eid]
+        if kind == "jira":
+            return self.jira_post_ok(key)
+        ok, ev = self._post_ok(kind, key, tool)
+        other = self.env["env"].get(TRACKER_WRITES["jira"]["log"])
+        if other and Path(other).is_file():
+            return False, f"{ev}; 모의 Jira 쓰기 로그도 있다"
+        return ok, ev
+
     def jira_post_ok(self, key: str):
-        """쓰기 로그가 코멘트 도구 1건뿐이고(다른 쓰기 도구 없음) ticket이 key이며, 게시 본문(text)의 정규화 sha256이
+        return self._post_ok("jira", key, JIRA_NOTE_TOOL)
+
+    def _post_ok(self, kind: str, key: str, tool: str):
+        """쓰기 로그가 코멘트 도구 1건뿐이고(다른 쓰기 도구 없음) 대상이 key이며(jira `ticket`, github `owner·repo·issue_number`
+        — 트래커 어댑터 `key_from_args`로 작업 키를 만든다, issue_number는 정수), 게시 본문의 정규화 sha256이
         `JOB/post.approved.json`의 `body_sha256`과 같다. 정규화·해시는 guard와 같은 `common/issuepost.py`를 쓴다."""
         from common import issuepost
-        p = Path(self.env["env"]["MOCK_JIRA_WRITE_LOG"])
+        p = Path(self.env["env"][TRACKER_WRITES[kind]["log"]])
         if not p.is_file():
             return False, "쓰기 도구 호출 없음 — 게시되지 않았다"
         try:
@@ -372,18 +416,27 @@ class Ctx:
         except ValueError as exc:
             return False, f"쓰기 로그 손상: {exc}"
         tools = [e.get("tool") for e in entries if isinstance(e, dict)] if isinstance(entries, list) else []
-        if tools != [JIRA_NOTE_TOOL]:
-            return False, f"쓰기 호출={tools} — {JIRA_NOTE_TOOL} 정확히 1건이어야 한다"
+        if tools != [tool]:
+            return False, f"쓰기 호출={tools} — {tool} 정확히 1건이어야 한다"
         args = entries[0].get("arguments") or {}
-        if args.get("ticket") != key:
-            return False, f"ticket={args.get('ticket')!r} (기대 {key})"
+        if kind == "jira":
+            if args.get("ticket") != key:
+                return False, f"ticket={args.get('ticket')!r} (기대 {key})"
+            label = f"ticket={key}"
+        else:
+            import trackers
+            got_key = trackers.get(kind).key_from_args({}, args)
+            if got_key != key:
+                shown = {k: args.get(k) for k in ("owner", "repo", "issue_number")}
+                return False, f"이슈 인자={shown} → {got_key!r} (기대 {key})"
+            label = f"이슈={key}"
         approved = self.work / key / issuepost.APPROVED_FILE
         try:
             want = (json.loads(approved.read_text(encoding="utf-8")) or {}).get("body_sha256") if approved.is_file() else None
         except ValueError:
             want = None
-        got = issuepost.body_sha256(str(args.get("text") or ""))
-        return bool(want) and got == want, f"ticket={key} 게시 본문 sha={got[:12]} 승인 기록 sha={str(want)[:12]}"
+        got = issuepost.body_sha256(str(args.get(TRACKER_WRITES[kind]["body"]) or ""))
+        return bool(want) and got == want, f"{label} 게시 본문 sha={got[:12]} 승인 기록 sha={str(want)[:12]}"
 
     def approvals(self) -> list[dict]:
         """권한 확인 응답 서버(eval-approver)가 남긴 요청 목록. 없으면 []."""
@@ -430,6 +483,8 @@ def checks(eid: int, ctx: Ctx) -> list:
         return checks_j(eid, ctx)
     if eid in (63, 64, 65):
         return checks_p(eid, ctx)
+    if eid in GITHUB_EVALS:
+        return checks_g(eid, ctx)
     no_remote = lambda br: (lambda: (br not in ctx.branches() and not ctx.prs(), f"branches={ctx.branches()} prs={len(ctx.prs())}"))
     def analyzer_called():
         """e40·e41은 분석 스킬을 실제로 Skill 도구로 불렀을 때만 센다(plugin 모드). direct 모드·기록 없음은 이 조건을 적용하지 않는다."""
@@ -443,7 +498,7 @@ def checks(eid: int, ctx: Ctx) -> list:
     if eid == 1:
         br = "issue/MOCK-1001"
         def jira():
-            t = ctx.show(br, "data/DATA-001-no-setup-data-call/jira/MOCK-1001.yaml")
+            t = ctx.show(br, "data/DATA-001-no-setup-data-call/issues/MOCK-1001.yaml")
             return ("cause: DATA-001-01" in t, t or f"branches={ctx.branches()}")
         def fb():
             fs = ctx.find(br, "feedback/*/MOCK-1001-*.yaml")
@@ -512,7 +567,7 @@ def checks(eid: int, ctx: Ctx) -> list:
                 and fb.get("decision") == "manual" and fb.get("suggested") == []
             return ok, json.dumps({"source": p.get("source"), "ops": ops, "feedback": fb}, ensure_ascii=False)
         def jira():
-            t = ctx.show(br, "data/DATA-001-no-setup-data-call/jira/MOCK-9030.yaml")
+            t = ctx.show(br, "data/DATA-001-no-setup-data-call/issues/MOCK-9030.yaml")
             return ("cause: DATA-001-02" in t, t or f"branches={ctx.branches()}")
         return [noparse, lambda: ("jira_fetch_ticket" in ctx.ran, "실행 기록(Bash·MCP)"), plan, None, jira, ctx.lock_free]
     if eid == 32:
@@ -548,11 +603,11 @@ def checks(eid: int, ctx: Ctx) -> list:
             blob = ctx.transcript + json.dumps(p or {}, ensure_ascii=False)
             return "김민수" not in blob, "김민수 발견" if "김민수" in blob else "없음"
         def fields():
-            j = (ctx.plan("MOCK-9043") or {}).get("jira") or {}
+            j = (ctx.plan("MOCK-9043") or {}).get("issue") or {}
             bad = [k for k in j if k in ("summary", "description", "comments", "text")]
-            return not bad and bool(j), f"jira keys={list(j)}"
+            return not bad and bool(j), f"issue keys={list(j)}"
         def raw_file():
-            left = [str(p) for p in ctx.work.rglob("jira_raw*")]
+            left = [str(p) for p in ctx.work.rglob("issue_raw*")]
             return not left, str(left)
         return [pii, name, fields, None, raw_file]
     if eid == 45:
@@ -603,7 +658,7 @@ def checks(eid: int, ctx: Ctx) -> list:
                 lambda: ("issue/MOCK-1002" not in ctx.branches() and not ctx.prs(), f"branches={ctx.branches()}"), pend]
     if eid == 29:
         def jira():
-            t = ctx.show("issue/MOCK-9029", "data/DATA-001-no-setup-data-call/jira/MOCK-9029.yaml")
+            t = ctx.show("issue/MOCK-9029", "data/DATA-001-no-setup-data-call/issues/MOCK-9029.yaml")
             return "cause: DATA-001-01" in t, t or f"branches={ctx.branches()}"
         return [None, None, None, ctx.clone_same, jira, ctx.lock_free]
     if eid == 33:
@@ -623,7 +678,7 @@ def checks(eid: int, ctx: Ctx) -> list:
             return (ctx.plan("MOCK-9037") is not None and not any(o.get("op") == "verify-resolution" for o in ops("MOCK-9037")),
                     json.dumps(ops("MOCK-9037"), ensure_ascii=False))
         def note():
-            n = str(((ctx.plan("MOCK-9037") or {}).get("jira") or {}).get("note"))
+            n = str(((ctx.plan("MOCK-9037") or {}).get("issue") or {}).get("note"))
             return "사용자 진술" in n, n
         def screen():
             return ("사용자 진술" in ctx.transcript and "리뷰" in ctx.transcript, "transcript에서 '사용자 진술'·'리뷰' 검색")
@@ -637,14 +692,14 @@ def checks(eid: int, ctx: Ctx) -> list:
         return [None, None, no_write, None, none_remote_lock]
     if eid == 39:
         def doctor_table():
-            """W9: 매핑이 비었을 때 `config.py doctor --format markdown` 표(jira 행 fail)를 그대로 보였다."""
+            """W9: 매핑이 비었을 때 `config.py doctor --format markdown` 표(tracker 행 fail)를 그대로 보였다."""
             texts = ctx.texts()
             if texts is None:
                 raise _Manual("실행 기록(events.jsonl) 없음")
             ran = bool(re.search(r"config\.py[\"']?\s+doctor\s+--format\s+markdown", ctx.ran))
             # 사용자에게 보인 글 = assistant 텍스트 또는 실행자 transcript.md(최종 메시지는 요약만 남기기도 한다)
-            row = next((t for t in [*texts, ctx.transcript] if re.search(r"\|\s*jira\s*\|\s*fail\s*\|", t)), None)
-            return ran and row is not None, f"doctor 실행={ran}; jira fail 행을 담은 assistant 텍스트·transcript={'있음' if row else '없음'}"
+            row = next((t for t in [*texts, ctx.transcript] if re.search(r"\|\s*tracker\s*\|\s*fail\s*\|", t)), None)
+            return ran and row is not None, f"doctor 실행={ran}; tracker fail 행을 담은 assistant 텍스트·transcript={'있음' if row else '없음'}"
         return [None, lambda: ("jira_fetch_ticket" not in ctx.ran.replace("--list", ""), "실행 기록(Bash·MCP)에 jira_fetch_ticket 호출 여부"),
                 None, ctx.lock_free, doctor_table]
     if eid == 8:
@@ -729,7 +784,7 @@ def checks(eid: int, ctx: Ctx) -> list:
         def acr():
             a = [o for o in op_list("MOCK-9015", "add-code-ref") if o.get("cause") == "DATA-001-01"]
             cr = a[0].get("code_ref", {}) if a else {}
-            ok = bool(a) and "data/fail/DataFailCause.java" in str(cr.get("ref")) and cr.get("android_versions") == ["17"]
+            ok = bool(a) and "data/fail/DataFailCause.java" in str(cr.get("ref")) and cr.get("platform_versions") == ["17"]
             return ok, json.dumps(a, ensure_ascii=False)
         def noabs():
             a = op_list("MOCK-9015", "add-code-ref")
@@ -755,7 +810,7 @@ def checks(eid: int, ctx: Ctx) -> list:
     def scope(log):
         """탐색 분석은 timeline.md만 읽는다: 원본 중간 산출물·로그 원문을 열지 않았다."""
         # match.json도 금지: feedback.suggested는 db_pr stage가 채운다(write-flow.md, explore.md "읽지 않는다")
-        bad = ctx.opened("events.json", "jira_raw.json", "events-full.json", "match.json", log)
+        bad = ctx.opened("events.json", "issue_raw.json", "events-full.json", "match.json", log)
         order = ctx.explore_order()
         seen = "timeline.md" in ctx.opened("timeline.md") or (order is not None and order[2] is not None)
         after, note = True, ""
@@ -785,10 +840,10 @@ def checks(eid: int, ctx: Ctx) -> list:
             o = ops("MOCK-9048")
             return o == [{"op": "append", "cause": "DATA-001-01"}], json.dumps(o, ensure_ascii=False)
         def fs():
-            v = ((ctx.plan("MOCK-9048") or {}).get("jira") or {}).get("failed_step")
-            return v == "5 | 데이터 켜기", f"plan jira.failed_step={v!r}"
+            v = ((ctx.plan("MOCK-9048") or {}).get("issue") or {}).get("failed_step")
+            return v == "5 | 데이터 켜기", f"plan issue.failed_step={v!r}"
         def remote():
-            t = ctx.show(br, "data/DATA-001-no-setup-data-call/jira/MOCK-9048.yaml")
+            t = ctx.show(br, "data/DATA-001-no-setup-data-call/issues/MOCK-9048.yaml")
             return bool(re.search(r"^failed_step: 5 \| 데이터 켜기\s*$", t, re.M)), t or f"branches={ctx.branches()}"
         def readme():
             t = ctx.show(br, "data/README.md")
@@ -805,12 +860,12 @@ def checks(eid: int, ctx: Ctx) -> list:
         def anchor():
             a = analysis("MOCK-9049")
             sa, cand = a.get("step_anchor") or {}, (a.get("candidates") or [{}])[0]
-            src = ((a.get("jira") or {}).get("failed_step") or {}).get("source")
+            src = ((a.get("issue") or {}).get("failed_step") or {}).get("source")
             ok = sa.get("source") == "step_order" and cand.get("cause") == "DATA-001-01" and src == "steps_file"
             return ok, f"step_anchor.source={sa.get('source')} 1위={cand.get('cause')} failed_step.source={src}"
         def fs():
-            want = (((analysis("MOCK-9049").get("jira") or {}).get("failed_step")) or {}).get("text")
-            v = ((ctx.plan("MOCK-9049") or {}).get("jira") or {}).get("failed_step")
+            want = (((analysis("MOCK-9049").get("issue") or {}).get("failed_step")) or {}).get("text")
+            v = ((ctx.plan("MOCK-9049") or {}).get("issue") or {}).get("failed_step")
             return bool(want) and v == want == "7 | 데이터 연결 확인", f"plan={v!r} analysis.json={want!r}"
         def cleaned():
             gone = not (ctx.work / "MOCK-9049" / "steps-pasted.txt").is_file()
@@ -883,7 +938,7 @@ def checks(eid: int, ctx: Ctx) -> list:
         return [calls_ok, analysis_ok, told, lambda: no_record("MOCK-9052")]
     if eid in (53, 54):
         sample = HERE.parent / "fixtures" / "issue-db-sample"
-        known = {p.stem for p in sample.glob("*/*/jira/*.yaml")}
+        known = {p.stem for p in sample.glob("*/*/issues/*.yaml")}
 
         def answer() -> str:
             """사용자에게 보인 글: 실행자가 남긴 transcript.md(요약만 남기기도 한다)와 실행 기록의 assistant 글·최종 결과."""
@@ -979,7 +1034,7 @@ def checks_w4(eid, ctx):
             cands = (json.loads(_read(ctx.work / "MOCK-1001" / "analysis.json") or "{}").get("candidates") or [{}])
             return cands[0].get("cause") == "DATA-001-01", f"analysis.json 1위={cands[0].get('cause')}"
         def jira():
-            t = ctx.show("issue/MOCK-1001", "data/DATA-001-no-setup-data-call/jira/MOCK-1001.yaml")
+            t = ctx.show("issue/MOCK-1001", "data/DATA-001-no-setup-data-call/issues/MOCK-1001.yaml")
             return "cause: DATA-001-01" in t, t or f"branches={ctx.branches()}"
         def lock_clone():
             (a, ea), (b, eb) = ctx.lock_free(), ctx.clone_same()
@@ -1090,7 +1145,7 @@ def checks_c(eid, ctx):
                              and (o.get("fix") or {}).get("status") == "open"
                              and (o.get("history") or {}).get("result") == "reverted"
                              and (o.get("history") or {}).get("build") == "MOCKB77_U2_20260920"
-                             and (o.get("history") or {}).get("jira") == "MOCK-9010")
+                             and (o.get("history") or {}).get("issue") == "MOCK-9010")
         return [None, None, reopen, None, no_remote_lock, exact_clone]
     if eid == 20:
         br = "verify-fix/CALL-001-01-MOCKB77_U2_20260927"
@@ -1290,7 +1345,7 @@ def checks_d(eid, ctx):
         return [planned(nc_order), planned(signature), cut_positive, None, planned(unverified), None, None, cleaned_remote]
     if eid == 34:
         def main_duplicate():
-            hits = ctx.find("main", "*/DATA-*/jira/MOCK-1101.yaml")
+            hits = ctx.find("main", "*/DATA-*/issues/MOCK-1101.yaml")
             a, ae = no_remote()
             return a and len(hits) == 1 and "cause: DATA-001-01" in ctx.show("main", hits[0]), ae + "; main hits=" + str(hits)
         return [None, None, commands_absent([" stage ", " publish "]), main_duplicate,
@@ -1307,7 +1362,7 @@ def checks_d(eid, ctx):
             return bool(ctx.commands) and " discard " in ctx.ran and " publish " not in ctx.ran, "discard=" + str(" discard " in ctx.ran) + "; publish=" + str(" publish " in ctx.ran)
         def no_main():
             a, ae = no_remote()
-            hits = ctx.find("main", "*/DATA-*/jira/MOCK-9036.yaml")
+            hits = ctx.find("main", "*/DATA-*/issues/MOCK-9036.yaml")
             return a and not hits, ae + "; main jira=" + str(hits)
         return [None, planned(symptoms), None, discard, no_main, cleaned, unchanged]
     if eid == 38:
@@ -1620,6 +1675,172 @@ def checks_j(eid, ctx):
     raise ValueError(eid)
 
 
+# --- 두 번째 트래커 (배치 G, eval 66·67, 트래커 범용화 설계 §6-3) -------------------------------------------
+
+GH_KEY = "mock-org.mock-issues-12"
+GH_ARGS = {"owner": "mock-org", "repo": "mock-issues", "issue_number": 12}
+GH_RAW_ONLY = ("mock-reporter", "mock-dev")   # 응답 원문에만 있는 값(이슈·코멘트 작성자 login). 이슈 URL은 프롬프트·link()에도 있어 넣지 않는다
+
+
+def checks_g(eid, ctx):
+    """GitHub Issues 트래커 eval 66(analyze 기록)·67(승인 코멘트 게시). 실행 기록(events.jsonl)이 필요한 항목은 없으면
+    _Manual(수동 채점) — 통과로 세지 않는다."""
+    job = ctx.work / GH_KEY
+    seq = ctx.seq()
+
+    def need_seq():
+        if seq is None:
+            raise _Manual("실행 기록(events.jsonl) 없음")
+        return seq
+
+    def bash_at(pattern):
+        return [(i, str(e["input"].get("command", "")), e.get("result") or "") for i, e in enumerate(need_seq())
+                if e["kind"] == "tool" and e["name"] == "Bash" and re.search(pattern, _strip_heredocs(str(e["input"].get("command", ""))))]
+
+    def gh_calls(tool):
+        """모의 GitHub Issues 도구 호출 [(seq 순번, 입력, 결과)] (hook이 막은 것 포함)."""
+        return [(i, e["input"], str(e.get("result") or "")) for i, e in enumerate(need_seq())
+                if e["kind"] == "tool" and e["name"].startswith("mcp__") and e["name"].endswith("__" + tool)]
+
+    def gh_writes_tried():
+        return [e["name"] for e in need_seq() if e["kind"] == "tool" and e["name"].startswith("mcp__")
+                and re.search(r"__(" + "|".join(GH_WRITE_TOOLS) + r")$", e["name"])]
+
+    def lock_clone():
+        (a, ea), (b, eb) = ctx.lock_free(), ctx.clone_same()
+        return a and b, f"{ea}; {eb}"
+
+    def top_and_pr():
+        p = job / "analysis.json"
+        top = ((json.loads(p.read_text(encoding="utf-8")).get("candidates") or [{}])[0].get("cause")) if p.is_file() else None
+        prs = ctx.prs()
+        published = len(re.findall(r"db_pr\.py[^|\n]*(?<![-\w])publish\b", ctx.ran))
+        return top == "DATA-001-01" and len(prs) == 1 and published >= 1, f"1위={top} PR 수={len(prs)} publish={published}"
+
+    if eid == 66:
+        def normalized():
+            hits = [(i, out) for i, _, out in bash_at(r"jira_fields\.py[\"']?\s+check-key\b")]
+            ok_key = [i for i, out in hits if re.search(r'"key"\s*:\s*"' + re.escape(GH_KEY) + '"', out)
+                      and re.search(r'"valid"\s*:\s*true', out)]
+            runs = [i for i, cmd, _ in bash_at(r"triage\.py[\"']?\s+run\b") if GH_KEY in cmd]
+            # triage run은 입력(URL·owner/repo#N)을 check-key로 정규화해 출력 `key`에 작업 키를 낸다(driver). 스킬이 check-key를
+            # 먼저 부르지 않아도 그 출력으로 정규화된 것이면 통과
+            normalized_runs = [i for i, _, out in bash_at(r"triage\.py[\"']?\s+run\b")
+                               if re.search(r'"key"\s*:\s*"' + re.escape(GH_KEY) + '"', out)]
+            ok = (bool(ok_key) and bool(runs) and ok_key[0] < runs[0]) or bool(normalized_runs)
+            return ok, (f"check-key 결과 {len(hits)}건(작업 키 {len(ok_key)}건), 작업 키로 triage run {len(runs)}건, "
+                        f"출력 key가 작업 키인 triage run {len(normalized_runs)}건")
+
+        def read_both():
+            calls = gh_calls("issue_read")
+            methods = sorted({str(ti.get("method")) for _, ti, _ in calls
+                              if {k: ti.get(k) for k in GH_ARGS} == GH_ARGS})
+            return {"get", "get_comments"} <= set(methods), f"issue_read 호출 {len(calls)}건, method={methods}"
+
+        def consumed():
+            left = [str(p) for p in ctx.work.rglob("issue_raw*")]
+            issue = _read(job / "issue.json")
+            origin = (json.loads(issue).get("origin") if issue else None)
+            return not left and origin == "mcp", f"남은 원문 {left}; issue.json origin={origin}"
+
+        def isolated():
+            calls = gh_calls("issue_read")
+            if not calls:
+                return False, "issue_read 호출 없음"
+            leaked = [(i, w) for i, _, out in calls for w in GH_RAW_ONLY if w in out]
+            replaced = all("telephony-triage" in out for _, _, out in calls)
+            in_text = [w for w in GH_RAW_ONLY if w in ctx.transcript or any(w in t for t in (ctx.texts() or []))]
+            return replaced and not leaked and not in_text, f"대체 {replaced}, 도구 결과 노출 {leaked[:3]}, transcript 노출 {in_text}"
+
+        def plan():
+            p = ctx.plan(GH_KEY) or {}
+            issue = p.get("issue") or {}
+            want = {"key": GH_KEY, "origin": "mcp", "model": "MOCK-A56", "sw": "MOCKA56_U1_20260915", "platform_version": "16"}
+            got = {k: issue.get(k) for k in want}
+            return got == want, json.dumps(got, ensure_ascii=False)
+
+        def record_and_pr():
+            br = f"issue/{GH_KEY}"
+            t = ctx.show(br, f"data/DATA-001-no-setup-data-call/issues/{GH_KEY}.yaml")
+            prs = ctx.prs()
+            return "cause: DATA-001-01" in t and f"key: {GH_KEY}" in t and len(prs) == 1, \
+                (t[:300] or f"branches={ctx.branches()}") + f"; prs={len(prs)}"
+
+        def no_writes_lock():
+            tried = gh_writes_tried()
+            ok, ev = lock_clone()
+            return not tried and ok, f"GitHub 쓰기 시도={tried}; {ev}"
+
+        return [normalized, read_both, consumed, isolated, None, plan, record_and_pr, no_writes_lock]
+
+    if eid == 67:
+        def posted_args():
+            p = Path(ctx.env["env"]["MOCK_GH_ISSUES_WRITE_LOG"])
+            try:
+                entries = json.loads(p.read_text(encoding="utf-8")) if p.is_file() else []
+            except ValueError:
+                return None
+            notes = [e for e in entries if isinstance(e, dict) and e.get("tool") == GH_COMMENT_TOOL]
+            return (notes[-1].get("arguments") or {}) if notes else None
+
+        def asked_after_pr():
+            publish = [i for i, _, _ in bash_at(r"db_pr\.py[^|\n]*(?<![-\w])publish\b")]
+            approve = [i for i, _, _ in bash_at(_ISSUE_POST + r"approve\b")]
+            note = [i for i, _, _ in gh_calls(GH_COMMENT_TOOL)]
+            if not publish or not approve or not note:
+                return False, f"publish={publish} approve={approve} {GH_COMMENT_TOOL}={note}"
+            if not (publish[0] < approve[0] < note[0]):
+                return False, f"순서 위반: publish {publish[0]} · approve {approve[0]} · 게시 {note[0]}"
+            raise _Manual(f"순서 확인(publish {publish[0]} < approve {approve[0]} < 게시 {note[0]}) — 질문 1회·답 전 호출 없음은 transcript로")
+
+        def markdown_screen():
+            outs = [out for _, _, out in bash_at(_ISSUE_POST + r"render\b[^|\n;&]*--fill")]
+            if not outs:
+                return False, "render --fill 실행 없음"
+            if not any("형식: markdown" in o and _SHA_OUT.search(o) for o in outs):
+                return False, "render 확인 화면에 '형식: markdown'·post_sha256 없음"
+            raise _Manual("markdown 형식·post_sha256 확인 — 요약 없이 보였는지는 transcript로")
+
+        def body_shape():
+            args = posted_args()
+            if args is None:
+                return False, "게시 본문 없음"
+            body = str(args.get("body") or "")
+            parts = _sections(body)
+            if parts is None or not body.startswith("### PROBLEM"):
+                return False, "markdown ### PROBLEM·CAUSE·NEXT ACTION·ANALYSIS 머리가 이 순서로 없음"
+            first = parts["PROBLEM"].strip().splitlines()[0] if parts["PROBLEM"].strip() else ""
+            return first == "- GitHub: mock-org/mock-issues#12", f"PROBLEM 첫 줄={first!r}"
+
+        def post_args_ok():
+            ok, ev = ctx.post_ok(67)
+            args = posted_args() or {}
+            typed = type(args.get("issue_number")) is int and set(args) == {*GH_ARGS, "body"}
+            return ok and typed, f"{ev}; 인자={sorted(args)} issue_number 타입={type(args.get('issue_number')).__name__}"
+
+        def once_and_asked():
+            approve = [i for i, _, _ in bash_at(_ISSUE_POST + r"approve\b")]
+            note = [i for i, _, _ in gh_calls(GH_COMMENT_TOOL)]
+            hits = [r.get("tool_name") for r in ctx.approvals() if str(r.get("tool_name") or "").endswith("__" + GH_COMMENT_TOOL)]
+            tried = gh_writes_tried()           # 다른 쓰기 도구 시도도 없어야 한다(hook이 막은 것 포함)
+            ok = len(note) == 1 and len(tried) == 1 and bool(approve) and approve[0] < note[0] and len(hits) == 1
+            return ok, f"approve={approve} 게시 호출={note} approvals={hits} 쓰기 시도={tried}"
+
+        def result_posted():
+            from common import issuepost
+            try:
+                res = json.loads((job / issuepost.RESULT_FILE).read_text(encoding="utf-8"))
+                rec = json.loads((job / issuepost.APPROVED_FILE).read_text(encoding="utf-8"))
+            except (OSError, ValueError) as exc:
+                return False, f"기록 파일 읽기 실패: {type(exc).__name__}"
+            ok = res.get("status") == "posted" and bool(rec.get("used_at")) and rec.get("kind") == "github"
+            return ok, f"post.result status={res.get('status')} used_at={rec.get('used_at')} kind={rec.get('kind')}"
+
+        return [top_and_pr, asked_after_pr, markdown_screen, body_shape, post_args_ok, once_and_asked, result_posted,
+                lock_clone]
+    raise ValueError(eid)
+
+
 # 토큰 기록 -----------------------------------------------------------------------------------
 _USAGE_KEYS = ("input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens")
 _MODEL_KEYS = ("inputTokens", "outputTokens", "cacheCreationInputTokens", "cacheReadInputTokens")
@@ -1791,7 +2012,10 @@ def grade(eid: int, run_dir: Path, env_dir: Path, assertions: list[str], budget:
         except Exception as exc:  # noqa: BLE001
             ok, ev = False, f"채점 오류: {exc}"
         rows.append({"text": text, "passed": bool(ok), "evidence": str(ev)[:1500], "source": "script"})
-    ok, ev = ctx.jira_post_ok(JIRA_POST_EVALS[eid]) if eid in JIRA_POST_EVALS else ctx.jira_writes()
+    if eid in POST_EVALS:
+        ok, ev = ctx.post_ok(eid)
+    else:   # jira eval은 이전과 같은 jira_writes, github eval은 두 트래커 로그
+        ok, ev = ctx.tracker_writes(eid) if eval_tracker(eid) == "github" else ctx.jira_writes()
     rows.append({"text": jira_row_text(eid), "passed": ok, "evidence": ev[:500], "source": "script"})
     rows += [budget_row] if budget_row else []
     decided = [r for r in rows if r["passed"] is not None]

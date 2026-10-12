@@ -339,7 +339,7 @@ html { scroll-behavior: smooth; }
           <div class="k">Jira MCP</div>
           <h3>Jira 연동 (읽기 + 승인한 코멘트)</h3>
           <p>이미 등록된 Jira MCP를 찾아 구조화 필드와 발생 시각을 읽습니다. 분석 결과는 확인 화면에서 승인하면 코멘트 1건(PROBLEM / CAUSE / NEXT ACTION / ANALYSIS)으로 올릴 수 있고, 그 밖의 쓰기 도구 호출은 차단됩니다.</p>
-          <ul><li>모델·SW·Android 버전 필드 매핑</li><li>시험 절차의 PASS 스텝으로 분석 구간 지정(선택)</li></ul>
+          <ul><li>모델·SW·Android 버전 필드 매핑</li><li>시험 절차의 PASS 스텝으로 분석 구간 지정(선택)</li><li>트래커는 설정으로 고름(사내는 Jira, GitHub Issues는 실험적)</li></ul>
         </article>
         <article class="feat">
           <div class="k">guard hook</div>
@@ -416,9 +416,9 @@ html { scroll-behavior: smooth; }
       </div>
       <div>
         <div class="nums">
-          <div class="num"><b>1,412</b><span>자동 테스트. CI(Ubuntu, Python 3.11 · 3.14) 통과</span></div>
+          <div class="num"><b>1,640</b><span>자동 테스트. CI(Ubuntu, Python 3.11 · 3.14) 통과</span></div>
           <div class="num"><b>23 / 23</b><span>샘플 이슈 DB 회귀 fixture 통과</span></div>
-          <div class="num"><b>65</b><span>skill eval 시나리오 정의</span></div>
+          <div class="num"><b>67</b><span>skill eval 시나리오 정의</span></div>
         </div>
         <p class="small muted" style="margin-top:10px">2026-10-11 기준 개발 환경 실측(토큰은 10-08). 규칙을 추가할 때마다 새 규칙이 해당 로그를 잡는지, 정상 로그를 잘못 잡지 않는지, 기존 분류를 깨지 않는지 회귀로 확인합니다.</p>
       </div>
@@ -458,7 +458,7 @@ html { scroll-behavior: smooth; }
           <h3>설치와 환경 확인</h3>
           <ol>
             <li><span class="s">S-0</span><span>사내 로그 형식 사전 점검과 설정 초안 제안 (선택, Claude 없이 30분)</span></li>
-            <li><span class="s">S-1</span><span>사내 값 조사, 오프라인 평가 기준(1위 정확도 등) 합의</span></li>
+            <li><span class="s">S-1</span><span>"사내 설정 시작"으로 시작(단계 안내 도구). 사내 값 조사, 오프라인 평가 기준(1위 정확도 등) 합의</span></li>
             <li><span class="s">S-2</span><span>사내 Claude Code에서 플러그인·hook·Jira MCP 동작 확인</span></li>
           </ol>
         </div>
@@ -602,7 +602,7 @@ html { scroll-behavior: smooth; }
 </section>
 
 <footer>
-  <div class="wrap">telephony-triage · 수치는 2026-10-11 개발 환경 실측(토큰 10-08)이며 토큰·비용은 모의 데이터 eval 기준입니다. 로그·화면 예시는 합성 데이터입니다.</div>
+  <div class="wrap">telephony-triage · 수치는 2026-10-12 개발 환경 실측(토큰 10-08)이며 토큰·비용은 모의 데이터 eval 기준입니다. 로그·화면 예시는 합성 데이터입니다.</div>
 </footer>
 
 </body>

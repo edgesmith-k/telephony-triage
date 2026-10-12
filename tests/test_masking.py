@@ -319,7 +319,7 @@ def test_mask_pii_jira_json_via_events():
         },
         "comments": [{"author": "mock.reporter", "body": "다시 010-1234-5678 로 연락 바랍니다"}],
     }
-    src = _tmp() / "jira.json"
+    src = _tmp() / "issue.json"
     src.write_text(json.dumps(jira, ensure_ascii=False), encoding="utf-8")
     out = src.with_name("jira.masked.json")
     proc = _run("mask_pii.py", ["--events", str(src), "--out", str(out), "--db", str(SAMPLE)])
@@ -387,7 +387,7 @@ def test_mask_pii_check_staged_and_changed():
     _git(repo, "init", "-q", "-b", "main")
     _git(repo, "-c", "user.name=t", "-c", "user.email=t@t", "add", "-A")
     _git(repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "init")
-    note = repo / "data/DATA-001-no-setup-data-call/jira/MOCK-1101.yaml"
+    note = repo / "data/DATA-001-no-setup-data-call/issues/MOCK-1101.yaml"
     original = note.read_text(encoding="utf-8")
     note.write_text(original + "# 고객 010-1234-5678\n", encoding="utf-8")
 

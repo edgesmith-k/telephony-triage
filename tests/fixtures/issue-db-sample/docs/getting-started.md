@@ -10,7 +10,7 @@ Claude Code에 telephony-triage 플러그인을 설치한다. 설치 방법은 �
 
 커맨드가 순서대로 묻고 설정한다.
 
-- `~/.telephony-triage/config.yaml` 생성 (GHE 아이디, 이슈 DB clone 경로·원격·GHE 호스트, Jira MCP 서버와 읽기 도구, 타임존, 작업 디렉토리)
+- `~/.telephony-triage/config.yaml` 생성 (GHE 아이디, 이슈 DB clone 경로·원격·GHE 호스트, 트래커(Jira 등) MCP 서버와 읽기 도구, 타임존, 작업 디렉토리)
 - 이슈 DB clone이 없으면 `git clone` 제안
 - 이슈 DB 레포에 pre-commit hook 설치 (`git config core.hooksPath .githooks`)
 - 읽기 스냅샷 생성
@@ -23,7 +23,8 @@ Claude Code에 telephony-triage 플러그인을 설치한다. 설치 방법은 �
 ```
 
 - 확인 화면까지 진행하고 임시 worktree를 지운다. **push하지 않고, 이슈 DB clone의 브랜치·파일도 바꾸지 않는다.**
-- Jira MCP 없이 연습하려면 `--jira-file <yaml>`로 샘플 Jira 요약을 준다.
+- Jira MCP 없이 연습하려면 `--issue-file <yaml>`로 샘플 Jira 요약을 준다.
+- 이 이슈 DB의 트래커가 GitHub Issues면(`issue-db.config.yaml` `tracker.kind: github`) `<JIRA-KEY>` 자리에 `owner/repo#N`이나 이슈 URL을 준다. 기록 파일 이름은 작업 키 `<owner>.<repo>-<N>`(소문자)이다.
 - 스스로 해결해서 히스토리만 남기는 흐름도 같이 연습한다:
   `/telephony-triage:record <JIRA-KEY> --dry-run`
 - `--dry-run`은 pending 피드백을 만들지 않는다.

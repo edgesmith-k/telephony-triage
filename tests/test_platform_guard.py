@@ -147,7 +147,8 @@ def _approve_at(job_dir: Path, key: str, body: str) -> Path:
     sys.path.insert(0, str(REPO / "plugin" / "scripts"))
     from common import issuepost
     at = issuepost.now()
-    record = {"schema": 1, "key": key, "tool": NOTE_TOOL, "key_arg": "ticket", "body_sha256": issuepost.body_sha256(body),
+    record = {"schema": 1, "key": key, "tool": NOTE_TOOL, "key_arg": "ticket", "kind": "jira",
+              "body_sha256": issuepost.body_sha256(body),
               "format": "jira-wiki", "request_hash": "0" * 16, "approved_at": issuepost.iso(at),
               "expires_at": issuepost.iso(issuepost.expires(at)), "used_at": None}
     job = job_dir / key
@@ -202,7 +203,7 @@ def test_jira_read_goes_to_selected_platform_work_dir():
     """스킬이 triage 전에 Jira를 읽어도 선택 플랫폼(TT_PLATFORM > 사용자 config platform)의 work_dir에 저장한다."""
     p = two_profiles()
     ws = p["ws"]
-    ws.json("config.py", ["set-jira", "--server", "mock-jira", "--get-issue", "mcp__mock-jira__jira_fetch_ticket"])
+    ws.json("config.py", ["set-tracker", "--server", "mock-jira", "--get-issue", "mcp__mock-jira__jira_fetch_ticket"])
     event = {"hook_event_name": "PostToolUse", "tool_name": "mcp__mock-jira__jira_fetch_ticket",
              "tool_input": {"ticket": "MOCK-7401"}, "cwd": str(ws.base),
              "tool_response": {"key": "MOCK-7401", "fields": {"summary": "s"}}}
@@ -210,11 +211,11 @@ def test_jira_read_goes_to_selected_platform_work_dir():
     proc = run("jira_bridge.py", [], root=root_on, env=ws.env(TT_PLATFORM="ofono"), cwd=ws.base,
                stdin=json.dumps(event))
     assert proc.returncode == 0, proc.stderr
-    assert (p["work"] / "MOCK-7401" / "jira_raw.json").is_file()
+    assert (p["work"] / "MOCK-7401" / "issue_raw.json").is_file()
     assert not (ws.work / "MOCK-7401").exists()
     proc = run("jira_bridge.py", [], root=root_on, env=ws.env(), cwd=ws.base, stdin=json.dumps(
         {**event, "tool_input": {"ticket": "MOCK-7402"}, "tool_response": {"key": "MOCK-7402", "fields": {}}}))
-    assert proc.returncode == 0 and (ws.work / "MOCK-7402" / "jira_raw.json").is_file()
+    assert proc.returncode == 0 and (ws.work / "MOCK-7402" / "issue_raw.json").is_file()
 
 
 # -- 규칙 8: 프로필 경로 겹침·잘못된 값 (리뷰 P1-2·P2-8) -----------------------------------------------

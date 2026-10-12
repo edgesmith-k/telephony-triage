@@ -80,7 +80,7 @@ def test_init_interactive_rejects_bad_paths():
         "Mars/Olympus",                        # 거부: 모르는 타임존
         "UTC",
         "sometimes",                           # 거부: year_source
-        "jira",
+        "tracker",
         str(env.base / "no-logs"),             # 거부: 없는 디렉토리
         "",                                    # log_dir 건너뜀
         str(env.base / "work"),
@@ -91,11 +91,11 @@ def test_init_interactive_rejects_bad_paths():
     result = json.loads(proc.stdout)
     assert result["suggest_clone"].startswith("git clone https://ghe.mock.invalid/")
     cfg = env.config()
-    # 팀 기본값과 같은 답(base_branch·ghe_host·jira.timezone·year_source)은 저장하지 않고 상속한다
+    # 팀 기본값과 같은 답(base_branch·ghe_host·tracker.timezone·year_source)은 저장하지 않고 상속한다
     assert cfg["issue_db"] == {"path": str(clone), "remote": "https://ghe.mock.invalid/mock-org/telephony-issue-db.git"}
-    assert "jira" not in cfg and cfg["logcat"] == {"timezone": "UTC"} and "log_dir" not in cfg
-    eff = env.json("config.py", ["show", "--keys", "issue_db.base_branch,issue_db.ghe_host,jira.timezone"])["values"]
-    assert eff == {"issue_db.base_branch": "main", "issue_db.ghe_host": "ghe.mock.invalid", "jira.timezone": "Asia/Seoul"}
+    assert "tracker" not in cfg and cfg["logcat"] == {"timezone": "UTC"} and "log_dir" not in cfg
+    eff = env.json("config.py", ["show", "--keys", "issue_db.base_branch,issue_db.ghe_host,tracker.timezone"])["values"]
+    assert eff == {"issue_db.base_branch": "main", "issue_db.ghe_host": "ghe.mock.invalid", "tracker.timezone": "Asia/Seoul"}
     assert cfg["plugin"]["scripts_path"] == str(env.root / "scripts")
     assert (env.base / "work").is_dir()
     if POSIX:
@@ -116,7 +116,7 @@ def test_init_saves_only_answers_so_team_default_changes_flow_through():
     root = make_plugin_root.make()      # 캐시된 plugin_root()의 site-defaults를 고치지 않도록 새 루트
     env = Env(root=root)
     env.init(env.base / "db")
-    assert "explore" not in env.config() and "jira" not in env.config()
+    assert "explore" not in env.config() and "tracker" not in env.config()
     assert env.json("config.py", ["show", "--keys", "explore.when"])["values"] == {"explore.when": "ask"}
     path = root / "site-defaults.yaml"
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -146,9 +146,10 @@ def test_set_and_sync_scripts_path():
 def test_jira_tools_from_nonstandard_mock_server():
     env = Env()  # 테스트 헬퍼 루트: exclude_servers: []
     env.init(env.base / "db")
-    found = env.json("config.py", ["jira-candidates", "--mcp-config", MCP_CONFIG])
-    assert found["usable"] == ["mock-jira"] and found["exclude_servers"] == []
-    (server,) = found["servers"]
+    found = env.json("config.py", ["tracker-candidates", "--mcp-config", MCP_CONFIG])
+    # mcp.json에는 모의 GitHub Issues 서버도 있다(표준 도구 이름이라 jira 설정에서도 읽기 후보가 잡힌다)
+    assert found["usable"] == ["mock-github-issues", "mock-jira"] and found["exclude_servers"] == []
+    server = next(s for s in found["servers"] if s["server"] == "mock-jira")
     assert server["suggested"] == {"get_issue": "mcp__mock-jira__jira_fetch_ticket",
                                    "search_issues": "mcp__mock-jira__jira_query_tickets",
                                    "get_comments": "mcp__mock-jira__jira_ticket_comments"}
@@ -156,27 +157,27 @@ def test_jira_tools_from_nonstandard_mock_server():
     assert "mcp__mock-jira__jira_post_comment" in server["tools"]
     assert not any("post_comment" in t or "move_ticket" in t for t in server["read_tools"])
 
-    # 사용자가 확인한 값을 저장한다. read_tools에는 jira.tools 값이 들어간다(전체 이름)
-    saved = env.json("config.py", ["set-jira", "--server", "mock-jira",
+    # 사용자가 확인한 값을 저장한다. read_tools에는 tracker.tools 값이 들어간다(전체 이름)
+    saved = env.json("config.py", ["set-tracker", "--server", "mock-jira",
                                    "--get-issue", "mcp__mock-jira__jira_fetch_ticket",
                                    "--search-issues", "mcp__mock-jira__jira_query_tickets",
                                    "--read-tools", "mcp__mock-jira__jira_ticket_comments"])
     assert saved["added_to_read_tools"] == ["mcp__mock-jira__jira_fetch_ticket", "mcp__mock-jira__jira_query_tickets"]
-    jira = env.config()["jira"]
+    jira = env.config()["tracker"]
     assert jira["mcp_server"] == "mock-jira"
     assert jira["tools"] == {"get_issue": "mcp__mock-jira__jira_fetch_ticket",
                              "search_issues": "mcp__mock-jira__jira_query_tickets"}
     assert jira["read_tools"] == ["mcp__mock-jira__jira_fetch_ticket", "mcp__mock-jira__jira_query_tickets",
                                   "mcp__mock-jira__jira_ticket_comments"]
     # 짧은 이름·다른 서버 도구는 거부
-    assert env.run("config.py", ["set-jira", "--server", "mock-jira", "--get-issue", "jira_fetch_ticket"]).returncode == 2
-    assert env.run("config.py", ["set-jira", "--server", "mock-jira",
+    assert env.run("config.py", ["set-tracker", "--server", "mock-jira", "--get-issue", "jira_fetch_ticket"]).returncode == 2
+    assert env.run("config.py", ["set-tracker", "--server", "mock-jira",
                                  "--get-issue", "mcp__other__get_issue"]).returncode == 2
 
 
 def test_jira_server_names_are_normalized_like_session_tool_names():
     """R-2: 세션 도구 이름은 서버 이름의 `[^A-Za-z0-9_-]`를 `_`로 쓴다(관측 기반 추정, S1 확인).
-    후보는 세션 이름으로 만들고, set-jira는 원래 서버 이름과 세션 이름을 같은 서버로 본다(저장값은 그대로)."""
+    후보는 세션 이름으로 만들고, set-tracker는 원래 서버 이름과 세션 이름을 같은 서버로 본다(저장값은 그대로)."""
     sys.path.insert(0, str(REPO / "plugin" / "scripts"))
     from common import mcptools
     assert mcptools.full_name("jira.corp", "x") == "mcp__jira_corp__x"
@@ -188,17 +189,17 @@ def test_jira_server_names_are_normalized_like_session_tool_names():
 
     env = Env()
     env.init(env.base / "db")
-    saved = env.json("config.py", ["set-jira", "--server", "jira.corp", "--get-issue", "mcp__jira_corp__get_issue"])
-    assert saved["tools"]["get_issue"] == "mcp__jira_corp__get_issue" and env.config()["jira"]["mcp_server"] == "jira.corp"
-    assert env.run("config.py", ["set-jira", "--server", "jira.corp",
+    saved = env.json("config.py", ["set-tracker", "--server", "jira.corp", "--get-issue", "mcp__jira_corp__get_issue"])
+    assert saved["tools"]["get_issue"] == "mcp__jira_corp__get_issue" and env.config()["tracker"]["mcp_server"] == "jira.corp"
+    assert env.run("config.py", ["set-tracker", "--server", "jira.corp",
                                  "--get-issue", "mcp__jira_other__get_issue"]).returncode == 2
 
 
 def test_excluded_mock_servers():
-    root = plugin_root("exclude-mock", jira={**yaml.safe_load(
-        (REPO / "plugin/site-defaults.example.yaml").read_text(encoding="utf-8"))["jira"], "exclude_servers": ["mock-*"]})
+    root = plugin_root("exclude-mock", tracker={**yaml.safe_load(
+        (REPO / "plugin/site-defaults.example.yaml").read_text(encoding="utf-8"))["tracker"], "exclude_servers": ["mock-*"]})
     env = Env(root=root)
-    found = env.json("config.py", ["jira-candidates", "--mcp-config", MCP_CONFIG])
+    found = env.json("config.py", ["tracker-candidates", "--mcp-config", MCP_CONFIG])
     assert found["usable"] == [] and found["servers"][0]["excluded"] is True
     assert found["servers"][0]["tools"] == [] and "중단" in found["next"]
 
@@ -210,7 +211,7 @@ def test_missing_site_defaults_stops_everything():
     assert (bare / "site-defaults.example.yaml").is_file()
     env = Env(root=bare)
     for script, args in (("config.py", ["init"]), ("config.py", ["check", "--db", SAMPLE]),
-                         ("config.py", ["jira-candidates", "--mcp-config", MCP_CONFIG]), ("config.py", ["doctor"]),
+                         ("config.py", ["tracker-candidates", "--mcp-config", MCP_CONFIG]), ("config.py", ["doctor"]),
                          ("db_pr.py", ["lock", "status"]), ("db_pr.py", ["my-prs"]), ("code_roots.py", ["suggest"])):
         proc = env.run(script, args, stdin="")
         assert proc.returncode == 2 and "사내 기본값 없음" in proc.stderr, (script, proc.stderr)
@@ -357,9 +358,9 @@ def test_code_root_selector():
     env.init(env.base / "db")
     cfg = env.config()
     cfg["code_profiles"] = [
-        {"name": "android17-dev", "android_version": "17",
+        {"name": "android17-dev", "platform_version": "17",
          "roots": {"aosp": str(SRC / "android17"), "vendor_ril": str(SRC / "android17/vendor/mockril")}},
-        {"name": "android16-main", "android_version": "16",
+        {"name": "android16-main", "platform_version": "16",
          "roots": {"aosp": str(SRC / "android16"), "vendor_ril": str(SRC / "android16/vendor/mockril")}},
     ]
     (env.home / "config.yaml").write_text(yaml.safe_dump(cfg, allow_unicode=True), encoding="utf-8")
@@ -398,9 +399,9 @@ def test_show_keys_returns_only_requested_values_and_lists_missing():
     env = Env()
     env.init(env.base / "db")
     full = env.json("config.py", ["show"])
-    out = env.json("config.py", ["show", "--keys", "work_dir,jira.tools,no.such"])
+    out = env.json("config.py", ["show", "--keys", "work_dir,tracker.tools,no.such"])
     assert set(out) == {"user_config", "values", "missing"}
-    assert out["values"] == {"work_dir": full["effective"]["work_dir"], "jira.tools": full["effective"]["jira"]["tools"]}
+    assert out["values"] == {"work_dir": full["effective"]["work_dir"], "tracker.tools": full["effective"]["tracker"]["tools"]}
     assert out["missing"] == ["no.such"] and out["user_config"] == full["user_config"]
     assert env.json("config.py", ["show"]) == full      # --keys 없으면 이전과 같다
 
@@ -412,8 +413,8 @@ def _rows(result: dict) -> dict:
     return {r["check"]: r for r in result["rows"]}
 
 
-DOCTOR_MD_MAX = 1152    # doctor markdown 바이트 상한 (jira_post 행을 더해 1,024B에서 늘림)
-DOCTOR_ROWS = ["python", "deps", "config", "scripts_path", "clone", "hook", "guard", "jira", "jira_post", "gh", "snapshot",
+DOCTOR_MD_MAX = 1152    # doctor markdown 바이트 상한 (tracker_post 행을 더해 1,024B에서 늘림)
+DOCTOR_ROWS = ["python", "deps", "config", "scripts_path", "clone", "hook", "guard", "tracker", "tracker_post", "gh", "snapshot",
                "compat", "lock"]
 
 
@@ -519,37 +520,37 @@ def test_doctor_without_config_fails_config_and_skips_the_rest_without_creating_
 
 def test_doctor_empty_jira_mapping_fails_and_exits_1():
     env, _ = _ready_env()
-    _set_user(env, jira={"mcp_server": ""})
-    jira = _rows(_doctor(env, expect=1))["jira"]
+    _set_user(env, tracker={"mcp_server": ""})
+    jira = _rows(_doctor(env, expect=1))["tracker"]
     assert jira["status"] == "fail" and "mcp_server" in jira["detail"] and "setup 4" in jira["next"]
-    _set_user(env, jira={"mcp_server": "mock-jira", "tools": {"get_issue": ""}})
-    assert "get_issue" in _rows(_doctor(env, expect=1))["jira"]["detail"]
-    _set_user(env, jira={"mcp_server": "mock-jira", "tools": {"get_issue": "jira_fetch_ticket"}})
-    assert "전체 이름" in _rows(_doctor(env, expect=1))["jira"]["detail"]
-    _set_user(env, jira={"mcp_server": "other", "tools": {"get_issue": "mcp__mock-jira__jira_fetch_ticket"}})
-    assert "서버 other의 도구가 아닙니다" in _rows(_doctor(env, expect=1))["jira"]["detail"]
+    _set_user(env, tracker={"mcp_server": "mock-jira", "tools": {"get_issue": ""}})
+    assert "get_issue" in _rows(_doctor(env, expect=1))["tracker"]["detail"]
+    _set_user(env, tracker={"mcp_server": "mock-jira", "tools": {"get_issue": "jira_fetch_ticket"}})
+    assert "전체 이름" in _rows(_doctor(env, expect=1))["tracker"]["detail"]
+    _set_user(env, tracker={"mcp_server": "other", "tools": {"get_issue": "mcp__mock-jira__jira_fetch_ticket"}})
+    assert "서버 other의 도구가 아닙니다" in _rows(_doctor(env, expect=1))["tracker"]["detail"]
 
 
 def test_doctor_jira_post_row_skip_ok_warn_fail():
-    """승인 코멘트 도구 설정(`jira.write_tools.add_comment`): 없으면 skip, 유효하면 ok, 서버·단어·인자 오류는 warn,
+    """승인 코멘트 도구 설정(`tracker.write_tools.add_comment`): 없으면 skip, 유효하면 ok, 서버·단어·인자 오류는 warn,
     read_tools에 있으면(승인 생략 경로) fail. 설정이 무효면 guard 자가시험은 코멘트 입력을 넣지 않는다."""
     env, _ = _ready_env()
     rows = _rows(_doctor(env))
-    assert rows["jira_post"] == {"check": "jira_post", "status": "ok",
+    assert rows["tracker_post"] == {"check": "tracker_post", "status": "ok",
                                  "detail": "mcp__mock-jira__jira_ticket_add_note / jira-wiki"}
-    _set_user(env, jira={"write_tools": {"add_comment": {"tool": ""}}})     # 도구를 비우면 꺼진다
-    assert _rows(_doctor(env))["jira_post"] == {"check": "jira_post", "status": "skip", "detail": "게시 기능 꺼짐(본문 파일만)"}
-    _set_user(env, jira={"write_tools": {"add_comment": {"tool": "mcp__other__add_note"}}})
+    _set_user(env, tracker={"write_tools": {"add_comment": {"tool": ""}}})     # 도구를 비우면 꺼진다
+    assert _rows(_doctor(env))["tracker_post"] == {"check": "tracker_post", "status": "skip", "detail": "게시 기능 꺼짐(본문 파일만)"}
+    _set_user(env, tracker={"write_tools": {"add_comment": {"tool": "mcp__other__add_note"}}})
     rows = _rows(_doctor(env))
-    assert rows["jira_post"]["status"] == "warn" and "Jira 서버" in rows["jira_post"]["detail"]
-    assert "write_tools" in rows["jira_post"]["next"] and rows["guard"]["detail"] == "deny 2/2"
-    _set_user(env, jira={"write_tools": {"add_comment": {"tool": "mcp__mock-jira__jira_add_worklog_note"}}})
-    assert "금지 단어" in _rows(_doctor(env))["jira_post"]["detail"]
-    _set_user(env, jira={"write_tools": {"transition": {"tool": "mcp__mock-jira__jira_move_ticket"}}})
-    assert "add_comment만" in _rows(_doctor(env))["jira_post"]["detail"]
+    assert rows["tracker_post"]["status"] == "warn" and "Jira 서버" in rows["tracker_post"]["detail"]
+    assert "write_tools" in rows["tracker_post"]["next"] and rows["guard"]["detail"] == "deny 2/2"
+    _set_user(env, tracker={"write_tools": {"add_comment": {"tool": "mcp__mock-jira__jira_add_worklog_note"}}})
+    assert "금지 단어" in _rows(_doctor(env))["tracker_post"]["detail"]
+    _set_user(env, tracker={"write_tools": {"transition": {"tool": "mcp__mock-jira__jira_move_ticket"}}})
+    assert "add_comment만" in _rows(_doctor(env))["tracker_post"]["detail"]
     read = ["mcp__mock-jira__jira_fetch_ticket", "mcp__mock-jira__jira_ticket_add_note"]
-    _set_user(env, jira={"read_tools": read})
-    row = _rows(_doctor(env, expect=1))["jira_post"]
+    _set_user(env, tracker={"read_tools": read})
+    row = _rows(_doctor(env, expect=1))["tracker_post"]
     assert row["status"] == "fail" and "read_tools" in row["detail"] and "read_tools" in row["next"]
 
 
@@ -646,20 +647,20 @@ def test_doctor_lock_held_expired_and_corrupt():
 def test_doctor_refactored_helpers_keep_messages():
     env = Env()
     env.init(env.base / "db")
-    proc = env.run("config.py", ["set-jira", "--server", "mock-jira", "--get-issue", "jira_fetch_ticket"])
+    proc = env.run("config.py", ["set-tracker", "--server", "mock-jira", "--get-issue", "jira_fetch_ticket"])
     assert proc.returncode == 2 and proc.stderr.strip() == "도구 이름은 전체 이름(mcp__<server>__<tool>)이어야 합니다: jira_fetch_ticket"
-    proc = env.run("config.py", ["set-jira", "--server", "mock-jira", "--get-issue", "mcp__other__get_issue"])
+    proc = env.run("config.py", ["set-tracker", "--server", "mock-jira", "--get-issue", "mcp__other__get_issue"])
     assert proc.returncode == 2 and proc.stderr.strip() == "mcp__other__get_issue는 서버 mock-jira의 도구가 아닙니다."
 
 
 def test_doctor_bad_jira_types_make_a_fail_row_not_a_traceback():
     env, _ = _ready_env()
-    _set_user(env, jira={"mcp_server": "mock-jira", "tools": ["get_issue"], "read_tools": "mcp__mock-jira__x"})
+    _set_user(env, tracker={"mcp_server": "mock-jira", "tools": ["get_issue"], "read_tools": "mcp__mock-jira__x"})
     proc = env.run("config.py", ["doctor", "--format", "markdown"])
-    assert proc.returncode == 1 and "Traceback" not in proc.stderr and "| jira | fail | " in proc.stdout
+    assert proc.returncode == 1 and "Traceback" not in proc.stderr and "| tracker | fail | " in proc.stdout
     assert "형식 오류" in proc.stdout
-    _set_user(env, jira={"mcp_server": "mock-jira", "tools": {"get_issue": "mcp__mock-jira__a"}, "read_tools": "oops"})
-    assert "형식 오류" in _rows(_doctor(env, expect=1))["jira"]["detail"]
+    _set_user(env, tracker={"mcp_server": "mock-jira", "tools": {"get_issue": "mcp__mock-jira__a"}, "read_tools": "oops"})
+    assert "형식 오류" in _rows(_doctor(env, expect=1))["tracker"]["detail"]
 
 
 def test_doctor_does_not_create_missing_work_dir_and_empty_work_dir_skips():
@@ -693,12 +694,43 @@ def test_doctor_worst_case_markdown_fits_budget():
     clone = Path(_repo()["clone"])
     env = Env()
     env.init(clone)    # hook·snapshot·jira 문제, lock 보유, gh 인증 없음
-    _set_user(env, jira={"mcp_server": "mock-jira-with-a-fairly-long-server-name", "tools": {"get_issue": ""}})
+    _set_user(env, tracker={"mcp_server": "mock-jira-with-a-fairly-long-server-name", "tools": {"get_issue": ""}})
     env.json("db_pr.py", ["lock", "acquire", "MOCK-1101-long-job-key", "--command", "analyze"])
     proc = env.run("config.py", ["doctor", "--format", "markdown"], unauth=True)
     assert proc.returncode == 1
     assert proc.stdout.count("| fail |") >= 2 and proc.stdout.count("| warn |") >= 3
     assert len(proc.stdout.encode("utf-8")) <= DOCTOR_MD_MAX, len(proc.stdout.encode("utf-8"))
+
+
+# -- GitHub 트래커 (트래커 범용화 묶음 3, 설계 §3-2 classify_extra·§6-2) ---------------------------------------
+
+
+def test_github_tracker_candidates_set_tracker_and_doctor():
+    """github 세션: `issue_read` 하나가 get_issue·get_comments 후보(어댑터 classify_extra), set-tracker가 같은 도구를 두 동작에
+    저장하고, doctor의 tracker·guard 자체 시험(github 승인 코멘트 인자, selftest_key) 행이 ok다. jira 세션에서는 보강하지 않는다."""
+    from runner import github_root
+    env = Env(root=github_root())
+    env.init(env.base / "db")
+    found = env.json("config.py", ["tracker-candidates", "--mcp-config", MCP_CONFIG])
+    gh = next(s for s in found["servers"] if s["server"] == "mock-github-issues")
+    read = "mcp__mock-github-issues__issue_read"
+    assert gh["tracker_tools"]["get_issue"] == [read] and gh["tracker_tools"]["get_comments"] == [read]
+    assert gh["suggested"] == {"get_issue": read, "get_comments": read,
+                               "search_issues": "mcp__mock-github-issues__search_issues"}
+    assert not any(w in t for t in gh["read_tools"] for w in ("add_issue_comment", "update_issue", "create_pull_request"))
+    jira_env = Env()
+    jira_env.init(jira_env.base / "db")
+    gh_jira = next(s for s in jira_env.json("config.py", ["tracker-candidates", "--mcp-config", MCP_CONFIG])["servers"]
+                   if s["server"] == "mock-github-issues")
+    assert gh_jira["tracker_tools"]["get_comments"] == []
+    saved = env.json("config.py", ["set-tracker", "--server", "mock-github-issues", "--get-issue", read,
+                                   "--get-comments", read, "--search-issues", "mcp__mock-github-issues__search_issues"])
+    assert saved["tools"] == {"get_issue": read, "search_issues": "mcp__mock-github-issues__search_issues",
+                              "get_comments": read}
+    assert saved["read_tools"] == [read, "mcp__mock-github-issues__search_issues"]
+    rows = {r["check"]: r for r in env.json("config.py", ["doctor", "--format", "json"], expect=1)["rows"]}
+    assert rows["tracker"]["status"] == "ok", rows["tracker"]
+    assert rows["guard"]["status"] == "ok" and rows["guard"]["detail"].startswith("deny 2/2"), rows["guard"]   # 이름 휴리스틱 + 승인 없는 게시
 
 
 if __name__ == "__main__":

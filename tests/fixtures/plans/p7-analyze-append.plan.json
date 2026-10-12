@@ -3,12 +3,12 @@
   "schema_version": 1,
   "started_at": "2026-09-29T10:00+09:00",
   "base_sha": "0000000000000000000000000000000000000000",
-  "jira": {
+  "issue": {
     "key": "MOCK-7001",
     "origin": "mcp",
     "model": "MOCK-A56",
     "sw": "MOCKA56_U1_20260925",
-    "android_version": "16",
+    "platform_version": "16",
     "carrier": "MockTel KR",
     "date": "2026-09-29",
     "occurred_on": "2026-09-28",

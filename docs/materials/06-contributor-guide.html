@@ -353,7 +353,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
       <figure class="fig"><svg viewBox="0 0 820 400" role="img" aria-labelledby="cfT"><title id="cfT">확인 화면 모형</title><defs><marker id="cfh" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head acc" d="M0,0 L10,5 L0,10 z"/></marker></defs>
 <rect class="box in" x="20" y="14" width="520" height="372" rx="8"/>
 <text class="t" x="36" y="40">push 전 확인 — issue/ABC-12345</text>
-<text class="m" x="36" y="68">변경 파일 4개</text><text class="s" x="140" y="68">type.md · jira/ABC-12345.yaml · fixture · README</text>
+<text class="m" x="36" y="68">변경 파일 4개</text><text class="s" x="140" y="68">type.md · issues/ABC-12345.yaml · fixture · README</text>
 <text class="m" x="36" y="94">ID 할당</text><text class="s" x="140" y="94">새 원인 → DATA-001-03, fixture → DATA-001-03.log</text>
 <text class="m" x="36" y="120">README 미리보기</text><text class="s" x="140" y="120">원인 제목 · 해결책 문구</text>
 <text class="m" x="36" y="146">주요 diff</text><text class="s" x="140" y="146">+ 시그니처 2개, + Jira 기록 1건</text>
@@ -460,6 +460,14 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
         <li>커밋합니다. hook을 끄지 않습니다(<code>--no-verify</code> 금지).</li>
         <li><code>TT_PUBLISH_TOKEN=manual git push origin &lt;브랜치&gt;</code>로 push하고 PR을 만듭니다. 이 표시가 없으면 이슈 DB의 push 검사가 거부합니다.</li>
       </ol>
+      <div class="tbl"><table>
+        <tr><th>validate(lint)가 이렇게 말하면</th><th>뜻</th></tr>
+        <tr><td><code>legacy-dir</code></td><td>유형 디렉토리에 이름이 바뀌기 전 기록 폴더 <code>jira/</code>가 남음. Jira 기록은 <code>issues/&lt;KEY&gt;.yaml</code>로 옮깁니다</td></tr>
+        <tr><td><code>config</code> (옛 설정 키)</td><td><code>issue-db.config.yaml</code>에 <code>jira_key_regex</code>·<code>jira_base_url</code>·<code>readme.jira_inline_max</code>·<code>android_versions_supported</code>가 남음. <code>tracker: {kind, base_url, key_regex}</code>·<code>readme.issue_inline_max</code>·<code>platform_versions_supported</code>로 이름만 바꿉니다. DB <code>tracker.kind</code>가 설치되지 않은 트래커여도 이 코드입니다</td></tr>
+        <tr><td><code>issue-key</code></td><td>기록 키가 DB <code>tracker.key_regex</code>나 그 트래커의 작업 키 형식에 맞지 않음</td></tr>
+        <tr><td><code>duplicate-issue</code> · <code>issue-cause</code></td><td>같은 Jira가 두 번 기록됨 · Jira 기록의 원인이 그 유형에 없음</td></tr>
+      </table></div>
+      <p><b>새 트래커 추가</b>(개발자용): Jira 밖의 트래커는 어댑터 모듈 <code>plugin/scripts/trackers/&lt;kind&gt;.py</code> 하나와 사이트 설정 예시, 이슈 DB <code>tracker</code> 선언, 모의 MCP 테스트로 더합니다. 체크리스트는 <code>docs/design/18-trackers.md</code> §6입니다. GitHub Issues 어댑터가 본보기이지만 아직 <b>실험적</b>입니다.</p>
     </section>
 
     <section class="chap" id="g7" data-title="자주 하는 실수">

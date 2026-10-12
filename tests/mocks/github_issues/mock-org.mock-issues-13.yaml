@@ -1,0 +1,13 @@
+# 모의 GitHub 이슈 (합성, 트래커 범용화 §6-1).
+number: 13
+title: 통화 중 끊김
+body: |
+  VoLTE 통화 중 10초쯤 지나면 끊깁니다.
+state: open
+html_url: https://ghe.mock.invalid/mock-org/mock-issues/issues/13
+labels:
+  - {name: Call}
+user: {login: mock-reporter}
+created_at: "2026-09-22T01:00:00Z"
+comments:
+  - {id: 511, user: {login: mock-reporter}, created_at: "2026-09-22T01:05:00Z", body: 재현 로그를 올립니다.}

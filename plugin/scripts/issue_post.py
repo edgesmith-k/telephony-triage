@@ -6,9 +6,9 @@
     issue_post.py render  <KEY> [--fill <json>] [--format jira-wiki|markdown] [--omit a,b] [--again] [--json]
     issue_post.py approve <KEY> --sha <post_sha256> [--json]
 
-`JOB` = `<work_dir>/<KEY>`. 입력은 모두 이미 마스킹된 파일이다: `JOB/analysis.json`, `JOB/jira.json`(원문 인용 검사용 텍스트는
+`JOB` = `<work_dir>/<KEY>`. 입력은 모두 이미 마스킹된 파일이다: `JOB/analysis.json`, `JOB/issue.json`(원문 인용 검사용 텍스트는
 본문에 넣지 않는다), `JOB/plan.json`(있으면), `JOB/triage-state.json`, 스냅샷 `issue-db.config.yaml`(`mask.allow_patterns`,
-`jira_key_regex`).
+`tracker.key_regex`).
 
 - `render`: 스크립트가 결정적인 칸을 채우고 LLM 칸(`problem`·`cause`·`next`·`code_location`)은 `--fill`의 JSON에서 받는다.
   `--fill`이 없으면 LLM 칸을 `TODO(LLM)`로 둔 초안 화면만 낸다(해시 줄 없음). `--fill`이 있으면 검사(형식·basis·길이·TODO·
@@ -26,13 +26,13 @@
   approved_at, expires_at, posted_at, comment_id}`.
 
 게시 가능(postable) 조건(첫 실패가 `reason`): 코멘트 도구 설정 유효 → analysis.json `status: ok` → `mode` write·read-only →
-`triage-state.json` 마지막 실행의 `request_hash`가 같고 `dry_run`이 거짓 → `jira.origin: mcp` → 게시 이력 없음(또는 `--again`).
+`triage-state.json` 마지막 실행의 `request_hash`가 같고 `dry_run`이 거짓 → `issue.origin: mcp` → 게시 이력 없음(또는 `--again`).
 게시 가능하지 않아도 render는 본문 파일을 만든다(직접 붙여넣기 대안). lock은 잡지 않는다: `JOB/post*` 파일만 쓰고
 git·clone·스냅샷·worktree를 건드리지 않는다.
 
 종료 코드: 0 = 완료(postable이 거짓이어도 render는 0), 1 = 검사 실패(fill 형식·basis·길이·TODO·로그 원문 줄·Jira 원문 인용·
 마스킹 잔여, approve의 sha 불일치·render 뒤 post.md 편집·분석 변경·이미 게시함), 2 = 사용·환경 오류(site-defaults·사용자
-config 없음, 키 형식 불일치, analysis.json 없음·status≠ok, approve인데 postable 거짓, plan.json 손상).
+config 없음, 키 형식 불일치, 트래커 불일치(`tracker-mismatch`: 설정 `tracker.kind` ≠ 스냅샷(없으면 사용자 clone) 이슈 DB 선언, 둘 다 없으면 대조 불가), analysis.json 없음·status≠ok, approve인데 postable 거짓, plan.json 손상).
 """
 
 from __future__ import annotations
@@ -51,8 +51,8 @@ from common import compat, issuepost, masking, session_lock, site_defaults, user
 from common.exitcodes import CHECK_FAILED, OK, USAGE  # noqa: E402
 import platforms  # noqa: E402
 from platforms import session as platform_session  # noqa: E402
+import trackers  # noqa: E402
 
-DEFAULT_KEY_RE = r"[A-Z][A-Z0-9]+-\d+"     # jira_fields.DEFAULT_KEY_RE와 같다
 OMIT_KEYS = ("failed_step", "fields", "evidence", "must_show", "others")
 FILL_KEYS = {"problem", "cause", "next", "code_location"}
 BASIS = {"log": "[로그로 확인]", "code": "[코드로 추정]", "placeholder": "[placeholder 규칙 결과]", "explore": "[탐색 분석 가설]"}
@@ -91,10 +91,31 @@ class Job:
         work = Path(str(userconfig.get(self.cfg, "work_dir"))).expanduser()
         self.snap = work / session_lock.SNAPSHOT_DIR
         db_cfg = compat.load_db_config(self.snap) if (self.snap / "issue-db.config.yaml").is_file() else {}
-        key_re = re.compile(str(db_cfg.get("jira_key_regex") or DEFAULT_KEY_RE))
-        self.key = args.key
-        if not issuepost.KEY_SAFE_RE.fullmatch(self.key) or not key_re.fullmatch(self.key):
-            raise Usage(f"Jira 키 형식이 아니다: {self.key}")
+        # 세션 tracker.kind와 이슈 DB 선언(스냅샷, 없으면 사용자 clone의 issue_db.path)이 다르면 거부(tracker-mismatch, 종료 2).
+        # 둘 다 읽을 수 없으면 대조할 수 없으므로 멈춘다(fail-closed)
+        declared = db_cfg
+        if not declared:
+            clone = Path(str(userconfig.get(self.cfg, "issue_db.path") or "")).expanduser()
+            try:
+                declared = compat.load_db_config(clone) if str(clone) not in ("", ".") \
+                    and (clone / "issue-db.config.yaml").is_file() else {}
+            except Exception as exc:  # noqa: BLE001 — 손상된 설정도 대조 불가
+                raise Usage(f"이슈 DB 설정을 읽지 못해 트래커 선언을 대조할 수 없다: {clone} ({type(exc).__name__})") from exc
+        undeclared = None if declared else (
+            "이슈 DB 설정(스냅샷·issue_db.path의 issue-db.config.yaml)을 찾지 못해 트래커 선언(tracker.kind)을 대조할 수 없다 "
+            "— analyze를 먼저 하거나 issue_db.path를 확인한다")      # 플랫폼 대조(더 구체적인 안내) 뒤에 낸다
+        try:
+            self.tracker = trackers.of(self.cfg)
+            problem = trackers.mismatch(self.cfg, declared) if declared else None
+        except trackers.TrackerConfigError as exc:
+            raise Usage(str(exc)) from exc
+        if problem:
+            raise Usage(problem)
+        tracker = db_cfg.get("tracker") if isinstance(db_cfg.get("tracker"), dict) else {}
+        key_re = re.compile(str(tracker.get("key_regex") or self.tracker.default_key_regex))
+        self.key = self.tracker.parse_key(args.key) or args.key      # 작업 키로 정규화(jira는 입력 그대로)
+        if not self.tracker.safe_key_re.fullmatch(self.key) or not key_re.fullmatch(self.key):
+            raise Usage(f"{self.tracker.label} 키 형식이 아니다: {self.key}")
         self.allow = list((db_cfg.get("mask") or {}).get("allow_patterns") or [])
         self.dir = work / self.key
         self.spec, self.spec_err = issuepost.write_spec(self.cfg)
@@ -102,6 +123,8 @@ class Job:
         done = (self.analysis or {}).get("platform") or userconfig.TOP_PROFILE
         if self.analysis and done != self.platform:      # 다른 플랫폼 분석을 다른 플랫폼 설정으로 게시하지 않는다
             raise Usage(f"이 분석은 {done} 플랫폼이다(선택한 플랫폼: {self.platform}) — --platform {done}으로 다시 실행한다")
+        if undeclared:
+            raise Usage(undeclared)
         self.render_doc = _read(self.dir / issuepost.RENDER_FILE, issuepost.RENDER_FILE)
         self.approved = _read(self.dir / issuepost.APPROVED_FILE, issuepost.APPROVED_FILE)
         self.result = _read(self.dir / issuepost.RESULT_FILE, issuepost.RESULT_FILE)
@@ -121,7 +144,7 @@ class Job:
         self.plan_skipped = None
         path = self.dir / "plan.json"
         plan = _read(path, "plan.json")
-        if not plan or (plan.get("jira") or {}).get("key") != self.key:
+        if not plan or (plan.get("issue") or {}).get("key") != self.key:
             return None
         if not (isinstance(plan.get("feedback"), dict) and plan["feedback"].get("decision")):
             return None
@@ -139,8 +162,8 @@ class Job:
     def tool_format(self, override: str | None) -> str:
         if override:
             return override
-        fmt = (self.spec or {}).get("format") or userconfig.get(self.cfg, "jira.write_tools.add_comment.format")
-        return fmt if fmt in issuepost.FORMATS else issuepost.DEFAULT_FORMAT
+        fmt = (self.spec or {}).get("format") or userconfig.get(self.cfg, "tracker.write_tools.add_comment.format")
+        return fmt if fmt in self.tracker.formats else self.tracker.default_format
 
     def posted(self) -> bool:
         return bool(self.result and self.result.get("status") == "posted")
@@ -149,7 +172,7 @@ class Job:
         """(게시 가능, 첫 실패 사유). `history=False`면 게시 이력(6번)은 보지 않는다(approve가 따로 종료 1로 본다)."""
         if self.spec is None:
             return False, (f"코멘트 도구 설정 오류: {self.spec_err}" if self.spec_err
-                           else "쓰기 도구 미설정(jira.write_tools.add_comment)")
+                           else "쓰기 도구 미설정(tracker.write_tools.add_comment)")
         a = self.analysis
         if not a or a.get("status") != "ok":
             return False, "분석 결과(analysis.json status: ok)가 없다"
@@ -165,8 +188,8 @@ class Job:
             return False, "분석 상태(triage-state.json)가 analysis.json과 다르다 — 다시 분석한다"
         if last.get("dry_run") is not False:
             return False, "--dry-run 실행 결과는 게시하지 않는다" if last.get("dry_run") else "실행 기록에 dry-run 여부가 없다 — 다시 분석한다"
-        if (a.get("jira") or {}).get("origin") != "mcp":
-            return False, f"Jira가 MCP에서 오지 않았다(origin: {(a.get('jira') or {}).get('origin')})"
+        if (a.get("issue") or {}).get("origin") != "mcp":
+            return False, f"Jira가 MCP에서 오지 않았다(origin: {(a.get('issue') or {}).get('origin')})"
         if history and self.posted() and not again:
             r = self.result
             return False, (f"이미 게시함(comment {r.get('comment_id') or '?'}, {r.get('posted_at')}) — "
@@ -295,19 +318,19 @@ IN_RANGE = {True: "발생 시각 포함", "partial": "발생 시각 일부", Fal
 
 def build(job: Job, a: dict, plan: dict | None, fill: dict | None, omit: set[str]) -> tuple[dict, str, dict]:
     """(sections, tail, info). fill이 None이면 LLM 칸은 TODO(LLM)."""
-    jira_doc = _read(job.path("jira.json"), "jira.json") or {}
-    fields = jira_doc.get("jira") or {}
-    note = ((plan or {}).get("jira") or {}).get("note")
+    jira_doc = _read(job.path("issue.json"), "issue.json") or {}
+    fields = jira_doc.get("issue") or {}
+    note = ((plan or {}).get("issue") or {}).get("note")
     cl = classify(a, plan)
     s = {name: [] for name in issuepost.SECTIONS}
     # PROBLEM
-    s["PROBLEM"].append(_line(f"Jira: {job.key}"))
+    s["PROBLEM"].append(_line(f"{job.tracker.label}: {job.tracker.display(job.key)}"))
     if "fields" not in omit:
-        parts = [f"{label}: {_clip(fields[k], FIELD_MAX)}" for k, label in (("model", "단말"), ("sw", "SW"), ("android_version", _platform_label(a)),
+        parts = [f"{label}: {_clip(fields[k], FIELD_MAX)}" for k, label in (("model", "단말"), ("sw", "SW"), ("platform_version", _platform_label(a)),
                                                           ("carrier", "캐리어"), ("occurred_on", "발생일")) if fields.get(k)]
         if parts:
             s["PROBLEM"].append(_line(" · ".join(parts)))
-    step = (a.get("jira") or {}).get("failed_step")
+    step = (a.get("issue") or {}).get("failed_step")
     if "failed_step" not in omit and isinstance(step, dict) and step.get("text"):
         s["PROBLEM"].append(_line(f"실패 스텝(보조 정보): {_clip(step['text'], FAILED_STEP_MAX)}"))
     if note:
@@ -351,7 +374,7 @@ def build(job: Job, a: dict, plan: dict | None, fill: dict | None, omit: set[str
     if "others" not in omit and others:
         s["ANALYSIS"].append(_line("기타 후보: " + "; ".join(
             f"{_cand_name(c)} {c.get('title') or ''} ({c.get('score')})".replace("  ", " ") for c in others)))
-    tail = f"telephony-triage 자동 분석(실행 {a.get('run')}, {a.get('generated_at')}). Jira·로그 원문은 싣지 않는다."
+    tail = f"telephony-triage 자동 분석(실행 {a.get('run')}, {a.get('generated_at')}). {job.tracker.label}·로그 원문은 싣지 않는다."
     texts = jira_doc.get("text") or {}
     quote_src = [str(texts.get("summary") or ""), str(texts.get("description") or "")] + \
         [str(c) for c in texts.get("comments") or []]
@@ -420,11 +443,11 @@ def check_fill(raw, need_problem: bool, code_skipped: bool, masker, quote_src: l
         problems.append("problem은 문자열 또는 null이다")
     elif need_problem:
         if not (problem or "").strip():
-            problems.append("problem(증상 한 줄)이 필요하다(plan의 jira.note가 없다)")
+            problems.append("problem(증상 한 줄)이 필요하다(plan의 issue.note가 없다)")
         else:
             texts.append(("problem", problem, PROBLEM_MAX))
     elif problem:
-        warnings.append("plan의 jira.note가 있어 problem은 무시했다")
+        warnings.append("plan의 issue.note가 있어 problem은 무시했다")
     cause = raw.get("cause")
     if not isinstance(cause, list) or not CAUSE_ITEMS[0] <= len(cause) <= CAUSE_ITEMS[1]:
         problems.append(f"cause는 {CAUSE_ITEMS[0]}~{CAUSE_ITEMS[1]}개 목록이다")
@@ -527,6 +550,8 @@ def cmd_render(args, job: Job) -> tuple[dict, int]:
     a = job.require_analysis()
     omit = _omit(args.omit)
     plan = job.plan()
+    if args.format and args.format not in job.tracker.formats:
+        raise Usage(f"--format {args.format}은 이 트래커({job.tracker.name})가 받지 않는다: {'|'.join(job.tracker.formats)}")
     fmt = job.tool_format(args.format)
     job.dir.mkdir(parents=True, exist_ok=True)
     userconfig.ensure_private_dir(job.dir)
@@ -598,7 +623,7 @@ def cmd_render(args, job: Job) -> tuple[dict, int]:
 
 
 def spec_format(job: Job) -> str:
-    return (job.spec or {}).get("format") or issuepost.DEFAULT_FORMAT
+    return (job.spec or {}).get("format") or job.tracker.default_format
 
 
 def cmd_approve(args, job: Job) -> tuple[dict, int]:
@@ -624,7 +649,8 @@ def cmd_approve(args, job: Job) -> tuple[dict, int]:
         return {"error": "이미 게시함 — 다시 올리려면 사용자가 명시한 뒤 render --again"}, CHECK_FAILED
     at = issuepost.now()
     spec = job.spec
-    record = {"schema": 1, "key": job.key, "tool": spec["tool"], "key_arg": spec["key_arg"],
+    record = {"schema": 1, "key": job.key, "tool": spec["tool"], "key_arg": issuepost.spec_tracker(spec).key_arg_id(spec),
+              "kind": spec["kind"],
               "body_sha256": doc["post_sha256"], "format": doc.get("format"), "request_hash": a.get("request_hash"),
               "approved_at": issuepost.iso(at), "expires_at": issuepost.iso(issuepost.expires(at)), "used_at": None,
               "again": bool(doc.get("again"))}
@@ -668,7 +694,7 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("render", parents=[common])
     p.add_argument("key", metavar="KEY")
     p.add_argument("--fill", metavar="json", help="LLM 칸 JSON {problem, cause[{basis, text}], next[], code_location}")
-    p.add_argument("--format", choices=issuepost.FORMATS, help="본문 형식(기본: 코멘트 도구 설정, 없으면 jira-wiki)")
+    p.add_argument("--format", choices=tuple(issuepost.RENDERERS), help="본문 형식(기본: 코멘트 도구 설정, 없으면 jira-wiki)")
     p.add_argument("--omit", metavar="a,b", help="뺄 스크립트 칸 항목: " + "|".join(OMIT_KEYS))
     p.add_argument("--again", action="store_true", help="게시 이력이 있어도 다시 올린다(사용자가 명시했을 때만)")
     p = sub.add_parser("approve", parents=[common])

@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """triage.py — analyze Step 0~4 + Step 5 resolve 드라이버 (contracts.md §3.2, 07-workflow.md §analyze).
 
-    triage.py run <KEY> [--logs <logcat|bugreport>...] [--jira-raw <json> | --jira-file <yaml>]
+    triage.py run <KEY> [--logs <logcat|bugreport>...] [--issue-raw <json> | --issue-file <yaml>]
                   [--code <프로필|경로|키=경로,…|skip>] [--dry-run | --analysis-only] [--answer <kind>=<값>...]
                   [--tz <IANA>] [--year <YYYY>] [--minutes 5] [--refresh]
                   [--failed-step <한 줄>] [--steps-file <파일>] [--clock-offset <±시간>]
     triage.py run <KEY> --more-logs <logcat|bugreport>... [위 옵션]      # --logs와 함께 못 쓴다(종료 코드 2)
-    triage.py run <KEY> --offline-db <path> --out <dir> --logs <logcat...> (--jira-meta <json> | --jira-file <yaml>)
+    triage.py run <KEY> --offline-db <path> --out <dir> --logs <logcat...> (--issue-meta <json> | --issue-file <yaml>)
     triage.py release <KEY>
 
 결정적인 순서(키 검사 → lock → cleanup 후보 → 기존 계획 → 스냅샷·사후 lint → 호환성 → Jira 추출 →
@@ -30,22 +30,22 @@
 - `--analysis-only`(RF-7): 이슈 DB에 기록하지 않는 분석 전용 실행. `--dry-run`과 함께 못 쓴다(종료 코드 2). lock·스냅샷·Jira·코드·파싱·매칭·
   재사용은 그대로 하고, 쓰기 흐름의 질문·부작용(cleanup, 기존 계획 질문·pending 피드백 삭제, 열린 PR 확인)은 건너뛴다. 출력 `mode: "analysis-only"`
   (`read_only_reasons`·`open_prs` 없음, `plan`은 `{exists, source, pr_number}`만), ok로 끝나면 lock을 풀고 `lock_released: true`(`lock_owner` 없음).
-  `--jira-file`은 `--dry-run` 없이도 받는다. 입력 해시에는 mode가 없어 이어서 보통 analyze를 하면 core를 재사용한다.
+  `--issue-file`은 `--dry-run` 없이도 받는다. 입력 해시에는 mode가 없어 이어서 보통 analyze를 하면 core를 재사용한다.
 - `--more-logs <경로…>`(RF-7): 이전 분석의 로그(`triage-state.json`의 `job.logs`) 뒤에 로그를 더해 다시 분석한다(`--logs`와 함께 못 쓴다).
   순서는 이전 로그 뒤에 붙여 `f<순번>`이 안 바뀐다. 이미 있는 경로는 조용히, 내용(sha256)이 같은 다른 경로는 경고하고 건너뛴다. 이전 로그가 없거나
   `--offline-db`면 종료 코드 2. 로그 부분 해시가 바뀌어 Step 3~5를 합친 로그로 모두 다시 계산하고, 이전 `analysis.json`·`report.md`는
   `JOB/runs/<n>/`에 보관한다(최근 5개). `events.json`·`match.json`은 보관하지 않는다.
 - 읽지 않는 파일: `events.json`(파서 출력), `match.json`(매처 출력, `parse_logcat cut --evidence` 입력),
-  `jira.json`(마스킹된 Jira 추출 전체 — 코멘트 원문이 필요할 때만 읽는다), `jira_meta.json`, `triage-state.json`, `analysis-cache.json`.
+  `issue.json`(마스킹된 Jira 추출 전체 — 코멘트 원문이 필요할 때만 읽는다), `issue_meta.json`, `triage-state.json`, `analysis-cache.json`.
 
 `--failed-step`·`--steps-file`(선택)은 이 프로세스 안에서만 읽고 마스킹한다. 원문은 하위 스크립트 인자(→ `trace.jsonl`)와
-`triage-state.json`에 쓰지 않는다. 결과는 `jira.json`·`jira_meta.json`·`analysis.json`의 `jira.failed_step`·`report.md`·
+`triage-state.json`에 쓰지 않는다. 결과는 `issue.json`·`issue_meta.json`·`analysis.json`의 `issue.failed_step`·`report.md`·
 `timeline.md` 머리에 **있을 때만** 나온다(보조 정보, 점수·분류·검증에 쓰지 않는다). 없거나 읽지 못해도 출력은 이전과 같다.
 
 사용자 결정이 필요한 곳에서는 멈추고 `{"status": "needs_input", "needs_input": {kind, question, options[], answer}}`를
 낸다(종료 코드 0). 스킬이 사용자에게 묻고 `--answer <kind>=<값>`을 붙여 **같은 명령을 다시** 실행한다. 답과 진행 상태는
 `JOB/triage-state.json`에 남고, 세션 lock owner가 같으면 다시 묻지 않는다(재실행은 멱등). kind:
-`lock`(release-other|take-over|stop) · `plan`(resume|new) · `jira`(MCP 호출 후 재실행) ·
+`lock`(release-other|take-over|stop) · `plan`(resume|new) · `issue`(MCP 호출 후 재실행) ·
 `year`(YYYY) · `reanalyze`(yes|no) · `open_pr`(continue|stop) · `logs`(`--logs`로 재실행) ·
 `code`(프로필|경로|skip) · `code_confirm`(yes|skip) · `time`(ISO 시각) · `window`(full|keep) ·
 `anchor`(off: 실패 스텝 앵커를 쓰지 않고 Jira 발생 시각 기준 범위로 분석, 아래).
@@ -60,7 +60,7 @@
 `--steps-file`의 스텝 시각(**수동 시계 차 `--clock-offset`이 있을 때만**) > `--steps-file`의 스텝 순서(`step_order`: PASS 스텝의
 흔적을 이슈 DB `step_events` 규칙으로 로그에서 찾아 마지막 일치 뒤를 실패 구간으로 본다, 시계 불필요) > Jira 발생 시각(±`--minutes`) >
 증상 시각 스캔(`--answer time`). 시험 장비 시계는 단말 logcat 시계와 다를 수 있어, 시계 차를 모르면 장비 시각은 쓰지 않는다(경고).
-마커·steps-file 앵커는 분석 범위와 근접 보너스의 중심에서 Jira 시각을 대신한다(`JOB/match_meta.json`, `jira_meta.json`은 그대로).
+마커·steps-file 앵커는 분석 범위와 근접 보너스의 중심에서 Jira 시각을 대신한다(`JOB/match_meta.json`, `issue_meta.json`은 그대로).
 앵커 시각이 로그 범위 밖이면 경고하고 다음 출처로 넘어간다. 실패 스텝 문구는 앵커와 무관하게 우선 유형·키워드에 쓴다.
 앵커가 없고 마커 패턴·steps-file도 없으면 출력은 이전과 같다.
 
@@ -84,6 +84,7 @@ sys.path.insert(0, str(SCRIPTS))
 
 from common import events, site_defaults, userconfig, yamlio  # noqa: E402
 import platforms  # noqa: E402
+import trackers  # noqa: E402
 from platforms import session as platform_session  # noqa: E402
 from common.exitcodes import CHECK_FAILED, OK, USAGE  # noqa: E402
 from triagelib.cache import State  # noqa: E402
@@ -110,9 +111,9 @@ def build_parser() -> argparse.ArgumentParser:
     logs.add_argument("--logs", metavar="logcat|bugreport", nargs="+")
     logs.add_argument("--more-logs", metavar="logcat|bugreport", nargs="+", help="이전 분석의 로그 뒤에 로그를 더해 다시 분석(RF-7). --logs와 함께 못 쓴다")
     src = p.add_mutually_exclusive_group()
-    src.add_argument("--jira-raw", metavar="json")
-    src.add_argument("--jira-file", metavar="yaml")
-    src.add_argument("--jira-meta", metavar="json")
+    src.add_argument("--issue-raw", metavar="json")
+    src.add_argument("--issue-file", metavar="yaml")
+    src.add_argument("--issue-meta", metavar="json")
     p.add_argument("--code", metavar="프로필|경로|skip")
     p.add_argument("--dry-run", action="store_true")
     p.add_argument("--analysis-only", action="store_true", help="이슈 DB에 기록하지 않는 분석 전용(cleanup·기존 계획·열린 PR 건너뜀, ok면 lock 해제). --dry-run과 함께 못 쓴다")
@@ -139,15 +140,31 @@ def _emit(result: dict) -> None:
     print(dumps(result))
 
 
+def _work_key(cfg: dict, key: str) -> str | None:
+    """사용자 입력 → 작업 키(트래커 `parse_key` 정규화, jira는 입력 그대로). 경로 안전 형식이 아니면 None — `..` 같은 값이
+    작업 디렉토리 경로가 되지 않는다(트래커 범용화 묶음 3 리뷰 P2-2)."""
+    try:
+        tracker = trackers.of(cfg)
+    except trackers.TrackerConfigError:
+        return None
+    work = tracker.parse_key(key)
+    return work if isinstance(work, str) and tracker.safe_key_re.fullmatch(work) else None
+
+
 def cmd_release(args, defaults: dict) -> int:
     cfg = args.platform_cfg
-    job = Path(str(userconfig.get(cfg, "work_dir"))).expanduser() / args.key
+    key = _work_key(cfg, args.key)
+    if key is None:
+        _emit({"released": False, "note": "작업 디렉토리 없음"})
+        return OK
+    args.key = key
+    job = Path(str(userconfig.get(cfg, "work_dir"))).expanduser() / key
     state = State(job / STATE_FILE)
     runner = Runner(args.plugin_root)
     runner.env[platforms.ENV] = args.platform_name
     if state.data.get("owner"):
         runner.env["TT_LOCK_OWNER"] = state.data["owner"]
-    if not re.fullmatch(r"[A-Za-z0-9._-]+", args.key) or not job.is_dir():
+    if not job.is_dir():
         _emit({"released": False, "note": "작업 디렉토리 없음"})
         return OK
     runner.open_trace(job / "trace.jsonl")
@@ -169,9 +186,12 @@ def cmd_explore(args, defaults: dict) -> int:
     2 = 사용 오류(키 형식·작업 디렉토리·`events.json` 없음·입력 파일 손상).
     """
     cfg = args.platform_cfg
-    if not re.fullmatch(r"[A-Za-z0-9._-]+", args.key):
+    # --out(offline_eval JOB)이면 키는 표시용 이름이고 경로가 아니다 — 형식만 본다. 없으면 작업 키(경로)로 정규화한다
+    key = (args.key if re.fullmatch(r"[A-Za-z0-9._-]+", args.key) else None) if args.out else _work_key(cfg, args.key)
+    if key is None:
         print(f"Jira 키 형식이 아니다: {args.key} — 키를 확인한 뒤 다시 실행한다", file=sys.stderr)
         return USAGE
+    args.key = key
     job = Path(args.out).expanduser().resolve() if args.out else Path(str(userconfig.get(cfg, "work_dir"))).expanduser() / args.key
     if not job.is_dir():
         print(f"작업 디렉토리가 없다: {job} — 이 키로 /telephony-triage:analyze를 먼저 실행한다", file=sys.stderr)

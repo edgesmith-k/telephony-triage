@@ -18,8 +18,8 @@ class FixOps:
         if extra.get("build"):
             item["build"] = extra["build"]
         item.update(date=extra.get("date") or self.day, by=extra.get("by") or self.user)
-        if extra.get("jira"):
-            item["jira"] = extra["jira"]
+        if extra.get("issue"):
+            item["issue"] = extra["issue"]
         if extra.get("fixture"):
             item["fixture"] = self.fixture_ref(extra["fixture"])
         if keep_fix:
@@ -84,7 +84,7 @@ class FixOps:
                 raise Reject("fixed-in-build-missing", "fixed_in에 빌드가 있는 항목이 없습니다. 먼저 fix-submitted로 "
                              "빌드를 추가한다.", i)
             record = {"result": "passed", "build": v["build"], "date": v["date"], "by": v["by"]}
-            for key in ("jira", "fixture", "scenario_evidence", "note"):
+            for key in ("issue", "fixture", "scenario_evidence", "note"):
                 if v.get(key):
                     record[key] = v[key]
             fix.update(status="fixed", verification=record)

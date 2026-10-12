@@ -42,7 +42,7 @@ causes:
           note: 수정 반영 빌드에서 같은 403 거절이 재발해 open으로 되돌림
     related: [CALL-001-01]
     cp_evidence: null
-    android_versions: ["17"]
+    platform_versions: ["17"]
     code_refs: []
 tags: [ims-registration]
 ---

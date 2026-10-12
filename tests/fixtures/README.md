@@ -8,7 +8,7 @@
 | `logs/` | **파서 fixture** (Phase 2). `<name>.log`는 `tests/mocks/log_fixtures.yaml`의 시나리오에서 `tests/helpers/make_log_fixtures.py`가 만들고(`--check`로 검사), `<name>.events.json`은 `parse --full --tz Asia/Seoul --year 2026` 결과 스냅샷이다(`python3 tests/test_parse_logcat.py --update`로 갱신). 이슈 DB 안의 fixture와 섞지 않는다 |
 
 - 변형 트리(오류 주입, 0건 카테고리, 리뷰 케이스 등)는 커밋하지 않고 샘플 트리를 오염시키지 않는다 (`11-phases.md`).
-  변형(`issue-db-lint-errors`·`-empty-category`·`-pending`·`-dup-id`·`-verify`·`-review`)과 `verify-logs/`는 `tests/helpers/make_variant_dbs.py`가 샘플·시나리오에서 결정적으로 만든다(`--check`로 검사). 샘플을 바꾸면 다시 만든다.
+  변형(`issue-db-lint-errors`·`-empty-category`·`-pending`·`-dup-id`·`-verify`·`-review`·`-github` 등, 전체 목록은 생성기 머리말)과 `verify-logs/`는 `tests/helpers/make_variant_dbs.py`가 샘플·시나리오에서 결정적으로 만든다(`--check`로 검사). 샘플을 바꾸면 다시 만든다.
 - `issue-db-sample/`은 **운영 이슈 DB와 같은 모양**이다. 그래서 개발 안내를 그 안에 두지 않는다. 생성 파일(`README.md`, 카테고리 `README.md`, `STATS.md`, `parser-rules/CHANGELOG.md`)은 `db_build.py`(Phase 5)가 만들기 전까지 **없는 것이 정상**이다(`tests/test_sample_db.py`가 검사한다).
 
 ## 생성 변형 (커밋하지 않음, `runner.variant_db(name)`; 확인용 `make_variant_dbs.py --out DIR`)
@@ -21,6 +21,7 @@
 | `issue-db-verify/` | 검증(Phase 10): CALL-001-01을 `fix-submitted`(빌드 있는 `fixed_in`)로 되돌리고 수정 후 fixture를 뺀 트리. 같은 증상의 다른 원인 CALL-001-02(망 거절 cause 31, scenario만 있음)와 그 양성 fixture가 있다 |
 | `issue-db-review/` | 월간 리뷰(Phase 11): §6.6 항목마다 걸리는 경우와 안 걸리는 경우(중복 유형 DATA-009, pending DATA-001-03, 낮은 수락률·수동 기록 피드백, 급증·과거 일괄 기록, `also_allowed` 누적 등). 목록은 `tests/helpers/make_variant_dbs.py`의 `REVIEW_CASES`, 시험은 `tests/test_db_review.py`(기준일 `--as-of 2026-10-20`). 방치 기간 항목은 git 이력이 필요해서 테스트가 날짜 지정 커밋으로 만든다 |
 | `issue-db-dup-id/` | 머지 간격으로 같은 ID(DATA-001-03 두 번)와 같은 Jira(MOCK-1101 두 곳)가 들어온 트리. 사후 lint 보고 (Phase 7) |
+| `issue-db-github/` | 두 번째 트래커(`docs/design/18-trackers.md`, **합성**): `tracker {kind: github, base_url: https://ghe.mock.invalid/, key_regex: mock-org\.mock-issues-\d+}`, 기록·피드백·evidence의 Jira 키 `MOCK-<n>`을 GitHub 작업 키 `mock-org.mock-issues-<n>`으로(파일 이름 포함). 모의 MCP는 `tests/mocks/github_issues_mcp/`, eval 66·67 |
 | `verify-logs/` | **이슈 DB가 아니다.** `db_verify fix`·`resolution` 입력 로그(수정 후·재발·증상만 남음·시나리오 없음, 마스킹됨). 목록은 그 안의 `README.md` |
 
 ## 합성 샘플 이슈 DB (`issue-db-sample/`)

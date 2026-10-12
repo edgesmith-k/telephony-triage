@@ -238,7 +238,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
       <div class="eyebrow">LIMITATIONS · 현재 한계, 단점, 보완 방법</div>
       <h1>아직 안 되는 것과 그 대응</h1>
       <p>도입을 검토하거나 운영하는 사람이 알아야 할 한계를 숨김없이 정리했습니다. 항목마다 영향, 지금의 대응, 보완 방법, 언제 해소되는지를 붙였습니다. 대부분은 사내 환경에서 실제 로그와 사람으로 확인해야 풀리는 것들입니다.</p>
-      <div class="meta"><span><b>기준</b> main 2026-10-11 (사외 초안 완료, 사내 보완 전)</span><span><b>대상</b> 도입 검토자, 관리자</span><span><b>읽는 시간</b> 약 12분</span></div>
+      <div class="meta"><span><b>기준</b> main 2026-10-12 (사외 초안 완료, 사내 보완 전)</span><span><b>대상</b> 도입 검토자, 관리자</span><span><b>읽는 시간</b> 약 12분</span></div>
     </header>
 
     <section class="chap" id="l1" data-title="한눈에 보기">
@@ -280,7 +280,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
     <section class="chap" id="l2" data-title="아직 검증되지 않은 것">
       <h2><span class="no">2</span>아직 검증되지 않은 것</h2>
       <p class="first">이 절에서 알 수 있는 것: 사외에서 합성 데이터로만 확인해 사내에서 다시 봐야 하는 것</p>
-      <p>사외 개발은 사내 정보를 가져올 수 없어서 합성 데이터로만 재현했습니다. 자동 테스트 1,412개와 CI는 통과하지만, 아래는 실제 환경에서만 확인할 수 있습니다.</p>
+      <p>사외 개발은 사내 정보를 가져올 수 없어서 합성 데이터로만 재현했습니다. 자동 테스트 1,640개와 CI는 통과하지만, 아래는 실제 환경에서만 확인할 수 있습니다.</p>
       <div class="tbl lim"><table>
         <tr><th>한계</th><th>영향</th><th>보완 방법</th><th>언제</th></tr>
         <tr><td>실제 로그 문구</td><td>data 외 카테고리는 예시 규칙이라 실제 로그에서 후보가 안 나오거나 틀림</td><td>실제 로그로 태그·문구 교체(<code>s0_suggest.py</code>가 초안 제안), 카테고리별 시드 유형 5~10개</td><td class="when">S-4</td></tr>
@@ -289,8 +289,9 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
         <tr><td>사내 Claude Code 동작</td><td>hook과 Jira 원문 격리가 사내 버전에서 그대로 동작하는지 모름</td><td>빈 플러그인 실험과 실제 Jira MCP로 확인, 다르면 그것만 고침</td><td class="when">S-2</td></tr>
         <tr><td>지시 주입 방어</td><td>Jira 본문의 "이전 지시를 무시하라" 같은 문장에 흔들리는지 실제로 재지 않음</td><td>주입 eval 59·60을 실제 환경에서 실행, 안전 eval 위반 0 확인</td><td class="when">S-2</td></tr>
         <tr><td>파서 모델 적합성</td><td>사내 로그 형식이 참고 파서 가정과 다르면 여러 지표가 동시에 나빠짐</td><td>S-0 진단(Claude 없이 30분)으로 먼저 확인, 맞지 않으면 검증된 기존 파서를 백엔드로 포팅</td><td class="when">S-0·S-4a</td></tr>
-        <tr><td>Jira 코멘트 쓰기</td><td>실제 코멘트 도구 이름·인자·본문 형식·공개 범위·게시 규정을 모름. 결과 게시는 모의 Jira로만 확인</td><td>사내 Jira MCP에서 확인해 사이트 설정(<code>jira.write_tools.add_comment</code>)에 적음. 그 전에는 게시 기능이 꺼져 본문 파일만 만듦</td><td class="when">S23</td></tr>
+        <tr><td>Jira 코멘트 쓰기</td><td>실제 코멘트 도구 이름·인자·본문 형식·공개 범위·게시 규정을 모름. 결과 게시는 모의 Jira로만 확인</td><td>사내 Jira MCP에서 확인해 사이트 설정(<code>tracker.write_tools.add_comment</code>)에 적음. 그 전에는 게시 기능이 꺼져 본문 파일만 만듦</td><td class="when">S23</td></tr>
         <tr><td>oFono 플랫폼</td><td>oFono 파서는 가정 형식(journald·BSD syslog) placeholder 뼈대. 실제 로그 형식·구성요소·짝 계층·이슈 DB 내용이 없음</td><td>사내 로그를 받아 형식·규칙·이슈 DB를 작성(<code>docs/development/OFONO_LOG_COLLECTION.md</code>). 그 전에는 oFono 분석에 쓰지 않음</td><td class="when">S24~S29</td></tr>
+        <tr><td>GitHub Issues 트래커 (<b>실험적</b>)</td><td>모의 GitHub Issues MCP로만 검증. 실제 MCP 도구·인자·응답 형식, 이슈의 구조화 필드(모델·SW·버전·발생 시각) 위치를 모름. 지금은 그 필드를 사용자에게 물음</td><td>사내는 Jira라 해당 없음(결정 (o)). 실제로 쓰려면 아래 5절 알려진 한계부터 막고, 트래커 전용 MCP 등록(issues 도구만)으로 확인</td><td class="when">쓰기로 할 때 (S30·S31)</td></tr>
       </table></div>
     </section>
 
@@ -345,6 +346,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
         <tr><td>Read 도구로 로그 통독</td><td>Claude가 Read 도구로 로그를 통째로 읽는 것은 hook이 막지 못함</td><td>스킬 지침(필요한 구간만)과 사내 확인 뒤 대책</td><td class="when">S-2 뒤</td></tr>
         <tr><td>사람 이름은 마스킹 못 함</td><td>정해진 형식이 없어 패턴으로 잡을 수 없음</td><td>Jira에서 저장하는 정보 자체를 최소화(요약·설명·댓글 원문 저장 안 함). 리포트·PR에 이름을 넣지 않음</td><td class="when">지금</td></tr>
         <tr><td>Jira 원문 보존 기간</td><td>올리지 않은 작업 폴더에 원문이 남을 수 있음</td><td>cleanup이 후보를 보여주지만 보존 기간과 정리 주체는 미정</td><td class="when">사내 결정(S14)</td></tr>
+        <tr><td>GitHub 트래커: 설정 밖 GitHub MCP 쓰기 (알려진 한계)</td><td>GitHub 트래커를 쓸 때, 트래커로 설정하지 않은 다른 GitHub MCP 등록(예: 일반 GitHub 서버의 이슈 코멘트·이슈 쓰기 도구)으로 트래커 레포 이슈에 쓰면 guard가 잡지 않음(GitHub는 서버 이름 단어가 없고, 규칙 11은 이슈 DB 레포만 봄). Jira 설치에는 해당 없음(jira·atlassian 이름 판정)</td><td>쓰기 전에 대상 레포(<code>owner</code>/<code>repo</code>가 DB <code>tracker.key_regex</code>의 레포) 기준 거부를 규칙 11 앞에 더함. 그때까지 GitHub 트래커는 실험적</td><td class="when">GitHub 트래커를 쓰기 전</td></tr>
       </table></div>
     </section>
 

@@ -25,7 +25,7 @@ WRITE_FLOW_STEPS = {"0-cleanup", "2-preflight"}
 
 
 def _run(ws: Workspace, *extra, key=KEY, jira=None, expect=0) -> dict:
-    args = ["run", key, "--jira-file", jira or MOCK_JIRA / f"{key}.yaml", "--logs", LOG, "--answer", "code=skip", *extra]
+    args = ["run", key, "--issue-file", jira or MOCK_JIRA / f"{key}.yaml", "--logs", LOG, "--answer", "code=skip", *extra]
     return ws.json("triage.py", args, expect=expect)
 
 
@@ -84,14 +84,14 @@ def test_analysis_only_then_stage_is_refused():
 
 def test_analysis_only_accepts_jira_file_without_dry_run():
     ws = Workspace()
-    plain = ws.run("triage.py", ["run", KEY, "--jira-file", MOCK_JIRA / f"{KEY}.yaml", "--logs", LOG])
+    plain = ws.run("triage.py", ["run", KEY, "--issue-file", MOCK_JIRA / f"{KEY}.yaml", "--logs", LOG])
     assert plain.returncode == 2 and "--analysis-only" in plain.stderr      # 안내 문구도 새 플래그를 알린다
-    assert _only(ws)["jira"]["origin"] == "file"
+    assert _only(ws)["issue"]["origin"] == "file"
 
 
 def test_analysis_only_with_dry_run_is_usage_error():
     ws = Workspace(build=False)
-    proc = ws.run("triage.py", ["run", KEY, "--analysis-only", "--dry-run", "--jira-file", MOCK_JIRA / f"{KEY}.yaml",
+    proc = ws.run("triage.py", ["run", KEY, "--analysis-only", "--dry-run", "--issue-file", MOCK_JIRA / f"{KEY}.yaml",
                                 "--logs", LOG, "--answer", "code=skip"])
     assert proc.returncode == 2 and "--analysis-only" in proc.stderr and "--dry-run" in proc.stderr
     assert not proc.stdout.strip() and ws.db_pr("lock", "status")["held"] is False

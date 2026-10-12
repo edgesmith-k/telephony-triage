@@ -26,7 +26,7 @@ class ResolutionOps:
                          "없습니다.", i)
         v = dict(op["verification"])
         evidence = []
-        own = ((self.plan.get("jira") or {}).get("key")) if self.source == "record" else None
+        own = ((self.plan.get("issue") or {}).get("key")) if self.source == "record" else None
         for item in v["evidence"]:
             item = self.fixture_ref(item)
             if self.key_re.fullmatch(item):

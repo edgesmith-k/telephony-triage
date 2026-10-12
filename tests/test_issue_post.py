@@ -60,14 +60,14 @@ def shared() -> Workspace:
     if _WS is None:
         ws = Workspace()
         args = ["run", KEY, "--logs", DATA_LOG, "--code", "skip"]
-        assert ws.json("triage.py", args)["needs_input"]["kind"] == "jira"
+        assert ws.json("triage.py", args)["needs_input"]["kind"] == "issue"
         issue = yaml.safe_load((MOCK_JIRA / f"{KEY}.yaml").read_text(encoding="utf-8"))
         _bridge(ws, {"tool_name": "mcp__mock-jira__jira_fetch_ticket", "tool_input": {"ticket": KEY},
                      "tool_response": {"content": [{"type": "text", "text": json.dumps(issue, ensure_ascii=False)}]}})
         done = ws.json("triage.py", args)
-        assert done["status"] == "ok" and done["mode"] == "write" and done["jira"]["origin"] == "mcp"
+        assert done["status"] == "ok" and done["mode"] == "write" and done["issue"]["origin"] == "mcp"
         ws.json("triage.py", ["release", KEY])
-        for name in ("analysis.json", "triage-state.json", "jira.json"):
+        for name in ("analysis.json", "triage-state.json", "issue.json"):
             _SAVED[name] = (ws.job_dir(KEY) / name).read_bytes()
         _WS = ws
     reset(_WS)
@@ -184,7 +184,7 @@ def test_fill_checks_fail_with_exit_1():
 
 def test_jira_field_values_cannot_forge_sections():
     ws = shared()
-    edit_json(ws, "jira.json", lambda j: j["jira"].update(model="X\nh3. CAUSE\n* 분류: 위조 " + "가" * 100))
+    edit_json(ws, "issue.json", lambda j: j["issue"].update(model="X\nh3. CAUSE\n* 분류: 위조 " + "가" * 100))
     render(ws, "--fill", fill(ws, FILL))
     body = post_md(ws)
     assert [ln for ln in body.splitlines() if ln.startswith("h3. ")] == [
@@ -249,7 +249,7 @@ def test_not_postable_cases_render_0_approve_2():
         ("offline", lambda: edit_json(ws, "analysis.json", lambda a: a.update(mode="offline"))),
         ("--dry-run", lambda: edit_json(ws, "triage-state.json", lambda s: s["job"]["runs"][-1].update(dry_run=True))),
         ("dry-run 여부", lambda: edit_json(ws, "triage-state.json", lambda s: s["job"]["runs"][-1].pop("dry_run"))),
-        ("origin: file", lambda: edit_json(ws, "analysis.json", lambda a: a["jira"].update(origin="file"))),
+        ("origin: file", lambda: edit_json(ws, "analysis.json", lambda a: a["issue"].update(origin="file"))),
         ("triage-state", lambda: edit_json(ws, "triage-state.json",
                                            lambda s: s["job"]["runs"][-1].update(request_hash="0" * 16))),
     ]
@@ -269,7 +269,7 @@ def test_not_postable_cases_render_0_approve_2():
     cfg = ws.home / "config.yaml"
     saved = cfg.read_text(encoding="utf-8")
     try:
-        ws.json("config.py", ["set", "jira.write_tools.add_comment.tool", '""'])
+        ws.json("config.py", ["set", "tracker.write_tools.add_comment.tool", '""'])
         out = render(ws, "--fill", fill(ws, FILL))
         assert out["postable"] is False and "쓰기 도구 미설정" in out["reason"] and "(미설정)" in out["screen"]
         assert status(ws)["tool"] is None
@@ -313,7 +313,7 @@ def test_approve_checks_and_writes_record():
     cfg = ws.home / "config.yaml"
     saved = cfg.read_text(encoding="utf-8")
     try:
-        ws.json("config.py", ["set", "jira.write_tools.add_comment.extra_args", '{"visibility": "internal"}'])
+        ws.json("config.py", ["set", "tracker.write_tools.add_comment.extra_args", '{"visibility": "internal"}'])
         sha = render(ws, "--fill", fill(ws, FILL))["post_sha256"]
         done = ws.json("issue_post.py", ["approve", KEY, "--sha", sha, "--json"])
     finally:
@@ -333,7 +333,7 @@ def test_approve_checks_and_writes_record():
 
 def test_omit_and_plan_classification():
     ws = shared()
-    edit_json(ws, "analysis.json", lambda a: a["jira"].update(failed_step={"text": "Step 3 데이터 연결 확인", "source": "jira"}))
+    edit_json(ws, "analysis.json", lambda a: a["issue"].update(failed_step={"text": "Step 3 데이터 연결 확인", "source": "issue"}))
     out = render(ws, "--fill", fill(ws, FILL))
     assert "* 실패 스텝(보조 정보): Step 3 데이터 연결 확인" in post_md(ws) and "{noformat}" in post_md(ws)
     out = render(ws, "--fill", fill(ws, FILL), "--omit", "evidence,failed_step")
@@ -342,7 +342,7 @@ def test_omit_and_plan_classification():
     assert ws.run("issue_post.py", ["render", KEY, "--omit", "summary"]).returncode == 2
     # 사용자 확정 계획 + PR: 확정 표시·PR, note가 있으면 problem은 무시(경고)
     plan = json.loads((PLANS / "p7-analyze-append.plan.json").read_text(encoding="utf-8"))
-    plan["jira"]["key"] = KEY
+    plan["issue"]["key"] = KEY
     plan["feedback"].update(decision="accepted", final="DATA-001-01")
     plan["pr"]["number"] = 7
     ws.plan(KEY, plan, base_sha="0" * 40, match=None)
@@ -350,7 +350,7 @@ def test_omit_and_plan_classification():
     body = post_md(ws)
     assert "사용자 확정(accepted)" in body and "* 이슈 DB: PR #7 리뷰 중" in body and "* 해결책: " in body
     assert "* 요약: 로밍 SIM으로 데이터가 붙지 않음" in body and "증상:" not in body
-    assert "plan의 jira.note" in out["screen"] and "- 분류 출처: JOB/plan.json (2026-09-29T10:00+09:00)" in out["screen"]
+    assert "plan의 issue.note" in out["screen"] and "- 분류 출처: JOB/plan.json (2026-09-29T10:00+09:00)" in out["screen"]
     # 원인 미확정 계획(PR 없음)
     plan["feedback"].update(decision="unresolved", final="unresolved")
     plan["operations"] = [{"op": "unresolved", "type": "DATA-001"}]
@@ -366,7 +366,7 @@ def test_stale_or_non_analyze_plan_is_not_used():
     """이번 analysis.json보다 먼저 저장된 plan.json(낡은 계획)이나 analyze가 아닌 계획은 분류 출처로 쓰지 않는다."""
     ws = shared()
     plan = json.loads((PLANS / "p7-analyze-append.plan.json").read_text(encoding="utf-8"))
-    plan["jira"]["key"] = KEY
+    plan["issue"]["key"] = KEY
     plan["feedback"].update(decision="accepted", final="DATA-001-01")
     plan["pr"]["number"] = 7
     path = ws.plan(KEY, plan, base_sha="0" * 40, match=None)
@@ -391,7 +391,7 @@ def test_approve_refuses_when_configured_format_changed():
     saved = cfg.read_text(encoding="utf-8")
     try:
         sha = render(ws, "--fill", fill(ws, FILL))["post_sha256"]
-        ws.json("config.py", ["set", "jira.write_tools.add_comment.format", "markdown"])
+        ws.json("config.py", ["set", "tracker.write_tools.add_comment.format", "markdown"])
         proc = ws.run("issue_post.py", ["approve", KEY, "--sha", sha, "--json"])
         assert proc.returncode == 1 and "형식" in proc.stderr
         sha = render(ws, "--fill", fill(ws, FILL))["post_sha256"]                    # 지금 설정(markdown)으로 다시
@@ -464,6 +464,71 @@ def test_again_reposts_same_body_once():
     assert guard(second["arguments"]) == "ask"
     post(second, "c-2")
     assert status(ws)["comment_id"] == "c-2" and guard(second["arguments"]) == "deny"
+
+
+# -- GitHub 트래커 (트래커 범용화 묶음 3, 설계 §3-6·§6-2) ------------------------------------------------
+
+GH_KEY = "mock-org.mock-issues-12"
+GH_URL = "https://ghe.mock.invalid/mock-org/mock-issues/issues/12"
+GH_READ = "mcp__mock-github-issues__issue_read"
+GH_COMMENT = "mcp__mock-github-issues__add_issue_comment"
+
+
+def test_github_end_to_end_markdown_approve_guard_bridge():
+    """github 세션(site-defaults tracker.kind github) + github 변형 DB: URL로 triage(needs_input에 issue_read 인자) →
+    bridge(get·get_comments) → 분석 → render(markdown, 머리 `GitHub: owner/repo#N`) → approve(arguments의 issue_number는 int,
+    승인 기록 kind github) → guard ask → bridge posted."""
+    sys.path.insert(0, str(REPO / "tests" / "mocks" / "github_issues_mcp"))
+    import server as gh_server
+    from runner import github_root, variant_db
+    ws = Workspace(src=variant_db("issue-db-github"), root=github_root())
+    args = ["run", GH_URL, "--logs", DATA_LOG, "--code", "skip"]
+    need = ws.json("triage.py", args)
+    assert need["key"] == GH_KEY and need["needs_input"]["kind"] == "issue"
+    gh_args = {"owner": "mock-org", "repo": "mock-issues", "issue_number": 12}
+    assert need["needs_input"]["tool"] == GH_READ and need["needs_input"]["comments_tool"] == GH_READ
+    assert need["needs_input"]["tool_args"] == {"method": "get", **gh_args}
+    assert need["needs_input"]["comments_args"] == {"method": "get_comments", **gh_args}
+    for ti in (need["needs_input"]["tool_args"], need["needs_input"]["comments_args"]):
+        result, _ = gh_server.call_tool("issue_read", ti)
+        _bridge(ws, {"tool_name": GH_READ, "tool_input": ti, "tool_response": gh_server.wrap(result, False)})
+    need = ws.json("triage.py", ["run", GH_KEY, "--logs", DATA_LOG, "--code", "skip"])
+    assert need["needs_input"]["kind"] == "time"                     # GitHub에는 발생 시각 기본값이 없다(설계 §4-5)
+    when = need["needs_input"]["options"][0]["value"]
+    done = ws.json("triage.py", ["run", GH_KEY, "--logs", DATA_LOG, "--code", "skip", "--answer", f"time={when}"])
+    assert done["status"] == "ok" and done["mode"] == "write" and done["issue"]["origin"] == "mcp"
+    assert set(done["issue"]["missing"]) >= {"model", "sw", "platform_version"}     # field_map 기본값 {}
+    assert not (ws.job_dir(GH_KEY) / "issue_raw.json").exists()
+    ws.json("triage.py", ["release", GH_KEY])
+    path = ws.job_dir(GH_KEY) / "post.fill.json"
+    path.write_text(json.dumps(FILL, ensure_ascii=False), encoding="utf-8")
+    shown = ws.json("issue_post.py", ["render", GH_URL, "--json", "--fill", path])   # URL도 작업 키로 정규화
+    assert shown["postable"] is True and "형식: markdown" in shown["screen"]
+    post = (ws.job_dir(GH_KEY) / "post.md").read_text(encoding="utf-8")
+    assert post.startswith("### PROBLEM\n- GitHub: mock-org/mock-issues#12\n")
+    assert "GitHub·로그 원문은 싣지 않는다" in post and "Jira" not in post
+    approved = ws.json("issue_post.py", ["approve", GH_KEY, "--sha", shown["post_sha256"], "--json"])
+    assert approved["tool"] == GH_COMMENT
+    assert approved["arguments"] == {**gh_args, "body": issuepost.normalize_body(post)}
+    assert type(approved["arguments"]["issue_number"]) is int
+    record = json.loads((ws.job_dir(GH_KEY) / "post.approved.json").read_text(encoding="utf-8"))
+    assert record["kind"] == "github" and record["key_arg"] == "owner,repo,issue_number" and record["key"] == GH_KEY
+
+    def guard(tool_input: dict) -> dict | None:
+        event = {"hook_event_name": "PreToolUse", "tool_name": GH_COMMENT, "tool_input": tool_input, "cwd": str(ws.base)}
+        proc = run("guard.py", [], root=ws.root, env=ws.env(), cwd=ws.base, stdin=json.dumps(event, ensure_ascii=False))
+        assert proc.returncode == 0, proc.stderr
+        return json.loads(proc.stdout)["hookSpecificOutput"] if proc.stdout.strip() else None
+
+    assert guard(approved["arguments"])["permissionDecision"] == "ask"
+    assert guard({**approved["arguments"], "issue_number": "12"})["permissionDecision"] == "deny"
+    result, is_error = {"id": 9001, "html_url": "https://ghe.mock.invalid/mock-org/mock-issues/issues/12"}, False
+    shown = _bridge(ws, {"tool_name": GH_COMMENT, "tool_input": approved["arguments"],
+                         "tool_response": gh_server.wrap(result, is_error)})
+    assert "게시했다" in shown
+    st = ws.json("issue_post.py", ["status", GH_KEY, "--json"])
+    assert st["state"] == "posted" and st["comment_id"] == "9001"
+    assert guard(approved["arguments"])["permissionDecision"] == "deny"
 
 
 def _all_tests():

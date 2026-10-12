@@ -39,7 +39,7 @@ FULL_CHECKS = {
 
 
 def test_pr_body_skipped_checks():
-    plan = {"jira": {"key": "ABC-1", "model": "M1", "note": "메모"}}
+    plan = {"issue": {"key": "ABC-1", "model": "M1", "note": "메모"}}
     body = db_summary.pr_body(_screen(notes=["n1"], ids=[{"temp_id": "T1", "id": "DATA-001"}],
                                       files=[{"kind": "유형", "path": "data/DATA-001/type.md", "change": "신규"}]),
                               plan)
@@ -108,7 +108,7 @@ def test_verification_rows():
 @pytest.mark.parametrize("path,kind", [
     ("README.md", "생성 파일"), ("STATS.md", "생성 파일"), ("parser-rules/CHANGELOG.md", "생성 파일"),
     ("data/README.md", "생성 파일"),
-    ("data/DATA-001-x/jira/ABC-1.yaml", "Jira 기록"), ("feedback/a.md", "피드백"),
+    ("data/DATA-001-x/issues/ABC-1.yaml", "Jira 기록"), ("feedback/a.md", "피드백"),
     ("data/DATA-001-x/type.md", "유형"), ("parser-rules/data.yaml", "파서 규칙"),
     ("data/DATA-001-x/fixtures/DATA-001-01.log", "fixture"), ("other.txt", "기타"),
 ])
@@ -146,7 +146,7 @@ def test_reviewers_allow_cause_category_owner(tmp_path):
 
 
 def test_search_key():
-    assert db_summary.search_key({"jira": {"key": "ABC-1"}}, {"ids": [{"id": "DATA-001"}]}) == "ABC-1"
+    assert db_summary.search_key({"issue": {"key": "ABC-1"}}, {"ids": [{"id": "DATA-001"}]}) == "ABC-1"
     assert db_summary.search_key({}, {"ids": [{"id": "DATA-001"}]}) == "DATA-001"
     assert db_summary.search_key({}, {}) is None
 
@@ -231,7 +231,7 @@ def test_summary_flow_reports_fix_changes_only_for_fix_ops():
     from workspace import Workspace
     ws = Workspace()
     job = "fix-reopen-CALL-001-01"
-    plan = {"source": "fix-submitted", "schema_version": 1, "started_at": "2026-10-01T10:00+09:00", "jira": None,
+    plan = {"source": "fix-submitted", "schema_version": 1, "started_at": "2026-10-01T10:00+09:00", "issue": None,
             "commit_message": "[X] 수정 상태 되돌림",
             "operations": [{"op": "update-fix", "cause": "CALL-001-01", "fix": {"status": "open"},
                             "history": {"result": "reverted", "note": "회귀 의심 확인"}}]}
@@ -279,12 +279,12 @@ def _render_screen(**over) -> dict:
         {"id": r, "status": "pass", "reason": "통과 사유"} for r in ("R1", "R2", "R3", "R4")] + [
         {"id": "R5", "status": "pass", "reason": "추가 없음"}, {"id": "R6", "status": "pass", "reason": "표본 없음"}]}}}}
     base = {
-        "source": "analyze", "source_label": "분석 (analyze)", "jira": {"key": "MOCK-7001", "origin": "mcp", "label": None},
+        "source": "analyze", "source_label": "분석 (analyze)", "issue": {"key": "MOCK-7001", "origin": "mcp", "label": None},
         "branch": {"name": "issue/MOCK-7001", "remote": "신규", "remote_sha": None, "base": "main"},
         "reviewers": ["mock-org/telephony-data-owners"], "open_prs": [],
-        "files": [{"kind": "Jira 기록", "path": "data/DATA-001-x/jira/MOCK-7001.yaml", "change": "신규"}],
+        "files": [{"kind": "Jira 기록", "path": "data/DATA-001-x/issues/MOCK-7001.yaml", "change": "신규"}],
         "ids": [], "fixtures": [], "drift_decisions": [], "readme_preview": ["| 2026-09-29 | MOCK-7001 | DATA-001-02 |"],
-        "diff": ["+++ data/DATA-001-x/jira/MOCK-7001.yaml (신규)", "+key: MOCK-7001"], "diff_total_lines": 2,
+        "diff": ["+++ data/DATA-001-x/issues/MOCK-7001.yaml (신규)", "+key: MOCK-7001"], "diff_total_lines": 2,
         "diff_truncated": False,
         "checks": {"lint": {"ok": True, "errors": 0, "warnings": 0, "findings": []}, "ids": {"ok": True, "duplicates": []},
                    "mask": {"ok": True, "detections": 0},
@@ -317,7 +317,7 @@ def _scenario_record() -> tuple[dict, dict]:
     diff = [f"+line {i}" for i in range(48)] + ["+```", "+끝"]
     scr = _render_screen(
         source="record", source_label="수동 기록 (record)", open_prs=None,
-        jira={"key": "MOCK-7005", "origin": "file", "label": "Jira 메타데이터: 오프라인 파일"},
+        issue={"key": "MOCK-7005", "origin": "file", "label": "Jira 메타데이터: 오프라인 파일"},
         pr_title="[DATA-001-04] record MOCK-7005: SIM 미준비",
         branch={"name": "issue/MOCK-7005", "remote": "갱신", "remote_sha": "abc", "base": "main"},
         reviewers=[], files=[{"kind": "유형", "path": "data/DATA-001-x/type.md", "change": "수정"},
@@ -564,7 +564,7 @@ def test_target_title(tmp_path, target, title):
      "## push 전 확인: MOCK-7002 → (규칙 없음 — 원값: [DATA-001-02] add MOCK-7001: 로밍 중 데이터 로밍 OFF)"),
 ])
 def test_render_heading(jira, target, title, head):
-    out = db_summary.render_markdown(_render_screen(jira=jira), {}, _extra(target_id=target, target_title=title))
+    out = db_summary.render_markdown(_render_screen(issue=jira), {}, _extra(target_id=target, target_title=title))
     assert out.splitlines()[0] == head
 
 

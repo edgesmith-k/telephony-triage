@@ -3,7 +3,7 @@
   "schema_version": 1,
   "started_at": "2026-09-29T16:00+09:00",
   "base_sha": "0000000000000000000000000000000000000000",
-  "jira": null,
+  "issue": null,
   "operations": [
     {
       "op": "new-cause",

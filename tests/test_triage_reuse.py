@@ -29,7 +29,7 @@ SKIPPED_STEPS = {"3-markers", "3-parse", "4-match", "4-db", "4-hints", "5-resolv
 
 
 def _run(ws: Workspace, *extra, logs=LOG, code="skip") -> dict:
-    args = ["run", KEY, "--dry-run", "--jira-file", MOCK_JIRA / f"{KEY}.yaml", "--logs", logs]
+    args = ["run", KEY, "--dry-run", "--issue-file", MOCK_JIRA / f"{KEY}.yaml", "--logs", logs]
     args += ["--answer", "code=skip"] if code == "skip" else ["--code", code]
     done = ws.json("triage.py", [*args, *extra])
     assert done["status"] == "ok", done
@@ -104,7 +104,7 @@ def test_log_content_change_invalidates_only_logs_part():
     # 새 로그를 더하면 추가된 이름이 나온다
     other = log.with_name("extra.log")
     other.write_text(log.read_text(encoding="utf-8"), encoding="utf-8")
-    more = ws.json("triage.py", ["run", KEY, "--dry-run", "--jira-file", MOCK_JIRA / f"{KEY}.yaml", "--logs", log, other,
+    more = ws.json("triage.py", ["run", KEY, "--dry-run", "--issue-file", MOCK_JIRA / f"{KEY}.yaml", "--logs", log, other,
                                  "--answer", "code=skip"])
     assert more["reuse"]["changed"] == ["logs"] and more["reuse"]["added_logs"] == ["extra.log"]
 
@@ -202,7 +202,7 @@ def test_moved_code_path_forces_recompute():
 
 def test_needs_input_does_not_write_cache():
     ws = Workspace()
-    args = ["run", KEY, "--dry-run", "--jira-file", MOCK_JIRA / f"{KEY}.yaml", "--logs", LOG]
+    args = ["run", KEY, "--dry-run", "--issue-file", MOCK_JIRA / f"{KEY}.yaml", "--logs", LOG]
     asked = ws.json("triage.py", args)
     assert asked["status"] == "needs_input"
     job = ws.job_dir(KEY)
@@ -223,7 +223,7 @@ def test_offline_has_no_reuse_key_and_output_unchanged():
                         encoding="utf-8")
         logs = [str((REPO / "tests" / "fixtures" / p).resolve()) for p in item["logs"]]
         results.append(run_json("triage.py", ["run", item["key"], "--offline-db", SAMPLE, "--out", work / name, "--logs", *logs,
-                                              "--jira-meta", meta, "--tz", doc["tz"], "--year", doc["year"]]))
+                                              "--issue-meta", meta, "--tz", doc["tz"], "--year", doc["year"]]))
     for name, result in zip(("a", "b"), results):
         assert "reuse" not in result and "run" not in result and not (work / name / "analysis-cache.json").exists()
         text = (work / name / "report.md").read_text(encoding="utf-8")
@@ -250,7 +250,7 @@ def test_cache_and_state_hold_masked_text_only():
     ws = Workspace()
     raw = "010-1234-5678"
     done = _run(ws, "--failed-step", f"4 | 번호 {raw} 로 전화 걸기 | FAIL")
-    assert "<MSISDN#" in done["jira"]["failed_step"]["text"]
+    assert "<MSISDN#" in done["issue"]["failed_step"]["text"]
     again = _run(ws, "--failed-step", f"4 | 번호 {raw} 로 전화 걸기 | FAIL")
     assert again["reuse"]["hit"] is True
     job = ws.job_dir(KEY)
@@ -262,7 +262,7 @@ def test_cache_and_state_hold_masked_text_only():
     state = _state(ws)
     assert set(state["job"]) == {"logs", "runs", "cache"} and set(state["job"]["logs"][0]) == {"path", "name", "sha", "size"}
     assert len(state["job"]["cache"]["request_hash"]) == 16 and set(state["job"]["cache"]["parts"]) == {
-        "logs", "jira", "db", "config", "plugin", "args"}
+        "logs", "issue", "db", "config", "plugin", "args"}
 
 
 def test_runs_are_capped_and_top_change_is_reported():

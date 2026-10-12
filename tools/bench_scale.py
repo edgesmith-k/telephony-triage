@@ -204,7 +204,7 @@ def run_parse_one(spec: str, root: Path, work: Path) -> dict:
     around.write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
     meta = work / "meta.json"
     meta.write_text(json.dumps({"key": "BENCH-1", "occurred_at": mid.isoformat(), "sw": ""}), encoding="utf-8")
-    aargv = ["--db", str(SAMPLE_DB), "--events", str(around), "--jira-meta", str(meta), "--top", "0",
+    aargv = ["--db", str(SAMPLE_DB), "--events", str(around), "--issue-meta", str(meta), "--top", "0",
              "--plugin-root", str(root)]
     res["match_analysis"], code = _timed(lambda: _call(match_signatures.main, aargv, work / "analysis.json"))
     res["match_analysis_exit"] = code

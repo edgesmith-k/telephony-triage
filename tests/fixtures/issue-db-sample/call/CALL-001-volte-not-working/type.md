@@ -66,7 +66,7 @@ causes:
           note: 원인 시그니처는 불충족이었으나 증상이 남아 있어 부분 통과로 기록
     related: [IMS-001-01]
     cp_evidence: null
-    android_versions: ["17"]
+    platform_versions: ["17"]
     code_refs:
       - ref: aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/imsphone/ImsPhoneCallTracker.java
         symbol: ImsPhoneCallTracker#dial

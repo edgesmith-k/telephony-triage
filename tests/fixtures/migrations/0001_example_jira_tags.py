@@ -13,7 +13,7 @@ FROM_VERSION = 1
 TO_VERSION = 2
 DESCRIPTION = "Jira 스키마에 선택 필드 tags 추가, 기존 Jira 파일에 tags: [] 채움"
 
-_SCHEMA = "schema/jira.schema.json"
+_SCHEMA = "schema/issue.schema.json"
 _ANCHOR = '    "carrier": {"type": "string", "minLength": 1},\n'
 _TAGS = '    "tags": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},\n'
 
@@ -26,7 +26,7 @@ def migrate(tree):
         if _ANCHOR not in schema:
             raise RuntimeError(f"{_SCHEMA}에서 carrier 항목을 찾지 못했습니다.")
         tree.write(_SCHEMA, schema.replace(_ANCHOR, _ANCHOR + _TAGS, 1))
-    for rel in tree.glob("*/*/jira/*.yaml"):
+    for rel in tree.glob("*/*/issues/*.yaml"):
         text = tree.read(rel)
         if any(line.startswith("tags:") for line in text.splitlines()):
             continue

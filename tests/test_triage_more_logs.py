@@ -23,7 +23,7 @@ MOCK_JIRA = REPO / "tests" / "mocks" / "jira"
 LOGS = REPO / "tests" / "fixtures" / "logs"
 A = SAMPLE / "data/DATA-001-no-setup-data-call/fixtures/DATA-001-01.log"     # 1위 DATA-001-01
 KEY = "MOCK-1001"
-BASE = ["run", KEY, "--dry-run", "--jira-file", MOCK_JIRA / f"{KEY}.yaml", "--answer", "code=skip", "--answer", "window=full"]
+BASE = ["run", KEY, "--dry-run", "--issue-file", MOCK_JIRA / f"{KEY}.yaml", "--answer", "code=skip", "--answer", "window=full"]
 
 
 def _rebase(src: Path, name: str, start: str) -> Path:

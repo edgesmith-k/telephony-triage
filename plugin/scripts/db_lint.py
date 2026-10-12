@@ -5,10 +5,11 @@
                [--residual <옛 ID>=<새 ID> ...]
 
 검사 (코드 — 수준)
-- `schema` 오류: 유형 frontmatter·Jira·피드백·`.expect.yaml`을 이슈 DB `schema/`로 검사
+- `schema` 오류: 유형 frontmatter·이슈 기록(Jira)·피드백·`.expect.yaml`을 이슈 DB `schema/`로 검사
 - `category`·`id-format`·`id-prefix`·`type-dir` 오류: 카테고리 목록, ID 형식·접두어, 유형 디렉토리 이름
-- `duplicate-id`·`duplicate-jira` 오류: ID 중복, 같은 Jira 키가 둘 이상
-- `jira-key`·`jira-cause` 오류: `jira_key_regex`, 파일 이름, `cause`가 그 유형의 원인인지
+- `duplicate-id`·`duplicate-issue` 오류: ID 중복, 같은 Jira 키가 둘 이상
+- `issue-key`·`issue-cause` 오류: `tracker.key_regex`, 그 DB 트래커(`tracker.kind`)의 경로 안전 키 형식, 파일 이름,
+  `cause`가 그 유형의 원인인지. `tracker.kind`가 설치된 트래커가 아니면 `config` 오류
 - `glossary`·`title-length` 경고: 금지 동의어(GLOSSARY.md), 제목 길이 (§5.7 (2))
 - `related` 오류: 없는 원인, 한쪽만 있는 related
 - `code-ref` 오류: `<root 키>:<상대 경로>` 형식, 절대 경로, `code_root_keys`
@@ -36,8 +37,9 @@
 - `also-allowed` 오류: 자기 원인·같은 유형 원인·없는 ID
 - `merged-into` 오류: 없는 병합 대상
 - `parser-rules` 오류: 규칙 파일 로드·스키마
-- `config` 오류: `platform`이 이름 형식이 아니거나 설치되지 않은 플랫폼, 지원 버전 키 두 이름(`platform_versions_supported`·
-  `android_versions_supported`)을 함께 둠 (17-platforms K5·K9)
+- `config` 오류: `platform`이 이름 형식이 아니거나 설치되지 않은 플랫폼(17-platforms K5), 개명 전 설정 키
+  (`android_versions_supported`·`jira_key_regex`·`jira_base_url`·`readme.jira_inline_max`)가 남아 있음
+- `legacy-dir` 오류: 유형 디렉토리에 개명 전 기록 폴더 `jira/`가 남아 있음(`issues/`로 옮긴다)
 - `yaml-syntax` 오류: YAML 문법 오류(파일·줄). 그 파일만 건너뛰고 검사는 계속(config가 깨지면 검사 불가라 거기서 끝)
 - `synthetic` 경고: `synthetic_allowed: false`인 플러그인에서 `origin: synthetic` fixture
 - `residual-id` 오류: `--residual`로 준 옛 ID가 남아 있음
@@ -62,6 +64,7 @@ sys.path.insert(0, str(SCRIPTS))
 
 import parser_backends  # noqa: E402
 import platforms  # noqa: E402
+import trackers  # noqa: E402
 from common import compat, dbpath, gitscope, issuedb, masking, parser_rules, site_defaults, yamlio  # noqa: E402
 from common.exitcodes import CHECK_FAILED, OK, USAGE  # noqa: E402
 from common.fixtures import CAUSE_ID_RE, TYPE_ID_RE, parse_name  # noqa: E402
@@ -214,7 +217,7 @@ class Linter:
             return self.result()
         cats = [c for c in self.config.get("categories") or [] if isinstance(c, dict)]
         self.categories = {c["key"]: c for c in cats if c.get("key")}
-        self.key_re = self._compile_cfg("jira_key_regex")
+        self.key_re = self._compile_cfg("tracker.key_regex")
         self.fix_ref_re = self._compile_cfg("fix_ref_regex")
         self._check_mask_allow()
         self.root_keys = set(self.config.get("code_root_keys") or [])
@@ -264,7 +267,9 @@ class Linter:
     # 준비 -----------------------------------------------------------------------
 
     def _compile_cfg(self, key: str):
-        value = self.config.get(key)
+        value = self.config
+        for part in key.split("."):     # 점 표기(`tracker.key_regex`)
+            value = value.get(part) if isinstance(value, dict) else None
         if not value:
             return None
         try:
@@ -427,8 +432,9 @@ class Linter:
                 self.err("step-event", cfg, f"{where}.dir은 req|resp|unsol이어야 합니다: {item['dir']!r}")
 
     def _check_platform_config(self) -> None:
-        """`platform`(17-platforms K5): 플랫폼 이름 형식이고 설치된 플랫폼이어야 한다. 지원 버전 키는 새 이름
-        (`platform_versions_supported`)과 옛 이름(`android_versions_supported`) 중 하나만 둔다."""
+        """`platform`(17-platforms K5): 플랫폼 이름 형식이고 설치된 플랫폼이어야 한다. 개명 전 설정 키
+        (`issuedb.LEGACY_CONFIG_KEYS`: `android_versions_supported`·`jira_key_regex`·`jira_base_url`·`readme.jira_inline_max`)는
+        읽지 않으므로 남아 있으면 오류다(조용히 무시하지 않는다)."""
         value = self.config.get("platform")
         if value is not None:
             if not isinstance(value, str) or not platforms.NAME_RE.fullmatch(value):
@@ -436,9 +442,16 @@ class Linter:
             elif value not in platforms.known():
                 self.err("config", issuedb.CONFIG, f"platform: 설치된 플랫폼이 아닙니다: {value} "
                                                    f"(지원 플랫폼: {', '.join(platforms.known())})")
-        if all(self.config.get(k) is not None for k in issuedb.SUPPORTED_VERSION_KEYS):
-            self.err("config", issuedb.CONFIG, f"{' / '.join(issuedb.SUPPORTED_VERSION_KEYS)} 중 하나만 둔다"
-                                               "(새 이름을 쓰고 옛 이름은 지운다).")
+        try:     # tracker.kind(없으면 jira): 설치된 트래커여야 한다. 기록 키의 경로 안전 형식은 그 트래커 것
+            self.tracker = trackers.of_db(self.config)
+        except trackers.TrackerConfigError as exc:
+            self.tracker = None
+            self.err("config", issuedb.CONFIG, str(exc))
+        for old, new in issuedb.LEGACY_CONFIG_KEYS.items():
+            head, _, tail = old.partition(".")
+            node = self.config.get(head)
+            if (tail in node if isinstance(node, dict) else False) if tail else head in self.config:
+                self.err("config", issuedb.CONFIG, f"옛 설정 키 {old}는 읽지 않는다 — {new}로 이름을 바꾼다.")
 
     def _builtin_events(self) -> set[str]:
         """이슈 DB가 선언한 플랫폼의 파서 백엔드 builtin 이벤트 (K6)."""
@@ -455,7 +468,7 @@ class Linter:
         import jsonschema
 
         out = {}
-        for name in ("type", "jira", "feedback", "expect"):
+        for name in ("type", "issue", "feedback", "expect"):
             path = self.root / "schema" / f"{name}.schema.json"
             if path.is_file():
                 out[name] = jsonschema.Draft202012Validator(json.loads(path.read_text(encoding="utf-8")))
@@ -637,7 +650,7 @@ class Linter:
                 self.err("evidence-missing", type_md, f"{cid}: evidence fixture {item}가 없습니다.")
             return
         if self.key_re and self.key_re.fullmatch(item):
-            path = type_md.parent / "jira" / f"{item}.yaml"
+            path = type_md.parent / "issues" / f"{item}.yaml"
             record = self._yaml(path) if path.is_file() else None
             if path in self.bad_yaml:
                 return
@@ -751,25 +764,29 @@ class Linter:
         for type_md, data in self.types:
             type_id = str(data.get("id"))
             causes = {str(c.get("id")) for c in data.get("causes") or [] if isinstance(c, dict)}
-            for path in sorted((type_md.parent / "jira").glob("*.yaml")):
+            if (type_md.parent / "jira").is_dir():     # 개명 전 기록 폴더 — 읽지 않으므로 조용히 0건이 되지 않게 알린다
+                self.err("legacy-dir", type_md.parent / "jira", "옛 기록 폴더 jira/는 읽지 않는다 — issues/로 옮긴다.")
+            for path in sorted((type_md.parent / "issues").glob("*.yaml")):
                 record = self._yaml(path)
                 if path in self.bad_yaml:
                     continue
                 if not isinstance(record, dict):
                     self.err("schema", path, "Jira 기록이 매핑이 아닙니다.")
                     continue
-                self._validate("jira", record, path)
+                self._validate("issue", record, path)
                 key = str(record.get("key"))
                 if self.key_re and not self.key_re.fullmatch(key):
-                    self.err("jira-key", path, f"Jira 키 {key}가 jira_key_regex에 맞지 않습니다.")
+                    self.err("issue-key", path, f"Jira 키 {key}가 tracker.key_regex에 맞지 않습니다.")
+                if self.tracker is not None and not self.tracker.safe_key_re.fullmatch(key):
+                    self.err("issue-key", path, f"{self.tracker.label} 키 {key}가 트래커({self.tracker.name})의 작업 키 형식이 아닙니다.")
                 if path.stem != key:
-                    self.err("jira-key", path, f"파일 이름({path.name})이 키({key})와 다릅니다.")
+                    self.err("issue-key", path, f"파일 이름({path.name})이 키({key})와 다릅니다.")
                 if key in seen:
-                    self.err("duplicate-jira", [path, seen[key]], f"Jira {key}가 두 곳에 있습니다.")
+                    self.err("duplicate-issue", [path, seen[key]], f"Jira {key}가 두 곳에 있습니다.")
                 seen.setdefault(key, path)
                 cause = str(record.get("cause"))
                 if cause != "unresolved" and cause not in causes:
-                    self.err("jira-cause", path, f"cause {cause}가 유형 {type_id}의 원인이 아닙니다.")
+                    self.err("issue-cause", path, f"cause {cause}가 유형 {type_id}의 원인이 아닙니다.")
                 for field in ("note", "failed_step"):
                     if record.get(field):
                         for hit in masking.new_masker().find(str(record[field])):

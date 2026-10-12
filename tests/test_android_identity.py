@@ -148,14 +148,14 @@ def test_reference_backend_is_android():
     assert platforms.backend_name({"parser": {"backend": "reference"}}, "android") == "reference"
 
 
-def test_supported_versions_helper_reads_old_key():
+def test_supported_versions_reads_only_new_key():
+    """원칙 (d): 옛 이름 `android_versions_supported`는 읽지 않는다(db_lint가 config 오류로 알린다)."""
     from common import issuedb
 
-    assert issuedb.supported_versions({"android_versions_supported": [16, "17"]}) == (
-        "android_versions_supported", ["16", "17"])
-    assert issuedb.supported_versions({}) == ("android_versions_supported", [])
-    assert issuedb.supported_versions({"platform_versions_supported": ["2"], "android_versions_supported": ["16"]})[0] \
-        == "platform_versions_supported"
+    assert issuedb.supported_versions({"platform_versions_supported": [16, "17"]}) == (
+        "platform_versions_supported", ["16", "17"])
+    assert issuedb.supported_versions({}) == ("platform_versions_supported", [])
+    assert issuedb.supported_versions({"android_versions_supported": ["16"]}) == ("platform_versions_supported", [])
 
 
 def test_no_android_module_import_outside_platforms():

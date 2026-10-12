@@ -1,0 +1,16 @@
+# 모의 GitHub 이슈 (합성, 트래커 범용화 §6-1). 레포 mock-org/mock-issues, 호스트 ghe.mock.invalid.
+# 구조화 필드(모델·SW·버전·발생 시각)는 일부러 없다 — GitHub field_map 기본값은 비어 있고 사용자에게 묻는다(TODO(SITE:S31)).
+number: 12
+title: 데이터가 연결되지 않음 (슬롯 0)
+body: |
+  LTE 표시는 뜨는데 인터넷이 되지 않습니다.
+  재부팅하면 잠시 되다가 다시 끊깁니다.
+state: open
+html_url: https://ghe.mock.invalid/mock-org/mock-issues/issues/12
+labels:
+  - {name: Data}
+user: {login: mock-reporter}
+created_at: "2026-09-20T06:00:00Z"
+comments:
+  - {id: 501, user: {login: mock-reporter}, created_at: "2026-09-20T06:30:00Z", body: 로그 첨부했습니다.}
+  - {id: 502, user: {login: mock-dev}, created_at: "2026-09-21T00:10:00Z", body: 데이터 설정 확인 부탁드립니다.}

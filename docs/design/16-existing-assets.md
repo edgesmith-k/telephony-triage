@@ -7,11 +7,12 @@
 플러그인은 Jira MCP를 번들하지 않고, 사용자의 Claude Code에 **이미 등록된 서버**를 쓴다.
 
 - **등록 범위**: 플러그인 레포에서 연 세션에서 보여야 하므로 사용자 범위(user scope) 등록이 필요하다. setup이 서버를 못 찾으면 "다른 프로젝트에만 등록돼 있을 수 있음"과 사용자 범위 등록 방법을 안내한다.
-- **서버 이름**: 사람마다 다를 수 있으므로 사용자 config `jira.mcp_server`로 처리한다 (`02-config.md`).
-- **도구 이름 매핑** (`jira.tools`): MCP 구현마다 도구 이름과 응답 형식이 다르므로, 스킬은 도구 이름을 직접 쓰지 않고 **논리 동작**으로 부른다.
+- **서버 이름**: 사람마다 다를 수 있으므로 사용자 config `tracker.mcp_server`로 처리한다 (`02-config.md`).
+- **도구 이름 매핑** (`tracker.tools`): MCP 구현마다 도구 이름과 응답 형식이 다르므로, 스킬은 도구 이름을 직접 쓰지 않고 **논리 동작**으로 부른다.
 
   ```yaml
-  jira:
+  tracker:
+    kind: jira                            # jira | github (18-trackers.md)
     mcp_server: <서버 이름>
     tools:                                # 논리 동작 → 실제 도구 전체 이름
       get_issue: mcp__<server>__<tool>    # 필수
@@ -24,7 +25,7 @@
   ```
   - setup이 서버의 도구 목록에서 이름으로 후보를 골라 채우고(get/issue, search, comment 계열), **사용자가 확인**한다.
   - 코멘트 도구(`write_tools.add_comment`)는 setup이 고르지 않는 팀 기본값이다. 도구 이름·인자를 매핑해 두면 스킬은 `issue_post.py approve` 출력의 도구·인자만 쓰고, guard가 승인 기록(본문 해시·키·30분·1회)과 대조한 뒤 `ask`로 허용한다. 그 밖의 Jira 쓰기(필드 수정·상태 전환·이슈 생성·첨부)는 매핑할 곳이 없고 거부된다.
-  - 팀 공용 기본값은 `plugin/site-defaults.yaml`의 `jira.tools`/`jira.field_map`에 둔다. 팀이 같은 MCP 구현을 쓰면 개인 설정은 서버 이름만 확인하면 된다.
+  - 팀 공용 기본값은 `plugin/site-defaults.yaml`의 `tracker.tools`/`tracker.field_map`에 둔다. 팀이 같은 MCP 구현을 쓰면 개인 설정은 서버 이름만 확인하면 된다.
   - 응답 형식 차이는 `field_map`의 경로 표기(예: `fields.customfield_10001`, `fields.components[].name`)로 흡수한다. 경로로 표현이 안 되면 `plugin/scripts/adapters/jira_<구현>.py`에 변환 함수를 둔다.
 - 사외 모의 Jira MCP(`mock-jira`)는 도구 이름을 일부러 비표준(`jira_fetch_ticket` 등, `15-local-draft.md §15.2`)으로 만들어 매핑 경로를 반드시 거치게 한다.
 
@@ -120,7 +121,7 @@ external_parsers:
    - 한 PR에 유형 여러 개를 넣을 수 있다. 단, 한 PR은 **유형 10개 이하**로 나눈다 (리뷰 가능 크기).
    - 피드백 기록은 만들지 않는다.
    - 해결책은 `unverified`로 시작한다 (기존 자료에 검증 근거 Jira가 있으면 evidence로 넣어 verified).
-   - **Jira 기록은 선택**이다. 기존 자료에 Jira 키가 딸려 있어도 import PR에는 넣지 않는 것을 기본으로 한다(Jira를 대량으로 읽으면 사내 토큰이 많이 든다). 필요하면 나중에 `record --cause <원인 ID>`로 건별로 추가한다. 넣을 때는 `jira.tools.get_issue`로 메타데이터를 채우고, Jira 중복 검사를 거친다.
+   - **Jira 기록은 선택**이다. 기존 자료에 Jira 키가 딸려 있어도 import PR에는 넣지 않는 것을 기본으로 한다(Jira를 대량으로 읽으면 사내 토큰이 많이 든다). 필요하면 나중에 `record --cause <원인 ID>`로 건별로 추가한다. 넣을 때는 `tracker.tools.get_issue`로 메타데이터를 채우고, Jira 중복 검사를 거친다.
 3. 실제 로그(백엔드 builtin 이벤트 포함)로 R1~R5를 돌린다. 양성 fixture가 없는 원인은 `skipped: fixture 없음`으로 두고 리뷰 대상에 올린다.
 4. data 카테고리 오너 리뷰 후 머지한다. 브랜치는 `import/<category>-<n>`.
 
@@ -134,7 +135,7 @@ analyzers:
   data:
     skill: <기존 data 분석 스킬 이름>
     when: ask                    # 기본값. ask(1위가 data일 때 묻기) | always(묻지 않고 호출) | never
-    inputs: [events_json, log_paths, top_candidates, jira_summary]
+    inputs: [events_json, log_paths, top_candidates, issue_summary]
     max_tokens_hint: medium
 ```
 
@@ -152,7 +153,7 @@ analyzers:
 
 - **사외 (Phase D0·2 추가분)**: 파서 백엔드 인터페이스(`base.py`)와 **reference 백엔드**(공통 처리는 제품 수준, builtin 판별 없음), 모의 site 백엔드(`builtin.data.*` 이벤트 1~2개를 내는 가짜), 골든 테스트 틀(`tests/test_golden.py`, 모의 골든으로 동작 확인), 어댑터 예시, 모의 분석 스킬(`tests/mocks/skills/data-analyzer/`), 모의 Jira MCP의 비표준 도구 이름. 모두 테스트 헬퍼 플러그인 루트(`site-defaults.example.yaml` 복사본, `15-local-draft.md §15.1`)에서 돈다.
 - **사내 (S-4a, S-4 전에)**:
-  1. `jira.tools` 매핑 확정 (S-3에서 해도 됨)
+  1. `tracker.tools` 매핑 확정 (S-3에서 해도 됨)
   2. 기존 파서 포팅: **포팅 전 골든 출력 저장** → 이벤트 매핑표 확인 → `parser_backends/site/`로 포팅 → 골든 테스트 통과 → `parser.backend: site` → `db_regress --all`. (포팅이 어려우면 어댑터)
   3. 기존 분류 가져오기: 매핑표 확인 → `import` PR
   4. 분석 스킬 연결: `analyzers.data` 설정, 실제 이슈 1건으로 dry-run

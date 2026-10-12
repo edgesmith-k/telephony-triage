@@ -43,6 +43,34 @@ def plugin_root(kind: str = "plain", **defaults) -> Path:
     return _ROOTS[key]
 
 
+# 두 번째 트래커(GitHub Issues, 트래커 범용화 §6-1): site-defaults.yaml `tracker` 블록 통째 덮어쓰기
+# (`site-defaults.example.yaml`의 주석 예시와 같다). 모의 서버 `tests/mocks/github_issues_mcp/`
+GH_SERVER = "mock-github-issues"
+GH_READ = f"mcp__{GH_SERVER}__issue_read"
+GH_SEARCH = f"mcp__{GH_SERVER}__search_issues"
+GH_COMMENT = f"mcp__{GH_SERVER}__add_issue_comment"
+GITHUB_TRACKER = {
+    "kind": "github",
+    "mcp_server": GH_SERVER,
+    "exclude_servers": [],
+    "tools": {"get_issue": GH_READ, "get_comments": GH_READ, "search_issues": GH_SEARCH},
+    "read_tools": [GH_READ, GH_SEARCH],
+    "write_tools": {"add_comment": {"tool": GH_COMMENT, "body_arg": "body", "extra_args": {}, "format": "markdown"}},
+    "timezone": "Asia/Seoul",
+    "field_map": {},
+}
+
+
+def github_defaults(**tracker) -> dict:
+    """github 트래커 site-defaults 덮어쓰기(`plugin_root(..., **github_defaults())`). `tracker`는 블록 안 키 덮어쓰기."""
+    return {"tracker": {**json.loads(json.dumps(GITHUB_TRACKER)), **tracker}}
+
+
+def github_root(**tracker) -> Path:
+    """site-defaults의 트래커가 github인 플러그인 루트(종류별로 한 번만 만든다)."""
+    return plugin_root("github", **github_defaults(**tracker))
+
+
 def versioned_root(schema: int | None = None, generator: int | None = None) -> Path:
     """`common/versions.py`의 SCHEMA_VERSION·GENERATOR_VERSION을 고친 임시 플러그인 루트 (스크립트는 서브프로세스로 돌아
     monkeypatch가 닿지 않으므로 루트 복사본을 고친다). 종류별로 한 번만 만든다."""

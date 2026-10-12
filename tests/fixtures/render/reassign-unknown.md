@@ -8,7 +8,7 @@
 
 | 구분 | 파일 | 변경 |
 |---|---|---|
-| Jira 기록 | data/DATA-001-x/jira/MOCK-7001.yaml | 신규 |
+| Jira 기록 | data/DATA-001-x/issues/MOCK-7001.yaml | 신규 |
 
 ### ID 할당
 
@@ -28,7 +28,7 @@
 ### 주요 diff
 
 ```diff
-+++ data/DATA-001-x/jira/MOCK-7001.yaml (신규)
++++ data/DATA-001-x/issues/MOCK-7001.yaml (신규)
 +key: MOCK-7001
 ```
 

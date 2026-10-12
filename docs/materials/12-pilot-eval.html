@@ -254,7 +254,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
     <section class="chap" id="p2" data-title="S-5 정확도 관문">
       <h2><span class="no">2</span>S-5 정확도 관문</h2>
       <p class="first">이 절에서 알 수 있는 것: 파일럿 전에 매칭이 실제로 통하는지 재는 방법</p>
-      <p>해결된 과거 Jira로 라벨셋을 만들고 <code>tools/offline_eval.py</code>로 잽니다. 사람을 투입하기 전에 매칭 모델이 실제 로그에서 통하는지 확인하는 단계입니다.</p>
+      <p>해결된 과거 Jira로 라벨셋을 만들고 <code>tools/offline_eval.py</code>로 잽니다. 건마다 analyze와 같은 드라이버(<code>triage.py run --offline-db</code>)를 돌리고, 라벨셋의 Jira 값(발생 시각·SW·요약 등)은 작업 파일 <code>issue_input.json</code>으로 <code>--issue-meta</code>에 넘깁니다. 사람을 투입하기 전에 매칭 모델이 실제 로그에서 통하는지 확인하는 단계입니다.</p>
 <figure class="fig"><svg viewBox="0 0 820 220" role="img" aria-labelledby="spT"><title id="spT">평가군 나누기</title><defs><marker id="sph" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0,0 L10,5 L0,10 z"/></marker></defs>
 <rect class="box" x="20" y="60" width="200" height="90" rx="6"/><text class="t" x="32" y="84">라벨셋 20~30건</text><text class="s" x="32" y="104">Jira 키 · 로그 경로 ·</text><text class="s" x="32" y="122">정답 원인 ID 또는 unresolved</text><text class="s" x="32" y="140">카테고리별 3건 이상</text>
 <path class="ln" d="M220,90 C260,90 260,50 296,50" marker-end="url(#sph)"/><path class="ln" d="M220,120 C260,120 260,160 296,160" marker-end="url(#sph)"/>

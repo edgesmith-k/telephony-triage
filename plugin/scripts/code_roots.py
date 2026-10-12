@@ -128,17 +128,17 @@ def cmd_suggest(args, defaults) -> dict:
     for p in cfg.get("code_profiles") or []:
         roots = {k: str(v) for k, v in (p.get("roots") or {}).items()}
         aosp = Path(roots.get(primary, "")).expanduser()
-        profiles.append({"kind": "profile", "name": p.get("name"), "android_version": str(p.get("android_version")),
+        profiles.append({"kind": "profile", "name": p.get("name"), "platform_version": str(p.get("platform_version")),
                          "roots": roots, "estimated_version": estimate_version(aosp, sources) if aosp.is_dir() else None})
     for p in profiles:
-        p["match"] = version is not None and version in (p["android_version"], p["estimated_version"])
+        p["match"] = version is not None and version in (p["platform_version"], p["estimated_version"])
     recent = []
     for r in sorted(cfg.get("recent_code_roots") or [], key=lambda r: str(r.get("used_on", "")), reverse=True):
         roots = {k: str(v) for k, v in (r.get("roots") or {}).items()}
         aosp = Path(roots.get(primary, "")).expanduser()
         est = estimate_version(aosp, sources) if aosp.is_dir() else None
         recent.append({"kind": "recent", "name": None, "roots": roots, "used_on": r.get("used_on"),
-                       "android_version": est, "estimated_version": est, "match": version is not None and est == version})
+                       "platform_version": est, "estimated_version": est, "match": version is not None and est == version})
     ordered = ([p for p in profiles if p["match"]] + [r for r in recent if r["match"]]
                + [r for r in recent if not r["match"]] + [p for p in profiles if not p["match"]])
     for i, item in enumerate(ordered, 1):

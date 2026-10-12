@@ -21,7 +21,7 @@ op 필수 키 (`op` 외, plan.schema.json 기준):
 - `set-resolution`: cause, resolution
 - `verify-resolution`: cause, verification — verification: evidence·by·date
 - `allow-cause`: fixture, cause
-- `reclassify`: jira, from, to
+- `reclassify`: issue, from, to
 - `update-fix`: cause, fix
 - `add-code-ref`: cause, code_ref
 - `set-status`: id, status
@@ -43,7 +43,7 @@ op 필수 키 (`op` 외, plan.schema.json 기준):
   `must_*`는 AND·시그니처끼리는 OR, `fields` 값은 정규식 fullmatch(부분 일치는 `.*X.*`), `same_phone`(기본 true)은 DDS처럼 슬롯을 가로지르는 원인만 false, `sequence`는 항목 `id` 순서.
 - `recovery_signatures`는 이 원인에 특정한 정상 흐름(계기가 풀리는 이벤트 + 정상 동작을 `sequence`로, 정상 로그 어디에나 맞는 동작만은 금지), `scenario_signatures`는 재현 시나리오 흔적(원인 시그니처 복사·부정 금지). 코드·설정 수정 유형은 `fixed` 전환 전 둘 중 하나 필수.
 - 본문 로그 예시는 마스킹 후 5~15줄, 원인별 상세에만. 재현 시나리오는 verify-fix가 보인다.
-- `code_refs`는 `<root 키>:<상대 경로>` + `symbol`(절대 경로 금지), 버전별 경로는 항목을 나눠 `android_versions`.
+- `code_refs`는 `<root 키>:<상대 경로>` + `symbol`(절대 경로 금지), 버전별 경로는 항목을 나눠 `platform_versions`.
 - Jira `note`는 사용자가 확인한 한 줄. 사람 이름·고객명·원본 식별자 금지. Jira 요약·설명·코멘트 원문은 어디에도 저장하지 않는다.
 - 로그·fixture는 마스킹된 것만.
 

@@ -52,7 +52,7 @@ v1이 이것들 없이도 되는 이유
    | 삭제 (ours) | 변경 | 질문 |
 
    - parser-rule: 기능 필드가 같고 이력 필드만 다르면 main 값을 유지한다.
-5. **plan 내보내기**: 판정 결과를 op로 바꿔 `replay-plan.json`(`source: replay`)에 쓴다. 전용 op로 표현할 수 있으면 그것을 쓰고, 나머지는 **replay 전용 op**를 쓴다. 원래 계획이 있으면 `jira`, `commit_message`, `pr`, 원래 `source`(`origin_source`)와 `jira.origin`을 이어받는다(라벨 유지). 없으면 브랜치의 마지막 커밋 메시지와 열린 PR 정보를 쓴다.
+5. **plan 내보내기**: 판정 결과를 op로 바꿔 `replay-plan.json`(`source: replay`)에 쓴다. 전용 op로 표현할 수 있으면 그것을 쓰고, 나머지는 **replay 전용 op**를 쓴다. 원래 계획이 있으면 `issue`, `commit_message`, `pr`, 원래 `source`(`origin_source`)와 `issue.origin`을 이어받는다(라벨 유지). 없으면 브랜치의 마지막 커밋 메시지와 열린 PR 정보를 쓴다.
 6. **apply 재사용**: `db_pr stage`가 일반 계획과 똑같이 적용한다.
 
 **replay 전용 op** (계획 `source: replay`일 때만 허용)
@@ -91,7 +91,7 @@ v1의 세션 lock(이슈 DB(플랫폼)별 한 번에 한 작업) 대신, 같은 
 
 ## D. MCP로 Jira 첨부 가져오기 (실패 스텝)
 
-v1의 실패 스텝은 필드·설명·시험 절차 텍스트와 사용자가 준 `--steps-file`에서만 얻는다. 첨부(txt/csv/xlsx)를 Jira MCP로 직접 받으려면 `jira.read_tools`에 허용된 읽기 도구만 쓰고, 받은 파일은 `jira_raw.json`처럼 격리해 `--steps-file` 경로로 넘긴다 (`02-config.md`, 14-site.md S22). v1은 zip 첨부를 사용자가 직접 받아 `--steps-file`로 줄 때만 읽는다(안의 `report.html` 하나, 메모리에서만).
+v1의 실패 스텝은 필드·설명·시험 절차 텍스트와 사용자가 준 `--steps-file`에서만 얻는다. 첨부(txt/csv/xlsx)를 Jira MCP로 직접 받으려면 `tracker.read_tools`에 허용된 읽기 도구만 쓰고, 받은 파일은 `issue_raw.json`처럼 격리해 `--steps-file` 경로로 넘긴다 (`02-config.md`, 14-site.md S22). v1은 zip 첨부를 사용자가 직접 받아 `--steps-file`로 줄 때만 읽는다(안의 `report.html` 하나, 메모리에서만).
 
 ### D-2. 시계 차 자동 추정
 
@@ -104,7 +104,7 @@ v1의 실패 스텝은 필드·설명·시험 절차 텍스트와 사용자가 �
 
 ## E. Read 도구 원문 통독 차단 (사내 S1 뒤)
 
-규칙 10(`08-safety.md §9`)은 Bash 명령만 판정한다. Read 도구가 `limit` 없이 로그 원문·zip·`events.json`·`events-full.json`·`jira_raw.json`·`match.json`을 통째로 읽는 것은 막지 못한다. 사내 Claude Code(S1)에서 PreToolUse hook이 `Read`에 걸리고 입력에 `file_path`·`offset`·`limit`이 오는지 확인한 뒤, `hooks.json`에 matcher `Read`를 더하고 `guard.py check_file`(또는 같은 모양의 함수)에서 **`limit`·`offset` 없는 읽기**가 규칙 10과 같은 원문 대상(같은 이름·내용 판별, `fixtures/`·`draft/` 제외)이면 거부한다. 메시지는 규칙 10과 같게 구간 읽기를 안내한다. 대용량 파일은 Read 도구가 기본 줄 수 상한으로 자르기도 하므로(버전에 따라 다름) 상한이 있는 읽기를 어디까지 허용할지는 S1에서 정한다.
+규칙 10(`08-safety.md §9`)은 Bash 명령만 판정한다. Read 도구가 `limit` 없이 로그 원문·zip·`events.json`·`events-full.json`·`issue_raw.json`·`match.json`을 통째로 읽는 것은 막지 못한다. 사내 Claude Code(S1)에서 PreToolUse hook이 `Read`에 걸리고 입력에 `file_path`·`offset`·`limit`이 오는지 확인한 뒤, `hooks.json`에 matcher `Read`를 더하고 `guard.py check_file`(또는 같은 모양의 함수)에서 **`limit`·`offset` 없는 읽기**가 규칙 10과 같은 원문 대상(같은 이름·내용 판별, `fixtures/`·`draft/` 제외)이면 거부한다. 메시지는 규칙 10과 같게 구간 읽기를 안내한다. 대용량 파일은 Read 도구가 기본 줄 수 상한으로 자르기도 하므로(버전에 따라 다름) 상한이 있는 읽기를 어디까지 허용할지는 S1에서 정한다.
 
 - 관찰(W1·W4 eval): Bash `cat`·`cat -n`·`sed -n 1,20p` 같은 로그 원문 구간·전체 읽기도 규칙 10 대상이나 guard가 막지 않았다(eval 18·40·46). 새 WP 여부는 W 끝에서 결정.
 - 종결(W11): eval 18·40 trace에서 재현한 명령은 yaml·py·json 읽기이지 원문 로그가 아니었고, eval 46 trace는 없다. `fixtures/` 아래 로그는 설계상 예외다(`guard.py _is_raw_file`). W 끝 eval에서 다시 보이면 재개한다.

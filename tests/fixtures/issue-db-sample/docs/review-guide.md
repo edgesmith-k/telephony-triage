@@ -21,7 +21,7 @@
 | 품질 낮은 시그니처 | 수락률 < `quality.low_acceptance_rate` | 시그니처 좁히기 또는 삭제 |
 | 중복 후보 | 서로 다른 유형의 증상 시그니처가 같은 fixture에 동시 매칭 | `merged-into`로 병합 |
 | 오래 안 쓰인 원인 | `quality.stale_months` 동안 Jira 없음 | 유지 또는 `status: deprecated` |
-| 지원 종료 버전 | `android_versions`가 비어 있지 않고 모두 지원 목록 밖 | `status: deprecated` |
+| 지원 종료 버전 | `platform_versions`가 비어 있지 않고 모두 지원 목록 밖 | `status: deprecated` |
 | 수정 필요 누적 | `fix.status: open`이면서 Jira가 많음 | 근본 수정 우선순위 제안 |
 | 수정 상태 누락 | `fix-submitted`인데 `ref`/`fixed_in` 없음, `fixed`인데 `verification`/빌드 없음 | 보완 |
 | fixed 전환 불가 | 코드·설정 수정 유형인데 `scenario_signatures`·`recovery_signatures`가 모두 없음 | 시그니처 추가 |
@@ -59,7 +59,7 @@
 - **유형 병합**: 흡수되는 유형을 `status: merged-into:<유형 ID>`로 두고, 그 원인들은 흡수하는 유형의 원인으로 **새 ID를 받아** 옮긴다. 옛 원인에는 `status: merged-into:<새 원인 ID>`를 남긴다. Jira 파일은 새 유형 디렉토리로 옮기고 `cause`를 새 ID로 바꾼다.
 - **원인 병합**: 옛 원인 `status: merged-into:<원인 ID>` + Jira `cause` 갱신.
 - 브랜치는 `move/<옛 ID>-to-<새 ID>`, 계획 `source: move`, op 조합은 `new-cause` → `add-fixture` → `set-status` → `reclassify`다.
-  1. `new-cause`: 옛 원인 내용(제목·설명·시그니처·해결책·`resolution_type`·`android_versions`·`code_refs`)을 복사하고 `temp_id`를 붙인다.
+  1. `new-cause`: 옛 원인 내용(제목·설명·시그니처·해결책·`resolution_type`·`platform_versions`·`code_refs`)을 복사하고 `temp_id`를 붙인다.
   2. `add-fixture`: `for`는 그 `temp_id`, `path`에 옛 fixture의 **이슈 DB 기준 경로**(예: `data/DATA-009-.../fixtures/DATA-009-01.log`)를 쓰면 새 원인 이름으로 복사된다.
   3. `set-status`: 옛 원인은 `merged-into:<temp_id>`, 유형 병합이면 옛 유형은 `merged-into:<유형 ID>`.
   4. `reclassify`: 옛 원인의 Jira마다 `from: <옛 원인 ID>`, `to: <temp_id>`. 파일이 새 유형 디렉토리로 옮겨진다.

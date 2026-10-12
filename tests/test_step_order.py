@@ -252,7 +252,7 @@ def _offline(db: Path, steps: Path | None, *extra, occurred="2026-09-20T14:31:00
     out = tmp("tt-order-") / name
     meta = out.parent / "meta.json"
     meta.write_text(json.dumps({"key": KEY, "occurred_at": occurred, "summary": ""}), encoding="utf-8")
-    args = ["run", KEY, "--offline-db", db, "--out", out, "--logs", LOG, "--jira-meta", meta, *TZ, *extra]
+    args = ["run", KEY, "--offline-db", db, "--out", out, "--logs", LOG, "--issue-meta", meta, *TZ, *extra]
     if steps is not None:
         args += ["--steps-file", steps]
     return run_json("triage.py", args), out
@@ -277,7 +277,7 @@ def test_triage_aligns_failure_window_by_step_order_without_any_clock():
     assert done["logs"]["window"] == {"start": "2026-09-20T05:32:40.000Z", "end": "2026-09-20T05:34:10.000Z"}
     assert _causes(done) == ["DATA-001-01"]                                  # 이른 IMS 403은 구간 밖
     assert not any("스텝 순서 정렬 안 함" in w for w in done.get("warnings") or [])
-    assert done["jira"]["failed_step"] == {"text": "7 | 데이터 연결 확인", "source": "steps_file"}
+    assert done["issue"]["failed_step"] == {"text": "7 | 데이터 연결 확인", "source": "steps_file"}
     assert len((job / "analysis.json").read_bytes()) <= 4096
     meta = json.loads((job / "match_meta.json").read_text(encoding="utf-8"))
     assert meta["occurred_at"] == "2026-09-20T05:32:50.000Z"                 # 실패 스텝 흔적이 없으면 마지막 일치 시각
@@ -317,7 +317,7 @@ def test_triage_paste_text_gives_same_result_as_html():
 
 def test_triage_falls_back_to_jira_window_when_no_step_events_in_db():
     done, job = _offline(SAMPLE, _zip(tmp("tt-zip-") / "att.zip"))
-    assert done["step_anchor"] == {"source": "jira", "order": {"matched": 0, "observable": 0, "missed": 0,
+    assert done["step_anchor"] == {"source": "issue", "order": {"matched": 0, "observable": 0, "missed": 0,
                                                               "reason": "관측 가능한 PASS 스텝 없음"}}
     assert "스텝 순서 정렬 안 함: 관측 가능한 PASS 스텝 없음 — Jira 발생 시각 기준으로 분석했다" in done["warnings"]
     assert done["logs"]["window"] == {"start": "2026-09-20T05:26:00.000Z", "end": "2026-09-20T05:36:00.000Z"}
@@ -332,16 +332,16 @@ def test_triage_order_failure_reasons_fall_back_with_warning():
     only_fail = tmp("tt-p-") / "p.txt"
     only_fail.write_text("Step 1: 데이터 연결 확인 FAIL\n", encoding="utf-8")     # 앞선 PASS 스텝이 없다 — 시도하지 않는다
     done, _ = _offline(db, only_fail)
-    assert done["step_anchor"] == {"source": "jira"} and not any("스텝 순서" in w for w in done.get("warnings") or [])
+    assert done["step_anchor"] == {"source": "issue"} and not any("스텝 순서" in w for w in done.get("warnings") or [])
     # 마지막 관측 가능 스텝(데이터 켜기)의 흔적이 없는 로그(앞부분만)
     short = tmp("tt-s-") / "short.log"
     short.write_text("".join(line + "\n" for line in LOG.read_text(encoding="utf-8").splitlines()[:7]), encoding="utf-8")
     out = tmp("tt-order-") / "x"
     meta = out.parent / "m.json"
     meta.write_text(json.dumps({"key": KEY, "occurred_at": "2026-09-20T14:31:00+09:00", "summary": ""}), encoding="utf-8")
-    done = run_json("triage.py", ["run", KEY, "--offline-db", db, "--out", out, "--logs", short, "--jira-meta", meta, *TZ,
+    done = run_json("triage.py", ["run", KEY, "--offline-db", db, "--out", out, "--logs", short, "--issue-meta", meta, *TZ,
                                   "--steps-file", _paste(tmp("tt-paste-") / "p.txt")])
-    assert done["step_anchor"]["source"] == "jira" and done["step_anchor"]["order"]["reason"] == "마지막 관측 가능 스텝 미발견"
+    assert done["step_anchor"]["source"] == "issue" and done["step_anchor"]["order"]["reason"] == "마지막 관측 가능 스텝 미발견"
     assert "스텝 순서 정렬 안 함: 마지막 관측 가능 스텝 미발견 — Jira 발생 시각 기준으로 분석했다" in done["warnings"]
 
 
@@ -359,7 +359,7 @@ def test_fit_drops_order_last_before_clock_reason_before_focus():
     triage = importlib.import_module("triage")
 
     def make(n: int) -> dict:
-        return {"jira": {"summary": "s" * n}, "files": {"report": "r"},
+        return {"issue": {"summary": "s" * n}, "files": {"report": "r"},
                 "step_anchor": {"source": "step_order", "step": "7", "focus": ["DATA-001"],
                                 "order": {"matched": 4, "observable": 4, "missed": 0,
                                           "last": {"step": "6 | " + "가" * 30, "ts": "2026-09-20T05:32:50.000Z"}},

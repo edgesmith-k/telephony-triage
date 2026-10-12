@@ -28,7 +28,7 @@ causes:
     fix: {status: {{open|fix-submitted|wont-fix|not-a-bug}}, ref: null, fixed_in: [], verification: null, verification_history: []}
     related: []
     cp_evidence: null                 # 모뎀 쪽 원인이면 CP 근거 요약 (선택, 마스킹 대상)
-    android_versions: []              # 빈 목록 = 전 버전
+    platform_versions: []              # 빈 목록 = 전 버전
     code_refs: []
 tags: []
 ---

@@ -112,7 +112,7 @@ v1에서 도구는 이런 브랜치를 바꾸지 않는다. `sync-pr`는 아래 
 **사후 lint(⑤)의 정리 정책** (v1: 도구는 찾아서 알리기만 하고, 정리는 메인테이너가 한다)
 - 사후 lint가 문제를 찾으면 문제 종류, 관련 파일, 관련 커밋(어느 PR들이 머지됐는지)을 보여주고 메인테이너에게 알리라고 안내한다. 도구가 정리 PR을 만들지 않는다.
 - **main에 같은 ID가 두 번** 들어왔으면: 적용 시점 할당과 "머지는 한 번에 하나씩" 규칙 때문에 정상 흐름에서는 생기지 않는다. 터미널에서 직접 편집한 커밋이나 `sync-pr` 없이 머지한 경우에만 생긴다. 메인테이너가 main 커밋 기록의 머지 순서로 **먼저 머지된 쪽을 소유자**로 정하고, 나중 쪽 엔티티를 `chore/fix-db-<문제 ID>` 브랜치에서 다음 빈 ID로 직접 옮긴다. 옮길 참조는 `contracts.md §renumber 참조` 목록이다. 여러 엔티티가 공유하는 파일 안의 참조(다른 원인의 `related`, 피드백 `final`·`suggested`, parser-rules `added_for`)는 나중 PR이 추가한 것만 옮긴다(`git blame`으로 확인, 모호하면 두 작성자에게 묻는다). `db_lint --all`, 옮긴 파일에 대한 `db_lint --residual <옛 ID>=<새 ID>`, `validate`를 통과한 뒤 커밋 메시지에 `Renumbered: <옛 ID> -> <새 ID>` 트레일러를 남긴다. 옛 ID는 원래 주인이 계속 쓰므로 `merged-into`를 남기지 않는다. 이것이 "main에 들어간 ID는 바꾸지 않는다" 규칙의 유일한 예외다 (`03-issue-db.md §5.5`).
-- **Jira 중복**(같은 Jira 파일이 두 유형 디렉토리에 있음): 메인테이너가 나중에 머지된 쪽 파일을 지우고, 두 분류(원인 ID, 작성자, PR 링크)를 두 작성자에게 알린다 (PR 본문에 멘션). 어느 분류가 맞는지는 작성자와 카테고리 오너가 정하고, 필요하면 별도 PR로 `reclassify`한다.
+- **이슈 중복**(같은 이슈 기록 `issues/<작업 키>.yaml`이 두 유형 디렉토리에 있음, lint `duplicate-issue`): 메인테이너가 나중에 머지된 쪽 파일을 지우고, 두 분류(원인 ID, 작성자, PR 링크)를 두 작성자에게 알린다 (PR 본문에 멘션). 어느 분류가 맞는지는 작성자와 카테고리 오너가 정하고, 필요하면 별도 PR로 `reclassify`한다.
 - 그 밖의 규칙 위반(생성 파일 불일치, 없는 related 등)은 해당 파일만 고친다.
 - 정리 PR을 만들기 전에 `db_pr preflight --branch chore/fix-db-<문제 ID>`로 원격에 같은 브랜치나 같은 제목의 열린 PR이 있는지 확인하고, 있으면 만들지 않고 링크만 보여준다.
 - 정리 자동화(소유자 판별, 공유 파일 참조 판별, `renumber --in-main`, 정리 PR 초안 생성)는 `99-deferred.md`에 있다. 파일럿에서 자주 생기면 도입한다.
@@ -139,7 +139,7 @@ v1에서 도구는 이런 브랜치를 바꾸지 않는다. `sync-pr`는 아래 
 ### 6.4 스키마 버전과 마이그레이션
 
 - `issue-db.config.yaml`의 `schema_version`은 이슈 DB 파일 구조가 바뀔 때만 올린다. 필드 추가도 필수 필드면 올린다.
-- 첫 배포(반입) 전에는 v1 정의를 직접 고치고(예: Jira 기록의 선택 필드 `failed_step`), 배포 뒤에는 항상 버전을 올린다.
+- 첫 배포(반입) 전에는 v1 정의를 직접 고치고(예: Jira 기록의 선택 필드 `failed_step`, 트래커 범용화의 `jira/`→`issues/`·`platform_version(s)` 개명 — `18-trackers.md` T4), 배포 뒤에는 항상 버전을 올린다.
 - 플러그인은 `SUPPORTED_SCHEMA = (min, max)`를 가진다.
 
 | 이슈 DB 버전 | 플러그인 동작 |
@@ -186,7 +186,7 @@ v1에서 도구는 이런 브랜치를 바꾸지 않는다. `sync-pr`는 아래 
 | 품질 낮은 시그니처 | 수락률 < `quality.low_acceptance_rate` | 시그니처 좁히기 또는 삭제 |
 | 중복 후보 | 서로 다른 유형의 증상 시그니처가 같은 fixture에 동시 매칭, 제목 유사도 높음 | `merged-into`로 병합 |
 | 오래 안 쓰인 원인 | `quality.stale_months` 동안 Jira 없음 | 유지 또는 원인 `status: deprecated` |
-| 지원 종료 버전 | 원인의 `android_versions`가 **비어 있지 않고** 모두 `android_versions_supported` 밖 (빈 목록 = 전 버전이므로 제외) | 원인 `status: deprecated` |
+| 지원 종료 버전 | 원인의 `platform_versions`가 **비어 있지 않고** 모두 `platform_versions_supported` 밖 (빈 목록 = 전 버전이므로 제외) | 원인 `status: deprecated` |
 | 수정 필요 누적 | `fix.status: open`이면서 Jira가 많은 원인 | 근본 수정 우선순위 제안 |
 | 수정 상태 누락 | `fix-submitted`인데 `ref`/`fixed_in`(브랜치) 없음, `fixed`인데 `verification`/`fixed_in` 빌드 없음 | 보완 |
 | fixed 전환 불가 | 코드·설정 수정 유형인데 `scenario_signatures`와 `recovery_signatures`가 모두 없음 (`fix-submitted`면 verify-fix 불가) | 시그니처 추가 |
@@ -234,14 +234,14 @@ v1에서 도구는 이런 브랜치를 바꾸지 않는다. `sync-pr`는 아래 
 `docs/getting-started.md` (10분 목표):
 1. 플러그인 설치
 2. `/telephony-triage:setup`
-3. 샘플 Jira와 fixture로 `/telephony-triage:analyze --dry-run` 연습 (Jira MCP 없이 연습하려면 `--jira-file <yaml>`로 샘플 Jira 요약을 준다). 스스로 해결한 이슈를 남기는 `/telephony-triage:record --dry-run`도 함께 연습한다
+3. 샘플 Jira와 fixture로 `/telephony-triage:analyze --dry-run` 연습 (Jira MCP 없이 연습하려면 `--issue-file <yaml>`로 샘플 Jira 요약을 준다). 스스로 해결한 이슈를 남기는 `/telephony-triage:record --dry-run`도 함께 연습한다
 4. 실제 이슈로 첫 PR
 5. README, STATS 보는 법
 
 `--dry-run`은 Step 8을 임시 worktree에서 확인 화면까지만 진행하고, 끝나면 worktree와 임시 브랜치를 지운다(`db_pr discard`). 사용자의 이슈 DB 워킹 트리와 브랜치는 바뀌지 않는다. **pending 피드백을 만들지 않는다** (`03-issue-db.md §5.4 (3)`). **gh 인증이 없어도 된다**(`config.py check --for dry-run`, 확인 화면에 "push 불가: gh 인증 없음"만 표시). 그래서 setup의 gh 로그인 전에도 연습할 수 있다. 작업 계획은 남겨두므로 같은 Jira를 다시 analyze하면 이어서 할 수 있다.
 
-`--jira-file <yaml>`: Jira MCP 대신 파일에서 Jira 요약(`key`, `summary`, `description`, `field_map` 항목 값)을 읽는다. 계획에는 `jira.origin: file`로 남는다 (`contracts.md §작업 계획`).
-- analyze는 `--dry-run`과 함께일 때만 허용한다. 실제 PR은 Jira MCP로 읽은 값으로만 만든다: `--dry-run --jira-file`로 만든 계획을 실제 analyze가 이어받으면 Step 8 전에 Jira MCP로 다시 읽어 `jira`를 덮고 `origin: mcp`로 바꾼다.
+`--issue-file <yaml>`: Jira MCP 대신 파일에서 Jira 요약(`key`, `summary`, `description`, `field_map` 항목 값)을 읽는다. 계획에는 `issue.origin: file`로 남는다 (`contracts.md §작업 계획`).
+- analyze는 `--dry-run`과 함께일 때만 허용한다. 실제 PR은 Jira MCP로 읽은 값으로만 만든다: `--dry-run --issue-file`로 만든 계획을 실제 analyze가 이어받으면 Step 8 전에 Jira MCP로 다시 읽어 `issue`를 덮고 `origin: mcp`로 바꾼다.
 - record는 `--dry-run` 없이도 허용하되, 확인 화면과 PR 본문에 "Jira 메타데이터: 오프라인 파일"로 표시한다 (사용자가 직접 기록하는 흐름이므로). `sync-pr`로 재적용해도 계획의 `origin`이 유지되므로 라벨이 남는다.
 
 ### 6.10 새 카테고리 추가

@@ -126,8 +126,8 @@ def test_load_syntax_error_names_file_and_line(monkeypatch, loader):
     assert isinstance(info.value, yaml.YAMLError) and info.value.line == 3
     assert "broken.yaml:3: YAML 문법 오류" in str(info.value)
     db = copy_db()
-    jira = db / "call/CALL-001-volte-not-working/jira/MOCK-2101.yaml"
+    jira = db / "call/CALL-001-volte-not-working/issues/MOCK-2101.yaml"
     jira.write_text(jira.read_text(encoding="utf-8") + "x: [unclosed\n", encoding="utf-8", newline="\n")
     with pytest.raises(issuedb.IssueDbError) as info:
         issuedb.load(db)
-    assert str(info.value).startswith("call/CALL-001-volte-not-working/jira/MOCK-2101.yaml:")
+    assert str(info.value).startswith("call/CALL-001-volte-not-working/issues/MOCK-2101.yaml:")

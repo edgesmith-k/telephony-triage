@@ -22,7 +22,7 @@
 | 증상은 같고 원인이 다름 | 기존 유형에 **새 원인** | `new-cause` |
 | 증상 자체가 기존에 없음 | **새 유형** + 첫 원인 | `new-type` |
 | 증상은 맞지만 원인 미확정 | `cause: unresolved`인 Jira 기록 | `unresolved` |
-| 이미 있는 Jira를 다른 원인으로 | Jira 파일 이동 | `reclassify` |
+| 이미 있는 Jira를 다른 원인으로 | 이슈 기록(`issues/<KEY>.yaml`) 이동 | `reclassify` |
 
 - 새 유형을 만들기 전에 **전체 카테고리**에서 제목 유사도, 용어집 표준어, 증상 시그니처 중복을 확인한다. 비슷한 증상이 있으면 새 원인으로 넣는다.
 - 카테고리가 애매하면 `GLOSSARY.md`의 카테고리 경계 표를 따르고, 나머지는 `secondary_categories`와 `related`로 연결한다.
@@ -104,5 +104,5 @@
 - 생성 파일(`README.md`, 카테고리 `README.md`, `STATS.md`, `parser-rules/CHANGELOG.md`)을 직접 고치지 않는다. `db_build.py`만 만든다.
 - `.cache/`를 커밋하지 않는다.
 - ID는 main에 들어간 뒤에는 바꾸지 않는다. 폐기·병합은 삭제가 아니라 `status`로 표시한다.
-- 같은 Jira를 두 파일로 만들지 않는다 (Jira 한 건 = 파일 하나).
+- 같은 이슈를 두 파일로 만들지 않는다 (이슈 한 건 = `issues/<작업 키>.yaml` 파일 하나, lint `duplicate-issue`).
 - 마스킹되지 않은 로그, Jira 요약·설명·코멘트 원문, 사람 이름·고객명을 넣지 않는다.

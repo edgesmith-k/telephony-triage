@@ -244,7 +244,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
       <div class="eyebrow">ROADMAP · 사내 보완 S-0~S-7</div>
       <h1>사내 도입 로드맵</h1>
       <p>반입한 뒤 사내에서 거치는 9단계를 그림과 표로 정리했습니다. 단계마다 완료 기준과 사람이 준비할 것을 붙였습니다.</p>
-      <div class="meta"><span><b>기준</b> main 2026-10-11</span><span><b>대상</b> 도입 담당자</span><span><b>읽는 시간</b> 약 6분</span></div>
+      <div class="meta"><span><b>기준</b> main 2026-10-12</span><span><b>대상</b> 도입 담당자</span><span><b>읽는 시간</b> 약 6분</span></div>
     </header>
     <section class="chap" id="r1" data-title="전체 그림">
       <h2><span class="no">1</span>전체 그림</h2>
@@ -254,7 +254,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
     <section class="chap" id="r2" data-title="단계별 할 일">
       <h2><span class="no">2</span>단계별 할 일</h2>
       <p class="first">이 절에서 알 수 있는 것: 각 단계의 완료 기준과 준비물</p>
-      <div class="tbl "><table><tr><th>단계</th><th>할 일</th><th>완료 기준 (요약)</th><th>사람이 준비할 것</th></tr><tr><td><b>S-0</b> <span class="chip a">선택</span></td><td>실제 로그 사전 점검</td><td>Claude 없이 30분. 파서 가정이 맞는지 지표 5종</td><td>로그 3~5개(듀얼 SIM 포함)</td></tr><tr><td><b>S-1</b></td><td>사내 값 조사·기준 합의</td><td>확인 목록 정리(S1~S29, oFono S24~S29는 그 플랫폼을 켤 때만), SITE_PROFILE 작성, S-5 정확도 기준 합의</td><td>샘플 Jira 2~3개, 카테고리별 로그, 16/17 소스 경로, 빌드명</td></tr><tr><td><b>S-2</b></td><td>사내 Claude Code 확인</td><td>플러그인·hook·Jira 원문 격리 동작, 행동 eval 재실행, 안전 eval 위반 0</td><td>Claude Code, Jira MCP</td></tr><tr><td><b>S-3</b></td><td>사내 값 반영</td><td>site-defaults·팀 설정 작성, 점검 표 fail 0</td><td>Jira 필드·타임존, GHE 주소, (결과 게시를 쓰면) Jira 코멘트 도구·게시 규정(S23)</td></tr><tr><td><b>S-4a</b></td><td>운영 DB와 기존 자산</td><td>운영 DB 생성·보호, 기존 파서 포팅(골든 테스트), 기존 분류 가져오기</td><td>GHE 관리 권한, 기존 파서·분류</td></tr><tr><td><b>S-4</b></td><td>실제 로그로 규칙 교체</td><td>예시 규칙 → 실제 문구, 카테고리별 시드 유형 5~10개</td><td>카테고리별 실제 로그</td></tr><tr><td><b>S-5</b> <span class="chip a">관문</span></td><td>스모크·정확도 관문</td><td>dry-run, 샌드박스 PR 1건, 과거 Jira 20~30건 정확도</td><td>해결된 과거 Jira 라벨셋</td></tr><tr><td><b>S-6</b></td><td>남은 항목 정리</td><td>검토 항목 0건, 합성 fixture 0건 확인</td><td>—</td></tr><tr><td><b>S-7</b> <span class="chip a">파일럿</span></td><td>배포와 파일럿</td><td>마켓플레이스 등록, 카테고리별 10~20건, 첫 월간 리뷰, 확대 결정</td><td>파일럿 담당자</td></tr></table></div>
+      <div class="tbl "><table><tr><th>단계</th><th>할 일</th><th>완료 기준 (요약)</th><th>사람이 준비할 것</th></tr><tr><td><b>S-0</b> <span class="chip a">선택</span></td><td>실제 로그 사전 점검</td><td>Claude 없이 30분. 파서 가정이 맞는지 지표 5종</td><td>로그 3~5개(듀얼 SIM 포함)</td></tr><tr><td><b>S-1</b></td><td>사내 값 조사·기준 합의</td><td>확인 목록 정리(S1~S32, oFono S24~S29는 그 플랫폼을 켤 때만, GitHub 트래커 S30·S31은 사내가 Jira라 해당 없음), SITE_PROFILE 작성, S-5 정확도 기준 합의</td><td>샘플 Jira 2~3개, 카테고리별 로그, 16/17 소스 경로, 빌드명</td></tr><tr><td><b>S-2</b></td><td>사내 Claude Code 확인</td><td>플러그인·hook·Jira 원문 격리 동작, 행동 eval 재실행, 안전 eval 위반 0</td><td>Claude Code, Jira MCP</td></tr><tr><td><b>S-3</b></td><td>사내 값 반영</td><td>site-defaults·팀 설정 작성, 점검 표 fail 0</td><td>트래커 종류(<code>tracker.kind: jira</code>), Jira 필드·타임존, GHE 주소, (결과 게시를 쓰면) Jira 코멘트 도구·게시 규정(S23)</td></tr><tr><td><b>S-4a</b></td><td>운영 DB와 기존 자산</td><td>운영 DB 생성·보호, 기존 파서 포팅(골든 테스트), 기존 분류 가져오기</td><td>GHE 관리 권한, 기존 파서·분류</td></tr><tr><td><b>S-4</b></td><td>실제 로그로 규칙 교체</td><td>예시 규칙 → 실제 문구, 카테고리별 시드 유형 5~10개</td><td>카테고리별 실제 로그</td></tr><tr><td><b>S-5</b> <span class="chip a">관문</span></td><td>스모크·정확도 관문</td><td>dry-run, 샌드박스 PR 1건, 과거 Jira 20~30건 정확도</td><td>해결된 과거 Jira 라벨셋</td></tr><tr><td><b>S-6</b></td><td>남은 항목 정리</td><td>검토 항목 0건, 합성 fixture 0건 확인</td><td>—</td></tr><tr><td><b>S-7</b> <span class="chip a">파일럿</span></td><td>배포와 파일럿</td><td>마켓플레이스 등록, 카테고리별 10~20건, 첫 월간 리뷰, 확대 결정</td><td>파일럿 담당자</td></tr></table></div>
 
     </section>
     <section class="chap" id="r3" data-title="data만 먼저 할 때">
@@ -271,9 +271,9 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
       <h2><span class="no">4</span>진행 방법</h2>
       <p class="first">이 절에서 알 수 있는 것: 단계를 시작하고 끝내는 방법</p>
       <ol class="rule-list">
-        <li>사내 PC에 반입 묶음을 풀고 <code>SITE_PROFILE.md</code>를 만든 뒤 "사내 보완 모드로 S-1 시작"이라고 합니다.</li>
+        <li>사내 PC에 반입 묶음을 풀고 Claude Code에 <b>"사내 설정 시작"</b>이라고 합니다. <code>tools/site_step.py</code>가 <code>SITE_PROFILE.md</code>(모드 사내 보완, 현재 단계 S-1, 트래커 jira)를 만들고 현재 단계의 할 일·완료 기준·읽을 것을 냅니다. 이어서 할 때는 "계속"입니다.</li>
         <li>각 단계는 새 세션에서 <code>python3 tools/context_pack.py S-n</code> 출력만 읽고 진행합니다. 설계 문서 전체를 다시 읽지 않아 토큰이 적게 듭니다.</li>
-        <li>단계가 끝나면 완료 기준 점검 → 요약 → 사용자 확인 → <code>SITE_PROFILE.md</code> 진행 상태 갱신. 확인 전에는 다음 단계로 가지 않습니다.</li>
+        <li>단계가 끝나면 완료 기준 점검 → 요약 → 사용자 확인 → <code>python3 tools/site_step.py --done S-n</code>(완료 기록 + 다음 단계 안내). 확인 전에는 <code>--done</code>하지 않고, 도구는 현재 단계가 아닌 <code>--done</code>(건너뛰기)과 사외 PC에서의 실행을 거부합니다. 순서는 S-1 → S-2 → S-3 → S-4a → S-4 → S-5 → S-6 → S-7입니다(S-0 선택은 반입 전).</li>
         <li>사내 값과 사내 코드는 정해진 경로(<code>SITE_PATHS</code>)에만 둡니다. 다음 반입 때 보존됩니다.</li>
       </ol>
       <p class="foot">원본: <code>docs/design/15-local-draft.md</code> §15.5, <code>docs/tasks.md</code>. 파일럿 평가는 <a href="12-pilot-eval.html">파일럿 평가표</a>.</p>

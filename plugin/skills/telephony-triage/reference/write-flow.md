@@ -9,7 +9,7 @@ main 기준 다음 번호로 정해진다. 계획이 건드리는 대상이 그�
 
 | 순서 | 호출 |
 |---|---|
-| 1 | (흐름 시작 때 이미. analyze는 preflight만 Step 8 직전에 다시) `db_pr lock acquire <작업 키>` → `db_pr snapshot --job <작업 키>` → `config.py check --db SNAP [--for dry-run]` → `db_pr preflight --branch <br> --search <원인 ID 또는 KEY> [--jira <KEY>]` |
+| 1 | (흐름 시작 때 이미. analyze는 preflight만 Step 8 직전에 다시) `db_pr lock acquire <작업 키>` → `db_pr snapshot --job <작업 키>` → `config.py check --db SNAP [--for dry-run]` → `db_pr preflight --branch <br> --search <원인 ID 또는 KEY> [--issue <KEY>]` |
 | 2 | 로컬·원격 브랜치 검사와 선택 (아래) |
 | 3 | `db_pr stage <plan> --wt <wt> --branch <br> [--dry-run] --then-summary` — drift면 결정 반영 후 다시 |
 | 4 | 확인 화면 = 3의 출력 그대로 (승인 / 수정 요청 / 전체 diff / 취소) |
@@ -18,12 +18,12 @@ main 기준 다음 번호로 정해진다. 계획이 건드리는 대상이 그�
 
 ## 계획 형식 (analyze Step 7)
 
-`JOB/plan.json` (`contracts.md §작업 계획`). 최상위 키는 아래 것만 쓴다(스키마가 다른 키를 거부한다). 필수 `source`·`schema_version`·`started_at`·`base_sha`·`operations` — op 목록 키는 `operations`다(`ops` 아님). op별 필드는 `SNAP/schema/plan.schema.json`과 stage의 `계획 형식 오류` 메시지가 알려 준다. `jira`에는 요약·설명·코멘트 원문을 두지 않는다. `jira` 블록은 `JOB/jira.json`의 jira 블록을 그대로 복사한다(`key`·`origin`은 스키마 필수). `failed_step`(마스킹된 한 줄, 선택)도 그 안에 있으며, 확인 화면에서 사용자가 지우라고 하면 계획 `jira`에서 뺀다. 새 원인·유형은 커밋 메시지에 `temp_id`를 쓴다(적용 때 치환).
+`JOB/plan.json` (`contracts.md §작업 계획`). 최상위 키는 아래 것만 쓴다(스키마가 다른 키를 거부한다). 필수 `source`·`schema_version`·`started_at`·`base_sha`·`operations` — op 목록 키는 `operations`다(`ops` 아님). op별 필드는 `SNAP/schema/plan.schema.json`과 stage의 `계획 형식 오류` 메시지가 알려 준다. `issue`에는 요약·설명·코멘트 원문을 두지 않는다. `issue` 블록은 `JOB/issue.json`의 issue 블록을 그대로 복사한다(`key`·`origin`은 스키마 필수). `failed_step`(마스킹된 한 줄, 선택)도 그 안에 있으며, 확인 화면에서 사용자가 지우라고 하면 계획 `issue`에서 뺀다. 새 원인·유형은 커밋 메시지에 `temp_id`를 쓴다(적용 때 치환).
 
 ```json
 {"source": "analyze", "schema_version": <SNAP issue-db.config.yaml>, "started_at": "<lock 획득 시각>",
  "base_sha": "<analysis.json snapshot.sha>",
- "jira": {"key": "<KEY>", "origin": "<mcp|file>", <JOB/jira.json의 jira 블록의 나머지 필드(있으면 `failed_step` 포함)>,
+ "issue": {"key": "<KEY>", "origin": "<mcp|file>", <JOB/issue.json issue 블록의 나머지 필드(있으면 `failed_step` 포함)>,
           "date": "<오늘>", "note": "<확인받은 한 줄>"},
  "operations": [...], "extra_samples": [...],
  "feedback": {"date": "<지금, 타임존 포함>", "suggested": [<비워 둔다 — db_pr stage가 JOB/match.json 후보(cause≠null, 순위순 {cause, signature, score})로 채운다. 직접 적은 값이 다르면 stage 종료 2>],
@@ -41,10 +41,10 @@ lock 획득·인계 성공 시 반환된 `lock.owner`를 보관하고 이후 모
 lock 파일에서 토큰을 다시 읽어 대신 쓰지 않는다. owner 불일치는 중단하고, 새 인계는 사용자 확인 후에만 한다.
 
 `preflight` → `{tool_branch, user_branch: {exists, ahead_of_remote},
-remote_sha, open_prs[], jira_in_main}`.
+remote_sha, open_prs[], issue_in_main}`.
 - 쓰기 불가(`config.py check`의 `writable`/`push_allowed`가 false; `--for`는 `config.py check` 옵션이다)면 사유를 보여주고 멈춘다.
-- analyze 계획이 `jira.origin: file`이고 `--dry-run`이 아니면 여기 오기 전에 MCP로 다시 읽었어야 한다(아니면 멈춘다).
-- `jira_in_main`이면(append·unresolved) 기존 분류를 보여주고 유지/재분류(`reclassify`)를 묻는다. 열린 PR이 있으면 링크를 보여주고 계속할지 묻는다.
+- analyze 계획이 `issue.origin: file`이고 `--dry-run`이 아니면 여기 오기 전에 MCP로 다시 읽었어야 한다(아니면 멈춘다).
+- `issue_in_main`이면(append·unresolved) 기존 분류를 보여주고 유지/재분류(`reclassify`)를 묻는다. 열린 PR이 있으면 링크를 보여주고 계속할지 묻는다.
 
 ## 2. 브랜치 검사
 

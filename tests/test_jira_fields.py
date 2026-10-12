@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Phase 13 보조 스크립트 `jira_fields.py` (07-workflow.md §Step 0·2, 16-existing-assets.md §16.1, 08-safety.md §8.1).
 
-- `check-key`: 이슈 DB `jira_key_regex`로 키 검사(맞지 않으면 1).
+- `check-key`: 이슈 DB `tracker.key_regex`로 키 검사(맞지 않으면 1).
 - `extract`: 모의 Jira(비표준 커스텀 필드)를 `field_map`으로 읽고, 텍스트는 마스킹, 발생 시각은 UTC로,
   `occurred_on`은 Jira 타임존 날짜로, logcat 연도는 발생 연도로 낸다. 코멘트 작성자는 내지 않는다.
 
@@ -45,8 +45,8 @@ def test_extract_maps_masks_and_converts_time():
     out = run_json("jira_fields.py", ["extract", raw, "--origin", "file", "--db", SAMPLE,
                                       "--meta-out", meta, "--consume"], env=_home())
     assert out["key"] == "MOCK-1001" and out["key_valid"]
-    assert out["jira"] == {"key": "MOCK-1001", "origin": "file", "model": "MOCK-A56",
-                           "sw": "MOCKA56_U1_20260915", "android_version": "16",
+    assert out["issue"] == {"key": "MOCK-1001", "origin": "file", "model": "MOCK-A56",
+                           "sw": "MOCKA56_U1_20260915", "platform_version": "16",
                            "carrier": "MockTel KR", "occurred_on": "2026-09-20"}
     assert out["occurred_at"] == "2026-09-20T05:32:10+00:00"
     assert out["logcat"]["year"] == 2026 and out["sim_slot"] == "0"
@@ -69,8 +69,8 @@ def test_extract_reports_missing_fields():
     raw.write_text(json.dumps({"key": "MOCK-9", "fields": {"summary": "x"}}), encoding="utf-8")
     out = run_json("jira_fields.py", ["extract", raw, "--db", SAMPLE], env=_home())
     assert out["occurred_at"] is None and "occurred_at" in out["missing"]
-    assert {"model", "sw", "android_version"} <= set(out["missing"])
-    assert "occurred_on" not in out["jira"] and out["logcat"]["year"] is None
+    assert {"model", "sw", "platform_version"} <= set(out["missing"])
+    assert "occurred_on" not in out["issue"] and out["logcat"]["year"] is None
 
 
 def test_extract_without_failed_step_fields_adds_no_keys():
@@ -81,9 +81,9 @@ def test_extract_without_failed_step_fields_adds_no_keys():
     out = run_json("jira_fields.py", ["extract", raw, "--origin", "file", "--db", SAMPLE,
                                       "--meta-out", meta], env=_home())
     assert not {"failed_step", "failed_step_auto", "warnings"} & set(out)
-    assert "failed_step" not in out["jira"] and "test_steps" not in out["text"]
+    assert "failed_step" not in out["issue"] and "test_steps" not in out["text"]
     assert set(json.loads(meta.read_text(encoding="utf-8"))) == {"key", "sw", "summary", "description", "occurred_at",
-                                                                  "android_version", "sim_slot"}   # MOCK-1001은 Android 버전·SIM 슬롯이 있다
+                                                                  "platform_version", "sim_slot"}   # MOCK-1001은 Android 버전·SIM 슬롯이 있다
 
 
 def test_meta_out_android_version_only_when_present():
@@ -96,7 +96,7 @@ def test_meta_out_android_version_only_when_present():
         meta = tmp / f"{name}.json"
         run_json("jira_fields.py", ["extract", raw, "--origin", "file", "--db", SAMPLE, "--meta-out", meta], env=_home())
         metas.append(json.loads(meta.read_text(encoding="utf-8")))
-    assert metas[0]["android_version"] == "16" and "android_version" not in metas[1]
+    assert metas[0]["platform_version"] == "16" and "platform_version" not in metas[1]
 
 
 def test_meta_out_sim_slot_only_when_present():
@@ -123,9 +123,9 @@ def test_extract_failed_step_field_is_masked_and_not_missing():
     out = run_json("jira_fields.py", ["extract", raw, "--origin", "file", "--db", SAMPLE,
                                       "--meta-out", meta], env=_home())
     assert "010-1234-5678" not in json.dumps(out, ensure_ascii=False)
-    assert "<MSISDN#" in out["jira"]["failed_step"] and out["failed_step"]["source"] == "field"
+    assert "<MSISDN#" in out["issue"]["failed_step"] and out["failed_step"]["source"] == "field"
     assert out["missing"] == [] and "warnings" not in out
-    assert json.loads(meta.read_text(encoding="utf-8"))["failed_step"] == out["jira"]["failed_step"]
+    assert json.loads(meta.read_text(encoding="utf-8"))["failed_step"] == out["issue"]["failed_step"]
 
 
 if __name__ == "__main__":

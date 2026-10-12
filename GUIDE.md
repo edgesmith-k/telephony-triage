@@ -295,9 +295,10 @@ claude mcp list               # Jira MCP 사용자 범위 등록 확인
 2. 이슈 DB 레포 clone
 3. `/telephony-triage:setup`
    - GHE 아이디, 이슈 DB 경로, 로그 폴더, (선택) Android 16/17 소스 트리 프로필
-   - 이미 등록된 Jira MCP를 찾아 도구 매핑을 확인 (팀 기본값이 있으면 확인만)
+   - 이미 등록된 Jira MCP를 찾아 도구 매핑을 확인 (팀 기본값이 있으면 확인만). 팀이 GitHub Issues를 트래커로 쓰면(site-defaults `tracker.kind: github`) 그 트래커 전용 MCP 등록을 찾는다(`docs/design/18-trackers.md`)
+   - 옛 설정 키(`jira:` 등)가 남은 config는 막힌다(Jira 도구 호출 거부, doctor `tracker` 행 fail). `config.py rename-legacy --apply`로 `tracker:`로 바꾼다
    - git pre-commit hook 설치, 읽기 스냅샷 생성
-4. 연습: `/telephony-triage:analyze <샘플키> <로그> --dry-run` (아무것도 올리지 않음. gh 로그인 전에도 가능)
+4. 연습: `/telephony-triage:analyze <샘플키> <로그> --dry-run` (아무것도 올리지 않음. gh 로그인 전에도 가능). GitHub Issues 트래커면 키 자리에 `owner/repo#N`이나 이슈 URL을 줘도 된다
 5. (팀이 플랫폼을 둘 이상 켰을 때) setup이 어느 플랫폼을 설정할지 묻는다. 다른 플랫폼도 쓰면 setup을 한 번 더 해서 그 플랫폼을 고른다 — 그 플랫폼의 이슈 DB clone·작업 폴더(기본 `~/.telephony-triage/work-<이름>`)만 따로 묻고 Jira·gh 설정은 같이 쓴다. 분석은 `analyze <JIRA> <로그> --platform <이름>`(말로 "oFono 로그로 분석해줘"도 된다). 플랫폼과 이슈 DB가 맞지 않으면 `platform-mismatch`로 멈춘다
 
 ---
@@ -379,7 +380,7 @@ claude mcp list               # Jira MCP 사용자 범위 등록 확인
 
 ## 7. 지켜지는 안전장치 (자동)
 
-- Jira는 **읽기 + 승인한 코멘트 1건만** (확인 화면에서 승인한 본문만 올리고, 본문이 바뀌면 다시 승인. 필드 수정·상태 전환·이슈 생성 등 다른 쓰기 도구 호출은 차단)
+- Jira(설정한 트래커, GitHub Issues도 같음)는 **읽기 + 승인한 코멘트 1건만** (확인 화면에서 승인한 본문만 올리고, 본문이 바뀌면 다시 승인. 필드 수정·상태 전환·이슈 생성 등 다른 쓰기 도구 호출은 차단). 설정 트래커와 이슈 DB 트래커가 다르면 멈춤(`tracker-mismatch`)
 - push 전 **항상 사용자 확인**, main 직접 push 차단
 - 로그의 IMSI·전화번호·SIP URI·인증 값 등 **자동 마스킹**, 마스킹 안 된 커밋 차단. Jira 텍스트도 마스킹하고 원문은 저장하지 않음(구조화 필드 + 확인한 한 줄 요약만)
 - 사용자의 이슈 DB clone은 **브랜치를 바꾸거나 파일을 고치지 않음** (작업은 임시 폴더에서, 최신화는 main이고 깨끗할 때 fast-forward만. Claude의 Write/Edit 도구로 clone 안 파일을 쓰는 것도 차단)
@@ -401,6 +402,7 @@ claude mcp list               # Jira MCP 사용자 범위 등록 확인
 | 기존 Jira MCP·파서·분류·분석 스킬 활용 | `docs/design/16-existing-assets.md` |
 | 사내 확인 항목 목록 | `docs/design/14-site.md` |
 | 플랫폼 분리·새 플랫폼 추가 절차 | `docs/design/17-platforms.md` |
+| 트래커 범용화(Jira / GitHub Issues)·새 트래커 추가 절차 | `docs/design/18-trackers.md` |
 | 워크플로우 상세 | `docs/design/07-workflow.md` |
 | 공통 규칙 원본 | `docs/design/contracts.md` |
 | 사내 정보가 있어야 판단할 남은 항목 | `REVIEW-OPEN.md` |

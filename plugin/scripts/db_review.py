@@ -8,7 +8,7 @@
 
 - 기준일은 실행일이다. `--as-of`로 바꿀 수 있다(시험·재현용). STATS의 기준일(가장 최근 Jira `date`)과
   다른 이유: 리뷰는 "지금 방치된 것"을 찾는 보고서이고 생성 파일이 아니라 결정성 규칙(§5.2) 대상이 아니다.
-- 항목 기준은 `issue-db.config.yaml`의 `quality`와 `android_versions_supported`다. STATS와 같은 판정은
+- 항목 기준은 `issue-db.config.yaml`의 `quality`와 `platform_versions_supported`다. STATS와 같은 판정은
   `common/quality.py`를 함께 쓴다.
 - 방치 기간(해결책 미검증, 수정 검증 대기, Jira 없는 원인의 나이)은 git 이력(`common/history.py`)으로 구한다.
   이력이 없으면 그 원인은 "기간 확인 불가"로 따로 보인다.
@@ -154,7 +154,7 @@ class Review:
                 continue
             age = quality.days_ago(r, self.as_of, "date")
             if age is not None and age > int(q["unresolved_max_days"]):
-                stale_unresolved.append({"jira": r.get("key"), "type": r["_type"], "date": str(r.get("date")),
+                stale_unresolved.append({"issue": r.get("key"), "type": r["_type"], "date": str(r.get("date")),
                                          "days": age,
                                          "text": f"{r.get('key')} ({r['_type']}, 기록 {r.get('date')}, {age}일)"})
         self.add("stale-unresolved", "오래된 원인 미확정",
@@ -202,19 +202,19 @@ class Review:
                  "유지 또는 원인 `status: deprecated`", stale, stale_unknown)
 
         self.add("unsupported-versions", "지원 종료 버전",
-                 f"원인의 `android_versions`가 비어 있지 않고 모두 `{self.supported_key}`({', '.join(self.supported)}) "
+                 f"원인의 `platform_versions`가 비어 있지 않고 모두 `{self.supported_key}`({', '.join(self.supported)}) "
                  "밖 (빈 목록 = 전 버전이므로 제외)",
                  "원인 `status: deprecated`",
-                 [{"cause": c.id, "versions": [str(v) for v in c.raw.get("android_versions") or []],
-                   "text": f"{c.id} {c.title} (android_versions: "
-                           f"{', '.join(str(v) for v in c.raw.get('android_versions') or [])})"}
+                 [{"cause": c.id, "versions": [str(v) for v in c.raw.get("platform_versions") or []],
+                   "text": f"{c.id} {c.title} (platform_versions: "
+                           f"{', '.join(str(v) for v in c.raw.get('platform_versions') or [])})"}
                   for c in causes if quality.unsupported_versions(c, self.supported)])
 
         open_rows = sorted(((c, len(self.jira_of(c.id))) for c in causes
                             if quality.fix_of(c).get("status") == "open"), key=lambda x: (-x[1], x[0].id))
-        self.add("open-with-jira", "수정 필요 누적", "`fix.status: open`이면서 Jira가 있는 원인 (Jira 건수 순)",
+        self.add("open-with-issues", "수정 필요 누적", "`fix.status: open`이면서 Jira가 있는 원인 (Jira 건수 순)",
                  "근본 수정 우선순위 제안",
-                 [{"cause": c.id, "jira": n, "text": f"{c.id} {c.title} (Jira {n}건)"} for c, n in open_rows if n])
+                 [{"cause": c.id, "issues": n, "text": f"{c.id} {c.title} (Jira {n}건)"} for c, n in open_rows if n])
 
         self.add("fix-fields-missing", "수정 상태 누락",
                  "`fix-submitted`인데 `ref`/`fixed_in`(브랜치) 없음, `fixed`인데 `verification`/`fixed_in` 빌드 없음",
@@ -448,7 +448,7 @@ def run(args, defaults: dict, plugin_root: Path) -> dict:
         "category": args.category,
         "owners": _owners(Path(root), keys),
         "thresholds": {**DEFAULTS, **(db.config.get("quality") or {}),
-                       "android_versions_supported": db.config.get(issuedb.supported_versions(db.config)[0]) or []},
+                       "platform_versions_supported": issuedb.supported_versions(db.config)[1]},
         "feedback": {"total": len(db.feedback), "manual": manual, "used_for_acceptance": len(db.feedback) - manual},
         "summary": {i["key"]: i["count"] for i in items},
         "items": items,

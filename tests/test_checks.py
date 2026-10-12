@@ -25,7 +25,7 @@ from common.checks import PROFILES, Ctx, aggregate, plan_steps, run_checks  # no
 DB = "/db"
 MODES = ("local", "actions", "actions-build")
 RULE_FILE = "parser-rules/data.yaml"
-OTHER_FILE = "data/DATA-001-x/jira/PROJ-1.yaml"
+OTHER_FILE = "data/DATA-001-x/issues/PROJ-1.yaml"
 
 
 def _ctx(profile: str, ci_mode: str = "local", branch: str = "main", files=(OTHER_FILE,)) -> Ctx:

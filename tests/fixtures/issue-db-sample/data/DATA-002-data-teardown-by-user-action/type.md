@@ -37,7 +37,7 @@ causes:
       verification_history: []
     related: []
     cp_evidence: null
-    android_versions: []
+    platform_versions: []
     code_refs:
       - ref: aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataNetworkController.java
         symbol: DataNetworkController#onTearDownAllDataNetworks

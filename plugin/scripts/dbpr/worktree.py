@@ -120,7 +120,7 @@ def post_lint(snap: Path) -> dict:
     if data is None:
         return {"ran": False, "error": _err_brief(err)}
     errors = data.get("errors") or []
-    dups = [e for e in errors if e.get("code") in ("duplicate-id", "duplicate-jira")]
+    dups = [e for e in errors if e.get("code") in ("duplicate-id", "duplicate-issue")]
     out = {"ran": True, "errors": len(errors), "warnings": len(data.get("warnings") or []),
            "duplicates": [{"code": e["code"], "file": e.get("file"), "message": e.get("message")} for e in dups],
            "findings": [{"code": e["code"], "file": e.get("file"), "message": e.get("message")} for e in errors]}
@@ -316,8 +316,11 @@ def _drop_pasted_steps(ctx: Ctx, job: str) -> None:
         pass    # 지우지 못해도 lock 해제는 끝낸다(남은 파일은 cleanup이 보여준다)
 
 
-JOB_MARKERS = (PLAN, "state.json", "trace.jsonl", "jira_raw.json", "triage-state.json")   # logs/는 흔한 이름이라 표식이 아니다
-RAW_MARKERS = ("logs", "jira_raw.json")
+# 개명 전 작업 파일(jira_raw.json·jira.json·jira_meta.json)도 표식으로 본다 — 옛 JOB도 cleanup 대상·원문 잔여로 보이게(방어)
+LEGACY_JOB_FILES = ("jira_raw.json", "jira.json", "jira_meta.json")
+JOB_MARKERS = (PLAN, "state.json", "trace.jsonl", "issue_raw.json", "triage-state.json",
+               *LEGACY_JOB_FILES)   # logs/는 흔한 이름이라 표식이 아니다
+RAW_MARKERS = ("logs", "issue_raw.json", "jira_raw.json")
 RETAINED_NOTES = {      # PR 생성 실패라고 단정하지 않는다: PR은 만들어졌는데 번호만 기록되지 않았을 수 있다
     "unpublished": "미게시 계획 보존 — 재개 또는 명시적 폐기(discard) 필요",
     "pushed-no-pr": "push 기록 있음, PR 연결 미확인 — 원격 브랜치·열린 PR 확인 후 publish 재시도 또는 "

@@ -16,6 +16,7 @@
 | `issue-db-step-events/` | 스텝 순서 정렬: `step_events` 규칙 10개(CP는 관측 불가, 비행기 모드 켜기·끄기는 `match`, 망 등록은 `ril`, 데이터 켜기·끄기는 `event`) |
 | `issue-db-review/` | 월간 리뷰(Phase 11): §6.6 항목마다 걸리는 경우와 걸리지 않는 경우 (`REVIEW_CASES`) |
 | `issue-db-ofono/` | oFono 플랫폼 뼈대 DB(17-platforms §5, **합성·형식 가정·placeholder**): `platform: ofono`, `ofono_reference` 백엔드, placeholder 태그(`ofonod`·`daemon-a`·`daemon-b`)·extractor 1개, 유형 `DATA-001`과 양성 fixture(`tests/fixtures/logs/ofono/journal-iso.log`) 하나 |
+| `issue-db-github/` | 두 번째 트래커(트래커 범용화 §6-1, **합성**): `tracker {kind: github, base_url: https://ghe.mock.invalid/, key_regex: mock-org\\.mock-issues-\\d+}`, 기록·피드백·evidence의 Jira 키 `MOCK-<n>`을 GitHub 작업 키 `mock-org.mock-issues-<n>`으로(파일 이름 포함) |
 | `verify-logs/` | 이슈 DB가 아니다. `db_verify fix`·`resolution` 입력 로그(수정 후·재발·증상만 남음·시나리오 없음, 마스킹됨) |
 
 CLI:
@@ -86,7 +87,7 @@ causes:
     fix: {{status: open, ref: null, fixed_in: [], verification: null, verification_history: []}}
     related: []
     cp_evidence: null
-    android_versions: []
+    platform_versions: []
     code_refs: []
 tags: []
 ---
@@ -109,9 +110,9 @@ def lint_errors(db: Path) -> None:
     dup = db / "sms/SMS-001-duplicate-id"
     dup.mkdir(parents=True)
     shutil.copyfile(sms / "type.md", dup / "type.md")
-    # duplicate-jira: 다른 유형 디렉토리에 같은 Jira 키
-    _write(call / "jira/MOCK-1101.yaml",
-           (data / "jira/MOCK-1101.yaml").read_text(encoding="utf-8").replace("cause: DATA-001-01", "cause: CALL-001-01"))
+    # duplicate-issue: 다른 유형 디렉토리에 같은 Jira 키
+    _write(call / "issues/MOCK-1101.yaml",
+           (data / "issues/MOCK-1101.yaml").read_text(encoding="utf-8").replace("cause: DATA-001-01", "cause: CALL-001-01"))
     # glossary: 금지 동의어 "통화 단절"
     _edit(call / "type.md", "title: VoLTE가 동작하지 않음", "title: VoLTE 통화 단절")
     # related: 없는 원인
@@ -172,7 +173,7 @@ def lint_errors(db: Path) -> None:
           "    signatures:\n      - id: nested\n        must_match: ['(a+)+b']\n        window_sec: 60\n"
           "      - id: registration-forbidden\n")
     # raw-identifier: Jira note와 cp_evidence의 원본 전화번호
-    _edit(net / "jira/MOCK-3101.yaml", "note: 등록 거절 코드 13 반복, 서비스 없음 표시",
+    _edit(net / "issues/MOCK-3101.yaml", "note: 등록 거절 코드 13 반복, 서비스 없음 표시",
           "note: 등록 거절 코드 13 반복, 고객 010-1234-5678 확인")
     _edit(net / "type.md", "    cp_evidence: 거절 코드 자체는 CP에서 올라온다.",
           "    cp_evidence: 담당자 연락처 +82-10-1111-2222. 거절 코드 자체는 CP에서 올라온다.")
@@ -218,7 +219,7 @@ def pending(db: Path) -> None:
     fix: {status: open, ref: null, fixed_in: [], verification: null, verification_history: []}
     related: []
     cp_evidence: null
-    android_versions: []
+    platform_versions: []
     code_refs: []
 tags: [data-evaluation]
 ---""")
@@ -252,7 +253,7 @@ def dup_id(db: Path) -> None:
     fix: {{status: open, ref: null, fixed_in: [], verification: null, verification_history: []}}
     related: []
     cp_evidence: null
-    android_versions: []
+    platform_versions: []
     code_refs: []
 """
     first = block.format(title="SIM 미준비", desc="SIM 초기화 전에 평가가 거부됨", sig="sim-not-ready",
@@ -260,8 +261,8 @@ def dup_id(db: Path) -> None:
     second = block.format(title="무선 꺼짐", desc="무선이 꺼진 상태에서 평가가 거부됨", sig="radio-off",
                           reason="RADIO_POWER_OFF", res="무선 전원 상태 복구 뒤 평가를 다시 요청하도록 고친다")
     _edit(data / "type.md", "tags: [data-evaluation]\n---", first + second + "tags: [data-evaluation]\n---")
-    dup = db / "call/CALL-001-volte-not-working/jira/MOCK-1101.yaml"
-    text = (data / "jira/MOCK-1101.yaml").read_text(encoding="utf-8").replace("cause: DATA-001-01", "cause: CALL-001-01")
+    dup = db / "call/CALL-001-volte-not-working/issues/MOCK-1101.yaml"
+    text = (data / "issues/MOCK-1101.yaml").read_text(encoding="utf-8").replace("cause: DATA-001-01", "cause: CALL-001-01")
     _write(dup, text)
 
 
@@ -288,7 +289,7 @@ CALL_001_02 = """  - id: CALL-001-02
     fix: {status: not-a-bug, ref: null, fixed_in: [], verification: null, verification_history: []}
     related: []
     cp_evidence: null
-    android_versions: ["17"]
+    platform_versions: ["17"]
     code_refs: []
 """
 
@@ -391,7 +392,7 @@ causes:
       verification_history: []
     related: []
     cp_evidence: null
-    android_versions: ["14", "15"]
+    platform_versions: ["14", "15"]
     code_refs: []
   - id: DATA-009-02
     status: active
@@ -415,7 +416,7 @@ causes:
       verification_history: []
     related: []
     cp_evidence: null
-    android_versions: []
+    platform_versions: []
     code_refs: []
 tags: [data-evaluation]
 ---
@@ -453,7 +454,7 @@ DATA_001_03_PENDING = """  - id: DATA-001-03
     fix: {status: not-a-bug, ref: null, fixed_in: [], verification: null, verification_history: []}
     related: []
     cp_evidence: null
-    android_versions: []
+    platform_versions: []
     code_refs: []
 """
 
@@ -512,23 +513,23 @@ def review(db: Path) -> None:
     data = db / "data/DATA-001-no-setup-data-call"
     _edit(data / "type.md", "tags: [data-evaluation]\n---", DATA_001_03_PENDING + "tags: [data-evaluation]\n---")
     _write(db / "data/DATA-009-legacy-evaluation/type.md", DATA_002)
-    _edit(data / "jira/MOCK-1103.yaml", "note: 로밍 SIM 테스트 중 발생, 슬롯 1",
+    _edit(data / "issues/MOCK-1103.yaml", "note: 로밍 SIM 테스트 중 발생, 슬롯 1",
           "note: '로밍 SIM 테스트 중 발생, 슬롯 1. 로밍을 켜니 됐다고 함(근거: 사용자 진술)'")
     for key, rel, cause, when, occurred, note in REVIEW_JIRA:
         sw, ver = ("MOCKA56_U1_20260901", "15") if "DATA-009" in rel else ("MOCKA56_U1_20260920", "16")
-        _write(db / rel / "jira" / f"{key}.yaml",
+        _write(db / rel / "issues" / f"{key}.yaml",
                f"key: {key}\ncause: {cause}\ndate: {when}\noccurred_on: {occurred}\nmodel: MOCK-A56\nsw: {sw}\n"
-               f"android_version: \"{ver}\"\ncarrier: MockTel KR\nanalyzed_by: mock-user1\nnote: {note}\n")
+               f"platform_version: \"{ver}\"\ncarrier: MockTel KR\nanalyzed_by: mock-user1\nnote: {note}\n")
     for key, when, sig, decision, final in REVIEW_FEEDBACK:
         stamp = when[:16].replace("-", "").replace(":", "")
         _write(db / "feedback" / when[:7] / f"{key}-{stamp}.yaml",
-               f"jira: {key}\ndate: {when}\nby: mock-user1\nsuggested:\n"
+               f"issue: {key}\ndate: {when}\nby: mock-user1\nsuggested:\n"
                f"  - {{cause: {sig.split('/', 1)[0]}, signature: {sig}, score: 0.8}}\ndecision: {decision}\n"
                f"final: {final}\n")
     for key, when, final in REVIEW_MANUAL:
         stamp = when[:16].replace("-", "").replace(":", "")
         _write(db / "feedback" / when[:7] / f"{key}-{stamp}.yaml",
-               f"jira: {key}\ndate: {when}\nby: mock-user2\nsuggested: []\ndecision: manual\nfinal: {final}\n")
+               f"issue: {key}\ndate: {when}\nby: mock-user2\nsuggested: []\ndecision: manual\nfinal: {final}\n")
     _edit(db / "network/NETWORK-001-no-service/fixtures/NETWORK-001-01.expect.yaml", "origin: synthetic",
           "also_allowed:\n- CALL-001-01\n- SIM-001-01\n- IMS-001-01\norigin: synthetic")
     for rel in ("data/DATA-001-no-setup-data-call/fixtures/DATA-001-01.expect.yaml",
@@ -542,9 +543,9 @@ def step_focus(db: Path) -> None:
     _edit(db / "issue-db.config.yaml", "  map: []",
           "  map:\n    - {pattern: '데이터', types: [DATA-001], categories: []}")
     for key in ("MOCK-1131", "MOCK-1132"):
-        _write(db / "data/DATA-001-no-setup-data-call/jira" / f"{key}.yaml",
+        _write(db / "data/DATA-001-no-setup-data-call/issues" / f"{key}.yaml",
                f"key: {key}\ncause: DATA-001-01\ndate: 2026-09-25\noccurred_on: 2026-09-24\nmodel: MOCK-A56\n"
-               "sw: MOCKA56_U1_20260915\nandroid_version: \"16\"\ncarrier: MockTel KR\nanalyzed_by: mock-user1\n"
+               "sw: MOCKA56_U1_20260915\nplatform_version: \"16\"\ncarrier: MockTel KR\nanalyzed_by: mock-user1\n"
                "failed_step: 5 | 데이터 켜기\nnote: 스텝 우선 유형 시험\n")
 
 
@@ -622,7 +623,7 @@ causes:
     fix: {status: open, ref: null, fixed_in: [], verification: null, verification_history: []}
     related: []
     cp_evidence: null
-    android_versions: ["2"]            # 플랫폼 버전(K9). placeholder
+    platform_versions: ["2"]           # 플랫폼 버전. placeholder
     code_refs: []
 tags: []
 ---
@@ -637,7 +638,7 @@ def ofono(db: Path) -> None:
     """oFono 플랫폼 뼈대 DB(17-platforms §5): 유형·Jira·피드백을 비우고 placeholder 규칙과 합성 유형 하나를 넣는다."""
     cfg = db / "issue-db.config.yaml"
     _edit(cfg, "schema_version: 1\n", "platform: ofono                      # 17-platforms §4. TODO(SITE:S28)\nschema_version: 1\n")
-    _edit(cfg, 'android_versions_supported: ["16", "17"]',
+    _edit(cfg, 'platform_versions_supported: ["16", "17"]',
           'platform_versions_supported: ["2"]   # placeholder. TODO(SITE:S28)')
     _edit(cfg, "  name: reference                    # 사외 초안은 reference. 사내 포팅 후 site (S-4a)\n  min_version: 0.1.0",
           "  name: ofono_reference\n  min_version: 0.0.1")
@@ -659,6 +660,30 @@ def ofono(db: Path) -> None:
     _write(data / "fixtures/DATA-001-01.expect.yaml",
            "expect_top: DATA-001-01\noccurred_at: '2026-09-20T14:32:10+09:00'\norigin: synthetic\n")
 
+GH_KEY = "mock-org.mock-issues-"
+GH_TRACKER = ("tracker:                             # 이슈 트래커 (트래커 범용화 §6-1, 합성)\n"
+              "  kind: github\n"
+              "  base_url: https://ghe.mock.invalid/\n"
+              "  key_regex: 'mock-org\\.mock-issues-\\d+'\n")
+
+
+def github(db: Path) -> None:
+    """GitHub Issues 트래커 DB: tracker 블록과 Jira 키 `MOCK-<n>`(기록·피드백 파일 이름과 본문, 유형 evidence)을 바꾼다."""
+    cfg = db / "issue-db.config.yaml"
+    text, n = re.subn(r"tracker:[^\n]*\n(?:  [^\n]*\n)+", lambda m: GH_TRACKER, cfg.read_text(encoding="utf-8"), count=1)
+    if not n:
+        raise SystemExit(f"{cfg}: tracker 블록이 없습니다")
+    cfg.write_text(text, encoding="utf-8", newline="\n")
+    key_re = re.compile(r"\bMOCK-(\d+)\b")
+    for path in sorted(p for p in db.rglob("*") if p.is_file() and p.suffix in (".yaml", ".md")):
+        text = path.read_text(encoding="utf-8")
+        new = key_re.sub(lambda m: GH_KEY + m.group(1), text)
+        if new != text:
+            path.write_text(new, encoding="utf-8", newline="\n")
+    for path in sorted(p for p in db.rglob("MOCK-*") if p.is_file() and key_re.match(p.name)):
+        path.rename(path.with_name(key_re.sub(lambda m: GH_KEY + m.group(1), path.name, count=1)))
+
+
 VARIANTS = {
     "issue-db-lint-errors": lint_errors,
     "issue-db-empty-category": empty_category,
@@ -669,6 +694,7 @@ VARIANTS = {
     "issue-db-step-focus": step_focus,
     "issue-db-step-events": step_events,
     "issue-db-ofono": ofono,
+    "issue-db-github": github,
     "verify-logs": verify_logs,
 }
 

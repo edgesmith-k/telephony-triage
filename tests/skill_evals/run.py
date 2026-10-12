@@ -39,6 +39,7 @@ def dump(path: Path, value) -> None:
 MOCKS = REPO / "tests" / "mocks"
 ANALYZER_PLUGIN = "mock-analyzers"
 APPROVER = "eval-approver"
+GH_SERVER = "mock-github-issues"
 
 
 def _rules(entry: dict, run_dir: Path) -> str:
@@ -83,18 +84,25 @@ def prepare_plugin_mode(entry: dict, info: dict, env_dir: Path) -> dict:
     (skill / "SKILL.md").write_text(text.replace("tests/mocks/skills/data-analyzer/run.py",
                                                  (skill / "run.py").as_posix()), encoding="utf-8")
     mcp = env_dir / "mcp.json"
+    gh = {}
+    if "MOCK_GH_ISSUES_DIR" in info["env"]:    # 두 번째 트래커 eval(setup.tracker: github, 트래커 범용화 §6-3)
+        gh = {GH_SERVER: {"command": sys.executable, "args": [(MOCKS / "github_issues_mcp" / "server.py").as_posix()],
+                          "env": {k: info["env"][k] for k in ("MOCK_GH_ISSUES_DIR", "MOCK_GH_ISSUES_WRITE_LOG",
+                                                              "PYTHONIOENCODING")}}}
     dump(mcp, {"mcpServers": {
         "mock-jira": {"command": sys.executable, "args": [(MOCKS / "jira_mcp" / "server.py").as_posix()],
                       "env": {k: info["env"][k] for k in ("MOCK_JIRA_DIR", "MOCK_JIRA_WRITE_LOG", "PYTHONIOENCODING")}},
+        **gh,
         # guard의 ask(예: publish 규칙 7)에 사람 대신 답하고 요청을 기록한다(`approvals.json`).
         # setup.approver_deny면 모든 ask를 거부한다(권한 거부 경로, eval 62)
         APPROVER: {"command": sys.executable, "args": [(MOCKS / "approver_mcp" / "server.py").as_posix()],
                    "env": {"MOCK_APPROVALS_LOG": str(env_dir / "approvals.json"), "PYTHONIOENCODING": "utf-8",
                            **({"EVAL_APPROVER_DENY": "1"} if setup.get("approver_deny") else {})}}}})
-    return {"plugin_dirs": [info["plugin_root"], str(analyzer)], "mcp_config": str(mcp)}
+    return {"plugin_dirs": [info["plugin_root"], str(analyzer)], "mcp_config": str(mcp),
+            "mcp_servers": ["mock-jira", *gh, APPROVER]}
 
 
-def plugin_check(events: list[dict]) -> tuple[str | None, dict]:
+def plugin_check(events: list[dict], required: list[str] | None = None) -> tuple[str | None, dict]:
     """init 이벤트로 플러그인·MCP가 실제로 붙었는지 본다. 안 붙었으면 행동 평가가 아니라 환경 오류다."""
     init = next((e for e in events if e.get("type") == "system" and e.get("subtype") == "init"), None)
     uses = [c for e in events if e.get("type") == "assistant"
@@ -114,7 +122,7 @@ def plugin_check(events: list[dict]) -> tuple[str | None, dict]:
     seen.update(plugins=plugins, mcp_servers=servers)
     if "telephony-triage" not in plugins:
         return f"플러그인이 로딩되지 않음: {plugins}", seen
-    bad = {n: servers.get(n) for n in ("mock-jira", APPROVER) if servers.get(n) != "connected"}
+    bad = {n: servers.get(n) for n in (required or ("mock-jira", APPROVER)) if servers.get(n) != "connected"}
     if bad:
         return f"MCP 연결 실패: {bad}", seen
     return None, seen
@@ -249,7 +257,9 @@ def execute(entry: dict, info: dict, env_dir: Path, run_dir: Path, claude: str,
                    "--permission-prompt-tool", f"mcp__{APPROVER}__approve",
                    *[a for d in plugin["plugin_dirs"] for a in ("--plugin-dir", d)],
                    "--append-system-prompt", system,
-                   "--tools", tools, "--allowedTools", tools + ",mcp__mock-jira", *dirs]
+                   "--tools", tools, "--allowedTools",
+                   tools + ",mcp__mock-jira" + (f",mcp__{GH_SERVER}" if GH_SERVER in plugin.get("mcp_servers", []) else ""),
+                   *dirs]
     else:
         prompt = evaluation_prompt(entry, info, env_dir, run_dir)
         (run_dir / "prompt.txt").write_text(prompt, encoding="utf-8")
@@ -274,7 +284,7 @@ def execute(entry: dict, info: dict, env_dir: Path, run_dir: Path, claude: str,
             events_list, result = read_events(run_dir / "events.jsonl")
             status, reason = classify_result(result, proc.returncode)
             if plugin:
-                problem, seen = plugin_check(events_list)
+                problem, seen = plugin_check(events_list, plugin.get("mcp_servers"))
                 approvals = env_dir / "approvals.json"
                 seen["approvals"] = json.loads(approvals.read_text(encoding="utf-8")) if approvals.is_file() else []
                 plugin = {**plugin, "seen": seen}

@@ -73,7 +73,7 @@ def test_review_report_catches_every_planted_case():
     assert _ids(report, "pending-signatures") == ["DATA-001-03"]
     # pending 원인은 "fixture 없는 원인"이 아니라 "시그니처 없는 원인"으로 센다
     assert _ids(report, "no-fixture") == ["DATA-009-01", "DATA-009-02"]
-    assert _ids(report, "stale-unresolved", "jira") == ["MOCK-1105"]          # MOCK-1104(24일)는 아님
+    assert _ids(report, "stale-unresolved", "issue") == ["MOCK-1105"]          # MOCK-1104(24일)는 아님
     low = _item(report, "low-acceptance")["entries"]
     assert [(e["signature"], e["accepted"], e["total"]) for e in low] == [("DATA-001-01/data-disabled", 2, 6)]
     dup = _item(report, "duplicate-candidates")["entries"]
@@ -81,7 +81,7 @@ def test_review_report_catches_every_planted_case():
     # 제목 유사도는 없다(title_similarity None). 사용자 데이터 OFF 표본(extra.1)은 must_not_match로 DATA-002 S=0이라 관여하지 않는다.
     assert [d["types"] for d in dup] == [["DATA-001", "DATA-002"], ["DATA-001", "DATA-009"], ["DATA-002", "DATA-009"]]
     assert dup[1]["fixtures"] and dup[1]["title_similarity"] >= 0.8  # 심은 중복 후보는 제목도 비슷하다
-    # 지원 종료: 빈 android_versions(DATA-001-02 등)는 전 버전이라 제외
+    # 지원 종료: 빈 platform_versions(DATA-001-02 등)는 전 버전이라 제외
     assert _ids(report, "unsupported-versions") == ["DATA-009-01"]
     assert _ids(report, "stale-causes") == ["DATA-009-01"]
     assert _ids(report, "no-trace-signatures") == ["DATA-009-02", "IMS-001-01", "SMS-001-01"]
@@ -89,14 +89,14 @@ def test_review_report_catches_every_planted_case():
     assert _item(report, "fix-fields-missing")["entries"][0]["missing"] == ["ref", "fixed_in"]
     assert _ids(report, "fix-submitted-no-build") == ["DATA-009-01"]
     statement = {e["cause"]: e["sources"] for e in _item(report, "user-statement-only")["entries"]}
-    assert statement == {"DATA-001-02": ["jira:MOCK-1103"], "DATA-001-03": ["method"]}
+    assert statement == {"DATA-001-02": ["issue:MOCK-1103"], "DATA-001-03": ["method"]}
     assert _ids(report, "verification-failures") == ["CALL-001-01", "IMS-001-01"]
     allowed = _item(report, "also-allowed-accumulated")["entries"]
     assert {(e["kind"], e.get("cause") or e["fixture"]) for e in allowed} == {
         ("fixture", "network/NETWORK-001-no-service/fixtures/NETWORK-001-01.log"), ("cause", "IMS-001-01")}
     # 급증: NETWORK-001-01만. SMS-001-01은 최근에 기록했지만 발생일(occurred_on)이 과거라 아니다
     assert _ids(report, "surge") == ["NETWORK-001-01"]
-    assert _ids(report, "open-with-jira")[0] == "NETWORK-001-01"
+    assert _ids(report, "open-with-issues")[0] == "NETWORK-001-01"
     # git 이력이 없으면 방치 기간은 판단하지 않고 "확인 불가"로 따로 보인다
     assert _item(report, "fix-submitted-stale")["entries"] == []
     assert {e["reason"] for e in _item(report, "fix-submitted-stale")["undetermined"]} == {"no-history"}
@@ -116,7 +116,7 @@ def test_category_scope_and_owners():
     assert report["owners"]["sms"] == ["@mock-org/telephony-sms-owners"]
     for item in report["items"]:
         for entry in item["entries"]:
-            ident = entry.get("cause") or entry.get("jira") or entry.get("signature") or entry.get("fixture") or ""
+            ident = entry.get("cause") or entry.get("issue") or entry.get("signature") or entry.get("fixture") or ""
             assert "SMS-" in json.dumps(entry, ensure_ascii=False), (item["key"], ident)
     assert _ids(report, "no-trace-signatures") == ["SMS-001-01"]
     assert _item(report, "duplicate-candidates")["entries"] == []

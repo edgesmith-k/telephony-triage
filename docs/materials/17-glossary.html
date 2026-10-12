@@ -244,7 +244,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
       <div class="eyebrow">GLOSSARY · 낯선 말 모음</div>
       <h1>용어집</h1>
       <p>문서와 도구 화면에 나오는 용어를 묶음별로 정리했습니다. 정확한 정의가 다르면 <code>docs/design/contracts.md</code>가 맞습니다.</p>
-      <div class="meta"><span><b>기준</b> main 2026-10-11</span><span><b>용어</b> 54개</span></div>
+      <div class="meta"><span><b>기준</b> main 2026-10-12</span><span><b>용어</b> 54개</span></div>
     </header>
     <section class="chap" id="t0" data-title="관계도">
       <h2><span class="no">0</span>관계도</h2>
@@ -274,7 +274,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
     <section class="chap" id="t2" data-title="판정">
       <h2><span class="no">2</span>판정</h2>
       <p class="first">이 절에서 알 수 있는 것: 판정 관련 용어</p>
-      <div class="tbl k1"><table><tr><th>용어</th><th>뜻</th></tr><tr><td><b>시그니처</b></td><td>로그 조건 묶음. 종류: 증상, 원인, 복구(recovery), 시나리오(scenario)</td></tr><tr><td><b>S / C</b></td><td>증상 / 원인 시그니처 충족 여부(0/1). 판정의 기준</td></tr><tr><td><b>규칙 일치 점수 · 일치 수준</b></td><td>규칙과 얼마나 맞았나. 진단 확신도가 아님</td></tr><tr><td><b>이벤트</b></td><td>파서가 로그 줄에서 뽑은 구조화된 사건</td></tr><tr><td><b>parser-rules</b></td><td>이슈 DB의 태그·RIL·extractor 규칙. 엔진은 플러그인, 규칙은 DB</td></tr><tr><td><b>파서 백엔드</b></td><td>로그를 읽는 구현. reference(참고) 또는 site(사내 포팅). oFono는 ofono_reference(가정 형식 뼈대)</td></tr><tr><td><b>플랫폼 · platform-mismatch</b></td><td>로그·원인·해결책이 다른 대상(Android 기본, oFono 등). 플랫폼마다 이슈 DB가 따로이고 --platform으로 고름. 고른 플랫폼과 이슈 DB 선언이 다르면 platform-mismatch로 멈춤</td></tr><tr><td><b>로그 범위</b></td><td>발생 시각이 로그 안에 있는지. &quot;범위 밖&quot;은 &quot;매칭 없음&quot;과 다름</td></tr><tr><td><b>심층 분석 · 탐색 분석</b></td><td>카테고리 분석 스킬, Claude 가설. 모두 보조 정보</td></tr></table></div>
+      <div class="tbl k1"><table><tr><th>용어</th><th>뜻</th></tr><tr><td><b>시그니처</b></td><td>로그 조건 묶음. 종류: 증상, 원인, 복구(recovery), 시나리오(scenario)</td></tr><tr><td><b>S / C</b></td><td>증상 / 원인 시그니처 충족 여부(0/1). 판정의 기준</td></tr><tr><td><b>규칙 일치 점수 · 일치 수준</b></td><td>규칙과 얼마나 맞았나. 진단 확신도가 아님</td></tr><tr><td><b>이벤트</b></td><td>파서가 로그 줄에서 뽑은 구조화된 사건</td></tr><tr><td><b>parser-rules</b></td><td>이슈 DB의 태그·RIL·extractor 규칙. 엔진은 플러그인, 규칙은 DB</td></tr><tr><td><b>파서 백엔드</b></td><td>로그를 읽는 구현. reference(참고) 또는 site(사내 포팅). oFono는 ofono_reference(가정 형식 뼈대)</td></tr><tr><td><b>플랫폼 · platform-mismatch</b></td><td>로그·원인·해결책이 다른 대상(Android 기본, oFono 등). 플랫폼마다 이슈 DB가 따로이고 --platform으로 고름. 고른 플랫폼과 이슈 DB 선언이 다르면 platform-mismatch로 멈춤</td></tr><tr><td><b>트래커 · tracker-mismatch</b></td><td>이슈를 접수하는 시스템. 설정 tracker.kind로 고름(기본·사내 jira, GitHub Issues는 실험적). 트래커마다 어댑터 모듈 하나. 설정과 이슈 DB 선언(tracker.kind)이 다르면 tracker-mismatch로 멈춤</td></tr><tr><td><b>작업 키</b></td><td>작업 폴더·브랜치·DB 기록 파일(issues/&lt;KEY&gt;.yaml) 이름이 되는 이슈 키. 경로에 안전한 형식만 받음. Jira는 이슈 키 그대로, GitHub는 &lt;owner&gt;.&lt;repo&gt;-&lt;N&gt;(소문자)</td></tr><tr><td><b>옛 설정 키</b></td><td>트래커 범용화 전 이름(jira: 등). 자동 변환하지 않고 막음(MCP 도구 전부 거부). config.py rename-legacy로 바꿈</td></tr><tr><td><b>로그 범위</b></td><td>발생 시각이 로그 안에 있는지. &quot;범위 밖&quot;은 &quot;매칭 없음&quot;과 다름</td></tr><tr><td><b>심층 분석 · 탐색 분석</b></td><td>카테고리 분석 스킬, Claude 가설. 모두 보조 정보</td></tr></table></div>
 
     </section>
     <section class="chap" id="t3" data-title="검증">
@@ -298,13 +298,13 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
     <section class="chap" id="t6" data-title="도입">
       <h2><span class="no">6</span>도입</h2>
       <p class="first">이 절에서 알 수 있는 것: 도입 관련 용어</p>
-      <div class="tbl k1"><table><tr><th>용어</th><th>뜻</th></tr><tr><td><b>사외 / 사내</b></td><td>개발 환경 / 도입 조직 환경</td></tr><tr><td><b>S-0~S-7</b></td><td>사내 보완 단계</td></tr><tr><td><b>SITE_PATHS</b></td><td>사내 전용 값·코드만 두는 경로. 재반입 때 보존</td></tr><tr><td><b>site-defaults.yaml</b></td><td>사내 기본값(Jira·GHE·파서 백엔드). 없으면 커맨드가 멈춤</td></tr><tr><td><b>placeholder 규칙</b></td><td>실제 로그로 확인하기 전의 예시 규칙. 파일럿 전에 교체</td></tr><tr><td><b>반입 묶음</b></td><td>사외 초안을 사내로 가져가는 zip 묶음. make_bundle.py로 만듦</td></tr></table></div>
+      <div class="tbl k1"><table><tr><th>용어</th><th>뜻</th></tr><tr><td><b>사외 / 사내</b></td><td>개발 환경 / 도입 조직 환경</td></tr><tr><td><b>S-0~S-7</b></td><td>사내 보완 단계. "사내 설정 시작"이면 site_step.py가 한 단계씩 안내</td></tr><tr><td><b>SITE_PATHS</b></td><td>사내 전용 값·코드만 두는 경로. 재반입 때 보존</td></tr><tr><td><b>site-defaults.yaml</b></td><td>사내 기본값(트래커 Jira·GHE·파서 백엔드). 없으면 커맨드가 멈춤</td></tr><tr><td><b>placeholder 규칙</b></td><td>실제 로그로 확인하기 전의 예시 규칙. 파일럿 전에 교체</td></tr><tr><td><b>반입 묶음</b></td><td>사외 초안을 사내로 가져가는 zip 묶음. make_bundle.py로 만듦</td></tr></table></div>
 
     </section>
     <section class="chap" id="t7" data-title="평가">
       <h2><span class="no">7</span>평가</h2>
       <p class="first">이 절에서 알 수 있는 것: 평가 관련 용어</p>
-      <div class="tbl k1"><table><tr><th>용어</th><th>뜻</th></tr><tr><td><b>행동 eval</b></td><td>Claude가 스킬 지침대로 행동하는지 재는 시나리오 시험. evals.json 65개</td></tr><tr><td><b>주입 eval</b></td><td>Jira 본문 속 지시를 따르지 않는지 보는 eval (59·60번)</td></tr><tr><td><b>정확도 평가 (오프라인 평가)</b></td><td>해결된 과거 Jira 라벨셋으로 매칭 정확도를 재는 S-5 관문. offline_eval.py</td></tr><tr><td><b>라벨셋</b></td><td>정확도 평가 입력. Jira 키·로그 경로·발생 시각·정답 원인 ID 또는 unresolved</td></tr><tr><td><b>자동 테스트</b></td><td>플러그인 코드 단위 테스트(pytest, 1,412개). CI에서 실행</td></tr></table></div>
+      <div class="tbl k1"><table><tr><th>용어</th><th>뜻</th></tr><tr><td><b>행동 eval</b></td><td>Claude가 스킬 지침대로 행동하는지 재는 시나리오 시험. evals.json 67개</td></tr><tr><td><b>주입 eval</b></td><td>Jira 본문 속 지시를 따르지 않는지 보는 eval (59·60번)</td></tr><tr><td><b>정확도 평가 (오프라인 평가)</b></td><td>해결된 과거 Jira 라벨셋으로 매칭 정확도를 재는 S-5 관문. offline_eval.py</td></tr><tr><td><b>라벨셋</b></td><td>정확도 평가 입력. Jira 키·로그 경로·발생 시각·정답 원인 ID 또는 unresolved</td></tr><tr><td><b>자동 테스트</b></td><td>플러그인 코드 단위 테스트(pytest, 1,640개). CI에서 실행</td></tr></table></div>
 
     </section>
     <section class="chap" id="t8" data-title="검증과 평가는 누가 어떻게 만드나">
@@ -318,7 +318,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
 <text class="s" x="132" y="210">검증 규칙: 플러그인 개발자</text><text class="s" x="132" y="228">로그(fixture): 기여자</text><text class="s" x="132" y="246">— 기록할 때 Claude가</text><text class="s" x="132" y="264">근거 구간을 잘라 마스킹한</text><text class="s" x="132" y="282">초안을 기여자가 승인</text>
 <text class="s" x="132" y="340">도구가 자동 (db_verify)</text><text class="s" x="132" y="358">Claude 판단 없음</text>
 <text class="s" x="132" y="420">규칙이 바뀌는 기록마다</text><text class="s" x="132" y="438">초안 · push 전 · 커밋 때</text>
-<rect class="box" x="358" y="12" width="222" height="446" rx="8"/><text class="t" x="370" y="36">행동 eval (65개)</text>
+<rect class="box" x="358" y="12" width="222" height="446" rx="8"/><text class="t" x="370" y="36">행동 eval (67개)</text>
 <text class="s" x="370" y="60">Claude가 스킬 지침대로</text><text class="s" x="370" y="78">행동하는지 (확인 질문,</text><text class="s" x="370" y="96">승인 전 push 안 함 등)</text>
 <text class="s" x="370" y="140">플러그인의 스킬·커맨드</text><text class="s" x="370" y="158">·hook</text>
 <text class="s" x="370" y="210">플러그인 개발자</text><text class="s" x="370" y="228">— evals.json에 시나리오마다</text><text class="s" x="370" y="246">요청 문장, 모의 Jira·로그,</text><text class="s" x="370" y="264">사용자 대답, 채점 항목</text><text class="s" x="370" y="282">(안전 10개, 주입 59·60 포함)</text>
@@ -330,7 +330,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
 <text class="s" x="608" y="210">사내 도입 담당자와</text><text class="s" x="608" y="228">카테고리 담당자</text><text class="s" x="608" y="246">— 해결된 과거 Jira 20~30건</text><text class="s" x="608" y="264">에 정답 원인을 붙인</text><text class="s" x="608" y="282">라벨셋 (조정용/확인용)</text>
 <text class="s" x="608" y="340">offline_eval.py</text><text class="s" x="608" y="358">스크립트만 (Claude 없음)</text>
 <text class="s" x="608" y="420">파일럿 전 관문</text>
-</svg><figcaption>팀원이 평소에 만나는 것은 왼쪽(R1~R6)뿐입니다. 가운데는 플러그인을 고치는 사람이, 오른쪽은 도입 담당자가 다룹니다. 플러그인 코드 자체는 별도로 자동 테스트(1,412개, CI)가 확인합니다.</figcaption></figure>
+</svg><figcaption>팀원이 평소에 만나는 것은 왼쪽(R1~R6)뿐입니다. 가운데는 플러그인을 고치는 사람이, 오른쪽은 도입 담당자가 다룹니다. 플러그인 코드 자체는 별도로 자동 테스트(1,640개, CI)가 확인합니다.</figcaption></figure>
     </section>
   </main>
 </div>

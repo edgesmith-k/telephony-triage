@@ -2,7 +2,7 @@
 """match_signatures.py — 시그니처 매처 (contracts.md §3.2, 04-parser-matching.md §5.11,
 03-issue-db.md §5.9).
 
-    match_signatures.py [--db <path>] --events <json> [--jira-meta <json>]
+    match_signatures.py [--db <path>] --events <json> [--issue-meta <json>]
                         [--regress] [--no-feedback-weight] [--top 3]
 
 입력 이벤트는 `parse_logcat.py parse --mask` 출력이다. `masked: true`가 아니면
@@ -17,13 +17,13 @@
   참고 값이다. 시간 상한을 넘긴 시그니처(`errors`)는 호출자(`db_regress`·`db_verify`)가
   실패로 본다.
 - 후보 정렬: 같은 score 후보는 bonus 합(근접+키워드) 내림차순, 다음 ID 순. 회귀 모드는 bonus가 0이라 ID 순.
-- 스텝 기준 우선 유형(분석 모드, `--jira-meta`에 `failed_step`이 있을 때만): 같은 스텝이 이 유형의 기존 Jira 기록에 `step_focus.min_records`
+- 스텝 기준 우선 유형(분석 모드, `--issue-meta`에 `failed_step`이 있을 때만): 같은 스텝이 이 유형의 기존 Jira 기록에 `step_focus.min_records`
   건 이상 있거나(스텝 이름 비교) `issue-db.config.yaml`의 `step_focus.map`에 맞으면 그 유형은 **순위 키에만**
   `scoring.step_focus_bonus_max`(기본 0.05)를 더해 정렬한다. score·confidence·S·C는 바뀌지 않는다. 우선 유형이 있을 때만
   후보 `bonus.step`과 최상위 `step_focus: {types[], by{유형: ["records:N" | "map"]}}`를 낸다.
 
-`--jira-meta` (분석 모드, 선택): `{key, occurred_at, sw, summary, description, failed_step?, android_version?}` (`failed_step`은 있을 때만, 키워드 보너스 입력).
-`android_version`은 표시 전용이다: 원인 후보에 `android_versions`(원인 값, 빈 목록 = 전 버전)와 `version_match`(true·false, Jira 버전이 없거나
+`--issue-meta` (분석 모드, 선택): `{key, occurred_at, sw, summary, description, failed_step?, platform_version?}` (`failed_step`은 있을 때만, 키워드 보너스 입력).
+`platform_version`은 표시 전용이다: 원인 후보에 `platform_versions`(원인 값, 빈 목록 = 전 버전)와 `version_match`(true·false, Jira 버전이 없거나
 원인이 전 버전이거나 원인 없는 후보면 null)를 낼 뿐 순위·score·S/C에는 쓰지 않는다. Jira 값이 `16`·`16.0` 꼴일 때만 주 버전을 비교하고 다른 꼴("Android 16", "17 QPR1")은 null이다.
 `occurred_at`은 타임존 있는 ISO 시각, 텍스트 필드는 마스킹된 것이어야 한다.
 
@@ -285,9 +285,9 @@ def run(args) -> dict:
     except (dbpath.DbPathError, issuedb.IssueDbError) as exc:
         raise UsageError(str(exc)) from exc
 
-    jira = _load_json(args.jira_meta, "--jira-meta") if args.jira_meta else {}
+    jira = _load_json(args.issue_meta, "--issue-meta") if args.issue_meta else {}
     if not isinstance(jira, dict):
-        raise UsageError("--jira-meta는 JSON 객체여야 합니다.")
+        raise UsageError("--issue-meta는 JSON 객체여야 합니다.")
     try:
         compiled = compiled_cache.compile_signatures(db)
     except SignatureError as exc:
@@ -347,7 +347,7 @@ def match(events_doc: dict, db: issuedb.IssueDb, compiled: dict, *, regress: boo
     jira = jira or {}
     occurred = None
     if jira.get("occurred_at") and not regress:
-        occurred = _parse_iso(jira["occurred_at"], "--jira-meta occurred_at")
+        occurred = _parse_iso(jira["occurred_at"], "--issue-meta occurred_at")
 
     events, lo, hi, window, ids = _range(events_doc, regress)
     half = (hi - lo).total_seconds() / 2 if (lo and hi and window and not regress) else None
@@ -444,7 +444,7 @@ def match(events_doc: dict, db: issuedb.IssueDb, compiled: dict, *, regress: boo
         "range": {"start": lo.isoformat() if lo else None, "end": hi.isoformat() if hi else None},
         "bonus": use_bonus,
         "feedback_weight": use_feedback,
-        "jira": {k: jira.get(k) for k in ("key", "occurred_at", "sw") if k in jira},
+        "issue": {k: jira.get(k) for k in ("key", "occurred_at", "sw") if k in jira},
         "candidates": candidates[:top] if top else candidates,
         "pending_causes": pending,
         "types": types_out,
@@ -475,8 +475,8 @@ def _rank_key(c: dict) -> tuple:
 
 
 def _version_match(cause, jira: dict) -> bool | None:
-    versions = [str(v).strip().split(".")[0] for v in (cause.raw.get("android_versions") or [])] if cause else []
-    found = re.fullmatch(r"\s*(\d+)(?:\.\d+)*\s*", str(jira.get("android_version") or ""))   # "Android 16"·"17 QPR1" 등은 비교하지 않는다
+    versions = [str(v).strip().split(".")[0] for v in (cause.raw.get("platform_versions") or [])] if cause else []
+    found = re.fullmatch(r"\s*(\d+)(?:\.\d+)*\s*", str(jira.get("platform_version") or ""))   # "Android 16"·"17 QPR1" 등은 비교하지 않는다
     return (found.group(1) in versions) if versions and found else None
 
 
@@ -521,7 +521,7 @@ def _candidate(db, itype, cause, S, C, sym, res, jira, occurred, half, scoring, 
         "feedback": feedback,
         "fix_judgement": judgement,
         "related": _related(db, cause),
-        "android_versions": [str(v) for v in cause.raw.get("android_versions") or []] if cause else [],
+        "platform_versions": [str(v) for v in cause.raw.get("platform_versions") or []] if cause else [],
         "version_match": _version_match(cause, jira),
         **({"clock_flags": flags} if flags else {}),
     }
@@ -532,7 +532,7 @@ def build_parser() -> argparse.ArgumentParser:
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--db", default=None)
     parser.add_argument("--events", metavar="json", required=True)
-    parser.add_argument("--jira-meta", metavar="json", default=None)
+    parser.add_argument("--issue-meta", metavar="json", default=None)
     parser.add_argument("--regress", action="store_true")
     parser.add_argument("--no-feedback-weight", action="store_true")
     parser.add_argument("--top", type=int, default=3,

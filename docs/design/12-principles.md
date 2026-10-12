@@ -9,10 +9,10 @@
 - **사용자의 이슈 DB clone은 브랜치도 파일도 바꾸지 않는다.** 분석은 읽기 스냅샷(`<work_dir>/_snapshot`), 쓰기는 작업 worktree와 도구 브랜치(`tt/*`)를 쓴다. 사용자 clone에는 fetch와 조건부 `pull --ff-only`만 한다. 명시적 예외는 둘이다: 메인테이너가 `migrate/schema-v<N>` 브랜치에서 실행하는 `migrate` 커맨드(그 브랜치의 워킹 트리를 바꾼다), 그리고 사용자가 자기 직접 편집 브랜치에서 직접 실행하는 `db_add renumber`(base·`tt/*`·detached가 아니고 트리가 깨끗할 때만, `06-collaboration.md §6.3`).
 - 다른 유형의 fixture에서 새 시그니처가 걸리면(R3·R4) 시그니처를 좁힐지 `also_allowed`로 허용할지 **사용자가 고른다**. 몰래 좁히거나 몰래 허용하지 않는다 (`contracts.md §fixture`).
 - 사용자·이슈 DB(플랫폼)별로 **한 번에 한 작업**만 스냅샷을 옮기거나 worktree를 만든다(세션 lock, 플랫폼 `work_dir`마다 하나라 android 작업과 oFono 작업은 동시에 할 수 있다, `17-platforms.md`). 작업이 끝나는 모든 경로에서 lock을 푼다 (`contracts.md §3.2` `db_pr.py` 세부).
-- 생성 파일(README, STATS, CHANGELOG)은 `db_build.py`로만 만들고 직접 편집하지 않는다. 캐시는 커밋하지 않는다. Jira 한 건은 파일 하나다.
+- 생성 파일(README, STATS, CHANGELOG)은 `db_build.py`로만 만들고 직접 편집하지 않는다. 캐시는 커밋하지 않는다. 이슈 한 건은 파일 하나다(`issues/<작업 키>.yaml`).
 - 머지 전 main이 바뀌었으면 `sync-pr`로 다시 맞춘다 (계획이 있는 PR은 계획 재적용, 직접 편집한 브랜치는 사용자가 재동기화, `06-collaboration.md §6.3`).
 - ID는 main에 들어간 뒤에는 바꾸지 않는다. **유일한 예외**는 머지 간격으로 main에 같은 ID가 두 번 들어온 경우의 사후 정리(메인테이너, `06-collaboration.md §6.3`)다. 병합·폐기는 `status`로 처리하고 삭제하지 않는다.
-- Jira는 허용된 읽기 도구와, **사용자가 확인 화면에서 승인한 본문의 코멘트 추가**(`jira.write_tools.add_comment`, 1종)만 쓴다. 필드 수정·상태 전환·이슈 생성·삭제·첨부는 하지 않는다. 승인 뒤 본문이 바뀌면 다시 승인받는다(guard가 본문 해시·이슈 키를 승인 기록과 대조하고, Claude Code 권한 확인은 그대로 뜬다). `--dry-run`·`--analysis-only` 결과는 게시하지 않는다 (`07-workflow.md §Step 9`, `08-safety.md §9` 규칙 2).
+- 이슈 트래커(Jira 등, `18-trackers.md`)는 허용된 읽기 도구와, **사용자가 확인 화면에서 승인한 본문의 코멘트 추가**(`tracker.write_tools.add_comment`, 1종)만 쓴다. 필드 수정·상태 전환·이슈 생성·삭제·첨부는 하지 않는다. 승인 뒤 본문이 바뀌면 다시 승인받는다(guard가 본문 해시·이슈 키를 승인 기록과 대조하고, Claude Code 권한 확인은 그대로 뜬다). `--dry-run`·`--analysis-only` 결과는 게시하지 않는다 (`07-workflow.md §Step 9`, `08-safety.md §9` 규칙 2).
 - 로그 원문은 필요한 구간만 읽는다. 매칭과 이슈 DB에는 마스킹된 텍스트만 쓴다. 이슈 DB에는 마스킹된 최소 예시와 fixture만 남긴다.
 - Jira 코멘트에는 마스킹된 스크립트 출력과 확인받은 문장만 넣는다. Jira 원문 인용·로그 원문 통째 붙이기는 하지 않고, 로그로 확인한 것과 추정을 칸마다 구분한다.
 - 분석 리포트에서 로그로 확인한 사실과 코드 기반 추정을 구분한다. placeholder 규칙으로 얻은 결과는 그렇다고 밝힌다.
