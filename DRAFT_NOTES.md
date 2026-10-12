@@ -16,14 +16,10 @@
 
 ## 진행 상태 (10/12)
 
-- 모드: **사외 초안**. Phase **D0, 1~13** 완료. 반입 전 보강 트랙(S1~S6·I1~I5·X·3C~3F)과 개선 트랙 **W0~W12**, 반입 전 리뷰(10/07) 수정 트랙 **V1~V7·V 끝**, 실제 로그 반영 트랙 **L1~L3** 완료, 반입 전 3차 검토(A1~A4·B1·B2·문서) 반영(10/08), 설명 정리(PR #31). main 병합 PR #8~#38.
+- 모드: **사외 초안**. Phase **D0, 1~13** 완료. 반입 전 보강 트랙(S1~S6·I1~I5·X·3C~3F)과 개선 트랙 **W0~W12**, 반입 전 리뷰(10/07) 수정 트랙 **V1~V7·V 끝**, 실제 로그 반영 트랙 **L1~L3** 완료, 반입 전 3차 검토(A1~A4·B1·B2·문서) 반영(10/08), 설명 정리(PR #31). main 병합 PR #8~#41.
 - 10/11: 4차 검토 묶음 A~G(PR #36), Jira 결과 게시(PR #37), 플랫폼 분리(결정 (m), S24~S29). 상세·남은 관찰은 `docs/history/draft-notes-2026-10.md`.
 - 10/12: 트래커 범용화(결정 (n)·(o), `18-trackers.md`, GitHub 실험적), "사내 설정 시작". eval 결과·63 관찰은 history.
-- 10/12: 검토 반영 B1~B4(offline_eval 판정 불가 집계, 단일 플랫폼 경로 검사, init 프로필 보존·입력 항목만 갱신, usage_stats 플랫폼 선택). 미실행 eval: 58(setup, `setup.md` 수정).
-- 10/12: 토큰 측정 보완(모델 일치·실행 시점 커밋·기준선 자격·비용/캐시 보고)과 낭비 1~3(`db_review --owners`, record 초안 검증 기본 출력, search 재검색 조건). 미실행 eval: 18·31·32·38·53·54. 낭비 4·5는 측정 뒤.
-- 10/12: 작업 상태 한 화면 v1(`job_status.py`·`/telephony-triage:status`, 로컬 기록만 읽기 전용, 결정 D4 앞당김)과 needs_input `pending{kind, asked_at}` 기록. `status.md` eval 미정의.
-- 10/12: 사용 흐름 A/B 구분(SKILL·help·db-authoring §0, SKILL 한도 8,064·db-authoring 12,288은 Fable 결정), 분석 전용 답 이어 쓰기(`carry`), 쓰기 run의 파일 이슈 재사용 차단, eval 68~70(U). 미실행 eval: 3·6·35·45·46·51·63·68·69·70.
-- 10/12: 사내 단계 자동화(`site_step.py check·propose·evals·--done` 가드, `tools/site_checks.py`, `tests/skill_evals/pending.json` = S-2에서 먼저 돌릴 미실행 eval). 확인 게이트는 그대로(자동 `--done` 없음). 전체 1,742 통과.
+- 10/12: 검토 반영 B1~B4, 토큰 측정 보완·낭비 1~3, 작업 상태 한 화면 v1, 사용 흐름 A/B·eval 68~70, 사내 단계 자동화(`site_step.py`). 상세는 history. 미실행 eval은 `tests/skill_evals/pending.json`(S-2). 전체 1,742 통과.
 - 사내 확인 항목: `TODO(SITE)` **104곳** — `python3 tools/list_site_todos.py`. `REVIEW-OPEN.md` 0건.
 - 사내 시작: **"사내 설정 시작"** → `python3 tools/site_step.py`가 `SITE_PROFILE.md`(트래커 jira)를 만들고 S-1~S-7을 한 단계씩 낸다(결정 (o)).
 - 안내서(사람용 HTML): `docs/telephony-triage-guide.html` (공유본 https://claude.ai/artifact/1jov1Et4dQUMauFr6aoxWG). 역할별 문서 19개: `docs/materials/00-index.html`
@@ -63,7 +59,7 @@
 - (g) eval 판정 관례: 변경 전·후를 같은 모델로, 1순위 동작·형식 오류 재시도, 2순위 토큰 W0 폭(출력 9.5%·비용 15.7%), 폭 밖이면 trace(호출 수)로 원인 확인. (10/06)
 - (h)·(j) W11 보류 3건(10/07)·매칭 컴파일 캐시 삭제(측정 근거) → `docs/history/draft-notes-2026-10.md`
 - (i) eval은 변경과 관련된 최소만 사외에서 돌린다: 각 VP는 바꾼 스킬·흐름의 eval만, V 끝은 W 영향 미확인 목록 중 아직 관련 있는 것만 골라서. 전체 재실행은 사내 S-2. (10/07, 사용자)
-- (k) 3차 검토 §8 — 하지 않는다 (10/08): 토큰 절감 위해 확인·승인·경고 생략 / 변경분만 전달 / 측정 없는 캐시 복원·스트리밍·병렬화·모듈 개편 / 반입 전 웹 포털·범용판·자동 게시 / placeholder·Windows 차이를 결함 집계 / 기존 기능 재구현 / 테스트 수·수락률 하나로 품질 보증 / 복구 편의로 승인·버전 검사·lock 우회 / 모든 권고를 반입 차단 조건으로.
+- (k) 3차 검토 §8 "하지 않는다" 9건(10/08) → `docs/history/draft-notes-2026-10.md`
 - (m) 플랫폼 분리 (10/11, 사용자): 동작·원인·해결책이 달라 이슈 DB를 플랫폼별로(합치기 안 안 씀), 추가는 디렉토리 + `platform.enabled`, lock은 플랫폼별("사용자·이슈 DB(플랫폼)별 한 번에 한 작업"), RF-4 유지. `17-platforms.md` §7.
 - (n) 트래커 범용화 (10/11, 사용자): 설정 `tracker.kind`(jira|github)·어댑터 `trackers/`, `issues/`·`platform_version(s)` 개명은 (d)로 v1 직접 수정, 옛 키는 감지만(fail-closed), DB kind 다르면 거부. `18-trackers.md` §7.
 - (o) 사내 트래커는 Jira (10/12, 사용자): 사내 설정은 `tracker.kind: jira`, S30·S31(GitHub 트래커)은 해당 없음. "사내 설정 시작" 한마디로 `tools/site_step.py`가 단계를 이어 낸다(단계마다 완료 기준·사용자 확인은 그대로).

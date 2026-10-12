@@ -35,3 +35,15 @@
 - 묶음 3 리뷰(P0 없음): P1-1 설정 밖 GitHub MCP 등록의 트래커 레포 쓰기 미차단 → 사내가 Jira라 막지 않고 18장 "알려진 한계"(결정 (o)). P1-2 eval 66 채점 거짓 실패 → 수정. P2: release·explore 작업 키 정규화·`..` 거부, 옛 승인 기록 문구 → 수정. 나머지(search_issues 원문, Windows 예약 이름, URL 호스트)는 18장 §8.
 - 전체 pytest 1,640 통과(21분 44초). eval(Sonnet, run tr-sonnet-a): 8·14·39·47·61·66·67 기계 채점 실패 0.
 - **관찰 — eval 63**: "oFono 로그로…" 요청에 `triage.py run`에 `--platform ofono`를 붙이지 않음(2회 재실행 같음). 변경 전 트리 fdf3ced도 같은 모델로 같은 실패 → 이 작업의 회귀가 아니라 지금 모델 동작. eval 환경의 site 기본이 ofono라 결과는 oFono로 맞다. 스킬 문구 보강은 따로(사내 S-2 eval 전체 재실행 때 함께 판단).
+
+## 10/12 진행 상태 원문 (반입 묶음 전 옮김)
+
+- 10/12: 검토 반영 B1~B4(offline_eval 판정 불가 집계, 단일 플랫폼 경로 검사, init 프로필 보존·입력 항목만 갱신, usage_stats 플랫폼 선택). 미실행 eval: 58(setup, `setup.md` 수정).
+- 10/12: 토큰 측정 보완(모델 일치·실행 시점 커밋·기준선 자격·비용/캐시 보고)과 낭비 1~3(`db_review --owners`, record 초안 검증 기본 출력, search 재검색 조건). 미실행 eval: 18·31·32·38·53·54. 낭비 4·5는 측정 뒤.
+- 10/12: 작업 상태 한 화면 v1(`job_status.py`·`/telephony-triage:status`, 로컬 기록만 읽기 전용, 결정 D4 앞당김)과 needs_input `pending{kind, asked_at}` 기록. `status.md` eval 미정의.
+- 10/12: 사용 흐름 A/B 구분(SKILL·help·db-authoring §0, SKILL 한도 8,064·db-authoring 12,288은 Fable 결정), 분석 전용 답 이어 쓰기(`carry`), 쓰기 run의 파일 이슈 재사용 차단, eval 68~70(U). 미실행 eval: 3·6·35·45·46·51·63·68·69·70.
+- 10/12: 사내 단계 자동화(`site_step.py check·propose·evals·--done` 가드, `tools/site_checks.py`, `tests/skill_evals/pending.json` = S-2에서 먼저 돌릴 미실행 eval). 확인 게이트는 그대로(자동 `--done` 없음). 전체 1,742 통과.
+
+## 결정 (k) 원문 (10/12 옮김)
+
+- (k) 3차 검토 §8 — 하지 않는다 (10/08): 토큰 절감 위해 확인·승인·경고 생략 / 변경분만 전달 / 측정 없는 캐시 복원·스트리밍·병렬화·모듈 개편 / 반입 전 웹 포털·범용판·자동 게시 / placeholder·Windows 차이를 결함 집계 / 기존 기능 재구현 / 테스트 수·수락률 하나로 품질 보증 / 복구 편의로 승인·버전 검사·lock 우회 / 모든 권고를 반입 차단 조건으로.
