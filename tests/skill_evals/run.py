@@ -29,7 +29,7 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 sys.path.insert(0, str(REPO / "tests" / "helpers"))
 from skill_eval_env import build, _bash_path  # noqa: E402
-from grade import git, grade, token_record  # noqa: E402
+from grade import git, grade, token_record, write_summary  # noqa: E402
 
 
 def dump(path: Path, value) -> None:
@@ -358,7 +358,7 @@ def main() -> int:
             print(f"eval {eid}: prepared ({args.mode})", flush=True)
             continue
         outcome = execute(entry, info, env_dir, run_dir, claude, args.timeout, plugin, args.model)
-        grade(eid, run_dir, env_dir, entry["assertions"])
+        write_summary(iteration, eid, entry.get("batch"), grade(eid, run_dir, env_dir, entry["assertions"]))
         print(f"eval {eid}: {outcome['status']} — {outcome['reason'][:180]}", flush=True)
         if outcome["status"] != "completed":
             return 1

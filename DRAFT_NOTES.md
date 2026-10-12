@@ -22,7 +22,8 @@
 - 10/12: 검토 반영 B1~B4(offline_eval 판정 불가 집계, 단일 플랫폼 경로 검사, init 프로필 보존·입력 항목만 갱신, usage_stats 플랫폼 선택). 미실행 eval: 58(setup, `setup.md` 수정).
 - 10/12: 토큰 측정 보완(모델 일치·실행 시점 커밋·기준선 자격·비용/캐시 보고)과 낭비 1~3(`db_review --owners`, record 초안 검증 기본 출력, search 재검색 조건). 미실행 eval: 18·31·32·38·53·54. 낭비 4·5는 측정 뒤.
 - 10/12: 작업 상태 한 화면 v1(`job_status.py`·`/telephony-triage:status`, 로컬 기록만 읽기 전용, 결정 D4 앞당김)과 needs_input `pending{kind, asked_at}` 기록. `status.md` eval 미정의.
-- 10/12: 사용 흐름 A/B 구분(SKILL·help·db-authoring §0, SKILL 한도 8,064·db-authoring 12,288은 Fable 결정), 분석 전용 답 이어 쓰기(`carry`), 쓰기 run의 파일 이슈 재사용 차단, eval 68~70(U). 전체 1,711 통과. 미실행 eval: 3·6·35·45·46·51·63·68·69·70.
+- 10/12: 사용 흐름 A/B 구분(SKILL·help·db-authoring §0, SKILL 한도 8,064·db-authoring 12,288은 Fable 결정), 분석 전용 답 이어 쓰기(`carry`), 쓰기 run의 파일 이슈 재사용 차단, eval 68~70(U). 미실행 eval: 3·6·35·45·46·51·63·68·69·70.
+- 10/12: 사내 단계 자동화(`site_step.py check·propose·evals·--done` 가드, `tools/site_checks.py`, `tests/skill_evals/pending.json` = S-2에서 먼저 돌릴 미실행 eval). 확인 게이트는 그대로(자동 `--done` 없음). 전체 1,742 통과.
 - 사내 확인 항목: `TODO(SITE)` **104곳** — `python3 tools/list_site_todos.py`. `REVIEW-OPEN.md` 0건.
 - 사내 시작: **"사내 설정 시작"** → `python3 tools/site_step.py`가 `SITE_PROFILE.md`(트래커 jira)를 만들고 S-1~S-7을 한 단계씩 낸다(결정 (o)).
 - 안내서(사람용 HTML): `docs/telephony-triage-guide.html` (공유본 https://claude.ai/artifact/1jov1Et4dQUMauFr6aoxWG). 역할별 문서 19개: `docs/materials/00-index.html`

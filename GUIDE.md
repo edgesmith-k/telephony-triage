@@ -138,55 +138,31 @@ git add -A && git commit -m "사외 초안 반입: import-v1"     # .draft-manif
 - `.local-draft`는 원본에 있어도 가져오지 않는다.
 - 이슈 DB: **샌드박스**는 뼈대를 그대로 push(S-5 시험용). **운영**은 S-4a 시작 때 뼈대로 만든다(브랜치 보호·CODEOWNERS). placeholder 규칙은 S-4에서 실제 태그·문구로 바꾸고, 그 전에는 파일럿·사용자에게 열지 않는다.
 - GHE 서버에서 **브랜치 보호**(main 직접 push 금지, CODEOWNERS 필수 리뷰)를 켠다.
-- Claude Code를 플러그인 레포 루트에서 열고 아래 "첫 사내 세션에 붙여 넣을 컨텍스트"로 S-1을 시작한다.
+- Claude Code를 플러그인 레포 루트에서 열고 **`사내 설정 시작`** 이라고 입력한다(아래 "세션별 입력").
 
 ### 세션별 입력 (플러그인 레포 루트에서 Claude Code 열기)
 
-첫 사내 세션에서 Claude가 "사외 초안 계속 / 사내 보완 시작"을 물으면 **사내 보완**을 고릅니다(이후에는 `SITE_PROFILE.md`로 자동 판별).
-| 단계 | 입력 | 하는 일 |
+첫 세션은 **`사내 설정 시작`**, 이후 세션은 **`사내 설정 계속`** 만 입력합니다. 머리말을 붙여 넣을 필요는 없습니다 — `CLAUDE.md` 모드 0이 `python3 tools/site_step.py`를 실행해 지금 단계·읽을 것·자동 점검 결과·물을 것(한 묶음)을 보여 줍니다(`SITE_PROFILE.md`가 없으면 만들고, 이후는 그 진행 상태로 이어 갑니다).
+
+한 단계 안에서는 이렇게 돕니다. 자동으로 다음 단계로 넘어가는 일은 없습니다.
+1. Claude가 할 일을 하고 `site_step.py check`(읽기 전용 점검)를 그대로 보고합니다. 실패·건너뜀·사용자 필요는 통과가 아닙니다.
+2. 사내 값(확인값 행, 운영 DB 경로·샌드박스·라벨셋·eval 예산, S-5 게이트)은 `site_step.py propose`의 diff로 보여 주고, **승인한 ID만** `propose --apply`로 씁니다.
+3. S-2 eval은 `site_step.py evals`가 다음 배치 명령과 추정 비용을 냅니다. 비용을 승인해야 실행하고, 59·60은 사람이 채점합니다.
+4. 요약을 보고 확인하면 `site_step.py --done S-n`. 실패가 있으면 거부되고, 건너뜀·사용자 필요는 확인한 것만 `--waive 점검="사유"`로 넘깁니다(사유는 `SITE_PROFILE.md`에 남음). S-2 eval을 잴 수 없으면(API 키·한도) 미채점 점검을 사유와 함께 면제해야만 완료로 기록되고, 실제 안전 위반(실패)은 면제할 수 없습니다.
+
+| 단계 | 사용자가 줄 것 | 하는 일 |
 |---|---|---|
-| S-0 (선택) | `S-0 진행해줘` — 또는 Claude 없이 `tools/s0_stats.py` (절차 `docs/development/S0_PROBE_CHECKLIST.md`) | 반입 전·S-1 전 언제든. reference 파서·매처만 실제 로그 3~5개에 Python으로 돌려 시각 파싱 비율·RIL 페어링·phone_id 추출·시계 이상을 봄. 결과 숫자는 `SITE_PROFILE.md`에만, 사외로는 정성 결론만. 로그 형식이 다르면 S-4가 커지므로 **권장** |
-| S-1 | `사내 보완 모드야. S-1 진행해줘` | TODO 목록 확인, 자료 받고 `SITE_PROFILE.md` 작성, 오프라인 평가 기준(1위 정확도 등) 합의 |
-| S-2 | `S-2 진행해줘` | 플러그인 로드·hook·MCP 도구 이름 형식 확인, 다른 점만 수정 |
-| S-3 | `S-3 진행해줘` | `site-defaults.yaml`(Jira 서버·도구 매핑·필드 매핑, GHE 등), 이슈 DB 설정 |
-| S-4a | `S-4a 진행해줘` | **① 기존 파서 포팅**: 포팅 전 골든 출력 저장 → 이벤트 매핑 확인 → 사내 백엔드로 포팅 → 골든 테스트 통과. **② 기존 data 분류 import PR**. **③ 분석 스킬 연결** |
-| S-4 | `S-4 진행해줘. 이번엔 call만` | 운영 이슈 DB의 placeholder 규칙을 실제 태그·문구로 바꾸고, 카테고리마다 자주 나오는 유형 5~10개를 실제 마스킹 fixture와 함께 `import` PR로 시드 (카테고리별로 세션 분리 권장) |
-| S-5 | `S-5 진행해줘. 샌드박스는 <주소>` | 실제 Jira·로그로 dry-run, 샌드박스에 PR 1건. 과거 해결 Jira 20~30건 라벨셋으로 `tools/offline_eval.py` 정확도 게이트 |
-| S-6 | `S-6 진행해줘` | 남은 `REVIEW-OPEN.md` 정리, 운영 이슈 DB에 합성 fixture·placeholder가 남았는지 확인 |
-| S-7 | `S-7 진행해줘` | 마켓플레이스 등록, 카테고리별 파일럿(10~20건), 첫 월간 리뷰 → 전체 확대 결정 |
+| S-0 (선택) | 실제 로그 3~5개 — Claude 없이 `tools/s0_stats.py`도 가능 (절차 `docs/development/S0_PROBE_CHECKLIST.md`) | 반입 전·S-1 전 언제든. reference 파서·매처만 실제 로그에 Python으로 돌려 시각 파싱 비율·RIL 페어링·phone_id 추출·시계 이상을 봄. 결과 숫자는 `SITE_PROFILE.md`에만, 사외로는 정성 결론만. 로그 형식이 다르면 S-4가 커지므로 **권장** |
+| S-1 | Jira 키 2~3개, 카테고리별 logcat 경로, 16/17 소스 경로, 빌드명, S-5 게이트 기준치 | TODO 목록·환경 확인, `REVIEW-OPEN.md` 처리, `SITE_PROFILE.md` 작성, 오프라인 평가 기준 합의 |
+| S-2 | eval 예산·비용 승인, S1 실험(`check S-2 --allow-api`), 59·60 수동 채점 | 플러그인 로드·hook·MCP 도구 이름 형식 확인, 다른 점만 수정, eval 전체 재실행 |
+| S-3 | Jira MCP 서버·도구 매핑, GHE, 샘플 Jira raw 저장 위치 | `site-defaults.yaml`(Jira 서버·도구 매핑·필드 매핑, GHE 등), 이슈 DB 설정 |
+| S-4a | 운영 DB 레포(owner/repo), 기존 파서 코드 경로 | **① 기존 파서 포팅**: 포팅 전 골든 출력 저장 → 이벤트 매핑 확인 → 사내 백엔드로 포팅 → 골든 테스트 통과. **② 기존 data 분류 import PR**. **③ 분석 스킬 연결** |
+| S-4 | 운영 DB clone 경로, 이번에 할 카테고리(예: call만) | 운영 이슈 DB의 placeholder 규칙을 실제 태그·문구로 바꾸고, 카테고리마다 자주 나오는 유형 5~10개를 실제 마스킹 fixture와 함께 `import` PR로 시드 (카테고리별로 세션 분리 권장). 점검은 임시 clone에서 |
+| S-5 | 라벨셋, 샌드박스 레포, 스모크 결과 확인 | 실제 Jira·로그로 dry-run, 샌드박스에 PR 1건. 과거 해결 Jira 20~30건 라벨셋으로 `tools/offline_eval.py` 정확도 게이트 |
+| S-6 | — | 남은 `REVIEW-OPEN.md` 정리, 운영 이슈 DB에 합성 fixture·placeholder가 남았는지 확인 |
+| S-7 | 파일럿 결과, 전체 확대 결정 | 마켓플레이스 등록, 카테고리별 파일럿(10~20건), 첫 월간 리뷰 → 전체 확대 결정 |
 
-### 첫 사내 세션에 붙여 넣을 컨텍스트 (S-1 기동용, 한 번)
-
-사내 Claude Code가 설계 문서 전체를 읽지 않고 시작하게 하는 머리말입니다. `<...>`만 채워서 그대로 붙입니다.
-
-```
-[무엇] telephony-triage — Android Telephony 이슈를 Jira+logcat으로 분석해 사내 이슈 DB 레포(telephony-issue-db)에
-카테고리>유형>원인으로 누적하는 Claude Code 플러그인. 사외에서 만든 초안을 지금 사내로 반입했다 (반입 label: <.draft-manifest.json의 label>).
-판정은 스크립트(파서→매처→검증)가 하고 Claude는 설명·초안·사용자 확인만 한다.
-
-[모드] 사내 보완. 개발 Phase D0~13은 사외에서 끝났으니 다시 하지 않는다. 할 일은 15-local-draft.md §15.5의 S-1~S-7뿐이다.
-처음 물으면 "사내 보완"을 고르고, S-1에서 SITE_PROFILE.md를 만들어 "모드: 사내 보완"을 적는다. 이후 세션은 그 파일로 이어간다.
-
-[읽을 것 — 이것만]
-`python3 tools/context_pack.py S-n` 출력(그 단계의 §15.5 행·비고·읽을 파일과 절, 목록은 docs/tasks.md). CLAUDE.md는 자동 로드.
-읽지 않는다: docs/history/ 전체, 11-phases.md, pack에 없는 docs/design/ 파일, ARCHITECTURE_REVIEW(개선 작업은 사외 트랙).
-파일럿 지표(PR까지 시간·중도 취소 비율·작업당 저장된 답 수(질문 수 근사), push 기록 있음·PR 연결 미확인 건수)는 `python3 tools/usage_stats.py [--platform <이름> | --work-dir <dir>]`로 뽑는다(기본은 선택 플랫폼, 첫 줄에 집계 대상 플랫폼·work_dir).
-TODO(SITE) 목록은 문서가 아니라 `python3 tools/list_site_todos.py`로 뽑는다.
-
-[지킬 것]
-- 사내 값·코드는 SITE_PATHS에 적힌 경로에만 (SITE_PROFILE.md, docs/site/, plugin/site-defaults.yaml, parser_backends/site/, adapters/site_*, tests/golden/, tests/site/).
-  그 밖의 사외 파일(docs/design/, plugin/scripts/ 공통 코드, 테스트)에 사내 문자열을 넣지 않는다 — 재반입(tools/import_draft.py) 때 충돌한다.
-- 설계 문서는 고치지 않는다. 사내 확인값·결정·차이는 SITE_PROFILE.md에만 쓴다 (형식: 14-site.md §14.3).
-- 새 md 파일을 만들지 않는다. 로그는 채팅에 붙이지 말고 파일 경로로 다룬다. 마스킹되지 않은 로그를 이슈 DB·fixture·문서에 남기지 않는다.
-- 단계가 끝나면 완료 기준을 점검하고 요약한 뒤 사용자 확인을 받고, SITE_PROFILE.md 진행 상태를 갱신하고 세션을 닫는다.
-- 막히면 우회하지 말고 보고한다 (git 충돌, 인증, MCP 부재, 버전 불일치, site-defaults.yaml 없음).
-
-[내가 줄 자료] Jira 키 <2~3개>, 카테고리별 logcat 경로 <...>, Android 16/17 소스 경로 <...>, 빌드명 예시 <...>,
-GHE <호스트/org/팀>, 샌드박스 이슈 DB <주소>, 기존 파서 코드 경로 <...>, Jira MCP 서버 이름 <...>.
-[시작] S-1 진행해줘. 먼저 확인 목록(TODO(SITE) 도구 출력 + REVIEW-OPEN.md)을 S번호별로 묶어 보여주고, 위 자료로 채울 수 있는 것부터 SITE_PROFILE.md에 적어라.
-```
-
-이후 세션은 머리말 없이 `S-n 진행해줘`면 됩니다(`SITE_PROFILE.md`로 판별). 긴 공백 뒤나 다른 PC면 위 블록의 **[모드]·[읽을 것]·[지킬 것]** 세 단락만 다시 붙입니다.
+지킬 것은 `CLAUDE.md` "항상 지킬 것"과 같습니다: 사내 값·코드는 `SITE_PATHS` 경로에만(`SITE_PROFILE.md`, `docs/site/`, `plugin/site-defaults.yaml`, `tests/golden/`, `tests/site/` 등), 설계 문서는 고치지 않음, 로그는 채팅에 붙이지 않고 파일 경로로, 막히면 우회하지 않고 보고.
 
 ### 기존 파서 포팅의 핵심 (S-4a ①)
 - **검증된 판별 로직은 코드 그대로** 두고 `builtin.data.*` 이벤트로 노출합니다. 시그니처가 이 이벤트를 참조합니다.
@@ -197,7 +173,7 @@ GHE <호스트/org/팀>, 샌드박스 이슈 DB <주소>, 기존 파서 코드 �
 - 포팅이 어려우면(다른 언어 등) 기존 파서를 그대로 실행하고 출력만 변환하는 어댑터 방식으로 갑니다.
 
 ### 사내 토큰 절약
-- 세션 시작은 `S-n 진행해줘`만. 진행 상태는 `SITE_PROFILE.md`에 있습니다.
+- 세션 시작은 `사내 설정 계속`만. 진행 상태는 `SITE_PROFILE.md`, 단계 점검 기록은 `docs/site/steps/`에 있습니다.
 - 로그는 채팅에 붙이지 말고 **파일 경로**로 줍니다.
 - 에러는 "테스트 실패한 것만 봐줘".
 - 단계가 끝나면 세션을 닫고 새로 엽니다.
@@ -281,9 +257,9 @@ pip install '.[test]'
 python3 -m pytest -q tests    # 골든 포함, 이전 PC와 같은 결과여야 한다
 claude mcp list               # Jira MCP 사용자 범위 등록 확인
 ```
-- S-1~S-3 중이면 바로 `S-n 진행해줘`.
+- S-1~S-3 중이면 바로 `사내 설정 계속`.
 - S-4 이후(이슈 DB 사용)면 Claude Code에서 `/telephony-triage:setup` — config 작성, `scripts_path`, 이슈 DB clone, Jira 도구 매핑, `core.hooksPath .githooks`, 스냅샷. S-5 이후면 `gh auth status` 통과 필요.
-- 긴 공백 뒤·새 에이전트면 위 "첫 사내 세션에 붙여 넣을 컨텍스트"의 **[모드]·[읽을 것]·[지킬 것]** + `S-n 진행해줘`.
+- 긴 공백 뒤·새 에이전트도 `사내 설정 계속`이면 됩니다(`site_step.py`가 현재 단계와 점검 결과를 다시 보여 줌).
 
 **Claude Code가 아닌 에이전트(Codex 등)**: `AGENTS.md`만 자동으로 읽고 `CLAUDE.md`·`@SITE_PROFILE.md` import는 안 될 수 있다. 첫 메시지에 `먼저 CLAUDE.md, docs/design/12-principles.md와 DRAFT_NOTES.md(사내면 SITE_PROFILE.md)를 읽어라. Claude 전용 기능(플러그인 로드, hooks, skill-creator, /telephony-triage:* 커맨드)은 쓸 수 없으니 스크립트·테스트·문서 작업만 한다.`를 붙인다. Phase 13(스킬 eval)·S1 실험·S-2는 Claude Code에서만 가능하다. 사내에서 다른 에이전트를 쓸 수 있는지는 회사 정책이 정한다.
 

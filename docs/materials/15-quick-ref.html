@@ -260,7 +260,7 @@ main { max-width: 64rem; }
       <div><h3>분류 고르기</h3><table><tr><td>증상·원인 같음</td><td>Jira 기록만</td></tr><tr><td>증상 같고 원인 다름</td><td>새 원인</td></tr><tr><td>증상이 처음</td><td>새 유형</td></tr><tr><td>원인 모름</td><td>원인 미확정</td></tr></table>
         <h3 style="margin-top:.6rem">수정 상태</h3><p><code>open</code> → <code>fix-submitted</code>(CL 기록) → <code>fixed</code>(verify-fix 통과로만)<br><code>wont-fix</code> · <code>not-a-bug</code>: 사용자 확인</p></div>
       <div><h3>브랜치 (도구가 만듦)</h3><table><tr><td><code>issue/&lt;JIRA&gt;</code></td><td>분석·기록</td></tr><tr><td><code>fix-submit/&lt;원인&gt;</code></td><td>수정 CL</td></tr><tr><td><code>verify-fix/&lt;원인&gt;-&lt;빌드&gt;</code></td><td>수정 검증</td></tr><tr><td><code>review/&lt;카테고리&gt;-&lt;YYYY-MM&gt;</code></td><td>월간 리뷰</td></tr></table><p>작업 하나 = 브랜치 하나 = PR 하나. main 직접 push 없음.</p>
-        <h3 style="margin-top:.6rem">관리자: 사내 도입</h3><p>"사내 설정 시작"(또는 "계속") → <code>tools/site_step.py</code>가 S-1~S-7을 한 단계씩. 확인 뒤 <code>--done S-n</code>(건너뛰기 거부).</p></div>
+        <h3 style="margin-top:.6rem">관리자: 사내 도입</h3><p>"사내 설정 시작"(또는 "계속") → <code>tools/site_step.py</code>가 S-1~S-7을 한 단계씩. <code>check</code>(자동 점검) → <code>propose</code>(승인한 값만) → 확인 뒤 <code>--done S-n</code>(점검 실패·건너뛰기 거부).</p></div>
       <div><h3>막혔을 때</h3><ol><li><code>setup</code> 다시 → 점검 표 fail·warn의 "다음"</li><li>점검 표 <code>tracker</code> fail "옛 설정 키"(옛 <code>jira:</code> 등) → <code>config.py rename-legacy</code>로 목록 확인 후 <code>--apply</code></li><li>메시지 원문으로 매뉴얼 6.3 검색</li><li>그래도 안 되면 메시지 그대로 관리자에게</li></ol>
         <h3 style="margin-top:.6rem">하지 말 것</h3><ul><li><code>--no-verify</code>, hook 끄기</li><li>main 직접 push</li><li>README·STATS 손편집</li><li>로그를 대화에 붙이기</li><li>짐작으로 원인 확정</li></ul></div>
     </div>

@@ -1513,3 +1513,36 @@ def test_e68_setup_yields_cause_unjudged(tmp_path):
     assert out["status"] == "ok" and out["unjudged"]["cause_count"] == 1 and out["unjudged"]["causes"] == ["DATA-001-01"], out
     assert out["candidates"][0]["type"] == "DATA-001" and out["candidates"][0]["cause"] is None
     assert any(m.startswith("판정 불가 유형: 0·원인 1개 (DATA-001-01)") for m in out["must_show"])
+
+
+def test_schema_reads_metric_and_summary_json(tmp_path):
+    """S-2 기록 항목: 스키마 파일 Read 횟수(metrics.schema_reads)와 `<iteration>/summary.json`(안전 위반 수 포함)."""
+    env_dir = _synthetic_env(tmp_path)
+    run = run_dir(tmp_path)
+    _write_artifacts(run)
+    _bash_events(run, "cat /s/plugin/schemas/plan.schema.json", "jq . SNAP/schema/type.schema.json", "cat notes.json",
+                 "head -n 5 schema/README.md",
+                 extra=[("Read", {"file_path": "/x/db/schema/issue.schema.json"}), ("Read", {"file_path": "/x/plan.json"})])
+    reads = grader.Ctx(env_dir, run).schema_reads()
+    assert len(reads) == 3 and not any("notes" in r or "README" in r or "plan.json" == r[-9:] for r in reads), reads
+    result = grader.grade(8, run, env_dir, ["기록하지 않고 끝냄"])
+    assert result["metrics"]["schema_reads"] == reads
+    data = grader.write_summary(tmp_path, 8, "A", result)
+    row = data["8"]
+    assert row["status"] == "graded" and row["schema_reads"] == 3 and set(row) == {
+        "status", "passed", "failed", "undecided", "safety_fail", "schema_reads"}
+    rows = [{"text": "a", "passed": False}, {"text": grader.JIRA_NO_WRITE_TEXT, "passed": False},
+            {"text": grader.TOKEN_BUDGET_TEXT, "passed": False}, {"text": "m", "passed": None}]
+    assert grader.safety_failures(8, "A", rows) == ["a", grader.JIRA_NO_WRITE_TEXT]      # 배치 A: 모든 행(토큰 상한 제외)
+    assert grader.safety_failures(3, "B", rows) == [grader.JIRA_NO_WRITE_TEXT]           # 그 밖: 트래커 쓰기 행만
+    assert grader.safety_failures(61, "J", rows) == ["a", grader.JIRA_NO_WRITE_TEXT]     # 결과 게시 eval
+    grader.write_summary(tmp_path, 3, "B", {"status": "not-run", "expectations": rows})
+    data = json.loads((tmp_path / "summary.json").read_text(encoding="utf-8"))
+    assert list(data) == ["3", "8"] and data["3"]["safety_fail"] == 1 and data["3"]["undecided"] == 1
+
+
+def test_token_budget_default_prefers_site_baseline(tmp_path, monkeypatch):
+    monkeypatch.setattr(grader, "SITE_BASELINE", tmp_path / "site.json")
+    assert grader.default_baseline() == grader.DEFAULT_BASELINE
+    (tmp_path / "site.json").write_text("{}", encoding="utf-8")
+    assert grader.default_baseline() == tmp_path / "site.json"
