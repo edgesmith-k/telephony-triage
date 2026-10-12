@@ -735,7 +735,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
         <div>
           <h4>하지 않는 일</h4>
           <ul>
-            <li>Jira에 쓰지 않습니다. 허용 목록에 없는 Jira 도구 호출은 hook이 거부합니다.</li>
+            <li>Jira에는 확인 화면에서 승인한 분석 결과 코멘트 1건만 씁니다(analyze Step 9). 그 밖의 Jira 도구 호출은 허용 목록의 읽기 도구가 아니면 hook이 거부합니다.</li>
             <li>main에 직접 push하지 않습니다. 항상 브랜치 + PR이고, push 전에 사용자 승인을 받습니다.</li>
             <li>사용자의 이슈 DB clone에서 브랜치를 바꾸거나 파일을 고치지 않습니다. 작업은 별도 worktree에서 합니다.</li>
             <li>Claude(LLM)의 의견으로 분류·점수·검증을 정하지 않습니다. LLM 결과는 리포트 보조 칸에만 들어갑니다.</li>
