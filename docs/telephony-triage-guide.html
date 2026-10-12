@@ -179,7 +179,7 @@ html{scroll-behavior:smooth}
   <div class="flowline" aria-label="한 줄 흐름">
     <span>Jira + logcat</span><i>→</i><span>파서 (이벤트)</span><i>→</i><span>시그니처 매칭</span><i>→</i><span>원인·해결책 리포트</span><i>→</i><span class="hl">사용자 확인</span><i>→</i><span>이슈 DB에 PR</span><i>→</i><span>리뷰어 머지</span>
   </div>
-  <div class="meta">기준: 브랜치 ccr-d022623a-2f4vdx 커밋 a4f4a93 · 2026-10-11 · 사외 초안 단계 · 개정 5 (Jira 결과 게시·플랫폼 분리 반영)</div>
+  <div class="meta">기준: 브랜치 ccr-d022623a-2f4vdx 커밋 7fbc772 · 2026-10-12 · 사외 초안 단계 · 개정 6 (트래커 범용화·사내 설정 시작 반영)</div>
 </header>
 
 <!-- start -->
@@ -222,7 +222,7 @@ html{scroll-behavior:smooth}
   <div class="card stat"><b>6</b><span>카테고리: data · call · network · sim · sms · ims</span></div>
   <div class="card stat"><b>≈18k</b><span>Python 줄 수 (plugin/scripts + tools)</span></div>
   <div class="card stat"><b>1,412</b><span>pytest 통과 (10/11 기준)</span></div>
-  <div class="card stat"><b>65</b><span>스킬 행동 평가 항목 (전체 재실행은 사내 S-2)</span></div>
+  <div class="card stat"><b>67</b><span>스킬 행동 평가 항목 (전체 재실행은 사내 S-2)</span></div>
 </div>
 
 <div class="grid2">
@@ -241,7 +241,7 @@ html{scroll-behavior:smooth}
 <h3>v1 범위</h3>
 <div class="tbl"><table>
 <tr><th>포함</th><th>제외</th></tr>
-<tr><td>logcat (radio / main / system / crash), bugreport는 logcat 섹션만<br>Jira는 <b>읽기와, 확인 화면에서 승인한 본문의 코멘트 추가만</b> (그 밖 쓰기 거부)<br>GHE 브랜치 + PR (main 직접 push 금지)<br>CI 없음 (<code>ci_mode: local</code>)<br>사용자·이슈 DB(플랫폼)별 한 번에 한 작업 (세션 lock)<br>플랫폼별 이슈 DB (Android 기본, oFono 등 추가 가능)</td>
+<tr><td>logcat (radio / main / system / crash), bugreport는 logcat 섹션만<br>Jira는 <b>읽기와, 확인 화면에서 승인한 본문의 코멘트 추가만</b> (그 밖 쓰기 거부)<br>GHE 브랜치 + PR (main 직접 push 금지)<br>CI 없음 (<code>ci_mode: local</code>)<br>사용자·이슈 DB(플랫폼)별 한 번에 한 작업 (세션 lock)<br>플랫폼별 이슈 DB (Android 기본, oFono 등 추가 가능)<br>이슈 트래커는 설정으로 (Jira 기본·사내, GitHub Issues는 실험적)</td>
 <td>CP(모뎀) 로그 파싱<br>Jira 필드 수정·상태 전환·이슈 생성·첨부<br>3-way replay (직접 편집 브랜치 자동 병합)<br>Ubuntu 외 OS</td></tr>
 </table></div>
 </section>
@@ -498,6 +498,8 @@ NEW-CAUSE-1 → DATA-001-03</div></dd>
 <tr><td>push 불가: gh 인증 없음</td><td>GitHub CLI 로그인 안 됨</td><td><code>gh auth login --hostname &lt;GHE&gt;</code>. 분석과 dry-run은 가능</td></tr>
 <tr><td>Jira 도구가 거부됨</td><td>읽기 허용 목록에 없는 도구, 또는 승인 기록과 맞지 않는 코멘트 호출</td><td>정상 동작. 쓰기 도구는 막혀 있고, 코멘트는 확인 화면에서 승인한 본문만 1회(본문이 바뀌면 다시 승인). 읽기 도구 매핑은 <code>setup</code>에서 확인</td></tr>
 <tr><td><code>platform-mismatch</code> (종료 코드 2)</td><td>고른 플랫폼과 이슈 DB 선언(<code>issue-db.config.yaml</code>의 <code>platform</code>)이 다름</td><td>우회하지 않음(읽기 전용으로도 계속 안 함). <code>--platform</code>이나 config의 플랫폼 프로필 경로를 맞춘 뒤 다시 실행</td></tr>
+<tr><td>"옛 설정 키: … — config.py rename-legacy로 바꾼다" (종료 코드 2, doctor <code>tracker</code> fail, Jira 도구 전부 거부)</td><td>config에 트래커 범용화 전 키(<code>jira:</code>, <code>logcat.year_source: jira</code>, <code>code_profiles[].android_version</code> 등)가 남음. 자동 변환하지 않음</td><td><code>config.py rename-legacy</code>로 목록 확인 → <code>--apply</code>(내 config만). site-defaults 쪽이면 관리자가 키 이름만 바꿈</td></tr>
+<tr><td><code>tracker-mismatch</code> (종료 코드 2)</td><td>설정 <code>tracker.kind</code>와 이슈 DB 선언(<code>issue-db.config.yaml</code>의 <code>tracker.kind</code>, 없으면 jira)이 다름</td><td>우회하지 않음. <code>tracker.kind</code>나 <code>issue_db.path</code>를 맞춘 뒤 다시 실행</td></tr>
 <tr><td>버전 불일치로 쓰기 거부</td><td>이슈 DB 스키마·생성기 버전이 플러그인과 다름</td><td>플러그인 업데이트, 또는 메인테이너의 버전 올림 PR</td></tr>
 <tr><td>drift (종료 코드 1)</td><td>분석하는 동안 main에서 같은 항목이 바뀜</td><td>항목마다 내 값 / main 값 / 직접 입력 선택</td></tr>
 <tr><td>검증 못 함 (skipped: fixture 없음)</td><td>비교할 근거 로그가 없음</td><td>통과가 아님. 가능하면 fixture를 추가. 그대로 올리면 리뷰 대상으로 남음</td></tr>
@@ -600,6 +602,7 @@ NEW-CAUSE-1 → DATA-001-03</div></dd>
 │       ├── guard.py · jira_bridge.py   <span class="c"># hook 판정기</span>
 │       ├── config.py · code_roots.py · jira_fields.py · mask_pii.py
 │       ├── platforms/         <span class="c"># 플랫폼 레지스트리·계약, android/, ofono/(뼈대)</span>
+│       ├── trackers/          <span class="c"># 트래커 레지스트리 + 어댑터: jira.py(기본), github.py(실험적)</span>
 │       ├── parser_backends/   <span class="c"># base.py(인터페이스), reference/, ofono_reference/, logcat.py, ril.py</span>
 │       ├── adapters/          <span class="c"># 외부(기존) 파서 어댑터 계약</span>
 │       ├── migrations/        <span class="c"># 스키마 버전별 마이그레이션</span>
@@ -607,14 +610,14 @@ NEW-CAUSE-1 → DATA-001-03</div></dd>
 │           ├── checks.py      <span class="c"># 검사 순서 단일 정의 (stage·precommit·guard 프로필)</span>
 │           ├── failedstep.py  <span class="c"># 실패 스텝·스텝 목록 읽기 (txt/csv/html/zip)</span>
 │           └── stepanchor.py  <span class="c"># 실패 스텝 기준점: 스텝 순서 정렬, 시계 차</span>
-├── tools/                     <span class="c"># import_draft, check_boundary, make_db_skeleton, offline_eval, s0_stats ...</span>
+├── tools/                     <span class="c"># import_draft, check_boundary, make_db_skeleton, offline_eval, s0_stats, site_step(사내 설정 진행기) ...</span>
 ├── tests/
 │   ├── fixtures/issue-db-sample/   <span class="c"># 합성 샘플 이슈 DB (커밋되는 유일한 테스트 DB, 변형은 테스트 때 생성)</span>
-│   ├── mocks/                 <span class="c"># 모의 Jira MCP(읽기·막혀야 할 쓰기·승인 코멘트 도구), gh 스텁, logcat 생성기, 가짜 소스 트리</span>
-│   ├── skill_evals/           <span class="c"># 행동 평가 65개 + 트리거 평가</span>
-│   └── test_*.py              <span class="c"># 56개 테스트 파일</span>
+│   ├── mocks/                 <span class="c"># 모의 Jira MCP(읽기·막혀야 할 쓰기·승인 코멘트 도구), 모의 GitHub Issues MCP, gh 스텁, logcat 생성기, 가짜 소스 트리</span>
+│   ├── skill_evals/           <span class="c"># 행동 평가 67개 + 트리거 평가</span>
+│   └── test_*.py              <span class="c"># 59개 테스트 파일</span>
 └── docs/
-    ├── design/                <span class="c"># 설계 문서 01~17(12 원칙, 17 플랫폼) + README(지도) + contracts.md (공통 계약 단일 원본)</span>
+    ├── design/                <span class="c"># 설계 문서 01~18(12 원칙, 17 플랫폼, 18 트래커) + README(지도) + contracts.md (공통 계약 단일 원본)</span>
     ├── development/           <span class="c"># 아키텍처 리뷰(RF 계획), 개선 인계, S0 체크리스트, oFono 로그 수집(OFONO_LOG_COLLECTION.md)</span>
     └── history/               <span class="c"># 이력 아카이브 (평소 읽지 않음)</span></code></pre>
 </section>
@@ -652,12 +655,13 @@ NEW-CAUSE-1 → DATA-001-03</div></dd>
 <tr><td><code>db_add.py</code></td><td>plan.json 적용 (op별 규칙), drift 검사, ID·fixture 번호 할당, 유사 유형 검사</td><td>db_pr stage, db_verify --draft</td></tr>
 <tr><td><code>db_verify.py</code></td><td>R1~R6 규칙 검증, 해결책 검증, verify-fix 판정</td><td>Step 7, db_pr stage, validate</td></tr>
 <tr><td><code>db_regress.py</code></td><td>전체 fixture 회귀, 파서 규칙 변경 전후 이벤트 diff</td><td>stage, pre-commit</td></tr>
-<tr><td><code>db_lint.py</code></td><td>스키마, ID·Jira 중복, 작성 규칙, 정규식 안전, 원본 식별자 패턴 금지</td><td>stage, pre-commit, 사후 lint</td></tr>
+<tr><td><code>db_lint.py</code></td><td>스키마, ID·Jira 중복(<code>duplicate-issue</code>), 기록 키 형식(<code>issue-key</code>: DB <code>tracker.key_regex</code>와 트래커 작업 키 형식), 작성 규칙, 정규식 안전, 원본 식별자 패턴 금지. 개명 전 DB 키는 <code>config</code>, 옛 <code>jira/</code> 폴더는 <code>legacy-dir</code> 오류</td><td>stage, pre-commit, 사후 lint</td></tr>
 <tr><td><code>db_build.py</code></td><td>README · STATS · CHANGELOG 생성 (바이트 단위로 결정적)</td><td>stage, preview</td></tr>
 <tr><td><code>guard.py</code></td><td>hook 입력을 받아 allow / deny / ask 판정 (Bash · MCP · Write/Edit)</td><td>hooks.json</td></tr>
 <tr><td><code>jira_bridge.py</code></td><td>Jira MCP 원문을 <code>issue_raw.json</code>에 저장하고 모델에는 마스킹 요약만 전달. 승인 코멘트 응답이면 <code>post.result.json</code>을 쓰고 "게시됨 (KEY, comment id)" 요약만</td><td>hooks.json (PostToolUse)</td></tr>
 <tr><td><code>issue_post.py</code></td><td>Jira 결과 게시: <code>status</code>(게시 가능 여부)·<code>render</code>(확인 화면, <code>post.md</code>)·<code>approve</code>(승인 기록 <code>post.approved.json</code>). lock·git은 건드리지 않음</td><td>SKILL.md (Step 9)</td></tr>
-<tr><td><code>config.py</code></td><td>사용자 config · site-defaults 로드, 버전·gh 인증 호환성 판정, 플랫폼 선택·프로필</td><td>모든 스크립트</td></tr>
+<tr><td><code>config.py</code></td><td>사용자 config · site-defaults 로드, 버전·gh 인증 호환성 판정, 플랫폼 선택·프로필, 트래커 도구 매핑(<code>tracker-candidates</code>·<code>set-tracker</code>), 옛 설정 키 이름 바꾸기(<code>rename-legacy [--apply]</code>)</td><td>모든 스크립트</td></tr>
+<tr><td><code>trackers/</code></td><td>트래커 레지스트리와 어댑터(<code>jira.py</code> 기본, <code>github.py</code> 실험적): 작업 키 형식·정규화, 기본 키 정규식, guard 서버 단어, 게시 본문 형식, 코멘트 도구 키 인자. 표준 라이브러리만 씀</td><td>guard, jira_bridge, jira_fields, issue_post, db_*, config (레지스트리 경유)</td></tr>
 </table></div>
 
 <div class="note warn">설정 우선순위: <b>사용자 config &gt; <code>plugin/site-defaults.yaml</code> &gt; 내장값</b>. <code>site-defaults.yaml</code>이 없으면 모든 커맨드가 종료 코드 2("사내 기본값 없음")로 멈춥니다. 런타임 코드는 사내/사외를 판별하지 않습니다.</div>
@@ -852,7 +856,7 @@ score = min(1, base + bonus)
 <tr><th>코드</th><th>의미</th><th>처리</th></tr>
 <tr><td><code>0</code></td><td>성공 (경고 포함)</td><td>계속</td></tr>
 <tr><td><code>1</code></td><td>검사 실패 (drift 포함)</td><td>차단, 원인 표시</td></tr>
-<tr><td><code>2</code></td><td>사용·환경 오류 (config, git/gh, 버전 불일치, 마스킹 안 된 입력, 다른 작업의 lock)</td><td>stderr를 그대로 보이고 멈춤</td></tr>
+<tr><td><code>2</code></td><td>사용·환경 오류 (config·옛 설정 키, git/gh, 버전 불일치, <code>platform-mismatch</code>·<code>tracker-mismatch</code>, 마스킹 안 된 입력, 다른 작업의 lock)</td><td>stderr를 그대로 보이고 멈춤</td></tr>
 <tr><td><code>3</code></td><td>승인 필요 (R5 등)</td><td>확인 화면·PR에 "승인 필요" 표시</td></tr>
 </table></div>
 </section>
@@ -882,7 +886,7 @@ score = min(1, base + bonus)
 <div class="tbl"><table>
 <tr><th>#</th><th>Hook</th><th>이벤트 / 매처</th><th>동작</th></tr>
 <tr><td>1</td><td>scripts 경로 갱신</td><td>SessionStart</td><td>config의 <code>plugin.scripts_path</code> 갱신</td></tr>
-<tr><td>2</td><td>Jira 쓰기 차단</td><td>PreToolUse <code>mcp__.*</code></td><td>설정된 Jira 서버의 도구 중 <code>read_tools</code>에 없는 것은 모두 거부 (허용 목록). 이름에 jira·atlassian이 든 미설정 서버의 쓰기형 도구도 거부. <b>예외 1종</b>: 설정된 코멘트 도구(<code>tracker.write_tools.add_comment</code>)는 <code>post.approved.json</code>과 대조(인자·키·도구·본문 sha256, 본문이 <code>post.md</code>와 글자 그대로 같음, 30분 만료, 1회용)해 맞으면 <code>ask</code>, 아니면·판정 오류·결과 불명(<code>unknown</code>)의 재게시는 거부. 승인·결과 기록 파일 직접 쓰기도 거부</td></tr>
+<tr><td>2</td><td>Jira 쓰기 차단</td><td>PreToolUse <code>mcp__.*</code></td><td>설정된 트래커(Jira) 서버의 도구 중 <code>read_tools</code>에 없는 것은 모두 거부 (허용 목록). 이름에 설치된 모든 트래커의 서버 단어(지금 jira·atlassian, 늘 포함)가 든 미설정 서버의 쓰기형 도구도 거부. 옛 설정 키(<code>jira:</code> 등)·모르는 <code>tracker.kind</code>·트래커 모듈 불러오기 실패면 모든 MCP 도구 거부(파일·Bash 규칙은 평소대로). <b>예외 1종</b>: 설정된 코멘트 도구(<code>tracker.write_tools.add_comment</code>)는 <code>post.approved.json</code>과 대조(인자·키·도구·트래커 <code>kind</code>·본문 sha256, 본문이 <code>post.md</code>와 글자 그대로 같음, 30분 만료, 1회용)해 맞으면 <code>ask</code>, 아니면·판정 오류·결과 불명(<code>unknown</code>)의 재게시는 거부. 승인·결과 기록 파일 직접 쓰기도 거부</td></tr>
 <tr><td>3</td><td>PII 검사</td><td>PreToolUse Bash (<code>git commit</code>)</td><td>staged 변경에 마스킹 안 된 식별자가 있으면 차단</td></tr>
 <tr><td>4</td><td>생성 파일 정합성</td><td>PreToolUse Bash (<code>git commit</code>)</td><td><code>db_build --verify</code> 실패나 <code>.cache/</code> staged면 차단</td></tr>
 <tr><td>5</td><td>hook 우회 차단</td><td>PreToolUse Bash</td><td><code>--no-verify</code>, <code>core.hooksPath</code> 변경 차단</td></tr>
@@ -890,7 +894,7 @@ score = min(1, base + bonus)
 <tr><td>7</td><td>push 확인 강제</td><td>PreToolUse Bash (<code>git push</code>)</td><td>권한 결정을 <code>ask</code>로 반환해 승인 프롬프트를 띄움</td></tr>
 <tr><td>8</td><td>사용자 clone 직접 편집 차단</td><td>PreToolUse <code>Write|Edit|…</code></td><td>대상 경로가 사용자 clone(모든 플랫폼 프로필) 안이면 거부. Bash로 clone 본체의 브랜치·파일을 바꾸는 git·파일 쓰기도 거부(<code>migrate/schema-v&lt;N&gt;</code> 브랜치 만들기는 ask)</td></tr>
 <tr><td>9</td><td>Jira 응답 원문 격리</td><td>PostToolUse <code>mcp__.*</code></td><td>원문은 권한 700 디렉토리 파일로, 모델에는 마스킹 요약만 (실패 시 fail closed). 승인 코멘트 응답이면 <code>post.result.json</code>을 쓰고 승인을 소모(실패 응답은 소모 안 함, 처리 예외면 "게시됐을 수 있다 — 다시 게시하지 않는다")</td></tr>
-<tr><td>10</td><td>로그 원문 통독 차단</td><td>PreToolUse Bash</td><td><code>cat</code> 등으로 로그 원문·zip·events/match.json을 통째로 읽으면 거부(원문 줄 판별은 설치된 모든 플랫폼 형식의 합집합 — android 단독 설치도 journald·BSD syslog 모양 줄을 원문으로 봄). Read 도구는 지침으로만 제한(소스 파일도 <code>grep -n</code> 적중 주변 ≤200줄·파일당 Read ≤2회, 미적중이면 "코드 위치 미확인")</td></tr>
+<tr><td>10</td><td>로그 원문 통독 차단</td><td>PreToolUse Bash</td><td><code>cat</code> 등으로 로그 원문·zip·events·<code>issue_raw.json</code>(개명 전 <code>jira_raw.json</code>도)·match.json을 통째로 읽으면 거부(원문 줄 판별은 설치된 모든 플랫폼 형식의 합집합 — android 단독 설치도 journald·BSD syslog 모양 줄을 원문으로 봄). Read 도구는 지침으로만 제한(소스 파일도 <code>grep -n</code> 적중 주변 ≤200줄·파일당 Read ≤2회, 미적중이면 "코드 위치 미확인")</td></tr>
 <tr><td>11</td><td>이슈 DB 원격 쓰기 확인</td><td>PreToolUse Bash(<code>gh</code>)·<code>mcp__.*</code></td><td>이슈 DB(모든 플랫폼 프로필) 대상 <code>gh</code>·GitHub MCP 쓰기는 <code>ask</code>, PR 머지는 거부 (10·11번은 기존 matcher에서 판정, hook은 10종)</td></tr>
 </table></div>
 
@@ -898,6 +902,8 @@ score = min(1, base + bonus)
 <li><b>마스킹</b>: IMSI, 전화번호, SIP URI, 인증 값 등을 일관된 토큰으로 치환. Jira 텍스트도 즉시 마스킹하고 원문은 이슈 DB에 저장하지 않습니다.</li>
 <li><b>세션 lock</b>: 사용자·이슈 DB(플랫폼)별 한 번에 한 작업. lock은 플랫폼마다 <code>work_dir</code>에 있어 android 작업과 oFono 작업은 동시에 할 수 있습니다. 모든 종료 경로에서 lock을 풉니다.</li>
 <li><b>플랫폼 대조</b>: 고른 플랫폼(<code>--platform</code> &gt; config &gt; 사이트 기본)과 이슈 DB 선언이 다르면 <code>platform-mismatch</code>로 멈춥니다.</li>
+<li><b>트래커 대조</b>: 설정 <code>tracker.kind</code>와 이슈 DB 선언이 다르면 <code>tracker-mismatch</code>로 멈춥니다(<code>jira_fields check-key</code>·<code>extract</code>·<code>issue_post</code>). 작업 키는 경로에 안전한 형식만 받습니다(<code>..</code> 등 거부, <code>triage.py release</code>·<code>explore</code> 포함).</li>
+<li><b>GitHub Issues 트래커 (실험적)</b>: 모의 MCP로만 검증했습니다. 트래커로 설정하지 않은 다른 GitHub MCP 등록으로 트래커 레포 이슈에 쓰는 것은 막지 못하는 알려진 한계가 있어, 실제로 쓰기 전에 대상 레포 기준 거부를 더해야 합니다. 사내는 Jira라 해당 없습니다.</li>
 <li><b>프롬프트 주입 방어</b>: Jira·로그·소스 속 문장은 데이터로만 취급하고 그 지시를 따르지 않습니다.</li>
 <li><b>정규식 안전</b>: 중첩 수량자·무제한 역참조를 lint가 거부하고, 패턴마다 실행 시간 상한이 있습니다.</li>
 </ul>
@@ -912,7 +918,7 @@ score = min(1, base + bonus)
 <ol class="steps">
 <li><div>사내 마켓플레이스에서 <code>telephony-triage</code> 플러그인을 설치합니다.</div></li>
 <li><div>이슈 DB 레포를 clone합니다.</div></li>
-<li><div><code>/telephony-triage:setup</code>을 실행합니다. (켠 플랫폼이 둘 이상일 때만) 플랫폼을 고르고, GHE 아이디, 이슈 DB 경로, 로그 폴더, (선택) Android 16/17 소스 트리 프로필을 묻고, 등록된 Jira MCP의 도구 매핑을 확인하고, git hook(<code>core.hooksPath .githooks</code>)과 읽기 스냅샷을 준비합니다.</div></li>
+<li><div><code>/telephony-triage:setup</code>을 실행합니다. (켠 플랫폼이 둘 이상일 때만) 플랫폼을 고르고, GHE 아이디, 이슈 DB 경로, 로그 폴더, (선택) Android 16/17 소스 트리 프로필을 묻고, 등록된 Jira MCP의 도구 매핑을 확인하고(<code>config.py tracker-candidates</code> → <code>set-tracker</code>. 옛 설정 키가 남은 config면 <code>config.py rename-legacy</code>의 변경 목록을 확인받고 <code>--apply</code>), git hook(<code>core.hooksPath .githooks</code>)과 읽기 스냅샷을 준비합니다.</div></li>
 <li><div>연습: <code>/telephony-triage:analyze &lt;샘플키&gt; &lt;로그&gt; --dry-run</code>. 아무것도 올리지 않고 gh 로그인 전에도 됩니다.</div></li>
 </ol>
 
@@ -931,6 +937,7 @@ score = min(1, base + bonus)
 </table></div>
 
 <p>플랫폼이 여럿이면(Android 기본, oFono 등) 사용자가 플랫폼을 말했을 때만 스킬이 <code>--platform &lt;이름&gt;</code>을 붙입니다. 받는 스크립트는 9개(<code>triage</code>·<code>config</code>·<code>db_pr</code>·<code>db_verify</code>·<code>issue_post</code>·<code>code_roots</code>·<code>db_add</code>·<code>db_search</code>·<code>db_review</code>)이고, 선택 순서는 <code>--platform</code> &gt; 사용자 config <code>platform</code> &gt; 사이트 <code>platform.name</code>입니다. 다른 플랫폼은 <code>config.py init --platform &lt;이름&gt;</code>으로 경로 프로필만 더합니다(Jira·gh 공유).</p>
+<p>이슈 트래커는 설정 <code>tracker.kind</code>로 고릅니다(기본·사내 <code>jira</code>). <code>github</code>(GitHub Issues, 작업 키 <code>&lt;owner&gt;.&lt;repo&gt;-&lt;N&gt;</code> 소문자, <code>owner/repo#N</code>·이슈 URL 입력은 <code>check-key</code>가 정규화)도 있지만 <b>실험적</b>이고, 쓰려면 트래커 전용 MCP 등록(issues 도구만)을 둡니다. 계약과 새 트래커 추가 절차는 <code>docs/design/18-trackers.md</code>입니다.</p>
 <p>상황별 자세한 사용 예는 1부 <a href="#scenarios">상황별 사용 시나리오</a>에 있습니다.</p>
 </section>
 
@@ -954,7 +961,7 @@ score = min(1, base + bonus)
 <h2><span class="num">20</span>한계</h2>
 <div class="tbl"><table>
 <tr><th>한계</th><th>내용</th><th>영향</th></tr>
-<tr><td>로그 문구가 placeholder</td><td>태그·문구·RIL 이름은 사외에서 사내 자료 없이 쓴 예시. 사내 실제 logcat과 다를 수 있음 (TODO(SITE) 100곳, 실패 스텝 S22·Jira 코멘트 S23·oFono S24~S29 포함)</td><td>사내 S-1~S-4에서 확인·교체 필요. S-0 통계로 차이를 먼저 측정</td></tr>
+<tr><td>로그 문구가 placeholder</td><td>태그·문구·RIL 이름은 사외에서 사내 자료 없이 쓴 예시. 사내 실제 logcat과 다를 수 있음 (TODO(SITE) 104곳, 실패 스텝 S22·Jira 코멘트 S23·oFono S24~S29·GitHub 트래커 S30·S31 포함)</td><td>사내 S-1~S-4에서 확인·교체 필요. S-0 통계로 차이를 먼저 측정</td></tr>
 <tr><td>알려진 패턴만 잡음</td><td>시그니처가 없는 새 증상은 "후보 없음"으로 나옴. 유사 후보와 오류 이벤트 목록만 제공</td><td>사전 품질이 곧 도구 품질. 초기에는 시드 유형 5~10개/카테고리 필요. 보완: <a href="#unknown">탐색 분석 (Step 5-2)</a></td></tr>
 <tr><td>점수는 규칙 일치 수준</td><td>S=C=1이면 score가 1.0으로 포화. 동점은 근접·키워드로 정렬하도록 고쳤지만(R8), score 자체는 진단 확신도가 아님</td><td><code>confidence: high</code>를 자동 게시 근거로 쓰지 않음 (별도 품질 게이트 필요)</td></tr>
 <tr><td>실패 스텝 기준점은 대응표가 있어야 동작</td><td>로그에 스텝 표식이 없고 장비 시계가 달라, 스텝 순서 정렬은 <code>step_events</code> 대응표에 의존. 원인이 마지막 PASS 스텝보다 훨씬 앞이면 구간 밖이 될 수 있음</td><td>사내 S22에서 대응표 작성, 구간 기본값 조정. 의심되면 <code>--answer anchor=off</code></td></tr>
@@ -1099,11 +1106,12 @@ score = min(1, base + bonus)
 <div class="tbl"><table>
 <tr><th>항목</th><th>현재</th></tr>
 <tr><td>완료 Phase</td><td>D0, 1~13 (사외 초안 모드)</td></tr>
-<tr><td>진행 중</td><td>RF-2, 10/04 개선, 10/11 Jira 결과 게시·플랫폼 분리 구현 완료, 사용자 확인 대기 → 보안 검토 → 반입. 순서는 <code>DRAFT_NOTES.md</code> "다음 할 일"</td></tr>
+<tr><td>진행 중</td><td>RF-2, 10/04 개선, 10/11 Jira 결과 게시·플랫폼 분리, 10/12 트래커 범용화(Jira 기본, GitHub Issues 실험적)·사내 설정 진행기 구현 완료, 사용자 확인 대기 → 보안 검토 → 반입. 순서는 <code>DRAFT_NOTES.md</code> "다음 할 일"</td></tr>
 <tr><td>테스트</td><td><code>pytest tests</code> 1,412개 통과</td></tr>
-<tr><td>스킬 평가</td><td>행동 eval 65개(61·62 Jira 결과 게시, 63~65 플랫폼 분리). 사외에서는 바꾼 흐름의 eval만 돌리고 전체 재실행은 사내 S-2. 트리거 recall 26~33%</td></tr>
-<tr><td>사내 확인 항목</td><td>TODO(SITE) 100곳 (<code>python3 tools/list_site_todos.py</code>, 레지스트리 S1~S29: S22 실패 스텝 12곳, S23 Jira 코멘트 쓰기 5곳, S24~S29 oFono 포함), REVIEW-OPEN 0건</td></tr>
+<tr><td>스킬 평가</td><td>행동 eval 67개(61·62 Jira 결과 게시, 63~65 플랫폼 분리, 66·67 GitHub 트래커 — 실험적). 사외에서는 바꾼 흐름의 eval만 돌리고 전체 재실행은 사내 S-2. 트리거 recall 26~33%</td></tr>
+<tr><td>사내 확인 항목</td><td>TODO(SITE) 104곳 (<code>python3 tools/list_site_todos.py</code>, 레지스트리 S1~S32: S22 실패 스텝 12곳, S23 Jira 코멘트 쓰기 5곳, S24~S29 oFono, S30·S31 GitHub 트래커(사내는 Jira라 해당 없음) 포함), REVIEW-OPEN 0건</td></tr>
 <tr><td>사외에서 못 하는 것</td><td>실제 로그 문구·태그, report.html 구조, 스텝 → 로그 흔적 대응표, 장비·단말 시계 관계, 실제 Jira 필드 이름, 정확도 평가 (사내 S-1~S-5)</td></tr>
+<tr><td>사내 시작</td><td>사내 PC에서 Claude Code에 "사내 설정 시작"(이어서 할 때 "계속") → <code>tools/site_step.py</code>가 <code>SITE_PROFILE.md</code>(모드 사내 보완, 트래커 jira)를 만들고 S-1~S-7을 한 단계씩 냅니다. 단계마다 완료 기준 점검 → 사용자 확인 → <code>site_step.py --done S-n</code>(건너뛰기·사외 PC 거부)</td></tr>
 <tr><td>경계 원칙</td><td>사내 값·코드는 <code>SITE_PATHS</code> 경로에만. 사내→사외 반출은 사용자가 직접 타이핑한, 사내 정보 없는 문장뿐</td></tr>
 </table></div>
 </section>

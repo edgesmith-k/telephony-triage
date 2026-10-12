@@ -469,7 +469,7 @@ body.show-notes #notes-panel { display: block; }
 data/
   DATA-001-no-setup-data-call/   <span class="c"># 유형</span>
     type.md        <span class="c"># 유형 + 원인 정의, 시그니처</span>
-    issues/ABC-12345.yaml          <span class="c"># Jira 1건 = 파일 1개</span>
+    issues/ABC-12345.yaml        <span class="c"># Jira 1건 = 파일 1개</span>
     fixtures/DATA-001-02.log     <span class="c"># 마스킹된 최소 로그</span>
 call/  network/  sim/  sms/  ims/
 parser-rules/  tags.yaml  ril.yaml  extractors.yaml
@@ -581,7 +581,7 @@ feedback/      <span class="c"># 후보 수락·거절 기록</span>
       <tr><td>snapshot</td><td><span class="tag warn">warn</span></td><td>오래된 스냅샷</td><td><code>/telephony-triage:sync</code> 를 실행한다</td></tr>
       <tr><td>compat · lock</td><td><span class="tag ok">ok</span></td><td>스키마·생성기·파서 호환 / 세션 lock 없음</td><td></td></tr>
     </table></div>
-    <p class="small">예시 화면입니다. 실제 항목: python, deps, config, platform(켠 플랫폼이 둘 이상일 때만), scripts_path, clone, hook, guard(자가시험, 예 <code>deny 3/3</code>), tracker, tracker_post(Jira 게시 도구: ok / skip 게시 꺼짐 / fail 코멘트 도구가 read_tools에 있음), gh, snapshot, compat, lock.</p>
+    <p class="small">예시 화면입니다. 실제 항목: python, deps, config, platform(켠 플랫폼이 둘 이상일 때만), scripts_path, clone, hook, guard(자가시험, 예 <code>deny 3/3</code>), tracker(Jira 도구 매핑, 옛 설정 키 <code>jira:</code> 등이 남으면 fail → <code>config.py rename-legacy</code>), tracker_post(Jira 게시 도구: ok / skip 게시 꺼짐 / fail 코멘트 도구가 read_tools에 있음), gh, snapshot, compat, lock.</p>
   </div>
   <aside class="notes">문제가 생기면 먼저 doctor 표를 보세요. fail은 그 기능이 막힌 것이고 warn은 일부만 제한됩니다. 이 표를 그대로 캡처해서 질문하면 지원이 빠릅니다.</aside>
 </section>
@@ -932,6 +932,7 @@ bonus = 근접(근거 시각이 발생 시각에 가까울수록) + 키워드(Ji
       <tr><td class="wrap"><code>lock 보유자는 &lt;작업&gt;입니다</code></td><td>그 세션이 정말 끝났는지 확인 후 해제(<code>db_pr lock release &lt;작업&gt; --force</code>, 손상된 lock은 <code>.corrupt-&lt;ts&gt;</code>로 백업 후 제거). 같은 작업이 10분 안에 갱신됐으면 이어받기</td></tr>
       <tr><td class="wrap">버전 불일치 → 읽기 전용</td><td>분석은 계속, 계획 저장까지만. 플러그인 업데이트 또는 메인테이너에게 마이그레이션 요청</td></tr>
       <tr><td class="wrap"><code>플러그인 관리자가 사이트 설정(site-defaults.yaml)을 아직 올리지 않았습니다</code></td><td>설치본에 사내 설정이 없음(둘째 줄 "[관리자] 사내 기본값 없음 (S-3 미완료)"). 직접 고치지 말고 메시지를 관리자에게</td></tr>
+      <tr><td class="wrap"><code>옛 설정 키: … — config.py rename-legacy로 바꾼다</code></td><td>config에 이름이 바뀌기 전 키(<code>jira:</code> 등)가 남음. 자동 변환하지 않음(그동안 Jira 도구 호출도 거부). 목록을 보고 <code>config.py rename-legacy --apply</code></td></tr>
       <tr><td class="wrap">hook: <code>core.hooksPath</code>가 <code>.githooks</code>가 아님</td><td><code>/telephony-triage:setup</code> 을 다시 실행(hook 설치 단계)</td></tr>
     </table></div>
   </div>
@@ -984,7 +985,7 @@ bonus = 근접(근거 시각이 발생 시각에 가까울수록) + 키워드(Ji
       <div class="card">
         <h3>자동으로 막는 것 (hook 10종 중) — 언제</h3>
         <ul class="pts small">
-          <li>Jira 쓰기 도구 호출 — <b>MCP 도구를 부르기 직전</b>. 허용 목록의 읽기 도구만(이름에 jira·atlassian이 든 서버의 쓰기 도구도). 예외는 확인 화면에서 승인한 코멘트 1건(승인 기록과 맞을 때만 권한 질문)</li>
+          <li>Jira 쓰기 도구 호출 — <b>MCP 도구를 부르기 직전</b>. 허용 목록의 읽기 도구만(이름에 jira·atlassian이 든 서버의 쓰기 도구도, 옛 설정 키가 남아 있으면 MCP 도구 전부). 예외는 확인 화면에서 승인한 코멘트 1건(승인 기록과 맞을 때만 권한 질문)</li>
           <li>main 대상 push, 승인 토큰 없는 push — <b>git push 직전</b>(Claude 밖 터미널도)</li>
           <li><code>--no-verify</code> 같은 hook 우회 커밋 — <b>git commit 직전</b></li>
           <li>Claude가 내 이슈 DB clone 파일을 직접 편집하거나 clone 브랜치를 바꿈 — <b>Write·Edit·Bash 직전</b></li>
@@ -1098,9 +1099,9 @@ bonus = 근접(근거 시각이 발생 시각에 가까울수록) + 키워드(Ji
   <div class="body">
     <div class="tl">
       <div><b>S-0</b><span>선택. 실제 로그 형식 선행 확인, 설정 초안 제안 도구</span></div>
-      <div><b>S-1</b><span>사내 값 조사, 평가 기준 합의</span></div>
+      <div><b>S-1</b><span>"사내 설정 시작" → <code>site_step.py</code>가 단계 안내. 사내 값 조사, 평가 기준 합의</span></div>
       <div><b>S-2</b><span>사내 Claude Code 동작 확인</span></div>
-      <div><b>S-3</b><span>사내 설정(site-defaults) 입력</span></div>
+      <div><b>S-3</b><span>사내 설정(site-defaults, 트래커 Jira) 입력</span></div>
       <div><b>S-4a</b><span>기존 파서 포팅, 분류 import, 분석 스킬 연결</span></div>
       <div><b>S-4</b><span>카테고리별 실제 로그로 규칙 교체</span></div>
       <div><b>S-5</b><span>dry-run·샌드박스 PR, 정확도·오류율 게이트</span></div>
@@ -1122,10 +1123,11 @@ bonus = 근접(근거 시각이 발생 시각에 가까울수록) + 키워드(Ji
     <div class="nums">
       <div><b>1,412</b><span>자동 테스트 (CI Ubuntu, Python 3.11 · 3.14 통과)</span></div>
       <div><b>23/23</b><span>샘플 DB 회귀 fixture 통과</span></div>
-      <div><b>65</b><span>skill eval 정의</span></div>
+      <div><b>67</b><span>skill eval 정의</span></div>
       <div><b>~39만</b><span>analyze→기록 1건 토큰 (Sonnet, 이전 74만에서 −48%)</span></div>
     </div>
     <p class="small">커맨드 1회 약 20만~80만 토큰, $0.15~0.5 수준(Sonnet). 모의 데이터 eval 기준이라 실제 환경에서는 다를 수 있습니다. 기본 모델은 Sonnet, 탐색 가설 품질이 중요하면 Opus.</p>
+    <p class="small">이슈 트래커는 설정(<code>tracker.kind</code>)으로 고릅니다. 사내는 <b>Jira</b>입니다. GitHub Issues 트래커는 <b>실험적</b>이라 모의 MCP로만 검증했고, 트래커로 설정하지 않은 GitHub MCP의 이슈 쓰기는 막지 못하는 알려진 한계가 있습니다.</p>
     <div class="g3">
       <div class="card"><h3>사용법</h3><p class="small"><code>GUIDE.md</code> §5·§6<br>이슈 DB <code>docs/getting-started.md</code></p></div>
       <div class="card"><h3>기여 규칙</h3><p class="small">이슈 DB <code>CONTRIBUTING.md</code><br><code>docs/review-guide.md</code></p></div>

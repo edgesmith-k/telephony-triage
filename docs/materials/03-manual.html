@@ -850,7 +850,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
       <h3>현재 상태와 측정 수치</h3>
       <ul>
         <li>개발 단계(사외 초안, Phase D0~13)와 실제 로그 반영 트랙(L1~L3), 반입 전 3차 검토 반영까지 끝났습니다. 도입 조직 환경에 맞추는 사내 보완 단계(S-0~S-7, <a href="#s7-rollout">7.12</a>)는 아직 남아 있습니다.</li>
-        <li>자동 테스트 1,412개, CI(Ubuntu, Python 3.11·3.14) 통과. 샘플 이슈 DB 회귀 fixture 23/23. 스킬 행동 eval 65개 정의(Jira 결과 게시 61·62, 플랫폼 분리 63~65).</li>
+        <li>자동 테스트 1,412개, CI(Ubuntu, Python 3.11·3.14) 통과. 샘플 이슈 DB 회귀 fixture 23/23. 스킬 행동 eval 67개 정의(Jira 결과 게시 61·62, 플랫폼 분리 63~65, GitHub 트래커 66·67 — 실험적).</li>
         <li>10/11: Jira 결과 게시(승인한 코멘트 1건, analyze Step 9)와 플랫폼 분리(Android 기본, oFono 뼈대, 플랫폼별 이슈 DB)가 들어갔습니다.</li>
         <li>토큰(모의 데이터 eval 기준, Sonnet): analyze부터 기록까지 1건 약 39만 토큰(이전 74만에서 48% 감소). 커맨드 1회 20만~80만 토큰, 약 $0.15~0.5. <b>실제 로그·DB 크기에서는 달라질 수 있습니다.</b></li>
       </ul>
@@ -936,8 +936,8 @@ python3 -m pytest -q tests</pre></div>
       <h3>setup이 하는 일 (10단계)</h3>
       <div class="tbl"><table>
         <tr><th>#</th><th>단계</th><th>스크립트</th><th>확인할 것</th></tr>
-        <tr><td class="num">0</td><td>플랫폼 고르기 (켠 플랫폼이 둘 이상일 때만)</td><td><code>config.py init --platform &lt;이름&gt;</code></td><td>android 밖 플랫폼은 그 경로 프로필(<code>platforms.&lt;이름&gt;</code>: clone·<code>work_dir</code> 등)만 더함. Jira·gh 설정(4·9)은 공유. 따로 설치도 가능</td></tr>
-        <tr><td class="num">1</td><td>사용자 config 생성</td><td><code>config.py init --answers</code></td><td><code>~/.telephony-triage/</code>와 작업 디렉토리는 권한 700. 경로가 없으면 그 항목만 다시 물음</td></tr>
+        <tr><td class="num">0</td><td>플랫폼 고르기 (켠 플랫폼이 둘 이상일 때만)</td><td><code>config.py init --platform &lt;이름&gt;</code></td><td>android 밖 플랫폼은 그 경로 프로필(<code>platforms.&lt;이름&gt;</code>: clone·<code>work_dir</code> 등)만 더함. 트래커(Jira)·gh 설정(4·9)은 공유. 따로 설치도 가능</td></tr>
+        <tr><td class="num">1</td><td>사용자 config 생성</td><td><code>config.py init --answers</code></td><td><code>~/.telephony-triage/</code>와 작업 디렉토리는 권한 700. 경로가 없으면 그 항목만 다시 물음. 옛 설정 키(<code>jira:</code> 등, 트래커 범용화 전 이름)가 남아 종료 2면 <code>config.py rename-legacy</code>의 변경 목록을 보이고 확인받은 뒤 <code>--apply</code>(사용자 config만 바뀜)</td></tr>
         <tr><td class="num">2</td><td>스크립트 경로 기록</td><td><code>config.py sync-scripts-path</code></td><td>git pre-commit hook이 이 경로를 씀</td></tr>
         <tr><td class="num">3</td><td>이슈 DB clone 제안</td><td><code>git clone</code></td><td>동의할 때만 실행</td></tr>
         <tr><td class="num">4</td><td>Jira MCP 도구 매핑</td><td><code>config.py tracker-candidates</code>, <code>set-tracker</code></td><td><code>get_issue</code>(필수)·<code>search_issues</code>·<code>get_comments</code>와 허용 읽기 도구를 사용자가 확인. 후보가 없으면 setup 중단</td></tr>
@@ -966,6 +966,7 @@ python3 "$S/config.py" doctor --format markdown</pre></div>
         <tr><td><code>clone</code></td><td><span class="chip b">fail</span> 이슈 DB clone 없음</td><td>터미널에서 <code>git clone &lt;remote&gt; &lt;path&gt;</code> 실행</td></tr>
         <tr><td><code>hook</code></td><td><span class="chip b">fail</span> <code>core.hooksPath=(없음)</code></td><td><code>/telephony-triage:setup</code> 을 다시 실행한다(hook 설치 단계)</td></tr>
         <tr><td><code>tracker</code></td><td><span class="chip b">fail</span> tracker.tools.get_issue 매핑 비어 있음</td><td>setup 4번(Jira MCP 매핑)을 다시 한다</td></tr>
+        <tr><td><code>tracker</code></td><td><span class="chip b">fail</span> 옛 설정 키: <code>jira</code> → <code>tracker</code> 등 / <code>tracker.kind</code>가 모르는 값</td><td><code>config.py rename-legacy</code>로 목록을 보고 <code>--apply</code>(site-defaults의 옛 키는 관리자가 고침). 고치기 전까지 guard가 모든 MCP 호출을 거부하고 스크립트는 종료 2</td></tr>
         <tr><td><code>tracker_post</code></td><td><span class="chip g">ok</span> &lt;도구&gt; / &lt;형식&gt; · skip 게시 기능 꺼짐(본문 파일만) · <span class="chip w">warn</span> 코멘트 도구 설정 형식 문제</td><td>skip이면 할 일 없음(게시 대신 <code>JOB/post.md</code>를 직접 붙여넣기). warn은 관리자에게 알린다</td></tr>
         <tr><td><code>tracker_post</code></td><td><span class="chip b">fail</span> 코멘트 도구가 read_tools에 있음(승인 생략 경로)</td><td>관리자에게 알린다(<code>read_tools</code>에서 코멘트 도구를 뺀다)</td></tr>
         <tr><td><code>gh</code></td><td><span class="chip w">warn</span> gh 인증 없음 (host) — 쓰기 불가</td><td>터미널에서 <code>gh auth login -h &lt;host&gt;</code> 실행</td></tr>
@@ -1451,6 +1452,7 @@ db_build.py --verify --db &lt;db&gt;</pre></div>
         <tr><td>이슈 DB와 플러그인의 버전이 다를 때 (스키마·생성기·파서 백엔드)</td><td>analyze는 읽기 전용 모드로 계속(계획 저장까지), 쓰기 커맨드는 종료 코드 2로 멈춥니다</td><td>리포트의 "읽기 전용: …" 줄, 또는 "… 이슈 DB 쓰기 전체를 막는다."</td><td>플러그인 업데이트 또는 메인테이너에게 마이그레이션 요청</td><td><a href="#s6-msg">6.3</a>, <a href="#s7-upgrade">7.9</a></td></tr>
         <tr><td><code>site-defaults.yaml</code>이 없을 때 (어느 커맨드든 첫 스크립트 호출)</td><td>종료 코드 2로 멈춥니다. <code>help</code>만 예외(플러그인 파일만 읽음)</td><td>"플러그인 관리자가 사이트 설정(site-defaults.yaml)을 아직 올리지 않았습니다. 이 메시지를 관리자에게 전달하세요." (둘째 줄 "[관리자] 사내 기본값 없음 (S-3 미완료): … 실행할 수 없습니다.")</td><td>관리자가 S-3을 끝낼 때까지 기다립니다</td><td><a href="#s3-admin">3.1</a></td></tr>
         <tr><td>Jira 응답을 격리하지 못할 때 (Jira 도구 결과 직후)</td><td>원문을 내보내지 않고 오류 문구로 바꿉니다(fail closed)</td><td>"telephony-triage: … 원문은 표시하지 않는다."</td><td>이슈 키 형식·config를 확인하고 다시 읽습니다</td><td><a href="#s8-guard">8.3</a> 9번</td></tr>
+        <tr><td>설정이 트래커 범용화 전 이름이거나 트래커가 이슈 DB와 다를 때 (첫 스크립트 호출·Jira 도구 호출)</td><td>옛 설정 키(<code>jira:</code> 등)·모르는 <code>tracker.kind</code>면 스크립트 종료 2, guard는 모든 MCP 호출 거부. 설정 <code>tracker.kind</code> ≠ 이슈 DB 선언이면 <code>tracker-mismatch</code>로 종료 2</td><td>"옛 설정 키: … — config.py rename-legacy로 바꾼다" / "tracker-mismatch — 이슈 DB 트래커는 …, 설정 tracker.kind는 …"</td><td><code>config.py rename-legacy --apply</code>(사용자 config) 또는 관리자에게 알림. 불일치는 <code>tracker.kind</code>·<code>issue_db.path</code> 확인. 우회하지 않습니다</td><td><a href="#s6-msg">6.3</a></td></tr>
         <tr><td>계획을 적용할 때 main이 그사이 바뀌었을 때 (<code>db_pr stage</code>)</td><td>종료 코드 1 + drift 목록. 자동으로 덮지 않습니다</td><td>항목마다 계획 값 / 계획 당시 main 값 / 지금 main 값</td><td>계획 값 유지 / main 값 유지 / 직접 입력을 고르면 계획이 갱신되고 다시 적용됩니다</td><td><a href="#s0-seq">그림 B</a>, <a href="#s6-recover">6.4</a></td></tr>
         <tr><td>적용 중 검사가 실패했을 때 (lint·마스킹·회귀·R1~R4, Jira 중복)</td><td>종료 코드 1. 확인 화면이 나오지 않습니다</td><td>실패 원인. 회귀 실패면 "시그니처 좁히기 / allow-cause" 질문, Jira 중복이면 기존 분류와 유지/재분류 질문</td><td>계획을 고쳐 다시 적용합니다</td><td><a href="#s5-sc">5.2</a>, <a href="#s7-add">7.4</a></td></tr>
         <tr><td>검사는 통과했지만 사람 승인이 필요한 변화가 있을 때 (예: R5 기존 이벤트 변경)</td><td>종료 코드 3. 정상 경로이고 확인 화면이 나옵니다</td><td>확인 화면·PR 본문의 "승인 필요"</td><td>그대로 진행하고, 메인테이너 승인을 리뷰 조건으로 둡니다</td><td><a href="#s6-exit">6.2</a></td></tr>
@@ -1474,8 +1476,9 @@ db_build.py --verify --db &lt;db&gt;</pre></div>
       </table></div>
       <ul>
         <li><code>config.py doctor</code>: <code>fail</code>이 있으면 1, 없으면 0. 자기 실행이 불가능할 때만 2.</li>
-        <li><code>issue_post.py</code>(Jira 게시): <code>render</code>는 게시 가능하지 않아도 0(본문 파일만), fill 검사 실패 1, <code>approve</code>인데 게시 불가·키 형식·분석 결과 없음은 2.</li>
-        <li><code>platform-mismatch</code>(고른 플랫폼 ≠ 이슈 DB 선언)는 2입니다.</li>
+        <li><code>issue_post.py</code>(Jira 게시): <code>render</code>는 게시 가능하지 않아도 0(본문 파일만), fill 검사 실패 1, <code>approve</code>인데 게시 불가·키 형식·분석 결과 없음은 2. 트래커 대조는 스냅샷의 이슈 DB 선언, 스냅샷이 없으면 사용자 clone 선언과 하고, 둘 다 없으면 대조할 수 없어 2.</li>
+        <li><code>platform-mismatch</code>(고른 플랫폼 ≠ 이슈 DB 선언)와 <code>tracker-mismatch</code>(설정 <code>tracker.kind</code> ≠ 이슈 DB <code>tracker.kind</code>, 없으면 jira — <code>jira_fields.py check-key</code>·<code>extract</code>·<code>issue_post.py</code>)는 2입니다. 옛 설정 키·모르는 <code>tracker.kind</code>도 2입니다.</li>
+        <li><code>triage.py release</code>·<code>explore</code>는 받은 키를 작업 키로 정규화하고(jira는 입력 그대로), 경로 안전 형식이 아닌 키(<code>..</code> 등)는 2로 거부합니다.</li>
         <li><code>db_pr.py publish --and-discard</code>가 2면 PR은 이미 만들어진 것입니다. <code>discard</code>만 다시 합니다.</li>
         <li><code>triage.py explore</code>의 1은 "해당 없음"입니다(후보가 C=1이라 탐색 대상 아님).</li>
         <li><code>tools/make_bundle.py</code>(반입 묶음)는 0을 내지 않습니다. 3이 정상 완료(사람 확인 3건 대기)입니다.</li>
@@ -1494,6 +1497,9 @@ db_build.py --verify --db &lt;db&gt;</pre></div>
         <tr><td>doctor <code>tracker</code> fail "tracker.tools.get_issue 매핑 비어 있음" / analyze가 Jira를 부르지 않고 멈춤</td><td>Jira 도구 매핑 없음</td><td>setup 4단계. MCP를 사용자 범위로 등록했는지 <code>claude mcp list</code>. 연습은 <code>--dry-run --issue-file</code></td></tr>
         <tr><td>doctor <code>tracker_post</code> fail "코멘트 도구가 read_tools에 있음"</td><td>승인 없이 코멘트가 나갈 수 있는 설정</td><td>관리자가 <code>read_tools</code>에서 코멘트 도구를 뺌</td></tr>
         <tr><td>"Jira 코멘트는 확인 화면에서 승인한 본문만 올린다 (규칙 2): &lt;사유&gt;. issue_post.py render → 승인 → approve부터 다시 한다."</td><td>승인 기록과 다름(본문·키·도구·해시), 30분 만료, 이미 게시함, 결과 불명</td><td>render부터 다시 하고 확인 화면을 다시 승인. 결과 불명이면 Jira에서 먼저 확인하고 다시 올리지 않음</td></tr>
+        <tr><td>"… 옛 형식 승인 기록이다(트래커 kind 없음) — issue_post.py render부터 다시 한다"</td><td>트래커 범용화 전에 만든 승인 기록(<code>post.approved.json</code>에 트래커 <code>kind</code> 없음)</td><td>render부터 다시 하고 확인 화면을 다시 승인</td></tr>
+        <tr><td>"옛 설정 키: … — config.py rename-legacy로 바꾼다" (종료 2) / doctor <code>tracker</code> fail "옛 설정 키" / "옛 설정 키가 남아 있다: … (규칙 2). … 호출을 거부한다."</td><td>config에 개명 전 키(최상위 <code>jira:</code>, <code>logcat.year_source: jira</code>, <code>code_profiles[].android_version</code>, <code>tracker.field_map.android_version</code>)가 남음. 자동 변환하지 않음</td><td><code>config.py rename-legacy</code>로 변경 목록 확인 → <code>--apply</code>. site-defaults의 옛 키면 관리자가 고침</td></tr>
+        <tr><td>"tracker-mismatch — 이슈 DB 트래커는 &lt;a&gt;, 설정 tracker.kind는 &lt;b&gt;. config의 tracker.kind나 issue_db.path를 확인한다" (종료 2)</td><td>설정 트래커와 이슈 DB <code>issue-db.config.yaml</code>의 <code>tracker.kind</code>가 다름</td><td>우회하지 않음. <code>tracker.kind</code>나 이슈 DB 경로를 맞춘 뒤 다시 실행</td></tr>
         <tr><td>"… platform-mismatch …" (종료 2)</td><td>고른 플랫폼과 이슈 DB 선언(<code>issue-db.config.yaml</code>의 <code>platform</code>)이 다름</td><td>우회하지 않음. <code>--platform</code> 또는 config의 플랫폼 프로필 경로를 맞춘 뒤 다시 실행</td></tr>
         <tr><td>"이 플러그인은 Jira 읽기 전용이다(예외: 승인한 코멘트 추가 1종, …). … tracker.read_tools에 없어 거부한다 (규칙 2)."</td><td>허용 목록 밖 Jira 도구 호출</td><td>정상 차단. 필요한 읽기 도구라면 setup에서 <code>read_tools</code>에 추가 확인</td></tr>
         <tr><td>"격리 hook 미동작: Jira 원문이 대화에 들어옴"</td><td>Jira 응답 원문 격리 hook이 이 Claude Code에서 동작하지 않음</td><td>관리자에게 보고(S-2 확인 항목). 리포트·계획에는 여전히 마스킹 값만 저장됨</td></tr>
@@ -1570,7 +1576,7 @@ db_build.py --verify --db &lt;db&gt;</pre></div>
 ├── data/ call/ network/ sim/ sms/ ims/
 │   └── DATA-001-no-setup-data-call/
 │       ├── type.md                   유형 + 원인 정의(시그니처·해결책·fix)
-│       ├── issues/ABC-111.yaml         Jira 한 건 = 파일 하나
+│       ├── issues/ABC-111.yaml       Jira 한 건 = 파일 하나
 │       └── fixtures/                 마스킹된 최소 logcat
 ├── feedback/2026-09/…yaml            분석 제안 수락·거절 기록
 └── .github/ CODEOWNERS, pull_request_template.md</pre></div>
@@ -1651,6 +1657,7 @@ python3 $S/db_verify.py rules --db . --changed origin/main  # R1~R5</pre></div>
       <ul>
         <li>생성 파일은 같은 데이터면 누가 만들어도 바이트 단위로 같습니다(현재 시각을 쓰지 않음, 정렬·숫자 형식 고정, LF).</li>
         <li><code>db_build --write</code>는 이슈 DB <code>generator_version</code>과 플러그인 생성기 버전이 다르면 거부합니다(종료 2).</li>
+        <li>트래커 범용화 전 이름은 읽지 않습니다: 옛 DB 설정 키(<code>jira_key_regex</code>·<code>jira_base_url</code>·<code>readme.jira_inline_max</code>·<code>android_versions_supported</code>)는 <code>db_lint</code> <code>config</code> 오류, 유형 디렉토리에 남은 옛 기록 폴더 <code>jira/</code>는 <code>legacy-dir</code> 오류(<code>issues/</code>로 옮김). <code>db_lint</code>는 DB <code>tracker.kind</code>가 설치된 트래커인지(<code>config</code>)와 기록 키가 그 트래커 작업 키 형식인지(<code>issue-key</code>)도 봅니다.</li>
         <li>직접 편집 기여자는 이 명령들 대신 <code>/telephony-triage:validate</code> 한 번으로 같은 검사를 돌릴 수 있습니다.</li>
       </ul>
       <p>검증 체계(로컬 모드 <code>ci_mode: local</code>, 현재 기본)는 5단계입니다.</p>
@@ -1720,6 +1727,7 @@ python3 $S/db_verify.py rules --db . --changed origin/main  # R1~R5</pre></div>
       <div class="tbl"><table>
         <tr><th>키</th><th>뜻</th><th>비고</th></tr>
         <tr><td><code>synthetic_allowed</code></td><td>합성 fixture 허용</td><td>사내 기본 <code>false</code></td></tr>
+        <tr><td><code>tracker.kind</code></td><td>트래커 종류. <code>jira</code>(기본·사내) 또는 <code>github</code>(GitHub Issues, <b>실험적</b> — 모의 MCP로만 검증)</td><td>이슈 DB <code>tracker.kind</code>와 같아야 함(다르면 <code>tracker-mismatch</code>)</td></tr>
         <tr><td><code>tracker.mcp_server</code></td><td>Jira MCP 서버 이름</td><td></td></tr>
         <tr><td><code>tracker.exclude_servers</code></td><td>setup 후보에서 뺄 서버 패턴</td><td>기본 <code>['mock-*']</code></td></tr>
         <tr><td><code>tracker.tools</code></td><td>논리 동작 → 실제 도구 전체 이름. <code>get_issue</code> 필수, <code>search_issues</code>·<code>get_comments</code> 선택</td><td>형식 <code>mcp__&lt;server&gt;__&lt;tool&gt;</code></td></tr>
@@ -1734,13 +1742,14 @@ python3 $S/db_verify.py rules --db . --changed origin/main  # R1~R5</pre></div>
         <tr><td><code>platform.*</code></td><td>소스 트리 필수 디렉토리·버전 파일, 슬롯 표기(<code>log.phone_id</code>), RIL 태그(<code>ril.tags</code>, 기본 <code>[RILJ]</code>), 벤더 RIL 층 연결(<code>ril.vendor</code>, 선택: <code>layers</code>·<code>link_ms</code>·<code>coverage_tags</code>, 초안은 <code>s0_suggest.py</code>), bugreport 섹션</td><td><b>고정</b>. 키를 쓰면 목록이 통째로 바뀜. 바꾸면 <code>db_regress --all</code> 다시</td></tr>
         <tr><td><code>platform.name</code>, <code>platform.enabled</code>, <code>platform.others.&lt;이름&gt;</code>, <code>parser.by_platform.&lt;이름&gt;</code></td><td>기본 플랫폼(android), 켤 수 있는 플랫폼 목록, 그 밖 플랫폼의 상수와 파서 백엔드(없으면 그 플랫폼 기본, 예: <code>ofono_reference</code>)</td><td>없으면 android만. 사용자 config는 <code>platform</code>(이름 선택)과 <code>platforms.&lt;이름&gt;</code>(경로 프로필)만</td></tr>
         <tr><td><code>external_parsers</code></td><td>외부 파서 어댑터</td><td>사외 초안은 비어 있음(기본 플랫폼만)</td></tr>
-        <tr><td><code>analyzers.&lt;category&gt;</code></td><td>심층 분석 스킬: <code>skill</code>, <code>when</code>(<code>ask | always | never</code>), <code>inputs</code></td><td></td></tr>
+        <tr><td><code>analyzers.&lt;category&gt;</code></td><td>심층 분석 스킬: <code>skill</code>, <code>when</code>(<code>ask | always | never</code>), <code>inputs</code>(예 <code>issue_summary</code>)</td><td></td></tr>
         <tr><td><code>explore.when</code>, <code>explore.timeline_max_lines</code></td><td>탐색 분석 실행 방식, 타임라인 줄 수 상한(20~1000, 기본 200)</td><td></td></tr>
         <tr><td><code>code.auto_select</code></td><td>버전이 맞는 프로필이 1개면 자동 선택</td><td>불리언, 기본 <code>true</code></td></tr>
         <tr><td><code>failed_step.*</code></td><td>스텝 마커 패턴(기본 끔), 분석 창, 시계 차, steps-file 열·상태 낱말, 스텝 순서 정렬 기준</td><td><code>marker_patterns</code>는 <b>고정</b>. YAML에서 <code>no</code>·<code>yes</code>·<code>on</code>·<code>off</code>는 따옴표</td></tr>
         <tr><td><code>guard.raw_read</code></td><td>원문 통독 차단 대상 파일 이름·제외 디렉토리 추가</td><td><b>고정</b>, 내장 목록에 더해짐</td></tr>
       </table></div>
       <p>팀 공통 판정 값은 이슈 DB의 <code>issue-db.config.yaml</code>에 있습니다(부록 <a href="#s9-keys">9.4</a>). 바꾸면 PR이고 메인테이너가 리뷰합니다.</p>
+      <p><b>옛 설정 키</b>: 트래커 범용화 전 이름(최상위 <code>jira:</code>, <code>logcat.year_source: jira</code>, <code>code_profiles[].android_version</code>, <code>field_map.android_version</code>)이 site-defaults에 남아 있으면 자동 변환 없이 모든 사용자가 막힙니다(guard 모든 MCP 거부, 스크립트 종료 2, doctor <code>tracker</code> fail). 관리자가 키 이름만 바꿉니다(<code>tracker:</code> + <code>kind: jira</code>). 사용자 config는 각자 <code>config.py rename-legacy --apply</code>.</p>
       <p><b>플랫폼 추가</b>: 플랫폼(Android 기본, oFono 등)마다 이슈 DB 레포가 따로입니다. 새 플랫폼의 이슈 DB 뼈대는 <code>tools/make_db_skeleton.py &lt;out&gt; --platform &lt;이름&gt;</code>으로 만들고(<code>issue-db.config.yaml</code>에 <code>platform</code>·<code>platform_versions_supported</code>·<code>parser_backend.name</code>), <code>platform.enabled</code>에 이름을 더합니다. 지금 oFono는 가정 형식(journald·BSD syslog) placeholder 뼈대이고 실제 규칙은 사내 S24~S29에서 정합니다. 사용자용 로그 수집 체크리스트는 <code>docs/development/OFONO_LOG_COLLECTION.md</code>, 절차 전체는 <code>docs/design/17-platforms.md</code>입니다.</p>
     </div>
 
@@ -1853,13 +1862,13 @@ git push -u origin HEAD                        # 사용자 승인 후. PR은 사
 
     <div class="sub" id="s7-rollout" data-title="도입 단계 S-1~S-7">
       <h3>도입 단계 (사내 보완 S-0~S-7) <span class="chip p">진행 예정</span></h3>
-      <p>각 단계는 별도 Claude Code 세션으로 하고, 끝날 때마다 <code>SITE_PROFILE.md</code> 진행 상태를 갱신합니다(매 세션 읽히므로 4KB 이하로 짧게, 넘으면 <code>context_pack.py</code>가 경고). 세션 입력은 <code>S-n 진행해줘</code>, 읽을 자료는 <code>python3 tools/context_pack.py S-n</code> 출력뿐입니다.</p>
+      <p>각 단계는 별도 Claude Code 세션으로 하고, 끝날 때마다 <code>SITE_PROFILE.md</code> 진행 상태를 갱신합니다(매 세션 읽히므로 4KB 이하로 짧게, 넘으면 <code>context_pack.py</code>가 경고). 세션 입력은 <b>"사내 설정 시작"</b>(또는 "계속")입니다: <code>tools/site_step.py</code>가 <code>SITE_PROFILE.md</code>(모드 사내 보완, 트래커 jira)를 만들고 현재 단계의 할 일·완료 기준·읽을 것(<code>context_pack.py S-n</code> 출력)을 냅니다. 단계가 끝나면 완료 기준 점검 → 사용자 확인 → <code>site_step.py --done S-n</code>(건너뛰기·사외 PC에서는 거부). 읽을 자료는 <code>python3 tools/context_pack.py S-n</code> 출력뿐입니다.</p>
       <div class="tbl"><table>
         <tr><th>단계</th><th>할 일</th><th>완료 기준</th></tr>
         <tr><td>S-0 (선택)</td><td>실제 로그 3~5개로 파서 가정 확인(<a href="#s7-parser">7.8</a>)</td><td>지표 5종 기록, 정성 결론 1줄</td></tr>
         <tr><td>S-1</td><td>확인 목록(<code>tools/list_site_todos.py</code> + <code>REVIEW-OPEN.md</code>), 샘플 받아 <code>SITE_PROFILE.md</code> 작성</td><td>오프라인 평가 기준(1위 정확도 등) 합의</td></tr>
         <tr><td>S-2</td><td>사내 Claude Code 기능 확인(플러그인 로드, hooks, MCP 도구 이름), 실제 Jira MCP로 Jira 원문 격리 확인, 스킬 eval 전체 재실행(프롬프트 주입 eval 59·60 포함)</td><td>확인 8항목 기록, 안전 eval 위반 0</td></tr>
-        <tr><td>S-3</td><td><code>site-defaults.yaml</code>, <code>issue-db.config.yaml</code> 사내 값</td><td><code>config.py check</code>·<code>doctor</code> fail 0</td></tr>
+        <tr><td>S-3</td><td><code>site-defaults.yaml</code>(<code>tracker.kind: jira</code>·Jira 도구 매핑 등), <code>issue-db.config.yaml</code>(<code>tracker.{kind, base_url, key_regex}</code> 등) 사내 값</td><td><code>config.py check</code>·<code>doctor</code> fail 0</td></tr>
         <tr><td>S-4a</td><td>운영 이슈 DB 생성·보호, 기존 파서 포팅(골든), 기존 data 분류 import, 분석 스킬 연결. 벤더 RIL 태그 초안은 <code>s0_suggest.py</code></td><td>골든 통과(실제 골든 폴더가 사내 백엔드로 실행되는지, 기대값을 일부러 바꾸면 실패하는지까지 확인), import PR 머지</td></tr>
         <tr><td>S-4</td><td>placeholder 규칙을 실제 문구로, 카테고리별 유형 5~10개 시드(실제 마스킹 fixture)</td><td>회귀·검증 통과</td></tr>
         <tr><td>S-5</td><td>dry-run, 샌드박스 PR 1건, 과거 Jira 20~30건 <code>tools/offline_eval.py</code>. 평가군은 조정용과 최종 확인용으로 나눕니다. 듀얼 SIM·재부팅·시계 차·마스킹을 실제 로그로 따로 보고, PR 연결 실패 복구도 한 번 해 봅니다</td><td>최종 확인용 평가군이 정확도 기준과 오류율 상한을 <b>둘 다</b> 충족(지표가 없으면 미충족)</td></tr>
@@ -1918,7 +1927,7 @@ git push -u origin HEAD                        # 사용자 승인 후. PR은 사
       <div class="tbl"><table>
         <tr><th>규칙</th><th>언제 걸리나</th><th>적용 조건</th><th>걸리면</th><th>할 일</th></tr>
         <tr><td class="wrap"><b>1</b> scripts 경로 갱신</td><td class="wrap">Claude Code 세션이 시작될 때마다 (SessionStart)</td><td class="wrap">사용자 config가 있을 때(setup 뒤). config가 없으면 기록하지 않고, <code>site-defaults.yaml</code>이 없으면 아무것도 하지 않습니다(종료 코드 2)</td><td class="wrap">조용히 config의 <code>plugin.scripts_path</code>를 지금 플러그인 경로로 바꿉니다</td><td class="wrap">없음. 플러그인을 옮기거나 업데이트해도 경로가 따라옵니다</td></tr>
-        <tr><td class="wrap"><b>2</b> Jira 쓰기 차단</td><td class="wrap">Claude가 MCP 도구를 부르기 직전 (예: 분석 중 Jira 이슈 읽기, 코멘트 요청을 받았을 때)</td><td class="wrap">config의 Jira 서버(<code>tracker.mcp_server</code>·<code>tracker.tools</code>의 서버) 도구이고 <code>tracker.read_tools</code>에 없을 때. <b>예외 1종</b>: 설정된 코멘트 도구(<code>tracker.write_tools.add_comment</code>)는 <code>read_tools</code>보다 먼저 <code>post.approved.json</code>과 대조(인자 집합·키·도구·정규화 본문 sha256, 실제 본문이 <code>post.md</code>와 글자 그대로 같음, 30분 만료, 1회용, 결과 불명 <code>unknown</code>이면 재게시 거부)해 맞으면 승인 프롬프트(<code>ask</code>), 아니면·판정 오류면 거부. <code>post.approved.json</code>·<code>post.result.json</code>을 직접 쓰거나 지워도 거부. 설정되지 않은 서버라도 이름에 <code>jira</code>·<code>atlassian</code>이 들면 쓰기형 도구는 거부(setup 전에도). 그 밖의 MCP 서버 도구는 통과(11번 제외)</td><td class="wrap">거부: "이 플러그인은 Jira 읽기 전용이다(예외: 승인한 코멘트 추가 1종, tracker.write_tools.add_comment). &lt;도구&gt;은(는) tracker.read_tools에 없어 거부한다 (규칙 2)." / "Jira 코멘트는 확인 화면에서 승인한 본문만 올린다 (규칙 2): &lt;사유&gt;. issue_post.py render → 승인 → approve부터 다시 한다." / 승인 프롬프트(<code>ask</code>): "승인한 Jira 코멘트 게시다(&lt;KEY&gt;, 본문 sha256 …). 확인 화면의 본문과 같은지 보고 허용한다 (규칙 2)." / "Jira/Atlassian 서버의 쓰기형 도구는 설정 여부와 무관하게 거부한다 (규칙 2: &lt;도구&gt;)."</td><td class="wrap">코멘트 1건 게시 밖의 Jira 쓰기(필드 수정·상태 전환 등)는 플러그인 밖에서 직접 합니다. 코멘트가 거부되면 render부터 다시 승인합니다. 필요한 읽기 도구면 <code>setup</code>에서 허용 목록에 추가합니다</td></tr>
+        <tr><td class="wrap"><b>2</b> Jira 쓰기 차단</td><td class="wrap">Claude가 MCP 도구를 부르기 직전 (예: 분석 중 Jira 이슈 읽기, 코멘트 요청을 받았을 때)</td><td class="wrap">config의 Jira 서버(<code>tracker.mcp_server</code>·<code>tracker.tools</code>의 서버) 도구이고 <code>tracker.read_tools</code>에 없을 때. <b>예외 1종</b>: 설정된 코멘트 도구(<code>tracker.write_tools.add_comment</code>)는 <code>read_tools</code>보다 먼저 <code>post.approved.json</code>과 대조(인자 집합·키·도구·정규화 본문 sha256, 실제 본문이 <code>post.md</code>와 글자 그대로 같음, 30분 만료, 1회용, 결과 불명 <code>unknown</code>이면 재게시 거부)해 맞으면 승인 프롬프트(<code>ask</code>), 아니면·판정 오류면 거부. <code>post.approved.json</code>·<code>post.result.json</code>을 직접 쓰거나 지워도 거부. 설정되지 않은 서버라도 이름에 설치된 모든 트래커의 서버 단어(지금 <code>jira</code>·<code>atlassian</code>, 트래커 모듈을 못 불러와도 늘 포함)가 들면 쓰기형 도구는 거부(setup 전에도). 승인 기록의 트래커 <code>kind</code>가 지금 설정 트래커와 달라도 거부. 옛 설정 키·모르는 <code>tracker.kind</code>면 모든 MCP 도구 거부. 그 밖의 MCP 서버 도구는 통과(11번 제외)</td><td class="wrap">거부: "이 플러그인은 Jira 읽기 전용이다(예외: 승인한 코멘트 추가 1종, tracker.write_tools.add_comment). &lt;도구&gt;은(는) tracker.read_tools에 없어 거부한다 (규칙 2)." / "Jira 코멘트는 확인 화면에서 승인한 본문만 올린다 (규칙 2): &lt;사유&gt;. issue_post.py render → 승인 → approve부터 다시 한다." / 승인 프롬프트(<code>ask</code>): "승인한 Jira 코멘트 게시다(&lt;KEY&gt;, 본문 sha256 …). 확인 화면의 본문과 같은지 보고 허용한다 (규칙 2)." / "Jira/Atlassian 서버의 쓰기형 도구는 설정 여부와 무관하게 거부한다 (규칙 2: &lt;도구&gt;)." / "옛 설정 키가 남아 있다: … — config.py rename-legacy로 바꾼다 (규칙 2). &lt;도구&gt; 호출을 거부한다."</td><td class="wrap">코멘트 1건 게시 밖의 Jira 쓰기(필드 수정·상태 전환 등)는 플러그인 밖에서 직접 합니다. 코멘트가 거부되면 render부터 다시 승인합니다. 필요한 읽기 도구면 <code>setup</code>에서 허용 목록에 추가합니다</td></tr>
         <tr><td class="wrap"><b>3</b> PII 검사</td><td class="wrap">Bash로 이슈 DB에서 <code>git commit</code>을 실행하기 직전</td><td class="wrap">이슈 DB 레포이고 staged 파일이 있을 때</td><td class="wrap">거부: "staged 변경에 마스킹 안 된 개인정보가 있다 (규칙 3): &lt;파일:줄 종류&gt;. mask_pii로 마스킹한 뒤 다시 add한다."</td><td class="wrap">메시지의 파일·줄을 마스킹하고 다시 add합니다. 도구 흐름(<code>db_pr publish --commit</code>)에서는 보통 걸리지 않습니다</td></tr>
         <tr><td class="wrap"><b>4</b> 생성 파일 정합성</td><td class="wrap">위와 같은 순간</td><td class="wrap">이슈 DB 레포이고 staged 파일이 있을 때</td><td class="wrap">거부: ".cache/는 커밋하지 않는다 (규칙 4): …" 또는 생성 파일이 최신이 아닐 때 "직접 고치지 말고 db_build.py --write로 다시 만든 뒤 add한다." (<code>actions-build</code> 모드면 "생성 파일은 머지 후 봇이 만든다 … staged에서 뺀다")</td><td class="wrap">메시지대로 <code>db_build.py --write</code>로 다시 만들거나 staged에서 뺍니다</td></tr>
         <tr><td class="wrap"><b>5</b> hook 우회 차단</td><td class="wrap">이슈 DB에서 <code>git commit</code>·<code>git config</code>·<code>git -c core.hooksPath=…</code>를 실행하기 직전</td><td class="wrap">이슈 DB 레포. <code>--no-verify</code>·<code>-n</code> 커밋, <code>core.hooksPath</code> 변경·해제, 유효 값이 정확히 <code>.githooks</code>가 아닌 상태의 커밋</td><td class="wrap">거부: "git commit --no-verify는 pre-commit 검사를 건너뛰므로 금지한다 (규칙 5)." / "이 레포의 core.hooksPath가 '(없음)'다. 정확히 .githooks여야 커밋할 수 있다 (규칙 5). /telephony-triage:setup 을 다시 실행한다." / "core.hooksPath 해제는 금지다 (규칙 5). git hook(pre-commit·pre-push)이 꺼진다."</td><td class="wrap">우회 옵션을 빼고, hooksPath가 비었으면 <code>setup</code>을 다시 실행합니다</td></tr>
@@ -1926,7 +1935,7 @@ git push -u origin HEAD                        # 사용자 승인 후. PR은 사
         <tr><td class="wrap"><b>7</b> push 확인 강제</td><td class="wrap">이슈 DB로 <code>git push</code> 또는 <code>db_pr.py publish</code>를 실행하기 직전(도구 흐름의 확인 화면 승인 뒤 publish도 포함)</td><td class="wrap">이슈 DB 레포의 push. <code>publish</code>는 사용자 config가 있을 때</td><td class="wrap">승인 프롬프트(<code>ask</code>): "이슈 DB push다. 확인 화면(변경 파일·diff·검사 결과·커밋 메시지)을 승인한 뒤에만 진행한다 (규칙 7)." / "db_pr.py publish는 이슈 DB에 push한다. 확인 화면을 승인한 뒤에만 진행한다 (규칙 7)."</td><td class="wrap">확인 화면(<a href="#s5-confirm">5.8</a>)을 본 뒤 승인합니다. 헤드리스 실행에서는 거부됩니다</td></tr>
         <tr><td class="wrap"><b>8</b> 사용자 clone 직접 편집 차단</td><td class="wrap">Claude가 Write·Edit·MultiEdit·NotebookEdit로 파일을 쓰기 직전, 또는 Bash로 clone 본체를 바꾸는 명령을 실행하기 직전</td><td class="wrap">대상 경로가 config <code>issue_db.path</code>(내 clone, 플랫폼 프로필이 여럿이면 모든 프로필) 안일 때. <code>work_dir</code> 아래(작업 worktree·스냅샷)는 제외. Bash는 clone 본체에서 브랜치·파일을 바꾸는 git(<code>checkout</code>·<code>switch</code>·<code>reset</code>·<code>stash</code>·<code>merge</code>·<code>pull</code>·<code>clean</code> 등, <code>gh pr checkout</code>)과 파일 쓰기(<code>&gt;</code>·<code>tee</code>·<code>cp</code>·<code>rm</code>·<code>sed -i</code> 등의 대상). <code>fetch</code>·<code>status</code>·<code>log</code>·<code>diff</code>는 통과. 예외: 깨끗한 트리에서 <code>migrate/schema-v&lt;N&gt;</code> 브랜치 만들기는 <code>ask</code></td><td class="wrap">거부: "이슈 DB clone은 도구가 직접 고치지 않는다. 직접 편집은 사용자가 한다 (규칙 8: &lt;경로&gt;). 도구 변경은 작업 계획과 db_pr stage로 작업 worktree에서 만든다." / "사용자 clone의 브랜치·파일은 도구가 바꾸지 않는다 (규칙 8). 분석은 _snapshot, 쓰기는 db_pr의 작업 worktree …"</td><td class="wrap">직접 편집은 사용자가 에디터로 합니다. 도구에는 계획으로 지시합니다</td></tr>
         <tr><td class="wrap"><b>9</b> Jira 응답 원문 격리</td><td class="wrap">Jira 도구 결과가 Claude에게 돌아오는 순간 (PostToolUse)</td><td class="wrap"><code>tracker.tools.get_issue</code>·<code>get_comments</code>와 설정된 코멘트 도구일 때. 다른 도구 결과는 그대로</td><td class="wrap">원문 대신: "telephony-triage: Jira 응답 원문은 파일로만 저장했다(모델에 보이지 않음). 아래는 마스킹된 요약이다. 분석은 triage.py run이 이 파일을 읽는다." 실패하면 원문 대신 "… 이슈 키를 찾지 못해 저장하지 않았다(원문은 표시하지 않는다)." / "Jira 응답 처리 실패(…) — 원문은 표시하지 않는다." / "설정을 읽지 못해(…) Jira 응답 격리 여부를 판정하지 못했다 — 원문은 표시하지 않는다." 코멘트 게시 응답이면 "telephony-triage: Jira 코멘트를 게시했다 (&lt;KEY&gt;, comment &lt;id&gt;). 응답 원문은 표시하지 않는다. …"(<code>post.result.json</code> 기록, 승인 1회 소모, 실패 응답은 소모하지 않음) / 처리 예외면 "… 게시는 됐을 수 있다. Jira에서 확인하고 다시 게시하지 않는다(…)"</td><td class="wrap">정상이면 할 일 없음. 오류 문구가 나오면 이슈 키 형식·config를 확인하고 다시 읽습니다</td></tr>
-        <tr><td class="wrap"><b>10</b> 로그 원문 통독 차단</td><td class="wrap">Bash로 <code>cat</code>·<code>less</code>·<code>zcat</code>·<code>head -c</code>·<code>unzip -p</code> 등이나 모든 줄을 내보내는 <code>grep</code>/<code>awk</code>/<code>sed</code>를 실행하기 직전</td><td class="wrap">인자가 로그 원문·zip·bugreport·<code>events.json</code>·<code>events-full.json</code>·<code>issue_raw.json</code>·<code>match.json</code>일 때(앞 8KB·30줄로 판별). 원문 줄 모양은 설치된 모든 플랫폼 형식의 합집합입니다(android threadtime·time 줄, oFono 가정 형식 journald·BSD syslog 줄 — host·ident가 ASCII일 때만). 그래서 android 단독 설치도 journald 모양 줄을 원문으로 봅니다. <code>fixtures/</code>·<code>draft/</code> 아래와 없는 파일은 통과. 사용자 config와 무관</td><td class="wrap">거부: "로그 원문·zip·events/issue_raw/match.json은 통째로 읽지 않는다(원칙 §로그 원문, 규칙 10: &lt;명령&gt; &lt;인자&gt;). grep -n '&lt;패턴&gt;' &lt;파일&gt; 또는 sed -n '&lt;a&gt;,&lt;b&gt;p' &lt;파일&gt;로 필요한 줄만, bugreport는 parse_logcat.py extract-bugreport. Read 도구도 limit·offset으로 구간만."</td><td class="wrap">메시지가 안내하는 <code>grep -n</code>·<code>sed -n</code>·<code>extract-bugreport</code>로 필요한 구간만 읽습니다</td></tr>
+        <tr><td class="wrap"><b>10</b> 로그 원문 통독 차단</td><td class="wrap">Bash로 <code>cat</code>·<code>less</code>·<code>zcat</code>·<code>head -c</code>·<code>unzip -p</code> 등이나 모든 줄을 내보내는 <code>grep</code>/<code>awk</code>/<code>sed</code>를 실행하기 직전</td><td class="wrap">인자가 로그 원문·zip·bugreport·<code>events.json</code>·<code>events-full.json</code>·<code>issue_raw.json</code>(개명 전 <code>jira_raw.json</code>도)·<code>match.json</code>일 때(앞 8KB·30줄로 판별). 원문 줄 모양은 설치된 모든 플랫폼 형식의 합집합입니다(android threadtime·time 줄, oFono 가정 형식 journald·BSD syslog 줄 — host·ident가 ASCII일 때만). 그래서 android 단독 설치도 journald 모양 줄을 원문으로 봅니다. <code>fixtures/</code>·<code>draft/</code> 아래와 없는 파일은 통과. 사용자 config와 무관</td><td class="wrap">거부: "로그 원문·zip·events/issue_raw/match.json은 통째로 읽지 않는다(원칙 §로그 원문, 규칙 10: &lt;명령&gt; &lt;인자&gt;). grep -n '&lt;패턴&gt;' &lt;파일&gt; 또는 sed -n '&lt;a&gt;,&lt;b&gt;p' &lt;파일&gt;로 필요한 줄만, bugreport는 parse_logcat.py extract-bugreport. Read 도구도 limit·offset으로 구간만."</td><td class="wrap">메시지가 안내하는 <code>grep -n</code>·<code>sed -n</code>·<code>extract-bugreport</code>로 필요한 구간만 읽습니다</td></tr>
         <tr><td class="wrap"><b>11</b> 이슈 DB 원격 쓰기 확인</td><td class="wrap">Bash로 <code>gh</code>를 실행하거나 Jira가 아닌 MCP 도구(GitHub MCP 등)를 부르기 직전</td><td class="wrap">대상이 이슈 DB 레포(모든 플랫폼 프로필)일 때(<code>gh api</code>의 <code>repos/&lt;o&gt;/&lt;r&gt;</code> → <code>-R</code>·<code>--repo</code>·<code>GH_REPO</code> → cwd가 이슈 DB clone·worktree·스냅샷, MCP는 <code>owner</code>+<code>repo</code> 인자). 쓰기 서브커맨드(<code>pr create|edit|comment</code>, GET 아닌 <code>api</code> 등)와 쓰기형 MCP 도구만. config에 <code>issue_db.remote</code>가 없으면(setup 전) 적용하지 않음</td><td class="wrap">승인 프롬프트(<code>ask</code>): "이슈 DB 원격을 바꾸는 gh 명령이다. 변경·검증 결과를 보고 승인한 뒤에만 진행한다 (규칙 7)." / <code>gh pr merge</code>·머지 API·이름에 <code>merge</code>가 든 MCP 도구는 거부: "이슈 DB PR 머지는 리뷰어가 GHE에서 한다. 도구가 머지하지 않는다 (규칙 6·7)."</td><td class="wrap">PR은 도구 흐름(<code>db_pr publish</code>)으로 만들고, 머지는 리뷰어가 GHE에서 합니다. <code>db_pr.py</code>가 내부에서 부르는 <code>gh</code>는 hook에 보이지 않아 영향이 없습니다</td></tr>
       </table></div>
       <h4>적용되지 않는 경우</h4>
@@ -2044,7 +2053,7 @@ git push -u origin HEAD                        # 사용자 승인 후. PR은 사
         <tr><td><code>user.ghe_id</code></td><td>GHE 아이디(기록의 <code>analyzed_by</code>)</td></tr>
         <tr><td><code>plugin.scripts_path</code></td><td>플러그인 scripts 경로(자동 갱신)</td></tr>
         <tr><td><code>issue_db.path</code> · <code>remote</code> · <code>base_branch</code> · <code>ghe_host</code></td><td>이슈 DB clone 경로, 원격, base(기본 main), gh 호스트</td></tr>
-        <tr><td><code>tracker.mcp_server</code> · <code>tools</code> · <code>read_tools</code> · <code>timezone</code> · <code>field_map</code></td><td>사이트 설정을 덮어쓸 수 있는 Jira 값</td></tr>
+        <tr><td><code>tracker.mcp_server</code> · <code>tools</code> · <code>read_tools</code> · <code>timezone</code> · <code>field_map</code></td><td>사이트 설정을 덮어쓸 수 있는 트래커(Jira) 값. 옛 이름 <code>jira:</code>가 남아 있으면 <code>config.py rename-legacy</code></td></tr>
         <tr><td><code>logcat.timezone</code> · <code>year_source</code></td><td>logcat 시각 해석</td></tr>
         <tr><td><code>code_profiles</code></td><td>소스 트리 프리셋(<code>name</code>, <code>platform_version</code>, <code>roots.aosp</code>, <code>roots.vendor_ril</code>)</td></tr>
         <tr><td><code>recent_code_roots</code></td><td>직접 입력한 경로 최근 5개(자동)</td></tr>
@@ -2055,7 +2064,7 @@ git push -u origin HEAD                        # 사용자 승인 후. PR은 사
         <tr><th>키</th><th>뜻</th></tr>
         <tr><td><code>schema_version</code> · <code>generator_version</code></td><td>구조 버전 · 생성 파일 형식 버전(플러그인과 같아야 쓰기 가능)</td></tr>
         <tr><td><code>ci_mode</code></td><td><code>local</code>(현재) | <code>actions</code> | <code>actions-build</code></td></tr>
-        <tr><td><code>jira_base_url</code> · <code>jira_key_regex</code></td><td>Jira 링크, 키 형식(입력 검사)</td></tr>
+        <tr><td><code>tracker</code>: <code>kind</code> · <code>base_url</code> · <code>key_regex</code></td><td>이 DB의 트래커(없으면 jira, 설정과 다르면 <code>tracker-mismatch</code>), Jira 링크, 키 형식(입력 검사)</td></tr>
         <tr><td><code>categories</code></td><td><code>{key, name, id_prefix}</code> 목록, README 순서</td></tr>
         <tr><td><code>platform_versions_supported</code></td><td>지원 버전(지원 종료 판단)</td></tr>
         <tr><td><code>parser_backend</code> · <code>external_parsers</code></td><td>시그니처가 전제하는 파서 백엔드·외부 파서 최소 버전</td></tr>
@@ -2066,7 +2075,7 @@ git push -u origin HEAD                        # 사용자 승인 후. PR은 사
         <tr><td><code>quality</code></td><td>min_samples 5, low_acceptance_rate 0.7, stale_months 12, unresolved 30일, unverified 60일, fix_submitted 30일, surge 2.0</td></tr>
         <tr><td><code>mask.allow_patterns</code></td><td>마스킹 오탐 예외</td></tr>
         <tr><td><code>matcher.pattern_timeout_ms</code></td><td>패턴당 실행 시간 상한(2000)</td></tr>
-        <tr><td><code>readme.jira_inline_max</code> · <code>reviewers.format</code></td><td>README 표의 Jira 수, <code>gh pr create --reviewer</code> 형식</td></tr>
+        <tr><td><code>readme.issue_inline_max</code> · <code>reviewers.format</code></td><td>README 표의 Jira 수, <code>gh pr create --reviewer</code> 형식</td></tr>
       </table></div>
     </div>
 
@@ -2091,7 +2100,7 @@ git push -u origin HEAD                        # 사용자 승인 후. PR은 사
   <div class="empty" id="empty">검색어와 맞는 절이 없습니다. 다른 낱말(예: 커맨드 이름, 오류 문구 일부)로 찾아보세요.</div>
 
   <footer class="foot">
-    telephony-triage 사용·운영 매뉴얼 · 플러그인 레포 main(2026-10-11) 기준. 표·정의가 설계 문서와 다르면 <code>docs/design/contracts.md</code>가 맞습니다.
+    telephony-triage 사용·운영 매뉴얼 · 플러그인 레포 main(2026-10-12) 기준. 표·정의가 설계 문서와 다르면 <code>docs/design/contracts.md</code>가 맞습니다.
   </footer>
 </main>
 </div>
