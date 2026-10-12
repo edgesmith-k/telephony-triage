@@ -181,6 +181,23 @@ def _raw_job(ws, name: str, *, age: int | None = 120, logs: bool = True) -> Path
     return job
 
 
+def test_cleanup_sees_jobs_left_with_pre_rename_file_names():
+    """개명 전 작업 파일(jira_raw.json·jira.json·jira_meta.json)만 남은 옛 JOB도 cleanup 대상이고 원문 잔여로 보인다(방어)."""
+    ws = Workspace()
+    for name, files in (("OLD-1", ("jira_raw.json",)), ("OLD-2", ("jira.json", "jira_meta.json"))):
+        job = ws.work / name
+        job.mkdir(parents=True)
+        for f in files:
+            (job / f).write_text("{}", encoding="utf-8")
+        _age(job, 120)
+    unpub = ws.plan("MOCK-7003", "p7-analyze-append.plan.json").parent
+    (unpub / "jira_raw.json").write_text("{}", encoding="utf-8")
+    _age(unpub)
+    dry = ws.db_pr("cleanup", "--dry-run", "--older-than")
+    assert {t["job"] for t in dry["targets"] if t["kind"] == "job-dir"} == {"OLD-1", "OLD-2"}
+    assert {r["job"]: r["raw_remains"] for r in dry["retained"]} == {"MOCK-7003": True}
+
+
 def test_cleanup_older_than_candidates_are_tool_jobs_only_and_dry_run_equals_yes():
     ws = Workspace()
     raw = _raw_job(ws, "RAW-1")                                      # 원문만 남은 중단 작업(plan.json 없음)

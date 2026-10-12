@@ -36,8 +36,9 @@
 - `also-allowed` 오류: 자기 원인·같은 유형 원인·없는 ID
 - `merged-into` 오류: 없는 병합 대상
 - `parser-rules` 오류: 규칙 파일 로드·스키마
-- `config` 오류: `platform`이 이름 형식이 아니거나 설치되지 않은 플랫폼, 지원 버전 키 두 이름(`platform_versions_supported`·
-  `android_versions_supported`)을 함께 둠 (17-platforms K5·K9)
+- `config` 오류: `platform`이 이름 형식이 아니거나 설치되지 않은 플랫폼(17-platforms K5), 개명 전 설정 키
+  (`android_versions_supported`·`jira_key_regex`·`jira_base_url`·`readme.jira_inline_max`)가 남아 있음
+- `legacy-dir` 오류: 유형 디렉토리에 개명 전 기록 폴더 `jira/`가 남아 있음(`issues/`로 옮긴다)
 - `yaml-syntax` 오류: YAML 문법 오류(파일·줄). 그 파일만 건너뛰고 검사는 계속(config가 깨지면 검사 불가라 거기서 끝)
 - `synthetic` 경고: `synthetic_allowed: false`인 플러그인에서 `origin: synthetic` fixture
 - `residual-id` 오류: `--residual`로 준 옛 ID가 남아 있음
@@ -429,8 +430,9 @@ class Linter:
                 self.err("step-event", cfg, f"{where}.dir은 req|resp|unsol이어야 합니다: {item['dir']!r}")
 
     def _check_platform_config(self) -> None:
-        """`platform`(17-platforms K5): 플랫폼 이름 형식이고 설치된 플랫폼이어야 한다. 지원 버전 키는 새 이름
-        (`platform_versions_supported`)과 옛 이름(`android_versions_supported`) 중 하나만 둔다."""
+        """`platform`(17-platforms K5): 플랫폼 이름 형식이고 설치된 플랫폼이어야 한다. 개명 전 설정 키
+        (`issuedb.LEGACY_CONFIG_KEYS`: `android_versions_supported`·`jira_key_regex`·`jira_base_url`·`readme.jira_inline_max`)는
+        읽지 않으므로 남아 있으면 오류다(조용히 무시하지 않는다)."""
         value = self.config.get("platform")
         if value is not None:
             if not isinstance(value, str) or not platforms.NAME_RE.fullmatch(value):
@@ -438,9 +440,11 @@ class Linter:
             elif value not in platforms.known():
                 self.err("config", issuedb.CONFIG, f"platform: 설치된 플랫폼이 아닙니다: {value} "
                                                    f"(지원 플랫폼: {', '.join(platforms.known())})")
-        if all(self.config.get(k) is not None for k in issuedb.SUPPORTED_VERSION_KEYS):
-            self.err("config", issuedb.CONFIG, f"{' / '.join(issuedb.SUPPORTED_VERSION_KEYS)} 중 하나만 둔다"
-                                               "(새 이름을 쓰고 옛 이름은 지운다).")
+        for old, new in issuedb.LEGACY_CONFIG_KEYS.items():
+            head, _, tail = old.partition(".")
+            node = self.config.get(head)
+            if (tail in node if isinstance(node, dict) else False) if tail else head in self.config:
+                self.err("config", issuedb.CONFIG, f"옛 설정 키 {old}는 읽지 않는다 — {new}로 이름을 바꾼다.")
 
     def _builtin_events(self) -> set[str]:
         """이슈 DB가 선언한 플랫폼의 파서 백엔드 builtin 이벤트 (K6)."""
@@ -753,6 +757,8 @@ class Linter:
         for type_md, data in self.types:
             type_id = str(data.get("id"))
             causes = {str(c.get("id")) for c in data.get("causes") or [] if isinstance(c, dict)}
+            if (type_md.parent / "jira").is_dir():     # 개명 전 기록 폴더 — 읽지 않으므로 조용히 0건이 되지 않게 알린다
+                self.err("legacy-dir", type_md.parent / "jira", "옛 기록 폴더 jira/는 읽지 않는다 — issues/로 옮긴다.")
             for path in sorted((type_md.parent / "issues").glob("*.yaml")):
                 record = self._yaml(path)
                 if path in self.bad_yaml:

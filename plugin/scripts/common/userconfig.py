@@ -90,6 +90,9 @@ def legacy_problems(defaults: dict | None, user: dict | None) -> list[str]:
         logcat = data.get("logcat")
         if isinstance(logcat, dict) and logcat.get("year_source") == "jira":
             out.append(f"{where}: `logcat.year_source: jira` → `tracker`로 바꾼다.")
+        fmap = data.get("tracker", {}).get("field_map") if isinstance(data.get("tracker"), dict) else None
+        if isinstance(fmap, dict) and "android_version" in fmap:
+            out.append(f"{where}: `tracker.field_map.android_version` → `platform_version`로 바꾼다.")
         if where == "사용자 config":
             for _name, at, prof in _raw_profiles(data):
                 items = prof.get("code_profiles")
@@ -97,6 +100,44 @@ def legacy_problems(defaults: dict | None, user: dict | None) -> list[str]:
                     if isinstance(item, dict) and "android_version" in item:
                         out.append(f"{where}: `{at}code_profiles[{i}].android_version` → `platform_version`로 바꾼다.")
     return out
+
+
+def _rename_key(data: dict, old: str, new: str, value) -> dict:
+    """`old` 자리에 `new`(값 `value`)를 넣은 새 dict(순서 유지, 기존 `new` 키는 뺀다)."""
+    return {(new if k == old else k): (value if k == old else v) for k, v in data.items() if k != new}
+
+
+def rename_legacy(user: dict | None) -> tuple[dict, list[str]]:
+    """사용자 config의 옛 설정 키를 새 이름으로 바꾼 사본과 변경 목록 (`config.py rename-legacy`). 값은 그대로 둔다.
+    `jira:` → `tracker:`(+`kind: jira`, `tracker:`가 이미 있으면 합치고 그 값이 우선), `logcat.year_source: jira` → `tracker`,
+    `tracker.field_map.android_version` → `platform_version`, 프로필마다 `code_profiles[].android_version` → `platform_version`."""
+    data = copy.deepcopy(user or {})
+    changes: list[str] = []
+    if "jira" in data:
+        old = data["jira"] if isinstance(data["jira"], dict) else {}
+        cur = data.get("tracker") if isinstance(data.get("tracker"), dict) else {}
+        merged = {**old, **cur}
+        merged = {"kind": merged.pop("kind", "jira"), **merged}
+        data = _rename_key(data, "jira", "tracker", merged)
+        changes.append("jira: → tracker: (+ kind: jira)" + (" — 기존 tracker: 값과 합침(tracker 값 우선)" if cur else ""))
+    logcat = data.get("logcat")
+    if isinstance(logcat, dict) and logcat.get("year_source") == "jira":
+        logcat["year_source"] = "tracker"
+        changes.append("logcat.year_source: jira → tracker")
+    tracker = data.get("tracker")
+    fmap = tracker.get("field_map") if isinstance(tracker, dict) else None
+    if isinstance(fmap, dict) and "android_version" in fmap:
+        value = fmap["android_version"]
+        tracker["field_map"] = _rename_key(fmap, "android_version", "platform_version", fmap.get("platform_version", value))
+        changes.append("tracker.field_map.android_version → platform_version")
+    for _name, at, prof in _raw_profiles(data):
+        items = prof.get("code_profiles")      # 같은 목록 객체(최상위 프로필은 얕은 사본)라 제자리에서 바꾼다
+        for i, item in enumerate(items if isinstance(items, list) else []):
+            if isinstance(item, dict) and "android_version" in item:
+                items[i] = _rename_key(item, "android_version", "platform_version",
+                                       item.get("platform_version", item["android_version"]))
+                changes.append(f"{at}code_profiles[{i}].android_version → platform_version")
+    return data, changes
 
 
 def deep_merge(base: dict, over: dict) -> dict:

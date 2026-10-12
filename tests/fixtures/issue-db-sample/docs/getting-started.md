@@ -23,7 +23,7 @@ Claude Code에 telephony-triage 플러그인을 설치한다. 설치 방법은 �
 ```
 
 - 확인 화면까지 진행하고 임시 worktree를 지운다. **push하지 않고, 이슈 DB clone의 브랜치·파일도 바꾸지 않는다.**
-- Jira MCP 없이 연습하려면 `--jira-file <yaml>`로 샘플 Jira 요약을 준다.
+- Jira MCP 없이 연습하려면 `--issue-file <yaml>`로 샘플 Jira 요약을 준다.
 - 스스로 해결해서 히스토리만 남기는 흐름도 같이 연습한다:
   `/telephony-triage:record <JIRA-KEY> --dry-run`
 - `--dry-run`은 pending 피드백을 만들지 않는다.

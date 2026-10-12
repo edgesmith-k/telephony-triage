@@ -100,6 +100,9 @@ HEREDOC_RE = re.compile(r"<<-?\s*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\1")
 # 규칙 10: 로그 원문 통독 차단
 RAW_ALWAYS_CMDS = {"cat", "tac", "nl", "less", "more", "bat", "strings", "zcat", "zless", "bzcat", "xzcat"}
 RAW_NAMES = {"events.json", "events-full.json", "issue_raw.json", "match.json"}
+# 개명 전 작업 파일(jira_raw.json 등)이 개발 PC의 옛 JOB에 남아 있을 수 있다 — 읽기 코드가 아니라 방어 목록이다
+LEGACY_RAW_NAMES = {"jira_raw.json"}   # 개명 전 원문 파일만(jira.json·jira_meta.json은 마스킹본이라 새 이름처럼 대상 아님)
+RAW_NAMES |= LEGACY_RAW_NAMES
 RAW_EXEMPT_DIRS = {"fixtures", "draft"}
 RAW_GLOB_MAX = 20
 RAW_SNIFF_BYTES = 8192
@@ -368,7 +371,7 @@ def _origin_slug(cwd: Path) -> tuple | None:
 
 def check_mcp(tool: str, tool_input: dict, conf: Config, dec: Decision) -> None:
     if conf.legacy:
-        dec.deny.append(f"옛 설정 키가 남아 있다: {'; '.join(conf.legacy[:3])} — tracker:로 바꾼다 (규칙 2). "
+        dec.deny.append(f"옛 설정 키가 남아 있다: {'; '.join(conf.legacy[:3])} — config.py rename-legacy로 바꾼다 (규칙 2). "
                         f"{tool} 호출을 거부한다.")
         return
     # Jira 서버 접두사: mcp_server ∪ tracker.tools 이름의 서버 (플러그인 번들 `mcp__plugin_…`도 덮는다). 넓을수록 안전 쪽

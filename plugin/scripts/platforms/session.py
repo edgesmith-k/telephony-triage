@@ -31,7 +31,8 @@ def resolve(defaults: dict, cli: str | None = None, user: dict | None = None) ->
         raise PlatformConfigError(f"사용자 config({userconfig.path()}): " + "; ".join(problems))
     legacy = userconfig.legacy_problems(defaults, user)
     if legacy:      # 옛 설정 키(jira: 등)는 자동 변환하지 않는다 — 고치기 전까지 멈춘다(guard는 모든 MCP 거부)
-        raise PlatformConfigError("옛 설정 키: " + "; ".join(legacy) + " — config.py doctor로 확인한다")
+        raise PlatformConfigError("옛 설정 키: " + "; ".join(legacy) + " — config.py rename-legacy로 바꾼다"
+                                  "(site-defaults는 관리자)")
     name = select(defaults, cli, userconfig.selected_hint(user))
     if name == userconfig.TOP_PROFILE:      # 기본 플랫폼은 이전과 같은 호출(같은 결과)
         return name, userconfig.merged(defaults, user) if given else userconfig.merged(defaults)

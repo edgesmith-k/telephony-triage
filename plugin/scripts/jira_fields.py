@@ -316,7 +316,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         legacy = userconfig.legacy_problems(defaults, userconfig.load_user())
         if legacy:      # 옛 설정 키는 자동 변환하지 않는다(fail-closed, guard도 모든 MCP를 거부한다)
-            raise UsageError("옛 설정 키: " + "; ".join(legacy))
+            raise UsageError("옛 설정 키: " + "; ".join(legacy) + " — config.py rename-legacy로 바꾼다(site-defaults는 관리자)")
         db = _db(getattr(args, "db", None))
         if args.cmd == "check-key":
             ok = bool(key_regex(db).fullmatch(args.key))

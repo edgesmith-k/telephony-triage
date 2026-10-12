@@ -293,7 +293,7 @@ def main() -> int:
             return 0
         print(f"jira_bridge: 옛 설정 키 {legacy}", file=sys.stderr)
         text = ("telephony-triage: 옛 설정 키(" + "; ".join(legacy) + ")가 남아 Jira 응답 격리 여부를 판정하지 못했다 "
-                "— 원문은 표시하지 않는다. tracker:로 바꾼 뒤 config.py doctor로 확인한다.")
+                "— 원문은 표시하지 않는다. config.py rename-legacy로 바꾼 뒤 config.py doctor로 확인한다.")
         print(json.dumps({"hookSpecificOutput": {"hookEventName": "PostToolUse", "updatedToolOutput": text}},
                          ensure_ascii=False))
         return 0

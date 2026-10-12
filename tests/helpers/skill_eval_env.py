@@ -200,7 +200,7 @@ def build(entry: dict, out: Path, direct_tools: bool = True) -> dict:
     if out.exists():
         shutil.rmtree(out)
     out.mkdir(parents=True)
-    # site_defaults: site-defaults.yaml 최상위 키 덮어쓰기 (예: eval 39의 빈 jira.tools)
+    # site_defaults: site-defaults.yaml 최상위 키 덮어쓰기 (예: eval 39의 빈 tracker.tools)
     root = plugin_root("eval", **setup["site_defaults"]) if setup.get("site_defaults") else plugin_root()
     db_src = fixture_db(setup.get("db", "issue-db-sample"))
     ws = Workspace(src=db_src, root=root)

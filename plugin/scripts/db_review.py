@@ -8,7 +8,7 @@
 
 - 기준일은 실행일이다. `--as-of`로 바꿀 수 있다(시험·재현용). STATS의 기준일(가장 최근 Jira `date`)과
   다른 이유: 리뷰는 "지금 방치된 것"을 찾는 보고서이고 생성 파일이 아니라 결정성 규칙(§5.2) 대상이 아니다.
-- 항목 기준은 `issue-db.config.yaml`의 `quality`와 `android_versions_supported`다. STATS와 같은 판정은
+- 항목 기준은 `issue-db.config.yaml`의 `quality`와 `platform_versions_supported`다. STATS와 같은 판정은
   `common/quality.py`를 함께 쓴다.
 - 방치 기간(해결책 미검증, 수정 검증 대기, Jira 없는 원인의 나이)은 git 이력(`common/history.py`)으로 구한다.
   이력이 없으면 그 원인은 "기간 확인 불가"로 따로 보인다.
@@ -448,7 +448,7 @@ def run(args, defaults: dict, plugin_root: Path) -> dict:
         "category": args.category,
         "owners": _owners(Path(root), keys),
         "thresholds": {**DEFAULTS, **(db.config.get("quality") or {}),
-                       "android_versions_supported": db.config.get(issuedb.supported_versions(db.config)[0]) or []},
+                       "platform_versions_supported": issuedb.supported_versions(db.config)[1]},
         "feedback": {"total": len(db.feedback), "manual": manual, "used_for_acceptance": len(db.feedback) - manual},
         "summary": {i["key"]: i["count"] for i in items},
         "items": items,

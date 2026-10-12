@@ -406,3 +406,18 @@ if __name__ == "__main__":
             print(f"ERR {name}: {type(exc).__name__}: {exc}")
     print(f"\n{len(_all_tests()) - failures}/{len(_all_tests())} 통과")
     raise SystemExit(1 if failures else 0)
+
+
+def test_pre_rename_record_folder_and_config_keys_are_errors_not_silently_ignored():
+    """원칙 (d): 옛 `jira/` 기록 폴더·옛 설정 키는 읽지 않는다 → 0건으로 조용히 통과하지 않고 오류로 알린다."""
+    db = runner_copy(SAMPLE)
+    data = db / "data/DATA-001-no-setup-data-call"
+    (data / "issues").rename(data / "jira")
+    cfg = db / "issue-db.config.yaml"
+    cfg.write_text(cfg.read_text(encoding="utf-8").replace("  issue_inline_max: 3", "  jira_inline_max: 3"), encoding="utf-8")
+    proc = run("db_lint.py", ["--all", "--db", db])
+    errors = json.loads(proc.stdout)["errors"]
+    assert proc.returncode == 1
+    assert any(e["code"] == "legacy-dir" and "data/DATA-001-no-setup-data-call/jira" in e["files"][0] for e in errors)
+    assert any(e["code"] == "config" and "readme.jira_inline_max" in e["message"] and "readme.issue_inline_max" in e["message"]
+               for e in errors)

@@ -116,17 +116,17 @@ def load_config(root: Path) -> dict:
     return data
 
 
-# 지원 버전 키: 새 이름(플랫폼 무관)이 먼저, 없으면 옛 이름 (17-platforms K9). 값은 플랫폼 버전 문자열 목록.
-SUPPORTED_VERSION_KEYS = ("platform_versions_supported", "android_versions_supported")
+# 지원 버전 키 (값은 플랫폼 버전 문자열 목록). 옛 이름 `android_versions_supported`는 읽지 않는다(원칙 d,
+# 남아 있으면 db_lint `config` 오류 — `LEGACY_CONFIG_KEYS`).
+SUPPORTED_VERSION_KEY = "platform_versions_supported"
+# 개명 전 DB 설정 키 → 새 이름 (db_lint가 오류로 알린다. 코드는 옛 키를 읽지 않는다)
+LEGACY_CONFIG_KEYS = {"android_versions_supported": SUPPORTED_VERSION_KEY, "jira_key_regex": "tracker.key_regex",
+                      "jira_base_url": "tracker.base_url", "readme.jira_inline_max": "readme.issue_inline_max"}
 
 
 def supported_versions(config: dict) -> tuple[str, list[str]]:
-    """`(실제로 쓴 키 이름, 버전 문자열 목록)`. 새 키가 **있으면**(빈 목록 포함, null은 없는 것) 옛 키 값과 상관없이 새 키를
-    쓴다. 두 키가 모두 없으면 옛 이름과 빈 목록. 두 키가 함께 있으면 db_lint 오류로 하는 것은 17-platforms 묶음 2다."""
-    for key in SUPPORTED_VERSION_KEYS:
-        if config.get(key) is not None:
-            return key, [str(v) for v in config.get(key) or []]
-    return SUPPORTED_VERSION_KEYS[-1], []
+    """`(키 이름, 버전 문자열 목록)`. 키가 없거나 null이면 빈 목록."""
+    return SUPPORTED_VERSION_KEY, [str(v) for v in config.get(SUPPORTED_VERSION_KEY) or []]
 
 
 def type_files(root: Path, config: dict) -> list[Path]:

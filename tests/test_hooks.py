@@ -546,6 +546,8 @@ def test_guard_blocks_whole_raw_log_reads():
     (d / "a.txt").write_text("hello\n", encoding="utf-8")
     (d / "br.zip").write_bytes(b"PK\x03\x04" + b"\0" * 100)
     (d / "issue_raw.json").write_text("{}", encoding="utf-8")
+    for legacy in ("jira_raw.json", "jira.json", "jira_meta.json"):      # 개명 전 원문 파일도 막는다(방어 목록), 마스킹본은 허용
+        (d / legacy).write_text("{}", encoding="utf-8")
     for name in ("timeline.md", "report.md", "commit-message.txt"):
         (d / name).write_text("text\n", encoding="utf-8")
     fx = ws.work / "JOB" / "fixtures"
@@ -553,7 +555,8 @@ def test_guard_blocks_whole_raw_log_reads():
     (fx / "X.log").write_text(LOGCAT, encoding="utf-8")
     deny = ["cat x.log", "cat a.txt x.log", "cat < x.log", 'sh -c "cat x.log"', "cat logs/*.log",
             "head -c 5000 x.log", "tail -c5000 x.log", "unzip -p br.zip", "unzip -pq br.zip", "strings br.zip",
-            f"cat {d}/issue_raw.json", "echo hi && cat x.log",
+            f"cat {d}/issue_raw.json", f"cat {d}/jira_raw.json",
+            "echo hi && cat x.log",
             # 모든 줄에 맞는 패턴·스크립트는 통독과 같다
             'grep "" x.log', 'grep -n "" x.log', "grep -n '' x.log | head -40", "grep '.*' x.log", "grep -e '' x.log",
             "grep '^' x.log", "grep -n '$' x.log", "grep . x.log", "rg '' x.log", "grep -n '' < x.log",
@@ -564,7 +567,7 @@ def test_guard_blocks_whole_raw_log_reads():
         out = bash(ws, cmd, d)
         assert decision(out) == "deny", cmd
         assert "규칙 10" in out["permissionDecisionReason"], cmd
-    allow = ["grep -n RILJ x.log", "sed -n 1,20p x.log", "head -n 20 x.log", "wc -l x.log", "unzip -l br.zip",
+    allow = [f"cat {d}/jira.json", f"less {d}/jira_meta.json", "grep -n RILJ x.log", "sed -n 1,20p x.log", "head -n 20 x.log", "wc -l x.log", "unzip -l br.zip",
              f"cat {fx}/X.log", "cat timeline.md", "cat report.md", "cat commit-message.txt",
              "cat <<EOF > x.log\nhi\nEOF", "cat nonexistent.log", "cat a.txt", "echo hi > x.log",
              # 실제 패턴·구간 제한·개수만 내는 형태는 통과

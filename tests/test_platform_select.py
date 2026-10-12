@@ -299,7 +299,9 @@ def test_profile_paths_must_not_overlap(home):
 @pytest.mark.parametrize("prefix,needle", [
     ("platform: foo\n", "설치된 플랫폼이 아닙니다"),
     ("platform: Ofono\n", "플랫폼 이름"),
-    ("android_versions_supported: ['2']\n", "중 하나만 둔다"),
+    ("android_versions_supported: ['2']\n", "옛 설정 키 android_versions_supported"),
+    ("jira_key_regex: 'X-\\d+'\n", "옛 설정 키 jira_key_regex"),
+    ("jira_base_url: https://x.invalid/\n", "tracker.base_url로"),
 ])
 def test_db_lint_platform_config(prefix, needle):
     db = tmp("tt-lint-") / "db"

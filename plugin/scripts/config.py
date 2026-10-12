@@ -19,6 +19,8 @@
                                등록된 MCP 서버에서 tracker.tools·읽기 도구 후보 (setup 4). exclude_servers 적용
   set-tracker --server <s> --get-issue <전체 이름> [--search-issues ..] [--get-comments ..] [--read-tools a,b]
                                사용자가 확인한 값을 저장. read_tools에 tracker.tools 값을 포함한다
+  rename-legacy [--apply]      사용자 config.yaml의 옛 설정 키(jira:·year_source: jira·android_version)를 새 이름으로 바꾼다.
+                               변경 목록만 보이고 `--apply`일 때만 쓴다. site-defaults의 옛 키는 안내만(관리자가 고친다)
   install-hooks [--db <path>]  git config core.hooksPath .githooks, 값이 정확히 .githooks인지 확인 (setup 5)
   check [--db <path>] [--for write|dry-run]
                                호환성 판정: 스키마·생성기 버전·파서 백엔드·외부 파서, (write면) gh 인증
@@ -322,6 +324,27 @@ def cmd_set_tracker(args, defaults: dict) -> dict:
     return {"mcp_server": args.server, "tools": tools, "read_tools": read_tools, "added_to_read_tools": added}
 
 
+def cmd_rename_legacy(args, defaults: dict) -> dict:
+    """사용자 config의 옛 설정 키를 새 이름으로(값은 그대로). `--apply`가 없으면 쓰지 않는다. site-defaults는 안내만."""
+    user = userconfig.load_user()
+    site = userconfig.legacy_problems(defaults, None)
+    out = {"config": str(userconfig.path()) if user is not None else None, "changes": [], "applied": False,
+           "site_problems": site}
+    if site:
+        out["site_next"] = "site-defaults의 옛 키는 관리자가 고친다(플러그인 site-defaults.yaml, 키 이름만 바꾼다)"
+    if user is None:
+        return out
+    data, changes = userconfig.rename_legacy(user)
+    out["changes"] = changes
+    if changes and args.apply:
+        userconfig.save(data)
+        out["applied"] = True
+    out["remaining"] = userconfig.legacy_problems(None, data if out["applied"] else user)
+    if changes and not args.apply:
+        out["next"] = "변경 목록을 사용자에게 보이고 확인받은 뒤 config.py rename-legacy --apply"
+    return out
+
+
 def _git_out(repo: Path, *args: str) -> str | None:
     proc = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, encoding="utf-8")
     return proc.stdout.strip() if proc.returncode == 0 else None
@@ -599,9 +622,9 @@ def _doctor_rows(args, defaults: dict) -> list[dict]:
     def tracker():
         legacy = userconfig.legacy_problems(defaults, user)
         if legacy:
+            site = userconfig.legacy_problems(defaults, None)
             rows.append(_row("tracker", "fail", f"옛 설정 키: {legacy[0]}",
-                             f"{userconfig.path()}·site-defaults의 옛 키 이름을 바꾼다(jira:→tracker:, "
-                             "year_source: jira→tracker, code_profiles[].android_version→platform_version)"))
+                             "config.py rename-legacy로 확인 후 --apply" + (" · site-defaults는 관리자에게 알린다" if site else "")))
             return
         server = userconfig.get(cfg, "tracker.mcp_server")
         tools = userconfig.get(cfg, "tracker.tools", {})
@@ -741,7 +764,7 @@ def cmd_doctor(args, defaults: dict) -> tuple[dict, int]:
 
 
 _MISSING = object()
-LENIENT_CMDS = ("show", "set", "doctor")      # 플랫폼 키 문제가 있어도 도는 하위 명령(고치는 길)
+LENIENT_CMDS = ("show", "set", "doctor", "rename-legacy")      # 플랫폼 키·옛 설정 키 문제가 있어도 도는 하위 명령(고치는 길)
 
 
 def cmd_show(args, defaults: dict) -> dict:
@@ -786,6 +809,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--search-issues")
     p.add_argument("--get-comments")
     p.add_argument("--read-tools")
+    p = sub.add_parser("rename-legacy", parents=[common])
+    p.add_argument("--apply", action="store_true", help="변경 목록대로 사용자 config.yaml을 쓴다(없으면 목록만)")
     p = sub.add_parser("install-hooks", parents=[common])
     p.add_argument("--db", default=None)
     p = sub.add_parser("check", parents=[common])
@@ -821,9 +846,9 @@ def main(argv: list[str] | None = None) -> int:
                     if problems and args.cmd != "doctor":
                         print(f"경고: 사용자 config({userconfig.path()}) 플랫폼 설정 문제 — " + "; ".join(problems), file=sys.stderr)
                     legacy = userconfig.legacy_problems(defaults, userconfig.load_user())
-                    if legacy and args.cmd != "doctor":     # 고치는 길(show·set)은 돈다. doctor는 tracker 행 fail
+                    if legacy and args.cmd in ("show", "set"):     # 고치는 길은 돈다. doctor는 tracker 행 fail
                         print("경고: 옛 설정 키 — " + "; ".join(legacy) + " (고치기 전까지 다른 스크립트는 종료 2, "
-                              "guard는 모든 MCP 거부)", file=sys.stderr)
+                              "guard는 모든 MCP 거부 — config.py rename-legacy)", file=sys.stderr)
                 else:
                     args.platform_name, _cfg = platform_session.resolve(defaults, getattr(args, "platform", None))
             except platforms.PlatformConfigError as exc:
@@ -848,6 +873,8 @@ def main(argv: list[str] | None = None) -> int:
             result = cmd_tracker_candidates(args, defaults)
         elif args.cmd == "set-tracker":
             result = cmd_set_tracker(args, defaults)
+        elif args.cmd == "rename-legacy":
+            result = cmd_rename_legacy(args, defaults)
         elif args.cmd == "install-hooks":
             result = cmd_install_hooks(args, defaults)
         elif args.cmd == "check":

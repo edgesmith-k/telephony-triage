@@ -19,6 +19,7 @@
 | `sync-scripts-path` |  |  |
 | `tracker-candidates` | `[--mcp-config <MCP_CONFIG>]... [--tools-json <TOOLS_JSON>]` |  |
 | `set-tracker` | `--server <SERVER> --get-issue <GET_ISSUE> [--search-issues <SEARCH_ISSUES>] [--get-comments <GET_COMMENTS>] [--read-tools <READ_TOOLS>]` |  |
+| `rename-legacy` | `[--apply]` | `--apply`: 변경 목록대로 사용자 config.yaml을 쓴다(없으면 목록만) |
 | `install-hooks` | `[--db <DB>]` |  |
 | `check` | `[--db <path>] [--for {write,dry-run}]` | `--for`: 기본 write |
 | `gh-status` |  |  |
