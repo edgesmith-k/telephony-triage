@@ -145,7 +145,7 @@
 
 | 서브커맨드 | 사용법 | 옵션 설명 |
 |---|---|---|
-| — | `[<category>] [--db <DB>] [--platform <이름>] [--out <file>] [--as-of <YYYY-MM-DD>] [--json] [--plugin-root <PLUGIN_ROOT>]` | `--platform`: 플랫폼(이슈 DB·파서·설정 묶음). 없으면 TT_PLATFORM > 사용자 config platform > site-defaults platform.name; `--out`: Markdown 리포트를 쓸 파일; `--as-of`: 기준일 (기본: 오늘); `--json`: stdout에 JSON |
+| — | `[<category>] [--db <DB>] [--platform <이름>] [--out <file>] [--as-of <YYYY-MM-DD>] [--json] [--owners] [--plugin-root <PLUGIN_ROOT>]` | `--platform`: 플랫폼(이슈 DB·파서·설정 묶음). 없으면 TT_PLATFORM > 사용자 config platform > site-defaults platform.name; `--out`: Markdown 리포트를 쓸 파일; `--as-of`: 기준일 (기본: 오늘); `--json`: stdout에 JSON; `--owners`: 카테고리·CODEOWNERS 오너만 JSON으로 낸다(리뷰를 돌리지 않는다) |
 
 ## `db_migrate.py`
 
@@ -185,6 +185,12 @@ stdin: PostToolUse hook 입력 JSON (argparse 없음)
 | `status` | `<KEY>` |  |
 | `render` | `<KEY> [--fill <json>] [--format {jira-wiki,markdown}] [--omit <a,b>] [--again]` | `--fill`: LLM 칸 JSON {problem, cause[{basis, text}], next[], code_location}; `--format`: 본문 형식(기본: 코멘트 도구 설정, 없으면 jira-wiki); `--omit`: 뺄 스크립트 칸 항목: failed_step\|fields\|evidence\|must_show\|others; `--again`: 게시 이력이 있어도 다시 올린다(사용자가 명시했을 때만) |
 | `approve` | `<KEY> --sha <post_sha256>` | `--sha`: 확인 화면 마지막 줄의 post_sha256 |
+
+## `job_status.py`
+
+| 서브커맨드 | 사용법 | 옵션 설명 |
+|---|---|---|
+| — | `[<KEY>] [--format {json,markdown}] [--platform <이름>] [--plugin-root <PLUGIN_ROOT>] [--json]` | `key`: 작업 키(생략하면 lock 작업·단일 작업·후보); `--format`: markdown: 대상·단계·막힌 것·다음 할 일·관련 파일 (기본 json, --json과 함께 못 쓴다), 기본 json; `--platform`: 플랫폼(이슈 DB·파서·설정 묶음). 없으면 TT_PLATFORM > 사용자 config platform > site-defaults platform.name; `--json`: JSON 출력 (기본) |
 
 ## `triage.py run` → analysis.json 키
 

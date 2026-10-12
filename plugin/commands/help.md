@@ -13,24 +13,29 @@ telephony-triage 커맨드 도움말을 보여준다. 인자: $ARGUMENTS
 
 0. **말로 요청하기** — 먼저 이 두 줄을 그대로 보인다:
    "커맨드 없이 말로 요청해도 됩니다. 로그 분석, 비슷한 이슈 검색, 기록, 수정 CL 반영, 수정 검증, 해결책 검증, PR 재동기화는 스킬 설명 기준으로 알아서 연결됩니다.
-   setup, sync, preview, review, migrate, 인자 없는 validate는 커맨드로 실행하세요."
+   setup, sync, status, preview, review, migrate, 인자 없는 validate는 커맨드로 실행하세요."
 1. **목록** — 커맨드 목록은 이 파일에 적지 않는다. `${CLAUDE_PLUGIN_ROOT}/commands/*.md`의 frontmatter에서 만든다:
    Grep으로 그 디렉토리의 `^(description|argument-hint): ` 줄을 한 번에 읽는다(본문은 읽지 않는다).
    파일 이름 순으로 한 줄에 하나씩 `/telephony-triage:<파일 이름> <argument-hint>` — `<description>`을 보인다
    (`argument-hint`가 없으면 인자 없는 커맨드다. 값은 고쳐 쓰지 않고 그대로 인용하되 바깥 따옴표만 뗀다).
-2. **상황별 추천** — 아래 표를 그대로 보인다. 1번 목록에 없는 커맨드의 행은 뺀다.
+2. **상황별 추천** — 아래 안내 줄과 표를 그대로 보인다. 1번 목록에 없는 커맨드의 행은 뺀다.
 3. 끝에 "자세한 형식·옵션: `/telephony-triage:help <커맨드>`" 한 줄을 붙인다.
 
 ## 상황별 추천
 
+흐름 A(찾기·분석)는 이슈 DB를 바꾸지 않거나 기존 원인에 사례만 더한다. 흐름 B(등록)는 새 유형·원인·규칙을 만들고, 로그 근거·시그니처·fixture가 필요하며 카테고리 오너(파서 규칙은 메인테이너)가 리뷰한다.
+
 | 상황 | 커맨드 |
 |---|---|
 | 처음 설치했다, 설정·연결을 점검하고 싶다 | `setup` |
-| Jira 키와 로그가 있다, 원인을 찾고 이슈 DB에 기록하고 싶다 | `analyze <JIRA-KEY> <로그 경로>` |
-| 기록하지 않고 분석 결과만 보고 싶다 | `analyze <JIRA-KEY> <로그 경로> --analysis-only` |
-| 이미 스스로 해결했다, 분석 없이 기록만 남기고 싶다 | `record <JIRA-KEY>` |
-| 비슷한 이슈·Jira 번호부터 찾고 싶다 | `search <증상 문장 또는 키워드>` |
+| (A) Jira 키와 로그가 있다, 원인을 찾고 이슈 DB에 기록하고 싶다 | `analyze <JIRA-KEY> <로그 경로>` |
+| (A) 기록하지 않고 분석 결과만 보고 싶다 | `analyze <JIRA-KEY> <로그 경로> --analysis-only` |
+| (B) 분석했더니 새 원인·새 유형이다, 등록하고 싶다 | `analyze <JIRA-KEY> <로그 경로>` (Step 7에서 새 원인·새 유형) |
+| (A) 이미 스스로 해결했다, 분석 없이 기록만 남기고 싶다 | `record <JIRA-KEY>` |
+| (B) 직접 해결한 이슈를 새 원인으로 기록 | `record <JIRA-KEY> --new-cause <유형 ID>` |
+| (A) 비슷한 이슈·Jira 번호부터 찾고 싶다 | `search <증상 문장 또는 키워드>` |
 | 이슈 DB를 최신으로 받고, 오래된 작업과 내 열린 PR을 보고 싶다 | `sync` |
+| 어디까지 했는지 모르겠다, 막힌 것과 다음 할 일을 보고 싶다 | `status [JIRA-KEY]` |
 | 내 PR이 머지 대기 중인데 main이 바뀌었다 | `sync-pr [branch]` |
 | 수정 CL이 머지됐다 | `fix-submitted <원인 ID> --ref <CL> --fixed-in <branch>` |
 | 수정 빌드에서 재발하지 않는지 확인하고 싶다 | `verify-fix <원인 ID> <수정 빌드 logcat>` |

@@ -48,7 +48,7 @@ MCP `tracker.tools.get_issue`(매핑이 없으면 추측하지 말고 setup 안�
 
 ## 5. 내용 받기
 
-작성 규칙과 초안 형식은 `db-authoring.md`. 모든 초안은 승인받는다.
+작성 규칙과 초안 형식은 `db-authoring.md`. 모든 초안은 승인받는다. 준비물·리뷰어 목록은 `db-authoring.md` §0(한 번에 보이고 빠진 것만 받는다).
 
 - **새 원인·유형**: 원인 title·description·resolution·resolution_type·본문(재현 시나리오 포함). 새 유형이면 유형 title·summary·dir_slug.
 - **시그니처** — 새 원인·유형은 판별 시그니처가 필수다. 사용자에게 받거나(마스킹된 로그 문구 기준) 초안을 제안한다.
@@ -91,8 +91,8 @@ MCP `tracker.tools.get_issue`(매핑이 없으면 추측하지 말고 setup 안�
 
 ## 7. 초안 검증
 
-새 원인·유형 또는 시그니처·파서 규칙 변경이 있으면 `db_verify.py rules --plan WD/<KEY>/plan.json --draft WD/<KEY>/draft --verbose`(draft는 도구가 만들고 지운다 — 미리 만들지 않는다)로 검증하고
-결과표(실행/건너뜀과 사유)를 보여준다. `fail`이면 고친다. 다른 유형의 양성 fixture에서 C=1이면 "시그니처 좁히기 / `allow-cause`"를 묻는다.
+새 원인·유형 또는 시그니처·파서 규칙 변경이 있으면 `db_verify.py rules --plan WD/<KEY>/plan.json --draft WD/<KEY>/draft`(draft는 도구가 만들고 지운다 — 미리 만들지 않는다)로 검증하고
+결과표(실행/건너뜀과 사유)를 보여준다. 기본 출력은 통과 행만 접는다(fail·skipped·needs-approval·review_required·allow_cause_drafts는 그대로). 접힌 세부가 필요하면 같은 명령에 `--verbose`. `fail`이면 고친다. 다른 유형의 양성 fixture에서 C=1이면 "시그니처 좁히기 / `allow-cause`"를 묻는다.
 
 어떤 검증이 도는지(`db_pr stage`가 모두 돌린다):
 

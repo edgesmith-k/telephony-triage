@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import subprocess
 import sys
 from pathlib import Path
 import pytest
@@ -551,8 +552,8 @@ def _graded_run(tmp_path, execution, *, artifacts=True):
     return env_dir, run
 
 
-def _budget(total, margin=1.5, eid="24"):
-    return {"baseline": {"evals": {eid: {"total": total}}}, "margin": margin}
+def _budget(total, margin=1.5, eid="24", model="m-a"):
+    return {"baseline": {"model": model, "evals": {eid: {"total": total}}}, "margin": margin}
 
 
 @pytest.mark.parametrize("total,baseline,passed,failed,row_passed", [
@@ -563,7 +564,7 @@ def _budget(total, margin=1.5, eid="24"):
 ])
 def test_token_budget_row_in_grading(tmp_path, total, baseline, passed, failed, row_passed):
     tokens = grader.token_record(_result(modelUsage={"m": _mu(total, 0, 0, 0, 0.1)}) if total is not None else None)
-    env_dir, run = _graded_run(tmp_path, {"status": "completed", "tokens": tokens})
+    env_dir, run = _graded_run(tmp_path, {"status": "completed", "model": "m-a", "tokens": tokens})
     base = grader.grade(24, run, env_dir, ["lock 해제"])
     budget = _budget(baseline) if baseline else {"baseline": {"evals": {"1": {"total": 5}}}, "margin": 1.5}
     result = grader.grade(24, run, env_dir, ["lock 해제"], budget)
@@ -580,7 +581,7 @@ def test_token_budget_row_in_grading(tmp_path, total, baseline, passed, failed, 
 
 def test_token_budget_row_for_interrupted_and_not_run(tmp_path):
     tokens = grader.token_record(None)                           # 시간 초과: 전부 null
-    env_dir, run = _graded_run(tmp_path, {"status": "timeout", "reason": "제한", "tokens": tokens}, artifacts=False)
+    env_dir, run = _graded_run(tmp_path, {"status": "timeout", "reason": "제한", "model": "m-a", "tokens": tokens}, artifacts=False)
     result = grader.grade(24, run, env_dir, ["lock 해제"], _budget(100))
     assert result["status"] == "incomplete" and result["tokens"] == tokens
     assert result["expectations"][-1]["text"] == grader.TOKEN_BUDGET_TEXT and result["expectations"][-1]["passed"] is None
@@ -604,7 +605,17 @@ def _iteration(tmp_path, name, execution, eid=1):
     (run / "outputs").mkdir(parents=True)
     if execution is not None:
         (run / "execution.json").write_text(json.dumps(execution), encoding="utf-8")
+    if (execution or {}).get("status") == "completed":
+        _write_artifacts(run)
     return it
+
+
+def _manual_checks(monkeypatch, *fns):
+    """합성 iteration은 원격·clone이 없어 eval 1 스크립트 판정이 실패한다. 기준선 후보 판정만 보려고 검사를 바꾼다."""
+    monkeypatch.setattr(grader, "checks", lambda eid, ctx: list(fns))
+
+
+_RUN = {"status": "completed", "model": "m-a", "repo_commit": "c1", "repo_dirty": False}
 
 
 def _main(monkeypatch, capsys, *argv):
@@ -615,9 +626,9 @@ def _main(monkeypatch, capsys, *argv):
 
 def test_main_exit_codes_and_token_table(tmp_path, monkeypatch, capsys):
     tokens = grader.token_record(_result())                      # total 110
-    ran = _iteration(tmp_path, "ran", {"status": "error", "reason": "x", "tokens": tokens})
+    ran = _iteration(tmp_path, "ran", {"status": "error", "reason": "x", "model": "m-a", "tokens": tokens})
     base = tmp_path / "base.json"
-    base.write_text(json.dumps({"margin_default": 1.0, "evals": {"1": {"total": 100}}}), encoding="utf-8")
+    base.write_text(json.dumps({"model": "m-a", "margin_default": 1.0, "evals": {"1": {"total": 100}}}), encoding="utf-8")
     code, out = _main(monkeypatch, capsys, ran, "--eval", 1)
     assert code == 0 and "미기록" not in out.out and "110" in out.out and "기준선 없음" not in out.out    # 예산 없음: 상한 열 "-"
     assert (ran / "tokens.json").is_file()
@@ -630,6 +641,10 @@ def test_main_exit_codes_and_token_table(tmp_path, monkeypatch, capsys):
     bad = tmp_path / "bad.json"
     bad.write_text("{", encoding="utf-8")
     assert _main(monkeypatch, capsys, ran, "--token-budget", bad)[0] == 2
+    nomodel = tmp_path / "nomodel.json"                                  # 기준선 model 없음 = 형식 오류
+    nomodel.write_text(json.dumps({"evals": {"1": {"total": 100}}}), encoding="utf-8")
+    code, out = _main(monkeypatch, capsys, ran, "--eval", 1, "--token-budget", nomodel)
+    assert code == 2 and "model" in out.err
     # 미기록(시간 초과)은 판정 대상이면 1, 실행하지 않은(prepared) eval은 "미실행"이고 종료 코드에 영향 없다
     timeout = _iteration(tmp_path, "timeout", {"status": "timeout", "reason": "t", "tokens": grader.token_record(None)})
     code, out = _main(monkeypatch, capsys, timeout, "--eval", 1, "--token-budget", base)
@@ -640,19 +655,22 @@ def test_main_exit_codes_and_token_table(tmp_path, monkeypatch, capsys):
 
 
 def test_write_baseline_takes_max_run_and_records_model_and_commit(tmp_path, monkeypatch, capsys):
+    _manual_checks(monkeypatch)
     its = []
     for i, extra in enumerate((0, 50, 20)):
         r = _result(modelUsage={"m-a": _mu(100 + extra, 0, 0, 0, 0.1)}, num_turns=5 + i, total_cost_usd=1.0 + i)
-        its.append(_iteration(tmp_path, f"it{i}", {"status": "error", "reason": "x", "model": "m-a", "tokens": grader.token_record(r)}))
+        its.append(_iteration(tmp_path, f"it{i}", {**_RUN, "repo_dirty": i == 1, "tokens": grader.token_record(r)}))
     out_path = tmp_path / "token_baseline.json"
     code, _ = _main(monkeypatch, capsys, *its, "--eval", 1, "--write-baseline", out_path)
     data = json.loads(out_path.read_text(encoding="utf-8"))
     assert code == 0 and data["model"] == "m-a" and set(data) >= {"commit", "dirty", "date", "margin_default", "margin_basis"}
+    assert (data["commit"], data["dirty"]) == ("c1", True)                                     # run 시점 커밋, dirty는 하나라도면
+    assert (data["evals"]["1"]["commit"], data["evals"]["1"]["dirty"]) == ("c1", True)
     assert data["evals"]["1"]["total"] == 150 and data["evals"]["1"]["num_turns"] == 6       # 최댓값 run의 기록
     assert [r["total"] for r in data["evals"]["1"]["runs"]] == [100, 150, 120]
     assert grader.load_baseline(out_path)["evals"]["1"]["total"] == 150
     # 모델이 섞이면 쓰지 않는다
-    mixed = _iteration(tmp_path, "mixed", {"status": "error", "reason": "x", "model": "m-z", "tokens": grader.token_record(_result())})
+    mixed = _iteration(tmp_path, "mixed", {**_RUN, "model": "m-z", "tokens": grader.token_record(_result())})
     assert _main(monkeypatch, capsys, its[0], mixed, "--eval", 1, "--write-baseline", tmp_path / "x.json")[0] == 2
     # 기존 파일과 모델이 다르면 덮어쓰지 않는다(메시지에 두 모델)
     before = out_path.read_text(encoding="utf-8")
@@ -669,16 +687,17 @@ def _tok(total):
 
 
 def test_write_baseline_skips_null_runs_and_refuses_empty(tmp_path, monkeypatch, capsys):
+    _manual_checks(monkeypatch)
     path = tmp_path / "b.json"
-    mixed = [_iteration(tmp_path, "ok", {"status": "completed", "model": "m-a", "tokens": _tok(100)}),
-             _iteration(tmp_path, "null", {"status": "timeout", "reason": "t", "model": "m-a", "tokens": _tok(None)})]
+    mixed = [_iteration(tmp_path, "ok", {**_RUN, "tokens": _tok(100)}),
+             _iteration(tmp_path, "null", {**_RUN, "tokens": _tok(None)})]                # 완료됐지만 modelUsage 없음
     code, out = _main(monkeypatch, capsys, *mixed, "--eval", 1, "--write-baseline", path)
     assert code == 0 and "1개 제외" in out.err and [r["total"] for r in json.loads(path.read_text())["evals"]["1"]["runs"]] == [100]
     none = tmp_path / "none.json"
     code, out = _main(monkeypatch, capsys, mixed[1], "--eval", 1, "--write-baseline", none)
     assert code == 2 and not none.exists() and "빠진 run 수" in out.err
     with pytest.raises(ValueError):
-        grader.write_baseline(tmp_path / "w.json", {1: [_tok(None)]}, "m-a", "c", False)
+        grader.write_baseline(tmp_path / "w.json", {1: [{"tokens": _tok(None), "commit": "c", "dirty": False}]}, "m-a")
     empty = tmp_path / "empty.json"
     empty.write_text(json.dumps({"evals": {}}), encoding="utf-8")
     with pytest.raises(ValueError):
@@ -686,15 +705,16 @@ def test_write_baseline_skips_null_runs_and_refuses_empty(tmp_path, monkeypatch,
 
 
 def test_baseline_model_comes_from_model_then_init_model_never_by_model(tmp_path, monkeypatch, capsys):
-    only_init = _iteration(tmp_path, "init", {"status": "completed", "model": None, "init_model": "m-init", "tokens": _tok(100)})
+    _manual_checks(monkeypatch)
+    only_init = _iteration(tmp_path, "init", {**_RUN, "model": None, "init_model": "m-init", "tokens": _tok(100)})
     path = tmp_path / "b.json"
     assert _main(monkeypatch, capsys, only_init, "--eval", 1, "--write-baseline", path)[0] == 0
     assert json.loads(path.read_text())["model"] == "m-init"
-    both = _iteration(tmp_path, "both", {"status": "completed", "model": "m-flag", "init_model": "m-init", "tokens": _tok(100)})
+    both = _iteration(tmp_path, "both", {**_RUN, "model": "m-flag", "init_model": "m-init", "tokens": _tok(100)})
     path2 = tmp_path / "b2.json"
     assert _main(monkeypatch, capsys, both, "--eval", 1, "--write-baseline", path2)[0] == 0
-    assert json.loads(path2.read_text())["model"] == "m-flag"
-    nomodel = _iteration(tmp_path, "nomodel", {"status": "completed", "model": None, "tokens": _tok(100)})   # by_model에 m-a가 있어도 추정하지 않는다
+    assert json.loads(path2.read_text())["model"] == "m-init"                                   # 실제로 돈 모델이 먼저
+    nomodel = _iteration(tmp_path, "nomodel", {**_RUN, "model": None, "tokens": _tok(100)})   # by_model에 m-a가 있어도 추정하지 않는다
     path3 = tmp_path / "b3.json"
     assert _main(monkeypatch, capsys, nomodel, "--eval", 1, "--write-baseline", path3)[0] == 2 and not path3.exists()
 
@@ -734,7 +754,8 @@ def test_grade_without_budget_matches_head_behavior(tmp_path, monkeypatch, capsy
 
 def test_interrupted_summary_reflects_decided_budget_row(tmp_path):
     for total, passed, failed in ((100, 1, 0), (999, 0, 1)):
-        env_dir, run = _graded_run(tmp_path / str(total), {"status": "error", "reason": "x", "tokens": _tok(total)}, artifacts=False)
+        env_dir, run = _graded_run(tmp_path / str(total), {"status": "error", "reason": "x", "model": "m-a", "tokens": _tok(total)},
+                                   artifacts=False)
         s = grader.grade(24, run, env_dir, ["a"], _budget(100))["summary"]
         assert (s["passed"], s["failed"], s["total"], s["undecided"]) == (passed, failed, 3, 2)
 
@@ -763,6 +784,94 @@ def test_execute_records_tokens_from_stream_json_result(tmp_path, monkeypatch):
     assert saved["model"] == "m-a"
     assert saved["tokens"]["total"] == 110 and saved["tokens"]["usage_total"] == 100 and saved["usage"]["input_tokens"] == 10
     assert saved["total_cost_usd"] == 0.5
+    head = subprocess.run(["git", "-C", str(evaluation.REPO), "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+    assert saved["repo_commit"] == head and isinstance(saved["repo_dirty"], bool)            # run 시점 커밋
+
+
+def _budget_main(monkeypatch, capsys, it, tmp_path, model="m-a"):
+    base = tmp_path / f"base-{model}.json"
+    base.write_text(json.dumps({**({"model": model} if model else {}), "margin_default": 1.5,
+                                "evals": {"1": {"total": 100, "total_cost_usd": 0.09}}}), encoding="utf-8")
+    code, out = _main(monkeypatch, capsys, it, "--eval", 1, "--token-budget", base)
+    row = next(x for x in json.loads((it / "eval-1" / "with_skill" / "grading.json").read_text(encoding="utf-8"))["expectations"]
+               if x["text"] == grader.TOKEN_BUDGET_TEXT)
+    return code, out, row
+
+
+def test_token_budget_holds_on_model_mismatch_or_missing(tmp_path, monkeypatch, capsys):
+    other = _iteration(tmp_path, "other", {"status": "error", "reason": "x", "model": "m-z", "init_model": "m-z", "tokens": _tok(100)})
+    code, out, row = _budget_main(monkeypatch, capsys, other, tmp_path)
+    assert code == 1 and row["passed"] is None and row["hold"] is True and "m-z" in row["evidence"]
+    assert "모델 불일치" in out.out and "통과" not in out.out
+    # --model은 기준선과 같아도 실제로 돈 모델(init_model)이 다르면 보류
+    flag = _iteration(tmp_path, "flag", {"status": "error", "reason": "x", "model": "m-a", "init_model": "m-z", "tokens": _tok(100)})
+    code, out, row = _budget_main(monkeypatch, capsys, flag, tmp_path)
+    assert code == 1 and row["hold"] is True and "모델 불일치" in out.out
+    nomodel = _iteration(tmp_path, "nomodel", {"status": "error", "reason": "x", "tokens": _tok(100)})
+    code, out, row = _budget_main(monkeypatch, capsys, nomodel, tmp_path)
+    assert code == 1 and row["passed"] is None and row["hold"] is True and "모델 미기록" in out.out
+    only_flag = _iteration(tmp_path, "only_flag", {"status": "error", "reason": "x", "model": "m-a", "tokens": _tok(100)})
+    code, _, row = _budget_main(monkeypatch, capsys, only_flag, tmp_path)                      # init 없으면 --model 값
+    assert code == 0 and row["passed"] is True and row["hold"] is False
+    assert grader.token_budget_row(24, _tok(100), _budget(100), None)["hold"] is True
+    assert grader.token_budget_row(24, _tok(100), _budget(100, model=None), "m-a")["hold"] is True
+
+
+def test_token_budget_alias_model_passes_with_matching_init_model(tmp_path, monkeypatch, capsys):
+    tokens = grader.token_record(_result(modelUsage={"m-a": _mu(10, 10, 20, 60, 0.1)}, total_cost_usd=0.1))
+    alias = _iteration(tmp_path, "alias", {"status": "error", "reason": "x", "model": "sonnet", "init_model": "m-a", "tokens": tokens})
+    code, out, row = _budget_main(monkeypatch, capsys, alias, tmp_path)
+    assert code == 0 and row["passed"] is True and row["hold"] is False and "통과" in out.out
+    assert row["evidence"] == "total=100 상한=150 (기준선 100 × 여유율 1.5) cost=$0.100 (기준선 $0.090) cache_read=60%"
+
+
+def test_write_baseline_excludes_unfinished_and_failed_runs(tmp_path, monkeypatch, capsys):
+    _manual_checks(monkeypatch, lambda: (False, "실패"))
+    path = tmp_path / "b.json"
+    its = [_iteration(tmp_path, "err", {**_RUN, "status": "error", "reason": "x", "tokens": _tok(100)}),
+           _iteration(tmp_path, "to", {**_RUN, "status": "timeout", "reason": "t", "tokens": _tok(None)}),
+           _iteration(tmp_path, "prep", {"status": "prepared"}),
+           _iteration(tmp_path, "fail", {**_RUN, "tokens": _tok(100)})]
+    code, out = _main(monkeypatch, capsys, *its, "--eval", 1, "--write-baseline", path)
+    assert code == 2 and not path.exists()
+    for reason in ("err eval 1 — 실행 상태 error", "to eval 1 — 실행 상태 timeout", "prep eval 1 — 실행 상태 prepared",
+                   "fail eval 1 — 실패 항목 1개"):
+        assert reason in out.err
+    # 미결정 항목은 허용하고 run마다 수를 남긴다
+    _manual_checks(monkeypatch, lambda: (True, "ok"))
+    ok = _iteration(tmp_path, "ok", {**_RUN, "tokens": _tok(120)})
+    code, out = _main(monkeypatch, capsys, ok, its[3], "--eval", 1, "--write-baseline", path)
+    data = json.loads(path.read_text(encoding="utf-8"))
+    n = len(next(e for e in _entries() if e["id"] == 1)["assertions"])                       # 첫 항목만 스크립트, 나머지 수동
+    assert code == 0 and [r["undecided"] for r in data["evals"]["1"]["runs"]] == [n - 1, n - 1]
+    _manual_checks(monkeypatch)
+    und = _iteration(tmp_path, "und", {**_RUN, "tokens": _tok(130)})
+    _main(monkeypatch, capsys, und, "--eval", 1, "--write-baseline", path)
+    assert json.loads(path.read_text(encoding="utf-8"))["evals"]["1"]["runs"][0]["undecided"] == n
+
+
+def test_write_baseline_refuses_missing_or_mixed_run_commit(tmp_path, monkeypatch, capsys):
+    _manual_checks(monkeypatch)
+    a = _iteration(tmp_path, "a", {**_RUN, "tokens": _tok(100)})
+    old = _iteration(tmp_path, "old", {"status": "completed", "model": "m-a", "tokens": _tok(100)})     # repo_commit 없는 옛 기록
+    other = _iteration(tmp_path, "other", {**_RUN, "repo_commit": "c2", "tokens": _tok(100)})
+    for its, msg in (((a, old), "run 시점 커밋 미기록"), ((a, other), "run 시점 커밋이 다르다")):
+        path = tmp_path / f"{msg[-3:]}.json"
+        code, out = _main(monkeypatch, capsys, *its, "--eval", 1, "--write-baseline", path)
+        assert code == 2 and msg in out.err and not path.exists()
+
+
+def test_write_baseline_stores_cache_breakdown_and_cost(tmp_path, monkeypatch, capsys):
+    _manual_checks(monkeypatch)
+    keys = ("total", "num_turns", "input", "output", "cache_creation", "cache_read", "total_cost_usd")
+    lo = grader.token_record(_result(modelUsage={"m-a": _mu(10, 20, 30, 40, 0.3)}, total_cost_usd=0.3))
+    hi = grader.token_record(_result(modelUsage={"m-a": _mu(1, 2, 3, 400, 0.2)}, total_cost_usd=0.2))
+    its = [_iteration(tmp_path, n, {**_RUN, "tokens": t}) for n, t in (("lo", lo), ("hi", hi))]
+    path = tmp_path / "b.json"
+    assert _main(monkeypatch, capsys, *its, "--eval", 1, "--write-baseline", path)[0] == 0
+    e = json.loads(path.read_text(encoding="utf-8"))["evals"]["1"]
+    assert {k: e[k] for k in keys} == {k: hi[k] for k in keys}                                 # 대표값 = total 최대(비용은 더 낮다)
+    assert [{k: r[k] for k in keys} for r in e["runs"]] == [{k: t[k] for k in keys} for t in (lo, hi)]
 
 
 def test_w4_prep_evals_defined():
@@ -910,7 +1019,7 @@ def test_e39_doctor_table_from_text_or_transcript(tmp_path, where, ok):
 
 def test_jira_post_evals_defined():
     by_id = {e["id"]: e for e in _entries()}
-    assert len(by_id) == 67
+    assert len(by_id) == 70
     assert by_id[8]["name"] == "jira-comment-request-gated" and len(by_id[8]["assertions"]) == 4
     for eid, count in ((61, 10), (62, 6)):
         e = by_id[eid]
@@ -1106,6 +1215,8 @@ def _platform_ctx(tmp_path, *commands):
       'python3 /p/scripts/db_search.py MOCK-1001 --platform ofono --json'], True, True),
     (['python3 /p/scripts/triage.py run MOCK-1001 --platform ofono',
       'python3 /p/scripts/db_add.py similar --db /w/_snapshot "x"'], True, False),  # 새 플랫폼 인자 스크립트도 센다
+    (['python3 /p/scripts/triage.py run MOCK-1001 --platform ofono',
+      'python3 /p/scripts/job_status.py MOCK-1001 --format markdown'], True, False),   # job_status도 플랫폼 인자 스크립트다
     (['python3 /p/scripts/triage.py run MOCK-1001 --logs logs/a.log'], False, "manual"),   # triage 뒤 호출 0회 = 수동
 ])
 def test_e63_platform_flag_checks(tmp_path, commands, flag_ok, later_ok):
@@ -1320,3 +1431,118 @@ def test_e67_body_shape_and_post_args(tmp_path):
     wrong = "### PROBLEM\n- Jira: MOCK-1001\n\n### CAUSE\n- x\n\n### NEXT ACTION\n- y\n\n### ANALYSIS\n- z"
     assert grader.checks(67, _gh_env(tmp_path / "wrong", [_gh_note(wrong)], wrong))[3]()[0] is False
 
+
+
+def test_write_baseline_merges_alias_and_full_id_runs_by_init_model(tmp_path, monkeypatch, capsys):
+    """tr(--model sonnet, init 전체 ID) + v10(--model 전체 ID) run을 같은 모델로 합친다."""
+    _manual_checks(monkeypatch)
+    tr = _iteration(tmp_path, "tr", {**_RUN, "model": "sonnet", "init_model": "m-a", "tokens": _tok(100)})
+    v10 = _iteration(tmp_path, "v10", {**_RUN, "model": "m-a", "init_model": "m-a", "tokens": _tok(120)})
+    path = tmp_path / "b.json"
+    assert _main(monkeypatch, capsys, tr, v10, "--eval", 1, "--write-baseline", path)[0] == 0
+    data = json.loads(path.read_text(encoding="utf-8"))
+    assert data["model"] == "m-a" and [r["total"] for r in data["evals"]["1"]["runs"]] == [100, 120]
+
+
+def test_repo_state_excludes_iteration_inside_repo(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    for args in (["init", "-q"], ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "c"]):
+        subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True)
+    it = repo / "work" / "it1"
+    it.mkdir(parents=True)
+    (it / "out.txt").write_text("x", encoding="utf-8")
+    commit, dirty = evaluation.repo_state(it, repo)
+    assert len(commit) == 40 and dirty is False                           # iteration 산출물은 dirty가 아니다
+    assert evaluation.repo_state(None, repo)[1] is True and evaluation.repo_state(tmp_path / "out", repo)[1] is True
+    (repo / "x.py").write_text("x", encoding="utf-8")
+    assert evaluation.repo_state(it, repo)[1] is True
+    assert evaluation.repo_state(it, tmp_path / "none") == (None, None)
+
+
+# --- 사용 흐름 구분 (배치 U, eval 68~70) -------------------------------------------------------------------
+
+
+def test_flow_evals_defined(tmp_path):
+    """eval 68~70: 흐름 B 거절(unjudged)·중간 취소·분석 전용 뒤 기록 전환. 채점 함수 수 = assertion 수,
+    실행 흔적이 없으면 어느 항목도 통과로 세지 않는다."""
+    by_id = {e["id"]: e for e in _entries()}
+    names = {68: "unjudged-no-auto-new-cause", 69: "cancel-mid-registration-cleanup",
+             70: "analysis-only-then-record-reuses-inputs"}
+    assert by_id[68]["setup"]["db"] == "issue-db-unjudged"
+    assert {"scenario": "e068-slow-line.yaml", "as": "slow.log"} in by_id[68]["setup"]["logs"]
+    assert "--dry-run" not in by_id[69]["prompt"] and "--dry-run" in by_id[68]["prompt"]
+    for eid, name in names.items():
+        e = by_id[eid]
+        assert e["batch"] == "U" and e["name"] == name and e["setup"]["jira"] == [f"MOCK-{9000 + eid}"], eid
+        env = _synthetic_env(tmp_path / str(eid))
+        fns = grader.checks(eid, grader.Ctx(env, run_dir(tmp_path / str(eid))))
+        assert len(fns) == len(e["assertions"]), eid
+        for fn in fns:
+            if fn is None:
+                continue
+            try:
+                ok, _ = fn()
+            except grader._Manual:
+                continue
+            except Exception:  # noqa: BLE001 — 가짜 환경에는 원격·clone이 없다(grade()는 예외를 실패로 센다)
+                continue
+            assert ok is False, (eid, fn.__name__)
+    assert "U=사용 흐름 구분 3(68~70)" in json.loads((EVALS / "evals.json").read_text(encoding="utf-8"))["_comment"]
+
+
+def test_unjudged_variant_db_has_slow_cause():
+    from runner import variant_db
+
+    db = variant_db("issue-db-unjudged")
+    assert "pattern_timeout_ms: 300" in (db / "issue-db.config.yaml").read_text(encoding="utf-8")
+    text = (db / "data/DATA-001-no-setup-data-call/type.md").read_text(encoding="utf-8")
+    assert "id: slow-cause" in text and "id: data-disabled\n" not in text
+
+
+def test_e68_setup_yields_cause_unjudged(tmp_path):
+    """eval 68 입력을 오프라인으로 돌리면 원인 하나가 판정 불가(`unjudged.cause_count` 1)이고 1위는 유형만 맞는다."""
+    from runner import run_json, variant_db
+
+    gen = subprocess.run([sys.executable, str(REPO / "tests/mocks/logcat_gen.py"), str(EVALS / "scenarios/e068-slow-line.yaml"),
+                          "--out", str(tmp_path / "gen"), "--json"], capture_output=True, text=True, check=True)
+    slow = json.loads(gen.stdout)["files"][0]
+    out = run_json("triage.py", ["run", "MOCK-9068", "--offline-db", variant_db("issue-db-unjudged"), "--out", tmp_path / "job",
+                                 "--logs", REPO / "tests/fixtures/logs/data-disabled.log", slow,
+                                 "--issue-file", EVALS / "jira/MOCK-9068.yaml"])
+    assert out["status"] == "ok" and out["unjudged"]["cause_count"] == 1 and out["unjudged"]["causes"] == ["DATA-001-01"], out
+    assert out["candidates"][0]["type"] == "DATA-001" and out["candidates"][0]["cause"] is None
+    assert any(m.startswith("판정 불가 유형: 0·원인 1개 (DATA-001-01)") for m in out["must_show"])
+
+
+def test_schema_reads_metric_and_summary_json(tmp_path):
+    """S-2 기록 항목: 스키마 파일 Read 횟수(metrics.schema_reads)와 `<iteration>/summary.json`(안전 위반 수 포함)."""
+    env_dir = _synthetic_env(tmp_path)
+    run = run_dir(tmp_path)
+    _write_artifacts(run)
+    _bash_events(run, "cat /s/plugin/schemas/plan.schema.json", "jq . SNAP/schema/type.schema.json", "cat notes.json",
+                 "head -n 5 schema/README.md",
+                 extra=[("Read", {"file_path": "/x/db/schema/issue.schema.json"}), ("Read", {"file_path": "/x/plan.json"})])
+    reads = grader.Ctx(env_dir, run).schema_reads()
+    assert len(reads) == 3 and not any("notes" in r or "README" in r or "plan.json" == r[-9:] for r in reads), reads
+    result = grader.grade(8, run, env_dir, ["기록하지 않고 끝냄"])
+    assert result["metrics"]["schema_reads"] == reads
+    data = grader.write_summary(tmp_path, 8, "A", result)
+    row = data["8"]
+    assert row["status"] == "graded" and row["schema_reads"] == 3 and set(row) == {
+        "status", "passed", "failed", "undecided", "safety_fail", "schema_reads"}
+    rows = [{"text": "a", "passed": False}, {"text": grader.JIRA_NO_WRITE_TEXT, "passed": False},
+            {"text": grader.TOKEN_BUDGET_TEXT, "passed": False}, {"text": "m", "passed": None}]
+    assert grader.safety_failures(8, "A", rows) == ["a", grader.JIRA_NO_WRITE_TEXT]      # 배치 A: 모든 행(토큰 상한 제외)
+    assert grader.safety_failures(3, "B", rows) == [grader.JIRA_NO_WRITE_TEXT]           # 그 밖: 트래커 쓰기 행만
+    assert grader.safety_failures(61, "J", rows) == ["a", grader.JIRA_NO_WRITE_TEXT]     # 결과 게시 eval
+    grader.write_summary(tmp_path, 3, "B", {"status": "not-run", "expectations": rows})
+    data = json.loads((tmp_path / "summary.json").read_text(encoding="utf-8"))
+    assert list(data) == ["3", "8"] and data["3"]["safety_fail"] == 1 and data["3"]["undecided"] == 1
+
+
+def test_token_budget_default_prefers_site_baseline(tmp_path, monkeypatch):
+    monkeypatch.setattr(grader, "SITE_BASELINE", tmp_path / "site.json")
+    assert grader.default_baseline() == grader.DEFAULT_BASELINE
+    (tmp_path / "site.json").write_text("{}", encoding="utf-8")
+    assert grader.default_baseline() == tmp_path / "site.json"

@@ -201,7 +201,7 @@ def profile_problems(user: dict | None) -> list[str]:
         out.append(f"platform: 플랫폼 이름이 아닙니다: {user['platform']!r}")
     profs = user.get("platforms")
     if profs is None:
-        return out
+        return out + path_problems(user)
     if not isinstance(profs, dict):
         return out + ["platforms: 매핑이어야 합니다."]
     for name, prof in profs.items():

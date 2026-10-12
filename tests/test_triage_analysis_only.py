@@ -71,6 +71,7 @@ def test_analysis_only_skips_write_flow_and_releases_lock():
     state = json.loads((ws.job_dir(KEY) / "triage-state.json").read_text(encoding="utf-8"))
     assert state["job"]["runs"][-1]["mode"] == "analysis-only" and state["owner"] is None
     assert state["job"]["runs"][-1]["dry_run"] is False       # 분석 전용은 dry-run이 아니다(게시는 mode로 막는다)
+    assert set(state["carry"]) == {"logs", "issue", "config"}  # 다음 세션이 답을 이어받을 때 대조할 입력 해시
 
 
 def test_analysis_only_then_stage_is_refused():
@@ -128,4 +129,90 @@ def test_analysis_only_then_normal_analyze_reuses_core_and_runs_write_questions(
     report = (ws.job_dir(KEY) / "report.md").read_text(encoding="utf-8")
     assert "분석 전용" not in report and "- 열린 PR: 없음" in report
     assert ws.db_pr("lock", "status")["held"] is True
+    ws.json("triage.py", ["release", KEY])
+
+
+def _bare(ws: Workspace, *extra, logs=LOG) -> dict:
+    """`--answer code=skip` 없이 실행한다(이어받은 답을 보려고)."""
+    return ws.json("triage.py", ["run", KEY, "--issue-file", MOCK_JIRA / f"{KEY}.yaml", "--logs", logs, *extra])
+
+
+def _state(ws: Workspace) -> dict:
+    return json.loads((ws.job_dir(KEY) / "triage-state.json").read_text(encoding="utf-8"))
+
+
+def _only_answered(ws: Workspace) -> dict:
+    ask = _bare(ws, "--analysis-only")
+    assert ask["status"] == "needs_input" and ask["needs_input"]["kind"] == "code", ask
+    done = _bare(ws, "--analysis-only", "--answer", "code=skip")
+    assert done["status"] == "ok" and done["lock_released"] is True, done
+    return {**done, "asked_owner": ask["lock_owner"]}
+
+
+def test_analysis_only_answers_carry_to_next_session_when_inputs_unchanged():
+    ws = Workspace()
+    first = _only_answered(ws)
+    second = _bare(ws, "--dry-run")                         # 기록 전환: 플래그만 빼고 같은 명령, --answer 없음
+    assert second["status"] == "ok", second
+    assert second["reuse"] == {"hit": True, "run": 1} and second["run"] == first["run"] == 1
+    assert any("분석 전용 실행에서 받은 답(code)을 이어 썼다" in n for n in second["notes"]), second["notes"]
+    state = _state(ws)
+    assert state["answers"]["code"] == "skip" and "carried" not in state and "carry" not in state
+    assert state["owner"] == second["lock_owner"] and second["lock_owner"] != first["asked_owner"]     # 새 owner
+    ws.json("triage.py", ["release", KEY])
+
+
+def test_analysis_only_answers_dropped_when_logs_change():
+    ws = Workspace()
+    _only_answered(ws)
+    changed = tmp("tt-ao-carry-") / "DATA-001-01.log"
+    changed.write_text(LOG.read_text(encoding="utf-8") + "09-20 14:31:00.000  1000  1000 I DNC-0: extra line\n",
+                       encoding="utf-8")
+    ask = _bare(ws, "--dry-run", logs=changed)
+    assert ask["status"] == "needs_input" and ask["needs_input"]["kind"] == "code", ask
+    state = _state(ws)
+    assert "carried" not in state and "code" not in state["answers"]
+    ws.json("triage.py", ["release", KEY])
+
+
+def test_answers_not_carried_after_normal_release():
+    ws = Workspace()
+    ask = _bare(ws, "--dry-run")
+    assert ask["needs_input"]["kind"] == "code"
+    done = _bare(ws, "--dry-run", "--answer", "code=skip")
+    assert done["status"] == "ok"
+    ws.json("triage.py", ["release", KEY])                  # 보통 실행의 release: 이어받기 표시가 없다
+    again = _bare(ws, "--dry-run")
+    assert again["status"] == "needs_input" and again["needs_input"]["kind"] == "code"
+    ws.json("triage.py", ["release", KEY])
+
+
+def test_state_reset_keeps_only_carry_keys():
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    from triagelib.cache import State
+
+    carry = {"logs": "l", "issue": "i", "config": "c"}
+    answers = {"time": "t", "code": "skip", "lock": "take-over", "plan": "new", "reanalyze": "yes", "code_confirm": "yes"}
+    state = State(None)
+    state.data = {"owner": None, "answers": dict(answers), "carry": carry, "job": {"runs": []}}
+    state.reset("o2")
+    assert state.answers == {"time": "t", "code": "skip"} and "carry" not in state.data
+    assert state.data["carried"] == {"keys": ["code", "time"], **carry} and state.data["job"] == {"runs": []}
+    state.data = {"owner": "o1", "answers": dict(answers), "carry": carry}
+    state.reset("o2")
+    assert state.answers == {} and "carried" not in state.data
+    state.data = {"owner": None, "answers": dict(answers)}
+    state.reset("o2")
+    assert state.answers == {} and "carried" not in state.data
+    state.data = {"owner": "o2", "answers": dict(answers), "pending": {"kind": "code"}}
+    state.reset("o2")
+    assert state.answers == answers and "carried" not in state.data and "pending" not in state.data
+
+
+def test_file_issue_from_analysis_only_not_reused_by_write_run():
+    ws = Workspace()
+    first = _bare(ws, "--analysis-only")                    # --issue-file 추출(origin file) 뒤 질문 — 같은 owner가 lock을 갖고 있다
+    assert first["status"] == "needs_input" and first["needs_input"]["kind"] == "code"
+    ask = ws.json("triage.py", ["run", KEY, "--logs", LOG, "--answer", "code=skip"])
+    assert ask["status"] == "needs_input" and ask["needs_input"]["kind"] == "issue", ask   # 쓰기 실행은 Jira MCP로 다시 읽는다
     ws.json("triage.py", ["release", KEY])

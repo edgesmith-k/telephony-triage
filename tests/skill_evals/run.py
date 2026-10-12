@@ -29,7 +29,7 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 sys.path.insert(0, str(REPO / "tests" / "helpers"))
 from skill_eval_env import build, _bash_path  # noqa: E402
-from grade import grade, token_record  # noqa: E402
+from grade import git, grade, token_record, write_summary  # noqa: E402
 
 
 def dump(path: Path, value) -> None:
@@ -223,6 +223,22 @@ def classify_result(result: dict | None, returncode: int) -> tuple[str, str]:
     return "completed", reason
 
 
+def repo_state(iteration: Path | None = None, repo: Path = REPO) -> tuple[str | None, bool | None]:
+    """run 시점 레포 커밋과 dirty(기준선은 채점 시점 HEAD가 아니라 이 값을 쓴다). 못 읽으면 (None, None).
+    iteration 디렉토리가 레포 안이면 그 디렉토리는 dirty 판정에서 뺀다(실행 산출물이 레포를 더럽히지 않게)."""
+    commit = git(repo, "rev-parse", "HEAD").strip() or None
+    if not commit:
+        return None, None
+    spec: list[str] = []
+    try:
+        rel = Path(iteration).resolve().relative_to(Path(repo).resolve()).as_posix() if iteration else None
+    except ValueError:
+        rel = None
+    if rel and rel != ".":
+        spec = ["--", ".", f":(exclude,literal){rel}"]
+    return commit, bool(git(repo, "status", "--porcelain", *spec).strip())
+
+
 def execute(entry: dict, info: dict, env_dir: Path, run_dir: Path, claude: str,
             timeout: int, plugin: dict | None = None, model: str | None = None) -> dict:
     env = dict(os.environ)
@@ -267,6 +283,7 @@ def execute(entry: dict, info: dict, env_dir: Path, run_dir: Path, claude: str,
                    "--tools", "Read,Bash,Write,Edit,Glob,Grep", "--allowedTools", "Read,Bash,Write,Edit,Glob,Grep", *dirs]
     if model:
         command[2:2] = ["--model", model]
+    commit, dirty = repo_state(run_dir.parents[1])
     start = time.monotonic()
     result = None
     events_list: list[dict] = []
@@ -296,6 +313,7 @@ def execute(entry: dict, info: dict, env_dir: Path, run_dir: Path, claude: str,
                "elapsed_seconds": round(time.monotonic() - start, 2),
                "usage": (result or {}).get("usage"), "total_cost_usd": (result or {}).get("total_cost_usd"),
                "tokens": token_record(result), "model": model, "init_model": init_model(events_list),
+               "repo_commit": commit, "repo_dirty": dirty,
                "mode": "plugin" if plugin else "direct", "plugin": (plugin or {}).get("seen"),
                "outputs_derived": derived, "env_stripped": stripped_env}
     dump(run_dir / "execution.json", outcome)
@@ -340,7 +358,7 @@ def main() -> int:
             print(f"eval {eid}: prepared ({args.mode})", flush=True)
             continue
         outcome = execute(entry, info, env_dir, run_dir, claude, args.timeout, plugin, args.model)
-        grade(eid, run_dir, env_dir, entry["assertions"])
+        write_summary(iteration, eid, entry.get("batch"), grade(eid, run_dir, env_dir, entry["assertions"]))
         print(f"eval {eid}: {outcome['status']} — {outcome['reason'][:180]}", flush=True)
         if outcome["status"] != "completed":
             return 1

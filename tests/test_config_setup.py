@@ -671,8 +671,9 @@ def test_doctor_does_not_create_missing_work_dir_and_empty_work_dir_skips():
     rows = _rows(_doctor(env))
     assert not (env.base / "work").exists() and _tree(env.base) == before
     assert rows["snapshot"]["status"] == "warn" and rows["lock"]["status"] == "ok" and rows["compat"]["status"] == "skip"
-    _set_user(env, work_dir="")
-    rows = _rows(_doctor(env))
+    _set_user(env, work_dir="")      # 빈 work_dir은 경로 규칙 위반(platform fail)이지만 snapshot·lock은 건너뛴다
+    rows = _rows(env.json("config.py", ["doctor"], expect=1))      # platform 행이 더 붙는다(_doctor의 고정 행 목록 밖)
+    assert rows["platform"]["status"] == "fail" and "work_dir" in rows["platform"]["detail"]
     assert rows["snapshot"] == {"check": "snapshot", "status": "skip", "detail": "work_dir 없음"}
     assert rows["lock"]["status"] == "skip" and rows["lock"]["detail"] == "work_dir 없음"
 

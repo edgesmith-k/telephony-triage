@@ -257,6 +257,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
         <div><h4>도구가 하는 일</h4><ul><li>개인정보를 가리고(마스킹) 로그를 해석</li><li>과거 사례와 비교해 후보 3개를 근거와 함께 제시</li><li>기록할 변경을 만들고 검사한 뒤 PR까지</li></ul></div>
       </div>
       <div class="note rule"><span class="k">알아 둘 것</span>판정(어떤 원인이 맞았나)은 스크립트가 규칙대로 합니다. Claude는 설명을 채우고 질문할 뿐 판정을 바꾸지 않습니다. 그래서 같은 로그는 언제 돌려도 같은 후보가 나옵니다.</div>
+      <div class="note"><span class="k">두 가지 흐름</span><b>A 찾기·분석</b>(비슷한 이슈 검색, 로그 분석, 분석 전용, 기존 원인에 사례 추가)은 이슈 DB를 바꾸지 않거나 사례만 더합니다. <b>B 등록</b>(새 유형·원인·규칙)은 로그 근거·시그니처·fixture가 필요하고 카테고리 담당자(파서 규칙은 메인테이너)가 리뷰합니다. 도구는 흐름을 묻지 않고 기본으로 분석부터 합니다.</div>
     </section>
 
     <section class="chap" id="u2" data-title="설치">
@@ -353,6 +354,8 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
         <tr><td>다른 후보가 맞다 / 새 원인이다</td><td>그 항목을 고름. 새 원인·유형이면 도구가 초안을 만들고 내가 확인</td></tr>
         <tr><td>원인을 아직 모르겠다</td><td>"원인 미확정"으로 기록하거나, 기록하지 않고 끝냄</td></tr>
         <tr><td>리포트만 보고 기록은 안 하고 싶다</td><td><code>--analysis-only</code>로 실행하거나 확인 화면에서 취소. 계획은 남아 나중에 이어서 할 수 있음</td></tr>
+        <tr><td>분석 전용으로 본 뒤 기록하고 싶다</td><td><code>--analysis-only</code>만 빼고 같은 명령으로 다시 실행. 분석 결과를 재사용하고, 입력(로그·Jira·설정)이 같으면 이미 답한 발생 시각·소스 트리도 다시 묻지 않음</td></tr>
+        <tr><td>새 원인으로 등록하려는데 무엇이 필요한가</td><td>도구가 준비물(로그 근거 문구, 시그니처, fixture, 새 유형이면 비슷한 유형 3개)과 리뷰어(카테고리 담당자, 파서 규칙은 메인테이너)를 한 번에 보여 주고 빠진 것만 묻습니다. 판정 불가가 있으면 새 원인을 만들지 않습니다. 중간에 취소해도 브랜치·PR이 남지 않음</td></tr>
         <tr><td>로그를 더 줘야 한다 (범위 밖 등)</td><td><code>--more-logs</code>로 로그 추가해 다시 분석</td></tr>
       </table></div>
     </section>

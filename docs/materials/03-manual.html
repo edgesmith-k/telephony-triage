@@ -313,7 +313,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
 <text class="t" x="102" y="42">사용자</text>
 <text class="s" x="102" y="60">분류 확정 · 새 원인 승인 · push 전 확인 화면 승인</text>
 <rect class="box" x="90" y="110" width="520" height="50" rx="6"/>
-<text class="t" x="102" y="132">커맨드 13개</text>
+<text class="t" x="102" y="132">커맨드 14개</text>
 <text class="s" x="102" y="150">analyze · record · search · sync · sync-pr · fix-submitted · verify-fix …</text>
 <rect class="box" x="90" y="200" width="520" height="66" rx="6"/>
 <text class="t" x="102" y="222">스킬 telephony-triage</text>
@@ -387,7 +387,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
 
     <div class="sub" id="s0-cmdmap" data-title="커맨드별 동작 지도">
       <h3>커맨드별 동작 지도</h3>
-      <p>분석·기록 커맨드는 모두 같은 스킬을 부르고(setup·sync·preview·review·migrate는 스크립트만 부르고, help는 커맨드 파일만 읽습니다), 이슈 DB에 쓰는 커맨드는 모두 같은 <a href="#s0-seq">공통 쓰기 절차</a>로 끝납니다. 그래서 그림 다섯 장으로 열세 커맨드와, 규칙에 없는 새 이슈가 왔을 때의 흐름(E)까지 거의 다 설명할 수 있습니다.</p>
+      <p>분석·기록 커맨드는 모두 같은 스킬을 부르고(setup·sync·status·preview·review·migrate는 스크립트만 부르고, help는 커맨드 파일만 읽습니다), 이슈 DB에 쓰는 커맨드는 모두 같은 <a href="#s0-seq">공통 쓰기 절차</a>로 끝납니다. 그래서 그림 다섯 장으로 열네 커맨드와, 규칙에 없는 새 이슈가 왔을 때의 흐름(E)까지 거의 다 설명할 수 있습니다.</p>
       <div class="tbl"><table>
         <tr><th>커맨드</th><th>무엇을</th><th>주요 스크립트</th><th>이슈 DB</th><th>그림</th></tr>
         <tr><td><code>setup</code></td><td>설정 만들기, Jira 도구 연결, hook 설치, 점검 표</td><td><code>config.py</code>, <code>db_pr.py snapshot</code></td><td>읽기</td><td><a href="#s3-setup">3.3 표</a></td></tr>
@@ -396,6 +396,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
         <tr><td><code>search</code></td><td>이미 기록된 이슈 찾기</td><td><code>db_search.py</code></td><td>읽기</td><td>없음</td></tr>
         <tr><td><code>sync</code></td><td>스냅샷 최신화, 정리 후보, 내 PR 확인</td><td><code>db_pr.py snapshot · cleanup · my-prs</code></td><td>읽기</td><td>D</td></tr>
         <tr><td><code>sync-pr</code></td><td>main이 바뀐 뒤 내 PR에 계획 다시 적용</td><td><code>db_pr.py find-plan</code></td><td>PR 갱신</td><td>D 다음 B</td></tr>
+        <tr><td><code>status</code></td><td>작업 하나가 어디까지 됐는지·막힌 것·다음 할 일을 한 화면으로 봅니다(로컬 기록만)</td><td><code>job_status.py</code></td><td>읽기</td><td>없음</td></tr>
         <tr><td><code>fix-submitted</code></td><td>수정 CL과 빌드 기록</td><td><code>db_pr.py</code></td><td>PR</td><td>B</td></tr>
         <tr><td><code>verify-fix</code></td><td>수정 빌드 로그로 재발 여부 판정</td><td><code>db_verify.py fix</code></td><td>PR</td><td>C 다음 B</td></tr>
         <tr><td><code>validate</code></td><td>직접 편집 검사, 또는 <code>--cause</code>로 해결책 효과 검증</td><td><code>db_lint</code>, <code>db_regress</code>, <code>db_verify.py</code></td><td>읽기, <code>--cause</code>는 PR</td><td><code>--cause</code>는 C와 같은 모양, 이어서 B</td></tr>
@@ -766,7 +767,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
           <rect class="box hl" x="196" y="30" width="300" height="300" rx="8"/>
           <text class="t" x="212" y="54">telephony-triage 플러그인</text>
           <rect class="box" x="212" y="68" width="268" height="52" rx="5"/>
-          <text class="t" x="224" y="90">커맨드 13개</text>
+          <text class="t" x="224" y="90">커맨드 14개</text>
           <text class="s" x="224" y="108">analyze · record · search · sync …</text>
           <rect class="box" x="212" y="128" width="268" height="52" rx="5"/>
           <text class="t" x="224" y="150">스킬 telephony-triage</text>
@@ -819,7 +820,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
       </figure>
       <div class="tbl"><table>
         <tr><th>구성</th><th>위치</th><th>역할</th></tr>
-        <tr><td>커맨드</td><td><code>plugin/commands/*.md</code></td><td>얇은 래퍼. 스킬·스크립트를 부르는 입구(13개)</td></tr>
+        <tr><td>커맨드</td><td><code>plugin/commands/*.md</code></td><td>얇은 래퍼. 스킬·스크립트를 부르는 입구(14개)</td></tr>
         <tr><td>스킬</td><td><code>plugin/skills/telephony-triage/</code></td><td>스크립트 출력을 설명하고 사용자 결정을 계획으로 옮김. <code>reference/</code>에 흐름별 절차</td></tr>
         <tr><td>스크립트</td><td><code>plugin/scripts/</code></td><td>파싱·마스킹·매칭·검증·생성·PR. 결과는 JSON, 종료 코드 0/1/2/3</td></tr>
         <tr><td>hooks</td><td><code>plugin/hooks/hooks.json</code></td><td>SessionStart 1, PreToolUse(MCP·Bash·파일 도구), PostToolUse(Jira 원문 격리)</td></tr>
@@ -850,7 +851,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
       <h3>현재 상태와 측정 수치</h3>
       <ul>
         <li>개발 단계(사외 초안, Phase D0~13)와 실제 로그 반영 트랙(L1~L3), 반입 전 3차 검토 반영까지 끝났습니다. 도입 조직 환경에 맞추는 사내 보완 단계(S-0~S-7, <a href="#s7-rollout">7.12</a>)는 아직 남아 있습니다.</li>
-        <li>자동 테스트 1,640개, CI(Ubuntu, Python 3.11·3.14) 통과. 샘플 이슈 DB 회귀 fixture 23/23. 스킬 행동 eval 67개 정의(Jira 결과 게시 61·62, 플랫폼 분리 63~65, GitHub 트래커 66·67 — 실험적).</li>
+        <li>자동 테스트 1,742개, CI(Ubuntu, Python 3.11·3.14) 통과. 샘플 이슈 DB 회귀 fixture 23/23. 스킬 행동 eval 70개 정의(Jira 결과 게시 61·62, 플랫폼 분리 63~65, GitHub 트래커 66·67 — 실험적, 사용 흐름 구분 68~70).</li>
         <li>10/11: Jira 결과 게시(승인한 코멘트 1건, analyze Step 9)와 플랫폼 분리(Android 기본, oFono 뼈대, 플랫폼별 이슈 DB)가 들어갔습니다.</li>
         <li>토큰(모의 데이터 eval 기준, Sonnet): analyze부터 기록까지 1건 약 39만 토큰(이전 74만에서 48% 감소). 커맨드 1회 20만~80만 토큰, 약 $0.15~0.5. <b>실제 로그·DB 크기에서는 달라질 수 있습니다.</b></li>
       </ul>
@@ -929,15 +930,15 @@ python3 -m pytest -q tests</pre></div>
       </ol>
       <div class="code"><pre>/telephony-triage:setup</pre></div>
       <p>setup은 항목을 하나씩 묻습니다: GHE 아이디, 이슈 DB 로컬 clone 경로, 원격 URL, base 브랜치, GHE 호스트, Jira 시각 타임존, logcat 시각 타임존, 연도 결정 방식(<code>tracker | file-mtime | ask</code>), logcat 기본 탐색 경로(선택), 작업 디렉토리. 소스 트리 프로필(<code>code_profiles</code>)은 건너뛸 수 있습니다.</p>
-      <div class="note easy"><span class="k">답한 값만 저장합니다</span>필수 항목과, 팀 기본값과 다르게 답한 항목만 내 config에 저장합니다. 나머지는 저장하지 않으므로 관리자가 <code>site-defaults.yaml</code>의 팀 기본값을 바꾸면 그대로 따라갑니다. 예외로 base 브랜치와 작업 디렉토리는 팀 기본값을 상속하지 않습니다. 예전에 만든 config를 이 방식으로 바꾸려면 <code>config.py init --force</code>로 다시 만들거나 해당 키를 지웁니다.</div>
+      <div class="note easy"><span class="k">답한 값만 저장합니다</span>필수 항목과, 팀 기본값과 다르게 답한 항목만 내 config에 저장합니다. 나머지는 저장하지 않으므로 관리자가 <code>site-defaults.yaml</code>의 팀 기본값을 바꾸면 그대로 따라갑니다. 예외로 base 브랜치와 작업 디렉토리는 팀 기본값을 상속하지 않습니다. 예전에 만든 config를 이 방식으로 바꾸려면 <code>config.py init --force</code>에서 그 항목에 빈 값이나 팀 기본값을 답하거나(android·다른 플랫폼 모두 입력한 항목만 바뀝니다. 답 파일에 없는 항목은 지금 값 그대로이고, 대화형에서는 Enter가 지금 값 유지, <code>-</code>가 팀 기본값(키 삭제)입니다. Jira 도구 설정·<code>plugin</code>·<code>platform</code>·다른 플랫폼 프로필 <code>platforms.*</code>도 그대로 둡니다) 해당 키를 지웁니다.</div>
     </div>
 
     <div class="sub" id="s3-setup" data-title="setup이 하는 일">
       <h3>setup이 하는 일 (10단계)</h3>
       <div class="tbl"><table>
         <tr><th>#</th><th>단계</th><th>스크립트</th><th>확인할 것</th></tr>
-        <tr><td class="num">0</td><td>플랫폼 고르기 (켠 플랫폼이 둘 이상일 때만)</td><td><code>config.py init --platform &lt;이름&gt;</code></td><td>android 밖 플랫폼은 그 경로 프로필(<code>platforms.&lt;이름&gt;</code>: clone·<code>work_dir</code> 등)만 더함. 트래커(Jira)·gh 설정(4·9)은 공유. 따로 설치도 가능</td></tr>
-        <tr><td class="num">1</td><td>사용자 config 생성</td><td><code>config.py init --answers</code></td><td><code>~/.telephony-triage/</code>와 작업 디렉토리는 권한 700. 경로가 없으면 그 항목만 다시 물음. 옛 설정 키(<code>jira:</code> 등, 트래커 범용화 전 이름)가 남아 종료 2면 <code>config.py rename-legacy</code>의 변경 목록을 보이고 확인받은 뒤 <code>--apply</code>(사용자 config만 바뀜)</td></tr>
+        <tr><td class="num">0</td><td>플랫폼 고르기 (켠 플랫폼이 둘 이상일 때만)</td><td><code>config.py init --platform &lt;이름&gt;</code></td><td>android 밖 플랫폼은 그 경로 프로필(<code>platforms.&lt;이름&gt;</code>: clone·<code>work_dir</code> 등)만 더함. 트래커(Jira)·gh 설정(4·9)은 공유. 따로 설치도 가능(그 뒤 android를 더할 때는 <code>--force</code> 없이 <code>config.py init</code>이 android 프로필만 더함)</td></tr>
+        <tr><td class="num">1</td><td>사용자 config 생성</td><td><code>config.py init --answers</code></td><td><code>~/.telephony-triage/</code>와 작업 디렉토리는 권한 700. 경로가 없거나 절대 경로(<code>~</code> 허용)가 아니거나 다른 프로필과 겹치면 저장하지 않고 그 항목만 다시 물음. 옛 설정 키(<code>jira:</code> 등, 트래커 범용화 전 이름)가 남아 종료 2면 <code>config.py rename-legacy</code>의 변경 목록을 보이고 확인받은 뒤 <code>--apply</code>(사용자 config만 바뀜)</td></tr>
         <tr><td class="num">2</td><td>스크립트 경로 기록</td><td><code>config.py sync-scripts-path</code></td><td>git pre-commit hook이 이 경로를 씀</td></tr>
         <tr><td class="num">3</td><td>이슈 DB clone 제안</td><td><code>git clone</code></td><td>동의할 때만 실행</td></tr>
         <tr><td class="num">4</td><td>Jira MCP 도구 매핑</td><td><code>config.py tracker-candidates</code>, <code>set-tracker</code></td><td><code>get_issue</code>(필수)·<code>search_issues</code>·<code>get_comments</code>와 허용 읽기 도구를 사용자가 확인. 후보가 없으면 setup 중단</td></tr>
@@ -1003,6 +1004,7 @@ python3 "$S/config.py" doctor --format markdown</pre></div>
         <tr><td><a href="#c-search"><code>search</code></a></td><td>비슷한 이슈·Jira 번호 찾기</td><td>읽기</td><td>없음</td></tr>
         <tr><td><a href="#c-sync"><code>sync</code></a></td><td>스냅샷 최신화, 오래된 작업 정리, 내 PR 확인</td><td>읽기</td><td>잡음</td></tr>
         <tr><td><a href="#c-syncpr"><code>sync-pr</code></a></td><td>내 PR이 머지 대기 중인데 main이 바뀜</td><td>push</td><td>잡음</td></tr>
+        <tr><td><code>status</code></td><td>어디까지 했는지 모를 때(다음 날 재개 등). PR의 지금 상태는 보지 않습니다</td><td>읽기</td><td>없음</td></tr>
         <tr><td><a href="#c-fixsub"><code>fix-submitted</code></a></td><td>수정 CL이 머지됨</td><td>PR</td><td>잡음</td></tr>
         <tr><td><a href="#c-verifyfix"><code>verify-fix</code></a></td><td>수정 빌드에서 재발 안 하는지 확인</td><td>PR</td><td>잡음</td></tr>
         <tr><td><a href="#c-validate"><code>validate</code></a></td><td>직접 편집 검사 / 해결책 효과 검증</td><td>읽기 / PR</td><td>없음 / 잡음</td></tr>
@@ -1862,7 +1864,7 @@ git push -u origin HEAD                        # 사용자 승인 후. PR은 사
 
     <div class="sub" id="s7-rollout" data-title="도입 단계 S-1~S-7">
       <h3>도입 단계 (사내 보완 S-0~S-7) <span class="chip p">진행 예정</span></h3>
-      <p>각 단계는 별도 Claude Code 세션으로 하고, 끝날 때마다 <code>SITE_PROFILE.md</code> 진행 상태를 갱신합니다(매 세션 읽히므로 4KB 이하로 짧게, 넘으면 <code>context_pack.py</code>가 경고). 세션 입력은 <b>"사내 설정 시작"</b>(또는 "계속")입니다: <code>tools/site_step.py</code>가 <code>SITE_PROFILE.md</code>(모드 사내 보완, 트래커 jira)를 만들고 현재 단계의 할 일·완료 기준·읽을 것(<code>context_pack.py S-n</code> 출력)을 냅니다. 단계가 끝나면 완료 기준 점검 → 사용자 확인 → <code>site_step.py --done S-n</code>(건너뛰기·사외 PC에서는 거부). 읽을 자료는 <code>python3 tools/context_pack.py S-n</code> 출력뿐입니다.</p>
+      <p>각 단계는 별도 Claude Code 세션으로 하고, 끝날 때마다 <code>SITE_PROFILE.md</code> 진행 상태를 갱신합니다(매 세션 읽히므로 4KB 이하로 짧게, 넘으면 <code>context_pack.py</code>가 경고). 세션 입력은 <b>"사내 설정 시작"</b>(또는 "계속")입니다: <code>tools/site_step.py</code>가 <code>SITE_PROFILE.md</code>(모드 사내 보완, 트래커 jira)를 만들고 현재 단계의 할 일·완료 기준·읽을 것(<code>context_pack.py S-n</code> 출력)을 냅니다. 단계 안에서는 <code>site_step.py check</code>(읽기 전용 자동 점검) → 사내 값은 <code>site_step.py propose</code> diff 중 승인한 ID만 <code>--apply</code> → (S-2) <code>site_step.py evals</code>가 다음 eval 배치 명령·추정 비용(비용 승인 뒤 실행) → 요약·사용자 확인 → <code>site_step.py --done S-n</code>. 점검 실패가 있으면 거부하고, 건너뜀·사용자 필요는 확인한 것만 <code>--waive 점검="사유"</code>로 넘깁니다(건너뛰기·사외 PC에서도 거부). 읽을 자료는 <code>python3 tools/context_pack.py S-n</code> 출력뿐입니다.</p>
       <div class="tbl"><table>
         <tr><th>단계</th><th>할 일</th><th>완료 기준</th></tr>
         <tr><td>S-0 (선택)</td><td>실제 로그 3~5개로 파서 가정 확인(<a href="#s7-parser">7.8</a>)</td><td>지표 5종 기록, 정성 결론 1줄</td></tr>
@@ -1871,11 +1873,11 @@ git push -u origin HEAD                        # 사용자 승인 후. PR은 사
         <tr><td>S-3</td><td><code>site-defaults.yaml</code>(<code>tracker.kind: jira</code>·Jira 도구 매핑 등), <code>issue-db.config.yaml</code>(<code>tracker.{kind, base_url, key_regex}</code> 등) 사내 값</td><td><code>config.py check</code>·<code>doctor</code> fail 0</td></tr>
         <tr><td>S-4a</td><td>운영 이슈 DB 생성·보호, 기존 파서 포팅(골든), 기존 data 분류 import, 분석 스킬 연결. 벤더 RIL 태그 초안은 <code>s0_suggest.py</code></td><td>골든 통과(실제 골든 폴더가 사내 백엔드로 실행되는지, 기대값을 일부러 바꾸면 실패하는지까지 확인), import PR 머지</td></tr>
         <tr><td>S-4</td><td>placeholder 규칙을 실제 문구로, 카테고리별 유형 5~10개 시드(실제 마스킹 fixture)</td><td>회귀·검증 통과</td></tr>
-        <tr><td>S-5</td><td>dry-run, 샌드박스 PR 1건, 과거 Jira 20~30건 <code>tools/offline_eval.py</code>. 평가군은 조정용과 최종 확인용으로 나눕니다. 듀얼 SIM·재부팅·시계 차·마스킹을 실제 로그로 따로 보고, PR 연결 실패 복구도 한 번 해 봅니다</td><td>최종 확인용 평가군이 정확도 기준과 오류율 상한을 <b>둘 다</b> 충족(지표가 없으면 미충족)</td></tr>
+        <tr><td>S-5</td><td>dry-run, 샌드박스 PR 1건, 과거 Jira 20~30건 <code>tools/offline_eval.py</code>. 평가군은 조정용과 최종 확인용으로 나눕니다. 듀얼 SIM·재부팅·시계 차·마스킹을 실제 로그로 따로 보고, PR 연결 실패 복구도 한 번 해 봅니다. 판정 불완전(시그니처 시간 초과·오류) 항목은 판정 불가 오류로 세어 평가에서 빼고(정답이 미확정인데 원인 후보가 이미 있으면 오탐으로 평가하고 경고), S/C에 영향 없는 시그니처 오류만 있으면 평가하되 경고로 표시합니다. 전부 오류면 통과로 보지 않습니다(종료 코드 1)</td><td>최종 확인용 평가군이 정확도 기준과 오류율 상한을 <b>둘 다</b> 충족(지표가 없으면 미충족)</td></tr>
         <tr><td>S-6</td><td>남은 검토 항목, 합성 fixture 0건 확인</td><td>미처리 0건</td></tr>
         <tr><td>S-7</td><td>마켓플레이스 등록, 카테고리별 파일럿 10~20건, 첫 월간 리뷰. 사람 절차도 시험합니다: 작성자 부재 시 PR 인수, 플러그인 업데이트·되돌리기, 신규 사용자 혼자 설치부터 재개까지</td><td>파일럿 지표 보고 후 확대 결정</td></tr>
       </table></div>
-      <p>파일럿 지표는 <code>python3 tools/usage_stats.py</code>로 뽑습니다: PR까지 걸린 시간, 중도 취소 비율, 작업당 저장된 답 수(질문 수 근사), push 기록은 있으나 PR 연결이 확인되지 않은 건수. PR 완료는 PR 번호가 기록된 작업만 셉니다. 사용자 수락률은 정답 정확도가 아닙니다. 틀린 1위를 받아들일 수도 있기 때문입니다.</p>
+      <p>파일럿 지표는 <code>python3 tools/usage_stats.py</code>로 뽑습니다(플랫폼마다 <code>--platform &lt;이름&gt;</code>, 기본은 선택 플랫폼): PR까지 걸린 시간, 중도 취소 비율, 작업당 저장된 답 수(질문 수 근사), push 기록은 있으나 PR 연결이 확인되지 않은 건수. PR 완료는 PR 번호가 기록된 작업만 셉니다. 사용자 수락률은 정답 정확도가 아닙니다. 틀린 1위를 받아들일 수도 있기 때문입니다.</p>
     </div>
   </section>
 

@@ -7,6 +7,7 @@ description: Telephony 이슈(Android·oFono 등; data·call·network·sim·sms�
 
 **스크립트 출력으로 판단하고, 사람 확인을 받고, 계획을 최신 main 위에 적용해 PR로
 올린다.** 이슈 DB 파일은 직접 쓰지 않는다.
+흐름 **A 찾기·분석**(search·analyze·`--analysis-only`·기존 원인 `append`) / **B 등록**(새 유형·원인·규칙 → `db-authoring.md` §0 준비물·리뷰어). 흐름은 묻지 않고(기본 analyze) A에 B를 권하지 않는다.
 
 | 언제 | `reference/` |
 |---|---|
@@ -27,7 +28,7 @@ description: Telephony 이슈(Android·oFono 등; data·call·network·sim·sms�
 
 ### 1. 드라이버 (Step 0~4)
 
-플랫폼(이슈 DB가 따로): 사용자가 말했거나 `analysis.json`에 `platform`이 있으면 1단계 config부터 `triage`·`config`·`issue_post`·`code_roots`·`db_{pr,verify,add,search,review}`에 `--platform <이름>`을 붙인다(나머지엔 안 붙임). `platform-mismatch`는 우회 금지.
+플랫폼(이슈 DB가 따로): 사용자가 말했거나 `analysis.json`에 `platform`이 있으면 1단계 config부터 `rules.md`의 대상 스크립트에만 `--platform <이름>`을 붙인다. `platform-mismatch`는 우회 금지.
 
 1. `--issue-file`이 없으면 config(`S/config.py show --keys work_dir,tracker.tools`)의 `get_issue`(있으면 `get_comments`)를 그 스키마대로 부른다. 비어 있으면 추측하지 말고 멈춘다: `S/config.py doctor --format markdown` 표를 그대로 붙이고 setup 매핑 안내, 연습은 `--dry-run --issue-file <yaml>`. hook이 원문을
    `JOB/issue_raw.json`에 두고 마스킹 요약만 보여준다(`saved_to` 없으면 응답을 그 경로에 저장하고 "격리 hook 미동작(S1 확인)"을 알린다). `--issue-file`은
@@ -39,7 +40,7 @@ description: Telephony 이슈(Android·oFono 등; data·call·network·sim·sms�
 
 ### 2. 결과 읽기
 
-- `mode: analysis-only`("분석만", "기록하지 마") → Step 6(5-1·5-2 포함)까지, 계획·Step 7·8 없음(`lock_released`면 release 불필요). 추가 로그는 `--more-logs`.
+- `mode: analysis-only`("분석만", "기록하지 마") → Step 6(5-1·5-2 포함)까지, 계획·Step 7·8 없음(`lock_released`면 release 불필요). 추가 로그는 `--more-logs`. 기록 전환은 플래그만 빼고 같은 명령(`--issue-file`이면 `--dry-run`, 분석 재사용, 입력이 같으면 받은 답도 이어 씀).
 - `mode: read-only` → 계획 저장까지만임을 알리고 `snapshot.pull_skipped_reason`, `post_lint.errors`("메인테이너 정리"), `warnings`, `plan.pr_number`(→ `sync-pr`)도 알린다.
 - `notes`는 항상 알린다. `code.auto`면 "<roots> 자동 선택, `--code`로 변경 가능"도.
 - 로그 범위·`C: 0`·후보 없음은 report.md대로("로그 범위 밖"≠"매칭 없음").
@@ -74,7 +75,7 @@ description: Telephony 이슈(Android·oFono 등; data·call·network·sim·sms�
   `set-resolution`, `set-status`.
 - 시그니처·파서 규칙·새 원인·fixture가 있으면 `S/db_verify.py rules --plan JOB/plan.json --draft JOB/draft` 표를 보인다(`skipped`는 통과
   아님). 다른 유형 fixture에서 새 시그니처가 걸리면 **좁힐지 `allow-cause`할지 사용자가 고를 때까지** 멈춘다.
-- `note` 한 줄을 확인받고 `write-flow.md` §계획 형식으로 `JOB/plan.json`에 저장한다. 기록하지 않음·읽기 전용·계획만 저장이면
+- `note` 한 줄을 확인받고 `write-flow.md` §계획 형식으로 `JOB/plan.json`에 저장한다. 기록하지 않음·중간 취소·읽기 전용·계획만 저장이면
   `S/triage.py release <KEY>`로 끝낸다.
 
 ### Step 8. 적용 → 확인 → 커밋 → PR

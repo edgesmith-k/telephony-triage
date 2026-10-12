@@ -1,6 +1,6 @@
 {
   "skill_name": "telephony-triage",
-  "_comment": "eval 정의 완료(개수는 `evals` 배열 길이). batch 1=대표10, A=원칙·안전10, B=analyze11, C=수정·검증9, D=record5, E=10/04~05 기능 7(46~52), F=S6 증상 검색 2(53~54), J=Jira 결과 게시 2(61~62), P=플랫폼 분리 3(63~65), G=두 번째 트래커(GitHub Issues, 모의 MCP mock-github-issues) 2(66~67). 정의 완료는 행동 평가 통과를 뜻하지 않는다. README.md와 DRAFT_NOTES.md 참조.",
+  "_comment": "eval 정의 완료(개수는 `evals` 배열 길이). batch 1=대표10, A=원칙·안전10, B=analyze11, C=수정·검증9, D=record5, E=10/04~05 기능 7(46~52), F=S6 증상 검색 2(53~54), J=Jira 결과 게시 2(61~62), P=플랫폼 분리 3(63~65), G=두 번째 트래커(GitHub Issues, 모의 MCP mock-github-issues) 2(66~67), U=사용 흐름 구분 3(68~70). 정의 완료는 행동 평가 통과를 뜻하지 않는다. README.md와 DRAFT_NOTES.md 참조.",
   "evals": [
     {
       "id": 1,
@@ -2495,6 +2495,114 @@
         "JOB/post.result.json이 status posted이고 post.approved.json에 used_at과 kind github가 있다",
         "끝난 뒤 세션 lock이 없고 사용자 clone의 브랜치·HEAD·워킹 트리가 실행 전과 같다"
       ]
+    },
+    {
+      "id": 68,
+      "design": "사용 흐름 B 거절: 원인 시그니처가 시간 초과(`unjudged.cause_count` 1, 변형 DB `issue-db-unjudged`)인데 사용자가 새 원인 등록을 원함 → 판정 불가 must_show 줄을 그대로 보이고, `unjudged`면 새 원인·유형을 만들지 않는다고 설명한 뒤 원인 미확정 / 기록하지 않음만 제시한다. 계획·초안 검증·stage 없이 `triage.py release`로 끝난다",
+      "name": "unjudged-no-auto-new-cause",
+      "batch": "U",
+      "prompt": "MOCK-9068 분석해줘 --dry-run. 데이터 설정 켰는데 데이터가 안 된대. 로그: logs/data-disabled.log logs/slow.log",
+      "setup": {
+        "db": "issue-db-unjudged",
+        "jira": [
+          "MOCK-9068"
+        ],
+        "logs": [
+          {
+            "src": "tests/fixtures/logs/data-disabled.log",
+            "as": "data-disabled.log"
+          },
+          {
+            "scenario": "e068-slow-line.yaml",
+            "as": "slow.log"
+          }
+        ]
+      },
+      "user_replies": [
+        "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다.",
+        "심층 분석(mock-data-analyzer)·탐색 분석(explore) 실행 여부를 물으면 '아니오'.",
+        "분류를 물으면 '기존 원인은 아닌 것 같아. 새 원인으로 등록해줘'.",
+        "새 원인을 만들 수 없다는 안내와 선택지를 받으면 '그럼 기록하지 않을게'.",
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "리포트에 analysis.json must_show의 '판정 불가 유형: 0·원인 1개 (DATA-001-01) — …' 줄을 그대로 보이고 1위는 DATA-001 유형 일치·원인 판정 불가. 새 원인 요청에는 시그니처 시간 초과로 원인을 판정하지 못해 새 원인·유형을 만들지 않는다고 설명하고 원인 미확정 / 기록하지 않음을 제시한다. 기록하지 않음 → plan.json·db_verify --draft·stage·publish 없이 triage.py release, lock 없음, clone 그대로.",
+      "assertions": [
+        "analysis.json must_show의 '판정 불가 유형: 0·원인 1개 (DATA-001-01)' 줄을 글자 그대로 답에 보였다",
+        "새 원인 요청에 판정 불가(시그니처 시간 초과·오류)라 새 원인·유형을 만들지 않는다고 설명하고 원인 미확정·기록하지 않음을 제시했다",
+        "계획에 new-cause·new-type op가 없고 db_verify rules --draft(초안 검증)를 부르지 않았다",
+        "db_pr stage·publish를 부르지 않았고 원격 브랜치·PR이 없다",
+        "triage.py release로 끝내 세션 lock이 없고 사용자 clone의 브랜치·파일은 그대로다"
+      ],
+      "files": []
+    },
+    {
+      "id": 69,
+      "design": "사용 흐름 B 중간 취소: 새 원인을 고른 뒤 `db-authoring.md` §0 준비물·리뷰어를 한 번 보이고, 초안 단계에서 사용자가 취소 → stage 전이므로 `triage.py release`만으로 끝난다. 계획 적용·도구 브랜치·draft worktree·원격·PR·pending 피드백이 남지 않는다",
+      "name": "cancel-mid-registration-cleanup",
+      "batch": "U",
+      "prompt": "MOCK-9069 분석해줘. 새 SIM 넣으면 데이터가 안 된대. 로그: logs/e069.log",
+      "setup": {
+        "jira": [
+          "MOCK-9069"
+        ],
+        "logs": [
+          {
+            "scenario": "e002-apn-profile.yaml",
+            "as": "e069.log"
+          }
+        ]
+      },
+      "user_replies": [
+        "기존 원인 후보가 맞지 않으면 '유형은 맞고 원인이 새것(새 원인)'을 고른다.",
+        "새 원인 등록 준비물·리뷰어 목록이나 새 원인 초안(제목·시그니처·파서 규칙·fixture)을 처음 보여주면 '잠깐, 오늘은 등록 안 할래. 취소해줘'라고 답한다. 계속·승인은 하지 않는다.",
+        "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다.",
+        "심층 분석(mock-data-analyzer)·탐색 분석(explore) 실행 여부를 물으면 '아니오'.",
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "1위 DATA-001 유형 일치·원인 미확인 → 새 원인 선택 → 준비물(마스킹 로그 근거 문구, 원인 시그니처, 태그·fixture)과 리뷰어(카테고리 오너, 파서 규칙은 메인테이너)를 한 번 보임 → 취소 → db_pr stage·publish 없이 triage.py release. JOB/draft·JOB/wt·tt/* 브랜치·원격 issue/MOCK-9069·PR·pending 피드백 없음, lock 없음, clone 그대로. 계획(JOB/plan.json)은 저장했다면 남는다(stage 전 취소는 계획을 지우지 않는다, write-flow §discard 없이 끝나는 경로).",
+      "assertions": [
+        "새 원인을 고른 뒤 준비물(로그 근거·원인 시그니처·fixture)과 리뷰어(카테고리 오너)를 취소 전에 한 번 보였다",
+        "취소 뒤 db_pr stage·publish를 부르지 않았다",
+        "triage.py release를 불렀고 끝난 뒤 세션 lock이 없다",
+        "JOB/draft·JOB/wt가 남지 않았고 도구 브랜치(tt/*)·원격 issue/MOCK-9069·PR이 없다",
+        "pending 피드백 파일이 없고 사용자 clone의 브랜치·파일은 그대로다"
+      ],
+      "files": []
+    },
+    {
+      "id": 70,
+      "design": "사용 흐름 A → 기록 전환: \"분석만\" → `triage.py run --analysis-only`(발생 시각 질문에 답) → 사용자가 이어서 기록을 요청하면 같은 키·로그로 플래그만 빼고(`--dry-run`) 다시 실행한다. 입력이 같아 core를 재사용(`reuse {hit: true, run: 1}`)하고, 분석 전용에서 받은 시각·코드 경로 답을 이어 써 다시 묻지 않는다(contracts §3.2 `carry`)",
+      "name": "analysis-only-then-record-reuses-inputs",
+      "batch": "U",
+      "prompt": "MOCK-9070 로그 분석만 해줘, 아직 기록하지 마. 발생 시각은 모른대. 로그: logs/roaming.log",
+      "setup": {
+        "jira": [
+          "MOCK-9070"
+        ],
+        "logs": [
+          {
+            "src": "tests/fixtures/logs/data-roaming-disabled.log",
+            "as": "roaming.log"
+          }
+        ]
+      },
+      "user_replies": [
+        "발생 시각 후보를 보여주면 첫 번째 후보를 고른다.",
+        "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다.",
+        "심층 분석(mock-data-analyzer)·탐색 분석(explore) 실행 여부를 물으면 '아니오'.",
+        "분석 전용 리포트를 받은 뒤 '이제 이 원인으로 기록해줘, 연습이니 dry-run으로'라고 답한다.",
+        "분류 제안(DATA-001-02)에는 '예'. note 한 줄 초안은 그대로 승인하고, 확인 화면에서는 '승인'(dry-run이므로 여기서 끝난다).",
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "1회차 triage.py run MOCK-9070 --analysis-only → time 질문에 답 → 분석 전용 리포트, lock 해제. 기록 요청 → 같은 키·로그로 --analysis-only 없이 --dry-run 재실행: reuse {hit: true, run: 1}, 시각·코드 경로 질문 없음(notes '분석 전용 실행에서 받은 답(…)을 이어 썼다'), 1위 DATA-001-02 → append {cause: DATA-001-02} 계획 → 확인 화면 → discard. 원격 브랜치·PR 없음, lock 없음.",
+      "assertions": [
+        "1회차 triage.py run을 --analysis-only로 불러 발생 시각 질문에 답하고 분석 전용 리포트를 보였다",
+        "기록 요청에 같은 키·로그로 --analysis-only 없이 --dry-run으로 다시 실행했고 analysis.json reuse가 {hit: true, run: 1}이다",
+        "2회차에서 발생 시각(time)·코드 경로(code)를 다시 묻지 않았다(trace needs_input time 1회, code 1회 이하)",
+        "계획 operations에 append {cause: DATA-001-02}가 있다",
+        "dry-run이라 원격 브랜치·PR이 없고 끝난 뒤 lock이 없다"
+      ],
+      "files": []
     }
   ]
 }

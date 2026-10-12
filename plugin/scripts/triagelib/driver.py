@@ -187,9 +187,12 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
             if held.get("job") == self.key and held.get("owner") == owner:
                 self.run.env["TT_LOCK_OWNER"] = owner
                 self.locked = True
+                self.clear_pending()
                 return
         choice = self.answer("lock")
         if choice == "stop":
+            if self.state.path is not None and self.state.path.is_file() and self.state.data.pop("pending", None) is not None:
+                self.state.save()     # 답한 lock 질문이 job_status에 남지 않게 한다
             raise Stopped("사용자가 lock 대기 대신 중단을 골랐다.")
         if choice == "release-other":
             _, data, _ = self.run.call("0-lock", "db_pr.py", ["lock", "status"])
@@ -213,11 +216,31 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
             raise NeedsInput("lock", f"같은 이슈의 lock이 {age}초 전에 갱신됐다. 다른 세션이 진행 중일 수 있다. 이어받을까?",
                              [{"value": "take-over", "label": "이어받는다"}, {"value": "stop", "label": "중단"}])
         owner = data["lock"]["owner"]
-        self.state.reset(owner)   # 새 세션: 이전 세션의 답·진행 상태는 쓰지 않는다
+        self.state.reset(owner)   # 새 세션: 이전 세션의 답·진행 상태(`pending` 포함)는 쓰지 않는다
         self.state.answers.update({k: v for k, v in self.given.items() if k != "lock"})
         self.run.env["TT_LOCK_OWNER"] = owner
         self.locked = True
         self.state.save()
+
+    def check_carried(self) -> None:
+        """분석 전용 뒤 새 세션이 이어받은 답(`State.reset`)은 로그·Jira 추출·설정 해시가 같을 때만 쓴다. 다르면 버리고 다시 묻는다."""
+        carried = self.state.data.get("carried")
+        if not isinstance(carried, dict):
+            return
+        keys = [k for k in carried.get("keys") or [] if k in self.state.answers and k not in self.given]
+        if all(carried.get(k) == v for k, v in self.fingerprint().items()):
+            if keys:     # 표시는 ok로 끝날 때까지 남긴다(그 사이 다른 질문에서 멈춰도 다음 실행이 다시 알린다, `save_job`이 지운다)
+                self.notes.append(f"분석 전용 실행에서 받은 답({', '.join(keys)})을 이어 썼다 — 바꾸려면 --answer <kind>=<값>")
+            return
+        for k in keys:
+            self.state.answers.pop(k, None)
+        self.state.data.pop("carried", None)
+        self.state.save()
+
+    def clear_pending(self) -> None:
+        """lock을 잡은 뒤 이전 실행의 질문 표시(needs_input `pending`)를 지운다(lock 질문은 lock을 못 잡으면 남는다)."""
+        if self.state.data.pop("pending", None) is not None:
+            self.state.save()
 
     def cleanup(self) -> None:
         """잔여 worktree·도구 브랜치는 묻지도 지우지도 않는다. 목록만 보고 notes로 알린다(정리는 `/telephony-triage:sync`)."""
@@ -338,6 +361,11 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
             return info
         raw_default = self.job / "issue_raw.json"
         reuse = self.state.data.get("issue_done") and (self.job / "issue.json").is_file()
+        if reuse and not (a.dry_run or self.analysis_only or a.issue_raw or a.issue_file):
+            try:     # --issue-file 추출(연습·분석 전용)은 쓰기 실행에 이어 쓰지 않는다 — 실제 PR은 Jira MCP 값으로만
+                reuse = json.loads((self.job / "issue.json").read_text(encoding="utf-8")).get("origin") != "file"
+            except (OSError, json.JSONDecodeError, AttributeError):
+                reuse = False
         if a.issue_raw and not Path(a.issue_raw).is_file() and reuse:
             source, origin = None, None    # 첫 실행이 --consume으로 지웠다
         elif a.issue_raw or a.issue_file:
@@ -720,6 +748,8 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
             if not self.analysis_only:
                 self.open_prs()
         logs = self.logs()
+        if not self.offline:
+            self.check_carried()
         version = info.get("platform_version") or None
         code = self.code(version)
         tz = self.args.tz or (info.get("logcat") or {}).get("tz")

@@ -22,6 +22,7 @@
 | `issue-db-review/` | 월간 리뷰(Phase 11): §6.6 항목마다 걸리는 경우와 안 걸리는 경우(중복 유형 DATA-009, pending DATA-001-03, 낮은 수락률·수동 기록 피드백, 급증·과거 일괄 기록, `also_allowed` 누적 등). 목록은 `tests/helpers/make_variant_dbs.py`의 `REVIEW_CASES`, 시험은 `tests/test_db_review.py`(기준일 `--as-of 2026-10-20`). 방치 기간 항목은 git 이력이 필요해서 테스트가 날짜 지정 커밋으로 만든다 |
 | `issue-db-dup-id/` | 머지 간격으로 같은 ID(DATA-001-03 두 번)와 같은 Jira(MOCK-1101 두 곳)가 들어온 트리. 사후 lint 보고 (Phase 7) |
 | `issue-db-github/` | 두 번째 트래커(`docs/design/18-trackers.md`, **합성**): `tracker {kind: github, base_url: https://ghe.mock.invalid/, key_regex: mock-org\.mock-issues-\d+}`, 기록·피드백·evidence의 Jira 키 `MOCK-<n>`을 GitHub 작업 키 `mock-org.mock-issues-<n>`으로(파일 이름 포함). 모의 MCP는 `tests/mocks/github_issues_mcp/`, eval 66·67 |
+| `issue-db-unjudged/` | 원인 판정 불가(**합성**): `pattern_timeout_ms: 300`, DATA-001-01의 `data-disabled` 시그니처를 시간 초과하는 `slow-cause`(`must_match ['(a+)+$']`)로 바꾼 트리. `a`×40+`!` 줄(`tests/skill_evals/scenarios/e068-slow-line.yaml`)이 있으면 `unjudged.cause_count` 1, eval 68 |
 | `verify-logs/` | **이슈 DB가 아니다.** `db_verify fix`·`resolution` 입력 로그(수정 후·재발·증상만 남음·시나리오 없음, 마스킹됨). 목록은 그 안의 `README.md` |
 
 ## 합성 샘플 이슈 DB (`issue-db-sample/`)

@@ -184,6 +184,23 @@ def test_full_run_stops_for_code_choice_then_finishes_and_keeps_lock_until_relea
     assert ws.db_pr("lock", "status")["held"] is False
 
 
+def test_needs_input_records_only_pending_kind_and_answer_clears_it():
+    """needs_input이면 triage-state.json에 `pending {kind, asked_at}`만 남는다(질문 문구·선택지 없음). 답하고 다시 돌면 지운다."""
+    ws = Workspace()
+    args = ["run", "MOCK-1001", "--dry-run", "--issue-file", MOCK_JIRA / "MOCK-1001.yaml", "--logs", DATA_LOG]
+    first = ws.json("triage.py", args)
+    assert first["status"] == "needs_input"
+    path = ws.job_dir("MOCK-1001") / "triage-state.json"
+    state = json.loads(path.read_text(encoding="utf-8"))
+    assert set(state["pending"]) == {"kind", "asked_at"} and state["pending"]["kind"] == first["needs_input"]["kind"]
+    text = path.read_text(encoding="utf-8")
+    assert first["needs_input"]["question"] not in text
+    assert all(o["label"] not in text for o in first["needs_input"]["options"])
+    done = ws.json("triage.py", [*args, "--answer", "code=skip"])
+    assert done["status"] == "ok" and "pending" not in json.loads(path.read_text(encoding="utf-8"))
+    ws.json("triage.py", ["release", "MOCK-1001"])
+
+
 def test_full_run_resolves_code_refs_against_the_chosen_tree():
     ws = Workspace()
     src = REPO / "tests" / "mocks" / "src" / "android16"
@@ -480,7 +497,7 @@ def test_skill_md_is_within_7_5kb_and_drives_triage():
     skill = REPO / "plugin" / "skills" / "telephony-triage" / "SKILL.md"
     reference = skill.parent / "reference"
     text = skill.read_text(encoding="utf-8")
-    assert len(text.encode("utf-8")) <= 7680        # W6: 실행 규칙을 reference/rules.md로 옮긴 뒤의 한도(그 전 8,192B)
+    assert len(text.encode("utf-8")) <= 8064        # 흐름 A/B 한 줄(찾기·분석 / 등록) 추가 뒤의 한도. 그 전 7,680B(W6: 실행 규칙을 reference/rules.md로 옮김), W6 전 8,192B
     for needle in ("triage.py run", "needs_input", "--answer", "write-flow.md", "--commit", "reference/rules.md",
                    "steps-pasted.txt", "--dry-run --issue-file", "analyzer.skill",
                    "must_show", "triage.py explore"):
@@ -489,7 +506,7 @@ def test_skill_md_is_within_7_5kb_and_drives_triage():
     assert len(rules.encode("utf-8")) <= 2048
     for needle in ("S-3", "계획 형식 오류", "TT_LOCK_OWNER", "stage --then-summary", "모든 종료 경로에서 푼다", "사용자 확인 후"):
         assert needle in rules, needle
-    assert len((reference / "db-authoring.md").read_bytes()) <= 11392      # 필수 키 요약 포함. W7 add-fixture 세부 포함(그 전 11,264B)
+    assert len((reference / "db-authoring.md").read_bytes()) <= 12288      # 필수 키 요약 포함. §0 등록 준비물·리뷰어 색인 추가 뒤의 한도(그 전 11,392B: W7 add-fixture 세부, 11,264B)
     assert len((reference / "write-flow.md").read_bytes()) <= 14344
     _check_op_summary(reference / "db-authoring.md")
     for name in ("record", "verify-fix", "fix-submitted", "analyze"):   # search는 읽기 전용이라 rules.md를 읽지 않는다

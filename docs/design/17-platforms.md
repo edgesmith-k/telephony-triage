@@ -47,14 +47,14 @@ parser_backends/<p>_reference/          # 그 플랫폼 BACKEND 재수출 (andro
 | site-defaults | `platform.name`, `platform.enabled`, `platform.others.<p>`, `parser.by_platform.<p>` | 팀 기본, 켤 수 있는 플랫폼, 그 밖 플랫폼의 상수·백엔드 (`02-config.md`) |
 | 사용자 config | `platform` | 개인 기본 선택(`enabled` 안의 이름) |
 | 사용자 config | `platforms.<p>.{issue_db, work_dir, log_dir, code_profiles, recent_code_roots}` | 경로 프로필(`PROFILE_KEYS`). 최상위 같은 키 = android 프로필 |
-| CLI | `--platform <p>` | `triage.py`·`config.py`·`db_pr.py`·`db_verify.py`·`issue_post.py`·`code_roots.py`·`db_add.py`·`db_search.py`·`db_review.py`(그 밖 스크립트 — `mask_pii`·`parse_logcat` 등 — 은 받지 않는다) |
+| CLI | `--platform <p>` | `triage.py`·`config.py`·`db_pr.py`·`db_verify.py`·`issue_post.py`·`code_roots.py`·`db_add.py`·`db_search.py`·`db_review.py`·`job_status.py`(그 밖 스크립트 — `mask_pii`·`parse_logcat` 등 — 은 받지 않는다) |
 | env | `TT_PLATFORM` | triage → 하위 스크립트(사람이 쓰지 않는다) |
 
 - 선택 순서: `--platform` > `TT_PLATFORM` > 사용자 config `platform` > site `platform.name` > `android`. `enabled` 관문은 **사용자 세션 흐름만** 적용한다. DB에 고정된 도구(`db_regress`·`db_lint`·`parse_logcat --rules`)는 DB 선언 플랫폼(설치돼 있으면 허용).
 - 프로필: android가 아닌 플랫폼의 cfg는 공통 키에 `platforms.<p>`를 얹은 것이고 android 값을 **물려받지 않는다**(ofono 프로필이 실수로 android clone을 가리킬 수 없다). 기본 `work_dir` `<home>/work-<p>`, 보류 피드백 `<home>/pending-feedback-<p>`. 최상위 프로필 없는 config(따로 설치)도 된다.
 - 경로 규칙(`userconfig.path_problems`): `work_dir`·`issue_db.path`는 비어 있지 않은 절대 경로(`~` 허용), `work_dir`은 clone 밖, 프로필끼리 `work_dir`·clone·원격 겹침 금지. `platforms.<p>`의 프로필 밖 키(예: `source_tree`)는 거부(RF-4). `config.py show`·`set`·`doctor`는 이런 문제가 있어도 동작하고(set 경고, doctor `platform` 행 fail), 그 밖 스크립트는 종료 코드 2.
 - `--db`가 없을 때의 대체 경로(사용자 config `issue_db.path`, `common/dbpath`의 ③)도 **선택 플랫폼** 프로필의 값이다(`db_add`·`db_search`·`db_review`·`config`·`code_roots`). 이 스크립트들도 이슈 DB 선언과 선택 플랫폼을 대조한다(`platform-mismatch`). 단 `db_add`의 `apply`·`drift`·`renumber`·`check-ids`는 `db_pr publish`·`db_verify`·stage 검사가 그 DB에 대고 부르는 **DB 고정** 하위 명령이라 DB 선언을 따르고, `--platform`·`TT_PLATFORM`이 있을 때만 대조한다(사용자 config 없이 도는 비기본 DB 검사가 막히지 않게). 사용자 흐름인 `similar`는 항상 대조한다.
-- 쓰기: `config.py set --platform <p> <키>`·`code_roots remember`는 `profile_key(p, key)`(android면 그 키, 그 밖 `platforms.<p>.<키>`)에 쓴다. `config.py init --platform <p>`는 그 프로필만 더한다(트래커(`tracker.*`)·gh 설정은 공유).
+- 쓰기: `config.py set --platform <p> <키>`·`code_roots remember`는 `profile_key(p, key)`(android면 그 키, 그 밖 `platforms.<p>.<키>`)에 쓴다. `config.py init --platform <p>`는 그 프로필만 더한다(트래커(`tracker.*`)·gh 설정은 공유). 이미 있으면 `--force`로 그 프로필에서 입력한 항목만 갱신한다(없는 키·Enter는 유지, 빈 값·`-`·팀 기본값과 같은 답은 지움 — android `--force`와 같은 규칙). android도 최상위 프로필이 없는 config(따로 설치)면 `--force` 없이 그 프로필만 더한다. `init`의 플랫폼은 `--platform` > `TT_PLATFORM` > site(사용자 config `platform`은 보지 않는다 — `init --force`가 다른 플랫폼 프로필을 덮지 않게)이고, 새 config에 경로 규칙 문제가 있으면 저장하지 않는다(종료 코드 2).
 - 출력: `analysis.json`·lock 기록·`triage-state.json`의 `platform`은 android가 아닐 때만. 라벨은 `SPEC.label`. 같은 작업 키를 다른 플랫폼으로 다시 실행하면 종료 코드 2.
 
 ## 3. 플랫폼별 lock

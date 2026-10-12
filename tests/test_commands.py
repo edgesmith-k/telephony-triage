@@ -16,6 +16,7 @@ import json
 import os
 import platform
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -32,7 +33,7 @@ from workspace import Workspace  # noqa: E402
 COMMANDS = REPO / "plugin" / "commands"
 DOCS = REPO / "docs" / "design"
 EXPECTED = ["setup", "analyze", "record", "sync", "search", "sync-pr", "preview", "review", "validate",
-            "verify-fix", "fix-submitted", "migrate", "help"]
+            "verify-fix", "fix-submitted", "migrate", "help", "status"]
 SKILL_LINKED = ["analyze", "record", "verify-fix", "fix-submitted", "validate"]
 NO_ARGS = ["setup", "sync", "preview"]
 
@@ -49,12 +50,12 @@ def _frontmatter(name: str) -> dict:
 
 def test_command_files_match_design_lists():
     files = sorted(p.stem for p in COMMANDS.glob("*.md"))
-    assert files == sorted(EXPECTED) and len(files) == 13
+    assert files == sorted(EXPECTED) and len(files) == 14
     table = (DOCS / "09-commands.md").read_text(encoding="utf-8")
     names = re.findall(r"^\| `([a-z-]+)[ `]", table, re.M)
     assert sorted(set(names)) == sorted(EXPECTED)
     arch = (DOCS / "01-architecture.md").read_text(encoding="utf-8")
-    assert "commands/" in arch and "(13개)" in arch
+    assert "commands/" in arch and "(14개)" in arch
 
 
 def test_every_command_has_description_and_argument_hint_where_it_takes_args():
@@ -68,7 +69,7 @@ def test_every_command_has_description_and_argument_hint_where_it_takes_args():
 def test_skill_linked_commands_call_the_skill_and_others_call_scripts_only():
     for name in SKILL_LINKED:
         assert "telephony-triage" in (COMMANDS / f"{name}.md").read_text(encoding="utf-8"), name
-    for name in ("sync", "search", "preview", "review", "sync-pr", "migrate"):
+    for name in ("sync", "search", "preview", "review", "sync-pr", "migrate", "status"):
         text = (COMMANDS / f"{name}.md").read_text(encoding="utf-8")
         assert "${CLAUDE_PLUGIN_ROOT}/scripts/" in text, name
 
@@ -86,7 +87,7 @@ def test_write_commands_take_session_lock_and_readonly_commands_do_not():
     for name, path in (("sync", COMMANDS / "sync.md"), ("sync-pr", reference)):
         text = path.read_text(encoding="utf-8")
         assert "lock acquire" in text and "lock release" in text, name
-    for name in ("search", "preview", "review", "help"):
+    for name in ("search", "preview", "review", "help", "status"):
         assert "lock acquire" not in (COMMANDS / f"{name}.md").read_text(encoding="utf-8"), name
 
 
@@ -105,6 +106,29 @@ def test_help_lists_commands_from_files_and_recommends_only_existing_ones():
         hint = str(_frontmatter(name).get("argument-hint") or "")
         assert set(re.findall(r"--[A-Za-z0-9-]+", rest)) <= set(re.findall(r"--[A-Za-z0-9-]+", hint)), (name, rest)
 
+
+
+def test_flow_a_b_wording():
+    """사용 흐름 A(찾기·분석)·B(등록) 구분: help 안내 줄·표 머리, SKILL 한 줄, db-authoring §0 준비물·리뷰어, record 안내."""
+    skill_dir = REPO / "plugin" / "skills" / "telephony-triage"
+    help_text = (COMMANDS / "help.md").read_text(encoding="utf-8")
+    table = help_text.split("## 상황별 추천", 1)[1].split("\n## ", 1)[0]
+    assert "흐름 A(찾기·분석)는 이슈 DB를 바꾸지 않거나 기존 원인에 사례만 더한다" in table
+    assert "흐름 B(등록)는 새 유형·원인·규칙을 만들고" in table and "카테고리 오너(파서 규칙은 메인테이너)" in table
+    assert "아래 안내 줄과 표를 그대로 보인다" in help_text
+    assert len(re.findall(r"^\| \(A\) ", table, re.M)) >= 3 and len(re.findall(r"^\| \(B\) ", table, re.M)) >= 2
+    assert "`record <JIRA-KEY> --new-cause <유형 ID>`" in table
+    skill = (skill_dir / "SKILL.md").read_text(encoding="utf-8")
+    for needle in ("**A 찾기·분석**", "**B 등록**", "`db-authoring.md` §0", "흐름은 묻지 않고(기본 analyze) A에 B를 권하지 않는다", "기록하지 않음·중간 취소",
+                   "기록 전환은 플래그만 빼고 같은 명령(`--issue-file`이면 `--dry-run`", "`rules.md`의 대상 스크립트에만 `--platform"):
+        assert needle in skill, needle
+    authoring = (skill_dir / "reference" / "db-authoring.md").read_text(encoding="utf-8")
+    sec0 = authoring.split("## 0. 등록(흐름 B) 준비물·리뷰어", 1)[1].split("\n## 1.", 1)[0]
+    for needle in ("CODEOWNERS", "메인테이너", "`unjudged`", "`triage.py release <KEY>`", "`db_pr discard <wt>`", "dir_slug"):
+        assert needle in sec0, needle
+    assert "op 필수 키 (" not in sec0 and "S/" not in sec0
+    record = (skill_dir / "reference" / "record.md").read_text(encoding="utf-8")
+    assert "준비물·리뷰어 목록은 `db-authoring.md` §0" in record
 
 # -- sync: 본문이 부르는 스크립트 순서 ------------------------------------------------------------
 
@@ -134,6 +158,22 @@ def test_reference_calls_use_flags_the_scripts_accept():
     pub = parser.parse_args(["publish", "wt", "--branch", "b", "--lease", "new", "--approved", "h"])
     assert pub.commit is False and pub.and_discard is False
 
+
+def test_token_waste_wording_in_review_record_and_search():
+    """review 1단계는 오너만(`--owners`, 전체 리뷰 안 돌림), record 초안 검증은 기본(접힌) 출력, search는 질의가
+    keyword일 때만 키·ID로 다시 검색한다."""
+    review = (COMMANDS / "review.md").read_text(encoding="utf-8")
+    assert "db_review.py --owners" in review and "`db_review.py --json`을 먼저" not in review
+    record = (REFERENCE / "record.md").read_text(encoding="utf-8")
+    line = next(l for l in record.splitlines() if "db_verify.py rules --plan" in l and "--draft" in l)
+    assert "--verbose" not in line.split("`")[1]
+    assert "접힌 세부가 필요하면 같은 명령에 `--verbose`" in record
+    search = (REFERENCE / "search.md").read_text(encoding="utf-8")
+    assert "최상위 `kind`(질의 종류)가 `keyword`이고" in search
+    assert "최상위 `kind`가 `type-id`·`cause-id`·`issue`이면 다시 부르지 않는다(결과 항목의 `kind`(type·cause·issue)와 다르다)" in search
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    import db_review
+    assert db_review.build_parser().parse_args(["--owners"]).owners is True
 
 
 def test_sync_sequence_lists_closed_pr_workdir_and_deletes_only_after_yes():
@@ -282,7 +322,7 @@ def test_sync_and_setup_bodies_list_new_steps_in_order():
     assert "doctor" in setup[order[0]:order[1]], "gh 실패 경로도 doctor 표를 보인다"
     skill = (REPO / "plugin" / "skills" / "telephony-triage" / "SKILL.md").read_text(encoding="utf-8")
     assert "config.py doctor --format markdown" in skill
-    assert len(list(COMMANDS.glob("*.md"))) == 13
+    assert len(list(COMMANDS.glob("*.md"))) == 14
     sys.path.insert(0, str(REPO / "plugin" / "scripts"))
     import config, db_pr
     assert config.build_parser().parse_args(["doctor"]).format == "json"
@@ -435,10 +475,123 @@ def test_offline_eval_out_of_range_item_is_error_not_scored(tmp_path):
                    "expect": "DATA-001-01",
                    "logs": [str(SAMPLE / "data/DATA-001-no-setup-data-call/fixtures/DATA-001-01.log")]}],
     }), encoding="utf-8")
-    out = json.loads(_offline(str(labelset), "--json").stdout)
+    proc = _offline(str(labelset), "--json")
+    assert proc.returncode == 1, proc.stderr          # 전부 오류 = 통과 아님
+    out = json.loads(proc.stdout)
     assert out["summary"]["errors"] == 1 and out["summary"]["evaluated"] == 0
     assert out["summary"]["top1_accuracy"] is None
     assert "평가 0/전체 1" in _offline(str(labelset)).stdout
+
+
+def _eval_with(tmp_path, monkeypatch, unjudged: dict | None, expect: str = "unresolved", causes: list | None = None) -> dict:
+    """triage 결과를 꾸며 evaluate_item 한 건을 돌린다 (candidates의 cause 목록, unjudged)."""
+    sys.path.insert(0, str(REPO / "tools"))
+    import offline_eval
+    analysis = {"status": "ok", "logs": {"in_range": True, "events": 3},
+                "candidates": [{"cause": c} for c in (causes or [])]}
+    if unjudged is not None:
+        analysis["unjudged"] = unjudged
+    monkeypatch.setattr(offline_eval, "_script", lambda root, name, args: subprocess.CompletedProcess(
+        args, 0, json.dumps(analysis), ""))
+    work = tmp_path / f"w{len(list(tmp_path.iterdir()))}"
+    work.mkdir()
+    item = {"key": "U-1", "logs": ["none.log"], "occurred_at": "2026-09-20T14:32:10+09:00", "expect": expect}
+    return offline_eval.evaluate_item(tmp_path, tmp_path, tmp_path, {}, item, work)
+
+
+def test_offline_eval_unresolved_without_candidates_is_correct_when_fully_judged(tmp_path, monkeypatch):
+    r = _eval_with(tmp_path, monkeypatch, None)
+    import offline_eval
+    s = offline_eval.summarize([r])
+    assert r["error"] is None and r["warning"] is None and r["unjudged"] is None
+    assert r["verdict"] == "정답" and s["evaluated"] == 1 and s["unjudged_errors"] == 0
+
+
+def test_offline_eval_unjudged_unresolved_without_cause_candidate_is_error(tmp_path, monkeypatch):
+    # S/C null 유형 → 판정 불가 = 오류(분모 제외). 유형만 후보(cause: null)도 오탐 확정이 아니다
+    r = _eval_with(tmp_path, monkeypatch, {"count": 1, "types": ["DATA-001"],
+                                           "errors": [{"signature": "DATA-001/slow", "error": "timeout"}]}, causes=[None])
+    import offline_eval
+    assert r["error"] == "판정 불가(시그니처 시간 초과·오류): 유형 1·원인 0 — DATA-001/slow: timeout"
+    assert r["unjudged"] == {"count": 1, "cause_count": 0} and r["top"] is None and r["top3"] == []
+    s = offline_eval.summarize([r])
+    assert s["errors"] == s["unjudged_errors"] == 1 and s["evaluated"] == 0 and s["false_positive_rate"] is None
+    # 원인만 판정 불가(목록은 크기 제한으로 빠질 수 있다)
+    r = _eval_with(tmp_path, monkeypatch, {"count": 0, "cause_count": 1})
+    assert r["error"] == "판정 불가(시그니처 시간 초과·오류): 유형 0·원인 1" and "—" not in r["error"]
+
+
+def test_offline_eval_unjudged_positive_item_is_error_even_when_top_matches(tmp_path, monkeypatch):
+    r = _eval_with(tmp_path, monkeypatch, {"count": 1}, expect="DATA-001-01", causes=["DATA-001-01"])
+    import offline_eval
+    assert r["error"].startswith("판정 불가") and r["top"] is None and r["top3"] == []   # 판정 못 한 유형이 앞설 수 있다
+    s = offline_eval.summarize([r])
+    assert s["positive"] == 0 and s["top1_accuracy"] is None and s["unjudged_errors"] == 1
+
+
+def test_offline_eval_unjudged_unresolved_with_cause_candidate_is_definite_false_positive(tmp_path, monkeypatch):
+    r = _eval_with(tmp_path, monkeypatch, {"count": 1, "errors": [{"signature": "X/slow", "error": "timeout"}]},
+                   causes=[None, "DATA-001-01"])
+    import offline_eval
+    assert r["error"] is None and r["unjudged"] == {"count": 1, "cause_count": 0}
+    assert r["warning"].startswith("판정 불완전(시그니처 시간 초과·오류): 유형 1·원인 0 — X/slow: timeout")
+    s = offline_eval.summarize([r])
+    assert r["verdict"] == "오탐" and s["false_positive_rate"] == 1.0 and s["errors"] == s["unjudged_errors"] == 0
+    assert "경고 U-1: 판정 불완전" in offline_eval.render([r], s)
+
+
+def test_offline_eval_signature_only_error_is_warning_and_evaluated(tmp_path, monkeypatch):
+    # 충족된 유형의 다른 시그니처만 오류(count 0, cause_count 없음) → 평가하고 경고
+    r = _eval_with(tmp_path, monkeypatch, {"count": 0, "errors": [{"signature": "DATA-001/slow", "error": "timeout"}]})
+    import offline_eval
+    assert r["error"] is None and r["warning"] == "시그니처 오류(S/C 영향 없음) — DATA-001/slow: timeout"
+    assert r["unjudged"] is None
+    s = offline_eval.summarize([r])
+    assert r["verdict"] == "정답" and s["errors"] == 0 and s["evaluated"] == 1
+    assert "경고 U-1: 시그니처 오류" in offline_eval.render([r], s)
+
+
+def test_offline_eval_all_error_labelset_is_not_shown_as_pass(tmp_path, monkeypatch):
+    r = _eval_with(tmp_path, monkeypatch, {"count": 1})
+    import offline_eval
+    s = offline_eval.summarize([r])
+    assert s["evaluated"] == 0 and s["error_rate"] == 1.0
+    text = offline_eval.render([r], s)
+    assert "평가 가능한 항목 없음 — 전부 오류" in text and "그중 판정 불가 1건" in text
+    assert "정답 원인 ID 0·unresolved 1, 평가된 것 원인 0·unresolved 0, 오류 1" in text
+    assert s["positive_total"] == 0 and s["negative_total"] == 1
+    labelset = tmp_path / "allerr.yaml"         # 실제 실행: 로그 범위 밖(연도 틀림) 한 건 → 종료 1
+    labelset.write_text(yaml.safe_dump({
+        "db": str(SAMPLE), "tz": "Asia/Seoul",
+        "items": [{"key": "EVAL-1", "year": 2025, "occurred_at": "2026-09-20T14:32:10+09:00", "expect": "DATA-001-01",
+                   "logs": [str(SAMPLE / "data/DATA-001-no-setup-data-call/fixtures/DATA-001-01.log")]}],
+    }), encoding="utf-8")
+    proc = _offline(str(labelset))
+    assert proc.returncode == 1 and "평가 가능한 항목 없음" in proc.stdout and "전부 오류" in proc.stderr
+
+
+def test_offline_eval_end_to_end_signature_timeout_is_unjudged_error(tmp_path):
+    """실제 시간 초과 시그니처(test_triage_reuse의 slow-signature DB)로 unresolved 한 건 → 판정 불가 오류."""
+    sys.path.insert(0, str(REPO / "tests"))
+    from test_triage_reuse import LOG, _slow_symptom
+    db = tmp_path / "db"
+    shutil.copytree(SAMPLE, db)
+    _slow_symptom(db)
+    log = tmp_path / "slow.log"
+    log.write_text(LOG.read_text(encoding="utf-8") + "09-20 14:30:40.000  1234  1244 D DNC-0: " + "a" * 40 + "!\n",
+                   encoding="utf-8", newline="\n")
+    labelset = tmp_path / "slow.yaml"
+    labelset.write_text(yaml.safe_dump({
+        "db": str(db), "tz": "Asia/Seoul", "year": 2026,
+        "items": [{"key": "SLOW-1", "occurred_at": "2026-09-20T14:32:10+09:00", "expect": "unresolved",
+                   "logs": [str(log)]}],
+    }), encoding="utf-8")
+    proc = _offline(str(labelset), "--json")
+    assert proc.returncode == 1, proc.stderr
+    out = json.loads(proc.stdout)
+    assert out["summary"]["errors"] == out["summary"]["unjudged_errors"] == 1 and out["summary"]["evaluated"] == 0
+    item = out["items"][0]
+    assert item["error"].startswith("판정 불가") and item["unjudged"]["count"] >= 1
 
 
 def test_offline_eval_rejects_bad_labelset(tmp_path):

@@ -10,7 +10,7 @@ from pathlib import Path
 
 from common import compat, compiled, userconfig
 
-from .core import (ANSWER_KEYS, CACHE_FILE, CACHE_FILES, CACHE_FORMAT, PART_KEYS, RUNS_DIR, RUNS_KEEP, RUN_DIRS_KEEP,
+from .core import (ANSWER_KEYS, CACHE_FILE, CARRY_KEYS, CACHE_FILES, CACHE_FORMAT, PART_KEYS, RUNS_DIR, RUNS_KEEP, RUN_DIRS_KEEP,
                    SCRIPTS, STATE_SCHEMA, _now)
 from .report import _top_label
 
@@ -47,10 +47,19 @@ class State:
 
     def reset(self, owner: str | None) -> None:
         answers = self.data.get("answers") or {}
-        # 새 세션: 답·진행 상태는 버리고 `job`(로그·실행 이력·캐시 요약)만 남긴다 — 세션이 바뀌어도 같은 입력이면 재사용한다
+        prev, carry = self.data.get("owner"), self.data.get("carry")
+        # 새 세션: 답·진행 상태는 버리고 `job`(로그·실행 이력·캐시 요약)만 남긴다 — 세션이 바뀌어도 같은 입력이면 재사용한다.
+        # 예외: 분석 전용이 ok로 끝나 lock을 풀었으면(`carry`) 결과를 바꾸는 답(CARRY_KEYS)만 이어받는다 — 쓰기 전 입력 대조(`check_carried`)
+        if prev == owner:
+            kept = answers
+        elif prev is None and isinstance(carry, dict):
+            kept = {k: v for k, v in answers.items() if k in CARRY_KEYS}
+        else:
+            kept = {}
         platform = self.data.get("platform")      # 기본 아닌 플랫폼 작업 표시는 세션이 바뀌어도 남긴다
-        self.data = {"owner": owner, "answers": answers if self.data.get("owner") == owner else {},
-                     "job": self.data.get("job") or {}}
+        self.data = {"owner": owner, "answers": kept, "job": self.data.get("job") or {}}
+        if kept and prev != owner:
+            self.data["carried"] = {"keys": sorted(kept), **carry}
         if platform:
             self.data["platform"] = platform
 
@@ -75,12 +84,21 @@ class State:
 class CacheMixin:
     # 입력 재사용 (RF-7) ---------------------------------------------------------------------------------
 
-    def inputs(self, ctx: dict) -> dict:
-        """결과를 정하는 입력의 부분별 해시(각 16자리 hex). 바뀐 부분 이름을 알려 주는 데 쓴다. mode·dry-run은 넣지 않는다."""
-        a = self.args
+    def fingerprint(self) -> dict:
+        """로그·Jira 추출·설정의 부분 해시(`inputs`의 일부). 분석 전용에서 받은 답을 이어 쓸지 대조하는 데도 쓴다."""
         jira_path = self.job / "issue.json"
         user = dict(userconfig.load_user() or {})
         user.pop("recent_code_roots", None)      # 코드 경로를 처음 쓸 때 도구가 기록한다 — 결과와 무관
+        return {
+            "logs": _digest([{"name": f["name"], "sha": f["sha"]} for f in self.log_inputs]),
+            "issue": _file_sha(jira_path) if jira_path.is_file() else None,
+            "config": _digest({"site": self.defaults, "user": user}),
+        }
+
+    def inputs(self, ctx: dict) -> dict:
+        """결과를 정하는 입력의 부분별 해시(각 16자리 hex). 바뀐 부분 이름을 알려 주는 데 쓴다. mode·dry-run은 넣지 않는다."""
+        a = self.args
+        fp = self.fingerprint()
         code = ctx["code"] or {}
         steps_file = getattr(a, "steps_file", None)
         steps_sha = None
@@ -97,10 +115,9 @@ class CacheMixin:
             version = None
         plugin = [version, CACHE_FORMAT] + [[p.relative_to(SCRIPTS).as_posix(), _file_sha(p)] for p in scripts]
         return {
-            "logs": _digest([{"name": f["name"], "sha": f["sha"]} for f in self.log_inputs]),
-            "issue": _file_sha(jira_path) if jira_path.is_file() else None,
+            "logs": fp["logs"], "issue": fp["issue"],
             "db": compiled.source_hash(self.snap, compat.load_db_config(self.snap), compiled.environment(self.defaults, self.platform))[:16],
-            "config": _digest({"site": self.defaults, "user": user}),
+            "config": fp["config"],
             "plugin": _digest(plugin),
             "args": _digest({"tz": ctx["tz"], "year": ctx["year"], "minutes": a.minutes,
                              "code": {k: code.get(k) for k in ("skipped", "roots", "tree_version")},
@@ -231,6 +248,7 @@ class CacheMixin:
                      "top": {k: top[k] for k in ("type", "cause", "score", "S", "C")} if top else None, "reused": hit})
         job["runs"] = runs[-RUNS_KEEP:]
         job["logs"] = self.log_inputs
+        self.state.data.pop("carried", None)     # 이어 쓴 답 표시는 ok 실행에서 끝난다(`check_carried`)
         self.state.save()
 
     def request_hash(self, logs: list[Path], around: str | None, anchor: dict | None = None) -> str:

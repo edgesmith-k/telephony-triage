@@ -1,0 +1,8 @@
+# eval 68: 원인 시그니처 시간 초과용 줄 하나(`issue-db-unjudged`의 slow-cause `(a+)+$`가 이 줄에서 시간 초과 → unjudged.cause_count 1).
+name: e068-slow-line
+start: "2026-09-20T14:30:40+09:00"
+default_phone: 0
+pid: 1234
+tid: 1244
+entries:
+  - {at: 0, tag: "DNC-{phone}", level: D, msg: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa!"}

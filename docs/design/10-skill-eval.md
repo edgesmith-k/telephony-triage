@@ -10,7 +10,7 @@
 
 | 파일 | 내용 | 언제 읽나 |
 |---|---|---|
-| `SKILL.md` | 실행 규칙은 `rules.md`로 연결, `triage.py run` 호출과 `needs_input` 처리(Step 0~5 resolve는 드라이버, `contracts.md §3.2`), 결과 읽기, Step 6 리포트 규칙, Step 7 결정표, Step 8은 `write-flow.md`로. **7.5KB 이하**(RF-1, W6 전 8KB) | 스킬이 트리거될 때 |
+| `SKILL.md` | 실행 규칙은 `rules.md`로 연결, `triage.py run` 호출과 `needs_input` 처리(Step 0~5 resolve는 드라이버, `contracts.md §3.2`), 결과 읽기, Step 6 리포트 규칙, Step 7 결정표, Step 8은 `write-flow.md`로, 흐름 A(찾기·분석)/B(등록) 한 줄. **8,064B 이하**(흐름 A/B 추가 뒤, 그 전 7.5KB(RF-1), W6 전 8KB) | 스킬이 트리거될 때 |
 | `reference/rules.md` | 실행 규칙(스크립트 호출, 종료 코드 2·S-3 중단, lock, 마스킹, 사용자 확인 지점). 2KB 이하 | analyze(SKILL이 지시), `record`·`verify-fix`·`fix-submitted`·`validate --cause`·`sync-pr`. `search`는 읽기 전용이라 읽지 않는다 |
 | `reference/write-flow.md` | 공통 쓰기 절차(Step 8 방식), analyze 계획 형식, 확인 화면 형식, drift 결정, lock 해제 경로 | Step 7 계획 저장, Step 8, 모든 쓰기 흐름 |
 | `reference/record.md` | `07-workflow.md §record` | `record` 커맨드 |
@@ -18,7 +18,7 @@
 | `reference/sync-pr.md` | `07-workflow.md §sync-pr`, `06-collaboration.md §6.3` sync-pr 절차 (**단일 원본** — `commands/sync-pr.md`는 이 파일을 가리키기만 한다) | `sync-pr` 커맨드, Step 8-2 원격 브랜치 있음 |
 | `reference/search.md` | `03-issue-db.md §5.5`, `09-commands.md` search (**단일 원본** — `commands/search.md`는 이 파일을 가리키기만 한다). 증상 문장을 그대로 `db_search.py`에 넘기고 이슈 번호 줄·유형 > 원인 표로 보인다. 읽기 전용 | `search` 커맨드, 증상만 묻는 "비슷한 이슈·이슈 번호?" |
 | `reference/post.md` | `07-workflow.md §Step 9`: Jira 결과 게시 절차(status·render·`post.fill.json` 형식과 basis 규칙·확인 화면 그대로·수정 요청·`--omit`·approve 출력 그대로 1회 호출·거부·MCP 없음 처리) | analyze Step 9, 같은 세션의 "결과 Jira에 올려줘" |
-| `reference/db-authoring.md` | 아래 "추가 지침" 목록 중 작성 판단만(op·drift·R 표는 스키마·`계획 형식 오류` 메시지·`db_verify`가 대신한다). 11KB 이하(필수 필드 요약 1KB 포함) | 새 원인·유형·시그니처·파서 규칙을 만들 때 |
+| `reference/db-authoring.md` | 아래 "추가 지침" 목록 중 작성 판단만(op·drift·R 표는 스키마·`계획 형식 오류` 메시지·`db_verify`가 대신한다). §0 등록(흐름 B) 준비물·리뷰어 색인. 12KB 이하(필수 필드 요약 1KB 포함, §0 추가 전 11,392B) | 새 원인·유형·시그니처·파서 규칙을 만들 때 |
 | `reference/ril-requests.md`, `fail-causes.md`, `log-tags.md` | 참조 자료 | 로그 해석이 필요할 때 |
 
 - 각 커맨드(`commands/*.md`)는 자기 흐름의 reference 파일을 먼저 읽으라고 지시한다. SKILL.md 본체에 다른 흐름의 절차를 복사하지 않는다. 공통 실행 규칙은 `reference/rules.md` 한 곳에 두고, 커맨드에는 그것을 가리키는 한 줄(스킬 없이 스크립트만 부르는 커맨드는 호출 형식·종료 코드 2 한 줄)만 둔다.
@@ -71,7 +71,7 @@ skill-creator 스킬을 실행하고 아래를 입력으로 준다.
 
 ## eval 케이스 (fixture와 가짜 Jira 요약 사용)
 
-실행: `tests/skill_evals/run.py`(기본 `--mode plugin`). `claude -p --plugin-dir`로 실제 플러그인을 불러오고 Jira는 모의 MCP 서버, 분석 스킬은 모의 플러그인으로 붙여 커맨드·스킬 선택·hook(guard·jira_bridge)까지 평가한다. 채점은 실행 기록(도구 호출·드라이버 trace)으로 한다. 상세와 남은 차이는 `tests/skill_evals/README.md` "실행 모드". 실행마다 토큰(stream-json result의 modelUsage)을 `execution.json` `tokens`에 남기고, `grade.py --token-budget`이 `token_baseline.json` × 여유율로 상한을 판정한다. 상세 README.
+실행: `tests/skill_evals/run.py`(기본 `--mode plugin`). `claude -p --plugin-dir`로 실제 플러그인을 불러오고 Jira는 모의 MCP 서버, 분석 스킬은 모의 플러그인으로 붙여 커맨드·스킬 선택·hook(guard·jira_bridge)까지 평가한다. 채점은 실행 기록(도구 호출·드라이버 trace)으로 한다. 상세와 남은 차이는 `tests/skill_evals/README.md` "실행 모드". 실행마다 토큰(stream-json result의 modelUsage)을 `execution.json` `tokens`에 남기고, `grade.py --token-budget`이 `token_baseline.json` × 여유율로 상한을 판정한다(run의 `init_model`(없으면 `--model` 값)이 기준선 모델과 다르면 판정 보류, 비용·캐시 비율은 보고만). 상세 README.
 
 1. 없음 + DATA_DISABLED → `DATA-001 > DATA-001-01` 제안, 확인 후 Jira 기록 파일과 피드백 파일 생성
 2. 증상은 DATA-001, 원인이 이슈 DB에 없음(예: APN 불일치) → 새 원인(`temp_id`)과 시그니처 초안, draft worktree 초안 검증 결과 제시
@@ -134,5 +134,8 @@ skill-creator 스킬을 실행하고 아래를 입력으로 준다.
 65. (배치 P) 사용자 config의 clone이 oFono DB인데 선택은 android → snapshot·triage가 `platform-mismatch`(종료 2). 우회(`--offline-db`·다른 DB·config 수정) 없이 불일치를 알리고 멈춘다(재실행 안내는 판정하지 않음 — env에 ofono가 꺼져 있다). analysis.json·계획·PR 없음, lock 해제
 66. (배치 G, `18-trackers.md`) site `tracker.kind: github`(모의 `mock-github-issues`, 표준 도구 이름 `issue_read`·`add_issue_comment`) + 변형 DB `issue-db-github`에서 "https://ghe.mock.invalid/mock-org/mock-issues/issues/12 분석해서 기록해줘"(모델·SW·버전·발생 시각은 프롬프트에 제공) → `check-key`가 작업 키 `mock-org.mock-issues-12`로 정규화하고 그 키로 `triage.py run`, `issue_read`를 `method` get·get_comments로 부르고 원문은 hook이 `issue_raw.json`으로 격리(소비돼 남지 않음, 응답 원문에만 있는 값이 transcript에 없음), 분류 확인 뒤 계획 `issue.key`·`issue.origin: mcp`, PR `issue/mock-org.mock-issues-12`에 `data/…/issues/mock-org.mock-issues-12.yaml`. GitHub 쓰기 도구 0건, lock 해제, 사용자 clone 불변
 67. (배치 G) eval 61의 GitHub판: PR 뒤 GitHub 게시를 한 번 묻고 `issue_post.py render --fill`(markdown, PROBLEM 첫 줄 `GitHub: mock-org/mock-issues#12`) 확인 화면을 그대로 보인 뒤 승인 → `approve`(인자 `owner`·`repo`·`issue_number`(정수)·`body`, 승인 기록 `kind: github`) → guard `ask` → `add_issue_comment` 정확히 1건(본문 정규화 sha256 = 승인 기록), 다른 쓰기 시도 0건, `post.result.json` posted
+68. (배치 U, 사용 흐름 구분) 변형 DB `issue-db-unjudged`(DATA-001-01 원인 시그니처 시간 초과)에서 분석 → 판정 불가 must_show 줄을 그대로 보이고, 사용자가 새 원인을 원해도 `unjudged`라 새 원인·유형을 만들지 않고 원인 미확정 / 기록하지 않음만 제시. 계획·`db_verify --draft`·stage 없이 `triage.py release`, lock·clone 그대로
+69. (배치 U) 새 원인을 고른 뒤 `db-authoring.md` §0 준비물·리뷰어를 한 번 보이고 초안 단계에서 사용자 취소 → stage·publish 없이 `triage.py release`. `JOB/draft`·`JOB/wt`·`tt/*`·원격·PR·pending 피드백 없음
+70. (배치 U) "분석만, 발생 시각 모름" → `--analysis-only`(time 답) → "이제 기록, dry-run" → 같은 키·로그로 플래그만 빼고 `--dry-run` 재실행: `reuse {hit: true, run: 1}`, time·code 질문 재발 없음(이어 쓴 답, `contracts.md §3.2` `carry`), `append {cause: DATA-001-02}`, 원격 없음, lock 없음
 
-- 완료 기준: 트리거 테스트 전 항목, eval `evals.json` 전체(46~52는 10/04~05 기능 추가분, 53·54는 S6 증상 검색, 61·62는 Jira 결과 게시, 63~65는 플랫폼 분리, 66·67은 두 번째 트래커(GitHub Issues)) 통과. SKILL.md 본체 500줄 이내, 흐름별 reference 분리("SKILL 구성"). 결과물은 플러그인 `skills/telephony-triage/`에 둔다. `analyze`, `record`, `validate --cause`, `verify-fix`, `fix-submitted` 커맨드가 스킬과 연결되어 동작한다.
+- 완료 기준: 트리거 테스트 전 항목, eval `evals.json` 전체(46~52는 10/04~05 기능 추가분, 53·54는 S6 증상 검색, 61·62는 Jira 결과 게시, 63~65는 플랫폼 분리, 66·67은 두 번째 트래커(GitHub Issues), 68~70은 사용 흐름 A/B 구분) 통과. SKILL.md 본체 500줄 이내, 흐름별 reference 분리("SKILL 구성"). 결과물은 플러그인 `skills/telephony-triage/`에 둔다. `analyze`, `record`, `validate --cause`, `verify-fix`, `fix-submitted` 커맨드가 스킬과 연결되어 동작한다.
