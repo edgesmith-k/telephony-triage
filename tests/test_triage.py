@@ -184,6 +184,23 @@ def test_full_run_stops_for_code_choice_then_finishes_and_keeps_lock_until_relea
     assert ws.db_pr("lock", "status")["held"] is False
 
 
+def test_needs_input_records_only_pending_kind_and_answer_clears_it():
+    """needs_input이면 triage-state.json에 `pending {kind, asked_at}`만 남는다(질문 문구·선택지 없음). 답하고 다시 돌면 지운다."""
+    ws = Workspace()
+    args = ["run", "MOCK-1001", "--dry-run", "--issue-file", MOCK_JIRA / "MOCK-1001.yaml", "--logs", DATA_LOG]
+    first = ws.json("triage.py", args)
+    assert first["status"] == "needs_input"
+    path = ws.job_dir("MOCK-1001") / "triage-state.json"
+    state = json.loads(path.read_text(encoding="utf-8"))
+    assert set(state["pending"]) == {"kind", "asked_at"} and state["pending"]["kind"] == first["needs_input"]["kind"]
+    text = path.read_text(encoding="utf-8")
+    assert first["needs_input"]["question"] not in text
+    assert all(o["label"] not in text for o in first["needs_input"]["options"])
+    done = ws.json("triage.py", [*args, "--answer", "code=skip"])
+    assert done["status"] == "ok" and "pending" not in json.loads(path.read_text(encoding="utf-8"))
+    ws.json("triage.py", ["release", "MOCK-1001"])
+
+
 def test_full_run_resolves_code_refs_against_the_chosen_tree():
     ws = Workspace()
     src = REPO / "tests" / "mocks" / "src" / "android16"

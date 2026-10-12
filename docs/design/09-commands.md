@@ -1,6 +1,6 @@
 # 09. 커맨드 목록
 
-> 원본 10장. 파일 위치는 `01-architecture.md §3`의 `commands/`와 같은 목록이다 (13개).
+> 원본 10장. 파일 위치는 `01-architecture.md §3`의 `commands/`와 같은 목록이다 (14개).
 
 ---
 
@@ -15,6 +15,7 @@
 | `sync` | Step 1만 수행 (세션 lock → `db_pr snapshot`(base 변경 한 줄), 사후 lint → lock 해제). 이어 `db_pr cleanup --dry-run --older-than`으로 닫힌 PR의 오래된 작업 디렉토리를 보여주고 확인 후 지운다. 마지막에 `db_pr my-prs`(읽기 전용)로 내 열린 PR과 base 이동 여부를 한 줄씩 보이고 `sync-pr`은 안내만 한다 (`contracts.md §3.2`) | `07-workflow.md §Step 1` |
 | `search <증상 문장\|keyword\|JIRA-KEY\|ID>` | `db_search.py`로 이슈 DB 검색 (secondary/related, 옛 ID → 새 ID 연결 포함). 증상 문장("데이터 안 붙어, 이슈 번호 알려줘")은 단어별·별칭으로 찾는다. 유형, 원인, 해결책, 수정 상태, Jira를 보여주고 Jira 번호는 맨 위에 모아 요약한다. 스냅샷을 읽는다. 절차는 `reference/search.md` | `03-issue-db.md §5.5` |
 | `sync-pr [branch]` | 머지 전 재동기화: 원래 작업 계획을 최신 main에 재적용(drift 확인, ID 재할당), 생성 파일 재생성, ID·Jira 재검사, 확인 후 SHA 지정 lease push. 인자가 없으면 작업 계획에 기록된 열린 PR에서 고른다. 계획이 없는 브랜치는 수동 절차만 안내한다 | `07-workflow.md §sync-pr`, `06-collaboration.md §6.3` |
+| `status [JIRA-KEY]` | 작업 상태 한 화면: `job_status.py <KEY> --format markdown`으로 단계(분석·질문 대기·계획·stage·확인 화면·커밋·push·PR)·막힌 것·다음 할 일·관련 파일을 줄마다 확신도(`[현재]`·`[기록 <시각>]`·`[확인 불가]`)와 함께 보인다. 로컬 기록만 읽고 원격(PR 상태)은 보지 않는다. 키가 없으면 lock 작업·단일 작업, 여럿이면 후보 | `contracts.md §3.2` `job_status.py` |
 | `preview` | `db_build.py --preview <임시 디렉토리>`로 생성 결과를 보여준다. 워킹 트리를 바꾸지 않는다 | `03-issue-db.md §5.6` |
 | `review [category]` | 월간 리뷰 리포트. 인자가 없으면 오너 카테고리를 묻는다 | `06-collaboration.md §6.6` |
 | `validate [--cause <원인 ID> <적용 후 logcat...>] [--extra <logcat...>]` | 인자 없으면 현재 이슈 DB 변경분에 lint·전체 회귀·R1~R5(`--extra`면 R6) 실행 (직접 편집 기여자가 push 전에 실행, 아무것도 바꾸지 않음, 스크립트 래퍼). `--cause`면 해결책 검증 → passed 시 `verify-res/<원인 ID>-<YYYYMMDD>` PR | `07-workflow.md §validate` |
@@ -25,7 +26,7 @@
 - 모든 커맨드는 **얇은 래퍼**다. 로직은 스킬과 스크립트에 둔다 (`help`만 예외: 스크립트 없이 본문이 플러그인 파일을 읽는 절차다, §10.1).
 - 이슈 DB에 쓰는 커맨드(`analyze`, `record`, `sync-pr`, `validate --cause`, `fix-submitted`, `verify-fix`)와 `sync`(작업 키 `sync`)는 시작할 때 세션 lock을 잡고(`db_pr lock acquire`), 끝나는 모든 경로에서 푼다 (`contracts.md §3.2`). 이어서 `config.py check --db <work_dir>/_snapshot`으로 쓰기 가능 여부(스키마·생성기·파서 백엔드·외부 파서 버전, gh 인증)를 확인하고, 불가면 이유를 보여주고 멈춘다 (`analyze`는 읽기 전용으로 계속). `--dry-run`은 `--for dry-run`으로 gh 인증 없이 확인 화면까지 간다.
 - `migrate`는 lock을 잡지 않고 스냅샷도 옮기지 않는다(메인테이너 자기 브랜치의 워킹 트리만 바꾼다). `migrate/schema-v<N>` 브랜치에서는 `config.py check`·pre-commit·`validate`가 버전 불일치를 차단하지 않는다 (`06-collaboration.md §6.4`).
-- 읽기 전용 커맨드(`search`, `preview`, `review`, `help`, 인자 없는 `validate`)는 lock을 잡지 않는다.
+- 읽기 전용 커맨드(`search`, `preview`, `review`, `help`, `status`, 인자 없는 `validate`)는 lock을 잡지 않는다.
 - 모든 커맨드(`help` 제외: 플러그인 파일만 읽는다)는 `plugin/site-defaults.yaml`이 없으면 "사내 기본값 없음(S-3 미완료)"으로 멈춘다 (`15-local-draft.md §15.1`).
 - 최신 Claude Code에서 커맨드와 스킬의 관계(커맨드가 스킬로 통합됐는지 등)와 본문의 `${CLAUDE_PLUGIN_ROOT}` 치환 여부는 구현 전에 확인한다 (S1).
 

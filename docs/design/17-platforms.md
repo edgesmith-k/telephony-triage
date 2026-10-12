@@ -47,7 +47,7 @@ parser_backends/<p>_reference/          # 그 플랫폼 BACKEND 재수출 (andro
 | site-defaults | `platform.name`, `platform.enabled`, `platform.others.<p>`, `parser.by_platform.<p>` | 팀 기본, 켤 수 있는 플랫폼, 그 밖 플랫폼의 상수·백엔드 (`02-config.md`) |
 | 사용자 config | `platform` | 개인 기본 선택(`enabled` 안의 이름) |
 | 사용자 config | `platforms.<p>.{issue_db, work_dir, log_dir, code_profiles, recent_code_roots}` | 경로 프로필(`PROFILE_KEYS`). 최상위 같은 키 = android 프로필 |
-| CLI | `--platform <p>` | `triage.py`·`config.py`·`db_pr.py`·`db_verify.py`·`issue_post.py`·`code_roots.py`·`db_add.py`·`db_search.py`·`db_review.py`(그 밖 스크립트 — `mask_pii`·`parse_logcat` 등 — 은 받지 않는다) |
+| CLI | `--platform <p>` | `triage.py`·`config.py`·`db_pr.py`·`db_verify.py`·`issue_post.py`·`code_roots.py`·`db_add.py`·`db_search.py`·`db_review.py`·`job_status.py`(그 밖 스크립트 — `mask_pii`·`parse_logcat` 등 — 은 받지 않는다) |
 | env | `TT_PLATFORM` | triage → 하위 스크립트(사람이 쓰지 않는다) |
 
 - 선택 순서: `--platform` > `TT_PLATFORM` > 사용자 config `platform` > site `platform.name` > `android`. `enabled` 관문은 **사용자 세션 흐름만** 적용한다. DB에 고정된 도구(`db_regress`·`db_lint`·`parse_logcat --rules`)는 DB 선언 플랫폼(설치돼 있으면 허용).

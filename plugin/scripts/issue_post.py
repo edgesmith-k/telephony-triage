@@ -63,6 +63,8 @@ FAILED_STEP_MAX, EVIDENCE_LINES, EVIDENCE_CHARS, OTHERS_MAX = 120, 6, 160, 3
 QUOTE_MIN = 40                              # Jira 원문과 이만큼 같은 연속 부분이 있으면 인용으로 본다
 TODO = "TODO(LLM)"
 CONFIRMED = {"accepted", "chose-other", "new-cause", "new-type"}
+STALE_REASON = "분석 상태(triage-state.json)가 analysis.json과 다르다 — 다시 분석한다"   # job_status도 쓴다
+PLAN_OTHER_ANALYSIS = "다른 분석의 계획(request_hash)"
 
 
 class Usage(Exception):
@@ -149,7 +151,7 @@ class Job:
         if not (isinstance(plan.get("feedback"), dict) and plan["feedback"].get("decision")):
             return None
         if plan.get("request_hash") and self.analysis and plan["request_hash"] != self.analysis.get("request_hash"):
-            self.plan_skipped = "다른 분석의 계획(request_hash)"
+            self.plan_skipped = PLAN_OTHER_ANALYSIS
             return None
         if plan.get("source") != "analyze":
             self.plan_skipped = f"analyze 계획이 아님(source: {plan.get('source')})"
@@ -185,7 +187,7 @@ class Job:
         runs = (state.get("job") or {}).get("runs") or []
         last = runs[-1] if runs and isinstance(runs[-1], dict) else {}
         if last.get("request_hash") != a.get("request_hash"):
-            return False, "분석 상태(triage-state.json)가 analysis.json과 다르다 — 다시 분석한다"
+            return False, STALE_REASON
         if last.get("dry_run") is not False:
             return False, "--dry-run 실행 결과는 게시하지 않는다" if last.get("dry_run") else "실행 기록에 dry-run 여부가 없다 — 다시 분석한다"
         if (a.get("issue") or {}).get("origin") != "mcp":

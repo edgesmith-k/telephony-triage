@@ -33,7 +33,7 @@ from workspace import Workspace  # noqa: E402
 COMMANDS = REPO / "plugin" / "commands"
 DOCS = REPO / "docs" / "design"
 EXPECTED = ["setup", "analyze", "record", "sync", "search", "sync-pr", "preview", "review", "validate",
-            "verify-fix", "fix-submitted", "migrate", "help"]
+            "verify-fix", "fix-submitted", "migrate", "help", "status"]
 SKILL_LINKED = ["analyze", "record", "verify-fix", "fix-submitted", "validate"]
 NO_ARGS = ["setup", "sync", "preview"]
 
@@ -50,12 +50,12 @@ def _frontmatter(name: str) -> dict:
 
 def test_command_files_match_design_lists():
     files = sorted(p.stem for p in COMMANDS.glob("*.md"))
-    assert files == sorted(EXPECTED) and len(files) == 13
+    assert files == sorted(EXPECTED) and len(files) == 14
     table = (DOCS / "09-commands.md").read_text(encoding="utf-8")
     names = re.findall(r"^\| `([a-z-]+)[ `]", table, re.M)
     assert sorted(set(names)) == sorted(EXPECTED)
     arch = (DOCS / "01-architecture.md").read_text(encoding="utf-8")
-    assert "commands/" in arch and "(13개)" in arch
+    assert "commands/" in arch and "(14개)" in arch
 
 
 def test_every_command_has_description_and_argument_hint_where_it_takes_args():
@@ -69,7 +69,7 @@ def test_every_command_has_description_and_argument_hint_where_it_takes_args():
 def test_skill_linked_commands_call_the_skill_and_others_call_scripts_only():
     for name in SKILL_LINKED:
         assert "telephony-triage" in (COMMANDS / f"{name}.md").read_text(encoding="utf-8"), name
-    for name in ("sync", "search", "preview", "review", "sync-pr", "migrate"):
+    for name in ("sync", "search", "preview", "review", "sync-pr", "migrate", "status"):
         text = (COMMANDS / f"{name}.md").read_text(encoding="utf-8")
         assert "${CLAUDE_PLUGIN_ROOT}/scripts/" in text, name
 
@@ -87,7 +87,7 @@ def test_write_commands_take_session_lock_and_readonly_commands_do_not():
     for name, path in (("sync", COMMANDS / "sync.md"), ("sync-pr", reference)):
         text = path.read_text(encoding="utf-8")
         assert "lock acquire" in text and "lock release" in text, name
-    for name in ("search", "preview", "review", "help"):
+    for name in ("search", "preview", "review", "help", "status"):
         assert "lock acquire" not in (COMMANDS / f"{name}.md").read_text(encoding="utf-8"), name
 
 
@@ -299,7 +299,7 @@ def test_sync_and_setup_bodies_list_new_steps_in_order():
     assert "doctor" in setup[order[0]:order[1]], "gh 실패 경로도 doctor 표를 보인다"
     skill = (REPO / "plugin" / "skills" / "telephony-triage" / "SKILL.md").read_text(encoding="utf-8")
     assert "config.py doctor --format markdown" in skill
-    assert len(list(COMMANDS.glob("*.md"))) == 13
+    assert len(list(COMMANDS.glob("*.md"))) == 14
     sys.path.insert(0, str(REPO / "plugin" / "scripts"))
     import config, db_pr
     assert config.build_parser().parse_args(["doctor"]).format == "json"

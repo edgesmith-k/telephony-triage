@@ -187,6 +187,7 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
             if held.get("job") == self.key and held.get("owner") == owner:
                 self.run.env["TT_LOCK_OWNER"] = owner
                 self.locked = True
+                self.clear_pending()
                 return
         choice = self.answer("lock")
         if choice == "stop":
@@ -213,11 +214,16 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
             raise NeedsInput("lock", f"같은 이슈의 lock이 {age}초 전에 갱신됐다. 다른 세션이 진행 중일 수 있다. 이어받을까?",
                              [{"value": "take-over", "label": "이어받는다"}, {"value": "stop", "label": "중단"}])
         owner = data["lock"]["owner"]
-        self.state.reset(owner)   # 새 세션: 이전 세션의 답·진행 상태는 쓰지 않는다
+        self.state.reset(owner)   # 새 세션: 이전 세션의 답·진행 상태(`pending` 포함)는 쓰지 않는다
         self.state.answers.update({k: v for k, v in self.given.items() if k != "lock"})
         self.run.env["TT_LOCK_OWNER"] = owner
         self.locked = True
         self.state.save()
+
+    def clear_pending(self) -> None:
+        """lock을 잡은 뒤 이전 실행의 질문 표시(needs_input `pending`)를 지운다(lock 질문은 lock을 못 잡으면 남는다)."""
+        if self.state.data.pop("pending", None) is not None:
+            self.state.save()
 
     def cleanup(self) -> None:
         """잔여 worktree·도구 브랜치는 묻지도 지우지도 않는다. 목록만 보고 notes로 알린다(정리는 `/telephony-triage:sync`)."""

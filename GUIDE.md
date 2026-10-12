@@ -315,6 +315,7 @@ claude mcp list               # Jira MCP 사용자 범위 등록 확인
 | `verify-fix <원인 ID> <수정 빌드 로그>` | 수정 빌드에서 재발 안 하는지 확인 → fixed |
 | `validate [--cause <원인 ID> <적용 후 로그>] [--extra <로그...>]` | 직접 편집 검사 / 해결책 효과 검증 |
 | `sync-pr [브랜치]` | 내 PR이 머지 대기 중인데 main이 바뀌었을 때 (내 작업 계획을 최신 main에 다시 적용) |
+| `status [JIRA]` | 어디까지 했는지 모를 때(다음 날 재개 등). 단계·막힌 것·다음 할 일을 한 화면으로 본다(읽기 전용, 로컬 기록만, PR의 지금 상태는 보지 않음) |
 | `sync`, `preview`, `review [카테고리]`, `setup` | 최신화, 생성 결과 미리보기, 월간 리뷰, 설정 |
 | `migrate --to <N>` | (메인테이너) 자기 `migrate/schema-v<N>` 브랜치에서 스키마를 올림. PR은 직접 만든다 |
 

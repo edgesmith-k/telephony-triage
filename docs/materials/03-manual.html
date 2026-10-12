@@ -313,7 +313,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
 <text class="t" x="102" y="42">사용자</text>
 <text class="s" x="102" y="60">분류 확정 · 새 원인 승인 · push 전 확인 화면 승인</text>
 <rect class="box" x="90" y="110" width="520" height="50" rx="6"/>
-<text class="t" x="102" y="132">커맨드 13개</text>
+<text class="t" x="102" y="132">커맨드 14개</text>
 <text class="s" x="102" y="150">analyze · record · search · sync · sync-pr · fix-submitted · verify-fix …</text>
 <rect class="box" x="90" y="200" width="520" height="66" rx="6"/>
 <text class="t" x="102" y="222">스킬 telephony-triage</text>
@@ -387,7 +387,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
 
     <div class="sub" id="s0-cmdmap" data-title="커맨드별 동작 지도">
       <h3>커맨드별 동작 지도</h3>
-      <p>분석·기록 커맨드는 모두 같은 스킬을 부르고(setup·sync·preview·review·migrate는 스크립트만 부르고, help는 커맨드 파일만 읽습니다), 이슈 DB에 쓰는 커맨드는 모두 같은 <a href="#s0-seq">공통 쓰기 절차</a>로 끝납니다. 그래서 그림 다섯 장으로 열세 커맨드와, 규칙에 없는 새 이슈가 왔을 때의 흐름(E)까지 거의 다 설명할 수 있습니다.</p>
+      <p>분석·기록 커맨드는 모두 같은 스킬을 부르고(setup·sync·status·preview·review·migrate는 스크립트만 부르고, help는 커맨드 파일만 읽습니다), 이슈 DB에 쓰는 커맨드는 모두 같은 <a href="#s0-seq">공통 쓰기 절차</a>로 끝납니다. 그래서 그림 다섯 장으로 열네 커맨드와, 규칙에 없는 새 이슈가 왔을 때의 흐름(E)까지 거의 다 설명할 수 있습니다.</p>
       <div class="tbl"><table>
         <tr><th>커맨드</th><th>무엇을</th><th>주요 스크립트</th><th>이슈 DB</th><th>그림</th></tr>
         <tr><td><code>setup</code></td><td>설정 만들기, Jira 도구 연결, hook 설치, 점검 표</td><td><code>config.py</code>, <code>db_pr.py snapshot</code></td><td>읽기</td><td><a href="#s3-setup">3.3 표</a></td></tr>
@@ -396,6 +396,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
         <tr><td><code>search</code></td><td>이미 기록된 이슈 찾기</td><td><code>db_search.py</code></td><td>읽기</td><td>없음</td></tr>
         <tr><td><code>sync</code></td><td>스냅샷 최신화, 정리 후보, 내 PR 확인</td><td><code>db_pr.py snapshot · cleanup · my-prs</code></td><td>읽기</td><td>D</td></tr>
         <tr><td><code>sync-pr</code></td><td>main이 바뀐 뒤 내 PR에 계획 다시 적용</td><td><code>db_pr.py find-plan</code></td><td>PR 갱신</td><td>D 다음 B</td></tr>
+        <tr><td><code>status</code></td><td>작업 하나가 어디까지 됐는지·막힌 것·다음 할 일을 한 화면으로 봅니다(로컬 기록만)</td><td><code>job_status.py</code></td><td>읽기</td><td>없음</td></tr>
         <tr><td><code>fix-submitted</code></td><td>수정 CL과 빌드 기록</td><td><code>db_pr.py</code></td><td>PR</td><td>B</td></tr>
         <tr><td><code>verify-fix</code></td><td>수정 빌드 로그로 재발 여부 판정</td><td><code>db_verify.py fix</code></td><td>PR</td><td>C 다음 B</td></tr>
         <tr><td><code>validate</code></td><td>직접 편집 검사, 또는 <code>--cause</code>로 해결책 효과 검증</td><td><code>db_lint</code>, <code>db_regress</code>, <code>db_verify.py</code></td><td>읽기, <code>--cause</code>는 PR</td><td><code>--cause</code>는 C와 같은 모양, 이어서 B</td></tr>
@@ -766,7 +767,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
           <rect class="box hl" x="196" y="30" width="300" height="300" rx="8"/>
           <text class="t" x="212" y="54">telephony-triage 플러그인</text>
           <rect class="box" x="212" y="68" width="268" height="52" rx="5"/>
-          <text class="t" x="224" y="90">커맨드 13개</text>
+          <text class="t" x="224" y="90">커맨드 14개</text>
           <text class="s" x="224" y="108">analyze · record · search · sync …</text>
           <rect class="box" x="212" y="128" width="268" height="52" rx="5"/>
           <text class="t" x="224" y="150">스킬 telephony-triage</text>
@@ -819,7 +820,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
       </figure>
       <div class="tbl"><table>
         <tr><th>구성</th><th>위치</th><th>역할</th></tr>
-        <tr><td>커맨드</td><td><code>plugin/commands/*.md</code></td><td>얇은 래퍼. 스킬·스크립트를 부르는 입구(13개)</td></tr>
+        <tr><td>커맨드</td><td><code>plugin/commands/*.md</code></td><td>얇은 래퍼. 스킬·스크립트를 부르는 입구(14개)</td></tr>
         <tr><td>스킬</td><td><code>plugin/skills/telephony-triage/</code></td><td>스크립트 출력을 설명하고 사용자 결정을 계획으로 옮김. <code>reference/</code>에 흐름별 절차</td></tr>
         <tr><td>스크립트</td><td><code>plugin/scripts/</code></td><td>파싱·마스킹·매칭·검증·생성·PR. 결과는 JSON, 종료 코드 0/1/2/3</td></tr>
         <tr><td>hooks</td><td><code>plugin/hooks/hooks.json</code></td><td>SessionStart 1, PreToolUse(MCP·Bash·파일 도구), PostToolUse(Jira 원문 격리)</td></tr>
@@ -850,7 +851,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
       <h3>현재 상태와 측정 수치</h3>
       <ul>
         <li>개발 단계(사외 초안, Phase D0~13)와 실제 로그 반영 트랙(L1~L3), 반입 전 3차 검토 반영까지 끝났습니다. 도입 조직 환경에 맞추는 사내 보완 단계(S-0~S-7, <a href="#s7-rollout">7.12</a>)는 아직 남아 있습니다.</li>
-        <li>자동 테스트 1,678개, CI(Ubuntu, Python 3.11·3.14) 통과. 샘플 이슈 DB 회귀 fixture 23/23. 스킬 행동 eval 67개 정의(Jira 결과 게시 61·62, 플랫폼 분리 63~65, GitHub 트래커 66·67 — 실험적).</li>
+        <li>자동 테스트 1,697개, CI(Ubuntu, Python 3.11·3.14) 통과. 샘플 이슈 DB 회귀 fixture 23/23. 스킬 행동 eval 67개 정의(Jira 결과 게시 61·62, 플랫폼 분리 63~65, GitHub 트래커 66·67 — 실험적).</li>
         <li>10/11: Jira 결과 게시(승인한 코멘트 1건, analyze Step 9)와 플랫폼 분리(Android 기본, oFono 뼈대, 플랫폼별 이슈 DB)가 들어갔습니다.</li>
         <li>토큰(모의 데이터 eval 기준, Sonnet): analyze부터 기록까지 1건 약 39만 토큰(이전 74만에서 48% 감소). 커맨드 1회 20만~80만 토큰, 약 $0.15~0.5. <b>실제 로그·DB 크기에서는 달라질 수 있습니다.</b></li>
       </ul>
@@ -1003,6 +1004,7 @@ python3 "$S/config.py" doctor --format markdown</pre></div>
         <tr><td><a href="#c-search"><code>search</code></a></td><td>비슷한 이슈·Jira 번호 찾기</td><td>읽기</td><td>없음</td></tr>
         <tr><td><a href="#c-sync"><code>sync</code></a></td><td>스냅샷 최신화, 오래된 작업 정리, 내 PR 확인</td><td>읽기</td><td>잡음</td></tr>
         <tr><td><a href="#c-syncpr"><code>sync-pr</code></a></td><td>내 PR이 머지 대기 중인데 main이 바뀜</td><td>push</td><td>잡음</td></tr>
+        <tr><td><code>status</code></td><td>어디까지 했는지 모를 때(다음 날 재개 등). PR의 지금 상태는 보지 않습니다</td><td>읽기</td><td>없음</td></tr>
         <tr><td><a href="#c-fixsub"><code>fix-submitted</code></a></td><td>수정 CL이 머지됨</td><td>PR</td><td>잡음</td></tr>
         <tr><td><a href="#c-verifyfix"><code>verify-fix</code></a></td><td>수정 빌드에서 재발 안 하는지 확인</td><td>PR</td><td>잡음</td></tr>
         <tr><td><a href="#c-validate"><code>validate</code></a></td><td>직접 편집 검사 / 해결책 효과 검증</td><td>읽기 / PR</td><td>없음 / 잡음</td></tr>

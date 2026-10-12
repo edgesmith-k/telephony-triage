@@ -44,7 +44,8 @@
 
 사용자 결정이 필요한 곳에서는 멈추고 `{"status": "needs_input", "needs_input": {kind, question, options[], answer}}`를
 낸다(종료 코드 0). 스킬이 사용자에게 묻고 `--answer <kind>=<값>`을 붙여 **같은 명령을 다시** 실행한다. 답과 진행 상태는
-`JOB/triage-state.json`에 남고, 세션 lock owner가 같으면 다시 묻지 않는다(재실행은 멱등). kind:
+`JOB/triage-state.json`에 남고, 세션 lock owner가 같으면 다시 묻지 않는다(재실행은 멱등). 마지막 질문은
+`pending {kind, asked_at}`(문구·선택지 없음, 다음 run이 lock을 잡으면 지운다)로 남아 `job_status.py`가 읽는다. kind:
 `lock`(release-other|take-over|stop) · `plan`(resume|new) · `issue`(MCP 호출 후 재실행) ·
 `year`(YYYY) · `reanalyze`(yes|no) · `open_pr`(continue|stop) · `logs`(`--logs`로 재실행) ·
 `code`(프로필|경로|skip) · `code_confirm`(yes|skip) · `time`(ISO 시각) · `window`(full|keep) ·
@@ -89,7 +90,7 @@ from platforms import session as platform_session  # noqa: E402
 from common.exitcodes import CHECK_FAILED, OK, USAGE  # noqa: E402
 from triagelib.cache import State  # noqa: E402
 from triagelib.core import (ANALYSIS_MAX, EXPLORE_DONE_LINE, EXPLORE_INPUT_FILE, STATE_FILE, TIMELINE_FILE,  # noqa: E402,F401
-                            Fail, NeedsInput, Runner, Stopped, _clip)
+                            Fail, NeedsInput, Runner, Stopped, _clip, _now)
 from triagelib.driver import Driver  # noqa: E402
 from triagelib.report import _unique_evidence, dumps, fit, schema_violation, timeline  # noqa: E402,F401 — 테스트가 쓴다
 
@@ -245,6 +246,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         result = driver.execute()
     except NeedsInput as exc:
+        # 마지막 질문 종류만 남긴다(문구·선택지는 다른 작업 키·경로를 담을 수 있어 쓰지 않는다, 08-safety.md). answers 밖이라 입력 해시와 무관
+        driver.state.data["pending"] = {"kind": exc.payload["kind"], "asked_at": _now()}
         driver.state.save()
         driver.run.note("needs_input", kind=exc.payload["kind"])
         out = {"status": "needs_input", "key": driver.key, "needs_input": exc.payload,

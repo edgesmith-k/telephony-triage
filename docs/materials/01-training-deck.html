@@ -430,7 +430,7 @@ body.show-notes #notes-panel { display: block; }
         <span class="tag info">플러그인</span>
         <h3>telephony-triage</h3>
         <ul class="pts small">
-          <li>커맨드 13개, 스킬 1개, hook</li>
+          <li>커맨드 14개, 스킬 1개, hook</li>
           <li>파서·매처·검증 스크립트(Python)</li>
           <li>사내 마켓플레이스에서 설치 <span class="tag mute">예정 S-7</span></li>
         </ul>
@@ -588,12 +588,12 @@ feedback/      <span class="c"># 후보 수락·거절 기록</span>
 
 <!-- ================= 4. 커맨드 ================= -->
 <section class="slide" data-sec="4 커맨드별 사용법">
-  <div class="head"><div class="eyebrow">§4 커맨드별 사용법</div><h2>커맨드 13개 지도</h2><p class="lede">모두 <code>/telephony-triage:&lt;이름&gt;</code>으로 부릅니다. 분석·검색·기록은 말로 요청해도 연결됩니다.</p></div>
+  <div class="head"><div class="eyebrow">§4 커맨드별 사용법</div><h2>커맨드 14개 지도</h2><p class="lede">모두 <code>/telephony-triage:&lt;이름&gt;</code>으로 부릅니다. 분석·검색·기록은 말로 요청해도 연결됩니다.</p></div>
   <div class="body">
     <div class="g4">
       <div class="card key"><h3>분석·기록</h3><p><code>analyze</code></p><p><code>record</code></p><p class="small">이슈 DB에 PR</p></div>
       <div class="card key"><h3>수정 상태</h3><p><code>fix-submitted</code></p><p><code>verify-fix</code></p><p><code>validate --cause</code></p><p class="small">이슈 DB에 PR</p></div>
-      <div class="card"><h3>찾기·보기</h3><p><code>search</code></p><p><code>preview</code></p><p><code>review</code></p><p><code>help</code></p><p class="small">읽기 전용</p></div>
+      <div class="card"><h3>찾기·보기</h3><p><code>search</code></p><p><code>preview</code></p><p><code>review</code></p><p><code>status</code></p><p><code>help</code></p><p class="small">읽기 전용</p></div>
       <div class="card"><h3>맞추기·관리</h3><p><code>sync</code> <code>sync-pr</code></p><p><code>validate</code> (인자 없음)</p><p><code>setup</code> <code>migrate</code></p></div>
     </div>
     <div class="card alert"><p>이슈 DB에 쓰는 커맨드는 시작할 때 <b>세션 lock</b>을 잡고 끝나는 모든 경로에서 풉니다. 한 사람이 같은 이슈 DB(플랫폼)에서 동시에 두 작업을 할 수 없습니다(android 작업과 oFono 작업은 동시에 가능).</p></div>
@@ -720,6 +720,7 @@ feedback/      <span class="c"># 후보 수락·거절 기록</span>
       <tr><th>커맨드</th><th>언제</th><th>쓰기</th></tr>
       <tr><td><code>sync</code></td><td>스냅샷이 오래됐을 때. 오래된 작업 디렉토리 정리, 내 열린 PR 목록. push 안 한 계획은 지우지 않고 "보존"으로 알려 줌</td><td>없음</td></tr>
       <tr><td><code>sync-pr [브랜치]</code></td><td>내 PR이 머지 대기 중인데 main이 바뀌었을 때</td><td>PR 갱신</td></tr>
+      <tr><td><code>status [JIRA]</code></td><td>어디까지 했는지 모를 때. 단계·막힌 것·다음 할 일을 한 화면으로 보여 줌(로컬 기록만)</td><td>없음</td></tr>
       <tr><td><code>validate</code></td><td>이슈 DB를 직접 편집한 뒤 push 전 검사(lint·마스킹·회귀·R1~R5)</td><td>없음</td></tr>
       <tr><td><code>validate --cause</code></td><td>해결책 적용 후 로그로 효과 검증 → 통과 시 PR</td><td>PR</td></tr>
       <tr><td><code>preview</code></td><td>README·STATS 생성 결과를 임시 폴더에 미리보기</td><td>없음</td></tr>
@@ -1121,7 +1122,7 @@ bonus = 근접(근거 시각이 발생 시각에 가까울수록) + 키워드(Ji
   <div class="head"><div class="eyebrow">§10 현황 · Q&amp;A</div><h2>현재 상태와 참고 자료</h2></div>
   <div class="body">
     <div class="nums">
-      <div><b>1,678</b><span>자동 테스트 (CI Ubuntu, Python 3.11 · 3.14 통과)</span></div>
+      <div><b>1,697</b><span>자동 테스트 (CI Ubuntu, Python 3.11 · 3.14 통과)</span></div>
       <div><b>23/23</b><span>샘플 DB 회귀 fixture 통과</span></div>
       <div><b>67</b><span>skill eval 정의</span></div>
       <div><b>~39만</b><span>analyze→기록 1건 토큰 (Sonnet, 이전 74만에서 −48%)</span></div>

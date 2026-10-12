@@ -86,6 +86,19 @@ def test_reuse_survives_release_and_new_session():
     assert len(_state(ws)["job"]["runs"]) == 2
 
 
+def test_needs_input_round_trip_keeps_reuse_and_args_part():
+    """needs_input의 `pending` 표시는 answers 밖이라 입력 해시(args 부분)·재사용에 영향이 없다."""
+    ws = Workspace()
+    first = _run(ws)
+    parts = _state(ws)["job"]["cache"]["parts"]
+    ws.json("triage.py", ["release", KEY])
+    asked = ws.json("triage.py", ["run", KEY, "--dry-run", "--issue-file", MOCK_JIRA / f"{KEY}.yaml", "--logs", LOG])
+    assert asked["status"] == "needs_input" and _state(ws)["pending"]["kind"] == asked["needs_input"]["kind"]
+    again = _run(ws)
+    assert again["reuse"] == {"hit": True, "run": 1} and again["request_hash"] == first["request_hash"]
+    assert _state(ws)["job"]["cache"]["parts"]["args"] == parts["args"] and "pending" not in _state(ws)
+
+
 def test_log_content_change_invalidates_only_logs_part():
     ws = Workspace()
     log = tmp("tt-log-") / "radio.log"

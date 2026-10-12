@@ -13,7 +13,7 @@ telephony-triage 커맨드 도움말을 보여준다. 인자: $ARGUMENTS
 
 0. **말로 요청하기** — 먼저 이 두 줄을 그대로 보인다:
    "커맨드 없이 말로 요청해도 됩니다. 로그 분석, 비슷한 이슈 검색, 기록, 수정 CL 반영, 수정 검증, 해결책 검증, PR 재동기화는 스킬 설명 기준으로 알아서 연결됩니다.
-   setup, sync, preview, review, migrate, 인자 없는 validate는 커맨드로 실행하세요."
+   setup, sync, status, preview, review, migrate, 인자 없는 validate는 커맨드로 실행하세요."
 1. **목록** — 커맨드 목록은 이 파일에 적지 않는다. `${CLAUDE_PLUGIN_ROOT}/commands/*.md`의 frontmatter에서 만든다:
    Grep으로 그 디렉토리의 `^(description|argument-hint): ` 줄을 한 번에 읽는다(본문은 읽지 않는다).
    파일 이름 순으로 한 줄에 하나씩 `/telephony-triage:<파일 이름> <argument-hint>` — `<description>`을 보인다
@@ -31,6 +31,7 @@ telephony-triage 커맨드 도움말을 보여준다. 인자: $ARGUMENTS
 | 이미 스스로 해결했다, 분석 없이 기록만 남기고 싶다 | `record <JIRA-KEY>` |
 | 비슷한 이슈·Jira 번호부터 찾고 싶다 | `search <증상 문장 또는 키워드>` |
 | 이슈 DB를 최신으로 받고, 오래된 작업과 내 열린 PR을 보고 싶다 | `sync` |
+| 어디까지 했는지 모르겠다, 막힌 것과 다음 할 일을 보고 싶다 | `status [JIRA-KEY]` |
 | 내 PR이 머지 대기 중인데 main이 바뀌었다 | `sync-pr [branch]` |
 | 수정 CL이 머지됐다 | `fix-submitted <원인 ID> --ref <CL> --fixed-in <branch>` |
 | 수정 빌드에서 재발하지 않는지 확인하고 싶다 | `verify-fix <원인 ID> <수정 빌드 logcat>` |
