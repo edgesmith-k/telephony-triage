@@ -16,6 +16,7 @@ import json
 import os
 import platform
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -435,10 +436,123 @@ def test_offline_eval_out_of_range_item_is_error_not_scored(tmp_path):
                    "expect": "DATA-001-01",
                    "logs": [str(SAMPLE / "data/DATA-001-no-setup-data-call/fixtures/DATA-001-01.log")]}],
     }), encoding="utf-8")
-    out = json.loads(_offline(str(labelset), "--json").stdout)
+    proc = _offline(str(labelset), "--json")
+    assert proc.returncode == 1, proc.stderr          # 전부 오류 = 통과 아님
+    out = json.loads(proc.stdout)
     assert out["summary"]["errors"] == 1 and out["summary"]["evaluated"] == 0
     assert out["summary"]["top1_accuracy"] is None
     assert "평가 0/전체 1" in _offline(str(labelset)).stdout
+
+
+def _eval_with(tmp_path, monkeypatch, unjudged: dict | None, expect: str = "unresolved", causes: list | None = None) -> dict:
+    """triage 결과를 꾸며 evaluate_item 한 건을 돌린다 (candidates의 cause 목록, unjudged)."""
+    sys.path.insert(0, str(REPO / "tools"))
+    import offline_eval
+    analysis = {"status": "ok", "logs": {"in_range": True, "events": 3},
+                "candidates": [{"cause": c} for c in (causes or [])]}
+    if unjudged is not None:
+        analysis["unjudged"] = unjudged
+    monkeypatch.setattr(offline_eval, "_script", lambda root, name, args: subprocess.CompletedProcess(
+        args, 0, json.dumps(analysis), ""))
+    work = tmp_path / f"w{len(list(tmp_path.iterdir()))}"
+    work.mkdir()
+    item = {"key": "U-1", "logs": ["none.log"], "occurred_at": "2026-09-20T14:32:10+09:00", "expect": expect}
+    return offline_eval.evaluate_item(tmp_path, tmp_path, tmp_path, {}, item, work)
+
+
+def test_offline_eval_unresolved_without_candidates_is_correct_when_fully_judged(tmp_path, monkeypatch):
+    r = _eval_with(tmp_path, monkeypatch, None)
+    import offline_eval
+    s = offline_eval.summarize([r])
+    assert r["error"] is None and r["warning"] is None and r["unjudged"] is None
+    assert r["verdict"] == "정답" and s["evaluated"] == 1 and s["unjudged_errors"] == 0
+
+
+def test_offline_eval_unjudged_unresolved_without_cause_candidate_is_error(tmp_path, monkeypatch):
+    # S/C null 유형 → 판정 불가 = 오류(분모 제외). 유형만 후보(cause: null)도 오탐 확정이 아니다
+    r = _eval_with(tmp_path, monkeypatch, {"count": 1, "types": ["DATA-001"],
+                                           "errors": [{"signature": "DATA-001/slow", "error": "timeout"}]}, causes=[None])
+    import offline_eval
+    assert r["error"] == "판정 불가(시그니처 시간 초과·오류): 유형 1·원인 0 — DATA-001/slow: timeout"
+    assert r["unjudged"] == {"count": 1, "cause_count": 0} and r["top"] is None and r["top3"] == []
+    s = offline_eval.summarize([r])
+    assert s["errors"] == s["unjudged_errors"] == 1 and s["evaluated"] == 0 and s["false_positive_rate"] is None
+    # 원인만 판정 불가(목록은 크기 제한으로 빠질 수 있다)
+    r = _eval_with(tmp_path, monkeypatch, {"count": 0, "cause_count": 1})
+    assert r["error"] == "판정 불가(시그니처 시간 초과·오류): 유형 0·원인 1" and "—" not in r["error"]
+
+
+def test_offline_eval_unjudged_positive_item_is_error_even_when_top_matches(tmp_path, monkeypatch):
+    r = _eval_with(tmp_path, monkeypatch, {"count": 1}, expect="DATA-001-01", causes=["DATA-001-01"])
+    import offline_eval
+    assert r["error"].startswith("판정 불가") and r["top"] is None and r["top3"] == []   # 판정 못 한 유형이 앞설 수 있다
+    s = offline_eval.summarize([r])
+    assert s["positive"] == 0 and s["top1_accuracy"] is None and s["unjudged_errors"] == 1
+
+
+def test_offline_eval_unjudged_unresolved_with_cause_candidate_is_definite_false_positive(tmp_path, monkeypatch):
+    r = _eval_with(tmp_path, monkeypatch, {"count": 1, "errors": [{"signature": "X/slow", "error": "timeout"}]},
+                   causes=[None, "DATA-001-01"])
+    import offline_eval
+    assert r["error"] is None and r["unjudged"] == {"count": 1, "cause_count": 0}
+    assert r["warning"].startswith("판정 불완전(시그니처 시간 초과·오류): 유형 1·원인 0 — X/slow: timeout")
+    s = offline_eval.summarize([r])
+    assert r["verdict"] == "오탐" and s["false_positive_rate"] == 1.0 and s["errors"] == s["unjudged_errors"] == 0
+    assert "경고 U-1: 판정 불완전" in offline_eval.render([r], s)
+
+
+def test_offline_eval_signature_only_error_is_warning_and_evaluated(tmp_path, monkeypatch):
+    # 충족된 유형의 다른 시그니처만 오류(count 0, cause_count 없음) → 평가하고 경고
+    r = _eval_with(tmp_path, monkeypatch, {"count": 0, "errors": [{"signature": "DATA-001/slow", "error": "timeout"}]})
+    import offline_eval
+    assert r["error"] is None and r["warning"] == "시그니처 오류(S/C 영향 없음) — DATA-001/slow: timeout"
+    assert r["unjudged"] is None
+    s = offline_eval.summarize([r])
+    assert r["verdict"] == "정답" and s["errors"] == 0 and s["evaluated"] == 1
+    assert "경고 U-1: 시그니처 오류" in offline_eval.render([r], s)
+
+
+def test_offline_eval_all_error_labelset_is_not_shown_as_pass(tmp_path, monkeypatch):
+    r = _eval_with(tmp_path, monkeypatch, {"count": 1})
+    import offline_eval
+    s = offline_eval.summarize([r])
+    assert s["evaluated"] == 0 and s["error_rate"] == 1.0
+    text = offline_eval.render([r], s)
+    assert "평가 가능한 항목 없음 — 전부 오류" in text and "그중 판정 불가 1건" in text
+    assert "정답 원인 ID 0·unresolved 1, 평가된 것 원인 0·unresolved 0, 오류 1" in text
+    assert s["positive_total"] == 0 and s["negative_total"] == 1
+    labelset = tmp_path / "allerr.yaml"         # 실제 실행: 로그 범위 밖(연도 틀림) 한 건 → 종료 1
+    labelset.write_text(yaml.safe_dump({
+        "db": str(SAMPLE), "tz": "Asia/Seoul",
+        "items": [{"key": "EVAL-1", "year": 2025, "occurred_at": "2026-09-20T14:32:10+09:00", "expect": "DATA-001-01",
+                   "logs": [str(SAMPLE / "data/DATA-001-no-setup-data-call/fixtures/DATA-001-01.log")]}],
+    }), encoding="utf-8")
+    proc = _offline(str(labelset))
+    assert proc.returncode == 1 and "평가 가능한 항목 없음" in proc.stdout and "전부 오류" in proc.stderr
+
+
+def test_offline_eval_end_to_end_signature_timeout_is_unjudged_error(tmp_path):
+    """실제 시간 초과 시그니처(test_triage_reuse의 slow-signature DB)로 unresolved 한 건 → 판정 불가 오류."""
+    sys.path.insert(0, str(REPO / "tests"))
+    from test_triage_reuse import LOG, _slow_symptom
+    db = tmp_path / "db"
+    shutil.copytree(SAMPLE, db)
+    _slow_symptom(db)
+    log = tmp_path / "slow.log"
+    log.write_text(LOG.read_text(encoding="utf-8") + "09-20 14:30:40.000  1234  1244 D DNC-0: " + "a" * 40 + "!\n",
+                   encoding="utf-8", newline="\n")
+    labelset = tmp_path / "slow.yaml"
+    labelset.write_text(yaml.safe_dump({
+        "db": str(db), "tz": "Asia/Seoul", "year": 2026,
+        "items": [{"key": "SLOW-1", "occurred_at": "2026-09-20T14:32:10+09:00", "expect": "unresolved",
+                   "logs": [str(log)]}],
+    }), encoding="utf-8")
+    proc = _offline(str(labelset), "--json")
+    assert proc.returncode == 1, proc.stderr
+    out = json.loads(proc.stdout)
+    assert out["summary"]["errors"] == out["summary"]["unjudged_errors"] == 1 and out["summary"]["evaluated"] == 0
+    item = out["items"][0]
+    assert item["error"].startswith("판정 불가") and item["unjudged"]["count"] >= 1
 
 
 def test_offline_eval_rejects_bad_labelset(tmp_path):

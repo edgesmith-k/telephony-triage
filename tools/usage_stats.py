@@ -5,7 +5,10 @@ PR까지 걸린 평균 시간, 중도 취소 비율, 작업당 저장된 답 수
 PR 완료는 `plan.json`의 `pr.number`가 있을 때만 세고, push 기록 있음·PR 연결 미확인(`pr.head_sha`만 있음)은 따로 센다.
 
 CLI:
-    python3 tools/usage_stats.py [--work-dir <dir>]    (기본: 사용자 config의 work_dir)
+    python3 tools/usage_stats.py [--work-dir <dir> | --platform <이름>] [--plugin-root <dir>]
+    (기본: 선택 플랫폼(`--platform` > TT_PLATFORM > 사용자 config platform > site)의 사용자 config work_dir.
+    `--work-dir`와 `--platform`은 함께 쓸 수 없다. `--work-dir`면 site-defaults를 읽지 않는다)
+    첫 줄에 집계 대상(플랫폼·work_dir)을 적는다.
 """
 
 from __future__ import annotations
@@ -17,7 +20,9 @@ from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "plugin" / "scripts"))
-from common import session_lock, userconfig  # noqa: E402
+import platforms  # noqa: E402
+from common import session_lock, site_defaults, userconfig  # noqa: E402
+from platforms import session as platform_session  # noqa: E402
 
 
 def _json(path: Path) -> dict:
@@ -55,11 +60,23 @@ def stats(work_dir: Path) -> dict:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="usage_stats.py", description=__doc__)
-    parser.add_argument("--work-dir", help="기본: 사용자 config의 work_dir")
+    target = parser.add_mutually_exclusive_group()
+    target.add_argument("--work-dir", help="기본: 선택 플랫폼의 사용자 config work_dir")
+    platform_session.add_arg(target)
+    parser.add_argument("--plugin-root", default=None)
     args = parser.parse_args(argv)
     try:
-        work_dir = Path(args.work_dir or userconfig.get(userconfig.load_user() or {}, "work_dir")
-                        or userconfig.builtin()["work_dir"]).expanduser()
+        if args.work_dir:
+            work_dir = Path(args.work_dir).expanduser()
+            target = f"work_dir {work_dir} (--work-dir 지정)"
+        else:
+            defaults = site_defaults.load_or_exit(args.plugin_root)
+            name, cfg = platform_session.resolve(defaults, args.platform)
+            work_dir = Path(userconfig.get(cfg, "work_dir")).expanduser()
+            target = f"플랫폼 {name} · work_dir {work_dir}"
+    except platforms.PlatformConfigError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
     except Exception as exc:   # 손상된 config는 환경 오류(2)
         print(f"config를 읽지 못했다: {exc}", file=sys.stderr)
         return 2
@@ -67,6 +84,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"work_dir가 없다: {work_dir}", file=sys.stderr)
         return 2
     s = stats(work_dir)
+    print(f"집계 대상: {target}")
 
     def num(v, unit):
         return "n/a" if v is None else f"{v:.1f}{unit}"

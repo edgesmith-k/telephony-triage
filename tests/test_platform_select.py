@@ -174,6 +174,236 @@ def test_config_set_and_show_platform_profile():
     assert proc.returncode == 2 and "켜져 있지 않습니다" in proc.stderr
 
 
+class _Init:
+    """임시 홈 하나에서 `config.py init --answers`를 부르는 도우미 (켠 플랫폼 android·ofono)."""
+
+    def __init__(self):
+        self.root = _root_on()
+        self.h = tmp("tt-home-")
+        self.env = {"TELEPHONY_TRIAGE_HOME": self.h}
+        self.n = 0
+
+    def run(self, answers: dict, *extra: str, env: dict | None = None):
+        self.n += 1
+        path = self.h.parent / f"ans-{self.n}.json"
+        path.write_text(json.dumps(answers), encoding="utf-8")
+        return run("config.py", ["init", "--answers", path, *extra], root=self.root, env={**self.env, **(env or {})})
+
+    def ok(self, answers: dict, *extra: str, env: dict | None = None) -> dict:
+        proc = self.run(answers, *extra, env=env)
+        assert proc.returncode == 0, proc.stderr
+        return json.loads(proc.stdout)
+
+    def config(self) -> dict:
+        return yaml.safe_load((self.h / "config.yaml").read_text(encoding="utf-8"))
+
+    def write(self, data: dict) -> None:
+        (self.h / "config.yaml").write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+
+    def android(self, db="dbA", **over) -> dict:
+        return {"user.ghe_id": "u", "issue_db.path": str(self.h / db),
+                "issue_db.remote": f"https://ghe.mock.invalid/o/{db}.git", **over}
+
+
+TOOLS = {"mcp_server": "mock-jira", "tools": {"get_issue": "mcp__mock-jira__jira_fetch_ticket"},
+         "read_tools": ["mcp__mock-jira__jira_fetch_ticket"]}
+
+
+def test_ofono_first_then_android_init_adds_top_profile_without_force():
+    it = _Init()
+    it.ok({**it.android("dbO"), "work_dir": str(it.h / "work-ofono")}, "--platform", "ofono")
+    data = it.config()
+    assert not any(k in data for k in userconfig.PROFILE_KEYS)       # 따로 설치: 최상위 프로필 없음
+    data["tracker"] = TOOLS
+    data["plugin"]["extra"] = 1
+    data["platforms"]["ofono"]["code_profiles"] = [{"name": "o", "path": str(it.h / "src")}]
+    it.write(data)
+    it.ok({**it.android("dbA"), "user.ghe_id": "ignored"}, "--platform", "android")      # --force 없이 더한다
+    after = it.config()
+    assert after["issue_db"] == {"path": str(it.h / "dbA"), "remote": "https://ghe.mock.invalid/o/dbA.git"}
+    assert after["user"] == data["user"] and after["tracker"] == TOOLS and after["plugin"] == data["plugin"]
+    assert after["platforms"] == data["platforms"]                   # code_profiles 포함 그대로
+    proc = it.run(it.android("dbA2"), "--platform", "android")       # 이제 최상위 프로필이 있다
+    assert proc.returncode == 2 and "set" in proc.stderr and "--force" in proc.stderr
+    assert it.config() == after
+
+
+def test_android_first_then_ofono_init_keeps_top_profile():
+    it = _Init()
+    it.ok(it.android("dbA", **{"issue_db.base_branch": "dev"}))
+    before = it.config()
+    it.ok({"issue_db.path": str(it.h / "dbO"), "issue_db.remote": "https://ghe.mock.invalid/o/dbO.git"},
+          "--platform", "ofono")
+    after = it.config()
+    assert {k: v for k, v in after.items() if k != "platforms"} == before
+    assert after["platforms"]["ofono"]["issue_db"]["path"] == str(it.h / "dbO")
+
+
+def test_android_reinit_requires_force_and_keeps_keys_outside_fields():
+    it = _Init()
+    (it.h / "logs").mkdir(parents=True)
+    it.ok(it.android("dbA", **{"issue_db.base_branch": "dev", "log_dir": str(it.h / "logs")}))
+    it.ok({"issue_db.path": str(it.h / "dbO"), "issue_db.remote": "https://ghe.mock.invalid/o/dbO.git"},
+          "--platform", "ofono")
+    data = it.config()
+    data.update(platform="ofono", tracker={**TOOLS, "timezone": "UTC"})
+    data["plugin"]["extra"] = 1
+    it.write(data)
+    proc = it.run(it.android("dbA2"))
+    assert proc.returncode == 2 and "--force" in proc.stderr and it.config() == data
+    # 개인 기본 platform: ofono여도 init은 android(site 기본)를 고른다 — ofono 프로필을 덮지 않는다
+    it.ok(it.android("dbA2", **{"user.ghe_id": "u2"}), "--force")
+    after = it.config()
+    assert after["issue_db"] == {"path": str(it.h / "dbA2"), "remote": "https://ghe.mock.invalid/o/dbA2.git",
+                                 "base_branch": "dev"}            # 답에 없는 키는 그대로
+    assert after["log_dir"] == str(it.h / "logs") and after["user"]["ghe_id"] == "u2"
+    assert after["tracker"] == {**TOOLS, "timezone": "UTC"}
+    assert after["plugin"]["extra"] == 1 and after["plugin"]["scripts_path"] == str(it.root / "scripts")
+    assert after["platform"] == "ofono" and after["platforms"] == data["platforms"]
+    # TT_PLATFORM=ofono면 ofono 프로필을 다시 만든다(최상위는 그대로)
+    it.ok({"issue_db.path": str(it.h / "dbO2"), "issue_db.remote": "https://ghe.mock.invalid/o/dbO2.git"}, "--force",
+          env={"TT_PLATFORM": "ofono"})
+    final = it.config()
+    assert final["platforms"]["ofono"]["issue_db"]["path"] == str(it.h / "dbO2")
+    assert {k: v for k, v in final.items() if k != "platforms"} == {k: v for k, v in after.items() if k != "platforms"}
+
+
+def test_android_reinit_updates_only_entered_keys():
+    it = _Init()
+    custom = it.h / "my-work"
+    it.ok(it.android("dbA", **{"logcat.timezone": "UTC", "work_dir": str(custom), "issue_db.base_branch": "dev"}))
+    data = it.config()
+    data["tracker"] = TOOLS
+    it.write(data)
+    it.ok({"user.ghe_id": "u2"}, "--force")                         # 필수 키도 기존 값이 있으면 생략 가능
+    after = it.config()
+    assert after["logcat"] == {"timezone": "UTC"} and after["work_dir"] == str(custom)
+    assert after["issue_db"]["base_branch"] == "dev" and after["user"]["ghe_id"] == "u2" and after["tracker"] == TOOLS
+    # 빈 답(선택 항목)·팀 기본값과 같은 답은 지워 상속한다
+    it.ok({"logcat.timezone": "", "issue_db.base_branch": "main"}, "--force")
+    after = it.config()
+    assert "logcat" not in after and "base_branch" not in after["issue_db"] and after["work_dir"] == str(custom)
+    proc = it.run({"issue_db.path": ""}, "--force")                 # 필수 키를 비우면 거부
+    assert proc.returncode == 2 and "issue_db.path: 값이 필요합니다" in proc.stderr
+
+
+def test_android_reinit_stdin_enter_keeps_current_values():
+    import config as config_cli
+    it = _Init()
+    custom = it.h / "my-work"
+    it.ok(it.android("dbA", **{"logcat.timezone": "UTC", "work_dir": str(custom)}))
+    before = it.config()
+    proc = run("config.py", ["init", "--force"], root=it.root, env=it.env, stdin="\n" * len(config_cli.FIELDS))
+    assert proc.returncode == 0, proc.stderr
+    assert f"[{custom}]" in proc.stderr and "[UTC]" in proc.stderr          # 기본값 = 지금 값
+    assert it.config() == before
+
+
+def test_android_reinit_stdin_dash_resets_to_team_default():
+    import config as config_cli
+    it = _Init()
+    (it.h / "logs").mkdir(parents=True)
+    it.ok(it.android("dbA", **{"logcat.timezone": "UTC", "log_dir": str(it.h / "logs")}))
+    keys = [f[0] for f in config_cli.FIELDS]
+    lines = ["-" if k in ("logcat.timezone", "log_dir") else "" for k in keys]
+    proc = run("config.py", ["init", "--force"], root=it.root, env=it.env, stdin="\n".join(lines) + "\n")
+    assert proc.returncode == 0, proc.stderr
+    assert "(Enter=지금 값 유지, -=팀 기본값" in proc.stderr and "-=팀 기본값 없음)" in proc.stderr   # log_dir 팀 기본값 없음
+    after = it.config()
+    assert "logcat" not in after and "log_dir" not in after and after["issue_db"]["path"] == str(it.h / "dbA")
+
+
+def test_other_platform_force_updates_only_entered_keys():
+    it = _Init()
+    it.ok(it.android("dbA"))
+    custom = it.h / "wo-custom"
+    it.ok({"issue_db.path": str(it.h / "dbO"), "issue_db.remote": "https://ghe.mock.invalid/o/dbO.git",
+           "work_dir": str(custom)}, "--platform", "ofono")
+    data = it.config()
+    data["platforms"]["ofono"]["code_profiles"] = [{"name": "o", "path": str(it.h / "src")}]
+    it.write(data)
+    it.ok({"issue_db.path": str(it.h / "dbO2")}, "--platform", "ofono", "--force")      # 원격·work_dir 생략 = 유지
+    prof = it.config()["platforms"]["ofono"]
+    assert prof["issue_db"] == {"path": str(it.h / "dbO2"), "remote": "https://ghe.mock.invalid/o/dbO.git"}
+    assert prof["work_dir"] == str(custom) and prof["code_profiles"] == data["platforms"]["ofono"]["code_profiles"]
+    assert {k: v for k, v in it.config().items() if k != "platforms"} == {k: v for k, v in data.items() if k != "platforms"}
+    it.ok({"work_dir": str(it.h / "work-ofono")}, "--platform", "ofono", "--force")    # 팀 기본값과 같은 답 = 지움
+    assert "work_dir" not in it.config()["platforms"]["ofono"]
+    import config as config_cli
+    n = sum(f[0].split(".")[0] in userconfig.PROFILE_KEYS for f in config_cli.FIELDS)     # 프로필 항목만 묻는다
+    proc = run("config.py", ["init", "--platform", "ofono", "--force"], root=it.root, env=it.env, stdin="\n" * n)
+    assert proc.returncode == 0 and f"[{it.h / 'dbO2'}]" in proc.stderr          # 기본값 = 그 프로필의 지금 값
+    assert it.config()["platforms"]["ofono"]["issue_db"]["path"] == str(it.h / "dbO2")
+
+
+def test_android_reinit_warns_when_work_dir_with_jobs_changes():
+    it = _Init()
+    old = it.h / "w1"
+    it.ok(it.android("dbA", work_dir=str(old)))
+    (old / "MOCK-1").mkdir()
+    proc = it.run({"work_dir": str(it.h / "w2")}, "--force")
+    assert proc.returncode == 0 and f"이전 work_dir {old}에 작업 1개" in proc.stderr
+
+
+@pytest.mark.parametrize("bad", [["ofono"], "ofono"])
+def test_init_rejects_non_mapping_platforms(bad):
+    it = _Init()
+    it.ok(it.android("dbA"))
+    data = it.config()
+    data["platforms"] = bad
+    it.write(data)
+    before = (it.h / "config.yaml").read_bytes()
+    for extra in (("--force",), ("--platform", "ofono")):
+        proc = it.run(it.android("dbA2"), *extra)
+        assert proc.returncode == 2 and "platforms: 매핑이어야 합니다" in proc.stderr and "Traceback" not in proc.stderr
+        assert (it.h / "config.yaml").read_bytes() == before
+
+
+def test_init_rejects_unknown_tracker_kind_and_legacy_keys():
+    it = _Init()
+    it.ok(it.android("dbA"))
+    for over, needle in (({"tracker": {"kind": "nosuch"}}, "config.py set tracker.kind"), ({"jira": {"mcp_server": "x"}}, "rename-legacy로 바꾼다")):
+        it.write({**it.config(), **over})
+        before = (it.h / "config.yaml").read_bytes()
+        proc = it.run(it.android("dbA2"), "--force")
+        assert proc.returncode == 2 and needle in proc.stderr, proc.stderr
+        assert (it.h / "config.yaml").read_bytes() == before
+        data = it.config()
+        for k in over:
+            data.pop(k)
+        it.write(data)
+
+
+def test_init_rejects_invalid_new_config_without_touching_file():
+    it = _Init()
+    it.ok(it.android("dbA"))
+    it.ok({"issue_db.path": str(it.h / "dbO"), "issue_db.remote": "https://ghe.mock.invalid/o/dbO.git"},
+          "--platform", "ofono")
+    before = (it.h / "config.yaml").read_bytes()
+    (it.h / "w").mkdir()
+    cases = [
+        ((it.android("w/db", **{"work_dir": str(it.h / "w")}), "--force"), "clone)를 포함하거나 같습니다"),
+        ((it.android("dbO"), "--force"), "같은 clone"),                                  # 남긴 ofono 프로필과 겹침
+        (({"issue_db.path": str(it.h / "dbA"), "issue_db.remote": "https://ghe.mock.invalid/o/x.git"},
+          "--platform", "ofono", "--force"), "같은 clone"),                               # 최상위와 겹침
+        ((it.android("dbA3", **{"work_dir": "rel"}), "--force"), "절대 경로"),
+    ]
+    for (answers, *extra), needle in cases:
+        proc = it.run(answers, *extra)
+        assert proc.returncode == 2 and needle in proc.stderr, (extra, proc.stderr)
+        assert (it.h / "config.yaml").read_bytes() == before
+
+
+def test_init_force_rebuilds_config_with_broken_paths():
+    it = _Init()
+    it.write({"user": {"ghe_id": "u"}, "work_dir": "work", "issue_db": {"path": "db"}})     # 상대 경로(프로필 문제)
+    assert run("config.py", ["check"], root=it.root, env=it.env).returncode == 2
+    it.ok(it.android("dbA", work_dir=""), "--force")              # 빈 답은 지워 상속
+    after = it.config()
+    assert "work_dir" not in after and after["issue_db"]["path"] == str(it.h / "dbA")
+    assert userconfig.profile_problems(after) == []
+
+
 # -- lock: 플랫폼별 --------------------------------------------------------------------------
 
 
@@ -291,6 +521,60 @@ def test_profile_paths_must_not_overlap(home):
         assert any(needle in p for p in problems), (profs, problems)
     assert userconfig.profile_problems({**base, "platforms": {"ofono": {"work_dir": str(home / "w2")}}}) == []
     assert userconfig.profile_problems(base) == []
+
+
+@pytest.mark.parametrize("platforms_value", ["absent", "empty", "other"])
+def test_top_profile_path_problems_same_with_or_without_platforms(home, platforms_value):
+    clone = str(home / "db")
+    out = home.parent / "elsewhere"          # 최상위 경로와 겹치지 않는 다른 플랫폼 프로필
+    ofono = {"ofono": {"work_dir": str(out / "wo"), "issue_db": {"path": str(out / "dbo")}}}
+    for top in ({"issue_db": {"path": clone}, "work_dir": "work"},
+                {"issue_db": {"path": clone}, "work_dir": ""},
+                {"issue_db": {"path": clone}, "work_dir": str(home)},
+                {"issue_db": {"path": "db"}},
+                {"issue_db": {"path": clone}, "work_dir": str(home / "w")}):
+        user = dict(top)
+        if platforms_value == "empty":
+            user["platforms"] = {}
+        elif platforms_value == "other":
+            user["platforms"] = ofono
+        assert userconfig.profile_problems(user) == userconfig.profile_problems(top), (platforms_value, top)
+
+
+def test_config_validate_path_kinds(home, monkeypatch):
+    import config as config_cli
+    monkeypatch.setenv("HOME", str(home.parent))
+    for kind in ("clone-path", "work-dir"):
+        assert "절대 경로" in config_cli.validate(kind, "rel/x")
+        assert config_cli.validate(kind, str(home.parent / "x")) is None
+        assert config_cli.validate(kind, "~/x") is None
+        assert config_cli.validate(kind, "") is None             # 빈 값은 선택 항목 건너뜀(필수는 init이 따로 거부)
+
+
+def test_check_and_doctor_report_top_level_path_problem():
+    root = _root_on()
+    h = tmp("tt-home-")
+    env = {"TELEPHONY_TRIAGE_HOME": h}
+    (h / "config.yaml").write_text(yaml.safe_dump({"user": {"ghe_id": "u"}, "work_dir": "work",
+                                                   "issue_db": {"path": str(h / "db")}}), encoding="utf-8")
+    proc = run("config.py", ["check"], root=root, env=env)
+    assert proc.returncode == 2 and "work_dir: 비어 있지 않은 절대 경로" in proc.stderr
+    proc = run("config.py", ["doctor"], root=root, env=env)
+    rows = {r["check"]: r for r in json.loads(proc.stdout)["rows"]}
+    assert proc.returncode == 1 and rows["platform"]["status"] == "fail" and "work_dir" in rows["platform"]["detail"]
+
+
+def test_top_profile_paths_checked_without_platforms(home):
+    clone = str(home / "db")
+    base = {"issue_db": {"path": clone}}
+    problems = userconfig.profile_problems({**base, "work_dir": "work"})
+    assert any(p.startswith("work_dir: 비어 있지 않은 절대 경로") for p in problems), problems
+    problems = userconfig.profile_problems({**base, "work_dir": str(home)})          # platforms 없이도 clone 포함 검사
+    assert any("clone)를 포함하거나 같습니다" in p for p in problems), problems
+    with pytest.raises(platforms.PlatformConfigError):
+        session.resolve({"platform": ON}, None, {"work_dir": "work"})
+    _name, _cfg, problems = session.resolve_lenient({"platform": ON}, None, {"work_dir": ""})
+    assert any("work_dir" in p for p in problems), problems
 
 
 # -- 이슈 DB 키 --------------------------------------------------------------------------------

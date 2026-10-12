@@ -7,9 +7,10 @@ telephony-triage를 이 사용자 환경에 맞게 설정한다 (`02-config.md �
 각 단계의 결과를 짧게 보여주고, **사용자 확인이 필요한 곳에서는 반드시 묻는다.**
 
 0. **플랫폼** — `config.py site-defaults`의 `platform.enabled`가 2개 이상일 때만 어느 플랫폼을 설정할지 묻는다(없거나 1개면 묻지 않고 지금 흐름 그대로).
-   android가 아닌 플랫폼을 고르면 1·3·5·6·7·8·10번의 모든 스크립트 호출에 `--platform <이름>`을 붙인다: 1번은 그 플랫폼의 이슈 DB clone 경로·원격·작업 디렉토리만 묻고
+   플랫폼을 고르면(android 포함) 이후 `config.py`·`db_pr.py` 호출마다 `--platform <이름>`을 붙인다(개인 기본 `platform`을 따라 단계마다 달라지지 않게). android가 아니면 1번은 그 플랫폼의 이슈 DB clone 경로·원격·작업 디렉토리만 묻고
    `config.py init --platform <이름> --answers <파일>`(기존 config에 그 프로필만 더한다. config가 없으면 공통 항목과 그 프로필만 만든다 — 따로 설치)
-   또는 기존 프로필이면 `config.py set --platform <이름> <키> <값>`. Jira(4)·gh(9)는 플랫폼끼리 공유하므로 이미 설정됐으면 다시 하지 않는다.
+   또는 기존 프로필이면 `config.py set --platform <이름> <키> <값>`(여러 키면 `init --platform <이름> --force --answers <바꿀 키만 둔 파일>`). android를 골랐는데 기존 config에 android 프로필(최상위 `issue_db`·`work_dir` 등)이 없으면
+   (다른 플랫폼만 설치) 프로필 항목(clone·원격·작업 디렉토리 등)만 물어 `config.py init --answers <파일>`(`--force` 없이 그 프로필만 더한다). Jira(4)·gh(9)는 플랫폼끼리 공유하므로 이미 설정됐으면 다시 하지 않는다.
    플랫폼마다 clone·작업 디렉토리가 달라야 한다(겹치면 거부·경고). 다른 플랫폼도 쓰려면 setup을 한 번 더 한다.
 1. **config 만들기** — `config.py show`로 기존 config를 확인한다.
    - 없으면 아래 항목을 사용자에게 하나씩 묻는다(괄호 안 기본값은 `show`의 `effective`에 있다):
@@ -17,10 +18,10 @@ telephony-triage를 이 사용자 환경에 맞게 설정한다 (`02-config.md �
      logcat 시각 타임존, 연도 결정 방식(`tracker | file-mtime | ask`), logcat 기본 탐색 경로(선택),
      작업 디렉토리. `code_profiles`는 건너뛸 수 있다(기본값과 같은 답은 저장되지 않고 팀 기본값을 따른다).
    - 답을 JSON(`{"user.ghe_id": ..., "issue_db.path": ..., ...}`)으로 임시 파일에 쓰고
-     `config.py init --answers <파일>`을 실행한다. 경로가 없으면 거부되므로(종료 코드 2) 그 항목만 다시 묻는다.
+     `config.py init --answers <파일>`을 실행한다. 경로가 없거나 절대 경로(`~` 허용)가 아니거나 다른 프로필과 겹치면 거부되므로(종료 코드 2, config는 그대로) 그 항목만 다시 묻는다.
      홈(`~/.telephony-triage/`)과 작업 디렉토리는 권한 700으로 만들어진다.
    - 있으면 바꿀 항목만 `config.py set <키> <값>`으로 고친다. 예전 `init`이 저장한 팀 기본값 복사본을 상속형으로 바꾸려면
-     `config.py init --force`로 다시 만들거나 해당 키를 config.yaml에서 지운다.
+     `config.py init --force --answers <파일>`(파일에는 바꿀 키만 둔다. 상속할 키는 빈 값 `""`. 없는 키·Jira 도구·다른 플랫폼 프로필은 그대로라 4를 다시 하지 않는다)로 하거나 해당 키를 config.yaml에서 지운다.
    - 종료 코드 2 "옛 설정 키"면 `config.py rename-legacy`의 `changes`를 보여 주고 확인받은 뒤 `--apply`(사용자 config만 바뀐다).
      `site_problems`가 있으면 관리자에게 알리고 멈춘다(site-defaults는 고치지 않는다).
 2. **스크립트 경로** — `config.py sync-scripts-path`.

@@ -43,3 +43,70 @@ def test_pr_counts_only_with_number_and_pushed_without_pr_is_separate(tmp_path, 
          {}, files=pushed_files)
     s = usage_stats.stats(tmp_path)
     assert (s["started"], s["pr_jobs"], s["cancelled"], s["pushed_no_pr"]) == (2, 0, 1, 1)
+
+
+@pytest.fixture
+def two_platforms(tmp_path, monkeypatch, capsys):
+    """android work_dir(작업 0건)·ofono work_dir(PR 작업 1건)을 가진 사용자 config와 `main` 호출 도우미."""
+    import yaml
+
+    sys.path.insert(0, str(REPO / "tests" / "helpers"))
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    import platforms
+    from common import userconfig
+    from runner import plugin_root
+
+    root = plugin_root("ofono-on", platform={"name": "android", "enabled": ["android", "ofono"]})
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv(userconfig.HOME_ENV, str(home))
+    monkeypatch.delenv(platforms.ENV, raising=False)
+    wa, wo = tmp_path / "wa", tmp_path / "wo"
+    _job(wa, "A-1", {"started_at": START}, {})
+    _job(wo, "O-1", {"started_at": START, "pr": {"number": 1}}, {})
+    _job(wo, "O-2", {"started_at": START, "pr": {"number": 2}}, {})
+    data = {"work_dir": str(wa), "platforms": {"ofono": {"work_dir": str(wo)}}}
+
+    def write(**over):
+        (home / "config.yaml").write_text(yaml.safe_dump({**data, **over}), encoding="utf-8")
+
+    def main(*args):
+        code = usage_stats.main([*args, "--plugin-root", str(root)])
+        return code, capsys.readouterr()
+
+    write()
+    return {"main": main, "write": write, "wa": wa, "wo": wo, "env": platforms.ENV, "mp": monkeypatch}
+
+
+def test_default_platform_is_android_and_first_line_names_target(two_platforms):
+    code, out = two_platforms["main"]()
+    lines = out.out.splitlines()
+    assert code == 0 and lines[0] == f"집계 대상: 플랫폼 android · work_dir {two_platforms['wa']}"
+    assert "PR 작업 0건" in out.out and "중도 취소 1/1" in out.out
+
+
+def test_user_config_platform_and_env_select_ofono(two_platforms):
+    two_platforms["write"](platform="ofono")
+    code, out = two_platforms["main"]()
+    assert code == 0 and out.out.startswith(f"집계 대상: 플랫폼 ofono · work_dir {two_platforms['wo']}")
+    assert "PR 작업 2건" in out.out
+    two_platforms["write"]()
+    two_platforms["mp"].setenv(two_platforms["env"], "ofono")
+    code, out = two_platforms["main"]()
+    assert code == 0 and out.out.startswith("집계 대상: 플랫폼 ofono") and "PR 작업 2건" in out.out
+    code, out = two_platforms["main"]("--platform", "android")       # --platform이 TT_PLATFORM보다 우선
+    assert code == 0 and "PR 작업 0건" in out.out
+
+
+def test_explicit_work_dir_and_errors(two_platforms, tmp_path):
+    main = two_platforms["main"]
+    code, out = main("--work-dir", str(two_platforms["wo"]))
+    assert code == 0 and out.out.splitlines()[0] == f"집계 대상: work_dir {two_platforms['wo']} (--work-dir 지정)"
+    assert "PR 작업 2건" in out.out
+    with pytest.raises(SystemExit) as exc:                            # 둘은 함께 쓸 수 없다(argparse)
+        main("--work-dir", str(two_platforms["wo"]), "--platform", "android")
+    assert exc.value.code == 2
+    code, out = main("--work-dir", str(tmp_path / "nope"))
+    assert code == 2 and "work_dir가 없다" in out.err
+    code, out = main("--platform", "nosuch")
+    assert code == 2 and "nosuch" in out.err

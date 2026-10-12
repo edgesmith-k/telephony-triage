@@ -13,6 +13,11 @@
   init [--answers <json>]      config 생성 (setup 1). --answers가 없으면 stdin으로 항목별로 묻는다.
                                경로가 없으면 거부한다. 홈·work_dir은 권한 700.
                                답한 값만 저장(선택 항목은 팀 기본값과 다를 때만, 나머지는 site-defaults·내장 기본값 상속).
+                               플랫폼은 --platform > TT_PLATFORM > site(개인 기본 `platform`은 보지 않는다).
+                               기존 config에 그 플랫폼 프로필이 없으면 프로필 키만 물어 더하고, 있으면 --force로
+                               다시 만든다(android는 입력한 항목만 갱신: --answers에 없는 키·Enter는 지금 값 유지,
+                               빈 값·팀 기본값과 같은 답은 지워 상속, 그 밖 키는 유지). 새 config에 프로필 문제
+                               (경로 규칙·겹침)·옛 설정 키·모르는 tracker.kind가 있으면 저장하지 않고 종료 2.
   set <key> <value>            값 하나 바꾸기 (경로 값은 존재 검증)
   sync-scripts-path            plugin.scripts_path = ${CLAUDE_PLUGIN_ROOT}/scripts (setup 2, SessionStart hook)
   tracker-candidates [--mcp-config <json>...] [--tools-json <json>]
@@ -35,6 +40,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 import os
 import re
@@ -95,6 +101,8 @@ def validate(kind: str, value) -> str | None:
     if value in (None, ""):
         return None
     text = str(value)
+    if kind in ("clone-path", "work-dir") and not os.path.isabs(os.path.expanduser(text)):   # userconfig._abs_path와 같다
+        return f"절대 경로여야 합니다: {text}"
     if kind == "dir":
         return None if Path(text).expanduser().is_dir() else f"디렉토리가 없습니다: {text}"
     if kind == "clone-path":
@@ -136,25 +144,56 @@ def _other(args) -> bool:
 # -- 서브커맨드 ---------------------------------------------------------------------------
 
 
+def _unset(data: dict, dotted: str) -> None:
+    """키를 지우고 비게 된 상위 매핑도 지운다(팀 기본값 상속)."""
+    parts = dotted.split(".")
+    chain = [data]
+    for part in parts[:-1]:
+        node = chain[-1].get(part)
+        if not isinstance(node, dict):
+            return
+        chain.append(node)
+    chain[-1].pop(parts[-1], None)
+    for i in range(len(parts) - 2, -1, -1):
+        if chain[i + 1] == {}:
+            chain[i].pop(parts[i], None)
+
+
 def cmd_init(args, defaults: dict) -> dict:
     existing = userconfig.load_user()
+    if existing is not None and existing.get("platforms") is not None and not isinstance(existing["platforms"], dict):
+        raise UsageError("platforms: 매핑이어야 합니다 — config.py show로 확인하고 고친다")
     platform = _platform(args)
-    if _other(args) and existing is not None:
+    other = _other(args)
+    has_top = existing is not None and any(k in existing for k in userconfig.PROFILE_KEYS)
+    if other and existing is not None:
         # 기본 아닌 플랫폼: 기존 config에 그 플랫폼의 경로 프로필(`platforms.<p>`)만 더한다(Jira·gh 설정은 공유).
         # config가 없으면 공통 키(최상위)와 `platforms.<p>`를 함께 만든다(android 최상위 프로필 없이 — 따로 설치)
         if (existing.get("platforms") or {}).get(platform) is not None and not args.force:
             raise UsageError(f"플랫폼 {platform} 프로필이 이미 있습니다 (바꾸려면 set --platform {platform}, 다시 만들려면 --force)")
-    elif existing is not None and not args.force:
+    elif has_top and not args.force:
         raise UsageError(f"config가 이미 있습니다: {userconfig.path()} (바꾸려면 set, 다시 만들려면 --force)")
     fresh = existing is None
-    fields = [f for f in FIELDS if not _other(args) or fresh or f[0].split(".")[0] in userconfig.PROFILE_KEYS]
+    # 기존 config에 프로필만 더한다: 다른 플랫폼, 또는 최상위(android) 프로필이 없는 config(다른 플랫폼 먼저 설치)
+    profile_only = not fresh and (other or not has_top)
+    fields = [f for f in FIELDS if not profile_only or f[0].split(".")[0] in userconfig.PROFILE_KEYS]
+    # 기존 프로필 위에 다시 만들 때(android 기존 config, 다른 플랫폼 --force)는 입력한 항목만 갱신한다:
+    # --answers에 없는 키·Enter는 지금 값 유지, 빈 값·`-`·팀 기본값과 같은 답은 지워 상속
+    old_prof = (existing.get("platforms") or {}).get(platform) if other and not fresh else None
+    keep = not fresh and (not other or isinstance(old_prof, dict))
+    base = (old_prof if other else existing) if keep else {}     # 입력하지 않은 키의 출처
+    current = userconfig.merged(defaults, existing, platform=platform) if keep else {}
+
+    def has(key: str) -> bool:
+        return keep and userconfig.get(base, key) not in (None, "")
+
     answers = {}
     if args.answers:
         answers = json.loads(Path(args.answers).read_text(encoding="utf-8"))
         errors = []
         for key, _, kind, required in fields:
             value = answers.get(key)
-            if required and value in (None, ""):
+            if required and value in (None, "") and not (key not in answers and has(key)):
                 errors.append(f"{key}: 값이 필요합니다")
             elif (msg := validate(kind, value)):
                 errors.append(f"{key}: {msg}")
@@ -162,13 +201,22 @@ def cmd_init(args, defaults: dict) -> dict:
             raise UsageError("config 값이 잘못됐습니다:\n  " + "\n  ".join(errors))
     else:
         for key, question, kind, required in fields:
-            default = _default_for(key, defaults, platform)
+            team = _default_for(key, defaults, platform)
+            default = userconfig.get(current, key) if keep else team
             for _attempt in range(3):
                 hint = f" [{default}]" if default not in (None, "", [], {}) else ""
+                if keep and not required:   # Enter = 지금 값, `-` = 팀 기본값(키 삭제)
+                    shown = team if team not in (None, "", [], {}) else "없음"
+                    hint += f" (Enter=지금 값 유지, -=팀 기본값 {shown})"
                 print(f"{question}{hint}: ", end="", file=sys.stderr, flush=True)
                 line = sys.stdin.readline()
                 if not line:
                     raise UsageError(f"{key}: 입력이 끝났습니다.")
+                if keep and not line.strip() and (has(key) or not required):
+                    break       # Enter = 지금 값 유지(답에 넣지 않는다)
+                if keep and not required and line.strip() == "-":
+                    answers[key] = ""       # 팀 기본값으로(키 삭제)
+                    break
                 value = line.strip() or (default if default not in ([], {}) else "")
                 if required and not value:
                     print("  값이 필요합니다.", file=sys.stderr)
@@ -182,23 +230,45 @@ def cmd_init(args, defaults: dict) -> dict:
             else:
                 raise UsageError(f"{key}: 올바른 값을 받지 못했습니다.")
 
-    data: dict = {}
-    profile: dict = {}
+    # 기존 config·프로필을 바탕으로 입력한 키만 바꾼다(그 밖 키·tracker.tools·plugin·platform·다른 platforms는 그대로)
+    data: dict = {} if other or fresh else copy.deepcopy(existing)
+    profile: dict = copy.deepcopy(old_prof) if other and keep else {}
     for key, _, _kind, required in fields:
-        value = answers.get(key)
+        if key not in answers:
+            continue
+        value = answers[key]
+        target = profile if other and key.split(".")[0] in userconfig.PROFILE_KEYS else data
         if value in (None, "") or (not required and value == _default_for(key, defaults, platform)):
-            continue        # 답하지 않았거나 팀 기본값과 같으면 저장하지 않는다(이후 팀 기본값 변경을 상속)
-        is_profile = _other(args) and key.split(".")[0] in userconfig.PROFILE_KEYS
-        userconfig.set_value(profile if is_profile else data, key, value)
-    if _other(args) and not fresh:
-        full = dict(existing)
-        full["platforms"] = {**(existing.get("platforms") or {}), platform: profile}
-        data = full
-    else:
-        if _other(args):
-            data["platforms"] = {platform: profile}
+            _unset(target, key)   # 빈 답·팀 기본값과 같은 답은 저장하지 않는다(이후 팀 기본값 변경을 상속)
+            continue
+        userconfig.set_value(target, key, value)
+    if other and not fresh:
+        data = copy.deepcopy(existing)
+        data["platforms"] = {**(existing.get("platforms") or {}), platform: profile}
+    elif other:
+        data["platforms"] = {platform: profile}
+    if not profile_only:
         data.setdefault("plugin", {})["scripts_path"] = str(_plugin_root(args) / "scripts")
+    # 저장 전에 새 config를 검사한다(경로 규칙·프로필끼리 겹침·옛 설정 키). 문제가 있으면 config 파일은 그대로 둔다
+    legacy = userconfig.legacy_problems(None, data)
+    problems = userconfig.profile_problems(data) + legacy
+    if problems:
+        raise UsageError("config를 저장하지 않았습니다 — " + "; ".join(problems)
+                         + (" — config.py rename-legacy로 바꾼다" if legacy else ""))
     effective = userconfig.merged(defaults, data, platform=platform)
+    try:     # 모르는 트래커면 저장하지 않는다(다른 스크립트가 모두 종료 2)
+        trackers.kind_of(effective)
+    except trackers.TrackerConfigError as exc:
+        raise UsageError(f"config를 저장하지 않았습니다 — {exc} — 사용자 config의 tracker.kind를 고치거나 지운다"
+                         "(config.py set tracker.kind <값> / 직접 편집)") from exc
+    if keep:     # work_dir를 바꾸면 이전 작업은 옮기지 않는다 — 알리기만 한다
+        old = Path(userconfig.get(current, "work_dir")).expanduser()
+        try:
+            jobs = [d for d in old.iterdir() if d.is_dir() and d.name[:1] not in ("_", ".")] if old.is_dir() else []
+        except OSError:
+            jobs = []
+        if jobs and old != Path(userconfig.get(effective, "work_dir")).expanduser():
+            print(f"경고: 이전 work_dir {old}에 작업 {len(jobs)}개가 남았다(옮기지 않는다)", file=sys.stderr)
     userconfig.ensure_private_dir(userconfig.home())
     userconfig.ensure_private_dir(Path(userconfig.get(effective, "work_dir")).expanduser())
     path = userconfig.save(data)
@@ -850,7 +920,11 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.cmd != "site-defaults":
             try:
-                if args.cmd in LENIENT_CMDS:
+                if args.cmd == "init":
+                    # 개인 기본 플랫폼(config `platform`)은 보지 않는다: --platform > TT_PLATFORM > site(`init --force`가
+                    # 다른 플랫폼 프로필을 덮지 않게). 기존 config 문제는 보지 않는다(다시 만들 수 있게) — 새 값은 저장 전에 검사
+                    args.platform_name = platforms.select(defaults, getattr(args, "platform", None))
+                elif args.cmd in LENIENT_CMDS:
                     # 사용자 config의 플랫폼 키 문제가 있어도 고칠 수 있게 돈다(경고·doctor fail 행). 그 밖은 사용 오류
                     args.platform_name, _cfg, problems = platform_session.resolve_lenient(defaults, getattr(args, "platform", None))
                     args.platform_problems = problems

@@ -27,6 +27,13 @@
   - 상위 3 포함률: 정답이 원인 ID인 항목 중 상위 3 후보에 정답이 있는 비율
   - 오탐률: 정답이 unresolved인 항목 중 후보를 낸 비율
   로그 범위 밖(`logs.in_range` false)이거나 이벤트가 0인 항목은 오류로 빼고(분모 제외) 따로 센다.
+  판정 불완전(`unjudged`의 `count`·`cause_count` > 0: 시그니처 시간 초과·오류로 S/C null인 유형·원인이 있음)이면:
+    - 정답이 unresolved이고 상위 3에 원인(`cause`가 null 아님) 후보가 이미 있으면 판정 불완전과 무관하게 오탐이 확정이므로
+      평가하고(판정 오탐) 항목 `warning`에 판정 불완전을 남긴다.
+    - 그 밖(unresolved인데 원인 후보 없음, 정답이 원인 ID인 항목 전부 — 1위가 정답이어도 판정 못 한 유형이 앞설 수 있다)은
+      오류 "판정 불가(…)"로 뺀다(분모 제외, `errors`·`error_rate`에 들어가고 `unjudged_errors`로 따로 센다).
+  S/C에 영향 없는 시그니처 오류만 있으면(`errors`만, `count` 0) 평가하고 항목 `warning`에 남긴다.
+  항목 `unjudged`는 `{count, cause_count}`(판정 불가가 없으면 null). 오류 항목의 `top`·`top3`는 비운다.
 
 플러그인 루트: `--plugin-root`, 없으면 `plugin/site-defaults.yaml`이 있을 때 `plugin/`,
 없으면 테스트 헬퍼 루트(`tests/helpers/make_plugin_root.py`)를 임시로 만든다.
@@ -34,7 +41,7 @@
 `plugin_root`(실제 실행 루트 경로·임시 여부), `site_defaults_sha256`, `labelset_sha256`, Python 버전, 실행 인자 — 결과를 어느
 코드·DB·설정·라벨셋으로 냈는지 식별한다(비밀값·원문 없음). 항목에는 `logs_sha256`(입력 로그 해시)과 `backend`·`external`
 (`events.json`의 파서 백엔드·외부 파서, 못 읽으면 null)을 더한다.
-종료 코드: 0 = 실행 완료, 2 = 사용 오류.
+종료 코드: 0 = 실행 완료, 1 = 평가 가능한 항목 없음(전부 오류 — 통과로 보지 않는다), 2 = 사용 오류.
 """
 
 from __future__ import annotations
@@ -130,7 +137,7 @@ def evaluate_item(root: Path, db: Path, base: Path, doc: dict, item: dict, work:
     tz = item.get("tz", doc.get("tz"))
     if tz:
         args += ["--tz", str(tz)]
-    result = {"key": key, "expect": str(item["expect"]), "top": None, "top3": [], "error": None,
+    result = {"key": key, "expect": str(item["expect"]), "top": None, "top3": [], "error": None, "warning": None, "unjudged": None,
               "logs_sha256": [hashlib.sha256(Path(p).read_bytes()).hexdigest() if Path(p).is_file() else None for p in logs],
               "backend": None, "external": None}
     try:
@@ -163,6 +170,22 @@ def evaluate_item(root: Path, db: Path, base: Path, doc: dict, item: dict, work:
     candidates = analysis.get("candidates") or []
     result["top3"] = [c["cause"] for c in candidates[:3]]
     result["top"] = result["top3"][0] if result["top3"] else None
+    u = analysis.get("unjudged") or {}
+    if not u:
+        return result
+    first = (u.get("errors") or [{}])[0]
+    why = f" — {first.get('signature')}: {first.get('error')}" if first.get("signature") else ""
+    if not (u.get("count") or u.get("cause_count")):   # 충족된 유형의 다른 시그니처만 오류(S/C 영향 없음): 평가는 하고 알린다
+        result["warning"] = f"시그니처 오류(S/C 영향 없음){why}"
+        return result
+    result["unjudged"] = {"count": u.get("count", 0), "cause_count": u.get("cause_count", 0)}
+    what = f"유형 {result['unjudged']['count']}·원인 {result['unjudged']['cause_count']}{why}"
+    if result["expect"] == UNRESOLVED and any(c is not None for c in result["top3"]):
+        # 원인 후보가 이미 있으면 판정 못 한 항목과 무관하게 오탐이 확정이다
+        result["warning"] = f"판정 불완전(시그니처 시간 초과·오류): {what} — 원인 후보가 있어 오탐은 확정"
+    else:   # 판정 못 한 유형·원인이 1위·후보를 바꿀 수 있다 → 정답·미스를 단정하지 않는다(분모 제외)
+        result["error"] = f"판정 불가(시그니처 시간 초과·오류): {what}"
+        result["top"], result["top3"] = None, []
     return result
 
 
@@ -187,10 +210,13 @@ def summarize(results: list[dict]) -> dict:
         "total": len(results),
         "evaluated": len(scored),
         "errors": len(results) - len(scored),
+        "unjudged_errors": sum(bool(r["error"]) and bool(r.get("unjudged")) for r in results),
         "error_rate": rate(len(results) - len(scored), len(results)),
         "type_only": sum(bool(r["top3"]) and all(c is None for c in r["top3"]) for r in negative),
-        "positive": len(positive),
+        "positive": len(positive),          # 평가된(오류 아닌) 항목만
         "negative": len(negative),
+        "positive_total": sum(r["expect"] != UNRESOLVED for r in results),     # 오류 포함 전체
+        "negative_total": sum(r["expect"] == UNRESOLVED for r in results),
         "top1_accuracy": rate(sum(r["top"] == r["expect"] for r in positive), len(positive)),
         "top3_inclusion": rate(sum(r["expect"] in r["top3"] for r in positive), len(positive)),
         "false_positive_rate": rate(sum(r["verdict"] == "오탐" for r in negative), len(negative)),
@@ -211,16 +237,22 @@ def render(results: list[dict], summary: dict) -> str:
     for r in results:
         if r["error"]:
             lines.append(f"오류 {r['key']}: {r['error']}")
+    for r in results:
+        if r.get("warning"):
+            lines.append(f"경고 {r['key']}: {r['warning']}")
     lines += [
         "",
         f"평가 {summary['evaluated']}/전체 {summary['total']}",
-        f"항목 {summary['total']}건 (원인 정답 {summary['positive']}, "
-        f"unresolved 정답 {summary['negative']}, 오류 {summary['errors']})",
+        f"항목 {summary['total']}건 (정답 원인 ID {summary['positive_total']}·unresolved {summary['negative_total']}, "
+        f"평가된 것 원인 {summary['positive']}·unresolved {summary['negative']}, 오류 {summary['errors']})",
         f"1위 정확도    {_pct(summary['top1_accuracy'])}",
         f"상위 3 포함률 {_pct(summary['top3_inclusion'])}",
         f"오탐률        {_pct(summary['false_positive_rate'])} (원인 후보 기준, 유형만 {summary['type_only']}건 제외)",
-        f"오류율        {_pct(summary['error_rate'])} ({summary['errors']}/{summary['total']}, 평가에서 제외됨)",
+        f"오류율        {_pct(summary['error_rate'])} ({summary['errors']}/{summary['total']}, 평가에서 제외됨, "
+        f"그중 판정 불가 {summary['unjudged_errors']}건)",
     ]
+    if not summary["evaluated"]:
+        lines.append("평가 가능한 항목 없음 — 전부 오류(지표 없음, 통과 아님)")
     return "\n".join(lines)
 
 
@@ -282,6 +314,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"meta: 플러그인 {s(meta['plugin_repo'])} · DB {s(meta['db'])} · 플러그인 루트 {pr['path']}"
               f"{'(임시)' if pr['temporary'] else ''} · 라벨셋 sha256 {meta['labelset_sha256'][:12]} · Python {meta['python']}")
         print(render(results, summary))
+    if not summary["evaluated"]:     # 전부 오류인 평가를 정상 완료(0)로 보이지 않는다
+        print("평가 가능한 항목 없음 — 전부 오류", file=sys.stderr)
+        return 1
     return 0
 
 
