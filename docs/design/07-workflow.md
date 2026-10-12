@@ -94,7 +94,7 @@ git -C <issue_db.path> pull --ff-only
 - Jira는 **논리 동작 `tracker.tools`**(`get_issue`, 있으면 `get_comments`·`search_issues`)로 부른다. 도구 이름을 직접 쓰지 않는다 (`16-existing-assets.md §16.1`). `tracker.tools`는 `tracker.read_tools`(guard 허용 목록) 안에 있어야 한다. 필드는 `tracker.field_map`으로 읽는다. `--dry-run --issue-file <yaml>`이면 파일에서 읽는다 (`06-collaboration.md §6.9`). 계획의 `issue.origin`은 MCP면 `mcp`, 파일이면 `file`이다.
 - 요약, 설명, 재현 절차, 모델, SW 버전, Android 버전, 캐리어, 발생 시각, 컴포넌트, 기존 코멘트, (있으면) SIM 슬롯을 추출한다. **텍스트 필드는 읽은 직후 `mask_pii`를 거치고**, 이후 모든 단계(리포트, 키워드 보너스, `note` 초안, PR 본문)는 마스킹된 텍스트만 쓴다. 계획과 이슈 DB에는 원문을 저장하지 않고 구조화 필드와 사용자가 확인한 `note` 한 줄만 넣는다 (`08-safety.md §8.1`).
 - **실패 스텝(선택)**: 시험 절차와 실패한 스텝은 Jira 필드, 설명, 첨부에 있거나 없을 수 있다. 우선순위는 `--failed-step <한 줄>`(cli) > Jira 자동(`field_map.failed_step` 필드 > 마스킹된 설명 > `field_map.test_steps` 텍스트에서 `tracker.failed_step_patterns`로 찾은 줄) `--steps-file <파일>`(사용자가 줄 때만)이다. `--steps-file`은 **txt/csv/tsv**, **html**(`report.html` 등 표), **zip**(Jira 첨부 zip — 안의 파일 **하나**를 메모리에서만 읽고 풀지 않는다), **붙여넣기**(개발자가 스텝 목록을 대화에 붙이면 `WD/<KEY>/steps-pasted.txt`에 쓰고 그 경로를 `--steps-file`로 준다. 도구가 읽을 때 마스킹한다)를 받는다. zip 안에서는 이름이 `report.html`인 것 > 다른 `.html/.htm` > `.csv/.tsv/.txt` 순으로 하나만 고른다(같은 단계는 얕은 경로·이름 순; 절대·`..` 경로·암호화·5 MiB 초과 항목은 쓰지 않고 경고). 시험은 **첫 FAIL 스텝에서 멈추므로 FAIL 스텝이 마지막으로 실행된 스텝**이고 그 뒤 줄은 버린다(FAIL이 여럿이면 경고). `failed_step_patterns`가 먼저 맞고, 맞는 줄이 없으면 표의 FAIL 스텝(`번호 | 이름`)을 실패 스텝으로 쓴다(출처 `steps_file`). 표 머리가 있으면 그 앞의 요약 표는 패턴 검색에서 뺀다. 패턴이 이름만 뽑아도 맞은 줄이 스텝 번호로 시작하면(`Step 7 …`·`7 | …`·`7. …`) `번호 | 이름`으로 맞춘다(Jira 필드·표의 FAIL 행과 같은 표기라 README "자주 실패한 스텝"이 한 줄로 묶인다). 모든 값은 마스킹 후 한 줄(≤200자)로 만든다. **없거나 읽지 못해도 묻지 않고 멈추지 않는다**(파일을 읽지 못하면 경고만, 출력 키·줄이 없다). 보조 정보로 **분석 범위(아래 Step 3 실패 스텝 앵커)**·키워드 보너스·후보 없음 힌트·탐색 타임라인 머리·리포트 한 줄에만 쓰고 **S/C**·회귀·검증에는 쓰지 않는다(실패 스텝은 어디를·무엇을 볼지 정하고, 왜인지는 로그 시그니처가 정한다). `triage.py`는 원문 플래그를 같은 프로세스에서 마스킹하고 하위 스크립트 인자·`trace.jsonl`·`triage-state.json`에 남기지 않는다 (`08-safety.md §8.1`).
-- **발생 시각**을 최우선으로 찾는다. 시각은 `tracker.timezone`으로 해석해서 UTC로 바꾼다. 발생 날짜는 계획 `jira.occurred_on`에 넣는다 (통계용, `03-issue-db.md §5.4 (2)`).
+- **발생 시각**을 최우선으로 찾는다. 시각은 `tracker.timezone`으로 해석해서 UTC로 바꾼다. 발생 날짜는 계획 `issue.occurred_on`에 넣는다 (통계용, `03-issue-db.md §5.4 (2)`).
   - Jira에 없으면 **바로 묻지 않고** 로그를 먼저 본다: `parse_logcat.py parse <logcat...> --full --rules ... --mask`로 파일 전체를 파싱하고 매처를 `--regress`로 돌려 증상 시그니처가 충족되는 시각 후보(상위 3개, 유형 이름과 함께)를 보여주고 고르게 한다. 후보가 없으면 그때 묻는다. 시계 이상이 있으면 그 질문에 경고를 붙인다. 선택한 시각으로 Step 3을 ±5분으로 다시 자른다(`--full` 결과는 후보 선택에만 쓴다). Step 3에서 시계 이상이 보고돼도 같은 경로를 제안한다.
   - bugreport를 받았으면(Step 3 앞의 추출) `build.json`의 빌드 정보를 Jira SW가 비어 있을 때 후보로 보여준다.
 - 이 Jira가 스냅샷에 이미 있으면 기존 분류를 먼저 보여주고, 재분석할지 묻는다 (재분류면 Step 7에서 `reclassify`).
@@ -221,7 +221,7 @@ Android 버전과 브랜치마다 소스 트리가 다르므로 **분석할 때�
 "이 이슈를 `Data > DATA-001 > DATA-001-02 Roaming disabled`로 분류할까요?"
 - **예** → 계획에 `append DATA-001-02`.
 - **다른 기존 원인** → 사용자가 고른 원인으로 `append`. 이어서 한 번 묻는다(기본 "아니오", record에는 없음): 고른 원인이 `analysis.json` 후보에서 C=1이면 이 로그를 `add-fixture {for: <원인>, kind: extra}`로 넣을지 — `parse_logcat.py cut --around <JOB/match.json에서 그 원인 후보의 evidence 시각>`으로 자른다(`cut --evidence`는 1위 후보 근거로 자르므로 쓰지 않는다). 계획에 넣으면 `db_verify rules --plan --draft`의 R4(회귀)로 그 fixture에서 고른 원인 C=1을 확인하고, 실패면 fixture를 빼고 아래 `update-signature` 검토 제안으로 바꾼다. C=0이거나 후보에 없으면 fixture 대신 "시그니처가 이 로그를 못 잡는다 — `update-signature` 검토"를 `pr_notes`에 남길지. C=0 로그를 양성으로 넣으면 회귀가 실패하기 때문이다. 고른 원인이 `analysis.json` `unjudged.causes`에 있으면(match.json `causes[].C`가 `null`, 원인 시그니처 판정 불가 — 후보의 `C`는 정수라 후보 목록으로는 구분되지 않는다) fixture·시그니처 제안을 하지 않는다. 거절하면 `append`만 넣고, 추정으로 fixture·시그니처를 만들지 않는다.
-- **이미 이슈 DB에 있는 Jira를 다른 원인으로** → `reclassify {jira, from, to}`.
+- **이미 이슈 DB에 있는 Jira를 다른 원인으로** → `reclassify {issue, from, to}`.
 - **유형은 맞지만 새 원인** → `new-cause` (`temp_id` 필수). 원인 제목, 해결책, 수정 상태, 시그니처, 본문(재현 시나리오 포함) 초안을 `03-issue-db.md §5.7` 규칙대로 만들어 승인받는다. 코드·설정 수정 유형이면 `recovery_signatures`/`scenario_signatures` 초안도 제안한다.
 - **새 유형** → `db_add.py similar --db <work_dir>/_snapshot`으로 유사 유형 상위 3개를 먼저 보여준 뒤, 카테고리를 확인하고 `new-type`. 증상/원인 시그니처 초안을 모두 승인받는다.
 - **기존 카테고리에 맞지 않음** → `06-collaboration.md §6.10`에 따라 가장 가까운 카테고리에 넣는 안과 새 카테고리 제안 초안을 함께 보여준다.
@@ -229,9 +229,9 @@ Android 버전과 브랜치마다 소스 트리가 다르므로 **분석할 때�
 - **후보 없음**(Step 4)이었으면 선택지는 "새 유형 / 원인 미확정(사용자가 고른 가장 가까운 유형) / 기록하지 않음"이다. 기록하지 않으면 계획을 만들지 않고 `db_pr lock release`로 끝낸다.
 - 새 원인/유형이면 **`04-parser-matching.md §5.8 (3)` 파서 점검**을 해서 `add-parser-rule`/`update-parser-rule` op 초안을 만들고, `parse_logcat.py cut`으로 판별 근거 주변 최소 구간을 잘라 마스킹된 fixture를 만든 뒤 `add-fixture`(`kind: positive`, `for: <temp_id>`)로 넣고 승인받는다.
 - 기존 시그니처를 고치자는 결정이면 `update-signature`를 넣는다.
-- 회귀 의심(fixed, SW ≥ fixed_in)이면 `update-fix`(→ open, `history: {result: reverted, build: <Jira SW>, jira: <KEY>}`)를 넣을지 묻는다.
+- 회귀 의심(fixed, SW ≥ fixed_in)이면 `update-fix`(→ open, `history: {result: reverted, build: <Jira SW>, issue: <KEY>}`)를 넣을지 묻는다.
 - 분류된 원인이 `fix-submitted`이고 이 로그가 `fixed_in` 이후(≥) 빌드면:
-  - 원인 시그니처 충족(C=1) → "`update-fix` → open + 실패 이력"(`history: {result: failed, build: <Jira SW>, jira: <KEY>}`) / "이 로그로 verify-fix" 중 고르게 한다. 앞의 것이면 이 로그를 `recurrence` fixture로 넣을지 묻는다.
+  - 원인 시그니처 충족(C=1) → "`update-fix` → open + 실패 이력"(`history: {result: failed, build: <Jira SW>, issue: <KEY>}`) / "이 로그로 verify-fix" 중 고르게 한다. 앞의 것이면 이 로그를 `recurrence` fixture로 넣을지 묻는다.
   - C=0 → 이 로그로 `verify-fix`(`05-verification.md §5.12 (2)`)를 이어서 할지 묻는다.
 - `related` 후보가 보이면 `add-related`를 넣을지 묻는다.
 - 경로 변경이 발견됐으면 `add-code-ref`를 넣을지 묻는다.
@@ -356,7 +356,7 @@ post_sha256: <64 hex>          ← 선택 줄과 이 줄은 게시 가능하고 
 
 | 칸 | 스크립트(결정적) | LLM 칸 (`post.fill.json`) |
 |---|---|---|
-| PROBLEM (≤600자) | `Jira: <KEY>`, 구조화 필드(단말·SW·Android·캐리어·발생일), 실패 스텝(있을 때), `요약: <plan jira.note>`(있을 때) | `problem`: 증상 한 줄 ≤200자, note가 없을 때만 필수 |
+| PROBLEM (≤600자) | `Jira: <KEY>`, 구조화 필드(단말·SW·Android·캐리어·발생일), 실패 스텝(있을 때), `요약: <plan issue.note>`(있을 때) | `problem`: 증상 한 줄 ≤200자, note가 없을 때만 필수 |
 | CAUSE (≤1000자) | 분류 줄 + 확정 표시(사용자 확정 / 원인 미확정 / 자동 분석 1위 후보 — 사람이 확정하지 않음), 새 원인이면 임시 ID·PR, `규칙 일치 점수 <s> (S, C) — 진단 확신도 아님`, C=0이면 "유형만 일치, 원인 미확인" | `cause`: 1~4개 `{basis, text≤300}`. basis `log\|code\|placeholder\|explore` → `[로그로 확인]` `[코드로 추정]` `[placeholder 규칙 결과]` `[탐색 분석 가설]`. 없거나 다른 값이면 종료 1 |
 | NEXT ACTION (≤800자) | 해결책·해결책 검증·수정 상태(최종 원인이 DB에 있을 때), 미확정이면 "원인 미확정 — 추가 로그·재현 정보 필요", 이슈 DB 상태(PR #n 리뷰 중 / 계획만 저장 / 기록 안 함) | `next`: 0~3개 "다음 확인" ≤200자 |
 | ANALYSIS (≤1600자) | 근거 로그(마스킹, 1위 evidence ≤6줄, 고정폭 블록), 로그 범위, `must_show` 글자 그대로, `코드 위치: 코드 미확인`(code.skipped), 기타 후보 ≤3, 꼬리 줄 | `code_location`: `파일:라인 — 분기 조건` ≤200자 또는 null(code.skipped면 넣을 수 없다) |

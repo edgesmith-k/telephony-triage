@@ -71,12 +71,14 @@ work_dir: ~/.telephony-triage/work          # 작업 계획·상태 파일, 읽�
 - 이슈 DB의 `code_refs`는 `<root 키>:<루트 기준 상대 경로>` 형식이다 (`03-issue-db.md §5.4`). 그래서 같은 이슈 DB를 어떤 버전 트리에 대해서도 쓸 수 있다.
 - 시각 정렬: Jira 발생 시각(`tracker.timezone`)과 logcat 시각(`logcat.timezone`, 연도는 `logcat.year_source`)을 같은 기준(UTC)으로 바꿔서 비교한다. 파서(`parse_logcat.py`)는 **사용자 config를 읽지 않고** 시각을 `--tz/--year` 인자로만 받는다 (Phase 2에서 인자로 구현, Phase 6에서 config 연결). 파서가 읽는 설정은 플러그인 `site-defaults.yaml`의 파서 백엔드·외부 파서 설정뿐이다 (`contracts.md §3.2` 설정 읽기). 형식과 기본값은 Phase 0에서 확인한다(S4, S7).
 - Jira 키 형식은 DB 공통 값이므로 사용자 config가 아니라 `issue-db.config.yaml`의 `tracker.key_regex`에 둔다 (5.3).
+- **트래커**(`18-trackers.md`): `tracker` 블록은 이슈 시스템 하나를 가리킨다. `tracker.kind`(`jira` | `github`, 없으면 `jira`)는 팀 값이라 site-defaults에 두고, 이슈 DB `tracker.kind`와 같아야 한다(다르면 `tracker-mismatch`로 거부). 하위 키(`mcp_server`·`exclude_servers`·`tools`·`read_tools`·`write_tools.add_comment`·`timezone`·`field_map`·`failed_step_patterns`)는 트래커와 무관하게 같다. github는 `write_tools.add_comment`에 `key_arg`를 두지 않고(키 인자 `owner`·`repo`·`issue_number` 고정) 본문 형식은 `markdown`만, `field_map`은 기본 `{}`(모델·SW·버전·발생 시각은 사용자에게 묻는다). 예시는 `plugin/site-defaults.example.yaml`의 주석 블록.
+- **옛 설정 키**(트래커 범용화 전 이름: 최상위 `jira:`, `logcat.year_source: jira`, `code_profiles[].android_version`, `field_map.android_version`)는 자동 변환하지 않고 감지만 한다(`userconfig.legacy_problems`, fail-closed). 남아 있으면 guard가 모든 MCP 호출을 거부하고 스크립트는 종료 코드 2, `config.py doctor`는 `tracker` 행 fail이다. 사용자 config는 `config.py rename-legacy [--apply]`로 바꾸고, site-defaults는 관리자가 고친다.
 
 setup 커맨드가 순서대로 하는 일 (site-defaults `platform.enabled`가 2개 이상이면 먼저 어느 플랫폼을 설정할지 묻는다. 하나면 묻지 않는다. android 밖 플랫폼은 1·3·5·6·7·8·10을 `--platform <이름>`으로 돌고(`config.py init --platform <이름>`은 그 프로필만 더하고, config가 없으면 공통 키와 그 프로필만 만든다 — 따로 설치), Jira·gh(4·9)는 공유라 다시 하지 않는다):
 1. config가 없으면 항목별로 묻고 생성한다. **답한 값만 저장한다**: 필수 항목과, 선택 항목 중 팀 기본값(`site-defaults.yaml`·내장 기본값)과 다른 답만 쓰고(그리고 `plugin.scripts_path`), 나머지는 저장하지 않아 이후 팀 기본값 변경을 그대로 상속한다. 경로는 존재 여부를 검증한다. `code_profiles`는 건너뛸 수 있다. `~/.telephony-triage/`와 `work_dir`는 권한 `700`으로 만든다(작업 계획에 Jira 요약이 들어가므로). 제약: `issue_db.base_branch`·`work_dir`는 `site-defaults.yaml`에서 상속되지 않는다(이슈 DB `.githooks/pre-push`가 사용자 config에서 이 두 값을 직접 읽고 site-defaults를 보지 않으므로, 팀 기본값으로 지원하려면 pre-push도 같이 바꾼다). `init`으로 이미 만든 개발·연습 config는 자동으로 상속형이 되지 않는다. 팀 기본값을 따르게 하려면 `config.py init --force`로 다시 만들거나 해당 키를 config.yaml에서 지운다.
 2. `plugin.scripts_path`를 `${CLAUDE_PLUGIN_ROOT}/scripts`로 기록한다 (`config.py sync-scripts-path`).
 3. 이슈 DB 경로에 clone이 없으면 `git clone`을 제안한다.
-4. 이미 등록된 Jira MCP를 찾는다(사용자 범위 등록 필요, 못 찾으면 등록 범위를 안내. `site-defaults.yaml`의 `tracker.exclude_servers`(기본 `['mock-*']`, 테스트 헬퍼 복사본은 `[]`)에 맞는 서버는 후보에서 제외). 도구 목록에서 `tracker.tools` 후보(get/issue, search, comment 계열)를 골라 사용자 확인을 받고(`site-defaults.yaml`의 팀 기본값이 있으면 그것을 먼저 제안), 이어서 서버의 도구 목록을 읽어서 이름으로 읽기 도구 후보(get/search/list/read/fetch 계열)를 고르고, **사용자에게 확인받아** `tracker.read_tools`에 **전체 도구 이름**(`mcp__<server>__<tool>`)으로 저장한다. 서버가 없으면 사내 MCP 등록 방법을 안내하고 중단한다. 도구 이름 형식은 S1·S3에서 확인한다. Jira 코멘트 도구(`tracker.write_tools.add_comment`)는 setup이 정하지 않는다: 팀 기본값(`site-defaults.yaml`)이고, 사용자가 서버를 다른 이름으로 등록했으면 `config.py set tracker.write_tools.add_comment.tool <전체 이름>`으로 맞춘다. 상태는 doctor `jira_post` 행이 보인다(`07-workflow.md §Step 9`).
+4. 이미 등록된 트래커(Jira 등, `tracker.kind`는 팀 값) MCP를 찾는다(`config.py tracker-candidates` → 확인 → `config.py set-tracker`. 사용자 범위 등록 필요, 못 찾으면 등록 범위를 안내. `site-defaults.yaml`의 `tracker.exclude_servers`(기본 `['mock-*']`, 테스트 헬퍼 복사본은 `[]`)에 맞는 서버는 후보에서 제외). 도구 목록에서 `tracker.tools` 후보(get/issue, search, comment 계열)를 골라 사용자 확인을 받고(`site-defaults.yaml`의 팀 기본값이 있으면 그것을 먼저 제안), 이어서 서버의 도구 목록을 읽어서 이름으로 읽기 도구 후보(get/search/list/read/fetch 계열)를 고르고, **사용자에게 확인받아** `tracker.read_tools`에 **전체 도구 이름**(`mcp__<server>__<tool>`)으로 저장한다. 서버가 없으면 사내 MCP 등록 방법을 안내하고 중단한다. 도구 이름 형식은 S1·S3에서 확인한다. Jira 코멘트 도구(`tracker.write_tools.add_comment`)는 setup이 정하지 않는다: 팀 기본값(`site-defaults.yaml`)이고, 사용자가 서버를 다른 이름으로 등록했으면 `config.py set tracker.write_tools.add_comment.tool <전체 이름>`으로 맞춘다. 상태는 doctor `tracker_post` 행이 보인다(`07-workflow.md §Step 9`).
 5. 이슈 DB 레포에 git pre-commit hook을 설치한다: `git -C <issue_db.path> config core.hooksPath .githooks`. 설정 후 값이 **정확히 `.githooks`** 인지 확인한다 (다른 값이면 guard가 이슈 DB 커밋을 모두 막는다, `08-safety.md §9`).
 6. `db_pr.py lock acquire setup` → `db_pr.py snapshot --job setup`으로 읽기 스냅샷 `<work_dir>/_snapshot`을 만든다. 사용자 clone의 워킹 트리와 브랜치는 바꾸지 않는다. 다른 작업의 lock이 있으면 보유자를 보여주고, 그 세션이 끝났는지 확인받은 뒤 진행한다(`contracts.md §3.2` 세션 lock).
 7. **스냅샷 기준으로** 이슈 DB의 `schema_version`, `generator_version`, `parser_backend`, `external_parsers`가 플러그인과 호환되는지 확인한다: `config.py check --db <work_dir>/_snapshot --for dry-run` (`06-collaboration.md §6.4`). 오래된 사용자 clone이 아니라 origin/<base> 기준 버전을 본다. 쓰기가 막히는 조건이면 "읽기 전용"이라고 알리고 계속한다.
@@ -102,8 +104,10 @@ setup 커맨드가 순서대로 하는 일 (site-defaults `platform.enabled`가 
 schema_version: 1                    # 정수. 구조가 바뀔 때만 올린다 (06-collaboration.md §6.4)
 generator_version: 1                 # 생성 파일 형식 버전. 플러그인 GENERATOR_VERSION과 같아야 쓰기 가능
 ci_mode: local                       # local (현재, 06-collaboration.md §6.3) | actions | actions-build (13-actions.md)
-tracker.base_url: <사내 Jira URL>/browse/   # 형식은 14-site.md S17
-tracker.key_regex: '<Jira 키 정규식>'   # 예: '[A-Z][A-Z0-9]+-\d+' (14-site.md S16). db_lint가 Jira 파일명·key 검사, 스킬이 입력 검사
+tracker:                             # 이슈 트래커 (18-trackers.md §2)
+  kind: jira                         # jira | github. 없으면 jira. 세션 tracker.kind와 다르면 tracker-mismatch(거부)
+  base_url: <사내 Jira URL>/browse/  # 형식은 14-site.md S17 (README 링크 = 트래커 link(base_url, 키))
+  key_regex: '<Jira 키 정규식>'      # 예: '[A-Z][A-Z0-9]+-\d+' (14-site.md S16). db_lint가 기록 파일명·key 검사, 스킬이 입력 검사. 없으면 트래커 기본 정규식
 categories:                          # README 표시 순서, 이름, ID 접두어
   - {key: data,    name: Data,    id_prefix: DATA}
   - {key: call,    name: Call,    id_prefix: CALL}
@@ -112,8 +116,7 @@ categories:                          # README 표시 순서, 이름, ID 접두�
   - {key: sms,     name: SMS,     id_prefix: SMS}
   - {key: ims,     name: IMS,     id_prefix: IMS}
 # platform: ofono                   # 이 이슈 DB의 플랫폼(17-platforms.md §4). 없으면 android. 세션 선택과 다르면 platform-mismatch(거부)
-platform_versions_supported: ["16", "17"]   # 지원 중인 플랫폼 버전 (06-collaboration.md §6.6 지원 종료 판단). 옛 키 이름
-# platform_versions_supported: ["…"] # 새 키(플랫폼 무관). 있으면 이것을 읽고, 둘 다 있으면 db_lint config 오류. `make_db_skeleton.py --platform <p>` 뼈대는 새 키
+platform_versions_supported: ["16", "17"]   # 지원 중인 플랫폼 버전 (06-collaboration.md §6.6 지원 종료 판단). 옛 이름 android_versions_supported는 읽지 않고 db_lint config 오류
 parser_backend:                      # 이 이슈 DB의 시그니처가 전제하는 파서 백엔드 (16-existing-assets.md §16.3)
   name: site                         # site | reference (android, 사외 초안은 reference) | <플랫폼>_reference (예: ofono_reference)
   min_version: <버전>                # 이보다 낮은 백엔드면 쓰기 차단, 분석은 경고 후 진행
