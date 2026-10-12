@@ -1,4 +1,6 @@
-# 트래커 범용화 인계 (2026-10-12, 진행 중)
+# 트래커 범용화 인계 (2026-10-12, 완료 — 기록용)
+
+> 10/12 완료. 설계 결과는 `docs/design/18-trackers.md`. 일회성 비교 도구 `rename_compare.py`는 지웠다(절대 경로·scratchpad 기준).
 
 Jira 외 이슈 시스템(GitHub Issues 등)도 설정으로 쓸 수 있게 하는 작업. 사용자 요청(10/11), 추천안 승인.
 새 세션은 이 파일 → `request.md`(요구·결정) → `implementation-notes.md`(묶음 1·2 실제 구현) → `design.md`(설계서 전문) 순으로 읽는다.
