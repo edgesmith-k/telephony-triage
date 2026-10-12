@@ -43,7 +43,8 @@ def _unsupported(kind) -> str:
 
 
 def get(kind: str) -> TrackerSpec:
-    """이름 → `SPEC`. 이름 검증 → `trackers.<kind>` import → `SPEC` 타입·이름 확인. 오류는 `TrackerConfigError`."""
+    """이름 → `SPEC`. 이름 검증 → `trackers.<kind>` import → `SPEC` 타입·이름 확인. 오류는 모두 `TrackerConfigError`다 —
+    트래커 모듈의 SyntaxError·하위 의존성 누락·최상위 예외도 감싼다(호출자가 종료 2·MCP 거부로 한 길로 처리한다)."""
     if not isinstance(kind, str) or not NAME_RE.fullmatch(kind) or kind in _NOT_TRACKERS:
         raise TrackerConfigError(_unsupported(kind))
     if kind in _SPECS:
@@ -54,7 +55,9 @@ def get(kind: str) -> TrackerSpec:
     except ModuleNotFoundError as exc:
         if exc.name and (exc.name == module_name or module_name.startswith(exc.name + ".")):
             raise TrackerConfigError(_unsupported(kind)) from exc
-        raise  # 트래커 모듈 안의 하위 의존성 누락은 그대로 올린다
+        raise TrackerConfigError(f"트래커 {kind}을(를) 불러오지 못했다 (ModuleNotFoundError: {exc})") from exc
+    except Exception as exc:  # noqa: BLE001 — SyntaxError·ImportError·모듈 최상위 예외
+        raise TrackerConfigError(f"트래커 {kind}을(를) 불러오지 못했다 ({type(exc).__name__}: {exc})") from exc
     if hasattr(module, "__path__"):
         raise TrackerConfigError(_unsupported(kind))
     spec = getattr(module, "SPEC", None)
@@ -120,12 +123,10 @@ def known_server_words() -> tuple[tuple[str, ...], list[tuple[str, Exception]]]:
 
 
 def all_server_words() -> tuple[str, ...]:
-    """guard 규칙 2 서버 이름 휴리스틱 단어. 하나라도 불러오지 못했거나 비었거나 레지스트리가 실패하면 내장
-    `FALLBACK_SERVER_WORDS`를 더한다 — 이전(jira·atlassian 고정)보다 약해지지 않는다."""
+    """guard 규칙 2 서버 이름 휴리스틱 단어(정렬). 설치된 트래커 단어 합집합에 내장 `FALLBACK_SERVER_WORDS`(jira·atlassian)를
+    **늘** 더한다 — jira.py가 없는 설치·깨진 트래커·레지스트리 실패에서도 이전(jira·atlassian 고정)보다 약해지지 않는다."""
     try:
-        words, errors = known_server_words()
+        words, _errors = known_server_words()
     except Exception:  # noqa: BLE001
-        return FALLBACK_SERVER_WORDS
-    if errors or not words:
-        return tuple(sorted(set(words) | set(FALLBACK_SERVER_WORDS)))
-    return words
+        words = ()
+    return tuple(sorted(set(words) | set(FALLBACK_SERVER_WORDS)))

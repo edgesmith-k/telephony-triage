@@ -122,7 +122,15 @@ def target(event: dict, cfg: dict) -> str | None:
         return "add_comment"
     mapped = {k for k in ("get_issue", "get_comments")
               if tools.get(k) and mcptools.normalize(tools[k]) == mcptools.normalize(tool)}
-    return trackers.of(cfg).read_action(event.get("tool_input"), mapped) if mapped else None
+    if not mapped:
+        return None
+    adapter = trackers.of(cfg)
+    try:
+        action = adapter.read_action(event.get("tool_input"), set(mapped))
+    except Exception:  # noqa: BLE001 — 어댑터 오류도 원문을 숨긴다
+        return "unsupported"
+    # 매핑된 읽기 도구다: 어댑터가 mapped 밖의 값(None·add_comment 등)을 내도 원문을 통과시키지 않는다(fail-closed)
+    return action if isinstance(action, str) and action in mapped else "unsupported"
 
 
 def _comment_id(data):
@@ -138,8 +146,8 @@ def bridge_post(event: dict, cfg: dict) -> str:
     """승인 코멘트 게시 결과를 `post.result.json`에 기록한다. 성공이면 승인에 `used_at`을 남긴다(1회용)."""
     spec, _err = issuepost.write_spec(cfg)
     tool_input = event.get("tool_input") or {}
-    key = issuepost.adapter(spec).key_from_args(spec, tool_input)     # 경로 안전 작업 키 또는 None
-    if not isinstance(key, str) or not issuepost.adapter(spec).safe_key_re.fullmatch(key):
+    key = issuepost.spec_tracker(spec).key_from_args(spec, tool_input)     # 경로 안전 작업 키 또는 None
+    if not isinstance(key, str) or not issuepost.spec_tracker(spec).safe_key_re.fullmatch(key):
         return POST_FAILED
     sha = issuepost.body_sha256(str(tool_input.get(spec["body_arg"]) or ""))
     if len(_PROFILES) > 1:
@@ -226,8 +234,8 @@ def mark_unknown(event: dict, cfg: dict) -> None:
     try:
         spec, _err = issuepost.write_spec(cfg)
         tool_input = event.get("tool_input") or {}
-        key = issuepost.adapter(spec).key_from_args(spec, tool_input)
-        if not isinstance(key, str) or not issuepost.adapter(spec).safe_key_re.fullmatch(key):
+        key = issuepost.spec_tracker(spec).key_from_args(spec, tool_input)
+        if not isinstance(key, str) or not issuepost.spec_tracker(spec).safe_key_re.fullmatch(key):
             return
         # 그 KEY 승인이 있는 모든 프로필(어느 것으로 게시됐는지 모르므로 fail-closed). 승인이 없으면 선택 프로필의 작업 디렉토리
         cfgs = [c for c, _rec in _approved_cfgs(cfg, key)] or [cfg]

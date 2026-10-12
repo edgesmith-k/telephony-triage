@@ -71,8 +71,11 @@ def _db_cfg(db: Path | None) -> dict:
     return compat.load_db_config(db) if db else {}
 
 
-def key_regex(db: Path | None) -> re.Pattern:
-    """이슈 DB `tracker.key_regex`, 없으면 그 DB 트래커(없으면 jira)의 기본 정규식. DB kind 오류는 `TrackerConfigError`."""
+def key_regex(db: Path | None, cfg: dict | None = None) -> re.Pattern:
+    """이슈 DB `tracker.key_regex`, 없으면 그 DB 트래커의 기본 정규식. DB가 없으면 세션 트래커(`cfg`의 `tracker.kind`,
+    jira_bridge와 같다)의 기본 정규식. kind 오류는 `TrackerConfigError`."""
+    if db is None:
+        return re.compile(trackers.of(cfg).default_key_regex)
     conf = _db_cfg(db)
     tracker = conf.get("tracker")
     return re.compile(str((tracker.get("key_regex") if isinstance(tracker, dict) else None)
@@ -191,7 +194,7 @@ def extract(raw: dict, cfg: dict, db: Path | None, origin: str, last: int | None
     ltz = _zone(logcat_cfg.get("timezone"), "logcat")
 
     key = str(raw.get("key") or lookup(raw, "issue.key") or "")
-    kre = key_regex(db)
+    kre = key_regex(db, cfg)
     missing: list[str] = []
 
     structured = {}
@@ -326,7 +329,7 @@ def main(argv: list[str] | None = None) -> int:
             raise UsageError(problem)
         if args.cmd == "check-key":
             key = adapter.parse_key(args.key)       # 작업 키(경로 안전 형식). 못 바꾸면 입력 그대로 내고 실패
-            kre = key_regex(db)
+            kre = key_regex(db, cfg)
             ok = key is not None and bool(kre.fullmatch(key))
             result = {"key": key if key is not None else args.key, "valid": ok, "regex": kre.pattern}
             print(json.dumps(result, ensure_ascii=False))

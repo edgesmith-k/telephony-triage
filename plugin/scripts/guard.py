@@ -219,13 +219,17 @@ class Config:
                 p.exempt = p.work_dir
         # 옛 설정 키(jira: 등)가 남아 있으면 규칙 2의 설정 서버가 비어 보인다 → check_mcp가 모든 MCP를 거부한다(fail-closed)
         self.legacy = userconfig.legacy_problems(defaults, self.user)
-        # tracker.kind 오류(모르는 트래커·형식 오류)면 어느 트래커 규칙을 쓸지 모른다 → check_mcp가 모든 MCP를 거부한다(fail-closed)
+        # tracker.kind 오류(모르는 트래커·형식 오류·트래커 모듈을 못 불러옴)면 어느 트래커 규칙을 쓸지 모른다 → check_mcp가
+        # 모든 MCP를 거부한다(fail-closed). 어떤 예외든 여기서 받는다: Config가 깨지면 파일·Bash 규칙까지 degraded(ask)로 약해진다
         self.tracker_error: str | None = None
         for c in [self.cfg, *cfgs.values()]:
             try:
                 trackers.kind_of(c)
             except trackers.TrackerConfigError as exc:
                 self.tracker_error = str(exc)
+                break
+            except Exception as exc:  # noqa: BLE001
+                self.tracker_error = f"{type(exc).__name__}: {exc}"
                 break
         problems = userconfig.profile_problems(self.user) if self.user else []
         if problems:
@@ -429,8 +433,8 @@ def check_jira_post(tool: str, tool_input: dict, spec: dict, conf: Config, dec: 
             if got is None:
                 problems = []
                 break
-            key = issuepost.adapter(spec).key_from_args(spec, tool_input)     # 경로 안전 작업 키 또는 None
-            has_record = prof.work_dir is not None and isinstance(key, str) and issuepost.adapter(spec).safe_key_re.fullmatch(key) \
+            key = issuepost.spec_tracker(spec).key_from_args(spec, tool_input)     # 경로 안전 작업 키 또는 None
+            has_record = prof.work_dir is not None and isinstance(key, str) and issuepost.spec_tracker(spec).safe_key_re.fullmatch(key) \
                 and (prof.work_dir / key / issuepost.APPROVED_FILE).is_file()
             problems.insert(0, got) if has_record else problems.append(got)
         problem = problems[0] if problems else None
@@ -440,7 +444,7 @@ def check_jira_post(tool: str, tool_input: dict, spec: dict, conf: Config, dec: 
         dec.deny.append(f"Jira 코멘트는 확인 화면에서 승인한 본문만 올린다 (규칙 2): {problem}. "
                         "issue_post.py render → 승인 → approve부터 다시 한다.")
         return
-    key = issuepost.adapter(spec).key_from_args(spec, tool_input)
+    key = issuepost.spec_tracker(spec).key_from_args(spec, tool_input)
     sha = issuepost.body_sha256(tool_input[spec["body_arg"]])
     dec.ask.append(f"승인한 Jira 코멘트 게시다({key}, 본문 sha256 {sha[:12]}). 확인 화면의 본문과 같은지 보고 허용한다 (규칙 2).")
 

@@ -500,7 +500,7 @@ def _guard_selftest(args, clone: Path | None, cfg: dict | None = None) -> dict:
     spec, _err = issuepost.write_spec(cfg or {})
     if spec:
         events.append({"hook_event_name": "PreToolUse", "tool_name": spec["tool"], "cwd": home,
-                       "tool_input": {**issuepost.adapter(spec).key_args(spec, "SELFTEST-0"), spec["body_arg"]: "selftest"}})
+                       "tool_input": {**issuepost.spec_tracker(spec).key_args(spec, "SELFTEST-0"), spec["body_arg"]: "selftest"}})
     for event in events:
         try:
             proc = subprocess.run([python, str(root / "scripts" / "guard.py"), "--plugin-root", str(root)],

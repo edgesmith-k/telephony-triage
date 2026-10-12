@@ -11,8 +11,9 @@ from types import MappingProxyType
 from trackers.base import TrackerSpec
 
 # 경로 안전 키 형식 (옛 `issuepost.KEY_SAFE_RE`). DB `tracker.key_regex`보다 먼저 본다(작업 디렉토리 이름이 된다)
-SAFE_KEY_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*-\d+$")
-DEFAULT_KEY_REGEX = r"[A-Z][A-Z0-9]+-\d+"     # 옛 jira_fields·issue_post·db_search·dbadd.applier 4곳 중복 기본값
+# 숫자는 ASCII `[0-9]`만(`\d`는 유니코드 숫자도 받아 작업 디렉토리·브랜치 이름이 비ASCII가 된다)
+SAFE_KEY_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*-[0-9]+$")
+DEFAULT_KEY_REGEX = r"[A-Z][A-Z0-9]+-[0-9]+"   # 옛 jira_fields·issue_post·db_search·dbadd.applier 4곳 중복 기본값(`\d` → `[0-9]`)
 
 
 def _safe(value) -> str | None:
@@ -33,13 +34,11 @@ def link(base_url: str, key: str) -> str:
 
 
 def spec_problems(raw: dict) -> list[str]:
-    """`key_arg`(이슈 키 인자 이름)·`body_arg`는 서로 다른 비어 있지 않은 문자열, `extra_args`는 둘과 겹치지 않는 객체."""
-    key_arg, body_arg = raw.get("key_arg"), raw.get("body_arg")
-    extra = raw.get("extra_args") if raw.get("extra_args") is not None else {}
-    if not (isinstance(key_arg, str) and key_arg and isinstance(body_arg, str) and body_arg) or key_arg == body_arg:
+    """Jira 전용 검사: `key_arg`(이슈 키 인자 이름)가 필수이고 비어 있지 않은 문자열이며 `body_arg`와 다르다.
+    `body_arg`·`extra_args` 공통 검사는 `common/issuepost.spec_check`가 한다(문구는 이전 묶음 문구 그대로)."""
+    key_arg = raw.get("key_arg")
+    if not (isinstance(key_arg, str) and key_arg) or key_arg == raw.get("body_arg"):
         return ["add_comment.key_arg·body_arg는 서로 다른 비어 있지 않은 문자열이다"]
-    if not isinstance(extra, dict) or {key_arg, body_arg} & set(extra):
-        return ["add_comment.extra_args는 객체이고 key_arg·body_arg와 겹치지 않는다"]
     return []
 
 

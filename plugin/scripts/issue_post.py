@@ -32,7 +32,7 @@ git·clone·스냅샷·worktree를 건드리지 않는다.
 
 종료 코드: 0 = 완료(postable이 거짓이어도 render는 0), 1 = 검사 실패(fill 형식·basis·길이·TODO·로그 원문 줄·Jira 원문 인용·
 마스킹 잔여, approve의 sha 불일치·render 뒤 post.md 편집·분석 변경·이미 게시함), 2 = 사용·환경 오류(site-defaults·사용자
-config 없음, 키 형식 불일치, 트래커 불일치(`tracker-mismatch`: 설정 `tracker.kind` ≠ 스냅샷 이슈 DB 선언), analysis.json 없음·status≠ok, approve인데 postable 거짓, plan.json 손상).
+config 없음, 키 형식 불일치, 트래커 불일치(`tracker-mismatch`: 설정 `tracker.kind` ≠ 스냅샷(없으면 사용자 clone) 이슈 DB 선언, 둘 다 없으면 대조 불가), analysis.json 없음·status≠ok, approve인데 postable 거짓, plan.json 손상).
 """
 
 from __future__ import annotations
@@ -91,9 +91,22 @@ class Job:
         work = Path(str(userconfig.get(self.cfg, "work_dir"))).expanduser()
         self.snap = work / session_lock.SNAPSHOT_DIR
         db_cfg = compat.load_db_config(self.snap) if (self.snap / "issue-db.config.yaml").is_file() else {}
-        try:     # 세션 tracker.kind와 스냅샷 이슈 DB 선언이 다르면 거부(tracker-mismatch, 종료 2)
+        # 세션 tracker.kind와 이슈 DB 선언(스냅샷, 없으면 사용자 clone의 issue_db.path)이 다르면 거부(tracker-mismatch, 종료 2).
+        # 둘 다 읽을 수 없으면 대조할 수 없으므로 멈춘다(fail-closed)
+        declared = db_cfg
+        if not declared:
+            clone = Path(str(userconfig.get(self.cfg, "issue_db.path") or "")).expanduser()
+            try:
+                declared = compat.load_db_config(clone) if str(clone) not in ("", ".") \
+                    and (clone / "issue-db.config.yaml").is_file() else {}
+            except Exception as exc:  # noqa: BLE001 — 손상된 설정도 대조 불가
+                raise Usage(f"이슈 DB 설정을 읽지 못해 트래커 선언을 대조할 수 없다: {clone} ({type(exc).__name__})") from exc
+        undeclared = None if declared else (
+            "이슈 DB 설정(스냅샷·issue_db.path의 issue-db.config.yaml)을 찾지 못해 트래커 선언(tracker.kind)을 대조할 수 없다 "
+            "— analyze를 먼저 하거나 issue_db.path를 확인한다")      # 플랫폼 대조(더 구체적인 안내) 뒤에 낸다
+        try:
             self.tracker = trackers.of(self.cfg)
-            problem = trackers.mismatch(self.cfg, db_cfg) if db_cfg else None
+            problem = trackers.mismatch(self.cfg, declared) if declared else None
         except trackers.TrackerConfigError as exc:
             raise Usage(str(exc)) from exc
         if problem:
@@ -110,6 +123,8 @@ class Job:
         done = (self.analysis or {}).get("platform") or userconfig.TOP_PROFILE
         if self.analysis and done != self.platform:      # 다른 플랫폼 분석을 다른 플랫폼 설정으로 게시하지 않는다
             raise Usage(f"이 분석은 {done} 플랫폼이다(선택한 플랫폼: {self.platform}) — --platform {done}으로 다시 실행한다")
+        if undeclared:
+            raise Usage(undeclared)
         self.render_doc = _read(self.dir / issuepost.RENDER_FILE, issuepost.RENDER_FILE)
         self.approved = _read(self.dir / issuepost.APPROVED_FILE, issuepost.APPROVED_FILE)
         self.result = _read(self.dir / issuepost.RESULT_FILE, issuepost.RESULT_FILE)
@@ -634,7 +649,7 @@ def cmd_approve(args, job: Job) -> tuple[dict, int]:
         return {"error": "이미 게시함 — 다시 올리려면 사용자가 명시한 뒤 render --again"}, CHECK_FAILED
     at = issuepost.now()
     spec = job.spec
-    record = {"schema": 1, "key": job.key, "tool": spec["tool"], "key_arg": issuepost.adapter(spec).key_arg_id(spec),
+    record = {"schema": 1, "key": job.key, "tool": spec["tool"], "key_arg": issuepost.spec_tracker(spec).key_arg_id(spec),
               "body_sha256": doc["post_sha256"], "format": doc.get("format"), "request_hash": a.get("request_hash"),
               "approved_at": issuepost.iso(at), "expires_at": issuepost.iso(issuepost.expires(at)), "used_at": None,
               "again": bool(doc.get("again"))}

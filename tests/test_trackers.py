@@ -112,10 +112,16 @@ def test_get_checks_spec_type_name_and_module_kind(fake_trackers):
     assert "fakebug" in trackers.known() and "pkgtracker" not in trackers.known()
 
 
-def test_broken_dependency_inside_tracker_is_raised(fake_trackers):
-    fake_trackers("broken", "import no_such_dependency_xyz\n")
-    with pytest.raises(ModuleNotFoundError):
+@pytest.mark.parametrize("body,why", [("import no_such_dependency_xyz\n", "ModuleNotFoundError"),
+                                      ("SPEC = (\n", "SyntaxError"), ("raise RuntimeError('boom')\n", "RuntimeError"),
+                                      ("from os import no_such_name\n", "ImportError")])
+def test_broken_tracker_module_is_config_error(fake_trackers, body, why):
+    """트래커 모듈을 불러오지 못하면(하위 의존성·문법·최상위 예외) 모두 `TrackerConfigError` — 스크립트는 종료 2, guard는 MCP 거부."""
+    fake_trackers("broken", body)
+    with pytest.raises(TrackerConfigError, match=f"트래커 broken을\\(를\\) 불러오지 못했다 \\({why}"):
         trackers.get("broken")
+    with pytest.raises(TrackerConfigError):
+        trackers.kind_of({"tracker": {"kind": "broken"}})
 
 
 @pytest.mark.parametrize("cfg,want", [(None, "jira"), ({}, "jira"), ({"tracker": None}, "jira"), ({"tracker": {}}, "jira"),
@@ -156,10 +162,17 @@ def test_all_server_words_registry_failure_uses_builtin(monkeypatch):
     def boom():
         raise RuntimeError("registry")
     monkeypatch.setattr(trackers, "known", boom)
-    assert trackers.all_server_words() == ("jira", "atlassian")
+    assert trackers.all_server_words() == ("atlassian", "jira")
     monkeypatch.setattr(trackers, "known", lambda: ["jira"])
     monkeypatch.setattr(trackers, "get", lambda kind: (_ for _ in ()).throw(ImportError("x")))
-    assert set(trackers.all_server_words()) == {"jira", "atlassian"}                   # 전부 깨져도 내장 단어
+    assert trackers.all_server_words() == ("atlassian", "jira")                        # 전부 깨져도 내장 단어
+
+
+def test_all_server_words_keeps_builtin_without_jira(fake_trackers, monkeypatch):
+    """jira.py가 없는 설치(다른 트래커만)에서도 jira·atlassian 휴리스틱은 남는다."""
+    fake_trackers("fakebug", FAKE)
+    monkeypatch.setattr(trackers, "known", lambda: ["fakebug"])
+    assert trackers.all_server_words() == ("atlassian", "bugzilla", "jira")
 
 
 # -- 계층 규칙 ------------------------------------------------------------------------------------
@@ -178,6 +191,28 @@ def _imports(path: Path) -> set[str]:
                 in ("import_module", "__import__"):
             found.add(node.args[0].value)
     return found
+
+
+DYNAMIC_NAMES = {"__import__", "exec", "eval", "compile", "execfile", "importlib", "runpy", "import_module", "getattr"}
+DYNAMIC_MODULES = {"importlib", "runpy", "builtins"}
+
+
+@pytest.mark.parametrize("path", sorted(p for p in (SCRIPTS / "trackers").glob("*.py") if p.name != "__init__.py"),
+                         ids=lambda p: p.name)
+def test_tracker_modules_use_no_dynamic_import_or_exec(path):
+    """트래커 모듈(레지스트리 제외)은 동적 import·exec·eval을 아예 쓰지 않는다 — 인자가 상수가 아니어도 정적 검사가 닿게.
+    (`re.compile` 같은 속성 호출은 괜찮다. 맨 이름 `compile`·`getattr`·`import_module`과 importlib·runpy·builtins import는 금지)"""
+    bad = set()
+    for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+        if isinstance(node, ast.Name) and node.id in DYNAMIC_NAMES:
+            bad.add(node.id)
+        elif isinstance(node, ast.Attribute) and node.attr in ("import_module", "__import__"):
+            bad.add(node.attr)
+        elif isinstance(node, ast.Import):
+            bad |= {a.name for a in node.names if a.name.split(".")[0] in DYNAMIC_MODULES}
+        elif isinstance(node, ast.ImportFrom) and (node.module or "").split(".")[0] in DYNAMIC_MODULES:
+            bad.add(node.module)
+    assert bad == set()
 
 
 @pytest.mark.parametrize("path", sorted((SCRIPTS / "trackers").glob("*.py")), ids=lambda p: p.name)
@@ -210,8 +245,10 @@ def test_jira_parse_key_is_safe_key(text, want):
 
 
 def test_jira_constants_are_previous_values():
-    assert J.safe_key_re.pattern == r"^[A-Za-z][A-Za-z0-9_]*-\d+$"
-    assert J.default_key_regex == r"[A-Z][A-Z0-9]+-\d+"
+    assert J.safe_key_re.pattern == r"^[A-Za-z][A-Za-z0-9_]*-[0-9]+$"          # 이전 `\d`를 ASCII로
+    assert J.default_key_regex == r"[A-Z][A-Z0-9]+-[0-9]+"
+    for key in ("MOCK-١٢٣", "MOCK-１"):                                              # 유니코드 숫자는 작업 키가 아니다
+        assert J.parse_key(key) is None and not re.fullmatch(J.default_key_regex, key)
     assert J.server_words == ("jira", "atlassian")
     assert J.formats == ("jira-wiki", "markdown") and J.default_format == "jira-wiki"
     assert set(J.formats) <= set(issuepost.RENDERERS)
@@ -253,18 +290,38 @@ def test_jira_key_from_read():
     assert J.key_from_read({"key": "../../etc-1"}, {}, loose) is None
 
 
+KEYBODY = "add_comment.key_arg·body_arg는 서로 다른 비어 있지 않은 문자열이다"
+EXTRA = "add_comment.extra_args는 객체이고 key_arg·body_arg와 겹치지 않는다"
+
+
 @pytest.mark.parametrize("raw,want", [
     ({"key_arg": "ticket", "body_arg": "text"}, []),
-    ({"key_arg": "ticket", "body_arg": "text", "extra_args": {"v": 1}}, []),
-    ({"body_arg": "text"}, ["add_comment.key_arg·body_arg는 서로 다른 비어 있지 않은 문자열이다"]),
-    ({"key_arg": "t", "body_arg": "t"}, ["add_comment.key_arg·body_arg는 서로 다른 비어 있지 않은 문자열이다"]),
-    ({"key_arg": "ticket", "body_arg": "text", "extra_args": {"text": 1}},
-     ["add_comment.extra_args는 객체이고 key_arg·body_arg와 겹치지 않는다"]),
-    ({"key_arg": "ticket", "body_arg": "text", "extra_args": []},
-     ["add_comment.extra_args는 객체이고 key_arg·body_arg와 겹치지 않는다"]),
+    ({"key_arg": "ticket"}, []),                         # body_arg는 공통 검사(issuepost)
+    ({"key_arg": "ticket", "extra_args": {"ticket": 1}}, []),   # extra_args도 공통 검사
+    ({"body_arg": "text"}, [KEYBODY]),
+    ({"key_arg": "", "body_arg": "text"}, [KEYBODY]),
+    ({"key_arg": "t", "body_arg": "t"}, [KEYBODY]),
 ])
-def test_jira_spec_problems(raw, want):
+def test_jira_spec_problems_only_key_arg(raw, want):
     assert J.spec_problems(raw) == want
+
+
+@pytest.mark.parametrize("over,want", [
+    ({}, None),
+    ({"extra_args": {"v": 1}}, None),
+    ({"key_arg": None}, KEYBODY),
+    ({"key_arg": "text"}, KEYBODY),
+    ({"body_arg": None}, KEYBODY),
+    ({"body_arg": 5}, KEYBODY),
+    ({"extra_args": {"text": 1}}, EXTRA),
+    ({"extra_args": {"ticket": 1}}, EXTRA),
+    ({"extra_args": []}, EXTRA),
+])
+def test_spec_check_common_and_tracker_arg_problems(over, want):
+    """공통 검사(body_arg·extra_args 겹침)는 issuepost, 키 인자는 어댑터 — 문구는 이전과 같다."""
+    ac = {"tool": SPEC["tool"], "key_arg": "ticket", "body_arg": "text", **over}
+    spec, problems = issuepost.spec_check(_cfg(write_tools={"add_comment": ac}))
+    assert problems == ([] if want is None else [("warn", want)]) and (spec is None) == (want is not None)
 
 
 # -- issuepost 위임 --------------------------------------------------------------------------------
@@ -280,7 +337,7 @@ def _cfg(**over) -> dict:
 def test_spec_check_carries_kind_and_uses_adapter_formats():
     spec, problems = issuepost.spec_check(_cfg())
     assert problems == [] and spec == SPEC
-    assert issuepost.adapter(spec) is J and issuepost.adapter(_cfg()) is J
+    assert issuepost.spec_tracker(spec) is J
     assert issuepost.call_arguments(spec, KEY, "본문\n") == {"ticket": KEY, "text": "본문"}
     spec2, problems2 = issuepost.spec_check(_cfg(write_tools={"add_comment": {**_cfg()["tracker"]["write_tools"]["add_comment"],
                                                                               "format": "adf"}}))
@@ -426,3 +483,166 @@ def test_server_word_heuristic_keeps_builtin_with_broken_tracker():
         out = guard(w, tool, {})
         assert out.get("permissionDecision") == "deny" and "Jira/Atlassian" in out["permissionDecisionReason"], tool
     assert guard(w, READ, {"ticket": KEY}).get("permissionDecision") is None
+
+
+# -- 리뷰 반영: 깨진 트래커·bridge 반환값·DB kind·키 형식·mismatch 경로·위임 -----------------------------
+
+READ_ACTIONS = {   # 어댑터 read_action이 계약 밖의 값을 낼 때(core가 unsupported로 취급해 원문을 대체해야 한다)
+    "runsup": 'lambda ti, mapped: "unsupported"',
+    "rnone": "lambda ti, mapped: None",
+    "rcomment": 'lambda ti, mapped: "add_comment"',
+    "rraise": "lambda ti, mapped: (_ for _ in ()).throw(ValueError('x'))",
+}
+
+
+def _fake(name: str, **fields: str) -> str:
+    extra = "".join(f", {k}={v}" for k, v in fields.items())
+    return ("from dataclasses import replace\nimport trackers.jira as _jira\n"
+            f"SPEC = replace(_jira.SPEC, name={name!r}, label={name.title()!r}{extra})\n")
+
+
+def _db_copy(prefix: str, edit=None) -> Path:
+    db = tmp(prefix) / "db"
+    shutil.copytree(SAMPLE, db)
+    if edit:
+        conf = db / "issue-db.config.yaml"
+        text = conf.read_text(encoding="utf-8")
+        new = edit(text)
+        assert new != text
+        conf.write_text(new, encoding="utf-8")
+    return db
+
+
+def test_broken_configured_tracker_keeps_file_and_bash_rules():
+    """kind로 고른 트래커 모듈이 깨져도(SyntaxError) MCP만 거부되고 파일·Bash 규칙은 평소 판정 그대로다(degraded로 약해지지 않음)."""
+    w = ws("synbad", {"synbad.py": "SPEC = (\n"})
+    approved = w.work / KEY / "post.approved.json"
+    events = {"write_approved": ("Write", {"file_path": str(approved), "content": "{}"}),
+              "write_clone": ("Write", {"file_path": str(w.clone / "README.md"), "content": "x"}),
+              "push_main": ("Bash", {"command": f"git -C {w.clone} push origin main"})}
+    before = {name: guard(w, tool, ti) for name, (tool, ti) in events.items()}
+    set_kind(w, "synbad")
+    for name, (tool, ti) in events.items():
+        got = guard(w, tool, ti)
+        assert got.get("permissionDecision") == before[name].get("permissionDecision") == "deny", (name, got)
+        assert got["permissionDecisionReason"] == before[name]["permissionDecisionReason"], name
+        assert "내부 오류" not in got["permissionDecisionReason"]
+    out = guard(w, READ, {"ticket": KEY})
+    assert out.get("permissionDecision") == "deny" and "SyntaxError" in out["permissionDecisionReason"]
+    assert "트래커 설정 오류" in bridge(w)
+    for script, args in (("jira_fields.py", ["check-key", KEY, "--db", SAMPLE]), ("db_search.py", [KEY])):
+        proc = w.run(script, args)
+        assert proc.returncode == 2 and "SyntaxError" in proc.stderr and "Traceback" not in proc.stderr, (script, proc.stderr)
+
+
+@pytest.mark.parametrize("name", sorted(READ_ACTIONS))
+def test_bridge_read_action_outside_contract_replaces_raw(name):
+    w = ws("readact", {f"{n}.py": _fake(n, read_action=v) for n, v in READ_ACTIONS.items()})
+    set_kind(w, name)
+    text = bridge(w)
+    assert "지원하지 않는 읽기" in text and SECRET not in text and "imsi" not in text, (name, text)
+    assert not (w.work / KEY / "post.result.json").exists()
+
+
+def test_db_tracker_kind_error_stops_db_tools():
+    w = ws()
+    db = _db_copy("tt-badkind-", lambda t: t.replace("  kind: jira\n", "  kind: nosuch\n"))
+    for script, args in (("db_build.py", ["--db", db, "--preview", tmp("tt-prev-")]),
+                         ("db_search.py", ["--db", db, "MOCK-1101"]),
+                         ("db_add.py", ["apply", REPO / "tests" / "fixtures" / "plans" / "p7-analyze-append.plan.json",
+                                        "--db", db, "--user", "mock-user1"])):
+        proc = w.run(script, args)
+        assert proc.returncode == 2 and "이슈 DB tracker.kind" in proc.stderr and "nosuch" in proc.stderr, (script, proc.stderr)
+    lint = json.loads(w.run("db_lint.py", ["--db", db, "--all"]).stdout)
+    assert any(e["code"] == "config" and "tracker.kind" in e["message"] for e in lint["errors"]), lint["errors"]
+
+
+def test_record_key_must_be_tracker_work_key():
+    """DB key_regex가 넓어도 기록 키는 DB 트래커의 작업 키 형식이어야 한다(파일 이름이 된다): db_lint issue-key, db_add reject."""
+    w = ws()
+    db = _db_copy("tt-loosekey-", lambda t: re.sub(r"key_regex: .*", "key_regex: '.+-[0-9]+'", t))
+    src = next(db.glob("data/*/issues/MOCK-1101.yaml"))
+    bad = src.with_name("org.repo-1.yaml")
+    bad.write_text(src.read_text(encoding="utf-8").replace("MOCK-1101", "org.repo-1"), encoding="utf-8")
+    src.unlink()
+    lint = json.loads(w.run("db_lint.py", ["--db", db, "--all"]).stdout)
+    hits = [e for e in lint["errors"] if e["code"] == "issue-key"]
+    assert hits and "작업 키 형식" in hits[0]["message"] and "org.repo-1" in hits[0]["message"], lint["errors"]
+    plan = json.loads((REPO / "tests" / "fixtures" / "plans" / "p7-analyze-append.plan.json").read_text(encoding="utf-8"))
+    plan["issue"]["key"] = "org.repo-2"
+    path = tmp("tt-plan-") / "p.plan.json"
+    path.write_text(json.dumps(plan, ensure_ascii=False), encoding="utf-8")
+    proc = w.run("db_add.py", ["apply", path, "--db", db, "--user", "mock-user1"])
+    assert proc.returncode != 0 and "issue-key" in proc.stdout + proc.stderr and "작업 키 형식" in proc.stdout + proc.stderr, \
+        (proc.stdout[-800:], proc.stderr[-800:])
+
+
+def test_tracker_mismatch_on_triage_extract_and_offline():
+    w = ws("fakebug", {"fakebug.py": FAKE})
+    shutil.rmtree(w.work / "_snapshot", ignore_errors=True)        # 앞 테스트의 가짜 스냅샷(설정 파일만)은 worktree가 아니다
+    set_kind(w, "fakebug")
+    cases = {
+        "triage": ["run", KEY, "--dry-run", "--issue-file", MOCK_JIRA / f"{KEY}.yaml", "--logs", LOG],
+        "extract": ["extract", MOCK_JIRA / f"{KEY}.yaml", "--origin", "file", "--db", SAMPLE],
+        "offline": ["run", KEY, "--offline-db", SAMPLE, "--out", tmp("tt-off-") / "out", "--logs", LOG,
+                    "--issue-file", MOCK_JIRA / f"{KEY}.yaml", "--tz", "Asia/Seoul", "--year", "2026"],
+    }
+    for name, args in cases.items():
+        proc = w.run("jira_fields.py" if name == "extract" else "triage.py", args)
+        assert proc.returncode == 2 and "tracker-mismatch" in proc.stdout + proc.stderr, (name, proc.stdout[-500:], proc.stderr[-500:])
+        w.run("triage.py", ["release", KEY])
+
+
+def test_issue_post_without_snapshot_checks_clone_or_stops():
+    w = ws("fakebug", {"fakebug.py": FAKE})
+    shutil.rmtree(w.work / "_snapshot", ignore_errors=True)
+    assert w.run("issue_post.py", ["status", KEY, "--json"]).returncode == 0          # jira·jira(clone 선언)
+    set_kind(w, "fakebug")
+    proc = w.run("issue_post.py", ["status", KEY, "--json"])
+    assert proc.returncode == 2 and "tracker-mismatch" in proc.stderr                  # 스냅샷 없으면 clone 선언과 대조
+    data = yaml.safe_load(w.saved)
+    data["issue_db"]["path"] = str(tmp("tt-noclone-"))
+    data.setdefault("tracker", {})["kind"] = "jira"
+    (w.home / "config.yaml").write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    proc = w.run("issue_post.py", ["status", KEY, "--json"])
+    assert proc.returncode == 2 and "대조할 수 없다" in proc.stderr, proc.stderr          # 둘 다 없으면 fail-closed
+
+
+def test_check_key_without_db_uses_session_tracker(fake_trackers, monkeypatch):
+    import jira_fields
+    fake_trackers("strict", _fake("strict", default_key_regex='r"ZZ-[0-9]+"'))
+    assert jira_fields.key_regex(None, {"tracker": {"kind": "strict"}}).pattern == "ZZ-[0-9]+"
+    assert jira_fields.key_regex(None, {}).pattern == J.default_key_regex
+    assert jira_fields.key_regex(SAMPLE, {"tracker": {"kind": "strict"}}).pattern == r"[A-Z][A-Z0-9]+-\d+"   # DB 값이 먼저
+
+
+def test_tracker_candidates_delegates_classify_extra():
+    w = ws("cand", {"candbug.py": _fake("candbug",
+                                        classify_extra='lambda tool, a: (a | {"get_comments"}) if "get_issue" in a else a')})
+    tools = tmp("tt-tools-") / "tools.json"
+    tools.write_text(json.dumps({"srv": ["fetch_ticket"]}), encoding="utf-8")
+    args = ["tracker-candidates", "--tools-json", tools, "--mcp-config", tmp("tt-nomcp-") / "none.json"]
+    got = {}
+    for kind in ("jira", "candbug"):
+        set_kind(w, kind)
+        srv = next(s for s in w.json("config.py", args)["servers"] if s["server"] == "srv")
+        got[kind] = srv["tracker_tools"]
+    assert got["jira"]["get_issue"] == ["mcp__srv__fetch_ticket"] and got["jira"]["get_comments"] == []
+    assert got["candbug"]["get_comments"] == ["mcp__srv__fetch_ticket"]
+
+
+def test_guard_selftest_uses_tracker_key_args(fake_trackers, monkeypatch):
+    import config
+    fake_trackers("refbug", _fake("refbug", key_args='lambda spec, key: {"issue_ref": key}'))
+    seen = []
+
+    class Proc:
+        returncode, stderr = 0, ""
+        stdout = json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny",
+                                                    "permissionDecisionReason": "x"}})
+
+    monkeypatch.setattr(config.subprocess, "run", lambda *a, **kw: seen.append(json.loads(kw["input"])) or Proc())
+    cfg = _cfg(kind="refbug")
+    row = config._guard_selftest(type("A", (), {"plugin_root": str(REPO / "plugin")})(), None, cfg)
+    assert row["status"] == "ok"
+    assert seen[-1]["tool_input"] == {"issue_ref": "SELFTEST-0", "text": "selftest"}

@@ -180,11 +180,9 @@ def section_text(items: list) -> str:
 # -- 도구 설정 -------------------------------------------------------------------------------
 
 
-def adapter(cfg_or_spec: dict) -> trackers.TrackerSpec:
-    """설정(`tracker.kind`) 또는 검증된 spec(`kind`)의 트래커 어댑터. 잘못된 kind는 `trackers.TrackerConfigError`."""
-    if isinstance(cfg_or_spec, dict) and "kind" in cfg_or_spec and "tool" in cfg_or_spec:
-        return trackers.get(cfg_or_spec["kind"])
-    return trackers.of(cfg_or_spec)
+def spec_tracker(spec: dict) -> trackers.TrackerSpec:
+    """검증된 코멘트 도구 spec(`spec_check` 결과, `kind` 필수)의 트래커 어댑터. 설정에서는 `trackers.of(cfg)`를 쓴다."""
+    return trackers.get(spec["kind"])
 
 
 def _get(cfg: dict, path: tuple):
@@ -258,7 +256,13 @@ def spec_check(cfg: dict, prefixes: set[str] | None = None) -> tuple[dict | None
             problems.append(("warn", f"{tool} 이름에 금지 단어가 있다({', '.join(bad)})"))
     key_arg, body_arg = raw.get("key_arg"), raw.get("body_arg")
     extra = raw.get("extra_args") if raw.get("extra_args") is not None else {}
-    problems += [("warn", why) for why in tracker.spec_problems(raw)]    # 키·본문·고정 인자 모양(트래커별)
+    key_problems = tracker.spec_problems(raw)          # 트래커 전용: 키 인자(jira는 key_arg 필수)
+    if key_problems:
+        problems += [("warn", why) for why in key_problems]
+    elif not (isinstance(body_arg, str) and body_arg):  # 공통: 본문 인자, 고정 인자는 객체이고 키·본문 인자와 겹치지 않는다
+        problems.append(("warn", "add_comment.key_arg·body_arg는 서로 다른 비어 있지 않은 문자열이다"))
+    elif not isinstance(extra, dict) or ((tracker.arg_names(raw) | {body_arg}) & set(extra)):
+        problems.append(("warn", "add_comment.extra_args는 객체이고 key_arg·body_arg와 겹치지 않는다"))
     fmt = raw.get("format") or tracker.default_format
     if fmt not in tracker.formats:
         problems.append(("warn", f"add_comment.format은 {'|'.join(tracker.formats)} 중 하나다: {fmt}"))
@@ -279,7 +283,7 @@ def write_spec(cfg: dict, prefixes: set[str] | None = None) -> tuple[dict | None
 
 def call_arguments(spec: dict, key: str, body: str) -> dict:
     """approve가 내는 MCP 도구 인자 (도구 인자 매핑은 이 함수와 `check_call`만 안다)."""
-    return {**adapter(spec).key_args(spec, key), spec["body_arg"]: normalize_body(body), **spec.get("extra_args", {})}
+    return {**spec_tracker(spec).key_args(spec, key), spec["body_arg"]: normalize_body(body), **spec.get("extra_args", {})}
 
 
 # -- 승인 기록 -------------------------------------------------------------------------------
@@ -312,7 +316,7 @@ def check_call(tool: str, tool_input, spec: dict, work_dir: Path | None, at: dat
     같은 본문의 posted 이력은 승인 기록의 `again: true`(render --again)일 때만 건너뛴다. 결과 불명(unknown)은 늘 거부.
     guard는 판정만 한다(파일을 쓰지 않는다). 1회용 표시(`used_at`)는 PostToolUse(jira_bridge)가 한다."""
     at = at or now()
-    tracker = adapter(spec)
+    tracker = spec_tracker(spec)
     key_arg, body_arg, extra = tracker.key_arg_id(spec), spec["body_arg"], spec.get("extra_args") or {}
     if not isinstance(tool_input, dict):
         return "도구 입력이 객체가 아니다"
