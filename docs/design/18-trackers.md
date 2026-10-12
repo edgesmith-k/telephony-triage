@@ -7,6 +7,8 @@
 - **guard 규칙 2 이름 휴리스틱**은 설치된 모든 트래커의 서버 단어 합집합이다(§5). 지금 단어는 jira·atlassian뿐이라 jira 설치의 판정은 같다.
 - **승인 기록 `post.approved.json`에 트래커 `kind`가 더해진다.** guard가 지금 설정 트래커와 대조한다(§5). 30분 1회용 작업 파일이고 `schema: 1`은 그대로다.
 
+**GitHub Issues 트래커는 실험적이다** (10/12 사용자 결정 (o)): 사내 트래커는 Jira라 GitHub 어댑터는 모의 MCP로만 검증했고, 아래 §5 "알려진 한계"(설정 밖 GitHub MCP 등록의 트래커 레포 쓰기)를 막지 않았다. 실제로 쓰려면 그 한계부터 막는다.
+
 driver(`triage.py run`)가 `check-key`의 정규화된 작업 키로 작업 디렉토리를 만드는 것(§3)도 jira에서는 입력 그대로라 출력이 같다. 형식 이름 변경(`jira/` → `issues/`, `jira.schema.json` → `issue.schema.json`, `android_version(s)` → `platform_version(s)`, 설정 `jira:` → `tracker:`, `--jira-*` → `--issue-*` 등)은 스키마 v1을 직접 고쳤다(T4, T10).
 
 ## 1. 계약 (`plugin/scripts/trackers/`)
@@ -103,6 +105,8 @@ trackers/
 
 **전용 MCP 등록 권고 (S30)**: 4번이 규칙 11보다 먼저 돌기 때문에, GitHub 트래커 서버가 일반 GitHub MCP와 **같은 등록**이면 그 서버의 `read_tools` 밖 도구(코드 읽기·PR 생성 포함)가 모두 거부된다. 트래커용으로 issues toolset만 켠 **전용 등록**(별도 서버 이름)을 둔다. 이슈 DB PR은 `gh` CLI로 하므로 영향이 없다.
 
+**알려진 한계 (GitHub, 막지 않음 — 결정 (o))**: github는 서버 단어가 없으므로(위) 트래커로 **설정하지 않은** 다른 GitHub MCP 등록(예: 일반 `github` 서버의 `add_issue_comment`·`issue_write`)으로 트래커 레포 이슈에 쓰면 규칙 2가 잡지 않고, 규칙 11은 이슈 DB 레포만 본다 → 승인 없이 쓸 수 있다(재현: 묶음 3 리뷰 P1-1). Jira 설치에는 해당 없다(jira·atlassian 이름 휴리스틱). GitHub 트래커를 실제로 쓸 때 할 일: 설정 서버 밖의 쓰기형 도구라도 `owner`/`repo`가 DB `tracker.key_regex`의 레포를 가리키면 거부하는 대상 기반 판정을 규칙 11 앞에 둔다. 같은 이유로 eval 그레이더의 GitHub 쓰기 시도 집계도 넓힌다.
+
 ## 6. 새 트래커 추가 절차 (체크리스트)
 
 1. `plugin/scripts/trackers/<kind>.py`에 `SPEC = TrackerSpec(...)`. 이름은 `^[a-z][a-z0-9_]*$`. import는 §1-2. 모르는 값은 `TODO(SITE:S<n>)`(`14-site.md §14.2`에 행 추가)와 placeholder로 둔다.
@@ -137,5 +141,6 @@ trackers/
 - **리포트·doctor·guard 메시지의 라벨 일반화**: "Jira" 문구는 그대로다(T7). GitHub 설치에서 어색하면 `label`로 바꾼다.
 - **이슈 본문(이슈 폼)에서 구조화 필드 추출**: GitHub의 모델·SW·버전·발생 시각 위치는 사내 확인 뒤(S31). 지금은 사용자에게 묻는다.
 - **플랫폼별 트래커**: `platforms.<p>.tracker` 덮어쓰기(S32, `17-platforms.md §8`).
-- **GitHub 검색 결과 격리**: `search_issues` 결과는 jira_bridge가 격리하지 않는다(Jira `search_issues`와 같은 수준).
+- **GitHub 검색 결과 격리**: `search_issues` 결과는 jira_bridge가 격리하지 않는다(Jira `search_issues`와 같은 수준). 실제 GitHub `search_issues`는 이슈 `body` 원문을 돌려주므로 GitHub를 쓸 때 S30에서 응답 필드를 확인하고, 필요하면 `read_tools`에서 뺀다.
+- **GitHub 키 경계**: Windows 예약 이름 owner(`con`·`nul` 등), 이슈 URL 호스트 미검사(DB `base_url`과 비교 안 함), 비ASCII 대소문자 접기. 결과 키는 늘 경로 안전 형식이라 보안 문제는 아니다(리뷰 P2-4·P2-5).
 - **`.`로 시작하는 repo**(`.github`)는 작업 키 형식 밖이다. 필요하면 인코딩을 바꾼다(스키마 패턴과 함께).
