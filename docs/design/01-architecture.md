@@ -80,14 +80,14 @@ telephony-triage-plugin/                 # 개발 레포 루트
     │   ├── help.md                      # /telephony-triage:help [커맨드] — 목록은 commands/*.md frontmatter에서 (읽기 전용)
     │   ├── setup.md                     # /telephony-triage:setup
     │   ├── analyze.md                   # /telephony-triage:analyze — 옵션은 09-commands.md §10
-    │   ├── record.md                    # /telephony-triage:record <JIRA-KEY> [--cause <원인 ID> | --new-cause <유형 ID> | --new-type <category> | --unresolved <유형 ID>] [--fixture <logcat>] [--resolved-fixture <logcat>] [--dry-run] [--jira-file <yaml>]
+    │   ├── record.md                    # /telephony-triage:record <JIRA-KEY> [--cause <원인 ID> | --new-cause <유형 ID> | --new-type <category> | --unresolved <유형 ID>] [--fixture <logcat>] [--resolved-fixture <logcat>] [--dry-run] [--issue-file <yaml>]
     │   ├── sync.md                      # /telephony-triage:sync
     │   ├── search.md                    # /telephony-triage:search <증상 문장|keyword|JIRA-KEY|ID> (reference/search.md를 가리킴)
     │   ├── sync-pr.md                   # /telephony-triage:sync-pr [branch] (계획 재적용)
     │   ├── preview.md                   # /telephony-triage:preview
     │   ├── review.md                    # /telephony-triage:review [category]
     │   ├── validate.md                  # /telephony-triage:validate [--cause <원인 ID> <logcat...>] [--extra <logcat...>]
-    │   ├── verify-fix.md                # /telephony-triage:verify-fix <원인 ID> <logcat...> [--jira <키>]
+    │   ├── verify-fix.md                # /telephony-triage:verify-fix <원인 ID> <logcat...> [--issue <키>]
     │   ├── fix-submitted.md             # /telephony-triage:fix-submitted <원인 ID> --ref <CL> --fixed-in <branch>[:<build>]
     │   └── migrate.md                   # /telephony-triage:migrate (메인테이너용)
     ├── skills/
@@ -130,7 +130,7 @@ telephony-triage-plugin/                 # 개발 레포 루트
     │   ├── db_review.py
     │   ├── db_migrate.py
     │   ├── guard.py                     # Claude hook 판정기 (08-safety.md §9)
-    │   ├── jira_bridge.py               # PostToolUse hook: Jira MCP 원문 → JOB/jira_raw.json, 모델에는 마스킹 요약. 승인 코멘트 게시 결과 → JOB/post.result.json (08-safety.md §9)
+    │   ├── jira_bridge.py               # PostToolUse hook: Jira MCP 원문 → JOB/issue_raw.json, 모델에는 마스킹 요약. 승인 코멘트 게시 결과 → JOB/post.result.json (08-safety.md §9)
     │   ├── issue_post.py                # analyze Step 9: Jira 코멘트 본문(4칸) 렌더·승인 기록 (07-workflow.md §Step 9). 공용 판정은 common/issuepost.py
     │   ├── triage.py                    # analyze Step 0~4 + Step 5 resolve 드라이버 (contracts.md §3.2). CLI만. 구현은 triagelib/
     │   ├── triagelib/                   # core(상수·오류·Runner), cache(State·캐시 믹스인), anchor(실패 스텝·앵커 믹스인), report(fit·스키마 검사·report.md 믹스인), driver(Driver)
@@ -159,22 +159,22 @@ telephony-triage-plugin/                 # 개발 레포 루트
 | `code_roots.py` | 코드 경로 후보 정렬, 경로 검증, 트리 버전 추정, `<root 키>:` 경로 변환, symbol 검색 | analyze Step 2-1, Step 5 |
 | `parse_logcat.py` | logcat → 이벤트 JSON (**파서 백엔드 선택·호출**(`parser_backends/`, 포맷·연도·타임존·윈도우·RIL 페어링·`phone_id`·`coverage`·builtin 판별은 백엔드), bugreport에서 logcat 섹션만 추출(`extract-bugreport`, 구현 `platforms/android/bugreport.py`), 외부 파서(어댑터) 실행, 백엔드·외부 파서 불일치 경고, `--mask`면 extractor 전 줄 단위 마스킹(백엔드·외부 파서 이벤트 포함), extractor 실행), **fixture 최소 구간 자르기**(`cut`, `common/` 마스킹 함수로 마스킹 후 저장) | analyze Step 3·7, `record`(`--fixture`), `verify-fix`, `validate --cause`, `db_regress` |
 | `mask_pii.py` | 마스킹 치환(파일), 외부 이벤트 JSON 마스킹(`--events`), `--check` 검출. 마스킹 함수 자체는 `common/`에 있고 `parse_logcat`이 공유 | `db_add`, `db_precommit`, `db_pr stage`, guard hook 3번 |
-| `jira_fields.py` | Jira 키 검사(`check-key`, `jira_key_regex`), Jira 응답(MCP `get_issue` 결과 또는 `--jira-file`)에서 `jira.field_map`으로 구조화 필드 추출, 텍스트 필드 즉시 마스킹, 발생 시각 UTC 변환·`occurred_on`·logcat 연도, `--jira-meta` 파일 생성(`extract`). 사람 이름 필드(코멘트 작성자)는 내지 않음 | analyze Step 0·2, `record`, `verify-fix --jira` |
+| `jira_fields.py` | Jira 키 검사(`check-key`, `tracker.key_regex`), Jira 응답(MCP `get_issue` 결과 또는 `--issue-file`)에서 `tracker.field_map`으로 구조화 필드 추출, 텍스트 필드 즉시 마스킹, 발생 시각 UTC 변환·`occurred_on`·logcat 연도, `--issue-meta` 파일 생성(`extract`). 사람 이름 필드(코멘트 작성자)는 내지 않음 | analyze Step 0·2, `record`, `verify-fix --issue` |
 | `match_signatures.py` | 마스킹된 이벤트 JSON × 이슈 DB → 후보 랭킹(`same_phone`·`sequence` 포함, 패턴당 타임아웃), 수정 상태 판단, related | analyze Step 4, `db_regress`, `db_verify` |
 | `db_search.py` | 이슈 DB 검색 (secondary/related, 옛 ID → 새 ID 연결, 증상 문장 단어별 검색·`## 검색 별칭`·순위) | `search`, `record` 대화형 모드, Phase 11 테스트 |
 | `db_add.py` | 작업 계획(`plan.json`) 적용(`source`별 op 허용 규칙, `schema_version` 검사 포함), **drift 검사**(`drift`), ID·fixture 번호 할당, 브랜치 안 renumber("내 ID"만)·check-ids, 템플릿 생성, 유사 유형 검사 | `db_pr stage`, `db_verify rules --draft`, analyze Step 7·`record` (`similar`) |
 | `db_pr.py` | **이슈 DB 쓰기 오케스트레이션**: 세션 lock(`lock`), 읽기 스냅샷, 잔여 worktree·도구 브랜치(`tt/*`) 정리, 사전 점검(브랜치·열린 PR·Jira 중복), worktree 준비 + drift 검사 + apply + 검사(`stage`), 확인 화면 데이터(`summary`, 조립은 `db_summary.py`), 커밋 + lease push + PR(`publish --commit`), 정리(`discard`, `publish --and-discard`), 작업 상태 파일(`state.json`) | analyze Step 0·1·8, `record`, `sync`, `sync-pr`, `verify-fix`, `validate --cause`, `fix-submitted`, import/review/move 계획 PR |
 | `db_build.py` | 생성 파일(README, 카테고리 README, STATS, CHANGELOG) 생성, 정합성 검증 | `db_pr stage`, `preview`, `db_precommit`, guard hook 4번 |
-| `db_lint.py` | 정적 검사: 스키마, ID 형식·중복, Jira 중복, 작성 규칙, 용어집, related·code_refs 형식, `fix.ref` 형식(`fix_ref_regex`), 카테고리 목록, fixture 파일명, 시그니처·extractor·`jira/*.yaml` `note`·원인 본문·`cp_evidence` 안의 원본 식별자 패턴, **정규식 안전**(중첩 수량자·무제한 역참조 거부, `04-parser-matching.md §5.8 (4)`), 시그니처 `sequence`의 id 존재·중복, `builtin.*`·`ext.*` 이벤트 참조, 옛 ID 잔존, `.expect.yaml`의 `also_allowed`(자기 원인·같은 유형 원인·없는 ID 금지), 검증 규칙(근거 없는 verified 금지: `verify-resolution`의 evidence 없이 verified 금지, evidence의 Jira 키·fixture 경로 존재), `synthetic_allowed: false`일 때 `origin: synthetic` 경고 | `db_pr stage`, `db_precommit`, Step 1 사후 lint, CI |
+| `db_lint.py` | 정적 검사: 스키마, ID 형식·중복, Jira 중복, 작성 규칙, 용어집, related·code_refs 형식, `fix.ref` 형식(`fix_ref_regex`), 카테고리 목록, fixture 파일명, 시그니처·extractor·`issues/*.yaml` `note`·원인 본문·`cp_evidence` 안의 원본 식별자 패턴, **정규식 안전**(중첩 수량자·무제한 역참조 거부, `04-parser-matching.md §5.8 (4)`), 시그니처 `sequence`의 id 존재·중복, `builtin.*`·`ext.*` 이벤트 참조, 옛 ID 잔존, `.expect.yaml`의 `also_allowed`(자기 원인·같은 유형 원인·없는 ID 금지), 검증 규칙(근거 없는 verified 금지: `verify-resolution`의 evidence 없이 verified 금지, evidence의 Jira 키·fixture 경로 존재), `synthetic_allowed: false`일 때 `origin: synthetic` 경고 | `db_pr stage`, `db_precommit`, Step 1 사후 lint, CI |
 | `db_regress.py` | fixture 회귀: 파서 + 마스킹 + 매처로 기대 결과 확인 (회귀·검증 모드), 파서 규칙 변경 전/후 이벤트 diff | `db_pr stage`, `db_precommit`, `db_verify`, CI |
 | `db_verify.py` | `05-verification.md` 검증: `rules`(R1~R6), `resolution`(해결책 적용 후 로그 판정, 새 원인은 `--plan --draft`), `fix`(verify-fix 판정) | analyze Step 7(`--draft`), `db_pr stage`, `validate`, `record`(`--resolved-fixture`), `verify-fix`, `db_precommit`, CI |
 | `db_precommit.py` | **오케스트레이터만**: 변경 범위를 계산해서 호출 순서(`config.py check --for dry-run`(compat)·`.cache/` 차단(cache) 포함)는 `common/checks.py`의 PRECOMMIT 프로필이 정한다. 호출 내용: `db_lint --staged`, `mask_pii --check --staged`, `db_regress --staged`, (규칙 변경 시) `db_verify rules --staged`, `db_build --verify --staged`를 순서대로 호출 | git pre-commit hook |
 | `db_review.py` | 월간 리뷰 리포트 (시그니처 없는 원인, fixture 없이 검증된 원인 포함) | `review` |
 | `db_migrate.py` | 스키마 마이그레이션 실행(`--to`, 메인테이너의 `migrate/schema-v<N>` 브랜치 워킹 트리를 직접 바꿈), 옛 스키마 계획 올리기(`upgrade-plan`) | `migrate`, `sync-pr`(옛 스키마 계획) |
 | `guard.py` | Claude hook 입력(도구 이름, 명령, 파일 경로)을 받아 허용/차단/ask 판정 (Bash·MCP·Write/Edit) | `hooks.json` |
-| `jira_bridge.py` | 설정된 Jira `get_issue`·`get_comments` MCP 응답 원문을 `<work_dir>/<KEY>/jira_raw.json`에 쓰고 모델에 보이는 결과를 마스킹 요약으로 바꾼다(PostToolUse `updatedToolOutput`). 설정된 코멘트 도구(`jira.write_tools.add_comment`) 응답이면 `post.result.json`을 쓰고 승인 기록에 `used_at`을 남긴다 | `hooks.json` |
+| `jira_bridge.py` | 설정된 Jira `get_issue`·`get_comments` MCP 응답 원문을 `<work_dir>/<KEY>/issue_raw.json`에 쓰고 모델에 보이는 결과를 마스킹 요약으로 바꾼다(PostToolUse `updatedToolOutput`). 설정된 코멘트 도구(`tracker.write_tools.add_comment`) 응답이면 `post.result.json`을 쓰고 승인 기록에 `used_at`을 남긴다 | `hooks.json` |
 | `triage.py` | **analyze 드라이버**: Step 0~4와 Step 5 `code_refs` resolve를 위 스크립트의 `main()`을 같은 프로세스에서 불러 순서대로 수행, `analysis.json`(≤4KB)·`report.md` 초안·`trace.jsonl`, 후보 없음·원인 미확인이면 Step 5-2 입력 `timeline.md`. `--analysis-only`면 기록하지 않는 분석 전용(쓰기 흐름의 사전 질문 생략, ok에서 lock 해제). 사용자 결정 지점은 `needs_input`. 자체 판정 로직은 없다(요약·절삭만) | analyze(SKILL.md), `tools/offline_eval.py`(`--offline-db`) |
-| `issue_post.py` | analyze Step 9: `analysis.json`·`jira.json`·`plan.json`(마스킹본)으로 PROBLEM/CAUSE/NEXT ACTION/ANALYSIS 코멘트 본문을 렌더(결정적 칸 + 검증한 LLM 칸, 재마스킹)해 확인 화면을 내고(`render`), 승인한 본문의 해시를 기록하고 호출할 도구·인자를 낸다(`approve`). Jira를 직접 부르지 않고 lock·git을 건드리지 않는다 | analyze Step 9(`post.md`) |
+| `issue_post.py` | analyze Step 9: `analysis.json`·`issue.json`·`plan.json`(마스킹본)으로 PROBLEM/CAUSE/NEXT ACTION/ANALYSIS 코멘트 본문을 렌더(결정적 칸 + 검증한 LLM 칸, 재마스킹)해 확인 화면을 내고(`render`), 승인한 본문의 해시를 기록하고 호출할 도구·인자를 낸다(`approve`). Jira를 직접 부르지 않고 lock·git을 건드리지 않는다 | analyze Step 9(`post.md`) |
 
 - 검사 로직은 각 담당 스크립트에만 둔다. 다른 스크립트는 호출만 한다.
 - `record`는 매처와 코드 분석을 쓰지 않지만 쓰기 경로(`db_pr stage --then-summary` → `publish --commit --and-discard`)와 검사는 analyze와 같다 (`07-workflow.md §record`).

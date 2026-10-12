@@ -111,6 +111,6 @@ lock·`session.guard`는 각 플랫폼 `work_dir`에 있다(`Lock(work_dir, plat
 
 - **oFono 실제 파서 규칙·이슈 DB 내용**: 사내 로그를 받은 뒤 사내 모드에서(S24~S29, `docs/development/OFONO_LOG_COLLECTION.md`). 지금 `platforms/ofono`는 형식 가정(journald `short-iso-precise`·BSD syslog) placeholder이고 합성 로그로 전환만 검증한다. 실제 로그·형식은 사외로 가져오지 않는다.
 - **`external_parsers`는 기본 플랫폼만** 쓴다(그 밖 플랫폼은 `{}`). 비기본 플랫폼 어댑터는 필요할 때 `platform.others`·DB `external_parsers`와 함께 정한다.
-- **Jira 필드 플랫폼별 덮어쓰기**: `jira.field_map` 등은 플랫폼끼리 공유한다. oFono Jira 프로젝트가 다르면 `platforms.<p>.jira` 덮어쓰기(`PROFILE_KEYS` 확장)를 다음 작업으로(S28).
+- **Jira 필드 플랫폼별 덮어쓰기**: `tracker.field_map` 등은 플랫폼끼리 공유한다. oFono Jira 프로젝트가 다르면 `platforms.<p>.jira` 덮어쓰기(`PROFILE_KEYS` 확장)를 다음 작업으로(S28).
 - **스키마 필드 개명**(`android_version(s)` → 플랫폼 중립 이름): jira→tracker 개명과 함께(K9).
 - parser-rules 스키마가 `ril.yaml` 항목 1개 이상을 요구해 oFono DB에 placeholder 항목이 필요하다 — 실제 짝 규칙이 정해질 때 프로토콜별 파일 체계와 함께 스키마를 고친다.

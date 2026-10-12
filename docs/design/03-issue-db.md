@@ -69,7 +69,7 @@ telephony-issue-db/
 │   └── branch-protection.md           # 브랜치 보호 설정 기록 (06-collaboration.md §6.1)
 ├── schema/
 │   ├── type.schema.json
-│   ├── jira.schema.json
+│   ├── issue.schema.json
 │   ├── feedback.schema.json
 │   ├── plan.schema.json               # 작업 계획 (contracts.md §작업 계획)
 │   └── parser-rules.schema.json
@@ -86,7 +86,7 @@ telephony-issue-db/
 │   ├── README.md                      # [생성] 카테고리 상세 인덱스
 │   └── DATA-001-no-setup-data-call/   # 유형 디렉토리
 │       ├── type.md                    # 유형 + 원인 정의
-│       ├── jira/
+│       ├── issues/
 │       │   ├── ABC-111.yaml           # Jira 한 건 = 파일 하나
 │       │   ├── ABC-222.yaml
 │       │   └── ABC-333.yaml
@@ -170,13 +170,13 @@ causes:
       verification_history: []         # 이전 검증·되돌림 기록, 최신이 위 (형식: contracts.md §상태 값)
     related: []                        # 다른 원인 ID (카테고리 무관, 양방향)
     cp_evidence: null                  # 선택, 자유 텍스트 한 단락. 원인이 모뎀 쪽일 때 DM/silent log 위치·구간, CP 분석 요약, CP 티켓. 매칭·검증에 쓰지 않음. 마스킹 대상 (08-safety.md §8)
-    android_versions: ["16", "17"]     # 빈 목록([])이면 전 버전
+    platform_versions: ["16", "17"]     # 빈 목록([])이면 전 버전
     code_refs:                         # <root 키>:<루트 기준 상대 경로>
       - ref: aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataNetworkController.java
         symbol: DataNetworkController#<평가 메서드, Phase 0에서 확인>   # 파일이 옮겨져도 찾을 수 있게
       - ref: vendor_ril:<상대 경로>
         symbol: <함수명>
-        android_versions: ["16"]       # 이 경로가 유효한 버전 (생략하거나 빈 목록이면 전 버전)
+        platform_versions: ["16"]       # 이 경로가 유효한 버전 (생략하거나 빈 목록이면 전 버전)
   - id: DATA-001-02
     status: active
     title: Roaming disabled
@@ -193,7 +193,7 @@ causes:
     resolution_verification: {status: unverified}
     fix: {status: not-a-bug, ref: null, fixed_in: [], verification: null, verification_history: []}
     related: []
-    android_versions: ["16", "17"]
+    platform_versions: ["16", "17"]
     code_refs: []
 tags: [data-evaluation]
 ---
@@ -208,21 +208,21 @@ tags: [data-evaluation]
 - 로그 예시 / 확인 방법 / 재현 시나리오 / 해결책 / 코드 위치 / 비고
 ```
 
-- `android_versions: []`는 **전 버전**이다. 매처와 README는 "전 버전"으로 보여주고, 지원 종료 판단(`06-collaboration.md §6.6`)에서는 제외한다.
+- `platform_versions: []`는 **전 버전**이다. 매처와 README는 "전 버전"으로 보여주고, 지원 종료 판단(`06-collaboration.md §6.6`)에서는 제외한다.
 - `signatures_pending: true`(선택, **원인에만**): 수동 기록(`record`)에서 사용자가 원인 판별 시그니처를 아직 쓰지 않겠다고 명시한 경우에만 붙는다. 이때 원인 `signatures`가 비어 있어도 된다. **유형의 증상 시그니처는 예외 없이 필수**다 (없으면 analyze가 그 유형을 찾을 수 없으므로). 증상만 잡혀도 pending 원인이 "시그니처 없는 기존 원인"으로 후보에 함께 나온다. `db_lint` 경고, 월간 리뷰 "시그니처 없는 원인"에 나오고, 매처는 이 원인을 **판별할 수 없다**(후보 유형에 속하면 참고용 `pending_causes`로만 보여준다). 원인은 `resolution_verification: unverified`로 고정된다. 양성 fixture는 회귀에 남고 기대값은 `"<유형 ID>:unresolved"`다(`contracts.md §fixture`). `update-signature`로 판별 시그니처가 생기면 지워진다. `sync-pr`는 record 계획을 그대로 재적용하므로 pending이 유지된다 (`contracts.md §작업 계획` op 표, `§상태 값`).
 - `cp_evidence`(선택, 원인만): CP 로그 파싱은 v1 범위 밖이지만, 원인이 모뎀 쪽이면 근거를 적을 곳이 있어야 이슈 DB가 "RIL 에러 응답"에서 멈추지 않는다. 자유 텍스트 한 단락으로 DM/silent log 위치·구간, CP 분석 요약, 관련 CP 티켓을 적는다. 매칭·검증에 쓰지 않고, README 원인 행에 "CP 근거"로 표시한다. 마스킹 대상이고 `db_lint`가 원본 식별자 패턴을 검사한다.
 - `scenario_signatures`는 "재현 시나리오를 수행했다"는 로그 흔적이다 (예: 데이터 연결 시도, 발신 요청). 원인·증상 판별에는 쓰지 않고, verify-fix와 해결책 검증에서 로그가 유효한지 판단하는 데 쓴다. 의미는 다른 시그니처와 같다 (`04-parser-matching.md §5.11 (1)`).
 
-#### (2) Jira 기록 `jira/<JIRA-KEY>.yaml`
+#### (2) Jira 기록 `issues/<KEY>.yaml`
 
 ```yaml
-key: ABC-333                           # 형식: issue-db.config.yaml jira_key_regex (14-site.md S16)
+key: ABC-333                           # 형식: issue-db.config.yaml tracker.key_regex (14-site.md S16)
 cause: DATA-001-02                     # 원인 미확정이면 unresolved
 date: 2026-09-20                       # 분류한 날 (생성 결과의 기준일 계산에 씀, 5.2)
 occurred_on: 2026-09-18                # 선택. Jira 발생 시각의 날짜 (통계의 최근 N일·급증에 씀, 06-collaboration.md §6.7)
 model: <모델>
 sw: <빌드>
-android_version: "16"
+platform_version: "16"
 carrier: <캐리어>                      # 선택
 analyzed_by: <GHE 아이디>
 failed_step: 3 | Enable data           # 선택, 한 줄(≤200자). 마스킹된 실패 스텝 (아래)
@@ -232,14 +232,14 @@ note: 로밍 SIM 테스트 중 발생          # 선택, 한 줄. 사용자가 �
 - **저장하는 Jira 정보는 위 구조화 필드와 `note`, 선택 `failed_step`뿐이다.** Jira 요약·설명·코멘트 원문은 이슈 DB·PR 본문·피드백 어디에도 저장하지 않는다. `note`는 스킬이 마스킹된 Jira 요약에서 한 문장 초안을 만들고 **사용자가 확인한 문장**을 쓴다. 사람 이름·고객명은 넣지 않는다. `db_lint`가 `note`의 원본 식별자 패턴을 검사한다 (`08-safety.md §8.1`).
 
 - `failed_step`(선택)은 실패한 테스트 스텝 한 줄이다. 마스킹을 거쳐 공백을 정리하고 200자로 자른 값만 저장하고(`db_add`), `db_lint`가 `note`처럼 원본 식별자 패턴을 검사한다. Jira 필드·설명·시험 절차·`--failed-step`·`--steps-file`에서 자동으로 얻은 값(`07-workflow.md §Step 2`)은 Step 8 확인 화면의 diff에 보이고 **사용자가 지울 수 있다**. 없으면 키를 만들지 않는다. 점수(S/C)·분류·회귀·검증에는 쓰지 않는 보조 정보다(검색 키워드, 카테고리 README의 "자주 실패한 스텝", 그리고 **스텝 기준 우선 유형**의 한 출처로 쓴다: 같은 스텝이 한 유형에 `step_focus.min_records`건 이상 쌓이면 그 스텝으로 분석할 때 그 유형이 순위에서 우선한다, `04-parser-matching.md §5.11 (2)`). `issue-db.config.yaml`의 `scoring.step_focus_bonus_max`·`step_focus {min_records, map}`은 메인테이너가 관리하고 `db_lint`가 값·정규식·유형·카테고리를 검사한다.
-- `occurred_on`은 analyze·record가 Jira 발생 시각(`jira.field_map.occurred_at`, `jira.timezone`)에서 채운다. 모르면 생략하고, 통계는 `date`로 대신한다. 과거 이슈를 한꺼번에 기록해도 통계가 분류일에 몰리지 않게 하기 위해서다.
+- `occurred_on`은 analyze·record가 Jira 발생 시각(`tracker.field_map.occurred_at`, `tracker.timezone`)에서 채운다. 모르면 생략하고, 통계는 `date`로 대신한다. 과거 이슈를 한꺼번에 기록해도 통계가 분류일에 몰리지 않게 하기 위해서다.
 - 파일명이 Jira 키이므로 이슈 DB 전체에서 같은 Jira는 하나만 존재한다. `db_lint.py`가 전체 중복을 검사한다.
 - 재분류는 `reclassify` op로 한다: 파일을 다른 유형 디렉토리로 **이동**하고 `cause`를 바꾼 뒤, `note`에 `reclassified from <이전 원인 ID>`를 남긴다 (`contracts.md §작업 계획`).
 
 #### (3) 피드백 기록 `feedback/<YYYY-MM>/<JIRA-KEY>-<timestamp>.yaml`
 
 ```yaml
-jira: ABC-12345
+issue: ABC-12345
 date: 2026-09-27T18:30+09:00           # 계획의 feedback.date (Step 7 저장 시각). 파일명 timestamp도 같은 값. 재적용해도 바뀌지 않는다
 by: <GHE 아이디>
 suggested:                             # 매처가 제시한 후보 (순위순). signature는 전역 키
@@ -274,7 +274,7 @@ analyze Step 7까지의 결정은 이슈 DB를 바로 바꾸지 않고 **작업 
 
 ### 5.6 README 인덱스 (사람이 보는 화면)
 
-`db_build.py`가 `type.md`와 `jira/*.yaml`로부터 생성한다. Jira 키는 `jira_base_url` 링크로, 유형 제목은 해당 `type.md` 링크로 만든다.
+`db_build.py`가 `type.md`와 `issues/*.yaml`로부터 생성한다. Jira 키는 `tracker.base_url` 링크로, 유형 제목은 해당 `type.md` 링크로 만든다.
 
 루트 `README.md` 예:
 
@@ -341,10 +341,10 @@ analyze Step 7까지의 결정은 이슈 DB를 바로 바꾸지 않고 **작업 
 - 유형에 `failed_step`이 있는 Jira 기록이 있으면 카테고리 README 유형 절 끝에 `- 자주 실패한 스텝: <스텝> (N건); …` 한 줄을 더한다(공백·대소문자를 무시해 묶고, 많은 순 → 키 순 상위 3개, 표시는 묶음 안 원문의 최솟값 80자). 하나도 없으면 줄을 만들지 않는다. STATS는 바뀌지 않는다.
 
 - 카테고리는 **건수가 0이어도** 요약표 행과 섹션을 남기고, 섹션에는 "아직 등록된 이슈가 없습니다"를 쓴다.
-- Jira는 최근 `jira_inline_max`건만 표에 링크하고, 전체 건수와 유형 디렉토리의 `jira/` 링크를 함께 둔다.
+- Jira는 최근 `issue_inline_max`건만 표에 링크하고, 전체 건수와 유형 디렉토리의 `issues/` 링크를 함께 둔다.
 - `related`가 있으면 원인 셀에 `↔ <원인 ID>`로 표시한다.
 - 해결책이 미검증이면 해결책 셀에 `⚠ 미검증`을 붙인다. 수정 상태 셀은 `fix-submitted ⏳ <브랜치>[:<빌드>]`, `fixed ✅ <빌드> 검증`처럼 검증 여부를 함께 보여준다.
-- 카테고리 `README.md`는 같은 표에 증상 시그니처 요약, `code_refs`, `android_versions`(빈 목록은 "전 버전")를 추가한 상세판이다.
+- 카테고리 `README.md`는 같은 표에 증상 시그니처 요약, `code_refs`, `platform_versions`(빈 목록은 "전 버전")를 추가한 상세판이다.
 
 ### 5.7 신규 유형/원인 추가 지침 (필수 준수)
 
@@ -381,11 +381,11 @@ analyze Step 7까지의 결정은 이슈 DB를 바로 바꾸지 않고 **작업 
 | `recovery_signatures` | 해결되면 나타나야 하는 **이 원인에 특정한** 정상 흐름. 원인의 계기가 풀리는 이벤트와 정상 동작을 `sequence`로 묶는다. 그 카테고리 음성 fixture(정상 로그) 전부에 맞으면 R1 흔적 검사에서 실패한다(`05-verification.md §5.12 (1)`). 코드·설정 수정 유형(framework-bug, vendor-ril, modem, carrier-config)은 권장 | `must_event: [{id: on, event: data_setting_changed, fields: {enabled: 'true'}}]` + `must_match: [{id: setup, pattern: 'RILJ.*>\s*SETUP_DATA_CALL'}]`, `sequence: [on, setup]` | 원인 시그니처의 단순 부정, 정상 로그면 어디에나 맞는 동작만(예: `SETUP_DATA_CALL` 요청만) |
 | `scenario_signatures` | 재현 시나리오 수행 흔적. 코드·설정 수정 유형은 **`fixed` 전환 전에 `scenario_signatures`나 `recovery_signatures` 중 하나가 필수** (`05-verification.md §5.12 (2)`) | 데이터 연결 시도 평가 로그, 발신 요청 로그 | 원인 시그니처 복사 |
 | 시그니처 | 증상용/원인용 분리. **새 유형/원인은 판별 시그니처 필수**. 예외는 `record`에서 사용자가 명시한 **원인의** `signatures_pending: true`뿐이다(경고, 리뷰 대상, 원인 판별 불가, 해결책 unverified 고정. `sync-pr` 재적용에서는 유지된다). **새 유형의 증상 시그니처는 예외 없이 필수**. **마스킹된 로그 기준으로** 실제 확인한 문구로만 작성. 원본 식별자(IMSI, 전화번호, 셀 ID 등) 패턴 금지(`db_lint`, extractor 패턴 포함). 반복되는 복잡한 패턴은 extractor + `must_event` | `must_event: data_evaluation_rejected` | `.*error.*` 같은 광범위 패턴, 마스킹될 값에 의존, 시그니처를 비운 채 pending 표시 없음 |
-| Jira 기록 | `templates/jira.yaml`의 필수 필드 모두 기입 | | key만 기입 |
+| Jira 기록 | `templates/issue.yaml`의 필수 필드 모두 기입 | | key만 기입 |
 | 유형 디렉토리명 | `<유형 ID>-<영문 kebab-case 요약>` | `DATA-001-no-setup-data-call` | `data이슈` |
 | 로그 예시 | 마스킹 후 5~15줄, 본문 "원인별 상세"에만 | | frontmatter에 로그 원문 |
 | fixture | 원인마다 양성 1개 이상(없으면 `db_lint` 경고, R1·R2 `skipped: fixture 없음`, 리뷰 대상), 판별에 필요한 최소 구간(20~100줄), 마스킹. 이름은 `contracts.md §fixture` | `fixtures/DATA-001-02.log` | 전체 logcat, `DATA-001-02-fixed.log` 같은 규칙 밖 이름 |
-| `code_refs` | `<root 키>:<상대 경로>` + `symbol`(클래스#메서드 또는 함수명). 절대 경로 금지. 버전마다 경로가 다르면 항목을 나누고 `android_versions`로 구분 | `aosp:frameworks/opt/telephony/.../DataNetworkController.java` + symbol | `/home/user/android16/frameworks/...` |
+| `code_refs` | `<root 키>:<상대 경로>` + `symbol`(클래스#메서드 또는 함수명). 절대 경로 금지. 버전마다 경로가 다르면 항목을 나누고 `platform_versions`로 구분 | `aosp:frameworks/opt/telephony/.../DataNetworkController.java` + symbol | `/home/user/android16/frameworks/...` |
 | 본문 재현 시나리오 | 원인별 상세에 "재현 시나리오"(동작 순서, 조건)를 적는다. verify-fix가 이것을 사용자에게 보여준다 | 로밍 SIM 삽입 → 데이터 로밍 OFF → 데이터 사용 앱 실행 | (비워둠) |
 
 - 원인이 확정되지 않았으면 원인을 만들지 않고 `unresolved`로 기록한다. 추정만으로 원인을 만들지 않는다.
@@ -427,7 +427,7 @@ causes:
     fix: {status: {{open|fix-submitted|wont-fix|not-a-bug}}, ref: null, fixed_in: [], verification: null, verification_history: []}
     related: []
     cp_evidence: null                 # 모뎀 쪽 원인이면 CP 근거 요약 (선택, 마스킹 대상)
-    android_versions: []              # 빈 목록 = 전 버전
+    platform_versions: []              # 빈 목록 = 전 버전
     code_refs: []
 tags: []
 ---
@@ -469,13 +469,13 @@ tags: []
     resolution_verification: {status: unverified}
     fix: {status: {{...}}, ref: null, fixed_in: [], verification: null, verification_history: []}
     related: []
-    android_versions: []
+    platform_versions: []
     code_refs: []
 ```
 
 새 원인을 추가할 때는 `causes`에 위 블록을 원인 ID 순서대로 넣고, 본문 "원인별 상세"에도 `### <원인 ID> <title>` 섹션을 같은 순서로 추가한다. `db_add.py`는 type.md를 **파싱해서 엔티티 단위로 다시 쓴다** (텍스트 끝에 붙이지 않는다). 본문 섹션은 `### <ID>` 제목으로 식별한다.
 
-`templates/jira.yaml`:
+`templates/issue.yaml`:
 
 ```yaml
 key: {{JIRA-KEY}}
@@ -484,7 +484,7 @@ date: {{YYYY-MM-DD}}
 occurred_on: {{선택, 발생 날짜 YYYY-MM-DD}}
 model: {{모델}}
 sw: {{빌드}}
-android_version: "{{버전}}"
+platform_version: "{{버전}}"
 carrier: {{선택}}
 analyzed_by: {{GHE 아이디}}
 note: {{선택, 한 줄}}
