@@ -1287,6 +1287,9 @@ READ = "mcp__mock-github-issues__issue_read"
 BRIEF = "telephony-triage: Jira 응답 원문은 파일로만 저장했다(모델에 보이지 않음). 아래는 마스킹된 요약이다."
 
 
+GH_URL_E66 = "https://ghe.mock.invalid/mock-org/mock-issues/issues/12"
+
+
 def test_e66_normalize_read_and_isolation_checks(tmp_path):
     check = 'python3 /p/scripts/jira_fields.py check-key "https://ghe.mock.invalid/mock-org/mock-issues/issues/12"'
     out = json.dumps({"key": GH_KEY, "valid": True, "regex": "x"})
@@ -1301,6 +1304,10 @@ def test_e66_normalize_read_and_isolation_checks(tmp_path):
     bad = [items[1], items[2], ("tool", "t5", READ, {"method": "get", **GH_ARGS}, '{"html_url": "https://ghe.mock.invalid/x"}', False)]
     fns = grader.checks(66, _gh_seq_ctx(tmp_path / "bad", bad, {"origin": "file"}))
     assert fns[0]()[0] is False and fns[1]()[0] is False and fns[2]()[0] is False and fns[3]()[0] is False
+    # check-key 없이 URL로 triage run을 불러도 출력 key가 작업 키면(driver 정규화) 정규화 항목은 통과
+    url_run = ("tool", "t6", "Bash", {"command": f"python3 /p/scripts/triage.py run {GH_URL_E66} --logs x"},
+               json.dumps({"key": GH_KEY, "status": "needs_input"}), False)
+    assert grader.checks(66, _gh_seq_ctx(tmp_path / "url", [url_run], {"origin": "mcp"}))[0]()[0] is True
 
 
 def test_e67_body_shape_and_post_args(tmp_path):

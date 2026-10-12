@@ -819,7 +819,7 @@ def test_approval_record_kind_must_match_spec(tmp_path):
     rec = json.loads((tmp_path / KEY / "post.approved.json").read_text(encoding="utf-8"))
     del rec["kind"]
     (tmp_path / KEY / "post.approved.json").write_text(json.dumps(rec), encoding="utf-8")
-    assert issuepost.check_call(SPEC["tool"], call, SPEC, tmp_path) == "승인 기록의 트래커(kind)가 설정과 다르다"
+    assert "옛 형식 승인 기록" in issuepost.check_call(SPEC["tool"], call, SPEC, tmp_path)   # 리뷰 P2-6: 설정 오류와 구별
 
 
 # -- GitHub 관문(서브프로세스): check-key 정규화·tracker-mismatch·driver 작업 키(P2-9)·skeleton -------------
@@ -878,6 +878,20 @@ def test_driver_uses_normalized_work_key():
     assert analysis["key"] == GKEY
     assert sorted(p.name for p in w.work.iterdir() if p.is_dir() and not p.name.startswith("_")) == [GKEY]
 
+
+
+def test_release_and_explore_use_work_key():
+    """리뷰 P2-2: release·explore도 작업 키로 정규화한다(URL로 release해도 lock이 풀린다). 경로 안전 형식이 아니면(`..`) 거부."""
+    w = gws()
+    args = ["run", GH_URL, "--dry-run", "--issue-file", GH_ISSUES / f"{GKEY}.yaml", "--logs", GH_LOG, "--code", "skip",
+            "--answer", "time=2026-09-20T05:30:04.900Z"]
+    w.json("triage.py", args)
+    out = w.json("triage.py", ["release", GH_URL])
+    assert out.get("released") is True, out
+    for bad in ("..", "mock-org/../x#1"):
+        assert w.json("triage.py", ["release", bad]) == {"released": False, "note": "작업 디렉토리 없음"}
+        assert w.run("triage.py", ["explore", bad]).returncode == 2, bad
+    assert ws().run("triage.py", ["explore", ".."]).returncode == 2           # jira도 같다(이전에는 work_dir/..를 JOB으로 봤다)
 
 def test_make_db_skeleton_tracker_option():
     import subprocess

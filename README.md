@@ -1,6 +1,6 @@
 # telephony-triage
 
-Telephony 이슈 분석 도구(Claude Code 플러그인, Android 기본 — 팀이 켠 다른 플랫폼(예: oFono)은 플랫폼별 이슈 DB, [17-platforms](docs/design/17-platforms.md)). Jira 이슈와 logcat을 받아 원인·해결책을 분석하고,
+Telephony 이슈 분석 도구(Claude Code 플러그인, Android 기본 — 팀이 켠 다른 플랫폼(예: oFono)은 플랫폼별 이슈 DB, [17-platforms](docs/design/17-platforms.md)). Jira 이슈(설정으로 GitHub Issues도, [18-trackers](docs/design/18-trackers.md))와 logcat을 받아 원인·해결책을 분석하고,
 결과를 카테고리 > 이슈 유형(증상) > 원인으로 사내 GitHub 이슈 DB 레포(`telephony-issue-db`)에 누적한다.
 분류 확정·push 같은 쓰기 단계는 항상 사용자 확인을 거치고, main에는 직접 push하지 않는다(브랜치 + PR).
 

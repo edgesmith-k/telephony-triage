@@ -84,6 +84,7 @@ sys.path.insert(0, str(SCRIPTS))
 
 from common import events, site_defaults, userconfig, yamlio  # noqa: E402
 import platforms  # noqa: E402
+import trackers  # noqa: E402
 from platforms import session as platform_session  # noqa: E402
 from common.exitcodes import CHECK_FAILED, OK, USAGE  # noqa: E402
 from triagelib.cache import State  # noqa: E402
@@ -139,15 +140,31 @@ def _emit(result: dict) -> None:
     print(dumps(result))
 
 
+def _work_key(cfg: dict, key: str) -> str | None:
+    """사용자 입력 → 작업 키(트래커 `parse_key` 정규화, jira는 입력 그대로). 경로 안전 형식이 아니면 None — `..` 같은 값이
+    작업 디렉토리 경로가 되지 않는다(트래커 범용화 묶음 3 리뷰 P2-2)."""
+    try:
+        tracker = trackers.of(cfg)
+    except trackers.TrackerConfigError:
+        return None
+    work = tracker.parse_key(key)
+    return work if isinstance(work, str) and tracker.safe_key_re.fullmatch(work) else None
+
+
 def cmd_release(args, defaults: dict) -> int:
     cfg = args.platform_cfg
-    job = Path(str(userconfig.get(cfg, "work_dir"))).expanduser() / args.key
+    key = _work_key(cfg, args.key)
+    if key is None:
+        _emit({"released": False, "note": "작업 디렉토리 없음"})
+        return OK
+    args.key = key
+    job = Path(str(userconfig.get(cfg, "work_dir"))).expanduser() / key
     state = State(job / STATE_FILE)
     runner = Runner(args.plugin_root)
     runner.env[platforms.ENV] = args.platform_name
     if state.data.get("owner"):
         runner.env["TT_LOCK_OWNER"] = state.data["owner"]
-    if not re.fullmatch(r"[A-Za-z0-9._-]+", args.key) or not job.is_dir():
+    if not job.is_dir():
         _emit({"released": False, "note": "작업 디렉토리 없음"})
         return OK
     runner.open_trace(job / "trace.jsonl")
@@ -169,9 +186,12 @@ def cmd_explore(args, defaults: dict) -> int:
     2 = 사용 오류(키 형식·작업 디렉토리·`events.json` 없음·입력 파일 손상).
     """
     cfg = args.platform_cfg
-    if not re.fullmatch(r"[A-Za-z0-9._-]+", args.key):
+    # --out(offline_eval JOB)이면 키는 표시용 이름이고 경로가 아니다 — 형식만 본다. 없으면 작업 키(경로)로 정규화한다
+    key = (args.key if re.fullmatch(r"[A-Za-z0-9._-]+", args.key) else None) if args.out else _work_key(cfg, args.key)
+    if key is None:
         print(f"Jira 키 형식이 아니다: {args.key} — 키를 확인한 뒤 다시 실행한다", file=sys.stderr)
         return USAGE
+    args.key = key
     job = Path(args.out).expanduser().resolve() if args.out else Path(str(userconfig.get(cfg, "work_dir"))).expanduser() / args.key
     if not job.is_dir():
         print(f"작업 디렉토리가 없다: {job} — 이 키로 /telephony-triage:analyze를 먼저 실행한다", file=sys.stderr)

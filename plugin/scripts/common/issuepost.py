@@ -350,6 +350,8 @@ def check_call(tool: str, tool_input, spec: dict, work_dir: Path | None, at: dat
         return "승인한 도구와 다르다"
     if record.get("key_arg") != key_arg:
         return "승인 기록의 키 인자가 설정과 다르다"
+    if "kind" not in record:        # 트래커 범용화 전 형식(30분 1회용 작업 파일) — 설정 오류가 아니다
+        return "옛 형식 승인 기록이다(트래커 kind 없음) — issue_post.py render부터 다시 한다"
     if record.get("kind") != spec["kind"]:
         return "승인 기록의 트래커(kind)가 설정과 다르다"
     if record.get("used_at"):

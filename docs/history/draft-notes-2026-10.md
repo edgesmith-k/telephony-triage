@@ -15,6 +15,10 @@
 - (h) W11 보류 3건(위임 결정, 10/07): 파생 이벤트 `msg` 복사 제거 폐기, Windows 보정 유지, db-authoring 스키마 요약은 사내 S-2.
 - (j) 매칭 컴파일 캐시(`.cache/compiled.json`)를 삭제한다: 240유형·3.5k Jira에서 DB 로드(0.69~1.09s)에 캐시 hit 판정(+0.35~0.67s)이 더해질 뿐 컴파일은 1ms, 해시가 플러그인 코드를 보지 않아 판정을 캐시 파일에 좌우시켰다. `source_hash`(분석 재사용)·`.cache/` 커밋 차단은 유지. (10/07, 위임 결정, V7)
 
+## 결정 (l) 원문 (10/12 옮김)
+
+- (l) 4차 검토 (10/10): 회귀 양성 fixture는 소속 유형 S=0이면 실패(D1 c). chose-other 때 fixture·시그니처는 **제안만**(D2 i). 피드백 `suggested`는 `db_pr stage`가 `JOB/match.json`에서 채우고 불일치는 거부(D2 ii). 유형 전용 후보는 보류(D2 iii, S-5 라벨셋 뒤). `gh` 차단은 이슈 DB 레포 대상만(`-R <db>` 또는 cwd가 이슈 DB clone/worktree).
+
 ## 플랫폼 분리 결과 (10/11)
 
 - 묶음 1~3(fa993c0·dabbf88·dafe846·b07efb5·aaece33·a4f4a93), 묶음마다 리뷰 P0 0, P1 3·3·1 반영. android 출력 바이트 동일(baseline 비교).

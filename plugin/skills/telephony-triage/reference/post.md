@@ -51,7 +51,7 @@
 - **LLM 칸 문구**: fill을 고치고 3번부터. 새 확인 화면을 보이고 **다시 승인받는다**. 이전 `post_sha256`으로 approve하지 않는다(render가 이전 승인을 지운다).
 - **스크립트 칸**: 문구는 바꿀 수 없다. 빼기만 한다: `S/issue_post.py render <KEY> --fill JOB/post.fill.json --omit evidence,failed_step`
   (`failed_step|fields|evidence|must_show|others`). 확인 화면에 "빠진 항목"으로 나온다.
-- **형식**: 사용자가 원하면 `--format markdown`(기본은 설정값, 없으면 jira-wiki).
+- **형식**: 사용자가 원하면 `--format markdown`(기본은 설정값, 없으면 트래커 기본 — Jira는 jira-wiki, GitHub Issues는 markdown만).
 - **분류 출처**: 이번 분석 뒤 Step 7이 저장한 analyze 계획만 "사용자 확정"으로 쓴다. 화면이 "계획 없음 (JOB/plan.json은 쓰지 않음: …)"이면 CAUSE는 자동 분석 후보로 나온다고 알린다.
 - **분류를 바꾸려면** 여기서 하지 않는다. Step 7 다시 하기 또는 `reclassify` 계획으로 안내한다.
 - **취소·아니오**: approve를 부르지 않는다. `JOB/post.md`(마스킹본)를 직접 붙여넣을 수 있다고 알린다.

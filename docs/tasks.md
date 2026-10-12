@@ -1,6 +1,6 @@
 # 사내 보완 단계별 읽을 것 (pack)
 
-`python3 tools/context_pack.py S-n`이 `읽을 것`의 항목을 이어서 출력한다. 항목은 `경로` 또는 `경로 §절`(여러 절은 `§14.2·14.3`, 표의 한 행만은 `§14.2:S2`). `DRAFT_NOTES.md`는 사외 전용 절(새 세션 시작·남은 일)을 빼고 절 단위로 싣는다. `CLAUDE.md`와 `SITE_PROFILE.md`는 자동 로드(import)되므로 넣지 않는다. 할 일은 `docs/design/15-local-draft.md §15.5`.
+`python3 tools/context_pack.py S-n`이 `읽을 것`의 항목을 이어서 출력한다. 항목은 `경로` 또는 `경로 §절`(여러 절은 `§14.2·14.3`, 표의 한 행만은 `§14.2:S2`). `DRAFT_NOTES.md`는 사외 전용 절(새 세션 시작·남은 일)을 빼고 절 단위로 싣는다. `CLAUDE.md`와 `SITE_PROFILE.md`는 자동 로드(import)되므로 넣지 않는다. 할 일은 `docs/design/15-local-draft.md §15.5`. 단계 순서·진행 기록은 `python3 tools/site_step.py`("사내 설정 시작", 현재 단계 pack을 이 도구가 대신 출력).
 
 | pack | 읽을 것 | 비고 |
 |---|---|---|

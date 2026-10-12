@@ -2443,10 +2443,10 @@
       "expected_output": "check-key로 작업 키 mock-org.mock-issues-12를 얻어 triage를 돌리고, issue_read(get·get_comments) 원문은 hook이 파일로 격리한다. DATA-001-01 확인 뒤 PR issue/mock-org.mock-issues-12에 data/DATA-001-no-setup-data-call/issues/mock-org.mock-issues-12.yaml을 만든다. GitHub 쓰기 도구 0건.",
       "files": [],
       "assertions": [
-        "check-key로 이슈 URL을 작업 키 mock-org.mock-issues-12(valid true)로 정규화한 뒤 그 작업 키로 triage.py run을 불렀다",
+        "이슈 URL이 작업 키 mock-org.mock-issues-12로 정규화됐다(check-key valid true 뒤 그 작업 키로 triage.py run, 또는 triage.py run 출력 key가 작업 키)",
         "모의 GitHub MCP issue_read를 method get과 get_comments로 불렀다(owner mock-org, repo mock-issues, issue_number 12)",
         "issue_raw.json이 소비돼 work_dir에 남지 않았고 JOB/issue.json의 origin이 mcp다",
-        "issue_read 도구 결과는 hook이 마스킹 요약으로 대체했고 도구 결과·transcript에 응답 원문에만 있는 값(작성자 login·html_url)이 없다",
+        "issue_read 도구 결과는 hook이 마스킹 요약으로 대체했고 도구 결과·transcript에 응답 원문에만 있는 값(이슈·코멘트 작성자 login)이 없다",
         "분류 확정 전에 사용자에게 확인을 받았다",
         "계획 plan.json의 issue.key가 mock-org.mock-issues-12, issue.origin이 mcp이고 model·sw·platform_version이 요청에 적은 값(MOCK-A56, MOCKA56_U1_20260915, 16)이다",
         "원격 issue/mock-org.mock-issues-12 브랜치에 data/DATA-001-no-setup-data-call/issues/mock-org.mock-issues-12.yaml(key·cause: DATA-001-01)이 있고 gh 스텁에 PR이 1개 생겼다",

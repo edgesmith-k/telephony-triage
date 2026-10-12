@@ -34,6 +34,7 @@ telephony-triage를 이 사용자 환경에 맞게 설정한다 (`02-config.md �
      보여주고 **사용자 확인**을 받는다. 이어서 `read_tools` 후보를 보여주고 허용할 읽기 도구를 **확인**받는다.
    - `config.py set-tracker --server <s> --get-issue <전체 이름> [--search-issues ..] [--get-comments ..] --read-tools <a,b,..>`.
      도구 이름은 항상 **전체 이름**(`mcp__<server>__<tool>`)이다. `tracker.tools` 값은 `read_tools`에 자동으로 들어간다.
+   - 트래커 종류(`tracker.kind`: jira | github)는 팀 값(site-defaults)이라 묻지 않는다. github면 같은 `issue_read` 도구가 `get_issue`·`get_comments`를 겸하고(후보에 둘 다 나온다), 일반 GitHub MCP가 아닌 트래커 전용 등록을 고른다(같은 등록이면 그 서버의 다른 도구가 모두 막힌다).
 5. **git hook** — `config.py install-hooks`. 값이 정확히 `.githooks`가 아니면 실패한다(그대로 보고한다).
 6. **읽기 스냅샷** — `db_pr.py lock acquire setup --command setup`
    → `db_pr.py snapshot --job setup`.

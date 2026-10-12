@@ -1679,7 +1679,7 @@ def checks_j(eid, ctx):
 
 GH_KEY = "mock-org.mock-issues-12"
 GH_ARGS = {"owner": "mock-org", "repo": "mock-issues", "issue_number": 12}
-GH_RAW_ONLY = ("mock-reporter", "html_url", "ghe.mock.invalid/mock-org/mock-issues/issues/12")   # 응답 원문에만 있는 값
+GH_RAW_ONLY = ("mock-reporter", "mock-dev")   # 응답 원문에만 있는 값(이슈·코멘트 작성자 login). 이슈 URL은 프롬프트·link()에도 있어 넣지 않는다
 
 
 def checks_g(eid, ctx):
@@ -1723,8 +1723,13 @@ def checks_g(eid, ctx):
             ok_key = [i for i, out in hits if re.search(r'"key"\s*:\s*"' + re.escape(GH_KEY) + '"', out)
                       and re.search(r'"valid"\s*:\s*true', out)]
             runs = [i for i, cmd, _ in bash_at(r"triage\.py[\"']?\s+run\b") if GH_KEY in cmd]
-            ok = bool(ok_key) and bool(runs) and ok_key[0] < runs[0]
-            return ok, f"check-key 결과 {len(hits)}건(작업 키 {len(ok_key)}건), 작업 키로 triage run {len(runs)}건"
+            # triage run은 입력(URL·owner/repo#N)을 check-key로 정규화해 출력 `key`에 작업 키를 낸다(driver). 스킬이 check-key를
+            # 먼저 부르지 않아도 그 출력으로 정규화된 것이면 통과
+            normalized_runs = [i for i, _, out in bash_at(r"triage\.py[\"']?\s+run\b")
+                               if re.search(r'"key"\s*:\s*"' + re.escape(GH_KEY) + '"', out)]
+            ok = (bool(ok_key) and bool(runs) and ok_key[0] < runs[0]) or bool(normalized_runs)
+            return ok, (f"check-key 결과 {len(hits)}건(작업 키 {len(ok_key)}건), 작업 키로 triage run {len(runs)}건, "
+                        f"출력 key가 작업 키인 triage run {len(normalized_runs)}건")
 
         def read_both():
             calls = gh_calls("issue_read")

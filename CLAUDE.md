@@ -5,6 +5,7 @@
 Android Telephony 이슈 도구: Jira 이슈와 logcat으로 원인·해결책을 분석하고 사내 GitHub 이슈 DB(`telephony-issue-db`)에 누적한다. v1 범위는 `01-architecture.md §1`.
 
 > **작업 모드를 먼저 판별한다.** 처음 맞는 것을 쓴다:
+> 0. **"사내 설정 시작"(또는 "계속")이면 사내 보완**: `python3 tools/site_step.py` 출력대로 한 단계씩 한다(`SITE_PROFILE.md` 없으면 만듦, 트래커 jira). 단계 끝 → 완료 기준·요약·사용자 확인 → `--done S-n` → 다음 단계.
 > 1. **사용자가 모드를 말하면** 그 모드 ("사외 초안" / "사내 보완" / "사내 처음부터").
 > 2. **`SITE_PROFILE.md`(≤4KB)가 있으면 사내 모드.** 그 "진행 상태"의 모드·단계에서 잇는다.
 > 3. **`.local-draft`가 있으면 사외 초안.** 사외 PC 전용 표식(반입 안 함, `15-local-draft.md §15.2`). `DRAFT_NOTES.md` "진행 상태"에서 잇는다.
