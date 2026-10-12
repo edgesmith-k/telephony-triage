@@ -33,6 +33,7 @@
 ### 10.1 help
 
 - 커맨드 목록은 help 파일에 적지 않는다. 실행할 때 `${CLAUDE_PLUGIN_ROOT}/commands/*.md`의 frontmatter(`description`, `argument-hint`)를 읽어 만든다. help 파일에는 상황별 추천 표만 있고, 표의 커맨드 이름이 실제 커맨드 파일과 맞는지는 `tests/test_commands.py`가 검사한다.
+- **사용 흐름 A/B**: 상황별 추천 표 위에 안내 한 줄을 두고, 행 머리에 (A) 찾기·분석(이슈 DB를 바꾸지 않거나 기존 원인에 사례만 더함: search·analyze·`--analysis-only`·record 기존 원인) / (B) 등록(새 유형·원인·규칙: 로그 근거·시그니처·fixture, 카테고리 오너·파서 규칙은 메인테이너 리뷰)을 붙인다. 설정·상태·동기화 같은 보조 행은 붙이지 않는다. 스킬은 흐름은 묻지 않고(기본 analyze) A에 B를 권하지 않으며, B의 준비물·리뷰어는 `db-authoring.md` §0 한 곳이다.
 - `help <커맨드>`는 그 커맨드 파일을 읽는다. 본문이 스킬·reference 파일을 가리키면 그 커맨드의 사용법 절만 `offset`·`limit`로 읽는다. 없는 커맨드면 목록을 보이고 추측하지 않는다.
 - 파일에 없는 옵션을 만들지 않는다. Bash·스크립트를 부르지 않고, lock·이슈 DB·config·Jira를 쓰지 않으며, `plugin/site-defaults.yaml`이 없어도 동작한다.
 - **말로 요청하기 안내**: 인자 없는 help 첫 화면에, 커맨드 없이 말로 요청해도 스킬 description으로 흐름이 연결된다는 두 줄을 보인다. 말로 연결되는 흐름은 analyze, search(증상 문장 검색), record, fix-submitted, verify-fix, `validate --cause`, sync-pr이다(`SKILL.md` description에 있는 것). setup, sync, preview, review, migrate, 인자 없는 `validate`는 description에 없으므로 커맨드로 실행하라고 안내한다. 근거: `10-skill-eval.md` "description 트리거 테스트"(2026-10-05 실제 플러그인 측정 `trigger_real.py`, 24개×2회 recall 100%·precision 100% — 모의 환경 측정이므로 사내 S-2에서 재측정). 측정 문장(`tests/skill_evals/trigger_evals.json`)에는 sync-pr 1건이 있고 `validate --cause`는 없다 — 그 흐름의 연결은 description 기준이지 측정 결과가 아니다.

@@ -17,6 +17,7 @@
 | `issue-db-review/` | 월간 리뷰(Phase 11): §6.6 항목마다 걸리는 경우와 걸리지 않는 경우 (`REVIEW_CASES`) |
 | `issue-db-ofono/` | oFono 플랫폼 뼈대 DB(17-platforms §5, **합성·형식 가정·placeholder**): `platform: ofono`, `ofono_reference` 백엔드, placeholder 태그(`ofonod`·`daemon-a`·`daemon-b`)·extractor 1개, 유형 `DATA-001`과 양성 fixture(`tests/fixtures/logs/ofono/journal-iso.log`) 하나 |
 | `issue-db-github/` | 두 번째 트래커(트래커 범용화 §6-1, **합성**): `tracker {kind: github, base_url: https://ghe.mock.invalid/, key_regex: mock-org\\.mock-issues-\\d+}`, 기록·피드백·evidence의 Jira 키 `MOCK-<n>`을 GitHub 작업 키 `mock-org.mock-issues-<n>`으로(파일 이름 포함) |
+| `issue-db-unjudged/` | 원인 판정 불가(eval 68): `pattern_timeout_ms: 300`, DATA-001-01의 `data-disabled` 시그니처를 시간 초과하는 `slow-cause`(`must_match ['(a+)+$']`)로 바꾼 트리. `a`×40+`!` 줄이 있는 로그에서 `unjudged.cause_count` 1 |
 | `verify-logs/` | 이슈 DB가 아니다. `db_verify fix`·`resolution` 입력 로그(수정 후·재발·증상만 남음·시나리오 없음, 마스킹됨) |
 
 CLI:
@@ -684,6 +685,19 @@ def github(db: Path) -> None:
         path.rename(path.with_name(key_re.sub(lambda m: GH_KEY + m.group(1), path.name, count=1)))
 
 
+DATA_DISABLED_SIG = ("      - id: data-disabled\n        must_event:\n"
+                     "          - {id: setting-off, event: data_setting_changed, fields: {enabled: 'false'}}\n"
+                     "          - {id: rejected, event: data_evaluation_rejected, fields: {reasons: '.*DATA_DISABLED.*'}}\n"
+                     "        sequence: [setting-off, rejected]\n        same_phone: true\n        window_sec: 60\n")
+
+
+def unjudged(db: Path) -> None:
+    """원인 시그니처 시간 초과(`tests/test_triage.py`의 원인 판정 불가 사본과 같다): 매처 시간 한도 300ms, DATA-001-01 → `slow-cause`."""
+    _edit(db / "issue-db.config.yaml", "pattern_timeout_ms: 2000", "pattern_timeout_ms: 300")
+    _edit(db / "data/DATA-001-no-setup-data-call/type.md", DATA_DISABLED_SIG,
+          "      - id: slow-cause\n        must_match: ['(a+)+$']\n        window_sec: 60\n")
+
+
 VARIANTS = {
     "issue-db-lint-errors": lint_errors,
     "issue-db-empty-category": empty_category,
@@ -695,6 +709,7 @@ VARIANTS = {
     "issue-db-step-events": step_events,
     "issue-db-ofono": ofono,
     "issue-db-github": github,
+    "issue-db-unjudged": unjudged,
     "verify-logs": verify_logs,
 }
 

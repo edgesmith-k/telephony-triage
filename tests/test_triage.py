@@ -497,7 +497,7 @@ def test_skill_md_is_within_7_5kb_and_drives_triage():
     skill = REPO / "plugin" / "skills" / "telephony-triage" / "SKILL.md"
     reference = skill.parent / "reference"
     text = skill.read_text(encoding="utf-8")
-    assert len(text.encode("utf-8")) <= 7680        # W6: 실행 규칙을 reference/rules.md로 옮긴 뒤의 한도(그 전 8,192B)
+    assert len(text.encode("utf-8")) <= 8064        # 흐름 A/B 한 줄(찾기·분석 / 등록) 추가 뒤의 한도. 그 전 7,680B(W6: 실행 규칙을 reference/rules.md로 옮김), W6 전 8,192B
     for needle in ("triage.py run", "needs_input", "--answer", "write-flow.md", "--commit", "reference/rules.md",
                    "steps-pasted.txt", "--dry-run --issue-file", "analyzer.skill",
                    "must_show", "triage.py explore"):
@@ -506,7 +506,7 @@ def test_skill_md_is_within_7_5kb_and_drives_triage():
     assert len(rules.encode("utf-8")) <= 2048
     for needle in ("S-3", "계획 형식 오류", "TT_LOCK_OWNER", "stage --then-summary", "모든 종료 경로에서 푼다", "사용자 확인 후"):
         assert needle in rules, needle
-    assert len((reference / "db-authoring.md").read_bytes()) <= 11392      # 필수 키 요약 포함. W7 add-fixture 세부 포함(그 전 11,264B)
+    assert len((reference / "db-authoring.md").read_bytes()) <= 12288      # 필수 키 요약 포함. §0 등록 준비물·리뷰어 색인 추가 뒤의 한도(그 전 11,392B: W7 add-fixture 세부, 11,264B)
     assert len((reference / "write-flow.md").read_bytes()) <= 14344
     _check_op_summary(reference / "db-authoring.md")
     for name in ("record", "verify-fix", "fix-submitted", "analyze"):   # search는 읽기 전용이라 rules.md를 읽지 않는다

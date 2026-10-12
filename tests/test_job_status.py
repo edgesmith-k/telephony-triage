@@ -420,7 +420,62 @@ def test_markdown_byte_budget_with_long_korean_values():
            "files": {f"f{i}": f"/작업/{'경로' * 50}/파일{i}.json" for i in range(40)}}
     text = jobstatus.markdown(doc)
     assert len(text.encode("utf-8")) <= jobstatus.MD_MAX, len(text.encode("utf-8"))
-    assert text.rstrip("\n").endswith("줄(JSON 출력)") and "- … 외 " in text
+    assert text.rstrip("\n").endswith("줄(근거·경고·파일 등, JSON 출력)") and "- … 생략 " in text
     for head in ("### 대상", "### 단계", "### 막힌 것", "### 다음 할 일", "### 관련 파일"):
         assert head in text
     assert "b0:" in text                                           # 첫 막힌 것은 남는다
+
+
+def test_markdown_hard_cut_when_no_droppable_lines():
+    """버릴 줄이 없고 줄마다 잘라도 넘으면 상한 안의 줄 경계에서 끊는다(≤3,072B 보장)."""
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    from common import jobstatus
+    text = jobstatus._fit([("가" * 300, None)] * 100)
+    assert len(text.encode("utf-8")) <= jobstatus.MD_MAX and text.endswith("\n")
+    assert text.rstrip("\n").endswith("줄(근거·경고·파일 등, JSON 출력)") and "- … 생략 " in text   # 끊어도 생략 표시는 남는다
+    small = jobstatus._fit([("짧은 줄", None), ("근거", 1)])
+    assert small == "짧은 줄\n근거\n"
+
+
+def test_lock_stop_drops_pending_question():
+    ws = Workspace()
+    ws.acquire(JOB)                                              # 다른 작업이 lock을 갖고 있다
+    ask = ws.json("triage.py", _triage_args())
+    assert ask["status"] == "needs_input" and ask["needs_input"]["kind"] == "lock"
+    assert _tstate(ws)["pending"]["kind"] == "lock"
+    stopped = ws.json("triage.py", [*_triage_args(), "--answer", "lock=stop"])
+    assert stopped["status"] == "stopped"
+    assert "pending" not in _tstate(ws)                          # 답한 lock 질문이 상태 화면에 남지 않는다
+    assert _status(ws, KEY)["stage"]["id"] != "needs-input-past"
+
+
+def test_live_question_still_shows_stage_blockers():
+    ws = Workspace()
+    ws.plan(JOB, "p7-analyze-append.plan.json")
+    ws.acquire(JOB)
+    ws.stage(JOB, BRANCH)
+    stage = ws.job_dir(JOB) / "stage.json"
+    doc = json.loads(stage.read_text(encoding="utf-8"))
+    doc["checks"]["lint"] = {"code": 1}
+    doc["result"] = "check-failed"
+    doc["drift"] = [{"target": "DATA-001-01"}]
+    stage.write_text(json.dumps(doc), encoding="utf-8")
+    owner = json.loads((ws.work / "session.lock").read_text(encoding="utf-8"))["owner"]
+    _put(ws, JOB, "triage-state.json", {"owner": owner, "pending": {"kind": "plan", "asked_at": "2026-10-12T00:00:00+00:00"}})
+    out = _status(ws, JOB)
+    assert out["stage"]["id"] == "needs-input"                   # 지금 기다리는 질문이 앞선다
+    assert {"stage-failed", "drift"} <= _codes(out), _codes(out)  # 그래도 stage 결과는 막힌 것이다
+
+
+def test_resync_label_when_wt_git_unreadable():
+    ws = Workspace()
+    ws.plan(JOB, "p7-analyze-append.plan.json")
+    ws.ship(JOB, BRANCH, discard=False)
+    ws.db_pr("discard", ws.wt(JOB))
+    ws.acquire(JOB)
+    ws.stage(JOB, BRANCH)
+    (ws.wt(JOB) / ".git").write_text("gitdir: /nonexistent/tt-broken\n", encoding="utf-8")
+    doc = _status(ws, JOB)
+    assert "확인 불가(git 읽기 실패)" in doc["stage"]["label"] and "재동기화 중" not in doc["stage"]["label"], doc["stage"]
+    assert any("git 읽기 실패" in e for e in doc["stage"].get("evidence") or [])
+    assert any("wt git 읽기 실패" in w for w in doc["warnings"])

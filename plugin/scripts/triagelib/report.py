@@ -11,7 +11,7 @@ from common import events, masking, userconfig
 from common.exitcodes import USAGE
 
 from .anchor import _parse_ts, _step_label
-from .core import (ANALYSIS_MAX, AUTO_CODE_NOTE, ERROR_EVENT_RE, ERROR_FIELDS, EXPLORE_INPUT_FILE,
+from .core import (ANALYSIS_MAX, AUTO_CODE_NOTE, CARRY_PARTS, ERROR_EVENT_RE, ERROR_FIELDS, EXPLORE_INPUT_FILE,
                    EXPLORE_PENDING_LINE, Fail, MUST_SHOW_CLIP, MUST_SHOW_FIT, MUST_SHOW_MAX, SCRIPTS, SEARCH_LIMIT,
                    _HOT_LEVELS, _TOKEN_RE, _clip, _now)
 
@@ -264,6 +264,10 @@ class ReportMixin:
         candidates, anchor = core["candidates"], core["anchor"]
         run_no = reuse = None
         released = self.release() if self.analysis_only else False   # 분석 전용은 ok로 끝나면 lock을 푼다(stage 불가)
+        if released and parts is not None:
+            # 다음 세션(새 lock owner)의 첫 실행이 시각·연도·코드 경로 답을 이어받는 표시 — 이 입력 해시가 같을 때만 쓴다(`check_carried`)
+            self.state.data["carry"] = {k: parts[k] for k in CARRY_PARTS}
+            self.state.save()
         if parts is not None:
             runs = self.state.job.get("runs") or []
             seq = (runs[-1]["n"] if runs else 0) + 1

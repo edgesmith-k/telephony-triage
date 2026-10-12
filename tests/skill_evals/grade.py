@@ -485,6 +485,8 @@ def checks(eid: int, ctx: Ctx) -> list:
         return checks_p(eid, ctx)
     if eid in GITHUB_EVALS:
         return checks_g(eid, ctx)
+    if eid in (68, 69, 70):
+        return checks_u(eid, ctx)
     no_remote = lambda br: (lambda: (br not in ctx.branches() and not ctx.prs(), f"branches={ctx.branches()} prs={len(ctx.prs())}"))
     def analyzer_called():
         """e40·e41은 분석 스킬을 실제로 Skill 도구로 불렀을 때만 센다(plugin 모드). direct 모드·기록 없음은 이 조건을 적용하지 않는다."""
@@ -1400,8 +1402,8 @@ def _sections(body: str) -> dict[str, str] | None:
 
 # --- 플랫폼 분리 (배치 P, eval 63~65, docs/design/17-platforms.md) ---------------------------------------------
 
-PLATFORM_SCRIPTS = ("config", "db_pr", "db_verify", "code_roots", "issue_post", "db_add", "db_search", "db_review")   # --platform을 받는 스크립트(triage 밖)
-_SCRIPT_CALL = re.compile(r"\b(triage|config|db_pr|db_verify|code_roots|issue_post|db_add|db_search|db_review)\.py[\"']?([^\n;&|]*)")
+PLATFORM_SCRIPTS = ("config", "db_pr", "db_verify", "code_roots", "issue_post", "db_add", "db_search", "db_review", "job_status")   # --platform을 받는 스크립트(triage 밖)
+_SCRIPT_CALL = re.compile(r"\b(triage|config|db_pr|db_verify|code_roots|issue_post|db_add|db_search|db_review|job_status)\.py[\"']?([^\n;&|]*)")
 _PLATFORM_FLAG = re.compile(r"--platform(?:\s+|=)([A-Za-z0-9_]+)")
 
 
@@ -1680,6 +1682,106 @@ def checks_j(eid, ctx):
 GH_KEY = "mock-org.mock-issues-12"
 GH_ARGS = {"owner": "mock-org", "repo": "mock-issues", "issue_number": 12}
 GH_RAW_ONLY = ("mock-reporter", "mock-dev")   # 응답 원문에만 있는 값(이슈·코멘트 작성자 login). 이슈 URL은 프롬프트·link()에도 있어 넣지 않는다
+
+
+def checks_u(eid, ctx):
+    """사용 흐름 구분 eval 68~70(배치 U): 흐름 B 거절(unjudged)·중간 취소·분석 전용 뒤 기록 전환. 대화 항목은 수동 채점(None),
+    실행 기록이 없으면 `_Manual` — 없음을 보는 항목도 실행 흔적(transcript·commands)이 있어야 통과다."""
+    job = {68: "MOCK-9068", 69: "MOCK-9069", 70: "MOCK-9070"}[eid]
+    jobdir = ctx.work / job
+
+    def ran(sub):
+        return len(re.findall(r"db_pr\.py[^|\n]*(?<![-\w])" + sub + r"\b", ctx.ran))   # `--and-discard`·`--then-summary` 제외
+
+    def evidence():
+        if not (ctx.transcript.strip() and ctx.commands.strip()):
+            raise _Manual("실행 흔적(transcript·commands) 없음")
+
+    def triage_calls():
+        return [l for l in ctx.ran.splitlines() if re.search(r"triage\.py[\"']?\s+run\b", l)]
+
+    def released():
+        return bool(re.search(r"triage\.py[\"']?\s+release\b", ctx.ran))
+
+    def analysis():
+        text = _read(jobdir / "analysis.json")
+        return json.loads(text) if text else None
+
+    def ops():
+        return (ctx.plan(job) or {}).get("operations", [])
+
+    def no_stage():
+        evidence()
+        return ran("stage") == 0 and ran("publish") == 0, f"stage={ran('stage')} publish={ran('publish')}"
+
+    def no_remote():
+        tool = [b for b in ctx.branches() if b != "main"]
+        return not tool and not ctx.prs(), f"branches={ctx.branches()} prs={len(ctx.prs())}"
+
+    if eid == 68:
+        def shown():
+            data = analysis()
+            line = next((m for m in (data or {}).get("must_show") or [] if m.startswith("판정 불가 유형:")), None)
+            if line is None:
+                return False, "analysis.json must_show에 판정 불가 줄 없음"
+            texts = ctx.texts()
+            hay = "\n".join(texts) if texts is not None else ctx.transcript
+            ok = line.startswith("판정 불가 유형: 0·원인 1개 (DATA-001-01)") and line in hay
+            return ok, f"must_show 줄 {'그대로 있음' if line in hay else '답에 없음'}: {line[:120]}"
+        def no_new():
+            evidence()
+            bad = [o.get("op") for o in ops() if o.get("op") in ("new-cause", "new-type")]
+            draft = bool(re.search(r"db_verify\.py[^|\n]*--draft\b", ctx.ran))
+            return not bad and not draft, f"new op={bad} db_verify --draft={draft}"
+        def stage_remote():
+            a, ea = no_stage()
+            b, eb = no_remote()
+            return a and b, f"{ea}; {eb}"
+        def end():
+            evidence()
+            (a, ea), (b, eb) = ctx.lock_free(), ctx.clone_same()
+            return released() and a and b, f"release={released()}; {ea}; {eb}"
+        return [shown, None, no_new, stage_remote, end]
+    if eid == 69:
+        def release_lock():
+            evidence()
+            ok, ev = ctx.lock_free()
+            return released() and ok, f"release={released()}; {ev}"
+        def leftovers():
+            evidence()
+            left = [n for n in ("draft", "wt") if (jobdir / n).exists()]
+            clone = Path(ctx.env["issue_db_clone"])
+            tt = git(clone, "branch", "--list", "tt/*").split()
+            b, eb = no_remote()
+            return not left and not tt and b, f"JOB 잔여={left} tt 브랜치={tt}; {eb}"
+        def pending_clone():
+            evidence()
+            ok, ev = ctx.clone_same()
+            return ok and not ctx.pending(), f"pending={ctx.pending()}; {ev}"
+        return [None, no_stage, release_lock, leftovers, pending_clone]
+    def first_only():
+        calls = triage_calls()
+        return bool(calls) and "--analysis-only" in calls[0], f"triage.py run 호출={[c[:160] for c in calls]}"
+    def rerun_reused():
+        calls = triage_calls()
+        later = [c for c in calls[1:] if "--analysis-only" not in c]
+        data = analysis() or {}
+        ok = bool(later) and all("--dry-run" in c for c in later) and data.get("reuse") == {"hit": True, "run": 1} \
+            and data.get("mode") == "write"
+        return ok, f"재실행={len(later)} reuse={data.get('reuse')} mode={data.get('mode')}"
+    def not_reasked():
+        time, code = ctx.needs_input("time"), ctx.needs_input("code")
+        if time is None:
+            raise _Manual("드라이버 trace 없음")
+        return len(time) == 1 and len(code) <= 1, f"needs_input time={len(time)} code={len(code)}"
+    def appended():
+        o = ops()
+        return {"op": "append", "cause": "DATA-001-02"} in o, json.dumps(o, ensure_ascii=False)[:400]
+    def dry():
+        evidence()
+        (a, ea), (b, eb) = ctx.lock_free(), no_remote()
+        return a and b, f"{ea}; {eb}"
+    return [first_only, rerun_reused, not_reasked, appended, dry]
 
 
 def checks_g(eid, ctx):

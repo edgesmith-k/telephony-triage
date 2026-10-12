@@ -6,7 +6,7 @@
 `<work_dir>/<KEY>/`의 기록(plan.json·state.json·stage.json·pr.json·analysis.json·triage-state.json·post*)과
 `session.lock`, `<work_dir>/snapshot.json`, `wt/` 안의 git 읽기로 "어디까지 했는지"를 한 화면으로 낸다.
 단계(`none`·`started`·`needs-input`·`needs-input-past`·`analyzed`·`plan-saved`·`staged`·`summary-shown`·`committed`·
-`pushed-no-pr`·`pr-created`, 손상·형식 이상 파일이면 `unknown`; sync-pr 재적용은 "재동기화 중")·막힌 것·다음 할 일·관련 파일. 줄마다 확신도(`now`·`recorded`·`unknown`).
+`pushed-no-pr`·`pr-created`, 손상·형식 이상 파일이면 `unknown`; sync-pr 재적용은 "재동기화 중", wt git을 못 읽으면 "확인 불가(git 읽기 실패)")·막힌 것·다음 할 일·관련 파일. 줄마다 확신도(`now`·`recorded`·`unknown`).
 원격(PR 상태·원격 브랜치)은 보지 않는다(`원격 최신성: 확인하지 않음`). 사용자 승인 여부는 기록이 없어 늘 `unknown`이다.
 
 읽기 전용: mkdir·파일 쓰기·fetch·gh·lock 획득·갱신·git 쓰기(write-tree·승인 해시 재계산·worktree prune) 없음.
@@ -18,8 +18,10 @@
 
 출력: 기본 `--format json`(한 줄) `{key, platform, target, stage{id, label, confidence, at?, evidence?}, blockers[{code,
 label, confidence, at?, evidence?, next?}], must_show[], next, approval{approved_hash_prefix, staged_at, user_approval}, post, lock{held,
-mine, job, command, age_sec, expired, same_session}, files, warnings[]}`. `--format markdown`은 대상 → 단계 → 막힌 것 →
-다음 할 일 → 관련 파일(≤3KB, 넘으면 뒤쪽 줄을 빼고 `- … 외 N줄(JSON 출력)`, `--json`과 함께 못 쓴다).
+mine, job, command, age_sec, expired, same_session}, files, warnings[], last_question?{kind, asked_at, live}}`(`last_question`은
+단계가 질문 단계가 아닌데 `pending`이 있을 때). 지금 기다리는 질문이 단계를 앞서도 `state.json`이 있으면 stage·pr.json 막힌 것을 본다.
+`--format markdown`은 대상 → 단계 → 막힌 것 → 다음 할 일 → 관련 파일(≤3KB 보장: 넘으면 뒤쪽 줄을 빼고
+`- … 생략 N줄(근거·경고·파일 등, JSON 출력)`, 그래도 넘으면 줄마다 자르고 뒤에서부터 줄을 뺀다, `--json`과 함께 못 쓴다).
 
 종료 코드: 0 = 화면을 냈다(막힌 것이 있어도), 2 = 사용·환경 오류(site-defaults·사용자 config 없음, 키 형식 불일치,
 플랫폼 불일치(분석·작업이 다른 플랫폼), work_dir 없음, 인자 오류).

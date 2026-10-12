@@ -48,7 +48,7 @@ MCP `tracker.tools.get_issue`(매핑이 없으면 추측하지 말고 setup 안�
 
 ## 5. 내용 받기
 
-작성 규칙과 초안 형식은 `db-authoring.md`. 모든 초안은 승인받는다.
+작성 규칙과 초안 형식은 `db-authoring.md`. 모든 초안은 승인받는다. 준비물·리뷰어 목록은 `db-authoring.md` §0(한 번에 보이고 빠진 것만 받는다).
 
 - **새 원인·유형**: 원인 title·description·resolution·resolution_type·본문(재현 시나리오 포함). 새 유형이면 유형 title·summary·dir_slug.
 - **시그니처** — 새 원인·유형은 판별 시그니처가 필수다. 사용자에게 받거나(마스킹된 로그 문구 기준) 초안을 제안한다.

@@ -310,7 +310,11 @@ def collect(work_dir: Path, key: str, cfg: dict, defaults: dict, platform: str |
     at_pr_head = bool(commit_info and pr.get("head_sha") and commit_info["head"] == pr.get("head_sha"))
     # sync-pr 재적용: PR이 있는 계획을 같은 JOB에서 다시 stage한다(wt HEAD가 PR head가 아니다)
     resync = bool(pr.get("number")) and wt_exists and state is not None and not at_pr_head
-    prefix = f"PR #{pr.get('number')} 재동기화 중(sync-pr) — " if resync else ""
+    git_failed = wt_exists and commit_info is None
+    if resync and git_failed:      # wt HEAD를 못 읽었다 — sync-pr 재적용으로 단정하지 않는다
+        prefix = f"PR #{pr.get('number')} 확인 불가(git 읽기 실패) — "
+    else:
+        prefix = f"PR #{pr.get('number')} 재동기화 중(sync-pr) — " if resync else ""
     committed = bool(commit_info and state and commit_info["head"] != state.get("base_sha")
                      and commit_info["parents"] == [state.get("base_sha")])
 
@@ -405,7 +409,8 @@ def collect(work_dir: Path, key: str, cfg: dict, defaults: dict, platform: str |
         st = stage("started", "작업 디렉토리만 있다(분석 결과 없음)", "now", None, [f"{', '.join(ev)} 있음"] if ev else None)
         nxt = f"/telephony-triage:analyze {key} <로그 경로>로 다시 시작한다"
     if resync:
-        st.setdefault("evidence", []).insert(0, f"plan.json pr.number {pr.get('number')}, wt HEAD ≠ pr.head_sha")
+        st.setdefault("evidence", []).insert(0, f"plan.json pr.number {pr.get('number')}, "
+                                                + ("wt git 읽기 실패 — 재동기화 여부 확인 불가" if git_failed else "wt HEAD ≠ pr.head_sha"))
     if pending and TRIAGE_STATE not in files.corrupt and st["id"] not in ("needs-input", "needs-input-past"):
         out["last_question"] = {"kind": pending.get("kind"), "asked_at": pending.get("asked_at"), "live": bool(live_question)}
         if live_question:
@@ -414,7 +419,9 @@ def collect(work_dir: Path, key: str, cfg: dict, defaults: dict, platform: str |
     out["stage"] = st
 
     # stage.json·pr.json --------------------------------------------------------------------------------------
-    if stage_doc and state is not None and st["id"] in ("staged", "summary-shown", "committed"):
+    # 지금 기다리는 질문(needs-input)이 단계를 앞서도 state.json이 있으면 stage 결과는 그대로 막힌 것이다
+    staged_like = st["id"] in ("staged", "summary-shown", "committed") or (st["id"] == "needs-input" and state is not None)
+    if stage_doc and state is not None and staged_like:
         checks = stage_doc.get("checks") or {}
         failed = [n for n, v in checks.items() if isinstance(v, dict) and v.get("code") not in (0, 3, None)]
         if stage_doc.get("stopped") == "apply":
@@ -432,7 +439,7 @@ def collect(work_dir: Path, key: str, cfg: dict, defaults: dict, platform: str |
             blockers.append(_row("drift", f"drift {len(drift)}건 — 계획 대상이 main에서 바뀌었다", "recorded",
                                  "drift 항목마다 계획 값 유지 / main 값 유지 / 직접 입력을 사용자가 고른 뒤 다시 stage한다",
                                  _mtime(job / STAGE)))
-    if approved and state.get("pr_digest") and st["id"] in ("summary-shown", "committed") \
+    if approved and state.get("pr_digest") and (st["id"] in ("summary-shown", "committed") or staged_like) \
             and _sha256(job / PR_FILE) != state["pr_digest"]:
         blockers.append(_row("pr-json-changed", "pr.json이 확인 화면 뒤에 바뀌었다(없어졌다) — publish가 거부한다", "now",
                              f"db_pr summary {wt} --format markdown을 다시 해 확인 화면을 새로 보이고 승인받는다"))
@@ -482,11 +489,11 @@ def _tag(row: dict) -> str:
 
 def _fit(lines: list, limit: int = MD_MAX) -> str:
     """`lines` = [(텍스트, 버림 순위 또는 None)]. 바이트 상한을 넘으면 순위가 큰 줄부터(같으면 뒤에서부터) 버리고
-    마지막에 `- … 외 N줄(JSON 출력)`을 붙인다."""
+    마지막에 `- … 생략 N줄(근거·경고·파일 등, JSON 출력)`을 붙인다. 그래도 넘으면 줄마다 자르고, 끝으로 뒤에서부터 줄을 뺀다(생략 줄은 남는다)."""
     def size(rows, dropped):
         text = "\n".join(r[0] for r in rows) + "\n"
         if dropped:
-            text += f"- … 외 {dropped}줄(JSON 출력)\n"
+            text += f"- … 생략 {dropped}줄(근거·경고·파일 등, JSON 출력)\n"
         return len(text.encode("utf-8")), text
 
     rows, dropped = list(lines), 0
@@ -496,6 +503,10 @@ def _fit(lines: list, limit: int = MD_MAX) -> str:
         if not cands:     # 버릴 줄이 없다: 줄마다 자른다(마지막 수단)
             rows = [(_clip(r[0], 120), None) for r in rows]
             n, text = size(rows, dropped)
+            while n > limit and rows:     # 그래도 넘으면 뒤에서부터 줄을 빼 생략 줄 자리를 남긴다(≤ limit 보장, 생략 표시 유지)
+                rows.pop()
+                dropped += 1
+                n, text = size(rows, dropped)
             break
         top = max(rows[i][1] for i in cands)
         i = max(i for i in cands if rows[i][1] == top)

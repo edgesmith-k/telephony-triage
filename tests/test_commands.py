@@ -107,6 +107,29 @@ def test_help_lists_commands_from_files_and_recommends_only_existing_ones():
         assert set(re.findall(r"--[A-Za-z0-9-]+", rest)) <= set(re.findall(r"--[A-Za-z0-9-]+", hint)), (name, rest)
 
 
+
+def test_flow_a_b_wording():
+    """사용 흐름 A(찾기·분석)·B(등록) 구분: help 안내 줄·표 머리, SKILL 한 줄, db-authoring §0 준비물·리뷰어, record 안내."""
+    skill_dir = REPO / "plugin" / "skills" / "telephony-triage"
+    help_text = (COMMANDS / "help.md").read_text(encoding="utf-8")
+    table = help_text.split("## 상황별 추천", 1)[1].split("\n## ", 1)[0]
+    assert "흐름 A(찾기·분석)는 이슈 DB를 바꾸지 않거나 기존 원인에 사례만 더한다" in table
+    assert "흐름 B(등록)는 새 유형·원인·규칙을 만들고" in table and "카테고리 오너(파서 규칙은 메인테이너)" in table
+    assert "아래 안내 줄과 표를 그대로 보인다" in help_text
+    assert len(re.findall(r"^\| \(A\) ", table, re.M)) >= 3 and len(re.findall(r"^\| \(B\) ", table, re.M)) >= 2
+    assert "`record <JIRA-KEY> --new-cause <유형 ID>`" in table
+    skill = (skill_dir / "SKILL.md").read_text(encoding="utf-8")
+    for needle in ("**A 찾기·분석**", "**B 등록**", "`db-authoring.md` §0", "흐름은 묻지 않고(기본 analyze) A에 B를 권하지 않는다", "기록하지 않음·중간 취소",
+                   "기록 전환은 플래그만 빼고 같은 명령(`--issue-file`이면 `--dry-run`", "`rules.md`의 대상 스크립트에만 `--platform"):
+        assert needle in skill, needle
+    authoring = (skill_dir / "reference" / "db-authoring.md").read_text(encoding="utf-8")
+    sec0 = authoring.split("## 0. 등록(흐름 B) 준비물·리뷰어", 1)[1].split("\n## 1.", 1)[0]
+    for needle in ("CODEOWNERS", "메인테이너", "`unjudged`", "`triage.py release <KEY>`", "`db_pr discard <wt>`", "dir_slug"):
+        assert needle in sec0, needle
+    assert "op 필수 키 (" not in sec0 and "S/" not in sec0
+    record = (skill_dir / "reference" / "record.md").read_text(encoding="utf-8")
+    assert "준비물·리뷰어 목록은 `db-authoring.md` §0" in record
+
 # -- sync: 본문이 부르는 스크립트 순서 ------------------------------------------------------------
 
 

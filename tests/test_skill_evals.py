@@ -1019,7 +1019,7 @@ def test_e39_doctor_table_from_text_or_transcript(tmp_path, where, ok):
 
 def test_jira_post_evals_defined():
     by_id = {e["id"]: e for e in _entries()}
-    assert len(by_id) == 67
+    assert len(by_id) == 70
     assert by_id[8]["name"] == "jira-comment-request-gated" and len(by_id[8]["assertions"]) == 4
     for eid, count in ((61, 10), (62, 6)):
         e = by_id[eid]
@@ -1215,6 +1215,8 @@ def _platform_ctx(tmp_path, *commands):
       'python3 /p/scripts/db_search.py MOCK-1001 --platform ofono --json'], True, True),
     (['python3 /p/scripts/triage.py run MOCK-1001 --platform ofono',
       'python3 /p/scripts/db_add.py similar --db /w/_snapshot "x"'], True, False),  # 새 플랫폼 인자 스크립트도 센다
+    (['python3 /p/scripts/triage.py run MOCK-1001 --platform ofono',
+      'python3 /p/scripts/job_status.py MOCK-1001 --format markdown'], True, False),   # job_status도 플랫폼 인자 스크립트다
     (['python3 /p/scripts/triage.py run MOCK-1001 --logs logs/a.log'], False, "manual"),   # triage 뒤 호출 0회 = 수동
 ])
 def test_e63_platform_flag_checks(tmp_path, commands, flag_ok, later_ok):
@@ -1456,3 +1458,58 @@ def test_repo_state_excludes_iteration_inside_repo(tmp_path):
     (repo / "x.py").write_text("x", encoding="utf-8")
     assert evaluation.repo_state(it, repo)[1] is True
     assert evaluation.repo_state(it, tmp_path / "none") == (None, None)
+
+
+# --- 사용 흐름 구분 (배치 U, eval 68~70) -------------------------------------------------------------------
+
+
+def test_flow_evals_defined(tmp_path):
+    """eval 68~70: 흐름 B 거절(unjudged)·중간 취소·분석 전용 뒤 기록 전환. 채점 함수 수 = assertion 수,
+    실행 흔적이 없으면 어느 항목도 통과로 세지 않는다."""
+    by_id = {e["id"]: e for e in _entries()}
+    names = {68: "unjudged-no-auto-new-cause", 69: "cancel-mid-registration-cleanup",
+             70: "analysis-only-then-record-reuses-inputs"}
+    assert by_id[68]["setup"]["db"] == "issue-db-unjudged"
+    assert {"scenario": "e068-slow-line.yaml", "as": "slow.log"} in by_id[68]["setup"]["logs"]
+    assert "--dry-run" not in by_id[69]["prompt"] and "--dry-run" in by_id[68]["prompt"]
+    for eid, name in names.items():
+        e = by_id[eid]
+        assert e["batch"] == "U" and e["name"] == name and e["setup"]["jira"] == [f"MOCK-{9000 + eid}"], eid
+        env = _synthetic_env(tmp_path / str(eid))
+        fns = grader.checks(eid, grader.Ctx(env, run_dir(tmp_path / str(eid))))
+        assert len(fns) == len(e["assertions"]), eid
+        for fn in fns:
+            if fn is None:
+                continue
+            try:
+                ok, _ = fn()
+            except grader._Manual:
+                continue
+            except Exception:  # noqa: BLE001 — 가짜 환경에는 원격·clone이 없다(grade()는 예외를 실패로 센다)
+                continue
+            assert ok is False, (eid, fn.__name__)
+    assert "U=사용 흐름 구분 3(68~70)" in json.loads((EVALS / "evals.json").read_text(encoding="utf-8"))["_comment"]
+
+
+def test_unjudged_variant_db_has_slow_cause():
+    from runner import variant_db
+
+    db = variant_db("issue-db-unjudged")
+    assert "pattern_timeout_ms: 300" in (db / "issue-db.config.yaml").read_text(encoding="utf-8")
+    text = (db / "data/DATA-001-no-setup-data-call/type.md").read_text(encoding="utf-8")
+    assert "id: slow-cause" in text and "id: data-disabled\n" not in text
+
+
+def test_e68_setup_yields_cause_unjudged(tmp_path):
+    """eval 68 입력을 오프라인으로 돌리면 원인 하나가 판정 불가(`unjudged.cause_count` 1)이고 1위는 유형만 맞는다."""
+    from runner import run_json, variant_db
+
+    gen = subprocess.run([sys.executable, str(REPO / "tests/mocks/logcat_gen.py"), str(EVALS / "scenarios/e068-slow-line.yaml"),
+                          "--out", str(tmp_path / "gen"), "--json"], capture_output=True, text=True, check=True)
+    slow = json.loads(gen.stdout)["files"][0]
+    out = run_json("triage.py", ["run", "MOCK-9068", "--offline-db", variant_db("issue-db-unjudged"), "--out", tmp_path / "job",
+                                 "--logs", REPO / "tests/fixtures/logs/data-disabled.log", slow,
+                                 "--issue-file", EVALS / "jira/MOCK-9068.yaml"])
+    assert out["status"] == "ok" and out["unjudged"]["cause_count"] == 1 and out["unjudged"]["causes"] == ["DATA-001-01"], out
+    assert out["candidates"][0]["type"] == "DATA-001" and out["candidates"][0]["cause"] is None
+    assert any(m.startswith("판정 불가 유형: 0·원인 1개 (DATA-001-01)") for m in out["must_show"])

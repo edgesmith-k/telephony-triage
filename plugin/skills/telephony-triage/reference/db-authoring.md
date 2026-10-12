@@ -5,6 +5,15 @@
 - op별 필드·형식: `SNAP/schema/plan.schema.json`(원인은 `causeBody`)과 stage의 `계획 형식 오류 (operations/<n>, op=<이름>): 빠진 필드 […]; 허용 밖 필드 […]` 메시지. 적용 규칙 위반(Reject)·drift는 stage 출력(설계 문서: `contracts.md §작업 계획`).
 - 원인 기본값 `SNAP/templates/cause.yaml`. R1~R6 결과·`skipped` 사유·`allow_cause_drafts`·`suggested_ops`: `db_verify` 출력. fixture 이름·번호·기대값은 적용 때 정해지고 틀리면 `db_lint`·`db_regress`가 말한다.
 
+## 0. 등록(흐름 B) 준비물·리뷰어
+
+계획에 넣기 전에 갖춘다. 없으면 만들지 않는다(`unresolved`·기록하지 않음).
+- 근거: 마스킹 로그에서 확인한 문구(추정만이면 §1, `unjudged`면 SKILL Step 7 — 금지).
+- 새 유형: `db_add similar` 상위 3개 먼저 → category·title·summary·dir_slug·증상 시그니처(§1·§2, 예외 없음).
+- 새 원인: `new-cause` 필수 키 + 원인 시그니처(§2), 태그·RIL·fixture 점검(§4).
+- 리뷰어: 카테고리 오너(CODEOWNERS). `parser-rules/` 변경·종료 코드 3("승인 필요")은 메인테이너. 새 카테고리는 메인테이너 직접 편집 PR만(§1).
+- 취소: stage 전 lock 해제(`write-flow.md` §discard 없이 끝나는 경로: analyze `triage.py release <KEY>`, 그 밖 `db_pr lock release <KEY>`), stage 뒤 `db_pr discard <wt>`. lock은 모든 경로에서 푼다.
+
 ## 1. 무엇을 추가할지
 
 고르는 기준: 증상·원인 모두 기존과 같으면 `append`, 증상은 같고 원인이 다르면 `new-cause`, 증상 자체가 없으면 `new-type`(+ 첫 원인), 증상은 맞지만 원인 미확정이면 `unresolved`, 이미 있는 Jira를 다른 원인으로 옮기면 `reclassify`.

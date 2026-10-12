@@ -304,7 +304,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
     <section class="chap" id="t7" data-title="평가">
       <h2><span class="no">7</span>평가</h2>
       <p class="first">이 절에서 알 수 있는 것: 평가 관련 용어</p>
-      <div class="tbl k1"><table><tr><th>용어</th><th>뜻</th></tr><tr><td><b>행동 eval</b></td><td>Claude가 스킬 지침대로 행동하는지 재는 시나리오 시험. evals.json 67개</td></tr><tr><td><b>주입 eval</b></td><td>Jira 본문 속 지시를 따르지 않는지 보는 eval (59·60번)</td></tr><tr><td><b>정확도 평가 (오프라인 평가)</b></td><td>해결된 과거 Jira 라벨셋으로 매칭 정확도를 재는 S-5 관문. offline_eval.py</td></tr><tr><td><b>라벨셋</b></td><td>정확도 평가 입력. Jira 키·로그 경로·발생 시각·정답 원인 ID 또는 unresolved</td></tr><tr><td><b>자동 테스트</b></td><td>플러그인 코드 단위 테스트(pytest, 1,697개). CI에서 실행</td></tr></table></div>
+      <div class="tbl k1"><table><tr><th>용어</th><th>뜻</th></tr><tr><td><b>행동 eval</b></td><td>Claude가 스킬 지침대로 행동하는지 재는 시나리오 시험. evals.json 70개</td></tr><tr><td><b>주입 eval</b></td><td>Jira 본문 속 지시를 따르지 않는지 보는 eval (59·60번)</td></tr><tr><td><b>정확도 평가 (오프라인 평가)</b></td><td>해결된 과거 Jira 라벨셋으로 매칭 정확도를 재는 S-5 관문. offline_eval.py</td></tr><tr><td><b>라벨셋</b></td><td>정확도 평가 입력. Jira 키·로그 경로·발생 시각·정답 원인 ID 또는 unresolved</td></tr><tr><td><b>자동 테스트</b></td><td>플러그인 코드 단위 테스트(pytest, 1,711개). CI에서 실행</td></tr></table></div>
 
     </section>
     <section class="chap" id="t8" data-title="검증과 평가는 누가 어떻게 만드나">
@@ -318,7 +318,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
 <text class="s" x="132" y="210">검증 규칙: 플러그인 개발자</text><text class="s" x="132" y="228">로그(fixture): 기여자</text><text class="s" x="132" y="246">— 기록할 때 Claude가</text><text class="s" x="132" y="264">근거 구간을 잘라 마스킹한</text><text class="s" x="132" y="282">초안을 기여자가 승인</text>
 <text class="s" x="132" y="340">도구가 자동 (db_verify)</text><text class="s" x="132" y="358">Claude 판단 없음</text>
 <text class="s" x="132" y="420">규칙이 바뀌는 기록마다</text><text class="s" x="132" y="438">초안 · push 전 · 커밋 때</text>
-<rect class="box" x="358" y="12" width="222" height="446" rx="8"/><text class="t" x="370" y="36">행동 eval (67개)</text>
+<rect class="box" x="358" y="12" width="222" height="446" rx="8"/><text class="t" x="370" y="36">행동 eval (70개)</text>
 <text class="s" x="370" y="60">Claude가 스킬 지침대로</text><text class="s" x="370" y="78">행동하는지 (확인 질문,</text><text class="s" x="370" y="96">승인 전 push 안 함 등)</text>
 <text class="s" x="370" y="140">플러그인의 스킬·커맨드</text><text class="s" x="370" y="158">·hook</text>
 <text class="s" x="370" y="210">플러그인 개발자</text><text class="s" x="370" y="228">— evals.json에 시나리오마다</text><text class="s" x="370" y="246">요청 문장, 모의 Jira·로그,</text><text class="s" x="370" y="264">사용자 대답, 채점 항목</text><text class="s" x="370" y="282">(안전 10개, 주입 59·60 포함)</text>
@@ -330,7 +330,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
 <text class="s" x="608" y="210">사내 도입 담당자와</text><text class="s" x="608" y="228">카테고리 담당자</text><text class="s" x="608" y="246">— 해결된 과거 Jira 20~30건</text><text class="s" x="608" y="264">에 정답 원인을 붙인</text><text class="s" x="608" y="282">라벨셋 (조정용/확인용)</text>
 <text class="s" x="608" y="340">offline_eval.py</text><text class="s" x="608" y="358">스크립트만 (Claude 없음)</text>
 <text class="s" x="608" y="420">파일럿 전 관문</text>
-</svg><figcaption>팀원이 평소에 만나는 것은 왼쪽(R1~R6)뿐입니다. 가운데는 플러그인을 고치는 사람이, 오른쪽은 도입 담당자가 다룹니다. 플러그인 코드 자체는 별도로 자동 테스트(1,697개, CI)가 확인합니다.</figcaption></figure>
+</svg><figcaption>팀원이 평소에 만나는 것은 왼쪽(R1~R6)뿐입니다. 가운데는 플러그인을 고치는 사람이, 오른쪽은 도입 담당자가 다룹니다. 플러그인 코드 자체는 별도로 자동 테스트(1,711개, CI)가 확인합니다.</figcaption></figure>
     </section>
   </main>
 </div>
