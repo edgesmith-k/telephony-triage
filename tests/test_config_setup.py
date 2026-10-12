@@ -147,8 +147,9 @@ def test_jira_tools_from_nonstandard_mock_server():
     env = Env()  # 테스트 헬퍼 루트: exclude_servers: []
     env.init(env.base / "db")
     found = env.json("config.py", ["tracker-candidates", "--mcp-config", MCP_CONFIG])
-    assert found["usable"] == ["mock-jira"] and found["exclude_servers"] == []
-    (server,) = found["servers"]
+    # mcp.json에는 모의 GitHub Issues 서버도 있다(표준 도구 이름이라 jira 설정에서도 읽기 후보가 잡힌다)
+    assert found["usable"] == ["mock-github-issues", "mock-jira"] and found["exclude_servers"] == []
+    server = next(s for s in found["servers"] if s["server"] == "mock-jira")
     assert server["suggested"] == {"get_issue": "mcp__mock-jira__jira_fetch_ticket",
                                    "search_issues": "mcp__mock-jira__jira_query_tickets",
                                    "get_comments": "mcp__mock-jira__jira_ticket_comments"}
@@ -699,6 +700,37 @@ def test_doctor_worst_case_markdown_fits_budget():
     assert proc.returncode == 1
     assert proc.stdout.count("| fail |") >= 2 and proc.stdout.count("| warn |") >= 3
     assert len(proc.stdout.encode("utf-8")) <= DOCTOR_MD_MAX, len(proc.stdout.encode("utf-8"))
+
+
+# -- GitHub 트래커 (트래커 범용화 묶음 3, 설계 §3-2 classify_extra·§6-2) ---------------------------------------
+
+
+def test_github_tracker_candidates_set_tracker_and_doctor():
+    """github 세션: `issue_read` 하나가 get_issue·get_comments 후보(어댑터 classify_extra), set-tracker가 같은 도구를 두 동작에
+    저장하고, doctor의 tracker·guard 자체 시험(github 승인 코멘트 인자, selftest_key) 행이 ok다. jira 세션에서는 보강하지 않는다."""
+    from runner import github_root
+    env = Env(root=github_root())
+    env.init(env.base / "db")
+    found = env.json("config.py", ["tracker-candidates", "--mcp-config", MCP_CONFIG])
+    gh = next(s for s in found["servers"] if s["server"] == "mock-github-issues")
+    read = "mcp__mock-github-issues__issue_read"
+    assert gh["tracker_tools"]["get_issue"] == [read] and gh["tracker_tools"]["get_comments"] == [read]
+    assert gh["suggested"] == {"get_issue": read, "get_comments": read,
+                               "search_issues": "mcp__mock-github-issues__search_issues"}
+    assert not any(w in t for t in gh["read_tools"] for w in ("add_issue_comment", "update_issue", "create_pull_request"))
+    jira_env = Env()
+    jira_env.init(jira_env.base / "db")
+    gh_jira = next(s for s in jira_env.json("config.py", ["tracker-candidates", "--mcp-config", MCP_CONFIG])["servers"]
+                   if s["server"] == "mock-github-issues")
+    assert gh_jira["tracker_tools"]["get_comments"] == []
+    saved = env.json("config.py", ["set-tracker", "--server", "mock-github-issues", "--get-issue", read,
+                                   "--get-comments", read, "--search-issues", "mcp__mock-github-issues__search_issues"])
+    assert saved["tools"] == {"get_issue": read, "search_issues": "mcp__mock-github-issues__search_issues",
+                              "get_comments": read}
+    assert saved["read_tools"] == [read, "mcp__mock-github-issues__search_issues"]
+    rows = {r["check"]: r for r in env.json("config.py", ["doctor", "--format", "json"], expect=1)["rows"]}
+    assert rows["tracker"]["status"] == "ok", rows["tracker"]
+    assert rows["guard"]["status"] == "ok" and rows["guard"]["detail"].startswith("deny 2/2"), rows["guard"]   # 이름 휴리스틱 + 승인 없는 게시
 
 
 if __name__ == "__main__":

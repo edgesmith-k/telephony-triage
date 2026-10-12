@@ -392,6 +392,44 @@ def test_non_utf8_yaml_is_a_lint_finding():
     assert proc.returncode == 2 and "UTF-8" in proc.stderr and "Traceback" not in proc.stderr
 
 
+# -- GitHub 트래커 DB (트래커 범용화 묶음 3, 설계 §3-3·§6-2) --------------------------------------------
+
+GH = "issue-db-github"
+GH_REC = f"{D}/issues/mock-org.mock-issues-1101.yaml"
+
+
+def test_github_variant_is_clean():
+    result = _lint(variant_db(GH), "--all", expect=0)
+    assert result["errors"] == [] and result["warnings"] == []
+
+
+def test_github_record_keys_checked_against_key_regex_and_work_key():
+    """기록 키는 DB `tracker.key_regex`(팀 레포)와 github 작업 키 형식(소문자 `owner.repo-N`)에 모두 맞아야 한다."""
+    db = runner_copy(variant_db(GH))
+    src = db / GH_REC
+    for name, why in (("other-org.mock-issues-7", "tracker.key_regex"),        # 정규식 밖 레포
+                      ("MOCK-7", "tracker.key_regex"),                         # jira 키
+                      ("mock-org.Mock-Issues-7", "tracker.key_regex")):        # 대문자(작업 키 아님, 정규식도 밖)
+        bad = src.with_name(f"{name}.yaml")
+        bad.write_text(src.read_text(encoding="utf-8").replace("mock-org.mock-issues-1101", name), encoding="utf-8")
+        hits = [f for f in _lint(db, "--all", expect=1)["errors"] if f["code"] == "issue-key" and name in f["file"]]
+        assert hits and why in hits[0]["message"], (name, hits)
+        bad.unlink()
+    edit(db / "issue-db.config.yaml", "key_regex: 'mock-org\\.mock-issues-\\d+'", "key_regex: '.+-\\d+'")
+    bad = src.with_name("Mock-Org.mock-issues-8.yaml")                          # 넓은 정규식이어도 작업 키 형식
+    bad.write_text(src.read_text(encoding="utf-8").replace("mock-org.mock-issues-1101", "Mock-Org.mock-issues-8"),
+                   encoding="utf-8")
+    hits = [f for f in _lint(db, "--all", expect=1)["errors"] if f["code"] == "issue-key"]
+    assert hits and "작업 키 형식" in hits[0]["message"], hits
+
+
+def test_github_unknown_tracker_kind_is_config_error():
+    db = runner_copy(variant_db(GH))
+    edit(db / "issue-db.config.yaml", "  kind: github\n", "  kind: gitlabx\n")
+    errors = _lint(db, "--all", expect=1)["errors"]
+    assert any(e["code"] == "config" and "tracker.kind" in e["message"] and "gitlabx" in e["message"] for e in errors), errors
+
+
 if __name__ == "__main__":
     failures = 0
     for name, func in _all_tests():

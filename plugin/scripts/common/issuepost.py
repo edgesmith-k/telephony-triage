@@ -311,7 +311,8 @@ def read_json(path: Path) -> dict | None:
 
 
 def check_call(tool: str, tool_input, spec: dict, work_dir: Path | None, at: datetime | None = None) -> str | None:
-    """코멘트 도구 호출을 승인 기록과 대조한다 → 문제 문자열 또는 None(승인과 일치).
+    """코멘트 도구 호출을 승인 기록과 대조한다 → 문제 문자열 또는 None(승인과 일치). 승인 기록의 `key`·`tool`·`key_arg`·
+    `kind`(트래커)가 지금 설정과 같아야 한다.
     본문은 정규화 sha256이 승인과 같고, 정규화 전 입력이 `post.md`와 글자 그대로 같아야 한다(LF/CRLF·끝 줄바꿈 하나만 허용).
     같은 본문의 posted 이력은 승인 기록의 `again: true`(render --again)일 때만 건너뛴다. 결과 불명(unknown)은 늘 거부.
     guard는 판정만 한다(파일을 쓰지 않는다). 1회용 표시(`used_at`)는 PostToolUse(jira_bridge)가 한다."""
@@ -349,6 +350,8 @@ def check_call(tool: str, tool_input, spec: dict, work_dir: Path | None, at: dat
         return "승인한 도구와 다르다"
     if record.get("key_arg") != key_arg:
         return "승인 기록의 키 인자가 설정과 다르다"
+    if record.get("kind") != spec["kind"]:
+        return "승인 기록의 트래커(kind)가 설정과 다르다"
     if record.get("used_at"):
         return "이미 게시한 승인이다(1회용)"
     try:

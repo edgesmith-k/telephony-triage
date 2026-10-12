@@ -144,6 +144,11 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         code, data, _ = self.run.call("0-key", "jira_fields.py", ["check-key", self.key, "--db", db], expect=(0, 1))
         if code == 1:
             raise Fail(CHECK_FAILED, f"Jira 키 {self.key}가 형식({(data or {}).get('regex')})에 맞지 않는다. 키를 다시 묻는다.")
+        # 작업 디렉토리·lock·브랜치·피드백 파일은 check-key가 낸 작업 키(트래커 parse_key 정규화)로 만든다(jira는 입력 그대로)
+        key = (data or {}).get("key")
+        if not isinstance(key, str) or not key:
+            raise Fail(CHECK_FAILED, f"check-key가 작업 키를 내지 않았다({self.key}).")
+        self.key = self.out["key"] = key
 
     def open_job(self) -> None:
         if self.offline:

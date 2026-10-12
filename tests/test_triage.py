@@ -370,7 +370,7 @@ def test_bridge_records_approved_comment_post():
     job = home / "work" / "MOCK-1001"
     job.mkdir(parents=True)
     body = "h3. PROBLEM\n* Jira: MOCK-1001"
-    approved = {"schema": 1, "key": "MOCK-1001", "tool": NOTE_TOOL, "key_arg": "ticket",
+    approved = {"schema": 1, "key": "MOCK-1001", "tool": NOTE_TOOL, "key_arg": "ticket", "kind": "jira",
                 "body_sha256": issuepost.body_sha256(body), "approved_at": "2026-10-11T00:00:00+00:00",
                 "expires_at": "2026-10-11T00:30:00+00:00", "used_at": None}
     (job / "post.approved.json").write_text(json.dumps(approved), encoding="utf-8")

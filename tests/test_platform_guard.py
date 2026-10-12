@@ -147,7 +147,8 @@ def _approve_at(job_dir: Path, key: str, body: str) -> Path:
     sys.path.insert(0, str(REPO / "plugin" / "scripts"))
     from common import issuepost
     at = issuepost.now()
-    record = {"schema": 1, "key": key, "tool": NOTE_TOOL, "key_arg": "ticket", "body_sha256": issuepost.body_sha256(body),
+    record = {"schema": 1, "key": key, "tool": NOTE_TOOL, "key_arg": "ticket", "kind": "jira",
+              "body_sha256": issuepost.body_sha256(body),
               "format": "jira-wiki", "request_hash": "0" * 16, "approved_at": issuepost.iso(at),
               "expires_at": issuepost.iso(issuepost.expires(at)), "used_at": None}
     job = job_dir / key

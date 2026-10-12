@@ -24,8 +24,13 @@ parser-rules의 `added_for`는 뼈대에 존재하지 않는 유형을 가리키
 parser-rules는 샘플(android 문구)을 쓰지 않고 스키마 최소 placeholder 항목만 둔다(TODO(SITE)). 플랫폼 이름은
 레지스트리(`plugin/scripts/platforms`)로 확인한다. 기본 플랫폼이면 결과는 옵션 없을 때와 같다.
 
+`--tracker <kind>`(트래커 범용화 §3-3): 샘플은 jira DB다. 다른 트래커면 설정의 `tracker` 블록을
+`{kind: <kind>, base_url: <TODO>, key_regex: <그 트래커 기본 정규식>}`으로 바꾼다(값은 TODO(SITE) 자리표시 — github는 팀 레포로
+좁힌다, 예: `mock-org\\.mock-issues-\\d+`). 트래커 이름은 레지스트리(`plugin/scripts/trackers`)로 확인한다. jira면 결과는 옵션 없을
+때와 같다.
+
 CLI:
-    python3 tools/make_db_skeleton.py <out_dir> [--platform NAME] [--force] [--json]
+    python3 tools/make_db_skeleton.py <out_dir> [--platform NAME] [--tracker KIND] [--force] [--json]
 """
 
 from __future__ import annotations
@@ -112,6 +117,30 @@ def _platform(name: str):
     return name == platforms.DEFAULT_NAME, spec, backend.version()
 
 
+def _tracker(kind: str):
+    """레지스트리로 트래커 이름을 확인한다 → `(기본 트래커인가, SPEC)`."""
+    sys.path.insert(0, str(SCRIPTS))
+    import trackers
+
+    try:
+        spec = trackers.get(kind)
+    except trackers.TrackerConfigError as exc:
+        raise SystemExit(f"--tracker: {exc}") from exc
+    return kind == trackers.DEFAULT_KIND, spec
+
+
+def _tracker_config(text: str, spec) -> str:
+    """샘플(jira) 설정의 `tracker` 블록을 다른 트래커 자리표시로 바꾼다. 블록이 없으면 멈춘다(샘플이 바뀐 것)."""
+    block = (f"tracker:                             # 이슈 트래커 (트래커 범용화 §3-3)\n"
+             f"  kind: {spec.name}\n"
+             f"  base_url: https://tracker.invalid/            # TODO(SITE) {spec.label} 링크 앞부분(README 링크)\n"
+             f"  key_regex: '{spec.default_key_regex}'   # TODO(SITE) 팀 이슈 키로 좁힌다\n")
+    text, n = re.subn(r"(?m)^tracker:[^\n]*\n(?:  [^\n]*\n)+", lambda m: block, text, count=1)
+    if not n:
+        raise SystemExit("issue-db.config.yaml에서 tracker 블록을 찾지 못했습니다.")
+    return text
+
+
 def _platform_config(text: str, spec, version: str) -> str:
     """샘플(기본 플랫폼) 설정을 다른 플랫폼 설정으로 바꾼다. 바꿀 줄이 없으면 멈춘다(샘플이 바뀐 것)."""
     edits = [
@@ -141,8 +170,9 @@ def _write(path: Path, text: str) -> None:
     path.write_text(text, encoding="utf-8", newline="\n")
 
 
-def make(out: Path, force: bool = False, platform: str | None = None) -> dict:
+def make(out: Path, force: bool = False, platform: str | None = None, tracker: str | None = None) -> dict:
     is_default, spec, version = _platform(platform) if platform else (True, None, None)
+    jira_db, tracker_spec = _tracker(tracker) if tracker else (True, None)
     if not SAMPLE.exists():
         raise SystemExit(f"샘플 트리가 없습니다: {SAMPLE}")
     if out.exists():
@@ -158,8 +188,10 @@ def make(out: Path, force: bool = False, platform: str | None = None) -> dict:
             raise SystemExit(f"샘플에 없습니다: {rel}")
         dst = out / rel
         dst.parent.mkdir(parents=True, exist_ok=True)
-        if rel == "issue-db.config.yaml" and not is_default:
-            _write(dst, _platform_config(src.read_text(encoding="utf-8"), spec, version))
+        if rel == "issue-db.config.yaml" and not (is_default and jira_db):
+            text = src.read_text(encoding="utf-8")
+            text = text if is_default else _platform_config(text, spec, version)
+            _write(dst, text if jira_db else _tracker_config(text, tracker_spec))
         else:
             shutil.copy2(src, dst)
         created.append(rel)
@@ -192,6 +224,8 @@ def make(out: Path, force: bool = False, platform: str | None = None) -> dict:
     info = {"out": str(out), "categories": categories, "files": sorted(created)}
     if not is_default:
         info["platform"] = spec.name
+    if not jira_db:
+        info["tracker"] = tracker_spec.name
     return info
 
 
@@ -199,15 +233,17 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="make_db_skeleton.py", description=__doc__)
     parser.add_argument("out_dir", help="뼈대를 만들 디렉토리")
     parser.add_argument("--platform", metavar="NAME", help="플랫폼 (기본: 샘플과 같은 기본 플랫폼, 17-platforms §4)")
+    parser.add_argument("--tracker", metavar="KIND", help="이슈 트래커 (기본: 샘플과 같은 jira, 트래커 범용화 §3-3)")
     parser.add_argument("--force", action="store_true", help="이미 있으면 지우고 다시 만든다")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
 
-    info = make(Path(args.out_dir), force=args.force, platform=args.platform)
+    info = make(Path(args.out_dir), force=args.force, platform=args.platform, tracker=args.tracker)
     if args.json:
         print(json.dumps(info, ensure_ascii=False, indent=2))
     else:
-        print(f"이슈 DB 뼈대를 만들었습니다: {info['out']}" + (f" (플랫폼 {info['platform']})" if "platform" in info else ""))
+        print(f"이슈 DB 뼈대를 만들었습니다: {info['out']}" + (f" (플랫폼 {info['platform']})" if "platform" in info else "")
+              + (f" (트래커 {info['tracker']})" if "tracker" in info else ""))
         print(f"카테고리 {len(info['categories'])}개: {', '.join(info['categories'])}")
         print(f"파일 {len(info['files'])}개 (유형·Jira·fixture·피드백 없음)")
         print("생성 파일(README.md, STATS.md 등)은 첫 PR 때 db_build.py --write가 만든다.")

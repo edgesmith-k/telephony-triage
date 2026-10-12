@@ -19,7 +19,8 @@
 - 모드: **사외 초안**. Phase **D0, 1~13** 완료. 반입 전 보강 트랙(S1~S6·I1~I5·X·3C~3F)과 개선 트랙 **W0~W12**, 반입 전 리뷰(10/07) 수정 트랙 **V1~V7·V 끝**, 실제 로그 반영 트랙 **L1~L3** 완료, 반입 전 3차 검토(A1~A4·B1·B2·문서) 반영(10/08), 설명 정리(PR #31). main 병합 PR #8·#9·#11~#34 + 이번 브랜치 `ccr-d022623a-2f4vdx`.
 - 반입 전 4차 검토(10/10, 9관점) → 묶음 A~G 반영(이번 브랜치).
 - 10/11: 4차 검토 묶음 A~G(PR #36), Jira 결과 게시(PR #37, analyze Step 9·`issue_post.py`·guard 규칙 2, 사내 확인 S23), 플랫폼 분리(결정 (m), `docs/design/17-platforms.md`, 남은 것 S24~S29·`docs/development/OFONO_LOG_COLLECTION.md`). 전체 1,412 통과·eval 63~65 통과. 상세는 `docs/history/draft-notes-2026-10.md`.
-  남은 관찰(반입 후): `events.json`·`match.json`이 한 줄이라 `grep -n` 지침이 통독이 된다. 탐색 가설·분석 스킬 결과의 `mask_pii` 미경유(c). 같은 응답의 병렬 이중 게시는 권한 확인으로만 막음.
+  남은 관찰(반입 후)은 `docs/history/draft-notes-2026-10.md`.
+- **진행 중 (10/12)**: 트래커 범용화(jira→tracker) 묶음 1·2 완료, 묶음 3 WIP — 다음 세션은 `docs/development/tracker-handoff/README.md`부터.
 - 사내 확인 항목: `TODO(SITE)` **100곳** — `python3 tools/list_site_todos.py`. `REVIEW-OPEN.md` 0건.
 - 사내 S 단계 시작: `python3 tools/context_pack.py S-n`(표 `docs/tasks.md`).
 - 안내서(사람용 HTML): `docs/telephony-triage-guide.html` (공유본 https://claude.ai/artifact/1jov1Et4dQUMauFr6aoxWG). 역할별 문서 19개: `docs/materials/00-index.html`(PR #33·#34)

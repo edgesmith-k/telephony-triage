@@ -20,3 +20,7 @@
 - 묶음 1~3(fa993c0·dabbf88·dafe846·b07efb5·aaece33·a4f4a93), 묶음마다 리뷰 P0 0, P1 3·3·1 반영. android 출력 바이트 동일(baseline 비교).
 - 전체 pytest 1,412 통과(0 실패, 0 skip). eval 63·64·65(Sonnet) 통과(63 판정 보류 2개 수동 통과, 비용 $0.45).
 - 관찰: oFono 분석의 코드 경로 질문이 Jira android_version 값을 플랫폼 버전으로 보임(K9, 스키마 개명 때 정리).
+
+## 남은 관찰 (10/12 옮김)
+
+  남은 관찰(반입 후): `events.json`·`match.json`이 한 줄이라 `grep -n` 지침이 통독이 된다. 탐색 가설·분석 스킬 결과의 `mask_pii` 미경유(c). 같은 응답의 병렬 이중 게시는 권한 확인으로만 막음.

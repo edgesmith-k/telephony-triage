@@ -182,6 +182,9 @@ def test_eval_setup_references_resolve():
         assert setup.get("db", "issue-db-sample") in dbs, (e["id"], setup.get("db"))
         for key in setup.get("jira") or []:
             assert skill_eval_env._find_jira(key).is_file(), (e["id"], key)
+        for key in setup.get("gh_issues") or []:
+            assert skill_eval_env._find_gh_issue(key).is_file(), (e["id"], key)
+        assert setup.get("tracker", "jira") in ("jira", "github"), e["id"]
         for item in setup.get("logs") or []:
             if "src" in item:
                 assert fixture_path(item["src"]).is_file(), (e["id"], item["src"])
@@ -907,14 +910,14 @@ def test_e39_doctor_table_from_text_or_transcript(tmp_path, where, ok):
 
 def test_jira_post_evals_defined():
     by_id = {e["id"]: e for e in _entries()}
-    assert len(by_id) == 65
+    assert len(by_id) == 67
     assert by_id[8]["name"] == "jira-comment-request-gated" and len(by_id[8]["assertions"]) == 4
     for eid, count in ((61, 10), (62, 6)):
         e = by_id[eid]
         assert e["batch"] == "J" and len(e["assertions"]) == count
         assert e["setup"]["jira"] == ["MOCK-1001"] and e["setup"]["logs"][0]["as"] == "data-disabled.log"
     assert by_id[62]["setup"]["approver_deny"] is True and "approver_deny" not in by_id[61]["setup"]
-    assert grader.JIRA_POST_EVALS == {61: "MOCK-1001"}       # 62는 서버에 닿지 않으므로 공통 행 그대로
+    assert grader.POST_EVALS[61] == ("jira", "MOCK-1001", "jira_ticket_add_note")   # 62는 서버에 닿지 않으므로 공통 행 그대로
     assert grader.jira_row_text(61) == grader.JIRA_POST_TEXT and grader.jira_row_text(62) == grader.JIRA_NO_WRITE_TEXT
 
 
@@ -1148,3 +1151,165 @@ def test_e65_mismatch_bypass_and_guidance_checks(tmp_path):
     with pytest.raises(grader._Manual):                                  # 실행 기록 없음은 통과로 세지 않는다
         (run / "events.jsonl").unlink()
         grader.checks(65, grader.Ctx(env_dir, run))[0]()
+
+
+# --- 두 번째 트래커 (배치 G, eval 66·67, 트래커 범용화 §6-3) -----------------------------------------------
+
+GH_KEY = "mock-org.mock-issues-12"
+GH_ARGS = {"owner": "mock-org", "repo": "mock-issues", "issue_number": 12}
+
+
+def test_github_evals_defined():
+    by_id = {e["id"]: e for e in _entries()}
+    for eid, name in ((66, "github-analyze-record"), (67, "github-post-approved-comment")):
+        e = by_id[eid]
+        assert e["batch"] == "G" and e["name"] == name and len(e["assertions"]) == 8, eid
+        assert e["setup"] == {"tracker": "github", "db": "issue-db-github", "gh_issues": [GH_KEY],
+                              "logs": [{"src": "tests/fixtures/logs/data-disabled.log", "as": "data-disabled.log"}]}
+    assert "https://ghe.mock.invalid/mock-org/mock-issues/issues/12" in by_id[66]["prompt"]
+    assert "mock-org/mock-issues#12" in by_id[67]["prompt"]
+    assert grader.POST_EVALS[67] == ("github", GH_KEY, "add_issue_comment") and 66 not in grader.POST_EVALS
+    assert grader.GITHUB_EVALS == {66, 67}
+    assert grader.jira_row_text(66) == grader.GH_NO_WRITE_TEXT and grader.jira_row_text(67) == grader.GH_POST_TEXT
+    assert grader.jira_row_text(1) == grader.JIRA_NO_WRITE_TEXT                      # 기존 eval 문구는 그대로
+
+
+def test_github_eval_env_is_built(tmp_path):
+    """eval 66 환경(prepare-only와 같은 경로): site tracker github, github 변형 DB, 모의 GitHub 이슈·쓰기 로그 export,
+    direct 모드 호출 명령은 모의 GitHub call.py. plugin 모드 mcp.json에는 mock-github-issues가 붙는다."""
+    import skill_eval_env
+    import yaml
+
+    entry = next(e for e in _entries() if e["id"] == 66)
+    info = skill_eval_env.build(entry, tmp_path / "env")
+    env = info["env"]
+    assert Path(env["MOCK_GH_ISSUES_DIR"]).joinpath(f"{GH_KEY}.yaml").is_file()
+    assert env["MOCK_GH_ISSUES_WRITE_LOG"].endswith("gh-issues-writes.json") and not Path(env["MOCK_GH_ISSUES_WRITE_LOG"]).exists()
+    assert "export MOCK_GH_ISSUES_DIR=" in (tmp_path / "env" / "env.sh").read_text(encoding="utf-8")
+    site = yaml.safe_load((Path(info["plugin_root"]) / "site-defaults.yaml").read_text(encoding="utf-8"))
+    assert site["tracker"]["kind"] == "github" and site["tracker"]["mcp_server"] == "mock-github-issues"
+    conf = yaml.safe_load((Path(info["issue_db_clone"]) / "issue-db.config.yaml").read_text(encoding="utf-8"))
+    assert conf["tracker"]["kind"] == "github"
+    assert "github_issues_mcp/call.py" in info["jira_call"]
+    plugin = evaluation.prepare_plugin_mode(entry, info, tmp_path / "env")
+    servers = json.loads(Path(plugin["mcp_config"]).read_text(encoding="utf-8"))["mcpServers"]
+    assert servers["mock-github-issues"]["args"][0].endswith("github_issues_mcp/server.py")
+    assert servers["mock-github-issues"]["env"]["MOCK_GH_ISSUES_DIR"] == env["MOCK_GH_ISSUES_DIR"]
+    assert plugin["mcp_servers"] == ["mock-jira", "mock-github-issues", "eval-approver"]
+    connected = {"mock-jira": "connected", "eval-approver": "connected"}
+    assert evaluation.plugin_check([_init(["telephony-triage"], connected)], plugin["mcp_servers"])[0]   # github 서버 없음
+    assert evaluation.plugin_check([_init(["telephony-triage"], {**connected, "mock-github-issues": "connected"})],
+                                   plugin["mcp_servers"])[0] is None
+    jira = evaluation.prepare_plugin_mode({"setup": {}}, {"plugin_root": "r", "env": {
+        "MOCK_JIRA_DIR": "J", "MOCK_JIRA_WRITE_LOG": "W", "PYTHONIOENCODING": "utf-8"}}, tmp_path / "jira")
+    assert "mock-github-issues" not in json.loads(Path(jira["mcp_config"]).read_text(encoding="utf-8"))["mcpServers"]
+    assert jira["mcp_servers"] == ["mock-jira", "eval-approver"]
+
+
+def _gh_env(tmp_path, entries=None, approved_body=None, jira_entries=None):
+    env, run = tmp_path / "env", run_dir(tmp_path)
+    work = env / "work"
+    (work / GH_KEY).mkdir(parents=True)
+    gh_log, jira_log = env / "gh-writes.json", env / "jira-writes.json"
+    if entries is not None:
+        gh_log.write_text(json.dumps(entries, ensure_ascii=False), encoding="utf-8")
+    if jira_entries is not None:
+        jira_log.write_text(json.dumps(jira_entries, ensure_ascii=False), encoding="utf-8")
+    (env / "env.json").write_text(json.dumps({"remote": str(env), "work_dir": str(work),
+                                              "env": {"MOCK_JIRA_WRITE_LOG": str(jira_log),
+                                                      "MOCK_GH_ISSUES_WRITE_LOG": str(gh_log)}}), encoding="utf-8")
+    (env / "before.json").write_text("{}", encoding="utf-8")
+    if approved_body is not None:
+        from common import issuepost
+        (work / GH_KEY / "post.approved.json").write_text(json.dumps(
+            {"schema": 1, "key": GH_KEY, "kind": "github", "body_sha256": issuepost.body_sha256(approved_body)}), encoding="utf-8")
+    return grader.Ctx(env, run)
+
+
+GH_BODY = "### PROBLEM\n- GitHub: mock-org/mock-issues#12\n"
+
+
+def _gh_note(body=GH_BODY, **over):
+    return {"tool": "add_issue_comment", "arguments": {**GH_ARGS, "body": body, **over}}
+
+
+@pytest.mark.parametrize("name,entries,jira,expected", [
+    ("승인 본문 1건", [_gh_note()], None, True),
+    ("owner 대소문자", [_gh_note(owner="Mock-Org")], None, True),
+    ("issue_number 문자열", [_gh_note(issue_number="12")], None, False),
+    ("다른 이슈", [_gh_note(issue_number=13)], None, False),
+    ("본문 다름", [_gh_note(GH_BODY + "- 추가\n")], None, False),
+    ("2건", [_gh_note(), _gh_note()], None, False),
+    ("코멘트 + update_issue", [_gh_note(), {"tool": "update_issue", "arguments": {**GH_ARGS, "state": "closed"}}], None, False),
+    ("Jira 쓰기도 있음", [_gh_note()], [{"tool": "jira_post_comment", "arguments": {}}], False),
+    ("게시 없음", None, None, False),
+])
+def test_github_post_ok(tmp_path, name, entries, jira, expected):
+    ctx = _gh_env(tmp_path, entries, GH_BODY, jira)
+    assert ctx.post_ok(67)[0] is expected, name
+
+
+def test_github_no_write_row_checks_both_trackers(tmp_path):
+    assert _gh_env(tmp_path / "a").tracker_writes(66)[0] is True
+    assert _gh_env(tmp_path / "b", [_gh_note()]).tracker_writes(66)[0] is False
+    assert _gh_env(tmp_path / "c", None, None, [{"tool": "jira_post_comment"}]).tracker_writes(66)[0] is False
+    assert _gh_env(tmp_path / "d", [_gh_note()]).tracker_writes(1)[0] is True       # jira eval은 Jira 로그만(이전과 같다)
+
+
+def test_github_checks_cover_assertions_and_never_pass_unread(tmp_path):
+    by_id = {e["id"]: e for e in _entries()}
+    for eid in (66, 67):
+        ctx = _gh_env(tmp_path / str(eid))
+        fns = grader.checks(eid, ctx)
+        assert len(fns) == len(by_id[eid]["assertions"]), eid
+        for fn in fns:
+            if fn is None:
+                continue
+            try:
+                ok, _ = fn()
+            except grader._Manual:
+                continue
+            except Exception:  # noqa: BLE001 — 가짜 환경에는 clone이 없다(grade()는 예외를 실패로 센다)
+                continue
+            assert ok is False, (eid, fn.__name__)
+
+
+def _gh_seq_ctx(tmp_path, items, issue_json=None):
+    ctx = _gh_env(tmp_path)
+    _write_artifacts(ctx.run)
+    _seq_events(ctx.run, items)
+    if issue_json is not None:
+        (ctx.work / GH_KEY / "issue.json").write_text(json.dumps(issue_json), encoding="utf-8")
+    return grader.Ctx(ctx.env_dir, ctx.run)
+
+
+READ = "mcp__mock-github-issues__issue_read"
+BRIEF = "telephony-triage: Jira 응답 원문은 파일로만 저장했다(모델에 보이지 않음). 아래는 마스킹된 요약이다."
+
+
+def test_e66_normalize_read_and_isolation_checks(tmp_path):
+    check = 'python3 /p/scripts/jira_fields.py check-key "https://ghe.mock.invalid/mock-org/mock-issues/issues/12"'
+    out = json.dumps({"key": GH_KEY, "valid": True, "regex": "x"})
+    items = [("tool", "t1", "Bash", {"command": check}, out, False),
+             ("tool", "t2", "Bash", {"command": f"python3 /p/scripts/triage.py run {GH_KEY} --logs logs/data-disabled.log"},
+              "{}", False),
+             ("tool", "t3", READ, {"method": "get", **GH_ARGS}, BRIEF, False),
+             ("tool", "t4", READ, {"method": "get_comments", **GH_ARGS}, BRIEF, False)]
+    fns = grader.checks(66, _gh_seq_ctx(tmp_path / "ok", items, {"origin": "mcp"}))
+    assert fns[0]()[0] is True and fns[1]()[0] is True and fns[2]()[0] is True and fns[3]()[0] is True
+    # triage를 URL로 바로 부르고 check-key가 없으면 실패, get_comments가 없으면 실패, 원문(html_url)이 보이면 실패
+    bad = [items[1], items[2], ("tool", "t5", READ, {"method": "get", **GH_ARGS}, '{"html_url": "https://ghe.mock.invalid/x"}', False)]
+    fns = grader.checks(66, _gh_seq_ctx(tmp_path / "bad", bad, {"origin": "file"}))
+    assert fns[0]()[0] is False and fns[1]()[0] is False and fns[2]()[0] is False and fns[3]()[0] is False
+
+
+def test_e67_body_shape_and_post_args(tmp_path):
+    ctx = _gh_env(tmp_path / "ok", [_gh_note()], GH_BODY)
+    fns = grader.checks(67, ctx)
+    body = "### PROBLEM\n- GitHub: mock-org/mock-issues#12\n\n### CAUSE\n- x\n\n### NEXT ACTION\n- y\n\n### ANALYSIS\n- z"
+    ctx2 = _gh_env(tmp_path / "shape", [_gh_note(body)], body)
+    assert grader.checks(67, ctx2)[3]()[0] is True and grader.checks(67, ctx2)[4]()[0] is True
+    assert fns[3]()[0] is False                                         # 4칸이 아니다
+    wrong = "### PROBLEM\n- Jira: MOCK-1001\n\n### CAUSE\n- x\n\n### NEXT ACTION\n- y\n\n### ANALYSIS\n- z"
+    assert grader.checks(67, _gh_env(tmp_path / "wrong", [_gh_note(wrong)], wrong))[3]()[0] is False
+

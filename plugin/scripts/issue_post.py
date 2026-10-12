@@ -113,7 +113,7 @@ class Job:
             raise Usage(problem)
         tracker = db_cfg.get("tracker") if isinstance(db_cfg.get("tracker"), dict) else {}
         key_re = re.compile(str(tracker.get("key_regex") or self.tracker.default_key_regex))
-        self.key = args.key
+        self.key = self.tracker.parse_key(args.key) or args.key      # 작업 키로 정규화(jira는 입력 그대로)
         if not self.tracker.safe_key_re.fullmatch(self.key) or not key_re.fullmatch(self.key):
             raise Usage(f"{self.tracker.label} 키 형식이 아니다: {self.key}")
         self.allow = list((db_cfg.get("mask") or {}).get("allow_patterns") or [])
@@ -650,6 +650,7 @@ def cmd_approve(args, job: Job) -> tuple[dict, int]:
     at = issuepost.now()
     spec = job.spec
     record = {"schema": 1, "key": job.key, "tool": spec["tool"], "key_arg": issuepost.spec_tracker(spec).key_arg_id(spec),
+              "kind": spec["kind"],
               "body_sha256": doc["post_sha256"], "format": doc.get("format"), "request_hash": a.get("request_hash"),
               "approved_at": issuepost.iso(at), "expires_at": issuepost.iso(issuepost.expires(at)), "used_at": None,
               "again": bool(doc.get("again"))}

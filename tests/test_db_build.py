@@ -271,6 +271,21 @@ def test_failed_steps_line_shows_top_three_by_count_then_key():
     assert "- 자주 실패한 스텝: b 스텝 (2건); a 스텝 (1건); c 스텝 (1건)" in text.splitlines()
 
 
+# -- GitHub 트래커 DB (트래커 범용화 묶음 3, 설계 §4-10) ------------------------------------------------
+
+
+def test_github_readme_links_and_display():
+    """README의 이슈 링크는 DB 트래커 어댑터(`link`·`display`)가 만든다: `owner/repo#N` → `<base_url>owner/repo/issues/N`."""
+    out = _preview(variant_db("issue-db-github"))
+    text = (out / "README.md").read_text(encoding="utf-8")
+    assert "[mock-org/mock-issues#1101](https://ghe.mock.invalid/mock-org/mock-issues/issues/1101)" in text
+    assert "MOCK-1101" not in text and "jira.mock.invalid" not in text
+    data = (out / "data" / "README.md").read_text(encoding="utf-8")
+    assert "https://ghe.mock.invalid/mock-org/mock-issues/issues/1102" in data
+    again = _preview(variant_db("issue-db-github"))
+    assert (again / "README.md").read_bytes() == (out / "README.md").read_bytes()      # 결정적
+
+
 if __name__ == "__main__":
     failures = 0
     for name, func in _all_tests():

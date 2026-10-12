@@ -6,6 +6,9 @@
 **계층 규칙**(테스트로 강제): `trackers/*`는 표준 라이브러리만 import한다 — guard가 `common/issuepost`를 거쳐 불러오므로
 가벼워야 한다. `common`·`platforms`·핵심 스크립트를 import하지 않고, 트래커 모듈끼리도 import하지 않는다.
 
+`key_from_args`·`key_args`의 `spec`을 보지 않는 트래커(github: 키 인자 고정)는 `{}`를 받아도 된다 — core `jira_bridge`는
+읽기 응답의 키를 `key_from_read(응답, 입력, 정규식)`로 얻고, github `key_from_read`는 spec 없이 `key_from_args({}, 입력)`을 부른다.
+
 함수 필드의 인자 `spec`은 `common/issuepost.spec_check`가 검증한 코멘트 도구 spec(`key_arg`·`body_arg`·`extra_args`·
 `format`·`kind`), `raw`는 검증 전 `tracker.write_tools.add_comment` 매핑이다.
 """
@@ -46,3 +49,4 @@ class TrackerSpec:
     key_from_read: Callable[[object, object, re.Pattern], "str | None"]   # (응답, 도구 입력, 키 정규식) → 작업 키
     read_args: Callable[[str, str], "dict | None"]   # (논리 동작, 작업 키) → needs_input 안내 인자(없으면 None)
     classify_extra: Callable[[str, set], set]   # (도구 이름, 후보 동작) → 보강한 후보 동작(setup)
+    selftest_key: str = "SELFTEST-0"            # doctor guard 자체 시험의 가짜 작업 키(`safe_key_re`에 맞고 승인 기록이 없다)

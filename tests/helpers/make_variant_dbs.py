@@ -16,6 +16,7 @@
 | `issue-db-step-events/` | 스텝 순서 정렬: `step_events` 규칙 10개(CP는 관측 불가, 비행기 모드 켜기·끄기는 `match`, 망 등록은 `ril`, 데이터 켜기·끄기는 `event`) |
 | `issue-db-review/` | 월간 리뷰(Phase 11): §6.6 항목마다 걸리는 경우와 걸리지 않는 경우 (`REVIEW_CASES`) |
 | `issue-db-ofono/` | oFono 플랫폼 뼈대 DB(17-platforms §5, **합성·형식 가정·placeholder**): `platform: ofono`, `ofono_reference` 백엔드, placeholder 태그(`ofonod`·`daemon-a`·`daemon-b`)·extractor 1개, 유형 `DATA-001`과 양성 fixture(`tests/fixtures/logs/ofono/journal-iso.log`) 하나 |
+| `issue-db-github/` | 두 번째 트래커(트래커 범용화 §6-1, **합성**): `tracker {kind: github, base_url: https://ghe.mock.invalid/, key_regex: mock-org\\.mock-issues-\\d+}`, 기록·피드백·evidence의 Jira 키 `MOCK-<n>`을 GitHub 작업 키 `mock-org.mock-issues-<n>`으로(파일 이름 포함) |
 | `verify-logs/` | 이슈 DB가 아니다. `db_verify fix`·`resolution` 입력 로그(수정 후·재발·증상만 남음·시나리오 없음, 마스킹됨) |
 
 CLI:
@@ -659,6 +660,30 @@ def ofono(db: Path) -> None:
     _write(data / "fixtures/DATA-001-01.expect.yaml",
            "expect_top: DATA-001-01\noccurred_at: '2026-09-20T14:32:10+09:00'\norigin: synthetic\n")
 
+GH_KEY = "mock-org.mock-issues-"
+GH_TRACKER = ("tracker:                             # 이슈 트래커 (트래커 범용화 §6-1, 합성)\n"
+              "  kind: github\n"
+              "  base_url: https://ghe.mock.invalid/\n"
+              "  key_regex: 'mock-org\\.mock-issues-\\d+'\n")
+
+
+def github(db: Path) -> None:
+    """GitHub Issues 트래커 DB: tracker 블록과 Jira 키 `MOCK-<n>`(기록·피드백 파일 이름과 본문, 유형 evidence)을 바꾼다."""
+    cfg = db / "issue-db.config.yaml"
+    text, n = re.subn(r"tracker:[^\n]*\n(?:  [^\n]*\n)+", lambda m: GH_TRACKER, cfg.read_text(encoding="utf-8"), count=1)
+    if not n:
+        raise SystemExit(f"{cfg}: tracker 블록이 없습니다")
+    cfg.write_text(text, encoding="utf-8", newline="\n")
+    key_re = re.compile(r"\bMOCK-(\d+)\b")
+    for path in sorted(p for p in db.rglob("*") if p.is_file() and p.suffix in (".yaml", ".md")):
+        text = path.read_text(encoding="utf-8")
+        new = key_re.sub(lambda m: GH_KEY + m.group(1), text)
+        if new != text:
+            path.write_text(new, encoding="utf-8", newline="\n")
+    for path in sorted(p for p in db.rglob("MOCK-*") if p.is_file() and key_re.match(p.name)):
+        path.rename(path.with_name(key_re.sub(lambda m: GH_KEY + m.group(1), path.name, count=1)))
+
+
 VARIANTS = {
     "issue-db-lint-errors": lint_errors,
     "issue-db-empty-category": empty_category,
@@ -669,6 +694,7 @@ VARIANTS = {
     "issue-db-step-focus": step_focus,
     "issue-db-step-events": step_events,
     "issue-db-ofono": ofono,
+    "issue-db-github": github,
     "verify-logs": verify_logs,
 }
 

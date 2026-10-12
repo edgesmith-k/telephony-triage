@@ -12,6 +12,10 @@
 setup 필드 (모두 선택):
     db: tests/fixtures 아래 이슈 DB 이름 (기본 issue-db-sample)
     jira: [티켓 키]  — tests/skill_evals/jira, 없으면 tests/mocks/jira에서 찾는다
+    tracker: github — 두 번째 트래커(트래커 범용화 §6-3): site-defaults `tracker` 블록을 `runner.GITHUB_TRACKER`로(site_defaults의
+        tracker가 있으면 그 키가 우선), db 기본값을 `issue-db-github`로, 모의 GitHub Issues MCP 환경(`MOCK_GH_ISSUES_DIR`·
+        `MOCK_GH_ISSUES_WRITE_LOG`)을 export한다. direct 모드의 `jira_call`·`jira_tools_list`는 모의 GitHub 서버 call.py를 가리킨다
+    gh_issues: [작업 키] — tests/skill_evals/github_issues, 없으면 tests/mocks/github_issues에서 찾는다(`<owner>.<repo>-<n>.yaml`)
     logs: [{src: <레포 기준 경로> | scenario: <tests/skill_evals/scenarios 파일>, as: <파일명>, bugreport: zip|txt}]
         split_buffers: true — 버퍼별 파일 <as>.main.log·<as>.radio.log
     inject_main: [{scenario: <파일>, dest: <이슈 DB 안 디렉토리>, message: <커밋 메시지>}]
@@ -42,11 +46,12 @@ EVALS = REPO / "tests" / "skill_evals"
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import mock_env  # noqa: E402
-from runner import fixture_db, fixture_path, plugin_root  # noqa: E402
+from runner import fixture_db, fixture_path, github_defaults, plugin_root  # noqa: E402
 from workspace import Workspace, git  # noqa: E402
 
 GEN = REPO / "tests" / "mocks" / "logcat_gen.py"
 CALL = REPO / "tests" / "mocks" / "jira_mcp" / "call.py"
+GH_CALL = REPO / "tests" / "mocks" / "github_issues_mcp" / "call.py"
 ANALYZER = REPO / "tests" / "mocks" / "skills" / "data-analyzer" / "run.py"
 
 
@@ -181,6 +186,13 @@ def _find_jira(key: str) -> Path:
     raise SystemExit(f"Jira 티켓 없음: {key}")
 
 
+def _find_gh_issue(key: str) -> Path:
+    for d in (EVALS / "github_issues", REPO / "tests" / "mocks" / "github_issues"):
+        if (d / f"{key}.yaml").is_file():
+            return d / f"{key}.yaml"
+    raise SystemExit(f"GitHub 이슈 없음: {key}")
+
+
 def _clone_state(clone: Path) -> dict:
     return {
         "branch": git(clone, "rev-parse", "--abbrev-ref", "HEAD"),
@@ -201,14 +213,25 @@ def build(entry: dict, out: Path, direct_tools: bool = True) -> dict:
         shutil.rmtree(out)
     out.mkdir(parents=True)
     # site_defaults: site-defaults.yaml 최상위 키 덮어쓰기 (예: eval 39의 빈 tracker.tools)
-    root = plugin_root("eval", **setup["site_defaults"]) if setup.get("site_defaults") else plugin_root()
-    db_src = fixture_db(setup.get("db", "issue-db-sample"))
+    github = setup.get("tracker") == "github"
+    if setup.get("tracker") not in (None, "jira", "github"):
+        raise SystemExit(f"setup.tracker는 jira|github: {setup.get('tracker')}")
+    overrides = dict(setup.get("site_defaults") or {})
+    if github:   # 두 번째 트래커: tracker 블록은 github 예시, site_defaults.tracker의 키가 우선
+        overrides["tracker"] = github_defaults(**(overrides.get("tracker") or {}))["tracker"]
+    root = plugin_root("eval", **overrides) if overrides else plugin_root()
+    db_src = fixture_db(setup.get("db", "issue-db-github" if github else "issue-db-sample"))
     ws = Workspace(src=db_src, root=root)
 
     jira_dir = out / "jira"
     jira_dir.mkdir()
     for key in setup.get("jira") or []:
         shutil.copyfile(_find_jira(key), jira_dir / f"{key}.yaml")
+    gh_dir = out / "gh_issues"
+    if github or setup.get("gh_issues"):
+        gh_dir.mkdir()
+        for key in setup.get("gh_issues") or []:
+            shutil.copyfile(_find_gh_issue(key), gh_dir / f"{key}.yaml")
 
     logs = out / "logs"
     logs.mkdir()
@@ -307,6 +330,9 @@ def build(entry: dict, out: Path, direct_tools: bool = True) -> dict:
         "MOCK_JIRA_WRITE_LOG": str(out / "jira-writes.json"),
         "PYTHONIOENCODING": "utf-8",
     }
+    if gh_dir.is_dir():     # 모의 GitHub Issues MCP(트래커 범용화 §6-3) — github eval에서만
+        env["MOCK_GH_ISSUES_DIR"] = str(gh_dir)
+        env["MOCK_GH_ISSUES_WRITE_LOG"] = str(out / "gh-issues-writes.json")
     if setup.get("gh_unauth"):
         env["MOCK_GH_UNAUTH"] = "1"
     path_dirs = [str(p) for p in mock_env.gh_path_dirs()]
@@ -323,10 +349,13 @@ def build(entry: dict, out: Path, direct_tools: bool = True) -> dict:
         "logs": sorted(str(p) for p in logs.iterdir()), "jira_dir": str(jira_dir),
         "gh_state": str(ws.gh_state),
     }
+    if gh_dir.is_dir():
+        info["gh_issues_dir"] = str(gh_dir)
     if direct_tools:
+        call = GH_CALL if github else CALL      # 트래커 MCP 대신 부르는 명령(키 이름은 기존 그대로)
         info.update({
-            "jira_call": f"python3 \"{CALL.as_posix()}\" <tool> '<arguments JSON>'",
-            "jira_tools_list": f"python3 \"{CALL.as_posix()}\" --list",
+            "jira_call": f"python3 \"{call.as_posix()}\" <tool> '<arguments JSON>'",
+            "jira_tools_list": f"python3 \"{call.as_posix()}\" --list",
             "analyzer_run": (f"python3 -c \"import sys; sys.exit('mock-data-analyzer: internal error (timeout)')\" --input <입력 JSON 경로>"
                              if setup.get("analyzer_fail") else f"python3 \"{ANALYZER.as_posix()}\" --input <입력 JSON 경로>"),
         })

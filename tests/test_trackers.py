@@ -646,3 +646,254 @@ def test_guard_selftest_uses_tracker_key_args(fake_trackers, monkeypatch):
     row = config._guard_selftest(type("A", (), {"plugin_root": str(REPO / "plugin")})(), None, cfg)
     assert row["status"] == "ok"
     assert seen[-1]["tool_input"] == {"issue_ref": "SELFTEST-0", "text": "selftest"}
+
+
+# -- GitHub 어댑터 (묶음 3, 설계 §3-2 github 열·§3-4) ------------------------------------------------
+
+from trackers import github as github_tracker  # noqa: E402
+
+G = trackers.get("github")
+GKEY = "mock-org.mock-issues-12"
+GSPEC = {"tool": "mcp__mock-github-issues__add_issue_comment", "key_arg": None, "body_arg": "body", "extra_args": {},
+         "format": "markdown", "kind": "github"}
+GARGS = {"owner": "mock-org", "repo": "mock-issues", "issue_number": 12}
+
+
+def test_github_registered_and_constants():
+    assert "github" in trackers.known() and G.name == "github" and G.label == "GitHub"
+    assert G.server_words == ()                       # "github"를 넣으면 설정 밖 GitHub MCP 쓰기가 모두 거부된다(설계 §4-3)
+    assert trackers.all_server_words() == ("atlassian", "jira")
+    assert G.formats == ("markdown",) and G.default_format == "markdown" and set(G.formats) <= set(issuepost.RENDERERS)
+    assert dict(G.text_defaults) == {"summary": ("title",), "description": ("body",), "comments": ("comments[].body",)}
+    assert G.components_default == "labels[].name"
+    assert G.safe_key_re.fullmatch(G.selftest_key) and J.safe_key_re.fullmatch(J.selftest_key)
+    assert re.fullmatch(G.default_key_regex, GKEY) and not re.fullmatch(G.default_key_regex, "MOCK-1")
+
+
+@pytest.mark.parametrize("text,want", [
+    (GKEY, GKEY), ("Mock-Org.Mock-Issues-12", GKEY),                                    # 작업 키(소문자 정규화)
+    ("mock-org/mock-issues#12", GKEY), ("Mock-Org/Mock-Issues#12", GKEY),               # owner/repo#N
+    ("https://ghe.mock.invalid/mock-org/mock-issues/issues/12", GKEY),                  # 이슈 URL
+    ("https://ghe.mock.invalid/mock-org/mock-issues/issues/12/", GKEY),
+    ("https://ghe.mock.invalid/mock-org/mock-issues/issues/12#issuecomment-1", GKEY),
+    ("http://ghe.mock.invalid/mock-org/my.repo_x/issues/3?x=1", "mock-org.my.repo_x-3"),
+    ("MOCK-12", None), ("../x-1", None), ("a..b-1", None), ("o.a..b-1", None), ("o/a..b#1", None),
+    ("o/r#0", None), ("o/r#012", None), ("o.r-0", None), ("own.er/r#1", None), ("o/.github#1", None),
+    ("o/r/x#1", None), ("o r/x#1", None), ("o/r#1#2", None), ("https://ghe.mock.invalid/o/r/pull/1", None),
+    ("o/r#12345678901", None), ("", None), (None, None), (12, None),
+])
+def test_github_parse_key(text, want):
+    assert G.parse_key(text) == want
+    if want is not None:
+        assert G.safe_key_re.fullmatch(want) and want == want.lower()
+
+
+def test_github_display_link_key_args_round_trip():
+    assert G.display(GKEY) == "mock-org/mock-issues#12"
+    assert G.link("https://ghe.mock.invalid/", GKEY) == "https://ghe.mock.invalid/mock-org/mock-issues/issues/12"
+    assert G.display("not a key") == "not a key" and G.link("https://ghe.mock.invalid/", "x") == "https://ghe.mock.invalid/x"    # 표시만: 예외 없음
+    assert G.key_args(GSPEC, GKEY) == GARGS and G.key_args({}, "a.b.c-1") == {"owner": "a", "repo": "b.c", "issue_number": 1}
+    with pytest.raises(ValueError):
+        G.key_args({}, "MOCK-1")
+    assert G.arg_names(GSPEC) == {"owner", "repo", "issue_number"} and G.key_arg_id(GSPEC) == "owner,repo,issue_number"
+    assert G.key_from_args(GSPEC, {**GARGS, "body": "x"}) == GKEY
+    assert G.key_from_args({}, {"owner": "Mock-Org", "repo": "MOCK-Issues", "issue_number": 12}) == GKEY   # 소문자 정규화
+    assert G.key_from_args(GSPEC, G.key_args(GSPEC, GKEY)) == GKEY
+
+
+@pytest.mark.parametrize("over", [
+    {"issue_number": "12"}, {"issue_number": 12.0}, {"issue_number": True}, {"issue_number": 0}, {"issue_number": -1},
+    {"issue_number": None}, {"issue_number": 10 ** 10}, {"owner": "mock.org"}, {"owner": "../x"}, {"owner": "a/b"},
+    {"owner": "-x"}, {"owner": ""}, {"owner": "x" * 40}, {"owner": 1}, {"repo": "a..b"}, {"repo": ".github"},
+    {"repo": "a/b"}, {"repo": "a#b"}, {"repo": "a b"}, {"repo": ""}, {"repo": None},
+])
+def test_github_key_from_args_rejects(over):
+    assert G.key_from_args(GSPEC, {**GARGS, **over}) is None, over
+
+
+def test_github_key_from_args_needs_all_args():
+    for missing in GARGS:
+        assert G.key_from_args(GSPEC, {k: v for k, v in GARGS.items() if k != missing}) is None
+    assert G.key_from_args(GSPEC, None) is None and G.key_from_args(GSPEC, [GARGS]) is None
+
+
+def test_jira_and_github_key_formats_do_not_overlap():
+    for key in ("MOCK-1001", "A_B-1", "abc-1"):
+        assert J.safe_key_re.fullmatch(key) and not G.safe_key_re.fullmatch(key) and G.parse_key(key) is None
+    for key in (GKEY, "o.r-1", "a1.b_c.d-99"):
+        assert G.safe_key_re.fullmatch(key) and not J.safe_key_re.fullmatch(key) and J.parse_key(key) is None
+
+
+def test_github_read_action_key_from_read_read_args_classify():
+    both = {"get_issue", "get_comments"}
+    assert G.read_action({"method": "get", **GARGS}, both) == "get_issue"
+    assert G.read_action({"method": "get_comments", **GARGS}, both) == "get_comments"
+    for ti in ({"method": "get_labels", **GARGS}, {"method": 1}, GARGS, None):
+        assert G.read_action(ti, both) == "unsupported", ti
+    kre = re.compile(r"mock-org\.mock-issues-\d+")
+    assert G.key_from_read({"title": "x"}, {"method": "get", **GARGS}, kre) == GKEY        # 응답이 아니라 입력에서
+    assert G.key_from_read({"key": GKEY}, {"method": "get", "owner": "other", "repo": "x", "issue_number": 1}, kre) is None
+    assert G.key_from_read({}, {"method": "get", **GARGS, "issue_number": "12"}, kre) is None
+    assert G.read_args("get_issue", GKEY) == {"method": "get", **GARGS}
+    assert G.read_args("get_comments", GKEY) == {"method": "get_comments", **GARGS}
+    assert G.read_args("search_issues", GKEY) is None
+    assert G.classify_extra("issue_read", {"get_issue"}) == {"get_issue", "get_comments"}
+    assert G.classify_extra("mcp__srv__issue_read", {"get_issue"}) == {"get_issue", "get_comments"}
+    assert G.classify_extra("get_issue", {"get_issue"}) == {"get_issue"}
+    assert G.classify_extra("issue_read", set()) == set()
+
+
+GKEYARG = "add_comment.key_arg는 github 트래커에서 두지 않는다(키 인자는 owner·repo·issue_number 고정)"
+
+
+@pytest.mark.parametrize("raw,want", [
+    ({"body_arg": "body"}, []), ({"key_arg": None, "body_arg": "body"}, []), ({"key_arg": "", "body_arg": "body"}, []),
+    ({"key_arg": "ticket", "body_arg": "body"}, [GKEYARG]),
+    ({"body_arg": "issue_number"}, ["add_comment.body_arg가 키 인자(owner·repo·issue_number)와 겹친다"]),
+])
+def test_github_spec_problems(raw, want):
+    assert G.spec_problems(raw) == want
+
+
+def _gcfg(**over) -> dict:
+    read = "mcp__mock-github-issues__issue_read"
+    tracker = {"kind": "github", "mcp_server": "mock-github-issues", "tools": {"get_issue": read, "get_comments": read},
+               "read_tools": [read], "write_tools": {"add_comment": {"tool": GSPEC["tool"], "body_arg": "body"}}}
+    tracker.update(over)
+    return {"tracker": tracker}
+
+
+@pytest.mark.parametrize("ac,want", [
+    ({}, None),
+    ({"format": "jira-wiki"}, "add_comment.format은 markdown 중 하나다: jira-wiki"),
+    ({"key_arg": "ticket"}, GKEYARG),
+    ({"extra_args": {"owner": "x"}}, EXTRA),               # 공통 검사: 고정 인자가 키 인자를 덮어쓰지 못한다(P2-6)
+    ({"extra_args": {"issue_number": 1}}, EXTRA),
+    ({"extra_args": {"body": "x"}}, EXTRA),
+    ({"body_arg": None}, KEYBODY),
+])
+def test_github_spec_check(ac, want):
+    raw = {"tool": GSPEC["tool"], "body_arg": "body", **ac}
+    spec, problems = issuepost.spec_check(_gcfg(write_tools={"add_comment": raw}))
+    if want is None:
+        assert problems == [] and spec == GSPEC and issuepost.spec_tracker(spec) is G
+        assert issuepost.call_arguments(spec, GKEY, "본문 \n") == {**GARGS, "body": "본문"}
+    else:
+        assert spec is None and problems == [("warn", want)]
+
+
+def _approval(job: Path, spec: dict, key: str, body: str, **over) -> None:
+    at = issuepost.now()
+    record = {"schema": 1, "key": key, "tool": spec["tool"], "key_arg": issuepost.spec_tracker(spec).key_arg_id(spec),
+              "kind": spec["kind"], "body_sha256": issuepost.body_sha256(body), "approved_at": issuepost.iso(at),
+              "expires_at": issuepost.iso(issuepost.expires(at)), "used_at": None, **over}
+    (job / key).mkdir(parents=True, exist_ok=True)
+    (job / key / "post.approved.json").write_text(json.dumps(record, ensure_ascii=False), encoding="utf-8")
+    (job / key / "post.md").write_text(body + "\n", encoding="utf-8")
+
+
+def test_github_check_call(tmp_path):
+    body = "### PROBLEM\n- GitHub: mock-org/mock-issues#12"
+    call = {**GARGS, "body": body}
+    assert issuepost.check_call(GSPEC["tool"], call, GSPEC, tmp_path) == f"승인 기록 없음({GKEY})"
+    _approval(tmp_path, GSPEC, GKEY, body)
+    assert issuepost.check_call(GSPEC["tool"], call, GSPEC, tmp_path) is None
+    assert issuepost.check_call(GSPEC["tool"], {**call, "owner": "Mock-Org"}, GSPEC, tmp_path) is None   # 대소문자 무관
+    for bad, why in (({**call, "issue_number": "12"}, "이슈 키 형식 불일치(owner,repo,issue_number)"),
+                     ({**call, "issue_number": 13}, "승인 기록 없음(mock-org.mock-issues-13)"),
+                     ({**call, "reaction": "+1"}, "승인 범위 밖 인자: reaction"),
+                     ({**call, "comment_id": 1}, "승인 범위 밖 인자: comment_id"),
+                     ({k: v for k, v in call.items() if k != "repo"}, "이슈 키 형식 불일치(owner,repo,issue_number)")):
+        assert issuepost.check_call(GSPEC["tool"], bad, GSPEC, tmp_path) == why, bad
+
+
+def test_approval_record_kind_must_match_spec(tmp_path):
+    """P2-5: 승인 기록의 트래커 kind가 지금 설정과 같아야 한다(키 형식·key_arg가 우연히 같아도). 옛 기록(kind 없음)도 거부."""
+    body = "h3. PROBLEM"
+    call = {"ticket": KEY, "text": body}
+    _approval(tmp_path, SPEC, KEY, body)
+    assert issuepost.check_call(SPEC["tool"], call, SPEC, tmp_path) is None
+    for kind in ("github", None):
+        _approval(tmp_path, SPEC, KEY, body, kind=kind)
+        assert issuepost.check_call(SPEC["tool"], call, SPEC, tmp_path) == "승인 기록의 트래커(kind)가 설정과 다르다", kind
+    rec = json.loads((tmp_path / KEY / "post.approved.json").read_text(encoding="utf-8"))
+    del rec["kind"]
+    (tmp_path / KEY / "post.approved.json").write_text(json.dumps(rec), encoding="utf-8")
+    assert issuepost.check_call(SPEC["tool"], call, SPEC, tmp_path) == "승인 기록의 트래커(kind)가 설정과 다르다"
+
+
+# -- GitHub 관문(서브프로세스): check-key 정규화·tracker-mismatch·driver 작업 키(P2-9)·skeleton -------------
+
+from runner import github_root, variant_db  # noqa: E402
+
+GH_LOG = SAMPLE / "data/DATA-001-no-setup-data-call/fixtures/DATA-001-01.log"
+GH_URL = "https://ghe.mock.invalid/mock-org/mock-issues/issues/12"
+GH_ISSUES = REPO / "tests" / "mocks" / "github_issues"
+_GWS: dict[str, Workspace] = {}
+
+
+def gws(db: str = "issue-db-github") -> Workspace:
+    """site-defaults 트래커가 github인 작업공간(사용자 clone = `db`)."""
+    if db not in _GWS:
+        _GWS[db] = Workspace(src=variant_db(db) if db != "issue-db-sample" else SAMPLE, root=github_root())
+    return _GWS[db]
+
+
+def test_github_check_key_normalizes_inputs():
+    w = gws()
+    for text in (GH_URL, "mock-org/mock-issues#12", "Mock-Org.Mock-Issues-12", GKEY):
+        out = w.json("jira_fields.py", ["check-key", text, "--db", w.clone])
+        assert out == {"key": GKEY, "valid": True, "regex": r"mock-org\.mock-issues-\d+"}, text
+    out = w.json("jira_fields.py", ["check-key", "other-org/mock-issues#12", "--db", w.clone], expect=1)   # DB 정규식 밖
+    assert out["valid"] is False and out["key"] == "other-org.mock-issues-12"
+    out = w.json("jira_fields.py", ["check-key", "MOCK-1001", "--db", w.clone], expect=1)            # jira 키는 작업 키가 아니다
+    assert out == {"key": "MOCK-1001", "valid": False, "regex": r"mock-org\.mock-issues-\d+"}
+
+
+def test_github_session_with_jira_db_is_tracker_mismatch():
+    w = gws("issue-db-sample")
+    for script, args in (("jira_fields.py", ["check-key", GH_URL, "--db", SAMPLE]),
+                         ("jira_fields.py", ["extract", GH_ISSUES / f"{GKEY}.yaml", "--origin", "file", "--db", SAMPLE]),
+                         ("triage.py", ["run", GH_URL, "--dry-run", "--issue-file", GH_ISSUES / f"{GKEY}.yaml",
+                                        "--logs", GH_LOG]),
+                         ("issue_post.py", ["status", GKEY, "--json"])):
+        proc = w.run(script, args)
+        assert proc.returncode == 2 and "tracker-mismatch" in proc.stdout + proc.stderr, (script, proc.stderr[-400:])
+        assert "이슈 DB 트래커는 jira, 설정 tracker.kind는 github" in proc.stdout + proc.stderr
+        w.run("triage.py", ["release", GKEY])
+    jira_ws = ws()                                                    # jira 세션 × github DB
+    proc = jira_ws.run("jira_fields.py", ["check-key", KEY, "--db", variant_db("issue-db-github")])
+    assert proc.returncode == 2 and "이슈 DB 트래커는 github, 설정 tracker.kind는 jira" in proc.stderr
+
+
+def test_driver_uses_normalized_work_key():
+    """P2-9: triage.py run에 URL을 줘도 작업 디렉토리·lock·출력 키는 check-key의 작업 키다(`/`가 하위 디렉토리가 되지 않는다)."""
+    w = gws()
+    args = ["run", GH_URL, "--dry-run", "--issue-file", GH_ISSUES / f"{GKEY}.yaml", "--logs", GH_LOG, "--code", "skip",
+            "--answer", "time=2026-09-20T05:30:04.900Z"]
+    out = w.json("triage.py", args)
+    assert out["key"] == GKEY and out["status"] == "ok", out
+    assert (w.work / GKEY / "analysis.json").is_file() and not (w.work / "https:").exists()
+    analysis = json.loads((w.work / GKEY / "analysis.json").read_text(encoding="utf-8"))
+    assert analysis["key"] == GKEY
+    assert sorted(p.name for p in w.work.iterdir() if p.is_dir() and not p.name.startswith("_")) == [GKEY]
+
+
+def test_make_db_skeleton_tracker_option():
+    import subprocess
+    out = tmp("tt-skel-gh-")
+    proc = subprocess.run([sys.executable, str(REPO / "tools" / "make_db_skeleton.py"), str(out / "gh"), "--tracker", "github",
+                           "--json"], capture_output=True, text=True, encoding="utf-8")
+    assert proc.returncode == 0, proc.stderr
+    assert json.loads(proc.stdout)["tracker"] == "github"
+    conf = yaml.safe_load((out / "gh" / "issue-db.config.yaml").read_text(encoding="utf-8"))
+    assert conf["tracker"]["kind"] == "github" and conf["tracker"]["key_regex"] == G.default_key_regex
+    lint = json.loads(run("db_lint.py", ["--db", out / "gh", "--all"]).stdout)
+    assert lint["errors"] == [], lint["errors"]
+    for args in (["--tracker", "jira"], []):                          # jira는 옵션 없을 때와 같다
+        subprocess.run([sys.executable, str(REPO / "tools" / "make_db_skeleton.py"), str(out / f"j{len(args)}"), *args],
+                       check=True, capture_output=True)
+    assert (out / "j2" / "issue-db.config.yaml").read_bytes() == (out / "j0" / "issue-db.config.yaml").read_bytes()
+    bad = subprocess.run([sys.executable, str(REPO / "tools" / "make_db_skeleton.py"), str(out / "x"), "--tracker", "nosuch"],
+                         capture_output=True, text=True, encoding="utf-8")
+    assert bad.returncode != 0 and "지원 트래커" in bad.stderr

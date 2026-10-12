@@ -143,6 +143,67 @@ def test_mock_jira_add_note_records_write_and_comment_id():
         assert len(json.loads(log.read_text(encoding="utf-8"))) == 1
 
 
+GH_SERVER = REPO / "tests" / "mocks" / "github_issues_mcp" / "server.py"
+GH_CALL = REPO / "tests" / "mocks" / "github_issues_mcp" / "call.py"
+
+
+def test_mock_github_issues_mcp_roundtrip():
+    """모의 GitHub Issues MCP(트래커 범용화 §6-1): 표준 도구 이름·인자, issue_read method 3종, 검색, 없는 이슈는 isError."""
+    args = {"owner": "mock-org", "repo": "mock-issues", "issue_number": 12}
+    reqs = [{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-06-18"}},
+            {"jsonrpc": "2.0", "method": "notifications/initialized"},
+            {"jsonrpc": "2.0", "id": 2, "method": "tools/list"}]
+    calls = [("issue_read", {"method": "get", **args}), ("issue_read", {"method": "get_comments", **args}),
+             ("issue_read", {"method": "get_labels", **args}), ("search_issues", {"query": "통화", "owner": "mock-org"}),
+             ("issue_read", {"method": "get", **args, "issue_number": 999}),
+             ("issue_read", {"method": "get", **args, "issue_number": "12"})]
+    reqs += [{"jsonrpc": "2.0", "id": 10 + i, "method": "tools/call", "params": {"name": n, "arguments": a}}
+             for i, (n, a) in enumerate(calls)]
+    payload = "\n".join(json.dumps(r, ensure_ascii=False) for r in reqs) + "\n"
+    proc = subprocess.run([sys.executable, str(GH_SERVER)], input=payload, capture_output=True, text=True,
+                          encoding="utf-8", errors="replace", env=mock_env.env_with_mocks())
+    assert proc.returncode == 0, proc.stderr
+    by_id = {r["id"]: r for r in map(json.loads, proc.stdout.splitlines()) if "id" in r}
+    assert by_id[1]["result"]["serverInfo"]["name"] == "mock-github-issues"
+    assert [t["name"] for t in by_id[2]["result"]["tools"]] == [
+        "issue_read", "search_issues", "add_issue_comment", "update_issue", "create_pull_request"]
+
+    def body(i):
+        return json.loads(by_id[i]["result"]["content"][0]["text"]), by_id[i]["result"]["isError"]
+
+    issue, err = body(10)
+    assert not err and issue["number"] == 12 and issue["title"] and "comments" not in issue
+    assert issue["html_url"] == "https://ghe.mock.invalid/mock-org/mock-issues/issues/12"
+    comments, err = body(11)
+    assert not err and [c["body"] for c in comments] == ["로그 첨부했습니다.", "데이터 설정 확인 부탁드립니다."]
+    assert body(12) == ([{"name": "Data"}], False)
+    found, err = body(13)
+    assert not err and [i["number"] for i in found["items"]] == [13]
+    assert body(14)[1] is True and body(15)[1] is True
+
+
+def test_mock_github_issues_writes_are_logged():
+    """`add_issue_comment`은 `{id, html_url}`을 돌려주고 쓰기 로그에 남는다. guard 시험용 쓰기 도구도 로그만 남긴다."""
+    with tempfile.TemporaryDirectory(prefix="tt-gh-write-") as tmp:
+        log = Path(tmp) / "gh-writes.json"
+        env = {**mock_env.env_with_mocks(), "MOCK_GH_ISSUES_WRITE_LOG": str(log)}
+
+        def call(*args):
+            return subprocess.run([sys.executable, str(GH_CALL), *args], capture_output=True, text=True,
+                                  encoding="utf-8", errors="replace", env=env)
+
+        args = {"owner": "mock-org", "repo": "mock-issues", "issue_number": 12, "body": "### PROBLEM"}
+        proc = call("mcp__mock-github-issues__add_issue_comment", json.dumps(args, ensure_ascii=False))
+        assert proc.returncode == 0, proc.stderr
+        assert json.loads(proc.stdout) == {
+            "id": 9001, "html_url": "https://ghe.mock.invalid/mock-org/mock-issues/issues/12#issuecomment-9001"}
+        assert call("add_issue_comment", json.dumps({**args, "issue_number": 999})).returncode == 1   # 없는 이슈: 기록 안 함
+        assert call("update_issue", json.dumps({**args, "state": "closed"})).returncode == 0
+        assert [e["tool"] for e in json.loads(log.read_text(encoding="utf-8"))] == ["add_issue_comment", "update_issue"]
+        listed = json.loads(call("--list").stdout)
+        assert [t["name"] for t in listed][0] == "mcp__mock-github-issues__issue_read"
+
+
 # -- 2. 모의 원격과 gh 스텁 --------------------------------------------------
 
 
@@ -413,6 +474,21 @@ def test_site_defaults_example_shape():
     assert set(data["tracker"]["tools"].values()) <= set(data["tracker"]["read_tools"])
 
 
+def test_site_defaults_example_github_comment_matches_helper():
+    """site-defaults.example.yaml의 주석 github 예시(`# tracker:` 블록)는 테스트 헬퍼 `runner.GITHUB_TRACKER`와 같다."""
+    import yaml
+    from runner import GITHUB_TRACKER
+
+    lines = (REPO / "plugin" / "site-defaults.example.yaml").read_text(encoding="utf-8").splitlines()
+    start = lines.index("# tracker:")
+    block = []
+    for line in lines[start:]:
+        if not line.startswith("#"):
+            break
+        block.append(line[2:] if line.startswith("# ") else line[1:])
+    assert yaml.safe_load("\n".join(block))["tracker"] == GITHUB_TRACKER
+
+
 # -- 7·8. 실행 비트와 .mcp.json ---------------------------------------------
 
 
@@ -438,7 +514,7 @@ def test_no_mcp_json_at_repo_root():
     사내에서 가짜 Jira가 진짜로 잡힐 수 있다 (15-local-draft.md §15.2)."""
     assert not (REPO / ".mcp.json").exists()
     registered = json.loads((REPO / "tests/mocks/mcp.json").read_text(encoding="utf-8"))
-    assert list(registered["mcpServers"]) == ["mock-jira"]
+    assert list(registered["mcpServers"]) == ["mock-jira", "mock-github-issues"]
 
 
 def test_site_paths_are_absent_in_draft():

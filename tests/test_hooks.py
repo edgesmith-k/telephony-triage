@@ -369,7 +369,8 @@ def _approve(ws: Workspace, job_key: str, body: str, **over) -> Path:
     sys.path.insert(0, str(REPO / "plugin" / "scripts"))
     from common import issuepost
     at = issuepost.now()
-    record = {"schema": 1, "key": job_key, "tool": NOTE_TOOL, "key_arg": "ticket", "body_sha256": issuepost.body_sha256(body),
+    record = {"schema": 1, "key": job_key, "tool": NOTE_TOOL, "key_arg": "ticket", "kind": "jira",
+              "body_sha256": issuepost.body_sha256(body),
               "format": "jira-wiki", "request_hash": "0" * 16, "approved_at": issuepost.iso(at),
               "expires_at": issuepost.iso(issuepost.expires(at)), "used_at": None, **over}
     job = ws.job_dir(job_key)
@@ -862,6 +863,152 @@ def test_guard_without_pyyaml_asks_file_writes():
         proc = run("guard.py", [], root=ws.root, cwd=ws.base, env=env, stdin=json.dumps(event))
         out = json.loads(proc.stdout)["hookSpecificOutput"] if proc.stdout.strip() else None
         assert proc.returncode == 0 and decision(out) == want, cmd
+
+
+# -- Claude hook: GitHub 트래커(트래커 범용화 묶음 3, 설계 §4-3·§6-2) ---------------------------------------
+
+GH_READ, GH_SEARCH = "mcp__mock-github-issues__issue_read", "mcp__mock-github-issues__search_issues"
+GH_COMMENT = "mcp__mock-github-issues__add_issue_comment"
+GH_KEY = "mock-org.mock-issues-12"
+GH_ARGS = {"owner": "mock-org", "repo": "mock-issues", "issue_number": 12}
+_GH: Workspace | None = None
+
+
+def gh_shared() -> Workspace:
+    """site-defaults 트래커가 github(`runner.github_root`)이고 사용자 clone이 github 변형 DB인 작업공간."""
+    global _GH
+    if _GH is None:
+        from runner import github_root, variant_db
+        _GH = Workspace(src=variant_db("issue-db-github"), root=github_root())
+    return _GH
+
+
+def _gh_approve(ws: Workspace, key: str, body: str, **over) -> None:
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    from common import issuepost
+    at = issuepost.now()
+    record = {"schema": 1, "key": key, "tool": GH_COMMENT, "key_arg": "owner,repo,issue_number", "kind": "github",
+              "body_sha256": issuepost.body_sha256(body), "format": "markdown", "request_hash": "0" * 16,
+              "approved_at": issuepost.iso(at), "expires_at": issuepost.iso(issuepost.expires(at)), "used_at": None, **over}
+    job = ws.job_dir(key)
+    job.mkdir(parents=True, exist_ok=True)
+    (job / "post.approved.json").write_text(json.dumps(record, ensure_ascii=False), encoding="utf-8")
+    (job / "post.md").write_text(issuepost.normalize_body(body) + "\n", encoding="utf-8")
+    (job / "post.result.json").unlink(missing_ok=True)
+
+
+def test_guard_github_tracker_rule2():
+    """github 트래커 서버: read_tools(`issue_read`·`search_issues`)만 통과, 나머지 쓰기는 deny — 이슈 DB 레포 대상
+    `create_pull_request`도 규칙 11(ask)보다 규칙 2가 먼저다(설계 §4-3 S30). 설정 밖 Jira·Atlassian 서버 쓰기도 그대로 deny."""
+    ws = gh_shared()
+    for tool, ti in ((GH_READ, {"method": "get", **GH_ARGS}), (GH_READ, {"method": "get_comments", **GH_ARGS}),
+                     (GH_SEARCH, {"query": "데이터"})):
+        assert decision(guard(ws, tool, ti, ws.base)) is None, tool
+    db = {"owner": "mock-org", "repo": "telephony-issue-db"}
+    for tool, ti in (("mcp__mock-github-issues__update_issue", {**GH_ARGS, "state": "closed"}),
+                     ("mcp__mock-github-issues__create_pull_request", {**db, "title": "x", "head": "h", "base": "main"}),
+                     ("mcp__mock-github-issues__create_pull_request", {"owner": "mock-org", "repo": "other", "title": "x"}),
+                     ("mcp__mock-github-issues__get_file_contents", {"owner": "a", "repo": "b"})):
+        out = guard(ws, tool, ti, ws.base)
+        assert decision(out) == "deny" and "규칙 2" in out["permissionDecisionReason"], tool
+    for tool in ("mcp__x-jira__add_comment", "mcp__corp-atlassian__update_issue"):     # kind=github여도 휴리스틱 합집합
+        out = guard(ws, tool, {}, ws.base)
+        assert decision(out) == "deny" and "Jira/Atlassian" in out["permissionDecisionReason"], tool
+    # 트래커가 아닌 일반 GitHub MCP: 이슈 DB 대상 쓰기는 규칙 11 ask, 그 밖은 판정 없음(github server_words는 비어 있다)
+    assert decision(guard(ws, "mcp__github__create_pull_request", {**db, "title": "x"}, ws.base)) == "ask"
+    assert decision(guard(ws, "mcp__github__update_issue", {"owner": "a", "repo": "b", "issue_number": 1}, ws.base)) is None
+
+
+def test_guard_github_approved_comment():
+    ws = gh_shared()
+    body = "### PROBLEM\n- GitHub: mock-org/mock-issues#12\n\n### CAUSE\n- 분류: 후보 없음"
+    _gh_approve(ws, GH_KEY, body)
+    ok = guard(ws, GH_COMMENT, {**GH_ARGS, "body": body}, ws.base)
+    assert decision(ok) == "ask" and GH_KEY in ok["permissionDecisionReason"]
+    assert decision(guard(ws, GH_COMMENT, {**GH_ARGS, "owner": "Mock-Org", "body": body}, ws.base)) == "ask"
+    for ti, why in (({**GH_ARGS, "issue_number": 13, "body": body}, "승인 기록 없음"),
+                    ({**GH_ARGS, "issue_number": "12", "body": body}, "이슈 키 형식 불일치"),
+                    ({**GH_ARGS, "issue_number": 12.0, "body": body}, "이슈 키 형식 불일치"),
+                    ({**GH_ARGS, "repo": "other", "body": body}, "승인 기록 없음"),
+                    ({**GH_ARGS, "body": body, "reaction": "+1"}, "승인 범위 밖 인자: reaction"),
+                    ({**GH_ARGS, "body": body + "\n- 끼워 넣기"}, "sha256")):
+        out = guard(ws, GH_COMMENT, ti, ws.base)
+        assert decision(out) == "deny" and why in out["permissionDecisionReason"], (ti, out)
+    _gh_approve(ws, GH_KEY, body, kind="jira")                                    # P2-5: 다른 트래커의 승인 기록
+    out = guard(ws, GH_COMMENT, {**GH_ARGS, "body": body}, ws.base)
+    assert decision(out) == "deny" and "트래커(kind)" in out["permissionDecisionReason"]
+    out = guard(ws, "Write", {"file_path": str(ws.job_dir(GH_KEY) / "post.approved.json"), "content": "{}"}, ws.base)
+    assert decision(out) == "deny"
+
+
+def test_guard_github_legacy_or_unknown_kind_denies_all_mcp():
+    ws = gh_shared()
+    cfg_path = ws.home / "config.yaml"
+    saved = cfg_path.read_text(encoding="utf-8")
+    try:
+        for edit in ({"tracker": {"kind": "nosuch"}}, {"jira": {"mcp_server": "mock-jira"}}):
+            data = yaml.safe_load(saved)
+            data.update(edit)
+            cfg_path.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+            for tool in (GH_READ, "mcp__github__get_file_contents"):
+                assert decision(guard(ws, tool, {"method": "get", **GH_ARGS}, ws.base)) == "deny", (edit, tool)
+    finally:
+        cfg_path.write_text(saved, encoding="utf-8")
+
+
+def _gh_bridge(ws: Workspace, tool_input, response, tool: str = GH_READ) -> str:
+    event = {"hook_event_name": "PostToolUse", "tool_name": tool, "tool_input": tool_input, "tool_response": response}
+    proc = run("jira_bridge.py", [], root=ws.root, env=ws.env(), cwd=ws.base, stdin=json.dumps(event, ensure_ascii=False))
+    assert proc.returncode == 0, proc.stderr
+    return json.loads(proc.stdout)["hookSpecificOutput"]["updatedToolOutput"] if proc.stdout.strip() else ""
+
+
+def test_bridge_github_issue_read_merges_and_isolates():
+    sys.path.insert(0, str(REPO / "tests" / "mocks" / "github_issues_mcp"))
+    import server as gh_server
+    ws = gh_shared()
+    key = "mock-org.mock-issues-13"
+    raw = ws.job_dir(key) / "issue_raw.json"
+    raw.unlink(missing_ok=True)
+    args = {"owner": "mock-org", "repo": "mock-issues", "issue_number": 13}
+    issue, _ = gh_server.call_tool("issue_read", {"method": "get", **args})
+    text = _gh_bridge(ws, {"method": "get", **args}, gh_server.wrap(issue, False))
+    assert "파일로만 저장" in text and "VoLTE" in text                                 # 마스킹 요약
+    comments, _ = gh_server.call_tool("issue_read", {"method": "get_comments", **args})
+    text = _gh_bridge(ws, {"method": "get_comments", **args}, gh_server.wrap(comments, False))
+    saved = json.loads(raw.read_text(encoding="utf-8"))
+    assert saved["key"] == key and saved["title"] == issue["title"] and saved["comments"] == comments
+    assert stat_mode(raw) == 0o600
+    # 매핑된 도구인데 지원하지 않는 method(get_labels): 원문 대체(fail-closed)
+    labels, _ = gh_server.call_tool("issue_read", {"method": "get_labels", **args})
+    text = _gh_bridge(ws, {"method": "get_labels", **args}, gh_server.wrap(labels, False))
+    assert "지원하지 않는 읽기" in text and "Call" not in text
+    # DB key_regex 밖 레포·문자열 issue_number: 저장하지 않고 원문도 보이지 않는다
+    for ti in ({"method": "get", "owner": "other-org", "repo": "x", "issue_number": 1},
+               {"method": "get", **args, "issue_number": "13"}):
+        text = _gh_bridge(ws, ti, gh_server.wrap({"title": "비밀 제목", "body": "imsi=450081234567890"}, False))
+        assert "저장하지 않았다" in text and "비밀 제목" not in text and "450081234567890" not in text, ti
+    assert not (ws.work / "other-org.x-1").exists()
+
+
+def stat_mode(path: Path) -> int:
+    import stat
+    return stat.S_IMODE(path.stat().st_mode)
+
+
+def test_bridge_github_comment_result_marks_approval_used():
+    ws = gh_shared()
+    key = "mock-org.mock-issues-14"
+    body = "### PROBLEM\n- GitHub: mock-org/mock-issues#14"
+    _gh_approve(ws, key, body)
+    args = {"owner": "mock-org", "repo": "mock-issues", "issue_number": 14, "body": body}
+    text = _gh_bridge(ws, args, {"content": [{"type": "text", "text": json.dumps({"id": 9001, "html_url": "x"})}],
+                                 "isError": False}, tool=GH_COMMENT)
+    assert "게시했다" in text and "9001" in text
+    result = json.loads((ws.job_dir(key) / "post.result.json").read_text(encoding="utf-8"))
+    assert result["status"] == "posted" and result["comment_id"] == "9001" and result["key"] == key
+    assert json.loads((ws.job_dir(key) / "post.approved.json").read_text(encoding="utf-8"))["used_at"]
+    assert decision(guard(ws, GH_COMMENT, args, ws.base)) == "deny"                    # 1회용
 
 
 def test_hooks_json_has_eight_rules_wired_to_guard():

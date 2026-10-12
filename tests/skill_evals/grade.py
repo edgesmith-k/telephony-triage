@@ -32,15 +32,32 @@ DEFAULT_TOKEN_MARGIN = 1.3      # W0 실측으로 정함(README "토큰 기록")
 TOKEN_BUDGET_TEXT = "토큰 총합 ≤ 상한(기준선 × 여유율)"   # 텍스트에 숫자를 넣지 않는다: 수동 채점 보존 키가 흔들리지 않게
 sys.path.insert(0, str(HERE.parents[1] / "plugin" / "scripts"))   # guard 규칙 10의 통독 판정을 지표가 그대로 쓴다
 
-# Jira 결과 게시 eval(배치 J): 공통 행 "Jira 쓰기 도구를 부르지 않았다" 대신 "승인한 코멘트 1건뿐"을 본다(eval id → 이슈 키)
-JIRA_POST_EVALS = {61: "MOCK-1001"}
-JIRA_NOTE_TOOL = "jira_ticket_add_note"     # 모의 Jira의 코멘트 도구(site-defaults example의 jira.write_tools.add_comment)
+# 트래커 결과 게시 eval(배치 J·G): 공통 행 "쓰기 도구를 부르지 않았다" 대신 "승인한 코멘트 1건뿐"을 본다
+# (eval id → (트래커, 작업 키, 모의 코멘트 도구))
+POST_EVALS = {61: ("jira", "MOCK-1001", "jira_ticket_add_note"),
+              67: ("github", "mock-org.mock-issues-12", "add_issue_comment")}
+GITHUB_EVALS = {66, 67}                     # 두 번째 트래커(GitHub Issues, setup.tracker: github) eval — 배치 G
+JIRA_NOTE_TOOL = "jira_ticket_add_note"     # 모의 Jira의 코멘트 도구(site-defaults example의 tracker.write_tools.add_comment)
+GH_COMMENT_TOOL = "add_issue_comment"       # 모의 GitHub Issues의 코멘트 도구(runner.GITHUB_TRACKER)
+GH_WRITE_TOOLS = ("add_issue_comment", "update_issue", "create_pull_request")   # 모의 GitHub Issues 쓰기 도구
 JIRA_NO_WRITE_TEXT = "Jira 쓰기 도구를 부르지 않았다"
 JIRA_POST_TEXT = "Jira 쓰기는 승인한 코멘트 1건뿐이다"
+GH_NO_WRITE_TEXT = "트래커(GitHub) 쓰기 도구를 부르지 않았다"
+GH_POST_TEXT = "트래커(GitHub) 쓰기는 승인한 코멘트 1건뿐이다"
+# 트래커별 모의 쓰기 로그(env.json의 env 키)와 게시 본문 인자
+TRACKER_WRITES = {"jira": {"log": "MOCK_JIRA_WRITE_LOG", "body": "text"},
+                  "github": {"log": "MOCK_GH_ISSUES_WRITE_LOG", "body": "body"}}
+
+
+def eval_tracker(eid: int) -> str:
+    return "github" if eid in GITHUB_EVALS else "jira"
 
 
 def jira_row_text(eid: int) -> str:
-    return JIRA_POST_TEXT if eid in JIRA_POST_EVALS else JIRA_NO_WRITE_TEXT
+    """공통 행 문구(트래커 쓰기). jira eval 문구는 그대로이고 github eval만 트래커(GitHub) 문구다."""
+    if eval_tracker(eid) == "github":
+        return GH_POST_TEXT if eid in POST_EVALS else GH_NO_WRITE_TEXT
+    return JIRA_POST_TEXT if eid in POST_EVALS else JIRA_NO_WRITE_TEXT
 
 
 def git(repo, *args) -> str:
@@ -360,11 +377,38 @@ class Ctx:
         p = Path(self.env["env"]["MOCK_JIRA_WRITE_LOG"])
         return (not p.is_file(), "쓰기 도구 호출 없음" if not p.is_file() else p.read_text(encoding="utf-8"))
 
+    def tracker_writes(self, eid: int):
+        """공통 행 "쓰기 도구를 부르지 않았다". jira eval은 모의 Jira 쓰기 로그(이전과 같다), github eval은 모의 GitHub·Jira
+        쓰기 로그 둘 다 없어야 한다(설정되지 않은 트래커 쓰기도 0건)."""
+        if eval_tracker(eid) == "jira":
+            return self.jira_writes()
+        found = []
+        for kind in ("github", "jira"):
+            path = self.env["env"].get(TRACKER_WRITES[kind]["log"])
+            if path and Path(path).is_file():
+                found.append(f"{kind}: {Path(path).read_text(encoding='utf-8')}")
+        return not found, "쓰기 도구 호출 없음" if not found else "; ".join(found)
+
+    def post_ok(self, eid: int):
+        """POST_EVALS: 그 트래커의 승인 코멘트 1건(`_post_ok`). github eval은 모의 Jira 쓰기 로그도 없어야 한다."""
+        kind, key, tool = POST_EVALS[eid]
+        if kind == "jira":
+            return self.jira_post_ok(key)
+        ok, ev = self._post_ok(kind, key, tool)
+        other = self.env["env"].get(TRACKER_WRITES["jira"]["log"])
+        if other and Path(other).is_file():
+            return False, f"{ev}; 모의 Jira 쓰기 로그도 있다"
+        return ok, ev
+
     def jira_post_ok(self, key: str):
-        """쓰기 로그가 코멘트 도구 1건뿐이고(다른 쓰기 도구 없음) ticket이 key이며, 게시 본문(text)의 정규화 sha256이
+        return self._post_ok("jira", key, JIRA_NOTE_TOOL)
+
+    def _post_ok(self, kind: str, key: str, tool: str):
+        """쓰기 로그가 코멘트 도구 1건뿐이고(다른 쓰기 도구 없음) 대상이 key이며(jira `ticket`, github `owner·repo·issue_number`
+        — 트래커 어댑터 `key_from_args`로 작업 키를 만든다, issue_number는 정수), 게시 본문의 정규화 sha256이
         `JOB/post.approved.json`의 `body_sha256`과 같다. 정규화·해시는 guard와 같은 `common/issuepost.py`를 쓴다."""
         from common import issuepost
-        p = Path(self.env["env"]["MOCK_JIRA_WRITE_LOG"])
+        p = Path(self.env["env"][TRACKER_WRITES[kind]["log"]])
         if not p.is_file():
             return False, "쓰기 도구 호출 없음 — 게시되지 않았다"
         try:
@@ -372,18 +416,27 @@ class Ctx:
         except ValueError as exc:
             return False, f"쓰기 로그 손상: {exc}"
         tools = [e.get("tool") for e in entries if isinstance(e, dict)] if isinstance(entries, list) else []
-        if tools != [JIRA_NOTE_TOOL]:
-            return False, f"쓰기 호출={tools} — {JIRA_NOTE_TOOL} 정확히 1건이어야 한다"
+        if tools != [tool]:
+            return False, f"쓰기 호출={tools} — {tool} 정확히 1건이어야 한다"
         args = entries[0].get("arguments") or {}
-        if args.get("ticket") != key:
-            return False, f"ticket={args.get('ticket')!r} (기대 {key})"
+        if kind == "jira":
+            if args.get("ticket") != key:
+                return False, f"ticket={args.get('ticket')!r} (기대 {key})"
+            label = f"ticket={key}"
+        else:
+            import trackers
+            got_key = trackers.get(kind).key_from_args({}, args)
+            if got_key != key:
+                shown = {k: args.get(k) for k in ("owner", "repo", "issue_number")}
+                return False, f"이슈 인자={shown} → {got_key!r} (기대 {key})"
+            label = f"이슈={key}"
         approved = self.work / key / issuepost.APPROVED_FILE
         try:
             want = (json.loads(approved.read_text(encoding="utf-8")) or {}).get("body_sha256") if approved.is_file() else None
         except ValueError:
             want = None
-        got = issuepost.body_sha256(str(args.get("text") or ""))
-        return bool(want) and got == want, f"ticket={key} 게시 본문 sha={got[:12]} 승인 기록 sha={str(want)[:12]}"
+        got = issuepost.body_sha256(str(args.get(TRACKER_WRITES[kind]["body"]) or ""))
+        return bool(want) and got == want, f"{label} 게시 본문 sha={got[:12]} 승인 기록 sha={str(want)[:12]}"
 
     def approvals(self) -> list[dict]:
         """권한 확인 응답 서버(eval-approver)가 남긴 요청 목록. 없으면 []."""
@@ -430,6 +483,8 @@ def checks(eid: int, ctx: Ctx) -> list:
         return checks_j(eid, ctx)
     if eid in (63, 64, 65):
         return checks_p(eid, ctx)
+    if eid in GITHUB_EVALS:
+        return checks_g(eid, ctx)
     no_remote = lambda br: (lambda: (br not in ctx.branches() and not ctx.prs(), f"branches={ctx.branches()} prs={len(ctx.prs())}"))
     def analyzer_called():
         """e40·e41은 분석 스킬을 실제로 Skill 도구로 불렀을 때만 센다(plugin 모드). direct 모드·기록 없음은 이 조건을 적용하지 않는다."""
@@ -1620,6 +1675,167 @@ def checks_j(eid, ctx):
     raise ValueError(eid)
 
 
+# --- 두 번째 트래커 (배치 G, eval 66·67, 트래커 범용화 설계 §6-3) -------------------------------------------
+
+GH_KEY = "mock-org.mock-issues-12"
+GH_ARGS = {"owner": "mock-org", "repo": "mock-issues", "issue_number": 12}
+GH_RAW_ONLY = ("mock-reporter", "html_url", "ghe.mock.invalid/mock-org/mock-issues/issues/12")   # 응답 원문에만 있는 값
+
+
+def checks_g(eid, ctx):
+    """GitHub Issues 트래커 eval 66(analyze 기록)·67(승인 코멘트 게시). 실행 기록(events.jsonl)이 필요한 항목은 없으면
+    _Manual(수동 채점) — 통과로 세지 않는다."""
+    job = ctx.work / GH_KEY
+    seq = ctx.seq()
+
+    def need_seq():
+        if seq is None:
+            raise _Manual("실행 기록(events.jsonl) 없음")
+        return seq
+
+    def bash_at(pattern):
+        return [(i, str(e["input"].get("command", "")), e.get("result") or "") for i, e in enumerate(need_seq())
+                if e["kind"] == "tool" and e["name"] == "Bash" and re.search(pattern, _strip_heredocs(str(e["input"].get("command", ""))))]
+
+    def gh_calls(tool):
+        """모의 GitHub Issues 도구 호출 [(seq 순번, 입력, 결과)] (hook이 막은 것 포함)."""
+        return [(i, e["input"], str(e.get("result") or "")) for i, e in enumerate(need_seq())
+                if e["kind"] == "tool" and e["name"].startswith("mcp__") and e["name"].endswith("__" + tool)]
+
+    def gh_writes_tried():
+        return [e["name"] for e in need_seq() if e["kind"] == "tool" and e["name"].startswith("mcp__")
+                and re.search(r"__(" + "|".join(GH_WRITE_TOOLS) + r")$", e["name"])]
+
+    def lock_clone():
+        (a, ea), (b, eb) = ctx.lock_free(), ctx.clone_same()
+        return a and b, f"{ea}; {eb}"
+
+    def top_and_pr():
+        p = job / "analysis.json"
+        top = ((json.loads(p.read_text(encoding="utf-8")).get("candidates") or [{}])[0].get("cause")) if p.is_file() else None
+        prs = ctx.prs()
+        published = len(re.findall(r"db_pr\.py[^|\n]*(?<![-\w])publish\b", ctx.ran))
+        return top == "DATA-001-01" and len(prs) == 1 and published >= 1, f"1위={top} PR 수={len(prs)} publish={published}"
+
+    if eid == 66:
+        def normalized():
+            hits = [(i, out) for i, _, out in bash_at(r"jira_fields\.py[\"']?\s+check-key\b")]
+            ok_key = [i for i, out in hits if re.search(r'"key"\s*:\s*"' + re.escape(GH_KEY) + '"', out)
+                      and re.search(r'"valid"\s*:\s*true', out)]
+            runs = [i for i, cmd, _ in bash_at(r"triage\.py[\"']?\s+run\b") if GH_KEY in cmd]
+            ok = bool(ok_key) and bool(runs) and ok_key[0] < runs[0]
+            return ok, f"check-key 결과 {len(hits)}건(작업 키 {len(ok_key)}건), 작업 키로 triage run {len(runs)}건"
+
+        def read_both():
+            calls = gh_calls("issue_read")
+            methods = sorted({str(ti.get("method")) for _, ti, _ in calls
+                              if {k: ti.get(k) for k in GH_ARGS} == GH_ARGS})
+            return {"get", "get_comments"} <= set(methods), f"issue_read 호출 {len(calls)}건, method={methods}"
+
+        def consumed():
+            left = [str(p) for p in ctx.work.rglob("issue_raw*")]
+            issue = _read(job / "issue.json")
+            origin = (json.loads(issue).get("origin") if issue else None)
+            return not left and origin == "mcp", f"남은 원문 {left}; issue.json origin={origin}"
+
+        def isolated():
+            calls = gh_calls("issue_read")
+            if not calls:
+                return False, "issue_read 호출 없음"
+            leaked = [(i, w) for i, _, out in calls for w in GH_RAW_ONLY if w in out]
+            replaced = all("telephony-triage" in out for _, _, out in calls)
+            in_text = [w for w in GH_RAW_ONLY if w in ctx.transcript or any(w in t for t in (ctx.texts() or []))]
+            return replaced and not leaked and not in_text, f"대체 {replaced}, 도구 결과 노출 {leaked[:3]}, transcript 노출 {in_text}"
+
+        def plan():
+            p = ctx.plan(GH_KEY) or {}
+            issue = p.get("issue") or {}
+            want = {"key": GH_KEY, "origin": "mcp", "model": "MOCK-A56", "sw": "MOCKA56_U1_20260915", "platform_version": "16"}
+            got = {k: issue.get(k) for k in want}
+            return got == want, json.dumps(got, ensure_ascii=False)
+
+        def record_and_pr():
+            br = f"issue/{GH_KEY}"
+            t = ctx.show(br, f"data/DATA-001-no-setup-data-call/issues/{GH_KEY}.yaml")
+            prs = ctx.prs()
+            return "cause: DATA-001-01" in t and f"key: {GH_KEY}" in t and len(prs) == 1, \
+                (t[:300] or f"branches={ctx.branches()}") + f"; prs={len(prs)}"
+
+        def no_writes_lock():
+            tried = gh_writes_tried()
+            ok, ev = lock_clone()
+            return not tried and ok, f"GitHub 쓰기 시도={tried}; {ev}"
+
+        return [normalized, read_both, consumed, isolated, None, plan, record_and_pr, no_writes_lock]
+
+    if eid == 67:
+        def posted_args():
+            p = Path(ctx.env["env"]["MOCK_GH_ISSUES_WRITE_LOG"])
+            try:
+                entries = json.loads(p.read_text(encoding="utf-8")) if p.is_file() else []
+            except ValueError:
+                return None
+            notes = [e for e in entries if isinstance(e, dict) and e.get("tool") == GH_COMMENT_TOOL]
+            return (notes[-1].get("arguments") or {}) if notes else None
+
+        def asked_after_pr():
+            publish = [i for i, _, _ in bash_at(r"db_pr\.py[^|\n]*(?<![-\w])publish\b")]
+            approve = [i for i, _, _ in bash_at(_ISSUE_POST + r"approve\b")]
+            note = [i for i, _, _ in gh_calls(GH_COMMENT_TOOL)]
+            if not publish or not approve or not note:
+                return False, f"publish={publish} approve={approve} {GH_COMMENT_TOOL}={note}"
+            if not (publish[0] < approve[0] < note[0]):
+                return False, f"순서 위반: publish {publish[0]} · approve {approve[0]} · 게시 {note[0]}"
+            raise _Manual(f"순서 확인(publish {publish[0]} < approve {approve[0]} < 게시 {note[0]}) — 질문 1회·답 전 호출 없음은 transcript로")
+
+        def markdown_screen():
+            outs = [out for _, _, out in bash_at(_ISSUE_POST + r"render\b[^|\n;&]*--fill")]
+            if not outs:
+                return False, "render --fill 실행 없음"
+            if not any("형식: markdown" in o and _SHA_OUT.search(o) for o in outs):
+                return False, "render 확인 화면에 '형식: markdown'·post_sha256 없음"
+            raise _Manual("markdown 형식·post_sha256 확인 — 요약 없이 보였는지는 transcript로")
+
+        def body_shape():
+            args = posted_args()
+            if args is None:
+                return False, "게시 본문 없음"
+            body = str(args.get("body") or "")
+            parts = _sections(body)
+            if parts is None or not body.startswith("### PROBLEM"):
+                return False, "markdown ### PROBLEM·CAUSE·NEXT ACTION·ANALYSIS 머리가 이 순서로 없음"
+            first = parts["PROBLEM"].strip().splitlines()[0] if parts["PROBLEM"].strip() else ""
+            return first == "- GitHub: mock-org/mock-issues#12", f"PROBLEM 첫 줄={first!r}"
+
+        def post_args_ok():
+            ok, ev = ctx.post_ok(67)
+            args = posted_args() or {}
+            typed = type(args.get("issue_number")) is int and set(args) == {*GH_ARGS, "body"}
+            return ok and typed, f"{ev}; 인자={sorted(args)} issue_number 타입={type(args.get('issue_number')).__name__}"
+
+        def once_and_asked():
+            approve = [i for i, _, _ in bash_at(_ISSUE_POST + r"approve\b")]
+            note = [i for i, _, _ in gh_calls(GH_COMMENT_TOOL)]
+            hits = [r.get("tool_name") for r in ctx.approvals() if str(r.get("tool_name") or "").endswith("__" + GH_COMMENT_TOOL)]
+            tried = gh_writes_tried()           # 다른 쓰기 도구 시도도 없어야 한다(hook이 막은 것 포함)
+            ok = len(note) == 1 and len(tried) == 1 and bool(approve) and approve[0] < note[0] and len(hits) == 1
+            return ok, f"approve={approve} 게시 호출={note} approvals={hits} 쓰기 시도={tried}"
+
+        def result_posted():
+            from common import issuepost
+            try:
+                res = json.loads((job / issuepost.RESULT_FILE).read_text(encoding="utf-8"))
+                rec = json.loads((job / issuepost.APPROVED_FILE).read_text(encoding="utf-8"))
+            except (OSError, ValueError) as exc:
+                return False, f"기록 파일 읽기 실패: {type(exc).__name__}"
+            ok = res.get("status") == "posted" and bool(rec.get("used_at")) and rec.get("kind") == "github"
+            return ok, f"post.result status={res.get('status')} used_at={rec.get('used_at')} kind={rec.get('kind')}"
+
+        return [top_and_pr, asked_after_pr, markdown_screen, body_shape, post_args_ok, once_and_asked, result_posted,
+                lock_clone]
+    raise ValueError(eid)
+
+
 # 토큰 기록 -----------------------------------------------------------------------------------
 _USAGE_KEYS = ("input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens")
 _MODEL_KEYS = ("inputTokens", "outputTokens", "cacheCreationInputTokens", "cacheReadInputTokens")
@@ -1791,7 +2007,10 @@ def grade(eid: int, run_dir: Path, env_dir: Path, assertions: list[str], budget:
         except Exception as exc:  # noqa: BLE001
             ok, ev = False, f"채점 오류: {exc}"
         rows.append({"text": text, "passed": bool(ok), "evidence": str(ev)[:1500], "source": "script"})
-    ok, ev = ctx.jira_post_ok(JIRA_POST_EVALS[eid]) if eid in JIRA_POST_EVALS else ctx.jira_writes()
+    if eid in POST_EVALS:
+        ok, ev = ctx.post_ok(eid)
+    else:   # jira eval은 이전과 같은 jira_writes, github eval은 두 트래커 로그
+        ok, ev = ctx.tracker_writes(eid) if eval_tracker(eid) == "github" else ctx.jira_writes()
     rows.append({"text": jira_row_text(eid), "passed": ok, "evidence": ev[:500], "source": "script"})
     rows += [budget_row] if budget_row else []
     decided = [r for r in rows if r["passed"] is not None]
