@@ -8,6 +8,7 @@ from pathlib import Path
 
 import yaml
 
+import trackers
 from common import yamldoc, yamlio
 from common.buildname import sanitize_build
 from common.exitcodes import CHECK_FAILED, OK
@@ -43,7 +44,11 @@ class Applier(JiraOps, EntityOps, FixOps, ResolutionOps, SignatureOps, FixtureOp
         self.warnings: list[str] = []
         self.allow = [str(p) for p in ((self.config.get("mask") or {}).get("allow_patterns") or [])]
         tracker = self.config.get("tracker") if isinstance(self.config.get("tracker"), dict) else {}
-        self.key_re = re.compile(str(tracker.get("key_regex") or r"[A-Z][A-Z0-9]+-\d+"))
+        try:     # 기록 키: DB `tracker.key_regex`(없으면 DB 트래커 기본값) + 트래커 경로 안전 형식(파일 이름이 된다)
+            self.tracker = trackers.of_db(self.config)
+        except trackers.TrackerConfigError as exc:
+            raise UsageError(str(exc)) from exc
+        self.key_re = re.compile(str(tracker.get("key_regex") or self.tracker.default_key_regex))
         ref_re = self.config.get("fix_ref_regex")
         self.fix_ref_re = re.compile(str(ref_re)) if ref_re else None
 

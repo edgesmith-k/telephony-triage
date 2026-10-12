@@ -18,6 +18,8 @@ class JiraOps:
         key = jira["key"]
         if not self.key_re.fullmatch(key):
             raise Reject("issue-key", f"Jira 키 {key}가 tracker.key_regex에 맞지 않습니다.", i)
+        if not self.tracker.safe_key_re.fullmatch(key):     # 파일 이름이 된다
+            raise Reject("issue-key", f"{self.tracker.label} 키 {key}가 트래커({self.tracker.name})의 작업 키 형식이 아닙니다.", i)
         existing = self.tree.jira_files().get(key)
         if existing is not None:
             record = yamlio.loads(self.tree.read(existing) or "") or {}

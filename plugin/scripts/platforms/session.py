@@ -2,7 +2,8 @@
 
 `--platform`(CLI) > `TT_PLATFORM`(triage가 하위 스크립트에 넘긴다) > 사용자 config `platform` > site-defaults `platform.name`.
 고른 플랫폼은 `platform.enabled`에 있어야 한다(`platforms.select`). 사용자 config의 플랫폼 키 오류(`platforms.<p>`에
-경로 프로필 밖 키 등)와 옛 설정 키(`userconfig.legacy_problems`)도 여기서 거부한다. 결과 cfg는 `userconfig.merged(…, platform=…)`이다.
+경로 프로필 밖 키 등)와 옛 설정 키(`userconfig.legacy_problems`), `tracker.kind` 오류(모르는 트래커, `trackers.kind_of`)도
+여기서 거부한다. 결과 cfg는 `userconfig.merged(…, platform=…)`이다.
 
 레지스트리(`platforms/__init__.py`)는 사용자 config를 모른다 — 둘을 잇는 곳은 이 모듈뿐이다.
 """
@@ -11,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 
+import trackers
 from common import userconfig
 
 from . import ENV, PlatformConfigError, select
@@ -35,8 +37,14 @@ def resolve(defaults: dict, cli: str | None = None, user: dict | None = None) ->
                                   "(site-defaults는 관리자)")
     name = select(defaults, cli, userconfig.selected_hint(user))
     if name == userconfig.TOP_PROFILE:      # 기본 플랫폼은 이전과 같은 호출(같은 결과)
-        return name, userconfig.merged(defaults, user) if given else userconfig.merged(defaults)
-    return name, userconfig.merged(defaults, user, platform=name)
+        cfg = userconfig.merged(defaults, user) if given else userconfig.merged(defaults)
+    else:
+        cfg = userconfig.merged(defaults, user, platform=name)
+    try:     # 모르는 트래커면 어느 키 형식·도구 규칙을 쓸지 모른다 — 고치기 전까지 멈춘다(guard는 모든 MCP 거부)
+        trackers.kind_of(cfg)
+    except trackers.TrackerConfigError as exc:
+        raise PlatformConfigError(f"{exc} — tracker.kind를 확인한다(site-defaults는 관리자)") from exc
+    return name, cfg
 
 
 def resolve_lenient(defaults: dict, cli: str | None = None, user: dict | None = None) -> tuple[str, dict, list[str]]:

@@ -7,6 +7,7 @@ import re
 from pathlib import Path
 
 import platforms
+import trackers
 from common import compat, events, failedstep, masking, stepanchor, userconfig
 from common.exitcodes import CHECK_FAILED, USAGE
 
@@ -341,10 +342,15 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         elif reuse:
             source, origin = None, None
         else:
+            # 읽기 도구 인자 안내는 트래커가 정할 때만 더한다(jira는 None — 출력 불변)
+            adapter = trackers.of(self.cfg)
+            read = adapter.read_args("get_issue", self.key)
+            extra = {} if read is None else {"tool_args": read,
+                                             "comments_args": adapter.read_args("get_comments", self.key)}
             raise NeedsInput("issue", "Jira MCP로 이슈를 읽는다. 응답은 hook이 JOB/issue_raw.json에 저장하고 마스킹 요약만 보여준다. "
                                      "읽은 뒤 같은 명령을 다시 실행한다.", [],
                              tool=self.jira_tool("get_issue"), comments_tool=self.jira_tool("get_comments"),
-                             save_to=str(raw_default))
+                             save_to=str(raw_default), **extra)
         if source is not None:
             argv = ["extract", source, "--origin", origin, "--db", self.snap, "--meta-out", meta_path]
             if origin == "mcp":

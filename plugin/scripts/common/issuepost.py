@@ -2,12 +2,13 @@
 (07-workflow.md §Step 9, 08-safety.md §9 규칙 2).
 
 guard.py(PreToolUse)·jira_bridge.py(PostToolUse)·issue_post.py가 같이 쓴다. guard가 import하므로 표준 라이브러리와
-`mcptools`만 쓴다(PyYAML 없음).
+`mcptools`·`trackers`(표준 라이브러리만, 계층 규칙)만 쓴다(PyYAML 없음).
 
 - 본문 중간 표현(`sections`)은 트래커 중립이다: `{"PROBLEM": [Item], "CAUSE": …, "NEXT ACTION": …, "ANALYSIS": …}`,
   `Item = {"kind": "line"|"code", "text": str|[str]}`. 형식 문자열은 `RENDERERS`가 만든다(새 형식은 함수만 더한다).
 - 도구 설정 출처는 `write_spec`(경로 `SPEC_PATH`) 한 곳이고, 인자 매핑(`call_arguments`)과 승인 대조(`check_call`)는
-  spec(`key_arg`·`body_arg`·`extra_args`)만 본다.
+  spec(`kind`·`key_arg`·`body_arg`·`extra_args`)만 본다. 키 인자 모양(이름·검사·작업 키 복원)과 본문 형식 목록은 트래커
+  어댑터(`trackers.get(spec["kind"])`의 `key_args`·`key_from_args`·`arg_names`·`key_arg_id`·`spec_problems`·`formats`)가 정한다.
 - 승인 장치(본문 sha256·이슈 키·도구·30분 만료·1회용, 그리고 guard의 ask)는 설정으로 끌 수 없다. 설정이 바꿀 수 있는
   것은 "어느 도구가 코멘트 도구인가"뿐이고 `write_spec` 조건으로 좁힌다.
 
@@ -25,20 +26,18 @@ from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 from pathlib import Path
 
+import trackers
+
 from . import mcptools
 
 SPEC_PATH = ("tracker", "write_tools", "add_comment")
 SPEC_KEYS = {"tool", "key_arg", "body_arg", "extra_args", "format"}
 WRITE_TOOL_KINDS = {"add_comment"}          # write_tools에 허용하는 키는 이것 하나다
 APPROVAL_TTL_MIN = 30                       # 승인 유효 시간(분). 설정 키는 두지 않는다
-FORMATS = ("jira-wiki", "markdown")
-DEFAULT_FORMAT = "jira-wiki"
 # 도구 이름 단어 조건: 코멘트 단어가 있어야 하고 금지 단어가 없어야 한다 (TODO(SITE:S23))
 COMMENT_WORDS = {"comment", "comments", "note", "notes"}
 FORBIDDEN_WORDS = {"delete", "remove", "transition", "assign", "update", "edit", "attach", "upload", "link", "move",
                    "close", "reopen", "worklog", "set", "resolve"}
-# 경로 안전 키 형식 (TODO(SITE:S16)과 같은 형식). tracker.key_regex보다 먼저 본다(작업 디렉토리 이름이 된다)
-KEY_SAFE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*-\d+$")
 
 SECTIONS = ("PROBLEM", "CAUSE", "NEXT ACTION", "ANALYSIS")
 SECTION_MAX = {"PROBLEM": 600, "CAUSE": 1000, "NEXT ACTION": 800, "ANALYSIS": 1600}
@@ -167,7 +166,7 @@ def render_markdown(sections: dict, tail: str | None = None) -> str:
     return normalize_body("\n".join(out))
 
 
-RENDERERS = {"jira-wiki": render_jira_wiki, "markdown": render_markdown}
+RENDERERS = {"jira-wiki": render_jira_wiki, "markdown": render_markdown}   # 트래커가 쓸 수 있는 형식은 `TrackerSpec.formats`
 
 
 def section_text(items: list) -> str:
@@ -179,6 +178,13 @@ def section_text(items: list) -> str:
 
 
 # -- 도구 설정 -------------------------------------------------------------------------------
+
+
+def adapter(cfg_or_spec: dict) -> trackers.TrackerSpec:
+    """설정(`tracker.kind`) 또는 검증된 spec(`kind`)의 트래커 어댑터. 잘못된 kind는 `trackers.TrackerConfigError`."""
+    if isinstance(cfg_or_spec, dict) and "kind" in cfg_or_spec and "tool" in cfg_or_spec:
+        return trackers.get(cfg_or_spec["kind"])
+    return trackers.of(cfg_or_spec)
 
 
 def _get(cfg: dict, path: tuple):
@@ -212,6 +218,10 @@ def spec_check(cfg: dict, prefixes: set[str] | None = None) -> tuple[dict | None
     fail은 승인 생략 경로(도구가 read_tools에 있음)다."""
     prefixes = jira_prefixes(cfg) if prefixes is None else prefixes
     wt = _get(cfg, ("tracker", "write_tools"))
+    try:
+        tracker = trackers.of(cfg)
+    except trackers.TrackerConfigError as exc:   # kind 오류: 게시 경로 전체가 무효(guard·bridge는 앞에서 모든 MCP를 막는다)
+        return None, ([("warn", str(exc))] if wt not in (None, {}) else [])
     if wt in (None, {}):
         return None, []
     if not isinstance(wt, dict):
@@ -248,19 +258,17 @@ def spec_check(cfg: dict, prefixes: set[str] | None = None) -> tuple[dict | None
             problems.append(("warn", f"{tool} 이름에 금지 단어가 있다({', '.join(bad)})"))
     key_arg, body_arg = raw.get("key_arg"), raw.get("body_arg")
     extra = raw.get("extra_args") if raw.get("extra_args") is not None else {}
-    if not (isinstance(key_arg, str) and key_arg and isinstance(body_arg, str) and body_arg) or key_arg == body_arg:
-        problems.append(("warn", "add_comment.key_arg·body_arg는 서로 다른 비어 있지 않은 문자열이다"))
-    elif not isinstance(extra, dict) or {key_arg, body_arg} & set(extra):
-        problems.append(("warn", "add_comment.extra_args는 객체이고 key_arg·body_arg와 겹치지 않는다"))
-    fmt = raw.get("format") or DEFAULT_FORMAT
-    if fmt not in FORMATS:
-        problems.append(("warn", f"add_comment.format은 {'|'.join(FORMATS)} 중 하나다: {fmt}"))
+    problems += [("warn", why) for why in tracker.spec_problems(raw)]    # 키·본문·고정 인자 모양(트래커별)
+    fmt = raw.get("format") or tracker.default_format
+    if fmt not in tracker.formats:
+        problems.append(("warn", f"add_comment.format은 {'|'.join(tracker.formats)} 중 하나다: {fmt}"))
     read_tools = _get(cfg, ("tracker", "read_tools")) or []
     if isinstance(read_tools, list) and name in {mcptools.normalize(str(t)) for t in read_tools}:
         problems.insert(0, ("fail", f"{tool}이(가) tracker.read_tools에 있다(승인 생략 경로)"))
     if problems:
         return None, problems
-    return {"tool": name, "key_arg": key_arg, "body_arg": body_arg, "extra_args": dict(extra), "format": fmt}, []
+    return {"tool": name, "key_arg": key_arg, "body_arg": body_arg, "extra_args": dict(extra), "format": fmt,
+            "kind": tracker.name}, []
 
 
 def write_spec(cfg: dict, prefixes: set[str] | None = None) -> tuple[dict | None, str | None]:
@@ -271,7 +279,7 @@ def write_spec(cfg: dict, prefixes: set[str] | None = None) -> tuple[dict | None
 
 def call_arguments(spec: dict, key: str, body: str) -> dict:
     """approve가 내는 MCP 도구 인자 (도구 인자 매핑은 이 함수와 `check_call`만 안다)."""
-    return {spec["key_arg"]: key, spec["body_arg"]: normalize_body(body), **spec.get("extra_args", {})}
+    return {**adapter(spec).key_args(spec, key), spec["body_arg"]: normalize_body(body), **spec.get("extra_args", {})}
 
 
 # -- 승인 기록 -------------------------------------------------------------------------------
@@ -304,17 +312,18 @@ def check_call(tool: str, tool_input, spec: dict, work_dir: Path | None, at: dat
     같은 본문의 posted 이력은 승인 기록의 `again: true`(render --again)일 때만 건너뛴다. 결과 불명(unknown)은 늘 거부.
     guard는 판정만 한다(파일을 쓰지 않는다). 1회용 표시(`used_at`)는 PostToolUse(jira_bridge)가 한다."""
     at = at or now()
-    key_arg, body_arg, extra = spec["key_arg"], spec["body_arg"], spec.get("extra_args") or {}
+    tracker = adapter(spec)
+    key_arg, body_arg, extra = tracker.key_arg_id(spec), spec["body_arg"], spec.get("extra_args") or {}
     if not isinstance(tool_input, dict):
         return "도구 입력이 객체가 아니다"
-    unknown = sorted(set(tool_input) - ({key_arg, body_arg} | set(extra)))
+    unknown = sorted(set(tool_input) - (tracker.arg_names(spec) | {body_arg} | set(extra)))
     if unknown:
         return f"승인 범위 밖 인자: {', '.join(map(str, unknown))}"
     for k, v in extra.items():
         if tool_input.get(k) != v:
             return f"고정 인자 {k} 값이 설정과 다르다"
-    key = tool_input.get(key_arg)
-    if not isinstance(key, str) or not KEY_SAFE_RE.fullmatch(key):
+    key = tracker.key_from_args(spec, tool_input)
+    if not isinstance(key, str) or not tracker.safe_key_re.fullmatch(key):
         return f"이슈 키 형식 불일치({key_arg})"
     body = tool_input.get(body_arg)
     if not isinstance(body, str) or not body.strip():

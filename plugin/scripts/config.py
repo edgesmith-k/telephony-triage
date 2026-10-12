@@ -57,6 +57,7 @@ try:
     from common import issuepost  # noqa: E402
     import platforms  # noqa: E402
     from platforms import session as platform_session  # noqa: E402
+    import trackers  # noqa: E402
     IMPORT_ERROR: ImportError | None = None
 except ImportError as _exc:   # noqa: BLE001
     IMPORT_ERROR = _exc
@@ -282,7 +283,11 @@ def cmd_tracker_candidates(args, defaults: dict) -> dict:
             servers[name] = None
             errors[name] = str(exc)
     team = userconfig.get(defaults, "tracker.tools", {}) or {}
-    result = mcptools.candidates(servers, exclude, team, errors)
+    try:     # 후보 보강은 설정 트래커 어댑터(jira는 그대로)
+        adapter = trackers.of(merged)
+    except trackers.TrackerConfigError as exc:
+        raise UsageError(str(exc)) from exc
+    result = mcptools.candidates(servers, exclude, team, errors, adapter.classify_extra)
     usable = [s for s in result if not s["excluded"] and s["tracker_tools"].get("get_issue")]
     return {
         "exclude_servers": exclude,
@@ -495,7 +500,7 @@ def _guard_selftest(args, clone: Path | None, cfg: dict | None = None) -> dict:
     spec, _err = issuepost.write_spec(cfg or {})
     if spec:
         events.append({"hook_event_name": "PreToolUse", "tool_name": spec["tool"], "cwd": home,
-                       "tool_input": {spec["key_arg"]: "SELFTEST-0", spec["body_arg"]: "selftest"}})
+                       "tool_input": {**issuepost.adapter(spec).key_args(spec, "SELFTEST-0"), spec["body_arg"]: "selftest"}})
     for event in events:
         try:
             proc = subprocess.run([python, str(root / "scripts" / "guard.py"), "--plugin-root", str(root)],
@@ -625,6 +630,11 @@ def _doctor_rows(args, defaults: dict) -> list[dict]:
             site = userconfig.legacy_problems(defaults, None)
             rows.append(_row("tracker", "fail", f"옛 설정 키: {legacy[0]}",
                              "config.py rename-legacy로 확인 후 --apply" + (" · site-defaults는 관리자에게 알린다" if site else "")))
+            return
+        try:     # tracker.kind 오류(모르는 트래커): guard가 모든 MCP를 거부한다
+            trackers.kind_of(cfg)
+        except trackers.TrackerConfigError as exc:
+            rows.append(_row("tracker", "fail", str(exc), f"tracker.kind를 설치된 트래커({', '.join(trackers.known())}) 중 하나로 고친다"))
             return
         server = userconfig.get(cfg, "tracker.mcp_server")
         tools = userconfig.get(cfg, "tracker.tools", {})

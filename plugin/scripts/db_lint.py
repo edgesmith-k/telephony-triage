@@ -8,7 +8,8 @@
 - `schema` 오류: 유형 frontmatter·이슈 기록(Jira)·피드백·`.expect.yaml`을 이슈 DB `schema/`로 검사
 - `category`·`id-format`·`id-prefix`·`type-dir` 오류: 카테고리 목록, ID 형식·접두어, 유형 디렉토리 이름
 - `duplicate-id`·`duplicate-issue` 오류: ID 중복, 같은 Jira 키가 둘 이상
-- `issue-key`·`issue-cause` 오류: `tracker.key_regex`, 파일 이름, `cause`가 그 유형의 원인인지
+- `issue-key`·`issue-cause` 오류: `tracker.key_regex`, 그 DB 트래커(`tracker.kind`)의 경로 안전 키 형식, 파일 이름,
+  `cause`가 그 유형의 원인인지. `tracker.kind`가 설치된 트래커가 아니면 `config` 오류
 - `glossary`·`title-length` 경고: 금지 동의어(GLOSSARY.md), 제목 길이 (§5.7 (2))
 - `related` 오류: 없는 원인, 한쪽만 있는 related
 - `code-ref` 오류: `<root 키>:<상대 경로>` 형식, 절대 경로, `code_root_keys`
@@ -63,6 +64,7 @@ sys.path.insert(0, str(SCRIPTS))
 
 import parser_backends  # noqa: E402
 import platforms  # noqa: E402
+import trackers  # noqa: E402
 from common import compat, dbpath, gitscope, issuedb, masking, parser_rules, site_defaults, yamlio  # noqa: E402
 from common.exitcodes import CHECK_FAILED, OK, USAGE  # noqa: E402
 from common.fixtures import CAUSE_ID_RE, TYPE_ID_RE, parse_name  # noqa: E402
@@ -440,6 +442,11 @@ class Linter:
             elif value not in platforms.known():
                 self.err("config", issuedb.CONFIG, f"platform: 설치된 플랫폼이 아닙니다: {value} "
                                                    f"(지원 플랫폼: {', '.join(platforms.known())})")
+        try:     # tracker.kind(없으면 jira): 설치된 트래커여야 한다. 기록 키의 경로 안전 형식은 그 트래커 것
+            self.tracker = trackers.of_db(self.config)
+        except trackers.TrackerConfigError as exc:
+            self.tracker = None
+            self.err("config", issuedb.CONFIG, str(exc))
         for old, new in issuedb.LEGACY_CONFIG_KEYS.items():
             head, _, tail = old.partition(".")
             node = self.config.get(head)
@@ -770,6 +777,8 @@ class Linter:
                 key = str(record.get("key"))
                 if self.key_re and not self.key_re.fullmatch(key):
                     self.err("issue-key", path, f"Jira 키 {key}가 tracker.key_regex에 맞지 않습니다.")
+                if self.tracker is not None and not self.tracker.safe_key_re.fullmatch(key):
+                    self.err("issue-key", path, f"{self.tracker.label} 키 {key}가 트래커({self.tracker.name})의 작업 키 형식이 아닙니다.")
                 if path.stem != key:
                     self.err("issue-key", path, f"파일 이름({path.name})이 키({key})와 다릅니다.")
                 if key in seen:

@@ -4,7 +4,9 @@
 stdin: hook 입력 `{tool_name, tool_input, tool_response, ...}`. `tool_name`이 config `tracker.tools.get_issue`
 또는 `tracker.tools.get_comments`(전체 이름, 서버 이름 정규화 비교 — `mcptools.normalize`)일 때만 동작한다. 그 밖의 도구는 아무것도 출력하지 않는다(원래 결과 그대로).
 
-1. 응답에서 이슈 키를 찾아 `tracker.key_regex`(스냅샷 또는 사용자 clone의 `issue-db.config.yaml`)로 검사한다.
+1. 응답에서 이슈 키를 찾아 `tracker.key_regex`(스냅샷 또는 사용자 clone의 `issue-db.config.yaml`, 없으면 그 DB 트래커의
+   기본 정규식)와 트래커 경로 안전 형식으로 검사한다(트래커 어댑터 `key_from_read`). 대상 판별은 어댑터 `read_action`이고,
+   매핑된 도구인데 어댑터가 지원하지 않는 읽기(`unsupported`)면 원문을 대체한다(fail-closed).
 2. 원문을 `<work_dir>/<KEY>/issue_raw.json`(디렉토리 권한 700)에 쓴다. `get_comments` 응답은 같은 파일의 `comments`에 합친다.
    `triage.py run`이 이 파일을 `jira_fields.py extract --consume`으로 읽고 지운다.
 3. 모델에는 `hookSpecificOutput.updatedToolOutput`으로 **마스킹된 요약**(요약·설명 앞부분·코멘트 마지막 3개)만 준다.
@@ -17,6 +19,7 @@ stdin: hook 입력 `{tool_name, tool_input, tool_response, ...}`. `tool_name`이
 
 실패하면 원문을 내보내지 않고 오류 문구로 바꾼다(fail closed). 설정(`config.yaml`·`site-defaults.yaml`)을 읽지 못해
 대상인지 판정할 수 없으면 모든 `mcp__` 결과를 오류 문구로 바꾼다(guard가 같은 상태에서 모든 `mcp__` 호출을 거부하는 범위와 같다).
+옛 설정 키(`userconfig.legacy_problems`)·`tracker.kind` 오류(모르는 트래커)도 같다.
 의존성(PyYAML 등) import가 실패해도 같다(종료 1로 끝나 원문이 새지 않게). `site-defaults.yaml`이 없으면 guard처럼
 사용자 config만으로 판정한다. 종료 코드는 항상 0. 출력 필드 이름은 Claude Code hooks 문서의
 PostToolUse `updatedToolOutput`이다 — TODO(SITE:S1) 사내 Claude Code 버전에서 원문이 대체되는지 확인한다.
@@ -45,6 +48,7 @@ try:
     from common import compat, issuepost, masking, mcptools, site_defaults, userconfig  # noqa: E402
     import jira_fields  # noqa: E402
     import platforms  # noqa: E402
+    import trackers  # noqa: E402
     IMPORT_ERROR: Exception | None = None
 except ImportError as _exc:   # noqa: BLE001
     IMPORT_ERROR = _exc
@@ -96,32 +100,29 @@ def _post_cfg(cfg: dict, key: str, sha: str) -> dict | None:
 
 
 def _key_regex(cfg: dict) -> re.Pattern:
+    """스냅샷 > 사용자 clone의 `tracker.key_regex`. 없으면 처음 찾은 DB 설정의 트래커(없으면 세션 트래커) 기본 정규식."""
     work = Path(str(userconfig.get(cfg, "work_dir"))).expanduser()
+    declared = None
     for db in (work / "_snapshot", Path(str(userconfig.get(cfg, "issue_db.path") or "")).expanduser()):
         conf = compat.load_db_config(db) if (db / "issue-db.config.yaml").is_file() else {}
+        declared = conf if declared is None and conf else declared
         tracker = conf.get("tracker") if isinstance(conf.get("tracker"), dict) else {}
         if tracker.get("key_regex"):
             return re.compile(str(tracker["key_regex"]))
-    return re.compile(jira_fields.DEFAULT_KEY_RE)
-
-
-def _find_key(data, tool_input: dict, kre: re.Pattern) -> str | None:
-    candidates = []
-    if isinstance(data, dict):
-        candidates += [data.get("key"), (data.get("issue") or {}).get("key") if isinstance(data.get("issue"), dict) else None]
-    candidates += [v for v in (tool_input or {}).values() if isinstance(v, str)]
-    return next((str(c) for c in candidates if c and kre.fullmatch(str(c))), None)
+    return re.compile((trackers.of_db(declared) if declared else trackers.of(cfg)).default_key_regex)
 
 
 def target(event: dict, cfg: dict) -> str | None:
-    """대상 논리 동작(`get_issue`·`get_comments`·`add_comment`) 또는 None. `add_comment`는 유효한 코멘트 도구 설정만."""
+    """대상 논리 동작(`get_issue`·`get_comments`·`add_comment`), 매핑된 도구인데 트래커가 지원하지 않는 읽기면
+    `"unsupported"`, 대상이 아니면 None. `add_comment`는 유효한 코멘트 도구 설정만."""
     tools = (cfg.get("tracker") or {}).get("tools") or {}
     tool = event.get("tool_name")
     spec, _err = issuepost.write_spec(cfg)
     if spec and spec["tool"] == mcptools.normalize(tool):
         return "add_comment"
-    return next((k for k in ("get_issue", "get_comments")
-                 if tools.get(k) and mcptools.normalize(tools[k]) == mcptools.normalize(tool)), None)
+    mapped = {k for k in ("get_issue", "get_comments")
+              if tools.get(k) and mcptools.normalize(tools[k]) == mcptools.normalize(tool)}
+    return trackers.of(cfg).read_action(event.get("tool_input"), mapped) if mapped else None
 
 
 def _comment_id(data):
@@ -137,8 +138,8 @@ def bridge_post(event: dict, cfg: dict) -> str:
     """승인 코멘트 게시 결과를 `post.result.json`에 기록한다. 성공이면 승인에 `used_at`을 남긴다(1회용)."""
     spec, _err = issuepost.write_spec(cfg)
     tool_input = event.get("tool_input") or {}
-    key = tool_input.get(spec["key_arg"]) if isinstance(tool_input, dict) else None
-    if not isinstance(key, str) or not issuepost.KEY_SAFE_RE.fullmatch(key):
+    key = issuepost.adapter(spec).key_from_args(spec, tool_input)     # 경로 안전 작업 키 또는 None
+    if not isinstance(key, str) or not issuepost.adapter(spec).safe_key_re.fullmatch(key):
         return POST_FAILED
     sha = issuepost.body_sha256(str(tool_input.get(spec["body_arg"]) or ""))
     if len(_PROFILES) > 1:
@@ -181,7 +182,7 @@ def bridge_post(event: dict, cfg: dict) -> str:
 def bridge(event: dict, cfg: dict, kind: str) -> str:
     data = _payload(event.get("tool_response"))
     kre = _key_regex(cfg)
-    key = _find_key(data, event.get("tool_input") or {}, kre)
+    key = trackers.of(cfg).key_from_read(data, event.get("tool_input") or {}, kre)
     if key is None:
         return "telephony-triage: Jira 응답에서 형식에 맞는 이슈 키를 찾지 못해 저장하지 않았다(원문은 표시하지 않는다)."
     job = userconfig.ensure_private_dir(Path(str(userconfig.get(cfg, "work_dir"))).expanduser() / key)
@@ -198,6 +199,7 @@ def bridge(event: dict, cfg: dict, kind: str) -> str:
             return "telephony-triage: Jira 응답이 객체가 아니라 저장하지 않았다(원문은 표시하지 않는다)."
         comments = raw.get("comments")
         raw = dict(issue)
+        raw.setdefault("key", key)      # 키가 응답 밖(도구 입력)에서 온 트래커도 extract가 같은 키를 본다
         if comments and not raw.get("comments"):
             raw["comments"] = comments
     else:
@@ -224,8 +226,8 @@ def mark_unknown(event: dict, cfg: dict) -> None:
     try:
         spec, _err = issuepost.write_spec(cfg)
         tool_input = event.get("tool_input") or {}
-        key = tool_input.get(spec["key_arg"])
-        if not isinstance(key, str) or not issuepost.KEY_SAFE_RE.fullmatch(key):
+        key = issuepost.adapter(spec).key_from_args(spec, tool_input)
+        if not isinstance(key, str) or not issuepost.adapter(spec).safe_key_re.fullmatch(key):
             return
         # 그 KEY 승인이 있는 모든 프로필(어느 것으로 게시됐는지 모르므로 fail-closed). 승인이 없으면 선택 프로필의 작업 디렉토리
         cfgs = [c for c, _rec in _approved_cfgs(cfg, key)] or [cfg]
@@ -297,6 +299,23 @@ def main() -> int:
         print(json.dumps({"hookSpecificOutput": {"hookEventName": "PostToolUse", "updatedToolOutput": text}},
                          ensure_ascii=False))
         return 0
+    tracker_error = None
+    if error is None:
+        try:
+            trackers.kind_of(userconfig.merged(defaults, user))
+        except trackers.TrackerConfigError as exc:
+            tracker_error = str(exc)
+        except Exception as exc:  # noqa: BLE001 — 아래 설정 오류 경로가 대체한다
+            error = exc
+    if tracker_error:   # tracker.kind 오류: 옛 설정 키와 같은 범위(모든 mcp__)의 원문을 숨긴다(guard는 모든 MCP를 거부한다)
+        if not str(event.get("tool_name") or "").startswith("mcp__"):
+            return 0
+        print(f"jira_bridge: 트래커 설정 오류 {tracker_error}", file=sys.stderr)
+        text = (f"telephony-triage: 트래커 설정 오류({tracker_error})로 Jira 응답 격리 여부를 판정하지 못했다 "
+                "— 원문은 표시하지 않는다. tracker.kind를 고친 뒤 config.py doctor로 확인한다.")
+        print(json.dumps({"hookSpecificOutput": {"hookEventName": "PostToolUse", "updatedToolOutput": text}},
+                         ensure_ascii=False))
+        return 0
     try:
         _PROFILES.clear()
         _PROFILES.update(userconfig.profiles(defaults, user))
@@ -319,6 +338,9 @@ def main() -> int:
         print(f"jira_bridge: {error}", file=sys.stderr)
         text = (f"telephony-triage: 설정을 읽지 못해({type(error).__name__}) Jira 응답 격리 여부를 판정하지 못했다 "
                 "— 원문은 표시하지 않는다.")
+    elif kind == "unsupported":     # 매핑된 읽기 도구인데 트래커가 지원하지 않는 호출(예: 다른 method): 원문을 숨긴다
+        text = ("telephony-triage: 이 트래커가 지원하지 않는 읽기 호출이라 응답을 저장하지 않았다 — 원문은 표시하지 않는다. "
+                "tracker.tools 매핑과 호출 인자를 확인한다.")
     else:
         try:
             text = bridge_post(event, cfg) if kind == "add_comment" else bridge(event, cfg, kind)

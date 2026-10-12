@@ -145,8 +145,9 @@ def list_tools(conf: dict, timeout: float = 20.0) -> list[str]:
 
 
 def candidates(servers: dict[str, list[str] | None], exclude: list[str], team_tools: dict | None = None,
-               errors: dict[str, str] | None = None) -> list[dict]:
-    """서버별 후보. `servers`는 `{서버: [도구 이름] 또는 None(읽지 못함)}`."""
+               errors: dict[str, str] | None = None, classify_extra=None) -> list[dict]:
+    """서버별 후보. `servers`는 `{서버: [도구 이름] 또는 None(읽지 못함)}`. `classify_extra(도구, 후보 동작) -> 후보 동작`은
+    설정 트래커의 후보 보강(`TrackerSpec.classify_extra`, 없으면 `classify` 그대로)."""
     out = []
     for server in sorted(servers):
         tools = servers[server]
@@ -159,7 +160,8 @@ def candidates(servers: dict[str, list[str] | None], exclude: list[str], team_to
         entry["tools"] = sorted(full_name(server, t) for t in tools)
         tracker_tools: dict[str, list[str]] = {"get_issue": [], "search_issues": [], "get_comments": []}
         for tool in sorted(tools):
-            for action in classify(tool):
+            actions = classify(tool)
+            for action in sorted(classify_extra(tool, actions) if classify_extra else actions):
                 tracker_tools[action].append(full_name(server, tool))
         entry["tracker_tools"] = tracker_tools
         entry["read_tools"] = sorted(full_name(server, t) for t in tools if is_read(t))

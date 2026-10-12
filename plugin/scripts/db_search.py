@@ -52,6 +52,7 @@ from common.exitcodes import OK, USAGE  # noqa: E402
 from common.fixtures import CAUSE_ID_RE, TYPE_ID_RE  # noqa: E402
 from platforms import PlatformConfigError  # noqa: E402
 from platforms import session as platform_session  # noqa: E402
+import trackers  # noqa: E402
 
 JIRA_SHOWN = 5
 TOKEN_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.+-]*|[가-힣]+")
@@ -202,7 +203,12 @@ class Searcher:
 
     def search(self, query: str) -> dict:
         tracker = self.db.config.get("tracker") if isinstance(self.db.config.get("tracker"), dict) else {}
-        key_re = re.compile(str(tracker.get("key_regex") or r"[A-Z][A-Z0-9]+-\d+"))
+        try:     # 질의 키는 DB 트래커 어댑터로 작업 키로 정규화한다(jira는 그대로). 못 바꾸면 입력 그대로 판별
+            adapter = trackers.of_db(self.db.config)
+        except trackers.TrackerConfigError as exc:
+            raise UsageError(str(exc)) from exc
+        key_re = re.compile(str(tracker.get("key_regex") or adapter.default_key_regex))
+        key = adapter.parse_key(query) or query
         results: list[dict] = []
         renumbered: list[dict] = []
         if CAUSE_ID_RE.fullmatch(query) or TYPE_ID_RE.fullmatch(query):
@@ -223,9 +229,9 @@ class Searcher:
                         results.append(target)
             if kind == "type-id" and entry:
                 results += [self.cause_entry(self.causes[c["id"]]) for c in entry["causes"]]
-        elif key_re.fullmatch(query):
+        elif key_re.fullmatch(key):
             kind = "issue"
-            record = self.jira_by_key.get(query)
+            record = self.jira_by_key.get(key)
             if record:
                 results.append(self.jira_entry(record))
                 owner = str(record.get("cause"))

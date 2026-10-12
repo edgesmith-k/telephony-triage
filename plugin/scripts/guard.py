@@ -15,7 +15,7 @@ TODO(SITE:S3) 플러그인 hook에 보이는 MCP 도구 이름이 `mcp__<server>
 
 | # | 규칙 | 대상 |
 |---|---|---|
-| 2 | Jira 쓰기 차단: Jira 서버(`tracker.mcp_server`와 `tracker.tools` 도구 이름의 서버 접두사, 이름 정규화) 도구 중 `tracker.read_tools`(전체 이름, 정규화 비교)에 없는 것은 거부. **예외 1종**: `tracker.write_tools.add_comment.tool`(승인 코멘트, `common/issuepost.write_spec` 조건)은 `read_tools`보다 먼저 판정해 `<work_dir>/<KEY>/post.approved.json`과 대조(인자 집합·이슈 키·도구·정규화 본문 sha256·30분 만료·1회용)하고 맞으면 ask, 아니면·설정 오류·판정 예외면 거부. 설정되지 않은 서버라도 이름에 jira·atlassian이 들면 쓰기형 도구 거부. 옛 설정 키(`jira:` 등, `userconfig.legacy_problems`)가 남아 있으면 모든 MCP 호출 거부 | `mcp__.*` |
+| 2 | 트래커(Jira) 쓰기 차단: 트래커 서버(`tracker.mcp_server`와 `tracker.tools` 도구 이름의 서버 접두사, 이름 정규화) 도구 중 `tracker.read_tools`(전체 이름, 정규화 비교)에 없는 것은 거부. **예외 1종**: `tracker.write_tools.add_comment.tool`(승인 코멘트, `common/issuepost.write_spec` 조건)은 `read_tools`보다 먼저 판정해 `<work_dir>/<KEY>/post.approved.json`과 대조(인자 집합·이슈 키·도구·정규화 본문 sha256·30분 만료·1회용, 키 인자 모양은 트래커 어댑터)하고 맞으면 ask, 아니면·설정 오류·판정 예외면 거부. 설정되지 않은 서버라도 이름에 설치된 모든 트래커의 서버 단어(`trackers.all_server_words`, jira·atlassian, 레지스트리 실패 시 내장 jira·atlassian)가 들면 쓰기형 도구 거부. 옛 설정 키(`jira:` 등, `userconfig.legacy_problems`)가 남아 있거나 `tracker.kind`가 잘못됐으면(모르는 트래커) 모든 MCP 호출 거부 | `mcp__.*` |
 | 2 | 같은 규칙: `<work_dir>/<KEY>/post.approved.json`·`post.result.json`을 파일 도구나 Bash 파일 쓰기(규칙 8과 같은 판별)로 쓰거나 지우면 거부(approve·jira_bridge만 쓴다) | Write/Edit/MultiEdit/NotebookEdit, Bash |
 | 3 | PII 검사: `git commit`이면 `mask_pii --check --staged` | Bash, 이슈 DB |
 | 4 | 생성 파일 정합성: `git commit`이면 `db_build --verify --staged`(`actions-build`면 생성 파일 staged 거부), `.cache/` staged 거부 | Bash, 이슈 DB |
@@ -68,9 +68,10 @@ sys.path.insert(0, str(SCRIPTS))
 try:
     from common import checks, mcptools, site_defaults, userconfig  # noqa: E402
     from common import issuepost  # noqa: E402
+    import trackers  # noqa: E402
     IMPORT_ERROR: Exception | None = None
 except ImportError as _exc:   # noqa: BLE001
-    checks = mcptools = site_defaults = userconfig = issuepost = None   # type: ignore[assignment]
+    checks = mcptools = site_defaults = userconfig = issuepost = trackers = None   # type: ignore[assignment]
     IMPORT_ERROR = _exc
 
 FILE_TOOLS = {"Write", "Edit", "MultiEdit", "NotebookEdit"}
@@ -218,6 +219,14 @@ class Config:
                 p.exempt = p.work_dir
         # 옛 설정 키(jira: 등)가 남아 있으면 규칙 2의 설정 서버가 비어 보인다 → check_mcp가 모든 MCP를 거부한다(fail-closed)
         self.legacy = userconfig.legacy_problems(defaults, self.user)
+        # tracker.kind 오류(모르는 트래커·형식 오류)면 어느 트래커 규칙을 쓸지 모른다 → check_mcp가 모든 MCP를 거부한다(fail-closed)
+        self.tracker_error: str | None = None
+        for c in [self.cfg, *cfgs.values()]:
+            try:
+                trackers.kind_of(c)
+            except trackers.TrackerConfigError as exc:
+                self.tracker_error = str(exc)
+                break
         problems = userconfig.profile_problems(self.user) if self.user else []
         if problems:
             self.warnings.append("사용자 config 플랫폼 프로필 문제(보호는 유지, 잘못된 work_dir은 예외 근거로 쓰지 않는다): "
@@ -374,6 +383,9 @@ def check_mcp(tool: str, tool_input: dict, conf: Config, dec: Decision) -> None:
         dec.deny.append(f"옛 설정 키가 남아 있다: {'; '.join(conf.legacy[:3])} — config.py rename-legacy로 바꾼다 (규칙 2). "
                         f"{tool} 호출을 거부한다.")
         return
+    if conf.tracker_error:
+        dec.deny.append(f"트래커 설정 오류: {conf.tracker_error} — tracker.kind를 확인한다 (규칙 2). {tool} 호출을 거부한다.")
+        return
     # Jira 서버 접두사: mcp_server ∪ tracker.tools 이름의 서버 (플러그인 번들 `mcp__plugin_…`도 덮는다). 넓을수록 안전 쪽
     prefixes = issuepost.jira_prefixes(conf.cfg)
     name = mcptools.normalize(tool)
@@ -397,8 +409,9 @@ def check_mcp(tool: str, tool_input: dict, conf: Config, dec: Decision) -> None:
         dec.warn.append("tracker.mcp_server가 비어 있어 Jira 읽기 전용 규칙을 적용하지 않았다 (setup 전).")
     hit = mcptools.NAME_RE.match(tool)
     srv, part = (hit.group(1), hit.group(2)) if hit else ("", tool)
-    # 설정되지 않은 서버라도 이름에 jira/atlassian이 들면 쓰기형 도구는 거부한다 (서버 이름 휴리스틱)
-    if "jira" in srv.lower() or "atlassian" in srv.lower():
+    # 설정되지 않은 서버라도 이름에 트래커 서버 단어(설치된 모든 트래커의 합집합, kind와 무관: jira·atlassian …)가 들면
+    # 쓰기형 도구는 거부한다 (서버 이름 휴리스틱). 레지스트리를 못 쓰면 내장 jira·atlassian — 이전보다 약해지지 않는다
+    if any(w in srv.lower() for w in trackers.all_server_words()):
         if mcptools.is_write(part):
             dec.deny.append(f"Jira/Atlassian 서버의 쓰기형 도구는 설정 여부와 무관하게 거부한다 (규칙 2: {tool}).")
         return
@@ -416,8 +429,8 @@ def check_jira_post(tool: str, tool_input: dict, spec: dict, conf: Config, dec: 
             if got is None:
                 problems = []
                 break
-            key = tool_input.get(spec["key_arg"]) if isinstance(tool_input, dict) else None
-            has_record = prof.work_dir is not None and isinstance(key, str) and issuepost.KEY_SAFE_RE.fullmatch(key) \
+            key = issuepost.adapter(spec).key_from_args(spec, tool_input)     # 경로 안전 작업 키 또는 None
+            has_record = prof.work_dir is not None and isinstance(key, str) and issuepost.adapter(spec).safe_key_re.fullmatch(key) \
                 and (prof.work_dir / key / issuepost.APPROVED_FILE).is_file()
             problems.insert(0, got) if has_record else problems.append(got)
         problem = problems[0] if problems else None
@@ -427,7 +440,7 @@ def check_jira_post(tool: str, tool_input: dict, spec: dict, conf: Config, dec: 
         dec.deny.append(f"Jira 코멘트는 확인 화면에서 승인한 본문만 올린다 (규칙 2): {problem}. "
                         "issue_post.py render → 승인 → approve부터 다시 한다.")
         return
-    key = tool_input[spec["key_arg"]]
+    key = issuepost.adapter(spec).key_from_args(spec, tool_input)
     sha = issuepost.body_sha256(tool_input[spec["body_arg"]])
     dec.ask.append(f"승인한 Jira 코멘트 게시다({key}, 본문 sha256 {sha[:12]}). 확인 화면의 본문과 같은지 보고 허용한다 (규칙 2).")
 

@@ -41,6 +41,7 @@ from common import compat, dbpath, failedstep, gitscope, issuedb, md, quality, s
 from common.exitcodes import CHECK_FAILED, OK, USAGE  # noqa: E402
 from common.versions import GENERATOR_VERSION  # noqa: E402
 import platforms  # noqa: E402
+import trackers  # noqa: E402
 
 HEADER = "> 자동 생성 파일입니다. 직접 수정하지 마세요. (`db_build.py`, generator v{g})"
 EMPTY_CATEGORY = "아직 등록된 이슈가 없습니다."
@@ -91,6 +92,10 @@ class Context:
         self.categories = [c for c in self.config.get("categories") or [] if isinstance(c, dict)]
         tracker = self.config.get("tracker") if isinstance(self.config.get("tracker"), dict) else {}
         self.base_url = str(tracker.get("base_url") or "")
+        try:     # README 링크·표시는 DB가 선언한 트래커(`tracker.kind`, 없으면 jira) 형식
+            self.tracker = trackers.of_db(self.config)
+        except trackers.TrackerConfigError as exc:
+            raise UsageError(str(exc)) from exc
         self.inline_max = int((self.config.get("readme") or {}).get("issue_inline_max", 3))
         self.jira = sorted(db.jira, key=_jira_sort_key)
         # 원인·유형별 사전을 한 번만 만든다(원인마다 전체 Jira를 훑으면 1000유형에서 100초대). 정렬된 순서 그대로 담는다.
@@ -114,7 +119,8 @@ class Context:
         return [HEADER.format(g=GENERATOR_VERSION)]
 
     def link(self, key: str) -> str:
-        return f"[{key}]({self.base_url}{key})" if self.base_url else key
+        shown = self.tracker.display(key)
+        return f"[{shown}]({self.tracker.link(self.base_url, key)})" if self.base_url else shown
 
     def type_rel(self, itype: issuedb.IssueType) -> str:
         return itype.path.relative_to(self.db.root).as_posix()
