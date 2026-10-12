@@ -7,7 +7,7 @@
 ## 1. 목적과 범위
 
 Android Telephony 이슈 도구. Jira 이슈와 logcat을 받아 원인·해결책을 분석하고, 결과를 **카테고리 > 이슈 유형(증상) > 원인**으로 사내 GitHub 이슈 DB 레포(`telephony-issue-db`)에 누적한다. 팀원들이 같은 DB에 계속 기여하며 시그니처 품질과 해결 상태를 관리한다.
-v1 범위: logcat(radio/main/system/crash, bugreport는 logcat 섹션만) · Jira **읽기 + 승인한 코멘트 추가 1종** · GHE 브랜치+PR(main 직접 push 금지) · CI 없음(`ci_mode: local`) · 카테고리 data/call/network/sim/sms/ims · 사용자·이슈 DB(플랫폼)별 한 번에 한 작업 · 플랫폼(Android 기본, 팀이 켠 그 밖 플랫폼)마다 이슈 DB 하나(`17-platforms.md`). 제외: CP 로그 파싱, Jira 필드 수정·상태 전환·이슈 생성·첨부, 3-way replay. 상세 표는 `GUIDE.md §1`.
+v1 범위: logcat(radio/main/system/crash, bugreport는 logcat 섹션만) · 이슈 트래커(Jira 기본, 설정으로 GitHub Issues, `18-trackers.md`) **읽기 + 승인한 코멘트 추가 1종** · GHE 브랜치+PR(main 직접 push 금지) · CI 없음(`ci_mode: local`) · 카테고리 data/call/network/sim/sms/ims · 사용자·이슈 DB(플랫폼)별 한 번에 한 작업 · 플랫폼(Android 기본, 팀이 켠 그 밖 플랫폼)마다 이슈 DB 하나(`17-platforms.md`). 제외: CP 로그 파싱, Jira 필드 수정·상태 전환·이슈 생성·첨부, 3-way replay. 상세 표는 `GUIDE.md §1`.
 
 ---
 
@@ -68,7 +68,7 @@ telephony-triage-plugin/                 # 개발 레포 루트
 │   ├── helpers/make_repo.py             # 샘플 트리에서 임시 git 레포와 bare 원격을 만드는 테스트 헬퍼
 │   ├── helpers/make_plugin_root.py      # plugin/을 임시 디렉토리에 복사하고 example을 site-defaults.yaml로 넣은 테스트용 플러그인 루트 (15-local-draft.md §15.1)
 │   ├── site/                            # [사내 전용, SITE_PATHS] 실제 로그 기반 추가 테스트, offline-eval.yaml 라벨셋 (15-local-draft.md §15.5 S-4·S-5)
-│   ├── mocks/                           # 사외 초안용 모의 환경: mcp.json(mock-jira 등록), jira_mcp/, jira/, remote/, bin/gh, gh-state/, logcat_gen.py, src/android16|17/, builds.yaml, skills/data-analyzer/ (15-local-draft.md §15.2)
+│   ├── mocks/                           # 사외 초안용 모의 환경: mcp.json(mock-jira·mock-github-issues 등록), jira_mcp/, jira/, github_issues_mcp/, github_issues/, remote/, bin/gh, gh-state/, logcat_gen.py, src/android16|17/, builds.yaml, skills/data-analyzer/ (15-local-draft.md §15.2)
 │   ├── golden/                          # [사내 전용, SITE_PATHS] 포팅 전 기존 파서 골든 출력 (16-existing-assets.md §16.3)
 │   ├── test_golden.py                   # 골든 비교 테스트 (사외에는 모의 골든으로 틀만)
 │   └── test_*.py
@@ -112,6 +112,7 @@ telephony-triage-plugin/                 # 개발 레포 루트
     │   ├── parse_logcat.py
     │   ├── parser_backends/             # base.py(인터페이스, 백엔드 `platform` 속성·`log_format()`), reference/(android, platforms/android/backend.py의 BACKEND 재수출), <p>_reference/(그 플랫폼 BACKEND 재수출, 예: ofono_reference), site/(포팅한 기존 파서, 사내 전용 SITE_PATHS)
     │   ├── platforms/                   # 플랫폼 레지스트리(17-platforms.md): `__init__.py`(known·get·load·select·enabled·backend_name·label·원문 줄 판별), base.py(계약 PlatformSpec·LogFormat·PairProtocol·CaptureSpec·SourceTree), session.py(사용자 세션 선택·`--platform`), android/{logcat,ril,bugreport,backend}.py, ofono/(뼈대, 형식 가정 placeholder). 핵심(common·매처·db_*)은 플랫폼 이름을 모른다
+    │   ├── trackers/                    # 트래커 레지스트리(18-trackers.md): `__init__.py`(known·get·kind_of·of·db_kind·mismatch·all_server_words), base.py(계약 TrackerSpec), jira.py, github.py. 표준 라이브러리만(guard가 issuepost를 거쳐 불러온다)
     │   ├── adapters/                    # Jira 응답 변환, 외부 파서 어댑터 (사내 것은 site_* , SITE_PATHS)
     │   ├── match_signatures.py
     │   ├── mask_pii.py
@@ -156,10 +157,11 @@ telephony-triage-plugin/                 # 개발 레포 루트
 | `common/` | config·이슈 DB 로드, 스키마 검증, git 헬퍼, 로깅, **시그니처·extractor 컴파일 함수**(매처·`db_regress`가 공유), **마스킹 함수**(`mask_pii`와 `parse_logcat` 공유), **이벤트 레코드 `events.py`**(파서 출력 이벤트 키 순서·`line_ref`·`validate_event`, 표준 라이브러리만), **`yamlio.py`**(YAML 읽기 단일 입구, `CSafeLoader` 있으면 사용), `sanitize_build`, **검사 오케스트레이션 `checks.py`**(프로필 `stage`·`precommit`·`guard`의 단계 목록과 종료 코드 집계 `aggregate`. 하위 스크립트는 같은 프로세스에서 `main(argv)`로 부른다(`run_script`, 종료 코드·stdout JSON·stderr는 subprocess와 같고 `TT_SCRIPT_SUBPROCESS=1`이면 subprocess). top-level import는 stdlib와 `common.exitcodes`뿐이다: guard가 `site-defaults.yaml` 없이도 멈추지 않아야 한다) | 모든 스크립트 |
 | `config.py` | 사용자 config 로드/검증/갱신, `site-defaults.yaml` 로드(없으면 종료 코드 2), 스키마·생성기·파서 백엔드·외부 파서 버전과 gh 인증 호환성 판정(`check --for write\|dry-run`, `migrate/schema-v<N>` 브랜치는 버전 불일치 예외), **`plugin.scripts_path` 갱신**(`sync-scripts-path`) | 모든 스크립트, setup, SessionStart hook |
 | `platforms/` | 플랫폼 레지스트리(`17-platforms.md`): `<name>/__init__.py`의 `SPEC: PlatformSpec`을 이름으로 불러온다(`get`·`known`). `load(defaults, name)`·`PlatformProfile`(site-defaults `platform:`·`platform.others.<name>` 검증, 소스 트리·슬롯 표기·짝 규칙 태그·묶음 입력 섹션 상수, RF-4), `select`(`--platform` > `TT_PLATFORM` > 사용자 config `platform` > site `platform.name`, `platform.enabled` 관문), `backend_name`, 원문 줄 판별(guard 규칙 10·Jira 게시 검사). `session.py`는 선택과 사용자 config 프로필을 잇는다. 플랫폼 코드: `android/`(logcat·ril·bugreport·backend), `ofono/`(뼈대) | `parse_logcat.py`, `code_roots.py`, `config.py`, `triage.py`, `db_*`, guard |
+| `trackers/` | 트래커 레지스트리(`18-trackers.md`): `trackers/<kind>.py`의 `SPEC: TrackerSpec`을 이름으로 불러온다(`get`·`known`). 세션 `tracker.kind`(`kind_of`·`of`)·이슈 DB 선언(`db_kind`·`of_db`)·`tracker-mismatch`(`mismatch`)·guard 규칙 2 서버 단어 합집합(`all_server_words`). 작업 키 정규화·경로 안전 형식·쓰기 도구 키 인자·읽기 판별·링크는 어댑터가 정하고 핵심(guard·issuepost·jira_bridge·jira_fields·db_*)은 트래커 이름을 모른다 | `jira_fields`·`issue_post`·`common/issuepost`·`guard`·`jira_bridge`·`db_lint`·`db_build`·`db_search`·`db_add`·`config` |
 | `code_roots.py` | 코드 경로 후보 정렬, 경로 검증, 트리 버전 추정, `<root 키>:` 경로 변환, symbol 검색 | analyze Step 2-1, Step 5 |
 | `parse_logcat.py` | logcat → 이벤트 JSON (**파서 백엔드 선택·호출**(`parser_backends/`, 포맷·연도·타임존·윈도우·RIL 페어링·`phone_id`·`coverage`·builtin 판별은 백엔드), bugreport에서 logcat 섹션만 추출(`extract-bugreport`, 구현 `platforms/android/bugreport.py`), 외부 파서(어댑터) 실행, 백엔드·외부 파서 불일치 경고, `--mask`면 extractor 전 줄 단위 마스킹(백엔드·외부 파서 이벤트 포함), extractor 실행), **fixture 최소 구간 자르기**(`cut`, `common/` 마스킹 함수로 마스킹 후 저장) | analyze Step 3·7, `record`(`--fixture`), `verify-fix`, `validate --cause`, `db_regress` |
 | `mask_pii.py` | 마스킹 치환(파일), 외부 이벤트 JSON 마스킹(`--events`), `--check` 검출. 마스킹 함수 자체는 `common/`에 있고 `parse_logcat`이 공유 | `db_add`, `db_precommit`, `db_pr stage`, guard hook 3번 |
-| `jira_fields.py` | Jira 키 검사(`check-key`, `tracker.key_regex`), Jira 응답(MCP `get_issue` 결과 또는 `--issue-file`)에서 `tracker.field_map`으로 구조화 필드 추출, 텍스트 필드 즉시 마스킹, 발생 시각 UTC 변환·`occurred_on`·logcat 연도, `--issue-meta` 파일 생성(`extract`). 사람 이름 필드(코멘트 작성자)는 내지 않음 | analyze Step 0·2, `record`, `verify-fix --issue` |
+| `jira_fields.py` | 이슈 키 검사·작업 키 정규화(`check-key`: 트래커 `parse_key`, `tracker.key_regex`, `tracker-mismatch`), Jira 응답(MCP `get_issue` 결과 또는 `--issue-file`)에서 `tracker.field_map`으로 구조화 필드 추출, 텍스트 필드 즉시 마스킹, 발생 시각 UTC 변환·`occurred_on`·logcat 연도, `--issue-meta` 파일 생성(`extract`). 사람 이름 필드(코멘트 작성자)는 내지 않음 | analyze Step 0·2, `record`, `verify-fix --issue` |
 | `match_signatures.py` | 마스킹된 이벤트 JSON × 이슈 DB → 후보 랭킹(`same_phone`·`sequence` 포함, 패턴당 타임아웃), 수정 상태 판단, related | analyze Step 4, `db_regress`, `db_verify` |
 | `db_search.py` | 이슈 DB 검색 (secondary/related, 옛 ID → 새 ID 연결, 증상 문장 단어별 검색·`## 검색 별칭`·순위) | `search`, `record` 대화형 모드, Phase 11 테스트 |
 | `db_add.py` | 작업 계획(`plan.json`) 적용(`source`별 op 허용 규칙, `schema_version` 검사 포함), **drift 검사**(`drift`), ID·fixture 번호 할당, 브랜치 안 renumber("내 ID"만)·check-ids, 템플릿 생성, 유사 유형 검사 | `db_pr stage`, `db_verify rules --draft`, analyze Step 7·`record` (`similar`) |
