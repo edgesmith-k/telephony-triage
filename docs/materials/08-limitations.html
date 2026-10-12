@@ -289,7 +289,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
         <tr><td>사내 Claude Code 동작</td><td>hook과 Jira 원문 격리가 사내 버전에서 그대로 동작하는지 모름</td><td>빈 플러그인 실험과 실제 Jira MCP로 확인, 다르면 그것만 고침</td><td class="when">S-2</td></tr>
         <tr><td>지시 주입 방어</td><td>Jira 본문의 "이전 지시를 무시하라" 같은 문장에 흔들리는지 실제로 재지 않음</td><td>주입 eval 59·60을 실제 환경에서 실행, 안전 eval 위반 0 확인</td><td class="when">S-2</td></tr>
         <tr><td>파서 모델 적합성</td><td>사내 로그 형식이 참고 파서 가정과 다르면 여러 지표가 동시에 나빠짐</td><td>S-0 진단(Claude 없이 30분)으로 먼저 확인, 맞지 않으면 검증된 기존 파서를 백엔드로 포팅</td><td class="when">S-0·S-4a</td></tr>
-        <tr><td>Jira 코멘트 쓰기</td><td>실제 코멘트 도구 이름·인자·본문 형식·공개 범위·게시 규정을 모름. 결과 게시는 모의 Jira로만 확인</td><td>사내 Jira MCP에서 확인해 사이트 설정(<code>jira.write_tools.add_comment</code>)에 적음. 그 전에는 게시 기능이 꺼져 본문 파일만 만듦</td><td class="when">S23</td></tr>
+        <tr><td>Jira 코멘트 쓰기</td><td>실제 코멘트 도구 이름·인자·본문 형식·공개 범위·게시 규정을 모름. 결과 게시는 모의 Jira로만 확인</td><td>사내 Jira MCP에서 확인해 사이트 설정(<code>tracker.write_tools.add_comment</code>)에 적음. 그 전에는 게시 기능이 꺼져 본문 파일만 만듦</td><td class="when">S23</td></tr>
         <tr><td>oFono 플랫폼</td><td>oFono 파서는 가정 형식(journald·BSD syslog) placeholder 뼈대. 실제 로그 형식·구성요소·짝 계층·이슈 DB 내용이 없음</td><td>사내 로그를 받아 형식·규칙·이슈 DB를 작성(<code>docs/development/OFONO_LOG_COLLECTION.md</code>). 그 전에는 oFono 분석에 쓰지 않음</td><td class="when">S24~S29</td></tr>
       </table></div>
     </section>
