@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 import re
-from typing import NotRequired, TypedDict
+from typing import TypedDict
 
 SCHEMA_VERSION = 1  # events.json 최상위 "schema" (markers 출력도 같은 번호)
 
@@ -31,16 +31,19 @@ class LineRef(TypedDict):
     line_no: int | None      # 1부터 센 물리 줄 번호. 모르면 None(외부 파서)
 
 
-class RilAnnotation(TypedDict):
+class _RilRequired(TypedDict):
     serial: int | None
     dir: str | None
     request: str | None
     error: str | None
     paired_ts: str | None
     latency_ms: int | None
-    proto: NotRequired[str]  # 짝 프로토콜 이름. ril이 아닌 프로토콜만 단다 (`platforms.base.PairProtocol`)
-    observed_until: NotRequired[str]
-    hal: NotRequired[str]   # responded / reached / not_reached / unknown (platform.ril.vendor 있을 때만)
+
+
+class RilAnnotation(_RilRequired, total=False):  # 선택 키는 total=False로 (typing.NotRequired는 3.11부터)
+    proto: str  # 짝 프로토콜 이름. ril이 아닌 프로토콜만 단다 (`platforms.base.PairProtocol`)
+    observed_until: str
+    hal: str   # responded / reached / not_reached / unknown (platform.ril.vendor 있을 때만)
 
 
 class Event(TypedDict):

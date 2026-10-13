@@ -11,7 +11,7 @@ This repository develops the telephony-triage Claude plugin; the operational iss
 
 ## Build, Test, and Development Commands
 
-Run from the repository root, preferably on Ubuntu as specified by the architecture. Python tests require pytest, PyYAML, and jsonschema (`python3 -m venv .venv && . .venv/bin/activate && pip install '.[test]'`, pinned in `pyproject.toml`; Python 3.11+); use `python3` below or your environment's equivalent.
+Run from the repository root, preferably on Ubuntu as specified by the architecture. Python tests require pytest, PyYAML, and jsonschema (`python3 -m venv .venv && . .venv/bin/activate && pip install '.[test]'`, pinned in `pyproject.toml`; Python 3.10+); use `python3` below or your environment's equivalent.
 - `python3 -m pytest -q tests`: run the automated suite.
 - `python3 -m pytest -q tests/test_parse_logcat.py`: run focused parser tests.
 - `python3 plugin/scripts/db_lint.py --db <db-path> --all`: validate an issue database.
