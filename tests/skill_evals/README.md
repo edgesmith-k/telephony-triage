@@ -32,6 +32,7 @@ CLI는 PATH에 있어야 한다. 실행자에게 기대 답과 assertions를 전
 `--execute`는 Claude API를 사용하며 한도·인증 오류나 시간 초과에서 배치를 멈춘다. 결과는 `execution.json`과
 `events.jsonl`에 남는다. 한도를 만난 뒤 자동 반복하지 말고 사용 가능해진 뒤 **새 반복 경로**로 재개한다.
 Windows 개발 PC에서는 Python과 Git Bash를 PATH에 두고 UTF-8 모드를 사용한다. 배포 대상은 Ubuntu다.
+자식 `claude`는 `--setting-sources ""`로 사용자·프로젝트 설정(플러그인·hook·권한)을 읽지 않는다. 대신 사용자 `settings.json`(`$CLAUDE_CONFIG_DIR` 또는 `~/.claude`)에서 **인증·네트워크 키만** 넘긴다 — `apiKeyHelper`·`awsAuthRefresh`·`awsCredentialExport`는 `--settings` JSON에, `env`의 `ANTHROPIC_*`·`AWS_*`·`VERTEX_*`·`CLAUDE_CODE_USE_*`·프록시·CA 값은 프로세스 환경에(argv·기록에 값 없음, `execution.json`의 `auth_from_user_settings`에 이름만). 사내에서 `apiKeyHelper`로 인증하면 이것 없이는 "Not logged in"이 된다.
 
 실행자 결과 파일(`transcript.md`·`commands.md`·`notes.md`)은 규칙에서 `<run>/outputs/…` 절대 경로로 알려 준다(실행자의 작업 디렉토리는 `env-N`이라 상대 경로를
 잘못 쓴 적이 있다). 그래도 빠진 파일은 실행 기록(`events.jsonl`)에서 만든 대체본(첫 줄 `<!-- run.py: 실행자 미작성, events.jsonl에서 생성 -->`:
