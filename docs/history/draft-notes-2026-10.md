@@ -47,3 +47,10 @@
 ## 결정 (k) 원문 (10/12 옮김)
 
 - (k) 3차 검토 §8 — 하지 않는다 (10/08): 토큰 절감 위해 확인·승인·경고 생략 / 변경분만 전달 / 측정 없는 캐시 복원·스트리밍·병렬화·모듈 개편 / 반입 전 웹 포털·범용판·자동 게시 / placeholder·Windows 차이를 결함 집계 / 기존 기능 재구현 / 테스트 수·수락률 하나로 품질 보증 / 복구 편의로 승인·버전 검사·lock 우회 / 모든 권고를 반입 차단 조건으로.
+
+## 10/13 이동 (DRAFT_NOTES 진행 상태에서)
+
+- 10/11: 4차 검토 묶음 A~G(PR #36), Jira 결과 게시(PR #37), 플랫폼 분리(결정 (m), S24~S29). 상세·남은 관찰은 `docs/history/draft-notes-2026-10.md`.
+- 10/12: 트래커 범용화(결정 (n)·(o), `18-trackers.md`, GitHub 실험적), "사내 설정 시작". eval 결과·63 관찰은 history.
+- 10/12: 검토 반영 B1~B4, 토큰 측정 보완·낭비 1~3, 작업 상태 한 화면 v1, 사용 흐름 A/B·eval 68~70, 사내 단계 자동화(`site_step.py`). 상세는 history. 미실행 eval은 `tests/skill_evals/pending.json`(S-2). 전체 1,742 통과.
+- 반입 뒤 후보: RF-5(oFono)·RF-6(커넥터)·RF-8(자동화)은 사내 환경을 알아야 의미가 있다. RF-9·웹 UI(보류)는 그 뒤. 리뷰 후속(R-36~R-47·V 후속)은 `docs/development/ARCHITECTURE_REVIEW_2026-10.md`, 팀 검토(10/07) 판정은 `docs/development/TEAM_PLUGIN_REVIEW_VERDICT_2026-10-07.md`(원문 잔류는 S14).

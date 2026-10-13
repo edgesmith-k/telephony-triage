@@ -14,12 +14,11 @@
 - 테스트는 `tools/related_tests.py --run`(관련만). 전체는 도구가 full이라 할 때·반입 직전·요청 시.
 - 진행 중 판단은 Fable 결정 에이전트에게 묻는다(10/06 사용자 지정). 원칙상 사용자 승인 대상(이슈 DB push, main 병합·태그 등 사용자가 지시하지 않은 외부 동작)은 사용자에게.
 
-## 진행 상태 (10/12)
+## 진행 상태 (10/13)
 
 - 모드: **사외 초안**. Phase **D0, 1~13** 완료. 반입 전 보강 트랙(S1~S6·I1~I5·X·3C~3F)과 개선 트랙 **W0~W12**, 반입 전 리뷰(10/07) 수정 트랙 **V1~V7·V 끝**, 실제 로그 반영 트랙 **L1~L3** 완료, 반입 전 3차 검토(A1~A4·B1·B2·문서) 반영(10/08), 설명 정리(PR #31). main 병합 PR #8~#41.
-- 10/11: 4차 검토 묶음 A~G(PR #36), Jira 결과 게시(PR #37), 플랫폼 분리(결정 (m), S24~S29). 상세·남은 관찰은 `docs/history/draft-notes-2026-10.md`.
-- 10/12: 트래커 범용화(결정 (n)·(o), `18-trackers.md`, GitHub 실험적), "사내 설정 시작". eval 결과·63 관찰은 history.
-- 10/12: 검토 반영 B1~B4, 토큰 측정 보완·낭비 1~3, 작업 상태 한 화면 v1, 사용 흐름 A/B·eval 68~70, 사내 단계 자동화(`site_step.py`). 상세는 history. 미실행 eval은 `tests/skill_evals/pending.json`(S-2). 전체 1,742 통과.
+- 10/11~12: Jira 결과 게시(#37), 플랫폼 분리(m), 트래커 범용화(n·o), 사내 단계 자동화 등 — 줄별 요약은 `docs/history/draft-notes-2026-10.md` "10/13 이동". 미실행 eval `tests/skill_evals/pending.json`(S-2).
+- 10/13: **반입 완료** import-20261013(d6d5996)·재반입본 import-20261013b(2b08a7b, 태그 둘 다). 사내 실측으로 고친 것: 사내 설치 가이드 `docs/SITE_INSTALL.md`(#43), eval 실행기 `apiKeyHelper` 인증 전달(#43), Python 3.11.0rc1(Ubuntu 22.04 apt) tar filter 폴백(#44). 3.11.1 전체 1,751 통과.
 - 사내 확인 항목: `TODO(SITE)` **104곳** — `python3 tools/list_site_todos.py`. `REVIEW-OPEN.md` 0건.
 - 사내 시작: **"사내 설정 시작"** → `python3 tools/site_step.py`가 `SITE_PROFILE.md`(트래커 jira)를 만들고 S-1~S-7을 한 단계씩 낸다(결정 (o)).
 - 안내서(사람용 HTML): `docs/telephony-triage-guide.html` (공유본 https://claude.ai/artifact/1jov1Et4dQUMauFr6aoxWG). 역할별 문서 19개: `docs/materials/00-index.html`
@@ -29,12 +28,14 @@
 | ☐ | 항목 | 메모 |
 |---|---|---|
 | ☐ G | **범용판 별도 레포** (10/07 사용자 지시) — **보류(10/07 사용자)** | 재개 시점은 사용자가 정한다. **로컬 새 레포**(원격 없음), 범위 = 도메인 중립 코어 + 최소 예제 팩 1개. 시작은 결합 지점 조사(`plugin/scripts` 약 30파일) → 분리 설계 확인 → 이전. 이 레포는 바꾸지 않는다 |
-| ☐ Z | **반입 묶음** — 10/10 생성분은 이번 병합으로 main이 바뀌어 **새 라벨로 다시 만든다** | 최신 main에서 WSL Ubuntu로 `python3 tools/make_bundle.py --label import-<날짜>`(정상 종료 3) → 사람 확인 3건(§15.4: 회사명 검색·TODO 목록·이 파일 최신) → 도구가 출력한 명령으로 사용자가 태그 push. Windows는 환경 실패로 자동 검사가 실패한다 |
+| ☐ P | **Python 3.10 지원** — 사용자 결정 대기 | 막는 것 `events.py`의 `typing.NotRequired`(고치면 핵심 205개 통과), 위험 `fromisoformat` 20곳. 3.10 전체·CI·`requires-python`·가이드. S-7 전 권장 |
+| ☐ T | **사내 레포에서 실패하는 테스트 1건** — 이름 회신 대기 | 재반입 뒤 "사외 초안 체크" 실패. 후보 `test_boundary::test_repo_has_no_boundary_violations` → 사내 레포면 skip/사내 기준 |
+| ☐ R | 재반입 절차를 `SITE_INSTALL.md`에 | 첫 반입이 압축 풀기라 기준선 없음 → 첫 묶음으로 import_draft 기준선 뒤 새 묶음 |
 
 ## 사내로 넘긴 것
 
 - 행동 eval 전체(`evals.json`, S-2; 주입 eval 59·60 포함), 코드 Read line 힌트(T4, S-2 측정 뒤)·offline_eval 오류율 상한(S-1 합의, S-5)·`max_tokens_hint` 처리(S-4a)·setup Jira 없음 중단(U1, S-3), db-authoring 스키마 요약 확장(S-2, 스키마 Read 횟수로 판단), 사내 마켓플레이스 소스 유형 확인 → version 규칙(S-2·S-7, V2에서 `plugin.json` version 삭제 = 커밋 SHA 기준. 반입 직후 캐시 1회 무효화는 무해).
-- 반입 뒤 후보: RF-5(oFono)·RF-6(커넥터)·RF-8(자동화)은 사내 환경을 알아야 의미가 있다. RF-9·웹 UI(보류)는 그 뒤. 리뷰 후속(R-36~R-47·V 후속)은 `docs/development/ARCHITECTURE_REVIEW_2026-10.md`, 팀 검토(10/07) 판정은 `docs/development/TEAM_PLUGIN_REVIEW_VERDICT_2026-10-07.md`(원문 잔류는 S14).
+- 반입 뒤 후보(RF-5·6·8·9, 리뷰 후속 R-36~R-47)는 `docs/history/draft-notes-2026-10.md` "10/13 이동".
 
 ## 사외에서는 못 하는 것 (사내 S-1~S-5)
 
