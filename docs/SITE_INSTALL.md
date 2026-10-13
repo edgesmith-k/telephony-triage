@@ -73,7 +73,7 @@ python3 -m pip install --user PyYAML==6.0.3 jsonschema==4.26.0 attrs==26.1.0 jso
   referencing==0.37.0 typing-extensions==4.15.0 pytest==9.0.3 iniconfig==2.3.0 packaging==26.2 pluggy==1.6.0 Pygments==2.20.0
 # Python 3.10이면 추가
 python3 -m pip install --user rpds-py==0.30.0 exceptiongroup==1.3.1 tomli==2.5.0
-# Python 3.11+이면 추가
+# Python 3.11 이상이면 추가
 python3 -m pip install --user rpds-py==2026.6.3
 python3 -c "import yaml, jsonschema, pytest; import importlib.metadata as m; print([m.version(x) for x in ('PyYAML','jsonschema','pytest')])"
 ```
