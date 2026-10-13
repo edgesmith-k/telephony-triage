@@ -10,6 +10,7 @@
 | 3 | Python 3.11 venv | 프롬프트에 `(tt)`, `python3 --version` 3.11+ |
 | 4 | 의존성 설치 (사내 PyPI 미러) | 버전 3개 출력 |
 | 5 | `claude` → "사내 설정 시작" | `SITE_PROFILE.md` 생성, S-1 안내 |
+| (팀원) | 7절 — 담당자 S-7 뒤 | setup 점검 표 모두 ok |
 
 ## 1. 반입 파일 확인
 
@@ -111,5 +112,41 @@ S-1에서 `SITE_PROFILE.md`에 남길 것: 설치 경위(미러·venv 경로·�
 | 1. 각자 venv | 3~4단계를 사람마다, `~/.bashrc` 자동 활성화 | 지금 가능. 설치 단계 하나 추가 |
 | 2. 공용 venv | 한 곳(예: `/opt/tt-venv`)에 한 번 설치, 각자 `.bashrc`에 활성화 한 줄 | 설치 1회. 공용 경로 권한 관리 |
 | 3. 플러그인 수정 | hook이 `python3` 대신 지정한 인터프리터(예: 환경변수 `TT_PYTHON`)를 부르게 | 터미널 상태와 무관. 코드 수정 + 전체 테스트 필요 → **사외 레포에서 고쳐 다음 반입** (사내에서 공통 코드를 고치면 재반입 때 충돌) |
+
+## 7. 팀원 사용 준비 (S-7 배포 뒤, 처음 한 번)
+
+**전제**: 도입 담당자가 S-7까지 끝냈다(사이트 설정 `plugin/site-defaults.yaml`, 운영 이슈 DB, 사내 마켓플레이스 등록). 그 전에는 setup이 "플러그인 관리자가 사이트 설정(site-defaults.yaml)을 아직 올리지 않았습니다"로 멈춘다.
+
+1. **Python 3.11 환경** (Ubuntu 22.04 기준. 6절에서 공용 venv로 정했으면 `.bashrc` 한 줄만)
+   ```
+   sudo apt install python3.11 python3.11-venv
+   python3.11 -m venv ~/.venvs/tt
+   . ~/.venvs/tt/bin/activate                       # 프롬프트에 (tt)
+   pip config --site set global.index-url https://<사내 미러>/simple
+   python3 -m pip install PyYAML==6.0.3 jsonschema==4.26.0
+   echo '. ~/.venvs/tt/bin/activate' >> ~/.bashrc   # 터미널 열 때 자동으로 (tt)
+   ```
+   pytest는 필요 없다(테스트·골든 확인용). 시스템 `python3`(3.10)는 그대로 둔다. 미러에 고정 버전이 없으면 4절 표.
+2. **기본 연결**: `gh auth login -h <사내 GHE 호스트>`(이슈 DB PR용), `claude mcp list`에 Jira MCP가 사용자 범위로 보이는지.
+3. **플러그인 설치**: Claude Code에서 사내 마켓플레이스의 `telephony-triage`. 레포 clone은 필요 없다.
+4. **setup**: `(tt)` 터미널에서 `claude` → `/telephony-triage:setup`. GHE 아이디·이슈 DB clone 경로·타임존 등을 묻고 점검 표(doctor)를 보여 준다. 모든 행 `ok`면 끝, `fail`·`warn`은 "다음" 열대로.
+5. **연습·평소 사용**:
+   ```
+   (tt) $ claude
+   > /telephony-triage:analyze ABC-12345 ~/logs/radio.txt --dry-run   # 연습(아무것도 올리지 않음)
+   > ABC-12345 로그 분석해줘, 로그는 ~/logs/radio.txt                   # 평소
+   ```
+
+**지킬 것**: 항상 `(tt)` 터미널에서 `claude`(5절 이유) · 로그는 대화에 붙이지 않고 파일 경로로 · 막히면 setup을 다시 실행해 점검 표를 보고, 그래도 안 되면 메시지 그대로 관리자에게.
+
+| | 도입 담당자 | 팀원 |
+|---|---|---|
+| 레포 | 필요(레포 폴더에서 작업) | 불필요(마켓플레이스 설치) |
+| 시작 | "사내 설정 시작" | `/telephony-triage:setup` |
+| 의존성 | PyYAML·jsonschema·pytest | PyYAML·jsonschema |
+| pytest·eval·빈 플러그인 실험 | 한다(S-2) | 안 한다 |
+| 다시 검증할 때 | Claude Code 큰 버전 변경, 평소 모델 변경, 플러그인 새 반입(바뀐 흐름의 eval만) | — |
+
+오프라인 의존성 묶음(`tt-offline-deps-<날짜>.zip`, 사외에서 만든 wheel)은 **비상용**이다. 사내 미러로 설치되면 반입하지 않는다.
 
 관련: 반입 체크리스트 `docs/design/15-local-draft.md §15.4`, 사내 단계 §15.5, 사람용 총정리 `GUIDE.md` 4장.
