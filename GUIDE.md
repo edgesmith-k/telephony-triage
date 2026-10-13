@@ -105,11 +105,12 @@ python3 tools/make_bundle.py --label import-v1     # 이 이름이 사내 .draft
 | GHE 권한 | 웹 | 레포 3개(플러그인, 샌드박스 이슈 DB, 운영 이슈 DB) 생성, **브랜치 보호·CODEOWNERS 필수 리뷰 설정 권한**(없으면 로컬 hook이 유일한 방어선, S5) |
 
 **2) 묶음 확인과 테스트 재현** (15분)
+단계별 명령·막혔을 때 표(Python 3.10, 미러에 버전 없음, `UNKNOWN-0.0.0` 등)는 `docs/SITE_INSTALL.md`.
 ```
 mkdir -p ~/tt-draft && cd ~/tt-draft && unzip ~/telephony-triage-import-v1.zip
 sha256sum ~/telephony-triage-import-v1.zip   # 사외에서 적은 값과 같은지
 python3.11 -m venv .venv && . .venv/bin/activate   # `python3`가 3.11+면 python3. 3.10이면 python3.11
-pip install '.[test]'   # 사내 미러. 고정 버전이 미러에 없으면 `test_r10_dependency_manifest_has_complete_pins` 1건 실패는 예상, `SITE_PROFILE.md`에 기록
+pip install '.[test]'   # 사내 미러(--no-build-isolation 금지, SITE_INSTALL §4). 고정 버전이 미러에 없으면 `test_r10_dependency_manifest_has_complete_pins` 1건 실패는 예상, `SITE_PROFILE.md`에 기록
 python3 -m pytest -q tests                    # 사외와 같은 결과여야 한다 (10~15분)
 ```
 사외에서 통과한 테스트가 실패하면 환경 차이(파이썬·git 버전, 로케일, 경로)다. 반입 전에 원인을 잡는다.
