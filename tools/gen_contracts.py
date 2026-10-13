@@ -7,7 +7,7 @@
     (b) `plugin/skills/telephony-triage/reference/db-authoring.md`의 "op 필수 키" 요약 블록
         (`plugin/schemas/plan.schema.json`). 블록 경계는 기존 앵커 줄(`op 필수 키 (` ~ `여기 없는 op·세부 제약은 …`)이다.
 
-결정성: Python 3.11·3.14(CI 행렬)와 3.12(boundary job)에서 바이트가 같아야 하므로 `format_usage`/`format_help`
+결정성: Python 3.10·3.11·3.14(CI 행렬)와 3.12(boundary job)에서 바이트가 같아야 하므로 `format_usage`/`format_help`
 (버전마다 줄바꿈·문구가 다르다)를 쓰지 않고 `parser._actions`·`_mutually_exclusive_groups`·
 `_SubParsersAction.choices`를 정의 순서 그대로 돈다(choices·option_strings도 정렬하지 않는다).
 

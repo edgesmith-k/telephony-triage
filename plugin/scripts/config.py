@@ -538,7 +538,7 @@ def cmd_gh_status(args, defaults: dict) -> tuple[dict, int]:
 
 SNAPSHOT_STALE_DAYS = 7
 DETAIL_MAX = 80
-MIN_PYTHON = (3, 11)   # pyproject requires-python
+MIN_PYTHON = (3, 10)   # pyproject requires-python
 GUARD_SELFTEST_TIMEOUT = 20
 
 

@@ -144,7 +144,7 @@ telephony-triage-plugin/                 # 개발 레포 루트
         └── hooks.json                   # 08-safety.md §9
 ```
 
-- 스크립트는 Python 3.11+, 표준 라이브러리 중심으로 쓴다. 외부 의존성은 `pyyaml`, `jsonschema` 정도로 최소화한다.
+- 스크립트는 Python 3.10+, 표준 라이브러리 중심으로 쓴다. 외부 의존성은 `pyyaml`, `jsonschema` 정도로 최소화한다.
 - **실행 환경은 Ubuntu(Linux)** 다(사외·사내 동일). `.githooks/pre-commit`은 `#!/bin/sh` 셸 스크립트, PATH 스텁·홈 경로(`~/.telephony-triage/`)·실행 비트 모두 POSIX 기준이다. 다른 OS는 v1 범위 밖이다 (`14-site.md` S15).
 - SKILL.md와 커맨드는 스크립트를 **`${CLAUDE_PLUGIN_ROOT}/scripts/<이름>.py`** 로 호출한다. 설치 위치가 캐시 경로라서 상대 경로로는 동작하지 않는다. 스킬/커맨드 본문에서 `${CLAUDE_PLUGIN_ROOT}`가 실행 시 치환되는지는 S1에서 시험한다 (`14-site.md §14.2`). 치환되지 않으면 config의 `plugin.scripts_path`를 읽어 쓰는 방식으로 바꾼다.
 - Jira MCP는 사내 제공 서버를 쓰므로 `.mcp.json`에 번들하지 않는다. setup에서 **존재 여부와 읽기 도구 목록만 확인**한다.

@@ -79,7 +79,7 @@ python3 tools/make_bundle.py --label import-v1     # 이 이름이 사내 .draft
 ## 4. 사내에서 보완하기
 
 ### 미리 준비할 것
-- Ubuntu PC (다른 OS는 지원하지 않음), Python 3.11+, git, `gh`
+- Ubuntu PC (다른 OS는 지원하지 않음), Python 3.10+ (22.04 기본 python3 가능), git, `gh`
 - 샘플 Jira 키 2~3개(카테고리가 다른 것), 각 Jira의 발생 시각 필드 이름·형식·타임존
 - 카테고리별 실제 logcat 1개씩 + 정상 로그 1~2개(16/17), 듀얼 SIM 로그 1개 이상
 - Android 16/17 소스 경로, 빌드명 예시 3~5개, GHE 주소·조직·카테고리별 팀 이름, Gerrit CL 링크 예시, Jira URL 예시
@@ -97,19 +97,19 @@ python3 tools/make_bundle.py --label import-v1     # 이 이름이 사내 .draft
 | 항목 | 확인 | 필요 조건 / 이유 |
 |---|---|---|
 | OS | `lsb_release -a` | **Ubuntu** |
-| Python | `python3 --version` | **3.11+** |
-| 패키지 | 사내 미러 접근(`pip download pyyaml` 등)과 `python3.11 --version`(22.04는 `python3`가 3.10) | 의존성은 `pyproject.toml`에 고정돼 있다. `python3 -c "import yaml; print(yaml.__with_libyaml__)"`가 True면 YAML을 C 로더로 읽어 빠르다(False여도 동작) |
+| Python | `python3 --version` | **3.10+** (22.04 기본 3.10 그대로 가능) |
+| 패키지 | 사내 미러 접근(`pip download pyyaml` 등) | 의존성은 `pyproject.toml`에 고정돼 있다. `python3 -c "import yaml; print(yaml.__with_libyaml__)"`가 True면 YAML을 C 로더로 읽어 빠르다(False여도 동작) |
 | git | `git --version` | **2.31+** (guard의 `rev-parse --path-format`, worktree `--no-track`, `push --force-with-lease=<ref>:<sha>`) |
 | gh | `gh auth status --hostname <GHE 호스트>` | 실패하면 쓰기 작업 전부 불가(읽기 분석은 가능) |
 | Claude Code | `claude --version`, `claude mcp list` | 플러그인·hooks 지원 버전, Jira MCP 서버 이름과 사용자 범위 등록 (정밀 확인은 S-2) |
 | GHE 권한 | 웹 | 레포 3개(플러그인, 샌드박스 이슈 DB, 운영 이슈 DB) 생성, **브랜치 보호·CODEOWNERS 필수 리뷰 설정 권한**(없으면 로컬 hook이 유일한 방어선, S5) |
 
 **2) 묶음 확인과 테스트 재현** (15분)
-단계별 명령·막혔을 때 표(Python 3.10, 미러에 버전 없음, `UNKNOWN-0.0.0` 등)는 `docs/SITE_INSTALL.md`.
+단계별 명령·막혔을 때 표(설치 방법 A `--user`·B venv, 미러에 버전 없음, `UNKNOWN-0.0.0` 등)는 `docs/SITE_INSTALL.md`.
 ```
 mkdir -p ~/tt-draft && cd ~/tt-draft && unzip ~/telephony-triage-import-v1.zip
 sha256sum ~/telephony-triage-import-v1.zip   # 사외에서 적은 값과 같은지
-python3.11 -m venv .venv && . .venv/bin/activate   # `python3`가 3.11+면 python3. 3.10이면 python3.11
+python3 -m venv .venv && . .venv/bin/activate   # python3 3.10+
 pip install '.[test]'   # 사내 미러(--no-build-isolation 금지, SITE_INSTALL §4). 고정 버전이 미러에 없으면 `test_r10_dependency_manifest_has_complete_pins` 1건 실패는 예상, `SITE_PROFILE.md`에 기록
 python3 -m pytest -q tests                    # 사외와 같은 결과여야 한다 (10~15분)
 ```
@@ -242,7 +242,7 @@ python3 -m pytest -q tests        # 골든 포함, 그 뒤 운영 이슈 DB에 d
 **사외, 새 PC**
 ```
 git clone <사외 레포 URL> && cd telephony-triage
-python3.11 -m venv .venv && . .venv/bin/activate   # `python3`가 3.11+면 python3
+python3 -m venv .venv && . .venv/bin/activate   # python3 3.10+
 pip install '.[test]'
 touch .local-draft            # 안 만들면 Claude Code가 모드를 묻는다 → "사외 초안"
 python3 -m pytest -q tests    # 기준선 (Ubuntu 10~15분)
@@ -253,7 +253,7 @@ python3 -m pytest -q tests    # 기준선 (Ubuntu 10~15분)
 **사내, 새 PC** (`SITE_PROFILE.md`가 커밋돼 있어 모드는 자동)
 ```
 git clone <사내 GHE>/<org>/telephony-triage-plugin.git && cd telephony-triage-plugin
-python3.11 -m venv .venv && . .venv/bin/activate   # `python3`가 3.11+면 python3
+python3 -m venv .venv && . .venv/bin/activate   # python3 3.10+
 pip install '.[test]'
 python3 -m pytest -q tests    # 골든 포함, 이전 PC와 같은 결과여야 한다
 claude mcp list               # Jira MCP 사용자 범위 등록 확인

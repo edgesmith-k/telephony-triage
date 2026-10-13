@@ -231,8 +231,8 @@ def s1_env(ctx: Ctx) -> dict:
 
 
 def s1_python(ctx: Ctx) -> dict:
-    ok = sys.version_info[:2] >= (3, 11)
-    return res("s1.python", "pass" if ok else "fail", ".".join(map(str, sys.version_info[:3])) + " (3.11+ 필요, S15)",
+    ok = sys.version_info[:2] >= (3, 10)
+    return res("s1.python", "pass" if ok else "fail", ".".join(map(str, sys.version_info[:3])) + " (3.10+ 필요, S15)",
                f"{sys.executable} --version")
 
 

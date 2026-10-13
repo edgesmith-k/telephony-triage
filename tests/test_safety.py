@@ -226,9 +226,17 @@ def test_r11_validate_pins_selected_db_and_config_base(safety_root):
             assert "--db <db>" in line
 
 
+def _tomllib():
+    try:
+        import tomllib
+    except ModuleNotFoundError:   # Python 3.10: 테스트 의존성 tomli
+        import tomli as tomllib
+    return tomllib
+
+
 def test_r10_dependency_manifest_has_complete_pins(safety_root):
     import importlib.metadata as metadata
-    import tomllib
+    tomllib = _tomllib()
     from packaging.requirements import Requirement
     manifest = REPO / "pyproject.toml"
     assert manifest.is_file(), "fresh environments need a dependency manifest"
@@ -252,12 +260,11 @@ def test_r10_dependency_manifest_has_complete_pins(safety_root):
 
 
 def test_docs_python_version_matches_pyproject():
-    """R-26: 문서의 Python 최소 버전은 pyproject.toml(>=3.11)과 같다."""
-    import tomllib
-    assert tomllib.loads((REPO / "pyproject.toml").read_text(encoding="utf-8"))["project"]["requires-python"] == ">=3.11"
+    """R-26: 문서의 Python 최소 버전은 pyproject.toml(>=3.10)과 같다."""
+    assert _tomllib().loads((REPO / "pyproject.toml").read_text(encoding="utf-8"))["project"]["requires-python"] == ">=3.10"
     for rel in ("GUIDE.md", "docs/design/01-architecture.md", "docs/design/13-actions.md",
-                "docs/design/14-site.md", "AGENTS.md"):
-        assert "3.10+" not in (REPO / rel).read_text(encoding="utf-8"), rel
+                "docs/design/14-site.md", "AGENTS.md", "docs/SITE_INSTALL.md"):
+        assert "3.11+" not in (REPO / rel).read_text(encoding="utf-8"), rel
 
 
 @pytest.fixture
