@@ -410,6 +410,31 @@ def test_child_env_strips_parent_session_identity_but_keeps_auth_and_proxy():
     assert evaluation.NO_ATTRIBUTION_SETTINGS and json.loads(evaluation.NO_ATTRIBUTION_SETTINGS)["attribution"] == {"commit": "", "pr": ""}
 
 
+def test_child_settings_passes_only_auth_keys_from_user_settings(tmp_path):
+    conf = tmp_path / "conf"
+    conf.mkdir()
+    (conf / "settings.json").write_text(json.dumps({
+        "apiKeyHelper": "/opt/helper.sh", "hooks": {"PreToolUse": []}, "enabledPlugins": {"x": True},
+        "permissions": {"allow": ["Bash"]},
+        "env": {"ANTHROPIC_BASE_URL": "https://gw.example", "HTTPS_PROXY": "http://proxy.example", "FOO": "bar"}}), encoding="utf-8")
+    settings, auth_env, keys = evaluation.child_settings({"CLAUDE_CONFIG_DIR": str(conf)})
+    data = json.loads(settings)
+    assert data["apiKeyHelper"] == "/opt/helper.sh" and data["attribution"] == {"commit": "", "pr": ""}
+    assert not {"hooks", "enabledPlugins", "permissions", "env"} & set(data)     # 격리 유지: 인증 밖은 넘기지 않음
+    assert auth_env == {"ANTHROPIC_BASE_URL": "https://gw.example", "HTTPS_PROXY": "http://proxy.example"}
+    assert keys == ["apiKeyHelper", "env.ANTHROPIC_BASE_URL", "env.HTTPS_PROXY"]   # 기록에는 이름만
+
+
+def test_child_settings_without_user_settings_is_attribution_only(tmp_path):
+    for content in (None, "{broken", "[]"):
+        conf = tmp_path / f"c{content!r}"
+        conf.mkdir()
+        if content is not None:
+            (conf / "settings.json").write_text(content, encoding="utf-8")
+        settings, auth_env, keys = evaluation.child_settings({"CLAUDE_CONFIG_DIR": str(conf)})
+        assert json.loads(settings) == json.loads(evaluation.NO_ATTRIBUTION_SETTINGS) and auth_env == {} and keys == []
+
+
 def test_rules_use_absolute_result_paths_and_commit_message_line(tmp_path):
     rules = evaluation._rules({"user_replies": ["예"]}, tmp_path / "run")
     out = (tmp_path / "run" / "outputs").as_posix()

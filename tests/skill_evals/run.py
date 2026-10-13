@@ -147,6 +147,39 @@ PARENT_IDENTITY_NAMES = frozenset({
     "CLAUDE_CODE_WORKER_EPOCH", "TRACEPARENT"})
 # 커밋·PR 서명을 끈다(`claude --settings`는 JSON 문자열을 받는다).
 NO_ATTRIBUTION_SETTINGS = json.dumps({"includeCoAuthoredBy": False, "attribution": {"commit": "", "pr": ""}})
+# 자식은 `--setting-sources ""`로 사용자·프로젝트 설정(플러그인·hook·권한)을 읽지 않는다(재현성).
+# 그러면 사용자 settings.json으로 하는 인증(예: 사내 apiKeyHelper)도 빠져 "Not logged in"이 된다.
+# 인증·네트워크 관련 키만 사용자 설정에서 골라 넘긴다: 최상위 키는 --settings JSON에(명령 문자열이라 비밀 아님),
+# env 블록은 프로세스 환경에(값이 비밀일 수 있어 argv·기록에 넣지 않는다). 기록에는 키 이름만 남긴다.
+AUTH_SETTING_KEYS = ("apiKeyHelper", "awsAuthRefresh", "awsCredentialExport")
+AUTH_ENV_PREFIXES = ("ANTHROPIC_", "AWS_", "VERTEX_", "CLAUDE_CODE_USE_", "CLAUDE_CODE_API_KEY_HELPER")
+AUTH_ENV_NAMES = frozenset({"CLOUD_ML_REGION", "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "http_proxy", "https_proxy",
+                            "no_proxy", "NODE_EXTRA_CA_CERTS", "SSL_CERT_FILE"})
+
+
+def user_auth_settings(env: dict[str, str]) -> tuple[dict, dict[str, str]]:
+    """사용자 settings.json에서 인증·네트워크 키만 (최상위 키, env 블록). 없거나 깨졌으면 빈 값."""
+    base = Path(env["CLAUDE_CONFIG_DIR"]) if env.get("CLAUDE_CONFIG_DIR") else Path(env.get("HOME", str(Path.home()))) / ".claude"
+    try:
+        data = json.loads((base / "settings.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}, {}
+    if not isinstance(data, dict):
+        return {}, {}
+    top = {k: data[k] for k in AUTH_SETTING_KEYS if isinstance(data.get(k), str) and data[k]}
+    raw_env = data.get("env") if isinstance(data.get("env"), dict) else {}
+    auth_env = {k: str(v) for k, v in raw_env.items()
+                if isinstance(k, str) and (k.startswith(AUTH_ENV_PREFIXES) or k in AUTH_ENV_NAMES) and v is not None}
+    return top, auth_env
+
+
+def child_settings(env: dict[str, str]) -> tuple[str, dict[str, str], list[str]]:
+    """자식 --settings JSON, 덧붙일 환경, 넘긴 키 이름 목록."""
+    top, auth_env = user_auth_settings(env)
+    settings = {**json.loads(NO_ATTRIBUTION_SETTINGS), **top}
+    return json.dumps(settings), auth_env, sorted(top) + sorted(f"env.{k}" for k in auth_env)
+
+
 DERIVED_HEADER = "<!-- run.py: 실행자 미작성, events.jsonl에서 생성 -->"
 REQUIRED_OUTPUTS = ("transcript.md", "commands.md", "notes.md")
 
@@ -247,6 +280,8 @@ def execute(entry: dict, info: dict, env_dir: Path, run_dir: Path, claude: str,
     env["CLAUDE_CODE_GIT_BASH_PATH"] = env.get("CLAUDE_CODE_GIT_BASH_PATH", r"C:\Program Files\Git\bin\bash.exe") if os.name == "nt" else env.get("CLAUDE_CODE_GIT_BASH_PATH", "")
     env.pop("CLAUDECODE", None)
     env, stripped_env = child_env(env)
+    settings_json, auth_env, auth_keys = child_settings(env)
+    env.update(auth_env)
     # Git Bash는 python3.exe 없는 Windows에서도 같은 Python을 사용한다.
     if os.name == "nt":
         shim = env_dir / "bin"
@@ -256,7 +291,7 @@ def execute(entry: dict, info: dict, env_dir: Path, run_dir: Path, claude: str,
             stream.write(f"export PATH='{_bash_path(str(shim))}':\"$PATH\"\n")
         env["PATH"] = os.pathsep.join([str(shim), env["PATH"]])      # plugin 모드는 env.sh를 source하지 않는다
     common = ["--output-format", "stream-json", "--verbose", "--no-session-persistence", "--setting-sources", "",
-              "--settings", NO_ATTRIBUTION_SETTINGS, "--strict-mcp-config"]
+              "--settings", settings_json, "--strict-mcp-config"]
     dirs = ["--add-dir", str(info["plugin_root"]), str(Path(info["issue_db_clone"]).parents[1]), str(run_dir), str(REPO)]
     if plugin:
         prompt, system = plugin_prompt(entry, env_dir, run_dir)
@@ -315,7 +350,7 @@ def execute(entry: dict, info: dict, env_dir: Path, run_dir: Path, claude: str,
                "tokens": token_record(result), "model": model, "init_model": init_model(events_list),
                "repo_commit": commit, "repo_dirty": dirty,
                "mode": "plugin" if plugin else "direct", "plugin": (plugin or {}).get("seen"),
-               "outputs_derived": derived, "env_stripped": stripped_env}
+               "outputs_derived": derived, "env_stripped": stripped_env, "auth_from_user_settings": auth_keys}
     dump(run_dir / "execution.json", outcome)
     return outcome
 
