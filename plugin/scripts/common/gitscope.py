@@ -16,6 +16,9 @@ import tarfile
 from pathlib import Path
 
 
+_HAS_DATA_FILTER = hasattr(tarfile, "data_filter")
+
+
 class GitError(Exception):
     pass
 
@@ -56,8 +59,30 @@ def materialize_ref(repo: Path, ref: str, dest: Path) -> Path:
     data = git(repo, "archive", "--format=tar", ref, binary=True)
     dest.mkdir(parents=True, exist_ok=True)
     with tarfile.open(fileobj=io.BytesIO(data)) as tar:
-        tar.extractall(dest, filter="data")
+        if _HAS_DATA_FILTER:                          # 3.11.4+·3.12+ (PEP 706)
+            tar.extractall(dest, filter="data")
+        else:                                         # 3.11.0~3.11.3 (예: Ubuntu 22.04 python3.11): 같은 기준을 직접 검사
+            tar.extractall(dest, members=_safe_members(tar, dest))
     return dest
+
+
+def _safe_members(tar: tarfile.TarFile, dest: Path) -> list[tarfile.TarInfo]:
+    """`filter="data"`가 없는 Python용: 일반 파일·디렉토리·dest 안을 가리키는 링크만 허용, 나머지는 거부."""
+    root = dest.resolve()
+    members = []
+    for member in tar.getmembers():
+        target = (root / member.name).resolve()
+        if member.name.startswith(("/", "\\")) or (target != root and root not in target.parents):
+            raise GitError(f"git archive 항목이 대상 밖을 가리킨다: {member.name}")
+        if member.issym() or member.islnk():
+            link = (target.parent / member.linkname).resolve() if member.issym() else (root / member.linkname).resolve()
+            if link != root and root not in link.parents:
+                raise GitError(f"git archive 링크가 대상 밖을 가리킨다: {member.name} -> {member.linkname}")
+        elif not (member.isfile() or member.isdir()):
+            raise GitError(f"git archive 항목 종류를 풀지 않는다: {member.name}")
+        member.mode &= 0o755 if member.isdir() or member.mode & 0o111 else 0o644
+        members.append(member)
+    return members
 
 
 def has_ref(repo: Path, ref: str) -> bool:
