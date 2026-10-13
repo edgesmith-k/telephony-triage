@@ -38,7 +38,7 @@ def _repo(tmp_path: Path) -> Path:
 def test_materialize_ref_same_tree_with_and_without_data_filter(tmp_path, monkeypatch, has_filter):
     repo = _repo(tmp_path)
     if not has_filter:
-        monkeypatch.delattr(tarfile, "data_filter", raising=False)
+        monkeypatch.setattr(gitscope, "_HAS_DATA_FILTER", False)   # tarfile 자체는 건드리지 않는다(3.14는 내부에서 쓴다)
     out = gitscope.materialize_ref(repo, "HEAD", tmp_path / "out")
     assert (out / "a.txt").read_text(encoding="utf-8") == "A\n"
     assert (out / "sub" / "b.sh").stat().st_mode & 0o111

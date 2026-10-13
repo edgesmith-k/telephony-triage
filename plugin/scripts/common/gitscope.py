@@ -16,6 +16,9 @@ import tarfile
 from pathlib import Path
 
 
+_HAS_DATA_FILTER = hasattr(tarfile, "data_filter")
+
+
 class GitError(Exception):
     pass
 
@@ -56,7 +59,7 @@ def materialize_ref(repo: Path, ref: str, dest: Path) -> Path:
     data = git(repo, "archive", "--format=tar", ref, binary=True)
     dest.mkdir(parents=True, exist_ok=True)
     with tarfile.open(fileobj=io.BytesIO(data)) as tar:
-        if hasattr(tarfile, "data_filter"):           # 3.11.4+·3.12+ (PEP 706)
+        if _HAS_DATA_FILTER:                          # 3.11.4+·3.12+ (PEP 706)
             tar.extractall(dest, filter="data")
         else:                                         # 3.11.0~3.11.3 (예: Ubuntu 22.04 python3.11): 같은 기준을 직접 검사
             tar.extractall(dest, members=_safe_members(tar, dest))
