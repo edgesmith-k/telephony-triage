@@ -1796,7 +1796,9 @@ def checks_u(eid, ctx):
             if line is None:
                 return False, "analysis.json must_show에 판정 불가 줄 없음"
             texts = ctx.texts()
-            hay = "\n".join(texts) if texts is not None else ctx.transcript
+            # 모의 ask_user 질문 문구도 사용자에게 보이는 글이다(plugin 모드 헤드리스 실행자는 리포트를 질문에 담는다)
+            asked = [str(i.get("question", "")) for n, i in (ctx.tool_uses() or []) if n.endswith("__ask_user")]
+            hay = "\n".join([*texts, *asked]) if texts is not None else ctx.transcript
             ok = line.startswith("판정 불가 유형: 0·원인 1개 (DATA-001-01)") and line in hay
             return ok, f"must_show 줄 {'그대로 있음' if line in hay else '답에 없음'}: {line[:120]}"
         def no_new():

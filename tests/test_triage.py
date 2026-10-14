@@ -503,7 +503,7 @@ def test_skill_md_is_within_7_5kb_and_drives_triage():
                    "must_show", "triage.py explore"):
         assert needle in text, needle
     rules = (reference / "rules.md").read_text(encoding="utf-8")      # SKILL §실행 규칙이던 내용
-    assert len(rules.encode("utf-8")) <= 2048
+    assert len(rules.encode("utf-8")) <= 2176      # must_show 복사 위치·stage `next` 한 줄(eval 68·3, 10/14) 뒤의 한도. 그 전 2,048B
     for needle in ("S-3", "계획 형식 오류", "TT_LOCK_OWNER", "stage --then-summary", "모든 종료 경로에서 푼다", "사용자 확인 후"):
         assert needle in rules, needle
     assert len((reference / "db-authoring.md").read_bytes()) <= 12288      # 필수 키 요약 포함. §0 등록 준비물·리뷰어 색인 추가 뒤의 한도(그 전 11,392B: W7 add-fixture 세부, 11,264B)

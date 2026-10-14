@@ -77,7 +77,7 @@ sys.path.insert(0, str(SCRIPTS))
 import db_regress  # noqa: E402
 import match_signatures  # noqa: E402
 import parse_logcat  # noqa: E402
-from common import builds, checks, compat, dbpath, gitscope, issuedb, quality, rulediff, site_defaults, userconfig, yamlio  # noqa: E402
+from common import builds, checks, compat, dbpath, draftcheck, gitscope, issuedb, quality, rulediff, site_defaults, userconfig, yamlio  # noqa: E402
 from common.buildname import sanitize_build  # noqa: E402
 from common.exitcodes import CHECK_FAILED, NEEDS_APPROVAL, OK, USAGE  # noqa: E402
 from common.patterns import PatternError, PatternTimeout  # noqa: E402
@@ -720,6 +720,7 @@ def rules(args, defaults: dict, plugin_root: Path) -> tuple[dict, int]:
             remove_draft(draft, defaults)
         back = {i["id"]: i["temp_id"] for i in applied.get("ids") or [] if i.get("temp_id")}
         _retemp_drafts(result, back)
+        draftcheck.record(draft.parent, plan, code, "rules")
         return {"db": str(draft), "scope": "plan:draft", **result}, code
     try:
         db = dbpath.resolve(args.db)
@@ -937,9 +938,11 @@ def judge(args, defaults: dict, plugin_root: Path) -> tuple[dict, int]:
             mapping = {i["temp_id"]: i["id"] for i in applied.get("ids") or []}
             cause_id = mapping.get(cause_id, cause_id)
             root = draft
-            rules_result, _ = verify_rules(draft, draft, "HEAD", plugin_root, defaults,
-                                           _samples(_load_plan(args.plan), plan_path, [], []))
+            draft_plan = _load_plan(args.plan)
+            rules_result, rules_code = verify_rules(draft, draft, "HEAD", plugin_root, defaults,
+                                                    _samples(draft_plan, plan_path, [], []))
             _retemp_drafts(rules_result, {v: k for k, v in mapping.items()})
+            draftcheck.record(draft.parent, draft_plan, rules_code, args.cmd)
         else:
             try:
                 root = dbpath.resolve(args.db)

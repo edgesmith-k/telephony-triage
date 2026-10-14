@@ -1930,3 +1930,35 @@ def test_stage_skips_feedback_check_for_record_and_republished_plan():
     again = ws.stage(job, "issue/MOCK-7001")
     assert again["feedback_check"] == {"status": "skipped", "reason": "재적용"}
     ws.db_pr("discard", ws.wt(job))
+
+
+def test_stage_requires_draft_verify_for_authoring_ops():
+    """작성 op(새 원인 등)가 있는 계획은 그 계획의 초안 검증(`db_verify rules --plan --draft`) 기록이 있어야 stage한다
+    (SKILL Step 7, eval 3). 기록 뒤 작성 op가 바뀌면 다시 멈추고, 작성 op가 없는 계획(append)은 기록 없이 된다."""
+    ws = Workspace()
+    ws.plan("MOCK-7002", "p7-analyze-new-cause.plan.json", draft_verified=False)
+    ws.put("MOCK-7002", "fixtures/cut-1.log", SIM_LOG)
+    ws.acquire("MOCK-7002")
+    out = ws.stage("MOCK-7002", "issue/MOCK-7002", expect=1, dry_run=True)
+    assert out["stopped"] == "draft-verify" and "--draft" in out["next"] and "기록 없음" in out["reason"]
+    assert not ws.wt("MOCK-7002").exists()                  # worktree·apply 전에 멈춘다
+    plan = ws.job_dir("MOCK-7002") / "plan.json"
+    verify = ws.run("db_verify.py", ["rules", "--plan", plan, "--draft", ws.job_dir("MOCK-7002") / "draft", "--db", ws.clone])
+    assert verify.returncode == 0, verify.stderr[-2000:]
+    doc = json.loads(plan.read_text(encoding="utf-8"))
+    doc["pr_notes"] = ["초안 검증 뒤 pr_notes만 바꿈"]           # 작성 op 밖: 다시 검증하지 않는다
+    plan.write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
+    ws.stage("MOCK-7002", "issue/MOCK-7002", expect=(0, 3), dry_run=True)
+    ws.db_pr("discard", ws.wt("MOCK-7002"))
+    ws.acquire("MOCK-7002")
+    new = next(op for op in doc["operations"] if op["op"] == "new-cause")
+    new.setdefault("cause", {})["title"] = "초안 검증 뒤 바꾼 제목"
+    plan.write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
+    out = ws.stage("MOCK-7002", "issue/MOCK-7002", expect=1, dry_run=True)
+    assert out["stopped"] == "draft-verify" and "바뀜" in out["reason"]
+    ws.db_pr("lock", "release", "MOCK-7002")
+
+    ws.plan("MOCK-7001", "p7-analyze-append.plan.json", draft_verified=False)
+    ws.acquire("MOCK-7001")
+    ws.stage("MOCK-7001", "issue/MOCK-7001", expect=(0, 3), dry_run=True)
+    ws.db_pr("discard", ws.wt("MOCK-7001"))

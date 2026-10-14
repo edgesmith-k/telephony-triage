@@ -14,6 +14,7 @@ from pathlib import Path
 import yaml
 from common import userconfig, yamlio
 from common import checks as checks_mod
+from common import draftcheck
 from common import ghcli
 import db_summary
 from common.exitcodes import CHECK_FAILED, OK, USAGE
@@ -220,6 +221,13 @@ def stage(ctx: Ctx, plan_path: Path, wt: Path, branch: str, dry_run: bool) -> tu
     if not base_sha:
         raise UsageError(f"origin/{ctx.base}가 없습니다.")
     plan = _load_plan_checked(plan_path, ctx.repo, base_sha)
+    gap = draftcheck.missing(job_dir, plan)
+    if gap:     # SKILL Step 7: 작성 op가 있으면 초안 검증 표를 사용자에게 보인 뒤에만 stage (eval 3)
+        stopped = {"job": job, "plan": str(Path(plan_path).resolve()), "stopped": "draft-verify", "reason": gap,
+                   "next": (f"db_verify.py rules --plan {plan_path} --draft {job_dir / 'draft'} 표를 사용자에게 보이고(skipped는 "
+                            "통과 아님, 다른 유형 fixture에 걸리면 좁히기/allow-cause를 묻는다) 다시 stage한다")}
+        _write_json(job_dir / STAGE, stopped)
+        return stopped, CHECK_FAILED
     feedback_check = _check_feedback_suggested(plan, Path(plan_path), job_dir)
     try:
         old_state = _read_json(job_dir / STATE)
