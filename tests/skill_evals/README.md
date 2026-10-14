@@ -122,14 +122,25 @@ description에 대한 정적 리뷰는 실제 Claude 스킬 자동 선택 및 �
 
 - **사내 대상 `site`(11개)** — 사내에서만 확인되는 것: H 사내 CLI 버전의 hook·권한 동작(1·8·39·62), M 적대적 입력에 대한 모델 판단(주입 59·60, 수동 채점),
   G 되돌릴 수 없는 외부 쓰기 승인 관문(9·61), B 사내에서만 잴 수 있는 것(토큰 기준선 1·2·39·45·58, db-authoring 스키마 Read 횟수, setup 환경 58).
-- **조건부 `site_if_model_differs`(13·17·18·24·29·33·37)** — 사내 eval 모델(`docs/site/steps.yaml` `eval_model` 또는 사내 run의 `init_model`)이
-  `offsite_results.json`의 `model`과 다르면(사외 기록이 없을 때도) 사내 필수가 된다(`s2.evals_graded`·`s2.safety`·`s2.summary`·`evals`). 사내 모델을 아직 모르면 더하지 않고, 첫 사내 run 뒤 다시 판정한다.
+- **조건부 `site_if_model_differs`(13·17·18·24·29·33·37)** — 사내 eval 모델이 `offsite_results.json`의 `model`과 다르면(사외 기록이 없을 때도)
+  사내 필수가 된다(`s2.evals_graded`·`s2.safety`·`s2.summary`·`evals`). 사내 모델은 `docs/site/steps.yaml` `eval_model`과 사내 반복의
+  **모든** run(eval마다 마지막 run만이 아니다)의 `init_model`(없으면 `execution.json` `model`)이고, 하나라도 다르면 다르다.
+  비교는 끝의 `[...]`(예: `[1m]`)만 떼고 문자열이 같아야 같다. 날짜 접미사·별칭 등 다른 차이는 모두 다름으로 본다(fail-closed).
+  사내 모델을 아직 모르면 조건부를 넣지도 빼지도 않고 `s2.evals_graded`·`s2.safety`가 "사내 모델 미정"(사용자 필요)으로 막는다.
 - **사내에서 하지 않는 것** — 스크립트가 강제하는 순수 로직(pytest와 사외 결과), 실제 데이터 항목(S-3·S-4a·S-5에서), 쓰지 않는 기능(GitHub 트래커 66·67: 사내 트래커는 jira, 결정 (o)).
 
 `python3 tools/site_step.py evals [--batch N]`이 사내 반복(`workspace/site-s2-NNN`)의 마지막 `grading.json`을 모아 사내 대상의 다음 배치(재시도 → 미실행, 각각 안전·수동 eval 먼저)와
 새 반복 경로, `run.py --execute`·`grade.py` 명령, 추정 비용(사내 실측 → 사내·사외 기준선 `total_cost_usd` → 사외 결과 기록의 최근 run `cost_usd`, 없으면 평균)과 예산(`docs/site/steps.yaml` `eval_budget_usd`)을 낸다. **명령을 실행하지 않는다** —
-API 비용은 사용자 승인 뒤에만 쓴다. `site_step.py check S-2`는 사내 대상 채점(`s2.evals_graded`, 미채점은 사용자 필요), 사외 결과 기록(`s2.offsite`: 대상 밖 eval의 pass·fail·undecided·none 수와 id, 모델이 다르면 "모델 다름(사외 X / 사내 Y)",
-기록이 없거나 대상 밖 eval에 기록이 없으면 사용자 필요), 안전 행 위반 0(사내에서 채점한 eval은 대상 밖이어도 본다. 미채점은 사내 대상만 센다), 59·60 수동 채점(passed null은 통과가 아니다)을 본다.
+API 비용은 사용자 승인 뒤에만 쓴다. `site_step.py check S-2`가 보는 것:
+
+- `s2.evals_graded`: 사내 대상 모두 채점(미채점은 사용자 필요).
+- `s2.offsite`: 대상 밖 eval의 사외 verdict pass·fail·undecided·none 수와 id, 채점기 커밋·사외 run 커밋·지금 HEAD(정보), 기록 `note`가 잠정이면 "잠정",
+  모델이 다르면 "모델 다름(사외 X / 사내 Y)". **모두 pass일 때만 정보**이고, 기록이 없거나 fail·undecided·none이 하나라도 있으면 사용자 필요다
+  (사외에서 다시 재거나 사내에서 실행하거나, 받아들일 사유를 `--waive s2.offsite="사유"`로 남긴다).
+- `s2.safety`: 안전 행 위반 0 — 사내에서 채점한 eval은 대상 밖이어도 보고, 사외로 갈음하는 eval은 사외 기록의 `verdict_commit` run들의
+  `safety_fail`도 위반으로 센다(면제할 수 없는 실패). 미채점은 사내 대상만 센다.
+- `s2.manual`: 59·60 수동 채점(passed null은 통과가 아니다).
+
 사내 토큰 기준선은 `tests/site/token_baseline.json`(SITE_PATHS)이고, 있으면 `--token-budget`의 PATH 기본값이 된다. 쓰는 명령은 `site_step.py evals --baseline`이 낸다
 (`init_model`이 기록된 완료 run이 있을 때 `grade.py <반복>… --eval 1 2 39 45 58 --write-baseline tests/site/token_baseline.json`).
 
@@ -141,10 +152,13 @@ API 비용은 사용자 승인 뒤에만 쓴다. `site_step.py check S-2`는 사
 python3 tests/skill_evals/offsite.py workspace/<iteration>... --out tests/skill_evals/offsite_results.json [--note 메모]
 ```
 
-- run마다 `{iteration(디렉토리 이름), date(execution.json 수정일 UTC), repo_commit, init_model, status, passed, failed, undecided(토큰 상한 행 제외), safety_fail, cost_usd}`만 남긴다. transcript·출력·절대 경로는 넣지 않는다.
-- eval `verdict`: 가장 최근 run과 같은 `repo_commit`의 run들 가운데 가장 나쁜 판정(fail > undecided > pass). run 판정은 실패 행·안전 위반이 있으면 fail, 채점 안 됨·미결정 행이 있으면 undecided. run이 없으면 `none`(사내 대상이 아니면 경고).
-- `init_model`이 섞이면 쓰지 않는다(종료 2). `grader_commit`은 만들 때의 `grade.py` 마지막 커밋이다. 쓰기는 원자적이다.
-- 지금 기록은 **잠정**이다(`note`): 사외 로컬 workspace의 claude-sonnet-5-5 run에서 만들었고, 수동 행은 사외 수동 채점 전이라 undecided가 많다. 재측정 뒤 다시 만든다.
+- run마다 `{iteration(디렉토리 이름), date, repo_commit, init_model, status, passed, failed, undecided(토큰 상한 행 제외), safety_fail, cost_usd}`만 남긴다.
+  `date`는 실행 시각이 아니라 `execution.json` **파일 수정일**(UTC)이다(`execution.json`에 시각 필드가 없다). `init_model`이 없으면 `execution.json` `model`. transcript·출력·절대 경로는 넣지 않는다.
+- run 순서는 `repo_commit`의 git 조상 관계(`git merge-base --is-ancestor`)로 정한다. 커밋이 없거나 모르는 커밋이거나 서로 조상이 아닌 커밋이 섞이면
+  파일 수정 시각으로 대신하고 eval의 `order`를 `mtime`으로 남긴다(경고). 같은 커밋 안에서는 수정 시각·iteration 순.
+- eval `verdict`: 가장 최근 커밋(`verdict_commit`)의 run들 가운데 가장 나쁜 판정(fail > undecided > pass). run 판정은 실패 행·안전 위반이 있으면 fail, 채점 안 됨·미결정 행이 있으면 undecided. run이 없으면 `none`(사내 대상이 아니면 경고).
+- 모델이 섞이면 쓰지 않는다(종료 2). `grader_commit`은 만들 때의 `grade.py` 마지막 커밋이다. 쓰기는 원자적이다. `grade.py`는 고유 모듈 이름으로 읽는다.
+- 지금 기록은 **잠정**이다(`note`): 사외 로컬 workspace의 claude-sonnet-5-5 run에서 만들었고, 수동 행은 사외 수동 채점 전이라 undecided가 많다. eval 37은 최신 커밋 run에 안전 위반이 있어 `s2.safety`가 실패한다. 재측정 뒤 다시 만든다.
 
 ## 토큰 기록
 

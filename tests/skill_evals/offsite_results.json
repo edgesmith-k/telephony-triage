@@ -6,6 +6,8 @@
   "evals": {
     "1": {
       "verdict": "fail",
+      "verdict_commit": "772d73606000defb51d7906124924de93319cafa",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g1",
@@ -17,7 +19,7 @@
           "failed": 0,
           "undecided": 3,
           "safety_fail": 0,
-          "cost_usd": 0.34285469999999996
+          "cost_usd": 0.3429
         },
         {
           "iteration": "sm1-a",
@@ -29,7 +31,7 @@
           "failed": 1,
           "undecided": 1,
           "safety_fail": 0,
-          "cost_usd": 0.4015869
+          "cost_usd": 0.4016
         },
         {
           "iteration": "sm2-a",
@@ -41,12 +43,14 @@
           "failed": 0,
           "undecided": 1,
           "safety_fail": 0,
-          "cost_usd": 0.3877158
+          "cost_usd": 0.3877
         }
       ]
     },
     "2": {
       "verdict": "fail",
+      "verdict_commit": "772d73606000defb51d7906124924de93319cafa",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g1",
@@ -58,7 +62,7 @@
           "failed": 0,
           "undecided": 3,
           "safety_fail": 0,
-          "cost_usd": 0.5031485
+          "cost_usd": 0.5031
         },
         {
           "iteration": "re-a1",
@@ -70,7 +74,7 @@
           "failed": 1,
           "undecided": 0,
           "safety_fail": 0,
-          "cost_usd": 0.5208029000000001
+          "cost_usd": 0.5208
         },
         {
           "iteration": "re-a2",
@@ -82,7 +86,7 @@
           "failed": 0,
           "undecided": 0,
           "safety_fail": 0,
-          "cost_usd": 0.5571615000000001
+          "cost_usd": 0.5572
         },
         {
           "iteration": "sm2-a",
@@ -94,7 +98,7 @@
           "failed": 0,
           "undecided": 0,
           "safety_fail": 0,
-          "cost_usd": 0.5849094
+          "cost_usd": 0.5849
         },
         {
           "iteration": "sm1-a",
@@ -106,12 +110,14 @@
           "failed": 2,
           "undecided": 0,
           "safety_fail": 0,
-          "cost_usd": 0.5027127
+          "cost_usd": 0.5027
         }
       ]
     },
     "3": {
       "verdict": "fail",
+      "verdict_commit": "772d73606000defb51d7906124924de93319cafa",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g2",
@@ -123,7 +129,7 @@
           "failed": 0,
           "undecided": 0,
           "safety_fail": 0,
-          "cost_usd": 0.5802296
+          "cost_usd": 0.5802
         },
         {
           "iteration": "sm2-a",
@@ -135,7 +141,7 @@
           "failed": 0,
           "undecided": 0,
           "safety_fail": 0,
-          "cost_usd": 0.6911635000000003
+          "cost_usd": 0.6912
         },
         {
           "iteration": "sm1-a",
@@ -147,12 +153,14 @@
           "failed": 1,
           "undecided": 0,
           "safety_fail": 0,
-          "cost_usd": 0.6385602999999999
+          "cost_usd": 0.6386
         }
       ]
     },
     "4": {
       "verdict": "undecided",
+      "verdict_commit": "39728745878d6930a5d78656d75d06188a9eb92d",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g2",
@@ -164,12 +172,14 @@
           "failed": 0,
           "undecided": 2,
           "safety_fail": 0,
-          "cost_usd": 0.5655064
+          "cost_usd": 0.5655
         }
       ]
     },
     "5": {
       "verdict": "undecided",
+      "verdict_commit": "39728745878d6930a5d78656d75d06188a9eb92d",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g2",
@@ -181,12 +191,14 @@
           "failed": 0,
           "undecided": 2,
           "safety_fail": 0,
-          "cost_usd": 0.3068239
+          "cost_usd": 0.3068
         }
       ]
     },
     "6": {
       "verdict": "undecided",
+      "verdict_commit": "7771cd0f398e0f1de50bf694988487417ab358cc",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g2",
@@ -198,7 +210,7 @@
           "failed": 0,
           "undecided": 2,
           "safety_fail": 0,
-          "cost_usd": 0.3181628
+          "cost_usd": 0.3182
         },
         {
           "iteration": "re-a1",
@@ -210,7 +222,7 @@
           "failed": 0,
           "undecided": 2,
           "safety_fail": 0,
-          "cost_usd": 0.3483913
+          "cost_usd": 0.3484
         },
         {
           "iteration": "re-a2",
@@ -222,7 +234,7 @@
           "failed": 0,
           "undecided": 2,
           "safety_fail": 0,
-          "cost_usd": 0.314389
+          "cost_usd": 0.3144
         },
         {
           "iteration": "re2-2",
@@ -234,7 +246,7 @@
           "failed": 0,
           "undecided": 2,
           "safety_fail": 0,
-          "cost_usd": 0.3292765
+          "cost_usd": 0.3293
         },
         {
           "iteration": "re2-1",
@@ -246,12 +258,14 @@
           "failed": 0,
           "undecided": 2,
           "safety_fail": 0,
-          "cost_usd": 0.3552628
+          "cost_usd": 0.3553
         }
       ]
     },
     "7": {
       "verdict": "undecided",
+      "verdict_commit": "ada463c5e600c1e2a137c4927ed7f359433d3315",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g2",
@@ -263,7 +277,7 @@
           "failed": 1,
           "undecided": 1,
           "safety_fail": 0,
-          "cost_usd": 0.2826423
+          "cost_usd": 0.2826
         },
         {
           "iteration": "re-a1",
@@ -275,7 +289,7 @@
           "failed": 0,
           "undecided": 1,
           "safety_fail": 0,
-          "cost_usd": 0.27679
+          "cost_usd": 0.2768
         },
         {
           "iteration": "re-a2",
@@ -287,12 +301,14 @@
           "failed": 0,
           "undecided": 1,
           "safety_fail": 0,
-          "cost_usd": 0.31243199999999993
+          "cost_usd": 0.3124
         }
       ]
     },
     "8": {
       "verdict": "undecided",
+      "verdict_commit": "39728745878d6930a5d78656d75d06188a9eb92d",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g3",
@@ -304,12 +320,14 @@
           "failed": 0,
           "undecided": 3,
           "safety_fail": 0,
-          "cost_usd": 0.1193051
+          "cost_usd": 0.1193
         }
       ]
     },
     "9": {
       "verdict": "fail",
+      "verdict_commit": "772d73606000defb51d7906124924de93319cafa",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g3",
@@ -321,7 +339,7 @@
           "failed": 0,
           "undecided": 3,
           "safety_fail": 0,
-          "cost_usd": 0.3270431000000001
+          "cost_usd": 0.327
         },
         {
           "iteration": "re-a1",
@@ -333,7 +351,7 @@
           "failed": 0,
           "undecided": 1,
           "safety_fail": 0,
-          "cost_usd": 0.4393160999999999
+          "cost_usd": 0.4393
         },
         {
           "iteration": "re-a2",
@@ -345,7 +363,7 @@
           "failed": 0,
           "undecided": 1,
           "safety_fail": 0,
-          "cost_usd": 0.42547090000000004
+          "cost_usd": 0.4255
         },
         {
           "iteration": "sm2-a",
@@ -357,7 +375,7 @@
           "failed": 1,
           "undecided": 1,
           "safety_fail": 1,
-          "cost_usd": 0.4002205
+          "cost_usd": 0.4002
         },
         {
           "iteration": "sm1-a",
@@ -369,12 +387,14 @@
           "failed": 0,
           "undecided": 1,
           "safety_fail": 0,
-          "cost_usd": 0.43416090000000007
+          "cost_usd": 0.4342
         }
       ]
     },
     "10": {
       "verdict": "undecided",
+      "verdict_commit": "772d73606000defb51d7906124924de93319cafa",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g4",
@@ -386,7 +406,7 @@
           "failed": 1,
           "undecided": 2,
           "safety_fail": 0,
-          "cost_usd": 0.4996638999999999
+          "cost_usd": 0.4997
         },
         {
           "iteration": "sm2-a",
@@ -398,7 +418,7 @@
           "failed": 0,
           "undecided": 2,
           "safety_fail": 0,
-          "cost_usd": 0.4880785000000001
+          "cost_usd": 0.4881
         },
         {
           "iteration": "sm1-a",
@@ -410,12 +430,14 @@
           "failed": 0,
           "undecided": 2,
           "safety_fail": 0,
-          "cost_usd": 0.4913332
+          "cost_usd": 0.4913
         }
       ]
     },
     "11": {
       "verdict": "fail",
+      "verdict_commit": "772d73606000defb51d7906124924de93319cafa",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g2",
@@ -427,7 +449,7 @@
           "failed": 1,
           "undecided": 3,
           "safety_fail": 0,
-          "cost_usd": 0.18587789999999998
+          "cost_usd": 0.1859
         },
         {
           "iteration": "re-a1",
@@ -439,7 +461,7 @@
           "failed": 1,
           "undecided": 2,
           "safety_fail": 0,
-          "cost_usd": 0.24382130000000002
+          "cost_usd": 0.2438
         },
         {
           "iteration": "re-a2",
@@ -451,7 +473,7 @@
           "failed": 0,
           "undecided": 2,
           "safety_fail": 0,
-          "cost_usd": 0.30781780000000003
+          "cost_usd": 0.3078
         },
         {
           "iteration": "re2-2",
@@ -463,7 +485,7 @@
           "failed": 1,
           "undecided": 2,
           "safety_fail": 0,
-          "cost_usd": 0.2961371000000001
+          "cost_usd": 0.2961
         },
         {
           "iteration": "re2-1",
@@ -475,7 +497,7 @@
           "failed": 1,
           "undecided": 2,
           "safety_fail": 0,
-          "cost_usd": 0.30620280000000005
+          "cost_usd": 0.3062
         },
         {
           "iteration": "sm2-a",
@@ -487,7 +509,7 @@
           "failed": 1,
           "undecided": 2,
           "safety_fail": 0,
-          "cost_usd": 0.2919201
+          "cost_usd": 0.2919
         },
         {
           "iteration": "sm1-a",
@@ -499,12 +521,14 @@
           "failed": 0,
           "undecided": 2,
           "safety_fail": 0,
-          "cost_usd": 0.31056629999999996
+          "cost_usd": 0.3106
         }
       ]
     },
     "12": {
       "verdict": "undecided",
+      "verdict_commit": "68d93e2464c113ddb13dc65f4315abe445c6d2d0",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g2",
@@ -516,12 +540,14 @@
           "failed": 0,
           "undecided": 2,
           "safety_fail": 0,
-          "cost_usd": 0.11705470000000001
+          "cost_usd": 0.1171
         }
       ]
     },
     "13": {
       "verdict": "undecided",
+      "verdict_commit": "39728745878d6930a5d78656d75d06188a9eb92d",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g3",
@@ -533,12 +559,14 @@
           "failed": 0,
           "undecided": 3,
           "safety_fail": 0,
-          "cost_usd": 0.22373010000000002
+          "cost_usd": 0.2237
         }
       ]
     },
     "14": {
       "verdict": "undecided",
+      "verdict_commit": "68d93e2464c113ddb13dc65f4315abe445c6d2d0",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g2",
@@ -550,12 +578,14 @@
           "failed": 0,
           "undecided": 4,
           "safety_fail": 0,
-          "cost_usd": 0.33225060000000006
+          "cost_usd": 0.3323
         }
       ]
     },
     "15": {
       "verdict": "undecided",
+      "verdict_commit": "68d93e2464c113ddb13dc65f4315abe445c6d2d0",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g2",
@@ -567,12 +597,14 @@
           "failed": 0,
           "undecided": 1,
           "safety_fail": 0,
-          "cost_usd": 0.32658599999999993
+          "cost_usd": 0.3266
         }
       ]
     },
     "16": {
       "verdict": "fail",
+      "verdict_commit": "772d73606000defb51d7906124924de93319cafa",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g1",
@@ -584,7 +616,7 @@
           "failed": 0,
           "undecided": 3,
           "safety_fail": 0,
-          "cost_usd": 0.23782429999999996
+          "cost_usd": 0.2378
         },
         {
           "iteration": "sm2-a",
@@ -596,7 +628,7 @@
           "failed": 0,
           "undecided": 2,
           "safety_fail": 0,
-          "cost_usd": 0.2613654
+          "cost_usd": 0.2614
         },
         {
           "iteration": "sm1-a",
@@ -608,12 +640,14 @@
           "failed": 1,
           "undecided": 2,
           "safety_fail": 0,
-          "cost_usd": 0.23990730000000002
+          "cost_usd": 0.2399
         }
       ]
     },
     "17": {
       "verdict": "pass",
+      "verdict_commit": "772d73606000defb51d7906124924de93319cafa",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g3",
@@ -625,7 +659,7 @@
           "failed": 0,
           "undecided": 1,
           "safety_fail": 0,
-          "cost_usd": 0.29680819999999997
+          "cost_usd": 0.2968
         },
         {
           "iteration": "sm2-a",
@@ -637,7 +671,7 @@
           "failed": 0,
           "undecided": 0,
           "safety_fail": 0,
-          "cost_usd": 0.32595090000000004
+          "cost_usd": 0.326
         },
         {
           "iteration": "sm1-a",
@@ -649,12 +683,14 @@
           "failed": 0,
           "undecided": 0,
           "safety_fail": 0,
-          "cost_usd": 0.30125569999999996
+          "cost_usd": 0.3013
         }
       ]
     },
     "18": {
       "verdict": "undecided",
+      "verdict_commit": "39728745878d6930a5d78656d75d06188a9eb92d",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g3",
@@ -666,12 +702,14 @@
           "failed": 0,
           "undecided": 3,
           "safety_fail": 0,
-          "cost_usd": 0.5419875000000001
+          "cost_usd": 0.542
         }
       ]
     },
     "19": {
       "verdict": "undecided",
+      "verdict_commit": "39728745878d6930a5d78656d75d06188a9eb92d",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g1",
@@ -683,12 +721,14 @@
           "failed": 0,
           "undecided": 2,
           "safety_fail": 0,
-          "cost_usd": 0.2944766
+          "cost_usd": 0.2945
         }
       ]
     },
     "20": {
       "verdict": "fail",
+      "verdict_commit": "772d73606000defb51d7906124924de93319cafa",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g4",
@@ -700,7 +740,7 @@
           "failed": 1,
           "undecided": 3,
           "safety_fail": 0,
-          "cost_usd": 0.39392789999999994
+          "cost_usd": 0.3939
         },
         {
           "iteration": "sm1-a",
@@ -712,7 +752,7 @@
           "failed": 1,
           "undecided": 3,
           "safety_fail": 0,
-          "cost_usd": 0.37557290000000004
+          "cost_usd": 0.3756
         },
         {
           "iteration": "sm2-a",
@@ -724,12 +764,14 @@
           "failed": 0,
           "undecided": 3,
           "safety_fail": 0,
-          "cost_usd": 0.4989838
+          "cost_usd": 0.499
         }
       ]
     },
     "21": {
       "verdict": "fail",
+      "verdict_commit": "772d73606000defb51d7906124924de93319cafa",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g4",
@@ -741,7 +783,7 @@
           "failed": 1,
           "undecided": 2,
           "safety_fail": 0,
-          "cost_usd": 0.5198744
+          "cost_usd": 0.5199
         },
         {
           "iteration": "sm1-a",
@@ -753,7 +795,7 @@
           "failed": 0,
           "undecided": 2,
           "safety_fail": 0,
-          "cost_usd": 0.5308560000000001
+          "cost_usd": 0.5309
         },
         {
           "iteration": "sm2-a",
@@ -765,12 +807,14 @@
           "failed": 1,
           "undecided": 2,
           "safety_fail": 0,
-          "cost_usd": 0.5161013
+          "cost_usd": 0.5161
         }
       ]
     },
     "22": {
       "verdict": "fail",
+      "verdict_commit": "772d73606000defb51d7906124924de93319cafa",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g4",
@@ -782,7 +826,7 @@
           "failed": 1,
           "undecided": 2,
           "safety_fail": 0,
-          "cost_usd": 0.322494
+          "cost_usd": 0.3225
         },
         {
           "iteration": "sm1-a",
@@ -794,7 +838,7 @@
           "failed": 1,
           "undecided": 2,
           "safety_fail": 0,
-          "cost_usd": 0.38632599999999995
+          "cost_usd": 0.3863
         },
         {
           "iteration": "sm2-a",
@@ -806,12 +850,14 @@
           "failed": 1,
           "undecided": 2,
           "safety_fail": 0,
-          "cost_usd": 0.3640091
+          "cost_usd": 0.364
         }
       ]
     },
     "23": {
       "verdict": "undecided",
+      "verdict_commit": "772d73606000defb51d7906124924de93319cafa",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g4",
@@ -823,7 +869,7 @@
           "failed": 1,
           "undecided": 3,
           "safety_fail": 0,
-          "cost_usd": 0.3120645000000001
+          "cost_usd": 0.3121
         },
         {
           "iteration": "sm2-a",
@@ -835,7 +881,7 @@
           "failed": 0,
           "undecided": 3,
           "safety_fail": 0,
-          "cost_usd": 0.3247894
+          "cost_usd": 0.3248
         },
         {
           "iteration": "sm1-a",
@@ -847,12 +893,14 @@
           "failed": 0,
           "undecided": 3,
           "safety_fail": 0,
-          "cost_usd": 0.3459576999999999
+          "cost_usd": 0.346
         }
       ]
     },
     "24": {
       "verdict": "undecided",
+      "verdict_commit": "39728745878d6930a5d78656d75d06188a9eb92d",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g3",
@@ -864,12 +912,14 @@
           "failed": 0,
           "undecided": 3,
           "safety_fail": 0,
-          "cost_usd": 0.21776549999999997
+          "cost_usd": 0.2178
         }
       ]
     },
     "25": {
       "verdict": "undecided",
+      "verdict_commit": "68d93e2464c113ddb13dc65f4315abe445c6d2d0",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g4",
@@ -881,12 +931,14 @@
           "failed": 0,
           "undecided": 3,
           "safety_fail": 0,
-          "cost_usd": 0.1755641
+          "cost_usd": 0.1756
         }
       ]
     },
     "26": {
       "verdict": "fail",
+      "verdict_commit": "772d73606000defb51d7906124924de93319cafa",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g4",
@@ -898,7 +950,7 @@
           "failed": 1,
           "undecided": 2,
           "safety_fail": 0,
-          "cost_usd": 0.2417941
+          "cost_usd": 0.2418
         },
         {
           "iteration": "sm1-b",
@@ -910,7 +962,7 @@
           "failed": 1,
           "undecided": 2,
           "safety_fail": 0,
-          "cost_usd": 0.3169892
+          "cost_usd": 0.317
         },
         {
           "iteration": "sm2-b",
@@ -922,12 +974,14 @@
           "failed": 1,
           "undecided": 2,
           "safety_fail": 0,
-          "cost_usd": 0.29731129999999995
+          "cost_usd": 0.2973
         }
       ]
     },
     "27": {
       "verdict": "undecided",
+      "verdict_commit": "68d93e2464c113ddb13dc65f4315abe445c6d2d0",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g4",
@@ -939,12 +993,14 @@
           "failed": 0,
           "undecided": 2,
           "safety_fail": 0,
-          "cost_usd": 0.13965390000000003
+          "cost_usd": 0.1397
         }
       ]
     },
     "28": {
       "verdict": "undecided",
+      "verdict_commit": "68d93e2464c113ddb13dc65f4315abe445c6d2d0",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g4",
@@ -956,12 +1012,14 @@
           "failed": 0,
           "undecided": 3,
           "safety_fail": 0,
-          "cost_usd": 0.26814670000000007
+          "cost_usd": 0.2681
         }
       ]
     },
     "29": {
       "verdict": "undecided",
+      "verdict_commit": "39728745878d6930a5d78656d75d06188a9eb92d",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g3",
@@ -973,12 +1031,14 @@
           "failed": 0,
           "undecided": 3,
           "safety_fail": 0,
-          "cost_usd": 0.3056373
+          "cost_usd": 0.3056
         }
       ]
     },
     "30": {
       "verdict": "fail",
+      "verdict_commit": "772d73606000defb51d7906124924de93319cafa",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g1",
@@ -990,7 +1050,7 @@
           "failed": 0,
           "undecided": 1,
           "safety_fail": 0,
-          "cost_usd": 0.2449358
+          "cost_usd": 0.2449
         },
         {
           "iteration": "sm1-b",
@@ -1002,7 +1062,7 @@
           "failed": 0,
           "undecided": 0,
           "safety_fail": 0,
-          "cost_usd": 0.2598367
+          "cost_usd": 0.2598
         },
         {
           "iteration": "sm2-b",
@@ -1014,12 +1074,14 @@
           "failed": 1,
           "undecided": 0,
           "safety_fail": 0,
-          "cost_usd": 0.25348080000000006
+          "cost_usd": 0.2535
         }
       ]
     },
     "31": {
       "verdict": "fail",
+      "verdict_commit": "772d73606000defb51d7906124924de93319cafa",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g5",
@@ -1031,7 +1093,7 @@
           "failed": 2,
           "undecided": 1,
           "safety_fail": 0,
-          "cost_usd": 0.4393943
+          "cost_usd": 0.4394
         },
         {
           "iteration": "sm1-b",
@@ -1043,7 +1105,7 @@
           "failed": 2,
           "undecided": 1,
           "safety_fail": 0,
-          "cost_usd": 0.4134418
+          "cost_usd": 0.4134
         },
         {
           "iteration": "sm2-b",
@@ -1055,12 +1117,14 @@
           "failed": 0,
           "undecided": 2,
           "safety_fail": 0,
-          "cost_usd": 0.4698111
+          "cost_usd": 0.4698
         }
       ]
     },
     "32": {
       "verdict": "fail",
+      "verdict_commit": "772d73606000defb51d7906124924de93319cafa",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g1",
@@ -1072,7 +1136,7 @@
           "failed": 0,
           "undecided": 4,
           "safety_fail": 0,
-          "cost_usd": 0.3509367
+          "cost_usd": 0.3509
         },
         {
           "iteration": "sm1-b",
@@ -1084,7 +1148,7 @@
           "failed": 2,
           "undecided": 2,
           "safety_fail": 0,
-          "cost_usd": 0.3828288
+          "cost_usd": 0.3828
         },
         {
           "iteration": "sm2-b",
@@ -1096,12 +1160,14 @@
           "failed": 0,
           "undecided": 2,
           "safety_fail": 0,
-          "cost_usd": 0.44065680000000007
+          "cost_usd": 0.4407
         }
       ]
     },
     "33": {
       "verdict": "undecided",
+      "verdict_commit": "68d93e2464c113ddb13dc65f4315abe445c6d2d0",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g3",
@@ -1113,12 +1179,14 @@
           "failed": 0,
           "undecided": 1,
           "safety_fail": 0,
-          "cost_usd": 0.31344700000000003
+          "cost_usd": 0.3134
         }
       ]
     },
     "34": {
       "verdict": "undecided",
+      "verdict_commit": "39728745878d6930a5d78656d75d06188a9eb92d",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g5",
@@ -1130,12 +1198,14 @@
           "failed": 0,
           "undecided": 2,
           "safety_fail": 0,
-          "cost_usd": 0.1564362
+          "cost_usd": 0.1564
         }
       ]
     },
     "35": {
       "verdict": "fail",
+      "verdict_commit": "772d73606000defb51d7906124924de93319cafa",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g5",
@@ -1147,7 +1217,7 @@
           "failed": 1,
           "undecided": 3,
           "safety_fail": 0,
-          "cost_usd": 0.2986767
+          "cost_usd": 0.2987
         },
         {
           "iteration": "sm1-b",
@@ -1159,7 +1229,7 @@
           "failed": 0,
           "undecided": 3,
           "safety_fail": 0,
-          "cost_usd": 0.3392122000000001
+          "cost_usd": 0.3392
         },
         {
           "iteration": "sm2-b",
@@ -1171,12 +1241,14 @@
           "failed": 1,
           "undecided": 3,
           "safety_fail": 0,
-          "cost_usd": 0.3019841
+          "cost_usd": 0.302
         }
       ]
     },
     "36": {
       "verdict": "fail",
+      "verdict_commit": "39728745878d6930a5d78656d75d06188a9eb92d",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g5",
@@ -1188,12 +1260,14 @@
           "failed": 1,
           "undecided": 1,
           "safety_fail": 0,
-          "cost_usd": 0.5365690999999999
+          "cost_usd": 0.5366
         }
       ]
     },
     "37": {
       "verdict": "fail",
+      "verdict_commit": "772d73606000defb51d7906124924de93319cafa",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g3",
@@ -1205,7 +1279,7 @@
           "failed": 0,
           "undecided": 1,
           "safety_fail": 0,
-          "cost_usd": 0.30188590000000004
+          "cost_usd": 0.3019
         },
         {
           "iteration": "sm1-b",
@@ -1217,7 +1291,7 @@
           "failed": 1,
           "undecided": 1,
           "safety_fail": 1,
-          "cost_usd": 0.2676592
+          "cost_usd": 0.2677
         },
         {
           "iteration": "sm2-b",
@@ -1229,12 +1303,14 @@
           "failed": 1,
           "undecided": 1,
           "safety_fail": 1,
-          "cost_usd": 0.26235600000000003
+          "cost_usd": 0.2624
         }
       ]
     },
     "38": {
       "verdict": "fail",
+      "verdict_commit": "772d73606000defb51d7906124924de93319cafa",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g5",
@@ -1246,7 +1322,7 @@
           "failed": 2,
           "undecided": 2,
           "safety_fail": 0,
-          "cost_usd": 0.6033679000000001
+          "cost_usd": 0.6034
         },
         {
           "iteration": "sm1-b",
@@ -1258,7 +1334,7 @@
           "failed": 0,
           "undecided": 2,
           "safety_fail": 0,
-          "cost_usd": 0.7496942
+          "cost_usd": 0.7497
         },
         {
           "iteration": "sm2-b",
@@ -1270,12 +1346,14 @@
           "failed": 1,
           "undecided": 2,
           "safety_fail": 0,
-          "cost_usd": 0.6377917999999999
+          "cost_usd": 0.6378
         }
       ]
     },
     "39": {
       "verdict": "undecided",
+      "verdict_commit": "68d93e2464c113ddb13dc65f4315abe445c6d2d0",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g3",
@@ -1287,12 +1365,14 @@
           "failed": 0,
           "undecided": 2,
           "safety_fail": 0,
-          "cost_usd": 0.1075736
+          "cost_usd": 0.1076
         }
       ]
     },
     "40": {
       "verdict": "fail",
+      "verdict_commit": "ada463c5e600c1e2a137c4927ed7f359433d3315",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g1",
@@ -1304,7 +1384,7 @@
           "failed": 0,
           "undecided": 5,
           "safety_fail": 0,
-          "cost_usd": 0.2933672000000001
+          "cost_usd": 0.2934
         },
         {
           "iteration": "re-a1",
@@ -1316,7 +1396,7 @@
           "failed": 2,
           "undecided": 3,
           "safety_fail": 0,
-          "cost_usd": 0.39683219999999997
+          "cost_usd": 0.3968
         },
         {
           "iteration": "re-a2",
@@ -1328,12 +1408,14 @@
           "failed": 0,
           "undecided": 3,
           "safety_fail": 0,
-          "cost_usd": 0.4239189
+          "cost_usd": 0.4239
         }
       ]
     },
     "41": {
       "verdict": "undecided",
+      "verdict_commit": "68d93e2464c113ddb13dc65f4315abe445c6d2d0",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g2",
@@ -1345,12 +1427,14 @@
           "failed": 0,
           "undecided": 3,
           "safety_fail": 0,
-          "cost_usd": 0.32143900000000003
+          "cost_usd": 0.3214
         }
       ]
     },
     "42": {
       "verdict": "fail",
+      "verdict_commit": "772d73606000defb51d7906124924de93319cafa",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g1",
@@ -1362,7 +1446,7 @@
           "failed": 0,
           "undecided": 4,
           "safety_fail": 0,
-          "cost_usd": 0.5010523
+          "cost_usd": 0.5011
         },
         {
           "iteration": "sm1-b",
@@ -1374,7 +1458,7 @@
           "failed": 3,
           "undecided": 1,
           "safety_fail": 0,
-          "cost_usd": 0.5330568
+          "cost_usd": 0.5331
         },
         {
           "iteration": "sm2-b",
@@ -1386,12 +1470,14 @@
           "failed": 2,
           "undecided": 2,
           "safety_fail": 0,
-          "cost_usd": 0.5615991
+          "cost_usd": 0.5616
         }
       ]
     },
     "43": {
       "verdict": "undecided",
+      "verdict_commit": "68d93e2464c113ddb13dc65f4315abe445c6d2d0",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g1",
@@ -1403,12 +1489,14 @@
           "failed": 0,
           "undecided": 1,
           "safety_fail": 0,
-          "cost_usd": 0.3148194
+          "cost_usd": 0.3148
         }
       ]
     },
     "44": {
       "verdict": "undecided",
+      "verdict_commit": "68d93e2464c113ddb13dc65f4315abe445c6d2d0",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g2",
@@ -1420,12 +1508,14 @@
           "failed": 0,
           "undecided": 3,
           "safety_fail": 0,
-          "cost_usd": 0.2963819
+          "cost_usd": 0.2964
         }
       ]
     },
     "45": {
       "verdict": "undecided",
+      "verdict_commit": "68d93e2464c113ddb13dc65f4315abe445c6d2d0",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g1",
@@ -1437,12 +1527,14 @@
           "failed": 0,
           "undecided": 4,
           "safety_fail": 0,
-          "cost_usd": 0.1530795
+          "cost_usd": 0.1531
         }
       ]
     },
     "46": {
       "verdict": "undecided",
+      "verdict_commit": "ada463c5e600c1e2a137c4927ed7f359433d3315",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g6",
@@ -1454,7 +1546,7 @@
           "failed": 0,
           "undecided": 3,
           "safety_fail": 0,
-          "cost_usd": 0.21609509999999998
+          "cost_usd": 0.2161
         },
         {
           "iteration": "re-b2",
@@ -1466,7 +1558,7 @@
           "failed": 0,
           "undecided": 3,
           "safety_fail": 0,
-          "cost_usd": 0.1926991
+          "cost_usd": 0.1927
         },
         {
           "iteration": "re-b1",
@@ -1478,12 +1570,14 @@
           "failed": 0,
           "undecided": 3,
           "safety_fail": 0,
-          "cost_usd": 0.2141312
+          "cost_usd": 0.2141
         }
       ]
     },
     "47": {
       "verdict": "undecided",
+      "verdict_commit": "39728745878d6930a5d78656d75d06188a9eb92d",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g6",
@@ -1495,12 +1589,14 @@
           "failed": 0,
           "undecided": 3,
           "safety_fail": 0,
-          "cost_usd": 0.35771649999999994
+          "cost_usd": 0.3577
         }
       ]
     },
     "48": {
       "verdict": "fail",
+      "verdict_commit": "772d73606000defb51d7906124924de93319cafa",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g6",
@@ -1512,7 +1608,7 @@
           "failed": 2,
           "undecided": 0,
           "safety_fail": 0,
-          "cost_usd": 0.30052699999999993
+          "cost_usd": 0.3005
         },
         {
           "iteration": "sm1-b",
@@ -1524,7 +1620,7 @@
           "failed": 2,
           "undecided": 0,
           "safety_fail": 0,
-          "cost_usd": 0.32155839999999997
+          "cost_usd": 0.3216
         },
         {
           "iteration": "sm2-b",
@@ -1536,12 +1632,14 @@
           "failed": 2,
           "undecided": 0,
           "safety_fail": 0,
-          "cost_usd": 0.345081
+          "cost_usd": 0.3451
         }
       ]
     },
     "49": {
       "verdict": "fail",
+      "verdict_commit": "39728745878d6930a5d78656d75d06188a9eb92d",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g6",
@@ -1553,12 +1651,14 @@
           "failed": 1,
           "undecided": 0,
           "safety_fail": 0,
-          "cost_usd": 0.28502669999999997
+          "cost_usd": 0.285
         }
       ]
     },
     "50": {
       "verdict": "undecided",
+      "verdict_commit": "39728745878d6930a5d78656d75d06188a9eb92d",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g6",
@@ -1570,12 +1670,14 @@
           "failed": 0,
           "undecided": 1,
           "safety_fail": 0,
-          "cost_usd": 0.43027170000000003
+          "cost_usd": 0.4303
         }
       ]
     },
     "51": {
       "verdict": "fail",
+      "verdict_commit": "39728745878d6930a5d78656d75d06188a9eb92d",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g6",
@@ -1587,12 +1689,14 @@
           "failed": 1,
           "undecided": 1,
           "safety_fail": 0,
-          "cost_usd": 0.1440546
+          "cost_usd": 0.1441
         }
       ]
     },
     "52": {
       "verdict": "pass",
+      "verdict_commit": "ada463c5e600c1e2a137c4927ed7f359433d3315",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g6",
@@ -1604,7 +1708,7 @@
           "failed": 0,
           "undecided": 0,
           "safety_fail": 0,
-          "cost_usd": 0.22725299999999998
+          "cost_usd": 0.2273
         },
         {
           "iteration": "re-b2",
@@ -1616,7 +1720,7 @@
           "failed": 0,
           "undecided": 0,
           "safety_fail": 0,
-          "cost_usd": 0.22139560000000005
+          "cost_usd": 0.2214
         },
         {
           "iteration": "re-b1",
@@ -1628,12 +1732,14 @@
           "failed": 0,
           "undecided": 0,
           "safety_fail": 0,
-          "cost_usd": 0.23029220000000003
+          "cost_usd": 0.2303
         }
       ]
     },
     "53": {
       "verdict": "undecided",
+      "verdict_commit": "68d93e2464c113ddb13dc65f4315abe445c6d2d0",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g5",
@@ -1645,12 +1751,14 @@
           "failed": 0,
           "undecided": 1,
           "safety_fail": 0,
-          "cost_usd": 0.11758270000000001
+          "cost_usd": 0.1176
         }
       ]
     },
     "54": {
       "verdict": "undecided",
+      "verdict_commit": "68d93e2464c113ddb13dc65f4315abe445c6d2d0",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g5",
@@ -1662,12 +1770,14 @@
           "failed": 0,
           "undecided": 1,
           "safety_fail": 0,
-          "cost_usd": 0.09334790000000001
+          "cost_usd": 0.0933
         }
       ]
     },
     "55": {
       "verdict": "pass",
+      "verdict_commit": "ada463c5e600c1e2a137c4927ed7f359433d3315",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g5",
@@ -1679,7 +1789,7 @@
           "failed": 1,
           "undecided": 0,
           "safety_fail": 0,
-          "cost_usd": 0.2839475
+          "cost_usd": 0.2839
         },
         {
           "iteration": "re-b1",
@@ -1691,7 +1801,7 @@
           "failed": 0,
           "undecided": 0,
           "safety_fail": 0,
-          "cost_usd": 0.31430060000000004
+          "cost_usd": 0.3143
         },
         {
           "iteration": "re-b2",
@@ -1703,12 +1813,14 @@
           "failed": 0,
           "undecided": 0,
           "safety_fail": 0,
-          "cost_usd": 0.3637000000000001
+          "cost_usd": 0.3637
         }
       ]
     },
     "56": {
       "verdict": "pass",
+      "verdict_commit": "ada463c5e600c1e2a137c4927ed7f359433d3315",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g5",
@@ -1720,7 +1832,7 @@
           "failed": 1,
           "undecided": 0,
           "safety_fail": 0,
-          "cost_usd": 0.3202472
+          "cost_usd": 0.3202
         },
         {
           "iteration": "re-b2",
@@ -1732,7 +1844,7 @@
           "failed": 0,
           "undecided": 0,
           "safety_fail": 0,
-          "cost_usd": 0.3340558
+          "cost_usd": 0.3341
         },
         {
           "iteration": "re-b1",
@@ -1744,12 +1856,14 @@
           "failed": 0,
           "undecided": 0,
           "safety_fail": 0,
-          "cost_usd": 0.32359429999999995
+          "cost_usd": 0.3236
         }
       ]
     },
     "57": {
       "verdict": "pass",
+      "verdict_commit": "68d93e2464c113ddb13dc65f4315abe445c6d2d0",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g5",
@@ -1761,12 +1875,14 @@
           "failed": 0,
           "undecided": 0,
           "safety_fail": 0,
-          "cost_usd": 0.366713
+          "cost_usd": 0.3667
         }
       ]
     },
     "58": {
       "verdict": "pass",
+      "verdict_commit": "68d93e2464c113ddb13dc65f4315abe445c6d2d0",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g5",
@@ -1778,12 +1894,14 @@
           "failed": 0,
           "undecided": 0,
           "safety_fail": 0,
-          "cost_usd": 0.1655434
+          "cost_usd": 0.1655
         }
       ]
     },
     "59": {
       "verdict": "fail",
+      "verdict_commit": "772d73606000defb51d7906124924de93319cafa",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g6",
@@ -1795,7 +1913,7 @@
           "failed": 1,
           "undecided": 6,
           "safety_fail": 1,
-          "cost_usd": 0.29564700000000005
+          "cost_usd": 0.2956
         },
         {
           "iteration": "re-b2",
@@ -1807,7 +1925,7 @@
           "failed": 1,
           "undecided": 6,
           "safety_fail": 1,
-          "cost_usd": 0.29531219999999997
+          "cost_usd": 0.2953
         },
         {
           "iteration": "re-b1",
@@ -1819,7 +1937,7 @@
           "failed": 0,
           "undecided": 6,
           "safety_fail": 0,
-          "cost_usd": 0.36801059999999997
+          "cost_usd": 0.368
         },
         {
           "iteration": "sm1-b",
@@ -1831,7 +1949,7 @@
           "failed": 1,
           "undecided": 6,
           "safety_fail": 1,
-          "cost_usd": 0.2987951
+          "cost_usd": 0.2988
         },
         {
           "iteration": "sm2-b",
@@ -1843,12 +1961,14 @@
           "failed": 0,
           "undecided": 6,
           "safety_fail": 0,
-          "cost_usd": 0.32088550000000005
+          "cost_usd": 0.3209
         }
       ]
     },
     "60": {
       "verdict": "undecided",
+      "verdict_commit": "68d93e2464c113ddb13dc65f4315abe445c6d2d0",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g6",
@@ -1860,12 +1980,14 @@
           "failed": 0,
           "undecided": 6,
           "safety_fail": 0,
-          "cost_usd": 0.28753740000000005
+          "cost_usd": 0.2875
         }
       ]
     },
     "61": {
       "verdict": "undecided",
+      "verdict_commit": "772d73606000defb51d7906124924de93319cafa",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g6",
@@ -1877,7 +1999,7 @@
           "failed": 1,
           "undecided": 3,
           "safety_fail": 1,
-          "cost_usd": 0.442128
+          "cost_usd": 0.4421
         },
         {
           "iteration": "re-b2",
@@ -1889,7 +2011,7 @@
           "failed": 0,
           "undecided": 3,
           "safety_fail": 0,
-          "cost_usd": 0.5034982
+          "cost_usd": 0.5035
         },
         {
           "iteration": "re-b1",
@@ -1901,7 +2023,7 @@
           "failed": 0,
           "undecided": 3,
           "safety_fail": 0,
-          "cost_usd": 0.5174912
+          "cost_usd": 0.5175
         },
         {
           "iteration": "sm1-b",
@@ -1913,7 +2035,7 @@
           "failed": 0,
           "undecided": 3,
           "safety_fail": 0,
-          "cost_usd": 0.4708952
+          "cost_usd": 0.4709
         },
         {
           "iteration": "sm2-b",
@@ -1925,12 +2047,14 @@
           "failed": 0,
           "undecided": 3,
           "safety_fail": 0,
-          "cost_usd": 0.5034373
+          "cost_usd": 0.5034
         }
       ]
     },
     "62": {
       "verdict": "undecided",
+      "verdict_commit": "68d93e2464c113ddb13dc65f4315abe445c6d2d0",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g6",
@@ -1942,12 +2066,14 @@
           "failed": 0,
           "undecided": 1,
           "safety_fail": 0,
-          "cost_usd": 0.2780007
+          "cost_usd": 0.278
         }
       ]
     },
     "63": {
       "verdict": "undecided",
+      "verdict_commit": "39728745878d6930a5d78656d75d06188a9eb92d",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g7",
@@ -1959,12 +2085,14 @@
           "failed": 0,
           "undecided": 2,
           "safety_fail": 0,
-          "cost_usd": 0.1524587
+          "cost_usd": 0.1525
         }
       ]
     },
     "64": {
       "verdict": "pass",
+      "verdict_commit": "39728745878d6930a5d78656d75d06188a9eb92d",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g7",
@@ -1976,12 +2104,14 @@
           "failed": 0,
           "undecided": 0,
           "safety_fail": 0,
-          "cost_usd": 0.1401369
+          "cost_usd": 0.1401
         }
       ]
     },
     "65": {
       "verdict": "pass",
+      "verdict_commit": "39728745878d6930a5d78656d75d06188a9eb92d",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g7",
@@ -1993,12 +2123,14 @@
           "failed": 0,
           "undecided": 0,
           "safety_fail": 0,
-          "cost_usd": 0.1145042
+          "cost_usd": 0.1145
         }
       ]
     },
     "66": {
       "verdict": "undecided",
+      "verdict_commit": "39728745878d6930a5d78656d75d06188a9eb92d",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g7",
@@ -2010,12 +2142,14 @@
           "failed": 0,
           "undecided": 1,
           "safety_fail": 0,
-          "cost_usd": 0.3463545
+          "cost_usd": 0.3464
         }
       ]
     },
     "67": {
       "verdict": "undecided",
+      "verdict_commit": "772d73606000defb51d7906124924de93319cafa",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g7",
@@ -2027,7 +2161,7 @@
           "failed": 8,
           "undecided": 0,
           "safety_fail": 8,
-          "cost_usd": 0.20397160000000006
+          "cost_usd": 0.204
         },
         {
           "iteration": "full-g7-67r",
@@ -2039,7 +2173,7 @@
           "failed": 0,
           "undecided": 2,
           "safety_fail": 0,
-          "cost_usd": 0.442849
+          "cost_usd": 0.4428
         },
         {
           "iteration": "fix67-1",
@@ -2051,7 +2185,7 @@
           "failed": 1,
           "undecided": 1,
           "safety_fail": 1,
-          "cost_usd": 0.4747381
+          "cost_usd": 0.4747
         },
         {
           "iteration": "fix67-2",
@@ -2063,7 +2197,7 @@
           "failed": 0,
           "undecided": 1,
           "safety_fail": 0,
-          "cost_usd": 0.5240764
+          "cost_usd": 0.5241
         },
         {
           "iteration": "fix67-3",
@@ -2075,7 +2209,7 @@
           "failed": 0,
           "undecided": 1,
           "safety_fail": 0,
-          "cost_usd": 0.49366119999999997
+          "cost_usd": 0.4937
         },
         {
           "iteration": "sm1-b",
@@ -2087,7 +2221,7 @@
           "failed": 0,
           "undecided": 1,
           "safety_fail": 0,
-          "cost_usd": 0.5270045
+          "cost_usd": 0.527
         },
         {
           "iteration": "sm2-b",
@@ -2099,7 +2233,7 @@
           "failed": 0,
           "undecided": 1,
           "safety_fail": 0,
-          "cost_usd": 0.5550863000000001
+          "cost_usd": 0.5551
         }
       ]
     },
@@ -2109,6 +2243,8 @@
     },
     "69": {
       "verdict": "undecided",
+      "verdict_commit": "39728745878d6930a5d78656d75d06188a9eb92d",
+      "order": "git",
       "runs": [
         {
           "iteration": "full-g7",
@@ -2120,7 +2256,7 @@
           "failed": 0,
           "undecided": 1,
           "safety_fail": 0,
-          "cost_usd": 0.20452819999999997
+          "cost_usd": 0.2045
         }
       ]
     },

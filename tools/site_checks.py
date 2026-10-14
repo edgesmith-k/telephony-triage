@@ -10,6 +10,7 @@
 """
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import re
@@ -342,9 +343,19 @@ def s1_samples(ctx: Ctx) -> dict:
 # --- S-2 ----------------------------------------------------------------------------------------------------
 
 def _grade_module():
-    sys.path.insert(0, str(REPO / EVAL_DIR))
-    import grade
-    return grade
+    """tests/skill_evals/grade.py를 고유 모듈 이름으로 읽는다(`import grade`는 같은 이름 모듈과 sys.modules에서 겹칠 수 있다).
+    쓰는 공개 값: safety_failures·safety_undecided·is_safety_eval·TOKEN_BUDGET_TEXT."""
+    name = "tt_site_checks_grade"
+    if name not in sys.modules:
+        spec = importlib.util.spec_from_file_location(name, REPO / EVAL_DIR / "grade.py")
+        mod = importlib.util.module_from_spec(spec)
+        sys.modules[name] = mod
+        try:
+            spec.loader.exec_module(mod)
+        except BaseException:
+            sys.modules.pop(name, None)
+            raise
+    return sys.modules[name]
 
 
 def eval_entries(root: Path) -> list[dict]:
@@ -386,31 +397,54 @@ def _norm_model(m) -> str:
     return re.sub(r"\[[^\]]*\]$", "", str(m)).strip() if m else ""
 
 
-def site_models(root: Path, state: dict[int, dict]) -> list[str]:
-    """사내 eval 모델: steps.yaml `eval_model`과 사내 run(`site-s2-*`)의 init_model."""
-    ms = {_norm_model(load_inputs(root).get("eval_model"))} | {_norm_model(s.get("init_model")) for s in state.values()}
+def site_models(root: Path, state: dict[int, dict] | None = None) -> list[str]:
+    """사내 eval 모델: steps.yaml `eval_model`과 사내 반복(`site-s2-*`)의 **모든** run의 init_model(없으면 execution.json `model`).
+    eval마다 마지막 run만이 아니라 모든 run을 본다(한 run이라도 다른 모델이면 다르다)."""
+    ms = {_norm_model(load_inputs(root).get("eval_model"))}
+    for it in site_iterations(root):
+        for ex_p in it.glob("eval-*/with_skill/execution.json"):
+            try:
+                ex = json.loads(ex_p.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            if ex.get("status") != "prepared":
+                ms.add(_norm_model(ex.get("init_model") or ex.get("model")))
+    ms |= {_norm_model(s.get("model")) for s in (state or {}).values()}
     return sorted(m for m in ms if m)
 
 
-def model_differs(root: Path, state: dict[int, dict]) -> tuple[bool, str, str]:
-    """(사내 모델이 사외 결과 모델과 다른가, 사외 모델, 사내 모델). 사외 기록이 없으면 다르다고 본다(갈음할 근거 없음).
-    사내 모델을 아직 모르면(eval_model·사내 run 없음) 다르지 않다고 보고, 사내 run이 생기면 그 init_model로 다시 판정한다."""
+def model_differs(root: Path, state: dict[int, dict] | None = None) -> tuple[bool | None, str, str]:
+    """(사내 모델이 사외 결과 모델과 다른가, 사외 모델, 사내 모델).
+    - 사외 기록이 없으면 True(갈음할 근거 없음).
+    - 사내 모델을 아직 모르면(eval_model·사내 run 모델 없음) None: 조건부 eval을 빼지도 넣지도 않고 점검이 "사내 모델 미정"으로 묻는다.
+    - 비교는 끝의 `[...]`(컨텍스트 창 표기)만 떼고 문자열이 같아야 같다. 날짜 접미사·별칭 등 다른 차이는 모두 다름(fail-closed)."""
     off = load_offsite(root)
     off_m = _norm_model(off.get("model")) if off else ""
     site = site_models(root, state)
     site_s = "/".join(site) or "미정"
     if not off_m:
         return True, "없음", site_s
+    if not site:
+        return None, off_m, site_s
     return any(m != off_m for m in site), off_m, site_s
 
 
 def required_ids(root: Path, state: dict[int, dict]) -> list[int]:
-    """사내 S-2에서 실행·채점해야 하는 eval: site + (모델이 다르면) site_if_model_differs."""
+    """사내 S-2에서 실행·채점해야 하는 eval: site + (모델이 다르면) site_if_model_differs. 사내 모델 미정이면 조건부는 아직 넣지 않는다
+    (그 경우 s2.evals_graded·s2.safety가 사용자 필요로 막는다)."""
     pend = load_pending(root)
     req = set(pend["site"])
-    if model_differs(root, state)[0]:
+    if model_differs(root, state)[0] is True:
         req |= set(pend["site_if_model_differs"])
     return sorted(req & set(state))     # evals.json에 없는 id는 s2.pending이 실패로 본다
+
+
+def _model_unknown(root: Path, state: dict[int, dict]) -> str | None:
+    """사내 모델 미정이고 조건부 eval이 있으면 그 설명(사용자 필요), 아니면 None."""
+    cond = sorted(load_pending(root)["site_if_model_differs"])
+    if cond and model_differs(root, state)[0] is None:
+        return f"사내 모델 미정 — 사외 결과 모델과 다르면 조건부 eval {_ids(cond)}도 사내 필수"
+    return None
 
 
 def site_iterations(root: Path) -> list[Path]:
@@ -438,7 +472,8 @@ def eval_state(root: Path) -> dict[int, dict]:
             if ex.get("status") == "prepared":
                 continue
             st = {"status": "ungraded", "iteration": it.name, "exec": ex.get("status"),
-                  "cost": ex.get("total_cost_usd"), "init_model": ex.get("init_model")}
+                  "cost": ex.get("total_cost_usd"), "init_model": ex.get("init_model"),
+                  "model": ex.get("init_model") or ex.get("model")}
             if gr_p.is_file():
                 g = json.loads(gr_p.read_text(encoding="utf-8"))
                 rows = g.get("expectations") or []
@@ -490,11 +525,37 @@ def s2_graded(ctx: Ctx) -> dict:
         return res("s2.evals_graded", "needs-user", f"{scope} 중 채점 완료 {len(req) - len(missing)}, 남음 "
                    f"{len(missing)}: " + _ids(missing), cmd,
                    ask="eval 배치 실행 비용을 승인해 주세요(`site_step.py evals`가 명령·추정 비용을 낸다)")
+    unknown = _model_unknown(ctx.root, st)
+    if unknown:     # 조건부를 빼고 통과로 두지 않는다(fail-closed)
+        return res("s2.evals_graded", "needs-user", f"{scope} 모두 채점 · {unknown}", cmd,
+                   ask="사내 eval 모델을 알려 주세요(`propose --set eval_model=<ID>` → --apply). 사외와 다르면 조건부 eval도 돌린다")
     return res("s2.evals_graded", "pass", f"{scope} 모두 채점(graded) · 나머지는 사외 결과(s2.offsite)", cmd)
 
 
+def _offsite_latest(entry: dict) -> list[dict]:
+    """사외 기록 한 eval의 verdict_commit run들(없으면 마지막 run의 커밋)."""
+    runs = (entry or {}).get("runs") or []
+    if not runs:
+        return []
+    commit = entry.get("verdict_commit", runs[-1].get("repo_commit"))
+    return [r for r in runs if r.get("repo_commit") == commit]
+
+
+def _short(sha) -> str:
+    return str(sha)[:8] if sha else "?"
+
+
+def _head(root: Path) -> str:
+    try:
+        p = subprocess.run(["git", "-C", str(root), "rev-parse", "HEAD"], capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    return p.stdout.strip() if p.returncode == 0 else ""
+
+
 def s2_offsite(ctx: Ctx) -> dict:
-    """사내 대상 밖 eval을 갈음하는 사외 결과 기록(정보). 기록이 없거나 빠진 eval이 있으면 사용자 필요."""
+    """사내 대상 밖 eval을 갈음하는 사외 결과 기록. 모두 pass일 때만 정보이고, fail·undecided·none이 있으면 사용자 필요
+    (사용자가 사유와 함께 `--waive s2.offsite=…`로 받아들이거나 사외에서 다시 잰다)."""
     st = eval_state(ctx.root)
     off = load_offsite(ctx.root)
     path = load_pending(ctx.root)["offsite"]
@@ -507,14 +568,22 @@ def s2_offsite(ctx: Ctx) -> dict:
     verdict = {i: (off["evals"].get(str(i)) or {}).get("verdict") or "none" for i in rest}
     groups = {v: [i for i in rest if verdict[i] == v] for v in ("pass", "fail", "undecided", "none")}
     differs, off_m, site_m = model_differs(ctx.root, st)
-    head = (f"모델 다름(사외 {off_m} / 사내 {site_m}) · " if differs else "") + \
+    commits = sorted({_short(r.get("repo_commit")) for i in rest for r in _offsite_latest(off["evals"].get(str(i)))})
+    note = str(off.get("note") or "")
+    head = ("잠정 · " if re.search(r"provisional|잠정", note, re.I) else "") + \
+        (f"모델 다름(사외 {off_m} / 사내 {site_m}) · " if differs else "") + \
+        (f"사내 모델 미정(사외 {off_m}) · " if differs is None else "") + \
         f"사외 {off.get('model')}({off.get('generated')}) 갈음 {len(rest)}개: "
     body = " · ".join(f"{k} {len(v)}" + (f"({_ids(v, 15)})" if v and k != "pass" else "") for k, v in groups.items())
+    tail = (f" · 채점기 {_short(off.get('grader_commit'))} · 사외 run 커밋 {' '.join(commits) or '없음'} · "
+            f"지금 HEAD {_short(_head(ctx.root))}")
     cmd = f"cat {path}"
-    if groups["none"]:
-        return res("s2.offsite", "needs-user", head + body + " — 사외 기록 없는 eval이 있다", cmd,
-                   ask=f"eval {_ids(groups['none'])}의 사외 결과가 없다: 사외에서 실행해 기록을 다시 만들거나, 사내에서 실행할지 정해 주세요")
-    return res("s2.offsite", "info", head + body, cmd)
+    open_ = groups["fail"] + groups["undecided"] + groups["none"]
+    if open_:
+        return res("s2.offsite", "needs-user", head + body + tail, cmd,
+                   ask=f"사외 결과가 pass가 아닌 eval {_ids(sorted(open_))}: 사외에서 다시 재거나(실패·미결정 원인 확인, "
+                       "수동 행 채점) 사내에서 실행하거나, 받아들일 사유를 `--waive s2.offsite=\"사유\"`로 남겨 주세요")
+    return res("s2.offsite", "info", head + body + tail, cmd)
 
 
 def _ids(ids: list[int], n: int = 25) -> str:
@@ -526,7 +595,10 @@ def s2_safety(ctx: Ctx) -> dict:
     st = eval_state(ctx.root)
     req = set(required_ids(ctx.root, st))
     batches = {e["id"]: e.get("batch") for e in eval_entries(ctx.root)}
-    bad = {i: s["safety_fail"] for i, s in st.items() if s.get("safety_fail")}     # 사내에서 채점한 것은 대상 밖이어도 본다
+    bad = {i: len(s["safety_fail"]) for i, s in st.items() if s.get("safety_fail")}   # 사내에서 채점한 것은 대상 밖이어도 본다
+    off = load_offsite(ctx.root) or {"evals": {}}
+    off_bad = {i: n for i in st if i not in req       # 사외로 갈음하는 eval: verdict 커밋 run의 안전 위반도 위반이다
+               if (n := sum(r.get("safety_fail") or 0 for r in _offsite_latest(off["evals"].get(str(i)))))}
     null = {i: s["safety_null"] for i, s in st.items() if s.get("safety_null")}
     safety_ids = [i for i in st if grade.is_safety_eval(i, batches[i])]
     site_safety = [i for i in safety_ids if i in req]
@@ -534,15 +606,21 @@ def s2_safety(ctx: Ctx) -> dict:
     open_ = [i for i in site_safety if st[i]["status"] != "graded"]
     note = f" · 사외 결과로 갈음한 안전 eval {len(offsite)}" + (f"({_ids(offsite, 15)}, s2.offsite)" if offsite else "")
     cmd = "python3 tools/site_step.py check S-2 --json"
-    if bad:
-        return res("s2.safety", "fail", f"안전 위반 {sum(map(len, bad.values()))}행: eval {_ids(sorted(bad))}", cmd)
+    if bad or off_bad:
+        parts = ([f"사내 채점 {sum(bad.values())}행: eval {_ids(sorted(bad))}"] if bad else []) + \
+            ([f"사외 기록 {sum(off_bad.values())}행: eval {_ids(sorted(off_bad))}"] if off_bad else [])
+        return res("s2.safety", "fail", "안전 위반 " + " · ".join(parts), cmd)
     if null:
         return res("s2.safety", "needs-user", f"안전 위반 0(결정분) · 미결정 안전 행 {sum(map(len, null.values()))}: "
                    f"eval {_ids(sorted(null))}", cmd, ask=f"eval {_ids(sorted(null))}의 미결정 안전 행을 transcript로 채점해 주세요")
     if open_:
         return res("s2.safety", "needs-user", f"안전 위반 0(채점분) · 사내 대상 안전 eval 미채점 {len(open_)}: {_ids(open_)}"
                    + note, cmd, ask="사내 대상 안전 eval을 먼저 실행·채점한다(`site_step.py evals`)")
-    return res("s2.safety", "pass", f"사내 대상 안전 eval {len(site_safety)}개·트래커 쓰기 행 위반 0, 미결정 0" + note, cmd)
+    unknown = _model_unknown(ctx.root, st)
+    if unknown:
+        return res("s2.safety", "needs-user", f"안전 위반 0 · {unknown}" + note, cmd,
+                   ask="사내 eval 모델을 알려 주세요(`propose --set eval_model=<ID>` → --apply)")
+    return res("s2.safety", "pass", f"사내 대상 안전 eval {len(site_safety)}개·트래커 쓰기 행 위반 0(사외 기록 포함), 미결정 0" + note, cmd)
 
 
 def s2_manual(ctx: Ctx) -> dict:
