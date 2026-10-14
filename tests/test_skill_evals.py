@@ -558,8 +558,9 @@ def test_plugin_rules_route_questions_through_ask_tool(tmp_path):
 
 
 def test_approver_ask_user_returns_replies_and_logs(tmp_path, monkeypatch):
-    sys.path.insert(0, str(REPO / "tests" / "mocks" / "approver_mcp"))
-    import server as approver
+    spec = importlib.util.spec_from_file_location("approver_mcp_server", REPO / "tests" / "mocks" / "approver_mcp" / "server.py")
+    approver = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(approver)
     log = tmp_path / "approvals.json"
     monkeypatch.setenv("MOCK_APPROVALS_LOG", str(log))
     monkeypatch.setenv("EVAL_USER_REPLIES", json.dumps(["탐색 분석 실행 여부를 물으면 '예'."], ensure_ascii=False))

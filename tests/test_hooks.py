@@ -984,8 +984,10 @@ def _gh_bridge(ws: Workspace, tool_input, response, tool: str = GH_READ) -> str:
 
 
 def test_bridge_github_issue_read_merges_and_isolates():
-    sys.path.insert(0, str(REPO / "tests" / "mocks" / "github_issues_mcp"))
-    import server as gh_server
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("github_issues_mcp_server", REPO / "tests" / "mocks" / "github_issues_mcp" / "server.py")
+    gh_server = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(gh_server)
     ws = gh_shared()
     key = "mock-org.mock-issues-13"
     raw = ws.job_dir(key) / "issue_raw.json"

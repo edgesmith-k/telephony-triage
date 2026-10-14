@@ -478,8 +478,10 @@ def test_github_end_to_end_markdown_approve_guard_bridge():
     """github 세션(site-defaults tracker.kind github) + github 변형 DB: URL로 triage(needs_input에 issue_read 인자) →
     bridge(get·get_comments) → 분석 → render(markdown, 머리 `GitHub: owner/repo#N`) → approve(arguments의 issue_number는 int,
     승인 기록 kind github) → guard ask → bridge posted."""
-    sys.path.insert(0, str(REPO / "tests" / "mocks" / "github_issues_mcp"))
-    import server as gh_server
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("github_issues_mcp_server", REPO / "tests" / "mocks" / "github_issues_mcp" / "server.py")
+    gh_server = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(gh_server)
     from runner import github_root, variant_db
     ws = Workspace(src=variant_db("issue-db-github"), root=github_root())
     args = ["run", GH_URL, "--logs", DATA_LOG, "--code", "skip"]

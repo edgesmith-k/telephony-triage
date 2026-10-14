@@ -23,8 +23,9 @@ FRESH = session_lock.FRESH
 EXPIRE = session_lock.EXPIRE
 STATE, STAGE, PR_FILE, REGRESS, PLAN = "state.json", "stage.json", "pr.json", "regress.json", "plan.json"
 PASTED_STEPS = "steps-pasted.txt"   # 개발자가 붙여넣은 스텝 목록 원문(08-safety.md §8.1) — 작업이 끝나면 지운다
-DRAFT_VERIFY = "draft-verify.json"   # 초안 검증 기록(common/draftcheck) — 끝난 작업에 남기지 않는다
-WORK_FILES = (STATE, STAGE, PR_FILE, REGRESS, PASTED_STEPS, DRAFT_VERIFY)
+# draft-verify.json(common/draftcheck)은 작업 파일이 아니다: plan.json과 함께 남아 sync-pr 재적용·discard 뒤 재stage에서
+# 작성 op가 그대로면 다시 묻지 않는다(지문이 다르면 stage가 멈춘다). cleanup --older-than은 폴더째 지운다
+WORK_FILES = (STATE, STAGE, PR_FILE, REGRESS, PASTED_STEPS)
 JOB_KEY_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 TOOL_PREFIX = "tt/"
 

@@ -1949,12 +1949,14 @@ def test_stage_requires_draft_verify_for_authoring_ops():
     doc["pr_notes"] = ["초안 검증 뒤 pr_notes만 바꿈"]           # 작성 op 밖: 다시 검증하지 않는다
     plan.write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
     ws.stage("MOCK-7002", "issue/MOCK-7002", expect=(0, 3), dry_run=True)
+    ws.db_pr("discard", ws.wt("MOCK-7002"))
+    ws.acquire("MOCK-7002")
     new = next(op for op in doc["operations"] if op["op"] == "new-cause")
     new.setdefault("cause", {})["title"] = "초안 검증 뒤 바꾼 제목"
     plan.write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
     out = ws.stage("MOCK-7002", "issue/MOCK-7002", expect=1, dry_run=True)
     assert out["stopped"] == "draft-verify" and "바뀜" in out["reason"]
-    ws.db_pr("discard", ws.wt("MOCK-7002"))
+    ws.db_pr("lock", "release", "MOCK-7002")
 
     ws.plan("MOCK-7001", "p7-analyze-append.plan.json", draft_verified=False)
     ws.acquire("MOCK-7001")
@@ -1973,7 +1975,9 @@ def test_draft_verify_stop_invalidates_previous_approval():
     digest = ws.db_pr("summary", ws.wt("MOCK-7002"))["approved_hash"]
     plan = ws.job_dir("MOCK-7002") / "plan.json"
     doc = json.loads(plan.read_text(encoding="utf-8"))
-    next(op for op in doc["operations"] if op["op"] == "new-cause")["cause"]["title"] = "수정 요청 뒤 제목"
+    cause = next(op for op in doc["operations"] if op["op"] == "new-cause")["cause"]
+    original_title = cause["title"]
+    cause["title"] = "수정 요청 뒤 제목"
     plan.write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
     assert ws.stage("MOCK-7002", "issue/MOCK-7002", expect=1)["stopped"] == "draft-verify"
     state = json.loads((ws.job_dir("MOCK-7002") / "state.json").read_text(encoding="utf-8"))
@@ -1982,4 +1986,10 @@ def test_draft_verify_stop_invalidates_previous_approval():
                                "--approved", digest, "--commit"])
     assert proc.returncode != 0 and "승인 정보가 없습니다" in proc.stderr, proc.stderr[-500:]
     ws.db_pr("discard", ws.wt("MOCK-7002"))
-    assert not (ws.job_dir("MOCK-7002") / "draft-verify.json").exists()      # 작업 파일: discard가 지운다
+    assert (ws.job_dir("MOCK-7002") / "draft-verify.json").exists()     # plan과 함께 남는다(sync-pr 재적용)
+    ws.acquire("MOCK-7002")
+    assert ws.stage("MOCK-7002", "issue/MOCK-7002", expect=1)["stopped"] == "draft-verify"   # 남은 기록도 바뀐 작성 op는 통과시키지 않는다
+    cause["title"] = original_title                                      # 작성 op를 원래대로 되돌리면
+    plan.write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
+    ws.stage("MOCK-7002", "issue/MOCK-7002", expect=(0, 3), dry_run=True)  # db_verify 재실행 없이 남은 기록으로 통과한다
+    ws.db_pr("discard", ws.wt("MOCK-7002"))
