@@ -474,29 +474,65 @@ def test_real_child_transcript_format(tmp_path):
 
 # --- sm4 재측정 반영: transcript 비동기 기록, 초안 키, stage 거부 문구 ------------------------------------------------
 
-def test_waits_until_current_call_is_recorded(tmp_path):
-    """sm4 거짓 거부 8건: 화면 전문을 쓴 텍스트 블록과 질문이 한 응답인데 PreToolUse 때 transcript에 텍스트가 아직 없었다.
-    hook은 지금 호출(tool_use_id)이 기록될 때까지 기다린다."""
+def _late(path, delay, *rows):
     import threading
-    path = write(tmp_path, prompt("p"), bash("s", STAGE_CMD, SCREEN))
-    ask = {"question": "승인할까요?"}
 
     def later():
-        time.sleep(0.6)
+        time.sleep(delay)
         with path.open("a", encoding="utf-8") as fh:
-            fh.write(json.dumps(say(SCREEN)[0], ensure_ascii=False) + "\n")
-            fh.write(json.dumps(call("q1", ASK, ask)[0], ensure_ascii=False) + "\n")
+            for r in rows:
+                fh.write(json.dumps(r, ensure_ascii=False) + "\n")
     t = threading.Thread(target=later)
     t.start()
-    out = pre("pre-ask", path, ASK, ask, "q1", record=False)
-    t.join()
-    assert out is None
-    # 끝내 기록되지 않으면(형식이 다른 버전) 거부하지 않는다(fail-open, 경고)
-    lost = write(tmp_path, prompt("p"), bash("s", STAGE_CMD, SCREEN), say(SUMMARY), name="lost.jsonl")
+    return t
+
+
+def test_waits_until_current_call_is_recorded(tmp_path):
+    """sm4 거짓 거부 8건: 화면 전문을 쓴 텍스트 블록과 질문이 한 응답인데 PreToolUse 때 transcript에 텍스트가 아직 없었다.
+    hook은 지금 호출(tool_use_id)이 기록될 때까지(상한 WAIT_SECONDS) 기다린다."""
+    import show_guard
+    ask = {"question": "승인할까요?"}
+    path = write(tmp_path, prompt("p"), bash("s", STAGE_CMD, SCREEN))
+    t = _late(path, 0.5, say(SCREEN)[0], call("q1", ASK, ask)[0])
     t0 = time.time()
-    out, err = hook("pre-ask", {"transcript_path": str(lost), "tool_name": ASK, "tool_input": ask, "tool_use_id": "zz"})
-    assert out is None and "기록되지 않아" in err and time.time() - t0 < 15
+    out, err = hook("pre-ask", {"transcript_path": str(path), "tool_name": ASK, "tool_input": ask, "tool_use_id": "q1"})
+    t.join()
+    assert out is None and "기록되지 않아" not in err
+    assert time.time() - t0 < show_guard.WAIT_SECONDS + 1.5
+    # 늦게 기록된 글이 화면을 다 담지 않으면 여전히 거부한다
+    short = write(tmp_path, prompt("p"), bash("s", STAGE_CMD, SCREEN), name="short.jsonl")
+    t = _late(short, 0.3, say(SUMMARY)[0], call("q2", ASK, ask)[0])
+    out, err = hook("pre-ask", {"transcript_path": str(short), "tool_name": ASK, "tool_input": ask, "tool_use_id": "q2"})
+    t.join()
+    assert decision(out) == "deny" and "기록되지 않아" not in err
+
+
+def test_never_recorded_or_missing_id(tmp_path, monkeypatch, capsys):
+    import show_guard
+    monkeypatch.setattr(show_guard, "WAIT_SECONDS", 0.3)
+    ask = {"question": "승인할까요?"}
+    lost = write(tmp_path, prompt("p"), bash("s", STAGE_CMD, SCREEN), say(SUMMARY))
+    t0 = time.time()
+    out = show_guard.mode_pre_ask({"transcript_path": str(lost), "tool_name": ASK, "tool_input": ask, "tool_use_id": "zz"})
+    assert out is None and "기록되지 않아" in capsys.readouterr().err and time.time() - t0 < 2   # 거부하지 않는다
+    # tool_use_id가 없으면 기다리지 않고 바로 판정한다(이전 동작)
+    out = show_guard.mode_pre_ask({"transcript_path": str(lost), "tool_name": ASK, "tool_input": ask})
+    assert decision(out) == "deny" and "tool_use_id가 없어" in capsys.readouterr().err
     assert decision(pre("pre-ask", lost, ASK, ask, "zz")) == "deny"          # 기록되면 판정한다
+
+
+def test_draft_key_count_is_per_job(tmp_path):
+    """전부 통과한 초안 표는 작업이 달라도 결과가 같다: 앞 작업에서 낸 표식으로 뒤 작업이 한도에 걸리지 않는다."""
+    cmd = "python3 /p/scripts/db_verify.py rules --plan $J/plan.json --draft $J/draft --json"
+    key = shown.obligations(shown.parse_events([json.dumps(r, ensure_ascii=False) for r in bash("d1", cmd, DRAFT_OUT)]))[0].key
+    deny = shown.MARKER + " " + key + " — 초안 검증표를 요약했다"
+    run2 = "python3 /p/scripts/triage.py run MOCK-2 --logs logs/b.log"
+    path = write(tmp_path, prompt("p"), bash("d1", cmd, DRAFT_OUT), call("a1", ASK, {"question": "진행?"}, deny, True),
+                 call("a2", ASK, {"question": "진행?"}, deny, True), bash("s1", STAGE_CMD, SCREEN), say(SCREEN),
+                 prompt("다음 건 MOCK-2"), bash("t2", run2, "{}"), bash("d2", cmd, DRAFT_OUT))
+    ob = [o for o in shown.obligations(shown.parse_events(path.read_text(encoding="utf-8").splitlines())) if o.start > 0][-1]
+    assert ob.key == key
+    assert decision(pre("pre-ask", path, ASK, {"question": "note를 승인할까요?"})) == "deny"     # 새 작업: 다시 막는다
 
 
 def test_draft_rerun_with_same_result_shares_key_and_cap(tmp_path):

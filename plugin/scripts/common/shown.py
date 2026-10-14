@@ -675,6 +675,8 @@ def obligations(seq, read_file=None, job_dir=None, *, script_only: bool = True) 
                               path=None if job_dir is None else str(Path(job_dir) / "report.md"), extra=rep))
     calls = bash_index(seq, DRAFT)
     stage = bash_index(seq, STAGE)
+    runs = bash_index(seq, TRIAGE_RUN)
+    first_of: dict[tuple, int] = {}       # (작업 경계, 키) → 같은 결과가 처음 나온 초안 호출
     for i in calls:
         rules = draft_rules(tool_text(seq[i]))
         if not rules:
@@ -683,10 +685,16 @@ def obligations(seq, read_file=None, job_dir=None, *, script_only: bool = True) 
         end = min(nxt + [len(seq)])
         close = "end" if end >= len(seq) else ("draft" if end in calls else "stage")
         block = "\n".join(f"| {r['id']} | {r.get('status')} | {norm_line(str(r.get('reason') or ''))} |" for r in rules)
-        # 키는 결과 내용(규칙·상태·사유): 같은 결과로 초안 검증을 다시 돌려도 같은 의무라 막는 횟수 한도를 함께 쓴다
-        digest = hashlib.sha1(json.dumps([[r.get("id"), r.get("status"), r.get("reason")] for r in rules],
+        # 키는 계획 경로 인자와 결과 내용(규칙·상태·사유): 같은 작업에서 같은 결과로 다시 돌려도 같은 의무라 막는 횟수 한도를
+        # 함께 쓴다. 다른 작업과 키가 같아도(`$J/plan.json`·전부 통과) 횟수는 작업 경계(마지막 triage run) 뒤에서만 센다
+        plan = re.search(r"--plan[= ]\s*(\S+)", command_of(seq[i]))
+        digest = hashlib.sha1(json.dumps([plan.group(1) if plan else ""] + [[r.get("id"), r.get("status"), r.get("reason")]
+                                                                           for r in rules],
                                          ensure_ascii=False).encode("utf-8")).hexdigest()[:12]
-        out.append(Obligation("draft", f"draft:{digest}", i, end, close, rules=rules, block=block))
+        boundary = max([r for r in runs if r < i], default=-1)
+        count_from = first_of.setdefault((boundary, digest), i)
+        out.append(Obligation("draft", f"draft:{digest}", i, end, close, rules=rules, block=block,
+                              extra={"count_from": count_from}))
     return out
 
 

@@ -121,27 +121,44 @@ def turn_start(seq) -> int | None:
     return None if TRUNCATED[0] else 0
 
 
-WAIT_SECONDS = 5.0       # PreToolUse 때 transcript에 지금 호출이 기록될 때까지 기다리는 상한
-WAIT_STEP = 0.1
+WAIT_SECONDS = 2.0       # PreToolUse 때 transcript에 지금 호출이 기록될 때까지 기다리는 상한
+WAIT_STEP = 0.05
+
+
+def _wait_recorded(path, tool_use_id) -> bool:
+    """transcript에 tool_use_id가 나타날 때까지 새로 붙은 바이트만 본다(WAIT_SECONDS 상한). 나타났으면 True."""
+    needle = tool_use_id.encode("utf-8")
+    deadline = time.monotonic() + WAIT_SECONDS
+    pos, tail = 0, b""
+    try:
+        with Path(path).open("rb") as fh:
+            size = fh.seek(0, 2)
+            pos = max(0, size - TAIL_BYTES)
+            while True:
+                fh.seek(pos)
+                chunk = fh.read()
+                pos += len(chunk)
+                if needle in tail + chunk:
+                    return True
+                tail = (tail + chunk)[-len(needle):]
+                if time.monotonic() >= deadline:
+                    return False
+                time.sleep(WAIT_STEP)
+    except OSError:
+        return False
 
 
 def load_seq_for_call(path, tool_use_id):
     """PreToolUse: transcript는 비동기로 쓰여 같은 응답의 앞 텍스트 블록이 아직 없을 수 있다(10/14 sm4: 화면 전문을 쓴 직후의
-    질문이 거부됨). 지금 호출(tool_use_id)이 기록되면 그 앞 블록도 다 기록된 것이므로 그때까지 기다린다(WAIT_SECONDS 상한).
-    → (seq, 기록 확인 여부). 끝까지 기록되지 않으면 확인 여부 False — 거부하지 않는다(fail-open)."""
+    질문이 거부됨). 한 응답의 블록은 텍스트가 tool_use보다 먼저 기록되므로(sm4 transcript 300개 응답에서 예외 없음, probe 13번)
+    지금 호출(tool_use_id)이 기록되면 앞 블록도 다 기록된 것이다 — 그때까지 기다린 뒤(WAIT_SECONDS 상한, 새 바이트만 확인)
+    한 번 읽는다. → (seq, 판정 가능 여부). 기록되지 않으면 False — 거부하지 않는다(fail-open). 입력에 tool_use_id가 없으면
+    기다릴 수 없으니 바로 판정한다(이전 동작, 경고)."""
     if not tool_use_id:
-        return load_seq(path), False
-    deadline = time.monotonic() + WAIT_SECONDS
-    while True:
-        text = load_text(path)
-        if text is None:
-            return None, False
-        if tool_use_id in text or time.monotonic() >= deadline:
-            seen = tool_use_id in text
-            if quick_skip(text):
-                return None, seen
-            return shown.parse_events(text.splitlines(), include_user=True), seen
-        time.sleep(WAIT_STEP)
+        warn("입력에 tool_use_id가 없어 transcript 기록을 기다리지 않고 판정한다")
+        return load_seq(path), True
+    recorded = _wait_recorded(path, str(tool_use_id)) if path else False
+    return load_seq(path), recorded
 
 
 def trim_current(seq, tool_use_id):
@@ -279,11 +296,13 @@ def _checked(seq, obs, ts, *, report_ok=True):
 
 
 def _split(seq, found, prior_extra: int = 0):
-    """빠진 의무를 한도 안(막는다)·한도 밖(안내만)으로 나눈다."""
-    seen = markers(seq)
+    """빠진 의무를 한도 안(막는다)·한도 밖(안내만)으로 나눈다. 막은 횟수는 그 의무가 생긴 뒤(`count_from`, 초안 표는 같은 작업에서
+    같은 결과가 처음 나온 곳)의 표식만 센다 — 다른 작업의 같은 키 표식은 세지 않는다."""
     under, over = [], []
     for ob, miss in found:
-        (under if seen.count(ob.key) + prior_extra < MAX_BLOCKS else over).append((ob, miss))
+        start = (ob.extra or {}).get("count_from", ob.start) if isinstance(ob.extra, dict) else ob.start
+        n = markers(seq[start:]).count(ob.key)
+        (under if n + prior_extra < MAX_BLOCKS else over).append((ob, miss))
     return under, over
 
 

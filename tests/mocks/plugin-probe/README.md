@@ -20,6 +20,7 @@ Code 기능" 행). 배포 대상(`plugin/`)이 아니다.
 | 10 | **Stop hook** (표시 보조 `show_guard.py stop`, `08-safety.md §9.1`) | Stop hook 입력에 `last_assistant_message`·`stop_hook_active`·`transcript_path`가 있는지, `{"decision": "block", "reason"}`이면 모델이 reason을 받고 **새 메시지**로 이어 쓰는지(앞 메시지는 남는지), 두 번째 Stop의 `stop_hook_active`가 true인지, 피드백이 transcript에 `isMeta` user 항목("Stop hook feedback:\n<reason>")으로 남는지, 연속 계속 한도 |
 | 11 | PreToolUse 때 transcript (show_guard `pre-ask`·`pre-bash`) | 같은 응답에서 도구 호출 앞에 쓴 텍스트 블록이 PreToolUse 시점의 `transcript_path`에 이미 있는지(화면을 붙이고 바로 질문하는 경우), 입력에 `tool_use_id`가 있는지, `AskUserQuestion`의 `tool_input` 모양(`questions[].question`·`header`·`options[].label`) |
 | 12 | 여러 matcher 그룹·hook | 한 도구에 두 그룹(`mcp__.*`와 `mcp__.*__ask_user`)·한 그룹의 두 hook(Bash: guard + show_guard)이 걸리면 모두 실행되고 하나라도 `deny`면 거부되는지, 거부된 tool_result 문구(`PreToolUse:<tool> hook error: <reason>`, `is_error`) |
+| 13 | transcript 블록 기록 순서 (show_guard pre-ask·pre-bash의 기다림 전제) | 한 응답(같은 `message.id`)의 텍스트 블록이 그 tool_use 항목보다 **먼저** transcript에 붙는지, PreToolUse 시점에 지금 tool_use가 얼마 만에 기록되는지 |
 
 ## 실행 절차
 
@@ -51,6 +52,7 @@ Code 기능" 행). 배포 대상(`plugin/`)이 아니다.
 | 8 | `@SITE_PROFILE.md` import (파일 없음) | ✅ 경고·오류 없음 | 조용히 무시 |
 | — | 모의 MCP 붙이기 | ✅ `--mcp-config tests/mocks/mcp.json` | 레포 루트에서 실행(상대 경로). source `dynamic` |
 | 10~12 | Stop hook·PreToolUse transcript·여러 그룹 (2026-10-14 예비, 이 개발 환경의 Claude Code 2.1.299 — 사외 확인) | ✅ | `claude -p --plugin-dir`, stream-json. Stop 입력 키 `last_assistant_message`·`stop_hook_active`·`transcript_path` 등, block → user 역할 "Stop hook feedback:\n<reason>" 뒤 새 메시지, 두 번째 Stop은 `stop_hook_active: true`, 연속 계속 한도 8. PreToolUse 때 transcript에 같은 응답의 앞 텍스트 블록이 이미 있음 — **항상은 아니다**: 비동기 기록이라 sm4 eval에서 없던 경우 8건, probe에서 지금 호출(tool_use)은 0.25초 안에 기록됨 → show_guard는 그것이 기록될 때까지 기다린다. 여러 그룹·hook 모두 실행, `deny` 하나면 거부 — 12번 확인: 거부된 tool_result는 `"is_error": true`, content `PreToolUse:Bash hook error: <reason>`(probe transcript). `AskUserQuestion` 입력 모양은 대화형에서만 확인 가능 — 미확인(show_guard는 관대하게 읽는다) |
+| 13 | transcript 블록 기록 순서 (2026-10-14) | ✅ | eval 자식 transcript(sm4, 54개 세션) 300개 응답에서 텍스트가 tool_use보다 앞(예외 0). haiku probe: PreToolUse 시점에 지금 tool_use는 아직 없고 0.25초 안에 기록됨 |
 
 ## 주의
 
