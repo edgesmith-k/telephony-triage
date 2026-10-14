@@ -229,6 +229,9 @@ def test_jira_without_time_offers_time_candidates_instead_of_asking_year():
     options = ask["needs_input"]["options"]
     assert 1 <= len(options) <= 3 and "DATA-001" in options[0]["label"]
 
+    bad = ws.json("triage.py", [*args, "--answer", "time=2026-09-20 14:32 KST"])      # 읽을 수 없는 답: 종료 2 대신 다시 묻는다 (eval 67)
+    assert bad["status"] == "needs_input" and bad["needs_input"]["kind"] == "time", bad
+    assert "읽지 못했다" in bad["needs_input"]["question"] and bad["needs_input"]["options"] == options
     done = ws.json("triage.py", [*args, "--answer", f"time={options[0]['value']}"])
     assert done["status"] == "ok", done
     assert done["candidates"][0]["cause"] == "DATA-001-02"
@@ -503,7 +506,7 @@ def test_skill_md_is_within_7_5kb_and_drives_triage():
                    "must_show", "triage.py explore"):
         assert needle in text, needle
     rules = (reference / "rules.md").read_text(encoding="utf-8")      # SKILL §실행 규칙이던 내용
-    assert len(rules.encode("utf-8")) <= 2176      # must_show 복사 위치·stage `next` 한 줄(eval 68·3, 10/14) 뒤의 한도. 그 전 2,048B
+    assert len(rules.encode("utf-8")) <= 2240      # Bash 출력 비가시·must_show 위치(eval 68·67)·stage `next`(eval 3) 줄 뒤의 한도(10/14). 그 전 2,048B
     for needle in ("S-3", "계획 형식 오류", "TT_LOCK_OWNER", "stage --then-summary", "모든 종료 경로에서 푼다", "사용자 확인 후"):
         assert needle in rules, needle
     assert len((reference / "db-authoring.md").read_bytes()) <= 12288      # 필수 키 요약 포함. §0 등록 준비물·리뷰어 색인 추가 뒤의 한도(그 전 11,392B: W7 add-fixture 세부, 11,264B)

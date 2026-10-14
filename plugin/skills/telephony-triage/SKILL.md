@@ -35,7 +35,7 @@ description: Telephony 이슈(Android·oFono 등; data·call·network·sim·sms�
    `--dry-run`·`--analysis-only` 전용.
 2. `S/triage.py run <KEY> --logs <…> [--platform <p>]` + 위 옵션(analyzer·explore 외). stdout(=`JOB/analysis.json`)과 `JOB/report.md`만 읽는다.
 3. `status: needs_input` → `question`·`options`를 보이고 **사용자 답**을 `--answer <kind>=<값>`으로 붙여 같은 명령을 재실행한다.
-   `issue`는 1번 뒤, `logs`는 `--logs`를 붙여 재실행. `stopped`는 이유만.
+   `issue`는 1번 도구 재호출 뒤 `--answer` 없이, `logs`는 `--logs`를 붙여 재실행. `stopped`는 이유만.
 4. 종료 코드 1 → 키를 다시 묻는다.
 
 ### 2. 결과 읽기
@@ -53,7 +53,7 @@ description: Telephony 이슈(Android·oFono 등; data·call·network·sim·sms�
 
 ### Step 6. 리포트
 
-Step 7 질문 전에 `JOB/report.md`(`TODO(LLM)`만 채움)를 메시지로 보인다. 첫머리에 `must_show` 줄을 **복사**한다(고쳐 쓰기·생략 금지).
+Step 7 질문 전에 `JOB/report.md`(`TODO(LLM)`만 채움)를 보인다(`must_show`는 `rules.md`대로, 고쳐 쓰기 금지).
 원인은 **로그로 확인/코드로 추정/placeholder 규칙 결과**를 나누고 반대 근거와 다음 확인을 적는다.
 `fix_judgement`의 `regression-suspected`·`fix-insufficient`는 Step 7에서 묻고, `undetermined`는 SW·`fixed_in`을 나란히.
 
