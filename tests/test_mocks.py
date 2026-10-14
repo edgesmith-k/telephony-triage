@@ -572,24 +572,38 @@ def test_generated_files_use_lf():
         assert b"\r\n" not in Path(wrapped["files"][0]).read_bytes()
 
 
+def _committable_files() -> list[str]:
+    """커밋 대상 파일 (`git add -A`와 같은 기준: 추적 + 무시되지 않은 새 파일). `.venv/`·`build/`·eval 결과 등
+    `.gitignore` 경로는 빠진다. git 레포가 아니면(압축만 푼 반입본) 알려진 로컬 경로를 빼고 전체를 훑는다."""
+    proc = subprocess.run(["git", "-C", str(REPO), "ls-files", "-co", "--exclude-standard", "-z"],
+                          capture_output=True)
+    if proc.returncode == 0:
+        return [name for name in proc.stdout.decode("utf-8").split("\0") if name and (REPO / name).is_file()]
+    skip_parts = {".git", "__pycache__", ".pytest_cache", ".venv", "venv", "build", "dist"}
+    return [rel.as_posix() for rel in (p.relative_to(REPO) for p in REPO.rglob("*") if p.is_file())
+            if not set(rel.parts) & skip_parts and not any(part.endswith(".egg-info") for part in rel.parts)
+            and not rel.as_posix().startswith("tests/skill_evals/workspace/") and rel.name != "probe-hook.log"]
+
+
 def test_repo_text_files_use_lf():
     """커밋되는 텍스트 파일에 CRLF가 섞이지 않았다 (`.gitattributes`)."""
-    skip_parts = {".git", "__pycache__", ".pytest_cache"}
     skip_suffix = {".zip", ".png", ".jpg", ".gz", ".pdf"}
-    bad = []
-    for path in REPO.rglob("*"):
-        if not path.is_file():
-            continue
-        rel = path.relative_to(REPO)
-        if set(rel.parts) & skip_parts or path.suffix in skip_suffix:
-            continue
-        if rel.as_posix().startswith("tests/skill_evals/workspace/"):  # 스킬 eval 실행 결과, .gitignore (커밋 안 함)
-            continue
-        if rel.name == "probe-hook.log":  # 실험이 남기는 파일, 커밋하지 않는다
-            continue
-        if b"\r\n" in path.read_bytes():
-            bad.append(rel.as_posix())
+    bad = [rel for rel in _committable_files()
+           if Path(rel).suffix not in skip_suffix and b"\r\n" in (REPO / rel).read_bytes()]
     assert not bad, f"CRLF가 섞인 파일: {bad}"
+
+
+def test_repo_text_files_check_ignores_local_env(monkeypatch, tmp_path):
+    """레포 안 `.venv/` 같은 로컬 환경의 CRLF 파일은 검사 대상이 아니다 (사내 S-2: venv 안 패키지 파일로 실패)."""
+    repo = tmp_path / "r"
+    (repo / ".venv" / "lib").mkdir(parents=True)
+    (repo / ".venv" / "lib" / "pkg.txt").write_bytes(b"a\r\n")
+    (repo / "ok.txt").write_bytes(b"a\n")
+    (repo / ".gitignore").write_text(".venv/\n", encoding="utf-8")
+    monkeypatch.setattr(sys.modules[__name__], "REPO", repo)
+    assert sorted(_committable_files()) == [".gitignore", "ok.txt"]       # git 아님(압축만 푼 반입본): 폴백 제외 목록
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    assert sorted(_committable_files()) == [".gitignore", "ok.txt"]       # git: .gitignore 기준
 
 
 def _all_tests():
