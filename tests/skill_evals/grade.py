@@ -1238,12 +1238,18 @@ def checks(eid: int, ctx: Ctx) -> list:
                 want = tuple(Path(f).name for f in files) or names
             is_cut = lambda l: " cut " in l and "--evidence" in l
             cuts = [l for l in ctx.ran.splitlines() if is_cut(l)]
-            # 실행 기록이 있으면 마지막으로 성공한(종료 코드 0) cut 호출만 본다: 실패한 부분 cut 뒤 고쳐 다시 자른 것은
-            # 위반이 아니다 (h1-d eval 50). 성공한 호출이 없으면 모든 호출을 본다
-            ok_runs = [[l for l in _strip_heredocs(str(e["input"].get("command", ""))).splitlines() if is_cut(l)]
-                       for e in ctx.seq() or [] if e["kind"] == "tool" and e["name"] == "Bash" and not e.get("error")
-                       and not re.search(r"(?:EXIT|Exit code|종료 코드)\s*[1-9]", str(e.get("result") or ""))]
-            cuts = next((c for c in reversed(ok_runs) if c), cuts)
+            # 실행 기록이 있으면 실패가 확실한 cut 호출(오류 표시·0 아닌 종료 코드, cut 뒤 같은 명령에 파이프·`||`가 없다)만 빼고
+            # 나머지를 모두 본다: 실패한 부분 cut 뒤 고쳐 다시 자른 것은 위반이 아니다 (h1-d eval 50). 파이프·`||`가 붙으면
+            # 성공 여부를 모르므로 빼지 않는다. 남은 호출이 없으면 모든 호출을 본다
+            bad_exit = re.compile(r"(?:EXIT|Exit code|종료 코드)\s*[:=]?\s*[1-9]", re.I)
+            def failed(e, lines):
+                tails = [re.split(r";|&&", l[l.index(" cut "):], maxsplit=1)[0] for l in lines]
+                return ((e.get("error") or bool(bad_exit.search(str(e.get("result") or ""))))
+                        and not any("|" in t for t in tails))
+            runs = [(e, [l for l in _strip_heredocs(str(e["input"].get("command", ""))).splitlines() if is_cut(l)])
+                    for e in ctx.seq() or [] if e["kind"] == "tool" and e["name"] == "Bash"]
+            judged = [l for e, lines in runs if lines and not failed(e, lines) for l in lines]
+            cuts = judged or cuts
             got = [[Path(t).name for t in l.split() if t.endswith(".log") and Path(t).name in want] for l in cuts]
             return bool(cuts) and all(g == list(want) for g in got), f"입력 순서={list(want)} cut 호출={got}"
         def planned():
@@ -1878,7 +1884,10 @@ def checks_p(eid, ctx):
             texts = ctx.visible()       # 질문 문구로 알린 것도 보인 글이다 (h1-b eval 65)
             if texts is None:
                 raise _Manual("실행 기록(events.jsonl) 없음")
-            hit = next((t for t in texts if re.search(r"불일치|mismatch|맞지 않|다르|다릅|달라", t) and "ofono" in t), None)
+            # 같은 줄·문장에 플랫폼 낱말과 불일치 낱말이 함께 있어야 한다("확인해 달라" 같은 말은 알림이 아니다)
+            said = re.compile(r"(?:플랫폼|platform)[^.\n]{0,40}(?:불일치|mismatch|다르|다릅|맞지 않)|"
+                              r"(?:불일치|mismatch)[^.\n]{0,40}(?:플랫폼|platform)", re.I)
+            hit = next((t for t in texts if said.search(t) and "ofono" in t), None)
             return hit is not None, (hit[:300] if hit else "플랫폼 불일치(ofono) 알림 없음")
         def nothing_left():
             ok, ev = untouched()
