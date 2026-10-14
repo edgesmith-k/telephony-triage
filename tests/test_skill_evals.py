@@ -247,6 +247,21 @@ def test_e50_order_uses_ran_not_command_descriptions(tmp_path):
     assert fns[2]()[0] is True, fns[2]()
 
 
+@pytest.mark.parametrize("first_out, ok", [("앵커 줄이 없습니다\nEXIT 2", True), ('{"out": "cut-1.log"}\nEXIT 0', False)])
+def test_e50_order_judges_last_successful_cut(tmp_path, first_out, ok):
+    """실패한 부분 cut 뒤 고쳐 다시 자른 것은 위반이 아니다. 마지막으로 성공한 cut 호출만 본다 (h1-d eval 50)."""
+    env_dir = _synthetic_env(tmp_path)
+    run = run_dir(tmp_path)
+    _write_artifacts(run)
+    partial = "python3 /p/scripts/parse_logcat.py cut logs/e050.main.log --evidence /w/MOCK-9050/match.json --out c.log; echo EXIT $?"
+    both = "python3 /p/scripts/parse_logcat.py cut logs/e050.main.log logs/e050.radio.log --evidence /w/MOCK-9050/match.json --out c.log"
+    _seq_events(run, [("tool", "t1", "Bash", {"command": partial}, first_out, False),
+                      ("tool", "t2", "Bash", {"command": both}, "Exit code 2\n앵커 줄이 없습니다" if not ok else '{"out": "c.log"}',
+                       not ok)])
+    check = grader.checks(50, grader.Ctx(env_dir, run))[2]
+    assert check()[0] is ok, check()
+
+
 @pytest.mark.parametrize("resolution, ok", [("캐리어 APN을 직접 입력한다", True), ("캐리어 APN을 직접 입력한다.", True),
                                              ("캐리어 APN을 직접 입력한다. ", True), ("캐리어 APN 목록을 초기화한다", False)])
 def test_e38_revised_resolution_ignores_trailing_period_and_space(tmp_path, resolution, ok):
@@ -1395,6 +1410,11 @@ def test_e65_mismatch_bypass_and_guidance_checks(tmp_path):
     assert fns[0]()[0] is False and fns[1]()[0] is False
     _seq_events(run, [("text", "이슈 DB가 ofono 플랫폼이라 불일치로 멈췄습니다.")])   # 재실행 안내 없이 알리기만 해도 통과
     assert grader.checks(65, grader.Ctx(env_dir, run))[2]()[0] is True
+    # 질문 문구로 알린 것도 보인 글이다. "맞지 않"·"다르(다릅·달라)" 표현도 인정하되 ofono는 있어야 한다 (h1-b eval 65)
+    for question, ok in (("이슈 DB 플랫폼(ofono)이 선택한 플랫폼(android)과 맞지 않습니다. 어떻게 할까요?", True),
+                         ("이슈 DB가 ofono라 선택 플랫폼과 다릅니다.", True), ("이슈 DB 플랫폼이 맞지 않습니다.", False)):
+        _seq_events(run, [("tool", "q", "mcp__eval-approver__ask_user", {"question": question}, "중단", False)])
+        assert grader.checks(65, grader.Ctx(env_dir, run))[2]()[0] is ok, question
     with pytest.raises(grader._Manual):                                  # 실행 기록 없음은 통과로 세지 않는다
         (run / "events.jsonl").unlink()
         grader.checks(65, grader.Ctx(env_dir, run))[0]()
