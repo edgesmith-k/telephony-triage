@@ -14,7 +14,9 @@ Bash·Read 출력은 사용자에게 보이지 않는다. push 확인 화면(`##
   리포트는 Step 7 분류 질문(선택지 2개 이상)일 때만 본다(앞의 탐색·심층 분석 질문은 리포트 전이다).
 - `pre-bash`(PreToolUse Bash): `db_pr.py publish --approved H`·`issue_post.py approve`면 해시가 같은 화면을 찾아 화면 뒤 ~ 마지막
   질문(또는 사용자 입력) 사이에 화면 전체가 보였는지 본다. 빠지면 거부(승인 질문 전에 화면을 보이지 않았다). 화면을 못 찾으면
-  판정하지 않는다. `db_pr.py stage` 앞에 열린 초안 검증표가 보이지 않았어도 거부한다(그 창은 stage로 닫힌다).
+  판정하지 않는다 — 단 그 해시의 화면이 어느 도구 출력에도 없는데 화면을 낸 호출(stage·summary / render)이 기록에 있으면 한 번
+  거부하고 `summary <wt> --format markdown`(render)을 파이프 없이 다시 내게 한다. `db_pr.py stage` 앞에 열린 초안 검증표가
+  보이지 않았어도 거부한다(그 창은 stage로 닫힌다).
 - `post`(PostToolUse Bash): 결과에 화면·리포트·초안 검증 결과가 있으면 `additionalContext`로 "이 출력은 사용자에게 안 보인다,
   다음 메시지에 전문을 글자 그대로" 안내만 한다.
 
@@ -47,7 +49,7 @@ MAX_BLOCKS = 2
 TAIL_BYTES = 16 * 1024 * 1024
 BLOCK_LIMIT = 12 * 1024
 READ_LIMIT = 4 * 1024 * 1024
-QUICK_TOKENS = ("## push 전 확인:", "게시 전 확인:", "triage.py", "--draft")
+QUICK_TOKENS = ("## push 전 확인:", "게시 전 확인:", "triage.py", "--draft", "db_pr.py", "issue_post.py")
 KIND_NAME = {"push": "push 확인 화면", "post": "게시 확인 화면", "report": "분석 리포트", "draft": "초안 검증표"}
 OBJ = {"push": "을", "post": "을", "report": "를", "draft": "를"}      # 목적격 조사
 EXPLORE_Q = re.compile(r"(심층|탐색)\s*분석[^\n]*(할까요|실행할까|진행할까|\?)")
@@ -207,6 +209,26 @@ def approval_reason(ob, miss) -> str:
             f"(빠진 줄 {len(miss)}/{ob.total}). Bash 출력은 사용자에게 보이지 않는다.\n빠진 줄 예:\n{_examples(miss)}\n{_block(ob)}")
 
 
+UNSEEN_BLOCKS = 1      # 화면이 도구 결과에 없던 승인: 한 번만 막는다(다시 낸 화면은 그다음부터 보통 판정)
+
+
+def unseen_reason(key: str, kind: str, cmd: str) -> str:
+    """승인할 화면이 어느 도구 결과에도 없다: 화면을 다시 내는 명령을 알려 준다."""
+    if kind == "push":
+        m = re.search(r"(\S*db_pr\.py)[\"']?\s+(?:--\S+\s+\S+\s+)*publish\s+(\S+)", cmd)
+        how = (f"`python3 {m.group(1)} summary {m.group(2)} --format markdown`" if m
+               else "`python3 S/db_pr.py summary <wt> --format markdown`")
+        what = "push 확인 화면"
+    else:
+        m = re.search(r"(\S*issue_post\.py)[\"']?\s+(?:--\S+\s+\S+\s+)*approve\s+(\S+)", cmd)
+        how = (f"`python3 {m.group(1)} render {m.group(2)} --fill JOB/post.fill.json`" if m
+               else "`python3 S/issue_post.py render <KEY> --fill JOB/post.fill.json`")
+        what = "게시 확인 화면"
+    return (f"{shown.MARKER} {key} — 승인하려는 {what}이 어느 도구 출력에도 없다(리디렉션·`head`·`grep`·파일에서 해시를 읽음). "
+            "Bash 출력은 사용자에게 보이지 않고, 보지 않은 화면은 승인의 근거가 될 수 없다.\n"
+            f"{how}를 파이프·리디렉션 없이 실행하고, 그 출력 전체를 글자 그대로 답에 붙인 뒤 같은 메시지 끝에 다시 승인받는다.")
+
+
 def stage_reason(ob, miss) -> str:
     return (f"{shown.MARKER} {ob.key} — 초안 검증표를 보이지 않고 stage하려 했다(빠진 규칙 {len(miss)}/{ob.total}). "
             "Bash 출력은 사용자에게 보이지 않는다.\nstage 전에 규칙마다 한 행(R1~R6 각각 상태, 통과가 아니면 사유)을 보인다.\n"
@@ -320,7 +342,7 @@ def mode_pre_bash(inp) -> dict | None:
     if seq is None:
         return None
     seq = trim_current(seq, inp.get("tool_use_id"))
-    found, texts = [], []
+    found, texts, unseen = [], [], []
     targets = []
     if pub:
         a = shown.APPROVED_ARG.search(cmd[pub[0].start():])
@@ -333,7 +355,13 @@ def mode_pre_bash(inp) -> dict | None:
         wins = shown.screens(seq, kind, script_only=True)
         pick = [w for w in wins if h is None or shown.digest_of(w).startswith(h) or h.startswith(shown.digest_of(w))]
         if not pick:
-            continue      # 창을 못 찾음: 판정하지 않는다
+            # 화면이 어느 도구 결과에도 없다(리디렉션·파이프·state.json에서 해시): 그 화면을 낸 호출이 이 기록에 있으면
+            # 한 번 막고 화면을 다시 내게 한다. 끝부분만 읽었거나 그런 호출이 없으면 판정하지 않는다
+            makers = (shown.STAGE, shown.SUMMARY) if kind == "push" else (shown.RENDER,)
+            if not TRUNCATED[0] and any(shown.bash_index(seq, m) for m in makers):
+                key = f"{kind}:{h if kind == 'push' else (h or 'render')[:16]}"
+                unseen.append((key, kind, cmd))
+            continue
         w = pick[-1]
         at = _approval_point(seq, w["start"])
         miss = shown.uncovered(w["lines"], shown.visible_between(seq, w["start"] + 1, len(seq) if at is None else at + 1))
@@ -352,9 +380,16 @@ def mode_pre_bash(inp) -> dict | None:
                     texts.append(stage_reason)
     fmt = {id(ob): f for (ob, _), f in zip(found, texts)}
     under, over = _split(seq, found)
-    if under:
-        return _deny("\n\n".join(fmt[id(ob)](ob, miss) for ob, miss in under))
-    return {"systemMessage": capped_message([ob for ob, _ in over])} if over else None
+    seen = markers(seq)
+    first = [u for u in unseen if seen.count(u[0]) < UNSEEN_BLOCKS]
+    if under or first:
+        return _deny("\n\n".join([fmt[id(ob)](ob, miss) for ob, miss in under] + [unseen_reason(*u) for u in first]))
+    later = [u for u in unseen if u not in first]
+    if over or later:
+        msg = capped_message([ob for ob, _ in over]) if over else \
+            f"[telephony-triage] 확인 화면을 답에 보이지 못했다{shown.CAPPED} — 승인 전에 화면을 직접 확인"
+        return {"systemMessage": msg}
+    return None
 
 
 def _response_text(resp) -> str:

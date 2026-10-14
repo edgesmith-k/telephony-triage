@@ -440,7 +440,7 @@ def screens(seq, kind: str, *, script_only: bool = False) -> list[dict]:
         if script_only:
             cmd = command_of(e) if e["name"] == "Bash" else ""
             if any(m.search(cmd) for m in makers):
-                saved.update(Path(t.strip("\"'")).name for t in re.findall(r"(?<![0-9&])>>?\s*([^\s;&|<>]+)", cmd))
+                saved.update(redirect_targets(cmd))
             elif not saved or not _reads_saved(e, saved):
                 continue
         found = list(rx.finditer(tool_text(e)))
@@ -479,11 +479,32 @@ def screens(seq, kind: str, *, script_only: bool = False) -> list[dict]:
     return wins
 
 
+REDIRECT = re.compile(r"(?:^|[^0-9>&])(?:&|1)?>>?\s*([^\s;&|<>]+)")
+
+
+def redirect_targets(cmd: str) -> set[str]:
+    """명령의 stdout 리디렉션 대상(`>`·`>>`·`1>`·`&>`·`&>>`, `2>`·`>&1`·`/dev/*` 제외). 절대 경로(변수 없음)는 경로 그대로,
+    상대·`$VAR`·`~` 경로는 파일 이름만(`name:` 접두) — 다시 읽을 때 같은 규칙으로 비교한다(`_reads_saved`)."""
+    out = set()
+    for t in REDIRECT.findall(cmd):
+        t = t.strip("\"'")
+        if not t or t.startswith("/dev/"):
+            continue
+        out.add(t if t.startswith("/") and "$" not in t else "name:" + Path(t).name)
+    return out
+
+
 def _reads_saved(e, saved: set[str]) -> bool:
-    """Read·Bash가 화면 출력 파일(saved의 이름) 중 하나를 읽었다."""
+    """Read·Bash가 화면 출력 파일(`redirect_targets`) 중 하나를 읽었다: 절대 경로는 경로 전체, 그 밖은 파일 이름으로 비교."""
     if e["name"] == "Read":
-        return Path(str((e.get("input") or {}).get("file_path", ""))).name in saved
-    return any(re.search(r"(?<![\w.-])" + re.escape(n) + r"(?![\w.-])", command_of(e)) for n in saved if n)
+        fp = str((e.get("input") or {}).get("file_path", ""))
+        return fp in saved or "name:" + Path(fp).name in saved
+    cmd = command_of(e)
+    for t in saved:
+        target = t.removeprefix("name:")
+        if target and re.search(r"(?<![\w.-])" + re.escape(target) + r"(?![\w.-])", cmd):
+            return True
+    return False
 
 
 def digest_of(w) -> str:

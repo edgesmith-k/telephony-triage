@@ -257,8 +257,9 @@ def test_pre_bash_publish_requires_screen_before_approval(tmp_path):
     assert decision(out) == "deny"
     assert "승인 질문 전에 확인 화면 전체를 보이지 않았다 — 화면을 다시 보이고 다시 승인받는다" in \
         out["hookSpecificOutput"]["permissionDecisionReason"]
-    other = PUBLISH_CMD.replace("abc1234def", "0123456789")           # 그 해시의 화면이 없다: 판정하지 않는다
-    assert pre("pre-bash", summarized, "Bash", {"command": other}) is None
+    other = PUBLISH_CMD.replace("abc1234def", "0123456789")           # 그 해시의 화면이 도구 출력에 없다: 다시 내게 한다
+    out = pre("pre-bash", summarized, "Bash", {"command": other})
+    assert decision(out) == "deny" and "push:0123456789" in out["hookSpecificOutput"]["permissionDecisionReason"]
     assert pre("pre-bash", summarized, "Bash", {"command": 'grep -n "db_pr.py publish --approved abc1234def" a'}) is None
     key = shown.MARKER + " push:abc1234def — 승인 질문 전에"
     capped = write(tmp_path, prompt("p"), bash("s", STAGE_CMD, SCREEN), say(SUMMARY), prompt("승인"),
@@ -395,3 +396,43 @@ def test_redirected_stage_output_read_back_is_a_screen(tmp_path):
     path = write(tmp_path, prompt("p"), bash("s", STAGE_CMD + ' > "$JOB/stage_out.md"; echo EXIT $?', "EXIT 0"),
                  call("r", "Read", {"file_path": "/w/MOCK-1/stage_out.md"}, SCREEN), say(SUMMARY))
     assert stop(path, SUMMARY)["decision"] == "block"
+
+
+def test_publish_or_approve_of_screen_never_in_output(tmp_path):
+    hidden = write(tmp_path, prompt("p"), bash("s", STAGE_CMD + ' > "$JOB/stage_out.md"; echo EXIT $?', "EXIT 0"),
+                   bash("h", 'grep approved_hash "$JOB/stage_out.md"', "approved_hash: abc1234def"), say("승인할까요?"),
+                   prompt("승인"))
+    out = pre("pre-bash", hidden, "Bash", {"command": PUBLISH_CMD})
+    r = out["hookSpecificOutput"]["permissionDecisionReason"]
+    assert decision(out) == "deny" and r.startswith(shown.MARKER + " push:abc1234def")
+    assert "`python3 /p/scripts/db_pr.py summary /w/MOCK-1/wt --format markdown`" in r
+    again = write(tmp_path, prompt("p"), bash("s", STAGE_CMD + " > /w/o.md", "EXIT 0"), prompt("승인"),
+                  call("x", "Bash", {"command": PUBLISH_CMD}, "PreToolUse:Bash hook error: " + r, True), name="again.jsonl")
+    out = pre("pre-bash", again, "Bash", {"command": PUBLISH_CMD})       # 한 번만 막는다
+    assert decision(out) is None and shown.CAPPED in out["systemMessage"]
+    nostage = write(tmp_path, prompt("승인해줘"), say("네"), name="nostage.jsonl")
+    assert pre("pre-bash", nostage, "Bash", {"command": PUBLISH_CMD}) is None   # 화면을 낸 호출이 없다: 판정하지 않는다
+    render = "python3 /p/scripts/issue_post.py render MOCK-1 --fill /w/MOCK-1/post.fill.json --json"
+    approve = "python3 /p/scripts/issue_post.py approve MOCK-1 --sha " + "c" * 64
+    post = write(tmp_path, prompt("p"), bash("r", render + " | tail -1", '"post_sha256": "' + "c" * 64 + '"'), prompt("게시"),
+                 name="post.jsonl")
+    out = pre("pre-bash", post, "Bash", {"command": approve})
+    r = out["hookSpecificOutput"]["permissionDecisionReason"]
+    assert decision(out) == "deny" and "post:cccccccccccccccc" in r and "issue_post.py render MOCK-1 --fill" in r
+
+
+def test_redirect_targets_and_read_back_rules(tmp_path):
+    assert shown.redirect_targets('db_pr.py stage p > "$JOB/s.md" 2>&1') == {"name:s.md"}
+    assert shown.redirect_targets("db_pr.py stage p &> /tmp/a/s.md") == {"/tmp/a/s.md"}
+    assert shown.redirect_targets("db_pr.py stage p >/dev/null 2>/dev/null") == set()
+    assert shown.redirect_targets("db_pr.py stage p 2> err.txt >> out/o.md") == {"name:o.md"}
+    # 절대 경로로 쓴 파일: 같은 이름의 다른 경로(fixture)는 화면이 아니다
+    other = write(tmp_path, prompt("p"), bash("s", STAGE_CMD + " &> /w/MOCK-1/stage_out.md", "EXIT 0"),
+                  call("r", "Read", {"file_path": "/repo/tests/fixtures/stage_out.md"}, SCREEN), say(SUMMARY))
+    assert stop(other, SUMMARY) is None
+    same = write(tmp_path, prompt("p"), bash("s", STAGE_CMD + " &> /w/MOCK-1/stage_out.md", "EXIT 0"),
+                 bash("c", "cat /w/MOCK-1/stage_out.md", SCREEN), say(SUMMARY), name="same.jsonl")
+    assert stop(same, SUMMARY)["decision"] == "block"
+    devnull = write(tmp_path, prompt("p"), bash("s", STAGE_CMD + " > /dev/null", "EXIT 0"),
+                    bash("c", "cat /dev/null tests/fixtures/x.md", SCREEN), say(SUMMARY), name="dev.jsonl")
+    assert stop(devnull, SUMMARY) is None
