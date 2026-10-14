@@ -27,6 +27,10 @@ scripts=$(python3 - "$config" <<'EOF'
 import sys
 try:
     import yaml
+except ImportError:     # 이 python3(PATH 첫 번째)에 의존성이 없다 — scripts_path 문제로 오해하지 않게 따로 알린다
+    print("__TT_NO_YAML__ " + sys.executable)
+    sys.exit(0)
+try:
     with open(sys.argv[1], encoding="utf-8") as fh:
         data = yaml.safe_load(fh) or {}
     print(((data.get("plugin") or {}).get("scripts_path")) or "")
@@ -35,6 +39,9 @@ except Exception:
 EOF
 )
 
+case "$scripts" in
+  __TT_NO_YAML__*) guide "python3(${scripts#__TT_NO_YAML__ })에 PyYAML이 없다. 의존성을 설치한 Python이 PATH의 python3이어야 한다(venv면 켠 터미널에서 git을 쓴다).";;
+esac
 [ -n "$scripts" ] || guide "config에 plugin.scripts_path가 없다 ($config)."
 [ -f "$scripts/db_precommit.py" ] || guide "plugin.scripts_path가 무효하다 (db_precommit.py 없음): $scripts"
 

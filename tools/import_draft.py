@@ -66,6 +66,7 @@ ALWAYS_SKIP = {
     ".local-draft",  # 사외 PC 전용 표식 (15-local-draft.md §15.2)
     "__pycache__",
     ".pytest_cache",
+    ".venv",          # 사내 레포 안 가상환경(가이드 방식). 무시 파일이지만 site_only·되돌리기 목록에서도 훑지 않는다
     MANIFEST,
 }
 

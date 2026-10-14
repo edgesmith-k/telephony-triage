@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -182,6 +183,25 @@ def test_prepush_token_and_base_branch():
                 env=ws.hook_env(TT_PUBLISH_TOKEN=token))
     assert proc.returncode != 0 and "트리가 승인 해시와 다르다" in proc.stderr
     ws.db_pr("discard", wt)
+
+
+def test_git_hooks_name_missing_pyyaml_instead_of_misleading_errors():
+    """PATH의 python3에 PyYAML이 없으면(의존성은 venv에만, venv를 안 켬) 그렇다고 알리고 막는다.
+    pre-commit은 'scripts_path가 없다'로, pre-push는 기본값 판정으로 새지 않는다."""
+    ws = Workspace()
+    shim = ws.base / "no-yaml-bin"
+    shim.mkdir()
+    (shim / "python3").write_text(f"#!/bin/sh\nexec '{sys.executable}' -S \"$@\"\n", encoding="utf-8")
+    (shim / "python3").chmod(0o755)
+    env = ws.hook_env()
+    env["PATH"] = os.pathsep.join([str(shim), env.get("PATH", os.environ["PATH"])])
+    branch_with_change(ws, "review/data-2026-10", "CONTRIBUTING.md", "직접 편집\n")
+    proc = gitp(ws.clone, "commit", "-qm", "직접 편집", env=env)
+    assert proc.returncode != 0 and "PyYAML이 없다" in proc.stderr and "plugin.scripts_path가 없다" not in proc.stderr
+    assert gitp(ws.clone, "commit", "-qm", "직접 편집", env=ws.hook_env()).returncode == 0
+    env["TT_PUBLISH_TOKEN"] = "manual"
+    proc = gitp(ws.clone, "push", "-q", "origin", "HEAD:refs/heads/review/data-2026-10", env=env)
+    assert proc.returncode != 0 and "PyYAML이 없어" in proc.stderr
 
 
 # -- Claude hook: Bash ---------------------------------------------------------------------------

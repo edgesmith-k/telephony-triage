@@ -60,3 +60,36 @@ jobs:
         env:
           TT_SCHEMA_CHECK: "1"   # triage.py run 출력 스키마 검사 (tests/conftest.py도 설정)
         run: python -m pytest -q tests
+
+  # 사내 리허설 (tools/site_rehearsal.sh): 반입본을 사내와 같은 조건에서 사내 순서대로 설치·시작·기준선·전체 테스트.
+  # Ubuntu 22.04 apt Python(3.10.12 / python3.11 = 3.11.0rc1)·git 2.34, 일반 사용자, 한국어 로케일(git 메시지 한국어), KST.
+  # 사외 PC·CI 조건(root, 최신 Python, 영어 로케일, 레포 밖 venv)에서만 숨는 사내 실패를 반입 전에 잡는다.
+  site-rehearsal:
+    needs: boundary
+    if: github.server_url == 'https://github.com'
+    runs-on: ubuntu-latest
+    container: ubuntu:22.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        method: [user, venv, tt311]     # 가이드 방법 A(--user) · 레포 안 .venv · 레포 밖 python3.11 venv
+    steps:
+      - name: Ubuntu 22.04 packages (사내와 같은 apt 버전)
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq git unzip zip python3 python3-venv python3-pip python3.11 python3.11-venv \
+            locales language-pack-ko tzdata >/dev/null
+          locale-gen ko_KR.UTF-8 >/dev/null
+          useradd -m -s /bin/bash dev
+      - uses: actions/checkout@v4
+      - name: 반입본 만들기 (추적 파일 = 반입 묶음 내용)
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git archive --format=zip -o /tmp/bundle.zip HEAD
+          chmod 644 /tmp/bundle.zip
+          cp tools/site_rehearsal.sh /tmp/site_rehearsal.sh && chmod 755 /tmp/site_rehearsal.sh
+      - name: 리허설 (${{ matrix.method }}, 일반 사용자)
+        run: runuser -u dev -- env HOME=/home/dev LANG=ko_KR.UTF-8 TZ=Asia/Seoul TT_SCHEMA_CHECK=1 bash /tmp/site_rehearsal.sh /tmp/bundle.zip ${{ matrix.method }}

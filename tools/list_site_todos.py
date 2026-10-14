@@ -45,9 +45,17 @@ def candidates(root: Path) -> list[Path]:
             capture_output=True, check=True,
         ).stdout.decode("utf-8", errors="replace")
         # 다른 레포의 무시 경로에 풀린 묶음이면 git은 빈 목록을 준다 → rglob
-        return sorted(root / p for p in out.split(chr(0)) if p) or sorted(root.rglob("*"))
+        return sorted(root / p for p in out.split(chr(0)) if p) or _walk(root)
     except (OSError, subprocess.CalledProcessError):
-        return sorted(root.rglob("*"))
+        return _walk(root)
+
+
+LOCAL_DIRS = {".git", ".venv", "venv", "__pycache__", ".pytest_cache", "build", "dist"}
+
+
+def _walk(root: Path) -> list[Path]:
+    """git 없이 훑을 때 로컬 환경 디렉토리(레포 안 .venv 등)는 뺀다."""
+    return sorted(p for p in root.rglob("*") if not LOCAL_DIRS & set(p.relative_to(root).parts))
 
 
 def scan(root: Path) -> dict[str, list[dict]]:

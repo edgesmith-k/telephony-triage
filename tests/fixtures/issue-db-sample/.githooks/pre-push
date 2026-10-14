@@ -30,6 +30,14 @@ home = os.environ["TT_HOOK_HOME"]
 cfg = {}
 try:
     import yaml
+except ImportError:
+    yaml = None
+if yaml is None and os.path.isfile(os.path.join(home, "config.yaml")):
+    # config를 못 읽으면 기본 work_dir·base_branch로 잘못 판정한다 — 의존성 문제라고 알리고 막는다(fail-closed)
+    print(f"{PREFIX} push를 거부했다: python3({sys.executable})에 PyYAML이 없어 config를 읽을 수 없다. "
+          "의존성을 설치한 Python이 PATH의 python3이어야 한다(venv면 켠 터미널에서 git을 쓴다).", file=sys.stderr)
+    sys.exit(1)
+try:
     with open(os.path.join(home, "config.yaml"), encoding="utf-8") as fh:
         cfg = yaml.safe_load(fh) or {}
 except Exception:
