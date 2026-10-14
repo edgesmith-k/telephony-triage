@@ -70,7 +70,7 @@ Step 7 질문 전에 `JOB/report.md`(`TODO(LLM)`만 채움)를 보인다(`must_s
 | 증상이 새것 | `S/db_add.py similar --db SNAP` 3개를 먼저 보이고 `new-type` + `append` | `new-type` |
 | 원인 미확정 | `unresolved {type}` | `unresolved` |
 
-- 거부하면 표의 다른 선택지(다른 기존 원인·새 원인 포함)를 다시 보인다. 추정만으로·`unjudged`면 원인·유형을 안 만든다. 처음부터 후보 0개면 "새 유형 / 원인 미확정 / 기록하지 않음"만.
+- 거부하면 "다른 기존 원인 / 새 원인 / 새 유형 / 원인 미확정 / 기록하지 않음"을 다시 보인다. 추정만으로·`unjudged`면 원인·유형을 안 만든다. 처음부터 후보 0개면 "새 유형 / 원인 미확정 / 기록하지 않음"만.
 - `chose-other`면 한 번 묻는다(기본 아니오): 고른 원인이 후보에서 C=1이면 `add-fixture {kind: extra}`로 넣을지(`db-authoring.md`, R4 실패면 뺀다), C=0·후보 밖이면 `update-signature` 검토를 `pr_notes`에 남길지. `unjudged.causes`면 묻지 않는다. 거절하면 `append`만.
 - 물어보고 넣는 op: 회귀 의심·수정 미흡의 `update-fix`(실패 이력) 또는 verify-fix, `add-related`, `add-code-ref`, `update-signature`,
   `set-resolution`, `set-status`.

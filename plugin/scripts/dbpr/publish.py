@@ -120,7 +120,8 @@ def _check_feedback_suggested(plan: dict, plan_path: Path, job_dir: Path) -> dic
             _write_json(plan_path, plan)
         return {"status": "filled", "count": len(expected)}
     if _suggested_key(suggested) != _suggested_key(expected):
-        raise UsageError("계획 feedback.suggested가 JOB/match.json 후보와 다르다 — 비워 두면 stage가 채운다",
+        raise UsageError("계획 형식 오류: feedback.suggested가 JOB/match.json 후보와 다르다(이어서 하기 등 재분석 뒤) — "
+                         "feedback.suggested를 []로 비우고 다시 stage하면 stage가 채운다",
                          {"plan": suggested, "match": expected})
     return {"status": "verified", "count": len(expected)}
 
