@@ -180,6 +180,7 @@ git add -A && git commit -m "사외 초안 반입: import-v1"     # .draft-manif
 - 단계가 끝나면 세션을 닫고 새로 엽니다.
 
 ### 사외 코드를 다시 반입할 때
+단계별 명령·기준선 만들기(첫 반입을 압축 풀기로 해서 `.draft-manifest.json`이 없을 때)·멈췄을 때 표는 `docs/SITE_INSTALL.md` 8절.
 ```
 git switch -c draft-import/<날짜>
 python3 <새 초안>/tools/import_draft.py <새 초안> --dest . --label import-v2 --dry-run
