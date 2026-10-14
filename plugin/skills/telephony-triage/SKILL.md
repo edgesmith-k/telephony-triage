@@ -53,7 +53,7 @@ description: Telephony 이슈(Android·oFono 등; data·call·network·sim·sms�
 
 ### Step 6. 리포트
 
-`JOB/report.md`의 `TODO(LLM)` 칸만 채워 보인다. `analysis.json` `must_show` 줄은 **글자 그대로** 답에 넣는다(요약·생략 금지).
+Step 7 질문 전에 `JOB/report.md`(`TODO(LLM)`만 채움)를 메시지로 보인다. 첫머리에 `must_show` 줄을 **복사**한다(고쳐 쓰기·생략 금지).
 원인은 **로그로 확인/코드로 추정/placeholder 규칙 결과**를 나누고 반대 근거와 다음 확인을 적는다.
 `fix_judgement`의 `regression-suspected`·`fix-insufficient`는 Step 7에서 묻고, `undetermined`는 SW·`fixed_in`을 나란히.
 

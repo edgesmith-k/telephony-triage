@@ -75,7 +75,7 @@ gh 스텁 상태, Jira 티켓 디렉토리, 로그를 만든다. `env.sh`(export
 실제로 시험하지 못했다. 그래서 e40·e41의 스크립트 판정(계획 항목)은 `execution.json`의 `plugin.skill_calls`(중첩된 `plugin.seen`도 허용)에
 `mock-analyzers:mock-data-analyzer`가 있을 때만 통과로 센다(direct 모드·기록 없음은 이 조건 생략). 헬퍼 CLI(`skill_eval_env.py`)의 기본값은 그대로다.
 
-**남은 차이**(두 모드 공통): 사용자 대화는 `user_replies` 규칙으로 흉내 낸다. 테스트 헬퍼 플러그인 루트는 `site-defaults.example.yaml`
+**남은 차이**(두 모드 공통): 사용자 대화는 `user_replies` 규칙으로 흉내 낸다(질문에 대한 답). 질문 없이 사용자가 이어서 말하는 흐름(분석 전용 리포트를 받은 뒤 "이제 기록해줘", eval 70)은 `followups`로 쓴다 — 있으면 `--input-format stream-json`으로 result마다 다음 메시지를 보내고, 토큰은 상위 usage·턴 수를 더하고 누적값(modelUsage·비용)은 마지막 result를 쓴다. 테스트 헬퍼 플러그인 루트는 `site-defaults.example.yaml`
 (모의 Jira 도구 매핑)을 쓴다. 분석 스킬 이름은 설정의 `mock-data-analyzer`이고 실제 스킬은 플러그인 접두사가 붙는다(사내 분석 스킬도
 설치 방식에 따라 같을 수 있다). 쓰기 도구 호출 여부는 `MOCK_JIRA_WRITE_LOG`로도 본다.
 

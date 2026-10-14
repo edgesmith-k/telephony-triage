@@ -864,6 +864,43 @@ def test_execute_records_tokens_from_stream_json_result(tmp_path, monkeypatch):
     assert saved["repo_commit"] == head and isinstance(saved["repo_dirty"], bool)            # run 시점 커밋
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="가짜 claude는 shebang 실행 파일")
+def test_execute_sends_followups_after_each_result(tmp_path, monkeypatch):
+    """`followups`가 있으면 stream-json 입력으로 첫 메시지 → result → 후속 메시지 순서로 보내고, 상위 usage·턴 수는
+    더하고 누적값(modelUsage·비용)은 마지막 result를 쓴다(eval 70)."""
+    fake = tmp_path / "bin" / "claude"
+    fake.parent.mkdir()
+    seen = tmp_path / "seen.jsonl"
+    fake.write_text(f"#!{sys.executable}\nimport json, sys\n"
+                    f"assert '--input-format' in sys.argv\n"
+                    f"for i, line in enumerate(sys.stdin):\n"
+                    f"    open({str(seen)!r}, 'a').write(line)\n"
+                    f"    r = {_result(is_error=False, subtype='success')!r}\n"
+                    f"    r['result'] = 'turn %d' % i\n"
+                    f"    r['total_cost_usd'] = 0.5 * (i + 1)\n"
+                    f"    print(json.dumps(r), flush=True)\n", encoding="utf-8")
+    fake.chmod(0o755)
+    env_dir, run = tmp_path / "env", run_dir(tmp_path)
+    env_dir.mkdir()
+    info = {"env": {}, "skill": str(tmp_path / "skill"), "path_prefix": [], "plugin_root": str(tmp_path / "root"), "issue_db_clone": str(tmp_path / "a" / "b" / "clone")}
+    monkeypatch.delenv("CLAUDE_CODE_GIT_BASH_PATH", raising=False)
+    outcome = evaluation.execute({"prompt": "p", "user_replies": [], "followups": ["이어서 기록해줘"]},
+                                 info, env_dir, run, str(fake), 30, None, "m-a")
+    saved = json.loads((run / "execution.json").read_text(encoding="utf-8"))
+    msgs = [json.loads(x)["message"]["content"] for x in seen.read_text(encoding="utf-8").splitlines()]
+    assert outcome["status"] == "completed", outcome["reason"]
+    assert msgs[1] == "이어서 기록해줘" and len(msgs) == 2 and saved["followups_sent"] == 1
+    assert saved["reason"] == "turn 1" and saved["usage"]["input_tokens"] == 20 and saved["tokens"]["num_turns"] == 14
+    assert saved["total_cost_usd"] == 1.0
+    assert len((run / "events.jsonl").read_text(encoding="utf-8").splitlines()) == 2
+
+
+def test_merge_results_stops_on_error_and_single_is_identity():
+    one = _result()
+    assert evaluation.merge_results([one])["usage"] == one["usage"] and evaluation.merge_results([]) is None
+    assert evaluation.merge_results([_result(), _result(is_error=True)])["is_error"] is True
+
+
 def _budget_main(monkeypatch, capsys, it, tmp_path, model="m-a"):
     base = tmp_path / f"base-{model}.json"
     base.write_text(json.dumps({**({"model": model} if model else {}), "margin_default": 1.5,

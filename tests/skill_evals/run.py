@@ -22,6 +22,7 @@ import os
 import shutil
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -261,6 +262,73 @@ def read_events(path: Path) -> tuple[list[dict], dict | None]:
     return events, result
 
 
+def merge_results(results: list[dict]) -> dict | None:
+    """후속 메시지(`followups`)로 여러 턴을 돈 실행의 result 이벤트들을 하나로. 마지막 result를 바탕으로
+    상위 `usage` 수치·`num_turns`·`duration_ms`는 턴별 값이라 더하고, `modelUsage`·`total_cost_usd`는 누적값이라
+    마지막 값을 쓴다(CLI 2.1.299 실측: 두 번째 result의 modelUsage cacheRead = 두 턴 합). 하나라도 오류면 오류."""
+    if not results:
+        return None
+    merged = dict(results[-1])
+    usage: dict = {}
+    for r in results:
+        for k, v in (r.get("usage") or {}).items():
+            if isinstance(v, (int, float)) and not isinstance(v, bool):
+                usage[k] = usage.get(k, 0) + v
+            else:
+                usage.setdefault(k, v)
+    merged["usage"] = usage
+    for k in ("num_turns", "duration_ms"):
+        vals = [r.get(k) for r in results if isinstance(r.get(k), (int, float))]
+        if vals:
+            merged[k] = sum(vals)
+    merged["is_error"] = any(r.get("is_error") for r in results)
+    merged["turn_results"] = len(results)
+    return merged
+
+
+def run_turns(proc: subprocess.Popen, events, prompt: str, followups: list[str], timeout: int) -> list[dict]:
+    """stream-json 입력으로 첫 메시지를 보내고, result 이벤트가 올 때마다 다음 후속 메시지를 보낸다(사용자가 답을 받은 뒤
+    이어서 말하는 흐름 — 질문 도구로는 흉내 낼 수 없다, eval 70). 출력은 그대로 `events`에 쓴다. 오류 result면 남은 후속
+    메시지를 보내지 않는다. 제한 시간을 넘기면 프로세스를 죽이고 `subprocess.TimeoutExpired`."""
+    expired = threading.Event()
+
+    def kill() -> None:
+        expired.set()
+        proc.kill()
+
+    def send(text: str) -> None:
+        proc.stdin.write(json.dumps({"type": "user", "message": {"role": "user", "content": text}}, ensure_ascii=False) + "\n")
+        proc.stdin.flush()
+
+    timer = threading.Timer(timeout, kill)
+    timer.start()
+    pending, results = list(followups), []
+    try:
+        send(prompt)
+        for line in proc.stdout:
+            events.write(line)
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if event.get("type") != "result":
+                continue
+            results.append(event)
+            if pending and not event.get("is_error"):
+                send(pending.pop(0))
+            else:
+                proc.stdin.close()
+        proc.wait()
+    except (BrokenPipeError, ValueError):       # 죽은 프로세스에 쓰기·닫힌 stdin
+        if not expired.is_set():
+            raise
+    finally:
+        timer.cancel()
+    if expired.is_set():
+        raise subprocess.TimeoutExpired(proc.args, timeout)
+    return results
+
+
 def init_model(events: list[dict]) -> str | None:
     """stream-json init 이벤트가 알려 주는 실제 모델 ID. `--model` 없이 돌렸을 때 기준선 모델의 출처다."""
     init = next((e for e in events if e.get("type") == "system" and e.get("subtype") == "init"), None)
@@ -340,22 +408,32 @@ def execute(entry: dict, info: dict, env_dir: Path, run_dir: Path, claude: str,
                    "--tools", "Read,Bash,Write,Edit,Glob,Grep", "--allowedTools", "Read,Bash,Write,Edit,Glob,Grep", *dirs]
     if model:
         command[2:2] = ["--model", model]
+    followups = [str(f) for f in entry.get("followups") or []]
+    if followups:
+        command[2:2] = ["--input-format", "stream-json"]
     commit, dirty = repo_state(run_dir.parents[1])
     start = time.monotonic()
     result = None
     events_list: list[dict] = []
     derived: list[str] = []
     with (run_dir / "events.jsonl").open("w", encoding="utf-8") as events, (run_dir / "stderr.log").open("w", encoding="utf-8") as errors:
-        proc = subprocess.Popen(command, cwd=env_dir, env=env, stdin=subprocess.PIPE, stdout=events, stderr=errors,
-                                text=True, encoding="utf-8")
+        proc = subprocess.Popen(command, cwd=env_dir, env=env, stdin=subprocess.PIPE,
+                                stdout=subprocess.PIPE if followups else events, stderr=errors, text=True, encoding="utf-8")
+        turns: list[dict] = []
         try:
-            proc.communicate(prompt, timeout=timeout)
+            if followups:
+                turns = run_turns(proc, events, prompt, followups, timeout)
+            else:
+                proc.communicate(prompt, timeout=timeout)
         except subprocess.TimeoutExpired:
             proc.kill()
             proc.communicate()
             status, reason = "timeout", f"{timeout}초 제한으로 중단. 모의 환경의 lock 상태 확인 필요."
         else:
+            events.flush()
             events_list, result = read_events(run_dir / "events.jsonl")
+            if followups:
+                result = merge_results(turns)
             status, reason = classify_result(result, proc.returncode)
             if plugin:
                 problem, seen = plugin_check(events_list, plugin.get("mcp_servers"))
@@ -372,7 +450,8 @@ def execute(entry: dict, info: dict, env_dir: Path, run_dir: Path, claude: str,
                "tokens": token_record(result), "model": model, "init_model": init_model(events_list),
                "repo_commit": commit, "repo_dirty": dirty,
                "mode": "plugin" if plugin else "direct", "plugin": (plugin or {}).get("seen"),
-               "outputs_derived": derived, "env_stripped": stripped_env, "auth_from_user_settings": auth_keys}
+               "outputs_derived": derived, "env_stripped": stripped_env, "auth_from_user_settings": auth_keys,
+               **({"followups_sent": max(len(turns) - 1, 0)} if followups else {})}
     dump(run_dir / "execution.json", outcome)
     return outcome
 

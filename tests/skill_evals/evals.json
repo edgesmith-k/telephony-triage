@@ -2590,9 +2590,11 @@
         "발생 시각 후보를 보여주면 첫 번째 후보를 고른다.",
         "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다.",
         "심층 분석(mock-data-analyzer)·탐색 분석(explore) 실행 여부를 물으면 '아니오'.",
-        "분석 전용 리포트를 받은 뒤 '이제 이 원인으로 기록해줘, 연습이니 dry-run으로'라고 답한다.",
         "분류 제안(DATA-001-02)에는 '예'. note 한 줄 초안은 그대로 승인하고, 확인 화면에서는 '승인'(dry-run이므로 여기서 끝난다).",
         "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "followups": [
+        "이제 이 원인으로 기록해줘, 연습이니 dry-run으로"
       ],
       "expected_output": "1회차 triage.py run MOCK-9070 --analysis-only → time 질문에 답 → 분석 전용 리포트, lock 해제. 기록 요청 → 같은 키·로그로 --analysis-only 없이 --dry-run 재실행: reuse {hit: true, run: 1}, 시각·코드 경로 질문 없음(notes '분석 전용 실행에서 받은 답(…)을 이어 썼다'), 1위 DATA-001-02 → append {cause: DATA-001-02} 계획 → 확인 화면 → discard. 원격 브랜치·PR 없음, lock 없음.",
       "assertions": [
