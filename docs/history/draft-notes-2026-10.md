@@ -59,3 +59,11 @@
 
 - 10/13~14 (DRAFT_NOTES에서 옮김): **반입 완료** import-20261013(d6d5996)·재반입본 import-20261013b(2b08a7b, 태그 둘 다). 사내 실측으로 고친 것: 사내 설치 가이드 `docs/SITE_INSTALL.md`(#43), eval 실행기 `apiKeyHelper` 인증 전달(#43), Python 3.11.0rc1(Ubuntu 22.04 apt) tar filter 폴백(#44). 3.11.1 전체 1,751 통과. **Python 3.10 지원**(10/13, 결정 P): `requires-python >=3.10`, CI 3.10 추가, 가이드 A(`--user`)/B(venv) — 3.10 전체 1,751 통과(환경 3건은 venv PATH 조건). 반입본 import-20261013c(0365a98). 사내 S-2 실측 수정(10/14, T): eval 자식 `--permission-mode default`, e38 해결책 끝 마침표 무시, 사외 전용 검사 2건 사내 레포 skip. 반입본 import-20261014(2d544dc). 재반입 절차 `SITE_INSTALL.md` 8절(R). CRLF 검사는 git 커밋 대상만(사내 레포 안 `.venv`로 실패, 10/14). 사내 리허설(`tools/site_rehearsal.sh`, CI `site-rehearsal`: Ubuntu 22.04·일반 사용자·한국어 로케일, 설치 3방식) 추가 — 찾은 것: `--user` 설치+HOME 변경, venv 미활성 hook.
 - 10/14: eval 46 원인 = 헤드리스 실행자가 글 대신 도구만 불러 질문이 사라짐(문구 보강 1/3) → 모의 `ask_user` 도구(eval-approver)로 3/3. 63 = 플랫폼 규칙이 별도 문단에만 → 명령 자리에 `[--platform <p>]`. 58 = 가끔 실패, setup.md 보강. 리허설 로컬 재현: docker `mirror.gcr.io/library/ubuntu:22.04` + apt(https, proxy CA) → 이미지는 세션 한정.
+
+## 10/14 오후
+
+- (DRAFT_NOTES에서 옮김) 10/11~12: Jira 결과 게시(#37), 플랫폼 분리(m), 트래커 범용화(n·o), 사내 단계 자동화 등 — 줄별 요약은 `docs/history/draft-notes-2026-10.md` "10/13 이동". 미실행 eval `tests/skill_evals/pending.json`(S-2).
+- (DRAFT_NOTES에서 옮김) 10/13~14: 반입 import-20261013·13b·13c·14·**14c**(f4d98d5, 최신·사내 전달). 사내 실측 대응 PR #43~#49 (설치 가이드·재반입 8절, Python 3.10 지원, eval 권한·인증, 사내 리허설 CI `site-rehearsal`) — 줄별은 history "10/14 이동".
+- G 범용판 별도 레포(10/07 지시, 보류): **로컬 새 레포**(원격 없음), 범위 = 도메인 중립 코어 + 최소 예제 팩 1개. 시작은 결합 지점 조사(`plugin/scripts` 약 30파일) → 분리 설계 확인 → 이전. 이 레포는 바꾸지 않는다.
+- 10/14 오후 eval·수정 기록: E(15개×3) 결과 68·70 3/3 실패, 3 2/3. 원인 68 = 리포트·must_show를 사용자 글에 안 보임, 70 = 실행기가 질문 없는 후속 사용자 말을 못 보냄(→ `followups`), 3 = 초안 검증 생략(→ stage 게이트). 전체 eval 68개(Sonnet, 에이전트 7개, ≈$21): 실패 2·6·7·9·11·40·46·52·55·56·59·61·67 — 공통 원인은 Bash·Read 출력이 사용자에게 안 보이는데 "위 화면"으로 승인받음. 수정 뒤 12개 ×2 재실행 기계 통과, 사람 판정 6·11 1회 실패 → 추가 수정 후 2/2. 확인 화면 요약 4/21, must_show 첫머리 13/24·마지막 답 4/24(채점 밖). 리뷰(Opus) P1: 시각 답 정규화, draft-verify 멈춤 시 승인 무효화 → 반영, 회귀(기록을 WORK_FILES에 넣어 discard가 지움) → f512fc5. 채점기 기계 판정(8f3e9e9·847ebd2): 계획 단계 사람 판정 7/7 일치, 리뷰 4회. 크기 한도: SKILL 8,064→8,256B, rules.md 2,048→2,320B.
+- D 안의 안전 eval 14: 8,9,13,17,18,24,29,33,37,39,59,60,61,67. 나머지는 사외 Sonnet 결과로 갈음.
