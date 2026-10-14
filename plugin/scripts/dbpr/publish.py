@@ -225,8 +225,18 @@ def stage(ctx: Ctx, plan_path: Path, wt: Path, branch: str, dry_run: bool) -> tu
     gap = draftcheck.missing(job_dir, plan)
     if gap:     # SKILL Step 7: 작성 op가 있으면 초안 검증 표를 사용자에게 보인 뒤에만 stage (eval 3)
         stopped = {"job": job, "plan": str(Path(plan_path).resolve()), "stopped": "draft-verify", "reason": gap,
-                   "next": (f"db_verify.py rules --plan {plan_path} --draft {job_dir / 'draft'} 표를 사용자에게 보이고(skipped는 "
-                            "통과 아님, 다른 유형 fixture에 걸리면 좁히기/allow-cause를 묻는다) 다시 stage한다")}
+                   "next": (f"S/db_verify.py rules --plan {plan_path} --draft {job_dir / 'draft'}(rules.md대로 --platform·"
+                            "TT_LOCK_OWNER) 표를 사용자에게 보이고(skipped는 통과 아님, 다른 유형 fixture에 걸리면 "
+                            "좁히기/allow-cause를 묻는다) 다시 stage한다")}
+        # 이전 stage·summary의 승인이 남으면 수정 전 트리가 publish될 수 있다 — 재stage처럼 승인을 무효화한다
+        for name in (PR_FILE, REGRESS):
+            (job_dir / name).unlink(missing_ok=True)
+        try:
+            old = _read_json(job_dir / STATE)
+        except ValueError:
+            old = None
+        if old:
+            _write_json(job_dir / STATE, {**old, "approved_hash": None, "commit_message": None, "pr_digest": None})
         _write_json(job_dir / STAGE, stopped)
         return stopped, CHECK_FAILED
     feedback_check = _check_feedback_suggested(plan, Path(plan_path), job_dir)

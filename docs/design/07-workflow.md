@@ -62,7 +62,7 @@
 - `db_pr lock acquire <JIRA-KEY>`로 세션 lock을 잡는다(`--analysis-only`도 잡고, ok로 끝나면 `triage.py`가 푼다). 다른 작업의 lock이 있으면 보유자(작업 키, 명령, 마지막 갱신 시각)를 보여준다. 사용자가 그 세션이 끝났다고 확인하면 `db_pr lock release <그 작업 키> --force` 후 다시 잡고, 아니면 중단한다. 같은 Jira의 lock이 10분 이내에 갱신됐으면 "다른 세션이 같은 이슈를 진행 중일 수 있다"고 보여주고, 사용자가 확인하면 `acquire <JIRA-KEY> --take-over`로 이어받는다 (`contracts.md §3.2` 세션 lock).
 - (`--analysis-only`면 이 항목과 아래 기존 계획 항목을 건너뛴다 — `§분석 전용`) `db_pr cleanup --dry-run`으로 비정상 종료로 남은 worktree(`<work_dir>/*/wt`, `*/draft`)와 도구 브랜치(`tt/*`)를 찾는다. **묻지 않고 지우지도 않는다**(`--yes`를 부르지 않고, `--answer cleanup=yes`가 있어도 지우지 않는다). 대상이 있으면 `triage-state.json`에 `cleanup_targets=<n>`(`cleanup_done`과 함께, 세션마다 한 번 점검)을 남기고 `analysis.json` `notes`로 "잔여 worktree·도구 브랜치 n개(붙여넣은 스텝 원문이 남아 있을 수 있음) — `/telephony-triage:sync`에서 정리"를 알린다. `cleanup_targets`가 있으면 `needs_input` 뒤 ok 출력에도 매번 낸다. 정리는 `/telephony-triage:sync`가 묻고 한다. 현재 작업 키의 worktree는 대상이 아니다(도구 브랜치는 목록에 나올 수 있다).
 - `<work_dir>/<JIRA-KEY>/plan.json`이 이미 있으면:
-  - 기존 계획의 `source`가 `analyze`면 이어서 할지, 새로 시작할지 묻는다. `source`가 다르면(예: `record`) **"새로 시작(기존 계획 덮어씀)"만** 허용한다 (`contracts.md §작업 계획`).
+  - 기존 계획의 `source`가 `analyze`면 이어서 할지, 새로 시작할지 묻는다. 이어서면 분류(Step 7)를 다시 묻지 않고 기존 계획으로 Step 8로 간다(`analysis.json` `plan.next`). `source`가 다르면(예: `record`) **"새로 시작(기존 계획 덮어씀)"만** 허용한다 (`contracts.md §작업 계획`).
   - 이어서 하든 새로 시작하든 이 Jira의 pending 피드백을 지운다 (`03-issue-db.md §5.4 (3)`). 계획에 `pr.number`가 있으면 열린 PR이 있다고 알리고 `sync-pr` 또는 Step 8-2의 "브랜치 갱신"을 안내한다.
   - 이어받은 계획이 `issue.origin: file`(dry-run 연습 계획)이고 이번 실행이 `--dry-run`이 아니면, Step 2에서 Jira MCP로 다시 읽어 `issue`를 덮고 `origin: mcp`로 바꾼다.
 - `~/.telephony-triage/pending-feedback/`에 남은 피드백이 있으면 이번 PR에 함께 올린다고 알린다.

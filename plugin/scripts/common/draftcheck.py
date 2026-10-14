@@ -14,9 +14,19 @@ AUTHORING_OPS = ("new-type", "new-cause", "update-signature", "add-parser-rule",
 RECORD = "draft-verify.json"
 
 
+# fixture 중 작성 단계에서 넣는 것(새 원인 positive·negative, chose-other extra). verify 흐름이 판정 뒤 붙이는
+# resolved·fixed·recurrence는 뺀다 — 넣으면 `db_verify fix --plan --draft` 기록 뒤 지문이 늘 바뀐다
+AUTHORING_FIXTURES = ("positive", "negative", "extra")
+
+
+def _authoring(op) -> bool:
+    return isinstance(op, dict) and (op.get("op") in AUTHORING_OPS
+                                     or (op.get("op") == "add-fixture" and op.get("kind") in AUTHORING_FIXTURES))
+
+
 def fingerprint(plan: dict) -> str | None:
     """작성 op의 지문. 작성 op가 없으면 None(초안 검증 불필요)."""
-    ops = [op for op in plan.get("operations") or [] if isinstance(op, dict) and op.get("op") in AUTHORING_OPS]
+    ops = [op for op in plan.get("operations") or [] if _authoring(op)]
     if not ops:
         return None
     return hashlib.sha256(json.dumps(ops, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()

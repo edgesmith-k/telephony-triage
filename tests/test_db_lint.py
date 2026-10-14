@@ -467,7 +467,8 @@ def test_type_title_form_error_only_for_new_type():
 
     from common import typedoc
 
-    assert all(typedoc.symptom_title(t) for t in ("SIM이 인식되지 않음", "데이터 연결이 사용자 조작으로 끊김", "검증에 실패함"))
+    assert all(typedoc.symptom_title(t) for t in ("SIM이 인식되지 않음", "데이터 연결이 사용자 조작으로 끊김", "검증에 실패함",
+                                                    "IMS 등록 안 됨(VoWiFi)", "데이터 끊김 (Wi-Fi 전환 시)", "인터넷 안 됨…"))
     assert not any(typedoc.symptom_title(t) for t in ("DNS 검증 실패", "SIM 미준비", "", "VoLTE 문제"))
     repo = git_db()
     edit(repo / D / "type.md", "title: SETUP_DATA_CALL이 발생하지 않음", "title: SETUP_DATA_CALL 미발생")

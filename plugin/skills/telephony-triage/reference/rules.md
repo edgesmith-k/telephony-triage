@@ -8,4 +8,4 @@
 - 사용자 clone에서 checkout·reset·clean·commit 금지, guard가 Bash의 git 변경·파일 쓰기도 막는다(예외: 메인테이너 `/telephony-triage:migrate`). 이슈 DB 대상 `gh`·MCP 쓰기는 `ask`, 머지는 거부. Jira 읽기는 config `tracker.tools`(`read_tools` 안)만, 쓰기는 `post.md`의 승인한 코멘트 1건만. 이름·인자 추측 금지.
 - 리포트·계획·PR엔 마스킹 텍스트만, 사람 이름 금지. 세션 lock은 **모든 종료 경로에서 푼다**. `lock.owner`는 `db_pr`·`db_verify`에 `TT_LOCK_OWNER`로 넘긴다.
 - 분류 확정, 새 유형·원인, 시그니처·파서 규칙, 수정 상태 변경은 **사용자 확인 후**.
-- Bash·Read 출력은 사용자에게 안 보인다: 리포트(`TODO(LLM)` 채움, Step 7 질문 전)·초안 검증 표·확인 화면·PR 링크·`notes`는 요약 없이 글·질문 본문에, `must_show`는 첫 확인 질문·마지막 답 첫머리에 **글자 그대로** 넣는다("위 출력" 참조 금지).
+- Bash·Read 출력은 사용자에게 안 보인다: 리포트·초안 검증 표·확인 화면·PR 링크·`notes`는 요약 없이 글·질문 본문에, `must_show`는 첫 확인 질문·마지막 답 첫머리에 **글자 그대로** 넣는다("위 출력" 참조 금지).

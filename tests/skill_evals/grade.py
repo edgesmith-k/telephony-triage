@@ -1087,7 +1087,16 @@ def checks_w4(eid, ctx):
         texts = ctx.visible()
         if texts is None:
             return None
-        return [t for t in texts if is_question(t, topic)]
+        # 같은 질문을 글로도 쓰고 ask_user로도 물으면 한 번으로 센다(질문 문장 기준 중복 제거)
+        out, seen = [], set()
+        for t in texts:
+            if is_question(t, topic):
+                key = " ".join(s for s in re.split(r"(?<=[?？])", t) if is_question(s, topic))
+                key = re.sub(r"\s+", " ", key).strip()
+                if key not in seen:
+                    seen.add(key)
+                    out.append(t)
+        return out
 
     if eid == 58:
         def doctor_ran():

@@ -138,7 +138,9 @@ class TypeDoc:
 def symptom_title(title: str) -> bool:
     """유형 제목이 증상 형태인가: 명사형 종결(ㅁ 받침 한글 음절)로 끝난다 — "~하지 않음", "~됨", "끊김", "실패함".
     원인 제목(명사구 "SIM 미준비")이나 "~ 실패"·"~ 문제"처럼 끝나면 아니다 (db-authoring.md, db_lint `title-form`)."""
-    text = str(title or "").rstrip(" .")
+    text = str(title or "").strip()
+    text = re.sub(r"\s*[(\[（][^()\[\]（）]*[)\]）]\s*$", "", text)     # 끝 괄호 한정어: "안 됨(VoWiFi)"
+    text = text.rstrip(" \t.…\"'”’")
     if not text:
         return False
     code = ord(text[-1]) - 0xAC00

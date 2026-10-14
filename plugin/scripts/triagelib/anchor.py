@@ -286,8 +286,14 @@ class AnchorMixin:
     def occurred(self, info: dict, logs: list[Path], tz: str | None, year: int | None) -> str:
         bad = None
         if self.answer("time"):
-            if lc.normalize_ts(self.answer("time"), tz, year) is not None:
-                return self.answer("time")
+            dt = lc.normalize_ts(self.answer("time"), tz, year)
+            if dt is not None:
+                # 파서(--around)는 오프셋 있는 ISO만 받는다: 타임존 없는 ISO·logcat 스탬프는 로그 tz로 정규화해 넘기고 답도 바꿔 둔다
+                value = lc.format_ts(dt)
+                self.state.answers["time"] = value
+                if "time" in self.given:
+                    self.given["time"] = value
+                return value
             # 읽을 수 없는 답("…KST" 등)은 파서까지 보내지 않고 다시 묻는다 — 하위 스크립트 종료 2로 끝나지 않게 (eval 67)
             bad = self.answer("time")
             self.state.answers.pop("time", None)

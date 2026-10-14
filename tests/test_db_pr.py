@@ -1949,16 +1949,37 @@ def test_stage_requires_draft_verify_for_authoring_ops():
     doc["pr_notes"] = ["초안 검증 뒤 pr_notes만 바꿈"]           # 작성 op 밖: 다시 검증하지 않는다
     plan.write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
     ws.stage("MOCK-7002", "issue/MOCK-7002", expect=(0, 3), dry_run=True)
-    ws.db_pr("discard", ws.wt("MOCK-7002"))
-    ws.acquire("MOCK-7002")
     new = next(op for op in doc["operations"] if op["op"] == "new-cause")
     new.setdefault("cause", {})["title"] = "초안 검증 뒤 바꾼 제목"
     plan.write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
     out = ws.stage("MOCK-7002", "issue/MOCK-7002", expect=1, dry_run=True)
     assert out["stopped"] == "draft-verify" and "바뀜" in out["reason"]
-    ws.db_pr("lock", "release", "MOCK-7002")
+    ws.db_pr("discard", ws.wt("MOCK-7002"))
 
     ws.plan("MOCK-7001", "p7-analyze-append.plan.json", draft_verified=False)
     ws.acquire("MOCK-7001")
     ws.stage("MOCK-7001", "issue/MOCK-7001", expect=(0, 3), dry_run=True)
     ws.db_pr("discard", ws.wt("MOCK-7001"))
+
+
+def test_draft_verify_stop_invalidates_previous_approval():
+    """확인 화면(summary) 뒤 계획의 작성 op를 고치고 재stage가 draft-verify로 멈추면 이전 승인으로 publish할 수 없다
+    (수정 전 트리가 push되지 않게, 리뷰 P1-2). job_status는 막힌 것으로 보인다."""
+    ws = Workspace()
+    ws.plan("MOCK-7002", "p7-analyze-new-cause.plan.json")
+    ws.put("MOCK-7002", "fixtures/cut-1.log", SIM_LOG)
+    ws.acquire("MOCK-7002")
+    ws.stage("MOCK-7002", "issue/MOCK-7002", expect=(0, 3))
+    digest = ws.db_pr("summary", ws.wt("MOCK-7002"))["approved_hash"]
+    plan = ws.job_dir("MOCK-7002") / "plan.json"
+    doc = json.loads(plan.read_text(encoding="utf-8"))
+    next(op for op in doc["operations"] if op["op"] == "new-cause")["cause"]["title"] = "수정 요청 뒤 제목"
+    plan.write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
+    assert ws.stage("MOCK-7002", "issue/MOCK-7002", expect=1)["stopped"] == "draft-verify"
+    state = json.loads((ws.job_dir("MOCK-7002") / "state.json").read_text(encoding="utf-8"))
+    assert state["approved_hash"] is None and not (ws.job_dir("MOCK-7002") / "pr.json").exists()
+    proc = ws.run("db_pr.py", ["publish", ws.wt("MOCK-7002"), "--branch", "issue/MOCK-7002", "--lease", "new",
+                               "--approved", digest, "--commit"])
+    assert proc.returncode != 0 and "승인 정보가 없습니다" in proc.stderr, proc.stderr[-500:]
+    ws.db_pr("discard", ws.wt("MOCK-7002"))
+    assert not (ws.job_dir("MOCK-7002") / "draft-verify.json").exists()      # 작업 파일: discard가 지운다

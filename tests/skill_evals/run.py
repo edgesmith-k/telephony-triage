@@ -265,7 +265,8 @@ def read_events(path: Path) -> tuple[list[dict], dict | None]:
 def merge_results(results: list[dict]) -> dict | None:
     """후속 메시지(`followups`)로 여러 턴을 돈 실행의 result 이벤트들을 하나로. 마지막 result를 바탕으로
     상위 `usage` 수치·`num_turns`·`duration_ms`는 턴별 값이라 더하고, `modelUsage`·`total_cost_usd`는 누적값이라
-    마지막 값을 쓴다(CLI 2.1.299 실측: 두 번째 result의 modelUsage cacheRead = 두 턴 합). 하나라도 오류면 오류."""
+    마지막 값을 쓴다(CLI 2.1.299 실측: 두 번째 result의 modelUsage cacheRead = 두 턴 합, num_turns는 턴마다 1·1,
+    duration_ms는 2441·2377로 턴별 값). 하나라도 오류면 오류."""
     if not results:
         return None
     merged = dict(results[-1])
