@@ -284,8 +284,8 @@ def test_full_run_asks_for_jira_and_reads_what_the_bridge_saved():
 
 def test_hooks_json_wires_bridge_as_post_tool_use():
     hooks = json.loads((REPO / "plugin" / "hooks" / "hooks.json").read_text(encoding="utf-8"))["hooks"]
-    (entry,) = hooks["PostToolUse"]
-    assert entry["matcher"] == "mcp__.*" and "scripts/jira_bridge.py" in entry["hooks"][0]["command"]
+    (entry,) = [h for h in hooks["PostToolUse"] if h["matcher"] == "mcp__.*"]     # Bash 그룹은 표시 보조(show_guard post)
+    assert len(entry["hooks"]) == 1 and "scripts/jira_bridge.py" in entry["hooks"][0]["command"]
 
 
 def test_bridge_ignores_other_tools():

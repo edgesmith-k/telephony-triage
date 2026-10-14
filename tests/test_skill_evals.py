@@ -2242,3 +2242,83 @@ def test_injection_top_row_decides_on_classification(tmp_path, eid, job):
     ctx = _vis_ctx(tmp_path, [_bash("t", TRIAGE_CMD, "{}"), ("text", SHOWN_REPORT)], "wrong")
     _job_files(ctx, job, report, top="CALL-001-01")
     assert grader.checks(eid, ctx)[0]()[0] is False
+
+
+# --- 표시 보조 hook(show_guard.py)과 채점기의 같은 판정 ----------------------------------------------------------
+
+SHOW_GUARD = REPO / "plugin" / "scripts" / "show_guard.py"
+MARK = "[telephony-triage] show-guard"
+
+
+def _would_deny(events: Path, ask_input: dict, tid: str) -> bool:
+    """events.jsonl을 transcript로 주고 질문(tid, 기록의 마지막 호출) 직전에 show_guard pre-ask가 거부하는가."""
+    event = {"hook_event_name": "PreToolUse", "transcript_path": str(events), "tool_name": ASK, "tool_input": ask_input,
+             "tool_use_id": tid}
+    proc = subprocess.run([sys.executable, str(SHOW_GUARD), "pre-ask"], input=json.dumps(event, ensure_ascii=False),
+                          capture_output=True, text=True, encoding="utf-8", check=False)
+    assert proc.returncode == 0, proc.stderr
+    out = json.loads(proc.stdout) if proc.stdout.strip() else {}
+    return (out.get("hookSpecificOutput") or {}).get("permissionDecision") == "deny"
+
+
+PARTIAL = SCREEN.replace("| 생성 파일 | README.md | 수정 |\n", "")
+
+
+@pytest.mark.parametrize("before,question", [
+    (None, SCREEN + "\n승인할까요?"),
+    (SCREEN_HEAD, SCREEN_TAIL + "\n승인할까요?"),
+    (None, "변경 파일 3개, 검증 통과입니다. 승인할까요?"),
+    (None, PARTIAL + "\n승인할까요?"),
+    ("변경 파일 3개입니다.", "승인할까요?"),
+])
+def test_show_guard_parity_push_screen(tmp_path, before, question):
+    items = [_bash("s", STAGE_CMD, SCREEN), *([("text", before)] if before else []), _ask("q", question)]
+    ctx = _vis_ctx(tmp_path, items)
+    ok, ev = ctx.screen_shown("push")
+    assert _would_deny(ctx.run / "events.jsonl", {"question": question}, "q") is (not ok), ev
+
+
+@pytest.mark.parametrize("question", [POST + "\n게시할까요?", "본문 2줄짜리 코멘트를 게시할까요?"])
+def test_show_guard_parity_post_screen(tmp_path, question):
+    render = "python3 /p/scripts/issue_post.py render MOCK-1 --fill /w/MOCK-1/post.fill.json --json"
+    out = json.dumps({"screen": POST, "post_sha256": "c" * 64}, ensure_ascii=False)
+    ctx = _vis_ctx(tmp_path, [_bash("r", render, out), _ask("q", question)])
+    ok, ev = ctx.screen_shown("post")
+    assert _would_deny(ctx.run / "events.jsonl", {"question": question}, "q") is (not ok), ev
+
+
+@pytest.mark.parametrize("shown_text", [DRAFT_TABLE, "초안 검증: R1~R5 통과", DRAFT_TABLE.replace("❌ 실패", "✅ 실패")])
+def test_show_guard_parity_draft_table(tmp_path, shown_text):
+    ctx = _vis_ctx(tmp_path, [_bash("d", DRAFT_CMD, DRAFT_OUT), ("text", shown_text), _ask("q", "진행할까요?")])
+    ok, ev = ctx.draft_shown()
+    assert _would_deny(ctx.run / "events.jsonl", {"question": "진행할까요?"}, "q") is (not ok), ev
+
+
+@pytest.mark.parametrize("shown_text", [SHOWN_REPORT, SHOWN_REPORT.replace("notifyDataEnabledChanged: enabled=false", "꺼짐"),
+                                        SHOWN_REPORT.replace(MUST, "로그 범위 일부")])
+def test_show_guard_parity_report(tmp_path, shown_text):
+    base = tmp_path / "c"
+    run_json = json.dumps({"status": "ok", "key": "MOCK-1", "files": {"report": str(base / "work" / "MOCK-1" / "report.md")}})
+    q = {"question": shown_text + "\n어떻게 기록할까요?", "options": STEP7}
+    ctx = _report_ctx(tmp_path, "c", [_bash("t", TRIAGE_CMD, run_json), ("tool", "q", ASK, q, "응답", False)])
+    ok, ev = ctx.report_shown("MOCK-1")
+    assert _would_deny(ctx.run / "events.jsonl", q, "q") is (not ok), ev
+
+
+def test_denied_asks_do_not_count_and_show_guard_metrics(tmp_path):
+    deny = f"PreToolUse:{ASK} hook error: {MARK} push:abc1234def — push 확인 화면을 요약했다(빠진 줄 1/9)."
+    items = [_bash("s", STAGE_CMD, SCREEN), ("tool", "q1", ASK, {"question": SCREEN + "\n승인할까요?"}, deny, True),
+             _ask("q2", "승인할까요?"), _bash("p", PUBLISH_CMD, "ok")]
+    ctx = _vis_ctx(tmp_path, items, "denied")
+    ok, ev = ctx.screen_shown("push")
+    assert ok is False and "빠진 줄" in ev                      # 거부된 질문 안의 화면은 사용자에게 가지 않았다
+    assert all(SCREEN.splitlines()[0] not in t for t in ctx.visible())
+    q7 = {"question": "기록할까요?", "options": STEP7}
+    ctx = _vis_ctx(tmp_path, [("tool", "q", ASK, q7, deny, True), _ask("q2", "기록할까요?", STEP7)], "step7")
+    assert ctx.step7_index() == 1
+    with (ctx.run / "events.jsonl").open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps({"type": "user", "message": {"content": [
+            {"type": "text", "text": f"Stop hook feedback:\n{MARK} push:abc1234def — …"}]}}, ensure_ascii=False) + "\n")
+        fh.write(json.dumps({"type": "system", "subtype": "hook", "message": "[telephony-triage] 확인 화면 일부를 답에 보이지 "
+                             "못했다(재시도 한도) — 앞 Bash 출력을 직접 확인"}, ensure_ascii=False) + "\n")
+    assert ctx.show_guard() == {"blocks": 1, "denies": 1, "capped": 1}

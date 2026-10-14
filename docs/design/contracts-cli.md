@@ -166,6 +166,10 @@
 
 stdin: PostToolUse hook 입력 JSON (argparse 없음)
 
+## `show_guard.py`
+
+`show_guard.py (stop | pre-ask | pre-bash | post)`, stdin: 그 hook 입력 JSON (argparse 없음)
+
 ## `triage.py`
 
 공통 옵션(모든 서브커맨드): `--plugin-root <PLUGIN_ROOT>`; `--json` — JSON 출력 (항상 JSON); `--platform <이름>` — 플랫폼(이슈 DB·파서·설정 묶음). 없으면 TT_PLATFORM > 사용자 config platform > site-defaults platform.name

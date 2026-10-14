@@ -17,6 +17,9 @@ Code 기능" 행). 배포 대상(`plugin/`)이 아니다.
 | 7 | 권한 결정 필드 | hook이 `allow`/`deny`/`ask`를 냈을 때 세션이 그대로 따르는지 |
 | 8 | **`@SITE_PROFILE.md` import** | 레포 루트 `CLAUDE.md`의 첫 줄 `@SITE_PROFILE.md`가 **파일이 없을 때** 오류인지 경고인지 조용한지 |
 | 9 | hook 종료 코드 1·2 동작 | PreToolUse hook이 종료 1(비차단 오류)·2(차단)로 끝날 때 도구가 실행되는지·stderr가 어디 보이는지. guard·jira_bridge가 의존성 import 실패에도 종료 0 + 결정 JSON을 내는 근거다 (`08-safety.md §9` 의존성 없음). **사내 S1에서 확인** (사외 결과 없음) |
+| 10 | **Stop hook** (표시 보조 `show_guard.py stop`, `08-safety.md §9.1`) | Stop hook 입력에 `last_assistant_message`·`stop_hook_active`·`transcript_path`가 있는지, `{"decision": "block", "reason"}`이면 모델이 reason을 받고 **새 메시지**로 이어 쓰는지(앞 메시지는 남는지), 두 번째 Stop의 `stop_hook_active`가 true인지, 피드백이 transcript에 `isMeta` user 항목("Stop hook feedback:\n<reason>")으로 남는지, 연속 계속 한도 |
+| 11 | PreToolUse 때 transcript (show_guard `pre-ask`·`pre-bash`) | 같은 응답에서 도구 호출 앞에 쓴 텍스트 블록이 PreToolUse 시점의 `transcript_path`에 이미 있는지(화면을 붙이고 바로 질문하는 경우), 입력에 `tool_use_id`가 있는지, `AskUserQuestion`의 `tool_input` 모양(`questions[].question`·`header`·`options[].label`) |
+| 12 | 여러 matcher 그룹·hook | 한 도구에 두 그룹(`mcp__.*`와 `mcp__.*__ask_user`)·한 그룹의 두 hook(Bash: guard + show_guard)이 걸리면 모두 실행되고 하나라도 `deny`면 거부되는지, 거부된 tool_result 문구(`PreToolUse:<tool> hook error: <reason>`, `is_error`) |
 
 ## 실행 절차
 
@@ -47,6 +50,7 @@ Code 기능" 행). 배포 대상(`plugin/`)이 아니다.
 | 7 | 권한 결정 필드 | ✅ `hookSpecificOutput.permissionDecision` | `deny` → 실행 안 됨(`PreToolUse:<tool> hook error: <reason>`), `allow` → allowedTools에 없어도 실행, `ask` → allowedTools에 있어도 확인 요구(헤드리스는 거부). guard 규칙 6·8 deny 확인 |
 | 8 | `@SITE_PROFILE.md` import (파일 없음) | ✅ 경고·오류 없음 | 조용히 무시 |
 | — | 모의 MCP 붙이기 | ✅ `--mcp-config tests/mocks/mcp.json` | 레포 루트에서 실행(상대 경로). source `dynamic` |
+| 10~12 | Stop hook·PreToolUse transcript·여러 그룹 (2026-10-14 예비) | ✅ | `claude -p --plugin-dir`, stream-json. Stop 입력 키 `last_assistant_message`·`stop_hook_active`·`transcript_path` 등, block → user 역할 "Stop hook feedback:\n<reason>" 뒤 새 메시지, 두 번째 Stop은 `stop_hook_active: true`, 연속 계속 한도 8. PreToolUse 때 transcript에 같은 응답의 앞 텍스트 블록이 이미 있음. 여러 그룹·hook 모두 실행, `deny` 하나면 거부. `AskUserQuestion` 입력 모양은 대화형에서만 확인 가능 — 미확인(show_guard는 관대하게 읽는다) |
 
 ## 주의
 
