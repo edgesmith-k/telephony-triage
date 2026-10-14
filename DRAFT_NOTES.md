@@ -17,7 +17,7 @@
 ## 진행 상태 (10/14)
 
 - 모드: **사외 초안**. 10/11~14 줄별 요약은 history "10/13 이동"·"10/14 이동"·"10/14 오후". 최신 반입본 import-20261014c(f4d98d5, 사내 전달). Phase **D0, 1~13** 완료. 반입 전 보강 트랙(S1~S6·I1~I5·X·3C~3F)과 개선 트랙 **W0~W12**, 반입 전 리뷰(10/07) 수정 트랙 **V1~V7·V 끝**, 실제 로그 반영 트랙 **L1~L3** 완료, 반입 전 3차 검토(A1~A4·B1·B2·문서) 반영(10/08), 설명 정리(PR #31). main 병합 PR #8~#41.
-- 10/14 오후: E 결과로 전체 eval(Sonnet 68개) 실행 → 실패 대부분이 **Bash 출력만 띄우고 사용자에게 안 보임**(확인 화면·리포트·must_show). rules.md·write-flow·post·explore·SKILL 보강, stage 초안 검증 게이트(`draft-verify.json`), title-form lint, 시각 답 정규화, eval 실행기 `followups`, 채점기 '보였다' 기계 판정(8f3e9e9·847ebd2). 상세 history "10/14 오후". 전체 pytest 1,823 통과. 브랜치 커밋만(main 미병합).
+- 10/14 오후·저녁: 화면 요약을 **hook으로 강제**(`show_guard.py`, Stop·질문 도구·publish/approve/stage 앞, 판정은 채점기와 공유하는 `common/shown.py`, 실패 시 통과)·**사내 S-2 축소**(결정 (q)). 재측정(24개×2, Sonnet): 표시 실패 22/48 → **1/48**, 전체 실패 3/48, hook 되돌림 46회 중 정당 38·오탐 8(기록 쓰기 지연 → 고침). 상세 history "10/14 저녁". 전체 pytest 1,910 통과, eddd443 push(main 미병합).
 - 사내 확인 항목: `TODO(SITE)` **104곳** — `python3 tools/list_site_todos.py`. `REVIEW-OPEN.md` 0건.
 - 사내 시작: **"사내 설정 시작"** → `python3 tools/site_step.py`가 `SITE_PROFILE.md`(트래커 jira)를 만들고 S-1~S-7을 한 단계씩 낸다(결정 (o)).
 - 안내서(사람용 HTML): `docs/telephony-triage-guide.html` (공유본 https://claude.ai/artifact/1jov1Et4dQUMauFr6aoxWG). 역할별 문서 19개: `docs/materials/00-index.html`
@@ -26,14 +26,14 @@
 
 | ☐ | 항목 | 메모 |
 |---|---|---|
-| ☐ E | **화면 요약 재측정**(다음 할 일) | 새 채점기로 확인 화면이 나오는 eval 재실행(×2, Sonnet, ≈$15): `run.py --iteration tests/skill_evals/workspace/<새> --eval 1 2 3 9 10 11 16 17 20 21 22 23 26 30 31 32 35 37 38 42 48 59 61 67 --execute --model claude-sonnet-5-5` → `grade.py <경로>`. 요약 실패가 많으면 hook 강제 검토 |
-| ☐ D | **사내 S-2 축소** — 사용자 결정 대기 | 안: 안전 eval 14+rerun_first+대표 흐름 ≈30개만 사내(목록 history "10/14 오후"). 바꿀 곳 `site_checks.py` s2_graded·`site_step.py evals`. E 재측정 결과 보고 결정 |
-| ☐ F | 새 반입 묶음(E 반영 뒤, main 병합 PR 먼저) | `tools/make_bundle.py --label import-<날짜>`. 사내 적용은 `SITE_INSTALL.md` 8절 |
+| ☐ H | **사외 재측정 → `offsite_results.json` 재생성**(다음 할 일, 사용자 승인 대기 ≈$25) | hook 반영 커밋에서 전체 70개 ×1 + 68·70 ×2, 수동 행 채점 → `python3 tests/skill_evals/offsite.py <iteration>... --out tests/skill_evals/offsite_results.json`. 지금 기록은 잠정(통과 8·실패 23·미결정 37·없음 2), eval 37 표시 행 실패로 `s2.safety` 실패 상태 |
+| ☐ I | show_guard 남은 P2 | 재리뷰(eddd443) P2 4건: `--plan` 표기 정규화, triage 재실행 시 draft 한도 초기화 문서화, 화면 A→B→A 한도, `post:render` 고정 키 — history "10/14 저녁" |
+| ☐ F | 새 반입 묶음(H 뒤, main 병합 PR 먼저) | `tools/make_bundle.py --label import-<날짜>`. 사내 적용은 `SITE_INSTALL.md` 8절 |
 | ☐ G | 범용판 별도 레포 — **보류(10/07 사용자)** | 재개는 사용자가 정한다. 계획은 history "10/14 오후" |
 
 ## 사내로 넘긴 것
 
-- 행동 eval 전체(`evals.json`, S-2; 주입 eval 59·60 포함), 코드 Read line 힌트(T4, S-2 측정 뒤)·offline_eval 오류율 상한(S-1 합의, S-5)·`max_tokens_hint` 처리(S-4a)·setup Jira 없음 중단(U1, S-3), db-authoring 스키마 요약 확장(S-2, 스키마 Read 횟수로 판단), 사내 마켓플레이스 소스 유형 확인 → version 규칙(S-2·S-7, V2에서 `plugin.json` version 삭제 = 커밋 SHA 기준. 반입 직후 캐시 1회 무효화는 무해).
+- 사내 대상 eval 11개(`pending.json` `site`, S-2; 주입 59·60 포함, 사내 모델이 다르면 +7), 코드 Read line 힌트(T4, S-2 측정 뒤)·offline_eval 오류율 상한(S-1 합의, S-5)·`max_tokens_hint` 처리(S-4a)·setup Jira 없음 중단(U1, S-3), db-authoring 스키마 요약 확장(S-2, 스키마 Read 횟수로 판단), 사내 마켓플레이스 소스 유형 확인 → version 규칙(S-2·S-7, V2에서 `plugin.json` version 삭제 = 커밋 SHA 기준. 반입 직후 캐시 1회 무효화는 무해).
 - 반입 뒤 후보(RF-5·6·8·9, 리뷰 후속 R-36~R-47)는 `docs/history/draft-notes-2026-10.md` "10/13 이동".
 
 ## 사외에서는 못 하는 것 (사내 S-1~S-5)
@@ -52,6 +52,8 @@
 
 - (p) 수정 절차(10/14, 사용자): 수정할 게 나오면 **계획(Opus) → 수정(Opus) → 리뷰(별개 Opus, P0·P1이면 다시) → 테스트(Sonnet)** 를 단계별 에이전트로, 테스트 통과 뒤 커밋. 채점기: 확인 화면 안 내용 행도 **화면 전체** 기준(요약이면 실패), 순서·분류 안전 행은 표시로 실패시키지 않음.
 
+- (q) 사내 S-2 축소(10/14, 사용자 "사내에서 꼭 해야 하는 것만"): 기준 H(hook·권한)·M(적대 입력 모델 판단)·G(외부 쓰기 승인)·B(사내 측정). 사내 대상 1·2·8·9·39·45·58·59·60·61·62, 사내 모델이 사외와 다르면 13·17·18·24·29·33·37 추가. 단일 출처 `pending.json`, 나머지는 `offsite_results.json`(도구 생성)으로 갈음, 사외 실패·미결정은 사유 면제 필요, 안전 위반은 면제 불가. hook은 표시 보조라 실패 시 통과(결정 에이전트).
+
 - (a) 사내→사외 반출은 사용자가 직접 타이핑하는 사내 정보 없는 문장뿐. 사외는 합성 데이터로만 재현한다. (10/01)
 - (b) 자동 게시(RF-8)는 `confidence`가 아니라 별도 품질 게이트로만. (10/01)
 - (c) 실패 스텝·Claude 가설은 판정(S/C)에 쓰지 않는다. 구간·순위·검색·리포트 보조만. (10/04)
@@ -59,7 +61,7 @@
 - (e) verify-fix 흔적: 코드·설정 수정 유형은 흔적 필수. 비코드 유형(user-setting·network·hw)에 흔적 시그니처가 둘 다 없을 때만 사용자 확인으로 판정하고 `verification.note`에 남긴다. (10/04, R9)
 - (f) 반입 전 사외에서 최대한 안정화·보완·개선한 뒤 반입한다. 사내 문자열 사람 검색은 생략(사내→사외 반출 불가). (10/05)
 - (g) eval 판정 관례: 변경 전·후를 같은 모델로, 1순위 동작·형식 오류 재시도, 2순위 토큰 W0 폭(출력 9.5%·비용 15.7%), 폭 밖이면 trace(호출 수)로 원인 확인. (10/06)
-- (i) eval은 변경과 관련된 최소만 사외에서 돌린다: 각 VP는 바꾼 스킬·흐름의 eval만, V 끝은 W 영향 미확인 목록 중 아직 관련 있는 것만 골라서. 전체 재실행은 사내 S-2. (10/07, 사용자) 단, 실행 방식·공통 지침이 바뀌면 전체 + 사람 판정(10/14).
+- (i) eval은 변경과 관련된 최소만 사외에서 돌린다: 각 VP는 바꾼 스킬·흐름의 eval만, V 끝은 W 영향 미확인 목록 중 아직 관련 있는 것만 골라서. 사내 S-2는 사내 대상만(결정 (q)). (10/07, 사용자) 단, 실행 방식·공통 지침이 바뀌면 전체 + 사람 판정(10/14).
 - (h)(j)(k)(l) W11 보류·캐시 삭제·3차 §8·4차 검토 결정 → history
 - (m) 플랫폼 분리 (10/11, 사용자): 동작·원인·해결책이 달라 이슈 DB를 플랫폼별로(합치기 안 안 씀), 추가는 디렉토리 + `platform.enabled`, lock은 플랫폼별("사용자·이슈 DB(플랫폼)별 한 번에 한 작업"), RF-4 유지. `17-platforms.md` §7.
 - (n) 트래커 범용화 (10/11, 사용자): 설정 `tracker.kind`(jira|github)·어댑터 `trackers/`, `issues/`·`platform_version(s)` 개명은 (d)로 v1 직접 수정, 옛 키는 감지만(fail-closed), DB kind 다르면 거부. `18-trackers.md` §7.
