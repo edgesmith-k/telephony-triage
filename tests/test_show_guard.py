@@ -547,6 +547,46 @@ def test_draft_rerun_with_same_result_shares_key_and_cap(tmp_path):
     assert decision(out) is None and shown.CAPPED in out["systemMessage"]      # 다시 돌려도 한도는 그대로
 
 
+
+def test_draft_key_ignores_plan_notation(tmp_path):
+    """같은 계획 파일을 따옴표·변수·절대/상대 경로로 바꿔 써도 같은 키다: 표기만 바꿔 다시 돌려 한도를 새로 얻지 못한다."""
+    def draft(plan):
+        return f"python3 /p/scripts/db_verify.py rules --plan {plan} --draft /w/MOCK-9002/draft --json"
+
+    def key(cmd):
+        return shown.obligations(shown.parse_events([json.dumps(r, ensure_ascii=False) for r in bash("d", cmd, DRAFT_OUT)]))[0].key
+
+    plans = ["$W/MOCK-9002/plan.json", '"$W/MOCK-9002/plan.json"', "/abs/MOCK-9002/plan.json", "MOCK-9002/plan.json"]
+    keys = {key(draft(p)) for p in plans}
+    assert len(keys) == 1
+    k = keys.pop()
+    assert key(draft("/w/MOCK-2/plan.json")) != k                       # 다른 작업의 계획은 다른 키
+    deny = shown.MARKER + " " + k + " — 초안 검증표를 요약했다"
+    path = write(tmp_path, prompt("p"), bash("d1", draft(plans[0]), DRAFT_OUT), call("a1", ASK, {"question": "진행?"}, deny, True),
+                 call("a2", ASK, {"question": "진행?"}, deny, True), bash("d2", draft(plans[1]), DRAFT_OUT))
+    out = pre("pre-ask", path, ASK, {"question": "note를 승인할까요?"})
+    assert decision(out) is None and shown.CAPPED in out["systemMessage"]      # 표기를 바꿔 다시 돌려도 한도는 그대로
+
+
+def test_post_render_key_is_per_issue(tmp_path):
+    """`--sha`가 변수면 화면을 못 고른다: 키는 게시 대상별(`post:render:<KEY>`)이라 앞 이슈의 표식으로 뒤 이슈가 한도에 걸리지 않는다."""
+    def render(k):
+        return bash("r" + k, f"python3 /p/scripts/issue_post.py render {k} --fill /w/{k}/post.fill.json --json | tail -1",
+                    '"post_sha256": "' + "c" * 64 + '"')
+
+    def approve(k):
+        return f'python3 /p/scripts/issue_post.py approve {k} --sha "$SHA" --json'
+
+    one = write(tmp_path, prompt("p"), render("MOCK-1"), prompt("게시"))
+    out = pre("pre-bash", one, "Bash", {"command": approve("MOCK-1")})
+    r = out["hookSpecificOutput"]["permissionDecisionReason"]
+    assert decision(out) == "deny" and shown.MARKER + " post:render:MOCK-1" in r
+    two = write(tmp_path, prompt("p"), render("MOCK-1"), prompt("게시"), _denied("x1", approve("MOCK-1"), r),
+                prompt("다음 건"), render("MOCK-2"), prompt("게시"), name="two.jsonl")
+    assert decision(pre("pre-bash", two, "Bash", {"command": approve("MOCK-2")})) == "deny"     # 다른 이슈: 다시 막는다
+    out = pre("pre-bash", two, "Bash", {"command": approve("MOCK-1")}, tid="now1")
+    assert decision(out) is None and shown.CAPPED in out["systemMessage"]                     # 같은 이슈: 한 번만
+
 def test_stage_deny_does_not_invite_a_new_question(tmp_path):
     path = write(tmp_path, prompt("p"), bash("d", DRAFT_CMD, DRAFT_OUT), say("초안 검증 통과."))
     r = pre("pre-bash", path, "Bash", {"command": STAGE_CMD})["hookSpecificOutput"]["permissionDecisionReason"]

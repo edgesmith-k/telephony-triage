@@ -20,7 +20,7 @@ Bash·Read 출력은 사용자에게 보이지 않는다. push 확인 화면(`##
 - `post`(PostToolUse Bash): 결과에 화면·리포트·초안 검증 결과가 있으면 `additionalContext`로 "이 출력은 사용자에게 안 보인다,
   다음 메시지에 전문을 글자 그대로" 안내만 한다.
 
-같은 의무 키(`push:<hash>`·`post:<sha>`·`report:<id>`·`draft:<id>`)로 막은 횟수(transcript의 표식 `[telephony-triage] show-guard
+같은 의무 키(`push:<hash>`·`post:<sha>`(`--sha`가 변수면 `post:render:<KEY>`)·`report:<id>`·`draft:<id>`)로 막은 횟수(transcript의 표식 `[telephony-triage] show-guard
 <key>`가 든 Stop 피드백·거부된 도구 결과)가 MAX_BLOCKS(2)에 이르면 더 막지 않고 `systemMessage`로 사용자에게 직접 확인을 안내한다.
 Stop이 연이어 막혔는데(`stop_hook_active`) transcript에 표식이 없으면(피드백이 기록되지 않는 버전) 한도에 이른 것으로 본다.
 
@@ -297,7 +297,8 @@ def _checked(seq, obs, ts, *, report_ok=True):
 
 def _split(seq, found, prior_extra: int = 0):
     """빠진 의무를 한도 안(막는다)·한도 밖(안내만)으로 나눈다. 막은 횟수는 그 의무가 생긴 뒤(`count_from`, 초안 표는 같은 작업에서
-    같은 결과가 처음 나온 곳)의 표식만 센다 — 다른 작업의 같은 키 표식은 세지 않는다."""
+    같은 결과가 처음 나온 곳)의 표식만 센다 — 다른 작업의 같은 키 표식은 세지 않는다. 화면은 창마다 센다(A→B→A의 두 번째 A는
+    새 의무)."""
     under, over = [], []
     for ob, miss in found:
         start = (ob.extra or {}).get("count_from", ob.start) if isinstance(ob.extra, dict) else ob.start
@@ -406,7 +407,13 @@ def mode_pre_bash(inp) -> dict | None:
             # 한 번 막고 화면을 다시 내게 한다. 끝부분만 읽었거나 그런 호출이 없으면 판정하지 않는다
             makers = (shown.STAGE, shown.SUMMARY) if kind == "push" else (shown.RENDER,)
             if not TRUNCATED[0] and any(shown.bash_index(seq, m) for m in makers):
-                key = f"{kind}:{h if kind == 'push' else (h or 'render')[:16]}"
+                if kind == "push":
+                    key = f"push:{h}"
+                elif h:
+                    key = f"post:{h[:16]}"
+                else:  # --sha가 변수: 게시 대상 키별로 한 번(고정 키면 뒤 작업이 앞 작업의 표식으로 한도에 걸린다)
+                    tgt = cmd[app[0].end():].split()
+                    key = "post:render:" + (tgt[0].strip("\"'") if tgt else "")
                 unseen.append((key, kind, cmd))
             continue
         w = pick[-1]
