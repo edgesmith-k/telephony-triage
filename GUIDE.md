@@ -349,6 +349,14 @@ claude mcp list               # Jira MCP 사용자 범위 등록 확인
 - Sonnet 기본: analyze·record·fix-submitted·verify-fix·sync-pr·search·5-1 분석 스킬.
 - verify-fix: W3부터 흔적 시그니처 없는 코드·설정 수정 유형을 `db_verify fix`가 종료 코드 2로 막아 Sonnet 기본(eval 25 Sonnet 3/3, W3). eval 25는 사내 S-2 대상이 아니라 사외 결과 기록(`offsite_results.json`)으로 갈음한다.
 - 5-2 탐색은 Sonnet. 가설 품질이 중요하면 Opus를 고른다.
+- **검증 범위: 스킬 행동 eval·토큰 측정은 Sonnet 5.5(`claude-sonnet-5-5`)로만 했다**(`tests/skill_evals/offsite_results.json` `model`, 사내 S-2도 Sonnet 5.5). 다른 모델(Opus 등)도 같은 플러그인으로 동작하지만 eval로 확인하지 않았다.
+- 모델과 무관하게 지켜지는 것(스크립트·hook이 강제): 외부 쓰기(이슈 DB push·트래커 코멘트) 전 승인 질문, 사용자 clone 불변, 분류 판정은 스크립트 출력 기준, 마스킹, 확인 화면 전체 표시 강제(`show_guard`).
+- 다른 모델의 우려 사항:
+  - 화면 요약·질문 흐름: 모델마다 줄이는 습관이 다르다. hook이 거부하지만 거부 뒤 반응은 모델마다 다르고(Sonnet은 같은 호출을 그대로 다시 부르는 경향이 있었다), 한도를 넘으면 경고만 남긴다.
+  - 질문 횟수·순서: 사용자 확인 단계는 같지만 묻는 방식과 횟수가 다를 수 있다.
+  - 토큰·비용: 토큰 기준선(eval 1·2·39·45·58)과 이 안내서의 토큰·비용 수치는 Sonnet 기준이다. Opus는 비용이 더 든다.
+  - 작은 모델(Haiku 등)은 권장하지 않는다: Sonnet도 문구만으로는 지키지 못한 규칙이 있어 구조로 강제했다(`99-deferred.md` 3E).
+- 다른 모델로 쓰다가 이상한 동작을 보면 모델 이름과 함께 메인테이너에게 알린다. 사내 eval 모델이 바뀌면 S-2가 배치 A 7개를 더 돌린다(`pending.json` `site_if_model_differs`).
 - 바꾸는 법: `/model`. 커맨드 frontmatter `model` 고정은 사내 S1 확인 뒤(`14-site.md` S1).
 
 ### 팀 운영
