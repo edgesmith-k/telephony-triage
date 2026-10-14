@@ -15,6 +15,7 @@ eval 채점기(`tests/skill_evals/grade.py`)와 표시 보조 hook(`show_guard.p
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from dataclasses import dataclass, field
@@ -621,7 +622,7 @@ def visible_lines(chunks) -> list[str]:
 @dataclass
 class Obligation:
     """사용자에게 보여야 할 스크립트 출력 하나. kind push|post|report|draft, key push:<hash>|post:<sha 앞 16자>|report:<id>|
-    draft:<id>(id = 그 호출의 tool_use id 끝 12자, 없으면 seq 순번). start = 출력이 나온 seq 순번, end = 창 끝(배타),
+    draft:<결과 해시>(id = 그 호출의 tool_use id 끝 12자, 없으면 seq 순번; 초안은 규칙·상태·사유의 sha1 앞 12자). start = 출력이 나온 seq 순번, end = 창 끝(배타),
     close_kind = 창을 닫은 것(publish·discard·approve·restage·step7·stage·draft·end — end면 아직 열려 있다)."""
     kind: str
     key: str
@@ -682,7 +683,10 @@ def obligations(seq, read_file=None, job_dir=None, *, script_only: bool = True) 
         end = min(nxt + [len(seq)])
         close = "end" if end >= len(seq) else ("draft" if end in calls else "stage")
         block = "\n".join(f"| {r['id']} | {r.get('status')} | {norm_line(str(r.get('reason') or ''))} |" for r in rules)
-        out.append(Obligation("draft", f"draft:{_id_tag(seq[i], i)}", i, end, close, rules=rules, block=block))
+        # 키는 결과 내용(규칙·상태·사유): 같은 결과로 초안 검증을 다시 돌려도 같은 의무라 막는 횟수 한도를 함께 쓴다
+        digest = hashlib.sha1(json.dumps([[r.get("id"), r.get("status"), r.get("reason")] for r in rules],
+                                         ensure_ascii=False).encode("utf-8")).hexdigest()[:12]
+        out.append(Obligation("draft", f"draft:{digest}", i, end, close, rules=rules, block=block))
     return out
 
 

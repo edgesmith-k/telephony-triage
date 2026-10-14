@@ -110,7 +110,15 @@ def stop(path, last=None, active=False):
     return hook("stop", event)[0]
 
 
-def pre(mode, path, name, inp, tid="now"):
+def pre(mode, path, name, inp, tid="now", record=True):
+    """PreToolUse 입력. record면 실제처럼 지금 호출(tool_use)을 transcript 끝에 기록해 둔다(hook은 그것이 기록될 때까지
+    기다린 뒤 판정한다 — transcript는 비동기로 쓰인다)."""
+    path = Path(path)
+    if record and tid and path.is_file() and tid not in path.read_text(encoding="utf-8"):
+        copy = path.with_name(path.stem + f".{tid}.pre.jsonl")      # 원본은 그대로(뒤의 Stop 판정이 같은 파일을 쓴다)
+        copy.write_text(path.read_text(encoding="utf-8") + json.dumps(call(tid, name, inp)[0], ensure_ascii=False) + "\n",
+                        encoding="utf-8")
+        path = copy
     return hook(mode, {"hook_event_name": "PreToolUse", "transcript_path": str(path), "tool_name": name,
                        "tool_input": inp, "tool_use_id": tid})[0]
 
@@ -462,3 +470,48 @@ def test_real_child_transcript_format(tmp_path):
     # 세션을 남기지 않은 실행(--no-session-persistence): transcript 파일이 없다 → 판정 없음(fail-open, 경고만)
     out, err = hook("stop", {"transcript_path": str(tmp_path / "missing.jsonl"), "last_assistant_message": "승인할까요?"})
     assert out is None and "transcript" in err
+
+
+# --- sm4 재측정 반영: transcript 비동기 기록, 초안 키, stage 거부 문구 ------------------------------------------------
+
+def test_waits_until_current_call_is_recorded(tmp_path):
+    """sm4 거짓 거부 8건: 화면 전문을 쓴 텍스트 블록과 질문이 한 응답인데 PreToolUse 때 transcript에 텍스트가 아직 없었다.
+    hook은 지금 호출(tool_use_id)이 기록될 때까지 기다린다."""
+    import threading
+    path = write(tmp_path, prompt("p"), bash("s", STAGE_CMD, SCREEN))
+    ask = {"question": "승인할까요?"}
+
+    def later():
+        time.sleep(0.6)
+        with path.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(say(SCREEN)[0], ensure_ascii=False) + "\n")
+            fh.write(json.dumps(call("q1", ASK, ask)[0], ensure_ascii=False) + "\n")
+    t = threading.Thread(target=later)
+    t.start()
+    out = pre("pre-ask", path, ASK, ask, "q1", record=False)
+    t.join()
+    assert out is None
+    # 끝내 기록되지 않으면(형식이 다른 버전) 거부하지 않는다(fail-open, 경고)
+    lost = write(tmp_path, prompt("p"), bash("s", STAGE_CMD, SCREEN), say(SUMMARY), name="lost.jsonl")
+    t0 = time.time()
+    out, err = hook("pre-ask", {"transcript_path": str(lost), "tool_name": ASK, "tool_input": ask, "tool_use_id": "zz"})
+    assert out is None and "기록되지 않아" in err and time.time() - t0 < 15
+    assert decision(pre("pre-ask", lost, ASK, ask, "zz")) == "deny"          # 기록되면 판정한다
+
+
+def test_draft_rerun_with_same_result_shares_key_and_cap(tmp_path):
+    out1 = shown.obligations(shown.parse_events([json.dumps(r, ensure_ascii=False) for r in bash("d1", DRAFT_CMD, DRAFT_OUT)]))
+    out2 = shown.obligations(shown.parse_events([json.dumps(r, ensure_ascii=False) for r in bash("d2", DRAFT_CMD, DRAFT_OUT)]))
+    assert out1[0].key == out2[0].key and out1[0].key.startswith("draft:")
+    key = out1[0].key
+    deny = shown.MARKER + " " + key + " — 초안 검증표를 요약했다"
+    path = write(tmp_path, prompt("p"), bash("d1", DRAFT_CMD, DRAFT_OUT), call("a1", ASK, {"question": "진행?"}, deny, True),
+                 call("a2", ASK, {"question": "진행?"}, deny, True), bash("d2", DRAFT_CMD, DRAFT_OUT))
+    out = pre("pre-ask", path, ASK, {"question": "note를 승인할까요?"})
+    assert decision(out) is None and shown.CAPPED in out["systemMessage"]      # 다시 돌려도 한도는 그대로
+
+
+def test_stage_deny_does_not_invite_a_new_question(tmp_path):
+    path = write(tmp_path, prompt("p"), bash("d", DRAFT_CMD, DRAFT_OUT), say("초안 검증 통과."))
+    r = pre("pre-bash", path, "Bash", {"command": STAGE_CMD})["hookSpecificOutput"]["permissionDecisionReason"]
+    assert "같은 stage 명령을 다시 실행한다" in r and "새 질문을 만들지 않는다" in r

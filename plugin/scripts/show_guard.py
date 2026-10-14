@@ -34,6 +34,7 @@ from __future__ import annotations
 import json
 import re
 import sys
+import time
 from pathlib import Path
 
 SCRIPTS = Path(__file__).resolve().parent
@@ -118,6 +119,29 @@ def turn_start(seq) -> int | None:
         if e["kind"] == "user" and not e["meta"] and not e["feedback"]:
             return i
     return None if TRUNCATED[0] else 0
+
+
+WAIT_SECONDS = 5.0       # PreToolUse 때 transcript에 지금 호출이 기록될 때까지 기다리는 상한
+WAIT_STEP = 0.1
+
+
+def load_seq_for_call(path, tool_use_id):
+    """PreToolUse: transcript는 비동기로 쓰여 같은 응답의 앞 텍스트 블록이 아직 없을 수 있다(10/14 sm4: 화면 전문을 쓴 직후의
+    질문이 거부됨). 지금 호출(tool_use_id)이 기록되면 그 앞 블록도 다 기록된 것이므로 그때까지 기다린다(WAIT_SECONDS 상한).
+    → (seq, 기록 확인 여부). 끝까지 기록되지 않으면 확인 여부 False — 거부하지 않는다(fail-open)."""
+    if not tool_use_id:
+        return load_seq(path), False
+    deadline = time.monotonic() + WAIT_SECONDS
+    while True:
+        text = load_text(path)
+        if text is None:
+            return None, False
+        if tool_use_id in text or time.monotonic() >= deadline:
+            seen = tool_use_id in text
+            if quick_skip(text):
+                return None, seen
+            return shown.parse_events(text.splitlines(), include_user=True), seen
+        time.sleep(WAIT_STEP)
 
 
 def trim_current(seq, tool_use_id):
@@ -231,13 +255,14 @@ def unseen_reason(key: str, kind: str, cmd: str) -> str:
 
 def stage_reason(ob, miss) -> str:
     return (f"{shown.MARKER} {ob.key} — 초안 검증표를 보이지 않고 stage하려 했다(빠진 규칙 {len(miss)}/{ob.total}). "
-            "Bash 출력은 사용자에게 보이지 않는다.\nstage 전에 규칙마다 한 행(R1~R6 각각 상태, 통과가 아니면 사유)을 보인다.\n"
+            "Bash 출력은 사용자에게 보이지 않는다.\n답(글)에 규칙마다 한 행(R1~R6 각각 상태, 통과가 아니면 사유)을 보인 뒤 "
+            "같은 stage 명령을 다시 실행한다 — 표를 보이는 것이 목적이므로 진행 여부를 묻는 새 질문을 만들지 않는다.\n"
             f"빠진 규칙 예:\n{_examples(miss)}\n{_block(ob)}")
 
 
 def capped_message(obs) -> str:
     where = ", ".join(sorted({ob.path or f"앞 Bash 출력({KIND_NAME[ob.kind]})" for ob in obs}))
-    return f"[telephony-triage] 확인 화면 일부를 답에 보이지 못했다{shown.CAPPED} — {where}를 직접 확인"
+    return f"[telephony-triage] 확인 화면 일부를 답에 보이지 못했다{shown.CAPPED} — {where}에서 직접 확인"
 
 
 # --- 모드 ---------------------------------------------------------------------------------------------------
@@ -299,7 +324,7 @@ def _deny(text: str) -> dict:
 def mode_pre_ask(inp) -> dict | None:
     if not shown.is_ask(inp.get("tool_name")):
         return None
-    seq = load_seq(inp.get("transcript_path"))
+    seq, recorded = load_seq_for_call(inp.get("transcript_path"), inp.get("tool_use_id"))
     if seq is None:
         return None
     seq = trim_current(seq, inp.get("tool_use_id"))
@@ -315,6 +340,9 @@ def mode_pre_ask(inp) -> dict | None:
         if miss:
             found.append((ob, miss))
     under, over = _split(seq, found)
+    if under and not recorded:
+        warn("transcript에 지금 질문이 기록되지 않아(같은 응답의 앞 글이 빠졌을 수 있다) 거부하지 않는다")
+        return None
     if under:
         return _deny("\n\n".join(reason(ob, miss) for ob, miss in under))
     over = [(ob, m) for ob, m in over if ob.start >= ts]
@@ -338,7 +366,7 @@ def mode_pre_bash(inp) -> dict | None:
     stage = shown.STAGE.search(cmd)
     if not (pub or app or stage):
         return None
-    seq = load_seq(inp.get("transcript_path"))
+    seq, recorded = load_seq_for_call(inp.get("transcript_path"), inp.get("tool_use_id"))
     if seq is None:
         return None
     seq = trim_current(seq, inp.get("tool_use_id"))
@@ -382,6 +410,9 @@ def mode_pre_bash(inp) -> dict | None:
     under, over = _split(seq, found)
     seen = markers(seq)
     first = [u for u in unseen if seen.count(u[0]) < UNSEEN_BLOCKS]
+    if (under or first) and not recorded:
+        warn("transcript에 지금 명령이 기록되지 않아(같은 응답의 앞 글이 빠졌을 수 있다) 거부하지 않는다")
+        return None
     if under or first:
         return _deny("\n\n".join([fmt[id(ob)](ob, miss) for ob, miss in under] + [unseen_reason(*u) for u in first]))
     later = [u for u in unseen if u not in first]
