@@ -155,6 +155,15 @@ AUTH_SETTING_KEYS = ("apiKeyHelper", "awsAuthRefresh", "awsCredentialExport")
 AUTH_ENV_PREFIXES = ("ANTHROPIC_", "AWS_", "VERTEX_", "CLAUDE_CODE_USE_", "CLAUDE_CODE_API_KEY_HELPER")
 AUTH_ENV_NAMES = frozenset({"CLOUD_ML_REGION", "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "http_proxy", "https_proxy",
                             "no_proxy", "NODE_EXTRA_CA_CERTS", "SSL_CERT_FILE"})
+# 권한 모드를 명시한다: 생략하면 CLI 기본값(사내 설치는 auto)이 적용돼 분류기가 허용 목록의 Bash까지 막는다.
+# "default"는 옛 CLI의 이름이고 새 CLI(2.1.x, 도움말에는 manual)도 별칭으로 받는다(2.1.296 확인).
+CHILD_PERMISSION_MODE = "default"
+
+
+def child_common_args(settings_json: str) -> list[str]:
+    """두 모드(plain·plugin) 자식 `claude -p`의 공통 인자."""
+    return ["--output-format", "stream-json", "--verbose", "--no-session-persistence", "--setting-sources", "",
+            "--settings", settings_json, "--strict-mcp-config", "--permission-mode", CHILD_PERMISSION_MODE]
 
 
 def user_auth_settings(env: dict[str, str]) -> tuple[dict, dict[str, str]]:
@@ -290,8 +299,7 @@ def execute(entry: dict, info: dict, env_dir: Path, run_dir: Path, claude: str,
         with (env_dir / "env.sh").open("a", encoding="utf-8", newline="\n") as stream:
             stream.write(f"export PATH='{_bash_path(str(shim))}':\"$PATH\"\n")
         env["PATH"] = os.pathsep.join([str(shim), env["PATH"]])      # plugin 모드는 env.sh를 source하지 않는다
-    common = ["--output-format", "stream-json", "--verbose", "--no-session-persistence", "--setting-sources", "",
-              "--settings", settings_json, "--strict-mcp-config"]
+    common = child_common_args(settings_json)
     dirs = ["--add-dir", str(info["plugin_root"]), str(Path(info["issue_db_clone"]).parents[1]), str(run_dir), str(REPO)]
     if plugin:
         prompt, system = plugin_prompt(entry, env_dir, run_dir)

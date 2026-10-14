@@ -1438,7 +1438,8 @@ def checks_d(eid, ctx):
             # set-resolution may represent the edited text separately from new-cause.
             edits = ops(p, "set-resolution")
             resolution = edits[-1].get("resolution") if edits else c.get("resolution")
-            return resolution == "캐리어 APN을 직접 입력한다" and not ops(p, "verify-resolution")
+            # 끝의 마침표·공백은 문장 차이로 보지 않는다 ("…입력한다." 도 같은 해결책)
+            return str(resolution or "").rstrip(". \t\r\n") == "캐리어 APN을 직접 입력한다" and not ops(p, "verify-resolution")
         def unique(p):
             fx = ops(p, "add-fixture")
             keys = [(o.get("for"), o.get("kind"), o.get("path")) for o in fx]
