@@ -150,6 +150,42 @@ def test_draft_rows_missing_rejects_grouped_and_wrong_marks():
     assert shown.draft_rows_missing(RULES, shown.visible_lines(bad)) == ["R3(fail: C=1 — R4 fixture)"]
 
 
+def test_draft_doc_text_colon_and_per_row_json():
+    # 요약 줄 `R4 fail: 사유`의 `:`는 사유가 아니다 (h1-b eval 42)
+    assert shown.draft_doc("R4 fail: 기대값이 깨진 fixture 1개\nR5 skipped 해당 없음")["rules"] == [
+        {"id": "R4", "status": "fail", "reason": "기대값이 깨진 fixture 1개"},
+        {"id": "R5", "status": "skipped", "reason": "해당 없음"}]
+    # 규칙 행을 하나씩 찍은 JSON(줄 첫머리 `{`)은 JSON으로 읽는다. 뒤의 python dict 줄은 건너뛴다
+    rows = "\n".join(json.dumps(r, ensure_ascii=False, indent=1) for r in RULES[1:]) + "\n{'scope': 'plan:draft'}"
+    assert shown.draft_json(rows) == {"rules": RULES[1:]}
+    # 잘린 결과(`| head`) 안의 들여쓴 규칙 행은 JSON 행으로 읽지 않고, 요약 줄로 읽는다
+    cut = "R3 fail: C=1 — R4 fixture\n" + json.dumps({"rules": RULES}, ensure_ascii=False, indent=1)[:-40]
+    assert shown.draft_json(cut) is None
+    assert shown.draft_doc(cut)["rules"] == [{"id": "R3", "status": "fail", "reason": "C=1 — R4 fixture"}]
+
+
+def test_draft_window_first_fail_prefers_json_rerun():
+    """잘린 첫 결과(요약 줄만)보다 같은 계획을 다시 돌려 JSON으로 읽은 결과의 창을 본다 (h1-b eval 42)."""
+    cut = "R3 fail: C=1 — R4 fixture\n" + json.dumps({"rules": RULES}, ensure_ascii=False, indent=1)[:-40]
+    rerun = "\n".join(json.dumps(r, ensure_ascii=False, indent=1) for r in RULES[1:])
+    seq = [bash("d1", DRAFT_CMD + " | head -60", cut), bash("d2", DRAFT_CMD + " | python3 -c ''", rerun),
+           tool("q", ASK, {"question": "| R3 | 실패 | C=1 — R4 fixture |\n| R5 | 건너뜀 | 해당 없음 |"}),
+           bash("s", STAGE_CMD, SCREEN)]
+    w = shown.draft_window(seq, "first_fail")
+    assert (w["i"], w["end"], [r["id"] for r in w["rules"]]) == (1, 3, ["R3", "R5"])
+    assert shown.draft_rows_missing(w["rules"], shown.visible_lines(shown.visible_between(seq, w["i"] + 1, w["end"]))) == []
+    assert shown.draft_window(seq[:1] + seq[2:], "first_fail")["i"] == 0       # JSON 결과가 없으면 요약 줄 결과
+
+
+def test_draft_command_with_global_db_option():
+    """하위 명령 앞 전역 옵션 `--db X`도 건너뛴다 (h1-a eval 3: `db_verify.py --db X rules --plan … --draft …`)."""
+    cmd = "python3 $S/db_verify.py --db /w/_snapshot rules --plan /w/MOCK-1/plan.json --draft /w/MOCK-1/draft"
+    assert shown.DRAFT.search(shown.command_of({"input": {"command": cmd}}))
+    seq = [bash("d", cmd, json.dumps({"rules": RULES}))]
+    assert shown.bash_index(seq, shown.DRAFT) == [0]
+    assert [ob.kind for ob in shown.obligations(seq)] == ["draft"]          # show_guard 표시 의무도 생긴다
+
+
 def test_command_recognition_and_approval_window():
     assert shown.PUSH_END.search(shown.command_of({"input": {"command": PUBLISH_CMD}})).group(1) == "publish"
     assert not shown.PUSH_END.search(shown.command_of({"input": {"command": 'grep -n "db_pr.py publish" a.md'}}))

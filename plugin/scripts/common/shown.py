@@ -41,7 +41,7 @@ SCREEN_HEAD = {"push": re.compile(r"^## push 전 확인:", re.MULTILINE), "post"
 # `…; cat $W/stage.json`·`> discard-preview.md`는 하위 명령이 아니다. 인용 밖 줄 이음(`\` + 줄바꿈)은 공백으로 본다(`strip_quoted`).
 CMDWORD = (r"(?:(?:^|[;&|(`\n]|\$\()\s*(?:\w+=\S*\s+)*|\bpython3?(?:\.\d+)?(?:\s+-[^\s-]\S*)*\s+)"
            r"[\"']?(?:[^\s\"';&|()`]*/)?")
-SUB = r"[\"']?\s+(?:--(?:plugin-root|platform)\s+\S+\s+|--\S+\s+)*"
+SUB = r"[\"']?\s+(?:--(?:plugin-root|platform|db)\s+\S+\s+|--\S+\s+)*"
 
 
 def script_rx(script: str, tail: str) -> re.Pattern:
@@ -231,8 +231,10 @@ def report_core(text: str) -> list[str]:
     return out
 
 
-def draft_doc(result: str):
-    """초안 검증 결과: JSON(첫 `{`~마지막 `}`)이면 dict, 아니면 `R1 pass …` 줄 목록을 {"rules": […]}로. 못 읽으면 None."""
+def draft_json(result: str):
+    """초안 검증 결과를 JSON으로 읽는다: 첫 `{`~마지막 `}`가 결과 dict면 그것, 아니면 줄 첫머리 `{`에서 시작하는 JSON 객체들
+    중 규칙 행(`{"id": "R4", "status": …}`, 예: 결과를 `python3 -c`로 행마다 찍은 출력)을 {"rules": […]}로. 못 읽으면 None.
+    줄 첫머리만 보는 것은 잘린 결과(`| head -60`) 안의 들여쓴 규칙 행을 전체 결과로 잘못 읽지 않기 위해서다."""
     a, b = result.find("{"), result.rfind("}")
     if a >= 0 and b > a:
         try:
@@ -241,8 +243,28 @@ def draft_doc(result: str):
             doc = None
         if isinstance(doc, dict) and isinstance(doc.get("rules"), list):
             return doc
+    rows, pos, dec = [], 0, json.JSONDecoder()
+    for m in re.finditer(r"^\{", result, re.MULTILINE):
+        if m.start() < pos:
+            continue
+        try:
+            obj, pos = dec.raw_decode(result, m.start())
+        except ValueError:
+            continue
+        if isinstance(obj, dict) and isinstance(obj.get("rules"), list):
+            return obj
+        if isinstance(obj, dict) and re.fullmatch(r"R\d", str(obj.get("id"))) and obj.get("status"):
+            rows.append(obj)
+    return {"rules": rows} if rows else None
+
+
+def draft_doc(result: str):
+    """초안 검증 결과: JSON(`draft_json`)이면 dict, 아니면 `R1 pass …`·`R4 fail: …` 줄 목록을 {"rules": […]}로. 못 읽으면 None."""
+    doc = draft_json(result)
+    if doc is not None:
+        return doc
     rows = [{"id": m.group(1), "status": m.group(2), "reason": re.sub(r"\s+(True|False|None)$", "", m.group(3).strip())}
-            for m in re.finditer(r"^(R\d)\s+(pass|fail|skipped|needs-approval)\s*(.*)$", result, re.MULTILINE)]
+            for m in re.finditer(r"^(R\d)\s+(pass|fail|skipped|needs-approval):?\s*(.*)$", result, re.MULTILINE)]
     return {"rules": rows} if rows else None
 
 
@@ -571,7 +593,8 @@ def report_window(seq, end: int | None = None, read_file=None, job_dir=None, *, 
 
 def draft_window(seq, pick: str = "last") -> dict | None:
     """초안 검증표 창: 고른 draft 호출 ~ 다음 draft 호출·stage·기록 끝. pick=last: 첫 stage 전 마지막으로 읽을 수 있는
-    결과. pick=first_fail: fail 행이 든 첫 결과(stage 전 우선, 없으면 last와 같다).
+    결과. pick=first_fail: fail 행이 든 첫 결과(stage 전 우선, JSON으로 읽은 결과 우선, 없으면 last와 같다). 잘린 출력에서
+    `R4 fail: …` 요약 줄만 읽은 결과보다 같은 계획을 다시 돌려 JSON으로 읽은 결과를 본다(h1-b eval 42: `| head -60`).
     → {i, end, rules, doc, calls, parsed, first_stage}. 호출이 없으면 None. 결과를 하나도 못 읽으면 rules·doc이 None."""
     calls = bash_index(seq, DRAFT)
     if not calls:
@@ -587,6 +610,7 @@ def draft_window(seq, pick: str = "last") -> dict | None:
     if pick == "first_fail":
         failed = [p for p in parsed if any(isinstance(r, dict) and r.get("status") == "fail" for r in p[1]["rules"])]
         failed = [p for p in failed if p[0] < first_stage] or failed
+        failed = [p for p in failed if draft_json(tool_text(seq[p[0]])) is not None] or failed
         if failed:
             i, doc = failed[0]
     end = min([c for c in calls if c > i] + [s for s in stage if s > i] + [len(seq)])
