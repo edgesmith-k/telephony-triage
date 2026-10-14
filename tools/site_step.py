@@ -6,13 +6,15 @@
     python3 tools/site_step.py check [S-n] [--json] [--allow-api]   # 자동 점검(읽기 전용, docs/site/steps/S-n.json만 쓴다)
     python3 tools/site_step.py propose [S-n] [--set 키=값]...       # SITE_PROFILE 확인값 행·steps.yaml·초안의 diff(쓰지 않음)
     python3 tools/site_step.py propose ... --apply ID[,ID]         # 사용자가 승인한 항목만 쓴다(확인자 = git user.name)
-    python3 tools/site_step.py evals [--batch N] [--baseline]       # S-2: 남은 eval 다음 배치 명령·추정 비용(실행하지 않음)
+    python3 tools/site_step.py evals [--batch N] [--baseline]       # S-2: 사내 대상 eval의 다음 배치 명령·추정 비용(실행하지 않음)
     python3 tools/site_step.py --done S-n [--waive 점검="사유"]...  # 사용자 확인 뒤: 점검 재실행 → 통과면 완료 기록·다음 단계
 
 - 순서는 S-1 → S-2 → S-3 → S-4a → S-4 → S-5 → S-6 → S-7(`STEPS`). S-0(선택)은 반입 전 일이라 넣지 않는다.
 - 점검(`site_checks.py`)은 판정만 하고 단계를 넘기지 않는다. `--done`은 실패가 있으면 거부하고, 건너뜀·사용자 필요는
   `--waive`(사유는 SITE_PROFILE.md "설계 변경"·docs/site/evidence.md에 남는다) 없이는 거부한다. 사용자 확인 없이 `--done`하지 않는다.
 - `SITE_PROFILE.md`의 "진행 상태" `현재 단계`·`완료 단계` 줄과, 승인된 `propose --apply` 항목만 고친다. 형식은 14-site.md §14.3.
+- S-2 eval은 `tests/skill_evals/pending.json`의 사내 대상(`site`, 사내 모델이 사외 결과 모델과 다르면 `site_if_model_differs`도)만
+  돌린다. 나머지는 사외 결과 기록(`offsite_results.json`, 점검 `s2.offsite`)으로 갈음한다.
 - 새로 만들 때 트래커는 jira다(사내 결정: S30·S31 GitHub 트래커 항목은 해당 없음, S-3에서 `tracker.kind: jira`).
 - 사외 초안 PC(`.local-draft`)에서는 SITE_PROFILE.md를 만들지 않는다(종료 2, 반입 전 경계 검사가 막는 파일이다).
 
@@ -46,7 +48,7 @@ FINISHED_RE = re.compile(r"(?m)^- 완료 단계: *(.*)$")
 MODE_RE = re.compile(r"(?m)^- 모드: *(.+?)\s*$")
 GATE_LINE_RE = re.compile(r"(?m)^- S-5 게이트:.*$")
 EVAL_BATCH = 5
-BASELINE_EVALS = [1, 2, 39, 45, 58]
+BASELINE_EVALS = sc.BASELINE_EVALS     # 사내 토큰 기준선 eval(pending.json site의 부분집합, s2.pending)
 
 
 class Usage(Exception):
@@ -154,7 +156,7 @@ LOOP = """===== 진행 (한 단계씩, 확인 전에는 다음 단계로 가지 
 1. 할 일을 한다. 막히면(git 충돌·인증·MCP 부재·버전 불일치) 우회하지 않고 보고한다.
 2. `python3 tools/site_step.py check` — 자동 점검(읽기 전용). 실패·건너뜀·사용자 필요는 그대로 보고한다(통과로 쓰지 않는다).
 3. 값 반영: `python3 tools/site_step.py propose [--set 키=값]` → diff를 보여 주고, 사용자가 승인한 ID만 `propose --apply ID[,ID]`.
-4. (S-2) `python3 tools/site_step.py evals` — 다음 배치 명령·추정 비용. 비용 승인 뒤에만 실행하고, 수동 채점은 사람이 한다.
+4. (S-2) `python3 tools/site_step.py evals` — 사내 대상 eval의 다음 배치 명령·추정 비용(나머지는 사외 결과, s2.offsite). 비용 승인 뒤에만 실행하고, 수동 채점은 사람이 한다.
 5. 요약 → **사용자 확인** → `python3 tools/site_step.py --done {step}` (사용자가 확인한 건너뜀·사용자 필요만 `--waive 점검="사유"`)."""
 
 
@@ -380,8 +382,12 @@ def propose(root: Path, step: str | None, sets: list[str], apply: str | None, al
 # --- evals (S-2) -----------------------------------------------------------------------------------------------
 
 def _costs(root: Path) -> tuple[dict[int, float], float]:
-    """(eval별 예상 비용 근거 = 사내 실행 → 기준선, 사내 실행 누적 비용)."""
+    """(eval별 예상 비용 근거 = 사내 실행 → 사내 기준선 → 사외 기준선 → 사외 결과 기록의 최근 run, 사내 실행 누적 비용)."""
     known, spent = {}, 0.0
+    for k, v in ((sc.load_offsite(root) or {}).get("evals") or {}).items():      # 가장 약한 근거(사외 모델·환경)
+        costs = [r["cost_usd"] for r in (v or {}).get("runs") or [] if isinstance(r.get("cost_usd"), (int, float))]
+        if costs:
+            known[int(k)] = float(costs[-1])
     for base in (root / "tests/skill_evals/token_baseline.json", root / sc.SITE_BASELINE):   # 뒤가 우선(사내)
         if base.is_file():
             for k, v in (json.loads(base.read_text(encoding="utf-8")).get("evals") or {}).items():
@@ -418,29 +424,38 @@ def evals_cmd(root: Path, batch: int, baseline: bool) -> tuple[str, int]:
                 f"  python3 tests/skill_evals/grade.py {paths} --eval {' '.join(map(str, BASELINE_EVALS))} "
                 f"--write-baseline {sc.SITE_BASELINE}"), 0
     pend = sc.load_pending(root)
-    clean = {i for i, s in state.items() if s["status"] == "graded" and not s.get("failed")}
-    ungraded = sorted(i for i, s in state.items() if s["status"] == "ungraded")
-    rerun = [i for i in pend.get("rerun_first") or [] if i not in clean and i not in ungraded]
-    retry = sorted(i for i, s in state.items() if i not in clean and s["status"] not in ("none", "ungraded") and i not in rerun)
-    rest = sorted(i for i, s in state.items() if s["status"] == "none" and i not in rerun)
-    queue = rerun + retry + rest
+    req = sc.required_ids(root, state)
+    if not req:
+        return "S-2 eval: 사내 대상 없음 — tests/skill_evals/pending.json의 site가 비었다(`check S-2`의 s2.pending)", 1
+    _, off_m, site_m = sc.model_differs(root, state)
+    grade = sc._grade_module()
+    batches = {e["id"]: e.get("batch") for e in sc.eval_entries(root)}
+    first = lambda i: (not (i in pend["manual"] or grade.is_safety_eval(i, batches.get(i))), i)  # noqa: E731 — 안전·수동 먼저
+    clean = {i for i in req if state[i]["status"] == "graded" and not state[i].get("failed")}
+    ungraded = sorted(i for i in req if state[i]["status"] == "ungraded")
+    retry = sorted((i for i in req if i not in clean and state[i]["status"] not in ("none", "ungraded")), key=first)
+    rest = sorted((i for i in req if state[i]["status"] == "none"), key=first)
+    queue = retry + rest
     known, spent = _costs(root)
     mean = sum(known.values()) / len(known) if known else None
     est = lambda ids: None if mean is None else sum(known.get(i, mean) for i in ids)  # noqa: E731
-    graded = sum(s["status"] == "graded" for s in state.values())
-    out = [f"S-2 eval: 전체 {len(state)} · 채점 {graded} (실패 없음 {len(clean)}) · 남음 {len(queue)} "
-           f"(우선 {len(rerun)}, 재시도 {len(retry)}, 미실행 {len(rest)}) · 수동 채점 {pend.get('manual') or []}"]
+    graded = sum(state[i]["status"] == "graded" for i in req)
+    cond = sorted(set(req) - set(pend["site"]))
+    out = [f"S-2 eval: 사내 대상 {len(req)}/{len(state)}"
+           + (f"(모델 다름 사외 {off_m} / 사내 {site_m}: 조건부 {sc._ids(cond)} 포함)" if cond else "")
+           + f" · 채점 {graded} (실패 없음 {len(clean)}) · 남음 {len(queue)} (재시도 {len(retry)}, 미실행 {len(rest)}) · "
+           f"수동 채점 {pend['manual']} · 나머지 {len(state) - len(req)}개는 사외 결과(`check S-2`의 s2.offsite)"]
     if ungraded:
         out.append(f"채점만 필요(실행 기록 있음): eval {sc._ids(ungraded)} → grade.py <그 iteration> --eval …")
     if not queue:
-        out.append("남은 eval 없음. `site_step.py check S-2`로 안전·수동 채점을 확인한다.")
+        out.append("남은 사내 대상 eval 없음. `site_step.py check S-2`로 안전·수동 채점·사외 결과를 확인한다.")
         return "\n".join(out), 0
     nxt = queue[:batch]
     ids = " ".join(map(str, nxt))
     cost = est(nxt)
     budget = inputs.get("eval_budget_usd")
     out.append(f"다음 배치({len(nxt)}): eval {ids}")
-    out.append("추정 비용: " + (f"${cost:.2f}" if cost is not None else "알 수 없음(기준선·실측 없음)")
+    out.append("추정 비용: " + (f"${cost:.2f}" if cost is not None else "알 수 없음(기준선·실측·사외 결과 없음)")
                + (f" · 남은 전체 추정 ${est(queue):.2f}" if cost is not None else "") + f" · 지금까지 사내 실행 ${spent:.2f}")
     if budget is None:
         out.append("예산 미정 — 사용자에게 묻는다: `site_step.py propose --set eval_budget_usd=<USD>` → --apply")
@@ -453,6 +468,8 @@ def evals_cmd(root: Path, batch: int, baseline: bool) -> tuple[str, int]:
             f"  python3 tests/skill_evals/grade.py {new_it} --eval {ids}"
             + (" --token-budget" if (root / sc.SITE_BASELINE).is_file() else ""),
             *([] if model else ["(모델 미고정 — CLI 기본 모델. 기준선과 같은 모델로 고정하려면 `propose --set eval_model=<ID>`)"]),
+            *([f"(사내 모델이 사외 결과 모델 {off_m}와 다르면 조건부 eval {sc._ids(sorted(pend['site_if_model_differs']))}도 "
+               "사내 대상이 된다 — 실행 뒤 init_model로 다시 판정)"] if not cond and pend["site_if_model_differs"] else []),
             "한도·인증 오류로 멈추면 자동 반복하지 않고 사용 가능해진 뒤 `site_step.py evals`로 새 경로를 받는다."]
     return "\n".join(out), 0
 

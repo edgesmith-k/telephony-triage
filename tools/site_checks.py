@@ -34,6 +34,8 @@ STEP_STATE_DIR = "docs/site/steps"
 SITE_BASELINE = "tests/site/token_baseline.json"
 EVAL_DIR = "tests/skill_evals"
 EVAL_WORKSPACE_PREFIX = "site-s2-"
+OFFSITE_FILE = EVAL_DIR + "/offsite_results.json"
+BASELINE_EVALS = [1, 2, 39, 45, 58]     # 사내 토큰 기준선(T4) eval — pending.json site의 부분집합이어야 한다(s2.pending)
 PROFILE = "SITE_PROFILE.md"
 PROFILE_LIMIT = 4096
 # steps.yaml에 둘 수 있는 입력(값은 사용자가 준다)
@@ -350,8 +352,65 @@ def eval_entries(root: Path) -> list[dict]:
 
 
 def load_pending(root: Path) -> dict:
+    """`pending.json`(사내 S-2 대상의 단일 출처)을 정규화한다: site·site_if_model_differs는 {id: 사유}, manual은 [id].
+    파일이 없거나 site가 비면 site {}(→ `s2.pending` 실패. 전체 실행으로 되돌아가지 않는다)."""
     p = root / EVAL_DIR / "pending.json"
-    return json.loads(p.read_text(encoding="utf-8")) if p.is_file() else {"rerun_first": [], "manual": []}
+    raw = json.loads(p.read_text(encoding="utf-8")) if p.is_file() else {}
+    raw = raw if isinstance(raw, dict) else {}
+
+    def ids(v) -> dict[int, str]:
+        if isinstance(v, dict):
+            return {int(k): str(r) for k, r in v.items()}
+        return {int(k): "" for k in v} if isinstance(v, list) else {}
+
+    return {"site": ids(raw.get("site")), "site_if_model_differs": ids(raw.get("site_if_model_differs")),
+            "manual": [int(i) for i in raw.get("manual") or []], "offsite": raw.get("offsite") or OFFSITE_FILE,
+            "note": raw.get("note") or ""}
+
+
+def site_ids(root: Path) -> list[int]:
+    return sorted(load_pending(root)["site"])
+
+
+def load_offsite(root: Path) -> dict | None:
+    """사외 결과 기록(`tests/skill_evals/offsite.py`가 만든다). 없거나 읽을 수 없으면 None."""
+    p = root / load_pending(root)["offsite"]
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return data if isinstance(data, dict) and isinstance(data.get("evals"), dict) else None
+
+
+def _norm_model(m) -> str:
+    return re.sub(r"\[[^\]]*\]$", "", str(m)).strip() if m else ""
+
+
+def site_models(root: Path, state: dict[int, dict]) -> list[str]:
+    """사내 eval 모델: steps.yaml `eval_model`과 사내 run(`site-s2-*`)의 init_model."""
+    ms = {_norm_model(load_inputs(root).get("eval_model"))} | {_norm_model(s.get("init_model")) for s in state.values()}
+    return sorted(m for m in ms if m)
+
+
+def model_differs(root: Path, state: dict[int, dict]) -> tuple[bool, str, str]:
+    """(사내 모델이 사외 결과 모델과 다른가, 사외 모델, 사내 모델). 사외 기록이 없으면 다르다고 본다(갈음할 근거 없음).
+    사내 모델을 아직 모르면(eval_model·사내 run 없음) 다르지 않다고 보고, 사내 run이 생기면 그 init_model로 다시 판정한다."""
+    off = load_offsite(root)
+    off_m = _norm_model(off.get("model")) if off else ""
+    site = site_models(root, state)
+    site_s = "/".join(site) or "미정"
+    if not off_m:
+        return True, "없음", site_s
+    return any(m != off_m for m in site), off_m, site_s
+
+
+def required_ids(root: Path, state: dict[int, dict]) -> list[int]:
+    """사내 S-2에서 실행·채점해야 하는 eval: site + (모델이 다르면) site_if_model_differs."""
+    pend = load_pending(root)
+    req = set(pend["site"])
+    if model_differs(root, state)[0]:
+        req |= set(pend["site_if_model_differs"])
+    return sorted(req & set(state))     # evals.json에 없는 id는 s2.pending이 실패로 본다
 
 
 def site_iterations(root: Path) -> list[Path]:
@@ -397,22 +456,65 @@ def eval_state(root: Path) -> dict[int, dict]:
 def s2_pending(ctx: Ctx) -> dict:
     ids = {e["id"] for e in eval_entries(ctx.root)}
     pend = load_pending(ctx.root)
-    listed = [*(pend.get("rerun_first") or []), *(pend.get("manual") or [])]
-    bad = sorted(set(listed) - ids)
+    site, cond, manual = set(pend["site"]), set(pend["site_if_model_differs"]), set(pend["manual"])
+    cmd = "tests/skill_evals/pending.json"
+    if not site:     # 대상이 비면 통과로 보지 않는다(전체 실행으로 되돌아가지도 않는다)
+        return res("s2.pending", "fail", "pending.json이 없거나 site(사내 대상)가 비었다", cmd)
+    bad = sorted((site | cond | manual) - ids)
     if bad:
-        return res("s2.pending", "fail", f"pending.json의 id가 evals.json에 없음: {bad}", "tests/skill_evals/pending.json")
-    return res("s2.pending", "pass", f"rerun_first {len(pend.get('rerun_first') or [])} · manual "
-               f"{len(pend.get('manual') or [])} ⊆ evals.json {len(ids)}", "tests/skill_evals/pending.json")
+        return res("s2.pending", "fail", f"pending.json의 id가 evals.json에 없음: {bad}", cmd)
+    problems = []
+    if site & cond:
+        problems.append(f"site와 site_if_model_differs가 겹침: {sorted(site & cond)}")
+    if not manual <= site:
+        problems.append(f"manual이 site 밖: {sorted(manual - site)}")
+    if not set(BASELINE_EVALS) <= site:
+        problems.append(f"기준선 eval이 site 밖: {sorted(set(BASELINE_EVALS) - site)}")
+    if problems:
+        return res("s2.pending", "fail", " · ".join(problems), cmd)
+    return res("s2.pending", "pass", f"사내 대상 {len(site)}/{len(ids)} · 조건부(모델 다를 때) {len(cond)} · 수동 "
+               f"{sorted(manual)} · 기준선 ⊆ 사내", cmd)
 
 
 def s2_graded(ctx: Ctx) -> dict:
     st = eval_state(ctx.root)
-    missing = sorted(i for i, s in st.items() if s["status"] != "graded")
+    req = required_ids(ctx.root, st)
+    missing = [i for i in req if st.get(i, {}).get("status") != "graded"]
+    differs, off_m, site_m = model_differs(ctx.root, st)
+    scope = f"사내 대상 {len(req)}/{len(st)}" + (f"(모델 다름 사외 {off_m} / 사내 {site_m}: 조건부 포함)"
+                                                  if differs and load_pending(ctx.root)["site_if_model_differs"] else "")
     cmd = "python3 tools/site_step.py evals"
+    if not req:
+        return res("s2.evals_graded", "fail", "사내 대상 eval이 없다(s2.pending)", "tests/skill_evals/pending.json")
     if missing:     # 아직 돌리지 않은 것은 고칠 결함이 아니라 할 일이다(실행·채점 뒤 다시 점검)
-        return res("s2.evals_graded", "needs-user", f"채점 완료 {len(st) - len(missing)}/{len(st)}, 남음 {len(missing)}: "
-                   + _ids(missing), cmd, ask="eval 배치 실행 비용을 승인해 주세요(`site_step.py evals`가 명령·추정 비용을 낸다)")
-    return res("s2.evals_graded", "pass", f"evals.json {len(st)}개 모두 채점(graded)", cmd)
+        return res("s2.evals_graded", "needs-user", f"{scope} 중 채점 완료 {len(req) - len(missing)}, 남음 "
+                   f"{len(missing)}: " + _ids(missing), cmd,
+                   ask="eval 배치 실행 비용을 승인해 주세요(`site_step.py evals`가 명령·추정 비용을 낸다)")
+    return res("s2.evals_graded", "pass", f"{scope} 모두 채점(graded) · 나머지는 사외 결과(s2.offsite)", cmd)
+
+
+def s2_offsite(ctx: Ctx) -> dict:
+    """사내 대상 밖 eval을 갈음하는 사외 결과 기록(정보). 기록이 없거나 빠진 eval이 있으면 사용자 필요."""
+    st = eval_state(ctx.root)
+    off = load_offsite(ctx.root)
+    path = load_pending(ctx.root)["offsite"]
+    if off is None:
+        return res("s2.offsite", "needs-user", f"사외 결과 기록 없음: {path}", f"cat {path}",
+                   ask="사외 결과 기록(offsite_results.json)을 반입본에 넣어 주세요(사외 PC: `python3 tests/skill_evals/offsite.py "
+                       "<iteration>... --out tests/skill_evals/offsite_results.json`)")
+    req = set(required_ids(ctx.root, st))
+    rest = sorted(i for i in st if i not in req)
+    verdict = {i: (off["evals"].get(str(i)) or {}).get("verdict") or "none" for i in rest}
+    groups = {v: [i for i in rest if verdict[i] == v] for v in ("pass", "fail", "undecided", "none")}
+    differs, off_m, site_m = model_differs(ctx.root, st)
+    head = (f"모델 다름(사외 {off_m} / 사내 {site_m}) · " if differs else "") + \
+        f"사외 {off.get('model')}({off.get('generated')}) 갈음 {len(rest)}개: "
+    body = " · ".join(f"{k} {len(v)}" + (f"({_ids(v, 15)})" if v and k != "pass" else "") for k, v in groups.items())
+    cmd = f"cat {path}"
+    if groups["none"]:
+        return res("s2.offsite", "needs-user", head + body + " — 사외 기록 없는 eval이 있다", cmd,
+                   ask=f"eval {_ids(groups['none'])}의 사외 결과가 없다: 사외에서 실행해 기록을 다시 만들거나, 사내에서 실행할지 정해 주세요")
+    return res("s2.offsite", "info", head + body, cmd)
 
 
 def _ids(ids: list[int], n: int = 25) -> str:
@@ -422,11 +524,15 @@ def _ids(ids: list[int], n: int = 25) -> str:
 def s2_safety(ctx: Ctx) -> dict:
     grade = _grade_module()
     st = eval_state(ctx.root)
+    req = set(required_ids(ctx.root, st))
     batches = {e["id"]: e.get("batch") for e in eval_entries(ctx.root)}
-    bad = {i: s["safety_fail"] for i, s in st.items() if s.get("safety_fail")}
+    bad = {i: s["safety_fail"] for i, s in st.items() if s.get("safety_fail")}     # 사내에서 채점한 것은 대상 밖이어도 본다
     null = {i: s["safety_null"] for i, s in st.items() if s.get("safety_null")}
     safety_ids = [i for i in st if grade.is_safety_eval(i, batches[i])]
-    open_ = [i for i in safety_ids if st[i]["status"] != "graded"]
+    site_safety = [i for i in safety_ids if i in req]
+    offsite = [i for i in safety_ids if i not in req]
+    open_ = [i for i in site_safety if st[i]["status"] != "graded"]
+    note = f" · 사외 결과로 갈음한 안전 eval {len(offsite)}" + (f"({_ids(offsite, 15)}, s2.offsite)" if offsite else "")
     cmd = "python3 tools/site_step.py check S-2 --json"
     if bad:
         return res("s2.safety", "fail", f"안전 위반 {sum(map(len, bad.values()))}행: eval {_ids(sorted(bad))}", cmd)
@@ -434,14 +540,14 @@ def s2_safety(ctx: Ctx) -> dict:
         return res("s2.safety", "needs-user", f"안전 위반 0(결정분) · 미결정 안전 행 {sum(map(len, null.values()))}: "
                    f"eval {_ids(sorted(null))}", cmd, ask=f"eval {_ids(sorted(null))}의 미결정 안전 행을 transcript로 채점해 주세요")
     if open_:
-        return res("s2.safety", "needs-user", f"안전 위반 0(채점분) · 안전 eval 미채점 {len(open_)}: {_ids(open_)}", cmd,
-                   ask="안전 eval을 먼저 실행·채점한다(`site_step.py evals`)")
-    return res("s2.safety", "pass", f"안전 eval {len(safety_ids)}개·트래커 쓰기 행 위반 0, 미결정 0", cmd)
+        return res("s2.safety", "needs-user", f"안전 위반 0(채점분) · 사내 대상 안전 eval 미채점 {len(open_)}: {_ids(open_)}"
+                   + note, cmd, ask="사내 대상 안전 eval을 먼저 실행·채점한다(`site_step.py evals`)")
+    return res("s2.safety", "pass", f"사내 대상 안전 eval {len(site_safety)}개·트래커 쓰기 행 위반 0, 미결정 0" + note, cmd)
 
 
 def s2_manual(ctx: Ctx) -> dict:
     st = eval_state(ctx.root)
-    manual = load_pending(ctx.root).get("manual") or []
+    manual = load_pending(ctx.root)["manual"]
     open_ = sorted({i for i in manual if st.get(i, {}).get("status") != "graded"}
                    | {i for i, s in st.items() if s["status"] == "graded" and s.get("null_rows")})
     if open_:
@@ -456,16 +562,17 @@ S2_LINE = re.compile(r"(?m)^- S-2 결과: ")
 
 def s2_summary(ctx: Ctx) -> dict:
     st = eval_state(ctx.root)
-    graded = {i: s for i, s in st.items() if s["status"] == "graded"}
+    req = required_ids(ctx.root, st)
+    graded = {i: st[i] for i in req if st.get(i, {}).get("status") == "graded"}
     f = lambda k: sum(s.get(k) or 0 for s in graded.values())  # noqa: E731
     failed = sorted(i for i, s in graded.items() if s.get("failed"))
     safety = sum(len(s.get("safety_fail") or []) for s in graded.values())
-    ev = (f"채점 {len(graded)}/{len(st)} · 실패 eval {len(failed)} · 행 통과 {f('passed')}/실패 {f('failed')}/미결정 "
+    ev = (f"사내 대상 채점 {len(graded)}/{len(req)} · 실패 eval {len(failed)} · 행 통과 {f('passed')}/실패 {f('failed')}/미결정 "
           f"{f('undecided')} · 안전 위반 {safety} · 스키마 파일 Read {f('schema_reads')}회")
     cmd = "python3 tests/skill_evals/grade.py <iteration>"
     if S2_LINE.search(ctx.profile):
         return res("s2.summary", "pass", "SITE_PROFILE.md에 S-2 결과 줄 있음 · 지금 " + ev, cmd)
-    line = (f"- S-2 결과: 채점 {len(graded)}/{len(st)}, 실패 eval {len(failed)}"
+    line = (f"- S-2 결과: 사내 대상 채점 {len(graded)}/{len(req)}(나머지 사외 결과), 실패 eval {len(failed)}"
             + (f"({_ids(failed, 10)})" if failed else "") + f", 안전 위반 {safety}, 스키마 Read {f('schema_reads')}회"
             + f" (원인 {EVIDENCE_FILE})")
     return res("s2.summary", "needs-user", ev + " — SITE_PROFILE.md 기록 줄 없음", cmd,
@@ -492,11 +599,14 @@ def s2_s1_rows(ctx: Ctx) -> dict:
 
 def s2_baseline(ctx: Ctx) -> dict:
     p = ctx.root / SITE_BASELINE
+    site = set(site_ids(ctx.root))
+    sub = f"기준선 eval {BASELINE_EVALS} " + ("⊆ 사내 대상" if set(BASELINE_EVALS) <= site else "⊄ 사내 대상(s2.pending)")
     if p.is_file():
         data = json.loads(p.read_text(encoding="utf-8"))
         return res("s2.token_baseline", "pass", f"{SITE_BASELINE}: model {data.get('model')} · eval "
-                   f"{len(data.get('evals') or {})}개", f"cat {SITE_BASELINE}")
-    return res("s2.token_baseline", "info", f"{SITE_BASELINE} 없음(사내 토큰 기준선 T4)", "python3 tools/site_step.py evals --baseline")
+                   f"{len(data.get('evals') or {})}개 · {sub}", f"cat {SITE_BASELINE}")
+    return res("s2.token_baseline", "info", f"{SITE_BASELINE} 없음(사내 토큰 기준선 T4) · {sub}",
+               "python3 tools/site_step.py evals --baseline")
 
 
 # --- S-3 ----------------------------------------------------------------------------------------------------
@@ -979,7 +1089,7 @@ def s7_expansion(ctx: Ctx) -> dict:
 
 CHECKS = {
     "S-1": [s1_profile, s1_review_open, s1_gate, s1_samples, s1_python, s1_env, s1_ghe, s1_claude, s1_todos],
-    "S-2": [s2_pending, s2_graded, s2_safety, s2_manual, s2_summary, s2_probe, s2_s1_rows, s2_baseline],
+    "S-2": [s2_pending, s2_graded, s2_offsite, s2_safety, s2_manual, s2_summary, s2_probe, s2_s1_rows, s2_baseline],
     "S-3": [s3_site_defaults, s3_tracker_kind, s3_config_check, s3_doctor, s3_parse_logcat, s3_tracker_candidates,
             s3_jira_fields],
     "S-4a": [s4a_protection, s4a_golden, s4a_golden_mutation, s4a_analyzers, s4a_import_pr],
