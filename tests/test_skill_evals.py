@@ -538,6 +538,40 @@ def test_explore_order_handles_quoted_paths_and_haji_questions(tmp_path, command
     assert (asked, explored, read) == (0, 1, 2)
 
 
+@pytest.mark.parametrize("question,asked", [("탐색 분석을 실행할까요? (토큰 추가 사용)", True), ("코드 경로를 고를까요?", False)])
+def test_explore_order_counts_ask_user_tool_question(tmp_path, question, asked):
+    """plugin 모드 실행자는 질문을 모의 ask_user 도구로 한다 — 그 question도 질문으로 센다(글이 없어도)."""
+    env_dir = _synthetic_env(tmp_path)
+    run = run_dir(tmp_path)
+    _write_artifacts(run)
+    _seq_events(run, [("tool", "q1", "mcp__eval-approver__ask_user", {"question": question, "options": ["예", "아니오"]}, "답", False),
+                      ("tool", "e1", "Bash", {"command": "python3 triage.py explore MOCK-9046"}, "ok", False)])
+    explored, got, _ = grader.Ctx(env_dir, run).explore_order()
+    assert explored == 1 and (got == 0) is asked
+
+
+def test_plugin_rules_route_questions_through_ask_tool(tmp_path):
+    entry = {"user_replies": ["묻으면 '예'"]}
+    plugin = evaluation._rules(entry, tmp_path / "run", ask_tool=True)
+    assert evaluation.ASK_TOOL in plugin and "건너뛰지 않는다" in plugin
+    assert evaluation.ASK_TOOL not in evaluation._rules(entry, tmp_path / "run")      # direct 모드는 글로 묻는다
+
+
+def test_approver_ask_user_returns_replies_and_logs(tmp_path, monkeypatch):
+    sys.path.insert(0, str(REPO / "tests" / "mocks" / "approver_mcp"))
+    import server as approver
+    log = tmp_path / "approvals.json"
+    monkeypatch.setenv("MOCK_APPROVALS_LOG", str(log))
+    monkeypatch.setenv("EVAL_USER_REPLIES", json.dumps(["탐색 분석 실행 여부를 물으면 '예'."], ensure_ascii=False))
+    out = approver.handle({"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+                           "params": {"name": "ask_user", "arguments": {"question": "탐색 분석을 실행할까요?", "options": ["예", "아니오"]}}})
+    text = out["result"]["content"][0]["text"]
+    assert "[시뮬레이션 사용자]" in text and "물으면 '예'" in text
+    assert json.loads(log.read_text(encoding="utf-8")) == [{"kind": "ask", "question": "탐색 분석을 실행할까요?", "options": ["예", "아니오"]}]
+    listed = approver.handle({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})["result"]["tools"]
+    assert {t["name"] for t in listed} == {"approve", "ask_user"}
+
+
 def test_explore_order_ignores_explore_text_inside_heredocs(tmp_path):
     env_dir = _synthetic_env(tmp_path)
     run = run_dir(tmp_path)
