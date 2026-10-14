@@ -26,7 +26,7 @@
 
 | ☐ | 항목 | 메모 |
 |---|---|---|
-| ☐ H | **사외 재측정 → `offsite_results.json` 재생성**(다음 할 일, 사용자 승인 대기 ≈$25) | hook 반영 커밋에서 전체 70개 ×1 + 68·70 ×2, 수동 행 채점 → `python3 tests/skill_evals/offsite.py <iteration>... --out tests/skill_evals/offsite_results.json`. 지금 기록은 잠정(eval 37 표시 행 실패로 `s2.safety` 실패) |
+| ☐ H | **사외 재측정 → `offsite_results.json` 재생성 — 사용자 승인됨(10/14, ≈$24), 다음 세션은 바로 실행** | 절차·범위·명령: `docs/development/H_OFFSITE_REMEASURE.md`(57개 ×1 + 68·70, 사내 대상 11·53·54 제외). 끝나면 I → main 병합 PR(병합·반입은 사용자 확인) |
 | ☐ I | show_guard 남은 P2 | 재리뷰(eddd443) P2 4건(한도 세는 방식) — history "10/14 저녁" |
 | ☐ F | 새 반입 묶음(H 뒤, main 병합 PR 먼저) | `tools/make_bundle.py --label import-<날짜>`. 사내 적용은 `SITE_INSTALL.md` 8절 |
 | ☐ G | 범용판 별도 레포 — **보류(10/07 사용자)** | 재개는 사용자가 정한다. 계획은 history "10/14 오후" |
