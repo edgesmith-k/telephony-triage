@@ -1,6 +1,6 @@
-# 사내 설치 가이드 (반입 → "사내 설정 시작"까지)
+# 사내 설치 가이드 (반입 → "사내 설정 시작"까지, 재반입)
 
-반입 묶음을 사내 PC(Ubuntu 22.04 기준)에 풀고 Claude Code에서 **"사내 설정 시작"** 을 입력하기까지의 순서다.
+반입 묶음을 사내 PC(Ubuntu 22.04 기준)에 풀고 Claude Code에서 **"사내 설정 시작"** 을 입력하기까지의 순서다. 이미 작업 중인 사내 레포에 새 묶음을 넣을 때는 **8절(재반입)**.
 첫 반입(import-20261013)에서 실제로 막힌 곳과 해결법을 그대로 적었다. 사내 값(미러 주소·회사명·도메인)은 이 문서에 적지 않는다 — 필요하면 `SITE_PROFILE.md`에만.
 
 | 단계 | 할 일 | 끝난 기준 |
@@ -11,6 +11,7 @@
 | 4 | 의존성 설치 (사내 PyPI 미러) | 버전 3개 출력 |
 | 5 | `claude` → "사내 설정 시작" | `SITE_PROFILE.md` 생성, S-1 안내 |
 | (팀원) | 7절 — 담당자 S-7 뒤 | setup 점검 표 모두 ok |
+| (새 묶음) | 8절 재반입 — 압축을 레포 위에 풀지 않는다 | `import_draft.py` 종료 0, pytest 통과, main에 ff 병합 |
 
 ## 1. 반입 파일 확인
 
@@ -155,4 +156,67 @@ S-1에서 `SITE_PROFILE.md`에 남길 것: 설치 경위(미러·A/B·Python 버
 
 오프라인 의존성 묶음(`tt-offline-deps-<날짜>.zip`, 사외에서 만든 wheel)은 **비상용**이다. 사내 미러로 설치되면 반입하지 않는다.
 
-관련: 반입 체크리스트 `docs/design/15-local-draft.md §15.4`, 사내 단계 §15.5, 사람용 총정리 `GUIDE.md` 4장.
+## 8. 재반입 (작업 중인 사내 레포에 새 묶음 넣기)
+
+사외에서 고친 것을 새 묶음(`telephony-triage-import-<label>.zip`)으로 받아 넣을 때. **새 zip을 레포 위에 그냥 풀지 않는다** — 사외에서 지운 파일이 남고 사내 기록과 섞인다. 다른 폴더에 풀고 `tools/import_draft.py`가 바꿔 넣게 한다(`docs/design/15-local-draft.md §15.6`):
+
+- `SITE_PATHS` 경로(`SITE_PROFILE.md`, `plugin/site-defaults.yaml`, `docs/site/` 등)는 건드리지 않는다.
+- 기준선(`.draft-manifest.json`) 이후 **사내에서 고친 사외 파일**이 있으면 바꾸지 않고 멈춘다(종료 1).
+- 사외에서 지운 파일은 지우고, 사내에서 새로 만든 비-`SITE_PATHS` 파일은 지우지 않고 보고한다.
+- 도중에 실패하면 원래대로 되돌린다.
+
+명령은 레포 폴더에서, `claude`를 실행하는 것과 같은 Python으로(B면 `(tt)` 터미널).
+
+**0. 받은 파일 확인** — 1절과 같다(`sha256sum -c SHA256SUMS`). 이슈 DB 뼈대 zip은 해시가 지난번과 같으면 할 일이 없다.
+
+**1. 지금 상태 커밋** — 반입이 잘못돼도 이 커밋으로 돌아온다.
+```
+git status
+git add -A && git commit -m "S-n 진행 중 상태"      # 바뀐 게 있을 때만
+```
+
+**2. 기준선 확인** — `ls .draft-manifest.json`. 있으면 4로. 없으면(첫 반입을 2절처럼 압축 풀기로 했으면) 3을 한 번 한다.
+
+**3. 기준선 만들기 (한 번만)** — 지금 레포에 들어 있는 묶음으로 "현재 = 이 묶음"을 기록한다. 파일은 바뀌지 않고 `.draft-manifest.json`만 생긴다.
+```
+mkdir -p ~/tt-old && unzip -q <경로>/telephony-triage-import-<지금 레포의 label>.zip -d ~/tt-old
+python3 ~/tt-old/tools/import_draft.py ~/tt-old --dest . --label <지금 레포의 label> --dry-run
+#   "첫 반입입니다 (기준선 없음) … 덮어씀 0 / 지움 0 / 그대로 N" 이면
+python3 ~/tt-old/tools/import_draft.py ~/tt-old --dest . --label <지금 레포의 label>
+git add -A && git commit -m "반입 기준선 (<지금 레포의 label>)"
+```
+`덮어씀`이 0이 아니면 레포가 다른 묶음 상태일 수 있다 — 그 전 묶음 zip으로 dry-run을 다시 해서 `덮어씀 0`인 묶음으로 만든다. 어느 묶음으로도 0이 아니면 사내에서 고친 사외 파일이 있는 것이다(아래 표).
+
+**4. 새 묶음 적용** — 작업 브랜치에서 하고, 통과하면 main에 합친다.
+```
+mkdir -p ~/tt-new && unzip -q <경로>/telephony-triage-import-<새 label>.zip -d ~/tt-new
+git switch -c draft-import/<새 label>
+python3 ~/tt-new/tools/import_draft.py ~/tt-new --dest . --label <새 label> --dry-run
+#   "덮어씀 X / 지움 Y / 그대로 Z", SITE_PATHS 경로는 건드리지 않음 — 바뀌는 파일 수가 예상과 맞는지 본다
+python3 ~/tt-new/tools/import_draft.py ~/tt-new --dest . --label <새 label> --check-boundary
+git status --short          # 바뀐 사외 파일 + .draft-manifest.json만 M. SITE_PROFILE.md는 없어야 한다
+```
+
+**5. 테스트 후 병합**
+```
+python3 -m pytest -q tests          # 25~30분
+git add -A && git commit -m "재반입 <새 label> (사외 <커밋>)"
+git switch main && git merge --ff-only draft-import/<새 label> && git branch -d draft-import/<새 label>
+rm -rf ~/tt-old ~/tt-new
+```
+실패하면 main에 합치지 않는다. `FAILED tests/…::<테스트 이름>` 줄만(사내 이름·경로는 빼고) 사외로 전달한다. 사내 레포에서는 사외 초안 전용 검사(`test_site_paths_are_absent_in_draft`, `test_check_boundary_external`)가 skip으로 나오는 것이 정상이다(import-20261014부터).
+
+반입한 묶음에서 바뀐 흐름이 있으면 그 흐름의 eval만 다시 돌린다(7절 표 "다시 검증할 때"). 이어서 사내 단계는 `claude` → **계속**.
+
+### 멈췄을 때
+
+| 메시지 | 뜻 | 할 일 |
+|---|---|---|
+| `사내에서 고친 사외 파일이 있어 멈춥니다` + 목록, 종료 1 | 기준선 뒤 사내에서 공통 파일을 고침(예: 사외 수정을 기다리며 넣은 임시 수정) | 새 묶음에 정식 수정이 있으면 마지막 반입의 사외 버전으로 되돌린다: `git restore --source=$(git log -1 --format=%H -- .draft-manifest.json) -- <파일>` → 커밋 → 다시 실행. 계속 필요한 수정이면 **변경 요지를 사내 정보 없는 문장으로** 사외에 전달한다(파일 반출 없음) |
+| 사내 새 파일 보고 | `SITE_PATHS` 밖에 사내에서 만든 파일 | 지워지지 않는다. 사내 전용이면 `SITE_PATHS`에 경로를 추가 |
+| 경계 검사 위반, 종료 1 | 반입 뒤 모습에 사내 표식·import 방향 문제 | 레포는 바뀌지 않았다. 파일·줄만 사외로 전달 |
+| 종료 2 (적용 중 실패) | 도중 실패 | 도구가 되돌린다. 그래도 이상하면 `git reset --hard && git switch main`(1의 커밋으로) |
+
+공통 파일을 사내에서 직접 고치지 않는 것이 원칙이다(재반입 때 충돌). 사내 전용 코드·값은 `SITE_PATHS` 경로에만 둔다.
+
+관련: 반입 체크리스트 `docs/design/15-local-draft.md §15.4`, 사내 단계 §15.5, 재반입 §15.6, 사람용 총정리 `GUIDE.md` 4장.
