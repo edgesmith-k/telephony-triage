@@ -591,10 +591,22 @@ def report_window(seq, end: int | None = None, read_file=None, job_dir=None, *, 
             "core": report_core(source), "must": must}
 
 
+def plan_tag(e) -> str:
+    """draft 호출의 `--plan` 경로 끝 두 마디(<KEY>/plan.json). 따옴표·구분자·빈 마디 표기 차이는 같은 계획이다. 없으면 "".
+    공백 든 따옴표 경로도 통째로 읽으려 원 명령(heredoc 제외)에서 찾되, db_verify rules 호출부터만 본다(`&&` 앞 명령·echo의
+    `--plan`을 잡지 않게)."""
+    raw = strip_heredocs(str((e.get("input") or {}).get("command", "")))
+    m = DRAFT.search(raw)
+    plan = re.search(r"--plan[= ]\s*(\"[^\"]*\"|'[^']*'|\S+)", raw[m.start():] if m else raw)
+    parts = plan.group(1).rstrip(";&|)").strip("\"'").replace("\\", "/").split("/") if plan else []
+    return "/".join([p for p in parts if p not in ("", ".")][-2:])
+
+
 def draft_window(seq, pick: str = "last") -> dict | None:
     """초안 검증표 창: 고른 draft 호출 ~ 다음 draft 호출·stage·기록 끝. pick=last: 첫 stage 전 마지막으로 읽을 수 있는
     결과. pick=first_fail: fail 행이 든 첫 결과(stage 전 우선, JSON으로 읽은 결과 우선, 없으면 last와 같다). 잘린 출력에서
     `R4 fail: …` 요약 줄만 읽은 결과보다 같은 계획을 다시 돌려 JSON으로 읽은 결과를 본다(h1-b eval 42: `| head -60`).
+    창 끝은 다음 draft 호출·stage지만, 같은 계획을 다시 돌려 결과를 못 읽은 호출은 건너뛴다.
     → {i, end, rules, doc, calls, parsed, first_stage}. 호출이 없으면 None. 결과를 하나도 못 읽으면 rules·doc이 None."""
     calls = bash_index(seq, DRAFT)
     if not calls:
@@ -613,7 +625,10 @@ def draft_window(seq, pick: str = "last") -> dict | None:
         failed = [p for p in failed if draft_json(tool_text(seq[p[0]])) is not None] or failed
         if failed:
             i, doc = failed[0]
-    end = min([c for c in calls if c > i] + [s for s in stage if s > i] + [len(seq)])
+    # 같은 계획을 다시 돌렸는데 결과를 못 읽은 호출(`| sed -n 80,200p` 등)은 창을 끊지 않는다: 그 뒤에 보인 표는 읽은 결과의
+    # 것으로 본다 (sm4-1-b eval 42). 읽을 수 있는 결과·다른 계획·stage는 그대로 끊는다
+    reread = {c for c in calls if c > i and draft_doc(tool_text(seq[c])) is None and plan_tag(seq[c]) == plan_tag(seq[i])}
+    end = min([c for c in calls if c > i and c not in reread] + [s for s in stage if s > i] + [len(seq)])
     return {"i": i, "end": end, "doc": doc, "rules": [r for r in doc["rules"] if isinstance(r, dict) and r.get("id")],
             "calls": calls, "parsed": parsed, "first_stage": first_stage}
 
@@ -712,11 +727,8 @@ def obligations(seq, read_file=None, job_dir=None, *, script_only: bool = True) 
         # 키는 계획 경로 인자와 결과 내용(규칙·상태·사유): 같은 작업에서 같은 결과로 다시 돌려도 같은 의무라 막는 횟수 한도를
         # 함께 쓴다. 다른 작업과 키가 같아도(`$J/plan.json`·전부 통과) 횟수는 작업 경계(마지막 triage run) 뒤에서만 센다.
         # 경로는 뒤 셸 구분자·따옴표를 벗기고 빈·`.` 마디를 뺀 끝 두 마디(<KEY>/plan.json)만 쓴다: 표기만 바꿔 다시 돌려
-        # 한도를 새로 얻지 못하게(공백 든 따옴표 경로도 통째로 — command_of는 그런 인용을 지우므로 원 명령에서 찾는다)
-        raw = strip_heredocs(str((seq[i].get("input") or {}).get("command", "")))
-        plan = re.search(r"--plan[= ]\s*(\"[^\"]*\"|'[^']*'|\S+)", raw)
-        parts = plan.group(1).rstrip(";&|)").strip("\"'").replace("\\", "/").split("/") if plan else []
-        tag = "/".join([p for p in parts if p not in ("", ".")][-2:])
+        # 한도를 새로 얻지 못하게(plan_tag)
+        tag = plan_tag(seq[i])
         digest = hashlib.sha1(json.dumps([tag] + [[r.get("id"), r.get("status"), r.get("reason")]
                                                   for r in rules],
                                          ensure_ascii=False).encode("utf-8")).hexdigest()[:12]

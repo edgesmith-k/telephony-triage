@@ -175,6 +175,12 @@ def test_draft_window_first_fail_prefers_json_rerun():
     assert (w["i"], w["end"], [r["id"] for r in w["rules"]]) == (1, 3, ["R3", "R5"])
     assert shown.draft_rows_missing(w["rules"], shown.visible_lines(shown.visible_between(seq, w["i"] + 1, w["end"]))) == []
     assert shown.draft_window(seq[:1] + seq[2:], "first_fail")["i"] == 0       # JSON 결과가 없으면 요약 줄 결과
+    # 같은 계획을 다시 돌렸지만 결과를 못 읽은 호출은 창을 끊지 않는다(그 뒤 보인 표까지 본다, sm4-1-b eval 42)
+    unread = bash("d2", DRAFT_CMD.replace("/w/", "$W/") + " | sed -n 80,200p", '    "id": "R5",\n    "status": "skipped",')
+    w = shown.draft_window([seq[0], unread, *seq[2:]], "first_fail")
+    assert (w["i"], w["end"]) == (0, 3)
+    other = bash("d2", DRAFT_CMD.replace("MOCK-1", "MOCK-2") + " | sed -n 80,200p", "")
+    assert shown.draft_window([seq[0], other, *seq[2:]], "first_fail")["end"] == 1     # 다른 계획이면 끊는다
 
 
 def test_draft_command_with_global_db_option():
