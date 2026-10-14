@@ -641,6 +641,14 @@ def test_relative_draft_from_work_dir_leaves_clone_untouched():
     assert git(ws.clone, "status", "--porcelain", "--untracked-files=all") == ""
     assert not (ws.clone / job).exists()
 
+    record.unlink()     # 작업 디렉토리에서 `--plan plan.json --draft draft`로 불러도 같다
+    proc = run("db_verify.py", ["rules", "--plan", "plan.json", "--draft", "draft"], root=ws.root, env=ws.env(),
+               cwd=ws.job_dir(job))
+    assert proc.returncode == 0, proc.stderr
+    assert record.is_file() and not (ws.job_dir(job) / "draft").exists()
+    assert git(ws.clone, "worktree", "list", "--porcelain").count("worktree ") == 1
+    assert git(ws.clone, "status", "--porcelain", "--untracked-files=all") == ""
+
 
 DATA_001_03 = """  - id: DATA-001-03
     status: active

@@ -208,7 +208,7 @@ def preflight(ctx: Ctx, branch: str, search: str | None, jira: str | None) -> di
 def stage(ctx: Ctx, plan_path: Path, wt: Path, branch: str, dry_run: bool) -> tuple[dict, int]:
     ctx.require_repo()
     job_dir, job = _job_of(wt, ctx)
-    wt = Path(wt).expanduser().resolve()
+    wt = job_dir / Path(wt).name        # `_job_of`와 같은 absolute 기준(resolve하면 symlink인 상위 경로에서 검사가 어긋난다)
     ctx.lock.touch(job)
     _check_branch(ctx, branch)
     tool = TOOL_PREFIX + branch

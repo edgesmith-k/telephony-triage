@@ -1057,6 +1057,27 @@ def test_stage_json_stays_full_on_success_and_default_stdout_is_summary():
     ws.db_pr("discard", ws.wt("MOCK-7002"))
 
 
+def test_stage_under_symlinked_work_dir_ancestor():
+    """work_dir 상위 경로가 symlink여도 stage가 wt를 resolve하지 않고 `_job_of`와 같은 absolute 기준으로 쓴다."""
+    import pytest
+    ws = Workspace()
+    link = ws.base.parent / (ws.base.name + "-link")
+    try:
+        link.symlink_to(ws.base, target_is_directory=True)
+    except OSError:
+        pytest.skip("symlink를 만들 수 없다")
+    ws.json("config.py", ["set", "work_dir", link / "work"])
+    job = "MOCK-7002"
+    ws.plan(job, "p7-analyze-new-cause.plan.json")
+    ws.put(job, "fixtures/cut-1.log", SIM_LOG)
+    ws.acquire(job)
+    wt = link / "work" / job / "wt"
+    out = ws.db_pr("stage", link / "work" / job / "plan.json", "--wt", wt, "--branch", f"issue/{job}", "--json")
+    assert out["result"] == "ok" and out["worktree"] == "created", out
+    ws.db_pr("discard", wt)
+    link.unlink()
+
+
 def test_stage_json_stays_full_on_failed_check_drift_and_needs_approval():
     ws = Workspace()
     job = "review-data-2026-10"
