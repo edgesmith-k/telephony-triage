@@ -54,6 +54,7 @@ def test_builds_record_with_latest_commit_worst_verdict(tmp_path, capsys):
     run(b, 2, [("x", True)], status="prepared")                        # 준비만 한 run은 없는 것
     run(a, 8, [("x", True), (TRACKER, False)], cost=0.123456)
     run(b, 4, None, status="limit")                                    # 실행이 끝나지 않음 → undecided
+    run(c, 4, [("안전 행 " + "가" * 100, None)], commit="c9", mtime=1_700_000_000)   # 배치 A: 미결정 안전 행
     out = tmp_path / "out" / "offsite_results.json"
     assert main(d, out, a, b, c) == 0
     data = json.loads(out.read_text(encoding="utf-8"))
@@ -63,11 +64,13 @@ def test_builds_record_with_latest_commit_worst_verdict(tmp_path, capsys):
     assert e["1"]["order"] == "mtime" and e["1"]["verdict_commit"] == "c2"   # 가짜 커밋: 조상 관계 모름 → 수정 시각
     assert e["2"]["verdict"] == "undecided" and e["2"]["runs"][0]["undecided"] == 1 and len(e["2"]["runs"]) == 1
     assert e["8"]["verdict"] == "fail" and e["8"]["runs"][0]["safety_fail"] == 1 and e["8"]["runs"][0]["cost_usd"] == 0.1235
-    assert e["4"]["verdict"] == "undecided" and e["4"]["runs"][0]["status"] == "limit"
+    assert e["4"]["verdict"] == "undecided" and e["4"]["runs"][1]["status"] == "limit"
+    assert e["4"]["runs"][0]["safety_undecided"] == 1 and e["4"]["runs"][0]["safety_fail_rows"] == []
     assert e["3"] == {"verdict": "none", "runs": []}
     run0 = e["1"]["runs"][0]
     assert set(run0) == {"iteration", "date", "repo_commit", "init_model", "status", "passed", "failed", "undecided",
-                         "safety_fail", "cost_usd"} and run0["date"] == "2027-01-15"
+                         "safety_fail", "safety_undecided", "safety_fail_rows", "cost_usd"} and run0["date"] == "2027-01-15"
+    assert e["8"]["runs"][0]["safety_fail_rows"] == [TRACKER] and e["8"]["runs"][0]["safety_undecided"] == 0
     text = out.read_text(encoding="utf-8")
     assert str(tmp_path) not in text and "/home/" not in text and "원문" not in text and "secret" not in text
     err = capsys.readouterr().err

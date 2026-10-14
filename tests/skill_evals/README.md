@@ -137,8 +137,10 @@ API 비용은 사용자 승인 뒤에만 쓴다. `site_step.py check S-2`가 보
 - `s2.offsite`: 대상 밖 eval의 사외 verdict pass·fail·undecided·none 수와 id, 채점기 커밋·사외 run 커밋·지금 HEAD(정보), 기록 `note`가 잠정이면 "잠정",
   모델이 다르면 "모델 다름(사외 X / 사내 Y)". **모두 pass일 때만 정보**이고, 기록이 없거나 fail·undecided·none이 하나라도 있으면 사용자 필요다
   (사외에서 다시 재거나 사내에서 실행하거나, 받아들일 사유를 `--waive s2.offsite="사유"`로 남긴다).
-- `s2.safety`: 안전 행 위반 0 — 사내에서 채점한 eval은 대상 밖이어도 보고, 사외로 갈음하는 eval은 사외 기록의 `verdict_commit` run들의
-  `safety_fail`도 위반으로 센다(면제할 수 없는 실패). 미채점은 사내 대상만 센다.
+- `s2.safety`: 안전 행 위반 0·미결정 0 — 사내에서 채점한 eval은 대상 밖이어도 보고(그 eval은 사외 기록 대신 사내 결과를 쓴다),
+  사외로 갈음하는 eval은 사외 기록의 `verdict_commit` run들의 `safety_fail`을 위반(면제할 수 없는 실패, 근거에 실패 행 문구 앞 80자),
+  `safety_undecided`를 미결정(사용자 필요)으로 센다. 풀려면 사외에서 다시 재고 기록을 다시 만들거나 그 eval을 사내에서 실행·채점한다.
+  미채점은 사내 대상만 센다. `s2.offsite`도 사내에서 채점한 eval은 "사내 채점으로 대체"로 따로 센다.
 - `s2.manual`: 59·60 수동 채점(passed null은 통과가 아니다).
 
 사내 토큰 기준선은 `tests/site/token_baseline.json`(SITE_PATHS)이고, 있으면 `--token-budget`의 PATH 기본값이 된다. 쓰는 명령은 `site_step.py evals --baseline`이 낸다
@@ -152,7 +154,7 @@ API 비용은 사용자 승인 뒤에만 쓴다. `site_step.py check S-2`가 보
 python3 tests/skill_evals/offsite.py workspace/<iteration>... --out tests/skill_evals/offsite_results.json [--note 메모]
 ```
 
-- run마다 `{iteration(디렉토리 이름), date, repo_commit, init_model, status, passed, failed, undecided(토큰 상한 행 제외), safety_fail, cost_usd}`만 남긴다.
+- run마다 `{iteration(디렉토리 이름), date, repo_commit, init_model, status, passed, failed, undecided(토큰 상한 행 제외), safety_fail, safety_undecided, safety_fail_rows(실패한 안전 행의 채점 항목 문구 앞 80자), cost_usd}`만 남긴다.
   `date`는 실행 시각이 아니라 `execution.json` **파일 수정일**(UTC)이다(`execution.json`에 시각 필드가 없다). `init_model`이 없으면 `execution.json` `model`. transcript·출력·절대 경로는 넣지 않는다.
 - run 순서는 `repo_commit`의 git 조상 관계(`git merge-base --is-ancestor`)로 정한다. 커밋이 없거나 모르는 커밋이거나 서로 조상이 아닌 커밋이 섞이면
   파일 수정 시각으로 대신하고 eval의 `order`를 `mtime`으로 남긴다(경고). 같은 커밋 안에서는 수정 시각·iteration 순.

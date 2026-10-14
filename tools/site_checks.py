@@ -564,7 +564,8 @@ def s2_offsite(ctx: Ctx) -> dict:
                    ask="사외 결과 기록(offsite_results.json)을 반입본에 넣어 주세요(사외 PC: `python3 tests/skill_evals/offsite.py "
                        "<iteration>... --out tests/skill_evals/offsite_results.json`)")
     req = set(required_ids(ctx.root, st))
-    rest = sorted(i for i in st if i not in req)
+    in_house = sorted(i for i in st if i not in req and st[i]["status"] == "graded")   # 사내 채점이 사외 기록을 대신한다
+    rest = _offsite_covered(ctx.root, st, req)
     verdict = {i: (off["evals"].get(str(i)) or {}).get("verdict") or "none" for i in rest}
     groups = {v: [i for i in rest if verdict[i] == v] for v in ("pass", "fail", "undecided", "none")}
     differs, off_m, site_m = model_differs(ctx.root, st)
@@ -575,15 +576,22 @@ def s2_offsite(ctx: Ctx) -> dict:
         (f"사내 모델 미정(사외 {off_m}) · " if differs is None else "") + \
         f"사외 {off.get('model')}({off.get('generated')}) 갈음 {len(rest)}개: "
     body = " · ".join(f"{k} {len(v)}" + (f"({_ids(v, 15)})" if v and k != "pass" else "") for k, v in groups.items())
+    body += f" · 사내 채점으로 대체 {len(in_house)}" + (f"({_ids(in_house, 15)})" if in_house else "")
     tail = (f" · 채점기 {_short(off.get('grader_commit'))} · 사외 run 커밋 {' '.join(commits) or '없음'} · "
             f"지금 HEAD {_short(_head(ctx.root))}")
     cmd = f"cat {path}"
     open_ = groups["fail"] + groups["undecided"] + groups["none"]
     if open_:
         return res("s2.offsite", "needs-user", head + body + tail, cmd,
-                   ask=f"사외 결과가 pass가 아닌 eval {_ids(sorted(open_))}: 사외에서 다시 재거나(실패·미결정 원인 확인, "
-                       "수동 행 채점) 사내에서 실행하거나, 받아들일 사유를 `--waive s2.offsite=\"사유\"`로 남겨 주세요")
+                   ask=f"사외 결과가 pass가 아닌 eval {_ids(sorted(open_))}: 사외에서 다시 재고(실패·미결정 원인 확인, 수동 행 채점) "
+                       "`offsite.py`로 offsite_results.json을 다시 만들거나, 그 eval을 사내에서 실행·채점하거나(사내 채점이 사외 기록을 "
+                       "대신한다), 받아들일 사유를 `--waive s2.offsite=\"사유\"`로 남겨 주세요")
     return res("s2.offsite", "info", head + body + tail, cmd)
+
+
+def _offsite_covered(root: Path, st: dict[int, dict], req: set[int]) -> list[int]:
+    """사외 기록으로 갈음하는 eval: 사내 대상이 아니고 사내에서 채점하지도 않은 것(사내 채점이 있으면 그것이 대신한다)."""
+    return sorted(i for i in st if i not in req and st[i]["status"] != "graded")
 
 
 def _ids(ids: list[int], n: int = 25) -> str:
@@ -597,22 +605,33 @@ def s2_safety(ctx: Ctx) -> dict:
     batches = {e["id"]: e.get("batch") for e in eval_entries(ctx.root)}
     bad = {i: len(s["safety_fail"]) for i, s in st.items() if s.get("safety_fail")}   # 사내에서 채점한 것은 대상 밖이어도 본다
     off = load_offsite(ctx.root) or {"evals": {}}
-    off_bad = {i: n for i in st if i not in req       # 사외로 갈음하는 eval: verdict 커밋 run의 안전 위반도 위반이다
-               if (n := sum(r.get("safety_fail") or 0 for r in _offsite_latest(off["evals"].get(str(i)))))}
+    covered = _offsite_covered(ctx.root, st, req)      # 사내 채점이 있는 eval은 사외 기록을 보지 않는다(사내 결과가 대신한다)
+    latest = {i: _offsite_latest(off["evals"].get(str(i))) for i in covered}
+    off_bad = {i: n for i in covered if (n := sum(r.get("safety_fail") or 0 for r in latest[i]))}   # verdict 커밋 run의 위반
+    off_null = {i: n for i in covered if (n := sum(r.get("safety_undecided") or 0 for r in latest[i]))}
     null = {i: s["safety_null"] for i, s in st.items() if s.get("safety_null")}
     safety_ids = [i for i in st if grade.is_safety_eval(i, batches[i])]
     site_safety = [i for i in safety_ids if i in req]
-    offsite = [i for i in safety_ids if i not in req]
+    offsite = [i for i in safety_ids if i in covered]
     open_ = [i for i in site_safety if st[i]["status"] != "graded"]
     note = f" · 사외 결과로 갈음한 안전 eval {len(offsite)}" + (f"({_ids(offsite, 15)}, s2.offsite)" if offsite else "")
     cmd = "python3 tools/site_step.py check S-2 --json"
     if bad or off_bad:
+        rows = {i: sorted({t[:80] for r in latest[i] for t in r.get("safety_fail_rows") or []}) for i in off_bad}
         parts = ([f"사내 채점 {sum(bad.values())}행: eval {_ids(sorted(bad))}"] if bad else []) + \
-            ([f"사외 기록 {sum(off_bad.values())}행: eval {_ids(sorted(off_bad))}"] if off_bad else [])
-        return res("s2.safety", "fail", "안전 위반 " + " · ".join(parts), cmd)
-    if null:
-        return res("s2.safety", "needs-user", f"안전 위반 0(결정분) · 미결정 안전 행 {sum(map(len, null.values()))}: "
-                   f"eval {_ids(sorted(null))}", cmd, ask=f"eval {_ids(sorted(null))}의 미결정 안전 행을 transcript로 채점해 주세요")
+            ([f"사외 기록 {sum(off_bad.values())}행: eval {_ids(sorted(off_bad))}"] if off_bad else []) + \
+            [f"eval {i} 사외 실패 행: " + (" / ".join(f"「{t}」" for t in rows[i]) or "문구 없음(옛 기록)") for i in sorted(off_bad)]
+        return res("s2.safety", "fail", "안전 위반 " + " · ".join(parts), cmd,
+                   ask=("사외 기록의 안전 위반은 면제할 수 없다: 사외에서 다시 재고 `offsite.py`로 offsite_results.json을 다시 만들거나, "
+                        f"그 eval({_ids(sorted(off_bad))})을 사내에서 실행·채점한다(사내 채점이 사외 기록을 대신한다)") if off_bad else None)
+    if null or off_null:
+        parts = ([f"사내 {sum(map(len, null.values()))}행: eval {_ids(sorted(null))}"] if null else []) + \
+            ([f"사외 기록 {sum(off_null.values())}행: eval {_ids(sorted(off_null))}"] if off_null else [])
+        return res("s2.safety", "needs-user", "안전 위반 0(결정분) · 미결정 안전 행 " + " · ".join(parts), cmd,
+                   ask=(f"eval {_ids(sorted(null))}의 미결정 안전 행을 transcript로 채점해 주세요" if null else "")
+                   + (" / " if null and off_null else "")
+                   + (f"사외 기록의 미결정 안전 행(eval {_ids(sorted(off_null))})은 사외에서 수동 채점 뒤 offsite_results.json을 다시 "
+                      "만들거나 그 eval을 사내에서 실행·채점한다" if off_null else ""))
     if open_:
         return res("s2.safety", "needs-user", f"안전 위반 0(채점분) · 사내 대상 안전 eval 미채점 {len(open_)}: {_ids(open_)}"
                    + note, cmd, ask="사내 대상 안전 eval을 먼저 실행·채점한다(`site_step.py evals`)")
@@ -620,7 +639,7 @@ def s2_safety(ctx: Ctx) -> dict:
     if unknown:
         return res("s2.safety", "needs-user", f"안전 위반 0 · {unknown}" + note, cmd,
                    ask="사내 eval 모델을 알려 주세요(`propose --set eval_model=<ID>` → --apply)")
-    return res("s2.safety", "pass", f"사내 대상 안전 eval {len(site_safety)}개·트래커 쓰기 행 위반 0(사외 기록 포함), 미결정 0" + note, cmd)
+    return res("s2.safety", "pass", f"사내 대상 안전 eval {len(site_safety)}개·트래커 쓰기 행 위반 0·미결정 0(사외 기록 포함)" + note, cmd)
 
 
 def s2_manual(ctx: Ctx) -> dict:
