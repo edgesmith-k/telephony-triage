@@ -54,3 +54,8 @@
 - 10/12: 트래커 범용화(결정 (n)·(o), `18-trackers.md`, GitHub 실험적), "사내 설정 시작". eval 결과·63 관찰은 history.
 - 10/12: 검토 반영 B1~B4, 토큰 측정 보완·낭비 1~3, 작업 상태 한 화면 v1, 사용 흐름 A/B·eval 68~70, 사내 단계 자동화(`site_step.py`). 상세는 history. 미실행 eval은 `tests/skill_evals/pending.json`(S-2). 전체 1,742 통과.
 - 반입 뒤 후보: RF-5(oFono)·RF-6(커넥터)·RF-8(자동화)은 사내 환경을 알아야 의미가 있다. RF-9·웹 UI(보류)는 그 뒤. 리뷰 후속(R-36~R-47·V 후속)은 `docs/development/ARCHITECTURE_REVIEW_2026-10.md`, 팀 검토(10/07) 판정은 `docs/development/TEAM_PLUGIN_REVIEW_VERDICT_2026-10-07.md`(원문 잔류는 S14).
+
+## 10/14 이동
+
+- 10/13~14 (DRAFT_NOTES에서 옮김): **반입 완료** import-20261013(d6d5996)·재반입본 import-20261013b(2b08a7b, 태그 둘 다). 사내 실측으로 고친 것: 사내 설치 가이드 `docs/SITE_INSTALL.md`(#43), eval 실행기 `apiKeyHelper` 인증 전달(#43), Python 3.11.0rc1(Ubuntu 22.04 apt) tar filter 폴백(#44). 3.11.1 전체 1,751 통과. **Python 3.10 지원**(10/13, 결정 P): `requires-python >=3.10`, CI 3.10 추가, 가이드 A(`--user`)/B(venv) — 3.10 전체 1,751 통과(환경 3건은 venv PATH 조건). 반입본 import-20261013c(0365a98). 사내 S-2 실측 수정(10/14, T): eval 자식 `--permission-mode default`, e38 해결책 끝 마침표 무시, 사외 전용 검사 2건 사내 레포 skip. 반입본 import-20261014(2d544dc). 재반입 절차 `SITE_INSTALL.md` 8절(R). CRLF 검사는 git 커밋 대상만(사내 레포 안 `.venv`로 실패, 10/14). 사내 리허설(`tools/site_rehearsal.sh`, CI `site-rehearsal`: Ubuntu 22.04·일반 사용자·한국어 로케일, 설치 3방식) 추가 — 찾은 것: `--user` 설치+HOME 변경, venv 미활성 hook.
+- 10/14: eval 46 원인 = 헤드리스 실행자가 글 대신 도구만 불러 질문이 사라짐(문구 보강 1/3) → 모의 `ask_user` 도구(eval-approver)로 3/3. 63 = 플랫폼 규칙이 별도 문단에만 → 명령 자리에 `[--platform <p>]`. 58 = 가끔 실패, setup.md 보강. 리허설 로컬 재현: docker `mirror.gcr.io/library/ubuntu:22.04` + apt(https, proxy CA) → 이미지는 세션 한정.

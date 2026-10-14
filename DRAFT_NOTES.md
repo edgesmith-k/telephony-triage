@@ -14,11 +14,12 @@
 - 테스트는 `tools/related_tests.py --run`(관련만). 전체는 도구가 full이라 할 때·반입 직전·요청 시.
 - 진행 중 판단은 Fable 결정 에이전트에게 묻는다(10/06 사용자 지정). 원칙상 사용자 승인 대상(이슈 DB push, main 병합·태그 등 사용자가 지시하지 않은 외부 동작)은 사용자에게.
 
-## 진행 상태 (10/13)
+## 진행 상태 (10/14)
 
 - 모드: **사외 초안**. Phase **D0, 1~13** 완료. 반입 전 보강 트랙(S1~S6·I1~I5·X·3C~3F)과 개선 트랙 **W0~W12**, 반입 전 리뷰(10/07) 수정 트랙 **V1~V7·V 끝**, 실제 로그 반영 트랙 **L1~L3** 완료, 반입 전 3차 검토(A1~A4·B1·B2·문서) 반영(10/08), 설명 정리(PR #31). main 병합 PR #8~#41.
 - 10/11~12: Jira 결과 게시(#37), 플랫폼 분리(m), 트래커 범용화(n·o), 사내 단계 자동화 등 — 줄별 요약은 `docs/history/draft-notes-2026-10.md` "10/13 이동". 미실행 eval `tests/skill_evals/pending.json`(S-2).
-- 10/13: **반입 완료** import-20261013(d6d5996)·재반입본 import-20261013b(2b08a7b, 태그 둘 다). 사내 실측으로 고친 것: 사내 설치 가이드 `docs/SITE_INSTALL.md`(#43), eval 실행기 `apiKeyHelper` 인증 전달(#43), Python 3.11.0rc1(Ubuntu 22.04 apt) tar filter 폴백(#44). 3.11.1 전체 1,751 통과. **Python 3.10 지원**(10/13, 결정 P): `requires-python >=3.10`, CI 3.10 추가, 가이드 A(`--user`)/B(venv) — 3.10 전체 1,751 통과(환경 3건은 venv PATH 조건). 반입본 import-20261013c(0365a98). 사내 S-2 실측 수정(10/14, T): eval 자식 `--permission-mode default`, e38 해결책 끝 마침표 무시, 사외 전용 검사 2건 사내 레포 skip. 반입본 import-20261014(2d544dc). 재반입 절차 `SITE_INSTALL.md` 8절(R). CRLF 검사는 git 커밋 대상만(사내 레포 안 `.venv`로 실패, 10/14). 사내 리허설(`tools/site_rehearsal.sh`, CI `site-rehearsal`: Ubuntu 22.04·일반 사용자·한국어 로케일, 설치 3방식) 추가 — 찾은 것: `--user` 설치+HOME 변경, venv 미활성 hook.
+- 10/13~14: 반입 import-20261013·13b·13c·14·**14c**(f4d98d5, 최신·사내 전달). 사내 실측 대응 PR #43~#49 (설치 가이드·재반입 8절, Python 3.10 지원, eval 권한·인증, 사내 리허설 CI `site-rehearsal`) — 줄별은 history "10/14 이동".
+- 10/14: **PR #50 머지**(eval 46·63·58 대응, 질문은 모의 `ask_user`) · eval 안정성 점검 실행 중(아래 E).
 - 사내 확인 항목: `TODO(SITE)` **104곳** — `python3 tools/list_site_todos.py`. `REVIEW-OPEN.md` 0건.
 - 사내 시작: **"사내 설정 시작"** → `python3 tools/site_step.py`가 `SITE_PROFILE.md`(트래커 jira)를 만들고 S-1~S-7을 한 단계씩 낸다(결정 (o)).
 - 안내서(사람용 HTML): `docs/telephony-triage-guide.html` (공유본 https://claude.ai/artifact/1jov1Et4dQUMauFr6aoxWG). 역할별 문서 19개: `docs/materials/00-index.html`
@@ -27,6 +28,9 @@
 
 | ☐ | 항목 | 메모 |
 |---|---|---|
+| ☐ E | **eval 안정성 점검**(10/14 승인) | rerun_first 15개 × 3회(Sonnet, 사내와 같은 모델). 결과 `tests/skill_evals/workspace/stab-{1,2,3}`. 채점 `python3 tests/skill_evals/grade.py tests/skill_evals/workspace/stab-N --eval 3 6 18 31 32 35 38 45 51 53 54 58 68 69 70`. 1회라도 실패면 원인 수정·재검증(46·63은 #50에서 3/3) |
+| ☐ D | **사내 S-2 축소** — 사용자 결정 대기 | 안: 안전 eval 14(8,9,13,17,18,24,29,33,37,39,59,60,61,67)+rerun_first+대표 흐름 ≈30개만 사내, 나머지는 사외 Sonnet 결과로 갈음. 바꿀 곳 `site_checks.py` s2_graded·`site_step.py evals` |
+| ☐ F | 새 반입 묶음(E 반영 뒤) | `tools/make_bundle.py --label import-<날짜>`. 사내 적용은 `SITE_INSTALL.md` 8절 |
 | ☐ G | **범용판 별도 레포** (10/07 사용자 지시) — **보류(10/07 사용자)** | 재개 시점은 사용자가 정한다. **로컬 새 레포**(원격 없음), 범위 = 도메인 중립 코어 + 최소 예제 팩 1개. 시작은 결합 지점 조사(`plugin/scripts` 약 30파일) → 분리 설계 확인 → 이전. 이 레포는 바꾸지 않는다 |
 
 ## 사내로 넘긴 것
