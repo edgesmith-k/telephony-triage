@@ -181,6 +181,38 @@ def test_draft_window_first_fail_prefers_json_rerun():
     assert (w["i"], w["end"]) == (0, 3)
     other = bash("d2", DRAFT_CMD.replace("MOCK-1", "MOCK-2") + " | sed -n 80,200p", "")
     assert shown.draft_window([seq[0], other, *seq[2:]], "first_fail")["end"] == 1     # 다른 계획이면 끊는다
+    # hook 표시 의무도 같은 창 끝을 쓴다
+    (ob,) = [o for o in shown.obligations([seq[0], unread, *seq[2:]]) if o.kind == "draft"]
+    assert (ob.start, ob.end, ob.close_kind) == (0, 3, "stage")
+
+
+def test_draft_window_does_not_skip_rerun_that_may_differ():
+    """못 읽은 재실행이라도 결과가 다를 수 있으면(fail 글, 그사이 계획 수정) 창을 끊는다."""
+    passing = [dict(r, status="pass") for r in RULES]
+    table = "\n".join(f"| {r['id']} | 통과 | {r['reason']} |" for r in passing)
+    first = bash("d1", DRAFT_CMD, json.dumps({"rules": passing}, ensure_ascii=False, indent=1))
+    ask, stage = tool("q", ASK, {"question": table}), bash("s", STAGE_CMD, SCREEN)
+    fail_rows = bash("d2", DRAFT_CMD + " | sed -n 2,20p", '  {\n   "id": "R3",\n   "status": "fail",')
+    assert shown.draft_window([first, fail_rows, ask, stage])["end"] == 1
+    silent = bash("d2", DRAFT_CMD + " | sed -n 2,4p", '  {\n   "id": "R1",')
+    assert shown.draft_window([first, silent, ask, stage])["end"] == 3
+    edit = tool("e", "Edit", {"file_path": "/w/MOCK-1/plan.json"}, "ok")
+    assert shown.draft_window([first, edit, silent, ask, stage])["end"] == 2           # 그사이 계획을 고쳤다
+    edit_in_cmd = bash("d2", "python3 - <<'E'\nopen('/w/MOCK-1/plan.json','w')\nE\n" + DRAFT_CMD + " | sed -n 2,4p",
+                       '  {\n   "id": "R1",')
+    assert shown.draft_window([first, edit_in_cmd, ask, stage])["end"] == 1            # 같은 명령 안에서 고쳤다
+
+
+def test_draft_window_first_fail_keeps_plan_and_rule_coverage():
+    """요약 줄 fail 결과를 다른 계획의 JSON 결과나 일부 행만 고른 출력으로 바꾸지 않는다."""
+    text_fail = bash("d1", DRAFT_CMD + " | head -3", "R3 fail: C=1 — R4 fixture\nR5 skipped 해당 없음")
+    other = bash("d2", DRAFT_CMD.replace("MOCK-1", "MOCK-2"), json.dumps({"rules": RULES}, ensure_ascii=False))
+    assert shown.draft_window([text_fail, other], "first_fail")["i"] == 0
+    subset = bash("d2", DRAFT_CMD + " | jq '.rules[] | select(.status==\"fail\")'",
+                  json.dumps(RULES[1], ensure_ascii=False, indent=1))
+    assert shown.draft_window([text_fail, subset], "first_fail")["i"] == 0             # R5를 덮지 않는다
+    full = bash("d2", DRAFT_CMD, json.dumps({"rules": RULES}, ensure_ascii=False))
+    assert shown.draft_window([text_fail, full], "first_fail")["i"] == 1
 
 
 def test_draft_command_with_global_db_option():

@@ -602,11 +602,47 @@ def plan_tag(e) -> str:
     return "/".join([p for p in parts if p not in ("", ".")][-2:])
 
 
+def _touches(e, tag: str, own: bool) -> bool:
+    """도구 호출 e가 계획 파일(끝 두 마디 tag)을 건드릴 수 있는가: Write·Edit 대상이거나 Bash 명령이 그 경로를 말한다.
+    own(다시 돌린 draft 호출 자신)이면 `--plan` 인자로 쓴 것은 뺀다. 읽기만 해도 건드린 것으로 본다(모르면 끊는 쪽)."""
+    if e.get("kind") != "tool" or not tag:
+        return False
+    inp = e.get("input") if isinstance(e.get("input"), dict) else {}
+    if e.get("name") in ("Write", "Edit", "MultiEdit", "NotebookEdit"):
+        return str(inp.get("file_path", "")).replace("\\", "/").endswith(tag)
+    if e.get("name") != "Bash":
+        return False
+    cmd = str(inp.get("command", "")).replace("\\", "/")
+    allowed = len(re.findall(r"--plan[= ]\s*[\"']?\S*" + re.escape(tag), cmd)) if own else 0
+    return cmd.count(tag) > allowed
+
+
+def same_plan_rerun(seq, i: int, c: int) -> bool:
+    """draft 호출 c가 i와 같은 계획(plan_tag)을 고치지 않고 다시 돌린 것인가: i 뒤 ~ c(포함)에 그 계획을 건드린 호출이 없다."""
+    tag = plan_tag(seq[i])
+    return bool(tag) and plan_tag(seq[c]) == tag and not any(_touches(seq[k], tag, k == c) for k in range(i + 1, c + 1))
+
+
+_NOT_PASS = re.compile(r"\b(?:fail|needs-approval)\b", re.IGNORECASE)
+
+
+def draft_end(seq, i: int, calls, stage) -> int:
+    """draft 결과 i의 표시 창 끝(배타): 다음 draft 호출·stage·기록 끝. 채점기(`draft_window`)와 hook(`obligations`)이 같이 쓴다.
+    같은 계획을 고치지 않고 다시 돌렸는데 결과를 못 읽었고 출력에 fail·needs-approval 글이 없는 호출(`| sed -n 80,200p` 등)은
+    창을 끊지 않는다: 그 뒤에 보인 표는 읽은 결과의 것으로 본다 (sm4-1-b eval 42). 다른 결과일 수 있으면 끊는다."""
+    for c in sorted([c for c in calls if c > i] + [s for s in stage if s > i]):
+        text = tool_text(seq[c])
+        if (c in stage or draft_doc(text) is not None or _NOT_PASS.search(text)
+                or not same_plan_rerun(seq, i, c)):
+            return c
+    return len(seq)
+
+
 def draft_window(seq, pick: str = "last") -> dict | None:
     """초안 검증표 창: 고른 draft 호출 ~ 다음 draft 호출·stage·기록 끝. pick=last: 첫 stage 전 마지막으로 읽을 수 있는
-    결과. pick=first_fail: fail 행이 든 첫 결과(stage 전 우선, JSON으로 읽은 결과 우선, 없으면 last와 같다). 잘린 출력에서
-    `R4 fail: …` 요약 줄만 읽은 결과보다 같은 계획을 다시 돌려 JSON으로 읽은 결과를 본다(h1-b eval 42: `| head -60`).
-    창 끝은 다음 draft 호출·stage지만, 같은 계획을 다시 돌려 결과를 못 읽은 호출은 건너뛴다.
+    결과. pick=first_fail: fail 행이 든 첫 결과(stage 전 우선, 없으면 last와 같다). 그것이 잘린 출력의 `R4 fail: …` 요약
+    줄만 읽은 결과면 계획을 고치지 않고 다시 돌려 JSON으로 읽은 fail 결과(그 규칙을 모두 덮는 것)를 본다(h1-b eval 42:
+    `| head -60`). 창 끝은 `draft_end`.
     → {i, end, rules, doc, calls, parsed, first_stage}. 호출이 없으면 None. 결과를 하나도 못 읽으면 rules·doc이 None."""
     calls = bash_index(seq, DRAFT)
     if not calls:
@@ -622,13 +658,16 @@ def draft_window(seq, pick: str = "last") -> dict | None:
     if pick == "first_fail":
         failed = [p for p in parsed if any(isinstance(r, dict) and r.get("status") == "fail" for r in p[1]["rules"])]
         failed = [p for p in failed if p[0] < first_stage] or failed
-        failed = [p for p in failed if draft_json(tool_text(seq[p[0]])) is not None] or failed
         if failed:
             i, doc = failed[0]
-    # 같은 계획을 다시 돌렸는데 결과를 못 읽은 호출(`| sed -n 80,200p` 등)은 창을 끊지 않는다: 그 뒤에 보인 표는 읽은 결과의
-    # 것으로 본다 (sm4-1-b eval 42). 읽을 수 있는 결과·다른 계획·stage는 그대로 끊는다
-    reread = {c for c in calls if c > i and draft_doc(tool_text(seq[c])) is None and plan_tag(seq[c]) == plan_tag(seq[i])}
-    end = min([c for c in calls if c > i and c not in reread] + [s for s in stage if s > i] + [len(seq)])
+            # 요약 줄만 읽은 결과면, 계획을 고치지 않고 같은 계획을 다시 돌려 JSON으로 읽은 결과가 그 규칙을 모두 덮을 때만
+            # 그것으로 바꾼다(다른 계획의 결과나 일부 행만 고른 출력으로 이 결과의 의무를 버리지 않는다)
+            ids = {r.get("id") for r in doc["rules"] if isinstance(r, dict)}
+            if draft_json(tool_text(seq[i])) is None:
+                i, doc = next(((c, d) for c, d in failed if c > i and draft_json(tool_text(seq[c])) is not None
+                               and same_plan_rerun(seq, i, c)
+                               and ids <= {r.get("id") for r in d["rules"] if isinstance(r, dict)}), (i, doc))
+    end = draft_end(seq, i, calls, stage)
     return {"i": i, "end": end, "doc": doc, "rules": [r for r in doc["rules"] if isinstance(r, dict) and r.get("id")],
             "calls": calls, "parsed": parsed, "first_stage": first_stage}
 
@@ -720,8 +759,7 @@ def obligations(seq, read_file=None, job_dir=None, *, script_only: bool = True) 
         rules = draft_rules(tool_text(seq[i]))
         if not rules:
             continue
-        nxt = [c for c in calls if c > i] + [s for s in stage if s > i]
-        end = min(nxt + [len(seq)])
+        end = draft_end(seq, i, calls, stage)
         close = "end" if end >= len(seq) else ("draft" if end in calls else "stage")
         block = "\n".join(f"| {r['id']} | {r.get('status')} | {norm_line(str(r.get('reason') or ''))} |" for r in rules)
         # 키는 계획 경로 인자와 결과 내용(규칙·상태·사유): 같은 작업에서 같은 결과로 다시 돌려도 같은 의무라 막는 횟수 한도를
