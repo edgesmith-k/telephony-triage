@@ -459,3 +459,25 @@ def test_pre_rename_record_folder_and_config_keys_are_errors_not_silently_ignore
     assert any(e["code"] == "legacy-dir" and "data/DATA-001-no-setup-data-call/jira" in e["files"][0] for e in errors)
     assert any(e["code"] == "config" and "readme.jira_inline_max" in e["message"] and "readme.issue_inline_max" in e["message"]
                for e in errors)
+
+
+def test_type_title_form_error_only_for_new_type():
+    """유형 제목은 증상 형태(명사형 종결). 새 유형이면 오류, 기존 유형은 경고만 — 기존 제목 때문에 기록이 막히지 않게 (eval 3)."""
+    import shutil
+
+    from common import typedoc
+
+    assert all(typedoc.symptom_title(t) for t in ("SIM이 인식되지 않음", "데이터 연결이 사용자 조작으로 끊김", "검증에 실패함"))
+    assert not any(typedoc.symptom_title(t) for t in ("DNS 검증 실패", "SIM 미준비", "", "VoLTE 문제"))
+    repo = git_db()
+    edit(repo / D / "type.md", "title: SETUP_DATA_CALL이 발생하지 않음", "title: SETUP_DATA_CALL 미발생")
+    new_dir = repo / "data" / "DATA-009-dns-validation"
+    shutil.copytree(repo / D, new_dir)
+    doc = new_dir / "type.md"
+    doc.write_text(doc.read_text(encoding="utf-8").replace("DATA-001", "DATA-009")
+                   .replace("title: SETUP_DATA_CALL 미발생", "title: 인터넷 검증 실패"), encoding="utf-8")
+    changed = _lint(repo, "--changed", "main", expect=1)
+    form = [(f["file"], f in changed["errors"]) for f in changed["errors"] + changed["warnings"] if f["code"] == "title-form"]
+    assert (f"{D}/type.md", False) in form and ("data/DATA-009-dns-validation/type.md", True) in form, form
+    every = _lint(repo, "--all")                                             # base 없음: 경고만
+    assert [f for f in every["errors"] if f["code"] == "title-form"] == []

@@ -32,6 +32,7 @@ SITE_BASELINE = HERE.parents[1] / "tests" / "site" / "token_baseline.json"   # �
 DEFAULT_TOKEN_MARGIN = 1.3      # W0 실측으로 정함(README "토큰 기록")
 TOKEN_BUDGET_TEXT = "토큰 총합 ≤ 상한(기준선 × 여유율)"   # 텍스트에 숫자를 넣지 않는다: 수동 채점 보존 키가 흔들리지 않게
 sys.path.insert(0, str(HERE.parents[1] / "plugin" / "scripts"))   # guard 규칙 10의 통독 판정을 지표가 그대로 쓴다
+from common import typedoc  # noqa: E402  (유형 제목 증상 형태: db_lint `title-form`과 같은 기준)
 
 # 트래커 결과 게시 eval(배치 J·G): 공통 행 "쓰기 도구를 부르지 않았다" 대신 "승인한 코멘트 1건뿐"을 본다
 # (eval id → (트래커, 작업 키, 모의 코멘트 도구))
@@ -800,7 +801,7 @@ def checks(eid: int, ctx: Ctx) -> list:
         def title():
             n = op_list("MOCK-9003", "new-type")
             t = ((n[0].get("type") or {}).get("title") or "") if n else ""
-            return t.rstrip().endswith(("않음", "됨", "안 됨")), t
+            return typedoc.symptom_title(t), t         # db_lint `title-form`과 같은 기준(명사형 종결)
         return [in_cmd("similar"), nt, af, title, in_cmd("--draft"), none_remote_lock]
     if eid == 4:
         def pr():

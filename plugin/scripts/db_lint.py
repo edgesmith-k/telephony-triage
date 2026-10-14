@@ -31,6 +31,7 @@
   없는 카테고리의 `ext.*`
 - `verified-without-evidence`·`evidence-missing` 오류: 근거 없는 verified, 없는 Jira 키·fixture 경로
 - `new-cause-fixed` 오류: base에 없던 원인이 `fixed` (`--changed`·`--staged`에서만)
+- `title-form`: 유형 제목이 증상 형태(명사형 종결: "~하지 않음"·"~됨"·"끊김")가 아님 — base에 없던 새 유형은 오류(`--changed`·`--staged`), 그 밖은 경고
 - `fixed-without-verification` 오류: `fixed`인데 `fix.verification.result: passed`가 없음 (검증 없는 fixed 금지)
 - `fixed-without-trace` 오류: 코드·설정 수정 유형(`framework-bug`·`vendor-ril`·`modem`·`carrier-config`)이 `fixed`인데
   `scenario_signatures`·`recovery_signatures`가 모두 없음 (05-verification.md §5.12 (2) 전제)
@@ -65,7 +66,7 @@ sys.path.insert(0, str(SCRIPTS))
 import parser_backends  # noqa: E402
 import platforms  # noqa: E402
 import trackers  # noqa: E402
-from common import compat, dbpath, gitscope, issuedb, masking, parser_rules, site_defaults, yamlio  # noqa: E402
+from common import compat, dbpath, gitscope, issuedb, masking, parser_rules, site_defaults, typedoc, yamlio  # noqa: E402
 from common.exitcodes import CHECK_FAILED, OK, USAGE  # noqa: E402
 from common.fixtures import CAUSE_ID_RE, TYPE_ID_RE, parse_name  # noqa: E402
 from common.signatures import SignatureError, compile_signature  # noqa: E402
@@ -542,6 +543,11 @@ class Linter:
             self.err("symptom-missing", type_md, f"{type_id}: 증상 시그니처(symptom_signatures)가 없습니다.")
         self._merged(type_md, data.get("status"), type_id)
         self._title(type_md, type_id, data.get("title"), TYPE_TITLE_MAX)
+        if not typedoc.symptom_title(data.get("title")):
+            # 새 유형만 오류: 기존 유형 제목 때문에 그 유형에 기록하는 작업이 막히지 않게 한다
+            new = self.base_causes is not None and type_id not in self.base_causes
+            (self.err if new else self.warn)("title-form", type_md,
+                                             f"{type_id} 제목은 증상 형태로 끝낸다(\"~하지 않음\"·\"~됨\"·\"끊김\"): {data.get('title')}")
         body = type_md.read_text(encoding="utf-8").split("\n---\n", 1)
         if len(body) == 2:
             for hit in masking.new_masker().find(body[1]):
@@ -853,7 +859,7 @@ def _base_causes(root: Path) -> set[str] | None:
         db = issuedb.load(root)
     except issuedb.IssueDbError:
         return None
-    return {c.id for t in db.types for c in t.causes}
+    return {t.id for t in db.types} | {c.id for t in db.types for c in t.causes}     # 유형 ID도(새 유형 판별)
 
 
 def run(args, defaults: dict) -> tuple[dict, int]:
