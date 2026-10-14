@@ -106,7 +106,7 @@ Android 버전과 브랜치마다 소스 트리가 다르므로 **분석할 때�
 
 1. 대상 Android 버전을 정한다. 순서: Jira의 Android 버전/SW → bugreport `build.json` 또는 logcat의 빌드 정보(fingerprint 등) → 둘 다 없으면 사용자에게 묻는다.
 2. `--code`가 주어졌으면 그것을 쓴다. 프로필 이름이면 해당 `roots`를, 경로면 `aosp` 루트로 간주한다.
-3. **자동 선택**: `--code`도 답도 없고 `code.auto_select`(사용자 config > site-defaults > 기본 `true`, `02-config.md §4`)가 참이며, 대상 버전이 일치하는 `code_profiles` 프로필이 **정확히 1개**(`code_roots suggest`에서 `kind: profile`이고 `match`, 현재 "추천" 기준과 같다)면 그 프로필을 `--code <프로필>`처럼 쓰고 4번 검증으로 간다. 일치가 0개·2개 이상이거나 `auto_select: false`이거나 Jira 버전이 없으면(대체 출처는 쓰지 않는다) 4번처럼 묻는다. 최근 사용 경로만 일치하면 자동 선택하지 않는다. 알림은 의무다: `report.md` 코드 줄에 "(자동 선택: code.auto_select)", 출력 `code.auto: true`, 스킬이 한 줄로 알리고 `--code`로 바꿀 수 있다고 안내한다. 자동 선택한 경로가 무효면 전체 선택지(`code`)로 묻고 상태에는 기록하지 않으며, 트리 버전이 다르면 기존 `code_confirm`이다. 성공한 자동 선택만 `triage-state.json`에 `code_auto=<프로필>`로 남아 같은 세션 재실행이 그 값을 쓴다(`answers`에는 넣지 않는다). 사용자의 답·`--code`가 자동 선택보다 우선한다.
+3. **자동 선택**: `--code`도 답도 없고 `code.auto_select`(사용자 config > site-defaults > 기본 `true`, `02-config.md §4`)가 참이며, 대상 버전이 일치하는 `code_profiles` 프로필이 **정확히 1개**(`code_roots suggest`에서 `kind: profile`이고 `match`, 현재 "추천" 기준과 같다)면 그 프로필을 `--code <프로필>`처럼 쓰고 4번 검증으로 간다. 일치가 0개·2개 이상이거나 `auto_select: false`이거나 Jira 버전이 없으면(대체 출처는 쓰지 않는다) 4번처럼 묻는다. 최근 사용 경로만 일치하면 자동 선택하지 않는다. 알림은 의무다: `report.md` 코드 줄에 "(자동 선택: code.auto_select, `--code`로 변경 가능)", 출력 `code.auto: true`, 스킬이 한 줄로 알리고 `--code`로 바꿀 수 있다고 안내한다. 자동 선택한 경로가 무효면 전체 선택지(`code`)로 묻고 상태에는 기록하지 않으며, 트리 버전이 다르면 기존 `code_confirm`이다. 성공한 자동 선택만 `triage-state.json`에 `code_auto=<프로필>`로 남아 같은 세션 재실행이 그 값을 쓴다(`answers`에는 넣지 않는다). 사용자의 답·`--code`가 자동 선택보다 우선한다.
 3-1. 자동 선택하지 않으면 사용자에게 묻는다.
    ```
    코드 경로를 선택하세요. (대상: Android 16, SW <빌드>)

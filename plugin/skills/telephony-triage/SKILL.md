@@ -42,6 +42,7 @@ description: Telephony 이슈(Android·oFono 등; data·call·network·sim·sms�
 
 - `mode: analysis-only`("분석만", "기록하지 마") → Step 6(5-1·5-2 포함)까지, 계획·Step 7·8 없음(`lock_released`면 release 불필요). 추가 로그는 `--more-logs`. 기록 전환은 플래그만 빼고 같은 명령(`--issue-file`이면 `--dry-run`, 분석 재사용, 입력이 같으면 받은 답도 이어 씀).
 - `mode: read-only` → 계획 저장까지만임을 알리고 `snapshot.pull_skipped_reason`, `post_lint.errors`("메인테이너 정리"), `warnings`, `plan.pr_number`(→ `sync-pr`)도 알린다.
+- `plan.next`(이어서)가 있으면 그대로. `mode: write`는 `--dry-run`이어도 같다(dry-run은 Step 8).
 - `notes`는 항상 알린다. `code.auto`면 "<roots> 자동 선택, `--code`로 변경 가능"도.
 - 로그 범위·`C: 0`·후보 없음은 report.md대로("로그 범위 밖"≠"매칭 없음").
 - Step 5: `code.resolved` 파일에서 근거 문구의 출력 위치·분기 조건을 찾는다. `code.moved`는
@@ -69,7 +70,7 @@ Step 7 질문 전에 `JOB/report.md`(`TODO(LLM)`만 채움)를 보인다(`must_s
 | 증상이 새것 | `S/db_add.py similar --db SNAP` 3개를 먼저 보이고 `new-type` + `append` | `new-type` |
 | 원인 미확정 | `unresolved {type}` | `unresolved` |
 
-- 거부하면 표의 다른 선택지를 다시 보인다. 추정만으로·`unjudged`면 원인·유형을 안 만든다. 후보 없으면 "새 유형 / 원인 미확정 / 기록하지 않음"만.
+- 거부하면 표의 다른 선택지(다른 기존 원인·새 원인 포함)를 다시 보인다. 추정만으로·`unjudged`면 원인·유형을 안 만든다. 처음부터 후보 0개면 "새 유형 / 원인 미확정 / 기록하지 않음"만.
 - `chose-other`면 한 번 묻는다(기본 아니오): 고른 원인이 후보에서 C=1이면 `add-fixture {kind: extra}`로 넣을지(`db-authoring.md`, R4 실패면 뺀다), C=0·후보 밖이면 `update-signature` 검토를 `pr_notes`에 남길지. `unjudged.causes`면 묻지 않는다. 거절하면 `append`만.
 - 물어보고 넣는 op: 회귀 의심·수정 미흡의 `update-fix`(실패 이력) 또는 verify-fix, `add-related`, `add-code-ref`, `update-signature`,
   `set-resolution`, `set-status`.

@@ -46,7 +46,7 @@
     "read_only_reasons": {"type": "array", "description": "mode: read-only일 때 config.py check 사유(analysis-only면 없음)"},
     "read_only_hint": {"type": "string", "description": "mode: read-only일 때만, config.py check 사유 메시지, ≤200바이트, 4KB 압축 시 100"},
     "snapshot": {"type": "object"},
-    "plan": {"type": "object", "description": "analysis-only면 {exists, source, pr_number}만"},
+    "plan": {"type": "object", "description": "analysis-only면 {exists, source, pr_number}만. choice resume이면 next(Step 7 없이 기존 계획으로 Step 8)"},
     "issue": {"type": "object", "description": "failed_step {text(≤120, 4KB 압축 시 60), source}는 있을 때만, 보조 정보"},
     "step_anchor": {
      "type": "object",

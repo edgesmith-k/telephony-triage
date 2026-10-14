@@ -1935,11 +1935,13 @@
         ]
       },
       "user_replies": [
-        "첫 분석 리포트를 보인 뒤 사용자로서 '같은 시간대 b.log도 있어. 이걸 추가해서 다시 분석해줘'라고 말한다(b.log 경로는 logs/b.log).",
         "심층 분석(mock-data-analyzer) 실행 여부를 물으면 '아니오'.",
         "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다.",
         "분류를 기록할지 묻거나 기록 선택지를 주면 '기록하지 않는다'(분석만)로 답한다.",
         "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "followups": [
+        "같은 시간대 b.log도 있어. 이걸 추가해서 다시 분석해줘 (logs/b.log)"
       ],
       "expected_output": "1차 triage.py run MOCK-9052 --analysis-only --logs a.log → 1위 CALL-001(원인 미확인). 2차 --analysis-only --more-logs b.log → analysis.json logs.files [a.log, b.log], run 2, reuse.changed [logs], added_logs [b.log], top_changed true(CALL-001 → IMS-001-01). 답변이 이전 결과 대비 변화를 말한다. 계획·PR·lock 없음.",
       "assertions": [

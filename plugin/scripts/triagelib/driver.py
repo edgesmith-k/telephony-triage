@@ -274,6 +274,8 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
                                  pr_number=(plan.get("pr") or {}).get("number"))
             info.update(source=source, choice=choice, pr_number=(plan.get("pr") or {}).get("number"),
                         issue_origin=(plan.get("issue") or {}).get("origin"))
+            if choice == "resume":      # 이어서: 분류를 다시 묻지 않는다 (07-workflow, eval 11)
+                info["next"] = "리포트를 보인 뒤 Step 7(분류 질문·계획 작성) 없이 기존 JOB/plan.json으로 Step 8 진행"
             if not self.state.data.get("pending_cleared"):
                 pending = userconfig.pending_feedback_dir(self.cfg)
                 removed = [p.name for p in pending.glob(f"{self.key}-*.yaml")] if pending.is_dir() else []

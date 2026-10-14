@@ -209,6 +209,14 @@ class Ctx:
         seq = self.seq()
         return None if seq is None else [e["text"] for e in seq if e["kind"] == "text"]
 
+    def visible(self) -> list[str] | None:
+        """사용자에게 보이는 글: assistant 텍스트 + 모의 `ask_user` 질문 문구(헤드리스 실행자는 리포트·질문을 여기에 담는다).
+        Bash·Read 출력은 들어가지 않는다. 기록이 없으면 None."""
+        texts = self.texts()
+        if texts is None:
+            return None
+        return [*texts, *(str(i.get("question", "")) for n, i in (self.tool_uses() or []) if n.endswith("__ask_user"))]
+
     def tool_uses(self):
         """events.jsonl의 assistant tool_use를 [(이름, 입력)]으로. 기록이 없으면 None."""
         seq = self.seq()
@@ -1067,16 +1075,16 @@ def checks_w4(eid, ctx):
     def said(*patterns):
         """assistant 텍스트 한 조각 안에 모든 패턴이 있다."""
         def check():
-            texts = ctx.texts()
+            texts = ctx.visible()
             if texts is None:
                 raise _Manual("실행 기록(events.jsonl) 없음")
             hit = next((t for t in texts if all(re.search(p, t) for p in patterns)), None)
-            return hit is not None, (hit[:300] if hit else f"{patterns}를 모두 담은 assistant 텍스트 없음")
+            return hit is not None, (hit[:300] if hit else f"{patterns}를 모두 담은 사용자용 글(텍스트·질문) 없음")
         return check
 
     def asked(topic):
-        """topic을 묻는 질문 조각 수(assistant 텍스트 중 topic과 '할까요/실행할까/진행할까/할지'가 함께 든 것). 기록 없으면 None."""
-        texts = ctx.texts()
+        """topic을 묻는 질문 조각 수(assistant 텍스트·ask_user 질문 중 topic과 '할까요/실행할까/진행할까/할지'가 함께 든 것). 기록 없으면 None."""
+        texts = ctx.visible()
         if texts is None:
             return None
         return [t for t in texts if is_question(t, topic)]
@@ -1143,7 +1151,8 @@ def checks_w4(eid, ctx):
         order = ctx.explore_order()
         if got is None or order is None:
             raise _Manual("실행 기록(events.jsonl) 없음")
-        analyzer_q = [t for t in (asked(r"심층 분석|mock-data-analyzer") or []) if re.search(r"탐색", t)]
+        # 혼입 = 심층 분석을 묻는 물음 문장에 탐색도 묻는 것. "(탐색 분석은 바로 실행합니다.)" 같은 알림은 아니다
+        analyzer_q = [t for t in (asked(r"심층 분석|mock-data-analyzer") or []) if is_question(t, r"탐색")]
         return not got and not analyzer_q, f"탐색 질문 {len(got)}개; 심층 분석 질문에 탐색 혼입 {len(analyzer_q)}개"
     def explored_then_read():
         order = ctx.explore_order()
@@ -1796,10 +1805,8 @@ def checks_u(eid, ctx):
             line = next((m for m in (data or {}).get("must_show") or [] if m.startswith("판정 불가 유형:")), None)
             if line is None:
                 return False, "analysis.json must_show에 판정 불가 줄 없음"
-            texts = ctx.texts()
-            # 모의 ask_user 질문 문구도 사용자에게 보이는 글이다(plugin 모드 헤드리스 실행자는 리포트를 질문에 담는다)
-            asked = [str(i.get("question", "")) for n, i in (ctx.tool_uses() or []) if n.endswith("__ask_user")]
-            hay = "\n".join([*texts, *asked]) if texts is not None else ctx.transcript
+            texts = ctx.visible()        # 모의 ask_user 질문 문구도 사용자에게 보이는 글이다
+            hay = "\n".join(texts) if texts is not None else ctx.transcript
             ok = line.startswith("판정 불가 유형: 0·원인 1개 (DATA-001-01)") and line in hay
             return ok, f"must_show 줄 {'그대로 있음' if line in hay else '답에 없음'}: {line[:120]}"
         def no_new():

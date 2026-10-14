@@ -9,5 +9,5 @@ entries:
   - {after: 1, tag: ImsManager, pid: 1600, tid: 1610, msg: "register: impu=sip:+821055512345@ims.mnc008.mcc450.3gppnetwork.org msisdn=+821055512345"}
   - {after: 1, tag: "DSMGR-{phone}", msg: "DataRoamingEnabled changed to false"}
   - {after: 1, tag: "DNC-{phone}", level: I, msg: "onEvaluateNetworkRequests: reason=ROAMING_STATE_CHANGED"}
-  - {after: 0.5, tag: "DNC-{phone}", level: W, msg: "Data evaluation: evaluation reason:ROAMING_ENABLED_CHANGED, Data disallowed reasons: ROAMING_DISABLED, candidate profile=null subscriber imsi=450081234567890 msisdn=+821055512345"}
+  - {after: 0.5, tag: "DNC-{phone}", level: W, msg: "Data evaluation: subscriber imsi=450081234567890 msisdn=+821055512345 evaluation reason:ROAMING_ENABLED_CHANGED, Data disallowed reasons: ROAMING_DISABLED, candidate profile=null"}
   - {after: 10, tag: "DNC-{phone}", level: W, msg: "Data evaluation: evaluation reason:ROAMING_ENABLED_CHANGED, Data disallowed reasons: ROAMING_DISABLED, candidate profile=null"}
