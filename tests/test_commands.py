@@ -120,7 +120,7 @@ def test_flow_a_b_wording():
     assert "`record <JIRA-KEY> --new-cause <유형 ID>`" in table
     skill = (skill_dir / "SKILL.md").read_text(encoding="utf-8")
     for needle in ("**A 찾기·분석**", "**B 등록**", "`db-authoring.md` §0", "흐름은 묻지 않고(기본 analyze) A에 B를 권하지 않는다", "기록하지 않음·중간 취소",
-                   "기록 전환은 플래그만 빼고 같은 명령(`--issue-file`이면 `--dry-run`", "`rules.md`의 대상 스크립트에만 `--platform"):
+                   "기록 전환은 플래그만 빼고 같은 명령(`--issue-file`이면 `--dry-run`", "`[--platform <p>]` 필수", "`rules.md` 대상만"):
         assert needle in skill, needle
     authoring = (skill_dir / "reference" / "db-authoring.md").read_text(encoding="utf-8")
     sec0 = authoring.split("## 0. 등록(흐름 B) 준비물·리뷰어", 1)[1].split("\n## 1.", 1)[0]

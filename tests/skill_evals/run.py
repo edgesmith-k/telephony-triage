@@ -42,13 +42,23 @@ APPROVER = "eval-approver"
 GH_SERVER = "mock-github-issues"
 
 
-def _rules(entry: dict, run_dir: Path) -> str:
-    """실행자 공통 규칙(사용자 응답 시뮬레이션·결과 파일). 기대 답·assertion은 넣지 않는다."""
+ASK_TOOL = f"mcp__{APPROVER}__ask_user"
+
+
+def _rules(entry: dict, run_dir: Path, ask_tool: bool = False) -> str:
+    """실행자 공통 규칙(사용자 응답 시뮬레이션·결과 파일). 기대 답·assertion은 넣지 않는다.
+    `ask_tool`(plugin 모드): 질문은 모의 `ask_user` 도구로 한다 — 헤드리스 실행자는 글 대신 도구만 부르므로 질문을 글로만 남기게 하면
+    "응답 규칙대로 예로 진행"처럼 질문이 사라진다(eval 46)."""
     out = (run_dir / "outputs").as_posix()
+    if ask_tool:
+        how = (f"사용자에게 묻는 모든 자리(스킬의 \"묻는다\"·선택지·확인 화면 승인)는 `{ASK_TOOL}`(question=질문 문구 그대로, "
+               "options=선택지)로 묻고, 돌아온 답으로 이어 간다. 응답 규칙을 보고 질문을 건너뛰지 않는다 — 규칙은 질문 뒤의 답이지 "
+               "미리 받은 승인이 아니다. transcript에는 질문 문구와 받은 답을 순서대로 적는다.")
+    else:
+        how = ("응답 규칙은 질문을 한 뒤에 쓰는 사용자의 답이지, 미리 받은 승인이 아니다. 스킬이 묻게 하는 지점에서는 질문 문구(선택지 포함)를 "
+               "먼저 메시지로 보이고, 그다음 줄에 `[시뮬레이션 응답] <답>`을 적은 뒤 이어 간다(transcript에도 같은 순서).")
     return f"""응답 규칙: {json.dumps(entry['user_replies'], ensure_ascii=False)}
-응답 규칙은 질문을 한 뒤에 쓰는 사용자의 답이지, 미리 받은 승인이 아니다. 스킬이 묻게 하는 지점에서는 실제 사용자에게 하듯
-질문 문구(선택지 포함)를 먼저 메시지로 보이고, 그다음 줄에 `[시뮬레이션 응답] <답>`을 적은 뒤 이어 간다(transcript에도 같은 순서).
-"규칙대로 예로 답하고 진행" 같은 규칙 설명으로 질문을 대신하지 않는다 — 질문이 보여야 평가가 된다.
+{how}
 규칙에 없는 질문에는 변경하지 않는 선택지를 택하고 이를 기록한다. 스킬 지시와 사용자 응답이 충돌하면
 사용자 응답을 바꾸지 말고 필요한 지점에서 멈춘다. 성공을 위해 스크립트/스킬/채점기를 수정하지 않는다.
 레포 원본은 읽기만 한다. 쓰기는 이 평가의 모의 환경 및 {run_dir.as_posix()}/outputs 안에서만 한다.
@@ -67,8 +77,8 @@ def plugin_prompt(entry: dict, env_dir: Path, run_dir: Path) -> tuple[str, str]:
     system = f"""너는 telephony-triage 플러그인의 격리된 평가 실행자다. 실제 사용자는 없고, 첫 사용자 메시지가 요청이다.
 플러그인(커맨드·스킬·hook), Jira MCP, 사내 분석 스킬은 이미 설치돼 있다. 실제 사용자 PC에서처럼 처리한다.
 작업 디렉토리는 {env_dir.as_posix()}이고 요청의 logs/… 경로는 여기 기준이다. 필요한 환경 변수는 이미 설정돼 있다.
-사용자가 답해야 하는 질문은 아래 응답 규칙으로 스스로 답하고 이어 간다(질문하고 멈추지 않는다).
-""" + _rules(entry, run_dir)
+사용자가 답해야 하는 질문은 아래 방법으로 묻고 답을 받아 이어 간다(질문하고 멈추지 않는다).
+""" + _rules(entry, run_dir, ask_tool=True)
     return entry["prompt"], system
 
 
@@ -100,6 +110,7 @@ def prepare_plugin_mode(entry: dict, info: dict, env_dir: Path) -> dict:
         # setup.approver_deny면 모든 ask를 거부한다(권한 거부 경로, eval 62)
         APPROVER: {"command": sys.executable, "args": [(MOCKS / "approver_mcp" / "server.py").as_posix()],
                    "env": {"MOCK_APPROVALS_LOG": str(env_dir / "approvals.json"), "PYTHONIOENCODING": "utf-8",
+                           "EVAL_USER_REPLIES": json.dumps(entry.get("user_replies") or [], ensure_ascii=False),
                            **({"EVAL_APPROVER_DENY": "1"} if setup.get("approver_deny") else {})}}}})
     return {"plugin_dirs": [info["plugin_root"], str(analyzer)], "mcp_config": str(mcp),
             "mcp_servers": ["mock-jira", *gh, APPROVER]}
@@ -320,7 +331,7 @@ def execute(entry: dict, info: dict, env_dir: Path, run_dir: Path, claude: str,
                    *[a for d in plugin["plugin_dirs"] for a in ("--plugin-dir", d)],
                    "--append-system-prompt", system,
                    "--tools", tools, "--allowedTools",
-                   tools + ",mcp__mock-jira" + (f",mcp__{GH_SERVER}" if GH_SERVER in plugin.get("mcp_servers", []) else ""),
+                   tools + ",mcp__mock-jira," + ASK_TOOL + (f",mcp__{GH_SERVER}" if GH_SERVER in plugin.get("mcp_servers", []) else ""),
                    *dirs]
     else:
         prompt = evaluation_prompt(entry, info, env_dir, run_dir)

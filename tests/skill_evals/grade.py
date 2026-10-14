@@ -275,14 +275,19 @@ class Ctx:
 
     def explore_order(self, filename="timeline.md"):
         """(explore 호출 순번, 질문 순번, `filename` 첫 열람 순번). 순번은 seq 안의 위치, 없으면 None. 기록이 없으면 None.
-        질문 = explore 호출 앞의 assistant 텍스트 중 '탐색 분석'과 '할까요/실행할까/진행할까/할지'가 함께 든 것."""
+        질문 = explore 호출 앞의 assistant 텍스트, 또는 모의 `ask_user` 도구 호출의 question 중 '탐색 분석'과
+        '할까요/실행할까/진행할까/할지'가 함께 든 것(plugin 모드 실행자는 질문을 그 도구로 한다, run.py `_rules`)."""
         seq = self.seq()
         if seq is None:
             return None
         explored = next((i for i, e in enumerate(seq) if e["kind"] == "tool" and e["name"] == "Bash"
                          and re.search(r"triage\.py[\"']?\s+explore\b", _strip_heredocs(str(e["input"].get("command", ""))))), None)
-        asked = next((i for i, e in enumerate(seq) if e["kind"] == "text" and "탐색 분석" in e["text"]
-                      and re.search(r"할까요|실행할까|진행할까|할지", e["text"]) and (explored is None or i < explored)), None)
+        def question(e):
+            if e["kind"] == "text":
+                return e["text"]
+            return str(e["input"].get("question", "")) if e["name"].endswith("__ask_user") else ""
+        asked = next((i for i, e in enumerate(seq) if "탐색 분석" in question(e)
+                      and re.search(r"할까요|실행할까|진행할까|할지", question(e)) and (explored is None or i < explored)), None)
         read = next((i for i, e in enumerate(seq) if e["kind"] == "tool" and self._opens(e["name"], e["input"], (filename,))), None)
         if explored is not None:
             # 같은 Bash 호출 안에서 explore 뒤에 filename을 읽으면 explore 뒤 열람(순번 explored+0.5). 앞이면 인정하지 않는다.
