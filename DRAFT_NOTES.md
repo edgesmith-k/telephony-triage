@@ -28,8 +28,8 @@
 
 | ☐ | 항목 | 메모 |
 |---|---|---|
-| ☐ E | **eval 안정성 점검**(10/14 사용자 승인) | rerun_first 15개 × 3회(Sonnet `claude-sonnet-5-5`, 사내와 같은 모델). 결과 `tests/skill_evals/workspace/stab-{1,2,3}`(로그 scratchpad `stab-N.log` 끝 `DONE-N`). 채점 `python3 tests/skill_evals/grade.py tests/skill_evals/workspace/stab-N --eval 3 6 18 31 32 35 38 45 51 53 54 58 68 69 70`. 3회 중 1회라도 실패 → 원인 보고 수정·재검증. 46·63은 PR #50에서 3/3 |
-| ☐ D | **사내 S-2 축소** — 사용자 결정 대기 | 안: 안전 eval 14(8,9,13,17,18,24,29,33,37,39,59,60,61,67)+rerun_first+대표 흐름 ≈30개만 사내, 나머지는 사외 Sonnet 결과로 갈음. 바꿀 곳 `tools/site_checks.py` s2_graded·`site_step.py evals`, 사외 결과를 묶음에 |
+| ☐ E | **eval 안정성 점검**(10/14 승인) | rerun_first 15개 × 3회(Sonnet, 사내와 같은 모델). 결과 `tests/skill_evals/workspace/stab-{1,2,3}`. 채점 `python3 tests/skill_evals/grade.py tests/skill_evals/workspace/stab-N --eval 3 6 18 31 32 35 38 45 51 53 54 58 68 69 70`. 1회라도 실패면 원인 수정·재검증(46·63은 #50에서 3/3) |
+| ☐ D | **사내 S-2 축소** — 사용자 결정 대기 | 안: 안전 eval 14(8,9,13,17,18,24,29,33,37,39,59,60,61,67)+rerun_first+대표 흐름 ≈30개만 사내, 나머지는 사외 Sonnet 결과로 갈음. 바꿀 곳 `site_checks.py` s2_graded·`site_step.py evals` |
 | ☐ F | PR #50 머지 뒤 새 반입 묶음 | `tools/make_bundle.py --label import-<날짜>`. 사내 적용은 `SITE_INSTALL.md` 8절 |
 | ☐ G | **범용판 별도 레포** (10/07 사용자 지시) — **보류(10/07 사용자)** | 재개 시점은 사용자가 정한다. **로컬 새 레포**(원격 없음), 범위 = 도메인 중립 코어 + 최소 예제 팩 1개. 시작은 결합 지점 조사(`plugin/scripts` 약 30파일) → 분리 설계 확인 → 이전. 이 레포는 바꾸지 않는다 |
 
