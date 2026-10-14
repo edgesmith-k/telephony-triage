@@ -258,7 +258,8 @@ def _pending_files(ctx: Ctx, job_dir: Path) -> list[Path]:
 
 
 def _prepare_worktree(ctx: Ctx, wt: Path, tool: str, base_sha: str) -> str:
-    _job_of(wt, ctx)
+    job_dir, _ = _job_of(wt, ctx)
+    wt = job_dir / Path(wt).name        # 절대 경로로: `git -C <clone>`이 상대 경로를 clone 기준으로 풀지 않게
     if (wt / ".git").exists():
         _owned_worktree(ctx, wt)
         for args in (("checkout", "-f", "-B", tool, base_sha), ("reset", "--hard", base_sha), ("clean", "-fd")):
@@ -274,6 +275,8 @@ def _prepare_worktree(ctx: Ctx, wt: Path, tool: str, base_sha: str) -> str:
 
 
 def _remove_worktree(ctx: Ctx, path: Path) -> None:
+    job_dir, _ = _job_of(path, ctx)
+    path = job_dir / Path(path).name     # 절대 경로로 (`_prepare_worktree`와 같게)
     _owned_worktree(ctx, path)
     _git(ctx.repo, "worktree", "remove", "--force", str(path))
 

@@ -136,6 +136,9 @@ def _check_lock(job: str, defaults: dict) -> None:
 def make_draft(plan: Path, draft: Path, defaults: dict, plugin_root: str | None) -> dict:
     """`<draft>`에 origin/<base> 기준 분리 worktree를 만들고 계획을 적용한다. `db_add apply` 결과를 돌려준다."""
     from db_pr import _job_of, UsageError as WorktreeError
+    # 상대 경로는 검사(`_job_of`)와 같게 cwd 기준 절대 경로로 바꾼다. 그대로 두면 `git -C <clone> worktree add`가
+    # clone 기준으로 풀어 사용자 clone 안에 worktree를 만든다 (h1-a eval 10)
+    plan, draft = Path(plan).expanduser().absolute(), Path(draft).expanduser().absolute()
     ctx = _draft_ctx(defaults)
     try:
         _job_of(draft, ctx)
@@ -186,6 +189,7 @@ def _draft_ctx(defaults: dict):
 
 def remove_draft(draft: Path, defaults: dict) -> None:
     from db_pr import _remove_worktree, UsageError as WorktreeError
+    draft = Path(draft).expanduser().absolute()       # make_draft와 같게 cwd 기준
     if draft.name != "draft":
         raise UsageError("draft 경로 이름은 draft여야 합니다")
     try:
