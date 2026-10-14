@@ -155,7 +155,7 @@ _SCREEN_HEAD = {"push": re.compile(r"^## push 전 확인:", re.M), "post": re.co
 # 실행한 호출만 센다: 스크립트 경로가 명령어 자리(줄·`;`·`&`·`|`·`(`·`$(` 뒤, 앞의 `VAR=값` 허용, 또는 `python3 [-옵션]` 뒤)에
 # 있어야 한다. `grep -n "db_pr.py publish" write-flow.md`처럼 인자·인용 글 안의 이름은 호출이 아니다(`_command`가 공백이 든
 # 인용 글을 미리 지운다). 하위 명령은 스크립트 바로 뒤(앞 전역 옵션 `--plugin-root X`·`--platform X`·`--x`는 건너뜀)만 본다:
-# `…; cat $W/stage.json`·`> discard-preview.md`는 하위 명령이 아니다. 비교 전에 줄 이음(`\` + 줄바꿈)을 공백으로 바꾼다(`_command`).
+# `…; cat $W/stage.json`·`> discard-preview.md`는 하위 명령이 아니다. 인용 밖 줄 이음(`\` + 줄바꿈)은 공백으로 본다(`_strip_quoted`).
 _CMDWORD = (r"(?:(?:^|[;&|(`\n]|\$\()\s*(?:\w+=\S*\s+)*|\bpython3?(?:\.\d+)?(?:\s+-[^\s-]\S*)*\s+)"
             r"[\"']?(?:[^\s\"';&|()`]*/)?")
 _SUB = r"[\"']?\s+(?:--(?:plugin-root|platform)\s+\S+\s+|--\S+\s+)*"
@@ -182,9 +182,9 @@ _SEE_ABOVE = re.compile(r"위\s*(출력|확인 화면|화면|본문)")
 
 
 def _command(e) -> str:
-    """seq 도구 항목의 Bash 명령(비교용): heredoc 본문을 빼고 줄 이음(`\\` + 줄바꿈)을 공백으로 바꾸고, 공백이 든 인용 글을
-    `""`로 지운다(`_strip_quoted`)."""
-    return _strip_quoted(_strip_heredocs(str((e.get("input") or {}).get("command", ""))).replace("\\\n", " "))
+    """seq 도구 항목의 Bash 명령(비교용): heredoc 본문을 빼고 공백이 든 인용 글을 `""`로 지운다(`_strip_quoted`, 줄 이음도
+    거기서 공백으로 바꾼다)."""
+    return _strip_quoted(_strip_heredocs(str((e.get("input") or {}).get("command", ""))))
 
 
 def _strip_quoted(cmd: str) -> str:
@@ -193,12 +193,15 @@ def _strip_quoted(cmd: str) -> str:
 
     실제로 실행되는 인용 안 명령은 살린다: `"…"` 안의 `$(…)`·`` `…` `` 본문은 (재귀로 지운 뒤) 그 줄 끝 다음 줄로 옮겨
     명령어 자리에 두고(`R="$(python3 $S/db_pr.py publish …)"`), `sh -c`·`bash -c` 바로 뒤 인용 본문은 지우지 않고 새 줄로
-    펼친다. 인용 밖에서 단어 첫머리의 `#`(줄 처음·공백 뒤)부터 줄 끝까지는 주석이라 따옴표를 짝짓지 않고 `#`만 남긴다
-    (`# user's approval` 뒤 줄의 호출이 인용으로 먹히지 않게, 주석 안 `python3 db_pr.py publish`가 호출로 세지 않게).
+    펼친다(`bash -lc`·`sh -ec`처럼 `c`로 끝나는 묶은 옵션 포함, `./run.sh -c`는 아님). 인용 밖에서 단어 첫머리의
+    `#`(줄 처음·공백·`;`·`&`·`|`·`(` 뒤)부터 줄 끝까지는 주석이라 따옴표를 짝짓지 않고 `#`만 남긴다(`# user's approval` 뒤
+    줄의 호출이 인용으로 먹히지 않게, 주석 안 `python3 db_pr.py publish`가 호출로 세지 않게). 인용 밖 줄 이음(`\\` +
+    줄바꿈)은 공백으로 바꾸되 주석은 원래 줄바꿈에서 끝난다(`echo x # 메모 \\` 다음 줄의 호출은 실행된다).
 
     한계(고치지 않음, 오판 가능): `$PY $S/db_pr.py publish`처럼 변수로 든 인터프리터 뒤 호출, 하위 명령 앞 짧은 옵션
     (`db_pr.py -v publish`), 공백이 든 인용 경로(`python3 "/a b/db_pr.py" publish`)는 놓친다. 인용 없는
-    `echo run python3 db_pr.py publish`는 호출로 센다(과대 일치)."""
+    `echo run python3 db_pr.py publish`는 호출로 센다(과대 일치). `$(case a in a) …;; esac)`처럼 짝 없는 `)`가 든 명령
+    치환은 그 `)`에서 끝난 것으로 본다(뒷부분은 인용 글로 지워질 수 있다)."""
     out, extra, i, n = [], [], 0, len(cmd)
 
     def flush():
@@ -212,14 +215,14 @@ def _strip_quoted(cmd: str) -> str:
             out.append(q)
             i += 1
             continue
-        if q == "#" and (i == 0 or cmd[i - 1].isspace()):   # 주석: 줄 끝까지 건너뛴다(`#`만 남김)
+        if q == "#" and (i == 0 or cmd[i - 1].isspace() or cmd[i - 1] in ";&|("):   # 주석: 줄 끝까지 건너뛴다(`#`만 남김)
             j = cmd.find("\n", i)
             i = n if j < 0 else j
             out.append("#")
             continue
         if q not in "\"'":
             k = 2 if q == "\\" else 1      # 인용 밖 `\"`·`\'`는 글자다
-            out.append(cmd[i:i + k])
+            out.append(" " if cmd[i:i + 2] == "\\\n" else cmd[i:i + k])   # 줄 이음은 공백
             i += k
             continue
         j = i + 1
@@ -231,7 +234,7 @@ def _strip_quoted(cmd: str) -> str:
         body = cmd[i + 1:j]
         if not re.search(r"\s", body):
             out.append(cmd[i:j + 1])
-        elif re.search(r"\b(?:ba)?sh\s+-c\s+$", "".join(out)):   # `bash -c '…'`: 본문이 명령이다
+        elif _SH_C.search(_tail(out)):   # `bash -c '…'`: 본문이 명령이다
             out.append("\n" + _strip_quoted(body))
         else:
             out.append('""')
@@ -240,6 +243,19 @@ def _strip_quoted(cmd: str) -> str:
         i = j + 1
     flush()
     return "".join(out)
+
+
+_SH_C = re.compile(r"(?<![\w./-])(?:ba)?sh\s+-[a-zA-Z]*c\s+$")   # `bash -c`·`bash -lc`·`sh -ec` (`./run.sh -c` 아님)
+
+
+def _tail(out: list[str], k: int = 64) -> str:
+    """out을 이은 글의 끝 k글자(인용마다 전체를 다시 잇지 않게)."""
+    s = ""
+    for p in reversed(out):
+        s = p + s
+        if len(s) >= k:
+            break
+    return s[-k:]
 
 
 def _subst_spans(body: str) -> list[str]:
