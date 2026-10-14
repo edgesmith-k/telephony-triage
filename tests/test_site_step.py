@@ -111,3 +111,10 @@ def test_other_mode_or_missing_lines_refuse(tmp_path):
     prof.write_text("# SITE_PROFILE\n\n## 진행 상태\n- 모드: 사내 보완\n", encoding="utf-8")
     r = run(tmp_path)
     assert r.returncode == 2 and "현재 단계" in r.stderr
+
+
+def test_baseline_evals_are_in_site_set_and_help_has_no_rerun():
+    pend = ss.sc.load_pending(ROOT)
+    assert ss.BASELINE_EVALS is ss.sc.BASELINE_EVALS and set(ss.BASELINE_EVALS) <= set(pend["site"])
+    assert set(pend["manual"]) <= set(pend["site"])
+    assert "rerun" not in ss.__doc__ and "사내 대상" in ss.__doc__ and "offsite_results.json" in ss.__doc__

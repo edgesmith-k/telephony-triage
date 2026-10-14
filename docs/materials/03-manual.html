@@ -1869,7 +1869,7 @@ git push -u origin HEAD                        # 사용자 승인 후. PR은 사
         <tr><th>단계</th><th>할 일</th><th>완료 기준</th></tr>
         <tr><td>S-0 (선택)</td><td>실제 로그 3~5개로 파서 가정 확인(<a href="#s7-parser">7.8</a>)</td><td>지표 5종 기록, 정성 결론 1줄</td></tr>
         <tr><td>S-1</td><td>확인 목록(<code>tools/list_site_todos.py</code> + <code>REVIEW-OPEN.md</code>), 샘플 받아 <code>SITE_PROFILE.md</code> 작성</td><td>오프라인 평가 기준(1위 정확도 등) 합의</td></tr>
-        <tr><td>S-2</td><td>사내 Claude Code 기능 확인(플러그인 로드, hooks, MCP 도구 이름), 실제 Jira MCP로 Jira 원문 격리 확인, 스킬 eval 전체 재실행(프롬프트 주입 eval 59·60 포함)</td><td>확인 8항목 기록, 안전 eval 위반 0</td></tr>
+        <tr><td>S-2</td><td>사내 Claude Code 기능 확인(플러그인 로드, hooks, MCP 도구 이름), 실제 Jira MCP로 Jira 원문 격리 확인, 사내 대상 스킬 eval 실행(11개, 프롬프트 주입 eval 59·60 포함 — 나머지는 사외 결과로 갈음)</td><td>확인 8항목 기록, 안전 eval 위반 0</td></tr>
         <tr><td>S-3</td><td><code>site-defaults.yaml</code>(<code>tracker.kind: jira</code>·Jira 도구 매핑 등), <code>issue-db.config.yaml</code>(<code>tracker.{kind, base_url, key_regex}</code> 등) 사내 값</td><td><code>config.py check</code>·<code>doctor</code> fail 0</td></tr>
         <tr><td>S-4a</td><td>운영 이슈 DB 생성·보호, 기존 파서 포팅(골든), 기존 data 분류 import, 분석 스킬 연결. 벤더 RIL 태그 초안은 <code>s0_suggest.py</code></td><td>골든 통과(실제 골든 폴더가 사내 백엔드로 실행되는지, 기대값을 일부러 바꾸면 실패하는지까지 확인), import PR 머지</td></tr>
         <tr><td>S-4</td><td>placeholder 규칙을 실제 문구로, 카테고리별 유형 5~10개 시드(실제 마스킹 fixture)</td><td>회귀·검증 통과</td></tr>
