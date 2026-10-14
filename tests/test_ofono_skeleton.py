@@ -25,7 +25,7 @@ SCRIPTS = REPO / "plugin" / "scripts"
 sys.path.insert(0, str(REPO / "tests" / "helpers"))
 sys.path.insert(0, str(SCRIPTS))
 
-from runner import SAMPLE, plugin_root, run, run_json, tmp, variant_db  # noqa: E402
+from runner import SAMPLE, SITE_REPO_REASON, is_site_repo, plugin_root, run, run_json, tmp, variant_db  # noqa: E402
 
 import platforms  # noqa: E402
 from common import events, logtime, masking  # noqa: E402
@@ -281,6 +281,7 @@ def test_make_db_skeleton_platform_ofono_passes_lint():
     assert bad.returncode != 0 and "지원 플랫폼" in bad.stderr
 
 
+@pytest.mark.skipif(is_site_repo(), reason=SITE_REPO_REASON)
 def test_check_boundary_external():
     proc = subprocess.run([sys.executable, str(REPO / "tools" / "check_boundary.py"), "--mode", "external"],
                           capture_output=True, text=True, encoding="utf-8", cwd=REPO)

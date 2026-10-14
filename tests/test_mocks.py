@@ -28,6 +28,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+import pytest
+
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "tests" / "helpers"))
 sys.path.insert(0, str(REPO / "tests" / "mocks"))
@@ -36,6 +38,7 @@ import logcat_gen  # noqa: E402
 import make_plugin_root  # noqa: E402
 import make_repo  # noqa: E402
 import mock_env  # noqa: E402
+from runner import SITE_REPO_REASON, is_site_repo  # noqa: E402
 
 MCP_SERVER = REPO / "tests" / "mocks" / "jira_mcp" / "server.py"
 
@@ -517,6 +520,7 @@ def test_no_mcp_json_at_repo_root():
     assert list(registered["mcpServers"]) == ["mock-jira", "mock-github-issues"]
 
 
+@pytest.mark.skipif(is_site_repo(), reason=SITE_REPO_REASON)
 def test_site_paths_are_absent_in_draft():
     """`SITE_PATHS`의 경로는 사외 레포에 없어야 한다 (반입 체크리스트 §15.4)."""
     patterns = [
@@ -533,6 +537,17 @@ def test_site_paths_are_absent_in_draft():
             if target.exists() and any(target.iterdir() if target.is_dir() else [target]):
                 present.append(pattern)
     assert not present, f"사외 레포에 SITE_PATHS 경로가 있습니다: {present}"
+
+
+def test_is_site_repo_markers(tmp_path):
+    assert not is_site_repo(tmp_path)
+    for marker in (".draft-manifest.json", "SITE_PROFILE.md"):
+        root = tmp_path / marker.strip(".")
+        root.mkdir()
+        (root / marker).write_text("{}", encoding="utf-8")
+        assert is_site_repo(root)
+        (root / ".local-draft").touch()          # 사외 PC 표식이 있으면 사외 (check_boundary.detect_mode와 같다)
+        assert not is_site_repo(root)
 
 
 def test_generated_files_use_lf():

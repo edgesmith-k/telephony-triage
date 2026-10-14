@@ -29,6 +29,18 @@ _ROOTS: dict[str, Path] = {}
 _LOCK_OWNERS: dict[str, str] = {}
 
 
+def is_site_repo(root: Path = REPO) -> bool:
+    """사내 레포인지 — `tools/check_boundary.py` `detect_mode`와 같은 표식(`.local-draft`가 있으면 사외).
+    사외 초안 전용 검사는 사내 레포에서 건너뛴다. 사내 레포의 경계는 `test_boundary.py::test_repo_has_no_boundary_violations`가
+    사내 기준으로 본다."""
+    if (root / ".local-draft").exists():
+        return False
+    return any((root / marker).exists() for marker in (".draft-manifest.json", "SITE_PROFILE.md"))
+
+
+SITE_REPO_REASON = "사내 레포(.draft-manifest.json 또는 SITE_PROFILE.md): 사외 초안 전용 검사"
+
+
 def plugin_root(kind: str = "plain", **defaults) -> Path:
     """kind: `plain`(reference 백엔드) 또는 이름. `defaults`는 site-defaults.yaml 덮어쓰기."""
     key = kind + json.dumps(defaults, sort_keys=True, default=str)

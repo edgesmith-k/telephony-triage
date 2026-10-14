@@ -246,6 +246,17 @@ def test_e50_order_uses_ran_not_command_descriptions(tmp_path):
     assert fns[2]()[0] is True, fns[2]()
 
 
+@pytest.mark.parametrize("resolution, ok", [("캐리어 APN을 직접 입력한다", True), ("캐리어 APN을 직접 입력한다.", True),
+                                             ("캐리어 APN을 직접 입력한다. ", True), ("캐리어 APN 목록을 초기화한다", False)])
+def test_e38_revised_resolution_ignores_trailing_period_and_space(tmp_path, resolution, ok):
+    env_dir = _synthetic_env(tmp_path)
+    run = run_dir(tmp_path)
+    plan = {"operations": [{"op": "new-cause", "cause": {"resolution": "캐리어 APN 목록을 초기화한다"}},
+                           {"op": "set-resolution", "resolution": resolution}]}
+    (run / "outputs" / "plan.json").write_text(json.dumps(plan, ensure_ascii=False), encoding="utf-8")
+    assert grader.checks(38, grader.Ctx(env_dir, run))[3]()[0] is ok
+
+
 def test_raw_full_reads_metric(tmp_path):
     env_dir = _synthetic_env(tmp_path)
     run = run_dir(tmp_path)
@@ -423,6 +434,12 @@ def test_child_settings_passes_only_auth_keys_from_user_settings(tmp_path):
     assert not {"hooks", "enabledPlugins", "permissions", "env"} & set(data)     # 격리 유지: 인증 밖은 넘기지 않음
     assert auth_env == {"ANTHROPIC_BASE_URL": "https://gw.example", "HTTPS_PROXY": "http://proxy.example"}
     assert keys == ["apiKeyHelper", "env.ANTHROPIC_BASE_URL", "env.HTTPS_PROXY"]   # 기록에는 이름만
+
+
+def test_child_common_args_pin_permission_mode_and_isolation():
+    args = evaluation.child_common_args("{}")
+    assert args[args.index("--permission-mode") + 1] == "default"     # CLI 기본값(사내 auto)에 기대지 않는다
+    assert args[args.index("--setting-sources") + 1] == "" and "--strict-mcp-config" in args
 
 
 def test_child_settings_without_user_settings_is_attribution_only(tmp_path):
