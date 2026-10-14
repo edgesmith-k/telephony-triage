@@ -4,10 +4,18 @@ from __future__ import annotations
 
 import importlib
 import os
+import site
 from pathlib import Path
 import sys
 
 import pytest
+
+# 하위 프로세스의 `python3`(git hook·스크립트)가 pytest와 같은 인터프리터를 쓰게 한다.
+# venv를 켜지 않고 `.venv/bin/python -m pytest`로 돌려도 PATH의 시스템 python3(의존성 없음)로 새지 않는다.
+os.environ["PATH"] = os.pathsep.join([str(Path(sys.executable).parent), os.environ.get("PATH", "")])
+# `pip install --user`로 설치했으면 의존성은 ~/.local에 있다. HOME을 임시 폴더로 바꾸는 테스트의 하위 프로세스도
+# 같은 사용자 site를 보게 고정한다(사내 설치 방법 A, docs/SITE_INSTALL.md 3절).
+os.environ.setdefault("PYTHONUSERBASE", site.getuserbase())
 
 # W7: triage.py run 출력을 plugin/schemas/output/analysis.schema.json으로 검사한다(위반이면 종료 코드 2)
 os.environ["TT_SCHEMA_CHECK"] = "1"

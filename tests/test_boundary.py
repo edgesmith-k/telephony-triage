@@ -18,6 +18,7 @@ import time
 from pathlib import Path
 
 import pytest
+import yaml
 
 REPO = Path(__file__).resolve().parents[1]
 TOOLS = REPO / "tools"
@@ -85,8 +86,9 @@ def test_no_tracked_file_matches_ignore_rules():
 
 def test_external_workflow_only_on_github_com():
     """R-24: 사외 CI는 github.com에서만 돈다 (사내 GHE에서 대기·실패하지 않게)."""
-    text = (REPO / ".github/workflows/external.yml").read_text(encoding="utf-8")
-    assert text.count("    if: github.server_url == 'https://github.com'\n") == 2
+    jobs = yaml.safe_load((REPO / ".github/workflows/external.yml").read_text(encoding="utf-8"))["jobs"]
+    assert {"boundary", "test", "site-rehearsal"} <= set(jobs)
+    assert all(job.get("if") == "github.server_url == 'https://github.com'" for job in jobs.values()), jobs
 
 
 @pytest.fixture
