@@ -47,7 +47,7 @@ description: Telephony 이슈(Android·oFono 등; data·call·network·sim·sms�
 - Step 5: `code.resolved` 파일에서 근거 문구의 출력 위치·분기 조건을 찾는다. `code.moved`는
   "경로 변경"으로 알리고 Step 7에서 `add-code-ref`를 묻는다.
 - Step 5-1 `analyzer`(값이 있으면)·5-2 `explore`(후보 없음·원인 미확인만): `--no-…`·`never`면 생략, `--analyzer`·`--explore`·`always`면
-  실행, 아니면 토큰 추가를 알리고 묻는다(답 전 실행 금지). 둘 다 물으면 "심층 분석과 탐색 분석을 할까요?" 한 질문. 5-1은 `analyzer.skill`을 Skill로 부른다(입력 `files.events`·로그 경로·상위 후보·마스킹 요약).
+  실행, 아니면 토큰 추가를 알리고 질문을 그대로 보인다(답 전 `explore`·원문 열람 금지). 둘 다 물으면 "심층 분석과 탐색 분석을 할까요?" 한 질문. 5-1은 `analyzer.skill`을 Skill로 부른다(입력 `files.events`·로그 경로·상위 후보·마스킹 요약).
   결과는 `S/mask_pii.py` 후 report.md `심층 분석 (…)` 줄에, 다른 원인 의견은 Step 7 선택지로. 5-2는 실행이 정해진 뒤에만
   `S/triage.py explore <KEY>`, 그 `JOB/timeline.md`만 `explore.md`대로 읽는다.
 
