@@ -436,3 +436,29 @@ def test_redirect_targets_and_read_back_rules(tmp_path):
     devnull = write(tmp_path, prompt("p"), bash("s", STAGE_CMD + " > /dev/null", "EXIT 0"),
                     bash("c", "cat /dev/null tests/fixtures/x.md", SCREEN), say(SUMMARY), name="dev.jsonl")
     assert stop(devnull, SUMMARY) is None
+
+
+# --- 실제 eval 자식 transcript(모의 로그, 줄인 사본): 10/14 sm3에서 hook이 판정하지 못한 원인 회귀 ---------------------
+
+REAL = REPO / "tests" / "fixtures" / "show_guard"
+
+
+def test_real_child_transcript_format(tmp_path):
+    """eval 2 자식 세션 transcript(plugin 모드, run.py가 세션을 남겨 옮긴 것)를 push 확인 화면 승인 질문 직전에서 자른 사본.
+    블록마다 한 항목·hook attachment·Skill 주입 user 항목 그대로. 화면 전체를 담은 실제 질문은 통과, 요약하면 거부·Stop block."""
+    path = tmp_path / "s.jsonl"
+    shutil.copy(REAL / "eval2-session.jsonl", path)
+    ask = json.loads((REAL / "eval2-ask.json").read_text(encoding="utf-8"))
+    seq = shown.parse_events(path.read_text(encoding="utf-8").splitlines(), include_user=True)
+    obs = {ob.kind: ob for ob in shown.obligations(seq)}
+    assert set(obs) == {"push", "report", "draft"} and obs["push"].open
+    assert obs["report"].close_kind == "step7" and obs["draft"].close_kind == "stage"
+    assert pre("pre-ask", path, ASK, ask["tool_input"], ask["tool_use_id"]) is None
+    out = pre("pre-ask", path, ASK, {"question": "변경 파일 5개, 검증 통과입니다. 승인할까요?"}, ask["tool_use_id"])
+    assert decision(out) == "deny" and obs["push"].key in out["hookSpecificOutput"]["permissionDecisionReason"]
+    with path.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(say("변경 파일 5개입니다. 승인할까요?")[0], ensure_ascii=False) + "\n")
+    assert stop(path, "변경 파일 5개입니다. 승인할까요?")["decision"] == "block"
+    # 세션을 남기지 않은 실행(--no-session-persistence): transcript 파일이 없다 → 판정 없음(fail-open, 경고만)
+    out, err = hook("stop", {"transcript_path": str(tmp_path / "missing.jsonl"), "last_assistant_message": "승인할까요?"})
+    assert out is None and "transcript" in err

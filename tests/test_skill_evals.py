@@ -441,6 +441,21 @@ def test_child_common_args_pin_permission_mode_and_isolation():
     args = evaluation.child_common_args("{}")
     assert args[args.index("--permission-mode") + 1] == "default"     # CLI 기본값(사내 auto)에 기대지 않는다
     assert args[args.index("--setting-sources") + 1] == "" and "--strict-mcp-config" in args
+    assert "--no-session-persistence" in args
+    # plugin 모드는 transcript를 남긴다: 없으면 show_guard가 transcript_path를 읽지 못해 아무것도 판정하지 못한다(fail-open)
+    assert "--no-session-persistence" not in evaluation.child_common_args("{}", persist=True)
+
+
+def test_collect_transcript_moves_session_file(tmp_path):
+    conf, run = tmp_path / "conf", tmp_path / "run"
+    (conf / "projects" / "-w-env").mkdir(parents=True)
+    run.mkdir()
+    (conf / "projects" / "-w-env" / "abc-123.jsonl").write_text("{}\n", encoding="utf-8")
+    events = [{"type": "system", "subtype": "init", "session_id": "abc-123"}]
+    assert evaluation.collect_transcript(events, {"CLAUDE_CONFIG_DIR": str(conf)}, run) == "session.jsonl"
+    assert (run / "session.jsonl").is_file() and not (conf / "projects" / "-w-env" / "abc-123.jsonl").exists()
+    assert evaluation.collect_transcript(events, {"CLAUDE_CONFIG_DIR": str(conf)}, run) is None      # 이미 옮김
+    assert evaluation.collect_transcript([{"type": "system", "session_id": "../x"}], {"CLAUDE_CONFIG_DIR": str(conf)}, run) is None
 
 
 def test_child_settings_without_user_settings_is_attribution_only(tmp_path):
