@@ -50,7 +50,7 @@ Code 기능" 행). 배포 대상(`plugin/`)이 아니다.
 | 7 | 권한 결정 필드 | ✅ `hookSpecificOutput.permissionDecision` | `deny` → 실행 안 됨(`PreToolUse:<tool> hook error: <reason>`), `allow` → allowedTools에 없어도 실행, `ask` → allowedTools에 있어도 확인 요구(헤드리스는 거부). guard 규칙 6·8 deny 확인 |
 | 8 | `@SITE_PROFILE.md` import (파일 없음) | ✅ 경고·오류 없음 | 조용히 무시 |
 | — | 모의 MCP 붙이기 | ✅ `--mcp-config tests/mocks/mcp.json` | 레포 루트에서 실행(상대 경로). source `dynamic` |
-| 10~12 | Stop hook·PreToolUse transcript·여러 그룹 (2026-10-14 예비) | ✅ | `claude -p --plugin-dir`, stream-json. Stop 입력 키 `last_assistant_message`·`stop_hook_active`·`transcript_path` 등, block → user 역할 "Stop hook feedback:\n<reason>" 뒤 새 메시지, 두 번째 Stop은 `stop_hook_active: true`, 연속 계속 한도 8. PreToolUse 때 transcript에 같은 응답의 앞 텍스트 블록이 이미 있음. 여러 그룹·hook 모두 실행, `deny` 하나면 거부. `AskUserQuestion` 입력 모양은 대화형에서만 확인 가능 — 미확인(show_guard는 관대하게 읽는다) |
+| 10~12 | Stop hook·PreToolUse transcript·여러 그룹 (2026-10-14 예비, 이 개발 환경의 Claude Code 2.1.299 — 사외 확인) | ✅ | `claude -p --plugin-dir`, stream-json. Stop 입력 키 `last_assistant_message`·`stop_hook_active`·`transcript_path` 등, block → user 역할 "Stop hook feedback:\n<reason>" 뒤 새 메시지, 두 번째 Stop은 `stop_hook_active: true`, 연속 계속 한도 8. PreToolUse 때 transcript에 같은 응답의 앞 텍스트 블록이 이미 있음. 여러 그룹·hook 모두 실행, `deny` 하나면 거부 — 12번 확인: 거부된 tool_result는 `"is_error": true`, content `PreToolUse:Bash hook error: <reason>`(probe transcript). `AskUserQuestion` 입력 모양은 대화형에서만 확인 가능 — 미확인(show_guard는 관대하게 읽는다) |
 
 ## 주의
 

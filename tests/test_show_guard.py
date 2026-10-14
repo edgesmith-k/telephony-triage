@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -170,9 +171,9 @@ def test_stop_cap_after_two_markers(tmp_path):
     assert set(out) == {"systemMessage"} and shown.CAPPED in out["systemMessage"]
     one = write(tmp_path, prompt("p"), bash("s", STAGE_CMD, SCREEN), say(SUMMARY), feedback(key), say(SUMMARY), name="one.jsonl")
     assert stop(one, SUMMARY, active=True)["decision"] == "block"
-    # 연이은 Stop인데 피드백이 transcript에 없다(기록 안 되는 버전): 한도로 본다
+    # 연이은 Stop인데 이번 턴에 표식이 없다(다른 hook이 막았거나 피드백이 기록 안 되는 버전): 셀 수 없으니 조용히 둔다
     bare = write(tmp_path, prompt("p"), bash("s", STAGE_CMD, SCREEN), say(SUMMARY), name="bare.jsonl")
-    assert set(stop(bare, SUMMARY, active=True)) == {"systemMessage"}
+    assert stop(bare, SUMMARY, active=True) is None
 
 
 def test_stop_without_last_message_uses_transcript_text(tmp_path):
@@ -301,13 +302,15 @@ def test_large_transcript_is_fast(tmp_path):
     parts = [prompt("p")]
     for i in range(5200):                                              # 약 21MB
         parts.append(bash(f"f{i}", f"echo {i}", filler))
-    parts += [bash("s", STAGE_CMD, SCREEN), say(SUMMARY)]
-    path = write(tmp_path, *parts)
+    path = write(tmp_path, *parts, prompt("올려줘"), bash("s", STAGE_CMD, SCREEN), say(SUMMARY))
     assert path.stat().st_size > 20 * 1024 * 1024
     t0 = time.time()
     out = stop(path, SUMMARY)
     assert out["decision"] == "block"
     assert time.time() - t0 < 15
+    # 끝 16MB 안에 사용자 입력이 없다: 이번 턴의 시작을 모르므로 판정하지 않는다
+    blind = write(tmp_path, *parts, bash("s", STAGE_CMD, SCREEN), say(SUMMARY), name="blind.jsonl")
+    assert stop(blind, SUMMARY) is None
 
 
 @pytest.mark.parametrize("mode", ["stop", "pre-ask", "pre-bash", "post"])
@@ -317,3 +320,78 @@ def test_every_mode_exits_zero_on_garbage(mode, tmp_path):
     out, _ = hook(mode, {"transcript_path": str(bad), "tool_name": "Bash", "tool_input": {"command": PUBLISH_CMD},
                          "tool_response": 7})
     assert out is None
+
+
+# --- 리뷰 반영: 거부된 호출·문서 열람·인코딩·dry-run -------------------------------------------------------------
+
+def _denied(tid, cmd, reason):
+    return call(tid, "Bash", {"command": cmd}, "PreToolUse:Bash hook error: " + reason, True)
+
+
+def test_denied_stage_or_publish_does_not_close_window(tmp_path):
+    path = write(tmp_path, prompt("p"), bash("d", DRAFT_CMD, DRAFT_OUT), say("초안 검증 통과."))
+    out = pre("pre-bash", path, "Bash", {"command": STAGE_CMD})
+    reason = out["hookSpecificOutput"]["permissionDecisionReason"]
+    retry = write(tmp_path, prompt("p"), bash("d", DRAFT_CMD, DRAFT_OUT), say("초안 검증 통과."), _denied("s1", STAGE_CMD, reason),
+                  name="retry.jsonl")
+    assert decision(pre("pre-bash", retry, "Bash", {"command": STAGE_CMD})) == "deny"    # 다시 시도해도 창은 열려 있다
+    assert stop(retry, "초안 검증 통과.")["decision"] == "block"                        # Stop도 계속 본다
+    pub = write(tmp_path, prompt("p"), bash("s", STAGE_CMD, SCREEN), say(SUMMARY),
+                _denied("p1", PUBLISH_CMD, shown.MARKER + " push:abc1234def — 승인 질문 전에 …\n--- 붙일 화면 ---\n" + SCREEN),
+                say(SUMMARY), name="pub.jsonl")
+    assert stop(pub, SUMMARY)["decision"] == "block"            # 거부된 publish는 창을 닫지 않고, 거부 문구 속 화면도 화면이 아니다
+
+
+def test_reading_docs_or_fixtures_is_not_an_obligation(tmp_path):
+    doc = write(tmp_path, prompt("설계 문서 보여줘"), bash("c", "cat docs/design/07-workflow.md", "예시:\n" + REPORT + MUST),
+                say("문서 요약입니다."))
+    assert stop(doc, "문서 요약입니다.") is None                    # triage run이 없으면 리포트 의무도 없다
+    fx = write(tmp_path, prompt("fixture 봐줘"), bash("c", "cat tests/fixtures/render/checks-skipped.md", SCREEN),
+               call("r", "Read", {"file_path": "/repo/tests/fixtures/render/a.md"}, SCREEN.replace("abc1234def", "fff1234def")),
+               say("fixture 요약입니다."), name="fx.jsonl")
+    assert stop(fx, "fixture 요약입니다.") is None                  # 화면을 낸 스크립트 호출이 아니다
+
+
+def test_ascii_stdio_encoding(tmp_path):
+    path = write(tmp_path, prompt("분석"), bash("s", STAGE_CMD, SCREEN), say(SUMMARY))
+    event = json.dumps({"transcript_path": str(path), "last_assistant_message": SUMMARY}, ensure_ascii=False)
+    env = {**os.environ, "PYTHONIOENCODING": "ascii"}
+    proc = subprocess.run([sys.executable, str(SCRIPT), "stop"], input=event.encode("utf-8"), capture_output=True, env=env,
+                          check=False)
+    assert proc.returncode == 0
+    proc.stdout.decode("ascii")                                         # ASCII만 쓴다
+    assert json.loads(proc.stdout)["decision"] == "block"
+    bad = subprocess.run([sys.executable, str(SCRIPT), "stop"], input=b"\xff\xfe{", capture_output=True, env=env, check=False)
+    assert bad.returncode == 0 and bad.stdout == b""
+
+
+def test_dry_run_stage_closes_draft_window_and_non_ask_tool(tmp_path):
+    """dry-run 흐름의 `stage --dry-run`도 worktree를 만들고 확인 화면을 낸다(write-flow §3): 실제 stage와 같이 본다."""
+    path = write(tmp_path, prompt("p"), bash("d", DRAFT_CMD, DRAFT_OUT), say("초안 검증 통과."))
+    assert decision(pre("pre-bash", path, "Bash", {"command": STAGE_CMD.replace("--then-summary", "--dry-run")})) == "deny"
+    dry = write(tmp_path, prompt("p"), bash("d", DRAFT_CMD, DRAFT_OUT), bash("s", STAGE_CMD + " --dry-run", "{}"),
+                say("통과."), name="dry.jsonl")
+    assert stop(dry, "통과.") is None                                    # 창은 stage로 닫혔다(그 결과는 pre-bash가 막는다)
+    assert pre("pre-ask", path, "Bash", {"question": "진행할까요?"}) is None   # 질문 도구가 아니다
+
+
+def test_report_follows_latest_analysis(tmp_path):
+    run = _job(tmp_path)
+    q7 = {"question": REPORT + MUST + "\n어떻게 기록할까요?", "options": STEP7}
+    second = bash("t2", "python3 /p/scripts/triage.py run MOCK-1 --logs logs/b.log", run[1]["message"]["content"][0]["content"])
+    path = write(tmp_path, prompt("p"), run, call("q", ASK, q7, "예"), prompt("다른 로그로 다시"), second, say("다시 분석했습니다."))
+    out = stop(path, "다시 분석했습니다.")
+    assert out["decision"] == "block" and "report:t2" in out["reason"]
+
+
+def test_post_mentions_persisted_file():
+    saved = "Output too large (40KB). Full output saved to: /tmp/x/tool-results/abc.txt\n\nPreview:\n" + SCREEN[:80]
+    out, _ = hook("post", {"tool_name": "Bash", "tool_input": {"command": STAGE_CMD}, "tool_response": {"stdout": saved}})
+    ctx = out["hookSpecificOutput"]["additionalContext"]
+    assert "/tmp/x/tool-results/abc.txt" in ctx and "잘려" in ctx
+
+
+def test_redirected_stage_output_read_back_is_a_screen(tmp_path):
+    path = write(tmp_path, prompt("p"), bash("s", STAGE_CMD + ' > "$JOB/stage_out.md"; echo EXIT $?', "EXIT 0"),
+                 call("r", "Read", {"file_path": "/w/MOCK-1/stage_out.md"}, SCREEN), say(SUMMARY))
+    assert stop(path, SUMMARY)["decision"] == "block"

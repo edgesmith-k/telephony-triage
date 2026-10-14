@@ -52,15 +52,20 @@ KIND_NAME = {"push": "push 확인 화면", "post": "게시 확인 화면", "repo
 OBJ = {"push": "을", "post": "을", "report": "를", "draft": "를"}      # 목적격 조사
 EXPLORE_Q = re.compile(r"(심층|탐색)\s*분석[^\n]*(할까요|실행할까|진행할까|\?)")
 NOTE = "[telephony-triage] 표시 안내"
+TRUNCATED = [False]      # 마지막 load_text가 끝부분만 읽었는가
 
 
 def warn(msg: str) -> None:
-    print(f"show_guard: {msg}", file=sys.stderr)
+    try:      # stderr의 오류 처리는 backslashreplace라 인코딩이 달라도 쓰인다
+        print(f"show_guard: {msg}", file=sys.stderr)
+    except Exception:   # noqa: BLE001, S110 — 경고를 못 써도 종료 0
+        pass
 
 
 def emit(obj) -> None:
-    if obj:
-        print(json.dumps(obj, ensure_ascii=False))
+    if obj:      # ASCII로만 쓴다: stdout 인코딩(Windows cp949·PYTHONIOENCODING=ascii)과 무관하게
+        sys.stdout.write(json.dumps(obj, ensure_ascii=True) + "\n")
+        sys.stdout.flush()
 
 
 # --- transcript ---------------------------------------------------------------------------------------------
@@ -70,7 +75,8 @@ def _tokens(tok: str) -> tuple[str, str]:
 
 
 def load_text(path) -> str | None:
-    """transcript 끝 TAIL_BYTES(첫 줄이 잘렸으면 버린다). 못 읽으면 None."""
+    """transcript 끝 TAIL_BYTES(첫 줄이 잘렸으면 버린다). 못 읽으면 None. 잘라 읽었으면 TRUNCATED[0]이 True."""
+    TRUNCATED[0] = False
     if not path:
         return None
     p = Path(path)
@@ -78,6 +84,7 @@ def load_text(path) -> str | None:
         size = p.stat().st_size
         with p.open("rb") as fh:
             if size > TAIL_BYTES:
+                TRUNCATED[0] = True
                 fh.seek(size - TAIL_BYTES)
                 data = fh.read()
                 cut = data.find(b"\n")
@@ -101,13 +108,14 @@ def load_seq(path):
     return shown.parse_events(text.splitlines(), include_user=True)
 
 
-def turn_start(seq) -> int:
-    """마지막 실제 사용자 입력의 순번(tool_result·isMeta·Stop 피드백 제외). 없으면 0."""
+def turn_start(seq) -> int | None:
+    """마지막 실제 사용자 입력의 순번(tool_result·isMeta·Stop 피드백 제외). 없으면 0 — 단 transcript를 끝부분만 읽었으면
+    이번 턴의 시작을 모르므로 None(판정하지 않는다)."""
     for i in range(len(seq) - 1, -1, -1):
         e = seq[i]
         if e["kind"] == "user" and not e["meta"] and not e["feedback"]:
             return i
-    return 0
+    return None if TRUNCATED[0] else 0
 
 
 def trim_current(seq, tool_use_id):
@@ -237,6 +245,8 @@ def mode_stop(inp) -> dict | None:
     if seq is None:
         return None
     ts = turn_start(seq)
+    if ts is None:
+        return None
     obs = shown.obligations(seq, read_file, job_dir_of(seq))
     last = inp.get("last_assistant_message")
     final = last if isinstance(last, str) and last else last_text(seq, ts)
@@ -248,9 +258,11 @@ def mode_stop(inp) -> dict | None:
             found.append((ob, miss))
     if not found:
         return None
-    # 연이은 Stop인데 이번 턴에 표식이 하나도 기록되지 않았다: 피드백이 transcript에 남지 않는 버전 — 한도로 본다
-    unrecorded = bool(inp.get("stop_hook_active")) and not markers(seq[ts:])
-    under, over = _split(seq, found, MAX_BLOCKS if unrecorded else 0)
+    # 연이은 Stop인데 이번 턴에 표식이 하나도 기록되지 않았다: 다른 hook이 막았거나 피드백이 transcript에 남지 않는 버전 —
+    # 횟수를 셀 수 없으므로 조용히 둔다(한도 안내도 내지 않는다)
+    if inp.get("stop_hook_active") and not markers(seq[ts:]):
+        return None
+    under, over = _split(seq, found)
     if under:
         return {"decision": "block", "reason": "\n\n".join(reason(ob, miss) for ob, miss in under)}
     over = [(ob, m) for ob, m in over if ob.start >= ts]
@@ -263,12 +275,16 @@ def _deny(text: str) -> dict:
 
 
 def mode_pre_ask(inp) -> dict | None:
+    if not shown.is_ask(inp.get("tool_name")):
+        return None
     seq = load_seq(inp.get("transcript_path"))
     if seq is None:
         return None
     seq = trim_current(seq, inp.get("tool_use_id"))
     tool_input = inp.get("tool_input") if isinstance(inp.get("tool_input"), dict) else {}
     ts = turn_start(seq)
+    if ts is None:
+        return None
     obs = shown.obligations(seq, read_file, job_dir_of(seq))
     ask = shown.ask_text(tool_input)
     found = []
@@ -314,7 +330,7 @@ def mode_pre_bash(inp) -> dict | None:
         s = shown.SHA_ARG.search(cmd[app[0].start():])
         targets.append(("post", s.group(1) if s else None))
     for kind, h in targets:
-        wins = shown.screens(seq, kind)
+        wins = shown.screens(seq, kind, script_only=True)
         pick = [w for w in wins if h is None or shown.digest_of(w).startswith(h) or h.startswith(shown.digest_of(w))]
         if not pick:
             continue      # 창을 못 찾음: 판정하지 않는다
@@ -378,11 +394,36 @@ def mode_post(inp) -> dict | None:
     core = shown.report_core(report) if report else []
     if core or must:
         found.append((KIND_NAME["report"], f"결정적 줄과 must_show({len(core) + len(must)}줄)", "Step 7 질문"))
+    saved = _persisted(inp.get("tool_response"), text)
+    if saved is not None and not found and any(h.search(text) for h in shown.SCREEN_HEAD.values()):
+        found.append(("확인 화면", "전문", "승인 질문"))      # 잘려서 해시 줄이 없는 화면
     if not found:
         return None
-    parts = [f"{NOTE} — 이 출력({name})은 사용자에게 안 보인다. 다음 메시지에 {what}을 글자 그대로 붙이고, 같은 메시지 끝에 "
-             f"{ask}을 한다. 빠지면 hook이 되돌린다." for name, what, ask in found]
+    if saved is not None:       # 출력이 길어 파일로 남고 모델에는 일부만 보인다: 줄 수 대신 그 파일
+        where = saved or "원래 명령의 출력 파일"
+        parts = [f"{NOTE} — 이 출력({name})은 잘려 보였고 사용자에게도 안 보인다. 전문은 {where}에 있다 — 그 파일을 읽어 "
+                 f"{what}을 글자 그대로 다음 메시지에 붙이고, 같은 메시지 끝에 {ask}을 한다. 빠지면 hook이 되돌린다."
+                 for name, what, ask in found]
+    else:
+        parts = [f"{NOTE} — 이 출력({name})은 사용자에게 안 보인다. 다음 메시지에 {what}을 글자 그대로 붙이고, 같은 메시지 "
+                 f"끝에 {ask}을 한다. 빠지면 hook이 되돌린다." for name, what, ask in found]
     return {"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": "\n".join(parts)}}
+
+
+PERSISTED = re.compile(r"(?:Output too large|Full output)[^\n]*?saved to:?\s*(\S+)|(Output too large)")
+
+
+def _persisted(resp, text: str):
+    """Claude Code가 긴 출력을 파일로 남겼으면 그 경로(모르면 ""), 아니면 None. 응답의 `persist…`·`…Path` 문자열 키나
+    "Output too large … saved to: <path>" 문구로 본다(형식은 버전마다 다를 수 있어 최선 노력)."""
+    if isinstance(resp, dict):
+        for k, v in resp.items():
+            if "persist" in str(k).lower() and isinstance(v, str) and v:
+                return v
+            if "persist" in str(k).lower() and v is True:
+                return ""
+    m = PERSISTED.search(text[:2000]) or PERSISTED.search(text[-2000:])
+    return None if m is None else (m.group(1) or "")
 
 
 MODES = {"stop": mode_stop, "pre-ask": mode_pre_ask, "pre-bash": mode_pre_bash, "post": mode_post}
@@ -394,10 +435,9 @@ def main(argv: list[str] | None = None) -> int:
     if mode not in MODES:
         warn(f"모드를 모름: {mode!r} (stop|pre-ask|pre-bash|post) — 판정하지 않는다")
         return 0
+    inp = None
     try:
-        if IMPORT_ERROR is not None:
-            raise RuntimeError(f"import 실패: {IMPORT_ERROR}")
-        raw = sys.stdin.read()
+        raw = sys.stdin.buffer.read().decode("utf-8", errors="replace")
         try:
             inp = json.loads(raw)
         except ValueError:
@@ -406,12 +446,38 @@ def main(argv: list[str] | None = None) -> int:
         if not isinstance(inp, dict):
             warn("입력이 JSON 객체가 아니다 — 판정하지 않는다")
             return 0
+        if IMPORT_ERROR is not None:
+            raise RuntimeError(f"import 실패: {IMPORT_ERROR}")
         emit(MODES[mode](inp))
     except Exception as exc:   # noqa: BLE001 — 표시 보조: 내부 오류는 아무것도 막지 않는다(fail-open)
         warn(f"내부 오류({type(exc).__name__}: {exc}) — 판정하지 않는다")
-        if mode == "stop":
-            emit({"systemMessage": "[telephony-triage] show_guard 판정 못 함 — 확인 화면·리포트를 답에 그대로 보였는지 직접 확인"})
+        try:
+            # 판정 못 함 안내는 stop에서, 이 세션 transcript에 화면·리포트 흔적이 있을 때만(매 턴 되풀이하지 않게)
+            if mode == "stop" and _has_tokens(inp if isinstance(inp, dict) else {}):
+                emit({"systemMessage": "[telephony-triage] show_guard 판정 못 함 — 확인 화면·리포트를 답에 그대로 보였는지 "
+                                       "직접 확인"})
+        except Exception:   # noqa: BLE001, S110 — 어떤 경우에도 종료 0
+            pass
     return 0
+
+
+def _has_tokens(inp) -> bool:
+    text = load_text(inp.get("transcript_path"))
+    if text is None or quick_skip(text):
+        return False
+    # 이번 턴(마지막 실제 사용자 입력 뒤)에 흔적이 있을 때만: 지난 턴의 화면으로 매 턴 안내하지 않는다
+    lines = text.splitlines()
+    start = 0
+    for k in range(len(lines) - 1, -1, -1):
+        try:
+            ev = json.loads(lines[k])
+        except ValueError:
+            continue
+        msg = ev.get("message") if isinstance(ev, dict) else None
+        if ev.get("type") == "user" and not ev.get("isMeta") and isinstance(msg, dict) and isinstance(msg.get("content"), str):
+            start = k
+            break
+    return not quick_skip("\n".join(lines[start:]))
 
 
 if __name__ == "__main__":

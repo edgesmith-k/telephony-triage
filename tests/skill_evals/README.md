@@ -107,6 +107,7 @@ e46·e47 `scope()`는 `timeline.md` 첫 열람이 `triage.py explore` Bash 호�
 **"사용자에게 보였다" 기계 판정**: 보인 글 = assistant 텍스트 + 질문 도구(모의 `ask_user`·`AskUserQuestion`) 문구(`Ctx.visible_between`). Bash·Read 출력은 보인 것이 아니다.
 판정은 플러그인 공용 모듈 `plugin/scripts/common/shown.py`에 있고 표시 보조 hook `show_guard.py`(`08-safety.md §9.1`)가 같은 판정으로 실행 중에 되돌린다(grade.py의 `_norm_line` 등 옛 이름은 별칭).
 show_guard가 거부한 질문(오류 결과에 `[telephony-triage] show-guard` 표식)은 사용자에게 가지 않았으므로 보인 글도, 승인 질문(`asked`)·Step 7 질문도 아니다.
+hook이 거부해 실행되지 않은 호출(결과가 `PreToolUse:… hook error`인 오류)은 명령 판정(`stage`·`publish` 등)에서 빼고 창을 열거나 닫지 않는다.
 `metrics.show_guard = {blocks, denies, capped}`: 표식이 든 Stop hook 피드백 수, 표식이 든 거부된 도구 결과 수, 재시도 한도 안내(`(재시도 한도)`, assistant 밖 항목 — systemMessage가 기록되는 자리는 버전마다 달라 최선 노력) 수.
 스크립트 출력의 줄마다 정규화(앞뒤 공백·인용 `>` 제거, `|`가 2개 이상이면 칸마다 공백 제거 후 `|`로 잇기, 공백 하나로)한 것이
 보인 글(같은 방식으로 정규화)의 부분 문자열이어야 보인 줄이다(3글자 이하 줄은 보인 줄 하나와 통째로 같아야 한다). 명령은 인용 밖 줄 이음(`\` + 줄바꿈)을 공백으로 보고

@@ -156,3 +156,13 @@ def test_command_recognition_and_approval_window():
     seq = [bash("s", STAGE_CMD, SCREEN), tool("q", ASK, {"question": SCREEN + "\n승인할까요?"}, "예"), bash("p", PUBLISH_CMD, "ok")]
     (w,) = shown.screens(seq, "push")
     assert (w["end_kind"], w["approved_arg"], shown.digest_of(w), w["missing"]) == ("publish", "abc1234def", "abc1234def", [])
+
+
+def test_denied_accepts_pretooluse_content_and_not_run_skips_calls():
+    hook_text = "PreToolUse:Bash hook error: " + shown.MARKER + " draft:x — …"
+    assert shown.denied(tool("a", "Bash", {}, hook_text, False))       # 오류 표시가 없어도 거부 문구면 거부
+    assert not shown.denied(tool("b", "Bash", {}, shown.MARKER + " 인용", False))
+    guard = tool("g", "Bash", {"command": STAGE_CMD}, "PreToolUse:Bash hook error: 이 플러그인은 …", True)
+    assert shown.not_run(guard) and not shown.denied(guard)
+    seq = [bash("s", STAGE_CMD, SCREEN), tool("p", "Bash", {"command": PUBLISH_CMD}, hook_text, True)]
+    assert shown.bash_index(seq, shown.PUSH_END) == [] and shown.screens(seq, "push")[0]["end_kind"] == "end"

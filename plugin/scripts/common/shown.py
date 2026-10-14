@@ -52,6 +52,7 @@ PUSH_END = script_rx("db_pr.py", r"(publish|discard)\b")   # `publish … --and-
 POST_END = script_rx("issue_post.py", r"(approve)\b")
 STAGE = script_rx("db_pr.py", r"stage\b")
 RENDER = script_rx("issue_post.py", r"render\b")
+SUMMARY = script_rx("db_pr.py", r"summary\b")
 TRIAGE_RUN = script_rx("triage.py", r"run\b")
 DRAFT = script_rx("db_verify.py", r"rules\b[^|\n;&]*--draft\b")
 APPROVED_ARG = re.compile(r"--approved[= ]\s*[\"']?([0-9a-f]{7,64})\b")
@@ -360,8 +361,19 @@ def ask_text(tool_input) -> str:
 
 
 def denied(e) -> bool:
-    """show_guard가 거부한 도구 호출(오류 결과에 표식): 사용자에게 가지 않았다."""
-    return e.get("kind") == "tool" and bool(e.get("error")) and MARKER in str(e.get("result") or "")
+    """show_guard가 거부한 도구 호출(결과에 표식이 있고, 오류이거나 `PreToolUse:`로 시작 — 거부 결과는
+    `PreToolUse:<tool> hook error: <reason>`, is_error): 사용자에게 가지 않았다."""
+    if e.get("kind") != "tool":
+        return False
+    res = str(e.get("result") or "")
+    return MARKER in res and (bool(e.get("error")) or res.lstrip().startswith("PreToolUse:"))
+
+
+def not_run(e) -> bool:
+    """hook이 거부해 실행되지 않은 도구 호출(show_guard·guard 등, 결과가 `PreToolUse:…`인 오류). 창을 닫지도 열지도 않는다."""
+    if e.get("kind") != "tool":
+        return False
+    return denied(e) or (bool(e.get("error")) and str(e.get("result") or "").lstrip().startswith("PreToolUse:"))
 
 
 def _live_ask(e) -> bool:
@@ -385,8 +397,9 @@ def asks(seq, start: int, end: int) -> list[int]:
 
 
 def bash_index(seq, rx, start: int = 0, end: int | None = None) -> list[int]:
+    """rx에 맞는 명령을 실행한 Bash 호출의 순번(hook이 거부해 실행되지 않은 호출 `not_run`은 뺀다)."""
     return [i for i in range(start, len(seq) if end is None else end) if seq[i]["kind"] == "tool"
-            and seq[i]["name"] == "Bash" and rx.search(command_of(seq[i]))]
+            and seq[i]["name"] == "Bash" and not not_run(seq[i]) and rx.search(command_of(seq[i]))]
 
 
 def step7_question(tool_input) -> bool:
@@ -406,18 +419,30 @@ def step7_index(seq) -> int | None:
 
 # --- 창(확인 화면·리포트·초안 검증표) ------------------------------------------------------------------------
 
-def screens(seq, kind: str) -> list[dict]:
+def screens(seq, kind: str, *, script_only: bool = False) -> list[dict]:
     """확인 화면 창(kind push|post) `[{start, end, end_kind, hash, block, approved_arg, asked, see_above, lines, missing}]`.
     화면 = Bash·Read 결과 안의 스크립트 화면(머리 줄 ~ 해시 줄). 해시가 같은 다음 결과(다시 `cat`)는 같은 창이다.
     창 끝 = 뒤의 publish·discard(push)·issue_post approve(post) Bash, 해시가 다른 화면(다시 stage·render), 기록 끝 중 먼저.
     화면이 나온 호출 자체도 본다(그 안의 stage·render 뒤 부분): `stage …; publish …`·`render …; approve …`를 한 Bash로
     부르면 end = start라 보인 글도 질문도 없다.
-    asked = 창 안의 마지막 질문. missing = 화면 뒤 ~ asked(질문 포함), 질문이 없으면 창 끝까지 보인 글에 없는 줄."""
+    asked = 창 안의 마지막 질문. missing = 화면 뒤 ~ asked(질문 포함), 질문이 없으면 창 끝까지 보인 글에 없는 줄.
+    hook이 거부해 실행되지 않은 호출(`not_run`)은 화면을 열지도(거부 문구에 화면이 실려 있다) 창을 닫지도 않는다.
+    script_only(show_guard): 화면을 낸 스크립트 호출(Bash의 `db_pr.py stage`·`summary`, `issue_post.py render`)과, 그 호출이
+    리디렉션으로 쓴 파일(이름 비교)을 다시 읽은 결과만 화면으로 본다 — 문서·fixture를 `cat`·Read한 결과의 화면 모양 글은 의무가
+    아니다(채점기는 Read로 연 화면을 모두 센다)."""
     rx, end_rx, gen_rx = ((PUSH_SCREEN, PUSH_END, STAGE) if kind == "push" else (POST_SCREEN, POST_END, RENDER))
+    makers = (STAGE, SUMMARY) if kind == "push" else (RENDER,)
+    saved: set[str] = set()       # script_only: 화면을 낸 호출이 리디렉션으로 쓴 파일 이름(`stage … > $JOB/stage_out.md`)
     hits = []
     for i, e in enumerate(seq):
-        if e["kind"] != "tool" or e["name"] not in ("Bash", "Read"):
+        if e["kind"] != "tool" or e["name"] not in ("Bash", "Read") or not_run(e):
             continue
+        if script_only:
+            cmd = command_of(e) if e["name"] == "Bash" else ""
+            if any(m.search(cmd) for m in makers):
+                saved.update(Path(t.strip("\"'")).name for t in re.findall(r"(?<![0-9&])>>?\s*([^\s;&|<>]+)", cmd))
+            elif not saved or not _reads_saved(e, saved):
+                continue
         found = list(rx.finditer(tool_text(e)))
         if found:
             block = found[-1].group(0)
@@ -434,7 +459,7 @@ def screens(seq, kind: str) -> list[dict]:
         w["end"], w["end_kind"] = nxt, "restage" if k + 1 < len(wins) else "end"
         for j in range(w["start"], nxt):     # 화면이 나온 호출부터: `stage …; publish …` 한 호출이면 end = start
             e = seq[j]
-            cmd = command_of(e) if e["kind"] == "tool" and e["name"] == "Bash" else ""
+            cmd = command_of(e) if e["kind"] == "tool" and e["name"] == "Bash" and not not_run(e) else ""
             if j == w["start"]:
                 cmd = after_last(gen_rx, cmd)
             m = end_rx.search(cmd)
@@ -454,6 +479,13 @@ def screens(seq, kind: str) -> list[dict]:
     return wins
 
 
+def _reads_saved(e, saved: set[str]) -> bool:
+    """Read·Bash가 화면 출력 파일(saved의 이름) 중 하나를 읽었다."""
+    if e["name"] == "Read":
+        return Path(str((e.get("input") or {}).get("file_path", ""))).name in saved
+    return any(re.search(r"(?<![\w.-])" + re.escape(n) + r"(?![\w.-])", command_of(e)) for n in saved if n)
+
+
 def digest_of(w) -> str:
     """창 해시 줄(`approved_hash: <h>`·`post_sha256: <h>`)의 값."""
     return str(w["hash"]).split(":")[-1].strip()
@@ -468,20 +500,36 @@ def _read_text(read_file, path) -> str:
         return ""
 
 
-def report_window(seq, end: int | None = None, read_file=None, job_dir=None) -> dict:
+def report_window(seq, end: int | None = None, read_file=None, job_dir=None, *, latest: bool = False) -> dict:
     """Step 6 리포트 창: 마지막 triage run ~ end(기본: Step 7 질문(포함)·첫 stage·기록 끝). 리포트 = 창 안 Bash·Read 결과의
     `## <KEY> 분석` 중 가장 긴 것(head·grep 일부 재열람은 기준이 아니다), 없으면 job_dir/report.md(read_file로 읽는다).
-    → {start, end, run, source, where, core, must}. must = job_dir/analysis.json의 must_show."""
-    if end is None:
-        s7 = step7_index(seq)
-        stage = bash_index(seq, STAGE)
-        end = s7 + 1 if s7 is not None else stage[0] if stage else len(seq)
-    runs = bash_index(seq, TRIAGE_RUN, 0, end)
-    start = runs[-1] if runs else 0
+    → {start, end, run, source, where, core, must}. must = job_dir/analysis.json의 must_show.
+    latest(show_guard): 기록 전체의 마지막 triage run부터 그 뒤 Step 7 질문·stage까지(분석을 여러 번 하면 마지막 분석의
+    리포트). 이때 리포트 원문은 job_dir/report.md를 먼저 보고, 창 안 결과는 명령·경로에 `report.md`가 든 것만 본다(문서 열람 제외)."""
+    if latest:
+        runs = bash_index(seq, TRIAGE_RUN)
+        start = runs[-1] if runs else 0
+        if end is None:
+            s7 = next((i for i in range(start, len(seq)) if _live_ask(seq[i]) and step7_question(seq[i]["input"])), None)
+            stage = bash_index(seq, STAGE, start)
+            end = s7 + 1 if s7 is not None else stage[0] if stage else len(seq)
+    else:
+        if end is None:
+            s7 = step7_index(seq)
+            stage = bash_index(seq, STAGE)
+            end = s7 + 1 if s7 is not None else stage[0] if stage else len(seq)
+        runs = bash_index(seq, TRIAGE_RUN, 0, end)
+        start = runs[-1] if runs else 0
     source, where = None, ""
-    for i in range(start, end):
+    if latest and job_dir is not None:
+        text = _read_text(read_file, Path(job_dir) / "report.md")
+        if text:
+            source, where = text, "JOB/report.md"
+    for i in range(start, end) if source is None else ():
         e = seq[i]
-        if e["kind"] == "tool" and e["name"] in ("Bash", "Read"):
+        if e["kind"] == "tool" and e["name"] in ("Bash", "Read") and not not_run(e):
+            if latest and "report.md" not in json.dumps(e.get("input") or {}, ensure_ascii=False):
+                continue
             t = tool_text(e)
             if REPORT_HEAD.search(t) and (source is None or len(t) > len(source)):
                 source, where = t, f"seq {i} 결과"
@@ -580,19 +628,24 @@ def _id_tag(e, i: int) -> str:
     return tid[-12:] if tid else str(i)
 
 
-def obligations(seq, read_file=None, job_dir=None) -> list[Obligation]:
-    """seq의 표시 의무: push·post 확인 화면 창 전부(`screens`), 리포트(`report_window` 기본 창, 리포트가 있을 때), 결과를 읽을 수
-    있는 초안 검증 호출마다 하나(창 = 그 호출 ~ 다음 draft 호출·stage·기록 끝)."""
+def obligations(seq, read_file=None, job_dir=None, *, script_only: bool = True) -> list[Obligation]:
+    """seq의 표시 의무(show_guard): push·post 확인 화면 창 전부(`screens`, script_only면 화면을 낸 스크립트 호출만), 리포트
+    (triage run이 있고 리포트를 찾았을 때 — 마지막 run의 창, `report_window(latest=True)`), 결과를 읽을 수 있는 초안 검증 호출마다
+    하나(창 = 그 호출 ~ 다음 draft 호출·stage·기록 끝).
+
+    창 닫힘: 화면 = publish·discard(push)·approve(post)·해시가 다른 다음 화면, 리포트 = Step 7 분류 질문·stage, 초안 표 =
+    다음 초안 검증·stage(`--dry-run`도 — dry-run 흐름의 stage도 worktree를 만들고 확인 화면을 낸다). hook이 거부해 실행되지
+    않은 호출은 닫지 않는다."""
     out = []
     for kind in ("push", "post"):
-        for w in screens(seq, kind):
+        for w in screens(seq, kind, script_only=script_only):
             d = digest_of(w)
             out.append(Obligation(kind, f"{kind}:{d if kind == 'push' else d[:16]}", w["start"], w["end"], w["end_kind"],
                                   lines=w["lines"], block=w["block"], extra=w))
-    rep = report_window(seq, read_file=read_file, job_dir=job_dir)
-    if rep["source"] and (rep["core"] or rep["must"]):
-        s7 = step7_index(seq)
-        close = ("step7" if s7 is not None and rep["end"] == s7 + 1 else "end" if rep["end"] >= len(seq) else "stage")
+    rep = report_window(seq, read_file=read_file, job_dir=job_dir, latest=True)
+    if rep["run"] is not None and rep["source"] and (rep["core"] or rep["must"]):
+        end = rep["end"]
+        close = ("end" if end >= len(seq) else "step7" if end - 1 < len(seq) and _live_ask(seq[end - 1]) else "stage")
         tag = _id_tag(seq[rep["run"]], rep["run"]) if rep["run"] is not None else "0"
         block = "\n".join(rep["core"] + [m for m in rep["must"] if m not in rep["core"]])
         out.append(Obligation("report", f"report:{tag}", rep["start"], rep["end"], close, lines=rep["core"],
