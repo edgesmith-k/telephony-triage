@@ -592,30 +592,41 @@ def report_window(seq, end: int | None = None, read_file=None, job_dir=None, *, 
             "core": report_core(source), "must": must}
 
 
+PLAN_ARG = re.compile(r"--plan[= ]\s*(\"[^\"]*\"|'[^']*'|\S+)")     # 값: 따옴표 경로(공백 포함) 또는 공백 없는 글
+
+
 def plan_tag(e) -> str:
     """draft 호출의 `--plan` 경로 끝 두 마디(<KEY>/plan.json). 따옴표·구분자·빈 마디 표기 차이는 같은 계획이다. 없으면 "".
     공백 든 따옴표 경로도 통째로 읽으려 원 명령(heredoc 제외)에서 찾되, db_verify rules 호출부터만 본다(`&&` 앞 명령·echo의
     `--plan`을 잡지 않게)."""
     raw = strip_heredocs(str((e.get("input") or {}).get("command", "")))
     m = DRAFT.search(raw)
-    plan = re.search(r"--plan[= ]\s*(\"[^\"]*\"|'[^']*'|\S+)", raw[m.start():] if m else raw)
+    plan = PLAN_ARG.search(raw[m.start():] if m else raw)
     parts = plan.group(1).rstrip(";&|)").strip("\"'").replace("\\", "/").split("/") if plan else []
     return "/".join([p for p in parts if p not in ("", ".")][-2:])
 
 
+def _norm_path(path: str) -> str:
+    """경로 비교용: `\\`→`/`, 빈 마디·`.` 마디를 뺀다(`//`·`/./`)."""
+    return "/".join(p for p in str(path).replace("\\", "/").split("/") if p not in ("", "."))
+
+
 def _touches(e, tag: str, own: bool) -> bool:
-    """도구 호출 e가 계획 파일(끝 두 마디 tag)을 건드릴 수 있는가: Write·Edit 대상이거나 Bash 명령이 그 경로를 말한다.
-    own(다시 돌린 draft 호출 자신)이면 `--plan` 인자로 쓴 것은 뺀다. 읽기만 해도 건드린 것으로 본다(모르면 끊는 쪽)."""
+    """도구 호출 e가 계획 파일(끝 두 마디 tag)을 건드릴 수 있는가. 경로 표기(`$J/plan.json`·절대 경로·`//`)가 달라도 같은 파일일
+    수 있으므로 파일 이름(`plan.json`)으로 본다: Write·Edit 대상의 이름이 같거나, Bash 명령이 그 이름을 말한다. own(다시 돌린 draft
+    호출 자신)이면 `--plan` 인자(공백 든 따옴표 경로 포함)로 쓴 것은 뺀다. 읽기만 해도 건드린 것으로 본다(모르면 끊는 쪽)."""
     if e.get("kind") != "tool" or not tag:
         return False
+    name = tag.rsplit("/", 1)[-1]
     inp = e.get("input") if isinstance(e.get("input"), dict) else {}
     if e.get("name") in ("Write", "Edit", "MultiEdit", "NotebookEdit"):
-        return str(inp.get("file_path", "")).replace("\\", "/").endswith(tag)
+        return _norm_path(inp.get("file_path") or inp.get("notebook_path") or "").rsplit("/", 1)[-1] == name
     if e.get("name") != "Bash":
         return False
     cmd = str(inp.get("command", "")).replace("\\", "/")
-    allowed = len(re.findall(r"--plan[= ]\s*[\"']?\S*" + re.escape(tag), cmd)) if own else 0
-    return cmd.count(tag) > allowed
+    word = re.compile(r"(?<![\w.-])" + re.escape(name) + r"(?![\w.-])")
+    allowed = sum(len(word.findall(m.group(1))) for m in PLAN_ARG.finditer(cmd)) if own else 0
+    return len(word.findall(cmd)) > allowed
 
 
 def same_plan_rerun(seq, i: int, c: int) -> bool:
@@ -624,13 +635,16 @@ def same_plan_rerun(seq, i: int, c: int) -> bool:
     return bool(tag) and plan_tag(seq[c]) == tag and not any(_touches(seq[k], tag, k == c) for k in range(i + 1, c + 1))
 
 
-_NOT_PASS = re.compile(r"\b(?:fail|needs-approval)\b", re.IGNORECASE)
+# 통과가 아닐 수 있는 출력: 낱말 `fail`·`needs-approval`(앞뒤가 글자·`-`가 아님 — `fail-case.log`·`failed`는 아니다)
+_NOT_PASS = re.compile(r"(?<![\w-])(?:fail|needs-approval)(?![\w-])", re.IGNORECASE)
 
 
 def draft_end(seq, i: int, calls, stage) -> int:
     """draft 결과 i의 표시 창 끝(배타): 다음 draft 호출·stage·기록 끝. 채점기(`draft_window`)와 hook(`obligations`)이 같이 쓴다.
     같은 계획을 고치지 않고 다시 돌렸는데 결과를 못 읽었고 출력에 fail·needs-approval 글이 없는 호출(`| sed -n 80,200p` 등)은
-    창을 끊지 않는다: 그 뒤에 보인 표는 읽은 결과의 것으로 본다 (sm4-1-b eval 42). 다른 결과일 수 있으면 끊는다."""
+    창을 끊지 않는다: 그 뒤에 보인 표는 읽은 결과의 것으로 본다 (sm4-1-b eval 42). 다른 결과일 수 있으면 끊는다.
+    남는 추정(고치지 않음): 계획이 그대로여도 draft 트리·fixture·이슈 DB 스냅샷이 바뀌면 다시 돌린 결과가 다를 수 있고, 계획을
+    파일 이름(`plan.json`)을 말하지 않는 방법(변수에 든 경로를 `sed -i "$P"`)으로 고치면 건드림을 보지 못한다(`_touches`)."""
     for c in sorted([c for c in calls if c > i] + [s for s in stage if s > i]):
         text = tool_text(seq[c])
         if (c in stage or draft_doc(text) is not None or _NOT_PASS.search(text)

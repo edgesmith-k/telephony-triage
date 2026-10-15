@@ -275,3 +275,40 @@ def test_plan_tag_anchors_at_draft_call():
     assert tag("python3 /p/x.py check --plan /w/OTHER/plan.json && " + DRAFT_CMD) == "MOCK-1/plan.json"
     assert tag('echo "다시 --plan /w/OTHER/plan.json 로" && ' + DRAFT_CMD) == "MOCK-1/plan.json"
     assert tag(DRAFT_CMD + ' && echo "--plan /w/OTHER/plan.json"') == "MOCK-1/plan.json"
+
+
+def test_plan_touch_by_file_name_across_notations():
+    """`--plan $J/plan.json`과 Edit `/w/MOCK-1/plan.json`처럼 표기가 달라도 같은 계획일 수 있다: 파일 이름으로 건드림을 본다."""
+    passing = [dict(r, status="pass") for r in RULES]
+    table = "\n".join(f"| {r['id']} | 통과 | {r['reason']} |" for r in passing)
+    var_cmd = "python3 /p/scripts/db_verify.py rules --plan $J/plan.json --draft $J/draft --json"
+    first = bash("d1", var_cmd, json.dumps({"rules": passing}, ensure_ascii=False))
+    rerun = bash("d2", var_cmd + " > /tmp/o.json; echo done", "done")
+    ask, stage = tool("q", ASK, {"question": table}), bash("s", STAGE_CMD, SCREEN)
+    assert shown.draft_window([first, rerun, ask, stage])["end"] == 3                   # 고치지 않은 재실행: 끊지 않는다
+    for path in ("/w/MOCK-1/plan.json", "/w//MOCK-1/./plan.json"):
+        edit = tool("e", "Edit", {"file_path": path}, "ok")
+        assert shown.draft_window([first, edit, rerun, ask, stage])["end"] == 2, path  # 다른 표기로 고쳤다: 끊는다
+    other = tool("e", "Edit", {"file_path": "/w/MOCK-1/draft_plan.json.txt"}, "ok")
+    assert shown.draft_window([first, other, rerun, ask, stage])["end"] == 4          # 다른 파일
+    sed = bash("x", "sed -i 's/a/b/' /w/MOCK-1//plan.json", "")
+    assert shown.draft_window([first, sed, rerun, ask, stage])["end"] == 2
+
+
+def test_own_rerun_quoted_plan_with_spaces_is_not_a_touch():
+    passing = [dict(r, status="pass") for r in RULES]
+    cmd = "python3 /p/scripts/db_verify.py rules --plan \"/my work/MOCK-1/plan.json\" --draft /w/MOCK-1/draft --json"
+    first = bash("d1", cmd, json.dumps({"rules": passing}, ensure_ascii=False))
+    rerun = bash("d2", cmd + " | sed -n 2,4p", '  {\n   "id": "R1",')
+    stage = bash("s", STAGE_CMD, SCREEN)
+    assert shown.draft_window([first, rerun, stage])["end"] == 2                         # 자기 --plan 인자는 건드림이 아니다
+
+
+def test_not_pass_word_ignores_file_names():
+    passing = [dict(r, status="pass") for r in RULES]
+    first = bash("d1", DRAFT_CMD, json.dumps({"rules": passing}, ensure_ascii=False))
+    stage = bash("s", STAGE_CMD, SCREEN)
+    for out, end in (("fixtures/fail-case.log OK", 2), ("3 failed checks", 2), ('"status": "fail"', 1), ("요약 — fail 1건", 1),
+                     ("| R4 | fail |", 1), ("NEEDS-APPROVAL", 1)):
+        rerun = bash("d2", DRAFT_CMD + " | grep -v x", out)
+        assert shown.draft_window([first, rerun, stage])["end"] == end, out
