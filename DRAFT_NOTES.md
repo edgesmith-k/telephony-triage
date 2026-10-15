@@ -26,9 +26,9 @@
 
 | ☐ | 항목 | 메모 |
 |---|---|---|
-| ☐ K | **다음 세션 바로: 안전 검토(Opus max, P0만)** | 범위·기준 `docs/development/K_L_REVIEW_PLAN.md`(안전 핵심 모듈 전체). P0이면 (p)로 고치고 묶음 다시 |
-| ☐ L | **K 뒤: 종합 개선 검토(관점 4개 Opus max 에이전트 병렬 + 종합)** | 같은 문서. 목록만, 구현은 사용자가 고른 것만 |
-| ☐ F | 묶음 **import-20261015**(767cc4f, 자동 검사 통과, 수동 3항목은 사용자) | 세션 scratchpad `bundle-20261015/`. K 뒤 사용자가 `git tag import-20261015 767cc4f && git push origin import-20261015`(원격 main 경고는 detached HEAD 탓) |
+| ☐ K | **K 검토 완료 → 다음 세션 바로: P0·P1 수정**(결정 (p): 계획→수정→리뷰→테스트, 사용자 확인 후) | 결과 `docs/development/K_RESULT.md`: **P0-1** guard가 `${S}db_pr.py`·`$PY` 형태 publish에 ask 안 냄(eval 4건 승인 없이 push), P1-1~3. 고친 뒤 전체 테스트·`offsite_results.json`·묶음 재생성 |
+| ☐ L | **K 수정 뒤: 종합 개선 검토(관점 4개 Opus max 에이전트 병렬 + 종합)** | 같은 문서. 목록만, 구현은 사용자가 고른 것만 |
+| ☐ F | 반입 묶음 — **import-20261015(767cc4f)는 P0-1 때문에 태그하지 않는다** | K 수정 병합 뒤 `make_bundle.py --label import-<날짜>`로 다시, 태그는 사용자 |
 | ☐ G | 범용판 별도 레포 — **보류(10/07 사용자)** | 재개는 사용자가 정한다 |
 | ☐ R | 반입 뒤: 표시 판정 단순화 | 블록을 파일로 내고 hook은 그것과만 비교(L에서 같이 본다) |
 
