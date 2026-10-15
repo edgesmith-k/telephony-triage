@@ -163,7 +163,7 @@ def test_stop_full_screen_passes_and_summary_blocks(tmp_path):
     out = stop(path, SUMMARY + " 승인할까요?")
     assert out["decision"] == "block"
     r = out["reason"]
-    assert r.startswith(shown.MARKER + " push:abc1234def — push 확인 화면을 요약했다(빠진 줄 ")
+    assert r.startswith(shown.MARKER + " push:abc1234def — 되돌림(오류 아님): push 확인 화면을 요약했다(빠진 줄 ")
     assert "생성 파일|README.md|수정" in r and "--- 붙일 화면 ---\n" + SCREEN.rstrip() in r
     # 한 줄만 빠져도 막는다
     partial = SCREEN.replace("| 생성 파일 | README.md | 수정 |\n", "")
@@ -234,7 +234,13 @@ def test_pre_ask_allow_and_deny_shape(tmp_path):
     out = pre("pre-ask", path, "AskUserQuestion",
               {"questions": [{"question": SUMMARY + " 승인할까요?", "header": "push", "options": [{"label": "승인"}]}]})
     assert decision(out) == "deny" and out["hookSpecificOutput"]["hookEventName"] == "PreToolUse"
-    assert out["hookSpecificOutput"]["permissionDecisionReason"].startswith(shown.MARKER + " push:abc1234def")
+    r = out["hookSpecificOutput"]["permissionDecisionReason"]
+    assert r.startswith(shown.MARKER + " push:abc1234def — 거부됨(오류·일시 장애 아님). 이 호출은 실행되지 않았다.")
+    assert shown.MARKER_RE.findall(r) == ["push:abc1234def"]            # 표식+키는 첫 줄 맨 앞, 한 번
+    lines = r.splitlines()
+    assert lines[1].startswith("까닭: push 확인 화면을 요약했다(빠진 줄 ") and "이 거부 문구는 사용자에게 안 보인다" in lines[1]
+    assert lines[2].startswith("할 일: ") and "질문 본문 앞(또는 질문 바로 앞 글)" in lines[2]
+    assert "방금 거부된 것과 똑같은 호출" not in r
 
 
 def test_pre_ask_report_only_for_step7(tmp_path):
@@ -618,3 +624,7 @@ def test_stage_deny_does_not_invite_a_new_question(tmp_path):
     path = write(tmp_path, prompt("p"), bash("d", DRAFT_CMD, DRAFT_OUT), say("초안 검증 통과."))
     r = pre("pre-bash", path, "Bash", {"command": STAGE_CMD})["hookSpecificOutput"]["permissionDecisionReason"]
     assert "같은 stage 명령을 다시 실행한다" in r and "새 질문을 만들지 않는다" in r
+    lines = r.splitlines()
+    assert lines[0].startswith(shown.MARKER + " draft:") and "거부됨(오류·일시 장애 아님)" in lines[0]
+    assert lines[1].startswith("까닭: 초안 검증표를 보이지 않고 stage하려 했다(빠진 규칙 ")
+    assert lines[2].startswith("할 일: 먼저 답(글)에 아래 표를 그대로 쓰고, 그 글 뒤에(같은 응답에서) 같은 stage 명령을")

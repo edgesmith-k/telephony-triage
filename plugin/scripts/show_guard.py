@@ -234,20 +234,44 @@ def _block(ob) -> str:
     return f"--- {label} ---\n(12KB를 넘어 여기 싣지 않는다 — {where}에서 처음부터 끝까지 그대로 옮긴다)"
 
 
-def reason(ob, miss) -> str:
+# 거부·되돌림 문구 첫 줄(표식 + 키가 맨 앞 — contracts.md "reason 첫 줄 표식"). 모델이 거부를 일시 오류로 읽고 같은 호출을
+# 기다렸다 다시 하거나(`sleep 3`), Bash 출력·거부 문구가 사용자에게 보인다고 믿은 일(10/14)이 있어 그렇지 않다고 밝힌다
+DENY_LEAD = "— 거부됨(오류·일시 장애 아님). 이 호출은 실행되지 않았다. 기다리거나 같은 호출을 그대로 다시 하면 또 거부된다."
+STOP_LEAD = "— 되돌림(오류 아님):"
+UNSEEN_NOTE = "Bash 출력과 이 거부 문구는 사용자에게 안 보인다."
+RETRY_NOTE = "방금 거부된 것과 똑같은 호출이다(사이에 쓴 글 없음). 다시 불러도 사용자에게 보인 것은 그대로다 — 글을 먼저 쓴다."
+
+
+def _deny_text(ob, why: str, todo: str, miss, retry: bool, unit: str = "줄") -> str:
+    lines = [f"{shown.MARKER} {ob.key} {DENY_LEAD}", f"까닭: {why} {UNSEEN_NOTE}", f"할 일: {todo}"]
+    if retry:
+        lines.append(RETRY_NOTE)
+    return "\n".join(lines + [f"빠진 {unit} 예:\n{_examples(miss)}", _block(ob)])
+
+
+def reason(ob, miss, *, deny: bool = False, retry: bool = False) -> str:
+    """Stop 되돌림(deny=False)·질문 거부(deny=True) 문구."""
     name = KIND_NAME[ob.kind]
     unit = "규칙" if ob.kind == "draft" else "줄"
-    head = (f"{shown.MARKER} {ob.key} — {name}{OBJ[ob.kind]} 요약했다(빠진 {unit} {len(miss)}/{ob.total}). "
-            "Bash 출력은 사용자에게 보이지 않는다.")
+    why = f"{name}{OBJ[ob.kind]} 요약했다(빠진 {unit} {len(miss)}/{ob.total})."
+    if deny:
+        what = {"draft": "규칙마다 한 행(R1~R6 각각 상태, 통과가 아니면 사유)을",
+                "report": "아래 결정적 줄과 must_show를 글자 그대로(고쳐 쓰지 말고)"}.get(
+            ob.kind, "아래 화면 **전체**를 처음부터 끝까지 글자 그대로")
+        todo = f"{what} 질문 본문 앞(또는 질문 바로 앞 글)에 넣고 질문을 다시 부른다."
+        return _deny_text(ob, why, todo, miss, retry, unit)
+    head = f"{shown.MARKER} {ob.key} {STOP_LEAD} {why} Bash 출력은 사용자에게 보이지 않는다."
     how = {"draft": "규칙마다 한 행(R1~R6 각각 상태, 통과가 아니면 사유)을 보이고 같은 메시지 끝에 질문을 다시 한다.",
            "report": "결정적 줄과 must_show를 글자 그대로(고쳐 쓰지 말고) 보이고 같은 메시지 끝에 질문을 다시 한다."}.get(
         ob.kind, "화면 **전체**를 처음부터 끝까지 글자 그대로 다시 붙이고 같은 메시지 끝에 승인 질문을 다시 한다.")
     return f"{head}\n{how}\n빠진 {unit} 예:\n{_examples(miss)}\n{_block(ob)}"
 
 
-def approval_reason(ob, miss) -> str:
-    return (f"{shown.MARKER} {ob.key} — 승인 질문 전에 확인 화면 전체를 보이지 않았다 — 화면을 다시 보이고 다시 승인받는다"
-            f"(빠진 줄 {len(miss)}/{ob.total}). Bash 출력은 사용자에게 보이지 않는다.\n빠진 줄 예:\n{_examples(miss)}\n{_block(ob)}")
+def approval_reason(ob, miss, retry: bool = False) -> str:
+    return _deny_text(ob, f"승인 질문 전에 확인 화면 전체를 보이지 않았다 — 화면을 다시 보이고 다시 승인받는다"
+                          f"(빠진 줄 {len(miss)}/{ob.total}).",
+                      "아래 화면 전체를 글자 그대로 답에 붙이고 같은 메시지 끝에 승인 질문을 다시 한 뒤, 승인받으면 같은 명령을 "
+                      "실행한다.", miss, retry)
 
 
 UNSEEN_BLOCKS = 1      # 화면이 도구 결과에 없던 승인: 한 번만 막는다(다시 낸 화면은 그다음부터 보통 판정)
@@ -288,16 +312,17 @@ def unseen_reason(key: str, kind: str, cmd: str) -> str:
         how = (f"`python3 {m.group(1)} render {post_target(cmd) or '<KEY>'} --fill JOB/post.fill.json`" if m
                else "`python3 S/issue_post.py render <KEY> --fill JOB/post.fill.json`")
         what = "게시 확인 화면"
-    return (f"{shown.MARKER} {key} — 승인하려는 {what}이 어느 도구 출력에도 없다(리디렉션·`head`·`grep`·파일에서 해시를 읽음). "
-            "Bash 출력은 사용자에게 보이지 않고, 보지 않은 화면은 승인의 근거가 될 수 없다.\n"
-            f"{how}를 파이프·리디렉션 없이 실행하고, 그 출력 전체를 글자 그대로 답에 붙인 뒤 같은 메시지 끝에 다시 승인받는다.")
+    return (f"{shown.MARKER} {key} {DENY_LEAD}\n"
+            f"까닭: 승인하려는 {what}이 어느 도구 출력에도 없다(리디렉션·`head`·`grep`·파일에서 해시를 읽음). "
+            f"{UNSEEN_NOTE} 보지 않은 화면은 승인의 근거가 될 수 없다.\n"
+            f"할 일: {how}를 파이프·리디렉션 없이 실행하고, 그 출력 전체를 글자 그대로 답에 붙인 뒤 같은 메시지 끝에 다시 "
+            "승인받는다.")
 
 
-def stage_reason(ob, miss) -> str:
-    return (f"{shown.MARKER} {ob.key} — 초안 검증표를 보이지 않고 stage하려 했다(빠진 규칙 {len(miss)}/{ob.total}). "
-            "Bash 출력은 사용자에게 보이지 않는다.\n답(글)에 규칙마다 한 행(R1~R6 각각 상태, 통과가 아니면 사유)을 보인 뒤 "
-            "같은 stage 명령을 다시 실행한다 — 표를 보이는 것이 목적이므로 진행 여부를 묻는 새 질문을 만들지 않는다.\n"
-            f"빠진 규칙 예:\n{_examples(miss)}\n{_block(ob)}")
+def stage_reason(ob, miss, retry: bool = False) -> str:
+    return _deny_text(ob, f"초안 검증표를 보이지 않고 stage하려 했다(빠진 규칙 {len(miss)}/{ob.total}).",
+                      "먼저 답(글)에 아래 표를 그대로 쓰고, 그 글 뒤에(같은 응답에서) 같은 stage 명령을 다시 실행한다 — 진행 "
+                      "여부를 묻는 새 질문을 만들지 않는다.", miss, retry, "규칙")
 
 
 def capped_message(obs) -> str:
@@ -387,7 +412,7 @@ def mode_pre_ask(inp) -> dict | None:
         warn("transcript에 지금 질문이 기록되지 않아(같은 응답의 앞 글이 빠졌을 수 있다) 거부하지 않는다")
         return None
     if under:
-        return _deny("\n\n".join(reason(ob, miss) for ob, miss in under))
+        return _deny("\n\n".join(reason(ob, miss, deny=True) for ob, miss in under))
     over = [(ob, m) for ob, m in over if ob.start >= ts]
     return {"systemMessage": capped_message([ob for ob, _ in over])} if over else None
 
