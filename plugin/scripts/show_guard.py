@@ -23,6 +23,8 @@ Bash·Read 출력은 사용자에게 보이지 않는다. push 확인 화면(`##
 같은 의무 키(`push:<hash>`·`post:<sha>`(`--sha`가 변수면 `post:render:<KEY>`)·`report:<id>`·`draft:<id>`)로 막은 횟수(transcript의 표식 `[telephony-triage] show-guard
 <key>`가 든 Stop 피드백·거부된 도구 결과)가 MAX_BLOCKS(2)에 이르면 더 막지 않고 `systemMessage`로 사용자에게 직접 확인을 안내한다.
 Stop이 연이어 막혔는데(`stop_hook_active`) transcript에 표식이 없으면(피드백이 기록되지 않는 버전) 한도에 이른 것으로 본다.
+거부된 호출을 똑같이(`description` 제외) 사이 글·질문·사용자 입력 없이 다시 한 거부는 키마다 BLIND_FREE(1)번까지 세지
+않는다(`block_count`) — 그 거부 문구에는 RETRY_NOTE를 붙인다.
 
 **fail-open**: 표시 보조일 뿐 안전 관문이 아니다(실제 관문 — guard 규칙 7의 publish `ask`, 승인 해시, 규칙 2의 게시 승인 — 은 그대로).
 입력·transcript를 못 읽거나 import·판정 중 예외면 판정하지 않고 stderr에 경고한다(stop은 `systemMessage`로 "판정 못 함"도 알린다).
@@ -343,14 +345,62 @@ def _checked(seq, obs, ts, *, report_ok=True):
             yield ob
 
 
+BLIND_FREE = 1      # 키마다 세지 않는 "보지 않고 다시 한" 거부의 상한 → 같은 키 거부는 최대 MAX_BLOCKS + BLIND_FREE번
+
+
+def _sig(name, tool_input) -> str:
+    """같은 호출 비교용: 도구 이름 + 입력(`description` 제외)."""
+    inp = {k: v for k, v in (tool_input if isinstance(tool_input, dict) else {}).items() if k != "description"}
+    return json.dumps([str(name or ""), inp], ensure_ascii=False, sort_keys=True)
+
+
+def _quiet(seq, a: int, b: int) -> bool:
+    """seq[a:b]에 사용자에게 보인 글(assistant 텍스트·거부되지 않은 질문)도 사용자 입력·Stop 피드백도 없다(다른 도구 호출은
+    상관없다 — `sleep 3`)."""
+    for e in seq[max(a, 0):b]:
+        if e["kind"] == "text" or shown._live_ask(e) or (e["kind"] == "user" and (e["feedback"] or not e["meta"])):
+            return False
+    return True
+
+
+def _denies_of(seq, key: str, start: int = 0) -> list[int]:
+    return [i for i in range(max(start, 0), len(seq)) if shown.denied(seq[i])
+            and key in shown.MARKER_RE.findall(str(seq[i].get("result") or ""))]
+
+
+def blind_retries(seq, key: str, start: int = 0) -> int:
+    """seq[start:]의 key 거부 중 바로 앞 같은 키 거부와 똑같은 호출을 그 사이에 글·질문·사용자 입력 없이 다시 한 것의 수.
+    거부를 일시 오류로 읽고 기다렸다 되풀이한 호출(10/14)은 표를 보일 기회를 쓴 것이 아니다."""
+    ds = _denies_of(seq, key, start)
+    return sum(1 for a, b in zip(ds, ds[1:])
+               if _sig(seq[a]["name"], seq[a]["input"]) == _sig(seq[b]["name"], seq[b]["input"]) and _quiet(seq, a + 1, b))
+
+
+def block_count(seq, key: str, start: int = 0) -> int:
+    """seq[start:]에서 key로 막은 횟수(표식이 든 Stop 피드백·거부된 도구 결과). 보지 않고 다시 한 거부는 BLIND_FREE번까지 빼고
+    센다(Stop 피드백은 빼지 않는다)."""
+    return markers(seq[start:]).count(key) - min(BLIND_FREE, blind_retries(seq, key, start))
+
+
+def is_retry(seq, key: str, name, tool_input, start: int = 0) -> bool:
+    """지금 호출이 마지막 key 거부와 똑같고, 그 뒤 글·질문·사용자 입력이 없다."""
+    ds = _denies_of(seq, key, start)
+    return bool(ds) and _sig(seq[ds[-1]]["name"], seq[ds[-1]]["input"]) == _sig(name, tool_input) \
+        and _quiet(seq, ds[-1] + 1, len(seq))
+
+
+def _from(ob) -> int:
+    """막은 횟수를 세기 시작하는 순번: 그 의무가 생긴 곳(초안 표는 같은 작업에서 같은 결과가 처음 나온 곳)."""
+    return (ob.extra or {}).get("count_from", ob.start) if isinstance(ob.extra, dict) else ob.start
+
+
 def _split(seq, found, prior_extra: int = 0):
     """빠진 의무를 한도 안(막는다)·한도 밖(안내만)으로 나눈다. 막은 횟수는 그 의무가 생긴 뒤(`count_from`, 초안 표는 같은 작업에서
     같은 결과가 처음 나온 곳)의 표식만 센다 — 다른 작업의 같은 키 표식은 세지 않는다. 화면은 창마다 센다(A→B→A의 두 번째 A는
-    새 의무)."""
+    새 의무). 보지 않고 똑같이 다시 한 거부는 BLIND_FREE번까지 세지 않는다(`block_count`)."""
     under, over = [], []
     for ob, miss in found:
-        start = (ob.extra or {}).get("count_from", ob.start) if isinstance(ob.extra, dict) else ob.start
-        n = markers(seq[start:]).count(ob.key)
+        n = block_count(seq, ob.key, _from(ob))
         (under if n + prior_extra < MAX_BLOCKS else over).append((ob, miss))
     return under, over
 
@@ -412,7 +462,9 @@ def mode_pre_ask(inp) -> dict | None:
         warn("transcript에 지금 질문이 기록되지 않아(같은 응답의 앞 글이 빠졌을 수 있다) 거부하지 않는다")
         return None
     if under:
-        return _deny("\n\n".join(reason(ob, miss, deny=True) for ob, miss in under))
+        name = inp.get("tool_name")
+        return _deny("\n\n".join(reason(ob, miss, deny=True, retry=is_retry(seq, ob.key, name, tool_input, _from(ob)))
+                                  for ob, miss in under))
     over = [(ob, m) for ob, m in over if ob.start >= ts]
     return {"systemMessage": capped_message([ob for ob, _ in over])} if over else None
 
@@ -488,7 +540,8 @@ def mode_pre_bash(inp) -> dict | None:
         warn("transcript에 지금 명령이 기록되지 않아(같은 응답의 앞 글이 빠졌을 수 있다) 거부하지 않는다")
         return None
     if under or first:
-        return _deny("\n\n".join([fmt[id(ob)](ob, miss) for ob, miss in under] + [unseen_reason(*u) for u in first]))
+        return _deny("\n\n".join([fmt[id(ob)](ob, miss, is_retry(seq, ob.key, "Bash", tool_input, _from(ob)))
+                                   for ob, miss in under] + [unseen_reason(*u) for u in first]))
     later = [u for u in unseen if u not in first]
     if over or later:
         msg = capped_message([ob for ob, _ in over]) if over else \

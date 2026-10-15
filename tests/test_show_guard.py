@@ -277,7 +277,7 @@ def test_pre_bash_publish_requires_screen_before_approval(tmp_path):
     assert pre("pre-bash", summarized, "Bash", {"command": 'grep -n "db_pr.py publish --approved abc1234def" a'}) is None
     key = shown.MARKER + " push:abc1234def — 승인 질문 전에"
     capped = write(tmp_path, prompt("p"), bash("s", STAGE_CMD, SCREEN), say(SUMMARY), prompt("승인"),
-                   call("x1", "Bash", {"command": PUBLISH_CMD}, key, True),
+                   call("x1", "Bash", {"command": PUBLISH_CMD}, key, True), say(SUMMARY),       # 글을 쓰고 다시 시도
                    call("x2", "Bash", {"command": PUBLISH_CMD}, key, True), name="cap.jsonl")
     out = pre("pre-bash", capped, "Bash", {"command": PUBLISH_CMD})
     assert decision(out) is None and shown.CAPPED in out["systemMessage"]
@@ -548,7 +548,7 @@ def test_draft_rerun_with_same_result_shares_key_and_cap(tmp_path):
     key = out1[0].key
     deny = shown.MARKER + " " + key + " — 초안 검증표를 요약했다"
     path = write(tmp_path, prompt("p"), bash("d1", DRAFT_CMD, DRAFT_OUT), call("a1", ASK, {"question": "진행?"}, deny, True),
-                 call("a2", ASK, {"question": "진행?"}, deny, True), bash("d2", DRAFT_CMD, DRAFT_OUT))
+                 say("초안 검증 통과."), call("a2", ASK, {"question": "진행?"}, deny, True), bash("d2", DRAFT_CMD, DRAFT_OUT))
     out = pre("pre-ask", path, ASK, {"question": "note를 승인할까요?"})
     assert decision(out) is None and shown.CAPPED in out["systemMessage"]      # 다시 돌려도 한도는 그대로
 
@@ -569,7 +569,7 @@ def test_draft_key_ignores_plan_notation(tmp_path):
     assert key(draft("/w/MOCK-2/plan.json")) != k                       # 다른 작업의 계획은 다른 키
     deny = shown.MARKER + " " + k + " — 초안 검증표를 요약했다"
     path = write(tmp_path, prompt("p"), bash("d1", draft(plans[0]), DRAFT_OUT), call("a1", ASK, {"question": "진행?"}, deny, True),
-                 call("a2", ASK, {"question": "진행?"}, deny, True), bash("d2", draft(plans[1]), DRAFT_OUT))
+                 say("초안 검증 통과."), call("a2", ASK, {"question": "진행?"}, deny, True), bash("d2", draft(plans[1]), DRAFT_OUT))
     out = pre("pre-ask", path, ASK, {"question": "note를 승인할까요?"})
     assert decision(out) is None and shown.CAPPED in out["systemMessage"]      # 표기를 바꿔 다시 돌려도 한도는 그대로
 
@@ -628,3 +628,62 @@ def test_stage_deny_does_not_invite_a_new_question(tmp_path):
     assert lines[0].startswith(shown.MARKER + " draft:") and "거부됨(오류·일시 장애 아님)" in lines[0]
     assert lines[1].startswith("까닭: 초안 검증표를 보이지 않고 stage하려 했다(빠진 규칙 ")
     assert lines[2].startswith("할 일: 먼저 답(글)에 아래 표를 그대로 쓰고, 그 글 뒤에(같은 응답에서) 같은 stage 명령을")
+
+
+# --- 보지 않고 다시 한 거부(10/14: 거부를 transcript 지연으로 읽고 `sleep 3` 뒤 같은 호출) --------------------------------
+
+def _ask_deny(tid, question, reason):
+    return call(tid, ASK, {"question": question}, "PreToolUse:" + ASK + " hook error: " + reason, True)
+
+
+def test_blind_identical_retry_gets_one_more_deny(tmp_path):
+    q = SUMMARY + " 승인할까요?"
+    base = write(tmp_path, prompt("p"), bash("s", STAGE_CMD, SCREEN))
+    r = pre("pre-ask", base, ASK, {"question": q})["hookSpecificOutput"]["permissionDecisionReason"]
+    assert shown.MARKER + " push:abc1234def" in r and RETRY not in r
+    two = write(tmp_path, prompt("p"), bash("s", STAGE_CMD, SCREEN), _ask_deny("a1", q, r), _ask_deny("a2", q, r),
+                name="two.jsonl")
+    out = pre("pre-ask", two, ASK, {"question": q})                     # 세 번째 똑같은 질문: 한 번 더 막고 그렇다고 알린다
+    assert decision(out) == "deny" and RETRY in out["hookSpecificOutput"]["permissionDecisionReason"]
+    three = write(tmp_path, prompt("p"), bash("s", STAGE_CMD, SCREEN), _ask_deny("a1", q, r), _ask_deny("a2", q, r),
+                  _ask_deny("a3", q, r), name="three.jsonl")
+    out = pre("pre-ask", three, ASK, {"question": q})                   # 네 번째: 한도(키마다 거부 최대 3번)
+    assert decision(out) is None and shown.CAPPED in out["systemMessage"]
+    five = write(tmp_path, prompt("p"), bash("s", STAGE_CMD, SCREEN), *[_ask_deny(f"a{k}", q, r) for k in range(5)],
+                 name="five.jsonl")
+    out = pre("pre-ask", five, ASK, {"question": q})                    # 몇 번을 되풀이해도 한 번만 덜 센다
+    assert decision(out) is None and shown.CAPPED in out["systemMessage"]
+
+
+def test_retry_after_text_counts_but_tool_calls_in_between_do_not(tmp_path):
+    q = SUMMARY + " 승인할까요?"
+    r = pre("pre-ask", write(tmp_path, prompt("p"), bash("s", STAGE_CMD, SCREEN)), ASK,
+            {"question": q})["hookSpecificOutput"]["permissionDecisionReason"]
+    said = write(tmp_path, prompt("p"), bash("s", STAGE_CMD, SCREEN), _ask_deny("a1", q, r), say(SUMMARY),
+                 _ask_deny("a2", q, r), name="said.jsonl")
+    out = pre("pre-ask", said, ASK, {"question": q})                    # 사이에 글을 썼다: 보통대로 두 번에서 한도
+    assert decision(out) is None and shown.CAPPED in out["systemMessage"]
+    slept = write(tmp_path, prompt("p"), bash("s", STAGE_CMD, SCREEN), _ask_deny("a1", q, r), bash("z", "sleep 3", ""),
+                  _ask_deny("a2", q, r), name="slept.jsonl")
+    out = pre("pre-ask", slept, ASK, {"question": q})                   # `sleep 3`만 했다: 보지 않고 다시 한 것
+    assert decision(out) == "deny" and RETRY in out["hookSpecificOutput"]["permissionDecisionReason"]
+    other = write(tmp_path, prompt("p"), bash("s", STAGE_CMD, SCREEN), _ask_deny("a1", q, r), _ask_deny("a2", "승인?", r),
+                  name="other.jsonl")
+    out = pre("pre-ask", other, ASK, {"question": q})                   # 질문을 바꿨다: 똑같은 호출이 아니다
+    assert decision(out) is None and shown.CAPPED in out["systemMessage"]
+
+
+def test_blind_retry_ignores_description_and_marks_stage_retry(tmp_path):
+    path = write(tmp_path, prompt("p"), bash("d", DRAFT_CMD, DRAFT_OUT), say("초안 검증 통과."))
+    r = pre("pre-bash", path, "Bash", {"command": STAGE_CMD})["hookSpecificOutput"]["permissionDecisionReason"]
+    once = write(tmp_path, prompt("p"), bash("d", DRAFT_CMD, DRAFT_OUT), say("초안 검증 통과."),
+                 call("s1", "Bash", {"command": STAGE_CMD, "description": "stage"}, "PreToolUse:Bash hook error: " + r, True),
+                 name="once.jsonl")
+    out = pre("pre-bash", once, "Bash", {"command": STAGE_CMD, "description": "다시 stage"})
+    assert decision(out) == "deny" and RETRY in out["hookSpecificOutput"]["permissionDecisionReason"]
+    twice = write(tmp_path, prompt("p"), bash("d", DRAFT_CMD, DRAFT_OUT), say("초안 검증 통과."),
+                  _denied("s1", STAGE_CMD, r), _denied("s2", STAGE_CMD, r), name="twice.jsonl")
+    assert decision(pre("pre-bash", twice, "Bash", {"command": STAGE_CMD})) == "deny"     # 세 번째까지 막는다
+
+
+RETRY = "방금 거부된 것과 똑같은 호출이다"
