@@ -392,3 +392,61 @@ def test_two_failed_plans_are_both_satisfiable():
     obs = [o for o in shown.obligations(seq) if o.kind == "draft"]
     assert len({o.key for o in obs}) == 2 and all(o.end == 3 for o in obs)
     assert all(shown.missing(o, shown.visible_between(seq, o.start + 1, o.end)) == [] for o in obs)
+
+
+# h5-18b eval 18: 경로 목록이 든 R3 사유를 같은 계획 재실행에서 `[:150]`으로 잘라 찍고, 잘린 행만 보였다 — hook은 잘린 결과를
+# 의무로 삼아 통과시켰고 채점기는 처음 결과로 실패시켰다. 덜 보인 사본은 앞 결과의 창을 닫지 않고 의무도 되지 않는다
+LONG_R3 = "DATA-001-03: C=1 (DATA-001-03/any) — data/DATA-001-x/fixtures/DATA-001-01.log, data/DATA-001-x/fixtures/DATA-001-02.log"
+CUT_RERUN = ("R1 pass 대상 1개 통과\nR3 fail " + LONG_R3[:70] + "\nR4 fail 기대값이 깨진 fixture 5개\nR5 skipped 해당 없음\n"
+             '{"id": "R4", "status": "fail", "reason": "기대값이')
+
+
+def _cut_rerun(*between):
+    first = bash("d1", REL_DRAFT.format(plan="plan.json", draft="draft"),
+                 f"R3 fail: {LONG_R3}\nR4 fail: 기대값이 깨진 fixture 5개\n{{")
+    rerun = bash("d2", REL_DRAFT.format(plan="plan.json", draft="draft") + " | python3 -c 'print(r[:150])'", CUT_RERUN)
+    return [first, rerun, *between, bash("s", STAGE_CMD, SCREEN)]
+
+
+def test_weaker_copy():
+    full = [{"id": "R3", "status": "fail", "reason": LONG_R3}, {"id": "R4", "status": "fail", "reason": "x 5개"}]
+    cut = [{"id": "R1", "status": "pass", "reason": "대상 1개 통과"}, dict(full[0], reason=LONG_R3[:50] + "…"), full[1]]
+    assert shown.weaker_copy(full, cut)                                      # 잘린 사유 + 접힌 통과 행
+    assert shown.weaker_copy(full, [full[1]])                                # 규칙이 빠졌다
+    assert shown.weaker_copy(full, [dict(full[0], reason=""), full[1]])      # 사유 없이 상태만
+    assert not shown.weaker_copy(full, full)                                 # 같은 결과: 지금처럼 대신한다
+    assert not shown.weaker_copy(full, [dict(full[0], reason=LONG_R3 + " 더"), full[1]])        # 다른 사유
+    assert not shown.weaker_copy(full, [dict(full[0], status="pass", reason="")])              # 다른 상태
+    assert not shown.weaker_copy(full, [full[0], {"id": "R2", "status": "fail", "reason": "y"}])   # 새 실패 행
+
+
+def test_cut_rerun_keeps_first_result_obligation():
+    seq = _cut_rerun()
+    (ob,) = [o for o in shown.obligations(seq) if o.kind == "draft"]
+    assert (ob.start, ob.end, ob.close_kind) == (0, 2, "stage")
+    assert [r["reason"] for r in ob.rules if r["id"] == "R3"] == [LONG_R3]
+    cut_table = "| R3 | fail | " + LONG_R3[:70] + " |\n| R4 | fail | 기대값이 깨진 fixture 5개 |"
+    shown_cut = _cut_rerun(text(cut_table))
+    (ob,) = [o for o in shown.obligations(shown_cut) if o.kind == "draft"]
+    assert [m[:3] for m in shown.missing(ob, shown.visible_between(shown_cut, 1, ob.end))] == ["R3("]
+    w = shown.draft_window(shown_cut, "first_fail")                     # 채점기도 같은 결과·창
+    assert (w["i"], w["end"]) == (0, 3) and shown.draft_window(shown_cut)["i"] == 0
+    full = _cut_rerun(text(FAIL_TABLE.replace("DATA-001-03: C=1 (DATA-001-03/any) — data/DATA-001-x/fixtures/DATA-001-01.log",
+                                              LONG_R3)))
+    (ob,) = [o for o in shown.obligations(full) if o.kind == "draft"]
+    assert shown.missing(ob, shown.visible_between(full, 1, ob.end)) == []
+    # 계획을 고쳐 다시 돌렸으면 지금처럼 새 결과가 대신한다
+    edit = tool("e", "Edit", {"file_path": "/w/MOCK-1/plan.json"}, "ok")
+    seq = _cut_rerun()
+    seq = [seq[0], edit, *seq[1:]]
+    assert [(o.start, o.end) for o in shown.obligations(seq) if o.kind == "draft"] == [(0, 2), (2, 3)]
+
+
+def test_draft_doc_reads_printed_table_rows():
+    """모델이 결과를 `| R1 | pass | 사유 |`로 찍은 출력도 읽는다(h5-18b eval 18: 좁힌 계획의 통과 결과를 못 읽어 채점기가
+    앞 실패 결과를 마지막 결과로 봤다)."""
+    out = "| R1 | pass | 대상 1개 통과 |\n| R3 | fail | C=1 — x |\n| R5 | skipped | 해당 없음 |"
+    assert shown.draft_doc(out)["rules"] == [{"id": "R1", "status": "pass", "reason": "대상 1개 통과"},
+                                              {"id": "R3", "status": "fail", "reason": "C=1 — x"},
+                                              {"id": "R5", "status": "skipped", "reason": "해당 없음"}]
+    assert shown.draft_doc("| 규칙 | 상태 |\n|---|---|") is None

@@ -360,16 +360,45 @@ class Ctx:
         if bad and shown.draft_all_clear(w["rules"]):
             # 전부 통과한 표는 stage 전에 보이지 않았어도 첫 stage 뒤 첫 push 확인 화면(승인 질문까지)에 규칙 행이 모두 보였으면
             # 갈음한다(10/14 사용자, show_guard와 같다)
-            win = next((x for x in self.screens("push") or [] if x["start"] >= w["first_stage"]), None)
+            win = self.first_push_screen(w["first_stage"])
             if win is not None and win["asked"] is not None:
-                rest = shown.draft_rows_missing(
-                    w["rules"], shown.visible_lines(self.visible_between(win["start"] + 1, win["asked"] + 1)))
+                rest = self.rows_missing_in_screen(w["rules"], win)
                 if not rest:
                     return True, ev + f"; push 확인 화면으로 갈음(전부 통과, seq {win['start']}→{win['asked']})"
                 ev += f"; push 확인 화면(seq {win['start']}→{win['asked']})에도 없음: {rest}"
             else:
                 ev += "; 전부 통과지만 승인 질문까지 간 push 확인 화면 없음"
         return bool(w["rules"]) and not bad, ev
+
+    def first_push_screen(self, first_stage: int):
+        """첫 stage 뒤 첫 push 확인 화면 창. 없으면 None."""
+        return next((x for x in self.screens("push") or [] if x["start"] >= first_stage), None)
+
+    def rows_missing_in_screen(self, rules, win) -> list[str]:
+        """rules 규칙 행 중 push 확인 화면 창(화면 뒤 ~ 승인 질문 포함)의 보인 글에 없는 것(`shown.draft_rows_missing`)."""
+        return shown.draft_rows_missing(rules, shown.visible_lines(self.visible_between(win["start"] + 1, win["asked"] + 1)))
+
+    def stage_verification(self, first_stage: int, ids=("R1", "R2", "R3", "R4")):
+        """stage 자체 검증(첫 stage 뒤 첫 push 확인 화면의 "검증 결과" 표: `| R1 | ✅ 통과 | 사유 |`)에 ids 행이 모두 있고 fail(❌)이
+        없으며, 그 행이 승인 질문 전에 보였다 → (ok, 근거). 화면·승인 질문·행이 없으면 (False, 까닭)."""
+        win = self.first_push_screen(first_stage)
+        if win is None or win["asked"] is None:
+            return False, "stage 뒤 승인 질문까지 간 push 확인 화면 없음"
+        rows = {}
+        for m in re.finditer(r"^\|\s*(R\d)\s*\|\s*([^|]*?)\s*\|\s*([^|]*?)\s*\|\s*$", win["block"], re.M):
+            cell = m.group(2)
+            status = "pass" if cell.startswith("✅") else "fail" if cell.startswith("❌") else "skipped"
+            rows.setdefault(m.group(1), {"id": m.group(1), "status": status, "reason": m.group(3)})
+        want = [rows[i] for i in ids if i in rows]
+        if len(want) < len(ids):
+            return False, f"push 확인 화면(seq {win['start']}) 검증 결과에 {[i for i in ids if i not in rows]} 행 없음"
+        fails = [r["id"] for r in want if r["status"] == "fail"]
+        if fails:
+            return False, f"push 확인 화면(seq {win['start']}) stage 자체 검증 실패={fails}"
+        rest = self.rows_missing_in_screen(want, win)
+        if rest:
+            return False, f"push 확인 화면(seq {win['start']}→{win['asked']}) 검증 행이 승인 질문 전에 안 보임: {rest}"
+        return True, f"stage 자체 검증으로 갈음(R1~R4 통과, push 확인 화면 seq {win['start']}→{win['asked']})"
 
     def tool_uses(self):
         """events.jsonl의 assistant tool_use를 [(이름, 입력)]으로. 기록이 없으면 None."""
@@ -1024,7 +1053,13 @@ def checks(eid: int, ctx: Ctx) -> list:
                 return False, "초안 검증 호출 없음"
             fails = [r["id"] for r in w["rules"] if r.get("status") == "fail" and r["id"] in ("R1", "R2", "R3", "R4")]
             n = len([c for c in w["calls"] if c < w["first_stage"]])
-            return n >= 2 and not fails, f"stage 전 초안 검증 호출 {n}회, 마지막으로 읽은 결과(seq {w['i']})의 R1~R4 실패={fails}"
+            ev = f"stage 전 초안 검증 호출 {n}회, 마지막으로 읽은 결과(seq {w['i']})의 R1~R4 실패={fails}"
+            if n >= 2 and fails:
+                # 좁힌 뒤 초안 검증 결과를 못 읽었어도 stage 자체 검증(push 확인 화면)이 R1~R4 통과이고 승인 질문 전에 그 행이
+                # 보였으면 갈음한다(10/15 사용자 결정, h5-18b)
+                ok, why = ctx.stage_verification(w["first_stage"])
+                return ok, f"{ev}; {why}"
+            return n >= 2 and not fails, ev
         def r3_reported():
             """처음 실패 결과(first_fail — 다른 계획의 draft로 닫히지 않는다, `shown.draft_end`)의 표를 규칙마다 보였고, R3 fail
             행에 든 걸린 fixture와 걸린 시그니처 전역 키가 그 창의 보인 글에 있다(show_guard와 같은 창)."""

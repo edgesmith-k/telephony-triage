@@ -482,6 +482,17 @@ def _hit_keys(hits: list[dict], keys: list[str]) -> str:
     return ", ".join(found or keys)
 
 
+R3_FIXTURES_SHOWN = 3      # R3 실패 사유에 이름을 드는 걸린 fixture 수(나머지는 "외 k개", 전체 경로는 `hits[].fixture`)
+
+
+def _hit_fixtures(hits: list[dict]) -> str:
+    """R3 실패 사유의 걸린 fixture: `fixture N개: <파일 이름>, … 외 k개`. 전체 경로 목록은 표 한 행으로 너무 길어 모델이 잘라
+    보였다(h5-18b eval 18) — 경로는 결과의 `hits`·R4 `targets`에 그대로 있다. 시그니처 전역 키는 자르지 않는다(`_hit_keys`)."""
+    names = [Path(str(h["fixture"])).name for h in hits]
+    more = len(names) - R3_FIXTURES_SHOWN
+    return f"fixture {len(names)}개: {', '.join(names[:R3_FIXTURES_SHOWN])}" + (f" 외 {more}개" if more > 0 else "")
+
+
 def r3(run: Run, t: Targets) -> dict:
     checks = []
     for cid in sorted(t.cause):
@@ -505,7 +516,7 @@ def r3(run: Run, t: Targets) -> dict:
                 hits.append({"fixture": item["rel"], "kind": item["fx"].kind, "signature": sig,
                              "allow_cause_draft": _allow_draft(item, cid)})
         if hits:
-            checks.append(_check(cid, "fail", f"{cid}: C=1 ({_hit_keys(hits, keys)}) — {', '.join(h['fixture'] for h in hits)}",
+            checks.append(_check(cid, "fail", f"{cid}: C=1 ({_hit_keys(hits, keys)}) — {_hit_fixtures(hits)}",
                                  kind="cause",
                                  signatures=keys, hits=hits,
                                  allow_cause_drafts=[h["allow_cause_draft"] for h in hits if h["allow_cause_draft"]],
@@ -529,7 +540,7 @@ def r3(run: Run, t: Targets) -> dict:
         errored = [e for i in negatives for e in _errored(run, i, {tid}, other)]
         if hits:
             checks.append(_check(tid, "fail", f"{tid}: 음성 fixture에서 S=1 ({_hit_keys(hits, keys)}) — "
-                                              f"{', '.join(h['fixture'] for h in hits)}",
+                                              f"{_hit_fixtures(hits)}",
                                  kind="symptom", signatures=keys, hits=hits, **_err_extra(errored, other)))
         elif errored:
             checks.append(_check(tid, "fail", _errored_reason(errored), kind="symptom", signatures=keys,

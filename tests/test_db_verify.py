@@ -107,8 +107,10 @@ def test_broad_cause_signature_and_widened_fixed_cause_are_blocked():
     assert f"{CALL}/fixtures/CALL-001-01.fixed.MOCKB77_U2_20260920.log" in hits      # 수정 후 감시
     assert f"{CALL}/fixtures/CALL-001-01.fixed.MOCKB77_U2_20260920.log" in rows["R4"]["targets"]
     # 표 한 행(사유)에 걸린 시그니처 전역 키와 fixture가 같이 든다(eval 18)
-    assert rows["R3"]["reason"].startswith("CALL-001-01: C=1 (CALL-001-01/ims-not-registered-on-dial) — ")
-    assert f"{CALL}/fixtures/CALL-001.none.log" in rows["R3"]["reason"]
+    # 사유는 짧게: 파일 이름만(전체 경로는 hits), 키는 자르지 않는다(h5-18b eval 18)
+    reason = rows["R3"]["reason"]
+    assert reason.startswith(f"CALL-001-01: C=1 (CALL-001-01/ims-not-registered-on-dial) — fixture {len(hits)}개: ")
+    assert "CALL-001.none.log" in reason and f"{CALL}/fixtures/" not in reason
 
     db = git_db()
     new = db / "data/DATA-009-sim-rejected"
@@ -888,3 +890,13 @@ def test_r3_ignores_other_targets_signature_errors_but_shows_them():
     check = next(c for c in rows["R3"]["checks"] if c["target"] == "DATA-001-01")
     assert check["status"] == "pass" and "errors" not in check, check
     assert any(e["fixture"].endswith("DATA-001.none.log") for e in check["other_errors"]) and "다른 시그니처 오류" in check["note"]
+
+
+def test_r3_reason_names_few_fixtures_and_all_keys():
+    """R3 실패 사유: 걸린 fixture는 파일 이름 3개 + "외 k개", 시그니처 전역 키는 모두(h5-18b eval 18 — 경로 목록이 길어 잘렸다)."""
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    import db_verify
+    hits = [{"fixture": f"data/DATA-001-x/fixtures/DATA-001-0{n}.log", "signature": f"DATA-001-03/s{n % 2}"} for n in range(1, 7)]
+    assert db_verify._hit_fixtures(hits) == "fixture 6개: DATA-001-01.log, DATA-001-02.log, DATA-001-03.log 외 3개"
+    assert db_verify._hit_fixtures(hits[:2]) == "fixture 2개: DATA-001-01.log, DATA-001-02.log"
+    assert db_verify._hit_keys(hits, []) == "DATA-001-03/s0, DATA-001-03/s1"

@@ -761,3 +761,22 @@ def test_draft_all_clear_rule():
                 {"id": "R1", "status": "pass", "review_required": True},
                 {"id": "R4", "status": "pass", "allow_cause_drafts": [{"op": "allow-cause"}]}):
         assert not shown.draft_all_clear(ok + [bad]), bad
+
+
+def test_cut_rerun_of_same_plan_does_not_shrink_obligation(tmp_path):
+    """h5-18b eval 18: 같은 계획을 고치지 않고 다시 돌려 긴 R3 사유를 150자로 잘라 찍은 뒤 잘린 행을 질문에 넣었다 — 잘린
+    결과가 의무를 대신해 통과됐다. 덜 보인 사본은 앞(전체) 결과의 의무를 닫지 않는다."""
+    long_r3 = ("DATA-001-03: C=1 (DATA-001-03/any) — data/DATA-001-x/fixtures/DATA-001-01.log, "
+               "data/DATA-001-x/fixtures/DATA-001-02.log")
+    first = bash("d1", REL_DRAFT.format(plan="plan.json", draft="draft"),
+                 f"R3 fail: {long_r3}\nR4 fail: 기대값이 깨진 fixture 5개\n{{")
+    cut = bash("d2", REL_DRAFT.format(plan="plan.json", draft="draft") + " | python3 -c 'print(r[:60])'",
+               f"R1 pass 대상 1개 통과\nR3 fail {long_r3[:60]}\nR4 fail 기대값이 깨진 fixture 5개\nR5 skipped 해당 없음")
+    path = write(tmp_path, prompt("p"), first, cut)
+    cut_q = dict(NARROW_Q, question=f"| R3 | fail | {long_r3[:60]} |\n| R4 | fail | 기대값이 깨진 fixture 5개 |\n"
+                 + NARROW_Q["question"])
+    out = pre("pre-ask", path, ASK, cut_q)
+    assert decision(out) == "deny" and long_r3 in out["hookSpecificOutput"]["permissionDecisionReason"]
+    full_q = dict(NARROW_Q, question=f"| R3 | fail | {long_r3} |\n| R4 | fail | 기대값이 깨진 fixture 5개 |\n"
+                  + NARROW_Q["question"])
+    assert pre("pre-ask", path, ASK, full_q) is None

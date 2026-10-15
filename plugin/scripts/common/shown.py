@@ -266,7 +266,11 @@ def draft_doc(result: str):
     if doc is not None:
         return doc
     rows = []
-    for m in re.finditer(r"^(R\d)\s+(pass|fail|skipped|needs-approval):?\s*(.*)$", result, re.MULTILINE):
+    # 요약·행마다 찍은 줄(`R4 fail: 사유`)과, 모델이 결과를 표로 찍은 줄(`| R4 | fail | 사유 |`, h5-18b eval 18)
+    found = sorted(list(re.finditer(r"^(R\d)\s+(pass|fail|skipped|needs-approval):?\s*(.*)$", result, re.MULTILINE))
+                   + list(re.finditer(r"^\|\s*(R\d)\s*\|\s*(pass|fail|skipped|needs-approval)\s*\|\s*(.*?)\s*\|\s*$",
+                                      result, re.MULTILINE)), key=lambda m: m.start())
+    for m in found:
         # 행마다 찍은 출력의 끝 `review_required= False`(또는 값만 `True`)는 사유가 아니다 — 값은 review_required로 둔다
         tail = re.search(r"\s+(?:review_required=\s*)?(True|False|None)$", m.group(3).strip())
         reason = m.group(3).strip()[:tail.start()] if tail else m.group(3).strip()
@@ -643,6 +647,54 @@ def same_plan_rerun(seq, i: int, c: int) -> bool:
     return bool(tag) and plan_tag(seq[c]) == tag and not any(_touches(seq[k], tag, k == c) for k in range(i + 1, c + 1))
 
 
+def _cut_reason(reason) -> str:
+    """잘린 사유 비교용: 정규화하고 끝의 말줄임(`…`·`...`)을 뗀다."""
+    return re.sub(r"(?:…|\.\.\.)+$", "", norm_line(str(reason or ""))).rstrip()
+
+
+def weaker_copy(full, part) -> bool:
+    """part가 full의 덜 보인 사본인가: 같은 규칙은 상태가 같고 part의 사유가 full 사유의 앞부분(모델이 `[:150]`·`cut`으로
+    자른 출력)이며, part에만 있는 규칙은 접힌 통과 행(pass·`해당 없음`)뿐이고, 사유가 실제로 잘렸거나 full의 규칙이 빠졌다.
+    같은 결과를 덜 보이게 다시 찍어 표시 의무를 줄이지 못하게 한다(h5-18b eval 18: 경로 목록이 든 R3 사유를 150자로 잘라
+    다시 돌린 뒤 잘린 행만 보였는데 hook은 통과시키고 채점기는 처음 결과로 실패시켰다)."""
+    f = {str(r.get("id")): r for r in full or [] if isinstance(r, dict)}
+    p = {str(r.get("id")): r for r in part or [] if isinstance(r, dict)}
+    common = f.keys() & p.keys()
+    if not common:
+        return False
+    shorter = False
+    for rid in common:
+        if f[rid].get("status") != p[rid].get("status"):
+            return False
+        a, b = norm_line(str(f[rid].get("reason") or "")), _cut_reason(p[rid].get("reason"))
+        if not a.startswith(b):
+            return False
+        shorter = shorter or len(b) < len(a)
+    extra = [p[rid] for rid in p.keys() - f.keys()]
+    if extra and not draft_all_clear(extra):
+        return False
+    return shorter or bool(f.keys() - p.keys())
+
+
+def weaker_rerun(seq, i: int, c: int) -> bool:
+    """draft 호출 c가 i와 같은 계획을 고치지 않고 다시 돌려, 읽은 결과가 i 결과의 덜 보인 사본(`weaker_copy`)이다.
+    그런 c는 i의 창을 닫지 않고 따로 의무가 되지도 않는다 — i의 표를 그대로 보여야 한다."""
+    if not same_plan_rerun(seq, i, c):
+        return False
+    full, part = draft_rules(tool_text(seq[i])), draft_rules(tool_text(seq[c]))
+    return bool(full) and bool(part) and weaker_copy(full, part)
+
+
+def covering_draft(seq, c: int, calls, stage) -> int:
+    """draft 결과 c를 덮는 앞 결과: c가 그 덜 보인 사본이고 그 창이 c를 넘는 가장 앞 draft 호출. 없으면 c."""
+    for i in calls:
+        if i >= c:
+            break
+        if draft_end(seq, i, calls, stage) > c and weaker_rerun(seq, i, c):
+            return i
+    return c
+
+
 # 통과가 아닐 수 있는 출력: 낱말 `fail`·`needs-approval`(앞뒤가 글자·`-`가 아님 — `fail-case.log`·`failed`는 아니다)
 _NOT_PASS = re.compile(r"(?<![\w-])(?:fail|needs-approval)(?![\w-])", re.IGNORECASE)
 
@@ -667,6 +719,8 @@ def draft_end(seq, i: int, calls, stage) -> int:
     for c in sorted(set(later)):
         if c not in calls and c not in stage:
             return c        # 작업 경계
+        if c not in stage and weaker_rerun(seq, i, c):
+            continue        # 같은 결과를 덜 보이게 다시 찍었다(`weaker_copy`): i의 표가 그대로 의무다
         text = tool_text(seq[c])
         if (c in stage or draft_doc(text) is not None or _NOT_PASS.search(text)
                 or not same_plan_rerun(seq, i, c)):
@@ -703,6 +757,9 @@ def draft_window(seq, pick: str = "last") -> dict | None:
                 i, doc = next(((c, d) for c, d in failed if c > i and draft_json(tool_text(seq[c])) is not None
                                and same_plan_rerun(seq, i, c)
                                and ids <= {r.get("id") for r in d["rules"] if isinstance(r, dict)}), (i, doc))
+    j = covering_draft(seq, i, calls, stage)      # 덜 보인 사본이면 덮는 앞 결과의 창(hook `obligations`와 같다)
+    if j != i:
+        i, doc = j, draft_doc(tool_text(seq[j]))
     end = draft_end(seq, i, calls, stage)
     return {"i": i, "end": end, "doc": doc, "rules": [r for r in doc["rules"] if isinstance(r, dict) and r.get("id")],
             "calls": calls, "parsed": parsed, "first_stage": first_stage}
@@ -812,8 +869,8 @@ def obligations(seq, read_file=None, job_dir=None, *, script_only: bool = True) 
     first_of: dict[tuple, int] = {}       # (작업 경계, 키) → 같은 결과가 처음 나온 초안 호출
     for i in calls:
         rules = draft_rules(tool_text(seq[i]))
-        if not rules:
-            continue
+        if not rules or covering_draft(seq, i, calls, stage) != i:
+            continue        # 결과를 못 읽었거나, 앞 결과의 덜 보인 사본(그 앞 결과가 의무다)
         end = draft_end(seq, i, calls, stage)
         close = "end" if end >= len(seq) else ("draft" if end in calls else "stage" if end in stage else "job")
         block = "\n".join(f"| {r['id']} | {r.get('status')} | {norm_line(str(r.get('reason') or ''))} |" for r in rules)

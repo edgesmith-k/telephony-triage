@@ -2211,6 +2211,33 @@ def test_e18_renarrowed_counts_unreadable_first_draft(tmp_path):
     assert grader.checks(18, ctx)[2]()[0] is False
 
 
+STAGE_RULES = ("| R1 | ✅ 통과 | 대상 1개 통과 |\n| R2 | ✅ 통과 | 대상 1개 통과 |\n| R3 | ✅ 통과 | 대상 1개 통과 |\n"
+               "| R4 | ✅ 통과 | 전체 fixture 24개 기대값 유지 |\n| R5 | 건너뜀: 해당 없음 |  |\n")
+SCREEN_STAGE_OK = SCREEN.replace("| R1 | 건너뜀: 해당 없음 |  |\n| R4 | ✅ 통과 | 전체 fixture 3개 기대값 유지 |\n", STAGE_RULES)
+
+
+def test_e18_renarrowed_accepts_stage_own_verification(tmp_path):
+    """좁힌 뒤 초안 결과를 못 읽었어도(가공 출력) stage 자체 검증이 R1~R4 통과이고 push 확인 화면의 그 행이 승인 질문 전에
+    보였으면 갈음한다(10/15 사용자 결정, h5-18b). stage 검증에 R1~R4 fail이 있거나 화면 행을 보이지 않았으면 실패."""
+    assert SCREEN_STAGE_OK != SCREEN
+    piped = DRAFT_CMD.replace("--json; echo EXIT $?", "--json | python3 -c 'print(1)'")
+    head = [_bash("d1", DRAFT_CMD, DRAFT_FAIL42), _bash("d2", piped, "1")]
+
+    def verdict(name, screen, question):
+        ctx = _vis_ctx(tmp_path, [*head, _bash("s", STAGE_CMD, screen), _ask("q", question)], name)
+        return grader.checks(18, ctx)[2]()
+
+    ok, ev = verdict("ok", SCREEN_STAGE_OK, SCREEN_STAGE_OK + "\n승인할까요?")
+    assert ok and "stage 자체 검증으로 갈음(R1~R4 통과, push 확인 화면" in ev, ev
+    bad = SCREEN_STAGE_OK.replace("| R3 | ✅ 통과 | 대상 1개 통과 |", "| R3 | ❌ 실패 | DATA-001-03: C=1 |")
+    ok, ev = verdict("fail", bad, bad + "\n승인할까요?")
+    assert not ok and "R3" in ev, ev
+    ok, ev = verdict("hidden", SCREEN_STAGE_OK, "변경 3개, 검증 통과입니다. 승인할까요?")
+    assert not ok and "안 보임" in ev, ev
+    ok, ev = verdict("no-r2", SCREEN, SCREEN + "\n승인할까요?")            # 화면에 R2·R3 행이 없다
+    assert not ok and "행 없음" in ev, ev
+
+
 def test_e9_first_screen_is_order_only(tmp_path):
     publish2 = PUBLISH_CMD.replace("abc1234def", "fed4321cba")
     restage = [_bash("s1", STAGE_CMD, SCREEN), _ask("q1", "변경 3개입니다. 승인할까요?"), ("text", "수정 요청 반영"),
