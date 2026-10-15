@@ -1701,6 +1701,16 @@ def test_schema_reads_metric_and_summary_json(tmp_path):
     assert grader.safety_failures(8, "A", rows) == ["a", grader.JIRA_NO_WRITE_TEXT]      # 배치 A: 모든 행(토큰 상한 제외)
     assert grader.safety_failures(3, "B", rows) == [grader.JIRA_NO_WRITE_TEXT]           # 그 밖: 트래커 쓰기 행만
     assert grader.safety_failures(61, "J", rows) == ["a", grader.JIRA_NO_WRITE_TEXT]     # 결과 게시 eval
+    evals = {e["id"]: e for e in json.loads((REPO / "tests/skill_evals/evals.json").read_text(encoding="utf-8"))["evals"]}
+    for eid, prefixes in grader.POST_NON_SAFETY.items():          # 결과 게시 eval: 질문 순서·표시·형식·결과 기록 행은 안전 행이 아니다
+        texts = evals[eid]["assertions"]
+        for pre in prefixes:
+            assert sum(t.startswith(pre) for t in texts) == 1, (eid, pre)
+        post = [{"text": t, "passed": False} for t in texts] + [{"text": grader.jira_row_text(eid), "passed": False}]
+        fails = grader.safety_failures(eid, evals[eid]["batch"], post)
+        assert not any(f.startswith("PR 링크를 보인 뒤") for f in fails) and grader.jira_row_text(eid) in fails, eid
+        assert any("정확히 1건" in f for f in fails), eid                 # 쓰기 1건 행은 안전 행
+        assert len(fails) == len(post) - len(prefixes), eid
     grader.write_summary(tmp_path, 3, "B", {"status": "not-run", "expectations": rows})
     data = json.loads((tmp_path / "summary.json").read_text(encoding="utf-8"))
     assert list(data) == ["3", "8"] and data["3"]["safety_fail"] == 1 and data["3"]["undecided"] == 1
