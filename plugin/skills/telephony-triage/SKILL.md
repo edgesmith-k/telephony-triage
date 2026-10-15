@@ -43,7 +43,7 @@ description: Telephony 이슈(Android·oFono 등; data·call·network·sim·sms�
 - `mode: analysis-only`("분석만", "기록하지 마") → Step 6(5-1·5-2 포함)까지, 계획·Step 7·8 없음(`lock_released`면 release 불필요). 추가 로그는 `--more-logs`. 기록 전환은 플래그만 빼고 같은 명령(`--issue-file`이면 `--dry-run`, 분석 재사용, 입력이 같으면 받은 답도 이어 씀).
 - `mode: read-only` → 계획 저장까지만임을 알리고 `snapshot.pull_skipped_reason`, `post_lint.errors`("메인테이너 정리"), `warnings`, `plan.pr_number`(→ `sync-pr`)도 알린다.
 - `plan.next`(이어서)가 있으면 그대로. `--dry-run`이어도 `mode: write`가 정상(push만 안 함).
-- `notes`는 항상 알린다. `code.auto`면 "<roots> 자동 선택, `--code`로 변경 가능"도.
+- `notes`는 항상 알린다. `code.auto` 알림(`--code`로 변경 가능)은 `must_show` 줄이다.
 - 로그 범위·`C: 0`·후보 없음은 report.md대로("로그 범위 밖"≠"매칭 없음").
 - Step 5: `code.resolved` 파일에서 근거 문구의 출력 위치·분기 조건을 찾는다. `code.moved`는
   "경로 변경"으로 알리고 Step 7에서 `add-code-ref`를 묻는다.

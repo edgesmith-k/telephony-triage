@@ -477,6 +477,11 @@ class ReportMixin:
                          f"{self.platform_label} {code.get('tree_version') or '?'}{AUTO_CODE_NOTE if code.get('auto') else ''})")
             for m in code.get("moved") or []:
                 lines.append(f"  - 경로 변경: {m['ref']} → {m['new_ref'] or '찾지 못함'} (Step 7 add-code-ref 제안)")
+            if code.get("auto"):      # 자동 선택 알림은 의무다(07 §Step 2-1 3번): must_show로 사용자에게 보이게 한다
+                roots = code.get("roots")
+                roots = ", ".join(map(str, roots)) if isinstance(roots, (list, tuple)) else roots
+                lines.append(add(12, f"코드 분석 트리 자동 선택: {roots} ({self.platform_label} "
+                                     f"{code.get('tree_version') or '?'}) — 다른 트리는 --code로 지정"))
         if cands and cands[0]["cause"]:
             top = cands[0]
             verified = "검증됨" if top.get("resolution_verification") == "verified" else "⚠ 미검증"

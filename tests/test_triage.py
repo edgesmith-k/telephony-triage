@@ -1082,6 +1082,9 @@ def test_code_auto_select_table():
             assert done["status"] == "ok" and done["code"]["auto"] is True and done["code"]["roots"] == "android16-main", name
             report = (ws.job_dir(W4_KEY) / "report.md").read_text(encoding="utf-8")
             assert "(자동 선택: code.auto_select, `--code`로 변경 가능)" in report and "분석 트리: android16-main" in report, name
+            # eval 55: 자동 선택 알림은 must_show 줄이다(백틱 없음 — 글자 그대로 옮기기 쉽게)
+            line = next((m for m in done.get("must_show") or [] if m.startswith("코드 분석 트리 자동 선택: android16-main (")), None)
+            assert line and line.endswith(") — 다른 트리는 --code로 지정") and "`" not in line and f"- {line}" in report, name
             assert _w4_state(ws)["code_auto"] == "android16-main" and "code" not in _w4_state(ws)["answers"], name
             assert not [w for w in done.get("warnings", []) if "code.auto_select" in w], name     # 키 없음·유효 값은 경고 없음
         else:
