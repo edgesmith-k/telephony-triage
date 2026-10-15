@@ -221,7 +221,7 @@ html{scroll-behavior:smooth}
   <div class="card stat"><b>9</b><span>Hooks (Claude 8 + Jira 응답 격리 1)</span></div>
   <div class="card stat"><b>6</b><span>카테고리: data · call · network · sim · sms · ims</span></div>
   <div class="card stat"><b>≈18k</b><span>Python 줄 수 (plugin/scripts + tools)</span></div>
-  <div class="card stat"><b>1,757</b><span>pytest 통과 (10/14 기준)</span></div>
+  <div class="card stat"><b>전체 통과</b><span>pytest (개수·날짜는 결재용 요약 §3)</span></div>
   <div class="card stat"><b>70</b><span>스킬 행동 평가 항목 (사내 S-2는 11개, 나머지는 사외 결과)</span></div>
 </div>
 
@@ -972,7 +972,7 @@ score = min(1, base + bonus)
 <tr><td>직접 편집 브랜치 자동 병합 없음</td><td>3-way replay는 v1에서 제외. 원격 변경은 덮어쓰기 / 중단 중 선택</td><td>직접 편집 기여자는 수동 재동기화</td></tr>
 <tr><td>작업 상태가 PC에 묶임</td><td>plan.json, lock, worktree는 홈 디렉토리에 있어 git으로 따라오지 않음</td><td>열린 PR의 sync-pr는 원래 PC에서</td></tr>
 <tr><td>oFono는 뼈대뿐</td><td>플랫폼 분리(플랫폼별 이슈 DB·<code>--platform</code>)는 됐지만 oFono 파서는 가정 형식(journald·BSD syslog) placeholder, 합성 로그로 전환만 검증</td><td>사내 로그를 받은 뒤 S24~S29에서 규칙·이슈 DB 작성</td></tr>
-<tr><td>스킬 트리거 recall 낮음</td><td>트리거 평가 precision 100%, recall 26~33% (자연어로 부르면 스킬이 안 뜰 때가 많음)</td><td>당분간 슬래시 커맨드 사용 권장. 사내 S-2에서 재확인</td></tr>
+<tr><td>스킬 트리거</td><td>실제 플러그인 방식 측정 recall·precision 100%(24개×2회, 10/05, <code>10-skill-eval.md</code>). 옛 26~33%는 첫 도구 호출만 세는 방식의 값</td><td>사내 S-2에서 재확인</td></tr>
 <tr><td>성능</td><td><code>db_pr</code>가 하위 스크립트 7개를 subprocess로 부르고 각자 이슈 DB 전체를 로드. 전체 테스트 약 23분</td><td>stage 수십 초. in-process 호출로 개선 여지</td></tr>
 <tr><td>OS</td><td>Ubuntu만 지원</td><td>다른 OS는 v1 범위 밖</td></tr>
 </table></div>
@@ -1068,7 +1068,6 @@ score = min(1, base + bonus)
 <ul class="tight">
 <li><b>성능</b>: 하위 스크립트를 같은 프로세스에서 호출. PR 한 건당 수십 초 단축.</li>
 <li><b>유지보수</b>: <code>db_add.py</code>(1,373줄) op별 분할.</li>
-<li><b>트리거 개선</b>: 자연어 호출 recall 26~33%. SKILL.md가 크기 상한이라 문구 조정 필요. 지금은 슬래시 커맨드로 쓰면 문제없음.</li>
 <li><b>R7 근거 출처, R9·R11 문구 정리, R15 대용량 로그 처리.</b></li>
 </ul>
 <p>반입 전에 꼭 할 것은 <b>보안 검토</b>와 <b>사용자 확인</b>이고, 스킬 행동 평가 재실행은 사외에서 할지 사내 S-2로 넘길지 결정이 필요합니다. 순서는 <code>DRAFT_NOTES.md</code>의 "다음 할 일"에 있습니다.</p>
@@ -1108,8 +1107,8 @@ score = min(1, base + bonus)
 <tr><th>항목</th><th>현재</th></tr>
 <tr><td>완료 Phase</td><td>D0, 1~13 (사외 초안 모드)</td></tr>
 <tr><td>진행 중</td><td>RF-2, 10/04 개선, 10/11 Jira 결과 게시·플랫폼 분리, 10/12 트래커 범용화(Jira 기본, GitHub Issues 실험적)·사내 설정 진행기 구현 완료, 사용자 확인 대기 → 보안 검토 → 반입. 순서는 <code>DRAFT_NOTES.md</code> "다음 할 일"</td></tr>
-<tr><td>테스트</td><td><code>pytest tests</code> 1,757개 통과</td></tr>
-<tr><td>스킬 평가</td><td>행동 eval 70개(61·62 Jira 결과 게시, 63~65 플랫폼 분리, 66·67 GitHub 트래커 — 실험적, 68~70 사용 흐름 구분). 사외에서는 바꾼 흐름의 eval을 돌리고 결과를 사외 결과 기록(offsite_results.json)으로 남긴다. 사내 S-2는 사내에서만 확인되는 eval 11개(모델이 다르면 7개 추가)만 돌린다. 트리거 recall 26~33%. <b>평가·테스트는 Sonnet 5.5 기준</b>(10/15 사외 재측정: 사외 fail 0·안전 위반 0, hook 거부 52→29회·한도 도달 0). Opus 5.5는 11개 확인 측정만(실패 0, hook 거부 1회, 비용 eval당 약 2.7배). 다른 모델도 동작하지만 화면 요약·질문 흐름·비용이 다를 수 있고, 승인 없는 쓰기는 모델과 무관하게 막힌다</td></tr>
+<tr><td>테스트</td><td><code>pytest tests</code> 전체 통과(개수는 결재용 요약 §3)</td></tr>
+<tr><td>스킬 평가</td><td>행동 eval 70개(61·62 Jira 결과 게시, 63~65 플랫폼 분리, 66·67 GitHub 트래커 — 실험적, 68~70 사용 흐름 구분). 사외에서는 바꾼 흐름의 eval을 돌리고 결과를 사외 결과 기록(offsite_results.json)으로 남긴다. 사내 S-2는 사내에서만 확인되는 eval 11개(모델이 다르면 7개 추가)만 돌린다. 트리거 recall·precision 100%(실제 플러그인 방식). <b>평가·테스트는 Sonnet 5.5 기준</b>(10/15 사외 재측정: 사외 fail 0·안전 위반 0, hook 거부 52→29회·한도 도달 0). Opus 5.5는 11개 확인 측정만(실패 0, hook 거부 1회, 비용 eval당 약 2.7배). 다른 모델도 동작하지만 화면 요약·질문 흐름·비용이 다를 수 있고, 승인 없는 쓰기를 막는 장치는 모델과 무관하게 같다(명령 판정은 최선 노력 — K 검토에서 찾은 ask 누락은 수정·회귀 테스트로 확인, 수정 뒤 eval 재측정은 아직, 최종 방어선은 서버 브랜치 보호)</td></tr>
 <tr><td>사내 확인 항목</td><td>TODO(SITE) 104곳 (<code>python3 tools/list_site_todos.py</code>, 레지스트리 S1~S32: S22 실패 스텝 12곳, S23 Jira 코멘트 쓰기 5곳, S24~S29 oFono, S30·S31 GitHub 트래커(사내는 Jira라 해당 없음) 포함), REVIEW-OPEN 0건</td></tr>
 <tr><td>사외에서 못 하는 것</td><td>실제 로그 문구·태그, report.html 구조, 스텝 → 로그 흔적 대응표, 장비·단말 시계 관계, 실제 Jira 필드 이름, 정확도 평가 (사내 S-1~S-5)</td></tr>
 <tr><td>사내 시작</td><td>사내 PC에서 Claude Code에 "사내 설정 시작"(이어서 할 때 "계속") → <code>tools/site_step.py</code>가 <code>SITE_PROFILE.md</code>(모드 사내 보완, 트래커 jira)를 만들고 S-1~S-7을 한 단계씩 냅니다. 단계마다 <code>site_step.py check</code>(자동 점검) → 승인한 값만 <code>propose --apply</code> → 사용자 확인 → <code>site_step.py --done S-n</code>(점검 실패·건너뛰기·사외 PC 거부)</td></tr>

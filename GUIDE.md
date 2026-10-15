@@ -278,6 +278,15 @@ claude mcp list               # Jira MCP 사용자 범위 등록 확인
    - git pre-commit hook 설치, 읽기 스냅샷 생성
 4. 연습: `/telephony-triage:analyze <샘플키> <로그> --dry-run` (아무것도 올리지 않음. gh 로그인 전에도 가능). GitHub Issues 트래커면 키 자리에 `owner/repo#N`이나 이슈 URL을 줘도 된다
 5. (팀이 플랫폼을 둘 이상 켰을 때) setup이 어느 플랫폼을 설정할지 묻는다. 다른 플랫폼도 쓰면 setup을 한 번 더 해서 그 플랫폼을 고른다 — 그 플랫폼의 이슈 DB clone·작업 폴더(기본 `~/.telephony-triage/work-<이름>`)만 따로 묻고 Jira·gh 설정은 같이 쓴다. 분석은 `analyze <JIRA> <로그> --platform <이름>`(말로 "oFono 로그로 분석해줘"도 된다). 플랫폼과 이슈 DB가 맞지 않으면 `platform-mismatch`로 멈춘다
+6. (선택) **반복 질문 줄이기** — 사용자 config `~/.telephony-triage/config.yaml`에 직접 적는다(setup은 묻지 않는다. 사용자 config가 팀 기본값보다 우선하고, 적은 키만 덮는다):
+   ```yaml
+   code_profiles:                  # 버전별 소스 트리. Jira 버전과 맞는 프로필이 하나면 묻지 않고 고른다(code.auto_select, 기본 true)
+     - {name: android16-main, platform_version: "16", roots: {aosp: /path/to/android16}}
+   analyzers:
+     data: {when: never}           # 심층 분석: ask(기본) | always | never
+   explore: {when: never}          # 탐색 분석(규칙이 없을 때 Claude 가설): ask(기본) | always | never
+   ```
+   한 번만 끄려면 `analyze … --code skip`(코드 분석 건너뛰기) · `--no-analyzer` · `--no-explore`.
 
 ---
 
@@ -288,7 +297,7 @@ claude mcp list               # Jira MCP 사용자 범위 등록 확인
 ### 커맨드 한눈에
 | 커맨드 | 언제 |
 |---|---|
-| `analyze <JIRA> [로그...] [--code <프로필>] [--dry-run] [--failed-step <한 줄>] [--steps-file <파일>] [--clock-offset <±시간>] [--analyzer \| --no-analyzer] [--explore \| --no-explore]` | 로그로 이슈 분석하고 분류·기록. 실패 스텝은 선택 보조 정보이고, 시험 절차(`--steps-file`: txt/csv·html·zip·붙여넣기)의 PASS 스텝 순서를 로그의 흔적과 맞춰 분석 범위를 정한다(`--answer anchor=off`로 끔). 맞는 규칙이 없으면 Claude 탐색 분석(가설)을 할지 묻는다 |
+| `analyze <JIRA> [로그...] [--code <프로필\|skip>] [--dry-run] [--failed-step <한 줄>] [--steps-file <파일>] [--clock-offset <±시간>] [--analyzer \| --no-analyzer] [--explore \| --no-explore]` | 로그로 이슈 분석하고 분류·기록. 실패 스텝은 선택 보조 정보이고, 시험 절차(`--steps-file`: txt/csv·html·zip·붙여넣기)의 PASS 스텝 순서를 로그의 흔적과 맞춰 분석 범위를 정한다(`--answer anchor=off`로 끔). 맞는 규칙이 없으면 Claude 탐색 분석(가설)을 할지 묻는다. 같은 질문을 매번 받지 않으려면 5장 6번 |
 | `record <JIRA> [--cause <ID> \| --new-cause <유형> \| --new-type <카테고리> \| --unresolved <유형>] [--fixture <로그>] [--resolved-fixture <로그>] [--failed-step <한 줄>] [--steps-file <파일>]` | 직접 해결한 이슈를 히스토리만 기록 |
 | `search <증상 문장\|키워드\|JIRA\|ID>` | 비슷한 이슈가 있었는지 찾기. 예: `search 데이터 안 붙어, 이슈 번호 알려줘` |
 | `fix-submitted <원인 ID> --ref <CL> --fixed-in <브랜치>[:<빌드>]` | 수정 CL이 머지됐을 때 |
@@ -350,14 +359,14 @@ claude mcp list               # Jira MCP 사용자 범위 등록 확인
 - verify-fix: W3부터 흔적 시그니처 없는 코드·설정 수정 유형을 `db_verify fix`가 종료 코드 2로 막아 Sonnet 기본(eval 25 Sonnet 3/3, W3). eval 25는 사내 S-2 대상이 아니라 사외 결과 기록(`offsite_results.json`)으로 갈음한다.
 - 5-2 탐색은 Sonnet. 가설 품질이 중요하면 Opus를 고른다.
 - **검증 범위: 스킬 행동 eval·토큰 측정은 Sonnet 5.5(`claude-sonnet-5-5`)로만 했다**(`tests/skill_evals/offsite_results.json` `model`, 사내 S-2도 Sonnet 5.5). 다른 모델도 같은 플러그인으로 동작한다. Opus 5.5는 확인 측정만 했다(10/15, 배치 A 7개 + hook 거부가 많던 4·36·40·67: 실패 0, hook 거부 11개 중 1회 — 화면을 처음부터 보이는 편, 비용은 eval당 Sonnet의 약 2.7배). 그 밖의 모델은 eval로 확인하지 않았다.
-- 모델과 무관하게 지켜지는 것(스크립트·hook이 강제): 외부 쓰기(이슈 DB push·트래커 코멘트) 전 승인 질문, 사용자 clone 불변, 분류 판정은 스크립트 출력 기준, 마스킹, 확인 화면 전체 표시 강제(`show_guard`).
+- 모델과 무관하게 지켜지는 것(스크립트·hook이 강제): 외부 쓰기(이슈 DB push·트래커 코멘트) 전 승인 질문(guard 규칙 7 ask·승인 해시·pre-push 토큰 — 명령 판정은 최선 노력, 아래), 사용자 clone 불변, 분류 판정은 스크립트 출력 기준, 마스킹, 확인 화면 전체 표시 강제(`show_guard`).
 - 다른 모델의 우려 사항:
   - 화면 요약: 모델마다 줄이는 습관이 다르다(Sonnet, hook 전 표시 실패 22/48. hook 첫 판 뒤에도 거부 52회 중 요약 15·값 옮김 오류 3, 문구 개선 뒤 59개 실행에서 거부 29회).
   - 거부 뒤 반응: hook은 막기만 하고 한도(2회)를 넘으면 경고만 남긴다(Sonnet은 첫 판 문구에서 거부 52회 중 16회를 같은 호출로 그대로 재시도해 10회 한도에 닿았다. 거부 문구를 "오류 아님"으로 바꾼 뒤 한도 도달 0회).
   - 질문 횟수·순서: 확인 단계는 스크립트가 정하지만 무엇을 언제 같이 묻는지는 모델이 정한다(같은 Sonnet에서도 게시 질문 뒤에 PR 링크를 보이거나, 판정 불가에서 새 유형을 선택지로 낸 실행이 있었다). 순서·횟수가 달라도 승인 없는 쓰기는 생기지 않는다 — eval 채점에서도 안전 행이 아니다.
   - 토큰·비용: 토큰 기준선(eval 1·2·39·45·58)과 이 안내서의 수치(이슈 1건 약 39만 토큰)는 Sonnet 기준이다. Opus는 비용이 더 든다.
   - 작은 모델(Haiku 등)은 권장하지 않는다: Sonnet도 문구만으로는 지키지 못한 규칙이 있어 구조로 강제했다(eval 25 2/3, `99-deferred.md` 3E).
-- 위 우려는 사용자가 무엇을 보고 판단하느냐의 문제다. 승인 없는 쓰기는 모델과 무관하게 막힌다.
+- 위 우려는 사용자가 무엇을 보고 판단하느냐의 문제다. 승인 없는 쓰기를 막는 장치(guard ask·승인 해시·pre-push 토큰)는 모델과 무관하게 같다. 다만 명령 판정은 최선 노력이다(`docs/design/08-safety.md` '명령 판정의 한계'): K 안전 검토(10/15)에서 스킬 규약대로 변수(`${S}db_pr.py`·`$PY`)로 부른 publish가 ask 없이 push된 실행을 찾아(eval 기록 publish 110건 중 4건) 고쳤다. 수정은 회귀 테스트로 확인했고, 수정 뒤 eval 재측정은 아직이다(기록된 run은 모두 수정 전이고, 새 안전 행 위반은 그중 4건). 규약 밖 형태는 여전히 놓칠 수 있어 **최종 방어선은 GHE 브랜치 보호·필수 리뷰**다.
 - 다른 모델로 쓰다가 이상한 동작을 보면 모델 이름과 함께 메인테이너에게 알린다. 사내 eval 모델이 바뀌면 S-2가 배치 A 7개를 더 돌린다(`pending.json` `site_if_model_differs`).
 - 바꾸는 법: `/model`. 커맨드 frontmatter `model` 고정은 사내 S1 확인 뒤(`14-site.md` S1).
 

@@ -851,7 +851,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
       <h3>현재 상태와 측정 수치</h3>
       <ul>
         <li>개발 단계(사외 초안, Phase D0~13)와 실제 로그 반영 트랙(L1~L3), 반입 전 3차 검토 반영까지 끝났습니다. 도입 조직 환경에 맞추는 사내 보완 단계(S-0~S-7, <a href="#s7-rollout">7.12</a>)는 아직 남아 있습니다.</li>
-        <li>자동 테스트 1,757개, CI(Ubuntu, Python 3.10·3.11·3.14) 통과. 샘플 이슈 DB 회귀 fixture 23/23. 스킬 행동 eval 70개 정의(Jira 결과 게시 61·62, 플랫폼 분리 63~65, GitHub 트래커 66·67 — 실험적, 사용 흐름 구분 68~70).</li>
+        <li>자동 테스트 전체(개수는 결재용 요약 §3), CI(Ubuntu, Python 3.10·3.11·3.14) 통과. 샘플 이슈 DB 회귀 fixture 23/23. 스킬 행동 eval 70개 정의(Jira 결과 게시 61·62, 플랫폼 분리 63~65, GitHub 트래커 66·67 — 실험적, 사용 흐름 구분 68~70).</li>
         <li>10/11: Jira 결과 게시(승인한 코멘트 1건, analyze Step 9)와 플랫폼 분리(Android 기본, oFono 뼈대, 플랫폼별 이슈 DB)가 들어갔습니다.</li>
         <li>토큰(모의 데이터 eval 기준, Sonnet): analyze부터 기록까지 1건 약 39만 토큰(이전 74만에서 48% 감소). 커맨드 1회 20만~80만 토큰, 약 $0.15~0.5. <b>실제 로그·DB 크기에서는 달라질 수 있습니다.</b></li>
       </ul>
@@ -1258,7 +1258,7 @@ db_build.py --verify --db &lt;db&gt;</pre></div>
       <h3>모델과 토큰</h3>
       <ul>
         <li>기본 모델은 Sonnet입니다(analyze·record·fix-submitted·verify-fix·sync-pr·search·심층 분석). 탐색 분석의 가설 품질이 중요하면 Opus를 고를 수 있습니다. 바꾸는 법: <code>/model</code>.</li>
-        <li>평가·테스트는 Sonnet 5.5 기준입니다. 다른 모델도 동작합니다. Opus 5.5는 11개 확인 측정(실패 0, hook 거부 1회, 비용 eval당 약 2.7배)만 했고 그 밖의 모델은 확인하지 않았습니다. 외부 쓰기 전 승인 질문, 사용자 clone 불변, 스크립트 판정, 마스킹, 확인 화면 표시 강제(hook)는 모델과 무관합니다. 우려: 화면 요약(Sonnet hook 전 표시 실패 22/48)·거부 뒤 반응(Sonnet은 hook 첫 판에서 거부 52회 중 16회를 같은 호출로 재시도, 문구 개선 뒤 한도 도달 0회)·질문 흐름이 다를 수 있고, 토큰·비용 수치(이슈 1건 약 39만 토큰)는 Sonnet 기준이며, 작은 모델(Haiku 등)은 권장하지 않습니다(Sonnet도 문구만으로 못 지킨 규칙이 있어 구조로 강제). 승인 없는 쓰기는 모델과 무관하게 막힙니다.</li>
+        <li>평가·테스트는 Sonnet 5.5 기준입니다. 다른 모델도 동작합니다. Opus 5.5는 11개 확인 측정(실패 0, hook 거부 1회, 비용 eval당 약 2.7배)만 했고 그 밖의 모델은 확인하지 않았습니다. 외부 쓰기 전 승인 질문, 사용자 clone 불변, 스크립트 판정, 마스킹, 확인 화면 표시 강제(hook)는 모델과 무관합니다. 우려: 화면 요약(Sonnet hook 전 표시 실패 22/48)·거부 뒤 반응(Sonnet은 hook 첫 판에서 거부 52회 중 16회를 같은 호출로 재시도, 문구 개선 뒤 한도 도달 0회)·질문 흐름이 다를 수 있고, 토큰·비용 수치(이슈 1건 약 39만 토큰)는 Sonnet 기준이며, 작은 모델(Haiku 등)은 권장하지 않습니다(Sonnet도 문구만으로 못 지킨 규칙이 있어 구조로 강제). 승인 없는 쓰기를 막는 장치는 모델과 무관하게 같습니다(명령 판정은 최선 노력, 최종 방어선은 서버 브랜치 보호).</li>
         <li>심층 분석(<code>--analyzer</code>)과 탐색 분석(<code>--explore</code>)은 토큰을 더 씁니다. 기본은 실행 전에 묻습니다.</li>
         <li>토큰을 아끼는 습관: 로그는 경로로 주기, 한 작업이 끝나면 세션 닫기, 오류는 실패한 것만 보기.</li>
       </ul>
@@ -1870,7 +1870,7 @@ git push -u origin HEAD                        # 사용자 승인 후. PR은 사
         <tr><th>단계</th><th>할 일</th><th>완료 기준</th></tr>
         <tr><td>S-0 (선택)</td><td>실제 로그 3~5개로 파서 가정 확인(<a href="#s7-parser">7.8</a>)</td><td>지표 5종 기록, 정성 결론 1줄</td></tr>
         <tr><td>S-1</td><td>확인 목록(<code>tools/list_site_todos.py</code> + <code>REVIEW-OPEN.md</code>), 샘플 받아 <code>SITE_PROFILE.md</code> 작성</td><td>오프라인 평가 기준(1위 정확도 등) 합의</td></tr>
-        <tr><td>S-2</td><td>사내 Claude Code 기능 확인(플러그인 로드, hooks, MCP 도구 이름), 실제 Jira MCP로 Jira 원문 격리 확인, 사내 대상 스킬 eval 실행(11개, 프롬프트 주입 eval 59·60 포함 — 나머지는 사외 결과로 갈음)</td><td>확인 8항목 기록, 안전 eval 위반 0</td></tr>
+        <tr><td>S-2</td><td>사내 Claude Code 기능 확인(플러그인 로드, hooks, MCP 도구 이름), 실제 Jira MCP로 Jira 원문 격리 확인, 사내 대상 스킬 eval 실행(11개, 프롬프트 주입 eval 59·60 포함 — 나머지는 사외 결과로 갈음)</td><td>확인 14항목 기록, 안전 eval 위반 0</td></tr>
         <tr><td>S-3</td><td><code>site-defaults.yaml</code>(<code>tracker.kind: jira</code>·Jira 도구 매핑 등), <code>issue-db.config.yaml</code>(<code>tracker.{kind, base_url, key_regex}</code> 등) 사내 값</td><td><code>config.py check</code>·<code>doctor</code> fail 0</td></tr>
         <tr><td>S-4a</td><td>운영 이슈 DB 생성·보호, 기존 파서 포팅(골든), 기존 data 분류 import, 분석 스킬 연결. 벤더 RIL 태그 초안은 <code>s0_suggest.py</code></td><td>골든 통과(실제 골든 폴더가 사내 백엔드로 실행되는지, 기대값을 일부러 바꾸면 실패하는지까지 확인), import PR 머지</td></tr>
         <tr><td>S-4</td><td>placeholder 규칙을 실제 문구로, 카테고리별 유형 5~10개 시드(실제 마스킹 fixture)</td><td>회귀·검증 통과</td></tr>
@@ -1878,7 +1878,7 @@ git push -u origin HEAD                        # 사용자 승인 후. PR은 사
         <tr><td>S-6</td><td>남은 검토 항목, 합성 fixture 0건 확인</td><td>미처리 0건</td></tr>
         <tr><td>S-7</td><td>마켓플레이스 등록, 카테고리별 파일럿 10~20건, 첫 월간 리뷰. 사람 절차도 시험합니다: 작성자 부재 시 PR 인수, 플러그인 업데이트·되돌리기, 신규 사용자 혼자 설치부터 재개까지</td><td>파일럿 지표 보고 후 확대 결정</td></tr>
       </table></div>
-      <p>파일럿 지표는 <code>python3 tools/usage_stats.py</code>로 뽑습니다(플랫폼마다 <code>--platform &lt;이름&gt;</code>, 기본은 선택 플랫폼): PR까지 걸린 시간, 중도 취소 비율, 작업당 저장된 답 수(질문 수 근사), push 기록은 있으나 PR 연결이 확인되지 않은 건수. PR 완료는 PR 번호가 기록된 작업만 셉니다. 사용자 수락률은 정답 정확도가 아닙니다. 틀린 1위를 받아들일 수도 있기 때문입니다.</p>
+      <p>파일럿 지표는 <code>python3 &lt;scripts_path&gt;/usage_stats.py</code>(설치본, 모을 때 <code>--json</code>)로 뽑습니다(플랫폼마다 <code>--platform &lt;이름&gt;</code>, 기본은 선택 플랫폼): PR까지 걸린 시간, 중도 취소 비율, 작업당 저장된 답 수(질문 수 근사), push 기록은 있으나 PR 연결이 확인되지 않은 건수. PR 완료는 PR 번호가 기록된 작업만 셉니다. 사용자 수락률은 정답 정확도가 아닙니다. 틀린 1위를 받아들일 수도 있기 때문입니다.</p>
     </div>
   </section>
 
