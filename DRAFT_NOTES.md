@@ -16,20 +16,20 @@
 
 ## 진행 상태 (10/15)
 
-- 모드: **사외 초안**. Phase **D0, 1~13** 완료, 반입 전 보강 트랙 완료(history). 최신 반입본 import-20261014c(f4d98d5, 사내 전달). main 병합 PR #8~#51.
-- 10/14 밤~10/15 **H 사외 재측정 완료**: P0(`--draft` 상대 경로가 사용자 clone에 worktree 생성) 수정, hook 거부 문구·재시도·전부 통과 초안 갈음, 채점기 오판 수정 뒤 전체 재측정(h3-*·h4-u). 실패 11 → 0, hook 거부 52 → 29, 한도 도달 10 → 0. `offsite_results.json`(fb26573): 사외 fail 0·최신 안전 위반 0, 미결정 11(사내 대상 9 + 15·63). 상세 history "10/14 밤~10/15". 전체 pytest 1,956 통과. 브랜치 `ccr-d022623a-2f4vdx`(main 미병합).
-- 안내서 "모델 선택": Sonnet 5.5 기준, 다른 모델 우려·관찰 수치(사용자 10/14). Opus 5.5 확인 측정 11개 실패 0(비용 ≈2.7배, history).
-- `TODO(SITE)`: `python3 tools/list_site_todos.py`. `REVIEW-OPEN.md` 0건.
-- 사내 시작: **"사내 설정 시작"** → `python3 tools/site_step.py`(결정 (o)).
-- 안내서 HTML: `docs/telephony-triage-guide.html`(공유본 https://claude.ai/artifact/1jov1Et4dQUMauFr6aoxWG, 모델 절 미반영), `docs/materials/00-index.html`
+- 모드: **사외 초안**. Phase **D0, 1~13** 완료, 반입 전 보강 트랙 완료(history). 최신 반입본 import-20261014c(f4d98d5, 사내 전달), 새 묶음 import-20261015(767cc4f, 태그 전). main 병합 PR #8~#53.
+- 10/14 밤~10/15 **H 사외 재측정 완료**(PR #52·#53 병합): P0 `--draft` 상대 경로 수정, hook 거부 문구·재시도·전부 통과 초안 갈음, 채점기 수정 뒤 전체 재측정. 실패 11→0, 거부 52→29, 한도 10→0. `offsite_results.json`: 사외 fail 0·안전 위반 0, 미결정 11(사내 9 + 15·63). pytest 1,956. 상세 history "10/14 밤~10/15".
+- 안내서 "모델 선택": Sonnet 5.5 기준, Opus 5.5 확인 11개 실패 0(비용 ≈2.7배).
+- `TODO(SITE)`: `tools/list_site_todos.py`. REVIEW-OPEN 0건. 사내 시작: **"사내 설정 시작"**(결정 (o)).
+- 안내서 HTML: `docs/telephony-triage-guide.html`(공유본 https://claude.ai/artifact/1jov1Et4dQUMauFr6aoxWG 개정 7), `docs/materials/00-index.html`
 
 ## 남은 일 (사외 전용)
 
 | ☐ | 항목 | 메모 |
 |---|---|---|
-| ☐ F | 새 반입 묶음 — **main 병합 PR 먼저(사용자 확인)** | `tools/make_bundle.py --label import-<날짜>`. 사내 적용은 `SITE_INSTALL.md` 8절 |
+| ☐ K | **다음 세션 바로: 이번 변경분 안전 검토(사용자 10/15, Opus max, P0만)** | `b32d0e1..767cc4f`의 `db_verify`·`dbpr` 경로(`abs_wt`), hook 완화 3건(재시도·전부 통과 갈음·실패 표 창), `POST_NON_SAFETY`. P0(승인 없는 쓰기·clone 변경 등)이면 (p)로 고치고 묶음 다시 |
+| ☐ F | 묶음 **import-20261015**(767cc4f, 자동 검사 통과, 수동 3항목은 사용자) | 세션 scratchpad `bundle-20261015/`. K 뒤 사용자가 `git tag import-20261015 767cc4f && git push origin import-20261015`(원격 main 경고는 detached HEAD 탓) |
 | ☐ G | 범용판 별도 레포 — **보류(10/07 사용자)** | 재개는 사용자가 정한다 |
-| ☐ R | 반입 뒤 후보: 표시 판정 단순화 | `shown.py`가 자유 형식 출력을 정규식으로 읽어 경계 사례가 이어짐 → 스크립트가 보일 블록을 파일로 내고 hook은 그것과만 비교. P2는 history "10/14 밤~10/15" |
+| ☐ R | 반입 뒤: 표시 판정 단순화 | 정규식 경계 사례 → 스크립트가 보일 블록을 파일로, hook은 그것과만 비교. P2는 history |
 
 ## 사내로 넘긴 것
 
@@ -62,7 +62,7 @@
 - (d) 반입 전에는 v1 스키마를 직접 고치고, 배포 뒤에는 항상 버전을 올린다(`06 §6.4`). (10/04)
 - (e) verify-fix 흔적: 코드·설정 수정 유형은 흔적 필수. 비코드 유형(user-setting·network·hw)에 흔적 시그니처가 둘 다 없을 때만 사용자 확인으로 판정하고 `verification.note`에 남긴다. (10/04, R9)
 - (f) 반입 전 사외에서 최대한 안정화·보완·개선한 뒤 반입한다. 사내 문자열 사람 검색은 생략(사내→사외 반출 불가). (10/05)
-- (g) eval 판정: 변경 전·후 같은 모델, 1순위 동작, 2순위 토큰 W0 폭(출력 9.5%·비용 15.7%). (10/06)
+- (g) eval 판정: 전·후 같은 모델, 1순위 동작, 2순위 토큰 W0 폭. (10/06)
 - (i) eval은 변경과 관련된 최소만 사외에서 돌린다: 각 VP는 바꾼 스킬·흐름의 eval만, V 끝은 W 영향 미확인 목록 중 아직 관련 있는 것만 골라서. 사내 S-2는 사내 대상만(결정 (q)). (10/07, 사용자) 단, 실행 방식·공통 지침이 바뀌면 전체 + 사람 판정(10/14).
 - (h)(j)(k)(l) → history
 - (m) 플랫폼 분리 (10/11, 사용자): 동작·원인·해결책이 달라 이슈 DB를 플랫폼별로(합치기 안 안 씀), 추가는 디렉토리 + `platform.enabled`, lock은 플랫폼별("사용자·이슈 DB(플랫폼)별 한 번에 한 작업"), RF-4 유지. `17-platforms.md` §7.
