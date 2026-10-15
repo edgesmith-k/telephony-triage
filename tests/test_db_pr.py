@@ -1078,6 +1078,28 @@ def test_stage_under_symlinked_work_dir_ancestor():
     link.unlink()
 
 
+def test_wt_dot_from_inside_worktree():
+    """wt 안에서 `--wt .`·`summary .`·`discard .`도 된다(`Path('.').name`은 빈 글 — job_dir로 바뀌지 않게 `abs_wt`)."""
+    ws = Workspace()
+    job = "MOCK-7002"
+    ws.plan(job, "p7-analyze-new-cause.plan.json")
+    ws.put(job, "fixtures/cut-1.log", SIM_LOG)
+    ws.acquire(job)
+    wt = ws.wt(job)
+    out = ws.db_pr("stage", ws.job_dir(job) / "plan.json", "--wt", wt, "--branch", f"issue/{job}", "--json")
+    assert out["result"] == "ok", out
+
+    def inside(*args):
+        proc = run("db_pr.py", [str(a) for a in args], root=ws.root, env=ws.env(), cwd=wt)
+        assert proc.returncode == 0, proc.stderr[-2000:]
+        return json.loads(proc.stdout)
+    again = inside("stage", ws.job_dir(job) / "plan.json", "--wt", ".", "--branch", f"issue/{job}", "--json")
+    assert again["result"] == "ok" and again["worktree"] == "reapplied" and Path(again["wt"]) == wt, again
+    assert inside("summary", ".")["approved_hash"]
+    gone = inside("discard", ".")
+    assert gone.get("discarded") is True and not wt.exists(), gone
+
+
 def test_stage_json_stays_full_on_failed_check_drift_and_needs_approval():
     ws = Workspace()
     job = "review-data-2026-10"

@@ -21,7 +21,7 @@ from common.exitcodes import CHECK_FAILED, OK, USAGE
 
 from .lock import PLAN, PR_FILE, REGRESS, STAGE, STATE, TOOL_PREFIX, UsageError, _iso, _read_json, _write_json, now
 from . import worktree as _wt
-from .worktree import (Ctx, _check_branch, _err_brief, _gh, _git, _job_of, _out, _owned_worktree,
+from .worktree import (Ctx, abs_wt, _check_branch, _err_brief, _gh, _git, _job_of, _out, _owned_worktree,
                        _pending_files, _prepare_worktree, _ref_sha, _same_path, _worktrees, run_script)
 
 
@@ -208,7 +208,7 @@ def preflight(ctx: Ctx, branch: str, search: str | None, jira: str | None) -> di
 def stage(ctx: Ctx, plan_path: Path, wt: Path, branch: str, dry_run: bool) -> tuple[dict, int]:
     ctx.require_repo()
     job_dir, job = _job_of(wt, ctx)
-    wt = job_dir / Path(wt).name        # `_job_of`와 같은 absolute 기준(resolve하면 symlink인 상위 경로에서 검사가 어긋난다)
+    wt = abs_wt(wt)        # `_job_of`와 같은 absolute 기준(resolve하면 symlink인 상위 경로에서 검사가 어긋난다)
     ctx.lock.touch(job)
     _check_branch(ctx, branch)
     tool = TOOL_PREFIX + branch
@@ -404,8 +404,8 @@ def approved_hash(wt: Path) -> str:
 
 def summary(ctx: Ctx, wt: Path, markdown: bool = False) -> dict:
     job_dir, job = _job_of(wt, ctx)
+    wt = abs_wt(wt)
     _owned_worktree(ctx, wt)
-    wt = job_dir / wt.name
     ctx.lock.touch(job)
     state = _read_json(job_dir / STATE)
     stage_result = _read_json(job_dir / STAGE)
@@ -507,8 +507,8 @@ def _commit_approved(wt: Path, job_dir: Path, state: dict, approved: str) -> tup
 
 def publish(ctx: Ctx, wt: Path, branch: str, lease: str, approved: str, commit: bool = False) -> tuple[dict, int]:
     job_dir, job = _job_of(wt, ctx)
+    wt = abs_wt(wt)
     _owned_worktree(ctx, wt)
-    wt = job_dir / wt.name
     ctx.lock.touch(job)
     state = _read_json(job_dir / STATE)
     stage_result = _read_json(job_dir / STAGE) or {}
