@@ -114,7 +114,7 @@ fixture 번호, 피드백, pending 포함 여부는 계획 `source`로) → `db_
 - 종료 2 + `published: true`: push는 됐다. **publish를 다시 하지 않는다.** `discard.error`면 `discard.next`대로 `db_pr discard <wt>`만 다시 한다.
   `gh_error`(PR 생성 실패, `discard.skipped`, worktree·lock 유지)면 사유를 보고하고 PR 수동 처리 또는 publish 재시도를 사용자와 정한 뒤 `db_pr discard <wt>`.
 - 종료 2 + stderr만(JSON 없음): 보고하고 멈춘다.
-- 성공하면 PR 링크를 보여준다(`discard.discarded: true`). `publish`가 계획의 `pr`·`base_sha`를 기록하고 pending 피드백 원본을 `included_pending/`으로 옮긴다.
+- 성공하면(`discard.discarded: true`) PR 링크(`pr.url`)를 글자 그대로, 다음 질문 전에 보인다. `publish`가 계획의 `pr`·`base_sha`를 기록하고 pending 피드백 원본을 `included_pending/`으로 옮긴다.
 
 ## 6. 정리
 

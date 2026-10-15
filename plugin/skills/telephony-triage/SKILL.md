@@ -88,4 +88,4 @@ write-flow §2(브랜치·`--lease`)만 한다. 열린 PR·`issue_in_main`은 �
 
 ### Step 9. Jira 게시 (선택)
 
-`post.md`대로: PR 링크·`release` 뒤 `postable: true`면 한 번 묻고(기본 아니오), 승인한 본문만 올린다.
+`post.md`대로: PR 링크(`pr.url`)를 글로 보인 뒤·`release` 뒤 `postable: true`면 한 번 묻고(기본 아니오), 승인한 본문만 올린다.

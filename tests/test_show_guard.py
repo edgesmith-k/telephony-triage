@@ -279,6 +279,8 @@ def test_pre_bash_publish_requires_screen_before_approval(tmp_path):
     out = pre("pre-bash", summarized, "Bash", {"command": other})
     assert decision(out) == "deny" and "push:0123456789" in out["hookSpecificOutput"]["permissionDecisionReason"]
     assert pre("pre-bash", summarized, "Bash", {"command": 'grep -n "db_pr.py publish --approved abc1234def" a'}) is None
+    braced = 'S="python3 /p/scripts/"; ${S}db_pr.py publish /w/MOCK-1/wt --approved abc1234def --commit'   # E67
+    assert decision(pre("pre-bash", summarized, "Bash", {"command": braced})) == "deny"
     key = shown.MARKER + " push:abc1234def — 승인 질문 전에"
     capped = write(tmp_path, prompt("p"), bash("s", STAGE_CMD, SCREEN), say(SUMMARY), prompt("승인"),
                    call("x1", "Bash", {"command": PUBLISH_CMD}, key, True), say(SUMMARY),       # 글을 쓰고 다시 시도

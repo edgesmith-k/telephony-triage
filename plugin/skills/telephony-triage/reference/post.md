@@ -6,7 +6,7 @@
 
 ## 언제
 
-- Step 8 `publish … --and-discard`로 PR 링크를 보인 직후, 또는 Step 7 기록하지 않음·읽기 전용·계획만 저장으로
+- Step 8 publish 결과의 PR 링크(`pr.url`)를 **먼저 글로 보인 뒤**(게시 질문 본문 첫 줄에 `PR: <url>`을 넣어도 된다), 또는 Step 7 기록하지 않음·읽기 전용·계획만 저장으로
   `S/triage.py release <KEY>`를 한 직후. 이때 lock은 이미 풀려 있다. `issue_post.py`는 lock을 잡지 않는다.
 - 묻기 전에 `S/issue_post.py status <KEY> --json`. `postable: true`일 때만 **한 번** 묻는다(기본 아니오):
   "분석 결과를 Jira 코멘트(PROBLEM/CAUSE/NEXT ACTION/ANALYSIS)로 올릴까요? 본문을 먼저 보여드립니다".

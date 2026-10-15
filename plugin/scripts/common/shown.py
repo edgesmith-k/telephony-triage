@@ -36,11 +36,12 @@ PUSH_SCREEN = re.compile(r"^## push 전 확인:.*?^approved_hash: [0-9a-f]{7,64}
 POST_SCREEN = re.compile(r"^## \S+ 게시 전 확인:.*?^post_sha256: [0-9a-f]{64}[ \t]*$", re.DOTALL | re.MULTILINE)
 SCREEN_HEAD = {"push": re.compile(r"^## push 전 확인:", re.MULTILINE), "post": re.compile(r"^## \S+ 게시 전 확인:", re.MULTILINE)}
 # 실행한 호출만 센다: 스크립트 경로가 명령어 자리(줄·`;`·`&`·`|`·`(`·`$(` 뒤, 앞의 `VAR=값` 허용, 또는 `python3 [-옵션]` 뒤)에
-# 있어야 한다. `grep -n "db_pr.py publish" write-flow.md`처럼 인자·인용 글 안의 이름은 호출이 아니다(`command_of`가 공백이 든
+# 있어야 한다. 앞 경로는 `/`나 `}`로 끝나야 한다(`${S}db_pr.py` — `S="python3 /…/scripts/"`로 묶은 호출, E67).
+# `grep -n "db_pr.py publish" write-flow.md`처럼 인자·인용 글 안의 이름은 호출이 아니다(`command_of`가 공백이 든
 # 인용 글을 미리 지운다). 하위 명령은 스크립트 바로 뒤(앞 전역 옵션 `--plugin-root X`·`--platform X`·`--x`는 건너뜀)만 본다:
 # `…; cat $W/stage.json`·`> discard-preview.md`는 하위 명령이 아니다. 인용 밖 줄 이음(`\` + 줄바꿈)은 공백으로 본다(`strip_quoted`).
 CMDWORD = (r"(?:(?:^|[;&|(`\n]|\$\()\s*(?:\w+=\S*\s+)*|\bpython3?(?:\.\d+)?(?:\s+-[^\s-]\S*)*\s+)"
-           r"[\"']?(?:[^\s\"';&|()`]*/)?")
+           r"[\"']?(?:[^\s\"';&|()`]*[/}])?")
 SUB = r"[\"']?\s+(?:--(?:plugin-root|platform|db)\s+\S+\s+|--\S+\s+)*"
 
 

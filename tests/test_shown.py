@@ -232,6 +232,18 @@ def test_command_recognition_and_approval_window():
     assert (w["end_kind"], w["approved_arg"], shown.digest_of(w), w["missing"]) == ("publish", "abc1234def", "abc1234def", [])
 
 
+def test_command_through_braced_variable_prefix():
+    """E67: `S="python3 /…/scripts/"; ${S}db_pr.py publish …`도 publish 호출이다(경로가 `}`로 끝남). 인자 자리는 아니다."""
+    def end(cmd):
+        m = shown.PUSH_END.search(shown.command_of({"input": {"command": cmd}}))
+        return m and m.group(1)
+    assert end('S="python3 /p/scripts/"; ${S}db_pr.py publish /w/MOCK-1/wt --approved abc1234def --commit') == "publish"
+    assert end("python3 ${S}db_pr.py publish /w/MOCK-1/wt --approved abc1234def") == "publish"
+    assert end("${S}db_pr.py discard /w/MOCK-1/wt") == "discard"
+    assert not end("echo ${S}db_pr.py publish /w/MOCK-1/wt")
+    assert shown.STAGE.search(shown.command_of({"input": {"command": "${S}db_pr.py stage /w/MOCK-1/plan.json"}}))
+
+
 def test_denied_accepts_pretooluse_content_and_not_run_skips_calls():
     hook_text = "PreToolUse:Bash hook error: " + shown.MARKER + " draft:x — …"
     assert shown.denied(tool("a", "Bash", {}, hook_text, False))       # 오류 표시가 없어도 거부 문구면 거부
