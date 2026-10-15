@@ -113,7 +113,7 @@ telephony-issue-db/
 - `DATA-001.none.expect.yaml`은 기본 기대값(`expect_top: none`)과 같으면 생략할 수 있다. 위 예는 `occurred_at`을 적는 경우다. 양성 fixture의 `.expect.yaml`은 다른 유형의 원인이 같이 잡혀도 되는 경우(`also_allowed`)에 만든다 (`contracts.md §fixture`).
 
 **생성 결과의 결정성** — 같은 데이터면 누가 만들어도 바이트 단위로 같아야 한다.
-- 현재 시각을 쓰지 않는다. "최종 갱신"과 "최근 30일" 같은 기준일은 이슈 DB 안의 가장 최근 Jira `date`로 정한다.
+- 현재 시각을 쓰지 않는다. "최종 갱신"과 "최근 30일" 같은 기준일은 이슈 DB 안의 가장 최근 Jira `date`로 정한다. 카테고리 README에는 기준일을 넣지 않는다 — 다른 카테고리에 Jira가 더해져도 바뀌지 않게(CODEOWNERS 카테고리 오너 리뷰 요청이 번지지 않는다, `06-collaboration.md §6.1`).
 - 정렬: 카테고리는 `categories` 순서, 유형·원인은 ID 순, Jira는 `date` 내림차순 후 키 오름차순, 동률은 항상 ID/키 오름차순.
 - 숫자 포맷: 비율은 소수 둘째 자리 반올림 문자열(`0.73`), 건수는 정수.
 - 줄 끝 LF, 파일 끝 개행 1개, UTF-8.
@@ -281,7 +281,7 @@ analyze Step 7까지의 결정은 이슈 DB를 바로 바꾸지 않고 **작업 
 ```markdown
 # Telephony Issue DB
 
-> 자동 생성 파일입니다. 직접 수정하지 마세요. (`db_build.py`, generator v1)
+> 자동 생성 파일입니다. 직접 수정하지 마세요. (`db_build.py`, generator v2)
 > 기준일: 2026-09-27 · schema v1 · [통계](STATS.md) · [시작하기](docs/getting-started.md) · [기여 방법](CONTRIBUTING.md)
 
 ## 요약
