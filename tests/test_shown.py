@@ -180,7 +180,10 @@ def test_draft_window_first_fail_prefers_json_rerun():
     w = shown.draft_window([seq[0], unread, *seq[2:]], "first_fail")
     assert (w["i"], w["end"]) == (0, 3)
     other = bash("d2", DRAFT_CMD.replace("MOCK-1", "MOCK-2") + " | sed -n 80,200p", "")
-    assert shown.draft_window([seq[0], other, *seq[2:]], "first_fail")["end"] == 1     # 다른 계획이면 끊는다
+    # 실패 결과는 다른 계획의 draft로 끊지 않는다(h3-d eval 18) — 작업 경계(lock acquire)가 있으면 끊는다
+    assert shown.draft_window([seq[0], other, *seq[2:]], "first_fail")["end"] == 3
+    lock = bash("l", "python3 /p/scripts/db_pr.py lock acquire MOCK-2 --command record --json", "{}")
+    assert shown.draft_window([seq[0], lock, other, *seq[2:]], "first_fail")["end"] == 1
     # hook 표시 의무도 같은 창 끝을 쓴다
     (ob,) = [o for o in shown.obligations([seq[0], unread, *seq[2:]]) if o.kind == "draft"]
     assert (ob.start, ob.end, ob.close_kind) == (0, 3, "stage")
@@ -321,3 +324,71 @@ def test_draft_doc_row_print_with_review_required_tail():
     assert [(r["reason"], r.get("review_required")) for r in rules] == [("대상 2개 통과", False), ("fixture 없음", True),
                                                                          ("해당 없음", None)]
     assert not shown.draft_all_clear(rules) and shown.draft_all_clear([rules[0], rules[2]])
+
+
+# h3-d eval 18: 처음 시그니처의 실패 결과를 보이기 전에 좁힌 안을 다른 계획 파일로 돌려 통과했다
+REL_DRAFT = "cd /w/MOCK-1; python3 /p/scripts/db_verify.py rules --plan {plan} --draft {draft} 2>&1 | head -80"
+FAIL_SUMMARY = ("R3 fail: DATA-001-03: C=1 (DATA-001-03/any) — data/DATA-001-x/fixtures/DATA-001-01.log\n"
+                "R4 fail: 기대값이 깨진 fixture 5개\n{")
+NARROW_PASS = json.dumps({"rules": [{"id": "R1", "status": "pass", "reason": "대상 1개 통과"},
+                                    {"id": "R3", "status": "pass", "reason": "대상 1개 통과"},
+                                    {"id": "R4", "status": "pass", "reason": "전체 fixture 24개 기대값 유지"},
+                                    {"id": "R5", "status": "skipped", "reason": "해당 없음"}]}, ensure_ascii=False)
+FAIL_TABLE = ("| R3 | fail | DATA-001-03: C=1 (DATA-001-03/any) — data/DATA-001-x/fixtures/DATA-001-01.log |\n"
+              "| R4 | fail | 기대값이 깨진 fixture 5개 |")
+
+
+def _h3d(*between):
+    first = bash("d1", REL_DRAFT.format(plan="plan.json", draft="draft"), FAIL_SUMMARY)
+    narrow = bash("d2", REL_DRAFT.format(plan="plan-narrow.json", draft="draft2"), NARROW_PASS)
+    return [first, *between, narrow, tool("q", ASK, {"question": "fixture 6개에도 걸립니다(R3·R4 실패). 좁히기/허용?"}),
+            bash("s", STAGE_CMD, SCREEN)]
+
+
+def test_failed_draft_stays_open_past_other_plan():
+    """전부 통과가 아닌 결과는 다른 계획(`plan-narrow.json`)의 draft로 닫히지 않는다: stage까지 열려 있다(h3-d eval 18)."""
+    seq = _h3d()
+    first, narrow = [o for o in shown.obligations(seq) if o.kind == "draft"]
+    assert (first.start, first.end, first.close_kind) == (0, 3, "stage")
+    assert (narrow.start, narrow.end, narrow.close_kind) == (1, 3, "stage")
+    assert shown.missing(first, shown.visible_between(seq, 1, 3)) == [
+        "R3(fail: DATA-001-03: C=1 (DATA-001-03/any) — dat)", "R4(fail: 기대값이 깨진 fixture 5개)"]
+    w = shown.draft_window(seq, "first_fail")                       # 채점기도 같은 창
+    assert (w["i"], w["end"]) == (0, 3)
+    shown_seq = seq[:2] + [text(FAIL_TABLE)] + seq[2:]
+    (ob,) = [o for o in shown.obligations(shown_seq) if o.kind == "draft" and o.start == 0]
+    assert shown.missing(ob, shown.visible_between(shown_seq, 1, ob.end)) == []
+    # 전부 통과한 결과는 지금처럼 다음 draft(다른 계획)로 닫힌다
+    clear = [seq[1], bash("d3", REL_DRAFT.format(plan="plan.json", draft="draft"), FAIL_SUMMARY), seq[-1]]
+    assert [(o.start, o.end, o.close_kind) for o in shown.obligations(clear) if o.kind == "draft"] == \
+        [(0, 1, "draft"), (1, 2, "stage")]
+
+
+def test_failed_draft_closes_on_same_plan_rerun_and_job_boundary():
+    """같은 계획을 고쳐 다시 돌린 읽을 수 있는 결과는 앞 결과를 대신한다(지금과 같다). 작업 경계(triage run·discard·lock)도 닫는다."""
+    first = bash("d1", REL_DRAFT.format(plan="plan.json", draft="draft"), FAIL_SUMMARY)
+    edit = tool("e", "Edit", {"file_path": "/w/MOCK-1/plan.json"}, "ok")
+    rerun = bash("d2", REL_DRAFT.format(plan="plan.json", draft="draft"), NARROW_PASS)
+    ob = next(o for o in shown.obligations([first, edit, rerun, bash("s", STAGE_CMD, SCREEN)]) if o.kind == "draft")
+    assert (ob.end, ob.close_kind) == (2, "draft")
+    for cmd in (TRIAGE_CMD, "python3 /p/scripts/db_pr.py discard /w/MOCK-1/wt --json",
+                "python3 /p/scripts/db_pr.py lock release MOCK-1 --json",
+                "python3 /p/scripts/db_pr.py --platform android lock acquire MOCK-2 --command record"):
+        seq = _h3d(bash("j", cmd, "{}"))
+        ob = next(o for o in shown.obligations(seq) if o.kind == "draft")
+        assert (ob.end, ob.close_kind) == (1, "job"), cmd
+    # lock status는 경계가 아니다
+    seq = _h3d(bash("j", "python3 /p/scripts/db_pr.py lock status --json", "{}"))
+    assert next(o for o in shown.obligations(seq) if o.kind == "draft").close_kind == "stage"
+
+
+def test_two_failed_plans_are_both_satisfiable():
+    """다른 계획의 실패 결과 둘이 함께 열려 있어도 두 표를 보이면 둘 다 채워진다(같은 키 중복 의무 없음)."""
+    other = FAIL_SUMMARY.replace("DATA-001-03/any", "DATA-001-03/narrow").replace("fixture 5개", "fixture 1개")
+    seq = [bash("d1", REL_DRAFT.format(plan="plan.json", draft="draft"), FAIL_SUMMARY),
+           bash("d2", REL_DRAFT.format(plan="plan-b.json", draft="draft2"), other),
+           text(FAIL_TABLE + "\n" + FAIL_TABLE.replace("DATA-001-03/any", "DATA-001-03/narrow")
+                .replace("fixture 5개", "fixture 1개")), bash("s", STAGE_CMD, SCREEN)]
+    obs = [o for o in shown.obligations(seq) if o.kind == "draft"]
+    assert len({o.key for o in obs}) == 2 and all(o.end == 3 for o in obs)
+    assert all(shown.missing(o, shown.visible_between(seq, o.start + 1, o.end)) == [] for o in obs)

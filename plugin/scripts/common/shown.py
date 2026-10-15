@@ -56,6 +56,7 @@ STAGE = script_rx("db_pr.py", r"stage\b")
 RENDER = script_rx("issue_post.py", r"render\b")
 SUMMARY = script_rx("db_pr.py", r"summary\b")
 TRIAGE_RUN = script_rx("triage.py", r"run\b")
+JOB_END = script_rx("db_pr.py", r"(?:discard|lock\s+(?:acquire|release))\b")   # 작업 경계(초안 표 창, `draft_end`)
 DRAFT = script_rx("db_verify.py", r"rules\b[^|\n;&]*--draft\b")
 APPROVED_ARG = re.compile(r"--approved[= ]\s*[\"']?([0-9a-f]{7,64})\b")
 SHA_ARG = re.compile(r"--sha[=\s]+[\"']?([0-9a-f]{64})")
@@ -650,9 +651,22 @@ def draft_end(seq, i: int, calls, stage) -> int:
     """draft 결과 i의 표시 창 끝(배타): 다음 draft 호출·stage·기록 끝. 채점기(`draft_window`)와 hook(`obligations`)이 같이 쓴다.
     같은 계획을 고치지 않고 다시 돌렸는데 결과를 못 읽었고 출력에 fail·needs-approval 글이 없는 호출(`| sed -n 80,200p` 등)은
     창을 끊지 않는다: 그 뒤에 보인 표는 읽은 결과의 것으로 본다 (sm4-1-b eval 42). 다른 결과일 수 있으면 끊는다.
+    전부 통과가 아닌 결과(`draft_all_clear` 아님 — fail·needs-approval·review_required 등)는 **다른 계획**(`plan_tag`가 다르다)의
+    draft 호출로 끊지 않는다: 좁힌 안을 다른 파일(`plan-narrow.json`)로 돌려 통과해도 처음 실패 표(걸린 fixture·시그니처 키)를
+    보이고 사용자가 고르게 해야 한다(h3-d eval 18). 그 창은 stage·같은 계획의 재실행(위 규칙)·작업 경계(`triage.py run`,
+    `db_pr.py discard`·`lock acquire|release`)에서 닫힌다.
     남는 추정(고치지 않음): 계획이 그대로여도 draft 트리·fixture·이슈 DB 스냅샷이 바뀌면 다시 돌린 결과가 다를 수 있고, 계획을
     파일 이름(`plan.json`)을 말하지 않는 방법(변수에 든 경로를 `sed -i "$P"`)으로 고치면 건드림을 보지 못한다(`_touches`)."""
-    for c in sorted([c for c in calls if c > i] + [s for s in stage if s > i]):
+    rules = draft_rules(tool_text(seq[i]))
+    sticky = bool(rules) and not draft_all_clear(rules)
+    later = [c for c in calls if c > i] + [s for s in stage if s > i]
+    if sticky:
+        tag = plan_tag(seq[i])
+        later = [c for c in later if c in stage or plan_tag(seq[c]) == tag]
+        later += bash_index(seq, JOB_END, i + 1) + bash_index(seq, TRIAGE_RUN, i + 1)
+    for c in sorted(set(later)):
+        if c not in calls and c not in stage:
+            return c        # 작업 경계
         text = tool_text(seq[c])
         if (c in stage or draft_doc(text) is not None or _NOT_PASS.search(text)
                 or not same_plan_rerun(seq, i, c)):
@@ -742,7 +756,7 @@ def visible_lines(chunks) -> list[str]:
 class Obligation:
     """사용자에게 보여야 할 스크립트 출력 하나. kind push|post|report|draft, key push:<hash>|post:<sha 앞 16자>|report:<id>|
     draft:<결과 해시>(id = 그 호출의 tool_use id 끝 12자, 없으면 seq 순번; 초안은 규칙·상태·사유의 sha1 앞 12자). start = 출력이 나온 seq 순번, end = 창 끝(배타),
-    close_kind = 창을 닫은 것(publish·discard·approve·restage·step7·stage·draft·end — end면 아직 열려 있다)."""
+    close_kind = 창을 닫은 것(publish·discard·approve·restage·step7·stage·draft·job·end — end면 아직 열려 있다)."""
     kind: str
     key: str
     start: int
@@ -772,10 +786,10 @@ def _id_tag(e, i: int) -> str:
 def obligations(seq, read_file=None, job_dir=None, *, script_only: bool = True) -> list[Obligation]:
     """seq의 표시 의무(show_guard): push·post 확인 화면 창 전부(`screens`, script_only면 화면을 낸 스크립트 호출만), 리포트
     (triage run이 있고 리포트를 찾았을 때 — 마지막 run의 창, `report_window(latest=True)`), 결과를 읽을 수 있는 초안 검증 호출마다
-    하나(창 = 그 호출 ~ 다음 draft 호출·stage·기록 끝).
+    하나(창 = 그 호출 ~ 다음 draft 호출·stage·기록 끝, 전부 통과가 아닌 결과는 다른 계획의 draft로 닫히지 않는다 — `draft_end`).
 
     창 닫힘: 화면 = publish·discard(push)·approve(post)·해시가 다른 다음 화면, 리포트 = Step 7 분류 질문·stage, 초안 표 =
-    다음 초안 검증·stage(`--dry-run`도 — dry-run 흐름의 stage도 worktree를 만들고 확인 화면을 낸다). hook이 거부해 실행되지
+    다음 초안 검증(전부 통과가 아니면 같은 계획만)·작업 경계·stage(`--dry-run`도 — dry-run 흐름의 stage도 worktree를 만들고 확인 화면을 낸다). hook이 거부해 실행되지
     않은 호출은 닫지 않는다."""
     out = []
     for kind in ("push", "post"):
@@ -801,7 +815,7 @@ def obligations(seq, read_file=None, job_dir=None, *, script_only: bool = True) 
         if not rules:
             continue
         end = draft_end(seq, i, calls, stage)
-        close = "end" if end >= len(seq) else ("draft" if end in calls else "stage")
+        close = "end" if end >= len(seq) else ("draft" if end in calls else "stage" if end in stage else "job")
         block = "\n".join(f"| {r['id']} | {r.get('status')} | {norm_line(str(r.get('reason') or ''))} |" for r in rules)
         # 키는 계획 경로 인자와 결과 내용(규칙·상태·사유): 같은 작업에서 같은 결과로 다시 돌려도 같은 의무라 막는 횟수 한도를
         # 함께 쓴다. 다른 작업과 키가 같아도(`$J/plan.json`·전부 통과) 횟수는 작업 경계(마지막 triage run) 뒤에서만 센다.

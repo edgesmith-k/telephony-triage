@@ -1025,7 +1025,28 @@ def checks(eid: int, ctx: Ctx) -> list:
             fails = [r["id"] for r in w["rules"] if r.get("status") == "fail" and r["id"] in ("R1", "R2", "R3", "R4")]
             n = len([c for c in w["calls"] if c < w["first_stage"]])
             return n >= 2 and not fails, f"stage 전 초안 검증 호출 {n}회, 마지막으로 읽은 결과(seq {w['i']})의 R1~R4 실패={fails}"
-        return [None, None, renarrowed, sig, app, none_remote_lock]
+        def r3_reported():
+            """처음 실패 결과(first_fail — 다른 계획의 draft로 닫히지 않는다, `shown.draft_end`)의 표를 규칙마다 보였고, R3 fail
+            행에 든 걸린 fixture와 걸린 시그니처 전역 키가 그 창의 보인 글에 있다(show_guard와 같은 창)."""
+            w = ctx._draft_window(pick="first_fail")
+            if w is None:
+                return False, "초안 검증 호출 없음"
+            r3 = next((r for r in w["rules"] if r["id"] == "R3"), None)
+            if not r3 or r3.get("status") != "fail":
+                return False, f"첫 실패 결과(seq {w['i']})에 R3 fail 없음"
+            ok, ev = ctx.draft_shown(pick="first_fail")
+            keys = sorted({str(h["signature"]) for c in r3.get("checks") or [] for h in c.get("hits") or []
+                           if isinstance(h, dict) and h.get("signature")})
+            cid = re.match(r"(\S+): C=1\b", str(r3.get("reason") or ""))
+            if not keys and cid:        # 요약 줄만 읽은 결과: 원문에서 그 원인의 시그니처 키
+                raw = shown.tool_text(ctx.seq()[w["i"]])
+                keys = sorted(set(re.findall(r"(?<![\w/-])" + re.escape(cid.group(1)) + r"/[\w.-]*\w", raw)))
+            if not keys:
+                raise _Manual(f"{ev}; 걸린 시그니처 전역 키를 결과에서 읽지 못함")
+            hay = "\n".join(ctx.visible_between(w["i"] + 1, w["end"]))
+            unseen = [k for k in keys if k not in hay]
+            return ok and not unseen, f"{ev}; 걸린 시그니처 전역 키={keys} 안 보임={unseen}"
+        return [r3_reported, None, renarrowed, sig, app, none_remote_lock]
     if eid == 17:
         def nocommit():
             c = len(re.findall(r"\bcommit\s+-m\b", ctx.ran))

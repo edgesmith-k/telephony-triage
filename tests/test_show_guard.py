@@ -398,6 +398,44 @@ def test_dry_run_stage_closes_draft_window_and_non_ask_tool(tmp_path):
     assert pre("pre-ask", path, "Bash", {"question": "진행할까요?"}) is None   # 질문 도구가 아니다
 
 
+REL_DRAFT = "cd /w/MOCK-1; python3 /p/scripts/db_verify.py rules --plan {plan} --draft {draft} 2>&1 | head -80"
+FAIL_SUMMARY = ("R3 fail: DATA-001-03: C=1 (DATA-001-03/any) — data/DATA-001-x/fixtures/DATA-001-01.log\n"
+                "R4 fail: 기대값이 깨진 fixture 5개\n{")
+NARROW_PASS = json.dumps({"rules": [{"id": "R1", "status": "pass", "reason": "대상 1개 통과"},
+                                    {"id": "R3", "status": "pass", "reason": "대상 1개 통과"},
+                                    {"id": "R5", "status": "skipped", "reason": "해당 없음"}]}, ensure_ascii=False)
+FAIL_TABLE = ("| R3 | fail | DATA-001-03: C=1 (DATA-001-03/any) — data/DATA-001-x/fixtures/DATA-001-01.log |\n"
+              "| R4 | fail | 기대값이 깨진 fixture 5개 |")
+NARROW_Q = {"question": "fixture 6개에도 걸립니다(R3·R4 실패). 좁힌 안은 통과합니다. 좁히기/허용?", "options": ["좁히기", "허용"]}
+
+
+def _narrowed_first(*extra):
+    """h3-d eval 18: 처음 시그니처(plan.json)의 실패 표를 보이기 전에 좁힌 안(plan-narrow.json)을 돌려 통과했다."""
+    return (prompt("p"), bash("d1", REL_DRAFT.format(plan="plan.json", draft="draft"), FAIL_SUMMARY),
+            bash("d2", REL_DRAFT.format(plan="plan-narrow.json", draft="draft2"), NARROW_PASS), *extra)
+
+
+def test_failed_draft_before_other_plan_still_enforced(tmp_path):
+    """실패 결과의 표시 의무는 다른 계획의 draft 호출로 닫히지 않는다: 질문·stage 모두 처음 실패 표를 요구한다."""
+    path = write(tmp_path, *_narrowed_first())
+    key = next(o for o in shown.obligations(shown.parse_events(path.read_text(encoding="utf-8").splitlines()))
+               if o.kind == "draft").key
+    out = pre("pre-ask", path, ASK, NARROW_Q)
+    assert decision(out) == "deny"
+    why = out["hookSpecificOutput"]["permissionDecisionReason"]
+    assert key in why and "DATA-001-03/any" in why                 # 붙일 표에 걸린 키·fixture가 든 사유 행
+    assert pre("pre-ask", path, ASK, dict(NARROW_Q, question=FAIL_TABLE + "\n" + NARROW_Q["question"])) is None
+    assert decision(pre("pre-bash", path, "Bash", {"command": STAGE_CMD})) == "deny"
+    ok = write(tmp_path, *_narrowed_first(say(FAIL_TABLE)), name="ok.jsonl")
+    assert pre("pre-bash", ok, "Bash", {"command": STAGE_CMD}) is None
+    # 한도: 같은 키로 두 번 막았으면(사이에 글을 썼다) 더 막지 않고 안내만 한다
+    deny = shown.MARKER + " " + key + " — 거부됨"
+    capped = write(tmp_path, *_narrowed_first(call("a1", ASK, NARROW_Q, deny, True), say("다시 묻습니다."),
+                                              call("a2", ASK, NARROW_Q, deny, True), say("다시.")), name="cap.jsonl")
+    out = pre("pre-ask", capped, ASK, NARROW_Q)
+    assert decision(out) is None and shown.CAPPED in out["systemMessage"]
+
+
 def test_report_follows_latest_analysis(tmp_path):
     run = _job(tmp_path)
     q7 = {"question": REPORT + MUST + "\n어떻게 기록할까요?", "options": STEP7}

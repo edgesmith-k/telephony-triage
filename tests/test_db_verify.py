@@ -106,6 +106,9 @@ def test_broad_cause_signature_and_widened_fixed_cause_are_blocked():
     assert f"{CALL}/fixtures/CALL-001.none.log" in hits
     assert f"{CALL}/fixtures/CALL-001-01.fixed.MOCKB77_U2_20260920.log" in hits      # 수정 후 감시
     assert f"{CALL}/fixtures/CALL-001-01.fixed.MOCKB77_U2_20260920.log" in rows["R4"]["targets"]
+    # 표 한 행(사유)에 걸린 시그니처 전역 키와 fixture가 같이 든다(eval 18)
+    assert rows["R3"]["reason"].startswith("CALL-001-01: C=1 (CALL-001-01/ims-not-registered-on-dial) — ")
+    assert f"{CALL}/fixtures/CALL-001.none.log" in rows["R3"]["reason"]
 
     db = git_db()
     new = db / "data/DATA-009-sim-rejected"

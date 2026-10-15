@@ -475,6 +475,13 @@ def _retemp_drafts(obj, back: dict) -> None:
             _retemp_drafts(v, back)
 
 
+def _hit_keys(hits: list[dict], keys: list[str]) -> str:
+    """R3 실패 사유에 넣을 걸린 시그니처 전역 키(`<ID>/<시그니처 id>`): 사유가 표 한 행이라 걸린 fixture와 키가 행에 같이
+    보여야 사용자가 좁힐지·허용할지 고를 수 있다(eval 18). 매칭 결과에 키가 없으면 바뀐 시그니처 키."""
+    found = sorted({str(h["signature"]) for h in hits if h.get("signature")})
+    return ", ".join(found or keys)
+
+
 def r3(run: Run, t: Targets) -> dict:
     checks = []
     for cid in sorted(t.cause):
@@ -498,7 +505,8 @@ def r3(run: Run, t: Targets) -> dict:
                 hits.append({"fixture": item["rel"], "kind": item["fx"].kind, "signature": sig,
                              "allow_cause_draft": _allow_draft(item, cid)})
         if hits:
-            checks.append(_check(cid, "fail", f"{cid}: C=1 — {', '.join(h['fixture'] for h in hits)}", kind="cause",
+            checks.append(_check(cid, "fail", f"{cid}: C=1 ({_hit_keys(hits, keys)}) — {', '.join(h['fixture'] for h in hits)}",
+                                 kind="cause",
                                  signatures=keys, hits=hits,
                                  allow_cause_drafts=[h["allow_cause_draft"] for h in hits if h["allow_cause_draft"]],
                                  **_err_extra(errored, other)))
@@ -520,7 +528,8 @@ def r3(run: Run, t: Targets) -> dict:
         other = []
         errored = [e for i in negatives for e in _errored(run, i, {tid}, other)]
         if hits:
-            checks.append(_check(tid, "fail", f"{tid}: 음성 fixture에서 S=1 — {', '.join(h['fixture'] for h in hits)}",
+            checks.append(_check(tid, "fail", f"{tid}: 음성 fixture에서 S=1 ({_hit_keys(hits, keys)}) — "
+                                              f"{', '.join(h['fixture'] for h in hits)}",
                                  kind="symptom", signatures=keys, hits=hits, **_err_extra(errored, other)))
         elif errored:
             checks.append(_check(tid, "fail", _errored_reason(errored), kind="symptom", signatures=keys,
