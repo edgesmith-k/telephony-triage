@@ -18,7 +18,7 @@
 
 - 모드: **사외 초안**. Phase **D0, 1~13** 완료, 반입 전 보강 트랙 완료(history). 최신 반입본 import-20261014c(f4d98d5, 사내 전달). main 병합 PR #8~#51.
 - 10/14 밤~10/15 **H 사외 재측정 완료**: P0(`--draft` 상대 경로가 사용자 clone에 worktree 생성) 수정, hook 거부 문구·재시도·전부 통과 초안 갈음, 채점기 오판 수정 뒤 전체 재측정(h3-*·h4-u). 실패 11 → 0, hook 거부 52 → 29, 한도 도달 10 → 0. `offsite_results.json`(fb26573): 사외 fail 0·최신 안전 위반 0, 미결정 11(사내 대상 9 + 15·63). 상세 history "10/14 밤~10/15". 전체 pytest 1,956 통과. 브랜치 `ccr-d022623a-2f4vdx`(main 미병합).
-- 안내서 "모델 선택": Sonnet 5.5 기준, 다른 모델 우려·관찰 수치(사용자 10/14).
+- 안내서 "모델 선택": Sonnet 5.5 기준, 다른 모델 우려·관찰 수치(사용자 10/14). Opus 5.5 확인 측정 11개 실패 0(비용 ≈2.7배, history).
 - `TODO(SITE)`: `python3 tools/list_site_todos.py`. `REVIEW-OPEN.md` 0건.
 - 사내 시작: **"사내 설정 시작"** → `python3 tools/site_step.py`(결정 (o)).
 - 안내서 HTML: `docs/telephony-triage-guide.html`(공유본 https://claude.ai/artifact/1jov1Et4dQUMauFr6aoxWG, 모델 절 미반영), `docs/materials/00-index.html`

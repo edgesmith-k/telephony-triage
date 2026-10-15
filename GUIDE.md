@@ -349,7 +349,7 @@ claude mcp list               # Jira MCP 사용자 범위 등록 확인
 - Sonnet 기본: analyze·record·fix-submitted·verify-fix·sync-pr·search·5-1 분석 스킬.
 - verify-fix: W3부터 흔적 시그니처 없는 코드·설정 수정 유형을 `db_verify fix`가 종료 코드 2로 막아 Sonnet 기본(eval 25 Sonnet 3/3, W3). eval 25는 사내 S-2 대상이 아니라 사외 결과 기록(`offsite_results.json`)으로 갈음한다.
 - 5-2 탐색은 Sonnet. 가설 품질이 중요하면 Opus를 고른다.
-- **검증 범위: 스킬 행동 eval·토큰 측정은 Sonnet 5.5(`claude-sonnet-5-5`)로만 했다**(`tests/skill_evals/offsite_results.json` `model`, 사내 S-2도 Sonnet 5.5). 다른 모델(Opus 등)도 같은 플러그인으로 동작하지만 eval로 확인하지 않았다.
+- **검증 범위: 스킬 행동 eval·토큰 측정은 Sonnet 5.5(`claude-sonnet-5-5`)로만 했다**(`tests/skill_evals/offsite_results.json` `model`, 사내 S-2도 Sonnet 5.5). 다른 모델도 같은 플러그인으로 동작한다. Opus 5.5는 확인 측정만 했다(10/15, 배치 A 7개 + hook 거부가 많던 4·36·40·67: 실패 0, hook 거부 11개 중 1회 — 화면을 처음부터 보이는 편, 비용은 eval당 Sonnet의 약 2.7배). 그 밖의 모델은 eval로 확인하지 않았다.
 - 모델과 무관하게 지켜지는 것(스크립트·hook이 강제): 외부 쓰기(이슈 DB push·트래커 코멘트) 전 승인 질문, 사용자 clone 불변, 분류 판정은 스크립트 출력 기준, 마스킹, 확인 화면 전체 표시 강제(`show_guard`).
 - 다른 모델의 우려 사항:
   - 화면 요약: 모델마다 줄이는 습관이 다르다(Sonnet, hook 전 표시 실패 22/48. hook 첫 판 뒤에도 거부 52회 중 요약 15·값 옮김 오류 3, 문구 개선 뒤 59개 실행에서 거부 29회).
