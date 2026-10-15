@@ -77,7 +77,7 @@ sys.path.insert(0, str(SCRIPTS))
 import db_regress  # noqa: E402
 import match_signatures  # noqa: E402
 import parse_logcat  # noqa: E402
-from common import builds, checks, compat, dbpath, gitscope, issuedb, quality, rulediff, site_defaults, userconfig, yamlio  # noqa: E402
+from common import builds, checks, compat, dbpath, draftcheck, gitscope, issuedb, quality, rulediff, site_defaults, userconfig, yamlio  # noqa: E402
 from common.buildname import sanitize_build  # noqa: E402
 from common.exitcodes import CHECK_FAILED, NEEDS_APPROVAL, OK, USAGE  # noqa: E402
 from common.patterns import PatternError, PatternTimeout  # noqa: E402
@@ -136,6 +136,9 @@ def _check_lock(job: str, defaults: dict) -> None:
 def make_draft(plan: Path, draft: Path, defaults: dict, plugin_root: str | None) -> dict:
     """`<draft>`에 origin/<base> 기준 분리 worktree를 만들고 계획을 적용한다. `db_add apply` 결과를 돌려준다."""
     from db_pr import _job_of, UsageError as WorktreeError
+    # 상대 경로는 검사(`_job_of`)와 같게 cwd 기준 절대 경로로 바꾼다. 그대로 두면 `git -C <clone> worktree add`가
+    # clone 기준으로 풀어 사용자 clone 안에 worktree를 만든다 (h1-a eval 10)
+    plan, draft = Path(plan).expanduser().absolute(), Path(draft).expanduser().absolute()
     ctx = _draft_ctx(defaults)
     try:
         _job_of(draft, ctx)
@@ -186,6 +189,7 @@ def _draft_ctx(defaults: dict):
 
 def remove_draft(draft: Path, defaults: dict) -> None:
     from db_pr import _remove_worktree, UsageError as WorktreeError
+    draft = Path(draft).expanduser().absolute()       # make_draft와 같게 cwd 기준
     if draft.name != "draft":
         raise UsageError("draft 경로 이름은 draft여야 합니다")
     try:
@@ -471,6 +475,24 @@ def _retemp_drafts(obj, back: dict) -> None:
             _retemp_drafts(v, back)
 
 
+def _hit_keys(hits: list[dict], keys: list[str]) -> str:
+    """R3 실패 사유에 넣을 걸린 시그니처 전역 키(`<ID>/<시그니처 id>`): 사유가 표 한 행이라 걸린 fixture와 키가 행에 같이
+    보여야 사용자가 좁힐지·허용할지 고를 수 있다(eval 18). 매칭 결과에 키가 없으면 바뀐 시그니처 키."""
+    found = sorted({str(h["signature"]) for h in hits if h.get("signature")})
+    return ", ".join(found or keys)
+
+
+R3_FIXTURES_SHOWN = 3      # R3 실패 사유에 이름을 드는 걸린 fixture 수(나머지는 "외 k개", 전체 경로는 `hits[].fixture`)
+
+
+def _hit_fixtures(hits: list[dict]) -> str:
+    """R3 실패 사유의 걸린 fixture: `fixture N개: <파일 이름>, … 외 k개`. 전체 경로 목록은 표 한 행으로 너무 길어 모델이 잘라
+    보였다(h5-18b eval 18) — 경로는 결과의 `hits`·R4 `targets`에 그대로 있다. 시그니처 전역 키는 자르지 않는다(`_hit_keys`)."""
+    names = [Path(str(h["fixture"])).name for h in hits]
+    more = len(names) - R3_FIXTURES_SHOWN
+    return f"fixture {len(names)}개: {', '.join(names[:R3_FIXTURES_SHOWN])}" + (f" 외 {more}개" if more > 0 else "")
+
+
 def r3(run: Run, t: Targets) -> dict:
     checks = []
     for cid in sorted(t.cause):
@@ -494,7 +516,8 @@ def r3(run: Run, t: Targets) -> dict:
                 hits.append({"fixture": item["rel"], "kind": item["fx"].kind, "signature": sig,
                              "allow_cause_draft": _allow_draft(item, cid)})
         if hits:
-            checks.append(_check(cid, "fail", f"{cid}: C=1 — {', '.join(h['fixture'] for h in hits)}", kind="cause",
+            checks.append(_check(cid, "fail", f"{cid}: C=1 ({_hit_keys(hits, keys)}) — {_hit_fixtures(hits)}",
+                                 kind="cause",
                                  signatures=keys, hits=hits,
                                  allow_cause_drafts=[h["allow_cause_draft"] for h in hits if h["allow_cause_draft"]],
                                  **_err_extra(errored, other)))
@@ -516,7 +539,8 @@ def r3(run: Run, t: Targets) -> dict:
         other = []
         errored = [e for i in negatives for e in _errored(run, i, {tid}, other)]
         if hits:
-            checks.append(_check(tid, "fail", f"{tid}: 음성 fixture에서 S=1 — {', '.join(h['fixture'] for h in hits)}",
+            checks.append(_check(tid, "fail", f"{tid}: 음성 fixture에서 S=1 ({_hit_keys(hits, keys)}) — "
+                                              f"{_hit_fixtures(hits)}",
                                  kind="symptom", signatures=keys, hits=hits, **_err_extra(errored, other)))
         elif errored:
             checks.append(_check(tid, "fail", _errored_reason(errored), kind="symptom", signatures=keys,
@@ -720,6 +744,7 @@ def rules(args, defaults: dict, plugin_root: Path) -> tuple[dict, int]:
             remove_draft(draft, defaults)
         back = {i["id"]: i["temp_id"] for i in applied.get("ids") or [] if i.get("temp_id")}
         _retemp_drafts(result, back)
+        draftcheck.record(draft.parent, plan, code, "rules")
         return {"db": str(draft), "scope": "plan:draft", **result}, code
     try:
         db = dbpath.resolve(args.db)
@@ -937,9 +962,11 @@ def judge(args, defaults: dict, plugin_root: Path) -> tuple[dict, int]:
             mapping = {i["temp_id"]: i["id"] for i in applied.get("ids") or []}
             cause_id = mapping.get(cause_id, cause_id)
             root = draft
-            rules_result, _ = verify_rules(draft, draft, "HEAD", plugin_root, defaults,
-                                           _samples(_load_plan(args.plan), plan_path, [], []))
+            draft_plan = _load_plan(args.plan)
+            rules_result, rules_code = verify_rules(draft, draft, "HEAD", plugin_root, defaults,
+                                                    _samples(draft_plan, plan_path, [], []))
             _retemp_drafts(rules_result, {v: k for k, v in mapping.items()})
+            draftcheck.record(draft.parent, draft_plan, rules_code, args.cmd)
         else:
             try:
                 root = dbpath.resolve(args.db)

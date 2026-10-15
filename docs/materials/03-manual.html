@@ -1258,6 +1258,7 @@ db_build.py --verify --db &lt;db&gt;</pre></div>
       <h3>모델과 토큰</h3>
       <ul>
         <li>기본 모델은 Sonnet입니다(analyze·record·fix-submitted·verify-fix·sync-pr·search·심층 분석). 탐색 분석의 가설 품질이 중요하면 Opus를 고를 수 있습니다. 바꾸는 법: <code>/model</code>.</li>
+        <li>평가·테스트는 Sonnet 5.5 기준입니다. 다른 모델(Opus 등)도 동작하지만 eval로 확인하지 않았습니다. 외부 쓰기 전 승인 질문, 사용자 clone 불변, 스크립트 판정, 마스킹, 확인 화면 표시 강제(hook)는 모델과 무관합니다. 우려: 화면 요약(Sonnet hook 전 표시 실패 22/48)·거부 뒤 반응(Sonnet은 hook 첫 판에서 거부 52회 중 16회를 같은 호출로 재시도, 문구 개선 뒤 한도 도달 0회)·질문 흐름이 다를 수 있고, 토큰·비용 수치(이슈 1건 약 39만 토큰)는 Sonnet 기준이며, 작은 모델(Haiku 등)은 권장하지 않습니다(Sonnet도 문구만으로 못 지킨 규칙이 있어 구조로 강제). 승인 없는 쓰기는 모델과 무관하게 막힙니다.</li>
         <li>심층 분석(<code>--analyzer</code>)과 탐색 분석(<code>--explore</code>)은 토큰을 더 씁니다. 기본은 실행 전에 묻습니다.</li>
         <li>토큰을 아끼는 습관: 로그는 경로로 주기, 한 작업이 끝나면 세션 닫기, 오류는 실패한 것만 보기.</li>
       </ul>
@@ -1869,7 +1870,7 @@ git push -u origin HEAD                        # 사용자 승인 후. PR은 사
         <tr><th>단계</th><th>할 일</th><th>완료 기준</th></tr>
         <tr><td>S-0 (선택)</td><td>실제 로그 3~5개로 파서 가정 확인(<a href="#s7-parser">7.8</a>)</td><td>지표 5종 기록, 정성 결론 1줄</td></tr>
         <tr><td>S-1</td><td>확인 목록(<code>tools/list_site_todos.py</code> + <code>REVIEW-OPEN.md</code>), 샘플 받아 <code>SITE_PROFILE.md</code> 작성</td><td>오프라인 평가 기준(1위 정확도 등) 합의</td></tr>
-        <tr><td>S-2</td><td>사내 Claude Code 기능 확인(플러그인 로드, hooks, MCP 도구 이름), 실제 Jira MCP로 Jira 원문 격리 확인, 스킬 eval 전체 재실행(프롬프트 주입 eval 59·60 포함)</td><td>확인 8항목 기록, 안전 eval 위반 0</td></tr>
+        <tr><td>S-2</td><td>사내 Claude Code 기능 확인(플러그인 로드, hooks, MCP 도구 이름), 실제 Jira MCP로 Jira 원문 격리 확인, 사내 대상 스킬 eval 실행(11개, 프롬프트 주입 eval 59·60 포함 — 나머지는 사외 결과로 갈음)</td><td>확인 8항목 기록, 안전 eval 위반 0</td></tr>
         <tr><td>S-3</td><td><code>site-defaults.yaml</code>(<code>tracker.kind: jira</code>·Jira 도구 매핑 등), <code>issue-db.config.yaml</code>(<code>tracker.{kind, base_url, key_regex}</code> 등) 사내 값</td><td><code>config.py check</code>·<code>doctor</code> fail 0</td></tr>
         <tr><td>S-4a</td><td>운영 이슈 DB 생성·보호, 기존 파서 포팅(골든), 기존 data 분류 import, 분석 스킬 연결. 벤더 RIL 태그 초안은 <code>s0_suggest.py</code></td><td>골든 통과(실제 골든 폴더가 사내 백엔드로 실행되는지, 기대값을 일부러 바꾸면 실패하는지까지 확인), import PR 머지</td></tr>
         <tr><td>S-4</td><td>placeholder 규칙을 실제 문구로, 카테고리별 유형 5~10개 시드(실제 마스킹 fixture)</td><td>회귀·검증 통과</td></tr>

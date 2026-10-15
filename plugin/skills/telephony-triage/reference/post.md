@@ -6,7 +6,7 @@
 
 ## 언제
 
-- Step 8 `publish … --and-discard`로 PR 링크를 보인 직후, 또는 Step 7 기록하지 않음·읽기 전용·계획만 저장으로
+- Step 8 publish 결과의 PR 링크(`pr.url`)를 **먼저 글로 보인 뒤**(게시 질문 본문 첫 줄에 `PR: <url>`을 넣어도 된다), 또는 Step 7 기록하지 않음·읽기 전용·계획만 저장으로
   `S/triage.py release <KEY>`를 한 직후. 이때 lock은 이미 풀려 있다. `issue_post.py`는 lock을 잡지 않는다.
 - 묻기 전에 `S/issue_post.py status <KEY> --json`. `postable: true`일 때만 **한 번** 묻는다(기본 아니오):
   "분석 결과를 Jira 코멘트(PROBLEM/CAUSE/NEXT ACTION/ANALYSIS)로 올릴까요? 본문을 먼저 보여드립니다".
@@ -21,7 +21,7 @@
 2. `JOB/post.fill.json`을 Write로 쓴다(LLM 칸만, 아래 형식).
 3. `S/issue_post.py render <KEY> --fill JOB/post.fill.json` → `JOB/post.md`(올라갈 본문 그대로)와 확인 화면.
    종료 1이면 `problems`대로 fill을 고쳐 다시 실행한다.
-4. 확인 화면을 **요약·재작성 없이 그대로** 보인다(Step 8 확인 화면과 같은 규칙). 선택: **승인 / 수정 요청 / 취소**.
+4. 확인 화면 전체를 **요약·재작성 없이 그대로** 승인 질문 본문(또는 직전 글)에 넣는다 — 사용자는 Bash 출력을 못 본다(Step 8 확인 화면과 같은 규칙). 선택: **승인 / 수정 요청 / 취소**.
    render 출력은 `head`·`sed`·`grep`·`tail`로 자르거나 파이프하지 않는다 — 머리(분류·마스킹·칸 출처)부터 `post_sha256` 줄까지 전체를 읽고 보인다.
    마지막 줄 `post_sha256`이 없으면 승인을 받지 않는다(TODO·검증 실패가 남았다).
 5. 승인 → `S/issue_post.py approve <KEY> --sha <post_sha256> --json`. 출력의 `tool`을 `arguments` **그대로** 한 번 호출한다.

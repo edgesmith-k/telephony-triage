@@ -41,9 +41,10 @@ OK, DIFFERENT, USAGE = 0, 1, 2
 # contracts.md §3.2 표 순서. argparse가 있는 CLI 스크립트(`build_parser()`)
 SCRIPTS = ("config", "code_roots", "parse_logcat", "mask_pii", "jira_fields", "match_signatures", "db_search",
            "db_add", "db_build", "db_lint", "db_regress", "db_verify", "db_pr", "db_precommit", "db_review",
-           "db_migrate", "guard", "jira_bridge", "triage", "issue_post", "job_status")
+           "db_migrate", "guard", "jira_bridge", "show_guard", "triage", "issue_post", "job_status")
 # argparse 없이 stdin만 받는 스크립트
-STDIN_ONLY = {"jira_bridge": "stdin: PostToolUse hook 입력 JSON"}
+STDIN_ONLY = {"jira_bridge": "stdin: PostToolUse hook 입력 JSON",
+              "show_guard": "`show_guard.py (stop | pre-ask | pre-bash | post)`, stdin: 그 hook 입력 JSON"}
 # `__main__`이 있지만 CLI가 아닌 모듈(현재 없음)
 NOT_CLI: tuple[str, ...] = ()
 

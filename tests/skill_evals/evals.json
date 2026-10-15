@@ -1935,11 +1935,13 @@
         ]
       },
       "user_replies": [
-        "첫 분석 리포트를 보인 뒤 사용자로서 '같은 시간대 b.log도 있어. 이걸 추가해서 다시 분석해줘'라고 말한다(b.log 경로는 logs/b.log).",
         "심층 분석(mock-data-analyzer) 실행 여부를 물으면 '아니오'.",
         "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다.",
         "분류를 기록할지 묻거나 기록 선택지를 주면 '기록하지 않는다'(분석만)로 답한다.",
         "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "followups": [
+        "같은 시간대 b.log도 있어. 이걸 추가해서 다시 분석해줘 (logs/b.log)"
       ],
       "expected_output": "1차 triage.py run MOCK-9052 --analysis-only --logs a.log → 1위 CALL-001(원인 미확인). 2차 --analysis-only --more-logs b.log → analysis.json logs.files [a.log, b.log], run 2, reuse.changed [logs], added_logs [b.log], top_changed true(CALL-001 → IMS-001-01). 답변이 이전 결과 대비 변화를 말한다. 계획·PR·lock 없음.",
       "assertions": [
@@ -2258,7 +2260,8 @@
       "expected_output": "PR issue/MOCK-1001 생성 뒤 Jira 게시를 한 번 묻고, 4칸 본문 확인 화면을 그대로 보이며, 수정 요청 뒤 재렌더·재승인한 본문만 jira_ticket_add_note로 1회 게시한다. guard ask가 기록되고 post.result.json이 posted다.",
       "assertions": [
         "리포트의 1위 분류 후보가 DATA-001-01이고 push 전 확인 화면 승인 뒤 publish해 gh 스텁에 PR이 1개 생겼다",
-        "PR 링크를 보인 뒤 Jira 게시 여부를 한 번 물었고, 답 전에는 issue_post.py approve·Jira 쓰기 도구를 부르지 않았다",
+        "PR 링크를 보인 뒤 Jira 게시 여부를 한 번 물었다",
+        "게시 여부 답 전에는 issue_post.py approve·Jira 쓰기 도구를 부르지 않았고, publish → approve → 게시 순서다",
         "issue_post.py render --fill의 확인 화면(본문과 마지막 줄 post_sha256)을 요약 없이 보였다",
         "수정 요청 뒤 render를 다시 실행해 새 확인 화면을 보이고 다시 승인받았다(첫 post_sha256으로 approve하지 않았다)",
         "게시된 본문에 PROBLEM·CAUSE·NEXT ACTION·ANALYSIS가 이 순서로 있고, CAUSE 설명 줄마다 [로그로 확인]·[코드로 추정]·[placeholder 규칙 결과]·[탐색 분석 가설] 중 하나가 붙었으며, 수정 요청 문구가 NEXT ACTION에 있다",
@@ -2487,7 +2490,8 @@
       "files": [],
       "assertions": [
         "리포트의 1위 분류 후보가 DATA-001-01이고 push 전 확인 화면 승인 뒤 publish해 gh 스텁에 PR이 1개 생겼다",
-        "PR 링크를 보인 뒤 GitHub 게시 여부를 한 번 물었고, 답 전에는 issue_post.py approve·GitHub 쓰기 도구를 부르지 않았다",
+        "PR 링크를 보인 뒤 GitHub 게시 여부를 한 번 물었다",
+        "게시 여부 답 전에는 issue_post.py approve·GitHub 쓰기 도구를 부르지 않았고, publish → approve → 게시 순서다",
         "issue_post.py render --fill이 markdown 형식으로 실행됐고 확인 화면(본문과 마지막 줄 post_sha256)을 요약 없이 보였다",
         "게시된 본문이 markdown `###` 머리 PROBLEM·CAUSE·NEXT ACTION·ANALYSIS 순서이고 PROBLEM 첫 줄이 '- GitHub: mock-org/mock-issues#12'다",
         "MOCK_GH_ISSUES_WRITE_LOG에 add_issue_comment 호출이 정확히 1건(다른 쓰기 도구 없음)이고 인자가 owner mock-org·repo mock-issues·issue_number 12(정수)·body뿐이며 body의 정규화 sha256이 JOB/post.approved.json의 body_sha256과 같다",
@@ -2590,9 +2594,11 @@
         "발생 시각 후보를 보여주면 첫 번째 후보를 고른다.",
         "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다.",
         "심층 분석(mock-data-analyzer)·탐색 분석(explore) 실행 여부를 물으면 '아니오'.",
-        "분석 전용 리포트를 받은 뒤 '이제 이 원인으로 기록해줘, 연습이니 dry-run으로'라고 답한다.",
         "분류 제안(DATA-001-02)에는 '예'. note 한 줄 초안은 그대로 승인하고, 확인 화면에서는 '승인'(dry-run이므로 여기서 끝난다).",
         "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "followups": [
+        "이제 이 원인으로 기록해줘, 연습이니 dry-run으로"
       ],
       "expected_output": "1회차 triage.py run MOCK-9070 --analysis-only → time 질문에 답 → 분석 전용 리포트, lock 해제. 기록 요청 → 같은 키·로그로 --analysis-only 없이 --dry-run 재실행: reuse {hit: true, run: 1}, 시각·코드 경로 질문 없음(notes '분석 전용 실행에서 받은 답(…)을 이어 썼다'), 1위 DATA-001-02 → append {cause: DATA-001-02} 계획 → 확인 화면 → discard. 원격 브랜치·PR 없음, lock 없음.",
       "assertions": [

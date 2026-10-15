@@ -424,8 +424,8 @@ def collect(work_dir: Path, key: str, cfg: dict, defaults: dict, platform: str |
     if stage_doc and state is not None and staged_like:
         checks = stage_doc.get("checks") or {}
         failed = [n for n, v in checks.items() if isinstance(v, dict) and v.get("code") not in (0, 3, None)]
-        if stage_doc.get("stopped") == "apply":
-            failed.insert(0, "apply")
+        if stage_doc.get("stopped") in ("apply", "draft-verify"):
+            failed.insert(0, stage_doc["stopped"])
         if stage_doc.get("result") == "check-failed" or failed:
             blockers.append(_row("stage-failed", f"stage 실패: {', '.join(map(str, failed)) or 'check-failed'}", "recorded",
                                  "계획을 고쳐 `stage --then-summary`부터 다시 한다", _mtime(job / STAGE)))

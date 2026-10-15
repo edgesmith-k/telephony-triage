@@ -23,7 +23,7 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "tests" / "helpers"))
 
 from runner import SAMPLE, copy_db, edit, git, git_db, run, run_json, variant_db  # noqa: E402
-from workspace import PLANS, Workspace  # noqa: E402
+from workspace import PLANS, Workspace, draftcheck  # noqa: E402
 
 VERIFY_DB = variant_db("issue-db-verify")
 LOGS = variant_db("verify-logs")
@@ -106,6 +106,11 @@ def test_broad_cause_signature_and_widened_fixed_cause_are_blocked():
     assert f"{CALL}/fixtures/CALL-001.none.log" in hits
     assert f"{CALL}/fixtures/CALL-001-01.fixed.MOCKB77_U2_20260920.log" in hits      # 수정 후 감시
     assert f"{CALL}/fixtures/CALL-001-01.fixed.MOCKB77_U2_20260920.log" in rows["R4"]["targets"]
+    # 표 한 행(사유)에 걸린 시그니처 전역 키와 fixture가 같이 든다(eval 18)
+    # 사유는 짧게: 파일 이름만(전체 경로는 hits), 키는 자르지 않는다(h5-18b eval 18)
+    reason = rows["R3"]["reason"]
+    assert reason.startswith(f"CALL-001-01: C=1 (CALL-001-01/ims-not-registered-on-dial) — fixture {len(hits)}개: ")
+    assert "CALL-001.none.log" in reason and f"{CALL}/fixtures/" not in reason
 
     db = git_db()
     new = db / "data/DATA-009-sim-rejected"
@@ -615,6 +620,41 @@ def test_record_new_cause_resolution_draft_then_verified_stage(loaded_condition)
     ws.db_pr("discard", ws.wt(job))
 
 
+def test_relative_draft_from_work_dir_leaves_clone_untouched():
+    """work_dir에서 상대 경로 `--plan <키>/plan.json --draft <키>/draft`로 불러도 draft는 cwd 기준에 만들고
+    사용자 clone에는 worktree도 파일도 남지 않는다 (h1-a eval 10: clone/<키>/draft가 등록되던 회귀)."""
+    ws = Workspace()
+    job = "MOCK-7016"
+    ws.put(job, "fixtures/cut-1.log", SIM_LOG)
+    plan = json.loads((PLANS / "p7-record-verified.plan.json").read_text(encoding="utf-8"))
+    plan["operations"] = [op for op in plan["operations"]
+                          if op["op"] != "verify-resolution" and op.get("kind") != "resolved"]
+    ws.plan(job, plan, draft_verified=False)
+    ws.acquire(job)
+    record = ws.job_dir(job) / draftcheck.RECORD
+    assert not record.exists()
+
+    proc = run("db_verify.py", ["rules", "--plan", f"{job}/plan.json", "--draft", f"{job}/draft"], root=ws.root,
+               env=ws.env(), cwd=ws.work)
+    assert proc.returncode == 0, proc.stderr
+    assert json.loads(proc.stdout)["scope"] == "plan:draft"
+    assert json.loads(record.read_text(encoding="utf-8"))["command"] == "rules"     # cwd 기준 작업 디렉토리에 기록
+    assert not (ws.job_dir(job) / "draft").exists()
+    worktrees = [line for line in git(ws.clone, "worktree", "list", "--porcelain").splitlines()
+                 if line.startswith("worktree ")]
+    assert worktrees == [f"worktree {ws.clone.resolve()}"], worktrees
+    assert git(ws.clone, "status", "--porcelain", "--untracked-files=all") == ""
+    assert not (ws.clone / job).exists()
+
+    record.unlink()     # 작업 디렉토리에서 `--plan plan.json --draft draft`로 불러도 같다
+    proc = run("db_verify.py", ["rules", "--plan", "plan.json", "--draft", "draft"], root=ws.root, env=ws.env(),
+               cwd=ws.job_dir(job))
+    assert proc.returncode == 0, proc.stderr
+    assert record.is_file() and not (ws.job_dir(job) / "draft").exists()
+    assert git(ws.clone, "worktree", "list", "--porcelain").count("worktree ") == 1
+    assert git(ws.clone, "status", "--porcelain", "--untracked-files=all") == ""
+
+
 DATA_001_03 = """  - id: DATA-001-03
     status: active
     title: SIM 미준비
@@ -850,3 +890,13 @@ def test_r3_ignores_other_targets_signature_errors_but_shows_them():
     check = next(c for c in rows["R3"]["checks"] if c["target"] == "DATA-001-01")
     assert check["status"] == "pass" and "errors" not in check, check
     assert any(e["fixture"].endswith("DATA-001.none.log") for e in check["other_errors"]) and "다른 시그니처 오류" in check["note"]
+
+
+def test_r3_reason_names_few_fixtures_and_all_keys():
+    """R3 실패 사유: 걸린 fixture는 파일 이름 3개 + "외 k개", 시그니처 전역 키는 모두(h5-18b eval 18 — 경로 목록이 길어 잘렸다)."""
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    import db_verify
+    hits = [{"fixture": f"data/DATA-001-x/fixtures/DATA-001-0{n}.log", "signature": f"DATA-001-03/s{n % 2}"} for n in range(1, 7)]
+    assert db_verify._hit_fixtures(hits) == "fixture 6개: DATA-001-01.log, DATA-001-02.log, DATA-001-03.log 외 3개"
+    assert db_verify._hit_fixtures(hits[:2]) == "fixture 2개: DATA-001-01.log, DATA-001-02.log"
+    assert db_verify._hit_keys(hits, []) == "DATA-001-03/s0, DATA-001-03/s1"

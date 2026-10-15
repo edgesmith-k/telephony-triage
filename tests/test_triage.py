@@ -229,6 +229,11 @@ def test_jira_without_time_offers_time_candidates_instead_of_asking_year():
     options = ask["needs_input"]["options"]
     assert 1 <= len(options) <= 3 and "DATA-001" in options[0]["label"]
 
+    bad = ws.json("triage.py", [*args, "--answer", "time=2026-09-20 14:32 KST"])      # 읽을 수 없는 답: 종료 2 대신 다시 묻는다 (eval 67)
+    assert bad["status"] == "needs_input" and bad["needs_input"]["kind"] == "time", bad
+    assert "읽지 못했다" in bad["needs_input"]["question"] and bad["needs_input"]["options"] == options
+    naive = ws.json("triage.py", [*args, "--answer", "time=2026-09-22 08:00:03"])       # 타임존 없는 ISO: 로그 tz(KST)로 정규화
+    assert naive["status"] == "ok", naive
     done = ws.json("triage.py", [*args, "--answer", f"time={options[0]['value']}"])
     assert done["status"] == "ok", done
     assert done["candidates"][0]["cause"] == "DATA-001-02"
@@ -279,8 +284,8 @@ def test_full_run_asks_for_jira_and_reads_what_the_bridge_saved():
 
 def test_hooks_json_wires_bridge_as_post_tool_use():
     hooks = json.loads((REPO / "plugin" / "hooks" / "hooks.json").read_text(encoding="utf-8"))["hooks"]
-    (entry,) = hooks["PostToolUse"]
-    assert entry["matcher"] == "mcp__.*" and "scripts/jira_bridge.py" in entry["hooks"][0]["command"]
+    (entry,) = [h for h in hooks["PostToolUse"] if h["matcher"] == "mcp__.*"]     # Bash 그룹은 표시 보조(show_guard post)
+    assert len(entry["hooks"]) == 1 and "scripts/jira_bridge.py" in entry["hooks"][0]["command"]
 
 
 def test_bridge_ignores_other_tools():
@@ -497,17 +502,17 @@ def test_skill_md_is_within_7_5kb_and_drives_triage():
     skill = REPO / "plugin" / "skills" / "telephony-triage" / "SKILL.md"
     reference = skill.parent / "reference"
     text = skill.read_text(encoding="utf-8")
-    assert len(text.encode("utf-8")) <= 8064        # 흐름 A/B 한 줄(찾기·분석 / 등록) 추가 뒤의 한도. 그 전 7,680B(W6: 실행 규칙을 reference/rules.md로 옮김), W6 전 8,192B
+    assert len(text.encode("utf-8")) <= 8280        # E67: Step 9 앞 PR 링크(`pr.url`)를 글로 보인다는 말 뒤. 그 전 8,256B — 전체 eval(10/14) 반영: 이어서 plan.next·mode write·거부 뒤 선택지·issue 재호출 뒤의 한도. 그 전 8,064B(흐름 A/B 한 줄 추가 뒤). 그 전 7,680B(W6: 실행 규칙을 reference/rules.md로 옮김), W6 전 8,192B
     for needle in ("triage.py run", "needs_input", "--answer", "write-flow.md", "--commit", "reference/rules.md",
                    "steps-pasted.txt", "--dry-run --issue-file", "analyzer.skill",
                    "must_show", "triage.py explore"):
         assert needle in text, needle
     rules = (reference / "rules.md").read_text(encoding="utf-8")      # SKILL §실행 규칙이던 내용
-    assert len(rules.encode("utf-8")) <= 2048
+    assert len(rules.encode("utf-8")) <= 2320      # Bash·Read 출력 비가시(리포트·검증 표·확인 화면·notes·must_show, 전체 eval 10/14)·stage `next` 줄 뒤의 한도. 그 전 2,048B
     for needle in ("S-3", "계획 형식 오류", "TT_LOCK_OWNER", "stage --then-summary", "모든 종료 경로에서 푼다", "사용자 확인 후"):
         assert needle in rules, needle
     assert len((reference / "db-authoring.md").read_bytes()) <= 12288      # 필수 키 요약 포함. §0 등록 준비물·리뷰어 색인 추가 뒤의 한도(그 전 11,392B: W7 add-fixture 세부, 11,264B)
-    assert len((reference / "write-flow.md").read_bytes()) <= 14344
+    assert len((reference / "write-flow.md").read_bytes()) <= 14390     # E67 PR 링크를 다음 질문 전에 글자 그대로 보인다 뒤(그 전 14,344B)
     _check_op_summary(reference / "db-authoring.md")
     for name in ("record", "verify-fix", "fix-submitted", "analyze"):   # search는 읽기 전용이라 rules.md를 읽지 않는다
         assert "reference/rules.md" in (REPO / "plugin" / "commands" / f"{name}.md").read_text(encoding="utf-8"), name
@@ -1076,7 +1081,10 @@ def test_code_auto_select_table():
         if expect_auto:
             assert done["status"] == "ok" and done["code"]["auto"] is True and done["code"]["roots"] == "android16-main", name
             report = (ws.job_dir(W4_KEY) / "report.md").read_text(encoding="utf-8")
-            assert "(자동 선택: code.auto_select)" in report and "분석 트리: android16-main" in report, name
+            assert "(자동 선택: code.auto_select, `--code`로 변경 가능)" in report and "분석 트리: android16-main" in report, name
+            # eval 55: 자동 선택 알림은 must_show 줄이다(백틱 없음 — 글자 그대로 옮기기 쉽게)
+            line = next((m for m in done.get("must_show") or [] if m.startswith("코드 분석 트리 자동 선택: android16-main (")), None)
+            assert line and line.endswith(") — 다른 트리는 --code로 지정") and "`" not in line and f"- {line}" in report, name
             assert _w4_state(ws)["code_auto"] == "android16-main" and "code" not in _w4_state(ws)["answers"], name
             assert not [w for w in done.get("warnings", []) if "code.auto_select" in w], name     # 키 없음·유효 값은 경고 없음
         else:
@@ -1236,7 +1244,7 @@ def test_w4_docs_match_the_implementation():
     step0 = wf[wf.index("### Step 0."):wf.index("### Step 1.")]
     assert "/telephony-triage:sync" in step0 and "`--yes`를 부르지 않고" in step0 and "cleanup_targets" in step0
     step21 = wf[wf.index("### Step 2-1."):wf.index("### Step 3.")]
-    assert "code.auto_select" in step21 and "정확히 1개" in step21 and "(자동 선택: code.auto_select)" in step21
+    assert "code.auto_select" in step21 and "정확히 1개" in step21 and "(자동 선택: code.auto_select, `--code`로 변경 가능)" in step21
     step5 = wf[wf.index("### Step 5-1."):wf.index("### Step 6.")]
     assert "심층 분석과 탐색 분석을 할까요?" in step5 and "선택지 4개" in step5 and "선택지 2개" in step5
     cfg = (W4_DOCS / "02-config.md").read_text(encoding="utf-8")

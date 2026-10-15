@@ -14,13 +14,14 @@ from pathlib import Path
 import yaml
 from common import userconfig, yamlio
 from common import checks as checks_mod
+from common import draftcheck
 from common import ghcli
 import db_summary
 from common.exitcodes import CHECK_FAILED, OK, USAGE
 
 from .lock import PLAN, PR_FILE, REGRESS, STAGE, STATE, TOOL_PREFIX, UsageError, _iso, _read_json, _write_json, now
 from . import worktree as _wt
-from .worktree import (Ctx, _check_branch, _err_brief, _gh, _git, _job_of, _out, _owned_worktree,
+from .worktree import (Ctx, abs_wt, _check_branch, _err_brief, _gh, _git, _job_of, _out, _owned_worktree,
                        _pending_files, _prepare_worktree, _ref_sha, _same_path, _worktrees, run_script)
 
 
@@ -119,7 +120,8 @@ def _check_feedback_suggested(plan: dict, plan_path: Path, job_dir: Path) -> dic
             _write_json(plan_path, plan)
         return {"status": "filled", "count": len(expected)}
     if _suggested_key(suggested) != _suggested_key(expected):
-        raise UsageError("계획 feedback.suggested가 JOB/match.json 후보와 다르다 — 비워 두면 stage가 채운다",
+        raise UsageError("계획 형식 오류: feedback.suggested가 JOB/match.json 후보와 다르다(이어서 하기 등 재분석 뒤) — "
+                         "feedback.suggested를 []로 비우고 다시 stage하면 stage가 채운다",
                          {"plan": suggested, "match": expected})
     return {"status": "verified", "count": len(expected)}
 
@@ -206,7 +208,7 @@ def preflight(ctx: Ctx, branch: str, search: str | None, jira: str | None) -> di
 def stage(ctx: Ctx, plan_path: Path, wt: Path, branch: str, dry_run: bool) -> tuple[dict, int]:
     ctx.require_repo()
     job_dir, job = _job_of(wt, ctx)
-    wt = Path(wt).expanduser().resolve()
+    wt = abs_wt(wt)        # `_job_of`와 같은 absolute 기준(resolve하면 symlink인 상위 경로에서 검사가 어긋난다)
     ctx.lock.touch(job)
     _check_branch(ctx, branch)
     tool = TOOL_PREFIX + branch
@@ -220,6 +222,23 @@ def stage(ctx: Ctx, plan_path: Path, wt: Path, branch: str, dry_run: bool) -> tu
     if not base_sha:
         raise UsageError(f"origin/{ctx.base}가 없습니다.")
     plan = _load_plan_checked(plan_path, ctx.repo, base_sha)
+    gap = draftcheck.missing(job_dir, plan)
+    if gap:     # SKILL Step 7: 작성 op가 있으면 초안 검증 표를 사용자에게 보인 뒤에만 stage (eval 3)
+        stopped = {"job": job, "plan": str(Path(plan_path).resolve()), "stopped": "draft-verify", "reason": gap,
+                   "next": (f"S/db_verify.py rules --plan {plan_path} --draft {job_dir / 'draft'}(rules.md대로 --platform·"
+                            "TT_LOCK_OWNER) 표를 사용자에게 보이고(skipped는 통과 아님, 다른 유형 fixture에 걸리면 "
+                            "좁히기/allow-cause를 묻는다) 다시 stage한다")}
+        # 이전 stage·summary의 승인이 남으면 수정 전 트리가 publish될 수 있다 — 재stage처럼 승인을 무효화한다
+        for name in (PR_FILE, REGRESS):
+            (job_dir / name).unlink(missing_ok=True)
+        try:
+            old = _read_json(job_dir / STATE)
+        except ValueError:
+            old = None
+        if old:
+            _write_json(job_dir / STATE, {**old, "approved_hash": None, "commit_message": None, "pr_digest": None})
+        _write_json(job_dir / STAGE, stopped)
+        return stopped, CHECK_FAILED
     feedback_check = _check_feedback_suggested(plan, Path(plan_path), job_dir)
     try:
         old_state = _read_json(job_dir / STATE)
@@ -385,8 +404,8 @@ def approved_hash(wt: Path) -> str:
 
 def summary(ctx: Ctx, wt: Path, markdown: bool = False) -> dict:
     job_dir, job = _job_of(wt, ctx)
+    wt = abs_wt(wt)
     _owned_worktree(ctx, wt)
-    wt = job_dir / wt.name
     ctx.lock.touch(job)
     state = _read_json(job_dir / STATE)
     stage_result = _read_json(job_dir / STAGE)
@@ -488,8 +507,8 @@ def _commit_approved(wt: Path, job_dir: Path, state: dict, approved: str) -> tup
 
 def publish(ctx: Ctx, wt: Path, branch: str, lease: str, approved: str, commit: bool = False) -> tuple[dict, int]:
     job_dir, job = _job_of(wt, ctx)
+    wt = abs_wt(wt)
     _owned_worktree(ctx, wt)
-    wt = job_dir / wt.name
     ctx.lock.touch(job)
     state = _read_json(job_dir / STATE)
     stage_result = _read_json(job_dir / STAGE) or {}

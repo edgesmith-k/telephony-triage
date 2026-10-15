@@ -35,14 +35,15 @@ description: Telephony 이슈(Android·oFono 등; data·call·network·sim·sms�
    `--dry-run`·`--analysis-only` 전용.
 2. `S/triage.py run <KEY> --logs <…> [--platform <p>]` + 위 옵션(analyzer·explore 외). stdout(=`JOB/analysis.json`)과 `JOB/report.md`만 읽는다.
 3. `status: needs_input` → `question`·`options`를 보이고 **사용자 답**을 `--answer <kind>=<값>`으로 붙여 같은 명령을 재실행한다.
-   `issue`는 1번 뒤, `logs`는 `--logs`를 붙여 재실행. `stopped`는 이유만.
+   `issue`는 1번 도구 재호출 뒤 `--answer` 없이, `logs`는 `--logs`를 붙여 재실행. `stopped`는 이유만.
 4. 종료 코드 1 → 키를 다시 묻는다.
 
 ### 2. 결과 읽기
 
 - `mode: analysis-only`("분석만", "기록하지 마") → Step 6(5-1·5-2 포함)까지, 계획·Step 7·8 없음(`lock_released`면 release 불필요). 추가 로그는 `--more-logs`. 기록 전환은 플래그만 빼고 같은 명령(`--issue-file`이면 `--dry-run`, 분석 재사용, 입력이 같으면 받은 답도 이어 씀).
 - `mode: read-only` → 계획 저장까지만임을 알리고 `snapshot.pull_skipped_reason`, `post_lint.errors`("메인테이너 정리"), `warnings`, `plan.pr_number`(→ `sync-pr`)도 알린다.
-- `notes`는 항상 알린다. `code.auto`면 "<roots> 자동 선택, `--code`로 변경 가능"도.
+- `plan.next`(이어서)가 있으면 그대로. `--dry-run`이어도 `mode: write`가 정상(push만 안 함).
+- `notes`는 항상 알린다. `code.auto` 알림(`--code`로 변경 가능)은 `must_show` 줄이다.
 - 로그 범위·`C: 0`·후보 없음은 report.md대로("로그 범위 밖"≠"매칭 없음").
 - Step 5: `code.resolved` 파일에서 근거 문구의 출력 위치·분기 조건을 찾는다. `code.moved`는
   "경로 변경"으로 알리고 Step 7에서 `add-code-ref`를 묻는다.
@@ -53,7 +54,7 @@ description: Telephony 이슈(Android·oFono 등; data·call·network·sim·sms�
 
 ### Step 6. 리포트
 
-`JOB/report.md`의 `TODO(LLM)` 칸만 채워 보인다. `analysis.json` `must_show` 줄은 **글자 그대로** 답에 넣는다(요약·생략 금지).
+Step 7 질문 전에 `JOB/report.md`(`TODO(LLM)`만 채움)를 보인다(`must_show`는 `rules.md`대로, 고쳐 쓰기 금지).
 원인은 **로그로 확인/코드로 추정/placeholder 규칙 결과**를 나누고 반대 근거와 다음 확인을 적는다.
 `fix_judgement`의 `regression-suspected`·`fix-insufficient`는 Step 7에서 묻고, `undetermined`는 SW·`fixed_in`을 나란히.
 
@@ -69,7 +70,7 @@ description: Telephony 이슈(Android·oFono 등; data·call·network·sim·sms�
 | 증상이 새것 | `S/db_add.py similar --db SNAP` 3개를 먼저 보이고 `new-type` + `append` | `new-type` |
 | 원인 미확정 | `unresolved {type}` | `unresolved` |
 
-- 거부하면 표의 다른 선택지를 다시 보인다. 추정만으로·`unjudged`면 원인·유형을 안 만든다. 후보 없으면 "새 유형 / 원인 미확정 / 기록하지 않음"만.
+- 거부하면 "다른 기존 원인 / 새 원인 / 새 유형 / 원인 미확정 / 기록하지 않음"을 다시 보인다. 추정만으로·`unjudged`면 원인·유형을 안 만든다. 처음부터 후보 0개면 "새 유형 / 원인 미확정 / 기록하지 않음"만.
 - `chose-other`면 한 번 묻는다(기본 아니오): 고른 원인이 후보에서 C=1이면 `add-fixture {kind: extra}`로 넣을지(`db-authoring.md`, R4 실패면 뺀다), C=0·후보 밖이면 `update-signature` 검토를 `pr_notes`에 남길지. `unjudged.causes`면 묻지 않는다. 거절하면 `append`만.
 - 물어보고 넣는 op: 회귀 의심·수정 미흡의 `update-fix`(실패 이력) 또는 verify-fix, `add-related`, `add-code-ref`, `update-signature`,
   `set-resolution`, `set-status`.
@@ -87,4 +88,4 @@ write-flow §2(브랜치·`--lease`)만 한다. 열린 PR·`issue_in_main`은 �
 
 ### Step 9. Jira 게시 (선택)
 
-`post.md`대로: PR 링크·`release` 뒤 `postable: true`면 한 번 묻고(기본 아니오), 승인한 본문만 올린다.
+`post.md`대로: PR 링크(`pr.url`)를 글로 보인 뒤·`release` 뒤 `postable: true`면 한 번 묻고(기본 아니오), 승인한 본문만 올린다.

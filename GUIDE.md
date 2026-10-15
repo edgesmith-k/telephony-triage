@@ -148,14 +148,14 @@ git add -A && git commit -m "사외 초안 반입: import-v1"     # .draft-manif
 한 단계 안에서는 이렇게 돕니다. 자동으로 다음 단계로 넘어가는 일은 없습니다.
 1. Claude가 할 일을 하고 `site_step.py check`(읽기 전용 점검)를 그대로 보고합니다. 실패·건너뜀·사용자 필요는 통과가 아닙니다.
 2. 사내 값(확인값 행, 운영 DB 경로·샌드박스·라벨셋·eval 예산, S-5 게이트)은 `site_step.py propose`의 diff로 보여 주고, **승인한 ID만** `propose --apply`로 씁니다.
-3. S-2 eval은 `site_step.py evals`가 다음 배치 명령과 추정 비용을 냅니다. 비용을 승인해야 실행하고, 59·60은 사람이 채점합니다.
+3. S-2 eval은 사내에서 꼭 해야 하는 것(`tests/skill_evals/pending.json`의 사내 대상 11개, 사내 모델이 사외와 다르면 7개 추가)만 돌립니다. `site_step.py evals`가 다음 배치 명령과 추정 비용을 냅니다. 비용을 승인해야 실행하고, 59·60은 사람이 채점합니다. 나머지 eval은 사외 결과 기록(`tests/skill_evals/offsite_results.json`)으로 갈음하고 `check S-2`의 `s2.offsite`에 보입니다.
 4. 요약을 보고 확인하면 `site_step.py --done S-n`. 실패가 있으면 거부되고, 건너뜀·사용자 필요는 확인한 것만 `--waive 점검="사유"`로 넘깁니다(사유는 `SITE_PROFILE.md`에 남음). S-2 eval을 잴 수 없으면(API 키·한도) 미채점 점검을 사유와 함께 면제해야만 완료로 기록되고, 실제 안전 위반(실패)은 면제할 수 없습니다.
 
 | 단계 | 사용자가 줄 것 | 하는 일 |
 |---|---|---|
 | S-0 (선택) | 실제 로그 3~5개 — Claude 없이 `tools/s0_stats.py`도 가능 (절차 `docs/development/S0_PROBE_CHECKLIST.md`) | 반입 전·S-1 전 언제든. reference 파서·매처만 실제 로그에 Python으로 돌려 시각 파싱 비율·RIL 페어링·phone_id 추출·시계 이상을 봄. 결과 숫자는 `SITE_PROFILE.md`에만, 사외로는 정성 결론만. 로그 형식이 다르면 S-4가 커지므로 **권장** |
 | S-1 | Jira 키 2~3개, 카테고리별 logcat 경로, 16/17 소스 경로, 빌드명, S-5 게이트 기준치 | TODO 목록·환경 확인, `REVIEW-OPEN.md` 처리, `SITE_PROFILE.md` 작성, 오프라인 평가 기준 합의 |
-| S-2 | eval 예산·비용 승인, S1 실험(`check S-2 --allow-api`), 59·60 수동 채점 | 플러그인 로드·hook·MCP 도구 이름 형식 확인, 다른 점만 수정, eval 전체 재실행 |
+| S-2 | eval 예산·비용 승인, S1 실험(`check S-2 --allow-api`), 59·60 수동 채점 | 플러그인 로드·hook·MCP 도구 이름 형식 확인, 다른 점만 수정, 사내 대상 eval 실행(나머지는 사외 결과) |
 | S-3 | Jira MCP 서버·도구 매핑, GHE, 샘플 Jira raw 저장 위치 | `site-defaults.yaml`(Jira 서버·도구 매핑·필드 매핑, GHE 등), 이슈 DB 설정 |
 | S-4a | 운영 DB 레포(owner/repo), 기존 파서 코드 경로 | **① 기존 파서 포팅**: 포팅 전 골든 출력 저장 → 이벤트 매핑 확인 → 사내 백엔드로 포팅 → 골든 테스트 통과. **② 기존 data 분류 import PR**. **③ 분석 스킬 연결** |
 | S-4 | 운영 DB clone 경로, 이번에 할 카테고리(예: call만) | 운영 이슈 DB의 placeholder 규칙을 실제 태그·문구로 바꾸고, 카테고리마다 자주 나오는 유형 5~10개를 실제 마스킹 fixture와 함께 `import` PR로 시드 (카테고리별로 세션 분리 권장). 점검은 임시 clone에서 |
@@ -347,8 +347,18 @@ claude mcp list               # Jira MCP 사용자 범위 등록 확인
 ### 모델 선택 (3C~3E eval 근거)
 
 - Sonnet 기본: analyze·record·fix-submitted·verify-fix·sync-pr·search·5-1 분석 스킬.
-- verify-fix: W3부터 흔적 시그니처 없는 코드·설정 수정 유형을 `db_verify fix`가 종료 코드 2로 막아 Sonnet 기본(eval 25 Sonnet 3/3, W3). 사내 S-2 재실행에서 다시 확인한다.
+- verify-fix: W3부터 흔적 시그니처 없는 코드·설정 수정 유형을 `db_verify fix`가 종료 코드 2로 막아 Sonnet 기본(eval 25 Sonnet 3/3, W3). eval 25는 사내 S-2 대상이 아니라 사외 결과 기록(`offsite_results.json`)으로 갈음한다.
 - 5-2 탐색은 Sonnet. 가설 품질이 중요하면 Opus를 고른다.
+- **검증 범위: 스킬 행동 eval·토큰 측정은 Sonnet 5.5(`claude-sonnet-5-5`)로만 했다**(`tests/skill_evals/offsite_results.json` `model`, 사내 S-2도 Sonnet 5.5). 다른 모델(Opus 등)도 같은 플러그인으로 동작하지만 eval로 확인하지 않았다.
+- 모델과 무관하게 지켜지는 것(스크립트·hook이 강제): 외부 쓰기(이슈 DB push·트래커 코멘트) 전 승인 질문, 사용자 clone 불변, 분류 판정은 스크립트 출력 기준, 마스킹, 확인 화면 전체 표시 강제(`show_guard`).
+- 다른 모델의 우려 사항:
+  - 화면 요약: 모델마다 줄이는 습관이 다르다(Sonnet, hook 전 표시 실패 22/48. hook 첫 판 뒤에도 거부 52회 중 요약 15·값 옮김 오류 3, 문구 개선 뒤 59개 실행에서 거부 29회).
+  - 거부 뒤 반응: hook은 막기만 하고 한도(2회)를 넘으면 경고만 남긴다(Sonnet은 첫 판 문구에서 거부 52회 중 16회를 같은 호출로 그대로 재시도해 10회 한도에 닿았다. 거부 문구를 "오류 아님"으로 바꾼 뒤 한도 도달 0회).
+  - 질문 횟수·순서: 확인 단계는 스크립트가 정하지만 무엇을 언제 같이 묻는지는 모델이 정한다(같은 Sonnet에서도 게시 질문 뒤에 PR 링크를 보이거나, 판정 불가에서 새 유형을 선택지로 낸 실행이 있었다). 순서·횟수가 달라도 승인 없는 쓰기는 생기지 않는다 — eval 채점에서도 안전 행이 아니다.
+  - 토큰·비용: 토큰 기준선(eval 1·2·39·45·58)과 이 안내서의 수치(이슈 1건 약 39만 토큰)는 Sonnet 기준이다. Opus는 비용이 더 든다.
+  - 작은 모델(Haiku 등)은 권장하지 않는다: Sonnet도 문구만으로는 지키지 못한 규칙이 있어 구조로 강제했다(eval 25 2/3, `99-deferred.md` 3E).
+- 위 우려는 사용자가 무엇을 보고 판단하느냐의 문제다. 승인 없는 쓰기는 모델과 무관하게 막힌다.
+- 다른 모델로 쓰다가 이상한 동작을 보면 모델 이름과 함께 메인테이너에게 알린다. 사내 eval 모델이 바뀌면 S-2가 배치 A 7개를 더 돌린다(`pending.json` `site_if_model_differs`).
 - 바꾸는 법: `/model`. 커맨드 frontmatter `model` 고정은 사내 S1 확인 뒤(`14-site.md` S1).
 
 ### 팀 운영

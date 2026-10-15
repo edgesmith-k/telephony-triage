@@ -1057,6 +1057,49 @@ def test_stage_json_stays_full_on_success_and_default_stdout_is_summary():
     ws.db_pr("discard", ws.wt("MOCK-7002"))
 
 
+def test_stage_under_symlinked_work_dir_ancestor():
+    """work_dir 상위 경로가 symlink여도 stage가 wt를 resolve하지 않고 `_job_of`와 같은 absolute 기준으로 쓴다."""
+    import pytest
+    ws = Workspace()
+    link = ws.base.parent / (ws.base.name + "-link")
+    try:
+        link.symlink_to(ws.base, target_is_directory=True)
+    except OSError:
+        pytest.skip("symlink를 만들 수 없다")
+    ws.json("config.py", ["set", "work_dir", link / "work"])
+    job = "MOCK-7002"
+    ws.plan(job, "p7-analyze-new-cause.plan.json")
+    ws.put(job, "fixtures/cut-1.log", SIM_LOG)
+    ws.acquire(job)
+    wt = link / "work" / job / "wt"
+    out = ws.db_pr("stage", link / "work" / job / "plan.json", "--wt", wt, "--branch", f"issue/{job}", "--json")
+    assert out["result"] == "ok" and out["worktree"] == "created", out
+    ws.db_pr("discard", wt)
+    link.unlink()
+
+
+def test_wt_dot_from_inside_worktree():
+    """wt 안에서 `--wt .`·`summary .`·`discard .`도 된다(`Path('.').name`은 빈 글 — job_dir로 바뀌지 않게 `abs_wt`)."""
+    ws = Workspace()
+    job = "MOCK-7002"
+    ws.plan(job, "p7-analyze-new-cause.plan.json")
+    ws.put(job, "fixtures/cut-1.log", SIM_LOG)
+    ws.acquire(job)
+    wt = ws.wt(job)
+    out = ws.db_pr("stage", ws.job_dir(job) / "plan.json", "--wt", wt, "--branch", f"issue/{job}", "--json")
+    assert out["result"] == "ok", out
+
+    def inside(*args):
+        proc = run("db_pr.py", [str(a) for a in args], root=ws.root, env=ws.env(), cwd=wt)
+        assert proc.returncode == 0, proc.stderr[-2000:]
+        return json.loads(proc.stdout)
+    again = inside("stage", ws.job_dir(job) / "plan.json", "--wt", ".", "--branch", f"issue/{job}", "--json")
+    assert again["result"] == "ok" and again["worktree"] == "reapplied" and Path(again["wt"]) == wt, again
+    assert inside("summary", ".")["approved_hash"]
+    gone = inside("discard", ".")
+    assert gone.get("discarded") is True and not wt.exists(), gone
+
+
 def test_stage_json_stays_full_on_failed_check_drift_and_needs_approval():
     ws = Workspace()
     job = "review-data-2026-10"
@@ -1930,3 +1973,66 @@ def test_stage_skips_feedback_check_for_record_and_republished_plan():
     again = ws.stage(job, "issue/MOCK-7001")
     assert again["feedback_check"] == {"status": "skipped", "reason": "재적용"}
     ws.db_pr("discard", ws.wt(job))
+
+
+def test_stage_requires_draft_verify_for_authoring_ops():
+    """작성 op(새 원인 등)가 있는 계획은 그 계획의 초안 검증(`db_verify rules --plan --draft`) 기록이 있어야 stage한다
+    (SKILL Step 7, eval 3). 기록 뒤 작성 op가 바뀌면 다시 멈추고, 작성 op가 없는 계획(append)은 기록 없이 된다."""
+    ws = Workspace()
+    ws.plan("MOCK-7002", "p7-analyze-new-cause.plan.json", draft_verified=False)
+    ws.put("MOCK-7002", "fixtures/cut-1.log", SIM_LOG)
+    ws.acquire("MOCK-7002")
+    out = ws.stage("MOCK-7002", "issue/MOCK-7002", expect=1, dry_run=True)
+    assert out["stopped"] == "draft-verify" and "--draft" in out["next"] and "기록 없음" in out["reason"]
+    assert not ws.wt("MOCK-7002").exists()                  # worktree·apply 전에 멈춘다
+    plan = ws.job_dir("MOCK-7002") / "plan.json"
+    verify = ws.run("db_verify.py", ["rules", "--plan", plan, "--draft", ws.job_dir("MOCK-7002") / "draft", "--db", ws.clone])
+    assert verify.returncode == 0, verify.stderr[-2000:]
+    doc = json.loads(plan.read_text(encoding="utf-8"))
+    doc["pr_notes"] = ["초안 검증 뒤 pr_notes만 바꿈"]           # 작성 op 밖: 다시 검증하지 않는다
+    plan.write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
+    ws.stage("MOCK-7002", "issue/MOCK-7002", expect=(0, 3), dry_run=True)
+    ws.db_pr("discard", ws.wt("MOCK-7002"))
+    ws.acquire("MOCK-7002")
+    new = next(op for op in doc["operations"] if op["op"] == "new-cause")
+    new.setdefault("cause", {})["title"] = "초안 검증 뒤 바꾼 제목"
+    plan.write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
+    out = ws.stage("MOCK-7002", "issue/MOCK-7002", expect=1, dry_run=True)
+    assert out["stopped"] == "draft-verify" and "바뀜" in out["reason"]
+    ws.db_pr("lock", "release", "MOCK-7002")
+
+    ws.plan("MOCK-7001", "p7-analyze-append.plan.json", draft_verified=False)
+    ws.acquire("MOCK-7001")
+    ws.stage("MOCK-7001", "issue/MOCK-7001", expect=(0, 3), dry_run=True)
+    ws.db_pr("discard", ws.wt("MOCK-7001"))
+
+
+def test_draft_verify_stop_invalidates_previous_approval():
+    """확인 화면(summary) 뒤 계획의 작성 op를 고치고 재stage가 draft-verify로 멈추면 이전 승인으로 publish할 수 없다
+    (수정 전 트리가 push되지 않게, 리뷰 P1-2). job_status는 막힌 것으로 보인다."""
+    ws = Workspace()
+    ws.plan("MOCK-7002", "p7-analyze-new-cause.plan.json")
+    ws.put("MOCK-7002", "fixtures/cut-1.log", SIM_LOG)
+    ws.acquire("MOCK-7002")
+    ws.stage("MOCK-7002", "issue/MOCK-7002", expect=(0, 3))
+    digest = ws.db_pr("summary", ws.wt("MOCK-7002"))["approved_hash"]
+    plan = ws.job_dir("MOCK-7002") / "plan.json"
+    doc = json.loads(plan.read_text(encoding="utf-8"))
+    cause = next(op for op in doc["operations"] if op["op"] == "new-cause")["cause"]
+    original_title = cause["title"]
+    cause["title"] = "수정 요청 뒤 제목"
+    plan.write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
+    assert ws.stage("MOCK-7002", "issue/MOCK-7002", expect=1)["stopped"] == "draft-verify"
+    state = json.loads((ws.job_dir("MOCK-7002") / "state.json").read_text(encoding="utf-8"))
+    assert state["approved_hash"] is None and not (ws.job_dir("MOCK-7002") / "pr.json").exists()
+    proc = ws.run("db_pr.py", ["publish", ws.wt("MOCK-7002"), "--branch", "issue/MOCK-7002", "--lease", "new",
+                               "--approved", digest, "--commit"])
+    assert proc.returncode != 0 and "승인 정보가 없습니다" in proc.stderr, proc.stderr[-500:]
+    ws.db_pr("discard", ws.wt("MOCK-7002"))
+    assert (ws.job_dir("MOCK-7002") / "draft-verify.json").exists()     # plan과 함께 남는다(sync-pr 재적용)
+    ws.acquire("MOCK-7002")
+    assert ws.stage("MOCK-7002", "issue/MOCK-7002", expect=1)["stopped"] == "draft-verify"   # 남은 기록도 바뀐 작성 op는 통과시키지 않는다
+    cause["title"] = original_title                                      # 작성 op를 원래대로 되돌리면
+    plan.write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
+    ws.stage("MOCK-7002", "issue/MOCK-7002", expect=(0, 3), dry_run=True)  # db_verify 재실행 없이 남은 기록으로 통과한다
+    ws.db_pr("discard", ws.wt("MOCK-7002"))

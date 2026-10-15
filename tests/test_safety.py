@@ -148,6 +148,26 @@ def test_r3_prepare_refuses_foreign_repo(safety_root, tmp_path):
     assert marker.exists()
 
 
+def test_r3_relative_paths_never_touch_the_clone(safety_root, tmp_path, monkeypatch):
+    """cwd 기준 상대 경로(work_dir에서 `job/wt`·`job/draft`)도 검사와 같은 절대 경로로 git을 부른다. clone 기준으로 풀리면
+    사용자 clone 안에 worktree를 만들거나 엉뚱한 경로를 지운다 (h1-a eval 10)."""
+    module, ctx = safety_ctx(tmp_path)
+    verify = importlib.import_module("db_verify")
+    monkeypatch.setattr(verify.userconfig, "merged", lambda defaults: ctx.cfg)
+    monkeypatch.setattr(verify, "_SESSION", None)       # 앞 테스트가 정한 (플랫폼, cfg)를 쓰지 않게
+    (ctx.work_dir / "job").mkdir(parents=True)
+    monkeypatch.chdir(ctx.work_dir)
+    listed = lambda: [Path(w["path"]).resolve() for w in module._worktrees(ctx.repo)]
+    assert module._prepare_worktree(ctx, Path("job/wt"), "tt/job", "HEAD") == "created"
+    assert (ctx.work_dir / "job" / "wt" / ".git").is_file() and not (ctx.repo / "job").exists()
+    module._remove_worktree(ctx, Path("job/wt"))
+    git(ctx.repo, "worktree", "add", "--detach", str(ctx.work_dir / "job" / "draft"), "HEAD")
+    monkeypatch.chdir(ctx.work_dir / "job")
+    verify.remove_draft(Path("draft"), {})
+    assert listed() == [ctx.repo.resolve()]
+    assert git(ctx.repo, "status", "--porcelain", "--untracked-files=all") == ""
+
+
 def test_r3_draft_and_symlink_boundaries(safety_root, tmp_path, monkeypatch):
     module, ctx = safety_ctx(tmp_path)
     verify = importlib.import_module("db_verify")

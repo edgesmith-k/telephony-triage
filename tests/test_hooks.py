@@ -984,8 +984,10 @@ def _gh_bridge(ws: Workspace, tool_input, response, tool: str = GH_READ) -> str:
 
 
 def test_bridge_github_issue_read_merges_and_isolates():
-    sys.path.insert(0, str(REPO / "tests" / "mocks" / "github_issues_mcp"))
-    import server as gh_server
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("github_issues_mcp_server", REPO / "tests" / "mocks" / "github_issues_mcp" / "server.py")
+    gh_server = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(gh_server)
     ws = gh_shared()
     key = "mock-org.mock-issues-13"
     raw = ws.job_dir(key) / "issue_raw.json"
@@ -1034,9 +1036,24 @@ def test_bridge_github_comment_result_marks_approval_used():
 def test_hooks_json_has_eight_rules_wired_to_guard():
     hooks = json.loads((REPO / "plugin" / "hooks" / "hooks.json").read_text(encoding="utf-8"))["hooks"]
     assert "sync-scripts-path" in hooks["SessionStart"][0]["hooks"][0]["command"]
-    matchers = {h["matcher"]: h["hooks"][0]["command"] for h in hooks["PreToolUse"]}
-    assert set(matchers) == {"mcp__.*", "Bash", "Write|Edit|MultiEdit|NotebookEdit"}
-    assert all("${CLAUDE_PLUGIN_ROOT}/scripts/guard.py" in cmd for cmd in matchers.values())
+    matchers = {h["matcher"]: [x["command"] for x in h["hooks"]] for h in hooks["PreToolUse"]}
+    assert set(matchers) == {"mcp__.*", "Bash", "Write|Edit|MultiEdit|NotebookEdit", "AskUserQuestion|mcp__.*__ask_user"}
+    guarded = {m: cmds for m, cmds in matchers.items() if m != "AskUserQuestion|mcp__.*__ask_user"}
+    assert all("${CLAUDE_PLUGIN_ROOT}/scripts/guard.py" in cmds[0] for cmds in guarded.values())
+    # 표시 보조(08-safety.md "표시 보조 hook"): guard 뒤에 붙고, 판정은 show_guard.py 모드별
+    assert matchers["Bash"][1].endswith('/scripts/show_guard.py" pre-bash') and len(matchers["Bash"]) == 2
+    assert matchers["AskUserQuestion|mcp__.*__ask_user"] == ['python3 "${CLAUDE_PLUGIN_ROOT}/scripts/show_guard.py" pre-ask']
+    assert len(matchers["mcp__.*"]) == 1 and len(matchers["Write|Edit|MultiEdit|NotebookEdit"]) == 1
+
+
+def test_hooks_json_wires_show_guard_display_aid():
+    hooks = json.loads((REPO / "plugin" / "hooks" / "hooks.json").read_text(encoding="utf-8"))["hooks"]
+    (stop,) = hooks["Stop"]
+    assert "matcher" not in stop and stop["hooks"] == [
+        {"type": "command", "command": 'python3 "${CLAUDE_PLUGIN_ROOT}/scripts/show_guard.py" stop', "timeout": 30}]
+    post = {h["matcher"]: [x["command"] for x in h["hooks"]] for h in hooks["PostToolUse"]}
+    assert post["Bash"] == ['python3 "${CLAUDE_PLUGIN_ROOT}/scripts/show_guard.py" post']
+    assert all(x.get("timeout") for g in hooks["PostToolUse"] + hooks["PreToolUse"] for x in g["hooks"])
 
 
 if __name__ == "__main__":

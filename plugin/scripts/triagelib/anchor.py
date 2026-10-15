@@ -284,8 +284,20 @@ class AnchorMixin:
                 "start": start if start and start < fail else None, "fail": fail, "end": fail}
 
     def occurred(self, info: dict, logs: list[Path], tz: str | None, year: int | None) -> str:
+        bad = None
         if self.answer("time"):
-            return self.answer("time")
+            dt = lc.normalize_ts(self.answer("time"), tz, year)
+            if dt is not None:
+                # 파서(--around)는 오프셋 있는 ISO만 받는다: 타임존 없는 ISO·logcat 스탬프는 로그 tz로 정규화해 넘기고 답도 바꿔 둔다
+                value = lc.format_ts(dt)
+                self.state.answers["time"] = value
+                if "time" in self.given:
+                    self.given["time"] = value
+                return value
+            # 읽을 수 없는 답("…KST" 등)은 파서까지 보내지 않고 다시 묻는다 — 하위 스크립트 종료 2로 끝나지 않게 (eval 67)
+            bad = self.answer("time")
+            self.state.answers.pop("time", None)
+            self.given.pop("time", None)
         if info.get("occurred_at"):
             return info["occurred_at"]
         full = self.parse(logs, None, tz, year, self.job / "events-full.json")
@@ -300,6 +312,9 @@ class AnchorMixin:
         jumps = len(cov.get("clock_anomalies") or [])
         question = ("Jira에 발생 시각이 없다. 증상 시그니처가 충족된 시각 후보에서 고르게 한다"
                     + ("." if options else " — 후보가 없으니 시각을 묻는다."))
+        if bad is not None:
+            question = (f"답한 시각 '{_clip(bad, 60)}'을 읽지 못했다 — 후보 값 그대로 또는 ISO 8601(예: 2026-09-20T14:32:00+09:00)로 "
+                        "다시 답한다. " + question)
         if jumps:
             question += f" 로그에 시계 이상(역행·점프) {jumps}건 — 후보 시각이 실제와 다를 수 있다(재부팅·NITZ 전 가능)."
         extra = {}

@@ -159,8 +159,14 @@ class Ctx:
         return userconfig.pending_feedback_dir(self.cfg)
 
 
+def abs_wt(wt) -> Path:
+    """작업 경로의 절대 경로(`_job_of`와 같은 기준). resolve하지 않는다 — symlink인 상위 경로에서 검사가 어긋난다. `--wt .`(wt 안에서
+    실행)도 된다: `Path('.').name`은 빈 글이라 `job_dir / Path(wt).name`으로 다시 만들면 job_dir이 된다."""
+    return Path(wt).expanduser().absolute()
+
+
 def _job_of(wt: Path, ctx: Ctx) -> tuple[Path, str]:
-    wt = Path(wt).expanduser().absolute()
+    wt = abs_wt(wt)
     root = ctx.work_dir.absolute()
     if wt.name not in ("wt", "draft") or wt.parent.parent != root or wt.parent.name.startswith("."):
         raise UsageError(f"작업 경로는 work_dir/<작업 키>/wt 또는 draft여야 합니다: {wt}")
@@ -259,6 +265,7 @@ def _pending_files(ctx: Ctx, job_dir: Path) -> list[Path]:
 
 def _prepare_worktree(ctx: Ctx, wt: Path, tool: str, base_sha: str) -> str:
     _job_of(wt, ctx)
+    wt = abs_wt(wt)        # 절대 경로로: `git -C <clone>`이 상대 경로를 clone 기준으로 풀지 않게
     if (wt / ".git").exists():
         _owned_worktree(ctx, wt)
         for args in (("checkout", "-f", "-B", tool, base_sha), ("reset", "--hard", base_sha), ("clean", "-fd")):
@@ -274,13 +281,15 @@ def _prepare_worktree(ctx: Ctx, wt: Path, tool: str, base_sha: str) -> str:
 
 
 def _remove_worktree(ctx: Ctx, path: Path) -> None:
+    _job_of(path, ctx)
+    path = abs_wt(path)     # 절대 경로로 (`_prepare_worktree`와 같게)
     _owned_worktree(ctx, path)
     _git(ctx.repo, "worktree", "remove", "--force", str(path))
 
 
 def discard(ctx: Ctx, wt: Path) -> dict:
     job_dir, job = _job_of(wt, ctx)
-    wt = job_dir / wt.name
+    wt = abs_wt(wt)
     ctx.lock.touch(job)
     state = _read_json(job_dir / STATE) or {}
     branch = state.get("branch")

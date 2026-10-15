@@ -78,7 +78,7 @@ fixture 번호, 피드백, pending 포함 여부는 계획 `source`로) → `db_
 
 ## 4. push 전 확인 화면 (생략 불가)
 
-3번 출력을 **그대로 보인다(요약·재서술 금지)**. summary를 따로 부르지 않는다. 값이 없는 절은 "없음"으로 나온다.
+3번 출력 전문을 글·질문 본문에 **그대로 붙인다(요약·"위 출력" 금지)**. summary는 따로 안 부른다. 빈 절은 "없음".
 절 순서: 머리(`## push 전 확인: <KEY 또는 원인 ID> → <원인/유형 ID 제목>`, 구분, 브랜치, 리뷰어, 열린 PR) → 변경 파일 → ID 할당 →
 수정 상태 변경(`fix_changes`가 있을 때) → drift 결정 내역(있을 때) → 추가 설명(`notes` 전부, 계획 `pr_notes` 포함) → README 반영 미리보기 →
 주요 diff(50줄 넘으면 요약 + "전체 diff 보기" 선택지) → 자동 검사 결과 → 검증 결과 → 커밋 메시지 / PR 제목 → 마지막 줄 `approved_hash`.
@@ -114,7 +114,7 @@ fixture 번호, 피드백, pending 포함 여부는 계획 `source`로) → `db_
 - 종료 2 + `published: true`: push는 됐다. **publish를 다시 하지 않는다.** `discard.error`면 `discard.next`대로 `db_pr discard <wt>`만 다시 한다.
   `gh_error`(PR 생성 실패, `discard.skipped`, worktree·lock 유지)면 사유를 보고하고 PR 수동 처리 또는 publish 재시도를 사용자와 정한 뒤 `db_pr discard <wt>`.
 - 종료 2 + stderr만(JSON 없음): 보고하고 멈춘다.
-- 성공하면 PR 링크를 보여준다(`discard.discarded: true`). `publish`가 계획의 `pr`·`base_sha`를 기록하고 pending 피드백 원본을 `included_pending/`으로 옮긴다.
+- 성공하면(`discard.discarded: true`) PR 링크(`pr.url`)를 글자 그대로, 다음 질문 전에 보인다. `publish`가 계획의 `pr`·`base_sha`를 기록하고 pending 피드백 원본을 `included_pending/`으로 옮긴다.
 
 ## 6. 정리
 

@@ -19,9 +19,11 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -174,10 +176,28 @@ AUTH_ENV_NAMES = frozenset({"CLOUD_ML_REGION", "HTTP_PROXY", "HTTPS_PROXY", "NO_
 CHILD_PERMISSION_MODE = "default"
 
 
-def child_common_args(settings_json: str) -> list[str]:
-    """두 모드(plain·plugin) 자식 `claude -p`의 공통 인자."""
-    return ["--output-format", "stream-json", "--verbose", "--no-session-persistence", "--setting-sources", "",
-            "--settings", settings_json, "--strict-mcp-config", "--permission-mode", CHILD_PERMISSION_MODE]
+def child_common_args(settings_json: str, persist: bool = False) -> list[str]:
+    """두 모드(plain·plugin) 자식 `claude -p`의 공통 인자. persist(plugin 모드)면 세션 transcript를 남긴다:
+    `--no-session-persistence`면 hook 입력의 `transcript_path` 파일이 생기지 않아 표시 보조 hook(show_guard.py)이 아무것도
+    판정하지 못한다(fail-open, 08-safety.md §9.1). 남긴 transcript는 실행 뒤 run 디렉토리로 옮긴다(`collect_transcript`)."""
+    return ["--output-format", "stream-json", "--verbose", *([] if persist else ["--no-session-persistence"]),
+            "--setting-sources", "", "--settings", settings_json, "--strict-mcp-config", "--permission-mode",
+            CHILD_PERMISSION_MODE]
+
+
+def collect_transcript(events: list[dict], env: dict[str, str], run_dir: Path) -> str | None:
+    """자식 세션 transcript(`<config>/projects/*/<session_id>.jsonl`)를 run 디렉토리의 `session.jsonl`로 옮긴다(사용자
+    projects 디렉토리에 남기지 않는다). session_id는 stream-json init 이벤트. 못 찾으면 None — show_guard가 판정하지 못한 실행이다."""
+    sid = next((e.get("session_id") for e in events if e.get("type") == "system" and e.get("session_id")), None)
+    if not sid or not re.fullmatch(r"[A-Za-z0-9-]+", str(sid)):
+        return None
+    base = Path(env["CLAUDE_CONFIG_DIR"]) if env.get("CLAUDE_CONFIG_DIR") else Path(env.get("HOME", str(Path.home()))) / ".claude"
+    found = sorted((base / "projects").glob(f"*/{sid}.jsonl"))
+    if not found:
+        return None
+    dest = run_dir / "session.jsonl"
+    shutil.move(str(found[0]), dest)
+    return dest.name
 
 
 def user_auth_settings(env: dict[str, str]) -> tuple[dict, dict[str, str]]:
@@ -261,6 +281,74 @@ def read_events(path: Path) -> tuple[list[dict], dict | None]:
     return events, result
 
 
+def merge_results(results: list[dict]) -> dict | None:
+    """후속 메시지(`followups`)로 여러 턴을 돈 실행의 result 이벤트들을 하나로. 마지막 result를 바탕으로
+    상위 `usage` 수치·`num_turns`·`duration_ms`는 턴별 값이라 더하고, `modelUsage`·`total_cost_usd`는 누적값이라
+    마지막 값을 쓴다(CLI 2.1.299 실측: 두 번째 result의 modelUsage cacheRead = 두 턴 합, num_turns는 턴마다 1·1,
+    duration_ms는 2441·2377로 턴별 값). 하나라도 오류면 오류."""
+    if not results:
+        return None
+    merged = dict(results[-1])
+    usage: dict = {}
+    for r in results:
+        for k, v in (r.get("usage") or {}).items():
+            if isinstance(v, (int, float)) and not isinstance(v, bool):
+                usage[k] = usage.get(k, 0) + v
+            else:
+                usage.setdefault(k, v)
+    merged["usage"] = usage
+    for k in ("num_turns", "duration_ms"):
+        vals = [r.get(k) for r in results if isinstance(r.get(k), (int, float))]
+        if vals:
+            merged[k] = sum(vals)
+    merged["is_error"] = any(r.get("is_error") for r in results)
+    merged["turn_results"] = len(results)
+    return merged
+
+
+def run_turns(proc: subprocess.Popen, events, prompt: str, followups: list[str], timeout: int) -> list[dict]:
+    """stream-json 입력으로 첫 메시지를 보내고, result 이벤트가 올 때마다 다음 후속 메시지를 보낸다(사용자가 답을 받은 뒤
+    이어서 말하는 흐름 — 질문 도구로는 흉내 낼 수 없다, eval 70). 출력은 그대로 `events`에 쓴다. 오류 result면 남은 후속
+    메시지를 보내지 않는다. 제한 시간을 넘기면 프로세스를 죽이고 `subprocess.TimeoutExpired`."""
+    expired = threading.Event()
+
+    def kill() -> None:
+        expired.set()
+        proc.kill()
+
+    def send(text: str) -> None:
+        proc.stdin.write(json.dumps({"type": "user", "message": {"role": "user", "content": text}}, ensure_ascii=False) + "\n")
+        proc.stdin.flush()
+
+    timer = threading.Timer(timeout, kill)
+    timer.start()
+    pending, results = list(followups), []
+    try:
+        send(prompt)
+        for line in proc.stdout:
+            events.write(line)
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if event.get("type") != "result":
+                continue
+            results.append(event)
+            if pending and not event.get("is_error"):
+                send(pending.pop(0))
+            else:
+                proc.stdin.close()
+        proc.wait()
+    except (BrokenPipeError, ValueError):       # 죽은 프로세스에 쓰기·닫힌 stdin
+        if not expired.is_set():
+            raise
+    finally:
+        timer.cancel()
+    if expired.is_set():
+        raise subprocess.TimeoutExpired(proc.args, timeout)
+    return results
+
+
 def init_model(events: list[dict]) -> str | None:
     """stream-json init 이벤트가 알려 주는 실제 모델 ID. `--model` 없이 돌렸을 때 기준선 모델의 출처다."""
     init = next((e for e in events if e.get("type") == "system" and e.get("subtype") == "init"), None)
@@ -313,7 +401,7 @@ def execute(entry: dict, info: dict, env_dir: Path, run_dir: Path, claude: str,
         with (env_dir / "env.sh").open("a", encoding="utf-8", newline="\n") as stream:
             stream.write(f"export PATH='{_bash_path(str(shim))}':\"$PATH\"\n")
         env["PATH"] = os.pathsep.join([str(shim), env["PATH"]])      # plugin 모드는 env.sh를 source하지 않는다
-    common = child_common_args(settings_json)
+    common = child_common_args(settings_json, persist=bool(plugin))
     dirs = ["--add-dir", str(info["plugin_root"]), str(Path(info["issue_db_clone"]).parents[1]), str(run_dir), str(REPO)]
     if plugin:
         prompt, system = plugin_prompt(entry, env_dir, run_dir)
@@ -340,22 +428,32 @@ def execute(entry: dict, info: dict, env_dir: Path, run_dir: Path, claude: str,
                    "--tools", "Read,Bash,Write,Edit,Glob,Grep", "--allowedTools", "Read,Bash,Write,Edit,Glob,Grep", *dirs]
     if model:
         command[2:2] = ["--model", model]
+    followups = [str(f) for f in entry.get("followups") or []]
+    if followups:
+        command[2:2] = ["--input-format", "stream-json"]
     commit, dirty = repo_state(run_dir.parents[1])
     start = time.monotonic()
     result = None
     events_list: list[dict] = []
     derived: list[str] = []
     with (run_dir / "events.jsonl").open("w", encoding="utf-8") as events, (run_dir / "stderr.log").open("w", encoding="utf-8") as errors:
-        proc = subprocess.Popen(command, cwd=env_dir, env=env, stdin=subprocess.PIPE, stdout=events, stderr=errors,
-                                text=True, encoding="utf-8")
+        proc = subprocess.Popen(command, cwd=env_dir, env=env, stdin=subprocess.PIPE,
+                                stdout=subprocess.PIPE if followups else events, stderr=errors, text=True, encoding="utf-8")
+        turns: list[dict] = []
         try:
-            proc.communicate(prompt, timeout=timeout)
+            if followups:
+                turns = run_turns(proc, events, prompt, followups, timeout)
+            else:
+                proc.communicate(prompt, timeout=timeout)
         except subprocess.TimeoutExpired:
             proc.kill()
             proc.communicate()
             status, reason = "timeout", f"{timeout}초 제한으로 중단. 모의 환경의 lock 상태 확인 필요."
         else:
+            events.flush()
             events_list, result = read_events(run_dir / "events.jsonl")
+            if followups:
+                result = merge_results(turns)
             status, reason = classify_result(result, proc.returncode)
             if plugin:
                 problem, seen = plugin_check(events_list, plugin.get("mcp_servers"))
@@ -366,13 +464,16 @@ def execute(entry: dict, info: dict, env_dir: Path, run_dir: Path, claude: str,
                     status, reason = "error", f"플러그인 환경: {problem}"
             if status == "completed":
                 derived = derive_outputs(run_dir, events_list)
+    session = collect_transcript(events_list or read_events(run_dir / "events.jsonl")[0], env, run_dir) if plugin else None
     outcome = {"status": status, "reason": reason, "exit_code": proc.returncode,
                "elapsed_seconds": round(time.monotonic() - start, 2),
                "usage": (result or {}).get("usage"), "total_cost_usd": (result or {}).get("total_cost_usd"),
                "tokens": token_record(result), "model": model, "init_model": init_model(events_list),
                "repo_commit": commit, "repo_dirty": dirty,
                "mode": "plugin" if plugin else "direct", "plugin": (plugin or {}).get("seen"),
-               "outputs_derived": derived, "env_stripped": stripped_env, "auth_from_user_settings": auth_keys}
+               "outputs_derived": derived, "env_stripped": stripped_env, "auth_from_user_settings": auth_keys,
+               **({"session_transcript": session} if plugin else {}),
+               **({"followups_sent": max(len(turns) - 1, 0)} if followups else {})}
     dump(run_dir / "execution.json", outcome)
     return outcome
 

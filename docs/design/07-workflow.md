@@ -62,7 +62,7 @@
 - `db_pr lock acquire <JIRA-KEY>`로 세션 lock을 잡는다(`--analysis-only`도 잡고, ok로 끝나면 `triage.py`가 푼다). 다른 작업의 lock이 있으면 보유자(작업 키, 명령, 마지막 갱신 시각)를 보여준다. 사용자가 그 세션이 끝났다고 확인하면 `db_pr lock release <그 작업 키> --force` 후 다시 잡고, 아니면 중단한다. 같은 Jira의 lock이 10분 이내에 갱신됐으면 "다른 세션이 같은 이슈를 진행 중일 수 있다"고 보여주고, 사용자가 확인하면 `acquire <JIRA-KEY> --take-over`로 이어받는다 (`contracts.md §3.2` 세션 lock).
 - (`--analysis-only`면 이 항목과 아래 기존 계획 항목을 건너뛴다 — `§분석 전용`) `db_pr cleanup --dry-run`으로 비정상 종료로 남은 worktree(`<work_dir>/*/wt`, `*/draft`)와 도구 브랜치(`tt/*`)를 찾는다. **묻지 않고 지우지도 않는다**(`--yes`를 부르지 않고, `--answer cleanup=yes`가 있어도 지우지 않는다). 대상이 있으면 `triage-state.json`에 `cleanup_targets=<n>`(`cleanup_done`과 함께, 세션마다 한 번 점검)을 남기고 `analysis.json` `notes`로 "잔여 worktree·도구 브랜치 n개(붙여넣은 스텝 원문이 남아 있을 수 있음) — `/telephony-triage:sync`에서 정리"를 알린다. `cleanup_targets`가 있으면 `needs_input` 뒤 ok 출력에도 매번 낸다. 정리는 `/telephony-triage:sync`가 묻고 한다. 현재 작업 키의 worktree는 대상이 아니다(도구 브랜치는 목록에 나올 수 있다).
 - `<work_dir>/<JIRA-KEY>/plan.json`이 이미 있으면:
-  - 기존 계획의 `source`가 `analyze`면 이어서 할지, 새로 시작할지 묻는다. `source`가 다르면(예: `record`) **"새로 시작(기존 계획 덮어씀)"만** 허용한다 (`contracts.md §작업 계획`).
+  - 기존 계획의 `source`가 `analyze`면 이어서 할지, 새로 시작할지 묻는다. 이어서면 분류(Step 7)를 다시 묻지 않고 기존 계획으로 Step 8로 간다(`analysis.json` `plan.next`). `source`가 다르면(예: `record`) **"새로 시작(기존 계획 덮어씀)"만** 허용한다 (`contracts.md §작업 계획`).
   - 이어서 하든 새로 시작하든 이 Jira의 pending 피드백을 지운다 (`03-issue-db.md §5.4 (3)`). 계획에 `pr.number`가 있으면 열린 PR이 있다고 알리고 `sync-pr` 또는 Step 8-2의 "브랜치 갱신"을 안내한다.
   - 이어받은 계획이 `issue.origin: file`(dry-run 연습 계획)이고 이번 실행이 `--dry-run`이 아니면, Step 2에서 Jira MCP로 다시 읽어 `issue`를 덮고 `origin: mcp`로 바꾼다.
 - `~/.telephony-triage/pending-feedback/`에 남은 피드백이 있으면 이번 PR에 함께 올린다고 알린다.
@@ -106,7 +106,7 @@ Android 버전과 브랜치마다 소스 트리가 다르므로 **분석할 때�
 
 1. 대상 Android 버전을 정한다. 순서: Jira의 Android 버전/SW → bugreport `build.json` 또는 logcat의 빌드 정보(fingerprint 등) → 둘 다 없으면 사용자에게 묻는다.
 2. `--code`가 주어졌으면 그것을 쓴다. 프로필 이름이면 해당 `roots`를, 경로면 `aosp` 루트로 간주한다.
-3. **자동 선택**: `--code`도 답도 없고 `code.auto_select`(사용자 config > site-defaults > 기본 `true`, `02-config.md §4`)가 참이며, 대상 버전이 일치하는 `code_profiles` 프로필이 **정확히 1개**(`code_roots suggest`에서 `kind: profile`이고 `match`, 현재 "추천" 기준과 같다)면 그 프로필을 `--code <프로필>`처럼 쓰고 4번 검증으로 간다. 일치가 0개·2개 이상이거나 `auto_select: false`이거나 Jira 버전이 없으면(대체 출처는 쓰지 않는다) 4번처럼 묻는다. 최근 사용 경로만 일치하면 자동 선택하지 않는다. 알림은 의무다: `report.md` 코드 줄에 "(자동 선택: code.auto_select)", 출력 `code.auto: true`, 스킬이 한 줄로 알리고 `--code`로 바꿀 수 있다고 안내한다. 자동 선택한 경로가 무효면 전체 선택지(`code`)로 묻고 상태에는 기록하지 않으며, 트리 버전이 다르면 기존 `code_confirm`이다. 성공한 자동 선택만 `triage-state.json`에 `code_auto=<프로필>`로 남아 같은 세션 재실행이 그 값을 쓴다(`answers`에는 넣지 않는다). 사용자의 답·`--code`가 자동 선택보다 우선한다.
+3. **자동 선택**: `--code`도 답도 없고 `code.auto_select`(사용자 config > site-defaults > 기본 `true`, `02-config.md §4`)가 참이며, 대상 버전이 일치하는 `code_profiles` 프로필이 **정확히 1개**(`code_roots suggest`에서 `kind: profile`이고 `match`, 현재 "추천" 기준과 같다)면 그 프로필을 `--code <프로필>`처럼 쓰고 4번 검증으로 간다. 일치가 0개·2개 이상이거나 `auto_select: false`이거나 Jira 버전이 없으면(대체 출처는 쓰지 않는다) 4번처럼 묻는다. 최근 사용 경로만 일치하면 자동 선택하지 않는다. 알림은 의무다: `report.md` 코드 줄에 "(자동 선택: code.auto_select, `--code`로 변경 가능)", 그 아래 `- 코드 분석 트리 자동 선택: <roots> (<플랫폼> <트리 버전>) — 다른 트리는 --code로 지정` 줄(`must_show`, eval 55), 출력 `code.auto: true`. 자동 선택한 경로가 무효면 전체 선택지(`code`)로 묻고 상태에는 기록하지 않으며, 트리 버전이 다르면 기존 `code_confirm`이다. 성공한 자동 선택만 `triage-state.json`에 `code_auto=<프로필>`로 남아 같은 세션 재실행이 그 값을 쓴다(`answers`에는 넣지 않는다). 사용자의 답·`--code`가 자동 선택보다 우선한다.
 3-1. 자동 선택하지 않으면 사용자에게 묻는다.
    ```
    코드 경로를 선택하세요. (대상: Android 16, SW <빌드>)
@@ -212,7 +212,7 @@ Android 버전과 브랜치마다 소스 트리가 다르므로 **분석할 때�
 - 열린 PR: 없음
 ```
 
-**must_show**: `analysis.json`의 `must_show`(≤6줄, 4KB 압축 시 4줄)는 위 리포트 줄 중 사용자에게 꼭 보여야 하는 것의 본문 그대로다(`- ` 없이). 우선순위: 분석 전용 안내 > 읽기 전용 안내 > 1위가 바뀐 재분석 > 실패 스텝 > 장비 시각 미사용 > 판정 불가 유형 > 슬롯 불일치 > 시계 이상 구간의 근거 > 로그 범위 줄(후보 없음·1위 C=0·로그 범위 일부/밖·시계 이상일 때만) > 분석 범위 밖 오류 이벤트 > 파서 규칙에 없는 태그·후보 없음의 미추출 W/E/F 줄(추출 이벤트 0건일 때). 슬롯 불일치는 Jira `sim_slot` 안의 정수가 정확히 하나(음수 아님)일 때만 그 값을 1위 후보 `phones`와 그대로 비교한다(0/1 기준은 S20, 근거가 모두 `phone_id: null`이면 내지 않음). 리포트를 요약해 보여 줄 때도 이 줄들은 빼지 않는다(`contracts.md §3.2` `triage.py`).
+**must_show**: `analysis.json`의 `must_show`(≤6줄, 4KB 압축 시 4줄)는 위 리포트 줄 중 사용자에게 꼭 보여야 하는 것의 본문 그대로다(`- ` 없이). 우선순위: 분석 전용 안내 > 읽기 전용 안내 > 1위가 바뀐 재분석 > 실패 스텝 > 장비 시각 미사용 > 판정 불가 유형 > 슬롯 불일치 > 시계 이상 구간의 근거 > 로그 범위 줄(후보 없음·1위 C=0·로그 범위 일부/밖·시계 이상일 때만) > 분석 범위 밖 오류 이벤트 > 파서 규칙에 없는 태그·후보 없음의 미추출 W/E/F 줄(추출 이벤트 0건일 때) > 코드 분석 트리 자동 선택(`code.auto`). 슬롯 불일치는 Jira `sim_slot` 안의 정수가 정확히 하나(음수 아님)일 때만 그 값을 1위 후보 `phones`와 그대로 비교한다(0/1 기준은 S20, 근거가 모두 `phone_id: null`이면 내지 않음). 리포트를 요약해 보여 줄 때도 이 줄들은 빼지 않는다(`contracts.md §3.2` `triage.py`).
 
 ### Step 7. 분류 확정 → 작업 계획 작성 (반드시 사용자 확인)
 

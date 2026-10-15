@@ -26,6 +26,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import make_repo  # noqa: E402
 import mock_env  # noqa: E402
 from runner import SAMPLE, plugin_root, run, tmp  # noqa: E402
+sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+from common import draftcheck  # noqa: E402
 
 GIT_ID = ["-c", "user.name=Mock User", "-c", "user.email=mock-user@ghe.mock.invalid"]
 
@@ -97,7 +99,8 @@ class Workspace:
     def wt(self, job: str) -> Path:
         return self.work / job / "wt"
 
-    def plan(self, job: str, name_or_plan, base_sha: str | None = None, match: str | None = "auto", **over) -> Path:
+    def plan(self, job: str, name_or_plan, base_sha: str | None = None, match: str | None = "auto",
+             draft_verified: bool = True, **over) -> Path:
         """계획을 `<work_dir>/<job>/plan.json`에 쓴다. `base_sha`는 기본으로 지금 origin/main.
 
         `match="auto"`(기본): analyze 계획의 `feedback.suggested`가 비어 있지 않으면 그 후보로 `<job>/match.json`을
@@ -114,6 +117,10 @@ class Workspace:
         path.write_text(json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8")
         if match == "auto":
             self._auto_match(job, plan)
+        record = path.parent / draftcheck.RECORD
+        record.unlink(missing_ok=True)
+        if draft_verified:      # 초안 검증(db_verify --draft)을 마친 것으로 둔다. False면 stage가 draft-verify로 멈춘다
+            draftcheck.record(path.parent, plan, 0, "test")
         return path
 
     def _auto_match(self, job: str, plan: dict) -> None:
