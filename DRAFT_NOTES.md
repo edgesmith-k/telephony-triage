@@ -18,7 +18,7 @@
 
 - 모드: **사외 초안**. Phase **D0, 1~13** 완료, 반입 전 보강 트랙 완료(history). 최신 반입본 import-20261014c(f4d98d5, 사내 전달), 새 묶음 import-20261015(767cc4f, 태그 전). main 병합 PR #8~#53.
 - 10/14 밤~10/15 **H 사외 재측정 완료**(PR #52·#53): 실패 11→0, 거부 52→29, 한도 10→0. 상세 history "10/14 밤~10/15".
-- 10/15 **K 완료**(사용자 승인, 55d24a3·e45885d, 원격 `ccr-d022623a-2f4vdx`, PR 전): `offsite_results.json` pass 59·fail 0·미결정 11, pytest 1,967. **L 종합 검토 완료**: `docs/development/L_RESULT.md`(공유 문서 https://claude.ai/code/artifact/0d36a95a-0b4b-49ed-937f-603429389485).
+- 10/15 **K 완료**(55d24a3·e45885d): `offsite_results.json` pass 59·fail 0·미결정 11. **L 종합 검토**: `docs/development/L_RESULT.md`. 10/16 **L1 완료**(0f0d8cd~, 리뷰 P0·P1 0, pytest 34 실패는 HEAD와 같은 환경 실패·1,972 수집, P2는 L_RESULT 끝). 원격 `ccr-d022623a-2f4vdx`, PR 전.
 - 안내서 "모델 선택": Sonnet 5.5 기준, Opus 5.5 확인 11개 실패 0(비용 ≈2.7배).
 - `TODO(SITE)`: `tools/list_site_todos.py`. REVIEW-OPEN 0건. 사내 시작: **"사내 설정 시작"**(결정 (o)).
 - 안내서 HTML: `docs/telephony-triage-guide.html`(공유본 https://claude.ai/artifact/1jov1Et4dQUMauFr6aoxWG 개정 7), `docs/materials/00-index.html`
@@ -28,8 +28,8 @@
 | ☐ | 항목 | 메모 |
 |---|---|---|
 | ☑ K·L | K(P0-1·P1 수정, 재채점)·L(목록·분류·구현 계획) 완료 | `K_RESULT.md`(P2는 반입 뒤 후보), `L_RESULT.md` |
-| ☐ L1 | **다음 세션: L (가)·(나) 10개**(S, eval 재측정 없음 기본), 결정 (p)·(s) | `L_RESULT.md` "구현 진행" 세션 1. 원격 `ccr-d022623a-2f4vdx`에 이어 커밋, PR·병합은 사용자 |
-| ☐ L2 | L1 묶음 뒤: (다) 표시·판정 정리(R·M-2·U-2·U-4, eval 전체 1회) | `L_RESULT.md` 세션 2. 옛 R 항목 포함 |
+| ☑ L1 | L (가)·(나) 10개 완료(10/16), 생성기 v2 | `L_RESULT.md` 세션 1, 끝의 "L1 리뷰 P2"는 반입 뒤 후보 |
+| ☐ L2 | **진행 중(10/16, eval 비용 승인됨)**: (다) 표시·판정 정리(R·M-2·U-2·U-4, eval 전체 1회) | `L_RESULT.md` 세션 2. 옛 R 항목 포함 |
 | ☐ F | 반입 묶음 — **import-20261015(767cc4f)는 태그하지 않는다** | L1 병합 뒤 `make_bundle.py --label import-<날짜>`로 다시(L2 뒤 또 한 번), 태그는 사용자 |
 | ☐ G | 범용판 별도 레포 — **보류(10/07 사용자)** | 재개는 사용자가 정한다 |
 
