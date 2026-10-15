@@ -312,3 +312,12 @@ def test_not_pass_word_ignores_file_names():
                      ("| R4 | fail |", 1), ("NEEDS-APPROVAL", 1)):
         rerun = bash("d2", DRAFT_CMD + " | grep -v x", out)
         assert shown.draft_window([first, rerun, stage])["end"] == end, out
+
+
+def test_draft_doc_row_print_with_review_required_tail():
+    """행마다 `python3 -c`로 찍은 출력(`R6 skipped 해당 없음 review_required= False`, h1-b eval 4): 끝 값은 사유가 아니다."""
+    out = "R1 pass 대상 2개 통과 review_required= False\nR2 skipped fixture 없음 review_required= True\nR6 skipped 해당 없음 False"
+    rules = shown.draft_rules(out)
+    assert [(r["reason"], r.get("review_required")) for r in rules] == [("대상 2개 통과", False), ("fixture 없음", True),
+                                                                         ("해당 없음", None)]
+    assert not shown.draft_all_clear(rules) and shown.draft_all_clear([rules[0], rules[2]])

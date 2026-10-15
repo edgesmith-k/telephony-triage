@@ -264,8 +264,15 @@ def draft_doc(result: str):
     doc = draft_json(result)
     if doc is not None:
         return doc
-    rows = [{"id": m.group(1), "status": m.group(2), "reason": re.sub(r"\s+(True|False|None)$", "", m.group(3).strip())}
-            for m in re.finditer(r"^(R\d)\s+(pass|fail|skipped|needs-approval):?\s*(.*)$", result, re.MULTILINE)]
+    rows = []
+    for m in re.finditer(r"^(R\d)\s+(pass|fail|skipped|needs-approval):?\s*(.*)$", result, re.MULTILINE):
+        # 행마다 찍은 출력의 끝 `review_required= False`(또는 값만 `True`)는 사유가 아니다 — 값은 review_required로 둔다
+        tail = re.search(r"\s+(?:review_required=\s*)?(True|False|None)$", m.group(3).strip())
+        reason = m.group(3).strip()[:tail.start()] if tail else m.group(3).strip()
+        row = {"id": m.group(1), "status": m.group(2), "reason": reason}
+        if tail and "review_required" in tail.group(0):
+            row["review_required"] = tail.group(1) == "True"
+        rows.append(row)
     return {"rules": rows} if rows else None
 
 
