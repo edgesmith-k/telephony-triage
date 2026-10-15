@@ -154,6 +154,7 @@ def test_r3_relative_paths_never_touch_the_clone(safety_root, tmp_path, monkeypa
     module, ctx = safety_ctx(tmp_path)
     verify = importlib.import_module("db_verify")
     monkeypatch.setattr(verify.userconfig, "merged", lambda defaults: ctx.cfg)
+    monkeypatch.setattr(verify, "_SESSION", None)       # 앞 테스트가 정한 (플랫폼, cfg)를 쓰지 않게
     (ctx.work_dir / "job").mkdir(parents=True)
     monkeypatch.chdir(ctx.work_dir)
     listed = lambda: [Path(w["path"]).resolve() for w in module._worktrees(ctx.repo)]
