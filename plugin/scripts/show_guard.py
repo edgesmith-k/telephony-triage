@@ -13,15 +13,16 @@ Bash·Read 출력은 사용자에게 보이지 않는다. push 확인 화면(`##
 - `pre-ask`(PreToolUse `AskUserQuestion|mcp__.*__ask_user`): 같은 판정에 질문 문구를 더해 빠지면 질문을 거부(`deny`)한다.
   리포트는 Step 7 분류 질문(선택지 2개 이상)일 때만 본다(앞의 탐색·심층 분석 질문은 리포트 전이다).
 - `pre-bash`(PreToolUse Bash): `db_pr.py publish --approved H`·`issue_post.py approve`면 해시가 같은 화면을 찾아 화면 뒤 ~ 마지막
-  질문(또는 사용자 입력) 사이에 화면 전체가 보였는지 본다. 빠지면 거부(승인 질문 전에 화면을 보이지 않았다). 화면을 못 찾으면
-  판정하지 않는다 — 단 그 해시의 화면이 어느 도구 출력에도 없는데 화면을 낸 호출(stage·summary / render)이 기록에 있으면 한 번
-  거부하고 `summary <wt> --format markdown`(render)을 파이프 없이 다시 내게 한다. `db_pr.py stage` 앞에 열린 초안 검증표가
+  질문(또는 사용자 입력) 사이에 화면 전체가 보였는지 본다(해시가 변수 — `--approved "$H"` — 면 마지막 stage 호출 뒤의 마지막
+  화면 — 다시 stage한 화면을 숨겼으면 앞 화면으로 갈음하지 않는다. summary는 화면·해시를 바꾸지 않으므로 기준이 아니다). 빠지면 거부(승인 질문 전에 화면을 보이지 않았다).
+  화면을 못 찾으면 판정하지 않는다 — 단 그 해시의 화면이 어느 도구 출력에도 없는데 화면을 낸 호출(stage·summary / render)이
+  기록에 있으면 거부하고(push는 키마다 4번, post는 한 번 — `UNSEEN_BLOCKS`) `summary <wt> --format markdown`(render)을 파이프 없이 다시 내게 한다. `db_pr.py stage` 앞에 열린 초안 검증표가
   보이지 않았어도 거부한다(그 창은 stage로 닫힌다). 전부 통과한 초안 표(`shown.draft_all_clear`)는 의무가 아니다 — push 확인
   화면의 "검증 결과"로 갈음한다(10/14 사용자).
 - `post`(PostToolUse Bash): 결과에 화면·리포트·초안 검증 결과가 있으면 `additionalContext`로 "이 출력은 사용자에게 안 보인다,
   다음 메시지에 전문을 글자 그대로" 안내만 한다.
 
-같은 의무 키(`push:<hash>`·`post:<sha>`(`--sha`가 변수면 `post:render:<KEY>`)·`report:<id>`·`draft:<id>`)로 막은 횟수(transcript의 표식 `[telephony-triage] show-guard
+같은 의무 키(`push:<hash>`(해시가 변수인데 화면이 없으면 `push:var:<branch>`)·`post:<sha>`(`--sha`가 변수면 `post:render:<KEY>`)·`report:<id>`·`draft:<id>`)로 막은 횟수(transcript의 표식 `[telephony-triage] show-guard
 <key>`가 든 Stop 피드백·거부된 도구 결과)가 MAX_BLOCKS(2)에 이르면 더 막지 않고 `systemMessage`로 사용자에게 직접 확인을 안내한다.
 Stop이 연이어 막혔는데(`stop_hook_active`) transcript에 표식이 없으면(피드백이 기록되지 않는 버전) 한도에 이른 것으로 본다.
 거부된 호출을 똑같이(`description` 제외) 사이 글·질문·사용자 입력 없이 다시 한 거부는 키마다 BLIND_FREE(1)번까지 세지
@@ -277,7 +278,10 @@ def approval_reason(ob, miss, retry: bool = False) -> str:
                       "실행한다.", miss, retry)
 
 
-UNSEEN_BLOCKS = 1      # 화면이 도구 결과에 없던 승인: 한 번만 막는다(다시 낸 화면은 그다음부터 보통 판정)
+# 화면이 도구 결과에 없던 승인을 막는 횟수(키마다). push는 4번 — 보지 않은 화면의 push가 한 번의 재시도로 통과하면 안 된다
+# (K P1-2). 한도 없이 막지는 않는다: 큰 출력을 Claude Code가 파일로 돌리면 화면이 도구 출력에 끝내 안 나올 수 있다(fail-open,
+# 그 뒤는 systemMessage만 — 최종 관문은 guard 규칙 7 ask). post는 한 번(다시 낸 화면은 그다음부터 보통 판정)
+UNSEEN_BLOCKS = {"push": 4, "post": 1}
 
 
 # issue_post.py approve의 값 있는 옵션(`--json`만 값 없음). 이름만 적는다: 옵션 글자 그대로면 test_ofono_skeleton이
@@ -303,8 +307,14 @@ def post_target(cmd: str) -> str | None:
     return None
 
 
-def unseen_reason(key: str, kind: str, cmd: str) -> str:
-    """승인할 화면이 어느 도구 결과에도 없다: 화면을 다시 내는 명령을 알려 준다."""
+def push_target(cmd: str, start: int = 0) -> str | None:
+    """`db_pr.py publish`의 `--branch` 값(글자 그대로). 변수(`$B`)이거나 없으면 None."""
+    m = re.search(r"--branch[= ]\s*[\"']?([^\s\"';&|)]+)", cmd[start:])
+    return None if not m or m.group(1).startswith("$") else m.group(1)
+
+
+def unseen_reason(key: str, kind: str, cmd: str, again: bool = False) -> str:
+    """승인할 화면이 어느 도구 결과에도 없다: 화면을 다시 내는 명령을 알려 준다. again이면 같은 키로 이미 거부됐다(push)."""
     if kind == "push":
         m = re.search(r"(\S*db_pr\.py)[\"']?\s+(?:--\S+\s+\S+\s+)*publish\s+(\S+)", cmd)
         how = (f"`python3 {m.group(1)} summary {m.group(2)} --format markdown`" if m
@@ -319,7 +329,9 @@ def unseen_reason(key: str, kind: str, cmd: str) -> str:
             f"까닭: 승인하려는 {what}이 어느 도구 출력에도 없다(리디렉션·`head`·`grep`·파일에서 해시를 읽음). "
             f"{UNSEEN_NOTE} 보지 않은 화면은 승인의 근거가 될 수 없다.\n"
             f"할 일: {how}를 파이프·리디렉션 없이 실행하고, 그 출력 전체를 글자 그대로 답에 붙인 뒤 같은 메시지 끝에 다시 "
-            "승인받는다.")
+            "승인받는다."
+            + (f"\n이미 같은 이유로 거부됐다 — 화면이 도구 출력에 나오기 전에는 다시 불러도 거부된다(키마다 {UNSEEN_BLOCKS['push']}번)."
+               if again else ""))
 
 
 def stage_reason(ob, miss, retry: bool = False) -> str:
@@ -501,22 +513,27 @@ def mode_pre_bash(inp) -> dict | None:
     found, texts, unseen = [], [], []
     targets = []
     if pub:
+        # `--approved "$H"`처럼 해시가 변수면 화면을 못 고른다: 마지막 stage 호출 뒤 화면 중 마지막을 본다(post의 변수
+        # `--sha`와 같게). 다시 stage한 화면을 숨겼으면(리디렉션) 그 앞 화면은 승인 근거가 아니다 — 화면 없음으로 본다
         a = shown.APPROVED_ARG.search(cmd[pub[0].start():])
-        if a:
-            targets.append(("push", a.group(1)))
+        targets.append(("push", a.group(1) if a else None))
     if app:
         s = shown.SHA_ARG.search(cmd[app[0].start():])
         targets.append(("post", s.group(1) if s else None))
     for kind, h in targets:
         wins = shown.screens(seq, kind, script_only=True)
+        if kind == "push" and h is None:
+            # 기준은 stage만: summary(markdown·json)는 같은 해시 화면을 다시 낼 뿐이라 창이 stage 자리에 남는다(같은 해시 병합)
+            made = shown.bash_index(seq, shown.STAGE)
+            wins = [w for w in wins if not made or w["start"] >= max(made)]
         pick = [w for w in wins if h is None or shown.digest_of(w).startswith(h) or h.startswith(shown.digest_of(w))]
         if not pick:
             # 화면이 어느 도구 결과에도 없다(리디렉션·파이프·state.json에서 해시): 그 화면을 낸 호출이 이 기록에 있으면
-            # 한 번 막고 화면을 다시 내게 한다. 끝부분만 읽었거나 그런 호출이 없으면 판정하지 않는다
+            # 막고(`UNSEEN_BLOCKS`) 화면을 다시 내게 한다. 끝부분만 읽었거나 그런 호출이 없으면 판정하지 않는다
             makers = (shown.STAGE, shown.SUMMARY) if kind == "push" else (shown.RENDER,)
             if not TRUNCATED[0] and any(shown.bash_index(seq, m) for m in makers):
-                if kind == "push":
-                    key = f"push:{h}"
+                if kind == "push":   # 해시가 변수면 push 대상 브랜치별 키
+                    key = f"push:{h}" if h else f"push:var:{push_target(cmd, pub[0].start()) or '?'}"
                 elif h:
                     key = f"post:{h[:16]}"
                 else:  # --sha가 변수: 게시 대상 키별로 한 번(고정 키면 뒤 작업이 앞 작업의 표식으로 한도에 걸린다)
@@ -543,13 +560,13 @@ def mode_pre_bash(inp) -> dict | None:
     fmt = {id(ob): f for (ob, _), f in zip(found, texts)}
     under, over = _split(seq, found)
     seen = markers(seq)
-    first = [u for u in unseen if seen.count(u[0]) < UNSEEN_BLOCKS]
+    first = [u for u in unseen if seen.count(u[0]) < UNSEEN_BLOCKS[u[1]]]
     if (under or first) and not recorded:
         warn("transcript에 지금 명령이 기록되지 않아(같은 응답의 앞 글이 빠졌을 수 있다) 거부하지 않는다")
         return None
     if under or first:
         return _deny("\n\n".join([fmt[id(ob)](ob, miss, is_retry(seq, ob.key, "Bash", tool_input, _from(ob)))
-                                   for ob, miss in under] + [unseen_reason(*u) for u in first]))
+                                   for ob, miss in under] + [unseen_reason(*u, again=u[0] in seen) for u in first]))
     later = [u for u in unseen if u not in first]
     if over or later:
         msg = capped_message([ob for ob, _ in over]) if over else \

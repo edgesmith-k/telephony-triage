@@ -1,5 +1,5 @@
 """Scan recorded eval transcripts: every Bash command that runs db_pr.py publish (per show_guard's PUSH_END,
-which was fixed for ${S}) vs. guard.py rule-7 detection (is_db_pr and "publish" in argv)."""
+which was fixed for ${S}) vs. guard.py rule-7 detection (runs_publish | publish_text, after the K P0-1 fix)."""
 import sys, json, glob
 from pathlib import Path
 REPO = Path(__file__).resolve().parents[3]
@@ -8,12 +8,8 @@ import guard
 from common import shown
 
 def guard_sees_publish(cmd):
-    for inv in guard.invocations(cmd, Path("/tmp")):
-        name = guard._base(inv.argv[0])
-        is_db_pr = name == "db_pr.py" or (name.startswith("python") and any(guard._base(a) == "db_pr.py" for a in inv.argv[1:]))
-        if is_db_pr and "publish" in inv.argv:
-            return True
-    return False
+    # 수정 후 규칙 7 판정(guard.check_bash와 같은 합집합): argv `runs_publish` 또는 명령 글 `publish_text`
+    return guard.publish_text(cmd) or any(guard.runs_publish(inv.argv) for inv in guard.invocations(cmd, Path("/tmp")))
 
 seen = {}
 for f in glob.glob(str(REPO / "tests/skill_evals/workspace/*/*/*/session.jsonl")) + glob.glob(str(REPO / "tests/skill_evals/workspace/*/*/*/events.jsonl")):

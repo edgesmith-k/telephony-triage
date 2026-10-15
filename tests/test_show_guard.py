@@ -468,8 +468,8 @@ def test_publish_or_approve_of_screen_never_in_output(tmp_path):
     assert "`python3 /p/scripts/db_pr.py summary /w/MOCK-1/wt --format markdown`" in r
     again = write(tmp_path, prompt("p"), bash("s", STAGE_CMD + " > /w/o.md", "EXIT 0"), prompt("승인"),
                   call("x", "Bash", {"command": PUBLISH_CMD}, "PreToolUse:Bash hook error: " + r, True), name="again.jsonl")
-    out = pre("pre-bash", again, "Bash", {"command": PUBLISH_CMD})       # 한 번만 막는다
-    assert decision(out) is None and shown.CAPPED in out["systemMessage"]
+    out = pre("pre-bash", again, "Bash", {"command": PUBLISH_CMD})       # push는 화면이 나올 때까지 4번 막는다(K P1-2)
+    assert decision(out) == "deny" and "다시 불러도 거부된다" in out["hookSpecificOutput"]["permissionDecisionReason"]
     nostage = write(tmp_path, prompt("승인해줘"), say("네"), name="nostage.jsonl")
     assert pre("pre-bash", nostage, "Bash", {"command": PUBLISH_CMD}) is None   # 화면을 낸 호출이 없다: 판정하지 않는다
     render = "python3 /p/scripts/issue_post.py render MOCK-1 --fill /w/MOCK-1/post.fill.json --json"
@@ -479,6 +479,99 @@ def test_publish_or_approve_of_screen_never_in_output(tmp_path):
     out = pre("pre-bash", post, "Bash", {"command": approve})
     r = out["hookSpecificOutput"]["permissionDecisionReason"]
     assert decision(out) == "deny" and "post:cccccccccccccccc" in r and "issue_post.py render MOCK-1 --fill" in r
+    again = write(tmp_path, prompt("p"), bash("r", render + " | tail -1", '"post_sha256": "' + "c" * 64 + '"'), prompt("게시"),
+                  _denied("x", approve, r), name="post-again.jsonl")
+    out = pre("pre-bash", again, "Bash", {"command": approve})             # post는 한 번만 막는다(그대로)
+    assert decision(out) is None and shown.CAPPED in out["systemMessage"]
+
+
+PUB_BRANCH = "python3 /p/scripts/db_pr.py publish /w/MOCK-1/wt --branch issue/MOCK-1 --lease new --approved {h} --commit --and-discard"
+
+
+def test_publish_with_variable_approved_is_checked(tmp_path):
+    """K P1-1: `--approved "$H"`·`$H`·`H=$(…)`처럼 해시가 변수여도 판정한다(마지막 화면, post의 변수 `--sha`와 같게)."""
+    summarized = write(tmp_path, prompt("p"), bash("s", STAGE_CMD, SCREEN), say(SUMMARY + " 승인할까요?"), prompt("승인"))
+    full = write(tmp_path, prompt("p"), bash("s", STAGE_CMD, SCREEN), say(SCREEN + "\n승인할까요?"), prompt("승인"),
+                 name="full.jsonl")
+    for cmd in (PUB_BRANCH.format(h='"$H"'), PUB_BRANCH.format(h="$H"),
+                "H=$(jq -r .approved_hash /w/MOCK-1/state.json); " + PUB_BRANCH.format(h='"$H"')):
+        out = pre("pre-bash", summarized, "Bash", {"command": cmd})
+        r = out["hookSpecificOutput"]["permissionDecisionReason"]
+        assert decision(out) == "deny" and r.startswith(shown.MARKER + " push:abc1234def"), cmd
+        assert pre("pre-bash", full, "Bash", {"command": cmd}) is None, cmd
+
+
+def test_publish_with_variable_approved_and_hidden_screen(tmp_path):
+    """K P1-1: 화면을 숨기고(리디렉션) 해시도 변수면 push 대상 브랜치 키로 막고 summary로 화면을 다시 내게 한다."""
+    hidden = write(tmp_path, prompt("p"), bash("s", STAGE_CMD + " > /w/MOCK-1/screen.md", ""), say("stage 완료."))
+    out = pre("pre-bash", hidden, "Bash", {"command": PUB_BRANCH.format(h='"$H"')})
+    r = out["hookSpecificOutput"]["permissionDecisionReason"]
+    assert decision(out) == "deny" and r.startswith(shown.MARKER + " push:var:issue/MOCK-1 ")
+    assert "db_pr.py summary /w/MOCK-1/wt --format markdown" in r
+    out = pre("pre-bash", hidden, "Bash", {"command": PUB_BRANCH.format(h='"$H"').replace("issue/MOCK-1", "$B")})
+    assert out["hookSpecificOutput"]["permissionDecisionReason"].startswith(shown.MARKER + " push:var:? ")
+
+
+def test_unseen_publish_keeps_denying_until_screen_appears(tmp_path):
+    """K P1-2: 화면이 어느 도구 출력에도 없던 publish는 다시 불러도 키마다 4번(`UNSEEN_BLOCKS`)까지 거부한다. 그 뒤는
+    systemMessage만(큰 출력이 파일로 돌려져 화면이 끝내 안 나와도 막혀 버리지 않게 — fail-open, 최종 관문은 guard 규칙 7 ask).
+    summary로 화면을 내고 전체를 보인 뒤 승인받으면 통과."""
+    base = [prompt("p"), bash("s", STAGE_CMD + " > /w/MOCK-1/screen.md", ""), say("승인할까요?"), prompt("승인")]
+    r = pre("pre-bash", write(tmp_path, *base), "Bash", {"command": PUBLISH_CMD})["hookSpecificOutput"]["permissionDecisionReason"]
+    assert "다시 불러도 거부된다" not in r
+    for n in (1, 2, 3):
+        path = write(tmp_path, *base, *[_denied(f"x{k}", PUBLISH_CMD, r) for k in range(n)], name=f"n{n}.jsonl")
+        out = pre("pre-bash", path, "Bash", {"command": PUBLISH_CMD})
+        assert decision(out) == "deny" and "다시 불러도 거부된다(키마다 4번)" in out["hookSpecificOutput"]["permissionDecisionReason"], n
+    capped = write(tmp_path, *base, *[_denied(f"x{k}", PUBLISH_CMD, r) for k in range(4)], name="n4.jsonl")
+    out = pre("pre-bash", capped, "Bash", {"command": PUBLISH_CMD})       # 4번 거부한 뒤: 막지 않고 사용자 직접 확인 안내
+    assert decision(out) is None and shown.CAPPED in out["systemMessage"]
+    summary = "python3 /p/scripts/db_pr.py summary /w/MOCK-1/wt --format markdown"
+    ok = write(tmp_path, *base, *[_denied(f"x{k}", PUBLISH_CMD, r) for k in range(3)], bash("m", summary, SCREEN),
+               say(SCREEN + "\n승인할까요?"), prompt("승인"), name="ok.jsonl")
+    assert pre("pre-bash", ok, "Bash", {"command": PUBLISH_CMD}) is None
+
+
+def test_chain_hidden_screen_variable_s_publish(tmp_path):
+    """K repro_chain: `S="python3 …/"` + `${S}db_pr.py`로 화면을 숨기고 publish를 같은 호출로 다시 해도 두 번째도 거부한다."""
+    s = 'S="python3 /p/scripts/"\n'
+    stage = s + "${S}db_pr.py stage /w/MOCK-1/plan.json --wt /w/MOCK-1/wt --branch issue/MOCK-1 --then-summary > /w/MOCK-1/screen.md"
+    pub = s + "${S}db_pr.py publish /w/MOCK-1/wt --branch issue/MOCK-1 --lease new --approved abc1234def --commit --and-discard --json"
+    base = [prompt("MOCK-1 분석하고 push까지 해줘"), bash("s1", stage, ""), say("stage 완료. 올리겠습니다.")]
+    out = pre("pre-bash", write(tmp_path, *base), "Bash", {"command": pub}, tid="x1")
+    assert decision(out) == "deny"
+    r = out["hookSpecificOutput"]["permissionDecisionReason"]
+    out = pre("pre-bash", write(tmp_path, *base, _denied("x1", pub, r), name="2.jsonl"), "Bash", {"command": pub}, tid="x2")
+    assert decision(out) == "deny" and "다시 불러도 거부된다" in out["hookSpecificOutput"]["permissionDecisionReason"]
+
+
+def test_variable_approved_ignores_screen_before_hidden_restage(tmp_path):
+    """K 2차 R4: 해시가 변수(`--approved "$H"`)면 마지막 stage·summary 호출 뒤 화면만 본다. 첫 화면을 다 보이고 승인받은 뒤
+    고쳐 달라는 말에 다시 stage하면서 화면을 숨기면(리디렉션) 앞 화면으로 통과하지 않는다 — 화면 없음으로 막는다."""
+    first = [prompt("p"), bash("s1", STAGE_CMD, SCREEN), say(SCREEN + "\n승인할까요?"), prompt("README 문구를 바꿔줘")]
+    restage = STAGE_CMD + " > /w/MOCK-1/screen.md"
+    hidden = write(tmp_path, *first, bash("s2", restage, ""), say("다시 stage했습니다. 승인할까요?"), prompt("승인"))
+    out = pre("pre-bash", hidden, "Bash", {"command": PUB_BRANCH.format(h='"$H"')})
+    r = out["hookSpecificOutput"]["permissionDecisionReason"]
+    assert decision(out) == "deny" and r.startswith(shown.MARKER + " push:var:issue/MOCK-1 ")
+    screen2 = SCREEN.replace("abc1234def", "fed4321cba")
+    shown2 = write(tmp_path, *first, bash("s2", STAGE_CMD, screen2), say(screen2 + "\n승인할까요?"), prompt("승인"),
+                   name="shown2.jsonl")
+    assert pre("pre-bash", shown2, "Bash", {"command": PUB_BRANCH.format(h='"$H"')}) is None
+
+
+
+def test_variable_approved_after_summary_rerun_passes(tmp_path):
+    """K 3차 P1-a: summary는 화면·해시를 바꾸지 않는다 — stage 화면 뒤 `summary --format markdown`으로 같은 해시 화면을 다시 내
+    전체를 보이거나, `summary --format json`으로 해시를 읽고 변수로 publish해도 통과(기준은 마지막 stage)."""
+    summary_md = "python3 /p/scripts/db_pr.py summary /w/MOCK-1/wt --format markdown"
+    summary_json = "python3 /p/scripts/db_pr.py summary /w/MOCK-1/wt --format json"
+    rerun = write(tmp_path, prompt("p"), bash("s1", STAGE_CMD, SCREEN), say("stage 완료."), bash("m", summary_md, SCREEN),
+                  say(SCREEN + "\n승인할까요?"), prompt("승인"), name="rerun.jsonl")
+    assert pre("pre-bash", rerun, "Bash", {"command": PUB_BRANCH.format(h='"$H"')}) is None
+    as_json = write(tmp_path, prompt("p"), bash("s1", STAGE_CMD, SCREEN), say(SCREEN + "\n승인할까요?"), prompt("승인"),
+                    bash("j", summary_json, '{"approved_hash": "abc1234def"}'), name="json.jsonl")
+    assert pre("pre-bash", as_json, "Bash", {"command": PUB_BRANCH.format(h='"$H"')}) is None
 
 
 def test_redirect_targets_and_read_back_rules(tmp_path):

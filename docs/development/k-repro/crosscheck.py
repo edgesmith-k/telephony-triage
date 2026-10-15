@@ -6,12 +6,8 @@ sys.path.insert(0, str(REPO / "plugin" / "scripts"))
 import guard
 from common import shown
 
-def sees(cmd):
-    for inv in guard.invocations(cmd, Path("/tmp")):
-        name = guard._base(inv.argv[0])
-        if (name == "db_pr.py" or (name.startswith("python") and any(guard._base(a) == "db_pr.py" for a in inv.argv[1:]))) and "publish" in inv.argv:
-            return True
-    return False
+def sees(cmd):   # 수정 후 규칙 7 판정(guard.check_bash와 같은 합집합)
+    return guard.publish_text(cmd) or any(guard.runs_publish(inv.argv) for inv in guard.invocations(cmd, Path("/tmp")))
 
 rows = []
 for f in glob.glob(str(REPO / "tests/skill_evals/workspace/*/eval-*/with_skill/session.jsonl")):
