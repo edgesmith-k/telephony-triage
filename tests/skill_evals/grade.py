@@ -341,6 +341,18 @@ class Ctx:
             return False, "초안 검증 호출 없음"
         bad = shown.draft_rows_missing(w["rules"], shown.visible_lines(self.visible_between(w["i"] + 1, w["end"])))
         ev = (f"초안 검증 seq {w['i']}→{w['end']} 규칙 {len(w['rules'])}개, 보인 행 없음/불일치: {bad or '없음'}")
+        if bad and shown.draft_all_clear(w["rules"]):
+            # 전부 통과한 표는 stage 전에 보이지 않았어도 첫 stage 뒤 첫 push 확인 화면(승인 질문까지)에 규칙 행이 모두 보였으면
+            # 갈음한다(10/14 사용자, show_guard와 같다)
+            win = next((x for x in self.screens("push") or [] if x["start"] >= w["first_stage"]), None)
+            if win is not None and win["asked"] is not None:
+                rest = shown.draft_rows_missing(
+                    w["rules"], shown.visible_lines(self.visible_between(win["start"] + 1, win["asked"] + 1)))
+                if not rest:
+                    return True, ev + f"; push 확인 화면으로 갈음(전부 통과, seq {win['start']}→{win['asked']})"
+                ev += f"; push 확인 화면(seq {win['start']}→{win['asked']})에도 없음: {rest}"
+            else:
+                ev += "; 전부 통과지만 승인 질문까지 간 push 확인 화면 없음"
         return bool(w["rules"]) and not bad, ev
 
     def tool_uses(self):

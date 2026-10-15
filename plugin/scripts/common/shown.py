@@ -691,6 +691,25 @@ def draft_rows_missing(rules, visible_lines) -> list[str]:
     return bad
 
 
+ALL_CLEAR_SKIP = "해당 없음"
+
+
+def draft_all_clear(rules) -> bool:
+    """초안 검증 결과가 전부 통과다: 규칙 행이 있고, 모두 pass이거나 사유가 정확히 "해당 없음"인 skipped이며, review_required·
+    allow-cause 초안이 없다(fail·needs-approval·`fixture 없음`·pending 등은 아니다). 이런 표는 stage 전에 보이지 않아도 push 확인
+    화면의 "검증 결과"(승인 전 표시를 hook이 본다)로 갈음한다(10/14 사용자 결정)."""
+    rows = [r for r in rules or [] if isinstance(r, dict)]
+    if not rows:
+        return False
+    for r in rows:
+        status = r.get("status")
+        if r.get("review_required") or any(r.get(k) for k in r if "allow_cause" in str(k)):
+            return False
+        if not (status == "pass" or (status == "skipped" and str(r.get("reason") or "").strip() == ALL_CLEAR_SKIP)):
+            return False
+    return True
+
+
 def visible_lines(chunks) -> list[str]:
     return [norm_line(ln) for c in chunks for ln in str(c).splitlines()]
 

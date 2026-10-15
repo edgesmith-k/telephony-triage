@@ -54,8 +54,12 @@ REPORT = """## MOCK-1 분석
 """
 MUST = "로그 범위: 2026-09-20T05:30:00.000Z ~ 2026-09-20T05:30:29.900Z (일부만 포함), 시계 이상 없음"
 STEP7 = ["DATA-001-01로 기록", "다른 기존 원인", "새 원인", "기록하지 않음"]
+# 전부 통과가 아닌 표(R2 `fixture 없음`): stage 전에 보여야 한다. 전부 통과한 표(DRAFT_CLEAR)는 push 확인 화면으로 갈음한다
 DRAFT_OUT = json.dumps({"rules": [{"id": "R1", "status": "pass", "reason": "대상 1개 통과"},
+                                  {"id": "R2", "status": "skipped", "reason": "fixture 없음", "review_required": True},
                                   {"id": "R5", "status": "skipped", "reason": "해당 없음"}]}, ensure_ascii=False)
+DRAFT_CLEAR = json.dumps({"rules": [{"id": "R1", "status": "pass", "reason": "대상 1개 통과"},
+                                    {"id": "R5", "status": "skipped", "reason": "해당 없음"}]}, ensure_ascii=False)
 
 
 # --- transcript 만들기(실제 형식) -----------------------------------------------------------------------------
@@ -255,7 +259,7 @@ def test_pre_ask_draft_table(tmp_path):
     path = write(tmp_path, prompt("p"), bash("d", DRAFT_CMD, DRAFT_OUT))
     out = pre("pre-ask", path, ASK, {"question": "초안 검증 R1~R5 통과. 진행할까요?"})
     assert decision(out) == "deny" and "규칙마다 한 행" in out["hookSpecificOutput"]["permissionDecisionReason"]
-    table = "| R1 | 통과 | 대상 1개 통과 |\n| R5 | 건너뜀 | 해당 없음 |\n진행할까요?"
+    table = "| R1 | 통과 | 대상 1개 통과 |\n| R2 | 건너뜀 | fixture 없음 |\n| R5 | 건너뜀 | 해당 없음 |\n진행할까요?"
     assert pre("pre-ask", path, ASK, {"question": table}) is None
 
 
@@ -287,7 +291,7 @@ def test_pre_bash_stage_after_unshown_draft(tmp_path):
     path = write(tmp_path, prompt("p"), bash("d", DRAFT_CMD, DRAFT_OUT), say("초안 검증을 통과했습니다."))
     out = pre("pre-bash", path, "Bash", {"command": STAGE_CMD})
     assert decision(out) == "deny" and "초안 검증표를 보이지 않고 stage" in out["hookSpecificOutput"]["permissionDecisionReason"]
-    ok = write(tmp_path, prompt("p"), bash("d", DRAFT_CMD, DRAFT_OUT), say("| R1 | pass | 대상 1개 통과 |\n| R5 | skipped | 해당 없음 |"),
+    ok = write(tmp_path, prompt("p"), bash("d", DRAFT_CMD, DRAFT_OUT), say("| R1 | pass | 대상 1개 통과 |\n| R2 | skipped | fixture 없음 |\n| R5 | skipped | 해당 없음 |"),
                name="ok.jsonl")
     assert pre("pre-bash", ok, "Bash", {"command": STAGE_CMD}) is None
 
@@ -303,7 +307,7 @@ def test_post_reminds_full_output(tmp_path):
     assert f"전문({len(shown.screen_lines(SCREEN))}줄)" in ctx["additionalContext"]
     assert shown.MARKER not in ctx["additionalContext"]               # 막은 횟수 표식과 섞이지 않는다
     out, _ = hook("post", {"tool_name": "Bash", "tool_input": {"command": DRAFT_CMD}, "tool_response": {"stdout": DRAFT_OUT}})
-    assert "규칙마다 한 행(2행" in out["hookSpecificOutput"]["additionalContext"]
+    assert "규칙마다 한 행(3행" in out["hookSpecificOutput"]["additionalContext"]
     run = _job(tmp_path)[1]["message"]["content"][0]["content"]
     out, _ = hook("post", {"tool_name": "Bash", "tool_input": {"command": "python3 /p/scripts/triage.py run MOCK-1"},
                            "tool_response": {"stdout": run}})
@@ -687,3 +691,31 @@ def test_blind_retry_ignores_description_and_marks_stage_retry(tmp_path):
 
 
 RETRY = "방금 거부된 것과 똑같은 호출이다"
+
+
+# --- 전부 통과한 초안 표: push 확인 화면의 "검증 결과"로 갈음한다(10/14 사용자) ------------------------------------------
+
+def test_all_clear_draft_needs_no_table_before_stage(tmp_path):
+    path = write(tmp_path, prompt("p"), bash("d", DRAFT_CMD, DRAFT_CLEAR), say("초안 검증을 통과했습니다."))
+    assert pre("pre-bash", path, "Bash", {"command": STAGE_CMD}) is None          # stage를 막지 않는다
+    assert pre("pre-ask", path, ASK, {"question": "진행할까요?"}) is None           # 질문도 막지 않는다
+    assert stop(path, "초안 검증을 통과했습니다.") is None
+    out, _ = hook("post", {"tool_name": "Bash", "tool_input": {"command": DRAFT_CMD}, "tool_response": {"stdout": DRAFT_CLEAR}})
+    assert out is None                                                             # 표를 붙이라는 안내도 없다
+    # push 확인 화면은 그대로 본다: 승인 전에 화면(검증 결과 포함)을 보이지 않았으면 publish를 막는다
+    pub = write(tmp_path, prompt("p"), bash("d", DRAFT_CMD, DRAFT_CLEAR), say("통과."), bash("s", STAGE_CMD, SCREEN),
+                say(SUMMARY + " 승인할까요?"), prompt("승인"), name="pub.jsonl")
+    assert decision(pre("pre-bash", pub, "Bash", {"command": PUBLISH_CMD})) == "deny"
+
+
+def test_draft_all_clear_rule():
+    ok = [{"id": "R1", "status": "pass"}, {"id": "R5", "status": "skipped", "reason": "해당 없음"}]
+    assert shown.draft_all_clear(ok)
+    assert not shown.draft_all_clear([])
+    for bad in ({"id": "R4", "status": "fail", "reason": "다른 유형"},
+                {"id": "R2", "status": "skipped", "reason": "fixture 없음"},
+                {"id": "R3", "status": "skipped", "reason": "시그니처 없음(pending)"},
+                {"id": "R5", "status": "needs-approval", "reason": "이벤트 변경"},
+                {"id": "R1", "status": "pass", "review_required": True},
+                {"id": "R4", "status": "pass", "allow_cause_drafts": [{"op": "allow-cause"}]}):
+        assert not shown.draft_all_clear(ok + [bad]), bad

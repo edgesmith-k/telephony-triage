@@ -16,7 +16,8 @@ Bash·Read 출력은 사용자에게 보이지 않는다. push 확인 화면(`##
   질문(또는 사용자 입력) 사이에 화면 전체가 보였는지 본다. 빠지면 거부(승인 질문 전에 화면을 보이지 않았다). 화면을 못 찾으면
   판정하지 않는다 — 단 그 해시의 화면이 어느 도구 출력에도 없는데 화면을 낸 호출(stage·summary / render)이 기록에 있으면 한 번
   거부하고 `summary <wt> --format markdown`(render)을 파이프 없이 다시 내게 한다. `db_pr.py stage` 앞에 열린 초안 검증표가
-  보이지 않았어도 거부한다(그 창은 stage로 닫힌다).
+  보이지 않았어도 거부한다(그 창은 stage로 닫힌다). 전부 통과한 초안 표(`shown.draft_all_clear`)는 의무가 아니다 — push 확인
+  화면의 "검증 결과"로 갈음한다(10/14 사용자).
 - `post`(PostToolUse Bash): 결과에 화면·리포트·초안 검증 결과가 있으면 `additionalContext`로 "이 출력은 사용자에게 안 보인다,
   다음 메시지에 전문을 글자 그대로" 안내만 한다.
 
@@ -334,6 +335,13 @@ def capped_message(obs) -> str:
 
 # --- 모드 ---------------------------------------------------------------------------------------------------
 
+def obligations(seq, read_file=None, job_dir=None):
+    """`shown.obligations`에서 전부 통과한 초안 표(`shown.draft_all_clear`)를 뺀 것: 그 표는 push 확인 화면의 "검증 결과"로
+    갈음한다(승인 전 표시는 pre-bash·Stop이 화면으로 본다, 10/14 사용자 결정). fail·`fixture 없음` 등이 든 표는 그대로."""
+    return [ob for ob in shown.obligations(seq, read_file, job_dir)
+            if not (ob.kind == "draft" and shown.draft_all_clear(ob.rules))]
+
+
 def _checked(seq, obs, ts, *, report_ok=True):
     for ob in obs:
         if not ob.open:
@@ -412,7 +420,7 @@ def mode_stop(inp) -> dict | None:
     ts = turn_start(seq)
     if ts is None:
         return None
-    obs = shown.obligations(seq, read_file, job_dir_of(seq))
+    obs = obligations(seq, read_file, job_dir_of(seq))
     last = inp.get("last_assistant_message")
     final = last if isinstance(last, str) and last else last_text(seq, ts)
     found = []
@@ -450,7 +458,7 @@ def mode_pre_ask(inp) -> dict | None:
     ts = turn_start(seq)
     if ts is None:
         return None
-    obs = shown.obligations(seq, read_file, job_dir_of(seq))
+    obs = obligations(seq, read_file, job_dir_of(seq))
     ask = shown.ask_text(tool_input)
     found = []
     for ob in _checked(seq, obs, ts, report_ok=shown.step7_question(tool_input)):
@@ -526,7 +534,7 @@ def mode_pre_bash(inp) -> dict | None:
             found.append((ob, miss))
             texts.append(approval_reason)
     if stage:
-        for ob in shown.obligations(seq):
+        for ob in obligations(seq):
             if ob.kind == "draft" and ob.open:
                 miss = shown.missing(ob, shown.visible_between(seq, ob.start + 1))
                 if miss:
@@ -574,7 +582,7 @@ def mode_post(inp) -> dict | None:
             found.append((KIND_NAME[kind], f"전문({len(shown.screen_lines(ms[-1].group(0)))}줄)", "승인 질문"))
     if shown.DRAFT.search(cmd):
         rules = shown.draft_rules(out)
-        if rules:
+        if rules and not shown.draft_all_clear(rules):     # 전부 통과한 표는 push 확인 화면으로 갈음한다
             found.append((KIND_NAME["draft"], f"규칙마다 한 행({len(rules)}행, 통과가 아니면 사유)", "질문"))
     report = text if shown.REPORT_HEAD.search(text) else ""
     must = []

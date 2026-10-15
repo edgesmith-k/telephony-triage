@@ -1951,6 +1951,29 @@ def test_draft_shown_per_rule(tmp_path, shown, ok):
     assert got is ok, ev
 
 
+DRAFT_CLEAR = json.dumps({"rules": [{"id": "R1", "status": "skipped", "reason": "해당 없음"},
+                                    {"id": "R4", "status": "pass", "reason": "전체 fixture 3개 기대값 유지"}]},
+                         ensure_ascii=False) + "\nEXIT 0"
+
+
+def test_draft_shown_all_clear_via_push_screen(tmp_path):
+    """전부 통과한 표는 stage 전에 보이지 않았어도 첫 push 확인 화면(검증 결과 행)이 승인 질문까지 보였으면 갈음한다(10/14)."""
+    ctx = _vis_ctx(tmp_path, [_bash("d", DRAFT_CMD, DRAFT_CLEAR), ("text", "초안 검증 통과."), _bash("s", STAGE_CMD, SCREEN),
+                              _ask("q", SCREEN + "\n승인할까요?")], "clear")
+    ok, ev = ctx.draft_shown()
+    assert ok and "push 확인 화면으로 갈음(전부 통과" in ev, ev
+    ctx = _vis_ctx(tmp_path, [_bash("d", DRAFT_CMD, DRAFT_CLEAR), ("text", "초안 검증 통과."), _bash("s", STAGE_CMD, SCREEN),
+                              _ask("q", "변경 2건, 검증 통과. 승인할까요?")], "summarized")
+    ok, ev = ctx.draft_shown()
+    assert ok is False and "push 확인 화면" in ev, ev                      # 화면도 요약했다
+    ctx = _vis_ctx(tmp_path, [_bash("d", DRAFT_CMD, DRAFT_CLEAR), ("text", "초안 검증 통과."), _bash("s", STAGE_CMD, SCREEN)],
+                   "noask")
+    assert ctx.draft_shown()[0] is False                                    # 승인 질문까지 간 화면이 없다
+    ctx = _vis_ctx(tmp_path, [_bash("d", DRAFT_CMD, DRAFT_OUT), ("text", "초안 검증 통과."), _bash("s", STAGE_CMD, SCREEN),
+                              _ask("q", SCREEN + "\n승인할까요?")], "failed")
+    assert ctx.draft_shown()[0] is False                                    # fail이 든 표는 stage 전에 보여야 한다
+
+
 def test_draft_shown_unreadable_is_manual_and_missing_is_false(tmp_path):
     piped = DRAFT_CMD.replace("--json; echo EXIT $?", "--json | python3 -c 'print(1)'")
     ctx = _vis_ctx(tmp_path, [_bash("d", piped, "요약: 일부 실패"), ("text", DRAFT_TABLE)], "piped")
