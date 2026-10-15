@@ -797,13 +797,31 @@ def obligations(seq, read_file=None, job_dir=None, *, script_only: bool = True) 
     return out
 
 
+REF_TAIL = re.compile(r"\s*\(f\d+:L\d+(?:[,\s]+f\d+:L\d+)*\)\s*$")
+CLOCK_EVIDENCE = "시계 이상 구간의 근거"
+
+
+def _relax(line: str) -> str:
+    """리포트 줄 비교용: 백틱과 줄 끝 로그 위치 참조(` (f0:L2)`·` (f0:L2, f1:L9)`)를 뗀다."""
+    return REF_TAIL.sub("", str(line).replace("`", ""))
+
+
+def report_uncovered(core, chunks, must_show=()) -> list[str]:
+    """리포트 결정적 줄 중 보인 글에 없는 것(글머리·굵게 무시, `uncovered`). 백틱과 줄 끝 `(fN:Ln)` 참조는 양쪽에서 떼고 비교한다 —
+    단 must_show에 시계 이상 구간의 근거 줄이 있으면(재정렬 기준이라 어느 줄인지가 근거다) 참조까지 그대로 본다."""
+    if any(CLOCK_EVIDENCE in str(m) for m in must_show or ()):
+        return uncovered(core, chunks, bullets=True)
+    relaxed = ["\n".join(_relax(ln) for ln in str(c).splitlines()) for c in chunks]
+    return [ln for ln in core if uncovered([_relax(ln)], relaxed, bullets=True)]
+
+
 def missing(ob: Obligation, chunks) -> list[str]:
     """ob의 빠진 것: 화면 줄 / 리포트 결정적 줄(글머리·굵게 무시) + 글자 그대로 없는 must_show / 보인 행이 없는 규칙."""
     if ob.kind == "draft":
         return draft_rows_missing(ob.rules, visible_lines(chunks))
     if ob.kind == "report":
         raw = "\n".join(str(c) for c in chunks)
-        return uncovered(ob.lines, chunks, bullets=True) + [m for m in ob.must_show if m not in raw]
+        return report_uncovered(ob.lines, chunks, ob.must_show) + [m for m in ob.must_show if m not in raw]
     return uncovered(ob.lines, chunks)
 
 

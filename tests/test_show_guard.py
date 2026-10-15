@@ -217,7 +217,9 @@ def test_stop_report_missing_evidence_or_must_show_blocks(tmp_path):
     run = _job(tmp_path)
     full = REPORT + "\n" + MUST + "\n어떻게 기록할까요?"
     assert stop(write(tmp_path, prompt("p"), run, say(full)), full) is None
-    short = REPORT.replace(" (f0:L6)", "") + "\n" + MUST
+    short = REPORT.replace("reasons: DATA_DISABLED", "reasons: 데이터 꺼짐") + "\n" + MUST
+    noref = REPORT.replace(" (f0:L6)", "").replace("enabled=false", "`enabled=false`") + "\n" + MUST   # 줄 끝 참조·백틱은 봐준다
+    assert stop(write(tmp_path, prompt("p"), run, say(noref), name="noref.jsonl"), noref) is None
     out = stop(write(tmp_path, prompt("p"), run, say(short)), short)
     assert out["decision"] == "block" and "분석 리포트를 요약했다(빠진 줄 1/5)" in out["reason"] and "must_show" in out["reason"]
     nomust = REPORT

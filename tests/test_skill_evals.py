@@ -1908,6 +1908,14 @@ def test_report_shown_with_reformatted_bullets(tmp_path):
     assert ctx.report_shown("MOCK-1")[0] is False
 
 
+def test_report_shown_ignores_trailing_refs_and_backticks(tmp_path):
+    """줄 끝 `(fN:Ln)` 참조와 백틱은 양쪽에서 떼고 본다(show_guard와 같다, `shown.report_uncovered`)."""
+    relaxed = SHOWN_REPORT.replace(" (f0:L2)", "").replace("notifyDataEnabledChanged", "`notifyDataEnabledChanged`")
+    ctx = _report_ctx(tmp_path, "relaxed", [_bash("t", TRIAGE_CMD, "{}"), _ask("q", relaxed + "\n기록할까요?", STEP7)])
+    ok, ev = ctx.report_shown("MOCK-1")
+    assert ok, ev
+
+
 def test_report_shown_prefers_report_read_in_window(tmp_path):
     """다시 돌린 분석: 창 안에서 읽은 리포트가 기준이고 JOB/report.md(지난 실행)는 보지 않는다."""
     fresh = REPORT.replace("DATA-001-01 Data disabled", "DATA-001-02 Data roaming disabled")

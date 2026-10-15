@@ -119,7 +119,7 @@ plugin 모드 자식은 세션 transcript를 남기고(`--no-session-persistence
   창 = 화면 ~ publish·discard(post는 `issue_post approve`)·해시가 다른 다음 화면(다시 stage·render)·기록 끝. 창 안 마지막 `ask_user`까지 모든 줄이 보이고 그 질문이 있어야 통과다
   (같은 해시를 다시 `cat`해도 새 창이 아니다). 화면이 나온 호출 자체도 창이다: `stage …; publish …`·`render …; approve …`를 한 Bash로 부르면 창이 그 호출에서 끝나 보인 글·질문이 없으므로 실패다. publish로 끝난 창은 `--approved <hash>`가 그 화면의 `approved_hash`와 같아야 한다(그 화면을 승인한 publish). 화면 내용 항목(`screen_has`, 예: e2 `NEW-CAUSE-1 → DATA-001-03`)은 화면을 요약 없이 보인 것과 스크립트 화면의 문구를 함께 본다.
 - 리포트(`Ctx.report_shown`): 창 = 마지막 `triage.py run` ~ Step 7 질문(포함)·첫 stage. 창 안에서 읽은 `## <KEY> 분석` 중 가장 긴 결과(head·grep 일부 재열람은 기준이 아니다, 없으면 `JOB/report.md`)의 결정적 줄(분류 후보·근거 로그와 하위 줄·로그 범위 등, `TODO(LLM)` 줄 제외)이
-  글머리(`- `·`* `)·굵게(`**`)를 무시하고 모두 보였고, `analysis.json` `must_show` 줄은 글자 그대로 있어야 한다.
+  글머리(`- `·`* `)·굵게(`**`)·백틱·줄 끝 로그 위치 참조(` (f0:L2)`, 양쪽에서 뗀다 — must_show에 "시계 이상 구간의 근거"가 있으면 참조까지 그대로)를 무시하고 모두 보였고, `analysis.json` `must_show` 줄은 글자 그대로 있어야 한다(`shown.report_uncovered`, show_guard도 같다).
 - 초안 검증표(`Ctx.draft_shown`): 첫 stage 전 마지막 `db_verify rules --draft` 결과(e42는 fail 행이 든 첫 결과 — 허용 뒤 다시 돌린 초안은 통과라서)의 규칙마다 그 규칙 ID만 든(사유 글 제외) 보인 줄에 상태 표시가 있고, 통과가 아니면 사유가 있고 ✅가 없어야 한다
   ("R1~R4 통과"처럼 묶은 줄은 인정하지 않는다). 결과를 읽을 수 없게 가공했으면 수동 채점이다. 전부 통과한 표(모든 행이 pass이거나 사유가 정확히 `해당 없음`인 skipped, `review_required`·needs-approval·allow-cause 없음, `shown.draft_all_clear`)는
   stage 전에 보이지 않았어도 첫 stage 뒤 첫 push 확인 화면 창(화면 뒤 ~ 승인 질문 포함)에 규칙 행이 모두 보였으면 통과다(근거 "push 확인 화면으로 갈음(전부 통과)", 10/14 사용자 결정 — show_guard도 그 표에는 stage 전 의무를 두지 않는다).

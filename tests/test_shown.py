@@ -252,3 +252,26 @@ def test_denied_accepts_pretooluse_content_and_not_run_skips_calls():
     assert shown.not_run(guard) and not shown.denied(guard)
     seq = [bash("s", STAGE_CMD, SCREEN), tool("p", "Bash", {"command": PUBLISH_CMD}, hook_text, True)]
     assert shown.bash_index(seq, shown.PUSH_END) == [] and shown.screens(seq, "push")[0]["end_kind"] == "end"
+
+
+def test_report_uncovered_relaxes_refs_and_backticks_unless_clock_evidence():
+    core = ["- 근거 로그 (마스킹, 슬롯 phone 0):",
+            "  - 2026-09-20T05:30:03.000Z DSMGR-0 notifyDataEnabledChanged: enabled=false (f0:L2, f1:L7)"]
+    shown_text = "- 근거 로그 (마스킹, 슬롯 phone 0):\n  - 2026-09-20T05:30:03.000Z DSMGR-0 `notifyDataEnabledChanged: enabled=false`"
+    assert shown.report_uncovered(core, [shown_text]) == []
+    assert shown.report_uncovered(core, [shown_text.replace("enabled=false", "꺼짐")]) == [core[1]]
+    assert shown.report_uncovered(core, [shown_text.replace("- 근거 로그 (마스킹, 슬롯 phone 0):\n", "")]) == [core[0]]  # 머리 줄은 그대로
+    clock = ["시계 이상 구간의 근거: 1위의 순서·시간창 판정은 시각 재정렬 기준"]
+    assert shown.report_uncovered(core, [shown_text], clock) == [core[1]]          # 시계 이상 근거면 참조까지 본다
+    ob = shown.Obligation("report", "report:x", 0, 1, "end", lines=core, must_show=[])
+    assert shown.missing(ob, [shown_text]) == []
+
+
+def test_plan_tag_anchors_at_draft_call():
+    """`--plan`은 db_verify rules 호출부터 찾는다: 앞 `&&` 명령이나 echo 글 안의 `--plan`은 태그가 아니다."""
+    def tag(cmd):
+        return shown.plan_tag({"input": {"command": cmd}})
+    assert tag(DRAFT_CMD) == "MOCK-1/plan.json"
+    assert tag("python3 /p/x.py check --plan /w/OTHER/plan.json && " + DRAFT_CMD) == "MOCK-1/plan.json"
+    assert tag('echo "다시 --plan /w/OTHER/plan.json 로" && ' + DRAFT_CMD) == "MOCK-1/plan.json"
+    assert tag(DRAFT_CMD + ' && echo "--plan /w/OTHER/plan.json"') == "MOCK-1/plan.json"

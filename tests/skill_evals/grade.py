@@ -301,7 +301,7 @@ class Ctx:
             return False, f"리포트 없음(창 seq {start}→{end} 도구 결과·JOB/report.md)"
         core = w["core"]
         chunks = self.visible_between(start, end)
-        missing = _uncovered(core, chunks, bullets=True)
+        missing = shown.report_uncovered(core, chunks, w["must"])     # 백틱·줄 끝 (fN:Ln)는 떼고(시계 이상 근거면 그대로)
         raw = "\n".join(chunks)
         must = w["must"] if must_show else []
         must_miss = [m for m in must if m not in raw]
