@@ -14,22 +14,22 @@
 - 테스트는 `tools/related_tests.py --run`(관련만). 전체는 도구가 full이라 할 때·반입 직전·요청 시.
 - 진행 중 판단은 Fable 결정 에이전트에게 묻는다(10/06 사용자 지정). 원칙상 사용자 승인 대상(이슈 DB push, main 병합·태그 등 사용자가 지시하지 않은 외부 동작)은 사용자에게.
 
-## 진행 상태 (10/14)
+## 진행 상태 (10/15)
 
-- 모드: **사외 초안**. Phase **D0, 1~13** 완료, 반입 전 보강·개선·리뷰 트랙(S·I·X·3C~3F·W0~W12·V1~V7·L1~L3·3차 검토) 완료(history). 최신 반입본 import-20261014c(f4d98d5, 사내 전달). main 병합 PR #8~#51.
-- 10/14 오후·저녁: 화면 요약을 **hook으로 강제**(`show_guard.py`, Stop·질문 도구·publish/approve/stage 앞, 판정은 채점기와 공유하는 `common/shown.py`, 실패 시 통과)·**사내 S-2 축소**(결정 (q)). 재측정(24개×2, Sonnet): 표시 실패 22/48 → **1/48**, 전체 실패 3/48, hook 되돌림 46회 중 정당 38·오탐 8(기록 쓰기 지연 → 고침). 상세 history "10/14 저녁". 전체 pytest 1,910 통과, eddd443 push(main 미병합).
-- 사내 확인 항목: `TODO(SITE)` **104곳** — `python3 tools/list_site_todos.py`. `REVIEW-OPEN.md` 0건.
-- 사내 시작: **"사내 설정 시작"** → `python3 tools/site_step.py`가 `SITE_PROFILE.md`(트래커 jira)를 만들고 S-1~S-7을 한 단계씩 낸다(결정 (o)).
-- 안내서(사람용 HTML): `docs/telephony-triage-guide.html` (공유본 https://claude.ai/artifact/1jov1Et4dQUMauFr6aoxWG). 역할별 문서 19개: `docs/materials/00-index.html`
+- 모드: **사외 초안**. Phase **D0, 1~13** 완료, 반입 전 보강 트랙 완료(history). 최신 반입본 import-20261014c(f4d98d5, 사내 전달). main 병합 PR #8~#51.
+- 10/14 밤~10/15 **H 사외 재측정 완료**: P0(`--draft` 상대 경로가 사용자 clone에 worktree 생성) 수정, hook 거부 문구·재시도·전부 통과 초안 갈음, 채점기 오판 수정 뒤 전체 재측정(h3-*·h4-u). 실패 11 → 0, hook 거부 52 → 29, 한도 도달 10 → 0. `offsite_results.json`(fb26573): 사외 fail 0·최신 안전 위반 0, 미결정 11(사내 대상 9 + 15·63). 상세 history "10/14 밤~10/15". 전체 pytest 1,956 통과. 브랜치 `ccr-d022623a-2f4vdx`(main 미병합).
+- 안내서 "모델 선택": Sonnet 5.5 기준, 다른 모델 우려·관찰 수치(사용자 10/14).
+- `TODO(SITE)`: `python3 tools/list_site_todos.py`. `REVIEW-OPEN.md` 0건.
+- 사내 시작: **"사내 설정 시작"** → `python3 tools/site_step.py`(결정 (o)).
+- 안내서 HTML: `docs/telephony-triage-guide.html`(공유본 https://claude.ai/artifact/1jov1Et4dQUMauFr6aoxWG, 모델 절 미반영), `docs/materials/00-index.html`
 
 ## 남은 일 (사외 전용)
 
 | ☐ | 항목 | 메모 |
 |---|---|---|
-| ☐ H | **사외 재측정 → `offsite_results.json` 재생성 — 사용자 승인됨(10/14, ≈$24), 다음 세션은 바로 실행** | 절차·범위·명령: `docs/development/H_OFFSITE_REMEASURE.md`(57개 ×1 + 68·70, 사내 대상 11·53·54 제외). 끝나면 I → main 병합 PR(병합·반입은 사용자 확인) |
-| ☐ I | show_guard 남은 P2 | 재리뷰(eddd443) P2 4건(한도 세는 방식) — history "10/14 저녁" |
-| ☐ F | 새 반입 묶음(H 뒤, main 병합 PR 먼저) | `tools/make_bundle.py --label import-<날짜>`. 사내 적용은 `SITE_INSTALL.md` 8절 |
-| ☐ G | 범용판 별도 레포 — **보류(10/07 사용자)** | 재개는 사용자가 정한다. 계획은 history "10/14 오후" |
+| ☐ F | 새 반입 묶음 — **main 병합 PR 먼저(사용자 확인)** | `tools/make_bundle.py --label import-<날짜>`. 사내 적용은 `SITE_INSTALL.md` 8절 |
+| ☐ G | 범용판 별도 레포 — **보류(10/07 사용자)** | 재개는 사용자가 정한다 |
+| ☐ R | 반입 뒤 후보: 표시 판정 단순화 | `shown.py`가 자유 형식 출력을 정규식으로 읽어 경계 사례가 이어짐 → 스크립트가 보일 블록을 파일로 내고 hook은 그것과만 비교. P2는 history "10/14 밤~10/15" |
 
 ## 사내로 넘긴 것
 
@@ -50,6 +50,8 @@
 
 ## 결정
 
+- (r) 고칠 범위(10/15, 사용자): 리뷰·재측정에서 **P0·P1(안전 위반·기능 결함)만** 고치고 P2는 "반입 뒤 후보"에 적는다. 질문 순서·횟수 행은 안전 행이 아니다(게시 eval 61·67, 쓰기 순서 행은 안전 행). eval 18 stage 자체 검증 갈음·전부 통과 초안 표 push 화면 갈음(사용자 10/14·15).
+
 - (p) 수정 절차(10/14, 사용자): 수정할 게 나오면 **계획(Opus) → 수정(Opus) → 리뷰(별개 Opus, P0·P1이면 다시) → 테스트(Sonnet)** 를 단계별 에이전트로, 테스트 통과 뒤 커밋. 채점기: 확인 화면 안 내용 행도 **화면 전체** 기준(요약이면 실패), 순서·분류 안전 행은 표시로 실패시키지 않음.
 
 - (q) 사내 S-2 축소(10/14, 사용자): 사내 대상 = hook·권한·적대 입력·외부 쓰기 승인·사내 측정에 걸리는 11개(`pending.json` `site`), 사내 모델이 다르면 +7. 나머지는 `offsite_results.json`(도구 생성)으로 갈음, 사외 실패·미결정은 사유 면제, 안전 위반은 면제 불가.
@@ -60,7 +62,7 @@
 - (d) 반입 전에는 v1 스키마를 직접 고치고, 배포 뒤에는 항상 버전을 올린다(`06 §6.4`). (10/04)
 - (e) verify-fix 흔적: 코드·설정 수정 유형은 흔적 필수. 비코드 유형(user-setting·network·hw)에 흔적 시그니처가 둘 다 없을 때만 사용자 확인으로 판정하고 `verification.note`에 남긴다. (10/04, R9)
 - (f) 반입 전 사외에서 최대한 안정화·보완·개선한 뒤 반입한다. 사내 문자열 사람 검색은 생략(사내→사외 반출 불가). (10/05)
-- (g) eval 판정 관례: 변경 전·후를 같은 모델로, 1순위 동작·형식 오류 재시도, 2순위 토큰 W0 폭(출력 9.5%·비용 15.7%), 폭 밖이면 trace(호출 수)로 원인 확인. (10/06)
+- (g) eval 판정: 변경 전·후 같은 모델, 1순위 동작, 2순위 토큰 W0 폭(출력 9.5%·비용 15.7%). (10/06)
 - (i) eval은 변경과 관련된 최소만 사외에서 돌린다: 각 VP는 바꾼 스킬·흐름의 eval만, V 끝은 W 영향 미확인 목록 중 아직 관련 있는 것만 골라서. 사내 S-2는 사내 대상만(결정 (q)). (10/07, 사용자) 단, 실행 방식·공통 지침이 바뀌면 전체 + 사람 판정(10/14).
 - (h)(j)(k)(l) → history
 - (m) 플랫폼 분리 (10/11, 사용자): 동작·원인·해결책이 달라 이슈 DB를 플랫폼별로(합치기 안 안 씀), 추가는 디렉토리 + `platform.enabled`, lock은 플랫폼별("사용자·이슈 DB(플랫폼)별 한 번에 한 작업"), RF-4 유지. `17-platforms.md` §7.
