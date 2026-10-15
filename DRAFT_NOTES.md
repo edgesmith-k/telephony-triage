@@ -26,9 +26,9 @@
 
 | ☐ | 항목 | 메모 |
 |---|---|---|
-| ☐ K | **K 검토 완료 → 다음 세션 바로: P0·P1 수정**(결정 (p): 계획→수정→리뷰→테스트, 사용자 확인 후) | 결과 `docs/development/K_RESULT.md`: **P0-1** guard가 `${S}db_pr.py`·`$PY` 형태 publish에 ask 안 냄(eval 4건 승인 없이 push), P1-1~3. 고친 뒤 전체 테스트·`offsite_results.json`·묶음 재생성 |
-| ☐ L | **K 수정 뒤: 종합 개선 검토(관점 4개 Opus max 에이전트 병렬 + 종합)** | `K_L_REVIEW_PLAN.md`. 목록만 |
-| ☐ F | 반입 묶음 — **import-20261015(767cc4f)는 P0-1 때문에 태그하지 않는다** | K 수정 병합 뒤 `make_bundle.py --label import-<날짜>`로 다시, 태그는 사용자 |
+| ☑ K | **K 완료(10/15, 사용자 승인)**: P0-1·P1-1~3 수정(55d24a3), 3차 재리뷰 P0·P1 없음, 재채점·`offsite_results.json` 재생성(pass 59·fail 0·undecided 11), 전체 1,967 passed | `docs/development/K_RESULT.md`. 남은 P2는 반입 뒤 후보 |
+| ☐ L | **다음 세션 바로: 종합 개선 검토(관점 4개 Opus max 에이전트 병렬 + 종합)** | `K_L_REVIEW_PLAN.md`. 목록만 |
+| ☐ F | 반입 묶음 — **import-20261015(767cc4f)는 P0-1 때문에 태그하지 않는다** | L 반영·병합 뒤 `make_bundle.py --label import-<날짜>`로 다시, 태그는 사용자 |
 | ☐ G | 범용판 별도 레포 — **보류(10/07 사용자)** | 재개는 사용자가 정한다 |
 | ☐ R | 반입 뒤: 표시 판정 단순화 | 블록을 파일로 내고 hook은 그것과만 비교(L에서 같이 본다) |
 
