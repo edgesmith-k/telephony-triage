@@ -687,9 +687,12 @@ def obligations(seq, read_file=None, job_dir=None, *, script_only: bool = True) 
         block = "\n".join(f"| {r['id']} | {r.get('status')} | {norm_line(str(r.get('reason') or ''))} |" for r in rules)
         # 키는 계획 경로 인자와 결과 내용(규칙·상태·사유): 같은 작업에서 같은 결과로 다시 돌려도 같은 의무라 막는 횟수 한도를
         # 함께 쓴다. 다른 작업과 키가 같아도(`$J/plan.json`·전부 통과) 횟수는 작업 경계(마지막 triage run) 뒤에서만 센다.
-        # 경로는 따옴표·구분자를 벗기고 끝 두 마디(<KEY>/plan.json)만 쓴다: 표기만 바꿔 다시 돌려 한도를 새로 얻지 못하게
-        plan = re.search(r"--plan[= ]\s*(\S+)", command_of(seq[i]))
-        tag = "/".join(plan.group(1).strip("\"'").replace("\\", "/").split("/")[-2:]) if plan else ""
+        # 경로는 뒤 셸 구분자·따옴표를 벗기고 빈·`.` 마디를 뺀 끝 두 마디(<KEY>/plan.json)만 쓴다: 표기만 바꿔 다시 돌려
+        # 한도를 새로 얻지 못하게(공백 든 따옴표 경로도 통째로 — command_of는 그런 인용을 지우므로 원 명령에서 찾는다)
+        raw = strip_heredocs(str((seq[i].get("input") or {}).get("command", "")))
+        plan = re.search(r"--plan[= ]\s*(\"[^\"]*\"|'[^']*'|\S+)", raw)
+        parts = plan.group(1).rstrip(";&|)").strip("\"'").replace("\\", "/").split("/") if plan else []
+        tag = "/".join([p for p in parts if p not in ("", ".")][-2:])
         digest = hashlib.sha1(json.dumps([tag] + [[r.get("id"), r.get("status"), r.get("reason")]
                                                   for r in rules],
                                          ensure_ascii=False).encode("utf-8")).hexdigest()[:12]

@@ -253,6 +253,29 @@ def approval_reason(ob, miss) -> str:
 UNSEEN_BLOCKS = 1      # 화면이 도구 결과에 없던 승인: 한 번만 막는다(다시 낸 화면은 그다음부터 보통 판정)
 
 
+# issue_post.py approve의 값 있는 옵션(`--json`만 값 없음). 이름만 적는다: 옵션 글자 그대로면 test_ofono_skeleton이
+# 이 파일을 --platform을 받는 스크립트로 센다
+APPROVE_VALUED = {"--" + n for n in ("sha", "plugin-root", "platform")}
+
+
+def post_target(cmd: str) -> str | None:
+    """`issue_post.py approve`의 KEY 인자. 앞에 온 옵션(`--sha X`·`--sha=X`·`--json` 등)은 건너뛰고, 뒤 셸 구분자·따옴표는
+    벗긴다. 변수(`$K`)이거나 못 찾으면 None."""
+    m = shown.POST_END.search(cmd)
+    skip = False
+    for raw in (cmd[m.end():].split() if m else []):
+        tok = raw.rstrip(";&|)").strip("\"'")
+        if skip:
+            skip = False
+        elif tok in APPROVE_VALUED:
+            skip = True
+        elif tok and not tok.startswith("-"):
+            return None if tok.startswith("$") else tok
+        if raw.rstrip("\"'")[-1:] in (";", "&", "|", ")"):    # 이 명령의 끝
+            break
+    return None
+
+
 def unseen_reason(key: str, kind: str, cmd: str) -> str:
     """승인할 화면이 어느 도구 결과에도 없다: 화면을 다시 내는 명령을 알려 준다."""
     if kind == "push":
@@ -261,8 +284,8 @@ def unseen_reason(key: str, kind: str, cmd: str) -> str:
                else "`python3 S/db_pr.py summary <wt> --format markdown`")
         what = "push 확인 화면"
     else:
-        m = re.search(r"(\S*issue_post\.py)[\"']?\s+(?:--\S+\s+\S+\s+)*approve\s+(\S+)", cmd)
-        how = (f"`python3 {m.group(1)} render {m.group(2)} --fill JOB/post.fill.json`" if m
+        m = re.search(r"(\S*issue_post\.py)[\"']?\s+(?:--\S+\s+\S+\s+)*approve\b", cmd)
+        how = (f"`python3 {m.group(1)} render {post_target(cmd) or '<KEY>'} --fill JOB/post.fill.json`" if m
                else "`python3 S/issue_post.py render <KEY> --fill JOB/post.fill.json`")
         what = "게시 확인 화면"
     return (f"{shown.MARKER} {key} — 승인하려는 {what}이 어느 도구 출력에도 없다(리디렉션·`head`·`grep`·파일에서 해시를 읽음). "
@@ -412,8 +435,8 @@ def mode_pre_bash(inp) -> dict | None:
                 elif h:
                     key = f"post:{h[:16]}"
                 else:  # --sha가 변수: 게시 대상 키별로 한 번(고정 키면 뒤 작업이 앞 작업의 표식으로 한도에 걸린다)
-                    tgt = cmd[app[0].end():].split()
-                    key = "post:render:" + (tgt[0].strip("\"'") if tgt else "")
+                    tgt = post_target(cmd)
+                    key = f"post:render:{tgt}" if tgt else "post:render"
                 unseen.append((key, kind, cmd))
             continue
         w = pick[-1]

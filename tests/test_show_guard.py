@@ -587,6 +587,33 @@ def test_post_render_key_is_per_issue(tmp_path):
     out = pre("pre-bash", two, "Bash", {"command": approve("MOCK-1")}, tid="now1")
     assert decision(out) is None and shown.CAPPED in out["systemMessage"]                     # 같은 이슈: 한 번만
 
+
+def test_draft_tag_path_spellings():
+    """`//`·`./`·공백 든 따옴표 경로·Windows 경로·뒤 셸 구분자도 같은 계획이면 같은 키다."""
+    def key(plan):
+        cmd = f"python3 /p/scripts/db_verify.py rules --draft /w/D/draft --json --plan {plan}"     # 뒤 구분자를 시험하게 끝에
+        return shown.obligations(shown.parse_events([json.dumps(r, ensure_ascii=False) for r in bash("d", cmd, DRAFT_OUT)]))[0].key
+
+    base = key("/w/MOCK-9002/plan.json")
+    for plan in ["/w//MOCK-9002//plan.json", "./MOCK-9002/./plan.json", '"/my work/MOCK-9002/plan.json"',
+                 "'/my work/MOCK-9002/plan.json'", r"C:\w\MOCK-9002\plan.json", '"$W/MOCK-9002/plan.json");']:
+        assert key(plan) == base, plan
+
+
+def test_post_render_key_skips_flags_before_issue_key(tmp_path):
+    """argparse는 KEY 앞의 옵션도 받는다: 키는 옵션을 건너뛴 첫 인자(뒤 셸 구분자는 벗김), 다시 낼 render 명령도 그 키다."""
+    path = write(tmp_path, prompt("p"), bash("r", "python3 /p/scripts/issue_post.py render MOCK-1 --fill f.json --json | tail -1",
+                                              '"post_sha256": "' + "c" * 64 + '"'), prompt("게시"))
+    s = "python3 /p/scripts/issue_post.py approve "
+    for cmd, want in [(s + '--sha "$SHA" MOCK-1', "MOCK-1"), (s + "--sha=$SHA MOCK-1", "MOCK-1"),
+                      (s + '--json MOCK-2 --sha "$SHA"', "MOCK-2"), (s + '--platform android --sha "$SHA" MOCK-2', "MOCK-2"),
+                      (s + 'MOCK-1 --sha "$SHA";', "MOCK-1"), ('(' + s + '--sha "$SHA" MOCK-2)', "MOCK-2")]:
+        r = pre("pre-bash", path, "Bash", {"command": cmd})["hookSpecificOutput"]["permissionDecisionReason"]
+        assert r.startswith(shown.MARKER + " post:render:" + want + " "), (cmd, r)
+        assert f"issue_post.py render {want} --fill" in r, cmd
+    r = pre("pre-bash", path, "Bash", {"command": s + '"$K" --sha "$SHA"'})["hookSpecificOutput"]["permissionDecisionReason"]
+    assert r.startswith(shown.MARKER + " post:render ") and "render <KEY> --fill" in r      # 키도 변수: 고정 키
+
 def test_stage_deny_does_not_invite_a_new_question(tmp_path):
     path = write(tmp_path, prompt("p"), bash("d", DRAFT_CMD, DRAFT_OUT), say("초안 검증 통과."))
     r = pre("pre-bash", path, "Bash", {"command": STAGE_CMD})["hookSpecificOutput"]["permissionDecisionReason"]
