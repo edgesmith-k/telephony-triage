@@ -135,6 +135,7 @@ telephony-triage-plugin/                 # 개발 레포 루트
     │   ├── jira_bridge.py               # PostToolUse hook: Jira MCP 원문 → JOB/issue_raw.json, 모델에는 마스킹 요약. 승인 코멘트 게시 결과 → JOB/post.result.json (08-safety.md §9)
     │   ├── issue_post.py                # analyze Step 9: Jira 코멘트 본문(4칸) 렌더·승인 기록 (07-workflow.md §Step 9). 공용 판정은 common/issuepost.py
     │   ├── job_status.py                # 작업 상태 한 화면(읽기 전용, 로컬 기록만). 수집은 common/jobstatus.py (contracts.md §3.2)
+    │   ├── usage_stats.py               # 파일럿 지표(S-7, 읽기 전용, --json)
     │   ├── triage.py                    # analyze Step 0~4 + Step 5 resolve 드라이버 (contracts.md §3.2). CLI만. 구현은 triagelib/
     │   ├── triagelib/                   # core(상수·오류·Runner), cache(State·캐시 믹스인), anchor(실패 스텝·앵커 믹스인), report(fit·스키마 검사·report.md 믹스인), driver(Driver)
     │   └── migrations/                  # 0001_xxx.py … 스키마 버전별 마이그레이션
@@ -180,6 +181,7 @@ telephony-triage-plugin/                 # 개발 레포 루트
 | `triage.py` | **analyze 드라이버**: Step 0~4와 Step 5 `code_refs` resolve를 위 스크립트의 `main()`을 같은 프로세스에서 불러 순서대로 수행, `analysis.json`(≤4KB)·`report.md` 초안·`trace.jsonl`, 후보 없음·원인 미확인이면 Step 5-2 입력 `timeline.md`. `--analysis-only`면 기록하지 않는 분석 전용(쓰기 흐름의 사전 질문 생략, ok에서 lock 해제). 사용자 결정 지점은 `needs_input`. 자체 판정 로직은 없다(요약·절삭만) | analyze(SKILL.md), `tools/offline_eval.py`(`--offline-db`) |
 | `issue_post.py` | analyze Step 9: `analysis.json`·`issue.json`·`plan.json`(마스킹본)으로 PROBLEM/CAUSE/NEXT ACTION/ANALYSIS 코멘트 본문을 렌더(결정적 칸 + 검증한 LLM 칸, 재마스킹)해 확인 화면을 내고(`render`), 승인한 본문의 해시를 기록하고 호출할 도구·인자를 낸다(`approve`). Jira를 직접 부르지 않고 lock·git을 건드리지 않는다 | analyze Step 9(`post.md`) |
 | `job_status.py` | 작업 상태 한 화면(`status` 커맨드): `<work_dir>/<KEY>/` 기록·`session.lock`·`wt/` git 읽기로 단계·막힌 것·다음 할 일. 읽기 전용(mkdir·fetch·lock·git 쓰기 없음), 원격은 보지 않는다 | `status` |
+| `usage_stats.py` | 파일럿 지표: PR까지 시간·중도 취소·질문 수 근사(work_dir 읽기만) | S-7, 런북 §10 |
 
 - 검사 로직은 각 담당 스크립트에만 둔다. 다른 스크립트는 호출만 한다.
 - `record`는 매처와 코드 분석을 쓰지 않지만 쓰기 경로(`db_pr stage --then-summary` → `publish --commit --and-discard`)와 검사는 analyze와 같다 (`07-workflow.md §record`).

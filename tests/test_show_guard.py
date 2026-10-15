@@ -617,6 +617,29 @@ def test_real_child_transcript_format(tmp_path):
     assert out is None and "transcript" in err
 
 
+def test_hook_replay_counts_without_content(tmp_path, monkeypatch):
+    """M-3: tools/hook_replay.py가 기록된 세션의 결정 지점마다 guard·show_guard를 다시 판정하고 키·결정·빠진 줄 수만 낸다."""
+    sys.path.insert(0, str(REPO / "tools"))
+    import hook_replay
+    monkeypatch.setenv("TELEPHONY_TRIAGE_HOME", str(tmp_path / "home"))     # 이 PC의 사용자 config에 기대지 않는다
+    lines = (REAL / "eval2-session.jsonl").read_text(encoding="utf-8").splitlines()
+    ask = json.loads((REAL / "eval2-ask.json").read_text(encoding="utf-8"))
+    as_line = lambda inp: json.dumps(call(ask["tool_use_id"], ASK, inp)[0], ensure_ascii=False)  # noqa: E731
+    out = hook_replay.replay([lines + [as_line({"question": "변경 파일 5개, 검증 통과입니다. 승인할까요?"})]])
+    pts = out["points"]
+    assert [sum(p["hook"] == h for p in pts) for h in ("guard", "pre-bash", "pre-ask")] == [25, 16, 7]
+    last = pts[-1]
+    assert (last["hook"], last["decision"], last["recorded"]) == ("pre-ask", "deny", None)
+    assert last["keys"][0].startswith("push:") and last["missing"][0][0] > 0
+    assert out["summary"]["mismatch"] == 2        # 기록상 guard 규칙 10 거부 2건: 원문 파일이 지금 없어 allow (한계)
+    text = json.dumps(out, ensure_ascii=False)
+    assert "MOCK-" not in text and "push 전 확인" not in text and "db_pr" not in text
+    assert hook_replay.replay([lines + [as_line(ask["tool_input"])]])["points"][-1]["decision"] == "allow"
+    stop_lines = write(tmp_path, prompt("p"), bash("s", STAGE_CMD, SCREEN), say(SUMMARY)).read_text(encoding="utf-8").splitlines()
+    end = [p for p in hook_replay.replay([stop_lines])["points"] if p["hook"] == "stop"]
+    assert [(p["decision"], p["recorded"]) for p in end] == [("block", "ran")] and end[0]["keys"][0].startswith("push:")
+
+
 # --- sm4 재측정 반영: transcript 비동기 기록, 초안 키, stage 거부 문구 ------------------------------------------------
 
 def _late(path, delay, *rows):

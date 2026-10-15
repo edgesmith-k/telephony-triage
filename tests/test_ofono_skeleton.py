@@ -408,11 +408,11 @@ def test_rotated_files_are_joined(tmp_path):
 # -- 리뷰 3 반영: DB를 읽는 스크립트의 플랫폼 선택·대조 ---------------------------------------------------
 
 NINE = {"triage", "config", "db_pr", "db_verify", "issue_post", "code_roots", "db_add", "db_search", "db_review",
-        "job_status"}      # 이름은 그대로(9개 시절), job_status(읽기 전용 상태 화면) 포함 10개
+        "job_status", "usage_stats"}   # 이름은 그대로(9개 시절), job_status(읽기 전용 상태 화면)·usage_stats(S-7 지표) 포함 11개
 
 
 def test_platform_option_scripts():
-    """`--platform`을 받는 스크립트는 이 10개다. 스킬·커맨드 본문에서 `S/<script>.py … --platform`으로 나오는 스크립트는
+    """`--platform`을 받는 스크립트는 이 11개다. 스킬·커맨드 본문에서 `S/<script>.py … --platform`으로 나오는 스크립트는
     그 부분집합이어야 한다(문서가 실제로 없는 옵션을 붙이라고 하지 않게)."""
     import re
 

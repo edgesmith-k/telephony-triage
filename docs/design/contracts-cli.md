@@ -196,6 +196,12 @@ stdin: PostToolUse hook 입력 JSON (argparse 없음)
 |---|---|---|
 | — | `[<KEY>] [--format {json,markdown}] [--platform <이름>] [--plugin-root <PLUGIN_ROOT>] [--json]` | `key`: 작업 키(생략하면 lock 작업·단일 작업·후보); `--format`: markdown: 대상·단계·막힌 것·다음 할 일·관련 파일 (기본 json, --json과 함께 못 쓴다), 기본 json; `--platform`: 플랫폼(이슈 DB·파서·설정 묶음). 없으면 TT_PLATFORM > 사용자 config platform > site-defaults platform.name; `--json`: JSON 출력 (기본) |
 
+## `usage_stats.py`
+
+| 서브커맨드 | 사용법 | 옵션 설명 |
+|---|---|---|
+| — | `[--work-dir <WORK_DIR> \| --platform <이름>] [--json] [--plugin-root <PLUGIN_ROOT>]` | `--work-dir`: 기본: 선택 플랫폼의 사용자 config work_dir; `--platform`: 플랫폼(이슈 DB·파서·설정 묶음). 없으면 TT_PLATFORM > 사용자 config platform > site-defaults platform.name; `--json`: 집계 대상과 수치를 JSON 한 줄로(개수·시간만, 내용 없음) |
+
 ## `triage.py run` → analysis.json 키
 
 원본 `plugin/schemas/output/analysis.schema.json`. `키?`는 있을 때만, `(…)`는 설명, `[≤N]`은 목록 상한(`[]`는 상한 없는 객체 목록).

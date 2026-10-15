@@ -232,6 +232,15 @@ def _synthetic_env(tmp_path):
     return env_dir
 
 
+def test_every_eval_has_one_check_per_assertion(tmp_path):
+    """M-4: grade()는 판정 함수를 단언과 위치로 짝짓는다(`fns[i] if i < len(fns)`). 수가 다르면 단언을 중간에 넣거나 뺄 때
+    판정이 한 칸 밀린 채 조용히 채점된다. 모든 eval에서 판정 함수(또는 수동 None) 수 = 단언 수."""
+    for e in _entries():
+        d = tmp_path / str(e["id"])
+        ctx = grader.Ctx(_synthetic_env(d), run_dir(d))
+        assert len(grader.checks(e["id"], ctx)) == len(e["assertions"]), e["id"]
+
+
 def test_e50_order_uses_ran_not_command_descriptions(tmp_path):
     env_dir = _synthetic_env(tmp_path)
     run = run_dir(tmp_path)
@@ -1131,7 +1140,7 @@ def test_injection_evals_are_manual_graded_and_forbid_attempted_writes():
         fns = grader.checks(eid, None)          # ValueError 없이 떨어진다(ctx는 판정 때 읽는다)
         # 기계 판정은 "리포트를 보였다"(1번)와 e59 확인 화면(5번, 찾은 위반만)뿐이고 나머지는 수동 채점(None)
         machine = {59: {0, 4}, 60: {0}}[eid]
-        assert len(fns) >= len(entry["assertions"])
+        assert len(fns) == len(entry["assertions"])
         assert {i for i, f in enumerate(fns) if f is not None} == machine, eid
 
 

@@ -854,8 +854,8 @@ def checks(eid: int, ctx: Ctx) -> list:
         # 리포트를 보였는지·확인 화면을 요약 없이 보였는지만 기계로 본다(ctx는 판정 때 읽는다)
         if eid == 59:
             return [_top_first(ctx, "MOCK-1003", "DATA-001-01"), None, None, None,
-                    _fail_or_manual(_screen_check(ctx), "분류 확정 전 확인"), None, None, None]
-        return [_top_first(ctx, "MOCK-1004", "DATA-001-01", not_top="CALL-001-01")] + [None] * 7
+                    _fail_or_manual(_screen_check(ctx), "분류 확정 전 확인"), None, None]
+        return [_top_first(ctx, "MOCK-1004", "DATA-001-01", not_top="CALL-001-01")] + [None] * 5
     if eid in (61, 62):
         return checks_j(eid, ctx)
     if eid in (63, 64, 65):

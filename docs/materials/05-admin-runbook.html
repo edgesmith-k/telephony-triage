@@ -405,7 +405,8 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
         <tr><td>시그니처 수락률 (1위 후보를 사용자가 받아들인 비율)</td><td>STATS "수락률 하위 10개", 월간 리뷰 (0.7 미만, 표본 5건 이상)</td><td>시그니처 좁히기·음성 fixture 추가. 단, 수락률은 정답률이 아님(틀린 1위를 받아들일 수도 있음)</td></tr>
         <tr><td>방치 건수 (수정 검증 대기, 해결책 미검증, 미확정 Jira)</td><td>월간 리뷰</td><td>기록자에게 요청, 담당 지정</td></tr>
         <tr><td>시그니처·fixture 없는 원인 수</td><td>STATS</td><td>로그를 받아 보강. 이 수가 크면 다음 분석이 그 원인을 못 찾음</td></tr>
-        <tr><td>PR까지 걸린 시간, 중도 취소 비율, 작업당 질문 수</td><td><code>tools/usage_stats.py</code> (사용자 PC마다 실행해 모음. 플랫폼마다 <code>--platform &lt;이름&gt;</code>, 기본은 선택 플랫폼)</td><td>취소가 많으면 기여 부담이 큰 것. 어느 단계에서 멈추는지 사용자에게 확인</td></tr>
+        <tr><td>PR까지 걸린 시간, 중도 취소 비율, 작업당 질문 수</td><td><code>python3 &lt;scripts_path&gt;/usage_stats.py --json</code> — 사용자 PC마다 실행(설치본에 있다, <code>scripts_path</code>는 사용자 config <code>plugin.scripts_path</code>)해 JSON을 모아 PR 시간·취소 비율을 합산. 플랫폼마다 <code>--platform &lt;이름&gt;</code>(기본은 선택 플랫폼)</td><td>취소가 많으면 기여 부담이 큰 것. 어느 단계에서 멈추는지 사용자에게 확인</td></tr>
+        <tr><td>재사용률·1위 수락률·미확정 누적(월별 추이)</td><td>STATS.md 머리 "요약 (KPI)" — PR마다 재생성, GHE에서 바로 보임</td><td>재사용률이 낮으면 시그니처·시드 유형 보강, 미확정이 쌓이면 월간 리뷰에서 담당 지정</td></tr>
         <tr><td>정확도 (1위 정확도, 상위 3개 포함률, 오탐률)</td><td><code>tools/offline_eval.py</code> (해결된 과거 Jira 라벨셋)</td><td>도입 때 정한 기준 미달이면 파일럿 전에 시그니처·규칙 조정</td></tr>
       </table></div>
       <p class="foot">기준값과 명령 옵션은 운영 매뉴얼(<code>03-manual.html</code>)과 <code>docs/design/06-collaboration.md</code>가 원본입니다. 구조와 흐름은 설계 안내(<code>04-design.html</code>)에 있습니다.</p>
