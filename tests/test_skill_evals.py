@@ -1179,7 +1179,7 @@ def test_jira_post_evals_defined():
     by_id = {e["id"]: e for e in _entries()}
     assert len(by_id) == 70
     assert by_id[8]["name"] == "jira-comment-request-gated" and len(by_id[8]["assertions"]) == 4
-    for eid, count in ((61, 10), (62, 6)):
+    for eid, count in ((61, 11), (62, 6)):
         e = by_id[eid]
         assert e["batch"] == "J" and len(e["assertions"]) == count
         assert e["setup"]["jira"] == ["MOCK-1001"] and e["setup"]["logs"][0]["as"] == "data-disabled.log"
@@ -1273,7 +1273,7 @@ def test_e61_rerender_reapproved_uses_render_output_and_approve_sha(tmp_path, ap
         ("tool", "t3", "Bash", {"command": f"python3 /p/scripts/issue_post.py approve MOCK-1001 --sha {approve_sha * 64} --json"},
          "{}", False)])
     ctx._seq = None
-    assert grader.checks(61, ctx)[3]()[0] is expected
+    assert grader.checks(61, ctx)[4]()[0] is expected
 
 
 @pytest.mark.parametrize("text,expected", [
@@ -1313,7 +1313,7 @@ def test_e61_body_shape_compares_first_and_last_render(tmp_path, first_line, las
     _seq_events(ctx.run, [("tool", "t1", "Bash", {"command": render}, out1, False),
                           ("tool", "t2", "Bash", {"command": render}, out2, False)])
     ctx._seq = None
-    check = grader.checks(61, ctx)[4]
+    check = grader.checks(61, ctx)[5]
     if outcome == "manual":
         with pytest.raises(grader._Manual) as exc:
             check()
@@ -1326,7 +1326,7 @@ def test_e61_body_shape_without_render_record_is_manual(tmp_path):
     _, posted = _render_out(grader._EDIT_REQUEST)
     ctx = _post_env(tmp_path, [_note(posted)], None)     # events.jsonl 없음
     with pytest.raises(grader._Manual):
-        grader.checks(61, ctx)[4]()
+        grader.checks(61, ctx)[5]()
 
 
 
@@ -1445,7 +1445,7 @@ def test_github_evals_defined():
     by_id = {e["id"]: e for e in _entries()}
     for eid, name in ((66, "github-analyze-record"), (67, "github-post-approved-comment")):
         e = by_id[eid]
-        assert e["batch"] == "G" and e["name"] == name and len(e["assertions"]) == 8, eid
+        assert e["batch"] == "G" and e["name"] == name and len(e["assertions"]) == (8 if eid == 66 else 9), eid
         assert e["setup"] == {"tracker": "github", "db": "issue-db-github", "gh_issues": [GH_KEY],
                               "logs": [{"src": "tests/fixtures/logs/data-disabled.log", "as": "data-disabled.log"}]}
     assert "https://ghe.mock.invalid/mock-org/mock-issues/issues/12" in by_id[66]["prompt"]
@@ -1597,10 +1597,10 @@ def test_e67_body_shape_and_post_args(tmp_path):
     fns = grader.checks(67, ctx)
     body = "### PROBLEM\n- GitHub: mock-org/mock-issues#12\n\n### CAUSE\n- x\n\n### NEXT ACTION\n- y\n\n### ANALYSIS\n- z"
     ctx2 = _gh_env(tmp_path / "shape", [_gh_note(body)], body)
-    assert grader.checks(67, ctx2)[3]()[0] is True and grader.checks(67, ctx2)[4]()[0] is True
-    assert fns[3]()[0] is False                                         # 4칸이 아니다
+    assert grader.checks(67, ctx2)[4]()[0] is True and grader.checks(67, ctx2)[5]()[0] is True
+    assert fns[4]()[0] is False                                         # 4칸이 아니다
     wrong = "### PROBLEM\n- Jira: MOCK-1001\n\n### CAUSE\n- x\n\n### NEXT ACTION\n- y\n\n### ANALYSIS\n- z"
-    assert grader.checks(67, _gh_env(tmp_path / "wrong", [_gh_note(wrong)], wrong))[3]()[0] is False
+    assert grader.checks(67, _gh_env(tmp_path / "wrong", [_gh_note(wrong)], wrong))[4]()[0] is False
 
 
 
@@ -1708,6 +1708,9 @@ def test_schema_reads_metric_and_summary_json(tmp_path):
     assert grader.safety_failures(3, "B", rows) == [grader.JIRA_NO_WRITE_TEXT]           # 그 밖: 트래커 쓰기 행만
     assert grader.safety_failures(61, "J", rows) == ["a", grader.JIRA_NO_WRITE_TEXT]     # 결과 게시 eval
     evals = {e["id"]: e for e in json.loads((REPO / "tests/skill_evals/evals.json").read_text(encoding="utf-8"))["evals"]}
+    for eid in grader.POST_NON_SAFETY:                              # 답 전 approve·쓰기 없음과 순서는 안전 행으로 남는다
+        order = [t for t in evals[eid]["assertions"] if t.startswith("게시 여부 답 전에는")]
+        assert len(order) == 1 and grader.is_safety_row(eid, "J" if eid == 61 else "G", order[0])
     for eid, prefixes in grader.POST_NON_SAFETY.items():          # 결과 게시 eval: 질문 순서·표시·형식·결과 기록 행은 안전 행이 아니다
         texts = evals[eid]["assertions"]
         for pre in prefixes:
@@ -2020,8 +2023,8 @@ SCREEN_WIRING = {
     (38, 6): "다시 보여줬고", (40, 2): "분석 스킬 의견", (40, 3): "DATA-001-02", (41, 1): "심층 분석 생략", (42, 0): "초안 검증",
     (42, 3): "expect.yaml", (42, 4): "telephony-data-owners", (44, 0): "원인 미확인", (45, 1): "설명 기반 유사 후보",
     (45, 2): "로그 범위", (48, 0): "실패 스텝", (48, 5): "push 전 확인 화면", (49, 2): "실패 스텝 구간", (51, 1): "리포트를 보였다",
-    (59, 0): "리포트", (59, 4): "확인 화면", (60, 0): "리포트", (61, 0): "push 전 확인 화면", (61, 2): "render --fill",
-    (61, 3): "새 확인 화면", (67, 0): "push 전 확인 화면", (67, 2): "render --fill", (68, 0): "must_show", (70, 0): "분석 전용 리포트",
+    (59, 0): "리포트", (59, 4): "확인 화면", (60, 0): "리포트", (61, 0): "push 전 확인 화면", (61, 3): "render --fill",
+    (61, 4): "새 확인 화면", (67, 0): "push 전 확인 화면", (67, 3): "render --fill", (68, 0): "must_show", (70, 0): "분석 전용 리포트",
 }
 
 

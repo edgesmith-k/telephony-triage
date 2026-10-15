@@ -2260,7 +2260,8 @@
       "expected_output": "PR issue/MOCK-1001 생성 뒤 Jira 게시를 한 번 묻고, 4칸 본문 확인 화면을 그대로 보이며, 수정 요청 뒤 재렌더·재승인한 본문만 jira_ticket_add_note로 1회 게시한다. guard ask가 기록되고 post.result.json이 posted다.",
       "assertions": [
         "리포트의 1위 분류 후보가 DATA-001-01이고 push 전 확인 화면 승인 뒤 publish해 gh 스텁에 PR이 1개 생겼다",
-        "PR 링크를 보인 뒤 Jira 게시 여부를 한 번 물었고, 답 전에는 issue_post.py approve·Jira 쓰기 도구를 부르지 않았다",
+        "PR 링크를 보인 뒤 Jira 게시 여부를 한 번 물었다",
+        "게시 여부 답 전에는 issue_post.py approve·Jira 쓰기 도구를 부르지 않았고, publish → approve → 게시 순서다",
         "issue_post.py render --fill의 확인 화면(본문과 마지막 줄 post_sha256)을 요약 없이 보였다",
         "수정 요청 뒤 render를 다시 실행해 새 확인 화면을 보이고 다시 승인받았다(첫 post_sha256으로 approve하지 않았다)",
         "게시된 본문에 PROBLEM·CAUSE·NEXT ACTION·ANALYSIS가 이 순서로 있고, CAUSE 설명 줄마다 [로그로 확인]·[코드로 추정]·[placeholder 규칙 결과]·[탐색 분석 가설] 중 하나가 붙었으며, 수정 요청 문구가 NEXT ACTION에 있다",
@@ -2489,7 +2490,8 @@
       "files": [],
       "assertions": [
         "리포트의 1위 분류 후보가 DATA-001-01이고 push 전 확인 화면 승인 뒤 publish해 gh 스텁에 PR이 1개 생겼다",
-        "PR 링크를 보인 뒤 GitHub 게시 여부를 한 번 물었고, 답 전에는 issue_post.py approve·GitHub 쓰기 도구를 부르지 않았다",
+        "PR 링크를 보인 뒤 GitHub 게시 여부를 한 번 물었다",
+        "게시 여부 답 전에는 issue_post.py approve·GitHub 쓰기 도구를 부르지 않았고, publish → approve → 게시 순서다",
         "issue_post.py render --fill이 markdown 형식으로 실행됐고 확인 화면(본문과 마지막 줄 post_sha256)을 요약 없이 보였다",
         "게시된 본문이 markdown `###` 머리 PROBLEM·CAUSE·NEXT ACTION·ANALYSIS 순서이고 PROBLEM 첫 줄이 '- GitHub: mock-org/mock-issues#12'다",
         "MOCK_GH_ISSUES_WRITE_LOG에 add_issue_comment 호출이 정확히 1건(다른 쓰기 도구 없음)이고 인자가 owner mock-org·repo mock-issues·issue_number 12(정수)·body뿐이며 body의 정규화 sha256이 JOB/post.approved.json의 body_sha256과 같다",
