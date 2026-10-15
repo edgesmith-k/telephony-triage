@@ -216,6 +216,23 @@ def test_draft_window_first_fail_keeps_plan_and_rule_coverage():
     assert shown.draft_window([text_fail, subset], "first_fail")["i"] == 0             # R5를 덮지 않는다
     full = bash("d2", DRAFT_CMD, json.dumps({"rules": RULES}, ensure_ascii=False))
     assert shown.draft_window([text_fail, full], "first_fail")["i"] == 1
+    # 규칙마다 찍은 행(h6-18b eval 18: `print(r['id'], r['status'], r['reason'])`)도 같은 상태로 더 많이 덮으면 바꾼다
+    rows = bash("d3", DRAFT_CMD + " | python3 -c '…'", "R1 pass 대상 1개 통과\nR2 pass 대상 1개 통과\nR3 fail C=1 — R4 fixture"
+                "\nR4 pass 통과\nR5 skipped 해당 없음\nR6 skipped 해당 없음")
+    assert shown.draft_window([text_fail, rows], "first_fail")["i"] == 1
+    flipped = bash("d3", DRAFT_CMD + " | python3 -c '…'", "R1 pass 대상 1개 통과\nR2 pass 대상 1개 통과\nR3 fail C=1 — R4 fixture"
+                   "\nR4 pass 통과\nR5 fail 바뀜\nR6 skipped 해당 없음")
+    assert shown.draft_window([text_fail, flipped], "first_fail")["i"] == 0           # R5 상태가 다르다
+    cut = bash("d3", DRAFT_CMD + " | python3 -c '…'", "R1 pass 대상 1개 통과\nR2 pass 대상 1개 통과\nR3 fail C=1\n"
+               "R4 pass 통과\nR5 skipped 해당 없음\nR6 skipped 해당 없음")
+    assert shown.draft_window([text_fail, cut], "first_fail")["i"] == 0               # R3 사유를 잘랐다
+    writer = bash("w", "python3 /tmp/fix.py --plan /w/MOCK-1/plan.json", "")
+    assert shown.draft_window([text_fail, writer, rows], "first_fail")["i"] == 0      # draft 호출이 아닌 --plan은 건드림
+    # 사이에 같은 계획을 `--plan`으로 준 실패한 재실행은 계획을 건드린 것이 아니다(h6-18b: JSON 파싱 오류로 끝난 호출)
+    broken = bash("d4", DRAFT_CMD + " --json | python3 -c 'json.load…'", "Traceback … JSONDecodeError")
+    assert shown.draft_window([text_fail, broken, rows], "first_fail")["i"] == 2
+    edit = bash("e", "sed -i 's/a/b/' /w/MOCK-1/plan.json", "")
+    assert shown.draft_window([text_fail, edit, rows], "first_fail")["i"] == 0        # 고쳤으면 바꾸지 않는다
 
 
 def test_draft_command_with_global_db_option():

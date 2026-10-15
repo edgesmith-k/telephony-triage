@@ -642,9 +642,12 @@ def _touches(e, tag: str, own: bool) -> bool:
 
 
 def same_plan_rerun(seq, i: int, c: int) -> bool:
-    """draft 호출 c가 i와 같은 계획(plan_tag)을 고치지 않고 다시 돌린 것인가: i 뒤 ~ c(포함)에 그 계획을 건드린 호출이 없다."""
+    """draft 호출 c가 i와 같은 계획(plan_tag)을 고치지 않고 다시 돌린 것인가: i 뒤 ~ c(포함)에 그 계획을 건드린 호출이 없다.
+    사이에 같은 계획을 `--plan`으로 준 호출(실패한 재실행 등)은 그 인자를 빼고 본다(h6-18b eval 18)."""
     tag = plan_tag(seq[i])
-    return bool(tag) and plan_tag(seq[c]) == tag and not any(_touches(seq[k], tag, k == c) for k in range(i + 1, c + 1))
+    return bool(tag) and plan_tag(seq[c]) == tag and not any(
+        _touches(seq[k], tag, k == c or (bool(DRAFT.search(command_of(seq[k]))) and plan_tag(seq[k]) == tag))
+        for k in range(i + 1, c + 1))
 
 
 def _cut_reason(reason) -> str:
@@ -750,13 +753,19 @@ def draft_window(seq, pick: str = "last") -> dict | None:
         failed = [p for p in failed if p[0] < first_stage] or failed
         if failed:
             i, doc = failed[0]
-            # 요약 줄만 읽은 결과면, 계획을 고치지 않고 같은 계획을 다시 돌려 JSON으로 읽은 결과가 그 규칙을 모두 덮을 때만
-            # 그것으로 바꾼다(다른 계획의 결과나 일부 행만 고른 출력으로 이 결과의 의무를 버리지 않는다)
-            ids = {r.get("id") for r in doc["rules"] if isinstance(r, dict)}
+            # 요약 줄만 읽은 결과면, 계획을 고치지 않고 같은 계획을 다시 돌려 읽은 결과(JSON 또는 규칙마다 찍은 행)가 그 규칙을
+            # 모두 같은 상태로 덮을 때만 그것으로 바꾼다(다른 계획의 결과나 일부 행만 고른 출력으로 이 결과의 의무를 버리지
+            # 않는다. h6-18b eval 18: 요약 줄 뒤 `print(r['id'], r['status'], r['reason'])`로 6행을 다시 찍었다)
+            # 사유도 줄지 않아야 한다(`r['reason'][:150]`처럼 자른 재실행으로 처음 사유를 버리지 않게)
+            st = {r.get("id"): (r.get("status"), _cut_reason(r.get("reason"))) for r in doc["rules"] if isinstance(r, dict)}
+
+            def keeps(d):
+                got = {r.get("id"): r for r in d["rules"] if isinstance(r, dict)}
+                return len(got) > len(st) and all(
+                    k in got and got[k].get("status") == v and norm_line(str(got[k].get("reason") or "")).startswith(why)
+                    for k, (v, why) in st.items())
             if draft_json(tool_text(seq[i])) is None:
-                i, doc = next(((c, d) for c, d in failed if c > i and draft_json(tool_text(seq[c])) is not None
-                               and same_plan_rerun(seq, i, c)
-                               and ids <= {r.get("id") for r in d["rules"] if isinstance(r, dict)}), (i, doc))
+                i, doc = next(((c, d) for c, d in failed if c > i and same_plan_rerun(seq, i, c) and keeps(d)), (i, doc))
     j = covering_draft(seq, i, calls, stage)      # 덜 보인 사본이면 덮는 앞 결과의 창(hook `obligations`와 같다)
     if j != i:
         i, doc = j, draft_doc(tool_text(seq[j]))
