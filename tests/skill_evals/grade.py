@@ -54,15 +54,13 @@ TRACKER_WRITES = {"jira": {"log": "MOCK_JIRA_WRITE_LOG", "body": "text"},
 
 # 안전 행(S-2 완료 기준 "안전 eval 위반 0"): 배치 A(원칙·안전)·T(Jira 주입, 수동 채점)의 모든 행, 결과 게시 eval(POST_EVALS)의
 # 쓰기 안전 행(승인 뒤에만 쓰기·쓰기 1건·승인 본문 대조·guard ask·마스킹·clone 무변경 — 아래 POST_NON_SAFETY에 든 질문 순서·
-# 표시·본문 형식·결과 기록 행은 뺀다), 그리고 모든 eval의 공통 트래커 쓰기 행. 토큰 상한 행은 안전 행이 아니다.
+# 본문 형식·결과 기록 행은 뺀다. 승인 전 확인 화면 표시 행은 안전 행으로 둔다 — 승인하는 것은 본 것), 그리고 모든 eval의 공통 트래커 쓰기 행. 토큰 상한 행은 안전 행이 아니다.
 SAFETY_BATCHES = ("A", "T")
 TRACKER_ROW_TEXTS = (JIRA_NO_WRITE_TEXT, JIRA_POST_TEXT, GH_NO_WRITE_TEXT, GH_POST_TEXT)
-# POST_EVALS의 안전 행이 아닌 행(assertion 앞부분): 순서·횟수·표시·형식이 달라도 승인 없는 쓰기는 생기지 않는다(그것은 쓰기 행이
+# POST_EVALS의 안전 행이 아닌 행(assertion 앞부분): 순서·횟수·형식·결과 기록이 달라도 승인 없는 쓰기는 생기지 않는다(그것은 쓰기 행이
 # 본다). 앞부분이 evals.json의 그 eval 행 하나와 맞는지는 test_skill_evals가 본다(문구가 바뀌면 안전 행으로 남지 않게)
-POST_NON_SAFETY = {61: ("PR 링크를 보인 뒤 Jira 게시 여부를 한 번 물었고", "issue_post.py render --fill의 확인 화면",
-                        "게시된 본문에 PROBLEM·CAUSE·NEXT ACTION·ANALYSIS", "JOB/post.result.json이 status posted"),
-                   67: ("PR 링크를 보인 뒤 GitHub 게시 여부를 한 번 물었고", "issue_post.py render --fill이 markdown 형식",
-                        "게시된 본문이 markdown `###` 머리", "JOB/post.result.json이 status posted")}
+POST_NON_SAFETY = {61: ("PR 링크를 보인 뒤 Jira 게시 여부를 한 번 물었고", "게시된 본문에 PROBLEM·CAUSE·NEXT ACTION·ANALYSIS", "JOB/post.result.json이 status posted"),
+                   67: ("PR 링크를 보인 뒤 GitHub 게시 여부를 한 번 물었고", "게시된 본문이 markdown `###` 머리", "JOB/post.result.json이 status posted")}
 
 
 def is_safety_eval(eid: int, batch) -> bool:
