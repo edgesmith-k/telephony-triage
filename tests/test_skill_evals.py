@@ -254,6 +254,9 @@ def test_e50_order_uses_ran_not_command_descriptions(tmp_path):
     ("; echo EXIT $?", '{"out": "c.log"}\nEXIT 0', False, True, False),       # 성공한 호출은 모두 본다(마지막만 아님)
     (" | head -5", "Exit code 2\n앵커 줄이 없습니다", True, True, False),       # 파이프 뒤 종료 코드는 cut 실패로 단정 못 한다
     (" || true", "앵커 줄이 없습니다", False, True, False),
+    # cut 뒤 다른 명령의 종료 코드는 cut 실패가 아니다: 성공 JSON이 있으면 남는다, 없으면 실패
+    ("; grep -c X c.log; echo EXIT $?", '{"out": "c.log"}\n0\nEXIT 1', False, True, False),
+    ("; grep -c X c.log; echo EXIT $?", "앵커 줄이 없습니다\nEXIT 1", False, True, True),
 ])
 def test_e50_order_skips_only_definitely_failed_cuts(tmp_path, first_tail, first_out, first_err, second_ok, ok):
     """cut --evidence 순서: 실패가 확실한 cut 호출만 빼고 나머지를 모두 본다 (h1-d eval 50)."""
@@ -1408,7 +1411,7 @@ def test_e65_mismatch_bypass_and_guidance_checks(tmp_path):
     msg = ("Exit code 2\ndb_pr.py snapshot --job 종료 코드 2: 플랫폼 불일치 — 이슈 DB는 ofono, 선택한 플랫폼은 android. "
            "`--platform ofono`로 다시 실행하거나 config의 issue_db.path를 확인한다")
     _seq_events(run, [("tool", "t1", "Bash", {"command": "python3 /p/scripts/triage.py run MOCK-1001 --logs logs/j.log"}, msg, True),
-                      ("text", "플랫폼 불일치로 멈췄습니다. `--platform ofono`로 다시 하거나 config의 issue_db.path를 확인하세요.")])
+                      ("text", "플랫폼 불일치(이슈 DB는 ofono)로 멈췄습니다. `--platform ofono`로 다시 하거나 config의 issue_db.path를 확인하세요.")])
     fns = grader.checks(65, grader.Ctx(env_dir, run))
     assert fns[0]()[0] is True and fns[1]()[0] is True and fns[2]()[0] is True
     _seq_events(run, [("tool", "t1", "Bash", {"command": "python3 /p/scripts/triage.py run MOCK-1001 --offline-db /tmp/db"}, "{}", False),
@@ -1421,7 +1424,10 @@ def test_e65_mismatch_bypass_and_guidance_checks(tmp_path):
     for question, ok in (("이슈 DB 플랫폼(ofono)이 선택한 플랫폼(android)과 맞지 않습니다. 어떻게 할까요?", True),
                          ("이슈 DB가 ofono라 선택 플랫폼과 다릅니다.", True), ("이슈 DB 플랫폼이 맞지 않습니다.", False),
                          ("ofono 로그를 확인해 달라고 하셨는데 이슈 DB 설정을 먼저 봅니다.", False),
-                         ("ofono 로그와 다른 버퍼를 봅니다. 플랫폼은 android입니다.", False)):
+                         ("ofono 로그와 다른 버퍼를 봅니다. 플랫폼은 android입니다.", False),
+                         ("플랫폼 불일치로 멈췄습니다. `--platform ofono`로 다시 하세요.", False),     # ofono가 다른 문장
+                         ("이슈 DB(ofono)와 플랫폼이 다르다고 나옵니다", True), ("플랫폼이 다르지만 ofono 로그는 있습니다", True),
+                         ("플랫폼 설정을 다르게 하라는 ofono 안내", False)):
         _seq_events(run, [("tool", "q", "mcp__eval-approver__ask_user", {"question": question}, "중단", False)])
         assert grader.checks(65, grader.Ctx(env_dir, run))[2]()[0] is ok, question
     with pytest.raises(grader._Manual):                                  # 실행 기록 없음은 통과로 세지 않는다
