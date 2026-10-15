@@ -2492,7 +2492,7 @@ def test_publish_ask_row_from_approvals(tmp_path):
 
 
 def test_publish_ask_row_counts_forms_only_guard_or_result_sees(tmp_path):
-    """K 2차 R5: 실행한 publish는 `shown.PUSH_END`만이 아니라 guard 규칙 7 판정(`runs_publish`·`publish_text`)과 결과의
+    """K 2차 R5: 실행한 publish는 `shown.PUSH_END`만이 아니라 guard 규칙 7 판정(낱말 그물 `word_net`)과 결과의
     `"published": true`의 합집합이다 — PUSH_END가 놓치는 인용 짝(`R="$(python3 "…/db_pr.py" publish …)"`)·`"$S"db_pr.py`·
     셸 heredoc·스크립트 파일 안 호출도 ask 기록이 없으면 실패 행이다."""
     forms = {"subst": 'R="$(python3 "/p/scripts/db_pr.py" publish /w/wt --branch issue/MOCK-1 --approved abc1234 --json)"; echo "$R"',

@@ -223,6 +223,27 @@
 
 완료 기준: 리뷰 P0·P1 없음, 전체 pytest 통과, eval 사외 fail 0·최신 run 안전 위반 0, `08-safety`·`contracts` 갱신, DRAFT_NOTES 갱신.
 
+## (다) 결과 (L2)
+
+### ① M-2 — guard 규칙 7 낱말 그물, 옛·새 비교 (2026-10-16)
+
+옛 = 6012486 guard(`publish_text` ∪ argv `runs_publish`), 새 = `guard.word_net`. 이 PC 기록의 Bash 명령 전부(스크래치 스크립트, 레포에 넣지 않음).
+
+| 말뭉치 | Bash | 둘 다 ask | 옛만 | 새만 |
+|---|---|---|---|---|
+| eval workspace `events.jsonl` 14개 | 157 | 3 | 0 | 0 |
+| 녹화 `tests/fixtures/show_guard/eval2-session.jsonl` | 16 | 0 | 0 | 0 |
+| 개발 세션 `~/.claude/projects/…` 180개(하위 에이전트 포함) | 5,467 | 20 | 3 | 15 |
+| 원격 K 기록(4,714개) | — | — | — | — |
+
+- 옛만 3건은 모두 publish 실행이 아니다(옛 오판): `python3 - <<EOF`로 `test_db_pr.py`·`db_pr.py`·`dbpr/publish.py`를 고치는 편집 3(`ws.db_pr(`·`_publish_args`·`test_db_pr.py` 부분 문자열). 처음 비교 때 옛만이던 git 커밋 메시지 2건(`git commit -F - <<EOF`, `git add … && git commit`)은 리뷰 2차에서 git·gh를 글 명령에서 뺀 뒤 둘 다 ask다.
+- 새만 15건도 모두 publish 실행이 아니다(새 오판, ask라 싸다): python heredoc으로 문서·코드를 고치는 편집 7, `mkdir … && cat > 스크립트 <<EOF`(글 명령만인 줄이 아님) 1, db_pr 소스를 `sed`·`grep … | head`로 읽기 4(`head`·`sed`는 글 명령 목록 밖), `echo "…db_pr…dbpr/publish…"; git diff …`(git 줄은 빼지 않음) 1, 리뷰 에이전트가 이 그물의 재현 글을 `printf … | python`으로 돌린 것 2.
+- 스킬 실행 명령(eval·녹화)은 옛·새가 같다. 계획 때 프로토타입(새만 11)보다 많은 것은 그 뒤 생긴 세션(계획·리뷰 에이전트)과 git·gh 변경 때문이다.
+- **원격 K 기록 4,714개는 이 PC에 없어 비교하지 못했다** — 반입 전 원격 세션에서 같은 비교를 다시 해야 한다(남은 일, 결정 J9).
+- 리뷰 수정(1차: 인용·`\`·`$'…'`으로 쪼갠 낱말, 2차: heredoc 끝 표시를 줄 이음이 삼킴, git·gh 별칭·pager 실행, 인용 바로 앞 `$S`, 낱말 안 줄 이음) 뒤 다시 돈 수치다. 개발 세션 Bash 수는 비교하는 동안에도 늘었다(5,377 → 5,467).
+- ②에서 show_guard가 같은 그물을 쓸 때의 참고 수치(옛 = `shown.STAGE`·`shown.POST_END` 정규식): stage는 eval 14/14·녹화 2/2 같음, 개발 세션 둘 다 17·새만 19(옛만 0). approve는 eval·녹화 0, 개발 세션 새만 1.
+- L1 리뷰 P2 (8) `maxsplit=1`은 이 단계에서 고쳤다.
+
 ## L1 리뷰 P2 (반입 뒤 후보)
 
 - (3) `tools/hook_replay.py` `_user_text`·Stop 피드백 판별이 `shown.parse_events`와 다르다(목록형 user 텍스트, isMeta 아닌 Stop 피드백) → `parse_events(include_user=True)` 재사용.

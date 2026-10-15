@@ -346,6 +346,47 @@ def test_guard_publish_any_interpreter_or_substitution_asks():
     assert decision(bash(ws, "${S}db_pr.py publish wt", ws.base, env=empty)) is None
 
 
+def test_guard_publish_word_net_closes_limits_and_skips_text():
+    """L M-2: 낱말 그물(`word_net`)은 옛 한계(`python3 -m`·변수에 담은 하위 명령·`${P:-publish}`·`$C`·별칭·줄 이음)를 ask로
+    닫고, `cat >` heredoc·`publish.json`·`publish-preview`·`dbpr/publish.py`는 판정하지 않는다. git·gh 줄은 글로 빼지
+    않는다(리뷰 2차 P0-2). 남는 한계(스크립트 파일 안, 변수로 만든 낱말, 가짜 heredoc)는 08-safety와 같게 고정한다."""
+    ws = shared()
+    r = ws.root / "scripts"
+    for cmd in ("python3 -m db_pr publish wt", "SUB=publish; python3 $S/db_pr.py $SUB wt",
+                "python3 $S/db_pr.py ${P:-publish} wt", f'C="python3 {r}/db_pr.py publish"; $C wt',
+                f"alias p='python3 {r}/db_pr.py publish'; p wt", f"S={r}/\npython3 ${{S}}db_pr.py \\\n  publish wt",
+                # 인용·`\`·ANSI-C로 쪼갠 낱말(리뷰 P0)
+                'python3 $S/db_pr.py pub"lish" wt', "python3 $S/db_pr.py publ\\ish wt", 'python3 $S/d""b_pr.py publish wt',
+                'python3 $S/db"_"pr.py publish wt', "python3 $S/db\\_pr.py publish wt", "python3 $S/db_pr.py pub$'l'ish wt",
+                # 리뷰 2차 P0-1: 본문 끝 줄의 `\`가 heredoc 끝 표시를 삼키지 않는다
+                "cat > n.md <<'EOF'\nC:\\work\\\nEOF\npython3 $S/db_pr.py publish wt",
+                "git commit -F - <<'EOF'\nC:\\work\\\nEOF\npython3 $S/db_pr.py publish wt",
+                "tee n.md <<'EOF'\nC:\\work\\\nEOF\npython3 $S/db_pr.py publish wt",
+                # P0-2: git·gh는 글 명령이 아니다(별칭·pager·ssh 명령으로 실행)
+                "git -c alias.p='!python3 $S/db_pr.py publish wt #' p",
+                "git -c core.pager='python3 $S/db_pr.py publish wt #' log",
+                "GIT_SSH_COMMAND='python3 $S/db_pr.py publish wt #' git fetch",
+                "gh alias set p '!python3 $S/db_pr.py publish wt'; gh p",
+                "git -c alias.x='!sh' x <<'EOF'\npython3 $S/db_pr.py publish wt\nEOF",
+                # 그래서 git·gh 글(커밋 메시지·PR 본문)도 ask다(오판, 싸다)
+                'git commit -m "db_pr.py publish 고침"', "git commit -F - <<'EOF'\nfix db_pr.py publish\nEOF",
+                'gh pr create --title t --body "python3 db_pr.py publish 결과"',
+                # P0-3: 인용·`\` 바로 앞의 `$S`
+                'S=/p/; python3 "$S"d""b_pr.py publish wt', 'python3 $S"d"b_pr.py publish wt',
+                'python3 "$S"db\\_pr.py publish wt', "python3 \"$S\"$'d'b_pr.py publish wt", "python3 $S'd'b_pr.py publish wt",
+                # P1: 낱말 안의 줄 이음(bash는 빈 글로 잇는다)
+                "python3 $S/db_pr.py pub\\\nlish wt", "python3 $S/db\\\n_pr.py publish wt"):
+        out = bash(ws, cmd, ws.base)
+        assert decision(out) == "ask" and "규칙 7" in out["permissionDecisionReason"], cmd
+    for cmd in ("cat > notes.md <<'EOF'\npython3 db_pr.py publish wt\nEOF", "cat /w/MOCK-1/publish.json",
+                f"python3 {r}/db_pr.py summary wt > /w/MOCK-1/publish-preview.md",
+                f"sed -n 1,20p {r}/db_pr.py {r}/dbpr/publish.py",
+                # 남는 한계
+                "bash /w/push.sh", f"P=pub; python3 {r}/db_pr.py ${{P}}lish wt", f"X=db; python3 {r}/${{X}}_pr.py publish wt",
+                "echo \"<<EOF\"\npython3 $S/db_pr.py publish wt\nEOF"):   # 인용 안 `<<EOF`로 만든 가짜 heredoc
+        assert decision(bash(ws, cmd, ws.base)) is None, cmd
+
+
 def test_guard_ignores_other_repos_and_missing_config():
     ws = shared()
     other = tmp("tt-other-repo-") / "r"

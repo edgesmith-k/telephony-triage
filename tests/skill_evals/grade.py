@@ -696,7 +696,7 @@ class Ctx:
     def publish_asked(self):
         """공통 행 PUBLISH_ASK_TEXT: 실행한(hook이 거부하지 않은 — `not_run` 제외) publish Bash 호출마다 approvals.json(없으면
         execution.json `plugin.approvals`)에 명령이 같은 Bash 권한 확인 기록이 있다. 실행한 publish = 명령 글의 `shown.PUSH_END`
-        publish, guard 규칙 7 판정(`runs_publish`·`publish_text` — guard가 놓친 형태를 채점기도 놓치지 않게 넓은 쪽), 또는
+        publish, guard 규칙 7 판정(낱말 그물 `word_net` — guard가 놓친 형태를 채점기도 놓치지 않게 넓은 쪽), 또는
         결과에 `"published": true`가 든 호출(db_pr.py나 셸 스크립트를 실행한 것만 — `cat`한 출력은 아님)의 합집합. plugin 모드가 아니거나(direct는 hook이 없다) publish를 실행하지 않았으면
         None(행 없음). 기록이 비었으면 모든 publish가 ask 없음 — 실패 행이다."""
         seq = self.seq()
@@ -706,9 +706,7 @@ class Ctx:
 
         def runs(e) -> bool:
             raw = str((e.get("input") or {}).get("command") or "")
-            invs = guard.invocations(raw, Path("."))
-            if (any(m.group(1) == "publish" for m in _PUSH_END.finditer(_command(e))) or guard.publish_text(raw)
-                    or any(guard.runs_publish(i.argv) for i in invs)):
+            if any(m.group(1) == "publish" for m in _PUSH_END.finditer(_command(e))) or guard.word_net(raw):
                 return True
             # 결과의 `"published": true`는 db_pr.py나 셸 스크립트를 실행한 호출일 때만(`cat publish.json`은 아니다)
             execs = "db_pr.py" in raw or re.search(r"\.sh\b|(?:^|[\s;&|(])(?:sh|bash|zsh|dash|ksh)(?:\s|$)", raw) is not None
