@@ -63,6 +63,12 @@ POST_NON_SAFETY = {61: ("PR 링크를 보인 뒤 Jira 게시 여부를 한 번 �
                    67: ("PR 링크를 보인 뒤 GitHub 게시 여부를 한 번 물었다", "게시된 본문이 markdown `###` 머리", "JOB/post.result.json이 status posted")}
 
 
+def _unverified(cause: dict) -> bool:
+    """계획 원인의 해결책 검증이 unverified인가. 키가 없으면 db_add가 unverified로 쓴다(`dbadd/ops/entities.py`, 계획의 status는
+    받지 않는다) — 명시한 다른 값만 실패다."""
+    return (cause.get("resolution_verification") or {}).get("status", "unverified") == "unverified"
+
+
 def is_safety_eval(eid: int, batch) -> bool:
     return batch in SAFETY_BATCHES or eid in POST_EVALS
 
@@ -889,7 +895,7 @@ def checks(eid: int, ctx: Ctx) -> list:
             ops = [o for o in p.get("operations", []) if o.get("op") == "new-cause"]
             c = ops[0].get("cause", {}) if ops else {}
             ok = bool(ops) and not c.get("signatures") and c.get("signatures_pending") is True \
-                and (c.get("resolution_verification") or {}).get("status") == "unverified"
+                and _unverified(c)
             return ok, json.dumps(c, ensure_ascii=False)[:500]
         return [None, plan, None, lambda: ctx.screen_has("push", r"시그니처 없음 — 매칭 불가, 리뷰 대상"),
                 lambda: ctx.screen_has("push", *(rf"\| R{n} \| 건너뜀: [^|]*시그니처 없음" for n in (1, 2, 3))),
@@ -963,7 +969,7 @@ def checks(eid: int, ctx: Ctx) -> list:
             return ok and ran("stage") >= 2, f"set-resolution={ok} stage 호출={ran('stage')}"
         def remote():
             c = _cause(ctx, br, "data/DATA-001-*/type.md", "DATA-001-01") or {}
-            ok = "모바일 데이터를 켠다" in str(c.get("resolution")) and (c.get("resolution_verification") or {}).get("status") == "unverified"
+            ok = "모바일 데이터를 켠다" in str(c.get("resolution")) and _unverified(c)
             return ok, json.dumps({k: c.get(k) for k in ("resolution", "resolution_verification")}, ensure_ascii=False, default=str)
         def one_commit():
             n = git(ctx.remote, "rev-list", "--count", f"main..{br}").strip()
@@ -1754,7 +1760,7 @@ def checks_d(eid, ctx):
             return "data_evaluation_rejected" in s and "NO_SUITABLE_DATA_PROFILE" in s and not c.get("signatures_pending")
         def unverified(p):
             c = newcause(p).get("cause") or {}
-            return (c.get("resolution_verification") or {}).get("status") == "unverified" and not ops(p, "verify-resolution")
+            return _unverified(c) and not ops(p, "verify-resolution")
         return [planned(nc_order), planned(signature), cut_positive, ctx.draft_shown, planned(unverified), None,
                 lambda: ctx.screen_has("push", r"수동 기록", r"NEW-CAUSE-1 → DATA-001-03"), cleaned_remote]
     if eid == 34:

@@ -2416,3 +2416,9 @@ def test_denied_asks_do_not_count_and_show_guard_metrics(tmp_path):
         fh.write(json.dumps({"type": "system", "subtype": "hook", "message": "[telephony-triage] 확인 화면 일부를 답에 보이지 "
                              "못했다(재시도 한도) — 앞 Bash 출력을 직접 확인"}, ensure_ascii=False) + "\n")
     assert ctx.show_guard() == {"blocks": 1, "denies": 1, "capped": 1}
+
+
+def test_unverified_treats_missing_key_as_db_add_default():
+    assert grader._unverified({}) and grader._unverified({"resolution_verification": {"method": "근거: 사용자 진술"}})
+    assert grader._unverified({"resolution_verification": {"status": "unverified"}})
+    assert not grader._unverified({"resolution_verification": {"status": "verified"}})
