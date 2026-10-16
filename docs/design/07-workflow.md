@@ -83,7 +83,7 @@ git -C <work_dir>/_snapshot checkout --detach origin/<base_branch>
 git -C <issue_db.path> pull --ff-only
 ```
 
-- **사용자 clone에서 `checkout`하지 않는다.** 현재 브랜치가 base가 아니거나 dirty하면 pull을 건너뛰고 그 사실만 알린다. ff-only가 실패하면 자동으로 해결하지 않고 보고한다.
+- **사용자 clone에서 `checkout`하지 않는다.** 현재 브랜치가 base가 아니거나 dirty하면 pull을 건너뛰고 그 사실만 알린다(`triage.py run`은 모드와 상관없이 `notes`에 `이슈 DB pull 건너뜀: <사유>`). ff-only가 실패하면 자동으로 해결하지 않고 보고한다.
 - 분석(Step 3~7), 사후 lint, `parse_logcat --rules`, 매처, `db_search`는 모두 **스냅샷**(`--db <work_dir>/_snapshot`)을 읽는다. 로컬 main이 오래됐어도 결과가 최신 origin 기준이 된다.
 - 스냅샷은 읽기 전용이다.
 - `snapshot` 결과의 `previous_sha`·`base_sha_changed`로 이전 스냅샷 대비 base 변경 여부를 알 수 있다(`sync`가 한 줄로 보인다). 시각은 `<work_dir>/snapshot.json`에 남아 `config.py doctor`가 스냅샷 나이를 본다(`contracts.md §3.2`).

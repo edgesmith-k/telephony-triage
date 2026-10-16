@@ -1236,6 +1236,18 @@ def test_other_job_leftovers_are_noted_never_asked_or_deleted():
     ws.json("triage.py", ["release", W4_KEY])
 
 
+def test_pull_skipped_reason_is_noted_in_every_mode():
+    """07 §Step 1: 사용자 clone이 base가 아니면 pull을 건너뛰고 알린다 — 쓰기·분석 전용 모두 notes(SKILL은 notes를 항상 알림)."""
+    ws = Workspace()
+    git(ws.clone, "checkout", "-q", "-b", "my-work")
+    done = _w4_run(ws, "--answer", "code=skip")
+    assert done["status"] == "ok" and done["snapshot"]["pulled"] is False
+    assert [n for n in done["notes"] if n.startswith("이슈 DB pull 건너뜀:") and "my-work" in n], done["notes"]
+    ws.json("triage.py", ["release", W4_KEY])
+    only = _w4_run(ws, "--analysis-only", "--answer", "code=skip")
+    assert only["status"] == "ok" and [n for n in only["notes"] if n.startswith("이슈 DB pull 건너뜀:")], only
+
+
 def test_no_leftovers_means_no_note_and_analysis_only_does_not_look():
     """07 §Step 0·§분석 전용: 대상이 없으면 note 없음, 분석 전용은 cleanup을 보지도 알리지도 않는다(0-cleanup trace 없음)."""
     ws = Workspace()

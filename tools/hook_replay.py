@@ -28,7 +28,7 @@ transcript, 그 범위의 기록 없음 — 건너뛴 확인이지 통과가 아
 (규칙 7 publish ask는 `conf.user`가 있어야)는 **지금 PC 상태**로 판정한다 — 기록 당시와 다르면 mismatch로 센다. show_guard는
 (L R ②b부터) 의무를 **지금 PC의 표시 기록**으로 정한다: 세션을 돌린 PC의 work_dir 기록이 없으면(다른 PC, 회전으로 밀려남,
 시각 없는 transcript) 판정하지 않아 allow로 나온다 — `records`가 null이거나 anchored가 적으면 show_guard 지점의 결과는 믿지 않는다.
-옛 scripts(`--scripts`, ②a 이전)는 transcript 추론으로 판정하므로 두 판정의 차이에는 기록 유무도 섞인다. guard와 show_guard가 같은 호출을 둘 다 거부하면 기록에는
+옛 scripts(`--scripts`, ②a 이전)는 transcript 추론으로 판정하므로 두 판정의 차이에는 기록 유무도 섞인다. 옛 scripts는 리포트 의무를 **지금 디스크**의 JOB/report.md·analysis.json으로 정하므로 같은 Jira를 여러 번 분석한 세션에서는 뒤 실행의 줄로 판정한다(재생 인공물). guard와 show_guard가 같은 호출을 둘 다 거부하면 기록에는
 한쪽 거부만 남아 다른 쪽이 거짓 mismatch가 된다. Stop 피드백이 transcript에 기록되지 않는 버전에서는 block이 `ran`으로 세어진다.
 
 종료 코드: 0, 파일을 못 읽으면 2.
