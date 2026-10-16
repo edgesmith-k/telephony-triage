@@ -137,13 +137,22 @@ def _check_rows(stage_result: dict) -> dict:
 
 
 def _readme_preview(wt: Path, keys: list[str]) -> list[str]:
-    lines = []
+    """README마다 `[<wt 기준 경로>]` 머리 뒤에 이 작업 키가 든 표 행·제목. 앞 두 칸(`| 1-3 | APN 프로파일 없음 |`)이 앞 파일에서
+    이미 나온 표 행은 뺀다(같은 원인 행이 루트·카테고리 README에 두 번), 남는 행이 없는 파일은 머리도 없다. 20줄까지."""
+    lines, seen = [], set()
     for path in [wt / "README.md", *sorted(wt.glob("*/README.md"))]:
         if not path.is_file():
             continue
+        rows = []
         for line in path.read_text(encoding="utf-8").splitlines():
-            if (line.startswith("|") or line.startswith("###")) and any(k in line for k in keys) and line not in lines:
-                lines.append(line)
+            if not ((line.startswith("|") or line.startswith("###")) and any(k in line for k in keys)) or line in rows:
+                continue
+            head = "|".join(line.split("|")[:3]) if line.startswith("|") else line
+            if head not in seen:
+                seen.add(head)
+                rows.append(line)
+        if rows:
+            lines += [f"[{path.relative_to(wt).as_posix()}]", *rows]
     return lines[:20]
 
 
@@ -464,6 +473,33 @@ def _result_cell(row: dict) -> str:
     return str(row.get("label"))          # skipped·review_required·needs-approval·알 수 없는 status는 원문 그대로
 
 
+def _file_rows(files: list[dict]) -> list[str]:
+    """변경 파일 표 행. 생성 파일(README·STATS·CHANGELOG)은 표 끝 한 행에 경로를 모두(`·`로), 변경이 섞이면 경로마다 변경을 붙인다."""
+    gen = [f for f in files if f["kind"] == "생성 파일"]
+    out = [f"| {md.cell(f['kind'])} | {md.cell(f['path'])} | {md.cell(f['change'])} |" for f in files if f not in gen]
+    if gen:
+        changes = list(dict.fromkeys(f["change"] for f in gen))
+        paths = [f["path"] if len(changes) == 1 else f"{f['path']} ({f['change']})" for f in gen]
+        out.append(f"| 생성 파일 | {md.cell(' · '.join(paths))} | {md.cell('·'.join(changes))} |")
+    return out
+
+
+def _verification_table(rows: list[dict]) -> list[str]:
+    """검증 결과 표 행. 결과 칸이 같은 건너뜀(skipped, 리뷰 대상 아님) 규칙만 첫 규칙 자리에 한 행(`| R5·R6 | 건너뜀: 해당 없음 |  |`).
+    통과·실패·승인 필요·리뷰 대상·그 밖은 규칙마다 한 행 — 건너뜀을 ✅ 행과 합치지 않는다."""
+    groups: list[tuple[list, dict]] = []
+    for r in rows:
+        plain = r.get("status") == "skipped" and not r.get("review_required")
+        g = next((g for g in groups if plain and g[1].get("status") == "skipped" and not g[1].get("review_required")
+                  and _result_cell(g[1]) == _result_cell(r)), None)
+        if g:
+            g[0].append(r["id"])
+        else:
+            groups.append(([r["id"]], r))
+    return [f"| {md.cell('·'.join(str(i) for i in ids))} | {md.cell(_result_cell(r))} | "
+            f"{md.cell(r.get('reason') if r.get('status') != 'skipped' else '')} |" for ids, r in groups]
+
+
 def _check_lines(checks: dict) -> list[str]:
     if "skipped" in checks:
         return [f"자동 검사: 건너뜀 — {md.line(checks['skipped'])}"]
@@ -503,8 +539,7 @@ def render_markdown(scr: dict, plan: dict, extra: dict) -> str:
            f"브랜치: {branch['name']} ({branch['remote']}) → PR 대상: {branch['base']}",
            f"리뷰어: {md.line(', '.join(scr['reviewers'])) or '없음'}", f"열린 PR: {open_prs}", "",
            "### 변경 파일", "", "| 구분 | 파일 | 변경 |", "|---|---|---|"]
-    out += [f"| {md.cell(f['kind'])} | {md.cell(f['path'])} | {md.cell(f['change'])} |" for f in scr["files"]] \
-        or ["| 없음 | | |"]
+    out += _file_rows(scr["files"]) or ["| 없음 | | |"]
     out += ["", "### ID 할당", ""]
     rows = [f"- {id_assignment(i)}" for i in ids]
     pr = plan.get("pr") or {}
@@ -535,8 +570,7 @@ def render_markdown(scr: dict, plan: dict, extra: dict) -> str:
     out += ["", "### 검증 결과", ""]
     if scr["verification"]:
         out += ["| 규칙 | 결과 | 사유 |", "|---|---|---|"]
-        out += [f"| {md.cell(r['id'])} | {md.cell(_result_cell(r))} | "
-                f"{md.cell(r.get('reason') if r.get('status') != 'skipped' else '')} |" for r in scr["verification"]]
+        out += _verification_table(scr["verification"])
     elif "skipped" in scr["checks"]:      # 검사를 건너뛰었으면 검증도 못 돌았다 — "없음"으로 두지 않는다
         out.append(f"검증: 건너뜀 — {md.line(scr['checks']['skipped'])}")
     else:

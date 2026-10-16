@@ -675,3 +675,42 @@ def test_summary_notes_show_suggested_source():
     other.stage("MOCK-7002", "issue/MOCK-7002", expect=(0, 3))
     notes = other.db_pr("summary", other.wt("MOCK-7002"))["notes"]
     assert "제시 후보 기록 없음 — match.json 없음(수락률 통계 제외)" in notes, notes
+
+
+# --- L2 ③ U-2: 확인 화면 압축 ---------------------------------------------------------------------------------
+
+def test_generated_files_share_one_row_with_every_path():
+    gen = [{"kind": "생성 파일", "path": p, "change": "수정"} for p in ("README.md", "STATS.md", "data/README.md")]
+    files = [gen[0], {"kind": "Jira 기록", "path": "data/D/issues/MOCK-7001.yaml", "change": "신규"}, *gen[1:]]
+    text = db_summary.render_markdown(_render_screen(files=files), {}, _extra())
+    rows = [l for l in text.splitlines() if l.startswith("| ") and "|---" not in l and "구분" not in l][:2]
+    assert rows == ["| Jira 기록 | data/D/issues/MOCK-7001.yaml | 신규 |",
+                    "| 생성 파일 | README.md · STATS.md · data/README.md | 수정 |"]          # 표 끝 한 행, 경로 전부
+    mixed = gen[:2] + [{"kind": "생성 파일", "path": "parser-rules/CHANGELOG.md", "change": "신규"}]
+    text = db_summary.render_markdown(_render_screen(files=mixed), {}, _extra())
+    assert "| 생성 파일 | README.md (수정) · STATS.md (수정) · parser-rules/CHANGELOG.md (신규) | 수정·신규 |" in text
+
+
+def test_only_same_reason_skips_share_a_verification_row():
+    stage = {"checks": {"verify": {"code": OK, "result": {"rules": [
+        {"id": "R1", "status": "pass", "reason": "통과"}, {"id": "R2", "status": "pass", "reason": "통과"},
+        {"id": "R3", "status": "skipped", "reason": "해당 없음"}, {"id": "R4", "status": "skipped", "reason": "fixture 없음"},
+        {"id": "R5", "status": "skipped", "reason": "해당 없음"},
+        {"id": "R6", "status": "skipped", "reason": "해당 없음", "review_required": True}]}}}}
+    text = db_summary.render_markdown(_render_screen(verification=db_summary._verification_rows(stage)), {}, _extra())
+    rows = [l for l in text.split("### 검증 결과")[1].splitlines() if l.startswith("| R")]
+    assert [r.split("|")[1].strip() for r in rows] == ["R1", "R2", "R3·R5", "R4", "R6"]   # 첫 규칙 자리, ID는 한 번씩
+    assert rows[2] == "| R3·R5 | 건너뜀: 해당 없음 |  |" and "✅" not in rows[2]               # 묶은 행에 ✅ 없음
+    assert all("✅" in r for r in rows[:2])                                                 # pass는 묶지 않는다
+
+
+def test_readme_preview_heads_each_file_and_drops_repeated_rows(tmp_path):
+    (tmp_path / "data").mkdir()
+    row = "| 1-3 | APN 프로파일 없음 | MOCK-9002 |"
+    (tmp_path / "README.md").write_text(f"# DB\n### DATA-001 MOCK-9002\n{row}\n| x | y | z |\n", encoding="utf-8")
+    (tmp_path / "data" / "README.md").write_text(f"{row.replace('MOCK-9002 |', 'MOCK-9002 (상세) |')}\n"
+                                                 "| 2026-10-16 | MOCK-9002 | 새 행 |\n", encoding="utf-8")
+    (tmp_path / "sms").mkdir()
+    (tmp_path / "sms" / "README.md").write_text(f"{row}\n", encoding="utf-8")       # 남는 행 없음: 머리도 없다
+    assert db_summary._readme_preview(tmp_path, ["MOCK-9002"]) == [
+        "[README.md]", "### DATA-001 MOCK-9002", row, "[data/README.md]", "| 2026-10-16 | MOCK-9002 | 새 행 |"]

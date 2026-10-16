@@ -190,8 +190,16 @@ def denied(e) -> bool:
     return MARKER in res and (bool(e.get("error")) or res.lstrip().startswith("PreToolUse:"))
 
 
+# 질문이 사용자에게 가지 않은 오류 결과: 모의 ask_user의 선택지 상한 거부, 실제 AskUserQuestion의 입력 스키마 오류(선택지 5개 이상 등)
+ASK_REJECTED = ("선택지는 질문당 4개까지", "InputValidationError")
+
+
 def _live_ask(e) -> bool:
-    return e.get("kind") == "tool" and is_ask(e.get("name")) and not denied(e)
+    """사용자에게 간 질문: show_guard가 거부하지 않았고, 선택지 상한·스키마 오류로 거부되지도 않았다."""
+    if not (e.get("kind") == "tool" and is_ask(e.get("name"))) or denied(e):
+        return False
+    res = str(e.get("result") or "")
+    return not (e.get("error") and any(t in res for t in ASK_REJECTED))
 
 
 def visible_between(seq, start: int = 0, end: int | None = None) -> list[str]:

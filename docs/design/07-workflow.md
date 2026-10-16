@@ -109,13 +109,13 @@ Android 버전과 브랜치마다 소스 트리가 다르므로 **분석할 때�
 3. **자동 선택**: `--code`도 답도 없고 `code.auto_select`(사용자 config > site-defaults > 기본 `true`, `02-config.md §4`)가 참이며, 대상 버전이 일치하는 `code_profiles` 프로필이 **정확히 1개**(`code_roots suggest`에서 `kind: profile`이고 `match`, 현재 "추천" 기준과 같다)면 그 프로필을 `--code <프로필>`처럼 쓰고 4번 검증으로 간다. 일치가 0개·2개 이상이거나 `auto_select: false`이거나 Jira 버전이 없으면(대체 출처는 쓰지 않는다) 4번처럼 묻는다. 최근 사용 경로만 일치하면 자동 선택하지 않는다. 알림은 의무다: `report.md` 코드 줄에 "(자동 선택: code.auto_select, `--code`로 변경 가능)", 그 아래 `- 코드 분석 트리 자동 선택: <roots> (<플랫폼> <트리 버전>) — 다른 트리는 --code로 지정` 줄(`must_show`, eval 55), 출력 `code.auto: true`. 자동 선택한 경로가 무효면 전체 선택지(`code`)로 묻고 상태에는 기록하지 않으며, 트리 버전이 다르면 기존 `code_confirm`이다. 성공한 자동 선택만 `triage-state.json`에 `code_auto=<프로필>`로 남아 같은 세션 재실행이 그 값을 쓴다(`answers`에는 넣지 않는다). 사용자의 답·`--code`가 자동 선택보다 우선한다.
 3-1. 자동 선택하지 않으면 사용자에게 묻는다.
    ```
-   코드 경로를 선택하세요. (대상: Android 16, SW <빌드>)
+   코드 경로를 선택하세요. (대상: Android 16, SW <빌드>) (그 밖 후보: 최근 Android 16 aosp=/work/a16_qpr1,vendor_ril=/work/ril — 직접 입력에 이름이나 경로를 적는다)
    1) android16-main   aosp=/path/to/android16  vendor_ril=...   ← 버전 일치, 추천
    2) android17-dev    aosp=/path/to/android17  vendor_ril=...
-   3) 최근 사용: /work/a16_qpr1  (2026-09-25)
-   4) 직접 입력
-   5) 코드 분석 건너뛰기 (로그 기반 분석만)
+   3) 직접 입력
+   4) 코드 분석 건너뛰기 (로그 기반 분석만)
    ```
+   - 선택지는 질문당 4개다(AskUserQuestion 상한, `reference/rules.md`): 후보는 둘(추천이 첫째)까지, 나머지 후보 이름은 질문 문구에 둔다(L2 J7).
    - 버전이 일치하는 프로필과 최근 경로를 위에 올린다.
    - 직접 입력은 `code_root_keys`의 루트마다 묻는다. 모르는 루트는 비워둘 수 있다.
 4. 검증: 경로가 존재하는지, `aosp` 루트에 `platform.source_tree.required_dirs`(기본 `frameworks/opt/telephony`)가 모두 있는지 확인한다. 트리 버전을 추정해서 대상 버전과 다르면 경고하고 계속할지 묻는다. 추정은 빌드 시스템의 플랫폼 버전 정의(최신 AOSP는 release config 쪽, 이전 버전은 `build/make/core/version_defaults.mk` 등)를 순서대로 시도하고, 모두 실패하면 사용자 입력을 신뢰한다. 정확한 파일 위치는 Phase 0에서 확인하고(S11) `platform.source_tree.version_sources`에 반영한다.
@@ -170,7 +170,7 @@ Android 버전과 브랜치마다 소스 트리가 다르므로 **분석할 때�
 
 ### Step 5-1. 심층 분석 (카테고리 분석 스킬, 선택)
 - `analyzers.<category>`가 설정돼 있고 1위 후보가 그 카테고리이면 `when`에 따라 호출한다. 기본 `ask`는 "심층 분석(<스킬 이름>)을 실행할까요? (토큰 추가 사용)"를 묻는다. `--analyzer`면 묻지 않고 호출하고, `--no-analyzer`면 호출하지 않는다. **5-2도 `ask`(둘 다 플래그 없음)이면 한 질문으로 합친다**: "심층 분석과 탐색 분석을 할까요? (토큰 추가 사용)" — 선택지 4개(둘 다 / 심층만 / 탐색만 / 둘 다 안 함). 한쪽이 플래그·config(`always`·`never`)로 이미 정해졌으면 남은 한쪽만 그 질문대로 묻고(선택지 2개), 둘 다 정해졌으면 묻지 않는다. 입력: 마스킹된 이벤트 JSON 경로, 로그 경로, 상위 후보, Jira 요약 (`16-existing-assets.md §16.5`).
-- 결과는 `mask_pii`를 적용한 뒤 리포트의 "심층 분석 (<스킬 이름>)" 절에 넣는다. **분류 후보·점수·검증 판정에는 쓰지 않는다.** 스킬이 다른 원인을 제시하면 "분석 스킬 의견"으로 보여주고 Step 7 선택지에 추가한다(고르면 `decision: chose-other` — Step 7의 chose-other 제안 규칙 적용, 이슈 DB에 없는 원인이면 `new-cause` 흐름).
+- 결과는 `mask_pii`를 적용한 뒤 리포트의 "심층 분석 (<스킬 이름>)" 절에 넣는다. **분류 후보·점수·검증 판정에는 쓰지 않는다.** 스킬이 다른 원인을 제시하면 "분석 스킬 의견"으로 보여주고 Step 7 둘째 질문(다른 원인·유형을 고른 뒤)의 첫 선택지로 둔다 — [<의견 원인> / 다른 기존 원인·새 원인·새 유형 / 원인 미확정 / 기록하지 않음], 의견이 1위와 같으면 질문은 그대로(고르면 `decision: chose-other` — Step 7의 chose-other 제안 규칙 적용, 이슈 DB에 없는 원인이면 `new-cause` 흐름).
 - 스킬이 없거나, 실패하거나, 사용자가 호출하지 않기로 하면 "심층 분석 생략: <사유>"를 적고 계속한다.
 - **리포트 칸(`triage.py`가 채운다)**: 분석 스킬이 설정돼 있으면 `- 심층 분석 (<스킬>): TODO(LLM) 결과 요약 / 분석 스킬 의견: <원인 ID — 근거 | 1위와 같음>. 실행 안 함·실패면 이 줄을 "심층 분석 생략: <사유>"로`, `when: never`면 `- 심층 분석 생략: analyzers.<카테고리>.when: never`, 설정이 없으면 `- 심층 분석: 해당 없음(1위 카테고리에 분석 스킬 설정 없음)`(후보가 없으면 `해당 없음(1위 후보 없음)`).
 
@@ -219,6 +219,11 @@ Android 버전과 브랜치마다 소스 트리가 다르므로 **분석할 때�
 `--analysis-only`면 Step 6 리포트로 끝내고 이 단계로 오지 않는다(`§분석 전용`).
 
 "이 이슈를 `Data > DATA-001 > DATA-001-02 Roaming disabled`로 분류할까요?"
+
+분류 질문은 선택지 4개까지다(AskUserQuestion 상한): 고를 것 2개 + "원인 미확정" + "기록하지 않음"(L2 J6). 후보 0개면 새 유형 + 고정 둘.
+첫 질문은 `<1위 원인>`로 분류 / 다른 원인·유형 / 원인 미확정 / 기록하지 않음, 다른 원인·유형(또는 글로 거부)이면 다른 기존 원인(본문에
+2·3위 ID·제목) / 새 원인·새 유형 / 원인 미확정 / 기록하지 않음(분석 스킬 의견이 1위와 다르면 [<의견 원인> / 다른 기존 원인·새 원인·새 유형 / …]), 고른 갈래의 하위 선택(2·3위 중 하나 — 최대 2개, 새 원인 / 새 유형)도 같은 모양이다.
+아래 갈래는 그 선택의 결과다.
 - **예** → 계획에 `append DATA-001-02`.
 - **다른 기존 원인** → 사용자가 고른 원인으로 `append`. 이어서 한 번 묻는다(기본 "아니오", record에는 없음): 고른 원인이 `analysis.json` 후보에서 C=1이면 이 로그를 `add-fixture {for: <원인>, kind: extra}`로 넣을지 — `parse_logcat.py cut --around <JOB/match.json에서 그 원인 후보의 evidence 시각>`으로 자른다(`cut --evidence`는 1위 후보 근거로 자르므로 쓰지 않는다). 계획에 넣으면 `db_verify rules --plan --draft`의 R4(회귀)로 그 fixture에서 고른 원인 C=1을 확인하고, 실패면 fixture를 빼고 아래 `update-signature` 검토 제안으로 바꾼다. C=0이거나 후보에 없으면 fixture 대신 "시그니처가 이 로그를 못 잡는다 — `update-signature` 검토"를 `pr_notes`에 남길지. C=0 로그를 양성으로 넣으면 회귀가 실패하기 때문이다. 고른 원인이 `analysis.json` `unjudged.causes`에 있으면(match.json `causes[].C`가 `null`, 원인 시그니처 판정 불가 — 후보의 `C`는 정수라 후보 목록으로는 구분되지 않는다) fixture·시그니처 제안을 하지 않는다. 거절하면 `append`만 넣고, 추정으로 fixture·시그니처를 만들지 않는다.
 - **이미 이슈 DB에 있는 Jira를 다른 원인으로** → `reclassify {issue, from, to}`.
@@ -402,7 +407,7 @@ post_sha256: <64 hex>          ← 선택 줄과 이 줄은 게시 가능하고 
 3. **중복 확인**: `db_pr preflight --branch issue/<JIRA-KEY> --search <JIRA-KEY> --issue <JIRA-KEY>`. main에 같은 Jira가 있으면 중단하고 기존 분류를 보여준 뒤 유지 / 재분류(`reclassify`)를 묻는다. 열린 PR이 있으면 링크를 보여주고 계속할지 묻는다.
 4. **분류 정하기**
    - 옵션이 있으면 그대로 쓴다: `--cause` → `append`, `--new-cause <유형 ID>` → `new-cause`, `--new-type <category>` → `new-type`, `--unresolved <유형 ID>` → `unresolved`. ID가 스냅샷에 있는지, `active`인지 확인한다.
-   - **옵션이 없으면 대화형**: 사용자에게 증상과 원인을 한두 문장으로 받아 `db_search.py`(키워드)와 `db_add.py similar <제목>`(유사 유형 상위 3개)을 `--db <work_dir>/_snapshot`으로 돌려 후보를 보여주고 고르게 한다: 기존 원인 / 기존 유형의 새 원인 / 새 유형 / 원인 미확정.
+   - **옵션이 없으면 대화형**: 사용자에게 증상과 원인을 한두 문장으로 받아 `db_search.py`(키워드)와 `db_add.py similar <제목>`(유사 유형 상위 3개)을 `--db <work_dir>/_snapshot`으로 돌려 후보를 보여주고 고르게 한다: 기존 원인 / 새 원인·새 유형 / 원인 미확정 / 기록하지 않음(하위 선택도 고를 것 둘 + 고정 둘, L2 J6).
 5. **내용 받기** (`03-issue-db.md §5.7` 작성 규칙대로 초안을 만들고 승인받는다)
    - 새 원인/유형: 원인 `title`, `description`, `resolution`, `resolution_type`, 본문(재현 시나리오 포함). 새 유형이면 유형 `title`, `summary`, `dir_slug`.
    - **시그니처**: 새 원인/유형은 판별 시그니처가 필수다. 사용자에게 받거나(마스킹된 로그 문구 기준) 초안을 제안한다. **새 유형은 증상 시그니처가 없으면 진행하지 않는다**(증상 로그 문구를 받거나, 증상이 보이는 로그를 `--fixture`로 받아 초안을 만든다). 새 원인은 사용자가 **명시적으로** "원인 시그니처는 나중에"를 고르면 원인에 `signatures_pending: true`로 기록하고, 그 결과(경고, 매칭 불가, 해결책 unverified 고정, 월간 리뷰 대상)를 알린다. 시그니처가 있으면 `04-parser-matching.md §5.8 (3)` 파서 점검을 해서 `add-parser-rule`/`update-parser-rule` 초안을 만든다.

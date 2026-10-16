@@ -672,3 +672,18 @@ def test_record_obligations_same_key_new_content_or_return_reopens():
     seq, recs = _rec_seq(("a", "db_pr.py summary", [PUSH("h1")]), ("b", "db_pr.py publish", [CLOSE("publish")]),
                          ("c", "db_pr.py summary", [PUSH("h1")]))
     assert [(o.start, o.close_kind) for o in runtime.record_obligations(seq, recs)] == [(0, "publish")]   # 같은 내용: 그대로
+
+
+def test_rejected_ask_is_not_live():
+    """③ 리뷰 P1-2: 선택지 상한으로 거부된 질문(모의 ask_user 오류·실제 AskUserQuestion InputValidationError)은 사용자에게 가지
+    않았다 — 보인 글도 Step 7 질문도 아니다(hook과 채점기가 함께 쓰는 판정)."""
+    opts = ["예", "다른 기존 원인", "새 원인", "새 유형", "원인 미확정", "기록하지 않음"]
+    rej = {"kind": "tool", "id": "q1", "name": "mcp__eval-approver__ask_user", "input": {"question": "판정 불가 유형\n분류할까요?",
+           "options": opts}, "result": "선택지는 질문당 4개까지다(AskUserQuestion과 같다) — 나머지는 본문 목록에", "error": True}
+    real = {**rej, "id": "q2", "name": "AskUserQuestion", "result": "InputValidationError: options too long"}
+    ok = {**rej, "id": "q3", "input": {"question": "분류할까요?", "options": ["예", "다른 원인·유형", "원인 미확정", "기록하지 않음"]},
+          "result": "답", "error": False}
+    assert not runtime._live_ask(rej) and not runtime._live_ask(real) and runtime._live_ask(ok)
+    assert not any("판정 불가 유형" in c for c in runtime.visible_between([rej, real, ok]))
+    other = {**rej, "result": "MCP 연결 끊김"}                         # 다른 오류는 그대로(질문이 갔는지 모른다)
+    assert runtime._live_ask(other)

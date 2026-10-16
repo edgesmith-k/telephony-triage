@@ -280,6 +280,24 @@
 
 - 스크립트 stdout 줄바꿈: Windows에서 `db_pr stage` 등의 stdout이 CRLF로 나온다(텍스트 모드). 채점기는 화면 경계 줄 끝에서 `\r`을 허용하도록 고쳤고(②b), hook은 기록(스크립트가 쓴 LF 문자열)을 보므로 영향이 없다. stdout을 LF로 고정할지는 모든 스크립트 출력에 걸치는 변경이라 따로 본다.
 
+### ③ U-2·U-4 — 확인 화면 압축·질문 4개까지 (2026-10-16)
+
+- U-2(J5): 생성 파일 한 행(경로 전부), 같은 사유의 건너뜀만 한 행(`| R5·R6 | 건너뜀: 해당 없음 |  |`), README 미리보기 `[경로]` 머리·앞 두 칸 중복 제거.
+  채점기는 화면이 찍은 묶음 행과 같은 보인 줄만 ID마다 펼친다(모델이 쓴 요약은 불인정).
+- U-4(J6·J7): 분류 질문은 고를 것 둘 + 원인 미확정 + 기록하지 않음(4개까지), 분석 스킬 의견은 둘째 질문의 첫 선택지, record 대화형 분류도 같은 모양.
+  코드 경로 질문은 후보 둘 + 직접 입력 + 건너뛰기(나머지 후보는 문구에, 이름 없는 경로는 경로 값). 모의 `ask_user`는 5개 이상이면 오류이고,
+  그렇게 거부된 질문(모의 오류·실제 `InputValidationError`)은 보인 글·Step 7 질문이 아니다(`shown._live_ask`).
+- **§3.3 skill-creator**: SKILL.md·reference(rules·explore·write-flow·record) 수정은 `anthropic-skills:skill-creator` 지침(명령형·간결·세부는 reference,
+  이유 한 줄)을 읽고 따랐다. 그 스킬의 eval·뷰어 루프는 돌리지 않았다 — 검증은 §4 전체 재측정. 크기 한도: SKILL 8,280 → 8,500B, rules 2,320 → 2,460B,
+  write-flow 14,390 → 14,680B(`test_triage`, 주석에 사유).
+
+### ③ 리뷰 P2 (반입 뒤 후보)
+
+- `db_summary._readme_preview`의 `lines[:20]`이 행 없는 `[경로]` 머리로 끝날 수 있다.
+- 카테고리 README의 플랫폼·코드 칸이 루트 README 행에 밀려 미리보기에서 빠진다(앞 두 칸 중복 제거의 설계상 결과).
+- e2·e69의 "새 원인" 답까지 질문 수가 3이 됐다(첫 질문 → 다른 원인·유형 → 새 원인/새 유형) — 재측정에서 본다.
+- e6 expected_output과 [0] 단언은 옛 선택지 문구 그대로다 — 수동 채점 메모.
+
 ### ②a 리뷰 P2 (반입 뒤 후보)
 
 - P2-1 기록 인자를 `record()`의 try 밖에서 계산한다(`dbpr/publish.py` summary가 json 출력에도 마크다운을 그림, `db_verify.py`의 `brief_rules`, `triagelib/report.py`의 `report_core`) — 거기서 예외가 나면 본 작업 결과가 바뀐다. → try + stderr 경고로 감싼다.

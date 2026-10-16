@@ -167,6 +167,7 @@ _PUSH_SCREEN, _POST_SCREEN, _SCREEN_HEAD = shown.PUSH_SCREEN, shown.POST_SCREEN,
 _CMDWORD, _SUB, _script_rx = shown.CMDWORD, shown.SUB, shown.script_rx
 _PUSH_END, _POST_END, _STAGE, _RENDER = shown.PUSH_END, shown.POST_END, shown.STAGE, shown.RENDER
 _TRIAGE_RUN, _DRAFT, _APPROVED_ARG = shown.TRIAGE_RUN, shown.DRAFT, shown.APPROVED_ARG
+_GROUPED_SKIP = re.compile(r"\b(R\d(?:·R\d)+)\b")      # 확인 화면이 묶은 건너뜀 행의 ID 칸(L2 J5)
 _GIT_COMMIT = re.compile(r"\bgit\b[^|\n;&]*\bcommit\b")
 _STEP7_OPTS, _REPORT_CORE, _STATUS_TOKENS, _SEE_ABOVE = shown.STEP7_OPTS, shown.REPORT_CORE, shown.STATUS_TOKENS, shown.SEE_ABOVE
 _HEREDOC_RE, _strip_heredocs, _strip_quoted, _SH_C = shown._HEREDOC_RE, shown.strip_heredocs, shown.strip_quoted, shown.SH_C
@@ -381,8 +382,19 @@ class Ctx:
         return next((x for x in self.screens("push") or [] if x["start"] >= first_stage), None)
 
     def rows_missing_in_screen(self, rules, win) -> list[str]:
-        """rules 규칙 행 중 push 확인 화면 창(화면 뒤 ~ 승인 질문 포함)의 보인 글에 없는 것(`shown.draft_rows_missing`)."""
-        return shown.draft_rows_missing(rules, shown.visible_lines(self.visible_between(win["start"] + 1, win["asked"] + 1)))
+        """rules 규칙 행 중 push 확인 화면 창(화면 뒤 ~ 승인 질문 포함)의 보인 글에 없는 것(`shown.draft_rows_missing`). 확인 화면이
+        같은 사유의 건너뜀을 묶은 행(`| R5·R6 | 건너뜀: 해당 없음 |  |`, 스크립트 출력 모양 — L2 J5)은 ID마다 한 줄로 펼쳐 읽는다.
+        펼치는 것은 그 화면(`win["block"]`)이 찍은 묶음 행과 정규화한 줄이 같은 보인 줄뿐이다 — 모델이 쓴 요약("R1·R2 통과",
+        "R5·R6 건너뜀(해당 없음)")은 펼치지 않는다(여전히 불인정)."""
+        printed = {ln for ln in shown.screen_lines(win.get("block") or "") if _GROUPED_SKIP.search(ln)}
+        lines = []
+        for line in shown.visible_lines(self.visible_between(win["start"] + 1, win["asked"] + 1)):
+            m = _GROUPED_SKIP.search(line)
+            if m and line in printed:
+                lines += [line.replace(m.group(1), rid, 1) for rid in m.group(1).split("·")]
+            else:
+                lines.append(line)
+        return shown.draft_rows_missing(rules, lines)
 
     def stage_verification(self, first_stage: int, ids=("R1", "R2", "R3", "R4")):
         """stage 자체 검증(첫 stage 뒤 첫 push 확인 화면의 "검증 결과" 표: `| R1 | ✅ 통과 | 사유 |`)에 ids 행이 모두 있고 fail(❌)이
@@ -391,10 +403,11 @@ class Ctx:
         if win is None or win["asked"] is None:
             return False, "stage 뒤 승인 질문까지 간 push 확인 화면 없음"
         rows = {}
-        for m in re.finditer(r"^\|\s*(R\d)\s*\|\s*([^|]*?)\s*\|\s*([^|]*?)\s*\|\s*$", win["block"], re.M):
+        for m in re.finditer(r"^\|\s*(R\d(?:·R\d)*)\s*\|\s*([^|]*?)\s*\|\s*([^|]*?)\s*\|\s*$", win["block"], re.M):
             cell = m.group(2)
             status = "pass" if cell.startswith("✅") else "fail" if cell.startswith("❌") else "skipped"
-            rows.setdefault(m.group(1), {"id": m.group(1), "status": status, "reason": m.group(3)})
+            for rid in m.group(1).split("·"):          # 같은 사유의 건너뜀을 묶은 행(L2 J5)은 ID마다 펼친다
+                rows.setdefault(rid, {"id": rid, "status": status, "reason": m.group(3)})
         want = [rows[i] for i in ids if i in rows]
         if len(want) < len(ids):
             return False, f"push 확인 화면(seq {win['start']}) 검증 결과에 {[i for i in ids if i not in rows]} 행 없음"
@@ -745,7 +758,8 @@ def _cause(ctx: Ctx, branch: str, type_glob: str, cid: str) -> dict | None:
 
 
 # 수동 기록(record) 확인 화면: 구분 줄과 해당 없는 검증(R1~R3·R5 건너뜀) 행
-RECORD_SKIPPED = (r"구분: 수동 기록 \(record\)", *(rf"\| R{n} \| 건너뜀: 해당 없음" for n in (1, 2, 3, 5)))
+# 검증 결과의 건너뜀 행: 같은 사유면 스크립트가 한 행으로 묶는다(`| R1·R2·R3·R5 | 건너뜀: 해당 없음 |`, L2 J5)
+RECORD_SKIPPED = (r"구분: 수동 기록 \(record\)", *(rf"\| (?:R\d·)*R{n}(?:·R\d)* \| 건너뜀: 해당 없음" for n in (1, 2, 3, 5)))
 
 
 def _allow_fixtures(doc) -> list[str]:
@@ -963,7 +977,7 @@ def checks(eid: int, ctx: Ctx) -> list:
                 and _unverified(c)
             return ok, json.dumps(c, ensure_ascii=False)[:500]
         return [None, plan, None, lambda: ctx.screen_has("push", r"시그니처 없음 — 매칭 불가, 리뷰 대상"),
-                lambda: ctx.screen_has("push", *(rf"\| R{n} \| 건너뜀: [^|]*시그니처 없음" for n in (1, 2, 3))),
+                lambda: ctx.screen_has("push", *(rf"\| (?:R\d·)*R{n}(?:·R\d)* \| 건너뜀: [^|]*시그니처 없음" for n in (1, 2, 3))),
                 no_remote("issue/MOCK-9032")]
     if eid == 40:
         def plan():

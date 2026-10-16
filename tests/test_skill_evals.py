@@ -624,6 +624,14 @@ def test_approver_ask_user_returns_replies_and_logs(tmp_path, monkeypatch):
     assert json.loads(log.read_text(encoding="utf-8")) == [{"kind": "ask", "question": "탐색 분석을 실행할까요?", "options": ["예", "아니오"]}]
     listed = approver.handle({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})["result"]["tools"]
     assert {t["name"] for t in listed} == {"approve", "ask_user"}
+    ask = next(t for t in listed if t["name"] == "ask_user")
+    assert ask["inputSchema"]["properties"]["options"]["maxItems"] == 4               # AskUserQuestion과 같은 상한(L2 J7)
+    call = lambda n: approver.handle({"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": {  # noqa: E731
+        "name": "ask_user", "arguments": {"question": "어떻게 기록할까요?", "options": [f"선택 {i}" for i in range(n)]}}})["result"]
+    assert call(4)["isError"] is False
+    five = call(5)
+    assert five["isError"] is True and "질문당 4개까지" in five["content"][0]["text"]
+    assert json.loads(log.read_text(encoding="utf-8"))[-1]["rejected"] == "선택지 4개 초과"
 
 
 def test_explore_order_ignores_explore_text_inside_heredocs(tmp_path):
@@ -2254,6 +2262,28 @@ def test_e18_renarrowed_accepts_stage_own_verification(tmp_path):
     assert not ok and "행 없음" in ev, ev
 
 
+def test_grouped_skip_rows_are_expanded_for_stage_verification_and_all_clear(tmp_path):
+    """L2 J5: 확인 화면은 같은 사유의 건너뜀을 한 행(`| R2·R3 | 건너뜀: 해당 없음 |  |`)으로 묶는다 — 채점기는 ID마다 펼쳐 읽는다.
+    모델이 쓴 "R1~R4 통과" 묶음은 그대로 불인정."""
+    grouped = SCREEN_STAGE_OK.replace("| R2 | ✅ 통과 | 대상 1개 통과 |\n| R3 | ✅ 통과 | 대상 1개 통과 |\n", "").replace(
+        "| R5 | 건너뜀: 해당 없음 |  |", "| R2·R3·R5 | 건너뜀: 해당 없음 |  |")
+    assert "R2·R3·R5" in grouped and "| R2 |" not in grouped
+    head = [_bash("d1", DRAFT_CMD, DRAFT_FAIL42), _bash("d2", DRAFT_CMD.replace("--json; echo EXIT $?", "--json | head -1"), "1")]
+    ctx = _vis_ctx(tmp_path, [*head, _bash("s", STAGE_CMD, grouped), _ask("q", grouped + "\n승인할까요?")], "grouped")
+    ok, ev = grader.checks(18, ctx)[2]()
+    assert ok and "stage 자체 검증으로 갈음" in ev, ev
+    ctx = _vis_ctx(tmp_path, [*head, _bash("s", STAGE_CMD, grouped), _ask("q", "R1~R5 통과입니다. 승인할까요?")], "model")
+    assert grader.checks(18, ctx)[2]()[0] is False
+    clear = json.dumps({"rules": [{"id": "R1", "status": "skipped", "reason": "해당 없음"},
+                                  {"id": "R5", "status": "skipped", "reason": "해당 없음"}]}, ensure_ascii=False) + "\nEXIT 0"
+    scr = SCREEN.replace("| R1 | 건너뜀: 해당 없음 |  |", "| R1·R5 | 건너뜀: 해당 없음 |  |")
+    assert scr != SCREEN
+    ctx = _vis_ctx(tmp_path, [_bash("d", DRAFT_CMD, clear), ("text", "초안 검증 통과."), _bash("s", STAGE_CMD, scr),
+                              _ask("q", scr + "\n승인할까요?")], "clear-grouped")
+    ok, ev = ctx.draft_shown()
+    assert ok and "push 확인 화면으로 갈음(전부 통과" in ev, ev
+
+
 def test_e9_first_screen_is_order_only(tmp_path):
     publish2 = PUBLISH_CMD.replace("abc1234def", "fed4321cba")
     restage = [_bash("s1", STAGE_CMD, SCREEN), _ask("q1", "변경 3개입니다. 승인할까요?"), ("text", "수정 요청 반영"),
@@ -2533,3 +2563,21 @@ def test_publish_ask_row_absent_when_not_applicable(tmp_path):
     for name, (items, mode) in cases.items():
         rows = _publish_run(tmp_path / name, items, [], mode)
         assert grader.PUBLISH_ASK_TEXT not in [r["text"] for r in rows] and len(rows) == base, name
+
+
+def test_grouped_skip_expansion_credits_only_the_printed_line():
+    """③ 리뷰 P1-1: 펼치는 것은 화면이 찍은 묶음 행과 같은 보인 줄뿐 — 모델이 쓴 요약("R1·R2·R3·R4 통과, 건너뜀 없음",
+    "R5·R6 건너뜀(해당 없음)")은 인정하지 않는다. 화면 그대로(CRLF 포함)는 인정."""
+    rules = [{"id": f"R{n}", "status": "pass", "reason": "대상 1개 통과"} for n in (1, 2, 3, 4)] + \
+            [{"id": f"R{n}", "status": "skipped", "reason": "해당 없음"} for n in (5, 6)]
+    block = "\r\n".join(["### 검증 결과", "", "| 규칙 | 결과 | 사유 |", "|---|---|---|"]
+                         + [f"| R{n} | ✅ 통과 | 대상 1개 통과 |" for n in (1, 2, 3, 4)] + ["| R5·R6 | 건너뜀: 해당 없음 |  |"])
+
+    def missing(text):
+        ctx = grader.Ctx.__new__(grader.Ctx)
+        ctx.visible_between = lambda a, b: [text]
+        return ctx.rows_missing_in_screen(rules, {"start": 0, "asked": 1, "block": block})
+
+    assert missing(block.replace("\r", "")) == []
+    assert len(missing("R1·R2·R3·R4 통과, 건너뜀 없음\nR5·R6 건너뜀: 해당 없음")) == 6
+    assert len(missing("건너뜀 없이 R1·R2·R3·R4 모두 통과\nR5·R6 건너뜀(해당 없음)")) == 6

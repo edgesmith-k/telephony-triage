@@ -548,9 +548,15 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
                     "label": f"{c.get('name') or '최근'} {self.platform_label} {c.get('platform_version') or '?'}"
                              + (" (추천)" if c.get("recommended") else "")}
                    for c in suggested.get("candidates") or []]
+        # 질문당 선택지 4개(AskUserQuestion 상한): 후보 둘(추천이 첫째) + 직접 입력 + 건너뛰기, 나머지 후보는 문구에
+        options, rest = options[:2], options[2:]
         options += [{"value": "<경로 또는 키=경로,…>", "label": "직접 입력"},
                     {"value": "skip", "label": "코드 분석 건너뛰기(로그 기반 분석만)"}]
         text = text or f"코드 경로를 고른다 (대상: {self.platform_label} {version or '?'})."
+        if rest:    # 이름 없는 최근 경로는 직접 입력에 그대로 적을 수 있게 경로 값을 함께
+            cands = (suggested.get("candidates") or [])[2:]
+            names = [o["label"] + ("" if c.get("name") else f" {o['value']}") for o, c in zip(rest, cands)]
+            text += f" (그 밖 후보: {', '.join(names)} — 직접 입력에 이름이나 경로를 적는다)"
         return NeedsInput("code", text + (" (code.auto_select 값이 잘못돼 묻기로 본다)" if self.auto_invalid else ""), options)
 
     @staticmethod
