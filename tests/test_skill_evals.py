@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import re
 import subprocess
 import sys
@@ -2387,11 +2388,17 @@ MARK = "[telephony-triage] show-guard"
 
 
 def _would_deny(events: Path, ask_input: dict, tid: str) -> bool:
-    """events.jsonl을 transcript로 주고 질문(tid, 기록의 마지막 호출) 직전에 show_guard pre-ask가 거부하는가."""
-    event = {"hook_event_name": "PreToolUse", "transcript_path": str(events), "tool_name": ASK, "tool_input": ask_input,
+    """events.jsonl을 transcript로 주고 질문(tid, 기록의 마지막 호출) 직전에 show_guard pre-ask가 거부하는가. hook은 스크립트
+    기록으로 의무를 정하므로(L R) 시각을 붙인 사본과 그 transcript가 실제였다면 남았을 기록을 덧입힌 홈으로 부른다 — 채점기
+    추론(shown_infer)과 hook(기록)이 같은 결론인지 본다."""
+    import shown_records
+    stamped, home = events.with_name("events.stamped.jsonl"), events.parent / "home"
+    shown_records.stamp_file(events, stamped, home)
+    event = {"hook_event_name": "PreToolUse", "transcript_path": str(stamped), "tool_name": ASK, "tool_input": ask_input,
              "tool_use_id": tid}
     proc = subprocess.run([sys.executable, str(SHOW_GUARD), "pre-ask"], input=json.dumps(event, ensure_ascii=False),
-                          capture_output=True, text=True, encoding="utf-8", check=False)
+                          capture_output=True, text=True, encoding="utf-8", check=False,
+                          env={**os.environ, "TELEPHONY_TRIAGE_HOME": str(home)})
     assert proc.returncode == 0, proc.stderr
     out = json.loads(proc.stdout) if proc.stdout.strip() else {}
     return (out.get("hookSpecificOutput") or {}).get("permissionDecision") == "deny"

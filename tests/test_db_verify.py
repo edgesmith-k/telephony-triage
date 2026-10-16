@@ -659,7 +659,8 @@ def test_relative_draft_from_work_dir_leaves_clone_untouched():
 def test_shown_records_draft_table_with_transcript_key():
     """L R ②a: `rules --plan --draft`는 초안 검증표(기본 출력 행)를 draft 기록으로 남기고, key는 transcript 추론(옛 판정)이
     같은 출력에서 만드는 키와 같다(`--plan <키>/plan.json` 태그 + 규칙·상태·사유)."""
-    from common import shown
+    sys.path.insert(0, str(Path(__file__).resolve().parent / "skill_evals"))
+    import shown_infer as shown     # 기록 키 = 채점기 추론 키(같은 계획·같은 결과)
     ws = Workspace()
     job = "MOCK-7016"
     ws.put(job, "fixtures/cut-1.log", SIM_LOG)

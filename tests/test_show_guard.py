@@ -9,6 +9,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -17,7 +18,11 @@ import pytest
 REPO = Path(__file__).resolve().parents[1]
 SCRIPT = REPO / "plugin" / "scripts" / "show_guard.py"
 sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+sys.path.insert(0, str(REPO / "tests" / "helpers"))
+sys.path.insert(0, str(REPO / "tests" / "skill_evals"))
 from common import shown  # noqa: E402
+import shown_infer  # noqa: E402 — 채점기 추론(옮긴 함수의 시험·녹화본 비교)
+import shown_records  # noqa: E402 — 시각·기록 덧입히기(L R)
 
 ASK = "mcp__eval-approver__ask_user"
 STAGE_CMD = "python3 /p/scripts/db_pr.py stage /w/MOCK-1/plan.json --then-summary"
@@ -91,18 +96,37 @@ def feedback(reason):
     return [{"type": "user", "isMeta": True, "message": {"role": "user", "content": "Stop hook feedback:\n" + reason}}]
 
 
-def write(tmp_path, *parts, name="t.jsonl") -> Path:
+def home_of(path) -> Path:
+    """transcript마다 따로 둔 사용자 홈(`<이름 첫 마디>.home`, pre()의 사본 `t.now.pre.jsonl`도 원본 `t.jsonl`과 같은 홈)."""
+    path = Path(path)
+    return path.parent / (path.name.split(".")[0] + ".home")
+
+
+def write(tmp_path, *parts, name="t.jsonl", records=True, extra=None, replace=None) -> Path:
+    """실제 형식 transcript를 쓴다. 줄마다 시각을 붙이고(1초 간격), records면 그 transcript가 실제였다면 스크립트가 남겼을
+    표시 기록을 그 transcript의 홈 work_dir에 새로 쓴다(`shown_records.backfill`, L R)."""
     rows = [{"type": "system", "subtype": "init"}, {"type": "ai-title", "title": "x"}]
     for p in parts:
         rows += p
+    rows = shown_records.stamp(rows)
     path = tmp_path / name
     path.write_text("\n".join(json.dumps(r, ensure_ascii=False) for r in rows) + "\n", encoding="utf-8")
+    shown_records.home(home_of(path))
+    if records:
+        shown_records.backfill(rows, home_of(path), extra, replace)
+    else:
+        shown_records.log_path(home_of(path)).unlink(missing_ok=True)
     return path
 
 
-def hook(mode, event, script=SCRIPT) -> tuple[dict | None, str]:
+NO_HOME = Path(tempfile.mkdtemp(prefix="tt-nohome-")) / "none"     # 기록 없는 홈(사용자 config에 기대지 않게)
+
+
+def hook(mode, event, script=SCRIPT, home=None) -> tuple[dict | None, str]:
+    tp = event.get("transcript_path") if isinstance(event, dict) else None
+    env = {**os.environ, "TELEPHONY_TRIAGE_HOME": str(home or (home_of(tp) if tp else NO_HOME))}
     proc = subprocess.run([sys.executable, str(script), mode], input=event if isinstance(event, str) else json.dumps(event),
-                          capture_output=True, text=True, encoding="utf-8", timeout=60, check=False)
+                          capture_output=True, text=True, encoding="utf-8", timeout=60, check=False, env=env)
     assert proc.returncode == 0, proc.stderr
     return (json.loads(proc.stdout) if proc.stdout.strip() else None), proc.stderr
 
@@ -277,9 +301,8 @@ def test_pre_bash_publish_requires_screen_before_approval(tmp_path):
     assert decision(out) == "deny"
     assert "승인 질문 전에 확인 화면 전체를 보이지 않았다 — 화면을 다시 보이고 다시 승인받는다" in \
         out["hookSpecificOutput"]["permissionDecisionReason"]
-    other = PUBLISH_CMD.replace("abc1234def", "0123456789")           # 그 해시의 화면이 도구 출력에 없다: 다시 내게 한다
-    out = pre("pre-bash", summarized, "Bash", {"command": other})
-    assert decision(out) == "deny" and "push:0123456789" in out["hookSpecificOutput"]["permissionDecisionReason"]
+    other = PUBLISH_CMD.replace("abc1234def", "0123456789")           # 그 해시의 화면 기록이 없다: 판정하지 않는다(J-c,
+    assert pre("pre-bash", summarized, "Bash", {"command": other}) is None   # 스크립트의 해시 대조·규칙 7 ask가 관문)
     assert pre("pre-bash", summarized, "Bash", {"command": 'grep -n "db_pr.py publish --approved abc1234def" a'}) is None
     braced = 'S="python3 /p/scripts/"; ${S}db_pr.py publish /w/MOCK-1/wt --approved abc1234def --commit'   # E67
     assert decision(pre("pre-bash", summarized, "Bash", {"command": braced})) == "deny"
@@ -302,20 +325,45 @@ def test_pre_bash_stage_after_unshown_draft(tmp_path):
 
 # --- PostToolUse ----------------------------------------------------------------------------------------------
 
+def _post_home(tmp_path, *recs) -> Path:
+    """post 판정용 홈: 지금 시각의 기록(스크립트가 방금 남긴 것)."""
+    base = tmp_path / "post.home"
+    shown_records.home(base)
+    shown_records.log_path(base).unlink(missing_ok=True)
+    for script, kind, f in recs:
+        shown_records.add_record(base, script, kind, "MOCK-1", shown.now_iso(), **f)
+    return base
+
+
 def test_post_reminds_full_output(tmp_path):
+    """L R: 안내는 지금 호출의 스크립트가 60초 안에 남긴 기록으로 고른다(출력 모양을 보지 않는다)."""
+    home = _post_home(tmp_path, shown_records.screen_record(SCREEN))
     out, _ = hook("post", {"tool_name": "Bash", "tool_input": {"command": STAGE_CMD},
                            "tool_response": {"stdout": "EXIT 0\n" + SCREEN, "stderr": "", "interrupted": False,
-                                             "isImage": False, "noOutputExpected": False}})
+                                             "isImage": False, "noOutputExpected": False}}, home=home)
     ctx = out["hookSpecificOutput"]
     assert ctx["hookEventName"] == "PostToolUse" and "사용자에게 안 보인다" in ctx["additionalContext"]
     assert f"전문({len(shown.screen_lines(SCREEN))}줄)" in ctx["additionalContext"]
     assert shown.MARKER not in ctx["additionalContext"]               # 막은 횟수 표식과 섞이지 않는다
-    out, _ = hook("post", {"tool_name": "Bash", "tool_input": {"command": DRAFT_CMD}, "tool_response": {"stdout": DRAFT_OUT}})
+    failed = [{"id": "R1", "status": "pass", "reason": "통과"}, {"id": "R3", "status": "fail", "reason": "fixture 2개"},
+              {"id": "R5", "status": "skipped", "reason": "해당 없음"}]
+    home = _post_home(tmp_path, ("db_verify", "draft", {"key": shown.draft_key("MOCK-1/plan.json", failed), "rules": failed}))
+    out, _ = hook("post", {"tool_name": "Bash", "tool_input": {"command": DRAFT_CMD}, "tool_response": {"stdout": "{}"}}, home=home)
     assert "규칙마다 한 행(3행" in out["hookSpecificOutput"]["additionalContext"]
-    run = _job(tmp_path)[1]["message"]["content"][0]["content"]
+    ok_rules = [{"id": "R1", "status": "pass", "reason": "통과"}, {"id": "R5", "status": "skipped", "reason": "해당 없음"}]
+    clear = _post_home(tmp_path, ("db_verify", "draft", {"key": "draft:x", "rules": ok_rules}))   # 전부 통과: 화면으로 갈음
+    assert hook("post", {"tool_name": "Bash", "tool_input": {"command": DRAFT_CMD}, "tool_response": {}}, home=clear)[0] is None
+    home = _post_home(tmp_path, ("triage", "report", {"key": "report:MOCK-1#1", "lines": shown.report_core(REPORT),
+                                                      "must_show": [MUST]}))
     out, _ = hook("post", {"tool_name": "Bash", "tool_input": {"command": "python3 /p/scripts/triage.py run MOCK-1"},
-                           "tool_response": {"stdout": run}})
+                           "tool_response": {"stdout": "{}"}}, home=home)
     assert "결정적 줄과 must_show(5줄)" in out["hookSpecificOutput"]["additionalContext"]
+    # 다른 스크립트 호출·오래된 기록(60초 밖)은 안내하지 않는다
+    assert hook("post", {"tool_name": "Bash", "tool_input": {"command": STAGE_CMD}, "tool_response": {}}, home=home)[0] is None
+    old = _post_home(tmp_path)
+    shown_records.add_record(old, *shown_records.screen_record(SCREEN)[:2], "MOCK-1", "2026-01-01T00:00:00.000Z",
+                             **shown_records.screen_record(SCREEN)[2])
+    assert hook("post", {"tool_name": "Bash", "tool_input": {"command": STAGE_CMD}, "tool_response": {}}, home=old)[0] is None
 
 
 # --- 성능 -------------------------------------------------------------------------------------------------------
@@ -378,7 +426,7 @@ def test_reading_docs_or_fixtures_is_not_an_obligation(tmp_path):
 def test_ascii_stdio_encoding(tmp_path):
     path = write(tmp_path, prompt("분석"), bash("s", STAGE_CMD, SCREEN), say(SUMMARY))
     event = json.dumps({"transcript_path": str(path), "last_assistant_message": SUMMARY}, ensure_ascii=False)
-    env = {**os.environ, "PYTHONIOENCODING": "ascii"}
+    env = {**os.environ, "PYTHONIOENCODING": "ascii", "TELEPHONY_TRIAGE_HOME": str(home_of(path))}
     proc = subprocess.run([sys.executable, str(SCRIPT), "stop"], input=event.encode("utf-8"), capture_output=True, env=env,
                           check=False)
     assert proc.returncode == 0
@@ -418,7 +466,7 @@ def _narrowed_first(*extra):
 def test_failed_draft_before_other_plan_still_enforced(tmp_path):
     """실패 결과의 표시 의무는 다른 계획의 draft 호출로 닫히지 않는다: 질문·stage 모두 처음 실패 표를 요구한다."""
     path = write(tmp_path, *_narrowed_first())
-    key = next(o for o in shown.obligations(shown.parse_events(path.read_text(encoding="utf-8").splitlines()))
+    key = next(o for o in shown_infer.obligations(shown.parse_events(path.read_text(encoding="utf-8").splitlines()))
                if o.kind == "draft").key
     out = pre("pre-ask", path, ASK, NARROW_Q)
     assert decision(out) == "deny"
@@ -439,49 +487,58 @@ def test_failed_draft_before_other_plan_still_enforced(tmp_path):
 def test_report_follows_latest_analysis(tmp_path):
     run = _job(tmp_path)
     q7 = {"question": REPORT + MUST + "\n어떻게 기록할까요?", "options": STEP7}
-    second = bash("t2", "python3 /p/scripts/triage.py run MOCK-1 --logs logs/b.log", run[1]["message"]["content"][0]["content"])
+    rerun = run[1]["message"]["content"][0]["content"].replace('"key": "MOCK-1"', '"key": "MOCK-1", "run": 2')
+    second = bash("t2", "python3 /p/scripts/triage.py run MOCK-1 --logs logs/b.log", rerun)
     path = write(tmp_path, prompt("p"), run, call("q", ASK, q7, "예"), prompt("다른 로그로 다시"), second, say("다시 분석했습니다."))
     out = stop(path, "다시 분석했습니다.")
-    assert out["decision"] == "block" and "report:t2" in out["reason"]
+    assert out["decision"] == "block" and "report:MOCK-1#2" in out["reason"]
 
 
-def test_post_mentions_persisted_file():
+def test_post_mentions_persisted_file(tmp_path):
     saved = "Output too large (40KB). Full output saved to: /tmp/x/tool-results/abc.txt\n\nPreview:\n" + SCREEN[:80]
-    out, _ = hook("post", {"tool_name": "Bash", "tool_input": {"command": STAGE_CMD}, "tool_response": {"stdout": saved}})
+    out, _ = hook("post", {"tool_name": "Bash", "tool_input": {"command": STAGE_CMD}, "tool_response": {"stdout": saved}},
+                  home=_post_home(tmp_path, shown_records.screen_record(SCREEN)))
     ctx = out["hookSpecificOutput"]["additionalContext"]
     assert "/tmp/x/tool-results/abc.txt" in ctx and "잘려" in ctx
 
 
-def test_redirected_stage_output_read_back_is_a_screen(tmp_path):
+HIDDEN = {"s": [shown_records.screen_record(SCREEN)]}     # 리디렉션으로 숨긴 화면도 스크립트는 기록한다(L R)
+
+
+def test_hidden_screen_is_still_an_obligation(tmp_path):
+    """L R: 화면을 리디렉션으로 숨겨도(stage > 파일) 스크립트가 기록했으므로 의무다 — 되읽기 규칙·화면 모양 추론이 필요 없다."""
     path = write(tmp_path, prompt("p"), bash("s", STAGE_CMD + ' > "$JOB/stage_out.md"; echo EXIT $?', "EXIT 0"),
-                 call("r", "Read", {"file_path": "/w/MOCK-1/stage_out.md"}, SCREEN), say(SUMMARY))
+                 call("r", "Read", {"file_path": "/w/MOCK-1/stage_out.md"}, SCREEN), say(SUMMARY), extra=HIDDEN)
     assert stop(path, SUMMARY)["decision"] == "block"
+    devnull = write(tmp_path, prompt("p"), bash("s", STAGE_CMD + " > /dev/null", "EXIT 0"), say(SUMMARY), name="dev.jsonl",
+                    extra=HIDDEN)
+    assert stop(devnull, SUMMARY)["decision"] == "block"
 
 
-def test_publish_or_approve_of_screen_never_in_output(tmp_path):
+def test_publish_or_approve_of_hidden_screen_gets_normal_deny_with_screen(tmp_path):
+    """L R(J2): 화면이 어느 도구 출력에도 없어도 기록이 있으므로 보통 거부다 — 거부 문구에 붙일 화면 전문이 실리고, 한도는
+    MAX_BLOCKS(+BLIND_FREE). 화면을 낸 기록이 없으면 판정하지 않는다(스크립트의 해시 대조·규칙 7 ask가 관문)."""
     hidden = write(tmp_path, prompt("p"), bash("s", STAGE_CMD + ' > "$JOB/stage_out.md"; echo EXIT $?', "EXIT 0"),
                    bash("h", 'grep approved_hash "$JOB/stage_out.md"', "approved_hash: abc1234def"), say("승인할까요?"),
-                   prompt("승인"))
+                   prompt("승인"), extra=HIDDEN)
     out = pre("pre-bash", hidden, "Bash", {"command": PUBLISH_CMD})
     r = out["hookSpecificOutput"]["permissionDecisionReason"]
     assert decision(out) == "deny" and r.startswith(shown.MARKER + " push:abc1234def")
-    assert "`python3 /p/scripts/db_pr.py summary /w/MOCK-1/wt --format markdown`" in r
-    again = write(tmp_path, prompt("p"), bash("s", STAGE_CMD + " > /w/o.md", "EXIT 0"), prompt("승인"),
-                  call("x", "Bash", {"command": PUBLISH_CMD}, "PreToolUse:Bash hook error: " + r, True), name="again.jsonl")
-    out = pre("pre-bash", again, "Bash", {"command": PUBLISH_CMD})       # push는 화면이 나올 때까지 4번 막는다(K P1-2)
-    assert decision(out) == "deny" and "다시 불러도 거부된다" in out["hookSpecificOutput"]["permissionDecisionReason"]
+    assert "--- 붙일 화면 ---\n" + SCREEN.rstrip() in r
     nostage = write(tmp_path, prompt("승인해줘"), say("네"), name="nostage.jsonl")
-    assert pre("pre-bash", nostage, "Bash", {"command": PUBLISH_CMD}) is None   # 화면을 낸 호출이 없다: 판정하지 않는다
+    assert pre("pre-bash", nostage, "Bash", {"command": PUBLISH_CMD}) is None
     render = "python3 /p/scripts/issue_post.py render MOCK-1 --fill /w/MOCK-1/post.fill.json --json"
     approve = "python3 /p/scripts/issue_post.py approve MOCK-1 --sha " + "c" * 64
+    post_screen = "## Jira 게시 전 확인: MOCK-1 → 코멘트 1건\n본문 줄\n선택: 승인 / 수정 요청 / 취소\npost_sha256: " + "c" * 64
+    posted = {"r": [("issue_post", "post", {"key": "post:" + "c" * 16, "block": post_screen})]}
     post = write(tmp_path, prompt("p"), bash("r", render + " | tail -1", '"post_sha256": "' + "c" * 64 + '"'), prompt("게시"),
-                 name="post.jsonl")
+                 name="post.jsonl", extra=posted)
     out = pre("pre-bash", post, "Bash", {"command": approve})
     r = out["hookSpecificOutput"]["permissionDecisionReason"]
-    assert decision(out) == "deny" and "post:cccccccccccccccc" in r and "issue_post.py render MOCK-1 --fill" in r
+    assert decision(out) == "deny" and r.startswith(shown.MARKER + " post:cccccccccccccccc") and "본문 줄" in r
     again = write(tmp_path, prompt("p"), bash("r", render + " | tail -1", '"post_sha256": "' + "c" * 64 + '"'), prompt("게시"),
-                  _denied("x", approve, r), name="post-again.jsonl")
-    out = pre("pre-bash", again, "Bash", {"command": approve})             # post는 한 번만 막는다(그대로)
+                  _denied("x", approve, r), say("게시할까요?"), _denied("y", approve, r), name="post-again.jsonl", extra=posted)
+    out = pre("pre-bash", again, "Bash", {"command": approve})             # 글을 쓰고 두 번 막혔다: 한도
     assert decision(out) is None and shown.CAPPED in out["systemMessage"]
 
 
@@ -489,7 +546,7 @@ PUB_BRANCH = "python3 /p/scripts/db_pr.py publish /w/MOCK-1/wt --branch issue/MO
 
 
 def test_publish_with_variable_approved_is_checked(tmp_path):
-    """K P1-1: `--approved "$H"`·`$H`·`H=$(…)`처럼 해시가 변수여도 판정한다(마지막 화면, post의 변수 `--sha`와 같게)."""
+    """K P1-1: `--approved "$H"`·`$H`·`H=$(…)`처럼 해시가 변수여도 판정한다(마지막 stage 실행 뒤 기록된 화면)."""
     summarized = write(tmp_path, prompt("p"), bash("s", STAGE_CMD, SCREEN), say(SUMMARY + " 승인할까요?"), prompt("승인"))
     full = write(tmp_path, prompt("p"), bash("s", STAGE_CMD, SCREEN), say(SCREEN + "\n승인할까요?"), prompt("승인"),
                  name="full.jsonl")
@@ -502,33 +559,29 @@ def test_publish_with_variable_approved_is_checked(tmp_path):
 
 
 def test_publish_with_variable_approved_and_hidden_screen(tmp_path):
-    """K P1-1: 화면을 숨기고(리디렉션) 해시도 변수면 push 대상 브랜치 키로 막고 summary로 화면을 다시 내게 한다."""
-    hidden = write(tmp_path, prompt("p"), bash("s", STAGE_CMD + " > /w/MOCK-1/screen.md", ""), say("stage 완료."))
+    """K P1-1 → L R(J2): 화면을 숨기고 해시도 변수여도 기록된 화면의 키로 보통 거부한다(브랜치 키 `push:var:` 없음)."""
+    hidden = write(tmp_path, prompt("p"), bash("s", STAGE_CMD + " > /w/MOCK-1/screen.md", ""), say("stage 완료."), extra=HIDDEN)
     out = pre("pre-bash", hidden, "Bash", {"command": PUB_BRANCH.format(h='"$H"')})
     r = out["hookSpecificOutput"]["permissionDecisionReason"]
-    assert decision(out) == "deny" and r.startswith(shown.MARKER + " push:var:issue/MOCK-1 ")
-    assert "db_pr.py summary /w/MOCK-1/wt --format markdown" in r
-    out = pre("pre-bash", hidden, "Bash", {"command": PUB_BRANCH.format(h='"$H"').replace("issue/MOCK-1", "$B")})
-    assert out["hookSpecificOutput"]["permissionDecisionReason"].startswith(shown.MARKER + " push:var:? ")
+    assert decision(out) == "deny" and r.startswith(shown.MARKER + " push:abc1234def ") and SCREEN.rstrip() in r
 
 
-def test_unseen_publish_keeps_denying_until_screen_appears(tmp_path):
-    """K P1-2: 화면이 어느 도구 출력에도 없던 publish는 다시 불러도 키마다 4번(`UNSEEN_BLOCKS`)까지 거부한다. 그 뒤는
-    systemMessage만(큰 출력이 파일로 돌려져 화면이 끝내 안 나와도 막혀 버리지 않게 — fail-open, 최종 관문은 guard 규칙 7 ask).
-    summary로 화면을 내고 전체를 보인 뒤 승인받으면 통과."""
+def test_hidden_publish_limit_is_the_normal_one(tmp_path):
+    """L R(J2): 숨긴 화면의 publish도 보통 한도 — 똑같은 호출을 글 없이 되풀이한 거부는 한 번 세지 않으므로 많아야 3번 거부하고,
+    그 뒤는 systemMessage만. summary로 화면을 내고 전체를 보인 뒤 승인받으면 통과."""
     base = [prompt("p"), bash("s", STAGE_CMD + " > /w/MOCK-1/screen.md", ""), say("승인할까요?"), prompt("승인")]
-    r = pre("pre-bash", write(tmp_path, *base), "Bash", {"command": PUBLISH_CMD})["hookSpecificOutput"]["permissionDecisionReason"]
-    assert "다시 불러도 거부된다" not in r
-    for n in (1, 2, 3):
-        path = write(tmp_path, *base, *[_denied(f"x{k}", PUBLISH_CMD, r) for k in range(n)], name=f"n{n}.jsonl")
+    r = pre("pre-bash", write(tmp_path, *base, extra=HIDDEN), "Bash",
+            {"command": PUBLISH_CMD})["hookSpecificOutput"]["permissionDecisionReason"]
+    for n in (1, 2):
+        path = write(tmp_path, *base, *[_denied(f"x{k}", PUBLISH_CMD, r) for k in range(n)], name=f"n{n}.jsonl", extra=HIDDEN)
         out = pre("pre-bash", path, "Bash", {"command": PUBLISH_CMD})
-        assert decision(out) == "deny" and "다시 불러도 거부된다(키마다 4번)" in out["hookSpecificOutput"]["permissionDecisionReason"], n
-    capped = write(tmp_path, *base, *[_denied(f"x{k}", PUBLISH_CMD, r) for k in range(4)], name="n4.jsonl")
-    out = pre("pre-bash", capped, "Bash", {"command": PUBLISH_CMD})       # 4번 거부한 뒤: 막지 않고 사용자 직접 확인 안내
+        assert decision(out) == "deny" and "방금 거부된 것과 똑같은 호출" in out["hookSpecificOutput"]["permissionDecisionReason"], n
+    capped = write(tmp_path, *base, *[_denied(f"x{k}", PUBLISH_CMD, r) for k in range(3)], name="n3.jsonl", extra=HIDDEN)
+    out = pre("pre-bash", capped, "Bash", {"command": PUBLISH_CMD})
     assert decision(out) is None and shown.CAPPED in out["systemMessage"]
     summary = "python3 /p/scripts/db_pr.py summary /w/MOCK-1/wt --format markdown"
-    ok = write(tmp_path, *base, *[_denied(f"x{k}", PUBLISH_CMD, r) for k in range(3)], bash("m", summary, SCREEN),
-               say(SCREEN + "\n승인할까요?"), prompt("승인"), name="ok.jsonl")
+    ok = write(tmp_path, *base, _denied("x0", PUBLISH_CMD, r), bash("m", summary, SCREEN), say(SCREEN + "\n승인할까요?"),
+               prompt("승인"), name="ok.jsonl", extra=HIDDEN)
     assert pre("pre-bash", ok, "Bash", {"command": PUBLISH_CMD}) is None
 
 
@@ -538,57 +591,47 @@ def test_chain_hidden_screen_variable_s_publish(tmp_path):
     stage = s + "${S}db_pr.py stage /w/MOCK-1/plan.json --wt /w/MOCK-1/wt --branch issue/MOCK-1 --then-summary > /w/MOCK-1/screen.md"
     pub = s + "${S}db_pr.py publish /w/MOCK-1/wt --branch issue/MOCK-1 --lease new --approved abc1234def --commit --and-discard --json"
     base = [prompt("MOCK-1 분석하고 push까지 해줘"), bash("s1", stage, ""), say("stage 완료. 올리겠습니다.")]
-    out = pre("pre-bash", write(tmp_path, *base), "Bash", {"command": pub}, tid="x1")
+    hidden = {"s1": [shown_records.screen_record(SCREEN)]}
+    out = pre("pre-bash", write(tmp_path, *base, extra=hidden), "Bash", {"command": pub}, tid="x1")
     assert decision(out) == "deny"
     r = out["hookSpecificOutput"]["permissionDecisionReason"]
-    out = pre("pre-bash", write(tmp_path, *base, _denied("x1", pub, r), name="2.jsonl"), "Bash", {"command": pub}, tid="x2")
-    assert decision(out) == "deny" and "다시 불러도 거부된다" in out["hookSpecificOutput"]["permissionDecisionReason"]
+    out = pre("pre-bash", write(tmp_path, *base, _denied("x1", pub, r), name="2.jsonl", extra=hidden), "Bash", {"command": pub},
+              tid="x2")
+    assert decision(out) == "deny" and "방금 거부된 것과 똑같은 호출" in out["hookSpecificOutput"]["permissionDecisionReason"]
 
 
 def test_variable_approved_ignores_screen_before_hidden_restage(tmp_path):
-    """K 2차 R4: 해시가 변수(`--approved "$H"`)면 마지막 stage·summary 호출 뒤 화면만 본다. 첫 화면을 다 보이고 승인받은 뒤
-    고쳐 달라는 말에 다시 stage하면서 화면을 숨기면(리디렉션) 앞 화면으로 통과하지 않는다 — 화면 없음으로 막는다."""
+    """K 2차 R4: 해시가 변수(`--approved "$H"`)면 마지막 stage 실행 뒤 기록된 화면만 본다. 첫 화면을 다 보이고 승인받은 뒤
+    고쳐 달라는 말에 다시 stage하면서 화면을 숨기면(리디렉션) 앞 화면으로 통과하지 않는다 — 새 화면 키로 막는다."""
     first = [prompt("p"), bash("s1", STAGE_CMD, SCREEN), say(SCREEN + "\n승인할까요?"), prompt("README 문구를 바꿔줘")]
     restage = STAGE_CMD + " > /w/MOCK-1/screen.md"
-    hidden = write(tmp_path, *first, bash("s2", restage, ""), say("다시 stage했습니다. 승인할까요?"), prompt("승인"))
+    screen2 = SCREEN.replace("abc1234def", "fed4321cba")
+    hidden = write(tmp_path, *first, bash("s2", restage, ""), say("다시 stage했습니다. 승인할까요?"), prompt("승인"),
+                   extra={"s2": [shown_records.screen_record(screen2)]})
     out = pre("pre-bash", hidden, "Bash", {"command": PUB_BRANCH.format(h='"$H"')})
     r = out["hookSpecificOutput"]["permissionDecisionReason"]
-    assert decision(out) == "deny" and r.startswith(shown.MARKER + " push:var:issue/MOCK-1 ")
-    screen2 = SCREEN.replace("abc1234def", "fed4321cba")
+    assert decision(out) == "deny" and r.startswith(shown.MARKER + " push:fed4321cba ")
     shown2 = write(tmp_path, *first, bash("s2", STAGE_CMD, screen2), say(screen2 + "\n승인할까요?"), prompt("승인"),
                    name="shown2.jsonl")
     assert pre("pre-bash", shown2, "Bash", {"command": PUB_BRANCH.format(h='"$H"')}) is None
+    # J-c: stage 뒤 화면 기록이 없다(summary 없이 해시만) — 판정하지 않는다(stage가 approved_hash를 비워 publish가 거부한다)
+    bare = write(tmp_path, *first, bash("s2", STAGE_CMD.replace(" --then-summary", ""), "{}"), prompt("승인"), name="bare.jsonl")
+    assert pre("pre-bash", bare, "Bash", {"command": PUB_BRANCH.format(h='"$H"')}) is None
 
 
 
 def test_variable_approved_after_summary_rerun_passes(tmp_path):
     """K 3차 P1-a: summary는 화면·해시를 바꾸지 않는다 — stage 화면 뒤 `summary --format markdown`으로 같은 해시 화면을 다시 내
-    전체를 보이거나, `summary --format json`으로 해시를 읽고 변수로 publish해도 통과(기준은 마지막 stage)."""
+    전체를 보이거나, `summary --format json`으로 해시를 읽고 변수로 publish해도 통과(같은 key = 같은 의무, 기준은 마지막 stage)."""
     summary_md = "python3 /p/scripts/db_pr.py summary /w/MOCK-1/wt --format markdown"
     summary_json = "python3 /p/scripts/db_pr.py summary /w/MOCK-1/wt --format json"
     rerun = write(tmp_path, prompt("p"), bash("s1", STAGE_CMD, SCREEN), say("stage 완료."), bash("m", summary_md, SCREEN),
                   say(SCREEN + "\n승인할까요?"), prompt("승인"), name="rerun.jsonl")
     assert pre("pre-bash", rerun, "Bash", {"command": PUB_BRANCH.format(h='"$H"')}) is None
     as_json = write(tmp_path, prompt("p"), bash("s1", STAGE_CMD, SCREEN), say(SCREEN + "\n승인할까요?"), prompt("승인"),
-                    bash("j", summary_json, '{"approved_hash": "abc1234def"}'), name="json.jsonl")
+                    bash("j", summary_json, '{"approved_hash": "abc1234def"}'), name="json.jsonl",
+                    extra={"j": [shown_records.screen_record(SCREEN)]})
     assert pre("pre-bash", as_json, "Bash", {"command": PUB_BRANCH.format(h='"$H"')}) is None
-
-
-def test_redirect_targets_and_read_back_rules(tmp_path):
-    assert shown.redirect_targets('db_pr.py stage p > "$JOB/s.md" 2>&1') == {"name:s.md"}
-    assert shown.redirect_targets("db_pr.py stage p &> /tmp/a/s.md") == {"/tmp/a/s.md"}
-    assert shown.redirect_targets("db_pr.py stage p >/dev/null 2>/dev/null") == set()
-    assert shown.redirect_targets("db_pr.py stage p 2> err.txt >> out/o.md") == {"name:o.md"}
-    # 절대 경로로 쓴 파일: 같은 이름의 다른 경로(fixture)는 화면이 아니다
-    other = write(tmp_path, prompt("p"), bash("s", STAGE_CMD + " &> /w/MOCK-1/stage_out.md", "EXIT 0"),
-                  call("r", "Read", {"file_path": "/repo/tests/fixtures/stage_out.md"}, SCREEN), say(SUMMARY))
-    assert stop(other, SUMMARY) is None
-    same = write(tmp_path, prompt("p"), bash("s", STAGE_CMD + " &> /w/MOCK-1/stage_out.md", "EXIT 0"),
-                 bash("c", "cat /w/MOCK-1/stage_out.md", SCREEN), say(SUMMARY), name="same.jsonl")
-    assert stop(same, SUMMARY)["decision"] == "block"
-    devnull = write(tmp_path, prompt("p"), bash("s", STAGE_CMD + " > /dev/null", "EXIT 0"),
-                    bash("c", "cat /dev/null tests/fixtures/x.md", SCREEN), say(SUMMARY), name="dev.jsonl")
-    assert stop(devnull, SUMMARY) is None
 
 
 # --- 실제 eval 자식 transcript(모의 로그, 줄인 사본): 10/14 sm3에서 hook이 판정하지 못한 원인 회귀 ---------------------
@@ -603,7 +646,8 @@ def test_real_child_transcript_format(tmp_path):
     shutil.copy(REAL / "eval2-session.jsonl", path)
     ask = json.loads((REAL / "eval2-ask.json").read_text(encoding="utf-8"))
     seq = shown.parse_events(path.read_text(encoding="utf-8").splitlines(), include_user=True)
-    obs = {ob.kind: ob for ob in shown.obligations(seq)}
+    shown_records.stamp_file(path, path, home_of(path))       # 녹화본에 시각을 붙이고 스크립트가 남겼을 기록을 덧입힌다(L R)
+    obs = {ob.kind: ob for ob in shown_infer.obligations(seq)}
     assert set(obs) == {"push", "report", "draft"} and obs["push"].open
     assert obs["report"].close_kind == "step7" and obs["draft"].close_kind == "stage"
     assert pre("pre-ask", path, ASK, ask["tool_input"], ask["tool_use_id"]) is None
@@ -622,7 +666,7 @@ def test_hook_replay_counts_without_content(tmp_path, monkeypatch):
     sys.path.insert(0, str(REPO / "tools"))
     import hook_replay
     monkeypatch.setenv("TELEPHONY_TRIAGE_HOME", str(tmp_path / "home"))     # 이 PC의 사용자 config에 기대지 않는다
-    lines = (REAL / "eval2-session.jsonl").read_text(encoding="utf-8").splitlines()
+    lines = shown_records.stamp_file(REAL / "eval2-session.jsonl", tmp_path / "s.jsonl", tmp_path / "home")
     ask = json.loads((REAL / "eval2-ask.json").read_text(encoding="utf-8"))
     as_line = lambda inp: json.dumps(call(ask["tool_use_id"], ASK, inp)[0], ensure_ascii=False)  # noqa: E731
     out = hook_replay.replay([lines + [as_line({"question": "변경 파일 5개, 검증 통과입니다. 승인할까요?"})]])
@@ -635,10 +679,14 @@ def test_hook_replay_counts_without_content(tmp_path, monkeypatch):
     text = json.dumps(out, ensure_ascii=False)
     assert "MOCK-" not in text and "push 전 확인" not in text and "db_pr" not in text
     assert hook_replay.replay([lines + [as_line(ask["tool_input"])]])["points"][-1]["decision"] == "allow"
-    stop_lines = write(tmp_path, prompt("p"), bash("s", STAGE_CMD, SCREEN), say(SUMMARY)).read_text(encoding="utf-8").splitlines()
-    end = [p for p in hook_replay.replay([stop_lines])["points"] if p["hook"] == "stop"]
+    n = len(shown.read_records([tmp_path / "home" / "work"]))
+    assert out["summary"]["records"] == {"anchored": n, "unanchored": 0} and n >= 5    # 덧입힌 기록은 모두 고정된다
+    stop_path = write(tmp_path, prompt("p"), bash("s", STAGE_CMD, SCREEN), say(SUMMARY))
+    monkeypatch.setenv("TELEPHONY_TRIAGE_HOME", str(home_of(stop_path)))
+    end = [p for p in hook_replay.replay([stop_path.read_text(encoding="utf-8").splitlines()])["points"] if p["hook"] == "stop"]
     assert [(p["decision"], p["recorded"]) for p in end] == [("block", "ran")] and end[0]["keys"][0].startswith("push:")
-    assert out["summary"]["records"] is None      # 녹화본에는 시각·기록이 없다: 확인하지 못함(0/0 통과가 아니다)
+    plain = (REAL / "eval2-session.jsonl").read_text(encoding="utf-8").splitlines()
+    assert hook_replay.replay([plain])["summary"]["records"] is None   # 시각 없는 녹화본: 확인하지 못함(0/0 통과가 아니다)
 
 
 def test_hook_replay_counts_anchored_records_and_reads_other_scripts(tmp_path):
@@ -722,6 +770,7 @@ def test_never_recorded_or_missing_id(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(show_guard, "WAIT_SECONDS", 0.3)
     ask = {"question": "승인할까요?"}
     lost = write(tmp_path, prompt("p"), bash("s", STAGE_CMD, SCREEN), say(SUMMARY))
+    monkeypatch.setenv("TELEPHONY_TRIAGE_HOME", str(home_of(lost)))     # in-process 호출: 기록을 찾을 홈
     t0 = time.time()
     out = show_guard.mode_pre_ask({"transcript_path": str(lost), "tool_name": ASK, "tool_input": ask, "tool_use_id": "zz"})
     assert out is None and "기록되지 않아" in capsys.readouterr().err and time.time() - t0 < 2   # 거부하지 않는다
@@ -731,23 +780,24 @@ def test_never_recorded_or_missing_id(tmp_path, monkeypatch, capsys):
     assert decision(pre("pre-ask", lost, ASK, ask, "zz")) == "deny"          # 기록되면 판정한다
 
 
-def test_draft_key_count_is_per_job(tmp_path):
-    """전부 통과한 초안 표는 작업이 달라도 결과가 같다: 앞 작업에서 낸 표식으로 뒤 작업이 한도에 걸리지 않는다."""
-    cmd = "python3 /p/scripts/db_verify.py rules --plan $J/plan.json --draft $J/draft --json"
-    key = shown.obligations(shown.parse_events([json.dumps(r, ensure_ascii=False) for r in bash("d1", cmd, DRAFT_OUT)]))[0].key
-    deny = shown.MARKER + " " + key + " — 초안 검증표를 요약했다"
+def test_draft_key_is_per_job(tmp_path):
+    """L R: 초안 기록 키는 계획 경로의 작업 폴더(<KEY>/plan.json)를 담으므로 결과가 같아도 작업마다 다르다 — 앞 작업에서 낸
+    표식으로 뒤 작업이 한도에 걸리지 않는다."""
+    cmd = "python3 /p/scripts/db_verify.py rules --plan /w/{j}/plan.json --draft /w/{j}/draft --json"
+    rules = json.loads(DRAFT_OUT)["rules"]
+    key1, key2 = shown.draft_key("MOCK-1/plan.json", rules), shown.draft_key("MOCK-2/plan.json", rules)
+    deny = shown.MARKER + " " + key1 + " — 초안 검증표를 요약했다"
     run2 = "python3 /p/scripts/triage.py run MOCK-2 --logs logs/b.log"
-    path = write(tmp_path, prompt("p"), bash("d1", cmd, DRAFT_OUT), call("a1", ASK, {"question": "진행?"}, deny, True),
+    path = write(tmp_path, prompt("p"), bash("d1", cmd.format(j="MOCK-1"), DRAFT_OUT), call("a1", ASK, {"question": "진행?"}, deny, True),
                  call("a2", ASK, {"question": "진행?"}, deny, True), bash("s1", STAGE_CMD, SCREEN), say(SCREEN),
-                 prompt("다음 건 MOCK-2"), bash("t2", run2, "{}"), bash("d2", cmd, DRAFT_OUT))
-    ob = [o for o in shown.obligations(shown.parse_events(path.read_text(encoding="utf-8").splitlines())) if o.start > 0][-1]
-    assert ob.key == key
-    assert decision(pre("pre-ask", path, ASK, {"question": "note를 승인할까요?"})) == "deny"     # 새 작업: 다시 막는다
+                 prompt("다음 건 MOCK-2"), bash("t2", run2, "{}"), bash("d2", cmd.format(j="MOCK-2"), DRAFT_OUT))
+    out = pre("pre-ask", path, ASK, {"question": "note를 승인할까요?"})
+    assert key1 != key2 and decision(out) == "deny" and key2 in out["hookSpecificOutput"]["permissionDecisionReason"]
 
 
 def test_draft_rerun_with_same_result_shares_key_and_cap(tmp_path):
-    out1 = shown.obligations(shown.parse_events([json.dumps(r, ensure_ascii=False) for r in bash("d1", DRAFT_CMD, DRAFT_OUT)]))
-    out2 = shown.obligations(shown.parse_events([json.dumps(r, ensure_ascii=False) for r in bash("d2", DRAFT_CMD, DRAFT_OUT)]))
+    out1 = shown_infer.obligations(shown.parse_events([json.dumps(r, ensure_ascii=False) for r in bash("d1", DRAFT_CMD, DRAFT_OUT)]))
+    out2 = shown_infer.obligations(shown.parse_events([json.dumps(r, ensure_ascii=False) for r in bash("d2", DRAFT_CMD, DRAFT_OUT)]))
     assert out1[0].key == out2[0].key and out1[0].key.startswith("draft:")
     key = out1[0].key
     deny = shown.MARKER + " " + key + " — 초안 검증표를 요약했다"
@@ -764,7 +814,7 @@ def test_draft_key_ignores_plan_notation(tmp_path):
         return f"python3 /p/scripts/db_verify.py rules --plan {plan} --draft /w/MOCK-9002/draft --json"
 
     def key(cmd):
-        return shown.obligations(shown.parse_events([json.dumps(r, ensure_ascii=False) for r in bash("d", cmd, DRAFT_OUT)]))[0].key
+        return shown_infer.obligations(shown.parse_events([json.dumps(r, ensure_ascii=False) for r in bash("d", cmd, DRAFT_OUT)]))[0].key
 
     plans = ["$W/MOCK-9002/plan.json", '"$W/MOCK-9002/plan.json"', "/abs/MOCK-9002/plan.json", "MOCK-9002/plan.json"]
     keys = {key(draft(p)) for p in plans}
@@ -778,51 +828,17 @@ def test_draft_key_ignores_plan_notation(tmp_path):
     assert decision(out) is None and shown.CAPPED in out["systemMessage"]      # 표기를 바꿔 다시 돌려도 한도는 그대로
 
 
-def test_post_render_key_is_per_issue(tmp_path):
-    """`--sha`가 변수면 화면을 못 고른다: 키는 게시 대상별(`post:render:<KEY>`)이라 앞 이슈의 표식으로 뒤 이슈가 한도에 걸리지 않는다."""
-    def render(k):
-        return bash("r" + k, f"python3 /p/scripts/issue_post.py render {k} --fill /w/{k}/post.fill.json --json | tail -1",
-                    '"post_sha256": "' + "c" * 64 + '"')
-
-    def approve(k):
-        return f'python3 /p/scripts/issue_post.py approve {k} --sha "$SHA" --json'
-
-    one = write(tmp_path, prompt("p"), render("MOCK-1"), prompt("게시"))
-    out = pre("pre-bash", one, "Bash", {"command": approve("MOCK-1")})
-    r = out["hookSpecificOutput"]["permissionDecisionReason"]
-    assert decision(out) == "deny" and shown.MARKER + " post:render:MOCK-1" in r
-    two = write(tmp_path, prompt("p"), render("MOCK-1"), prompt("게시"), _denied("x1", approve("MOCK-1"), r),
-                prompt("다음 건"), render("MOCK-2"), prompt("게시"), name="two.jsonl")
-    assert decision(pre("pre-bash", two, "Bash", {"command": approve("MOCK-2")})) == "deny"     # 다른 이슈: 다시 막는다
-    out = pre("pre-bash", two, "Bash", {"command": approve("MOCK-1")}, tid="now1")
-    assert decision(out) is None and shown.CAPPED in out["systemMessage"]                     # 같은 이슈: 한 번만
-
-
 def test_draft_tag_path_spellings():
     """`//`·`./`·공백 든 따옴표 경로·Windows 경로·뒤 셸 구분자도 같은 계획이면 같은 키다."""
     def key(plan):
         cmd = f"python3 /p/scripts/db_verify.py rules --draft /w/D/draft --json --plan {plan}"     # 뒤 구분자를 시험하게 끝에
-        return shown.obligations(shown.parse_events([json.dumps(r, ensure_ascii=False) for r in bash("d", cmd, DRAFT_OUT)]))[0].key
+        return shown_infer.obligations(shown.parse_events([json.dumps(r, ensure_ascii=False) for r in bash("d", cmd, DRAFT_OUT)]))[0].key
 
     base = key("/w/MOCK-9002/plan.json")
     for plan in ["/w//MOCK-9002//plan.json", "./MOCK-9002/./plan.json", '"/my work/MOCK-9002/plan.json"',
                  "'/my work/MOCK-9002/plan.json'", r"C:\w\MOCK-9002\plan.json", '"$W/MOCK-9002/plan.json");']:
         assert key(plan) == base, plan
 
-
-def test_post_render_key_skips_flags_before_issue_key(tmp_path):
-    """argparse는 KEY 앞의 옵션도 받는다: 키는 옵션을 건너뛴 첫 인자(뒤 셸 구분자는 벗김), 다시 낼 render 명령도 그 키다."""
-    path = write(tmp_path, prompt("p"), bash("r", "python3 /p/scripts/issue_post.py render MOCK-1 --fill f.json --json | tail -1",
-                                              '"post_sha256": "' + "c" * 64 + '"'), prompt("게시"))
-    s = "python3 /p/scripts/issue_post.py approve "
-    for cmd, want in [(s + '--sha "$SHA" MOCK-1', "MOCK-1"), (s + "--sha=$SHA MOCK-1", "MOCK-1"),
-                      (s + '--json MOCK-2 --sha "$SHA"', "MOCK-2"), (s + '--platform android --sha "$SHA" MOCK-2', "MOCK-2"),
-                      (s + 'MOCK-1 --sha "$SHA";', "MOCK-1"), ('(' + s + '--sha "$SHA" MOCK-2)', "MOCK-2")]:
-        r = pre("pre-bash", path, "Bash", {"command": cmd})["hookSpecificOutput"]["permissionDecisionReason"]
-        assert r.startswith(shown.MARKER + " post:render:" + want + " "), (cmd, r)
-        assert f"issue_post.py render {want} --fill" in r, cmd
-    r = pre("pre-bash", path, "Bash", {"command": s + '"$K" --sha "$SHA"'})["hookSpecificOutput"]["permissionDecisionReason"]
-    assert r.startswith(shown.MARKER + " post:render ") and "render <KEY> --fill" in r      # 키도 변수: 고정 키
 
 def test_stage_deny_does_not_invite_a_new_question(tmp_path):
     path = write(tmp_path, prompt("p"), bash("d", DRAFT_CMD, DRAFT_OUT), say("초안 검증 통과."))
@@ -930,11 +946,82 @@ def test_cut_rerun_of_same_plan_does_not_shrink_obligation(tmp_path):
                  f"R3 fail: {long_r3}\nR4 fail: 기대값이 깨진 fixture 5개\n{{")
     cut = bash("d2", REL_DRAFT.format(plan="plan.json", draft="draft") + " | python3 -c 'print(r[:60])'",
                f"R1 pass 대상 1개 통과\nR3 fail {long_r3[:60]}\nR4 fail 기대값이 깨진 fixture 5개\nR5 skipped 해당 없음")
-    path = write(tmp_path, prompt("p"), first, cut)
-    cut_q = dict(NARROW_Q, question=f"| R3 | fail | {long_r3[:60]} |\n| R4 | fail | 기대값이 깨진 fixture 5개 |\n"
+    # 출력을 잘라 찍어도 스크립트는 전체 규칙을 기록한다(L R): 같은 계획·같은 결과 = 같은 key = 첫 의무 그대로
+    full = [(s, k, f) for _, s, k, f in shown_records.records_for(
+        shown.parse_events([json.dumps(r, ensure_ascii=False) for r in first])[0])]
+    path = write(tmp_path, prompt("p"), first, cut, replace={"d2": full})
+    cut_q =dict(NARROW_Q, question=f"| R3 | fail | {long_r3[:60]} |\n| R4 | fail | 기대값이 깨진 fixture 5개 |\n"
                  + NARROW_Q["question"])
     out = pre("pre-ask", path, ASK, cut_q)
     assert decision(out) == "deny" and long_r3 in out["hookSpecificOutput"]["permissionDecisionReason"]
     full_q = dict(NARROW_Q, question=f"| R3 | fail | {long_r3} |\n| R4 | fail | 기대값이 깨진 fixture 5개 |\n"
                   + NARROW_Q["question"])
     assert pre("pre-ask", path, ASK, full_q) is None
+
+
+# --- 기록(L R): 없음·세션 밖·회전 ------------------------------------------------------------------------------------
+
+def test_no_records_means_no_judgement(tmp_path):
+    """기록이 없으면(스크립트가 화면을 내지 않았거나 다른 PC의 기록) transcript가 요약이어도 판정하지 않는다 — 추론하지 않는다."""
+    path = write(tmp_path, prompt("p"), bash("s", STAGE_CMD, SCREEN), say(SUMMARY), records=False)
+    assert stop(path, SUMMARY) is None
+    assert pre("pre-ask", path, ASK, {"question": SUMMARY + " 승인할까요?"}) is None
+    assert pre("pre-bash", path, "Bash", {"command": PUBLISH_CMD}) is None
+
+
+def test_records_before_session_start_are_ignored(tmp_path):
+    """세션 첫 시각보다 이른 기록(지난 세션의 같은 작업)은 이 세션의 의무가 아니다. 회전된 `.1`의 기록도 읽는다."""
+    path = write(tmp_path, prompt("p"), bash("s", "echo hi", "hi"), say(SUMMARY), records=False)
+    base = home_of(path)
+    shown_records.add_record(base, *shown_records.screen_record(SCREEN)[:2], "MOCK-1", "2026-10-15T23:59:00.000Z",
+                             **shown_records.screen_record(SCREEN)[2])
+    assert stop(path, SUMMARY) is None
+    rotated = write(tmp_path, prompt("p"), bash("s", STAGE_CMD, SCREEN), say(SUMMARY), name="rot.jsonl")
+    log = shown_records.log_path(home_of(rotated))
+    log.replace(log.with_name(log.name + ".1"))                      # 4MB 회전 직후: 지금 파일 없음, 기록은 .1에
+    assert stop(rotated, SUMMARY)["decision"] == "block"
+
+
+def test_same_hash_different_screen_is_a_new_obligation(tmp_path):
+    """②b 리뷰 P1-1: push key는 트리 해시라 커밋 메시지·PR 제목만 바꿔 다시 stage해도 같다. 같은 key라도 화면이 바뀌면 새 의무 —
+    새 화면을 그 뒤에 다 보여야 하고(앞 화면으로 갈음하지 않는다), 거부 문구에는 새 화면이 실린다. 다른 화면에 밀렸다가 같은
+    화면으로 돌아와도(A→B→A) 다시 보여야 한다."""
+    msg = "### 커밋 메시지 / PR 제목\n\n```\n[DATA-001-01] {}\n```\n\n### 주요 diff"
+    a1, a2 = (SCREEN.replace("### 주요 diff", msg.format(m)) for m in ("M1 original message", "M2 changed message"))
+    first = [prompt("p"), bash("s1", STAGE_CMD, a1), say(a1 + "\n승인할까요?"), prompt("커밋 메시지를 M2로 바꿔줘")]
+    var = PUB_BRANCH.format(h='"$H"')
+    hidden = write(tmp_path, *first, bash("s2", STAGE_CMD + " > /w/MOCK-1/screen.md", ""), say("바꿨습니다. 승인할까요?"),
+                   prompt("승인"), extra={"s2": [shown_records.screen_record(a2)]})
+    for cmd in (PUBLISH_CMD, var):
+        out = pre("pre-bash", hidden, "Bash", {"command": cmd})
+        r = out["hookSpecificOutput"]["permissionDecisionReason"]
+        assert decision(out) == "deny" and "M2 changed message" in r and "M1 original message" not in r, cmd
+    # 반대 방향: 첫 화면은 요약했지만 바뀐 화면을 다 보였다 — 통과(앞 화면을 붙이며 막지 않는다)
+    later = write(tmp_path, prompt("p"), bash("s1", STAGE_CMD, a1), say(SUMMARY + " 승인할까요?"), prompt("메시지 M2로"),
+                  bash("s2", STAGE_CMD, a2), say(a2 + "\n승인할까요?"), prompt("승인"), name="later.jsonl")
+    assert pre("pre-bash", later, "Bash", {"command": PUBLISH_CMD}) is None
+    b = SCREEN.replace("abc1234def", "fed4321cba").replace("+cause: DATA-001-01", "+cause: DATA-001-02")
+    back = write(tmp_path, prompt("p"), bash("s1", STAGE_CMD, SCREEN), say(SCREEN + "\n승인할까요?"), prompt("02로"),
+                 bash("s2", STAGE_CMD, b), say(b + "\n승인할까요?"), prompt("다시 01로"), bash("s3", STAGE_CMD, SCREEN),
+                 say("되돌렸습니다. 승인할까요?"), prompt("승인"), name="back.jsonl")
+    assert decision(pre("pre-bash", back, "Bash", {"command": PUBLISH_CMD})) == "deny"
+
+
+def test_closed_window_same_hash_new_screen_judges_the_new_screen(tmp_path):
+    """②b 재리뷰 P1(S3·S4): publish가 실행됐거나(실패) discard로 닫힌 뒤 같은 트리를 다른 커밋 메시지로 다시 stage하고 새 화면을
+    숨기면, 창은 닫힌 채(Stop은 막지 않는다 — J-e)지만 publish 승인 판정은 새 화면으로 한다(글자·변수 해시 모두 거부, 새 화면 첨부)."""
+    msg = "### 커밋 메시지 / PR 제목\n\n```\n[DATA-001-01] {}\n```\n\n### 주요 diff"
+    a1, a2 = (SCREEN.replace("### 주요 diff", msg.format(m)) for m in ("M1 original message", "M2 changed message"))
+    hidden = {"s2": [shown_records.screen_record(a2)]}
+    restage = bash("s2", STAGE_CMD + " > /w/MOCK-1/screen.md", "")
+    shown_a1 = [prompt("p"), bash("s1", STAGE_CMD, a1), say(a1 + "\n승인할까요?")]
+    s3 = write(tmp_path, *shown_a1, prompt("승인"), bash("p1", PUBLISH_CMD, '{"published": false}'), say("push가 거부됐습니다."),
+               prompt("메시지 M2로 바꿔서 다시"), restage, say("바꿨습니다. 다시 올릴까요?"), prompt("응"), name="s3.jsonl", extra=hidden)
+    s4 = write(tmp_path, *shown_a1, prompt("버리고 메시지 M2로 다시"), bash("d", "python3 /p/scripts/db_pr.py discard /w/MOCK-1/wt", "{}"),
+               restage, say("다시 만들었습니다. 올릴까요?"), prompt("응"), name="s4.jsonl", extra=hidden)
+    for path in (s3, s4):
+        for cmd in (PUBLISH_CMD, PUB_BRANCH.format(h='"$H"')):
+            out = pre("pre-bash", path, "Bash", {"command": cmd})
+            r = out["hookSpecificOutput"]["permissionDecisionReason"]
+            assert decision(out) == "deny" and "M2 changed message" in r and "M1 original message" not in r, (path.name, cmd)
+    assert stop(s3, "바꿨습니다. 다시 올릴까요?") is None

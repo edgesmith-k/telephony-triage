@@ -1,36 +1,41 @@
 #!/usr/bin/env python3
 """show_guard.py — 스크립트 출력을 요약하지 않고 사용자에게 보였는지 보는 **표시 보조** hook (08-safety.md "표시 보조 hook").
 
-Bash·Read 출력은 사용자에게 보이지 않는다. push 확인 화면(`## push 전 확인:` ~ `approved_hash:`), Jira 게시 화면(`## … 게시 전
-확인:` ~ `post_sha256:`), Step 6 분석 리포트(결정적 줄과 `must_show`), 초안 검증표(`db_verify rules --draft`, 규칙마다 한 행)는
-모델이 글자 그대로 답에 옮겨야 한다. 판정은 eval 채점기와 같은 `common/shown.py`(빠진 줄 = 정규화 뒤 보인 글에 없는 줄)다.
+Bash·Read 출력은 사용자에게 보이지 않는다. push 확인 화면, 게시 확인 화면, Step 6 분석 리포트(결정적 줄과 `must_show`),
+초안 검증표(규칙마다 한 행)는 모델이 글자 그대로 답에 옮겨야 한다.
+
+**무엇이 의무인가 — 스크립트 기록**(L R): `db_pr summary`·`issue_post render`·`triage run`·`db_verify rules --draft`가 낸 출력과
+`stage`·`publish`·`discard`·`lock`·`approve`가 실행된 사실을 스크립트가 `<work_dir>/.shown/log.jsonl`에 직접 남긴다
+(`common/shown.py` `record`, contracts.md "표시 기록"). hook은 사용자 config의 모든 프로필 work_dir에서 이 세션의 기록을 읽어
+transcript의 Bash 호출에 시각으로 고정하고(`shown.anchor`: tool_use 시각 − 2초 ≤ 기록 시각 ≤ tool_result 시각, 명령에 기록의
+스크립트 이름) 창을 계산한다(`shown.record_obligations`). 도구 출력·명령 모양으로 화면이 나왔는지 추론하지 않는다(그 추론은 eval
+채점기 전용 `tests/skill_evals/shown_infer.py`). **보였는가**는 transcript로 본다: 의무 뒤 assistant 텍스트·거부되지 않은 질문
+문구에 정규화한 줄이 다 있는가(`shown.missing`).
 
     python3 show_guard.py stop|pre-ask|pre-bash|post   (stdin: hook 입력 JSON)
 
-- `stop`(Stop): 이번 턴에 나온 열린 의무(창이 아직 닫히지 않은 화면·리포트·초안 표)마다 보인 글(의무 뒤 assistant 텍스트·질문 +
-  `last_assistant_message`)에 빠진 것이 있으면 `{"decision": "block", "reason"}` — 모델은 새 메시지로 전체를 다시 보인다.
-  리포트는 턴을 넘어 열려 있으면(탐색·심층 분석 질문 뒤) 계속 보되, 마지막 메시지가 그 질문이면 보지 않는다.
-- `pre-ask`(PreToolUse `AskUserQuestion|mcp__.*__ask_user`): 같은 판정에 질문 문구를 더해 빠지면 질문을 거부(`deny`)한다.
-  리포트는 Step 7 분류 질문(선택지 2개 이상)일 때만 본다(앞의 탐색·심층 분석 질문은 리포트 전이다).
-- `pre-bash`(PreToolUse Bash): `db_pr.py publish --approved H`·`issue_post.py approve`면 해시가 같은 화면을 찾아 화면 뒤 ~ 마지막
-  질문(또는 사용자 입력) 사이에 화면 전체가 보였는지 본다(해시가 변수 — `--approved "$H"` — 면 마지막 stage 호출 뒤의 마지막
-  화면 — 다시 stage한 화면을 숨겼으면 앞 화면으로 갈음하지 않는다. summary는 화면·해시를 바꾸지 않으므로 기준이 아니다). 빠지면 거부(승인 질문 전에 화면을 보이지 않았다).
-  화면을 못 찾으면 판정하지 않는다 — 단 그 해시의 화면이 어느 도구 출력에도 없는데 화면을 낸 호출(stage·summary / render)이
-  기록에 있으면 거부하고(push는 키마다 4번, post는 한 번 — `UNSEEN_BLOCKS`) `summary <wt> --format markdown`(render)을 파이프 없이 다시 내게 한다. `db_pr.py stage` 앞에 열린 초안 검증표가
-  보이지 않았어도 거부한다(그 창은 stage로 닫힌다). 전부 통과한 초안 표(`shown.draft_all_clear`)는 의무가 아니다 — push 확인
-  화면의 "검증 결과"로 갈음한다(10/14 사용자).
-- `post`(PostToolUse Bash): 결과에 화면·리포트·초안 검증 결과가 있으면 `additionalContext`로 "이 출력은 사용자에게 안 보인다,
-  다음 메시지에 전문을 글자 그대로" 안내만 한다.
+- `stop`(Stop): 이번 턴에 열린 의무(리포트는 턴을 넘어 열려 있어도, 단 마지막 메시지가 탐색·심층 분석 질문이면 리포트는 보지
+  않는다)마다 보인 글 + `last_assistant_message`에 빠진 것이 있으면 `{"decision": "block", "reason"}`.
+- `pre-ask`(PreToolUse `AskUserQuestion|mcp__.*__ask_user`): 같은 판정에 질문 문구를 더해 빠지면 질문을 거부한다. 리포트는
+  Step 7 분류 질문일 때만 본다.
+- `pre-bash`(PreToolUse Bash): 명령이 `db_pr`·`publish`(`guard.word_net`, 규칙 7과 같은 낱말 그물)면 해시가 같은 push 의무(해시가
+  변수 — `--approved "$H"` — 면 마지막 stage 실행 뒤에 기록된 push 의무)를, `issue_post`·`approve`면 post 의무를 골라 의무 뒤 ~
+  마지막 질문(또는 사용자 입력) 사이에 화면 전체가 보였는지 본다. 맞는 의무가 없으면 판정하지 않는다(스크립트의 해시 대조와 규칙 7
+  ask가 관문). `db_pr`·`stage`면 열린 초안 검증표(전부 통과 표 `shown.draft_all_clear` 제외 — push 확인 화면의 "검증 결과"로
+  갈음)가 보였는지 본다. 거부 문구에는 붙일 화면 전문(12KB 이하)이 실린다.
+- `post`(PostToolUse Bash): 명령에 기록 스크립트 이름이 있고 60초 안에 그 스크립트의 의무 기록이 있으면 `additionalContext`로
+  "이 출력은 사용자에게 안 보인다, 다음 메시지에 전문을 글자 그대로" 안내만 한다.
 
-같은 의무 키(`push:<hash>`(해시가 변수인데 화면이 없으면 `push:var:<branch>`)·`post:<sha>`(`--sha`가 변수면 `post:render:<KEY>`)·`report:<id>`·`draft:<id>`)로 막은 횟수(transcript의 표식 `[telephony-triage] show-guard
-<key>`가 든 Stop 피드백·거부된 도구 결과)가 MAX_BLOCKS(2)에 이르면 더 막지 않고 `systemMessage`로 사용자에게 직접 확인을 안내한다.
-Stop이 연이어 막혔는데(`stop_hook_active`) transcript에 표식이 없으면(피드백이 기록되지 않는 버전) 한도에 이른 것으로 본다.
-거부된 호출을 똑같이(`description` 제외) 사이 글·질문·사용자 입력 없이 다시 한 거부는 키마다 BLIND_FREE(1)번까지 세지
-않는다(`block_count`) — 그 거부 문구에는 RETRY_NOTE를 붙인다.
+같은 의무 키(`push:<hash>`·`post:<sha 앞 16자>`·`report:<KEY>#<run>`·`draft:<sha1 12자>`)로 막은 횟수(transcript의 표식
+`[telephony-triage] show-guard <key>`가 든 Stop 피드백·거부된 도구 결과, 그 의무가 생긴 뒤)가 MAX_BLOCKS(2)에 이르면 더 막지
+않고 `systemMessage`로 사용자에게 직접 확인을 안내한다. 거부된 호출을 똑같이(`description` 제외) 사이 글·질문·사용자 입력 없이
+다시 한 거부는 키마다 BLIND_FREE(1)번까지 세지 않는다 — 그 거부 문구에는 RETRY_NOTE를 붙인다. Stop이 연이어 막혔는데
+(`stop_hook_active`) 이번 턴 transcript에 표식이 없으면 아무것도 내지 않는다.
 
-**fail-open**: 표시 보조일 뿐 안전 관문이 아니다(실제 관문 — guard 규칙 7의 publish `ask`, 승인 해시, 규칙 2의 게시 승인 — 은 그대로).
-입력·transcript를 못 읽거나 import·판정 중 예외면 판정하지 않고 stderr에 경고한다(stop은 `systemMessage`로 "판정 못 함"도 알린다).
-파일을 쓰지 않는다. 종료 코드는 항상 0. transcript는 끝 16MB만 읽고, 화면·리포트·초안 표 흔적이 없으면 바로 끝낸다.
+**fail-open**: 표시 보조일 뿐 안전 관문이 아니다(실제 관문 — guard 규칙 7의 publish `ask`, 승인 해시·pre-push, 규칙 2의 게시
+승인 — 은 그대로). 입력·transcript·config·기록을 못 읽거나 import·판정 중 예외면 판정하지 않고 stderr에 경고한다(stop은 이번 턴에
+화면·리포트 흔적이 있으면 `systemMessage`로 "판정 못 함"도 알린다). hook은 파일을 쓰지 않는다. 종료 코드는 항상 0. 이 세션의
+기록이 없으면 transcript를 읽지 않고 끝낸다. transcript는 끝 16MB만 읽는다.
 """
 
 from __future__ import annotations
@@ -52,8 +57,11 @@ except Exception as _exc:   # noqa: BLE001 — 표시 보조는 import가 깨져
 
 MAX_BLOCKS = 2
 TAIL_BYTES = 16 * 1024 * 1024
+HEAD_BYTES = 64 * 1024
 BLOCK_LIMIT = 12 * 1024
-READ_LIMIT = 4 * 1024 * 1024
+# ponytail: post 안내는 지금 호출이 남긴 기록을 시각으로만 고른다(60초). 같은 스크립트를 60초 안에 두 번 부르면 앞 기록도 안내한다
+POST_WINDOW = 60.0
+RECORD_SCRIPTS = ("db_pr", "issue_post", "db_verify", "triage")
 QUICK_TOKENS = ("## push 전 확인:", "게시 전 확인:", "triage.py", "--draft", "db_pr.py", "issue_post.py")
 KIND_NAME = {"push": "push 확인 화면", "post": "게시 확인 화면", "report": "분석 리포트", "draft": "초안 검증표"}
 OBJ = {"push": "을", "post": "을", "report": "를", "draft": "를"}      # 목적격 조사
@@ -73,6 +81,49 @@ def emit(obj) -> None:
     if obj:      # ASCII로만 쓴다: stdout 인코딩(Windows cp949·PYTHONIOENCODING=ascii)과 무관하게
         sys.stdout.write(json.dumps(obj, ensure_ascii=True) + "\n")
         sys.stdout.flush()
+
+
+# --- 기록 ---------------------------------------------------------------------------------------------------
+
+def work_dirs() -> list[Path]:
+    """사용자 config의 모든 프로필 work_dir(TT_PLATFORM과 무관 — guard처럼). PyYAML이 필요해 지연 import한다."""
+    from common import userconfig
+    out = []
+    for cfg in userconfig.profiles({}).values():
+        w = userconfig.get(cfg, "work_dir")
+        if w:
+            out.append(Path(str(w)).expanduser())
+    return list(dict.fromkeys(out))
+
+
+def session_start(path) -> float | None:
+    """transcript 앞부분(HEAD_BYTES)의 첫 `timestamp`. 없으면 None(시각이 없는 transcript는 기록을 고정할 수 없다)."""
+    try:
+        with Path(path).open("rb") as fh:
+            head = fh.read(HEAD_BYTES).decode("utf-8", errors="replace")
+    except OSError as exc:
+        warn(f"transcript를 읽지 못함({exc}) — 판정하지 않는다")
+        return None
+    for line in head.splitlines():
+        try:
+            ev = json.loads(line)
+        except ValueError:
+            continue
+        t = shown._epoch(ev.get("timestamp")) if isinstance(ev, dict) else None
+        if t is not None:
+            return t
+    return None
+
+
+def load_records(path) -> list[dict]:
+    """이 세션의 기록: 세션 첫 시각(− ANCHOR_SLACK)보다 이른 기록은 버린다. 비면 transcript를 읽지 않고 끝낸다."""
+    if not path:
+        return []
+    t0 = session_start(path)
+    if t0 is None:
+        return []
+    return [r for r in shown.read_records(work_dirs())
+            if (shown._epoch(r.get("at")) or 0) >= t0 - shown.ANCHOR_SLACK]
 
 
 # --- transcript ---------------------------------------------------------------------------------------------
@@ -110,9 +161,7 @@ def quick_skip(text: str) -> bool:
 
 def load_seq(path):
     text = load_text(path)
-    if text is None or quick_skip(text):
-        return None
-    return shown.parse_events(text.splitlines(), include_user=True)
+    return None if text is None else shown.parse_events(text.splitlines(), include_user=True)
 
 
 def turn_start(seq) -> int | None:
@@ -185,38 +234,6 @@ def markers(seq) -> list[str]:
     return keys
 
 
-def read_file(path: Path) -> str:
-    try:
-        if not path.is_file() or path.stat().st_size > READ_LIMIT:
-            return ""
-        return path.read_text(encoding="utf-8", errors="replace")
-    except OSError:
-        return ""
-
-
-def _json_in(text: str):
-    a, b = text.find("{"), text.rfind("}")
-    if 0 <= a < b:
-        try:
-            doc = json.loads(text[a:b + 1])
-        except ValueError:
-            return None
-        return doc if isinstance(doc, dict) else None
-    return None
-
-
-def job_dir_of(seq):
-    """마지막 `triage.py run` 결과가 status ok이고 files.report가 있으면 그 디렉토리."""
-    runs = shown.bash_index(seq, shown.TRIAGE_RUN)
-    if not runs:
-        return None
-    doc = _json_in(str(seq[runs[-1]].get("result") or ""))
-    if not doc or doc.get("status") != "ok":
-        return None
-    rep = (doc.get("files") or {}).get("report") if isinstance(doc.get("files"), dict) else None
-    return Path(rep).parent if isinstance(rep, str) and rep else None
-
-
 def last_text(seq, start: int) -> str:
     for e in reversed(seq[start:]):
         if e["kind"] == "text":
@@ -278,62 +295,6 @@ def approval_reason(ob, miss, retry: bool = False) -> str:
                       "실행한다.", miss, retry)
 
 
-# 화면이 도구 결과에 없던 승인을 막는 횟수(키마다). push는 4번 — 보지 않은 화면의 push가 한 번의 재시도로 통과하면 안 된다
-# (K P1-2). 한도 없이 막지는 않는다: 큰 출력을 Claude Code가 파일로 돌리면 화면이 도구 출력에 끝내 안 나올 수 있다(fail-open,
-# 그 뒤는 systemMessage만 — 최종 관문은 guard 규칙 7 ask). post는 한 번(다시 낸 화면은 그다음부터 보통 판정)
-UNSEEN_BLOCKS = {"push": 4, "post": 1}
-
-
-# issue_post.py approve의 값 있는 옵션(`--json`만 값 없음). 이름만 적는다: 옵션 글자 그대로면 test_ofono_skeleton이
-# 이 파일을 --platform을 받는 스크립트로 센다
-APPROVE_VALUED = {"--" + n for n in ("sha", "plugin-root", "platform")}
-
-
-def post_target(cmd: str) -> str | None:
-    """`issue_post.py approve`의 KEY 인자. 앞에 온 옵션(`--sha X`·`--sha=X`·`--json` 등)은 건너뛰고, 뒤 셸 구분자·따옴표는
-    벗긴다. 변수(`$K`)이거나 못 찾으면 None."""
-    m = shown.POST_END.search(cmd)
-    skip = False
-    for raw in (cmd[m.end():].split() if m else []):
-        tok = raw.rstrip(";&|)").strip("\"'")
-        if skip:
-            skip = False
-        elif tok in APPROVE_VALUED:
-            skip = True
-        elif tok and not tok.startswith("-"):
-            return None if tok.startswith("$") else tok
-        if raw.rstrip("\"'")[-1:] in (";", "&", "|", ")"):    # 이 명령의 끝
-            break
-    return None
-
-
-def push_target(cmd: str, start: int = 0) -> str | None:
-    """`db_pr.py publish`의 `--branch` 값(글자 그대로). 변수(`$B`)이거나 없으면 None."""
-    m = re.search(r"--branch[= ]\s*[\"']?([^\s\"';&|)]+)", cmd[start:])
-    return None if not m or m.group(1).startswith("$") else m.group(1)
-
-
-def unseen_reason(key: str, kind: str, cmd: str, again: bool = False) -> str:
-    """승인할 화면이 어느 도구 결과에도 없다: 화면을 다시 내는 명령을 알려 준다. again이면 같은 키로 이미 거부됐다(push)."""
-    if kind == "push":
-        m = re.search(r"(\S*db_pr\.py)[\"']?\s+(?:--\S+\s+\S+\s+)*publish\s+(\S+)", cmd)
-        how = (f"`python3 {m.group(1)} summary {m.group(2)} --format markdown`" if m
-               else "`python3 S/db_pr.py summary <wt> --format markdown`")
-        what = "push 확인 화면"
-    else:
-        m = re.search(r"(\S*issue_post\.py)[\"']?\s+(?:--\S+\s+\S+\s+)*approve\b", cmd)
-        how = (f"`python3 {m.group(1)} render {post_target(cmd) or '<KEY>'} --fill JOB/post.fill.json`" if m
-               else "`python3 S/issue_post.py render <KEY> --fill JOB/post.fill.json`")
-        what = "게시 확인 화면"
-    return (f"{shown.MARKER} {key} {DENY_LEAD}\n"
-            f"까닭: 승인하려는 {what}이 어느 도구 출력에도 없다(리디렉션·`head`·`grep`·파일에서 해시를 읽음). "
-            f"{UNSEEN_NOTE} 보지 않은 화면은 승인의 근거가 될 수 없다.\n"
-            f"할 일: {how}를 파이프·리디렉션 없이 실행하고, 그 출력 전체를 글자 그대로 답에 붙인 뒤 같은 메시지 끝에 다시 "
-            "승인받는다."
-            + (f"\n이미 같은 이유로 거부됐다 — 화면이 도구 출력에 나오기 전에는 다시 불러도 거부된다(키마다 {UNSEEN_BLOCKS['push']}번)."
-               if again else ""))
-
-
 def stage_reason(ob, miss, retry: bool = False) -> str:
     return _deny_text(ob, f"초안 검증표를 보이지 않고 stage하려 했다(빠진 규칙 {len(miss)}/{ob.total}).",
                       "먼저 답(글)에 아래 표를 그대로 쓰고, 그 글 뒤에(같은 응답에서) 같은 stage 명령을 다시 실행한다 — 진행 "
@@ -347,10 +308,10 @@ def capped_message(obs) -> str:
 
 # --- 모드 ---------------------------------------------------------------------------------------------------
 
-def obligations(seq, read_file=None, job_dir=None):
-    """`shown.obligations`에서 전부 통과한 초안 표(`shown.draft_all_clear`)를 뺀 것: 그 표는 push 확인 화면의 "검증 결과"로
-    갈음한다(승인 전 표시는 pre-bash·Stop이 화면으로 본다, 10/14 사용자 결정). fail·`fixture 없음` 등이 든 표는 그대로."""
-    return [ob for ob in shown.obligations(seq, read_file, job_dir)
+def obligations(seq, recs):
+    """`shown.record_obligations`에서 전부 통과한 초안 표(`shown.draft_all_clear`)를 뺀 것: 그 표는 push 확인 화면의 "검증
+    결과"로 갈음한다(승인 전 표시는 pre-bash·Stop이 화면으로 본다, 10/14 사용자 결정). fail·`fixture 없음` 등이 든 표는 그대로."""
+    return [ob for ob in shown.record_obligations(seq, recs)
             if not (ob.kind == "draft" and shown.draft_all_clear(ob.rules))]
 
 
@@ -409,30 +370,27 @@ def is_retry(seq, key: str, name, tool_input, start: int = 0) -> bool:
         and _quiet(seq, ds[-1] + 1, len(seq))
 
 
-def _from(ob) -> int:
-    """막은 횟수를 세기 시작하는 순번: 그 의무가 생긴 곳(초안 표는 같은 작업에서 같은 결과가 처음 나온 곳)."""
-    return (ob.extra or {}).get("count_from", ob.start) if isinstance(ob.extra, dict) else ob.start
-
-
-def _split(seq, found, prior_extra: int = 0):
-    """빠진 의무를 한도 안(막는다)·한도 밖(안내만)으로 나눈다. 막은 횟수는 그 의무가 생긴 뒤(`count_from`, 초안 표는 같은 작업에서
-    같은 결과가 처음 나온 곳)의 표식만 센다 — 다른 작업의 같은 키 표식은 세지 않는다. 화면은 창마다 센다(A→B→A의 두 번째 A는
-    새 의무). 보지 않고 똑같이 다시 한 거부는 BLIND_FREE번까지 세지 않는다(`block_count`)."""
+def _split(seq, found):
+    """빠진 의무를 한도 안(막는다)·한도 밖(안내만)으로 나눈다. 막은 횟수는 그 의무가 생긴 뒤의 표식만 센다 — 다른 작업의 같은
+    키 표식은 세지 않는다(같은 key는 하나의 의무라 첫 기록이 곧 셈 시작). 보지 않고 똑같이 다시 한 거부는 BLIND_FREE번까지
+    세지 않는다(`block_count`)."""
     under, over = [], []
     for ob, miss in found:
-        n = block_count(seq, ob.key, _from(ob))
-        (under if n + prior_extra < MAX_BLOCKS else over).append((ob, miss))
+        (under if block_count(seq, ob.key, ob.start) < MAX_BLOCKS else over).append((ob, miss))
     return under, over
 
 
 def mode_stop(inp) -> dict | None:
+    recs = load_records(inp.get("transcript_path"))
+    if not recs:
+        return None
     seq = load_seq(inp.get("transcript_path"))
     if seq is None:
         return None
     ts = turn_start(seq)
     if ts is None:
         return None
-    obs = obligations(seq, read_file, job_dir_of(seq))
+    obs = obligations(seq, recs)
     last = inp.get("last_assistant_message")
     final = last if isinstance(last, str) and last else last_text(seq, ts)
     found = []
@@ -462,6 +420,9 @@ def _deny(text: str) -> dict:
 def mode_pre_ask(inp) -> dict | None:
     if not shown.is_ask(inp.get("tool_name")):
         return None
+    recs = load_records(inp.get("transcript_path"))
+    if not recs:
+        return None
     seq, recorded = load_seq_for_call(inp.get("transcript_path"), inp.get("tool_use_id"))
     if seq is None:
         return None
@@ -470,7 +431,7 @@ def mode_pre_ask(inp) -> dict | None:
     ts = turn_start(seq)
     if ts is None:
         return None
-    obs = obligations(seq, read_file, job_dir_of(seq))
+    obs = obligations(seq, recs)
     ask = shown.ask_text(tool_input)
     found = []
     for ob in _checked(seq, obs, ts, report_ok=shown.step7_question(tool_input)):
@@ -483,7 +444,7 @@ def mode_pre_ask(inp) -> dict | None:
         return None
     if under:
         name = inp.get("tool_name")
-        return _deny("\n\n".join(reason(ob, miss, deny=True, retry=is_retry(seq, ob.key, name, tool_input, _from(ob)))
+        return _deny("\n\n".join(reason(ob, miss, deny=True, retry=is_retry(seq, ob.key, name, tool_input, ob.start))
                                   for ob, miss in under))
     over = [(ob, m) for ob, m in over if ob.start >= ts]
     return {"systemMessage": capped_message([ob for ob, _ in over])} if over else None
@@ -498,80 +459,71 @@ def _approval_point(seq, start: int) -> int | None:
     return None
 
 
+def _pick(seq, recs, obs, kind: str, h: str | None):
+    """승인할 의무: 해시(앞부분)가 맞는 것, 해시가 변수면 push는 마지막 stage 실행 뒤에 기록된(같은 key 다시 기록 포함) 것 중
+    마지막(stage가 approved_hash를 비우므로 그 앞 화면은 승인 근거가 아니다), post는 마지막. 없으면 None."""
+    cands = [ob for ob in obs if ob.kind == kind]
+    if h:
+        cands = [ob for ob in cands if ob.key.split(":", 1)[1].startswith(h) or h.startswith(ob.key.split(":", 1)[1])]
+    elif kind == "push":
+        staged = max((r["at"] for _, r in shown.anchor(seq, recs) if r.get("kind") == "close" and r.get("by") == "stage"),
+                     default="")
+        cands = [ob for ob in cands if ob.extra.get("last_at", "") > staged]
+    return cands[-1] if cands else None
+
+
 def mode_pre_bash(inp) -> dict | None:
     tool_input = inp.get("tool_input") if isinstance(inp.get("tool_input"), dict) else {}
-    cmd = shown.command_of({"input": tool_input})
-    pub = [m for m in shown.PUSH_END.finditer(cmd) if m.group(1) == "publish"]
-    app = list(shown.POST_END.finditer(cmd))
-    stage = shown.STAGE.search(cmd)
+    cmd = str(tool_input.get("command") or "")
+    if "db_pr" not in cmd and "issue_post" not in cmd:
+        return None
+    import guard   # 규칙 7과 같은 낱말 그물(① M-2) — 표준 라이브러리 부분만 쓴다
+    pub, app, stage = (guard.word_net(cmd), guard.word_net(cmd, "issue_post", "approve"),
+                       guard.word_net(cmd, "db_pr", "stage"))
     if not (pub or app or stage):
+        return None
+    recs = load_records(inp.get("transcript_path"))
+    if not recs:
         return None
     seq, recorded = load_seq_for_call(inp.get("transcript_path"), inp.get("tool_use_id"))
     if seq is None:
         return None
     seq = trim_current(seq, inp.get("tool_use_id"))
-    found, texts, unseen = [], [], []
+    every = shown.record_obligations(seq, recs)
+    found, texts = [], []
     targets = []
     if pub:
-        # `--approved "$H"`처럼 해시가 변수면 화면을 못 고른다: 마지막 stage 호출 뒤 화면 중 마지막을 본다(post의 변수
-        # `--sha`와 같게). 다시 stage한 화면을 숨겼으면(리디렉션) 그 앞 화면은 승인 근거가 아니다 — 화면 없음으로 본다
-        a = shown.APPROVED_ARG.search(cmd[pub[0].start():])
+        a = shown.APPROVED_ARG.search(cmd)
         targets.append(("push", a.group(1) if a else None))
     if app:
-        s = shown.SHA_ARG.search(cmd[app[0].start():])
+        s = shown.SHA_ARG.search(cmd)
         targets.append(("post", s.group(1) if s else None))
     for kind, h in targets:
-        wins = shown.screens(seq, kind, script_only=True)
-        if kind == "push" and h is None:
-            # 기준은 stage만: summary(markdown·json)는 같은 해시 화면을 다시 낼 뿐이라 창이 stage 자리에 남는다(같은 해시 병합)
-            made = shown.bash_index(seq, shown.STAGE)
-            wins = [w for w in wins if not made or w["start"] >= max(made)]
-        pick = [w for w in wins if h is None or shown.digest_of(w).startswith(h) or h.startswith(shown.digest_of(w))]
-        if not pick:
-            # 화면이 어느 도구 결과에도 없다(리디렉션·파이프·state.json에서 해시): 그 화면을 낸 호출이 이 기록에 있으면
-            # 막고(`UNSEEN_BLOCKS`) 화면을 다시 내게 한다. 끝부분만 읽었거나 그런 호출이 없으면 판정하지 않는다
-            makers = (shown.STAGE, shown.SUMMARY) if kind == "push" else (shown.RENDER,)
-            if not TRUNCATED[0] and any(shown.bash_index(seq, m) for m in makers):
-                if kind == "push":   # 해시가 변수면 push 대상 브랜치별 키
-                    key = f"push:{h}" if h else f"push:var:{push_target(cmd, pub[0].start()) or '?'}"
-                elif h:
-                    key = f"post:{h[:16]}"
-                else:  # --sha가 변수: 게시 대상 키별로 한 번(고정 키면 뒤 작업이 앞 작업의 표식으로 한도에 걸린다)
-                    tgt = post_target(cmd)
-                    key = f"post:render:{tgt}" if tgt else "post:render"
-                unseen.append((key, kind, cmd))
-            continue
-        w = pick[-1]
-        at = _approval_point(seq, w["start"])
-        miss = shown.uncovered(w["lines"], shown.visible_between(seq, w["start"] + 1, len(seq) if at is None else at + 1))
+        ob = _pick(seq, recs, every, kind, h)
+        if ob is None:
+            continue     # 기록에 맞는 화면이 없다: 스크립트의 해시 대조와 규칙 7 ask가 관문
+        at = _approval_point(seq, ob.start)
+        miss = shown.uncovered(ob.lines, shown.visible_between(seq, ob.start + 1, len(seq) if at is None else at + 1))
         if miss:
-            d = shown.digest_of(w)
-            ob = shown.Obligation(kind, f"{kind}:{d if kind == 'push' else d[:16]}", w["start"], w["end"], w["end_kind"],
-                                  lines=w["lines"], block=w["block"])
             found.append((ob, miss))
             texts.append(approval_reason)
     if stage:
-        for ob in obligations(seq):
-            if ob.kind == "draft" and ob.open:
+        for ob in every:
+            if ob.kind == "draft" and ob.open and not shown.draft_all_clear(ob.rules):
                 miss = shown.missing(ob, shown.visible_between(seq, ob.start + 1))
                 if miss:
                     found.append((ob, miss))
                     texts.append(stage_reason)
     fmt = {id(ob): f for (ob, _), f in zip(found, texts)}
     under, over = _split(seq, found)
-    seen = markers(seq)
-    first = [u for u in unseen if seen.count(u[0]) < UNSEEN_BLOCKS[u[1]]]
-    if (under or first) and not recorded:
+    if under and not recorded:
         warn("transcript에 지금 명령이 기록되지 않아(같은 응답의 앞 글이 빠졌을 수 있다) 거부하지 않는다")
         return None
-    if under or first:
-        return _deny("\n\n".join([fmt[id(ob)](ob, miss, is_retry(seq, ob.key, "Bash", tool_input, _from(ob)))
-                                   for ob, miss in under] + [unseen_reason(*u, again=u[0] in seen) for u in first]))
-    later = [u for u in unseen if u not in first]
-    if over or later:
-        msg = capped_message([ob for ob, _ in over]) if over else \
-            f"[telephony-triage] 확인 화면을 답에 보이지 못했다{shown.CAPPED} — 승인 전에 화면을 직접 확인"
-        return {"systemMessage": msg}
+    if under:
+        return _deny("\n\n".join(fmt[id(ob)](ob, miss, is_retry(seq, ob.key, "Bash", tool_input, ob.start))
+                                 for ob, miss in under))
+    if over:
+        return {"systemMessage": capped_message([ob for ob, _ in over])}
     return None
 
 
@@ -587,44 +539,35 @@ def mode_post(inp) -> dict | None:
     if inp.get("tool_name") != "Bash":
         return None
     tool_input = inp.get("tool_input") if isinstance(inp.get("tool_input"), dict) else {}
-    out = _response_text(inp.get("tool_response"))
-    if not out:
+    cmd = str(tool_input.get("command") or "")
+    names = {n for n in RECORD_SCRIPTS if re.search(rf"(?<![\w-]){n}(?![\w-])", cmd)}
+    if not names:
         return None
-    cmd = shown.command_of({"input": tool_input})
-    text = shown.tool_text({"name": "Bash", "result": out})
-    found = []
-    for kind, rx in (("push", shown.PUSH_SCREEN), ("post", shown.POST_SCREEN)):
-        ms = list(rx.finditer(text))
-        if ms:
-            found.append((KIND_NAME[kind], f"전문({len(shown.screen_lines(ms[-1].group(0)))}줄)", "승인 질문"))
-    if shown.DRAFT.search(cmd):
-        rules = shown.draft_rules(out)
-        if rules and not shown.draft_all_clear(rules):     # 전부 통과한 표는 push 확인 화면으로 갈음한다
-            found.append((KIND_NAME["draft"], f"규칙마다 한 행({len(rules)}행, 통과가 아니면 사유)", "질문"))
-    report = text if shown.REPORT_HEAD.search(text) else ""
-    must = []
-    if not report and shown.TRIAGE_RUN.search(cmd):
-        doc = _json_in(out)
-        rep = (doc or {}).get("files", {}).get("report") if isinstance((doc or {}).get("files"), dict) else None
-        if doc and doc.get("status") == "ok" and isinstance(rep, str):
-            report = read_file(Path(rep))
-            must = [str(m) for m in doc.get("must_show") or [] if isinstance(m, str)]
-    core = shown.report_core(report) if report else []
-    if core or must:
-        found.append((KIND_NAME["report"], f"결정적 줄과 must_show({len(core) + len(must)}줄)", "Step 7 질문"))
-    saved = _persisted(inp.get("tool_response"), text)
-    if saved is not None and not found and any(h.search(text) for h in shown.SCREEN_HEAD.values()):
-        found.append(("확인 화면", "전문", "승인 질문"))      # 잘려서 해시 줄이 없는 화면
+    now = time.time()
+    found: dict[str, tuple] = {}
+    for r in shown.read_records(work_dirs()):
+        t = shown._epoch(r.get("at"))
+        if t is None or now - t > POST_WINDOW or not ({r.get("script"), r.get("via")} & names):
+            continue
+        kind = r.get("kind")
+        if kind in ("push", "post"):
+            found[kind] = (KIND_NAME[kind], f"전문({len(shown.screen_lines(str(r.get('block') or '')))}줄)", "승인 질문")
+        elif kind == "draft" and r.get("rules") and not shown.draft_all_clear(r["rules"]):  # 전부 통과 표는 화면으로 갈음
+            found[kind] = (KIND_NAME[kind], f"규칙마다 한 행({len(r['rules'])}행, 통과가 아니면 사유)", "질문")
+        elif kind == "report" and (r.get("lines") or r.get("must_show")):
+            n = len(r.get("lines") or []) + len(r.get("must_show") or [])
+            found[kind] = (KIND_NAME[kind], f"결정적 줄과 must_show({n}줄)", "Step 7 질문")
     if not found:
         return None
+    saved = _persisted(inp.get("tool_response"), _response_text(inp.get("tool_response")))
     if saved is not None:       # 출력이 길어 파일로 남고 모델에는 일부만 보인다: 줄 수 대신 그 파일
         where = saved or "원래 명령의 출력 파일"
         parts = [f"{NOTE} — 이 출력({name})은 잘려 보였고 사용자에게도 안 보인다. 전문은 {where}에 있다 — 그 파일을 읽어 "
                  f"{what}을 글자 그대로 다음 메시지에 붙이고, 같은 메시지 끝에 {ask}을 한다. 빠지면 hook이 되돌린다."
-                 for name, what, ask in found]
+                 for name, what, ask in found.values()]
     else:
         parts = [f"{NOTE} — 이 출력({name})은 사용자에게 안 보인다. 다음 메시지에 {what}을 글자 그대로 붙이고, 같은 메시지 "
-                 f"끝에 {ask}을 한다. 빠지면 hook이 되돌린다." for name, what, ask in found]
+                 f"끝에 {ask}을 한다. 빠지면 hook이 되돌린다." for name, what, ask in found.values()]
     return {"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": "\n".join(parts)}}
 
 

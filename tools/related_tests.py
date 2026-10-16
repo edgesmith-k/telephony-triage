@@ -73,6 +73,9 @@ FULL_PATTERNS = (
 # helpers/** 중 전체를 돌리지 않는 예외 (full 판정보다 먼저 본다).
 SKILL_EVAL_PATHS = ("tests/skill_evals/*", "tests/helpers/skill_eval_env.py")
 SKILL_EVAL_TEST = "tests/test_skill_evals.py"
+# 채점기 추론(shown_infer)과 표시 기록 도우미는 표시 판정 테스트도 쓴다 (SKILL_EVAL_PATHS보다 먼저 본다)
+SHOWN_PATHS = ("tests/skill_evals/shown_infer.py", "tests/helpers/shown_records.py")
+SHOWN_TESTS = {SKILL_EVAL_TEST, "tests/test_shown.py", "tests/test_show_guard.py", "tests/test_db_verify.py"}
 SAFETY_TEST = "tests/test_safety.py"      # plugin/scripts가 바뀌면 항상 포함
 MAX_IMPORTERS = 8                           # 간접 importer가 이보다 많으면 공용 모듈
 GENERIC_FIXTURE_DIRS = {"logs", "plans", "golden", "scenarios"}   # 디렉토리 이름만으로는 너무 넓다
@@ -268,6 +271,9 @@ def select(files: list[str]) -> Selection:
         sel.per_file[path] = {"tests": [], "note": f"full ({reason})"}
 
     for path in files:
+        if matches(path, SHOWN_PATHS):
+            add(path, SHOWN_TESTS & set(tests))
+            continue
         if matches(path, SKILL_EVAL_PATHS):
             add(path, {SKILL_EVAL_TEST} & set(tests))
             continue

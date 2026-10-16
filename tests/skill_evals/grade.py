@@ -32,8 +32,11 @@ SITE_BASELINE = HERE.parents[1] / "tests" / "site" / "token_baseline.json"   # �
 DEFAULT_TOKEN_MARGIN = 1.3      # W0 실측으로 정함(README "토큰 기록")
 TOKEN_BUDGET_TEXT = "토큰 총합 ≤ 상한(기준선 × 여유율)"   # 텍스트에 숫자를 넣지 않는다: 수동 채점 보존 키가 흔들리지 않게
 sys.path.insert(0, str(HERE.parents[1] / "plugin" / "scripts"))   # guard 규칙 10의 통독 판정을 지표가 그대로 쓴다
-# typedoc: 유형 제목 증상 형태(db_lint `title-form`과 같은 기준), shown: '사용자에게 보였다' 판정(표시 보조 hook show_guard.py와 같은 기준)
-from common import shown, typedoc  # noqa: E402
+# typedoc: 유형 제목 증상 형태(db_lint `title-form`과 같은 기준). shown: '사용자에게 보였다' 판정 — 채점기 전용 transcript 추론
+# `shown_infer.py`(L R부터 표시 보조 hook은 스크립트 기록을 보고, 채점기는 추론한다: 독립된 두 판정)
+from common import typedoc  # noqa: E402
+sys.path.insert(0, str(HERE))
+import shown_infer as shown  # noqa: E402
 
 # 트래커 결과 게시 eval(배치 J·G): 공통 행 "쓰기 도구를 부르지 않았다" 대신 "승인한 코멘트 1건뿐"을 본다
 # (eval id → (트래커, 작업 키, 모의 코멘트 도구))
@@ -157,7 +160,8 @@ def is_question(text: str, topic: str) -> bool:
 
 
 # --- "사용자에게 보였다" 판정 (확인 화면·리포트·초안 검증표) ------------------------------------------------
-# 판정은 플러그인 공용 모듈 `plugin/scripts/common/shown.py`에 있다(표시 보조 hook `show_guard.py`와 같은 판정).
+# 판정은 채점기 전용 `tests/skill_evals/shown_infer.py`(transcript 추론)와 런타임 `common/shown.py`(보인 줄 비교)에 있다 —
+# 표시 보조 hook `show_guard.py`는 스크립트 기록으로 의무를 정하므로 이것과 독립된 판정이다.
 # 보인 글 = assistant 텍스트 + 질문 도구(모의 ask_user·AskUserQuestion) 문구, show_guard가 거부한 질문은 빼고. 아래는 옛 이름 별칭.
 _PUSH_SCREEN, _POST_SCREEN, _SCREEN_HEAD = shown.PUSH_SCREEN, shown.POST_SCREEN, shown.SCREEN_HEAD
 _CMDWORD, _SUB, _script_rx = shown.CMDWORD, shown.SUB, shown.script_rx

@@ -142,7 +142,7 @@
 ## 하지 않을 것 (지금)
 
 - 웹 대시보드: GHE의 STATS.md(G-5)로 갈음. 파일럿에서 설치 부담이 확인되면 다시 본다.
-- show_guard 끄는 스위치: 한도(2회, unseen push 4회)·fail-open으로 피해 상한이 있다.
+- show_guard 끄는 스위치: 한도(키마다 2회 + 보지 않고 되풀이한 거부 1회, 숨긴 화면도 같다 — L2 J2)·fail-open으로 피해 상한이 있다.
 - 시그니처 버전 범위·빌드별 로그 프로필: S-0/S-4에서 실제 차이를 본 뒤(RF-4).
 - `offline_eval --keep`: 미스 한 건은 `triage.py run --offline-db --out`으로 다시 돌리면 된다.
 - guard·shown 명령 파서 통합: M-2·R이 둘 사이 의존을 끊으면 풀린다.
@@ -243,6 +243,42 @@
 - 리뷰 수정(1차: 인용·`\`·`$'…'`으로 쪼갠 낱말, 2차: heredoc 끝 표시를 줄 이음이 삼킴, git·gh 별칭·pager 실행, 인용 바로 앞 `$S`, 낱말 안 줄 이음) 뒤 다시 돈 수치다. 개발 세션 Bash 수는 비교하는 동안에도 늘었다(5,377 → 5,467).
 - ②에서 show_guard가 같은 그물을 쓸 때의 참고 수치(옛 = `shown.STAGE`·`shown.POST_END` 정규식): stage는 eval 14/14·녹화 2/2 같음, 개발 세션 둘 다 17·새만 19(옛만 0). approve는 eval·녹화 0, 개발 세션 새만 1.
 - L1 리뷰 P2 (8) `maxsplit=1`은 이 단계에서 고쳤다.
+
+### ② R — 표시 보조 hook을 스크립트 기록 기반으로 (②a 기록, ②b 전환, 2026-10-16)
+
+- 줄 수: 런타임 `show_guard.py` 702 → 645, `common/shown.py` 1,114 → 551(합 1,816 → 1,196, 계획 목표 ≈1,050보다 많다 — 문구·한도·기다림은 그대로 두었다). 추론 670줄은 채점기 전용 `tests/skill_evals/shown_infer.py`로 옮겼다(hook = 기록, 채점기 = 추론).
+- J2: "화면 없음"(unseen) 갈래 삭제 — 숨긴 화면도 기록이 있으므로 보통 거부(붙일 화면 포함)·보통 한도(키마다 2 + 보지 않고 되풀이 1, push·post 같다).
+- 전환 게이트(J1): **아직 통과 아님**. 파일럿 eval 2·18·30·67 세션 `records`(anchored/unanchored) 실측 7/1·7/0·4/0·7/1(via 이전 f08119b 기록 — eval 2·67은 `triage.py run`이 같은 프로세스에서 부른 `db_pr lock` 기록 1건씩이 고정되지 않음) / via 주입 재생 8/0·7/0·4/0·8/0. via를 넣은 스크립트로 eval 2·67을 다시 돌려 실측 unanchored 0을 확인해야 한다(메인). 녹화 eval2(시각·추론 기록 덧입힘) 5/0.
+- 옛(f08119b, transcript 추론) vs 새(②b) `hook_replay --scripts` 결정 비교 — 차이 2, 둘 다 새가 맞다:
+
+| 말뭉치 | 결정 지점(show_guard) | 차이 | 내용 |
+|---|---|---|---|
+| 파일럿 eval 2 | 47(23) | 1 | push 승인 질문: 옛 allow → 새 deny(빠진 줄 70/99 — diff·이슈 표를 요약). 옛은 Windows stage 출력의 CRLF로 화면을 못 찾았다(옛 버그, J-a~J-e 밖). 실제 run도 이 질문이 통과했다 |
+| 파일럿 eval 18·30 | 40(20)·26(13) | 0 | |
+| 파일럿 eval 67 | 58(28) | 1 | approve: 옛 deny("화면 없음") → 새 allow(화면 33줄을 다 보임). 원인은 Windows `render` 마크다운 출력의 CRLF(`post_sha256: …\r\n`)를 옛 정규식이 못 찾은 것(옛 버그, J-a~J-e 밖) |
+| 녹화 eval2 | 46(22) | 0 | |
+| 개발 세션(화면 글이 든 40개) | — | — | 추론으로 만들 기록 0(스크립트가 화면을 낸 호출이 없다) — 새는 판정하지 않으므로 비교 대상 없음 |
+
+- J-b~J-e 사례는 이 말뭉치에 없었다(단위 시험으로만 확인: 거부된 호출은 창을 닫지 않음, 변수 해시 + summary 없는 stage는 판정 없음, 같은 계획·같은 결과 재실행은 첫 창 유지).
+
+### ②b 리뷰 P1 후보 (메인·사용자 결정)
+
+- Windows Claude Code의 PowerShell 도구는 `hooks.json`의 `Bash` matcher에 걸리지 않는다 — guard 규칙 3~8·10·11과 show_guard가 PowerShell 호출을 보지 못한다. 이 PC(Windows)에서 PowerShell 도구가 노출된다. `hooks.json`은 바꾸지 않았다 — 사내 S-1/S-2에서 노출 여부를 확인하고(probe 16) matcher 추가(`Bash|PowerShell` — guard 명령 파서가 PowerShell 문법을 모름)와 PowerShell 도구 deny 중 고른다.
+
+### ②b 리뷰 P2 (반입 뒤 후보)
+
+- P2-1 `show_guard.py` 빠른 거름·anchor가 `db_pr`·`issue_post` 이름을 글자 그대로 요구 — `python3 "$S"/d"b_pr.py" publish`는 규칙 7 ask는 받지만 show_guard는 건너뜀 → 따옴표·`\`를 지운 글로 거르거나 한계로 적기.
+- P2-3 `_pick`의 staged 시각이 작업(job)과 무관 — A summary 뒤 다른 작업을 stage하고 `publish A --approved "$H"`면 판정 없음 → stage 시각을 `ob.extra["job"]`별로.
+- P2-5 transcript 앞 64KB에 timestamp가 없으면(첫 줄이 64KB 초과) 세션 시작 필터가 None → 세션 전체가 경고 없이 판정 없음 → None이면 거르지 않거나 경고.
+- P2-6 12KB 넘는 숨긴 화면의 거부 문구가 "앞 Bash 출력에서"라고 하지만 그런 출력이 없음 → push·post는 "summary --format markdown·render를 파이프 없이 다시".
+- P2-8 시험 구멍: 세션 시작 시험이 `echo hi`라 걸러냄을 시험하지 못함, `test_redirect_targets_and_read_back_rules`를 옮기지 않고 지움(`shown_infer`의 `script_only`·`redirect_targets`·`_reads_saved`는 시험에서만 닿음), "기록 없으면 큰 transcript를 안 읽음" 시험 없음 → 죽은 코드 삭제 또는 시험 이전.
+- P2-9 `tests/helpers/shown_records.py` backfill은 출력에 보인 화면만 기록(summary json·리디렉션 stage·잘린 draft·실패한 triage lock close 누락, 거절한 publish close는 더 만듦) → 녹화 fixture 게이트·차이 0은 거의 동어반복, 실증은 파일럿.
+- ②b 3차 리뷰 V4: A가 publish로 닫힘 → B 숨김 → A2(같은 key 교체) 순서면 교체 갈래가 열린 B를 restage로 닫지 않아 Stop이 낡은 B 화면을 요구(publish는 A2로 거부 — 거짓 허용 아님, 드문 거짓 Stop) → 교체 갈래에서도 같은 종류의 열린 창을 닫기.
+- (②b에서 고친 것: P1-1 같은 key 다른 화면 = 새 의무, P1-2 게이트 수치 정직하게, P2-2·P2-4·P2-7·P2-10 문서.)
+
+### ② P2 후보 (반입 뒤)
+
+- 스크립트 stdout 줄바꿈: Windows에서 `db_pr stage` 등의 stdout이 CRLF로 나온다(텍스트 모드). 채점기는 화면 경계 줄 끝에서 `\r`을 허용하도록 고쳤고(②b), hook은 기록(스크립트가 쓴 LF 문자열)을 보므로 영향이 없다. stdout을 LF로 고정할지는 모든 스크립트 출력에 걸치는 변경이라 따로 본다.
 
 ### ②a 리뷰 P2 (반입 뒤 후보)
 

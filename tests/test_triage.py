@@ -203,6 +203,10 @@ def test_shown_records_report_only_for_ok_runs_in_work_dir(tmp_path):
     assert rec["lines"] == shown.report_core((job / "report.md").read_text(encoding="utf-8")) and rec["lines"]
     assert rec["must_show"] == (json.loads((job / "analysis.json").read_text(encoding="utf-8")).get("must_show") or [])
     assert rec["path"] == str(job.absolute() / "report.md")
+    # triage run이 in-process로 부른 db_pr lock의 close는 via=triage(hook이 triage.py Bash 호출에 고정한다 — 파일럿 eval 2·67)
+    locks = [r for r in (json.loads(x) for x in log.read_text(encoding="utf-8").splitlines() if x.strip())
+             if r.get("by") == "lock"]
+    assert locks and all((r["script"], r.get("via")) == ("db_pr", "triage") for r in locks)
     ws.json("triage.py", ["release", "MOCK-1001"])
     doc, items = _items()
     _offline(items[0], doc, tmp_path / "out")

@@ -25,8 +25,10 @@ transcript, 그 범위의 기록 없음 — 건너뛴 확인이지 통과가 아
 "transcript 시각이 스크립트 실행을 감싼다"는 R 전제가 이 환경에서 깨진 것이다(plugin-probe 15).
 
 한계: guard 규칙 중 디스크·git 상태에 기대는 것(10 로그 원문 읽기 — 파일이 있어야 판정, 4·5 커밋, 8 clone)과 사용자 config
-(규칙 7 publish ask는 `conf.user`가 있어야)는 **지금 PC 상태**로 판정한다 — 기록 당시와 다르면 mismatch로 센다. show_guard의
-리포트 판정(작업 디렉토리의 report.md)도 파일이 없으면 다르게 나올 수 있다. guard와 show_guard가 같은 호출을 둘 다 거부하면 기록에는
+(규칙 7 publish ask는 `conf.user`가 있어야)는 **지금 PC 상태**로 판정한다 — 기록 당시와 다르면 mismatch로 센다. show_guard는
+(L R ②b부터) 의무를 **지금 PC의 표시 기록**으로 정한다: 세션을 돌린 PC의 work_dir 기록이 없으면(다른 PC, 회전으로 밀려남,
+시각 없는 transcript) 판정하지 않아 allow로 나온다 — `records`가 null이거나 anchored가 적으면 show_guard 지점의 결과는 믿지 않는다.
+옛 scripts(`--scripts`, ②a 이전)는 transcript 추론으로 판정하므로 두 판정의 차이에는 기록 유무도 섞인다. guard와 show_guard가 같은 호출을 둘 다 거부하면 기록에는
 한쪽 거부만 남아 다른 쪽이 거짓 mismatch가 된다. Stop 피드백이 transcript에 기록되지 않는 버전에서는 block이 `ran`으로 세어진다.
 
 종료 코드: 0, 파일을 못 읽으면 2.

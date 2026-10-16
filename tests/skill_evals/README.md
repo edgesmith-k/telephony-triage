@@ -108,7 +108,7 @@ e46·e47 `scope()`는 `timeline.md` 첫 열람이 `triage.py explore` Bash 호�
 '탐색 분석'과 '할까요'(또는 '실행할까'·'진행할까')가 함께 있어야 통과하고, 실행 기록이 없으면 수동 채점으로 남는다.
 
 **"사용자에게 보였다" 기계 판정**: 보인 글 = assistant 텍스트 + 질문 도구(모의 `ask_user`·`AskUserQuestion`) 문구(`Ctx.visible_between`). Bash·Read 출력은 보인 것이 아니다.
-판정은 플러그인 공용 모듈 `plugin/scripts/common/shown.py`에 있고 표시 보조 hook `show_guard.py`(`08-safety.md §9.1`)가 같은 판정으로 실행 중에 되돌린다(grade.py의 `_norm_line` 등 옛 이름은 별칭).
+판정은 채점기 전용 `tests/skill_evals/shown_infer.py`(transcript에서 화면·리포트·초안 표 의무를 추론)와 런타임 공용 `plugin/scripts/common/shown.py`(보인 줄 비교)에 있다(grade.py의 `_norm_line` 등 옛 이름은 별칭). 표시 보조 hook `show_guard.py`(`08-safety.md §9.1`)는 같은 "보였다" 비교를 쓰되 의무를 **스크립트 표시 기록**(`<work_dir>/.shown/log.jsonl`, L R)으로 정한다 — hook = 기록, 채점기 = 추론인 독립된 두 판정이다. `test_skill_evals.py`의 parity 시험은 기본 사례(화면 전체·요약·일부·리포트·초안 표)에서 두 판정이 같은지만 본다(시각과 추론 기록을 덧입힌 사본, `tests/helpers/shown_records.py`). run 디렉토리의 `shown-log.jsonl`은 그 실행의 기록 사본이다(`tools/hook_replay.py`로 hook을 다시 판정할 때 쓴다). 스크립트 출력의 CRLF(Windows)는 화면 경계 줄 끝에서 허용한다(플랫폼 차이이지 모델 행동이 아니다).
 show_guard가 거부한 질문(오류 결과에 `[telephony-triage] show-guard` 표식)은 사용자에게 가지 않았으므로 보인 글도, 승인 질문(`asked`)·Step 7 질문도 아니다.
 hook이 거부해 실행되지 않은 호출(결과가 `PreToolUse:… hook error`인 오류)은 명령 판정(`stage`·`publish` 등)에서 빼고 창을 열거나 닫지 않는다(채점기에도 적용 — 실행하지 않은 명령이므로. 기록된 sm* 48 run 재채점 차이 0).
 plugin 모드 자식은 세션 transcript를 남기고(`--no-session-persistence`를 쓰지 않는다 — 쓰면 hook 입력의 `transcript_path` 파일이 없어 show_guard가 아무것도 판정하지 못한다, 10/14 sm3 측정에서 확인), 실행 뒤 run 디렉토리 `session.jsonl`로 옮긴다(`execution.json` `session_transcript`, 못 찾으면 null = show_guard가 판정하지 못한 실행).
@@ -120,7 +120,7 @@ plugin 모드 자식은 세션 transcript를 남기고(`--no-session-persistence
   창 = 화면 ~ publish·discard(post는 `issue_post approve`)·해시가 다른 다음 화면(다시 stage·render)·기록 끝. 창 안 마지막 `ask_user`까지 모든 줄이 보이고 그 질문이 있어야 통과다
   (같은 해시를 다시 `cat`해도 새 창이 아니다). 화면이 나온 호출 자체도 창이다: `stage …; publish …`·`render …; approve …`를 한 Bash로 부르면 창이 그 호출에서 끝나 보인 글·질문이 없으므로 실패다. publish로 끝난 창은 `--approved <hash>`가 그 화면의 `approved_hash`와 같아야 한다(그 화면을 승인한 publish). 화면 내용 항목(`screen_has`, 예: e2 `NEW-CAUSE-1 → DATA-001-03`)은 화면을 요약 없이 보인 것과 스크립트 화면의 문구를 함께 본다.
 - 리포트(`Ctx.report_shown`): 창 = 마지막 `triage.py run` ~ Step 7 질문(포함)·첫 stage. 창 안에서 읽은 `## <KEY> 분석` 중 가장 긴 결과(head·grep 일부 재열람은 기준이 아니다, 없으면 `JOB/report.md`)의 결정적 줄(분류 후보·근거 로그와 하위 줄·로그 범위 등, `TODO(LLM)` 줄 제외)이
-  글머리(`- `·`* `)·굵게(`**`)·백틱·줄 끝 로그 위치 참조(` (f0:L2)`, 양쪽에서 뗀다 — must_show에 "시계 이상 구간의 근거"가 있으면 참조까지 그대로)를 무시하고 모두 보였고, `analysis.json` `must_show` 줄은 글자 그대로 있어야 한다(`shown.report_uncovered`, show_guard도 같다).
+  글머리(`- `·`* `)·굵게(`**`)·백틱·줄 끝 로그 위치 참조(` (f0:L2)`, 양쪽에서 뗀다 — must_show에 "시계 이상 구간의 근거"가 있으면 참조까지 그대로)를 무시하고 모두 보였고, `analysis.json` `must_show` 줄은 글자 그대로 있어야 한다(`shown.report_uncovered`, show_guard도 같은 비교 — 줄은 report 기록에서).
 - 초안 검증표(`Ctx.draft_shown`): 첫 stage 전 마지막 `db_verify rules --draft` 결과(e42는 fail 행이 든 첫 결과 — 허용 뒤 다시 돌린 초안은 통과라서)의 규칙마다 그 규칙 ID만 든(사유 글 제외) 보인 줄에 상태 표시가 있고, 통과가 아니면 사유가 있고 ✅가 없어야 한다
   ("R1~R4 통과"처럼 묶은 줄은 인정하지 않는다). 결과를 읽을 수 없게 가공했으면 수동 채점이다. 전부 통과한 표(모든 행이 pass이거나 사유가 정확히 `해당 없음`인 skipped, `review_required`·needs-approval·allow-cause 없음, `shown.draft_all_clear`)는
   stage 전에 보이지 않았어도 첫 stage 뒤 첫 push 확인 화면 창(화면 뒤 ~ 승인 질문 포함)에 규칙 행이 모두 보였으면 통과다(근거 "push 확인 화면으로 갈음(전부 통과)", 10/14 사용자 결정 — show_guard도 그 표에는 stage 전 의무를 두지 않는다).
