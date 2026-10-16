@@ -199,7 +199,7 @@ git status --short          # 바뀐 사외 파일 + .draft-manifest.json만 M. 
 
 **5. 테스트 후 병합**
 ```
-python3 -m pytest -q tests          # 25~30분
+python3 -m pytest -q tests          # Ubuntu CI 약 16~20분, PC에 따라 더 걸린다
 git add -A && git commit -m "재반입 <새 label> (사외 <커밋>)"
 git switch main && git merge --ff-only draft-import/<새 label> && git branch -d draft-import/<새 label>
 rm -rf ~/tt-old ~/tt-new

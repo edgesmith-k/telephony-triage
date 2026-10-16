@@ -264,8 +264,8 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
     <h1>telephony-triage 사용·운영 매뉴얼</h1>
     <p>Android Telephony 이슈를 Jira와 logcat으로 분석하고, 결과를 팀 이슈 DB(<code>telephony-issue-db</code>)에 PR로 쌓는 도구입니다. 이 문서 하나로 설치, 매일의 사용, 결과 해석, 문제 해결, 이슈 DB 운영까지 이어받을 수 있게 썼습니다.</p>
     <div class="meta">
-      <span><b>기준</b> 플러그인 레포 main, 2026-10-12</span>
-      <span><b>이슈 DB 스키마</b> v1 · 생성기 v1</span>
+      <span><b>기준</b> 플러그인 레포 main, 2026-10-16</span>
+      <span><b>이슈 DB 스키마</b> v1 · 생성기 v2</span>
       <span><b>예시 값</b> <code>ABC-12345</code>, <code>ghe.example</code>는 자리표시자</span>
     </div>
   </header>
@@ -475,7 +475,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
 <path class="ln" d="M245,652 L97,652" marker-end="url(#sqAh)"/>
 <text class="s" x="103" y="646">리포트 (Claude는 설명 칸만 채움)</text>
 <path class="ln acc" d="M95,686 L243,686" marker-end="url(#sqAha)"/>
-<text class="lab" x="103" y="680">분류 확정: 예 / 다른 원인 / 새 원인 / 새 유형 / 미확정</text>
+<text class="lab" x="103" y="680">분류 확정: 1위로 / 다른 원인·유형 / 미확정 / 기록 안 함</text>
 <rect class="box in" x="185" y="704" width="420" height="26" rx="4"/>
 <text class="s" x="195" y="721">plan.json 저장, 이어서 그림 B의 공통 쓰기 절차</text>
 </svg><figcaption>굵은 글씨의 강조색 화살표는 사람이 결정하는 곳입니다. <code>--analysis-only</code>면 리포트에서 끝나고 lock을 풉니다.</figcaption></figure>
@@ -823,7 +823,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
         <tr><td>커맨드</td><td><code>plugin/commands/*.md</code></td><td>얇은 래퍼. 스킬·스크립트를 부르는 입구(14개)</td></tr>
         <tr><td>스킬</td><td><code>plugin/skills/telephony-triage/</code></td><td>스크립트 출력을 설명하고 사용자 결정을 계획으로 옮김. <code>reference/</code>에 흐름별 절차</td></tr>
         <tr><td>스크립트</td><td><code>plugin/scripts/</code></td><td>파싱·마스킹·매칭·검증·생성·PR. 결과는 JSON, 종료 코드 0/1/2/3</td></tr>
-        <tr><td>hooks</td><td><code>plugin/hooks/hooks.json</code></td><td>SessionStart 1, PreToolUse(MCP·Bash·파일 도구), PostToolUse(Jira 원문 격리)</td></tr>
+        <tr><td>hooks</td><td><code>plugin/hooks/hooks.json</code></td><td>SessionStart(경로 갱신), PreToolUse(MCP·Bash·파일 도구 — guard / Bash·AskUserQuestion — 표시 보조), PostToolUse(Jira 원문 격리 / Bash — 표시 보조 안내), Stop(표시 보조). 안전 관문 10종 + 표시 보조 1종(<a href="#s8-guard">8.3</a>)</td></tr>
         <tr><td>사이트 설정</td><td><code>plugin/site-defaults.yaml</code></td><td>조직 기본값(Jira 도구 매핑·필드·GHE·파서 백엔드). 없으면 모든 커맨드(help 제외)가 멈춤</td></tr>
         <tr><td>이슈 DB 설정</td><td><code>issue-db.config.yaml</code></td><td>Jira 키 형식, 카테고리, 점수, 품질 기준, 마스킹 예외 등 팀 공통 값</td></tr>
       </table></div>
@@ -850,10 +850,11 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
     <div class="sub" id="s1-status" data-title="현재 상태와 수치">
       <h3>현재 상태와 측정 수치</h3>
       <ul>
-        <li>개발 단계(사외 초안, Phase D0~13)와 실제 로그 반영 트랙(L1~L3), 반입 전 3차 검토 반영까지 끝났습니다. 도입 조직 환경에 맞추는 사내 보완 단계(S-0~S-7, <a href="#s7-rollout">7.12</a>)는 아직 남아 있습니다.</li>
-        <li>자동 테스트 전체(개수는 결재용 요약 §3), CI(Ubuntu, Python 3.10·3.11·3.14) 통과. 샘플 이슈 DB 회귀 fixture 23/23. 스킬 행동 eval 70개 정의(Jira 결과 게시 61·62, 플랫폼 분리 63~65, GitHub 트래커 66·67 — 실험적, 사용 흐름 구분 68~70).</li>
+        <li>개발 단계(사외 초안, Phase D0~13)와 실제 로그 반영 트랙, 반입 전 3차 검토 반영, 10/15 안전 검토(K: push 승인 질문 누락 P0 1건·P1 3건 수정), 10/16 개선(L1·L2)까지 끝났습니다. 도입 조직 환경에 맞추는 사내 보완 단계(S-0~S-7, <a href="#s7-rollout">7.13</a>)는 아직 남아 있습니다.</li>
+        <li>자동 테스트는 CI(Ubuntu, Python 3.10·3.11·3.14)에서 돌립니다(개수와 CI 통과 기준 커밋은 결재용 요약 §3). 샘플 이슈 DB 회귀 fixture 23/23. 스킬 행동 eval 70개(Jira 결과 게시 61·62, 플랫폼 분리 63~65, GitHub 트래커 66·67 — 실험적, 사용 흐름 구분 68~70) 중 사외 59개 통과·실패 0, 11개는 사내 S-2 확인 대상입니다(Sonnet 5.5, 10/16 K·L 수정 뒤 재측정 — 각 eval 최신 run 안전 위반 0).</li>
         <li>10/11: Jira 결과 게시(승인한 코멘트 1건, analyze Step 9)와 플랫폼 분리(Android 기본, oFono 뼈대, 플랫폼별 이슈 DB)가 들어갔습니다.</li>
-        <li>토큰(모의 데이터 eval 기준, Sonnet): analyze부터 기록까지 1건 약 39만 토큰(이전 74만에서 48% 감소). 커맨드 1회 20만~80만 토큰, 약 $0.15~0.5. <b>실제 로그·DB 크기에서는 달라질 수 있습니다.</b></li>
+        <li>10/16: 표시 보조 hook이 스크립트가 남긴 표시 기록과 대조(<a href="#s8-guard">8.3</a>), push 확인(규칙 7) 낱말 그물, 확인 화면 압축(<a href="#s5-confirm">5.8</a>), 질문마다 선택지 4개 이하, 반복 질문 끄는 설정 안내(사용자 config, <a href="#s9-keys">부록 C</a>), STATS 머리 KPI, <code>usage_stats --json</code>이 들어갔습니다.</li>
+        <li>이슈 1건(분석 → 기록) 비용은 Sonnet 5.5 기준 아는 원인 약 $0.34~0.40, 새 원인·새 유형 약 $0.56~0.71입니다(합성 데이터 eval 실측). 실제 로그는 1.5~2배로 추정하고, Opus 5.5는 약 2.7배입니다. 최신 수치는 결재용 요약 §4. <b>실제 로그·DB 크기에서는 달라질 수 있습니다.</b></li>
       </ul>
       <div class="note plan"><span class="k">예정·알려진 한계</span>
         <ul>
@@ -861,7 +862,8 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
           <li>사내 마켓플레이스 등록(<code>marketplace.json</code>)은 S-7에서 합니다.</li>
           <li>계획 없는 브랜치를 자동으로 합치는 3-way replay, 사후 lint 정리 PR 자동화는 v1에 없습니다. 메인테이너가 수동으로 정리합니다.</li>
           <li>Read 도구로 로그를 한 번에 통째로 읽는 것은 hook이 막지 못합니다(스킬 지침으로만 제한). 사내 S-2 확인 뒤 다룹니다.</li>
-          <li>반입 뒤로 넘긴 항목(작업 상태 JSON 원자 쓰기, 성능 재측정, analyze 질문 수 등)은 <code>docs/development/ARCHITECTURE_REVIEW_2026-10.md</code>에 있습니다.</li>
+          <li>Windows에서 Claude Code가 PowerShell 도구를 내놓으면 그 호출은 hook이 보지 못합니다(<a href="#s8-guard">8.3</a> 한계, 사내 S-2 확인 16번에서 정함).</li>
+          <li>반입 뒤로 넘긴 항목(작업 상태 JSON 원자 쓰기, 성능 재측정, analyze 질문 수 등)은 <code>docs/development/ARCHITECTURE_REVIEW_2026-10.md</code>에 있습니다. 10/15 안전 검토(K)·10/16 개선(L)의 반입 뒤 후보는 <code>docs/development/K_RESULT.md</code>·<code>L_RESULT.md</code>에 있습니다.</li>
         </ul>
       </div>
     </div>
@@ -892,7 +894,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
         <li><b>GHE 레포 3개</b>: 플러그인 레포, 샌드박스 이슈 DB(시험용), 운영 이슈 DB.</li>
         <li><b>GHE 권한</b>: 운영 이슈 DB main 브랜치 보호(직접 push 금지, PR 필수, CODEOWNERS 승인 1명 이상)를 설정할 수 있어야 합니다. 이 설정이 없으면 로컬 hook이 유일한 방어선이 됩니다.</li>
         <li><b>팀</b>: 카테고리별 오너 팀 6개(data·call·network·sim·sms·ims)와 메인테이너 팀.</li>
-        <li><b>사이트 설정 파일</b> <code>plugin/site-defaults.yaml</code>(S-3에서 작성, <a href="#s7-site">7.7</a>).</li>
+        <li><b>사이트 설정 파일</b> <code>plugin/site-defaults.yaml</code>(S-3에서 작성, <a href="#s7-site">7.8</a>).</li>
         <li><b>사내 값</b>: Jira 키 형식, 발생 시각 필드 이름·형식·타임존, Gerrit CL 링크 형식, 빌드명 비교 규칙, Android 16/17 소스 경로.</li>
         <li><b>시드 자료</b>: 카테고리별 실제 logcat과 정상 로그, 듀얼 SIM 로그, 과거 해결 Jira 20~30건(카테고리별 3건 이상, 오프라인 정확도 평가용).</li>
       </ul>
@@ -905,12 +907,12 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
 
     <div class="sub" id="s3-admin" data-title="관리자 선행 작업">
       <h3>관리자 선행 작업 (한 번)</h3>
-      <p>팀원이 설치하기 전에 다음이 끝나 있어야 합니다. 순서는 <a href="#s7-rollout">7.12 도입 단계</a>와 같습니다.</p>
+      <p>팀원이 설치하기 전에 다음이 끝나 있어야 합니다. 순서는 <a href="#s7-rollout">7.13 도입 단계</a>와 같습니다.</p>
       <ol>
         <li>플러그인 레포 반입과 테스트 재현: <code>pip install '.[test]'</code> 후 <code>python3 -m pytest -q tests</code>가 사외와 같은 결과인지 확인.</li>
         <li><code>plugin/site-defaults.yaml</code> 작성과 커밋(S-3). 이 파일이 없으면 setup과 모든 커맨드(help 제외)가 "플러그인 관리자가 사이트 설정(site-defaults.yaml)을 아직 올리지 않았습니다"(둘째 줄 "[관리자] 사내 기본값 없음 (S-3 미완료)")로 멈춥니다.</li>
         <li>운영 이슈 DB를 뼈대로 만들고 main에 첫 push, 이어서 브랜치 보호와 CODEOWNERS 필수 리뷰를 켭니다. 설정 내용은 이슈 DB <code>docs/branch-protection.md</code>에 기록합니다.</li>
-        <li><code>parser-rules</code>의 placeholder를 실제 태그·문구로 바꾸고 카테고리별 시드 유형을 넣습니다(S-4). 초안은 <code>tools/s0_suggest.py</code>가 제안합니다(<a href="#s7-parser">7.8</a>).</li>
+        <li><code>parser-rules</code>의 placeholder를 실제 태그·문구로 바꾸고 카테고리별 시드 유형을 넣습니다(S-4). 초안은 <code>tools/s0_suggest.py</code>가 제안합니다(<a href="#s7-parser">7.9</a>).</li>
         <li>샌드박스 이슈 DB에서 dry-run과 실제 PR 1건으로 시험합니다(S-5).</li>
       </ol>
       <div class="code"><pre>git clone https://ghe.example/&lt;org&gt;/telephony-triage-plugin.git
@@ -1042,7 +1044,7 @@ python3 "$S/config.py" doctor --format markdown</pre></div>
         <p class="who">기여자 · 가장 자주 쓰는 커맨드</p>
         <dl class="kv">
           <dt>목적</dt><dd>Jira와 logcat으로 원인을 분석하고, 분류를 확정해 이슈 DB에 PR을 올립니다.</dd>
-          <dt>형식</dt><dd><div class="code"><pre>/telephony-triage:analyze &lt;JIRA-KEY&gt; [logcat 경로...] [--code &lt;프로필|경로&gt;]
+          <dt>형식</dt><dd><div class="code"><pre>/telephony-triage:analyze &lt;JIRA-KEY&gt; [logcat 경로...] [--code &lt;프로필|경로|skip&gt;]
   [--dry-run | --analysis-only] [--more-logs &lt;로그...&gt;] [--issue-file &lt;yaml&gt;]
   [--failed-step &lt;한 줄&gt;] [--steps-file &lt;파일&gt;] [--clock-offset &lt;±시간&gt;]
   [--analyzer | --no-analyzer] [--explore | --no-explore] [--platform &lt;이름&gt;]</pre></div></dd>
@@ -1050,7 +1052,7 @@ python3 "$S/config.py" doctor --format markdown</pre></div>
             <div class="tbl"><table>
               <tr><th>옵션</th><th>뜻</th></tr>
               <tr><td><code>logcat 경로</code></td><td>logcat(threadtime 기본) 또는 bugreport(<code>.zip</code>·txt). bugreport는 logcat 섹션(system·radio·main)과 빌드 정보만 꺼내 씀. 이전 부팅 버퍼(<code>-L</code>)는 섞지 않고 건너뜀. 꺼낸 파일은 <code>logs/&lt;이름&gt;-&lt;경로 해시&gt;/</code>에 두어 이름이 같은 bugreport끼리 덮어쓰지 않음</td></tr>
-              <tr><td><code>--code</code></td><td>소스 트리 프로필 이름 또는 aosp 경로. 없으면 버전이 맞는 프로필이 정확히 1개일 때 자동 선택(알림), 아니면 물음</td></tr>
+              <tr><td><code>--code</code></td><td>소스 트리 프로필 이름 또는 aosp 경로. 없으면 버전이 맞는 프로필이 정확히 1개일 때 자동 선택(알림, <code>code.auto_select</code>), 아니면 물음(후보 둘 + 직접 입력 + 건너뛰기). <code>skip</code>이면 코드 분석을 건너뜀(로그 기반 분석만)</td></tr>
               <tr><td><code>--dry-run</code></td><td>확인 화면까지만. 아무것도 올리지 않음</td></tr>
               <tr><td><code>--analysis-only</code></td><td>리포트까지만. 계획·PR 없음, 끝나면 lock 해제. <code>--dry-run</code>과 함께 못 씀</td></tr>
               <tr><td><code>--more-logs</code></td><td>이전 분석의 로그 뒤에 로그를 더해 전체를 다시 계산. 이전 결과는 <code>runs/&lt;n&gt;/</code>에 최근 5개 보관</td></tr>
@@ -1070,7 +1072,8 @@ python3 "$S/config.py" doctor --format markdown</pre></div>
 /telephony-triage:analyze ABC-12345 ~/logs/radio.txt --analysis-only
 /telephony-triage:analyze ABC-12345 ~/logs/radio.txt --steps-file ~/tests/report.zip --clock-offset +3m</pre></div></dd>
           <dt>주의</dt><dd><ul>
-            <li>분류 질문에는 예 / 다른 기존 원인 / 새 원인 / 새 유형 / 원인 미확정 중에서 고릅니다. 후보가 없으면 새 유형 / 원인 미확정 / 기록하지 않음만 나옵니다.</li>
+            <li>분류 질문은 질문마다 선택지가 4개까지입니다. 첫 질문은 "&lt;1위 원인&gt;로 분류" / "다른 원인·유형" / "원인 미확정" / "기록하지 않음"입니다. "다른 원인·유형"을 고르거나 글로 다른 답을 하면 둘째 질문이 나옵니다: "다른 기존 원인"(2·3위 ID·제목은 질문 본문 목록) / "새 원인·새 유형" / "원인 미확정" / "기록하지 않음". 분석 스킬 의견이 1위와 다르면 둘째 질문의 첫 선택지가 그 의견 원인입니다. 후보가 없으면 "새 유형" / "원인 미확정(가장 가까운 유형)" / "기록하지 않음"만 나옵니다. 목록에 없는 답은 "기타(Other)"로 직접 입력합니다.</li>
+            <li>소스 트리·심층 분석·탐색 분석 질문을 매번 받지 않으려면 사용자 config에 적어 둡니다(<a href="#s9-keys">부록 C</a>). 한 번만 끄려면 <code>--code skip</code>·<code>--no-analyzer</code>·<code>--no-explore</code>를 씁니다.</li>
             <li>"다른 기존 원인"(분석 스킬 의견 포함)을 고르면 한 번 더 묻습니다(기본 "아니오"): 고른 원인이 후보에서 C=1이면 이 로그를 fixture(<code>kind: extra</code>)로 넣을지, C=0이거나 후보 밖이면 "<code>update-signature</code> 검토"를 PR note에 남길지. 거절하면 Jira만 추가합니다.</li>
             <li>버전이 안 맞아 쓰기가 막히면 읽기 전용으로 계속하고 계획 저장까지만 합니다(<a href="#s6-msg">6.3</a>). 고른 플랫폼과 이슈 DB 선언이 다른 <code>platform-mismatch</code>는 읽기 전용으로도 계속하지 않고 멈춥니다.</li>
             <li>Jira 게시가 안 되는 경우(코멘트 도구 미설정, dry-run 결과, 오프라인, <code>--issue-file</code>, 이미 게시함)는 묻지 않습니다. 사용자가 요청하면 사유를 보이고 <code>JOB/post.md</code>를 만들어 직접 붙여넣게 안내합니다.</li>
@@ -1147,7 +1150,7 @@ python3 "$S/config.py" doctor --format markdown</pre></div>
           <dt>주의</dt><dd><ul>
             <li>계획은 작성자 PC에만 있으므로 <b>작성자가 실행</b>합니다. 다른 PC로 옮기기 전에 끝내 두세요.</li>
             <li>마지막 publish 뒤 다른 사람이 브랜치에 push했으면 diff를 보여주고 덮어쓰기 / 중단을 묻습니다.</li>
-            <li>계획이 없는 브랜치(직접 편집한 <code>review/</code>, <code>chore/</code> 등)는 수동 절차만 안내합니다(<a href="#s7-review">7.5</a>).</li>
+            <li>계획이 없는 브랜치(직접 편집한 <code>review/</code>, <code>chore/</code> 등)는 수동 절차만 안내합니다(<a href="#s7-review">7.6</a>).</li>
           </ul></dd>
         </dl>
       </div>
@@ -1223,7 +1226,7 @@ db_build.py --verify --db &lt;db&gt;</pre></div>
         <h3>/telephony-triage:review</h3>
         <p class="who">카테고리 오너 · 월 1회 · 읽기 전용</p>
         <dl class="kv">
-          <dt>목적</dt><dd>카테고리의 품질·해결 상태 리포트를 만듭니다. 정리는 별도 PR로 합니다(<a href="#s7-monthly">7.6</a>).</dd>
+          <dt>목적</dt><dd>카테고리의 품질·해결 상태 리포트를 만듭니다. 정리는 별도 PR로 합니다(<a href="#s7-monthly">7.7</a>).</dd>
           <dt>형식</dt><dd><code>/telephony-triage:review [category]</code> (없으면 CODEOWNERS 기준 오너 카테고리를 물음)</dd>
           <dt>출력</dt><dd><code>&lt;work_dir&gt;/review-&lt;category&gt;-&lt;YYYY-MM&gt;/report.md</code>, 항목별 건수 요약. 리포트 머리에 이슈 DB 경로·커밋·브랜치와 커밋 안 된 변경 여부가 나옵니다. 내 clone이 base 브랜치가 아니거나 변경이 있으면, 병합되지 않은 변경이 리포트에 섞였을 수 있다고 알립니다. 확실히 main 기준으로 보려면 <code>sync</code>로 스냅샷을 최신화한 뒤 그 스냅샷을 읽게 합니다.</dd>
         </dl>
@@ -1258,7 +1261,7 @@ db_build.py --verify --db &lt;db&gt;</pre></div>
       <h3>모델과 토큰</h3>
       <ul>
         <li>기본 모델은 Sonnet입니다(analyze·record·fix-submitted·verify-fix·sync-pr·search·심층 분석). 탐색 분석의 가설 품질이 중요하면 Opus를 고를 수 있습니다. 바꾸는 법: <code>/model</code>.</li>
-        <li>평가·테스트는 Sonnet 5.5 기준입니다. 다른 모델도 동작합니다. Opus 5.5는 11개 확인 측정(실패 0, hook 거부 1회, 비용 eval당 약 2.7배)만 했고 그 밖의 모델은 확인하지 않았습니다. 외부 쓰기 전 승인 질문, 사용자 clone 불변, 스크립트 판정, 마스킹, 확인 화면 표시 강제(hook)는 모델과 무관합니다. 우려: 화면 요약(Sonnet hook 전 표시 실패 22/48)·거부 뒤 반응(Sonnet은 hook 첫 판에서 거부 52회 중 16회를 같은 호출로 재시도, 문구 개선 뒤 한도 도달 0회)·질문 흐름이 다를 수 있고, 토큰·비용 수치(이슈 1건 약 39만 토큰)는 Sonnet 기준이며, 작은 모델(Haiku 등)은 권장하지 않습니다(Sonnet도 문구만으로 못 지킨 규칙이 있어 구조로 강제). 승인 없는 쓰기를 막는 장치는 모델과 무관하게 같습니다(명령 판정은 최선 노력, 최종 방어선은 서버 브랜치 보호).</li>
+        <li>평가·테스트는 Sonnet 5.5 기준입니다. 다른 모델도 동작합니다. Opus 5.5는 11개 확인 측정(실패 0, hook 거부 1회, 비용 eval당 약 2.7배)만 했고 그 밖의 모델은 확인하지 않았습니다. 외부 쓰기 전 승인 질문, 사용자 clone 불변, 스크립트 판정, 마스킹, 확인 화면 표시 보조 hook은 모델과 무관합니다. 우려: 화면 요약(Sonnet hook 전 표시 실패 22/48)·거부 뒤 반응(Sonnet은 hook 첫 판에서 거부 52회 중 16회를 같은 호출로 재시도, 문구 개선 뒤 한도 도달 0회)·질문 흐름이 다를 수 있고, 비용 수치(<a href="#s1-status">1.4</a>, 결재용 요약 §4)는 Sonnet 기준이며, 작은 모델(Haiku 등)은 권장하지 않습니다(Sonnet도 문구만으로 못 지킨 규칙이 있어 구조로 강제). 승인 없는 쓰기를 막는 장치는 모델과 무관하게 같습니다(명령 판정은 최선 노력, 최종 방어선은 서버 브랜치 보호).</li>
         <li>심층 분석(<code>--analyzer</code>)과 탐색 분석(<code>--explore</code>)은 토큰을 더 씁니다. 기본은 실행 전에 묻습니다.</li>
         <li>토큰을 아끼는 습관: 로그는 경로로 주기, 한 작업이 끝나면 세션 닫기, 오류는 실패한 것만 보기.</li>
       </ul>
@@ -1298,11 +1301,13 @@ db_build.py --verify --db &lt;db&gt;</pre></div>
         <tr><td>해결책 검증</td><td>"검증됨" 또는 "⚠ 미검증". 미검증이어도 후보로 씁니다(분류는 로그 근거)</td></tr>
         <tr><td>수정 상태</td><td><code>fix.status</code>와 Jira SW 비교 판단(<a href="#s5-fix">5.5</a>)</td></tr>
         <tr><td>다른 버전 원인</td><td><a href="#s5-version">5.6</a></td></tr>
-        <tr><td>RIL 이벤트의 <code>hal</code></td><td>사내에서 벤더 RIL 층 연결(<a href="#s7-site">7.7</a> <code>platform.ril.vendor</code>)을 켰을 때만 나옵니다. RILJ 요청이 벤더 층 어디까지 갔는지입니다. <code>responded</code>: 벤더 소켓 층에 응답이 있음, RILJ 응답이 없으면 AP 쪽 전달 유실 근거. <code>reached</code>: HAL까지 갔고 응답은 없음, 모뎀·벤더 쪽을 봄. <code>not_reached</code>: 주변에 벤더 줄은 있는데 이 요청만 없음, 같은 창에 다른 요청의 HAL 줄이 있을 때만 AP 쪽 근거. <code>unknown</code>: 벤더 줄이 수집되지 않음, 판단 근거로 쓰지 않음</td></tr>
+        <tr><td>RIL 이벤트의 <code>hal</code></td><td>사내에서 벤더 RIL 층 연결(<a href="#s7-site">7.8</a> <code>platform.ril.vendor</code>)을 켰을 때만 나옵니다. RILJ 요청이 벤더 층 어디까지 갔는지입니다. <code>responded</code>: 벤더 소켓 층에 응답이 있음, RILJ 응답이 없으면 AP 쪽 전달 유실 근거. <code>reached</code>: HAL까지 갔고 응답은 없음, 모뎀·벤더 쪽을 봄. <code>not_reached</code>: 주변에 벤더 줄은 있는데 이 요청만 없음, 같은 창에 다른 요청의 HAL 줄이 있을 때만 AP 쪽 근거. <code>unknown</code>: 벤더 줄이 수집되지 않음, 판단 근거로 쓰지 않음</td></tr>
         <tr><td>순위 참고</td><td>점수 동점 후보가 여럿이면 발생 시각 근접·키워드로 정렬했다는 표시. 원인 확정이 아님</td></tr>
         <tr><td>재사용 / 재분석</td><td>같은 입력이면 "재사용", 입력이 바뀌었으면 "재분석: 실행 m 대비 바뀐 입력 [...] — 1위 X → Y". 판정 불가 유형·시그니처 오류가 있던 실행은 캐시에 저장하지 않으므로 다음 실행은 항상 재계산</td></tr>
         <tr><td>읽기 전용 / 분석 전용</td><td>쓰기가 막힌 이유 또는 <code>--analysis-only</code> 안내. 리포트를 요약할 때도 빠지지 않는 줄입니다(must_show)</td></tr>
-        <tr><td>must_show 순서</td><td>분석 전용 &gt; 읽기 전용 &gt; 1위가 바뀐 재분석 &gt; 실패 스텝 &gt; 장비 시각 미사용 &gt; 판정 불가 유형 &gt; 슬롯 불일치 &gt; 시계 이상 구간의 근거 &gt; 로그 범위 &gt; 분석 범위 밖 오류 &gt; 파서 규칙에 없는 태그·미추출 줄(최대 6줄, <code>analysis.json</code> 4KB 압축 시 4줄)</td></tr>
+        <tr><td>must_show 순서</td><td>분석 전용 &gt; 읽기 전용 &gt; 1위가 바뀐 재분석 &gt; 실패 스텝 &gt; 장비 시각 미사용 &gt; 판정 불가 유형 &gt; 슬롯 불일치 &gt; 시계 이상 구간의 근거 &gt; 로그 범위 &gt; 분석 범위 밖 오류 &gt; 파서 규칙에 없는 태그·미추출 줄 &gt; 코드 분석 트리 자동 선택 &gt; 이슈 DB pull 건너뜀 (최대 6줄, <code>analysis.json</code> 4KB 압축 시 4줄)</td></tr>
+        <tr><td>코드 분석 트리 자동 선택</td><td>"코드 분석 트리 자동 선택: &lt;프로필&gt; (Android 16) — 다른 트리는 --code로 지정". <code>--code</code> 없이 버전이 맞는 프로필이 하나라 묻지 않고 골랐다는 알림이고, 코드 위치 줄에도 "(자동 선택: code.auto_select, <code>--code</code>로 변경 가능)"이 붙습니다. 다른 트리로 보려면 <code>--code</code>를 주고 다시 분석합니다. 늘 묻게 하려면 사용자 config에 <code>code: {auto_select: false}</code>(최상위 <code>code:</code> 아래, <a href="#s9-keys">부록 C</a>)</td></tr>
+        <tr><td>이슈 DB pull 건너뜀</td><td>"이슈 DB pull 건너뜀: &lt;사유&gt;". 내 이슈 DB clone을 최신으로 당기지 못했다는 알림입니다. 사유는 셋입니다: 현재 브랜치가 base가 아님 / 커밋하지 않은 변경이 있음 / <code>pull --ff-only</code> 실패. 도구는 내 clone을 바꾸지 않으므로 필요하면 직접 정리합니다. 분석은 원격에서 새로 받은 읽기 스냅샷 기준이라 영향이 없습니다. Jira 결과 코멘트에는 넣지 않습니다(로컬 브랜치 이름이 들어 있음). must_show 우선순위는 맨 뒤입니다</td></tr>
         <tr><td>실패 스텝 구간</td><td>steps-file·실패 스텝으로 정한 분석 범위. "스텝 순서 정렬 안 함: &lt;사유&gt;"면 Jira 발생 시각 기준으로 분석한 것</td></tr>
         <tr><td>심층 / 탐색 분석</td><td>보조 칸. 점수·분류·검증에 쓰지 않습니다. 탐색 분석은 가설 1~3개(로그로 확인한 줄, 코드 추정, 반대 근거, 다음에 받을 로그)</td></tr>
       </table></div>
@@ -1366,7 +1371,7 @@ db_build.py --verify --db &lt;db&gt;</pre></div>
       <p>가설은 1~3개이고 점수·신뢰도를 매기지 않습니다. "가능성 높음" 대신 근거 줄 수와 반대 근거로 보여줍니다. 가설이 하나도 서지 않으면 "가설 없음: 이유"와 다음에 받을 로그만 적습니다.</p>
       <h4>그다음</h4>
       <ul>
-        <li><b>채택</b>: 분류 확정 선택지는 평소와 같습니다(새 유형 / 원인 미확정 / 기록하지 않음, 원인 미확인이면 기존 원인·새 원인·미확정). 가설을 채택하면 그 가설이 새 유형·새 원인 초안의 출발점이 됩니다. "로그로 확인" 줄에서 시그니처 초안을, 그 구간을 잘라 fixture를 만들고, 이후 R1~R5 검증과 확인 화면은 평소와 같습니다.</li>
+        <li><b>채택</b>: 분류 확정 선택지는 평소와 같습니다(새 유형 / 원인 미확정 / 기록하지 않음, 원인 미확인이면 기존 원인 / 새 원인 / 원인 미확정 / 기록하지 않음). 가설을 채택하면 그 가설이 새 유형·새 원인 초안의 출발점이 됩니다. "로그로 확인" 줄에서 시그니처 초안을, 그 구간을 잘라 fixture를 만들고, 이후 R1~R5 검증과 확인 화면은 평소와 같습니다.</li>
         <li><b>보류</b>: 원인 미확정으로 기록할 수 있고, Jira 기록 <code>note</code>에 가설 한 줄(마스킹)을 남길지 묻습니다.</li>
         <li><b>기록 안 함</b>: 계획 없이 끝납니다.</li>
       </ul>
@@ -1424,8 +1429,10 @@ db_build.py --verify --db &lt;db&gt;</pre></div>
     <div class="sub" id="s5-confirm" data-title="push 전 확인 화면">
       <h3>push 전 확인 화면과 검증 결과표</h3>
       <p>이슈 DB에 쓰는 모든 흐름은 push 전에 이 화면을 그대로 보여주고 승인을 받습니다. 요약하거나 생략하지 않습니다.</p>
+      <div class="note warn"><span class="k">같은 화면이 한 번 더 나오면</span>스크립트 출력은 사용자 화면에 바로 보이지 않아 Claude가 답에 옮겨 보여 줍니다. Claude가 push·게시 확인 화면이나 분석 리포트를 줄여 보이면 <b>표시 보조 hook</b>이 전문을 다시 보이게 합니다. 같은 화면이 한 번 더 나오는 것은 정상입니다. 같은 화면을 두 번 되돌려도 다 보이지 못하면 더 막지 않고 "[telephony-triage] 확인 화면 일부를 답에 보이지 못했다(재시도 한도) — &lt;곳&gt;에서 직접 확인"을 띄웁니다. &lt;곳&gt;이 <code>report.md</code> 같은 파일이면 그 파일을, "앞 Bash 출력(push 확인 화면)"이면 Claude Code에서 그 도구 출력을 펼쳐 직접 보고, 내용이 맞을 때만 승인합니다. "[telephony-triage] show_guard 판정 못 함 — …"이 뜨면 hook이 판정하지 못한 것이므로 같은 방법으로 확인합니다. 이 hook은 보이는 것을 돕는 장치일 뿐 안전 관문이 아닙니다. push 승인 질문·승인 해시·pre-push 검사는 그대로 걸립니다. 자세한 동작은 <a href="#s8-guard">8.3</a>.</div>
       <div class="note easy"><span class="k">이 화면에서 볼 세 가지</span>첫째, 변경 파일과 ID가 내가 의도한 것인지 봅니다. 둘째, 자동 검사와 검증에 실패나 "건너뜀"이 없는지 봅니다. 건너뜀은 통과가 아닙니다. 셋째, 커밋 메시지와 한 줄 요약에 사람 이름이나 원문이 들어가지 않았는지 봅니다.</div>
       <p>순서: 머리(대상 → 원인/유형, 구분, 브랜치, 리뷰어, 열린 PR) → 변경 파일 → ID 할당(예 <code>NEW-CAUSE-1 → DATA-001-04</code>) → 수정 상태 변경 → drift 결정 → 추가 설명 → README 반영 미리보기 → 주요 diff → 자동 검사 → 검증 결과 → 커밋 메시지·PR 제목 → <code>approved_hash</code>.</p>
+      <p>화면을 짧게 하려고 생성 파일(README·STATS·CHANGELOG)은 변경 파일 표 끝 한 행에 경로를 모아 적고, 같은 사유의 검증 건너뜀은 한 행으로 묶으며(스크립트가 묶을 때만), README 반영 미리보기에서는 앞 파일에 이미 나온 행을 뺍니다.</p>
       <div class="tbl"><table>
         <tr><th>검증</th><th>무엇을</th><th>통과 기준</th></tr>
         <tr><td>R1 파서</td><td>대상 원인의 양성 fixture를 새 규칙으로 파싱</td><td>시그니처가 참조하는 태그·이벤트·필드가 추출됨</td></tr>
@@ -1452,13 +1459,14 @@ db_build.py --verify --db &lt;db&gt;</pre></div>
         <tr><th>상황 (언제)</th><th>무엇이 일어나나</th><th>사용자에게 보이는 것</th><th>할 일</th><th>자세히</th></tr>
         <tr><td>분석 중 결정이 필요할 때: 발생 시각이 없음, 소스 트리 선택, 로그 범위 밖, lock 이어받기, 기존 계획·열린 PR 처리</td><td><code>triage.py run</code>이 <code>status: needs_input</code>으로 멈춥니다. 대신 고르지 않습니다</td><td>질문과 선택지</td><td>답하면 스킬이 같은 명령에 <code>--answer &lt;종류&gt;=&lt;값&gt;</code>을 붙여 다시 실행합니다</td><td><a href="#s0-seq">그림 A</a></td></tr>
         <tr><td>다른 작업이 lock을 갖고 있을 때 (쓰기 흐름 시작)</td><td>종료 코드 2. 보유자 정보를 냅니다. 같은 작업 키의 lock이 10분 이내면 이어받을지 묻습니다</td><td>"다른 작업(…)이 lock을 갖고 있습니다…" / "같은 작업(…)의 lock이 N초 전에 갱신됐습니다…"</td><td>그 작업을 끝내거나, 끝난 세션이면 이어받기·<code>--force</code> 해제</td><td><a href="#s6-msg">6.3</a>, <a href="#s6-recover">6.4</a></td></tr>
-        <tr><td>이슈 DB와 플러그인의 버전이 다를 때 (스키마·생성기·파서 백엔드)</td><td>analyze는 읽기 전용 모드로 계속(계획 저장까지), 쓰기 커맨드는 종료 코드 2로 멈춥니다</td><td>리포트의 "읽기 전용: …" 줄, 또는 "… 이슈 DB 쓰기 전체를 막는다."</td><td>플러그인 업데이트 또는 메인테이너에게 마이그레이션 요청</td><td><a href="#s6-msg">6.3</a>, <a href="#s7-upgrade">7.9</a></td></tr>
+        <tr><td>이슈 DB와 플러그인의 버전이 다를 때 (스키마·생성기·파서 백엔드)</td><td>analyze는 읽기 전용 모드로 계속(계획 저장까지), 쓰기 커맨드는 종료 코드 2로 멈춥니다</td><td>리포트의 "읽기 전용: …" 줄, 또는 "… 이슈 DB 쓰기 전체를 막는다."</td><td>플러그인 업데이트 또는 메인테이너에게 마이그레이션 요청</td><td><a href="#s6-msg">6.3</a>, <a href="#s7-upgrade">7.10</a>·<a href="#s7-migrate">7.11</a></td></tr>
         <tr><td><code>site-defaults.yaml</code>이 없을 때 (어느 커맨드든 첫 스크립트 호출)</td><td>종료 코드 2로 멈춥니다. <code>help</code>만 예외(플러그인 파일만 읽음)</td><td>"플러그인 관리자가 사이트 설정(site-defaults.yaml)을 아직 올리지 않았습니다. 이 메시지를 관리자에게 전달하세요." (둘째 줄 "[관리자] 사내 기본값 없음 (S-3 미완료): … 실행할 수 없습니다.")</td><td>관리자가 S-3을 끝낼 때까지 기다립니다</td><td><a href="#s3-admin">3.1</a></td></tr>
         <tr><td>Jira 응답을 격리하지 못할 때 (Jira 도구 결과 직후)</td><td>원문을 내보내지 않고 오류 문구로 바꿉니다(fail closed)</td><td>"telephony-triage: … 원문은 표시하지 않는다."</td><td>이슈 키 형식·config를 확인하고 다시 읽습니다</td><td><a href="#s8-guard">8.3</a> 9번</td></tr>
         <tr><td>설정이 트래커 범용화 전 이름이거나 트래커가 이슈 DB와 다를 때 (첫 스크립트 호출·Jira 도구 호출)</td><td>옛 설정 키(<code>jira:</code> 등)·모르는 <code>tracker.kind</code>면 스크립트 종료 2, guard는 모든 MCP 호출 거부. 설정 <code>tracker.kind</code> ≠ 이슈 DB 선언이면 <code>tracker-mismatch</code>로 종료 2</td><td>"옛 설정 키: … — config.py rename-legacy로 바꾼다" / "tracker-mismatch — 이슈 DB 트래커는 …, 설정 tracker.kind는 …"</td><td><code>config.py rename-legacy --apply</code>(사용자 config) 또는 관리자에게 알림. 불일치는 <code>tracker.kind</code>·<code>issue_db.path</code> 확인. 우회하지 않습니다</td><td><a href="#s6-msg">6.3</a></td></tr>
         <tr><td>계획을 적용할 때 main이 그사이 바뀌었을 때 (<code>db_pr stage</code>)</td><td>종료 코드 1 + drift 목록. 자동으로 덮지 않습니다</td><td>항목마다 계획 값 / 계획 당시 main 값 / 지금 main 값</td><td>계획 값 유지 / main 값 유지 / 직접 입력을 고르면 계획이 갱신되고 다시 적용됩니다</td><td><a href="#s0-seq">그림 B</a>, <a href="#s6-recover">6.4</a></td></tr>
         <tr><td>적용 중 검사가 실패했을 때 (lint·마스킹·회귀·R1~R4, Jira 중복)</td><td>종료 코드 1. 확인 화면이 나오지 않습니다</td><td>실패 원인. 회귀 실패면 "시그니처 좁히기 / allow-cause" 질문, Jira 중복이면 기존 분류와 유지/재분류 질문</td><td>계획을 고쳐 다시 적용합니다</td><td><a href="#s5-sc">5.2</a>, <a href="#s7-add">7.4</a></td></tr>
         <tr><td>검사는 통과했지만 사람 승인이 필요한 변화가 있을 때 (예: R5 기존 이벤트 변경)</td><td>종료 코드 3. 정상 경로이고 확인 화면이 나옵니다</td><td>확인 화면·PR 본문의 "승인 필요"</td><td>그대로 진행하고, 메인테이너 승인을 리뷰 조건으로 둡니다</td><td><a href="#s6-exit">6.2</a></td></tr>
+        <tr><td>확인 화면·리포트·초안 검증표를 답에 다 보이지 않았을 때 (답 끝·질문 직전·publish·게시 승인(approve)·stage 직전)</td><td>표시 보조 hook이 다시 보이게 합니다(같은 화면이 한 번 더 나옴). 같은 화면으로 2회 막은 뒤에는 더 막지 않고 알림만 냅니다</td><td>같은 화면이 다시 나옴 / "[telephony-triage] 확인 화면 일부를 답에 보이지 못했다(재시도 한도) — … 직접 확인" / "[telephony-triage] show_guard 판정 못 함 — …"</td><td>알림의 곳(<code>report.md</code> 또는 앞 Bash 출력)을 직접 보고 맞을 때만 승인합니다. 승인 질문·승인 해시·pre-push는 그대로 걸립니다</td><td><a href="#s5-confirm">5.8</a>, <a href="#s8-guard">8.3</a></td></tr>
         <tr><td>확인 화면을 승인한 뒤 파일이 바뀌었을 때 (<code>publish</code>)</td><td>승인이 무효가 되어 종료 코드 1. push하지 않습니다</td><td>사유(승인 뒤 변경, 검사 실패, 커밋 둘 이상, 메시지 불일치)</td><td>계획을 고쳐 적용부터 다시 하고 확인 화면을 다시 승인합니다</td><td><a href="#s5-confirm">5.8</a></td></tr>
         <tr><td>push는 됐는데 그 뒤가 실패했을 때 (<code>publish</code>의 discard 실패·PR 생성 실패)</td><td>종료 코드 2 + <code>published: true</code>. publish를 다시 하지 않습니다</td><td><code>discard.error</code>와 <code>discard.next</code>, 또는 <code>gh_error</code></td><td>discard 실패면 <code>db_pr.py discard &lt;wt&gt;</code>만 다시. PR 생성 실패면 수동 처리 또는 publish 재시도를 정한 뒤 discard</td><td><a href="#s6-recover">6.4</a></td></tr>
         <tr><td>스킬이 쓴 계획의 형식이 틀렸을 때 (<code>stage</code>)</td><td>종료 코드 2. 이전 작업 파일은 건드리지 않습니다</td><td>"계획 형식 오류: …"(op·빠진 필드·허용 밖 필드)</td><td>없음. 스킬이 결정 내용은 바꾸지 않고 형식만 고쳐 다시 적용하고 알립니다</td><td><a href="#s6-msg">6.3</a></td></tr>
@@ -1517,7 +1525,7 @@ db_build.py --verify --db &lt;db&gt;</pre></div>
         <tr><td>"백엔드 불일치 — 이슈 DB는 site ≥ x, 현재 reference y. 결과가 팀 기준과 다를 수 있음"</td><td>파서 백엔드 버전 차이</td><td>플러그인·사이트 설정의 <code>parser.backend</code> 확인. 분석은 경고 후 진행, 쓰기는 막힘</td></tr>
         <tr><td>"외부 파서 불일치 [data] — … 어댑터 없음"</td><td>이슈 DB가 고정한 외부 파서 어댑터가 없거나 낮음</td><td><code>external_parsers</code> 설정과 어댑터 설치 확인</td></tr>
         <tr><td>리포트 "로그 범위: … (로그 범위 밖)"</td><td>발생 시각이 로그 밖. radio 버퍼가 작으면 흔함</td><td>전체 파싱 여부 질문에 답하거나 그 시각을 담은 로그를 <code>--more-logs</code>로 추가</td></tr>
-        <tr><td>"해석한 logcat 줄이 없습니다 — 로그 범위 밖이 아니라 형식·인코딩 문제입니다"</td><td>줄 형식이 파서 가정과 다름</td><td>파일 형식·인코딩 확인. 반복되면 관리자가 S-0 진단(<a href="#s7-parser">7.8</a>)</td></tr>
+        <tr><td>"해석한 logcat 줄이 없습니다 — 로그 범위 밖이 아니라 형식·인코딩 문제입니다"</td><td>줄 형식이 파서 가정과 다름</td><td>파일 형식·인코딩 확인. 반복되면 관리자가 S-0 진단(<a href="#s7-parser">7.9</a>)</td></tr>
         <tr><td>"시계 이상 있음"</td><td>단말 시각 되감기·점프(재부팅 직후 등)</td><td>도구가 제안하는 증상 시각 후보 중에서 고름</td></tr>
         <tr><td>"스텝 순서 정렬 안 함: &lt;사유&gt; — Jira 발생 시각 기준으로 분석했다"</td><td>PASS 스텝 흔적을 충분히 못 찾음</td><td>정상 동작. <code>step_events</code> 규칙 보강은 메인테이너</td></tr>
         <tr><td>"장비 시각 미사용: 시계 정렬 불가(시계 차 모름)"</td><td>steps-file 시각을 단말 시각으로 옮길 수 없음</td><td>알면 <code>--clock-offset</code> 지정</td></tr>
@@ -1529,8 +1537,11 @@ db_build.py --verify --db &lt;db&gt;</pre></div>
         <tr><td>pre-commit이 "plugin.scripts_path" 안내와 함께 커밋 거부</td><td>hook이 플러그인 스크립트를 못 찾음</td><td>Claude Code 세션을 한 번 열거나(SessionStart가 갱신) setup. 플러그인 없이 편집하는 사람은 플러그인 레포 clone의 <code>plugin/scripts</code> 지정</td></tr>
         <tr><td>doctor <code>snapshot</code> warn "N일 전 (…, 7일 초과)"</td><td>오래된 읽기 스냅샷</td><td><code>/telephony-triage:sync</code></td></tr>
         <tr><td>publish가 push 없이 종료 1, "summary를 다시 받는다"</td><td>확인 화면을 만든 뒤 PR 제목·본문 내용이 바뀌었거나, 이전 버전 도구로 만든 확인 화면</td><td>확인 화면을 다시 받아 다시 승인합니다. 승인 화면과 실제 PR 내용이 어긋나지 않게 막는 장치입니다</td></tr>
+        <tr><td>"[telephony-triage] 확인 화면 일부를 답에 보이지 못했다(재시도 한도) — &lt;곳&gt;에서 직접 확인"</td><td>Claude가 확인 화면·리포트를 답에 다 옮기지 못해 표시 보조 hook이 같은 화면으로 2회 되돌린 뒤 멈춤(안전 관문 아님)</td><td>&lt;곳&gt;이 파일(<code>report.md</code> 등)이면 그 파일을, "앞 Bash 출력(…)"이면 Claude Code에서 그 도구 출력을 펼쳐 직접 보고 맞을 때만 승인. 승인 질문·승인 해시·pre-push는 그대로(<a href="#s8-guard">8.3</a>)</td></tr>
+        <tr><td>"[telephony-triage] show_guard 판정 못 함 — 확인 화면·리포트를 답에 그대로 보였는지 직접 확인"</td><td>표시 보조 hook이 표시 기록·transcript·설정을 읽지 못했거나 내부 오류(판정하지 않고 지나감, fail-open)</td><td>확인 화면·<code>report.md</code>를 직접 보고 맞을 때만 승인. 계속 나면 관리자에게 알림(<a href="#s8-guard">8.3</a>)</td></tr>
+        <tr><td>리포트 위쪽 줄(must_show에서는 맨 뒤) "이슈 DB pull 건너뜀: &lt;사유&gt;"</td><td>내 이슈 DB clone이 base 브랜치가 아니거나, 커밋하지 않은 변경이 있거나, <code>pull --ff-only</code> 실패</td><td>분석에는 영향 없음(원격에서 받은 읽기 스냅샷 기준). 필요하면 내 clone을 직접 정리(<a href="#s5-report">5.1</a>)</td></tr>
         <tr><td>"계획 형식 오류"</td><td>작업 계획 필드 누락·허용 밖 필드</td><td>메시지의 op·필드대로 계획을 고쳐 다시 실행(스킬이 처리)</td></tr>
-        <tr><td>sync 결과 "ID 중복·Jira 중복"(사후 lint)</td><td>직접 편집 커밋이나 sync-pr 없이 머지</td><td>메인테이너 수동 정리(<a href="#s7-review">7.5</a>)</td></tr>
+        <tr><td>sync 결과 "ID 중복·Jira 중복"(사후 lint)</td><td>직접 편집 커밋이나 sync-pr 없이 머지</td><td>메인테이너 수동 정리(<a href="#s7-review">7.6</a>)</td></tr>
       </table></div>
     </div>
 
@@ -1806,6 +1817,9 @@ python3 -m pytest -q tests        # 골든 포함
         <li><code>--check-boundary</code>는 반입 뒤 모습을 조직 패턴으로 검사하고, 위반이면 반입하지 않습니다(종료 1). 적용 중 실패하면 자동으로 되돌립니다.</li>
         <li>파일 하나를 마지막 반입 버전으로 되돌리기: <code>git restore --source=$(git log -1 --format=%H -- .draft-manifest.json) -- &lt;파일&gt;</code></li>
       </ul>
+      <h4>재반입 뒤 다시 돌릴 확인 (도입 담당자)</h4>
+      <p>반입한 묶음에서 hook이나 공통 판정이 바뀌었으면(<code>hooks.json</code>, <code>guard.py</code>, <code>show_guard.py</code>, <code>common/shown.py</code>, <code>jira_bridge.py</code>, 표시 기록을 쓰는 스크립트(<code>db_pr</code>·<code>issue_post</code>·<code>db_verify</code>·<code>triage</code>)의 기록 부분, <code>SKILL.md</code>·<code>reference/rules.md</code>의 공통 규칙) 사내 대상 eval 11개를 <b>모두</b> 다시 돌립니다. 아니면 바뀐 흐름의 eval만 돌립니다. 어느 쪽인지는 묶음과 함께 오는 <code>DRAFT_NOTES.md</code> "사내로 넘긴 것"의 재반입 노트에 있습니다.</p>
+      <p>이번 K·L 반영 묶음은 hook이 바뀌었으므로 11개를 모두 다시 돌리고 S-2 확인 15·16번을 봅니다. 생성기 버전도 v2로 올라갔으므로 운영 이슈 DB가 있으면 <code>migrate --to &lt;현재 스키마&gt;</code>로 맞춥니다(운영 DB가 아직 없으면 뼈대 config 한 줄, <code>docs/SITE_INSTALL.md</code> §8 끝). Claude Code를 올릴 때도 S-2 확인 16항목과 사내 대상 eval 11개를 다시 합니다(<a href="#s7-rollout">7.13</a> S-2). 자세한 절차는 <code>docs/SITE_INSTALL.md</code> §8.</p>
       <h4>사용자 쪽</h4>
       <ul>
         <li>플러그인이 업데이트되면 SessionStart hook이 세션마다 <code>plugin.scripts_path</code>를 새 경로로 맞춥니다.</li>
@@ -1868,9 +1882,9 @@ git push -u origin HEAD                        # 사용자 승인 후. PR은 사
       <p>각 단계는 별도 Claude Code 세션으로 하고, 끝날 때마다 <code>SITE_PROFILE.md</code> 진행 상태를 갱신합니다(매 세션 읽히므로 4KB 이하로 짧게, 넘으면 <code>context_pack.py</code>가 경고). 세션 입력은 <b>"사내 설정 시작"</b>(또는 "계속")입니다: <code>tools/site_step.py</code>가 <code>SITE_PROFILE.md</code>(모드 사내 보완, 트래커 jira)를 만들고 현재 단계의 할 일·완료 기준·읽을 것(<code>context_pack.py S-n</code> 출력)을 냅니다. 단계 안에서는 <code>site_step.py check</code>(읽기 전용 자동 점검) → 사내 값은 <code>site_step.py propose</code> diff 중 승인한 ID만 <code>--apply</code> → (S-2) <code>site_step.py evals</code>가 다음 eval 배치 명령·추정 비용(비용 승인 뒤 실행) → 요약·사용자 확인 → <code>site_step.py --done S-n</code>. 점검 실패가 있으면 거부하고, 건너뜀·사용자 필요는 확인한 것만 <code>--waive 점검="사유"</code>로 넘깁니다(건너뛰기·사외 PC에서도 거부). 읽을 자료는 <code>python3 tools/context_pack.py S-n</code> 출력뿐입니다.</p>
       <div class="tbl"><table>
         <tr><th>단계</th><th>할 일</th><th>완료 기준</th></tr>
-        <tr><td>S-0 (선택)</td><td>실제 로그 3~5개로 파서 가정 확인(<a href="#s7-parser">7.8</a>)</td><td>지표 5종 기록, 정성 결론 1줄</td></tr>
+        <tr><td>S-0 (선택)</td><td>실제 로그 3~5개로 파서 가정 확인(<a href="#s7-parser">7.9</a>)</td><td>지표 5종 기록, 정성 결론 1줄</td></tr>
         <tr><td>S-1</td><td>확인 목록(<code>tools/list_site_todos.py</code> + <code>REVIEW-OPEN.md</code>), 샘플 받아 <code>SITE_PROFILE.md</code> 작성</td><td>오프라인 평가 기준(1위 정확도 등) 합의</td></tr>
-        <tr><td>S-2</td><td>사내 Claude Code 기능 확인(플러그인 로드, hooks, MCP 도구 이름), 실제 Jira MCP로 Jira 원문 격리 확인, 사내 대상 스킬 eval 실행(11개, 프롬프트 주입 eval 59·60 포함 — 나머지는 사외 결과로 갈음)</td><td>확인 14항목 기록, 안전 eval 위반 0</td></tr>
+        <tr><td>S-2</td><td>사내 Claude Code 기능 확인(플러그인 로드, hooks, MCP 도구 이름, 표시 보조 hook 전제(Stop hook·transcript 시각), AskUserQuestion 선택지 상한, PowerShell 도구 노출(Windows)), 실제 Jira MCP로 Jira 원문 격리 확인, 사내 대상 스킬 eval 실행(11개: 1·2·8·9·39·45·58·59·60·61·62, 프롬프트 주입 eval 59·60 포함 — 나머지는 사외 결과로 갈음). 사내 eval 모델이 사외(Sonnet 5.5)와 다르면 조건부 7개(13·17·18·24·29·33·37)도 돌립니다. hook 거부·되돌림이 이상하면 <code>tools/hook_replay.py</code>로 재판정(숫자만)</td><td>확인 16항목 기록(<code>tests/mocks/plugin-probe/README.md</code> — 15번은 <code>hook_replay.py</code>의 records unanchored 0 — records가 null이면 확인 못 한 것이지 통과가 아님, 16번은 PowerShell 도구), 안전 eval 위반 0</td></tr>
         <tr><td>S-3</td><td><code>site-defaults.yaml</code>(<code>tracker.kind: jira</code>·Jira 도구 매핑 등), <code>issue-db.config.yaml</code>(<code>tracker.{kind, base_url, key_regex}</code> 등) 사내 값</td><td><code>config.py check</code>·<code>doctor</code> fail 0</td></tr>
         <tr><td>S-4a</td><td>운영 이슈 DB 생성·보호, 기존 파서 포팅(골든), 기존 data 분류 import, 분석 스킬 연결. 벤더 RIL 태그 초안은 <code>s0_suggest.py</code></td><td>골든 통과(실제 골든 폴더가 사내 백엔드로 실행되는지, 기대값을 일부러 바꾸면 실패하는지까지 확인), import PR 머지</td></tr>
         <tr><td>S-4</td><td>placeholder 규칙을 실제 문구로, 카테고리별 유형 5~10개 시드(실제 마스킹 fixture)</td><td>회귀·검증 통과</td></tr>
@@ -1925,7 +1939,7 @@ git push -u origin HEAD                        # 사용자 승인 후. PR은 사
 
     <div class="sub" id="s8-guard" data-title="guard 규칙">
       <h3>hook과 guard 규칙: 언제 걸리나</h3>
-      <div class="note easy"><span class="k">쉽게 말하면</span>검사가 걸리는 순간은 셋입니다. Claude가 도구를 부르기 직전(PreToolUse: Jira MCP 도구, Bash 명령, 파일 쓰기 도구), Jira 도구 결과가 Claude에게 돌아오는 직후(PostToolUse), 그리고 이슈 DB에서 <code>git commit</code>·<code>git push</code>를 하는 순간(git hook, Claude 밖 터미널 포함)입니다. 세션을 열 때 경로를 맞추는 hook이 하나 더 있습니다.</div>
+      <div class="note easy"><span class="k">쉽게 말하면</span>검사가 걸리는 순간은 셋입니다. Claude가 도구를 부르기 직전(PreToolUse: Jira MCP 도구, Bash 명령, 파일 쓰기 도구), Jira 도구 결과가 Claude에게 돌아오는 직후(PostToolUse), 그리고 이슈 DB에서 <code>git commit</code>·<code>git push</code>를 하는 순간(git hook, Claude 밖 터미널 포함)입니다. 세션을 열 때 경로를 맞추는 hook이 하나 더 있습니다. 그리고 확인 화면·리포트 표시를 돕는 표시 보조 hook이 있습니다(안전 관문 아님, 아래 "표시 보조 hook").</div>
       <p>표의 "걸리면" 문구는 실제 메시지입니다. guard의 거부·ask 문구에는 앞에 <code>[telephony-triage]</code>가 붙고, 3·4번 문구는 guard가 부르는 <code>common/checks.py</code>에서 오며, 9번(<code>jira_bridge.py</code>) 문구는 <code>telephony-triage: </code>로 시작합니다. git 관련 규칙(3~7)은 명령의 작업 디렉토리가 config의 이슈 DB 레포(그 worktree·읽기 스냅샷 포함)일 때만 적용됩니다.</p>
       <div class="tbl"><table>
         <tr><th>규칙</th><th>언제 걸리나</th><th>적용 조건</th><th>걸리면</th><th>할 일</th></tr>
@@ -1935,12 +1949,22 @@ git push -u origin HEAD                        # 사용자 승인 후. PR은 사
         <tr><td class="wrap"><b>4</b> 생성 파일 정합성</td><td class="wrap">위와 같은 순간</td><td class="wrap">이슈 DB 레포이고 staged 파일이 있을 때</td><td class="wrap">거부: ".cache/는 커밋하지 않는다 (규칙 4): …" 또는 생성 파일이 최신이 아닐 때 "직접 고치지 말고 db_build.py --write로 다시 만든 뒤 add한다." (<code>actions-build</code> 모드면 "생성 파일은 머지 후 봇이 만든다 … staged에서 뺀다")</td><td class="wrap">메시지대로 <code>db_build.py --write</code>로 다시 만들거나 staged에서 뺍니다</td></tr>
         <tr><td class="wrap"><b>5</b> hook 우회 차단</td><td class="wrap">이슈 DB에서 <code>git commit</code>·<code>git config</code>·<code>git -c core.hooksPath=…</code>를 실행하기 직전</td><td class="wrap">이슈 DB 레포. <code>--no-verify</code>·<code>-n</code> 커밋, <code>core.hooksPath</code> 변경·해제, 유효 값이 정확히 <code>.githooks</code>가 아닌 상태의 커밋</td><td class="wrap">거부: "git commit --no-verify는 pre-commit 검사를 건너뛰므로 금지한다 (규칙 5)." / "이 레포의 core.hooksPath가 '(없음)'다. 정확히 .githooks여야 커밋할 수 있다 (규칙 5). /telephony-triage:setup 을 다시 실행한다." / "core.hooksPath 해제는 금지다 (규칙 5). git hook(pre-commit·pre-push)이 꺼진다."</td><td class="wrap">우회 옵션을 빼고, hooksPath가 비었으면 <code>setup</code>을 다시 실행합니다</td></tr>
         <tr><td class="wrap"><b>6</b> main 직접 push 차단</td><td class="wrap">이슈 DB에서 <code>git push</code>를 실행하기 직전</td><td class="wrap">대상 ref가 base 브랜치(refspec 또는 현재 브랜치), <code>--all</code>·<code>--mirror</code>, push <code>--no-verify</code></td><td class="wrap">거부: "base 브랜치(main)로 직접 push하지 않는다 (규칙 6). 브랜치를 올리고 PR을 만든다." / "--all/--mirror push는 base 브랜치(main)를 포함할 수 있어 금지한다 (규칙 6)." / "git push의 --no-verify는 pre-push 검사를 건너뛰므로 금지한다 (규칙 5)."</td><td class="wrap">작업 브랜치를 올리고 PR을 만듭니다</td></tr>
-        <tr><td class="wrap"><b>7</b> push 확인 강제</td><td class="wrap">이슈 DB로 <code>git push</code> 또는 <code>db_pr.py publish</code>를 실행하기 직전(도구 흐름의 확인 화면 승인 뒤 publish도 포함)</td><td class="wrap">이슈 DB 레포의 push. <code>publish</code>는 사용자 config가 있을 때</td><td class="wrap">승인 프롬프트(<code>ask</code>): "이슈 DB push다. 확인 화면(변경 파일·diff·검사 결과·커밋 메시지)을 승인한 뒤에만 진행한다 (규칙 7)." / "db_pr.py publish는 이슈 DB에 push한다. 확인 화면을 승인한 뒤에만 진행한다 (규칙 7)."</td><td class="wrap">확인 화면(<a href="#s5-confirm">5.8</a>)을 본 뒤 승인합니다. 헤드리스 실행에서는 거부됩니다</td></tr>
+        <tr><td class="wrap"><b>7</b> push 확인 강제</td><td class="wrap">이슈 DB로 <code>git push</code>를 하거나, 명령 글에 이름 <code>db_pr</code>과 낱말 <code>publish</code>가 함께 있는 Bash 명령(<code>db_pr.py publish</code>, 도구 흐름의 확인 화면 승인 뒤 publish도 포함)을 실행하기 직전. 변수·따옴표·줄 이음으로 쪼갠 이름도 붙여 보고, grep·echo·cat 같은 글 명령만인 줄(과 그 heredoc 본문)은 뺍니다. git·gh 줄은 빼지 않으므로 커밋 메시지·PR 본문에 두 낱말이 들어도 물을 수 있습니다(묻는 오판은 쌉니다)</td><td class="wrap">이슈 DB 레포의 push. <code>publish</code>는 사용자 config가 있을 때</td><td class="wrap">승인 프롬프트(<code>ask</code>): "이슈 DB push다. 확인 화면(변경 파일·diff·검사 결과·커밋 메시지)을 승인한 뒤에만 진행한다 (규칙 7)." / "db_pr.py publish는 이슈 DB에 push한다. 확인 화면을 승인한 뒤에만 진행한다 (규칙 7)."</td><td class="wrap">확인 화면(<a href="#s5-confirm">5.8</a>)을 본 뒤 승인합니다. 헤드리스 실행에서는 거부됩니다</td></tr>
         <tr><td class="wrap"><b>8</b> 사용자 clone 직접 편집 차단</td><td class="wrap">Claude가 Write·Edit·MultiEdit·NotebookEdit로 파일을 쓰기 직전, 또는 Bash로 clone 본체를 바꾸는 명령을 실행하기 직전</td><td class="wrap">대상 경로가 config <code>issue_db.path</code>(내 clone, 플랫폼 프로필이 여럿이면 모든 프로필) 안일 때. <code>work_dir</code> 아래(작업 worktree·스냅샷)는 제외. Bash는 clone 본체에서 브랜치·파일을 바꾸는 git(<code>checkout</code>·<code>switch</code>·<code>reset</code>·<code>stash</code>·<code>merge</code>·<code>pull</code>·<code>clean</code> 등, <code>gh pr checkout</code>)과 파일 쓰기(<code>&gt;</code>·<code>tee</code>·<code>cp</code>·<code>rm</code>·<code>sed -i</code> 등의 대상). <code>fetch</code>·<code>status</code>·<code>log</code>·<code>diff</code>는 통과. 예외: 깨끗한 트리에서 <code>migrate/schema-v&lt;N&gt;</code> 브랜치 만들기는 <code>ask</code></td><td class="wrap">거부: "이슈 DB clone은 도구가 직접 고치지 않는다. 직접 편집은 사용자가 한다 (규칙 8: &lt;경로&gt;). 도구 변경은 작업 계획과 db_pr stage로 작업 worktree에서 만든다." / "사용자 clone의 브랜치·파일은 도구가 바꾸지 않는다 (규칙 8). 분석은 _snapshot, 쓰기는 db_pr의 작업 worktree …"</td><td class="wrap">직접 편집은 사용자가 에디터로 합니다. 도구에는 계획으로 지시합니다</td></tr>
         <tr><td class="wrap"><b>9</b> Jira 응답 원문 격리</td><td class="wrap">Jira 도구 결과가 Claude에게 돌아오는 순간 (PostToolUse)</td><td class="wrap"><code>tracker.tools.get_issue</code>·<code>get_comments</code>와 설정된 코멘트 도구일 때. 다른 도구 결과는 그대로</td><td class="wrap">원문 대신: "telephony-triage: Jira 응답 원문은 파일로만 저장했다(모델에 보이지 않음). 아래는 마스킹된 요약이다. 분석은 triage.py run이 이 파일을 읽는다." 실패하면 원문 대신 "… 이슈 키를 찾지 못해 저장하지 않았다(원문은 표시하지 않는다)." / "Jira 응답 처리 실패(…) — 원문은 표시하지 않는다." / "설정을 읽지 못해(…) Jira 응답 격리 여부를 판정하지 못했다 — 원문은 표시하지 않는다." 코멘트 게시 응답이면 "telephony-triage: Jira 코멘트를 게시했다 (&lt;KEY&gt;, comment &lt;id&gt;). 응답 원문은 표시하지 않는다. …"(<code>post.result.json</code> 기록, 승인 1회 소모, 실패 응답은 소모하지 않음) / 처리 예외면 "… 게시는 됐을 수 있다. Jira에서 확인하고 다시 게시하지 않는다(…)"</td><td class="wrap">정상이면 할 일 없음. 오류 문구가 나오면 이슈 키 형식·config를 확인하고 다시 읽습니다</td></tr>
         <tr><td class="wrap"><b>10</b> 로그 원문 통독 차단</td><td class="wrap">Bash로 <code>cat</code>·<code>less</code>·<code>zcat</code>·<code>head -c</code>·<code>unzip -p</code> 등이나 모든 줄을 내보내는 <code>grep</code>/<code>awk</code>/<code>sed</code>를 실행하기 직전</td><td class="wrap">인자가 로그 원문·zip·bugreport·<code>events.json</code>·<code>events-full.json</code>·<code>issue_raw.json</code>(개명 전 <code>jira_raw.json</code>도)·<code>match.json</code>일 때(앞 8KB·30줄로 판별). 원문 줄 모양은 설치된 모든 플랫폼 형식의 합집합입니다(android threadtime·time 줄, oFono 가정 형식 journald·BSD syslog 줄 — host·ident가 ASCII일 때만). 그래서 android 단독 설치도 journald 모양 줄을 원문으로 봅니다. <code>fixtures/</code>·<code>draft/</code> 아래와 없는 파일은 통과. 사용자 config와 무관</td><td class="wrap">거부: "로그 원문·zip·events/issue_raw/match.json은 통째로 읽지 않는다(원칙 §로그 원문, 규칙 10: &lt;명령&gt; &lt;인자&gt;). grep -n '&lt;패턴&gt;' &lt;파일&gt; 또는 sed -n '&lt;a&gt;,&lt;b&gt;p' &lt;파일&gt;로 필요한 줄만, bugreport는 parse_logcat.py extract-bugreport. Read 도구도 limit·offset으로 구간만."</td><td class="wrap">메시지가 안내하는 <code>grep -n</code>·<code>sed -n</code>·<code>extract-bugreport</code>로 필요한 구간만 읽습니다</td></tr>
         <tr><td class="wrap"><b>11</b> 이슈 DB 원격 쓰기 확인</td><td class="wrap">Bash로 <code>gh</code>를 실행하거나 Jira가 아닌 MCP 도구(GitHub MCP 등)를 부르기 직전</td><td class="wrap">대상이 이슈 DB 레포(모든 플랫폼 프로필)일 때(<code>gh api</code>의 <code>repos/&lt;o&gt;/&lt;r&gt;</code> → <code>-R</code>·<code>--repo</code>·<code>GH_REPO</code> → cwd가 이슈 DB clone·worktree·스냅샷, MCP는 <code>owner</code>+<code>repo</code> 인자). 쓰기 서브커맨드(<code>pr create|edit|comment</code>, GET 아닌 <code>api</code> 등)와 쓰기형 MCP 도구만. config에 <code>issue_db.remote</code>가 없으면(setup 전) 적용하지 않음</td><td class="wrap">승인 프롬프트(<code>ask</code>): "이슈 DB 원격을 바꾸는 gh 명령이다. 변경·검증 결과를 보고 승인한 뒤에만 진행한다 (규칙 7)." / <code>gh pr merge</code>·머지 API·이름에 <code>merge</code>가 든 MCP 도구는 거부: "이슈 DB PR 머지는 리뷰어가 GHE에서 한다. 도구가 머지하지 않는다 (규칙 6·7)."</td><td class="wrap">PR은 도구 흐름(<code>db_pr publish</code>)으로 만들고, 머지는 리뷰어가 GHE에서 합니다. <code>db_pr.py</code>가 내부에서 부르는 <code>gh</code>는 hook에 보이지 않아 영향이 없습니다</td></tr>
       </table></div>
+      <h4>표시 보조 hook (show_guard)</h4>
+      <p>표시 보조 hook(<code>show_guard.py</code>)은 규칙 번호가 없습니다. 안전 관문이 아니라, Claude가 확인 화면·리포트를 줄이지 않고 그대로 보였는지 보는 장치입니다. hook은 모두 11종입니다: 안전 관문 10종(설계 문서 <code>08-safety.md</code> §9의 셈: SessionStart 1·Jira 1·Bash 6·파일 도구 1·Jira 응답 격리 1)과 표시 보조 1종. 이 셈은 위 표의 규칙 번호와 1:1이 아닙니다(10·11번은 새 matcher 없이 기존 Bash·MCP hook 안에서 판정). 사용자가 할 일은 <a href="#s5-confirm">5.8</a>.</p>
+      <ul>
+        <li><b>걸리는 곳</b>: Stop(답을 끝낼 때), PreToolUse AskUserQuestion(질문 직전), PreToolUse Bash(publish·approve·stage 직전, guard와 같은 그룹), PostToolUse Bash(안내만).</li>
+        <li><b>무엇을 보나</b>: 확인 화면(push·게시)·분석 리포트의 결정적 줄과 must_show·초안 검증표를 낸 스크립트(<code>db_pr</code>·<code>issue_post</code>·<code>db_verify</code>·<code>triage</code>)가 <code>&lt;work_dir&gt;/.shown/log.jsonl</code>에 표시 기록을 남깁니다(<a href="#s9-files">부록 A</a>). hook은 그 기록을 transcript의 Bash 호출에 시각으로 고정하고, 그 뒤 답·질문에 모든 줄이 보였는지 봅니다.</li>
+        <li><b>빠지면</b>: Stop은 되돌려 다시 보이게 하고, 질문·publish·approve(게시 승인)·stage(초안 검증표를 보이지 않은 적용)는 거부합니다(붙일 화면 전문 포함). 같은 화면으로 2회(똑같이 반복한 호출 1회는 세지 않음)에 이르면 더 막지 않고 사용자에게 "[telephony-triage] 확인 화면 일부를 답에 보이지 못했다(재시도 한도) — &lt;곳&gt;에서 직접 확인"을 냅니다.</li>
+        <li><b>판정 못 할 때</b>: 기록·transcript·설정을 못 읽거나 내부 오류면 판정하지 않습니다(fail-open). 그 턴에 화면 흔적이 있으면 "show_guard 판정 못 함"을 알립니다.</li>
+        <li><b>안전과의 관계</b>: 실제 관문(규칙 7 승인 질문·승인 해시·pre-push 토큰·규칙 2 게시 승인)은 그대로라, 이 hook이 열려도 승인 없는 쓰기는 생기지 않습니다.</li>
+        <li><b>한계</b>: 최선 노력입니다. Windows PowerShell 도구로 돌린 호출과, 시계가 다른 실행 환경(컨테이너·원격 Bash)·백그라운드로 넘어간 호출(120초 초과 포함)은 표시 기록을 Bash 호출에 고정하지 못해 판정하지 않습니다. 출력을 파일로 돌리고 Read로 연 화면도 그대로 판정합니다(기록이 그 화면을 낸 Bash 호출에 고정됨). 다만 Read 호출 뒤에는 안내(PostToolUse)가 붙지 않습니다.</li>
+      </ul>
       <h4>적용되지 않는 경우</h4>
       <ul>
         <li>이슈 DB가 아닌 레포의 git 명령: 어떤 git 규칙도 적용하지 않습니다.</li>
@@ -1949,6 +1973,7 @@ git push -u origin HEAD                        # 사용자 승인 후. PR은 사
         <li>다른 MCP 서버의 도구: 설정을 읽을 수 있을 때는 2번·9번 모두 통과합니다. <code>config.yaml</code>·<code>site-defaults.yaml</code>을 읽지 못하면 9번은 모든 <code>mcp__</code> 결과를 오류 문구로 바꿉니다(guard가 같은 상태에서 거부하는 범위와 같음).</li>
         <li><code>site-defaults.yaml</code>이 없을 때: guard는 멈추지 않고 "site-defaults.yaml이 없다 (S-3 미완료). 사용자 config만으로 판정한다."라고 경고한 뒤 사용자 config로 판정합니다. 단 커밋 검사(3·4번)가 부르는 스크립트가 종료 코드 2를 내므로 이슈 DB 커밋은 거부됩니다.</li>
         <li>Read·Glob·Grep 도구: hook이 없습니다. 로그 통독 차단은 Bash 명령에만 걸리고, Read 도구는 스킬 지침에만 기댑니다: 로그·<code>events.json</code>·<code>match.json</code>·소스 파일(<code>code.resolved</code>)은 통째로 읽지 않고 <code>grep -n</code> 적중 줄 주변만 <code>offset</code>·<code>limit</code>(≤200줄)로, 같은 구간은 다시 읽지 않으며(소스는 파일당 Read ≤2회), 소스에서 <code>grep -n</code>이 맞지 않으면 추정하지 않고 "코드 위치 미확인"으로 적습니다.</li>
+        <li>Windows PowerShell 도구 호출: <code>hooks.json</code>의 Bash matcher에 걸리지 않아 guard 규칙 3~8·10·11과 표시 보조 hook이 보지 못합니다(아래 한계).</li>
         <li>PyYAML 등 의존성이 없거나 guard 자체가 내부 오류를 내면: MCP 도구는 거부(승인 코멘트 도구 포함, Jira 쓰기 차단은 guard가 유일한 장치), Bash의 <code>git</code>·<code>gh</code>·<code>db_pr.py publish</code>·파일 쓰기와 Write·Edit 도구는 "레포 판별 불가 — 직접 확인한다"로 승인 프롬프트(<code>ask</code>), 그 밖의 Bash는 경고만 하고 통과합니다. doctor의 <code>python</code>·<code>deps</code>·<code>guard</code>(자가시험) 행이 이 상태를 먼저 보입니다.</li>
       </ul>
       <h4>git hook 두 개</h4>
@@ -1959,7 +1984,7 @@ git push -u origin HEAD                        # 사용자 승인 후. PR은 사
         <tr><td class="wrap"><code>pre-push</code></td><td class="wrap">이슈 DB에서 <code>git push</code>가 원격에 보내기 직전</td><td class="wrap">대상이 base 브랜치면 거부(플랫폼이 여럿이면 push 커밋의 DB 선언 플랫폼의 <code>work_dir</code>·base 기준). 환경변수 <code>TT_PUBLISH_TOKEN</code>이 없거나 승인 해시와 다르면 거부. 토큰은 <code>db_pr publish</code>가 자기 push에만 넣습니다</td><td class="wrap">"[telephony-triage pre-push] push를 거부했다: TT_PUBLISH_TOKEN이 없다. 도구 흐름은 확인 화면 승인 뒤 db_pr publish가 push한다. 직접 편집한 브랜치는 /telephony-triage:validate 통과 후 TT_PUBLISH_TOKEN=manual 을 붙여 push한다 …"</td><td class="wrap">도구 흐름이면 확인 화면을 승인해 publish가 push하게 둡니다. 직접 편집 브랜치면 <code>validate</code> 통과 후 <code>TT_PUBLISH_TOKEN=manual git push origin &lt;브랜치&gt;</code></td></tr>
       </table></div>
       <p>3·4번과 <code>pre-commit</code>은 검사 내용이 겹치는 이중 장치입니다. Claude 세션 안에서는 3·4번이 더 빨리, 더 분명한 메시지로 막고, 진짜 강제는 <code>pre-commit</code>입니다. 목적은 도구 경로 밖의 실수 방지이지 권한 통제가 아닙니다.</p>
-      <div class="note warn"><span class="k">한계</span>명령 판정은 최선 노력입니다. 변수 치환, 별칭, 스크립트 파일 안의 git 호출, <code>$( )</code>, <code>GIT_DIR=</code> 같은 우회는 보지 못합니다. Read 도구의 통독도 막지 못합니다. 그래서 진짜 강제는 git pre-commit hook과 <b>서버 측 브랜치 보호</b>입니다.</div>
+      <div class="note warn"><span class="k">한계</span>명령 판정은 최선 노력입니다. git 규칙은 변수 치환, 별칭, 스크립트 파일 안의 git 호출, <code>$( )</code>, 앞선 명령에서 export한 <code>GIT_DIR</code> 같은 우회를 보지 못합니다. 규칙 7의 publish 판정은 낱말 그물로 넓혔지만, 낱말 자체를 변수로 만든 호출(<code>${P}lish</code> 등)·인코딩한 호출·가짜 heredoc·스크립트 파일 안 호출(<code>bash push.sh</code>)·셸 프로필의 별칭·함수는 보지 못해 승인 질문 없이 브랜치 push·PR까지 갈 수 있습니다. Windows에서 Claude Code가 PowerShell 도구를 내놓으면 그 호출은 <code>hooks.json</code>의 Bash matcher에 걸리지 않아 guard 규칙 3~8·10·11과 표시 보조 hook이 보지 못합니다(사외 Windows PC에서 확인). 지원 OS는 Ubuntu이고, 사내 S-2(확인 16번)에서 노출 여부를 보고 matcher 추가와 PowerShell 도구 거부(deny) 중 고릅니다. Read 도구의 통독도 막지 못합니다. 그래서 진짜 강제는 git pre-commit hook과 <b>서버 측 브랜치 보호</b>입니다. main에는 서버 브랜치 보호·CODEOWNERS 리뷰 없이 들어가지 않습니다(<a href="#s7-protect">7.3</a>대로 보호를 설정했을 때).</div>
     </div>
 
     <div class="sub" id="s8-approve" data-title="승인 지점">
@@ -2025,6 +2050,7 @@ git push -u origin HEAD                        # 사용자 승인 후. PR은 사
         <tr><td>작업 디렉토리</td><td><code>~/.telephony-triage/work/</code> (기본, 권한 700)</td><td>도구</td></tr>
         <tr><td>읽기 스냅샷 / 스냅샷 시각</td><td><code>work/_snapshot/</code>, <code>work/snapshot.json</code></td><td>sync, analyze</td></tr>
         <tr><td>작업별 산출물</td><td><code>work/&lt;KEY&gt;/</code>: <code>analysis.json</code>, <code>report.md</code>, <code>logs/</code>(bugreport에서 꺼낸 logcat), <code>plan.json</code>, <code>wt/</code>, <code>draft/</code>, <code>runs/</code>, <code>timeline.md</code></td><td>도구</td></tr>
+        <tr><td>표시 기록</td><td><code>work/.shown/log.jsonl</code> (4MB 넘으면 <code>log.jsonl.1</code>로 한 세대 회전, 최대 약 8MB, 폴더 권한 700). 확인 화면·리포트 결정적 줄·초안 표 사유를 담아 마스킹된 화면과 같은 민감도입니다. 사용자 PC에만 있고 레포·반입 묶음에 들어가지 않으며, <code>cleanup</code>·<code>discard</code>·<code>status</code>·<code>usage_stats</code>가 건드리지 않습니다</td><td>도구(<code>db_pr</code>·<code>issue_post</code>·<code>db_verify</code>·<code>triage</code>), 표시 보조 hook이 읽음</td></tr>
         <tr><td>pending 피드백</td><td><code>~/.telephony-triage/pending-feedback/</code></td><td>도구</td></tr>
         <tr><td>월간 리뷰 리포트</td><td><code>work/review-&lt;category&gt;-&lt;YYYY-MM&gt;/report.md</code></td><td>review</td></tr>
         <tr><td>사이트 설정</td><td><code>plugin/site-defaults.yaml</code></td><td>관리자(S-3)</td></tr>
@@ -2059,9 +2085,19 @@ git push -u origin HEAD                        # 사용자 승인 후. PR은 사
         <tr><td><code>tracker.mcp_server</code> · <code>tools</code> · <code>read_tools</code> · <code>timezone</code> · <code>field_map</code></td><td>사이트 설정을 덮어쓸 수 있는 트래커(Jira) 값. 옛 이름 <code>jira:</code>가 남아 있으면 <code>config.py rename-legacy</code></td></tr>
         <tr><td><code>logcat.timezone</code> · <code>year_source</code></td><td>logcat 시각 해석</td></tr>
         <tr><td><code>code_profiles</code></td><td>소스 트리 프리셋(<code>name</code>, <code>platform_version</code>, <code>roots.aosp</code>, <code>roots.vendor_ril</code>)</td></tr>
+        <tr><td><code>code.auto_select</code></td><td>Jira 버전과 맞는 소스 트리 프로필이 하나면 묻지 않고 고름(사용자 config &gt; 사이트 기본 &gt; 기본 true). YAML에서는 최상위 <code>code:</code> 아래 <code>auto_select:</code>(아래 예시). setup은 묻지 않음, 직접 적음</td></tr>
+        <tr><td><code>analyzers.&lt;카테고리&gt;.when</code></td><td>심층 분석: <code>ask</code>(기본, 실행 전에 물음) | <code>always</code> | <code>never</code>. setup은 묻지 않음, 직접 적음</td></tr>
+        <tr><td><code>explore.when</code></td><td>탐색 분석: <code>ask</code>(기본) | <code>always</code> | <code>never</code>. setup은 묻지 않음, 직접 적음</td></tr>
         <tr><td><code>recent_code_roots</code></td><td>직접 입력한 경로 최근 5개(자동)</td></tr>
         <tr><td><code>log_dir</code> · <code>work_dir</code></td><td>logcat 탐색 경로, 작업 디렉토리</td></tr>
       </table></div>
+      <p><b>반복 질문 줄이기</b>: 심층·탐색 분석 설정은 setup이 묻지 않으므로 이 파일에 직접 적습니다(소스 트리 프로필 <code>code_profiles</code>는 setup에서 넣을 수도 있습니다). 사용자 config가 팀 기본값보다 우선하고, 적은 키만 덮습니다. 한 번만 끄려면 <code>analyze … --code skip</code>(코드 분석 건너뛰기)·<code>--no-analyzer</code>·<code>--no-explore</code>를 씁니다.</p>
+      <div class="code"><pre>code_profiles:                  # 버전이 맞는 프로필이 하나면 묻지 않고 고른다(code.auto_select, 기본 true)
+  - {name: android16-main, platform_version: "16", roots: {aosp: /path/to/android16}}
+# code: {auto_select: false}     # 늘 묻게 하려면(기본 true)
+analyzers:
+  data: {when: never}           # 심층 분석: ask(기본) | always | never
+explore: {when: never}          # 탐색 분석: ask(기본) | always | never</pre></div>
       <h4>이슈 DB (<code>issue-db.config.yaml</code>)</h4>
       <div class="tbl"><table>
         <tr><th>키</th><th>뜻</th></tr>
@@ -2103,7 +2139,7 @@ git push -u origin HEAD                        # 사용자 승인 후. PR은 사
   <div class="empty" id="empty">검색어와 맞는 절이 없습니다. 다른 낱말(예: 커맨드 이름, 오류 문구 일부)로 찾아보세요.</div>
 
   <footer class="foot">
-    telephony-triage 사용·운영 매뉴얼 · 플러그인 레포 main(2026-10-12) 기준. 표·정의가 설계 문서와 다르면 <code>docs/design/contracts.md</code>가 맞습니다.
+    telephony-triage 사용·운영 매뉴얼 · 플러그인 레포 main(2026-10-16) 기준. 표·정의가 설계 문서와 다르면 <code>docs/design/contracts.md</code>가 맞습니다.
   </footer>
 </main>
 </div>

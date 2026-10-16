@@ -331,6 +331,13 @@
 - 같은 뿌리: `post_lint.errors`도 SKILL은 read-only에서만 알린다(07 §Step 1은 모드 무관), record·verify·sync-pr 흐름의 `db_pr snapshot`에는 pull 건너뜀 알림 지시가 없다.
 - 시험 공백: read-only에서 줄 순서, 오프라인에서 줄 없음, dirty·ff-only 사유.
 
+### HTML 자료 현행화 (10/16, 묶음 5개 — 계획·수정·리뷰 각 별개 에이전트, P0·P1 0까지 재리뷰)
+
+- 대상 `docs/materials/*.html` 20개·`docs/telephony-triage-guide.html`(개정 8) + GUIDE·SITE_INSTALL·`tests/skill_evals/README.md` 낡은 문장. 계획 P1 88·P2 54, 리뷰에서 공통 문구 오류 둘(표시 보조 hook "Read로 연 화면은 판정하지 않는다" → 실제는 PostToolUse 안내만 빠짐, "막는 장치가 아니다" → "안전 관문이 아니다")을 찾아 모든 문서에서 고침.
+- 리뷰 P2(반입 뒤 후보): 01 슬라이드 29(711px)·12(653px) 넘침(원래부터), 33은 650px 한계, 13 "skip은 생략" 문구; 10-cases 사례 3 질문·리포트 순서(SVG); 06 확인 화면 모형 SVG가 R1~R4 한 줄; 15 빠른 참조 인쇄면 꽉 참; 04·03 SVG "안전장치 10종"(수는 맞음); 01·02·19·안내서 "CI 통과" 카드는 1,956개(10/15) 기준 — 2,013개는 PR CI 뒤 14 §3 갱신.
+- 범위 밖 발견: `08-safety.md:86` hook 셈(Bash 6 등)이 규칙 번호와 1:1이 아니어서 모호 → 설계 문서 정리 후보. `common/shown.py` `_tail_lines`가 기록 파일 OSError를 경고 없이 빈 목록으로 처리 — 08-safety §9.1 "표시 기록을 못 읽으면 stderr 경고"와 다름(코드 또는 문서 정리 후보).
+- 같이 고친 것: `tests/skill_evals/offsite.py`가 Windows에서 CRLF로 쓰던 것(LF 고정), `commands/analyze.md` argument-hint `--code <프로필|경로|skip>`.
+
 ## L1 리뷰 P2 (반입 뒤 후보)
 
 (3)(4)(5)(8)은 L2에서 처리했다: (3) `_user_entry`가 `shown.parse_events(include_user=True)` 재사용, (4) `hook_replay` docstring 한계, (5) `last_user` 삭제, (8) `maxsplit=1`(① M-2). 남은 것은 (6)(7).

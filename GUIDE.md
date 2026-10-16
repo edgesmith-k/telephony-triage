@@ -104,14 +104,14 @@ python3 tools/make_bundle.py --label import-v1     # 이 이름이 사내 .draft
 | Claude Code | `claude --version`, `claude mcp list` | 플러그인·hooks 지원 버전, Jira MCP 서버 이름과 사용자 범위 등록 (정밀 확인은 S-2) |
 | GHE 권한 | 웹 | 레포 3개(플러그인, 샌드박스 이슈 DB, 운영 이슈 DB) 생성, **브랜치 보호·CODEOWNERS 필수 리뷰 설정 권한**(없으면 로컬 hook이 유일한 방어선, S5) |
 
-**2) 묶음 확인과 테스트 재현** (15분)
+**2) 묶음 확인과 테스트 재현** (약 20~30분)
 단계별 명령·막혔을 때 표(설치 방법 A `--user`·B venv, 미러에 버전 없음, `UNKNOWN-0.0.0` 등)는 `docs/SITE_INSTALL.md`.
 ```
 mkdir -p ~/tt-draft && cd ~/tt-draft && unzip ~/telephony-triage-import-v1.zip
 sha256sum ~/telephony-triage-import-v1.zip   # 사외에서 적은 값과 같은지
 python3 -m venv .venv && . .venv/bin/activate   # python3 3.10+
 pip install '.[test]'   # 사내 미러(--no-build-isolation 금지, SITE_INSTALL §4). 고정 버전이 미러에 없으면 `test_r10_dependency_manifest_has_complete_pins` 1건 실패는 예상, `SITE_PROFILE.md`에 기록
-python3 -m pytest -q tests                    # 사외와 같은 결과여야 한다 (10~15분)
+python3 -m pytest -q tests                    # 사외와 같은 결과여야 한다 (Ubuntu CI 약 16~20분, PC에 따라 더 걸린다)
 ```
 사외에서 통과한 테스트가 실패하면 환경 차이(파이썬·git 버전, 로케일, 경로)다. 반입 전에 원인을 잡는다.
 개발 중 코드를 고친 뒤에는 전체 대신 `python3 tools/related_tests.py --run`(바뀐 파일의 관련 테스트 + 경계 검사)을 돌린다. 전체 `pytest tests`는 도구가 `full: true`로 판단할 때, 반입 묶음을 만들기 직전, 요청할 때만 쓴다.
@@ -246,7 +246,7 @@ git clone <사외 레포 URL> && cd telephony-triage
 python3 -m venv .venv && . .venv/bin/activate   # python3 3.10+
 pip install '.[test]'
 touch .local-draft            # 안 만들면 Claude Code가 모드를 묻는다 → "사외 초안"
-python3 -m pytest -q tests    # 기준선 (Ubuntu 10~15분)
+python3 -m pytest -q tests    # 기준선 (Ubuntu CI 약 16~20분, Windows 사외 개발 PC는 약 42분)
 ```
 첫 메시지: `DRAFT_NOTES.md의 "남은 일"에서 다음 할 일을 확인하고, 그 작업의 근거 문서만 읽고 시작해줘. docs/history/는 읽지 마.`
 원본 문서 zip·eval 산출물은 레포에 없어도 된다(`docs/design/`이 정본, eval은 새 iteration 경로로 다시 만든다).
@@ -359,14 +359,14 @@ claude mcp list               # Jira MCP 사용자 범위 등록 확인
 - verify-fix: W3부터 흔적 시그니처 없는 코드·설정 수정 유형을 `db_verify fix`가 종료 코드 2로 막아 Sonnet 기본(eval 25 Sonnet 3/3, W3). eval 25는 사내 S-2 대상이 아니라 사외 결과 기록(`offsite_results.json`)으로 갈음한다.
 - 5-2 탐색은 Sonnet. 가설 품질이 중요하면 Opus를 고른다.
 - **검증 범위: 스킬 행동 eval·토큰 측정은 Sonnet 5.5(`claude-sonnet-5-5`)로만 했다**(`tests/skill_evals/offsite_results.json` `model`, 사내 S-2도 Sonnet 5.5). 다른 모델도 같은 플러그인으로 동작한다. Opus 5.5는 확인 측정만 했다(10/15, 배치 A 7개 + hook 거부가 많던 4·36·40·67: 실패 0, hook 거부 11개 중 1회 — 화면을 처음부터 보이는 편, 비용은 eval당 Sonnet의 약 2.7배). 그 밖의 모델은 eval로 확인하지 않았다.
-- 모델과 무관하게 지켜지는 것(스크립트·hook이 강제): 외부 쓰기(이슈 DB push·트래커 코멘트) 전 승인 질문(guard 규칙 7 ask·승인 해시·pre-push 토큰 — 명령 판정은 최선 노력, 아래), 사용자 clone 불변, 분류 판정은 스크립트 출력 기준, 마스킹, 확인 화면 전체 표시 강제(`show_guard`).
+- 모델과 무관하게 지켜지는 것(스크립트·hook이 강제): 외부 쓰기(이슈 DB push·트래커 코멘트) 전 승인 질문(guard 규칙 7 ask·승인 해시·pre-push 토큰 — 명령 판정은 최선 노력, 아래), 사용자 clone 불변, 분류 판정은 스크립트 출력 기준, 마스킹. 확인 화면·리포트를 그대로 보이게 하는 것은 표시 보조 hook(`show_guard`)이 돕지만 안전 관문이 아니다 — 판정을 못 하면 지나가고(fail-open), 같은 화면을 두 번 되돌려도 안 되면 사용자에게 직접 확인을 안내한다(`docs/design/08-safety.md §9.1`).
 - 다른 모델의 우려 사항:
   - 화면 요약: 모델마다 줄이는 습관이 다르다(Sonnet, hook 전 표시 실패 22/48. hook 첫 판 뒤에도 거부 52회 중 요약 15·값 옮김 오류 3, 문구 개선 뒤 59개 실행에서 거부 29회).
   - 거부 뒤 반응: hook은 막기만 하고 한도(2회)를 넘으면 경고만 남긴다(Sonnet은 첫 판 문구에서 거부 52회 중 16회를 같은 호출로 그대로 재시도해 10회 한도에 닿았다. 거부 문구를 "오류 아님"으로 바꾼 뒤 한도 도달 0회).
   - 질문 횟수·순서: 확인 단계는 스크립트가 정하지만 무엇을 언제 같이 묻는지는 모델이 정한다(같은 Sonnet에서도 게시 질문 뒤에 PR 링크를 보이거나, 판정 불가에서 새 유형을 선택지로 낸 실행이 있었다). 순서·횟수가 달라도 승인 없는 쓰기는 생기지 않는다 — eval 채점에서도 안전 행이 아니다.
-  - 토큰·비용: 토큰 기준선(eval 1·2·39·45·58)과 이 안내서의 수치(이슈 1건 약 39만 토큰)는 Sonnet 기준이다. Opus는 비용이 더 든다.
+  - 토큰·비용: 토큰 기준선(eval 1·2·39·45·58)과 이슈 1건 비용(아는 원인 약 $0.34~0.40, 새 원인·새 유형 약 $0.56~0.71 — 합성 데이터 eval 실측, 최신 수치는 `docs/materials/14-exec-summary.html` §4)은 Sonnet 5.5 기준이다. Opus 5.5는 약 2.7배다.
   - 작은 모델(Haiku 등)은 권장하지 않는다: Sonnet도 문구만으로는 지키지 못한 규칙이 있어 구조로 강제했다(eval 25 2/3, `99-deferred.md` 3E).
-- 위 우려는 사용자가 무엇을 보고 판단하느냐의 문제다. 승인 없는 쓰기를 막는 장치(guard ask·승인 해시·pre-push 토큰)는 모델과 무관하게 같다. 다만 명령 판정은 최선 노력이다(`docs/design/08-safety.md` '명령 판정의 한계'): K 안전 검토(10/15)에서 스킬 규약대로 변수(`${S}db_pr.py`·`$PY`)로 부른 publish가 ask 없이 push된 실행을 찾아(eval 기록 publish 110건 중 4건) 고쳤다. 수정과 그 뒤 보강(L M-2, 10/16: 규칙 7이 변수·인용으로 쪼갠 이름도 낱말로 맞춰 `ask`)은 회귀 테스트와 기록된 명령 재판정(이 PC 개발 세션의 Bash 명령 5,467건을 옛·새 규칙 7 판정에 넣어 비교한 일회성 스크립트 — 옛 판정이 `ask`한 publish는 새 판정도 모두 `ask`)으로 확인했다. eval 전체 재측정(L2, 10/16: 비-site 59개, 고친 eval은 다시 실행)에서 eval마다 최신 run의 안전 행 위반은 0이다(그 전에 기록된 run의 위반은 publish 110건 중 4건, 모두 수정 전. site eval 11개는 사내에서 다시 한다). 규약 밖 형태는 여전히 놓칠 수 있어 **최종 방어선은 GHE 브랜치 보호·필수 리뷰**다.
+- 위 우려는 사용자가 무엇을 보고 판단하느냐의 문제다. 승인 없는 쓰기를 막는 장치(guard ask·승인 해시·pre-push 토큰)는 모델과 무관하게 같다. 다만 명령 판정은 최선 노력이다(`docs/design/08-safety.md` '명령 판정의 한계'): K 안전 검토(10/15)에서 스킬 규약대로 변수(`${S}db_pr.py`·`$PY`)로 부른 publish가 ask 없이 push된 실행을 찾아(eval 기록 publish 110건 중 4건) 고쳤다. 수정과 그 뒤 보강(L M-2, 10/16: 규칙 7이 변수·인용으로 쪼갠 이름도 낱말로 맞춰 `ask`)은 회귀 테스트와 기록된 명령 재판정(이 PC 개발 세션의 Bash 명령 5,467건을 옛·새 규칙 7 판정에 넣어 비교한 일회성 스크립트 — 옛 판정이 `ask`한 publish는 새 판정도 모두 `ask`)으로 확인했다. eval 전체 재측정(L2, 10/16: 비-site 59개, 고친 eval은 다시 실행)에서 eval마다 최신 run의 안전 행 위반은 0이다(그 전에 기록된 run의 publish 관련 위반은 110건 중 4건, 모두 수정 전. L2 중 e29 pull 건너뜀 알림 행 위반 2 run(l2-e·l2-g)은 df38da2로 고친 뒤 l2-h에서 통과. site eval 11개는 사내에서 다시 한다). 규약 밖 형태는 여전히 놓칠 수 있어 **최종 방어선은 GHE 브랜치 보호·필수 리뷰**다.
 - 다른 모델로 쓰다가 이상한 동작을 보면 모델 이름과 함께 메인테이너에게 알린다. 사내 eval 모델이 바뀌면 S-2가 배치 A 7개를 더 돌린다(`pending.json` `site_if_model_differs`).
 - 바꾸는 법: `/model`. 커맨드 frontmatter `model` 고정은 사내 S1 확인 뒤(`14-site.md` S1).
 

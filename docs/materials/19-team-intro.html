@@ -374,7 +374,7 @@ html { scroll-behavior: smooth; }
           <div class="step gate">
             <div class="n">2 · 확인</div>
             <h3>“이 분류가 맞나요?”</h3>
-            <p class="small">엔지니어가 고릅니다: 맞음 / 다른 원인 / 새 원인 / 새 유형 / 원인 미확정. 새 규칙은 R1~R5 자동 검증을 거칩니다.</p>
+            <p class="small">엔지니어가 고릅니다: 1위 후보 / 다른 원인·유형(기존 원인·새 원인·새 유형) / 원인 미확정 / 기록하지 않음. 새 규칙은 R1~R5 자동 검증을 거칩니다.</p>
             <div class="who">사용자 결정</div>
           </div>
           <div class="arrow" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 12h15M14 7l5 5-5 5"/></svg></div>
@@ -418,9 +418,9 @@ html { scroll-behavior: smooth; }
         <div class="nums">
           <div class="num"><b>CI 통과</b><span>자동 테스트 전체(Ubuntu, Python 3.10 · 3.11 · 3.14). 개수는 <a href="14-exec-summary.html#e3">결재용 요약 §3</a></span></div>
           <div class="num"><b>23 / 23</b><span>샘플 이슈 DB 회귀 fixture 통과</span></div>
-          <div class="num"><b>70</b><span>skill eval 시나리오 정의</span></div>
+          <div class="num"><b>70</b><span>skill eval (사외 59 통과 · 실패 0, 11개는 사내 확인)</span></div>
         </div>
-        <p class="small muted" style="margin-top:10px">2026-10-12 기준 개발 환경 실측(토큰은 10-08). 규칙을 추가할 때마다 새 규칙이 해당 로그를 잡는지, 정상 로그를 잘못 잡지 않는지, 기존 분류를 깨지 않는지 회귀로 확인합니다.</p>
+        <p class="small muted" style="margin-top:10px">2026-10-16 기준(테스트 개수·eval 결과는 <a href="14-exec-summary.html#e3">결재용 요약 §3</a>). 규칙을 추가할 때마다 새 규칙이 해당 로그를 잡는지, 정상 로그를 잘못 잡지 않는지, 기존 분류를 깨지 않는지 회귀로 확인합니다.</p>
       </div>
     </div>
   </div>
@@ -499,29 +499,21 @@ html { scroll-behavior: smooth; }
 
 <section class="block" id="cost">
   <div class="wrap">
-    <div class="side"><div class="eyebrow">비용 감각</div><h2>커맨드 1회에 드는 토큰</h2></div>
+    <div class="side"><div class="eyebrow">비용 감각</div><h2>이슈 1건에 드는 비용</h2></div>
     <div class="body">
       <div class="cost">
         <div class="costcard">
-          <div class="muted small">커맨드 1회 (Sonnet)</div>
-          <div class="big">20만 ~ 80만 토큰</div>
-          <div class="big" style="font-size:1.2rem">약 $0.15 ~ $0.5</div>
-          <div class="caveat">모의 데이터 eval 기준 · 실제 환경은 다를 수 있음</div>
+          <div class="muted small">아는 원인 1건 (분석 → 기록, Sonnet 5.5)</div>
+          <div class="big">약 $0.34 ~ $0.40</div>
+          <div class="caveat">합성 데이터 eval 실측 · 실제 로그는 1.5~2배 추정</div>
         </div>
         <div class="costcard">
-          <div class="muted small">analyze → 기록 1건 (Sonnet)</div>
-          <div class="meter">
-            <div class="lbl"><span>이전</span><span>약 74만</span></div>
-            <div class="track"><div class="fill old" style="width:100%"></div></div>
-          </div>
-          <div class="meter">
-            <div class="lbl"><span>현재</span><span>약 39만 (−48%)</span></div>
-            <div class="track"><div class="fill" style="width:52.7%"></div></div>
-          </div>
-          <div class="caveat">모의 데이터 eval 기준 · 실제 환경은 다를 수 있음</div>
+          <div class="muted small">새 원인·새 유형 1건 (Sonnet 5.5)</div>
+          <div class="big">약 $0.56 ~ $0.71</div>
+          <div class="caveat">합성 데이터 eval 실측 · 최신 수치는 <a href="14-exec-summary.html#e4">결재용 요약 §4</a></div>
         </div>
       </div>
-      <p class="small muted">data 심층 분석 스킬과 Claude 탐색 분석은 토큰을 더 쓰므로 실행 전에 묻습니다. 기본 모델은 Sonnet이며, 탐색 가설 품질이 중요하면 Opus를 고를 수 있습니다.</p>
+      <p class="small muted">data 심층 분석 스킬과 Claude 탐색 분석은 토큰을 더 쓰므로 실행 전에 묻습니다. 기본 모델은 Sonnet이며, 탐색 가설 품질이 중요하면 Opus를 고를 수 있습니다. Opus는 비용이 약 2.7배입니다.</p>
     </div>
   </div>
 </section>
@@ -602,7 +594,7 @@ html { scroll-behavior: smooth; }
 </section>
 
 <footer>
-  <div class="wrap">telephony-triage · 수치는 2026-10-12 개발 환경 실측(토큰 10-08)이며 토큰·비용은 모의 데이터 eval 기준입니다. 로그·화면 예시는 합성 데이터입니다.</div>
+  <div class="wrap">telephony-triage · 수치는 2026-10-16 기준이며 비용은 합성 데이터 eval 실측입니다(결재용 요약 §4). 로그·화면 예시는 합성 데이터입니다.</div>
 </footer>
 
 </body>

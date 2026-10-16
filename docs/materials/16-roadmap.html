@@ -244,7 +244,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
       <div class="eyebrow">ROADMAP · 사내 보완 S-0~S-7</div>
       <h1>사내 도입 로드맵</h1>
       <p>반입한 뒤 사내에서 거치는 9단계를 그림과 표로 정리했습니다. 단계마다 완료 기준과 사람이 준비할 것을 붙였습니다.</p>
-      <div class="meta"><span><b>기준</b> main 2026-10-12</span><span><b>대상</b> 도입 담당자</span><span><b>읽는 시간</b> 약 6분</span></div>
+      <div class="meta"><span><b>기준</b> main 2026-10-16</span><span><b>대상</b> 도입 담당자</span><span><b>읽는 시간</b> 약 6분</span></div>
     </header>
     <section class="chap" id="r1" data-title="전체 그림">
       <h2><span class="no">1</span>전체 그림</h2>
@@ -254,7 +254,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
     <section class="chap" id="r2" data-title="단계별 할 일">
       <h2><span class="no">2</span>단계별 할 일</h2>
       <p class="first">이 절에서 알 수 있는 것: 각 단계의 완료 기준과 준비물</p>
-      <div class="tbl "><table><tr><th>단계</th><th>할 일</th><th>완료 기준 (요약)</th><th>사람이 준비할 것</th></tr><tr><td><b>S-0</b> <span class="chip a">선택</span></td><td>실제 로그 사전 점검</td><td>Claude 없이 30분. 파서 가정이 맞는지 지표 5종</td><td>로그 3~5개(듀얼 SIM 포함)</td></tr><tr><td><b>S-1</b></td><td>사내 값 조사·기준 합의</td><td>확인 목록 정리(S1~S32, oFono S24~S29는 그 플랫폼을 켤 때만, GitHub 트래커 S30·S31은 사내가 Jira라 해당 없음), SITE_PROFILE 작성, S-5 정확도 기준 합의</td><td>샘플 Jira 2~3개, 카테고리별 로그, 16/17 소스 경로, 빌드명</td></tr><tr><td><b>S-2</b></td><td>사내 Claude Code 확인</td><td>플러그인·hook·Jira 원문 격리 동작, 사내 대상 행동 eval 실행(나머지는 사외 결과), 안전 eval 위반 0</td><td>Claude Code, Jira MCP</td></tr><tr><td><b>S-3</b></td><td>사내 값 반영</td><td>site-defaults·팀 설정 작성, 점검 표 fail 0</td><td>트래커 종류(<code>tracker.kind: jira</code>), Jira 필드·타임존, GHE 주소, (결과 게시를 쓰면) Jira 코멘트 도구·게시 규정(S23)</td></tr><tr><td><b>S-4a</b></td><td>운영 DB와 기존 자산</td><td>운영 DB 생성·보호, 기존 파서 포팅(골든 테스트), 기존 분류 가져오기</td><td>GHE 관리 권한, 기존 파서·분류</td></tr><tr><td><b>S-4</b></td><td>실제 로그로 규칙 교체</td><td>예시 규칙 → 실제 문구, 카테고리별 시드 유형 5~10개</td><td>카테고리별 실제 로그</td></tr><tr><td><b>S-5</b> <span class="chip a">관문</span></td><td>스모크·정확도 관문</td><td>dry-run, 샌드박스 PR 1건, 과거 Jira 20~30건 정확도</td><td>해결된 과거 Jira 라벨셋</td></tr><tr><td><b>S-6</b></td><td>남은 항목 정리</td><td>검토 항목 0건, 합성 fixture 0건 확인</td><td>—</td></tr><tr><td><b>S-7</b> <span class="chip a">파일럿</span></td><td>배포와 파일럿</td><td>마켓플레이스 등록, 카테고리별 10~20건, 첫 월간 리뷰, 확대 결정</td><td>파일럿 담당자</td></tr></table></div>
+      <div class="tbl "><table><tr><th>단계</th><th>할 일</th><th>완료 기준 (요약)</th><th>사람이 준비할 것</th></tr><tr><td><b>S-0</b> <span class="chip a">선택</span></td><td>실제 로그 사전 점검</td><td>Claude 없이 30분. 파서 가정이 맞는지 지표 5종</td><td>로그 3~5개(듀얼 SIM 포함)</td></tr><tr><td><b>S-1</b></td><td>사내 값 조사·기준 합의</td><td>확인 목록 정리(S1~S32, oFono S24~S29는 그 플랫폼을 켤 때만, GitHub 트래커 S30·S31은 사내가 Jira라 해당 없음), SITE_PROFILE 작성, S-5 정확도 기준 합의, 도입 전 기준선(최근 해결 Jira 몇 건의 분석 → 원인 확정 시간·같은 원인 재분석 수, SITE_PROFILE에만)</td><td>샘플 Jira 2~3개, 카테고리별 로그, 16/17 소스 경로, 빌드명, 기준선용 최근 해결 Jira 몇 건</td></tr><tr><td><b>S-2</b></td><td>사내 Claude Code 확인</td><td>확인 16항목 기록(hook·표시 보조 hook 전제·질문 선택지 상한·PowerShell 노출), Jira 원문 격리 동작, 사내 대상 행동 eval 11개 실행(사내 모델이 Sonnet 5.5와 다르면 +7, 나머지는 사외 결과), 안전 eval 위반 0</td><td>Claude Code, Jira MCP</td></tr><tr><td><b>S-3</b></td><td>사내 값 반영</td><td>site-defaults·팀 설정 작성, 점검 표 fail 0</td><td>트래커 종류(<code>tracker.kind: jira</code>), Jira 필드·타임존, GHE 주소, (결과 게시를 쓰면) Jira 코멘트 도구·게시 규정(S23)</td></tr><tr><td><b>S-4a</b></td><td>운영 DB와 기존 자산</td><td>운영 DB 생성·보호, 기존 파서 포팅(골든 테스트), 기존 분류 가져오기</td><td>GHE 관리 권한, 기존 파서·분류</td></tr><tr><td><b>S-4</b></td><td>실제 로그로 규칙 교체</td><td>예시 규칙 → 실제 문구, 카테고리별 시드 유형 5~10개</td><td>카테고리별 실제 로그</td></tr><tr><td><b>S-5</b> <span class="chip a">관문</span></td><td>스모크·정확도 관문</td><td>dry-run, 샌드박스 PR 1건, 과거 Jira 20~30건 정확도</td><td>해결된 과거 Jira 라벨셋</td></tr><tr><td><b>S-6</b></td><td>남은 항목 정리</td><td>검토 항목 0건, 합성 fixture 0건 확인</td><td>—</td></tr><tr><td><b>S-7</b> <span class="chip a">파일럿</span></td><td>배포와 파일럿</td><td>마켓플레이스 등록, 카테고리별 10~20건, 첫 월간 리뷰, 확대 결정</td><td>파일럿 담당자</td></tr></table></div>
 
     </section>
     <section class="chap" id="r3" data-title="data만 먼저 할 때">
@@ -264,7 +264,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
 <rect class="box" x="20" y="16" width="380" height="140" rx="6"/><text class="t" x="34" y="40">전체 카테고리</text>
 <text class="s" x="34" y="66">S-4a: data 기존 자산 연결</text><text class="s" x="34" y="86">S-4: 나머지 5개 카테고리 규칙 교체 + 시드</text><text class="s" x="34" y="106">S-2: 사내 대상 eval 11개</text><text class="s" x="34" y="126">S-5: 카테고리별 3건 이상</text>
 <rect class="box hl" x="420" y="16" width="380" height="140" rx="6"/><text class="t" x="434" y="40">data만 먼저</text>
-<text class="s" x="434" y="66">S-4a: 그대로 (data의 핵심 작업)</text><text class="s" x="434" y="86">S-4: data는 가져온 규칙 검증만</text><text class="s" x="434" y="106">S-2: data 관련 eval만 → 비용 1/2~1/3</text><text class="w" x="434" y="126">S-4 완료 기준을 "data 한정"으로 먼저 합의</text>
+<text class="s" x="434" y="66">S-4a: 그대로 (data의 핵심 작업)</text><text class="s" x="434" y="86">S-4: data는 가져온 규칙 검증만</text><text class="s" x="434" y="106">S-2: 그대로 (사내 대상 eval 11개는 카테고리 무관)</text><text class="w" x="434" y="126">S-4 완료 기준을 "data 한정"으로 먼저 합의</text>
 </svg><figcaption>S-4의 완료 기준에는 data 외 5개 카테고리 시드가 들어 있습니다. data만 할 거면 기준을 바꾸는 것부터 정해야 미완료 상태가 남지 않습니다.</figcaption></figure>
     </section>
     <section class="chap" id="r4" data-title="진행 방법">
@@ -273,8 +273,9 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
       <ol class="rule-list">
         <li>사내 PC에 반입 묶음을 풀고 Claude Code에 <b>"사내 설정 시작"</b>이라고 합니다. <code>tools/site_step.py</code>가 <code>SITE_PROFILE.md</code>(모드 사내 보완, 현재 단계 S-1, 트래커 jira)를 만들고 현재 단계의 할 일·완료 기준·읽을 것을 냅니다. 이어서 할 때는 "계속"입니다.</li>
         <li>각 단계는 새 세션에서 <code>python3 tools/context_pack.py S-n</code> 출력만 읽고 진행합니다. 설계 문서 전체를 다시 읽지 않아 토큰이 적게 듭니다.</li>
-        <li>단계가 끝나면 완료 기준 점검 → 요약 → 사용자 확인 → <code>python3 tools/site_step.py --done S-n</code>(완료 기록 + 다음 단계 안내). 확인 전에는 <code>--done</code>하지 않고, 도구는 현재 단계가 아닌 <code>--done</code>(건너뛰기)과 사외 PC에서의 실행을 거부합니다. 순서는 S-1 → S-2 → S-3 → S-4a → S-4 → S-5 → S-6 → S-7입니다(S-0 선택은 반입 전).</li>
+        <li>단계 안에서는 <code>python3 tools/site_step.py check</code>(자동 점검, 읽기 전용) → <code>propose</code>(SITE_PROFILE 확인값 등의 diff만 보임, 사용자가 승인한 항목만 <code>--apply ID</code>로 씀)를 씁니다. 단계가 끝나면 완료 기준 점검 → 요약 → 사용자 확인 → <code>python3 tools/site_step.py --done S-n</code>(완료 기록 + 다음 단계 안내). 점검이 건너뜀·사용자 필요로 남은 것을 받아들이려면 <code>--waive 점검="사유"</code>를 붙입니다(사유는 기록에 남음). 확인 전에는 <code>--done</code>하지 않고, 도구는 현재 단계가 아닌 <code>--done</code>(건너뛰기)과 사외 PC에서의 실행을 거부합니다. 순서는 S-1 → S-2 → S-3 → S-4a → S-4 → S-5 → S-6 → S-7입니다(S-0 선택은 반입 전).</li>
         <li>사내 값과 사내 코드는 정해진 경로(<code>SITE_PATHS</code>)에만 둡니다. 다음 반입 때 보존됩니다.</li>
+        <li><b>새 묶음을 다시 반입하면</b>: hook이나 공통 판정이 바뀐 묶음이면 사내 대상 eval 11개를 모두 다시 돌리고, 아니면 바뀐 흐름의 eval만 돌립니다. 어느 쪽인지는 묶음과 함께 오는 <code>DRAFT_NOTES.md</code> "사내로 넘긴 것"에 있습니다. 이번 K·L 반영 묶음은 hook이 바뀌었으므로 11개를 모두 다시 돌리고 S-2 확인 15·16번을 봅니다. 절차는 <a href="03-manual.html#s7-upgrade">운영 매뉴얼 7.10</a>.</li>
       </ol>
       <p class="foot">원본: <code>docs/design/15-local-draft.md</code> §15.5, <code>docs/tasks.md</code>. 파일럿 평가는 <a href="12-pilot-eval.html">파일럿 평가표</a>.</p>
     </section>

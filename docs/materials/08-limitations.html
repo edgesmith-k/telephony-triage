@@ -238,7 +238,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
       <div class="eyebrow">LIMITATIONS · 현재 한계, 단점, 보완 방법</div>
       <h1>아직 안 되는 것과 그 대응</h1>
       <p>도입을 검토하거나 운영하는 사람이 알아야 할 한계를 숨김없이 정리했습니다. 항목마다 영향, 지금의 대응, 보완 방법, 언제 해소되는지를 붙였습니다. 대부분은 사내 환경에서 실제 로그와 사람으로 확인해야 풀리는 것들입니다.</p>
-      <div class="meta"><span><b>기준</b> main 2026-10-12 (사외 초안 완료, 사내 보완 전)</span><span><b>대상</b> 도입 검토자, 관리자</span><span><b>읽는 시간</b> 약 12분</span></div>
+      <div class="meta"><span><b>기준</b> main 2026-10-16 (사외 초안 완료, 사내 보완 전)</span><span><b>대상</b> 도입 검토자, 관리자</span><span><b>읽는 시간</b> 약 12분</span></div>
     </header>
 
     <section class="chap" id="l1" data-title="한눈에 보기">
@@ -280,13 +280,13 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
     <section class="chap" id="l2" data-title="아직 검증되지 않은 것">
       <h2><span class="no">2</span>아직 검증되지 않은 것</h2>
       <p class="first">이 절에서 알 수 있는 것: 사외에서 합성 데이터로만 확인해 사내에서 다시 봐야 하는 것</p>
-      <p>사외 개발은 사내 정보를 가져올 수 없어서 합성 데이터로만 재현했습니다. 자동 테스트 전체(개수는 결재용 요약 §3)와 CI는 통과하지만, 아래는 실제 환경에서만 확인할 수 있습니다.</p>
+      <p>사외 개발은 사내 정보를 가져올 수 없어서 합성 데이터로만 재현했습니다. 자동 테스트와 CI(개수와 결과는 결재용 요약 §3)로 확인했지만, 아래는 실제 환경에서만 확인할 수 있습니다.</p>
       <div class="tbl lim"><table>
         <tr><th>한계</th><th>영향</th><th>보완 방법</th><th>언제</th></tr>
         <tr><td>실제 로그 문구</td><td>data 외 카테고리는 예시 규칙이라 실제 로그에서 후보가 안 나오거나 틀림</td><td>실제 로그로 태그·문구 교체(<code>s0_suggest.py</code>가 초안 제안), 카테고리별 시드 유형 5~10개</td><td class="when">S-4</td></tr>
         <tr><td>정확도</td><td>1위 정확도, 상위 3개 포함률, 오탐률을 모름</td><td>해결된 과거 Jira 20~30건 라벨셋으로 <code>offline_eval.py</code>. 조정용과 최종 확인용을 나누고, 기준과 오류율 상한을 둘 다 충족해야 통과</td><td class="when">S-5</td></tr>
         <tr><td>Jira 필드·시계</td><td>발생 시각 필드 이름, 장비와 단말 시계 차이를 모르면 분석 범위가 어긋남</td><td>실제 Jira 필드 매핑, 시계 관계 확인</td><td class="when">S-1·S-3</td></tr>
-        <tr><td>사내 Claude Code 동작</td><td>hook과 Jira 원문 격리가 사내 버전에서 그대로 동작하는지 모름</td><td>빈 플러그인 실험과 실제 Jira MCP로 확인, 다르면 그것만 고침</td><td class="when">S-2</td></tr>
+        <tr><td>사내 Claude Code 동작</td><td>hook과 Jira 원문 격리가 사내 버전에서 그대로 동작하는지 모름. 표시 보조 hook 전제(Stop hook·transcript 시각 고정), 질문 선택지 상한, Windows PowerShell 도구 노출도 사내 버전에서 다시 봐야 함</td><td>S-2 확인 16항목(빈 플러그인 실험)과 실제 Jira MCP로 확인, 다르면 그것만 고침</td><td class="when">S-2</td></tr>
         <tr><td>지시 주입 방어</td><td>Jira 본문의 "이전 지시를 무시하라" 같은 문장에 흔들리는지 실제로 재지 않음</td><td>주입 eval 59·60을 실제 환경에서 실행, 안전 eval 위반 0 확인</td><td class="when">S-2</td></tr>
         <tr><td>파서 모델 적합성</td><td>사내 로그 형식이 참고 파서 가정과 다르면 여러 지표가 동시에 나빠짐</td><td>S-0 진단(Claude 없이 30분)으로 먼저 확인, 맞지 않으면 검증된 기존 파서를 백엔드로 포팅</td><td class="when">S-0·S-4a</td></tr>
         <tr><td>Jira 코멘트 쓰기</td><td>실제 코멘트 도구 이름·인자·본문 형식·공개 범위·게시 규정을 모름. 결과 게시는 모의 Jira로만 확인</td><td>사내 Jira MCP에서 확인해 사이트 설정(<code>tracker.write_tools.add_comment</code>)에 적음. 그 전에는 게시 기능이 꺼져 본문 파일만 만듦</td><td class="when">S23</td></tr>
@@ -318,7 +318,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
         <tr><td>리뷰어가 필요함</td><td>카테고리 담당자가 리뷰하지 않으면 PR이 쌓임</td><td>CODEOWNERS로 자동 지정. 파일럿에서 PR까지 걸린 시간·대기 PR 수를 잼</td><td class="when">S-7</td></tr>
         <tr><td>한 번에 하나씩 병합</td><td>대기 PR이 많으면 병합 → sync-pr 요청이 반복됨</td><td>ID 중복을 막는 대가. 병합 간격을 짧게, sync-pr는 작성자 PC에서 1회 실행</td><td class="when">지금</td></tr>
         <tr><td>월간 리뷰를 사람이 해야 함</td><td>안 하면 방치 항목·오탐 시그니처가 쌓임</td><td>리포트는 도구가 만들고 기준값은 팀 설정. 정리는 담당자 몫</td><td class="when">지금</td></tr>
-        <tr><td>분석 중 질문이 많을 수 있음</td><td>발생 시각, 소스 트리 등 매번 묻는 게 귀찮을 수 있음</td><td>추측으로 채우지 않으려는 설계. 파일럿에서 작업당 질문 수를 재고 줄일 곳을 정함</td><td class="when">S-7 뒤</td></tr>
+        <tr><td>분석 중 질문이 많을 수 있음</td><td>발생 시각, 소스 트리 등 매번 묻는 게 귀찮을 수 있음</td><td>추측으로 채우지 않으려는 설계. 반복 질문은 사용자 config(<code>~/.telephony-triage/config.yaml</code>)로 끌 수 있음: 소스 트리 자동 선택(<code>code_profiles</code>, <code>code.auto_select</code>), 심층·탐색 분석(<code>when: never</code>). 한 번만 끄려면 <code>--code skip</code>·<code>--no-analyzer</code>·<code>--no-explore</code>. 질문마다 선택지는 4개까지(10/16). 남은 질문 수 줄이기는 파일럿에서 작업당 질문 수를 잰 뒤 정함(R-44)</td><td class="when">지금 · 나머지 S-7 뒤</td></tr>
       </table></div>
 
       <h3>수정 검증(verify-fix)을 안 돌리면 fixed가 안 됨</h3>
@@ -342,8 +342,10 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
       <p class="first">이 절에서 알 수 있는 것: 막지 못하는 것과 그 대신 기대는 장치</p>
       <div class="tbl lim"><table>
         <tr><th>한계</th><th>영향</th><th>대신 기대는 것</th><th>언제</th></tr>
-        <tr><td>PC의 hook은 우회 가능</td><td>변수·스크립트 안의 git 호출, 별칭, 일부 래퍼 명령은 판정 못 함. git hook은 설정을 바꾸면 꺼짐</td><td><b>GHE 서버 브랜치 보호와 CODEOWNERS 필수 리뷰</b>. 설정할 수 없는 GHE라면 git hook 방식 채택부터 다시 결정</td><td class="when">도입 전 필수</td></tr>
+        <tr><td>PC의 hook은 우회 가능</td><td>변수·스크립트 안의 git 호출, 별칭, 일부 래퍼 명령은 판정 못 함. git hook은 설정을 바꾸면 꺼짐. push 확인(규칙 7)은 10/16부터 명령 글에 이름 <code>db_pr</code>과 낱말 <code>publish</code>가 함께 있으면 승인 질문을 띄우도록 넓혔음(변수·따옴표·줄 이음으로 쪼갠 이름도 붙여 봄). 그래도 낱말 자체를 변수로 만든 호출(<code>${P}lish</code> 등)·인코딩한 호출·가짜 heredoc·스크립트 파일 안 호출(<code>bash push.sh</code>)·셸 프로필의 별칭·함수는 승인 질문 없이 브랜치 push·PR까지 갈 수 있음</td><td><b>GHE 서버 브랜치 보호와 CODEOWNERS 필수 리뷰</b>(main에는 리뷰 없이 못 들어감). 설정할 수 없는 GHE라면 git hook 방식 채택부터 다시 결정</td><td class="when">도입 전 필수</td></tr>
+        <tr><td>Windows PowerShell 도구</td><td>Windows에서 Claude Code가 PowerShell 도구를 내놓으면 그 호출은 <code>hooks.json</code>의 Bash matcher에 걸리지 않아 guard 규칙 3~8·10·11과 표시 보조 hook이 보지 못함(사외 Windows PC에서 확인)</td><td>지원 OS는 Ubuntu. 사내에서 노출되면 matcher 추가와 PowerShell 도구 거부(deny) 중 고름. 그 전까지 main 변경은 서버 브랜치 보호·필수 리뷰가 최종이고, 로그 원문 통독(규칙 10)은 Read 도구처럼 스킬 지침에만 기댐</td><td class="when">S-2 (확인 16번)</td></tr>
         <tr><td>Read 도구로 로그 통독</td><td>Claude가 Read 도구로 로그를 통째로 읽는 것은 hook이 막지 못함</td><td>스킬 지침(필요한 구간만)과 사내 확인 뒤 대책</td><td class="when">S-2 뒤</td></tr>
+        <tr><td>확인 화면 표시 보조는 최선 노력</td><td>Claude가 push·게시 확인 화면이나 분석 리포트를 줄여 보이면 표시 보조 hook이 다시 보이게 하지만, 같은 화면으로 2회 막아 한도에 이르면 더 막지 않고 "재시도 한도 — &lt;곳&gt;에서 직접 확인" 알림만 띄움. 판정을 못 하면(표시 기록·transcript를 못 읽음, 시계가 다른 실행 환경·백그라운드 실행이라 기록을 고정하지 못함) 대개 알림 없이 지나감(내부 오류면 "판정 못 함"). 화면을 Read로 다시 열면 다음 메시지에 전문을 보이라는 안내만 빠지고, 판정은 스크립트 기록으로 그대로 함. 그래서 승인 전 화면은 사용자가 직접 확인해야 함</td><td>안전 관문은 그대로: push 승인 질문(규칙 7)·승인 해시·pre-push 검사·게시 승인. 표시 보조 hook은 안전 관문이 아님</td><td class="when">지금</td></tr>
         <tr><td>사람 이름은 마스킹 못 함</td><td>정해진 형식이 없어 패턴으로 잡을 수 없음</td><td>Jira에서 저장하는 정보 자체를 최소화(요약·설명·댓글 원문 저장 안 함). 리포트·PR에 이름을 넣지 않음</td><td class="when">지금</td></tr>
         <tr><td>Jira 원문 보존 기간</td><td>올리지 않은 작업 폴더에 원문이 남을 수 있음</td><td>cleanup이 후보를 보여주지만 보존 기간과 정리 주체는 미정</td><td class="when">사내 결정(S14)</td></tr>
         <tr><td>GitHub 트래커: 설정 밖 GitHub MCP 쓰기 (알려진 한계)</td><td>GitHub 트래커를 쓸 때, 트래커로 설정하지 않은 다른 GitHub MCP 등록(예: 일반 GitHub 서버의 이슈 코멘트·이슈 쓰기 도구)으로 트래커 레포 이슈에 쓰면 guard가 잡지 않음(GitHub는 서버 이름 단어가 없고, 규칙 11은 이슈 DB 레포만 봄). Jira 설치에는 해당 없음(jira·atlassian 이름 판정)</td><td>쓰기 전에 대상 레포(<code>owner</code>/<code>repo</code>가 DB <code>tracker.key_regex</code>의 레포) 기준 거부를 규칙 11 앞에 더함. 그때까지 GitHub 트래커는 실험적</td><td class="when">GitHub 트래커를 쓰기 전</td></tr>
@@ -355,10 +357,10 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
       <p class="first">이 절에서 알 수 있는 것: 돈과 시간 쪽 단점</p>
       <div class="tbl lim"><table>
         <tr><th>한계</th><th>현재 수치</th><th>보완</th><th>언제</th></tr>
-        <tr><td>이슈 1건 토큰</td><td>모의 데이터 기준 분석→기록 약 39만 토큰(약 $0.4), 어려운 dry-run은 80만~130만(약 $0.7)</td><td>실제 bugreport는 1.5~2배로 예상. S-2에서 실측, 파일럿에서 건당 비용 확인</td><td class="when">S-2·S-7</td></tr>
+        <tr><td>이슈 1건 비용</td><td>아는 원인 1건 약 $0.34~0.40 · 새 원인·유형 1건 약 $0.56~0.71 (Sonnet 5.5, 합성 데이터). 최신 수치는 <a href="14-exec-summary.html#e4">결재용 요약 §4</a></td><td>실제 로그는 1.5~2배로 예상(Opus 5.5는 약 2.7배). S-2에서 실측, 파일럿에서 건당 비용 확인</td><td class="when">S-2·S-7</td></tr>
         <tr><td>준비 단계 토큰</td><td>data만 해도 추정 3천만~6천만 토큰(약 $25~60, 실측 아님). 사내 S-2 행동 eval은 사내에서만 확인되는 11개만 실행(10/14 결정, 나머지는 사외 결과로 갈음)</td><td>사내 모델이 사외와 같으면 조건부 7개도 빠진다</td><td class="when">S-2</td></tr>
         <tr><td>DB가 커질 때 속도</td><td>DB 읽기 0.7~1.1초, 일부 비교가 사례 수 × 규칙 수에 비례</td><td>사내 로그·DB 크기로 재측정한 뒤 색인·범위 제한 검토</td><td class="when">파일럿 뒤</td></tr>
-        <tr><td>Windows 개발 환경</td><td>환경 문제로 테스트 4건이 늘 실패, 반입 묶음은 Ubuntu(WSL)에서 만들어야 함</td><td>CI(Ubuntu)로 확인. 사내 사용 자체는 영향 없음</td><td class="when">지금</td></tr>
+        <tr><td>Windows 개발 환경</td><td>환경 문제로 테스트 4건이 늘 실패, 반입 묶음은 Ubuntu(WSL)에서 만들어야 함</td><td>CI(Ubuntu)로 확인. 사내 사용 자체는 영향 없음. 단 Claude Code의 PowerShell 도구는 hook 밖(<a href="#l5">5절</a>)</td><td class="when">지금</td></tr>
       </table></div>
     </section>
 
@@ -381,7 +383,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
         <tr><td>테스트 속도 (R-47)</td><td>사내 CI 기준 뒤</td></tr>
         <tr><td>Android 버전 어댑터 남은 부분 (RF-4)</td><td>사내 버전 구성을 안 뒤</td></tr>
       </table></div>
-      <p>출처: <code>docs/development/ARCHITECTURE_REVIEW_2026-10.md</code>, <code>TEAM_PLUGIN_REVIEW_VERDICT_2026-10-07.md</code>.</p>
+      <p>출처: <code>docs/development/ARCHITECTURE_REVIEW_2026-10.md</code>, <code>TEAM_PLUGIN_REVIEW_VERDICT_2026-10-07.md</code>. K·L 리뷰의 반입 뒤 후보: <code>docs/development/K_RESULT.md</code>·<code>L_RESULT.md</code>.</p>
       </details>
       <p class="foot">확장 아이디어는 별도 문서에 있습니다. 이 문서의 "언제"는 계획이고, 사내 상황에 따라 바뀔 수 있습니다.</p>
     </section>
