@@ -530,7 +530,7 @@ def test_skill_md_is_within_7_5kb_and_drives_triage():
     skill = REPO / "plugin" / "skills" / "telephony-triage" / "SKILL.md"
     reference = skill.parent / "reference"
     text = skill.read_text(encoding="utf-8")
-    assert len(text.encode("utf-8")) <= 8500        # L2 ③ 리뷰: Step 7 질문 모양(고정 둘·글 거부·분석 스킬 의견 자리·후보 0개) 뒤. 그 전 8,280B — E67: Step 9 앞 PR 링크(`pr.url`)를 글로 보인다는 말 뒤. 그 전 8,256B — 전체 eval(10/14) 반영: 이어서 plan.next·mode write·거부 뒤 선택지·issue 재호출 뒤의 한도. 그 전 8,064B(흐름 A/B 한 줄 추가 뒤). 그 전 7,680B(W6: 실행 규칙을 reference/rules.md로 옮김), W6 전 8,192B
+    assert len(text.encode("utf-8")) <= 8590        # L2 재측정 뒤: --more-logs는 --logs 대신(e52)·회귀 의심은 update-fix(e10) 명시 뒤. 그 전 8,500B — L2 ③ 리뷰: Step 7 질문 모양(고정 둘·글 거부·분석 스킬 의견 자리·후보 0개) 뒤. 그 전 8,280B — E67: Step 9 앞 PR 링크(`pr.url`)를 글로 보인다는 말 뒤. 그 전 8,256B — 전체 eval(10/14) 반영: 이어서 plan.next·mode write·거부 뒤 선택지·issue 재호출 뒤의 한도. 그 전 8,064B(흐름 A/B 한 줄 추가 뒤). 그 전 7,680B(W6: 실행 규칙을 reference/rules.md로 옮김), W6 전 8,192B
     for needle in ("triage.py run", "needs_input", "--answer", "write-flow.md", "--commit", "reference/rules.md",
                    "steps-pasted.txt", "--dry-run --issue-file", "analyzer.skill",
                    "must_show", "triage.py explore"):

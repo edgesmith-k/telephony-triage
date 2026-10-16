@@ -40,7 +40,7 @@ description: Telephony 이슈(Android·oFono 등; data·call·network·sim·sms�
 
 ### 2. 결과 읽기
 
-- `mode: analysis-only`("분석만", "기록하지 마") → Step 6(5-1·5-2 포함)까지, 계획·Step 7·8 없음(`lock_released`면 release 불필요). 추가 로그는 `--more-logs`. 기록 전환은 플래그만 빼고 같은 명령(`--issue-file`이면 `--dry-run`, 분석 재사용, 입력이 같으면 받은 답도 이어 씀).
+- `mode: analysis-only`("분석만", "기록하지 마") → Step 6(5-1·5-2 포함)까지, 계획·Step 7·8 없음(`lock_released`면 release 불필요). 추가 로그는 `--logs` 대신 `--more-logs`. 기록 전환은 플래그만 빼고 같은 명령(`--issue-file`이면 `--dry-run`, 분석 재사용, 입력이 같으면 받은 답도 이어 씀).
 - `mode: read-only` → 계획 저장까지만임을 알리고 `snapshot.pull_skipped_reason`, `post_lint.errors`("메인테이너 정리"), `warnings`, `plan.pr_number`(→ `sync-pr`)도 알린다.
 - `plan.next`(이어서)가 있으면 그대로. `--dry-run`이어도 `mode: write`가 정상(push만 안 함).
 - `notes`는 항상 알린다. `code.auto` 알림(`--code`로 변경 가능)은 `must_show` 줄이다.
@@ -72,7 +72,7 @@ Step 7 질문 전에 `JOB/report.md`(`TODO(LLM)`만 채움)를 보인다(`must_s
 
 - 추정만으로·`unjudged`면 원인·유형을 안 만든다.
 - `chose-other`면 한 번 묻는다(기본 아니오): 고른 원인이 후보에서 C=1이면 `add-fixture {kind: extra}`로 넣을지(`db-authoring.md`, R4 실패면 뺀다), C=0·후보 밖이면 `update-signature` 검토를 `pr_notes`에 남길지. `unjudged.causes`면 묻지 않는다. 거절하면 `append`만.
-- 물어보고 넣는 op: 회귀 의심·수정 미흡의 `update-fix`(실패 이력) 또는 verify-fix, `add-related`, `add-code-ref`, `update-signature`,
+- 물어보고 넣는 op: 회귀 의심(fixed, SW ≥ `fixed_in`)은 `update-fix`(→open, history reverted), fix-submitted만 `update-fix`(실패 이력) 또는 verify-fix, `add-related`, `add-code-ref`, `update-signature`,
   `set-resolution`, `set-status`.
 - 시그니처·파서 규칙·새 원인·fixture가 있으면 `S/db_verify.py rules --plan JOB/plan.json --draft JOB/draft` 표를 보인다(`skipped`는 통과
   아님). 다른 유형 fixture에서 새 시그니처가 걸리면 **좁힐지 `allow-cause`할지 사용자가 고를 때까지** 멈춘다.
