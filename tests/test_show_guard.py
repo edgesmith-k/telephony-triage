@@ -638,6 +638,48 @@ def test_hook_replay_counts_without_content(tmp_path, monkeypatch):
     stop_lines = write(tmp_path, prompt("p"), bash("s", STAGE_CMD, SCREEN), say(SUMMARY)).read_text(encoding="utf-8").splitlines()
     end = [p for p in hook_replay.replay([stop_lines])["points"] if p["hook"] == "stop"]
     assert [(p["decision"], p["recorded"]) for p in end] == [("block", "ran")] and end[0]["keys"][0].startswith("push:")
+    assert out["summary"]["records"] is None      # 녹화본에는 시각·기록이 없다: 확인하지 못함(0/0 통과가 아니다)
+
+
+def test_hook_replay_counts_anchored_records_and_reads_other_scripts(tmp_path):
+    """L R ②a: summary.records = 세션 시각 범위 안의 표시 기록 중 Bash 호출에 고정한 수와 못 한 수(R 전제 확인, probe 15).
+    `--scripts`는 guard·show_guard·shown을 그 디렉토리에서 읽는다 — `anchor`가 없는 옛 사본이면 records는 null."""
+    T = "2026-10-16T00:00:{:06.3f}Z".format
+    home, work = tmp_path / "home", tmp_path / "work"
+    home.mkdir()
+    (home / "config.yaml").write_text(f"work_dir: {work.as_posix()}\n", encoding="utf-8")
+    recs = [{"v": 1, "at": T(2), "script": "db_pr", "kind": "push", "job": "MOCK-1", "key": "push:x", "block": SCREEN},
+            {"v": 1, "at": T(2.5), "script": "triage", "kind": "report", "job": "MOCK-1"},   # 그런 호출 없음
+            {"v": 1, "at": "2026-10-15T00:00:00.000Z", "script": "db_pr", "kind": "close", "job": "MOCK-0"}]  # 다른 세션
+    (work / ".shown").mkdir(parents=True)
+    (work / ".shown" / "log.jsonl").write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in recs),
+                                               encoding="utf-8")
+    rows = [{**prompt("p")[0], "timestamp": T(0)}, {**bash("s", STAGE_CMD, SCREEN)[0], "timestamp": T(1)},
+            {**bash("s", STAGE_CMD, SCREEN)[1], "timestamp": T(3)}, {**say(SCREEN)[0], "timestamp": T(4)}]
+    path = tmp_path / "s.jsonl"
+    path.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows), encoding="utf-8")
+    env = {**os.environ, "TELEPHONY_TRIAGE_HOME": str(home), "PYTHONUTF8": "1"}
+
+    def replay(*extra):
+        proc = subprocess.run([sys.executable, str(REPO / "tools" / "hook_replay.py"), str(path), *extra], env=env,
+                              capture_output=True, text=True, encoding="utf-8", stdin=subprocess.DEVNULL)
+        assert proc.returncode == 0, proc.stderr
+        return json.loads(proc.stdout)["summary"]
+
+    assert replay()["records"] == {"anchored": 1, "unanchored": 1}
+    log = work / ".shown" / "log.jsonl"
+    saved = log.read_text(encoding="utf-8")
+    log.write_text("".join(json.dumps(r) + "\n" for r in recs[2:]), encoding="utf-8")   # 세션 범위의 기록 없음
+    assert replay()["records"] is None
+    log.unlink()                                                                             # 빈 work_dir
+    assert replay()["records"] is None
+    log.write_text(saved, encoding="utf-8")
+    old = tmp_path / "old-scripts"
+    shutil.copytree(REPO / "plugin" / "scripts", old, ignore=shutil.ignore_patterns("__pycache__"))
+    src = (old / "common" / "shown.py").read_text(encoding="utf-8")
+    (old / "common" / "shown.py").write_text(src.replace("def anchor(", "def _anchor_absent("), encoding="utf-8")
+    out = replay("--scripts", str(old))
+    assert out["records"] is None and out["points"] == replay()["points"]
 
 
 # --- sm4 재측정 반영: transcript 비동기 기록, 초안 키, stage 거부 문구 ------------------------------------------------

@@ -184,6 +184,30 @@ def test_full_run_stops_for_code_choice_then_finishes_and_keeps_lock_until_relea
     assert ws.db_pr("lock", "status")["held"] is False
 
 
+
+def test_shown_records_report_only_for_ok_runs_in_work_dir(tmp_path):
+    """L R ②a: ok로 끝난 run만 report 기록(key `report:<KEY>#<run>`, lines = report.md의 결정적 줄, must_show = analysis.json,
+    path = JOB/report.md). needs_input run과 `--offline-db`(work_dir 밖 --out)는 기록하지 않는다."""
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    from common import shown
+    ws = Workspace()
+    log = ws.work / ".shown" / "log.jsonl"
+    reports = lambda: [r for r in (json.loads(x) for x in log.read_text(encoding="utf-8").splitlines() if x.strip())  # noqa: E731
+                       if r["kind"] == "report"] if log.is_file() else []
+    args = ["run", "MOCK-1001", "--dry-run", "--issue-file", MOCK_JIRA / "MOCK-1001.yaml", "--logs", DATA_LOG]
+    assert ws.json("triage.py", args)["status"] == "needs_input" and reports() == []
+    done = ws.json("triage.py", [*args, "--answer", "code=skip"])
+    job = ws.job_dir("MOCK-1001")
+    [rec] = reports()
+    assert (rec["script"], rec["job"], rec["key"]) == ("triage", "MOCK-1001", f"report:MOCK-1001#{done['run']}")
+    assert rec["lines"] == shown.report_core((job / "report.md").read_text(encoding="utf-8")) and rec["lines"]
+    assert rec["must_show"] == (json.loads((job / "analysis.json").read_text(encoding="utf-8")).get("must_show") or [])
+    assert rec["path"] == str(job.absolute() / "report.md")
+    ws.json("triage.py", ["release", "MOCK-1001"])
+    doc, items = _items()
+    _offline(items[0], doc, tmp_path / "out")
+    assert len(reports()) == 1 and not (tmp_path / ".shown").exists() and not (tmp_path / "out" / ".shown").exists()
+
 def test_needs_input_records_only_pending_kind_and_answer_clears_it():
     """needs_input이면 triage-state.json에 `pending {kind, asked_at}`만 남는다(질문 문구·선택지 없음). 답하고 다시 돌면 지운다."""
     ws = Workspace()

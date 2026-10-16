@@ -47,7 +47,7 @@ from pathlib import Path
 SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS))
 
-from common import compat, issuepost, masking, session_lock, site_defaults, userconfig  # noqa: E402
+from common import compat, issuepost, masking, session_lock, shown, site_defaults, userconfig  # noqa: E402
 from common.exitcodes import CHECK_FAILED, OK, USAGE  # noqa: E402
 import platforms  # noqa: E402
 from platforms import session as platform_session  # noqa: E402
@@ -618,6 +618,8 @@ def cmd_render(args, job: Job) -> tuple[dict, int]:
         "created_at": issuepost.iso(issuepost.now())})
     new_tokens = sum(masker.counts.values())
     text = screen(job, a, plan, info, fmt, body, omit, ok, reason, problems, warnings, missing, new_tokens, sha)
+    if sha and ok and not missing and not problems:     # 화면에 post_sha256 줄이 있을 때만(승인할 수 있는 화면) 표시 기록
+        shown.record(job.dir.parent, "issue_post", "post", job.dir.name, key=f"post:{sha[:16]}", block=text)
     out = {"screen": text, "post_sha256": sha if ok else None, "postable": ok, "reason": reason, "slots_missing": missing,
            "problems": problems, "files": {"post": str(post_path) if valid else None,
                                            "render": str(job.path(issuepost.RENDER_FILE))}}
@@ -629,6 +631,7 @@ def spec_format(job: Job) -> str:
 
 
 def cmd_approve(args, job: Job) -> tuple[dict, int]:
+    shown.record(job.dir.parent, "issue_post", "close", job.dir.name, by="approve")   # 결과와 무관하게 게시 창을 닫는다
     a = job.require_analysis()
     doc = job.render_doc
     if not doc or doc.get("key") != job.key:

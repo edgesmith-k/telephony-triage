@@ -905,11 +905,15 @@ def test_execute_records_tokens_from_stream_json_result(tmp_path, monkeypatch):
     fake.chmod(0o755)
     env_dir, run = tmp_path / "env", run_dir(tmp_path)
     env_dir.mkdir()
-    info = {"env": {}, "skill": str(tmp_path / "skill"), "path_prefix": [], "plugin_root": str(tmp_path / "root"), "issue_db_clone": str(tmp_path / "a" / "b" / "clone")}
+    info = {"env": {}, "skill": str(tmp_path / "skill"), "path_prefix": [], "plugin_root": str(tmp_path / "root"), "issue_db_clone": str(tmp_path / "a" / "b" / "clone"),
+            "work_dir": str(tmp_path / "work")}
+    (tmp_path / "work" / ".shown").mkdir(parents=True)
+    (tmp_path / "work" / ".shown" / "log.jsonl").write_text('{"v": 1}\n', encoding="utf-8")     # 표시 기록(L R)
     monkeypatch.delenv("CLAUDE_CODE_GIT_BASH_PATH", raising=False)
     outcome = evaluation.execute({"prompt": "p", "user_replies": []}, info, env_dir, run, str(fake), 30, None, "m-a")
     saved = json.loads((run / "execution.json").read_text(encoding="utf-8"))
     assert outcome["status"] == "completed", outcome["reason"]
+    assert (run / "shown-log.jsonl").read_text(encoding="utf-8") == '{"v": 1}\n'          # run 디렉토리로 복사
     assert saved["model"] == "m-a"
     assert saved["tokens"]["total"] == 110 and saved["tokens"]["usage_total"] == 100 and saved["usage"]["input_tokens"] == 10
     assert saved["total_cost_usd"] == 0.5

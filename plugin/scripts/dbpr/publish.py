@@ -15,6 +15,7 @@ import yaml
 from common import userconfig, yamlio
 from common import checks as checks_mod
 from common import draftcheck
+from common import shown
 from common import ghcli
 import db_summary
 from common.exitcodes import CHECK_FAILED, OK, USAGE
@@ -435,9 +436,12 @@ def summary(ctx: Ctx, wt: Path, markdown: bool = False) -> dict:
     state["pr_digest"] = hashlib.sha256((job_dir / PR_FILE).read_bytes()).hexdigest()   # 승인 대상에 pr.json 포함
     _write_json(job_dir / STATE, state)
     result = {**scr, "pr_body": body, "approved_hash": digest}
+    extras = db_summary.screen_extras(wt, scr, stage_result["apply"].get("operations") or [], digest)
+    md = db_summary.render_markdown(scr, plan, extras)
+    # 표시 기록(형식과 무관 — json·markdown·stage --then-summary): show_guard가 이 화면을 이 호출 뒤 답에서 찾는다
+    shown.record(ctx.work_dir, "db_pr", "push", job, key=f"push:{digest}", block=md)
     if markdown:    # opt-in: 확인 화면 마크다운(JSON 키·상태 파일은 그대로, main이 `_markdown`을 꺼내 출력한다)
-        extras = db_summary.screen_extras(wt, scr, stage_result["apply"].get("operations") or [], digest)
-        result["_markdown"] = db_summary.render_markdown(scr, plan, extras)
+        result["_markdown"] = md
     return result
 
 

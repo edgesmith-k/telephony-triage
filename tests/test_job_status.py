@@ -296,6 +296,7 @@ def test_key_omitted_lock_job_single_job_and_candidates():
     assert _status(ws)["key"] == JOB                             # 작업 하나
     ws.plan("MOCK-7002", "p7-analyze-append.plan.json")
     (ws.work / "_scratch").mkdir()
+    (ws.work / ".shown").mkdir(exist_ok=True)                   # 표시 기록 폴더(L R)도 후보가 아니다
     out = _status(ws)
     assert {c["key"] for c in out["candidates"]} == {JOB, "MOCK-7002"} and all(c["stage"] == "plan-saved"
                                                                                for c in out["candidates"])

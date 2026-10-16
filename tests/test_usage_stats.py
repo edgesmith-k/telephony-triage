@@ -25,6 +25,8 @@ def _job(root: Path, key: str, plan: dict, answers: dict, files=()):
 
 def test_three_numbers_from_three_jobs(tmp_path):
     (tmp_path / "_snapshot").mkdir()
+    (tmp_path / ".shown").mkdir()          # 표시 기록 폴더(L R)는 작업이 아니다
+    (tmp_path / ".shown" / "log.jsonl").write_text("{}\n", encoding="utf-8")
     done = _job(tmp_path, "A-1", {"started_at": START, "pr": {"number": 1}}, {"time": "x", "anchor": "off"})
     os.utime(done / "plan.json", (START_EPOCH + 1800, START_EPOCH + 1800))                          # PR까지 30분
     _job(tmp_path, "A-2", {"started_at": START}, {"time": "x", "year": "2026", "code": "c"})        # 취소

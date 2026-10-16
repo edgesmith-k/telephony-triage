@@ -467,3 +467,115 @@ def test_draft_doc_reads_printed_table_rows():
                                               {"id": "R3", "status": "fail", "reason": "C=1 — x"},
                                               {"id": "R5", "status": "skipped", "reason": "해당 없음"}]
     assert shown.draft_doc("| 규칙 | 상태 |\n|---|---|") is None
+
+
+# --- 표시 기록 런타임 API (L R ②a): record·read_records·anchor·parse_events ts/rts ---------------------------------------
+
+
+def _tool_line(tid, cmd, ts):
+    return {"type": "assistant", "timestamp": ts,
+            "message": {"content": [{"type": "tool_use", "id": tid, "name": "Bash", "input": {"command": cmd}}]}}
+
+
+def _result_line(tid, ts, text="ok"):
+    return {"type": "user", "timestamp": ts,
+            "message": {"content": [{"type": "tool_result", "tool_use_id": tid, "content": text}]}}
+
+
+def test_record_appends_one_line_rotates_and_never_raises(tmp_path, capsys, monkeypatch):
+    work = tmp_path / "work"
+    assert shown.record(work, "db_pr", "push", "MOCK-1", key="push:abc", block="화면")
+    rec = json.loads((work / ".shown" / "log.jsonl").read_text(encoding="utf-8"))
+    assert {k: rec[k] for k in ("v", "script", "kind", "job", "key", "block")} == {
+        "v": 1, "script": "db_pr", "kind": "push", "job": "MOCK-1", "key": "push:abc", "block": "화면"}
+    assert shown._epoch(rec["at"]) is not None and rec["at"].endswith("Z") and len(rec["at"]) == 24
+    monkeypatch.setattr(shown, "LOG_MAX", 10)       # 한 세대 회전
+    assert shown.record(work, "db_pr", "close", "MOCK-1", by="stage")
+    assert (work / ".shown" / "log.jsonl.1").is_file()
+    assert [r["kind"] for r in shown.read_records([work])] == ["push", "close"]   # 회전된 파일도 읽는다
+    blocked = tmp_path / "blocked"
+    blocked.mkdir()
+    (blocked / ".shown").write_text("파일", encoding="utf-8")
+    assert shown.record(blocked, "db_pr", "push", "MOCK-1") is False
+    assert "표시 기록을 쓰지 못함(push: " in capsys.readouterr().err
+
+
+def test_record_after_torn_last_line_is_still_readable(tmp_path):
+    """앞 기록이 줄바꿈 없이 끊겨도(동시 쓰기·중단) 새 기록은 앞에 줄바꿈을 붙여 쓰므로 붙지 않고 읽힌다(close를 잃지 않게)."""
+    work = tmp_path / "work"
+    assert shown.record(work, "db_pr", "push", "MOCK-1", key="push:a")
+    with open(work / ".shown" / "log.jsonl", "a", encoding="utf-8") as f:
+        f.write('{"v": 1, "at": "2026-10-16T00:00:0')                      # 찢긴 끝 줄
+    assert shown.record(work, "db_pr", "close", "MOCK-1", by="publish")
+    assert [(r["kind"], r.get("by")) for r in shown.read_records([work])] == [("push", None), ("close", "publish")]
+
+
+def test_record_ignores_rotation_failure(tmp_path, monkeypatch):
+    """회전 실패(경합으로 이미 옮겨짐, Windows 공유 위반)는 무시하고 지금 파일에 쓴다."""
+    work = tmp_path / "work"
+    assert shown.record(work, "db_pr", "push", "MOCK-1")
+    monkeypatch.setattr(shown, "LOG_MAX", 1)
+
+    def busy(*_a, **_k):
+        raise PermissionError(32, "공유 위반")
+    monkeypatch.setattr(shown.os, "replace", busy)
+    assert shown.record(work, "db_pr", "close", "MOCK-1", by="stage")
+    assert not (work / ".shown" / "log.jsonl.1").exists()
+    assert [r["kind"] for r in shown.read_records([work])] == ["push", "close"]
+
+
+def test_record_from_concurrent_processes_loses_nothing(tmp_path):
+    """여러 프로세스가 동시에 기록해도(병렬 도구 호출) 모두 읽힌다 — Windows `O_APPEND`는 원자적이 아니라 잠금으로 막는다."""
+    import subprocess
+    work = tmp_path / "work"
+    code = ("import sys; sys.path.insert(0, sys.argv[1]); from common import shown\n"
+            "for i in range(30):\n"
+            "    assert shown.record(sys.argv[2], 'db_pr', 'close', sys.argv[3], by='stage', i=i, pad='x' * 2000)\n")
+    procs = [subprocess.Popen([sys.executable, "-c", code, str(REPO / "plugin" / "scripts"), str(work), f"J{p}"],
+                              stdin=subprocess.DEVNULL) for p in range(4)]
+    assert [p.wait(timeout=120) for p in procs] == [0] * 4
+    got = sorted((r["job"], r["i"]) for r in shown.read_records([work]))
+    assert got == sorted((f"J{p}", i) for p in range(4) for i in range(30))
+
+
+def test_read_records_tail_skips_broken_lines_and_sorts(tmp_path, monkeypatch):
+    work = tmp_path / "w"
+    (work / ".shown").mkdir(parents=True)
+    rows = [{"at": "2026-10-16T00:00:02.000Z", "kind": "b"}, "깨진 줄", {"at": "2026-10-16T00:00:01.000Z", "kind": "a"},
+            {"kind": "시각 없음"}]
+    (work / ".shown" / "log.jsonl").write_text(
+        "\n".join(r if isinstance(r, str) else json.dumps(r, ensure_ascii=False) for r in rows) + "\n", encoding="utf-8")
+    assert [r["kind"] for r in shown.read_records([work, work, tmp_path / "없음"])] == ["a", "b"]
+    monkeypatch.setattr(shown, "READ_TAIL", 80)       # 끝부분만: 잘린 첫 줄은 버린다
+    assert [r["kind"] for r in shown.read_records([work])] == ["a"]
+
+
+def test_parse_events_carries_tool_timestamps():
+    seq = shown.parse_events([_tool_line("t1", "ls", "2026-10-16T00:00:01.000Z"),
+                              _result_line("t1", "2026-10-16T00:00:02.000Z")])
+    assert (seq[0]["ts"], seq[0]["rts"]) == ("2026-10-16T00:00:01.000Z", "2026-10-16T00:00:02.000Z")
+    assert shown.parse_events([_tool_line("t2", "ls", None)])[0]["rts"] is None     # stream-json·끝나지 않은 호출
+
+
+def test_anchor_pins_records_to_the_bash_call_that_wrote_them():
+    T = "2026-10-16T00:00:{:06.3f}Z".format
+    lines = [_tool_line("s", "python3 ~/.claude/plugins/telephony-triage/scripts/db_pr.py summary wt", T(10)),
+             _tool_line("v", "python3 $S/db_verify.py rules --plan p --draft d", T(10.5)),   # 병렬 호출
+             _result_line("v", T(13)), _result_line("s", T(12)),
+             _tool_line("r", "python3 $S/triage.py run MOCK-1", T(20)), _result_line("r", T(21)),
+             _tool_line("x", "python3 $S/db_pr.py publish wt", T(30))]                       # 아직 끝나지 않음
+    seq = shown.parse_events(lines)
+    rec = lambda script, at: {"script": script, "at": T(at), "kind": "k"}                    # noqa: E731
+    recs = [rec("db_pr", 11), rec("db_verify", 11.5), rec("db_pr", 8.1), rec("db_pr", 7.9), rec("triage", 11),
+            rec("triage", 20.5), rec("db_pr", 30.5), rec("issue_post", 11), {"script": "db_pr", "at": "?"}]
+    got = [(seq[i]["id"], r["script"], r["at"][17:23]) for i, r in shown.anchor(seq, recs)]
+    # 8.1은 SLACK(2초) 안이라 summary 호출, 7.9는 밖. triage 이름은 `telephony-triage/`에 걸리지 않는다
+    assert got == [("s", "db_pr", "08.100"), ("s", "db_pr", "11.000"), ("v", "db_verify", "11.500"),
+                   ("r", "triage", "20.500")]
+
+
+def test_draft_key_is_the_inferred_obligation_key():
+    out = json.dumps({"rules": RULES}, ensure_ascii=False)
+    seq = [{"kind": "tool", "id": "d1", "name": "Bash", "input": {"command": DRAFT_CMD}, "result": out, "error": False}]
+    [ob] = [o for o in shown.obligations(seq) if o.kind == "draft"]
+    assert ob.key == shown.draft_key("MOCK-1/plan.json", RULES)

@@ -7,7 +7,7 @@ import json
 import os
 import re
 
-from common import events, masking, userconfig
+from common import events, masking, shown, userconfig
 from common.exitcodes import USAGE
 
 from .anchor import _parse_ts, _step_label
@@ -334,6 +334,10 @@ class ReportMixin:
         result = final
         (self.job / "analysis.json").write_text(dumps(result) + "\n",
                                                 encoding="utf-8", newline="\n")
+        if not self.offline:    # 표시 기록(`--offline-db`는 work_dir 밖 --out이라 사용자에게 보이지 않는다)
+            shown.record(self.job.parent, "triage", "report", self.job.name, key=f"report:{self.job.name}#{run_no}",
+                         lines=shown.report_core(report), must_show=result.get("must_show") or [],
+                         path=str(self.job.absolute() / "report.md"))
         self.run.note("done", candidates=len(candidates), calls=self.run.calls)
         return result
 

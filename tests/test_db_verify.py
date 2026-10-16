@@ -655,6 +655,33 @@ def test_relative_draft_from_work_dir_leaves_clone_untouched():
     assert git(ws.clone, "status", "--porcelain", "--untracked-files=all") == ""
 
 
+
+def test_shown_records_draft_table_with_transcript_key():
+    """L R ②a: `rules --plan --draft`는 초안 검증표(기본 출력 행)를 draft 기록으로 남기고, key는 transcript 추론(옛 판정)이
+    같은 출력에서 만드는 키와 같다(`--plan <키>/plan.json` 태그 + 규칙·상태·사유)."""
+    from common import shown
+    ws = Workspace()
+    job = "MOCK-7016"
+    ws.put(job, "fixtures/cut-1.log", SIM_LOG)
+    plan = json.loads((PLANS / "p7-record-verified.plan.json").read_text(encoding="utf-8"))
+    plan["operations"] = [op for op in plan["operations"]
+                          if op["op"] != "verify-resolution" and op.get("kind") != "resolved"]
+    ws.plan(job, plan, draft_verified=False)
+    ws.acquire(job)
+    proc = ws.run("db_verify.py", ["rules", "--plan", ws.job_dir(job) / "plan.json", "--draft", ws.job_dir(job) / "draft"])
+    assert proc.returncode == 0, proc.stderr
+    log = ws.work / ".shown" / "log.jsonl"
+    recs = [json.loads(x) for x in log.read_text(encoding="utf-8").splitlines() if x.strip()]
+    drafts = [r for r in recs if r["kind"] == "draft"]
+    assert len(drafts) == 1
+    rec = drafts[0]
+    assert (rec["script"], rec["job"], rec["plan"]) == ("db_verify", job, "plan.json")
+    assert rec["rules"] == json.loads(proc.stdout)["rules"]
+    cmd = f"python3 /p/scripts/db_verify.py rules --plan {job}/plan.json --draft {job}/draft"
+    seq = [{"kind": "tool", "id": "d1", "name": "Bash", "input": {"command": cmd}, "result": proc.stdout, "error": False}]
+    assert [o.key for o in shown.obligations(seq) if o.kind == "draft"] == [rec["key"]]
+    ws.db_pr("lock", "release", job)
+
 DATA_001_03 = """  - id: DATA-001-03
     status: active
     title: SIM 미준비

@@ -77,7 +77,7 @@ sys.path.insert(0, str(SCRIPTS))
 import db_regress  # noqa: E402
 import match_signatures  # noqa: E402
 import parse_logcat  # noqa: E402
-from common import builds, checks, compat, dbpath, draftcheck, gitscope, issuedb, quality, rulediff, site_defaults, userconfig, yamlio  # noqa: E402
+from common import builds, checks, compat, dbpath, draftcheck, gitscope, issuedb, quality, rulediff, shown, site_defaults, userconfig, yamlio  # noqa: E402
 from common.buildname import sanitize_build  # noqa: E402
 from common.exitcodes import CHECK_FAILED, NEEDS_APPROVAL, OK, USAGE  # noqa: E402
 from common.patterns import PatternError, PatternTimeout  # noqa: E402
@@ -745,6 +745,11 @@ def rules(args, defaults: dict, plugin_root: Path) -> tuple[dict, int]:
         back = {i["id"]: i["temp_id"] for i in applied.get("ids") or [] if i.get("temp_id")}
         _retemp_drafts(result, back)
         draftcheck.record(draft.parent, plan, code, "rules")
+        # 표시 기록: 초안 검증표(기본 출력 행). 경로는 make_draft와 같은 기준(절대), 키는 <plan 부모 폴더>/<plan 파일> + 규칙·상태·사유
+        d, pa = draft.expanduser().absolute(), plan_path.expanduser().absolute()
+        rows = brief_rules(result).get("rules") or []
+        shown.record(d.parent.parent, "db_verify", "draft", d.parent.name, key=shown.draft_key(f"{pa.parent.name}/{pa.name}", rows),
+                     plan=pa.name, rules=rows)
         return {"db": str(draft), "scope": "plan:draft", **result}, code
     try:
         db = dbpath.resolve(args.db)

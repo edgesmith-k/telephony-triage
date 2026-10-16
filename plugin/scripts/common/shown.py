@@ -8,7 +8,7 @@ eval 채점기(`tests/skill_evals/grade.py`)와 표시 보조 hook(`show_guard.p
 것의 부분 문자열이면 보인 줄이다. 요약·재서술은 빠진 줄로 남는다. show_guard가 거부한 질문(`denied`)은 사용자에게 가지 않았으므로
 보인 글도 질문도 아니다.
 
-입력 seq(`parse_events`): `{kind: "text", text}` | `{kind: "tool", id, name, input, result, error}` | (include_user)
+입력 seq(`parse_events`): `{kind: "text", text}` | `{kind: "tool", id, name, input, result, error, ts, rts}`(ts·rts = tool_use·tool_result 줄의 transcript `timestamp`, stream-json은 None) | (include_user)
 `{kind: "user", text, feedback, meta}`. stream-json 실행 기록(eval `events.jsonl`)과 Claude Code transcript JSONL(블록마다 한 항목,
 실제 사용자 입력은 문자열 content, Stop hook 피드백은 `isMeta`)을 모두 읽는다.
 """
@@ -17,8 +17,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
+import sys
+import time
+from contextlib import contextmanager
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 
 MARKER = "[telephony-triage] show-guard"
@@ -343,7 +348,7 @@ def parse_events(lines, include_user: bool = False, skip_sidechain: bool = True)
                 continue
             if typ == "assistant" and c.get("type") == "tool_use":
                 e = {"kind": "tool", "id": c.get("id"), "name": c.get("name") or "", "input": c.get("input") or {},
-                     "result": "", "error": False}
+                     "result": "", "error": False, "ts": ev.get("timestamp"), "rts": None}
                 if not isinstance(e["input"], dict):
                     e["input"] = {}
                 out.append(e)
@@ -352,7 +357,8 @@ def parse_events(lines, include_user: bool = False, skip_sidechain: bool = True)
             elif typ == "assistant" and c.get("type") == "text":
                 out.append({"kind": "text", "text": str(c.get("text") or "")})
             elif typ == "user" and c.get("type") == "tool_result" and c.get("tool_use_id") in by_id:
-                by_id[c["tool_use_id"]].update(result=_block_text(c.get("content")), error=bool(c.get("is_error")))
+                by_id[c["tool_use_id"]].update(result=_block_text(c.get("content")), error=bool(c.get("is_error")),
+                                               rts=ev.get("timestamp"))
             elif typ == "user" and c.get("type") == "text":
                 user_text.append(str(c.get("text") or ""))
         if include_user and user_text:
@@ -888,9 +894,7 @@ def obligations(seq, read_file=None, job_dir=None, *, script_only: bool = True) 
         # 경로는 뒤 셸 구분자·따옴표를 벗기고 빈·`.` 마디를 뺀 끝 두 마디(<KEY>/plan.json)만 쓴다: 표기만 바꿔 다시 돌려
         # 한도를 새로 얻지 못하게(plan_tag)
         tag = plan_tag(seq[i])
-        digest = hashlib.sha1(json.dumps([tag] + [[r.get("id"), r.get("status"), r.get("reason")]
-                                                  for r in rules],
-                                         ensure_ascii=False).encode("utf-8")).hexdigest()[:12]
+        digest = draft_key(tag, rules).partition(":")[2]
         boundary = max([r for r in runs if r < i], default=-1)
         count_from = first_of.setdefault((boundary, digest), i)
         out.append(Obligation("draft", f"draft:{digest}", i, end, close, rules=rules, block=block,
@@ -948,3 +952,163 @@ def guard_counts(lines) -> dict:
             if isinstance(ev, dict) and ev.get("type") != "assistant":
                 capped += 1
     return {"blocks": blocks, "denies": denies, "capped": capped}
+
+
+# -- 표시 기록 (L R, `<work_dir>/.shown/log.jsonl`) ---------------------------------------------------------------------
+# 스크립트(db_pr summary·stage·publish·discard·lock, issue_post render·approve, db_verify rules --draft, triage run)가 사용자에게
+# 보여야 할 출력(의무)과 창을 닫는 사실(close)을 한 줄씩 남긴다. hook은 이 기록을 transcript의 Bash 호출에 시각으로 고정한다
+# (`anchor`). 기록 실패는 본 작업을 막지 않는다(stderr 경고만). 형식은 contracts.md "표시 기록".
+
+SHOWN_DIR = ".shown"
+LOG_NAME = "log.jsonl"
+LOCK_NAME = "log.lock"     # 회전하지 않는 잠금 파일(쓰기·회전을 한 프로세스씩)
+# ponytail: 한 세대 회전(log.jsonl.1), 최대 ≈8MB. 긴 세션이 회전을 넘으면 그 앞 의무는 판정하지 않는다 — 필요하면 세대 수를 늘린다
+LOG_MAX = 4 << 20
+READ_TAIL = 2 << 20
+# ponytail: probe 13 — PreToolUse 시점에 지금 tool_use 줄은 아직 없고 0.25초 안에 기록된다. 사내 probe 15로 조정할 손잡이
+ANCHOR_SLACK = 2.0
+
+
+def now_iso() -> str:
+    """UTC 밀리초, transcript `timestamp`와 같은 모양(`2026-10-16T03:12:45.123Z`)."""
+    return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
+def _epoch(s) -> float | None:
+    """ISO 시각 → epoch 초. `Z`는 3.10 `fromisoformat`이 못 읽어 바꾼다. 못 읽으면 None."""
+    try:
+        t = datetime.fromisoformat(str(s).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    return (t if t.tzinfo else t.replace(tzinfo=timezone.utc)).timestamp()
+
+
+def draft_key(tag: str, rules) -> str:
+    """초안 검증 의무 키: 계획 태그(<plan 부모 폴더>/<plan 파일>)와 규칙·상태·사유의 sha1 앞 12자."""
+    return "draft:" + hashlib.sha1(json.dumps([tag] + [[r.get("id"), r.get("status"), r.get("reason")] for r in rules],
+                                              ensure_ascii=False).encode("utf-8")).hexdigest()[:12]
+
+
+@contextmanager
+def _locked(path: Path, wait: float = 10.0):
+    """`path`의 첫 바이트에 배타 잠금(`dbpr/lock.py` guard와 같은 방식: Windows `msvcrt.locking`, POSIX `fcntl.lockf` — NFS에서도
+    POSIX 잠금). 잡힐 때까지 0.02초마다 다시, `wait`초가 지나면 OSError."""
+    fd = os.open(path, os.O_RDWR | os.O_CREAT | getattr(os, "O_BINARY", 0), 0o600)
+    try:
+        deadline = time.monotonic() + wait
+        while True:
+            try:
+                os.lseek(fd, 0, os.SEEK_SET)
+                if os.name == "nt":
+                    import msvcrt
+                    msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+                else:
+                    import fcntl
+                    fcntl.lockf(fd, fcntl.LOCK_EX | fcntl.LOCK_NB, 1, 0)
+                break
+            except OSError:
+                if time.monotonic() >= deadline:
+                    raise
+                time.sleep(.02)
+        try:
+            yield
+        finally:
+            os.lseek(fd, 0, os.SEEK_SET)
+            if os.name == "nt":
+                msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+            else:
+                fcntl.lockf(fd, fcntl.LOCK_UN, 1, 0)
+    finally:
+        os.close(fd)
+
+
+def record(work_dir, script: str, kind: str, job: str, **fields) -> bool:
+    """`<work_dir>/.shown/log.jsonl`에 기록 하나를 append(폴더 0o700, 4MB 넘으면 한 세대 회전). 실패하면 stderr 경고만 하고
+    False — 종료 코드·stdout은 호출한 스크립트 그대로.
+
+    close 기록을 잃으면 hook이 닫힌 창을 열린 것으로 보고 거짓 거부한다(②b). 그래서: 회전 확인과 쓰기를 `.shown/log.lock`
+    배타 잠금 안에서 한다(Windows의 `O_APPEND`는 CRT가 끝으로 옮긴 뒤 쓰는 흉내라 프로세스 사이에 원자적이지 않다, NFS도 같다).
+    `O_APPEND` fd에 `os.write` 한 번(기록마다 한 호출, 재시도 없음, 짧게 쓰이면 실패)으로 쓰고, 앞에 줄바꿈을 붙여
+    (`"\\n" + line + "\\n"`) 앞 기록의 찢긴 끝 줄(중단)에 붙지 않게 한다 — 읽는 쪽은 빈 줄·깨진 줄을 건너뛴다. 회전 실패(Windows
+    공유 위반 등)는 무시하고 지금 파일에 쓴다. 잠금을 10초 안에 못 잡으면 경고만 한다."""
+    try:
+        d = Path(work_dir) / SHOWN_DIR
+        d.mkdir(mode=0o700, parents=True, exist_ok=True)
+        log = d / LOG_NAME
+        data = ("\n" + json.dumps({"v": 1, "at": now_iso(), "script": script, "kind": kind, "job": job, **fields},
+                                  ensure_ascii=False) + "\n").encode("utf-8")
+        with _locked(d / LOCK_NAME):
+            try:
+                if log.stat().st_size > LOG_MAX:
+                    os.replace(log, d / (LOG_NAME + ".1"))
+            except OSError:
+                pass
+            fd = os.open(log, os.O_WRONLY | os.O_APPEND | os.O_CREAT | getattr(os, "O_BINARY", 0), 0o600)
+            try:
+                if os.write(fd, data) != len(data):
+                    raise OSError("short write")
+            finally:
+                os.close(fd)
+        return True
+    except (OSError, TypeError, ValueError) as exc:
+        print(f"[telephony-triage] 표시 기록을 쓰지 못함({kind}: {type(exc).__name__}) — 표시 보조 hook이 이 출력을 보지 않는다",
+              file=sys.stderr)
+        return False
+
+
+def _tail_lines(path: Path, budget: int) -> list[str]:
+    try:
+        with open(path, "rb") as f:
+            size = f.seek(0, os.SEEK_END)
+            f.seek(max(0, size - budget))
+            data = f.read()
+    except OSError:
+        return []
+    lines = data.decode("utf-8", errors="replace").split("\n")
+    return lines[1:] if size > budget else lines     # 잘린 첫 줄은 버린다
+
+
+def read_records(work_dirs) -> list[dict]:
+    """work_dir마다 기록 끝 `READ_TAIL`(지금 파일이 작으면 남은 만큼 회전된 `.1`의 끝까지)을 읽어 `at` 순으로. JSON이 아닌
+    줄(동시 append로 섞인 줄)은 건너뛴다."""
+    out = []
+    for w in dict.fromkeys(str(w) for w in work_dirs):
+        d = Path(w) / SHOWN_DIR
+        cur = d / LOG_NAME
+        try:
+            size = cur.stat().st_size if cur.is_file() else 0
+        except OSError:
+            size = 0
+        lines = _tail_lines(d / (LOG_NAME + ".1"), READ_TAIL - size) if size < READ_TAIL else []
+        lines += _tail_lines(cur, READ_TAIL) if size else []
+        for raw in lines:
+            try:
+                r = json.loads(raw)
+            except ValueError:
+                continue
+            if isinstance(r, dict) and isinstance(r.get("at"), str):
+                out.append(r)
+    return sorted(out, key=lambda r: r["at"])
+
+
+def anchor(seq, recs) -> list[tuple[int, dict]]:
+    """기록마다, 명령에 기록의 `script` 이름(앞뒤가 글자·`-`가 아님 — `telephony-triage/`는 triage가 아니다)이 든 끝난 Bash
+    호출 중 `ts − ANCHOR_SLACK ≤ at ≤ rts`인 것에서 `rts`가 가장 이른 것의 seq 순번. 고정된 (순번, 기록)만 (순번, at) 순으로 —
+    못 고정한 기록(다른 세션·하위 에이전트·아직 끝나지 않은 호출·백그라운드 실행·시각 없는 기록)은 뺀다."""
+    calls = []
+    for i, e in enumerate(seq):
+        if e.get("kind") == "tool" and e.get("name") == "Bash":
+            ts, rts = _epoch(e.get("ts")), _epoch(e.get("rts"))
+            if ts is not None and rts is not None:
+                calls.append((i, ts, rts, str((e.get("input") or {}).get("command", ""))))
+    out = []
+    for r in recs:
+        at, script = _epoch(r.get("at")), str(r.get("script") or "")
+        if at is None or not script:
+            continue
+        name = re.compile(rf"(?<![\w-]){re.escape(script)}(?![\w-])")
+        best = min(((rts, i) for i, ts, rts, cmd in calls if ts - ANCHOR_SLACK <= at <= rts and name.search(cmd)),
+                   default=None)
+        if best is not None:
+            out.append((best[1], r))
+    return sorted(out, key=lambda x: (x[0], x[1]["at"]))

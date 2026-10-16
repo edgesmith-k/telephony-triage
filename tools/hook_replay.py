@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """hook_replay.py — 기록된 세션의 hook 결정 지점을 지금 코드로 다시 판정한다 (숫자만, transcript 내용 없음).
 
-    python3 tools/hook_replay.py <session.jsonl> [<session.jsonl> ...] [--plugin-root <dir>]
+    python3 tools/hook_replay.py <session.jsonl> [<session.jsonl> ...] [--plugin-root <dir>] [--scripts <plugin/scripts>]
 
 입력은 Claude Code transcript JSONL(사내 `~/.claude/projects/<프로젝트>/<세션>.jsonl`, eval `with_skill/session.jsonl`,
 `tests/fixtures/show_guard/eval2-session.jsonl`과 같은 형식). 결정 지점은 `plugin/hooks/hooks.json`과 같다:
@@ -10,16 +10,24 @@
 - Stop: 뒤에 다음 도구 호출 없이 실제 사용자 입력·Stop 피드백·파일 끝이 오는 assistant 텍스트.
 PostToolUse(post·jira_bridge)는 허용/거부가 아니라 안내라 넣지 않는다.
 
+`--scripts`: guard·show_guard·`common.shown`을 읽을 plugin/scripts 디렉토리(기본 이 레포). 옛 커밋 사본
+(`git archive <커밋> plugin/scripts | tar -x -C <dir>`)과 지금 작업 트리를 같은 재생 드라이버로 비교할 때 쓴다(L R 전환 게이트).
+
 stdout JSON 하나: `files[{index, lines}]`, `points[{file, line, hook, tool, decision, keys, missing, recorded}]`,
-`summary{points, decisions, recorded_deny, mismatch}`. 파일 경로·사유 글·명령은 내지 않는다. 도구는 종류(Bash·ask·file·mcp·other),
+`summary{points, decisions, recorded_deny, mismatch, records}`. 파일 경로·사유 글·명령은 내지 않는다. 도구는 종류(Bash·ask·file·mcp·other),
 표식 키는 `kind:` + sha1 8자(브랜치·Jira 키가 새지 않게), `missing`은 "빠진 줄 n/total" 숫자.
 `recorded`는 기록상 결과(`deny:guard`·`deny:show_guard`·`deny:other`·`ran`, Stop은 `block`·`ran`, 결과 없음 null).
 mismatch = recorded가 있는 지점에서 기록상 그 hook의 거부(Stop은 block)와 지금 판정의 거부가 다른 수(guard `ask`는 기록으로
 구분할 수 없어 거부가 아닌 것으로 본다).
+`records` = 스크립트 표시 기록(사용자 config의 모든 프로필 `work_dir`의 `.shown/log.jsonl`, L R) 중 세션 시각 범위 안의 것을
+transcript의 Bash 호출에 고정한 수 `{anchored, unanchored}`. 확인할 것이 없는 파일이 하나라도 있으면 null(옛 scripts, 시각 없는
+transcript, 그 범위의 기록 없음 — 건너뛴 확인이지 통과가 아니다). unanchored가 0이 아니면
+"transcript 시각이 스크립트 실행을 감싼다"는 R 전제가 이 환경에서 깨진 것이다(plugin-probe 15).
 
 한계: guard 규칙 중 디스크·git 상태에 기대는 것(10 로그 원문 읽기 — 파일이 있어야 판정, 4·5 커밋, 8 clone)과 사용자 config
 (규칙 7 publish ask는 `conf.user`가 있어야)는 **지금 PC 상태**로 판정한다 — 기록 당시와 다르면 mismatch로 센다. show_guard의
-리포트 판정(작업 디렉토리의 report.md)도 파일이 없으면 다르게 나올 수 있다.
+리포트 판정(작업 디렉토리의 report.md)도 파일이 없으면 다르게 나올 수 있다. guard와 show_guard가 같은 호출을 둘 다 거부하면 기록에는
+한쪽 거부만 남아 다른 쪽이 거짓 mismatch가 된다. Stop 피드백이 transcript에 기록되지 않는 버전에서는 block이 `ran`으로 세어진다.
 
 종료 코드: 0, 파일을 못 읽으면 2.
 """
@@ -35,13 +43,32 @@ import tempfile
 from collections import Counter
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "plugin" / "scripts"))
-import guard  # noqa: E402
-import show_guard  # noqa: E402
-from common import shown  # noqa: E402
+REPO_SCRIPTS = Path(__file__).resolve().parents[1] / "plugin" / "scripts"
+guard = show_guard = shown = None   # `_load`가 채운다
 
 MISSING_RE = re.compile(r"빠진 (?:줄|규칙) (\d+)/(\d+)")
-FEEDBACK = "Stop hook feedback:"
+
+
+def _load(scripts=None) -> None:
+    """guard·show_guard·`common.shown`을 `scripts`(기본 이 레포)에서 import한다. 이미 그 디렉토리 것이 올라와 있으면 그대로 쓰고,
+    다른 디렉토리 것이면 그 디렉토리의 최상위 모듈 이름(`common`·`trackers` 등)을 sys.modules에서 지우고 다시 읽는다."""
+    global guard, show_guard, shown
+    d = Path(scripts).resolve() if scripts else REPO_SCRIPTS
+
+    def elsewhere(name: str) -> bool:
+        f = getattr(sys.modules.get(name), "__file__", None)
+        return bool(f) and not Path(f).resolve().is_relative_to(d)
+
+    if any(map(elsewhere, ("guard", "show_guard", "common"))):
+        tops = {p.stem for p in d.iterdir() if p.suffix == ".py" or (p / "__init__.py").is_file()}
+        for name in [n for n in sys.modules if n.split(".")[0] in tops]:
+            del sys.modules[name]
+    if sys.path[:1] != [str(d)]:
+        sys.path.insert(0, str(d))
+    import guard as g  # noqa: E402
+    import show_guard as sg  # noqa: E402
+    from common import shown as sh  # noqa: E402
+    guard, show_guard, shown = g, sg, sh
 
 
 def _blocks(ev) -> list[dict]:
@@ -50,11 +77,12 @@ def _blocks(ev) -> list[dict]:
     return [b for b in content if isinstance(b, dict)] if isinstance(content, list) else []
 
 
-def _user_text(ev):
-    """사용자 항목의 문자열 content(실제 입력·Stop 피드백), 아니면 None."""
-    msg = ev.get("message") if isinstance(ev, dict) and ev.get("type") == "user" else None
-    content = msg.get("content") if isinstance(msg, dict) else None
-    return content if isinstance(content, str) else None
+def _user_entry(ev):
+    """사용자 항목(실제 입력·Stop 피드백·주입 글)이면 `shown.parse_events(include_user=True)`의 user 항목
+    `{text, feedback, meta}`, 아니면 None — 목록형 user 텍스트, isMeta가 아닌 Stop 피드백도 show_guard와 같게 읽는다."""
+    if not isinstance(ev, dict) or ev.get("type") != "user":
+        return None
+    return next((e for e in shown.parse_events([ev], include_user=True, skip_sidechain=False) if e["kind"] == "user"), None)
 
 
 def _result_text(content) -> str:
@@ -124,7 +152,7 @@ def _show(mode, inp) -> dict:
 
 
 def _stop_end(evs, i):
-    """evs[i](assistant 텍스트)가 턴 끝이면 ("user"|"feedback"|"eof", 피드백 항목), 아니면 None."""
+    """evs[i](assistant 텍스트)가 턴 끝이면 ("user"|"feedback"|"eof", 피드백 글), 아니면 None."""
     for ev in evs[i + 1:]:
         if not isinstance(ev, dict) or ev.get("isSidechain"):
             continue
@@ -132,15 +160,43 @@ def _stop_end(evs, i):
             if any(b.get("type") in ("text", "tool_use") for b in _blocks(ev)):
                 return None
             continue
-        text = _user_text(ev)
-        if text is None:
+        u = _user_entry(ev)
+        if u is None:
             continue
-        if ev.get("isMeta"):
-            if text.startswith(FEEDBACK):
-                return "feedback", text
+        if u["feedback"]:
+            return "feedback", u["text"]
+        if u["meta"]:
             continue
         return "user", None
     return "eof", None
+
+
+def _work_dirs() -> list[Path]:
+    """사용자 config(TELEPHONY_TRIAGE_HOME)의 모든 프로필 work_dir. 못 읽으면 빈 목록."""
+    try:
+        from common import userconfig
+        return [Path(str(userconfig.get(c, "work_dir"))).expanduser()
+                for c in userconfig.profiles({}).values() if userconfig.get(c, "work_dir")]
+    except Exception:  # noqa: BLE001 — 숫자 보조: 설정이 깨졌으면 기록 없음으로 본다
+        return []
+
+
+def _records(lines: list[str], recs: list[dict]) -> dict | None:
+    """세션 시각 범위(첫 timestamp − SLACK ~ 마지막 timestamp) 안의 기록을 고정한 수. 확인할 것이 없으면 None — `anchor`가 없는
+    옛 scripts, transcript에 시각이 없음(녹화본·stream-json), 그 범위의 기록이 없음(빈 work_dir·다른 TELEPHONY_TRIAGE_HOME).
+    `{anchored: 0, unanchored: 0}`을 내지 않는다: 건너뛴 확인을 통과(unanchored 0)로 읽지 않게."""
+    if not hasattr(shown, "anchor"):
+        return None
+    seq = shown.parse_events(lines)
+    stamps = [t for t in (shown._epoch(e.get(k)) for e in seq for k in ("ts", "rts")) if t is not None]
+    if not stamps:
+        return None
+    lo, hi = min(stamps) - shown.ANCHOR_SLACK, max(stamps)
+    mine = [r for r in recs if (t := shown._epoch(r.get("at"))) is not None and lo <= t <= hi]
+    if not mine:
+        return None
+    n = len(shown.anchor(seq, mine))
+    return {"anchored": n, "unanchored": len(mine) - n}
 
 
 def _replay_one(fi: int, lines: list[str], plugin_root, tmp: Path) -> list[dict]:
@@ -153,7 +209,7 @@ def _replay_one(fi: int, lines: list[str], plugin_root, tmp: Path) -> list[dict]
     recorded = _recorded(evs)
     path = tmp / f"{fi}.jsonl"
     points = []
-    last_user, feedback_since_user = -1, False
+    feedback_since_user = False
 
     def prefix(i):
         # ponytail: 지점마다 prefix 파일을 다시 쓴다(O(줄 수²) 바이트). 큰 transcript가 느리면 한 파일에 append하며 진행
@@ -163,12 +219,12 @@ def _replay_one(fi: int, lines: list[str], plugin_root, tmp: Path) -> list[dict]
     for i, ev in enumerate(evs):
         if not isinstance(ev, dict) or ev.get("isSidechain"):
             continue
-        text = _user_text(ev)
-        if text is not None:
-            if ev.get("isMeta"):
-                feedback_since_user |= text.startswith(FEEDBACK)
-            else:
-                last_user, feedback_since_user = i, False
+        u = _user_entry(ev)
+        if u is not None:
+            if u["feedback"]:
+                feedback_since_user = True
+            elif not u["meta"]:
+                feedback_since_user = False
         if ev.get("type") != "assistant":
             continue
         cwd = ev.get("cwd") or str(tmp)
@@ -209,16 +265,21 @@ def _mismatch(p) -> bool:
     return (p["recorded"] == want) != (p["decision"] == "deny")
 
 
-def replay(files: list[list[str]], plugin_root=None) -> dict:
+def replay(files: list[list[str]], plugin_root=None, scripts=None) -> dict:
     """파일마다 줄 목록을 받아 결정 지점 판정과 요약을 낸다."""
+    _load(scripts)
     with tempfile.TemporaryDirectory() as d:
         points = [p for fi, lines in enumerate(files) for p in _replay_one(fi, lines, plugin_root, Path(d))]
     denied = {(p["file"], p["line"]) for p in points if str(p["recorded"]).startswith("deny:")}
+    recs = shown.read_records(_work_dirs()) if hasattr(shown, "read_records") else []
+    per = [_records(lines, recs) for lines in files]
+    records = None if any(r is None for r in per) else {
+        k: sum(r[k] for r in per) for k in ("anchored", "unanchored")}
     return {"files": [{"index": fi, "lines": len(lines)} for fi, lines in enumerate(files)],
             "points": points,
             "summary": {"points": len(points),
                         "decisions": dict(sorted(Counter(f"{p['hook']}:{p['decision']}" for p in points).items())),
-                        "recorded_deny": len(denied), "mismatch": sum(map(_mismatch, points))}}
+                        "recorded_deny": len(denied), "mismatch": sum(map(_mismatch, points)), "records": records}}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -226,6 +287,7 @@ def main(argv: list[str] | None = None) -> int:
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("sessions", nargs="+", help="Claude Code transcript JSONL")
     parser.add_argument("--plugin-root", default=None)
+    parser.add_argument("--scripts", default=None, help="guard·show_guard·common.shown을 읽을 plugin/scripts (기본 이 레포)")
     args = parser.parse_args(argv)
     files = []
     for s in args.sessions:
@@ -238,7 +300,7 @@ def main(argv: list[str] | None = None) -> int:
         sys.stdout.reconfigure(encoding="utf-8")
     except (AttributeError, ValueError):
         pass
-    print(json.dumps(replay(files, args.plugin_root), ensure_ascii=False))
+    print(json.dumps(replay(files, args.plugin_root, args.scripts), ensure_ascii=False))
     return 0
 
 

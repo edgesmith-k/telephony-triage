@@ -78,7 +78,7 @@ from pathlib import Path
 SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS))
 
-from common import compat, site_defaults, userconfig, yamlio  # noqa: E402
+from common import compat, shown, site_defaults, userconfig, yamlio  # noqa: E402
 import platforms  # noqa: E402
 from platforms import session as platform_session  # noqa: E402
 import db_summary  # noqa: E402,F401 — test_db_summary가 본다
@@ -167,6 +167,16 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _shown_close(ctx: Ctx, wt: str, by: str) -> None:
+    """표시 기록에 창을 닫는 사실(실제로 실행된 stage·publish·discard)을 남긴다 — hook이 거부한 호출은 여기까지 오지 않으므로
+    닫지 않는다. 작업 경로가 아니면 건너뛴다(그 명령은 곧 UsageError로 끝난다)."""
+    try:
+        _, job = _job_of(Path(wt), ctx)
+    except (UsageError, OSError):
+        return
+    shown.record(ctx.work_dir, "db_pr", "close", job, by=by)
+
+
 def main(argv: list[str] | None = None) -> int:
     try:
         sys.stdout.reconfigure(encoding="utf-8")
@@ -198,8 +208,10 @@ def main(argv: list[str] | None = None) -> int:
                 held = lock.describe(lock.read())
                 result = {"held": held is not None, "lock": held}
             elif args.lock_cmd == "acquire":
+                shown.record(lock.work_dir, "db_pr", "close", args.job, by="lock")
                 result = lock.acquire(args.job, args.command, args.take_over)
             else:
+                shown.record(lock.work_dir, "db_pr", "close", args.job, by="lock")
                 result = lock.release(args.job, args.force)
                 if not args.force:      # 자기 작업을 끝낼 때(lock이 이미 없어도)
                     _drop_pasted_steps(ctx, args.job)
@@ -212,12 +224,13 @@ def main(argv: list[str] | None = None) -> int:
         elif args.cmd == "stage":
             if args.then_summary and (args.json or getattr(args, "verbose", False)):
                 raise UsageError("--then-summary는 --json·--verbose와 함께 쓸 수 없다 (stdout이 마크다운이다).")
+            _shown_close(ctx, args.wt, "stage")
             result, code = stage(ctx, Path(args.plan), Path(args.wt), args.branch, args.dry_run)
             if not getattr(args, "verbose", False):
                 result = _brief_stage(result, _job_of(Path(args.wt), ctx)[0])
             if args.then_summary and code in (OK, 3):
                 try:
-                    shown = summary(ctx, Path(args.wt), True)["_markdown"]
+                    md = summary(ctx, Path(args.wt), True)["_markdown"]
                 except Exception as exc:    # stage는 성공했다: stage.json·state.json은 남아 있다
                     reason = str(exc) or type(exc).__name__
                     print(f"stage 성공, summary 실패: {reason} — db_pr summary {args.wt} --format markdown만 다시 부른다",
@@ -225,7 +238,7 @@ def main(argv: list[str] | None = None) -> int:
                     result["summary_error"] = reason
                     code = USAGE
                 else:
-                    print(shown, end="")
+                    print(md, end="")
                     return code
         elif args.cmd == "summary":
             if args.format == "markdown" and args.json:
@@ -235,6 +248,7 @@ def main(argv: list[str] | None = None) -> int:
                 print(result["_markdown"], end="")
                 return code
         elif args.cmd == "publish":
+            _shown_close(ctx, args.wt, "publish")
             result, code = publish(ctx, Path(args.wt), args.branch, args.lease, args.approved, args.commit)
             if args.and_discard:
                 if code == OK:
@@ -250,6 +264,7 @@ def main(argv: list[str] | None = None) -> int:
                 else:
                     result["discard"] = {"discarded": False, "skipped": "publish 실패 — worktree·lock 보존"}
         elif args.cmd == "discard":
+            _shown_close(ctx, args.wt, "discard")
             result = discard(ctx, Path(args.wt))
         else:
             result = find_plan(ctx, args.branch)

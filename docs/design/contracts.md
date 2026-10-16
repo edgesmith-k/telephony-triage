@@ -156,6 +156,25 @@
 - `discard`: `git worktree remove --force <wt>`, 도구 브랜치 `tt/<br>` 삭제, `state.json`·붙여넣은 스텝 원문 `steps-pasted.txt` 삭제, **lock 해제**. 사용자 로컬 `<br>`와 원격 브랜치, `plan.json`은 건드리지 않는다.
 - 커밋은 `publish --commit`이 한다: 승인 해시·`core.hooksPath`·guard 프로필 검사(규칙 3·4)·pre-commit을 거친다. 스킬은 직접 `git add`·`git commit`을 하지 않는다 (`07-workflow.md §Step 8-6`). Claude hook(`guard.py`)은 `publish` 토큰이 있으면 옵션과 무관하게 `ask`로 확인을 강제한다(규칙 7).
 
+### 표시 기록 `<work_dir>/.shown/log.jsonl` (L R)
+
+사용자에게 보여야 할 스크립트 출력(의무)과 그 창을 닫는 사실을 스크립트가 직접 한 줄(JSON 하나)씩 append한다. 표시 보조 hook
+(`show_guard.py`)이 이 기록을 transcript의 Bash 호출에 시각으로 고정해 읽는다(`common/shown.py` `record`·`read_records`·`anchor`).
+안전 관문이 아니다(규칙 7 ask·승인 해시·pre-push가 관문).
+
+| 키 | 값 |
+|---|---|
+| `v` · `at` · `script` · `kind` · `job` | `1`, 기록 시각 UTC 밀리초(`2026-10-16T03:12:45.123Z`, transcript `timestamp`와 같은 모양), `db_pr`·`issue_post`·`db_verify`·`triage`, 아래 종류, 작업 키 |
+| `kind: push` | `db_pr summary`(형식과 무관 — json·`--format markdown`·`stage --then-summary`): `key` = `push:<approved_hash>`, `block` = 확인 화면 마크다운 전문 |
+| `kind: post` | `issue_post render`가 승인할 수 있는 화면(`post_sha256:` 줄이 있을 때)을 낼 때: `key` = `post:<sha 앞 16자>`, `block` = 화면 전문 |
+| `kind: report` | `triage run`이 ok로 끝날 때(`--offline-db` 제외): `key` = `report:<KEY>#<run>`, `lines` = report.md의 결정적 줄, `must_show`, `path` = `JOB/report.md` |
+| `kind: draft` | `db_verify rules --plan --draft`: `key` = `draft:<sha1 12자>`(계획 `<부모 폴더>/<파일>`과 규칙·상태·사유), `plan`, `rules` = 기본 출력 행 |
+| `kind: close` | 실제로 실행된 `db_pr stage`·`publish`·`discard`·`lock acquire`·`lock release`, `issue_post approve`(결과와 무관): `by` = `stage`·`publish`·`discard`·`lock`·`approve` |
+
+- 폴더는 0o700으로 만든다. 4MB를 넘으면 쓰기 전에 `log.jsonl.1`로 한 세대 회전한다(최대 ≈8MB). 읽는 쪽은 끝 2MB만 본다.
+- 기록을 쓰지 못해도(디스크·권한) 본 작업은 그대로다: stderr에 `[telephony-triage] 표시 기록을 쓰지 못함(<종류>: …)`만 내고 종료 코드·stdout은 바뀌지 않는다.
+- `.shown/`은 작업 폴더가 아니다: `cleanup`·`discard`·`status` 후보·`usage_stats`는 건드리거나 세지 않는다. 화면·리포트 줄을 담으므로 마스킹된 JOB 파일과 같은 민감도다.
+
 ---
 
 ## 종료 코드

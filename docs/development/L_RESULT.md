@@ -244,6 +244,12 @@
 - ②에서 show_guard가 같은 그물을 쓸 때의 참고 수치(옛 = `shown.STAGE`·`shown.POST_END` 정규식): stage는 eval 14/14·녹화 2/2 같음, 개발 세션 둘 다 17·새만 19(옛만 0). approve는 eval·녹화 0, 개발 세션 새만 1.
 - L1 리뷰 P2 (8) `maxsplit=1`은 이 단계에서 고쳤다.
 
+### ②a 리뷰 P2 (반입 뒤 후보)
+
+- P2-1 기록 인자를 `record()`의 try 밖에서 계산한다(`dbpr/publish.py` summary가 json 출력에도 마크다운을 그림, `db_verify.py`의 `brief_rules`, `triagelib/report.py`의 `report_core`) — 거기서 예외가 나면 본 작업 결과가 바뀐다. → try + stderr 경고로 감싼다.
+- P2-4 `shown.record`: `.shown`·`log.jsonl`이 symlink면 work_dir 밖에 쓴다. → symlink는 거부한다.
+- (P2-2 찢긴 끝 줄에 다음 기록이 붙어 둘 다 잃음, P2-3 회전 경합·Windows `os.replace` 실패: **P1로 재분류, ②a에서 수정** — close 기록을 잃으면 ②b에서 창이 열린 채 남아 거짓 거부가 된다. `O_APPEND` fd에 `"\n" + line + "\n"`을 `os.write` 한 번, 회전 실패는 무시, 읽는 쪽은 빈 줄·깨진 줄을 건너뜀.)
+
 ## L1 리뷰 P2 (반입 뒤 후보)
 
 - (3) `tools/hook_replay.py` `_user_text`·Stop 피드백 판별이 `shown.parse_events`와 다르다(목록형 user 텍스트, isMeta 아닌 Stop 피드백) → `parse_events(include_user=True)` 재사용.

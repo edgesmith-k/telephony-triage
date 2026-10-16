@@ -533,6 +533,27 @@ def test_github_end_to_end_markdown_approve_guard_bridge():
     assert guard(approved["arguments"])["permissionDecision"] == "deny"
 
 
+def test_shown_records_post_screen_only_when_approvable_and_approve_closes():
+    """L R ②a: fill 있는 render(승인할 수 있는 화면)만 post 기록(key `post:<sha 앞 16자>`, block = 화면 전문), fill 없는
+    render·검사 실패는 기록 없음. approve는 결과와 무관하게 close by approve."""
+    ws = shared()
+    log = ws.work / ".shown" / "log.jsonl"
+
+    def new(before: int) -> list[dict]:
+        return [json.loads(x) for x in log.read_text(encoding="utf-8").splitlines() if x.strip()][before:] if log.is_file() else []
+
+    n = len(new(0))
+    render(ws)                                                           # fill 없음: 초안
+    render(ws, "--fill", fill(ws, {**FILL, "cause": [{"text": "근거 없음"}]}), expect=1)   # 검사 실패
+    assert new(n) == []
+    out = render(ws, "--fill", fill(ws, FILL))
+    rec = new(n)
+    assert len(rec) == 1 and rec[0]["kind"] == "post" and rec[0]["script"] == "issue_post" and rec[0]["job"] == KEY
+    assert rec[0]["key"] == f"post:{out['post_sha256'][:16]}" and rec[0]["block"] == out["screen"]
+    ws.run("issue_post.py", ["approve", KEY, "--sha", "0" * 64, "--json"])          # 실패한 approve도 창은 닫는다
+    assert [(r["kind"], r.get("by")) for r in new(n + 1)] == [("close", "approve")]
+
+
 def _all_tests():
     return [(name, func) for name, func in sorted(globals().items()) if name.startswith("test_") and callable(func)]
 

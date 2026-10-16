@@ -2036,3 +2036,54 @@ def test_draft_verify_stop_invalidates_previous_approval():
     plan.write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
     ws.stage("MOCK-7002", "issue/MOCK-7002", expect=(0, 3), dry_run=True)  # db_verify 재실행 없이 남은 기록으로 통과한다
     ws.db_pr("discard", ws.wt("MOCK-7002"))
+
+
+# -- 표시 기록 `.shown/log.jsonl` (L R ②a) ------------------------------------------------------------------------
+
+
+def _shown_log(ws: Workspace) -> list[dict]:
+    p = ws.work / ".shown" / "log.jsonl"
+    return [json.loads(line) for line in p.read_text(encoding="utf-8").splitlines() if line.strip()] if p.is_file() else []
+
+
+def test_shown_records_push_screen_in_every_format_and_close_facts():
+    """summary는 형식과 무관하게(json·markdown·stage --then-summary) 같은 key·같은 화면 전문을 push 기록으로 남기고,
+    lock·stage·publish·discard는 실제로 실행될 때 close 사실을 남긴다. discard·cleanup은 `.shown`을 건드리지 않는다."""
+    import os
+    ws = Workspace()
+    wt = _staged_job(ws)
+    out = _then_summary(ws, "MOCK-7002", "issue/MOCK-7002")
+    assert out.returncode == 0
+    md = ws.run("db_pr.py", ["summary", wt, "--format", "markdown"]).stdout
+    ws.db_pr("summary", wt)
+    h = _state(ws, "MOCK-7002")["approved_hash"]
+    recs = _shown_log(ws)
+    assert [(r["kind"], r.get("by")) for r in recs] == [("close", "lock"), ("close", "stage")] + [("push", None)] * 3
+    for r in recs:
+        assert r["v"] == 1 and r["script"] == "db_pr" and r["job"] == "MOCK-7002" and r["at"].endswith("Z")
+    pushes = [r for r in recs if r["kind"] == "push"]
+    assert all(r["key"] == f"push:{h}" and r["block"] == out.stdout == md for r in pushes)
+    assert md.splitlines()[-1] == f"approved_hash: {h}"
+    ws.db_pr(*_publish_args(ws, "MOCK-7002", "issue/MOCK-7002", "--commit"))
+    ws.db_pr("discard", wt)
+    assert [r.get("by") for r in _shown_log(ws)[5:]] == ["publish", "discard"]
+    old = 0   # cleanup·cleanup --older-than은 `.`으로 시작하는 폴더를 작업으로 보지 않는다(위험 3)
+    for p in (ws.work / ".shown", ws.work / ".shown" / "log.jsonl"):
+        os.utime(p, (old, old))
+    ws.db_pr("cleanup", "--yes")
+    ws.db_pr("cleanup", "--yes", "--older-than")
+    assert len(_shown_log(ws)) == 7
+
+
+def test_shown_record_failure_keeps_exit_code_and_stdout():
+    """기록을 못 쓰면(`.shown`이 파일) stderr 경고만 하고 종료 코드·stdout은 그대로다."""
+    import shutil
+    ws = Workspace()
+    wt = _staged_job(ws)
+    shutil.rmtree(ws.work / ".shown")
+    (ws.work / ".shown").write_text("x", encoding="utf-8")
+    out = _then_summary(ws, "MOCK-7002", "issue/MOCK-7002")
+    assert out.returncode == 0 and out.stdout.startswith("## push 전 확인: MOCK-7002")
+    assert "표시 기록을 쓰지 못함" in out.stderr
+    assert out.stdout == ws.run("db_pr.py", ["summary", wt, "--format", "markdown"]).stdout
+    ws.db_pr("discard", wt)
