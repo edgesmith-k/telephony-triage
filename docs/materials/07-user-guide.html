@@ -237,7 +237,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
       <div class="eyebrow">USER GUIDE · 처음 쓰는 사람을 위한 안내</div>
       <h1>Jira 번호와 로그만 주면 됩니다</h1>
       <p>Telephony 이슈를 분석하는 엔지니어를 위한 안내입니다. 설치, 첫 연습, 요청하는 법, 리포트 읽는 법만 담았습니다. 기록·PR은 기여자 가이드, 구조는 설계 안내, 세부 옵션은 운영 매뉴얼에 있습니다.</p>
-      <div class="meta"><span><b>기준</b> main 2026-10-12</span><span><b>대상</b> 처음 쓰는 팀원</span><span><b>읽는 시간</b> 약 10분</span></div>
+      <div class="meta"><span><b>기준</b> main 2026-10-16</span><span><b>대상</b> 처음 쓰는 팀원</span><span><b>읽는 시간</b> 약 10분</span></div>
     </header>
 
     <section class="chap" id="u1" data-title="3분 요약">
@@ -269,10 +269,18 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
         <li><code>claude mcp list</code>로 Jira 연결 확인</li>
         <li class="gate"><code>/telephony-triage:setup</code></li>
       </ol>
-      <p>setup은 하나씩 묻습니다: GHE 아이디, 이슈 DB clone 경로와 원격 주소, Jira·logcat 시각의 타임존, 로그 연도를 정하는 방법, 작업 폴더. 팀 기본값과 같으면 그대로 넘기면 되고, 다르게 답한 값만 저장됩니다.</p>
+      <p>setup은 하나씩 묻습니다: GHE 아이디, 이슈 DB clone 경로와 원격 주소, Jira·logcat 시각의 타임존, 로그 연도를 정하는 방법, 작업 폴더, (선택) Android 16/17 소스 트리 프로필. 팀 기본값과 같으면 그대로 넘기면 되고, 다르게 답한 값만 저장됩니다.</p>
       <p>마지막에 <b>점검 표</b>가 나옵니다. 모든 행이 <code>ok</code>면 끝입니다. <code>fail</code>·<code>warn</code> 행은 "다음" 열의 안내대로 하면 됩니다. GHE 로그인이 안 됐으면(<code>gh warn</code>) 분석과 연습은 되지만 기록(PR)은 못 합니다.</p>
       <div class="note warn"><span class="k">"사이트 설정을 아직 올리지 않았습니다"로 멈추면</span>관리자가 사이트 설정(<code>site-defaults.yaml</code>)을 아직 올리지 않은 상태입니다. 메시지를 그대로 관리자에게 전달하고 기다립니다.</div>
       <div class="note"><span class="k">"옛 설정 키"로 멈추면</span>예전에 만든 config에 이름이 바뀌기 전 키(<code>jira:</code> 등, 지금은 <code>tracker:</code>)가 남아 있는 상태입니다. 자동으로 바꾸지 않고 막습니다(점검 표 <code>tracker</code> 행 fail, Jira 도구 호출 거부). setup이 <code>config.py rename-legacy</code>로 바꿀 목록을 보여 주면 확인하고 승인합니다(<code>--apply</code>, 내 config만 바뀜). 사이트 설정 쪽 옛 키라는 안내가 나오면 관리자에게 전달합니다.</div>
+      <h3>(선택) 반복 질문 줄이기</h3>
+      <p>분석할 때마다 나오는 소스 트리·심층 분석·탐색 분석 질문을 줄이려면 <code>~/.telephony-triage/config.yaml</code>에 직접 적습니다. 심층·탐색 분석 설정은 setup이 묻지 않습니다(소스 트리 프로필은 setup에서 넣을 수도 있습니다). 내 config가 팀 기본값보다 우선하고, 적은 키만 덮습니다.</p>
+      <div class="code"><pre>code_profiles:                  # 버전이 맞는 프로필이 하나면 묻지 않고 고른다(code.auto_select, 기본 true)
+  - {name: android16-main, platform_version: "16", roots: {aosp: /path/to/android16}}
+analyzers:
+  data: {when: never}           # 심층 분석(카테고리별 키 — data·call 등): ask(기본) | always | never
+explore: {when: never}          # 탐색 분석: ask(기본) | always | never</pre></div>
+      <p>한 번만 끄려면 <code>analyze … --code skip</code>(코드 분석 건너뛰기) · <code>--no-analyzer</code> · <code>--no-explore</code>를 붙입니다.</p>
     </section>
 
     <section class="chap" id="u3" data-title="첫 연습">
@@ -331,6 +339,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
 
       <h3>후보가 없을 때</h3>
       <p>DB가 아직 작을 때 가장 흔합니다. 그래도 리포트는 빈손이 아닙니다: Jira 설명으로 찾은 비슷한 사례 3개, 로그의 오류·거부·타임아웃 줄(최대 8줄, 이벤트로 추출 안 된 W/E/F 줄 수도 함께), 파서가 모르는 태그(규칙이 없어 놓쳤을 수 있다는 힌트), 로그 범위 판정. 원하면 <b>탐색 분석</b>으로 Claude의 원인 가설 1~3개를 받을 수 있습니다. 토큰을 더 쓰므로 실행 전에 묻습니다. 가설은 "추정" 칸에만 들어가고 판정에는 쓰이지 않습니다. 첫 줄이 "<b>판정 불완전</b>"이면 후보가 없는 것이 아니라 시그니처 시간 초과·오류로 판정을 못 한 것입니다. 새 유형을 만들지 말고 관리자에게 알립니다.</p>
+      <p>리포트 첫머리 쪽에 "<b>이슈 DB pull 건너뜀: &lt;사유&gt;</b>" 줄이 있으면 내 이슈 DB clone을 최신으로 당기지 못했다는 알림입니다. 사유는 셋입니다: 현재 브랜치가 base가 아님 / 커밋하지 않은 변경이 있음 / <code>pull --ff-only</code> 실패. 분석은 원격에서 새로 받은 읽기 스냅샷 기준이라 영향이 없고, 도구는 내 clone을 바꾸지 않으므로 필요하면 직접 정리합니다. 이 줄은 Jira 결과 코멘트에는 들어가지 않습니다.</p>
 
       <h3>수정 상태 문구 읽기</h3>
       <figure class="fig"><svg viewBox="0 0 820 280" role="img" aria-labelledby="fxT"><title id="fxT">Jira SW 빌드와 수정 빌드 비교</title><defs><marker id="fxh" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0,0 L10,5 L0,10 z"/></marker></defs>
@@ -347,12 +356,13 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
     <section class="chap" id="u6" data-title="분석 뒤에 할 일">
       <h2><span class="no">6</span>분석 뒤에 할 일</h2>
       <p class="first">이 절에서 알 수 있는 것: 리포트를 본 뒤의 선택지</p>
+      <p>리포트 뒤 분류 질문은 질문마다 선택지가 4개까지입니다. 첫 질문은 "&lt;1위 원인&gt;로 분류" / "다른 원인·유형" / "원인 미확정" / "기록하지 않음"입니다. 후보가 없으면 "새 유형" / "원인 미확정(가장 가까운 유형)" / "기록하지 않음"만 나옵니다.</p>
       <div class="tbl"><table>
         <tr><th>상황</th><th>할 일</th></tr>
-        <tr><td>1위 후보가 맞다</td><td>"예"로 확정 → 확인 화면 승인 → PR. 자세한 건 <a href="06-contributor-guide.html">기여자 가이드</a></td></tr>
+        <tr><td>1위 후보가 맞다</td><td>첫 질문에서 "&lt;1위 원인&gt;로 분류"를 고름 → 확인 화면 승인 → PR. 자세한 건 <a href="06-contributor-guide.html">기여자 가이드</a></td></tr>
         <tr><td>결과를 Jira에도 남기고 싶다</td><td>PR 링크 뒤 "분석 결과를 Jira 코멘트로 올릴까요?"에 예(기본 아니오). PROBLEM / CAUSE / NEXT ACTION / ANALYSIS 본문 확인 화면 → 승인 → 권한 확인에서 허용하면 코멘트 1건 게시. 본문을 고치면 다시 승인. <code>--dry-run</code>·<code>--analysis-only</code>면 묻지 않음</td></tr>
-        <tr><td>다른 후보가 맞다 / 새 원인이다</td><td>그 항목을 고름. 새 원인·유형이면 도구가 초안을 만들고 내가 확인</td></tr>
-        <tr><td>원인을 아직 모르겠다</td><td>"원인 미확정"으로 기록하거나, 기록하지 않고 끝냄</td></tr>
+        <tr><td>다른 후보가 맞다 / 새 원인이다</td><td>"다른 원인·유형"을 고르면 둘째 질문(다른 기존 원인 — 2·3위는 질문 본문 목록 / 새 원인·새 유형 / 원인 미확정 / 기록하지 않음)이 나옴. 분석 스킬 의견이 1위와 다르면 둘째 질문의 첫 선택지가 그 의견 원인. 목록에 없으면 기타(Other)로 직접 입력. 새 원인·유형이면 도구가 초안을 만들고 내가 확인</td></tr>
+        <tr><td>원인을 아직 모르겠다</td><td>첫 질문에서 "원인 미확정"으로 기록하거나, "기록하지 않음"으로 끝냄</td></tr>
         <tr><td>리포트만 보고 기록은 안 하고 싶다</td><td><code>--analysis-only</code>로 실행하거나 확인 화면에서 취소. 계획은 남아 나중에 이어서 할 수 있음</td></tr>
         <tr><td>분석 전용으로 본 뒤 기록하고 싶다</td><td><code>--analysis-only</code>만 빼고 같은 명령으로 다시 실행. 분석 결과를 재사용하고, 입력(로그·Jira·설정)이 같으면 이미 답한 발생 시각·소스 트리도 다시 묻지 않음</td></tr>
         <tr><td>새 원인으로 등록하려는데 무엇이 필요한가</td><td>도구가 준비물(로그 근거 문구, 시그니처, fixture, 새 유형이면 비슷한 유형 3개)과 리뷰어(카테고리 담당자, 파서 규칙은 메인테이너)를 한 번에 보여 주고 빠진 것만 묻습니다. 판정 불가가 있으면 새 원인을 만들지 않습니다. 중간에 취소해도 브랜치·PR이 남지 않음</td></tr>
@@ -365,12 +375,12 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
       <p class="first">이 절에서 알 수 있는 것: 비용을 줄이는 습관</p>
       <ul>
         <li>기본 모델은 Sonnet입니다. 탐색 분석의 가설 품질이 중요하면 <code>/model</code>로 Opus를 고를 수 있습니다.</li>
-        <li>평가와 테스트는 Sonnet 5.5 기준입니다(Opus 5.5는 안전 eval 등 11개 확인 측정: 실패 0, 비용 약 2.7배). 다른 모델도 동작하고 승인 질문·clone 보호·판정·마스킹은 모델과 무관하게 지켜지지만, 화면 요약·질문 흐름·비용은 다를 수 있습니다(Sonnet에서도 hook 전 확인 화면 표시 실패 22/48, hook 첫 판 뒤 거부 52회 중 16회는 같은 호출 재시도 — 문구 개선 뒤 한도 도달 0회). 이상한 동작은 모델 이름과 함께 알려 주세요.</li>
+        <li>평가와 테스트는 Sonnet 5.5 기준입니다(Opus 5.5는 안전 eval 등 11개 확인 측정: 실패 0, 비용 약 2.7배). 다른 모델도 동작하고 승인 질문·clone 보호·판정·마스킹은 모델과 무관하게 같은 장치로 지켜지지만(명령 판정은 최선 노력, 최종 방어선은 서버 브랜치 보호), 화면 요약·질문 흐름·비용은 다를 수 있습니다(Sonnet에서도 표시 보조 hook 도입 전 확인 화면 표시 실패 22/48, 표시 보조 hook 첫 판 뒤 거부 52회 중 16회는 같은 호출 재시도 — 문구 개선 뒤 한도 도달 0회). 이상한 동작은 모델 이름과 함께 알려 주세요.</li>
         <li>로그는 파일 경로로 줍니다. 대화에 붙이면 토큰이 크게 늘고 개인정보도 대화에 남습니다.</li>
         <li>한 작업이 끝나면 세션을 닫습니다. 이전 대화가 계속 쌓이면 매번 다시 읽습니다.</li>
-        <li>심층 분석·탐색 분석은 토큰을 더 쓰므로 필요할 때만 "예"라고 답합니다.</li>
+        <li>심층 분석·탐색 분석은 토큰을 더 쓰므로 필요할 때만 "예"라고 답합니다. 늘 쓰지 않는다면 <a href="#u2">2절</a>의 "반복 질문 줄이기"로 끕니다.</li>
       </ul>
-      <p>모의 데이터 기준 분석부터 기록까지 1건에 약 39만 토큰(약 $0.4)입니다. 실제 bugreport는 더 클 수 있습니다.</p>
+      <p>이슈 1건(분석 → 기록) 비용은 Sonnet 5.5 기준 아는 원인 약 $0.34~0.40, 새 원인·새 유형 약 $0.56~0.71입니다(합성 데이터, 심층·탐색·코드 분석 없이 eval 실측, 가장 무거운 경로(원인이 DB에 없음 → 심층·탐색 분석 → 코드 읽기 → 새 원인·유형 등록)는 미측정). 실제 로그는 1.5~2배로 추정하고, Opus 5.5는 약 2.7배입니다. 최신 수치는 <a href="14-exec-summary.html#e4">결재용 요약 §4</a>.</p>
     </section>
 
     <section class="chap" id="u8" data-title="막혔을 때">
@@ -382,6 +392,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
         <li>메시지 원문으로 <a href="03-manual.html#s6-msg">매뉴얼 6.3</a> 검색</li>
         <li class="gate">그래도 안 되면 메시지 그대로 관리자에게("내부 오류"면 안내된 <code>trace.jsonl</code>도 함께)</li>
       </ol>
+      <div class="note"><span class="k">같은 확인 화면이 한 번 더 나오거나 "재시도 한도" 알림이 뜨면</span>스크립트 출력은 사용자 화면에 바로 보이지 않아 Claude가 답에 옮겨 보여 줍니다. Claude가 push·게시 확인 화면이나 분석 리포트를 줄여 보이면 <b>표시 보조 hook</b>이 전문을 다시 보이게 합니다. 같은 화면이 한 번 더 나오는 것은 정상입니다. 같은 화면을 두 번 되돌려도 다 보이지 못하면 더 막지 않고 "[telephony-triage] 확인 화면 일부를 답에 보이지 못했다(재시도 한도) — &lt;곳&gt;에서 직접 확인"을 띄웁니다. &lt;곳&gt;이 <code>report.md</code> 같은 파일이면 그 파일을, "앞 Bash 출력(push 확인 화면)"이면 Claude Code에서 그 도구 출력을 펼쳐 직접 보고, 내용이 맞을 때만 승인합니다. "[telephony-triage] show_guard 판정 못 함 — …"이 뜨면 hook이 판정하지 못한 것이므로 같은 방법으로 확인합니다. 이 hook은 보이는 것을 돕는 장치일 뿐 안전 관문이 아닙니다. push 승인 질문·승인 지문·pre-push 검사는 그대로 걸립니다. 메시지별 설명은 <a href="03-manual.html#s6-msg">매뉴얼 6.3</a>.</div>
       <div class="note warn"><span class="k">하지 말 것</span>막힌 걸 풀려고 hook을 끄거나(<code>--no-verify</code>) main에 직접 push하지 않습니다. 도구가 거부하는 건 대부분 실수를 막는 장치입니다. 이유는 <a href="04-design.html#c9">설계 안내 9장</a>에 있습니다.</div>
       <p class="foot">더 볼 곳: 기록과 PR은 <a href="06-contributor-guide.html">기여자 가이드</a>, 구조와 이유는 <a href="04-design.html">설계 안내</a>, 모든 옵션과 메시지는 <a href="03-manual.html">운영 매뉴얼</a>.</p>
     </section>

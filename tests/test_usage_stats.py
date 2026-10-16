@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO / "tools"))
+sys.path.insert(0, str(REPO / "plugin" / "scripts"))
 import usage_stats  # noqa: E402
 
 START = "2026-10-01T00:00:00+00:00"
@@ -25,6 +25,8 @@ def _job(root: Path, key: str, plan: dict, answers: dict, files=()):
 
 def test_three_numbers_from_three_jobs(tmp_path):
     (tmp_path / "_snapshot").mkdir()
+    (tmp_path / ".shown").mkdir()          # 표시 기록 폴더(L R)는 작업이 아니다
+    (tmp_path / ".shown" / "log.jsonl").write_text("{}\n", encoding="utf-8")
     done = _job(tmp_path, "A-1", {"started_at": START, "pr": {"number": 1}}, {"time": "x", "anchor": "off"})
     os.utime(done / "plan.json", (START_EPOCH + 1800, START_EPOCH + 1800))                          # PR까지 30분
     _job(tmp_path, "A-2", {"started_at": START}, {"time": "x", "year": "2026", "code": "c"})        # 취소
@@ -110,3 +112,10 @@ def test_explicit_work_dir_and_errors(two_platforms, tmp_path):
     assert code == 2 and "work_dir가 없다" in out.err
     code, out = main("--platform", "nosuch")
     assert code == 2 and "nosuch" in out.err
+
+
+def test_json_output_has_counts_only(two_platforms):
+    code, out = two_platforms["main"]("--work-dir", str(two_platforms["wo"]), "--json")
+    data = json.loads(out.out)
+    assert code == 0 and data["platform"] is None and data["work_dir"] == str(two_platforms["wo"])
+    assert (data["pr_jobs"], data["started"], data["cancelled"]) == (2, 2, 0)

@@ -565,7 +565,7 @@ feedback/      <span class="c"># 후보 수락·거절 기록</span>
       <tr><td>gh · doctor</td><td>gh 인증 확인 후 <code>config.py doctor</code> 점검 표를 그대로 보여줌</td><td>gh 없음 → 읽기 전용으로 끝</td></tr>
     </table></div>
   </div>
-  <aside class="notes">setup은 실제로 10단계지만 묶으면 이 다섯 덩어리입니다. 중간에 멈춰도 잡은 lock은 항상 풀고 끝납니다. 팀 기본값과 같은 답은 저장하지 않으므로, 관리자가 팀 기본값을 바꾸면 내 설정도 따라갑니다. 설정을 바꿀 때는 setup을 다시 돌리면 바꿀 항목만 고칩니다.</aside>
+  <aside class="notes">setup은 실제로 10단계지만 묶으면 이 다섯 덩어리입니다. 중간에 멈춰도 잡은 lock은 항상 풀고 끝납니다. 팀 기본값과 같은 답은 저장하지 않으므로, 관리자가 팀 기본값을 바꾸면 내 설정도 따라갑니다. 설정을 바꿀 때는 setup을 다시 돌리면 바꿀 항목만 고칩니다. 분석마다 나오는 소스 트리·심층 분석·탐색 분석 질문을 줄이려면 <code>~/.telephony-triage/config.yaml</code>에 직접 적습니다(<code>analyzers.data.when</code>·<code>explore.when</code>을 never로, 버전이 맞는 소스 트리 프로필이 하나면 묻지 않고 고름 — <code>code.auto_select</code>). 한 번만 끄려면 <code>--code skip</code>·<code>--no-analyzer</code>·<code>--no-explore</code>. 자세한 예시는 사용자 가이드 2절.</aside>
 </section>
 
 <section class="slide" data-sec="3 설치와 setup">
@@ -610,7 +610,7 @@ feedback/      <span class="c"># 후보 수락·거절 기록</span>
       <tr><td><code>--analysis-only</code></td><td>결과만 보고 이슈 DB에 기록하지 않을 때. 리포트로 끝나고 lock을 풂</td></tr>
       <tr><td><code>--dry-run</code></td><td>기록 흐름을 확인 화면까지 연습. push 없음, gh 인증 불필요</td></tr>
       <tr><td><code>--more-logs &lt;로그…&gt;</code></td><td>첫 분석 뒤 로그를 더 받았을 때. 이전 로그 뒤에 붙여 전체를 다시 계산</td></tr>
-      <tr><td><code>--code &lt;프로필|경로&gt;</code></td><td>분석할 소스 트리(Android 16/17 등). 없으면 물어봄</td></tr>
+      <tr><td><code>--code &lt;프로필|경로|skip&gt;</code></td><td>소스 트리. 없으면 맞는 프로필 1개는 자동, 아니면 물어봄. <code>skip</code>은 생략</td></tr>
       <tr><td><code>--failed-step</code> · <code>--steps-file</code></td><td>시험 실패 스텝·절차. 분석 구간과 순위 참고만, S/C에는 안 씀</td></tr>
       <tr><td><code>--issue-file &lt;yaml&gt;</code></td><td>Jira 대신 파일. <code>--dry-run</code>·<code>--analysis-only</code>와만</td></tr>
       <tr><td><code>--platform &lt;이름&gt;</code></td><td>Android가 아닌 플랫폼(oFono 등) 이슈 DB로 분석. 이슈 DB 선언과 다르면 <code>platform-mismatch</code>로 멈춤</td></tr>
@@ -625,16 +625,15 @@ feedback/      <span class="c"># 후보 수락·거절 기록</span>
   <div class="body">
     <div class="chat">
       <div class="msg u"><div class="who">나</div><div class="what"><code>/telephony-triage:analyze ABC-12345 ~/logs/radio.txt</code></div></div>
-      <div class="msg"><div class="who">Claude</div><div class="what">스냅샷 최신화, Jira 읽기(마스킹 요약). Android 16 프로필을 추천합니다. 이 소스 트리로 볼까요?</div></div>
-      <div class="msg u"><div class="who">나</div><div class="what">응, 그걸로.</div></div>
-      <div class="msg"><div class="who">Claude</div><div class="what">리포트: 1위 <b>Data &gt; DATA-001 &gt; DATA-001-02</b> (S=1, C=1), 근거 로그 4줄, 해결책, 기존 사례 1건 …</div></div>
+      <div class="msg"><div class="who">Claude</div><div class="what">스냅샷 최신화, Jira 읽기(마스킹 요약). 버전이 맞는 Android 16 프로필을 자동으로 골랐습니다(바꾸려면 <code>--code</code>).</div></div>
       <div class="msg ask"><div class="who">Claude</div><div class="what">카테고리 분석 스킬로 심층 분석을 할까요? 토큰이 더 듭니다.</div></div>
-      <div class="msg ask"><div class="who">Claude</div><div class="what">이 이슈를 <b>DATA-001-02 Roaming disabled</b>로 분류할까요? 예 / 다른 원인 / 새 원인 / 새 유형 / 원인 미확정</div></div>
-      <div class="msg u"><div class="who">나</div><div class="what">예. → 한 줄 요약 확인 → <b>push 전 확인 화면</b> → 승인 → PR 링크</div></div>
+      <div class="msg"><div class="who">Claude</div><div class="what">리포트: 1위 <b>Data &gt; DATA-001 &gt; DATA-001-02</b> (S=1, C=1), 근거 로그 4줄, 해결책, 기존 사례 1건 …</div></div>
+      <div class="msg ask"><div class="who">Claude</div><div class="what">이 이슈를 <b>DATA-001-02 Roaming disabled</b>로 분류할까요? DATA-001-02로 분류 / 다른 원인·유형 / 원인 미확정 / 기록하지 않음</div></div>
+      <div class="msg u"><div class="who">나</div><div class="what">DATA-001-02로 분류. → 한 줄 요약 확인 → <b>push 전 확인 화면</b> → 승인 → PR 링크</div></div>
       <div class="msg ask"><div class="who">Claude</div><div class="what">(선택) 분석 결과를 Jira 코멘트로 올릴까요? 예면 PROBLEM / CAUSE / NEXT ACTION / ANALYSIS 확인 화면 → 승인 → 권한 확인 → 코멘트 1건 게시</div></div>
     </div>
   </div>
-  <aside class="notes">주황 줄은 Claude가 대신 고르지 않고 반드시 묻는 지점입니다. 답하기 전에는 다음으로 가지 않습니다. 시각이 Jira에 없거나 로그 범위 밖이면 이 사이에 질문이 하나 더 끼어듭니다. 대화 내용은 설명용 예시입니다.</aside>
+  <aside class="notes">주황 줄은 Claude가 대신 고르지 않고 반드시 묻는 지점입니다. 답하기 전에는 다음으로 가지 않습니다. 시각이 Jira에 없거나 로그 범위 밖이면 이 사이에 질문이 하나 더 끼어듭니다. 버전이 맞는 소스 트리 프로필이 여럿이면 어느 것으로 볼지도 묻습니다. 분류 질문은 선택지가 4개까지라, "다른 원인·유형"을 고르면 둘째 질문이 나옵니다. 대화 내용은 설명용 예시입니다.</aside>
 </section>
 
 <section class="slide" data-sec="4 커맨드별 사용법">
@@ -828,13 +827,14 @@ bonus = 근접(근거 시각이 발생 시각에 가까울수록) + 키워드(Ji
   <div class="body">
     <div class="tw"><table class="t">
       <tr><th>내 답</th><th>계획에 들어가는 op</th></tr>
-      <tr><td>예 (1위 수락)</td><td><code>append</code> 그 원인에 Jira 추가</td></tr>
+      <tr><td>&lt;1위&gt;로 분류 (1위 수락)</td><td><code>append</code> 그 원인에 Jira 추가</td></tr>
       <tr><td>다른 기존 원인</td><td><code>append</code> 고른 원인 / 이미 DB에 있는 Jira면 <code>reclassify</code>. 이어서 C=1이면 fixture(<code>extra</code>) 추가, C=0이면 시그니처 검토 메모를 넣을지 한 번 더 물음(기본 아니오)</td></tr>
       <tr><td>새 원인</td><td><code>new-cause</code> + 시그니처·파서 규칙·fixture 초안</td></tr>
       <tr><td>새 유형</td><td>유사 유형 3개를 먼저 보고 <code>new-type</code></td></tr>
       <tr><td>원인 미확정</td><td><code>unresolved</code> 유형에만 기록</td></tr>
       <tr><td>기록하지 않음</td><td>계획 없이 lock 해제</td></tr>
     </table></div>
+    <p class="small">질문마다 선택지는 4개까지입니다. 첫 질문은 &lt;1위&gt;로 분류 / 다른 원인·유형 / 원인 미확정 / 기록하지 않음이고, "다른 원인·유형"이면 둘째 질문(다른 기존 원인 / 새 원인·새 유형 / 원인 미확정 / 기록하지 않음)이 나옵니다. 후보가 없으면 새 유형 / 원인 미확정(가장 가까운 유형) / 기록하지 않음. 목록에 없는 답은 기타(Other)로 직접 입력합니다.</p>
     <p class="small">계획은 <code>work/&lt;KEY&gt;/plan.json</code>에 저장되고, 커밋 메시지와 한 줄 요약(<code>note</code>)도 이때 확인받습니다.</p>
   </div>
   <aside class="notes">추정만으로는 새 원인을 만들지 않습니다. 확신이 없으면 원인 미확정으로 남기는 것이 팀 DB에 더 좋습니다. 회귀 의심이나 수정 미흡이 보이면 이 단계에서 수정 상태를 바꿀지 따로 묻습니다.</aside>
@@ -876,7 +876,7 @@ bonus = 근접(근거 시각이 발생 시각에 가까울수록) + 키워드(Ji
       <span class="tag fail" style="text-align:center">취소 → 정리, 계획은 남김</span>
     </div>
   </div>
-  <aside class="notes">이 화면이 이슈 DB에 들어가기 전 마지막 관문입니다. 변경 파일, ID, 검사 결과, 커밋 메시지를 꼭 읽고 승인하세요. 승인하면 도구가 커밋 하나를 만들고, 승인 해시가 맞을 때만 push됩니다.</aside>
+  <aside class="notes">이 화면이 이슈 DB에 들어가기 전 마지막 관문입니다. 변경 파일, ID, 검사 결과, 커밋 메시지를 꼭 읽고 승인하세요. 승인하면 도구가 커밋 하나를 만들고, 승인 해시가 맞을 때만 push됩니다. 화면을 짧게 하려고 생성 파일(README·STATS)은 변경 파일 표 끝 한 행, 같은 사유로 건너뛴 검증은 한 행으로 묶입니다. Claude가 이 화면을 줄여 보이면 표시 보조 hook이 전문을 다시 보이게 합니다.</aside>
 </section>
 
 <section class="slide" data-sec="6 이슈 DB에 기록하기">
@@ -984,7 +984,7 @@ bonus = 근접(근거 시각이 발생 시각에 가까울수록) + 키워드(Ji
   <div class="body">
     <div class="g2">
       <div class="card">
-        <h3>자동으로 막는 것 (hook 10종 중) — 언제</h3>
+        <h3>자동으로 막는 것 (안전 관문 hook 10종 중) — 언제</h3>
         <ul class="pts small">
           <li>Jira 쓰기 도구 호출 — <b>MCP 도구를 부르기 직전</b>. 허용 목록의 읽기 도구만(이름에 jira·atlassian이 든 서버의 쓰기 도구도, 옛 설정 키가 남아 있으면 MCP 도구 전부). 예외는 확인 화면에서 승인한 코멘트 1건(승인 기록과 맞을 때만 권한 질문)</li>
           <li>main 대상 push, 승인 토큰 없는 push — <b>git push 직전</b>(Claude 밖 터미널도)</li>
@@ -1001,14 +1001,14 @@ bonus = 근접(근거 시각이 발생 시각에 가까울수록) + 키워드(Ji
           <li>시그니처·파서 규칙 추가, <code>also_allowed</code></li>
           <li>수정 상태 변경</li>
           <li>drift 항목 선택, 오래된 작업 정리</li>
-          <li>push 전 확인 화면 (push마다 권한 프롬프트도 뜸)</li>
+          <li>push 전 확인 화면 (push마다 권한 프롬프트도 뜸) — Claude가 화면을 줄이면 표시 보조 hook이 다시 보이게 함</li>
           <li>Jira 결과 코멘트 확인 화면 (게시 직전 권한 프롬프트도 뜸)</li>
         </ul>
       </div>
     </div>
     <p class="small">로컬 장치는 우회될 수 있어서 <b>GHE 브랜치 보호</b>(main 직접 push 금지, CODEOWNERS 필수 리뷰)가 서버에서 최종 방어선입니다.</p>
   </div>
-  <aside class="notes">hook 판정은 최선 노력 방식이라 모든 우회를 막지는 못합니다. 그래서 서버 측 브랜치 보호가 전제입니다. 사용자는 이 장치들을 끄려고 하지 말고, 막히면 메시지를 그대로 공유해 주세요. 어느 순간에 걸리는지는 다음 장.</aside>
+  <aside class="notes">hook 판정은 최선 노력 방식이라 모든 우회를 막지는 못합니다. 그래서 서버 측 브랜치 보호가 전제입니다. 사용자는 이 장치들을 끄려고 하지 말고, 막히면 메시지를 그대로 공유해 주세요. push 확인은 10/16에 명령 글에서 db_pr과 publish 두 낱말을 함께 찾는 방식(낱말 그물)으로 넓혔지만, 낱말을 변수로 만든 호출이나 스크립트 파일 안 호출은 여전히 못 보는 최선 노력입니다. hook은 모두 11종으로, 안전 관문 10종과 표시 보조 1종입니다. 어느 순간에 걸리는지는 다음 장.</aside>
 </section>
 
 <section class="slide" data-sec="8 안전 장치">
@@ -1020,6 +1020,7 @@ bonus = 근접(근거 시각이 발생 시각에 가까울수록) + 키워드(Ji
           <li>MCP: Jira 읽기 도구와 승인한 코멘트 1건만 통과(2)</li>
           <li>Bash: 이슈 DB git commit·push 검사(3~7), 로그 통독 차단(10)</li>
           <li>Write·Edit: 내 clone 파일이면 거부(8)</li>
+          <li>질문·Bash 직전: 화면 다 보였나(표시 보조)</li>
         </ul>
       </div>
       <div class="card key"><h3>결과 직후</h3><p class="small">PostToolUse</p>
@@ -1043,7 +1044,7 @@ bonus = 근접(근거 시각이 발생 시각에 가까울수록) + 키워드(Ji
     </div>
     <p class="small">적용되지 않는 경우: 이슈 DB가 아닌 레포의 git, config 없을 때의 git·파일 규칙, Jira 서버 설정(<code>tracker.mcp_server</code>·<code>tracker.tools</code>)이 모두 비어 있을 때의 Jira 규칙, 다른 MCP 서버, Read·Glob·Grep(hook 없음). 세션 시작 때는 경로 갱신 hook만 돕니다.</p>
   </div>
-  <aside class="notes">세 순간만 기억하면 됩니다. 도구를 부르기 직전, Jira 결과를 받은 직후, 그리고 git 커밋과 push. 거부 메시지에는 규칙 번호와 대신 할 일이 들어 있으니 그대로 따르면 됩니다. 예를 들어 로그 통독이 막히면 grep -n이나 sed -n으로 구간만 읽으라고 안내합니다. 자세한 표는 매뉴얼 8장입니다.</aside>
+  <aside class="notes">세 순간만 기억하면 됩니다. 도구를 부르기 직전, Jira 결과를 받은 직후, 그리고 git 커밋과 push. 거부 메시지에는 규칙 번호와 대신 할 일이 들어 있으니 그대로 따르면 됩니다. 예를 들어 로그 통독이 막히면 grep -n이나 sed -n으로 구간만 읽으라고 안내합니다. 표시 보조 hook은 Claude가 답을 끝낼 때(Stop)도 확인 화면·리포트가 다 보였는지 보고, 빠졌으면 같은 화면을 한 번 더 보이게 합니다. 같은 화면을 두 번 되돌려도 안 되면 "…(재시도 한도) — &lt;곳&gt;에서 직접 확인" 알림이 뜨니, 그곳(report.md 같은 파일이나 펼친 도구 출력)을 직접 보고 맞을 때만 승인하세요. 이 hook은 판정을 못 하면 그냥 지나가는 보조 장치이고, 승인 질문·승인 해시·pre-push 검사는 그대로 걸립니다. 자세한 표는 매뉴얼 8장입니다.</aside>
 </section>
 
 <!-- ================= 9. 관리 ================= -->
@@ -1111,7 +1112,7 @@ bonus = 근접(근거 시각이 발생 시각에 가까울수록) + 키워드(Ji
     </div>
     <div class="g2">
       <div class="card alert"><p class="small">data 규칙은 실제 단말 로그와 AOSP 소스로 형식을 확인했습니다. 나머지 카테고리의 규칙은 아직 <b>placeholder</b>이고, S-4에서 실제 태그·문구로 바뀌기 전에는 결과에 "placeholder 규칙"이 표시됩니다.</p></div>
-      <div class="card"><p class="small">파일럿은 카테고리별 10~20건, 첫 월간 리뷰 뒤 전체 확대를 결정합니다. 지표는 PR까지 시간, 중도 취소 비율, 작업당 저장된 답 수, PR 연결 미확인 건수입니다.</p></div>
+      <div class="card"><p class="small">파일럿은 카테고리별 10~20건, 첫 월간 리뷰 뒤 전체 확대를 결정합니다. 지표는 PR까지 시간, 중도 취소 비율, 작업당 저장된 답 수, PR 연결 미확인 건수, 그리고 STATS 머리의 재사용률·1위 수락률입니다.</p></div>
     </div>
   </div>
   <aside class="notes">여러분이 이 플러그인을 실제로 받는 시점은 S-7 파일럿입니다. 그 전에 S-5에서 과거 해결 Jira 20~30건으로 정확도를 미리 확인합니다. 파일럿 동안 불편한 점을 모아 주시면 반입 뒤 개선 항목으로 넣습니다.</aside>
@@ -1122,12 +1123,12 @@ bonus = 근접(근거 시각이 발생 시각에 가까울수록) + 키워드(Ji
   <div class="head"><div class="eyebrow">§10 현황 · Q&amp;A</div><h2>현재 상태와 참고 자료</h2></div>
   <div class="body">
     <div class="nums">
-      <div><b>1,757</b><span>자동 테스트 (CI Ubuntu, Python 3.10 · 3.11 · 3.14 통과)</span></div>
+      <div><b>CI 통과</b><span>자동 테스트 전체(Ubuntu, Python 3.10 · 3.11 · 3.14). 개수는 <a href="14-exec-summary.html#e3">결재용 요약 §3</a></span></div>
       <div><b>23/23</b><span>샘플 DB 회귀 fixture 통과</span></div>
-      <div><b>70</b><span>skill eval 정의</span></div>
-      <div><b>~39만</b><span>analyze→기록 1건 토큰 (Sonnet, 이전 74만에서 −48%)</span></div>
+      <div><b>70</b><span>skill eval (사외 59 통과·실패 0, 11개는 사내 확인)</span></div>
+      <div><b>$0.34~0.40</b><span>아는 원인 1건 분석→기록 (Sonnet 5.5, 합성 데이터)</span></div>
     </div>
-    <p class="small">커맨드 1회 약 20만~80만 토큰, $0.15~0.5 수준(Sonnet). 모의 데이터 eval 기준이라 실제 환경에서는 다를 수 있습니다. 기본 모델은 Sonnet, 탐색 가설 품질이 중요하면 Opus.</p>
+    <p class="small">새 원인·새 유형 1건은 약 $0.56~0.71. 합성 데이터 eval 실측이라 실제 로그는 1.5~2배로 추정합니다(<a href="14-exec-summary.html#e4">결재용 요약 §4</a>). 기본 모델은 Sonnet, 탐색 가설 품질이 중요하면 Opus(비용 약 2.7배).</p>
     <p class="small">이슈 트래커는 설정(<code>tracker.kind</code>)으로 고릅니다. 사내는 <b>Jira</b>입니다. GitHub Issues 트래커는 <b>실험적</b>이라 모의 MCP로만 검증했고, 트래커로 설정하지 않은 GitHub MCP의 이슈 쓰기는 막지 못하는 알려진 한계가 있습니다.</p>
     <div class="g3">
       <div class="card"><h3>사용법</h3><p class="small"><code>GUIDE.md</code> §5·§6<br>이슈 DB <code>docs/getting-started.md</code></p></div>
@@ -1136,7 +1137,7 @@ bonus = 근접(근거 시각이 발생 시각에 가까울수록) + 키워드(Ji
     </div>
     <p class="lede" style="color:var(--ink)"><b>질문 받겠습니다.</b></p>
   </div>
-  <aside class="notes">수치는 2026-10-12 사외 모의 환경 기준입니다(토큰은 10-08 측정). 정확도는 아직 측정 전이고 S-5에서 사내 과거 Jira로 처음 잽니다. 마지막으로 다시 강조할 것: 판정은 스크립트, 기록은 승인 후 PR, Jira는 읽기와 승인한 코멘트만.</aside>
+  <aside class="notes">수치는 2026-10-16 사외 합성 데이터 기준입니다(테스트 수·eval 결과·비용은 결재용 요약 §3·§4). 비용은 심층·탐색·코드 분석 없이 짧은 합성 로그로 잰 값이고, 원인이 DB에 없어 심층·탐색 분석과 코드 읽기까지 하는 가장 무거운 경로는 아직 재지 않았습니다(훨씬 클 수 있음). 정확도는 아직 측정 전이고 S-5에서 사내 과거 Jira로 처음 잽니다. 마지막으로 다시 강조할 것: 판정은 스크립트, 기록은 승인 후 PR, Jira는 읽기와 승인한 코멘트만.</aside>
 </section>
 
 </div></div>

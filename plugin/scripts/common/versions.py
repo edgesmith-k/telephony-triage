@@ -7,5 +7,5 @@
 - `SCHEMA_VERSION`: 이 플러그인이 읽고 쓰는 이슈 DB 스키마 버전 (`schema_version`).
 """
 
-GENERATOR_VERSION = 1
+GENERATOR_VERSION = 2
 SCHEMA_VERSION = 1

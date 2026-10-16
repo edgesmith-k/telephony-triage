@@ -184,6 +184,34 @@ def test_full_run_stops_for_code_choice_then_finishes_and_keeps_lock_until_relea
     assert ws.db_pr("lock", "status")["held"] is False
 
 
+
+def test_shown_records_report_only_for_ok_runs_in_work_dir(tmp_path):
+    """L R ②a: ok로 끝난 run만 report 기록(key `report:<KEY>#<run>`, lines = report.md의 결정적 줄, must_show = analysis.json,
+    path = JOB/report.md). needs_input run과 `--offline-db`(work_dir 밖 --out)는 기록하지 않는다."""
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    from common import shown
+    ws = Workspace()
+    log = ws.work / ".shown" / "log.jsonl"
+    reports = lambda: [r for r in (json.loads(x) for x in log.read_text(encoding="utf-8").splitlines() if x.strip())  # noqa: E731
+                       if r["kind"] == "report"] if log.is_file() else []
+    args = ["run", "MOCK-1001", "--dry-run", "--issue-file", MOCK_JIRA / "MOCK-1001.yaml", "--logs", DATA_LOG]
+    assert ws.json("triage.py", args)["status"] == "needs_input" and reports() == []
+    done = ws.json("triage.py", [*args, "--answer", "code=skip"])
+    job = ws.job_dir("MOCK-1001")
+    [rec] = reports()
+    assert (rec["script"], rec["job"], rec["key"]) == ("triage", "MOCK-1001", f"report:MOCK-1001#{done['run']}")
+    assert rec["lines"] == shown.report_core((job / "report.md").read_text(encoding="utf-8")) and rec["lines"]
+    assert rec["must_show"] == (json.loads((job / "analysis.json").read_text(encoding="utf-8")).get("must_show") or [])
+    assert rec["path"] == str(job.absolute() / "report.md")
+    # triage run이 in-process로 부른 db_pr lock의 close는 via=triage(hook이 triage.py Bash 호출에 고정한다 — 파일럿 eval 2·67)
+    locks = [r for r in (json.loads(x) for x in log.read_text(encoding="utf-8").splitlines() if x.strip())
+             if r.get("by") == "lock"]
+    assert locks and all((r["script"], r.get("via")) == ("db_pr", "triage") for r in locks)
+    ws.json("triage.py", ["release", "MOCK-1001"])
+    doc, items = _items()
+    _offline(items[0], doc, tmp_path / "out")
+    assert len(reports()) == 1 and not (tmp_path / ".shown").exists() and not (tmp_path / "out" / ".shown").exists()
+
 def test_needs_input_records_only_pending_kind_and_answer_clears_it():
     """needs_input이면 triage-state.json에 `pending {kind, asked_at}`만 남는다(질문 문구·선택지 없음). 답하고 다시 돌면 지운다."""
     ws = Workspace()
@@ -502,17 +530,17 @@ def test_skill_md_is_within_7_5kb_and_drives_triage():
     skill = REPO / "plugin" / "skills" / "telephony-triage" / "SKILL.md"
     reference = skill.parent / "reference"
     text = skill.read_text(encoding="utf-8")
-    assert len(text.encode("utf-8")) <= 8280        # E67: Step 9 앞 PR 링크(`pr.url`)를 글로 보인다는 말 뒤. 그 전 8,256B — 전체 eval(10/14) 반영: 이어서 plan.next·mode write·거부 뒤 선택지·issue 재호출 뒤의 한도. 그 전 8,064B(흐름 A/B 한 줄 추가 뒤). 그 전 7,680B(W6: 실행 규칙을 reference/rules.md로 옮김), W6 전 8,192B
+    assert len(text.encode("utf-8")) <= 8590        # L2 재측정 뒤: --more-logs는 --logs 대신(e52)·회귀 의심은 update-fix(e10) 명시 뒤. 그 전 8,500B — L2 ③ 리뷰: Step 7 질문 모양(고정 둘·글 거부·분석 스킬 의견 자리·후보 0개) 뒤. 그 전 8,280B — E67: Step 9 앞 PR 링크(`pr.url`)를 글로 보인다는 말 뒤. 그 전 8,256B — 전체 eval(10/14) 반영: 이어서 plan.next·mode write·거부 뒤 선택지·issue 재호출 뒤의 한도. 그 전 8,064B(흐름 A/B 한 줄 추가 뒤). 그 전 7,680B(W6: 실행 규칙을 reference/rules.md로 옮김), W6 전 8,192B
     for needle in ("triage.py run", "needs_input", "--answer", "write-flow.md", "--commit", "reference/rules.md",
                    "steps-pasted.txt", "--dry-run --issue-file", "analyzer.skill",
                    "must_show", "triage.py explore"):
         assert needle in text, needle
     rules = (reference / "rules.md").read_text(encoding="utf-8")      # SKILL §실행 규칙이던 내용
-    assert len(rules.encode("utf-8")) <= 2320      # Bash·Read 출력 비가시(리포트·검증 표·확인 화면·notes·must_show, 전체 eval 10/14)·stage `next` 줄 뒤의 한도. 그 전 2,048B
+    assert len(rules.encode("utf-8")) <= 2460      # L2 J7 질문당 선택지 4개 줄 뒤의 한도. 그 전 2,320B — Bash·Read 출력 비가시(리포트·검증 표·확인 화면·notes·must_show, 전체 eval 10/14)·stage `next` 줄 뒤의 한도. 그 전 2,048B
     for needle in ("S-3", "계획 형식 오류", "TT_LOCK_OWNER", "stage --then-summary", "모든 종료 경로에서 푼다", "사용자 확인 후"):
         assert needle in rules, needle
     assert len((reference / "db-authoring.md").read_bytes()) <= 12288      # 필수 키 요약 포함. §0 등록 준비물·리뷰어 색인 추가 뒤의 한도(그 전 11,392B: W7 add-fixture 세부, 11,264B)
-    assert len((reference / "write-flow.md").read_bytes()) <= 14390     # E67 PR 링크를 다음 질문 전에 글자 그대로 보인다 뒤(그 전 14,344B)
+    assert len((reference / "write-flow.md").read_bytes()) <= 14680     # L2 J5 확인 화면 압축(생성 파일 한 행·건너뜀 묶음·README 머리) 뒤(그 전 14,390B: E67 PR 링크를 다음 질문 전에 글자 그대로 보인다 뒤(그 전 14,344B)
     _check_op_summary(reference / "db-authoring.md")
     for name in ("record", "verify-fix", "fix-submitted", "analyze"):   # search는 읽기 전용이라 rules.md를 읽지 않는다
         assert "reference/rules.md" in (REPO / "plugin" / "commands" / f"{name}.md").read_text(encoding="utf-8"), name
@@ -1208,6 +1236,21 @@ def test_other_job_leftovers_are_noted_never_asked_or_deleted():
     ws.json("triage.py", ["release", W4_KEY])
 
 
+def test_pull_skipped_reason_is_must_show_in_every_mode():
+    """07 §Step 1: 사용자 clone이 base가 아니면 pull을 건너뛰고 알린다 — 쓰기·분석 전용 모두 report.md·must_show 줄(show_guard가 강제),
+    needs_input 뒤 재실행(스냅샷을 상태에서 재사용)에서도."""
+    ws = Workspace()
+    git(ws.clone, "checkout", "-q", "-b", "my-work")
+    _asked_code(_w4_run(ws))
+    done = _w4_run(ws, "--answer", "code=skip")
+    line = [m for m in done.get("must_show") or [] if m.startswith("이슈 DB pull 건너뜀:")]
+    assert done["status"] == "ok" and done["snapshot"]["pulled"] is False and len(line) == 1 and "my-work" in line[0], done
+    assert f"- {line[0]}" in (ws.job_dir(W4_KEY) / "report.md").read_text(encoding="utf-8").splitlines()
+    ws.json("triage.py", ["release", W4_KEY])
+    only = _w4_run(ws, "--analysis-only", "--answer", "code=skip")
+    assert only["status"] == "ok" and [m for m in only.get("must_show") or [] if m.startswith("이슈 DB pull 건너뜀:")], only
+
+
 def test_no_leftovers_means_no_note_and_analysis_only_does_not_look():
     """07 §Step 0·§분석 전용: 대상이 없으면 note 없음, 분석 전용은 cleanup을 보지도 알리지도 않는다(0-cleanup trace 없음)."""
     ws = Workspace()
@@ -1447,3 +1490,20 @@ def test_top_candidate_slot_mismatch_is_must_shown():
     both, _ = _run_custom([REJECTED_LINE.format("14:30:10.000"), OFF_LINE.format("14:30:02.000")], "MOCK-7424", sim_slot="1")
     order = [m.split(":")[0] for m in both["must_show"]]
     assert order.index("슬롯 불일치") < order.index("시계 이상 구간의 근거") < order.index("로그 범위")
+
+
+def test_code_question_offers_four_choices_and_names_the_rest():
+    """L2 J7: 질문당 선택지 4개(AskUserQuestion·모의 ask_user 상한) — 후보 둘(추천이 첫째) + 직접 입력 + 건너뛰기, 나머지 후보는 문구에."""
+    from types import SimpleNamespace
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    from triagelib import driver
+    fake = SimpleNamespace(platform_label="Android", auto_invalid=False)
+    cands = [{"name": n, "platform_version": "16", "recommended": i == 0} for i, n in enumerate(("a16", "b16", "c16"))]
+    q = driver.Driver.code_question(fake, "16", {"candidates": cands})
+    assert [o["value"] for o in q.payload["options"]] == ["a16", "b16", "<경로 또는 키=경로,…>", "skip"]
+    assert "(그 밖 후보: c16 Android 16 — 직접 입력에 이름이나 경로를 적는다)" in q.payload["question"]
+    recent = {"name": None, "platform_version": "16", "roots": {"aosp": "/work/a16_qpr1", "vendor_ril": "/work/ril"}}
+    q = driver.Driver.code_question(fake, "16", {"candidates": [*cands[:2], recent]})
+    assert "최근 Android 16 aosp=/work/a16_qpr1,vendor_ril=/work/ril" in q.payload["question"]   # 이름 없는 경로도 적을 수 있게
+    two = driver.Driver.code_question(fake, "16", {"candidates": cands[:2]})
+    assert len(two.payload["options"]) == 4 and "그 밖 후보" not in two.payload["question"]

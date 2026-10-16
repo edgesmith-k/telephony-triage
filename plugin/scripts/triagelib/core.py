@@ -43,6 +43,7 @@ EXPLORE_INPUT_FILE = "explore-input.json"   # `triage.py explore`의 입력(마�
 MUST_SHOW_MAX = 6                # render_report가 모으는 must_show 상한
 MUST_SHOW_FIT = 4                # fit이 마지막에 남기는 수
 MUST_SHOW_CLIP = 160
+PULL_SKIPPED = "이슈 DB pull 건너뜀"     # must_show 줄 머리(issue_post가 Jira 본문에서 뺀다)
 EXPLORE_HYPOTHESIS = "TODO(LLM) 가설 1~3개 — 로그로 확인 / 코드로 추정 / 반대 근거 / 다음에 받을 로그. 실행하지 않으면 \"탐색 분석 생략: <사유>\". 점수·분류·검증에 쓰지 않는다"
 EXPLORE_PENDING_LINE = ("- 탐색 분석 (추정): 미실행 — 동의(또는 --explore·explore.when: always) 뒤 triage.py explore {key}가 "
                         f"{TIMELINE_FILE}를 만든다. " + EXPLORE_HYPOTHESIS)

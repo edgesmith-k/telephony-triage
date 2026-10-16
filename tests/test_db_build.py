@@ -44,7 +44,7 @@ def test_readme_structure_matches_design():
     text = (out / "README.md").read_text(encoding="utf-8")
     lines = text.splitlines()
     assert lines[0] == "# Telephony Issue DB"
-    assert lines[2].startswith("> 자동 생성 파일입니다. 직접 수정하지 마세요. (`db_build.py`, generator v1)")
+    assert lines[2].startswith("> 자동 생성 파일입니다. 직접 수정하지 마세요. (`db_build.py`, generator v2)")
     assert lines[3].startswith("> 기준일: 2026-09-27 · schema v1 · [통계](STATS.md)")
     headings = [l for l in lines if l.startswith("## ")]
     assert headings == ["## 요약", "## 최근 추가 (9건)", *[f"## {c}" for c in CATEGORIES], "## 보관"]
@@ -127,7 +127,7 @@ def test_preview_leaves_worktree_alone():
 
 def test_generator_version_mismatch():
     db = copy_db()
-    edit(db / "issue-db.config.yaml", "generator_version: 1", "generator_version: 2")
+    edit(db / "issue-db.config.yaml", "generator_version: 2", "generator_version: 1")
     proc = run("db_build.py", ["--db", db, "--write"])
     assert proc.returncode == 2 and "generator_version" in proc.stderr
     assert not (db / "README.md").exists()
@@ -187,7 +187,19 @@ def test_stats_excludes_manual_feedback():
     assert "| `DATA-001-01/data-disabled` | 1 | 0 | 0.00 | 아니오 |" in quality
     assert "| `DATA-001-02/roaming-disabled` | 1 | 1 | 1.00 | 아니오 |" in quality
     assert "SIM-001" not in quality  # MOCK-4101은 decision: manual
-    assert "| 2026-09 | 2 | 1 |" in text  # 기여 현황: 분석 2, 수동 기록 1
+    assert "| 2026-09 | 2 | 1 |" in text  # KPI 월 표: 분석 2, 수동 기록 1
+
+
+def test_stats_kpi_head():
+    """G-5: STATS 머리 KPI(06-collaboration.md §6.7). 샘플 피드백 = MOCK-1103 accepted(1위 roaming), MOCK-1104 unresolved(1위
+    data-disabled), MOCK-4101 manual. 미확정 Jira MOCK-1104(date 09-26), 기준일 09-27."""
+    text = (_preview(SAMPLE) / "STATS.md").read_text(encoding="utf-8")
+    assert text.index("## 요약 (KPI)") < text.index("## 건수")
+    kpi = text.split("## 요약 (KPI)", 1)[1].split("\n## ", 1)[0]
+    assert "- 분석 2건 · 수동 기록 1건 · 결정: 수락 1 · 다른 후보 0 · 새 원인 0 · 새 유형 0 · 미확정 1" in kpi
+    assert "- 재사용률 0.50 (1/2) · 1위 수락률 0.50 (1/2)" in kpi
+    assert "- 원인 미확정 Jira 1건 · 가장 오래된 것 1일" in kpi
+    assert "| 2026-09 | 2 | 1 | 0.50 | 0.50 | 1 | 2 |" in kpi
 
 
 def test_stats_use_occurred_on_for_recent_counts():
@@ -262,6 +274,19 @@ def test_category_readme_lists_frequent_failed_steps_deterministically():
     for key in ("data", "call", "network", "sim", "sms", "ims"):
         assert "자주 실패한 스텝" not in (plain / key / "README.md").read_text(encoding="utf-8")
     assert (first / "call/README.md").read_bytes() == (plain / "call/README.md").read_bytes()
+
+
+def test_new_jira_changes_only_its_category_readme():
+    """U-1: 카테고리 README에는 DB 전체 기준일이 없다 — data에 더 늦은 Jira를 넣어도 다른 카테고리 README는 바이트 그대로
+    (GHE CODEOWNERS가 다른 카테고리 오너에게 리뷰를 요청하지 않는다)."""
+    db = copy_db()
+    (db / "data/DATA-001-no-setup-data-call/issues/MOCK-1199.yaml").write_text(
+        "key: MOCK-1199\ncause: DATA-001-01\ndate: 2026-10-05\n"
+        "model: MOCK-A56\nsw: MOCKA56_U1_20260901\nplatform_version: \"16\"\nanalyzed_by: mock-user1\n", encoding="utf-8")
+    new, old = _preview(db), _preview(SAMPLE)
+    for key in ("call", "network", "sim", "sms", "ims"):
+        assert (new / key / "README.md").read_bytes() == (old / key / "README.md").read_bytes(), key
+    assert (new / "data/README.md").read_bytes() != (old / "data/README.md").read_bytes()
 
 
 def test_failed_steps_line_shows_top_three_by_count_then_key():

@@ -7,12 +7,12 @@ import json
 import os
 import re
 
-from common import events, masking, userconfig
+from common import events, masking, shown, userconfig
 from common.exitcodes import USAGE
 
 from .anchor import _parse_ts, _step_label
 from .core import (ANALYSIS_MAX, AUTO_CODE_NOTE, CARRY_PARTS, ERROR_EVENT_RE, ERROR_FIELDS, EXPLORE_INPUT_FILE,
-                   EXPLORE_PENDING_LINE, Fail, MUST_SHOW_CLIP, MUST_SHOW_FIT, MUST_SHOW_MAX, SCRIPTS, SEARCH_LIMIT,
+                   EXPLORE_PENDING_LINE, Fail, MUST_SHOW_CLIP, MUST_SHOW_FIT, MUST_SHOW_MAX, PULL_SKIPPED, SCRIPTS, SEARCH_LIMIT,
                    _HOT_LEVELS, _TOKEN_RE, _clip, _now)
 
 
@@ -334,6 +334,10 @@ class ReportMixin:
         result = final
         (self.job / "analysis.json").write_text(dumps(result) + "\n",
                                                 encoding="utf-8", newline="\n")
+        if not self.offline:    # 표시 기록(`--offline-db`는 work_dir 밖 --out이라 사용자에게 보이지 않는다)
+            shown.record(self.job.parent, "triage", "report", self.job.name, key=f"report:{self.job.name}#{run_no}",
+                         lines=shown.report_core(report), must_show=result.get("must_show") or [],
+                         path=str(self.job.absolute() / "report.md"))
         self.run.note("done", candidates=len(candidates), calls=self.run.calls)
         return result
 
@@ -350,6 +354,8 @@ class ReportMixin:
             lines.append(add(1, "분석 전용: 이슈 DB에 기록하지 않는다(계획·PR 없음). 기록하려면 --analysis-only 없이 다시 실행"))
         if r.get("read_only_hint"):
             lines.append(add(2, f"읽기 전용: {r['read_only_hint']}"))
+        if (r.get("snapshot") or {}).get("pull_skipped_reason"):    # 07 §Step 1: 모드와 상관없이 알린다(분석과 무관해 맨 뒤 우선순위)
+            lines.append(add(13, f"{PULL_SKIPPED}: {_clip(r['snapshot']['pull_skipped_reason'], MUST_SHOW_CLIP - len(PULL_SKIPPED) - 2)}"))
         if self.failed_step:
             lines.append(add(4, f"실패 스텝 (보조 정보, Jira {self.failed_step['source']}; 점수·S/C에 쓰지 않음; 분석 범위·순위 참고): "
                                 f"{self.failed_step['text']}"))

@@ -44,7 +44,7 @@ MCP `tracker.tools.get_issue`(매핑이 없으면 추측하지 말고 setup 안�
   `--unresolved <유형>` → `unresolved`. ID가 스냅샷에 있고 `active`인지 확인한다(`db_search.py <ID> --db SNAP --brief`).
 - **옵션이 없으면 대화형**: 증상과 원인을 한두 문장으로 받아 `db_search.py "<증상 문장 또는 키워드>" --db SNAP`와
   `db_add.py similar "<증상 제목>" --db SNAP`(유사 유형 상위 3개)로 후보를 보여주고 고르게 한다:
-  기존 원인 / 기존 유형의 새 원인 / 새 유형 / 원인 미확정.
+  기존 원인 / 새 원인·새 유형 / 원인 미확정 / 기록하지 않음. 고른 갈래의 하위 선택도 고를 것 둘 + 원인 미확정 + 기록하지 않음(기존 원인 후보가 셋 이상이면 본문에 목록, `rules.md` 질문당 4개).
 
 ## 5. 내용 받기
 

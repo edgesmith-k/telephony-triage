@@ -58,6 +58,10 @@ def test_unknown_path_is_full():
 def test_test_file_and_skill_evals():
     assert select("tests/test_db_pr.py")["tests"] == ["tests/test_db_pr.py"]
     assert select("tests/skill_evals/run.py")["tests"] == ["tests/test_skill_evals.py"]
+    shown = ["tests/test_db_verify.py", "tests/test_show_guard.py", "tests/test_shown.py", "tests/test_skill_evals.py"]
+    assert select("tests/skill_evals/shown_infer.py")["tests"] == shown           # 채점기 추론: 표시 판정 테스트도
+    assert select("tests/helpers/shown_records.py") == {**select("tests/helpers/shown_records.py"), "full": False}
+    assert select("tests/helpers/shown_records.py")["tests"] == shown
 
 
 def test_tool_change_selects_tests_mentioning_it():

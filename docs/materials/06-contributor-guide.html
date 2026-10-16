@@ -244,7 +244,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
       <div class="eyebrow">CONTRIBUTING · 이슈 DB에 기록하는 사람을 위한 안내</div>
       <h1>내 분석을 팀 이슈 DB에 남기려면</h1>
       <p>이슈를 분석하거나 직접 해결한 뒤 그 결과를 팀 이슈 DB에 남기는 사람을 위한 안내입니다. 무엇을 기록할지, 브랜치와 PR은 어떻게 만들어지는지, 리뷰는 어떻게 받는지를 순서대로 정리했습니다. 대부분은 도구가 해 주고, 사람은 확인과 승인만 하면 됩니다.</p>
-      <div class="meta"><span><b>기준</b> main 2026-10-12</span><span><b>대상</b> 분석·기록하는 엔지니어, 새 원인을 제안하는 사람</span><span><b>읽는 시간</b> 약 12분</span></div>
+      <div class="meta"><span><b>기준</b> main 2026-10-16</span><span><b>대상</b> 분석·기록하는 엔지니어, 새 원인을 제안하는 사람</span><span><b>읽는 시간</b> 약 12분</span></div>
     </header>
 
     <section class="chap" id="g1" data-title="무엇을 기록하나">
@@ -265,6 +265,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
         <tr><td>증상은 같은데 원인이 다름</td><td>기존 유형에 <b>새 원인</b></td></tr>
         <tr><td>증상 자체가 처음 봄</td><td><b>새 유형</b> + 첫 원인</td></tr>
         <tr><td>증상은 맞는데 원인을 아직 모름</td><td><b>원인 미확정</b>으로 기록. 추정만으로 원인을 만들지 않습니다</td></tr>
+        <tr><td>기록할 것이 아님, 판단 보류</td><td><b>기록하지 않음</b>. 계획을 만들지 않고 끝납니다</td></tr>
       </table></div>
 
       <figure class="fig"><svg viewBox="0 0 820 300" role="img" aria-labelledby="dtT"><title id="dtT">분류 결정 나무</title><defs><marker id="dth" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0,0 L10,5 L0,10 z"/></marker></defs>
@@ -281,7 +282,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
 <rect class="box in" x="300" y="200" width="230" height="80" rx="6"/><text class="t" x="312" y="224">원인 미확정으로 기록</text><text class="s" x="312" y="244">추정만으로 원인을 만들지 않음</text><text class="s" x="312" y="262">나중에 확정되면 재분류</text>
 <rect class="box" x="580" y="200" width="140" height="80" rx="6"/><text class="t" x="592" y="224">새 원인</text><text class="s" x="592" y="244">기존 유형 아래에</text><text class="s" x="592" y="262">추가</text>
 <rect class="box hl" x="730" y="200" width="70" height="80" rx="6"/><text class="t" x="740" y="224">Jira</text><text class="t" x="740" y="242">기록만</text><text class="s" x="740" y="262">가장 흔함</text>
-</svg><figcaption>도구가 리포트에서 후보를 보여주고 이 순서로 묻습니다. 대신 고르지 않습니다.</figcaption></figure>
+</svg><figcaption>도구는 먼저 1위 후보로 분류할지 묻고(1위로 / 다른 원인·유형 / 원인 미확정 / 기록하지 않음), "다른 원인·유형"을 고르면 다른 기존 원인 / 새 원인·새 유형을 묻습니다(질문마다 선택지 4개까지, 2·3위 후보는 질문 본문 목록, 목록에 없는 답은 기타(Other)로 직접 입력). 후보가 없으면 새 유형 / 원인 미확정(가장 가까운 유형) / 기록하지 않음만 나옵니다. 위 나무는 그때 무엇을 고를지 판단하는 순서입니다. 도구가 대신 고르지 않습니다.</figcaption></figure>
       <div class="note rule"><span class="k">새 유형을 만들기 전에</span>다른 카테고리까지 비슷한 증상이 있는지 확인하세요. 비슷한 증상이 있으면 새 유형보다 그 유형의 새 원인이 맞습니다. 도구가 유사 후보를 보여줍니다.</div>
       <div class="note"><span class="k">등록 준비물·리뷰어</span>새 유형·원인·규칙(흐름 B)은 로그 근거 문구·시그니처·fixture가 있어야 만들고, 카테고리 오너(파서 규칙·"승인 필요"는 메인테이너)가 리뷰합니다. 도구가 목록을 한 번에 보여 주고 빠진 것만 묻습니다.</div>
     </section>
@@ -382,7 +383,9 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
         <tr><td>승인 필요 항목, 리뷰어</td><td>메인테이너 승인이 필요한 변화가 있나, 누가 리뷰하나</td></tr>
         <tr><td>커밋 메시지</td><td>그대로 PR 제목이 됨</td></tr>
       </table></div>
+      <p>화면을 짧게 하려고 생성 파일(README·STATS·CHANGELOG)은 변경 파일 표 끝 한 행에 경로를 모두 적고, 같은 사유로 건너뛴 규칙(리뷰 대상이 아닌 것)은 한 행으로 묶습니다(예 <code>R5·R6 | 건너뜀: 해당 없음</code>). 리뷰 대상인 건너뜀과 통과·실패는 규칙마다 한 행입니다.</p>
       <p>고를 수 있는 것: <b>승인</b> / <b>수정 요청</b>(말로 고칠 곳을 알려주면 반영해 화면을 다시 보여줌) / <b>전체 diff</b> / <b>취소</b>(계획은 남아서 나중에 이어서 할 수 있음).</p>
+      <div class="note"><span class="k">확인 화면이 한 번 더 나오거나 "재시도 한도" 알림이 뜨면</span>스크립트 출력은 사용자 화면에 바로 보이지 않아 Claude가 답에 옮겨 보여 줍니다. Claude가 push·게시 확인 화면, 분석 리포트, 초안 검증표(전부 통과한 표는 빼고)를 줄여 보이면 <b>표시 보조 hook</b>이 전문을 다시 보이게 합니다. 같은 화면이 한 번 더 나오는 것은 정상입니다. 같은 화면을 두 번 되돌려도 다 보이지 못하면 더 막지 않고 "[telephony-triage] 확인 화면 일부를 답에 보이지 못했다(재시도 한도) — &lt;곳&gt;에서 직접 확인"을 띄웁니다. &lt;곳&gt;이 <code>report.md</code> 같은 파일이면 그 파일을, "앞 Bash 출력(push 확인 화면)"이면 Claude Code에서 그 도구 출력을 펼쳐 직접 보고, 내용이 맞을 때만 승인합니다. "[telephony-triage] show_guard 판정 못 함 — …"이 뜨면 hook이 판정하지 못한 것이므로 같은 방법으로 확인합니다. 이 hook은 보이는 것을 돕는 장치일 뿐 안전 관문이 아닙니다. push 승인 질문·승인 지문·pre-push 검사는 그대로 걸립니다.</div>
       <h3 id="g3r">검증 결과 R1~R6 읽는 법</h3>
       <p>새 원인·유형·시그니처·파서 규칙·해결책이 들어가면 도구가 자동으로 R1~R6을 돌립니다. 사람이 따로 실행하지 않습니다. 각 항목은 <b>어떤 로그에</b> 새 규칙을 대 보는지가 다릅니다.</p>
       <figure class="fig"><svg viewBox="0 0 820 330" role="img" aria-labelledby="rvT"><title id="rvT">R1~R6이 새 규칙을 대 보는 로그</title><defs><marker id="rvh" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0,0 L10,5 L0,10 z"/></marker></defs>

@@ -245,7 +245,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
       <div class="eyebrow">EXECUTIVE SUMMARY · 한 장 요약</div>
       <h1>Telephony 이슈 분석 도구 도입 검토</h1>
       <p>Jira와 로그로 원인을 찾고, 확인된 원인을 팀 DB에 쌓아 다음 분석에 재사용하는 Claude Code 플러그인입니다.</p>
-      <div class="meta"><span><b>기준</b> main 2026-10-12</span><span><b>대상</b> 결재자, 팀 리더</span><span><b>읽는 시간</b> 약 4분</span></div>
+      <div class="meta"><span><b>기준</b> 2026-10-16 (K·L1·L2 반영)</span><span><b>대상</b> 결재자, 팀 리더</span><span><b>읽는 시간</b> 약 4분</span></div>
     </header>
     <section class="chap" id="e1" data-title="왜 필요한가">
       <h2><span class="no">1</span>왜 필요한가</h2>
@@ -264,19 +264,19 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
     <section class="chap" id="e3" data-title="현재 상태">
       <h2><span class="no">3</span>현재 상태</h2>
       <p class="first">이 절에서 알 수 있는 것: 어디까지 됐나</p>
-      <div class="tbl "><table><tr><th>항목</th><th>상태</th></tr><tr><td>개발 (사외 초안)</td><td>완료. 자동 테스트 1,757개 CI 통과(Ubuntu), 샘플 DB 회귀 23/23, 행동 시나리오 eval 70개 정의. 이슈 트래커를 설정으로 분리(사내는 Jira, GitHub Issues는 실험적)</td></tr><tr><td>반입 묶음</td><td>생성 완료(10/09). 반입 직전 태그만 남음</td></tr><tr><td>사내 보완 (S-0~S-7)</td><td>시작 전. 사내 PC에서 "사내 설정 시작"으로 한 단계씩 진행(<code>site_step.py</code>). 실제 로그 문구, 정확도, 사내 Claude Code 동작 확인이 여기서 이뤄짐</td></tr></table></div>
-
+      <div class="tbl "><table><tr><th>항목</th><th>상태</th></tr><tr><td>개발 (사외 초안)</td><td>완료. 자동 테스트 1,956개 CI 통과(10/15 PR #53). K·L1·L2 뒤 2,013개(10/16 이 PC 수집)는 PR CI 확인 후 갱신. 샘플 DB 회귀 23/23. 행동 시나리오 eval 70개 중 사외 59 통과·실패 0, 11개는 사내 확인 대상(Sonnet 5.5, 사외 결과 기록 10/16 — K·L 수정 뒤 재측정, 각 eval 최신 run 안전 위반 0). Opus 5.5 확인 측정 11개 실패 0(10/15). 안전 검토 K(10/15): P0 1·P1 3 발견 → 수정(회귀 테스트로 확인). 10/16 L2에서 push 확인 판정을 넓히고(규칙 7 낱말 그물), 확인 화면 표시 보조 hook을 스크립트 표시 기록과 대조하게 바꿈. 이슈 트래커를 설정으로 분리(사내는 Jira, GitHub Issues는 실험적)</td></tr><tr><td>반입 묶음</td><td>import-20261014c 사내 전달. K·L1·L2 반영 묶음은 병합 뒤 새로 만든다(태그는 사용자). hook이 바뀐 묶음이라 사내에서 사내 대상 eval 11개를 모두 다시 돌리고 S-2 확인 15·16번을 본다</td></tr><tr><td>사내 보완 (S-0~S-7)</td><td>사내 PC에서 단계별 진행(진행 상태는 사내 <code>SITE_PROFILE.md</code>). 실제 로그 문구, 정확도(S-5), 사내 Claude Code 동작 확인이 여기서 이뤄짐</td></tr></table></div>
+      <p class="foot">바뀌는 수치(테스트 수·eval 결과·비용)는 이 절과 §4에만 적는다. 다른 자료는 여기를 가리킨다.</p>
     </section>
     <section class="chap" id="e4" data-title="비용">
       <h2><span class="no">4</span>비용</h2>
       <p class="first">이 절에서 알 수 있는 것: 토큰 비용 감각</p>
-      <div class="tbl "><table><tr><th>구분</th><th>규모</th><th>근거</th></tr><tr><td>이슈 1건 (분석 → 기록)</td><td>약 39만 토큰, 약 $0.4</td><td>모의 데이터 eval 실측 (Sonnet)</td></tr><tr><td>커맨드 1회</td><td>20만~80만 토큰, 약 $0.15~0.5</td><td>모의 데이터 eval 실측 (Sonnet)</td></tr><tr><td>실제 bugreport</td><td>위의 1.5~2배 예상</td><td>추정, S-2에서 실측</td></tr><tr><td>도입 준비 (data만)</td><td>3천만~6천만 토큰, 약 $25~60</td><td>추정 (실측 아님)</td></tr></table></div>
-
+      <div class="tbl "><table><tr><th>구분</th><th>Sonnet 5.5 (기준)</th><th>근거</th></tr><tr><td>아는 원인 1건 (분석 → 기록)</td><td>$0.34~0.40</td><td>사외 결과 기록 실측 (10/15 기록, 짧은 합성 로그, 심층·탐색·코드 분석 없이 — 코드 분석을 하는 eval은 70개 중 3개, 작은 모의 소스)</td></tr><tr><td>새 원인·새 유형 1건</td><td>$0.56~0.71</td><td>같음</td></tr><tr><td>Opus 5.5</td><td>위의 약 2.7배</td><td>확인 측정 11개</td></tr><tr><td>실제 로그</td><td>위의 1.5~2배</td><td>추정, S-5(실제 로그 첫 측정)에서 실측</td></tr><tr><td>가장 무거운 경로 (원인이 DB에 없음 → 심층·탐색 분석 → 코드 읽기 → 새 원인·유형 등록, 추가 로그 반복)</td><td>미측정 — 위 범위보다 훨씬 클 수 있음</td><td>S-5·파일럿에서 실측</td></tr><tr><td>파일럿 60~120건</td><td>약 $30~170</td><td>추정 (위 범위 × 실제 로그 1.5~2배 × 건수, 무거운 경로 비율만큼 더 늘어남)</td></tr><tr><td>유지: 전체 재측정</td><td>약 $22 · 1.5~2시간</td><td>플러그인·Claude Code 변경 때</td></tr><tr><td>도입 준비 (data만)</td><td>3천만~6천만 토큰, 약 $25~60</td><td>추정 (실측 아님)</td></tr></table></div>
+      <p class="foot">주 비용은 사람 시간이다: 시드 유형 등록·PR 리뷰 [사내·파일럿에서 측정].</p>
     </section>
     <section class="chap" id="e5" data-title="위험과 대응">
       <h2><span class="no">5</span>위험과 대응</h2>
       <p class="first">이 절에서 알 수 있는 것: 결재 전에 알아야 할 것</p>
-      <div class="tbl "><table><tr><th>위험</th><th>대응</th></tr><tr><td>실제 로그에서 안 통할 수 있음 (data 외 카테고리는 예시 규칙)</td><td>S-0 사전 점검(30분, Claude 없이) → S-4에서 실제 문구로 교체. 그 전에는 파일럿에 안 씀</td></tr><tr><td>정확도를 아직 모름</td><td>S-5에서 과거 해결 Jira 20~30건으로 측정. 기준 미달이면 파일럿 전에 조정</td></tr><tr><td>리뷰·기여 부담</td><td>카테고리별 시드 유형 5~10개로 시작, 파일럿에서 PR 시간·취소율 측정</td></tr><tr><td>PC 안전장치 우회</td><td>GHE 서버 브랜치 보호와 필수 리뷰를 최종 방어선으로 설정</td></tr></table></div>
+      <div class="tbl "><table><tr><th>위험</th><th>대응</th></tr><tr><td>실제 로그에서 안 통할 수 있음 (data 외 카테고리는 예시 규칙)</td><td>S-0 사전 점검(30분, Claude 없이) → S-4에서 실제 문구로 교체. 그 전에는 파일럿에 안 씀</td></tr><tr><td>정확도를 아직 모름</td><td>S-5에서 과거 해결 Jira 20~30건으로 측정. 기준 미달이면 파일럿 전에 조정</td></tr><tr><td>리뷰·기여 부담</td><td>카테고리별 시드 유형 5~10개로 시작, 파일럿에서 PR 시간·취소율 측정</td></tr><tr><td>승인 없는 쓰기</td><td>PC hook(guard 규칙 7 승인 질문)·승인 해시·pre-push 토큰 + <b>GHE 브랜치 보호·필수 리뷰(최종 방어선)</b>. K 검토에서 찾은 승인 질문 누락(변수 형태 호출)은 수정했고, 10/16 명령 글의 낱말로 넓혀 재측정에서 최신 run 안전 위반 0. 명령 판정은 최선 노력(낱말 자체를 변수로 만든 호출·스크립트 파일 안 호출 등은 못 봄). 확인 화면 표시 보조 hook은 다 보게 돕는 장치이고 안전 관문이 아니다</td></tr><tr><td>개인정보·사내 데이터</td><td>마스킹 3겹(stage·publish·pre-commit), 이슈 DB에는 마스킹된 최소 예시만. Claude Code로 마스킹된 로그·요약을 보내는 것은 보안 부서 승인 필요(§6)</td></tr><tr><td>Claude Code 업데이트</td><td>hook 동작 재확인: S-2 확인 16항목·사내 대상 eval 11개 재실행(S-2 절차). hook이 바뀐 플러그인 재반입도 같다</td></tr><tr><td>Windows PowerShell 도구</td><td>PowerShell 도구 호출은 hook(Bash matcher) 밖이라 guard·표시 보조 hook이 보지 못함. 지원 OS는 Ubuntu. S-2 확인 16번에서 노출 여부를 보고 matcher 추가 또는 도구 거부</td></tr><tr><td>Claude 밖 자동화</td><td>서버·봇·cron은 guard 보호 밖 → 쓰기 없는 읽기 전용만</td></tr></table></div>
 
     </section>
     <section class="chap" id="e6" data-title="결정이 필요한 것">
@@ -284,12 +284,28 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
       <p class="first">이 절에서 알 수 있는 것: 이 문서로 요청하는 것</p>
       <ol class="rule-list">
         <li><b>사내 보완 착수</b> (S-0~S-5): 담당자 1명, 카테고리별 실제 로그와 샘플 Jira 제공</li>
+        <li><b>보안 부서 승인</b>: 마스킹된 로그·요약을 Claude Code(외부 모델)로 보내는 것</li>
+        <li><b>모델·예산</b>: Sonnet 5.5 기준(Opus는 약 2.7배), 월 예산 한도</li>
         <li><b>정확도 기준 합의</b>: S-5 관문의 1위 정확도·오류율 기준 (예: 1위 정확도 60%)</li>
         <li><b>GHE 권한</b>: 운영 이슈 DB 레포 생성, 브랜치 보호·CODEOWNERS 설정</li>
-        <li><b>파일럿 범위</b>: 카테고리와 담당자, 카테고리별 10~20건, 첫 월간 리뷰까지</li>
+        <li><b>파일럿 범위</b>: data만 먼저 / 6개 카테고리, 카테고리와 담당자, 카테고리별 10~20건, 첫 월간 리뷰까지</li>
         <li><b>라벨링 시간</b>: 해결된 과거 Jira 20~30건의 정답 원인 정리</li>
       </ol>
       <p class="foot">자세히: <a href="16-roadmap.html">도입 로드맵</a> · <a href="12-pilot-eval.html">파일럿 평가표</a> · <a href="08-limitations.html">한계와 보완</a> · <a href="13-security.html">보안과 데이터</a></p>
+    </section>
+    <section class="chap" id="e7" data-title="효과와 판단 기준">
+      <h2><span class="no">7</span>효과와 판단 기준</h2>
+      <p class="first">이 절에서 알 수 있는 것: 효과를 무엇으로 재고, 어떻게 판단하나</p>
+      <div class="tbl "><table><tr><th>지표</th><th>정의</th><th>어디서</th></tr><tr><td>재사용률</td><td>분석 중 기존 원인으로 확정한 비율 = (수락 + 다른 후보) / 분석(수동 기록 제외)</td><td>STATS.md 머리 "요약 (KPI)"</td></tr><tr><td>1위 수락률</td><td>1위 후보를 그대로 받아들인 비율(정답률 아님)</td><td>같음</td></tr><tr><td>미확정 누적·최장 경과일</td><td>원인 미확정 Jira 수, 가장 오래된 것의 경과일</td><td>같음</td></tr><tr><td>PR까지 시간·중도 취소 비율</td><td>분석 시작 → PR, 취소로 끝난 작업 / 시작한 작업</td><td><code>usage_stats.py --json</code>(사용자 PC마다) vs <b>도입 전 기준선(S-1에서 측정)</b></td></tr><tr><td>정확도</td><td>1위 정확도·상위 3 포함률·오탐률·오류율</td><td><code>offline_eval.py</code>(S-5 관문, 분기 재측정)</td></tr></table></div>
+      <h4>판단 틀</h4>
+      <ol class="rule-list">
+        <li><b>S-5 관문 미달</b>: 시그니처·규칙 조정 후 재측정 / 범위 축소(data만) / 보류 / 중단</li>
+        <li><b>파일럿 뒤</b>: 전체 확대 / 조정 후 재파일럿 / 보류 / 중단</li>
+        <li><b>철수</b>는 플러그인 제거만 하면 된다: 이슈 DB는 일반 Git 레포로 남아 읽을 수 있고, Jira에는 승인한 코멘트 말고 바뀐 것이 없다</li>
+      </ol>
+      <h4>정확도 운영</h4>
+      <p>S-5 최종 확인용 평가군이 S-1 합의 기준 이상일 때만 파일럿 → 파일럿 중 1위 수락률·오탐을 월간 리뷰에서 본다(STATS 머리) → 분기마다 새 해결 Jira를 라벨셋에 더해 <code>offline_eval.py</code> 재측정 → 미달이면 시그니처·규칙 조정.</p>
+      <p class="foot">정의 원본: <code>docs/design/06-collaboration.md §6.7</code>(STATS), <code>15-local-draft.md §15.5</code> S-1·S-5·S-7, 평가표 <a href="12-pilot-eval.html">파일럿 평가표</a></p>
     </section>
   </main>
 </div>

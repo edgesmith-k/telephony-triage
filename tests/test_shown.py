@@ -1,15 +1,19 @@
-"""'사용자에게 보였다' 공용 판정(plugin/scripts/common/shown.py): 정규화, 실행 기록 읽기(stream-json·transcript), 표시 의무,
-초안 검증표 규칙별 행, show_guard가 거부한 질문 제외 (08-safety.md "표시 보조 hook", tests/skill_evals/README.md)."""
+"""'사용자에게 보였다' 판정: 채점기 추론(tests/skill_evals/shown_infer.py — 정규화, 실행 기록 읽기, 표시 의무, 초안 검증표
+규칙별 행, show_guard가 거부한 질문 제외)과 런타임 표시 기록(plugin/scripts/common/shown.py — 기록·고정·창) (08-safety.md §9.1)."""
 from __future__ import annotations
 
 import json
 import sys
 from pathlib import Path
 
+import pytest
+
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "plugin" / "scripts"))
 
-from common import shown  # noqa: E402
+sys.path.insert(0, str(REPO / "tests" / "skill_evals"))
+import shown_infer as shown  # noqa: E402 — 채점기 추론(옮긴 함수)과 런타임 이름을 함께 낸다
+from common import shown as runtime  # noqa: E402 — 표시 기록 API(L R)
 
 STAGE_CMD = "python3 /p/scripts/db_pr.py stage /w/MOCK-1/plan.json --then-summary"
 PUBLISH_CMD = "python3 /p/scripts/db_pr.py publish /w/MOCK-1/wt --approved abc1234def --commit"
@@ -467,3 +471,219 @@ def test_draft_doc_reads_printed_table_rows():
                                               {"id": "R3", "status": "fail", "reason": "C=1 — x"},
                                               {"id": "R5", "status": "skipped", "reason": "해당 없음"}]
     assert shown.draft_doc("| 규칙 | 상태 |\n|---|---|") is None
+
+
+# --- 표시 기록 런타임 API (L R ②a): record·read_records·anchor·parse_events ts/rts ---------------------------------------
+
+
+def _tool_line(tid, cmd, ts):
+    return {"type": "assistant", "timestamp": ts,
+            "message": {"content": [{"type": "tool_use", "id": tid, "name": "Bash", "input": {"command": cmd}}]}}
+
+
+def _result_line(tid, ts, text="ok"):
+    return {"type": "user", "timestamp": ts,
+            "message": {"content": [{"type": "tool_result", "tool_use_id": tid, "content": text}]}}
+
+
+def test_record_appends_one_line_rotates_and_never_raises(tmp_path, capsys, monkeypatch):
+    work = tmp_path / "work"
+    assert runtime.record(work, "db_pr", "push", "MOCK-1", key="push:abc", block="화면")
+    rec = json.loads((work / ".shown" / "log.jsonl").read_text(encoding="utf-8"))
+    assert {k: rec[k] for k in ("v", "script", "kind", "job", "key", "block")} == {
+        "v": 1, "script": "db_pr", "kind": "push", "job": "MOCK-1", "key": "push:abc", "block": "화면"}
+    assert runtime._epoch(rec["at"]) is not None and rec["at"].endswith("Z") and len(rec["at"]) == 24
+    monkeypatch.setattr(runtime, "LOG_MAX", 10)       # 한 세대 회전
+    assert runtime.record(work, "db_pr", "close", "MOCK-1", by="stage")
+    assert (work / ".shown" / "log.jsonl.1").is_file()
+    assert [r["kind"] for r in runtime.read_records([work])] == ["push", "close"]   # 회전된 파일도 읽는다
+    blocked = tmp_path / "blocked"
+    blocked.mkdir()
+    (blocked / ".shown").write_text("파일", encoding="utf-8")
+    assert runtime.record(blocked, "db_pr", "push", "MOCK-1") is False
+    assert "표시 기록을 쓰지 못함(push: " in capsys.readouterr().err
+
+
+def test_record_after_torn_last_line_is_still_readable(tmp_path):
+    """앞 기록이 줄바꿈 없이 끊겨도(동시 쓰기·중단) 새 기록은 앞에 줄바꿈을 붙여 쓰므로 붙지 않고 읽힌다(close를 잃지 않게)."""
+    work = tmp_path / "work"
+    assert runtime.record(work, "db_pr", "push", "MOCK-1", key="push:a")
+    with open(work / ".shown" / "log.jsonl", "a", encoding="utf-8") as f:
+        f.write('{"v": 1, "at": "2026-10-16T00:00:0')                      # 찢긴 끝 줄
+    assert runtime.record(work, "db_pr", "close", "MOCK-1", by="publish")
+    assert [(r["kind"], r.get("by")) for r in runtime.read_records([work])] == [("push", None), ("close", "publish")]
+
+
+def test_record_ignores_rotation_failure(tmp_path, monkeypatch):
+    """회전 실패(경합으로 이미 옮겨짐, Windows 공유 위반)는 무시하고 지금 파일에 쓴다."""
+    work = tmp_path / "work"
+    assert runtime.record(work, "db_pr", "push", "MOCK-1")
+    monkeypatch.setattr(runtime, "LOG_MAX", 1)
+
+    def busy(*_a, **_k):
+        raise PermissionError(32, "공유 위반")
+    monkeypatch.setattr(runtime.os, "replace", busy)
+    assert runtime.record(work, "db_pr", "close", "MOCK-1", by="stage")
+    assert not (work / ".shown" / "log.jsonl.1").exists()
+    assert [r["kind"] for r in runtime.read_records([work])] == ["push", "close"]
+
+
+def test_record_from_concurrent_processes_loses_nothing(tmp_path):
+    """여러 프로세스가 동시에 기록해도(병렬 도구 호출) 모두 읽힌다 — Windows `O_APPEND`는 원자적이 아니라 잠금으로 막는다."""
+    import subprocess
+    work = tmp_path / "work"
+    code = ("import sys; sys.path.insert(0, sys.argv[1]); from common import shown\n"
+            "for i in range(30):\n"
+            "    assert shown.record(sys.argv[2], 'db_pr', 'close', sys.argv[3], by='stage', i=i, pad='x' * 2000)\n")
+    procs = [subprocess.Popen([sys.executable, "-c", code, str(REPO / "plugin" / "scripts"), str(work), f"J{p}"],
+                              stdin=subprocess.DEVNULL) for p in range(4)]
+    assert [p.wait(timeout=120) for p in procs] == [0] * 4
+    got = sorted((r["job"], r["i"]) for r in runtime.read_records([work]))
+    assert got == sorted((f"J{p}", i) for p in range(4) for i in range(30))
+
+
+def test_read_records_tail_skips_broken_lines_and_sorts(tmp_path, monkeypatch):
+    work = tmp_path / "w"
+    (work / ".shown").mkdir(parents=True)
+    rows = [{"at": "2026-10-16T00:00:02.000Z", "kind": "b"}, "깨진 줄", {"at": "2026-10-16T00:00:01.000Z", "kind": "a"},
+            {"kind": "시각 없음"}]
+    (work / ".shown" / "log.jsonl").write_text(
+        "\n".join(r if isinstance(r, str) else json.dumps(r, ensure_ascii=False) for r in rows) + "\n", encoding="utf-8")
+    assert [r["kind"] for r in runtime.read_records([work, work, tmp_path / "없음"])] == ["a", "b"]
+    monkeypatch.setattr(runtime, "READ_TAIL", 80)       # 끝부분만: 잘린 첫 줄은 버린다
+    assert [r["kind"] for r in runtime.read_records([work])] == ["a"]
+
+
+def test_parse_events_carries_tool_timestamps():
+    seq = runtime.parse_events([_tool_line("t1", "ls", "2026-10-16T00:00:01.000Z"),
+                              _result_line("t1", "2026-10-16T00:00:02.000Z")])
+    assert (seq[0]["ts"], seq[0]["rts"]) == ("2026-10-16T00:00:01.000Z", "2026-10-16T00:00:02.000Z")
+    assert runtime.parse_events([_tool_line("t2", "ls", None)])[0]["rts"] is None     # stream-json·끝나지 않은 호출
+
+
+def test_anchor_pins_records_to_the_bash_call_that_wrote_them():
+    T = "2026-10-16T00:00:{:06.3f}Z".format
+    lines = [_tool_line("s", "python3 ~/.claude/plugins/telephony-triage/scripts/db_pr.py summary wt", T(10)),
+             _tool_line("v", "python3 $S/db_verify.py rules --plan p --draft d", T(10.5)),   # 병렬 호출
+             _result_line("v", T(13)), _result_line("s", T(12)),
+             _tool_line("r", "python3 $S/triage.py run MOCK-1", T(20)), _result_line("r", T(21)),
+             _tool_line("x", "python3 $S/db_pr.py publish wt", T(30))]                       # 아직 끝나지 않음
+    seq = runtime.parse_events(lines)
+    rec = lambda script, at: {"script": script, "at": T(at), "kind": "k"}                    # noqa: E731
+    recs = [rec("db_pr", 11), rec("db_verify", 11.5), rec("db_pr", 8.1), rec("db_pr", 7.9), rec("triage", 11),
+            rec("triage", 20.5), rec("db_pr", 30.5), rec("issue_post", 11), {"script": "db_pr", "at": "?"}]
+    got = [(seq[i]["id"], r["script"], r["at"][17:23]) for i, r in runtime.anchor(seq, recs)]
+    # 8.1은 SLACK(2초) 안이라 summary 호출, 7.9는 밖. triage 이름은 `telephony-triage/`에 걸리지 않는다
+    assert got == [("s", "db_pr", "08.100"), ("s", "db_pr", "11.000"), ("v", "db_verify", "11.500"),
+                   ("r", "triage", "20.500")]
+    # triage run이 in-process로 부른 db_pr lock 기록(via=triage)은 triage.py 호출에 고정한다(파일럿 eval 2·67)
+    nested = {"script": "db_pr", "via": "triage", "at": T(20.4), "kind": "close"}
+    assert [seq[i]["id"] for i, _ in runtime.anchor(seq, [nested, {**nested, "via": None}])] == ["r"]
+
+
+def test_draft_key_is_the_inferred_obligation_key():
+    out = json.dumps({"rules": RULES}, ensure_ascii=False)
+    seq = [{"kind": "tool", "id": "d1", "name": "Bash", "input": {"command": DRAFT_CMD}, "result": out, "error": False}]
+    [ob] = [o for o in shown.obligations(seq) if o.kind == "draft"]
+    assert ob.key == runtime.draft_key("MOCK-1/plan.json", RULES)
+
+
+def _rec_seq(*calls):
+    """(id, 명령, [기록…]) 호출마다 10초 간격 Bash 항목과 그 안 시각의 기록. 질문은 ("ask", 입력)."""
+    T = "2026-10-16T00:{:02d}:{:06.3f}Z"
+    at = lambda s: T.format(int(s // 60), s % 60)                                      # noqa: E731
+    seq, recs = [], []
+    for k, c in enumerate(calls):
+        t = 10.0 * (k + 1)
+        if c[0] == "ask":
+            seq.append({"kind": "tool", "id": f"q{k}", "name": "mcp__x__ask_user", "input": c[1], "result": "답", "error": False})
+            continue
+        cid, cmd, rs = c
+        seq.append({"kind": "tool", "id": cid, "name": "Bash", "input": {"command": cmd}, "result": "", "error": False,
+                    "ts": at(t), "rts": at(t + 5)})
+        recs += [{"v": 1, "at": at(t + 1 + 0.1 * j), "job": "MOCK-1", **r} for j, r in enumerate(rs)]
+    return seq, recs
+
+
+PUSH = lambda h: {"script": "db_pr", "kind": "push", "key": f"push:{h}", "block": f"## push 전 확인: x\napproved_hash: {h}"}  # noqa: E731
+CLOSE = lambda by, script="db_pr": {"script": script, "kind": "close", "by": by}                                      # noqa: E731
+FAIL = [{"id": "R3", "status": "fail", "reason": "fixture 2개"}]
+DRAFT = lambda key, plan, rules=FAIL: {"script": "db_verify", "kind": "draft", "key": key, "plan": plan, "rules": rules}  # noqa: E731
+REP = lambda key: {"script": "triage", "kind": "report", "key": key, "lines": ["줄"], "must_show": ["반드시"]}           # noqa: E731
+
+
+@pytest.mark.parametrize("calls,want", [
+    # push: 다른 key push(restage) · publish · discard · 같은 key 다시 기록은 첫 창 그대로(닫혔으면 닫힌 채)
+    ([("a", "db_pr.py stage", [CLOSE("stage"), PUSH("h1")]), ("b", "db_pr.py stage", [CLOSE("stage"), PUSH("h2")])],
+     [("push:h1", "restage"), ("push:h2", "end")]),
+    ([("a", "db_pr.py summary", [PUSH("h1")]), ("b", "db_pr.py publish", [CLOSE("publish")]),
+      ("c", "db_pr.py summary", [PUSH("h1")])], [("push:h1", "publish")]),
+    ([("a", "db_pr.py summary", [PUSH("h1")]), ("b", "db_pr.py discard", [CLOSE("discard")])], [("push:h1", "discard")]),
+    # post: 다른 key post · approve
+    ([("a", "issue_post.py render", [{"script": "issue_post", "kind": "post", "key": "post:p1", "block": "x"}]),
+      ("b", "issue_post.py approve", [CLOSE("approve", "issue_post")])], [("post:p1", "approve")]),
+    # report: 다른 report · stage · Step 7 질문
+    ([("a", "triage.py run", [REP("report:M#1")]), ("b", "triage.py run", [REP("report:M#2")])],
+     [("report:M#1", "restage"), ("report:M#2", "end")]),
+    ([("a", "triage.py run", [REP("report:M#1")]), ("b", "db_pr.py stage", [CLOSE("stage")])], [("report:M#1", "stage")]),
+    ([("a", "triage.py run", [REP("report:M#1")]), ("ask", {"question": "기록?", "options": ["원인 미확정", "기록하지 않음"]})],
+     [("report:M#1", "step7")]),
+    # draft: 같은 계획 다른 key · 다른 계획은 닫지 않음 · stage · lock·discard·report(job)
+    ([("a", "db_verify.py rules", [DRAFT("draft:1", "plan.json")]), ("b", "db_verify.py rules", [DRAFT("draft:2", "plan.json")])],
+     [("draft:1", "draft"), ("draft:2", "end")]),
+    ([("a", "db_verify.py rules", [DRAFT("draft:1", "plan.json")]),
+      ("b", "db_verify.py rules", [DRAFT("draft:2", "plan-narrow.json")])], [("draft:1", "end"), ("draft:2", "end")]),
+    ([("a", "db_verify.py rules", [DRAFT("draft:1", "plan.json", [{"id": "R1", "status": "pass", "reason": "통과"}])]),
+      ("b", "db_verify.py rules", [DRAFT("draft:2", "plan-narrow.json")])], [("draft:1", "draft"), ("draft:2", "end")]),
+    ([("a", "db_verify.py rules", [DRAFT("draft:1", "plan.json")]), ("b", "db_pr.py stage", [CLOSE("stage")])],
+     [("draft:1", "stage")]),
+    ([("a", "db_verify.py rules", [DRAFT("draft:1", "plan.json")]), ("b", "db_pr.py lock", [CLOSE("lock")])], [("draft:1", "job")]),
+    ([("a", "db_verify.py rules", [DRAFT("draft:1", "plan.json")]), ("b", "triage.py run", [REP("report:N#1")])],
+     [("draft:1", "job"), ("report:N#1", "end")]),
+    # 같은 key 다시 기록(같은 계획·같은 결과): 첫 창 유지(J-d)
+    ([("a", "db_verify.py rules", [DRAFT("draft:1", "plan.json")]), ("b", "db_verify.py rules", [DRAFT("draft:1", "plan.json")])],
+     [("draft:1", "end")]),
+])
+def test_record_obligations_window_cells(calls, want):
+    seq, recs = _rec_seq(*calls)
+    assert [(o.key, o.close_kind) for o in runtime.record_obligations(seq, recs)] == want
+
+
+def test_record_obligations_rerun_keeps_first_start_and_last_at():
+    seq, recs = _rec_seq(("a", "db_pr.py summary", [PUSH("h1")]), ("b", "db_pr.py summary", [PUSH("h1")]))
+    (ob,) = runtime.record_obligations(seq, recs)
+    assert ob.start == 0 and ob.open and ob.extra["last_at"] == recs[1]["at"]
+
+
+def test_record_obligations_same_key_new_content_or_return_reopens():
+    """같은 key: 열린 창의 내용이 바뀌면 새 의무(앞 것은 버림), 다른 화면에 밀렸다 돌아오면 새 의무, publish 뒤는 닫힌 채(J-e) —
+    단 내용이 바뀌었으면 닫힌 채 내용·start만 새 기록으로(승인 판정은 새 화면)."""
+    a2 = {**PUSH("h1"), "block": "## push 전 확인: y\napproved_hash: h1"}
+    seq, recs = _rec_seq(("a", "db_pr.py stage", [PUSH("h1")]), ("b", "db_pr.py stage", [a2]))
+    (ob,) = runtime.record_obligations(seq, recs)
+    assert (ob.start, ob.open, "y" in ob.block) == (1, True, True)
+    seq, recs = _rec_seq(("a", "db_pr.py stage", [PUSH("h1")]), ("b", "db_pr.py stage", [PUSH("h2")]),
+                         ("c", "db_pr.py stage", [PUSH("h1")]))
+    assert [(o.key, o.start, o.close_kind) for o in runtime.record_obligations(seq, recs)] == \
+        [("push:h2", 1, "restage"), ("push:h1", 2, "end")]
+    seq, recs = _rec_seq(("a", "db_pr.py summary", [PUSH("h1")]), ("b", "db_pr.py publish", [CLOSE("publish")]),
+                         ("c", "db_pr.py summary", [a2]))
+    assert [(o.start, o.close_kind, "y" in o.block) for o in runtime.record_obligations(seq, recs)] == [(2, "publish", True)]
+    seq, recs = _rec_seq(("a", "db_pr.py summary", [PUSH("h1")]), ("b", "db_pr.py publish", [CLOSE("publish")]),
+                         ("c", "db_pr.py summary", [PUSH("h1")]))
+    assert [(o.start, o.close_kind) for o in runtime.record_obligations(seq, recs)] == [(0, "publish")]   # 같은 내용: 그대로
+
+
+def test_rejected_ask_is_not_live():
+    """③ 리뷰 P1-2: 선택지 상한으로 거부된 질문(모의 ask_user 오류·실제 AskUserQuestion InputValidationError)은 사용자에게 가지
+    않았다 — 보인 글도 Step 7 질문도 아니다(hook과 채점기가 함께 쓰는 판정)."""
+    opts = ["예", "다른 기존 원인", "새 원인", "새 유형", "원인 미확정", "기록하지 않음"]
+    rej = {"kind": "tool", "id": "q1", "name": "mcp__eval-approver__ask_user", "input": {"question": "판정 불가 유형\n분류할까요?",
+           "options": opts}, "result": "선택지는 질문당 4개까지다(AskUserQuestion과 같다) — 나머지는 본문 목록에", "error": True}
+    real = {**rej, "id": "q2", "name": "AskUserQuestion", "result": "InputValidationError: options too long"}
+    ok = {**rej, "id": "q3", "input": {"question": "분류할까요?", "options": ["예", "다른 원인·유형", "원인 미확정", "기록하지 않음"]},
+          "result": "답", "error": False}
+    assert not runtime._live_ask(rej) and not runtime._live_ask(real) and runtime._live_ask(ok)
+    assert not any("판정 불가 유형" in c for c in runtime.visible_between([rej, real, ok]))
+    other = {**rej, "result": "MCP 연결 끊김"}                         # 다른 오류는 그대로(질문이 갔는지 모른다)
+    assert runtime._live_ask(other)

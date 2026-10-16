@@ -5,10 +5,14 @@ PR까지 걸린 평균 시간, 중도 취소 비율, 작업당 저장된 답 수
 PR 완료는 `plan.json`의 `pr.number`가 있을 때만 세고, push 기록 있음·PR 연결 미확인(`pr.head_sha`만 있음)은 따로 센다.
 
 CLI:
-    python3 tools/usage_stats.py [--work-dir <dir> | --platform <이름>] [--plugin-root <dir>]
+    python3 <plugin.scripts_path>/usage_stats.py [--work-dir <dir> | --platform <이름>] [--json] [--plugin-root <dir>]
+    (`plugin.scripts_path`는 사용자 config — setup·SessionStart가 설치본 scripts 경로로 맞춘다. 읽기 전용: work_dir의
+    `plan.json`·`triage-state.json`·`state.json`·`wt/` 유무만 본다)
     (기본: 선택 플랫폼(`--platform` > TT_PLATFORM > 사용자 config platform > site)의 사용자 config work_dir.
     `--work-dir`와 `--platform`은 함께 쓸 수 없다. `--work-dir`면 site-defaults를 읽지 않는다)
-    첫 줄에 집계 대상(플랫폼·work_dir)을 적는다.
+    첫 줄에 집계 대상(플랫폼·work_dir)을 적는다. `--json`이면 텍스트 대신 JSON 한 줄
+    `{platform, work_dir, pr_minutes, pr_jobs, pushed_no_pr, cancelled, started, questions, q_jobs}`(개수·시간만,
+    `--work-dir`면 `platform`은 null).
 """
 
 from __future__ import annotations
@@ -19,7 +23,8 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "plugin" / "scripts"))
+SCRIPTS = Path(__file__).resolve().parent
+sys.path.insert(0, str(SCRIPTS))
 import platforms  # noqa: E402
 from common import session_lock, site_defaults, userconfig  # noqa: E402
 from platforms import session as platform_session  # noqa: E402
@@ -58,13 +63,19 @@ def stats(work_dir: Path) -> dict:
             "questions": sum(questions) / len(questions) if questions else None, "q_jobs": len(questions)}
 
 
-def main(argv: list[str] | None = None) -> int:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="usage_stats.py", description=__doc__)
     target = parser.add_mutually_exclusive_group()
     target.add_argument("--work-dir", help="기본: 선택 플랫폼의 사용자 config work_dir")
     platform_session.add_arg(target)
+    parser.add_argument("--json", action="store_true", help="집계 대상과 수치를 JSON 한 줄로(개수·시간만, 내용 없음)")
     parser.add_argument("--plugin-root", default=None)
-    args = parser.parse_args(argv)
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+    name = None
     try:
         if args.work_dir:
             work_dir = Path(args.work_dir).expanduser()
@@ -84,6 +95,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"work_dir가 없다: {work_dir}", file=sys.stderr)
         return 2
     s = stats(work_dir)
+    if args.json:
+        print(json.dumps({"platform": name, "work_dir": str(work_dir), **s}, ensure_ascii=False))
+        return 0
     print(f"집계 대상: {target}")
 
     def num(v, unit):

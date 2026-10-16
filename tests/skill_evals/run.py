@@ -465,6 +465,9 @@ def execute(entry: dict, info: dict, env_dir: Path, run_dir: Path, claude: str,
             if status == "completed":
                 derived = derive_outputs(run_dir, events_list)
     session = collect_transcript(events_list or read_events(run_dir / "events.jsonl")[0], env, run_dir) if plugin else None
+    # 스크립트 표시 기록(L R): 임시 env가 지워져도 hook_replay 재생 비교가 되게 run 디렉토리로 복사한다
+    if info.get("work_dir") and (shown_log := Path(info["work_dir"]) / ".shown" / "log.jsonl").is_file():
+        shutil.copyfile(shown_log, run_dir / "shown-log.jsonl")
     outcome = {"status": status, "reason": reason, "exit_code": proc.returncode,
                "elapsed_seconds": round(time.monotonic() - start, 2),
                "usage": (result or {}).get("usage"), "total_cost_usd": (result or {}).get("total_cost_usd"),

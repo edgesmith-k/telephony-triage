@@ -293,7 +293,7 @@ def test_migrate_branch_skips_version_checks():
     env = Env()
     env.init(clone)
     edit(clone / "issue-db.config.yaml", "schema_version: 1", "schema_version: 2")
-    edit(clone / "issue-db.config.yaml", "generator_version: 1", "generator_version: 2")
+    edit(clone / "issue-db.config.yaml", "generator_version: 2", "generator_version: 3")
     blocked = env.run("config.py", ["check", "--db", clone, "--for", "dry-run"])
     codes = [r["code"] for r in json.loads(blocked.stdout)["reasons"]]
     assert blocked.returncode == 2 and codes == ["schema-too-new", "generator-mismatch"]

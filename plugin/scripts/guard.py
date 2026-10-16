@@ -21,7 +21,7 @@ TODO(SITE:S3) 플러그인 hook에 보이는 MCP 도구 이름이 `mcp__<server>
 | 4 | 생성 파일 정합성: `git commit`이면 `db_build --verify --staged`(`actions-build`면 생성 파일 staged 거부), `.cache/` staged 거부 | Bash, 이슈 DB |
 | 5 | hook 우회 차단: 커밋의 `--no-verify`·`-n`, `-c core.hooksPath=…`(모든 git 명령), 유효 `core.hooksPath`가 정확히 `.githooks`가 아니면 커밋 거부, `core.hooksPath`를 바꾸거나 해제하는 `git config` 거부(정확히 `.githooks`로 설정은 허용), `GIT_CONFIG_*`·`GIT_INDEX_FILE` 대입이 붙은 commit·push·config 거부 | Bash, 이슈 DB |
 | 6 | base 브랜치 push 차단: refspec의 대상 ref(없으면 현재 브랜치), `--all`/`--mirror`, push `--no-verify` | Bash, 이슈 DB |
-| 7 | push 확인 강제: 이슈 DB `git push`와 `db_pr.py publish`는 `ask` (옵션 `--commit`·`--and-discard`와 무관: `publish` 토큰만 본다) | Bash |
+| 7 | push 확인 강제: 이슈 DB `git push`와 `db_pr.py publish`는 `ask` (옵션 `--commit`·`--and-discard`와 무관: `publish` 토큰만 본다). publish는 명령 글의 낱말 그물(`word_net`: 이름 `db_pr`와 낱말 `publish`가 함께 든다, 글 명령만인 줄은 뺀다 — 아래 "명령 파싱")로 본다 | Bash |
 | 8 | 사용자 clone 직접 편집 차단: 대상 파일이 `issue_db.path` 안이면 거부(`work_dir` 아래는 제외) | Write/Edit/MultiEdit/NotebookEdit |
 | 8 | 같은 규칙, Bash: clone 본체에서 브랜치·파일을 바꾸는 git·`gh pr checkout`, clone 안으로의 파일 쓰기(리디렉션·tee·cp·rm·`sed -i` 등) 거부. migrate 브랜치 생성(깨끗한 트리)은 ask | Bash, clone 본체 |
 | 10 | 로그 원문 통독 차단: cat·tac·nl·less·more·bat·strings·zcat·zless·bzcat·xzcat, `head/tail -c`, `unzip -p/-c`가 로그 원문·zip·bugreport·`events*.json`·`issue_raw.json`·`match.json`을 통째로 읽으면 거부(`fixtures/`·`draft/` 제외, 사용자 config와 무관) | Bash |
@@ -34,8 +34,16 @@ TODO(SITE:S3) 플러그인 hook에 보이는 MCP 도구 이름이 `mcp__<server>
 
 **명령 파싱은 최선 노력**이다: `;`/`&&`/`||`/`|`/줄바꿈으로 이은 명령, `cd <dir>`, 앞의 환경변수 대입(`GIT_DIR`·`GIT_WORK_TREE` 등은
 레포 판별에 반영)과 래퍼(`WRAPPERS`: env·timeout·nice·ionice·stdbuf·sudo·setsid·time·exec·nohup·command·xargs(정적 인자만)),
-`sh -c`/`bash -c`/`eval` 안쪽(중첩 한도 있음), heredoc 본문 제외. 변수 치환·별칭·백틱·`$( )`·`xargs -I{}` 항목·표 밖 래퍼·
-스크립트 파일 안의 git 호출은 보지 못한다.
+`sh -c`/`bash -c`/`eval` 안쪽(중첩 한도 있음), `VAR=값` 대입 값 안의 `$( )`·백틱 본문, 셸(`SHELLS`)이 읽는 heredoc
+본문(`bash <<EOF`·`cat <<EOF | sh`), 그 밖의 heredoc 본문 제외, 주석(인용 밖 단어 첫머리 `#`부터 줄 끝, 줄바꿈은 남김 —
+`_strip_comments`) 제외. 변수 치환·별칭·인자 안의 `$( )`·백틱·`xargs -I{}` 항목·표 밖 래퍼·스크립트 파일 안의 git 호출은
+보지 못한다.
+규칙 7 publish는 낱말 그물 하나로 넓게 본다(ask 오판은 싸다, `word_net`): 명령 글 전체(heredoc 밖 줄 이음은 bash처럼 잇고 heredoc 본문 포함)에
+이름 `db_pr`와 낱말 `publish`가 함께 있으면 ask다 — 인터프리터·`python3 -m`·변수·별칭·`$( )`·`-c`·heredoc과 무관. 검색·출력·
+파일 받기(`NET_TEXT_CMDS`, git·gh는 아님 — 별칭·pager로 글을 실행한다)만인 줄과 그 줄이 연 heredoc 본문은 글로 보고 뺀다(그 줄에 `$( )`·백틱이 있거나 셸로 넘기면
+(`echo "…" | bash`) 빼지 않음). 남는 한계: 낱말을 변수로 만들어 쓴 호출(`${P}lish`·`X=db; …/${X}_pr.py`)·인코딩, 인용 안 `<<EOF`로 만든 가짜 heredoc, 스크립트 파일 안 호출(`bash push.sh`
+— eval 채점기는 결과의 `"published": true`로도 센다), 사용자 셸 프로필의 별칭·함수. 반대로 db_pr 소스·문서를 sed·python으로
+다루는 명령에 두 낱말이 함께 들면 ask 오판이다.
 진짜 강제는 git hook(pre-commit·pre-push)과 GHE 브랜치 보호다.
 
 **설정 없음**: 사용자 config가 없거나 `issue_db.path`로 레포를 판별할 수 없으면 git·파일 규칙은 적용하지 않는다.
@@ -45,8 +53,9 @@ TODO(SITE:S3) 플러그인 hook에 보이는 MCP 도구 이름이 `mcp__<server>
 없으므로 코멘트 도구도 거부한다. hook은 모든 도구 호출에 걸리므로, `site-defaults.yaml`이 없어도 guard는 멈추지 않고 사용자 config만으로
 판정한다(경고). 이때 커밋 검사(3·4번)가 부르는 스크립트는 종료 코드 2를 내므로 이슈 DB 커밋은 거부된다.
 
-**의존성 없음·내부 오류**(`_degraded`): import 실패나 판정 중 예외면 MCP는 거부, Bash의 git·gh·`db_pr.py publish`와
-파일 도구는 ask, 그 밖의 Bash는 통과 + 경고. 종료 코드는 그래도 0이다(2는 설치 명령까지 모든 Bash를 막는다).
+**의존성 없음·내부 오류**(`_degraded`): import 실패나 판정 중 예외면 MCP는 거부, Bash의 git·gh·`db_pr.py publish`(규칙 7과 같은
+`word_net`)와 파일 도구는 ask, 그 밖의 Bash는 통과 + 경고.
+종료 코드는 그래도 0이다(2는 설치 명령까지 모든 Bash를 막는다).
 """
 
 from __future__ import annotations
@@ -536,10 +545,65 @@ def _strip_heredocs(command: str) -> str:
     return "\n".join(out)
 
 
+def _heredocs(command: str) -> list[tuple[str, str]]:
+    """heredoc마다 (시작 줄, 본문). 본문 안의 heredoc은 그 본문을 다시 읽을 때 본다."""
+    lines = command.split("\n")
+    out, i = [], 0
+    while i < len(lines):
+        line = lines[i]
+        i += 1
+        for m in HEREDOC_RE.finditer(line):
+            tag, body = m.group(2), []
+            while i < len(lines) and lines[i].strip() != tag:
+                body.append(lines[i])
+                i += 1
+            i += 1
+            out.append((line, "\n".join(body)))
+    return out
+
+
+def _subst_bodies(value: str) -> list[str]:
+    """글 안의 `$( … )`(괄호 짝을 센다)·`` `…` `` 본문."""
+    out, i = [], value.find("$(")
+    while i >= 0:
+        depth, j = 1, i + 2
+        while j < len(value) and depth:
+            depth += {"(": 1, ")": -1}.get(value[j], 0)
+            j += 1
+        out.append(value[i + 2:j - 1] if not depth else value[i + 2:])   # 닫히지 않았으면 끝까지
+        i = value.find("$(", j)
+    return out + re.findall(r"`([^`]*)`", value)
+
+
+def _strip_comments(command: str) -> str:
+    """인용 밖에서 단어 첫머리의 `#`(줄 처음·공백·`;`·`&`·`|`·`(` 뒤)부터 줄 끝까지 주석을 뺀다. 줄바꿈은 남긴다(다음 줄은 다른
+    명령이다 — `shown.strip_quoted`와 같은 규칙). `$#`·`${#x}`·`a#b`·인용 안 `#`·`\\#`은 그대로."""
+    out, i, n, quote = [], 0, len(command), None
+    while i < n:
+        c = command[i]
+        if c == "\\" and quote != "'" and i + 1 < n:
+            out.append(command[i:i + 2])
+            i += 2
+            continue
+        if quote:
+            quote = None if c == quote else quote
+        elif c in "'\"":
+            quote = c
+        elif c == "#" and (i == 0 or command[i - 1] in " \t\n;&|("):
+            j = command.find("\n", i)
+            i = n if j < 0 else j
+            continue
+        out.append(c)
+        i += 1
+    return "".join(out)
+
+
 def _tokens(command: str) -> list[str]:
-    text = _strip_heredocs(command).replace("\n", " \n ")
-    # `>`도 연산자 글자로 둔다: 공백 없이 붙은 리디렉션(`echo x>f`, `>>f`, `>|f`)을 따옴표 밖에서만 나눈다
+    text = _strip_comments(_strip_heredocs(command)).replace("\n", " \n ")
+    # `>`도 연산자 글자로 둔다: 공백 없이 붙은 리디렉션(`echo x>f`, `>>f`, `>|f`)을 따옴표 밖에서만 나눈다.
+    # 주석은 위에서 뺀다: shlex 기본 `commenters="#"`는 주석과 함께 줄바꿈 토큰까지 먹어 다음 줄 명령이 앞 argv에 붙는다
     lex = shlex.shlex(text, posix=True, punctuation_chars=";&|()>")
+    lex.commenters = ""
     lex.whitespace = " \t\r"
     lex.whitespace_split = True
     try:
@@ -637,6 +701,55 @@ def _base(word: str) -> str:
     return name[:-4] if name.lower().endswith(".exe") else name
 
 
+# 규칙 7 낱말 그물(L M-2): 이 명령만인 줄(과 그 줄이 연 heredoc 본문)은 글로 본다 — 검색·출력·파일 받기.
+# git·gh는 넣지 않는다: `git -c alias.p='!…'`·`core.pager`·`GIT_SSH_COMMAND`·`gh alias set`으로 글을 실행할 수 있다
+NET_TEXT_CMDS = {"grep", "egrep", "fgrep", "rg", "ag", "ack", "echo", "printf", "cat", "tee"}
+
+
+def _text_only(line: str) -> bool:
+    try:
+        names = [_base(i.argv[0]) for i in invocations(line, Path("."))]
+    except Exception:  # noqa: BLE001 — 못 읽으면 남긴다(넓게 본다)
+        return False
+    return bool(names) and all(n in NET_TEXT_CMDS for n in names)
+
+
+def word_net(command: str, name: str = "db_pr", word: str = "publish") -> bool:
+    r"""규칙 7(과 show_guard pre-bash, ②)의 호출 판정: 남은 명령 글에 이름 `name`과 낱말 `word`가 함께 있다.
+    heredoc 본문 밖의 줄 이음(`\` + 줄바꿈)은 bash처럼 빈 글로 잇고, 줄마다 그 줄이 연 heredoc 본문을 붙인다(끝 표시는
+    원래 줄에서 찾는다 — 본문 끝 줄의 `\`가 끝 표시를 삼키지 않게). 주석을 뺀 줄이 `$(`·백틱 없이 NET_TEXT_CMDS만이고
+    셸로 넘기지 않으면(`echo … | bash`는 넘김) 그 줄과 본문을 뺀다. 끝 표시가 없는 heredoc을 연 줄은 빼지 않는다.
+    남은 글 그대로, 거기서 `\` + 줄바꿈·`'`·`"`·`\`·`$'`의 `$`를 지운 글(`pub"lish"`·`db\_pr`·`pub$'l'ish`), 인용·`\` 바로
+    앞의 `$VAR`를 `/`로 바꾸고 지운 글(`"$S"d""b_pr` — 지우기만 하면 `$Sdb_pr`가 된다) 중 어느 것에든 있으면 있다.
+    이름은 앞이 글자·`.`·`-`가 아니고 뒤가 글자·`-`가 아니다(`test_db_pr.py`·`ws.db_pr(`·`dbpr/` 아님). 낱말은 앞이
+    글자·`.`가 아니고 뒤가 글자·`.`·`-`가 아니다(`publish.py`·`publish.json`·`publish-preview`·`_publish`·`published`
+    아님, `${P:-publish}`는 맞다)."""
+    lines, kept, i = command.split("\n"), [], 0
+    while i < len(lines):
+        raw, i = lines[i], i + 1
+        while raw.endswith("\\") and i < len(lines):   # bash 줄 이음: 빈 글로 잇는다(`pub\⏎lish` = publish)
+            raw, i = raw[:-1] + lines[i], i + 1
+        start, open_end = i, False
+        for m in HEREDOC_RE.finditer(raw):
+            j = i
+            while j < len(lines) and lines[j].strip() != m.group(2):
+                j += 1
+            if j >= len(lines):   # 끝 표시 없음: 본문으로 빼지 않고 이 줄도 남긴다(넓게 본다)
+                open_end = True
+                break
+            i = j + 1
+        line = _strip_comments(raw)
+        if (open_end or "$(" in line or "`" in line or _feeds_shell(line, Path("."))
+                or not _text_only(line)):
+            kept += [line, *lines[start:i]]
+    text = "\n".join(kept)
+    joined = re.sub(r"\\\n", "", text)
+    unquote = re.compile(r"""\$(?=['"])|["'\\]""")
+    texts = (text, unquote.sub("", joined), unquote.sub("", re.sub(r"""\$\w+(?=["'\\])""", "/", joined)))
+    return (any(re.search(rf"(?<![\w.-]){re.escape(name)}(?![\w-])", t) for t in texts)
+            and any(re.search(rf"(?<![\w.]){re.escape(word)}(?![\w.-])", t) for t in texts))
+
+
 class Invocation:
     def __init__(self, cwd: Path, argv: list[str], env: dict | None = None):
         self.cwd = cwd
@@ -644,10 +757,28 @@ class Invocation:
         self.env = env or {}   # 앞의 `VAR=값` 대입
 
 
+def _feeds_shell(line: str, cwd: Path) -> bool:
+    """heredoc이 시작된 줄에 `-c` 없는 셸(`SHELLS`)이 있다: 본문을 셸이 실행한다(`bash <<EOF`·`cat <<EOF | sh`)."""
+    for seg in _segments(_tokens(line)):
+        seg, _, _ = _strip_prefix(seg, cwd)
+        if seg and _base(seg[0]) in SHELLS and not any(
+                t.startswith("-") and not t.startswith("--") and "c" in t[1:] for t in seg[1:]):
+            return True
+    return False
+
+
 def invocations(command: str, cwd: Path, depth: int = 0) -> list[Invocation]:
     out: list[Invocation] = []
+    if depth < MAX_DEPTH:   # 셸이 읽는 heredoc 본문은 명령이다
+        for line, body in _heredocs(command):
+            if _feeds_shell(line, cwd):
+                out += invocations(body, cwd, depth + 1)
     for seg in _segments(_tokens(command)):
         seg, seg_cwd, env = _strip_prefix(seg, cwd)
+        if depth < MAX_DEPTH:   # `R="$(…)"`·`R="`…`"` 대입 값의 명령 치환은 실행된다(shlex는 대입 토큰 하나로 붙인다)
+            for value in env.values():
+                for body in _subst_bodies(value):
+                    out += invocations(body, seg_cwd, depth + 1)
         if not seg:
             continue
         name = _base(seg[0])
@@ -913,7 +1044,7 @@ def _raw_cmd_verb(inv: Invocation) -> str | None:
         for a in flags:
             if a == "--bytes" or a.startswith("--bytes="):
                 return f"{name} -c"
-            if not a.startswith("--") and "c" in re.split(r"\d", a[1:], 1)[0]:
+            if not a.startswith("--") and "c" in re.split(r"\d", a[1:], maxsplit=1)[0]:
                 return f"{name} -c"
     elif name == "unzip":
         for a in flags:
@@ -1448,20 +1579,19 @@ def check_post_record_writes(inv: Invocation, conf: Config, dec: Decision) -> No
             return
 
 
+PUBLISH_ASK = "db_pr.py publish는 이슈 DB에 push한다. 확인 화면을 승인한 뒤에만 진행한다 (규칙 7)."
+
+
 def check_bash(command: str, cwd: Path, conf: Config, dec: Decision) -> None:
     check_raw_read(command, cwd, dec, conf)
+    if conf.user is not None and word_net(command):   # 규칙 7: 명령 글 전체의 낱말 그물 하나 (argv·치환·heredoc 무관)
+        dec.ask.append(PUBLISH_ASK)
     for inv in invocations(command, cwd):
         name = _base(inv.argv[0])
         if conf.work_dirs:
             check_post_record_writes(inv, conf, dec)
         if conf.clones:
             check_clone_writes(inv, conf, dec)
-        is_db_pr = name == "db_pr.py" or (name.startswith("python")
-                                           and any(_base(a) == "db_pr.py" for a in inv.argv[1:]))
-        if is_db_pr and "publish" in inv.argv:
-            if conf.user is not None:
-                dec.ask.append("db_pr.py publish는 이슈 DB에 push한다. 확인 화면을 승인한 뒤에만 진행한다 (규칙 7).")
-            continue
         if name == "gh":
             check_gh(inv, conf, dec)
             continue
@@ -1526,8 +1656,7 @@ def _degraded(event: dict, why: str) -> tuple[dict | None, list[str]]:
         try:
             invs = invocations(str(tool_input.get("command") or ""), Path(str(event.get("cwd") or os.getcwd())))
             names = [_base(i.argv[0]) for i in invs]
-            risky = any(n in ("git", "gh") for n in names) or any(
-                "publish" in i.argv and any(_base(a) == "db_pr.py" for a in i.argv) for i in invs) or any(
+            risky = any(n in ("git", "gh") for n in names) or word_net(str(tool_input.get("command") or "")) or any(
                 not _expand(t).startswith("/dev/") for i in invs for t in _write_targets(i))   # 파일 쓰기(clone일 수 있다)
         except Exception:  # noqa: BLE001 — 파싱도 못 하면 사람에게 넘긴다
             pass

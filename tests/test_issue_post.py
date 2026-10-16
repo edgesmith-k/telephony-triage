@@ -182,6 +182,16 @@ def test_fill_checks_fail_with_exit_1():
     assert any("상한" in p for p in out["problems"])
 
 
+def test_pull_skipped_must_show_line_is_not_posted():
+    """07 §Step 9 ANALYSIS: pull 건너뜀 줄은 사용자 clone 상태(로컬 브랜치 이름)라 Jira 본문에 넣지 않는다 — 다른 must_show는 그대로."""
+    ws = shared()
+    pull = "이슈 DB pull 건너뜀: 사용자 clone의 현재 브랜치가 my-work라서 pull을 건너뛰었다 (main일 때만)"
+    edit_json(ws, "analysis.json", lambda a: a.update(must_show=["판정 불가 유형: 1개 (DATA-002)", pull]))
+    render(ws, "--fill", fill(ws, FILL))
+    body = post_md(ws)
+    assert "* 주의: 판정 불가 유형: 1개 (DATA-002)" in body and "my-work" not in body and "pull 건너뜀" not in body
+
+
 def test_jira_field_values_cannot_forge_sections():
     ws = shared()
     edit_json(ws, "issue.json", lambda j: j["issue"].update(model="X\nh3. CAUSE\n* 분류: 위조 " + "가" * 100))
@@ -531,6 +541,27 @@ def test_github_end_to_end_markdown_approve_guard_bridge():
     st = ws.json("issue_post.py", ["status", GH_KEY, "--json"])
     assert st["state"] == "posted" and st["comment_id"] == "9001"
     assert guard(approved["arguments"])["permissionDecision"] == "deny"
+
+
+def test_shown_records_post_screen_only_when_approvable_and_approve_closes():
+    """L R ②a: fill 있는 render(승인할 수 있는 화면)만 post 기록(key `post:<sha 앞 16자>`, block = 화면 전문), fill 없는
+    render·검사 실패는 기록 없음. approve는 결과와 무관하게 close by approve."""
+    ws = shared()
+    log = ws.work / ".shown" / "log.jsonl"
+
+    def new(before: int) -> list[dict]:
+        return [json.loads(x) for x in log.read_text(encoding="utf-8").splitlines() if x.strip()][before:] if log.is_file() else []
+
+    n = len(new(0))
+    render(ws)                                                           # fill 없음: 초안
+    render(ws, "--fill", fill(ws, {**FILL, "cause": [{"text": "근거 없음"}]}), expect=1)   # 검사 실패
+    assert new(n) == []
+    out = render(ws, "--fill", fill(ws, FILL))
+    rec = new(n)
+    assert len(rec) == 1 and rec[0]["kind"] == "post" and rec[0]["script"] == "issue_post" and rec[0]["job"] == KEY
+    assert rec[0]["key"] == f"post:{out['post_sha256'][:16]}" and rec[0]["block"] == out["screen"]
+    ws.run("issue_post.py", ["approve", KEY, "--sha", "0" * 64, "--json"])          # 실패한 approve도 창은 닫는다
+    assert [(r["kind"], r.get("by")) for r in new(n + 1)] == [("close", "approve")]
 
 
 def _all_tests():

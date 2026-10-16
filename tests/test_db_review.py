@@ -222,7 +222,7 @@ def test_stats_on_review_db():
     checks = stats.split("## 품질 점검", 1)[1]
     assert "시그니처 없는 원인: 1 (DATA-001-03)" in checks
     assert "fixture 없는 원인: 2 (DATA-009-01, DATA-009-02)" in checks
-    assert "| 2026-10 | 7 | 3 |" in stats   # 기여 현황: 분석 7, 수동 기록 3
+    assert "| 2026-10 | 7 | 3 |" in stats   # KPI 월 표: 분석 7, 수동 기록 3
 
 
 

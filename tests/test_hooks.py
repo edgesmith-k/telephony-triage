@@ -281,6 +281,18 @@ def test_guard_push_rules():
     assert decision(bash(ws, publish, ws.base)) == "ask"
 
 
+def test_guard_comment_does_not_swallow_next_line():
+    """K 3차 P1-b: 주석 뒤 줄의 명령은 따로 본다(shlex 기본 commenters가 주석과 줄바꿈을 함께 먹어 다음 줄이 앞 argv에 붙던 우회).
+    `$#`·`${#x}`·`a#b`·인용 안 `#`은 주석이 아니다."""
+    ws = shared()
+    c = ws.clone
+    assert decision(bash(ws, "echo x # note\ngit push origin HEAD:main", c)) == "deny"
+    assert decision(bash(ws, "echo s # c\ngit commit --no-verify -m x", c)) == "deny"
+    assert decision(bash(ws, "true # main 아님\ngit push origin HEAD:refs/heads/issue/MOCK-1", c)) == "ask"
+    for cmd in ('echo $# ${#x} a#b "q # git push origin main"', "git status # git push origin main"):
+        assert decision(bash(ws, cmd, c)) is None, cmd
+
+
 def test_guard_publish_with_commit_and_discard_still_asks():
     """W5: `publish --commit --and-discard`도 `publish` 토큰 때문에 ask다 (옵션 이름과 무관)."""
     ws = shared()
@@ -297,6 +309,81 @@ def test_guard_stage_then_summary_and_discard_are_not_asked():
     db_pr = f'python3 "{ws.root}/scripts/db_pr.py"'
     for cmd in (f"{db_pr} stage plan.json --wt wt --branch issue/MOCK-1 --then-summary",
                 f"{db_pr} summary wt --format markdown", f"{db_pr} discard wt"):
+        assert decision(bash(ws, cmd, ws.base)) is None, cmd
+
+
+def test_guard_publish_any_interpreter_or_substitution_asks():
+    """K P0-1: SKILL.md `S/` 규약(`${S}db_pr.py`)·변수 인터프리터·`py -3`·`./db_pr.py`·명령 치환·백틱 안 publish도 규칙 7 ask다.
+    stage·summary·discard와 db_pr.py를 인자로 읽는 명령은 판정할 것이 없다. git push 규칙은 그대로."""
+    ws = shared()
+    root = ws.root / "scripts"
+    tail = "publish wt --branch issue/MOCK-1 --lease new --approved x --commit --and-discard --json"
+    for cmd in (f'S="{root}/"; python3 ${{S}}db_pr.py {tail}', f'S="python3 {root}/"\n${{S}}db_pr.py {tail}',
+                f"PY=python3; S={root}; $PY $S/db_pr.py {tail}", '"${PY:-python3}" "${S}db_pr.py" publish wt',
+                f"py -3 {root}/db_pr.py publish wt", 'R="$(python3 $S/db_pr.py publish wt --json)"',
+                "R=`python3 $S/db_pr.py publish wt --json`", f"cd {root} && ./db_pr.py {tail}"):
+        out = bash(ws, cmd, ws.base)
+        assert decision(out) == "ask" and "규칙 7" in out["permissionDecisionReason"], cmd
+    # K 2차: 인용 경로가 든 명령 치환 대입(R1), 쪼갠 이름 `"$S"db_pr.py`·`$S"db_pr.py"`(R2), 셸이 읽는 heredoc·heredoc 안
+    # subprocess(R3)
+    for cmd in (f'R="$(python3 "{root}/db_pr.py" publish /w/wt --branch issue/MOCK-1 --approved abc1234 --commit --json)"; echo "$R"',
+                'R="$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/db_pr.py" publish wt)"',
+                'python3 "$S"db_pr.py publish wt --json', 'python3 $S"db_pr.py" publish wt --json',
+                f"bash <<'EOF'\nset -e\npython3 {root}/db_pr.py publish wt --json\nEOF",
+                f"python3 - <<'EOF'\nimport subprocess\nsubprocess.run(['python3', '{root}/db_pr.py', 'publish', 'wt'])\nEOF",
+                # K 3차: 셸로 넘기는 글, `python3 -c` 본문
+                f'echo "python3 {root}/db_pr.py publish wt" | bash', f"printf '%s\\n' 'python3 $S/db_pr.py publish wt' | sh",
+                f"python3 -c \"import subprocess; subprocess.run(['python3', '{root}/db_pr.py', 'publish', 'wt'])\""):
+        out = bash(ws, cmd, ws.base)
+        assert decision(out) == "ask" and "규칙 7" in out["permissionDecisionReason"], cmd
+    for cmd in ("${S}db_pr.py stage plan.json --wt wt --branch issue/MOCK-1 --then-summary",
+                "$PY $S/db_pr.py summary wt --format markdown", "${S}db_pr.py discard wt",
+                f"grep -n publish {root}/db_pr.py", 'grep -n "db_pr.py publish" x.md', "cat $S/db_pr.py | grep publish",
+                'rg "publish" db_pr.py', "python3 -m pytest tests/test_db_pr.py -k publish", "ls # db_pr.py publish wt"):
+        assert decision(bash(ws, cmd, ws.base)) is None, cmd
+    assert decision(bash(ws, "git push origin HEAD:refs/heads/main x/db_pr.py publish", ws.clone)) == "deny"
+    empty = {"TELEPHONY_TRIAGE_HOME": tmp("tt-nohome-")}     # 사용자 config 없음: 이슈 DB가 없으므로 묻지 않는다
+    assert decision(bash(ws, "${S}db_pr.py publish wt", ws.base, env=empty)) is None
+
+
+def test_guard_publish_word_net_closes_limits_and_skips_text():
+    """L M-2: 낱말 그물(`word_net`)은 옛 한계(`python3 -m`·변수에 담은 하위 명령·`${P:-publish}`·`$C`·별칭·줄 이음)를 ask로
+    닫고, `cat >` heredoc·`publish.json`·`publish-preview`·`dbpr/publish.py`는 판정하지 않는다. git·gh 줄은 글로 빼지
+    않는다(리뷰 2차 P0-2). 남는 한계(스크립트 파일 안, 변수로 만든 낱말, 가짜 heredoc)는 08-safety와 같게 고정한다."""
+    ws = shared()
+    r = ws.root / "scripts"
+    for cmd in ("python3 -m db_pr publish wt", "SUB=publish; python3 $S/db_pr.py $SUB wt",
+                "python3 $S/db_pr.py ${P:-publish} wt", f'C="python3 {r}/db_pr.py publish"; $C wt',
+                f"alias p='python3 {r}/db_pr.py publish'; p wt", f"S={r}/\npython3 ${{S}}db_pr.py \\\n  publish wt",
+                # 인용·`\`·ANSI-C로 쪼갠 낱말(리뷰 P0)
+                'python3 $S/db_pr.py pub"lish" wt', "python3 $S/db_pr.py publ\\ish wt", 'python3 $S/d""b_pr.py publish wt',
+                'python3 $S/db"_"pr.py publish wt', "python3 $S/db\\_pr.py publish wt", "python3 $S/db_pr.py pub$'l'ish wt",
+                # 리뷰 2차 P0-1: 본문 끝 줄의 `\`가 heredoc 끝 표시를 삼키지 않는다
+                "cat > n.md <<'EOF'\nC:\\work\\\nEOF\npython3 $S/db_pr.py publish wt",
+                "git commit -F - <<'EOF'\nC:\\work\\\nEOF\npython3 $S/db_pr.py publish wt",
+                "tee n.md <<'EOF'\nC:\\work\\\nEOF\npython3 $S/db_pr.py publish wt",
+                # P0-2: git·gh는 글 명령이 아니다(별칭·pager·ssh 명령으로 실행)
+                "git -c alias.p='!python3 $S/db_pr.py publish wt #' p",
+                "git -c core.pager='python3 $S/db_pr.py publish wt #' log",
+                "GIT_SSH_COMMAND='python3 $S/db_pr.py publish wt #' git fetch",
+                "gh alias set p '!python3 $S/db_pr.py publish wt'; gh p",
+                "git -c alias.x='!sh' x <<'EOF'\npython3 $S/db_pr.py publish wt\nEOF",
+                # 그래서 git·gh 글(커밋 메시지·PR 본문)도 ask다(오판, 싸다)
+                'git commit -m "db_pr.py publish 고침"', "git commit -F - <<'EOF'\nfix db_pr.py publish\nEOF",
+                'gh pr create --title t --body "python3 db_pr.py publish 결과"',
+                # P0-3: 인용·`\` 바로 앞의 `$S`
+                'S=/p/; python3 "$S"d""b_pr.py publish wt', 'python3 $S"d"b_pr.py publish wt',
+                'python3 "$S"db\\_pr.py publish wt', "python3 \"$S\"$'d'b_pr.py publish wt", "python3 $S'd'b_pr.py publish wt",
+                # P1: 낱말 안의 줄 이음(bash는 빈 글로 잇는다)
+                "python3 $S/db_pr.py pub\\\nlish wt", "python3 $S/db\\\n_pr.py publish wt"):
+        out = bash(ws, cmd, ws.base)
+        assert decision(out) == "ask" and "규칙 7" in out["permissionDecisionReason"], cmd
+    for cmd in ("cat > notes.md <<'EOF'\npython3 db_pr.py publish wt\nEOF", "cat /w/MOCK-1/publish.json",
+                f"python3 {r}/db_pr.py summary wt > /w/MOCK-1/publish-preview.md",
+                f"sed -n 1,20p {r}/db_pr.py {r}/dbpr/publish.py",
+                # 남는 한계
+                "bash /w/push.sh", f"P=pub; python3 {r}/db_pr.py ${{P}}lish wt", f"X=db; python3 {r}/${{X}}_pr.py publish wt",
+                "echo \"<<EOF\"\npython3 $S/db_pr.py publish wt\nEOF"):   # 인용 안 `<<EOF`로 만든 가짜 heredoc
         assert decision(bash(ws, cmd, ws.base)) is None, cmd
 
 
@@ -806,7 +893,8 @@ def test_guard_without_pyyaml_denies_mcp_and_asks_risky_bash():
     out, _ = judge(JIRA_TOOLS[0], {})
     assert decision(out) == "deny" and "의존성 없음" in out["permissionDecisionReason"]
     for cmd in (f'git -C "{ws.clone}" status', f"gh pr list -R {DB_SLUG}",
-                f'python3 "{ws.root}/scripts/db_pr.py" publish wt --branch issue/MOCK-1'):
+                f'python3 "{ws.root}/scripts/db_pr.py" publish wt --branch issue/MOCK-1',
+                f'S="python3 {ws.root}/scripts/"; ${{S}}db_pr.py publish wt', "$PY $S/db_pr.py publish wt"):
         out, _ = judge("Bash", {"command": cmd})
         assert decision(out) == "ask" and "레포 판별 불가" in out["permissionDecisionReason"], cmd
     out, err = judge("Bash", {"command": "echo hi"})

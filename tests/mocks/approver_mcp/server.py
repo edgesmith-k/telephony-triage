@@ -11,7 +11,8 @@
 `ask_user`(plugin 모드 실행자 전용): 실제 사용자에게 묻는 자리(스킬의 "묻는다"·선택지·확인 화면)에서 실행자가 질문 문구를
 그대로 넘긴다. 헤드리스 실행자는 글을 거의 쓰지 않고 도구만 부르므로, 질문을 글로만 남기게 하면 "응답 규칙대로 예로 진행"처럼
 질문이 사라진다(eval 46). 질문을 도구 호출로 받으면 기록에 남고, 답으로는 `EVAL_USER_REPLIES`(JSON 배열, eval의 user_replies)를
-돌려준다 — 실행자는 그중 이 질문에 맞는 것을 사용자의 답으로 쓴다. 질문은 `MOCK_APPROVALS_LOG`에 `kind: ask`로 남긴다.
+돌려준다 — 실행자는 그중 이 질문에 맞는 것을 사용자의 답으로 쓴다. 질문은 `MOCK_APPROVALS_LOG`에 `kind: ask`로 남긴다. 선택지는 질문당 4개까지(AskUserQuestion과 같은 상한, L2 J7): 넘으면 답 대신
+오류(`isError`)를 돌려주고 기록에 `rejected`를 남긴다.
 """
 
 from __future__ import annotations
@@ -22,6 +23,8 @@ import sys
 from pathlib import Path
 
 PROTOCOL_VERSION = "2025-06-18"
+MAX_OPTIONS = 4         # AskUserQuestion 질문당 선택지 상한(probe 14)
+TOO_MANY = "선택지는 질문당 4개까지다(AskUserQuestion과 같다) — 나머지는 본문 목록에 두고 나눠서 다시 묻는다"
 TOOLS = [{
     "name": "approve",
     "description": "eval 전용: 권한 확인 요청에 사용자 대신 답한다",
@@ -31,7 +34,8 @@ TOOLS = [{
     "name": "ask_user",
     "description": "사용자에게 묻는다: 질문 문구(선택지 포함)를 그대로 넘기면 사용자의 답이 돌아온다. 답을 받기 전에는 그 질문이 막는 일을 시작하지 않는다",
     "inputSchema": {"type": "object", "properties": {"question": {"type": "string"},
-                                                     "options": {"type": "array", "items": {"type": "string"}}},
+                                                     "options": {"type": "array", "items": {"type": "string"},
+                                                                 "maxItems": MAX_OPTIONS}},
                     "required": ["question"]},
 }]
 
@@ -55,15 +59,20 @@ def approve(arguments: dict) -> dict:
     return {"behavior": "allow", "updatedInput": arguments.get("input") or {}}
 
 
-def ask_user(arguments: dict) -> str:
-    _log({"kind": "ask", "question": arguments.get("question"), "options": arguments.get("options")})
+def ask_user(arguments: dict) -> tuple[str, bool]:
+    """(답 글, 오류 여부)."""
+    options = arguments.get("options")
+    if isinstance(options, list) and len(options) > MAX_OPTIONS:
+        _log({"kind": "ask", "question": arguments.get("question"), "options": options, "rejected": "선택지 4개 초과"})
+        return TOO_MANY, True
+    _log({"kind": "ask", "question": arguments.get("question"), "options": options})
     try:
         replies = json.loads(os.environ.get("EVAL_USER_REPLIES") or "[]")
     except ValueError:
         replies = []
     lines = "\n".join(f"- {r}" for r in replies) or "- (응답 규칙 없음)"
     return ("[시뮬레이션 사용자] 아래 응답 규칙 중 이 질문에 맞는 것이 사용자의 답이다. 맞는 규칙이 없으면 변경하지 않는 "
-            f"선택지를 고른 것으로 하고 그 사실을 transcript에 적는다.\n{lines}")
+            f"선택지를 고른 것으로 하고 그 사실을 transcript에 적는다.\n{lines}"), False
 
 
 def handle(message: dict) -> dict | None:
@@ -81,7 +90,8 @@ def handle(message: dict) -> dict | None:
             text = json.dumps(approve(params.get("arguments") or {}), ensure_ascii=False)
             result = {"content": [{"type": "text", "text": text}], "isError": False}
         elif params.get("name") == "ask_user":
-            result = {"content": [{"type": "text", "text": ask_user(params.get("arguments") or {})}], "isError": False}
+            text, err = ask_user(params.get("arguments") or {})
+            result = {"content": [{"type": "text", "text": text}], "isError": err}
         else:
             result = {"content": [{"type": "text", "text": f"unknown tool: {params.get('name')}"}], "isError": True}
     elif mid is None:

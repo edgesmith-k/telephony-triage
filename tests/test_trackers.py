@@ -876,7 +876,7 @@ def test_driver_uses_normalized_work_key():
     assert (w.work / GKEY / "analysis.json").is_file() and not (w.work / "https:").exists()
     analysis = json.loads((w.work / GKEY / "analysis.json").read_text(encoding="utf-8"))
     assert analysis["key"] == GKEY
-    assert sorted(p.name for p in w.work.iterdir() if p.is_dir() and not p.name.startswith("_")) == [GKEY]
+    assert sorted(p.name for p in w.work.iterdir() if p.is_dir() and not p.name.startswith(("_", "."))) == [GKEY]
 
 
 

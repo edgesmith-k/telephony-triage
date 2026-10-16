@@ -246,7 +246,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
       <div class="eyebrow">RUNBOOK · 관리자용 실무 안내</div>
       <h1>언제, 무엇을 하면 되나</h1>
       <p>이슈 DB와 플러그인을 운영하는 사람을 위한 안내입니다. 매일·매주·매월 할 일과, 문제가 생겼을 때 어디부터 볼지를 순서대로 정리했습니다. 명령 옵션과 메시지별 조치 같은 세부 내용은 운영 매뉴얼(<code>03-manual.html</code>) 6·7장에 있고, 여기서는 그 장으로 연결만 합니다.</p>
-      <div class="meta"><span><b>기준</b> main 2026-10-12</span><span><b>대상</b> 메인테이너, 카테고리 담당자, 도입 담당자</span><span><b>읽는 시간</b> 약 12분</span></div>
+      <div class="meta"><span><b>기준</b> main 2026-10-16</span><span><b>대상</b> 메인테이너, 카테고리 담당자, 도입 담당자</span><span><b>읽는 시간</b> 약 12분</span></div>
     </header>
 
     <section class="chap" id="r1" data-title="관리자 역할">
@@ -284,7 +284,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
         <div><b>매주</b><span class="who">메인테이너</span><ul><li><code>sync</code> 결과의 사후 검사 경고 확인 (ID 중복·Jira 중복이면 5절)</li><li>오래 열린 PR 점검, 작성자 부재면 7절</li></ul></div>
         <div><b>매월</b><span class="who">카테고리 담당자</span><ul><li><code>/telephony-triage:review &lt;카테고리&gt;</code></li><li>방치 항목은 리포트의 "기록: 이름"에게 요청</li><li>정리 내용은 <code>review/…</code> PR로</li><li>STATS의 급증·수락률 확인</li></ul></div>
         <div class="lite"><b>분기</b><span class="who">메인테이너</span><ul><li>지원 Android 버전(<code>platform_versions_supported</code>) 갱신</li><li>오래 안 쓰인 원인·지원 종료 원인 폐기 정리</li><li>10절 숫자 점검</li></ul></div>
-        <div class="lite"><b>플러그인 업데이트 때</b><span class="who">메인테이너</span><ul><li>릴리스 노트에 지원 스키마·생성기 버전</li><li>버전이 바뀌면 플러그인 먼저 배포 → DB 쪽 migrate PR</li><li>팀원에게 업데이트 공지</li></ul></div>
+        <div class="lite"><b>플러그인 업데이트 때</b><span class="who">메인테이너</span><ul><li>릴리스 노트에 지원 스키마·생성기 버전</li><li>버전이 바뀌면 플러그인 먼저 배포 → DB 쪽 migrate PR</li><li>팀원에게 업데이트 공지</li><li>hook·공통 판정이 바뀐 묶음이면 사내 대상 eval 11개 모두 다시 + S-2 확인 항목(묶음의 <code>DRAFT_NOTES.md</code> 재반입 노트, <a href="03-manual.html#s7-upgrade">매뉴얼 7.10</a>)</li><li>Claude Code를 올릴 때도 S-2 확인 16항목·사내 대상 eval 11개 다시</li></ul></div>
       </div>
       <div class="note easy"><span class="k">월간 리뷰가 잡아 주는 것</span>시그니처 없는 원인, fixture 없는 원인, 오래 미확정인 Jira, 수락률 낮은 시그니처, 중복 후보, 오래 안 쓰인 원인, 수정 검증 대기 방치(30일), 해결책 미검증 방치(60일), 급증. 기준값은 이슈 DB의 <code>issue-db.config.yaml</code>에 있고 바꾸려면 PR입니다. 항목별 조치는 <a href="03-manual.html#s7-monthly">매뉴얼 7.7</a>.</div>
     </section>
@@ -321,6 +321,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
         <tr><td><b>오탐 신고</b> ("이 원인이 아닌데 1위로 나와요")</td><td>사용자 신고, 월간 리뷰 "수락률 낮은 시그니처"</td><td>그 로그 구간을 음성 fixture로 추가하고 시그니처를 좁히는 PR. 회귀 검사가 다른 사례를 깨지 않는지 확인</td><td><a href="03-manual.html#s7-add">매뉴얼 7.4</a></td></tr>
         <tr><td><b>급증</b></td><td>월간 리뷰 "급증"</td><td>최근 30일이 이전 월평균의 2배 이상. 특정 빌드·모델·통신사에 몰렸는지 STATS 분포로 보고 원인 조사</td><td><a href="03-manual.html#s7-monthly">매뉴얼 7.7</a></td></tr>
         <tr><td><b>Jira 원문 격리가 안 됨</b></td><td>사용자가 "격리 hook 미동작" 메시지 보고</td><td>그 Claude Code 버전에서 hook이 동작하는지 확인(S-2 항목). 그 사이에도 리포트·계획에는 마스킹 값만 저장됨</td><td><a href="03-manual.html#s6-msg">매뉴얼 6.3</a></td></tr>
+        <tr><td><b>확인 화면을 다 보이지 못했다는 알림</b></td><td>사용자가 "[telephony-triage] 확인 화면 일부를 답에 보이지 못했다(재시도 한도)" 또는 "show_guard 판정 못 함" 메시지 보고</td><td>표시 보조 hook이 한도(같은 화면 2회)에 이르렀거나 판정을 못 한 것. 승인 질문·승인 해시·pre-push는 그대로라 승인 없는 push는 아님. 사용자에게 알림의 곳(<code>report.md</code> 또는 앞 Bash 출력)을 직접 보고 승인하라고 안내. 자주 나면 그 세션 transcript(<code>~/.claude/projects/&lt;프로젝트&gt;/&lt;세션&gt;.jsonl</code>)를 <b>세션을 돌린 PC의 플러그인 레포 clone에서</b>(<code>tools/</code>는 설치본에 없음) <code>python3 tools/hook_replay.py &lt;세션 .jsonl&gt;</code>로 재판정해 숫자만 보고(내용 없음), S-2 확인 항목 10~13·15를 다시 봄. 결과의 <code>records</code>가 null이면 확인하지 못한 것이지 통과가 아님</td><td><a href="03-manual.html#s8-guard">매뉴얼 8.3</a></td></tr>
       </table></div>
     </section>
 
@@ -379,7 +380,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
         <tr><td>팀 공통 기준값 (<code>issue-db.config.yaml</code>)</td><td>이슈 DB PR, 메인테이너 리뷰</td><td>트래커 선언(<code>tracker.{kind, base_url, key_regex}</code>), 방치 기준일, 점수, 마스킹 예외 등. 마스킹 예외를 너무 넓게(<code>.*</code>) 쓰면 lint가 거부. 트래커 범용화 전 키(<code>jira_key_regex</code>·<code>jira_base_url</code>·<code>readme.jira_inline_max</code>·<code>android_versions_supported</code>)는 lint <code>config</code> 오류, 옛 기록 폴더 <code>jira/</code>는 <code>legacy-dir</code> 오류(<code>issues/</code>로 옮김)</td><td><a href="03-manual.html#s9-keys">매뉴얼 9.4</a></td></tr>
         <tr><td>사이트 설정 (<code>site-defaults.yaml</code>)</td><td>플러그인 레포</td><td><code>platform.*</code>를 바꾸면 파서 출력이 달라질 수 있어 DB에서 전체 회귀를 다시 돌림. Jira 결과 게시를 켜려면 <code>tracker.write_tools.add_comment</code>(코멘트 도구 1종, <code>read_tools</code>에 넣지 않음, 사내 확인 S23). 옛 키(최상위 <code>jira:</code> 등)가 남아 있으면 모든 사용자가 막히므로 키 이름만 <code>tracker:</code>(+<code>kind: jira</code>)로 바꿈. 사용자 config는 각자 <code>config.py rename-legacy --apply</code></td><td><a href="03-manual.html#s7-site">매뉴얼 7.8</a></td></tr>
         <tr><td>플랫폼 추가 (oFono 등)</td><td>플러그인 레포 + 새 이슈 DB 레포</td><td>플랫폼마다 이슈 DB가 따로. 뼈대는 <code>tools/make_db_skeleton.py &lt;out&gt; --platform &lt;이름&gt;</code>, 사이트 설정 <code>platform.enabled</code>에 이름 추가. 사용자는 setup에서 그 플랫폼을 골라 경로 프로필만 더함</td><td><code>docs/design/17-platforms.md</code> §6</td></tr>
-        <tr><td>플러그인 업데이트</td><td>플러그인 레포 → 마켓플레이스</td><td>새 초안은 <code>import_draft.py</code>로 반입(사내 전용 경로 보존, 통째 교체 금지). 생성기만 바뀌면 메인테이너가 <code>migrate/schema-v&lt;현재&gt;</code>에서 <code>migrate --to &lt;현재 스키마&gt;</code>(<code>generator_version</code>은 올리기만, DB 값이 더 크면 종료 2 → 플러그인 업데이트)</td><td><a href="03-manual.html#s7-upgrade">매뉴얼 7.10</a></td></tr>
+        <tr><td>플러그인 업데이트</td><td>플러그인 레포 → 마켓플레이스</td><td>새 초안은 <code>import_draft.py</code>로 반입(사내 전용 경로 보존, 통째 교체 금지). 생성기만 바뀌면 메인테이너가 <code>migrate/schema-v&lt;현재&gt;</code>에서 <code>migrate --to &lt;현재 스키마&gt;</code>(<code>generator_version</code>은 올리기만, DB 값이 더 크면 종료 2 → 플러그인 업데이트). hook이나 공통 판정(<code>hooks.json</code>·<code>guard.py</code>·<code>show_guard.py</code>·<code>common/shown.py</code>·<code>jira_bridge.py</code> 등)이 바뀐 묶음이면 사내 대상 eval 11개를 모두 다시 돌리고 S-2 확인 항목을 다시 봄. 아니면 바뀐 흐름의 eval만 돌림(어느 쪽인지는 묶음의 <code>DRAFT_NOTES.md</code> 재반입 노트). Claude Code를 올릴 때도 S-2 확인 16항목·사내 대상 eval 11개를 다시 함</td><td><a href="03-manual.html#s7-upgrade">매뉴얼 7.10</a></td></tr>
         <tr><td>스키마 버전 올리기</td><td>메인테이너 <code>migrate/schema-v&lt;N&gt;</code> 브랜치</td><td>병합 중지 공지 → 플러그인 먼저 배포(읽기 전용 기간이 생길 수 있음) → <code>migrate --dry-run</code> → 실행 → <code>db_build --write</code>·<code>validate</code> → PR → 재개. 되돌리기 = revert PR + 플러그인 이전 SHA + 이전 플러그인으로 <code>db_build --write</code>(다운그레이드 명령 없음)</td><td><a href="03-manual.html#s7-migrate">매뉴얼 7.11</a></td></tr>
       </table></div>
     </section>
@@ -405,7 +406,8 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
         <tr><td>시그니처 수락률 (1위 후보를 사용자가 받아들인 비율)</td><td>STATS "수락률 하위 10개", 월간 리뷰 (0.7 미만, 표본 5건 이상)</td><td>시그니처 좁히기·음성 fixture 추가. 단, 수락률은 정답률이 아님(틀린 1위를 받아들일 수도 있음)</td></tr>
         <tr><td>방치 건수 (수정 검증 대기, 해결책 미검증, 미확정 Jira)</td><td>월간 리뷰</td><td>기록자에게 요청, 담당 지정</td></tr>
         <tr><td>시그니처·fixture 없는 원인 수</td><td>STATS</td><td>로그를 받아 보강. 이 수가 크면 다음 분석이 그 원인을 못 찾음</td></tr>
-        <tr><td>PR까지 걸린 시간, 중도 취소 비율, 작업당 질문 수</td><td><code>tools/usage_stats.py</code> (사용자 PC마다 실행해 모음. 플랫폼마다 <code>--platform &lt;이름&gt;</code>, 기본은 선택 플랫폼)</td><td>취소가 많으면 기여 부담이 큰 것. 어느 단계에서 멈추는지 사용자에게 확인</td></tr>
+        <tr><td>PR까지 걸린 시간, 중도 취소 비율, 작업당 질문 수</td><td><code>python3 &lt;scripts_path&gt;/usage_stats.py --json</code> — 사용자 PC마다 실행(설치본에 있다, <code>scripts_path</code>는 사용자 config <code>plugin.scripts_path</code>)해 JSON을 모아 PR 시간·취소 비율을 합산. 플랫폼마다 <code>--platform &lt;이름&gt;</code>(기본은 선택 플랫폼)</td><td>취소가 많으면 기여 부담이 큰 것. 어느 단계에서 멈추는지 사용자에게 확인</td></tr>
+        <tr><td>재사용률·1위 수락률·미확정 누적(월별 추이)</td><td>STATS.md 머리 "요약 (KPI)" — PR마다 재생성, GHE에서 바로 보임</td><td>재사용률이 낮으면 시그니처·시드 유형 보강, 미확정이 쌓이면 월간 리뷰에서 담당 지정</td></tr>
         <tr><td>정확도 (1위 정확도, 상위 3개 포함률, 오탐률)</td><td><code>tools/offline_eval.py</code> (해결된 과거 Jira 라벨셋)</td><td>도입 때 정한 기준 미달이면 파일럿 전에 시그니처·규칙 조정</td></tr>
       </table></div>
       <p class="foot">기준값과 명령 옵션은 운영 매뉴얼(<code>03-manual.html</code>)과 <code>docs/design/06-collaboration.md</code>가 원본입니다. 구조와 흐름은 설계 안내(<code>04-design.html</code>)에 있습니다.</p>

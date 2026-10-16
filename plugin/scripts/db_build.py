@@ -327,7 +327,7 @@ def readme(ctx: Context) -> str:
 
 def category_readme(ctx: Context, cat: dict) -> str:
     out = [f"# {cat['name']}", "", *ctx.header(),
-           f"> 기준일: {ctx.base_text} · [전체 인덱스](../README.md)", ""]
+           "> [전체 인덱스](../README.md)", ""]
     types = ctx.types_of(cat["key"])
     if not types:
         out.append(EMPTY_CATEGORY)
@@ -362,6 +362,63 @@ def _count_window(ctx: Context, records: list[dict], lo: int, hi: int) -> int:
     return quality.count_window(records, ctx.base, lo, hi)
 
 
+def _verify_results(active_causes) -> Counter:
+    results = Counter()
+    for cause in active_causes:
+        fix = cause.raw.get("fix") or {}
+        if (fix.get("verification") or {}).get("result"):
+            results[fix["verification"]["result"]] += 1
+        for item in fix.get("verification_history") or []:
+            if isinstance(item, dict) and item.get("result"):
+                results[item["result"]] += 1
+    return results
+
+
+DECISION_LABELS = (("accepted", "수락"), ("chose-other", "다른 후보"), ("new-cause", "새 원인"),
+                   ("new-type", "새 유형"), ("unresolved", "미확정"))
+
+
+def _people(ctx: Context) -> set[str]:
+    return ({str(r.get("analyzed_by")) for r in ctx.jira if r.get("analyzed_by")}
+            | {str(f.get("by")) for f in ctx.db.feedback if f.get("by")})
+
+
+def _kpi(ctx: Context, active_causes) -> list[str]:
+    """STATS 머리: 피드백·Jira 기록에서 운영 지표 (06-collaboration.md §6.7 "KPI 머리")."""
+    fb = ctx.db.feedback
+    analyzed = [f for f in fb if f.get("decision") != "manual"]
+    dist = Counter(f.get("decision") for f in analyzed)
+    reused = dist["accepted"] + dist["chose-other"]
+    acc = issuedb.acceptance(fb).values()
+    top_a, top_t = sum(a for a, _ in acc), sum(t for _, t in acc)
+    unresolved = [r for r in ctx.jira if str(r.get("cause")) == "unresolved"]
+    ages = [a for a in (quality.days_ago(r, ctx.base, "date") for r in unresolved) if a is not None]
+    out = ["", "## 요약 (KPI)", "",
+           f"- 분석 {len(analyzed)}건 · 수동 기록 {len(fb) - len(analyzed)}건 · 결정: "
+           + " · ".join(f"{label} {dist[k]}" for k, label in DECISION_LABELS),
+           f"- 재사용률 {_ratio(reused, len(analyzed))} ({reused}/{len(analyzed)}) · "
+           f"1위 수락률 {_ratio(top_a, top_t)} ({top_a}/{top_t})",
+           f"- 원인 미확정 Jira {len(unresolved)}건" + (f" · 가장 오래된 것 {max(ages)}일" if ages else ""),
+           f"- 재발(verify-fix 실패 기록) {_verify_results(active_causes)['failed']}건 · 기여자 {len(_people(ctx))}명"]
+    months: dict[str, list[dict]] = {}
+    for f in fb:
+        month = str(f.get("date", ""))[:7]
+        if month:
+            months.setdefault(month, []).append(f)
+    if months:
+        out += ["", "| 월 | 분석 | 수동 기록 | 재사용률 | 1위 수락률 | 미확정 결정 | 기여자 |",
+                "|---|---|---|---|---|---|---|"]
+        for m, rows in sorted(months.items(), reverse=True):
+            an = [f for f in rows if f.get("decision") != "manual"]
+            d = Counter(f.get("decision") for f in an)
+            acc = issuedb.acceptance(rows).values()
+            a, t = sum(x for x, _ in acc), sum(y for _, y in acc)
+            out.append(f"| {m} | {len(an)} | {len(rows) - len(an)} | "
+                       f"{_ratio(d['accepted'] + d['chose-other'], len(an))} | {_ratio(a, t)} | {d['unresolved']} | "
+                       f"{len({str(f.get('by')) for f in rows if f.get('by')})} |")
+    return out
+
+
 def stats(ctx: Context) -> str:
     qcfg = ctx.config.get("quality") or {}
     min_samples = int(qcfg.get("min_samples", 5))
@@ -369,7 +426,7 @@ def stats(ctx: Context) -> str:
     active_causes = [c for t in ctx.types if t.active for c in t.causes if c.active]
     out = ["# 통계", "", *ctx.header(),
            f"> 기준일: {ctx.base_text} (가장 최근 Jira 기록의 `date`). 발생일은 `occurred_on`, 없으면 `date`.",
-           "", "## 건수", "",
+           *_kpi(ctx, active_causes), "", "## 건수", "",
            "| 카테고리 | 유형 | 원인 | 누적 | 최근 30일 | 최근 90일 |", "|---|---|---|---|---|---|"]
     total = [0, 0, 0, 0, 0]
     for cat in ctx.categories:
@@ -463,35 +520,14 @@ def stats(ctx: Context) -> str:
     verified = sum(1 for c in active_causes
                    if (c.raw.get("resolution_verification") or {}).get("status") == "verified")
     waiting = sorted(c.id for c in active_causes if (c.raw.get("fix") or {}).get("status") == "fix-submitted")
-    results = Counter()
-    for cause in active_causes:
-        fix = cause.raw.get("fix") or {}
-        if (fix.get("verification") or {}).get("result"):
-            results[fix["verification"]["result"]] += 1
-        for item in fix.get("verification_history") or []:
-            if isinstance(item, dict) and item.get("result"):
-                results[item["result"]] += 1
+    results = _verify_results(active_causes)
     out += ["", "## 검증 현황", "",
             f"- 해결책 검증률: {_ratio(verified, len(active_causes))} ({verified}/{len(active_causes)})",
             f"- fix-submitted 대기: {', '.join(waiting) if waiting else '없음'}",
             f"- verify-fix 기록: 통과 {results['passed']} · 부분 통과 {results['partial']} · 실패 {results['failed']}"
             f" · 되돌림 {results['reverted']}"]
 
-    months: dict[str, list[int]] = {}
-    for record in ctx.db.feedback:
-        month = str(record.get("date", ""))[:7]
-        if not month:
-            continue
-        entry = months.setdefault(month, [0, 0])
-        entry[1 if record.get("decision") == "manual" else 0] += 1
-    people = {str(r.get("analyzed_by")) for r in ctx.jira if r.get("analyzed_by")}
-    people |= {str(f.get("by")) for f in ctx.db.feedback if f.get("by")}
-    out += ["", "## 기여 현황", ""]
-    if months:
-        out += ["| 월 | 분석 | 수동 기록 |", "|---|---|---|"]
-        out += [f"| {m} | {a} | {r} |" for m, (a, r) in sorted(months.items(), reverse=True)]
-        out.append("")
-    out.append(f"기여자 수: {len(people)}")
+    out += ["", "## 기여 현황", "", f"기여자 수: {len(_people(ctx))}"]
 
     pending = sorted(c.id for c in active_causes if c.pending)
     have_fixture = quality.positive_fixture_causes(ctx.db)

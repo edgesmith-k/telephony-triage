@@ -30,6 +30,7 @@ telephony-triage 커맨드 도움말을 보여준다. 인자: $ARGUMENTS
 | 처음 설치했다, 설정·연결을 점검하고 싶다 | `setup` |
 | (A) Jira 키와 로그가 있다, 원인을 찾고 이슈 DB에 기록하고 싶다 | `analyze <JIRA-KEY> <로그 경로>` |
 | (A) 기록하지 않고 분석 결과만 보고 싶다 | `analyze <JIRA-KEY> <로그 경로> --analysis-only` |
+| (A) 코드 경로·심층 분석·탐색 분석 질문 없이 분석하고 싶다 | `analyze <JIRA-KEY> <로그 경로> --code skip --no-analyzer --no-explore` (늘 그렇게: 사용자 config, GUIDE 5장) |
 | (B) 분석했더니 새 원인·새 유형이다, 등록하고 싶다 | `analyze <JIRA-KEY> <로그 경로>` (Step 7에서 새 원인·새 유형) |
 | (A) 이미 스스로 해결했다, 분석 없이 기록만 남기고 싶다 | `record <JIRA-KEY>` |
 | (B) 직접 해결한 이슈를 새 원인으로 기록 | `record <JIRA-KEY> --new-cause <유형 ID>` |

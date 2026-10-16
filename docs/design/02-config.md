@@ -102,7 +102,7 @@ setup 커맨드가 순서대로 하는 일 (site-defaults `platform.enabled`가 
 
 ```yaml
 schema_version: 1                    # 정수. 구조가 바뀔 때만 올린다 (06-collaboration.md §6.4)
-generator_version: 1                 # 생성 파일 형식 버전. 플러그인 GENERATOR_VERSION과 같아야 쓰기 가능
+generator_version: 2                 # 생성 파일 형식 버전. 플러그인 GENERATOR_VERSION과 같아야 쓰기 가능
 ci_mode: local                       # local (현재, 06-collaboration.md §6.3) | actions | actions-build (13-actions.md)
 tracker:                             # 이슈 트래커 (18-trackers.md §2)
   kind: jira                         # jira | github. 없으면 jira. 세션 tracker.kind와 다르면 tracker-mismatch(거부)
