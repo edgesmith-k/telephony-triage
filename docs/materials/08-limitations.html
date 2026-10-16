@@ -357,7 +357,7 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
       <p class="first">이 절에서 알 수 있는 것: 돈과 시간 쪽 단점</p>
       <div class="tbl lim"><table>
         <tr><th>한계</th><th>현재 수치</th><th>보완</th><th>언제</th></tr>
-        <tr><td>이슈 1건 비용</td><td>아는 원인 1건 약 $0.34~0.40 · 새 원인·유형 1건 약 $0.56~0.71 (Sonnet 5.5, 합성 데이터). 최신 수치는 <a href="14-exec-summary.html#e4">결재용 요약 §4</a></td><td>실제 로그는 1.5~2배로 예상(Opus 5.5는 약 2.7배). S-2에서 실측, 파일럿에서 건당 비용 확인</td><td class="when">S-2·S-7</td></tr>
+        <tr><td>이슈 1건 비용</td><td>아는 원인 1건 약 $0.34~0.40 · 새 원인·유형 1건 약 $0.56~0.71 (Sonnet 5.5, 합성 데이터, 심층·탐색·코드 분석 없이, 가장 무거운 경로(원인이 DB에 없음 → 심층·탐색 분석 → 코드 읽기 → 새 원인·유형 등록)는 미측정). 최신 수치는 <a href="14-exec-summary.html#e4">결재용 요약 §4</a></td><td>실제 로그는 1.5~2배로 예상(Opus 5.5는 약 2.7배). S-5에서 실측, 파일럿에서 건당 비용 확인</td><td class="when">S-5·S-7</td></tr>
         <tr><td>준비 단계 토큰</td><td>data만 해도 추정 3천만~6천만 토큰(약 $25~60, 실측 아님). 사내 S-2 행동 eval은 사내에서만 확인되는 11개만 실행(10/14 결정, 나머지는 사외 결과로 갈음)</td><td>사내 모델이 사외와 같으면 조건부 7개도 빠진다</td><td class="when">S-2</td></tr>
         <tr><td>DB가 커질 때 속도</td><td>DB 읽기 0.7~1.1초, 일부 비교가 사례 수 × 규칙 수에 비례</td><td>사내 로그·DB 크기로 재측정한 뒤 색인·범위 제한 검토</td><td class="when">파일럿 뒤</td></tr>
         <tr><td>Windows 개발 환경</td><td>환경 문제로 테스트 4건이 늘 실패, 반입 묶음은 Ubuntu(WSL)에서 만들어야 함</td><td>CI(Ubuntu)로 확인. 사내 사용 자체는 영향 없음. 단 Claude Code의 PowerShell 도구는 hook 밖(<a href="#l5">5절</a>)</td><td class="when">지금</td></tr>

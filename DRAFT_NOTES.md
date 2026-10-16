@@ -16,12 +16,12 @@
 
 ## 진행 상태 (10/16)
 
-- 모드: **사외 초안**. Phase **D0, 1~13** 완료, 반입 전 보강 트랙 완료(history). 최신 반입본 import-20261014c(f4d98d5, 사내 전달), 새 묶음 import-20261015(767cc4f, 태그 전). main 병합 PR #8~#53.
+- 모드: **사외 초안**. Phase **D0, 1~13** 완료, 반입 전 보강 트랙 완료(history). 최신 반입본 import-20261014c(f4d98d5, 사내 전달), 새 묶음 **import-20261016**(main 병합 뒤 생성, 태그 전). main 병합 PR #8~#53.
 - 10/15 H 사외 재측정 완료(PR #52·#53, history).
-- 10/15 **K 완료**(55d24a3·e45885d): `offsite_results.json` pass 59·fail 0·미결정 11. **L 종합 검토**: `docs/development/L_RESULT.md`. 10/16 **L1·L2 완료**(L2 1023567~, 재측정 offsite pass 59·fail 0·none 11(site), 결과·P2는 L_RESULT "(다) 결과"). 원격 `ccr-d022623a-2f4vdx`, PR 전.
-- 안내서 "모델 선택": Sonnet 5.5 기준, Opus 5.5 확인 11개 실패 0(비용 ≈2.7배).
+- 10/15 **K 완료**(55d24a3·e45885d): `offsite_results.json` pass 59·fail 0·미결정 11. **L 종합 검토**: `docs/development/L_RESULT.md`. 10/16 **L1·L2 완료**(L2 1023567~, 재측정 offsite pass 59·fail 0·none 11(site), 결과·P2는 L_RESULT "(다) 결과"), HTML 자료 현행화·소개 품질 절. 원격 `ccr-d022623a-2f4vdx` → main 병합.
+- 모델: Sonnet 5.5 기준, Opus 5.5 확인 11개 실패 0(≈2.7배).
 - `TODO(SITE)`: `tools/list_site_todos.py`. REVIEW-OPEN 0건. 사내 시작: **"사내 설정 시작"**(결정 (o)).
-- 안내서 HTML: `docs/telephony-triage-guide.html`(공유본 https://claude.ai/artifact/1jov1Et4dQUMauFr6aoxWG 개정 7), `docs/materials/00-index.html`
+- 안내서 HTML: `docs/telephony-triage-guide.html`(공유본 https://claude.ai/artifact/1jov1Et4dQUMauFr6aoxWG 개정 7, 파일 개정 8), `docs/materials/00-index.html`
 
 ## 남은 일 (사외 전용)
 
@@ -30,7 +30,7 @@
 | ☑ K·L | K(P0-1·P1 수정, 재채점)·L(목록·분류·구현 계획) 완료 | `K_RESULT.md`(P2는 반입 뒤 후보), `L_RESULT.md` |
 | ☑ L1 | L (가)·(나) 10개 완료(10/16), 생성기 v2 | `L_RESULT.md` 세션 1, 끝의 "L1 리뷰 P2"는 반입 뒤 후보 |
 | ☑ L2 | (다) 표시·판정 정리(R·M-2·U-2·U-4) + 재측정 완료(10/16) | `L_RESULT.md` "(다) 결과", P2는 반입 뒤 후보 |
-| ☐ F | 반입 묶음 — **import-20261015(767cc4f)는 태그하지 않는다** | L1 병합 뒤 `make_bundle.py --label import-<날짜>`로 다시(L2 뒤 또 한 번), 태그는 사용자 |
+| ☐ F | 반입 묶음 **import-20261016** — 태그·반입은 사용자(20261015는 태그하지 않음) | 사내: SITE_INSTALL §8 재반입, 아래 L2 노트 |
 | ☐ G | 범용판 별도 레포 — **보류(10/07 사용자)** | 재개는 사용자가 정한다 |
 
 ## 사내로 넘긴 것
