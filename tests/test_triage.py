@@ -1236,16 +1236,19 @@ def test_other_job_leftovers_are_noted_never_asked_or_deleted():
     ws.json("triage.py", ["release", W4_KEY])
 
 
-def test_pull_skipped_reason_is_noted_in_every_mode():
-    """07 §Step 1: 사용자 clone이 base가 아니면 pull을 건너뛰고 알린다 — 쓰기·분석 전용 모두 notes(SKILL은 notes를 항상 알림)."""
+def test_pull_skipped_reason_is_must_show_in_every_mode():
+    """07 §Step 1: 사용자 clone이 base가 아니면 pull을 건너뛰고 알린다 — 쓰기·분석 전용 모두 report.md·must_show 줄(show_guard가 강제),
+    needs_input 뒤 재실행(스냅샷을 상태에서 재사용)에서도."""
     ws = Workspace()
     git(ws.clone, "checkout", "-q", "-b", "my-work")
+    _asked_code(_w4_run(ws))
     done = _w4_run(ws, "--answer", "code=skip")
-    assert done["status"] == "ok" and done["snapshot"]["pulled"] is False
-    assert [n for n in done["notes"] if n.startswith("이슈 DB pull 건너뜀:") and "my-work" in n], done["notes"]
+    line = [m for m in done.get("must_show") or [] if m.startswith("이슈 DB pull 건너뜀:")]
+    assert done["status"] == "ok" and done["snapshot"]["pulled"] is False and len(line) == 1 and "my-work" in line[0], done
+    assert f"- {line[0]}" in (ws.job_dir(W4_KEY) / "report.md").read_text(encoding="utf-8").splitlines()
     ws.json("triage.py", ["release", W4_KEY])
     only = _w4_run(ws, "--analysis-only", "--answer", "code=skip")
-    assert only["status"] == "ok" and [n for n in only["notes"] if n.startswith("이슈 DB pull 건너뜀:")], only
+    assert only["status"] == "ok" and [m for m in only.get("must_show") or [] if m.startswith("이슈 DB pull 건너뜀:")], only
 
 
 def test_no_leftovers_means_no_note_and_analysis_only_does_not_look():

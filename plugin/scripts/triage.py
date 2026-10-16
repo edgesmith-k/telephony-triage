@@ -24,7 +24,7 @@
   출력 `{timeline, lines, total}`. 종료 코드 1 = 해당 없음(입력 파일 없음), 2 = 사용 오류·`events.json` 없음. lock·trace는 쓰지 않는다.
 - `analysis.json`의 `must_show`(있을 때만, ≤6줄·4KB 압축 시 4줄·줄당 ≤160자): 리포트 줄 중 사용자에게 꼭 보여야 하는 것(분석 전용·읽기 전용·
   1위 변화 재분석·실패 스텝·장비 시각 미사용·판정 불가 유형·원인·슬롯 불일치·시계 이상 구간 근거·로그 범위 이상·범위 밖 오류·
-  파서 규칙에 없는 태그·미추출 W/E 줄·코드 분석 트리 자동 선택, 순서는 `07-workflow.md §Step 6`). `report.md`의 줄과 같은 문구다.
+  파서 규칙에 없는 태그·미추출 W/E 줄·코드 분석 트리 자동 선택·이슈 DB pull 건너뜀, 순서는 `07-workflow.md §Step 6`). `report.md`의 줄과 같은 문구다.
 - `JOB/analysis-cache.json`: 입력 해시(`request_hash`, 부분별 `parts`)가 같으면 파싱·매칭을 다시 하지 않고 이 core를 다시 보여 준다
   (RF-7, `07-workflow.md §입력 재사용`). `--offline-db`·`--refresh`·`needs_input`/오류 실행은 쓰지도 읽지도 않는다. 마스킹된 값만 담는다.
 - `--analysis-only`(RF-7): 이슈 DB에 기록하지 않는 분석 전용 실행. `--dry-run`과 함께 못 쓴다(종료 코드 2). lock·스냅샷·Jira·코드·파싱·매칭·

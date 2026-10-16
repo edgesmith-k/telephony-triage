@@ -359,7 +359,8 @@ def build(job: Job, a: dict, plan: dict | None, fill: dict | None, omit: set[str
         s["ANALYSIS"].append(_line(f"근거 로그 (마스킹, {_cand_name(cand)} 후보 {len(ev)}줄):"))
         s["ANALYSIS"].append({"kind": "code", "text": [_clip(f"{e.get('ts')} {e.get('tag')} {e.get('msg')}", EVIDENCE_CHARS)
                                                        for e in ev]})
-    must = [str(m) for m in a.get("must_show") or []]
+    # 사용자 clone 상태(triagelib PULL_SKIPPED 줄)는 분석과 무관하고 로컬 브랜치 이름이 들어 Jira에 올리지 않는다
+    must = [str(m) for m in a.get("must_show") or [] if not str(m).startswith("이슈 DB pull 건너뜀:")]
     logs = a.get("logs") or {}
     rng = logs.get("range")
     if isinstance(rng, list) and len(rng) == 2 and not any(m.startswith("로그 범위") for m in must):

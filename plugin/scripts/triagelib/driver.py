@@ -317,8 +317,6 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
             self.state.data["snapshot"] = snap
             self.state.save()
         self.out["snapshot"] = snap
-        if snap.get("pull_skipped_reason"):     # 모드와 상관없이 알린다(notes는 항상 보임)
-            self.notes.append(f"이슈 DB pull 건너뜀: {snap['pull_skipped_reason']}")
 
     def compat(self) -> None:
         for_ = "dry-run" if self.args.dry_run or self.analysis_only else "write"

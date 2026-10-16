@@ -83,7 +83,7 @@ git -C <work_dir>/_snapshot checkout --detach origin/<base_branch>
 git -C <issue_db.path> pull --ff-only
 ```
 
-- **사용자 clone에서 `checkout`하지 않는다.** 현재 브랜치가 base가 아니거나 dirty하면 pull을 건너뛰고 그 사실만 알린다(`triage.py run`은 모드와 상관없이 `notes`에 `이슈 DB pull 건너뜀: <사유>`). ff-only가 실패하면 자동으로 해결하지 않고 보고한다.
+- **사용자 clone에서 `checkout`하지 않는다.** 현재 브랜치가 base가 아니거나 dirty하면 pull을 건너뛰고 그 사실만 알린다(`triage.py run`은 모드와 상관없이 report.md·`must_show` 줄 `이슈 DB pull 건너뜀: <사유>`). ff-only가 실패하면 자동으로 해결하지 않고 보고한다.
 - 분석(Step 3~7), 사후 lint, `parse_logcat --rules`, 매처, `db_search`는 모두 **스냅샷**(`--db <work_dir>/_snapshot`)을 읽는다. 로컬 main이 오래됐어도 결과가 최신 origin 기준이 된다.
 - 스냅샷은 읽기 전용이다.
 - `snapshot` 결과의 `previous_sha`·`base_sha_changed`로 이전 스냅샷 대비 base 변경 여부를 알 수 있다(`sync`가 한 줄로 보인다). 시각은 `<work_dir>/snapshot.json`에 남아 `config.py doctor`가 스냅샷 나이를 본다(`contracts.md §3.2`).
@@ -212,7 +212,7 @@ Android 버전과 브랜치마다 소스 트리가 다르므로 **분석할 때�
 - 열린 PR: 없음
 ```
 
-**must_show**: `analysis.json`의 `must_show`(≤6줄, 4KB 압축 시 4줄)는 위 리포트 줄 중 사용자에게 꼭 보여야 하는 것의 본문 그대로다(`- ` 없이). 우선순위: 분석 전용 안내 > 읽기 전용 안내 > 1위가 바뀐 재분석 > 실패 스텝 > 장비 시각 미사용 > 판정 불가 유형 > 슬롯 불일치 > 시계 이상 구간의 근거 > 로그 범위 줄(후보 없음·1위 C=0·로그 범위 일부/밖·시계 이상일 때만) > 분석 범위 밖 오류 이벤트 > 파서 규칙에 없는 태그·후보 없음의 미추출 W/E/F 줄(추출 이벤트 0건일 때) > 코드 분석 트리 자동 선택(`code.auto`). 슬롯 불일치는 Jira `sim_slot` 안의 정수가 정확히 하나(음수 아님)일 때만 그 값을 1위 후보 `phones`와 그대로 비교한다(0/1 기준은 S20, 근거가 모두 `phone_id: null`이면 내지 않음). 리포트를 요약해 보여 줄 때도 이 줄들은 빼지 않는다(`contracts.md §3.2` `triage.py`).
+**must_show**: `analysis.json`의 `must_show`(≤6줄, 4KB 압축 시 4줄)는 위 리포트 줄 중 사용자에게 꼭 보여야 하는 것의 본문 그대로다(`- ` 없이). 우선순위: 분석 전용 안내 > 읽기 전용 안내 > 1위가 바뀐 재분석 > 실패 스텝 > 장비 시각 미사용 > 판정 불가 유형 > 슬롯 불일치 > 시계 이상 구간의 근거 > 로그 범위 줄(후보 없음·1위 C=0·로그 범위 일부/밖·시계 이상일 때만) > 분석 범위 밖 오류 이벤트 > 파서 규칙에 없는 태그·후보 없음의 미추출 W/E/F 줄(추출 이벤트 0건일 때) > 코드 분석 트리 자동 선택(`code.auto`) > pull 건너뜀(§Step 1, 분석과 무관해 맨 뒤). 슬롯 불일치는 Jira `sim_slot` 안의 정수가 정확히 하나(음수 아님)일 때만 그 값을 1위 후보 `phones`와 그대로 비교한다(0/1 기준은 S20, 근거가 모두 `phone_id: null`이면 내지 않음). 리포트를 요약해 보여 줄 때도 이 줄들은 빼지 않는다(`contracts.md §3.2` `triage.py`).
 
 ### Step 7. 분류 확정 → 작업 계획 작성 (반드시 사용자 확인)
 
@@ -364,7 +364,7 @@ post_sha256: <64 hex>          ← 선택 줄과 이 줄은 게시 가능하고 
 | PROBLEM (≤600자) | `Jira: <KEY>`, 구조화 필드(단말·SW·Android·캐리어·발생일), 실패 스텝(있을 때), `요약: <plan issue.note>`(있을 때) | `problem`: 증상 한 줄 ≤200자, note가 없을 때만 필수 |
 | CAUSE (≤1000자) | 분류 줄 + 확정 표시(사용자 확정 / 원인 미확정 / 자동 분석 1위 후보 — 사람이 확정하지 않음), 새 원인이면 임시 ID·PR, `규칙 일치 점수 <s> (S, C) — 진단 확신도 아님`, C=0이면 "유형만 일치, 원인 미확인" | `cause`: 1~4개 `{basis, text≤300}`. basis `log\|code\|placeholder\|explore` → `[로그로 확인]` `[코드로 추정]` `[placeholder 규칙 결과]` `[탐색 분석 가설]`. 없거나 다른 값이면 종료 1 |
 | NEXT ACTION (≤800자) | 해결책·해결책 검증·수정 상태(최종 원인이 DB에 있을 때), 미확정이면 "원인 미확정 — 추가 로그·재현 정보 필요", 이슈 DB 상태(PR #n 리뷰 중 / 계획만 저장 / 기록 안 함) | `next`: 0~3개 "다음 확인" ≤200자 |
-| ANALYSIS (≤1600자) | 근거 로그(마스킹, 1위 evidence ≤6줄, 고정폭 블록), 로그 범위, `must_show` 글자 그대로, `코드 위치: 코드 미확인`(code.skipped), 기타 후보 ≤3, 꼬리 줄 | `code_location`: `파일:라인 — 분기 조건` ≤200자 또는 null(code.skipped면 넣을 수 없다) |
+| ANALYSIS (≤1600자) | 근거 로그(마스킹, 1위 evidence ≤6줄, 고정폭 블록), 로그 범위, `must_show` 글자 그대로(pull 건너뜀 줄은 빼고 — 사용자 clone 상태라 분석과 무관하고 로컬 브랜치 이름이 든다), `코드 위치: 코드 미확인`(code.skipped), 기타 후보 ≤3, 꼬리 줄 | `code_location`: `파일:라인 — 분기 조건` ≤200자 또는 null(code.skipped면 넣을 수 없다) |
 
 - 전체 상한 4,000자. LLM 칸은 칸당 1줄, `TODO`·빈 칸·로그 원문 줄 모양·Jira 요약·설명·코멘트와 40자 이상 같은 연속 부분이 있으면 종료 1. 마스킹은 `08-safety.md §8.1` "Jira 코멘트 본문".
 - 형식은 `--format` > `tracker.write_tools.add_comment.format` > `jira-wiki`. 렌더러(jira-wiki·markdown)는 트래커 중립 중간 표현에서 만들고 도구 인자 매핑과 분리돼 있다.
