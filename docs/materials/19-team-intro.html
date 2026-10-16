@@ -138,9 +138,11 @@ tr:last-child td { border-bottom: 0; }
 th { font-size: 0.78rem; font-family: var(--font-mono); color: var(--muted); font-weight: 500; letter-spacing: 0.04em; }
 td:first-child { font-weight: 700; white-space: nowrap; }
 #quality td:first-child { white-space: nowrap; }
+@media (min-width: 561px) {
 #terms table.defs td:first-child { white-space: normal; width: 14%; }
 #terms table.defs td:nth-child(2) { width: 32%; }
 #terms table.defs td:nth-child(3) { width: 27%; }
+}
 @media (max-width: 560px) {
   #quality thead, #terms thead { display: none; }
   #quality tr, #quality td, #terms tr, #terms td { display: block; }
@@ -688,8 +690,8 @@ html { scroll-behavior: smooth; }
             <tr><td>유형 · 원인</td><td data-label="뜻">유형은 사용자가 겪는 증상, 원인은 같은 증상 아래의 서로 다른 이유.</td><td data-label="예·비유">유형 DATA-001 “데이터 연결 요청이 안 나감” 아래 원인 01 “데이터 설정 꺼짐”, 02 “로밍 설정 꺼짐”</td><td data-label="왜 필요한가">같은 증상이라도 이유마다 해결책이 달라 나눠 관리하려고</td></tr>
             <tr><td>파서 규칙</td><td data-label="뜻">로그 한 줄에서 필요한 값을 뽑아 이벤트로 바꾸는 규칙(태그 · 추출 패턴).</td><td data-label="예·비유"><code>DNC</code> 태그의 “Data disallowed reasons: ROAMING_DISABLED” 줄 → “데이터 거부” 이벤트(사유 ROAMING_DISABLED)</td><td data-label="왜 필요한가">판정 규칙이 로그를 늘 같은 기준(이벤트)으로 읽게 하려고</td></tr>
             <tr><td>시그니처</td><td data-label="뜻">이 유형 · 원인을 알아보는 로그 패턴 묶음(이벤트 · 조건 · 순서).</td><td data-label="예·비유">같은 SIM에서 “데이터 설정 꺼짐” 뒤 60초 안에 “데이터 거부(DATA_DISABLED)”가 오면 DATA-001-01</td><td data-label="왜 필요한가">원인 판정을 짐작이 아니라, 누가 돌려도 같은 결과가 나오는 조건으로 하려고</td></tr>
-            <tr><td>S / C</td><td data-label="뜻">증상 시그니처(S) · 원인 시그니처(C)가 맞았는지(맞으면 1). 진단 확신도는 아님.</td><td data-label="예·비유">데이터 거부는 있는데 설정 꺼짐 줄이 없으면 S=1 · C=0(유형 일치, 원인 미확인)</td><td data-label="왜 필요한가">증상만 맞는지, 원인까지 맞는지를 나눠 보여 주려고</td></tr>
-            <tr><td>fixture</td><td data-label="뜻">시험용으로 남겨 둔 마스킹된 로그 조각. 원인마다 맞혀야 할 조각과 잡으면 안 되는 정상 조각을 둡니다.</td><td data-label="예·비유">시험 문제 은행: 새 규칙을 넣을 때마다 이 조각들로 다시 시험</td><td data-label="왜 필요한가">규칙이 실제로 맞히는지 언제든 다시 시험할 수 있게 하려고</td></tr>
+            <tr><td>S / C</td><td data-label="뜻">증상 시그니처(S) · 원인 시그니처(C)가 맞았는지(맞으면 1). 진단 확신도는 아님.</td><td data-label="예·비유">데이터 거부(DATA_DISABLED)는 있는데 설정 꺼짐 줄이 없으면 DATA-001-01은 S=1 · C=0(유형 일치, 원인 미확인)</td><td data-label="왜 필요한가">증상만 맞는지, 원인까지 맞는지를 나눠 보여 주려고</td></tr>
+            <tr><td>fixture</td><td data-label="뜻">시험용으로 남겨 둔 마스킹된 로그 조각. 원인마다 맞혀야 할 조각, 유형마다 잡으면 안 되는 정상 조각을 둡니다.</td><td data-label="예·비유">시험 문제 은행: 새 규칙을 넣을 때마다 이 조각들로 다시 시험</td><td data-label="왜 필요한가">규칙이 실제로 맞히는지 언제든 다시 시험할 수 있게 하려고</td></tr>
           </tbody>
         </table>
       </div>
@@ -711,7 +713,7 @@ html { scroll-behavior: smooth; }
         <table class="ex">
           <thead><tr><th></th><th>묻는 것</th><th>예</th></tr></thead>
           <tbody>
-            <tr><td>R1</td><td data-label="묻는 것">규칙이 로그에서 단서를 찾아내나?</td><td data-label="예">로그의 “로밍 중” · “데이터 로밍 꺼짐” · “데이터 거부(ROAMING_DISABLED)” 줄이 이벤트로 뽑힌다</td></tr>
+            <tr><td>R1</td><td data-label="묻는 것">규칙이 로그에서 단서를 찾아내나?</td><td data-label="예">로그의 “데이터 거부(ROAMING_DISABLED)” 줄이 “데이터 거부” 이벤트로, 사유 값까지 뽑힌다</td></tr>
             <tr><td>R2</td><td data-label="묻는 것">그 이슈를 맞히나?</td><td data-label="예">로밍 설정이 꺼졌던 이슈의 로그를 넣으면 이 원인이 걸린다</td></tr>
             <tr><td>R3</td><td data-label="묻는 것">엉뚱한 걸 잡지 않나? (오진 방지)</td><td data-label="예">정상으로 데이터가 붙은 로그, 데이터 설정을 꺼 둔 다른 원인(DATA-001-01)의 로그, 고친 뒤 로그에는 걸리지 않는다</td></tr>
             <tr><td>R4</td><td data-label="묻는 것">예전 판정을 망가뜨리지 않나?</td><td data-label="예">이슈 DB의 다른 fixture(예전에 맞히던 다른 이슈)의 판정이 그대로다</td></tr>
@@ -720,9 +722,9 @@ html { scroll-behavior: smooth; }
           </tbody>
         </table>
       </div>
-      <p class="small muted">새 원인 초안은 R1~R5로 확인하고, 추가 로그를 주면 R6도 봅니다. R1~R4가 실패하면 기록이 막히고(볼 로그가 없어 건너뛴 검사는 통과가 아니라 “검증 못 함”으로 표시돼 리뷰 대상이 됩니다), R5가 기존 결과를 바꾸면 메인테이너 승인이 필요하며, R6은 실패해도 사용자가 진행을 고를 수 있습니다. 이렇게 검증한 규칙이 PR로 병합되면 다음 분석부터 같은 증상을 자동으로 찾아냅니다.</p>
+      <p class="small muted">새 원인 초안은 R1~R5로 확인하고, 추가 로그를 주면 R6도 봅니다. R1~R4가 실패하면 기록이 막히고(볼 로그가 없어 건너뛴 검사는 통과가 아니라 “검증 못 함”으로 표시돼 리뷰 대상이 됩니다), R5가 기존 결과를 바꾸면 메인테이너 승인이 필요하며, R6은 실패해도 사용자가 진행을 고를 수 있습니다. 이렇게 검증한 규칙이 PR로 병합되면 다음 분석부터 같은 원인을 자동으로 찾아냅니다.</p>
       <h3>eval 예시: 운전면허 실기 시험처럼</h3>
-      <p>Claude가 정해진 절차를 지키는지 보는 실기 시험입니다. 모의 Jira 이슈와 로그(코스)를 주고 실제 플러그인으로 끝까지 돌린 뒤, 채점 스크립트(감독관)가 실행 기록에서 정해진 항목을 확인합니다. 이런 걸 봅니다.</p>
+      <p>Claude가 정해진 절차를 지키는지 보는 실기 시험입니다. 모의 Jira 이슈와 로그(코스)를 주고 실제 플러그인으로 끝까지 돌린 뒤, 채점 스크립트(감독관)가 실행 기록에서 정해진 항목을 확인하고, 의미 판단 항목은 기록을 읽어 따로 채점합니다. 이런 걸 봅니다.</p>
       <div class="tbl-wrap">
         <table class="ex">
           <thead><tr><th>eval</th><th>묻는 것</th><th>통과 조건</th></tr></thead>
