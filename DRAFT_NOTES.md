@@ -14,11 +14,11 @@
 - 테스트는 `tools/related_tests.py --run`(관련만). 전체는 도구가 full이라 할 때·반입 직전·요청 시.
 - 진행 중 판단은 Fable 결정 에이전트에게 묻는다(10/06 사용자 지정). 원칙상 사용자 승인 대상(이슈 DB push, main 병합·태그 등 사용자가 지시하지 않은 외부 동작)은 사용자에게.
 
-## 진행 상태 (10/15)
+## 진행 상태 (10/16)
 
 - 모드: **사외 초안**. Phase **D0, 1~13** 완료, 반입 전 보강 트랙 완료(history). 최신 반입본 import-20261014c(f4d98d5, 사내 전달), 새 묶음 import-20261015(767cc4f, 태그 전). main 병합 PR #8~#53.
-- 10/14 밤~10/15 **H 사외 재측정 완료**(PR #52·#53): 실패 11→0, 거부 52→29, 한도 10→0. 상세 history "10/14 밤~10/15".
-- 10/15 **K 완료**(55d24a3·e45885d): `offsite_results.json` pass 59·fail 0·미결정 11. **L 종합 검토**: `docs/development/L_RESULT.md`. 10/16 **L1 완료**(0f0d8cd~, 리뷰 P0·P1 0, pytest 34 실패는 HEAD와 같은 환경 실패·1,972 수집, P2는 L_RESULT 끝). 원격 `ccr-d022623a-2f4vdx`, PR 전.
+- 10/15 H 사외 재측정 완료(PR #52·#53, history).
+- 10/15 **K 완료**(55d24a3·e45885d): `offsite_results.json` pass 59·fail 0·미결정 11. **L 종합 검토**: `docs/development/L_RESULT.md`. 10/16 **L1·L2 완료**(L2 1023567~, 재측정 offsite pass 59·fail 0·none 11(site), 결과·P2는 L_RESULT "(다) 결과"). 원격 `ccr-d022623a-2f4vdx`, PR 전.
 - 안내서 "모델 선택": Sonnet 5.5 기준, Opus 5.5 확인 11개 실패 0(비용 ≈2.7배).
 - `TODO(SITE)`: `tools/list_site_todos.py`. REVIEW-OPEN 0건. 사내 시작: **"사내 설정 시작"**(결정 (o)).
 - 안내서 HTML: `docs/telephony-triage-guide.html`(공유본 https://claude.ai/artifact/1jov1Et4dQUMauFr6aoxWG 개정 7), `docs/materials/00-index.html`
@@ -29,13 +29,14 @@
 |---|---|---|
 | ☑ K·L | K(P0-1·P1 수정, 재채점)·L(목록·분류·구현 계획) 완료 | `K_RESULT.md`(P2는 반입 뒤 후보), `L_RESULT.md` |
 | ☑ L1 | L (가)·(나) 10개 완료(10/16), 생성기 v2 | `L_RESULT.md` 세션 1, 끝의 "L1 리뷰 P2"는 반입 뒤 후보 |
-| ☐ L2 | **진행 중(10/16, eval 비용 승인됨)**: (다) 표시·판정 정리(R·M-2·U-2·U-4, eval 전체 1회) | `L_RESULT.md` 세션 2. 옛 R 항목 포함 |
+| ☑ L2 | (다) 표시·판정 정리(R·M-2·U-2·U-4) + 재측정 완료(10/16) | `L_RESULT.md` "(다) 결과", P2는 반입 뒤 후보 |
 | ☐ F | 반입 묶음 — **import-20261015(767cc4f)는 태그하지 않는다** | L1 병합 뒤 `make_bundle.py --label import-<날짜>`로 다시(L2 뒤 또 한 번), 태그는 사용자 |
 | ☐ G | 범용판 별도 레포 — **보류(10/07 사용자)** | 재개는 사용자가 정한다 |
 
 ## 사내로 넘긴 것
 
 - 사내 대상 eval 11개(`pending.json` `site`, S-2; 주입 59·60 포함, 사내 모델이 다르면 +7), 코드 Read line 힌트(T4, S-2 측정 뒤)·offline_eval 오류율 상한(S-1 합의, S-5)·`max_tokens_hint` 처리(S-4a)·setup Jira 없음 중단(U1, S-3), db-authoring 스키마 요약 확장(S-2, 스키마 Read 횟수로 판단), 사내 마켓플레이스 소스 유형 확인 → version 규칙(S-2·S-7, V2에서 `plugin.json` version 삭제 = 커밋 SHA 기준. 반입 직후 캐시 1회 무효화는 무해).
+- **L2로 hook이 바뀜**: 반입 전 원격 K 기록 4,714개로 M-2 옛·새 비교(J9), 반입 뒤 site eval 11개 모두 다시·plugin-probe 15(기록 시각 고정)·16(PowerShell matcher) 확인.
 - 반입 뒤 후보(RF-5·6·8·9, 리뷰 후속 R-36~R-47)는 `docs/history/draft-notes-2026-10.md` "10/13 이동".
 
 ## 사외에서는 못 하는 것 (사내 S-1~S-5)

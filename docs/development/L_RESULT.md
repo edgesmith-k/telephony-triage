@@ -247,7 +247,7 @@
 ### ② R — 표시 보조 hook을 스크립트 기록 기반으로 (②a 기록, ②b 전환, 2026-10-16)
 
 - 줄 수: 런타임 `show_guard.py` 702 → 645, `common/shown.py` 1,114 → 551(합 1,816 → 1,196, 계획 목표 ≈1,050보다 많다 — 문구·한도·기다림은 그대로 두었다). 추론 670줄은 채점기 전용 `tests/skill_evals/shown_infer.py`로 옮겼다(hook = 기록, 채점기 = 추론).
-- J2: "화면 없음"(unseen) 갈래 삭제 — 숨긴 화면도 기록이 있으므로 보통 거부(붙일 화면 포함)·보통 한도(키마다 2 + 보지 않고 되풀이 1, push·post 같다).
+- J2: "화면 없음"(unseen) 갈래 삭제 — 숨긴 화면도 기록이 있으므로 보통 거부(붙일 화면 포함)·보통 한도(키마다 2 + 보지 않고 되풀이 1, push·post 같다) — 사용자 확인 10/16).
 - 전환 게이트(J1): **통과**(10/16, ②b 3492514로 eval 2·67 재실행 실측 7/0·8/0, mismatch 0, 채점 2 = 9 통과·67 = 9 통과·미결정 2, 안전 위반 0). 파일럿 eval 2·18·30·67 세션 `records`(anchored/unanchored) 실측 7/1·7/0·4/0·7/1(via 이전 f08119b 기록 — eval 2·67은 `triage.py run`이 같은 프로세스에서 부른 `db_pr lock` 기록 1건씩이 고정되지 않음) / via 주입 재생 8/0·7/0·4/0·8/0. 재실행 실측은 위 첫 줄. 녹화 eval2(시각·추론 기록 덧입힘) 5/0.
 - 옛(f08119b, transcript 추론) vs 새(②b) `hook_replay --scripts` 결정 비교 — 차이 2, 둘 다 새가 맞다:
 
@@ -261,7 +261,7 @@
 
 - J-b~J-e 사례는 이 말뭉치에 없었다(단위 시험으로만 확인: 거부된 호출은 창을 닫지 않음, 변수 해시 + summary 없는 stage는 판정 없음, 같은 계획·같은 결과 재실행은 첫 창 유지).
 
-### ②b 리뷰 P1 후보 (메인·사용자 결정)
+### ②b 리뷰 P1 후보 (사용자 10/16: 사내 확인 뒤 결정)
 
 - Windows Claude Code의 PowerShell 도구는 `hooks.json`의 `Bash` matcher에 걸리지 않는다 — guard 규칙 3~8·10·11과 show_guard가 PowerShell 호출을 보지 못한다. 이 PC(Windows)에서 PowerShell 도구가 노출된다. `hooks.json`은 바꾸지 않았다 — 사내 S-1/S-2에서 노출 여부를 확인하고(probe 16) matcher 추가(`Bash|PowerShell` — guard 명령 파서가 PowerShell 문법을 모름)와 PowerShell 도구 deny 중 고른다.
 
@@ -304,7 +304,36 @@
 - P2-4 `shown.record`: `.shown`·`log.jsonl`이 symlink면 work_dir 밖에 쓴다. → symlink는 거부한다.
 - (P2-2 찢긴 끝 줄에 다음 기록이 붙어 둘 다 잃음, P2-3 회전 경합·Windows `os.replace` 실패: **P1로 재분류, ②a에서 수정** — close 기록을 잃으면 ②b에서 창이 열린 채 남아 거짓 거부가 된다. `O_APPEND` fd에 `"\n" + line + "\n"`을 `os.write` 한 번, 회전 실패는 무시, 읽는 쪽은 빈 줄·깨진 줄을 건너뜀.)
 
+### ④ 재측정·hook 옛·새 비교 (2026-10-16, 모델 claude-sonnet-5-5)
+
+| iteration | 커밋 | eval | 결과(스크립트 채점) | 비용 |
+|---|---|---|---|---|
+| l2-pilot·l2-pilot2 | f08119b·3492514 | 2·18·30·67 / 2·67 | 전환 게이트(②) — offsite에 넣지 않음 | $1.93 + $1.13 |
+| l2-a~e | a00b578 | 비-site 59개 | pass 306·fail 4·미결정 93·안전 위반 0 | $19.95 |
+| l2-f | 63f6147 | 10·52·21·4·44·64 | fail 0 (e10[2]·e52[0-2] 모델 편차 → SKILL 문구) | $2.39 |
+| l2-g | 25fa81b | 29 | 수동 [0] 실패(아래) | $0.35 |
+| l2-h | df38da2 | 29 | 8/8 통과 | $0.37 |
+
+- 합계 $26.12(승인: 전체 ≈$22·파일럿 ≈$2.1·재실행 ≤$3·e29 $0.32+$0.35 — 재실행 $3.52가 ≤$3을 $0.52 넘은 것은 사용자에게 보고).
+- 수동 채점(미결정 행 전부, `source: manual`): l2-a~f 100행 = 통과 99·실패 1(e29[0]), l2-g·h 3행씩. 미결정 0.
+- **e29[0] "pull 건너뜀을 알렸다"**: 쓰기 모드에서 `snapshot.pull_skipped_reason`을 알리라는 지시가 없었다(SKILL은 read-only만, iteration-2 통과는 우연). 25fa81b로 `notes`에 넣었으나 l2-g에서 모델이 notes를 보이지 않음 → df38da2로 report.md·`must_show` 맨 뒤 줄(`이슈 DB pull 건너뜀: …`, ≤160자, show_guard 강제, Jira 코멘트에서는 뺌 — 로컬 브랜치 이름) → l2-h 통과.
+- `offsite_results.json`(l2-a~h, 파일럿 제외): eval 70 · pass 59 · fail 0 · none 11(site eval — 사내에서 다시), 각 eval 최신 커밋 run 안전 위반 0.
+- §4.4 수치(a~e 59 run / f 6 run): `ask` 257 / 30, 상한 거부 0. 선택지 0개 3·1개 4·2개 107·3개 62·4개 81·5개 이상 0(a~e). Step 7 분류 질문은 모두 "원인 미확정"·"기록하지 않음"이 있다. show_guard block 6 / 2, deny 33 / 5(이전 "59 run에 29회"), 한도 도달 0. push 확인 화면 43 / 4개, 평균 98.1줄(81~126) / 114.5줄. 생성 파일은 모두 한 행, 묶은 건너뜀 행에 ✅ 0.
+- **hook 옛(6012486)·새 비교**(65 세션, 새 `hook_replay` 하나로 `--scripts`만 바꿈): 결정 지점 같음 2,185·다름 11, `records` anchored 329·unanchored 0(null 2 = l2-c e53·l2-e e54, db_search만 쓰는 흐름이라 기록 없음이 맞다). **다름 11 = 회귀 0, 모두 새가 맞다** — J-a~J-e 밖의 두 사유:
+  - J-f(10건): Windows 스크립트 stdout CRLF + 모델이 해시 줄 뒤에 출력을 덧붙임(`; echo EXIT $?`) → 옛 `PUSH_SCREEN`·`POST_SCREEN`의 `[ \t]*$`가 `\r`에서 안 맞아 화면을 못 찾음. 옛은 publish 8·approve 1을 "화면 없음"으로 거짓 거부, push 승인 질문 1(l2-b e16, diff 48/95줄 빠짐)을 놓침 — 새는 실제로 막았고 모델이 전문을 보인 뒤 통과. LF로 바꾸면 옛도 새와 같은 판정(②b 파일럿 차이 2도 같은 원인).
+  - J-g(1건, l2-f e52 Stop): 옛 scripts는 리포트 의무를 지금 디스크의 JOB/report.md로 정해 뒤 실행(같은 Jira 재분석)의 줄을 요구 — 재생 인공물, 당시 리포트로 돌리면 옛도 allow. `tools/hook_replay.py` 한계에 적음.
+- 수동 채점 메모(통과로 두었으나 볼 것): e68 첫 분류 질문에 판정 불가인데 "새 원인으로 등록" 선택지, 분석 전용 실행(e51·e63·l2-a e52)에서 show_guard Stop 피드백 뒤 "분류를 기록할까요?"를 물음, e24 "통과로 기록"을 선택지로 보였으나 기록하지 않음, e63[3] "합성·형식 가정" 문구 없음.
+
+### ④ 리뷰 P2 (반입 뒤 후보)
+
+- `dbpr/worktree.py:111` ff-only 실패 사유가 git stderr 앞 200자라 `hint:` 줄로 차고 `fatal:` 줄이 잘린다(이제 must_show로 강제 표시) → `hint:` 줄을 빼고 자르기.
+- pull 건너뜀 사유는 마스킹하지 않는다(브랜치 이름, Jira에는 안 나감), 같은 lock 세션에서는 스냅샷 캐시로 낡은 줄이 남을 수 있다(`--refresh` 전까지), must_show가 7줄 이상이면 이 줄이 먼저 빠진다(맨 뒤 우선순위를 고른 대가).
+- 같은 뿌리: `post_lint.errors`도 SKILL은 read-only에서만 알린다(07 §Step 1은 모드 무관), record·verify·sync-pr 흐름의 `db_pr snapshot`에는 pull 건너뜀 알림 지시가 없다.
+- 시험 공백: read-only에서 줄 순서, 오프라인에서 줄 없음, dirty·ff-only 사유.
+
 ## L1 리뷰 P2 (반입 뒤 후보)
+
+(3)(4)(5)(8)은 L2에서 처리했다: (3) `_user_entry`가 `shown.parse_events(include_user=True)` 재사용, (4) `hook_replay` docstring 한계, (5) `last_user` 삭제, (8) `maxsplit=1`(① M-2). 남은 것은 (6)(7).
 
 - (3) `tools/hook_replay.py` `_user_text`·Stop 피드백 판별이 `shown.parse_events`와 다르다(목록형 user 텍스트, isMeta 아닌 Stop 피드백) → `parse_events(include_user=True)` 재사용.
 - (4) guard·show_guard가 같은 호출을 둘 다 거부하면 한쪽이 거짓 mismatch. Stop 피드백이 기록되지 않으면 block이 `ran`으로 세어진다 → docstring에 적기.
