@@ -541,7 +541,7 @@ def test_doctor_markdown_and_json_show_versions_and_fail_warn_rows_only():
     status, _, diag = text.partition("### 진단 (관리자 전달용 — 이 화면을 그대로 보낸다. 로그 원문·자격증명 없음)\n")
     assert status.startswith(f"## {JOB} 작업 상태") and "### 단계" in status and diag
     assert re.search(r"^- \[현재\] 버전: 플러그인 지문 [0-9a-f]{12}\(설치 폴더 [^)]+\) · Claude Code (\d+\.\d+\.\d+|확인 불가) · "
-                     r"Python 3\.\d+\.\d+ · PyYAML \S+·jsonschema \S+$", diag, re.M)
+                     r"Python 3\.\d+\.\d+\S* · PyYAML \S+·jsonschema \S+$", diag, re.M)
     assert re.search(r"^- \[현재\] 환경 점검\(doctor\): ok \d+ · warn \d+ · fail [1-9]\d* · skip \d+$", diag, re.M)
     rows = [ln.split(" | ") for ln in diag.splitlines() if ln.startswith("| ") and not ln.startswith(("| 점검", "|---"))]
     assert rows and [r[1] for r in rows] == sorted((r[1] for r in rows), key=lambda s: s != "fail")
