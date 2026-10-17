@@ -4,21 +4,20 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>telephony-triage 소개 (파트 공유)</title>
-<!-- 문서 스타일: 안내서(책)의 CSS 그대로 + 맨 아래 PROMO 추가. 19와 02의 공통 절은 글자 그대로 같다. -->
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<!-- 문서 스타일: 안내서(책)의 CSS 그대로 + 맨 아래 PROMO 추가. 19와 02의 공통 절은 글자 그대로 같다. 외부 요청 없음: 웹 글꼴을 불러오지 않고 시스템 글꼴로 표시. -->
 <style>
 /* Layout: 전폭 연청록 히어로(실제 추세 차트) → 좌측 목차 + 본문. 신호 ON=청록, OFF=주황, 이동평균=호박색 */
 :root{
   --bg:#f5f7f8;--surface:#ffffff;--sunken:#eef1f3;--text:#121a24;--muted:#5a6573;--line:#dfe4e9;
-  --accent:#0e8a72;--accent-soft:#e3f4ef;--on-accent:#ffffff;
+  --accent:#0e8a72;--accent-ink:#0a735f;--accent-soft:#e3f4ef;--on-accent:#ffffff;
   --off:#c2410c;--off-soft:#fdeee6;--ma:#b7791f;
   --warn:#b45309;--warn-soft:#fff6e5;--danger:#b91c1c;--danger-soft:#fdeeee;
   --hero-bg:#eaf3f0;--hero-fg:#121a24;--hero-muted:#5a6573;--hero-line:#cfdcd7;--hero-on:#0e8a72;--hero-off:#c2410c;--hero-ma:#b7791f;--hero-shade:rgba(194,65,12,.09);
   --term-bg:#101923;--term-fg:#dbe4ee;--term-muted:#7d8ea3;--term-ok:#3fd1ae;--term-warn:#e8b04f;
   --radius:14px;color-scheme:light;
-  --display:"Bricolage Grotesque","IBM Plex Sans KR",system-ui,sans-serif;
-  --font:"IBM Plex Sans KR",-apple-system,system-ui,sans-serif;
-  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --display:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR","Segoe UI",system-ui,sans-serif;
+  --font:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR","Segoe UI",system-ui,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"D2Coding",monospace;
 }
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);font-size:17px;line-height:1.75;
@@ -26,14 +25,14 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);fon
 .wrap{max-width:1040px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
 h1,h2,h3{text-wrap:balance}
 p{margin:0 0 16px}
-a{color:var(--accent)}
+a{color:var(--accent-ink);text-underline-offset:2px}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
 .num{font-family:var(--mono);font-variant-numeric:tabular-nums}
 
 /* ---------- HERO ---------- */
 .hero{background:var(--hero-bg);color:var(--hero-fg);border-bottom:1px solid var(--hero-line)}
 .hero .wrap{padding-block:56px 48px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:48px;align-items:center}
-.hero .tag{font-family:var(--mono);font-size:12px;letter-spacing:.12em;color:var(--hero-on);margin:0 0 14px;display:flex;gap:10px;align-items:center}
+.hero .tag{font-family:var(--mono);font-size:12px;letter-spacing:.12em;color:var(--accent-ink);margin:0 0 14px;display:flex;gap:10px;align-items:center}
 .hero .tag::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--hero-on);box-shadow:0 0 0 4px rgba(14,138,114,.16)}
 .hero h1{font-family:var(--display);font-weight:800;font-size:clamp(44px,7vw,72px);line-height:1;letter-spacing:-.035em;margin:0 0 18px}
 .hero h1 span{color:var(--hero-on)}
@@ -64,17 +63,17 @@ main{min-width:0;max-width:760px}
 .toc a:hover,.toc a:focus-visible{color:var(--text);border-left-color:var(--accent)}
 @media (max-width:880px){
   .layout{grid-template-columns:1fr;gap:0;padding-block:20px 72px}
-  .toc{display:none}
+  .toc{position:static;padding:12px 16px;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface)}
   .toc summary{cursor:pointer;margin:0;font-size:12px}
   .toc[open] summary{margin-bottom:8px}
 }
 section{scroll-margin-top:24px}
-.kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;color:var(--accent);margin:72px 0 6px;text-transform:uppercase}
+.kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;color:var(--accent-ink);margin:72px 0 6px;text-transform:uppercase}
 h2{font-family:var(--font);font-weight:700;font-size:30px;line-height:1.3;letter-spacing:-.02em;margin:0 0 14px}
 h3{font-size:19px;font-weight:600;margin:36px 0 8px}
 .lead{font-size:19.5px;font-weight:500;line-height:1.65;margin-bottom:20px}
 .bridge{color:var(--muted);font-size:15px;margin:28px 0 0;padding-left:14px;border-left:2px solid var(--line)}
-mark{background:none;color:var(--accent);font-weight:600}
+mark{background:none;color:var(--accent-ink);font-weight:600}
 
 /* ---------- WHY: before/after ---------- */
 .vs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:24px 0 8px}
@@ -82,7 +81,7 @@ mark{background:none;color:var(--accent);font-weight:600}
 .vs .label{font-family:var(--mono);font-size:11.5px;letter-spacing:.1em;margin-bottom:8px;display:block}
 .vs .manual .label{color:var(--off)}
 .vs .auto{border-color:var(--accent);background:var(--accent-soft)}
-.vs .auto .label{color:var(--accent)}
+.vs .auto .label{color:var(--accent-ink)}
 .vs ul{margin:0;padding-left:18px;font-size:15px;line-height:1.7}
 @media (max-width:560px){.vs{grid-template-columns:1fr}}
 
@@ -100,9 +99,9 @@ td.r,th.r{text-align:right}
 .sig{min-width:620px}
 .sig td small{display:block;color:var(--muted);font-size:12px;font-family:var(--mono)}
 .pill{display:inline-block;font-family:var(--mono);font-size:11.5px;font-weight:700;letter-spacing:.06em;padding:2px 9px;border-radius:999px}
-.pill.on{background:var(--accent-soft);color:var(--accent)}
+.pill.on{background:var(--accent-soft);color:var(--accent-ink)}
 .pill.off{background:var(--off-soft);color:var(--off)}
-.pos{color:var(--accent)}.neg{color:var(--off)}
+.pos{color:var(--accent-ink)}.neg{color:var(--off)}
 .wbar{display:flex;align-items:center;gap:10px;justify-content:flex-end}
 .wbar .track{width:72px;height:6px;border-radius:3px;background:var(--sunken);overflow:hidden;flex:none}
 .wbar .fill{display:block;height:100%;background:var(--accent);border-radius:3px}
@@ -113,7 +112,7 @@ tr.cash td{background:var(--sunken)}
 .feat{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,300px);gap:28px;align-items:start;margin-top:8px}
 .feat ol{list-style:none;margin:0;padding:0;display:grid;gap:18px}
 .feat li{display:grid;grid-template-columns:32px minmax(0,1fr);gap:12px}
-.feat li .n{font-family:var(--mono);font-size:12px;color:var(--accent);padding-top:4px}
+.feat li .n{font-family:var(--mono);font-size:12px;color:var(--accent-ink);padding-top:4px}
 .feat li h4{margin:0 0 2px;font-size:16.5px}
 .feat li p{margin:0;font-size:15px;color:var(--muted);line-height:1.65}
 .tg{background:var(--sunken);border:1px solid var(--line);border-radius:var(--radius);padding:16px}
@@ -154,7 +153,7 @@ code{font-family:var(--mono);font-size:.85em;background:var(--sunken);border:1px
 .stage code{font-size:11.5px;border:none;background:none;padding:0;color:var(--muted)}
 .stage p{font-size:13.5px;color:var(--muted);margin:6px 0 0;line-height:1.55}
 .stage.gate .dot{background:var(--accent);border-color:var(--accent);box-shadow:0 0 0 5px var(--accent-soft)}
-.stage.gate .t{color:var(--accent)}
+.stage.gate .t{color:var(--accent-ink)}
 .fail{margin-top:12px;border:1px dashed var(--off);border-radius:10px;padding:8px 10px;font-size:12.5px;color:var(--off);background:var(--off-soft);line-height:1.5}
 @media (max-width:720px){
   .pipe{grid-template-columns:1fr}
@@ -184,7 +183,7 @@ code{font-family:var(--mono);font-size:.85em;background:var(--sunken);border:1px
 .gates{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:24px 0}
 .g{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:18px;display:flex;flex-direction:column;gap:10px;min-width:0}
 .g .top{display:flex;justify-content:space-between;align-items:center;font-family:var(--mono);font-size:11.5px;color:var(--muted);letter-spacing:.08em}
-.g .top em{font-style:normal;color:var(--accent)}
+.g .top em{font-style:normal;color:var(--accent-ink)}
 .g .big{font-family:var(--display);font-weight:800;font-size:38px;line-height:1;letter-spacing:-.03em}
 .g h4{margin:0;font-size:16px}
 .g dl{margin:0;display:grid;gap:8px;font-size:14px;line-height:1.6}
@@ -209,7 +208,7 @@ footer{margin-top:64px;padding-top:18px;border-top:1px solid var(--line);font-si
 @media (prefers-reduced-motion:no-preference){html{scroll-behavior:smooth}}
 
 /* ---------- BOOK (책 구조용 추가) ---------- */
-.toc .part{display:block;font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:var(--accent);margin:16px 0 4px}
+.toc .part{display:block;font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:var(--accent-ink);margin:16px 0 4px}
 @media (min-width:881px){.toc{max-height:calc(100vh - 32px);overflow:auto;padding-bottom:24px}}
 .part-head{margin-top:88px;border-top:3px solid var(--text)}
 .part-head .kicker{margin-top:20px}
@@ -217,13 +216,13 @@ footer{margin-top:64px;padding-top:18px;border-top:1px solid var(--line);font-si
 .wide{min-width:640px}
 .flow{width:100%;max-width:520px;height:auto;display:block;margin-top:4px}
 .flow text{font-family:var(--font)}.flow .b{font-size:15px;font-weight:700}.flow .s{font-size:12px;fill:var(--hero-muted)}
-.flow .h{font-size:12px;font-weight:700;fill:var(--hero-on);letter-spacing:.04em}.flow .big{font-size:24px;font-weight:800;fill:var(--hero-on)}
+.flow .h{font-size:12px;font-weight:700;fill:var(--accent-ink);letter-spacing:.04em}.flow .big{font-size:24px;font-weight:800;fill:var(--hero-on)}
 .flow-foot{font-size:12px;color:var(--hero-muted);margin:6px 0 0}
 .cgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 32px}
-.cpart h3{font-size:15px;color:var(--accent);margin:20px 0 6px}
+.cpart h3{font-size:15px;color:var(--accent-ink);margin:20px 0 6px}
 .cpart ol{list-style:none;padding:0;margin:0}
 .cpart a{display:flex;gap:10px;padding:7px 0;border-bottom:1px solid var(--line);color:var(--text);text-decoration:none}
-.cpart a:hover,.cpart a:focus-visible{color:var(--accent)}
+.cpart a:hover,.cpart a:focus-visible{color:var(--accent-ink)}
 .cpart b{font-family:var(--mono);min-width:22px;color:var(--muted);font-weight:600}
 @media (max-width:600px){.cgrid{grid-template-columns:1fr}}
 
@@ -233,12 +232,12 @@ footer{margin-top:64px;padding-top:18px;border-top:1px solid var(--line);font-si
 .ba .side{border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);padding:16px;min-width:0;display:flex;flex-direction:column;gap:10px}
 .ba .side.after{border-color:var(--accent);background:var(--accent-soft)}
 .ba .label{font-family:var(--mono);font-size:11.5px;letter-spacing:.1em;color:var(--off)}
-.ba .after .label{color:var(--accent)}
+.ba .after .label{color:var(--accent-ink)}
 .ba h4{margin:0;font-size:17px;line-height:1.4}
 .ba .term{margin:0}
 .ba .term pre{font-size:12px;white-space:pre-wrap;overflow-wrap:anywhere}
 .ba p{margin:0;font-size:14.5px;color:var(--muted);line-height:1.6}
-.ba .mid{display:grid;place-items:center;color:var(--accent)}
+.ba .mid{display:grid;place-items:center;color:var(--accent-ink)}
 .ba .mid svg{width:28px;height:28px}
 .chk{display:flex;gap:6px;flex-wrap:wrap}
 .pill.q{background:var(--sunken);color:var(--muted)}
@@ -246,7 +245,7 @@ footer{margin-top:64px;padding-top:18px;border-top:1px solid var(--line);font-si
 .cmt{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;margin:16px 0 8px}
 .cmt .who{padding:10px 16px;border-bottom:1px solid var(--line);background:var(--sunken);font-size:12.5px;color:var(--muted);font-family:var(--mono)}
 .cmt pre{margin:0;padding:14px 16px;font-family:var(--mono);font-size:12.5px;line-height:1.7;white-space:pre-wrap;overflow-wrap:anywhere}
-.cmt pre b{color:var(--accent)}
+.cmt pre b{color:var(--accent-ink)}
 .cmt pre i{font-style:normal;color:var(--muted)}
 .uses{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:20px 0}
 .uses>div{border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);padding:16px 18px;min-width:0}
@@ -265,6 +264,31 @@ footer{margin-top:64px;padding-top:18px;border-top:1px solid var(--line);font-si
 .next{margin-top:72px;padding:28px 24px;border:1px solid var(--accent);border-radius:var(--radius);background:var(--accent-soft)}
 .next .kicker{margin-top:0}
 .next p:last-child{margin-bottom:0}
+
+/* ---------- 목차 버튼 (안내서와 같음) ---------- */
+.toc summary::after{content:""}
+@media (max-width:880px){.toc summary::after{content:" +";color:var(--muted)}.toc[open] summary::after{content:" −"}}
+.tocbtn{position:fixed;right:max(12px,env(safe-area-inset-right,0px));bottom:max(12px,env(safe-area-inset-bottom,0px));z-index:10;
+  font-size:13px;line-height:1;padding:8px 12px;border-radius:999px;background:var(--surface);color:var(--accent-ink);
+  border:1px solid var(--line);box-shadow:0 2px 8px rgba(18,26,36,.12);text-decoration:none}
+.tocbtn.off{opacity:0;visibility:hidden}
+.tocbtn{transition:opacity .2s}
+body{padding-bottom:56px}
+@media print{
+  body{background:#fff;font-size:11pt}
+  .toc,.tocbtn,.chnav,.printbtn,.hl,.hero .tag::before{display:none!important}
+  .layout{display:block;padding:0}
+  .hero,.chart-card{background:#fff;box-shadow:none}
+  .term{background:#fff;color:var(--text);border-color:var(--muted)}
+  .term .bar{display:none}
+  .term .p,.term .o{color:var(--accent-ink)}.term .c{color:var(--muted)}.term .w{color:var(--warn)}
+  pre,.term pre{white-space:pre-wrap;overflow-wrap:anywhere;overflow:visible}
+  thead{display:table-header-group}
+  tr,svg,.g,.steps>li{break-inside:avoid}
+  .scroll{overflow:visible}
+  .scroll table{min-width:0!important}
+  a{text-decoration:underline}
+}
 </style>
 </head>
 <body>
@@ -408,7 +432,7 @@ approved_hash: c02651cacb352e7ba15e211b00b717b9a19ff0a4</pre></div>
       <ul>
         <li>로그를 이벤트로 바꿔 팀 규칙과 자동으로 맞춰 본다</li>
         <li>원인·해결책·Jira 이력이 팀 이슈 DB에 있다</li>
-        <li>판정은 스크립트라 같은 로그면 같은 후보가 나온다</li>
+        <li>판정은 스크립트라 같은 로그·조건·규칙이면 같은 판정을 재현한다</li>
         <li>"고쳐짐"은 수정 빌드 로그 검증을 통과해야 붙는다</li>
       </ul>
     </div>
@@ -428,7 +452,7 @@ approved_hash: c02651cacb352e7ba15e211b00b717b9a19ff0a4</pre></div>
     <div class="stage gate"><div class="dot"></div><span class="t">올리기</span><p>확인 화면 승인 뒤 PR</p><div class="fail">승인 전에는 push 없음</div></div>
   </div>
   <div class="walk">
-    <p><b>판정은 스크립트가 합니다.</b> Python 스크립트가 규칙대로 원인 후보를 고릅니다. 그래서 같은 로그면 누가 돌려도 같은 후보가 나옵니다. Claude는 결과를 사람 말로 설명하고, 초안을 쓰고, 질문합니다.</p>
+    <p><b>판정은 스크립트가 합니다.</b> Python 스크립트가 규칙대로 원인 후보를 고릅니다. 그래서 같은 로그·분석 조건·규칙 버전에서는 같은 판정을 재현합니다. Claude는 결과를 사람 말로 설명하고, 초안을 쓰고, 질문합니다.</p>
     <p><b>확정은 사람이 합니다.</b> 담당자가 분류를 고르고, 새 원인 초안을 하나씩 승인합니다. 확신이 없으면 "원인 미확정"으로 남기면 됩니다.</p>
     <p><b>기록은 PR로 쌓입니다.</b> 카테고리 담당자가 PR을 리뷰한 뒤 main(팀 이슈 DB의 기준 본)에 들어갑니다. 들어간 규칙은 다음 분석부터 자동으로 쓰입니다.</p>
     <p><b>원인이 규칙에 없으면</b> "원인 미확인", 증상까지 처음이면 "후보 없음"으로 알리고, 비슷한 유형 3개를 보여 줍니다. 원하면 Claude가 원인 가설 1~3개를 근거와 함께 냅니다. 가설은 점수와 분류에 쓰지 않습니다. 팀이 이미 쓰는 분석 스킬을 선택으로 연결해 더 깊이 볼 수도 있습니다.</p>
@@ -538,6 +562,15 @@ approved_hash: c02651cacb352e7ba15e211b00b717b9a19ff0a4</pre></div>
 <footer>telephony-triage · 기준 2026-10-17 · 화면·로그 예시는 합성 샘플 데이터입니다. 테스트·eval 수치는 안내서 31장, 비용은 14장이 정본입니다.</footer>
   </main>
 </div></div>
-
+<a class="tocbtn" href="#toc">목차</a>
+<script>
+(function(){var toc=document.getElementById('toc'),mq=matchMedia('(max-width:880px)');
+function s(){mq.matches?toc.removeAttribute('open'):toc.setAttribute('open','')}s();
+mq.addEventListener&&mq.addEventListener('change',s);
+toc.querySelector('summary').addEventListener('click',function(e){if(!mq.matches)e.preventDefault()});
+var tb=document.querySelector('.tocbtn'),hero=document.querySelector('header.hero');
+if(tb&&hero&&'IntersectionObserver' in window){new IntersectionObserver(function(es){tb.classList.toggle('off',es[0].isIntersecting)}).observe(hero)}
+if(tb)tb.addEventListener('click',function(){toc.setAttribute('open','')});})();
+</script>
 </body>
 </html>
