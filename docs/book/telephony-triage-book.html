@@ -379,7 +379,7 @@ body{padding-bottom:56px}
     <div><b>지금 분석하고 싶다</b><p><a href="#ch07">7장 설치</a> → <a href="#ch08">8장 사용법</a></p></div>
     <div><b>오류가 나서 막혔다</b><p><a href="#ch13">13장 막혔을 때</a></p></div>
     <div><b>운영·리뷰를 맡았다</b><p><a href="#ch15">15</a> · <a href="#ch17">17</a> · <a href="#ch18">18장</a></p></div>
-    <div><b>도입 여부를 판단한다</b><p><a href="#apx-d">부록 D 한 장 요약</a> → <a href="#ch20">20</a> · <a href="#ch25">25장</a></p></div>
+    <div><b>도입 여부를 판단한다</b><p><a href="#apx-d">부록 D 한 장 요약</a> → <a href="#ch20">20</a> · <a href="#ch25">25</a> · <a href="#ch32-3">32장(넓혀 쓸 후보)</a></p></div>
   </div>
   <div class="search" id="search" hidden>
     <label for="q">제목·명령어 찾기</label>
@@ -482,6 +482,7 @@ body{padding-bottom:56px}
       </tbody>
     </table></div>
   </div>
+  <p>분석 말고 쌓인 지식을 넓혀 쓸 수 있는 후보는 <a href="#ch32-3">32.3</a>·<a href="#ch32-4">32.4</a>에 모았습니다. 확정 계획은 아니고, 파일럿 결과를 보고 고릅니다.</p>
   <p class="bridge">다음 장은 실제 이슈 한 건을 처음부터 끝까지 따라갑니다.</p>
   <nav class="chnav" aria-label="장 이동"><a href="#contents">목차</a><a href="#ch02">2장 한 이슈를 처음부터 끝까지 →</a></nav>
 </section>
@@ -4115,6 +4116,7 @@ score = score × (0.5 + 0.5 × 수락률)</pre></div>
 
   <h3 id="ch32-3">32.3 부품을 다른 일에 다시 쓰기<a class="hl" href="#ch32-3" aria-label="링크">#</a></h3>
   <p>이 도구는 다섯 부품의 조합입니다. 로그 읽기, 패턴 대조, 지식 사전(이슈 DB), 검증기, 안전한 기록입니다. 로그 읽기와 사전만 바꾸면 나머지 셋은 다른 용도에 그대로 쓸 수 있습니다.</p>
+  <div class="scroll"><svg class="flow" style="min-width:340px;max-width:420px" viewBox="0 0 340 214" role="img" aria-label="다섯 부품(로그 읽기, 패턴 대조, 지식 사전, 검증기, 안전한 기록)을 지금의 이슈 분석에 쓰고, 재발 감시·릴리스 확인·대량 분류·Jira 사전 분석에도 넓혀 쓸 수 있다. 점선은 후보."><text x="0" y="13" style="font-size:13px;font-weight:700;fill:var(--accent-ink)">다섯 부품</text><text x="200" y="13" style="font-size:13px;font-weight:700;fill:var(--accent-ink)">쓰임 (지금 + 후보)</text><rect x="1" y="24" width="138" height="30" rx="8" style="fill:var(--surface);stroke:var(--line)"/><text x="70" y="44" text-anchor="middle" style="font-size:13px;fill:var(--text)">로그 읽기</text><rect x="1" y="64" width="138" height="30" rx="8" style="fill:var(--surface);stroke:var(--line)"/><text x="70" y="84" text-anchor="middle" style="font-size:13px;fill:var(--text)">패턴 대조</text><rect x="1" y="104" width="138" height="30" rx="8" style="fill:var(--surface);stroke:var(--line)"/><text x="70" y="124" text-anchor="middle" style="font-size:13px;fill:var(--text)">지식 사전</text><rect x="1" y="144" width="138" height="30" rx="8" style="fill:var(--surface);stroke:var(--line)"/><text x="70" y="164" text-anchor="middle" style="font-size:13px;fill:var(--text)">검증기</text><rect x="1" y="184" width="138" height="30" rx="8" style="fill:var(--surface);stroke:var(--line)"/><text x="70" y="204" text-anchor="middle" style="font-size:13px;fill:var(--text)">안전한 기록</text><rect x="201" y="24" width="138" height="30" rx="8" style="fill:var(--accent-ink);stroke:var(--accent-ink)"/><text x="270" y="44" text-anchor="middle" style="font-size:13px;fill:#ffffff;font-weight:700">이슈 분석 (지금)</text><rect x="201" y="64" width="138" height="30" rx="8" style="fill:var(--surface);stroke:var(--accent);stroke-dasharray:4 3"/><text x="270" y="84" text-anchor="middle" style="font-size:13px;fill:var(--text)">재발 감시</text><rect x="201" y="104" width="138" height="30" rx="8" style="fill:var(--surface);stroke:var(--accent);stroke-dasharray:4 3"/><text x="270" y="124" text-anchor="middle" style="font-size:13px;fill:var(--text)">릴리스 확인</text><rect x="201" y="144" width="138" height="30" rx="8" style="fill:var(--surface);stroke:var(--accent);stroke-dasharray:4 3"/><text x="270" y="164" text-anchor="middle" style="font-size:13px;fill:var(--text)">대량 분류</text><rect x="201" y="184" width="138" height="30" rx="8" style="fill:var(--surface);stroke:var(--accent);stroke-dasharray:4 3"/><text x="270" y="204" text-anchor="middle" style="font-size:13px;fill:var(--text)">Jira 사전 분석</text><path d="M146 39v160M146 119h44m-6 -5l6 5l-6 5" style="fill:none;stroke:var(--accent);stroke-width:2"/></svg></div>
   <div class="panel">
     <div class="panel-head"><b>다시 쓰는 방법</b><span>후보, 확정 계획 아님</span></div>
     <div class="scroll"><table class="wide">

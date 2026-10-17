@@ -252,6 +252,7 @@ footer{margin-top:64px;padding-top:18px;border-top:1px solid var(--line);font-si
 .uses h4{margin:0 0 6px;font-size:16.5px}
 .uses p{margin:0;font-size:14.5px;color:var(--muted);line-height:1.65}
 @media (max-width:720px){.uses{grid-template-columns:1fr}}
+.fut p+p{margin-top:8px}.fut b{color:var(--text);font-weight:600}
 .flow-tall{display:none}
 @media (max-width:480px){.flow-wide{display:none}.flow-tall{display:block}}
 @media (max-width:560px){.term pre{white-space:pre-wrap;overflow-wrap:anywhere}
@@ -345,6 +346,8 @@ details.more[open]>summary{margin-bottom:8px}
     <span class="part">신뢰와 한계</span>
     <a href="#trust">믿을 수 있는 근거</a>
     <a href="#scope">할 수 있는 것과 한계</a>
+    <span class="part">앞으로</span>
+    <a href="#future">넓힐 수 있는 것</a>
     <span class="part">동작과 안전</span>
     <a href="#how">어떻게 동작하나</a>
     <a href="#safety">데이터와 안전</a>
@@ -512,6 +515,25 @@ approved_hash: c02651cacb352e7ba15e211b00b717b9a19ff0a4</pre></div>
     </div>
   </div>
   <p class="chart-foot">근거는 <a href="../book/telephony-triage-book.html#ch01-4">안내서 1.4 v1 범위</a>와 <a href="../book/telephony-triage-book.html#ch25">25장 한계와 대응</a>입니다.</p>
+  <p class="bridge">이 도구를 다른 일에 넓혀 쓰는 후보를 봅니다.</p>
+</section>
+
+<section id="future">
+  <p class="kicker">Future</p>
+  <h2>앞으로 넓힐 수 있는 것</h2>
+  <p class="lead">이 도구는 다섯 부품의 조합이라, 쌓인 지식을 분석 말고 다른 일에도 쓸 수 있습니다.</p>
+  <p>다섯 부품은 로그 읽기, 패턴 대조, 지식 사전(팀 이슈 DB), 검증기, 안전한 기록입니다. 아래는 넓혀 쓸 수 있는 후보입니다.</p>
+  <p class="callout">모두 <b>후보이고 확정 계획이 아닙니다.</b> 도입과 파일럿 뒤에, 파일럿 결과를 보고 고릅니다.</p>
+  <div class="scroll"><svg class="flow" style="min-width:340px;max-width:420px" viewBox="0 0 340 214" role="img" aria-label="다섯 부품(로그 읽기, 패턴 대조, 지식 사전, 검증기, 안전한 기록)을 지금의 이슈 분석에 쓰고, 재발 감시·릴리스 확인·대량 분류·Jira 사전 분석에도 넓혀 쓸 수 있다. 점선은 후보."><text x="0" y="13" style="font-size:13px;font-weight:700;fill:var(--accent-ink)">다섯 부품</text><text x="200" y="13" style="font-size:13px;font-weight:700;fill:var(--accent-ink)">쓰임 (지금 + 후보)</text><rect x="1" y="24" width="138" height="30" rx="8" style="fill:var(--surface);stroke:var(--line)"/><text x="70" y="44" text-anchor="middle" style="font-size:13px;fill:var(--text)">로그 읽기</text><rect x="1" y="64" width="138" height="30" rx="8" style="fill:var(--surface);stroke:var(--line)"/><text x="70" y="84" text-anchor="middle" style="font-size:13px;fill:var(--text)">패턴 대조</text><rect x="1" y="104" width="138" height="30" rx="8" style="fill:var(--surface);stroke:var(--line)"/><text x="70" y="124" text-anchor="middle" style="font-size:13px;fill:var(--text)">지식 사전</text><rect x="1" y="144" width="138" height="30" rx="8" style="fill:var(--surface);stroke:var(--line)"/><text x="70" y="164" text-anchor="middle" style="font-size:13px;fill:var(--text)">검증기</text><rect x="1" y="184" width="138" height="30" rx="8" style="fill:var(--surface);stroke:var(--line)"/><text x="70" y="204" text-anchor="middle" style="font-size:13px;fill:var(--text)">안전한 기록</text><rect x="201" y="24" width="138" height="30" rx="8" style="fill:var(--accent-ink);stroke:var(--accent-ink)"/><text x="270" y="44" text-anchor="middle" style="font-size:13px;fill:#ffffff;font-weight:700">이슈 분석 (지금)</text><rect x="201" y="64" width="138" height="30" rx="8" style="fill:var(--surface);stroke:var(--accent);stroke-dasharray:4 3"/><text x="270" y="84" text-anchor="middle" style="font-size:13px;fill:var(--text)">재발 감시</text><rect x="201" y="104" width="138" height="30" rx="8" style="fill:var(--surface);stroke:var(--accent);stroke-dasharray:4 3"/><text x="270" y="124" text-anchor="middle" style="font-size:13px;fill:var(--text)">릴리스 확인</text><rect x="201" y="144" width="138" height="30" rx="8" style="fill:var(--surface);stroke:var(--accent);stroke-dasharray:4 3"/><text x="270" y="164" text-anchor="middle" style="font-size:13px;fill:var(--text)">대량 분류</text><rect x="201" y="184" width="138" height="30" rx="8" style="fill:var(--surface);stroke:var(--accent);stroke-dasharray:4 3"/><text x="270" y="204" text-anchor="middle" style="font-size:13px;fill:var(--text)">Jira 사전 분석</text><path d="M146 39v160M146 119h44m-6 -5l6 5l-6 5" style="fill:none;stroke:var(--accent);stroke-width:2"/></svg></div>
+  <div class="uses fut">
+    <div><h4>1. 재발 조기 경보</h4><p>매일 밤 수정 빌드 로그로 고친 원인이 다시 나는지 검사합니다. LLM 비용은 0입니다.</p><p><b>좋아지는 것</b> 고친 사람에게 회귀가 바로 전달됩니다.</p><p><b>먼저 필요한 것</b> 알림 연결(회귀 판정은 이미 있음)</p></div>
+    <div><h4>2. 릴리스 품질 확인</h4><p>시험 단말 로그에 아는 원인이 걸리면 경고합니다. LLM 비용은 0입니다.</p><p><b>좋아지는 것</b> 빌드마다 열린 원인·회귀 의심 수를 바로 봅니다.</p><p><b>먼저 필요한 것</b> 빌드 비교 규칙을 사내 빌드명에 맞춤</p></div>
+    <div><h4>3. Jira 접수 때 1차 분석</h4><p>바뀐 Jira의 후보·근거 리포트를 미리 만듭니다. 게시는 승인 뒤입니다.</p><p><b>좋아지는 것</b> 담당자가 열 때 후보 3개와 근거가 준비돼 있습니다.</p><p><b>먼저 필요한 것</b> Jira 첨부 커넥터, 실행 환경, 비용 상한</p></div>
+    <div><h4>4. 벤더·모뎀 쪽 전달 리포트</h4><p>AP·CP 판단 근거를 정리해 벤더에 넘깁니다.</p><p><b>좋아지는 것</b> 주고받는 왕복이 줄어듭니다.</p><p><b>먼저 필요한 것</b> 벤더 RIL 층 연결(사내 S-4a)</p></div>
+    <div><h4>5. 신규 입사자 교육</h4><p>팀 이슈 DB에 쌓인 사례를 연습 문제로 씁니다.</p><p><b>좋아지는 것</b> 실제 사례로 로그 보는 법을 익힙니다.</p><p><b>먼저 필요한 것</b> 연습용 문제 고르기(연습 모드는 이미 있음)</p></div>
+    <div><h4>6. 고객 bugreport 대량 분류</h4><p>bugreport 수백 개의 원인 분포와 미분류 묶음을 냅니다. LLM 비용은 거의 0입니다.</p><p><b>좋아지는 것</b> 원인 분포를 자동으로 봅니다.</p><p><b>다시 쓰는 부품</b> 파서·매처</p></div>
+  </div>
+  <p class="chart-foot">전체 18개(부품 다시 쓰기 6개, 확장 아이디어 12개)와 고를 때 지킬 것은 <a href="../book/telephony-triage-book.html#ch32-3">안내서 32장</a>에 있습니다.</p>
   <p class="bridge">요약을 마치고 다음 할 일을 봅니다.</p>
 </section>
 
