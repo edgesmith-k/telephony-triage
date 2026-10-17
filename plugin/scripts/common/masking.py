@@ -307,3 +307,13 @@ class Masker:
 def new_masker(existing_text: str | None = None, allow_patterns: Iterable[str] = ()) -> Masker:
     """새 마스커. `existing_text`에 이미 있는 토큰 다음 번호부터 준다."""
     return Masker(allow_patterns=allow_patterns, existing_text=existing_text)
+
+
+URL_USERINFO = re.compile(r"://[^/@\s]+@")
+
+
+def mask_brief(text, limit: int = 120) -> str:
+    """사람·관리자에게 보이는 짧은 진단 글(오류 메시지·doctor 내용): URL 자격증명(`://user:token@` → `://<CRED>@`)을 먼저
+    가리고 마스킹한 뒤 공백을 접어 `limit`자로 자른다(`db_pr` stage 기록, `job_status --doctor`)."""
+    text = " ".join(new_masker().mask(URL_USERINFO.sub("://<CRED>@", str(text or ""))).split())
+    return text if len(text) <= limit else text[: limit - 1] + "…"

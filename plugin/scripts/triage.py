@@ -16,7 +16,8 @@
 출력 (`JOB` = `<work_dir>/<KEY>`, `--offline-db`면 `--out`)
 - `JOB/analysis.json` (≤ 4KB, 공백 없는 compact JSON): LLM이 읽는 유일한 분석 결과. stdout에도 같은 내용을 낸다.
 - `JOB/report.md`: Step 6 리포트 초안(결정적인 칸은 채우고, 원인 설명·코드 위치는 `TODO(LLM)`로 둔다).
-- `JOB/trace.jsonl`: 호출마다 `{ts, step, script, args, exit, ms, out_bytes, stderr}` 한 줄.
+- `JOB/trace.jsonl`: 호출마다 `{ts, step, script, args, exit, ms, out_bytes, stderr}` 한 줄과 사건 행(`start`(`v: 2`)·`needs_input`·
+  `done`·`stopped`·`error`). db_pr의 `stage`·`publish`·`discard` 행도 같은 파일이다(contracts.md §3.2 작업 기록, usage_stats가 센다).
 - `JOB/explore-input.json`: 후보 없음·원인 미확인(1위 C=0)이고 `explore.when`이 `never`가 아닐 때만. 탐색 분석 입력(마스킹된 값만:
   발생 시각·실패 스텝·앵커 머리·줄 수 상한 `explore.timeline_max_lines`). `run`은 타임라인을 만들지 않고 이전 `timeline.md`·입력 파일을 지운다.
 - `triage.py explore <KEY> [--out <dir>]`: 사용자가 탐색 분석에 동의한 뒤(또는 `--explore`·`explore.when: always`) `JOB/explore-input.json`과

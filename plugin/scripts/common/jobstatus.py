@@ -22,6 +22,7 @@ from common import issuepost, session_lock, userconfig
 
 PLAN, STATE, STAGE, PR_FILE, PASTED_STEPS = "plan.json", "state.json", "stage.json", "pr.json", "steps-pasted.txt"
 TRIAGE_STATE = "triage-state.json"
+TRACE = "trace.jsonl"
 REMOTE_NOTE = "원격 최신성: 확인하지 않음(로컬 기록만)"
 CANDIDATES_MAX = 5
 LABEL_MAX = 160
@@ -172,6 +173,29 @@ def quick_stage(job: Path) -> str:
     if (analysis or {}).get("status") == "ok":
         return "analyzed"
     return "started"
+
+
+def trace_rows(job: Path, tail: int | None = None) -> list[dict]:
+    """`JOB/trace.jsonl`의 행(깨진 줄·객체 아닌 줄은 건너뛴다). `tail`이면 끝 `tail`바이트만 읽고 잘린 첫 줄은 버린다.
+    없거나 못 읽으면 []. 읽는 곳: `usage_stats`(전체), `job_status`의 last-run-error(끝 일부)."""
+    try:
+        with (job / TRACE).open("rb") as fh:
+            size = fh.seek(0, os.SEEK_END)
+            fh.seek(max(0, size - tail) if tail else 0)
+            data = fh.read()
+    except OSError:
+        return []
+    if tail and size > tail:
+        data = data.partition(b"\n")[2]
+    rows = []
+    for line in data.decode("utf-8", "replace").splitlines():
+        try:
+            row = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(row, dict):
+            rows.append(row)
+    return rows
 
 
 def candidates(work_dir: Path, safe_key_re) -> list[dict]:

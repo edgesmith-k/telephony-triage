@@ -151,4 +151,5 @@ class Runner:
 
     def open_trace(self, path: Path) -> None:
         self.trace_path = path
-        self._trace({"ts": _now(), "step": "start", "pid": os.getpid()})
+        # v 2: 이 뒤 행으로 운영 지표(usage_stats)를 잰다 — db_pr의 stage·publish·discard 행도 같은 파일(v 2)
+        self._trace({"ts": _now(), "step": "start", "v": 2, "pid": os.getpid()})

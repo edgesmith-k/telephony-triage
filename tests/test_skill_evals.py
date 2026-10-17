@@ -1089,6 +1089,24 @@ def test_w4_eval_checks_cover_assertions_and_never_pass_unread(tmp_path):
     assert ctx.needs_input("code") == ["code"] and ctx.needs_input() == ["code", "cleanup"]
 
 
+def test_db_pr_trace_rows_without_script_are_invisible_to_grader(tmp_path):
+    """db_pr의 작업 기록 행(stage·publish·discard, script 없음)은 채점기의 실행 명령(trace·ran)·질문 수에 들어가지 않는다."""
+    import grade as grader
+    env, run = tmp_path / "env", tmp_path / "run"
+    env.mkdir(); run.mkdir(); (env / "work" / "MOCK-1001").mkdir(parents=True)
+    (env / "env.json").write_text(json.dumps({"remote": str(env), "work_dir": str(env / "work")}), encoding="utf-8")
+    (env / "before.json").write_text("{}", encoding="utf-8")
+    rows = [{"step": "0-key", "script": "jira_fields.py", "args": ["check-key", "MOCK-1001"]},
+            {"step": "stage", "v": 2, "result": "ok", "dry_run": False},
+            {"step": "publish", "v": 2, "action": "created", "pr": 1, "gh_ok": True},
+            {"step": "discard", "v": 2, "outcome": "after-publish"}]
+    (env / "work" / "MOCK-1001" / "trace.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+    (run / "events.jsonl").write_text("", encoding="utf-8")
+    ctx = grader.Ctx(env, run)
+    assert ctx.trace() == "jira_fields.py check-key MOCK-1001" and ctx.needs_input() == []
+    assert not any(w in ctx.ran + ctx.invoked for w in ("publish", "discard", "stage"))
+
+
 def _ctx_with_events(tmp_path, events):
     import grade as grader
     env, run = tmp_path / "env", tmp_path / "run"

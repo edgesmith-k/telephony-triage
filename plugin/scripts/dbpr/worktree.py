@@ -14,8 +14,8 @@ from common.buildname import is_valid_branch_name
 from common import checks as checks_mod
 from common import ghcli
 
-from .lock import (JOB_KEY_RE, Lock, PASTED_STEPS, PLAN, SNAPSHOT_DIR, SNAPSHOT_META, STATE, TOOL_PREFIX, UsageError,
-                   WORK_FILES, _iso, _read_json, _write_json, now)
+from .lock import (JOB_KEY_RE, Lock, PASTED_STEPS, PLAN, SNAPSHOT_DIR, SNAPSHOT_META, STAGE, STATE, TOOL_PREFIX,
+                   UsageError, WORK_FILES, _iso, _read_json, _write_json, now, trace_note)
 
 
 # -- snapshot ---------------------------------------------------------------------------
@@ -287,6 +287,16 @@ def _remove_worktree(ctx: Ctx, path: Path) -> None:
     _git(ctx.repo, "worktree", "remove", "--force", str(path))
 
 
+def _discard_outcome(job_dir: Path) -> str | None:
+    """discard 사유(usage_stats): push 기록 있음 after-publish · dry-run stage dry-run · 그 밖 cancel. 못 읽으면 None."""
+    try:
+        if ((_read_json(job_dir / PLAN) or {}).get("pr") or {}).get("head_sha"):
+            return "after-publish"
+        return "dry-run" if (_read_json(job_dir / STAGE) or {}).get("dry_run") else "cancel"
+    except (OSError, ValueError, AttributeError):
+        return None
+
+
 def discard(ctx: Ctx, wt: Path) -> dict:
     job_dir, job = _job_of(wt, ctx)
     wt = abs_wt(wt)
@@ -305,6 +315,7 @@ def discard(ctx: Ctx, wt: Path) -> dict:
     if branch and _ref_sha(ctx.repo, f"refs/heads/{TOOL_PREFIX}{branch}"):
         _git(ctx.repo, "branch", "-D", TOOL_PREFIX + branch)
         deleted_branch = TOOL_PREFIX + branch
+    trace_note(job_dir, "discard", outcome=_discard_outcome(job_dir))
     for name in WORK_FILES:
         (job_dir / name).unlink(missing_ok=True)
     released = ctx.lock.release(job, force=False)
