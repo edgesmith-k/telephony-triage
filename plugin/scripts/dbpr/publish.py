@@ -519,6 +519,8 @@ def publish(ctx: Ctx, wt: Path, branch: str, lease: str, approved: str, commit: 
     pr_info = _read_json(job_dir / PR_FILE)
     if not state or not state.get("approved_hash") or not pr_info:
         raise UsageError("승인 정보가 없습니다. stage --then-summary(확인) 뒤 publish --commit한다.")
+    if stage_result.get("dry_run"):   # 06-collaboration §6.6: dry-run은 확인 화면까지만
+        raise UsageError("--dry-run으로 stage한 작업은 publish하지 않는다. --dry-run 없이 다시 stage·확인한다.")
     if "pr_digest" not in state:
         return {"published": False, "problems": ["state.json에 pr_digest가 없다 (이전 버전의 summary). "
                                                  "summary를 다시 받는다."]}, CHECK_FAILED

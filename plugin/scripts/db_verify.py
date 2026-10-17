@@ -585,7 +585,22 @@ def _errored_reason(errored: list[dict]) -> str:
     return f"{', '.join(e['fixture'] for e in errored)}: 시그니처·extractor 오류 — 판정 불가"
 
 
+def _regress_ok(regress: dict | None) -> bool:
+    """`--regress-json`이 전체 범위의 온전한 db_regress 결과인지(아니면 다시 돌린다 — 빈·잘린 결과를 통과로 세지 않는다)."""
+    if not isinstance(regress, dict):
+        return False
+    results, summary = regress.get("results"), regress.get("summary")
+    if not isinstance(results, list) or not isinstance(summary, dict) or summary.get("scope") != "all":
+        return False
+    if not all(isinstance(r, dict) and r.get("fixture") and r.get("status") for r in results):
+        return False
+    failed = sum(r["status"] != "pass" for r in results)
+    return summary.get("total") == len(results) and summary.get("failed") == failed
+
+
 def r4(run: Run, regress: dict | None) -> tuple[dict, dict]:
+    if regress is not None and (not _regress_ok(regress) or regress["summary"]["total"] != len(run.items)):
+        regress = None
     if regress is None:
         results = [db_regress.judge(item, run.result(_paths(item))) for item in run.items]
         failed = [r for r in results if r["status"] != "pass"]

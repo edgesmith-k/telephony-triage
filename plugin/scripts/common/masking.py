@@ -114,8 +114,8 @@ RULES: tuple[Rule, ...] = (
     Rule("CRED", re.compile(r'(?i)\b(?:response|nonce|cnonce|opaque)\s*=\s*"?(?P<v>[^",\s]+)"?'),
          context=_SIP_AUTH_CONTEXT),
     Rule("CRED", re.compile(r"\b(?:RES|AUTN|AUTS|XRES)\s*[=:]\s*(?:0x)?(?P<v>[0-9A-Fa-f]{8,})\b")),
-    Rule("CRED", re.compile(r'(?i)\b(?:password|passwd|pwd|secret|token)\s*[=:]\s*"?(?P<v>[^\s",;]+)')),
-    Rule("CRED", re.compile(r'(?i)\b(?:api[_-]?key|key)\s*[=:]\s*"?(?P<v>[A-Za-z0-9+/=_-]+)'),
+    Rule("CRED", re.compile(r'(?i)\b(?:password|passwd|pwd|secret|token)' + _SEP + r'(?P<v>[^\s",;]+)')),
+    Rule("CRED", re.compile(r'(?i)\b(?:api[_-]?key|key)' + _SEP + r'(?P<v>[A-Za-z0-9+/=_-]+)'),
          check=_secretish),
     # AKA 키 (대소문자 구분: 소문자 `ok=`·`ik` 섞인 문구를 피한다; Kc 64비트 = 16 hex가 하한)
     # 대문자 변형(`KI`, `OPC`)은 받고 소문자(`ki=`, `ck=`)는 받지 않는다(체크섬 등 일반 키와 겹친다)

@@ -110,6 +110,9 @@ DETECT = [
     ("AKA AUTN=00112233445566778899aabbccddeeff", "CRED", "00112233445566778899aabbccddeeff"),
     ("wifi password=hunter2", "CRED", "hunter2"),
     ("oauth token: eyJhbGciOiJIUzI1NiJ9", "CRED", "eyJhbGciOiJIUzI1NiJ9"),
+    ('{"password":"demoSecret987"}', "CRED", "demoSecret987"),            # JSON 키 뒤 닫는 따옴표 (Codex 리뷰 P0)
+    ('{"token": "demoToken987654321"}', "CRED", "demoToken987654321"),
+    ('{"api_key":"AbCd1234EfGh5678"}', "CRED", "AbCd1234EfGh5678"),
     # 구분자·붙은 IMEI, IMEISV, EID, MAC 변형, GPS, AKA 키, PIN/PUK, Bearer, 장치 serial (P0-4)
     ("IMEI: 49-015420-323751-8", "IMEI", "49-015420-323751-8"),
     ("imei: 35 209900 176148 1", "IMEI", "35 209900 176148 1"),

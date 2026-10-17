@@ -928,3 +928,15 @@ def test_r3_reason_names_few_fixtures_and_all_keys():
     assert db_verify._hit_fixtures(hits) == "fixture 6개: DATA-001-01.log, DATA-001-02.log, DATA-001-03.log 외 3개"
     assert db_verify._hit_fixtures(hits[:2]) == "fixture 2개: DATA-001-01.log, DATA-001-02.log"
     assert db_verify._hit_keys(hits, []) == "DATA-001-03/s0, DATA-001-03/s1"
+
+
+@pytest.mark.parametrize("bad", [{}, {"summary": {"scope": "all", "total": 12, "failed": 12}, "results": []},
+                                 {"summary": {"scope": "staged", "total": 0, "failed": 0}, "results": []}])
+def test_r4_recomputes_when_regress_json_is_empty_or_inconsistent(bad):
+    """`--regress-json`이 비었거나 집계가 안 맞거나 전체 범위가 아니면 믿지 않고 다시 돌린다 (Codex 리뷰 P1)."""
+    sys.path.insert(0, str(REPO / "plugin/scripts"))
+    import db_verify
+    run_ = db_verify.Run(SAMPLE, REPO / "plugin", {})   # 읽기만 한다
+    row, used = db_verify.r4(run_, bad)
+    assert used["summary"]["total"] == len(run_.items) > 0 and used["results"]
+    assert row["reason"] == f"전체 fixture {len(run_.items)}개 기대값 유지" and row["status"] == "pass"
