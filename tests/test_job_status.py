@@ -227,9 +227,9 @@ def test_status_changes_nothing():
     wt = ws.wt(JOB)
     lock = (ws.work / "session.lock").read_bytes()
     before = (_git_state(ws.clone, wt), _tree(ws.work, ws.clone, ws.home))
-    for args in ([JOB], [JOB, "--format", "markdown"], [KEY], []):
+    for args in ([JOB], [JOB, "--format", "markdown"], [KEY], [], [JOB, "--doctor", "--format", "markdown"], [KEY, "--doctor"]):
         assert ws.run("job_status.py", args).returncode == 0
-    assert (_git_state(ws.clone, wt), _tree(ws.work, ws.clone, ws.home)) == before, "job_status는 읽기 전용이다"
+    assert (_git_state(ws.clone, wt), _tree(ws.work, ws.clone, ws.home)) == before, "job_status는 읽기 전용이다(--doctor도)"
     assert (ws.work / "session.lock").read_bytes() == lock
     ws.commit(JOB)                                              # committed 경로(wt git 읽기)도 같다
     before = (_git_state(ws.clone, wt), _tree(ws.work, ws.clone, ws.home))
@@ -248,7 +248,7 @@ def test_sensitive_files_and_question_text_never_shown():
     state_bytes = (job / "triage-state.json").read_text(encoding="utf-8")
     assert question not in state_bytes and _tstate(ws)["pending"]["kind"] == first["needs_input"]["kind"]
     lock_owner = json.loads((ws.work / "session.lock").read_text(encoding="utf-8"))["owner"]
-    for text in (ws.run("job_status.py", [KEY]).stdout, _md(ws, KEY)):
+    for text in (ws.run("job_status.py", [KEY]).stdout, _md(ws, KEY), _doctor_md(ws, KEY)):
         for marker in ("PASTED-MARKER-91", "RAW-MARKER-92", question, lock_owner):
             assert marker not in text
 
@@ -480,3 +480,114 @@ def test_resync_label_when_wt_git_unreadable():
     assert "확인 불가(git 읽기 실패)" in doc["stage"]["label"] and "재동기화 중" not in doc["stage"]["label"], doc["stage"]
     assert any("git 읽기 실패" in e for e in doc["stage"].get("evidence") or [])
     assert any("wt git 읽기 실패" in w for w in doc["warnings"])
+
+
+# -- last-run-error·진단(--doctor) ---------------------------------------------------------------------------------
+
+
+DOCTOR_MAX = 4096
+CRED_URL = "https:" + "//u:" + "tok123@ghe.mock.invalid/x"     # 토큰 든 URL(경계 검사가 원문으로 보지 않게 나눠 쓴다)
+
+
+def _trace(ws: Workspace, job: str, *rows) -> None:
+    ws.job_dir(job).mkdir(parents=True, exist_ok=True)
+    with (ws.job_dir(job) / "trace.jsonl").open("a", encoding="utf-8") as fh:
+        for r in rows:
+            fh.write(json.dumps(r, ensure_ascii=False) + "\n")
+
+
+def _doctor_md(ws: Workspace, *args, env=None) -> str:
+    proc = ws.run("job_status.py", [*args, "--doctor", "--format", "markdown"], env=env)
+    assert proc.returncode == 0, proc.stderr
+    assert len(proc.stdout.encode("utf-8")) <= DOCTOR_MAX, len(proc.stdout.encode("utf-8"))
+    return proc.stdout
+
+
+def test_last_run_error_until_a_later_run_ends():
+    ws = Workspace()
+    ws.plan(JOB, "p7-analyze-append.plan.json")
+    _trace(ws, JOB, {"ts": "2026-10-01T00:00:00+00:00", "step": "error", "exit": 2,
+                     "message": "work_dir가 없다 imsi=450081234567890 " + CRED_URL})
+    doc = _status(ws, JOB)
+    row = next(b for b in doc["blockers"] if b["code"] == "last-run-error")
+    assert row["label"].startswith("마지막 실행이 오류로 끝났다(종료 2): work_dir가 없다 imsi=<IMSI#1>")
+    assert "://<CRED>@" in row["label"] and row["at"] == "2026-10-01T00:00:00+00:00" and "--doctor" in row["next"]
+    for text in (json.dumps(doc, ensure_ascii=False), _md(ws, JOB)):
+        assert "450081234567890" not in text and "tok123" not in text
+    assert "last-run-error: 마지막 실행이 오류로 끝났다" in _md(ws, JOB)
+    _trace(ws, JOB, {"ts": "2026-10-01T00:05:00+00:00", "step": "start", "v": 2}, {"step": "done"})
+    assert "last-run-error" not in _codes(_status(ws, JOB))          # 뒤 실행이 끝났다
+    _trace(ws, JOB, {"ts": "2026-10-01T00:09:00Z", "step": "stage", "v": 2, "result": "error", "dry_run": False,
+                     "message": "계획 형식 오류: JSON을 읽을 수 없습니다"})
+    row = next(b for b in _status(ws, JOB)["blockers"] if b["code"] == "last-run-error")
+    assert row["label"] == "마지막 실행이 오류로 끝났다(db_pr stage): 계획 형식 오류: JSON을 읽을 수 없습니다"
+    _trace(ws, JOB, {"step": "stage", "v": 2, "result": "drift", "dry_run": False})
+    assert "last-run-error" not in _codes(_status(ws, JOB))          # 실패(drift)는 오류가 아니다
+
+
+def test_doctor_markdown_and_json_show_versions_and_fail_warn_rows_only():
+    import re
+    ws = Workspace()
+    ws.plan(JOB, "p7-analyze-append.plan.json")
+    git(ws.clone, "config", "core.hooksPath", "hooks")                # hook fail 행
+    text = _doctor_md(ws, JOB)
+    status, _, diag = text.partition("### 진단 (관리자 전달용 — 이 화면을 그대로 보낸다. 로그 원문·자격증명 없음)\n")
+    assert status.startswith(f"## {JOB} 작업 상태") and "### 단계" in status and diag
+    assert re.search(r"^- \[현재\] 버전: 플러그인 지문 [0-9a-f]{12}\(설치 폴더 [^)]+\) · Claude Code (\d+\.\d+\.\d+|확인 불가) · "
+                     r"Python 3\.\d+\.\d+ · PyYAML \S+·jsonschema \S+$", diag, re.M)
+    assert re.search(r"^- \[현재\] 환경 점검\(doctor\): ok \d+ · warn \d+ · fail [1-9]\d* · skip \d+$", diag, re.M)
+    rows = [ln.split(" | ") for ln in diag.splitlines() if ln.startswith("| ") and not ln.startswith(("| 점검", "|---"))]
+    assert rows and [r[1] for r in rows] == sorted((r[1] for r in rows), key=lambda s: s != "fail")
+    assert {r[1] for r in rows} <= {"fail", "warn"}
+    hook = next(r for r in rows if r[0] == "| hook")
+    assert "config.py install-hooks" in hook[3] and "setup 을 다시" not in hook[3]
+    assert len(("\n" + diag).encode("utf-8")) <= 1024
+    doc = _status(ws, JOB, "--doctor")
+    d = doc["diagnosis"]
+    assert doc["key"] == JOB and re.fullmatch(r"[0-9a-f]{12}", d["plugin"]["fingerprint"]) and d["plugin"]["dir"]
+    assert d["doctor"]["exit"] == 1 and set(d["doctor"]["counts"]) == {"ok", "warn", "fail", "skip"}
+    assert d["doctor"]["rows"] and all(r["status"] != "ok" for r in d["doctor"]["rows"])
+    assert "diagnosis" not in _status(ws, JOB)                        # opt-in
+
+
+def test_doctor_without_config_still_answers_and_masks_url_credentials():
+    import yaml
+    home = tmp("tt-js-home-")
+    ws = Workspace()
+    proc = run("job_status.py", [KEY, "--doctor", "--format", "markdown"], root=ws.root, env={"TELEPHONY_TRIAGE_HOME": home})
+    assert proc.returncode == 0, proc.stderr
+    assert proc.stdout.startswith("## 작업 상태 — 확인 불가\n\n- 작업 상태: 확인 불가 — 사용자 config가 없다")
+    assert "| config | fail |" in proc.stdout and len(proc.stdout.encode("utf-8")) <= DOCTOR_MAX
+    doc = json.loads(run("job_status.py", [KEY, "--doctor"], root=ws.root, env={"TELEPHONY_TRIAGE_HOME": home}).stdout)
+    assert doc["status_error"].startswith("사용자 config가 없다") and doc["diagnosis"]["doctor"]["exit"] == 1
+    assert ws.run("job_status.py", [KEY, "--doctor", "--format", "markdown", "--json"]).returncode == 2
+    # doctor clone 행의 다음(`git clone <remote>`)이 토큰 URL을 그대로 내도 진단에는 가려서 싣는다
+    cfg_path = ws.home / "config.yaml"
+    cfg = yaml.safe_load(cfg_path.read_text(encoding="utf-8"))
+    cfg["issue_db"].update(remote=CRED_URL + ".git", path=str(ws.base / "no-clone"))
+    cfg_path.write_text(yaml.safe_dump(cfg, allow_unicode=True), encoding="utf-8")
+    text = _doctor_md(ws, KEY)
+    assert "| clone | fail |" in text and "://<CRED>@ghe.mock.invalid" in text and "tok123" not in text
+    assert "tok123" not in ws.run("job_status.py", [KEY, "--doctor"]).stdout
+
+
+def test_doctor_worst_case_fits_4096_bytes():
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    import job_status
+    from common import jobstatus
+    long = "아주 긴 한국어 설명 " * 40
+    doc = {"key": KEY, "platform": "android",
+           "target": {"tracker": "jira", "issue": {"key": KEY}, "work_dir": "/w" * 300, "snapshot": None,
+                      "remote": jobstatus.REMOTE_NOTE},
+           "stage": {"id": "staged", "label": long, "confidence": "now", "evidence": [long] * 10},
+           "lock": {"held": False}, "blockers": [{"code": f"b{i}", "label": long, "confidence": "now", "next": long}
+                                                  for i in range(30)],
+           "must_show": [], "next": long, "warnings": [long] * 20, "files": {}}
+    diag = {"plugin": {"fingerprint": "0" * 12, "dir": "폴더" * 100, "version": "9.9.9"}, "claude_code": "확인 불가",
+            "python": "3.14.0", "deps": "PyYAML 6.0·jsonschema 4.0",
+            "doctor": {"exit": 1, "counts": {"ok": 1, "warn": 9, "fail": 9, "skip": 1},
+                       "rows": [{"check": f"c{i}", "status": "fail" if i % 2 else "warn", "detail": "가" * 120,
+                                 "next": "나" * 160} for i in range(18)]}}
+    md = job_status.diagnosis_markdown(diag)
+    assert len(md.encode("utf-8")) <= job_status.DIAG_MAX and md.rstrip("\n").split("\n")[-1].startswith("- … 외 ")
+    assert len((jobstatus.markdown(doc) + md).encode("utf-8")) <= DOCTOR_MAX

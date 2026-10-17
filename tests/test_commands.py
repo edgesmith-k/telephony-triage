@@ -108,6 +108,15 @@ def test_help_lists_commands_from_files_and_recommends_only_existing_ones():
 
 
 
+def test_status_doctor_is_the_stuck_path_not_setup_again():
+    """막혔을 때는 setup 전체가 아니라 `status --doctor`(읽기 전용 진단) → 막힌 것·fail·warn 행의 "다음"만."""
+    status = (COMMANDS / "status.md").read_text(encoding="utf-8")
+    assert "--doctor" in str(_frontmatter("status").get("argument-hint")) and "--doctor`를 붙인다" in status
+    assert "setup 전체를 다시 하지 않는다" in status and "최대 2분" in status
+    help_text = (COMMANDS / "help.md").read_text(encoding="utf-8")
+    assert "| 막혔다·오류가 났다, 관리자에게 보낼 진단 한 장 | `status [JIRA-KEY] --doctor` |" in help_text
+
+
 def test_flow_a_b_wording():
     """사용 흐름 A(찾기·분석)·B(등록) 구분: help 안내 줄·표 머리, SKILL 한 줄, db-authoring §0 준비물·리뷰어, record 안내."""
     skill_dir = REPO / "plugin" / "skills" / "telephony-triage"

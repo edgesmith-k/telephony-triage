@@ -289,8 +289,8 @@ def main(argv: list[str] | None = None) -> int:
             pass
         tail = " — lock을 풀었다" if released else (f" — lock이 남았을 수 있다: triage.py release {driver.key}" if had_lock else "")
         trace = driver.job / "trace.jsonl" if driver.job else f"<work_dir>/{driver.key}/trace.jsonl"
-        print(f"triage.py 내부 오류 — 스크립트 버그다. 이 메시지와 {trace}(마스킹된 호출 기록, 로그 원문 없음)를 "
-              f"플러그인 관리자에게 전달한다: {message}{tail}", file=sys.stderr)
+        print(f"triage.py 내부 오류 — 스크립트 버그다. 이 메시지와 `/telephony-triage:status --doctor` 화면과 "
+              f"{trace}(마스킹된 호출 기록, 로그 원문 없음)를 플러그인 관리자에게 전달한다: {message}{tail}", file=sys.stderr)
         return USAGE
     _emit(result)
     return OK

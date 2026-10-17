@@ -687,7 +687,7 @@ def _doctor_rows(args, defaults: dict) -> list[dict]:
         if value == ".githooks":
             rows.append(_row("hook", "ok", "core.hooksPath=.githooks"))
         else:
-            rows.append(_row("hook", "fail", f"core.hooksPath={value or '(없음)'}", "/telephony-triage:setup 을 다시 실행한다(hook 설치 단계)"))
+            rows.append(_row("hook", "fail", f"core.hooksPath={value or '(없음)'}", "setup 5번(hook)만 다시 — `config.py install-hooks`"))
     guarded("hook", hook) if repo_box else skip("hook", "clone 없음")
 
     # 4b guard 자가시험 (읽기 전용: guard는 판정만 한다)
