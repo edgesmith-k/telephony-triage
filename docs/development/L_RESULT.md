@@ -351,7 +351,7 @@
 
 ## 외부 운영 리뷰 (10/17)
 
-외부 운영 리뷰 제안 8개를 판정했다(계획: Plan 에이전트 → 메인, 구현: 별개 에이전트, 브랜치 `ops-metrics`, PR #56(`codex-fix`) 위). SKILL.md·reference·hooks.json·guard·show_guard·`common/shown.py`·표시 기록부·`commands/setup.md`는 바꾸지 않았다 → 이슈 DB 스키마·`GENERATOR_VERSION` 그대로, **site eval 재실행 조건 아님**.
+외부 운영 리뷰 제안 8개를 판정했다(계획: Plan 에이전트 → 메인, 구현: 별개 에이전트, 브랜치 `ops-metrics`, base main f5cd8dc). SKILL.md·reference·hooks.json·guard·show_guard·`common/shown.py`·표시 기록부·`commands/setup.md`는 바꾸지 않았다 → 이슈 DB 스키마·`GENERATOR_VERSION` 그대로, **site eval 재실행 조건 아님**.
 
 | # | 제안 | 판정 | 시점 | L 항목 |
 |---|---|---|---|---|
@@ -368,7 +368,8 @@
 
 - 결함 3개: PR 시간 = `plan.json` 수정 시각(재publish·sync-pr·feedback이 다시 씀), 계획만 있고 PR·state·wt 없으면 취소(보류·읽기 전용·dry-run 포함), 질문 = 저장된 답 수(reset·`--answer` 포함, `.shown`도 훑음).
 - 사건 기록은 기존 `JOB/trace.jsonl`에 더했다(`contracts.md` "작업 기록"): triage `start`에 `v: 2`, db_pr `stage{result, dry_run, message?}`·`publish{action, pr, gh_ok}`·`discard{outcome}`(`dbpr/lock.py trace_note`, 쓰기 실패는 stderr 경고만). db_pr 행에는 script·args가 없어 채점기 `trace()`·`needs_input()`에 안 나온다.
-- 상태 9종(손상·PR·push만·진행 중·연습·취소·보류(읽기 전용)·분석만·결과 없음) + legacy(v≥2 행 없음)·다른 흐름. PR까지 = 첫 `0-key` → 첫 `publish{created, gh_ok}`, 분석까지 = 첫 `0-key` → 첫 `done`, 질문 = `needs_input`(issue 제외), 재시도 4종.
+- 상태 9종(손상·PR·push만·진행 중·연습·취소·보류(읽기 전용)·분석만·결과 없음) + legacy(v≥2 행 없음)·다른 흐름. PR까지 = 첫 `0-key` → 그 뒤 첫 `publish{created, gh_ok}`(상태 pr만), 분석까지 = 첫 `0-key` → 그 뒤 첫 `done`, 질문 = `needs_input`(issue 제외), 재시도(analyze 실행, `--answer` 재실행은 따로, 오류, stage, stage 실패).
+- 리뷰 반영(10/17): 파이프 stdout cp949 깨짐(P1, `reconfigure`), 연습 뒤 실제 analyze는 연습 아님, PR 시간은 첫 analyze 뒤 행만·상태 pr만, 손상 `job.runs`·naive 시각은 없는 것으로, 답 재실행 분리, `trace_note`가 인코딩 오류도 삼킴, `--doctor`는 예상 밖 오류·지문 실패에도 진단, transcript는 형식 변화(목록 id·문자열/inf usage)에 견디고 세션 파일 단위로 필요한 필드만 읽으며 플러그인 호출은 경로 모양만.
 - **한계(사용자 결정 2, 수용)**: release(Step 7 "기록하지 않음") 사유는 기록되지 않아 파일 상태로만 가른다(분석 뒤 계획 없음 = 분석만). 정확히 하려면 SKILL Step 7 `triage.py release --outcome` → skill-creator + 유료 eval.
 
 ### ② 장애 안내 (`job_status.py --doctor`, `last-run-error`)
@@ -376,7 +377,7 @@
 - 런북의 "막히면 setup 다시"는 lock 강제 해제 유도·스냅샷 이동·Jira 매핑 재질문을 부른다 → 읽기 전용 진단 한 장 `status [KEY] --doctor`: 화면 뒤 진단 절(≤1,024B, 전체 ≤4,096B) — 플러그인 지문(`versions.plugin_fingerprint`)·Claude Code·Python·의존성 버전, doctor 개수와 fail·warn 행(마스킹·URL 자격증명 가림, `masking.mask_brief`). 작업을 못 찾아도 종료 0으로 "확인 불가 — 사유" + 진단.
 - 기본 화면: trace 끝 256KB의 마지막 끝 행이 triage `error`·`stage{result: error}`면 막힌 것 `last-run-error`.
 - 실패 단계만 복구: doctor `hook` 행 다음 = "setup 5번(hook)만 다시 — `config.py install-hooks`", status.md(`--doctor`, setup 전체를 다시 하지 않는다)·help.md 표 한 행·triage 내부 오류 안내에 `status --doctor`. `docs/SITE_INSTALL.md` "지킬 것"도 고쳤다.
-- **HTML은 이번 PR에서 고치지 않았다(사용자 결정 4)** — HTML 정리 묶음에서 "막히면 setup 다시"를 `status --doctor`로: `docs/materials/05-admin-runbook.html` §4(본문·SVG 글자)·§10(409 지표 문구), `15-quick-ref.html` "막혔을 때", `07-user-guide.html` §8, `03-manual.html`(961·970·1505~1508·1895), `12-pilot-eval.html`(272·273), `01-training-deck.html`(1115), `02-marketing.html`(517), `19-team-intro.html`(551), `docs/telephony-triage-guide.html` 04절.
+- **HTML은 이번 PR에서 고치지 않았다(사용자 결정 4)** — HTML 정리 묶음에서 "막히면 setup 다시"를 `status --doctor`로: `docs/materials/05-admin-runbook.html` §4(본문·SVG 글자)·§10(409 지표 문구), `15-quick-ref.html` "막혔을 때", `07-user-guide.html` §8, `03-manual.html`(961·970·1505~1508·1895), `12-pilot-eval.html`(272·273), `01-training-deck.html`(1115), `02-marketing.html`(517), `19-team-intro.html`(551), `docs/telephony-triage-guide.html` 04절, `01-training-deck.html`(578·937), `03-manual.html`(1518).
 
 ### ③ 질문·재시도·단계별 비용 (`usage_stats.py --transcripts`)
 
@@ -387,5 +388,5 @@
 
 ### 남은 것
 
-- **유료 eval(사용자 결정 1)**: 리뷰 뒤 쓰기 흐름 eval 한 번(이 구현 에이전트는 돌리지 않았다). evals.json에서 publish·discard·stage를 말하는 eval: 1·6·8·13·17·18·22·25·27·28·34·47·50·51·52·59·60·61·62·67·68·69·70.
-- 테스트(이 Windows PC, 전체 4분할): 2,002 통과·33 실패·4 건너뜀 — 실패 33개는 모두 이 PC의 알려진 환경 실패 목록(34개) 안이고 새 실패 없음(목록의 `test_doctor_worst_case_markdown_fits_budget`은 이번에 통과 — hook 행 "다음"이 짧아진 영향으로 보임).
+- **유료 eval(사용자 결정 1)**: 리뷰 뒤 쓰기 흐름 eval 한 번(구현 에이전트는 돌리지 않았다). 실행 기록에서 stage·publish·discard를 실제로 부르는 것: 최소 48(analyze → publish created → after-publish)·16(sync-pr → edited)·30(record publish)·17(dry-run discard)·36(cancel discard)·69(stage 전 release) ≈ $2.0, 확장 +3(draft-verify)·66(GitHub)·19(verify-fix) ≈ $3.4.
+- 테스트(이 Windows PC, 전체 4분할): 2,002 통과·33 실패·4 건너뜀 — 실패 33개는 모두 이 PC의 알려진 환경 실패 목록(34개) 안이고 새 실패 없음(목록의 `test_doctor_worst_case_markdown_fits_budget`은 이번에 통과 — hook 행 "다음"이 짧아진 영향으로 보임). 리뷰 반영 뒤 관련 9개 파일을 한 프로세스로: 551 통과·7 실패(모두 기준 목록)·3 건너뜀.

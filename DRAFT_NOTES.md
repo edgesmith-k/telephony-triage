@@ -18,7 +18,7 @@
 
 - 모드: **사외 초안**. Phase **D0, 1~13** 완료, 반입 전 보강 트랙 완료(history). 최신 반입본 import-20261014c(f4d98d5, 사내 전달), 새 묶음 **import-20261016**(main 병합 뒤 생성, 태그 전). main 병합 PR #8~#53.
 - 10/15 **K 완료**: offsite pass 59·fail 0·미결정 11. **L**: `docs/development/L_RESULT.md`. 10/16 **L1·L2 완료**(L2 1023567~, 재측정 offsite pass 59·fail 0·none 11(site), 결과·P2는 L_RESULT "(다) 결과"), HTML 자료 현행화·소개 품질 절. 원격 → main 병합.
-- 10/17 **외부 운영 리뷰 ①②③**(`ops-metrics`, PR #56 위): `L_RESULT.md` "외부 운영 리뷰". 남은 것: 쓰기 흐름 유료 eval 1회·HTML 정리.
+- 10/17 **외부 운영 리뷰 ①②③**(`ops-metrics`, main f5cd8dc 위): `L_RESULT.md` "외부 운영 리뷰". 남은 것: 쓰기 흐름 유료 eval 1회·HTML 정리.
 - 모델: Sonnet 5.5 기준, Opus 5.5 확인 11개 실패 0(≈2.7배).
 - `TODO(SITE)`: `tools/list_site_todos.py`. REVIEW-OPEN 0건. 사내 시작: **"사내 설정 시작"**(결정 (o)).
 - 안내서 HTML: `docs/telephony-triage-guide.html`(공유본 https://claude.ai/artifact/1jov1Et4dQUMauFr6aoxWG 개정 7, 파일 개정 8), `docs/materials/00-index.html`
