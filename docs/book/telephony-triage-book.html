@@ -4849,19 +4849,21 @@ var tb=document.querySelector('.tocbtn'),hero=document.querySelector('header.her
 if(tb&&hero&&'IntersectionObserver' in window){new IntersectionObserver(function(es){tb.classList.toggle('off',es[0].isIntersecting)}).observe(hero)}
 var box=document.getElementById('search');
 if(box){box.hidden=false;var q=document.getElementById('q'),out=document.getElementById('q-results'),idx=[],seen={},last='contents',lastT='';
-[].forEach.call(document.querySelectorAll('main h2, main h3, main code'),function(el){
+[].forEach.call(document.querySelectorAll('main h2, main h3, main h4, main code'),function(el){
 var t=el.tagName,sec=el.closest('section[id]'),txt,id,kind;
 if(t==='H2'){id=sec&&sec.id;txt=el.textContent;kind='장'}
 else if(t==='H3'){id=el.id||(sec&&sec.id);txt=el.textContent.replace(/#$/,'');kind='절'}
+else if(t==='H4'){if(el.closest('li, .g'))return;id=el.id||last;txt=el.textContent.replace(/#$/,'');kind='소제목'}
 else{txt=el.textContent.trim();if(!/^\/telephony-triage:|\.py\b/.test(txt)||txt.length>80)return;id=last;kind='명령'}
-if(t!=='CODE'&&id){last=id;lastT=txt}
+if((t==='H2'||t==='H3')&&id){last=id;lastT=txt}
 if(!id||!txt)return;var key=kind+'|'+txt+'|'+id;if(seen[key])return;seen[key]=1;
-idx.push({t:txt,id:id,k:kind,where:t==='CODE'?lastT:''})});
+idx.push({t:txt,id:id,k:kind,where:t==='CODE'||t==='H4'?lastT:''})});
 q.addEventListener('input',function(){var v=q.value.trim().toLowerCase();out.textContent='';if(!v)return;var n=0;
-for(var i=0;i<idx.length&&n<20;i++){var it=idx[i];if(it.t.toLowerCase().indexOf(v)<0)continue;n++;
+for(var i=0,hit=0;i<idx.length;i++){var it=idx[i];if(it.t.toLowerCase().indexOf(v)<0)continue;hit++;if(n>=20)continue;n++;
 var li=document.createElement('li'),a=document.createElement('a'),sm=document.createElement('small');
-a.href='#'+it.id;a.textContent=it.t;sm.textContent=it.k+(it.k==='명령'?' · '+it.where:'');li.appendChild(a);li.appendChild(sm);out.appendChild(li)}
-if(!n){var li=document.createElement('li');li.textContent='찾은 항목이 없습니다.';out.appendChild(li)}})}
+a.href='#'+it.id;a.textContent=it.t;sm.textContent=it.k+(it.where?' · '+it.where:'');li.appendChild(a);li.appendChild(sm);out.appendChild(li)}
+if(!n){var li=document.createElement('li');li.textContent='찾은 항목이 없습니다.';out.appendChild(li)}
+else if(hit>n){var li=document.createElement('li');li.textContent='앞의 '+n+'개만 보입니다(전체 '+hit+'개). 검색어를 더 길게 써 보세요.';out.appendChild(li)}})}
 var opened=[];
 addEventListener('beforeprint',function(){[].forEach.call(document.querySelectorAll('details:not([open])'),function(d){d.setAttribute('open','');opened.push(d)})});
 addEventListener('afterprint',function(){opened.forEach(function(d){d.removeAttribute('open')});opened=[]});
