@@ -688,7 +688,7 @@ def _base_tree(repo: Path, ref: str, dest: Path) -> tuple[Path | None, str | Non
     if not gitscope.has_ref(repo, ref):
         return None, None
     sha = gitscope.git(repo, "rev-parse", f"{ref}^{{commit}}").strip()
-    return gitscope.materialize_ref(repo, sha, dest), sha
+    return gitscope.materialize_ref_sparse(repo, sha, dest), sha       # fixture 로그는 현재 트리 것만 쓴다
 
 
 def verify_rules(root: Path, repo: Path, base_ref: str, plugin_root: Path, defaults: dict,
