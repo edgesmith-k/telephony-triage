@@ -331,6 +331,7 @@ details.more[open]>summary{margin-bottom:8px}
     <a href="#story">활용</a>
     <a href="#why">왜 필요한가</a>
     <a href="#result">결과 예시</a>
+    <a href="#trust">왜 믿을 수 있나</a>
     <a href="#scope">할 수 있는 것과 한계</a>
     <a href="#how">어떻게 동작하나</a>
     <a href="#safety">데이터와 안전</a>
@@ -449,6 +450,27 @@ approved_hash: c02651cacb352e7ba15e211b00b717b9a19ff0a4</pre></div>
 - 코드 위치: 코드 미확인</pre>
   </div>
   <p class="chart-foot">이 eval은 GitHub Issues 트래커로 돌렸고, Jira에도 같은 네 칸이 올라갑니다. 앞의 "약 3분"이 이 실행입니다. 게시 규칙은 <a href="../book/telephony-triage-book.html#ch12">안내서 12장</a>에 있습니다.</p>
+  <p class="bridge">결과를 믿을 수 있는 근거를 봅니다.</p>
+</section>
+
+<section id="trust">
+  <p class="kicker">Trust</p>
+  <h2>왜 믿을 수 있나</h2>
+  <p class="lead">걱정마다 막는 장치와 숫자를 적었습니다.</p>
+  <div class="panel">
+    <div class="panel-head"><b>걱정과 장치</b><span>2026-10-17 기준</span></div>
+    <div class="scroll"><table class="wide cards">
+      <thead><tr><th>걱정</th><th>장치와 근거</th><th>자세히</th></tr></thead>
+      <tbody>
+        <tr><td>돌릴 때마다 결과가 다르지 않나</td><td data-label="장치와 근거">판정은 AI가 아니라 스크립트가 합니다. 같은 로그·분석 조건·규칙 버전이면 같은 판정이 나옵니다.</td><td data-label="자세히"><a href="../book/telephony-triage-book.html#ch04">4장</a></td></tr>
+        <tr><td>새 규칙이 기존 판정을 깨지 않나</td><td data-label="장치와 근거">새 규칙은 검증 R1~R6을 거칩니다. 그중 R4가 이슈 DB에 쌓인 시험 로그(fixture) 전체로 기존 판정을 다시 확인합니다.</td><td data-label="자세히"><a href="../book/telephony-triage-book.html#ch29">29장</a></td></tr>
+        <tr><td>승인 없이 팀 DB에 올라가지 않나</td><td data-label="장치와 근거">확인 화면을 승인해야 push합니다. Claude가 명령을 실행하기 전에 확인하는 안전 검사(hook) 10종이 승인 없는 push를 막습니다. main으로 바로 가는 push는 거부됩니다. 사내에서 켜는 서버 브랜치 보호(PR·리뷰 필수)가 마지막으로 지킵니다.</td><td data-label="자세히"><a href="../book/telephony-triage-book.html#ch23">23장</a></td></tr>
+        <tr><td>개인정보가 새지 않나</td><td data-label="장치와 근거">도구가 PC 밖으로 보내는 로그·Jira 내용은 가린 뒤에만 Claude와 이슈 DB로 갑니다. 올리는 길에서 세 번 더 검사합니다.</td><td data-label="자세히"><a href="../book/telephony-triage-book.html#ch22">22장</a></td></tr>
+        <tr><td>문제가 생기면</td><td data-label="장치와 근거">우회하지 않고 멈춘 뒤 메시지로 알립니다. 막히면 <code>/telephony-triage:status --doctor</code> 한 화면을 봅니다.</td><td data-label="자세히"><a href="../book/telephony-triage-book.html#ch13">13장</a></td></tr>
+        <tr><td>실제로 검증했나</td><td data-label="장치와 근거">자동 테스트 2,047개를 Python 3개 버전 CI에서 돌려 모두 통과했습니다. 행동 평가(eval) 70개 중 개발 단계에서 확인한 59개는 실패 0입니다. 나머지 11개는 사내에서 확인합니다.</td><td data-label="자세히"><a href="../book/telephony-triage-book.html#ch31">31장</a></td></tr>
+      </tbody>
+    </table></div>
+  </div>
   <p class="bridge">지금 할 수 있는 것과 아직 못 하는 것을 정리합니다.</p>
 </section>
 
@@ -506,7 +528,6 @@ approved_hash: c02651cacb352e7ba15e211b00b717b9a19ff0a4</pre></div>
   <p class="lead">로그와 Jira 원문은 내 PC에 남고, 밖으로 나가는 것은 개인정보를 가린 것뿐입니다.</p>
   <svg class="flow" viewBox="0 0 360 300" role="img" aria-label="원문 로그와 Jira 응답 원문은 내 PC 작업 폴더에만 있다. 마스킹을 거친 것만 Claude 대화, 팀 이슈 DB, Jira 코멘트로 간다."><rect x="1" y="1" width="358" height="106" rx="10" style="fill:var(--accent-soft);stroke:var(--accent)"/><text x="16" y="26" class="b" style="fill:var(--text)">내 PC · 원문은 여기에만</text><text x="16" y="50" class="s">logcat 원문, bugreport</text><text x="16" y="70" class="s">Jira 응답 원문 issue_raw.json (분석 뒤 지움)</text><text x="16" y="90" class="s">작업 폴더 권한 700 (나만 읽고 씀)</text><path d="M180 110v34m-6 -7l6 7l6 -7" style="fill:none;stroke:var(--accent);stroke-width:2"/><text x="194" y="132" class="h">마스킹을 거친 것만</text><rect x="1" y="152" width="358" height="42" rx="10" style="fill:var(--surface);stroke:var(--line)"/><text x="16" y="178" class="b" style="fill:var(--text)">Claude 대화</text><text x="132" y="178" class="s">가린 요약, 필요한 로그 구간</text><rect x="1" y="202" width="358" height="42" rx="10" style="fill:var(--surface);stroke:var(--line)"/><text x="16" y="228" class="b" style="fill:var(--text)">팀 이슈 DB</text><text x="132" y="228" class="s">가린 fixture, Jira 필드, 메모</text><rect x="1" y="252" width="358" height="42" rx="10" style="fill:var(--surface);stroke:var(--line)"/><text x="16" y="278" class="b" style="fill:var(--text)">Jira</text><text x="132" y="278" class="s">승인한 코멘트 1건 (선택)</text></svg>
   <ul class="limits" style="margin-top:22px">
-    <li><b>승인 없이 올라가지 않습니다.</b> 확인 화면을 승인해야 push합니다. main으로 바로 가는 push는 거부됩니다. 마지막 방어선은 서버의 브랜치 보호와 필수 리뷰입니다.</li>
     <li><b>연습 실행은 올라가지 않습니다.</b> <code>--dry-run</code>으로 준비한 작업은 올리기 단계(publish)가 거부합니다.</li>
     <li><b>Jira는 읽기와 승인한 코멘트 1건뿐입니다.</b> 필드 수정, 상태 변경, 이슈 생성은 거부합니다. 본문이 바뀌면 다시 승인받습니다.</li>
     <li><b>개인정보는 가립니다.</b> IMSI, 전화번호, SIP 주소의 사용자 부분, 자격 증명을 표식으로 바꿉니다. <code>"password": "…"</code> 같은 JSON 키 형태도 가립니다.</li>
