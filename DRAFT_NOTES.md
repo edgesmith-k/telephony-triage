@@ -21,7 +21,7 @@
 - 10/17 **외부 운영 리뷰 ①②③**(`ops-metrics`, main f5cd8dc 위): `L_RESULT.md` "외부 운영 리뷰". 남은 것: 쓰기 흐름 유료 eval 1회·HTML 정리.
 - 모델: Sonnet 5.5 기준, Opus 5.5 확인 11개 실패 0(≈2.7배).
 - `TODO(SITE)`: `tools/list_site_todos.py`. REVIEW-OPEN 0건. 사내 시작: **"사내 설정 시작"**(결정 (o)).
-- 안내서 HTML: `docs/telephony-triage-guide.html`(공유본 https://claude.ai/artifact/1jov1Et4dQUMauFr6aoxWG 개정 7, 파일 개정 8), `docs/materials/00-index.html`
+- 안내서 HTML: 통합 책 `docs/book/telephony-triage-book.html`(10/17, 옛 안내서·자료 03~18을 합침, 공유본 https://claude.ai/artifact/1jov1Et4dQUMauFr6aoxWG 를 책으로 교체 예정), 목록 `docs/materials/00-index.html`
 
 ## 남은 일 (사외 전용)
 

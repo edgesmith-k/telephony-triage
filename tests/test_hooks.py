@@ -236,7 +236,7 @@ def test_guard_commit_requires_exact_hookspath():
         else:
             git(ws.clone, "config", "core.hooksPath", value)
         out = bash(ws, 'git commit -m "x"', ws.clone)
-        assert decision(out) == "deny" and "/telephony-triage:setup" in out["permissionDecisionReason"], value
+        assert decision(out) == "deny" and "config.py install-hooks" in out["permissionDecisionReason"], value
     ws.json("config.py", ["install-hooks", "--db", ws.clone])
     # worktree도 같은 설정을 공유한다
     wt = ws.work / "wt-guard"
