@@ -564,7 +564,7 @@ approved_hash: c02651cacb352e7ba15e211b00b717b9a19ff0a4</pre></div>
   <p class="lead">도입을 검토할 때 먼저 나오는 질문 여섯 개입니다.</p>
   <details class="faq"><summary>AI가 원인을 정하나요?</summary><p>아닙니다. 원인 판정은 규칙을 따르는 스크립트가 합니다. Claude는 설명·질문·초안만 맡습니다. 분류 확정은 엔지니어가, 팀 이슈 DB 반영은 카테고리 담당자의 리뷰가 합니다.</p></details>
   <details class="faq"><summary>정확도는 얼마인가요?</summary><p>아직 모릅니다. 지금까지는 합성 데이터로 개발했습니다. 사내에서 해결된 과거 Jira 20~30건으로 처음 잽니다(S-5). 기준에 못 미치면 파일럿을 시작하지 않습니다.</p></details>
-  <details class="faq"><summary>품질은 어떻게 확인했나요?</summary><p>자동 테스트 2,047개가 서버의 자동 검사(CI, Ubuntu)에서 Python 세 버전으로 모두 통과했습니다. Claude가 절차를 지키는지 보는 행동 평가(eval)는 70개입니다. 사외에서 59개가 통과했고 실패는 0개, 11개는 사내에서 확인합니다. 최신 값은 <a href="../book/telephony-triage-book.html#ch31">안내서 31장</a>에 있습니다.</p></details>
+  <details class="faq"><summary>품질은 어떻게 확인했나요?</summary><p>자동 테스트 2,047개가 서버의 자동 검사(CI, Ubuntu)에서 Python 세 버전으로 모두 통과했습니다. Claude가 절차를 지키는지 보는 행동 평가(eval)는 70개입니다. 개발 단계에서 59개가 통과했고 실패는 0개, 11개는 사내에서 확인합니다. 최신 값은 <a href="../book/telephony-triage-book.html#ch31">안내서 31장</a>에 있습니다.</p></details>
   <details class="faq"><summary>막히면 setup을 처음부터 다시 하나요?</summary><p>아닙니다. <code>/telephony-triage:status --doctor</code>를 먼저 실행합니다. 아무것도 바꾸지 않고, 막힌 것과 다음 할 일을 한 화면으로 보여 줍니다. 그래도 안 되면 그 화면을 그대로 관리자에게 보냅니다(<a href="../book/telephony-triage-book.html#ch13">안내서 13장</a>).</p></details>
   <details class="faq"><summary>운영 효과는 무엇으로 재나요?</summary><p>팀 이슈 DB에서 예전 원인을 다시 쓴 비율과, 1위 후보를 그대로 받아들인 비율을 봅니다. 파일럿에서는 PR까지 걸린 시간과 중간에 취소한 비율을 잽니다. 정의와 집계 도구는 <a href="../book/telephony-triage-book.html#ch19">안내서 19장</a>에 있습니다.</p></details>
   <details class="faq"><summary>쓰다가 그만두면 무엇이 남나요?</summary><p>팀 이슈 DB는 일반 GitHub 레포의 Markdown·YAML 파일과 가린 로그입니다. 플러그인 없이도 읽고 검색할 수 있습니다. Jira에는 승인한 코멘트 말고 바뀐 것이 없습니다.</p></details>

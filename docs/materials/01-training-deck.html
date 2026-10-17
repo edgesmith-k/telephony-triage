@@ -1097,7 +1097,7 @@ bonus = 근접(근거 시각이 발생 시각에 가까울수록) + 키워드(Ji
 </section>
 
 <section class="slide" data-sec="9 관리와 운영">
-  <div class="head"><div class="eyebrow">§9 관리와 운영</div><h2>사내 적용 단계 S-0 ~ S-7</h2><p class="lede">사외에서 모의 환경으로 구현을 끝냈고, 사내에서는 실제 값만 끼워 맞춥니다. 아래는 모두 <span class="warn-t">예정</span>입니다.</p></div>
+  <div class="head"><div class="eyebrow">§9 관리와 운영</div><h2>사내 적용 단계 S-0 ~ S-7</h2><p class="lede">개발 단계에서 모의 환경으로 구현을 끝냈고, 사내에서는 실제 값만 끼워 맞춥니다. 아래는 모두 <span class="warn-t">예정</span>입니다.</p></div>
   <div class="body">
     <div class="tl">
       <div><b>S-0</b><span>선택. 실제 로그 형식 선행 확인, 설정 초안 제안 도구</span></div>
@@ -1125,7 +1125,7 @@ bonus = 근접(근거 시각이 발생 시각에 가까울수록) + 키워드(Ji
     <div class="nums">
       <div><b>CI 통과</b><span>자동 테스트 전체(Ubuntu, Python 3.10 · 3.11 · 3.14). 개수는 <a href="../book/telephony-triage-book.html#ch31">안내서 31장</a></span></div>
       <div><b>23/23</b><span>샘플 DB 회귀 fixture 통과</span></div>
-      <div><b>70</b><span>skill eval (사외 59 통과·실패 0, 11개는 사내 확인)</span></div>
+      <div><b>70</b><span>skill eval (개발 단계 59 통과·실패 0, 11개는 사내 확인)</span></div>
       <div><b>$0.34~0.40</b><span>아는 원인 1건 분석→기록 (Sonnet 5.5, 합성 데이터)</span></div>
     </div>
     <p class="small">새 원인·새 유형 1건은 약 $0.56~0.71. 합성 데이터 eval 실측이라 실제 로그는 1.5~2배로 추정합니다(<a href="../book/telephony-triage-book.html#ch14">안내서 14장</a>). 기본 모델은 Sonnet, 탐색 가설 품질이 중요하면 Opus(비용 약 2.7배).</p>
@@ -1137,7 +1137,7 @@ bonus = 근접(근거 시각이 발생 시각에 가까울수록) + 키워드(Ji
     </div>
     <p class="lede" style="color:var(--ink)"><b>질문 받겠습니다.</b></p>
   </div>
-  <aside class="notes">수치는 2026-10-16 사외 합성 데이터 기준입니다(테스트 수·eval 결과는 안내서 31장, 비용은 14장). 비용은 심층·탐색·코드 분석 없이 짧은 합성 로그로 잰 값이고, 원인이 DB에 없어 심층·탐색 분석과 코드 읽기까지 하는 가장 무거운 경로는 아직 재지 않았습니다(훨씬 클 수 있음). 정확도는 아직 측정 전이고 S-5에서 사내 과거 Jira로 처음 잽니다. 마지막으로 다시 강조할 것: 판정은 스크립트, 기록은 승인 후 PR, Jira는 읽기와 승인한 코멘트만.</aside>
+  <aside class="notes">수치는 2026-10-16 개발 단계 합성 데이터 기준입니다(테스트 수·eval 결과는 안내서 31장, 비용은 14장). 비용은 심층·탐색·코드 분석 없이 짧은 합성 로그로 잰 값이고, 원인이 DB에 없어 심층·탐색 분석과 코드 읽기까지 하는 가장 무거운 경로는 아직 재지 않았습니다(훨씬 클 수 있음). 정확도는 아직 측정 전이고 S-5에서 사내 과거 Jira로 처음 잽니다. 마지막으로 다시 강조할 것: 판정은 스크립트, 기록은 승인 후 PR, Jira는 읽기와 승인한 코멘트만.</aside>
 </section>
 
 </div></div>
