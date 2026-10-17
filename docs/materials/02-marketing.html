@@ -451,9 +451,9 @@ approved_hash: c02651cacb352e7ba15e211b00b717b9a19ff0a4</pre></div>
       <tbody>
         <tr><td>돌릴 때마다 결과가 다르지 않나</td><td data-label="장치와 근거">판정은 AI가 아니라 스크립트가 합니다. 같은 로그·분석 조건·규칙 버전이면 같은 판정이 나옵니다.</td><td data-label="자세히"><a href="../book/telephony-triage-book.html#ch04">4장</a></td></tr>
         <tr><td>새 규칙이 기존 판정을 깨지 않나</td><td data-label="장치와 근거">새 규칙은 검증 R1~R6을 거칩니다. 그중 R4가 이슈 DB에 쌓인 시험 로그(fixture) 전체로 기존 판정을 다시 확인합니다.</td><td data-label="자세히"><a href="../book/telephony-triage-book.html#ch29">29장</a></td></tr>
-        <tr><td>승인 없이 팀 DB에 올라가지 않나</td><td data-label="장치와 근거">확인 화면을 승인해야 push합니다. Claude가 명령을 실행하기 전에 확인하는 안전 검사(hook) 10종이 승인 없는 push를 막습니다. main으로 바로 가는 push는 거부됩니다. 사내에서 켜는 서버 브랜치 보호(PR·리뷰 필수)가 마지막으로 지킵니다.</td><td data-label="자세히"><a href="../book/telephony-triage-book.html#ch23">23장</a></td></tr>
+        <tr><td>승인 없이 팀 DB에 올라가지 않나</td><td data-label="장치와 근거">확인 화면을 승인해야 push합니다. push 직전에 git hook이 승인한 내용과 그대로 같은지 다시 확인합니다. main으로 바로 가는 push는 거부됩니다. 사내에서 켜는 서버 브랜치 보호(PR·리뷰 필수)가 마지막으로 지킵니다.</td><td data-label="자세히"><a href="../book/telephony-triage-book.html#ch23">23장</a></td></tr>
         <tr><td>개인정보가 새지 않나</td><td data-label="장치와 근거">도구가 PC 밖으로 보내는 로그·Jira 내용은 가린 뒤에만 Claude와 이슈 DB로 갑니다. 올리는 길에서 세 번 더 검사합니다.</td><td data-label="자세히"><a href="../book/telephony-triage-book.html#ch22">22장</a></td></tr>
-        <tr><td>문제가 생기면</td><td data-label="장치와 근거">우회하지 않고 멈춘 뒤 메시지로 알립니다. 막히면 <code>/telephony-triage:status --doctor</code> 한 화면을 봅니다.</td><td data-label="자세히"><a href="../book/telephony-triage-book.html#ch13">13장</a></td></tr>
+        <tr><td>문제가 생기면</td><td data-label="장치와 근거">안전 조건을 못 채운 작업은 막고 이유를 알립니다. 경고만 하는 경우, 쓰기만 막고 분석은 계속하는 경우도 구분해 보여 줍니다. 막히면 <code>/telephony-triage:status --doctor</code> 한 화면을 봅니다.</td><td data-label="자세히"><a href="../book/telephony-triage-book.html#ch13">13장</a></td></tr>
         <tr><td>실제로 검증했나</td><td data-label="장치와 근거">자동 테스트 2,047개를 Python 3개 버전 CI에서 돌려 모두 통과했습니다. 행동 평가(eval) 70개 중 개발 단계에서 확인한 59개는 실패 0입니다. 나머지 11개는 사내에서 확인합니다.</td><td data-label="자세히"><a href="../book/telephony-triage-book.html#ch31">31장</a></td></tr>
       </tbody>
     </table></div>
@@ -477,7 +477,7 @@ approved_hash: c02651cacb352e7ba15e211b00b717b9a19ff0a4</pre></div>
     <div class="manual"><span class="label">한계</span>
       <ul>
         <li>모뎀(CP) 로그는 읽지 않는다</li>
-        <li>규칙에 없는 원인은 찾지 못하고 "원인 미확인"·"후보 없음"으로 알린다</li>
+        <li>규칙에 없는 원인은 자동으로 확정하지 않고 "원인 미확인"·"후보 없음"으로 알린다. 원하면 탐색 분석이 원인 가설을 제시하지만 판정에는 쓰지 않는다</li>
         <li>data 밖 5개 카테고리의 로그 문구는 아직 예시 값이다</li>
         <li>정확도는 사내 과거 Jira 20~30건으로 처음 잰다</li>
         <li>지원 OS는 Ubuntu뿐이다</li>
