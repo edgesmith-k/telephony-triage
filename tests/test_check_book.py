@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -75,7 +76,9 @@ def test_promo_common_sections_differ(tmp_path):
     ca.write_text(a.read_text(encoding="utf-8"), encoding="utf-8")
     src = b.read_text(encoding="utf-8")
     assert check_book.check_common(ca, b) == []
-    cb.write_text(src.replace('<h2>왜 필요한가</h2>', '<h2>왜 필요한가요</h2>', 1), encoding="utf-8")
+    marker = '<p class="kicker">Why</p>'
+    assert marker in src
+    cb.write_text(src.replace(marker, marker + "!", 1), encoding="utf-8")
     out = check_book.check_common(ca, cb)
     assert len(out) == 1 and "section#why" in out[0] and "common" in out[0]
 
@@ -84,7 +87,29 @@ def test_promo_toc_order_differs(tmp_path):
     a, b = (REPO / p for p in check_book.PROMO_PAIR)
     cb = tmp_path / "19.html"
     src = b.read_text(encoding="utf-8")
-    why, res = '    <a href="#why">왜 필요한가</a>\n', '    <a href="#result">결과 예시</a>\n'
-    cb.write_text(src.replace(why + res, res + why, 1), encoding="utf-8")
+    swapped, n = re.subn(r'(    <a href="#why">[^\n]*\n)(    <a href="#result">[^\n]*\n)', r"\2\1", src, count=1)
+    assert n == 1
+    cb.write_text(swapped, encoding="utf-8")
     out = check_book.check_common(a, cb)
     assert len(out) == 1 and "목차" in out[0]
+
+
+def test_promo_hero_ask_may_differ(tmp_path):
+    a, b = (REPO / p for p in check_book.PROMO_PAIR)
+    cb = tmp_path / "19.html"
+    src = b.read_text(encoding="utf-8")
+    changed, n = re.subn(r'(<p class="hero-ask">)[^\n]*?(</p>)', r"\1다른 안내 한 줄\2", src, count=1)
+    assert n == 1
+    cb.write_text(changed, encoding="utf-8")
+    assert check_book.check_common(a, cb) == []
+
+
+def test_promo_hero_other_text_differs(tmp_path):
+    a, b = (REPO / p for p in check_book.PROMO_PAIR)
+    cb = tmp_path / "19.html"
+    src = b.read_text(encoding="utf-8")
+    marker = '<p class="rc-cond">'
+    assert marker in src
+    cb.write_text(src.replace(marker, marker + "!", 1), encoding="utf-8")
+    out = check_book.check_common(a, cb)
+    assert len(out) == 1 and "header1" in out[0]

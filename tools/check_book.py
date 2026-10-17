@@ -10,7 +10,8 @@
     wording   금지 문구(과장된 결정성 표현 등)
     common    02 소개와 19 팀 소개의 `<style>`·`<script>`·hero·footer·공통 `<section>`이 글자 그대로 같고,
               목차 링크 순서가 같음(19 전용 절과 서로 다른 절은 `PROMO_ONLY`에 적은 id만 뺀다.
-              title은 비교하지 않는다. 둘 다 대상일 때만 검사)
+              title은 비교하지 않는다. hero 안 `<p class="hero-ask">` 한 줄은 파일마다 다른 첫 화면
+              안내라 내용을 빼고 비교한다. 둘 다 대상일 때만 검사)
 
 대상 기본값은 `docs/book/telephony-triage-book.html`과 git이 추적하는 `docs/materials/*.html`이다.
 책의 숫자 중복(같은 수치가 장마다 다른지)은 오탐이 많아 검사하지 않는다.
@@ -40,6 +41,7 @@ BANNED = [
 PROMO_PAIR = ("docs/materials/02-marketing.html", "docs/materials/19-team-intro.html")
 # 공통 비교에서 빼는 절: story는 19에만, contact는 파일마다 다른 마무리. title은 비교하지 않고, 목차는 story·contact 링크를 뺀 순서만 비교한다.
 PROMO_ONLY = {"story", "contact"}
+VARIANT_RE = re.compile(r'(<p class="hero-ask">)[^\n]*?(</p>)')
 TOC_RE = re.compile(r'<details class="toc".*?</details>', re.S)
 BLOCK_RE = re.compile(r'<style>.*?</style>|<script>.*?</script>|<header class="hero">.*?</header>|<footer>.*?</footer>'
                       r'|<section id="([^"]+)"[^>]*>.*?</section>', re.S)
@@ -118,7 +120,8 @@ def _blocks(src: str) -> list[tuple[str, int, str]]:
             tag = re.match(r"<(\w+)", m.group(0)).group(1)
             n[tag] = n.get(tag, 0) + 1
             key = f"{tag}{n[tag]}"
-        out.append((key, m.start(), m.group(0)))
+        body = VARIANT_RE.sub(r"\1\2", m.group(0), count=1) if key.startswith("header") else m.group(0)
+        out.append((key, m.start(), body))
     return out
 
 
@@ -130,6 +133,11 @@ def check_common(a: Path, b: Path, names: tuple[str, str] | None = None) -> list
             if h.lstrip("#") not in PROMO_ONLY] for x in (sa, sb)]
     if toc[0] != toc[1]:
         return [f"{na}: common: 목차 링크 순서가 {nb}와 다름 ({' '.join(toc[0])} / {' '.join(toc[1])})"]
+    for name, src in ((na, sa), (nb, sb)):
+        hero = re.search(r'<header class="hero">.*?</header>', src, re.S)
+        n = len(VARIANT_RE.findall(hero.group(0))) if hero else 0
+        if n != 1:
+            return [f"{name}: common: hero의 hero-ask 줄이 {n}개 (정확히 1개여야 함)"]
     ba, bb = _blocks(sa), _blocks(sb)
     ka, kb = [k for k, _, _ in ba], [k for k, _, _ in bb]
     if ka != kb:
@@ -138,7 +146,8 @@ def check_common(a: Path, b: Path, names: tuple[str, str] | None = None) -> list
         if ta == tb:
             continue
         i = next((j for j, (x, y) in enumerate(zip(ta, tb)) if x != y), min(len(ta), len(tb)))
-        la, lb = sa.count("\n", 0, pa + i) + 1, sb.count("\n", 0, pb + i) + 1
+        la = sa.count("\n", 0, pa) + ta.count("\n", 0, i) + 1
+        lb = sb.count("\n", 0, pb) + tb.count("\n", 0, i) + 1
         return [f"{na}:{la}: common: {key}가 {nb}:{lb}와 다름"]
     return []
 
