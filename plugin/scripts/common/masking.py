@@ -113,9 +113,9 @@ RULES: tuple[Rule, ...] = (
     # --- 자격증명 ---
     Rule("CRED", re.compile(r'(?i)\b(?:response|nonce|cnonce|opaque)\s*=\s*"?(?P<v>[^",\s]+)"?'),
          context=_SIP_AUTH_CONTEXT),
-    Rule("CRED", re.compile(r"\b(?:RES|AUTN|AUTS|XRES)\s*[=:]\s*(?:0x)?(?P<v>[0-9A-Fa-f]{8,})\b")),
-    Rule("CRED", re.compile(r'(?i)\b(?:password|passwd|pwd|secret|token)\s*[=:]\s*"?(?P<v>[^\s",;]+)')),
-    Rule("CRED", re.compile(r'(?i)\b(?:api[_-]?key|key)\s*[=:]\s*"?(?P<v>[A-Za-z0-9+/=_-]+)'),
+    Rule("CRED", re.compile(r"\b(?:RES|AUTN|AUTS|XRES)" + _SEP + r"(?:0x)?(?P<v>[0-9A-Fa-f]{8,})\b")),
+    Rule("CRED", re.compile(r'(?i)\b(?:password|passwd|pwd|secret|token)' + _SEP + r'(?P<v>[^\s",;]+)')),
+    Rule("CRED", re.compile(r'(?i)\b(?:api[_-]?key|key)' + _SEP + r'(?P<v>[A-Za-z0-9+/=_-]+)'),
          check=_secretish),
     # AKA 키 (대소문자 구분: 소문자 `ok=`·`ik` 섞인 문구를 피한다; Kc 64비트 = 16 hex가 하한)
     # 대문자 변형(`KI`, `OPC`)은 받고 소문자(`ki=`, `ck=`)는 받지 않는다(체크섬 등 일반 키와 겹친다)
@@ -129,14 +129,14 @@ RULES: tuple[Rule, ...] = (
     Rule("CRED", re.compile(r"(?<![\w.-])(?P<v>eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}(?:\.[A-Za-z0-9_-]*)?)")),  # JWT
     # --- URI·주소 ---
     Rule("IMPU", re.compile(r"\bsips?:(?P<v>[^@\s;>\"<]+)@")),
-    Rule("IMPI", re.compile(r'(?i)\b(?:username|impi)\s*=\s*"?(?P<v>[^@"\s,<]+)@')),
+    Rule("IMPI", re.compile(r'(?i)\b(?:username|impi)(?:\s*=|"\s*:)\s*"?(?P<v>[^@"\s,<]+)@')),
     Rule("MSISDN", re.compile(r"\btel:(?P<v>\+?[\d-]{6,})")),
     Rule("EMAIL", re.compile(r"(?<![\w.%+-])(?P<v>[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,})\b")),
     Rule("SUPI", re.compile(r"\b(?P<v>imsi-\d{5,15})\b")),
     Rule("SUCI", re.compile(r"\b(?P<v>suci-[0-9A-Fa-f-]{6,})")),
     # --- 문맥 있는 식별자 ---
-    Rule("IMSI", re.compile(r'(?i)\bimsi\s*[=:]\s*"?(?P<v>\d{6,15})' + _NUM_END)),
-    Rule("IMEI", re.compile(r'(?i)\b(?:imei|meid|device_?id)\s*[=:]\s*"?(?P<v>[0-9A-Fa-f]{14,16})' + _NUM_END)),
+    Rule("IMSI", re.compile(r'(?i)\bimsi' + _SEP + r'(?P<v>\d{6,15})' + _NUM_END)),
+    Rule("IMEI", re.compile(r'(?i)\b(?:imei|meid|device_?id)' + _SEP + r'(?P<v>[0-9A-Fa-f]{14,16})' + _NUM_END)),
     # 구분자(`-`·공백) IMEI/IMEISV, 키에 붙은 값(`IMEI4901…`). 끝 경계를 두지 않아 `…518_1`도 값 부분만 토큰
     Rule("IMEI", re.compile(r'(?i)\bm?(?:imei|imeisv|meid|device_?id)"?\s*[=:]?\s*"?(?P<v>\d(?:[ -]?\d){13,15})'),
          check=lambda v: 14 <= len(_digits(v)) <= 16, gate=("imei", "meid", "device")),
@@ -157,15 +157,15 @@ RULES: tuple[Rule, ...] = (
          gate=("lat", "lon", "lng", "altitude")),
     Rule("GEO", re.compile(r"(?i)\b(?:gps|fused|network|passive)\s+(?P<v>[-+]?\d{1,3}\.\d{4,},[-+]?\d{1,3}\.\d{4,})"),
          gate=("gps", "fused", "network", "passive")),
-    Rule("ICCID", re.compile(r'(?i)\biccid\s*[=:]\s*"?(?P<v>[0-9A-Fa-f]{18,20})' + _NUM_END)),
-    Rule("TMSI", re.compile(r'(?i)\b(?:p-?tmsi|m-?tmsi|s-?tmsi|tmsi)\s*[=:]\s*"?(?P<v>(?:0x)?[0-9A-Fa-f]{4,10})\b')),
-    Rule("GUTI", re.compile(r'(?i)\b(?:5g-?guti|guti)\s*[=:]\s*"?(?P<v>[0-9A-Fa-f][0-9A-Fa-f-]{7,})\b')),
+    Rule("ICCID", re.compile(r'(?i)\biccid' + _SEP + r'(?P<v>[0-9A-Fa-f]{18,20})' + _NUM_END)),
+    Rule("TMSI", re.compile(r'(?i)\b(?:p-?tmsi|m-?tmsi|s-?tmsi|tmsi)' + _SEP + r'(?P<v>(?:0x)?[0-9A-Fa-f]{4,10})\b')),
+    Rule("GUTI", re.compile(r'(?i)\b(?:5g-?guti|guti)' + _SEP + r'(?P<v>[0-9A-Fa-f][0-9A-Fa-f-]{7,})\b')),
     # 셀 식별자 — TODO(SITE:S13) RIL 데이터 콜 응답의 `cid`(context id)도 셀로 본다(과잉이지만 안전 쪽)
     Rule("CELL", re.compile(
         r"\b(?:mCi|mPci|mTac|mLac|mCid|mNci|mCellId|cid|ci|pci|tac|lac|nci|eci|cellId|cellIdentity)"
-        r"\s*[=:]\s*(?P<v>0x[0-9A-Fa-f]+|\d+)" + _NUM_END)),
+        + _SEP + r"(?P<v>0x[0-9A-Fa-f]+|\d+)" + _NUM_END)),
     Rule("MSISDN", re.compile(
-        r'(?i)\b(?:msisdn|phone(?:number)?|dest(?:addr)?|destination|number|callee|caller)\s*[=:]\s*"?(?P<v>\+?\d{7,15})'
+        r'(?i)\b(?:msisdn|phone(?:number)?|dest(?:addr)?|destination|number|callee|caller)' + _SEP + r'(?P<v>\+?\d{7,15})'
         + _NUM_END)),
     # --- 형식 ---
     Rule("MSISDN", re.compile(r"(?<![\w+.])(?P<v>\+\d{1,3}[- ]?\d{1,4}[- ]?\d{3,4}[- ]?\d{4})(?!\w|\.\w)")),

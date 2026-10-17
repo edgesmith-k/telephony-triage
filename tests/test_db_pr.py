@@ -354,6 +354,11 @@ def test_summary_markdown_shows_needs_approval_and_dry_run_push_note():
     ws.stage("MOCK-7001", "issue/MOCK-7001", dry_run=True, unauth=True)
     md = ws.run("db_pr.py", ["summary", ws.wt("MOCK-7001"), "--format", "markdown"], unauth=True)
     assert "push 불가: gh 인증 없음 (--dry-run)" in md.stdout and md.stdout.splitlines()[-1].startswith("approved_hash: ")
+    approved = md.stdout.splitlines()[-1].split(": ", 1)[1]
+    pub = ws.run("db_pr.py", ["publish", ws.wt("MOCK-7001"), "--branch", "issue/MOCK-7001", "--lease", "new",
+                              "--approved", approved, "--commit"], unauth=True)
+    assert pub.returncode == 2 and "--dry-run으로 stage한 작업은 publish하지 않는다" in pub.stderr   # 확인 화면까지만
+    assert not ws.prs()
     ws.db_pr("discard", ws.wt("MOCK-7001"))
 
 

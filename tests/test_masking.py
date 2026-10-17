@@ -110,6 +110,18 @@ DETECT = [
     ("AKA AUTN=00112233445566778899aabbccddeeff", "CRED", "00112233445566778899aabbccddeeff"),
     ("wifi password=hunter2", "CRED", "hunter2"),
     ("oauth token: eyJhbGciOiJIUzI1NiJ9", "CRED", "eyJhbGciOiJIUzI1NiJ9"),
+    ('{"password":"demoSecret987"}', "CRED", "demoSecret987"),            # JSON 키 뒤 닫는 따옴표 (Codex 리뷰 P0)
+    ('{"token": "demoToken987654321"}', "CRED", "demoToken987654321"),
+    ('{"api_key":"AbCd1234EfGh5678"}', "CRED", "AbCd1234EfGh5678"),
+    ('{"RES":"0123456789abcdef"}', "CRED", "0123456789abcdef"),            # 같은 결함의 형제 규칙 (JSON 키)
+    ('{"imsi":"45005123456"}', "IMSI", "45005123456"),
+    ('{"iccid":"1234567890123456789"}', "ICCID", "1234567890123456789"),
+    ('{"tmsi":"0x1234abcd"}', "TMSI", "0x1234abcd"),
+    ('{"guti":"45005-1234abcd"}', "GUTI", "45005-1234abcd"),
+    ('{"cid":12345}', "CELL", "12345"),
+    ('{"msisdn":"5551234567"}', "MSISDN", "5551234567"),
+    ('{"impi":"sub01x@ims"}', "IMPI", "sub01x"),
+    ("username: alice@example.com", "EMAIL", "alice@example.com"),     # 따옴표 없는 `username:`는 도메인까지 EMAIL로
     # 구분자·붙은 IMEI, IMEISV, EID, MAC 변형, GPS, AKA 키, PIN/PUK, Bearer, 장치 serial (P0-4)
     ("IMEI: 49-015420-323751-8", "IMEI", "49-015420-323751-8"),
     ("imei: 35 209900 176148 1", "IMEI", "35 209900 176148 1"),
