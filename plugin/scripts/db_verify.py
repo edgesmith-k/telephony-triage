@@ -599,7 +599,8 @@ def _regress_ok(regress: dict | None) -> bool:
 
 
 def r4(run: Run, regress: dict | None) -> tuple[dict, dict]:
-    if regress is not None and (not _regress_ok(regress) or regress["summary"]["total"] != len(run.items)):
+    if regress is not None and (not _regress_ok(regress)
+                                or {r["fixture"] for r in regress["results"]} != {i["rel"] for i in run.items}):
         regress = None
     if regress is None:
         results = [db_regress.judge(item, run.result(_paths(item))) for item in run.items]

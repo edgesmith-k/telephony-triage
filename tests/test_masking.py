@@ -113,6 +113,14 @@ DETECT = [
     ('{"password":"demoSecret987"}', "CRED", "demoSecret987"),            # JSON 키 뒤 닫는 따옴표 (Codex 리뷰 P0)
     ('{"token": "demoToken987654321"}', "CRED", "demoToken987654321"),
     ('{"api_key":"AbCd1234EfGh5678"}', "CRED", "AbCd1234EfGh5678"),
+    ('{"RES":"0123456789abcdef"}', "CRED", "0123456789abcdef"),            # 같은 결함의 형제 규칙 (JSON 키)
+    ('{"imsi":"45005123456"}', "IMSI", "45005123456"),
+    ('{"iccid":"1234567890123456789"}', "ICCID", "1234567890123456789"),
+    ('{"tmsi":"0x1234abcd"}', "TMSI", "0x1234abcd"),
+    ('{"guti":"45005-1234abcd"}', "GUTI", "45005-1234abcd"),
+    ('{"cid":12345}', "CELL", "12345"),
+    ('{"msisdn":"5551234567"}', "MSISDN", "5551234567"),
+    ('{"impi":"sub01x@ims"}', "IMPI", "sub01x"),
     # 구분자·붙은 IMEI, IMEISV, EID, MAC 변형, GPS, AKA 키, PIN/PUK, Bearer, 장치 serial (P0-4)
     ("IMEI: 49-015420-323751-8", "IMEI", "49-015420-323751-8"),
     ("imei: 35 209900 176148 1", "IMEI", "35 209900 176148 1"),
