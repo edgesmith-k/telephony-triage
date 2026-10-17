@@ -159,7 +159,8 @@ def test_retries_runs_errors_stages_failed(tmp_path):
             row("stage", 22, v=2, result="error", dry_run=False, message="m"),
             row("stage", 23, v=2, result="needs-approval", dry_run=False), row("stage", 24, v=2, result="ok", dry_run=False)]
     _job(tmp_path, "R-1", ANALYZE, rows, files=["state.json"])
-    assert usage_stats.stats(tmp_path)["retries"] == {"runs": 2, "errors": 1, "stages": 5, "stage_failed": 3}
+    assert usage_stats.stats(tmp_path)["retries"] == {"runs": 2, "answer_reruns": 0, "errors": 1, "stages": 5,
+                                                       "stage_failed": 3}
 
 
 def test_json_and_text_carry_counts_only(tmp_path, capsys):
@@ -348,14 +349,15 @@ def test_transcripts_retry_window_subagent_asks_and_guard(tmp_path):
     t.resp(usage=None)                                                                 # retry, usage 없음
     t.resp(("mcp__mock__ask_user", {"question": "q"}, ("y", False)))                    # retry(도구) → 끝
     t.resp()                                                                           # write
+    side = _T()
+    side.n = 200
+    side.resp(usage=(2, 2, 2, 2), sidechain=True)                       # 세션 파일 안의 isSidechain 줄
+    t.lines += side.lines
     t.write(tmp_path / "proj" / "a" / f"{SID}.jsonl")
     sub = _T()
     sub.n = 100                                                          # message.id는 세션 안에서 응답마다 다르다
     sub.resp(bash("grep x"), usage=(7, 7, 7, 7), sidechain=True)
     sub.write(tmp_path / "proj" / "a" / SID / "subagents" / "agent-1.jsonl")
-    side = _T()
-    side.n = 200
-    side.resp(usage=(2, 2, 2, 2), sidechain=True).write(tmp_path / "proj" / "a" / "side.jsonl")
     tok = usage_stats.transcripts(tmp_path / "proj")
     calls = {k: v["calls"] for k, v in tok["by_stage"].items() if v["calls"]}
     assert calls == {"basic": 2, "retry": 4, "write": 5, "subagent": 2}
@@ -396,3 +398,76 @@ def test_transcripts_cli_output_has_numbers_only(tmp_path, capsys):
             assert secret not in blob
     assert usage_stats.main(["--work-dir", str(tmp_path / "work"), "--transcripts", str(tmp_path / "none")]) == 0
     assert capsys.readouterr().out.splitlines()[-1].startswith("토큰: 미측정")
+
+
+# -- 리뷰 회귀(10/17): 파이프 인코딩·지표 정확도·손상 입력·transcript 형식 변화 --------------------------------------------
+
+
+def test_text_mode_through_a_pipe_without_utf8_mode(tmp_path):
+    """콘솔이 아닌 stdout(파이프)에서 PYTHONUTF8 없이도 텍스트(−·— 포함)를 낸다(Windows 기본 cp949에서 깨지지 않는다)."""
+    import subprocess
+    _job(tmp_path, "A-1", ANALYZE, run(0))
+    env = {k: v for k, v in os.environ.items() if k not in ("PYTHONUTF8", "PYTHONIOENCODING")}
+    proc = subprocess.run([sys.executable, str(REPO / "plugin" / "scripts" / "usage_stats.py"), "--work-dir", str(tmp_path)],
+                          capture_output=True, env=env)
+    assert proc.returncode == 0, proc.stderr.decode("utf-8", "replace")
+    assert "취소 비율" in proc.stdout.decode("utf-8") and "−" in proc.stdout.decode("utf-8")
+
+
+def test_practice_ends_when_a_real_analyze_follows(tmp_path):
+    practice = [*run(0), row("stage", 9, v=2, result="ok", dry_run=True), row("discard", 10, v=2, outcome="dry-run")]
+    _job(tmp_path, "P-1", ANALYZE, [*practice, *run(60)])                   # 연습 뒤 실제 analyze → 보류
+    _job(tmp_path, "P-2", None, [*practice, *run(60)], analysis={"status": "ok"})   # → 분석만
+    _job(tmp_path, "P-3", ANALYZE, practice)
+    st = usage_stats.stats(tmp_path)["states"]
+    assert (st["held"], st["analysis_only"], st["practice"]) == (1, 1, 1)
+
+
+def test_pr_time_only_after_first_analyze_and_only_for_pr_state(tmp_path):
+    # record로 PR을 먼저 만들고 같은 키로 나중에 analyze — 음수 시간이 아니라 측정 불가
+    _job(tmp_path, "R-1", _pr_plan(), [row("publish", 0, v=2, action="created", pr=1, gh_ok=True), *run(600)])
+    pushed = {**ANALYZE, "pr": {"number": None, "branch": "issue/X", "head_sha": "a" * 40}}
+    _job(tmp_path, "S-1", pushed, [*run(0), row("publish", 30, v=2, action="created", pr=None, gh_ok=True)])
+    s = usage_stats.stats(tmp_path)
+    assert s["pr_minutes"]["n"] == 0 and s["pr_unmeasured"] == 1 and s["states"]["pushed"] == 1
+
+
+def test_corrupt_runs_and_naive_timestamps_do_not_break_the_report(tmp_path):
+    _job(tmp_path, "C-1", None, [{"ts": "2026-10-01T00:00:00", "step": "0-key"}, start(0), row("done", 5)],
+         tstate={"job": {"runs": 5}}, analysis={"status": "ok"})
+    _job(tmp_path, "C-2", None, run(0), tstate={"job": {"runs": "x"}}, analysis={"status": "ok"})
+    s = usage_stats.stats(tmp_path)
+    assert s["jobs"] == 2 and s["analysis_minutes"]["values"] == [5.0] and s["analysis_only_runs"] == 0
+
+
+def test_answer_reruns_are_counted_apart_from_runs(tmp_path):
+    rows = [key(0), start(0), row("needs_input", 1, kind="time"), key(2), start(2), row("needs_input", 3, kind="code"),
+            key(4), start(4), row("done", 6), key(100), start(100), row("done", 105)]
+    _job(tmp_path, "A-1", None, rows, analysis={"status": "ok"})
+    r = usage_stats.stats(tmp_path)["retries"]
+    assert (r["runs"], r["answer_reruns"]) == (2, 2)
+
+
+def test_transcripts_survive_format_drift(tmp_path):
+    t = _T()
+    t.resp(bash(f"{S}/triage.py run K"))
+    t.resp(usage=(5, 5, 5, 5))
+    t.lines[-1]["message"]["id"] = ["list", "id"]                       # id가 목록
+    t.resp(usage=(1, 1, 1, 1))
+    t.lines[-1]["message"]["usage"]["input_tokens"] = "12"               # 숫자가 아닌 usage → usage 없음
+    t.resp(usage=(1, 1, 1, 1))
+    t.lines[-1]["message"]["usage"]["output_tokens"] = float("inf")
+    t.resp(bash("ls"))
+    t.lines[-2]["message"]["content"][1]["id"] = {"odd": 1}              # tool id가 객체
+    t.lines[-1]["message"]["content"][0]["tool_use_id"] = {"odd": 1}
+    t.write(tmp_path / "p" / f"{SID}.jsonl")
+    tok = usage_stats.transcripts(tmp_path / "p")
+    assert tok["sessions"] == 1 and tok["usage_missing"] == 2 and tok["total"]["calls"] == 3
+
+
+def test_plugin_session_needs_the_plugin_script_path(tmp_path):
+    _T(sid="a").resp(bash("python3 config.py show"), bash("python3 tools/job_status.py")).write(tmp_path / "p" / "a.jsonl")
+    assert usage_stats.transcripts(tmp_path / "p")["sessions"] == 0     # 다른 프로젝트의 같은 이름
+    _T(sid="b").resp(bash('S="/x/plugin/scripts"; python3 "$S/config.py" show')).write(tmp_path / "p" / "b.jsonl")
+    _T(sid="c").resp(bash(r"python3 C:\x\scripts\db_pr.py lock status")).write(tmp_path / "p" / "c.jsonl")
+    assert usage_stats.transcripts(tmp_path / "p")["sessions"] == 2

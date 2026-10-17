@@ -2159,3 +2159,11 @@ def test_trace_write_failure_keeps_stdout_and_exit_code():
     assert proc.stdout == ws.run("db_pr.py", ["summary", wt, "--format", "markdown"]).stdout
     proc = ws.run("db_pr.py", ["discard", wt])
     assert proc.returncode == 0 and json.loads(proc.stdout)["discarded"] is True and "작업 기록을 쓰지 못함(discard" in proc.stderr
+
+
+def test_trace_note_unencodable_message_only_warns(tmp_path, capsys):
+    """인코딩할 수 없는 글(서로게이트)이 든 기록도 예외를 내지 않는다 — 원래 UsageError(종료 2)를 가리지 않는다."""
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    from dbpr.lock import trace_note
+    trace_note(tmp_path, "stage", result="error", message="깨진 글 \udc80")
+    assert "작업 기록을 쓰지 못함(stage: UnicodeEncodeError)" in capsys.readouterr().err

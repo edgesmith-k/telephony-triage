@@ -493,7 +493,7 @@ def _commit_approved(wt: Path, job_dir: Path, state: dict, approved: str) -> tup
     hooks = _out(_git(wt, "config", "--get", "core.hooksPath", check=False))
     if hooks != ".githooks":
         raise UsageError(f"이 레포의 core.hooksPath가 '{hooks or '(없음)'}'다. 정확히 .githooks여야 커밋할 수 있다 "
-                         "(규칙 5). /telephony-triage:setup 을 다시 실행한다.")
+                         "(규칙 5). setup 5번(hook)만 다시 — `config.py install-hooks`.")
     _git(wt, "add", "-A")
     deny = _guard_problems(_wt._PLUGIN_ROOT, wt)
     if deny:

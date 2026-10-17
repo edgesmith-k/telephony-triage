@@ -174,7 +174,11 @@ def diagnosis(args, platform: str | None) -> dict:
         doctor = {"exit": code, "counts": data.get("counts"), "rows": rows}
     else:
         doctor = {"exit": code, "error": f"환경 점검 실행 실패(종료 {code})"}
-    return {"plugin": {"fingerprint": versions.plugin_fingerprint(root), "dir": root.name,
+    try:
+        fingerprint = versions.plugin_fingerprint(root)
+    except OSError as exc:      # 읽을 수 없는 파일이 있어도 진단은 낸다
+        fingerprint = f"확인 불가 — {type(exc).__name__}"
+    return {"plugin": {"fingerprint": fingerprint, "dir": root.name,
                        "version": manifest.get("version") if isinstance(manifest, dict) else None},
             "claude_code": _claude_code_version(), "python": platform_mod.python_version(), "deps": _deps(),
             "doctor": doctor}
@@ -226,6 +230,10 @@ def main(argv: list[str] | None = None) -> int:
             print(f"job_status.py: {exc}", file=sys.stderr)
             return USAGE
         doc = {"status_error": masking.mask_brief(exc, 240)}     # 진단은 작업 상태를 못 내도 낸다
+    except Exception as exc:  # noqa: BLE001 — 예상 밖 오류(손상된 key_regex 등)도 --doctor면 진단은 낸다
+        if not args.doctor:
+            raise
+        doc = {"status_error": f"확인 불가 — {type(exc).__name__}"}
     if args.doctor:
         doc["diagnosis"] = diagnosis(args, doc.get("platform") or args.platform)
     if args.format == "markdown":

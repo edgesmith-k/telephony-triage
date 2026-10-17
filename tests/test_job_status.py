@@ -21,6 +21,13 @@ sys.path.insert(0, str(REPO / "tests" / "helpers"))
 import mock_env  # noqa: E402
 from runner import SAMPLE, plugin_root, run, tmp  # noqa: E402
 from workspace import Workspace, git  # noqa: E402
+import pytest  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _no_real_claude(monkeypatch, tmp_path):
+    """--doctor가 진짜 `claude --version`을 부르지 않게 한다(없는 경로 → 확인 불가)."""
+    monkeypatch.setenv("CLAUDE_CODE_EXECPATH", str(tmp_path / "no-claude"))
 
 MOCK_JIRA = REPO / "tests" / "mocks" / "jira"
 LOG = SAMPLE / "data/DATA-001-no-setup-data-call/fixtures/DATA-001-01.log"
@@ -591,3 +598,27 @@ def test_doctor_worst_case_fits_4096_bytes():
     md = job_status.diagnosis_markdown(diag)
     assert len(md.encode("utf-8")) <= job_status.DIAG_MAX and md.rstrip("\n").split("\n")[-1].startswith("- … 외 ")
     assert len((jobstatus.markdown(doc) + md).encode("utf-8")) <= DOCTOR_MAX
+
+
+
+def test_doctor_still_answers_on_unexpected_errors(monkeypatch):
+    """작업 상태 쪽 예상 밖 오류(손상된 key_regex)·지문 계산 실패에도 --doctor는 진단을 낸다(종료 0, 확인 불가 — 예외 종류)."""
+    import types
+    ws = Workspace()
+    snap = ws.work / "_snapshot"
+    snap.mkdir(parents=True, exist_ok=True)
+    (snap / "issue-db.config.yaml").write_text("tracker:\n  key_regex: '('\n", encoding="utf-8")
+    text = _doctor_md(ws, KEY)
+    assert text.startswith("## 작업 상태 — 확인 불가\n\n- 작업 상태: 확인 불가 — ") and "### 진단" in text
+    assert ws.run("job_status.py", [KEY]).returncode != 0                 # --doctor 없으면 그대로 오류
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    import job_status
+
+    def boom(root):
+        raise PermissionError("locked")
+    monkeypatch.setattr(job_status.versions, "plugin_fingerprint", boom)
+    monkeypatch.setattr(job_status.subprocess, "run", lambda *a, **k: types.SimpleNamespace(
+        returncode=0, stdout=json.dumps({"rows": [], "counts": {"ok": 1, "warn": 0, "fail": 0, "skip": 0}})))
+    diag = job_status.diagnosis(types.SimpleNamespace(plugin_root=str(ws.root)), None)
+    assert diag["plugin"]["fingerprint"] == "확인 불가 — PermissionError" and diag["claude_code"] == "확인 불가"
+    assert "플러그인 지문 확인 불가 — PermissionError" in job_status.diagnosis_markdown(diag)

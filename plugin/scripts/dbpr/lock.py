@@ -199,6 +199,6 @@ def trace_note(job_dir: Path, step: str, **fields) -> None:
     try:
         with (Path(job_dir) / TRACE).open("a", encoding="utf-8", newline="\n") as fh:
             fh.write(json.dumps({"ts": _iso(now()), "step": step, "v": 2, **fields}, ensure_ascii=False) + "\n")
-    except OSError as exc:
+    except (OSError, ValueError) as exc:     # ValueError: 인코딩할 수 없는 글(서로게이트) — 원래 오류를 가리지 않는다
         print(f"[telephony-triage] 작업 기록을 쓰지 못함({step}: {type(exc).__name__}) — 운영 지표(usage_stats)에서 빠진다",
               file=sys.stderr)
