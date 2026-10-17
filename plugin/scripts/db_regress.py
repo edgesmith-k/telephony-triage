@@ -12,7 +12,9 @@ fixture마다 `parse_logcat.py parse --full --mask`와 `match_signatures.py --re
   `signatures_pending` 원인의 양성 fixture는 넣고 기본 기대값은 `"<유형 ID>:unresolved"`다.
 - 범위: `--changed`/`--staged`면 바뀐 유형과 그 `related` 원인의 유형, 같은 카테고리의
   fixture(06-collaboration.md §6.8). `parser-rules/`·`schema/`·`issue-db.config.yaml`이 바뀌었으면
-  전체(범위 확장 규칙). `--staged`는 index 내용으로 돈다.
+  전체(범위 확장 규칙). 이슈 기록(`<유형>/issues/<KEY>.yaml`)만 바뀐 유형은 범위에 넣지 않는다(판정에
+  쓰이지 않는다). 그렇게 건너뛴 유형의 기록은 `summary.excluded = {reason: "issues-only", files}`에 적는다
+  (최종 범위에 든 유형의 기록은 적지 않고, 없으면 키도 없다 — 0건이 통과로 읽히지 않게). `--staged`는 index 내용으로 돈다.
 - 실패 원인: 음성 fixture면 S=1이 된 유형과 증상 시그니처 전역 키, 양성이면 C=1인 원인과
   시그니처 전역 키. 실패가 **다른 유형의 원인**이 C=1이 된 것 때문이면 `allow-cause` op 초안.
 - 정규식 시간 상한 초과(매처·extractor)는 실패다(04 §5.8 (4)).
@@ -81,10 +83,20 @@ def collect(db: issuedb.IssueDb) -> list[dict]:
     return out
 
 
+def issue_records(db: issuedb.IssueDb, changed: list[str]) -> list[str]:
+    """바뀐 파일 중 유형의 이슈 기록(`<유형>/issues/<KEY>.yaml`, issuedb가 읽는 모양). 회귀 판정(S/C·기대값)에
+    쓰이지 않으므로 범위를 넓히지 않는다(04-parser-matching.md §5.11 (4))."""
+    prefixes = [itype.path.relative_to(db.root).as_posix() + "/issues/" for itype in db.types]
+    return [name for name in changed
+            if name.endswith(".yaml") and any(name.startswith(p) and "/" not in name[len(p):] for p in prefixes)]
+
+
 def scope_types(db: issuedb.IssueDb, changed: list[str]) -> set[str] | None:
-    """바뀐 파일로 회귀할 유형 ID 집합. 전체면 None."""
+    """바뀐 파일로 회귀할 유형 ID 집합. 전체면 None. 이슈 기록만 바뀐 유형은 넣지 않는다."""
     if any(name.startswith(GLOBAL_PATHS) for name in changed):
         return None
+    records = set(issue_records(db, changed))
+    changed = [name for name in changed if name not in records]
     touched: set[str] = set()
     for itype in db.types:
         rel = itype.path.relative_to(db.root).as_posix() + "/"
@@ -315,7 +327,12 @@ def run(args, defaults: dict, plugin_root: Path) -> tuple[dict, int]:
 
         items = collect(db)
         selected = scope_types(db, changed) if changed is not None else None
+        records = []
         if selected is not None:
+            # 이슈 기록만 바뀌어 범위에서 빠진 유형의 기록 (최종 범위에 든 유형의 기록은 적지 않는다)
+            outside = [itype.path.relative_to(db.root).as_posix() + "/issues/"
+                       for itype in db.types if itype.id not in selected]
+            records = [r for r in issue_records(db, changed) if r.startswith(tuple(outside))]
             items = [i for i in items if i["type"].id in selected]
 
         results = []
@@ -338,6 +355,9 @@ def run(args, defaults: dict, plugin_root: Path) -> tuple[dict, int]:
         "passed": len(results) - len(failed),
         "failed": len(failed),
     }
+    if records:
+        # 이슈 기록만 바뀐 유형을 건너뛰었다 — 0건이 "검사 통과"로 읽히지 않게 사유를 남긴다
+        summary["excluded"] = {"reason": "issues-only", "files": records}
     return {"summary": summary, "results": results}, (CHECK_FAILED if failed else OK)
 
 

@@ -15,6 +15,8 @@
 
 from __future__ import annotations
 
+import dataclasses
+import hashlib
 import json
 import re
 from dataclasses import dataclass, field
@@ -130,11 +132,45 @@ def _check_extractor_names(data: dict) -> None:
             )
 
 
+# 로드 결과 캐시: 키는 규칙 파일 세 개와 스키마의 **내용** 해시다(경로가 아니다 — 한 프로세스가 base·현재·index
+# 트리를 번갈아 읽고, 같은 tmp 경로의 파일이 바뀔 수 있다). 파일은 매번 읽어 해시하고 파싱·검증만 재사용한다.
+# RulesError는 캐시하지 않는다. 반환한 Rules(안의 dict·list·Extractor 포함)는 캐시와 공유하므로 **불변으로 다룬다**.
+_CACHE: dict[bytes, Rules] = {}
+_CACHE_MAX = 8
+
+
+def _content_key(rules_dir: Path, schema_path: Path) -> bytes | None:
+    h = hashlib.sha256()
+    try:
+        for path in (*(rules_dir / name for name in FILES), schema_path):
+            data = path.read_bytes()
+            h.update(len(data).to_bytes(8, "big"))
+            h.update(data)
+    except OSError:
+        return None          # 없는·못 읽는 파일: 캐시 없이 _load가 RulesError를 낸다
+    return h.digest()
+
+
 def load(rules_dir: str | Path, schema_path: str | Path | None = None) -> Rules:
     rules_dir = Path(rules_dir)
     if not rules_dir.is_dir():
         raise RulesError(f"규칙 디렉토리가 없습니다: {rules_dir}")
     schema_path = Path(schema_path) if schema_path else rules_dir.parent / SCHEMA_REL
+    key = _content_key(rules_dir, schema_path)
+    hit = _CACHE.pop(key, None) if key is not None else None
+    if hit is not None:
+        _CACHE[key] = hit                                     # 최근 사용으로 옮긴다
+        return dataclasses.replace(hit, path=rules_dir)
+    rules = _load(rules_dir, schema_path)
+    # 읽는 동안 파일이 바뀌었으면 넣지 않는다(키와 내용이 어긋난 항목을 만들지 않는다)
+    if key is not None and _content_key(rules_dir, schema_path) == key:
+        _CACHE[key] = rules
+        while len(_CACHE) > _CACHE_MAX:
+            del _CACHE[next(iter(_CACHE))]
+    return rules
+
+
+def _load(rules_dir: Path, schema_path: Path) -> Rules:
     validator = _validator(schema_path)
 
     docs = {name: _read_yaml(rules_dir / name) for name in FILES}
