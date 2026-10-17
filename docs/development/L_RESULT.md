@@ -388,5 +388,5 @@
 
 ### 남은 것
 
-- **유료 eval(사용자 결정 1)**: 리뷰 뒤 쓰기 흐름 eval 한 번(구현 에이전트는 돌리지 않았다). 실행 기록에서 stage·publish·discard를 실제로 부르는 것: 최소 48(analyze → publish created → after-publish)·16(sync-pr → edited)·30(record publish)·17(dry-run discard)·36(cancel discard)·69(stage 전 release) ≈ $2.0, 확장 +3(draft-verify)·66(GitHub)·19(verify-fix) ≈ $3.4.
+- **유료 eval(사용자 결정 1)**: 리뷰 뒤 쓰기 흐름 eval 한 번(구현 에이전트는 돌리지 않았다). 실행 기록에서 stage·publish·discard를 실제로 부르는 것: 최소 48(analyze → publish created → after-publish)·16(sync-pr → edited)·30(record publish)·17(dry-run discard)·36(cancel discard)·69(stage 전 release) ≈ $2.0, 확장 +3(draft-verify)·66(GitHub)·19(verify-fix) ≈ $3.4. → **실행(10/17, claude-sonnet-5-5, iteration `ops-r1`): 확장 9개 모두 fail 0**(3·16·17·19·30·36·48·66·69, undecided는 수동 채점 항목), 비용 $3.42. 새 trace 행(stage·publish·discard)은 eval 작업 폴더가 끝나면 지워져 실행 중 기록은 직접 보지 못했고 단위 시험으로 확인했다. 리뷰 2회(P1 1·P2 10 → 수정 → 재리뷰 P0·P1 0).
 - 테스트(이 Windows PC, 전체 4분할): 2,002 통과·33 실패·4 건너뜀 — 실패 33개는 모두 이 PC의 알려진 환경 실패 목록(34개) 안이고 새 실패 없음(목록의 `test_doctor_worst_case_markdown_fits_budget`은 이번에 통과 — hook 행 "다음"이 짧아진 영향으로 보임). 리뷰 반영 뒤 관련 9개 파일을 한 프로세스로: 551 통과·7 실패(모두 기준 목록)·3 건너뜀.
