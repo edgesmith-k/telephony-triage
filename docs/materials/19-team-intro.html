@@ -274,6 +274,16 @@ footer{margin-top:64px;padding-top:18px;border-top:1px solid var(--line);font-si
 .tocbtn.off{opacity:0;visibility:hidden}
 .tocbtn{transition:opacity .2s}
 body{padding-bottom:56px}
+/* ---------- 접는 절 (UX2) ---------- */
+.share-note{font-size:13px;color:var(--hero-muted);margin:-14px 0 24px;max-width:34em}
+details.more{margin:4px 0 0}
+details.more>summary{cursor:pointer;display:inline-block;font-size:15px;color:var(--accent-ink);text-decoration:underline;text-underline-offset:2px}
+details.more[open]>summary{margin-bottom:8px}
+.reply{margin:12px 0 0}
+@media print{
+  details::details-content{content-visibility:visible!important;display:block}
+  details.more>summary{display:none}
+}
 @media print{
   body{background:#fff;font-size:11pt}
   .toc,.tocbtn,.chnav,.printbtn,.hl,.hero .tag::before{display:none!important}
@@ -299,8 +309,9 @@ body{padding-bottom:56px}
     <h1>Telephony <span>Triage</span></h1>
     <p class="tagline">데이터·통화가 안 되는 Android 이슈, Jira 번호와 로그 파일만 주면 팀이 전에 찾은 원인인지 도구가 먼저 맞춰 봅니다.</p>
     <span class="sample">기준 2026-10-17 · 화면 예시는 합성 샘플 데이터</span>
-    <svg class="flow flow-wide" viewBox="0 0 460 250" role="img" aria-label="이미 등록된 원인이면 명령 한 줄부터 원인과 해결 찾기, 팀 기록에 올리기(PR)까지 약 3분. 한 사람이 등록한 원인은 다음 사람 이슈에서 자동으로 맞힌다."><text x="0" y="14" class="h">1 · 이미 등록된 원인의 이슈</text><rect x="0" y="26" width="132" height="58" rx="10" style="fill:var(--surface);stroke:var(--hero-line)"/><text x="66" y="51" text-anchor="middle" class="b" style="fill:var(--hero-fg)">명령 한 줄</text><text x="66" y="70" text-anchor="middle" class="s">Jira 번호 + 로그</text><path d="M138 55h18m-6 -5l6 5l-6 5" style="fill:none;stroke:var(--hero-on);stroke-width:2"/><rect x="164" y="26" width="132" height="58" rx="10" style="fill:var(--surface);stroke:var(--hero-line)"/><text x="230" y="51" text-anchor="middle" class="b" style="fill:var(--hero-fg)">원인·해결</text><text x="230" y="70" text-anchor="middle" class="s">근거 로그 줄까지</text><path d="M302 55h18m-6 -5l6 5l-6 5" style="fill:none;stroke:var(--hero-on);stroke-width:2"/><rect x="328" y="26" width="132" height="58" rx="10" style="fill:var(--hero-on);stroke:var(--hero-on)"/><text x="394" y="51" text-anchor="middle" class="b" style="fill:#ffffff">팀 기록에 올림</text><text x="394" y="70" text-anchor="middle" class="s" style="fill:#e6f4f0">PR로 리뷰 요청</text><path d="M2 96v8h456v-8" style="fill:none;stroke:var(--hero-on);stroke-width:2"/><text x="230" y="128" text-anchor="middle" class="big">약 3분</text><text x="0" y="168" class="h">2 · 그다음 이슈</text><rect x="0" y="180" width="132" height="58" rx="10" style="fill:var(--surface);stroke:var(--hero-line)"/><text x="66" y="205" text-anchor="middle" class="b" style="fill:var(--hero-fg)">팀원 A</text><text x="66" y="224" text-anchor="middle" class="s">새 원인 등록</text><path d="M138 209h18m-6 -5l6 5l-6 5" style="fill:none;stroke:var(--hero-on);stroke-width:2"/><rect x="164" y="180" width="132" height="58" rx="10" style="fill:var(--surface);stroke:var(--hero-line)"/><text x="230" y="205" text-anchor="middle" class="b" style="fill:var(--hero-fg)">이슈 DB</text><text x="230" y="224" text-anchor="middle" class="s">원인이 쌓임</text><path d="M302 209h18m-6 -5l6 5l-6 5" style="fill:none;stroke:var(--hero-on);stroke-width:2"/><rect x="328" y="180" width="132" height="58" rx="10" style="fill:var(--hero-on);stroke:var(--hero-on)"/><text x="394" y="205" text-anchor="middle" class="b" style="fill:#ffffff">팀원 B</text><text x="394" y="224" text-anchor="middle" class="s" style="fill:#e6f4f0">바로 맞힘 ✓</text></svg>
-    <svg class="flow flow-tall" viewBox="0 0 340 474" role="img" aria-label="이미 등록된 원인이면 명령 한 줄부터 원인과 해결 찾기, 팀 기록에 올리기(PR)까지 약 3분. 한 사람이 등록한 원인은 다음 사람 이슈에서 자동으로 맞힌다."><text x="0" y="14" class="h">1 · 이미 등록된 원인의 이슈</text><rect x="1" y="26" width="338" height="46" rx="10" style="fill:var(--surface);stroke:var(--hero-line)"/><text x="16" y="55" class="b" style="fill:var(--hero-fg)">명령 한 줄</text><text x="324" y="55" text-anchor="end" class="s">Jira 번호 + 로그</text><path d="M170 75v12m-5 -5l5 5l5 -5" style="fill:none;stroke:var(--hero-on);stroke-width:2"/><rect x="1" y="90" width="338" height="46" rx="10" style="fill:var(--surface);stroke:var(--hero-line)"/><text x="16" y="119" class="b" style="fill:var(--hero-fg)">원인·해결</text><text x="324" y="119" text-anchor="end" class="s">근거 로그 줄까지</text><path d="M170 139v12m-5 -5l5 5l5 -5" style="fill:none;stroke:var(--hero-on);stroke-width:2"/><rect x="1" y="154" width="338" height="46" rx="10" style="fill:var(--hero-on);stroke:var(--hero-on)"/><text x="16" y="183" class="b" style="fill:#ffffff">팀 기록에 올림</text><text x="324" y="183" text-anchor="end" class="s" style="fill:#e6f4f0">PR로 리뷰 요청</text><text x="170" y="234" text-anchor="middle" class="big">약 3분</text><text x="170" y="254" text-anchor="middle" class="s">이미 등록된 원인일 때</text><text x="0" y="288" class="h">2 · 그다음 이슈</text><rect x="1" y="300" width="338" height="46" rx="10" style="fill:var(--surface);stroke:var(--hero-line)"/><text x="16" y="329" class="b" style="fill:var(--hero-fg)">팀원 A</text><text x="324" y="329" text-anchor="end" class="s">새 원인 등록</text><path d="M170 349v12m-5 -5l5 5l5 -5" style="fill:none;stroke:var(--hero-on);stroke-width:2"/><rect x="1" y="364" width="338" height="46" rx="10" style="fill:var(--surface);stroke:var(--hero-line)"/><text x="16" y="393" class="b" style="fill:var(--hero-fg)">이슈 DB</text><text x="324" y="393" text-anchor="end" class="s">원인이 쌓임</text><path d="M170 413v12m-5 -5l5 5l5 -5" style="fill:none;stroke:var(--hero-on);stroke-width:2"/><rect x="1" y="428" width="338" height="46" rx="10" style="fill:var(--hero-on);stroke:var(--hero-on)"/><text x="16" y="457" class="b" style="fill:#ffffff">팀원 B</text><text x="324" y="457" text-anchor="end" class="s" style="fill:#e6f4f0">바로 맞힘 ✓</text></svg>
+    <p class="share-note">본문은 이 파일 하나로 읽을 수 있습니다. 안내서 링크는 docs 폴더 묶음이 함께 있어야 열립니다.</p>
+    <svg class="flow flow-wide" viewBox="0 0 460 264" role="img" aria-label="이미 등록된 원인이면 명령 한 줄부터 원인과 해결 찾기, 팀 기록에 올리기(PR)까지 약 3분(합성 사례 1건 179초, 사람이 답하는 시간 제외). 한 사람이 등록한 원인은 다음 사람 이슈에서 후보로 바로 제시된다."><text x="0" y="14" class="h">1 · 이미 등록된 원인의 이슈</text><rect x="0" y="26" width="132" height="58" rx="10" style="fill:var(--surface);stroke:var(--hero-line)"/><text x="66" y="51" text-anchor="middle" class="b" style="fill:var(--hero-fg)">명령 한 줄</text><text x="66" y="70" text-anchor="middle" class="s">Jira 번호 + 로그</text><path d="M138 55h18m-6 -5l6 5l-6 5" style="fill:none;stroke:var(--hero-on);stroke-width:2"/><rect x="164" y="26" width="132" height="58" rx="10" style="fill:var(--surface);stroke:var(--hero-line)"/><text x="230" y="51" text-anchor="middle" class="b" style="fill:var(--hero-fg)">원인·해결</text><text x="230" y="70" text-anchor="middle" class="s">근거 로그 줄까지</text><path d="M302 55h18m-6 -5l6 5l-6 5" style="fill:none;stroke:var(--hero-on);stroke-width:2"/><rect x="328" y="26" width="132" height="58" rx="10" style="fill:var(--hero-on);stroke:var(--hero-on)"/><text x="394" y="51" text-anchor="middle" class="b" style="fill:#ffffff">팀 기록에 올림</text><text x="394" y="70" text-anchor="middle" class="s" style="fill:#e6f4f0">PR로 리뷰 요청</text><path d="M2 96v8h456v-8" style="fill:none;stroke:var(--hero-on);stroke-width:2"/><text x="230" y="134" text-anchor="middle" class="big">약 3분</text><text x="230" y="154" text-anchor="middle" class="s">합성 사례 1건 179초 · 사람이 답하는 시간 제외</text><text x="0" y="182" class="h">2 · 그다음 이슈</text><rect x="0" y="194" width="132" height="58" rx="10" style="fill:var(--surface);stroke:var(--hero-line)"/><text x="66" y="219" text-anchor="middle" class="b" style="fill:var(--hero-fg)">팀원 A</text><text x="66" y="238" text-anchor="middle" class="s">새 원인 등록</text><path d="M138 223h18m-6 -5l6 5l-6 5" style="fill:none;stroke:var(--hero-on);stroke-width:2"/><rect x="164" y="194" width="132" height="58" rx="10" style="fill:var(--surface);stroke:var(--hero-line)"/><text x="230" y="219" text-anchor="middle" class="b" style="fill:var(--hero-fg)">이슈 DB</text><text x="230" y="238" text-anchor="middle" class="s">원인이 쌓임</text><path d="M302 223h18m-6 -5l6 5l-6 5" style="fill:none;stroke:var(--hero-on);stroke-width:2"/><rect x="328" y="194" width="132" height="58" rx="10" style="fill:var(--hero-on);stroke:var(--hero-on)"/><text x="394" y="219" text-anchor="middle" class="b" style="fill:#ffffff">팀원 B</text><text x="394" y="238" text-anchor="middle" class="s" style="fill:#e6f4f0">후보로 바로 제시</text></svg>
+    <svg class="flow flow-tall" viewBox="0 0 340 474" role="img" aria-label="이미 등록된 원인이면 명령 한 줄부터 원인과 해결 찾기, 팀 기록에 올리기(PR)까지 약 3분(합성 사례 1건 179초, 사람이 답하는 시간 제외). 한 사람이 등록한 원인은 다음 사람 이슈에서 후보로 바로 제시된다."><text x="0" y="14" class="h">1 · 이미 등록된 원인의 이슈</text><rect x="1" y="26" width="338" height="46" rx="10" style="fill:var(--surface);stroke:var(--hero-line)"/><text x="16" y="55" class="b" style="fill:var(--hero-fg)">명령 한 줄</text><text x="324" y="55" text-anchor="end" class="s">Jira 번호 + 로그</text><path d="M170 75v12m-5 -5l5 5l5 -5" style="fill:none;stroke:var(--hero-on);stroke-width:2"/><rect x="1" y="90" width="338" height="46" rx="10" style="fill:var(--surface);stroke:var(--hero-line)"/><text x="16" y="119" class="b" style="fill:var(--hero-fg)">원인·해결</text><text x="324" y="119" text-anchor="end" class="s">근거 로그 줄까지</text><path d="M170 139v12m-5 -5l5 5l5 -5" style="fill:none;stroke:var(--hero-on);stroke-width:2"/><rect x="1" y="154" width="338" height="46" rx="10" style="fill:var(--hero-on);stroke:var(--hero-on)"/><text x="16" y="183" class="b" style="fill:#ffffff">팀 기록에 올림</text><text x="324" y="183" text-anchor="end" class="s" style="fill:#e6f4f0">PR로 리뷰 요청</text><text x="170" y="234" text-anchor="middle" class="big">약 3분</text><text x="170" y="254" text-anchor="middle" class="s">합성 사례 1건 179초 · 사람이 답하는 시간 제외</text><text x="0" y="288" class="h">2 · 그다음 이슈</text><rect x="1" y="300" width="338" height="46" rx="10" style="fill:var(--surface);stroke:var(--hero-line)"/><text x="16" y="329" class="b" style="fill:var(--hero-fg)">팀원 A</text><text x="324" y="329" text-anchor="end" class="s">새 원인 등록</text><path d="M170 349v12m-5 -5l5 5l5 -5" style="fill:none;stroke:var(--hero-on);stroke-width:2"/><rect x="1" y="364" width="338" height="46" rx="10" style="fill:var(--surface);stroke:var(--hero-line)"/><text x="16" y="393" class="b" style="fill:var(--hero-fg)">이슈 DB</text><text x="324" y="393" text-anchor="end" class="s">원인이 쌓임</text><path d="M170 413v12m-5 -5l5 5l5 -5" style="fill:none;stroke:var(--hero-on);stroke-width:2"/><rect x="1" y="428" width="338" height="46" rx="10" style="fill:var(--hero-on);stroke:var(--hero-on)"/><text x="16" y="457" class="b" style="fill:#ffffff">팀원 B</text><text x="324" y="457" text-anchor="end" class="s" style="fill:#e6f4f0">후보로 바로 제시</text></svg>
     <p class="flow-foot">시간은 합성 로그 1건의 실측(179초)입니다. 결과 코멘트 게시까지 넣었고, 사람이 답하는 시간은 뺐습니다. PR은 팀 기록에 넣기 전에 리뷰를 요청하는 것입니다.</p>
   </div>
   <figure class="chart-card" style="margin:0">
@@ -318,8 +329,9 @@ body{padding-bottom:56px}
 <div class="wrap"><div class="layout">
   <details class="toc" id="toc" open><summary>CONTENTS</summary>
     <a href="#story">활용</a>
-    <a href="#result">결과 예시</a>
     <a href="#why">왜 필요한가</a>
+    <a href="#result">결과 예시</a>
+    <a href="#scope">할 수 있는 것과 한계</a>
     <a href="#how">어떻게 동작하나</a>
     <a href="#safety">데이터와 안전</a>
     <a href="#rollout">도입 순서</a>
@@ -340,13 +352,39 @@ body{padding-bottom:56px}
     <div><h4>담당자가 바뀔 때</h4><p>Jira마다 원인과 해결이 팀 이슈 DB에 남아, 새 담당자가 그대로 이어받습니다.</p></div>
     <div><h4>수정 이후 확인</h4><p>수정 코드(CL)가 반영된 뒤, 수정 빌드 로그로 재발했는지 판정하고 기록합니다.</p></div>
   </div>
-  <p class="bridge">실제 화면부터 봅니다.</p>
+  <p class="bridge">이런 일이 왜 생기는지부터 봅니다.</p>
+</section>
+
+<section id="why">
+  <p class="kicker">Why</p>
+  <h2>왜 필요한가</h2>
+  <p class="lead">같은 원인이 몇 달 뒤 다른 사람에게 또 들어오는데, 앞서 찾은 답은 개인 메모에 있습니다.</p>
+  <p>"데이터가 안 붙어요" 같은 이슈가 오면 담당자는 수만 줄의 logcat(단말이 남기는 기록)을 처음부터 읽습니다. 듀얼 SIM 기록이 섞이고 단말 시계가 튀어서, 같은 로그도 사람마다 결론이 다릅니다. 수정 코드(CL)가 반영돼도 재발을 확인한 기록은 남지 않습니다.</p>
+  <div class="vs">
+    <div class="manual"><span class="label">직접 할 때</span>
+      <ul>
+        <li>수만 줄 로그를 처음부터 읽는다</li>
+        <li>예전 사례는 사람 기억과 메모에 있다</li>
+        <li>같은 로그도 사람마다 결론이 다르다</li>
+        <li>"고쳤다"는 말만 남고 재발 확인 기록이 없다</li>
+      </ul>
+    </div>
+    <div class="auto"><span class="label">이 도구로</span>
+      <ul>
+        <li>로그를 이벤트로 바꿔 팀 규칙과 자동으로 맞춰 본다</li>
+        <li>원인·해결책·Jira 이력이 팀 이슈 DB에 있다</li>
+        <li>판정은 스크립트라 같은 로그·조건·규칙이면 같은 판정을 재현한다</li>
+        <li>"고쳐짐"은 수정 빌드 로그 검증을 통과해야 붙는다</li>
+      </ul>
+    </div>
+  </div>
+  <p class="bridge">실제 화면에서 결과를 봅니다.</p>
 </section>
 
 <section id="result">
   <p class="kicker">Result</p>
   <h2>실제로 이렇게 보입니다</h2>
-  <p class="lead">처음에는 원인을 못 찾던 로그가, 팀원이 원인을 한 번 등록한 뒤에는 첫 줄에서 맞습니다.</p>
+  <p class="lead">처음에는 원인을 못 찾던 로그도, 팀원이 원인을 한 번 등록한 뒤에는 그 원인이 첫 후보로 나옵니다.</p>
 
   <h3>같은 로그, 등록 전과 뒤</h3>
   <div class="ba">
@@ -363,7 +401,7 @@ body{padding-bottom:56px}
     <div class="side after">
       <span class="label">다음 · MOCK-9100</span>
       <h4>DATA-001-03 APN 프로파일 없음</h4>
-      <div class="chk"><span class="pill on">증상 맞음</span><span class="pill on">원인 맞음</span></div>
+      <div class="chk"><span class="pill on">증상 맞음</span><span class="pill on">원인 조건 맞음</span></div>
       <div class="term"><pre>해결책: 새 SIM 통신사에 맞는 APN 프로파일을
         carrier config에 추가한다 (미검증)
 기존 사례: MOCK-9002</pre></div>
@@ -411,32 +449,33 @@ approved_hash: c02651cacb352e7ba15e211b00b717b9a19ff0a4</pre></div>
 - 코드 위치: 코드 미확인</pre>
   </div>
   <p class="chart-foot">이 eval은 GitHub Issues 트래커로 돌렸고, Jira에도 같은 네 칸이 올라갑니다. 앞의 "약 3분"이 이 실행입니다. 게시 규칙은 <a href="../book/telephony-triage-book.html#ch12">안내서 12장</a>에 있습니다.</p>
-  <p class="bridge">이런 도구가 왜 필요한지부터 봅니다.</p>
+  <p class="bridge">지금 할 수 있는 것과 아직 못 하는 것을 정리합니다.</p>
 </section>
 
-<section id="why">
-  <p class="kicker">Why</p>
-  <h2>왜 필요한가</h2>
-  <p class="lead">같은 원인이 몇 달 뒤 다른 사람에게 또 들어오는데, 앞서 찾은 답은 개인 메모에 있습니다.</p>
-  <p>"데이터가 안 붙어요" 같은 이슈가 오면 담당자는 수만 줄의 logcat(단말이 남기는 기록)을 처음부터 읽습니다. 듀얼 SIM 기록이 섞이고 단말 시계가 튀어서, 같은 로그도 사람마다 결론이 다릅니다. 수정 코드(CL)가 반영돼도 재발을 확인한 기록은 남지 않습니다.</p>
+<section id="scope">
+  <p class="kicker">Scope</p>
+  <h2>할 수 있는 것과 한계</h2>
+  <p class="lead">v1은 Android logcat으로 6개 카테고리 이슈를 판정하고, 실제 정확도는 아직 모릅니다.</p>
   <div class="vs">
-    <div class="manual"><span class="label">직접 할 때</span>
+    <div class="auto"><span class="label">할 수 있는 것</span>
       <ul>
-        <li>수만 줄 로그를 처음부터 읽는다</li>
-        <li>예전 사례는 사람 기억과 메모에 있다</li>
-        <li>같은 로그도 사람마다 결론이 다르다</li>
-        <li>"고쳤다"는 말만 남고 재발 확인 기록이 없다</li>
+        <li>logcat(radio·main·system·crash)과 bugreport의 logcat 부분 분석</li>
+        <li>data · call · network · sim · sms · ims 카테고리</li>
+        <li>Jira 읽기와, 승인한 결과 코멘트 1건 추가</li>
+        <li>팀 이슈 DB에 PR로 기록하고, 수정 빌드 로그로 재발 확인</li>
       </ul>
     </div>
-    <div class="auto"><span class="label">이 도구로</span>
+    <div class="manual"><span class="label">한계</span>
       <ul>
-        <li>로그를 이벤트로 바꿔 팀 규칙과 자동으로 맞춰 본다</li>
-        <li>원인·해결책·Jira 이력이 팀 이슈 DB에 있다</li>
-        <li>판정은 스크립트라 같은 로그·조건·규칙이면 같은 판정을 재현한다</li>
-        <li>"고쳐짐"은 수정 빌드 로그 검증을 통과해야 붙는다</li>
+        <li>모뎀(CP) 로그는 읽지 않는다</li>
+        <li>규칙에 없는 원인은 찾지 못하고 "원인 미확인"·"후보 없음"으로 알린다</li>
+        <li>data 밖 5개 카테고리의 로그 문구는 아직 예시 값이다</li>
+        <li>정확도는 사내 과거 Jira 20~30건으로 처음 잰다</li>
+        <li>지원 OS는 Ubuntu뿐이다</li>
       </ul>
     </div>
   </div>
+  <p class="chart-foot">근거는 <a href="../book/telephony-triage-book.html#ch01-4">안내서 1.4 v1 범위</a>와 <a href="../book/telephony-triage-book.html#ch25">25장 한계와 대응</a>입니다.</p>
   <p class="bridge">도구가 판정하는 방식과 사람이 정하는 부분을 나눠 봅니다.</p>
 </section>
 
@@ -481,6 +520,7 @@ approved_hash: c02651cacb352e7ba15e211b00b717b9a19ff0a4</pre></div>
   <p class="kicker">Rollout</p>
   <h2>도입 순서</h2>
   <p class="lead">사내에서는 S-0부터 S-7까지 한 단계씩 하고, 정확도를 확인한 뒤에만 파일럿을 합니다.</p>
+  <details class="more"><summary>도입 단계 다섯 개 펼치기</summary>
   <ol class="steps">
     <li><h4>사전 점검 (S-0, 선택)</h4><p>Claude 없이 30분 동안 사내 로그 형식을 점검합니다.</p></li>
     <li><h4>사내 값과 동작 확인 (S-1~S-3)</h4><p>"사내 설정 시작"으로 시작합니다. 사내 Claude Code에서 hook(도구 호출을 자동으로 검사하는 장치)과 Jira 연결이 동작하는지 봅니다.</p></li>
@@ -489,6 +529,7 @@ approved_hash: c02651cacb352e7ba15e211b00b717b9a19ff0a4</pre></div>
     <li><h4>파일럿 (S-6·S-7)</h4><p>남은 항목을 정리하고 배포합니다. 카테고리별 10~20건으로 시작하고, 첫 월간 리뷰 뒤에 넓힐지 정합니다.</p></li>
   </ol>
   <p class="chart-foot">단계마다 자동 점검을 통과하고 사람이 확인해야 다음 단계로 갑니다. 자세한 것은 <a href="../book/telephony-triage-book.html#ch20">안내서 20장</a>에 있습니다.</p>
+  </details>
   <p class="bridge">이슈 1건에 드는 비용을 봅니다.</p>
 </section>
 
@@ -496,6 +537,7 @@ approved_hash: c02651cacb352e7ba15e211b00b717b9a19ff0a4</pre></div>
   <p class="kicker">Cost</p>
   <h2>비용</h2>
   <p class="lead">아는 원인 1건은 합성 로그 기준 약 $0.34~0.40이고, 실제 로그와 무거운 경로에서는 더 듭니다.</p>
+  <details class="more"><summary>비용 표 펼치기</summary>
   <div class="panel">
     <div class="panel-head"><b>이슈 1건(분석 → 기록) 비용</b><span>Sonnet 5.5 · 안내서 14장</span></div>
     <div class="scroll"><table class="wide cards">
@@ -513,6 +555,7 @@ approved_hash: c02651cacb352e7ba15e211b00b717b9a19ff0a4</pre></div>
   </div>
   <p>금액은 Claude Code가 계산한 API(프로그램이 모델을 부르는 창구) 요금 기준입니다. 회사 계약 방식에 따라 실제 청구는 다를 수 있습니다. 비용의 대부분은 토큰(모델이 읽고 쓴 글의 양)보다 사람 시간입니다.</p>
   <p class="chart-foot">정본은 <a href="../book/telephony-triage-book.html#ch14">안내서 14장</a>입니다. 이 표는 그 장에서 단서와 함께 옮겼습니다.</p>
+  </details>
 </section>
 
 <section id="faq">
@@ -532,6 +575,7 @@ approved_hash: c02651cacb352e7ba15e211b00b717b9a19ff0a4</pre></div>
   <p class="kicker">Terms</p>
   <h2>용어</h2>
   <p class="lead">이 열 개를 알면 리포트와 확인 화면을 읽을 수 있습니다.</p>
+  <details class="more"><summary>용어 열 개 펼치기</summary>
   <div class="panel">
     <div class="panel-head"><b>용어 열 개</b><span>뜻 · 예·비유 · 왜 필요한가</span></div>
     <div class="scroll"><table class="wide cards">
@@ -551,12 +595,16 @@ approved_hash: c02651cacb352e7ba15e211b00b717b9a19ff0a4</pre></div>
     </table></div>
   </div>
   <p class="chart-foot">전체 용어는 <a href="../book/telephony-triage-book.html#apx-a">안내서 부록 A</a>에 같은 형식으로 있습니다.</p>
+  </details>
 </section>
 
 <section id="contact" class="next">
   <p class="kicker">Feedback</p>
-  <h2>의견은 메신저나 메일 부탁드립니다.</h2>
-  <p>써 보고 싶은 이슈 유형이나 걱정되는 점을 알려 주시면 도입 검토에 반영하겠습니다.</p>
+  <h2>의견을 들려주세요</h2>
+  <p>이 문서를 보낸 사람에게 아래 세 줄을 채워 회신해 주세요. 한 줄씩이면 충분합니다.</p>
+  <div class="term reply"><pre>1. 자주 반복되는 이슈 1개:
+2. 가장 걱정되는 점 1개:
+3. 파일럿 참여 의향: 예 / 아니오 / 조건부(조건: )</pre></div>
 </section>
 
 <footer>telephony-triage · 기준 2026-10-17 · 화면·로그 예시는 합성 샘플 데이터입니다. 테스트·eval 수치는 안내서 31장, 비용은 14장이 정본입니다.</footer>
@@ -570,7 +618,11 @@ mq.addEventListener&&mq.addEventListener('change',s);
 toc.querySelector('summary').addEventListener('click',function(e){if(!mq.matches)e.preventDefault()});
 var tb=document.querySelector('.tocbtn'),hero=document.querySelector('header.hero');
 if(tb&&hero&&'IntersectionObserver' in window){new IntersectionObserver(function(es){tb.classList.toggle('off',es[0].isIntersecting)}).observe(hero)}
-if(tb)tb.addEventListener('click',function(){toc.setAttribute('open','')});})();
+if(tb)tb.addEventListener('click',function(){toc.setAttribute('open','')});
+var opened=[];
+addEventListener('beforeprint',function(){[].forEach.call(document.querySelectorAll('details:not([open])'),function(d){d.setAttribute('open','');opened.push(d)})});
+addEventListener('afterprint',function(){opened.forEach(function(d){d.removeAttribute('open')});opened=[]});
+})();
 </script>
 </body>
 </html>

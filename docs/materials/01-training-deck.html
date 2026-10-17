@@ -1200,7 +1200,12 @@ bonus = 근접(근거 시각이 발생 시각에 가까울수록) + 키워드(Ji
 
   document.addEventListener('keydown', function (e) {
     if (e.altKey || e.ctrlKey || e.metaKey) return;
-    var k = e.key;
+    var t = e.target, k = e.key;
+    // 입력칸에서는 단축키를 쓰지 않는다. 버튼·링크·summary는 Enter·Space만 그 요소의 기본 동작(누르기)에 맡긴다
+    if (t && (t.isContentEditable || (t.closest && t.closest('input, textarea, select')))) return;
+    if (t && t.closest && t.closest('button, a, summary') && (k === 'Enter' || k === ' ')) return;
+    // 모바일 연속 스크롤 모드: 스페이스·PageUp·PageDown·위아래 화살표는 브라우저 스크롤 그대로
+    if (mq.matches && (k === ' ' || k === 'PageUp' || k === 'PageDown' || k === 'ArrowUp' || k === 'ArrowDown')) return;
     if (k === 'ArrowRight' || k === 'PageDown' || (k === ' ' && !e.shiftKey)) { e.preventDefault(); show(i + 1, true); }
     else if (k === 'ArrowLeft' || k === 'PageUp' || (k === ' ' && e.shiftKey)) { e.preventDefault(); show(i - 1, true); }
     else if (k === 'Home') { e.preventDefault(); show(0, true); }

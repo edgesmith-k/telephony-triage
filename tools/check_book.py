@@ -8,6 +8,9 @@
               (`<a href>`는 허용)
     command   본문의 `/telephony-triage:<이름>`에 맞는 `plugin/commands/<이름>.md`가 없음
     wording   금지 문구(과장된 결정성 표현 등)
+    common    02 소개와 19 팀 소개의 `<style>`·`<script>`·hero·footer·공통 `<section>`이 글자 그대로 같고,
+              목차 링크 순서가 같음(19 전용 절과 서로 다른 절은 `PROMO_ONLY`에 적은 id만 뺀다.
+              title은 비교하지 않는다. 둘 다 대상일 때만 검사)
 
 대상 기본값은 `docs/book/telephony-triage-book.html`과 git이 추적하는 `docs/materials/*.html`이다.
 책의 숫자 중복(같은 수치가 장마다 다른지)은 오탐이 많아 검사하지 않는다.
@@ -34,6 +37,12 @@ BANNED = [
     "같은 로그면 같은 후보",
     "팀 지식으로 굳지 않",
 ]
+PROMO_PAIR = ("docs/materials/02-marketing.html", "docs/materials/19-team-intro.html")
+# 공통 비교에서 빼는 절: story는 19에만, contact는 파일마다 다른 마무리. title은 비교하지 않고, 목차는 story·contact 링크를 뺀 순서만 비교한다.
+PROMO_ONLY = {"story", "contact"}
+TOC_RE = re.compile(r'<details class="toc".*?</details>', re.S)
+BLOCK_RE = re.compile(r'<style>.*?</style>|<script>.*?</script>|<header class="hero">.*?</header>|<footer>.*?</footer>'
+                      r'|<section id="([^"]+)"[^>]*>.*?</section>', re.S)
 COMMAND_RE = re.compile(r"/telephony-triage:([a-z][a-z0-9-]*)")
 EXTERNAL_RE = re.compile(r"(?i)^(https?:)?//")
 CSS_EXTERNAL_RE = re.compile(r"""(?i)(@import\s+(?:url\(\s*)?|url\(\s*)['"]?((?:https?:)?//[^'")\s;]+)""")
@@ -97,6 +106,43 @@ def default_targets(root: Path = REPO) -> list[Path]:
     return [root / BOOK] + [root / p for p in sorted(out)]
 
 
+def _blocks(src: str) -> list[tuple[str, int, str]]:
+    """비교할 블록 (이름, 시작 위치, 본문). 절은 `PROMO_ONLY`를 뺀다."""
+    out, n = [], {"style": 0, "script": 0}
+    for m in BLOCK_RE.finditer(src):
+        if m.group(1):
+            if m.group(1) in PROMO_ONLY:
+                continue
+            key = f"section#{m.group(1)}"
+        else:
+            tag = re.match(r"<(\w+)", m.group(0)).group(1)
+            n[tag] = n.get(tag, 0) + 1
+            key = f"{tag}{n[tag]}"
+        out.append((key, m.start(), m.group(0)))
+    return out
+
+
+def check_common(a: Path, b: Path, names: tuple[str, str] | None = None) -> list[str]:
+    """두 소개 파일의 공통 블록이 같은지. 다르면 첫 차이를 양쪽 파일:행으로 하나 보인다."""
+    na, nb = names or (str(a), str(b))
+    sa, sb = a.read_text(encoding="utf-8"), b.read_text(encoding="utf-8")
+    toc = [[h for h in re.findall(r'href="([^"]+)"', (TOC_RE.search(x) or re.match("", x)).group(0))
+            if h.lstrip("#") not in PROMO_ONLY] for x in (sa, sb)]
+    if toc[0] != toc[1]:
+        return [f"{na}: common: 목차 링크 순서가 {nb}와 다름 ({' '.join(toc[0])} / {' '.join(toc[1])})"]
+    ba, bb = _blocks(sa), _blocks(sb)
+    ka, kb = [k for k, _, _ in ba], [k for k, _, _ in bb]
+    if ka != kb:
+        return [f"{na}: common: 공통 블록 목록이 {nb}와 다름 ({' '.join(ka)} / {' '.join(kb)})"]
+    for (key, pa, ta), (_, pb, tb) in zip(ba, bb):
+        if ta == tb:
+            continue
+        i = next((j for j, (x, y) in enumerate(zip(ta, tb)) if x != y), min(len(ta), len(tb)))
+        la, lb = sa.count("\n", 0, pa + i) + 1, sb.count("\n", 0, pb + i) + 1
+        return [f"{na}:{la}: common: {key}가 {nb}:{lb}와 다름"]
+    return []
+
+
 def check(files: list[Path], root: Path = REPO) -> list[str]:
     problems: list[str] = []
     cache: dict[Path, _Page] = {}
@@ -137,6 +183,9 @@ def check(files: list[Path], root: Path = REPO) -> list[str]:
             for w in BANNED:
                 if w in text:
                     problems.append(f"{name}:{n}: wording: 금지 문구 \"{w}\"")
+    pair = [(root / p).resolve() for p in PROMO_PAIR]
+    if all(p in {f.resolve() for f in files} for p in pair):
+        problems += check_common(*pair, names=PROMO_PAIR)
     return problems
 
 

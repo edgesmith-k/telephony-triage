@@ -247,6 +247,14 @@ body{padding-bottom:56px}
 @media (max-width:560px){.starts{grid-template-columns:minmax(0,1fr)}}
 .steps-plain{margin:0;padding:12px 18px 12px 38px;font-size:15px}
 .steps-plain li{margin:4px 0}
+.qa{font-size:15px;color:var(--muted);border-left:2px solid var(--accent);padding-left:12px;margin:-6px 0 20px}
+.search{margin:20px 0 0}
+.search label{display:block;font-weight:600;font-size:15px;margin-bottom:6px}
+.search input{width:100%;font:inherit;font-size:16px;padding:8px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--text)}
+.search ul{list-style:none;margin:8px 0 0;padding:0;font-size:15px}
+.search li{padding:4px 0;border-bottom:1px solid var(--line)}
+.search li small{color:var(--muted);margin-left:8px}
+@media print{.search{display:none!important}details::details-content{content-visibility:visible!important;display:block}}
 .printbtn{font:inherit;font-size:14px;padding:6px 14px;border:1px solid var(--line);border-radius:999px;background:var(--surface);color:var(--accent-ink);cursor:pointer}
 @media print{
   section[id^=ch],section[id^=apx-],.part-head{break-before:page}
@@ -279,8 +287,8 @@ body{padding-bottom:56px}
     <h1>Telephony <span>Triage</span></h1>
     <p class="tagline">로그를 한 줄씩 뒤지지 마세요. 팀이 전에 찾은 원인인지 도구가 먼저 맞춰 봅니다.</p>
     <span class="sample">기준 2026-10-17 · 화면 예시는 합성 샘플 데이터</span>
-    <svg class="flow" viewBox="0 0 460 250" role="img" aria-label="명령 한 줄, 원인과 해결 찾기, PR 올리기까지 약 3분. 한 사람이 등록한 원인은 다음 사람 이슈에서 자동으로 맞힌다."><text x="0" y="14" class="h">1 · 이미 등록된 원인의 이슈</text><rect x="0" y="26" width="132" height="58" rx="10" style="fill:var(--surface);stroke:var(--hero-line)"/><text x="66" y="51" text-anchor="middle" class="b" style="fill:var(--hero-fg)">명령 한 줄</text><text x="66" y="70" text-anchor="middle" class="s">Jira 번호 + 로그</text><path d="M138 55h18m-6 -5l6 5l-6 5" style="fill:none;stroke:var(--hero-on);stroke-width:2"/><rect x="164" y="26" width="132" height="58" rx="10" style="fill:var(--surface);stroke:var(--hero-line)"/><text x="230" y="51" text-anchor="middle" class="b" style="fill:var(--hero-fg)">원인·해결</text><text x="230" y="70" text-anchor="middle" class="s">근거 로그 줄까지</text><path d="M302 55h18m-6 -5l6 5l-6 5" style="fill:none;stroke:var(--hero-on);stroke-width:2"/><rect x="328" y="26" width="132" height="58" rx="10" style="fill:var(--hero-on);stroke:var(--hero-on)"/><text x="394" y="51" text-anchor="middle" class="b" style="fill:#ffffff">PR 올림</text><text x="394" y="70" text-anchor="middle" class="s" style="fill:#e6f4f0">팀 이슈 DB로</text><path d="M2 96v8h456v-8" style="fill:none;stroke:var(--hero-on);stroke-width:2"/><text x="230" y="128" text-anchor="middle" class="big">약 3분</text><text x="0" y="168" class="h">2 · 그다음 이슈</text><rect x="0" y="180" width="132" height="58" rx="10" style="fill:var(--surface);stroke:var(--hero-line)"/><text x="66" y="205" text-anchor="middle" class="b" style="fill:var(--hero-fg)">팀원 A</text><text x="66" y="224" text-anchor="middle" class="s">새 원인 등록</text><path d="M138 209h18m-6 -5l6 5l-6 5" style="fill:none;stroke:var(--hero-on);stroke-width:2"/><rect x="164" y="180" width="132" height="58" rx="10" style="fill:var(--surface);stroke:var(--hero-line)"/><text x="230" y="205" text-anchor="middle" class="b" style="fill:var(--hero-fg)">이슈 DB</text><text x="230" y="224" text-anchor="middle" class="s">원인이 쌓임</text><path d="M302 209h18m-6 -5l6 5l-6 5" style="fill:none;stroke:var(--hero-on);stroke-width:2"/><rect x="328" y="180" width="132" height="58" rx="10" style="fill:var(--hero-on);stroke:var(--hero-on)"/><text x="394" y="205" text-anchor="middle" class="b" style="fill:#ffffff">팀원 B</text><text x="394" y="224" text-anchor="middle" class="s" style="fill:#e6f4f0">바로 맞힘 ✓</text></svg>
-    <p class="flow-foot">시간은 이미 등록된 원인일 때의 합성 로그 실측(179초, 결과 코멘트 게시까지 포함)이고, 사람이 답하는 시간은 뺐습니다.</p>
+    <svg class="flow" viewBox="0 0 460 264" role="img" aria-label="명령 한 줄, 원인과 해결 찾기, PR 올리기까지 약 3분(합성 사례 1건 179초, 사람이 답하는 시간 제외). 한 사람이 등록한 원인은 다음 사람 이슈에서 후보로 바로 제시된다."><text x="0" y="14" class="h">1 · 이미 등록된 원인의 이슈</text><rect x="0" y="26" width="132" height="58" rx="10" style="fill:var(--surface);stroke:var(--hero-line)"/><text x="66" y="51" text-anchor="middle" class="b" style="fill:var(--hero-fg)">명령 한 줄</text><text x="66" y="70" text-anchor="middle" class="s">Jira 번호 + 로그</text><path d="M138 55h18m-6 -5l6 5l-6 5" style="fill:none;stroke:var(--hero-on);stroke-width:2"/><rect x="164" y="26" width="132" height="58" rx="10" style="fill:var(--surface);stroke:var(--hero-line)"/><text x="230" y="51" text-anchor="middle" class="b" style="fill:var(--hero-fg)">원인·해결</text><text x="230" y="70" text-anchor="middle" class="s">근거 로그 줄까지</text><path d="M302 55h18m-6 -5l6 5l-6 5" style="fill:none;stroke:var(--hero-on);stroke-width:2"/><rect x="328" y="26" width="132" height="58" rx="10" style="fill:var(--hero-on);stroke:var(--hero-on)"/><text x="394" y="51" text-anchor="middle" class="b" style="fill:#ffffff">PR 올림</text><text x="394" y="70" text-anchor="middle" class="s" style="fill:#e6f4f0">팀 이슈 DB로</text><path d="M2 96v8h456v-8" style="fill:none;stroke:var(--hero-on);stroke-width:2"/><text x="230" y="134" text-anchor="middle" class="big">약 3분</text><text x="0" y="182" class="h">2 · 그다음 이슈</text><rect x="0" y="194" width="132" height="58" rx="10" style="fill:var(--surface);stroke:var(--hero-line)"/><text x="66" y="219" text-anchor="middle" class="b" style="fill:var(--hero-fg)">팀원 A</text><text x="66" y="238" text-anchor="middle" class="s">새 원인 등록</text><path d="M138 223h18m-6 -5l6 5l-6 5" style="fill:none;stroke:var(--hero-on);stroke-width:2"/><rect x="164" y="194" width="132" height="58" rx="10" style="fill:var(--surface);stroke:var(--hero-line)"/><text x="230" y="219" text-anchor="middle" class="b" style="fill:var(--hero-fg)">이슈 DB</text><text x="230" y="238" text-anchor="middle" class="s">원인이 쌓임</text><path d="M302 223h18m-6 -5l6 5l-6 5" style="fill:none;stroke:var(--hero-on);stroke-width:2"/><rect x="328" y="194" width="132" height="58" rx="10" style="fill:var(--hero-on);stroke:var(--hero-on)"/><text x="394" y="219" text-anchor="middle" class="b" style="fill:#ffffff">팀원 B</text><text x="394" y="238" text-anchor="middle" class="s" style="fill:#e6f4f0">후보로 바로 제시</text></svg>
+    <p class="flow-foot">약 3분은 합성 사례 1건의 실측(179초)입니다. 결과 코멘트 게시까지 넣었고, 사람이 답하는 시간은 뺐습니다.</p>
   </div>
   <figure class="chart-card" style="margin:0">
     <div class="chart-head"><b>이렇게 입력하면</b></div>
@@ -352,6 +360,11 @@ body{padding-bottom:56px}
     <div><b>운영·리뷰를 맡았다</b><p><a href="#ch15">15</a> · <a href="#ch17">17</a> · <a href="#ch18">18장</a></p></div>
     <div><b>도입 여부를 판단한다</b><p><a href="#apx-d">부록 D 한 장 요약</a> → <a href="#ch20">20</a> · <a href="#ch25">25장</a></p></div>
   </div>
+  <div class="search" id="search" hidden>
+    <label for="q">제목·명령어 찾기</label>
+    <input id="q" type="search" placeholder="예: verify-fix, 리포트, db_build.py" autocomplete="off">
+    <ul id="q-results"></ul>
+  </div>
 </section>
 
 <section id="contents">
@@ -380,6 +393,7 @@ body{padding-bottom:56px}
   <p class="kicker">Chapter 01</p>
   <h2>1장 이 도구가 하는 일</h2>
   <p class="lead">Jira 번호와 로그 파일을 주면, 팀이 전에 확인한 원인과 맞는지 스크립트가 판정합니다.</p>
+  <p class="qa">이 장에서 답하는 질문: 이 도구는 무엇을 하고 무엇을 하지 않나? → 읽고 나서: 판정·설명·기록의 분담과 v1 범위를 말할 수 있다.</p>
   <p>사람이 확인한 결과는 팀 공용 이슈 DB(사내 GitHub 레포)에 PR로 쌓입니다. 쌓일수록 다음 사람이 같은 원인을 더 빨리 찾습니다. 이 도구는 Claude Code에 설치하는 플러그인입니다.</p>
 
   <h3 id="ch01-1">1.1 지금의 문제<a class="hl" href="#ch01-1" aria-label="링크">#</a></h3>
@@ -434,7 +448,8 @@ body{padding-bottom:56px}
 <section id="ch02">
   <p class="kicker">Chapter 02</p>
   <h2>2장 한 이슈를 처음부터 끝까지</h2>
-  <p class="lead">새 SIM에서 데이터가 안 되는 이슈가 분석·등록되고, 다음 이슈에서 자동으로 맞는 과정입니다.</p>
+  <p class="lead">새 SIM에서 데이터가 안 되는 이슈가 분석·등록되고, 다음 이슈에서 첫 후보로 나오는 과정입니다.</p>
+  <p class="qa">이 장에서 답하는 질문: 이슈 한 건은 분석부터 머지까지 어떻게 흘러가나? → 읽고 나서: 단계마다 누가 무엇을 하는지 안다.</p>
   <div class="callout info">예시 값은 합성 샘플 이슈 DB와, 같은 입력으로 돌린 실행 기록(eval 2, 연습 모드)에서 가져왔습니다. PR 이후 단계는 같은 흐름의 코드와 설계 문서를 기준으로 적었습니다. 실제 화면 문구는 조금 다를 수 있습니다.</div>
 
   <div class="pipe">
@@ -564,7 +579,7 @@ approved_hash: c02651cacb352e7ba15e211b00b717b9a19ff0a4</pre></div>
   <p>data 카테고리 오너가 GitHub에서 PR을 리뷰합니다. 서버의 브랜치 보호가 main 직접 push를 막고 CODEOWNERS 리뷰를 요구합니다. 머지되면 DATA-001-03이 팀 이슈 DB의 main에 들어갑니다.</p>
   <p>리뷰를 기다리는 사이 다른 PR이 먼저 머지되면 <code>/telephony-triage:sync-pr</code>을 실행합니다. 저장한 작업 계획을 최신 main 위에 다시 적용하고, 새 원인 번호가 겹치면 다음 빈 번호로 바꿉니다.</p>
 
-  <h3 id="ch02-13">2.13 다음 이슈: 이번에는 자동으로 맞는다<a class="hl" href="#ch02-13" aria-label="링크">#</a></h3>
+  <h3 id="ch02-13">2.13 다음 이슈: 이번에는 첫 후보로 나온다<a class="hl" href="#ch02-13" aria-label="링크">#</a></h3>
   <p>몇 주 뒤 다른 팀원에게 같은 증상의 이슈가 들어왔다고 합시다(가상의 MOCK-9100, 같은 로그 패턴). analyze는 이슈 DB의 최신 main을 받으므로 DATA-001-03 규칙도 함께 받습니다.</p>
   <div class="term"><div class="bar"><i></i><i></i><i></i></div><pre><span class="c"># 예상 화면 — 같은 리포트 형식과 점수 공식으로 적은 것(실행 기록 아님)</span>
 - 분류 후보: data &gt; DATA-001 &gt; DATA-001-03 APN 프로파일 없음 (규칙 일치 점수 1.0, 일치 수준 높음 — 진단 확신도 아님)
@@ -581,6 +596,7 @@ approved_hash: c02651cacb352e7ba15e211b00b717b9a19ff0a4</pre></div>
   <p class="kicker">Chapter 03</p>
   <h2>3장 꼭 알아야 할 말</h2>
   <p class="lead">이 여덟 개를 알면 리포트와 확인 화면을 읽을 수 있습니다.</p>
+  <p class="qa">이 장에서 답하는 질문: 리포트와 확인 화면에 나오는 말은 무슨 뜻인가? → 읽고 나서: 용어 여덟 개로 리포트를 읽을 수 있다.</p>
   <p>예는 합성 샘플 이슈 DB와 2장의 예시에서 가져왔습니다. 나머지 용어는 <a href="#apx-a">부록 A</a>에 같은 형식으로 모읍니다.</p>
   <div class="panel">
     <div class="panel-head"><b>용어 여덟 개</b><span>뜻 · 예 · 왜 필요한가</span></div>
@@ -606,6 +622,7 @@ approved_hash: c02651cacb352e7ba15e211b00b717b9a19ff0a4</pre></div>
   <p class="kicker">Chapter 04</p>
   <h2>4장 누가 무엇을 정하나</h2>
   <p class="lead">판정은 스크립트, 설명과 초안은 Claude, 확정과 승인은 사람이 합니다.</p>
+  <p class="qa">이 장에서 답하는 질문: 판정·설명·확정은 각각 누가 하나? → 읽고 나서: Claude가 하지 않는 일과 사람이 승인하는 곳을 안다.</p>
   <div class="panel">
     <div class="panel-head"><b>정하는 사람</b><span>12-principles.md</span></div>
     <div class="scroll"><table class="sig">
@@ -637,6 +654,7 @@ approved_hash: c02651cacb352e7ba15e211b00b717b9a19ff0a4</pre></div>
   <p class="kicker">Chapter 05</p>
   <h2>5장 무엇이 어디에 있나</h2>
   <p class="lead">도구와 데이터는 다른 레포에 있고, 작업 중인 파일은 내 PC의 작업 폴더에 있습니다.</p>
+  <p class="qa">이 장에서 답하는 질문: 도구·데이터·작업 파일은 어디에 있나? → 읽고 나서: 플러그인 레포, 이슈 DB, 작업 폴더를 구분할 수 있다.</p>
   <p>도구와 데이터를 나눈 데는 이유가 있습니다. 설치된 플러그인 폴더는 캐시 사본이라, 그 안에서 고친 것은 push할 수 없습니다. 그래서 데이터는 각자 clone한 이슈 DB 레포에 둡니다.</p>
   <div class="panel">
     <div class="panel-head"><b>구성 요소와 위치</b><span>01-architecture.md §2</span></div>
@@ -661,6 +679,7 @@ approved_hash: c02651cacb352e7ba15e211b00b717b9a19ff0a4</pre></div>
   <p class="kicker">Chapter 06</p>
   <h2>6장 이 책 읽는 순서</h2>
   <p class="lead">처음 쓰는 사람은 2장과 7장만 읽으면 첫 분석을 할 수 있습니다. 그 밖에는 역할에 맞는 부로 바로 가면 됩니다.</p>
+  <p class="qa">이 장에서 답하는 질문: 내 역할이면 어느 장부터 읽나? → 읽고 나서: 첫 분석까지 읽을 장과 그다음 장을 고를 수 있다.</p>
   <div class="panel">
     <div class="panel-head"><b>역할별 순서</b><span>2부~5부, 부록</span></div>
     <div class="scroll"><table class="sig">
@@ -691,6 +710,7 @@ approved_hash: c02651cacb352e7ba15e211b00b717b9a19ff0a4</pre></div>
   <p class="kicker">Chapter 07</p>
   <h2>7장 설치와 첫 분석</h2>
   <p class="lead">설치는 다섯 단계이고, 첫 분석은 아무것도 올리지 않는 연습 모드로 합니다.</p>
+  <p class="qa">이 장에서 답하는 질문: 설치하고 첫 분석을 어떻게 시작하나? → 읽고 나서: 설치 다섯 단계를 마치고 연습 모드로 첫 분석을 돌릴 수 있다.</p>
   <div class="callout warn">관리자가 사이트 설정(<code>plugin/site-defaults.yaml</code>)을 올리기 전에는 help를 뺀 모든 커맨드가 멈춥니다. 메시지는 "플러그인 관리자가 사이트 설정(site-defaults.yaml)을 아직 올리지 않았습니다"입니다. 이 메시지가 보이면 관리자에게 전달하고 기다립니다.</div>
 
   <h3 id="ch07-1">7.1 미리 갖출 것<a class="hl" href="#ch07-1" aria-label="링크">#</a></h3>
@@ -835,6 +855,7 @@ explore: {when: never}          <span class="c"># 탐색 분석: ask(기본) | a
   <p class="kicker">Chapter 08</p>
   <h2>8장 상황별 사용법</h2>
   <p class="lead">지금 상황에 맞는 시나리오를 찾아, 적힌 입력을 주면 적힌 결과가 나옵니다.</p>
+  <p class="qa">이 장에서 답하는 질문: 내 상황에는 어떤 입력을 주나? → 읽고 나서: 시나리오 표에서 상황에 맞는 요청을 고를 수 있다.</p>
   <p>시나리오는 A부터 R까지 18개입니다. 각 시나리오는 상황, 입력, 결과 순서로 적었습니다. 커맨드 앞에는 모두 <code>/telephony-triage:</code>를 붙여 Claude Code 입력창에 넣습니다. 예시의 Jira 키·로그·ID는 합성 샘플 이슈 DB와 eval 실행 기록의 값입니다. 실제 화면 문구는 조금 다를 수 있습니다.</p>
 
   <h3 id="ch08-ask">8.1 말로 요청해도 된다<a class="hl" href="#ch08-ask" aria-label="링크">#</a></h3>
@@ -1145,6 +1166,7 @@ explore: {when: never}          <span class="c"># 탐색 분석: ask(기본) | a
   <p class="kicker">Chapter 09</p>
   <h2>9장 리포트 읽기</h2>
   <p class="lead">첫 줄로 어떤 경우인지 알고, 근거 로그 줄을 직접 확인한 뒤, 경고 줄을 놓치지 않습니다.</p>
+  <p class="qa">이 장에서 답하는 질문: 리포트는 어디부터 어떻게 읽나? → 읽고 나서: 첫 줄과 S·C로 경우를 알고, 근거 로그와 경고 줄을 확인할 수 있다.</p>
 
   <h3 id="ch09-where">9.1 리포트는 어디에 있나<a class="hl" href="#ch09-where" aria-label="링크">#</a></h3>
   <p>리포트는 분석할 때마다 작업 폴더의 <code>&lt;작업 폴더&gt;/&lt;Jira 키&gt;/report.md</code>에 저장됩니다. 판정 값은 스크립트가 쓰고, "원인"과 "코드 위치" 칸만 Claude가 채웁니다. Claude는 이 리포트를 대화에 옮겨 보여 줍니다.</p>
@@ -1302,6 +1324,7 @@ explore: {when: never}          <span class="c"># 탐색 분석: ask(기본) | a
   <p class="kicker">Chapter 10</p>
   <h2>10장 분류 확정과 기록</h2>
   <p class="lead">담당자가 고른 분류는 작업 계획이 되고, 확인 화면을 승인해야 PR로 올라갑니다.</p>
+  <p class="qa">이 장에서 답하는 질문: 분류를 고르면 무엇이 기록되나? → 읽고 나서: 질문에 답하고 확인 화면을 읽은 뒤 PR까지 올릴 수 있다.</p>
   <p>이 장은 <a href="#ch02">2장</a>의 예시(새 원인 등록)를 다른 경우까지 넓힙니다. 2장에 나온 화면은 다시 싣지 않고 절 번호로 가리킵니다. 분석 없이 기록만 남기는 <code>record</code>는 <a href="#ch08">8장</a>에 있습니다.</p>
 
   <h3 id="ch10-1">10.1 질문은 어떤 모양인가<a class="hl" href="#ch10-1" aria-label="링크">#</a></h3>
@@ -1440,6 +1463,7 @@ explore: {when: never}          <span class="c"># 탐색 분석: ask(기본) | a
   <p class="kicker">Chapter 11</p>
   <h2>11장 수정 이후 확인</h2>
   <p class="lead">수정 상태는 로그 근거로만 바뀌고, 단계마다 커맨드가 하나씩 있습니다.</p>
+  <p class="qa">이 장에서 답하는 질문: 수정 CL이 머지된 뒤에는 무엇을 하나? → 읽고 나서: fix-submitted와 verify-fix로 수정 상태를 바꿀 수 있다.</p>
   <p>원인마다 수정 상태(<code>fix.status</code>)가 있습니다. 코드나 설정을 고쳐야 하는 원인은 "수정 CL 제출 → 수정 빌드에서 확인" 순서로 상태가 바뀝니다. "고쳐짐(fixed)"은 팀 전체가 믿는 표시라서, 사람의 말이나 Claude의 판단으로는 바꾸지 않습니다. 수정 빌드 로그를 스크립트가 판정한 결과로만 바뀝니다.</p>
 
   <h3 id="ch11-1">11.1 수정 상태 다섯 가지<a class="hl" href="#ch11-1" aria-label="링크">#</a></h3>
@@ -1557,6 +1581,7 @@ explore: {when: never}          <span class="c"># 탐색 분석: ask(기본) | a
   <p class="kicker">Chapter 12</p>
   <h2>12장 찾기·이어 하기·Jira 게시</h2>
   <p class="lead">찾기와 상태 보기는 아무것도 바꾸지 않고, 멈춘 작업은 같은 명령을 다시 실행하면 이어집니다.</p>
+  <p class="qa">이 장에서 답하는 질문: 예전 이슈를 찾고, 멈춘 작업을 잇고, Jira에 결과를 올리려면 어떻게 하나? → 읽고 나서: search로 찾고, 같은 명령으로 이어 하고, 승인한 코멘트 1건을 올릴 수 있다.</p>
 
   <h3 id="ch12-1">12.1 과거 이슈 찾기: search<a class="hl" href="#ch12-1" aria-label="링크">#</a></h3>
   <p>"비슷한 이슈 있었어?"처럼 과거 기록만 궁금할 때 씁니다. 로그 분석이나 분류는 하지 않고, 이슈 DB에 이미 있는 기록만 찾습니다. 읽기 전용이라 lock도 잡지 않습니다.</p>
@@ -1680,6 +1705,7 @@ explore: {when: never}          <span class="c"># 탐색 분석: ask(기본) | a
   <p class="kicker">Chapter 13</p>
   <h2>13장 막혔을 때</h2>
   <p class="lead">막히면 setup을 다시 하지 말고 <code>status --doctor</code>부터 실행해, 막힌 것 하나만 고칩니다.</p>
+  <p class="qa">이 장에서 답하는 질문: 도구가 멈추면 무엇부터 보나? → 읽고 나서: status --doctor 화면에서 막힌 것 하나를 골라 고칠 수 있다.</p>
   <div class="callout warn">예전 자료에는 "막히면 setup을 다시 실행"이라고 적힌 곳이 있습니다. 지금은 쓰지 않는 안내입니다. setup 전체를 다시 하면 lock과 읽기 스냅샷을 건드리고 Jira 연결도 다시 묻습니다. 고장 난 단계만 고칩니다.</div>
 
   <h3 id="ch13-1">13.1 먼저: status --doctor<a class="hl" href="#ch13-1" aria-label="링크">#</a></h3>
@@ -1827,6 +1853,7 @@ explore: {when: never}          <span class="c"># 탐색 분석: ask(기본) | a
   <p class="kicker">Chapter 14</p>
   <h2>14장 토큰·모델·비용</h2>
   <p class="lead">아는 원인 1건은 합성 로그 기준 약 $0.34~0.40이고, 실제 로그와 무거운 경로에서는 더 듭니다.</p>
+  <p class="qa">이 장에서 답하는 질문: 이슈 한 건에 비용이 얼마나 드나? → 읽고 나서: 비용을 정하는 요소와 토큰을 아끼는 습관을 안다.</p>
   <div class="callout warn">측정값은 Sonnet 5.5와 합성 데이터로 잰 값이고, 추정은 표에 "추정"으로 표시합니다. 실제 로그로 잰 값은 아직 없습니다. 비용 수치의 정본은 이 장입니다. 다른 장의 수치는 이 장에서 옮긴 것입니다.</div>
 
   <h3 id="ch14-1">14.1 비용은 무엇으로 정해지나<a class="hl" href="#ch14-1" aria-label="링크">#</a></h3>
@@ -1907,6 +1934,7 @@ explore: {when: never}          <span class="c"># 탐색 분석: ask(기본) | a
   <p class="kicker">Chapter 15</p>
   <h2>15장 관리자 역할과 처음 한 번</h2>
   <p class="lead">관리자 일은 세 역할로 나뉘고, 팀원이 설치하기 전에 사이트 설정·운영 이슈 DB·브랜치 보호를 한 번 해 둡니다.</p>
+  <p class="qa">이 장에서 답하는 질문: 팀원이 설치하기 전에 관리자는 무엇을 해 두나? → 읽고 나서: 사이트 설정, 운영 이슈 DB, 브랜치 보호를 준비할 수 있다.</p>
 
   <h3 id="ch15-1">15.1 역할 세 가지<a class="hl" href="#ch15-1" aria-label="링크">#</a></h3>
   <p>도구는 PR을 머지하지 않습니다. 머지와 "승인 필요" 항목의 판단은 늘 사람이 합니다. 그 사람이 아래 세 역할입니다.</p>
@@ -1997,6 +2025,7 @@ explore: {when: never}          <span class="c"># 탐색 분석: ask(기본) | a
   <p class="kicker">Chapter 16</p>
   <h2>16장 이슈 DB 구조와 생성 파일</h2>
   <p class="lead">이슈 DB는 카테고리 폴더 아래 유형 폴더로 나뉘고, README·STATS·CHANGELOG는 db_build.py만 만듭니다.</p>
+  <p class="qa">이 장에서 답하는 질문: 이슈 DB는 어떻게 생겼고, 어느 파일이 생성 파일인가? → 읽고 나서: 폴더·ID 규칙을 알고 생성 파일은 db_build.py로만 만든다.</p>
 
   <h3 id="ch16-1">16.1 폴더 구조<a class="hl" href="#ch16-1" aria-label="링크">#</a></h3>
   <p>아래는 합성 샘플 이슈 DB(<code>tests/fixtures/issue-db-sample</code>)의 모습입니다. 운영 이슈 DB도 같은 구조입니다. <code>[생성]</code>이라고 적은 파일은 사람이 고치지 않습니다.</p>
@@ -2084,6 +2113,7 @@ explore: {when: never}          <span class="c"># 탐색 분석: ask(기본) | a
   <p class="kicker">Chapter 17</p>
   <h2>17장 PR 리뷰와 월간 리뷰</h2>
   <p class="lead">PR은 체크리스트를 보고 한 번에 하나씩 머지하고, 매달 리뷰 리포트로 방치된 항목을 찾아 정리 PR로 올립니다.</p>
+  <p class="qa">이 장에서 답하는 질문: PR과 월간 리뷰에서 무엇을 확인하나? → 읽고 나서: 체크리스트로 머지하고, 리뷰 리포트로 정리 PR을 올릴 수 있다.</p>
 
   <h3 id="ch17-1">17.1 머지 전 체크리스트<a class="hl" href="#ch17-1" aria-label="링크">#</a></h3>
   <p>PR 하나는 Jira 하나(또는 리뷰 정리 한 묶음)입니다. 제목은 <code>[&lt;원인 ID 또는 유형 ID&gt;] &lt;요약&gt;</code> 형식입니다. 리뷰어는 PR 템플릿의 네 항목을 확인합니다.</p>
@@ -2176,6 +2206,7 @@ explore: {when: never}          <span class="c"># 탐색 분석: ask(기본) | a
   <p class="kicker">Chapter 18</p>
   <h2>18장 운영 달력과 변경 관리</h2>
   <p class="lead">주기별 정기 작업을 지키면 이슈 DB가 스스로 망가지지 않고, 무엇을 바꾸느냐에 따라 고칠 레포와 리뷰어가 정해집니다.</p>
+  <p class="qa">이 장에서 답하는 질문: 정기 작업과 변경은 누가 어디서 하나? → 읽고 나서: 운영 달력을 지키고, 바꿀 것에 맞는 레포와 리뷰어를 고를 수 있다.</p>
 
   <h3 id="ch18-1">18.1 정기 작업<a class="hl" href="#ch18-1" aria-label="링크">#</a></h3>
   <div class="panel">
@@ -2279,6 +2310,7 @@ explore: {when: never}          <span class="c"># 탐색 분석: ask(기본) | a
   <p class="kicker">Chapter 19</p>
   <h2>19장 운영 지표</h2>
   <p class="lead">지식이 쌓이는지는 STATS 머리에서, 기여 부담은 usage_stats.py에서, 단계별 토큰은 --transcripts에서 봅니다.</p>
+  <p class="qa">이 장에서 답하는 질문: 지식이 쌓이는지는 무엇으로 보나? → 읽고 나서: STATS, usage_stats.py, --transcripts로 지표를 읽을 수 있다.</p>
   <p>정확도는 이 숫자들로 재지 않습니다. 정확도는 해결된 과거 Jira로 따로 잽니다(<a href="#ch20">20장</a> 20.4). 사용자가 1위 후보를 받아들인 비율은 정답률이 아닙니다. 틀린 1위를 받아들일 수도 있기 때문입니다.</p>
 
   <h3 id="ch19-1">19.1 어디서 무엇을 보나<a class="hl" href="#ch19-1" aria-label="링크">#</a></h3>
@@ -2403,6 +2435,7 @@ explore: {when: never}          <span class="c"># 탐색 분석: ask(기본) | a
   <p class="kicker">Chapter 20</p>
   <h2>20장 사내 도입 단계와 파일럿</h2>
   <p class="lead">반입한 뒤 S-1부터 S-7까지 한 단계씩 하고, 자동 점검을 통과하고 사람이 확인해야 다음 단계로 넘어갑니다.</p>
+  <p class="qa">이 장에서 답하는 질문: 사내 도입은 어떤 순서로 하나? → 읽고 나서: S-0~S-7 단계와 파일럿을 넓히는 기준을 안다.</p>
   <p>사외에서 만든 초안을 사내로 들여온 것을 반입이라고 합니다. 사내에서는 사외에서 끝낸 개발 단계를 다시 하지 않습니다. 사내 환경에 맞추는 일만 S 단계로 합니다.</p>
 
   <h3 id="ch20-1">20.1 진행 방법<a class="hl" href="#ch20-1" aria-label="링크">#</a></h3>
@@ -2552,6 +2585,7 @@ explore: {when: never}          <span class="c"># 탐색 분석: ask(기본) | a
   <p class="kicker">Chapter 21</p>
   <h2>21장 업그레이드·재반입·마이그레이션</h2>
   <p class="lead">새 묶음은 import_draft.py로 바꿔 넣고, 생성기·스키마가 바뀌면 플러그인을 먼저 배포한 뒤 이슈 DB를 migrate로 맞춥니다.</p>
+  <p class="qa">이 장에서 답하는 질문: 새 묶음 반입과 버전 올리기는 어떻게 하나? → 읽고 나서: import_draft.py로 반입하고 migrate 순서를 지킬 수 있다.</p>
 
   <h3 id="ch21-1">21.1 새 묶음 들여오기(재반입)<a class="hl" href="#ch21-1" aria-label="링크">#</a></h3>
   <p>새 묶음 zip을 사내 레포 위에 그냥 풀지 않습니다. 사외에서 지운 파일이 남고 사내 파일과 섞이기 때문입니다. 다른 폴더에 풀고 <code>tools/import_draft.py</code>가 바꿔 넣게 합니다.</p>
@@ -2671,6 +2705,7 @@ explore: {when: never}          <span class="c"># 탐색 분석: ask(기본) | a
   <p class="kicker">Chapter 22</p>
   <h2>22장 데이터는 어디에 머무나</h2>
   <p class="lead">로그와 Jira 원문은 내 PC를 벗어나지 않고, Claude와 이슈 DB에는 개인정보를 가린 것만 갑니다.</p>
+  <p class="qa">이 장에서 답하는 질문: 로그와 Jira 원문은 어디까지 가나? → 읽고 나서: 원문은 PC에 남고 가린 것만 나간다는 것을 확인할 수 있다.</p>
   <p>이 도구는 단말 로그와 Jira를 읽습니다. 로그에는 IMSI(가입자 식별 번호)와 전화번호가, Jira 설명에는 테스터 이름이 들어 있곤 합니다. 그래서 원문은 내 PC의 작업 폴더에만 두고, 밖으로 보내는 것은 모두 마스킹(개인정보를 표식으로 바꾸는 것)을 거칩니다.</p>
   <svg class="flow" viewBox="0 0 360 300" role="img" aria-label="원문 로그와 Jira 응답 원문은 내 PC 작업 폴더에만 있다. 마스킹을 거친 것만 Claude 대화, 팀 이슈 DB, Jira 코멘트로 간다."><rect x="1" y="1" width="358" height="106" rx="10" style="fill:var(--accent-soft);stroke:var(--accent)"/><text x="16" y="26" class="b" style="fill:var(--text)">내 PC · 원문은 여기에만</text><text x="16" y="50" class="s">logcat 원문, bugreport</text><text x="16" y="70" class="s">Jira 응답 원문 issue_raw.json (분석 뒤 지움)</text><text x="16" y="90" class="s">작업 폴더 권한 700 (나만 읽고 씀)</text><path d="M180 110v34m-6 -7l6 7l6 -7" style="fill:none;stroke:var(--accent);stroke-width:2"/><text x="194" y="132" class="h">마스킹을 거친 것만</text><rect x="1" y="152" width="358" height="42" rx="10" style="fill:var(--surface);stroke:var(--line)"/><text x="16" y="178" class="b" style="fill:var(--text)">Claude 대화</text><text x="132" y="178" class="s">가린 요약, 필요한 로그 구간</text><rect x="1" y="202" width="358" height="42" rx="10" style="fill:var(--surface);stroke:var(--line)"/><text x="16" y="228" class="b" style="fill:var(--text)">팀 이슈 DB</text><text x="132" y="228" class="s">가린 fixture, Jira 필드, 메모</text><rect x="1" y="252" width="358" height="42" rx="10" style="fill:var(--surface);stroke:var(--line)"/><text x="16" y="278" class="b" style="fill:var(--text)">Jira</text><text x="132" y="278" class="s">승인한 코멘트 1건 (선택)</text></svg>
 
@@ -2787,6 +2822,7 @@ imsi=<span class="o">&lt;IMSI#1&gt;</span> tel:<span class="o">&lt;MSISDN#2&gt;<
   <p class="kicker">Chapter 23</p>
   <h2>23장 안전장치</h2>
   <p class="lead">PC의 장치가 실수를 빨리 막고, 서버의 브랜치 보호가 마지막으로 main을 지킵니다.</p>
+  <p class="qa">이 장에서 답하는 질문: 승인 없는 기록은 무엇이 막나? → 읽고 나서: PC의 장치와 서버 브랜치 보호가 각각 무엇을 막는지 안다.</p>
   <p>이 도구는 AI가 팀 공용 레포에 쓰는 도구입니다. 그래서 쓰기로 가는 길마다 확인을 둡니다. 앞쪽 장치는 빠르게 막고 이유를 알려 줍니다. 뒤로 갈수록 우회하기 어렵습니다.</p>
   <div class="pipe">
     <div class="stage"><div class="dot"></div><span class="t">Claude hook</span><code>guard.py</code><p>도구 호출 직전에 위험한 명령을 거부</p></div>
@@ -2903,6 +2939,7 @@ imsi=<span class="o">&lt;IMSI#1&gt;</span> tel:<span class="o">&lt;MSISDN#2&gt;<
   <p class="kicker">Chapter 24</p>
   <h2>24장 위협과 대응</h2>
   <p class="lead">위협마다 막는 장치가 있고, PC 장치로 못 막는 부분은 서버 보호나 사람 확인이 맡습니다.</p>
+  <p class="qa">이 장에서 답하는 질문: 어떤 위협이 있고 무엇으로 막나? → 읽고 나서: 위협별 장치와, PC가 못 막는 부분을 누가 맡는지 안다.</p>
   <p>아래 표는 보안 검토에서 다룬 위협입니다. "남는 위험"은 장치가 있어도 막지 못하는 부분입니다. 남는 위험의 대응 시점은 <a href="#ch25">25장</a>에 있습니다.</p>
   <div class="panel">
     <div class="panel-head"><b>위협 표</b><span>08-safety.md §8·§9</span></div>
@@ -2940,6 +2977,7 @@ imsi=<span class="o">&lt;IMSI#1&gt;</span> tel:<span class="o">&lt;MSISDN#2&gt;<
   <p class="kicker">Chapter 25</p>
   <h2>25장 한계와 대응</h2>
   <p class="lead">실제 로그 문구와 정확도는 아직 사내에서 확인하지 않았고, 그 전에는 파일럿에 쓰지 않습니다.</p>
+  <p class="qa">이 장에서 답하는 질문: 아직 모르는 것과 설계상 못 하는 것은 무엇인가? → 읽고 나서: 한계마다 지금의 대응과 풀리는 시점을 안다.</p>
   <p>한계는 다섯 갈래입니다. 아직 검증하지 않은 것, 설계에서 오는 것, 운영에 드는 일, 안전장치가 못 막는 것, 비용과 속도입니다. 항목마다 지금의 대응과 풀리는 시점을 적었습니다. S-1~S-7은 사내 도입 단계입니다(<a href="#ch20">20장</a>).</p>
 
   <h3 id="ch25-a">25.1 아직 검증하지 않은 것<a class="hl" href="#ch25-a" aria-label="링크">#</a></h3>
@@ -3008,6 +3046,7 @@ imsi=<span class="o">&lt;IMSI#1&gt;</span> tel:<span class="o">&lt;MSISDN#2&gt;<
   <p class="kicker">Chapter 26</p>
   <h2>26장 이슈 DB에 기여하기</h2>
   <p class="lead">기여는 대부분 도구가 PR로 올려 주고, 사람은 초안이 작성 규칙에 맞는지 보고 승인합니다.</p>
+  <p class="qa">이 장에서 답하는 질문: 이슈 DB에 새 원인·유형을 어떻게 올리나? → 읽고 나서: 작성 규칙과 PR 정책에 맞는지 보고 초안을 승인할 수 있다.</p>
   <p>이 장은 분석 결과를 기록하는 엔지니어와 새 원인을 제안하는 사람을 위한 것입니다. 확인 화면을 읽는 법은 <a href="#ch10">10장</a>, 검증 R1~R6이 무엇을 보는지는 <a href="#ch29">29장</a>에 있습니다. 작성 규칙의 원본은 이슈 DB의 <code>CONTRIBUTING.md</code>이고, 이 장은 그 내용을 예와 함께 풉니다.</p>
 
   <h3 id="ch26-1">26.1 무엇을 어떻게 기록하나<a class="hl" href="#ch26-1" aria-label="링크">#</a></h3>
@@ -3155,6 +3194,7 @@ imsi=<span class="o">&lt;IMSI#1&gt;</span> tel:<span class="o">&lt;MSISDN#2&gt;<
   <p class="kicker">Chapter 27</p>
   <h2>27장 구조와 동작 원리</h2>
   <p class="lead">도구는 다섯 층으로 나뉘고, 위층은 아래층이 낸 판정을 바꾸지 못합니다.</p>
+  <p class="qa">이 장에서 답하는 질문: 도구는 어떤 층으로 나뉘고, 분석은 어떻게 흐르나? → 읽고 나서: 스크립트별 역할과 분석·쓰기 흐름을 따라갈 수 있다.</p>
   <p>이 장은 플러그인을 고치거나 리뷰하는 사람을 위한 지도입니다. 레포 두 개와 내 PC의 작업 폴더가 어떻게 맞물리는지, 스크립트마다 무엇을 맡는지, 분석과 쓰기가 어떤 순서로 실행되는지 봅니다. 사용자 관점의 위치 요약은 <a href="#ch05">5장</a>에 있습니다.</p>
 
   <h3 id="ch27-1">27.1 시스템 구성<a class="hl" href="#ch27-1" aria-label="링크">#</a></h3>
@@ -3402,6 +3442,7 @@ note: 모바일 데이터 OFF 상태에서 접수됨</pre></div>
   <p class="kicker">Chapter 28</p>
   <h2>28장 파싱과 매칭</h2>
   <p class="lead">로그 줄은 마스킹된 이벤트로 바뀌고, 매처가 이벤트를 시그니처와 맞춰 S·C를 정한 뒤 점수로 후보를 줄 세웁니다.</p>
+  <p class="qa">이 장에서 답하는 질문: 로그 줄이 어떻게 후보 순위가 되나? → 읽고 나서: 시그니처 조건, S·C, 점수 공식을 읽을 수 있다.</p>
   <p>판정은 S·C 값(0 또는 1)으로만 합니다. 점수는 후보를 정렬할 때만 씁니다. 이 장의 숫자는 <code>match_signatures.py</code>의 기본값과 합성 샘플 이슈 DB 설정에서 확인한 것입니다.</p>
 
   <div class="pipe">
@@ -3542,6 +3583,7 @@ score = score × (0.5 + 0.5 × 수락률)</pre></div>
   <p class="kicker">Chapter 29</p>
   <h2>29장 검증과 수정 상태</h2>
   <p class="lead">새 규칙은 R1~R6을 통과해야 올라가고, 원인의 수정 상태 fixed는 수정 빌드 로그 검증으로만 붙습니다.</p>
+  <p class="qa">이 장에서 답하는 질문: 새 규칙과 수정 상태는 무엇으로 검증하나? → 읽고 나서: R1~R6과 verify-fix의 판정 기준을 안다.</p>
   <p>이 장의 판정은 모두 회귀·검증 모드입니다(<a href="#ch28">28장</a> 28.3). 파일 전체를 보고, 보너스와 피드백 가중치를 끄고, S·C 값만으로 판정합니다. 근거는 <code>db_verify.py</code>와 <code>docs/design/05-verification.md</code>입니다.</p>
 
   <h3 id="ch29-1">29.1 언제 도나<a class="hl" href="#ch29-1" aria-label="링크">#</a></h3>
@@ -3723,6 +3765,7 @@ score = score × (0.5 + 0.5 × 수락률)</pre></div>
   <p class="kicker">Chapter 30</p>
   <h2>30장 설계 결정 기록</h2>
   <p class="lead">결정 18개는 모두 "같은 입력에 같은 판정, 사람이 본 것만 기록"을 지키려고 고른 것입니다.</p>
+  <p class="qa">이 장에서 답하는 질문: 왜 이렇게 설계했나? → 읽고 나서: 결정 18개와 고르지 않은 대안을 안다.</p>
   <p>설계를 바꾸려는 사람과 "이건 왜 이렇게 했지?"가 궁금한 리뷰어를 위한 장입니다. 결정마다 배경, 고르지 않은 대안, 그 대가와 대응을 적었습니다. 결정을 바꾸려면 여기 적힌 대가부터 봅니다. 장치마다 짧은 이유는 <a href="#ch23">23장</a>에 있습니다.</p>
 
   <h3 id="ch30-1">30.1 한눈에 보기<a class="hl" href="#ch30-1" aria-label="링크">#</a></h3>
@@ -3803,6 +3846,7 @@ score = score × (0.5 + 0.5 × 수락률)</pre></div>
   <p class="kicker">Chapter 31</p>
   <h2>31장 품질 확인: 테스트와 eval</h2>
   <p class="lead">품질은 넷으로 나눠 잽니다: 코드는 자동 테스트, 규칙은 R1~R6, Claude의 행동은 eval, 실제 정확도는 사내 평가입니다.</p>
+  <p class="qa">이 장에서 답하는 질문: 품질은 무엇으로 재고, 어디까지 쟀나? → 읽고 나서: 테스트·eval 결과와 아직 재지 않은 것을 안다.</p>
   <div class="callout info">테스트 수와 eval 결과의 정본은 이 장입니다. 비용의 정본은 <a href="#ch14">14장</a>입니다. 기준은 main 38433f6, 2026-10-17입니다. 이슈 1건 비용은 <a href="#ch14">14장</a>에 있습니다.</div>
 
   <h3 id="ch31-1">31.1 무엇을 무엇으로 재나<a class="hl" href="#ch31-1" aria-label="링크">#</a></h3>
@@ -3917,6 +3961,7 @@ score = score × (0.5 + 0.5 × 수락률)</pre></div>
   <p class="kicker">Chapter 32</p>
   <h2>32장 앞으로 할 수 있는 것</h2>
   <p class="lead">남은 개선은 반입을 막지 않는 것들이고, 확장 아이디어 12개는 파일럿 결과를 보고 다시 고릅니다.</p>
+  <p class="qa">이 장에서 답하는 질문: 다음에는 무엇을 할 수 있나? → 읽고 나서: 남은 개선 항목과 확장 아이디어 12개를 안다.</p>
   <p>여기 있는 것은 확정 계획이 아니라 후보입니다. 순서와 시점은 사내 환경과 파일럿 결과를 본 뒤에 정합니다. 끝낸 개선의 날짜별 목록은 레포의 변경 이력에 있습니다.</p>
 
   <h3 id="ch32-1">32.1 개선 계획(RF)의 상태<a class="hl" href="#ch32-1" aria-label="링크">#</a></h3>
@@ -4023,6 +4068,7 @@ score = score × (0.5 + 0.5 × 수락률)</pre></div>
   <p class="kicker">Appendix A</p>
   <h2>부록 A 용어집</h2>
   <p class="lead">도구 화면과 이 책에 나오는 말을 뜻, 예, 왜 필요한가로 묶었습니다.</p>
+  <p class="qa">이 장에서 답하는 질문: 이 말은 무슨 뜻인가? → 읽고 나서: 용어의 뜻과 예, 필요한 이유를 찾을 수 있다.</p>
   <p><a href="#ch03">3장</a>의 여덟 개도 같은 형식으로 다시 넣었습니다. 예는 합성 샘플 이슈 DB(<code>tests/fixtures/issue-db-sample</code>)와 <a href="#ch02">2장</a>의 예시에서 가져왔고, 가상의 예는 "(가상)"으로 표시했습니다. 정의가 설계 문서와 다르면 <code>docs/design/contracts.md</code>가 맞습니다.</p>
 
   <h3 id="apx-a-1">A.1 분류<a class="hl" href="#apx-a-1" aria-label="링크">#</a></h3>
@@ -4179,6 +4225,7 @@ score = score × (0.5 + 0.5 × 수락률)</pre></div>
   <p class="kicker">Appendix B</p>
   <h2>부록 B 자주 묻는 질문</h2>
   <p class="lead">도입 검토에서 나오는 질문 24개와, 쓰는 사람이 자주 묻는 질문 6개를 관점별로 모았습니다.</p>
+  <p class="qa">이 장에서 답하는 질문: 도입을 검토할 때 무엇을 묻나? → 읽고 나서: 질문 30개의 답과 근거가 있는 장을 찾을 수 있다.</p>
   <p>질문을 누르면 답이 펼쳐집니다. 바뀌는 숫자(비용, 테스트 수)의 정본은 <a href="#ch14">14장</a>과 <a href="#ch31">31장</a>입니다. 여기 나오는 숫자는 그 장에서 단서와 함께 옮긴 것입니다.</p>
 
   <h3 id="apx-b-1">B.1 가치: 왜 써야 하나<a class="hl" href="#apx-b-1" aria-label="링크">#</a></h3>
@@ -4248,6 +4295,7 @@ score = score × (0.5 + 0.5 × 수락률)</pre></div>
   <p class="kicker">Appendix C</p>
   <h2>부록 C 빠른 참조</h2>
   <p class="lead">자주 쓰는 커맨드, 요청 문장, 리포트에서 볼 곳, 막혔을 때 할 일을 한 장에 모았습니다.</p>
+  <p class="qa">이 장에서 답하는 질문: 자주 쓰는 명령과 막혔을 때 할 일은 무엇인가? → 읽고 나서: 커맨드, 요청 문장, 막혔을 때 순서를 한 장에서 본다.</p>
   <p><button type="button" class="printbtn" id="print-apx-c" hidden>부록 C만 인쇄</button></p>
   <p>모든 커맨드는 <code>/telephony-triage:&lt;이름&gt;</code> 형식입니다. 로그는 대화에 붙이지 않고 항상 파일 경로로 줍니다. 형식과 옵션 전체는 <a href="#apx-e">부록 E</a>에 있습니다.</p>
 
@@ -4395,6 +4443,7 @@ score = score × (0.5 + 0.5 × 수락률)</pre></div>
   <p class="kicker">Appendix D</p>
   <h2>부록 D 한 장 요약</h2>
   <p class="lead">원인을 찾고, 확인된 원인을 팀 이슈 DB에 쌓아 다시 쓰는 플러그인의 도입 검토 요약입니다.</p>
+  <p class="qa">이 장에서 답하는 질문: 도입을 결정하려면 무엇을 알아야 하나? → 읽고 나서: 필요성, 진행 상황, 비용, 위험, 결정할 것을 한 장으로 본다.</p>
   <div class="callout info">대상: 결재자, 팀 리더, 도입 검토자. 읽는 시간은 약 4분입니다. 기준일은 2026-10-17이고, 바뀌는 숫자의 정본은 <a href="#ch14">14장</a>(비용)과 <a href="#ch31">31장</a>(테스트·eval)입니다.</div>
 
   <h3 id="apx-d-1">D.1 왜 필요한가<a class="hl" href="#apx-d-1" aria-label="링크">#</a></h3>
@@ -4496,6 +4545,7 @@ score = score × (0.5 + 0.5 × 수락률)</pre></div>
   <p class="kicker">Appendix E</p>
   <h2>부록 E 표 모음</h2>
   <p class="lead">커맨드 14개, 종료 코드 4개, 설정 키, 파일 위치, 브랜치 이름을 찾아보기 쉽게 표로 모았습니다.</p>
+  <p class="qa">이 장에서 답하는 질문: 커맨드·설정 키·파일 위치는 어디에 정리돼 있나? → 읽고 나서: 표에서 형식과 값을 바로 찾을 수 있다.</p>
   <p>커맨드 형식은 각 커맨드 파일(<code>plugin/commands/*.md</code>)의 <code>argument-hint</code>를 그대로 옮겼습니다. <code>/telephony-triage:help &lt;커맨드&gt;</code>를 실행하면 같은 내용을 도구 안에서 볼 수 있습니다.</p>
 
   <h3 id="apx-e-1">E.1 커맨드<a class="hl" href="#apx-e-1" aria-label="링크">#</a></h3>
@@ -4673,6 +4723,24 @@ if(e.isIntersecting&&a){if(cur)cur.removeAttribute('aria-current');a.setAttribut
 Object.keys(links).forEach(function(id){var el=document.getElementById(id);if(el)io.observe(el)})}
 var tb=document.querySelector('.tocbtn'),hero=document.querySelector('header.hero');
 if(tb&&hero&&'IntersectionObserver' in window){new IntersectionObserver(function(es){tb.classList.toggle('off',es[0].isIntersecting)}).observe(hero)}
+var box=document.getElementById('search');
+if(box){box.hidden=false;var q=document.getElementById('q'),out=document.getElementById('q-results'),idx=[],seen={},last='contents',lastT='';
+[].forEach.call(document.querySelectorAll('main h2, main h3, main code'),function(el){
+var t=el.tagName,sec=el.closest('section[id]'),txt,id,kind;
+if(t==='H2'){id=sec&&sec.id;txt=el.textContent;kind='장'}
+else if(t==='H3'){id=el.id||(sec&&sec.id);txt=el.textContent.replace(/#$/,'');kind='절'}
+else{txt=el.textContent.trim();if(!/^\/telephony-triage:|\.py\b/.test(txt)||txt.length>80)return;id=last;kind='명령'}
+if(t!=='CODE'&&id){last=id;lastT=txt}
+if(!id||!txt)return;var key=kind+'|'+txt+'|'+id;if(seen[key])return;seen[key]=1;
+idx.push({t:txt,id:id,k:kind,where:t==='CODE'?lastT:''})});
+q.addEventListener('input',function(){var v=q.value.trim().toLowerCase();out.textContent='';if(!v)return;var n=0;
+for(var i=0;i<idx.length&&n<20;i++){var it=idx[i];if(it.t.toLowerCase().indexOf(v)<0)continue;n++;
+var li=document.createElement('li'),a=document.createElement('a'),sm=document.createElement('small');
+a.href='#'+it.id;a.textContent=it.t;sm.textContent=it.k+(it.k==='명령'?' · '+it.where:'');li.appendChild(a);li.appendChild(sm);out.appendChild(li)}
+if(!n){var li=document.createElement('li');li.textContent='찾은 항목이 없습니다.';out.appendChild(li)}})}
+var opened=[];
+addEventListener('beforeprint',function(){[].forEach.call(document.querySelectorAll('details:not([open])'),function(d){d.setAttribute('open','');opened.push(d)})});
+addEventListener('afterprint',function(){opened.forEach(function(d){d.removeAttribute('open')});opened=[]});
 var pb=document.getElementById('print-apx-c');
 if(pb){pb.hidden=false;pb.addEventListener('click',function(){var b=document.body;function off(){b.classList.remove('print-apx-c')}
 b.classList.add('print-apx-c');addEventListener('afterprint',off,{once:true});window.print();setTimeout(off,1000)})}})();
