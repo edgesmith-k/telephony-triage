@@ -1009,7 +1009,7 @@ def check_commit(call: GitCall, conf: Config, dec: Decision) -> None:
     hooks = _git(call.cwd, "config", "--get", "core.hooksPath").stdout.strip()
     if hooks != ".githooks":
         dec.deny.append(f"이 레포의 core.hooksPath가 '{hooks or '(없음)'}'다. 정확히 .githooks여야 커밋할 수 있다 "
-                        "(규칙 5). /telephony-triage:setup 을 다시 실행한다.")
+                        "(규칙 5). setup 5번(hook)만 다시 한다 — `config.py install-hooks`.")
         return
     top = _git(call.cwd, "rev-parse", "--show-toplevel").stdout.strip()
     if not top:
