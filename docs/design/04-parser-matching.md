@@ -196,3 +196,4 @@ feedback_weight가 켜져 있고 해당 시그니처 표본 ≥ min_samples면: 
 
 - `status`가 `active`가 아닌 원인의 fixture는 회귀에서 제외한다. `signatures_pending` 원인의 양성 fixture는 제외하지 않고 `"<유형 ID>:unresolved"` 기대값으로 돈다 (`contracts.md §fixture`).
 - `.expect.yaml`의 `occurred_at`(선택)은 판정에 쓰지 않고, 결과 표에 참고로 보여준다.
+- 이슈 기록(`issues/<KEY>.yaml`)과 `feedback/`은 이 모드의 판정에 들어가지 않는다(bonus·피드백 끔, 수정 상태·시그니처는 `type.md`). 그래서 `db_regress --changed`/`--staged`는 이슈 기록만 바뀐 유형을 범위에 넣지 않는다 (`contracts.md §3.2` 이슈 기록 제외).

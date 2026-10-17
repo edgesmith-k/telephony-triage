@@ -2,6 +2,7 @@
 
 - `--staged`: index 내용이 기준이다. unstaged 변경은 무시한다. 비교 기준(base)은 `HEAD`.
 - `--changed <ref>`: `git merge-base <ref> HEAD`와 현재 워킹 트리의 차이. base는 그 merge-base.
+- 바뀐 파일 목록은 `--no-renames`로 만든다: 이름이 바뀐 파일은 옛 경로(삭제)와 새 경로가 모두 범위다.
 - `--ref <ref>`: 그 커밋의 트리.
 
 index·ref의 트리가 필요하면 임시 디렉토리로 꺼낸다(`materialize_*`). 사용자 워킹 트리는
@@ -37,13 +38,13 @@ def merge_base(repo: Path, ref: str) -> str:
 def changed_files(repo: Path, ref: str) -> list[str]:
     """`merge-base <ref> HEAD` 이후 바뀐 파일(워킹 트리 기준, 추적 안 된 새 파일 포함, 삭제 포함)."""
     base = merge_base(repo, ref)
-    names = git(repo, "diff", "--name-only", "-z", base).split("\0")
+    names = git(repo, "diff", "--name-only", "--no-renames", "-z", base).split("\0")
     names += git(repo, "ls-files", "--others", "--exclude-standard", "-z").split("\0")
     return sorted(set(filter(None, names)))
 
 
 def staged_files(repo: Path) -> list[str]:
-    return sorted(set(filter(None, git(repo, "diff", "--cached", "--name-only", "-z").split("\0"))))
+    return sorted(set(filter(None, git(repo, "diff", "--cached", "--name-only", "--no-renames", "-z").split("\0"))))
 
 
 def materialize_index(repo: Path, dest: Path) -> Path:

@@ -12,7 +12,9 @@
 2. `.cache/`가 staged면 차단 (캐시는 커밋하지 않는다).
 3. `db_lint --staged`
 4. `mask_pii --check --staged`
-5. `db_regress --staged` (parser-rules 변경이면 전체로 확장, db_regress가 판단)
+5. `db_regress --staged` (parser-rules 변경이면 전체로 확장, 이슈 기록만 바뀐 유형은 제외, db_regress가 판단).
+   이슈 기록만 바뀌어 건너뛴 유형이 있으면(`summary.excluded`) 돌린 fixture 수와 그 파일을 note로 남긴다.
+   그 밖에 돌린 fixture가 0개면 "회귀 대상 fixture 0개 (바뀐 유형 없음)" note를 남긴다(종료 코드는 0 그대로).
 6. 규칙 변경(parser-rules/, type.md, fixture 기대값)이 있으면 `db_verify rules --staged`
 7. `ci_mode: local`/`actions`: `db_build --verify --staged`. `actions-build`: 생성 파일이 staged면 차단
    (13-actions.md). `migrate/schema-v<N>` 브랜치에서는 생성기 버전 불일치로 검증을 못 하면 경고만 한다.
@@ -106,6 +108,18 @@ def run(db: Path, plugin_root: str | None) -> tuple[dict, int]:
                 note=("생성 파일(README·STATS·CHANGELOG)이 원본과 다르다. 직접 고치지 말고 "
                       "db_build.py --write로 다시 만든 뒤 git add 한다: " + _brief("build", res.code, res.data, res.stderr))
                 if res.code == CHECK_FAILED and isinstance(res.data, dict) else None)
+        elif (res.name == "regress" and res.code == OK and isinstance(res.data, dict)
+              and ((res.data.get("summary") or {}).get("excluded") or {}).get("files")):
+            # 이슈 기록만 바뀐 유형은 건너뛰었다 — 0건이 "회귀 통과"로 읽히지 않게 사유를 적는다
+            summary = res.data["summary"]
+            files = summary["excluded"]["files"]
+            more = f" 외 {len(files) - 5}개" if len(files) > 5 else ""
+            add("regress", res.code, note=(
+                f"회귀 대상 fixture {summary.get('total', 0)}개 — 이슈 기록만 바뀐 유형은 건너뜀 "
+                f"({summary['excluded'].get('reason')}): {', '.join(files[:5])}{more}"))
+        elif (res.name == "regress" and res.code == OK and isinstance(res.data, dict)
+              and (res.data.get("summary") or {}).get("total") == 0):
+            add("regress", res.code, note="회귀 대상 fixture 0개 (바뀐 유형 없음)")   # 건너뜀을 통과로 보이지 않게
         else:
             add(res.name, res.code, res.data, res.stderr)
 
