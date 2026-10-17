@@ -348,3 +348,44 @@
 - (6) 키 해시(sha1 8자)는 엔트로피가 낮은 키면 되돌릴 수 있다 → S-2 안내: 사외로는 요약 숫자만.
 - (7) 공유 안내서 재게시 때 개정 번호 올리기(메인·사용자).
 - (8) `guard.py:1076` `re.split(r"\d", a[1:], 1)` 위치 인자 maxsplit가 Python 3.13+ DeprecationWarning(hook_replay 시험에서 10회) → `maxsplit=1`.
+
+## 외부 운영 리뷰 (10/17)
+
+외부 운영 리뷰 제안 8개를 판정했다(계획: Plan 에이전트 → 메인, 구현: 별개 에이전트, 브랜치 `ops-metrics`, PR #56(`codex-fix`) 위). SKILL.md·reference·hooks.json·guard·show_guard·`common/shown.py`·표시 기록부·`commands/setup.md`는 바꾸지 않았다 → 이슈 DB 스키마·`GENERATOR_VERSION` 그대로, **site eval 재실행 조건 아님**.
+
+| # | 제안 | 판정 | 시점 | L 항목 |
+|---|---|---|---|---|
+| ① | 운영 지표 수정 | 이번 묶음 | 지금 | G-6 후속 |
+| ② | 장애 안내(읽기 전용 진단 우선) | 이번 묶음 | 지금 | D4 확장 |
+| ③ | 질문·재시도·단계별 비용 | 이번 묶음(간단/표준/심층 묶음 설정은 파일럿 뒤) | 지금 | S-7, U-3 |
+| (a) | setup 기본값 표·선호 기억·메모 합치기 | 백로그 | 파일럿 뒤 | U-5·U-6·U-10(D3) |
+| (b) | 릴리스별 검증 조합·canary·업그레이드 복구 반복 | 기록은 S-7(C7·S2)에 있음, 자동화 백로그 | 기록 파일럿 전, 자동화 파일럿 뒤 | G-9·C7·S2·D13 |
+| (c) | eval 단언↔채점 함수 ID 연결 | 백로그(낮음) | 지금 가능(재채점만) | M-8 |
+| (d) | 정확도 분해·표본 수·"검증 부족"·수락 독립 재검토 | 백로그 | 분해 파일럿 전(S-5), 재검토 파일럿 중 | G-8·S-5 |
+| (e) | 리뷰·sync·머지 대기·재작업·관리 시간 | 백로그 | 정의 파일럿 전, 수집 파일럿 뒤 | G-4·G-7·D6 |
+
+### ① 운영 지표 (`usage_stats.py` format 2)
+
+- 결함 3개: PR 시간 = `plan.json` 수정 시각(재publish·sync-pr·feedback이 다시 씀), 계획만 있고 PR·state·wt 없으면 취소(보류·읽기 전용·dry-run 포함), 질문 = 저장된 답 수(reset·`--answer` 포함, `.shown`도 훑음).
+- 사건 기록은 기존 `JOB/trace.jsonl`에 더했다(`contracts.md` "작업 기록"): triage `start`에 `v: 2`, db_pr `stage{result, dry_run, message?}`·`publish{action, pr, gh_ok}`·`discard{outcome}`(`dbpr/lock.py trace_note`, 쓰기 실패는 stderr 경고만). db_pr 행에는 script·args가 없어 채점기 `trace()`·`needs_input()`에 안 나온다.
+- 상태 9종(손상·PR·push만·진행 중·연습·취소·보류(읽기 전용)·분석만·결과 없음) + legacy(v≥2 행 없음)·다른 흐름. PR까지 = 첫 `0-key` → 첫 `publish{created, gh_ok}`, 분석까지 = 첫 `0-key` → 첫 `done`, 질문 = `needs_input`(issue 제외), 재시도 4종.
+- **한계(사용자 결정 2, 수용)**: release(Step 7 "기록하지 않음") 사유는 기록되지 않아 파일 상태로만 가른다(분석 뒤 계획 없음 = 분석만). 정확히 하려면 SKILL Step 7 `triage.py release --outcome` → skill-creator + 유료 eval.
+
+### ② 장애 안내 (`job_status.py --doctor`, `last-run-error`)
+
+- 런북의 "막히면 setup 다시"는 lock 강제 해제 유도·스냅샷 이동·Jira 매핑 재질문을 부른다 → 읽기 전용 진단 한 장 `status [KEY] --doctor`: 화면 뒤 진단 절(≤1,024B, 전체 ≤4,096B) — 플러그인 지문(`versions.plugin_fingerprint`)·Claude Code·Python·의존성 버전, doctor 개수와 fail·warn 행(마스킹·URL 자격증명 가림, `masking.mask_brief`). 작업을 못 찾아도 종료 0으로 "확인 불가 — 사유" + 진단.
+- 기본 화면: trace 끝 256KB의 마지막 끝 행이 triage `error`·`stage{result: error}`면 막힌 것 `last-run-error`.
+- 실패 단계만 복구: doctor `hook` 행 다음 = "setup 5번(hook)만 다시 — `config.py install-hooks`", status.md(`--doctor`, setup 전체를 다시 하지 않는다)·help.md 표 한 행·triage 내부 오류 안내에 `status --doctor`. `docs/SITE_INSTALL.md` "지킬 것"도 고쳤다.
+- **HTML은 이번 PR에서 고치지 않았다(사용자 결정 4)** — HTML 정리 묶음에서 "막히면 setup 다시"를 `status --doctor`로: `docs/materials/05-admin-runbook.html` §4(본문·SVG 글자)·§10(409 지표 문구), `15-quick-ref.html` "막혔을 때", `07-user-guide.html` §8, `03-manual.html`(961·970·1505~1508·1895), `12-pilot-eval.html`(272·273), `01-training-deck.html`(1115), `02-marketing.html`(517), `19-team-intro.html`(551), `docs/telephony-triage-guide.html` 04절.
+
+### ③ 질문·재시도·단계별 비용 (`usage_stats.py --transcripts`)
+
+- hook 방식은 쓰지 않는다(사내 eval 11 재실행·Stop 시점 transcript 불완전·hook 파일 안 씀 원칙). transcript(`sessionId` 줄)를 사후에 읽어 플러그인 세션의 usage를 message.id당 한 번 세고 단계(basic·code·deep·explore·new_cause·write·post·other·retry·subagent)로 나눈다. 대화 질문·심층 호출·show_guard 되돌림·거부·스크립트 오류·모델·버전도 센다. 숫자만, opt-in.
+- 수동 확인(사외 기준치): `usage_stats.py --work-dir <빈 폴더> --transcripts tests/skill_evals/workspace/l2-a --json` → 12세션(analyze 8), 응답 242, 입력 484·출력 117,207·캐시 읽기 7,898,059·캐시 쓰기 524,432 = 각 run `events.jsonl` result.usage 합(eval-52는 result 2개, 모두 합해 13개)과 **정확히 같다**. 단계별 응답 basic 111·write 67·new_cause 31·other 11·retry 11·explore 7·deep 4, 대화 질문 53, 되돌림 2·거부 7, 스크립트 오류 2.
+- **팀원 PC transcript 읽기(사용자 결정 3)**: 기능은 만들었고, 사내 허용 여부는 S-7에서 보안 기준으로 정한다(불허면 토큰만 미측정). transcript 기본 30일 삭제 → 2주마다 수집, Claude Code 버전마다 처음 한 번 `claude -p --output-format json` 합계 대조(`15-local-draft.md` S-7).
+- 간단/표준/심층 묶음 설정은 만들지 않았다(기존 손잡이 `--code skip`·`--no-analyzer`·`--no-explore`·`--analysis-only`). 기준치 → 파일럿 2주 → U-3·U-5·U-6과 결정.
+
+### 남은 것
+
+- **유료 eval(사용자 결정 1)**: 리뷰 뒤 쓰기 흐름 eval 한 번(이 구현 에이전트는 돌리지 않았다). evals.json에서 publish·discard·stage를 말하는 eval: 1·6·8·13·17·18·22·25·27·28·34·47·50·51·52·59·60·61·62·67·68·69·70.
+- 테스트(이 Windows PC, 전체 4분할): 2,002 통과·33 실패·4 건너뜀 — 실패 33개는 모두 이 PC의 알려진 환경 실패 목록(34개) 안이고 새 실패 없음(목록의 `test_doctor_worst_case_markdown_fits_budget`은 이번에 통과 — hook 행 "다음"이 짧아진 영향으로 보임).
