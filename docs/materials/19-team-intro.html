@@ -37,19 +37,19 @@ a{color:var(--accent-ink);text-underline-offset:2px}
 .hero h1{font-family:var(--display);font-weight:800;font-size:clamp(44px,7vw,72px);line-height:1;letter-spacing:-.035em;margin:0 0 18px}
 .hero h1 span{color:var(--hero-on)}
 .hero .tagline{font-size:19px;line-height:1.65;color:var(--hero-fg);margin:0 0 28px;max-width:28em}
-.hero .sample{font-size:12px;color:var(--hero-muted);border:1px solid var(--hero-line);border-radius:999px;padding:3px 11px;display:inline-block;margin-bottom:28px}
+.hero .sample{font-size:14px;color:var(--hero-muted);border:1px solid var(--hero-line);border-radius:999px;padding:3px 11px;display:inline-block;margin-bottom:28px}
 .kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-top:1px solid var(--hero-line)}
 .kpis div{padding:16px 14px 0 0}
 .kpis div+div{padding-left:14px;border-left:1px solid var(--hero-line)}
 .kpis b{display:block;font-family:var(--display);font-weight:700;font-size:24px;line-height:1.1;letter-spacing:-.02em}
-.kpis span{font-size:13px;color:var(--hero-muted);line-height:1.5;display:block;margin-top:6px}
+.kpis span{font-size:14px;color:var(--hero-muted);line-height:1.5;display:block;margin-top:6px}
 .chart-card{background:var(--surface);box-shadow:0 1px 2px rgba(18,26,36,.05),0 8px 24px rgba(18,26,36,.06);border:1px solid var(--hero-line);border-radius:var(--radius);padding:18px 18px 12px}
 .chart-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:8px}
 .chart-head b{font-size:14px;font-weight:600}
-.legend{display:flex;gap:14px;font-size:12px;color:var(--hero-muted);flex-wrap:wrap}
+.legend{display:flex;gap:14px;font-size:14px;color:var(--hero-muted);flex-wrap:wrap}
 .legend i{display:inline-block;width:14px;height:3px;border-radius:2px;vertical-align:middle;margin-right:6px}
 .legend i.sw{height:10px;width:10px;border-radius:2px;background:var(--hero-shade);border:1px solid var(--hero-off)}
-.chart-foot{font-size:12.5px;color:var(--hero-muted);margin:6px 0 0;line-height:1.55}
+.chart-foot{font-size:14px;color:var(--hero-muted);margin:6px 0 0;line-height:1.55}
 @media (max-width:880px){.hero .wrap{grid-template-columns:minmax(0,1fr);gap:32px;padding-block:40px 36px}}
 @media (max-width:480px){.kpis{grid-template-columns:1fr}.kpis div+div{border-left:none;padding-left:0;border-top:1px solid var(--hero-line);padding-top:14px}.kpis div{padding-bottom:12px}}
 
@@ -89,15 +89,15 @@ mark{background:none;color:var(--accent-ink);font-weight:600}
 .panel{border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);margin:22px 0;overflow:hidden}
 .panel-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:14px 18px;border-bottom:1px solid var(--line);background:var(--sunken)}
 .panel-head b{font-size:15px}
-.panel-head span{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.panel-head span{font-family:var(--mono);font-size:14px;color:var(--muted)}
 .scroll{overflow-x:auto}
-table{width:100%;border-collapse:collapse;font-size:15px}
+table{width:100%;border-collapse:collapse;font-size:16px}
 th,td{text-align:left;padding:11px 16px;border-bottom:1px solid var(--line);vertical-align:middle;line-height:1.55}
 tbody tr:last-child td{border-bottom:none}
-th{font-weight:600;color:var(--muted);font-size:12.5px;white-space:nowrap}
+th{font-weight:600;color:var(--muted);font-size:14px;white-space:nowrap}
 td.r,th.r{text-align:right}
 .sig{min-width:620px}
-.sig td small{display:block;color:var(--muted);font-size:12px;font-family:var(--mono)}
+.sig td small{display:block;color:var(--muted);font-size:13.5px;font-family:var(--mono)}
 .pill{display:inline-block;font-family:var(--mono);font-size:11.5px;font-weight:700;letter-spacing:.06em;padding:2px 9px;border-radius:999px}
 .pill.on{background:var(--accent-soft);color:var(--accent-ink)}
 .pill.off{background:var(--off-soft);color:var(--off)}
@@ -151,10 +151,10 @@ code{font-family:var(--mono);font-size:.85em;background:var(--sunken);border:1px
 .stage:first-child::before{left:8px}.stage:last-child::before{right:calc(100% - 8px)}
 .stage .t{font-weight:600;font-size:15px;line-height:1.4;display:block}
 .stage code{font-size:11.5px;border:none;background:none;padding:0;color:var(--muted)}
-.stage p{font-size:13.5px;color:var(--muted);margin:6px 0 0;line-height:1.55}
+.stage p{font-size:14px;color:var(--muted);margin:6px 0 0;line-height:1.55}
 .stage.gate .dot{background:var(--accent);border-color:var(--accent);box-shadow:0 0 0 5px var(--accent-soft)}
 .stage.gate .t{color:var(--accent-ink)}
-.fail{margin-top:12px;border:1px dashed var(--off);border-radius:10px;padding:8px 10px;font-size:12.5px;color:var(--off);background:var(--off-soft);line-height:1.5}
+.fail{margin-top:12px;border:1px dashed var(--off);border-radius:10px;padding:8px 10px;font-size:14px;color:var(--off);background:var(--off-soft);line-height:1.5}
 @media (max-width:720px){
   .pipe{grid-template-columns:1fr}
   .stage{padding:0 0 18px 30px}
@@ -173,7 +173,7 @@ code{font-family:var(--mono);font-size:.85em;background:var(--sunken);border:1px
 .sev.retry::before{background:var(--ma)}
 .sev.partial::before{background:var(--accent)}
 .sev.stop::before{background:var(--off)}
-.sevkey{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:var(--muted);padding:10px 16px;border-top:1px solid var(--line);background:var(--sunken)}
+.sevkey{display:flex;gap:16px;flex-wrap:wrap;font-size:14px;color:var(--muted);padding:10px 16px;border-top:1px solid var(--line);background:var(--sunken)}
 .sevkey .sev{font-weight:400}
 .callout{border-radius:12px;padding:14px 18px;margin:18px 0;font-size:15px;border-left:3px solid;background:var(--surface);border-top:1px solid var(--line);border-right:1px solid var(--line);border-bottom:1px solid var(--line)}
 .callout.warn{border-left-color:var(--warn);background:var(--warn-soft)}
@@ -208,16 +208,16 @@ footer{margin-top:64px;padding-top:18px;border-top:1px solid var(--line);font-si
 @media (prefers-reduced-motion:no-preference){html{scroll-behavior:smooth}}
 
 /* ---------- BOOK (책 구조용 추가) ---------- */
-.toc .part{display:block;font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:var(--accent-ink);margin:16px 0 4px}
+.toc .part{display:block;font-family:var(--mono);font-size:12.5px;letter-spacing:.08em;color:var(--accent-ink);margin:16px 0 4px}
 @media (min-width:881px){.toc{max-height:calc(100vh - 32px);overflow:auto;padding-bottom:24px}}
 .part-head{margin-top:88px;border-top:3px solid var(--text)}
 .part-head .kicker{margin-top:20px}
 .part-head h2{font-size:36px}
 .wide{min-width:640px}
 .flow{width:100%;max-width:520px;height:auto;display:block;margin-top:4px}
-.flow text{font-family:var(--font)}.flow .b{font-size:15px;font-weight:700}.flow .s{font-size:12px;fill:var(--hero-muted)}
-.flow .h{font-size:12px;font-weight:700;fill:var(--accent-ink);letter-spacing:.04em}.flow .big{font-size:24px;font-weight:800;fill:var(--hero-on)}
-.flow-foot{font-size:12px;color:var(--hero-muted);margin:6px 0 0}
+.flow text{font-family:var(--font)}.flow .b{font-size:15px;font-weight:700}.flow .s{font-size:13px;fill:var(--hero-muted)}
+.flow .h{font-size:13px;font-weight:700;fill:var(--accent-ink);letter-spacing:.04em}.flow .big{font-size:24px;font-weight:800;fill:var(--hero-on)}
+.flow-foot{font-size:14px;color:var(--hero-muted);margin:6px 0 0}
 .cgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 32px}
 .cpart h3{font-size:15px;color:var(--accent-ink);margin:20px 0 6px}
 .cpart ol{list-style:none;padding:0;margin:0}
@@ -235,7 +235,7 @@ footer{margin-top:64px;padding-top:18px;border-top:1px solid var(--line);font-si
 .ba .after .label{color:var(--accent-ink)}
 .ba h4{margin:0;font-size:17px;line-height:1.4}
 .ba .term{margin:0}
-.ba .term pre{font-size:12px;white-space:pre-wrap;overflow-wrap:anywhere}
+.ba .term pre{font-size:14px;white-space:pre-wrap;overflow-wrap:anywhere}
 .ba p{margin:0;font-size:14.5px;color:var(--muted);line-height:1.6}
 .ba .mid{display:grid;place-items:center;color:var(--accent-ink)}
 .ba .mid svg{width:28px;height:28px}
@@ -243,8 +243,8 @@ footer{margin-top:64px;padding-top:18px;border-top:1px solid var(--line);font-si
 .pill.q{background:var(--sunken);color:var(--muted)}
 @media (max-width:720px){.ba{grid-template-columns:minmax(0,1fr)}.ba .mid svg{transform:rotate(90deg)}}
 .cmt{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;margin:16px 0 8px}
-.cmt .who{padding:10px 16px;border-bottom:1px solid var(--line);background:var(--sunken);font-size:12.5px;color:var(--muted);font-family:var(--mono)}
-.cmt pre{margin:0;padding:14px 16px;font-family:var(--mono);font-size:12.5px;line-height:1.7;white-space:pre-wrap;overflow-wrap:anywhere}
+.cmt .who{padding:10px 16px;border-bottom:1px solid var(--line);background:var(--sunken);font-size:14px;color:var(--muted);font-family:var(--mono)}
+.cmt pre{margin:0;padding:14px 16px;font-family:var(--mono);font-size:14px;line-height:1.7;white-space:pre-wrap;overflow-wrap:anywhere}
 .cmt pre b{color:var(--accent-ink)}
 .cmt pre i{font-style:normal;color:var(--muted)}
 .uses{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:20px 0}
@@ -252,6 +252,7 @@ footer{margin-top:64px;padding-top:18px;border-top:1px solid var(--line);font-si
 .uses h4{margin:0 0 6px;font-size:16.5px}
 .uses p{margin:0;font-size:14.5px;color:var(--muted);line-height:1.65}
 @media (max-width:720px){.uses{grid-template-columns:1fr}}
+.fut p+p{margin-top:8px}.fut b{color:var(--text);font-weight:600}
 .flow-tall{display:none}
 @media (max-width:480px){.flow-wide{display:none}.flow-tall{display:block}}
 @media (max-width:560px){.term pre{white-space:pre-wrap;overflow-wrap:anywhere}
@@ -260,7 +261,7 @@ footer{margin-top:64px;padding-top:18px;border-top:1px solid var(--line);font-si
   table.cards tbody tr:last-child{border-bottom:none}
   table.cards td{display:block;border:0;padding:2px 0}
   table.cards td:first-child{font-weight:700}
-  table.cards td[data-label]::before{content:attr(data-label);display:block;font-family:var(--mono);font-size:11px;color:var(--muted)}}
+  table.cards td[data-label]::before{content:attr(data-label);display:block;font-family:var(--mono);font-size:12.5px;color:var(--muted)}}
 .next{margin-top:72px;padding:28px 24px;border:1px solid var(--accent);border-radius:var(--radius);background:var(--accent-soft)}
 .next .kicker{margin-top:0}
 .next p:last-child{margin-bottom:0}
@@ -278,16 +279,17 @@ body{padding-bottom:56px}
 .hero h1.q{font-size:clamp(30px,4.4vw,44px);line-height:1.25;letter-spacing:-.02em}
 .hero-ask{font-size:16px;font-weight:600;margin:-12px 0 24px;max-width:30em}
 .rc{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:10px 14px;margin:8px 0 0;font-size:15px;line-height:1.5}
-.rc dt{color:var(--muted);font-size:13px;padding-top:2px}
+.rc dt{color:var(--muted);font-size:14px;padding-top:2px}
 .rc dd{margin:0;font-weight:600;min-width:0}
 .rc code{font-weight:400;overflow-wrap:anywhere}
 .rc .id{white-space:nowrap}
 .chart-head .ex{display:inline-block;font-size:12px;font-weight:700;color:var(--off);border:1px solid var(--off);border-radius:999px;padding:0 8px;margin-right:6px}
 .rc-cond{font-size:14px;color:var(--text);margin:14px 0 4px;padding-top:10px;border-top:1px solid var(--line)}
-.reuse{padding-left:22px;margin:0 0 16px}.reuse li{margin:6px 0}
 .cta{display:inline-block;padding:10px 18px;border-radius:999px;background:var(--accent-ink);color:#ffffff;text-decoration:none;font-weight:600}
+.reply-box{display:block;width:100%;font:inherit;font-size:16px;line-height:1.7;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--text);resize:none}
+.reply-hint{font-size:14px;color:var(--muted);margin:8px 0 0}
 /* ---------- 접는 절 (UX2) ---------- */
-.share-note{font-size:13px;color:var(--hero-muted);margin:-14px 0 24px;max-width:34em}
+.share-note{font-size:14px;color:var(--hero-muted);margin:-14px 0 24px;max-width:34em}
 details.more{margin:4px 0 0}
 details.more>summary{cursor:pointer;display:inline-block;font-size:15px;color:var(--accent-ink);text-decoration:underline;text-underline-offset:2px}
 details.more[open]>summary{margin-bottom:8px}
@@ -338,14 +340,19 @@ details.more[open]>summary{margin-bottom:8px}
 
 <div class="wrap"><div class="layout">
   <details class="toc" id="toc" open><summary>CONTENTS</summary>
+    <span class="part">문제와 결과</span>
     <a href="#story">활용</a>
     <a href="#why">왜 필요한가</a>
     <a href="#result">받는 결과</a>
-    <a href="#reuse">팀에 남는 것</a>
+    <span class="part">신뢰와 한계</span>
     <a href="#trust">믿을 수 있는 근거</a>
     <a href="#scope">할 수 있는 것과 한계</a>
+    <span class="part">앞으로</span>
+    <a href="#future">넓힐 수 있는 것</a>
+    <span class="part">동작과 안전</span>
     <a href="#how">어떻게 동작하나</a>
     <a href="#safety">데이터와 안전</a>
+    <span class="part">도입</span>
     <a href="#rollout">도입 순서</a>
     <a href="#cost">비용</a>
     <a href="#faq">자주 묻는 질문</a>
@@ -364,6 +371,7 @@ details.more[open]>summary{margin-bottom:8px}
     <div><h4>담당자가 바뀔 때</h4><p>Jira마다 원인과 해결이 팀 이슈 DB에 남아, 새 담당자가 그대로 이어받습니다.</p></div>
     <div><h4>수정 이후 확인</h4><p>수정 코드(CL)가 반영된 뒤, 수정 빌드 로그로 재발했는지 판정하고 기록합니다.</p></div>
   </div>
+  <p><a class="cta" href="#contact">의견 네 줄 보내기</a></p>
   <p class="bridge">이런 일이 왜 생기는지부터 봅니다.</p>
 </section>
 
@@ -396,13 +404,13 @@ details.more[open]>summary{margin-bottom:8px}
 <section id="result">
   <p class="kicker">Result</p>
   <h2>원인 후보와 근거, 등록된 해결책을 한 화면에서 봅니다</h2>
-  <p class="lead">처음에는 원인을 못 찾던 로그도, 팀원이 원인을 한 번 등록한 뒤에는 그 원인이 첫 후보로 나옵니다.</p>
+  <p class="lead">처음에는 원인을 못 찾던 로그도, 팀원이 원인을 등록하고 리뷰를 거친 뒤에는 그 원인이 첫 후보로 나옵니다.</p>
 
   <h3>입력 한 줄에서 결과까지</h3>
   <p>Jira 번호와 로그 파일 경로를 주면 됩니다. 로그는 대화에 붙이지 않고 경로로 줍니다.</p>
   <div class="term"><div class="bar"><i></i><i></i><i></i></div><pre><span class="p">&gt;</span> /telephony-triage:analyze MOCK-9100 ~/logs/sim.log</pre></div>
-    <svg class="flow flow-wide" viewBox="0 0 460 264" role="img" aria-label="이미 등록된 원인이면 명령 한 줄부터 원인과 해결 찾기, 팀 기록에 올리기(PR)까지 약 3분(합성 사례 1건 179초, 사람이 답하는 시간 제외). 한 사람이 등록한 원인은 다음 사람 이슈에서 후보로 바로 제시된다."><text x="0" y="14" class="h">1 · 이미 등록된 원인의 이슈</text><rect x="0" y="26" width="132" height="58" rx="10" style="fill:var(--surface);stroke:var(--hero-line)"/><text x="66" y="51" text-anchor="middle" class="b" style="fill:var(--hero-fg)">명령 한 줄</text><text x="66" y="70" text-anchor="middle" class="s">Jira 번호 + 로그</text><path d="M138 55h18m-6 -5l6 5l-6 5" style="fill:none;stroke:var(--hero-on);stroke-width:2"/><rect x="164" y="26" width="132" height="58" rx="10" style="fill:var(--surface);stroke:var(--hero-line)"/><text x="230" y="51" text-anchor="middle" class="b" style="fill:var(--hero-fg)">원인·해결</text><text x="230" y="70" text-anchor="middle" class="s">근거 로그 줄까지</text><path d="M302 55h18m-6 -5l6 5l-6 5" style="fill:none;stroke:var(--hero-on);stroke-width:2"/><rect x="328" y="26" width="132" height="58" rx="10" style="fill:var(--hero-on);stroke:var(--hero-on)"/><text x="394" y="51" text-anchor="middle" class="b" style="fill:#ffffff">팀 기록에 올림</text><text x="394" y="70" text-anchor="middle" class="s" style="fill:#e6f4f0">PR로 리뷰 요청</text><path d="M2 96v8h456v-8" style="fill:none;stroke:var(--hero-on);stroke-width:2"/><text x="230" y="134" text-anchor="middle" class="big">약 3분</text><text x="230" y="154" text-anchor="middle" class="s">합성 사례 1건 179초 · 사람이 답하는 시간 제외</text><text x="0" y="182" class="h">2 · 그다음 이슈</text><rect x="0" y="194" width="132" height="58" rx="10" style="fill:var(--surface);stroke:var(--hero-line)"/><text x="66" y="219" text-anchor="middle" class="b" style="fill:var(--hero-fg)">팀원 A</text><text x="66" y="238" text-anchor="middle" class="s">새 원인 등록</text><path d="M138 223h18m-6 -5l6 5l-6 5" style="fill:none;stroke:var(--hero-on);stroke-width:2"/><rect x="164" y="194" width="132" height="58" rx="10" style="fill:var(--surface);stroke:var(--hero-line)"/><text x="230" y="219" text-anchor="middle" class="b" style="fill:var(--hero-fg)">이슈 DB</text><text x="230" y="238" text-anchor="middle" class="s">원인이 쌓임</text><path d="M302 223h18m-6 -5l6 5l-6 5" style="fill:none;stroke:var(--hero-on);stroke-width:2"/><rect x="328" y="194" width="132" height="58" rx="10" style="fill:var(--hero-on);stroke:var(--hero-on)"/><text x="394" y="219" text-anchor="middle" class="b" style="fill:#ffffff">팀원 B</text><text x="394" y="238" text-anchor="middle" class="s" style="fill:#e6f4f0">후보로 바로 제시</text></svg>
-    <svg class="flow flow-tall" viewBox="0 0 340 474" role="img" aria-label="이미 등록된 원인이면 명령 한 줄부터 원인과 해결 찾기, 팀 기록에 올리기(PR)까지 약 3분(합성 사례 1건 179초, 사람이 답하는 시간 제외). 한 사람이 등록한 원인은 다음 사람 이슈에서 후보로 바로 제시된다."><text x="0" y="14" class="h">1 · 이미 등록된 원인의 이슈</text><rect x="1" y="26" width="338" height="46" rx="10" style="fill:var(--surface);stroke:var(--hero-line)"/><text x="16" y="55" class="b" style="fill:var(--hero-fg)">명령 한 줄</text><text x="324" y="55" text-anchor="end" class="s">Jira 번호 + 로그</text><path d="M170 75v12m-5 -5l5 5l5 -5" style="fill:none;stroke:var(--hero-on);stroke-width:2"/><rect x="1" y="90" width="338" height="46" rx="10" style="fill:var(--surface);stroke:var(--hero-line)"/><text x="16" y="119" class="b" style="fill:var(--hero-fg)">원인·해결</text><text x="324" y="119" text-anchor="end" class="s">근거 로그 줄까지</text><path d="M170 139v12m-5 -5l5 5l5 -5" style="fill:none;stroke:var(--hero-on);stroke-width:2"/><rect x="1" y="154" width="338" height="46" rx="10" style="fill:var(--hero-on);stroke:var(--hero-on)"/><text x="16" y="183" class="b" style="fill:#ffffff">팀 기록에 올림</text><text x="324" y="183" text-anchor="end" class="s" style="fill:#e6f4f0">PR로 리뷰 요청</text><text x="170" y="234" text-anchor="middle" class="big">약 3분</text><text x="170" y="254" text-anchor="middle" class="s">합성 사례 1건 179초 · 사람이 답하는 시간 제외</text><text x="0" y="288" class="h">2 · 그다음 이슈</text><rect x="1" y="300" width="338" height="46" rx="10" style="fill:var(--surface);stroke:var(--hero-line)"/><text x="16" y="329" class="b" style="fill:var(--hero-fg)">팀원 A</text><text x="324" y="329" text-anchor="end" class="s">새 원인 등록</text><path d="M170 349v12m-5 -5l5 5l5 -5" style="fill:none;stroke:var(--hero-on);stroke-width:2"/><rect x="1" y="364" width="338" height="46" rx="10" style="fill:var(--surface);stroke:var(--hero-line)"/><text x="16" y="393" class="b" style="fill:var(--hero-fg)">이슈 DB</text><text x="324" y="393" text-anchor="end" class="s">원인이 쌓임</text><path d="M170 413v12m-5 -5l5 5l5 -5" style="fill:none;stroke:var(--hero-on);stroke-width:2"/><rect x="1" y="428" width="338" height="46" rx="10" style="fill:var(--hero-on);stroke:var(--hero-on)"/><text x="16" y="457" class="b" style="fill:#ffffff">팀원 B</text><text x="324" y="457" text-anchor="end" class="s" style="fill:#e6f4f0">후보로 바로 제시</text></svg>
+    <svg class="flow flow-wide" viewBox="0 0 460 264" role="img" aria-label="이미 등록된 원인이면 명령 한 줄부터 원인과 해결 찾기, 팀 기록에 올리기(PR)까지 약 3분(합성 사례 1건 179초, 사람이 답하는 시간 제외). 한 사람이 등록한 원인은 다음 사람 이슈에서 후보로 바로 제시된다."><text x="0" y="14" class="h">1 · 이미 등록된 원인의 이슈</text><rect x="0" y="26" width="132" height="58" rx="10" style="fill:var(--surface);stroke:var(--hero-line)"/><text x="66" y="51" text-anchor="middle" class="b" style="fill:var(--hero-fg)">명령 한 줄</text><text x="66" y="70" text-anchor="middle" class="s">Jira 번호 + 로그</text><path d="M138 55h18m-6 -5l6 5l-6 5" style="fill:none;stroke:var(--hero-on);stroke-width:2"/><rect x="164" y="26" width="132" height="58" rx="10" style="fill:var(--surface);stroke:var(--hero-line)"/><text x="230" y="51" text-anchor="middle" class="b" style="fill:var(--hero-fg)">원인·해결</text><text x="230" y="70" text-anchor="middle" class="s">근거 로그 줄까지</text><path d="M302 55h18m-6 -5l6 5l-6 5" style="fill:none;stroke:var(--hero-on);stroke-width:2"/><rect x="328" y="26" width="132" height="58" rx="10" style="fill:var(--accent-ink);stroke:var(--accent-ink)"/><text x="394" y="51" text-anchor="middle" class="b" style="fill:#ffffff">팀 기록에 올림</text><text x="394" y="70" text-anchor="middle" class="s" style="fill:#ffffff">PR로 리뷰 요청</text><path d="M2 96v8h456v-8" style="fill:none;stroke:var(--hero-on);stroke-width:2"/><text x="230" y="134" text-anchor="middle" class="big">약 3분</text><text x="230" y="154" text-anchor="middle" class="s">합성 사례 1건 179초 · 사람이 답하는 시간 제외</text><text x="0" y="182" class="h">2 · 그다음 이슈</text><rect x="0" y="194" width="132" height="58" rx="10" style="fill:var(--surface);stroke:var(--hero-line)"/><text x="66" y="219" text-anchor="middle" class="b" style="fill:var(--hero-fg)">팀원 A</text><text x="66" y="238" text-anchor="middle" class="s">새 원인 등록</text><path d="M138 223h18m-6 -5l6 5l-6 5" style="fill:none;stroke:var(--hero-on);stroke-width:2"/><rect x="164" y="194" width="132" height="58" rx="10" style="fill:var(--surface);stroke:var(--hero-line)"/><text x="230" y="219" text-anchor="middle" class="b" style="fill:var(--hero-fg)">이슈 DB</text><text x="230" y="238" text-anchor="middle" class="s">원인이 쌓임</text><path d="M302 223h18m-6 -5l6 5l-6 5" style="fill:none;stroke:var(--hero-on);stroke-width:2"/><rect x="328" y="194" width="132" height="58" rx="10" style="fill:var(--accent-ink);stroke:var(--accent-ink)"/><text x="394" y="219" text-anchor="middle" class="b" style="fill:#ffffff">팀원 B</text><text x="394" y="238" text-anchor="middle" class="s" style="fill:#ffffff">후보로 바로 제시</text></svg>
+    <svg class="flow flow-tall" viewBox="0 0 340 474" role="img" aria-label="이미 등록된 원인이면 명령 한 줄부터 원인과 해결 찾기, 팀 기록에 올리기(PR)까지 약 3분(합성 사례 1건 179초, 사람이 답하는 시간 제외). 한 사람이 등록한 원인은 다음 사람 이슈에서 후보로 바로 제시된다."><text x="0" y="14" class="h">1 · 이미 등록된 원인의 이슈</text><rect x="1" y="26" width="338" height="46" rx="10" style="fill:var(--surface);stroke:var(--hero-line)"/><text x="16" y="55" class="b" style="fill:var(--hero-fg)">명령 한 줄</text><text x="324" y="55" text-anchor="end" class="s">Jira 번호 + 로그</text><path d="M170 75v12m-5 -5l5 5l5 -5" style="fill:none;stroke:var(--hero-on);stroke-width:2"/><rect x="1" y="90" width="338" height="46" rx="10" style="fill:var(--surface);stroke:var(--hero-line)"/><text x="16" y="119" class="b" style="fill:var(--hero-fg)">원인·해결</text><text x="324" y="119" text-anchor="end" class="s">근거 로그 줄까지</text><path d="M170 139v12m-5 -5l5 5l5 -5" style="fill:none;stroke:var(--hero-on);stroke-width:2"/><rect x="1" y="154" width="338" height="46" rx="10" style="fill:var(--accent-ink);stroke:var(--accent-ink)"/><text x="16" y="183" class="b" style="fill:#ffffff">팀 기록에 올림</text><text x="324" y="183" text-anchor="end" class="s" style="fill:#ffffff">PR로 리뷰 요청</text><text x="170" y="234" text-anchor="middle" class="big">약 3분</text><text x="170" y="254" text-anchor="middle" class="s">합성 사례 1건 179초 · 사람이 답하는 시간 제외</text><text x="0" y="288" class="h">2 · 그다음 이슈</text><rect x="1" y="300" width="338" height="46" rx="10" style="fill:var(--surface);stroke:var(--hero-line)"/><text x="16" y="329" class="b" style="fill:var(--hero-fg)">팀원 A</text><text x="324" y="329" text-anchor="end" class="s">새 원인 등록</text><path d="M170 349v12m-5 -5l5 5l5 -5" style="fill:none;stroke:var(--hero-on);stroke-width:2"/><rect x="1" y="364" width="338" height="46" rx="10" style="fill:var(--surface);stroke:var(--hero-line)"/><text x="16" y="393" class="b" style="fill:var(--hero-fg)">이슈 DB</text><text x="324" y="393" text-anchor="end" class="s">원인이 쌓임</text><path d="M170 413v12m-5 -5l5 5l5 -5" style="fill:none;stroke:var(--hero-on);stroke-width:2"/><rect x="1" y="428" width="338" height="46" rx="10" style="fill:var(--accent-ink);stroke:var(--accent-ink)"/><text x="16" y="457" class="b" style="fill:#ffffff">팀원 B</text><text x="324" y="457" text-anchor="end" class="s" style="fill:#ffffff">후보로 바로 제시</text></svg>
   <p class="flow-foot">약 3분은 합성 사례 1건의 실측(179초)입니다. 결과 코멘트 게시까지 넣었고, 사람이 답하는 시간은 뺐습니다. PR은 팀 기록에 넣기 전에 리뷰를 요청하는 것입니다.</p>
 
   <h3>같은 로그, 등록 전과 뒤</h3>
@@ -468,28 +476,14 @@ approved_hash: c02651cacb352e7ba15e211b00b717b9a19ff0a4</pre></div>
 - 코드 위치: 코드 미확인</pre>
   </div>
   <p class="chart-foot">이 eval은 GitHub Issues 트래커로 돌렸고, Jira에도 같은 네 칸이 올라갑니다. 앞의 "약 3분"이 이 실행입니다. 게시 규칙은 <a href="../book/telephony-triage-book.html#ch12">안내서 12장</a>에 있습니다.</p>
-  <p class="bridge">검토한 결과가 팀에 어떻게 남는지 봅니다.</p>
-</section>
-
-<section id="reuse">
-  <p class="kicker">What stays</p>
-  <h2>검토한 결과는 다음 분석에 다시 쓰입니다</h2>
-  <p class="lead">담당자가 확정하고 리뷰를 거친 원인만 팀 이슈 DB에 들어가고, 다음 분석부터 후보로 쓰입니다.</p>
-  <ol class="reuse">
-    <li>담당자가 분류를 고르고, 새 원인 초안을 승인합니다.</li>
-    <li>도구가 PR(리뷰 요청)을 올리고, 카테고리 담당자가 리뷰한 뒤 머지합니다.</li>
-    <li>다음 분석은 최신 이슈 DB를 읽어, 같은 원인을 후보로 보여 줍니다.</li>
-  </ol>
   <p class="bridge">그 후보를 어디까지 믿을 수 있는지 봅니다.</p>
 </section>
 
 <section id="trust">
   <p class="kicker">Trust</p>
   <h2>후보는 도구가, 확정은 사람이 합니다</h2>
-  <p class="lead">도구는 원인 후보와 근거를 내고, 분류 확정과 기록 승인은 사람이 합니다.</p>
+  <p class="lead">도구는 원인 후보와 근거를 내고, 분류 확정과 기록 승인은 사람이 합니다. 확신이 없으면 "원인 미확정"으로 남깁니다.</p>
   <ul class="limits">
-    <li><b>사람이 확정합니다.</b> 담당자가 분류를 고르고, 확신이 없으면 "원인 미확정"으로 남깁니다.</li>
-    <li><b>판정은 스크립트가 합니다.</b> 그래서 같은 로그·분석 조건·규칙 버전이면 같은 판정이 나옵니다.</li>
     <li><b>실제 정확도는 아직 모릅니다.</b> 파일럿 전에 사내에서 해결된 과거 Jira 20~30건으로 먼저 잽니다. 규칙을 고쳐 기준을 넘을 때까지 파일럿을 시작하지 않고, 파일럿에서는 실제 이슈의 오탐·누락을 봅니다(<a href="../book/telephony-triage-book.html#ch20">안내서 20장</a>).</li>
   </ul>
   <details class="more"><summary>걱정 6가지와 막는 장치 표 펼치기</summary>
@@ -514,7 +508,7 @@ approved_hash: c02651cacb352e7ba15e211b00b717b9a19ff0a4</pre></div>
 <section id="scope">
   <p class="kicker">Scope</p>
   <h2>v1이 하는 것과 아직 못 하는 것</h2>
-  <p class="lead">v1은 Android logcat으로 6개 카테고리 이슈를 판정하고, 실제 정확도는 아직 모릅니다.</p>
+  <p class="lead">v1은 Android logcat으로 6개 카테고리 이슈를 판정합니다.</p>
   <div class="vs">
     <div class="auto"><span class="label">할 수 있는 것</span>
       <ul>
@@ -535,6 +529,25 @@ approved_hash: c02651cacb352e7ba15e211b00b717b9a19ff0a4</pre></div>
     </div>
   </div>
   <p class="chart-foot">근거는 <a href="../book/telephony-triage-book.html#ch01-4">안내서 1.4 v1 범위</a>와 <a href="../book/telephony-triage-book.html#ch25">25장 한계와 대응</a>입니다.</p>
+  <p class="bridge">이 도구를 다른 일에 넓혀 쓰는 후보를 봅니다.</p>
+</section>
+
+<section id="future">
+  <p class="kicker">Future</p>
+  <h2>앞으로 넓힐 수 있는 것</h2>
+  <p class="lead">이 도구는 다섯 부품의 조합이라, 쌓인 지식을 분석 말고 다른 일에도 쓸 수 있습니다.</p>
+  <p>다섯 부품은 로그 읽기, 패턴 대조, 지식 사전(팀 이슈 DB), 검증기, 안전한 기록입니다. 아래는 넓혀 쓸 수 있는 후보입니다.</p>
+  <p class="callout">모두 <b>후보이고 확정 계획이 아닙니다.</b> 도입과 파일럿 뒤에, 파일럿 결과를 보고 고릅니다.</p>
+  <div class="scroll"><svg class="flow" style="min-width:340px;max-width:420px" viewBox="0 0 340 214" role="img" aria-label="다섯 부품(로그 읽기, 패턴 대조, 지식 사전, 검증기, 안전한 기록)을 지금의 이슈 분석에 쓰고, 재발 감시·릴리스 확인·대량 분류·Jira 사전 분석에도 넓혀 쓸 수 있다. 점선은 후보."><text x="0" y="13" style="font-size:13px;font-weight:700;fill:var(--accent-ink)">다섯 부품</text><text x="200" y="13" style="font-size:13px;font-weight:700;fill:var(--accent-ink)">쓰임 (지금 + 후보)</text><rect x="1" y="24" width="138" height="30" rx="8" style="fill:var(--surface);stroke:var(--line)"/><text x="70" y="44" text-anchor="middle" style="font-size:13px;fill:var(--text)">로그 읽기</text><rect x="1" y="64" width="138" height="30" rx="8" style="fill:var(--surface);stroke:var(--line)"/><text x="70" y="84" text-anchor="middle" style="font-size:13px;fill:var(--text)">패턴 대조</text><rect x="1" y="104" width="138" height="30" rx="8" style="fill:var(--surface);stroke:var(--line)"/><text x="70" y="124" text-anchor="middle" style="font-size:13px;fill:var(--text)">지식 사전</text><rect x="1" y="144" width="138" height="30" rx="8" style="fill:var(--surface);stroke:var(--line)"/><text x="70" y="164" text-anchor="middle" style="font-size:13px;fill:var(--text)">검증기</text><rect x="1" y="184" width="138" height="30" rx="8" style="fill:var(--surface);stroke:var(--line)"/><text x="70" y="204" text-anchor="middle" style="font-size:13px;fill:var(--text)">안전한 기록</text><rect x="201" y="24" width="138" height="30" rx="8" style="fill:var(--accent-ink);stroke:var(--accent-ink)"/><text x="270" y="44" text-anchor="middle" style="font-size:13px;fill:#ffffff;font-weight:700">이슈 분석 (지금)</text><rect x="201" y="64" width="138" height="30" rx="8" style="fill:var(--surface);stroke:var(--accent);stroke-dasharray:4 3"/><text x="270" y="84" text-anchor="middle" style="font-size:13px;fill:var(--text)">재발 감시</text><rect x="201" y="104" width="138" height="30" rx="8" style="fill:var(--surface);stroke:var(--accent);stroke-dasharray:4 3"/><text x="270" y="124" text-anchor="middle" style="font-size:13px;fill:var(--text)">릴리스 확인</text><rect x="201" y="144" width="138" height="30" rx="8" style="fill:var(--surface);stroke:var(--accent);stroke-dasharray:4 3"/><text x="270" y="164" text-anchor="middle" style="font-size:13px;fill:var(--text)">대량 분류</text><rect x="201" y="184" width="138" height="30" rx="8" style="fill:var(--surface);stroke:var(--accent);stroke-dasharray:4 3"/><text x="270" y="204" text-anchor="middle" style="font-size:13px;fill:var(--text)">Jira 사전 분석</text><path d="M146 39v160M146 119h44m-6 -5l6 5l-6 5" style="fill:none;stroke:var(--accent);stroke-width:2"/></svg></div>
+  <div class="uses fut">
+    <div><h4>1. 재발 조기 경보</h4><p>매일 밤 수정 빌드 로그로 고친 원인이 다시 나는지 검사합니다. LLM 비용은 0입니다.</p><p><b>좋아지는 것</b> 고친 사람에게 회귀가 바로 전달됩니다.</p><p><b>먼저 필요한 것</b> 알림 연결(회귀 판정은 이미 있음)</p></div>
+    <div><h4>2. 릴리스 품질 확인</h4><p>시험 단말 로그에 아는 원인이 걸리면 경고합니다. LLM 비용은 0입니다.</p><p><b>좋아지는 것</b> 빌드마다 열린 원인·회귀 의심 수를 바로 봅니다.</p><p><b>먼저 필요한 것</b> 빌드 비교 규칙을 사내 빌드명에 맞춤</p></div>
+    <div><h4>3. Jira 접수 때 1차 분석</h4><p>바뀐 Jira의 후보·근거 리포트를 미리 만듭니다. 게시는 승인 뒤입니다.</p><p><b>좋아지는 것</b> 담당자가 열 때 후보 3개와 근거가 준비돼 있습니다.</p><p><b>먼저 필요한 것</b> Jira 첨부 커넥터, 실행 환경, 비용 상한</p></div>
+    <div><h4>4. 벤더·모뎀 쪽 전달 리포트</h4><p>AP·CP 판단 근거를 정리해 벤더에 넘깁니다.</p><p><b>좋아지는 것</b> 주고받는 왕복이 줄어듭니다.</p><p><b>먼저 필요한 것</b> 벤더 RIL 층 연결(사내 S-4a)</p></div>
+    <div><h4>5. 신규 입사자 교육</h4><p>팀 이슈 DB에 쌓인 사례를 연습 문제로 씁니다.</p><p><b>좋아지는 것</b> 실제 사례로 로그 보는 법을 익힙니다.</p><p><b>먼저 필요한 것</b> 연습용 문제 고르기(연습 모드는 이미 있음)</p></div>
+    <div><h4>6. 고객 bugreport 대량 분류</h4><p>bugreport 수백 개의 원인 분포와 미분류 묶음을 냅니다. LLM 비용은 거의 0입니다.</p><p><b>좋아지는 것</b> 원인 분포를 자동으로 봅니다.</p><p><b>다시 쓰는 부품</b> 파서·매처</p></div>
+  </div>
+  <p class="chart-foot">전체 18개(부품 다시 쓰기 6개, 확장 아이디어 12개)와 고를 때 지킬 것은 <a href="../book/telephony-triage-book.html#ch32-3">안내서 32장</a>에 있습니다.</p>
   <p class="bridge">요약을 마치고 다음 할 일을 봅니다.</p>
 </section>
 
@@ -559,7 +572,7 @@ approved_hash: c02651cacb352e7ba15e211b00b717b9a19ff0a4</pre></div>
   </div>
   <div class="walk">
     <p><b>규칙과 대조합니다.</b> 파서가 로그 줄을 이벤트로 바꾸고, 매처가 이벤트를 이슈 DB의 시그니처와 맞춰 S·C와 점수를 냅니다. Claude는 결과를 사람 말로 설명하고, 초안을 쓰고, 질문합니다.</p>
-    <p><b>분류는 질문에 답해 고릅니다.</b> 담당자가 리포트를 보고 분류를 고르고, 새 원인 초안을 하나씩 승인합니다. 확신이 없으면 "원인 미확정"으로 남기면 됩니다.</p>
+    <p><b>분류는 질문에 답해 고릅니다.</b> 담당자가 리포트를 보고 분류를 고르고, 새 원인 초안을 하나씩 승인합니다.</p>
     <p><b>기록은 PR로 쌓입니다.</b> 카테고리 담당자가 PR을 리뷰한 뒤 main(팀 이슈 DB의 기준 본)에 들어갑니다. 들어간 규칙은 다음 분석부터 자동으로 쓰입니다.</p>
     <p><b>원인이 규칙에 없으면</b> "원인 미확인", 증상까지 처음이면 "후보 없음"으로 알리고, 비슷한 유형 3개를 보여 줍니다. 원하면 Claude가 원인 가설 1~3개를 근거와 함께 냅니다. 가설은 점수와 분류에 쓰지 않습니다. 팀이 이미 쓰는 분석 스킬을 선택으로 연결해 더 깊이 볼 수도 있습니다.</p>
   </div>
@@ -571,7 +584,7 @@ approved_hash: c02651cacb352e7ba15e211b00b717b9a19ff0a4</pre></div>
   <p class="kicker">Safety</p>
   <h2>데이터와 안전</h2>
   <p class="lead">로그와 Jira 원문은 내 PC에 남고, 밖으로 나가는 것은 개인정보를 가린 것뿐입니다.</p>
-  <svg class="flow" viewBox="0 0 360 300" role="img" aria-label="원문 로그와 Jira 응답 원문은 내 PC 작업 폴더에만 있다. 마스킹을 거친 것만 Claude 대화, 팀 이슈 DB, Jira 코멘트로 간다."><rect x="1" y="1" width="358" height="106" rx="10" style="fill:var(--accent-soft);stroke:var(--accent)"/><text x="16" y="26" class="b" style="fill:var(--text)">내 PC · 원문은 여기에만</text><text x="16" y="50" class="s">logcat 원문, bugreport</text><text x="16" y="70" class="s">Jira 응답 원문 issue_raw.json (분석 뒤 지움)</text><text x="16" y="90" class="s">작업 폴더 권한 700 (나만 읽고 씀)</text><path d="M180 110v34m-6 -7l6 7l6 -7" style="fill:none;stroke:var(--accent);stroke-width:2"/><text x="194" y="132" class="h">마스킹을 거친 것만</text><rect x="1" y="152" width="358" height="42" rx="10" style="fill:var(--surface);stroke:var(--line)"/><text x="16" y="178" class="b" style="fill:var(--text)">Claude 대화</text><text x="132" y="178" class="s">가린 요약, 필요한 로그 구간</text><rect x="1" y="202" width="358" height="42" rx="10" style="fill:var(--surface);stroke:var(--line)"/><text x="16" y="228" class="b" style="fill:var(--text)">팀 이슈 DB</text><text x="132" y="228" class="s">가린 fixture, Jira 필드, 메모</text><rect x="1" y="252" width="358" height="42" rx="10" style="fill:var(--surface);stroke:var(--line)"/><text x="16" y="278" class="b" style="fill:var(--text)">Jira</text><text x="132" y="278" class="s">승인한 코멘트 1건 (선택)</text></svg>
+  <div class="scroll"><svg class="flow" style="min-width:360px" viewBox="0 0 360 300" role="img" aria-label="원문 로그와 Jira 응답 원문은 내 PC 작업 폴더에만 있다. 마스킹을 거친 것만 Claude 대화, 팀 이슈 DB, Jira 코멘트로 간다."><rect x="1" y="1" width="358" height="106" rx="10" style="fill:var(--accent-soft);stroke:var(--accent)"/><text x="16" y="26" class="b" style="fill:var(--text)">내 PC · 원문은 여기에만</text><text x="16" y="50" class="s">logcat 원문, bugreport</text><text x="16" y="70" class="s">Jira 응답 원문 issue_raw.json (분석 뒤 지움)</text><text x="16" y="90" class="s">작업 폴더 권한 700 (나만 읽고 씀)</text><path d="M180 110v34m-6 -7l6 7l6 -7" style="fill:none;stroke:var(--accent);stroke-width:2"/><text x="194" y="132" class="h">마스킹을 거친 것만</text><rect x="1" y="152" width="358" height="42" rx="10" style="fill:var(--surface);stroke:var(--line)"/><text x="16" y="178" class="b" style="fill:var(--text)">Claude 대화</text><text x="132" y="178" class="s">가린 요약, 필요한 로그 구간</text><rect x="1" y="202" width="358" height="42" rx="10" style="fill:var(--surface);stroke:var(--line)"/><text x="16" y="228" class="b" style="fill:var(--text)">팀 이슈 DB</text><text x="132" y="228" class="s">가린 fixture, Jira 필드, 메모</text><rect x="1" y="252" width="358" height="42" rx="10" style="fill:var(--surface);stroke:var(--line)"/><text x="16" y="278" class="b" style="fill:var(--text)">Jira</text><text x="132" y="278" class="s">승인한 코멘트 1건 (선택)</text></svg></div>
   <ul class="limits" style="margin-top:22px">
     <li><b>연습 실행은 올라가지 않습니다.</b> <code>--dry-run</code>으로 준비한 작업은 올리기 단계(publish)가 거부합니다.</li>
     <li><b>Jira는 읽기와 승인한 코멘트 1건뿐입니다.</b> 필드 수정, 상태 변경, 이슈 생성은 거부합니다. 본문이 바뀌면 다시 승인받습니다.</li>
@@ -631,7 +644,6 @@ approved_hash: c02651cacb352e7ba15e211b00b717b9a19ff0a4</pre></div>
   <details class="faq"><summary>AI가 원인을 정하나요?</summary><p>아닙니다. 원인 판정은 규칙을 따르는 스크립트가 합니다. Claude는 설명·질문·초안만 맡습니다. 분류 확정은 엔지니어가, 팀 이슈 DB 반영은 카테고리 담당자의 리뷰가 합니다.</p></details>
   <details class="faq"><summary>타이밍 문제나 크래시도 잡나요?</summary><p>로그에 남으면 잡습니다. 순서가 어긋나거나, 등록된 RIL 요청이 정해진 시간 안에 응답하지 않거나 늦은 경우는 시그니처 조건으로 씁니다. 크래시 줄은 그 태그(예: AndroidRuntime)를 파서 규칙에 등록하면 조건이 됩니다. 로그에 흔적이 없는 경합과 logcat 밖의 자료(tombstone, ANR traces, 모뎀 로그)는 v1에서 읽지 않습니다(<a href="../book/telephony-triage-book.html#ch25-b">안내서 25.2</a>).</p></details>
   <details class="faq"><summary>정확도는 얼마인가요?</summary><p>아직 모릅니다. 지금까지는 합성 데이터로 개발했습니다. 사내에서 해결된 과거 Jira 20~30건으로 처음 잽니다(S-5). 기준에 못 미치면 파일럿을 시작하지 않습니다.</p></details>
-  <details class="faq"><summary>품질은 어떻게 확인했나요?</summary><p>자동 테스트 2,047개가 서버의 자동 검사(CI, Ubuntu)에서 Python 세 버전으로 모두 통과했습니다. Claude가 절차를 지키는지 보는 행동 평가(eval)는 70개입니다. 개발 단계에서 59개가 통과했고 실패는 0개, 11개는 사내에서 확인합니다. 최신 값은 <a href="../book/telephony-triage-book.html#ch31">안내서 31장</a>에 있습니다.</p></details>
   <details class="faq"><summary>막히면 setup을 처음부터 다시 하나요?</summary><p>아닙니다. <code>/telephony-triage:status --doctor</code>를 먼저 실행합니다. 아무것도 바꾸지 않고, 막힌 것과 다음 할 일을 한 화면으로 보여 줍니다. 그래도 안 되면 그 화면을 그대로 관리자에게 보냅니다(<a href="../book/telephony-triage-book.html#ch13">안내서 13장</a>).</p></details>
   <details class="faq"><summary>운영 효과는 무엇으로 재나요?</summary><p>팀 이슈 DB에서 예전 원인을 다시 쓴 비율과, 1위 후보를 그대로 받아들인 비율을 봅니다. 파일럿에서는 PR까지 걸린 시간과 중간에 취소한 비율을 잽니다. 정의와 집계 도구는 <a href="../book/telephony-triage-book.html#ch19">안내서 19장</a>에 있습니다.</p></details>
   <details class="faq"><summary>쓰다가 그만두면 무엇이 남나요?</summary><p>팀 이슈 DB는 일반 GitHub 레포의 Markdown·YAML 파일과 가린 로그입니다. 플러그인 없이도 읽고 검색할 수 있습니다. Jira에는 승인한 코멘트 말고 바뀐 것이 없습니다.</p></details>
@@ -668,10 +680,12 @@ approved_hash: c02651cacb352e7ba15e211b00b717b9a19ff0a4</pre></div>
 <section id="contact" class="next">
   <p class="kicker">Feedback</p>
   <h2>의견을 들려주세요</h2>
-  <p>이 문서를 보낸 사람에게 아래 세 줄을 채워 회신해 주세요. 한 줄씩이면 충분합니다.</p>
-  <div class="term reply"><pre>1. 자주 반복되는 이슈 1개:
+  <p>이 문서를 보낸 사람에게 아래 네 줄을 채워 회신해 주세요. 한 줄씩이면 충분합니다.</p>
+  <textarea class="reply-box" readonly rows="5" aria-label="회신 양식" aria-describedby="reply-hint" onfocus="this.select()">1. 자주 반복되는 이슈 1개:
 2. 가장 걱정되는 점 1개:
-3. 파일럿 참여 의향: 예 / 아니오 / 조건부(조건: )</pre></div>
+3. 파일럿 참여 의향: 예 / 아니오 / 조건부(조건: )
+4. 앞으로 넓힐 것 중 우리 팀에 먼저 필요한 것(번호나 이름):</textarea>
+  <p class="reply-hint" id="reply-hint">상자를 눌러 전체를 고른 뒤 복사해 회신에 붙이면 됩니다.</p>
 </section>
 
 <footer>telephony-triage · 기준 2026-10-17 · 화면·로그 예시는 합성 샘플 데이터입니다. 테스트·eval 수치는 안내서 31장, 비용은 14장이 정본입니다.</footer>

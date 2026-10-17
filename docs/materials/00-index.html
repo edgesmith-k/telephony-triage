@@ -213,8 +213,6 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
   pre { white-space: pre-wrap; overflow: visible; padding-right: 0.9rem; }
   .tbl, .fig { overflow: visible; }
   .fig svg { min-width: 0; }
-  section.chap { break-before: page; }
-  section.chap:first-of-type { break-before: auto; }
   h2, h3, h4 { break-after: avoid; }
   tr, .card, .note, .code { break-inside: avoid; }
   a { color: inherit; text-decoration: none; }
@@ -234,8 +232,8 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
 .grid a { display: block; text-decoration: none; color: inherit; border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); padding: 0.6rem 0.8rem; }
 .grid a:hover { border-color: var(--accent); }
 .grid b { display: block; color: var(--accent); }
-.grid span { display: block; font-size: var(--step--1); }
-.grid i { display: block; font-style: normal; font-size: var(--step--1); color: var(--ink-2); margin-top: 0.2rem; }
+.grid span { display: block; font-size: 0.9375rem; }
+.grid i { display: block; font-style: normal; font-size: 0.9375rem; color: var(--ink-2); margin-top: 0.2rem; }
 .shell { grid-template-columns: minmax(0, 1fr); } main { max-width: 60rem; }
 
 </style>
@@ -247,12 +245,12 @@ mark { background: var(--mark); color: inherit; padding: 0 0.1em; border-radius:
     <header class="hero">
       <div class="eyebrow">DOCS · 문서 목록</div>
       <h1>telephony-triage 문서</h1>
-      <p>설명은 안내서 한 권에 모았습니다. 이 폴더에는 교육 슬라이드와 소개 자료 두 개만 따로 둡니다.</p>
-      <div class="meta"><span><b>기준</b> main 2026-10-17</span><span><b>문서</b> 4개</span></div>
+      <p>설명은 안내서 한 권에 모았습니다. 이 폴더에는 교육 슬라이드와 소개 자료 세 개만 따로 둡니다.</p>
+      <div class="meta"><span><b>기준</b> main 2026-10-17</span><span><b>문서</b> 5개</span></div>
       <p>바뀌는 수치는 안내서가 정본입니다. 비용은 <a href="../book/telephony-triage-book.html#ch14">14장</a>, 테스트·eval은 <a href="../book/telephony-triage-book.html#ch31">31장</a>에 있습니다.</p>
     </header>
-    <section class="chap"><h2>안내서</h2><div class="grid"><a href="../book/telephony-triage-book.html"><b>telephony-triage 안내서</b><span>시작하기, 사용법, 관리·운영, 안전과 한계, 개발·기여, 부록(용어집·FAQ·빠른 참조·한 장 요약)</span><i>모두. 역할별 읽는 순서는 6장</i></a></div></section>
-    <section class="chap"><h2>따로 두는 자료</h2><div class="grid"><a href="01-training-deck.html"><b>교육 슬라이드</b><span>1시간 사용자 교육용</span><i>교육 진행자</i></a><a href="02-marketing.html"><b>소개 페이지</b><span>한 페이지 소개</span><i>처음 듣는 사람</i></a><a href="19-team-intro.html"><b>파트 공유용 소개</b><span>의견 수집용. 이 파일 하나로 본문을 읽을 수 있음(안내서 링크는 docs 폴더째 보낼 때 열림)</span><i>파트원</i></a></div></section>
+    <section class="chap"><h2>안내서</h2><div class="grid"><a href="../book/telephony-triage-book.html"><b>telephony-triage 안내서</b><span>설치·사용·운영·안전·기여를 찾아볼 때. 역할별 읽는 순서는 6장</span><i>공유: docs 폴더째 (소개 자료와 링크로 이어짐)</i></a></div></section>
+    <section class="chap"><h2>따로 두는 자료</h2><div class="grid"><a href="01-training-deck.html"><b>교육 슬라이드</b><span>1시간 사용자 교육을 진행할 때</span><i>공유: 본문은 파일 하나로 읽음. 안내서 링크는 docs 폴더째 보낼 때 열림</i></a><a href="02-marketing.html"><b>소개 페이지</b><span>처음 듣는 사람에게 도입을 설명할 때</span><i>공유: 본문은 파일 하나로 읽음. 안내서 링크는 docs 폴더째 보낼 때 열림</i></a><a href="19-team-intro.html"><b>파트 공유용 소개</b><span>파트원에게 보내고 의견을 모을 때</span><i>공유: 본문은 파일 하나로 읽음. 안내서 링크는 docs 폴더째 보낼 때 열림</i></a><a href="20-plugin-brief.html"><b>1분 소개</b><span>처음 듣는 사람에게 한 장으로 알릴 때</span><i>공유: 본문은 파일 하나로 완결(자세한 소개 링크는 docs 폴더째)</i></a></div></section>
   </main>
 </div>
 
