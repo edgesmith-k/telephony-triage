@@ -937,6 +937,9 @@ def test_r4_recomputes_when_regress_json_is_empty_or_inconsistent(bad):
     sys.path.insert(0, str(REPO / "plugin/scripts"))
     import db_verify
     run_ = db_verify.Run(SAMPLE, REPO / "plugin", {})   # 읽기만 한다
-    row, used = db_verify.r4(run_, bad)
+    try:
+        row, used = db_verify.r4(run_, bad)
+    finally:
+        run_.close()    # 같은 프로세스의 패턴 워커 본문을 남기지 않는다(test_inprocess)
     assert used["summary"]["total"] == len(run_.items) > 0 and used["results"]
     assert row["reason"] == f"전체 fixture {len(run_.items)}개 기대값 유지" and row["status"] == "pass"
