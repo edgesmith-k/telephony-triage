@@ -121,6 +121,7 @@ DETECT = [
     ('{"cid":12345}', "CELL", "12345"),
     ('{"msisdn":"5551234567"}', "MSISDN", "5551234567"),
     ('{"impi":"sub01x@ims"}', "IMPI", "sub01x"),
+    ("username: alice@example.com", "EMAIL", "alice@example.com"),     # 따옴표 없는 `username:`는 도메인까지 EMAIL로
     # 구분자·붙은 IMEI, IMEISV, EID, MAC 변형, GPS, AKA 키, PIN/PUK, Bearer, 장치 serial (P0-4)
     ("IMEI: 49-015420-323751-8", "IMEI", "49-015420-323751-8"),
     ("imei: 35 209900 176148 1", "IMEI", "35 209900 176148 1"),

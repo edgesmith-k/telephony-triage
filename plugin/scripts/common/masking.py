@@ -129,7 +129,7 @@ RULES: tuple[Rule, ...] = (
     Rule("CRED", re.compile(r"(?<![\w.-])(?P<v>eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}(?:\.[A-Za-z0-9_-]*)?)")),  # JWT
     # --- URI·주소 ---
     Rule("IMPU", re.compile(r"\bsips?:(?P<v>[^@\s;>\"<]+)@")),
-    Rule("IMPI", re.compile(r'(?i)\b(?:username|impi)' + _SEP + r'(?P<v>[^@"\s,<]+)@')),
+    Rule("IMPI", re.compile(r'(?i)\b(?:username|impi)(?:\s*=|"\s*:)\s*"?(?P<v>[^@"\s,<]+)@')),
     Rule("MSISDN", re.compile(r"\btel:(?P<v>\+?[\d-]{6,})")),
     Rule("EMAIL", re.compile(r"(?<![\w.%+-])(?P<v>[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,})\b")),
     Rule("SUPI", re.compile(r"\b(?P<v>imsi-\d{5,15})\b")),
