@@ -291,7 +291,7 @@ def cmd_migrate(args, defaults: dict) -> tuple[dict, int]:
         "from": current, "to": target if steps else current, "steps": [s.summary() for s in steps],
         "generator_version": generator, "changed": changed,
         "next": ([] if args.dry_run or not (steps or generator_only) else
-                 ["db_build.py --write", "validate", f"git commit (브랜치 {branch})", "git push -u origin HEAD"]),
+                 ["db_build.py --write", "validate", f"git commit (브랜치 {branch})", "TT_PUBLISH_TOKEN=manual git push -u origin HEAD"]),
     }
     if generator_only:
         if args.dry_run:

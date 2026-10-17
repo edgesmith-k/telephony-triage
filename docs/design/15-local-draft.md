@@ -114,7 +114,7 @@ tests/site/
 
 - 사내 코드는 위 경로에만 둔다. 사외 레포의 파일(예: `parse_logcat.py`)을 사내에서 직접 고쳐야 했다면 그 변경의 요지를 사용자가 **직접 타이핑해** 사외에 전달하고 다음 사외 버전에 반영한다. 사내 사본은 임시로 취급한다. 사내에서 사외로 나가는 것은 **사용자가 직접 타이핑하는 사내 정보 없는 문장**뿐이다(파일·마스킹 로그·diff·요약 파일 반출 없음, 2026-10-01 결정). 도구는 반출물을 만들지 않는다.
 - **재반입 절차** (통째로 교체 금지). 사내 플러그인 레포는 git으로 관리한다.
-  1. `git switch -c draft-import/<날짜>`
+  1. `git switch -c draft-import/<새 label>`
   2. `tools/import_draft.py <새 사외 초안 경로> --check-boundary`: 반입 기준선 `.draft-manifest.json`(마지막으로 반입한 사외 초안의 버전 표시와 파일 경로·해시 목록)과 비교해서 처리한다.
      - 파일 목록은 git 무시 규칙을 따른다: 사내 레포는 `git ls-files -co --exclude-standard`(`git add -A`와 같은 기준), 압축 푼 초안은 그 `.gitignore`만(PC 전역 무시 제외). 반입 뒤 모습(`--check-boundary`·사내 새 파일 보고)에는 들어오는 `.gitignore`도 적용한다.
      - `SITE_PATHS`에 있는 경로는 건드리지 않는다. 새 초안 `SITE_PATHS`에만 있는 줄은 **보고만** 한다(경고·JSON `site_paths_new`, 멈춘 경우에도). 사내 `SITE_PATHS`에 직접 추가한다.

@@ -15,6 +15,3 @@ pattern:* tests/test_boundary.py
 
 # 교육 자료의 마스킹 전·후 예시: 테스트 PLMN(001-01) 합성 IMSI
 pattern:long-number docs/* ^001010123456789$
-
-# 책자·자료 HTML의 웹 글꼴 stylesheet (외부 연결이 막히면 시스템 글꼴로 표시)
-pattern:url-host docs/* ^https://fonts\.googleapis\.com$

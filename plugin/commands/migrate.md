@@ -27,6 +27,6 @@ argument-hint: --to <N> [--dry-run]
 6. **검증** — `validate` 커맨드(인자 없음)를 실행하고 결과표를 보여준다. 실패하면 원인을 보고하고 멈춘다.
    `config.py check --db <DB> --for write`도 함께 돌려 이 브랜치에서 버전 불일치로 막히지 않는지 확인한다.
 7. **커밋·push 안내** — 변경 파일을 보여주고 **사용자 승인 후** 커밋한다(메시지 예: `schema: v<옛>→v<N> migrate`, 생성기만이면 `schema: generator_version <옛>→<새> (v<N> 그대로)`).
-   push와 PR은 `git push -u origin HEAD`와 사내 PR 절차를 **안내만** 한다. 승인 없이 push하지 않는다.
+   push와 PR은 `TT_PUBLISH_TOKEN=manual git push -u origin HEAD`(이슈 DB pre-push가 토큰 없는 push를 거부한다)와 사내 PR 절차를 **안내만** 한다. 승인 없이 push하지 않는다.
    PR이 머지되면 다른 사용자는 `sync`로 새 스키마를 받고, 옛 스키마의 열린 작업 계획은 `sync-pr`가
    `db_migrate.py upgrade-plan`으로 올린다 (`upgrade_plan()`이 없는 마이그레이션이면 계획을 다시 만든다).
