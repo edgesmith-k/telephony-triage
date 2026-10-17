@@ -129,6 +129,8 @@ table.t td:first-child { white-space: nowrap; }
 table.t.tight td { padding: 6px 10px; }
 table.t .num { font-variant-numeric: tabular-nums; }
 table.t td.wrap { white-space: normal; width: 46%; }
+table.t.say th:first-child { width: 58%; }
+@media (min-width: 761px) { table.t.say { font-size: 17px; } }
 
 /* ---------- console / report mock ---------- */
 .console {
@@ -300,16 +302,16 @@ body.show-notes #notes-panel { display: block; }
     <div><span>왜 만들었나</span><span class="rng">4</span></div>
     <div><span>전체 구조</span><span class="rng">5–8</span></div>
     <div><span>설치와 setup</span><span class="rng">9–11</span></div>
-    <div><span>커맨드별 사용법</span><span class="rng">12–18</span></div>
-    <div><span>판정 읽는 법</span><span class="rng">19–23</span></div>
-    <div><span>이슈 DB에 기록하기</span><span class="rng">24–27</span></div>
-    <div><span>오류가 났을 때</span><span class="rng">28–30</span></div>
-    <div><span>안전 장치</span><span class="rng">31–33</span></div>
-    <div><span>관리와 운영</span><span class="rng">34–37</span></div>
-    <div><span>현황 · Q&amp;A</span><span class="rng">38</span></div>
+    <div><span>커맨드별 사용법</span><span class="rng">12–19</span></div>
+    <div><span>판정 읽는 법</span><span class="rng">20–24</span></div>
+    <div><span>이슈 DB에 기록하기</span><span class="rng">25–28</span></div>
+    <div><span>오류가 났을 때</span><span class="rng">29–31</span></div>
+    <div><span>안전 장치</span><span class="rng">32–34</span></div>
+    <div><span>관리와 운영</span><span class="rng">35–38</span></div>
+    <div><span>현황 · Q&amp;A</span><span class="rng">39</span></div>
   </div>
   <p class="small">키보드 ← → 또는 스페이스로 넘기고, <code>N</code>으로 발표자 노트를 엽니다.</p>
-  <aside class="notes">왼쪽 열이 사용자 관점(무엇을, 어떻게), 오른쪽 열이 결과 해석과 운영입니다. 시간이 모자라면 관리와 운영(34–37)은 카테고리 오너·메인테이너만 따로 봅니다.</aside>
+  <aside class="notes">왼쪽 열이 사용자 관점(무엇을, 어떻게), 오른쪽 열이 결과 해석과 운영입니다. 시간이 모자라면 관리와 운영(35–38)은 카테고리 오너·메인테이너만 따로 봅니다.</aside>
 </section>
 
 <section class="slide" data-sec="시작">
@@ -527,14 +529,15 @@ feedback/      <span class="c"># 후보 수락·거절 기록</span>
 
 <!-- ================= 3. 설치 ================= -->
 <section class="slide" data-sec="3 설치와 setup">
-  <div class="head"><div class="eyebrow">§3 설치와 setup</div><h2>첫 설치 네 단계</h2></div>
+  <div class="head"><div class="eyebrow">§3 설치와 setup</div><h2>첫 설치 다섯 단계</h2></div>
   <div class="body">
     <div class="g2">
       <div class="rail">
         <div><div><b>플러그인 설치</b><p class="small">사내 마켓플레이스에서 <code>telephony-triage</code> (등록은 S-7 예정)</p></div></div>
-        <div><div><b>이슈 DB clone</b><p class="small">setup이 clone 명령을 제안해 주기도 합니다</p></div></div>
-        <div><div><b><code>/telephony-triage:setup</code></b><p class="small">설정 생성, Jira 도구 매핑, git hook, 스냅샷, 점검 표</p></div></div>
-        <div><div><b>연습 한 번</b><p class="small"><code>/telephony-triage:analyze ABC-12345 ~/logs/radio.txt --dry-run</code><br>아무것도 올리지 않고, gh 로그인 전에도 됩니다</p></div></div>
+        <div><div><b>GitHub 로그인</b><p class="small"><code>gh auth login -h &lt;GHE 호스트&gt;</code><br>PR을 올릴 GHE 서버에 로그인합니다</p></div></div>
+        <div><div><b>Jira 연결 확인</b><p class="small"><code>claude mcp list</code>에 사내 Jira MCP가 보이는지 봅니다</p></div></div>
+        <div><div><b><code>/telephony-triage:setup</code></b><p class="small">하나씩 묻고 마지막에 점검 표. 이슈 DB clone도 제안합니다</p></div></div>
+        <div><div><b>연습 한 번</b><p class="small"><code>/telephony-triage:analyze ABC-12345 ~/logs/radio.txt --dry-run</code><br>아무것도 올리지 않습니다</p></div></div>
       </div>
       <div class="card">
         <h3>미리 갖출 것</h3>
@@ -564,25 +567,24 @@ feedback/      <span class="c"># 후보 수락·거절 기록</span>
       <tr><td>gh · doctor</td><td>gh 인증 확인 후 <code>config.py doctor</code> 점검 표를 그대로 보여줌</td><td>gh 없음 → 읽기 전용으로 끝</td></tr>
     </table></div>
   </div>
-  <aside class="notes">setup은 실제로 10단계지만 묶으면 이 다섯 덩어리입니다. 켠 플랫폼이 둘 이상이면 먼저 어느 플랫폼을 설정할지 묻습니다. 다른 플랫폼은 경로 프로필(clone·작업 디렉토리)만 더하고, Jira·gh 설정은 함께 씁니다. config 단계에서 묻는 것은 GHE 아이디, 이슈 DB 경로·URL, base 브랜치, 타임존, 로그 폴더, 작업 디렉토리입니다. 중간에 멈춰도 잡은 lock은 항상 풀고 끝납니다. 팀 기본값과 같은 답은 저장하지 않으므로, 관리자가 팀 기본값을 바꾸면 내 설정도 따라갑니다. 설정을 바꿀 때는 setup을 다시 돌리면 바꿀 항목만 고칩니다. 분석마다 나오는 소스 트리·심층 분석·탐색 분석 질문을 줄이려면 <code>~/.telephony-triage/config.yaml</code>에 직접 적습니다(<code>analyzers.data.when</code>·<code>explore.when</code>을 never로, 버전이 맞는 소스 트리 프로필이 하나면 묻지 않고 고름 — <code>code.auto_select</code>). 한 번만 끄려면 <code>--code skip</code>·<code>--no-analyzer</code>·<code>--no-explore</code>. 자세한 예시는 안내서 7장 7.7.</aside>
+  <aside class="notes">setup은 실제로 0~10번 단계지만 묶으면 이 다섯 덩어리입니다. 0번(플랫폼 고르기)은 팀이 켠 플랫폼이 둘 이상일 때만 나옵니다. 다른 플랫폼은 경로 프로필(clone·작업 디렉토리)만 더하고, Jira·gh 설정은 함께 씁니다. config 단계에서 묻는 것은 GHE 아이디, 이슈 DB 경로·URL, base 브랜치, GHE 호스트입니다. 이어서 타임존(Jira·logcat), 연도 정하는 방식, 로그 폴더(선택), 작업 디렉토리를 묻습니다. 중간에 멈춰도 잡은 lock은 항상 풀고 끝납니다. 팀 기본값과 같은 답은 저장하지 않으므로, 관리자가 팀 기본값을 바꾸면 내 설정도 따라갑니다. 설정을 바꿀 때는 setup을 다시 돌리면 바꿀 항목만 고칩니다. 분석마다 나오는 소스 트리·심층 분석·탐색 분석 질문을 줄이려면 <code>~/.telephony-triage/config.yaml</code>에 직접 적습니다(<code>analyzers.data.when</code>·<code>explore.when</code>을 never로, 버전이 맞는 소스 트리 프로필이 하나면 묻지 않고 고름 — <code>code.auto_select</code>). 한 번만 끄려면 <code>--code skip</code>·<code>--no-analyzer</code>·<code>--no-explore</code>. 자세한 예시는 안내서 7장 7.7.</aside>
 </section>
 
 <section class="slide" data-sec="3 설치와 setup">
-  <div class="head"><div class="eyebrow">§3 설치와 setup</div><h2>doctor 점검 표 읽기</h2><p class="lede">doctor는 읽기 전용입니다. 고치지 않고 <b>다음</b> 열로 할 일을 알려줍니다.</p></div>
+  <div class="head"><div class="eyebrow">§3 설치와 setup</div><h2>doctor 점검 표 읽기</h2><p class="lede">doctor는 읽기 전용입니다. 막히면 setup을 다시 하지 말고 <code>/telephony-triage:status --doctor</code>부터.</p></div>
   <div class="body">
     <div class="tw"><table class="t tight">
-      <tr><th>항목</th><th>상태</th><th>내용</th><th>다음</th></tr>
-      <tr><td>config</td><td><span class="tag ok">ok</span></td><td>config.yaml 있음</td><td></td></tr>
-      <tr><td>clone</td><td><span class="tag ok">ok</span></td><td>~/work/telephony-issue-db</td><td></td></tr>
+      <tr><th>점검</th><th>상태</th><th>내용</th><th>다음</th></tr>
+      <tr><td>config · clone</td><td><span class="tag ok">ok</span></td><td>config.yaml 있음 / ~/work/telephony-issue-db</td><td></td></tr>
       <tr><td>hook</td><td><span class="tag fail">fail</span></td><td>core.hooksPath=(없음)</td><td>setup 5번(hook)만 다시 — <code>config.py install-hooks</code></td></tr>
       <tr><td>tracker</td><td><span class="tag fail">fail</span></td><td>tracker.tools.get_issue 매핑 비어 있음</td><td>setup 4번(Jira MCP 매핑)을 다시 한다</td></tr>
       <tr><td>gh</td><td><span class="tag warn">warn</span></td><td>gh 인증 없음 (ghe.example) — 쓰기 불가</td><td>터미널에서 <code>gh auth login -h ghe.example</code> 실행</td></tr>
-      <tr><td>snapshot</td><td><span class="tag warn">warn</span></td><td>오래된 스냅샷</td><td><code>/telephony-triage:sync</code> 를 실행한다</td></tr>
+      <tr><td>snapshot</td><td><span class="tag warn">warn</span></td><td>9일 전 (a1b2c3d, 7일 초과)</td><td><code>/telephony-triage:sync</code> 를 실행한다</td></tr>
       <tr><td>compat · lock</td><td><span class="tag ok">ok</span></td><td>스키마·생성기·파서 호환 / 세션 lock 없음</td><td></td></tr>
     </table></div>
     <p class="small">예시 화면입니다. 실제 항목: python, deps, config, platform(켠 플랫폼이 둘 이상일 때만), scripts_path, clone, hook, guard(자가시험, 예 <code>deny 3/3</code>), tracker(Jira 도구 매핑, 옛 설정 키 <code>jira:</code> 등이 남으면 fail → <code>config.py rename-legacy</code>), tracker_post(Jira 게시 도구: ok / skip 게시 꺼짐 / fail 코멘트 도구가 read_tools에 있음), gh, snapshot, compat, lock.</p>
   </div>
-  <aside class="notes">문제가 생기면 먼저 doctor 표를 보세요. fail은 그 기능이 막힌 것이고 warn은 일부만 제한됩니다. 이 표를 그대로 캡처해서 질문하면 지원이 빠릅니다.</aside>
+  <aside class="notes">막히면 먼저 status --doctor 화면(doctor 표의 fail·warn 행 포함)을 보세요. fail은 그 기능이 막힌 것이고 warn은 일부만 제한됩니다. skip은 앞 행이 실패해서 확인하지 못한 행입니다(예: clone이 없으면 hook은 skip). 고칠 곳은 "다음" 열에 있습니다. setup 전체를 다시 하면 lock과 읽기 스냅샷을 건드리고 Jira 연결도 다시 묻습니다. 고장 난 단계만 고칩니다. 이 표를 그대로 캡처해서 질문하면 지원이 빠릅니다.</aside>
 </section>
 
 <!-- ================= 4. 커맨드 ================= -->
@@ -597,7 +599,27 @@ feedback/      <span class="c"># 후보 수락·거절 기록</span>
     </div>
     <div class="card alert"><p>이슈 DB에 쓰는 커맨드는 시작할 때 <b>세션 lock</b>을 잡고 끝나는 모든 경로에서 풉니다. 한 사람이 같은 이슈 DB(플랫폼)에서 동시에 두 작업을 할 수 없습니다(android 작업과 oFono 작업은 동시에 가능).</p></div>
   </div>
-  <aside class="notes">대부분의 사용자는 analyze, search, record 세 개면 충분합니다. 수정 상태 커맨드는 CL을 올린 담당자가, migrate는 메인테이너만 씁니다. 읽기 전용 커맨드는 lock을 잡지 않으니 분석 중에도 search는 됩니다. 어떤 커맨드를 쓸지 모르면 help를 먼저 부르면 됩니다. 커맨드 없이 "ABC-12345 로그 분석해줘"처럼 말해도 스킬이 analyze·search·record·fix-submitted·verify-fix·sync-pr 흐름으로 연결됩니다(모의 환경 측정에서 트리거 문장 24개×2회 recall·precision 100%, 사내는 S-2에서 재측정. validate --cause는 스킬 설명에는 있지만 측정 문장에는 없습니다). setup·sync·preview·review·migrate와 인자 없는 validate는 커맨드로 실행하세요.</aside>
+  <aside class="notes">대부분의 사용자는 analyze, search, record 세 개면 충분합니다. 수정 상태 커맨드는 CL을 올린 담당자가, migrate는 메인테이너만 씁니다. 읽기 전용 커맨드는 lock을 잡지 않으니 분석 중에도 search는 됩니다. migrate도 lock을 쓰지 않습니다. sync·setup은 이슈 DB에 쓰지 않지만, 스냅샷을 새로 만드는 동안 lock을 잡습니다. 그래서 분석 중에는 sync를 할 수 없습니다. 말로 요청하는 방법은 다음 장에 있습니다. setup·sync·status·preview·review·migrate와 인자 없는 validate는 커맨드로만 실행합니다. 무엇을 쓸지 모르면 help(읽기 전용)를 먼저 부릅니다. 말로 연결되는지 잰 트리거 측정은 24개×2회(10/05) 100%입니다. 지금 평가 파일은 26개이고 추가분은 아직 재지 않았습니다. 사내는 S-2에서 다시 잽니다.</aside>
+</section>
+
+<section class="slide" data-sec="4 커맨드별 사용법">
+  <div class="head"><div class="eyebrow">§4 커맨드별 사용법</div><h2>커맨드 없이 말로 요청하기</h2></div>
+  <div class="body">
+    <div class="tw"><table class="t tight say">
+      <tr><th>이렇게 말하면</th><th>도구가 하는 일</th></tr>
+      <tr><td class="wrap">"MOCK-9040 로그 분석해줘, 로밍 중 데이터 안 붙어. 로그는 ~/logs/radio.txt"</td><td>분석(<code>analyze</code>)</td></tr>
+      <tr><td class="wrap">"oFono 로그로 MOCK-9040 분석해줘"</td><td>oFono 이슈 DB로 분석(<code>analyze --platform ofono</code>). 팀이 oFono를 켰을 때만</td></tr>
+      <tr><td class="wrap">"분석만 해 줘", "기록하지 마"</td><td>분석 전용(<code>analyze --analysis-only</code>)</td></tr>
+      <tr><td class="wrap">(분석을 마친 같은 세션에서) "결과 Jira에 올려줘"</td><td>본문을 보여 주고 승인받은 뒤 Jira 코멘트 1건</td></tr>
+      <tr><td class="wrap">"데이터 안 붙는 이슈 예전에 있었어? 지라 번호 알려줘"</td><td>검색(<code>search</code>)</td></tr>
+      <tr><td class="wrap">"MOCK-777은 APN 설정 고쳐서 해결했어, 기록만 해줘"</td><td>수동 기록(<code>record</code>)</td></tr>
+      <tr><td class="wrap">"CALL-001-01 수정 CL 머지됐어, 이슈 DB에 반영해줘"</td><td>수정 CL 기록(<code>fix-submitted</code>)</td></tr>
+      <tr><td class="wrap">"CALL-001-01 수정 빌드 로그로 재발 안 하는지 확인해줘"</td><td>수정 검증(<code>verify-fix</code>)</td></tr>
+      <tr><td class="wrap">"telephony-issue-db에 issue/MOCK-9002 PR 올렸는데 main 바뀌어서 리뷰어가 sync 하래"</td><td>PR 재동기화(<code>sync-pr</code>)</td></tr>
+    </table></div>
+    <p class="small">커맨드로만: setup·sync·status·preview·review·migrate·인자 없는 validate. 모르면 <code>help</code>(읽기 전용). 로그는 대화에 붙이지 말고 파일 경로로 줍니다.</p>
+  </div>
+  <aside class="notes">커맨드를 외우지 않아도 됩니다. 말로 요청하면 스킬이 같은 흐름으로 이어 줍니다. 로그를 대화에 붙이면 마스킹 전 원문이 대화에 들어가니, 꼭 파일 경로로 주세요. 연결되는지는 실제 플러그인을 붙여 쟀습니다. 10/05에 문장 24개를 2회씩 돌려 recall·precision 100%였습니다. sync-pr 행과 비슷한 문장이 측정에 있습니다. 10/05 측정 뒤 더한 문장 2개(검색 10/05, oFono 10/11)는 아직 재지 않았습니다. 지금 평가 파일은 26개(스킬이 떠야 함 16, 뜨면 안 됨 10)입니다. validate --cause는 스킬 설명에는 있지만 측정 문장에는 없습니다. 모의 환경 측정이라 사내는 S-2에서 다시 잽니다.</aside>
 </section>
 
 <section class="slide" data-sec="4 커맨드별 사용법">
@@ -614,9 +636,9 @@ feedback/      <span class="c"># 후보 수락·거절 기록</span>
       <tr><td><code>--issue-file &lt;yaml&gt;</code></td><td>Jira 대신 파일. <code>--dry-run</code>·<code>--analysis-only</code>와만</td></tr>
       <tr><td><code>--platform &lt;이름&gt;</code></td><td>Android가 아닌 플랫폼(oFono 등) 이슈 DB로 분석. 이슈 DB 선언과 다르면 <code>platform-mismatch</code>로 멈춤</td></tr>
     </table></div>
-    <p class="small">로그 자리에 bugreport(.zip/.txt)를 주면 logcat 섹션만 꺼내 씁니다. <code>--analyzer</code>/<code>--explore</code>는 다음 장.</p>
+    <p class="small">로그 자리에 bugreport(.zip/.txt)를 주면 logcat 섹션만 꺼내 씁니다. <code>--analyzer</code>·<code>--explore</code>는 15·24번 슬라이드.</p>
   </div>
-  <aside class="notes">로그는 채팅에 붙이지 말고 파일 경로로 주세요. 붙이면 마스킹 전 원문이 대화에 들어갑니다. 처음 몇 번은 --analysis-only로 결과만 보는 것을 권합니다.</aside>
+  <aside class="notes">로그는 채팅에 붙이지 말고 파일 경로로 주세요. 붙이면 마스킹 전 원문이 대화에 들어갑니다. 처음 몇 번은 --analysis-only로 결과만 보는 것을 권합니다. 표에 없는 <code>--clock-offset &lt;±시간&gt;</code>은 시험 장비와 단말의 시계 차이를 알 때 줍니다(예: <code>+3m</code>).</aside>
 </section>
 
 <section class="slide" data-sec="4 커맨드별 사용법">
@@ -632,7 +654,7 @@ feedback/      <span class="c"># 후보 수락·거절 기록</span>
       <div class="msg ask"><div class="who">Claude</div><div class="what">(선택) 분석 결과를 Jira 코멘트로 올릴까요? 예면 PROBLEM / CAUSE / NEXT ACTION / ANALYSIS 확인 화면 → 승인 → 권한 확인 → 코멘트 1건 게시</div></div>
     </div>
   </div>
-  <aside class="notes">주황 줄은 Claude가 대신 고르지 않고 반드시 묻는 지점입니다. 답하기 전에는 다음으로 가지 않습니다. 시각이 Jira에 없거나 로그 범위 밖이면 이 사이에 질문이 하나 더 끼어듭니다. 버전이 맞는 소스 트리 프로필이 여럿이면 어느 것으로 볼지도 묻습니다. 분류 질문은 선택지가 4개까지라, "다른 원인·유형"을 고르면 둘째 질문이 나옵니다. 대화 내용은 설명용 예시입니다.</aside>
+  <aside class="notes">주황 줄은 Claude가 대신 고르지 않고 반드시 묻는 지점입니다. 답하기 전에는 다음으로 가지 않습니다. 시각이 Jira에 없거나 로그 범위 밖이면 이 사이에 질문이 하나 더 끼어듭니다. 버전이 맞는 소스 트리 프로필이 여럿이면 어느 것으로 볼지도 묻습니다. 맞는 버전 프로필이 없어도 자동으로 고르지 않고 묻습니다. 같은 경로로 버전만 다른 프로필을 두 개 두면 매번 묻게 됩니다. 분류 질문은 선택지가 4개까지라, "다른 원인·유형"을 고르면 둘째 질문이 나옵니다. 대화 내용은 설명용 예시입니다.</aside>
 </section>
 
 <section class="slide" data-sec="4 커맨드별 사용법">
@@ -653,7 +675,7 @@ feedback/      <span class="c"># 후보 수락·거절 기록</span>
       <p class="small"><b><code>--more-logs</code></b>는 이전 결과를 <code>runs/&lt;n&gt;/</code>에 보관하고, 1위가 바뀌면 "1위 X → Y"를 보여줍니다.</p>
     </div>
   </div>
-  <aside class="notes">분석 전용으로 본 뒤 기록하고 싶으면 옵션 없이 다시 실행하면 됩니다. 입력이 같으니 분석은 재사용되고, 건너뛴 사전 질문만 그때 나옵니다. --analysis-only와 --dry-run은 함께 쓸 수 없습니다.</aside>
+  <aside class="notes">분석 전용으로 본 뒤 기록하고 싶으면 옵션 없이 다시 실행하면 됩니다. 입력이 같으니 분석은 재사용되고, 건너뛴 사전 질문만 그때 나옵니다. --analysis-only와 --dry-run은 함께 쓸 수 없습니다. 멈춘 작업도 같은 analyze를 다시 실행하면 이어집니다. 같은 Jira의 계획이 남아 있으면 "이어서 / 새로 시작"을 묻습니다. 연습(--dry-run)으로 만든 계획은 --dry-run 없이 다시 실행하고, 확인 화면을 새로 승인해야 올라갑니다. 계획은 내 PC에만 있어서 다른 PC로 옮겨 이어 할 수 없습니다.</aside>
 </section>
 
 <section class="slide" data-sec="4 커맨드별 사용법">
@@ -685,7 +707,7 @@ feedback/      <span class="c"># 후보 수락·거절 기록</span>
       </div>
     </div>
   </div>
-  <aside class="notes">record는 지름길이 아닙니다. 쓰기 경로와 검증이 analyze와 똑같고 로그 분석만 건너뜁니다. 분석을 시작하기 전에 search로 이미 기록된 이슈인지 먼저 보는 습관을 권합니다.</aside>
+  <aside class="notes">record는 지름길이 아닙니다. 쓰기 경로와 검증이 analyze와 똑같고 로그 분석만 건너뜁니다. 분석을 시작하기 전에 search로 이미 기록된 이슈인지 먼저 보는 습관을 권합니다. 새 유형은 증상 시그니처가 꼭 있어야 합니다. 새 원인은 "시그니처는 나중에"를 분명히 고를 때만 pending으로 기록됩니다. 이 원인은 판별할 수 없고 월간 리뷰 대상이 됩니다.</aside>
 </section>
 
 <section class="slide" data-sec="4 커맨드별 사용법">
@@ -698,6 +720,7 @@ feedback/      <span class="c"># 후보 수락·거절 기록</span>
       <span class="arrow"><code>verify-fix</code> 통과</span>
       <span class="state done">fixed</span>
     </div>
+    <p class="small">실패·재발 → <code>open</code> · partial은 상태 유지(이력만) · <code>wont-fix</code>·<code>not-a-bug</code>는 새 원인 등록 때 정하거나 나중에 사람 확인 후 변경</p>
     <div class="console" style="font-size:15px"><span class="k">/telephony-triage:fix-submitted</span> CALL-001-01 --ref &lt;CL&gt; --fixed-in main-dev:BUILD_X
 <span class="k">/telephony-triage:verify-fix</span> CALL-001-01 ~/logs/after_fix.txt</div>
     <div class="tw"><table class="t tight">
@@ -708,7 +731,7 @@ feedback/      <span class="c"># 후보 수락·거절 기록</span>
       <tr><td><span class="tag mute">unknown</span></td><td>재현 흔적 없음·구간 부족</td><td>기록 안 함, 필요한 로그 안내</td></tr>
     </table></div>
   </div>
-  <aside class="notes">fixed는 verify-fix 통과로만 됩니다. "고쳤어요"라는 말만으로는 안 됩니다. 수정 빌드에서 재현 시나리오를 실제로 수행한 흔적이 로그에 있어야 판정합니다. 통과하면 그 로그가 회귀 fixture로 들어가 이후 규칙 변경에서도 재발 판정이 지켜집니다.</aside>
+  <aside class="notes">수정 상태는 open, fix-submitted, fixed, wont-fix, not-a-bug 다섯 가지입니다. fixed는 verify-fix 통과로만 됩니다. "고쳤어요"라는 말만으로는 안 됩니다. open으로 되돌려도 이전 CL·빌드는 이력에 남습니다. fix-submitted는 이미 fixed인 원인이면 멈춥니다. 재발이면 analyze에서 open으로 되돌립니다. wont-fix·not-a-bug인 원인이면 상태가 바뀐다고 알리고 확인받습니다. 빌드를 빼면 경고하고 계속할지 묻습니다. verify-fix는 판정 전에 멈추는 경우가 있습니다. 상태가 fix-submitted·fixed가 아닐 때, 원인 시그니처가 없을 때, 기록된 수정 빌드가 없을 때, 로그 빌드가 수정 빌드보다 이전일 때입니다. 코드·설정 수정 유형인데 흔적 규칙(scenario·recovery)이 둘 다 없어도 멈춥니다. 수정 빌드에서 재현 시나리오를 실제로 해 본 흔적이 로그에 보여야 판정합니다. 예외는 사용자 설정·망·하드웨어 원인이면서 흔적 규칙이 없을 때뿐이고, 이때만 사람 확인으로 판정합니다. 통과하면 그 로그가 회귀 fixture로 들어가 이후 규칙 변경에서도 재발 판정이 지켜집니다.</aside>
 </section>
 
 <section class="slide" data-sec="4 커맨드별 사용법">
@@ -716,17 +739,18 @@ feedback/      <span class="c"># 후보 수락·거절 기록</span>
   <div class="body">
     <div class="tw"><table class="t">
       <tr><th>커맨드</th><th>언제</th><th>쓰기</th></tr>
-      <tr><td><code>sync</code></td><td>스냅샷이 오래됐을 때. 오래된 작업 디렉토리 정리, 내 열린 PR 목록. push 안 한 계획은 지우지 않고 "보존"으로 알려 줌</td><td>없음</td></tr>
+      <tr><td><code>sync</code></td><td>스냅샷이 오래됐을 때. 오래된 작업 디렉토리 정리, 내 열린 PR 목록</td><td>없음</td></tr>
       <tr><td><code>sync-pr [브랜치]</code></td><td>내 PR이 머지 대기 중인데 main이 바뀌었을 때</td><td>PR 갱신</td></tr>
-      <tr><td><code>status [JIRA]</code></td><td>어디까지 했는지 모를 때. 단계·막힌 것·다음 할 일을 한 화면으로 보여 줌(로컬 기록만)</td><td>없음</td></tr>
-      <tr><td><code>validate</code></td><td>이슈 DB를 직접 편집한 뒤 push 전 검사(lint·마스킹·회귀·R1~R5)</td><td>없음</td></tr>
+      <tr><td><code>status [JIRA] [--doctor]</code></td><td>어디까지 했는지·막힌 것·다음 할 일(로컬 기록만). 막히면 <code>--doctor</code>로 진단 한 장</td><td>없음</td></tr>
+      <tr><td><code>help [커맨드]</code></td><td>어떤 커맨드를 쓸지 모를 때. 목록·상황별 추천·형식(아무것도 실행 안 함)</td><td>없음</td></tr>
+      <tr><td><code>validate</code></td><td>이슈 DB를 직접 편집한 뒤 push 전 검사(lint·마스킹·회귀·R1~R5·생성 파일)</td><td>없음</td></tr>
       <tr><td><code>validate --cause</code></td><td>해결책 적용 후 로그로 효과 검증 → 통과 시 PR</td><td>PR</td></tr>
       <tr><td><code>preview</code></td><td>README·STATS 생성 결과를 임시 폴더에 미리보기</td><td>없음</td></tr>
       <tr><td><code>review [카테고리]</code></td><td>카테고리 오너의 월간 리뷰 리포트</td><td>없음</td></tr>
       <tr><td><code>migrate --to &lt;N&gt;</code></td><td>메인테이너가 스키마를 올릴 때</td><td>자기 브랜치</td></tr>
     </table></div>
   </div>
-  <aside class="notes">sync-pr은 작업 계획이 있는 PC에서만 됩니다. 계획이 PC에만 저장되기 때문입니다. 직접 편집한 브랜치는 계획이 없으니 rebase 후 validate를 돌리고 직접 push합니다.</aside>
+  <aside class="notes">sync는 push 안 한 계획을 지우지 않고 "보존"으로 알려 줍니다. validate에 <code>--extra &lt;로그&gt;</code>를 주면 R6(추가 표본)까지 봅니다. sync-pr은 작업 계획이 있는 PC에서만 됩니다. 계획이 PC에만 저장되기 때문입니다. 직접 편집한 브랜치는 계획이 없으니 rebase 후 validate를 돌리고 직접 push합니다.</aside>
 </section>
 
 <!-- ================= 5. 판정 ================= -->
@@ -758,7 +782,7 @@ bonus = 근접(근거 시각이 발생 시각에 가까울수록) + 키워드(Ji
     </div>
     <p class="small">회귀·검증 모드는 보너스 0, 피드백 가중치 끔. 판정은 S/C 값만 봅니다.</p>
   </div>
-  <aside class="notes">1위와 2위의 점수 차이를 확신의 차이로 읽지 마세요. 실제 판단은 S와 C, 그리고 근거 로그를 보고 합니다. 가중치 설정을 바꿔도 회귀 결과가 바뀌지 않도록 일부러 이렇게 만들었습니다.</aside>
+  <aside class="notes">1위와 2위의 점수 차이를 확신의 차이로 읽지 마세요. 실제 판단은 S와 C, 그리고 근거 로그를 보고 합니다. 가중치 설정을 바꿔도 회귀 결과가 바뀌지 않도록 일부러 이렇게 만들었습니다. 분석 모드에서는 한 규칙이 후보로 제시된 기록이 5건 이상 쌓이면 수락률을 점수에 곱합니다. 늘 거절된 규칙은 점수가 최대 절반까지 줄어듭니다. 이때도 S·C는 그대로입니다.</aside>
 </section>
 
 <section class="slide" data-sec="5 판정 읽는 법">
@@ -767,7 +791,7 @@ bonus = 근접(근거 시각이 발생 시각에 가까울수록) + 키워드(Ji
     <div class="console" style="font-size:14.5px"><span class="k">## ABC-12345 분석</span>
 - 분류 후보: Data &gt; DATA-001 SETUP_DATA_CALL이 발생하지 않음 &gt; DATA-001-02 Roaming disabled
   (규칙 일치 점수 1.0, 일치 수준 높음 — 진단 확신도 아님)
-- 근거 로그: 시각·태그·메시지 3~10줄, 마스킹, 줄 위치 (f0:L1234)   슬롯: phone 0
+- 근거 로그: 시각·태그·메시지 최대 10줄, 마스킹, 줄 위치 (f0:L1234)   슬롯: phone 0
 - <span class="c">(해당할 때만)</span> 판정 불가 유형 · 슬롯 불일치 · 시계 이상 구간의 근거
 - 로그 범위: 10:02~10:12 (발생 시각 포함), 시계 이상 없음
 - 원인 / 코드 위치: 파일:라인 + 분기 조건 (분석 트리: Android 16)   <span class="c">← 로그 확인과 코드 추정 구분</span>
@@ -778,7 +802,7 @@ bonus = 근접(근거 시각이 발생 시각에 가까울수록) + 키워드(Ji
 - 열린 PR: 없음</div>
     <p class="small"><b>must_show</b> 줄(분석 전용 안내, 1위 변화, 판정 불가 유형, 슬롯 불일치, 시계 이상 근거, 로그 범위 경고 등)은 Claude가 요약하지 않고 글자 그대로 보여줍니다.</p>
   </div>
-  <aside class="notes">리포트의 결정적인 칸은 스크립트가 채우고, Claude는 설명 칸만 채웁니다. 근거 로그의 f0:L1234는 첫 번째 입력 파일의 1234번째 줄이라 원본에서 바로 찾아볼 수 있습니다.</aside>
+  <aside class="notes">리포트의 결정적인 칸은 스크립트가 채우고, Claude는 설명 칸만 채웁니다. 근거 로그의 f0:L1234는 첫 번째 입력 파일의 1234번째 줄이라 원본에서 바로 찾아볼 수 있습니다. must_show는 우선순위 순으로 최대 6줄입니다.</aside>
 </section>
 
 <section class="slide" data-sec="5 판정 읽는 법">
@@ -817,7 +841,7 @@ bonus = 근접(근거 시각이 발생 시각에 가까울수록) + 키워드(Ji
     </div>
     <div class="console" style="font-size:15px"><span class="c"># 채택하면</span> 후보 없음 → 탐색 분석 → 가설 채택 → 새 유형(원인) 초안 + 시그니처·fixture → R1~R5 검증 → 확인 화면 → PR</div>
   </div>
-  <aside class="notes">규칙에 없는 이슈가 와도 빈손이 아닙니다. 동의하면 triage.py explore가 마스킹된 타임라인을 만들고, Claude가 그 타임라인과 소스를 보고 가설을 근거·반대 근거와 함께 씁니다. 가설은 판정이 아니라 사람이 고를 출발점입니다. 채택하면 "로그로 확인" 줄이 시그니처 초안이 되고, 그다음은 평소와 같은 R1~R5 검증과 확인 화면입니다. 보류하면 원인 미확정으로 남기고 note에 가설 한 줄을 남길지 묻습니다. 토큰이 더 들어 기본은 실행 전에 묻습니다.</aside>
+  <aside class="notes">규칙에 없는 이슈가 와도 빈손이 아닙니다. 동의하면 triage.py explore가 마스킹된 타임라인을 만들고, Claude가 그 타임라인과 소스를 보고 가설을 근거·반대 근거와 함께 씁니다. 가설은 판정이 아니라 사람이 고를 출발점입니다. 채택하면 "로그로 확인" 줄이 시그니처 초안이 되고, 그다음은 평소와 같은 R1~R5 검증과 확인 화면입니다. 보류하면 원인 미확정으로 남기고 note에 가설 한 줄을 남길지 묻습니다. 토큰이 더 들어 기본은 실행 전에 묻습니다. 이 도구가 못 하는 것도 있습니다. 모뎀(CP) 로그 해석, 로그에 흔적이 없는 타이밍 경합, tags.yaml에 없는 태그의 크래시입니다. tombstone·ANR도 읽지 않습니다. 이런 이슈는 후보 없음이 되고, 탐색 분석으로 이어집니다.</aside>
 </section>
 
 <!-- ================= 6. 기록 ================= -->
@@ -836,7 +860,7 @@ bonus = 근접(근거 시각이 발생 시각에 가까울수록) + 키워드(Ji
     <p class="small">질문마다 선택지는 4개까지입니다. 첫 질문은 &lt;1위&gt;로 분류 / 다른 원인·유형 / 원인 미확정 / 기록하지 않음이고, "다른 원인·유형"이면 둘째 질문(다른 기존 원인 / 새 원인·새 유형 / 원인 미확정 / 기록하지 않음)이 나옵니다. 후보가 없으면 새 유형 / 원인 미확정(가장 가까운 유형) / 기록하지 않음. 목록에 없는 답은 기타(Other)로 직접 입력합니다.</p>
     <p class="small">계획은 <code>work/&lt;KEY&gt;/plan.json</code>에 저장되고, 커밋 메시지와 한 줄 요약(<code>note</code>)도 이때 확인받습니다.</p>
   </div>
-  <aside class="notes">추정만으로는 새 원인을 만들지 않습니다. 확신이 없으면 원인 미확정으로 남기는 것이 팀 DB에 더 좋습니다. 회귀 의심이나 수정 미흡이 보이면 이 단계에서 수정 상태를 바꿀지 따로 묻습니다.</aside>
+  <aside class="notes">추정만으로는 새 원인을 만들지 않습니다. 확신이 없으면 원인 미확정으로 남기는 것이 팀 DB에 더 좋습니다. 회귀 의심이나 수정 미흡이 보이면 이 단계에서 수정 상태를 바꿀지 따로 묻습니다. 심층 분석 의견이 1위와 다르면 질문이 "의견이 가리킨 원인 / 그 밖의 원인·유형"으로 나옵니다.</aside>
 </section>
 
 <section class="slide" data-sec="6 이슈 DB에 기록하기">
@@ -900,7 +924,7 @@ bonus = 근접(근거 시각이 발생 시각에 가까울수록) + 키워드(Ji
       </div>
     </div>
   </div>
-  <aside class="notes">텍스트 rebase로 합치지 않고, 계획을 최신 main 위에 다시 적용하는 방식이라 충돌이 적습니다. 남이 먼저 바꾼 값은 절대 몰래 덮어쓰지 않고 항목마다 물어봅니다.</aside>
+  <aside class="notes">텍스트 rebase로 합치지 않고, 계획을 최신 main 위에 다시 적용하는 방식이라 충돌이 적습니다. 남이 먼저 바꾼 값은 절대 몰래 덮어쓰지 않고 항목마다 물어봅니다. 내 PC의 도구 브랜치는 <code>tt/issue/&lt;KEY&gt;</code>처럼 <code>tt/</code>로 시작하고, 원격에는 <code>tt/</code>를 뺀 이름으로 올라갑니다. 머지는 한 번에 하나씩입니다. 먼저 머지된 PR이 같은 번호를 쓰면 sync-pr 화면에 "DATA-001-03 → DATA-001-04 재할당"이 보입니다.</aside>
 </section>
 
 <!-- ================= 7. 예외 ================= -->
@@ -919,7 +943,7 @@ bonus = 근접(근거 시각이 발생 시각에 가까울수록) + 키워드(Ji
       <div class="card alert"><p class="small">git 충돌·인증 실패·MCP 없음·버전 불일치는 도구가 <b>우회하지 않고 보고</b>합니다. "그냥 진행해"로는 넘어가지 않습니다.</p></div>
     </div>
   </div>
-  <aside class="notes">종료 코드 2에서는 Claude가 스스로 해결을 시도하지 않고 멈춥니다. 예외는 계획 형식 오류뿐인데, 이건 메시지대로 계획을 고쳐 다시 실행합니다. 3은 정상 경로일 수 있습니다. 확인 화면도 3으로 나올 수 있습니다.</aside>
+  <aside class="notes">종료 코드 2에서는 Claude가 스스로 해결을 시도하지 않고 멈춥니다. 예외는 계획 형식 오류뿐인데, 이건 메시지대로 계획을 고쳐 다시 실행합니다. 3은 정상 경로일 수 있습니다. 확인 화면도 3으로 나올 수 있습니다. 올리기(publish)가 2를 내면서 <code>published: true</code>면 push는 이미 됐습니다. 바로 다시 올리지 않습니다. 정리(discard)가 실패했으면 정리만, PR 생성이 실패했으면 열린 PR을 먼저 확인합니다.</aside>
 </section>
 
 <section class="slide" data-sec="7 오류가 났을 때">
@@ -993,7 +1017,7 @@ bonus = 근접(근거 시각이 발생 시각에 가까울수록) + 키워드(Ji
     <p>나머지는 hook이 막거나 승인을 묻습니다(최선 노력). 어느 순간에 걸리는지는 다음 장에 있습니다.</p>
     <p class="small">로컬 장치는 우회될 수 있어서 <b>GHE 브랜치 보호</b>(main 직접 push 금지, CODEOWNERS 필수 리뷰)가 서버에서 최종 방어선입니다.</p>
   </div>
-  <aside class="notes">push 전 확인 화면을 Claude가 줄여 보이면, 표시 보조 hook이 같은 화면을 다시 보이게 합니다. Jira는 허용 목록의 읽기 도구만 통과합니다. 이름에 jira·atlassian이 든 서버의 쓰기 도구도 막습니다. 옛 설정 키가 남아 있으면 MCP 도구 전부를 막습니다. 예외는 확인 화면에서 승인한 코멘트 1건이고, 승인 기록과 맞을 때만 권한 질문이 뜹니다. hook 판정은 최선 노력 방식이라 모든 우회를 막지는 못합니다. 그래서 서버 측 브랜치 보호가 전제입니다. 사용자는 이 장치들을 끄려고 하지 말고, 막히면 메시지를 그대로 공유해 주세요. push 확인은 10/16에 명령 글에서 db_pr과 publish 두 낱말을 함께 찾는 방식(낱말 그물)으로 넓혔지만, 낱말을 변수로 만든 호출이나 스크립트 파일 안 호출은 여전히 못 보는 최선 노력입니다. hook은 모두 11종으로, 안전 관문 10종과 표시 보조 1종입니다.</aside>
+  <aside class="notes">push 전 확인 화면을 Claude가 줄여 보이면, 표시 보조 hook이 같은 화면을 다시 보이게 합니다. Jira는 허용 목록의 읽기 도구만 통과합니다. 이름에 jira·atlassian이 든 서버의 쓰기 도구도 막습니다. 옛 설정 키가 남아 있으면 MCP 도구 전부를 막습니다. 예외는 확인 화면에서 승인한 코멘트 1건이고, 승인 기록과 맞을 때만 권한 질문이 뜹니다. hook 판정은 최선 노력 방식이라 모든 우회를 막지는 못합니다. 그래서 서버 측 브랜치 보호가 전제입니다. 새 원인·유형 초안(제목·판별 규칙·해결책·한 줄 메모)과 남은 lock 강제 해제도 사람이 승인합니다. 사용자는 이 장치들을 끄려고 하지 말고, 막히면 메시지를 그대로 공유해 주세요. push 확인은 10/16에 명령 글에서 db_pr과 publish 두 낱말을 함께 찾는 방식(낱말 그물)으로 넓혔지만, 낱말을 변수로 만든 호출이나 스크립트 파일 안 호출은 여전히 못 보는 최선 노력입니다. hook은 모두 11종으로, 안전 관문 10종과 표시 보조 1종입니다.</aside>
 </section>
 
 <section class="slide" data-sec="8 안전 장치">
@@ -1002,8 +1026,8 @@ bonus = 근접(근거 시각이 발생 시각에 가까울수록) + 키워드(Ji
     <div class="g4">
       <div class="card key"><h3>도구 호출 직전</h3><p class="small">PreToolUse</p>
         <ul class="pts small">
-          <li>MCP: Jira 읽기 도구와 승인한 코멘트 1건만 통과(2). 이슈 DB 대상 gh·GitHub MCP 쓰기는 승인 질문, PR 머지는 거부</li>
-          <li>Bash: 이슈 DB git commit·push 검사(3~7), 로그 통독 차단(10)</li>
+          <li>MCP: Jira 읽기 도구와 승인한 코멘트 1건만 통과(2). 이슈 DB 대상 gh·GitHub MCP 쓰기는 승인 질문, PR 머지는 거부(11)</li>
+          <li>Bash: 이슈 DB 커밋·push 검사(3~7), clone 변경 차단(8), 로그 통독 차단(10)</li>
           <li>Write·Edit: 내 clone 파일이면 거부(8)</li>
         </ul>
       </div>
@@ -1015,7 +1039,7 @@ bonus = 근접(근거 시각이 발생 시각에 가까울수록) + 키워드(Ji
       </div>
       <div class="card"><h3>커밋 순간</h3><p class="small">git pre-commit</p>
         <ul class="pts small">
-          <li>lint·마스킹·회귀·생성 파일 검사</li>
+          <li>호환성·캐시·lint·마스킹·회귀·규칙 검증·생성 파일(7가지)</li>
           <li>터미널에서 직접 커밋해도 걸림</li>
         </ul>
       </div>
@@ -1027,7 +1051,7 @@ bonus = 근접(근거 시각이 발생 시각에 가까울수록) + 키워드(Ji
       </div>
     </div>
   </div>
-  <aside class="notes">세 순간만 기억하면 됩니다. 도구를 부르기 직전, Jira 결과를 받은 직후, 그리고 git 커밋과 push. 거부 메시지에는 규칙 번호와 대신 할 일이 들어 있으니 그대로 따르면 됩니다. 예를 들어 로그 통독이 막히면 grep -n이나 sed -n으로 구간만 읽으라고 안내합니다. 표시 보조 hook은 질문이나 Bash 직전에 화면이 다 보였는지 봅니다. Claude가 답을 끝낼 때(Stop)도 확인 화면·리포트가 다 보였는지 보고, 빠졌으면 같은 화면을 한 번 더 보이게 합니다. 같은 화면을 두 번 되돌려도 안 되면 "…(재시도 한도) — &lt;곳&gt;에서 직접 확인" 알림이 뜨니, 그곳(report.md 같은 파일이나 펼친 도구 출력)을 직접 보고 맞을 때만 승인하세요. 이 hook은 판정을 못 하면 그냥 지나가는 보조 장치이고, 승인 질문·승인 해시·pre-push 검사는 그대로 걸립니다. 걸리지 않는 경우도 있습니다. 이슈 DB가 아닌 레포의 git과, Jira·이슈 DB와 무관한 MCP 호출은 검사하지 않습니다. config가 없으면 git·파일 규칙이, Jira 서버 설정(<code>tracker.mcp_server</code>·<code>tracker.tools</code>)이 모두 비어 있으면 Jira 규칙이 빠집니다. Read·Glob·Grep에는 hook이 없고, 세션 시작 때는 경로 갱신 hook만 돕니다. 자세한 표는 안내서 23장입니다.</aside>
+  <aside class="notes">세 순간만 기억하면 됩니다. 도구를 부르기 직전, Jira 결과를 받은 직후, 그리고 git 커밋과 push. 거부 메시지에는 규칙 번호와 대신 할 일이 들어 있으니 그대로 따르면 됩니다. 규칙 11은 메시지에 규칙 7로 나옵니다(머지 거부는 규칙 6·7). 예를 들어 로그 통독이 막히면 grep -n이나 sed -n으로 구간만 읽으라고 안내합니다. 표시 보조 hook은 질문이나 Bash 직전에 화면이 다 보였는지 봅니다. Claude가 답을 끝낼 때(Stop)도 확인 화면·리포트가 다 보였는지 보고, 빠졌으면 같은 화면을 한 번 더 보이게 합니다. 같은 화면을 두 번 되돌려도 안 되면 "…(재시도 한도) — &lt;곳&gt;에서 직접 확인" 알림이 뜨니, 그곳(report.md 같은 파일이나 펼친 도구 출력)을 직접 보고 맞을 때만 승인하세요. 이 hook은 판정을 못 하면 그냥 지나가는 보조 장치이고, 승인 질문·승인 해시·pre-push 검사는 그대로 걸립니다. 걸리지 않는 경우도 있습니다. 이슈 DB가 아닌 레포의 git과, Jira·이슈 DB와 무관한 MCP 호출은 검사하지 않습니다. config가 없으면 git·파일 규칙이, Jira 서버 설정(<code>tracker.mcp_server</code>·<code>tracker.tools</code>)이 모두 비어 있으면 Jira 규칙이 빠집니다. Read·Glob·Grep에는 hook이 없고, 세션 시작 때는 경로 갱신 hook만 돕니다. 자세한 표는 안내서 23장입니다.</aside>
 </section>
 
 <!-- ================= 9. 관리 ================= -->
@@ -1072,7 +1096,7 @@ bonus = 근접(근거 시각이 발생 시각에 가까울수록) + 키워드(Ji
       <tr><td>이슈 DB 스키마가 지원 범위 안</td><td>정상</td><td>—</td></tr>
       <tr><td>이슈 DB가 플러그인보다 새 버전</td><td>읽기 전용 분석만</td><td>플러그인 업데이트</td></tr>
       <tr><td>이슈 DB가 플러그인보다 옛 버전</td><td>쓰기 막힘, 분석 가능</td><td>메인테이너 마이그레이션</td></tr>
-      <tr><td>생성기 버전 불일치</td><td>쓰기 막힘</td><td>플러그인 업데이트</td></tr>
+      <tr><td>생성기 버전 불일치</td><td>쓰기 막힘</td><td>DB 낮음 → 메인테이너 migrate / 높음 → 플러그인 업데이트</td></tr>
     </table></div>
     <div class="card"><p class="small"><b>스키마 올리기(메인테이너)</b>: <code>migrate/schema-v&lt;N&gt;</code> 브랜치 → <code>migrate --to &lt;N&gt;</code> → <code>db_build --write</code> → <code>validate</code> → 승인 후 커밋 → 직접 PR. 머지 뒤 남은 PR은 <code>sync-pr</code>이 계획을 새 스키마로 올립니다.</p></div>
   </div>
@@ -1112,7 +1136,7 @@ bonus = 근접(근거 시각이 발생 시각에 가까울수록) + 키워드(Ji
       <div><b>$0.34~0.40</b><span>아는 원인 1건 분석→기록 (Sonnet 5.5, 합성 데이터)</span></div>
     </div>
     <div class="g3">
-      <div class="card"><h3>사용법</h3><p class="small"><code>GUIDE.md</code> §5·§6<br>이슈 DB <code>docs/getting-started.md</code></p></div>
+      <div class="card"><h3>사용법</h3><p class="small">안내서 <a href="../book/telephony-triage-book.html"><code>telephony-triage-book.html</code></a><br><code>GUIDE.md</code> §5·§6<br>이슈 DB <code>docs/getting-started.md</code></p></div>
       <div class="card"><h3>기여 규칙</h3><p class="small">이슈 DB <code>CONTRIBUTING.md</code><br><code>docs/review-guide.md</code></p></div>
       <div class="card"><h3>설계</h3><p class="small"><code>docs/design/README.md</code> 지도<br><code>09-commands.md</code> · <code>12-principles.md</code></p></div>
     </div>

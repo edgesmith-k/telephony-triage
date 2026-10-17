@@ -924,6 +924,7 @@ explore: {when: never}          <span class="c"># 탐색 분석: ask(기본) | a
         <tr><td>"MOCK-777은 APN 설정 고쳐서 해결했어, 기록만 해줘"</td><td>수동 기록(<code>record</code>)</td></tr>
         <tr><td>"CALL-001-01 수정 CL 머지됐어, 이슈 DB에 반영해줘"</td><td>수정 CL 기록(<code>fix-submitted</code>)</td></tr>
         <tr><td>"CALL-001-01 수정 빌드 로그로 재발 안 하는지 확인해줘"</td><td>수정 검증(<code>verify-fix</code>)</td></tr>
+        <tr><td>"telephony-issue-db에 issue/MOCK-9002 PR 올렸는데 main 바뀌어서 리뷰어가 sync 하래"</td><td>PR 재동기화(<code>sync-pr</code>)</td></tr>
       </tbody>
     </table></div>
   </div>
@@ -1836,7 +1837,7 @@ explore: {when: never}          <span class="c"># 탐색 분석: ask(기본) | a
   <ul>
     <li><code>config.py doctor</code>는 fail 행이 있으면 1, 없으면 0입니다.</li>
     <li><code>status</code>는 막힌 것이 있어도 화면을 냈으면 0입니다.</li>
-    <li>올리기(<code>publish</code>)가 2를 내면서 <code>published: true</code>면 PR은 이미 만들어진 것입니다. 올리기를 다시 하지 않습니다.</li>
+    <li>올리기(<code>publish</code>)가 2를 내면서 <code>published: true</code>면 push는 이미 된 것입니다. 올리기를 바로 다시 하지 않습니다. 정리(discard)가 실패했으면 정리만 다시 합니다. PR 생성이 실패했으면 <a href="#ch13-6">13.6</a>을 봅니다.</li>
     <li>2인데 "계획 형식 오류"면 예외입니다. 결정 내용은 그대로 두고 계획 형식만 고쳐 다시 적용합니다. 도구가 처리하고 알립니다.</li>
   </ul>
 
