@@ -2,8 +2,8 @@
 
 하지 않는 것: fetch·gh, lock 획득·갱신, git 쓰기(write-tree·승인 해시 재계산·worktree prune), 파일 쓰기·mkdir,
 손상 파일 수리. git은 `<JOB>/wt` 안의 읽기(`rev-parse`, `log -1 --format=%P`, `--no-optional-locks status`)만 한다.
-읽지 않는 것: `issue_raw.json`, `steps-pasted.txt` 내용(있는지만), 로그, `events.json`, `trace.jsonl` 내용(크기만),
-needs_input 질문 문구(상태 파일에 없다: `pending {kind, asked_at}`만).
+읽지 않는 것: `issue_raw.json`, `steps-pasted.txt` 내용(있는지만), 로그, `events.json`, `trace.jsonl`은 끝 256KB의 마지막 끝 행만
+(`last-run-error`), needs_input 질문 문구(상태 파일에 없다: `pending {kind, asked_at}`만).
 
 단계는 위에서부터 처음 맞는 것이다(`STAGES`). 줄마다 확신도: `now`(지금 확인) · `recorded`(기록, 시각) · `unknown`(확인 불가).
 """
@@ -18,15 +18,21 @@ from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
-from common import issuepost, session_lock, userconfig
+from common import issuepost, masking, session_lock, userconfig
 
 PLAN, STATE, STAGE, PR_FILE, PASTED_STEPS = "plan.json", "state.json", "stage.json", "pr.json", "steps-pasted.txt"
 TRIAGE_STATE = "triage-state.json"
+TRACE = "trace.jsonl"
 REMOTE_NOTE = "원격 최신성: 확인하지 않음(로컬 기록만)"
 CANDIDATES_MAX = 5
 LABEL_MAX = 160
 GIT_TIMEOUT = 20
 MD_MAX = 3072                   # markdown 바이트 상한
+TRACE_TAIL = 256 << 10          # last-run-error: trace.jsonl 끝에서 읽는 바이트
+# 실행 하나가 끝난 행(triage done·needs_input·stopped·error, db_pr stage·publish·discard). 마지막 것이 오류면 last-run-error
+END_STEPS = ("done", "needs_input", "stopped", "error", "stage", "publish", "discard")
+RUN_ERROR_NEXT = ("메시지대로 고친 뒤 같은 명령을 다시 실행한다. '내부 오류'면 `/telephony-triage:status --doctor` 화면과 "
+                  "trace.jsonl을 관리자에게 보낸다")
 STAGES = ("none", "pr-created", "pushed-no-pr", "committed", "needs-input", "summary-shown", "staged", "plan-saved",
           "needs-input-past", "analyzed", "started", "unknown")
 # 파일별로 쓰는 중첩 값의 형식. 값이 null이면 통과, 형식이 다르면 그 파일을 손상으로 본다(고치지 않는다)
@@ -172,6 +178,45 @@ def quick_stage(job: Path) -> str:
     if (analysis or {}).get("status") == "ok":
         return "analyzed"
     return "started"
+
+
+def trace_rows(job: Path, tail: int | None = None) -> list[dict]:
+    """`JOB/trace.jsonl`의 행(깨진 줄·객체 아닌 줄은 건너뛴다). `tail`이면 끝 `tail`바이트만 읽고 잘린 첫 줄은 버린다.
+    없거나 못 읽으면 []. 읽는 곳: `usage_stats`(전체), `job_status`의 last-run-error(끝 일부)."""
+    try:
+        with (job / TRACE).open("rb") as fh:
+            size = fh.seek(0, os.SEEK_END)
+            fh.seek(max(0, size - tail) if tail else 0)
+            data = fh.read()
+    except OSError:
+        return []
+    if tail and size > tail:
+        data = data.partition(b"\n")[2]
+    rows = []
+    for line in data.decode("utf-8", "replace").splitlines():
+        try:
+            row = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(row, dict):
+            rows.append(row)
+    return rows
+
+
+def last_run_error(job: Path) -> dict | None:
+    """trace 끝 256KB의 마지막 끝 행이 triage `error` 또는 db_pr `stage{result: error}`면 막힌 것 `last-run-error`(메시지는 가림)."""
+    last = next((r for r in reversed(trace_rows(job, TRACE_TAIL)) if r.get("step") in END_STEPS), None)
+    if last is None:
+        return None
+    if last["step"] == "error":
+        where = f"종료 {last.get('exit')}"
+    elif last["step"] == "stage" and last.get("result") == "error":
+        where = "db_pr stage"
+    else:
+        return None
+    at = last.get("ts") if isinstance(last.get("ts"), str) else None
+    return _row("last-run-error", f"마지막 실행이 오류로 끝났다({where}): {masking.mask_brief(last.get('message'))}", "recorded",
+                RUN_ERROR_NEXT, at)
 
 
 def candidates(work_dir: Path, safe_key_re) -> list[dict]:
@@ -446,6 +491,9 @@ def collect(work_dir: Path, key: str, cfg: dict, defaults: dict, platform: str |
     if has_job and (job / PASTED_STEPS).is_file():
         blockers.append(_row("pasted-steps-remains", "붙여넣은 스텝 원문(steps-pasted.txt)이 남아 있다", "now",
                              f"작업을 끝낼 때 db_pr discard 또는 `triage.py release {key}`가 지운다"))
+    run_error = last_run_error(job) if has_job else None
+    if run_error:
+        blockers.append(run_error)
     if (tstate or {}).get("cleanup_targets"):
         blockers.append(_row("cleanup-targets", f"잔여 worktree·도구 브랜치 {tstate['cleanup_targets']}개(마지막 analyze 기록)",
                              "recorded", "/telephony-triage:sync에서 정리"))

@@ -78,13 +78,13 @@ from pathlib import Path
 SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS))
 
-from common import compat, shown, site_defaults, userconfig, yamlio  # noqa: E402
+from common import compat, masking, shown, site_defaults, userconfig, yamlio  # noqa: E402
 import platforms  # noqa: E402
 from platforms import session as platform_session  # noqa: E402
 import db_summary  # noqa: E402,F401 — test_db_summary가 본다
 from common.exitcodes import OK, USAGE  # noqa: E402
 from dbpr import worktree as _worktree_mod  # noqa: E402
-from dbpr.lock import Lock, UsageError  # noqa: E402
+from dbpr.lock import Lock, UsageError, trace_note  # noqa: E402
 from dbpr.publish import (_GUARD_FIX_TAIL, _brief_stage, approved_hash, find_plan, my_prs, preflight,  # noqa: E402,F401
                           publish, stage, summary)
 from dbpr.worktree import (Ctx, _drop_pasted_steps, _git, _job_of, _prepare_worktree,  # noqa: E402,F401
@@ -177,6 +177,18 @@ def _shown_close(ctx: Ctx, wt: str, by: str) -> None:
     shown.record(ctx.work_dir, "db_pr", "close", job, by=by)
 
 
+def _trace_stage(ctx: Ctx, wt: str, outcome: str, dry_run: bool, message: str | None = None) -> None:
+    """stage 한 번의 결과를 `JOB/trace.jsonl`에(운영 지표). 오류 메시지는 `masking.mask_brief`(120자)."""
+    try:
+        job_dir, _ = _job_of(Path(wt), ctx)
+    except (UsageError, OSError):
+        return
+    if not job_dir.is_dir():
+        return
+    extra = {"message": masking.mask_brief(message)} if message is not None else {}
+    trace_note(job_dir, "stage", result=outcome, dry_run=dry_run, **extra)
+
+
 def main(argv: list[str] | None = None) -> int:
     try:
         sys.stdout.reconfigure(encoding="utf-8")
@@ -225,7 +237,12 @@ def main(argv: list[str] | None = None) -> int:
             if args.then_summary and (args.json or getattr(args, "verbose", False)):
                 raise UsageError("--then-summary는 --json·--verbose와 함께 쓸 수 없다 (stdout이 마크다운이다).")
             _shown_close(ctx, args.wt, "stage")
-            result, code = stage(ctx, Path(args.plan), Path(args.wt), args.branch, args.dry_run)
+            try:
+                result, code = stage(ctx, Path(args.plan), Path(args.wt), args.branch, args.dry_run)
+            except Exception as exc:
+                _trace_stage(ctx, args.wt, "error", args.dry_run, str(exc) or type(exc).__name__)
+                raise
+            _trace_stage(ctx, args.wt, result.get("stopped") or result.get("result") or "error", args.dry_run)
             if not getattr(args, "verbose", False):
                 result = _brief_stage(result, _job_of(Path(args.wt), ctx)[0])
             if args.then_summary and code in (OK, 3):

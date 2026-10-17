@@ -194,13 +194,13 @@ stdin: PostToolUse hook 입력 JSON (argparse 없음)
 
 | 서브커맨드 | 사용법 | 옵션 설명 |
 |---|---|---|
-| — | `[<KEY>] [--format {json,markdown}] [--platform <이름>] [--plugin-root <PLUGIN_ROOT>] [--json]` | `key`: 작업 키(생략하면 lock 작업·단일 작업·후보); `--format`: markdown: 대상·단계·막힌 것·다음 할 일·관련 파일 (기본 json, --json과 함께 못 쓴다), 기본 json; `--platform`: 플랫폼(이슈 DB·파서·설정 묶음). 없으면 TT_PLATFORM > 사용자 config platform > site-defaults platform.name; `--json`: JSON 출력 (기본) |
+| — | `[<KEY>] [--format {json,markdown}] [--doctor] [--platform <이름>] [--plugin-root <PLUGIN_ROOT>] [--json]` | `key`: 작업 키(생략하면 lock 작업·단일 작업·후보); `--format`: markdown: 대상·단계·막힌 것·다음 할 일·관련 파일 (기본 json, --json과 함께 못 쓴다), 기본 json; `--doctor`: 관리자 전달용 진단(버전·환경 점검 doctor의 fail·warn 행)을 덧붙인다 — gh 인증 확인으로 몇 초~최대 2분; `--platform`: 플랫폼(이슈 DB·파서·설정 묶음). 없으면 TT_PLATFORM > 사용자 config platform > site-defaults platform.name; `--json`: JSON 출력 (기본) |
 
 ## `usage_stats.py`
 
 | 서브커맨드 | 사용법 | 옵션 설명 |
 |---|---|---|
-| — | `[--work-dir <WORK_DIR> \| --platform <이름>] [--json] [--plugin-root <PLUGIN_ROOT>]` | `--work-dir`: 기본: 선택 플랫폼의 사용자 config work_dir; `--platform`: 플랫폼(이슈 DB·파서·설정 묶음). 없으면 TT_PLATFORM > 사용자 config platform > site-defaults platform.name; `--json`: 집계 대상과 수치를 JSON 한 줄로(개수·시간만, 내용 없음) |
+| — | `[--work-dir <WORK_DIR> \| --platform <이름>] [--json] [--transcripts [<dir>]] [--plugin-root <PLUGIN_ROOT>]` | `--work-dir`: 기본: 선택 플랫폼의 사용자 config work_dir; `--platform`: 플랫폼(이슈 DB·파서·설정 묶음). 없으면 TT_PLATFORM > 사용자 config platform > site-defaults platform.name; `--json`: 집계 대상과 수치를 JSON 한 줄로(개수·시간만, 내용 없음); `--transcripts`: Claude Code transcript의 단계별 토큰·대화 질문·재시도 신호도 센다(opt-in, 숫자만). 기본 $CLAUDE_CONFIG_DIR/projects 또는 ~/.claude/projects |
 
 ## `triage.py run` → analysis.json 키
 

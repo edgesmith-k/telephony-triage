@@ -1641,6 +1641,8 @@ def test_publish_and_discard_keeps_work_when_only_pr_creation_fails(tmp_path):
     assert ws.db_pr("lock", "status")["held"] is True
     assert git(ws.remote, "branch", "--list", "issue/MOCK-7001") != ""      # push는 됐다
     ws.db_pr("discard", wt)
+    rows = [(r["step"], r.get("action"), r.get("pr"), r.get("gh_ok"), r.get("outcome")) for r in _trace(ws, "MOCK-7001")]
+    assert rows[1:] == [("publish", "created", None, False, None), ("discard", None, None, None, "after-publish")]
 
 
 def test_guard_and_db_pr_share_rule_3_4_deny_messages():
@@ -2092,3 +2094,76 @@ def test_shown_record_failure_keeps_exit_code_and_stdout():
     assert "표시 기록을 쓰지 못함" in out.stderr
     assert out.stdout == ws.run("db_pr.py", ["summary", wt, "--format", "markdown"]).stdout
     ws.db_pr("discard", wt)
+
+
+# -- 작업 기록(JOB/trace.jsonl) db_pr 행: usage_stats 운영 지표 -------------------------------------------------------
+
+
+def _trace(ws: Workspace, job: str, step: str | None = None) -> list[dict]:
+    p = ws.job_dir(job) / "trace.jsonl"
+    rows = [json.loads(line) for line in p.read_text(encoding="utf-8").splitlines()] if p.is_file() else []
+    return [r for r in rows if step is None or r["step"] == step]
+
+
+def test_trace_rows_for_stage_publish_republish_and_discard():
+    ws = Workspace()
+    wt = _staged_job(ws, "MOCK-7001", "p7-analyze-append.plan.json")
+    assert _then_summary(ws, "MOCK-7001", "issue/MOCK-7001").returncode == 0
+    out = ws.db_pr(*_publish_args(ws, "MOCK-7001", "issue/MOCK-7001", "--commit"))
+    again = ws.db_pr(*_publish_args(ws, "MOCK-7001", "issue/MOCK-7001", "--commit", lease=out["head_sha"]))
+    assert again["pr"]["action"] == "edited"
+    ws.db_pr("discard", wt)
+    rows = _trace(ws, "MOCK-7001")
+    assert [r["step"] for r in rows] == ["stage", "publish", "publish", "discard"]
+    assert all(r["v"] == 2 and r["ts"].endswith("Z") and "script" not in r and "args" not in r for r in rows)
+    assert {k: rows[0][k] for k in ("result", "dry_run")} == {"result": "ok", "dry_run": False}
+    n = out["pr"]["number"]
+    assert [(r["action"], r["pr"], r["gh_ok"]) for r in rows[1:3]] == [("created", n, True), ("edited", n, True)]
+    assert rows[3]["outcome"] == "after-publish"
+
+
+def test_trace_discard_outcome_cancel_and_dry_run():
+    ws = Workspace()
+    wt = _staged_job(ws, "MOCK-7001", "p7-analyze-append.plan.json")
+    ws.stage("MOCK-7001", "issue/MOCK-7001", expect=(0, 3))
+    ws.db_pr("discard", wt)
+    ws.acquire("MOCK-7001")
+    ws.stage("MOCK-7001", "issue/MOCK-7001", expect=(0, 3), dry_run=True)
+    ws.db_pr("discard", wt)
+    rows = _trace(ws, "MOCK-7001")
+    assert [(r["step"], r.get("outcome"), r.get("dry_run")) for r in rows] == [
+        ("stage", None, False), ("discard", "cancel", None), ("stage", None, True), ("discard", "dry-run", None)]
+
+
+def test_trace_stage_draft_verify_and_usage_error_rows():
+    ws = Workspace()
+    ws.plan("MOCK-7002", "p7-analyze-new-cause.plan.json", draft_verified=False)
+    ws.acquire("MOCK-7002")
+    ws.stage("MOCK-7002", "issue/MOCK-7002", expect=1)
+    (ws.job_dir("MOCK-7002") / "plan.json").write_text("{not json", encoding="utf-8")
+    assert _stage_raw(ws, "MOCK-7002", "issue/MOCK-7002").returncode == 2
+    rows = _trace(ws, "MOCK-7002", "stage")
+    assert [r["result"] for r in rows] == ["draft-verify", "error"] and "message" not in rows[0]
+    msg = rows[1]["message"]
+    assert msg.startswith("계획 형식 오류: JSON을 읽을 수 없습니다") and len(msg) <= 120
+    ws.db_pr("lock", "release", "MOCK-7002")
+
+
+def test_trace_write_failure_keeps_stdout_and_exit_code():
+    ws = Workspace()
+    wt = _staged_job(ws, "MOCK-7001", "p7-analyze-append.plan.json")
+    (ws.job_dir("MOCK-7001") / "trace.jsonl").mkdir()          # 그 자리에 폴더: append 불가
+    proc = _then_summary(ws, "MOCK-7001", "issue/MOCK-7001")
+    assert proc.returncode == 0 and proc.stdout.startswith("## push 전 확인: MOCK-7001")
+    assert "작업 기록을 쓰지 못함(stage" in proc.stderr
+    assert proc.stdout == ws.run("db_pr.py", ["summary", wt, "--format", "markdown"]).stdout
+    proc = ws.run("db_pr.py", ["discard", wt])
+    assert proc.returncode == 0 and json.loads(proc.stdout)["discarded"] is True and "작업 기록을 쓰지 못함(discard" in proc.stderr
+
+
+def test_trace_note_unencodable_message_only_warns(tmp_path, capsys):
+    """인코딩할 수 없는 글(서로게이트)이 든 기록도 예외를 내지 않는다 — 원래 UsageError(종료 2)를 가리지 않는다."""
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    from dbpr.lock import trace_note
+    trace_note(tmp_path, "stage", result="error", message="깨진 글 \udc80")
+    assert "작업 기록을 쓰지 못함(stage: UnicodeEncodeError)" in capsys.readouterr().err

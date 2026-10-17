@@ -105,6 +105,9 @@ def test_analysis_is_small_deterministic_and_writes_report_and_trace():
     scripts = [row.get("script") for row in trace if row.get("script")]
     assert "parse_logcat.py" in scripts and "match_signatures.py" in scripts
     assert all("exit" in row and "ms" in row for row in trace if row.get("script"))
+    # start 행 v 2: 이 뒤 행으로 운영 지표를 잰다(usage_stats). 0-key는 trace를 열기 전에 불려 start 앞에 쓰인다
+    steps = [row["step"] for row in trace]
+    assert [row.get("v") for row in trace if row["step"] == "start"] == [2] and steps.index("0-key") < steps.index("start")
 
 
 def test_version_mismatch_is_report_only(monkeypatch):

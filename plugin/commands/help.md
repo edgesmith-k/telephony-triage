@@ -37,6 +37,7 @@ telephony-triage 커맨드 도움말을 보여준다. 인자: $ARGUMENTS
 | (A) 비슷한 이슈·Jira 번호부터 찾고 싶다 | `search <증상 문장 또는 키워드>` |
 | 이슈 DB를 최신으로 받고, 오래된 작업과 내 열린 PR을 보고 싶다 | `sync` |
 | 어디까지 했는지 모르겠다, 막힌 것과 다음 할 일을 보고 싶다 | `status [JIRA-KEY]` |
+| 막혔다·오류가 났다, 관리자에게 보낼 진단 한 장 | `status [JIRA-KEY] --doctor` |
 | 내 PR이 머지 대기 중인데 main이 바뀌었다 | `sync-pr [branch]` |
 | 수정 CL이 머지됐다 | `fix-submitted <원인 ID> --ref <CL> --fixed-in <branch>` |
 | 수정 빌드에서 재발하지 않는지 확인하고 싶다 | `verify-fix <원인 ID> <수정 빌드 logcat>` |

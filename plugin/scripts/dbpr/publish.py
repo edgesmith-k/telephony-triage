@@ -20,7 +20,8 @@ from common import ghcli
 import db_summary
 from common.exitcodes import CHECK_FAILED, OK, USAGE
 
-from .lock import PLAN, PR_FILE, REGRESS, STAGE, STATE, TOOL_PREFIX, UsageError, _iso, _read_json, _write_json, now
+from .lock import (PLAN, PR_FILE, REGRESS, STAGE, STATE, TOOL_PREFIX, UsageError, _iso, _read_json, _write_json, now,
+                   trace_note)
 from . import worktree as _wt
 from .worktree import (Ctx, abs_wt, _check_branch, _err_brief, _gh, _git, _job_of, _out, _owned_worktree,
                        _pending_files, _prepare_worktree, _ref_sha, _same_path, _worktrees, run_script)
@@ -492,7 +493,7 @@ def _commit_approved(wt: Path, job_dir: Path, state: dict, approved: str) -> tup
     hooks = _out(_git(wt, "config", "--get", "core.hooksPath", check=False))
     if hooks != ".githooks":
         raise UsageError(f"이 레포의 core.hooksPath가 '{hooks or '(없음)'}'다. 정확히 .githooks여야 커밋할 수 있다 "
-                         "(규칙 5). /telephony-triage:setup 을 다시 실행한다.")
+                         "(규칙 5). setup 5번(hook)만 다시 — `config.py install-hooks`.")
     _git(wt, "add", "-A")
     deny = _guard_problems(_wt._PLUGIN_ROOT, wt)
     if deny:
@@ -605,6 +606,7 @@ def publish(ctx: Ctx, wt: Path, branch: str, lease: str, approved: str, commit: 
         included[src.name] = {"file": src.name, "pr": number}
     plan["included_pending"] = sorted(included.values(), key=lambda i: i["file"])
     plan_path.write_text(json.dumps(plan, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
+    trace_note(job_dir, "publish", action=action, pr=number, gh_ok=gh_error is None)   # PR 생성 시각(usage_stats)
     result = {"published": True, "pushed": True, **extra, "branch": branch, "head_sha": head, "lease": lease,
               "pr": {"number": number, "url": url, "action": action}, "plan": str(plan_path),
               "pr_ids_recorded": ids_recorded}

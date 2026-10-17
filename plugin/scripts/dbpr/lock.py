@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import sys
 import tempfile
 import time
 import uuid
@@ -22,6 +23,7 @@ SNAPSHOT_META = session_lock.SNAPSHOT_META   # snapshot이 best-effort로 쓴다
 FRESH = session_lock.FRESH
 EXPIRE = session_lock.EXPIRE
 STATE, STAGE, PR_FILE, REGRESS, PLAN = "state.json", "stage.json", "pr.json", "regress.json", "plan.json"
+TRACE = "trace.jsonl"         # 작업 기록(triage Runner와 같은 파일). db_pr 행은 `v: 2`, script·args 없음
 PASTED_STEPS = "steps-pasted.txt"   # 개발자가 붙여넣은 스텝 목록 원문(08-safety.md §8.1) — 작업이 끝나면 지운다
 # draft-verify.json(common/draftcheck)은 작업 파일이 아니다: plan.json과 함께 남아 sync-pr 재적용·discard 뒤 재stage에서
 # 작성 op가 그대로면 다시 묻지 않는다(지문이 다르면 stage가 멈춘다). cleanup --older-than은 폴더째 지운다
@@ -189,3 +191,14 @@ def _read_json(path: Path) -> dict | None:
 def _write_json(path: Path, data: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
+
+
+def trace_note(job_dir: Path, step: str, **fields) -> None:
+    """`JOB/trace.jsonl`에 사건 한 줄 `{ts, step, v: 2, …}`(append, contracts.md §3.2 작업 기록). 채점기 trace()는 script 있는
+    행만 세므로 여기 행은 보이지 않는다. 쓰지 못하면 stderr 경고만 — 종료 코드·stdout은 호출한 명령 그대로."""
+    try:
+        with (Path(job_dir) / TRACE).open("a", encoding="utf-8", newline="\n") as fh:
+            fh.write(json.dumps({"ts": _iso(now()), "step": step, "v": 2, **fields}, ensure_ascii=False) + "\n")
+    except (OSError, ValueError) as exc:     # ValueError: 인코딩할 수 없는 글(서로게이트) — 원래 오류를 가리지 않는다
+        print(f"[telephony-triage] 작업 기록을 쓰지 못함({step}: {type(exc).__name__}) — 운영 지표(usage_stats)에서 빠진다",
+              file=sys.stderr)
