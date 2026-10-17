@@ -14,21 +14,32 @@ PR이 있는데 그 두 행이 없으면 pr_unmeasured(record처럼 analyze 없�
 `issue` 제외), 대화 질문(AskUserQuestion)은 스크립트 신호가 없어 세지 않는다. release(Step 7) 사유는 기록이 없어 파일 상태로만
 가른다(분석 뒤 기록하지 않음 = 분석만). `cleanup --yes`로 지운 작업은 빠진다.
 
+`--transcripts [<dir>]`(opt-in, 기본 `$CLAUDE_CONFIG_DIR/projects` 또는 `~/.claude/projects`, 오프라인·읽기 전용): Claude Code
+transcript에서 플러그인 세션(플러그인 스크립트 Bash 호출 또는 `telephony-triage` 스킬)의 usage를 응답(message.id)마다 한 번 세어
+단계(basic·code·deep·explore·new_cause·write·post·other·retry·subagent, `transcripts()` 참고)로 나누고, 대화 질문(거부·입력 오류
+아닌 AskUserQuestion·__ask_user)·심층 스킬 호출·show_guard 되돌림·거부·스크립트 오류(종료 1·2)·모델·Claude Code 버전을 센다.
+단계 합 = 전체(자체 검사). 대상 세션이 없거나 usage가 없으면 미측정(0이 아니다). 숫자만 내고 내용·명령·경로·세션 ID는 내지 않는다.
+
 CLI:
-    python3 <plugin.scripts_path>/usage_stats.py [--work-dir <dir> | --platform <이름>] [--json] [--plugin-root <dir>]
+    python3 <plugin.scripts_path>/usage_stats.py [--work-dir <dir> | --platform <이름>] [--json] [--transcripts [<dir>]]
+                                                 [--plugin-root <dir>]
     (`plugin.scripts_path`는 사용자 config — setup·SessionStart가 설치본 scripts 경로로 맞춘다. 읽기 전용)
     (기본: 선택 플랫폼(`--platform` > TT_PLATFORM > 사용자 config platform > site)의 사용자 config work_dir.
     `--work-dir`와 `--platform`은 함께 쓸 수 없다. `--work-dir`면 site-defaults를 읽지 않는다)
     텍스트 9줄(첫 줄 집계 대상). `--json`이면 JSON 한 줄 `{format: 2, platform, work_dir, jobs, states{…}, held_read_only,
     analysis_only_runs, cancel_ratio, pr_minutes{n, median, mean, values}, pr_unmeasured, analysis_minutes{…},
     questions{jobs, total, per_job, by_kind}, retries{runs, errors, stages, stage_failed}, legacy{jobs, stages}, other_flows, tokens}`
-    (개수·시간만 — 작업 키·trace 메시지 없음, `--work-dir`면 `platform`은 null, `tokens`는 null).
+    (개수·시간만 — 작업 키·trace 메시지 없음, `--work-dir`면 `platform`은 null). `tokens`는 `--transcripts`가 없으면 null,
+    있으면 `{dir, sessions, analyze_sessions, by_stage{단계: {calls, input, output, cache_read, cache_write}}, total(없으면 null),
+    asks, deep_calls, show_guard{stop, deny}, script_errors, models, versions, usage_missing}`.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
+import re
 import statistics
 import sys
 from pathlib import Path
@@ -36,7 +47,7 @@ from pathlib import Path
 SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS))
 import platforms  # noqa: E402
-from common import jobstatus, session_lock, site_defaults, userconfig  # noqa: E402
+from common import jobstatus, session_lock, shown, site_defaults, userconfig  # noqa: E402
 from platforms import session as platform_session  # noqa: E402
 
 MARKERS = (jobstatus.PLAN, jobstatus.STATE, jobstatus.TRACE, jobstatus.TRIAGE_STATE)
@@ -147,6 +158,202 @@ def stats(work_dir: Path) -> dict:
             "other_flows": sum(1 for j in jobs if j["kind"] == "other"), "tokens": None}
 
 
+# -- --transcripts: 질문·재시도·단계별 토큰 --------------------------------------------------------------------------
+# 대상 = Claude Code transcript 줄(`sessionId`, 평문 JSONL). stream-json(`session_id`)·표시 기록 줄은 sessionId가 없어 빠진다.
+# 내용·명령·경로·세션 ID는 내지 않는다: usage 숫자와 표식이 맞았는지만 센다.
+
+PLUGIN_CALL = re.compile(r"\b(?:triage|db_pr|db_verify|db_add|config|issue_post|parse_logcat|code_roots|db_search|mask_pii|"
+                         r"job_status)\.py\b")
+CODE_EXT = (".java", ".kt", ".c", ".cc", ".cpp", ".h", ".hpp", ".aidl", ".hal")
+STEP_KEYS = ("basic", "code", "deep", "explore", "new_cause", "write", "post", "other", "retry", "subagent")
+USAGE_KEYS = (("input", "input_tokens"), ("output", "output_tokens"), ("cache_read", "cache_read_input_tokens"),
+              ("cache_write", "cache_creation_input_tokens"))
+EXIT_RE = re.compile(r"Exit code (\d+)")
+_ARG = r"[^\n;&|]*"     # 같은 명령 안(줄·;·&·| 전)
+
+
+def _bash_marker(cmd: str) -> str | None:
+    for key, pattern in (("explore", rf"\btriage\.py\b{_ARG}\bexplore\b"), ("basic", rf"\btriage\.py\b{_ARG}\brun\b"),
+                         ("new_cause", rf"\bdb_verify\.py\b{_ARG}\brules\b{_ARG}--draft|\bparse_logcat\.py\b{_ARG}\bcut\b|"
+                                       rf"\bdb_add\.py\b{_ARG}\bsimilar\b"),
+                         ("write", rf"\bdb_pr\.py\b{_ARG}\b(?:preflight|stage|summary|publish|discard|find-plan)\b"),
+                         ("post", r"\bissue_post\.py\b")):
+        if re.search(pattern, cmd):
+            return key
+    return None
+
+
+def _skill(tool: dict) -> str:
+    return str(tool["input"].get("skill") or "") if tool["name"] == "Skill" else ""
+
+
+def _marker(tool: dict, cur: str | None) -> str | None:
+    """도구 호출 하나가 정하는 다음 단계(없으면 None). ponytail: 명령 모양·경로 끝으로 가르는 근사(heredoc 글 속 명령도 걸린다)."""
+    name, inp = tool["name"], tool["input"]
+    if name == "Bash":
+        return _bash_marker(str(inp.get("command") or ""))
+    if name == "Skill":
+        return None if _skill(tool).startswith("telephony-triage") else "deep"
+    paths = [str(inp.get(k) or "").replace("\\", "/") for k in ("file_path", "path", "glob", "pattern")]
+    if name == "Read" and paths[0].endswith("reference/db-authoring.md"):
+        return "new_cause"
+    if name in ("Write", "Edit"):
+        return "new_cause" if "/draft/" in paths[0] else "write" if paths[0].endswith("plan.json") else None
+    if cur in ("basic", "code") and name in ("Read", "Grep", "Glob"):
+        return "code" if any(p.lower().rstrip("*}").endswith(CODE_EXT) for p in paths) else "basic"
+    return None
+
+
+def _failed(tool: dict) -> str | None:
+    """실패 신호: show_guard 거부 → deny, 플러그인 스크립트 종료 1·2(3 제외) → script."""
+    if shown.denied(tool):
+        return "deny"
+    m = EXIT_RE.search(tool["result"])
+    if tool["name"] == "Bash" and tool["error"] and m and m.group(1) in ("1", "2") \
+            and PLUGIN_CALL.search(str(tool["input"].get("command") or "")):
+        return "script"
+    return None
+
+
+def _text(body) -> str:
+    if isinstance(body, list):
+        return "\n".join(str(b.get("text", "")) for b in body if isinstance(b, dict))
+    return str(body or "")
+
+
+def _session_lines(root: Path) -> dict:
+    """`root` 아래 `*.jsonl`의 transcript 줄 → {sessionId: {"main": [...], "sub": [...]}}. 하위 에이전트 파일(`subagents/`)·
+    isSidechain 줄은 sub. 깨진 줄·sessionId 없는 줄(stream-json 등)은 건너뛴다."""
+    sessions: dict = {}
+    for path in sorted(root.rglob("*.jsonl")):
+        sub_file = "subagents" in path.relative_to(root).parts
+        try:
+            with path.open(encoding="utf-8", errors="replace") as fh:
+                for raw in fh:
+                    try:
+                        ev = json.loads(raw)
+                    except ValueError:
+                        continue
+                    if isinstance(ev, dict) and isinstance(ev.get("sessionId"), str):
+                        part = "sub" if sub_file or ev.get("isSidechain") else "main"
+                        sessions.setdefault(ev["sessionId"], {"main": [], "sub": []})[part].append(ev)
+        except OSError:
+            continue
+    return sessions
+
+
+def _responses(lines: list) -> list:
+    """assistant 줄을 message.id로 묶은 응답(처음 나온 순서, usage는 필드별 최댓값 — 한 응답이 여러 줄)과 Stop 되돌림 표시."""
+    order, by_id, tools = [], {}, {}
+    for ev in lines:
+        msg = ev.get("message") if isinstance(ev.get("message"), dict) else {}
+        content = msg.get("content")
+        if ev.get("type") == "assistant":
+            rid = msg.get("id") or ev.get("uuid") or len(order)
+            r = by_id.get(rid)
+            if r is None:
+                r = by_id[rid] = {"usage": None, "model": msg.get("model"), "tools": []}
+                order.append(r)
+            if isinstance(msg.get("usage"), dict):
+                r["usage"] = {k: max(int(msg["usage"].get(f) or 0), (r["usage"] or {}).get(k, 0)) for k, f in USAGE_KEYS}
+            for c in content if isinstance(content, list) else ():
+                if isinstance(c, dict) and c.get("type") == "tool_use":
+                    t = {"kind": "tool", "name": str(c.get("name") or ""), "result": "", "error": False,
+                         "input": c.get("input") if isinstance(c.get("input"), dict) else {}}
+                    r["tools"].append(t)
+                    tools[c.get("id")] = t
+        elif ev.get("type") == "user":
+            if isinstance(content, str) and content.lstrip().startswith("Stop hook feedback") and shown.MARKER in content:
+                order.append({"stop": True})        # 표시 보조 hook의 Stop 되돌림
+            for c in content if isinstance(content, list) else ():
+                if isinstance(c, dict) and c.get("type") == "tool_result" and c.get("tool_use_id") in tools:
+                    tools[c["tool_use_id"]].update(result=_text(c.get("content")), error=bool(c.get("is_error")))
+    return order
+
+
+def transcripts(root: Path) -> dict:
+    """`root`(Claude Code projects 폴더) 아래 플러그인 세션의 단계별 토큰·대화 질문·재시도 신호 수. 오프라인·읽기 전용.
+    단계: 응답은 현재 단계에 넣고 그 응답의 도구 호출이 다음 단계를 정한다(첫 표식 전 응답은 첫 표식 단계, 표식이 없으면
+    other). 실패 신호(플러그인 스크립트 종료 1·2, show_guard 거부, Stop 되돌림) 뒤 ~ 도구를 부르는 다음 응답까지는 retry."""
+    zero = {"calls": 0, "input": 0, "output": 0, "cache_read": 0, "cache_write": 0}
+    out = {"dir": str(root), "sessions": 0, "analyze_sessions": 0, "by_stage": {k: dict(zero) for k in STEP_KEYS},
+           "total": None, "asks": 0, "deep_calls": 0, "show_guard": {"stop": 0, "deny": 0}, "script_errors": 0,
+           "models": {}, "versions": {}, "usage_missing": 0}
+    total = dict(zero)
+
+    def add(stage: str, r: dict) -> None:
+        model = str(r.get("model") or "?")
+        out["models"][model] = out["models"].get(model, 0) + 1
+        if r["usage"] is None:
+            out["usage_missing"] += 1
+            return
+        out["by_stage"][stage]["calls"] += 1
+        for k, _ in USAGE_KEYS:
+            out["by_stage"][stage][k] += r["usage"][k]
+
+    for sess in (_session_lines(root).values() if root.is_dir() else ()):
+        main = _responses(sess["main"])
+        calls = [t for r in main for t in r.get("tools", ())]
+        if not any(PLUGIN_CALL.search(str(t["input"].get("command") or "")) if t["name"] == "Bash"
+                   else _skill(t).startswith("telephony-triage") for t in calls):
+            continue
+        sub = _responses(sess["sub"])
+        out["sessions"] += 1
+        version = next((str(ev["version"]) for ev in sess["main"] if ev.get("version")), "?")
+        out["versions"][version] = out["versions"].get(version, 0) + 1
+        out["analyze_sessions"] += any(t["name"] == "Bash" and _bash_marker(str(t["input"].get("command") or "")) == "basic"
+                                       for t in calls)
+        for r in main + sub:        # 자체 검사용 합계(단계 나누기와 따로 센다)
+            if not r.get("stop") and r["usage"] is not None:
+                total["calls"] += 1
+                for k, _ in USAGE_KEYS:
+                    total[k] += r["usage"][k]
+        cur, pending, retry = None, [], False
+        for r in main:
+            if r.get("stop"):
+                out["show_guard"]["stop"] += 1
+                retry = True
+                continue
+            if retry:
+                add("retry", r)
+            elif cur is None:
+                pending.append(r)
+            else:
+                add(cur, r)
+            nxt = None
+            for t in r["tools"]:
+                if shown.is_ask(t["name"]) and not shown.denied(t) \
+                        and not (t["error"] and any(x in t["result"] for x in shown.ASK_REJECTED)):
+                    out["asks"] += 1
+                out["deep_calls"] += t["name"] == "Skill" and not _skill(t).startswith("telephony-triage")
+                nxt = _marker(t, nxt or cur) or nxt
+                fail = _failed(t)
+                if fail == "deny":
+                    out["show_guard"]["deny"] += 1
+                elif fail == "script":
+                    out["script_errors"] += 1
+            if r["tools"]:
+                retry = any(_failed(t) for t in r["tools"])
+                if cur == "code" and nxt is None:       # 코드가 아닌 도구 응답이면 basic으로 돌아간다
+                    nxt = "basic"
+            if nxt and cur is None:
+                for p in pending:
+                    add(nxt, p)
+                pending = []
+            cur = nxt or cur
+        for p in pending:
+            add("other", p)
+        for r in sub:
+            if not r.get("stop"):
+                add("subagent", r)
+    staged = {k: sum(v[k] for v in out["by_stage"].values()) for k in zero}
+    if staged != total:
+        print(f"[telephony-triage] transcript 집계 자체 검사 불일치: 단계 합 {staged} ≠ 전체 {total}", file=sys.stderr)
+    if total["calls"]:
+        out["total"] = total
+    return out
+
+
 def report_lines(s: dict) -> list[str]:
     """텍스트 8줄(집계 대상 줄 뒤). "취소 비율" 낱말은 site_checks PILOT_FIELDS가 본다."""
     def dist(d: dict) -> str:
@@ -166,7 +373,21 @@ def report_lines(s: dict) -> list[str]:
             f"분석까지(첫 analyze → 분석 완료) {dist(s['analysis_minutes'])}",
             f"드라이버 질문(issue 제외) 작업당 {per_job}개 (총 {q['total']}개: {kinds})",
             f"재시도: analyze 실행 {r['runs']} · 오류 {r['errors']} · stage {r['stages']}(실패 {r['stage_failed']})",
-            "토큰: 미측정" if s["tokens"] is None else f"토큰: 합계 {json.dumps(s['tokens']['total'], ensure_ascii=False)}"]
+            _token_line(s["tokens"])]
+
+
+def _token_line(t: dict | None) -> str:
+    if t is None:
+        return "토큰: 미측정 (--transcripts 없음)"
+    if t["total"] is None:
+        return f"토큰: 미측정 (transcript 대상 세션 {t['sessions']}, usage 없는 응답 {t['usage_missing']})"
+    tot = t["total"]
+    stages = " · ".join(f"{k} {sum(v[f] for f in ('input', 'output', 'cache_read', 'cache_write'))}"
+                        for k, v in t["by_stage"].items() if v["calls"])
+    return (f"토큰(transcript, 세션 {t['sessions']}·analyze {t['analyze_sessions']}): 입력 {tot['input']} · 출력 {tot['output']} · "
+            f"캐시 읽기 {tot['cache_read']} · 캐시 쓰기 {tot['cache_write']} (응답 {tot['calls']}) — 단계별 {stages} — 대화 질문 "
+            f"{t['asks']} · 심층 {t['deep_calls']} · 되돌림 {t['show_guard']['stop']}·거부 {t['show_guard']['deny']} · "
+            f"스크립트 오류 {t['script_errors']}")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -175,6 +396,9 @@ def build_parser() -> argparse.ArgumentParser:
     target.add_argument("--work-dir", help="기본: 선택 플랫폼의 사용자 config work_dir")
     platform_session.add_arg(target)
     parser.add_argument("--json", action="store_true", help="집계 대상과 수치를 JSON 한 줄로(개수·시간만, 내용 없음)")
+    parser.add_argument("--transcripts", nargs="?", const="", default=None, metavar="dir",
+                        help="Claude Code transcript의 단계별 토큰·대화 질문·재시도 신호도 센다(opt-in, 숫자만). "
+                             "기본 $CLAUDE_CONFIG_DIR/projects 또는 ~/.claude/projects")
     parser.add_argument("--plugin-root", default=None)
     return parser
 
@@ -201,6 +425,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f"work_dir가 없다: {work_dir}", file=sys.stderr)
         return 2
     s = stats(work_dir)
+    if args.transcripts is not None:
+        root = Path(args.transcripts).expanduser() if args.transcripts else \
+            Path(os.environ.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude").expanduser() / "projects"
+        s["tokens"] = transcripts(root)
     if args.json:
         print(json.dumps({"format": 2, "platform": name, "work_dir": str(work_dir), **s}, ensure_ascii=False))
         return 0

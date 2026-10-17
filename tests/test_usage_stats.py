@@ -9,6 +9,7 @@ import pytest
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "plugin" / "scripts"))
 import usage_stats  # noqa: E402
+from common import shown  # noqa: E402
 
 T0 = datetime(2026, 10, 1, tzinfo=timezone.utc)
 START = T0.isoformat()
@@ -175,7 +176,7 @@ def test_json_and_text_carry_counts_only(tmp_path, capsys):
     text = capsys.readouterr().out
     lines = text.splitlines()
     assert len(lines) == 9 and lines[0].startswith("집계 대상:") and any("취소 비율" in ln for ln in lines)
-    assert lines[-1] == "토큰: 미측정"
+    assert lines[-1] == "토큰: 미측정 (--transcripts 없음)"
     for blob in (out, text):
         assert "SECRET-KEY-1" not in blob and "secret-msg" not in blob
 
@@ -252,3 +253,146 @@ def test_json_output_has_counts_only(two_platforms):
     data = json.loads(out.out)
     assert code == 0 and data["platform"] is None and data["work_dir"] == str(two_platforms["wo"])
     assert (data["states"]["pr"], data["jobs"], data["states"]["cancelled"]) == (2, 2, 0)
+
+
+# -- --transcripts: transcript usage를 단계별로 ------------------------------------------------------------------------
+
+SID = "11111111-2222-3333-4444-555555555555"
+
+
+class _T:
+    """합성 transcript(Claude Code 줄 모양: sessionId·message.id·usage, tool_use/tool_result)."""
+
+    def __init__(self, sid=SID, version="2.1.300"):
+        self.lines, self.sid, self.version, self.n = [], sid, version, 0
+
+    def resp(self, *tools, usage=(10, 1, 100, 5), split=False, sidechain=False, model="claude-sonnet-5-5"):
+        self.n += 1
+        mid = f"msg_{self.n}"
+        u = None if usage is None else dict(zip(("input_tokens", "output_tokens", "cache_read_input_tokens",
+                                                 "cache_creation_input_tokens"), usage))
+        content = [{"type": "text", "text": "SECRET-TEXT"}]
+        ids = []
+        for name, inp, *_ in tools:
+            ids.append(f"tu_{self.n}_{len(ids)}")
+            content.append({"type": "tool_use", "id": ids[-1], "name": name, "input": inp})
+        chunks = [[c] for c in content] if split else [content]
+        for c in chunks:      # 한 응답이 여러 줄(같은 message.id) — usage는 줄마다 같은 값(중간값이면 작다)
+            self.lines.append({"type": "assistant", "sessionId": self.sid, "version": self.version, "isSidechain": sidechain,
+                               "message": {"id": mid, "model": model, "role": "assistant", "content": c,
+                                           **({"usage": u} if u else {})}})
+        for (name, inp, *rest), tid in zip(tools, ids):
+            result, err = (rest + [("ok", False)])[0] if rest else ("ok", False)
+            self.lines.append({"type": "user", "sessionId": self.sid, "isSidechain": sidechain, "message": {"role": "user",
+                               "content": [{"type": "tool_result", "tool_use_id": tid, "content": result, "is_error": err}]}})
+        return self
+
+    def user(self, text):
+        self.lines.append({"type": "user", "sessionId": self.sid, "isMeta": True, "message": {"role": "user", "content": text}})
+        return self
+
+    def write(self, path: Path):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("".join(json.dumps(x, ensure_ascii=False) + "\n" for x in self.lines), encoding="utf-8")
+        return path
+
+
+def bash(cmd, result="ok", err=False):
+    return ("Bash", {"command": cmd}, (result, err))
+
+
+S = "python3 /p/scripts"
+
+
+def test_transcripts_stage_markers_and_first_marker_attribution(tmp_path):
+    t = _T()
+    t.resp(usage=(1, 1, 1, 1))                                          # 첫 표식 전 → 첫 표식(basic) 단계
+    t.resp(bash(f"{S}/triage.py run SECRET-KEY-1 --logs /secret/path.log"), split=True)
+    t.resp(("Read", {"file_path": "/src/Foo.java"}))                    # basic 응답, 다음은 code
+    t.resp(("Grep", {"pattern": "x", "path": "/src", "glob": "*.kt"}))  # code
+    t.resp(bash("ls"))                                                  # code 응답, 코드 아닌 도구 → basic
+    t.resp(("Skill", {"skill": "mock-analyzers:mock-data-analyzer"}))   # basic 응답, 다음 deep
+    t.resp(bash(f"{S}/triage.py explore SECRET-KEY-1"))                  # deep
+    t.resp(("Read", {"file_path": "/p/skills/telephony-triage/reference/db-authoring.md"}))   # explore
+    t.resp(("Write", {"file_path": "/w/K/draft/x.yaml", "content": "c"}))                     # new_cause
+    t.resp(bash(f"{S}/db_verify.py rules --plan p --draft d"), bash(f"{S}/parse_logcat.py cut x"),
+           bash(f"{S}/db_add.py similar x"))                                                  # new_cause
+    t.resp(("Write", {"file_path": "/w/K/plan.json", "content": "{}"}))                       # new_cause → write
+    t.resp(bash(f"{S}/db_pr.py stage /w/K/plan.json --wt /w/K/wt --then-summary"))            # write
+    t.resp(bash(f"{S}/issue_post.py render K"))                                               # write → post
+    t.resp()                                                                                  # post
+    t.write(tmp_path / "proj" / "a" / f"{SID}.jsonl")
+    tok = usage_stats.transcripts(tmp_path / "proj")
+    calls = {k: v["calls"] for k, v in tok["by_stage"].items() if v["calls"]}
+    assert calls == {"basic": 4, "code": 2, "deep": 1, "explore": 1, "new_cause": 3, "write": 2, "post": 1}
+    assert tok["by_stage"]["basic"]["input"] == 1 + 10 * 3                # 같은 message.id 두 줄은 한 번
+    assert (tok["sessions"], tok["analyze_sessions"], tok["deep_calls"], tok["usage_missing"]) == (1, 1, 1, 0)
+    total = tok["total"]
+    assert total["calls"] == 14 and sum(v["input"] for v in tok["by_stage"].values()) == total["input"]
+    assert tok["models"] == {"claude-sonnet-5-5": 14} and tok["versions"] == {"2.1.300": 1}
+
+
+def test_transcripts_retry_window_subagent_asks_and_guard(tmp_path):
+    t = _T()
+    t.resp(bash(f"{S}/triage.py run K"))
+    t.resp(bash(f"{S}/db_pr.py stage p --wt w", "Exit code 2\n계획 형식 오류", True))   # basic 응답, 실패 → retry
+    t.resp()                                                                          # retry(도구 없음)
+    t.resp(bash(f"{S}/db_pr.py stage p --wt w"))                                      # retry(도구 부름, 포함) → write
+    t.resp(bash(f"{S}/db_pr.py stage p --wt w", "Exit code 3\n승인 필요", True))       # write, 종료 3은 실패 아님
+    t.resp(("AskUserQuestion", {"questions": [{"question": "q"}]}, ("답", False)))      # write
+    t.resp(("AskUserQuestion", {"questions": []}, ("InputValidationError: 선택지", True)))   # 입력 오류 질문은 안 셈
+    t.resp(("AskUserQuestion", {"questions": []},
+            (f"PreToolUse:AskUserQuestion hook error: {shown.MARKER} push:x — 거부됨", True)))   # 거부 → retry
+    t.resp(bash("echo hi"))                                                             # retry
+    t.user(f"Stop hook feedback:\n{shown.MARKER} report:K#1 — 되돌림(오류 아님)")           # Stop 되돌림 → retry
+    t.resp(usage=None)                                                                 # retry, usage 없음
+    t.resp(("mcp__mock__ask_user", {"question": "q"}, ("y", False)))                    # retry(도구) → 끝
+    t.resp()                                                                           # write
+    t.write(tmp_path / "proj" / "a" / f"{SID}.jsonl")
+    sub = _T()
+    sub.n = 100                                                          # message.id는 세션 안에서 응답마다 다르다
+    sub.resp(bash("grep x"), usage=(7, 7, 7, 7), sidechain=True)
+    sub.write(tmp_path / "proj" / "a" / SID / "subagents" / "agent-1.jsonl")
+    side = _T()
+    side.n = 200
+    side.resp(usage=(2, 2, 2, 2), sidechain=True).write(tmp_path / "proj" / "a" / "side.jsonl")
+    tok = usage_stats.transcripts(tmp_path / "proj")
+    calls = {k: v["calls"] for k, v in tok["by_stage"].items() if v["calls"]}
+    assert calls == {"basic": 2, "retry": 4, "write": 5, "subagent": 2}
+    assert tok["by_stage"]["subagent"]["input"] == 9
+    assert (tok["asks"], tok["show_guard"], tok["script_errors"], tok["usage_missing"]) == (2, {"stop": 1, "deny": 1}, 1, 1)
+    assert sum(v["calls"] for v in tok["by_stage"].values()) == tok["total"]["calls"] == 13
+
+
+def test_transcripts_skip_non_plugin_sessions_and_stream_json(tmp_path):
+    other = _T(sid="other")
+    other.resp(bash("python3 x.py"), ("Skill", {"skill": "dataviz"})).write(tmp_path / "p" / "o.jsonl")
+    stream = [{"type": "assistant", "session_id": SID, "message": {"id": "m", "content": [{"type": "tool_use", "id": "t",
+               "name": "Bash", "input": {"command": "triage.py run K"}}], "usage": {"input_tokens": 99}}},
+              {"type": "result", "session_id": SID, "usage": {"input_tokens": 99}}]
+    (tmp_path / "p" / "events.jsonl").write_text("".join(json.dumps(x) + "\n" for x in stream) + "not json\n", encoding="utf-8")
+    tok = usage_stats.transcripts(tmp_path / "p")
+    assert tok["sessions"] == 0 and tok["total"] is None
+    _T().resp(("Skill", {"skill": "telephony-triage:analyze"}), usage=None).write(tmp_path / "p" / "s.jsonl")
+    tok = usage_stats.transcripts(tmp_path / "p")
+    assert tok["sessions"] == 1 and tok["total"] is None and tok["usage_missing"] == 1     # usage 없음 = 미측정(0 아님)
+
+
+def test_transcripts_cli_output_has_numbers_only(tmp_path, capsys):
+    t = _T()
+    t.resp(bash(f"{S}/triage.py run SECRET-KEY-1 --logs /secret/path.log"))
+    t.resp(("AskUserQuestion", {"questions": [{"question": "SECRET-Q"}]}, ("SECRET-ANSWER", False)))
+    t.write(tmp_path / "proj" / "x" / f"{SID}.jsonl")
+    (tmp_path / "work").mkdir()
+    assert usage_stats.main(["--work-dir", str(tmp_path / "work"), "--transcripts", str(tmp_path / "proj"), "--json"]) == 0
+    out = capsys.readouterr().out
+    tok = json.loads(out)["tokens"]
+    assert tok["sessions"] == 1 and tok["asks"] == 1 and tok["total"]["input"] == 20
+    assert usage_stats.main(["--work-dir", str(tmp_path / "work"), "--transcripts", str(tmp_path / "proj")]) == 0
+    text = capsys.readouterr().out
+    assert text.splitlines()[-1].startswith("토큰(transcript, 세션 1·analyze 1)") and "대화 질문 1" in text
+    for blob in (out, text):
+        for secret in ("SECRET", SID, "path.log", "triage.py"):
+            assert secret not in blob
+    assert usage_stats.main(["--work-dir", str(tmp_path / "work"), "--transcripts", str(tmp_path / "none")]) == 0
+    assert capsys.readouterr().out.splitlines()[-1].startswith("토큰: 미측정")
