@@ -884,11 +884,11 @@ def run(args, defaults: dict) -> tuple[dict, int]:
                 scope = set(gitscope.staged_files(repo))
                 root = gitscope.materialize_index(repo, temp / "index")
                 if gitscope.has_ref(repo, "HEAD"):
-                    base = _base_causes(gitscope.materialize_ref(repo, "HEAD", temp / "base"))
+                    base = _base_causes(gitscope.materialize_ref_sparse(repo, "HEAD", temp / "base"))
             elif args.changed:
                 scope = set(gitscope.changed_files(repo, args.changed))
-                base = _base_causes(gitscope.materialize_ref(repo, gitscope.merge_base(repo, args.changed),
-                                                             temp / "base"))
+                base = _base_causes(gitscope.materialize_ref_sparse(repo, gitscope.merge_base(repo, args.changed),
+                                                                    temp / "base"))
         except gitscope.GitError as exc:
             raise UsageError(str(exc)) from exc
         result = Linter(root, defaults, base_causes=base, residual=residual, scope=scope).run()

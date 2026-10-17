@@ -6,12 +6,13 @@
 - `--ref <ref>`: 그 커밋의 트리.
 
 index·ref의 트리가 필요하면 임시 디렉토리로 꺼낸다(`materialize_*`). 사용자 워킹 트리는
-바꾸지 않는다.
+바꾸지 않는다. 비교 기준(base) 트리는 fixture 로그를 빼고 꺼낸다(`materialize_ref_sparse`).
 """
 
 from __future__ import annotations
 
 import io
+import os
 import subprocess
 import tarfile
 from pathlib import Path
@@ -24,8 +25,8 @@ class GitError(Exception):
     pass
 
 
-def git(repo: Path, *args: str, binary: bool = False):
-    proc = subprocess.run(["git", "-C", str(repo), *args], capture_output=True)
+def git(repo: Path, *args: str, binary: bool = False, env: dict | None = None, input: bytes | None = None):
+    proc = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, env=env, input=input)
     if proc.returncode != 0:
         raise GitError(f"git {' '.join(args)} 실패: {proc.stderr.decode('utf-8', 'replace').strip()}")
     return proc.stdout if binary else proc.stdout.decode("utf-8", "replace")
@@ -64,6 +65,45 @@ def materialize_ref(repo: Path, ref: str, dest: Path) -> Path:
             tar.extractall(dest, filter="data")
         else:                                         # 3.11.0~3.11.3 (예: Ubuntu 22.04 python3.11): 같은 기준을 직접 검사
             tar.extractall(dest, members=_safe_members(tar, dest))
+    return dest
+
+
+# 기준(base) 트리를 읽는 쪽(이슈 정의·parser-rules·schema)은 fixture 로그를 읽지 않는다 (`<카테고리>/<유형>/fixtures/`)
+NO_FIXTURES = (":(exclude,glob)*/*/fixtures/**",)
+
+
+def materialize_ref_sparse(repo: Path, ref: str, dest: Path, exclude: tuple[str, ...] = NO_FIXTURES) -> Path:
+    """커밋 `ref`의 트리에서 `exclude` pathspec을 뺀 파일만 `dest`로 꺼낸다.
+
+    `dest` 옆(호출자의 임시 디렉토리 안)의 임시 index에 `read-tree` → `ls-files` → `checkout-index`. 사용자
+    index·워킹 트리는 건드리지 않는다(`GIT_INDEX_FILE`은 이 세 호출에서만 덮어쓴다). `repo`가 레포의 하위
+    디렉토리면 그 하위 트리(`<ref>:<prefix>`)만 꺼낸다(`materialize_ref`의 git archive와 같은 상대 경로).
+    쓰기는 git이 하므로 eol·필터 변환은 git archive와 같다(최상위 DB 기준). 다른 점:
+    - `export-ignore`·`export-subst` 속성을 따르지 않는다(이슈 DB는 이 속성을 쓰지 않는다).
+    - 심볼릭 링크는 그대로 쓴다(archive 경로의 대상 밖 링크 검사 없음, 입력은 사용자 자신의 ref).
+    - ref에 `.gitattributes`가 없으면 워킹 트리의 `.gitattributes`를 쓴다(git checkout 방향 규칙).
+    - 워킹 트리가 있어야 한다(bare 레포는 실패).
+    - 하위 디렉토리 DB면 그 DB 안의 `.gitattributes`만 적용한다(archive는 하위 것을 무시해 autocrlf면 CRLF).
+    """
+    top = Path(git(repo, "rev-parse", "--show-toplevel").strip())
+    sub = git(repo, "rev-parse", "--show-prefix").strip().rstrip("/")
+    dest.mkdir(parents=True, exist_ok=True)
+    tree = f"{ref}^{{tree}}"
+    if sub:
+        commit = git(repo, "rev-parse", "--verify", f"{ref}^{{commit}}").strip()      # 잘못된 ref는 GitError
+        tree = f"{commit}:{sub}"
+        if not git(top, "ls-tree", "-d", commit, "--", sub).strip():   # 손상 등 git 오류는 GitError
+            return dest                                # 그 ref에 DB가 없다: 빈 기준(전부 새것)
+    index = dest.parent.resolve() / f".{dest.name}.index"
+    env = {k: v for k, v in os.environ.items() if k != "GIT_LITERAL_PATHSPECS"}   # exclude·glob 매직이 꺼지지 않게
+    env["GIT_INDEX_FILE"] = str(index)
+    prefix = str(dest.resolve()).replace("\\", "/").rstrip("/") + "/"
+    try:                                               # 임시 index의 경로는 하위 트리 기준이므로 레포 최상위에서 부른다
+        git(top, "read-tree", tree, env=env)
+        names = git(top, "ls-files", "-z", "--", ".", *exclude, env=env, binary=True)
+        git(top, "checkout-index", "-f", "-z", "--stdin", f"--prefix={prefix}", env=env, input=names)
+    finally:
+        index.unlink(missing_ok=True)
     return dest
 
 
