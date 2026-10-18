@@ -14,8 +14,11 @@ import를 스크립트마다 반복하지 않는다. 종료 코드·stdout JSON�
 `SystemExit`는 그 코드, 잡히지 않은 예외는 traceback을 stderr에 쓰고 1. `env`를 주거나 환경 변수
 `TT_SCRIPT_SUBPROCESS=1`이면 예전처럼 subprocess로 부른다(환경을 바꿔야 하는 호출·문제 추적용).
 
-이 모듈은 stdlib와 `common.exitcodes`만 top-level에서 가져온다: guard는 `site-defaults.yaml`이 없어도 멈추면 안
-되므로(모든 도구 호출에 걸린다) `site_defaults`·yaml을 import하지 않는다. 하위 스크립트 모듈은 부를 때 import하고,
+staged 범위에서 index 트리를 읽는 단계(`Step.index_tree`: lint·regress·verify·build)가 둘 이상 돌면 index를
+임시 디렉토리에 한 번만 꺼내 `--index-tree <dir>`로 넘기고 끝나면 지운다(precommit). guard는 build 하나라 그대로다.
+
+이 모듈은 stdlib와 `common.exitcodes`·`common.gitscope`(stdlib만 쓴다)만 top-level에서 가져온다: guard는
+`site-defaults.yaml`이 없어도 멈추면 안 되므로(모든 도구 호출에 걸린다) `site_defaults`·yaml을 import하지 않는다. 하위 스크립트 모듈은 부를 때 import하고,
 그때 나는 import 오류도 위 계약(stderr + 1)으로 돌려준다.
 """
 
@@ -27,13 +30,16 @@ import io
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 import traceback
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
+from common import gitscope
 from common.exitcodes import CHECK_FAILED, NEEDS_APPROVAL, OK, USAGE
 
 SCRIPTS = Path(__file__).resolve().parent.parent
@@ -184,6 +190,7 @@ class Step:
     args: Callable[[Ctx], list] | None = None
     when: Callable[[Ctx], str | None] | None = None   # 건너뛸 사유를 돌려주면 건너뛴다
     migrate_tolerant: bool = False  # migrate 브랜치에서 "생성기 버전" 2는 통과 (06-collaboration.md §6.4)
+    index_tree: bool = False        # staged 범위에서 index 트리를 읽는다(`--index-tree`를 받는다)
 
 
 @dataclass
@@ -211,10 +218,10 @@ def _script_step(name: str, script: str, build_args: Callable[[Ctx], list]) -> S
 
 _COMPAT = _script_step("compat", "config.py", lambda c: ["check", "--db", _db(c), "--for", "dry-run"])
 _CACHE = Step("cache", "cache")
-_LINT = _script_step("lint", "db_lint.py", lambda c: [*_scope(c), "--db", _db(c)])
+_LINT = Step("lint", "script", "db_lint.py", lambda c: [*_scope(c), "--db", _db(c)], index_tree=True)
 _MASK = _script_step("mask", "mask_pii.py", lambda c: ["--check", *_scope(c), "--db", _db(c)])
 _BUILD_VERIFY = Step("build", "script", "db_build.py", lambda c: ["--verify", "--staged", "--db", _db(c)],
-                     migrate_tolerant=True)
+                     migrate_tolerant=True, index_tree=True)
 _GENERATED_STAGED = Step("build", "generated_staged")
 
 
@@ -247,9 +254,9 @@ def _precommit_steps(ctx: Ctx) -> list[Step]:
         _CACHE,
         _LINT,
         _MASK,
-        _script_step("regress", "db_regress.py", lambda c: ["--staged", "--db", _db(c)]),
+        Step("regress", "script", "db_regress.py", lambda c: ["--staged", "--db", _db(c)], index_tree=True),
         Step("verify", "script", "db_verify.py", lambda c: ["rules", "--staged", "--db", _db(c)],
-             when=_no_rule_change),
+             when=_no_rule_change, index_tree=True),
         _build_step(ctx),
     ]
 
@@ -329,7 +336,7 @@ def plan_steps(profile: Profile, ctx: Ctx) -> list[tuple[str, str | None, list]]
     return out
 
 
-def _run_step(step: Step, ctx: Ctx, runner) -> StepResult:
+def _run_step(step: Step, ctx: Ctx, runner, tree: Path | None = None) -> StepResult:
     if step.when is not None:
         reason = step.when(ctx)
         if reason:
@@ -341,6 +348,8 @@ def _run_step(step: Step, ctx: Ctx, runner) -> StepResult:
         hit = sorted(set(ctx.files) & generated_paths(ctx.db_cfg))
         return StepResult(step.name, CHECK_FAILED if hit else OK, data={"paths": hit})
     args = step.args(ctx)
+    if tree is not None and step.index_tree:
+        args = [*args, "--index-tree", str(tree)]
     code, data, err = runner(step.script, args, plugin_root=ctx.plugin_root)
     err = (err or "").strip()
     if (step.migrate_tolerant and code == USAGE and is_migrate_branch(ctx.branch)
@@ -357,12 +366,33 @@ def run_checks(profile: Profile, ctx: Ctx, *, runner=run_script, on_step=None) -
     """
     results: list[StepResult] = []
     aborted = None
-    for step in _planned(profile, ctx):
-        res = _run_step(step, ctx, runner)
-        results.append(res)
-        if profile.abort_on_usage and res.code == USAGE:
-            aborted = res
-            break
-        if on_step is not None:
-            on_step(res)
+    steps = _planned(profile, ctx)
+    with _shared_index_tree(steps, ctx) as tree:
+        for step in steps:
+            res = _run_step(step, ctx, runner, tree)
+            results.append(res)
+            if profile.abort_on_usage and res.code == USAGE:
+                aborted = res
+                break
+            if on_step is not None:
+                on_step(res)
     return Run(results, aggregate(r.code for r in results), aborted)
+
+
+@contextlib.contextmanager
+def _shared_index_tree(steps: list[Step], ctx: Ctx):
+    """staged 범위에서 index 트리를 읽는 단계가 둘 이상 돌면 index를 한 번 꺼낸 디렉토리, 아니면 None.
+    꺼내다 실패하면 None이다(각 단계가 직접 꺼내다 같은 오류로 2를 낸다)."""
+    users = [s for s in steps if s.index_tree and not (s.when is not None and s.when(ctx))]
+    if ctx.scope != "staged" or len(users) < 2:
+        yield None
+        return
+    temp = Path(tempfile.mkdtemp(prefix="tt-precommit-index-"))
+    try:
+        try:
+            tree = gitscope.materialize_index(Path(ctx.db), temp / "db")
+        except gitscope.GitError:
+            tree = None
+        yield tree
+    finally:
+        shutil.rmtree(temp, ignore_errors=True)

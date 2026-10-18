@@ -873,6 +873,8 @@ def run(args, defaults: dict) -> tuple[dict, int]:
         if not sep or not old or not new:
             raise UsageError(f"--residual은 <옛 ID>=<새 ID> 형식이다: {item}")
         residual.append((old, new))
+    if args.index_tree and not args.staged:
+        raise UsageError("--index-tree는 --staged와 함께 쓴다 (precommit 내부용).")
 
     temp = Path(tempfile.mkdtemp(prefix="tt-lint-"))
     try:
@@ -882,7 +884,7 @@ def run(args, defaults: dict) -> tuple[dict, int]:
                 root = gitscope.materialize_ref(repo, args.ref, temp / "ref")
             elif args.staged:
                 scope = set(gitscope.staged_files(repo))
-                root = gitscope.materialize_index(repo, temp / "index")
+                root = Path(args.index_tree) if args.index_tree else gitscope.materialize_index(repo, temp / "index")
                 if gitscope.has_ref(repo, "HEAD"):
                     base = _base_causes(gitscope.materialize_ref_sparse(repo, "HEAD", temp / "base"))
             elif args.changed:
@@ -909,6 +911,7 @@ def build_parser() -> argparse.ArgumentParser:
     scope.add_argument("--changed", metavar="ref")
     scope.add_argument("--staged", action="store_true")
     parser.add_argument("--residual", action="append", metavar="옛 ID=새 ID")
+    parser.add_argument("--index-tree", metavar="dir", help=argparse.SUPPRESS)   # precommit 내부용: 이미 꺼낸 index 트리(--staged와 함께, 지우지 않는다)
     parser.add_argument("--json", action="store_true", help="JSON 출력 (항상 JSON)")
     parser.add_argument("--plugin-root", default=None)
     return parser

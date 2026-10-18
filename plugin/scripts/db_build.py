@@ -612,7 +612,9 @@ def run(args) -> tuple[dict, int]:
     if args.verify:
         workdir = None
         try:
-            if args.staged:
+            if args.staged and args.index_tree:
+                root = Path(args.index_tree)
+            elif args.staged:
                 workdir = Path(tempfile.mkdtemp(prefix="tt-build-index-"))
                 root = gitscope.materialize_index(repo, workdir / "db")
             else:
@@ -658,6 +660,7 @@ def build_parser() -> argparse.ArgumentParser:
     mode.add_argument("--verify", action="store_true")
     mode.add_argument("--preview", metavar="out_dir")
     parser.add_argument("--staged", action="store_true", help="--verify와 함께: index 기준")
+    parser.add_argument("--index-tree", metavar="dir", help=argparse.SUPPRESS)   # precommit 내부용: 이미 꺼낸 index 트리(--staged와 함께, 지우지 않는다)
     parser.add_argument("--json", action="store_true", help="JSON 출력 (항상 JSON)")
     parser.add_argument("--plugin-root", default=None)
     return parser
@@ -673,6 +676,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.staged and not args.verify:
             raise UsageError("--staged는 --verify와 함께 쓴다.")
+        if args.index_tree and not args.staged:
+            raise UsageError("--index-tree는 --staged와 함께 쓴다 (precommit 내부용).")
         result, code = run(args)
     except (UsageError, yamlio.YamlFileError) as exc:
         print(str(exc), file=sys.stderr)

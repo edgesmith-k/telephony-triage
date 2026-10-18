@@ -337,3 +337,47 @@ def test_mask_check_in_subdir_db_sees_only_db_files(capsys):
     code, out, err = _main("mask_pii", ["--check", "--staged", "--db", str(sub)], capsys)
     assert code == 1 and sorted({d["path"] for d in json.loads(out)["detections"]}) == sorted(["new.txt", note]), (out, err)
 
+
+# -- pre-commit: index를 한 번만 꺼낸다 ---------------------------------------------------------------------------
+
+def _count_index(monkeypatch) -> list[Path]:
+    calls, real = [], gitscope.materialize_index
+    monkeypatch.setattr(gitscope, "materialize_index", lambda repo, dest: calls.append(dest) or real(repo, dest))
+    return calls
+
+
+def test_precommit_materializes_index_once_with_same_result(tmp_path, monkeypatch):
+    import contextlib
+
+    import db_precommit
+    from common import checks
+    db, _ = _r5_db(tmp_path)                                           # 규칙 변경: lint·regress·verify·build 모두 돈다
+    temp = tmp_path / "t"
+    temp.mkdir()
+    monkeypatch.setattr(tempfile, "tempdir", str(temp))
+    calls = _count_index(monkeypatch)
+    shared = db_precommit.run(db, str(plugin_root()))
+    assert len(calls) == 1 and list(temp.iterdir()) == []              # 한 번 꺼내고 지운다
+    assert [c["check"] for c in shared[0]["checks"] if not c.get("skipped")] == [
+        "compat", "cache", "lint", "mask", "regress", "verify", "build"]
+    calls.clear()
+    with monkeypatch.context() as m:
+        m.setattr(checks, "_shared_index_tree", lambda steps, ctx: contextlib.nullcontext())
+        assert db_precommit.run(db, str(plugin_root())) == shared and len(calls) == 4   # 단계마다 꺼내던 예전 동작
+    calls.clear()
+    guard = checks.run_checks(checks.PROFILES["guard"], checks.Ctx(db=db, scope="staged", files=gitscope.staged_files(db),
+                                                                    plugin_root=str(plugin_root())))
+    assert len(calls) == 1 and "--index-tree" not in guard.steps[-1].args       # guard는 build 하나: 그대로
+
+
+def test_index_tree_option_same_output_and_needs_staged(tmp_path, capsys):
+    db, _ = _r5_db(tmp_path)
+    tree = gitscope.materialize_index(db, tmp_path / "tree")
+    keep = _files(tree)
+    for script, head in (("db_lint", []), ("db_regress", []), ("db_verify", ["rules"]), ("db_build", ["--verify"])):
+        alone = _main(script, [*head, "--staged", "--db", str(db)], capsys)
+        assert _main(script, [*head, "--staged", "--index-tree", str(tree), "--db", str(db)], capsys)[:2] == alone[:2]
+        code, _, err = _main(script, [*head, *(["--changed", "HEAD"] if script != "db_build" else []),
+                                      "--index-tree", str(tree), "--db", str(db)], capsys)
+        assert code == 2 and "--index-tree는 --staged와 함께" in err, (script, code, err)
+    assert _files(tree) == keep                                          # 넘겨받은 트리는 지우지 않는다
