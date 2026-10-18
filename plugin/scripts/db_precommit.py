@@ -24,7 +24,8 @@
 stdout에 낸다(`--json`과 상관없이 항상).
 
 git은 hook을 부를 때 `GIT_INDEX_FILE`을 넘긴다(`git commit -a`·`git commit <경로>`의 임시 index 포함).
-하위 스크립트는 환경을 그대로 물려받아 같은 index를 본다.
+하위 스크립트는 환경을 그대로 물려받아 같은 index를 본다. index 트리는 한 번만 꺼내 lint·regress·verify·build에
+`--index-tree`로 넘긴다(common/checks.py).
 """
 
 from __future__ import annotations

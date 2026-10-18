@@ -289,16 +289,22 @@ def test_guard_deny_says_mask_check_could_not_run_on_exit_2():
     assert "마스킹 안 된 개인정보" in msg and "a.yaml:3 IMEI" in msg
 
 
-def test_checks_imports_only_stdlib_and_exitcodes():
-    """guard는 site-defaults가 없어도 멈추면 안 되므로 checks.py는 site_defaults·yaml을 가져오지 않는다."""
-    tree = ast.parse(Path(checks.__file__).read_text(encoding="utf-8"))
+def _imports(path: Path) -> set[str]:
     mods = set()
-    for node in ast.walk(tree):
+    for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
         if isinstance(node, ast.Import):
             mods |= {a.name for a in node.names}
         elif isinstance(node, ast.ImportFrom):
-            mods.add(node.module or "")
+            mods |= ({f"common.{a.name}" for a in node.names} if node.module == "common" else {node.module or ""})
+    return mods
+
+
+def test_checks_imports_only_stdlib_and_exitcodes():
+    """guard는 site-defaults가 없어도 멈추면 안 되므로 checks.py는 site_defaults·yaml을 가져오지 않는다.
+    `common.gitscope`(index 트리 공유)도 stdlib만 쓴다."""
+    mods = _imports(Path(checks.__file__))
     assert "yaml" not in mods
     assert not any("site_defaults" in m for m in mods)
     local = {m for m in mods if m.startswith("common")}
-    assert local == {"common.exitcodes"}, local
+    assert local == {"common.exitcodes", "common.gitscope"}, local
+    assert not {m for m in _imports(Path(checks.gitscope.__file__)) if m.startswith(("common", "yaml"))}

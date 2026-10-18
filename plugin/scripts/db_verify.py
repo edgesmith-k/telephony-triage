@@ -743,6 +743,8 @@ def _load_plan(path: str) -> dict:
 
 
 def rules(args, defaults: dict, plugin_root: Path) -> tuple[dict, int]:
+    if args.index_tree and not args.staged:
+        raise UsageError("--index-tree는 --staged와 함께 쓴다 (precommit 내부용).")
     plan_path = Path(args.plan) if args.plan else None
     plan = _load_plan(args.plan) if plan_path else None
     samples = _samples(plan, plan_path, args.extra, args.extra_normal)
@@ -781,15 +783,16 @@ def rules(args, defaults: dict, plugin_root: Path) -> tuple[dict, int]:
             raise UsageError(str(exc)) from exc
         result, code = verify_rules(db, db, base, plugin_root, defaults, samples, regress)
         return {"db": str(db), "scope": f"changed:{args.changed}", **result}, code
-    index_dir = Path(tempfile.mkdtemp(prefix="tt-verify-index-"))
+    index_dir = None if args.index_tree else Path(tempfile.mkdtemp(prefix="tt-verify-index-"))
     try:
         try:
-            root = gitscope.materialize_index(db, index_dir / "db")
+            root = Path(args.index_tree) if args.index_tree else gitscope.materialize_index(db, index_dir / "db")
         except gitscope.GitError as exc:
             raise UsageError(str(exc)) from exc
         result, code = verify_rules(root, db, "HEAD", plugin_root, defaults, samples, regress)
     finally:
-        shutil.rmtree(index_dir, ignore_errors=True)
+        if index_dir is not None:
+            shutil.rmtree(index_dir, ignore_errors=True)
     return {"db": str(db), "scope": "staged", **result}, code
 
 
@@ -1082,6 +1085,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--extra", metavar="logcat", nargs="*", default=[], help="R6 같은 증상 표본 (expect: match)")
     p.add_argument("--extra-normal", metavar="logcat", nargs="*", default=[], help="R6 정상 표본 (expect: nomatch)")
     p.add_argument("--regress-json", help=argparse.SUPPRESS)   # db_pr stage가 이미 돌린 회귀 결과를 넘긴다
+    p.add_argument("--index-tree", metavar="dir", help=argparse.SUPPRESS)   # precommit 내부용: 이미 꺼낸 index 트리(--staged와 함께, 지우지 않는다)
     for name in ("resolution", "fix"):
         p = sub.add_parser(name, parents=[common])
         p.add_argument("logs", metavar="logcat", nargs="*")

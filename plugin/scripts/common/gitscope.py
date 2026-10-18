@@ -7,6 +7,9 @@
 
 index·ref의 트리가 필요하면 임시 디렉토리로 꺼낸다(`materialize_*`). 사용자 워킹 트리는
 바꾸지 않는다. 비교 기준(base) 트리는 fixture 로그를 빼고 꺼낸다(`materialize_ref_sparse`).
+
+경로는 DB 루트(`repo`) 기준이다: `repo`가 레포의 하위 디렉토리면 파일 목록은 그 하위 안 파일만, 꺼낸 트리는
+그 하위만 낸다(최상위 DB에서는 레포 최상위 기준과 같다).
 """
 
 from __future__ import annotations
@@ -39,20 +42,37 @@ def merge_base(repo: Path, ref: str) -> str:
 def changed_files(repo: Path, ref: str) -> list[str]:
     """`merge-base <ref> HEAD` 이후 바뀐 파일(워킹 트리 기준, 추적 안 된 새 파일 포함, 삭제 포함)."""
     base = merge_base(repo, ref)
-    names = git(repo, "diff", "--name-only", "--no-renames", "-z", base).split("\0")
-    names += git(repo, "ls-files", "--others", "--exclude-standard", "-z").split("\0")
+    names = git(repo, "diff", "--relative", "--name-only", "--no-renames", "-z", base).split("\0")
+    names += git(repo, "ls-files", "--others", "--exclude-standard", "-z").split("\0")     # 이미 repo 기준
     return sorted(set(filter(None, names)))
 
 
 def staged_files(repo: Path) -> list[str]:
-    return sorted(set(filter(None, git(repo, "diff", "--cached", "--name-only", "--no-renames", "-z").split("\0"))))
+    names = git(repo, "diff", "--cached", "--relative", "--name-only", "--no-renames", "-z").split("\0")
+    return sorted(set(filter(None, names)))
 
 
 def materialize_index(repo: Path, dest: Path) -> Path:
-    """index 내용을 `dest`로 꺼낸다."""
+    """index 내용을 `dest`로 꺼낸다. 환경의 `GIT_INDEX_FILE`(hook의 `commit -a` 임시 index 등)을 그대로 따른다.
+
+    `repo`가 하위 디렉토리면 그 하위의 index 항목(`ls-files -s`, 경로는 하위 기준)을 `dest` 옆 임시 index에 옮겨
+    꺼낸다(`materialize_ref_sparse`와 같은 상대 경로·같은 `.gitattributes` 적용: DB 안의 것).
+    - 임시 index에 `.gitattributes`가 없는 디렉토리는 checkout-index가 워킹 트리(레포 최상위 기준 같은 경로)에서
+      찾는다. 바깥 레포에 DB 안과 같은 이름의 디렉토리 `.gitattributes`가 있으면 그 규칙이 섞일 수 있다."""
     dest.mkdir(parents=True, exist_ok=True)
     prefix = str(dest.resolve()).replace("\\", "/").rstrip("/") + "/"
-    git(repo, "checkout-index", "-a", "-f", f"--prefix={prefix}")
+    if not git(repo, "rev-parse", "--show-prefix").strip():
+        git(repo, "checkout-index", "-a", "-f", f"--prefix={prefix}")
+        return dest
+    entries = git(repo, "ls-files", "-s", "-z", binary=True)
+    top = Path(git(repo, "rev-parse", "--show-toplevel").strip())
+    index = dest.parent.resolve() / f".{dest.name}.index"
+    env = {**os.environ, "GIT_INDEX_FILE": str(index)}
+    try:
+        git(top, "update-index", "-z", "--index-info", env=env, input=entries)
+        git(top, "checkout-index", "-a", "-f", f"--prefix={prefix}", env=env)
+    finally:
+        index.unlink(missing_ok=True)
     return dest
 
 

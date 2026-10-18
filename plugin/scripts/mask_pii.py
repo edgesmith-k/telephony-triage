@@ -61,16 +61,19 @@ def _git(db: Path, *args: str) -> str:
 
 
 def _scope_files(db: Path, changed: str | None, staged: bool) -> list[tuple[str, str]]:
-    """`[(표시 경로, 내용)]`. 삭제된 파일은 뺀다."""
+    """`[(표시 경로, 내용)]`. 삭제된 파일은 뺀다. 경로는 DB 루트 기준이고 DB 밖 파일은 보지 않는다(`--relative`)."""
     out = []
     if staged:
-        names = _git(db, "diff", "--cached", "--name-only", "--diff-filter=ACMR", "-z").split("\0")
+        names = _git(db, "diff", "--cached", "--relative", "--name-only", "--diff-filter=ACMR", "-z").split("\0")
         for name in filter(None, names):
-            raw = subprocess.run(["git", "-C", str(db), "show", f":{name}"], capture_output=True)
+            raw = subprocess.run(["git", "-C", str(db), "show", f":./{name}"], capture_output=True)
+            if raw.returncode != 0:                    # 빈 내용으로 검사 없이 통과시키지 않는다
+                err = raw.stderr.decode("utf-8", errors="replace").strip()
+                raise UsageError(f"git show :./{name} 실패: {err}")
             out.append((name, raw.stdout))
     else:
         base = _git(db, "merge-base", changed, "HEAD").strip()
-        names = _git(db, "diff", "--name-only", "--diff-filter=ACMR", "-z", base).split("\0")
+        names = _git(db, "diff", "--relative", "--name-only", "--diff-filter=ACMR", "-z", base).split("\0")
         names += _git(db, "ls-files", "--others", "--exclude-standard", "-z").split("\0")
         for name in sorted(set(filter(None, names))):
             path = db / name

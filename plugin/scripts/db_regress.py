@@ -304,14 +304,19 @@ def run(args, defaults: dict, plugin_root: Path) -> tuple[dict, int]:
     except dbpath.DbPathError as exc:
         raise UsageError(str(exc)) from exc
 
+    if args.index_tree and not args.staged:
+        raise UsageError("--index-tree는 --staged와 함께 쓴다 (precommit 내부용).")
     changed: list[str] | None = None
     workdir = None
     root = repo
     try:
         if args.staged:
             changed = gitscope.staged_files(repo)
-            workdir = Path(tempfile.mkdtemp(prefix="tt-regress-index-"))
-            root = gitscope.materialize_index(repo, workdir / "db")
+            if args.index_tree:
+                root = Path(args.index_tree)
+            else:
+                workdir = Path(tempfile.mkdtemp(prefix="tt-regress-index-"))
+                root = gitscope.materialize_index(repo, workdir / "db")
         elif args.changed:
             changed = gitscope.changed_files(repo, args.changed)
     except gitscope.GitError as exc:
@@ -371,6 +376,7 @@ def build_parser() -> argparse.ArgumentParser:
     scope.add_argument("--staged", action="store_true")
     scope.add_argument("--events-diff", metavar="ref", help="규칙 변경 전후 이벤트 변화 (R5)")
     parser.add_argument("--no-external", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--index-tree", metavar="dir", help=argparse.SUPPRESS)   # precommit 내부용: 이미 꺼낸 index 트리(--staged와 함께, 지우지 않는다)
     parser.add_argument("--json", action="store_true", help="JSON 출력 (항상 JSON)")
     parser.add_argument("--plugin-root", default=None)
     return parser
