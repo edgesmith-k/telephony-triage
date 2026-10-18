@@ -56,7 +56,9 @@ def materialize_index(repo: Path, dest: Path) -> Path:
     """index 내용을 `dest`로 꺼낸다. 환경의 `GIT_INDEX_FILE`(hook의 `commit -a` 임시 index 등)을 그대로 따른다.
 
     `repo`가 하위 디렉토리면 그 하위의 index 항목(`ls-files -s`, 경로는 하위 기준)을 `dest` 옆 임시 index에 옮겨
-    꺼낸다(`materialize_ref_sparse`와 같은 상대 경로·같은 `.gitattributes` 적용: DB 안의 것만)."""
+    꺼낸다(`materialize_ref_sparse`와 같은 상대 경로·같은 `.gitattributes` 적용: DB 안의 것).
+    - 임시 index에 `.gitattributes`가 없는 디렉토리는 checkout-index가 워킹 트리(레포 최상위 기준 같은 경로)에서
+      찾는다. 바깥 레포에 DB 안과 같은 이름의 디렉토리 `.gitattributes`가 있으면 그 규칙이 섞일 수 있다."""
     dest.mkdir(parents=True, exist_ok=True)
     prefix = str(dest.resolve()).replace("\\", "/").rstrip("/") + "/"
     if not git(repo, "rev-parse", "--show-prefix").strip():

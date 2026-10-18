@@ -416,6 +416,24 @@ def test_mask_pii_check_staged_and_changed():
     assert _run("mask_pii.py", ["--check", "--staged", "--db", str(repo)]).returncode == 1
 
 
+def test_mask_pii_staged_unreadable_blob_is_usage_error():
+    """index의 blob을 못 읽으면(`git show` 실패) 빈 내용으로 통과시키지 않고 실행 불가 2."""
+    repo = _tmp() / "db"
+    shutil.copytree(SAMPLE, repo)
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "-c", "user.name=t", "-c", "user.email=t@t", "add", "-A")
+    _git(repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "init")
+    (repo / "new.txt").write_text("010-1234-5678\n", encoding="utf-8")
+    _git(repo, "add", "new.txt")
+    blob = subprocess.run(["git", "-C", str(repo), "rev-parse", ":new.txt"], capture_output=True,
+                          text=True, check=True).stdout.strip()
+    obj = repo / ".git" / "objects" / blob[:2] / blob[2:]
+    obj.chmod(0o644)                                                    # 객체 파일은 읽기 전용(Windows는 그대로 못 지운다)
+    obj.unlink()                                                        # 느슨한 객체를 지워 읽기 실패를 만든다
+    proc = _run("mask_pii.py", ["--check", "--staged", "--db", str(repo)])
+    assert proc.returncode == 2 and "git show :./new.txt 실패" in proc.stderr, (proc.stdout, proc.stderr)
+
+
 def test_mask_pii_check_does_not_skip_nul_files():
     """R-5: NUL이 든 파일(잘린 logcat·UTF-16)도 건너뛰지 않는다 — NUL을 지우고 검사하고 `checked`에 센다."""
     repo = _tmp() / "db"

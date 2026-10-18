@@ -67,6 +67,9 @@ def _scope_files(db: Path, changed: str | None, staged: bool) -> list[tuple[str,
         names = _git(db, "diff", "--cached", "--relative", "--name-only", "--diff-filter=ACMR", "-z").split("\0")
         for name in filter(None, names):
             raw = subprocess.run(["git", "-C", str(db), "show", f":./{name}"], capture_output=True)
+            if raw.returncode != 0:                    # 빈 내용으로 검사 없이 통과시키지 않는다
+                err = raw.stderr.decode("utf-8", errors="replace").strip()
+                raise UsageError(f"git show :./{name} 실패: {err}")
             out.append((name, raw.stdout))
     else:
         base = _git(db, "merge-base", changed, "HEAD").strip()
