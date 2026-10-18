@@ -14,29 +14,28 @@
 - 테스트는 `tools/related_tests.py --run`(관련만). 전체는 도구가 full이라 할 때·반입 직전·요청 시.
 - 진행 중 판단은 Fable 결정 에이전트에게 묻는다(10/06 사용자 지정). 원칙상 사용자 승인 대상(이슈 DB push, main 병합·태그 등 사용자가 지시하지 않은 외부 동작)은 사용자에게.
 
-## 진행 상태 (10/17)
+## 진행 상태 (10/18)
 
-- 모드: **사외 초안**. Phase **D0, 1~13** 완료, 반입 전 보강 트랙 완료(history). 최신 반입본 import-20261014c(f4d98d5, 사내 전달), 새 묶음 **import-20261016**(main 병합 뒤 생성, 태그 전). main 병합 PR #8~#53.
+- 모드: **사외 초안**. Phase **D0, 1~13** 완료, 반입 전 보강 트랙 완료(history). 최신 반입본 import-20261014c(f4d98d5, 사내 전달), 새 묶음 **import-20261018**(태그 전, 20261016은 대체). main 병합 PR #8~#67.
 - 10/15 **K 완료**: offsite pass 59·fail 0·미결정 11. **L**: `docs/development/L_RESULT.md`. 10/16 **L1·L2 완료**(L2 1023567~, 재측정 offsite pass 59·fail 0·none 11(site), 결과·P2는 L_RESULT "(다) 결과"), HTML 자료 현행화·소개 품질 절. 원격 → main 병합.
-- 10/17 **외부 운영 리뷰 ①②③**(`ops-metrics`, main f5cd8dc 위): `L_RESULT.md` "외부 운영 리뷰". 남은 것: 쓰기 흐름 유료 eval 1회·HTML 정리.
+- 10/17 **외부 운영 리뷰 ①②③**: `L_RESULT.md` "외부 운영 리뷰". 남은 것: 쓰기 흐름 유료 eval 1회.
+- 10/18 검사 속도 개선(#63·#65·#67), 하위 디렉토리 DB 범위 결함 수정(#67), 문서 현행화(#64·#66).
 - 모델: Sonnet 5.5 기준, Opus 5.5 확인 11개 실패 0(≈2.7배).
 - `TODO(SITE)`: `tools/list_site_todos.py`. REVIEW-OPEN 0건. 사내 시작: **"사내 설정 시작"**(결정 (o)).
-- 안내서 HTML: 통합 책 `docs/book/telephony-triage-book.html`(10/17, 옛 안내서·자료 03~18을 합침, 공유본 https://claude.ai/artifact/1jov1Et4dQUMauFr6aoxWG 를 책으로 교체 예정), 목록 `docs/materials/00-index.html`
+- 안내서 HTML: 책 `docs/book/telephony-triage-book.html`(공유본 https://claude.ai/artifact/1jov1Et4dQUMauFr6aoxWG), 목록 `docs/materials/00-index.html`
 
 ## 남은 일 (사외 전용)
 
 | ☐ | 항목 | 메모 |
 |---|---|---|
-| ☑ K·L | K(P0-1·P1 수정, 재채점)·L(목록·분류·구현 계획) 완료 | `K_RESULT.md`(P2는 반입 뒤 후보), `L_RESULT.md` |
-| ☑ L1 | L (가)·(나) 10개 완료(10/16), 생성기 v2 | `L_RESULT.md` 세션 1, 끝의 "L1 리뷰 P2"는 반입 뒤 후보 |
-| ☑ L2 | (다) 표시·판정 정리(R·M-2·U-2·U-4) + 재측정 완료(10/16) | `L_RESULT.md` "(다) 결과", P2는 반입 뒤 후보 |
-| ☐ F | 반입 묶음 **import-20261016** — 태그·반입은 사용자(20261015는 태그하지 않음) | 사내: SITE_INSTALL §8 재반입, 아래 L2 노트 |
+| ☑ K·L·L1·L2 | 10/15~16 완료(생성기 v2, 표시·판정 정리 R·M-2·U-2·U-4, 재측정) | `K_RESULT.md`·`L_RESULT.md`, P2는 반입 뒤 후보 |
+| ☐ F | 반입 묶음 **import-20261018** — 태그·반입은 사용자(20261015·20261016은 태그하지 않음) | 사내: SITE_INSTALL §8 재반입, 아래 L2 노트 |
 | ☐ G | 범용판 별도 레포 — **보류(10/07 사용자)** | 재개는 사용자가 정한다 |
 
 ## 사내로 넘긴 것
 
 - 사내 대상 eval 11개(`pending.json` `site`, S-2; 주입 59·60 포함, 사내 모델이 다르면 +7), 코드 Read line 힌트(T4, S-2 측정 뒤)·offline_eval 오류율 상한(S-1 합의, S-5)·`max_tokens_hint` 처리(S-4a)·setup Jira 없음 중단(U1, S-3), db-authoring 스키마 요약 확장(S-2, 스키마 Read 횟수로 판단), 사내 마켓플레이스 소스 유형 확인 → version 규칙(S-2·S-7, V2에서 `plugin.json` version 삭제 = 커밋 SHA 기준. 반입 직후 캐시 1회 무효화는 무해).
-- **L2로 hook이 바뀜**: 반입 전 원격 K 기록 4,714개로 M-2 옛·새 비교(J9), 반입 뒤 site eval 11개 모두 다시·plugin-probe 15(기록 시각 고정)·16(PowerShell matcher) 확인.
+- **L2로 hook이 바뀜**: M-2 옛·새 비교(J9)는 원격 K 기록 4,714개가 없어져 못 했고, 이 PC 기록 Bash 11,767개로 대신 비교(10/18): 새 판정이 놓친 publish 0(옛만 5는 편집 명령, 새만 27은 ask). 반입 뒤 site eval 11개 모두 다시·plugin-probe 15(기록 시각 고정)·16(PowerShell matcher) 확인.
 - **외부 운영 리뷰(10/17)**: hook·SKILL 불변 → site eval 재실행 불필요. S-7: usage_stats format 2·`--transcripts` 허용 여부.
 - 반입 뒤 후보(RF-5·6·8·9, 리뷰 후속 R-36~R-47)는 `docs/history/draft-notes-2026-10.md` "10/13 이동".
 
