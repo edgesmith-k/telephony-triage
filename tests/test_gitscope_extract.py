@@ -254,3 +254,86 @@ def test_failed_base_extraction_leaves_no_temp_dirs(tmp_path, monkeypatch, capsy
         code, _, err = _main(script, argv, capsys)
         assert code == 2 and "checkout-index" in err, (script, argv, code, err)
         assert list(temp.iterdir()) == [], (script, argv)
+
+
+# -- 하위 디렉토리 DB의 --staged/--changed: 경로는 DB 루트 기준 ----------------------------------------------------
+
+_TYPE = "data/DATA-001-no-setup-data-call"
+
+
+def _touch_type(db: Path, mark: str) -> None:
+    path = db / _TYPE / "type.md"
+    path.write_text(path.read_text(encoding="utf-8") + f"\n<!-- {mark} -->\n", encoding="utf-8", newline="\n")
+
+
+def test_materialize_index_in_subdir_db_matches_top_level_db(tmp_path, monkeypatch):
+    top, sub = git_db(), _subdir_db()
+    for db in (top, sub):
+        _touch_type(db, "staged")
+        git(db, "add", "-A")
+    want = _files(gitscope.materialize_index(top, tmp_path / "top"))
+    assert "issue-db.config.yaml" in want and "top.txt" not in want
+    assert _files(gitscope.materialize_index(sub, tmp_path / "sub")) == want
+    # hook이 넘기는 GIT_INDEX_FILE(commit -a 등의 임시 index)을 그대로 따른다. 사용자 index는 그대로다.
+    repo = sub.parent
+    other = tmp_path / "other.index"
+    other.write_bytes((repo / ".git" / "index").read_bytes())
+    (sub / "extra.txt").write_text("x\n", encoding="utf-8", newline="\n")
+    before = (repo / ".git" / "index").read_bytes()
+    monkeypatch.setenv("GIT_INDEX_FILE", str(other))
+    git(sub, "add", "extra.txt")
+    got = _files(gitscope.materialize_index(sub, tmp_path / "alt"))
+    assert gitscope.staged_files(sub) == sorted(["extra.txt", f"{_TYPE}/type.md"])
+    monkeypatch.delenv("GIT_INDEX_FILE")
+    assert got == {**want, "extra.txt": b"x\n"} and (repo / ".git" / "index").read_bytes() == before
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["alt", "other.index", "sub", "top"]   # 임시 index가 남지 않는다
+
+
+def test_scope_files_in_subdir_db_are_db_relative(tmp_path):
+    sub = _subdir_db()
+    _touch_type(sub, "changed")
+    (sub.parent / "top.txt").write_text("outside\n", encoding="utf-8")
+    assert gitscope.changed_files(sub, "HEAD") == [f"{_TYPE}/type.md"]
+    git(sub.parent, "add", "-A")
+    assert gitscope.staged_files(sub) == [f"{_TYPE}/type.md"]
+    assert "top.txt" in gitscope.staged_files(sub.parent)                         # 최상위 DB는 지금과 같다
+
+
+def test_lint_and_regress_staged_in_subdir_db_check_the_changed_type(capsys):
+    sub = _subdir_db()
+    top = git_db()
+    for db in (sub, top):
+        _touch_type(db, "staged")
+        git(db, "add", "-A")
+    for argv in (["--staged"], ["--changed", "HEAD"]):
+        got = []
+        for db in (sub, top):
+            code, out, err = _main("db_regress", [*argv, "--db", str(db)], capsys)
+            assert code == 0, (argv, err)
+            got.append(sorted(r["fixture"].replace("\\", "/") for r in json.loads(out)["results"]))
+        assert got[0] and any(_TYPE in f for f in got[0]) and got[0] == got[1], (argv, got)   # 최상위 DB와 같은 범위
+    for db in (sub, top):
+        assert _main("db_build", ["--write", "--db", str(db)], capsys)[0] == 0
+        git(db, "add", "-A")
+        code, out, _ = _main("db_build", ["--verify", "--staged", "--db", str(db)], capsys)
+        assert code == 0, out                                                    # index 트리를 DB 루트로 읽는다
+    code, out, _ = _main("db_lint", ["--staged", "--db", str(sub)], capsys)
+    assert code == 0 and json.loads(out)["summary"]["types"] > 0, out
+    (sub / _TYPE / "type.md").write_text("---\nid: [\n", encoding="utf-8")
+    git(sub, "add", "-A")
+    code, out, _ = _main("db_lint", ["--staged", "--db", str(sub)], capsys)
+    assert code == 1 and any(_TYPE in (e.get("file") or "") for e in json.loads(out)["errors"]), out
+
+
+def test_mask_check_in_subdir_db_sees_only_db_files(capsys):
+    sub = _subdir_db()
+    note = f"{_TYPE}/issues/MOCK-1101.yaml"
+    for path in (sub / note, sub.parent / "top.txt"):
+        path.write_text(path.read_text(encoding="utf-8") + "# 고객 010-1234-5678\n", encoding="utf-8", newline="\n")
+    (sub / "new.txt").write_text("010-1234-5678\n", encoding="utf-8")          # 추적 안 된 새 파일
+    code, out, err = _main("mask_pii", ["--check", "--changed", "HEAD", "--db", str(sub)], capsys)
+    assert code == 1 and sorted({d["path"] for d in json.loads(out)["detections"]}) == sorted(["new.txt", note]), (out, err)
+    git(sub.parent, "add", "-A")
+    code, out, err = _main("mask_pii", ["--check", "--staged", "--db", str(sub)], capsys)
+    assert code == 1 and sorted({d["path"] for d in json.loads(out)["detections"]}) == sorted(["new.txt", note]), (out, err)
+
