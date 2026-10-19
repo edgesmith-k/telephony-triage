@@ -13,7 +13,7 @@
               title은 비교하지 않는다. hero 안 `<p class="hero-ask">` 한 줄은 파일마다 다른 첫 화면
               안내라 내용을 빼고 비교한다. 둘 다 대상일 때만 검사)
 
-대상 기본값은 `docs/book/telephony-triage-book.html`과 git이 추적하는 `docs/materials/*.html`이다.
+대상 기본값은 `docs/book/telephony-triage-book.html`과 `docs/materials/*.html`(`git add -A` 기준, 디스크에 있는 것)이다.
 책의 숫자 중복(같은 수치가 장마다 다른지)은 오탐이 많아 검사하지 않는다.
 
 CLI:
@@ -103,9 +103,11 @@ def _parse(path: Path) -> _Page:
 
 
 def default_targets(root: Path = REPO) -> list[Path]:
-    out = subprocess.run(["git", "ls-files", "docs/materials/*.html"], cwd=root,
-                         capture_output=True, text=True, check=True).stdout.split()
-    return [root / BOOK] + [root / p for p in sorted(out)]
+    # `git add -A`와 같은 기준(추적 + 무시되지 않은 새 파일). 반입 직후 스테이징 전이면 지운 파일이
+    # 인덱스에 남고 새 파일은 미추적이라, 디스크에 있는 것만 남긴다.
+    out = subprocess.run(["git", "ls-files", "-co", "--exclude-standard", "-z", "--", "docs/materials/*.html"],
+                         cwd=root, capture_output=True, check=True).stdout.decode("utf-8", "surrogateescape").split("\0")
+    return [root / BOOK] + [root / p for p in sorted(set(out)) if p and (root / p).is_file()]
 
 
 def _blocks(src: str) -> list[tuple[str, int, str]]:

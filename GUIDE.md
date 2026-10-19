@@ -261,6 +261,7 @@ claude mcp list               # Jira MCP 사용자 범위 등록 확인
 ```
 - S-1~S-3 중이면 바로 `사내 설정 계속`.
 - S-4 이후(이슈 DB 사용)면 Claude Code에서 `/telephony-triage:setup` — config 작성, `scripts_path`, 이슈 DB clone, Jira 도구 매핑, `core.hooksPath .githooks`, 스냅샷. S-5 이후면 `gh auth status` 통과 필요.
+- venv를 켠 터미널에서 `claude`를 켰다면, Claude에게 Bash로 `command -v python3`를 실행해 달라고 해서 `.venv` 경로가 나오는지 본다. 다르면 `docs/SITE_INSTALL.md` 4절 "막혔을 때" 표. 의존성을 venv 대신 시스템 python3에 `--user`로 설치하면(SITE_INSTALL 3절 A) 이 확인이 필요 없어 더 간단하다.
 - 긴 공백 뒤·새 에이전트도 `사내 설정 계속`이면 됩니다(`site_step.py`가 현재 단계와 점검 결과를 다시 보여 줌).
 
 **Claude Code가 아닌 에이전트(Codex 등)**: `AGENTS.md`만 자동으로 읽고 `CLAUDE.md`·`@SITE_PROFILE.md` import는 안 될 수 있다. 첫 메시지에 `먼저 CLAUDE.md, docs/design/12-principles.md와 DRAFT_NOTES.md(사내면 SITE_PROFILE.md)를 읽어라. Claude 전용 기능(플러그인 로드, hooks, skill-creator, /telephony-triage:* 커맨드)은 쓸 수 없으니 스크립트·테스트·문서 작업만 한다.`를 붙인다. Phase 13(스킬 eval)·S1 실험·S-2는 Claude Code에서만 가능하다. 사내에서 다른 에이전트를 쓸 수 있는지는 회사 정책이 정한다.

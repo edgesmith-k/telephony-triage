@@ -7,6 +7,7 @@ import os
 import re
 import subprocess
 import sys
+import types
 from pathlib import Path
 import pytest
 
@@ -82,6 +83,60 @@ def test_weekly_limit_stops_batch_without_claiming_completion():
                                                 "result": "weekly limit"}, 1)
     assert status == "blocked"
     assert reason == "weekly limit"
+
+
+@pytest.mark.parametrize("module, body, cause", [
+    ("yaml", "import _tt_missing_dep\n", "No module named '_tt_missing_dep'"),       # 의존성 없음(import 기구가 낸 원인)
+    ("jsonschema", "__version__ = '3.2.0'\n", "jsonschema 4.0+ 필요 (현재 3.2.0)"),   # Draft202012Validator 없는 옛 버전
+])
+def test_execute_stops_before_spending_when_child_python_lacks_deps(tmp_path, monkeypatch, capsys, module, body, cause):
+    """자식 `python3`가 실행 조건을 못 맞추면 반복 디렉토리를 만들기 전에 종료 2 (사내: eval 세션 ModuleNotFoundError)."""
+    shadow = tmp_path / "shadow"
+    shadow.mkdir()
+    (shadow / f"{module}.py").write_text(body, encoding="utf-8")
+    monkeypatch.setenv("PYTHONPATH", str(shadow))                # site-packages보다 앞에서 실제 모듈을 가린다
+    which = evaluation.shutil.which
+    fake = str(tmp_path / "claude-not-run")                      # 검사가 빠져도 실제 CLI를 부르지 않는다
+    monkeypatch.setattr(evaluation.shutil, "which", lambda name, path=None: fake if name == "claude" else which(name, path=path))
+    monkeypatch.setattr(evaluation, "execute", lambda *a, **k: pytest.fail("의존성 검사 없이 실행 단계까지 감"))
+    iteration = tmp_path / "it"
+    monkeypatch.setattr(sys, "argv", ["run.py", "--iteration", str(iteration), "--eval", "3", "--execute"])
+    with pytest.raises(SystemExit) as exc:
+        evaluation.main()
+    assert exc.value.code == 2
+    err = capsys.readouterr().err
+    assert cause in err and "SITE_INSTALL.md" in err
+    assert not iteration.exists()
+
+
+@pytest.mark.parametrize("os_name", ["nt", "posix"])
+def test_execute_puts_python3_shim_first_for_hooks_and_bash(tmp_path, monkeypatch, os_name):
+    """hook·MCP(프로세스 PATH)와 Bash(env.sh) 모두 맨 앞이 사전 검사가 본 sys.executable을 부르는 `python3` shim이다.
+    모듈의 `os`만 바꿔 두 분기를 어느 OS에서나 돌린다. Popen은 기록만 하고 FileNotFoundError(실제 CLI를 부르지 않음)."""
+    fake_os = types.SimpleNamespace(**{k: getattr(os, k) for k in dir(os) if not k.startswith("__")})
+    fake_os.name = os_name
+    monkeypatch.setattr(evaluation, "os", fake_os)
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path))                   # 실제 사용자 설정을 읽지 않는다
+    monkeypatch.delenv("CLAUDE_CODE_GIT_BASH_PATH", raising=False)
+    monkeypatch.setattr(evaluation, "repo_state", lambda *a, **k: (None, None))
+    seen = {}
+
+    def popen(command, **kw):
+        seen.update(kw)
+        raise FileNotFoundError(command[0])
+
+    monkeypatch.setattr(evaluation.subprocess, "Popen", popen)
+    env_dir, run = tmp_path / "env", run_dir(tmp_path)
+    env_dir.mkdir()
+    info = {"env": {}, "skill": str(tmp_path / "skill"), "path_prefix": [], "plugin_root": str(tmp_path / "root"),
+            "issue_db_clone": str(tmp_path / "a" / "b" / "clone")}
+    with pytest.raises(FileNotFoundError):
+        evaluation.execute({"prompt": "p", "user_replies": []}, info, env_dir, run, str(tmp_path / "missing" / "claude"), 5)
+    shim = env_dir / "bin"
+    assert evaluation._bash_path(sys.executable) in (shim / "python3").read_text(encoding="utf-8")
+    assert seen["env"]["PATH"].split(os.pathsep)[0] == str(shim)
+    exports = [x for x in (env_dir / "env.sh").read_text(encoding="utf-8").splitlines() if x.startswith("export PATH=")]
+    assert exports[-1] == f"export PATH='{evaluation._bash_path(str(shim))}':\"$PATH\""
 
 
 def test_evaluator_prompt_does_not_leak_expected_answers(tmp_path):

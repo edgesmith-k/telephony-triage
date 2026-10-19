@@ -24,6 +24,7 @@ Code 기능" 행). 배포 대상(`plugin/`)이 아니다.
 | 14 | **AskUserQuestion 선택지 상한** | 질문당 선택지 수 상한(그리고 질문 수 상한), 넘을 때 동작(오류·잘림·거부), "Other"(자유 입력)가 자동으로 붙는지. Step 7 첫 질문(후보 ≤3 + 새 원인·새 유형·원인 미확정·기록하지 않음)과 거부 뒤 질문이 상한을 넘는지 판단 근거(L U-4) |
 | 15 | **transcript 시각으로 스크립트 기록 고정** (show_guard의 의무 = 스크립트 표시 기록, `08-safety.md §9.1`, L R) | Bash 호출마다 tool_use 줄 `timestamp` − 2초 ≤ 스크립트가 `<work_dir>/.shown/log.jsonl`에 쓴 기록 시각(`at`) ≤ tool_result 줄 `timestamp`인지(transcript 시각이 스크립트 실행을 감싸는지 — 시계가 다른 실행 환경·원격 Bash면 깨진다). 확인: 쓰기 흐름(analyze → push 확인 화면)을 한 번 돌린 세션 transcript로 `python3 tools/hook_replay.py <세션.jsonl>`의 `summary.records`가 `{anchored: n>0, unanchored: 0}`(null이면 확인하지 못한 것) 한계: 자동 백그라운드 전환: 120초를 넘긴 Bash 호출은 Claude Code가 백그라운드로 돌려 tool_result가 먼저 기록되므로, 그 뒤에 쓴 기록(긴 `stage`)은 `at > rts`라 고정되지 않아 판정하지 않는다(옛 transcript 판정은 화면 없음으로 거부했다) |
 | 16 | **PowerShell 도구와 hook matcher** | 사내 Claude Code가 PowerShell 도구를 노출하는지(Windows), 노출하면 그 호출이 `hooks.json`의 `Bash` matcher에 걸리는지. 걸리지 않으면 guard 규칙 3~8·10·11과 show_guard가 보지 못하므로 matcher를 더하거나 PowerShell 도구를 deny한다(`08-safety.md §9.1` 한계, L_RESULT ②b P1 후보) |
+| 17 | **Bash 도구의 PATH와 venv** | venv `(tt)` 터미널에서 `claude`를 켰을 때 Bash 도구의 `command -v python3`·`echo "$VIRTUAL_ENV"`·`python3 -c 'import jsonschema'`가 hook의 `python3`(doctor guard 행 `hook python3≠doctor python`)와 같은지. `~/.bashrc`에 activate 줄이 있을 때와 없을 때를 비교한다. 다르면 `docs/SITE_INSTALL.md` 4절 표(A `--user`로 바꾸는 것이 가장 확실) |
 
 ## 실행 절차
 
@@ -59,6 +60,7 @@ Code 기능" 행). 배포 대상(`plugin/`)이 아니다.
 | 14 | AskUserQuestion 선택지 상한 (2026-10-15 예비) | — 미확인(대화형에서만) | 이 개발 환경의 도구 정의: 질문당 선택지 2~4개, "Other" 자유 입력. 넘칠 때 실제 동작은 사내 S1에서 대화형으로 확인 |
 | 15 | transcript 시각으로 기록 고정 (2026-10-16) | ✅ 사외(사내 S-2 재확인) | 이 PC 개발 세션 1건(2026-10-15) + L2 파일럿 eval 2·18·30·67 세션 `records`(anchored/unanchored): 실측 7/1·7/0·4/0·7/1(via 이전 f08119b 기록 — eval 2·67은 `triage.py run`이 같은 프로세스에서 부른 `db_pr lock` 기록 1건씩이 고정되지 않음) / via 주입 재생 8/0·7/0·4/0·8/0. ②b(3492514)로 eval 2·67 재실행 실측 7/0·8/0(10/16). 한계: 자동 백그라운드 전환: 120초를 넘긴 Bash 호출은 Claude Code가 백그라운드로 돌려 tool_result가 먼저 기록되므로, 그 뒤에 쓴 기록(긴 `stage`)은 `at > rts`라 고정되지 않아 판정하지 않는다(옛 transcript 판정은 화면 없음으로 거부했다). Claude Code 2.1.300 |
 | 16 | PowerShell 도구 (2026-10-16 ②b 리뷰) | — 미확인(사내) | 이 PC(Windows) Claude Code에 PowerShell 도구가 있고 `Bash` matcher에 걸리지 않는다. 사내 S-1/S-2에서 노출 여부 확인 |
+| 17 | Bash 도구의 PATH와 venv (2026-10-19) | — 미확인(사내) | 원격 리눅스 컨테이너의 `claude -p`(eval 실행기)에서 Bash 도구의 PATH에 gh 스텁이 빠진 일이 있다(`CLAUDE_ENV_FILE`로 보완, `tests/skill_evals/run.py`). 그 환경의 셸 프로필이 PATH를 새로 정했을 수 있어, 대화형 CLI·Ubuntu에서 같은지는 모른다. 사내 S-2에서 확인 |
 
 ## 주의
 
