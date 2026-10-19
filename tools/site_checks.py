@@ -690,7 +690,7 @@ def s2_s1_rows(ctx: Ctx) -> dict:
     have = [r for r in profile_rows(ctx.profile) if r[0] == "S1"]
     if not have:
         return res("s2.s1_rows", "needs-user", "SITE_PROFILE.md 확인값에 S1 행 없음", "SITE_PROFILE.md ## 확인값",
-                   ask="plugin-probe 16항목 실험 결과(사외와 다른 것 — 10~13 show_guard 전제, 14 AskUserQuestion 선택지 상한, 15 transcript 시각으로 표시 기록 고정, 16 PowerShell 도구 포함)를 알려 주세요")
+                   ask="plugin-probe 17항목 실험 결과(사외와 다른 것 — 10~13 show_guard 전제, 14 AskUserQuestion 선택지 상한, 15 transcript 시각으로 표시 기록 고정, 16 PowerShell 도구, 17 Bash 도구의 python3 포함)를 알려 주세요")
     return res("s2.s1_rows", "pass", f"S1 행 {len(have)}개", "SITE_PROFILE.md ## 확인값")
 
 

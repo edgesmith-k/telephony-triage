@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -46,6 +47,20 @@ def test_missing_command(tmp_path):
 
 def test_repo_docs_clean():
     assert check_book.check(check_book.default_targets()) == []
+
+
+def test_default_targets_before_staging(tmp_path):
+    """반입 직후 `git add` 전: 지운 추적 파일은 빼고, 새 파일은 넣고, 무시 파일은 뺀다 (사내 재반입)."""
+    mat = tmp_path / "docs" / "materials"
+    mat.mkdir(parents=True)
+    (mat / "a.html").write_text(OK, encoding="utf-8")
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    subprocess.run(["git", "-C", str(tmp_path), "add", "-A"], check=True)       # index에만 있으면 된다(commit 불필요)
+    (mat / "a.html").unlink()
+    (mat / "새 문서 b.html").write_text(OK, encoding="utf-8")                   # 공백·한글: `-z`로 나눠야 한 항목
+    (mat / "c.html").write_text(OK, encoding="utf-8")
+    (tmp_path / ".gitignore").write_text("c.html\n", encoding="utf-8")
+    assert check_book.default_targets(tmp_path) == [tmp_path / check_book.BOOK, mat / "새 문서 b.html"]
 
 
 def test_missing_anchor_in_other_file(tmp_path):

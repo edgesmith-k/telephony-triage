@@ -2602,7 +2602,7 @@ explore: {when: never}          <span class="c"># 탐색 분석: ask(기본) | a
       <tbody>
         <tr><td>S-0 (선택)</td><td>실제 로그로 파서 가정 미리 확인. Claude 없이 Python만</td><td>지표 5종을 <code>SITE_PROFILE.md</code>에 기록, 개발 담당에게 전달할 결론 한 줄(사람이 직접 타이핑한 문장)</td><td>로그 3~5개(듀얼 SIM 포함)</td></tr>
         <tr><td>S-1</td><td>확인 목록 정리, <code>SITE_PROFILE.md</code> 작성, 도입 전 기준선 기록</td><td><code>REVIEW-OPEN.md</code> 모든 항목 처리 또는 사유 있는 보류. S-5 기준치 합의</td><td>샘플 Jira 2~3개, 카테고리별 로그, 소스 경로, 빌드명</td></tr>
-        <tr><td>S-2</td><td>사내 Claude Code 기능 확인, 실제 Jira MCP로 원문 격리 확인, 사내 대상 eval 실행</td><td>Claude Code 기능 확인 16항목(플러그인 로드·hook·MCP 도구 이름 등)의 결과 기록. eval 결과 기록, 안전 eval 위반 0</td><td>Claude Code, Jira MCP</td></tr>
+        <tr><td>S-2</td><td>사내 Claude Code 기능 확인, 실제 Jira MCP로 원문 격리 확인, 사내 대상 eval 실행</td><td>Claude Code 기능 확인 17항목(플러그인 로드·hook·MCP 도구 이름 등)의 결과 기록. eval 결과 기록, 안전 eval 위반 0</td><td>Claude Code, Jira MCP</td></tr>
         <tr><td>S-3</td><td>사이트 설정과 이슈 DB 설정에 사내 값 넣기</td><td><code>config.py check</code>·<code>doctor</code> fail 0</td><td>Jira 필드·타임존, GHE 주소, (게시를 쓰면) 코멘트 도구</td></tr>
         <tr><td>S-4a</td><td>운영 이슈 DB 만들기·보호. 기존 파서 옮기기, 기존 분류 가져오기, 분석 스킬 연결</td><td>골든 테스트(옮기기 전 파서 출력을 저장해 두고 옮긴 뒤 같은지 보는 시험) 통과. 기대값을 바꾸면 실패하는지까지 확인. 가져오기 PR 머지</td><td>GHE 관리 권한, 기존 파서·분류</td></tr>
         <tr><td>S-4</td><td>예시 규칙을 실제 문구로 바꿉니다. data 밖 5개 카테고리마다 시드 유형 5~10개(data는 S-4a 가져오기로)</td><td>회귀·검증 통과. 실제 마스킹 fixture 1개 이상씩</td><td>카테고리별 실제 로그</td></tr>
@@ -2737,7 +2737,7 @@ explore: {when: never}          <span class="c"># 탐색 분석: ask(기본) | a
 
   <h3 id="ch21-3">21.3 반입 뒤 다시 할 확인<a class="hl" href="#ch21-3" aria-label="링크">#</a></h3>
   <p>반입한 묶음에서 hook이나 공통 판정이 바뀌었으면, 사내 대상 eval 11개를 모두 다시 실행하고 S-2 확인 항목을 다시 봅니다. 바뀌는 파일은 <code>hooks.json</code>, <code>guard.py</code>, <code>show_guard.py</code>, <code>common/shown.py</code>, <code>jira_bridge.py</code>, 스킬의 공통 규칙 등입니다.</p>
-  <p>그 밖이면 바뀐 흐름의 eval만 실행합니다. 어느 쪽인지는 묶음과 함께 오는 <code>DRAFT_NOTES.md</code> "사내로 넘긴 것"의 재반입 노트에 적혀 있습니다. Claude Code의 큰 버전을 올릴 때도 S-2 확인 16항목과 사내 대상 eval 11개를 다시 합니다.</p>
+  <p>그 밖이면 바뀐 흐름의 eval만 실행합니다. 어느 쪽인지는 묶음과 함께 오는 <code>DRAFT_NOTES.md</code> "사내로 넘긴 것"의 재반입 노트에 적혀 있습니다. Claude Code의 큰 버전을 올릴 때도 S-2 확인 17항목과 사내 대상 eval 11개를 다시 합니다.</p>
 
   <h3 id="ch21-4">21.4 플러그인과 이슈 DB의 버전<a class="hl" href="#ch21-4" aria-label="링크">#</a></h3>
   <p>이슈 DB 설정에는 두 버전이 있습니다. 스키마 버전(<code>schema_version</code>, 파일 형식)과 생성기 버전(<code>generator_version</code>, 생성 파일 형식)입니다. 지금 플러그인은 스키마 1, 생성기 2를 씁니다. 등록된 스키마 마이그레이션은 아직 없습니다.</p>
@@ -4623,7 +4623,7 @@ score = score × (0.5 + 0.5 × 수락률)</pre></div>
         <tr><td>리뷰·기여 부담</td><td>카테고리별 시드 유형 5~10개로 시작. 파일럿에서 PR 시간과 취소 비율을 잼</td></tr>
         <tr><td>승인 없는 쓰기</td><td>PC의 승인 질문, 승인 지문, pre-push 검사. 마지막 방어선은 GHE 브랜치 보호와 필수 리뷰</td></tr>
         <tr><td>개인정보·사내 데이터</td><td>가리기를 세 번 검사(stage·publish·pre-commit). 외부 모델로 보내는 것은 보안 부서 승인 필요</td></tr>
-        <tr><td>Claude Code 업데이트</td><td>S-2 확인 16항목과 사내 대상 eval 11개를 다시 돌림</td></tr>
+        <tr><td>Claude Code 업데이트</td><td>S-2 확인 17항목과 사내 대상 eval 11개를 다시 돌림</td></tr>
         <tr><td>Windows PowerShell 도구</td><td>hook이 보지 못함. 지원 OS는 Ubuntu. S-2에서 노출 여부를 보고 막음</td></tr>
         <tr><td>Claude 밖 자동화(서버·봇·cron)</td><td>guard 보호 밖이므로 쓰기 없는 읽기 전용만 허용</td></tr>
       </tbody>

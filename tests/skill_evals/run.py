@@ -393,14 +393,16 @@ def execute(entry: dict, info: dict, env_dir: Path, run_dir: Path, claude: str,
     env, stripped_env = child_env(env)
     settings_json, auth_env, auth_keys = child_settings(env)
     env.update(auth_env)
-    # Git Bash는 python3.exe 없는 Windows에서도 같은 Python을 사용한다.
-    if os.name == "nt":
-        shim = env_dir / "bin"
-        shim.mkdir()
-        (shim / "python3").write_text(f"#!/bin/sh\nexec '{_bash_path(sys.executable)}' \"$@\"\n", encoding="utf-8", newline="\n")
-        with (env_dir / "env.sh").open("a", encoding="utf-8", newline="\n") as stream:
-            stream.write(f"export PATH='{_bash_path(str(shim))}':\"$PATH\"\n")
-        env["PATH"] = os.pathsep.join([str(shim), env["PATH"]])      # plugin 모드는 env.sh를 source하지 않는다
+    # `python3`는 사전 검사(child_python_problem)가 본 sys.executable을 부르는 shim이다(Windows Git Bash에는
+    # python3.exe가 없을 수 있다). hook·MCP 서버는 프로세스 PATH를, Bash는 env.sh(direct: 명령마다 source,
+    # plugin: CLAUDE_ENV_FILE)를 쓰므로 둘 다 맨 앞에 둔다.
+    shim = env_dir / "bin"
+    shim.mkdir()
+    (shim / "python3").write_text(f"#!/bin/sh\nexec '{_bash_path(sys.executable)}' \"$@\"\n", encoding="utf-8", newline="\n")
+    (shim / "python3").chmod(0o755)
+    env["PATH"] = os.pathsep.join([str(shim), env["PATH"]])
+    with (env_dir / "env.sh").open("a", encoding="utf-8", newline="\n") as stream:
+        stream.write(f"export PATH='{_bash_path(str(shim))}':\"$PATH\"\n")
     common = child_common_args(settings_json, persist=bool(plugin))
     dirs = ["--add-dir", str(info["plugin_root"]), str(Path(info["issue_db_clone"]).parents[1]), str(run_dir), str(REPO)]
     if plugin:
@@ -408,7 +410,7 @@ def execute(entry: dict, info: dict, env_dir: Path, run_dir: Path, claude: str,
         (run_dir / "prompt.txt").write_text(f"[system]\n{system}\n[user]\n{prompt}\n", encoding="utf-8")
         tools = "Read,Bash,Write,Edit,Glob,Grep,Skill"
         # MCP 도구는 서버 단위로 허용한다 — Jira 쓰기 차단은 권한 거부가 아니라 guard hook이 해야 평가가 된다.
-        # Bash는 매번 사용자 셸 프로필로 PATH를 다시 잡으므로(gh 스텁이 빠진다) env.sh를 명령마다 source하게 한다.
+        # Bash는 셸 프로필로 PATH를 다시 잡을 수 있으므로(원격 `claude -p`에서 gh 스텁이 빠진 일이 있다) env.sh를 명령마다 source하게 한다.
         env["CLAUDE_ENV_FILE"] = str(env_dir / "env.sh")
         # 실제 설치처럼 Bash에는 CLAUDE_PLUGIN_ROOT가 없다: 모델은 SKILL.md·커맨드 본문에 치환된 `S/` 경로를 써야 한다.
         env.pop("CLAUDE_PLUGIN_ROOT", None)
@@ -481,6 +483,33 @@ def execute(entry: dict, info: dict, env_dir: Path, run_dir: Path, claude: str,
     return outcome
 
 
+# 플러그인 스크립트 실행 조건 (pyproject `requires-python`·`dependencies`). Python 3 옛 버전에서도 파싱되게 쓴다.
+DEPS_CHECK = """import sys
+if sys.version_info < (3, 10):
+    sys.exit("Python 3.10+ 필요 (현재 %s)" % sys.version.split()[0])
+import yaml, jsonschema
+try:
+    from jsonschema import Draft202012Validator
+except ImportError:
+    sys.exit("jsonschema 4.0+ 필요 (현재 %s)" % getattr(jsonschema, "__version__", "?"))
+"""
+
+
+def child_python_problem() -> str | None:
+    """자식 세션의 `python3`(hook·Bash·스크립트가 이름으로 부름 — execute()의 shim이 sys.executable을 부른다)가
+    플러그인 실행 조건을 못 맞추면 그 이유."""
+    py = sys.executable
+    try:        # cwd=HERE: 실행 디렉토리의 같은 이름 파일(jsonschema.py 등)이 import를 가로채지 않게
+        proc = subprocess.run([py, "-c", DEPS_CHECK], cwd=HERE, capture_output=True, text=True, encoding="utf-8",
+                              errors="replace", timeout=60, env={**os.environ, "PYTHONIOENCODING": "utf-8"})
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return f"{py}: {exc}"
+    if proc.returncode:
+        lines = proc.stderr.strip().splitlines()
+        return f"{py}: {lines[-1] if lines else f'종료 코드 {proc.returncode}'}"
+    return None
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--iteration", type=Path, required=True)
@@ -503,6 +532,10 @@ def main() -> int:
     claude = shutil.which("claude") if args.execute else None
     if args.execute and not claude:
         parser.error("Claude Code CLI를 PATH에서 찾을 수 없음")
+    problem = child_python_problem() if args.execute else None
+    if problem:
+        parser.error(f"자식 세션 python3가 플러그인 실행 조건(Python 3.10+, yaml, jsonschema 4.0+)을 못 맞춤 — {problem}. "
+                     "`pip install --user`로 설치하거나 venv `(tt)` 터미널에서 실행한다(docs/SITE_INSTALL.md 4·5절)")
     iteration.mkdir(parents=True)
     for eid in args.eval:
         entry = entries[eid]

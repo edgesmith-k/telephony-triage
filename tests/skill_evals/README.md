@@ -32,7 +32,7 @@ python3 tests/skill_evals/grade.py tests/skill_evals/workspace/run-new --eval 3 
 
 CLI는 PATH에 있어야 한다. 실행자에게 기대 답과 assertions를 전달하지 않고, 모의 Jira·Git 원격·gh 스텁만 사용한다.
 `--execute`는 Claude API를 사용하며 한도·인증 오류나 시간 초과에서 배치를 멈춘다. 결과는 `execution.json`과
-`events.jsonl`에 남는다. 한도를 만난 뒤 자동 반복하지 말고 사용 가능해진 뒤 **새 반복 경로**로 재개한다.
+`events.jsonl`에 남는다. 자식 세션의 hook과 Bash는 같은 `python3`를 쓴다(`run.py`를 실행한 Python을 부르는 `python3` shim을 PATH와 `env.sh` 맨 앞에 둔다). 실행 전에 그 `python3`가 Python 3.10+·`yaml`·`jsonschema` 4.0+ 조건을 맞추는지 보고, 아니면 반복 디렉토리를 만들기 전에 종료 2로 멈춘다(비용 없음, `docs/SITE_INSTALL.md` 4·5절). 한도를 만난 뒤 자동 반복하지 말고 사용 가능해진 뒤 **새 반복 경로**로 재개한다.
 Windows 개발 PC에서는 Python과 Git Bash를 PATH에 두고 UTF-8 모드를 사용한다. 배포 대상은 Ubuntu다.
 자식 `claude`는 `--setting-sources ""`로 사용자·프로젝트 설정(플러그인·hook·권한)을 읽지 않는다. 대신 사용자 `settings.json`(`$CLAUDE_CONFIG_DIR` 또는 `~/.claude`)에서 **인증·네트워크 키만** 넘긴다 — `apiKeyHelper`·`awsAuthRefresh`·`awsCredentialExport`는 `--settings` JSON에, `env`의 `ANTHROPIC_*`·`AWS_*`·`VERTEX_*`·`CLAUDE_CODE_USE_*`·프록시·CA 값은 프로세스 환경에(argv·기록에 값 없음, `execution.json`의 `auth_from_user_settings`에 이름만). 사내에서 `apiKeyHelper`로 인증하면 이것 없이는 "Not logged in"이 된다.
 
