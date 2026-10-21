@@ -151,6 +151,19 @@ analyzers:
 - 다른 카테고리도 같은 방식으로 분석 스킬을 붙일 수 있다.
 - 분석 스킬은 1위 후보가 있을 때만 호출된다. 후보 없음·원인 미확인일 때의 Claude 가설은 별도 단계인 **탐색 분석**(`07-workflow.md §Step 5-2`, `explore.when`)이 맡는다. 사내에 범용 로그 분석 스킬이 있어도 v1은 탐색 분석을 스킬 본문(`reference/explore.md`)으로 하고, 그 스킬 연결은 S-4a에서 필요성을 본 뒤 정한다.
 
+### 16.5.1 분석 스킬 만들기 (분석 스킬이 없는 카테고리)
+
+리포트의 `심층 분석: 해당 없음(1위 카테고리에 분석 스킬 설정 없음)`은 정상 상태다(줄 끝에 이 안내 위치를 붙인다). 분석 스킬은 필요할 때만 만든다. 이슈 DB 독자용 요약은 뼈대의 `docs/analyzer-skills.md`(`tools/make_db_skeleton.py`)에 있다.
+
+- **만들 때**: 다음이 있고 **유지할 오너가 있을 때만** 만든다 — (a) 시그니처(정규식·이벤트·순서)로 표현하기 어려운 판단 순서(여러 단계의 조건 분기, 값 비교), (b) 따라가야 하는 코드 경로, (c) 이슈를 거듭하며 쌓인 점검 목록. 오너가 없거나 시그니처·파서 규칙으로 표현되면 만들지 않는다(규칙은 결정적이고 fixture 회귀로 검증된다, `12-principles.md`).
+- **구조**: `SKILL.md`(공통 절차: 입력 읽기 → 판단 순서 → 출력) + `references/<유형 ID>.md`(이슈 유형별 점검 목록·코드 경로, 그 유형일 때만 읽는다) + `analyzer.md`(입출력 계약). 계약은 위 §16.5와 `07-workflow.md §Step 5-1`에 맞춘다:
+  - 입력: `inputs`의 `events_json`(마스킹된 이벤트 JSON **경로**), `log_paths`, `top_candidates`(`[{type, cause, score, confidence}]`), `issue_summary`(마스킹된 한두 줄). 원문 로그를 통째로 받지 않는다.
+  - 출력: 리포트 `심층 분석 (<스킬>)` 칸에 붙을 요약, 다른 원인이면 `분석 스킬 의견: <원인 ID — 근거>`, 규칙이 필요하면 `규칙 제안:` 줄(제안만 한다). 마스킹된 값만 쓴다. 모의 예: `tests/mocks/skills/data-analyzer/`.
+- **description**: telephony-triage 스킬의 트리거 설명(Jira·logcat 분석 요청)과 겹치지 않게 쓴다 — "telephony-triage analyze Step 5-1에서 `analyzers.<카테고리>`로만 부른다"처럼 호출 경로를 좁힌다. 겹치면 사용자의 분석 요청이 이 스킬로 새어 본 흐름(lock·스냅샷·확인 화면)을 건너뛴다.
+- **파일을 바꾸지 않는다**: 분석 스킬은 이슈 DB·작업 계획·로그를 고치지 않고 규칙을 제안만 한다. 제안을 넣을지는 Step 7에서 사용자가 정한다.
+- **검증**: 해결된 실제 이슈(마스킹된 로그)로 스킬 있음/없음을 같은 모델로 비교한다(`10-skill-eval.md` 방식: 1순위 결과 — 의견이 맞는 원인을 가리키는지·제안 규칙이 R1~R5를 통과하는지, 2순위 토큰). 나아지지 않으면 연결하지 않는다.
+- **연결·교체·끄기**: 키는 `analyzers.<카테고리>`(`skill`·`when`·`inputs`, `contracts.md §기존 자산 연결 계약`). 팀 기본값은 `site-defaults.yaml`, 개인은 사용자 config(`~/.telephony-triage/config.yaml`, `02-config.md §4`)에 같은 키를 두면 덮어쓴다. `skill`을 바꾸면 교체, `when: never`면 끄기, 한 번만 건너뛰려면 analyze `--no-analyzer`.
+
 ## 16.6 사외 초안과 사내 작업
 
 - **사외 (Phase D0·2 추가분)**: 파서 백엔드 인터페이스(`base.py`)와 **reference 백엔드**(공통 처리는 제품 수준, builtin 판별 없음), 모의 site 백엔드(`builtin.data.*` 이벤트 1~2개를 내는 가짜), 골든 테스트 틀(`tests/test_golden.py`, 모의 골든으로 동작 확인), 어댑터 예시, 모의 분석 스킬(`tests/mocks/skills/data-analyzer/`), 모의 Jira MCP의 비표준 도구 이름. 모두 테스트 헬퍼 플러그인 루트(`site-defaults.example.yaml` 복사본, `15-local-draft.md §15.1`)에서 돈다.

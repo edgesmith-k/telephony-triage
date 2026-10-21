@@ -278,6 +278,7 @@ def test_sample_tree_layout():
         "docs/getting-started.md",
         "docs/review-guide.md",
         "docs/branch-protection.md",
+        "docs/analyzer-skills.md",
         "templates/type.md",
         "templates/cause.yaml",
         "templates/issue.yaml",
@@ -519,6 +520,9 @@ def test_skeleton_has_no_types_and_validates():
             assert (out / "schema" / name).exists(), f"뼈대에 {name}이 없습니다."
         for name in ("type.md", "cause.yaml", "issue.yaml"):
             assert (out / "templates" / name).exists(), f"뼈대에 템플릿 {name}이 없습니다."
+        guide = (out / "docs" / "analyzer-skills.md").read_text(encoding="utf-8")     # 분석 스킬 만들기 (16-existing-assets §16.5.1)
+        for needle in ("analyzers.<카테고리>", "규칙 제안:", "파일을 바꾸지 않는다", "when: never", "references/<유형 ID>.md"):
+            assert needle in guide, needle
 
         validator = Draft202012Validator(
             json.loads((out / "schema" / "parser-rules.schema.json").read_text(encoding="utf-8"))

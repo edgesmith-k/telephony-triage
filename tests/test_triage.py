@@ -822,7 +822,7 @@ def test_deep_analysis_slot_depends_on_analyzer_setting():
     never = _analyzer_report({"analyzers": {"data": {"skill": "mock-data-analyzer", "when": "never"}}})
     assert "- 심층 분석 생략: analyzers.data.when: never" in never
     none = _analyzer_report({"analyzers": {"other": {"skill": "x", "when": "ask"}}})
-    assert "- 심층 분석: 해당 없음(1위 카테고리에 분석 스킬 설정 없음)" in none
+    assert "- 심층 분석: 해당 없음(1위 카테고리에 분석 스킬 설정 없음) (만드는 법: 이슈 DB docs/analyzer-skills.md)" in none
 
 
 # -- 실패 스텝(선택 입력, 보조 정보) ---------------------------------------------------------------------

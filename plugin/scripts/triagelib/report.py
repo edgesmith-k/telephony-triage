@@ -508,7 +508,8 @@ class ReportMixin:
             lines.append(f"- 심층 분석 ({analyzer['skill']}): TODO(LLM) 결과 요약 / 분석 스킬 의견: <원인 ID — 근거 | 1위와 같음>. "
                          "실행 안 함·실패면 이 줄을 \"심층 분석 생략: <사유>\"로")
         else:
-            lines.append("- 심층 분석: 해당 없음(" + ("1위 카테고리에 분석 스킬 설정 없음" if cands else "1위 후보 없음") + ")")
+            lines.append("- 심층 분석: 해당 없음(1위 카테고리에 분석 스킬 설정 없음) (만드는 법: 이슈 DB docs/analyzer-skills.md)"
+                         if cands else "- 심층 분석: 해당 없음(1위 후보 없음)")
         explore = r.get("explore")
         if explore and explore.get("when") == "never":
             lines.append("- 탐색 분석: 생략 (explore.when: never)")
