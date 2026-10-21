@@ -252,6 +252,26 @@ def test_ipv4_after_version_context_is_kept():
     assert masking.new_masker()("peer 1.2.3.4") == "peer <IP#1>"  # 문맥 없으면 안전 쪽
 
 
+def test_data_call_response_cid_is_not_cell():
+    """AOSP 데이터 콜 응답 객체 안의 `cid`는 context id라 셀이 아니다(S13 오탐). 셀 식별자는 그대로 마스킹한다.
+    (AOSP 형식을 본뜬 합성 줄)"""
+    m = masking.new_masker()
+    resp = ("RILJ: [0041]< SETUP_DATA_CALL DataCallResponse: { cause=NONE retry=-1 cid=1 linkStatus=2 protocolType=2 "
+            "ifname=rmnet_data0 addresses=[10.0.0.2/32] mtu=1500 defaultQos=EpsQos: {qci=9} sliceInfo=null} [PHONE0]")
+    assert m(resp) == resp.replace("10.0.0.2", "<IP#1>")
+    unsol = "[UNSL]< UNSOL_DATA_CALL_LIST_CHANGED [DataCallResponse: { cause=NONE retry=-1 cid=2 linkStatus=2}] lac=1234 cid=5678"
+    assert m(unsol) == "[UNSL]< UNSOL_DATA_CALL_LIST_CHANGED [DataCallResponse: { cause=NONE retry=-1 cid=2 linkStatus=2}] " \
+                       "lac=<CELL#1> cid=<CELL#2>"      # 객체 밖의 `cid`는 셀
+    aidl = "android.hardware.radio.data.SetupDataCallResult{cause: 0, suggestedRetryTime: -1, cid: 3, active: 2}"
+    assert m(aidl) == aidl
+    cell = "CellIdentityGsm:{ mLac=1234 mCid=5678 } CellIdentityLte:{ mCi=12345678 mPci=301 mTac=4660 }"
+    assert m(cell) == "CellIdentityGsm:{ mLac=<CELL#1> mCid=<CELL#2> } CellIdentityLte:{ mCi=<CELL#3> mPci=<CELL#4> mTac=<CELL#5> }"
+    # 객체가 아닌 데이터 콜 문구(모의 형식)는 안전 쪽으로 그대로 셀로 본다
+    assert masking.new_masker()("[0041]< SETUP_DATA_CALL error=NONE cid=1") == "[0041]< SETUP_DATA_CALL error=NONE cid=<CELL#1>"
+    assert masking.new_masker().find(resp) == [{"kind": "IP", "start": resp.index("10.0.0.2"),
+                                                 "end": resp.index("10.0.0.2") + len("10.0.0.2")}]
+
+
 def test_pin_puk_values_need_four_digits():
     assert masking.new_masker()("pin: 3") == "pin: 3"
     assert masking.new_masker()("pin=null puk=unknown") == "pin=null puk=unknown"
