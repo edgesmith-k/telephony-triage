@@ -11,6 +11,7 @@
 | 4 | 의존성 설치 (사내 PyPI 미러) | 버전 3개 출력 |
 | 5 | `claude` → "사내 설정 시작" | `SITE_PROFILE.md` 생성, S-1 안내 |
 | (팀원) | 7절 — 담당자 S-7 뒤 | setup 점검 표 모두 ok |
+| (S-4a) | 9절 운영 이슈 DB 첫 push — 빈 레포, 보호 켜기 전 한 번 | push 성공, `s4a.protection` 통과 |
 | (새 묶음) | 8절 재반입 — 압축을 레포 위에 풀지 않는다 | `import_draft.py` 종료 0, pytest 통과, main에 ff 병합 |
 
 ## 1. 반입 파일 확인
@@ -161,6 +162,15 @@ S-1에서 `SITE_PROFILE.md`에 남길 것: 설치 경위(미러·A/B·Python 버
 
 오프라인 의존성 묶음(`tt-offline-deps-<날짜>.zip`, 사외에서 만든 wheel)은 **비상용**이다. 사내 미러로 설치되면 반입하지 않는다.
 
+### 이슈 DB 경로를 바꿨을 때 (`config.py set issue_db.path`)
+
+읽기 스냅샷 `<work_dir>/_snapshot`은 **옛 clone의 git worktree**라 그대로 두면 다음 sync·analyze의 snapshot이 "다른 clone의 worktree"로 멈춘다. 경로를 바꾸기 전에 진행 중 작업(`<work_dir>/<작업 키>/`, `/telephony-triage:status`로 확인)을 끝내거나 버리고, 바꾼 뒤 옛 스냅샷을 정리한다. `config.py set`도 스냅샷이 남아 있으면 같은 안내를 한 줄(`hint`) 낸다.
+```
+git -C <옛 clone> worktree remove --force <work_dir>/_snapshot    # 옛 clone이 남아 있을 때
+rm -rf <work_dir>/_snapshot                                        # 옛 clone을 이미 지웠을 때(폴더만 남음)
+```
+`<work_dir>/snapshot.json`(마지막 스냅샷 시각)은 다음 snapshot이 덮어쓰므로 그대로 둔다. 다음 sync가 새 clone에서 스냅샷을 다시 만든다. 사용자 clone 자체(옛·새)는 도구가 바꾸지 않는다.
+
 ## 8. 재반입 (작업 중인 사내 레포에 새 묶음 넣기)
 
 사외에서 고친 것을 새 묶음(`telephony-triage-import-<label>.zip`)으로 받아 넣을 때. **새 zip을 레포 위에 그냥 풀지 않는다** — 사외에서 지운 파일이 남고 사내 기록과 섞인다. 다른 폴더에 풀고 `tools/import_draft.py`가 바꿔 넣게 한다(`docs/design/15-local-draft.md §15.6`):
@@ -209,7 +219,7 @@ git add -A && git commit -m "재반입 <새 label> (사외 <커밋>)"
 git switch main && git merge --ff-only draft-import/<새 label> && git branch -d draft-import/<새 label>
 rm -rf ~/tt-old ~/tt-new
 ```
-실패하면 main에 합치지 않는다. `FAILED tests/…::<테스트 이름>` 줄만(사내 이름·경로는 빼고) 사외로 전달한다. 사내 레포에서는 사외 초안 전용 검사(`test_site_paths_are_absent_in_draft`, `test_check_boundary_external`)가 skip으로 나오는 것이 정상이다(import-20261014부터).
+실패하면 main에 합치지 않는다. `FAILED tests/…::<테스트 이름>` 줄만(사내 이름·경로는 빼고) 사외로 전달한다. 사내 레포에서는 사외 초안 전용 검사(`test_site_paths_are_absent_in_draft`, `test_check_boundary_external`, `test_site_defaults_required`)가 skip으로 나오는 것이 정상이다(import-20261014부터, 마지막 것은 그다음 묶음부터).
 
 반입한 묶음에서 **hook이나 공통 판정이 바뀌었으면**(`plugin/hooks/hooks.json`, `guard.py`, `show_guard.py`, `common/shown.py`, `jira_bridge.py`, 표시 기록을 쓰는 스크립트(`db_pr`·`issue_post`·`db_verify`·`triage`)의 기록 부분, 또는 `SKILL.md`·`reference/rules.md`의 공통 규칙) 사내 대상 eval 11개(`tests/skill_evals/pending.json` `site`)를 **모두** 다시 돌린다. 그 밖이면 바뀐 흐름의 eval만. 어느 쪽인지는 묶음과 함께 오는 `DRAFT_NOTES.md` "사내로 넘긴 것"의 재반입 노트에 적혀 있다. 생성기 버전(`generator_version`)이 올라간 묶음이면 운영 이슈 DB를 `migrate --to <현재 스키마>`로 맞춘다(`docs/design/06-collaboration.md §6.4` 버전 올림 순서, 운영 DB가 아직 없으면 뼈대 config 한 줄). 이어서 사내 단계는 `claude` → **계속**.
 
@@ -223,5 +233,37 @@ rm -rf ~/tt-old ~/tt-new
 | 종료 2 (적용 중 실패) | 도중 실패 | 도구가 되돌린다. 그래도 이상하면 `git reset --hard && git switch main`(1의 커밋으로) |
 
 공통 파일을 사내에서 직접 고치지 않는 것이 원칙이다(재반입 때 충돌). 사내 전용 코드·값은 `SITE_PATHS` 경로에만 둔다.
+
+## 9. 운영 이슈 DB 첫 push (S-4a, 도입 담당자 한 번)
+
+S-3까지 손본 뼈대(2절의 `../issue-db-skeleton`, 문서에 따라 `~/tt-skel`)를 사내 GHE의 **빈 운영 레포** main에 올린다. "main 직접 push 금지"의 유일한 예외이며, 브랜치 보호를 켜기 전·빈 레포·도입 담당자만이다. 그 뒤의 모든 변경은 PR이다.
+
+**0. 빈 레포 만들기** — GHE에서 README·`.gitignore`·라이선스 없이 만든다(파일이 있으면 첫 push가 거부된다 — force push로 덮지 않는다).
+
+**1. 뼈대 점검** — 레포 폴더에서, `claude`를 실행하는 것과 같은 Python으로.
+```
+SKEL=../issue-db-skeleton
+find $SKEL -name type.md -o -path '*/fixtures/*' | head         # 출력 없음 — 유형·fixture가 없어야 한다(뼈대는 빈 카테고리뿐)
+python3 plugin/scripts/db_lint.py --all --db $SKEL             # 오류 0
+python3 plugin/scripts/db_build.py --db $SKEL --write          # 생성 파일(README·STATS·CHANGELOG)은 db_build로만 만든다
+python3 plugin/scripts/db_build.py --db $SKEL --verify         # 종료 0 — main이 처음부터 CI 검사와 맞는다
+```
+
+**2. 첫 커밋과 push**
+```
+cd $SKEL
+git init -b main
+git config user.name "<이름>"; git config user.email "<사내 메일>"
+git add -A && git status --short                                # 뼈대 파일만인지 본다
+git commit -m "운영 이슈 DB 뼈대 (import-<label>)"
+git remote add origin <사내 GHE>/<org>/<이슈 DB 레포>.git
+git push -u origin main
+```
+- 이 폴더에는 `core.hooksPath`를 설정하지 않는다(`.githooks/pre-push`가 main push를 거부한다 — 그게 정상 동작이다). `--no-verify`로 우회하지 않는다.
+- 인증 실패·거부(레포가 비어 있지 않음 등)는 우회하지 말고 멈춰서 원인을 본다.
+
+**3. 바로 서버 보호 켜기** — main 브랜치 보호(PR 필수, CODEOWNERS 승인 필수, force push·삭제 금지). `.githooks/`는 서버 강제가 전제다(`docs/design/06-collaboration.md §6.1`). 확인은 `python3 tools/site_step.py check`의 `s4a.protection`.
+
+**4. 뼈대 폴더 정리** — 이 폴더는 더 쓰지 않는다(지워도 된다). 도입 담당자도 팀원과 같이 `/telephony-triage:setup`으로 운영 레포를 clone하고, `core.hooksPath`는 setup이 설정한다. 이후 변경은 도구의 PR(`tt/*` 브랜치)이나 메인테이너 PR로만 한다.
 
 관련: 반입 체크리스트 `docs/design/15-local-draft.md §15.4`, 사내 단계 §15.5, 재반입 §15.6, 사람용 총정리 `GUIDE.md` 4장.
