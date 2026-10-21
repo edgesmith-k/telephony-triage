@@ -19,7 +19,7 @@
 - 모드: **사외 초안**. Phase **D0, 1~13** 완료, 반입 전 보강 트랙 완료(history). 최신 반입 묶음 **import-20261018**(태그 있음). main 병합 PR #8~#70.
 - 10/15~16 **K·L·L1·L2 완료**(`K_RESULT.md`·`L_RESULT.md`, 재측정 offsite pass 59·fail 0·none 11(site)).
 - 10/17~18 외부 운영 리뷰 ①②③, 쓰기 흐름 eval 9개 fail 0, 검사 속도·하위 디렉토리 DB 수정(#63·#65·#67), 책·소개 자료(#59~#66).
-- 10/21 **사내 피드백 10건 → PR #71(병합 대기)**: 골든 synthetic 예외, site 백엔드 로드, `cid` 마스킹 과탐, 첫 push 문서, 분석 스킬 만들기(16 §16.5.1·뼈대 `docs/analyzer-skills.md`), 규칙 제안 → Step 7. 결정 대기: #71 병합, eval 40·41 확인(≈$1), `test_show_guard` 재생 1건 실패 원인(환경 의존). history "10/21".
+- 10/21 **사내 피드백 10건 → PR #71(병합 대기)**: 골든 synthetic, site 백엔드, `cid` 과탐, 첫 push, 분석 스킬 만들기, 규칙 제안 → Step 7. 결정 대기: #71 병합, 사외 eval 재측정, `test_show_guard` 재생 1건(환경 의존). history "10/21".
 - 모델: Sonnet 5.5 기준(Opus 5.5 확인 11개 실패 0).
 - `TODO(SITE)`: `tools/list_site_todos.py`. REVIEW-OPEN 0건. 사내 시작: **"사내 설정 시작"**(결정 (o)).
 - 안내서 HTML: 책 `docs/book/telephony-triage-book.html`(공유본 https://claude.ai/artifact/1jov1Et4dQUMauFr6aoxWG), 목록 `docs/materials/00-index.html`
@@ -29,7 +29,7 @@
 | ☐ | 항목 | 메모 |
 |---|---|---|
 | ☑ K·L·L1·L2 | 10/15~16 완료(생성기 v2, 표시·판정 정리 R·M-2·U-2·U-4, 재측정) | `K_RESULT.md`·`L_RESULT.md`, P2는 반입 뒤 후보 |
-| ☐ F | 반입 묶음 **import-20261018** — 태그·반입은 사용자(20261015·20261016은 태그하지 않음) | 사내: SITE_INSTALL §8 재반입, 아래 L2 노트 |
+| ☐ F | 반입 묶음 **import-20261018** — 태그·반입은 사용자(20261015·20261016은 태그하지 않음) | 사내: SITE_INSTALL §8 재반입, 아래 L2 노트, **`REIMPORT_NOTES_1021.md`**(사내 eval은 추후) |
 | ☐ G | 범용판 별도 레포 — **보류(10/07 사용자)** | 재개는 사용자가 정한다 |
 
 ## 사내로 넘긴 것
