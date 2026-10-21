@@ -14,13 +14,13 @@
 - 테스트는 `tools/related_tests.py --run`(관련만). 전체는 도구가 full이라 할 때·반입 직전·요청 시.
 - 진행 중 판단은 Fable 결정 에이전트에게 묻는다(10/06 사용자 지정). 원칙상 사용자 승인 대상(이슈 DB push, main 병합·태그 등 사용자가 지시하지 않은 외부 동작)은 사용자에게.
 
-## 진행 상태 (10/18)
+## 진행 상태 (10/21)
 
-- 모드: **사외 초안**. Phase **D0, 1~13** 완료, 반입 전 보강 트랙 완료(history). 최신 반입본 import-20261014c(f4d98d5, 사내 전달), 새 묶음 **import-20261018**(태그 전, 20261016은 대체). main 병합 PR #8~#67.
-- 10/15 **K 완료**: offsite pass 59·fail 0·미결정 11. **L**: `docs/development/L_RESULT.md`. 10/16 **L1·L2 완료**(L2 1023567~, 재측정 offsite pass 59·fail 0·none 11(site), 결과·P2는 L_RESULT "(다) 결과"), HTML 자료 현행화·소개 품질 절. 원격 → main 병합.
-- 10/17 **외부 운영 리뷰 ①②③**: `L_RESULT.md` "외부 운영 리뷰". 남은 것: 쓰기 흐름 유료 eval 1회.
-- 10/18 검사 속도 개선(#63·#65·#67), 하위 디렉토리 DB 범위 결함 수정(#67), 문서 현행화(#64·#66).
-- 모델: Sonnet 5.5 기준, Opus 5.5 확인 11개 실패 0(≈2.7배).
+- 모드: **사외 초안**. Phase **D0, 1~13** 완료, 반입 전 보강 트랙 완료(history). 최신 반입 묶음 **import-20261018**(태그 있음). main 병합 PR #8~#70.
+- 10/15~16 **K·L·L1·L2 완료**(`K_RESULT.md`·`L_RESULT.md`, 재측정 offsite pass 59·fail 0·none 11(site)).
+- 10/17~18 외부 운영 리뷰 ①②③, 쓰기 흐름 eval 9개 fail 0, 검사 속도·하위 디렉토리 DB 수정(#63·#65·#67), 책·소개 자료(#59~#66).
+- 10/21 **사내 피드백 10건 → PR #71(병합 대기)**: 골든 synthetic 예외, site 백엔드 로드, `cid` 마스킹 과탐, 첫 push 문서, 분석 스킬 만들기(16 §16.5.1·뼈대 `docs/analyzer-skills.md`), 규칙 제안 → Step 7. 결정 대기: #71 병합, eval 40·41 확인(≈$1), `test_show_guard` 재생 1건 실패 원인(환경 의존). history "10/21".
+- 모델: Sonnet 5.5 기준(Opus 5.5 확인 11개 실패 0).
 - `TODO(SITE)`: `tools/list_site_todos.py`. REVIEW-OPEN 0건. 사내 시작: **"사내 설정 시작"**(결정 (o)).
 - 안내서 HTML: 책 `docs/book/telephony-triage-book.html`(공유본 https://claude.ai/artifact/1jov1Et4dQUMauFr6aoxWG), 목록 `docs/materials/00-index.html`
 

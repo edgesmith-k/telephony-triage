@@ -79,3 +79,5 @@
 - 결정 (r) 끝 문장: eval 18 stage 자체 검증 갈음·전부 통과 초안 표 push 화면 갈음(사용자 10/14·15).
 - 결정 (p) 채점기: 확인 화면 안 내용 행도 **화면 전체** 기준(요약이면 실패), 순서·분류 안전 행은 표시로 실패시키지 않음.
 - 결정 (f) 반입 전 사외에서 최대한 안정화·보완·개선한 뒤 반입한다. 사내 문자열 사람 검색은 생략(사내→사외 반출 불가). (10/05)
+- 10/21 사내 피드백(사용자 직접 입력, 사내 값 없음) PR #71: 7e6d5bb 골든 합성 줄 보충 예외(`synthetic` 표식·사유 필수, 변조 점검은 synthetic 경로 건너뜀)·`real_site_backend` 픽스처(`parser_backends.site_real`, 사외는 skip), b53bd72 `test_site_defaults_required` 사내 skip, 18f5c49 `DataCallResponse`/`SetupDataCallResult` 객체 안 `cid`는 셀 아님(S13), a8d53b2 contracts 자격증명 키 필드명 주의, d56fec2 SITE_INSTALL 9절 첫 push·옛 스냅샷 정리(config.py 힌트), 535d9c5 16 §16.5.1 분석 스킬 만들기·뼈대 `docs/analyzer-skills.md`·리포트 "해당 없음" 줄 안내, 96127c4 분석 스킬 `규칙 제안:` → Step 7(사내 문구 오타 정정 ip→op 등, SKILL.md 상한 8,962B). 중단된 앞 작업의 `triage.py proposals`(JSON 파싱)는 문구와 맞지 않아 제거. 리뷰 P0·P1 없음. P2: 줄 끝까지 닫히지 않은 DataCallResponse 뒤 `cid=` 미마스킹 가능, 12-principles·08-safety에 첫 push 예외 교차 참조. 관련 테스트 1,796 통과·1 실패(`test_show_guard::test_hook_replay_counts_without_content`, 변경 전에도 실패·PC 기록 파일 의존). eval 영향: 40·41 문구만.
+
