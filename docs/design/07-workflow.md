@@ -172,6 +172,7 @@ Android 버전과 브랜치마다 소스 트리가 다르므로 **분석할 때�
 - `analyzers.<category>`가 설정돼 있고 1위 후보가 그 카테고리이면 `when`에 따라 호출한다. 기본 `ask`는 "심층 분석(<스킬 이름>)을 실행할까요? (토큰 추가 사용)"를 묻는다. `--analyzer`면 묻지 않고 호출하고, `--no-analyzer`면 호출하지 않는다. **5-2도 `ask`(둘 다 플래그 없음)이면 한 질문으로 합친다**: "심층 분석과 탐색 분석을 할까요? (토큰 추가 사용)" — 선택지 4개(둘 다 / 심층만 / 탐색만 / 둘 다 안 함). 한쪽이 플래그·config(`always`·`never`)로 이미 정해졌으면 남은 한쪽만 그 질문대로 묻고(선택지 2개), 둘 다 정해졌으면 묻지 않는다. 입력: 마스킹된 이벤트 JSON 경로, 로그 경로, 상위 후보, Jira 요약 (`16-existing-assets.md §16.5`).
 - 결과는 `mask_pii`를 적용한 뒤 리포트의 "심층 분석 (<스킬 이름>)" 절에 넣는다. **분류 후보·점수·검증 판정에는 쓰지 않는다.** 스킬이 다른 원인을 제시하면 "분석 스킬 의견"으로 보여주고 Step 7 둘째 질문(다른 원인·유형을 고른 뒤)의 첫 선택지로 둔다 — [<의견 원인> / 다른 기존 원인·새 원인·새 유형 / 원인 미확정 / 기록하지 않음], 의견이 1위와 같으면 질문은 그대로(고르면 `decision: chose-other` — Step 7의 chose-other 제안 규칙 적용, 이슈 DB에 없는 원인이면 `new-cause` 흐름).
 - 스킬이 없거나, 실패하거나, 사용자가 호출하지 않기로 하면 "심층 분석 생략: <사유>"를 적고 계속한다.
+- **규칙 제안**: 분석 스킬은 파일을 바꾸지 않고 결과의 `규칙 제안:` 줄로 제안만 한다(`- [이슈 DB] add-parser-rule …`·`- [이슈 DB] update-signature …`·`- [스킬] …`, 형식 `16-existing-assets.md §16.5.1`). 처리는 Step 7이다. 스크립트는 이 줄을 읽지 않는다.
 - **리포트 칸(`triage.py`가 채운다)**: 분석 스킬이 설정돼 있으면 `- 심층 분석 (<스킬>): TODO(LLM) 결과 요약 / 분석 스킬 의견: <원인 ID — 근거 | 1위와 같음>. 실행 안 함·실패면 이 줄을 "심층 분석 생략: <사유>"로`, `when: never`면 `- 심층 분석 생략: analyzers.<카테고리>.when: never`, 설정이 없으면 `- 심층 분석: 해당 없음(1위 카테고리에 분석 스킬 설정 없음) (만드는 법: 이슈 DB docs/analyzer-skills.md)`(후보가 없으면 `해당 없음(1위 후보 없음)`).
 
 ### Step 5-2. 탐색 분석 (Claude 가설, 선택)
@@ -234,6 +235,7 @@ Android 버전과 브랜치마다 소스 트리가 다르므로 **분석할 때�
 - **후보 없음**(Step 4)이었으면 선택지는 "새 유형 / 원인 미확정(사용자가 고른 가장 가까운 유형) / 기록하지 않음"이다. 기록하지 않으면 계획을 만들지 않고 `db_pr lock release`로 끝낸다.
 - 새 원인/유형이면 **`04-parser-matching.md §5.8 (3)` 파서 점검**을 해서 `add-parser-rule`/`update-parser-rule` op 초안을 만들고, `parse_logcat.py cut`으로 판별 근거 주변 최소 구간을 잘라 마스킹된 fixture를 만든 뒤 `add-fixture`(`kind: positive`, `for: <temp_id>`)로 넣고 승인받는다.
 - 기존 시그니처를 고치자는 결정이면 `update-signature`를 넣는다.
+- **분석 스킬 규칙 제안**(Step 5-1 결과에 `규칙 제안:` 줄이 있을 때): 분류 확정 뒤 한 번 묻는다(기본 "아니오", 고를 줄 선택 — 시그니처·파서 규칙 추가는 사용자 확인 후에만, `12-principles.md`). 고른 `[이슈 DB]` 줄(`add-parser-rule`·`update-signature`)은 `db-authoring.md` 점검을 거친 op 초안을 보이고 승인한 것만 계획에 넣는다 — 이후 `db_verify rules --plan --draft`(초안 검증 게이트)·stage 검사·확인 화면은 다른 작성 op와 같다. `[스킬]` 줄은 계획에 넣지 않고 분석 스킬 담당자 메모로 보인다. 분류 결정(`decision`)은 바꾸지 않는다.
 - 회귀 의심(fixed, SW ≥ fixed_in)이면 `update-fix`(→ open, `history: {result: reverted, build: <Jira SW>, issue: <KEY>}`)를 넣을지 묻는다.
 - 분류된 원인이 `fix-submitted`이고 이 로그가 `fixed_in` 이후(≥) 빌드면:
   - 원인 시그니처 충족(C=1) → "`update-fix` → open + 실패 이력"(`history: {result: failed, build: <Jira SW>, issue: <KEY>}`) / "이 로그로 verify-fix" 중 고르게 한다. 앞의 것이면 이 로그를 `recurrence` fixture로 넣을지 묻는다.

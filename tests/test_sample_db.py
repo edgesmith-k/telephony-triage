@@ -521,7 +521,7 @@ def test_skeleton_has_no_types_and_validates():
         for name in ("type.md", "cause.yaml", "issue.yaml"):
             assert (out / "templates" / name).exists(), f"뼈대에 템플릿 {name}이 없습니다."
         guide = (out / "docs" / "analyzer-skills.md").read_text(encoding="utf-8")     # 분석 스킬 만들기 (16-existing-assets §16.5.1)
-        for needle in ("analyzers.<카테고리>", "규칙 제안:", "파일을 바꾸지 않는다", "when: never", "references/<유형 ID>.md"):
+        for needle in ("analyzers.<카테고리>", "- [이슈 DB] add-parser-rule file=", "- [스킬]", "파일을 바꾸지 않는다", "when: never", "references/<유형 ID>.md"):
             assert needle in guide, needle
 
         validator = Draft202012Validator(

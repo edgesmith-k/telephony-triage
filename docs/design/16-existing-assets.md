@@ -158,9 +158,12 @@ analyzers:
 - **만들 때**: 다음이 있고 **유지할 오너가 있을 때만** 만든다 — (a) 시그니처(정규식·이벤트·순서)로 표현하기 어려운 판단 순서(여러 단계의 조건 분기, 값 비교), (b) 따라가야 하는 코드 경로, (c) 이슈를 거듭하며 쌓인 점검 목록. 오너가 없거나 시그니처·파서 규칙으로 표현되면 만들지 않는다(규칙은 결정적이고 fixture 회귀로 검증된다, `12-principles.md`).
 - **구조**: `SKILL.md`(공통 절차: 입력 읽기 → 판단 순서 → 출력) + `references/<유형 ID>.md`(이슈 유형별 점검 목록·코드 경로, 그 유형일 때만 읽는다) + `analyzer.md`(입출력 계약). 계약은 위 §16.5와 `07-workflow.md §Step 5-1`에 맞춘다:
   - 입력: `inputs`의 `events_json`(마스킹된 이벤트 JSON **경로**), `log_paths`, `top_candidates`(`[{type, cause, score, confidence}]`), `issue_summary`(마스킹된 한두 줄). 원문 로그를 통째로 받지 않는다.
-  - 출력: 리포트 `심층 분석 (<스킬>)` 칸에 붙을 요약, 다른 원인이면 `분석 스킬 의견: <원인 ID — 근거>`, 규칙이 필요하면 `규칙 제안:` 줄(제안만 한다). 마스킹된 값만 쓴다. 모의 예: `tests/mocks/skills/data-analyzer/`.
+  - 출력: 리포트 `심층 분석 (<스킬>)` 칸에 붙을 요약, 다른 원인이면 `분석 스킬 의견: <원인 ID — 근거>`, 규칙이 필요하면 `규칙 제안:` 줄 아래에 한 줄에 하나씩(제안만 한다). 마스킹된 값만 쓴다. 모의 예: `tests/mocks/skills/data-analyzer/`.
+    - 이슈 DB 규칙: `- [이슈 DB] add-parser-rule file=<parser-rules 파일> rule=<규칙> — 근거: <로그 줄·이유>` 또는 `- [이슈 DB] update-signature cause=<원인 ID> … — 근거: …`
+    - 분석 스킬 자체 개선(점검 목록·코드 경로 보완): `- [스킬] … — 근거: …`
+  - 처리(`07-workflow.md §Step 7`): 분류 확정 뒤 한 번 묻는다(기본 아니오, 고를 줄 선택). 고른 `[이슈 DB]` 줄은 스킬이 `db-authoring.md` 점검을 거친 계획 op 초안으로 만들어 보이고, 승인한 것만 `plan.json`에 들어가 다른 작성 op와 같은 초안 검증(`db_verify rules --plan --draft`)·stage 검사를 거친다. `[스킬]` 줄은 계획에 넣지 않고 분석 스킬 담당자 메모로만 보인다. 스크립트는 이 줄을 읽지 않는다.
 - **description**: telephony-triage 스킬의 트리거 설명(Jira·logcat 분석 요청)과 겹치지 않게 쓴다 — "telephony-triage analyze Step 5-1에서 `analyzers.<카테고리>`로만 부른다"처럼 호출 경로를 좁힌다. 겹치면 사용자의 분석 요청이 이 스킬로 새어 본 흐름(lock·스냅샷·확인 화면)을 건너뛴다.
-- **파일을 바꾸지 않는다**: 분석 스킬은 이슈 DB·작업 계획·로그를 고치지 않고 규칙을 제안만 한다. 제안을 넣을지는 Step 7에서 사용자가 정한다.
+- **파일을 바꾸지 않는다**: 분석 스킬은 이슈 DB·작업 계획·로그·자기 references를 고치지 않고 규칙을 제안만 한다(`규칙 제안:`). 넣을지는 Step 7에서 사용자가 정한다.
 - **검증**: 해결된 실제 이슈(마스킹된 로그)로 스킬 있음/없음을 같은 모델로 비교한다(`10-skill-eval.md` 방식: 1순위 결과 — 의견이 맞는 원인을 가리키는지·제안 규칙이 R1~R5를 통과하는지, 2순위 토큰). 나아지지 않으면 연결하지 않는다.
 - **연결·교체·끄기**: 키는 `analyzers.<카테고리>`(`skill`·`when`·`inputs`, `contracts.md §기존 자산 연결 계약`). 팀 기본값은 `site-defaults.yaml`, 개인은 사용자 config(`~/.telephony-triage/config.yaml`, `02-config.md §4`)에 같은 키를 두면 덮어쓴다. `skill`을 바꾸면 교체, `when: never`면 끄기, 한 번만 건너뛰려면 analyze `--no-analyzer`.
 
