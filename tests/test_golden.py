@@ -49,10 +49,12 @@ CASES = GOLDEN_DIR / "cases.yaml"
 
 sys.path.insert(0, str(REPO / "tests" / "mocks"))
 sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+sys.path.append(str(REPO / "tools"))  # site_checks만 (plugin/scripts보다 뒤)
 
 import logcat_gen  # noqa: E402
 import parser_backends  # noqa: E402  (plugin/scripts/parser_backends)
 from common import events as evrec, masking  # noqa: E402
+from site_checks import GOLDEN_META_KEYS, golden_synthetic_errors  # noqa: E402  (사내 s4a.golden과 같은 검사)
 
 MOCK_SITE_DIR = REPO / "tests" / "mocks" / "parser_backends" / "site"
 
@@ -106,18 +108,6 @@ def _load_cases() -> list[dict]:
     return data.get("cases", [])
 
 
-def case_errors(case: dict) -> list[str]:
-    """케이스 표식 검사. 실제 로그에 없는 판별 경로(bugreport 전용 흔적 등)에 한해 합성 줄을 보충한 케이스는
-    `synthetic: {reason: "..."}`를 남긴다 — 사유가 비면 오류 (16-existing-assets.md §16.3 골든 1).
-    나머지 케이스는 실제 로그 기준이라 표식이 없다."""
-    if "synthetic" not in case:
-        return []
-    mark = case["synthetic"]
-    if not isinstance(mark, dict) or not str(mark.get("reason") or "").strip():
-        return [f"{case.get('name')}: synthetic 표식에 사유(reason)가 없습니다"]
-    return []
-
-
 def _make_log(case: dict, out_dir: Path) -> Path:
     info = logcat_gen.generate(REPO / case["scenario"], out_dir, name=case["name"])
     return Path(info["files"][0])
@@ -160,6 +150,9 @@ def update_goldens() -> list[Path]:
         for case in _load_cases():
             actual = build_actual(case, Path(tmp))
             path = golden_path(case)
+            if path.exists():   # 최상위 메타(`synthetic` 표식·사유)는 백엔드 출력이 아니라 사람이 쓴 것이라 남긴다
+                old = json.loads(path.read_text(encoding="utf-8"))
+                actual = {**{k: old[k] for k in GOLDEN_META_KEYS if k in old}, **actual}
             path.write_text(
                 json.dumps(actual, ensure_ascii=False, indent=2) + "\n",
                 encoding="utf-8",
@@ -197,13 +190,14 @@ def test_golden_matches(tmp_path=None):
         )
 
 
-def test_cases_synthetic_marker_has_reason():
-    """합성 줄을 보충한 케이스는 `synthetic.reason`이 있어야 한다."""
-    assert [e for case in _load_cases() for e in case_errors(case)] == []
-    assert case_errors({"name": "real"}) == []
-    assert case_errors({"name": "s", "synthetic": {"reason": "bugreport 캡처 흔적은 logcat 덤프에 없음"}}) == []
+def test_golden_synthetic_marker_has_reason():
+    """합성 줄을 보충한 케이스의 골든 JSON 최상위 `synthetic`에는 사유가 있어야 한다(16-existing-assets.md §16.3 골든 1)."""
+    goldens = [golden_path(case) for case in _load_cases()]
+    assert [e for p in goldens for e in golden_synthetic_errors(p.name, json.loads(p.read_text(encoding="utf-8")))] == []
+    assert golden_synthetic_errors("real", {"events": []}) == []
+    assert golden_synthetic_errors("s", {"synthetic": {"reason": "bugreport 캡처 흔적은 logcat 덤프에 없음"}}) == []
     for bad in (True, "", {}, {"reason": " "}):
-        assert case_errors({"name": "s", "synthetic": bad}), bad
+        assert golden_synthetic_errors("s", {"synthetic": bad}), bad
 
 
 def test_real_site_backend_not_shadowed(tmp_path):

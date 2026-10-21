@@ -18,7 +18,7 @@
 | TMSI / GUTI / 5G-GUTI | 키 이름 문맥 | `<TMSI#n>` / `<GUTI#n>` |
 | MSISDN / 전화번호 | `+`국가번호, 국내 번호 형식, `tel:` URI | `<MSISDN#n>` |
 | SIP URI / IMPU / IMPI | `sip:…@…`, `tel:…`, IMS 도메인의 사용자 부분 | 사용자 부분만 `<IMPU#n>` / `<IMPI#n>` (도메인은 유지 옵션) |
-| Cell ID / TAC / CI / PCI 등 셀 식별자 | `mCi=`, `mTac=`, `cid=` 등 키 이름 문맥 (AOSP 데이터 콜 응답 객체 `DataCallResponse: {…}`·`SetupDataCallResult{…}` 안의 `cid`는 context id라 제외) | `<CELL#n>` |
+| Cell ID / TAC / CI / PCI 등 셀 식별자 | `mCi=`, `mTac=`, `cid=` 등 키 이름 문맥 (AOSP 데이터 콜 응답 객체 `DataCallResponse: {…}`·`SetupDataCallResult{…}`의 첫 `cid`는 context id라 제외 — 닫히지 않고 잘린 줄의 뒤쪽 `cid=`는 셀로 본다) | `<CELL#n>` |
 | IP 주소 | IPv4/IPv6. IPv4 값 바로 앞이 `version`·`build`·`release`·`rev`·`fw`·`sw`·`baseband`·`kernel`·`v` 문맥이면 제외(버전 문자열) | `<IP#n>` |
 | MAC 주소 | 6옥텟 `:`·`-` 형식(`-` 형식은 숫자만이면 제외), 키 문맥(`mac`·`mac_address`·`bssid`·`hwaddr`·`ether`·`bd_addr`, 낱말이 앞에 붙은 `…MacAddress`)의 12 hex | `<MAC#n>` |
 | GPS 좌표 | `lat`·`latitude`·`lon`·`longitude`·`lng`·`altitude`(앞에 `m` 허용) 키 문맥의 소수 3자리 이상, `gps`·`fused`·`network`·`passive` 뒤의 `위도,경도` 쌍(소수 4자리 이상) | `<GEO#n>` |

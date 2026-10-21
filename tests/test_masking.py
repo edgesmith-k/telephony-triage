@@ -266,6 +266,11 @@ def test_data_call_response_cid_is_not_cell():
     assert m(aidl) == aidl
     cell = "CellIdentityGsm:{ mLac=1234 mCid=5678 } CellIdentityLte:{ mCi=12345678 mPci=301 mTac=4660 }"
     assert m(cell) == "CellIdentityGsm:{ mLac=<CELL#1> mCid=<CELL#2> } CellIdentityLte:{ mCi=<CELL#3> mPci=<CELL#4> mTac=<CELL#5> }"
+    # 닫는 `}` 없이 잘린 객체: 제외는 첫 `cid`까지라 뒤의 셀 `cid`는 마스킹된다
+    cut = "DataCallResponse: { cause=NONE retry=-1 cid=1 linkStatus=2 ifname=rmnet0 ... lac=1234 cid=5678"
+    assert m(cut) == "DataCallResponse: { cause=NONE retry=-1 cid=1 linkStatus=2 ifname=rmnet0 ... lac=<CELL#1> cid=<CELL#2>"   # 같은 값 = 같은 번호
+    hidl = "SetupDataCallResult{.cause = NONE, .suggestedRetryTime = -1, .cid = 1, .active = 2}"
+    assert m(hidl) == hidl
     # 객체가 아닌 데이터 콜 문구(모의 형식)는 안전 쪽으로 그대로 셀로 본다
     assert masking.new_masker()("[0041]< SETUP_DATA_CALL error=NONE cid=1") == "[0041]< SETUP_DATA_CALL error=NONE cid=<CELL#1>"
     assert masking.new_masker().find(resp) == [{"kind": "IP", "start": resp.index("10.0.0.2"),

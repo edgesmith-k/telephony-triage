@@ -868,6 +868,16 @@ def s4a_golden(ctx: Ctx) -> dict:
     cmd = "python3 -m pytest --collect-only -q tests/golden"
     if not data:
         return res("s4a.golden", "fail", "tests/golden/ 골든 파일 0", cmd)
+    marks = []
+    for p in sorted(data):
+        if p.suffix == ".json":
+            try:
+                marks += golden_synthetic_errors(str(p.relative_to(ctx.root)), json.loads(p.read_text(encoding="utf-8")))
+            except ValueError:
+                pass        # 깨진 JSON은 골든 테스트가 잡는다
+    if marks:
+        return res("s4a.golden", "fail", "; ".join(marks), cmd,
+                   ask="합성 줄을 보충한 골든에 사유를 적는다(16-existing-assets.md §16.3 골든 1)")
     if not _golden_tests(ctx.root):
         return res("s4a.golden", "needs-user", f"골든 {len(data)}개, 수집할 test_*.py 없음", cmd,
                    ask="사내 골든 테스트(tests/golden/test_*.py)를 어떻게 돌리는지 정해 주세요")
@@ -908,8 +918,19 @@ def _mutate(value, path: str):
 
 
 MUTATIONS = 3
-# 골든 케이스 메타데이터(기대값이 아님): 합성 줄 보충 표식·사유(16-existing-assets.md §16.3 골든 1). 변조 대상에서 뺀다.
+# 골든 JSON 최상위 메타데이터(기대값이 아님): 합성 줄 보충 표식·사유(16-existing-assets.md §16.3 골든 1). 변조 대상에서 뺀다.
 GOLDEN_META_KEYS = ("synthetic",)
+
+
+def golden_synthetic_errors(name: str, data) -> list[str]:
+    """골든 JSON 최상위 `synthetic` 표식 검사: 있으면 `{reason: "<왜 실제 로그에 없는지>"}`이고 사유가 비지 않아야 한다.
+    표식이 없으면 실제 로그 기준 케이스다. 사내는 `s4a.golden`, 모의는 `tests/test_golden.py`가 쓴다."""
+    if not isinstance(data, dict) or "synthetic" not in data:
+        return []
+    mark = data["synthetic"]
+    if not isinstance(mark, dict) or not str(mark.get("reason") or "").strip():
+        return [f"{name}: synthetic 표식에 사유(reason)가 없습니다"]
+    return []
 
 
 def s4a_golden_mutation(ctx: Ctx) -> dict:
@@ -931,7 +952,7 @@ def s4a_golden_mutation(ctx: Ctx) -> dict:
     target = copy / rel
     original = target.read_text(encoding="utf-8")
     leaves = [p for p, _ in _leaves(json.loads(original))
-              if not set(re.findall(r"[^.\[\]]+", p)) & set(GOLDEN_META_KEYS)]
+              if re.match(r"[^.\[]+", p).group() not in GOLDEN_META_KEYS]   # 최상위 메타 키만 뺀다(이벤트 필드 이름은 기대값)
     if not leaves:
         return res("s4a.golden_mutation", "skip", f"{rel}: 바꿀 값 없음", cmd, ask="값이 있는 골든 JSON을 둔다")
     picks = sorted({0, len(leaves) // 2, len(leaves) - 1})[:MUTATIONS]

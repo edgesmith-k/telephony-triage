@@ -13,7 +13,7 @@
   숫자 규칙은 단어 경계(`_`, `.` 포함) 안에서만 본다.
 - **값 앞 제외(`Rule.before`)**: 값 바로 앞 24자가 이 패턴에 맞으면 그 값은 건너뛴다
   (`version 10.0.1.2`를 IPv4로 보지 않기). `context`(줄 전체 양성 조건)와 반대 방향의 음성 조건이다.
-- **구간 제외(`Rule.outside`)**: 값이 이 패턴이 맞은 구간 안이면 건너뛴다(데이터 콜 응답 객체 안의 `cid`는
+- **구간 제외(`Rule.outside`)**: 값이 이 패턴이 맞은 구간 안이면 건너뛴다(데이터 콜 응답 객체의 첫 `cid`는
   셀이 아니다). 줄 전체가 아니라 맞은 구간만 보므로 같은 텍스트의 다른 `cid=`는 그대로 마스킹한다.
 - **게이트(`Rule.gate`)**: 키 이름 문맥 규칙은 소문자 줄에 그 키 부분문자열이 하나라도 있을 때만
   돈다. 결과는 같고 규칙당 고정비(줄마다 `finditer`)만 줄인다(08-safety.md §8 성능).
@@ -168,10 +168,12 @@ RULES: tuple[Rule, ...] = (
         r"\b(?:mCi|mPci|mTac|mLac|mCid|mNci|mCellId|ci|pci|tac|lac|nci|eci|cellId|cellIdentity)"
         + _SEP + r"(?P<v>0x[0-9A-Fa-f]+|\d+)" + _NUM_END)),
     # 맨 `cid`도 셀로 보되, AOSP 데이터 콜 응답 객체(`DataCallResponse: { … cid=1 …}`, `SetupDataCallResult{… cid: 1 …}`)
-    # 안의 `cid`는 데이터 콜 context id라 셀이 아니다(사내 확인: 오탐, S13). 구간은 객체 이름부터 첫 중첩 `{`·`}`·줄 끝까지
-    # (`cid`는 중첩 필드보다 앞에 나온다). 그 밖의 `cid=`(모의 `SETUP_DATA_CALL error=NONE cid=1` 등)는 그대로 셀로 본다(안전 쪽)
+    # 안의 `cid`는 데이터 콜 context id라 셀이 아니다(사내 확인: 오탐, S13). 구간은 객체 이름부터 그 객체의 **첫** `cid` 값까지
+    # (`cid`는 중첩 `{`·`}`보다 앞에 나온다). 그래서 닫는 `}` 없이 잘린 줄에서 뒤에 오는 셀 `cid=`는 구간 밖이라 마스킹된다.
+    # 그 밖의 `cid=`(모의 `SETUP_DATA_CALL error=NONE cid=1` 등)는 그대로 셀로 본다(안전 쪽)
     Rule("CELL", re.compile(r"\bcid" + _SEP + r"(?P<v>0x[0-9A-Fa-f]+|\d+)" + _NUM_END), gate=("cid",),
-         outside=re.compile(r"\b(?:DataCallResponse|SetupDataCallResult)\s*:?\s*\{[^{}\n]*")),
+         outside=re.compile(r"\b(?:DataCallResponse|SetupDataCallResult)\s*:?\s*\{[^{}\n]*?\bcid" + _SEP
+                            + r"(?:0x[0-9A-Fa-f]+|\d+)")),
     Rule("MSISDN", re.compile(
         r'(?i)\b(?:msisdn|phone(?:number)?|dest(?:addr)?|destination|number|callee|caller)' + _SEP + r'(?P<v>\+?\d{7,15})'
         + _NUM_END)),
