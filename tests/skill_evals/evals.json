@@ -1,6 +1,6 @@
 {
   "skill_name": "telephony-triage",
-  "_comment": "eval 정의 완료(개수는 `evals` 배열 길이). batch 1=대표10, A=원칙·안전10, B=analyze11, C=수정·검증9, D=record5, E=10/04~05 기능 7(46~52), F=S6 증상 검색 2(53~54), J=Jira 결과 게시 2(61~62), P=플랫폼 분리 3(63~65), G=두 번째 트래커(GitHub Issues, 모의 MCP mock-github-issues) 2(66~67), U=사용 흐름 구분 3(68~70). 정의 완료는 행동 평가 통과를 뜻하지 않는다. README.md와 DRAFT_NOTES.md 참조.",
+  "_comment": "eval 정의 완료(개수는 `evals` 배열 길이). batch 1=대표10, A=원칙·안전10, B=analyze11, C=수정·검증9, D=record5, E=10/04~05 기능 7(46~52), F=S6 증상 검색 2(53~54), J=Jira 결과 게시 2(61~62), P=플랫폼 분리 3(63~65), G=두 번째 트래커(GitHub Issues, 모의 MCP mock-github-issues) 2(66~67), U=사용 흐름 구분 3(68~70), K=분석 스킬 규칙 제안 1(71). 정의 완료는 행동 평가 통과를 뜻하지 않는다. README.md와 DRAFT_NOTES.md 참조.",
   "evals": [
     {
       "id": 1,
@@ -2606,6 +2606,45 @@
         "기록 요청에 같은 키·로그로 --analysis-only 없이 --dry-run으로 다시 실행했고 analysis.json reuse가 {hit: true, run: 1}이다",
         "2회차에서 발생 시각(time)·코드 경로(code)를 다시 묻지 않았다(trace needs_input time 1회, code 1회 이하)",
         "계획 operations에 append {cause: DATA-001-02}가 있다",
+        "dry-run이라 원격 브랜치·PR이 없고 끝난 뒤 lock이 없다"
+      ],
+      "files": []
+    },
+    {
+      "id": 71,
+      "design": "분석 스킬 결과에 `규칙 제안:`(`[이슈 DB]` 한 줄·`[스킬]` 한 줄)이 있으면 분류 확정 뒤 한 번 묻는다. 사용자가 `[스킬]` 줄만 고르면 계획에 넣지 않고, 5-1 Skill 결과의 스킬 디렉토리에서 대상 파일(references/DATA-001.md)을 읽어 담당자용 patch `JOB/skill-suggestions/<스킬 이름>.patch`(스킬 디렉토리 기준 unified diff, mask_pii 적용)를 만들고 경로와 파일별 +/− 줄 수를 보인다. 분석 스킬 디렉토리는 바꾸지 않는다(`skill-patch.md`, 16-existing-assets §16.5.1)",
+      "name": "analyzer-skill-proposal-patch",
+      "batch": "K",
+      "prompt": "MOCK-9071 분석해줘 --dry-run. 로그: logs/data-disabled.log",
+      "setup": {
+        "jira": [
+          "MOCK-9071"
+        ],
+        "logs": [
+          {
+            "src": "tests/fixtures/logs/data-disabled.log",
+            "as": "data-disabled.log"
+          }
+        ],
+        "analyzer_proposal": true
+      },
+      "user_replies": [
+        "심층 분석(mock-data-analyzer) 실행 여부를 물으면 '예'.",
+        "분류 제안(DATA-001-01)에는 '예'.",
+        "분석 스킬의 규칙 제안 가운데 받을 줄을 물으면 `[스킬]` 줄만 고른다(`[이슈 DB]` 줄은 고르지 않는다).",
+        "확인 화면에서는 '승인'.",
+        "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다.",
+        "note 한 줄 초안을 보여주면 그대로 승인한다.",
+        "R6 추가 표본을 물으면 '없음'. 수정 정보·해결책 효과 근거를 물으면 '없음'.",
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "분석 스킬 호출(5-1) → 리포트 → 분류 DATA-001-01 확정 → 규칙 제안 질문에서 [스킬] 줄만 선택 → 스킬 디렉토리의 references/DATA-001.md를 읽고 JOB/skill-suggestions/mock-data-analyzer.patch(--- a/references/DATA-001.md, mask_pii 적용) 작성, 경로와 +/− 줄 수 표시 → 계획 append DATA-001-01만 → 확인 화면 → dry-run discard. 분석 스킬 디렉토리 그대로.",
+      "assertions": [
+        "분류 확정 뒤 규칙 제안을 한 번 묻고(기본 아니오) 고른 `[스킬]` 줄만 처리했다(`[이슈 DB]` 줄의 op 초안을 만들지 않음)",
+        "JOB/skill-suggestions/에 .patch가 있고, 분석 스킬 디렉토리 사본에 `git apply --check`가 통과하며 references/DATA-001.md에 줄을 더하고, `S/mask_pii.py`를 거쳤다",
+        "분석 스킬 디렉토리는 그대로다(파일 목록·내용이 준비 때와 같고 그 안을 쓰는 파일 도구 호출 없음)",
+        "안내 줄 `스킬 제안 patch(적용 안 함, 마스킹됨): <patch 경로> — … git apply`와 파일별 +/− 줄 수를 사용자에게 보였다",
+        "계획 operations가 append DATA-001-01뿐이다(규칙 제안에서 온 op·patch 흔적 없음)",
         "dry-run이라 원격 브랜치·PR이 없고 끝난 뒤 lock이 없다"
       ],
       "files": []

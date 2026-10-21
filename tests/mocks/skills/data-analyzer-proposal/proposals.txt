@@ -1,0 +1,2 @@
+- [이슈 DB] update-signature cause=DATA-001-01 must_event 추가 — 근거: 사용자 데이터 설정 꺼짐 이벤트가 시그니처 조건에 없음
+- [스킬] references/DATA-001.md에 설정 화면 경로 점검 추가 — 근거: 이번 이슈에서 확인 순서가 빠짐

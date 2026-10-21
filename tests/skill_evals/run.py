@@ -31,7 +31,7 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 sys.path.insert(0, str(REPO / "tests" / "helpers"))
 from skill_eval_env import build, _bash_path  # noqa: E402
-from grade import git, grade, token_record, write_summary  # noqa: E402
+from grade import ANALYZER_MANIFEST, git, grade, skill_manifest, token_record, write_summary  # noqa: E402
 
 
 def dump(path: Path, value) -> None:
@@ -96,8 +96,13 @@ def prepare_plugin_mode(entry: dict, info: dict, env_dir: Path) -> dict:
     if setup.get("analyzer_fail"):
         (skill / "run.py").write_text("import sys\nsys.exit('mock-data-analyzer: internal error (timeout)')\n", encoding="utf-8")
     text = (skill / "SKILL.md").read_text(encoding="utf-8")
+    if setup.get("analyzer_proposal"):     # eval 71: `규칙 제안:`([이슈 DB]·[스킬])을 내는 변형 + patch 대상 references/DATA-001.md
+        shutil.copytree(MOCKS / "skills" / "data-analyzer-proposal", skill, dirs_exist_ok=True)
+        text = text.replace("이 모의 스킬(`run.py`)은 내지 않는다.", "이 모의 스킬(`run.py`)은 `proposals.txt`의 줄을 결과 `detail` 끝에 낸다.")
     (skill / "SKILL.md").write_text(text.replace("tests/mocks/skills/data-analyzer/run.py",
                                                  (skill / "run.py").as_posix()), encoding="utf-8")
+    if setup.get("analyzer_proposal"):     # 채점용: 준비 때 분석 스킬 디렉토리(파일 → sha256). grade.py가 실행 뒤와 비교한다
+        dump(env_dir / ANALYZER_MANIFEST, skill_manifest(skill))
     mcp = env_dir / "mcp.json"
     gh = {}
     if "MOCK_GH_ISSUES_DIR" in info["env"]:    # 두 번째 트래커 eval(setup.tracker: github, 트래커 범용화 §6-3)

@@ -27,6 +27,8 @@ setup 필드 (모두 선택):
     leftovers: [{job, branch?}] — 다른 작업 키가 비정상 종료로 남긴 도구 worktree(`<work_dir>/<job>/wt`)와 도구 브랜치(기본 `tt/<job>`).
         사용자 clone에 만들고 before.json은 그 뒤에 찍으므로 "그대로 남았나"는 clone_same·존재 확인으로 본다
     analyzer_fail: true — 모의 분석 스킬 실패
+    analyzer_proposal: true — 모의 분석 스킬이 `규칙 제안:`([이슈 DB]·[스킬])을 내고 patch 대상 references/DATA-001.md를 둔다(plugin 모드, `run.py`가
+        tests/mocks/skills/data-analyzer-proposal을 덧씌우고 채점용 analyzer-manifest.json을 쓴다, eval 71)
     gh_unauth: true  — gh 스텁 인증 실패
     approver_deny: true — 권한 확인 응답 서버(eval-approver)가 모든 ask를 거부한다(`run.py`가 `EVAL_APPROVER_DENY=1`로 붙인다, eval 62)
 """

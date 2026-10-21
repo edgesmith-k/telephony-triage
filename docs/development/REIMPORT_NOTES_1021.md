@@ -20,13 +20,13 @@
 | 운영 이슈 DB 첫 push | `SITE_INSTALL.md §9`(S-4a, 도입 담당자 한 번). `config.py set issue_db.path` 뒤 옛 스냅샷 정리 안내가 출력된다(§7 "이슈 DB 경로를 바꿨을 때") |
 | 분석 스킬 만들기 | `16 §16.5.1` 신설. 이슈 DB 뼈대에 `docs/analyzer-skills.md`가 추가돼 **뼈대 zip 해시가 바뀐다**. 이미 만든 운영 이슈 DB에는 이 파일을 복사해 넣는다(이슈 DB 변경이므로 PR로) |
 | 리포트 안내 | `심층 분석: 해당 없음(…)` 줄 끝에 `(만드는 법: 이슈 DB docs/analyzer-skills.md)` |
-| 규칙 제안 → Step 7 | 분석 스킬의 `규칙 제안:` 줄을 분류 확정 뒤 한 번 묻는다. `[이슈 DB]` 줄은 op 초안 → 승인분만 계획에 넣어 `db_verify`까지, `[스킬]` 줄은 담당자 메모로만. 분석 스킬이 이 형식(16 §16.5)으로 쓰는지 확인 |
+| 규칙 제안 → Step 7 | 분석 스킬의 `규칙 제안:` 줄을 분류 확정 뒤 한 번 묻는다. `[이슈 DB]` 줄은 op 초안 → 승인분만 계획에 넣어 `db_verify`까지, `[스킬]` 줄은 계획에 넣지 않고 담당자용 patch `JOB/skill-suggestions/<스킬 이름>.patch`(분석 스킬 디렉토리 기준 unified diff, `mask_pii` 적용, 분석 스킬은 안 바꿈 — 담당자가 `git apply`)를 만든다. 스킬 디렉토리를 모르면 메모로만. 분석 스킬이 이 형식(16 §16.5)으로 쓰는지 확인 |
 
 ## 3. 테스트·eval
 
 - `python3 -m pytest -q tests`. `tests/test_show_guard.py::test_hook_replay_counts_without_content`는 사외에서도 환경에 따라 실패한다(기대 2, 실제 1). 이것만 실패하면 병합해도 되고, 실패 줄은 사외로 전달한다.
 - **SKILL.md(공통 규칙)가 바뀌었다** → §8 기준으로는 사내 대상 eval 11개(`pending.json` `site`)를 모두 다시 돌릴 대상이다. **이번에는 추후로 미룬다(10/21 사용자: 토큰 여유 없음).** 돌릴 때 이 반입분이 직접 닿는 것은 Step 5-1·7 흐름이다. hook은 바뀌지 않았다.
-- 사외 eval도 이번 변경분은 아직 다시 돌리지 않았다(40·41만 영향, 중간에 멈춤).
+- 사외 eval: 스킬 제안 patch(새 eval 71, `reference/skill-patch.md`)까지 넣은 뒤 전체 재측정 예정. 그 전 52개 부분 실행(m1-*)은 fail 1(eval 47 `match.json` 열람, 모델 편차·P2). 71이 사외 기록에 `none`이면 S-2 `s2.offsite`가 사용자 결정으로 띄운다(사외 측정 뒤 `offsite.py`로 다시 만들거나 사내에서 돌림).
 
 ## 4. 남은 P2 (반입 뒤 후보)
 

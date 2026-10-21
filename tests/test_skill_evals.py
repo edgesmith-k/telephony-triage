@@ -1274,7 +1274,7 @@ def test_e39_doctor_table_from_text_or_transcript(tmp_path, where, ok):
 
 def test_jira_post_evals_defined():
     by_id = {e["id"]: e for e in _entries()}
-    assert len(by_id) == 70
+    assert len(by_id) == 71
     assert by_id[8]["name"] == "jira-comment-request-gated" and len(by_id[8]["assertions"]) == 4
     for eid, count in ((61, 11), (62, 6)):
         e = by_id[eid]
@@ -2654,3 +2654,105 @@ def test_grouped_skip_expansion_credits_only_the_printed_line():
     assert missing(block.replace("\r", "")) == []
     assert len(missing("R1·R2·R3·R4 통과, 건너뜀 없음\nR5·R6 건너뜀: 해당 없음")) == 6
     assert len(missing("건너뜀 없이 R1·R2·R3·R4 모두 통과\nR5·R6 건너뜀(해당 없음)")) == 6
+
+
+# --- 분석 스킬 규칙 제안 (배치 K, eval 71) ---------------------------------------------------------------
+
+def _proposal_info(tmp_path):
+    return {"plugin_root": str(tmp_path / "root"),
+            "env": {"MOCK_JIRA_DIR": "J", "MOCK_JIRA_WRITE_LOG": "W", "PYTHONIOENCODING": "utf-8"}}
+
+
+def _mock_run(skill: Path) -> dict:
+    out = subprocess.run([sys.executable, str(skill / "run.py")], input="{}", capture_output=True, text=True, check=True)
+    return json.loads(out.stdout)
+
+
+def test_e71_defined_and_wired(tmp_path):
+    by_id = {e["id"]: e for e in _entries()}
+    e = by_id[71]
+    assert e["batch"] == "K" and e["name"] == "analyzer-skill-proposal-patch" and e["setup"]["analyzer_proposal"] is True
+    assert e["setup"]["jira"] == ["MOCK-9071"] and (EVALS / "jira" / "MOCK-9071.yaml").is_file()
+    assert "K=분석 스킬 규칙 제안 1(71)" in json.loads((EVALS / "evals.json").read_text(encoding="utf-8"))["_comment"]
+    assert not any("analyzer_proposal" in (x.get("setup") or {}) for x in by_id.values() if x["id"] != 71)
+    d = tmp_path / "e"
+    fns = grader.checks(71, grader.Ctx(_synthetic_env(d), run_dir(d)))
+    assert len(fns) == len(e["assertions"]) and fns[0] is None
+    for fn in fns[1:]:          # 실행 흔적이 없으면 어느 항목도 통과로 세지 않는다
+        try:
+            ok, _ = fn()
+        except grader._Manual:
+            continue
+        except Exception:  # noqa: BLE001 — 가짜 환경에는 원격이 없다(grade()는 예외를 실패로 센다)
+            continue
+        assert ok is False
+
+
+def test_prepare_plugin_mode_analyzer_proposal_variant_only_when_set(tmp_path):
+    """setup.analyzer_proposal만 모의 분석 스킬에 `규칙 제안:`·references를 더한다. 없으면 출력·파일이 예전과 같다."""
+    plain = Path(evaluation.prepare_plugin_mode({"setup": {}}, _proposal_info(tmp_path / "a"), (tmp_path / "a").resolve())
+                 ["plugin_dirs"][1]) / "skills" / "mock-data-analyzer"
+    assert not (plain / "references").exists() and not (plain / "proposals.txt").exists()
+    assert not (tmp_path / "a" / grader.ANALYZER_MANIFEST).exists()
+    src = REPO / "tests" / "mocks" / "skills" / "data-analyzer"
+    assert _mock_run(plain) == _mock_run(src) and "규칙 제안" not in _mock_run(plain)["detail"]
+    env = (tmp_path / "b").resolve()
+    env.mkdir()
+    skill = Path(evaluation.prepare_plugin_mode({"setup": {"analyzer_proposal": True}}, _proposal_info(env), env)
+                 ["plugin_dirs"][1]) / "skills" / "mock-data-analyzer"
+    assert (skill / "references" / "DATA-001.md").is_file()
+    detail = _mock_run(skill)["detail"]
+    assert "\n규칙 제안:\n- [이슈 DB] update-signature cause=DATA-001-01" in detail
+    assert "- [스킬] references/DATA-001.md에 설정 화면 경로 점검 추가 — 근거:" in detail
+    assert "`proposals.txt`의 줄을 결과 `detail` 끝에 낸다" in (skill / "SKILL.md").read_text(encoding="utf-8")
+    manifest = json.loads((env / grader.ANALYZER_MANIFEST).read_text(encoding="utf-8"))
+    assert manifest == grader.skill_manifest(skill) and "references/DATA-001.md" in manifest
+
+
+def _e71_ctx(tmp_path, *, patch_text=None, events=(), shown=""):
+    import difflib
+
+    env = _synthetic_env(tmp_path)
+    evaluation.prepare_plugin_mode({"setup": {"analyzer_proposal": True}}, _proposal_info(env), env)
+    skill = env.joinpath(*grader.ANALYZER_SKILL_REL)
+    rel = "references/DATA-001.md"
+    old = (skill / rel).read_text(encoding="utf-8").splitlines(keepends=True)
+    if patch_text is None:
+        patch_text = "".join(difflib.unified_diff(old, old + ["4. 설정 화면 경로(설정 > 네트워크 > 모바일 데이터)를 본다.\n"],
+                                                  f"a/{rel}", f"b/{rel}"))
+    job = tmp_path / "work" / "MOCK-9071"
+    (job / "skill-suggestions").mkdir(parents=True)
+    (job / "skill-suggestions" / "mock-data-analyzer.patch").write_text(patch_text, encoding="utf-8")
+    (job / "plan.json").write_text(json.dumps({"operations": [{"op": "append", "cause": "DATA-001-01"}]}), encoding="utf-8")
+    run = run_dir(tmp_path)
+    _write_artifacts(run)
+    _seq_events(run, [_bash("m", "python3 S/mask_pii.py JOB/skill-suggestions/mock-data-analyzer.patch --in-place", ""),
+                      *(events(skill) if callable(events) else events), ("text", shown)])
+    return grader.Ctx(env, run), skill
+
+
+def test_e71_grades_patch_shown_and_skill_unchanged(tmp_path):
+    shown = ("스킬 제안 patch(적용 안 함, 마스킹됨): /w/MOCK-9071/skill-suggestions/mock-data-analyzer.patch — 분석 스킬 담당자에게 "
+             "전달, 담당자가 검토 후 스킬 소스에서 git apply\n| references/DATA-001.md | +1 | −0 |")
+    guide = (REPO / "plugin/skills/telephony-triage/reference/skill-patch.md").read_text(encoding="utf-8")
+    assert f"`{grader.GUIDE_HEAD} <patch 경로> — 분석 스킬 담당자에게 전달, 담당자가 검토 후 스킬 소스에서 git apply`" in guide
+    ctx, skill = _e71_ctx(tmp_path / "ok", shown=shown)
+    fns = grader.checks(71, ctx)
+    for i in (1, 2, 3, 4):
+        assert fns[i]()[0] is True, (i, fns[i]())
+    # 분석 스킬 디렉토리를 고치면(내용 변경·파일 도구 쓰기) 3번이 실패한다
+    (skill / "references" / "DATA-001.md").write_text("바뀜\n", encoding="utf-8")
+    assert grader.checks(71, ctx)[2]()[0] is False
+    def write(sk):
+        return [("tool", "w", "Write", {"file_path": str(sk / "references" / "NEW.md"), "content": "x"}, "ok", False)]
+    ctx2, sk2 = _e71_ctx(tmp_path / "w", events=write, shown=shown)
+    assert not (sk2 / "references" / "NEW.md").exists()      # 기록만 있는 쓰기 호출도 잡는다
+    assert grader.checks(71, ctx2)[2]()[0] is False
+    # 사본에 적용되지 않는 patch(문맥 불일치)는 2번 실패, patch 이름만 보이고 줄 수가 없으면 4번은 수동
+    bad = "--- a/references/DATA-001.md\n+++ b/references/DATA-001.md\n@@ -1,2 +1,3 @@\n 없는 줄\n 또 없는 줄\n+추가\n"
+    ctx3, _ = _e71_ctx(tmp_path / "bad", patch_text=bad, shown=shown.splitlines()[0])
+    assert grader.checks(71, ctx3)[1]()[0] is False
+    with pytest.raises(grader._Manual):     # 안내 줄은 있고 줄 수 표기가 없다
+        grader.checks(71, ctx3)[3]()
+    ctx4, _ = _e71_ctx(tmp_path / "plain", shown="patch: mock-data-analyzer.patch 를 만들었습니다 | references/DATA-001.md | +1 |")
+    assert grader.checks(71, ctx4)[3]()[0] is False         # 고정 안내 줄이 없으면 실패
