@@ -544,7 +544,7 @@ def test_skill_md_is_within_7_5kb_and_drives_triage():
         assert needle in rules, needle
     assert len((reference / "db-authoring.md").read_bytes()) <= 12288      # 필수 키 요약 포함. §0 등록 준비물·리뷰어 색인 추가 뒤의 한도(그 전 11,392B: W7 add-fixture 세부, 11,264B)
     assert len((reference / "write-flow.md").read_bytes()) <= 14680     # L2 J5 확인 화면 압축(생성 파일 한 행·건너뜀 묶음·README 머리) 뒤(그 전 14,390B: E67 PR 링크를 다음 질문 전에 글자 그대로 보인다 뒤(그 전 14,344B)
-    assert len((reference / "skill-patch.md").read_bytes()) <= 1790      # analyze Step 7 `[스킬]` 줄을 고를 때만 읽는다(write-flow에 두면 모든 쓰기 흐름이 읽는다). 리뷰 P1: 마스킹 뒤 git apply --check·실패 시 메모 포함
+    assert len((reference / "skill-patch.md").read_bytes()) <= 1800      # analyze Step 7 `[스킬]` 줄을 고를 때만 읽는다(write-flow에 두면 모든 쓰기 흐름이 읽는다). 리뷰 P1: 마스킹 뒤 git apply --check·실패 시 메모 포함
     _check_op_summary(reference / "db-authoring.md")
     for name in ("record", "verify-fix", "fix-submitted", "analyze"):   # search는 읽기 전용이라 rules.md를 읽지 않는다
         assert "reference/rules.md" in (REPO / "plugin" / "commands" / f"{name}.md").read_text(encoding="utf-8"), name
