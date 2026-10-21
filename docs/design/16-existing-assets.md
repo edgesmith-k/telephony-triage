@@ -75,8 +75,10 @@ parse_logcat.py (플러그인 진입점, contracts.md §3.2 계약 유지)
 1. **포팅 전에** 실제 로그 N개(카테고리별, 정상 포함, data는 기존 파서가 판별하는 경우를 모두 포함)를 기존 파서로 돌려 출력을 저장한다: `tests/golden/<이름>.orig.json` (사내 전용, `SITE_PATHS`).
    - 기존 파서를 **원본 로그와 번호 토큰 마스킹 로그 양쪽**으로 돌려 판별 결과가 같은지 먼저 본다. 다르면 그 판별은 마스킹에 민감한 것이므로, 포팅 시 위 "마스킹과의 관계"대로 처리하고 사용자에게 보고한다.
    - 골든 비교는 마스킹된 로그 기준으로 한다(이슈 DB fixture와 같은 조건).
+   - **합성 줄 보충(예외)**: 사내 첨부가 대부분 logcat 덤프라 bugreport 캡처 흔적에만 기대는 판별 경로는 실제 로그에 나오지 않는다. **실제 로그에 없는 판별 경로에 한해서만** 실제 로그에 합성 줄을 보충해 케이스를 만들 수 있고, 그 케이스에는 `synthetic` 표식과 사유를 남긴다(케이스 목록에 `synthetic: {reason: "<왜 실제 로그에 없는지>"}`, `reason` 필수 — `tests/test_golden.py`가 검사). 나머지 판별은 모두 실제 로그 기준이다. `synthetic`은 메타데이터라 골든 변조 점검(`site_checks.py` `s4a.golden_mutation`)이 바꾸지 않는다.
 2. 기존 출력 → 이벤트 형식 변환 규칙(매핑표)을 정하고 사용자 확인을 받는다.
 3. 포팅한 백엔드의 결과가 변환된 골든과 **같은지** 비교하는 테스트(`tests/test_golden.py`)를 둔다. 다르면 포팅 버그다. 같은 로그의 원본/마스킹 입력에서 builtin 이벤트 이름과 마스킹 대상이 아닌 필드가 같은지도 검사한다.
+   - 사내 골든 테스트(`tests/golden/test_*.py`)는 백엔드를 `real_site_backend` 픽스처(`tests/conftest.py`, `runner.real_site_backend()`)로 받는다. `conftest.py`가 세션 시작 때 임시 플러그인 루트의 `parser_backends`(그 `site/`는 모의 백엔드)를 먼저 불러 두므로 `import parser_backends.site`는 모의를 준다. 픽스처는 실제 `plugin/scripts/parser_backends/site/`를 `parser_backends.site_real`이라는 다른 이름으로 불러와 모의를 쓰는 테스트와 한 세션에서 서로 가리지 않는다(없으면 건너뜀).
 4. 의도적으로 바꾼 부분(정렬, 필드 이름 등)은 사용자 승인 후에만 골든을 갱신하고 이유를 `SITE_PROFILE.md`에 기록한다.
 5. 이후 백엔드 코드를 바꿀 때마다 골든 테스트 + `db_regress --all` + R5 이벤트 diff를 돌린다.
 

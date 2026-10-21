@@ -18,6 +18,12 @@
 - 골든: `tests/mocks/golden/<이름>.golden.json` (모의)
 - 로그: 시나리오에서 그때그때 생성한다 (생성기는 결정적이다)
 
+사내 골든 테스트의 백엔드 불러오기
+- `conftest.py`가 세션 시작 때 임시 플러그인 루트의 `parser_backends`를 먼저 불러 두고, 그 루트의
+  `site/`는 모의 백엔드라 `import parser_backends.site`는 모의를 준다.
+- 사내 `tests/golden/test_*.py`는 `real_site_backend` 픽스처(`runner.real_site_backend()`)로 실제
+  `plugin/scripts/parser_backends/site/`를 받는다(모듈 이름 `parser_backends.site_real`, 없으면 건너뜀).
+
 골든 갱신:
     python3 tests/test_golden.py --update
 
@@ -30,6 +36,7 @@ import argparse
 import copy
 import json
 import re
+import shutil
 import sys
 import tempfile
 from pathlib import Path
@@ -97,6 +104,18 @@ def _load_cases() -> list[dict]:
     with CASES.open(encoding="utf-8") as fh:
         data = yaml.safe_load(fh)
     return data.get("cases", [])
+
+
+def case_errors(case: dict) -> list[str]:
+    """케이스 표식 검사. 실제 로그에 없는 판별 경로(bugreport 전용 흔적 등)에 한해 합성 줄을 보충한 케이스는
+    `synthetic: {reason: "..."}`를 남긴다 — 사유가 비면 오류 (16-existing-assets.md §16.3 골든 1).
+    나머지 케이스는 실제 로그 기준이라 표식이 없다."""
+    if "synthetic" not in case:
+        return []
+    mark = case["synthetic"]
+    if not isinstance(mark, dict) or not str(mark.get("reason") or "").strip():
+        return [f"{case.get('name')}: synthetic 표식에 사유(reason)가 없습니다"]
+    return []
 
 
 def _make_log(case: dict, out_dir: Path) -> Path:
@@ -176,6 +195,37 @@ def test_golden_matches(tmp_path=None):
             f"{case['name']}: 백엔드 버전이 바뀌었습니다. "
             "골든·회귀 기준이 흔들리므로 승인 후 갱신하세요."
         )
+
+
+def test_cases_synthetic_marker_has_reason():
+    """합성 줄을 보충한 케이스는 `synthetic.reason`이 있어야 한다."""
+    assert [e for case in _load_cases() for e in case_errors(case)] == []
+    assert case_errors({"name": "real"}) == []
+    assert case_errors({"name": "s", "synthetic": {"reason": "bugreport 캡처 흔적은 logcat 덤프에 없음"}}) == []
+    for bad in (True, "", {}, {"reason": " "}):
+        assert case_errors({"name": "s", "synthetic": bad}), bad
+
+
+def test_real_site_backend_not_shadowed(tmp_path):
+    """사내 실제 site 백엔드는 모의(`parser_backends.site`)와 다른 이름으로 불러와 서로 가리지 않는다
+    (`conftest.py` `real_site_backend`). 여기서는 모의 백엔드 복사본을 '실제' 자리로 써서 확인한다."""
+    sys.path.insert(0, str(REPO / "tests" / "helpers"))
+    import runner
+
+    assert runner.real_site_backend(tmp_path / "none") is None
+    real = tmp_path / "site"
+    shutil.copytree(MOCK_SITE_DIR, real, ignore=shutil.ignore_patterns("__pycache__"))
+    mock_before = sys.modules.get("parser_backends.site")
+    saved = sys.modules.pop(runner.REAL_SITE_MODULE, None)
+    try:
+        backend = runner.real_site_backend(real)
+        assert isinstance(backend, parser_backends.ParserBackend)
+        assert sys.modules[runner.REAL_SITE_MODULE].__file__ == str(real / "__init__.py")
+        assert sys.modules.get("parser_backends.site") is mock_before
+    finally:
+        sys.modules.pop(runner.REAL_SITE_MODULE, None)
+        if saved is not None:
+            sys.modules[runner.REAL_SITE_MODULE] = saved
 
 
 def test_golden_detects_change(tmp_path=None):

@@ -480,6 +480,20 @@ def test_s4a_golden_mutation_runs_on_temp_copy(tmp_path):
     assert snapshot(root)["tests/golden/a.golden.json"] == before["tests/golden/a.golden.json"]
 
 
+def test_s4a_golden_mutation_skips_synthetic_marker(tmp_path):
+    """`synthetic` 표식·사유는 메타데이터라 바꾸지 않는다(비교하지 않아도 못 잡음이 아니다)."""
+    root = site_root(tmp_path)
+    g = root / "tests" / "golden"
+    g.mkdir(parents=True)
+    (g / "a.golden.json").write_text('{"synthetic": {"reason": "bugreport 전용 흔적"}, "events": [{"tag": "DNC-0", "n": 3}]}',
+                                     encoding="utf-8")
+    (g / "test_a.py").write_text("import json, pathlib\n\ndef test_a():\n    p = pathlib.Path(__file__).with_name('a.golden.json')\n"
+                                 "    assert json.loads(p.read_text())['events'] == [{'tag': 'DNC-0', 'n': 3}]\n",
+                                 encoding="utf-8")
+    r = sc.s4a_golden_mutation(sc.Ctx(root))
+    assert r["status"] == "pass" and "synthetic" not in r["evidence"]
+
+
 def ops_db(tmp_path, synthetic: bool) -> Path:
     db = tmp_path / "ops-db"
     fx = db / "call" / "CALL-001-drop" / "fixtures"

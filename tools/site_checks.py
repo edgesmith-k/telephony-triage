@@ -908,6 +908,8 @@ def _mutate(value, path: str):
 
 
 MUTATIONS = 3
+# 골든 케이스 메타데이터(기대값이 아님): 합성 줄 보충 표식·사유(16-existing-assets.md §16.3 골든 1). 변조 대상에서 뺀다.
+GOLDEN_META_KEYS = ("synthetic",)
 
 
 def s4a_golden_mutation(ctx: Ctx) -> dict:
@@ -928,7 +930,8 @@ def s4a_golden_mutation(ctx: Ctx) -> dict:
     rel = goldens[0].relative_to(ctx.root)
     target = copy / rel
     original = target.read_text(encoding="utf-8")
-    leaves = [p for p, _ in _leaves(json.loads(original))]
+    leaves = [p for p, _ in _leaves(json.loads(original))
+              if not set(re.findall(r"[^.\[\]]+", p)) & set(GOLDEN_META_KEYS)]
     if not leaves:
         return res("s4a.golden_mutation", "skip", f"{rel}: 바꿀 값 없음", cmd, ask="값이 있는 골든 JSON을 둔다")
     picks = sorted({0, len(leaves) // 2, len(leaves) - 1})[:MUTATIONS]
