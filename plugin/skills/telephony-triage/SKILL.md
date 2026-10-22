@@ -73,7 +73,7 @@ Step 7 질문 전에 `JOB/report.md`(`TODO(LLM)`만 채움)를 보인다(`must_s
 - 추정만으로·`unjudged`면 원인·유형을 안 만든다.
 - `chose-other`면 한 번 묻는다(기본 아니오): 고른 원인이 후보에서 C=1이면 `add-fixture {kind: extra}`로 넣을지(`db-authoring.md`, R4 실패면 뺀다), C=0·후보 밖이면 `update-signature` 검토를 `pr_notes`에 남길지. `unjudged.causes`면 묻지 않는다. 거절하면 `append`만.
 - 물어보고 넣는 op: 회귀 의심(fixed, SW ≥ `fixed_in`)은 `update-fix`(→open, history reverted), fix-submitted만 `update-fix`(실패 이력) 또는 verify-fix, `add-related`, `add-code-ref`, `update-signature`,
-  `set-resolution`, `set-status`. 심층 분석에 `규칙 제안:` 줄이 있으면 분류 확정 뒤 한 번 묻는다(여러 개 가능: 줄마다 선택지 + `모두` + `받지 않음(기본)`): `[이슈 DB]` 줄(add-parser-rule·update-signature)은 db-authoring.md 점검을 거친 op 초안을 보이고 승인한 것만 계획에 넣는다. `[스킬]` 줄은 계획에 넣지 않고 담당자용 patch를 만든다(`skill-patch.md`).
+  `set-resolution`, `set-status`. 심층 분석에 `규칙 제안:` 줄이 있으면 분류 확정 뒤 한 번 묻는다(여러 개 가능: 줄마다 선택지 + `모두` + `받지 않음(기본 — 확인 안 한 제안은 반영하지 않으려고)`): `[이슈 DB]` 줄(add-parser-rule·update-signature)은 db-authoring.md 점검을 거친 op 초안을 보이고 승인한 것만 계획에 넣는다. `[스킬]` 줄은 계획에 넣지 않고 담당자용 patch를 만든다(`skill-patch.md`).
 - 시그니처·파서 규칙·새 원인·fixture가 있으면 `S/db_verify.py rules --plan JOB/plan.json --draft JOB/draft` 표를 보인다(`skipped`는 통과
   아님). 다른 유형 fixture에서 새 시그니처가 걸리면 **좁힐지 `allow-cause`할지 사용자가 고를 때까지** 멈춘다.
 - `note` 한 줄을 확인받고 `write-flow.md` §계획 형식으로 `JOB/plan.json`에 저장한다. 기록하지 않음·중간 취소·읽기 전용·계획만 저장이면

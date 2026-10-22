@@ -2401,7 +2401,9 @@ def checks_k(eid, ctx):
         # patch를 대상으로 한 mask_pii가 마지막 diff(→ .patch) 뒤에 있어야 한다(Step 5-1 결과 마스킹과 구분)
         lines = ctx.ran.splitlines()
         diffs = [i for i, l in enumerate(lines) if re.search(r"\bdiff\b[^\n]*\.patch", l)]
-        masks = [i for i, l in enumerate(lines) if re.search(r"mask_pii\.py[^\n]*\.patch", l)]
+        pvars = {m.group(1) for l in lines for m in re.finditer(r"\b([A-Za-z_]\w*)=[^\s;&|]*\.patch\b", l)}
+        masks = [i for i, l in enumerate(lines) if re.search(r"mask_pii\.py[^\n]*\.patch", l)
+                 or any(re.search(rf"mask_pii\.py[^\n]*\$\{{?{v}\b", l) for v in pvars)]     # P=….patch 뒤 "$P"도 patch 대상
         masked = bool(masks) and (not diffs or max(masks) > max(diffs))
         return ok and masked, "; ".join(evs) + f"; patch mask_pii(마지막 diff 뒤)={masked}"
 
