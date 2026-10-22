@@ -460,12 +460,12 @@ post_sha256: <64 hex>          ← 선택 줄과 이 줄은 게시 가능하고 
 
 ## verify-fix
 
-**`/telephony-triage:verify-fix <원인 ID> <수정 빌드 logcat...> [--issue <검증 Jira>]`** (판정 규칙은 `05-verification.md §5.12 (2)`)
+**`/telephony-triage:verify-fix <원인 ID> <수정 빌드 logcat...> [--issue <검증 Jira>] [--bundle <CI/CD 번들 번호>]`** (판정 규칙은 `05-verification.md §5.12 (2)`)
 1. 작업 키 `verify-fix-<원인 ID>-<build>`로 `db_pr lock acquire` → `db_pr snapshot --job <작업 키>`로 최신화하고 스냅샷에서 원인을 찾는다. 아래에서 중단하거나 판정 결과를 기록하지 않고 끝나는 경우는 모두 `db_pr lock release <작업 키>`로 끝낸다. `fix.status`가 `fix-submitted`(또는 재검증이면 `fixed`)인지 확인한다. 아니면 중단한다. `signatures_pending` 원인이면 중단하고 판별 시그니처 추가를 안내한다.
 2. 코드·설정 수정 유형인데 `scenario_signatures`와 `recovery_signatures`가 모두 없으면 중단하고 시그니처 추가를 안내한다 (`update-signature`를 이 계획에 넣고 진행할지 물을 수 있다. 그 경우 판정은 `db_verify fix --plan <p> --draft <work_dir>/<작업 키>/draft`로 시그니처를 적용한 트리에서 하고, R1 흔적 검사를 통과해야 한다).
-3. `fixed_in`에 빌드가 있는 항목이 없으면 중단하고 `fix-submitted`로 빌드를 추가하라고 안내한다. 로그의 빌드를 확인한다 (Jira SW, bugreport `build.json`, 또는 logcat fingerprint. 로그가 bugreport면 Step 3과 같이 먼저 추출한다). `fixed_in` 이후(≥)인지 `build_compare`로 확인한다. 이전 빌드면 중단한다. 비교 규칙이 없거나 파싱 불가면 사용자에게 묻는다.
+3. `fixed_in`에 빌드가 있는 항목이 없으면 중단하고 `fix-submitted`로 빌드를 추가하라고 안내한다. 로그의 빌드를 확인한다 (Jira SW, bugreport `build.json`, 또는 logcat fingerprint. 로그가 bugreport면 Step 3과 같이 먼저 추출한다). AP 패치 기준이라 수정 패치가 적용된 빌드(main 반영 전 테스트 빌드 포함)의 로그면 되고 `fixed_in`과 비교하지 않는다. 대신 로그 빌드와 수정 CL을 보이고 "이 빌드에 수정 패치가 들어 있나요?"를 한 번 확인받는다(아니오·모름이면 기록하지 않는다). 모뎀 수정(`resolution_type: modem`)만 기존 규칙대로 `fixed_in` 이후(≥)인지 `build_compare`로 확인한다(이전 빌드면 중단, 비교 규칙이 없거나 파싱 불가면 사용자에게 묻는다).
 4. `db_pr preflight --branch verify-fix/<원인 ID>-<build> --search <원인 ID>`로 열린 PR(다른 verify-fix, fix-submit)을 보여준다.
-5. `db_verify fix --db <work_dir>/_snapshot --cause <ID> <logcat...> --build <build>`로 판정한다. 시나리오 흔적과 원인 본문의 "재현 시나리오"를 함께 보여주고, 사용자가 그 시나리오를 수행한 로그인지 확인받는다. 흔적 시그니처가 있는데 흔적이 없으면 판단 불가다 (사용자 확인으로 대신하지 않는다). 예외는 하나다: 비코드 유형(`user-setting`·`network`·`hw`)에 scenario·recovery 시그니처가 **둘 다 없으면** 흔적 판정 대신 사용자 확인(`user_confirmation_required`)을 받고 `verification.note`에 남긴다(`05-verification.md §5.12 (2)`). 코드·설정 수정 유형은 시그니처가 없으면 판정 전에 중단한다.
+5. `db_verify fix --db <work_dir>/_snapshot --cause <ID> <logcat...> --build <build> [--bundle <N>]`로 판정한다(번들 번호는 `verification.note`에 `CI/CD 번들 <N>`으로 남는다). 시나리오 흔적과 원인 본문의 "재현 시나리오"를 함께 보여주고, 사용자가 그 시나리오를 수행한 로그인지 확인받는다. 흔적 시그니처가 있는데 흔적이 없으면 판단 불가다 (사용자 확인으로 대신하지 않는다). 예외는 하나다: 비코드 유형(`user-setting`·`network`·`hw`)에 scenario·recovery 시그니처가 **둘 다 없으면** 흔적 판정 대신 사용자 확인(`user_confirmation_required`)을 받고 `verification.note`에 남긴다(`05-verification.md §5.12 (2)`). 코드·설정 수정 유형은 시그니처가 없으면 판정 전에 중단한다.
 6. 판정별 작업 계획 `<work_dir>/verify-fix-<원인 ID>-<build>/plan.json`(`source: verify-fix`):
    - **통과** → `verify-fix {result: passed}` + `add-fixture`(`kind: fixed`, `build`). fixture는 `parse_logcat cut --around <흔적 시각>`으로 자른다.
    - **실패** → `verify-fix {result: failed}` (open 전환, 이력 보존) + 사용자가 원하면 `add-fixture`(`kind: recurrence`, `build`).

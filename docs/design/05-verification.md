@@ -100,9 +100,9 @@ open ──(수정 CL 머지, fix-submitted 커맨드)──▶ fix-submitted �
 - "시나리오 흔적 충족" = `scenario_signatures`가 있으면 그것이 충족, 없으면 `recovery_signatures`가 충족. 판정은 시나리오 흔적 충족을 전제로 한다. **흔적이 없으면 판단 불가**다. 사용자 말만으로 흔적을 대신하지 않는다.
 - 그 밖의 유형(`user-setting`, `network`, `hw`)은 두 시그니처가 없어도 되지만, 없으면 흔적 판정 대신 사용자 확인을 받고 그 사실을 `verification.note`에 남긴다.
 
-**`/telephony-triage:verify-fix <원인 ID> <수정 빌드 logcat...> [--issue <검증 Jira>]`** (절차 전체는 `07-workflow.md §verify-fix`)
+**`/telephony-triage:verify-fix <원인 ID> <수정 빌드 logcat...> [--issue <검증 Jira>] [--bundle <CI/CD 번들 번호>]`** (절차 전체는 `07-workflow.md §verify-fix`)
 1. 원인의 `fix.status`가 `fix-submitted`(또는 재검증이면 `fixed`)인지 확인한다. 아니면 중단한다.
-2. `fixed_in`에 빌드가 있는 항목이 없으면 중단하고 `fix-submitted` 커맨드로 빌드를 먼저 추가하라고 안내한다 (`verify-fix` passed의 전제, `contracts.md §작업 계획`). 로그의 빌드가 `fixed_in` 이후(≥, 같은 빌드 포함)인지 `build_compare`로 확인한다. 이전 빌드면 중단한다. 비교 규칙이 없거나 파싱 불가면 사용자에게 묻는다.
+2. `fixed_in`에 빌드가 있는 항목이 없으면 중단하고 `fix-submitted` 커맨드로 빌드를 먼저 추가하라고 안내한다 (`verify-fix` passed의 전제 — `fixed` 기록과 회귀 판정의 기준, `contracts.md §작업 계획`). **빌드 기준은 AP 패치다**: 수정 패치가 적용된 빌드(main 반영 전 테스트 빌드 포함)의 로그면 되고, 로그 빌드를 `fixed_in`과 비교하지 않는다(main 반영 이미지로 다시 검증해 올릴 필요가 없다). 대신 로그 빌드와 수정 CL(`fix.ref`)을 보이고 "이 빌드에 수정 패치가 들어 있나요?"를 한 번 확인받는다(아니오·모름이면 기록하지 않는다, 패치 전 로그로 failed·passed가 잘못 나는 것을 막는다). 로그 빌드는 `verification.build`로, `--bundle`을 주면 CI/CD 번들 번호를 `verification.note`(`CI/CD 번들 <N>`)로 남긴다. **모뎀 수정(`resolution_type: modem`)은 기존 규칙**: 로그의 빌드가 `fixed_in` 이후(≥, 같은 빌드 포함)인지 `build_compare`로 확인한다. 이전 빌드면 중단한다. 비교 규칙이 없거나 파싱 불가면 사용자에게 묻는다.
 3. **시나리오 흔적 확인**: 위 전제대로 흔적을 찾아 원인 본문의 "재현 시나리오"와 함께 보여준다.
 4. 판정 (`db_verify fix`):
 

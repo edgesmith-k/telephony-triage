@@ -113,7 +113,7 @@
 |---|---|---|
 | `rules` | `(--plan <plan.json> \| --changed <ref> \| --staged) [--extra [<logcat>...]] [--extra-normal [<logcat>...]]` | `--extra`: R6 같은 증상 표본 (expect: match); `--extra-normal`: R6 정상 표본 (expect: nomatch) |
 | `resolution` | `[<logcat>...] [--cause <ID>] [--plan <plan.json>]` |  |
-| `fix` | `[<logcat>...] [--cause <ID>] [--plan <plan.json>] [--build <빌드>]` |  |
+| `fix` | `[<logcat>...] [--cause <ID>] [--plan <plan.json>] [--build <빌드>] [--bundle <N>]` | `--bundle`: CI/CD 번들 번호 (verification.note에 기록) |
 
 ## `db_pr.py`
 

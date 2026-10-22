@@ -21,6 +21,7 @@
 | 분석 스킬 만들기 | `16 §16.5.1` 신설. 이슈 DB 뼈대에 `docs/analyzer-skills.md`가 추가돼 **뼈대 zip 해시가 바뀐다**. 이미 만든 운영 이슈 DB에는 이 파일을 복사해 넣는다(이슈 DB 변경이므로 PR로) |
 | 리포트 안내 | `심층 분석: 해당 없음(…)` 줄 끝에 `(만드는 법: 이슈 DB docs/analyzer-skills.md)` |
 | 규칙 제안 → Step 7 | 분석 스킬의 `규칙 제안:` 줄을 분류 확정 뒤 한 번 묻는다. `[이슈 DB]` 줄은 op 초안 → 승인분만 계획에 넣어 `db_verify`까지, `[스킬]` 줄은 계획에 넣지 않고 담당자용 patch `JOB/skill-suggestions/<스킬 이름>.patch`(분석 스킬 디렉토리 기준 unified diff, `mask_pii` 적용, 분석 스킬은 안 바꿈 — 담당자가 `git apply`)를 만든다. 10/22: diff·마스킹·`git apply --check`·안내 줄은 새 스크립트 `skill_patch.py`가 하고 안내 줄은 표시 보조 hook이 강제한다(표시 기록 `kind: patch` — 스킬 문서는 `reference/skill-patch.md`만 바뀌고 SKILL.md는 그대로). 스킬 디렉토리를 모르면 메모로만. 분석 스킬이 이 형식(16 §16.5)으로 쓰는지 확인 |
+| verify-fix 빌드 기준(10/22) | AP 패치 기준: `modem`이 아닌 원인은 로그 빌드를 `fixed_in`과 비교하지 않는다(`build_check.status: not-compared`, 이전 빌드여도 종료 2 없음). 수정 패치가 들어간 빌드(main 반영 전 테스트 빌드 포함)의 로그면 되고, 로그 빌드는 그대로 `verification.build`. `modem` 원인은 기존 비교 규칙 그대로. 새 선택 인자 `--bundle <CI/CD 번들 번호>` → `verification.note`에 `CI/CD 번들 <N>`(이슈 DB 스키마 변경 없음 — `schema_version`·마이그레이션 불필요). `fixed_in`에 빌드 있는 항목 필요(모든 원인, `fixed` 스키마 조건)·회귀 판정(analyze Step 7)은 그대로. 기존 `fixed_in`·`verification` 데이터는 영향 없음. 스킬 문서는 `reference/verify.md` verify-fix 절만 바뀜 |
 
 ## 3. 테스트·eval
 

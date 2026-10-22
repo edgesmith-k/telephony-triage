@@ -525,7 +525,7 @@ note: {{선택, 한 줄}}
 |---|---|---|
 | open | 원인은 확인됐고 코드/설정 수정이 필요한데 아직 안 됨 | — |
 | fix-submitted | 수정 CL이 머지됐고 검증 대기 | `ref`(CL/커밋), `fixed_in`(브랜치 필수, 빌드 선택) |
-| fixed | 수정이 **검증까지** 완료 (`05-verification.md §5.12 (2)`) | `ref`, `fixed_in`(빌드 있는 항목 1개 이상, verify-fix 통과의 전제), `verification`(result: passed). 코드·설정 수정 유형은 `scenario_signatures` 또는 `recovery_signatures` |
+| fixed | 수정이 **검증까지** 완료 (`05-verification.md §5.12 (2)`) | `ref`, `fixed_in`(빌드 있는 항목 1개 이상, verify-fix 통과의 전제. verify-fix 로그 빌드와 비교하는 것은 `modem` 원인뿐 — AP 패치는 패치 적용 빌드 로그면 된다), `verification`(result: passed). 코드·설정 수정 유형은 `scenario_signatures` 또는 `recovery_signatures` |
 | wont-fix | 수정하지 않기로 결정 | 본문 비고에 사유 |
 | not-a-bug | 사용자 설정/네트워크 등 단말 수정 대상 아님 | — |
 
