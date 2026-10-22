@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """skill_patch.py — 분석 스킬 `[스킬]` 규칙 제안의 담당자용 patch (analyze Step 7, `reference/skill-patch.md`, 16-existing-assets §16.5.1).
 
-    skill_patch.py <KEY> --skill-dir <SK> --name <analyzer.skill> [--platform <이름>] [--json]
+    skill_patch.py <KEY> --skill-dir <SK> --name <analyzer.skill> [--source <SRC>] [--platform <이름>] [--json]
+    skill_patch.py <KEY> --name <analyzer.skill> --apply --sha <patch sha256> [--source <SRC>] [--platform <이름>] [--json]
 
 `JOB` = `<work_dir>/<KEY>`. 스킬이 제안을 반영해 쓴 사본 `JOB/skill-suggestions/<이름>/<rel>`(`<이름>` = `--name`에서
 `[A-Za-z0-9._-]` 밖 글자를 `-`로 바꾼 것)을 모두 모아, 분석 스킬 디렉토리 `SK`의 같은 `<rel>`과 비교한 unified diff를 만든다.
@@ -15,15 +16,32 @@
 4. 적용 확인: `SK`의 임시 사본(`.git` 제외, `GIT_CEILING_DIRECTORIES`로 바깥 저장소를 찾지 않는다)에서 `git apply --check`.
 5. 통과하면 `JOB/skill-suggestions/<이름>.patch`를 쓰고 고정 안내 줄과 파일별 `- <rel> +N −M`을 낸다.
 
-하나라도 실패하면 patch를 쓰지 않고(이전 patch도 지운다) `스킬 제안 patch 없음(직접 반영할 메모): <사유>` 한 줄을 낸다(종료 1).
+하나라도 실패하면 patch를 쓰지 않고(이전 patch·meta도 지운다) `스킬 제안 patch 없음(직접 반영할 메모): <사유>` 한 줄을 낸다(종료 1).
 낸 줄(안내 줄·줄 수, 또는 메모)은 표시 기록(`kind: patch`, contracts.md "표시 기록")으로 남아 표시 보조 hook이 다음 질문·턴
-끝 전에 글자 그대로 보였는지 본다. `SK` 안은 쓰지 않는다. 네트워크·git 쓰기·lock 없음.
+끝 전에 글자 그대로 보였는지 본다. `SK` 안은 쓰지 않는다. 네트워크·lock 없음, git 쓰기는 `--apply`의 스킬 소스 워킹 트리
+(`git apply`)뿐이다(index·커밋·push 없음).
+
+**스킬 소스 적용(선택, 16-existing-assets §16.5.1)**: 스킬 소스 `SRC` = `--source` 또는 config `analyzers.<카테고리>.source`
+(`skill`이 `--name`과 같은 항목, 절대 경로 — 분석 스킬 소스 checkout 안의 스킬 폴더). patch를 만들 때 `SRC`가 있으면 적용 가능성을
+미리 본다(아래 검사): 되면 `스킬 소스 적용 대기: …` 줄과 patch 전문(```diff 울타리)을, 안 되면 `스킬 소스에 바로 적용할 수 없음(patch만
+남김): <사유>` 줄을 더한다(종료 0 그대로). patch가 200줄·12KB를 넘으면 제안하지 않는다("patch 파일을 열어 확인"). 마스킹이
+추가 줄을 바꿨으면 대기 줄 끝에 `추가 줄 N개가 마스킹으로 바뀜 — placeholder가 소스에 들어간다`. 사용자가 "적용"을 고르면
+`--apply --sha <그 줄의 sha256>`(`--source`는 못 쓴다): meta가 있고 patch 파일 sha256이 같고, 적용 대상은 meta에 기록한(제안 때 보인)
+스킬 소스이며 지금 설정된 스킬 소스가 있으면 그것과 같고, 검사를 다시 통과하면 `SRC`가 든 저장소 최상위에서 `git apply [--directory=<SRC의 저장소 안 경로>]`(워킹 트리만 — index·커밋·push 없음)를
+하고 `스킬 소스에 적용함(커밋 안 함): <SRC> — 확인 후 직접 커밋·push`와 파일별 줄 수를 낸다(종료 0). 검사: `SRC`가 폴더이고 `SK`·
+설치된 플러그인 폴더(경로에 `.claude/plugins`)·이슈 DB clone과 겹치지 않고, git 저장소 안이고, patch가 바꾸는 파일에 커밋하지 않은
+변경(추적 안 하는 파일 포함)이 없고, `git apply --check`가 통과한다. 하나라도 아니면 적용하지 않고 `스킬 소스에 적용 안 함(patch는
+남김): <사유>`(종료 1). 적용 결과 줄도 표시 기록(`kind: patch`, key `apply:<KEY>/<이름>`)으로 남는다. 제안하지 않은 patch(`SRC` 없음·적용 불가)의
+`--apply`는 메모(종료 1), `--apply`와 `--source`를 함께 주면 종료 2.
+patch를 만들면 `JOB/skill-suggestions/<이름>.meta.json`(`{skill_dir, sha256, files, source}` — source는 적용을 제안했을 때만)도
+쓴다. guard가 patch·meta 직접 쓰기를 거부한다(규칙 12).
 
 출력: 기본은 사용자에게 보일 줄 그대로(텍스트). `--json`이면 `{status: ok|memo, patch, files[{path, added, removed}], lines[],
-reason}`(`patch`는 ok일 때만, `reason`은 memo일 때만).
+reason}`(`patch`는 ok일 때만, `reason`은 memo일 때만). ok면 `sha256`, `SRC`가 있으면 `source`·`apply{offer, sha256|reason}`.
+`--apply`면 `{status: applied|memo, source, files, lines, reason}`.
 
 종료 코드: 0 = patch를 만들었다, 1 = 만들지 않았다(메모 — 사본 없음·경로 거부·변경 없음·텍스트 아님·마스킹이 문맥을 바꿈·
-`git apply --check` 실패·`SK` 없음), 2 = 사용·환경 오류(site-defaults·사용자 config 없음, 키 형식·플랫폼 불일치, 작업
+`git apply --check` 실패·`SK` 없음; `--apply`면 적용 안 함), 2 = 사용·환경 오류(`--skill-dir`·`--apply` 둘 다 없음, `--apply`와 `--source`를 함께 줌, site-defaults·사용자 config 없음, 키 형식·플랫폼 불일치, 작업
 디렉토리 없음, 이름이 비거나 점뿐, git 없음, `mask.allow_patterns` 정규식 오류).
 """
 
@@ -31,6 +49,7 @@ from __future__ import annotations
 
 import argparse
 import difflib
+import hashlib
 import json
 import os
 import re
@@ -52,6 +71,12 @@ import trackers  # noqa: E402
 SUGGEST_DIR = "skill-suggestions"
 GUIDE = "스킬 제안 patch(적용 안 함, 마스킹됨): {path} — 직접 검토해 스킬 소스의 dev 브랜치에 git apply, main에는 PR로 반영"
 MEMO = "스킬 제안 patch 없음(직접 반영할 메모): {reason}"
+APPLY_OFFER = "스킬 소스 적용 대기: {source} — 아래 patch(마스킹됨, sha256 {sha})를 그대로 보이고 바로 적용할지 묻는다"
+MASKED_NOTE = " — 추가 줄 {n}개가 마스킹으로 바뀜 — placeholder가 소스에 들어간다"
+OFFER_MAX_LINES, OFFER_MAX_BYTES = 200, 12288    # 화면에 patch 전문을 보일 수 있는 크기까지만 바로 적용을 제안한다
+APPLY_NO = "스킬 소스에 바로 적용할 수 없음(patch만 남김): {reason}"
+APPLIED = "스킬 소스에 적용함(커밋 안 함): {source} — 확인 후 직접 커밋·push"
+APPLY_MEMO = "스킬 소스에 적용 안 함(patch는 남김): {reason}"
 NO_EOL = "\\ No newline at end of file\n"
 GIT_TIMEOUT = 60
 
@@ -94,6 +119,7 @@ def job_dir(args, defaults: dict) -> tuple[Path, list[str]]:
     key = tracker.parse_key(args.key) or args.key
     if not tracker.safe_key_re.fullmatch(key) or not re.fullmatch(str(block.get("key_regex") or tracker.default_key_regex), key):
         raise Usage(f"{tracker.label} 키 형식이 아니다: {key}")
+    args._cfg = cfg     # 스킬 소스(analyzers.<카테고리>.source)·이슈 DB clone 경로를 본다
     job = work / key
     if not job.is_dir():
         raise Usage(f"작업 디렉토리가 없다: {job} — analyze를 먼저 한다")
@@ -247,6 +273,8 @@ def build(job: Path, sk_arg: str, name: str, allow: list[str]) -> tuple[str, lis
     why = apply_check(sk, masked)
     if why:
         raise Memo(why)
+    build.masked_added = sum(1 for r, m in zip(raw.split("\n"), masked.split("\n"))
+                             if r != m and r.startswith("+") and not r.startswith("+++ "))
     return masked, files
 
 
@@ -254,40 +282,216 @@ def run(args, defaults: dict) -> tuple[dict, int]:
     job, allow = job_dir(args, defaults)
     name = safe_name(args.name)
     out = job / SUGGEST_DIR / f"{name}.patch"
+    meta = job / SUGGEST_DIR / f"{name}.meta.json"
     try:
         try:
             patch, files = build(job, args.skill_dir, name, allow)
         except OSError as exc:      # 읽기·임시 사본 복사 실패(shutil.Error 포함)
             raise Memo(f"파일을 읽거나 복사하지 못했다({type(exc).__name__})") from exc
     except Memo as exc:
-        try:
-            out.unlink()
-        except FileNotFoundError:
-            pass
+        for stale in (out, meta):
+            try:
+                stale.unlink()
+            except FileNotFoundError:
+                pass
         reason = " ".join(str(exc).split())
         line = MEMO.format(reason=reason)
         shown.record(job.parent, "skill_patch", "patch", job.name, key=f"patch:{job.name}/{name}", lines=[line])
         return {"status": "memo", "reason": reason, "files": [], "lines": [line]}, CHECK_FAILED
+    data = patch.encode("utf-8")
     tmp = out.with_name(out.name + ".tmp")
     try:
-        tmp.write_bytes(patch.encode("utf-8"))
+        tmp.write_bytes(data)
         os.replace(tmp, out)
     except OSError:
         tmp.unlink(missing_ok=True)
         raise
+    sha = hashlib.sha256(data).hexdigest()
+    sk = str(Path(args.skill_dir).expanduser().resolve())
     lines = [GUIDE.format(path=out.absolute())] + [f"- {f['path']} +{f['added']} −{f['removed']}" for f in files]
+    doc = {"status": "ok", "patch": str(out.absolute()), "files": files, "sha256": sha}
+    offered = None
+    src_raw = configured_source(args)
+    if src_raw:
+        src, _, _, why = source_check(src_raw, sk, out, [f["path"] for f in files], getattr(args, "_cfg", None) or {})
+        n_lines = patch.count("\n")
+        if not why and (n_lines > OFFER_MAX_LINES or len(data) > OFFER_MAX_BYTES):
+            why = f"patch가 커서({n_lines}줄, {len(data)}B) 화면에 다 보일 수 없다 — patch 파일을 열어 확인"
+        doc["source"] = str(src or src_raw)
+        if why:
+            lines.append(APPLY_NO.format(reason=why))
+            doc["apply"] = {"offer": False, "reason": why}
+        else:
+            masked_n = getattr(build, "masked_added", 0)
+            lines += [APPLY_OFFER.format(source=src, sha=sha) + (MASKED_NOTE.format(n=masked_n) if masked_n else ""),
+                      "```diff", *patch.rstrip("\n").split("\n"), "```"]
+            doc["apply"] = {"offer": True, "sha256": sha, "masked_added": masked_n}
+            offered = str(src)
+    try:        # --apply는 이 기록(보인 스킬 소스·sha256)과 같을 때만 적용한다
+        meta.write_text(json.dumps({"skill_dir": sk, "sha256": sha, "files": [f["path"] for f in files],
+                                    "source": offered}, ensure_ascii=False) + "\n", encoding="utf-8")
+    except OSError:
+        pass        # 없으면 --apply가 거부한다
     shown.record(job.parent, "skill_patch", "patch", job.name, key=f"patch:{job.name}/{name}", lines=lines,
                  path=str(out.absolute()))
-    return {"status": "ok", "patch": str(out.absolute()), "files": files, "lines": lines}, OK
+    doc["lines"] = lines
+    return doc, OK
+
+
+# -- 스킬 소스 적용 -------------------------------------------------------------------------------
+
+
+def configured_source(args) -> str | None:
+    """`--source` > config `analyzers.<카테고리>.source`(`skill`이 `--name`과 같은 첫 항목)."""
+    if getattr(args, "source", None):
+        return str(args.source)
+    cfg = getattr(args, "_cfg", None) or {}
+    analyzers = cfg.get("analyzers") if isinstance(cfg.get("analyzers"), dict) else {}
+    for entry in analyzers.values():
+        if isinstance(entry, dict) and entry.get("skill") == args.name and str(entry.get("source") or "").strip():
+            return str(entry["source"])
+    return None
+
+
+def _git_env() -> dict:
+    return {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+
+
+def _git(cwd: Path, *argv: str) -> subprocess.CompletedProcess:
+    git = shutil.which("git")
+    if git is None:
+        raise Usage("git이 없다 — 스킬 소스에 적용할 수 없다")
+    try:
+        return subprocess.run([git, *argv], cwd=cwd, env=_git_env(), capture_output=True, text=True, encoding="utf-8",
+                              errors="replace", timeout=GIT_TIMEOUT)
+    except (OSError, subprocess.SubprocessError) as exc:
+        return subprocess.CompletedProcess([git, *argv], 1, "", f"git 실행 실패({type(exc).__name__})")
+
+
+def _first(proc: subprocess.CompletedProcess) -> str:
+    return masking.mask_brief(next((ln.strip() for ln in (proc.stderr or proc.stdout).splitlines() if ln.strip()),
+                                   f"종료 {proc.returncode}"), 160)
+
+
+def source_check(src_raw: str, sk: str | None, patch: Path, files: list[str], cfg: dict):
+    """`(SRC, 저장소 최상위, SRC의 저장소 안 경로, 사유 또는 None)`. 사유가 있으면 적용하지 않는다(쓰기 없음)."""
+    src = Path(os.path.expanduser(src_raw))
+    if not src.is_absolute():
+        return None, None, None, f"스킬 소스가 절대 경로가 아니다({src_raw})"
+    if not src.is_dir():
+        return None, None, None, f"스킬 소스 폴더가 없다({src_raw})"
+    src = src.resolve()
+    parts = src.parts
+    if any(parts[i:i + 2] == (".claude", "plugins") for i in range(len(parts))):
+        return src, None, None, "설치된 플러그인 폴더다 — 플러그인 캐시의 스킬은 바꾸지 않는다"
+    if sk and (_inside(src, Path(sk)) or _inside(Path(sk), src)):
+        return src, None, None, "설치된 분석 스킬 폴더(SK)와 겹친다 — 플러그인 캐시의 스킬은 바꾸지 않는다"
+    for clone in _clones(cfg):
+        if _inside(src, clone) or _inside(clone, src):
+            return src, None, None, "이슈 DB clone과 겹친다"
+    top = _git(src, "rev-parse", "--show-toplevel")
+    if top.returncode != 0 or not top.stdout.strip():
+        return src, None, None, f"git 저장소가 아니다({src})"
+    root = Path(top.stdout.strip()).resolve()
+    prefix = src.relative_to(root).as_posix() if src != root else ""
+    paths = [f"{prefix}/{rel}" if prefix else rel for rel in files]
+    st = _git(root, "--no-optional-locks", "status", "--porcelain", "--untracked-files=all", "--", *paths)
+    if st.returncode != 0:
+        return src, root, prefix, f"git status 실패 — {_first(st)}"
+    if st.stdout.strip():
+        dirty = sorted({ln[3:].strip() for ln in st.stdout.splitlines() if ln.strip()})
+        return src, root, prefix, f"스킬 소스에 커밋하지 않은 변경이 있다({', '.join(dirty[:3])}) — 먼저 커밋하거나 되돌린다"
+    chk = _git(root, "apply", "--check", *_dir_arg(prefix), str(patch))
+    if chk.returncode != 0:
+        return src, root, prefix, f"git apply --check 실패 — {_first(chk)}"
+    return src, root, prefix, None
+
+
+def _dir_arg(prefix: str) -> list[str]:
+    return [f"--directory={prefix}"] if prefix else []
+
+
+def _clones(cfg: dict) -> list[Path]:
+    out = []
+    for key in ("issue_db.path",):
+        raw = userconfig.get(cfg, key)
+        if isinstance(raw, str) and raw.strip():
+            p = Path(os.path.expanduser(raw))
+            if p.is_dir():
+                out.append(p.resolve())
+    return out
+
+
+def patch_counts(text: str) -> list[dict]:
+    """patch 글 → 파일별 `{path, added, removed}`(`+++ b/<rel>` 머리 기준)."""
+    out: list[dict] = []
+    for line in text.split("\n"):
+        if line.startswith("+++ b/"):
+            out.append({"path": line[len("+++ b/"):], "added": 0, "removed": 0})
+        elif line.startswith("--- ") or line.startswith("+++ ") or not out:
+            continue
+        elif line.startswith("+"):
+            out[-1]["added"] += 1
+        elif line.startswith("-"):
+            out[-1]["removed"] += 1
+    return out
+
+
+def run_apply(args, defaults: dict) -> tuple[dict, int]:
+    job, _ = job_dir(args, defaults)
+    name = safe_name(args.name)
+    out = job / SUGGEST_DIR / f"{name}.patch"
+    key = f"apply:{job.name}/{name}"
+    if getattr(args, "source", None):
+        raise Usage("--apply는 patch를 만들 때 보인 스킬 소스에만 적용한다 — --source 없이 부른다")
+    configured = configured_source(args)
+
+    def memo(reason: str) -> tuple[dict, int]:
+        line = APPLY_MEMO.format(reason=" ".join(reason.split()))
+        shown.record(job.parent, "skill_patch", "patch", job.name, key=key, lines=[line])
+        return {"status": "memo", "reason": reason, "files": [], "lines": [line]}, CHECK_FAILED
+
+    if not out.is_file():
+        return memo("patch가 없다 — skill_patch.py로 patch부터 만든다")
+    data = out.read_bytes()
+    sha = hashlib.sha256(data).hexdigest()
+    if not re.fullmatch(r"[0-9a-f]{64}", args.sha or "") or args.sha != sha:
+        return memo("patch가 보여 준 것과 다르다(sha256 불일치) — patch를 다시 보이고 다시 묻는다")
+    try:
+        meta = json.loads((job / SUGGEST_DIR / f"{name}.meta.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        meta = None
+    if not isinstance(meta, dict) or meta.get("sha256") != sha:
+        return memo("patch 기록(meta)이 없거나 patch와 맞지 않는다 — skill_patch.py로 patch를 다시 만든다")
+    src_raw = meta.get("source")
+    if not src_raw:
+        return memo("patch를 만들 때 스킬 소스 적용을 제안하지 않았다(스킬 소스 없음·적용 불가)")
+    if configured and str(Path(os.path.expanduser(configured)).resolve()) != src_raw:
+        return memo("설정된 스킬 소스가 patch를 보일 때와 다르다 — skill_patch.py로 patch를 다시 만든다")
+    files = patch_counts(data.decode("utf-8", errors="replace"))
+    src, root, prefix, why = source_check(src_raw, meta.get("skill_dir"), out,
+                                          [f["path"] for f in files], getattr(args, "_cfg", None) or {})
+    if why:
+        return memo(why)
+    proc = _git(root, "apply", *_dir_arg(prefix), str(out))
+    if proc.returncode != 0:
+        return memo(f"git apply 실패 — {_first(proc)}")
+    lines = [APPLIED.format(source=src)] + [f"- {f['path']} +{f['added']} −{f['removed']}" for f in files]
+    shown.record(job.parent, "skill_patch", "patch", job.name, key=key, lines=lines, path=str(src))
+    return {"status": "applied", "source": str(src), "files": files, "lines": lines}, OK
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="skill_patch.py", description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("key", metavar="KEY", help="작업 키")
-    parser.add_argument("--skill-dir", required=True, metavar="SK",
-                        help="분석 스킬 디렉토리(5-1 Skill 결과의 `Base directory for this skill:`)")
+    parser.add_argument("--skill-dir", metavar="SK",
+                        help="분석 스킬 디렉토리(5-1 Skill 결과의 `Base directory for this skill:`). patch를 만들 때 필수")
     parser.add_argument("--name", required=True, metavar="analyzer.skill", help="분석 스킬 이름(`analyzers.<카테고리>.skill`)")
+    parser.add_argument("--source", metavar="SRC", help="patch를 만들 때만: 분석 스킬 소스 폴더(없으면 config analyzers.<카테고리>.source). --apply와 함께 못 쓴다")
+    parser.add_argument("--apply", action="store_true",
+                        help="만든 patch를 스킬 소스 워킹 트리에 git apply(사용자가 '적용'을 고른 뒤에만, 커밋·push 없음)")
+    parser.add_argument("--sha", metavar="sha256", help="--apply: 보인 patch의 sha256(`스킬 소스 적용 대기:` 줄)")
     platform_session.add_arg(parser)
     parser.add_argument("--plugin-root", default=None)
     parser.add_argument("--json", action="store_true", help="JSON 출력(기본은 사용자에게 보일 줄)")
@@ -302,7 +506,12 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     defaults = site_defaults.load_or_exit(Path(args.plugin_root) if args.plugin_root else None)
     try:
-        doc, code = run(args, defaults)
+        if args.apply:
+            doc, code = run_apply(args, defaults)
+        elif not args.skill_dir:
+            raise Usage("--skill-dir가 필요하다(patch 만들기) — 적용은 --apply --sha")
+        else:
+            doc, code = run(args, defaults)
     except Usage as exc:
         print(f"skill_patch.py: {exc}", file=sys.stderr)
         return USAGE

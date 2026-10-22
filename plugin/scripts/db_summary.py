@@ -589,5 +589,8 @@ def render_markdown(scr: dict, plan: dict, extra: dict) -> str:
         out.append(md.line(scr["push_note"]))
     elif not scr["push_allowed"]:
         out.append(f"({NO_RULE} — 원값: push_allowed=false)")
+    if extra.get("merge"):      # 병합 줄(dry-run 아닐 때 summary가 넣는다, dbpr/merge.py screen_line)
+        from dbpr import merge as _merge
+        out += ["", _merge.screen_line(extra["merge"]["mode"], extra["merge"].get("reason"))]
     out += ["", f"approved_hash: {extra['approved_hash']}"]
     return "\n".join(out) + "\n"

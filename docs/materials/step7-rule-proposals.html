@@ -95,13 +95,13 @@ pre { font-family: var(--mono); font-size: .8rem; background: var(--off-soft); b
         <h3>① 이슈 DB 규칙 제안</h3>
         <p class="eg">예: "이 로그 줄을 이벤트로 잡는 규칙을 추가하자"</p>
         <div class="flow"><span>초안 보여 줌</span><i>→</i><span>사용자 승인</span><i>→</i><span>자동 검증</span><i>→</i><span class="end">PR</span></div>
-        <p class="note">평소 이슈 기록과 같은 길을 탑니다. 리뷰어가 PR을 합쳐야 이슈 DB에 들어갑니다.</p>
+        <p class="note">평소 이슈 기록과 같은 길을 탑니다. push 확인 화면에서 "push하고 바로 병합"을 고르면 본인이 바로 합칩니다. 다만 파서 규칙(<code>parser-rules/</code>) 같은 메인테이너 경로 변경은 메인테이너 리뷰를 거칩니다.</p>
       </div>
       <div class="kind">
         <h3>② 분석 스킬 개선 제안</h3>
         <p class="eg">예: "점검 목록에 설정 화면 확인을 추가하자"</p>
-        <div class="flow"><span>수정 파일(.patch) 생성</span><i>→</i><span class="end">직접 검토해 반영</span></div>
-        <p class="note">플러그인은 분석 스킬을 직접 고치지 않습니다. 수정 파일을 보고 반영할지 본인이 판단합니다. 스킬 소스의 dev 브랜치에 먼저 적용하고 main에는 PR로 가져오는 것을 권합니다.</p>
+        <div class="flow"><span>수정 파일(.patch) 생성</span><i>→</i><span>내용 보여 줌</span><i>→</i><span>"바로 적용할까요?"</span><i>→</i><span class="end">스킬 소스에 적용</span></div>
+        <p class="note">스킬 소스 폴더를 설정해 두면(<code>analyzers.&lt;카테고리&gt;.source</code>) 수정 내용을 보여 주고 물은 뒤 그 폴더에 바로 적용합니다. 커밋·push는 하지 않으니 확인하고 직접 올립니다. 설정이 없으면 수정 파일만 남기고 반영은 본인이 판단합니다. 설치된 플러그인 폴더의 스킬은 어느 쪽이든 고치지 않습니다.</p>
       </div>
     </div>
   </section>
@@ -111,7 +111,9 @@ pre { font-family: var(--mono); font-size: .8rem; background: var(--off-soft); b
     <div class="chat">
       <div class="msg claude"><div class="who">Claude</div>심층 분석이 규칙 2개를 제안했습니다. 받을 것을 고르세요(여러 개 가능).<br>1. [이슈 DB] 시그니처에 "데이터 설정 꺼짐" 조건 추가<br>2. [스킬] 점검 목록에 설정 화면 경로 확인 추가<br>3. 둘 다<br>4. 받지 않음 (기본 — 확인 안 한 제안은 반영하지 않으려고)</div>
       <div class="msg user"><div class="who">사용자</div>2번만</div>
-      <div class="msg claude"><div class="who">Claude</div>스킬 제안 patch(적용 안 함, 마스킹됨): <code>…/MOCK-1234/skill-suggestions/data-analyzer.patch</code> — 직접 검토해 스킬 소스의 dev 브랜치에 git apply, main에는 PR로 반영<br><code>references/DATA-001.md  +1 −0</code></div>
+      <div class="msg claude"><div class="who">Claude</div>스킬 제안 patch(적용 안 함, 마스킹됨): <code>…/MOCK-1234/skill-suggestions/data-analyzer.patch</code> — 직접 검토해 스킬 소스의 dev 브랜치에 git apply, main에는 PR로 반영<br><code>references/DATA-001.md  +1 −0</code><br>스킬 소스 적용 대기: <code>~/work/data-analyzer/skills/data-analyzer</code> — 아래 patch(마스킹됨, sha256 …)를 그대로 보이고 바로 적용할지 묻는다<br><code>+4. 설정 화면 경로(설정 &gt; 네트워크 &gt; 모바일 데이터)를 본다.</code><br>스킬 소스(<code>~/work/data-analyzer/skills/data-analyzer</code>)에 바로 적용할까요? (적용 / patch만 남김)</div>
+      <div class="msg user"><div class="who">사용자</div>적용</div>
+      <div class="msg claude"><div class="who">Claude</div>스킬 소스에 적용함(커밋 안 함): <code>~/work/data-analyzer/skills/data-analyzer</code> — 확인 후 직접 커밋·push<br><code>references/DATA-001.md  +1 −0</code></div>
     </div>
   </section>
 
@@ -121,6 +123,7 @@ pre { font-family: var(--mono); font-size: .8rem; background: var(--off-soft); b
       <li>묻는 건 한 번뿐이고 여러 개를 함께 고를 수 있습니다. 그냥 넘기면 "받지 않음"으로 처리해 규칙이 저절로 늘지 않습니다(규칙 추가는 사용자 확인 후에만). 안 받으면 예전과 똑같습니다.</li>
       <li>분석 스킬이 제안을 내지 않으면 이 질문도 나오지 않습니다.</li>
       <li>수정 파일에는 마스킹된 값만 들어갑니다. 마스킹 때문에 스킬 소스에 적용이 안 될 것 같으면 파일을 만들지 않고 메모로만 알려 줍니다.</li>
+      <li>바로 적용은 스킬 소스가 git 저장소이고, 바꿀 파일에 커밋하지 않은 수정이 없고, 수정 파일이 그대로 맞고, 화면에 다 보일 만큼 작을 때(200줄·12KB 이하)만 합니다. 아니면 이유를 알려 주고 수정 파일만 남깁니다. 마스킹으로 바뀐 줄이 있으면 placeholder가 소스에 들어간다고 미리 알려 줍니다.</li>
     </ul>
   </section>
 
@@ -136,8 +139,9 @@ pre { font-family: var(--mono); font-size: .8rem; background: var(--off-soft); b
     <ul class="plain">
       <li>[이슈 DB] 줄: <code>db-authoring.md</code> 점검을 거친 op 초안 → 승인분만 <code>plan.json</code> → <code>db_verify rules</code> → push 승인 → PR.</li>
       <li>[스킬] 줄: <code>JOB/skill-suggestions/&lt;스킬&gt;.patch</code>(unified diff, 스킬 폴더 기준 경로). 스크립트 <code>skill_patch.py</code>가 만들고 마스킹한 뒤 스킬 폴더 사본에 <code>git apply --check</code>가 통과할 때만 안내 줄을 냅니다. 안내 줄은 표시 보조 hook이 화면에 꼭 보이게 합니다(절차 <code>reference/skill-patch.md</code>).</li>
+      <li>바로 적용: <code>source</code>가 있으면 같은 스크립트가 적용 가능성을 미리 보고 patch 전문과 sha256을 냅니다. "적용"이면 <code>skill_patch.py &lt;KEY&gt; --name &lt;스킬&gt; --apply --sha &lt;H&gt;</code>가 보인 patch(sha256 대조)만 그 저장소 워킹 트리에 <code>git apply</code>합니다(index·커밋·push 없음, guard 규칙 12가 권한을 묻습니다, <code>16-existing-assets.md §16.5.1</code>).</li>
       <li>patch는 작업이 끝나도 남고, <code>db_pr cleanup --older-than</code>으로 오래된 작업 폴더를 지울 때 함께 지워집니다.</li>
-      <li>검증: eval 71이 [스킬] 갈래를 실행합니다(10/21 사외 통과). [이슈 DB] 갈래를 실행하는 eval은 아직 없습니다.</li>
+      <li>검증: eval 71이 [스킬] 갈래(patch만)를 실행합니다(10/21 사외 통과). 바로 적용(<code>source</code>)과 [이슈 DB] 갈래를 실행하는 eval은 아직 없습니다(단위 테스트 <code>tests/test_skill_patch.py</code>).</li>
     </ul>
   </details>
 </div>

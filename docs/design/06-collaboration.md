@@ -9,7 +9,7 @@
 `.github/CODEOWNERS`:
 
 ```
-# 카테고리
+# 카테고리 (선택 — 적으면 그 카테고리 PR은 오너 리뷰가 필요해 본인 병합이 막힌다)
 /data/                  @<org>/telephony-data-owners
 /call/                  @<org>/telephony-call-owners
 /network/               @<org>/telephony-network-owners
@@ -34,13 +34,30 @@
 ```
 
 - 팀 이름 형식과 `gh pr create --reviewer`에 넘기는 형식은 Phase 0에서 확인한다 (`14-site.md` S5, S19).
+- 리뷰어(`--reviewer`)는 CODEOWNERS에 오너가 있는 경로만 지정된다. 본인 병합(아래)이면 리뷰 요청은 알림일 뿐 병합을 막지 않는다.
 
 main 브랜치 보호 설정 (메인테이너가 GHE에서 설정하고 `docs/branch-protection.md`에 기록):
-- PR 필수, CODEOWNERS 승인 1명 이상 필수
-- 직접 push 금지
+- PR 필수(직접 push 금지), force push·삭제 금지
+- CODEOWNERS 리뷰 필수 + **필수 승인 수 0**: 오너가 적힌 경로(메인테이너 경로는 항상, 카테고리는 선택)만 리뷰가 필요하다.
+  리뷰어 머지를 유지할 팀은 필수 승인 1명 이상 + `issue_db.merge: review`.
 - (Actions를 쓰게 되면 `13-actions.md`의 추가 설정을 적용한다)
 
-**서버 측 강제가 전제다.** 플러그인의 Claude hook과 이슈 DB의 git hook(`pre-commit`, `pre-push`)은 모두 로컬 장치라 우회할 수 있다(최선 노력 명령 파싱, `core.hooksPath` 변경). 그리고 `core.hooksPath=.githooks`는 main에 커밋된 스크립트를 **모든 기여자 PC에서 실행**하므로, 브랜치 보호와 CODEOWNERS 필수 리뷰가 서버에서 강제되지 않으면 main 쓰기 권한이 곧 팀 전체 PC의 코드 실행 권한이 된다. 브랜치 보호를 설정할 수 없는 GHE 환경이면 `.githooks/` 채택 여부를 다시 결정한다 (`14-site.md` S5, `08-safety.md §9`).
+**본인 병합(PR + self-merge, 기본).** 이슈 DB 변경은 계속 PR로만 들어간다(이력·검사·되돌리기). `issue_db.merge: self`(사용자
+config > site-defaults > 내장 기본 `self`)이고 PR이 병합 자격이 있으면 push 전 확인 화면에 병합 줄과 선택지 `push하고 바로 병합` /
+`push만(리뷰어에게)` / `취소`가 나온다(`push하고 바로 병합`은 추천으로 표시하지 않는다). `push하고 바로 병합`이면
+`db_pr publish … --and-merge` **한 명령**(권한 확인 한 번)이 커밋·push·PR 뒤 같은 사용자 권한으로 병합한다. 조건: publish가 push한
+커밋이 PR head 그대로(승인 토큰 = 그 SHA, `gh pr merge --match-head-commit`), PR 검사가 모두 통과(검사가 없으면 `ci_mode: local`일
+때만 통과), `mergeStateStatus`가 CLEAN·HAS_HOOKS(오너 리뷰가 필요한 경로면 BLOCKED라 병합하지 않는다), 메인테이너 경로 변경 없음
+(기록이 아니라 `git diff origin/<base>...head`로 다시 본다), PR을 만든 뒤 main이 바뀌지 않음(fetch한 `origin/<base>`가 PR 커밋의 조상이
+아니거나 BEHIND면 같은 ID가 두 번 들어가지 않게 `sync-pr` 뒤 다시). 검사 대기·상태 확인 중(UNKNOWN 등)·BLOCKED인데 검사가 대기·없음이면
+`issue_db.merge_wait_seconds`(기본 420초, 최대 480)까지 기다린다. 끝내 안 되면 PR을 그대로 두고 사유와 재시도 명령(`db_pr merge --job <KEY>
+--approved <sha>`)을 알린다. 병합 자격이 없는 PR — `issue_db.merge: review`, 검증 결과 "승인 필요"(`needs-approval`), 메인테이너
+경로(`/.githooks/`·`/schema/`·`/parser-rules/`·`/templates/`·`/.github/`·`/docs/`·`/issue-db.config.yaml`·`CONTRIBUTING.md`·
+`GLOSSARY.md`·`.gitattributes`) 변경 — 은 확인 화면에 병합 선택지가 없다(리뷰어가 GHE에서 머지). guard는 `publish`·`merge`를 ask로,
+gh·MCP로 직접 머지는 거부로, 병합 기록(`merge-offer.json`) 직접 쓰기는 거부로 둔다(`08-safety.md §9` 규칙 7·11). 다른 사람이 문제를
+발견하면 그때 새 PR(또는 GHE의 Revert)로 고친다.
+
+**서버 측 강제가 전제다.** 플러그인의 Claude hook과 이슈 DB의 git hook(`pre-commit`, `pre-push`)은 모두 로컬 장치라 우회할 수 있다(최선 노력 명령 파싱, `core.hooksPath` 변경). 그리고 `core.hooksPath=.githooks`는 main에 커밋된 스크립트를 **모든 기여자 PC에서 실행**하므로, 브랜치 보호와 메인테이너 경로(`/.githooks/` 등)의 CODEOWNERS 필수 리뷰가 서버에서 강제되지 않으면 main 쓰기 권한이 곧 팀 전체 PC의 코드 실행 권한이 된다. 브랜치 보호를 설정할 수 없는 GHE 환경이면 `.githooks/` 채택 여부를 다시 결정한다 (`14-site.md` S5, `08-safety.md §9`).
 
 ### 6.2 PR 규칙과 충돌 방지 (로컬 모드)
 
@@ -55,7 +72,7 @@ main 브랜치 보호 설정 (메인테이너가 GHE에서 설정하고 `docs/br
 | parser-rules 동시 추가 | 규칙 항목은 키로 식별하고 계획의 op(`add-parser-rule`/`update-parser-rule`)로 최신 main 위에 항목 단위로 넣는다. 같은 키를 main이 먼저 추가했거나 기능 필드를 바꿨으면 drift로 사용자에게 묻는다. 이력 필드만 바뀐 것은 drift가 아니다. |
 | 같은 Jira를 두 명이 분류 | 시작 시(`db_pr preflight`)와 Step 8-3에서 **origin/main의 같은 Jira 파일**과 **열린 PR**을 검사한다. main에 있으면 중단하고 기존 분류를 보여준 뒤 유지/재분류(`reclassify`)를 묻는다. 열린 PR이 있으면 링크를 보여주고 계속할지 묻는다. 그래도 둘 다 머지되면 사후 lint가 찾아서 알리고 메인테이너가 정리한다 (6.3). |
 | 같은 엔티티의 같은 필드를 양쪽이 수정 | (예: 같은 원인의 resolution을 둘 다 고침) 자동 해결하지 않는다. 계획 기반이면 drift로 양쪽 값을 보여주고 고르게 한다. 직접 편집한 브랜치는 rebase할 때 git 충돌로 드러난다 (6.3). |
-| **push 이후 ~ 머지 사이에 main이 바뀜** | 6.3의 `sync-pr`, 리뷰어 머지 체크리스트, 사후 lint로 막는다. |
+| **push 이후 ~ 머지 사이에 main이 바뀜** | 6.3의 `sync-pr`, 본인 병합이면 `publish --and-merge`·`db_pr merge`의 상태 검사(main 변경·BEHIND·충돌이면 병합 안 함), 리뷰어 머지면 체크리스트, 사후 lint로 막는다. |
 
 **ID가 바뀔 때 갱신하는 참조**: `contracts.md §renumber 참조`에만 있다. 직접 편집 브랜치의 `db_add renumber`와 메인테이너의 사후 정리가 같은 목록을 쓰고, 치환 후 `db_lint --residual`로 옛 ID 잔존을 검사한다. 도구가 만든 PR은 적용 시점 할당이라 renumber가 필요 없다.
 
@@ -73,7 +90,7 @@ CI 대신 아래 **5단계**로 검증한다. `issue-db.config.yaml`의 `ci_mode
 | ① 적용 시 | Step 8, `record`, `sync-pr`, `verify-fix`, `validate --cause`, `fix-submitted`, import/review/move 계획 PR | `db_pr stage` | drift 검사, `db_add apply` 후 `03-issue-db.md §5.7 (4)` 체크리스트 전부, 생성 파일 재생성, `db_verify rules --plan` |
 | ② 커밋 시 | `git commit` | **git pre-commit hook** (`.githooks/pre-commit` → `db_precommit.py --db "$(git rev-parse --show-toplevel)"`) + Claude hook | `db_lint --staged`, `mask_pii --check --staged`, `db_regress --staged`(parser-rules 변경 시 전체), 규칙 변경 시 `db_verify rules --staged`, `db_build --verify --staged` |
 | ③ push 직전 | 위 모든 쓰기 흐름 | `db_pr summary` + 사용자 확인 + `db_pr publish` | 최신 main 위 계획 적용(drift 결정 포함), `check-ids`, Jira 중복·열린 PR, `db_regress --all`, `05-verification.md` 검증, 확인 화면 승인, 승인 해시·커밋 부모·커밋 메시지 일치 확인 |
-| ④ 머지 직전 | 리뷰어 | PR 템플릿 체크리스트 + `sync-pr` | main이 PR 마지막 push 이후 바뀌었으면 작성자가 `sync-pr` 실행 후 머지 |
+| ④ 머지 직전 | 작성자(본인 병합) 또는 리뷰어 | `publish --and-merge`·`db_pr merge`(승인 커밋·PR 검사·`mergeStateStatus`·main 불변) 또는 PR 템플릿 체크리스트 + `sync-pr` | main이 PR 마지막 push 이후 바뀌었으면 작성자가 `sync-pr` 실행 후 머지 |
 | ⑤ 사후 | 모든 커맨드의 이슈 DB 최신화 직후 (`db_pr snapshot`) | `db_lint --all --db <work_dir>/_snapshot` | main 스냅샷 전체 검사. 문제를 발견하면 알리고 메인테이너 정리를 안내한다 (아래, v1은 수동) |
 
 - `db_verify rules`가 `needs-approval`(종료 코드 `3`)을 내면 ②는 경고 후 통과하고, ①③은 확인 화면과 PR 본문에 "승인 필요"로 표시한다 (`contracts.md §종료 코드`).
@@ -117,7 +134,7 @@ v1에서 도구는 이런 브랜치를 바꾸지 않는다. `sync-pr`는 아래 
 - 정리 PR을 만들기 전에 `db_pr preflight --branch chore/fix-db-<문제 ID>`로 원격에 같은 브랜치나 같은 제목의 열린 PR이 있는지 확인하고, 있으면 만들지 않고 링크만 보여준다.
 - 정리 자동화(소유자 판별, 공유 파일 참조 판별, `renumber --in-main`, 정리 PR 초안 생성)는 `99-deferred.md`에 있다. 파일럿에서 자주 생기면 도입한다.
 
-**`.github/pull_request_template.md`** (리뷰어 머지 체크리스트)
+**`.github/pull_request_template.md`** (머지 전 체크리스트 — 리뷰어가 머지할 때. 본인 병합은 `db_pr merge`가 충돌·main 변경·검사·브랜치 보호만 확인하고, 내용(작성 규칙)은 작성자가 push 전 확인 화면에서 본다)
 ```markdown
 ## 분석 요약
 (자동 작성)
@@ -125,7 +142,7 @@ v1에서 도구는 이런 브랜치를 바꾸지 않는다. `sync-pr`는 아래 
 ## 검증 결과
 (자동 작성. "승인 필요" 항목이 있으면 메인테이너 승인 필수)
 
-## 리뷰어 머지 전 체크리스트
+## 머지 전 체크리스트 (리뷰어 머지일 때 — 본인 병합은 도구가 충돌·main 변경·검사·브랜치 보호만 확인한다)
 - [ ] GHE에 충돌 표시가 없다
 - [ ] 이 PR의 마지막 push 이후 main에 다른 PR이 머지되지 않았다
       (머지됐다면 작성자에게 `/telephony-triage:sync-pr` 요청)
@@ -133,7 +150,7 @@ v1에서 도구는 이런 브랜치를 바꾸지 않는다. `sync-pr`는 아래 
 - [ ] parser-rules 변경이나 "승인 필요" 검증 결과가 있으면 메인테이너가 승인했다
 ```
 
-- 머지는 **한 번에 하나씩** 한다. 여러 PR이 대기 중이면 하나를 머지한 뒤 다음 PR의 작성자에게 `sync-pr`를 요청한다.
+- 머지는 **한 번에 하나씩** 한다. 여러 PR이 대기 중이면 하나를 머지한 뒤 다음 PR의 작성자에게 `sync-pr`를 요청한다. 본인 병합이면 main이 PR 뒤에 바뀐 PR은 도구가 병합하지 않고 `sync-pr`를 안내한다.
 - 동시 기여자가 많아져서 ④가 병목이 되면 `13-actions.md`(Actions 전환)를 검토한다.
 
 ### 6.4 스키마 버전과 마이그레이션

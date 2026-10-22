@@ -29,11 +29,11 @@ LABEL_MAX = 160
 GIT_TIMEOUT = 20
 MD_MAX = 3072                   # markdown 바이트 상한
 TRACE_TAIL = 256 << 10          # last-run-error: trace.jsonl 끝에서 읽는 바이트
-# 실행 하나가 끝난 행(triage done·needs_input·stopped·error, db_pr stage·publish·discard). 마지막 것이 오류면 last-run-error
-END_STEPS = ("done", "needs_input", "stopped", "error", "stage", "publish", "discard")
+# 실행 하나가 끝난 행(triage done·needs_input·stopped·error, db_pr stage·publish·discard·merge). 마지막 것이 오류면 last-run-error
+END_STEPS = ("done", "needs_input", "stopped", "error", "stage", "publish", "discard", "merge")
 RUN_ERROR_NEXT = ("메시지대로 고친 뒤 같은 명령을 다시 실행한다. '내부 오류'면 `/telephony-triage:status --doctor` 화면과 "
                   "trace.jsonl을 관리자에게 보낸다")
-STAGES = ("none", "pr-created", "pushed-no-pr", "committed", "needs-input", "summary-shown", "staged", "plan-saved",
+STAGES = ("none", "pr-merged", "pr-created", "pushed-no-pr", "committed", "needs-input", "summary-shown", "staged", "plan-saved",
           "needs-input-past", "analyzed", "started", "unknown")
 # 파일별로 쓰는 중첩 값의 형식. 값이 null이면 통과, 형식이 다르면 그 파일을 손상으로 본다(고치지 않는다)
 SHAPES = {
@@ -156,6 +156,12 @@ def read_lock(work_dir: Path, key: str, owner: str | None) -> tuple[dict, dict |
     return info, None
 
 
+def merged_row(job: Path, number) -> dict | None:
+    """trace 끝 256KB에서 이 PR의 마지막 `merge{merged: true}` 행(`db_pr merge`가 병합했거나 이미 병합됨을 확인). 없으면 None."""
+    return next((r for r in reversed(trace_rows(job, TRACE_TAIL))
+                 if r.get("step") == "merge" and r.get("merged") is True and r.get("pr") == number), None)
+
+
 def quick_stage(job: Path) -> str:
     """후보 목록용 얕은 단계(파일만, git·lock 없음). 손상 파일은 `unknown`."""
     files = _Files(job, [])
@@ -164,7 +170,7 @@ def quick_stage(job: Path) -> str:
         return "unknown"
     pr = (plan or {}).get("pr") or {}
     if pr.get("number"):
-        return "pr-created"
+        return "pr-merged" if merged_row(job, pr["number"]) else "pr-created"
     if pr.get("head_sha"):
         return "pushed-no-pr"
     if state and state.get("approved_hash") and (job / PR_FILE).is_file():
@@ -369,6 +375,11 @@ def collect(work_dir: Path, key: str, cfg: dict, defaults: dict, platform: str |
         nxt = f"/telephony-triage:analyze {key} <로그 경로>"
     elif PLAN in files.corrupt:
         st = unknown(PLAN)
+    elif pr.get("number") and not resync and merged_row(job, pr["number"]):
+        row = merged_row(job, pr["number"])
+        st = stage("pr-merged", f"PR #{pr['number']} 병합됨(db_pr merge, {str(row.get('sha') or '?')[:12]}) — 원격 main은 다시 확인하지 않았다",
+                   "recorded", row.get("ts") if isinstance(row.get("ts"), str) else None, ["trace.jsonl merge 행"])
+        nxt = "없음 — 끝난 작업이다(작업 폴더는 db_pr cleanup --older-than이 정리한다)"
     elif pr.get("number") and not resync:
         st = stage("pr-created", f"PR #{pr['number']} 생성됨(브랜치 {pr.get('branch')}) — PR의 지금 상태는 확인하지 않았다",
                    "recorded", _mtime(job / PLAN), [f"plan.json pr.number {pr['number']}"])

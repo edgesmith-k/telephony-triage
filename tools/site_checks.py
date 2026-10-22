@@ -854,7 +854,8 @@ def s4a_protection(ctx: Ctx) -> dict:
     reviews = data.get("required_pull_request_reviews") or {}
     owners = bool(reviews.get("require_code_owner_reviews"))
     return res("s4a.protection", "pass" if reviews and owners else "fail",
-               f"PR 리뷰 필수 {bool(reviews)} · CODEOWNERS 리뷰 {owners}", cmd)
+               f"PR 리뷰 필수 {bool(reviews)} · CODEOWNERS 리뷰 {owners} · 필수 승인 수 "
+               f"{reviews.get('required_approving_review_count', '?')}(0이면 본인 병합 가능, issue_db.merge)", cmd)
 
 
 def _golden_tests(root: Path) -> list[Path]:

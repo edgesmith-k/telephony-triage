@@ -267,7 +267,7 @@ def visible_lines(chunks) -> list[str]:
 @dataclass
 class Obligation:
     """사용자에게 보여야 할 스크립트 출력 하나. kind push|post|report|draft|patch, key push:<hash>|post:<sha 앞 16자>|report:<id>|
-    draft:<결과 해시>|patch:<KEY>/<스킬 이름>(id = 그 호출의 tool_use id 끝 12자, 없으면 seq 순번; 초안은 규칙·상태·사유의 sha1 앞
+    draft:<결과 해시>|patch:<KEY>/<스킬 이름>|apply:<KEY>/<스킬 이름>(id = 그 호출의 tool_use id 끝 12자, 없으면 seq 순번; 초안은 규칙·상태·사유의 sha1 앞
     12자). start = 출력이 나온 seq 순번, end = 창 끝(배타),
     close_kind = 창을 닫은 것(publish·discard·approve·restage·step7·stage·draft·job·end — end면 아직 열려 있다)."""
     kind: str

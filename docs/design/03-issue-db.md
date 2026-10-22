@@ -105,7 +105,7 @@ telephony-issue-db/
 │   └── 2026-09/ABC-12345-20260927T1830.yaml
 └── .github/
     ├── CODEOWNERS
-    └── pull_request_template.md       # 리뷰어 머지 체크리스트 (06-collaboration.md §6.3)
+    └── pull_request_template.md       # 머지 전 체크리스트 — 리뷰어 머지일 때 (06-collaboration.md §6.3)
     # workflows/는 Actions 사용 시에만 추가 (13-actions.md)
 ```
 

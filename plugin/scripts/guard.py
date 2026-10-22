@@ -21,11 +21,12 @@ TODO(SITE:S3) 플러그인 hook에 보이는 MCP 도구 이름이 `mcp__<server>
 | 4 | 생성 파일 정합성: `git commit`이면 `db_build --verify --staged`(`actions-build`면 생성 파일 staged 거부), `.cache/` staged 거부 | Bash, 이슈 DB |
 | 5 | hook 우회 차단: 커밋의 `--no-verify`·`-n`, `-c core.hooksPath=…`(모든 git 명령), 유효 `core.hooksPath`가 정확히 `.githooks`가 아니면 커밋 거부, `core.hooksPath`를 바꾸거나 해제하는 `git config` 거부(정확히 `.githooks`로 설정은 허용), `GIT_CONFIG_*`·`GIT_INDEX_FILE` 대입이 붙은 commit·push·config 거부 | Bash, 이슈 DB |
 | 6 | base 브랜치 push 차단: refspec의 대상 ref(없으면 현재 브랜치), `--all`/`--mirror`, push `--no-verify` | Bash, 이슈 DB |
-| 7 | push 확인 강제: 이슈 DB `git push`와 `db_pr.py publish`는 `ask` (옵션 `--commit`·`--and-discard`와 무관: `publish` 토큰만 본다). publish는 명령 글의 낱말 그물(`word_net`: 이름 `db_pr`와 낱말 `publish`가 함께 든다, 글 명령만인 줄은 뺀다 — 아래 "명령 파싱")로 본다 | Bash |
+| 7 | push 확인 강제: 이슈 DB `git push`와 `db_pr.py publish`는 `ask` (옵션 `--commit`·`--and-discard`와 무관: `publish` 토큰만 본다). publish는 명령 글의 낱말 그물(`word_net`: 이름 `db_pr`와 낱말 `publish`가 함께 든다, 글 명령만인 줄은 뺀다 — 아래 "명령 파싱")로 본다. 같은 그물로 `db_pr.py merge`·`publish --and-merge`(PR 바로 병합 — 확인 화면에서 "push하고 바로 병합"을 고른 뒤에만, 스크립트가 승인 커밋·검사를 대조)도 `ask`(한 명령이면 권한 확인 한 번). 병합 기록 `<work_dir>/<KEY>/merge-offer.json`을 파일 도구·Bash 파일 쓰기로 쓰거나 지우면 거부(db_pr만 쓴다) | Bash |
 | 8 | 사용자 clone 직접 편집 차단: 대상 파일이 `issue_db.path` 안이면 거부(`work_dir` 아래는 제외) | Write/Edit/MultiEdit/NotebookEdit |
 | 8 | 같은 규칙, Bash: clone 본체에서 브랜치·파일을 바꾸는 git·`gh pr checkout`, clone 안으로의 파일 쓰기(리디렉션·tee·cp·rm·`sed -i` 등) 거부. migrate 브랜치 생성(깨끗한 트리)은 ask | Bash, clone 본체 |
 | 10 | 로그 원문 통독 차단: cat·tac·nl·less·more·bat·strings·zcat·zless·bzcat·xzcat, `head/tail -c`, `unzip -p/-c`가 로그 원문·zip·bugreport·`events*.json`·`issue_raw.json`·`match.json`을 통째로 읽으면 거부(`fixtures/`·`draft/` 제외, 사용자 config와 무관) | Bash |
-| 11 | 이슈 DB 원격 쓰기 확인: 대상이 이슈 DB인 `gh` 쓰기는 ask·`pr merge`는 거부, 비Jira MCP 쓰기형 도구(`owner`/`repo` 인자)도 같게 | Bash, `mcp__.*` |
+| 11 | 이슈 DB 원격 쓰기 확인: 대상이 이슈 DB인 `gh` 쓰기는 ask·`pr merge`는 거부(병합은 `db_pr.py merge`로만, 규칙 7), 비Jira MCP 쓰기형 도구(`owner`/`repo` 인자)도 같게 | Bash, `mcp__.*` |
+| 12 | 분석 스킬 소스 적용 확인: `skill_patch.py --apply`(낱말 그물: 이름 `skill_patch`와 낱말 `apply`)는 `ask`. config `analyzers.<카테고리>.source`(절대 경로) 안을 파일 도구·Bash 파일 쓰기(규칙 8과 같은 판별)·파일을 바꾸는 git(`CLONE_GIT_SUBS`·commit·push·stash)으로 바꾸면 `ask`(적용은 `skill_patch.py --apply`로만). 스크립트 기록 `<work_dir>/<KEY>/skill-suggestions/<이름>.patch`·`<이름>.meta.json`을 파일 도구·Bash 파일 쓰기로 쓰거나 지우면 거부(skill_patch.py만 쓴다) | Bash, Write/Edit/MultiEdit/NotebookEdit |
 
 (1번은 SessionStart의 `config.py sync-scripts-path`다.)
 
@@ -53,8 +54,8 @@ TODO(SITE:S3) 플러그인 hook에 보이는 MCP 도구 이름이 `mcp__<server>
 없으므로 코멘트 도구도 거부한다. hook은 모든 도구 호출에 걸리므로, `site-defaults.yaml`이 없어도 guard는 멈추지 않고 사용자 config만으로
 판정한다(경고). 이때 커밋 검사(3·4번)가 부르는 스크립트는 종료 코드 2를 내므로 이슈 DB 커밋은 거부된다.
 
-**의존성 없음·내부 오류**(`_degraded`): import 실패나 판정 중 예외면 MCP는 거부, Bash의 git·gh·`db_pr.py publish`(규칙 7과 같은
-`word_net`)와 파일 도구는 ask, 그 밖의 Bash는 통과 + 경고.
+**의존성 없음·내부 오류**(`_degraded`): import 실패나 판정 중 예외면 MCP는 거부, Bash의 git·gh·`db_pr.py publish`·`merge`·
+`skill_patch.py --apply`(규칙 7·12와 같은 `word_net`)와 파일 도구는 ask, 그 밖의 Bash는 통과 + 경고.
 종료 코드는 그래도 0이다(2는 설치 명령까지 모든 Bash를 막는다).
 """
 
@@ -244,6 +245,7 @@ class Config:
         if problems:
             self.warnings.append("사용자 config 플랫폼 프로필 문제(보호는 유지, 잘못된 work_dir은 예외 근거로 쓰지 않는다): "
                                  + "; ".join(problems[:5]))
+        self.skill_sources = _skill_sources(self.cfg) if self.user is not None else []   # 규칙 12
         top = self.profiles[0]            # 기본 플랫폼 프로필(옛 단일 프로필 속성)
         self.clone, self.clone_common, self.work_dir = top.clone, top.clone_common, top.work_dir
         self.base, self.remote_slug = top.base, top.remote_slug
@@ -320,6 +322,21 @@ class Config:
 
     def same_db_repo(self, slug) -> bool:
         return any(_same_repo(slug, s) for s in self.remote_slugs)
+
+
+def _skill_sources(cfg: dict) -> list[str]:
+    """규칙 12: config `analyzers.<카테고리>.source` 중 절대 경로(`~` 허용)의 정규화 경로."""
+    out = []
+    analyzers = cfg.get("analyzers") if isinstance(cfg.get("analyzers"), dict) else {}
+    for entry in analyzers.values():
+        src = entry.get("source") if isinstance(entry, dict) else None
+        if isinstance(src, str) and src.strip() and os.path.isabs(os.path.expanduser(src)):
+            out.append(_norm(os.path.expanduser(src)))
+    return out
+
+
+def _in_skill_source(target: str, conf: "Config") -> bool:
+    return any(_inside(target, src) for src in conf.skill_sources)
 
 
 def _git(cwd: Path, *args: str) -> subprocess.CompletedProcess:
@@ -478,7 +495,8 @@ def check_mcp_db_write(tool: str, part: str, tool_input: dict, conf: Config, dec
     if slug is None or not conf.same_db_repo(slug):
         return
     if mcptools.verb(part) == "merge":   # 동사 자리만: `disable_pr_auto_merge`는 ask
-        dec.deny.append(f"이슈 DB PR 머지는 리뷰어가 GHE에서 한다. 도구가 머지하지 않는다 (규칙 6·7: {tool}).")
+        dec.deny.append(f"이슈 DB PR을 MCP로 직접 머지하지 않는다. 병합은 사용자가 고른 뒤 db_pr.py merge로만 하거나 리뷰어가 "
+                        f"GHE에서 한다 (규칙 7·11: {tool}).")
     else:
         dec.ask.append(f"이슈 DB 원격을 바꾸는 MCP 도구다({tool}). 변경·검증 결과를 보고 승인한 뒤에만 진행한다 (규칙 7).")
 
@@ -495,6 +513,25 @@ def _post_record(target: str, conf: Config) -> bool:
     """어느 프로필이든 `<work_dir>/<KEY>/post.approved.json|post.result.json`인가 (target은 `_norm` 경로)."""
     p = Path(target)
     return p.name in POST_RECORDS and any(_norm(p.parent.parent) == _norm(w) for w in conf.work_dirs)
+
+
+SCRIPT_RECORD_MSGS = {
+    "merge": "병합 기록(merge-offer.json)은 db_pr publish·merge만 쓴다. 직접 쓰거나 지우지 않는다 (규칙 7",
+    "patch": "스킬 제안 patch·기록(skill-suggestions/<이름>.patch·.meta.json)은 skill_patch.py만 쓴다. 직접 쓰거나 지우지 않는다 (규칙 12",
+}
+
+
+def _script_record(target: str, conf: Config) -> str | None:
+    """스크립트만 쓰는 기록이면 거부 문구 머리: `<work_dir>/<KEY>/merge-offer.json`, `<work_dir>/<KEY>/skill-suggestions/<이름>.patch`·
+    `<이름>.meta.json`(사본 폴더 `<이름>/<rel>`은 대상이 아니다). target은 `_norm` 경로."""
+    p = Path(target)
+    works = [_norm(w) for w in conf.work_dirs]
+    if p.name == "merge-offer.json" and _norm(p.parent.parent) in works:
+        return SCRIPT_RECORD_MSGS["merge"]
+    if (p.parent.name == "skill-suggestions" and _norm(p.parent.parent.parent) in works
+            and (p.name.endswith(".patch") or p.name.endswith(".meta.json"))):
+        return SCRIPT_RECORD_MSGS["patch"]
+    return None
 
 
 def _in_clone(target: str, conf: Config) -> bool:
@@ -521,9 +558,14 @@ def check_file(tool_input: dict, cwd: Path, conf: Config, dec: Decision) -> None
     if _post_record(target, conf):
         dec.deny.append(f"{POST_RECORD_MSG}: {raw}).")
         return
+    if _script_record(target, conf):
+        dec.deny.append(f"{_script_record(target, conf)}: {raw}).")
+        return
     if _in_clone(target, conf):
         dec.deny.append("이슈 DB clone은 도구가 직접 고치지 않는다. 직접 편집은 사용자가 한다 "
                         f"(규칙 8: {raw}). 도구 변경은 작업 계획과 db_pr stage로 작업 worktree에서 만든다.")
+    elif _in_skill_source(target, conf):
+        dec.ask.append(f"{SKILL_SOURCE_ASK} ({raw})")
 
 
 # -- Bash 명령 파싱 ------------------------------------------------------------------------
@@ -1380,7 +1422,8 @@ def check_gh(inv: Invocation, conf: Config, dec: Decision) -> None:
     if kind == "read" or not _gh_targets_db(inv, conf):
         return
     if kind == "merge":
-        dec.deny.append("이슈 DB PR 머지는 리뷰어가 GHE에서 한다. 도구가 머지하지 않는다 (규칙 6·7).")
+        dec.deny.append("이슈 DB PR을 gh로 직접 머지하지 않는다. 병합은 사용자가 고른 뒤 db_pr.py merge(승인 커밋·PR 검사 대조)로만 "
+                        "하거나 리뷰어가 GHE에서 한다 (규칙 7·11).")
     else:
         dec.ask.append("이슈 DB 원격을 바꾸는 gh 명령이다. 변경·검증 결과를 보고 승인한 뒤에만 진행한다 (규칙 7).")
 
@@ -1577,19 +1620,47 @@ def check_post_record_writes(inv: Invocation, conf: Config, dec: Decision) -> No
         if _post_record(target, conf):
             dec.deny.append(f"{POST_RECORD_MSG}: {word}).")
             return
+        if _script_record(target, conf):
+            dec.deny.append(f"{_script_record(target, conf)}: {word}).")
+            return
 
 
 PUBLISH_ASK = "db_pr.py publish는 이슈 DB에 push한다. 확인 화면을 승인한 뒤에만 진행한다 (규칙 7)."
+MERGE_ASK = ("db_pr.py merge·publish --and-merge는 이슈 DB PR을 main에 병합한다. 사용자가 push 전 확인 화면에서 "
+             "'push하고 바로 병합'을 고른 뒤(재시도는 사용자가 병합을 요청한 뒤)에만 진행한다 (규칙 7).")
+SKILL_APPLY_ASK = ("skill_patch.py --apply는 분석 스킬 소스의 워킹 트리를 바꾼다(커밋·push 안 함). patch를 보이고 사용자가 "
+                   "'적용'을 고른 뒤에만 진행한다 (규칙 12).")
+SKILL_SOURCE_ASK = ("분석 스킬 소스(analyzers.<카테고리>.source)는 skill_patch.py --apply로만 바꾼다. 사용자가 직접 요청한 "
+                    "편집일 때만 승인한다 (규칙 12)")
+
+
+def check_skill_source(inv: Invocation, conf: Config, dec: Decision) -> None:
+    """규칙 12(Bash): 파일 쓰기 대상이나 파일을 바꾸는 git 명령의 작업 디렉토리가 분석 스킬 소스 안이면 ask."""
+    for word in _write_targets(inv):
+        p = _expand(word)
+        if _in_skill_source(_norm(Path(p) if Path(p).is_absolute() else inv.cwd / p), conf):
+            dec.ask.append(f"{SKILL_SOURCE_ASK}: {word}")
+            return
+    if _base(inv.argv[0]) == "git":
+        call = GitCall(inv)
+        if call.sub in CLONE_GIT_SUBS | {"commit", "push", "stash"} and _in_skill_source(_norm(call.cwd), conf):
+            dec.ask.append(f"{SKILL_SOURCE_ASK}: git {call.sub}")
 
 
 def check_bash(command: str, cwd: Path, conf: Config, dec: Decision) -> None:
     check_raw_read(command, cwd, dec, conf)
     if conf.user is not None and word_net(command):   # 규칙 7: 명령 글 전체의 낱말 그물 하나 (argv·치환·heredoc 무관)
         dec.ask.append(PUBLISH_ASK)
+    if conf.user is not None and word_net(command, "db_pr", "merge"):        # 규칙 7: PR 바로 병합
+        dec.ask.append(MERGE_ASK)
+    if conf.user is not None and word_net(command, "skill_patch", "apply"):  # 규칙 12: 분석 스킬 소스 적용
+        dec.ask.append(SKILL_APPLY_ASK)
     for inv in invocations(command, cwd):
         name = _base(inv.argv[0])
         if conf.work_dirs:
             check_post_record_writes(inv, conf, dec)
+        if conf.skill_sources:
+            check_skill_source(inv, conf, dec)
         if conf.clones:
             check_clone_writes(inv, conf, dec)
         if name == "gh":
@@ -1656,7 +1727,9 @@ def _degraded(event: dict, why: str) -> tuple[dict | None, list[str]]:
         try:
             invs = invocations(str(tool_input.get("command") or ""), Path(str(event.get("cwd") or os.getcwd())))
             names = [_base(i.argv[0]) for i in invs]
-            risky = any(n in ("git", "gh") for n in names) or word_net(str(tool_input.get("command") or "")) or any(
+            cmd = str(tool_input.get("command") or "")
+            risky = any(n in ("git", "gh") for n in names) or word_net(cmd) or word_net(cmd, "db_pr", "merge") or \
+                word_net(cmd, "skill_patch", "apply") or any(
                 not _expand(t).startswith("/dev/") for i in invs for t in _write_targets(i))   # 파일 쓰기(clone일 수 있다)
         except Exception:  # noqa: BLE001 — 파싱도 못 하면 사람에게 넘긴다
             pass

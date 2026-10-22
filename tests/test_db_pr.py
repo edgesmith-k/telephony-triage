@@ -310,7 +310,7 @@ def test_source_outside_values_dry_run_and_forced_exit_3():
 SUMMARY_KEYS = ["source", "source_label", "issue", "branch", "reviewers", "open_prs", "files", "ids", "fixtures",
                 "drift_decisions", "readme_preview", "diff", "diff_total_lines", "diff_truncated", "checks", "verification",
                 "approval_needed", "notes", "commit_message", "pr_title", "push_allowed", "push_note", "pending_included",
-                "pr_body", "approved_hash"]
+                "pr_body", "approved_hash", "merge"]      # merge: 병합 자격(dry-run이 아닐 때, dbpr/merge.py eligibility)
 
 
 def test_summary_markdown_is_opt_in_and_leaves_json_and_state_files_alone():
@@ -2167,3 +2167,155 @@ def test_trace_note_unencodable_message_only_warns(tmp_path, capsys):
     from dbpr.lock import trace_note
     trace_note(tmp_path, "stage", result="error", message="깨진 글 \udc80")
     assert "작업 기록을 쓰지 못함(stage: UnicodeEncodeError)" in capsys.readouterr().err
+
+
+# -- PR 바로 병합 (publish --and-merge, db_pr merge, 06-collaboration.md §6.1) ------------------------------------
+
+
+def _published(ws: Workspace, job: str = "MOCK-7002", branch: str = "issue/MOCK-7002", *extra, env=None) -> dict:
+    _staged_job(ws, job)
+    out = _then_summary(ws, job, branch)
+    assert out.returncode == 0
+    ws.last_screen = out.stdout
+    return ws.db_pr(*_publish_args(ws, job, branch, "--commit", "--and-discard", *extra), env=env)
+
+
+def _merge(ws: Workspace, approved: str, job: str = "MOCK-7002", expect=0, wait: str = "0", **env) -> dict:
+    return ws.db_pr("merge", "--job", job, "--approved", approved, "--wait", wait, expect=expect, env=env or None)
+
+
+def _trace_merge(ws: Workspace, job: str = "MOCK-7002") -> list[dict]:
+    rows = [json.loads(x) for x in (ws.job_dir(job) / "trace.jsonl").read_text(encoding="utf-8").splitlines() if x]
+    return [r for r in rows if r.get("step") == "merge"]
+
+
+def test_screen_offers_combined_choice_and_publish_and_merge_merges_in_one_command():
+    ws = Workspace()
+    out = _published(ws, "MOCK-7002", "issue/MOCK-7002", "--and-merge", "--wait", "0")
+    screen = ws.last_screen.splitlines()
+    assert screen[-1].startswith("approved_hash: ") and screen[-3] == (
+        "병합: push 뒤 바로 병합할 수 있다(issue_db.merge: self — 검사·브랜치 보호 조건을 확인한 뒤) — 선택지: "
+        "push하고 바로 병합 / push만(리뷰어에게) / 취소")
+    head = out["head_sha"]
+    assert out["published"] is True and out["discard"]["discarded"] is True
+    assert out["merge"]["mode"] == "self" and out["merge"]["approved"] == head
+    assert out["merge"]["retry"] == f"db_pr merge --job MOCK-7002 --approved {head}"
+    res = out["merge"]["result"]
+    assert res["merged"] is True and res["method"] == "merge" and res["checks"] == "none"
+    pr = ws.prs()[0]
+    assert pr["state"] == "MERGED" and pr["deleteBranch"] is False and res["merge_commit"] == pr["mergeCommit"]["oid"]
+    assert ws.db_pr("lock", "status")["held"] is False and not ws.wt("MOCK-7002").exists()
+    again = _merge(ws, head)                                # 같은 커밋으로 이미 병합됨: 0
+    assert again["merged"] is True and again["already"] is True
+    status = ws.json("job_status.py", ["MOCK-7002"])
+    assert status["stage"]["id"] == "pr-merged" and res["merge_commit"][:12] in status["stage"]["label"]
+
+
+def test_publish_without_and_merge_leaves_pr_and_merge_needs_published_head():
+    ws = Workspace()
+    out = _published(ws)
+    head = out["head_sha"]
+    assert out["merge"] == {"mode": "self", "approved": head, "retry": f"db_pr merge --job MOCK-7002 --approved {head}"}
+    assert ws.prs()[0]["state"] == "OPEN"
+    offer = json.loads((ws.job_dir("MOCK-7002") / "merge-offer.json").read_text(encoding="utf-8"))
+    assert offer["mode"] == "self" and offer["head_sha"] == head and offer["pr"] == out["pr"]["number"]
+    clone_branch, clone_head = git(ws.clone, "rev-parse", "--abbrev-ref", "HEAD"), git(ws.clone, "rev-parse", "HEAD")
+    bad = _merge(ws, "0" * 40, expect=1)
+    assert bad["merged"] is False and "승인한 커밋이 아니다" in bad["reason"] and ws.prs()[0]["state"] == "OPEN"
+    done = _merge(ws, head[:12])
+    assert done["merged"] is True and ws.prs()[0]["mergedWith"] == "merge"
+    assert git(ws.clone, "rev-parse", "--abbrev-ref", "HEAD") == clone_branch and \
+        git(ws.clone, "rev-parse", "HEAD") == clone_head, "사용자 clone은 fetch만"
+    assert [r["merged"] for r in _trace_merge(ws)] == [False, True]
+
+
+def test_merge_refuses_or_waits_and_leaves_pr_with_retry():
+    ws = Workspace()
+    head = _published(ws)["head_sha"]
+    retry = f"db_pr merge --job MOCK-7002 --approved {head}"
+    for env, want in (({"MOCK_GH_CHECKS": "pending"}, "검사 대기(db-check)"),
+                      ({"MOCK_GH_CHECKS": "fail"}, "PR 검사 실패(db-check)"),
+                      ({"MOCK_GH_MERGE_STATE": "BLOCKED"}, "검사 대기(브랜치 보호"),
+                      ({"MOCK_GH_MERGE_STATE": "BLOCKED", "MOCK_GH_CHECKS": "pass"}, "리뷰어가 GHE에서 머지"),
+                      ({"MOCK_GH_MERGE_STATE": "UNKNOWN"}, "GHE 병합 가능 상태 확인 중(UNKNOWN)"),
+                      ({"MOCK_GH_MERGE_STATE": "BEHIND"}, "sync-pr issue/MOCK-7002"),
+                      ({"MOCK_GH_FAIL_MERGE": "1"}, "gh pr merge 실패")):
+        out = _merge(ws, head, expect=1, **env)
+        assert out["merged"] is False and want in out["reason"] and out["left"] == "PR은 그대로 둔다", (env, out)
+        assert out["retry"] == retry and ws.prs()[0]["state"] == "OPEN"
+    waited = _merge(ws, head, expect=1, wait="1", MOCK_GH_CHECKS="pending")    # 기다려도 안 되면 사유·재시도 명령
+    assert "1초 기다려도 안 됐다" in waited["reason"] and waited["waited"] >= 1 and waited["retry"] == retry
+    ok = _merge(ws, head, MOCK_GH_CHECKS="pass", MOCK_GH_MERGE_METHODS="squash,rebase")
+    assert ok["merged"] is True and ok["checks"] == "pass" and ok["method"] == "squash"
+
+
+def test_merge_treats_missing_checks_as_pending_outside_local_ci_mode():
+    ws = Workspace()
+    head = _published(ws)["head_sha"]
+
+    def to_actions(c):
+        cfg = c / "issue-db.config.yaml"
+        cfg.write_text(cfg.read_text(encoding="utf-8").replace("ci_mode: local", "ci_mode: actions"), encoding="utf-8")
+    ws.push_main(to_actions)
+    out = _merge(ws, head, expect=1)
+    assert out["merged"] is False and "검사 대기(검사 결과 없음(ci_mode: actions))" in out["reason"]
+
+
+def test_merge_refuses_when_pr_head_moved_or_merged_elsewhere():
+    ws = Workspace()
+    head = _published(ws)["head_sha"]
+    path = ws.gh_state / "prs.json"
+    state = json.loads(path.read_text(encoding="utf-8"))
+    state["prs"][0]["headRefOid"] = "f" * 40                # 승인 뒤 누가 PR 브랜치에 push했다
+    path.write_text(json.dumps(state), encoding="utf-8")
+    out = _merge(ws, head, expect=1)
+    assert "승인한 커밋 뒤에 바뀌었다" in out["reason"] and ws.prs()[0]["state"] == "OPEN"
+    state["prs"][0]["state"] = "MERGED"                     # 다른 커밋으로 병합됨 — already로 보지 않는다
+    path.write_text(json.dumps(state), encoding="utf-8")
+    out = _merge(ws, head, expect=1)
+    assert out["merged"] is False and "다른 커밋으로 병합됐다" in out["reason"]
+
+
+def test_merge_refuses_when_main_moved_after_publish():
+    """strict 검사가 없는 레포에서도 main이 PR 뒤에 바뀌면 병합하지 않는다(같은 ID 중복 방지 — sync-pr로 다시 맞춘다)."""
+    ws = Workspace()
+    head = _published(ws)["head_sha"]
+    ws.push_main(lambda c: (c / "NOTE.txt").write_text("다른 PR\n", encoding="utf-8"))
+    out = _merge(ws, head, expect=1)
+    assert out["merged"] is False and "sync-pr issue/MOCK-7002" in out["reason"] and ws.prs()[0]["state"] == "OPEN"
+
+
+def test_review_mode_screen_has_no_merge_choice_and_merge_refuses():
+    ws = Workspace()
+    ws.json("config.py", ["set", "issue_db.merge", "review"])
+    out = _published(ws, "MOCK-7002", "issue/MOCK-7002", "--and-merge", "--wait", "0")
+    assert "병합: 리뷰어가 GHE에서 머지한다 — issue_db.merge: review — 리뷰어가 GHE에서 머지한다" in ws.last_screen
+    assert "push하고 바로 병합" not in ws.last_screen
+    assert out["merge"]["mode"] == "review" and out["merge"]["result"]["merged"] is False
+    refused = _merge(ws, out["head_sha"], expect=1)
+    assert refused["merged"] is False and "review" in refused["reason"] and ws.prs()[0]["state"] == "OPEN"
+    assert ws.db_pr("merge", "--job", "MOCK-0000", "--approved", "a" * 40, expect=2) == {}   # 병합 기록 없음
+
+
+def test_merge_eligibility_rules_and_check_rollup(tmp_path):
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    from dbpr import merge as m
+
+    assert m.rollup_state([]) == ("none", [])
+    assert m.rollup_state([{"name": "a", "status": "COMPLETED", "conclusion": "SKIPPED"},
+                           {"context": "b", "state": "SUCCESS"}]) == ("pass", [])
+    assert m.rollup_state([{"name": "a", "status": "QUEUED", "conclusion": None}]) == ("pending", ["a"])
+    assert m.rollup_state([{"context": "b", "state": "EXPECTED"}]) == ("pending", ["b"])
+    assert m.rollup_state([{"name": "a", "status": "COMPLETED", "conclusion": "FAILURE"},
+                           {"name": "c", "status": "IN_PROGRESS"}]) == ("fail", ["a"])
+    assert m.merge_mode({}) == ("self", None)
+    assert m.merge_mode({"issue_db": {"merge": "auto"}})[0] == "review"      # 모르는 값은 안전한 쪽
+    assert m.wait_seconds({}) == 420 and m.wait_seconds({"issue_db": {"merge_wait_seconds": 99999}}) == 480
+    assert m.wait_seconds({"issue_db": {"merge_wait_seconds": "x"}}) == 420 and m.wait_seconds({}, 0) == 0
+    assert m.maintainer_paths(["parser-rules/x.yaml", ".githooks/pre-push", "issue-db.config.yaml", "docs/a.md",
+                               "data/README.md", "issue-db.config.yaml.bak"]) == \
+        ["parser-rules/x.yaml", ".githooks/pre-push", "issue-db.config.yaml", "docs/a.md"]
+    assert m.eligibility({}, {"result": "needs-approval"}, [])[0] == "review"
+    assert m.eligibility({}, {"result": "ok"}, ["parser-rules/data.yaml"]) == \
+        ("review", "메인테이너 경로 변경(parser-rules/data.yaml) — 메인테이너 리뷰 뒤 GHE에서 머지한다")
+    assert m.eligibility({}, {"result": "ok"}, ["data/x.md"]) == ("self", None)

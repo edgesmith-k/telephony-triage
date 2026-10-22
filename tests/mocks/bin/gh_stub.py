@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """`gh` CLI 스텁 (15-local-draft.md §15.2). 사내 GHE를 대신한다.
 
-지원: `auth status`, `pr create`, `pr list`(`--search`, `--author`), `pr view`, `pr edit`.
+지원: `auth status`, `pr create`, `pr list`(`--search`, `--author`), `pr view`, `pr edit`, `pr merge`, `repo view`.
 상태는 `tests/mocks/gh-state/prs.json`에 저장한다
 (`MOCK_GH_STATE_DIR`로 바꿀 수 있다).
 
@@ -14,12 +14,17 @@
   MOCK_GH_USER        `--author @me`가 가리키는 사용자 (기본 mock-user). `pr create`가 author로 기록한다
   MOCK_GH_FAIL_LIST=1 `pr list`를 실패시킨다 (my-prs의 gh 실패 경로 시험)
   MOCK_GH_BAD_JSON=<문자열>  `pr list`가 그 문자열(1이면 html)을 stdout에 내고 0으로 끝난다 (my-prs 경고 경로 시험)
+  MOCK_GH_CHECKS      `pr view`의 statusCheckRollup: none(기본, 빈 목록) | pass | pending | fail
+  MOCK_GH_MERGE_STATE `pr view`의 mergeStateStatus (기본 CLEAN)
+  MOCK_GH_MERGE_METHODS `repo view`가 허용하는 병합 방식(쉼표, 기본 merge,squash,rebase)
+  MOCK_GH_FAIL_MERGE=1 `pr merge`를 실패시킨다
   GH_HOST             호스트 이름 (없으면 ghe.mock.invalid)
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import subprocess
@@ -279,14 +284,70 @@ def cmd_pr(argv: list[str]) -> int:
             return 0
         if args.json_fields is not None:
             fields = [f for f in args.json_fields.split(",") if f]
-            print(json.dumps({k: match.get(k) for k in fields}, ensure_ascii=False))
+            view = {**match, "statusCheckRollup": _rollup(), "mergeStateStatus": os.environ.get("MOCK_GH_MERGE_STATE") or "CLEAN",
+                    "isDraft": bool(match.get("isDraft"))}
+            print(json.dumps({k: view.get(k) for k in fields}, ensure_ascii=False))
         else:
             print(f"#{match['number']} {match['title']}")
             print(match["body"])
         return 0
 
+    if sub == "merge":
+        parser = argparse.ArgumentParser(add_help=False)
+        parser.add_argument("selector")
+        parser.add_argument("--merge", action="store_true")
+        parser.add_argument("--squash", action="store_true")
+        parser.add_argument("--rebase", action="store_true")
+        parser.add_argument("--match-head-commit", default=None)
+        parser.add_argument("--delete-branch", "-d", action="store_true")
+        args, _ = parser.parse_known_args(rest)
+        match = next((p for p in state["prs"] if p["repo"] == repo and str(p["number"]) == args.selector), None)
+        if match is None:
+            print(f"no pull requests found for {args.selector!r}", file=sys.stderr)
+            return 1
+        methods = [m for m in ("merge", "squash", "rebase") if getattr(args, m)]
+        if len(methods) != 1:
+            print("--merge, --rebase, --squash 중 하나만", file=sys.stderr)
+            return 1
+        if os.environ.get("MOCK_GH_FAIL_MERGE") == "1":
+            print("gh 스텁: pr merge 실패 (MOCK_GH_FAIL_MERGE)", file=sys.stderr)
+            return 1
+        if match["state"] != "OPEN":
+            print(f"Pull request #{match['number']} is not open", file=sys.stderr)
+            return 1
+        if args.match_head_commit and args.match_head_commit != match.get("headRefOid"):
+            print("Head branch was modified. Review and try the merge again.", file=sys.stderr)
+            return 1
+        oid = hashlib.sha1(f"{repo}#{match['number']}:{match.get('headRefOid')}".encode()).hexdigest()
+        match.update(state="MERGED", mergeCommit={"oid": oid}, mergedWith=methods[0],
+                     deleteBranch=args.delete_branch)
+        save_state(state)
+        print(f"✓ Merged pull request #{match['number']}")
+        return 0
+
     print(f"gh 스텁: 지원하지 않는 pr 하위 명령: {sub}", file=sys.stderr)
     return 2
+
+
+def _rollup() -> list[dict]:
+    kind = os.environ.get("MOCK_GH_CHECKS") or "none"
+    if kind == "pass":
+        return [{"__typename": "CheckRun", "name": "db-check", "status": "COMPLETED", "conclusion": "SUCCESS"}]
+    if kind == "pending":
+        return [{"__typename": "CheckRun", "name": "db-check", "status": "IN_PROGRESS", "conclusion": ""}]
+    if kind == "fail":
+        return [{"__typename": "StatusContext", "context": "db-check", "state": "FAILURE"}]
+    return []
+
+
+def cmd_repo(argv: list[str]) -> int:
+    if not argv or argv[0] != "view":
+        print(f"gh 스텁: 지원하지 않는 repo 하위 명령: {argv}", file=sys.stderr)
+        return 2
+    allowed = set((os.environ.get("MOCK_GH_MERGE_METHODS") or "merge,squash,rebase").split(","))
+    print(json.dumps({"mergeCommitAllowed": "merge" in allowed, "squashMergeAllowed": "squash" in allowed,
+                      "rebaseMergeAllowed": "rebase" in allowed}))
+    return 0
 
 
 def main(argv: list[str]) -> int:
@@ -300,6 +361,8 @@ def main(argv: list[str]) -> int:
         return cmd_auth(argv[1:])
     if argv[0] == "pr":
         return cmd_pr(argv[1:])
+    if argv[0] == "repo":
+        return cmd_repo(argv[1:])
     print(f"gh 스텁: 지원하지 않는 명령: {argv[0]}", file=sys.stderr)
     return 2
 

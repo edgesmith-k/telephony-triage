@@ -28,7 +28,7 @@ transcript의 Bash 호출에 시각으로 고정하고(`shown.anchor`: tool_use 
 - `post`(PostToolUse Bash): 명령에 기록 스크립트 이름이 있고 60초 안에 그 스크립트의 의무 기록이 있으면 `additionalContext`로
   "이 출력은 사용자에게 안 보인다, 다음 메시지에 전문을 글자 그대로" 안내만 한다.
 
-같은 의무 키(`push:<hash>`·`post:<sha 앞 16자>`·`report:<KEY>#<run>`·`draft:<sha1 12자>`·`patch:<KEY>/<스킬 이름>`)로 막은 횟수(transcript의 표식
+같은 의무 키(`push:<hash>`·`post:<sha 앞 16자>`·`report:<KEY>#<run>`·`draft:<sha1 12자>`·`patch:<KEY>/<스킬 이름>`·`apply:<KEY>/<스킬 이름>`)로 막은 횟수(transcript의 표식
 `[telephony-triage] show-guard <key>`가 든 Stop 피드백·거부된 도구 결과, 그 의무가 생긴 뒤)가 MAX_BLOCKS(2)에 이르면 더 막지
 않고 `systemMessage`로 사용자에게 직접 확인을 안내한다. 거부된 호출을 똑같이(`description` 제외) 사이 글·질문·사용자 입력 없이
 다시 한 거부는 키마다 BLIND_FREE(1)번까지 세지 않는다 — 그 거부 문구에는 RETRY_NOTE를 붙인다. Stop이 연이어 막혔는데

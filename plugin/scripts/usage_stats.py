@@ -209,7 +209,7 @@ def _bash_marker(cmd: str) -> str | None:
     for key, pattern in (("explore", rf"\btriage\.py\b{_ARG}\bexplore\b"), ("basic", rf"\btriage\.py\b{_ARG}\brun\b"),
                          ("new_cause", rf"\bdb_verify\.py\b{_ARG}\brules\b{_ARG}--draft|\bparse_logcat\.py\b{_ARG}\bcut\b|"
                                        rf"\bdb_add\.py\b{_ARG}\bsimilar\b"),
-                         ("write", rf"\bdb_pr\.py\b{_ARG}\b(?:preflight|stage|summary|publish|discard|find-plan)\b"),
+                         ("write", rf"\bdb_pr\.py\b{_ARG}\b(?:preflight|stage|summary|publish|discard|merge|find-plan)\b"),
                          ("post", r"\bissue_post\.py\b")):
         if re.search(pattern, cmd):
             return key

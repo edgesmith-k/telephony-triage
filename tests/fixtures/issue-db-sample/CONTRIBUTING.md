@@ -10,7 +10,7 @@
 | **도구 경로** (권장) | 분석 결과, 수동 기록, 수정 상태·검증 반영 | Claude Code 플러그인 커맨드(`analyze`, `record`, `verify-fix`, `validate --cause`, `fix-submitted`). 도구가 **작업 계획을 최신 main 위에 적용**해서 브랜치와 PR을 만든다 |
 | **직접 편집** | 월간 리뷰 정리, 유형 이동·병합, 스키마 마이그레이션, 새 카테고리, 사후 정리 | 자기 로컬 브랜치에서 편집 → `db_build --write` → `/telephony-triage:validate` → push |
 
-- **main에 직접 push하지 않는다.** 모든 변경은 PR + CODEOWNERS 승인 1명 이상이다.
+- **main에 직접 push하지 않는다.** 모든 변경은 PR이다. PR을 만든 사람이 바로 병합할 수 있고(브랜치 보호 조건 충족 시), CODEOWNERS에 오너가 적힌 경로는 그 오너의 승인이 필요하다.
 - PR 하나에는 Jira 하나(또는 리뷰 정리 한 묶음)만 넣는다. 예외: pending 피드백 파일은 analyze PR에 함께 올릴 수 있다.
 - PR 제목은 `[<원인 ID 또는 유형 ID>] <요약>`이다.
 

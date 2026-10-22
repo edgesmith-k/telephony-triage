@@ -256,3 +256,172 @@ def test_copy_error_is_a_memo(env, monkeypatch):
     doc, code = skill_patch.run(args, {})
     assert code == 1 and doc["status"] == "memo" and "복사하지 못했다(Error)" in doc["lines"][0]
     assert not env["patch"].exists() and records(env)[-1]["lines"] == doc["lines"]
+
+
+# -- 스킬 소스 적용 (--source / analyzers.<카테고리>.source, --apply) ----------------------------------------
+
+APPLIED_HEAD = "스킬 소스에 적용함(커밋 안 함): "
+APPLY_MEMO_HEAD = "스킬 소스에 적용 안 함(patch는 남김): "
+
+
+def _git(cwd: Path, *args) -> str:
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    env.update(GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@x", GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@x")
+    return subprocess.run(["git", *args], cwd=cwd, env=env, capture_output=True, text=True, check=True).stdout
+
+
+@pytest.fixture()
+def src(tmp_path):
+    """분석 스킬 소스 checkout: 저장소 안의 하위 폴더 `skills/<이름>`(--directory 경로를 시험한다)."""
+    repo = tmp_path / "analyzer-src"
+    skill = repo / "skills" / NAME
+    (skill / "references").mkdir(parents=True)
+    (skill / "SKILL.md").write_text("---\nname: mock-data-analyzer\n---\n", encoding="utf-8")
+    (skill / REL).write_text(ORIG, encoding="utf-8", newline="\n")
+    _git(repo, "init", "-q")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "init")
+    return skill
+
+
+def _offer(env, src_dir):
+    put(env, REL, ORIG + ADDED)
+    proc = call(env, "--source", str(src_dir))
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    return proc.stdout.splitlines()
+
+
+def _sha(env) -> str:
+    return hashlib.sha256(env["patch"].read_bytes()).hexdigest()
+
+
+def apply(env, *extra, sha=None):
+    return run("skill_patch.py", [KEY, "--name", NAME, "--apply", "--sha", sha or _sha(env), *extra], env=env["env"])
+
+
+def test_source_offer_shows_masked_patch_and_apply_changes_working_tree_only(env, src):
+    sk_before = tree(env["sk"])
+    lines = _offer(env, src)
+    sha = _sha(env)
+    assert lines[2] == (f"스킬 소스 적용 대기: {src.resolve()} — 아래 patch(마스킹됨, sha256 {sha})를 그대로 보이고 "
+                        "바로 적용할지 묻는다")
+    assert lines[3] == "```diff" and lines[-1] == "```" and f"+{ADDED.rstrip()}" in lines
+    assert lines[4:-1] == env["patch"].read_text(encoding="utf-8").rstrip("\n").split("\n")
+    assert (src / REL).read_text(encoding="utf-8") == ORIG, "patch를 만들 때는 스킬 소스를 바꾸지 않는다"
+    (rec,) = records(env)
+    assert rec["key"] == f"patch:{KEY}/{NAME}" and rec["lines"] == lines      # patch 전문도 보일 줄(표시 기록)
+    repo = src.parent.parent
+    head, index = _git(repo, "rev-parse", "HEAD"), (repo / ".git" / "index").read_bytes()
+    proc = apply(env)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert proc.stdout.splitlines() == [f"{APPLIED_HEAD}{src.resolve()} — 확인 후 직접 커밋·push", f"- {REL} +1 −0"]
+    assert (src / REL).read_text(encoding="utf-8") == ORIG + ADDED
+    assert _git(repo, "rev-parse", "HEAD") == head, "커밋하지 않는다"
+    assert (repo / ".git" / "index").read_bytes() == index, "index도 바꾸지 않는다(워킹 트리만)"
+    assert _git(repo, "status", "--porcelain").strip() == f"M skills/{NAME}/{REL}"
+    assert tree(env["sk"]) == sk_before, "설치된 분석 스킬 폴더(SK)는 그대로"
+    rec = records(env)[-1]
+    assert rec["key"] == f"apply:{KEY}/{NAME}" and rec["kind"] == "patch" and rec["lines"] == proc.stdout.splitlines()
+
+
+def test_source_from_config_and_json(env, src):
+    cfg = env["base"] / "config.yaml"
+    cfg.write_text(cfg.read_text(encoding="utf-8") + f"analyzers:\n  data:\n    skill: {NAME}\n    source: {src}\n",
+                   encoding="utf-8")
+    put(env, REL, ORIG + ADDED)
+    js = json.loads(call(env, "--json").stdout)
+    assert js["status"] == "ok" and js["source"] == str(src.resolve()) and js["apply"] == {"offer": True, "sha256": _sha(env), "masked_added": 0}
+    doc = json.loads(apply(env, "--json").stdout)
+    assert doc["status"] == "applied" and doc["files"] == [{"path": REL, "added": 1, "removed": 0}]
+
+
+def test_no_source_keeps_old_lines_and_apply_needs_source(env):
+    put(env, REL, ORIG + ADDED)
+    proc = call(env)
+    assert proc.returncode == 0 and len(proc.stdout.splitlines()) == 2        # 안내 줄 + 파일별 줄 수(이전 그대로)
+    proc = apply(env)
+    assert proc.returncode == 1 and "적용을 제안하지 않았다" in proc.stdout
+    proc = run("skill_patch.py", [KEY, "--name", NAME], env=env["env"])
+    assert proc.returncode == 2 and "--skill-dir가 필요하다" in proc.stderr
+
+
+def test_not_a_git_repo_is_refused(env, tmp_path):
+    plain = tmp_path / "plain" / NAME
+    (plain / "references").mkdir(parents=True)
+    (plain / REL).write_text(ORIG, encoding="utf-8", newline="\n")
+    lines = _offer(env, plain)
+    assert lines[2].startswith("스킬 소스에 바로 적용할 수 없음(patch만 남김): git 저장소가 아니다") and len(lines) == 3
+    proc = apply(env)                                       # 제안하지 않은 patch는 적용하지 않는다
+    assert proc.returncode == 1 and proc.stdout.startswith(APPLY_MEMO_HEAD + "patch를 만들 때 스킬 소스 적용을 제안하지 않았다")
+    assert (plain / REL).read_text(encoding="utf-8") == ORIG and env["patch"].is_file()
+
+
+def test_dirty_target_file_is_refused(env, src):
+    _offer(env, src)
+    (src / REL).write_text(ORIG + "로컬 수정\n", encoding="utf-8")
+    proc = apply(env)
+    assert proc.returncode == 1 and "커밋하지 않은 변경이 있다" in proc.stdout and REL in proc.stdout
+    assert (src / REL).read_text(encoding="utf-8") == ORIG + "로컬 수정\n"
+    rec = records(env)[-1]
+    assert rec["key"] == f"apply:{KEY}/{NAME}" and rec["lines"] == proc.stdout.splitlines()
+
+
+def test_apply_check_failure_and_sha_mismatch(env, src):
+    repo = src.parent.parent
+    _offer(env, src)
+    proc = apply(env, sha="0" * 64)
+    assert proc.returncode == 1 and "sha256 불일치" in proc.stdout
+    (src / REL).write_text("# 완전히 다른 내용\n", encoding="utf-8")
+    _git(repo, "commit", "-q", "-am", "upstream change")
+    proc = apply(env)
+    assert proc.returncode == 1 and proc.stdout.startswith(APPLY_MEMO_HEAD + "git apply --check 실패")
+    assert (src / REL).read_text(encoding="utf-8") == "# 완전히 다른 내용\n"
+
+
+def test_apply_target_is_only_the_source_shown_at_offer(env, src, tmp_path):
+    """--apply는 --source를 받지 않고, meta에 기록한(제안 때 보인) 스킬 소스에만 적용한다. meta가 없거나 설정이 바뀌면 거부."""
+    _offer(env, src)
+    proc = apply(env, "--source", str(tmp_path))
+    assert proc.returncode == 2 and "--source 없이" in proc.stderr
+    meta = env["job"] / "skill-suggestions" / f"{NAME}.meta.json"
+    saved = meta.read_text(encoding="utf-8")
+    assert json.loads(saved)["source"] == str(src.resolve())
+    meta.unlink()
+    proc = apply(env)
+    assert proc.returncode == 1 and "patch 기록(meta)이 없거나" in proc.stdout
+    meta.write_text(saved, encoding="utf-8")
+    other = tmp_path / "other-skill"
+    other.mkdir()
+    cfg = env["base"] / "config.yaml"
+    cfg.write_text(cfg.read_text(encoding="utf-8") + f"analyzers:\n  data:\n    skill: {NAME}\n    source: {other}\n",
+                   encoding="utf-8")
+    proc = apply(env)
+    assert proc.returncode == 1 and "설정된 스킬 소스가 patch를 보일 때와 다르다" in proc.stdout
+    assert (src / REL).read_text(encoding="utf-8") == ORIG
+
+
+def test_large_patch_is_not_offered_and_masked_added_lines_are_noted(env, src):
+    put(env, REL, ORIG + "".join(f"{i}. 줄\n" for i in range(300)))
+    lines = call(env, "--source", str(src)).stdout.splitlines()
+    assert lines[-1].startswith("스킬 소스에 바로 적용할 수 없음(patch만 남김): patch가 커서(") and "patch 파일을 열어 확인" in lines[-1]
+    put(env, REL, ORIG + "5. 재현 단말 imei=490154203237518 기록\n")
+    lines = call(env, "--source", str(src)).stdout.splitlines()
+    assert lines[2].endswith(" — 추가 줄 1개가 마스킹으로 바뀜 — placeholder가 소스에 들어간다")
+
+
+def test_never_applies_to_installed_skill_dir(env, tmp_path):
+    """SK(설치된 분석 스킬 폴더)나 `.claude/plugins` 아래를 스킬 소스로 줘도 제안·적용하지 않는다."""
+    subprocess.run(["git", "init", "-q", str(env["sk"])], check=True)
+    _git(env["sk"], "add", "-A")
+    _git(env["sk"], "commit", "-q", "-m", "x")
+    before = tree(env["sk"])
+    lines = _offer(env, env["sk"])
+    assert "SK" in lines[2] and "플러그인 캐시" in lines[2] and lines[2].startswith("스킬 소스에 바로 적용할 수 없음")
+    assert apply(env).returncode == 1 and tree(env["sk"]) == before
+    cache = tmp_path / ".claude" / "plugins" / "cache" / NAME
+    (cache / "references").mkdir(parents=True)
+    (cache / REL).write_text(ORIG, encoding="utf-8")
+    subprocess.run(["git", "init", "-q", str(cache)], check=True)
+    lines = _offer(env, cache)
+    assert "설치된 플러그인 폴더" in lines[2]
+    assert apply(env).returncode == 1 and (cache / REL).read_text(encoding="utf-8") == ORIG
