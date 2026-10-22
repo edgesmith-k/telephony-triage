@@ -78,6 +78,7 @@ SHOWN_PATHS = ("tests/skill_evals/shown_infer.py", "tests/helpers/shown_records.
 SHOWN_TESTS = {SKILL_EVAL_TEST, "tests/test_shown.py", "tests/test_show_guard.py", "tests/test_db_verify.py"}
 SAFETY_TEST = "tests/test_safety.py"      # plugin/scripts가 바뀌면 항상 포함
 MAX_IMPORTERS = 8                           # 간접 importer가 이보다 많으면 공용 모듈
+STATIC_PACKAGES = {"dbpr", "dbadd", "triagelib"}   # import 문으로만 쓰는 패키지(레지스트리가 이름으로 부르는 platforms·trackers·adapters·parser_backends 제외)
 GENERIC_FIXTURE_DIRS = {"logs", "plans", "golden", "scenarios"}   # 디렉토리 이름만으로는 너무 넓다
 NO_TEST_ROOT_FILES = {".gitignore", ".gitattributes"}
 
@@ -222,7 +223,7 @@ def references_module(text: str, imports: set[str], mod: str, rel: str) -> bool:
         return True
     stem = rel[len(SCRIPTS) + 1:]
     patterns = [rf"\b{re.escape(last)}\.py\b", rf"scripts/{re.escape(last)}\b", re.escape(stem)]
-    if "." not in mod:      # 따옴표 이름 호출은 최상위 스크립트만(`dbpr.merge`의 "merge"는 흔한 값이다)
+    if mod.split(".", 1)[0] not in STATIC_PACKAGES:   # 정적 import 패키지는 이름 호출이 없다("merge"·"core"는 흔한 값)
         patterns.append(rf"""["']{re.escape(last)}["']""")
     return any(re.search(p, text) for p in patterns)
 
