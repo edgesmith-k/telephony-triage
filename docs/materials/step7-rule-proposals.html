@@ -82,7 +82,7 @@ pre { font-family: var(--mono); font-size: .8rem; background: var(--off-soft); b
         <ol class="steps">
           <li>분석 스킬이 로그를 보고 의견을 낸다</li>
           <li>의견이 리포트에 적힌다</li>
-          <li class="good"><b>분류를 정한 뒤 "이 제안 받을까요?"라고 묻는다</b> (기본은 아니오)</li>
+          <li class="good"><b>분류를 정한 뒤 "이 제안 받을까요?"라고 묻는다</b> (여러 개 고를 수 있음)</li>
         </ol>
       </div>
     </div>
@@ -109,7 +109,7 @@ pre { font-family: var(--mono); font-size: .8rem; background: var(--off-soft); b
   <section>
     <h2>실제 화면은 이렇게 보입니다</h2>
     <div class="chat">
-      <div class="msg claude"><div class="who">Claude</div>심층 분석이 규칙을 제안했습니다. 받을 줄을 고르세요 (기본: 아무것도 안 받음).<br>1. [이슈 DB] 시그니처에 "데이터 설정 꺼짐" 조건 추가<br>2. [스킬] 점검 목록에 설정 화면 경로 확인 추가</div>
+      <div class="msg claude"><div class="who">Claude</div>심층 분석이 규칙 2개를 제안했습니다. 받을 것을 고르세요(여러 개 가능).<br>1. [이슈 DB] 시그니처에 "데이터 설정 꺼짐" 조건 추가<br>2. [스킬] 점검 목록에 설정 화면 경로 확인 추가<br>3. 둘 다<br>4. 받지 않음 (기본)</div>
       <div class="msg user"><div class="who">사용자</div>2번만</div>
       <div class="msg claude"><div class="who">Claude</div>스킬 제안 patch(적용 안 함, 마스킹됨): <code>…/MOCK-1234/skill-suggestions/data-analyzer.patch</code> — 분석 스킬 담당자에게 전달, 담당자가 검토 후 스킬 소스에서 git apply<br><code>references/DATA-001.md  +1 −0</code></div>
     </div>
@@ -118,7 +118,7 @@ pre { font-family: var(--mono); font-size: .8rem; background: var(--off-soft); b
   <section>
     <h2>알아 둘 것</h2>
     <ul class="plain">
-      <li>묻는 건 한 번뿐이고 기본은 "아니오"입니다. 안 받으면 예전과 똑같습니다.</li>
+      <li>묻는 건 한 번뿐이고 여러 개를 함께 고를 수 있습니다. 그냥 넘기면 "받지 않음"으로 처리해 규칙이 저절로 늘지 않습니다(규칙 추가는 사용자 확인 후에만). 안 받으면 예전과 똑같습니다.</li>
       <li>분석 스킬이 제안을 내지 않으면 이 질문도 나오지 않습니다.</li>
       <li>수정 파일에는 마스킹된 값만 들어갑니다. 마스킹 때문에 담당자 쪽에서 적용이 안 될 것 같으면 파일을 만들지 않고 메모로만 알려 줍니다.</li>
     </ul>
