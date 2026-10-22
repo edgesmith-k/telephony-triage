@@ -109,7 +109,7 @@ pre { font-family: var(--mono); font-size: .8rem; background: var(--off-soft); b
   <section>
     <h2>실제 화면은 이렇게 보입니다</h2>
     <div class="chat">
-      <div class="msg claude"><div class="who">Claude</div>심층 분석이 규칙 2개를 제안했습니다. 받을 것을 고르세요(여러 개 가능).<br>1. [이슈 DB] 시그니처에 "데이터 설정 꺼짐" 조건 추가<br>2. [스킬] 점검 목록에 설정 화면 경로 확인 추가<br>3. 둘 다<br>4. 받지 않음 (기본 — 확인 안 한 제안은 반영하지 않으려고)</div>
+      <div class="msg claude"><div class="who">Claude</div>심층 분석이 규칙 2개를 제안했습니다. 받을 것을 고르세요(여러 개 가능).<br>1. [이슈 DB] 시그니처에 "데이터 설정 꺼짐" 조건 추가<br>2. [스킬] 점검 목록에 설정 화면 경로 확인 추가<br>3. 모두<br>4. 받지 않음 (기본 — 확인 안 한 제안은 반영하지 않으려고)</div>
       <div class="msg user"><div class="who">사용자</div>2번만</div>
       <div class="msg claude"><div class="who">Claude</div>스킬 제안 patch(적용 안 함, 마스킹됨): <code>…/MOCK-1234/skill-suggestions/data-analyzer.patch</code> — 직접 검토해 스킬 소스의 dev 브랜치에 git apply, main에는 PR로 반영<br><code>references/DATA-001.md  +1 −0</code><br>스킬 소스 적용 대기: <code>~/work/data-analyzer/skills/data-analyzer</code> — 아래 patch(마스킹됨, sha256 …)를 그대로 보이고 바로 적용할지 묻는다<br><code>+4. 설정 화면 경로(설정 &gt; 네트워크 &gt; 모바일 데이터)를 본다.</code><br>스킬 소스(<code>~/work/data-analyzer/skills/data-analyzer</code>)에 바로 적용할까요? (적용 / patch만 남김)</div>
       <div class="msg user"><div class="who">사용자</div>적용</div>
