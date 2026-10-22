@@ -221,8 +221,9 @@ def references_module(text: str, imports: set[str], mod: str, rel: str) -> bool:
     if last in imports and "." not in mod:
         return True
     stem = rel[len(SCRIPTS) + 1:]
-    patterns = [rf"\b{re.escape(last)}\.py\b", rf"""["']{re.escape(last)}["']""",
-                rf"scripts/{re.escape(last)}\b", re.escape(stem)]
+    patterns = [rf"\b{re.escape(last)}\.py\b", rf"scripts/{re.escape(last)}\b", re.escape(stem)]
+    if "." not in mod:      # 따옴표 이름 호출은 최상위 스크립트만(`dbpr.merge`의 "merge"는 흔한 값이다)
+        patterns.append(rf"""["']{re.escape(last)}["']""")
     return any(re.search(p, text) for p in patterns)
 
 

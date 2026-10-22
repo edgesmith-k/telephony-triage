@@ -26,7 +26,7 @@ import time
 
 import yaml
 
-from common import masking, userconfig
+from common import masking, userconfig, yamlio
 from common.exitcodes import CHECK_FAILED, OK, USAGE
 
 from .lock import JOB_KEY_RE, PLAN, UsageError, _iso, _read_json, _write_json, now, trace_note
@@ -190,7 +190,7 @@ def _ci_mode(ctx: Ctx) -> str:
     """fetch한 `origin/<base>`의 `issue-db.config.yaml` `ci_mode`(키가 없으면 local, 파일을 못 읽으면 unknown — 검사 없음을 통과로 보지 않는다)."""
     proc = _git(ctx.repo, "show", f"refs/remotes/origin/{ctx.base}:issue-db.config.yaml", check=False)
     try:
-        doc = yaml.safe_load(proc.stdout) if proc.returncode == 0 else None
+        doc = yamlio.safe_load(proc.stdout) if proc.returncode == 0 else None
     except yaml.YAMLError:
         doc = None
     return str(doc.get("ci_mode") or "local") if isinstance(doc, dict) else "unknown"
