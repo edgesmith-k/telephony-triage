@@ -555,4 +555,4 @@ note: {{선택, 한 줄}}
 - 주 카테고리는 **사용자가 겪는 증상**으로 정한다.
 - 다른 카테고리가 원인 쪽이면 원인에 `related: [<다른 원인 ID>]`를 넣고, 유형에 `secondary_categories`를 넣는다. `related`는 양방향으로 넣는다 (`add-related` op는 양쪽을 함께 갱신한다).
 - `search`와 매처는 `secondary_categories`와 `related`도 탐색한다. 리포트에는 "관련: SIM-002-01 SIM refresh"처럼 보여준다.
-- `secondary_categories`가 있는 유형은 해당 카테고리 오너도 리뷰어로 지정한다 (`gh pr create --reviewer`, 계산 방법은 `02-config.md §5.3` 리뷰어 계산).
+- `secondary_categories`가 있는 유형은 해당 카테고리 오너(CODEOWNERS에 있을 때)도 리뷰어로 지정한다 (`gh pr create --reviewer`, 계산 방법은 `02-config.md §5.3` 리뷰어 계산).

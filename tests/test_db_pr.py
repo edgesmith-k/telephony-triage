@@ -332,6 +332,9 @@ def test_summary_markdown_is_opt_in_and_leaves_json_and_state_files_alone():
     assert md.stdout.splitlines()[-1] == f"approved_hash: {shown['approved_hash']}"   # 같은 승인 해시
     assert "해결책 검증 상태: DATA-001-03 — unverified(신규 원인 (new-cause))" in md.stdout
     assert "NEW-CAUSE-1 → DATA-001-03" in md.stdout and shown["commit_message"] in md.stdout
+    # 샘플 CODEOWNERS에는 카테고리 오너가 없다(메인테이너 경로만) — data/ 변경 PR의 리뷰어는 없음
+    assert shown["reviewers"] == [] and "\n리뷰어: 없음\n" in md.stdout
+    assert shown["merge"]["mode"] == "self" and "\n병합: push 뒤 바로 병합할 수 있다" in md.stdout
     assert {name: (job / name).read_bytes() for name in files} == files   # state.json·pr.json 바이트 동일
     assert len(md.stdout.encode()) < len(default.stdout.encode())
 
@@ -542,8 +545,35 @@ def _edit(path: Path, old: str, new: str) -> None:
 # -- allow-cause ------------------------------------------------------------------------------
 
 
+CATEGORY_OWNERS = "\n/data/ @mock-org/telephony-data-owners\n/sim/ @mock-org/telephony-sim-owners\n"
+
+
+def _add_category_owners(root: Path) -> None:
+    """샘플 CODEOWNERS는 메인테이너 경로만 둔다. 카테고리 오너를 두기로 한 레포처럼 /data/·/sim/ 오너를 더한다."""
+    path = root / ".github" / "CODEOWNERS"
+    path.write_text(path.read_text(encoding="utf-8") + CATEGORY_OWNERS, encoding="utf-8", newline="\n")
+
+
+def test_category_reviewers_exclude_maintainer_owners(tmp_path):
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    from dbpr import merge as dbmerge
+
+    (tmp_path / ".github").mkdir()
+    (tmp_path / ".github" / "CODEOWNERS").write_text(
+        (SAMPLE / ".github" / "CODEOWNERS").read_text(encoding="utf-8") + CATEGORY_OWNERS, encoding="utf-8")
+    revs = ["mock-org/telephony-issue-db-maintainers", "mock-org/telephony-data-owners"]
+    assert dbmerge.category_reviewers(tmp_path, revs, {}) == ["mock-org/telephony-data-owners"]
+    assert dbmerge.category_reviewers(tmp_path, revs[:1], {}) == []
+    fmt = {"reviewers": {"format": "{team}@{org}"}}
+    assert dbmerge.category_reviewers(tmp_path, ["telephony-issue-db-maintainers@mock-org"], fmt) == []
+    assert dbmerge.eligibility({}, {}, ["data/x.yaml"], ["mock-org/telephony-data-owners"]) == (
+        "review", "카테고리 오너 리뷰(CODEOWNERS): mock-org/telephony-data-owners — 오너 리뷰 뒤 GHE에서 머지한다")
+    assert dbmerge.eligibility({}, {}, ["data/x.yaml"], []) == ("self", None)
+
+
 def test_allow_cause_creates_or_extends_expect_and_adds_reviewer():
     ws = Workspace()
+    ws.push_main(_add_category_owners, "카테고리 오너 추가(선택 — 06-collaboration §6.1)")
     job = "review-sim-2026-10"
     ws.plan(job, _review_plan([{"op": "allow-cause", "fixture": "fixtures/SIM-001-01.log", "cause": "DATA-001-01"}],
                               "review/sim-2026-10"))
@@ -570,6 +600,9 @@ def test_allow_cause_creates_or_extends_expect_and_adds_reviewer():
     assert exp == {"expect_top": "DATA-001-03", "also_allowed": ["IMS-001-01"]}
     summary = ws.db_pr("summary", ws.wt("MOCK-7002"))
     assert "mock-org/telephony-data-owners" in summary["reviewers"]
+    # 카테고리 오너가 리뷰어면 바로 병합 자격이 없다(오너 리뷰 뒤 GHE에서 머지) — 메인테이너 팀은 이 판정에 들지 않는다
+    assert summary["merge"]["mode"] == "review" and "카테고리 오너 리뷰(CODEOWNERS)" in summary["merge"]["reason"]
+    assert "telephony-data-owners" in summary["merge"]["reason"] and "choices" not in summary["merge"]
     ws.db_pr("discard", ws.wt("MOCK-7002"))
 
     db = git_db()

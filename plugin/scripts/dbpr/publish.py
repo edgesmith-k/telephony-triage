@@ -440,7 +440,8 @@ def summary(ctx: Ctx, wt: Path, markdown: bool = False) -> dict:
     result = {**scr, "pr_body": body, "approved_hash": digest}
     extras = db_summary.screen_extras(wt, scr, stage_result["apply"].get("operations") or [], digest)
     if not stage_result.get("dry_run"):     # 병합 줄·선택지(merge.py eligibility — publish --and-merge와 같은 판정)
-        mode, reason = _merge.eligibility(ctx.cfg, stage_result, [f.get("path") or "" for f in scr.get("files") or []])
+        mode, reason = _merge.eligibility(ctx.cfg, stage_result, [f.get("path") or "" for f in scr.get("files") or []],
+                                          _merge.category_reviewers(wt, scr["reviewers"], db_cfg))
         result["merge"] = extras["merge"] = {"mode": mode, "reason": reason,
                                              **({"choices": _merge.CHOICES} if mode == "self" else {})}
     md = db_summary.render_markdown(scr, plan, extras)
@@ -619,7 +620,9 @@ def publish(ctx: Ctx, wt: Path, branch: str, lease: str, approved: str, commit: 
         result["gh_error"] = f"push는 됐지만 PR {action}에 실패했다: {gh_error}"
         return result, USAGE
     changed = [p for p in _out(_git(wt, "diff", "--name-only", state["base_sha"], head, check=False)).splitlines() if p]
-    result["merge"] = _merge.offer(ctx, job_dir, job, stage_result, changed, number, url, head)   # 바로 병합 제안(merge.py)
+    db_cfg = yamlio.load(wt / "issue-db.config.yaml") or {}
+    owners = _merge.category_reviewers(wt, (pr_info or {}).get("reviewers") or [], db_cfg if isinstance(db_cfg, dict) else {})
+    result["merge"] = _merge.offer(ctx, job_dir, job, stage_result, changed, number, url, head, owners)   # 바로 병합 제안(merge.py)
     return result, OK
 
 

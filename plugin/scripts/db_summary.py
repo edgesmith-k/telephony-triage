@@ -89,6 +89,11 @@ def reviewers(wt: Path, paths: list[str], plan: dict, db_cfg: dict) -> list[str]
                        None)
             if cat:
                 owners += _owners_for(rules, f"{cat}/")
+    return format_owners(owners, db_cfg)
+
+
+def format_owners(owners: list[str], db_cfg: dict) -> list[str]:
+    """CODEOWNERS 항목(`@<org>/<team>`·`@user`)을 `reviewers.format`으로(중복 없이, 순서 유지)."""
     fmt = str((db_cfg.get("reviewers") or {}).get("format") or "{org}/{team}")
     out = []
     for owner in owners:
@@ -107,7 +112,7 @@ def _verification_rows(stage_result: dict) -> list[dict]:
         status = item.get("status")
         label = shown.get(status) or (f"건너뜀: {item.get('reason')}" if status == "skipped" else status)
         if status == "skipped" and item.get("review_required"):
-            label = f"검증 못 함 — 리뷰 대상 ({item.get('reason')})"
+            label = f"검증 못 함 — 자동 검증 없음 ({item.get('reason')})"
         rows.append({"id": item.get("id"), "status": status, "label": label, "reason": item.get("reason"),
                      "review_required": item.get("review_required", False)})
     return rows
@@ -296,12 +301,12 @@ def screen(wt: Path, plan: dict, stage_result: dict, state: dict, db_cfg: dict, 
     if "사용자 진술" in str(jira.get("note") or ""):
         user_statement = True
     for cid in new_pending:
-        notes.append(f"{cid}: 시그니처 없음 — 매칭 불가, 리뷰 대상")
+        notes.append(f"{cid}: 시그니처 없음 — 매칭 불가(나중에 보완)")
     if user_statement:
-        notes.append("해결책 근거: 사용자 진술 — 카테고리 오너 리뷰 필요")
+        notes.append("해결책 근거: 사용자 진술 — 검증 전(unverified)")
     for row in verification:
         if row["status"] == "skipped" and row.get("review_required"):
-            notes.append(f"{row['id']}: 검증 못 함 — 리뷰 대상 ({row['reason']})")
+            notes.append(f"{row['id']}: 검증 못 함 — 자동 검증 없음 ({row['reason']})")
     # 계획의 pr_notes: 흐름별 설명(drift 결정, verify-fix 근거, allow-cause 사유 등). 한 번 더 마스킹한다.
     masker = masking.new_masker(allow_patterns=(db_cfg.get("mask") or {}).get("allow_patterns") or [])
     notes += [masker(str(n)) for n in plan.get("pr_notes") or [] if str(n).strip()]

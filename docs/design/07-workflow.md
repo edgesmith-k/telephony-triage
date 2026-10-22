@@ -272,7 +272,7 @@ Android 버전과 브랜치마다 소스 트리가 다르므로 **분석할 때�
    ## push 전 확인: ABC-12345 → DATA-001-02 Roaming disabled
    구분: 분석 (analyze)        ← record면 "수동 기록"
    브랜치: issue/ABC-12345 (신규) → PR 대상: main
-   리뷰어: @<org>/telephony-data-owners (CODEOWNERS)   ← 다른 카테고리 fixture에 also_allowed를 추가했으면 그 카테고리 오너 포함
+   리뷰어: 없음                 ← CODEOWNERS 기준. 카테고리 오너를 둔 레포면 그 팀(다른 카테고리 fixture에 also_allowed를 추가했으면 그 카테고리 오너 포함)
    열린 PR: 없음
 
    ### 변경 파일
@@ -419,11 +419,11 @@ post_sha256: <64 hex>          ← 선택 줄과 이 줄은 게시 가능하고 
      - 새 원인·새 유형: 새 시그니처는 계획에만 있고 스냅샷에는 없으므로 스냅샷 매처로 근거를 찾을 수 없다. 발생 시각(없으면 사용자가 지정한 줄 번호나 시각) 기준으로 `parse_logcat.py cut --around <시각>`으로 자른다. 자른 fixture가 새 시그니처를 실제로 충족하는지는 7번 초안 검증(R1·R2, 계획을 적용한 draft 트리)이 확인하고, 충족하지 않으면 구간이나 시그니처를 고친다.
      - 자른 마스킹 fixture를 `add-fixture`(`kind: positive`)로 넣는다. fixture가 없으면 R1·R2가 `skipped: fixture 없음`이 된다고 알린다. 원인이 `signatures_pending`이면 이 fixture는 기대값 `"<유형 ID>:unresolved"`로 회귀에 들어간다 (`contracts.md §fixture`).
    - **수정 정보**(선택): 사용자가 "이미 고쳤다"고 하면 `ref`와 `fixed_in`(브랜치 필수, 빌드 선택)을 받아 `fix.status: fix-submitted`로 기록한다(새 원인은 `new-cause`의 `cause.fix`, 기존 원인은 `update-fix`). 기존 원인이 이미 `fixed`면 `update-fix`를 넣지 않고 "이미 검증된 수정이 있다"고 보여준다(`fixed` → `fix-submitted`는 `contracts.md` op 표가 거부한다). **`fixed`는 기록하지 않는다.** "검증까지 끝났다"고 해도 `fixed`는 `verify-fix`로만 한다고 안내한다. 형식은 `fix_ref_regex`, `build_compare`로 검사한다.
-   - **해결책 효과**(선택): 사용자가 "해결책이 효과 있었다"고 하면 근거를 묻는다. 근거는 기록 대상이 **아닌** 다른 Jira 키, 또는 `--resolved-fixture <logcat>`의 `db_verify resolution` 판정 passed다(`signatures_pending`이 아닐 때만. 기존 원인은 `--db <work_dir>/_snapshot`, 새 원인은 `--plan <plan> --draft <work_dir>/<JIRA-KEY>/draft`로 판정하고 `--cause`에 `temp_id`를 준다). 근거가 있으면 `resolved` fixture를 `cut --around <흔적 시각>`으로 잘라 `add-fixture`(`kind: resolved`)와 `verify-resolution`(evidence: Jira 키 또는 그 fixture 경로)을 **`new-cause`/`set-resolution` 뒤에** 넣는다. 근거가 없거나 기록 대상 Jira 자신뿐이면 `unverified`로 둔다. 사용자가 그래도 효과를 주장하면 `unverified`를 유지하고 "근거: 사용자 진술"을 남긴다: 새 원인은 `cause.resolution_verification.method`에, 기존 원인은 Jira 기록 `note`에 쓴다. 확인 화면과 PR 본문에 "사용자 진술 — 카테고리 오너 리뷰 필요"를 표시한다.
+   - **해결책 효과**(선택): 사용자가 "해결책이 효과 있었다"고 하면 근거를 묻는다. 근거는 기록 대상이 **아닌** 다른 Jira 키, 또는 `--resolved-fixture <logcat>`의 `db_verify resolution` 판정 passed다(`signatures_pending`이 아닐 때만. 기존 원인은 `--db <work_dir>/_snapshot`, 새 원인은 `--plan <plan> --draft <work_dir>/<JIRA-KEY>/draft`로 판정하고 `--cause`에 `temp_id`를 준다). 근거가 있으면 `resolved` fixture를 `cut --around <흔적 시각>`으로 잘라 `add-fixture`(`kind: resolved`)와 `verify-resolution`(evidence: Jira 키 또는 그 fixture 경로)을 **`new-cause`/`set-resolution` 뒤에** 넣는다. 근거가 없거나 기록 대상 Jira 자신뿐이면 `unverified`로 둔다. 사용자가 그래도 효과를 주장하면 `unverified`를 유지하고 "근거: 사용자 진술"을 남긴다: 새 원인은 `cause.resolution_verification.method`에, 기존 원인은 Jira 기록 `note`에 쓴다. 확인 화면과 PR 본문에 "사용자 진술 — 검증 전(unverified)"를 표시한다.
    - **code_refs**(선택): `<root 키>:<상대 경로>` + `symbol`로 받는다. 절대 경로는 거부한다 (`add-code-ref` 또는 새 원인의 `code_refs`).
 6. **작업 계획**: `<work_dir>/<JIRA-KEY>/plan.json`, `source: record`, `schema_version`, `base_sha`(스냅샷 SHA), `issue.origin`, `pr.branch: issue/<JIRA-KEY>`, 피드백 `{suggested: [], decision: manual, final: <원인 ID | temp_id | unresolved>}`, 커밋 메시지 `[<ID>] record <JIRA-KEY>: <요약>`. 계획을 만들 때 **같은 Jira의 pending 피드백을 지운다** (`03-issue-db.md §5.4 (3)`).
 7. **초안 검증**: 새 원인/유형 또는 시그니처·파서 규칙 변경이 있으면 `db_verify rules --plan <plan> --draft <work_dir>/<JIRA-KEY>/draft`로 검증하고 결과표(실행/건너뜀과 사유)를 보여준다. `fail`이면 수정한다. 다른 유형의 양성 fixture에서 C=1이 된 경우는 analyze Step 7과 같이 "시그니처 좁히기 / `allow-cause`"를 묻는다.
-8. **적용 → 확인 → 커밋 → PR**: 공통 쓰기 절차(analyze Step 8의 2~9번과 같음). 확인 화면 머리에 **"구분: 수동 기록 (record)"**, "로그·코드 분석: 하지 않음", 실행한 검증과 건너뛴 검증(사유), `skipped: fixture 없음`이면 "검증 못 함 — 리뷰 대상", `signatures_pending`이면 "시그니처 없음 — 매칭 불가, 리뷰 대상", 해결책 근거가 사용자 진술뿐이면 "사용자 진술 — 카테고리 오너 리뷰 필요"를 보여준다. PR 본문에도 같은 내용을 넣는다. `--dry-run`이면 확인 화면까지 보여주고 `db_pr discard <wt>`로 정리한다(publish는 dry-run 작업을 거부한다; lock 해제).
+8. **적용 → 확인 → 커밋 → PR**: 공통 쓰기 절차(analyze Step 8의 2~9번과 같음). 확인 화면 머리에 **"구분: 수동 기록 (record)"**, "로그·코드 분석: 하지 않음", 실행한 검증과 건너뛴 검증(사유), `skipped: fixture 없음`이면 "검증 못 함 — 자동 검증 없음", `signatures_pending`이면 "시그니처 없음 — 매칭 불가(나중에 보완)", 해결책 근거가 사용자 진술뿐이면 "사용자 진술 — 검증 전(unverified)"를 보여준다. PR 본문에도 같은 내용을 넣는다. `--dry-run`이면 확인 화면까지 보여주고 `db_pr discard <wt>`로 정리한다(publish는 dry-run 작업을 거부한다; lock 해제).
 
 - 사용자가 취소하면 manual 피드백은 **보관하지 않고 버린다** (통계에 쓰지 않고, 취소는 분류가 확실하지 않다는 뜻일 수 있으며, 다른 Jira의 PR에 섞이면 리뷰가 헷갈리므로). 작업 계획은 남겨서 같은 Jira로 다시 record하면 이어서 할 수 있다.
 
@@ -444,7 +444,7 @@ post_sha256: <64 hex>          ← 선택 줄과 이 줄은 게시 가능하고 
 2. `db_verify resolution --db <work_dir>/_snapshot --cause <ID> <logcat...>`로 판정한다 (`05-verification.md §5.12 (1)` 표). 로그는 파싱 후 마스킹된 이벤트로 판정한다.
 3. **unknown** → 이유(recovery/scenario 시그니처 없음, 흔적 없음, 증상 남음)와 필요한 조건을 안내하고 `db_pr lock release <작업 키>`로 끝낸다. **failed** → 해결책이 효과가 없다고 보고하고, `set-resolution`이나 새 원인 분석을 제안한다 (계획을 만들지 않고 `db_pr lock release <작업 키>`로 끝낸다).
 4. **passed** → 작업 계획 `<work_dir>/verify-res-<원인 ID>-<YYYYMMDD>/plan.json`(`source: validate-cause`)을 만든다: `parse_logcat cut --around <recovery 또는 scenario 흔적 시각>`(`db_verify resolution` 결과의 시각)으로 자른 마스킹 fixture를 `add-fixture`(`kind: resolved`), `verify-resolution`(evidence에 그 fixture 경로와 선택적 Jira 키).
-5. 공통 쓰기 절차로 올린다. 브랜치 `verify-res/<원인 ID>-<YYYYMMDD>`. 리뷰어는 원인 소속 카테고리 오너.
+5. 공통 쓰기 절차로 올린다. 브랜치 `verify-res/<원인 ID>-<YYYYMMDD>`. 리뷰어는 CODEOWNERS 기준(원인 소속 카테고리에 오너를 둔 레포만).
 
 ---
 

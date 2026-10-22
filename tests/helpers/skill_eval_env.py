@@ -30,6 +30,9 @@ setup 필드 (모두 선택):
     analyzer_proposal: true — 모의 분석 스킬이 `규칙 제안:`([이슈 DB]·[스킬])을 내고 patch 대상 references/DATA-001.md를 둔다(plugin 모드, `run.py`가
         tests/mocks/skills/data-analyzer-proposal을 덧씌우고 채점용 analyzer-manifest.json을 쓴다, eval 71)
     gh_unauth: true  — gh 스텁 인증 실패
+    gh_merge: {checks: none|pass|pending|fail, merge_state: <mergeStateStatus>, methods: "merge,squash,rebase"} — gh 스텁의 PR 검사·
+        병합 가능 상태·허용 병합 방식(`MOCK_GH_CHECKS`·`MOCK_GH_MERGE_STATE`·`MOCK_GH_MERGE_METHODS`, 바로 병합 eval 72). 없는 키는
+        스텁 기본값(검사 없음·CLEAN·세 방식 모두)이고, gh_merge가 없으면 env에 아무것도 더하지 않는다(다른 eval은 예전과 같다)
     approver_deny: true — 권한 확인 응답 서버(eval-approver)가 모든 ask를 거부한다(`run.py`가 `EVAL_APPROVER_DENY=1`로 붙인다, eval 62)
 """
 
@@ -206,6 +209,25 @@ def _clone_state(clone: Path) -> dict:
     }
 
 
+GH_MERGE_KEYS = {"checks": "MOCK_GH_CHECKS", "merge_state": "MOCK_GH_MERGE_STATE", "methods": "MOCK_GH_MERGE_METHODS"}
+GH_CHECKS = ("none", "pass", "pending", "fail")
+GH_METHODS = ("merge", "squash", "rebase")
+
+
+def gh_merge_env(spec) -> dict[str, str]:
+    """setup.gh_merge → gh 스텁 환경 변수(`tests/mocks/bin/gh_stub.py` 머리말). 없으면 {} — 스텁 기본값 그대로."""
+    if not spec:
+        return {}
+    if not isinstance(spec, dict) or set(spec) - set(GH_MERGE_KEYS):
+        raise SystemExit(f"setup.gh_merge 키는 {sorted(GH_MERGE_KEYS)}: {spec}")
+    if spec.get("checks") not in (None, *GH_CHECKS):
+        raise SystemExit(f"setup.gh_merge.checks는 {'|'.join(GH_CHECKS)}: {spec['checks']}")
+    methods = [m for m in str(spec.get("methods") or ",".join(GH_METHODS)).split(",") if m]
+    if not methods or set(methods) - set(GH_METHODS):
+        raise SystemExit(f"setup.gh_merge.methods는 {','.join(GH_METHODS)} 중 쉼표로: {spec.get('methods')}")
+    return {GH_MERGE_KEYS[k]: str(v) for k, v in spec.items() if v not in (None, "")}
+
+
 def build(entry: dict, out: Path, direct_tools: bool = True) -> dict:
     """direct_tools=False(plugin 모드)면 env.json에 jira_call·jira_tools_list·analyzer_run을 쓰지 않는다 —
     실행자가 MCP·Skill 대신 그 명령을 직접 부르는 우회를 막는다."""
@@ -337,6 +359,7 @@ def build(entry: dict, out: Path, direct_tools: bool = True) -> dict:
         env["MOCK_GH_ISSUES_WRITE_LOG"] = str(out / "gh-issues-writes.json")
     if setup.get("gh_unauth"):
         env["MOCK_GH_UNAUTH"] = "1"
+    env.update(gh_merge_env(setup.get("gh_merge")))
     path_dirs = [str(p) for p in mock_env.gh_path_dirs()]
     lines = ["# 스킬 eval 환경 — `source`로 불러온다"]
     lines += [f"export {k}='{v}'" for k, v in env.items()]

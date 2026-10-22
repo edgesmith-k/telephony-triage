@@ -2,7 +2,7 @@
 
 새 원인·유형·시그니처·파서 규칙·해결책을 바꿀 때 읽는다. 규칙은 이슈 DB `CONTRIBUTING.md`와 같고 스크립트가 검사한다. 여기엔 **쓰는 판단**만 둔다. 나머지는 스크립트가 알려 준다:
 
-- op별 필드·형식: `SNAP/schema/plan.schema.json`(원인은 `causeBody`)과 stage의 `계획 형식 오류 (operations/<n>, op=<이름>): 빠진 필드 […]; 허용 밖 필드 […]` 메시지. 적용 규칙 위반(Reject)·drift는 stage 출력(설계 문서: `contracts.md §작업 계획`).
+- op별 필드·형식: `SNAP/schema/plan.schema.json`(원인은 `causeBody`)과 stage의 `계획 형식 오류 (operations/<n>, op=<이름>): 빠진 필드 […]; 허용 밖 필드 […]` 메시지. 적용 규칙 위반(Reject)·drift는 stage 출력(`contracts.md §작업 계획`).
 - 원인 기본값 `SNAP/templates/cause.yaml`. R1~R6 결과·`skipped` 사유·`allow_cause_drafts`·`suggested_ops`: `db_verify` 출력. fixture 이름·번호·기대값은 적용 때 정해지고 틀리면 `db_lint`·`db_regress`가 말한다.
 
 ## 0. 등록(흐름 B) 준비물·리뷰어
@@ -11,7 +11,7 @@
 - 근거: 마스킹 로그에서 확인한 문구(추정만이면 §1, `unjudged`면 SKILL Step 7 — 금지).
 - 새 유형: `db_add similar` 상위 3개 먼저 → category·title·summary·dir_slug·증상 시그니처(§1·§2, 예외 없음).
 - 새 원인: `new-cause` 필수 키 + 원인 시그니처(§2), 태그·RIL·fixture 점검(§4).
-- 리뷰어: 카테고리 오너(CODEOWNERS). `parser-rules/` 변경·종료 코드 3("승인 필요")은 메인테이너. 새 카테고리는 메인테이너 직접 편집 PR만(§1).
+- 리뷰어: CODEOWNERS대로(카테고리 오너 없으면 없음). `parser-rules/` 변경·종료 코드 3("승인 필요")은 메인테이너. 새 카테고리는 메인테이너 직접 편집 PR만(§1).
 - 취소: stage 전 lock 해제(`write-flow.md` §discard 없이 끝나는 경로: analyze `triage.py release <KEY>`, 그 밖 `db_pr lock release <KEY>`), stage 뒤 `db_pr discard <wt>`. lock은 모든 경로에서 푼다.
 
 ## 1. 무엇을 추가할지
@@ -83,10 +83,10 @@ op 필수 키 (`op` 외, plan.schema.json 기준):
 
 `db_verify.py rules --plan <plan> --draft <draft>`(초안)와 stage가 R1~R6 표를 낸다. 판정은 스크립트 출력이다.
 
-- `skipped`는 통과가 아니다. 사유와 함께 "검증 못 함 — 리뷰 대상"으로 표시한다. 해결책만 바뀌면 R1~R5는 `skipped: 해당 없음`이고 검증 상태만 unverified.
+- `skipped`는 통과가 아니다. 사유와 함께 "검증 못 함 — 자동 검증 없음"으로 표시한다. 해결책만 바뀌면 R1~R5는 `skipped: 해당 없음`이고 검증 상태만 unverified.
 - **R3·R4에서 다른 유형 양성 fixture에 새 시그니처가 C=1이 되면** 사용자가 고를 때까지 push하지 않는다. 몰래 좁히지도 허용하지도 않는다. 결과의 `allow_cause_drafts`(op 그대로)를 선택지와 함께 보인다.
   - (a) **시그니처 좁히기**: fixture와 걸린 시그니처 전역 키를 보이고 대상 원인 fixture에만 있는 조건(`must_not_match`·구체적인 `fields`·`sequence`)을 더한 안을 제시, 다시 초안 검증.
-  - (b) **허용**: 그 로그에 실제로 두 현상이 다 있으면 `allow-cause {fixture, cause}`. fixture `.expect.yaml` 변경이 확인 화면에 나오고 그 오너가 리뷰어가 된다. 계획 `pr_notes`에 `allow-cause: <fixture>에 <현상>이 실제로 함께 있음 (<근거 로그 한 줄, 마스킹>)`을 넣는다.
+  - (b) **허용**: 그 로그에 실제로 두 현상이 다 있으면 `allow-cause {fixture, cause}`. fixture `.expect.yaml` 변경이 확인 화면에 나오고 리뷰어는 CODEOWNERS대로다. 계획 `pr_notes`에 `allow-cause: <fixture>에 <현상>이 실제로 함께 있음 (<근거 로그 한 줄, 마스킹>)`을 넣는다.
 - R6 `fail`은 막지 않는다(`blocking: false`). 결과를 보이고 진행 여부는 사용자가 고른다.
 - 음성 fixture에 걸린 경우(R3)는 허용 선택지가 없다 — 시그니처를 좁힌다.
 
@@ -101,6 +101,6 @@ op 필수 키 (`op` 외, plan.schema.json 기준):
 - 주 카테고리는 **사용자가 겪는 증상** 기준이다(이슈 DB `GLOSSARY.md` §카테고리 경계). 원인이 다른 카테고리면 원인 `related`, 유형 `secondary_categories`로 잇는다.
 - ID는 main에 들어간 뒤 바꾸지 않는다. 병합·폐기는 `status`(`deprecated | merged-into:<ID>`)로, 삭제 금지.
 - `signatures_pending: true`는 record에서 사용자가 명시할 때만(매칭 불가, 해결책 unverified 고정).
-- 브랜치 이름은 흐름 문서(`record.md`·`verify.md`·`write-flow.md`)가 알려 준다(설계 문서: `contracts.md §브랜치`). PR 하나에 Jira 하나.
+- 브랜치 이름은 흐름 문서(`record.md`·`verify.md`·`write-flow.md`)가 알려 준다(`contracts.md §브랜치`). PR 하나에 Jira 하나.
 - **기존 분류 가져오기**(`source: import`): record 규칙과 같되 새 유형·원인 모두 시그니처 필수(pending 불가), 해결책 unverified로 시작. 브랜치 `import/<category>-<n>`, PR당 새 유형 10개 이하.
 - **분석 스킬** 결과는 리포트 보조일 뿐 분류·점수·검증에 쓰지 않는다. 스킬이 DB에 없는 원인을 말해도 그것만으로 원인을 만들지 않는다 — 사용자가 고르면 `new-cause` 흐름(시그니처 초안·검증 포함).

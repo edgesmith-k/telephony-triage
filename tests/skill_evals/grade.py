@@ -899,6 +899,8 @@ def checks(eid: int, ctx: Ctx) -> list:
         return checks_u(eid, ctx)
     if eid == 71:
         return checks_k(eid, ctx)
+    if eid == 72:
+        return checks_m(eid, ctx)
     no_remote = lambda br: (lambda: (br not in ctx.branches() and not ctx.prs(), f"branches={ctx.branches()} prs={len(ctx.prs())}"))
     def analyzer_called():
         return _analyzer_called(ctx)
@@ -988,7 +990,7 @@ def checks(eid: int, ctx: Ctx) -> list:
             ok = bool(ops) and not c.get("signatures") and c.get("signatures_pending") is True \
                 and _unverified(c)
             return ok, json.dumps(c, ensure_ascii=False)[:500]
-        return [None, plan, None, lambda: ctx.screen_has("push", r"시그니처 없음 — 매칭 불가, 리뷰 대상"),
+        return [None, plan, None, lambda: ctx.screen_has("push", r"시그니처 없음 — 매칭 불가\(나중에 보완\)"),
                 lambda: ctx.screen_has("push", *(rf"\| (?:R\d·)*R{n}(?:·R\d)* \| 건너뜀: [^|]*시그니처 없음" for n in (1, 2, 3))),
                 no_remote("issue/MOCK-9032")]
     if eid == 40:
@@ -1019,7 +1021,7 @@ def checks(eid: int, ctx: Ctx) -> list:
             unseen = [d for d in drafts if d not in hay]
             return ok and bool(fail) and not unseen, f"{ev}; fail 행={fail}; allow-cause 초안 fixture={drafts} 안 보임={unseen}"
         return [draft_allow, None, allow, lambda: ctx.screen_has("push", r"fixtures/DATA-001-02\.2\.expect\.yaml"),
-                lambda: ctx.screen_has("push", r"^리뷰어: .*telephony-data-owners"), no_remote("issue/MOCK-9042")]
+                lambda: ctx.screen_has("push", r"^리뷰어: 없음$"), no_remote("issue/MOCK-9042")]   # 샘플 CODEOWNERS: 카테고리 오너 없음
     if eid == 43:
         raw = ["010-9876-5432", "+82-10-2222-3333", "356938035643809"]
         def pii():
@@ -1177,7 +1179,7 @@ def checks(eid: int, ctx: Ctx) -> list:
         def note():
             n = str(((ctx.plan("MOCK-9037") or {}).get("issue") or {}).get("note"))
             return "사용자 진술" in n, n
-        return [None, novr, note, lambda: ctx.screen_has("push", r"사용자 진술 — 카테고리 오너 리뷰 필요"), none_remote_lock]
+        return [None, novr, note, lambda: ctx.screen_has("push", r"사용자 진술 — 검증 전\(unverified\)"), none_remote_lock]
     if eid == 24:
         def noplan():
             plans = [str(p) for p in ctx.work.glob("verify-fix-*/plan.json")]
@@ -2463,6 +2465,83 @@ def checks_k(eid, ctx):
         return ok and ctx.branches() == ["main"] and not ctx.prs(), f"branches={ctx.branches()} prs={len(ctx.prs())}; {ev}"
 
     return [None, applies, unchanged, shown_patch, plan_clean, dry]
+
+
+MERGE_LINE = r"^병합: push 뒤 바로 병합할 수 있다.*선택지: push하고 바로 병합 / push만\(리뷰어에게\) / 취소"   # merge.screen_line(self)
+MERGE_CHOICE = "push하고 바로 병합"
+_DB_PR_MERGE = shown.script_rx("db_pr.py", r"merge\b")       # 병합 재시도(`db_pr merge`). `publish --and-merge`는 PUSH_END
+_RAW_MERGE = re.compile(r"\bgh\b[^|\n;&]*\bpr\s+merge\b|\bgh\b[^|\n;&]*\bapi\b[^|\n;&]*/merges?\b|merge_pull_request")
+
+
+def checks_m(eid, ctx):
+    """본인 바로 병합 eval 72(배치 M): 확인 화면의 병합 줄·선택지 → 사용자가 `push하고 바로 병합`을 고른 뒤 `publish --and-merge`
+    한 번 → gh 스텁 PR MERGED → merge commit 알림. 실행 기록이 없으면 `_Manual`(없음을 보는 항목도 통과로 세지 않는다)."""
+    job, br = "MOCK-9072", "issue/MOCK-9072"
+
+    def seq():
+        s = ctx.seq()
+        if s is None:
+            raise _Manual("실행 기록(events.jsonl) 없음")
+        return s
+
+    def publishes():
+        s = seq()
+        return [i for i in ctx._bash_index(shown.PUSH_END) if re.search(r"(?<![-\w])publish\b", shown.command_of(s[i]))]
+
+    def window():
+        """publish로 끝난 마지막 push 화면 창과 그 창의 질문(병합 선택지가 든 것)."""
+        s, wins = seq(), ctx.screens("push") or []
+        w = next((w for w in reversed(wins) if w["end_kind"] == "publish"), None)
+        ask = s[w["asked"]] if w and w["asked"] is not None else None
+        return w, ask
+
+    def screen():
+        ok, ev = _screen_check(ctx, end=("publish",))()
+        has, ev2 = ctx.screen_has("push", MERGE_LINE, which="last")
+        w, ask = window()
+        offered = bool(ask) and MERGE_CHOICE in json.dumps(ask.get("input"), ensure_ascii=False)
+        return ok and has and offered, f"{ev}; 병합 줄 {'있음' if has else '없음'}; 질문에 '{MERGE_CHOICE}' {'있음' if offered else '없음'}"
+
+    def merged_once():
+        s, pubs = seq(), publishes()
+        cmds = [shown.command_of(s[i]) for i in pubs]
+        flagged = [i for i, c in zip(pubs, cmds) if re.search(r"(?<![-\w])--and-merge\b", c)]
+        retry = ctx._bash_index(_DB_PR_MERGE)
+        raw = _RAW_MERGE.findall(ctx.ran)
+        w, ask = window()
+        after = bool(flagged) and w is not None and w["asked"] is not None and flagged[0] > w["asked"] and w["end"] == flagged[0]
+        ok = len(pubs) == 1 and len(flagged) == 1 and after and not retry and not raw
+        return ok, (f"publish={len(pubs)} --and-merge={len(flagged)} 선택 질문 뒤={after} db_pr merge={len(retry)} "
+                    f"gh 직접 병합={raw[:3]}")
+
+    def pr_merged():
+        prs = ctx.prs()
+        head = git(ctx.remote, "rev-parse", f"refs/heads/{br}").strip() if br in ctx.branches() else ""
+        rec = ctx.show(br, f"data/DATA-001-no-setup-data-call/issues/{job}.yaml") if head else ""
+        p = prs[0] if len(prs) == 1 else {}
+        ok = (p.get("state") == "MERGED" and bool(head) and p.get("headRefOid") == head
+              and bool((p.get("mergeCommit") or {}).get("oid")) and not p.get("deleteBranch") and "cause: DATA-001-01" in rec)
+        return ok, (f"prs={len(prs)} state={p.get('state')} head 일치={bool(head) and p.get('headRefOid') == head} "
+                    f"mergeCommit={(p.get('mergeCommit') or {}).get('oid')} method={p.get('mergedWith')} "
+                    f"deleteBranch={p.get('deleteBranch')}; 기록 파일 {'cause: DATA-001-01' if 'cause: DATA-001-01' in rec else rec[:120] or '없음'}")
+
+    def told():
+        s, pubs = seq(), publishes()
+        prs = ctx.prs()
+        oid = str(((prs[0] if len(prs) == 1 else {}).get("mergeCommit") or {}).get("oid") or "")
+        if not pubs or not oid:
+            return False, f"publish={len(pubs)} merge commit={oid or '없음'}"
+        text = "\n".join(ctx.visible_between(pubs[-1] + 1))
+        hit = bool(re.search(rf"\b{oid[:7]}[0-9a-f]*\b", text))
+        word = "병합" in text
+        return hit and word, f"publish 뒤 보인 글에 merge commit {oid[:12]} {'있음' if hit else '없음'}, '병합' {'있음' if word else '없음'}"
+
+    def end():
+        seq()
+        (a, ea), (b, eb) = ctx.lock_free(), ctx.clone_same()
+        return a and b, f"{ea}; {eb}"
+
+    return [screen, merged_once, pr_merged, told, end]
 
 
 def checks_g(eid, ctx):

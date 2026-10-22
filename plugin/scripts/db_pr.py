@@ -59,7 +59,7 @@ PR을 만들거나(`gh pr create`) 고친다(`gh pr edit`).
 `publish --and-discard`: publish 종료 0일 때만 `discard`를 이어 부른다(실패하면 worktree·lock을 남긴다).
 publish 종료 0이면 결과에 병합 기록 `merge`(`{mode: self, approved, retry}` 또는 `{mode: review, reason}`)를 싣고
 `JOB/merge-offer.json`에 남긴다(discard 뒤에도 남는다). `mode`: config `issue_db.merge`(self | review, 기본 self). self여도
-stage `needs-approval`·메인테이너 경로(`dbpr.merge.MAINTAINER_PATHS`) 변경이면 review. summary(확인 화면)도 같은 판정으로
+stage `needs-approval`·메인테이너 경로(`dbpr.merge.MAINTAINER_PATHS`) 변경·카테고리 오너 리뷰어(CODEOWNERS)면 review. summary(확인 화면)도 같은 판정으로
 병합 줄과 선택지(`push하고 바로 병합` / `push만(리뷰어에게)` / `취소`)를 낸다.
 `publish --and-merge`: publish(·discard) 종료 0이고 `merge.mode`가 self면 같은 프로세스에서 아래 `merge`를 이어 부르고 결과를
 `merge.result`에 싣는다(종료 코드는 publish 결과 그대로 — 병합 여부는 `merge.result.merged`). 권한 확인은 publish 한 번이다.

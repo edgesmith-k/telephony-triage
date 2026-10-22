@@ -9,15 +9,7 @@
 `.github/CODEOWNERS`:
 
 ```
-# 카테고리 (선택 — 적으면 그 카테고리 PR은 오너 리뷰가 필요해 본인 병합이 막힌다)
-/data/                  @<org>/telephony-data-owners
-/call/                  @<org>/telephony-call-owners
-/network/               @<org>/telephony-network-owners
-/sim/                   @<org>/telephony-sim-owners
-/sms/                   @<org>/telephony-sms-owners
-/ims/                   @<org>/telephony-ims-owners
-
-# 공통 (모든 카테고리와 모든 기여자 PC에 영향)
+# 공통 (모든 카테고리와 모든 기여자 PC에 영향) — dbpr/merge.py MAINTAINER_PATHS와 같은 목록
 /parser-rules/          @<org>/telephony-issue-db-maintainers
 /schema/                @<org>/telephony-issue-db-maintainers
 /templates/             @<org>/telephony-issue-db-maintainers
@@ -29,12 +21,17 @@
 /.gitattributes         @<org>/telephony-issue-db-maintainers
 /.github/               @<org>/telephony-issue-db-maintainers
 
-# 피드백 기록은 리뷰 불필요 (자동 기록)
-/feedback/
+# 카테고리 오너는 두지 않는다(기본, 샘플 이슈 DB). 오너 리뷰를 받을 카테고리만 더한다 — 그 카테고리 PR은 오너 승인 전
+# BLOCKED라 본인 병합이 막힌다:
+# /data/                @<org>/telephony-data-owners
 ```
 
 - 팀 이름 형식과 `gh pr create --reviewer`에 넘기는 형식은 Phase 0에서 확인한다 (`14-site.md` S5, S19).
-- 리뷰어(`--reviewer`)는 CODEOWNERS에 오너가 있는 경로만 지정된다. 본인 병합(아래)이면 리뷰 요청은 알림일 뿐 병합을 막지 않는다.
+- 리뷰어(`--reviewer`)는 CODEOWNERS에 오너가 있는 경로만 지정된다(`02-config.md §5.3` 리뷰어 계산). 카테고리 오너가 없으면 카테고리 경로만
+  바꾸는 PR(사례 추가·새 원인·`allow-cause` 등)은 리뷰어가 없다 — 확인 화면 `리뷰어: 없음`, `gh pr create`에 `--reviewer` 없음. 메인테이너
+  경로를 바꾸면 메인테이너 팀이 리뷰어다(그 PR은 병합 자격도 없다). 카테고리 오너를 둔 레포에서 그 팀이 리뷰어면 병합 자격이 없다(아래).
+- 맞바꾼 것: 카테고리 오너가 없으면 다른 카테고리의 fixture에 `also_allowed`를 넣는 PR(`allow-cause`)도 그 카테고리 사람의 리뷰 없이
+  병합된다. 이것을 보는 곳은 이제 월간 리뷰의 `also_allowed` 누적 항목(§6.6)뿐이다 — 교차 카테고리 허용을 사전에 막아야 하는 팀은 카테고리 오너를 둔다.
 
 main 브랜치 보호 설정 (메인테이너가 GHE에서 설정하고 `docs/branch-protection.md`에 기록):
 - PR 필수(직접 push 금지), force push·삭제 금지
@@ -53,7 +50,8 @@ config > site-defaults > 내장 기본 `self`)이고 PR이 병합 자격이 있�
 `issue_db.merge_wait_seconds`(기본 420초, 최대 480)까지 기다린다. 끝내 안 되면 PR을 그대로 두고 사유와 재시도 명령(`db_pr merge --job <KEY>
 --approved <sha>`)을 알린다. 병합 자격이 없는 PR — `issue_db.merge: review`, 검증 결과 "승인 필요"(`needs-approval`), 메인테이너
 경로(`/.githooks/`·`/schema/`·`/parser-rules/`·`/templates/`·`/.github/`·`/docs/`·`/issue-db.config.yaml`·`CONTRIBUTING.md`·
-`GLOSSARY.md`·`.gitattributes`) 변경 — 은 확인 화면에 병합 선택지가 없다(리뷰어가 GHE에서 머지). guard는 `publish`·`merge`를 ask로,
+`GLOSSARY.md`·`.gitattributes`) 변경, 리뷰어에 카테고리 오너(메인테이너가 아닌 CODEOWNERS 팀, 사유 `카테고리 오너 리뷰(CODEOWNERS)`)가
+든 PR — 은 확인 화면에 병합 선택지가 없다(리뷰어가 GHE에서 머지). guard는 `publish`·`merge`를 ask로,
 gh·MCP로 직접 머지는 거부로, 병합 기록(`merge-offer.json`) 직접 쓰기는 거부로 둔다(`08-safety.md §9` 규칙 7·11). 다른 사람이 문제를
 발견하면 그때 새 PR(또는 GHE의 Revert)로 고친다.
 
@@ -193,7 +191,7 @@ v1에서 도구는 이런 브랜치를 바꾸지 않는다. `sync-pr`는 아래 
 
 ### 6.6 정기 리뷰 (월 1회, 카테고리 오너)
 
-`/telephony-triage:review [category]`가 로컬에서 리뷰 리포트를 만든다 (push 안 함). 인자가 없으면 사용자가 오너인 카테고리(CODEOWNERS 기준)를 묻는다. 오너는 리포트를 보고 필요한 수정을 `review/<category>-<YYYY-MM>` PR로 올린다. 두 가지 방법이 있다: (a) 직접 편집 후 `validate` → push, (b) 리포트의 조치를 **계획 파일**(`source: review`, op: `set-status`·`update-signature`·`reclassify`·`set-resolution`·`allow-cause`·`add-fixture`)로 적어 공통 쓰기 절차(`07-workflow.md`)로 올린다. 계획 작성은 Claude Code가 돕고(`<work_dir>/review-<category>-<YYYY-MM>/plan.json`), **별도 커맨드는 없다**. 절차는 `docs/review-guide.md`에 적는다.
+`/telephony-triage:review [category]`가 로컬에서 리뷰 리포트를 만든다 (push 안 함). 인자가 없으면 사용자가 오너인 카테고리(CODEOWNERS 기준)를 묻는다(카테고리 오너가 없는 레포면 리뷰할 카테고리를 고른다). 오너는 리포트를 보고 필요한 수정을 `review/<category>-<YYYY-MM>` PR로 올린다. 두 가지 방법이 있다: (a) 직접 편집 후 `validate` → push, (b) 리포트의 조치를 **계획 파일**(`source: review`, op: `set-status`·`update-signature`·`reclassify`·`set-resolution`·`allow-cause`·`add-fixture`)로 적어 공통 쓰기 절차(`07-workflow.md`)로 올린다. 계획 작성은 Claude Code가 돕고(`<work_dir>/review-<category>-<YYYY-MM>/plan.json`), **별도 커맨드는 없다**. 절차는 `docs/review-guide.md`에 적는다.
 
 | 리포트 항목 | 기준 (`issue-db.config.yaml`) | 조치 |
 |---|---|---|
@@ -271,7 +269,7 @@ v1에서 도구는 이런 브랜치를 바꾸지 않는다. `sync-pr`는 아래 
 - 새 카테고리 PR은 **메인테이너의 직접 편집 브랜치** `category/<key>`다(계획 op로 표현할 수 없는 변경이므로, 6.3 "계획이 없는 브랜치" 절차: 편집 → `db_build --write` → `validate` → push). 들어갈 것:
   1. `issue-db.config.yaml`의 `categories`에 `{key, name, id_prefix}` 추가
   2. 카테고리 디렉토리 생성
-  3. `.github/CODEOWNERS`에 오너 팀 추가
+  3. (카테고리 오너를 두는 레포만) `.github/CODEOWNERS`에 오너 팀 추가
   4. `GLOSSARY.md`와 경계 표에 범위, 예시, 기존 카테고리와의 경계 추가
   5. `parser-rules/tags.yaml`, `ril.yaml`에 새 카테고리 태그와 RIL 요청 추가
   6. 첫 유형과 원인, fixture (선택. 보통 이 PR 뒤에 첫 이슈 PR을 올린다)

@@ -61,7 +61,7 @@
 | 시그니처·파서 규칙 변경 포함 | R1~R5 (+R6 표본을 주면) | 위와 같음 |
 | 기존 원인에 Jira만 추가(`append`) | 항상 항목만 | R1~R3·R5 `skipped: 해당 없음` |
 | 사용자가 "수정 완료"라고 함 | `ref`·`fixed_in` 형식 검사(`fix_ref_regex`, `build_compare`) | `fix-submitted`까지만 기록. `fixed`는 `verify-fix`로만 |
-| 사용자가 "해결책이 효과 있었다"고 함 | 근거가 있으면 `verify-resolution`(evidence: 기록 대상이 아닌 **다른** Jira 키, 또는 `--resolved-fixture`로 자른 `resolved` fixture + `db_verify resolution` passed. 새 원인이면 `db_verify resolution --plan <plan> --draft <dir>`로 계획을 적용한 트리에서 판정) | 근거가 없거나 기록 대상 Jira 자신뿐이면 `unverified`. 사용자가 그래도 효과를 주장하면 "근거: 사용자 진술"을 남기고(여전히 `unverified`. 새 원인은 `resolution_verification.method`, 기존 원인은 Jira 기록 `note`), 확인 화면·PR 본문에 "사용자 진술 — 카테고리 오너 리뷰 필요"로 표시한다 (`06-collaboration.md §6.6`) |
+| 사용자가 "해결책이 효과 있었다"고 함 | 근거가 있으면 `verify-resolution`(evidence: 기록 대상이 아닌 **다른** Jira 키, 또는 `--resolved-fixture`로 자른 `resolved` fixture + `db_verify resolution` passed. 새 원인이면 `db_verify resolution --plan <plan> --draft <dir>`로 계획을 적용한 트리에서 판정) | 근거가 없거나 기록 대상 Jira 자신뿐이면 `unverified`. 사용자가 그래도 효과를 주장하면 "근거: 사용자 진술"을 남기고(여전히 `unverified`. 새 원인은 `resolution_verification.method`, 기존 원인은 Jira 기록 `note`), 확인 화면·PR 본문에 "사용자 진술 — 검증 전(unverified)"로 표시한다 (`06-collaboration.md §6.6`) |
 
 - 확인 화면과 PR 본문에는 **"수동 기록"** 라벨과 위 표에서 실행된 검증과 건너뛴 검증(사유 포함)을 모두 보여준다 (`db_pr summary`가 계획 `source: record`로 표시).
 - 피드백은 `decision: manual`로 남기고 수락률 통계에서 제외한다 (`06-collaboration.md §6.5`).

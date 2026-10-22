@@ -2000,7 +2000,7 @@ explore: {when: never}          <span class="c"># 탐색 분석: ask(기본) | a
     <div class="scroll"><table class="wide">
       <thead><tr><th>역할</th><th>누가</th><th>맡는 일</th></tr></thead>
       <tbody>
-        <tr><td>카테고리 오너</td><td>data·call·network·sim·sms·ims마다 한 팀(CODEOWNERS에 적힌 팀)</td><td>월간 리뷰, 해결책·수정 검증 요청. 팀이 리뷰어 머지(<code>issue_db.merge: review</code>)를 쓰거나 CODEOWNERS에 카테고리 오너를 적었으면 그 카테고리 PR 리뷰와 머지</td></tr>
+        <tr><td>카테고리 오너</td><td>data·call·network·sim·sms·ims마다 한 팀(CODEOWNERS에는 리뷰를 받기로 한 카테고리만 적는다 — 샘플은 적지 않음)</td><td>월간 리뷰, 해결책·수정 검증 요청. 팀이 리뷰어 머지(<code>issue_db.merge: review</code>)를 쓰거나 CODEOWNERS에 카테고리 오너를 적었으면 그 카테고리 PR 리뷰와 머지</td></tr>
         <tr><td>메인테이너</td><td>이슈 DB 공통 영역을 맡은 팀</td><td>파서 규칙·스키마·hook·설정 변경 리뷰, 새 카테고리, 스키마 버전 올리기, 사후 정리, 브랜치 보호, 플러그인 업데이트</td></tr>
         <tr><td>도입 담당자</td><td>사내 도입을 맡은 사람. 보통 메인테이너가 겸함</td><td>사이트 설정, 운영 이슈 DB 만들기, 사내 보완 단계(S-1~S-7), 파일럿 지표 모으기</td></tr>
       </tbody>
@@ -2062,17 +2062,14 @@ explore: {when: never}          <span class="c"># 탐색 분석: ask(기본) | a
     </table></div>
   </div>
   <p>필수 승인 수를 0으로 두면 PR을 만든 사람이 검사 통과 뒤 바로 병합할 수 있습니다(<code>issue_db.merge: self</code>, 기본). 리뷰어 머지를 유지할 팀은 필수 승인을 1명 이상으로 두고 사이트 설정에 <code>issue_db.merge: review</code>를 적어 확인 화면의 바로 병합 선택지를 끕니다. 설정한 날짜와 확인한 사람은 이슈 DB의 <code>docs/branch-protection.md</code>에 적습니다. 보호를 켤 수 없는 GHE라면 <code>.githooks/</code>를 쓸지부터 다시 정합니다.</p>
-  <p>CODEOWNERS는 폴더마다 리뷰 팀을 정합니다. 오너가 적힌 경로만 리뷰가 필요합니다. 모든 PC에 영향을 주는 공통 폴더(메인테이너 경로)는 메인테이너 팀을 꼭 적습니다. 카테고리 폴더의 오너는 선택입니다. 적으면 그 카테고리 PR은 오너 리뷰가 필요해 본인 병합이 막힙니다. 아래는 합성 샘플 이슈 DB의 파일이고, 조직·팀 이름은 모의 값입니다.</p>
-  <div class="term"><div class="bar"><i></i><i></i><i></i></div><pre><span class="c"># .github/CODEOWNERS (샘플, 일부)</span>
-/data/                  @mock-org/telephony-data-owners
-/call/                  @mock-org/telephony-call-owners
-<span class="c"># ... network · sim · sms · ims 같은 형식</span>
+  <p>CODEOWNERS는 폴더마다 리뷰 팀을 정합니다. 오너가 적힌 경로만 리뷰가 필요합니다. 모든 PC에 영향을 주는 공통 폴더(메인테이너 경로)는 메인테이너 팀을 꼭 적습니다. 카테고리 폴더의 오너는 선택입니다. 샘플은 두지 않아 카테고리 PR은 리뷰어 없이(확인 화면 "리뷰어: 없음") 작성자가 바로 병합합니다. 적으면 그 카테고리 PR은 오너 리뷰가 필요해 본인 병합이 막힙니다. 아래는 합성 샘플 이슈 DB의 파일이고, 조직·팀 이름은 모의 값입니다.</p>
+  <div class="term"><div class="bar"><i></i><i></i><i></i></div><pre><span class="c"># .github/CODEOWNERS (샘플, 일부) — 메인테이너 경로만, 카테고리 오너 없음</span>
 /parser-rules/          @mock-org/telephony-issue-db-maintainers
 /schema/                @mock-org/telephony-issue-db-maintainers
 /.githooks/             @mock-org/telephony-issue-db-maintainers
 /issue-db.config.yaml   @mock-org/telephony-issue-db-maintainers
-<span class="c"># 피드백 기록은 리뷰 불필요 (자동 기록)</span>
-/feedback/</pre></div>
+<span class="c"># ... templates · docs · .github · GLOSSARY.md · CONTRIBUTING.md · .gitattributes 같은 형식</span>
+<span class="c"># 오너 리뷰를 받을 카테고리만 더한다: /data/  @mock-org/telephony-data-owners</span></pre></div>
   <p>카테고리 오너가 바뀌면 GHE에서 그 팀의 구성원만 바꾸면 됩니다. 팀 자체가 바뀌면 CODEOWNERS를 고치는 PR을 올립니다. 두 레포의 브랜치 흐름은 <a href="#ch15-5">15.5</a>의 그림에 있습니다.</p>
   <h3 id="ch15-5">15.5 브랜치 관리 한눈에<a class="hl" href="#ch15-5" aria-label="링크">#</a></h3>
   <p>브랜치를 관리할 레포는 둘입니다. 팀 기록이 쌓이는 이슈 DB 레포와, 도구 자체인 플러그인 레포입니다. 두 레포 모두 main에는 직접 쓰지 않습니다.</p>
@@ -2250,8 +2247,8 @@ explore: {when: never}          <span class="c"># 탐색 분석: ask(기본) | a
     <div class="scroll"><table class="wide">
       <thead><tr><th>표시</th><th>뜻</th><th>리뷰어가 할 일</th></tr></thead>
       <tbody>
-        <tr><td>"검증 못 함 — 리뷰 대상"</td><td>fixture가 없는 등의 이유로 자동 검증을 건너뜀</td><td>근거 로그나 설명을 직접 확인한다</td></tr>
-        <tr><td>"사용자 진술 — 카테고리 오너 리뷰 필요"</td><td>해결책 근거가 담당자의 말뿐임</td><td>근거가 충분한지 판단한다</td></tr>
+        <tr><td>"검증 못 함 — 자동 검증 없음"</td><td>fixture가 없는 등의 이유로 자동 검증을 건너뜀</td><td>근거 로그나 설명을 직접 확인한다</td></tr>
+        <tr><td>"사용자 진술 — 검증 전(unverified)"</td><td>해결책 근거가 담당자의 말뿐임</td><td>근거가 충분한지 판단한다</td></tr>
         <tr><td>"승인 필요"</td><td>파서 규칙 변경으로 기존 이벤트가 바뀜(R5)</td><td>메인테이너가 PR에 붙은 영향 표를 보고 승인한다</td></tr>
         <tr><td><code>also_allowed</code> 추가</td><td>다른 카테고리 fixture에서 이 원인도 맞는다고 허용함</td><td>그 fixture의 카테고리 오너가 리뷰어로 붙는다</td></tr>
       </tbody>

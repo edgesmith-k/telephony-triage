@@ -91,7 +91,7 @@ fixture 번호, 피드백, pending 포함 여부는 계획 `source`로) → `db_
 - 수정 상태 변경 (summary fix_changes, 있을 때 — 각 line을 글자 그대로 한 줄씩):
   `CALL-001-01: fixed → open (이전 ref MOCKCL-12345·fixed_in MOCKB77_U2_20260920 → verification_history 보존, 결과 reverted)`
 - drift 결정 내역 (있을 때, 계획 pr_notes의 drift 줄).
-- 검증 결과는 R1 … R6의 상태와 사유. skipped는 "건너뜀: <사유>", review_required면 "검증 못 함 — 리뷰 대상". 같은 사유의 건너뜀만 한 행(`| R5·R6 | 건너뜀: 해당 없음 |  |`) — 스크립트만 묶는다, 네 초안 표는 규칙마다 한 행. 이어서 `승인 필요: <approval_needed | 없음>`,
+- 검증 결과는 R1 … R6의 상태와 사유. skipped는 "건너뜀: <사유>", review_required면 "검증 못 함 — 자동 검증 없음". 같은 사유의 건너뜀만 한 행(`| R5·R6 | 건너뜀: 해당 없음 |  |`) — 스크립트만 묶는다, 네 초안 표는 규칙마다 한 행. 이어서 `승인 필요: <approval_needed | 없음>`,
   `해결책 검증 상태: <verified | unverified(사유)>`.
 - <push_note가 있으면: "push 불가: gh 인증 없음" 등>
 

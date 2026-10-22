@@ -42,7 +42,7 @@ open ─(fix-submitted)─▶ fix-submitted ─(verify-fix passed)─▶ fixed
    `WD/<작업 키>/plan.json`(`source: validate-cause`, `issue: null`):
    `add-fixture {for: <ID>, kind: resolved, path}` → `verify-resolution {cause: <ID>, verification: {method: <요약>, evidence: [<fixture 경로>, (선택) Jira 키], by, date}}`(`status` 없음 — `db_verify` `suggested_ops` 그대로).
    커밋 메시지 `[<ID>] verify-resolution: <요약>`.
-5. 공통 쓰기 절차. 브랜치 `verify-res/<원인 ID>-<YYYYMMDD>`, 리뷰어는 원인 카테고리 오너.
+5. 공통 쓰기 절차. 브랜치 `verify-res/<원인 ID>-<YYYYMMDD>`, 리뷰어는 CODEOWNERS 기준(원인 카테고리에 오너를 둔 레포만, 없으면 없음).
 
 ---
 

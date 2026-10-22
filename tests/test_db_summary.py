@@ -100,7 +100,7 @@ def test_verification_rows():
     rows = {r["id"]: r for r in db_summary._verification_rows(stage)}
     assert [rows[k]["label"] for k in ("R1", "R2", "R3", "R4")] == ["통과", "실패", "승인 필요", "미구현(뼈대)"]
     assert rows["R5"]["label"] == "건너뜀: 로그 없음" and rows["R5"]["review_required"] is False
-    assert rows["R6"]["label"] == "검증 못 함 — 리뷰 대상 (코드 없음)" and rows["R6"]["review_required"] is True
+    assert rows["R6"]["label"] == "검증 못 함 — 자동 검증 없음 (코드 없음)" and rows["R6"]["review_required"] is True
     assert rows["R7"]["label"] == "other"
     assert db_summary._verification_rows({}) == []
 
@@ -328,8 +328,8 @@ def _scenario_record() -> tuple[dict, dict]:
                    "path": "fixtures/DATA-001-04.log"}],
         fix_changes=[{"line": "CALL-001-01: fixed → open (이전 ref MOCKCL-12345·fixed_in MOCKB77_U2_20260920 → "
                               "verification_history 보존, 결과 reverted)"}],
-        notes=["로그·코드 분석: 하지 않음 (수동 기록)", "DATA-001-04: 시그니처 없음 — 매칭 불가, 리뷰 대상",
-               "drift: DATA-001-02 resolution — 계획 값 유지 (계획 값: 켠다, main 값: 끈다)", "R5: 검증 못 함 — 리뷰 대상 (코드 없음)"],
+        notes=["로그·코드 분석: 하지 않음 (수동 기록)", "DATA-001-04: 시그니처 없음 — 매칭 불가(나중에 보완)",
+               "drift: DATA-001-02 resolution — 계획 값 유지 (계획 값: 켠다, main 값: 끈다)", "R5: 검증 못 함 — 자동 검증 없음 (코드 없음)"],
         diff=diff, diff_total_lines=80, diff_truncated=True, verification=verification,
         approval_needed=[r for r in verification if r["status"] == "needs-approval"],
         checks={"lint": {"ok": False, "errors": 2, "warnings": 1, "findings": ["E-TITLE: a.md", "E-ID: b.md"]},
@@ -403,7 +403,7 @@ def test_render_markdown_never_shows_non_success_as_pass():
     for rid in ("R2", "R3", "R4", "R5", "R6"):                         # pass가 아닌 행에는 ✅·"통과"가 없다
         assert "✅" not in rows[rid] and "통과" not in rows[rid], rows[rid]
     assert "✅" in rows["R1"]
-    assert "건너뜀: 해당 없음" in rows["R3"] and "검증 못 함 — 리뷰 대상" in rows["R5"]
+    assert "건너뜀: 해당 없음" in rows["R3"] and "검증 못 함 — 자동 검증 없음" in rows["R5"]
     assert "❌ 실패" in rows["R2"] and "승인 필요" in rows["R4"] and "| other |" in rows["R6"]
     assert "승인 필요: R4 — 메인테이너 승인 필수" in text
     # 비성공 정보 전부: 실패 상세, 노트, 파일
@@ -634,12 +634,12 @@ def test_render_markdown_collapses_newlines_in_single_line_values():
 
 def test_render_markdown_phrases_are_in_write_flow_doc():
     """표·분기에 쓰는 고정 문구가 write-flow.md에 있는지(옛 §4 L86 L104 L109). 없는 문구는 위 테스트에 '문서 출처 없음'으로 표시했다."""
-    for phrase in ("수동 기록 (record)", "건너뜀: <사유>", "검증 못 함 — 리뷰 대상", "승인 필요: <approval_needed | 없음>",
+    for phrase in ("수동 기록 (record)", "건너뜀: <사유>", "검증 못 함 — 자동 검증 없음", "승인 필요: <approval_needed | 없음>",
                    "push 불가: gh 인증 없음", "전체 diff 보기", "계획 당시 DATA-001-03"):
         assert phrase in WRITE_FLOW, phrase
     scr, extra = _scenario_record()
     text = db_summary.render_markdown(scr, {}, extra)
-    for phrase in ("건너뜀: 해당 없음", "검증 못 함 — 리뷰 대상", "승인 필요: R4", "push 불가: gh 인증 없음", "수동 기록 (record)"):
+    for phrase in ("건너뜀: 해당 없음", "검증 못 함 — 자동 검증 없음", "승인 필요: R4", "push 불가: gh 인증 없음", "수동 기록 (record)"):
         assert phrase in text, phrase
 
 

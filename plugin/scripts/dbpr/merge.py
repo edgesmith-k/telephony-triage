@@ -5,7 +5,8 @@
   고르면 `publish … --and-merge` 한 명령(권한 확인 한 번)이 push·PR 뒤 같은 사용자 권한으로 병합한다. 바로 안 되면
   `db_pr merge --job <KEY> --approved <sha>`로 다시 한다. 기본값은 config `issue_db.merge`(사용자 config > site-defaults >
   내장 `self`). `review`면 확인 화면에 병합 선택지를 내지 않는다(리뷰어가 GHE에서 머지하는 이전 흐름).
-- `self`여도 검증 결과 "승인 필요"(stage `needs-approval`)나 메인테이너 경로(`MAINTAINER_PATHS`) 변경이 든 PR은 자격이 없다.
+- `self`여도 검증 결과 "승인 필요"(stage `needs-approval`)나 메인테이너 경로(`MAINTAINER_PATHS`) 변경이 든 PR, 리뷰어에 메인테이너가
+  아닌 CODEOWNERS 팀(레포가 카테고리 오너를 두기로 한 경우, `category_reviewers`)이 든 PR은 자격이 없다.
   `merge`는 기록 파일만 믿지 않고 `git diff --name-only origin/<base>...<head>`로 메인테이너 경로를 다시 본다.
 - 승인 토큰 = publish가 push한 커밋 SHA. PR head가 그 SHA가 아니면 병합하지 않는다(`gh pr merge --match-head-commit`도 같은 SHA).
   병합 조건: PR 검사가 모두 통과(검사가 없으면 이슈 DB `ci_mode: local`일 때만 통과 — 그 밖은 아직 안 온 것으로 본다),
@@ -38,6 +39,7 @@ MAX_WAIT = 480
 POLL = 15
 CHOICES = ["push하고 바로 병합", "push만(리뷰어에게)", "취소"]
 REVIEW_REASON = "issue_db.merge: review — 리뷰어가 GHE에서 머지한다"
+CATEGORY_REVIEW = "카테고리 오너 리뷰(CODEOWNERS)"
 # 메인테이너 경로(SITE_INSTALL §9 3번·06-collaboration §6.1 CODEOWNERS "공통"). `/`로 끝나면 폴더 아래 전부
 MAINTAINER_PATHS = (".githooks/", "schema/", "parser-rules/", "templates/", ".github/", "docs/", "issue-db.config.yaml",
                     "CONTRIBUTING.md", "GLOSSARY.md", ".gitattributes")
@@ -78,8 +80,17 @@ def maintainer_paths(changed: list[str]) -> list[str]:
     return [f for f in changed if any(f.startswith(p) if p.endswith("/") else f == p for p in MAINTAINER_PATHS)]
 
 
-def eligibility(cfg: dict, stage_result: dict, changed: list[str]) -> tuple[str, str | None]:
-    """`(self|review, 사유)` — 확인 화면(summary)과 publish가 같은 판정을 쓴다."""
+def category_reviewers(wt, reviewers: list[str], db_cfg: dict) -> list[str]:
+    """리뷰어 중 메인테이너 경로 규칙의 오너가 아닌 것(카테고리 오너 등). CODEOWNERS는 wt의 것, 형식은 `reviewers.format`."""
+    import db_summary
+
+    maint = [o for pattern, who in db_summary._codeowners(wt) if maintainer_paths([pattern.lstrip("/")]) for o in who]
+    known = set(db_summary.format_owners(maint, db_cfg))
+    return [r for r in reviewers or [] if r not in known]
+
+
+def eligibility(cfg: dict, stage_result: dict, changed: list[str], owners: list[str] = ()) -> tuple[str, str | None]:
+    """`(self|review, 사유)` — 확인 화면(summary)과 publish가 같은 판정을 쓴다. owners = `category_reviewers` 결과."""
     mode, warning = merge_mode(cfg)
     if mode == "review":
         return "review", warning or REVIEW_REASON
@@ -88,6 +99,8 @@ def eligibility(cfg: dict, stage_result: dict, changed: list[str]) -> tuple[str,
     hit = maintainer_paths(changed)
     if hit:
         return "review", f"메인테이너 경로 변경({hit[0]}) — 메인테이너 리뷰 뒤 GHE에서 머지한다"
+    if owners:
+        return "review", f"{CATEGORY_REVIEW}: {', '.join(owners)} — 오너 리뷰 뒤 GHE에서 머지한다"
     return "self", None
 
 
@@ -103,9 +116,10 @@ def retry_command(job: str, head: str) -> str:
     return f"db_pr merge --job {job} --approved {head}"
 
 
-def offer(ctx: Ctx, job_dir, job: str, stage_result: dict, changed: list[str], number, url, head: str) -> dict:
+def offer(ctx: Ctx, job_dir, job: str, stage_result: dict, changed: list[str], number, url, head: str,
+          owners: list[str] = ()) -> dict:
     """publish 성공 뒤 병합 기록을 `JOB/merge-offer.json`에 쓰고 publish 결과의 `merge` 블록을 돌려준다."""
-    mode, reason = eligibility(ctx.cfg, stage_result, changed)
+    mode, reason = eligibility(ctx.cfg, stage_result, changed, owners)
     if number is None:
         mode, reason = "review", "PR 번호를 알 수 없다 — GHE에서 머지한다"
     doc = {"mode": mode, "pr": number, "url": url, "head_sha": head, "reason": reason, "at": _iso(now())}

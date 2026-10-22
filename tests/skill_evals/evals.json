@@ -1,6 +1,6 @@
 {
   "skill_name": "telephony-triage",
-  "_comment": "eval 정의 완료(개수는 `evals` 배열 길이). batch 1=대표10, A=원칙·안전10, B=analyze11, C=수정·검증9, D=record5, E=10/04~05 기능 7(46~52), F=S6 증상 검색 2(53~54), J=Jira 결과 게시 2(61~62), P=플랫폼 분리 3(63~65), G=두 번째 트래커(GitHub Issues, 모의 MCP mock-github-issues) 2(66~67), U=사용 흐름 구분 3(68~70), K=분석 스킬 규칙 제안 1(71). 정의 완료는 행동 평가 통과를 뜻하지 않는다. README.md와 DRAFT_NOTES.md 참조.",
+  "_comment": "eval 정의 완료(개수는 `evals` 배열 길이). batch 1=대표10, A=원칙·안전10, B=analyze11, C=수정·검증9, D=record5, E=10/04~05 기능 7(46~52), F=S6 증상 검색 2(53~54), J=Jira 결과 게시 2(61~62), P=플랫폼 분리 3(63~65), G=두 번째 트래커(GitHub Issues, 모의 MCP mock-github-issues) 2(66~67), U=사용 흐름 구분 3(68~70), K=분석 스킬 규칙 제안 1(71), M=본인 바로 병합 1(72). 정의 완료는 행동 평가 통과를 뜻하지 않는다. README.md와 DRAFT_NOTES.md 참조.",
   "evals": [
     {
       "id": 1,
@@ -1213,7 +1213,7 @@
     },
     {
       "id": 32,
-      "design": "`record ABC-779 --new-cause DATA-001`, 사용자가 \"시그니처는 나중에\"라고 명시, 로그 없음 → `signatures_pending: true`, 해결책 `unverified`, 확인 화면에 \"시그니처 없음 — 매칭 불가, 리뷰 대상\"과 R1~R3 `skipped: 시그니처 없음(pending)` 표시. 사용자가 명시하지 않았는데 시그니처를 비우면 진행하지 않고 시그니처를 요청한다",
+      "design": "`record ABC-779 --new-cause DATA-001`, 사용자가 \"시그니처는 나중에\"라고 명시, 로그 없음 → `signatures_pending: true`, 해결책 `unverified`, 확인 화면에 \"시그니처 없음 — 매칭 불가(나중에 보완)\"과 R1~R3 `skipped: 시그니처 없음(pending)` 표시. 사용자가 명시하지 않았는데 시그니처를 비우면 진행하지 않고 시그니처를 요청한다",
       "name": "record-new-cause-signatures-pending",
       "batch": 1,
       "prompt": "/telephony-triage:record MOCK-9032 --new-cause DATA-001 --dry-run",
@@ -1232,12 +1232,12 @@
         "확인 화면에서 'push하고 바로 병합'과 'push만(리뷰어에게)'이 있으면 'push만(리뷰어에게)'을 고른다.",
         "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
       ],
-      "expected_output": "new-cause에 signatures_pending: true, 해결책 unverified, 확인 화면에 '시그니처 없음 — 매칭 불가, 리뷰 대상'과 R1~R3 skipped: 시그니처 없음(pending).",
+      "expected_output": "new-cause에 signatures_pending: true, 해결책 unverified, 확인 화면에 '시그니처 없음 — 매칭 불가(나중에 보완)'과 R1~R3 skipped: 시그니처 없음(pending).",
       "assertions": [
         "사용자가 명시한 뒤에만 signatures_pending: true를 넣었다",
         "계획 new-cause의 signatures가 비고 signatures_pending true, resolution_verification unverified다",
         "pending의 결과(lint 경고, 매칭 불가, 해결책 unverified 고정, 리뷰 대상)를 알렸다",
-        "확인 화면에 '시그니처 없음 — 매칭 불가, 리뷰 대상'이 보인다",
+        "확인 화면에 '시그니처 없음 — 매칭 불가(나중에 보완)'이 보인다",
         "검증 결과에 R1~R3 skipped(시그니처 없음(pending))가 있고 통과로 표시하지 않았다",
         "dry-run이라 원격 브랜치·PR이 없다"
       ],
@@ -1370,7 +1370,7 @@
     },
     {
       "id": 37,
-      "design": "`record ABC-783 --cause DATA-001-02`, 사용자가 \"이 Jira에서 로밍 켜니까 해결됐어, 해결책 검증된 걸로 해줘\"(다른 Jira·로그 근거 없음) → 기록 대상 Jira 자신은 근거가 될 수 없다고 안내하고 `verify-resolution`을 넣지 않는다. 사용자가 계속 주장하면 `unverified`를 유지하고 \"근거: 사용자 진술\"을 남기며, 확인 화면에 \"사용자 진술 — 카테고리 오너 리뷰 필요\"를 표시한다",
+      "design": "`record ABC-783 --cause DATA-001-02`, 사용자가 \"이 Jira에서 로밍 켜니까 해결됐어, 해결책 검증된 걸로 해줘\"(다른 Jira·로그 근거 없음) → 기록 대상 Jira 자신은 근거가 될 수 없다고 안내하고 `verify-resolution`을 넣지 않는다. 사용자가 계속 주장하면 `unverified`를 유지하고 \"근거: 사용자 진술\"을 남기며, 확인 화면에 \"사용자 진술 — 검증 전(unverified)\"를 표시한다",
       "batch": "A",
       "prompt": "/telephony-triage:record MOCK-9037 --cause DATA-001-02 --dry-run  (이 Jira에서 로밍 켜니까 해결됐어, 해결책 검증된 걸로 해줘)",
       "setup": {
@@ -1388,12 +1388,12 @@
         "확인 화면에서 'push하고 바로 병합'과 'push만(리뷰어에게)'이 있으면 'push만(리뷰어에게)'을 고른다.",
         "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
       ],
-      "expected_output": "기록 대상 Jira 자신은 근거가 아니라고 안내하고 verify-resolution을 넣지 않는다. 사용자가 계속 주장하면 unverified를 유지하고 Jira 기록 note에 '근거: 사용자 진술'을 남기며, 확인 화면에 '사용자 진술 — 카테고리 오너 리뷰 필요'를 보여준다.",
+      "expected_output": "기록 대상 Jira 자신은 근거가 아니라고 안내하고 verify-resolution을 넣지 않는다. 사용자가 계속 주장하면 unverified를 유지하고 Jira 기록 note에 '근거: 사용자 진술'을 남기며, 확인 화면에 '사용자 진술 — 검증 전(unverified)'를 보여준다.",
       "assertions": [
         "기록 대상 Jira 자신은 해결책 근거가 될 수 없다고 안내했다",
         "계획에 verify-resolution op가 없다",
         "계획 issue.note에 '사용자 진술'이 들어 있다",
-        "확인 화면에 '사용자 진술 — 카테고리 오너 리뷰 필요'가 보인다",
+        "확인 화면에 '사용자 진술 — 검증 전(unverified)'가 보인다",
         "dry-run이라 원격 브랜치·PR이 없고 끝난 뒤 lock이 없다"
       ],
       "files": [],
@@ -1569,7 +1569,7 @@
     },
     {
       "id": 42,
-      "design": "새 원인 시그니처가 **다른 카테고리의 기존 양성 fixture**에서 C=1(그 로그에 실제로 두 현상이 있음) → R4 실패와 `allow-cause` 초안을 보여주고 \"시그니처 좁히기 / 허용\"을 묻는다. 허용을 고르면 그 fixture의 `.expect.yaml` 변경(`also_allowed`)이 확인 화면 변경 파일에 나오고, 그 카테고리 오너가 리뷰어에 추가된다. 사용자가 고르기 전에는 push하지 않는다",
+      "design": "새 원인 시그니처가 **다른 카테고리의 기존 양성 fixture**에서 C=1(그 로그에 실제로 두 현상이 있음) → R4 실패와 `allow-cause` 초안을 보여주고 \"시그니처 좁히기 / 허용\"을 묻는다. 허용을 고르면 그 fixture의 `.expect.yaml` 변경(`also_allowed`)이 확인 화면 변경 파일에 나온다. 샘플 CODEOWNERS는 메인테이너 경로만 두므로(카테고리 오너 없음, `06-collaboration.md §6.1`) 다른 카테고리 fixture를 바꿔도 리뷰어는 `없음`이다. 사용자가 고르기 전에는 push하지 않는다",
       "name": "allow-cause-cross-category",
       "batch": 1,
       "prompt": "/telephony-triage:record MOCK-9042 --new-cause IMS-001 --fixture logs/e042.log --dry-run  (망 P-CSCF 응답 지연으로 IMS 등록 408 타임아웃. 망 설정 바꿔서 해결됨)",
@@ -1602,13 +1602,13 @@
         "확인 화면에서 'push하고 바로 병합'과 'push만(리뷰어에게)'이 있으면 'push만(리뷰어에게)'을 고른다.",
         "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
       ],
-      "expected_output": "초안 검증 R4가 data 카테고리의 DATA-001-02.2.log에서 새 원인 C=1을 보고 → allow-cause 초안과 함께 '시그니처 좁히기 / 허용'을 묻고 → 허용 선택 시 DATA-001-02.2.expect.yaml(also_allowed) 변경이 확인 화면 변경 파일에 나오고 data 오너가 리뷰어에 추가된다. 고르기 전에는 진행하지 않는다.",
+      "expected_output": "초안 검증 R4가 data 카테고리의 DATA-001-02.2.log에서 새 원인 C=1을 보고 → allow-cause 초안과 함께 '시그니처 좁히기 / 허용'을 묻고 → 허용 선택 시 DATA-001-02.2.expect.yaml(also_allowed) 변경이 확인 화면 변경 파일에 나오고, 리뷰어는 `없음`이다(샘플 CODEOWNERS에 카테고리 오너 없음). 고르기 전에는 진행하지 않는다.",
       "assertions": [
         "초안 검증 결과에서 다른 유형(DATA-001) 양성 fixture의 C=1 실패와 allow-cause 초안을 보여줬다",
         "사용자에게 '시그니처 좁히기 / 허용'을 묻고 답을 받기 전에는 stage로 가지 않았다",
         "계획에 allow-cause {fixture: DATA-001-02.2.log, cause: NEW-CAUSE-1}가 들어갔다",
         "확인 화면 변경 파일에 data/DATA-001-*/fixtures/DATA-001-02.2.expect.yaml이 있다",
-        "확인 화면 리뷰어에 telephony-data-owners가 있다",
+        "확인 화면 리뷰어가 `없음`이다(샘플 CODEOWNERS에 카테고리 오너가 없어 다른 카테고리 fixture를 바꿔도 리뷰어가 붙지 않는다)",
         "dry-run이라 원격 브랜치·PR이 없다"
       ],
       "files": []
@@ -2600,9 +2600,9 @@
         "심층 분석(mock-data-analyzer)·탐색 분석(explore) 실행 여부를 물으면 '아니오'.",
         "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
       ],
-      "expected_output": "1위 DATA-001 유형 일치·원인 미확인 → 새 원인 선택 → 준비물(마스킹 로그 근거 문구, 원인 시그니처, 태그·fixture)과 리뷰어(카테고리 오너, 파서 규칙은 메인테이너)를 한 번 보임 → 취소 → db_pr stage·publish 없이 triage.py release. JOB/draft·JOB/wt·tt/* 브랜치·원격 issue/MOCK-9069·PR·pending 피드백 없음, lock 없음, clone 그대로. 계획(JOB/plan.json)은 저장했다면 남는다(stage 전 취소는 계획을 지우지 않는다, write-flow §discard 없이 끝나는 경로).",
+      "expected_output": "1위 DATA-001 유형 일치·원인 미확인 → 새 원인 선택 → 준비물(마스킹 로그 근거 문구, 원인 시그니처, 태그·fixture)과 리뷰어(CODEOWNERS 기준 — 샘플은 카테고리 오너가 없어 없음(본인 병합), 파서 규칙은 메인테이너)를 한 번 보임 → 취소 → db_pr stage·publish 없이 triage.py release. JOB/draft·JOB/wt·tt/* 브랜치·원격 issue/MOCK-9069·PR·pending 피드백 없음, lock 없음, clone 그대로. 계획(JOB/plan.json)은 저장했다면 남는다(stage 전 취소는 계획을 지우지 않는다, write-flow §discard 없이 끝나는 경로).",
       "assertions": [
-        "새 원인을 고른 뒤 준비물(로그 근거·원인 시그니처·fixture)과 리뷰어(카테고리 오너)를 취소 전에 한 번 보였다",
+        "새 원인을 고른 뒤 준비물(로그 근거·원인 시그니처·fixture)과 리뷰어(CODEOWNERS 기준 — 카테고리 오너가 없으면 없음, 파서 규칙은 메인테이너)를 취소 전에 한 번 보였다",
         "취소 뒤 db_pr stage·publish를 부르지 않았다",
         "triage.py release를 불렀고 끝난 뒤 세션 lock이 없다",
         "JOB/draft·JOB/wt가 남지 않았고 도구 브랜치(tt/*)·원격 issue/MOCK-9069·PR이 없다",
@@ -2684,6 +2684,47 @@
         "안내 줄 `스킬 제안 patch(적용 안 함, 마스킹됨): <patch 경로> — … git apply`와 파일별 +/− 줄 수를 사용자에게 보였다",
         "계획 operations가 append DATA-001-01뿐이다(규칙 제안에서 온 op·patch 흔적 없음)",
         "dry-run이라 원격 브랜치·PR이 없고 끝난 뒤 lock이 없다"
+      ],
+      "files": []
+    },
+    {
+      "id": 72,
+      "design": "본인 바로 병합(`06-collaboration.md §6.1`, `write-flow.md` §4·§5): eval 1과 같은 analyze(기존 원인 DATA-001-01에 append)에서 push 전 확인 화면에 병합 줄(`병합: push 뒤 바로 병합할 수 있다 … 선택지: push하고 바로 병합 / push만(리뷰어에게) / 취소`)과 선택지를 요약 없이 보이고, 사용자가 `push하고 바로 병합`을 고른 뒤에만 `db_pr publish … --and-merge` 한 번으로 커밋·push·PR·병합한다(승인 전 `db_pr merge`·`--and-merge` 없음, `gh pr merge` 직접 금지). gh 스텁은 검사 통과·CLEAN·병합 방식 허용(setup `gh_merge`), 샘플 이슈 DB는 `ci_mode: local`이라 병합된다. 병합 결과(merge commit)를 알린다",
+      "name": "self-merge-after-confirm",
+      "batch": "M",
+      "prompt": "MOCK-9072 로그 분석해줘. 데이터가 안 붙는대. 로그는 logs/data-disabled.log 야",
+      "setup": {
+        "jira": [
+          "MOCK-9072"
+        ],
+        "logs": [
+          {
+            "src": "tests/fixtures/logs/data-disabled.log",
+            "as": "data-disabled.log"
+          }
+        ],
+        "gh_merge": {
+          "checks": "pass",
+          "merge_state": "CLEAN",
+          "methods": "merge,squash,rebase"
+        }
+      },
+      "user_replies": [
+        "분류 제안(DATA-001-01 Data disabled)에는 '예'.",
+        "심층 분석(mock-data-analyzer) 실행 여부를 물으면 '아니오'.",
+        "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다.",
+        "note 한 줄 초안을 보여주면 그대로 승인한다.",
+        "R6 추가 표본을 물으면 '없음'. 수정 정보·해결책 효과 근거를 물으면 '없음'.",
+        "push 전 확인 화면에서 'push하고 바로 병합'과 'push만(리뷰어에게)'이 있으면 'push하고 바로 병합'을 고른다(병합 선택지가 없으면 '승인').",
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "DATA-001 > DATA-001-01 제안 → 확인 → 계획 append → stage → push 전 확인 화면(병합 줄·선택지 포함)을 그대로 보이고 묻기 → 'push하고 바로 병합' → `db_pr publish … --commit --and-discard --and-merge` 한 번(권한 확인 한 번) → PR issue/MOCK-9072 생성·병합(gh 스텁 state MERGED, --match-head-commit = push한 커밋) → PR 링크와 merge commit을 알림. lock 없음, 사용자 clone 그대로(fetch만).",
+      "assertions": [
+        "push 전 확인 화면을 요약 없이 보이고, 화면의 병합 줄(`병합: push 뒤 바로 병합할 수 있다 … 선택지: push하고 바로 병합 / push만(리뷰어에게) / 취소`)과 그 선택지로 물은 뒤에 publish했다",
+        "사용자가 'push하고 바로 병합'을 고른 뒤에만 `db_pr publish … --and-merge`를 한 번 불렀다(그 전에 `db_pr merge`·`--and-merge` 없음, `db_pr merge` 재시도 없음, `gh pr merge` 직접 호출 없음)",
+        "gh 스텁의 PR이 1개이고 병합됐다(state MERGED, head = 원격 issue/MOCK-9072 커밋, --delete-branch 없음), 그 브랜치에 data/DATA-001-no-setup-data-call/issues/MOCK-9072.yaml(cause: DATA-001-01)이 있다",
+        "publish 뒤 병합 결과(병합됨과 merge commit)를 사용자에게 알렸다",
+        "끝난 뒤 세션 lock이 없고 사용자 clone의 브랜치·HEAD·워킹 트리가 실행 전과 같다"
       ],
       "files": []
     }

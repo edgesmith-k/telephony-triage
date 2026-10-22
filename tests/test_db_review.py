@@ -113,7 +113,7 @@ def test_manual_feedback_is_not_in_acceptance():
 def test_category_scope_and_owners():
     report = _review(REVIEW_DB, "sms")
     assert report["category"] == "sms"
-    assert report["owners"]["sms"] == ["@mock-org/telephony-sms-owners"]
+    assert report["owners"]["sms"] == []        # 샘플 CODEOWNERS는 메인테이너 경로만(카테고리 오너 없음)
     for item in report["items"]:
         for entry in item["entries"]:
             ident = entry.get("cause") or entry.get("issue") or entry.get("signature") or entry.get("fixture") or ""
@@ -138,7 +138,7 @@ def test_owners_only_lists_categories_and_owners_without_review(monkeypatch, cap
     out = json.loads(capsys.readouterr().out)
     assert set(out) == {"db", "categories", "owners"} and out["db"] == str(REVIEW_DB)
     assert "sms" in out["categories"] and set(out["owners"]) == set(out["categories"])
-    assert out["owners"]["sms"] == ["@mock-org/telephony-sms-owners"]
+    assert out["owners"]["sms"] == [] and not any(out["owners"].values())   # 카테고리 오너 없음(메인테이너 경로만)
     assert out["owners"] == _review(REVIEW_DB)["owners"]
     for extra in (["sms"], ["--out", str(tmp() / "r.md")], ["--as-of", AS_OF]):
         proc = run("db_review.py", ["--db", REVIEW_DB, "--owners", *extra])
@@ -146,6 +146,18 @@ def test_owners_only_lists_categories_and_owners_without_review(monkeypatch, cap
     missing = tmp() / "none"                                    # DB 오류는 리뷰와 같은 메시지·종료 코드
     owners, review = (run("db_review.py", ["--db", missing, flag]) for flag in ("--owners", "--json"))
     assert owners.returncode == review.returncode == 2 and owners.stderr == review.stderr and owners.stderr
+
+
+def test_category_owners_read_from_codeowners_when_present():
+    """카테고리 오너는 선택이다(06-collaboration §6.1). 레포가 `/<category>/ @<org>/<team>`을 적으면 그 팀을 낸다(마지막 규칙)."""
+    db = copy_db(REVIEW_DB)
+    path = db / ".github" / "CODEOWNERS"
+    path.write_text(path.read_text(encoding="utf-8") + "\n/sms/ @mock-org/a\n/sms/ @mock-org/telephony-sms-owners  # 뒤가 이긴다\n",
+                    encoding="utf-8")
+    report = _review(db, "sms")
+    assert report["owners"]["sms"] == ["@mock-org/telephony-sms-owners"] and report["owners"]["data"] == []
+    md = run("db_review.py", ["--db", db, "sms", "--as-of", AS_OF])
+    assert md.returncode == 0 and "오너: @mock-org/telephony-sms-owners" in md.stdout
 
 
 def test_stale_periods_come_from_git_history():
@@ -185,7 +197,7 @@ def test_review_is_read_only_and_writes_markdown():
     assert json.loads(proc.stdout)["out"] == str(out)
     text = out.read_text(encoding="utf-8")
     assert text.startswith("# 월간 리뷰 리포트 — data (2026-10-20)")
-    assert "오너: @mock-org/telephony-data-owners" in text
+    assert "오너: (CODEOWNERS에 없음)" in text     # 샘플 CODEOWNERS에 카테고리 오너가 없다
     assert "## 중복 후보" in text and "DATA-001 SETUP_DATA_CALL이 발생하지 않음 ↔ DATA-009" in text
     assert "수동 기록(`decision: manual`) 4건은 수락률에서 뺐다" in text
     status = subprocess.run(["git", "-C", str(db), "status", "--porcelain"], capture_output=True, text=True)

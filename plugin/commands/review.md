@@ -1,9 +1,9 @@
 ---
-description: 월간 리뷰 리포트 (카테고리 오너) — 이슈 DB 품질·해결 상태를 점검한다. 읽기 전용, push 안 함
+description: 월간 리뷰 리포트 (카테고리 담당자 — 오너를 둔 경우 그 오너) — 이슈 DB 품질·해결 상태를 점검한다. 읽기 전용, push 안 함
 argument-hint: "[category]"
 ---
 
-카테고리 오너의 월간 리뷰 리포트를 만든다 (`06-collaboration.md §6.6`, `09-commands.md` review).
+카테고리 담당자(CODEOWNERS에 오너를 둔 경우 그 오너)의 월간 리뷰 리포트를 만든다 (`06-collaboration.md §6.6`, `09-commands.md` review).
 스크립트: `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/<이름>.py"`(결과 JSON). 종료 코드 2면 메시지를 그대로 보이고 멈춘다(예: 사내 기본값 없음 S-3).
 플랫폼: 사용자가 플랫폼을 말했으면(`--platform <이름>`, 예: oFono) `triage`·`config`·`issue_post`·`code_roots`·`db_pr`·`db_verify`·`db_add`·`db_search`·`db_review` 호출에 `--platform <이름>`을 붙이고, 그 밖 스크립트에는 붙이지 않는다. 그 밖 스크립트의 `--db`에는 그 플랫폼의 `SNAP`(읽기, `<work_dir>/_snapshot`) 또는 clone(`issue_db.path`)을 준다(`config.py show --platform <이름> --keys work_dir,issue_db.path`).
 
@@ -12,7 +12,8 @@ argument-hint: "[category]"
 인자: `$ARGUMENTS` (카테고리 키, 선택)
 
 1. **카테고리 정하기** — 인자가 있으면 그 카테고리. 없으면 `db_review.py --owners`(리뷰는 돌리지 않는다)로 `categories`와 `owners`
-   (CODEOWNERS의 카테고리별 오너)를 보여주고, 사용자가 오너인 카테고리를 **묻는다**(전체를 볼 수도 있다).
+   (CODEOWNERS의 카테고리별 오너)를 보여주고, 사용자가 오너인 카테고리를 **묻는다**(전체를 볼 수도 있다). 오너가 모두 비었으면
+   (카테고리 오너를 두지 않은 레포 — 샘플 기본) 오너로 묻지 않고 리뷰할 카테고리를 고르게 한다.
    종료 코드 2(없는 카테고리 등)면 메시지를 보여주고 다시 묻는다.
 2. **리포트 만들기** — `db_review.py <category> --out <work_dir>/review-<category>-<YYYY-MM>/report.md`
    (`work_dir`는 `config.py show --keys work_dir`의 값, `<YYYY-MM>`은 오늘). `--db`는 주지 않는다(기본값: cwd의 이슈 DB 또는 config의

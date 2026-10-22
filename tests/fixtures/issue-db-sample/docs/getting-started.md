@@ -60,5 +60,5 @@ Claude Code에 telephony-triage 플러그인을 설치한다. 설치 방법은 �
 ## 다음 단계
 
 - 규칙은 `CONTRIBUTING.md`, 용어는 `GLOSSARY.md`
-- 월간 리뷰(카테고리 오너)는 `docs/review-guide.md`
+- 월간 리뷰(카테고리 담당자, 오너를 둔 경우 그 오너)는 `docs/review-guide.md`
 - 카테고리 분석 스킬을 만들려면 `docs/analyzer-skills.md`

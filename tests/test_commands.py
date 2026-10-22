@@ -123,7 +123,7 @@ def test_flow_a_b_wording():
     help_text = (COMMANDS / "help.md").read_text(encoding="utf-8")
     table = help_text.split("## 상황별 추천", 1)[1].split("\n## ", 1)[0]
     assert "흐름 A(찾기·분석)는 이슈 DB를 바꾸지 않거나 기존 원인에 사례만 더한다" in table
-    assert "흐름 B(등록)는 새 유형·원인·규칙을 만들고" in table and "카테고리 오너(파서 규칙은 메인테이너)" in table
+    assert "흐름 B(등록)는 새 유형·원인·규칙을 만들고" in table and "리뷰어는 CODEOWNERS 기준이다(카테고리 오너를 둔 카테고리만, 파서 규칙은 메인테이너)" in table
     assert "아래 안내 줄과 표를 그대로 보인다" in help_text
     assert len(re.findall(r"^\| \(A\) ", table, re.M)) >= 3 and len(re.findall(r"^\| \(B\) ", table, re.M)) >= 2
     assert "`record <JIRA-KEY> --new-cause <유형 ID>`" in table
