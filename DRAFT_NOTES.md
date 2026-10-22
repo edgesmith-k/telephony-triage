@@ -14,12 +14,12 @@
 - 테스트는 `tools/related_tests.py --run`(관련만). 전체는 도구가 full이라 할 때·반입 직전·요청 시.
 - 진행 중 판단은 Fable 결정 에이전트에게 묻는다(10/06 사용자 지정). 원칙상 사용자 승인 대상(이슈 DB push, main 병합·태그 등 사용자가 지시하지 않은 외부 동작)은 사용자에게.
 
-## 진행 상태 (10/21)
+## 진행 상태 (10/22)
 
 - 모드: **사외 초안**. Phase **D0, 1~13** 완료, 반입 전 보강 트랙 완료(history). 최신 반입 묶음 **import-20261018**(태그 있음). main 병합 PR #8~#70.
 - 10/15~16 **K·L·L1·L2 완료**(`K_RESULT.md`·`L_RESULT.md`, 재측정 offsite pass 59·fail 0·none 11(site)).
 - 10/17~18 외부 운영 리뷰 ①②③, 쓰기 흐름 eval 9개 fail 0, 검사 속도·하위 디렉토리 DB 수정(#63·#65·#67), 책·소개 자료(#59~#66).
-- 10/21 **사내 피드백 10건 → PR #71(병합 대기)**: 골든 synthetic, site 백엔드, `cid` 과탐, 첫 push, 분석 스킬 만들기, 규칙 제안 → Step 7(`[스킬]` → 담당자 patch, eval 71). 사외 재측정 pass 55·fail 5(표시 누락 P2, `REIMPORT_NOTES_1021.md`). 결정 대기: #71 병합. history "10/21".
+- 10/21~22 **PR #71(병합 대기)**: 사내 피드백 10건, 규칙 제안 질문·스킬 patch·스킬 소스 적용, verify-fix 패치 빌드 기준, 이슈 DB 본인 바로 병합, eval 71·72. **다음: 전체 리뷰 — `REVIEW_1022_HANDOFF.md`**. 사외 기록 갱신은 나중(사용자).
 - 모델: Sonnet 5.5 기준(Opus 5.5 확인 11개 실패 0).
 - `TODO(SITE)`: `tools/list_site_todos.py`. REVIEW-OPEN 0건. 사내 시작: **"사내 설정 시작"**(결정 (o)).
 - 안내서 HTML: 책 `docs/book/telephony-triage-book.html`(공유본 https://claude.ai/artifact/1jov1Et4dQUMauFr6aoxWG), 목록 `docs/materials/00-index.html`
