@@ -266,8 +266,9 @@ def visible_lines(chunks) -> list[str]:
 
 @dataclass
 class Obligation:
-    """사용자에게 보여야 할 스크립트 출력 하나. kind push|post|report|draft, key push:<hash>|post:<sha 앞 16자>|report:<id>|
-    draft:<결과 해시>(id = 그 호출의 tool_use id 끝 12자, 없으면 seq 순번; 초안은 규칙·상태·사유의 sha1 앞 12자). start = 출력이 나온 seq 순번, end = 창 끝(배타),
+    """사용자에게 보여야 할 스크립트 출력 하나. kind push|post|report|draft|patch, key push:<hash>|post:<sha 앞 16자>|report:<id>|
+    draft:<결과 해시>|patch:<KEY>/<스킬 이름>(id = 그 호출의 tool_use id 끝 12자, 없으면 seq 순번; 초안은 규칙·상태·사유의 sha1 앞
+    12자). start = 출력이 나온 seq 순번, end = 창 끝(배타),
     close_kind = 창을 닫은 것(publish·discard·approve·restage·step7·stage·draft·job·end — end면 아직 열려 있다)."""
     kind: str
     key: str
@@ -308,10 +309,30 @@ def report_uncovered(core, chunks, must_show=()) -> list[str]:
     return [ln for ln in core if uncovered([_relax(ln)], relaxed, bullets=True)]
 
 
+PATCH_LIST = re.compile(r"^(?:[-*+]|\d+[.)])\s+")
+
+
+def _patch_norm(line: str) -> str:
+    """patch 안내 줄 비교용: 백틱·굵게를 떼고 표 칸 `|`는 공백으로, U+2212 `−`는 `-`로, 줄 앞 글머리·번호(`- `·`1. `)를 뗀 뒤
+    공백을 하나로."""
+    s = re.sub(r"^(?:>\s*)+", "", str(line).strip()).replace("`", "").replace("**", "").replace("|", " ").replace("\u2212", "-")
+    return re.sub(r"\s+", " ", PATCH_LIST.sub("", s.strip())).strip()
+
+
+def patch_uncovered(lines, chunks) -> list[str]:
+    """스킬 제안 patch 안내 줄(`skill_patch.py`) 중 보인 글에 없는 것: 양쪽을 `_patch_norm`한 부분 문자열 비교(경로를 코드
+    표시로 감싸도, 줄 수를 표 행·번호 목록·글머리 없이·ASCII `-`로 써도 같은 줄) — 그 밖은 글자 그대로."""
+    hay = "\n".join(_patch_norm(ln) for c in chunks for ln in str(c).splitlines())
+    return [ln for ln in lines if _patch_norm(ln) not in hay]
+
+
 def missing(ob: Obligation, chunks) -> list[str]:
-    """ob의 빠진 것: 화면 줄 / 리포트 결정적 줄(글머리·굵게 무시) + 글자 그대로 없는 must_show / 보인 행이 없는 규칙."""
+    """ob의 빠진 것: 화면 줄 / 리포트 결정적 줄(글머리·굵게 무시) + 글자 그대로 없는 must_show / 보인 행이 없는 규칙 /
+    patch 안내 줄(글머리·굵게·백틱 무시)."""
     if ob.kind == "draft":
         return draft_rows_missing(ob.rules, visible_lines(chunks))
+    if ob.kind == "patch":
+        return patch_uncovered(ob.lines, chunks)
     if ob.kind == "report":
         raw = "\n".join(str(c) for c in chunks)
         return report_uncovered(ob.lines, chunks, ob.must_show) + [m for m in ob.must_show if m not in raw]
@@ -322,7 +343,7 @@ CAPPED = "(재시도 한도)"
 
 
 # -- 표시 기록 (L R, `<work_dir>/.shown/log.jsonl`) ---------------------------------------------------------------------
-# 스크립트(db_pr summary·stage·publish·discard·lock, issue_post render·approve, db_verify rules --draft, triage run)가 사용자에게
+# 스크립트(db_pr summary·stage·publish·discard·lock, issue_post render·approve, db_verify rules --draft, triage run, skill_patch)가 사용자에게
 # 보여야 할 출력(의무)과 창을 닫는 사실(close)을 한 줄씩 남긴다. hook은 이 기록을 transcript의 Bash 호출에 시각으로 고정한다
 # (`anchor`). 기록 실패는 본 작업을 막지 않는다(stderr 경고만). 형식은 contracts.md "표시 기록".
 
@@ -487,9 +508,12 @@ def anchor(seq, recs) -> list[tuple[int, dict]]:
 
 
 def _content(kind, r):
-    """의무 내용(같은 key라도 다르면 다른 화면): push·post = 화면 전문, report = 결정적 줄·must_show, draft = 규칙(key에 든다)."""
+    """의무 내용(같은 key라도 다르면 다른 화면): push·post = 화면 전문, report = 결정적 줄·must_show, draft = 규칙(key에 든다),
+    patch = 안내 줄."""
     if kind == "report":
         return r.get("lines"), r.get("must_show")
+    if kind == "patch":
+        return r.get("lines")
     return r.get("rules") if kind == "draft" else screen_lines(str(r.get("block") or ""))   # 줄 끝·빈 줄 차이는 같은 화면
 
 
@@ -499,6 +523,10 @@ def _obligation(kind, key, i, n, r):
     if kind in ("push", "post"):
         block = str(r.get("block") or "")
         return Obligation(kind, key, i, n, "end", lines=screen_lines(block), block=block, extra=extra)
+    if kind == "patch":
+        lines = [str(x) for x in r.get("lines") or [] if str(x).strip()]
+        return Obligation(kind, key, i, n, "end", lines=lines, block="\n".join(lines), path=r.get("path"),
+                          extra=extra) if lines else None
     if kind == "report":
         lines, must = [str(x) for x in r.get("lines") or []], [str(x) for x in r.get("must_show") or []]
         if not (lines or must):
@@ -522,6 +550,7 @@ def record_obligations(seq, recs) -> list[Obligation]:
     | post | key가 다른 post(restage) · close approve |
     | report(lines·must_show가 있을 때) | 다른 report(restage) · close stage · 고정 뒤 거부되지 않은 Step 7 질문(step7) |
     | draft | 같은 job·plan의 key가 다른 draft(draft — 전부 통과 표는 어느 draft로도) · close stage(stage)·discard·lock·report 기록(job) |
+    | patch(lines가 있을 때) | 같은 key(작업·스킬 이름)의 내용이 다른 기록만(새 의무) — 다른 key·close로 닫히지 않는다(턴이 끝나면 Stop·질문이 보지 않는다) |
 
     같은 key의 뒤 기록은 새 의무가 아니다: 첫 기록의 창을 그대로 쓴다(열려 있으면 열린 채, 닫혔으면 닫힌 채) — `extra["last_at"]`만
     뒤 기록 시각으로. 단 열린 창의 내용(화면 전문·리포트 줄)이 바뀌었거나 그 창이 다른 화면·초안에 밀려 닫혔었으면 앞 의무를
@@ -547,7 +576,7 @@ def record_obligations(seq, recs) -> list[Obligation]:
                     shut(ob, i, "stage" if by == "stage" else "job")
             continue
         key = str(r.get("key") or "")
-        if kind not in ("push", "post", "report", "draft") or not key:
+        if kind not in ("push", "post", "report", "draft", "patch") or not key:
             continue
         old = by_key.get(key)
         if old is not None:
@@ -569,7 +598,7 @@ def record_obligations(seq, recs) -> list[Obligation]:
             out.remove(old)
             live = [ob for ob in out if ob.open]
         for ob in live:
-            if ob.kind == kind and kind != "draft":
+            if ob.kind == kind and kind not in ("draft", "patch"):
                 shut(ob, i, "restage")
             elif kind == "draft" and ob.kind == "draft" and (
                     draft_all_clear(ob.rules) or (ob.extra.get("job"), ob.extra.get("plan")) == (r.get("job"), r.get("plan"))):
@@ -577,7 +606,7 @@ def record_obligations(seq, recs) -> list[Obligation]:
             elif kind == "report" and ob.kind == "draft":
                 shut(ob, i, "job")
         ob = _obligation(kind, key, i, len(seq), r)
-        if ob is None:      # 보일 줄이 없는 리포트: 의무는 없고 앞 의무를 닫기만 한다
+        if ob is None:      # 보일 줄이 없는 리포트·patch: 의무는 없고 앞 의무를 닫기만 한다
             continue
         by_key[key] = ob
         out.append(ob)

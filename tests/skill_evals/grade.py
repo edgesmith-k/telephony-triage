@@ -72,7 +72,7 @@ PUBLISH_ASK_TEXT = "실행한 db_pr publish마다 권한 확인 기록(approvals
 ANALYZER_MANIFEST = "analyzer-manifest.json"
 ANALYZER_SKILL_REL = ("mock-plugins", "mock-analyzers", "skills", "mock-data-analyzer")
 FILE_WRITE_TOOLS = ("Write", "Edit", "MultiEdit", "NotebookEdit")
-GUIDE_HEAD = "스킬 제안 patch(적용 안 함, 마스킹됨):"     # `skill-patch.md` 고정 안내 줄의 머리
+GUIDE_HEAD = "스킬 제안 patch(적용 안 함, 마스킹됨):"     # 고정 안내 줄의 머리(`skill_patch.py` GUIDE)
 
 
 def skill_manifest(root: Path) -> dict[str, str]:
@@ -1958,8 +1958,10 @@ def _sections(body: str) -> dict[str, str] | None:
 
 # --- 플랫폼 분리 (배치 P, eval 63~65, docs/design/17-platforms.md) ---------------------------------------------
 
-PLATFORM_SCRIPTS = ("config", "db_pr", "db_verify", "code_roots", "issue_post", "db_add", "db_search", "db_review", "job_status")   # --platform을 받는 스크립트(triage 밖)
-_SCRIPT_CALL = re.compile(r"\b(triage|config|db_pr|db_verify|code_roots|issue_post|db_add|db_search|db_review|job_status)\.py[\"']?([^\n;&|]*)")
+PLATFORM_SCRIPTS = ("config", "db_pr", "db_verify", "code_roots", "issue_post", "db_add", "db_search", "db_review", "job_status",
+                    "skill_patch")   # --platform을 받는 스크립트(triage 밖)
+_SCRIPT_CALL = re.compile(r"\b(triage|config|db_pr|db_verify|code_roots|issue_post|db_add|db_search|db_review|job_status|skill_patch)"
+                          r"\.py[\"']?([^\n;&|]*)")
 _PLATFORM_FLAG = re.compile(r"--platform(?:\s+|=)([A-Za-z0-9_]+)")
 
 
@@ -2359,7 +2361,8 @@ def checks_u(eid, ctx):
 
 def checks_k(eid, ctx):
     """분석 스킬 규칙 제안 eval 71(배치 K): 고른 `[스킬]` 줄 → 담당자용 patch `JOB/skill-suggestions/*.patch`
-    (`reference/skill-patch.md`), 분석 스킬 디렉토리는 그대로, 계획에는 규칙 제안 op 없음. 실행 흔적이 없으면 `_Manual`."""
+    (`reference/skill-patch.md` — `S/skill_patch.py`가 diff·마스킹·apply --check·안내 줄), 분석 스킬 디렉토리는 그대로, 계획에는
+    규칙 제안 op 없음. 실행 흔적이 없으면 `_Manual`."""
     job = "MOCK-9071"
     jobdir = ctx.work / job
     skill = ctx.env_dir.joinpath(*ANALYZER_SKILL_REL)
@@ -2398,14 +2401,17 @@ def checks_k(eid, ctx):
             adds = [r for r in stat if r[2] == target and r[0].isdigit() and int(r[0]) > 0]
             ok = ok and chk.returncode == 0 and bool(adds)
             evs.append(f"{patch.name}: apply --check {'통과' if chk.returncode == 0 else '실패 ' + chk.stderr.strip()[:200]}, numstat={stat}")
-        # patch를 대상으로 한 mask_pii가 마지막 diff(→ .patch) 뒤에 있어야 한다(Step 5-1 결과 마스킹과 구분)
+        # patch를 만든 길: `skill_patch.py`(diff·마스킹·apply --check를 스크립트가 한다, 10/22 — 그 뒤에 손 diff가 없어야 한다) 또는
+        # 예전 손 절차(patch를 대상으로 한 mask_pii가 마지막 diff(→ .patch) 뒤 — Step 5-1 결과 마스킹과 구분)
         lines = ctx.ran.splitlines()
         diffs = [i for i, l in enumerate(lines) if re.search(r"\bdiff\b[^\n]*\.patch", l)]
+        script = [i for i, l in enumerate(lines) if re.search(r"skill_patch\.py\b[^\n]*--skill-dir", l)]
+        by_script = bool(script) and (not diffs or max(script) > max(diffs))
         pvars = {m.group(1) for l in lines for m in re.finditer(r"\b([A-Za-z_]\w*)=[^\s;&|]*\.patch\b", l)}
         masks = [i for i, l in enumerate(lines) if re.search(r"mask_pii\.py[^\n]*\.patch", l)
                  or any(re.search(rf"mask_pii\.py[^\n]*\$\{{?{v}\b", l) for v in pvars)]     # P=….patch 뒤 "$P"도 patch 대상
-        masked = bool(masks) and (not diffs or max(masks) > max(diffs))
-        return ok and masked, "; ".join(evs) + f"; patch mask_pii(마지막 diff 뒤)={masked}"
+        masked = by_script or (bool(masks) and (not diffs or max(masks) > max(diffs)))
+        return ok and masked, "; ".join(evs) + f"; skill_patch.py(마지막 손 diff 뒤)={by_script}; 마스킹 거침={masked}"
 
     def unchanged():
         evidence()
@@ -2427,7 +2433,7 @@ def checks_k(eid, ctx):
         if not ps:
             return False, "patch 없음"
         text = "\n".join(vis)
-        # `skill-patch.md`의 고정 안내 줄: 머리·patch 이름·"git apply"가 한 줄에 있어야 한다
+        # 고정 안내 줄(`skill_patch.py` 출력): 머리·patch 이름·"git apply"가 한 줄에 있어야 한다
         named = [p.name for p in ps if any(GUIDE_HEAD in l and p.name in l and "git apply" in l for l in text.splitlines())]
         counts = []
         lines = text.splitlines()

@@ -20,7 +20,7 @@
 | 운영 이슈 DB 첫 push | `SITE_INSTALL.md §9`(S-4a, 도입 담당자 한 번). `config.py set issue_db.path` 뒤 옛 스냅샷 정리 안내가 출력된다(§7 "이슈 DB 경로를 바꿨을 때") |
 | 분석 스킬 만들기 | `16 §16.5.1` 신설. 이슈 DB 뼈대에 `docs/analyzer-skills.md`가 추가돼 **뼈대 zip 해시가 바뀐다**. 이미 만든 운영 이슈 DB에는 이 파일을 복사해 넣는다(이슈 DB 변경이므로 PR로) |
 | 리포트 안내 | `심층 분석: 해당 없음(…)` 줄 끝에 `(만드는 법: 이슈 DB docs/analyzer-skills.md)` |
-| 규칙 제안 → Step 7 | 분석 스킬의 `규칙 제안:` 줄을 분류 확정 뒤 한 번 묻는다. `[이슈 DB]` 줄은 op 초안 → 승인분만 계획에 넣어 `db_verify`까지, `[스킬]` 줄은 계획에 넣지 않고 담당자용 patch `JOB/skill-suggestions/<스킬 이름>.patch`(분석 스킬 디렉토리 기준 unified diff, `mask_pii` 적용, 분석 스킬은 안 바꿈 — 담당자가 `git apply`)를 만든다. 스킬 디렉토리를 모르면 메모로만. 분석 스킬이 이 형식(16 §16.5)으로 쓰는지 확인 |
+| 규칙 제안 → Step 7 | 분석 스킬의 `규칙 제안:` 줄을 분류 확정 뒤 한 번 묻는다. `[이슈 DB]` 줄은 op 초안 → 승인분만 계획에 넣어 `db_verify`까지, `[스킬]` 줄은 계획에 넣지 않고 담당자용 patch `JOB/skill-suggestions/<스킬 이름>.patch`(분석 스킬 디렉토리 기준 unified diff, `mask_pii` 적용, 분석 스킬은 안 바꿈 — 담당자가 `git apply`)를 만든다. 10/22: diff·마스킹·`git apply --check`·안내 줄은 새 스크립트 `skill_patch.py`가 하고 안내 줄은 표시 보조 hook이 강제한다(표시 기록 `kind: patch` — 스킬 문서는 `reference/skill-patch.md`만 바뀌고 SKILL.md는 그대로). 스킬 디렉토리를 모르면 메모로만. 분석 스킬이 이 형식(16 §16.5)으로 쓰는지 확인 |
 
 ## 3. 테스트·eval
 

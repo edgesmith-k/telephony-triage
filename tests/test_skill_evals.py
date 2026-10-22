@@ -2709,7 +2709,12 @@ def test_prepare_plugin_mode_analyzer_proposal_variant_only_when_set(tmp_path):
     assert manifest == grader.skill_manifest(skill) and "references/DATA-001.md" in manifest
 
 
-def _e71_ctx(tmp_path, *, patch_text=None, events=(), shown=""):
+E71_SCRIPT = ("python3 /p/scripts/skill_patch.py MOCK-9071 --skill-dir /e/mock-plugins/mock-analyzers/skills/mock-data-analyzer "
+              "--name mock-data-analyzer")
+E71_MASK = "python3 S/mask_pii.py JOB/skill-suggestions/mock-data-analyzer.patch --in-place"
+
+
+def _e71_ctx(tmp_path, *, patch_text=None, events=(), shown="", made=E71_SCRIPT):
     import difflib
 
     env = _synthetic_env(tmp_path)
@@ -2726,7 +2731,7 @@ def _e71_ctx(tmp_path, *, patch_text=None, events=(), shown=""):
     (job / "plan.json").write_text(json.dumps({"operations": [{"op": "append", "cause": "DATA-001-01"}]}), encoding="utf-8")
     run = run_dir(tmp_path)
     _write_artifacts(run)
-    _seq_events(run, [_bash("m", "python3 S/mask_pii.py JOB/skill-suggestions/mock-data-analyzer.patch --in-place", ""),
+    _seq_events(run, [*([_bash("m", made, "")] if made else []),
                       *(events(skill) if callable(events) else events), ("text", shown)])
     return grader.Ctx(env, run), skill
 
@@ -2734,12 +2739,21 @@ def _e71_ctx(tmp_path, *, patch_text=None, events=(), shown=""):
 def test_e71_grades_patch_shown_and_skill_unchanged(tmp_path):
     shown = ("스킬 제안 patch(적용 안 함, 마스킹됨): /w/MOCK-9071/skill-suggestions/mock-data-analyzer.patch — 분석 스킬 담당자에게 "
              "전달, 담당자가 검토 후 스킬 소스에서 git apply\n| references/DATA-001.md | +1 | −0 |")
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    import skill_patch      # 안내 줄은 스크립트가 낸다(채점기 머리와 같아야 한다)
+    assert skill_patch.GUIDE.format(path="/w/MOCK-9071/skill-suggestions/mock-data-analyzer.patch") == shown.splitlines()[0]
+    assert skill_patch.GUIDE.startswith(grader.GUIDE_HEAD + " ")
     guide = (REPO / "plugin/skills/telephony-triage/reference/skill-patch.md").read_text(encoding="utf-8")
-    assert f"`{grader.GUIDE_HEAD} <patch 경로> — 분석 스킬 담당자에게 전달, 담당자가 검토 후 스킬 소스에서 git apply`" in guide
+    assert "S/skill_patch.py <KEY> --skill-dir" in guide and f"`{grader.GUIDE_HEAD} …`" in guide
     ctx, skill = _e71_ctx(tmp_path / "ok", shown=shown)
     fns = grader.checks(71, ctx)
     for i in (1, 2, 3, 4):
         assert fns[i]()[0] is True, (i, fns[i]())
+    # 예전 손 절차(diff → patch에 mask_pii)도 2번 통과, 스크립트도 손 마스킹도 없으면 실패, 스크립트 뒤 손 diff로 덮으면 실패
+    assert grader.checks(71, _e71_ctx(tmp_path / "legacy", shown=shown, made=E71_MASK)[0])[1]()[0] is True
+    assert grader.checks(71, _e71_ctx(tmp_path / "none", shown=shown, made=None)[0])[1]()[0] is False
+    over = [_bash("d", "diff -u a b > /w/MOCK-9071/skill-suggestions/mock-data-analyzer.patch", "")]
+    assert grader.checks(71, _e71_ctx(tmp_path / "over", shown=shown, events=over)[0])[1]()[0] is False
     # 분석 스킬 디렉토리를 고치면(내용 변경·파일 도구 쓰기) 3번이 실패한다
     (skill / "references" / "DATA-001.md").write_text("바뀜\n", encoding="utf-8")
     assert grader.checks(71, ctx)[2]()[0] is False

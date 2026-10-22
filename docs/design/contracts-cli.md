@@ -190,6 +190,12 @@ stdin: PostToolUse hook 입력 JSON (argparse 없음)
 | `render` | `<KEY> [--fill <json>] [--format {jira-wiki,markdown}] [--omit <a,b>] [--again]` | `--fill`: LLM 칸 JSON {problem, cause[{basis, text}], next[], code_location}; `--format`: 본문 형식(기본: 코멘트 도구 설정, 없으면 jira-wiki); `--omit`: 뺄 스크립트 칸 항목: failed_step\|fields\|evidence\|must_show\|others; `--again`: 게시 이력이 있어도 다시 올린다(사용자가 명시했을 때만) |
 | `approve` | `<KEY> --sha <post_sha256>` | `--sha`: 확인 화면 마지막 줄의 post_sha256 |
 
+## `skill_patch.py`
+
+| 서브커맨드 | 사용법 | 옵션 설명 |
+|---|---|---|
+| — | `<KEY> --skill-dir <SK> --name <analyzer.skill> [--platform <이름>] [--plugin-root <PLUGIN_ROOT>] [--json]` | `key`: 작업 키; `--skill-dir`: 분석 스킬 디렉토리(5-1 Skill 결과의 `Base directory for this skill:`); `--name`: 분석 스킬 이름(`analyzers.<카테고리>.skill`); `--platform`: 플랫폼(이슈 DB·파서·설정 묶음). 없으면 TT_PLATFORM > 사용자 config platform > site-defaults platform.name; `--json`: JSON 출력(기본은 사용자에게 보일 줄) |
+
 ## `job_status.py`
 
 | 서브커맨드 | 사용법 | 옵션 설명 |

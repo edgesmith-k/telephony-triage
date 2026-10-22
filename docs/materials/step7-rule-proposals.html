@@ -135,7 +135,7 @@ pre { font-family: var(--mono); font-size: .8rem; background: var(--off-soft); b
 - [스킬] references/DATA-001.md에 점검 순서 추가 — 근거: 이번 이슈에서 확인 순서가 빠짐</pre>
     <ul class="plain">
       <li>[이슈 DB] 줄: <code>db-authoring.md</code> 점검을 거친 op 초안 → 승인분만 <code>plan.json</code> → <code>db_verify rules</code> → push 승인 → PR.</li>
-      <li>[스킬] 줄: <code>JOB/skill-suggestions/&lt;스킬&gt;.patch</code>(unified diff, 스킬 폴더 기준 경로). 만든 뒤 마스킹하고 원본에 <code>git apply --check</code>가 통과할 때만 안내 줄을 보입니다. 절차는 <code>reference/skill-patch.md</code>.</li>
+      <li>[스킬] 줄: <code>JOB/skill-suggestions/&lt;스킬&gt;.patch</code>(unified diff, 스킬 폴더 기준 경로). 스크립트 <code>skill_patch.py</code>가 만들고 마스킹한 뒤 스킬 폴더 사본에 <code>git apply --check</code>가 통과할 때만 안내 줄을 냅니다. 안내 줄은 표시 보조 hook이 화면에 꼭 보이게 합니다(절차 <code>reference/skill-patch.md</code>).</li>
       <li>patch는 작업이 끝나도 남고, <code>db_pr cleanup --older-than</code>으로 오래된 작업 폴더를 지울 때 함께 지워집니다.</li>
       <li>검증: eval 71이 [스킬] 갈래를 실행합니다(10/21 사외 통과). [이슈 DB] 갈래를 실행하는 eval은 아직 없습니다.</li>
     </ul>
