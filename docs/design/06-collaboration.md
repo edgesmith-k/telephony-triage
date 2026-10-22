@@ -46,7 +46,7 @@ config > site-defaults > 내장 기본 `self`)이고 PR이 병합 자격이 있�
 커밋이 PR head 그대로(승인 토큰 = 그 SHA, `gh pr merge --match-head-commit`), PR 검사가 모두 통과(검사가 없으면 `ci_mode: local`일
 때만 통과), `mergeStateStatus`가 CLEAN·HAS_HOOKS(오너 리뷰가 필요한 경로면 BLOCKED라 병합하지 않는다), 메인테이너 경로 변경 없음
 (기록이 아니라 `git diff origin/<base>...head`로 다시 본다), PR을 만든 뒤 main이 바뀌지 않음(fetch한 `origin/<base>`가 PR 커밋의 조상이
-아니거나 BEHIND면 같은 ID가 두 번 들어가지 않게 `sync-pr` 뒤 다시). 검사 대기·상태 확인 중(UNKNOWN 등)·BLOCKED인데 검사가 대기·없음이면
+아니거나 BEHIND면 같은 ID가 두 번 들어가지 않게 `sync-pr` 뒤 다시). 검사 대기·상태 확인 중(UNKNOWN 등)·fetch 실패면(리뷰 필요·BLOCKED는 기다리지 않는다)
 `issue_db.merge_wait_seconds`(기본 420초, 최대 480)까지 기다린다. 끝내 안 되면 PR을 그대로 두고 사유와 재시도 명령(`db_pr merge --job <KEY>
 --approved <sha>`)을 알린다. 병합 자격이 없는 PR — `issue_db.merge: review`, 검증 결과 "승인 필요"(`needs-approval`), 메인테이너
 경로(`/.githooks/`·`/schema/`·`/parser-rules/`·`/templates/`·`/.github/`·`/docs/`·`/issue-db.config.yaml`·`CONTRIBUTING.md`·

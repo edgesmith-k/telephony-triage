@@ -16,6 +16,7 @@
   MOCK_GH_BAD_JSON=<문자열>  `pr list`가 그 문자열(1이면 html)을 stdout에 내고 0으로 끝난다 (my-prs 경고 경로 시험)
   MOCK_GH_CHECKS      `pr view`의 statusCheckRollup: none(기본, 빈 목록) | pass | pending | fail
   MOCK_GH_MERGE_STATE `pr view`의 mergeStateStatus (기본 CLEAN)
+  MOCK_GH_REVIEW_DECISION `pr view`의 reviewDecision (기본 빈 값 — 필수 리뷰 없음)
   MOCK_GH_MERGE_METHODS `repo view`가 허용하는 병합 방식(쉼표, 기본 merge,squash,rebase)
   MOCK_GH_FAIL_MERGE=1 `pr merge`를 실패시킨다
   GH_HOST             호스트 이름 (없으면 ghe.mock.invalid)
@@ -285,7 +286,7 @@ def cmd_pr(argv: list[str]) -> int:
         if args.json_fields is not None:
             fields = [f for f in args.json_fields.split(",") if f]
             view = {**match, "statusCheckRollup": _rollup(), "mergeStateStatus": os.environ.get("MOCK_GH_MERGE_STATE") or "CLEAN",
-                    "isDraft": bool(match.get("isDraft"))}
+                    "isDraft": bool(match.get("isDraft")), "reviewDecision": os.environ.get("MOCK_GH_REVIEW_DECISION") or ""}
             print(json.dumps({k: view.get(k) for k in fields}, ensure_ascii=False))
         else:
             print(f"#{match['number']} {match['title']}")

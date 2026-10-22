@@ -953,7 +953,7 @@ def s4a_golden_mutation(ctx: Ctx) -> dict:
     target = copy / rel
     original = target.read_text(encoding="utf-8")
     leaves = [p for p, _ in _leaves(json.loads(original))
-              if re.match(r"[^.\[]+", p).group() not in GOLDEN_META_KEYS]   # 최상위 메타 키만 뺀다(이벤트 필드 이름은 기대값)
+              if (m := re.match(r"[^.\[]+", p)) is None or m.group() not in GOLDEN_META_KEYS]   # 최상위 메타 키만 뺀다(이벤트 필드 이름은 기대값, 최상위 목록은 키 없음)
     if not leaves:
         return res("s4a.golden_mutation", "skip", f"{rel}: 바꿀 값 없음", cmd, ask="값이 있는 골든 JSON을 둔다")
     picks = sorted({0, len(leaves) // 2, len(leaves) - 1})[:MUTATIONS]

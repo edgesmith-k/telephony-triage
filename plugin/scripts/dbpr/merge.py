@@ -11,8 +11,9 @@
 - 승인 토큰 = publish가 push한 커밋 SHA. PR head가 그 SHA가 아니면 병합하지 않는다(`gh pr merge --match-head-commit`도 같은 SHA).
   병합 조건: PR 검사가 모두 통과(검사가 없으면 이슈 DB `ci_mode: local`일 때만 통과 — 그 밖은 아직 안 온 것으로 본다),
   `mergeStateStatus`가 CLEAN·HAS_HOOKS, fetch한 `origin/<base>`가 PR 커밋의 조상(main이 바뀌면 `sync-pr`).
-  검사 대기·병합 가능 상태 확인 중(UNKNOWN 등)·BLOCKED인데 검사가 대기·없음이면 `wait`초까지 기다렸다 다시 본다
-  (기본 config `issue_db.merge_wait_seconds`, 600). 끝내 안 되면 PR을 그대로 두고 사유와 재시도 명령(`retry`)을 낸다.
+  검사 대기·병합 가능 상태 확인 중(UNKNOWN 등)이면 `wait`초까지 기다렸다 다시 본다(기본 config `issue_db.merge_wait_seconds`).
+  리뷰 필요(`reviewDecision` REVIEW_REQUIRED·CHANGES_REQUESTED)·BLOCKED는 기다리지 않는다(검사가 없는 BLOCKED는 `ci_mode: local`
+  — 올 검사가 없다). 끝내 안 되면 PR을 그대로 두고 사유와 재시도 명령(`retry`)을 낸다.
 - gh는 사용자 clone을 cwd로 부르되 `--delete-branch`를 쓰지 않는다(gh가 로컬 브랜치를 지우거나 checkout하지 않게 — clone 불변).
   원격 PR 브랜치 삭제는 레포 설정 "Automatically delete head branches"에 맡긴다. 병합 뒤 사용자 clone에는 `fetch`만 한다.
 """
@@ -25,7 +26,7 @@ import time
 
 import yaml
 
-from common import userconfig
+from common import masking, userconfig
 from common.exitcodes import CHECK_FAILED, OK, USAGE
 
 from .lock import JOB_KEY_RE, PLAN, UsageError, _iso, _read_json, _write_json, now, trace_note
@@ -50,10 +51,14 @@ FINAL_STATES = {
     "DRAFT": "초안(draft) PR이다",
 }
 BLOCKED_REVIEW = "GHE 브랜치 보호 조건(필수 리뷰 등)을 만족하지 않는다 — 리뷰어가 GHE에서 머지한다"
+BLOCKED_NO_CHECKS = ("GHE 브랜치 보호가 병합을 막는다(필수 리뷰 또는 필수 검사 — ci_mode: local이라 올 검사가 없다)"
+                     " — 리뷰어가 GHE에서 머지한다")
+REVIEW_BLOCKING = {"REVIEW_REQUIRED", "CHANGES_REQUESTED"}
 PASS_CONCLUSIONS = {"SUCCESS", "NEUTRAL", "SKIPPED"}
 PASS_STATES = {"SUCCESS"}
 PENDING_STATES = {"PENDING", "EXPECTED"}
-VIEW_FIELDS = "number,url,state,isDraft,headRefName,headRefOid,baseRefName,mergeStateStatus,statusCheckRollup,mergeCommit"
+VIEW_FIELDS = ("number,url,state,isDraft,headRefName,headRefOid,baseRefName,mergeStateStatus,statusCheckRollup,mergeCommit,"
+               "reviewDecision")
 
 
 def merge_mode(cfg: dict) -> tuple[str, str | None]:
@@ -218,7 +223,10 @@ def _attempt(ctx: Ctx, number, head: str, branch: str) -> dict:
         raise _Stop(f"PR base가 {view.get('baseRefName')}다({ctx.base}가 아니다)")
     if view.get("isDraft"):
         raise _Stop(FINAL_STATES["DRAFT"])
-    _git(ctx.repo, "fetch", "origin", check=False)    # 사용자 clone은 fetch만(브랜치·파일 불변)
+    fetch = _git(ctx.repo, "fetch", "origin", check=False)    # 사용자 clone은 fetch만(브랜치·파일 불변)
+    if fetch.returncode != 0:      # 오래된 origin/<base>로 메인테이너 경로·main 불변을 보지 않는다
+        err = masking.mask_brief((fetch.stderr or fetch.stdout or "").strip(), 200)
+        raise _Stop(f"fetch 실패(종료 {fetch.returncode}: {err}) — 인증·네트워크를 확인한다", retry=True)
     diff = _git(ctx.repo, "diff", "--name-only", f"refs/remotes/origin/{ctx.base}...{head}", check=False)
     if diff.returncode != 0:
         raise _Stop("PR 변경 파일을 확인하지 못했다(git diff) — fetch 상태를 확인한다")
@@ -231,16 +239,16 @@ def _attempt(ctx: Ctx, number, head: str, branch: str) -> dict:
         checks, names = "pending", [f"검사 결과 없음(ci_mode: {ci_mode})"]
     if checks == "fail":
         raise _Stop(f"PR 검사 실패({', '.join(names[:5])}) — 실패 원인을 고친 뒤 sync-pr로 다시 올린다", checks=checks)
+    review = str(view.get("reviewDecision") or "").upper()
+    if review in REVIEW_BLOCKING:      # 리뷰는 기다려도 오지 않는다 — 검사 대기 전에 멈춘다
+        raise _Stop(BLOCKED_REVIEW, checks=checks, review=review)
     if checks == "pending":
         raise _Stop(f"검사 대기({', '.join(names[:5])})", retry=True, checks=checks)
     mss = str(view.get("mergeStateStatus") or "").upper()
     if mss in FINAL_STATES:
         raise _Stop(FINAL_STATES[mss].format(branch=branch), checks=checks, merge_state=mss)
-    if mss == "BLOCKED":
-        if checks == "none":
-            raise _Stop("검사 대기(브랜치 보호: 필수 검사가 아직 보고되지 않았거나 리뷰가 필요하다)", retry=True,
-                        checks=checks, merge_state=mss)
-        raise _Stop(BLOCKED_REVIEW, checks=checks, merge_state=mss)
+    if mss == "BLOCKED":        # 검사 없음이 여기 오면 ci_mode: local(그 밖은 위에서 검사 대기) — 기다리지 않는다
+        raise _Stop(BLOCKED_NO_CHECKS if checks == "none" else BLOCKED_REVIEW, checks=checks, merge_state=mss)
     if mss not in MERGEABLE_STATES:
         raise _Stop(f"GHE 병합 가능 상태 확인 중({mss or '알 수 없음'})", retry=True, checks=checks, merge_state=mss)
     anc = _git(ctx.repo, "merge-base", "--is-ancestor", f"refs/remotes/origin/{ctx.base}", head, check=False).returncode

@@ -2268,7 +2268,7 @@ def test_merge_refuses_or_waits_and_leaves_pr_with_retry():
     retry = f"db_pr merge --job MOCK-7002 --approved {head}"
     for env, want in (({"MOCK_GH_CHECKS": "pending"}, "검사 대기(db-check)"),
                       ({"MOCK_GH_CHECKS": "fail"}, "PR 검사 실패(db-check)"),
-                      ({"MOCK_GH_MERGE_STATE": "BLOCKED"}, "검사 대기(브랜치 보호"),
+                      ({"MOCK_GH_MERGE_STATE": "BLOCKED"}, "ci_mode: local이라 올 검사가 없다"),
                       ({"MOCK_GH_MERGE_STATE": "BLOCKED", "MOCK_GH_CHECKS": "pass"}, "리뷰어가 GHE에서 머지"),
                       ({"MOCK_GH_MERGE_STATE": "UNKNOWN"}, "GHE 병합 가능 상태 확인 중(UNKNOWN)"),
                       ({"MOCK_GH_MERGE_STATE": "BEHIND"}, "sync-pr issue/MOCK-7002"),
@@ -2292,6 +2292,41 @@ def test_merge_treats_missing_checks_as_pending_outside_local_ci_mode():
     ws.push_main(to_actions)
     out = _merge(ws, head, expect=1)
     assert out["merged"] is False and "검사 대기(검사 결과 없음(ci_mode: actions))" in out["reason"]
+    out = _merge(ws, head, expect=1, MOCK_GH_MERGE_STATE="BLOCKED")     # 필수 검사가 아직 안 왔다 — 대기 그대로
+    assert "검사 대기(검사 결과 없음" in out["reason"]
+
+
+def test_merge_does_not_wait_for_review_or_blocked_without_checks():
+    """리뷰 필요(reviewDecision)·ci_mode: local의 검사 없는 BLOCKED는 기다려도 풀리지 않는다 — 바로 사유를 낸다."""
+    ws = Workspace()
+    head = _published(ws)["head_sha"]
+    for env in ({"MOCK_GH_REVIEW_DECISION": "REVIEW_REQUIRED", "MOCK_GH_CHECKS": "pending"},
+                {"MOCK_GH_REVIEW_DECISION": "CHANGES_REQUESTED"}):
+        out = _merge(ws, head, expect=1, wait="30", **env)
+        assert out["reason"] == m_reason("BLOCKED_REVIEW") and out["review"] == env["MOCK_GH_REVIEW_DECISION"], out
+        assert out["waited"] < 10 and ws.prs()[0]["state"] == "OPEN"
+    out = _merge(ws, head, expect=1, wait="30", MOCK_GH_MERGE_STATE="BLOCKED")
+    assert out["reason"] == m_reason("BLOCKED_NO_CHECKS") and out["waited"] < 10
+    done = _merge(ws, head, MOCK_GH_REVIEW_DECISION="APPROVED")
+    assert done["merged"] is True
+
+
+def test_merge_stops_when_fetch_fails():
+    """fetch가 실패하면 오래된 origin/<base>로 메인테이너 경로·main 불변을 보지 않는다(fail-closed)."""
+    ws = Workspace()
+    head = _published(ws)["head_sha"]
+    git(ws.clone, "config", "remote.origin.uploadpack", "false")      # 원격 URL(gh 레포)은 그대로, fetch만 실패
+    out = _merge(ws, head, expect=1)
+    assert out["merged"] is False and out["reason"].startswith("fetch 실패(종료 ") and "인증·네트워크를 확인한다" in out["reason"]
+    assert ws.prs()[0]["state"] == "OPEN" and out["retry"].startswith("db_pr merge")
+    git(ws.clone, "config", "--unset", "remote.origin.uploadpack")
+    assert _merge(ws, head)["merged"] is True
+
+
+def m_reason(name: str) -> str:
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    from dbpr import merge as m
+    return getattr(m, name)
 
 
 def test_merge_refuses_when_pr_head_moved_or_merged_elsewhere():

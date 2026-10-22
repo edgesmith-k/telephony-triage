@@ -324,6 +324,22 @@ def test_source_offer_shows_masked_patch_and_apply_changes_working_tree_only(env
     assert rec["key"] == f"apply:{KEY}/{NAME}" and rec["kind"] == "patch" and rec["lines"] == proc.stdout.splitlines()
 
 
+def test_source_offer_fence_longer_than_skill_code_fence(env, src):
+    """스킬 파일의 코드 울타리(문맥 줄 " ```")가 화면의 diff 울타리를 닫지 않게 더 긴 울타리로 감싼다."""
+    fenced = ORIG + "\n```\nadb logcat -b radio\n```\n"
+    for d in (env["sk"], src):
+        (d / REL).write_text(fenced, encoding="utf-8", newline="\n")
+    _git(src.parent.parent, "commit", "-qam", "fence")
+    put(env, REL, fenced + ADDED)
+    proc = call(env, "--source", str(src))
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    lines = proc.stdout.splitlines()
+    assert " ```" in lines and lines[3] == "````diff" and lines[-1] == "````"
+    assert lines[4:-1] == env["patch"].read_text(encoding="utf-8").rstrip("\n").split("\n")
+    assert records(env)[-1]["lines"] == lines
+    assert skill_patch._fence("a ```` b") == "`````" and skill_patch._fence("x") == "```"
+
+
 def test_source_from_config_and_json(env, src):
     cfg = env["base"] / "config.yaml"
     cfg.write_text(cfg.read_text(encoding="utf-8") + f"analyzers:\n  data:\n    skill: {NAME}\n    source: {src}\n",

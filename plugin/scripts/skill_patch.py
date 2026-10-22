@@ -23,7 +23,7 @@
 
 **스킬 소스 적용(선택, 16-existing-assets §16.5.1)**: 스킬 소스 `SRC` = `--source` 또는 config `analyzers.<카테고리>.source`
 (`skill`이 `--name`과 같은 항목, 절대 경로 — 분석 스킬 소스 checkout 안의 스킬 폴더). patch를 만들 때 `SRC`가 있으면 적용 가능성을
-미리 본다(아래 검사): 되면 `스킬 소스 적용 대기: …` 줄과 patch 전문(```diff 울타리)을, 안 되면 `스킬 소스에 바로 적용할 수 없음(patch만
+미리 본다(아래 검사): 되면 `스킬 소스 적용 대기: …` 줄과 patch 전문(```diff 울타리 — patch에 백틱 줄이 있으면 그보다 긴 울타리)을, 안 되면 `스킬 소스에 바로 적용할 수 없음(patch만
 남김): <사유>` 줄을 더한다(종료 0 그대로). patch가 200줄·12KB를 넘으면 제안하지 않는다("patch 파일을 열어 확인"). 마스킹이
 추가 줄을 바꿨으면 대기 줄 끝에 `추가 줄 N개가 마스킹으로 바뀜 — placeholder가 소스에 들어간다`. 사용자가 "적용"을 고르면
 `--apply --sha <그 줄의 sha256>`(`--source`는 못 쓴다): meta가 있고 patch 파일 sha256이 같고, 적용 대상은 meta에 기록한(제안 때 보인)
@@ -167,6 +167,11 @@ def collect(copies: Path, sk: Path) -> list[tuple[str, Path, Path]]:
     if not out:
         raise Memo(f"사본이 없다({copies})")
     return sorted(out)
+
+
+def _fence(text: str) -> str:
+    """patch에 든 가장 긴 백틱 줄보다 한 칸 긴 울타리(최소 3) — 스킬 파일의 코드 울타리가 화면의 diff 울타리를 닫지 못하게."""
+    return "`" * max(3, max((len(m) for m in re.findall(r"`+", text)), default=0) + 1)
 
 
 def _lines(data: bytes, rel: str) -> list[str]:
@@ -323,8 +328,9 @@ def run(args, defaults: dict) -> tuple[dict, int]:
             doc["apply"] = {"offer": False, "reason": why}
         else:
             masked_n = getattr(build, "masked_added", 0)
+            fence = _fence(patch)
             lines += [APPLY_OFFER.format(source=src, sha=sha) + (MASKED_NOTE.format(n=masked_n) if masked_n else ""),
-                      "```diff", *patch.rstrip("\n").split("\n"), "```"]
+                      f"{fence}diff", *patch.rstrip("\n").split("\n"), fence]
             doc["apply"] = {"offer": True, "sha256": sha, "masked_added": masked_n}
             offered = str(src)
     try:        # --apply는 이 기록(보인 스킬 소스·sha256)과 같을 때만 적용한다
