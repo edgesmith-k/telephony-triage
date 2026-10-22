@@ -101,7 +101,11 @@ pre { font-family: var(--mono); font-size: .8rem; background: var(--off-soft); b
         </div>
         <div class="branch">
           <div class="head sk">[스킬] 줄</div>
-          <div class="node new">담당자용 patch 생성<small>JOB/skill-suggestions/&lt;스킬&gt;.patch · 경로·+/− 줄 수 표시</small></div>
+          <div class="node new">담당자용 patch 생성<small>JOB/skill-suggestions/&lt;스킬&gt;.patch</small></div>
+          <div class="arrow"></div>
+          <div class="node new">마스킹 → 원본에 git apply --check<small>실패하면 patch를 지우고 메모로만</small></div>
+          <div class="arrow"></div>
+          <div class="node ok">고정 안내 줄 + 파일별 +N −M<small>"적용 안 함, 마스킹됨 … 담당자가 git apply"</small></div>
           <div class="arrow"></div>
           <div class="node off">계획·PR·Jira에 넣지 않음<small>분석 스킬은 안 바꿈, 담당자가 git apply</small></div>
         </div>
@@ -122,7 +126,7 @@ pre { font-family: var(--mono); font-size: .8rem; background: var(--off-soft); b
     <ul style="margin-top:12px">
       <li>분석 스킬은 파일을 바꾸지 않고 제안만 한다. 반영은 사용자 확인 → 검증 → PR.</li>
       <li>이 줄을 쓰지 않는 분석 스킬은 동작이 예전과 같다.</li>
-      <li>eval 71이 모의 분석 스킬의 제안 변형(<code>analyzer_proposal</code>)으로 <code>[스킬]</code> patch 분기를 실행한다. <code>[이슈 DB]</code> 분기를 실행하는 eval은 아직 없다.</li>
+      <li>eval 71이 모의 분석 스킬의 제안 변형(<code>analyzer_proposal</code>)으로 <code>[스킬]</code> patch 분기를 실행한다(10/21 사외 통과). <code>[이슈 DB]</code> 분기를 실행하는 eval은 아직 없다.</li>
     </ul>
   </section>
 </div>
