@@ -2737,8 +2737,8 @@ def _e71_ctx(tmp_path, *, patch_text=None, events=(), shown="", made=E71_SCRIPT)
 
 
 def test_e71_grades_patch_shown_and_skill_unchanged(tmp_path):
-    shown = ("스킬 제안 patch(적용 안 함, 마스킹됨): /w/MOCK-9071/skill-suggestions/mock-data-analyzer.patch — 분석 스킬 담당자에게 "
-             "전달, 담당자가 검토 후 스킬 소스에서 git apply\n| references/DATA-001.md | +1 | −0 |")
+    shown = ("스킬 제안 patch(적용 안 함, 마스킹됨): /w/MOCK-9071/skill-suggestions/mock-data-analyzer.patch — 직접 검토해 스킬 소스의 "
+             "dev 브랜치에 git apply, main에는 PR로 반영\n| references/DATA-001.md | +1 | −0 |")
     sys.path.insert(0, str(REPO / "plugin" / "scripts"))
     import skill_patch      # 안내 줄은 스크립트가 낸다(채점기 머리와 같아야 한다)
     assert skill_patch.GUIDE.format(path="/w/MOCK-9071/skill-suggestions/mock-data-analyzer.patch") == shown.splitlines()[0]

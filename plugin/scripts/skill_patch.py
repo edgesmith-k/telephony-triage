@@ -15,7 +15,7 @@
 4. 적용 확인: `SK`의 임시 사본(`.git` 제외, `GIT_CEILING_DIRECTORIES`로 바깥 저장소를 찾지 않는다)에서 `git apply --check`.
 5. 통과하면 `JOB/skill-suggestions/<이름>.patch`를 쓰고 고정 안내 줄과 파일별 `- <rel> +N −M`을 낸다.
 
-하나라도 실패하면 patch를 쓰지 않고(이전 patch도 지운다) `스킬 제안 patch 없음(담당자 메모로 전달): <사유>` 한 줄을 낸다(종료 1).
+하나라도 실패하면 patch를 쓰지 않고(이전 patch도 지운다) `스킬 제안 patch 없음(직접 반영할 메모): <사유>` 한 줄을 낸다(종료 1).
 낸 줄(안내 줄·줄 수, 또는 메모)은 표시 기록(`kind: patch`, contracts.md "표시 기록")으로 남아 표시 보조 hook이 다음 질문·턴
 끝 전에 글자 그대로 보였는지 본다. `SK` 안은 쓰지 않는다. 네트워크·git 쓰기·lock 없음.
 
@@ -50,8 +50,8 @@ from platforms import session as platform_session  # noqa: E402
 import trackers  # noqa: E402
 
 SUGGEST_DIR = "skill-suggestions"
-GUIDE = "스킬 제안 patch(적용 안 함, 마스킹됨): {path} — 분석 스킬 담당자에게 전달, 담당자가 검토 후 스킬 소스에서 git apply"
-MEMO = "스킬 제안 patch 없음(담당자 메모로 전달): {reason}"
+GUIDE = "스킬 제안 patch(적용 안 함, 마스킹됨): {path} — 직접 검토해 스킬 소스의 dev 브랜치에 git apply, main에는 PR로 반영"
+MEMO = "스킬 제안 patch 없음(직접 반영할 메모): {reason}"
 NO_EOL = "\\ No newline at end of file\n"
 GIT_TIMEOUT = 60
 

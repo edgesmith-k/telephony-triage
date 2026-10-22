@@ -1030,10 +1030,10 @@ def test_closed_window_same_hash_new_screen_judges_the_new_screen(tmp_path):
 # --- 스킬 제안 patch 안내(skill_patch.py, kind patch) ---------------------------------------------------------------
 
 PATCH_CMD = "python3 /p/scripts/skill_patch.py MOCK-1 --skill-dir /sk/mock-data-analyzer --name mock-data-analyzer"
-PATCH_LINES = ["스킬 제안 patch(적용 안 함, 마스킹됨): /w/MOCK-1/skill-suggestions/mock-data-analyzer.patch — 분석 스킬 담당자에게 "
-               "전달, 담당자가 검토 후 스킬 소스에서 git apply", "- references/DATA-001.md +1 −0"]
+PATCH_LINES = ["스킬 제안 patch(적용 안 함, 마스킹됨): /w/MOCK-1/skill-suggestions/mock-data-analyzer.patch — 직접 검토해 스킬 소스의 "
+               "dev 브랜치에 git apply, main에는 PR로 반영", "- references/DATA-001.md +1 −0"]
 PATCH_OUT = "\n".join(PATCH_LINES)
-MEMO_LINE = "스킬 제안 patch 없음(담당자 메모로 전달): 마스킹이 문맥·삭제 줄을 바꿔 원본에 적용되지 않는다(1줄, 예: x)"
+MEMO_LINE = "스킬 제안 patch 없음(직접 반영할 메모): 마스킹이 문맥·삭제 줄을 바꿔 원본에 적용되지 않는다(1줄, 예: x)"
 
 
 def _patch_rec(lines=PATCH_LINES, name="mock-data-analyzer"):

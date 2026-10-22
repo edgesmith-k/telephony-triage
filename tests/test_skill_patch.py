@@ -32,7 +32,7 @@ import skill_patch  # noqa: E402
 KEY = "MOCK-9071"
 NAME = "mock-data-analyzer"
 REL = "references/DATA-001.md"
-GUIDE_TAIL = " — 분석 스킬 담당자에게 전달, 담당자가 검토 후 스킬 소스에서 git apply"
+GUIDE_TAIL = " — 직접 검토해 스킬 소스의 dev 브랜치에 git apply, main에는 PR로 반영"
 ORIG = "# DATA-001 점검\n\n1. 데이터 설정을 본다.\n2. APN을 본다.\n3. 로밍 설정을 본다.\n"
 ADDED = "4. 설정 화면 경로(설정 > 네트워크 > 모바일 데이터)를 본다.\n"
 
@@ -155,7 +155,7 @@ def test_path_escape_is_rejected(env, tmp_path, case):
     proc = call(env)
     assert proc.returncode == 1, proc.stderr
     (line,) = proc.stdout.splitlines()
-    assert line.startswith("스킬 제안 patch 없음(담당자 메모로 전달): ")
+    assert line.startswith("스킬 제안 patch 없음(직접 반영할 메모): ")
     assert ("스킬 디렉토리 밖" in line) if case == "sk-symlink" else ("심볼릭 링크" in line or "일반 파일" in line)
     assert not env["patch"].exists() and tree(outside) == before
     (rec,) = records(env)
@@ -179,7 +179,7 @@ def test_masking_that_changes_context_fails_without_patch(env):
     proc = call(env)
     assert proc.returncode == 1
     (line,) = proc.stdout.splitlines()
-    assert line.startswith("스킬 제안 patch 없음(담당자 메모로 전달): 마스킹이 문맥·삭제 줄을 바꿔 원본에 적용되지 않는다")
+    assert line.startswith("스킬 제안 patch 없음(직접 반영할 메모): 마스킹이 문맥·삭제 줄을 바꿔 원본에 적용되지 않는다")
     assert "490154203237518" not in line and "<IMEI#1>" in line
     assert not env["patch"].exists() and tree(env["sk"]) == before
     assert "490154203237518" not in json.dumps(records(env), ensure_ascii=False)
