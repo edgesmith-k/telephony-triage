@@ -1,132 +1,143 @@
 <title>Step 7 규칙 제안 흐름</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <style>
-/* 레이아웃: 전·후 두 열 흐름도, 좁으면 위아래로 쌓는다 */
+/* 레이아웃: 한 줄 요약 → 전/후 3단계 비교 → 실제 화면 예시 → 자세히(접힘) */
 :root {
-  --bg: #f5f7f8; --panel: #ffffff; --fg: #1b2328; --muted: #5d6b73; --line: #c9d3d8;
+  --bg: #f5f7f8; --panel: #ffffff; --fg: #1b2328; --muted: #5d6b73; --line: #d3dbdf;
   --accent: #1f6f8b; --accent-soft: #e2f0f5; --new: #b4540f; --new-soft: #fbeee3;
-  --ok: #2c7a4b; --ok-soft: #e4f3ea; --off: #8a959b; --off-soft: #eef1f2;
-  --sans: "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  --ok: #2c7a4b; --ok-soft: #e4f3ea; --off-soft: #eef1f2;
+  --sans: "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
   --mono: ui-monospace, Menlo, Consolas, monospace;
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
   --bg: #12181b; --panel: #1a2226; --fg: #e3e9ec; --muted: #9aa8af; --line: #34424a;
   --accent: #6cbad6; --accent-soft: #1b3440; --new: #f0a060; --new-soft: #3a2616;
-  --ok: #73c995; --ok-soft: #173325; --off: #7d898f; --off-soft: #222b2f; color-scheme: dark } }
+  --ok: #73c995; --ok-soft: #173325; --off-soft: #222b2f; color-scheme: dark } }
 :root[data-theme="dark"] {
   --bg: #12181b; --panel: #1a2226; --fg: #e3e9ec; --muted: #9aa8af; --line: #34424a;
   --accent: #6cbad6; --accent-soft: #1b3440; --new: #f0a060; --new-soft: #3a2616;
-  --ok: #73c995; --ok-soft: #173325; --off: #7d898f; --off-soft: #222b2f; color-scheme: dark }
-body { background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 15px; line-height: 1.55;
-  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 28px 48px; }
-.wrap { max-width: 1080px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; }
-h1 { font-size: 1.6rem; margin: 0; text-wrap: balance; }
-.lede { color: var(--muted); margin: 6px 0 0; max-width: 65ch; }
-.cols { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-@media (max-width: 780px) { .cols { grid-template-columns: 1fr; } }
-.col { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px; min-width: 0; display: flex; flex-direction: column; gap: 0; }
-.col h2 { margin: 0 0 14px; font-size: 1.05rem; display: flex; align-items: center; gap: 8px; }
-.tag { font-size: .72rem; letter-spacing: .06em; padding: 2px 8px; border-radius: 99px; font-weight: 500; }
-.tag.before { background: var(--off-soft); color: var(--muted); }
-.tag.after { background: var(--new-soft); color: var(--new); }
-.node { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; background: var(--panel); }
-.node b { display: block; font-size: .92rem; }
-.node small { color: var(--muted); font-size: .82rem; display: block; }
-.node.step { border-left: 4px solid var(--accent); background: var(--accent-soft); }
-.node.new { border-color: var(--new); background: var(--new-soft); }
-.node.ok { border-color: var(--ok); background: var(--ok-soft); }
-.node.off { border-style: dashed; color: var(--muted); background: var(--off-soft); }
-.arrow { height: 22px; display: flex; justify-content: center; }
-.arrow::before { content: ""; width: 2px; background: var(--line); }
-.arrow.lbl { height: auto; padding: 4px 0; align-items: center; gap: 8px; font-size: .78rem; color: var(--muted); }
-.arrow.lbl::before { height: 18px; }
-code { font-family: var(--mono); font-size: .82em; background: var(--off-soft); padding: 0 4px; border-radius: 4px; }
-.branches { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-@media (max-width: 520px) { .branches { grid-template-columns: 1fr; } }
-.branch { display: flex; flex-direction: column; min-width: 0; }
-.branch .head { font-size: .78rem; font-weight: 700; text-align: center; padding: 4px; border-radius: 6px; margin-bottom: 6px; }
-.head.db { background: var(--new-soft); color: var(--new); }
-.head.sk { background: var(--accent-soft); color: var(--accent); }
-.head.no { background: var(--off-soft); color: var(--muted); }
-.branch .node { font-size: .85rem; }
-.branch .arrow { height: 14px; }
-.lost { margin-top: 10px; font-size: .85rem; color: var(--muted); border-top: 1px dashed var(--line); padding-top: 10px; }
-.notes { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; }
-.notes h3 { margin: 0 0 8px; font-size: 1rem; }
-.notes ul { margin: 0; padding-left: 1.2em; display: grid; gap: 4px; }
-pre { font-family: var(--mono); font-size: .8rem; background: var(--off-soft); border-radius: 8px; padding: 10px 12px; overflow-x: auto; margin: 8px 0 0; }
+  --ok: #73c995; --ok-soft: #173325; --off-soft: #222b2f; color-scheme: dark }
+body { background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 16px; line-height: 1.6;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 28px 56px; }
+.wrap { max-width: 920px; margin: 0 auto; display: flex; flex-direction: column; gap: 28px; }
+h1 { font-size: 1.5rem; margin: 0; text-wrap: balance; }
+h2 { font-size: 1.15rem; margin: 0 0 12px; text-wrap: balance; }
+p { margin: 0; }
+.summary { background: var(--accent-soft); border-radius: 12px; padding: 18px 20px; font-size: 1.05rem; }
+.summary b { color: var(--accent); }
+.compare { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 720px) { .compare { grid-template-columns: 1fr; } }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; min-width: 0; }
+.card.after { border-color: var(--new); }
+.label { display: inline-block; font-size: .8rem; font-weight: 700; letter-spacing: .04em; padding: 2px 10px; border-radius: 99px; margin-bottom: 10px; }
+.label.before { background: var(--off-soft); color: var(--muted); }
+.label.after { background: var(--new-soft); color: var(--new); }
+ol.steps { margin: 0; padding-left: 1.3em; display: grid; gap: 8px; }
+ol.steps li.bad { color: var(--muted); }
+ol.steps li.good b { color: var(--new); }
+.kinds { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 720px) { .kinds { grid-template-columns: 1fr; } }
+.kind { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.kind h3 { margin: 0; font-size: 1rem; }
+.kind .eg { font-size: .9rem; color: var(--muted); }
+.flow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: .9rem; }
+.flow span { background: var(--off-soft); border-radius: 6px; padding: 3px 8px; }
+.flow span.end { background: var(--ok-soft); color: var(--ok); font-weight: 600; }
+.flow i { font-style: normal; color: var(--muted); }
+.chat { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; display: grid; gap: 12px; }
+.msg { border-radius: 10px; padding: 10px 14px; max-width: 100%; min-width: 0; overflow-wrap: anywhere; }
+.msg .who { font-size: .78rem; font-weight: 700; color: var(--muted); margin-bottom: 2px; }
+.msg.claude { background: var(--off-soft); }
+.msg.user { background: var(--accent-soft); justify-self: end; }
+code { font-family: var(--mono); font-size: .85em; }
+.note { font-size: .92rem; color: var(--muted); }
+ul.plain { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; }
+details { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 18px; }
+summary { cursor: pointer; font-weight: 600; }
+summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+details > ul { margin-top: 12px; }
+pre { font-family: var(--mono); font-size: .8rem; background: var(--off-soft); border-radius: 8px; padding: 10px 12px; overflow-x: auto; margin: 10px 0; white-space: pre; }
 </style>
 
 <div class="wrap">
   <header>
-    <h1>Step 7 규칙 제안 흐름 (전·후)</h1>
-    <p class="lede">분석 스킬(Step 5-1 심층 분석)이 낸 <code>규칙 제안:</code> 줄을 Step 7에서 어떻게 다루는지. 바뀐 것은 플러그인 <code>SKILL.md</code> 두 줄과 16 §16.5 형식 계약이고, 분석 스킬 자체는 바뀌지 않았다.</p>
+    <h1>분석 스킬의 "규칙 제안"은 어떻게 처리되나</h1>
   </header>
 
-  <div class="cols">
-    <section class="col">
-      <h2>전 <span class="tag before">PR #71 이전</span></h2>
-      <div class="node step"><b>Step 5-1 심층 분석</b><small><code>analyzer.skill</code> 호출 → 결과 마스킹</small></div>
-      <div class="arrow"></div>
-      <div class="node"><b>report.md <code>심층 분석 (…)</code> 줄</b><small>다른 원인 의견만 Step 7로 넘김</small></div>
-      <div class="arrow"></div>
-      <div class="node off"><b>규칙 제안이 있어도</b><small>받아 처리하는 지시가 없음 → 리포트 글로만 남거나 모델마다 다르게 처리</small></div>
-      <div class="arrow"></div>
-      <div class="node step"><b>Step 7 분류 확정 · 물어보고 넣는 op</b><small>회귀 의심, add-related, add-code-ref, update-signature …</small></div>
-      <div class="arrow"></div>
-      <div class="node"><b>plan.json → db_verify → push 승인 → PR</b><small>분석 스킬 제안은 경로에 없음</small></div>
-      <p class="lost">결과: 분석 스킬이 찾은 규칙 후보가 이슈 DB에 들어갈 정해진 길이 없었다.</p>
-    </section>
+  <p class="summary">분석 스킬이 <b>"이런 규칙을 추가하면 좋겠다"</b>고 제안하면, 이제 흘려보내지 않고 <b>분류를 정한 뒤 사용자에게 한 번 물어서</b> 반영합니다. 아무것도 자동으로 바뀌지 않습니다.</p>
 
-    <section class="col">
-      <h2>후 <span class="tag after">PR #71</span></h2>
-      <div class="node step"><b>Step 5-1 심층 분석</b><small><code>analyzer.skill</code> 호출 → 결과 마스킹</small></div>
-      <div class="arrow"></div>
-      <div class="node"><b>report.md <code>심층 분석 (…)</code> 줄</b><small>다른 원인 의견 <b style="display:inline;color:var(--new)">·규칙 제안</b>은 Step 7</small></div>
-      <div class="arrow"></div>
-      <div class="node step"><b>Step 7 분류 확정</b><small>기존 질문·op는 그대로</small></div>
-      <div class="arrow"></div>
-      <div class="node new"><b>새 질문 (한 번, 기본 아니오)</b><small><code>규칙 제안:</code> 줄이 있을 때만. 받을 줄을 고른다</small></div>
-      <div class="arrow"></div>
-      <div class="branches">
-        <div class="branch">
-          <div class="head db">[이슈 DB] 줄</div>
-          <div class="node new">db-authoring.md 점검</div>
-          <div class="arrow"></div>
-          <div class="node new">op 초안 표시<small>add-parser-rule · update-signature</small></div>
-          <div class="arrow"></div>
-          <div class="node ok">승인한 것만 plan.json</div>
-          <div class="arrow"></div>
-          <div class="node ok">db_verify rules → push 승인 → PR<small>기존 안전 경로 그대로</small></div>
-        </div>
-        <div class="branch">
-          <div class="head sk">[스킬] 줄</div>
-          <div class="node new">담당자용 patch 생성<small>JOB/skill-suggestions/&lt;스킬&gt;.patch</small></div>
-          <div class="arrow"></div>
-          <div class="node new">마스킹 → 원본에 git apply --check<small>실패하면 patch를 지우고 메모로만</small></div>
-          <div class="arrow"></div>
-          <div class="node ok">고정 안내 줄 + 파일별 +N −M<small>"적용 안 함, 마스킹됨 … 담당자가 git apply"</small></div>
-          <div class="arrow"></div>
-          <div class="node off">계획·PR·Jira에 넣지 않음<small>분석 스킬은 안 바꿈, 담당자가 git apply</small></div>
-        </div>
-        <div class="branch">
-          <div class="head no">아니오 · 줄 없음</div>
-          <div class="node off">예전과 같은 흐름</div>
-        </div>
+  <section>
+    <h2>무엇이 바뀌었나</h2>
+    <div class="compare">
+      <div class="card">
+        <span class="label before">전</span>
+        <ol class="steps">
+          <li>분석 스킬이 로그를 보고 의견을 낸다</li>
+          <li>의견이 리포트에 적힌다</li>
+          <li class="bad">규칙 제안이 있어도 리포트 글로 끝난다</li>
+        </ol>
       </div>
-    </section>
-  </div>
+      <div class="card after">
+        <span class="label after">후</span>
+        <ol class="steps">
+          <li>분석 스킬이 로그를 보고 의견을 낸다</li>
+          <li>의견이 리포트에 적힌다</li>
+          <li class="good"><b>분류를 정한 뒤 "이 제안 받을까요?"라고 묻는다</b> (기본은 아니오)</li>
+        </ol>
+      </div>
+    </div>
+  </section>
 
-  <section class="notes">
-    <h3>분석 스킬이 내야 하는 형식 (16 §16.5)</h3>
+  <section>
+    <h2>받겠다고 고르면, 제안 종류에 따라 이렇게 됩니다</h2>
+    <div class="kinds">
+      <div class="kind">
+        <h3>① 이슈 DB 규칙 제안</h3>
+        <p class="eg">예: "이 로그 줄을 이벤트로 잡는 규칙을 추가하자"</p>
+        <div class="flow"><span>초안 보여 줌</span><i>→</i><span>사용자 승인</span><i>→</i><span>자동 검증</span><i>→</i><span class="end">PR</span></div>
+        <p class="note">평소 이슈 기록과 같은 길을 탑니다. 리뷰어가 PR을 합쳐야 이슈 DB에 들어갑니다.</p>
+      </div>
+      <div class="kind">
+        <h3>② 분석 스킬 개선 제안</h3>
+        <p class="eg">예: "점검 목록에 설정 화면 확인을 추가하자"</p>
+        <div class="flow"><span>수정 파일(.patch) 생성</span><i>→</i><span class="end">담당자에게 전달</span></div>
+        <p class="note">분석 스킬은 다른 팀 소유라 직접 고치지 않습니다. 담당자가 수정 파일을 보고 반영합니다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>실제 화면은 이렇게 보입니다</h2>
+    <div class="chat">
+      <div class="msg claude"><div class="who">Claude</div>심층 분석이 규칙을 제안했습니다. 받을 줄을 고르세요 (기본: 아무것도 안 받음).<br>1. [이슈 DB] 시그니처에 "데이터 설정 꺼짐" 조건 추가<br>2. [스킬] 점검 목록에 설정 화면 경로 확인 추가</div>
+      <div class="msg user"><div class="who">사용자</div>2번만</div>
+      <div class="msg claude"><div class="who">Claude</div>스킬 제안 patch(적용 안 함, 마스킹됨): <code>…/MOCK-1234/skill-suggestions/data-analyzer.patch</code> — 분석 스킬 담당자에게 전달, 담당자가 검토 후 스킬 소스에서 git apply<br><code>references/DATA-001.md  +1 −0</code></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>알아 둘 것</h2>
+    <ul class="plain">
+      <li>묻는 건 한 번뿐이고 기본은 "아니오"입니다. 안 받으면 예전과 똑같습니다.</li>
+      <li>분석 스킬이 제안을 내지 않으면 이 질문도 나오지 않습니다.</li>
+      <li>수정 파일에는 마스킹된 값만 들어갑니다. 마스킹 때문에 담당자 쪽에서 적용이 안 될 것 같으면 파일을 만들지 않고 메모로만 알려 줍니다.</li>
+    </ul>
+  </section>
+
+  <details>
+    <summary>자세히 (분석 스킬 담당자·개발자용)</summary>
+    <ul class="plain">
+      <li>분석 스킬은 결과 끝에 아래 형식으로 제안을 적습니다(<code>16-existing-assets.md §16.5</code>). 파일은 바꾸지 않습니다.</li>
+    </ul>
     <pre>규칙 제안:
 - [이슈 DB] add-parser-rule file=extractors.yaml rule=&lt;태그·패턴 → 이벤트&gt; — 근거: &lt;마스킹된 로그 줄&gt;
 - [이슈 DB] update-signature cause=DATA-001-01 must_event 추가 — 근거: &lt;로그 줄·이유&gt;
 - [스킬] references/DATA-001.md에 점검 순서 추가 — 근거: 이번 이슈에서 확인 순서가 빠짐</pre>
-    <ul style="margin-top:12px">
-      <li>분석 스킬은 파일을 바꾸지 않고 제안만 한다. 반영은 사용자 확인 → 검증 → PR.</li>
-      <li>이 줄을 쓰지 않는 분석 스킬은 동작이 예전과 같다.</li>
-      <li>eval 71이 모의 분석 스킬의 제안 변형(<code>analyzer_proposal</code>)으로 <code>[스킬]</code> patch 분기를 실행한다(10/21 사외 통과). <code>[이슈 DB]</code> 분기를 실행하는 eval은 아직 없다.</li>
+    <ul class="plain">
+      <li>[이슈 DB] 줄: <code>db-authoring.md</code> 점검을 거친 op 초안 → 승인분만 <code>plan.json</code> → <code>db_verify rules</code> → push 승인 → PR.</li>
+      <li>[스킬] 줄: <code>JOB/skill-suggestions/&lt;스킬&gt;.patch</code>(unified diff, 스킬 폴더 기준 경로). 만든 뒤 마스킹하고 원본에 <code>git apply --check</code>가 통과할 때만 안내 줄을 보입니다. 절차는 <code>reference/skill-patch.md</code>.</li>
+      <li>patch는 작업이 끝나도 남고, <code>db_pr cleanup --older-than</code>으로 오래된 작업 폴더를 지울 때 함께 지워집니다.</li>
+      <li>검증: eval 71이 [스킬] 갈래를 실행합니다(10/21 사외 통과). [이슈 DB] 갈래를 실행하는 eval은 아직 없습니다.</li>
     </ul>
-  </section>
+  </details>
 </div>
