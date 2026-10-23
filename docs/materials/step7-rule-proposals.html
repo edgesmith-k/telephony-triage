@@ -57,6 +57,12 @@ summary { cursor: pointer; font-weight: 600; }
 summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
 details > ul { margin-top: 12px; }
 pre { font-family: var(--mono); font-size: .8rem; background: var(--off-soft); border-radius: 8px; padding: 10px 12px; overflow-x: auto; margin: 10px 0; white-space: pre; }
+/* 전체 흐름 그림 */
+.e2e-box { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; overflow-x: auto; }
+.e2e-svg{display:block;width:100%;min-width:680px;height:auto;color:var(--fg)}
+.e2e-svg text{font-family:var(--font,var(--sans,system-ui))}
+.e2e-svg .t{font-size:13px;font-weight:700;fill:currentColor}.e2e-svg .s,.e2e-svg .lbl{font-size:11px;fill:var(--muted)}
+.e2e-svg .lbl-k{font-size:11px;font-weight:600;fill:var(--accent)}.e2e-svg .row{font-size:12px;font-weight:700;fill:var(--muted);letter-spacing:.04em}
 </style>
 
 <div class="wrap">
@@ -89,18 +95,80 @@ pre { font-family: var(--mono); font-size: .8rem; background: var(--off-soft); b
   </section>
 
   <section>
+    <h2>전체 흐름에서 어디쯤인가</h2>
+    <div class="e2e-box">
+    <svg class="e2e-svg" viewBox="0 0 800 340" role="img" aria-label="블록 다이어그램. 위 줄은 두 케이스가 함께 쓰는 이슈 DB 경로로 분석, 분류 확정, 작업 계획, 적용·검사와 확인 화면, 올리기와 main 반영 순서다. 아래 줄은 케이스 2에서만 생기는 분석 스킬 경로다. 분류를 정한 뒤 규칙 제안을 받을지 묻고, 이슈 DB 제안은 위 줄의 작업 계획에 더해지며, 스킬 제안은 patch 파일이 된 뒤 사람이 적용을 고르면 스킬 소스 폴더에 커밋 전 상태로 반영된다.">
+      <defs>
+        <marker id="e2e-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" style="fill:var(--muted)"/></marker>
+        <marker id="e2e-ark" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" style="fill:var(--accent)"/></marker>
+      </defs>
+      <rect x="6" y="196" width="788" height="138" rx="10" style="fill:var(--accent-soft)"/>
+      <text x="20" y="22" class="row">이슈 DB 경로 · 케이스 1·2 공통</text>
+      <text x="92" y="216" class="row" style="fill:var(--accent)">분석 스킬 경로 · 케이스 2에서만</text>
+
+      <g style="fill:var(--panel);stroke:var(--line);stroke-width:1.2">
+        <rect x="20" y="34" width="120" height="56" rx="8"/>
+        <rect x="180" y="34" width="120" height="56" rx="8" style="stroke:var(--new);stroke-dasharray:5 3;stroke-width:1.5"/>
+        <rect x="340" y="34" width="120" height="56" rx="8"/>
+        <rect x="500" y="34" width="120" height="56" rx="8"/>
+        <rect x="660" y="34" width="120" height="56" rx="8"/>
+        <rect x="180" y="228" width="120" height="56" rx="8" style="stroke:var(--new);stroke-dasharray:5 3;stroke-width:1.5"/>
+        <rect x="340" y="228" width="120" height="56" rx="8"/>
+        <rect x="500" y="228" width="120" height="56" rx="8" style="stroke:var(--new);stroke-dasharray:5 3;stroke-width:1.5"/>
+        <rect x="660" y="228" width="120" height="56" rx="8"/>
+      </g>
+      <g text-anchor="middle">
+        <text x="80" y="58" class="t">분석</text><text x="80" y="76" class="s">리포트까지</text>
+        <text x="240" y="58" class="t">분류 정하기</text><text x="240" y="76" class="s">사람이 고름</text>
+        <text x="400" y="58" class="t">작업 계획</text><text x="400" y="76" class="s">무엇을 바꿀지</text>
+        <text x="560" y="58" class="t">적용 · 검사</text><text x="560" y="76" class="s">확인 화면</text>
+        <text x="720" y="58" class="t">올리기</text><text x="720" y="76" class="s">PR → main</text>
+        <text x="240" y="252" class="t">규칙 제안</text><text x="240" y="270" class="s">받을 제안 고르기</text>
+        <text x="400" y="252" class="t">patch 파일</text><text x="400" y="270" class="s">고칠 내용 정리</text>
+        <text x="560" y="252" class="t">적용할까?</text><text x="560" y="270" class="s">사람이 고름</text>
+        <text x="720" y="252" class="t">스킬 소스 폴더</text><text x="720" y="270" class="s">커밋 전 상태로</text>
+      </g>
+
+      <g style="stroke:var(--muted);stroke-width:1.5;fill:none" marker-end="url(#e2e-ar)">
+        <path d="M140 62H178"/><path d="M300 62H338"/><path d="M460 62H498"/><path d="M620 62H658"/>
+        <path d="M210 90V226"/>
+      </g>
+      <text x="202" y="132" text-anchor="end" class="lbl">분류를 정한 뒤</text>
+      <text x="720" y="108" text-anchor="middle" class="lbl">바로 병합 또는 리뷰어가 병합</text>
+      <text x="560" y="108" text-anchor="middle" class="lbl">승인한 내용만</text>
+
+      <path d="M80 90V256H178" style="stroke:var(--accent);stroke-width:1.5;fill:none;stroke-dasharray:4 4" marker-end="url(#e2e-ark)"/>
+      <text x="88" y="176" class="lbl-k">규칙 제안</text>
+      <text x="88" y="190" class="lbl">(분석 스킬이 냄)</text>
+
+      <path d="M290 228V170H380V92" style="stroke:var(--muted);stroke-width:1.5;fill:none" marker-end="url(#e2e-ar)"/>
+      <text x="388" y="140" class="lbl">이슈 DB 제안 → 계획에 추가</text>
+
+      <g style="stroke:var(--accent);stroke-width:1.5;fill:none" marker-end="url(#e2e-ark)">
+        <path d="M300 256H338"/><path d="M460 256H498"/><path d="M620 256H658"/><path d="M560 284V306"/>
+      </g>
+      <text x="319" y="247" text-anchor="middle" class="lbl-k">스킬</text>
+      <text x="639" y="247" text-anchor="middle" class="lbl-k">적용</text>
+      <text x="568" y="322" class="lbl">patch만 남김 → 스킬 담당자가 반영</text>
+      <text x="720" y="302" text-anchor="middle" class="lbl">커밋·push는 사람이</text>
+    </svg>
+    </div>
+    <p class="note" style="margin-top:10px">윗줄은 모든 기록이 지나는 이슈 DB 경로, 아랫줄은 규칙 제안이 있을 때만 생기는 분석 스킬 경로입니다. 점선 테두리는 사람이 고르는 곳입니다.</p>
+  </section>
+
+  <section>
     <h2>받겠다고 고르면, 제안 종류에 따라 이렇게 됩니다</h2>
     <div class="kinds">
       <div class="kind">
         <h3>① 이슈 DB 규칙 제안</h3>
         <p class="eg">예: "이 로그 줄을 이벤트로 잡는 규칙을 추가하자"</p>
-        <div class="flow"><span>초안 보여 줌</span><i>→</i><span>사용자 승인</span><i>→</i><span>자동 검증</span><i>→</i><span class="end">PR</span></div>
+        <div class="flow"><span>초안 보여 줌</span><i>→</i><span>사용자 승인</span><i>→</i><span>자동 검증</span><i>→</i><span>확인 화면</span><i>→</i><span class="end">PR</span></div>
         <p class="note">평소 이슈 기록과 같은 길을 탑니다. push 확인 화면에서 "push하고 바로 병합"을 고르면 본인이 바로 합칩니다. 다만 파서 규칙(<code>parser-rules/</code>) 같은 메인테이너 경로 변경은 메인테이너 리뷰를 거칩니다.</p>
       </div>
       <div class="kind">
         <h3>② 분석 스킬 개선 제안</h3>
         <p class="eg">예: "점검 목록에 설정 화면 확인을 추가하자"</p>
-        <div class="flow"><span>수정 파일(.patch) 생성</span><i>→</i><span>내용 보여 줌</span><i>→</i><span>"바로 적용할까요?"</span><i>→</i><span class="end">스킬 소스에 적용</span></div>
+        <div class="flow"><span>수정 파일(.patch) 생성</span><i>→</i><span>내용 보여 줌</span><i>→</i><span>"바로 적용할까요?"</span><i>→</i><span>실행 허가</span><i>→</i><span class="end">스킬 소스에 적용</span></div>
         <p class="note">스킬 소스 폴더를 설정해 두면(<code>analyzers.&lt;카테고리&gt;.source</code>) 수정 내용을 보여 주고 물은 뒤 그 폴더에 바로 적용합니다. 커밋·push는 하지 않으니 확인하고 직접 올립니다. 설정이 없으면 수정 파일만 남기고 반영은 본인이 판단합니다. 설치된 플러그인 폴더의 스킬은 어느 쪽이든 고치지 않습니다.</p>
       </div>
     </div>
