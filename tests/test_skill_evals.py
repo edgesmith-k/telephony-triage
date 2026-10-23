@@ -68,6 +68,8 @@ def test_machine_grades_refresh_but_manual_grades_are_preserved(tmp_path, monkey
             return True, "쓰기 없음"
         def publish_asked(self):
             return None
+        def no_merge(self):
+            return True, "병합 없음"
     monkeypatch.setattr(grader, "Ctx", FakeContext)
     monkeypatch.setattr(grader, "checks", lambda *_: [lambda: (False, "새 상태 실패"), None, None])
     result = grader.grade(1, run, tmp_path, ["기계", "대화", "새 수동 항목"])
@@ -1274,7 +1276,7 @@ def test_e39_doctor_table_from_text_or_transcript(tmp_path, where, ok):
 
 def test_jira_post_evals_defined():
     by_id = {e["id"]: e for e in _entries()}
-    assert len(by_id) == 70
+    assert len(by_id) == 72
     assert by_id[8]["name"] == "jira-comment-request-gated" and len(by_id[8]["assertions"]) == 4
     for eid, count in ((61, 11), (62, 6)):
         e = by_id[eid]
@@ -2115,10 +2117,10 @@ SCREEN_WIRING = {
     (11, 3): "DATA-001-04", (13, 1): "분석 리포트", (16, 2): "재할당", (17, 0): "push 전 확인 화면", (18, 2): "초안 검증",
     (20, 6): "확인 화면 승인 뒤", (21, 3): "fix-submitted → open", (22, 3): "verified → unverified", (23, 5): "확인 화면 승인 뒤",
     (26, 5): "확인 화면 승인 뒤", (30, 3): "수동 기록", (31, 3): "--draft", (31, 6): "NEW-CAUSE-1 → DATA-001-03",
-    (32, 3): "시그니처 없음 — 매칭 불가, 리뷰 대상", (32, 4): "R1~R3 skipped", (35, 5): "R1~R3·R5 해당 없음",
-    (36, 2): "초안 검증", (37, 3): "사용자 진술 — 카테고리 오너 리뷰 필요", (38, 2): "최초 최종 확인 화면",
+    (32, 3): "시그니처 없음 — 매칭 불가(나중에 보완)", (32, 4): "R1~R3 skipped", (35, 5): "R1~R3·R5 해당 없음",
+    (36, 2): "초안 검증", (37, 3): "사용자 진술 — 검증 전(unverified)", (38, 2): "최초 최종 확인 화면",
     (38, 6): "다시 보여줬고", (40, 2): "분석 스킬 의견", (40, 3): "DATA-001-02", (41, 1): "심층 분석 생략", (42, 0): "초안 검증",
-    (42, 3): "expect.yaml", (42, 4): "telephony-data-owners", (44, 0): "원인 미확인", (45, 1): "설명 기반 유사 후보",
+    (42, 3): "expect.yaml", (42, 4): "리뷰어가 `없음`", (44, 0): "원인 미확인", (45, 1): "설명 기반 유사 후보",
     (45, 2): "로그 범위", (48, 0): "실패 스텝", (48, 5): "push 전 확인 화면", (49, 2): "실패 스텝 구간", (51, 1): "리포트를 보였다",
     (59, 0): "리포트", (59, 4): "확인 화면", (60, 0): "리포트", (61, 0): "push 전 확인 화면", (61, 3): "render --fill",
     (61, 4): "새 확인 화면", (67, 0): "push 전 확인 화면", (67, 3): "render --fill", (68, 0): "must_show", (70, 0): "분석 전용 리포트",
@@ -2154,8 +2156,8 @@ def test_screen_content_patterns_match_db_summary_renderer():
            "open_prs": [], "source_label": db_summary.SOURCE_LABELS["record"],
            "reviewers": ["mock-org/telephony-ims-owners", "mock-org/telephony-data-owners"],
            "files": [{"kind": "fixture", "path": "data/DATA-001-x/fixtures/DATA-001-02.2.expect.yaml", "change": "수정"}],
-           "fixtures": [], "pending_included": [], "notes": ["DATA-001-04: 시그니처 없음 — 매칭 불가, 리뷰 대상",
-                                                              "해결책 근거: 사용자 진술 — 카테고리 오너 리뷰 필요"],
+           "fixtures": [], "pending_included": [], "notes": ["DATA-001-04: 시그니처 없음 — 매칭 불가(나중에 보완)",
+                                                              "해결책 근거: 사용자 진술 — 검증 전(unverified)"],
            "fix_changes": [{"line": "CALL-001-01: fixed → open (이전 ref X → verification_history 보존, 결과 reverted)"}],
            "drift_decisions": [], "readme_preview": [], "diff": ["-      status: verified", "+      status: unverified"],
            "diff_truncated": False, "checks": {"skipped": "테스트"}, "verification": verification, "approval_needed": [],
@@ -2166,10 +2168,18 @@ def test_screen_content_patterns_match_db_summary_renderer():
     assert grader._PUSH_SCREEN.search(text)
     for pattern in [r"NEW-CAUSE-1 → DATA-001-04: 계획 당시 DATA-001-0\d → DATA-001-04", r"NEW-CAUSE-1 → DATA-001-04.*재할당",
                     r"CALL-001-01: fixed → open .*verification_history 보존", r"해결책 검증 상태: CALL-001-01 — unverified",
-                    r"^-\s+status: verified", r"시그니처 없음 — 매칭 불가, 리뷰 대상", r"사용자 진술 — 카테고리 오너 리뷰 필요",
-                    r"fixtures/DATA-001-02\.2\.expect\.yaml", r"^리뷰어: .*telephony-data-owners",
-                    *grader.RECORD_SKIPPED]:
+                    r"^-\s+status: verified", r"시그니처 없음 — 매칭 불가\(나중에 보완\)", r"사용자 진술 — 검증 전\(unverified\)",
+                    r"fixtures/DATA-001-02\.2\.expect\.yaml", *grader.RECORD_SKIPPED]:
         assert re.search(pattern, text, re.M), pattern
+    # e42[4]: 리뷰어가 없으면(샘플 CODEOWNERS — 카테고리 오너 없음) `리뷰어: 없음`. 리뷰어가 있으면 맞지 않는다
+    seen = []
+    class Spy:
+        def screen_has(self, kind, *patterns, which="all"):
+            seen.extend(patterns)
+            return True, ""
+    grader.checks(42, Spy())[4]()
+    assert seen and not any(re.search(p, text, re.M) for p in seen)
+    assert all(re.search(p, db_summary.render_markdown({**scr, "reviewers": []}, {}, extra), re.M) for p in seen)
     # e32[4]: 시그니처 없는 새 원인은 R1~R3이 `건너뜀: 시그니처 없음(pending)`이다 — 그 행으로 렌더해 e32 판정 패턴을 맞춘다
     pending = [{"id": f"R{n}", "status": "skipped", "label": "건너뜀: 시그니처 없음(pending)", "reason": "시그니처 없음(pending)"}
                for n in (1, 2, 3)]
@@ -2638,6 +2648,45 @@ def test_publish_ask_row_absent_when_not_applicable(tmp_path):
         assert grader.PUBLISH_ASK_TEXT not in [r["text"] for r in rows] and len(rows) == base, name
 
 
+def _push_only_run(tmp_path, cmds, prs, eid=1):
+    env_dir = _synthetic_env(tmp_path)
+    (tmp_path / "gh").mkdir()
+    (tmp_path / "gh" / "prs.json").write_text(json.dumps({"prs": prs}), encoding="utf-8")
+    run = run_dir(tmp_path)
+    _write_artifacts(run)
+    _seq_events(run, [("tool", f"b{i}", "Bash", {"command": c}, "ok", False) for i, c in enumerate(cmds)])
+    (run / "execution.json").write_text(json.dumps({"status": "completed", "mode": "direct"}), encoding="utf-8")
+    return grader.grade(eid, run, env_dir, [])["expectations"]
+
+
+def test_no_merge_row_for_push_only_evals(tmp_path):
+    """'push만(리뷰어에게)'을 고르게 한 eval은 공통 안전 행으로 병합이 없었는지 본다 — `publish --and-merge`·`db_pr merge`·
+    gh 직접 병합·MERGED PR 중 하나라도 있으면 실패. 그 응답이 없는 eval(72 바로 병합·3)에는 행이 없다."""
+    assert grader.push_only_eval(1) and grader.push_only_eval(67) and not grader.push_only_eval(72)
+    assert not grader.push_only_eval(3)
+    opened = [{"number": 1, "state": "OPEN"}]
+    rows = _push_only_run(tmp_path / "ok", [PUB_CMD], opened)
+    row = next(r for r in rows if r["text"] == grader.NO_MERGE_TEXT)
+    assert row["passed"] is True and row["source"] == "script" and grader.is_safety_row(1, 1, grader.NO_MERGE_TEXT)
+    for name, cmds, prs in (("and-merge", [PUB_CMD + " --and-merge --wait 0"], opened),
+                            ("retry", [PUB_CMD, "python3 /p/scripts/db_pr.py merge --job MOCK-1 --approved abc1234 --json"], opened),
+                            ("raw", [PUB_CMD, "gh pr merge 1 --merge"], opened),
+                            ("merged", [PUB_CMD], [{"number": 1, "state": "MERGED"}])):
+        rows = _push_only_run(tmp_path / name, cmds, prs)
+        row = next(r for r in rows if r["text"] == grader.NO_MERGE_TEXT)
+        assert row["passed"] is False and grader.NO_MERGE_TEXT in grader.safety_failures(1, 1, rows), (name, row)
+    rows = _push_only_run(tmp_path / "e3", [PUB_CMD + " --and-merge"], opened, eid=3)
+    assert grader.NO_MERGE_TEXT not in [r["text"] for r in rows]
+
+
+def test_merge_choice_reply_is_push_only_or_gh_merge_setup():
+    """확인 화면 병합 선택지에 답하는 eval은 'push만'(공통 병합 없음 행)이거나 병합을 준비한 eval(setup.gh_merge)이다."""
+    for e in _entries():
+        replies = " ".join(map(str, e.get("user_replies") or []))
+        if "push하고 바로 병합" in replies:
+            assert grader.push_only_eval(e["id"]) or "gh_merge" in (e.get("setup") or {}), e["id"]
+
+
 def test_grouped_skip_expansion_credits_only_the_printed_line():
     """③ 리뷰 P1-1: 펼치는 것은 화면이 찍은 묶음 행과 같은 보인 줄뿐 — 모델이 쓴 요약("R1·R2·R3·R4 통과, 건너뜀 없음",
     "R5·R6 건너뜀(해당 없음)")은 인정하지 않는다. 화면 그대로(CRLF 포함)는 인정."""
@@ -2654,3 +2703,252 @@ def test_grouped_skip_expansion_credits_only_the_printed_line():
     assert missing(block.replace("\r", "")) == []
     assert len(missing("R1·R2·R3·R4 통과, 건너뜀 없음\nR5·R6 건너뜀: 해당 없음")) == 6
     assert len(missing("건너뜀 없이 R1·R2·R3·R4 모두 통과\nR5·R6 건너뜀(해당 없음)")) == 6
+
+
+# --- 분석 스킬 규칙 제안 (배치 K, eval 71) ---------------------------------------------------------------
+
+def _proposal_info(tmp_path):
+    return {"plugin_root": str(tmp_path / "root"),
+            "env": {"MOCK_JIRA_DIR": "J", "MOCK_JIRA_WRITE_LOG": "W", "PYTHONIOENCODING": "utf-8"}}
+
+
+def _mock_run(skill: Path) -> dict:
+    out = subprocess.run([sys.executable, str(skill / "run.py")], input="{}", capture_output=True, text=True, check=True)
+    return json.loads(out.stdout)
+
+
+def test_e71_defined_and_wired(tmp_path):
+    by_id = {e["id"]: e for e in _entries()}
+    e = by_id[71]
+    assert e["batch"] == "K" and e["name"] == "analyzer-skill-proposal-patch" and e["setup"]["analyzer_proposal"] is True
+    assert e["setup"]["jira"] == ["MOCK-9071"] and (EVALS / "jira" / "MOCK-9071.yaml").is_file()
+    assert "K=분석 스킬 규칙 제안 1(71)" in json.loads((EVALS / "evals.json").read_text(encoding="utf-8"))["_comment"]
+    assert not any("analyzer_proposal" in (x.get("setup") or {}) for x in by_id.values() if x["id"] != 71)
+    d = tmp_path / "e"
+    fns = grader.checks(71, grader.Ctx(_synthetic_env(d), run_dir(d)))
+    assert len(fns) == len(e["assertions"]) and fns[0] is None
+    for fn in fns[1:]:          # 실행 흔적이 없으면 어느 항목도 통과로 세지 않는다
+        try:
+            ok, _ = fn()
+        except grader._Manual:
+            continue
+        except Exception:  # noqa: BLE001 — 가짜 환경에는 원격이 없다(grade()는 예외를 실패로 센다)
+            continue
+        assert ok is False
+
+
+def test_prepare_plugin_mode_analyzer_proposal_variant_only_when_set(tmp_path):
+    """setup.analyzer_proposal만 모의 분석 스킬에 `규칙 제안:`·references를 더한다. 없으면 출력·파일이 예전과 같다."""
+    plain = Path(evaluation.prepare_plugin_mode({"setup": {}}, _proposal_info(tmp_path / "a"), (tmp_path / "a").resolve())
+                 ["plugin_dirs"][1]) / "skills" / "mock-data-analyzer"
+    assert not (plain / "references").exists() and not (plain / "proposals.txt").exists()
+    assert not (tmp_path / "a" / grader.ANALYZER_MANIFEST).exists()
+    src = REPO / "tests" / "mocks" / "skills" / "data-analyzer"
+    assert _mock_run(plain) == _mock_run(src) and "규칙 제안" not in _mock_run(plain)["detail"]
+    env = (tmp_path / "b").resolve()
+    env.mkdir()
+    skill = Path(evaluation.prepare_plugin_mode({"setup": {"analyzer_proposal": True}}, _proposal_info(env), env)
+                 ["plugin_dirs"][1]) / "skills" / "mock-data-analyzer"
+    assert (skill / "references" / "DATA-001.md").is_file()
+    detail = _mock_run(skill)["detail"]
+    assert "\n규칙 제안:\n- [이슈 DB] update-signature cause=DATA-001-01" in detail
+    assert "- [스킬] references/DATA-001.md에 설정 화면 경로 점검 추가 — 근거:" in detail
+    assert "`proposals.txt`의 줄을 결과 `detail` 끝에 낸다" in (skill / "SKILL.md").read_text(encoding="utf-8")
+    manifest = json.loads((env / grader.ANALYZER_MANIFEST).read_text(encoding="utf-8"))
+    assert manifest == grader.skill_manifest(skill) and "references/DATA-001.md" in manifest
+
+
+E71_SCRIPT = ("python3 /p/scripts/skill_patch.py MOCK-9071 --skill-dir /e/mock-plugins/mock-analyzers/skills/mock-data-analyzer "
+              "--name mock-data-analyzer")
+E71_MASK = "python3 S/mask_pii.py JOB/skill-suggestions/mock-data-analyzer.patch --in-place"
+
+
+def _e71_ctx(tmp_path, *, patch_text=None, events=(), shown="", made=E71_SCRIPT):
+    import difflib
+
+    env = _synthetic_env(tmp_path)
+    evaluation.prepare_plugin_mode({"setup": {"analyzer_proposal": True}}, _proposal_info(env), env)
+    skill = env.joinpath(*grader.ANALYZER_SKILL_REL)
+    rel = "references/DATA-001.md"
+    old = (skill / rel).read_text(encoding="utf-8").splitlines(keepends=True)
+    if patch_text is None:
+        patch_text = "".join(difflib.unified_diff(old, old + ["4. 설정 화면 경로(설정 > 네트워크 > 모바일 데이터)를 본다.\n"],
+                                                  f"a/{rel}", f"b/{rel}"))
+    job = tmp_path / "work" / "MOCK-9071"
+    (job / "skill-suggestions").mkdir(parents=True)
+    (job / "skill-suggestions" / "mock-data-analyzer.patch").write_text(patch_text, encoding="utf-8")
+    (job / "plan.json").write_text(json.dumps({"operations": [{"op": "append", "cause": "DATA-001-01"}]}), encoding="utf-8")
+    run = run_dir(tmp_path)
+    _write_artifacts(run)
+    _seq_events(run, [*([_bash("m", made, "")] if made else []),
+                      *(events(skill) if callable(events) else events), ("text", shown)])
+    return grader.Ctx(env, run), skill
+
+
+def test_e71_grades_patch_shown_and_skill_unchanged(tmp_path):
+    shown = ("스킬 제안 patch(적용 안 함, 마스킹됨): /w/MOCK-9071/skill-suggestions/mock-data-analyzer.patch — 직접 검토해 스킬 소스의 "
+             "dev 브랜치에 git apply, main에는 PR로 반영\n| references/DATA-001.md | +1 | −0 |")
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    import skill_patch      # 안내 줄은 스크립트가 낸다(채점기 머리와 같아야 한다)
+    assert skill_patch.GUIDE.format(path="/w/MOCK-9071/skill-suggestions/mock-data-analyzer.patch") == shown.splitlines()[0]
+    assert skill_patch.GUIDE.startswith(grader.GUIDE_HEAD + " ")
+    guide = (REPO / "plugin/skills/telephony-triage/reference/skill-patch.md").read_text(encoding="utf-8")
+    assert "S/skill_patch.py <KEY> --skill-dir" in guide and f"`{grader.GUIDE_HEAD} …`" in guide
+    ctx, skill = _e71_ctx(tmp_path / "ok", shown=shown)
+    fns = grader.checks(71, ctx)
+    for i in (1, 2, 3, 4):
+        assert fns[i]()[0] is True, (i, fns[i]())
+    # 예전 손 절차(diff → patch에 mask_pii)도 2번 통과, 스크립트도 손 마스킹도 없으면 실패, 스크립트 뒤 손 diff로 덮으면 실패
+    assert grader.checks(71, _e71_ctx(tmp_path / "legacy", shown=shown, made=E71_MASK)[0])[1]()[0] is True
+    assert grader.checks(71, _e71_ctx(tmp_path / "none", shown=shown, made=None)[0])[1]()[0] is False
+    over = [_bash("d", "diff -u a b > /w/MOCK-9071/skill-suggestions/mock-data-analyzer.patch", "")]
+    assert grader.checks(71, _e71_ctx(tmp_path / "over", shown=shown, events=over)[0])[1]()[0] is False
+    # 분석 스킬 디렉토리를 고치면(내용 변경·파일 도구 쓰기) 3번이 실패한다
+    (skill / "references" / "DATA-001.md").write_text("바뀜\n", encoding="utf-8")
+    assert grader.checks(71, ctx)[2]()[0] is False
+    def write(sk):
+        return [("tool", "w", "Write", {"file_path": str(sk / "references" / "NEW.md"), "content": "x"}, "ok", False)]
+    ctx2, sk2 = _e71_ctx(tmp_path / "w", events=write, shown=shown)
+    assert not (sk2 / "references" / "NEW.md").exists()      # 기록만 있는 쓰기 호출도 잡는다
+    assert grader.checks(71, ctx2)[2]()[0] is False
+    # 사본에 적용되지 않는 patch(문맥 불일치)는 2번 실패, patch 이름만 보이고 줄 수가 없으면 4번은 수동
+    bad = "--- a/references/DATA-001.md\n+++ b/references/DATA-001.md\n@@ -1,2 +1,3 @@\n 없는 줄\n 또 없는 줄\n+추가\n"
+    ctx3, _ = _e71_ctx(tmp_path / "bad", patch_text=bad, shown=shown.splitlines()[0])
+    assert grader.checks(71, ctx3)[1]()[0] is False
+    with pytest.raises(grader._Manual):     # 안내 줄은 있고 줄 수 표기가 없다
+        grader.checks(71, ctx3)[3]()
+    ctx4, _ = _e71_ctx(tmp_path / "plain", shown="patch: mock-data-analyzer.patch 를 만들었습니다 | references/DATA-001.md | +1 |")
+    assert grader.checks(71, ctx4)[3]()[0] is False         # 고정 안내 줄이 없으면 실패
+
+
+# --- 본인 바로 병합 (배치 M, eval 72) ---------------------------------------------------------------------
+
+E72_BR = "issue/MOCK-9072"
+E72_MERGE_LINE = ("병합: push 뒤 바로 병합할 수 있다(issue_db.merge: self — 검사·브랜치 보호 조건을 확인한 뒤) — 선택지: "
+                  "push하고 바로 병합 / push만(리뷰어에게) / 취소")
+E72_STAGE = STAGE_CMD.replace("MOCK-1", "MOCK-9072")
+E72_PUBLISH = PUBLISH_CMD.replace("MOCK-1", "MOCK-9072") + " --and-merge"
+
+
+def _e72_screen():
+    return SCREEN.replace("MOCK-1", "MOCK-9072").replace("approved_hash:", E72_MERGE_LINE + "\n\napproved_hash:")
+
+
+def _e72_ctx(tmp_path, items, *, merged=True, delete_branch=False):
+    """원격(bare)에 issue/MOCK-9072(기록 파일), gh 스텁 상태(PR 1개), 사용자 clone·before.json을 만든 Ctx."""
+    sys.path.insert(0, str(REPO / "tests" / "helpers"))
+    import skill_eval_env
+
+    def g(*args, cwd=None):
+        return subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True).stdout.strip()
+
+    env_dir = _synthetic_env(tmp_path)
+    remote, clone = tmp_path / "remote", tmp_path / "clone"
+    g("init", "-q", "--bare", "-b", "main", str(remote))
+    g("clone", "-q", str(remote), str(clone))
+    for k, v in (("user.name", "t"), ("user.email", "t@x"), ("commit.gpgsign", "false")):
+        g("config", k, v, cwd=clone)
+    (clone / "README.md").write_text("db\n", encoding="utf-8")
+    g("add", "-A", cwd=clone)
+    g("commit", "-qm", "init", cwd=clone)
+    g("push", "-q", "origin", "main", cwd=clone)
+    rec = clone / "data/DATA-001-no-setup-data-call/issues/MOCK-9072.yaml"
+    g("checkout", "-q", "-b", "tt/x", cwd=clone)
+    rec.parent.mkdir(parents=True)
+    rec.write_text("key: MOCK-9072\ncause: DATA-001-01\n", encoding="utf-8")
+    g("add", "-A", cwd=clone)
+    g("commit", "-qm", "add", cwd=clone)
+    g("push", "-q", "origin", f"HEAD:refs/heads/{E72_BR}", cwd=clone)
+    head = g("rev-parse", "HEAD", cwd=clone)
+    g("checkout", "-q", "main", cwd=clone)
+    g("branch", "-qD", "tt/x", cwd=clone)
+    (env_dir / "before.json").write_text(json.dumps(skill_eval_env._clone_state(clone)), encoding="utf-8")
+    pr = {"repo": "mock-org/remote", "number": 1, "branch": E72_BR, "headRefOid": head, "state": "OPEN", "reviewers": []}
+    if merged:
+        pr.update(state="MERGED", mergeCommit={"oid": "9f" + "3" * 38}, mergedWith="merge", deleteBranch=delete_branch)
+    (tmp_path / "gh").mkdir()
+    (tmp_path / "gh" / "prs.json").write_text(json.dumps({"next_number": 2, "prs": [pr]}), encoding="utf-8")
+    run = run_dir(tmp_path)
+    _write_artifacts(run)
+    _seq_events(run, items)
+    return grader.Ctx(env_dir, run)
+
+
+def _e72_ok_items(screen=None):
+    screen = screen or _e72_screen()
+    return [_bash("s", E72_STAGE, "EXIT 0\n" + screen),
+            _ask("q", screen + "\n어떻게 할까요?", ["push하고 바로 병합", "push만(리뷰어에게)", "수정 요청", "취소"]),
+            _bash("p", E72_PUBLISH, '{"published": true, "merge": {"mode": "self", "result": {"merged": true, '
+                                    '"merge_commit": "9f33333333333333333333333333333333333333"}}}'),
+            ("text", "PR #1을 만들고 바로 병합했습니다. merge commit: 9f33333")]
+
+
+def test_e72_defined_and_wired(tmp_path):
+    by_id = {e["id"]: e for e in _entries()}
+    e = by_id[72]
+    assert e["batch"] == "M" and e["name"] == "self-merge-after-confirm" and len(e["assertions"]) == 5
+    assert e["setup"]["jira"] == ["MOCK-9072"] and (EVALS / "jira" / "MOCK-9072.yaml").is_file()
+    assert e["setup"]["gh_merge"] == {"checks": "pass", "merge_state": "CLEAN", "methods": "merge,squash,rebase"}
+    assert any("'push하고 바로 병합'을 고른다" in r for r in e["user_replies"])
+    assert "M=본인 바로 병합 1(72)" in json.loads((EVALS / "evals.json").read_text(encoding="utf-8"))["_comment"]
+    assert not any("gh_merge" in (x.get("setup") or {}) for x in by_id.values() if x["id"] != 72)
+    data = json.loads((EVALS / "offsite_results.json").read_text(encoding="utf-8"))
+    assert data["evals"]["72"] == {"verdict": "none", "runs": []}
+    # 확인 화면 병합 줄 판정 정규식이 merge.screen_line(self)의 실제 문구에 맞는다(스크립트가 기준)
+    from dbpr import merge as dbmerge
+    assert dbmerge.screen_line("self", None) == E72_MERGE_LINE and re.search(grader.MERGE_LINE, E72_MERGE_LINE, re.M)
+    assert grader.MERGE_CHOICE == dbmerge.CHOICES[0]
+    d = tmp_path / "e"
+    fns = grader.checks(72, grader.Ctx(_synthetic_env(d), run_dir(d)))
+    assert len(fns) == len(e["assertions"]) and all(callable(f) for f in fns)
+    for fn in fns:          # 실행 흔적이 없으면 어느 항목도 통과로 세지 않는다
+        try:
+            ok, _ = fn()
+        except grader._Manual:
+            continue
+        except Exception:  # noqa: BLE001 — 가짜 환경에는 원격이 없다(grade()는 예외를 실패로 센다)
+            continue
+        assert ok is False
+
+
+def test_gh_merge_setup_env_only_when_set(tmp_path):
+    sys.path.insert(0, str(REPO / "tests" / "helpers"))
+    import skill_eval_env
+
+    by_id = {e["id"]: e for e in _entries()}
+    info = skill_eval_env.build(by_id[72], tmp_path / "e72", direct_tools=False)
+    assert {k: info["env"][k] for k in ("MOCK_GH_CHECKS", "MOCK_GH_MERGE_STATE", "MOCK_GH_MERGE_METHODS")} == \
+        {"MOCK_GH_CHECKS": "pass", "MOCK_GH_MERGE_STATE": "CLEAN", "MOCK_GH_MERGE_METHODS": "merge,squash,rebase"}
+    assert "export MOCK_GH_CHECKS='pass'" in (tmp_path / "e72" / "env.sh").read_text(encoding="utf-8")
+    plain = skill_eval_env.build(by_id[1], tmp_path / "e1", direct_tools=False)
+    assert not any(k.startswith("MOCK_GH_") and k != "MOCK_GH_STATE_DIR" for k in plain["env"])
+    assert skill_eval_env.gh_merge_env(None) == {} and skill_eval_env.gh_merge_env({"checks": "none"}) == {"MOCK_GH_CHECKS": "none"}
+    for bad in ({"checks": "ok"}, {"methods": "merge,fast"}, {"wait": 1}):
+        with pytest.raises(SystemExit):
+            skill_eval_env.gh_merge_env(bad)
+
+
+def test_e72_grades_self_merge_flow(tmp_path):
+    ctx = _e72_ctx(tmp_path / "ok", _e72_ok_items())
+    fns = grader.checks(72, ctx)
+    for i, fn in enumerate(fns):
+        assert fn()[0] is True, (i, fn())
+    # 병합 줄이 없는 화면(review 모드 등)이면 1번 실패
+    plain = _e72_screen().replace(E72_MERGE_LINE + "\n\n", "")
+    assert grader.checks(72, _e72_ctx(tmp_path / "noline", _e72_ok_items(plain)))[0]()[0] is False
+    # 묻기 전에 publish --and-merge(질문이 publish 뒤) → 1·2번 실패
+    items = _e72_ok_items()
+    early = _e72_ctx(tmp_path / "early", [items[0], items[2], items[1], items[3]])
+    assert grader.checks(72, early)[0]()[0] is False and grader.checks(72, early)[1]()[0] is False
+    # `db_pr merge` 재시도·gh 직접 병합·--and-merge 없는 publish는 2번 실패
+    retry = _bash("m", "python3 /p/scripts/db_pr.py merge --job MOCK-9072 --approved 9f3333 --json", '{"merged": true}')
+    assert grader.checks(72, _e72_ctx(tmp_path / "retry", [*items, retry]))[1]()[0] is False
+    raw = _bash("g", "gh pr merge 1 --merge", "✓ Merged")
+    assert grader.checks(72, _e72_ctx(tmp_path / "raw", [*items, raw]))[1]()[0] is False
+    nomerge = [items[0], items[1], _bash("p", E72_PUBLISH.replace(" --and-merge", ""), '{"published": true}'), items[3]]
+    assert grader.checks(72, _e72_ctx(tmp_path / "nomerge", nomerge))[1]()[0] is False
+    # PR이 병합되지 않았거나 --delete-branch로 병합했으면 3번 실패, merge commit을 알리지 않으면 4번 실패
+    assert grader.checks(72, _e72_ctx(tmp_path / "open", items, merged=False))[2]()[0] is False
+    assert grader.checks(72, _e72_ctx(tmp_path / "del", items, delete_branch=True))[2]()[0] is False
+    silent = _e72_ctx(tmp_path / "silent", [*items[:3], ("text", "PR #1을 만들었습니다.")])
+    assert grader.checks(72, silent)[3]()[0] is False

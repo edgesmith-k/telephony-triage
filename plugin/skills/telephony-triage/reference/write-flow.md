@@ -13,8 +13,8 @@ main 기준 다음 번호로 정해진다. 계획이 건드리는 대상이 그�
 | 2 | 로컬·원격 브랜치 검사와 선택 (아래) |
 | 3 | `db_pr stage <plan> --wt <wt> --branch <br> [--dry-run] --then-summary` — drift면 결정 반영 후 다시 |
 | 4 | 확인 화면 = 3의 출력 그대로 (승인 / 수정 요청 / 전체 diff / 취소) |
-| 5 | `db_pr publish <wt> --branch <br> --lease <sha\|new> --approved <hash> --commit --and-discard` → PR 링크 (커밋·push·PR·정리) |
-| 6 | 정리: 5의 `--and-discard`가 한다(worktree·`tt/<br>`·state 삭제, lock 해제). 그 밖은 §6 |
+| 5 | `db_pr publish <wt> --branch <br> --lease <sha\|new> --approved <hash> --commit --and-discard [--and-merge]` → PR 링크 (커밋·push·PR·정리[·병합]) |
+| 6 | 정리: 5의 `--and-discard`가 한다(worktree·`tt/<br>`·state 삭제, lock 해제). 병합 재시도는 §6 |
 
 ## 계획 형식 (analyze Step 7)
 
@@ -91,15 +91,15 @@ fixture 번호, 피드백, pending 포함 여부는 계획 `source`로) → `db_
 - 수정 상태 변경 (summary fix_changes, 있을 때 — 각 line을 글자 그대로 한 줄씩):
   `CALL-001-01: fixed → open (이전 ref MOCKCL-12345·fixed_in MOCKB77_U2_20260920 → verification_history 보존, 결과 reverted)`
 - drift 결정 내역 (있을 때, 계획 pr_notes의 drift 줄).
-- 검증 결과는 R1 … R6의 상태와 사유. skipped는 "건너뜀: <사유>", review_required면 "검증 못 함 — 리뷰 대상". 같은 사유의 건너뜀만 한 행(`| R5·R6 | 건너뜀: 해당 없음 |  |`) — 스크립트만 묶는다, 네 초안 표는 규칙마다 한 행. 이어서 `승인 필요: <approval_needed | 없음>`,
+- 검증 결과는 R1 … R6의 상태와 사유. skipped는 "건너뜀: <사유>", review_required면 "검증 못 함 — 자동 검증 없음". 같은 사유의 건너뜀만 한 행(`| R5·R6 | 건너뜀: 해당 없음 |  |`) — 스크립트만 묶는다, 네 초안 표는 규칙마다 한 행. 이어서 `승인 필요: <approval_needed | 없음>`,
   `해결책 검증 상태: <verified | unverified(사유)>`.
 - <push_note가 있으면: "push 불가: gh 인증 없음" 등>
 
 - `skipped`를 통과(✅)로 표시하지 않는다.
 - 계획에 `set-resolution`이 있거나 새 원인이면 "해결책 검증 상태: unverified"를 명시한다. 같은 계획의 `verify-resolution`이
   적용된 경우만 verified다.
-- 선택지:
-  - **승인** → 5번.
+- 선택지(병합 줄이 `… 선택지: push하고 바로 병합 / push만(리뷰어에게) / 취소`이면 **승인** 대신 `push하고 바로 병합`·`push만(리뷰어에게)`, 둘 다 추천 표시 없이. 4개가 넘으면 `전체 diff 보기`는 본문에 적고 Other로 받는다. 병합 줄이 `리뷰어가 …`이거나 없으면 그대로):
+  - **승인**·**push만(리뷰어에게)** → 5번. **push하고 바로 병합** → 5번에 `--and-merge`.
   - **수정 요청** → 사용자가 말한 부분을 **작업 계획에 반영**하고 `stage --then-summary`부터 다시(stage가 wt를 기준 SHA로 되돌려 다시 적용한다). **확인 화면을 다시 보여주고 다시 승인받는다.** 해결책 문구를 바꾸면 unverified로 돌아간다고 알린다.
   - **전체 diff 보기** → `git -C <wt> diff` + 새 파일 목록을 보여주고 다시 묻는다.
   - **취소** → 커밋하지 않는다(publish를 부르지 않는다). `db_pr discard <wt>`. 계획은 남긴다. 피드백은 아래 규칙.
@@ -115,12 +115,15 @@ fixture 번호, 피드백, pending 포함 여부는 계획 `source`로) → `db_
 - 종료 2 + `published: true`: push는 됐다. **publish를 다시 하지 않는다.** `discard.error`면 `discard.next`대로 `db_pr discard <wt>`만 다시 한다.
   `gh_error`(PR 생성 실패, `discard.skipped`, worktree·lock 유지)면 사유를 보고하고 PR 수동 처리 또는 publish 재시도를 사용자와 정한 뒤 `db_pr discard <wt>`.
 - 종료 2 + stderr만(JSON 없음): 보고하고 멈춘다.
+- `--and-merge`는 검사·병합 가능 상태를 최대 `issue_db.merge_wait_seconds`(기본 420초, 최대 480) 기다리므로 Bash timeout을 600000으로 준다. 종료 코드는 publish 결과다. `merge.result.merged: true`면 `merge_commit`을 알리고, false면 `reason`과 재시도 명령 `merge.result.retry`를 글자 그대로 보인다(PR은 그대로 — 재시도는 §6).
 - 성공하면(`discard.discarded: true`) PR 링크(`pr.url`)를 글자 그대로, 다음 질문 전에 보인다. `publish`가 계획의 `pr`·`base_sha`를 기록하고 pending 피드백 원본을 `included_pending/`으로 옮긴다.
 
 ## 6. 정리
 
 5번의 `--and-discard`가 한다. 단독 `discard`는 취소·`--dry-run`·discard 실패·PR 생성 실패 뒤에만. 계획은 PR 번호와 함께 남는다(`sync-pr`가 재적용).
-머지는 CODEOWNERS 리뷰어가 한다. 사용자 로컬 `<br>`가 있으면 원격과 달라졌다고 알린다.
+사용자 로컬 `<br>`가 있으면 원격과 달라졌다고 알린다.
+
+**병합 재시도**: `--and-merge`가 병합하지 못했고 사용자가 나중에 병합을 요청할 때만 그 `retry` 명령(`S/db_pr.py merge --job <작업 키> --approved <sha> --json`, 같은 timeout)을 한 번 부른다. 1 → `reason` 그대로, 2 → stderr. `gh pr merge` 직접 금지.
 
 ## pending 피드백 규칙 (취소할 때)
 

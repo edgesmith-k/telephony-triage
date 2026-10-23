@@ -113,7 +113,7 @@
 |---|---|---|
 | `rules` | `(--plan <plan.json> \| --changed <ref> \| --staged) [--extra [<logcat>...]] [--extra-normal [<logcat>...]]` | `--extra`: R6 같은 증상 표본 (expect: match); `--extra-normal`: R6 정상 표본 (expect: nomatch) |
 | `resolution` | `[<logcat>...] [--cause <ID>] [--plan <plan.json>]` |  |
-| `fix` | `[<logcat>...] [--cause <ID>] [--plan <plan.json>] [--build <빌드>]` |  |
+| `fix` | `[<logcat>...] [--cause <ID>] [--plan <plan.json>] [--build <빌드>] [--bundle <N>]` | `--bundle`: CI/CD 번들 번호 (verification.note에 기록) |
 
 ## `db_pr.py`
 
@@ -131,8 +131,9 @@
 | `preflight` | `--branch <br> [--search <원인 ID\|JIRA-KEY>] [--issue <KEY>]` |  |
 | `stage` | `<plan.json> --wt <dir> --branch <br> [--dry-run] [--verbose] [--then-summary]` | `--verbose`: stdout도 stage.json과 같이 전체 (기본은 통과 항목을 접는다); `--then-summary`: stage 종료 0·3이면 이어서 summary --format markdown을 부르고 그 마크다운만 출력한다 (--json·--verbose와 못 쓴다) |
 | `summary` | `<wt> [--format {json,markdown}]` | `--format`: markdown: write-flow §4 확인 화면을 마크다운으로 (기본 json, --json과 함께 못 쓴다), 기본 json |
-| `publish` | `<wt> --branch <br> --lease <sha\|new> --approved <hash> [--commit] [--and-discard]` | `--lease`: 원격 브랜치 SHA 또는 new(원격에 없어야 함); `--commit`: 커밋이 없으면 승인 해시·hooksPath·guard 검사를 거쳐 summary의 commit_message로 커밋한 뒤 publish한다 (멱등); `--and-discard`: publish 종료 0일 때만 이어서 discard한다 |
+| `publish` | `<wt> --branch <br> --lease <sha\|new> --approved <hash> [--commit] [--and-discard] [--and-merge] [--wait <초>]` | `--lease`: 원격 브랜치 SHA 또는 new(원격에 없어야 함); `--commit`: 커밋이 없으면 승인 해시·hooksPath·guard 검사를 거쳐 summary의 commit_message로 커밋한 뒤 publish한다 (멱등); `--and-discard`: publish 종료 0일 때만 이어서 discard한다; `--and-merge`: 확인 화면에서 'push하고 바로 병합'을 골랐을 때만: publish 종료 0이고 병합 자격(self)이면 이어서 merge; `--wait`: --and-merge: 검사·병합 가능 상태를 기다릴 최대 초(기본 config) |
 | `discard` | `<wt>` |  |
+| `merge` | `--job <작업 키> --approved <sha> [--wait <초>]` | `--approved`: publish 결과 merge.approved(PR head 커밋); `--wait`: 검사·병합 가능 상태를 기다릴 최대 초(기본 config issue_db.merge_wait_seconds) |
 | `find-plan` | `--branch <BRANCH>` |  |
 
 ## `db_precommit.py`
@@ -189,6 +190,12 @@ stdin: PostToolUse hook 입력 JSON (argparse 없음)
 | `status` | `<KEY>` |  |
 | `render` | `<KEY> [--fill <json>] [--format {jira-wiki,markdown}] [--omit <a,b>] [--again]` | `--fill`: LLM 칸 JSON {problem, cause[{basis, text}], next[], code_location}; `--format`: 본문 형식(기본: 코멘트 도구 설정, 없으면 jira-wiki); `--omit`: 뺄 스크립트 칸 항목: failed_step\|fields\|evidence\|must_show\|others; `--again`: 게시 이력이 있어도 다시 올린다(사용자가 명시했을 때만) |
 | `approve` | `<KEY> --sha <post_sha256>` | `--sha`: 확인 화면 마지막 줄의 post_sha256 |
+
+## `skill_patch.py`
+
+| 서브커맨드 | 사용법 | 옵션 설명 |
+|---|---|---|
+| — | `<KEY> [--skill-dir <SK>] --name <analyzer.skill> [--source <SRC>] [--apply] [--sha <sha256>] [--platform <이름>] [--plugin-root <PLUGIN_ROOT>] [--json]` | `key`: 작업 키; `--skill-dir`: 분석 스킬 디렉토리(5-1 Skill 결과의 `Base directory for this skill:`). patch를 만들 때 필수; `--name`: 분석 스킬 이름(`analyzers.<카테고리>.skill`); `--source`: patch를 만들 때만: 분석 스킬 소스 폴더(없으면 config analyzers.<카테고리>.source). --apply와 함께 못 쓴다; `--apply`: 만든 patch를 스킬 소스 워킹 트리에 git apply(사용자가 '적용'을 고른 뒤에만, 커밋·push 없음); `--sha`: --apply: 보인 patch의 sha256(`스킬 소스 적용 대기:` 줄); `--platform`: 플랫폼(이슈 DB·파서·설정 묶음). 없으면 TT_PLATFORM > 사용자 config platform > site-defaults platform.name; `--json`: JSON 출력(기본은 사용자에게 보일 줄) |
 
 ## `job_status.py`
 

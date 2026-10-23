@@ -6,7 +6,7 @@ fixture·피드백 기록을 뺀** 것이 뼈대다. 반입·사내 운영 레�
 
 들어가는 것
     issue-db.config.yaml, schema/ (6), templates/ (3), parser-rules/ (placeholder),
-    .github/ (CODEOWNERS, PR 템플릿), docs/ (3), .githooks/ (pre-commit·pre-push),
+    .github/ (CODEOWNERS, PR 템플릿), docs/ (4), .githooks/ (pre-commit·pre-push),
     CONTRIBUTING.md, GLOSSARY.md, .gitignore, .gitattributes,
     빈 카테고리 디렉토리(.gitkeep)와 feedback/(.gitkeep)
 
@@ -58,6 +58,7 @@ COPY_FILES = [
     "docs/getting-started.md",
     "docs/review-guide.md",
     "docs/branch-protection.md",
+    "docs/analyzer-skills.md",
     ".githooks/pre-commit",
     ".githooks/pre-push",
 ]

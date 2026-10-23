@@ -47,6 +47,15 @@ analyzers:
 - PR 본문에는 요약 한두 줄만 넣는다(원문 인용 금지).
 - 이슈 DB에 없는 원인을 제시해도 그것만으로 원인을 만들지 않는다.
   사용자가 고르면 `new-cause` 흐름(시그니처 초안·검증 포함)으로 간다.
+- 규칙이 필요하면 `규칙 제안:` 줄 아래에 한 줄에 하나씩 쓴다(파일은 바꾸지 않는다,
+  형식 `16-existing-assets.md §16.5.1`, 처리는 Step 7). 이 모의 스킬(`run.py`)은 내지 않는다. 예:
+
+```text
+규칙 제안:
+- [이슈 DB] add-parser-rule file=extractors.yaml rule=<태그·패턴 → 이벤트> — 근거: <마스킹된 로그 줄>, 이벤트로 안 잡힘
+- [이슈 DB] update-signature cause=DATA-001-01 must_event 추가 — 근거: <로그 줄·이유>
+- [스킬] references/DATA-001.md에 설정 화면 경로 점검 추가 — 근거: 이번 이슈에서 확인 순서가 빠짐
+```
 
 ## 사외 테스트에서 쓰는 법
 

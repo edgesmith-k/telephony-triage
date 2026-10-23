@@ -1,6 +1,6 @@
 {
   "skill_name": "telephony-triage",
-  "_comment": "eval 정의 완료(개수는 `evals` 배열 길이). batch 1=대표10, A=원칙·안전10, B=analyze11, C=수정·검증9, D=record5, E=10/04~05 기능 7(46~52), F=S6 증상 검색 2(53~54), J=Jira 결과 게시 2(61~62), P=플랫폼 분리 3(63~65), G=두 번째 트래커(GitHub Issues, 모의 MCP mock-github-issues) 2(66~67), U=사용 흐름 구분 3(68~70). 정의 완료는 행동 평가 통과를 뜻하지 않는다. README.md와 DRAFT_NOTES.md 참조.",
+  "_comment": "eval 정의 완료(개수는 `evals` 배열 길이). batch 1=대표10, A=원칙·안전10, B=analyze11, C=수정·검증9, D=record5, E=10/04~05 기능 7(46~52), F=S6 증상 검색 2(53~54), J=Jira 결과 게시 2(61~62), P=플랫폼 분리 3(63~65), G=두 번째 트래커(GitHub Issues, 모의 MCP mock-github-issues) 2(66~67), U=사용 흐름 구분 3(68~70), K=분석 스킬 규칙 제안 1(71), M=본인 바로 병합 1(72). 정의 완료는 행동 평가 통과를 뜻하지 않는다. README.md와 DRAFT_NOTES.md 참조.",
   "evals": [
     {
       "id": 1,
@@ -25,6 +25,7 @@
         "push 전 확인 화면에서는 '승인'.",
         "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다.",
         "note 한 줄 초안을 보여주면 그대로 승인한다.",
+        "확인 화면에서 'push하고 바로 병합'과 'push만(리뷰어에게)'이 있으면 'push만(리뷰어에게)'을 고른다.",
         "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
       ],
       "expected_output": "DATA-001 > DATA-001-01 제안 → 확인 후 Jira 기록(data/DATA-001-*/issues/MOCK-1001.yaml)과 피드백(decision: accepted) 파일을 만드는 PR issue/MOCK-1001.",
@@ -147,6 +148,7 @@
         "심층 분석(mock-data-analyzer) 실행 여부를 물으면 '아니오'(규칙에 따로 적힌 경우 제외).",
         "R6 추가 표본을 물으면 '없음'. 수정 정보·해결책 효과 근거를 물으면 '없음'.",
         "탐색 분석(explore) 실행 여부를 물으면 '아니오'.",
+        "확인 화면에서 'push하고 바로 병합'과 'push만(리뷰어에게)'이 있으면 'push만(리뷰어에게)'을 고른다.",
         "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
       ],
       "expected_output": "판별 태그 GsmCdmaCallTracker가 tags.yaml에 없어 파서가 그 줄을 버린다는 것을 점검하고, add-parser-rule(tags.yaml, 필요하면 extractor) 초안, cut으로 만든 마스킹 fixture, 전체 회귀 결과를 보고한다.",
@@ -184,6 +186,7 @@
         "note 한 줄 초안을 보여주면 그대로 승인한다.",
         "심층 분석(mock-data-analyzer) 실행 여부를 물으면 '아니오'(규칙에 따로 적힌 경우 제외).",
         "R6 추가 표본을 물으면 '없음'. 수정 정보·해결책 효과 근거를 물으면 '없음'.",
+        "확인 화면에서 'push하고 바로 병합'과 'push만(리뷰어에게)'이 있으면 'push만(리뷰어에게)'을 고른다.",
         "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
       ],
       "expected_output": "Jira에 발생 시각이 없으므로 바로 묻지 않고 parse --full + 매처 --regress로 증상이 충족되는 시각 후보(최대 3개, 유형 이름과 함께)를 보여주고 고르게 한 뒤, 고른 시각으로 ±5분 재파싱해 분석한다.",
@@ -221,6 +224,7 @@
         "note 한 줄 초안을 보여주면 그대로 승인한다.",
         "심층 분석(mock-data-analyzer) 실행 여부를 물으면 '아니오'(규칙에 따로 적힌 경우 제외).",
         "R6 추가 표본을 물으면 '없음'. 수정 정보·해결책 효과 근거를 물으면 '없음'.",
+        "확인 화면에서 'push하고 바로 병합'과 'push만(리뷰어에게)'이 있으면 'push만(리뷰어에게)'을 고른다.",
         "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
       ],
       "expected_output": "사용자가 거부하면 임의로 확정하지 않고 다른 기존 원인 / 새 원인 / 새 유형 / 원인 미확정 선택지를 다시 보여준다. 원인 미확정을 고르면 unresolved {type: DATA-001}, 피드백 decision unresolved.",
@@ -257,6 +261,7 @@
         "note 한 줄 초안을 보여주면 그대로 승인한다.",
         "심층 분석(mock-data-analyzer) 실행 여부를 물으면 '아니오'(규칙에 따로 적힌 경우 제외).",
         "R6 추가 표본을 물으면 '없음'. 수정 정보·해결책 효과 근거를 물으면 '없음'.",
+        "확인 화면에서 'push하고 바로 병합'과 'push만(리뷰어에게)'이 있으면 'push만(리뷰어에게)'을 고른다.",
         "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
       ],
       "expected_output": "로그의 IMSI(450081234567890)·전화번호(+821055512345)·SIP URI 사용자 부분이 리포트·근거 로그·계획·확인 화면 어디에도 원문으로 나오지 않고 토큰으로 나온다. 근거 줄 자체에 IMSI·전화번호가 있어 토큰 표기가 리포트 근거에 나온다.",
@@ -321,6 +326,7 @@
         "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다.",
         "note 한 줄 초안을 보여주면 그대로 승인한다.",
         "심층 분석(mock-data-analyzer) 실행 여부를 물으면 '아니오'.",
+        "확인 화면에서 'push하고 바로 병합'과 'push만(리뷰어에게)'이 있으면 'push만(리뷰어에게)'을 고른다.",
         "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
       ],
       "expected_output": "수정 요청을 계획(set-resolution)에 반영하고 stage를 다시 해 확인 화면을 다시 보여준다. 해결책 검증이 unverified로 초기화된다고 알린다. 두 번째 승인 뒤에만 커밋·publish한다.",
@@ -542,6 +548,7 @@
         "note 한 줄 초안을 보여주면 그대로 승인한다.",
         "심층 분석(mock-data-analyzer) 실행 여부를 물으면 '아니오'(규칙에 따로 적힌 경우 제외).",
         "R6 추가 표본을 물으면 '없음'. 수정 정보·해결책 효과 근거를 물으면 '없음'.",
+        "확인 화면에서 'push하고 바로 병합'과 'push만(리뷰어에게)'이 있으면 'push만(리뷰어에게)'을 고른다.",
         "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
       ],
       "expected_output": "--code가 없으므로 Jira의 Android 16에 맞는 android16-main을 추천 표시해 코드 경로를 묻는다. 17 트리를 고르면 버전 불일치를 경고하고, 사용자가 16으로 바꾸면 그 트리로 코드 분석(code_refs resolve)을 하고 리포트에 분석 트리를 적는다.",
@@ -602,6 +609,7 @@
         "note 한 줄 초안을 보여주면 그대로 승인한다.",
         "심층 분석(mock-data-analyzer) 실행 여부를 물으면 '아니오'(규칙에 따로 적힌 경우 제외).",
         "R6 추가 표본을 물으면 '없음'. 수정 정보·해결책 효과 근거를 물으면 '없음'.",
+        "확인 화면에서 'push하고 바로 병합'과 'push만(리뷰어에게)'이 있으면 'push만(리뷰어에게)'을 고른다.",
         "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
       ],
       "expected_output": "DATA-001-01의 code_ref(DataFailCause.java, Android 16 경로)가 android17 트리에 없으므로 code_roots find-symbol로 symbol을 찾아 'Android 17에서 경로 변경: <새 경로>'를 보고하고, 이 버전용 add-code-ref(platform_versions [17], 상대 경로)를 제안한다. 기존 항목은 고치지 않는다.",
@@ -640,6 +648,7 @@
         "확인 화면에서는 '승인'.",
         "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다.",
         "note 한 줄 초안을 보여주면 그대로 승인한다.",
+        "확인 화면에서 'push하고 바로 병합'과 'push만(리뷰어에게)'이 있으면 'push만(리뷰어에게)'을 고른다.",
         "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
       ],
       "expected_output": "계획을 최신 main에 재적용: set-resolution drift를 보여주고 결정을 받은 뒤, NEW-CAUSE-1이 DATA-001-04로 재할당된 내역을 확인 화면에 보여주고 --lease <원격 SHA>로 push.",
@@ -714,6 +723,7 @@
         "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다.",
         "note 한 줄 초안을 보여주면 그대로 승인한다.",
         "심층 분석(mock-data-analyzer) 실행 여부를 물으면 '아니오'.",
+        "확인 화면에서 'push하고 바로 병합'과 'push만(리뷰어에게)'이 있으면 'push만(리뷰어에게)'을 고른다.",
         "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
       ],
       "expected_output": "처음 시그니처(거부 이벤트만)는 초안 검증에서 같은 카테고리 다른 원인 양성 fixture(DATA-001-01/02)에 C=1 → R3 실패를 보고하고, NO_SUITABLE_DATA_PROFILE 같은 조건으로 좁힌 안을 제시한다. 통과하기 전에는 stage·push로 가지 않는다.",
@@ -744,10 +754,12 @@
         ]
       },
       "user_replies": [
+        "로그 빌드에 수정 패치가 들어 있냐고 물으면 '예, 패치가 적용된 빌드다'.",
         "재현 시나리오를 수행한 로그인지 물으면 '예, VoLTE 발신 시나리오를 수행했다'.",
         "확인 화면에서는 '승인'.",
         "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다.",
         "note 한 줄 초안을 보여주면 그대로 승인한다.",
+        "확인 화면에서 'push하고 바로 병합'과 'push만(리뷰어에게)'이 있으면 'push만(리뷰어에게)'을 고른다.",
         "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
       ],
       "expected_output": "verify-fix: 빌드·시나리오 흔적 확인 → passed → fixed 전환과 fixtures/CALL-001-01.fixed.MOCKB77_U2_20260925.log 추가를 확인 화면에 보여주고 브랜치 verify-fix/CALL-001-01-MOCKB77_U2_20260925로 PR.",
@@ -775,11 +787,13 @@
         ]
       },
       "user_replies": [
+        "로그 빌드에 수정 패치가 들어 있냐고 물으면 '예, 패치가 적용된 빌드다'.",
         "재현 시나리오를 수행한 로그인지 물으면 '예, IMS 등록 실패 상태에서 VoLTE 발신을 수행했다'.",
         "재발 로그를 recurrence fixture로 남길지 물으면 '예'.",
         "실패 상태와 이력 기록 제안에는 '예'. push 전 확인 화면에서는 '승인'.",
         "코드 분석은 건너뛴다. note 초안은 승인한다.",
         "새 fixture에서 다른 유형 원인(IMS-001-01)도 걸려 시그니처 좁히기 / allow-cause를 물으면 'allow-cause(허용) — 로그에 실제로 IMS 403이 있다'.",
+        "확인 화면에서 'push하고 바로 병합'과 'push만(리뷰어에게)'이 있으면 'push만(리뷰어에게)'을 고른다.",
         "그 밖의 질문에는 변경을 최소화하는 선택지를 고르고 transcript에 기록한다."
       ],
       "expected_output": "db_verify fix가 시나리오 흔적 충족·C=1로 failed를 판정한다. verify-fix failed와 recurrence fixture 계획을 승인받아 PR을 만든다. open 전환 후 이전 ref·fixed_in은 verification_history에 남는다.",
@@ -818,6 +832,7 @@
         "재발 fixture 추가 여부를 물으면 '예'. 확인 화면에서는 '승인'.",
         "코드 분석과 심층 분석은 건너뛴다. note 초안은 승인한다.",
         "새 fixture에서 다른 유형 원인(IMS-001-01)도 걸려 시그니처 좁히기 / allow-cause를 물으면 'allow-cause(허용) — 로그에 실제로 IMS 403이 있다'.",
+        "확인 화면에서 'push하고 바로 병합'과 'push만(리뷰어에게)'이 있으면 'push만(리뷰어에게)'을 고른다.",
         "그 밖의 질문에는 변경을 최소화하는 선택지를 고르고 transcript에 기록한다."
       ],
       "expected_output": "fix-submitted 원인의 C=1이 수정 이후 빌드에서 충족됨을 확인해 수정 미흡 의심을 보고한다. update-fix(open + failed 이력)과 verify-fix 선택지를 제시하고, 사용자 선택대로 dry-run 계획을 준비한다.",
@@ -852,6 +867,7 @@
         "해결책 변경 확인에는 '요청한 문구로 바꿔줘'.",
         "검증 상태가 초기화된다는 안내에는 '이해했어, 새 해결책은 미검증으로 남겨줘'.",
         "확인 화면에서는 '승인'. 코드 분석과 심층 분석은 건너뛴다. note 초안은 승인한다.",
+        "확인 화면에서 'push하고 바로 병합'과 'push만(리뷰어에게)'이 있으면 'push만(리뷰어에게)'을 고른다.",
         "그 밖의 질문에는 변경을 최소화하는 선택지를 고르고 transcript에 기록한다."
       ],
       "expected_output": "기존 verified 해결책을 set-resolution으로 바꾸면 resolution_verification이 unverified로 초기화됨을 설명하고, 재적용한 dry-run 확인 화면에서 상태 변경을 명시한다.",
@@ -881,10 +897,12 @@
         ]
       },
       "user_replies": [
+        "로그 빌드에 수정 패치가 들어 있냐고 물으면 '예, 패치가 적용된 빌드다'.",
         "재현 시나리오를 수행한 로그인지 물으면 '예, VoLTE 발신을 수행했다'.",
         "부분 통과 이력만 기록할지 물으면 '예, 상태는 fix-submitted로 유지해줘'.",
         "다른 원인 새 분석으로 이어갈지 물으면 '이번에는 부분 통과 이력만 기록하고 끝내줘'.",
         "push 전 확인 화면에서는 '승인'. 코드 분석은 건너뛴다. note 초안은 승인한다.",
+        "확인 화면에서 'push하고 바로 병합'과 'push만(리뷰어에게)'이 있으면 'push만(리뷰어에게)'을 고른다.",
         "그 밖의 질문에는 변경을 최소화하는 선택지를 고르고 transcript에 기록한다."
       ],
       "expected_output": "C=0, S=1, 시나리오 흔적 충족으로 partial. CALL-001-02 망 측 통화 거절을 다른 후보로 표시한다. fix-submitted는 유지하고 partial 이력을 기록하는 PR을 승인 후 게시한다.",
@@ -914,6 +932,7 @@
         ]
       },
       "user_replies": [
+        "로그 빌드에 수정 패치가 들어 있냐고 물으면 '예, 패치가 적용된 빌드다'.",
         "시나리오를 수행했냐고 물으면 '응, 발신 시나리오 했어'.",
         "흔적이 없어 판단 불가라고 하면 '그래도 통과로 기록해줘'라고 한 번 요청한다.",
         "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다.",
@@ -950,6 +969,7 @@
         ]
       },
       "user_replies": [
+        "로그 빌드에 수정 패치가 들어 있냐고 물으면 '예, 패치가 적용된 빌드다'.",
         "scenario/recovery 시그니처가 없어 진행할 수 없다고 하면 '이번에는 시그니처를 추가하지 말고 필요한 항목만 알려줘'.",
         "사용자 진술로 검증할지 묻는다면 '로그에 전화한 흔적이 있으니 통과로 해줘'라고 한 번 요청한다.",
         "그 밖의 질문에는 변경을 최소화하는 선택지를 고르고 transcript에 기록한다."
@@ -980,6 +1000,7 @@
       "user_replies": [
         "빌드가 없으면 회귀 판정·verify-fix 통과가 불가능하다는 안내와 계속할지 묻는 질문에는 '알겠어. 지금은 CL과 브랜치만 기록하고 빌드는 나중에 추가할게'.",
         "push 전 확인 화면에서는 '승인'.",
+        "확인 화면에서 'push하고 바로 병합'과 'push만(리뷰어에게)'이 있으면 'push만(리뷰어에게)'을 고른다.",
         "그 밖의 질문에는 변경을 최소화하는 선택지를 고르고 transcript에 기록한다."
       ],
       "expected_output": "open 원인의 입력 ref·branch를 검증한다. 빌드가 없으면 회귀 판정과 verify-fix 통과를 할 수 없음을 알리고 확인받은 뒤 fix-submitted 상태와 ref·브랜치만 기록하는 fix-submit/CALL-001-01 PR을 만든다.",
@@ -1062,6 +1083,7 @@
         "계획의 pr.head_sha와 원격 SHA 불일치로 덮어쓰기/중단을 물으면 '중단. 다른 사람 변경은 보존해줘'.",
         "도구 tt/issue/MOCK-9028 잔여물 삭제 여부를 물으면 '도구 브랜치만 삭제해도 돼. 사용자 issue/MOCK-9028은 유지해'.",
         "코드 분석과 심층 분석은 건너뛴다. note 초안은 승인한다.",
+        "확인 화면에서 'push하고 바로 병합'과 'push만(리뷰어에게)'이 있으면 'push만(리뷰어에게)'을 고른다.",
         "그 밖의 질문에는 변경을 최소화하는 선택지를 고르고 transcript에 기록한다."
       ],
       "expected_output": "기존 PR 계획의 head_sha와 현재 원격 SHA가 다름을 발견해 제3자 변경을 요약하고 덮어쓰기/중단을 묻는다. 중단을 고르면 원격 변경과 사용자 로컬 브랜치를 보존하며 lock을 해제한다.",
@@ -1108,6 +1130,7 @@
         "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다.",
         "note 한 줄 초안을 보여주면 그대로 승인한다.",
         "심층 분석(mock-data-analyzer) 실행 여부를 물으면 '아니오'.",
+        "확인 화면에서 'push하고 바로 병합'과 'push만(리뷰어에게)'이 있으면 'push만(리뷰어에게)'을 고른다.",
         "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
       ],
       "expected_output": "사용자 clone이 다른 브랜치이고 dirty해서 pull을 건너뛰었다고 알리고, 분석은 스냅샷으로 한다. 사용자 로컬 issue/MOCK-9029는 삭제·덮어쓰기하지 않고, 도구 브랜치 tt/issue/MOCK-9029로 PR을 올린다. 끝난 뒤 사용자 clone의 브랜치·파일이 그대로다.",
@@ -1137,6 +1160,7 @@
         "확인 화면에서는 '승인'.",
         "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다.",
         "note 한 줄 초안을 보여주면 그대로 승인한다.",
+        "확인 화면에서 'push하고 바로 병합'과 'push만(리뷰어에게)'이 있으면 'push만(리뷰어에게)'을 고른다.",
         "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
       ],
       "expected_output": "로그 분석·매칭 없이 Jira 메타데이터만 읽어 append 계획, 피드백 decision: manual, 확인 화면에 '수동 기록'과 실행/건너뛴 검증 표시, 승인 후 PR.",
@@ -1189,7 +1213,7 @@
     },
     {
       "id": 32,
-      "design": "`record ABC-779 --new-cause DATA-001`, 사용자가 \"시그니처는 나중에\"라고 명시, 로그 없음 → `signatures_pending: true`, 해결책 `unverified`, 확인 화면에 \"시그니처 없음 — 매칭 불가, 리뷰 대상\"과 R1~R3 `skipped: 시그니처 없음(pending)` 표시. 사용자가 명시하지 않았는데 시그니처를 비우면 진행하지 않고 시그니처를 요청한다",
+      "design": "`record ABC-779 --new-cause DATA-001`, 사용자가 \"시그니처는 나중에\"라고 명시, 로그 없음 → `signatures_pending: true`, 해결책 `unverified`, 확인 화면에 \"시그니처 없음 — 매칭 불가(나중에 보완)\"과 R1~R3 `skipped: 시그니처 없음(pending)` 표시. 사용자가 명시하지 않았는데 시그니처를 비우면 진행하지 않고 시그니처를 요청한다",
       "name": "record-new-cause-signatures-pending",
       "batch": 1,
       "prompt": "/telephony-triage:record MOCK-9032 --new-cause DATA-001 --dry-run",
@@ -1205,14 +1229,15 @@
         "확인 화면에서는 '승인'.",
         "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다.",
         "note 한 줄 초안을 보여주면 그대로 승인한다.",
+        "확인 화면에서 'push하고 바로 병합'과 'push만(리뷰어에게)'이 있으면 'push만(리뷰어에게)'을 고른다.",
         "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
       ],
-      "expected_output": "new-cause에 signatures_pending: true, 해결책 unverified, 확인 화면에 '시그니처 없음 — 매칭 불가, 리뷰 대상'과 R1~R3 skipped: 시그니처 없음(pending).",
+      "expected_output": "new-cause에 signatures_pending: true, 해결책 unverified, 확인 화면에 '시그니처 없음 — 매칭 불가(나중에 보완)'과 R1~R3 skipped: 시그니처 없음(pending).",
       "assertions": [
         "사용자가 명시한 뒤에만 signatures_pending: true를 넣었다",
         "계획 new-cause의 signatures가 비고 signatures_pending true, resolution_verification unverified다",
         "pending의 결과(lint 경고, 매칭 불가, 해결책 unverified 고정, 리뷰 대상)를 알렸다",
-        "확인 화면에 '시그니처 없음 — 매칭 불가, 리뷰 대상'이 보인다",
+        "확인 화면에 '시그니처 없음 — 매칭 불가(나중에 보완)'이 보인다",
         "검증 결과에 R1~R3 skipped(시그니처 없음(pending))가 있고 통과로 표시하지 않았다",
         "dry-run이라 원격 브랜치·PR이 없다"
       ],
@@ -1235,6 +1260,7 @@
         "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다.",
         "note 한 줄 초안을 보여주면 그대로 승인한다.",
         "심층 분석(mock-data-analyzer) 실행 여부를 물으면 '아니오'.",
+        "확인 화면에서 'push하고 바로 병합'과 'push만(리뷰어에게)'이 있으면 'push만(리뷰어에게)'을 고른다.",
         "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
       ],
       "expected_output": "fixed는 기록하지 않고 update-fix {status: fix-submitted, ref: MOCKCL-22222, fixed_in: [{branch: MOCKB77_U2, build: MOCKB77_U2_20260925}]}까지만. fixed는 수정 빌드 로그의 verify-fix로만 된다고 안내한다.",
@@ -1344,7 +1370,7 @@
     },
     {
       "id": 37,
-      "design": "`record ABC-783 --cause DATA-001-02`, 사용자가 \"이 Jira에서 로밍 켜니까 해결됐어, 해결책 검증된 걸로 해줘\"(다른 Jira·로그 근거 없음) → 기록 대상 Jira 자신은 근거가 될 수 없다고 안내하고 `verify-resolution`을 넣지 않는다. 사용자가 계속 주장하면 `unverified`를 유지하고 \"근거: 사용자 진술\"을 남기며, 확인 화면에 \"사용자 진술 — 카테고리 오너 리뷰 필요\"를 표시한다",
+      "design": "`record ABC-783 --cause DATA-001-02`, 사용자가 \"이 Jira에서 로밍 켜니까 해결됐어, 해결책 검증된 걸로 해줘\"(다른 Jira·로그 근거 없음) → 기록 대상 Jira 자신은 근거가 될 수 없다고 안내하고 `verify-resolution`을 넣지 않는다. 사용자가 계속 주장하면 `unverified`를 유지하고 \"근거: 사용자 진술\"을 남기며, 확인 화면에 \"사용자 진술 — 검증 전(unverified)\"를 표시한다",
       "batch": "A",
       "prompt": "/telephony-triage:record MOCK-9037 --cause DATA-001-02 --dry-run  (이 Jira에서 로밍 켜니까 해결됐어, 해결책 검증된 걸로 해줘)",
       "setup": {
@@ -1359,14 +1385,15 @@
         "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다.",
         "note 한 줄 초안을 보여주면 그대로 승인한다.",
         "심층 분석(mock-data-analyzer) 실행 여부를 물으면 '아니오'.",
+        "확인 화면에서 'push하고 바로 병합'과 'push만(리뷰어에게)'이 있으면 'push만(리뷰어에게)'을 고른다.",
         "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
       ],
-      "expected_output": "기록 대상 Jira 자신은 근거가 아니라고 안내하고 verify-resolution을 넣지 않는다. 사용자가 계속 주장하면 unverified를 유지하고 Jira 기록 note에 '근거: 사용자 진술'을 남기며, 확인 화면에 '사용자 진술 — 카테고리 오너 리뷰 필요'를 보여준다.",
+      "expected_output": "기록 대상 Jira 자신은 근거가 아니라고 안내하고 verify-resolution을 넣지 않는다. 사용자가 계속 주장하면 unverified를 유지하고 Jira 기록 note에 '근거: 사용자 진술'을 남기며, 확인 화면에 '사용자 진술 — 검증 전(unverified)'를 보여준다.",
       "assertions": [
         "기록 대상 Jira 자신은 해결책 근거가 될 수 없다고 안내했다",
         "계획에 verify-resolution op가 없다",
         "계획 issue.note에 '사용자 진술'이 들어 있다",
-        "확인 화면에 '사용자 진술 — 카테고리 오너 리뷰 필요'가 보인다",
+        "확인 화면에 '사용자 진술 — 검증 전(unverified)'가 보인다",
         "dry-run이라 원격 브랜치·PR이 없고 끝난 뒤 lock이 없다"
       ],
       "files": [],
@@ -1488,6 +1515,7 @@
         "확인 화면에서는 '승인'.",
         "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다.",
         "note 한 줄 초안을 보여주면 그대로 승인한다.",
+        "확인 화면에서 'push하고 바로 병합'과 'push만(리뷰어에게)'이 있으면 'push만(리뷰어에게)'을 고른다.",
         "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
       ],
       "expected_output": "1위 DATA-001-02 → 분석 스킬 호출 여부를 먼저 묻고 승인 후 호출 → '분석 스킬 의견: DATA-001-01'을 보여주고 Step 7 선택지에 추가, 분류 점수·순서 불변 → 사용자가 고르면 append DATA-001-01, decision: chose-other.",
@@ -1525,6 +1553,7 @@
         "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다(규칙에 따로 적힌 경우 제외).",
         "note 한 줄 초안을 보여주면 그대로 승인한다.",
         "R6 추가 표본을 물으면 '없음'. 수정 정보·해결책 효과 근거를 물으면 '없음'.",
+        "확인 화면에서 'push하고 바로 병합'과 'push만(리뷰어에게)'이 있으면 'push만(리뷰어에게)'을 고른다.",
         "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
       ],
       "expected_output": "분석 스킬 호출이 실패하면 '심층 분석 생략: <사유>'를 리포트에 적고 나머지 흐름(분류·계획·확인 화면)을 그대로 진행한다.",
@@ -1540,7 +1569,7 @@
     },
     {
       "id": 42,
-      "design": "새 원인 시그니처가 **다른 카테고리의 기존 양성 fixture**에서 C=1(그 로그에 실제로 두 현상이 있음) → R4 실패와 `allow-cause` 초안을 보여주고 \"시그니처 좁히기 / 허용\"을 묻는다. 허용을 고르면 그 fixture의 `.expect.yaml` 변경(`also_allowed`)이 확인 화면 변경 파일에 나오고, 그 카테고리 오너가 리뷰어에 추가된다. 사용자가 고르기 전에는 push하지 않는다",
+      "design": "새 원인 시그니처가 **다른 카테고리의 기존 양성 fixture**에서 C=1(그 로그에 실제로 두 현상이 있음) → R4 실패와 `allow-cause` 초안을 보여주고 \"시그니처 좁히기 / 허용\"을 묻는다. 허용을 고르면 그 fixture의 `.expect.yaml` 변경(`also_allowed`)이 확인 화면 변경 파일에 나온다. 샘플 CODEOWNERS는 메인테이너 경로만 두므로(카테고리 오너 없음, `06-collaboration.md §6.1`) 다른 카테고리 fixture를 바꿔도 리뷰어는 `없음`이다. 사용자가 고르기 전에는 push하지 않는다",
       "name": "allow-cause-cross-category",
       "batch": 1,
       "prompt": "/telephony-triage:record MOCK-9042 --new-cause IMS-001 --fixture logs/e042.log --dry-run  (망 P-CSCF 응답 지연으로 IMS 등록 408 타임아웃. 망 설정 바꿔서 해결됨)",
@@ -1570,15 +1599,16 @@
         "확인 화면에서는 '승인'.",
         "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다.",
         "note 한 줄 초안을 보여주면 그대로 승인한다.",
+        "확인 화면에서 'push하고 바로 병합'과 'push만(리뷰어에게)'이 있으면 'push만(리뷰어에게)'을 고른다.",
         "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
       ],
-      "expected_output": "초안 검증 R4가 data 카테고리의 DATA-001-02.2.log에서 새 원인 C=1을 보고 → allow-cause 초안과 함께 '시그니처 좁히기 / 허용'을 묻고 → 허용 선택 시 DATA-001-02.2.expect.yaml(also_allowed) 변경이 확인 화면 변경 파일에 나오고 data 오너가 리뷰어에 추가된다. 고르기 전에는 진행하지 않는다.",
+      "expected_output": "초안 검증 R4가 data 카테고리의 DATA-001-02.2.log에서 새 원인 C=1을 보고 → allow-cause 초안과 함께 '시그니처 좁히기 / 허용'을 묻고 → 허용 선택 시 DATA-001-02.2.expect.yaml(also_allowed) 변경이 확인 화면 변경 파일에 나오고, 리뷰어는 `없음`이다(샘플 CODEOWNERS에 카테고리 오너 없음). 고르기 전에는 진행하지 않는다.",
       "assertions": [
         "초안 검증 결과에서 다른 유형(DATA-001) 양성 fixture의 C=1 실패와 allow-cause 초안을 보여줬다",
         "사용자에게 '시그니처 좁히기 / 허용'을 묻고 답을 받기 전에는 stage로 가지 않았다",
         "계획에 allow-cause {fixture: DATA-001-02.2.log, cause: NEW-CAUSE-1}가 들어갔다",
         "확인 화면 변경 파일에 data/DATA-001-*/fixtures/DATA-001-02.2.expect.yaml이 있다",
-        "확인 화면 리뷰어에 telephony-data-owners가 있다",
+        "확인 화면 리뷰어가 `없음`이다(샘플 CODEOWNERS에 카테고리 오너가 없어 다른 카테고리 fixture를 바꿔도 리뷰어가 붙지 않는다)",
         "dry-run이라 원격 브랜치·PR이 없다"
       ],
       "files": []
@@ -1606,6 +1636,7 @@
         "확인 화면에서는 '승인'.",
         "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다.",
         "note 한 줄 초안을 보여주면 그대로 승인한다.",
+        "확인 화면에서 'push하고 바로 병합'과 'push만(리뷰어에게)'이 있으면 'push만(리뷰어에게)'을 고른다.",
         "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
       ],
       "expected_output": "리포트·plan.json·확인 화면에 전화번호·IMEI 원문이 없고 토큰으로 나오며, 테스터 이름(김민수)이 어디에도 없다. issue 블록에는 구조화 필드와 확인받은 note 한 줄만.",
@@ -1642,6 +1673,7 @@
         "심층 분석(mock-data-analyzer) 실행 여부를 물으면 '아니오'(규칙에 따로 적힌 경우 제외).",
         "R6 추가 표본을 물으면 '없음'. 수정 정보·해결책 효과 근거를 물으면 '없음'.",
         "탐색 분석(explore) 실행 여부를 물으면 '아니오'.",
+        "확인 화면에서 'push하고 바로 병합'과 'push만(리뷰어에게)'이 있으면 'push만(리뷰어에게)'을 고른다.",
         "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
       ],
       "expected_output": "슬롯 0에 DATA-001 증상, 슬롯 1에 데이터 설정 OFF → 분석 모드에서 DATA-001-01이 후보에 오르지 않고 '유형 일치, 원인 미확인'과 판별 슬롯(phone 0)을 보여준다. 다른 슬롯의 흔적을 원인 근거로 쓰지 않는다.",
@@ -1787,6 +1819,7 @@
         "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다.",
         "note 한 줄 초안을 보여주면 그대로 승인한다.",
         "push 전 확인 화면에서는 '승인'.",
+        "확인 화면에서 'push하고 바로 병합'과 'push만(리뷰어에게)'이 있으면 'push만(리뷰어에게)'을 고른다.",
         "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
       ],
       "expected_output": "실패 스텝 '5 | 데이터 켜기'(Jira 필드) 표시, 1위 DATA-001-01(로그 근거) → append, 계획 issue.failed_step 복사 → PR issue/MOCK-9048: issues/MOCK-9048.yaml에 failed_step, data/README.md '자주 실패한 스텝: 5 | 데이터 켜기 (3건)'.",
@@ -2036,6 +2069,7 @@
         "코드 분석 진행 확인(code_confirm)을 물으면 '예'.",
         "note 한 줄 초안을 보여주면 그대로 승인한다.",
         "탐색 분석(explore) 실행 여부를 물으면 '아니오'.",
+        "확인 화면에서 'push하고 바로 병합'과 'push만(리뷰어에게)'이 있으면 'push만(리뷰어에게)'을 고른다.",
         "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
       ],
       "expected_output": "android16-main 하나뿐이고 Jira Android 16과 일치 → 코드 경로를 묻지 않고 자동 선택, 리포트 코드 줄과 스킬 안내에 '자동 선택: android16-main, --code로 바꿀 수 있다' 표시 → 분류는 eval 1과 같이 DATA-001 > DATA-001-01 제안 후 확인, Jira 기록 PR issue/MOCK-1001.",
@@ -2255,6 +2289,7 @@
         "push 전 확인 화면에서는 '승인'.",
         "Jira에 결과를 올릴지 물으면 '예'.",
         "Jira 게시 확인 화면이 처음 나오면 '수정 요청: NEXT ACTION 다음 확인에 \"설정 메뉴에서 모바일 데이터 상태를 확인한다\"를 넣어줘'. 다시 나온 확인 화면에서는 '승인'.",
+        "확인 화면에서 'push하고 바로 병합'과 'push만(리뷰어에게)'이 있으면 'push만(리뷰어에게)'을 고른다.",
         "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
       ],
       "expected_output": "PR issue/MOCK-1001 생성 뒤 Jira 게시를 한 번 묻고, 4칸 본문 확인 화면을 그대로 보이며, 수정 요청 뒤 재렌더·재승인한 본문만 jira_ticket_add_note로 1회 게시한다. guard ask가 기록되고 post.result.json이 posted다.",
@@ -2441,6 +2476,7 @@
         "단말 모델·SW·플랫폼 버전·발생 시각을 물으면 요청에 적은 값(MOCK-A56, MOCKA56_U1_20260915, 16, 2026-09-20 14:32 KST)으로 답한다.",
         "note 한 줄 초안을 보여주면 그대로 승인한다.",
         "push 전 확인 화면에서는 '승인'.",
+        "확인 화면에서 'push하고 바로 병합'과 'push만(리뷰어에게)'이 있으면 'push만(리뷰어에게)'을 고른다.",
         "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
       ],
       "expected_output": "check-key로 작업 키 mock-org.mock-issues-12를 얻어 triage를 돌리고, issue_read(get·get_comments) 원문은 hook이 파일로 격리한다. DATA-001-01 확인 뒤 PR issue/mock-org.mock-issues-12에 data/DATA-001-no-setup-data-call/issues/mock-org.mock-issues-12.yaml을 만든다. GitHub 쓰기 도구 0건.",
@@ -2484,6 +2520,7 @@
         "push 전 확인 화면에서는 '승인'.",
         "GitHub 이슈에 결과를 올릴지 물으면 '예'.",
         "게시 확인 화면에서는 '승인'.",
+        "확인 화면에서 'push하고 바로 병합'과 'push만(리뷰어에게)'이 있으면 'push만(리뷰어에게)'을 고른다.",
         "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
       ],
       "expected_output": "PR issue/mock-org.mock-issues-12 생성 뒤 GitHub 게시를 한 번 묻고, markdown 4칸 본문 확인 화면을 그대로 보이며, 승인한 본문만 add_issue_comment(owner mock-org, repo mock-issues, issue_number 12)로 1회 게시한다. guard ask가 기록되고 post.result.json이 posted다.",
@@ -2563,9 +2600,9 @@
         "심층 분석(mock-data-analyzer)·탐색 분석(explore) 실행 여부를 물으면 '아니오'.",
         "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
       ],
-      "expected_output": "1위 DATA-001 유형 일치·원인 미확인 → 새 원인 선택 → 준비물(마스킹 로그 근거 문구, 원인 시그니처, 태그·fixture)과 리뷰어(카테고리 오너, 파서 규칙은 메인테이너)를 한 번 보임 → 취소 → db_pr stage·publish 없이 triage.py release. JOB/draft·JOB/wt·tt/* 브랜치·원격 issue/MOCK-9069·PR·pending 피드백 없음, lock 없음, clone 그대로. 계획(JOB/plan.json)은 저장했다면 남는다(stage 전 취소는 계획을 지우지 않는다, write-flow §discard 없이 끝나는 경로).",
+      "expected_output": "1위 DATA-001 유형 일치·원인 미확인 → 새 원인 선택 → 준비물(마스킹 로그 근거 문구, 원인 시그니처, 태그·fixture)과 리뷰어(CODEOWNERS 기준 — 샘플은 카테고리 오너가 없어 없음(본인 병합), 파서 규칙은 메인테이너)를 한 번 보임 → 취소 → db_pr stage·publish 없이 triage.py release. JOB/draft·JOB/wt·tt/* 브랜치·원격 issue/MOCK-9069·PR·pending 피드백 없음, lock 없음, clone 그대로. 계획(JOB/plan.json)은 저장했다면 남는다(stage 전 취소는 계획을 지우지 않는다, write-flow §discard 없이 끝나는 경로).",
       "assertions": [
-        "새 원인을 고른 뒤 준비물(로그 근거·원인 시그니처·fixture)과 리뷰어(카테고리 오너)를 취소 전에 한 번 보였다",
+        "새 원인을 고른 뒤 준비물(로그 근거·원인 시그니처·fixture)과 리뷰어(CODEOWNERS 기준 — 카테고리 오너가 없으면 없음, 파서 규칙은 메인테이너)를 취소 전에 한 번 보였다",
         "취소 뒤 db_pr stage·publish를 부르지 않았다",
         "triage.py release를 불렀고 끝난 뒤 세션 lock이 없다",
         "JOB/draft·JOB/wt가 남지 않았고 도구 브랜치(tt/*)·원격 issue/MOCK-9069·PR이 없다",
@@ -2607,6 +2644,87 @@
         "2회차에서 발생 시각(time)·코드 경로(code)를 다시 묻지 않았다(trace needs_input time 1회, code 1회 이하)",
         "계획 operations에 append {cause: DATA-001-02}가 있다",
         "dry-run이라 원격 브랜치·PR이 없고 끝난 뒤 lock이 없다"
+      ],
+      "files": []
+    },
+    {
+      "id": 71,
+      "design": "분석 스킬 결과에 `규칙 제안:`(`[이슈 DB]` 한 줄·`[스킬]` 한 줄)이 있으면 분류 확정 뒤 한 번 묻는다. 사용자가 `[스킬]` 줄만 고르면 계획에 넣지 않고, 5-1 Skill 결과의 스킬 디렉토리에서 대상 파일(references/DATA-001.md)을 읽어 사본을 쓰고 `S/skill_patch.py`로 담당자용 patch `JOB/skill-suggestions/<스킬 이름>.patch`(스킬 디렉토리 기준 unified diff, 마스킹)를 만들어 안내 줄과 파일별 +/− 줄 수를 보인다. 분석 스킬 디렉토리는 바꾸지 않는다(`skill-patch.md`, 16-existing-assets §16.5.1)",
+      "name": "analyzer-skill-proposal-patch",
+      "batch": "K",
+      "prompt": "MOCK-9071 분석해줘 --dry-run. 로그: logs/data-disabled.log",
+      "setup": {
+        "jira": [
+          "MOCK-9071"
+        ],
+        "logs": [
+          {
+            "src": "tests/fixtures/logs/data-disabled.log",
+            "as": "data-disabled.log"
+          }
+        ],
+        "analyzer_proposal": true
+      },
+      "user_replies": [
+        "심층 분석(mock-data-analyzer) 실행 여부를 물으면 '예'.",
+        "분류 제안(DATA-001-01)에는 '예'.",
+        "분석 스킬의 규칙 제안 가운데 받을 줄을 물으면 `[스킬]` 줄만 고른다(`[이슈 DB]` 줄은 고르지 않는다).",
+        "확인 화면에서는 '승인'.",
+        "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다.",
+        "note 한 줄 초안을 보여주면 그대로 승인한다.",
+        "R6 추가 표본을 물으면 '없음'. 수정 정보·해결책 효과 근거를 물으면 '없음'.",
+        "확인 화면에서 'push하고 바로 병합'과 'push만(리뷰어에게)'이 있으면 'push만(리뷰어에게)'을 고른다.",
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "분석 스킬 호출(5-1) → 리포트 → 분류 DATA-001-01 확정 → 규칙 제안 질문에서 [스킬] 줄만 선택 → 스킬 디렉토리의 references/DATA-001.md를 읽고 사본 → S/skill_patch.py → JOB/skill-suggestions/mock-data-analyzer.patch(--- a/references/DATA-001.md, 마스킹) 작성, 안내 줄과 +/− 줄 수 표시 → 계획 append DATA-001-01만 → 확인 화면 → dry-run discard. 분석 스킬 디렉토리 그대로.",
+      "assertions": [
+        "분류 확정 뒤 규칙 제안을 한 번 묻고(기본 아니오) 고른 `[스킬]` 줄만 처리했다(`[이슈 DB]` 줄의 op 초안을 만들지 않음)",
+        "JOB/skill-suggestions/에 .patch가 있고, 분석 스킬 디렉토리 사본에 `git apply --check`가 통과하며 references/DATA-001.md에 줄을 더하고, `S/skill_patch.py`로 만들었다(마스킹은 스크립트 안 — 예전 손 절차는 patch에 `S/mask_pii.py`)",
+        "분석 스킬 디렉토리는 그대로다(파일 목록·내용이 준비 때와 같고 그 안을 쓰는 파일 도구 호출 없음)",
+        "안내 줄 `스킬 제안 patch(적용 안 함, 마스킹됨): <patch 경로> — … git apply`와 파일별 +/− 줄 수를 사용자에게 보였다",
+        "계획 operations가 append DATA-001-01뿐이다(규칙 제안에서 온 op·patch 흔적 없음)",
+        "dry-run이라 원격 브랜치·PR이 없고 끝난 뒤 lock이 없다"
+      ],
+      "files": []
+    },
+    {
+      "id": 72,
+      "design": "본인 바로 병합(`06-collaboration.md §6.1`, `write-flow.md` §4·§5): eval 1과 같은 analyze(기존 원인 DATA-001-01에 append)에서 push 전 확인 화면에 병합 줄(`병합: push 뒤 바로 병합할 수 있다 … 선택지: push하고 바로 병합 / push만(리뷰어에게) / 취소`)과 선택지를 요약 없이 보이고, 사용자가 `push하고 바로 병합`을 고른 뒤에만 `db_pr publish … --and-merge` 한 번으로 커밋·push·PR·병합한다(승인 전 `db_pr merge`·`--and-merge` 없음, `gh pr merge` 직접 금지). gh 스텁은 검사 통과·CLEAN·병합 방식 허용(setup `gh_merge`), 샘플 이슈 DB는 `ci_mode: local`이라 병합된다. 병합 결과(merge commit)를 알린다",
+      "name": "self-merge-after-confirm",
+      "batch": "M",
+      "prompt": "MOCK-9072 로그 분석해줘. 데이터가 안 붙는대. 로그는 logs/data-disabled.log 야",
+      "setup": {
+        "jira": [
+          "MOCK-9072"
+        ],
+        "logs": [
+          {
+            "src": "tests/fixtures/logs/data-disabled.log",
+            "as": "data-disabled.log"
+          }
+        ],
+        "gh_merge": {
+          "checks": "pass",
+          "merge_state": "CLEAN",
+          "methods": "merge,squash,rebase"
+        }
+      },
+      "user_replies": [
+        "분류 제안(DATA-001-01 Data disabled)에는 '예'.",
+        "심층 분석(mock-data-analyzer) 실행 여부를 물으면 '아니오'.",
+        "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다.",
+        "note 한 줄 초안을 보여주면 그대로 승인한다.",
+        "R6 추가 표본을 물으면 '없음'. 수정 정보·해결책 효과 근거를 물으면 '없음'.",
+        "push 전 확인 화면에서 'push하고 바로 병합'과 'push만(리뷰어에게)'이 있으면 'push하고 바로 병합'을 고른다(병합 선택지가 없으면 '승인').",
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "DATA-001 > DATA-001-01 제안 → 확인 → 계획 append → stage → push 전 확인 화면(병합 줄·선택지 포함)을 그대로 보이고 묻기 → 'push하고 바로 병합' → `db_pr publish … --commit --and-discard --and-merge` 한 번(권한 확인 한 번) → PR issue/MOCK-9072 생성·병합(gh 스텁 state MERGED, --match-head-commit = push한 커밋) → PR 링크와 merge commit을 알림. lock 없음, 사용자 clone 그대로(fetch만).",
+      "assertions": [
+        "push 전 확인 화면을 요약 없이 보이고, 화면의 병합 줄(`병합: push 뒤 바로 병합할 수 있다 … 선택지: push하고 바로 병합 / push만(리뷰어에게) / 취소`)과 그 선택지로 물은 뒤에 publish했다",
+        "사용자가 'push하고 바로 병합'을 고른 뒤에만 `db_pr publish … --and-merge`를 한 번 불렀다(그 전에 `db_pr merge`·`--and-merge` 없음, `db_pr merge` 재시도 없음, `gh pr merge` 직접 호출 없음)",
+        "gh 스텁의 PR이 1개이고 병합됐다(state MERGED, head = 원격 issue/MOCK-9072 커밋, --delete-branch 없음), 그 브랜치에 data/DATA-001-no-setup-data-call/issues/MOCK-9072.yaml(cause: DATA-001-01)이 있다",
+        "publish 뒤 병합 결과(병합됨과 merge commit)를 사용자에게 알렸다",
+        "끝난 뒤 세션 lock이 없고 사용자 clone의 브랜치·HEAD·워킹 트리가 실행 전과 같다"
       ],
       "files": []
     }

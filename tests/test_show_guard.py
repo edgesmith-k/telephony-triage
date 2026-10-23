@@ -1025,3 +1025,88 @@ def test_closed_window_same_hash_new_screen_judges_the_new_screen(tmp_path):
             r = out["hookSpecificOutput"]["permissionDecisionReason"]
             assert decision(out) == "deny" and "M2 changed message" in r and "M1 original message" not in r, (path.name, cmd)
     assert stop(s3, "바꿨습니다. 다시 올릴까요?") is None
+
+
+# --- 스킬 제안 patch 안내(skill_patch.py, kind patch) ---------------------------------------------------------------
+
+PATCH_CMD = "python3 /p/scripts/skill_patch.py MOCK-1 --skill-dir /sk/mock-data-analyzer --name mock-data-analyzer"
+PATCH_LINES = ["스킬 제안 patch(적용 안 함, 마스킹됨): /w/MOCK-1/skill-suggestions/mock-data-analyzer.patch — 직접 검토해 스킬 소스의 "
+               "dev 브랜치에 git apply, main에는 PR로 반영", "- references/DATA-001.md +1 −0"]
+PATCH_OUT = "\n".join(PATCH_LINES)
+MEMO_LINE = "스킬 제안 patch 없음(직접 반영할 메모): 마스킹이 문맥·삭제 줄을 바꿔 원본에 적용되지 않는다(1줄, 예: x)"
+
+
+def _patch_rec(lines=PATCH_LINES, name="mock-data-analyzer"):
+    return ("skill_patch", "patch", {"key": f"patch:MOCK-1/{name}", "lines": list(lines)})
+
+
+def test_skill_patch_guidance_blocks_question_and_stop_until_shown(tmp_path):
+    """스킬 제안 patch 안내 줄·파일별 줄 수(또는 메모)는 다음 질문(Step 7이 아니어도)·턴 끝 전에 글자 그대로 보여야 한다."""
+    rec = {"k": [_patch_rec()]}
+    para = "스킬 patch를 만들었습니다(references/DATA-001.md에 한 줄 추가). 담당자에게 전달하세요."
+    q = {"question": "코드 경로를 고르세요"}
+    path = write(tmp_path, prompt("p"), bash("k", PATCH_CMD, PATCH_OUT), say(para), extra=rec)
+    out = pre("pre-ask", path, ASK, q)
+    r = out["hookSpecificOutput"]["permissionDecisionReason"]
+    assert decision(out) == "deny" and r.startswith(shown.MARKER + " patch:MOCK-1/mock-data-analyzer — 거부됨")
+    assert "스킬 제안 patch 안내를 요약했다(빠진 줄 2/2)" in r and "--- 붙일 줄 ---\n" + PATCH_OUT in r
+    out = stop(path, para)
+    assert out["decision"] == "block" and "스킬 제안 patch 안내를 요약했다" in out["reason"]
+    # 글자 그대로(경로 백틱·줄 수 글머리 없이도) 보이면 통과
+    shown_text = PATCH_LINES[0].replace("/w/MOCK-1/skill-suggestions/mock-data-analyzer.patch",
+                                        "`/w/MOCK-1/skill-suggestions/mock-data-analyzer.patch`") + "\n" + PATCH_LINES[1][2:]
+    ok = write(tmp_path, prompt("p"), bash("k", PATCH_CMD, PATCH_OUT), say(shown_text), name="ok.jsonl", extra=rec)
+    assert pre("pre-ask", ok, ASK, q) is None and stop(ok, shown_text) is None
+    # 줄 수 줄이 빠지면 막는다(안내 줄만으로는 부족)
+    half = write(tmp_path, prompt("p"), bash("k", PATCH_CMD, PATCH_OUT), say(PATCH_LINES[0]), name="half.jsonl", extra=rec)
+    out = stop(half, PATCH_LINES[0])
+    assert out["decision"] == "block" and "빠진 줄 1/2" in out["reason"]
+    # 실패 메모도 같은 의무
+    memo = write(tmp_path, prompt("p"), bash("k", PATCH_CMD, MEMO_LINE), say("patch는 만들지 못했습니다."), name="memo.jsonl",
+                 extra={"k": [_patch_rec([MEMO_LINE])]})
+    assert stop(memo, "patch는 만들지 못했습니다.")["decision"] == "block"
+    # 지난 턴의 안내는 이번 턴에서 보지 않는다, 기록 없는 같은 출력(문서 cat)은 의무가 아니다
+    later = write(tmp_path, prompt("p"), bash("k", PATCH_CMD, PATCH_OUT), say(para), prompt("다음"), say("네"),
+                  name="later.jsonl", extra=rec)
+    assert stop(later, "네") is None
+    plain = write(tmp_path, prompt("p"), bash("c", "cat notes.md", PATCH_OUT), say(para), name="plain.jsonl")
+    assert stop(plain, para) is None
+
+
+def test_skill_patch_two_skills_both_required_and_rerun_replaces(tmp_path):
+    """다른 분석 스킬의 patch는 서로 닫지 않는다. 같은 스킬을 다시 돌려 내용이 바뀌면 새 출력만 본다."""
+    other = [PATCH_LINES[0].replace("mock-data-analyzer", "mock-ims-analyzer"), "- SKILL.md +2 −1"]
+    both = write(tmp_path, prompt("p"), bash("k1", PATCH_CMD, PATCH_OUT), bash("k2", PATCH_CMD, "\n".join(other)),
+                 say("\n".join(other)), extra={"k1": [_patch_rec()], "k2": [_patch_rec(other, "mock-ims-analyzer")]})
+    out = stop(both, "\n".join(other))
+    assert out["decision"] == "block" and "patch:MOCK-1/mock-data-analyzer" in out["reason"]
+    assert "mock-ims-analyzer" not in out["reason"].split("\n")[0]
+    rerun = [PATCH_LINES[0], "- references/DATA-001.md +2 −0"]
+    again = write(tmp_path, prompt("p"), bash("k1", PATCH_CMD, PATCH_OUT), bash("k2", PATCH_CMD, "\n".join(rerun)),
+                  say("\n".join(rerun)), name="again.jsonl", extra={"k1": [_patch_rec()], "k2": [_patch_rec(rerun)]})
+    assert stop(again, "\n".join(rerun)) is None
+
+
+def test_post_reminds_skill_patch_output(tmp_path):
+    home = _post_home(tmp_path, _patch_rec())
+    out, _ = hook("post", {"tool_name": "Bash", "tool_input": {"command": PATCH_CMD}, "tool_response": {"stdout": PATCH_OUT}},
+                  home=home)
+    ctx = out["hookSpecificOutput"]["additionalContext"]
+    assert "스킬 제안 patch 안내" in ctx and "출력 줄 전부(2줄)" in ctx and "다음 질문" in ctx
+
+
+def test_skill_patch_count_line_forms_and_paraphrase():
+    """줄 수 줄은 표 행·번호 목록·글머리 없이·ASCII `-`로 써도 보인 것, 고쳐 쓴 문장은 빠진 것."""
+    count = PATCH_LINES[1]
+    for form in ("| references/DATA-001.md | +1 | −0 |", "1. references/DATA-001.md +1 −0", "- references/DATA-001.md +1 -0",
+                 "* `references/DATA-001.md` +1 −0", "| 1 | references/DATA-001.md | +1 | -0 |"[4:]):
+        assert shown.patch_uncovered([count], [PATCH_LINES[0] + "\n" + form]) == [], form
+    for bad in ("references/DATA-001.md에 1줄 추가", "| references/DATA-001.md | 1줄 추가 |", "references/DATA-001.md +2 −0"):
+        assert shown.patch_uncovered([count], [bad]) == [count], bad
+    assert shown.patch_uncovered([PATCH_LINES[0]], ["스킬 제안 patch를 만들었습니다(마스킹됨) — 담당자에게 전달"]) == [PATCH_LINES[0]]
+
+
+def test_skill_patch_table_row_passes_stop(tmp_path):
+    table = PATCH_LINES[0] + "\n\n| 파일 | 더함 | 뺌 |\n|---|---|---|\n| references/DATA-001.md | +1 | −0 |"
+    path = write(tmp_path, prompt("p"), bash("k", PATCH_CMD, PATCH_OUT), say(table), extra={"k": [_patch_rec()]})
+    assert stop(path, table) is None

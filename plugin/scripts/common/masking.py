@@ -13,6 +13,8 @@
   숫자 규칙은 단어 경계(`_`, `.` 포함) 안에서만 본다.
 - **값 앞 제외(`Rule.before`)**: 값 바로 앞 24자가 이 패턴에 맞으면 그 값은 건너뛴다
   (`version 10.0.1.2`를 IPv4로 보지 않기). `context`(줄 전체 양성 조건)와 반대 방향의 음성 조건이다.
+- **구간 제외(`Rule.outside`)**: 값이 이 패턴이 맞은 구간 안이면 건너뛴다(데이터 콜 응답 객체의 첫 `cid`는
+  셀이 아니다). 줄 전체가 아니라 맞은 구간만 보므로 같은 텍스트의 다른 `cid=`는 그대로 마스킹한다.
 - **게이트(`Rule.gate`)**: 키 이름 문맥 규칙은 소문자 줄에 그 키 부분문자열이 하나라도 있을 때만
   돈다. 결과는 같고 규칙당 고정비(줄마다 `finditer`)만 줄인다(08-safety.md §8 성능).
 - **예외**: `issue-db.config.yaml`의 `mask.allow_patterns`에 전체가 맞는 값은 그대로 둔다.
@@ -47,6 +49,7 @@ class Rule:
     context: re.Pattern | None = None               # 이 문맥이 있는 텍스트에서만
     before: re.Pattern | None = None                # 값 앞 24자가 이 패턴에 맞으면 건너뛴다
     gate: tuple[str, ...] = ()                      # 소문자 줄에 이 중 하나가 있을 때만 (비면 항상)
+    outside: re.Pattern | None = None               # 값이 이 패턴이 맞은 구간 안이면 건너뛴다(구간 음성 조건)
 
     def applies(self, text: str) -> bool:
         return self.context is None or bool(self.context.search(text))
@@ -160,10 +163,17 @@ RULES: tuple[Rule, ...] = (
     Rule("ICCID", re.compile(r'(?i)\biccid' + _SEP + r'(?P<v>[0-9A-Fa-f]{18,20})' + _NUM_END)),
     Rule("TMSI", re.compile(r'(?i)\b(?:p-?tmsi|m-?tmsi|s-?tmsi|tmsi)' + _SEP + r'(?P<v>(?:0x)?[0-9A-Fa-f]{4,10})\b')),
     Rule("GUTI", re.compile(r'(?i)\b(?:5g-?guti|guti)' + _SEP + r'(?P<v>[0-9A-Fa-f][0-9A-Fa-f-]{7,})\b')),
-    # 셀 식별자 — TODO(SITE:S13) RIL 데이터 콜 응답의 `cid`(context id)도 셀로 본다(과잉이지만 안전 쪽)
+    # 셀 식별자 (`mCid`·`CellIdentity*`의 키는 여기서 항상)
     Rule("CELL", re.compile(
-        r"\b(?:mCi|mPci|mTac|mLac|mCid|mNci|mCellId|cid|ci|pci|tac|lac|nci|eci|cellId|cellIdentity)"
+        r"\b(?:mCi|mPci|mTac|mLac|mCid|mNci|mCellId|ci|pci|tac|lac|nci|eci|cellId|cellIdentity)"
         + _SEP + r"(?P<v>0x[0-9A-Fa-f]+|\d+)" + _NUM_END)),
+    # 맨 `cid`도 셀로 보되, AOSP 데이터 콜 응답 객체(`DataCallResponse: { … cid=1 …}`, `SetupDataCallResult{… cid: 1 …}`)
+    # 안의 `cid`는 데이터 콜 context id라 셀이 아니다(사내 확인: 오탐, S13). 구간은 객체 이름부터 그 객체의 **첫** `cid` 값까지
+    # (`cid`는 중첩 `{`·`}`보다 앞에 나온다). 그래서 닫는 `}` 없이 잘린 줄에서 뒤에 오는 셀 `cid=`는 구간 밖이라 마스킹된다.
+    # 그 밖의 `cid=`(모의 `SETUP_DATA_CALL error=NONE cid=1` 등)는 그대로 셀로 본다(안전 쪽)
+    Rule("CELL", re.compile(r"\bcid" + _SEP + r"(?P<v>0x[0-9A-Fa-f]+|\d+)" + _NUM_END), gate=("cid",),
+         outside=re.compile(r"\b(?:DataCallResponse|SetupDataCallResult)\s*:?\s*\{[^{}\n]*?\bcid" + _SEP
+                            + r"(?:0x[0-9A-Fa-f]+|\d+)")),
     Rule("MSISDN", re.compile(
         r'(?i)\b(?:msisdn|phone(?:number)?|dest(?:addr)?|destination|number|callee|caller)' + _SEP + r'(?P<v>\+?\d{7,15})'
         + _NUM_END)),
@@ -267,6 +277,7 @@ class Masker:
                 continue
             if not rule.applies(text):  # 문맥 규칙은 줄 전체를 본다
                 continue
+            skip = [m.span() for m in rule.outside.finditer(text)] if rule.outside is not None else []
             free, pos = [], 0
             for start, end in sorted(taken):
                 if start > pos:
@@ -281,6 +292,8 @@ class Masker:
                         continue
                     start, end = match.span("v")
                     if rule.before is not None and rule.before.search(text[max(0, lo + start - 24):lo + start]):
+                        continue
+                    if any(a <= lo + start < b for a, b in skip):
                         continue
                     found.append((lo + start, lo + end, rule.kind, value))
                     taken.append((lo + start, lo + end))

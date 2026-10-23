@@ -307,7 +307,8 @@ def test_new_cause_without_fixture_and_pending_cause_are_skipped_not_passed():
 
 def test_fix_judgements_on_fix_submitted_cause():
     fixed = verify_fix(VERIFY_DB, "call-fixed.log")
-    assert fixed["judgement"] == "passed" and fixed["build_check"]["status"] == "after"
+    assert fixed["judgement"] == "passed" and fixed["build_check"]["status"] == "not-compared"     # carrier-config: AP 패치 기준
+    assert "bundle" not in fixed and "note" not in fixed["suggested_ops"][1]["verification"]
     assert fixed["trace"]["signature"] == "CALL-001-01/volte-dial-attempt"
     assert [op["op"] for op in fixed["suggested_ops"]] == ["add-fixture", "verify-fix"]
     failed = verify_fix(VERIFY_DB, "call-recurrence.log")
@@ -319,16 +320,64 @@ def test_fix_judgements_on_fix_submitted_cause():
     assert unknown["judgement"] == "unknown" and "시나리오 흔적 없음" in unknown["reason"]
     assert unknown["suggested_ops"] == []
 
-    early = verify_fix(VERIFY_DB, "call-fixed.log", build="MOCKB77_U2_20260910", expect=2)
-    assert early.returncode == 2 and "이전" in early.stderr
-    undetermined = verify_fix(VERIFY_DB, "call-fixed.log", build="OTHER_BUILD_1")
-    assert undetermined["build_check"]["status"] == "undetermined"
+    # AP 패치 기준(모뎀 아님): fixed_in보다 이전·비교 불가 빌드도 패치 적용 빌드 로그면 판정한다 (fixed_in과 비교하지 않음)
+    early = verify_fix(VERIFY_DB, "call-fixed.log", build="MOCKB77_U2_20260910")
+    assert early["judgement"] == "passed" and early["build_check"]["status"] == "not-compared"
+    assert early["build_check"]["build"] == "MOCKB77_U2_20260910"
+    assert early["build_check"]["fixed_in"] == [{"branch": "MOCKB77_U2", "build": "MOCKB77_U2_20260920"}]
+    assert early["suggested_ops"][1]["verification"]["build"] == "MOCKB77_U2_20260910"
+    other = verify_fix(VERIFY_DB, "call-fixed.log", build="OTHER_BUILD_1")
+    assert other["judgement"] == "passed" and other["build_check"]["status"] == "not-compared"
+    nobuild = verify_fix(VERIFY_DB, "call-fixed.log", build=None)
+    assert nobuild["build_check"]["status"] == "not-compared" and nobuild["build_check"]["build"] is None
 
     res = run_json("db_verify.py", ["resolution", "--cause", "CALL-001-02", LOGS / "call-noscenario.log",
                                     "--db", VERIFY_DB])
     assert res["judgement"] == "unknown" and "시나리오 흔적 없음" in res["reason"]      # recovery 없음 + 흔적 없음
     res = run_json("db_verify.py", ["resolution", "--cause", "CALL-001-01", LOGS / "call-fixed.log", "--db", VERIFY_DB])
     assert res["judgement"] == "passed"
+
+
+def test_fix_modem_cause_keeps_build_comparison():
+    """모뎀(CP) 수정은 기존 규칙: 로그 빌드를 build_compare로 fixed_in과 비교한다(이전이면 종료 2, 비교 불가면 묻는다)."""
+    db = copy_db(VERIFY_DB)
+    edit(db / CALL / "type.md", "    resolution_type: carrier-config\n", "    resolution_type: modem\n")
+    after = verify_fix(db, "call-fixed.log")
+    assert after["judgement"] == "passed" and after["build_check"]["status"] == "after"
+    assert after["build_check"]["against"] == "MOCKB77_U2_20260920"
+    early = verify_fix(db, "call-fixed.log", build="MOCKB77_U2_20260910", expect=2)
+    assert early.returncode == 2 and early.stdout == "" and "이전" in early.stderr
+    assert verify_fix(db, "call-fixed.log", build="OTHER_BUILD_1")["build_check"]["status"] == "undetermined"
+    assert verify_fix(db, "call-fixed.log", build=None)["build_check"]["status"] == "not-given"
+
+
+def test_fix_bundle_is_recorded_in_verification_note():
+    """--bundle: 출력 bundle과 suggested_ops의 verification.note(`CI/CD 번들 <N>`)에 남는다 (스키마 변경 없음)."""
+    def judged(log: str, *extra) -> dict:
+        return run_json("db_verify.py", ["fix", "--cause", "CALL-001-01", LOGS / log, "--db", VERIFY_DB,
+                                         "--build", "MOCKB77_U2_20260910", *extra])
+    passed = judged("call-fixed.log", "--bundle", " 4821 ")
+    assert passed["bundle"] == "4821" and passed["build_check"]["status"] == "not-compared"
+    v = passed["suggested_ops"][1]["verification"]
+    assert v["note"] == "CI/CD 번들 4821" and v["build"] == "MOCKB77_U2_20260910"
+    failed = judged("call-recurrence.log", "--bundle", "4821")
+    note = failed["suggested_ops"][0]["verification"]["note"]
+    assert note.startswith("원인 시그니처 충족") and note.endswith("; CI/CD 번들 4821")
+    partial = judged("call-partial.log", "--bundle", "4821")
+    assert partial["suggested_ops"][0]["verification"]["note"].endswith("; CI/CD 번들 4821")
+    bad = run("db_verify.py", ["fix", "--cause", "CALL-001-01", LOGS / "call-fixed.log", "--db", VERIFY_DB,
+                               "--bundle", "  "])
+    assert bad.returncode == 2 and "--bundle" in bad.stderr
+
+    db = copy_db(VERIFY_DB)       # note는 verify-fix op로 fix.verification에 그대로 기록된다
+    shutil.copyfile(LOGS / "call-fixed.log", db.parent / "cut.log")
+    ops = passed["suggested_ops"]
+    ops[0]["path"] = ops[1]["verification"]["fixture"] = str(db.parent / "cut.log")
+    ops[1]["verification"]["by"] = "mock-user1"
+    apply_plan(db, ops)
+    fix = cause_of(db / CALL / "type.md", "CALL-001-01")["fix"]
+    assert fix["status"] == "fixed" and fix["verification"]["note"] == "CI/CD 번들 4821"
+    assert fix["verification"]["build"] == "MOCKB77_U2_20260910"
 
 
 def test_fix_unknown_when_one_log_file_is_unreadable(tmp_path):

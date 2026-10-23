@@ -63,7 +63,7 @@ MCP `tracker.tools.get_issue`(매핑이 없으면 추측하지 말고 setup 안�
     결과를 파일로 저장하고 `parse_logcat.py cut <log> --evidence <match.json> --out WD/<KEY>/fixtures/cut-1.log --rules SNAP/parser-rules` (parse와 같은 로그를 같은 순서로).
   - 새 원인·유형: 새 시그니처는 계획에만 있어 스냅샷 매처로 근거를 찾을 수 없다. 발생 시각(없으면 사용자가 지정한 시각)으로
     `parse_logcat.py cut <log> --around <시각> --out ...`. 그 fixture가 새 시그니처를 실제로 충족하는지는 7번 초안 검증(R1·R2)이 확인한다.
-  - fixture가 없으면 R1·R2가 `skipped: fixture 없음`(검증 못 함, 리뷰 대상)이 된다고 알린다.
+  - fixture가 없으면 R1·R2가 `skipped: fixture 없음`(검증 못 함 — 자동 검증 없음)이 된다고 알린다.
   - 원인이 `signatures_pending`이면 그 fixture는 `"<유형 ID>:unresolved"` 기대값으로 회귀에 들어간다.
 - **수정 정보**(선택) — "이미 고쳤다"면 `ref`(fix_ref_regex)와 `fixed_in`(브랜치 필수, 빌드 선택)을 받아 `fix-submitted`로:
   새 원인은 `cause.fix`, 기존 원인은 `update-fix`. 기존 원인이 이미 `fixed`면 `update-fix`를 넣지 않고 "이미 검증된 수정이 있다"고 보여준다.
@@ -78,7 +78,7 @@ MCP `tracker.tools.get_issue`(매핑이 없으면 추측하지 말고 setup 안�
      **순서: `new-cause`/`set-resolution` 뒤에.** `signatures_pending` 원인은 해결책을 검증할 수 없다.
   - 기록 대상 Jira 자신은 근거가 아니다(그 Jira의 해결 진술은 사용자 진술이다). 근거가 없으면 `unverified`로 둔다.
     사용자가 그래도 주장하면 `unverified`를 유지하고 "근거: 사용자 진술"을 남긴다 — 새 원인은
-    `cause.resolution_verification.method`, 기존 원인은 Jira 기록 `note`. 확인 화면·PR에 "사용자 진술 — 카테고리 오너 리뷰 필요"가 나온다.
+    `cause.resolution_verification.method`, 기존 원인은 Jira 기록 `note`. 확인 화면·PR에 "사용자 진술 — 검증 전(unverified)"가 나온다.
 - **code_refs**(선택) — `<root 키>:<상대 경로>` + `symbol`. 절대 경로는 거부하고 다시 받는다.
 
 ## 6. 작업 계획
@@ -107,8 +107,8 @@ MCP `tracker.tools.get_issue`(매핑이 없으면 추측하지 말고 setup 안�
 ## 8. 적용 → 확인 → 커밋 → PR
 
 `write-flow.md` 그대로. 브랜치 `issue/<KEY>`. 확인 화면 머리에 **"구분: 수동 기록 (record)"**, "로그·코드 분석: 하지 않음",
-실행한 검증과 건너뛴 검증(사유), 해당하면 "검증 못 함 — 리뷰 대상", "시그니처 없음 — 매칭 불가, 리뷰 대상",
-"사용자 진술 — 카테고리 오너 리뷰 필요". PR 본문에도 같다(`db_pr summary`가 만든다). `--dry-run`이면 확인 화면까지 보여주고 `discard`.
+실행한 검증과 건너뛴 검증(사유), 해당하면 "검증 못 함 — 자동 검증 없음", "시그니처 없음 — 매칭 불가(나중에 보완)",
+"사용자 진술 — 검증 전(unverified)". PR 본문에도 같다(`db_pr summary`가 만든다). `--dry-run`이면 확인 화면까지 보여주고 `discard`.
 
 - **취소하면 manual 피드백은 보관하지 않고 버린다**(pending 디렉토리에 복사하지 않는다). 수동 기록은 제시된 후보가 없어 통계에
   쓰지 않고, 취소는 분류가 불확실하다는 뜻일 수 있으며, 다른 Jira의 PR에 섞이면 리뷰가 헷갈리기 때문이다. 계획은 남겨서 같은 Jira로 다시

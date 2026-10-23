@@ -5,6 +5,8 @@
 
 - 분류 확정, 새 유형/원인 생성, 시그니처와 파서 규칙 추가, 수정 상태 변경은 **항상 사용자 확인 후** 진행한다.
 - GitHub push 전에는 **변경 파일, ID 할당, README 미리보기, diff, 검사·검증 결과(실행/건너뜀과 사유), 커밋 메시지를 보여주고 승인받는다** (`07-workflow.md §Step 8`의 5번). 승인 없이는 push하지 않고, 승인 후 파일이 바뀌면 다시 승인받는다.
+- 이슈 DB 변경은 **PR로만** main에 들어간다(main 직접 push 금지). 리뷰어 승인은 기본 요건이 아니다: 사용자가 **push 전 확인 화면에서 "push하고 바로 병합"을 고르면 본인이 바로 병합**한다(`issue_db.merge: self`, 기본 — 팀이 `review`로 바꾸면 리뷰어가 GHE에서 머지. 그 선택지는 추천으로 표시하지 않는다). 병합은 `db_pr publish --and-merge`·`db_pr merge`만 하고, publish가 push한 커밋 그대로·PR 검사 통과(검사가 없으면 `ci_mode: local`일 때만)·GHE 병합 가능 상태·그 사이 main 불변일 때만이다. 검증 결과 "승인 필요"·메인테이너 경로 변경 PR은 메인테이너가 리뷰한다. 다른 사람이 문제를 찾으면 그때 새 PR(또는 Revert)로 고친다 (`06-collaboration.md §6.1`).
+- 분석 스킬 `[스킬]` 제안은 patch로 남긴다. 스킬 소스(`analyzers.<카테고리>.source`)가 설정돼 있으면 patch(마스킹됨)를 보이고 사용자가 "적용"을 고른 뒤에만 그 워킹 트리에 적용한다(`skill_patch.py --apply` — 커밋·push는 사용자). 설치된 플러그인 캐시의 스킬은 바꾸지 않는다 (`16-existing-assets.md §16.5.1`).
 - 도구가 만드는 이슈 DB 변경은 **작업 계획을 최신 main 위에 적용**하는 방식으로만 만들고, 절차는 `db_pr.py`가 한다. 텍스트 rebase로 병합하지 않는다. 계획이 건드리는 대상이 그사이 main에서 바뀌었으면(drift) 자동으로 덮지 않고 사용자에게 묻는다 (`contracts.md §작업 계획`). 예외: 스키마 마이그레이션·새 카테고리·사후 정리는 계획 op로 표현할 수 없으므로 메인테이너가 자기 로컬 브랜치에서 직접 편집한다 (`06-collaboration.md §6.3·6.4·6.10`).
 - **사용자의 이슈 DB clone은 브랜치도 파일도 바꾸지 않는다.** 분석은 읽기 스냅샷(`<work_dir>/_snapshot`), 쓰기는 작업 worktree와 도구 브랜치(`tt/*`)를 쓴다. 사용자 clone에는 fetch와 조건부 `pull --ff-only`만 한다. 명시적 예외는 둘이다: 메인테이너가 `migrate/schema-v<N>` 브랜치에서 실행하는 `migrate` 커맨드(그 브랜치의 워킹 트리를 바꾼다), 그리고 사용자가 자기 직접 편집 브랜치에서 직접 실행하는 `db_add renumber`(base·`tt/*`·detached가 아니고 트리가 깨끗할 때만, `06-collaboration.md §6.3`).
 - 다른 유형의 fixture에서 새 시그니처가 걸리면(R3·R4) 시그니처를 좁힐지 `also_allowed`로 허용할지 **사용자가 고른다**. 몰래 좁히거나 몰래 허용하지 않는다 (`contracts.md §fixture`).

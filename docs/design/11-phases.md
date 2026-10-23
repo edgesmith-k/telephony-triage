@@ -41,7 +41,7 @@
   - 합성 샘플 트리 `tests/fixtures/issue-db-sample/`: `03-issue-db.md §5.2` 디렉토리 구조, `issue-db.config.yaml`(schema_version 1, generator_version 1, `external_parsers: {}`, `matcher.pattern_timeout_ms`, SITE_PROFILE의 S16~S19 값: `tracker.key_regex`, `tracker.base_url`, `fix_ref_regex`, `reviewers`. 사외 초안은 모의 값), `.gitignore`, `.gitattributes`
   - `schema/` 6종(`plan.schema.json`은 `contracts.md §작업 계획`의 형식(`schema_version`, `base_sha`, `issue.origin`, `feedback.date`, `included_pending`)과 op 표 전체(`allow-cause` 포함), `source`는 9개 값만. `expect.schema.json`은 `.expect.yaml`(`expect_top`, `expect_not`, `also_allowed`, `occurred_at`, `origin`)), `templates/` 3종
   - `schema/`에 `signatures_pending`(원인만, 새 유형은 증상 시그니처 필수), 시그니처 `same_phone`·`sequence`와 조건 `id`, 원인 `cp_evidence`, 피드백 `decision: manual`, 계획 `source`, Jira 기록 `occurred_on` 포함 (`contracts.md §상태 값`). `plan.schema.json`은 `operations`를 순서 있는 배열로 둔다 (적용 순서가 의미를 가짐)
-  - `.github/CODEOWNERS`(팀 이름은 SITE_PROFILE 또는 placeholder), `pull_request_template.md`(`06-collaboration.md §6.3`)
+  - `.github/CODEOWNERS`(메인테이너 경로만 — 카테고리 오너 없음, `06-collaboration.md §6.1`. 팀 이름은 SITE_PROFILE 또는 placeholder), `pull_request_template.md`(`06-collaboration.md §6.3`)
   - `CONTRIBUTING.md` (`03-issue-db.md §5.7` + `06-collaboration.md §6.2` 요약 + "push 전 `validate`" + 직접 편집 브랜치의 재동기화 절차 + 수동 기록 안내 + `also_allowed` 규칙), `GLOSSARY.md` 초안(경계 표, 금지 동의어, `06-collaboration.md §6.9`), `docs/` 3종(getting-started `06-collaboration.md §6.9`, review-guide §6.6 — 직접 편집과 `source: review` 계획 파일로 올리는 법 둘 다, branch-protection §6.1)
   - `.githooks/pre-commit`·`.githooks/pre-push` **스텁**: 경고만 출력하고 통과 (Phase 8에서 교체)
   - 샘플 시그니처 중 하나(DATA-001-01)는 `sequence`와 `same_phone`을 쓴다 (`03-issue-db.md §5.4 (1)` 예시). 원인 하나에 `cp_evidence` 예시를 넣는다
@@ -96,7 +96,7 @@
 ### Phase 7. 이슈 DB 반영, PR, sync-pr
 - 할 일:
   - `db_add.py`: `apply`, `drift`, `renumber`(브랜치 안, "내 ID"만), `check-ids`, `similar`. op 표 전부(`allow-cause` 포함. 검증 op의 판정 로직 없이 적용 규칙만), 계획 `source`별 규칙(pending 피드백은 `analyze`만, `signatures_pending`은 `record`만, `source`는 9개 값만 허용), `schema_version` 검사, 임시 ID·fixture 번호 적용 시점 할당, type.md 엔티티 단위 재작성, 파서 규칙 항목 병합, related 양방향, 피드백 기록(`feedback.date` 사용)과 pending 규칙, `verify-resolution` evidence 존재 검사, `update-fix`의 `fixed` → `fix-submitted` 거부, drift 표(`contracts.md §작업 계획`).
-  - `db_pr.py`: `cleanup`, `preflight`, `stage`(drift 검사, `--dry-run`, 다른 worktree의 `tt/<br>` 검사, `state.json`), `summary`(`source`·`issue.origin` 라벨, 검증 실행/건너뜀 표, 리뷰어 계산(`allow-cause` 대상 fixture의 카테고리 오너 포함), `approved_hash`), `publish`(`state.json` 대조, refspec push, `included_pending` 이동, `base_sha` 갱신), `discard`(lock 해제). 도구 브랜치 `tt/*`.
+  - `db_pr.py`: `cleanup`, `preflight`, `stage`(drift 검사, `--dry-run`, 다른 worktree의 `tt/<br>` 검사, `state.json`), `summary`(`source`·`issue.origin` 라벨, 검증 실행/건너뜀 표, 리뷰어 계산(`allow-cause` 대상 fixture의 카테고리 오너 포함 — CODEOWNERS에 있을 때), `approved_hash`), `publish`(`state.json` 대조, refspec push, `included_pending` 이동, `base_sha` 갱신), `discard`(lock 해제). 도구 브랜치 `tt/*`.
   - `sync-pr`: 계획 재적용(`06-collaboration.md §6.3`). 계획 없는 브랜치는 수동 절차 안내만.
   - 사후 lint(`06-collaboration.md §6.3` ⑤): ID 중복·Jira 중복을 **보고**한다 (정리는 메인테이너 수동).
   - `db_verify.py rules` **뼈대**: R4만 실제 실행, R1~R3·R5는 `not-implemented`, R6은 `skipped` (`05-verification.md §5.12 (1)`). `--plan`/`--draft`/`--changed`/`--staged` 인터페이스와 종료 코드 `3` 경로(`TT_FORCE_VERIFY_EXIT=3`)는 이때 만든다.
@@ -112,7 +112,7 @@
   - 도구 브랜치 잔여물, 원격에 있는 브랜치 각각에서 Step 8-2 선택지대로 동작한다 ("plan으로 브랜치 갱신"은 lease push)
   - `source`가 9개 값 밖(예: `migrate`)인 계획은 `db_add apply`가 거부한다. `stage --dry-run`은 gh 인증 없이 확인 화면(`summary`)까지 간다. `TT_FORCE_VERIFY_EXIT=3`이면 `stage`가 `3`을 집계한다
   - **drift**: 계획의 `set-resolution` 대상 원인의 해결책을 다른 PR이 main에서 먼저 바꾸면 `stage`가 적용 전에 drift(종료 코드 1)를 낸다. 결정을 계획에 반영하고 `base_sha`를 바꾸면 통과한다. 계획의 `update-parser-rule` 대상 키를 main이 기능 필드까지 바꿨으면 drift이고, 이력 필드만 바꿨으면 drift가 아니다. 계획의 `allow-cause` 대상 fixture의 `also_allowed`를 main이 먼저 바꿨으면 drift다
-  - **`allow-cause`**: `.expect.yaml`이 없는 양성 fixture에 적용하면 기본 기대값 + `also_allowed`로 파일을 만들고, 있으면 `also_allowed`에 추가한다. 자기 원인·같은 유형 원인을 넣으면 거부된다. `summary`의 리뷰어에 그 fixture 카테고리 오너가 들어간다
+  - **`allow-cause`**: `.expect.yaml`이 없는 양성 fixture에 적용하면 기본 기대값 + `also_allowed`로 파일을 만들고, 있으면 `also_allowed`에 추가한다. 자기 원인·같은 유형 원인을 넣으면 거부된다. `summary`의 리뷰어에 그 fixture 카테고리 오너가 들어간다(CODEOWNERS에 그 카테고리 오너가 있을 때)
   - 같은 계획을 두 번 `stage`해도 피드백 파일의 이름과 `date`가 같다(`feedback.date`)
   - `verify-resolution`의 evidence가 없는 Jira 키·fixture 경로면 거부된다. `update-fix`로 `fixed` 원인을 `fix-submitted`로 바꾸는 계획은 거부되고, `not-a-bug` 원인을 `fix-submitted`로 바꾸는 계획은 통과한다
   - **두 브랜치에서 같은 유형에 동시에 같은 번호(DATA-001-03)의 새 원인과 같은 번호의 fixture를 만들고** 순서대로 머지할 때, 두 번째 PR이 `sync-pr`(계획 재적용)로 텍스트 충돌 없이 DATA-001-04로 올라가고, 먼저 머지된 DATA-001-03과 섞이지 않고, PR 제목·본문이 새 ID로 고쳐진다
@@ -148,7 +148,7 @@
   - 증상만 남은 로그 → `partial`, 다른 원인 후보 출력. `partial` 계획 적용 시 `fix-submitted` 유지 + partial 이력
   - 시나리오 흔적 없는 로그 → `unknown`
   - scenario/recovery 시그니처가 모두 없는 코드 수정 유형 원인 → W3 전: `db_verify fix`가 판정 없이 `unknown`(필수 시그니처 없음) / W3부터: 종료 코드 2, stdout 없음
-  - `fixed_in` 이전 빌드 로그, 빌드 없는 `fixed_in` → `db_verify fix` 중단(종료 코드 2). 빌드 없는 `fixed_in`에 `verify-fix passed` 계획을 적용하면 거부
+  - 빌드 없는 `fixed_in`(모든 원인), (모뎀 원인만) `fixed_in` 이전 빌드 로그 → `db_verify fix` 중단(종료 코드 2). 모뎀이 아닌 원인은 이전 빌드 로그도 판정한다(`build_check: not-compared`, AP 패치 기준). 빌드 없는 `fixed_in`에 `verify-fix passed` 계획을 적용하면 거부
   - `db_verify resolution`: recovery 없음 + 시나리오 흔적 없음 → `unknown`
   - 손으로 쓴 `record` 계획(`new-cause` + recovery 시그니처)에 `db_verify resolution --cause <temp_id> --plan --draft`로 해결책 적용 후 로그를 판정하면 `passed`이고, 이어서 `add-fixture(kind: resolved)` + `verify-resolution`을 넣은 계획을 `db_pr stage`에 넣으면 새 원인이 `verified`로 들어가고 lint가 통과한다
   - 그 카테고리의 모든 음성 fixture에 충족되는 scenario 시그니처 추가가 R1 흔적 검사에서 걸린다. 그 카테고리에 음성 fixture가 없으면 흔적 검사는 `skipped: 음성 fixture 없음`(`review_required: true`)이고 `pass`로 집계되지 않는다

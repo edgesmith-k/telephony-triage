@@ -61,7 +61,7 @@
 | 시그니처·파서 규칙 변경 포함 | R1~R5 (+R6 표본을 주면) | 위와 같음 |
 | 기존 원인에 Jira만 추가(`append`) | 항상 항목만 | R1~R3·R5 `skipped: 해당 없음` |
 | 사용자가 "수정 완료"라고 함 | `ref`·`fixed_in` 형식 검사(`fix_ref_regex`, `build_compare`) | `fix-submitted`까지만 기록. `fixed`는 `verify-fix`로만 |
-| 사용자가 "해결책이 효과 있었다"고 함 | 근거가 있으면 `verify-resolution`(evidence: 기록 대상이 아닌 **다른** Jira 키, 또는 `--resolved-fixture`로 자른 `resolved` fixture + `db_verify resolution` passed. 새 원인이면 `db_verify resolution --plan <plan> --draft <dir>`로 계획을 적용한 트리에서 판정) | 근거가 없거나 기록 대상 Jira 자신뿐이면 `unverified`. 사용자가 그래도 효과를 주장하면 "근거: 사용자 진술"을 남기고(여전히 `unverified`. 새 원인은 `resolution_verification.method`, 기존 원인은 Jira 기록 `note`), 확인 화면·PR 본문에 "사용자 진술 — 카테고리 오너 리뷰 필요"로 표시한다 (`06-collaboration.md §6.6`) |
+| 사용자가 "해결책이 효과 있었다"고 함 | 근거가 있으면 `verify-resolution`(evidence: 기록 대상이 아닌 **다른** Jira 키, 또는 `--resolved-fixture`로 자른 `resolved` fixture + `db_verify resolution` passed. 새 원인이면 `db_verify resolution --plan <plan> --draft <dir>`로 계획을 적용한 트리에서 판정) | 근거가 없거나 기록 대상 Jira 자신뿐이면 `unverified`. 사용자가 그래도 효과를 주장하면 "근거: 사용자 진술"을 남기고(여전히 `unverified`. 새 원인은 `resolution_verification.method`, 기존 원인은 Jira 기록 `note`), 확인 화면·PR 본문에 "사용자 진술 — 검증 전(unverified)"로 표시한다 (`06-collaboration.md §6.6`) |
 
 - 확인 화면과 PR 본문에는 **"수동 기록"** 라벨과 위 표에서 실행된 검증과 건너뛴 검증(사유 포함)을 모두 보여준다 (`db_pr summary`가 계획 `source: record`로 표시).
 - 피드백은 `decision: manual`로 남기고 수락률 통계에서 제외한다 (`06-collaboration.md §6.5`).
@@ -100,9 +100,9 @@ open ──(수정 CL 머지, fix-submitted 커맨드)──▶ fix-submitted �
 - "시나리오 흔적 충족" = `scenario_signatures`가 있으면 그것이 충족, 없으면 `recovery_signatures`가 충족. 판정은 시나리오 흔적 충족을 전제로 한다. **흔적이 없으면 판단 불가**다. 사용자 말만으로 흔적을 대신하지 않는다.
 - 그 밖의 유형(`user-setting`, `network`, `hw`)은 두 시그니처가 없어도 되지만, 없으면 흔적 판정 대신 사용자 확인을 받고 그 사실을 `verification.note`에 남긴다.
 
-**`/telephony-triage:verify-fix <원인 ID> <수정 빌드 logcat...> [--issue <검증 Jira>]`** (절차 전체는 `07-workflow.md §verify-fix`)
+**`/telephony-triage:verify-fix <원인 ID> <수정 빌드 logcat...> [--issue <검증 Jira>] [--bundle <CI/CD 번들 번호>]`** (절차 전체는 `07-workflow.md §verify-fix`)
 1. 원인의 `fix.status`가 `fix-submitted`(또는 재검증이면 `fixed`)인지 확인한다. 아니면 중단한다.
-2. `fixed_in`에 빌드가 있는 항목이 없으면 중단하고 `fix-submitted` 커맨드로 빌드를 먼저 추가하라고 안내한다 (`verify-fix` passed의 전제, `contracts.md §작업 계획`). 로그의 빌드가 `fixed_in` 이후(≥, 같은 빌드 포함)인지 `build_compare`로 확인한다. 이전 빌드면 중단한다. 비교 규칙이 없거나 파싱 불가면 사용자에게 묻는다.
+2. `fixed_in`에 빌드가 있는 항목이 없으면 중단하고 `fix-submitted` 커맨드로 빌드를 먼저 추가하라고 안내한다 (`verify-fix` passed의 전제 — `fixed` 기록과 회귀 판정의 기준, `contracts.md §작업 계획`). **빌드 기준은 AP 패치다**: 수정 패치가 적용된 빌드(main 반영 전 테스트 빌드 포함)의 로그면 되고, 로그 빌드를 `fixed_in`과 비교하지 않는다(main 반영 이미지로 다시 검증해 올릴 필요가 없다). 대신 로그 빌드와 수정 CL(`fix.ref`)을 보이고 "이 빌드에 수정 패치가 들어 있나요?"를 한 번 확인받는다(아니오·모름이면 기록하지 않는다, 패치 전 로그로 failed·passed가 잘못 나는 것을 막는다). 로그 빌드는 `verification.build`로, `--bundle`을 주면 CI/CD 번들 번호를 `verification.note`(`CI/CD 번들 <N>`)로 남긴다. **모뎀 수정(`resolution_type: modem`)은 기존 규칙**: 로그의 빌드가 `fixed_in` 이후(≥, 같은 빌드 포함)인지 `build_compare`로 확인한다. 이전 빌드면 중단한다. 비교 규칙이 없거나 파싱 불가면 사용자에게 묻는다.
 3. **시나리오 흔적 확인**: 위 전제대로 흔적을 찾아 원인 본문의 "재현 시나리오"와 함께 보여준다.
 4. 판정 (`db_verify fix`):
 

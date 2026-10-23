@@ -22,6 +22,7 @@ from common.exitcodes import CHECK_FAILED, OK, USAGE
 
 from .lock import (PLAN, PR_FILE, REGRESS, STAGE, STATE, TOOL_PREFIX, UsageError, _iso, _read_json, _write_json, now,
                    trace_note)
+from . import merge as _merge
 from . import worktree as _wt
 from .worktree import (Ctx, abs_wt, _check_branch, _err_brief, _gh, _git, _job_of, _out, _owned_worktree,
                        _pending_files, _prepare_worktree, _ref_sha, _same_path, _worktrees, run_script)
@@ -438,6 +439,11 @@ def summary(ctx: Ctx, wt: Path, markdown: bool = False) -> dict:
     _write_json(job_dir / STATE, state)
     result = {**scr, "pr_body": body, "approved_hash": digest}
     extras = db_summary.screen_extras(wt, scr, stage_result["apply"].get("operations") or [], digest)
+    if not stage_result.get("dry_run"):     # 병합 줄·선택지(merge.py eligibility — publish --and-merge와 같은 판정)
+        mode, reason = _merge.eligibility(ctx.cfg, stage_result, [f.get("path") or "" for f in scr.get("files") or []],
+                                          _merge.category_reviewers(wt, scr["reviewers"], db_cfg))
+        result["merge"] = extras["merge"] = {"mode": mode, "reason": reason,
+                                             **({"choices": _merge.CHOICES} if mode == "self" else {})}
     md = db_summary.render_markdown(scr, plan, extras)
     # 표시 기록(형식과 무관 — json·markdown·stage --then-summary): show_guard가 이 화면을 이 호출 뒤 답에서 찾는다
     shown.record(ctx.work_dir, "db_pr", "push", job, key=f"push:{digest}", block=md)
@@ -613,6 +619,10 @@ def publish(ctx: Ctx, wt: Path, branch: str, lease: str, approved: str, commit: 
     if gh_error:
         result["gh_error"] = f"push는 됐지만 PR {action}에 실패했다: {gh_error}"
         return result, USAGE
+    changed = [p for p in _out(_git(wt, "diff", "--name-only", state["base_sha"], head, check=False)).splitlines() if p]
+    db_cfg = yamlio.load(wt / "issue-db.config.yaml") or {}
+    owners = _merge.category_reviewers(wt, (pr_info or {}).get("reviewers") or [], db_cfg if isinstance(db_cfg, dict) else {})
+    result["merge"] = _merge.offer(ctx, job_dir, job, stage_result, changed, number, url, head, owners)   # 바로 병합 제안(merge.py)
     return result, OK
 
 

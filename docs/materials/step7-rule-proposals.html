@@ -1,0 +1,215 @@
+<title>Step 7 규칙 제안 흐름</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* 레이아웃: 한 줄 요약 → 전/후 3단계 비교 → 실제 화면 예시 → 자세히(접힘) */
+:root {
+  --bg: #f5f7f8; --panel: #ffffff; --fg: #1b2328; --muted: #5d6b73; --line: #d3dbdf;
+  --accent: #1f6f8b; --accent-soft: #e2f0f5; --new: #b4540f; --new-soft: #fbeee3;
+  --ok: #2c7a4b; --ok-soft: #e4f3ea; --off-soft: #eef1f2;
+  --sans: "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
+  --mono: ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #12181b; --panel: #1a2226; --fg: #e3e9ec; --muted: #9aa8af; --line: #34424a;
+  --accent: #6cbad6; --accent-soft: #1b3440; --new: #f0a060; --new-soft: #3a2616;
+  --ok: #73c995; --ok-soft: #173325; --off-soft: #222b2f; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #12181b; --panel: #1a2226; --fg: #e3e9ec; --muted: #9aa8af; --line: #34424a;
+  --accent: #6cbad6; --accent-soft: #1b3440; --new: #f0a060; --new-soft: #3a2616;
+  --ok: #73c995; --ok-soft: #173325; --off-soft: #222b2f; color-scheme: dark }
+body { background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 16px; line-height: 1.6;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 28px 56px; }
+.wrap { max-width: 920px; margin: 0 auto; display: flex; flex-direction: column; gap: 28px; }
+h1 { font-size: 1.5rem; margin: 0; text-wrap: balance; }
+h2 { font-size: 1.15rem; margin: 0 0 12px; text-wrap: balance; }
+p { margin: 0; }
+.summary { background: var(--accent-soft); border-radius: 12px; padding: 18px 20px; font-size: 1.05rem; }
+.summary b { color: var(--accent); }
+.compare { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 720px) { .compare { grid-template-columns: 1fr; } }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; min-width: 0; }
+.card.after { border-color: var(--new); }
+.label { display: inline-block; font-size: .8rem; font-weight: 700; letter-spacing: .04em; padding: 2px 10px; border-radius: 99px; margin-bottom: 10px; }
+.label.before { background: var(--off-soft); color: var(--muted); }
+.label.after { background: var(--new-soft); color: var(--new); }
+ol.steps { margin: 0; padding-left: 1.3em; display: grid; gap: 8px; }
+ol.steps li.bad { color: var(--muted); }
+ol.steps li.good b { color: var(--new); }
+.kinds { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 720px) { .kinds { grid-template-columns: 1fr; } }
+.kind { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.kind h3 { margin: 0; font-size: 1rem; }
+.kind .eg { font-size: .9rem; color: var(--muted); }
+.flow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: .9rem; }
+.flow span { background: var(--off-soft); border-radius: 6px; padding: 3px 8px; }
+.flow span.end { background: var(--ok-soft); color: var(--ok); font-weight: 600; }
+.flow i { font-style: normal; color: var(--muted); }
+.chat { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; display: grid; gap: 12px; }
+.msg { border-radius: 10px; padding: 10px 14px; max-width: 100%; min-width: 0; overflow-wrap: anywhere; }
+.msg .who { font-size: .78rem; font-weight: 700; color: var(--muted); margin-bottom: 2px; }
+.msg.claude { background: var(--off-soft); }
+.msg.user { background: var(--accent-soft); justify-self: end; }
+code { font-family: var(--mono); font-size: .85em; }
+.note { font-size: .92rem; color: var(--muted); }
+ul.plain { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; }
+details { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 18px; }
+summary { cursor: pointer; font-weight: 600; }
+summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+details > ul { margin-top: 12px; }
+pre { font-family: var(--mono); font-size: .8rem; background: var(--off-soft); border-radius: 8px; padding: 10px 12px; overflow-x: auto; margin: 10px 0; white-space: pre; }
+/* 전체 흐름 그림 */
+.e2e-box { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; overflow-x: auto; }
+.e2e-svg{display:block;width:100%;min-width:680px;height:auto;color:var(--fg)}
+.e2e-svg text{font-family:var(--font,var(--sans,system-ui))}
+.e2e-svg .t{font-size:13px;font-weight:700;fill:currentColor}.e2e-svg .s,.e2e-svg .lbl{font-size:11px;fill:var(--muted)}
+.e2e-svg .lbl-k{font-size:11px;font-weight:600;fill:var(--accent)}.e2e-svg .row{font-size:12px;font-weight:700;fill:var(--muted);letter-spacing:.04em}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>분석 스킬의 "규칙 제안"은 어떻게 처리되나</h1>
+  </header>
+
+  <p class="summary">분석 스킬이 <b>"이런 규칙을 추가하면 좋겠다"</b>고 제안하면, 이제 흘려보내지 않고 <b>분류를 정한 뒤 사용자에게 한 번 물어서</b> 반영합니다. 아무것도 자동으로 바뀌지 않습니다.</p>
+
+  <section>
+    <h2>무엇이 바뀌었나</h2>
+    <div class="compare">
+      <div class="card">
+        <span class="label before">전</span>
+        <ol class="steps">
+          <li>분석 스킬이 로그를 보고 의견을 낸다</li>
+          <li>의견이 리포트에 적힌다</li>
+          <li class="bad">규칙 제안이 있어도 리포트 글로 끝난다</li>
+        </ol>
+      </div>
+      <div class="card after">
+        <span class="label after">후</span>
+        <ol class="steps">
+          <li>분석 스킬이 로그를 보고 의견을 낸다</li>
+          <li>의견이 리포트에 적힌다</li>
+          <li class="good"><b>분류를 정한 뒤 "이 제안 받을까요?"라고 묻는다</b> (여러 개 고를 수 있음)</li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>전체 흐름에서 어디쯤인가</h2>
+    <div class="e2e-box">
+    <svg class="e2e-svg" viewBox="0 0 800 340" role="img" aria-label="블록 다이어그램. 위 줄은 두 케이스가 함께 쓰는 이슈 DB 경로로 분석, 분류 확정, 작업 계획, 적용·검사와 확인 화면, 올리기와 main 반영 순서다. 아래 줄은 케이스 2에서만 생기는 분석 스킬 경로다. 분류를 정한 뒤 규칙 제안을 받을지 묻고, 이슈 DB 제안은 위 줄의 작업 계획에 더해지며, 스킬 제안은 patch 파일이 된 뒤 사람이 적용을 고르면 스킬 소스 폴더에 커밋 전 상태로 반영된다.">
+      <defs>
+        <marker id="e2e-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" style="fill:var(--muted)"/></marker>
+        <marker id="e2e-ark" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" style="fill:var(--accent)"/></marker>
+      </defs>
+      <rect x="6" y="196" width="788" height="138" rx="10" style="fill:var(--accent-soft)"/>
+      <text x="20" y="22" class="row">이슈 DB 경로 · 케이스 1·2 공통</text>
+      <text x="92" y="216" class="row" style="fill:var(--accent)">분석 스킬 경로 · 케이스 2에서만</text>
+
+      <g style="fill:var(--panel);stroke:var(--line);stroke-width:1.2">
+        <rect x="20" y="34" width="120" height="56" rx="8"/>
+        <rect x="180" y="34" width="120" height="56" rx="8" style="stroke:var(--new);stroke-dasharray:5 3;stroke-width:1.5"/>
+        <rect x="340" y="34" width="120" height="56" rx="8"/>
+        <rect x="500" y="34" width="120" height="56" rx="8"/>
+        <rect x="660" y="34" width="120" height="56" rx="8"/>
+        <rect x="180" y="228" width="120" height="56" rx="8" style="stroke:var(--new);stroke-dasharray:5 3;stroke-width:1.5"/>
+        <rect x="340" y="228" width="120" height="56" rx="8"/>
+        <rect x="500" y="228" width="120" height="56" rx="8" style="stroke:var(--new);stroke-dasharray:5 3;stroke-width:1.5"/>
+        <rect x="660" y="228" width="120" height="56" rx="8"/>
+      </g>
+      <g text-anchor="middle">
+        <text x="80" y="58" class="t">분석</text><text x="80" y="76" class="s">리포트까지</text>
+        <text x="240" y="58" class="t">분류 정하기</text><text x="240" y="76" class="s">사람이 고름</text>
+        <text x="400" y="58" class="t">작업 계획</text><text x="400" y="76" class="s">무엇을 바꿀지</text>
+        <text x="560" y="58" class="t">적용 · 검사</text><text x="560" y="76" class="s">확인 화면</text>
+        <text x="720" y="58" class="t">올리기</text><text x="720" y="76" class="s">PR → main</text>
+        <text x="240" y="252" class="t">규칙 제안</text><text x="240" y="270" class="s">받을 제안 고르기</text>
+        <text x="400" y="252" class="t">patch 파일</text><text x="400" y="270" class="s">고칠 내용 정리</text>
+        <text x="560" y="252" class="t">적용할까?</text><text x="560" y="270" class="s">사람이 고름</text>
+        <text x="720" y="252" class="t">스킬 소스 폴더</text><text x="720" y="270" class="s">커밋 전 상태로</text>
+      </g>
+
+      <g style="stroke:var(--muted);stroke-width:1.5;fill:none" marker-end="url(#e2e-ar)">
+        <path d="M140 62H178"/><path d="M300 62H338"/><path d="M460 62H498"/><path d="M620 62H658"/>
+        <path d="M210 90V226"/>
+      </g>
+      <text x="202" y="132" text-anchor="end" class="lbl">분류를 정한 뒤</text>
+      <text x="720" y="108" text-anchor="middle" class="lbl">바로 병합 또는 리뷰어가 병합</text>
+      <text x="560" y="108" text-anchor="middle" class="lbl">승인한 내용만</text>
+
+      <path d="M80 90V256H178" style="stroke:var(--accent);stroke-width:1.5;fill:none;stroke-dasharray:4 4" marker-end="url(#e2e-ark)"/>
+      <text x="88" y="176" class="lbl-k">규칙 제안</text>
+      <text x="88" y="190" class="lbl">(분석 스킬이 냄)</text>
+
+      <path d="M290 228V170H380V92" style="stroke:var(--muted);stroke-width:1.5;fill:none" marker-end="url(#e2e-ar)"/>
+      <text x="388" y="140" class="lbl">이슈 DB 제안 → 계획에 추가</text>
+
+      <g style="stroke:var(--accent);stroke-width:1.5;fill:none" marker-end="url(#e2e-ark)">
+        <path d="M300 256H338"/><path d="M460 256H498"/><path d="M620 256H658"/><path d="M560 284V306"/>
+      </g>
+      <text x="319" y="247" text-anchor="middle" class="lbl-k">스킬</text>
+      <text x="639" y="247" text-anchor="middle" class="lbl-k">적용</text>
+      <text x="568" y="322" class="lbl">patch만 남김 → 스킬 담당자가 반영</text>
+      <text x="720" y="302" text-anchor="middle" class="lbl">커밋·push는 사람이</text>
+    </svg>
+    </div>
+    <p class="note" style="margin-top:10px">윗줄은 모든 기록이 지나는 이슈 DB 경로, 아랫줄은 규칙 제안이 있을 때만 생기는 분석 스킬 경로입니다. 점선 테두리는 사람이 고르는 곳입니다.</p>
+  </section>
+
+  <section>
+    <h2>받겠다고 고르면, 제안 종류에 따라 이렇게 됩니다</h2>
+    <div class="kinds">
+      <div class="kind">
+        <h3>① 이슈 DB 규칙 제안</h3>
+        <p class="eg">예: "이 로그 줄을 이벤트로 잡는 규칙을 추가하자"</p>
+        <div class="flow"><span>초안 보여 줌</span><i>→</i><span>사용자 승인</span><i>→</i><span>자동 검증</span><i>→</i><span>확인 화면</span><i>→</i><span class="end">PR</span></div>
+        <p class="note">평소 이슈 기록과 같은 길을 탑니다. push 확인 화면에서 "push하고 바로 병합"을 고르면 본인이 바로 합칩니다. 다만 파서 규칙(<code>parser-rules/</code>) 같은 메인테이너 경로 변경은 메인테이너 리뷰를 거칩니다.</p>
+      </div>
+      <div class="kind">
+        <h3>② 분석 스킬 개선 제안</h3>
+        <p class="eg">예: "점검 목록에 설정 화면 확인을 추가하자"</p>
+        <div class="flow"><span>수정 파일(.patch) 생성</span><i>→</i><span>내용 보여 줌</span><i>→</i><span>"바로 적용할까요?"</span><i>→</i><span>실행 허가</span><i>→</i><span class="end">스킬 소스에 적용</span></div>
+        <p class="note">스킬 소스 폴더를 설정해 두면(<code>analyzers.&lt;카테고리&gt;.source</code>) 수정 내용을 보여 주고 물은 뒤 그 폴더에 바로 적용합니다. 커밋·push는 하지 않으니 확인하고 직접 올립니다. 설정이 없으면 수정 파일만 남기고 반영은 본인이 판단합니다. 설치된 플러그인 폴더의 스킬은 어느 쪽이든 고치지 않습니다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>실제 화면은 이렇게 보입니다</h2>
+    <div class="chat">
+      <div class="msg claude"><div class="who">Claude</div>심층 분석이 규칙 2개를 제안했습니다. 받을 것을 고르세요(여러 개 가능).<br>1. [이슈 DB] 시그니처에 "데이터 설정 꺼짐" 조건 추가<br>2. [스킬] 점검 목록에 설정 화면 경로 확인 추가<br>3. 모두<br>4. 받지 않음 (기본 — 확인 안 한 제안은 반영하지 않으려고)</div>
+      <div class="msg user"><div class="who">사용자</div>2번만</div>
+      <div class="msg claude"><div class="who">Claude</div>스킬 제안 patch(적용 안 함, 마스킹됨): <code>…/MOCK-1234/skill-suggestions/data-analyzer.patch</code> — 직접 검토해 스킬 소스의 dev 브랜치에 git apply, main에는 PR로 반영<br><code>references/DATA-001.md  +1 −0</code><br>스킬 소스 적용 대기: <code>~/work/data-analyzer/skills/data-analyzer</code> — 아래 patch(마스킹됨, sha256 …)를 그대로 보이고 바로 적용할지 묻는다<br><code>+4. 설정 화면 경로(설정 &gt; 네트워크 &gt; 모바일 데이터)를 본다.</code><br>스킬 소스(<code>~/work/data-analyzer/skills/data-analyzer</code>)에 바로 적용할까요? (적용 / patch만 남김)</div>
+      <div class="msg user"><div class="who">사용자</div>적용</div>
+      <div class="msg claude"><div class="who">Claude</div>스킬 소스에 적용함(커밋 안 함): <code>~/work/data-analyzer/skills/data-analyzer</code> — 확인 후 직접 커밋·push<br><code>references/DATA-001.md  +1 −0</code></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>알아 둘 것</h2>
+    <ul class="plain">
+      <li>묻는 건 한 번뿐이고 여러 개를 함께 고를 수 있습니다. 그냥 넘기면 "받지 않음"으로 처리해 규칙이 저절로 늘지 않습니다(규칙 추가는 사용자 확인 후에만). 안 받으면 예전과 똑같습니다.</li>
+      <li>분석 스킬이 제안을 내지 않으면 이 질문도 나오지 않습니다.</li>
+      <li>수정 파일에는 마스킹된 값만 들어갑니다. 마스킹 때문에 스킬 소스에 적용이 안 될 것 같으면 파일을 만들지 않고 메모로만 알려 줍니다.</li>
+      <li>바로 적용은 스킬 소스가 git 저장소이고, 바꿀 파일에 커밋하지 않은 수정이 없고, 수정 파일이 그대로 맞고, 화면에 다 보일 만큼 작을 때(200줄·12KB 이하)만 합니다. 아니면 이유를 알려 주고 수정 파일만 남깁니다. 마스킹으로 바뀐 줄이 있으면 placeholder가 소스에 들어간다고 미리 알려 줍니다.</li>
+    </ul>
+  </section>
+
+  <details>
+    <summary>자세히 (분석 스킬 담당자·개발자용)</summary>
+    <ul class="plain">
+      <li>분석 스킬은 결과 끝에 아래 형식으로 제안을 적습니다(<code>16-existing-assets.md §16.5</code>). 파일은 바꾸지 않습니다.</li>
+    </ul>
+    <pre>규칙 제안:
+- [이슈 DB] add-parser-rule file=extractors.yaml rule=&lt;태그·패턴 → 이벤트&gt; — 근거: &lt;마스킹된 로그 줄&gt;
+- [이슈 DB] update-signature cause=DATA-001-01 must_event 추가 — 근거: &lt;로그 줄·이유&gt;
+- [스킬] references/DATA-001.md에 점검 순서 추가 — 근거: 이번 이슈에서 확인 순서가 빠짐</pre>
+    <ul class="plain">
+      <li>[이슈 DB] 줄: <code>db-authoring.md</code> 점검을 거친 op 초안 → 승인분만 <code>plan.json</code> → <code>db_verify rules</code> → push 승인 → PR.</li>
+      <li>[스킬] 줄: <code>JOB/skill-suggestions/&lt;스킬&gt;.patch</code>(unified diff, 스킬 폴더 기준 경로). 스크립트 <code>skill_patch.py</code>가 만들고 마스킹한 뒤 스킬 폴더 사본에 <code>git apply --check</code>가 통과할 때만 안내 줄을 냅니다. 안내 줄은 표시 보조 hook이 화면에 꼭 보이게 합니다(절차 <code>reference/skill-patch.md</code>).</li>
+      <li>바로 적용: <code>source</code>가 있으면 같은 스크립트가 적용 가능성을 미리 보고 patch 전문과 sha256을 냅니다. "적용"이면 <code>skill_patch.py &lt;KEY&gt; --name &lt;스킬&gt; --apply --sha &lt;H&gt;</code>가 보인 patch(sha256 대조)만 그 저장소 워킹 트리에 <code>git apply</code>합니다(index·커밋·push 없음, guard 규칙 12가 권한을 묻습니다, <code>16-existing-assets.md §16.5.1</code>).</li>
+      <li>patch는 작업이 끝나도 남고, <code>db_pr cleanup --older-than</code>으로 오래된 작업 폴더를 지울 때 함께 지워집니다.</li>
+      <li>검증: eval 71이 [스킬] 갈래(patch만)를 실행합니다(10/21 사외 통과). 바로 적용(<code>source</code>)과 [이슈 DB] 갈래를 실행하는 eval은 아직 없습니다(단위 테스트 <code>tests/test_skill_patch.py</code>).</li>
+    </ul>
+  </details>
+</div>

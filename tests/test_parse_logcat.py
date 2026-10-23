@@ -32,6 +32,7 @@ import zipfile
 from datetime import datetime, timedelta
 from pathlib import Path
 
+import pytest
 import yaml
 
 REPO = Path(__file__).resolve().parents[1]
@@ -44,6 +45,7 @@ from common import events  # noqa: E402
 import make_log_fixtures  # noqa: E402
 import make_plugin_root  # noqa: E402
 import mock_env  # noqa: E402
+from runner import SITE_REPO_REASON, is_site_repo  # noqa: E402
 
 LOG_DIR = REPO / "tests" / "fixtures" / "logs"
 SAMPLE_DB = REPO / "tests" / "fixtures" / "issue-db-sample"
@@ -788,7 +790,9 @@ def test_line_ref_multi_file_index():
     assert {e["line_ref"]["file_index"] for e in _events(swapped, ts="2026-09-20T05:30:00.000Z")} == {0}
 
 
+@pytest.mark.skipif(is_site_repo() or (REPO / "plugin" / "site-defaults.yaml").exists(), reason=SITE_REPO_REASON)
 def test_site_defaults_required():
+    """`plugin/`에 `site-defaults.yaml`이 없으면 멈춘다. 사내 레포에는 그 파일이 있어 구조상 성립하지 않는다."""
     code, _, err = _run(["parse", str(LOG_DIR / "data-connected.log"), "--full", "--rules", str(RULES)],
                         root=REPO / "plugin")
     assert code == 2 and "사내 기본값 없음" in err

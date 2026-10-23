@@ -305,9 +305,17 @@ def cmd_set(args, defaults: dict) -> dict:
         key = userconfig.profile_key(_platform(args), args.key)
     except ValueError as exc:
         raise UsageError(f"--platform {_platform(args)}: {exc}") from exc
+    before = userconfig.merged(defaults, copy.deepcopy(data), _platform(args))
     userconfig.set_value(data, key, value)
     userconfig.save(data)
     out = {"config": str(userconfig.path()), "key": key, "value": value}
+    old_clone = userconfig.get(before, "issue_db.path")
+    snap = Path(str(userconfig.get(before, "work_dir") or "")).expanduser() / "_snapshot"
+    if args.key == "issue_db.path" and old_clone and str(old_clone) != str(value) and snap.exists():
+        # 옛 읽기 스냅샷은 옛 clone의 worktree라 다음 snapshot이 거부한다(dbpr/worktree.py). 정리 방법 한 줄 (SITE_INSTALL.md 7절)
+        out["hint"] = (f"옛 읽기 스냅샷 {snap}는 옛 clone의 worktree다: "
+                       f"git -C {old_clone} worktree remove --force {snap} (옛 clone이 없으면 그 폴더를 지운다)")
+        print("안내: " + out["hint"], file=sys.stderr)
     problems = userconfig.profile_problems(data)
     if problems:     # 저장은 한다(고치는 중일 수 있다). 남은 문제를 보인다 — 고치기 전까지 다른 스크립트는 종료 2
         out["problems"] = problems

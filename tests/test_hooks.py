@@ -303,6 +303,58 @@ def test_guard_publish_with_commit_and_discard_still_asks():
         assert decision(out) == "ask" and "publish" in out["permissionDecisionReason"], tail
 
 
+def test_guard_merge_and_skill_apply_ask_direct_gh_merge_denied():
+    """PR 바로 병합: `db_pr.py merge`는 ask(사용자가 "병합"을 고른 뒤, 스크립트가 승인 커밋·검사 대조), gh로 직접 머지는 거부.
+    분석 스킬 소스 적용: `skill_patch.py --apply`는 ask(규칙 12). patch 만들기·my-prs는 판정할 것이 없다."""
+    ws = shared()
+    S = f'python3 "{ws.root}/scripts/'
+    out = bash(ws, f'{S}db_pr.py" merge --job MOCK-1 --approved {"a" * 40} --json', ws.base)
+    assert decision(out) == "ask" and "db_pr.py merge" in out["permissionDecisionReason"]
+    out = bash(ws, f"gh pr merge 3 --merge -R {DB_SLUG}", ws.base)
+    assert decision(out) == "deny" and "db_pr.py merge" in out["permissionDecisionReason"]
+    out = bash(ws, f'{S}skill_patch.py" MOCK-1 --name mock-data-analyzer --apply --sha {"b" * 64}', ws.base)
+    assert decision(out) == "ask" and "규칙 12" in out["permissionDecisionReason"]
+    for cmd in (f'{S}skill_patch.py" MOCK-1 --skill-dir /x --name mock-data-analyzer', f'{S}db_pr.py" my-prs',
+                f'{S}db_pr.py" summary wt --format markdown'):
+        assert decision(bash(ws, cmd, ws.base)) is None, cmd
+    # "push하고 바로 병합" = 한 명령: 권한 확인 한 번(publish·merge 사유 둘 다)
+    out = bash(ws, f'{S}db_pr.py" publish wt --branch issue/MOCK-1 --lease new --approved x --commit --and-discard '
+                   f'--and-merge --json', ws.base)
+    assert decision(out) == "ask" and "publish" in out["permissionDecisionReason"] and \
+        "db_pr.py merge" in out["permissionDecisionReason"]
+    # 스크립트만 쓰는 기록: 병합 기록·스킬 제안 patch·meta는 직접 쓰거나 지우면 거부, 사본 폴더는 통과
+    job = ws.work / "MOCK-1"
+    for target in (job / "merge-offer.json", job / "skill-suggestions" / "a.patch", job / "skill-suggestions" / "a.meta.json"):
+        out = guard(ws, "Write", {"file_path": str(target), "content": "{}"}, ws.base)
+        assert decision(out) == "deny" and "만 쓴다" in out["permissionDecisionReason"], target
+        assert decision(bash(ws, f"echo x > {target}", ws.base)) == "deny", target
+        assert decision(bash(ws, f"rm -f {target}", ws.base)) == "deny", target
+    copy = job / "skill-suggestions" / "a" / "references" / "x.patch"
+    assert decision(guard(ws, "Write", {"file_path": str(copy), "content": "x"}, ws.base)) is None
+
+
+def test_guard_skill_source_writes_ask():
+    """규칙 12: config `analyzers.<카테고리>.source` 안을 파일 도구·Bash 쓰기·파일을 바꾸는 git으로 바꾸면 ask, 읽기는 통과."""
+    ws = Workspace()
+    src = tmp("tt-skill-src-") / "skill"
+    (src / "references").mkdir(parents=True)
+    subprocess.run(["git", "init", "-q", str(src)], check=True)
+    cfg = ws.home / "config.yaml"
+    data = yaml.safe_load(cfg.read_text(encoding="utf-8"))
+    data["analyzers"] = {"data": {"skill": "mock-data-analyzer", "source": str(src)}}
+    cfg.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+    target = str(src / "references" / "DATA-001.md")
+    out = guard(ws, "Write", {"file_path": target, "content": "x"}, ws.base)
+    assert decision(out) == "ask" and "skill_patch.py --apply로만" in out["permissionDecisionReason"]
+    assert decision(guard(ws, "Edit", {"file_path": str(ws.base / "x.md"), "old_string": "a", "new_string": "b"},
+                          ws.base)) is None
+    for cmd, want in ((f"echo x > {target}", "ask"), (f"git -C {src} apply /tmp/p.patch", "ask"),
+                      ("git apply /tmp/p.patch", "ask"), (f"git -C {src} commit -m x", "ask"),
+                      (f"git -C {src} status --porcelain", None), (f"grep -n x {target}", None)):
+        cwd = src if not cmd.startswith(("echo", "grep")) and "-C" not in cmd else ws.base
+        assert decision(bash(ws, cmd, cwd)) == want, cmd
+
+
 def test_guard_stage_then_summary_and_discard_are_not_asked():
     """W5: `stage --then-summary`와 단독 `discard`는 판정할 것이 없다 (publish만 ask)."""
     ws = shared()

@@ -264,6 +264,20 @@ def test_sample_plans_validate():
 # -- 3. 파일 배치 ----------------------------------------------------------
 
 
+def test_codeowners_lists_maintainer_paths_only():
+    """CODEOWNERS는 메인테이너 경로만 둔다(카테고리 오너 없음 — 카테고리 PR은 작성자 본인 병합, 06-collaboration §6.1).
+    목록은 본인 병합이 막히는 메인테이너 경로(`dbpr/merge.py` MAINTAINER_PATHS)와 같다. 뼈대(make_db_skeleton)도 이 파일을 복사한다."""
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    from dbpr.merge import MAINTAINER_PATHS
+
+    rules = [line.split() for line in (SAMPLE / ".github" / "CODEOWNERS").read_text(encoding="utf-8").splitlines()
+             if line.strip() and not line.lstrip().startswith("#")]
+    assert sorted(r[0].lstrip("/") for r in rules) == sorted(MAINTAINER_PATHS)
+    assert all(r[1:] == ["@mock-org/telephony-issue-db-maintainers"] for r in rules), rules
+    categories = yaml.safe_load((SAMPLE / "issue-db.config.yaml").read_text(encoding="utf-8"))["categories"]
+    assert not {r[0].strip("/") for r in rules} & {c["key"] for c in categories}
+
+
 def test_sample_tree_layout():
     required = [
         "issue-db.config.yaml",
@@ -278,6 +292,7 @@ def test_sample_tree_layout():
         "docs/getting-started.md",
         "docs/review-guide.md",
         "docs/branch-protection.md",
+        "docs/analyzer-skills.md",
         "templates/type.md",
         "templates/cause.yaml",
         "templates/issue.yaml",
@@ -519,6 +534,9 @@ def test_skeleton_has_no_types_and_validates():
             assert (out / "schema" / name).exists(), f"뼈대에 {name}이 없습니다."
         for name in ("type.md", "cause.yaml", "issue.yaml"):
             assert (out / "templates" / name).exists(), f"뼈대에 템플릿 {name}이 없습니다."
+        guide = (out / "docs" / "analyzer-skills.md").read_text(encoding="utf-8")     # 분석 스킬 만들기 (16-existing-assets §16.5.1)
+        for needle in ("analyzers.<카테고리>", "- [이슈 DB] add-parser-rule file=", "- [스킬]", "파일을 바꾸지 않는다", "when: never", "references/<유형 ID>.md"):
+            assert needle in guide, needle
 
         validator = Draft202012Validator(
             json.loads((out / "schema" / "parser-rules.schema.json").read_text(encoding="utf-8"))

@@ -140,6 +140,20 @@ def test_set_and_sync_scripts_path():
     assert result["changed"] is True and env.config()["plugin"]["scripts_path"] == str(other_root / "scripts")
 
 
+def test_set_issue_db_path_hints_old_snapshot_cleanup():
+    """issue_db.path를 바꿨고 옛 읽기 스냅샷이 있으면 정리 방법 한 줄(hint·stderr). 없거나 같은 값이면 없다."""
+    env = Env()
+    env.init(env.base / "db")
+    out = env.json("config.py", ["set", "issue_db.path", env.base / "db2"])
+    assert "hint" not in out                                         # 스냅샷 없음
+    (env.base / "work" / "_snapshot").mkdir(parents=True)
+    proc = env.run("config.py", ["set", "issue_db.path", env.base / "db3"])
+    out = json.loads(proc.stdout)
+    assert proc.returncode == 0 and "worktree remove --force" in out["hint"] and str(env.base / "db2") in out["hint"]
+    assert "안내:" in proc.stderr
+    assert "hint" not in env.json("config.py", ["set", "issue_db.path", env.base / "db3"])   # 같은 값
+
+
 # -- Jira MCP ------------------------------------------------------------------------
 
 

@@ -66,7 +66,8 @@ telephony-issue-db/
 ├── docs/
 │   ├── getting-started.md             # 10분 온보딩 (06-collaboration.md §6.9)
 │   ├── review-guide.md                # 월간 리뷰 절차 (06-collaboration.md §6.6)
-│   └── branch-protection.md           # 브랜치 보호 설정 기록 (06-collaboration.md §6.1)
+│   ├── branch-protection.md           # 브랜치 보호 설정 기록 (06-collaboration.md §6.1)
+│   └── analyzer-skills.md             # 카테고리 분석 스킬 만들기 (16-existing-assets.md §16.5.1)
 ├── schema/
 │   ├── type.schema.json
 │   ├── issue.schema.json
@@ -104,7 +105,7 @@ telephony-issue-db/
 │   └── 2026-09/ABC-12345-20260927T1830.yaml
 └── .github/
     ├── CODEOWNERS
-    └── pull_request_template.md       # 리뷰어 머지 체크리스트 (06-collaboration.md §6.3)
+    └── pull_request_template.md       # 머지 전 체크리스트 — 리뷰어 머지일 때 (06-collaboration.md §6.3)
     # workflows/는 Actions 사용 시에만 추가 (13-actions.md)
 ```
 
@@ -524,7 +525,7 @@ note: {{선택, 한 줄}}
 |---|---|---|
 | open | 원인은 확인됐고 코드/설정 수정이 필요한데 아직 안 됨 | — |
 | fix-submitted | 수정 CL이 머지됐고 검증 대기 | `ref`(CL/커밋), `fixed_in`(브랜치 필수, 빌드 선택) |
-| fixed | 수정이 **검증까지** 완료 (`05-verification.md §5.12 (2)`) | `ref`, `fixed_in`(빌드 있는 항목 1개 이상, verify-fix 통과의 전제), `verification`(result: passed). 코드·설정 수정 유형은 `scenario_signatures` 또는 `recovery_signatures` |
+| fixed | 수정이 **검증까지** 완료 (`05-verification.md §5.12 (2)`) | `ref`, `fixed_in`(빌드 있는 항목 1개 이상, verify-fix 통과의 전제. verify-fix 로그 빌드와 비교하는 것은 `modem` 원인뿐 — AP 패치는 패치 적용 빌드 로그면 된다), `verification`(result: passed). 코드·설정 수정 유형은 `scenario_signatures` 또는 `recovery_signatures` |
 | wont-fix | 수정하지 않기로 결정 | 본문 비고에 사유 |
 | not-a-bug | 사용자 설정/네트워크 등 단말 수정 대상 아님 | — |
 
@@ -554,4 +555,4 @@ note: {{선택, 한 줄}}
 - 주 카테고리는 **사용자가 겪는 증상**으로 정한다.
 - 다른 카테고리가 원인 쪽이면 원인에 `related: [<다른 원인 ID>]`를 넣고, 유형에 `secondary_categories`를 넣는다. `related`는 양방향으로 넣는다 (`add-related` op는 양쪽을 함께 갱신한다).
 - `search`와 매처는 `secondary_categories`와 `related`도 탐색한다. 리포트에는 "관련: SIM-002-01 SIM refresh"처럼 보여준다.
-- `secondary_categories`가 있는 유형은 해당 카테고리 오너도 리뷰어로 지정한다 (`gh pr create --reviewer`, 계산 방법은 `02-config.md §5.3` 리뷰어 계산).
+- `secondary_categories`가 있는 유형은 해당 카테고리 오너(CODEOWNERS에 있을 때)도 리뷰어로 지정한다 (`gh pr create --reviewer`, 계산 방법은 `02-config.md §5.3` 리뷰어 계산).

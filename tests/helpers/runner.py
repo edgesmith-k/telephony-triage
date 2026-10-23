@@ -40,6 +40,39 @@ def is_site_repo(root: Path = REPO) -> bool:
 
 SITE_REPO_REASON = "사내 레포(.draft-manifest.json 또는 SITE_PROFILE.md): 사외 초안 전용 검사"
 
+# 사내 site 파서 백엔드(SITE_PATHS). 사외 레포에는 없다.
+REAL_SITE_BACKEND = REPO / "plugin" / "scripts" / "parser_backends" / "site"
+REAL_SITE_MODULE = "parser_backends.site_real"
+
+
+def real_site_backend(path: Path = REAL_SITE_BACKEND):
+    """사내 골든 테스트용: 레포의 **실제** site 백엔드 `BACKEND`(없으면 None).
+
+    `conftest.py`가 세션 시작 때 임시 플러그인 루트의 `parser_backends`를 먼저 import하고, 그 루트의 `site/`는
+    모의 백엔드(`make_plugin_root.make(with_site_backend=True)`)라 `import parser_backends.site`는 모의를 준다.
+    그래서 실제 백엔드는 `parser_backends.site_real`이라는 다른 이름으로 파일 경로에서 불러온다 — 모의
+    (`parser_backends.site`)를 쓰는 테스트와 한 세션에 섞여도 서로 가리지 않는다. 상대 import(`..base`·`..reference`)는
+    임시 루트의 같은 코드(plugin/에서 복사)로 풀린다 (16-existing-assets.md §16.3 골든 3).
+    """
+    import importlib.util
+
+    init = Path(path) / "__init__.py"
+    if not init.is_file():
+        return None
+    if REAL_SITE_MODULE in sys.modules:
+        return sys.modules[REAL_SITE_MODULE].BACKEND
+    import parser_backends  # noqa: F401  (부모 패키지: conftest가 불러 둔 임시 루트의 것)
+
+    spec = importlib.util.spec_from_file_location(REAL_SITE_MODULE, init, submodule_search_locations=[str(path)])
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[REAL_SITE_MODULE] = module
+    try:
+        spec.loader.exec_module(module)
+    except BaseException:
+        sys.modules.pop(REAL_SITE_MODULE, None)
+        raise
+    return module.BACKEND
+
 
 def plugin_root(kind: str = "plain", **defaults) -> Path:
     """kind: `plain`(reference 백엔드) 또는 이름. `defaults`는 site-defaults.yaml 덮어쓰기."""

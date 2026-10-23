@@ -480,6 +480,53 @@ def test_s4a_golden_mutation_runs_on_temp_copy(tmp_path):
     assert snapshot(root)["tests/golden/a.golden.json"] == before["tests/golden/a.golden.json"]
 
 
+def test_s4a_golden_mutation_skips_synthetic_marker(tmp_path):
+    """`synthetic` 표식·사유는 메타데이터라 바꾸지 않는다(비교하지 않아도 못 잡음이 아니다)."""
+    root = site_root(tmp_path)
+    g = root / "tests" / "golden"
+    g.mkdir(parents=True)
+    (g / "a.golden.json").write_text('{"synthetic": {"reason": "bugreport 전용 흔적"}, "events": [{"tag": "DNC-0", "n": 3}]}',
+                                     encoding="utf-8")
+    (g / "test_a.py").write_text("import json, pathlib\n\ndef test_a():\n    p = pathlib.Path(__file__).with_name('a.golden.json')\n"
+                                 "    assert json.loads(p.read_text())['events'] == [{'tag': 'DNC-0', 'n': 3}]\n",
+                                 encoding="utf-8")
+    r = sc.s4a_golden_mutation(sc.Ctx(root))
+    assert r["status"] == "pass" and "synthetic" not in r["evidence"]
+    # 최상위 키만 메타데이터다. 이벤트 안의 `synthetic` 필드는 기대값이라 바꾸고, 비교하지 않으면 못 잡음
+    (g / "a.golden.json").write_text('{"events": [{"tag": "DNC-0", "synthetic": 1}, {"n": 3}]}', encoding="utf-8")
+    (g / "test_a.py").write_text("import json, pathlib\n\ndef test_a():\n    p = pathlib.Path(__file__).with_name('a.golden.json')\n"
+                                 "    assert json.loads(p.read_text())['events'][1:] == [{'n': 3}]\n", encoding="utf-8")
+    r = sc.s4a_golden_mutation(sc.Ctx(root))
+    assert r["status"] == "needs-user" and "events[0].synthetic" in r["evidence"]
+
+
+def test_s4a_golden_mutation_list_root(tmp_path):
+    """골든 JSON 최상위가 목록이면(경로 `[0].tag`) 메타 키 판별에서 멈추지 않고 그대로 바꿔 본다."""
+    root = site_root(tmp_path)
+    g = root / "tests" / "golden"
+    g.mkdir(parents=True)
+    (g / "a.golden.json").write_text('[{"tag": "DNC-0", "n": 3}]', encoding="utf-8")
+    (g / "test_a.py").write_text("import json, pathlib\n\ndef test_a():\n    p = pathlib.Path(__file__).with_name('a.golden.json')\n"
+                                 "    assert json.loads(p.read_text()) == [{'tag': 'DNC-0', 'n': 3}]\n", encoding="utf-8")
+    r = sc.s4a_golden_mutation(sc.Ctx(root))
+    assert r["status"] == "pass" and "잡음 2, 못 잡음 0" in r["evidence"]
+
+
+def test_s4a_golden_requires_synthetic_reason(tmp_path):
+    """사내 골든 JSON 최상위 `synthetic` 표식에 사유가 없으면 실패한다(16-existing-assets.md §16.3 골든 1)."""
+    root = site_root(tmp_path)
+    g = root / "tests" / "golden"
+    g.mkdir(parents=True)
+    (g / "a.golden.json").write_text('{"synthetic": {"reason": " "}, "events": []}', encoding="utf-8")
+    (g / "b.orig.json").write_text('[{"synthetic": true}]', encoding="utf-8")       # 최상위 dict가 아니면 표식이 아니다
+    r = sc.s4a_golden(sc.Ctx(root))
+    assert r["status"] == "fail" and "tests/golden/a.golden.json: synthetic 표식에 사유" in r["evidence"]
+    assert "b.orig.json" not in r["evidence"]
+    (g / "a.golden.json").write_text('{"synthetic": {"reason": "bugreport 전용 흔적"}, "events": []}', encoding="utf-8")
+    r = sc.s4a_golden(sc.Ctx(root))
+    assert r["status"] == "needs-user" and "test_*.py 없음" in r["evidence"]   # 표식은 통과, 다음 검사로
+
+
 def ops_db(tmp_path, synthetic: bool) -> Path:
     db = tmp_path / "ops-db"
     fx = db / "call" / "CALL-001-drop" / "fixtures"

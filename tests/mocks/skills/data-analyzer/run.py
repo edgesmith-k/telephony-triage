@@ -59,6 +59,12 @@ def analyze(payload: dict) -> dict:
         suggested = "DATA-001-01"
         lines.append("의견: 사용자 데이터 설정이 꺼진 흔적이 있습니다.")
 
+    # 규칙 제안 변형(eval 71, 스킬 eval run.py `analyzer_proposal`): 같은 디렉토리에 proposals.txt가 있을 때만 붙인다.
+    # 형식 16-existing-assets.md §16.5.1. 없으면 출력은 예전과 같다.
+    proposals = Path(__file__).with_name("proposals.txt")
+    if proposals.is_file():
+        lines += ["규칙 제안:", *proposals.read_text(encoding="utf-8").splitlines()]
+
     return {
         "skill": SKILL,
         "summary": lines[0],
