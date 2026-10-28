@@ -612,7 +612,9 @@ class Linter:
             self._check_code_ref(type_md, cid, ref)
         fix = cause.get("fix") or {}
         if fix.get("ref") and self.fix_ref_re and not self.fix_ref_re.fullmatch(str(fix["ref"])):
-            self.err("fix-ref", type_md, f"{cid}: fix.ref '{fix['ref']}'가 fix_ref_regex에 맞지 않습니다.")
+            mock = " (fix_ref_regex가 모의 값이다 — 사내 형식으로 바꾸는 메인테이너 PR, 14-site S18)" \
+                if "MOCKCL" in self.fix_ref_re.pattern else ""
+            self.err("fix-ref", type_md, f"{cid}: fix.ref '{fix['ref']}'가 fix_ref_regex에 맞지 않습니다.{mock}")
         if verification.get("status") == "verified":
             evidence = verification.get("evidence") or []
             if not evidence:

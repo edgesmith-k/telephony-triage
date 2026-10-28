@@ -14,8 +14,10 @@
 로그, `events.json`, needs_input 질문 문구(상태 파일에는 `pending {kind, asked_at}`만 있다). `trace.jsonl`은 끝 256KB의
 마지막 끝 행만 본다: triage `error`·db_pr `stage{result: error}`로 끝났으면 막힌 것 `last-run-error`(메시지는 마스킹·URL 자격증명 가림).
 
+`<KEY>` = 트래커 키 또는 작업 키(fix-submit-<원인 ID>·verify-fix-…·verify-res-… 등 — `<work_dir>/<KEY>/`에 작업 표식 파일
+(plan.json·state.json·trace.jsonl 등)이 있을 때만. 작업 키면 `target.issue`는 null, `post.state` 해당 없음).
 `<KEY>`를 생략하면 lock을 잡은 작업, 없으면 작업 디렉토리가 하나일 때 그 작업. 여럿이면 최근 순 후보(최대 5개,
-`{candidates: [{key, stage, at}]}`)를 내고 종료 코드 0.
+`{candidates: [{key, kind(tracker|work), stage, at}]}`)를 내고 종료 코드 0.
 
 출력: 기본 `--format json`(한 줄) `{key, platform, target, stage{id, label, confidence, at?, evidence?}, blockers[{code,
 label, confidence, at?, evidence?, next?}], must_show[], next, approval{approved_hash_prefix, staged_at, user_approval}, post, lock{held,
@@ -77,15 +79,19 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _key(tracker, cfg_snap: Path, raw: str) -> str:
-    """키 형식 검사(트래커 `parse_key`·경로 안전 형식·스냅샷 `tracker.key_regex`). 로컬 검사만."""
+def _key(tracker, work: Path, raw: str) -> tuple[str, bool]:
+    """키 형식 검사(트래커 `parse_key`·경로 안전 형식·스냅샷 `tracker.key_regex`). 로컬 검사만. (키, 트래커 키인지).
+    트래커 키가 아니어도 작업 키 형식(`session_lock.JOB_KEY_RE`)이고 `<work_dir>/<키>/`에 작업 표식 파일이 있으면 작업 키로 받는다."""
+    cfg_snap = work / session_lock.SNAPSHOT_DIR
     db_cfg = compat.load_db_config(cfg_snap) if (cfg_snap / "issue-db.config.yaml").is_file() else {}
     block = db_cfg.get("tracker") if isinstance(db_cfg.get("tracker"), dict) else {}
     key_re = re.compile(str(block.get("key_regex") or tracker.default_key_regex))
     key = tracker.parse_key(raw) or raw
-    if not tracker.safe_key_re.fullmatch(key) or not key_re.fullmatch(key):
-        raise Usage(f"{tracker.label} 키 형식이 아니다: {key} — 키를 확인한 뒤 다시 실행한다")
-    return key
+    if tracker.safe_key_re.fullmatch(key) and key_re.fullmatch(key):
+        return key, True
+    if session_lock.is_job_dir(work, raw):      # fix-submit-<원인 ID>·verify-fix-…·verify-res-… 등(경로 안전 형식만)
+        return raw, False
+    raise Usage(f"{tracker.label} 키 형식이 아니다: {key} — 키를 확인한 뒤 다시 실행한다")
 
 
 def run(args, defaults: dict) -> dict:
@@ -106,18 +112,20 @@ def run(args, defaults: dict) -> dict:
         except session_lock.LockError:
             held = None
         job = (held or {}).get("job")
-        if job and not job.startswith(("_", ".")) and tracker.safe_key_re.fullmatch(job) and (work / job).is_dir():
+        kind = jobstatus.job_kind(work, job, tracker.safe_key_re) if job else None
+        if kind and (work / job).is_dir():
             key = job
         else:
             found = jobstatus.candidates(work, tracker.safe_key_re)
             if len(found) != 1:
                 return {"platform": name, "work_dir": str(work), "candidates": found[:jobstatus.CANDIDATES_MAX],
                         "more": max(0, len(found) - jobstatus.CANDIDATES_MAX)}
-            key = found[0]["key"]
+            key, kind = found[0]["key"], found[0]["kind"]
+        tracker_key = kind == "tracker"
     else:
-        key = _key(tracker, work / session_lock.SNAPSHOT_DIR, args.key)
+        key, tracker_key = _key(tracker, work, args.key)
     try:
-        return jobstatus.collect(work, key, cfg, defaults, platform=name, tracker=tracker.name)
+        return jobstatus.collect(work, key, cfg, defaults, platform=name, tracker=tracker.name, tracker_key=tracker_key)
     except jobstatus.StatusUsage as exc:
         raise Usage(str(exc)) from exc
 

@@ -31,9 +31,10 @@ external_parsers: {}                 # 어댑터를 쓰는 카테고리 고정 (
 
 code_root_keys: [aosp, vendor_ril]
 
-fix_ref_regex: '^(MOCKCL-\d+|[0-9a-f]{7,40})$'     # TODO(SITE:S18) 사내 Gerrit CL/커밋 형식
+fix_ref_regex: '^MOCKCL-\d+$'        # TODO(SITE:S18) 코드 수정 참조 형식(CL·커밋 등). 모의 값 — 실제 참조는 모두 fix-ref로 거부된다. 사내 형식으로 바꾼다
 
 build_compare:                       # 03-issue-db.md §5.9, 가상 빌드명은 tests/mocks/builds.yaml
+                                     # TODO(SITE:S12) 사내 빌드명 체계로 바꾼다(아래는 모의 값)
   - branch_regex: '^MOCKA56_U\d+_'
     version_regex: '^MOCKA56_U(?P<rev>\d+)_(?P<date>\d{8})$'
   - branch_regex: '^MOCKB77_U\d+_'
@@ -80,6 +81,7 @@ quality:                             # 06-collaboration.md §6.5, §6.6
 mask:                                # 08-safety.md §8
   allow_patterns:
     # 가상 빌드명은 15자리 숫자 오탐이 아니다 (tests/mocks/builds.yaml).
+    # TODO(SITE:S12) 모의 값 — 사내 빌드명 예외로 바꾸거나 지운다.
     - '^MOCK[AB]\d{2}_U\d+_\d{8}$'
 
 matcher:
@@ -88,5 +90,6 @@ matcher:
 readme:
   issue_inline_max: 3
 
-reviewers:                           # TODO(SITE:S19) gh pr create --reviewer 형식
-  format: '{org}/{team}'
+reviewers:                           # TODO(SITE:S19) CODEOWNERS 팀 오너(@<org>/<team>)를 gh 리뷰어 요청 값으로 바꾸는 형식
+  format: '{org}/{team}'             # 개인 오너(@<login>)는 <login> 그대로 요청한다 — 개인 오너만 쓰면 해당 없음
+                                     # (SITE_PROFILE S19에 그렇게 기록). 팀 오너면 샌드박스 PR로 이 형식을 확인한다

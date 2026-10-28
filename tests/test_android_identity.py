@@ -159,13 +159,14 @@ def test_supported_versions_reads_only_new_key():
 
 
 def test_no_android_module_import_outside_platforms():
-    """핵심 모듈은 `platforms.android`를 직접 import하지 않는다(예외: reference 백엔드 다시 내보내기)."""
+    """핵심 모듈은 `platforms.android`를 직접 import하지 않는다. 예외는 android 파서 백엔드: reference 다시 내보내기와
+    사내 `site` 백엔드(`parser_backends/site/`, SITE_PATHS — reference 공통 처리를 재사용할 수 있다, 16-existing-assets.md §16.3)."""
     scripts = REPO / "plugin" / "scripts"
     allowed = {"parser_backends/reference/__init__.py"}
     offenders = []
     for path in sorted(scripts.rglob("*.py")):
         rel = path.relative_to(scripts).as_posix()
-        if rel.startswith("platforms/") or rel in allowed:
+        if rel.startswith(("platforms/", "parser_backends/site/")) or rel in allowed:
             continue
         text = path.read_text(encoding="utf-8")
         if re.search(r"^\s*(from\s+platforms\.android\b|import\s+platforms\.android\b"

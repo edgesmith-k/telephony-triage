@@ -609,17 +609,18 @@ def test_cut_writes_only_masked_lines():
     evidence = _tmp() / "match.json"
     evidence.write_text(json.dumps(match, ensure_ascii=False), encoding="utf-8")
     fixture = _tmp() / "DATA-001-01.2.log"
-    proc = _run("parse_logcat.py", ["cut", str(log), "--evidence", str(evidence), "--context", "3",
-                                    "--max-lines", "40", "--out", str(fixture), "--tz", TZ, "--year", YEAR])
+    proc = _run("parse_logcat.py", ["cut", str(log), "--evidence", str(evidence), "--cause", "DATA-001-01",
+                                    "--context", "3", "--max-lines", "40", "--out", str(fixture), "--tz", TZ, "--year", YEAR])
     assert proc.returncode == 0, proc.stderr
+    assert json.loads(proc.stdout)["cause"] == "DATA-001-01"
     text = fixture.read_text(encoding="utf-8")
     assert masking.new_masker().find(text) == [] and "450081234567890" not in text
     again = _match(_parse(fixture, "--mask"), "--regress")
     assert [c["cause"] for c in again["causes"] if c["C"]] == ["DATA-001-01"]
 
     # 3) --max-lines: 앵커만으로 넘으면 종료 코드 2
-    proc = _run("parse_logcat.py", ["cut", str(log), "--evidence", str(evidence), "--max-lines", "1",
-                                    "--out", str(_tmp() / "x.log"), "--tz", TZ, "--year", YEAR])
+    proc = _run("parse_logcat.py", ["cut", str(log), "--evidence", str(evidence), "--cause", "DATA-001-01",
+                                    "--max-lines", "1", "--out", str(_tmp() / "x.log"), "--tz", TZ, "--year", YEAR])
     assert proc.returncode == 2 and "max-lines" in proc.stderr
 
 
@@ -627,18 +628,19 @@ def _line_at(sec: int, tag: str, msg: str, ms: int = 0) -> str:
     return f"09-20 14:30:{sec:02d}.{ms:03d}  1234  1244 D {tag}: [PHONE0] {msg}"
 
 
-def _evidence_json(refs: list[dict | None], ts: str = "2026-09-20T05:30:10.000Z") -> Path:
-    """`match.json` 모양의 최소 입력 (1위 후보의 근거만)."""
+def _evidence_json(refs: list[dict | None], ts: str = "2026-09-20T05:30:10.000Z", **extra) -> Path:
+    """`match.json` 모양의 최소 입력 (원인 X-001-01 후보의 근거만, `extra`는 최상위 키)."""
     evidence = [{"ts": ts, "tag": "DSM-0", "msg": "x", "event": None, "line_ref": ref} for ref in refs]
     path = _tmp() / "match.json"
-    path.write_text(json.dumps({"candidates": [{"evidence": evidence}]}), encoding="utf-8")
+    candidates = [{"type": "X-001", "cause": "X-001-01", "C": 1, "evidence": evidence}]
+    path.write_text(json.dumps({"candidates": candidates, **extra}), encoding="utf-8")
     return path
 
 
-def _cut(logs: list[Path], evidence: Path, *extra: str):
+def _cut(logs: list[Path], evidence: Path, *extra: str, cause: str | None = "X-001-01"):
     out = _tmp() / "cut.log"
     proc = _run("parse_logcat.py", ["cut", *map(str, logs), "--evidence", str(evidence), "--out", str(out),
-                                    "--tz", TZ, "--year", YEAR, *extra])
+                                    "--tz", TZ, "--year", YEAR, *(["--cause", cause] if cause else []), *extra])
     return proc, out
 
 
@@ -695,6 +697,60 @@ def test_cut_raw_alignment_with_form_feed():
     assert proc.returncode == 0, proc.stderr
     assert out.read_text(encoding="utf-8").strip().endswith("evidence after control chars")
     assert json.loads(proc.stdout)["lines"] == 1
+
+
+def test_cut_evidence_picks_requested_cause():
+    """`--cause`가 2위 후보면 1위가 아니라 그 후보의 근거로 자른다 (회귀 모드는 같은 점수면 ID 순이라 1위가 다른 원인일 수 있다)."""
+    lines = [_line_at(n, "DSM-0", f"tick {n}") for n in range(1, 60)]
+    lines[9] = _line_at(10, "DSM-0", "first cause line")
+    lines[49] = _line_at(50, "DSM-0", "second cause line")
+    log = _write(lines)
+    def ev(sec, line_no):
+        return [{"ts": f"2026-09-20T05:30:{sec:02d}.000Z", "tag": "DSM-0", "msg": "x", "event": None,
+                 "line_ref": {"file_index": 0, "line_no": line_no}}]
+    match = {"candidates": [{"type": "X-001", "cause": "X-001-01", "C": 1, "evidence": ev(10, 10)},
+                            {"type": "X-001", "cause": "X-001-02", "C": 1, "evidence": ev(50, 50)}],
+             "causes": [{"type": "X-001", "cause": "X-001-01", "C": 1}, {"type": "X-001", "cause": "X-001-02", "C": 1}]}
+    path = _tmp() / "match.json"
+    path.write_text(json.dumps(match), encoding="utf-8")
+    proc, out = _cut([log], path, "--context", "1", cause="X-001-02")
+    assert proc.returncode == 0, proc.stderr
+    info = json.loads(proc.stdout)
+    text = out.read_text(encoding="utf-8")
+    assert "second cause line" in text and "first cause line" not in text
+    assert info["cause"] == "X-001-02" and info["rank"] == 2
+    assert [w["code"] for w in info["warnings"]] == ["evidence-other-causes"]
+    assert "X-001-01" in info["warnings"][0]["message"] and "경고[evidence-other-causes]" in proc.stderr
+    # 다른 C=1 원인이 없으면 경고가 없다
+    proc, _ = _cut([log], _evidence_json([{"file_index": 0, "line_no": 10}]), "--context", "0")
+    info = json.loads(proc.stdout)
+    assert proc.returncode == 0 and info["rank"] == 1 and info["warnings"] == []
+
+
+def test_cut_evidence_cause_errors():
+    log = _dup_ts_tag_log()
+    ref = [{"file_index": 0, "line_no": 10}]
+    # --cause 없음
+    proc, out = _cut([log], _evidence_json(ref), cause=None)
+    assert proc.returncode == 2 and "--cause" in proc.stderr and not out.exists()
+    # 이 로그에서 C=0 / 판정 불가 / signatures_pending
+    for extra, want in (({"causes": [{"cause": "Y-001-01", "C": 0}]}, "C=0"),
+                        ({"causes": [{"cause": "Y-001-01", "C": None}]}, "C=null"),
+                        ({"pending_causes": [{"type": "Y-001", "cause": "Y-001-01"}]}, "signatures_pending")):
+        proc, _ = _cut([log], _evidence_json(ref, **extra), cause="Y-001-01")
+        assert proc.returncode == 2 and want in proc.stderr and "X-001-01" in proc.stderr, (want, proc.stderr)
+    # --top으로 잘렸으면 --top 0 재실행 힌트
+    for extra in ({"omitted": {"types": 0, "causes": 2, "pending_causes": 0, "candidates": 0}},
+                  {"causes": [{"cause": "Y-001-01", "C": 1}], "omitted": {"candidates": 1}}):
+        proc, _ = _cut([log], _evidence_json(ref, **extra), cause="Y-001-01")
+        assert proc.returncode == 2 and "--top 0" in proc.stderr, proc.stderr
+    # match.json에 없는 원인
+    proc, _ = _cut([log], _evidence_json(ref), cause="Y-001-01")
+    assert proc.returncode == 2 and "없는 원인" in proc.stderr
+    # --around와 --cause는 같이 쓰지 않는다
+    proc = _run("parse_logcat.py", ["cut", str(log), "--around", "2026-09-20T14:30:10+09:00", "--cause", "X-001-01",
+                                    "--out", str(_tmp() / "x.log"), "--tz", TZ, "--year", YEAR])
+    assert proc.returncode == 2 and "--cause" in proc.stderr
 
 
 def _all_tests():

@@ -11,7 +11,8 @@
 
 - 순서는 S-1 → S-2 → S-3 → S-4a → S-4 → S-5 → S-6 → S-7(`STEPS`). S-0(선택)은 반입 전 일이라 넣지 않는다.
 - 점검(`site_checks.py`)은 판정만 하고 단계를 넘기지 않는다. `--done`은 실패가 있으면 거부하고, 건너뜀·사용자 필요는
-  `--waive`(사유는 SITE_PROFILE.md "설계 변경"·docs/site/evidence.md에 남는다) 없이는 거부한다. 사용자 확인 없이 `--done`하지 않는다.
+  `--waive`(사유는 SITE_PROFILE.md "설계 변경"·docs/site/evidence.md에 남는다 — 사유는 줄 끝, SITE_PROFILE에는 120자까지 +
+  `…(전체: docs/site/evidence.md)`, 기록한 줄은 `--done` 출력에 보인다) 없이는 거부한다. 사용자 확인 없이 `--done`하지 않는다.
 - `SITE_PROFILE.md`의 "진행 상태" `현재 단계`·`완료 단계` 줄과, 승인된 `propose --apply` 항목만 고친다. 형식은 14-site.md §14.3.
 - S-2 eval은 `tests/skill_evals/pending.json`의 사내 대상(`site`, 사내 모델이 사외 결과 모델과 다르면 `site_if_model_differs`도)만
   돌린다. 나머지는 사외 결과 기록(`offsite_results.json`, 점검 `s2.offsite`)으로 갈음한다.
@@ -476,6 +477,9 @@ def evals_cmd(root: Path, batch: int, baseline: bool) -> tuple[str, int]:
 
 # --- done ------------------------------------------------------------------------------------------------------
 
+WAIVE_PROFILE_MAX = 120      # SITE_PROFILE 한 줄의 사유 글자 수(4KB 상한, 14-site.md §14.3). 전체 사유는 evidence.md
+
+
 def _parse_waivers(waives: list[str]) -> dict[str, str]:
     out = {}
     for w in waives:
@@ -484,8 +488,17 @@ def _parse_waivers(waives: list[str]) -> dict[str, str]:
             raise Usage(f"--waive {cid.strip()}: 사유에 줄바꿈을 넣을 수 없다(SITE_PROFILE 한 줄 기록)")
         if not sep or not why.strip():
             raise Usage(f"--waive {w!r}: 점검=\"사유\" 형식이다(사유 필수)")
+        if cid.strip() in out:
+            raise Usage(f"--waive {cid.strip()}: 같은 점검을 두 번 줬다 — 사유를 하나로 합쳐 한 번만 준다")
         out[cid.strip()] = why.strip()
     return out
+
+
+def _profile_reason(why: str) -> str:
+    """SITE_PROFILE 설계 변경 줄의 사유: 길면 앞 120자 + 전체 위치(조용히 자르지 않는다)."""
+    if len(why) <= WAIVE_PROFILE_MAX:
+        return why
+    return why[:WAIVE_PROFILE_MAX].rstrip() + f"…(전체: {sc.EVIDENCE_FILE})"
 
 
 def _append_section(text: str, head: str, line: str) -> str:
@@ -523,13 +536,16 @@ def done(root: Path, step: str, waives: list[str] | None = None, allow_api: bool
                 "사용자가 확인했으면 `--waive 점검=\"사유\"`로 사유를 남긴다"), 1
     today = date.today().isoformat()
     used = {w: why for w, why in waived.items() if ids[w]["status"] in ("skip", "needs-user")}
-    for w, why in used.items():
-        text = _append_section(text, "## 설계 변경", f"- ({today}) {step} {w} 면제: {why[:80]} — 사용자 결정")
+    recorded = []
+    for w, why in used.items():     # 사유는 줄 끝 — 사유 안의 `-`·`—`·`|`가 구분자와 섞이지 않는다
+        line = f"- ({today}) {step} {w} 면제(사용자 결정): {_profile_reason(why)}"
+        text = _append_section(text, "## 설계 변경", line)
+        recorded.append(line)
     if used:
         ev = root / sc.EVIDENCE_FILE
         ev.parent.mkdir(parents=True, exist_ok=True)
         ev.write_text(_evidence(root, ev.read_text(encoding="utf-8") if ev.is_file() else None,
-                                [f"- ({today}) {step} {w} 면제({ids[w]['status']}): {why} — 근거 {ids[w]['evidence']}"
+                                [f"- ({today}) {step} {w} 면제({ids[w]['status']}, 근거 {ids[w]['evidence']}) 사용자 결정: {why}"
                                  for w, why in used.items()]), encoding="utf-8", newline="\n")
     nxt = STEPS[STEPS.index(step) + 1] if step != STEPS[-1] else DONE
     item = f"{step} ({today})"
@@ -539,7 +555,8 @@ def done(root: Path, step: str, waives: list[str] | None = None, allow_api: bool
     prof.write_text(text, encoding="utf-8", newline="\n")
     extra = f" (면제 {', '.join(used)} — 사유는 SITE_PROFILE.md 설계 변경)" if used else ""
     out, _ = guide(nxt, False, root, allow_api)     # 기록은 끝났다(종료 0). 다음 단계 점검 결과는 출력으로만 본다
-    return f"{step} 완료를 기록했다{extra}.\n" + out, 0
+    shown = "".join(f"  SITE_PROFILE.md 설계 변경에 기록: {line}\n" for line in recorded)     # 쓴 줄을 그대로 보인다
+    return f"{step} 완료를 기록했다{extra}.\n" + shown + out, 0
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -508,6 +508,26 @@ def test_signature_references_exist_in_parser_rules():
     assert not errors, "\n".join(errors)
 
 
+def test_config_mock_values_are_marked():
+    """모의 설정 값은 TODO(SITE)로 표시하고 실제 사내 값을 받아들이지 않는다(사내 보고 14·15·16번, 뼈대도 같은 파일)."""
+    import re
+
+    text = (SAMPLE / "issue-db.config.yaml").read_text(encoding="utf-8")
+    cfg = _load_yaml(SAMPLE / "issue-db.config.yaml")
+    ref = re.compile(cfg["fix_ref_regex"])
+    assert ref.fullmatch("MOCKCL-1") and not any(ref.fullmatch(x) for x in ("1234567", "0123456789", "a1b2c3d", "CL 1"))
+    line = next(ln for ln in text.splitlines() if ln.startswith("fix_ref_regex:"))
+    assert "TODO(SITE:S18)" in line and "모의 값" in line and "Gerrit" not in text
+    lines = text.splitlines()
+    for needle in ("build_compare:", "- '^MOCK[AB]"):
+        n = next(k for k, ln in enumerate(lines) if needle in ln)
+        assert any("TODO(SITE:S12)" in ln for ln in lines[n - 1:n + 2]), needle
+    reviewers = text.split("reviewers:", 1)[1]
+    assert "TODO(SITE:S19)" in reviewers and "개인 오너" in reviewers and "해당 없음" in reviewers
+    owners = (SAMPLE / ".github/CODEOWNERS").read_text(encoding="utf-8")
+    assert "개인(@<login>)" in owners and "TODO(SITE:S5)" in owners
+
+
 # -- 6. 뼈대 ---------------------------------------------------------------
 
 
@@ -549,6 +569,10 @@ def test_skeleton_has_no_types_and_validates():
                 for item in data.get(section) or []:
                     if item["added_for"] != "-":
                         errors.append(f"{path.name}: added_for가 '-'가 아님 ({item['added_for']})")
+                    # 데이터 스택 태그(14-site §14.1 확정)만 빼고 placeholder 표시 (15-local-draft §15.4, s6.placeholder)
+                    data_tag = section == "tags" and item["category"] == "data"
+                    if str(item["reason"]).startswith("placeholder") == data_tag:
+                        errors.append(f"{path.name}: placeholder 표시가 틀림 ({item})")
         assert not errors, "\n".join(errors)
     finally:
         shutil.rmtree(out.parent, ignore_errors=True)

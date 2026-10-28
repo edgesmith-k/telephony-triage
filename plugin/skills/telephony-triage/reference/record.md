@@ -28,7 +28,7 @@
 MCP `tracker.tools.get_issue`(매핑이 없으면 추측하지 말고 setup 안내)를 부르면 hook이 원문을 `WD/<KEY>/issue_raw.json`에 두고 마스킹 요약만 보여준다(결과에 `saved_to`가 없으면 응답을 그 경로에 저장하고 "격리 hook 미동작: Jira 원문이 대화에 들어왔다(S1 확인)"고 알린다). `jira_fields.py extract WD/<KEY>/issue_raw.json --origin mcp --db SNAP --consume --comments last:3`(파일이면 `<yaml> --origin file`)로 읽는다.
 `--failed-step <한 줄>`·`--steps-file <파일>`(선택)이 있으면 `extract`에 그대로 넘긴다(우선순위 cli > Jira 자동 > 파일). 실패 스텝은 선택 값이라 없어도 묻지 않고 멈추지 않으며, 파일을 읽지 못하면 `warnings`만 보여주고 진행한다. 값은 보조 정보일 뿐 분류에 쓰지 않는다.
 `--steps-file`은 txt/csv·html(`report.html`)·zip(안의 파일 하나)이다. 개발자가 스텝 목록을 대화에 붙이면 `WD/<KEY>/steps-pasted.txt`에 쓰고 그 경로를 `--steps-file`로 준다(도구가 읽을 때 마스킹, 커밋하지 않는다, discard·lock release가 지운다). 시험 장비 시각은 시계가 단말과 다를 수 있어 `record`에서는 실패 스텝 이름만 쓴다(`--clock-offset`은 analyze의 구간 계산용).
-`issue` 블록(model, sw, platform_version, carrier, occurred_on)을 채우고, `missing`은 사용자에게 묻는다. `date`는 오늘.
+`issue` 블록(model, sw, platform_version, carrier, occurred_on — 값이 있는 키만 나온다)을 채운다. `missing_question`이 있으면 **글자 그대로** 글로 한 번 묻는다(자유 입력이라 선택지 질문이 아니다). 답한 값만 `issue`에 넣고, 선택 항목을 "없음"·"모름"이라 하면 그 키를 넣지 않는다. `null`을 계획에 넣지 않는다. `date`는 오늘.
 `note`는 마스킹된 요약으로 한 줄 초안을 만들어 확인받는다(사람 이름·전화번호·IMEI 금지).
 
 ## 3. 중복 확인
@@ -59,8 +59,9 @@ MCP `tracker.tools.get_issue`(매핑이 없으면 추측하지 말고 setup 안�
     진행하지 않고 시그니처를 요청한다.
   - 시그니처가 있으면 파서 규칙 점검(`db-authoring.md`)으로 `add-parser-rule`/`update-parser-rule` 초안.
 - **fixture** (`--fixture <logcat>`) — 마스킹된 최소 구간을 잘라 `add-fixture {for, kind: positive, path}`:
-  - 기존 원인(`--cause`): `parse_logcat.py parse <log> --full --rules SNAP/parser-rules --mask ...` → `match_signatures.py --regress`
-    결과를 파일로 저장하고 `parse_logcat.py cut <log> --evidence <match.json> --out WD/<KEY>/fixtures/cut-1.log --rules SNAP/parser-rules` (parse와 같은 로그를 같은 순서로).
+  - 기존 원인(`--cause`): `parse_logcat.py parse <log> --full --rules SNAP/parser-rules --mask ...` → `match_signatures.py --regress --top 0`
+    결과를 파일로 저장하고 `parse_logcat.py cut <log> --evidence <match.json> --cause <원인 ID> --out WD/<KEY>/fixtures/cut-1.log --rules SNAP/parser-rules` (parse와 같은 로그를 같은 순서로).
+    종료 코드 2로 그 원인이 C=0·판정 불가라고 하면 "기존 원인 시그니처가 이 로그를 못 잡는다"고 알리고 fixture 없이(`append`만) / `update-signature` 검토를 `pr_notes`에 남김을 묻는다. `--around`로 양성 fixture를 만들지 않는다(R4가 실패한다).
   - 새 원인·유형: 새 시그니처는 계획에만 있어 스냅샷 매처로 근거를 찾을 수 없다. 발생 시각(없으면 사용자가 지정한 시각)으로
     `parse_logcat.py cut <log> --around <시각> --out ...`. 그 fixture가 새 시그니처를 실제로 충족하는지는 7번 초안 검증(R1·R2)이 확인한다.
   - fixture가 없으면 R1·R2가 `skipped: fixture 없음`(검증 못 함 — 자동 검증 없음)이 된다고 알린다.

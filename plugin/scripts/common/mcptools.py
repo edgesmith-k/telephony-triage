@@ -3,6 +3,8 @@
 - 서버 목록: Claude Code MCP 설정 JSON의 `mcpServers`(기본은 사용자 범위 `~/.claude.json`).
   stdio 서버는 직접 띄워 `initialize` → `tools/list`로 도구 이름을 읽는다. 원격(http/sse) 서버는
   여기서 읽지 못하므로, 스킬이 세션에서 보이는 도구 이름을 `--tools-json`으로 넘긴다.
+  stdio 확인(`list_tools`)은 서버당 최대 `PROBE_TIMEOUT`(10초), `tools/list` 응답을 받는 즉시 끝내고 프로세스 그룹(손자 포함)을
+  종료한다 — 응답 뒤 끝나지 않는 서버·Windows `npx.cmd` 손자가 파이프를 쥔 경우에도 멈추지 않는다.
 - `site-defaults.yaml`의 `tracker.exclude_servers`(fnmatch 패턴, 기본 `['mock-*']`)에 맞는 서버는
   후보에서 뺀다.
 - 도구 전체 이름은 `mcp__<server>__<tool>`이고, `<server>`의 `[A-Za-z0-9_-]` 밖 글자는 `_`로 바뀐다 — TODO(SITE:S1)
@@ -14,9 +16,13 @@ from __future__ import annotations
 
 import fnmatch
 import json
+import os
+import queue
 import re
 import shutil
 import subprocess
+import threading
+import time
 from pathlib import Path
 
 PROTOCOL_VERSION = "2025-06-18"
@@ -118,10 +124,57 @@ def load_servers(config_paths: list[Path]) -> dict[str, dict]:
     return servers
 
 
-def list_tools(conf: dict, timeout: float = 20.0) -> list[str]:
-    """stdio MCP 서버를 띄워 도구 이름 목록을 읽는다. 원격 서버면 ValueError."""
+PROBE_TIMEOUT = 10.0      # 서버 하나의 initialize → tools/list 응답 기다림(초)
+KILL_GRACE = 1.0          # SIGTERM 뒤 SIGKILL까지(초)
+NOT_STDIO = "not-stdio: stdio 서버가 아니다(원격 서버는 --tools-json으로 준다)"
+
+
+class ProbeError(ValueError):
+    """stdio 서버 확인 실패. `kind`: `not-stdio`·`timeout`·`exited`·`no-response`·`rpc-error`. 메시지는 `<kind>…: 설명`이고
+    서버 출력(stdout·stderr) 내용은 넣지 않는다(사내 보고에 그대로 옮길 수 있게)."""
+
+    def __init__(self, kind: str, message: str):
+        super().__init__(message)
+        self.kind = kind
+
+
+def _kill_tree(proc: subprocess.Popen) -> None:
+    """프로세스 그룹(손자 포함)을 끝낸다. POSIX: 새 세션의 그룹에 SIGTERM → 잠시 뒤 SIGKILL. Windows: `taskkill /T /F`.
+    npx·uvx·mcp-remote처럼 손자가 stdout 파이프를 쥐고 있어도 읽기 스레드가 EOF를 받는다."""
+    if os.name == "nt":
+        try:
+            subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)], capture_output=True, timeout=10)
+        except (OSError, subprocess.SubprocessError):
+            pass
+        try:
+            proc.kill()
+        except OSError:
+            pass
+    else:
+        import signal
+        for sig, grace in ((signal.SIGTERM, KILL_GRACE), (signal.SIGKILL, KILL_GRACE)):
+            try:
+                os.killpg(proc.pid, sig)
+            except (ProcessLookupError, PermissionError):
+                pass
+            try:
+                proc.wait(timeout=grace)
+            except subprocess.TimeoutExpired:
+                pass
+    try:
+        proc.wait(timeout=KILL_GRACE)
+    except subprocess.TimeoutExpired:
+        pass
+
+
+def list_tools(conf: dict, timeout: float = PROBE_TIMEOUT) -> list[str]:
+    """stdio MCP 서버를 띄워 도구 이름 목록을 읽는다. 원격 서버·실패면 `ProbeError`(ValueError), 띄우지 못하면 OSError.
+
+    `initialize`·`notifications/initialized`·`tools/list`를 쓰고 stdin은 열어 둔 채 읽기 스레드가 stdout 줄을 받는다.
+    `id == 2` 응답이 오면 **바로** 반환한다(응답 뒤 끝나지 않는 서버를 기다리지 않는다). 끝에서는 항상 프로세스
+    그룹을 끝낸다(`_kill_tree`). `timeout`초 안에 응답이 없으면 `timeout`."""
     if not conf.get("command"):
-        raise ValueError("stdio 서버가 아니다(원격 서버는 --tools-json으로 준다)")
+        raise ProbeError("not-stdio", NOT_STDIO)
     command = shutil.which(conf["command"]) or conf["command"]
     requests = [
         {"jsonrpc": "2.0", "id": 1, "method": "initialize",
@@ -130,18 +183,76 @@ def list_tools(conf: dict, timeout: float = 20.0) -> list[str]:
         {"jsonrpc": "2.0", "method": "notifications/initialized"},
         {"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
     ]
-    payload = "\n".join(json.dumps(r) for r in requests) + "\n"
-    proc = subprocess.run([command, *conf.get("args", [])], input=payload, capture_output=True, text=True,
-                          encoding="utf-8", errors="replace", timeout=timeout, cwd=conf.get("cwd"),
-                          env=None if not conf.get("env") else {**__import__("os").environ, **conf["env"]})
-    for line in proc.stdout.splitlines():
+    payload = ("\n".join(json.dumps(r) for r in requests) + "\n").encode("utf-8")
+    group = ({"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == "nt"
+             else {"start_new_session": True})
+    proc = subprocess.Popen([command, *conf.get("args", [])], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE, cwd=conf.get("cwd"),
+                            env=None if not conf.get("env") else {**os.environ, **conf["env"]}, **group)
+    lines: queue.Queue = queue.Queue()
+
+    def pump_out():
         try:
-            msg = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if msg.get("id") == 2 and "result" in msg:
-            return [t["name"] for t in msg["result"].get("tools", []) if t.get("name")]
-    raise ValueError(f"tools/list 응답이 없다: {proc.stderr.strip()[:200]}")
+            for raw in iter(proc.stdout.readline, b""):
+                lines.put(raw)
+        except (OSError, ValueError):
+            pass
+        lines.put(None)                  # EOF
+
+    def drain_err():                     # stderr를 비워 서버가 파이프에 막히지 않게(내용은 쓰지 않는다)
+        try:
+            for _ in iter(lambda: proc.stderr.read(65536), b""):
+                pass
+        except (OSError, ValueError):
+            pass
+
+    readers = [threading.Thread(target=f, daemon=True) for f in (pump_out, drain_err)]
+    for t in readers:
+        t.start()
+    deadline = time.monotonic() + timeout
+    try:
+        try:
+            proc.stdin.write(payload)
+            proc.stdin.flush()
+        except OSError:
+            pass                         # 이미 끝난 서버: 아래에서 exited로 판정
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise ProbeError("timeout", f"timeout({timeout:g}초): tools/list 응답이 없다")
+            try:
+                raw = lines.get(timeout=remaining)
+            except queue.Empty:
+                continue
+            if raw is None:
+                try:
+                    code = proc.wait(timeout=min(KILL_GRACE, max(deadline - time.monotonic(), 0.01)))
+                except subprocess.TimeoutExpired:
+                    raise ProbeError("no-response", "no-response: stdout이 닫혔는데 tools/list 응답이 없다") from None
+                raise ProbeError("exited", f"exited({code}): tools/list 응답 전에 끝났다")
+            try:
+                msg = json.loads(raw.decode("utf-8", errors="replace"))
+            except ValueError:
+                continue
+            if not isinstance(msg, dict) or msg.get("id") != 2:
+                continue
+            if isinstance(msg.get("result"), dict):
+                return [t["name"] for t in msg["result"].get("tools", []) if isinstance(t, dict) and t.get("name")]
+            code = msg.get("error", {}).get("code") if isinstance(msg.get("error"), dict) else None
+            raise ProbeError("rpc-error", f"rpc-error({code}): tools/list 오류 응답")
+    finally:
+        try:
+            proc.stdin.close()
+        except OSError:
+            pass
+        _kill_tree(proc)
+        for t, pipe in zip(readers, (proc.stdout, proc.stderr)):
+            t.join(timeout=KILL_GRACE)
+            if not t.is_alive():         # 읽는 중인 파이프를 닫으면 막힐 수 있다(그룹 밖으로 나간 손자): 데몬 스레드에 맡긴다
+                try:
+                    pipe.close()
+                except OSError:
+                    pass
 
 
 def candidates(servers: dict[str, list[str] | None], exclude: list[str], team_tools: dict | None = None,

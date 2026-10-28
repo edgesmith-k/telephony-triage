@@ -26,9 +26,9 @@
 # /data/                @<org>/telephony-data-owners
 ```
 
-- 팀 이름 형식과 `gh pr create --reviewer`에 넘기는 형식은 Phase 0에서 확인한다 (`14-site.md` S5, S19).
-- 리뷰어(`--reviewer`)는 CODEOWNERS에 오너가 있는 경로만 지정된다(`02-config.md §5.3` 리뷰어 계산). 카테고리 오너가 없으면 카테고리 경로만
-  바꾸는 PR(사례 추가·새 원인·`allow-cause` 등)은 리뷰어가 없다 — 확인 화면 `리뷰어: 없음`, `gh pr create`에 `--reviewer` 없음. 메인테이너
+- 팀 이름 형식과 gh 리뷰어 요청(`gh pr edit --add-reviewer`)에 넘기는 형식은 Phase 0에서 확인한다 (`14-site.md` S5, S19). `reviewers.format`은 팀 오너(`@<org>/<team>`)에만 쓰이고 개인 오너(`@<login>`)는 그대로 요청한다 — 개인 오너만 쓰면 S19는 해당 없음.
+- 리뷰어(`--add-reviewer`)는 CODEOWNERS에 오너가 있는 경로만 지정된다(`02-config.md §5.3` 리뷰어 계산). 카테고리 오너가 없으면 카테고리 경로만
+  바꾸는 PR(사례 추가·새 원인·`allow-cause` 등)은 리뷰어가 없다 — 확인 화면 `리뷰어: 없음`, 리뷰어 요청 없음. 메인테이너
   경로를 바꾸면 메인테이너 팀이 리뷰어다(그 PR은 병합 자격도 없다). 카테고리 오너를 둔 레포에서 그 팀이 리뷰어면 병합 자격이 없다(아래).
 - 맞바꾼 것: 카테고리 오너가 없으면 다른 카테고리의 fixture에 `also_allowed`를 넣는 PR(`allow-cause`)도 그 카테고리 사람의 리뷰 없이
   병합된다. 이것을 보는 곳은 이제 월간 리뷰의 `also_allowed` 누적 항목(§6.6)뿐이다 — 교차 카테고리 허용을 사전에 막아야 하는 팀은 카테고리 오너를 둔다.
@@ -67,7 +67,7 @@ gh·MCP로 직접 머지는 거부로, 병합 기록(`merge-offer.json`) 직접 
 | 같은 원인에 Jira 동시 추가 | Jira 한 건 = 파일 하나. 서로 다른 파일이라 충돌하지 않는다. |
 | 같은 유형에 새 원인 동시 추가 (type.md) | `db_add.py`가 type.md를 파싱해서 엔티티 단위로 다시 쓴다. 최신 main 위에 내 원인을 추가하므로 텍스트 충돌이 없다. |
 | 새 유형/원인 ID 동시 할당 | ID는 **적용 시점에 최신 main 기준으로** 할당한다 (Step 8). push 후 main이 바뀌면 `sync-pr`가 계획을 다시 적용하면서 다시 할당한다. |
-| parser-rules 동시 추가 | 규칙 항목은 키로 식별하고 계획의 op(`add-parser-rule`/`update-parser-rule`)로 최신 main 위에 항목 단위로 넣는다. 같은 키를 main이 먼저 추가했거나 기능 필드를 바꿨으면 drift로 사용자에게 묻는다. 이력 필드만 바뀐 것은 drift가 아니다. |
+| parser-rules 동시 추가 | 규칙 항목은 키로 식별하고 계획의 op(`add-parser-rule`/`update-parser-rule`/`remove-parser-rule`)로 최신 main 위에 항목 단위로 넣는다. 같은 키를 main이 먼저 추가했거나 기능 필드를 바꿨으면 drift로 사용자에게 묻는다. 이력 필드만 바뀐 것은 drift가 아니다. |
 | 같은 Jira를 두 명이 분류 | 시작 시(`db_pr preflight`)와 Step 8-3에서 **origin/main의 같은 Jira 파일**과 **열린 PR**을 검사한다. main에 있으면 중단하고 기존 분류를 보여준 뒤 유지/재분류(`reclassify`)를 묻는다. 열린 PR이 있으면 링크를 보여주고 계속할지 묻는다. 그래도 둘 다 머지되면 사후 lint가 찾아서 알리고 메인테이너가 정리한다 (6.3). |
 | 같은 엔티티의 같은 필드를 양쪽이 수정 | (예: 같은 원인의 resolution을 둘 다 고침) 자동 해결하지 않는다. 계획 기반이면 drift로 양쪽 값을 보여주고 고르게 한다. 직접 편집한 브랜치는 rebase할 때 git 충돌로 드러난다 (6.3). |
 | **push 이후 ~ 머지 사이에 main이 바뀜** | 6.3의 `sync-pr`, 본인 병합이면 `publish --and-merge`·`db_pr merge`의 상태 검사(main 변경·BEHIND·충돌이면 병합 안 함), 리뷰어 머지면 체크리스트, 사후 lint로 막는다. |
@@ -154,7 +154,8 @@ v1에서 도구는 이런 브랜치를 바꾸지 않는다. `sync-pr`는 아래 
 ### 6.4 스키마 버전과 마이그레이션
 
 - `issue-db.config.yaml`의 `schema_version`은 이슈 DB 파일 구조가 바뀔 때만 올린다. 필드 추가도 필수 필드면 올린다.
-- 첫 배포(반입) 전에는 v1 정의를 직접 고치고(예: Jira 기록의 선택 필드 `failed_step`, 트래커 범용화의 `jira/`→`issues/`·`platform_version(s)` 개명 — `18-trackers.md` T4), 배포 뒤에는 항상 버전을 올린다.
+- 첫 배포(반입) 전에는 v1 정의를 직접 고치고(예: Jira 기록의 선택 필드 `failed_step`, 트래커 범용화의 `jira/`→`issues/`·`platform_version(s)` 개명 — `18-trackers.md` T4), 배포 뒤 **구조 변경**(필수 필드 추가·개명·형식 변경)은 항상 버전을 올린다.
+- 배포 뒤 **호환 변경**(선택 필드·op 추가, 필수 해제 — 기존 파일·계획이 모두 그대로 유효하고 옛 플러그인도 기존 기능은 그대로 동작. 새 op가 든 계획은 새 플러그인으로 적용)은 버전을 올리지 않는다. 운영 이슈 DB의 `schema/`를 메인테이너 PR로 바꾸고, 플러그인은 그 DB의 스키마로 동작을 가른다(예: Jira 기록 `sw` 필수 해제 — `issuedb.record_required`, 계획 op `remove-parser-rule`).
 - 플러그인은 `SUPPORTED_SCHEMA = (min, max)`를 가진다.
 
 | 이슈 DB 버전 | 플러그인 동작 |

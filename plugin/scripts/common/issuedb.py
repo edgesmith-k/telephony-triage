@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import json
 from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -20,6 +21,20 @@ import yaml
 from . import yamlio
 
 CONFIG = "issue-db.config.yaml"
+RECORD_SCHEMA = "schema/issue.schema.json"
+RECORD_JIRA_FIELDS = ("date", "model", "sw", "platform_version")   # Jira에서 오는 기록 필드(순서 = 기록 키 순서)
+_PLUGIN_RECORD_SCHEMA = Path(__file__).resolve().parents[2] / "schemas" / "issue.schema.json"
+
+
+def record_required(db_root) -> frozenset:
+    """Jira 기록 필수 필드 = 이슈 DB `schema/issue.schema.json`의 `required`(단일 원본 — 운영 DB가 옛 스키마면 sw도 필수).
+    `db_root`가 없으면 플러그인 사본. 스키마를 읽지 못하면 보수적으로 `RECORD_JIRA_FIELDS` 모두 필수."""
+    path = Path(db_root) / RECORD_SCHEMA if db_root else _PLUGIN_RECORD_SCHEMA
+    try:
+        req = json.loads(path.read_text(encoding="utf-8")).get("required")
+    except (OSError, ValueError, AttributeError):
+        req = None
+    return frozenset(map(str, req)) if isinstance(req, list) else frozenset(RECORD_JIRA_FIELDS)
 
 
 class IssueDbError(Exception):

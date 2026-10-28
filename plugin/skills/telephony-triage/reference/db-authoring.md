@@ -70,13 +70,13 @@ op 필수 키 (`op` 외, plan.schema.json 기준):
 
 파서 규칙(`parser-rules/`)은 이슈 DB에 있고 새 유형은 **PR 하나에 유형 + 파서 규칙 + fixture가 함께** 들어간다. extractor `id`는 시그니처가 참조하므로 바꾸지 않는다. 이벤트 이름은 접두어 없이 쓴다.
 
-**새 원인·유형을 계획할 때 점검** (부족하면 op 초안을 만들어 승인받는다): 시그니처가 참조하는 태그가 `tags.yaml`에 있나(없으면 파서가 그 줄을 버려 매칭이 안 된다), RIL 요청/unsol이 `ril.yaml`에 있나, cause 코드·reason·state 값이 필요한가(extractor 추가·`update-parser-rule`), 원인 fixture가 있나(`cut` 뒤 `add-fixture kind: positive`). 부족한 것은 `add-parser-rule` 등 op로 만든다.
+**새 원인·유형을 계획할 때 점검** (부족하면 `add-parser-rule` 등 op 초안을 만들어 승인받는다): 시그니처가 참조하는 태그가 `tags.yaml`에 있나(없으면 파서가 그 줄을 버린다), RIL 요청/unsol이 `ril.yaml`에 있나, cause 코드·reason·state 값이 필요한가(extractor 추가·`update-parser-rule`), 원인 fixture가 있나(`cut` 뒤 `add-fixture kind: positive`).
 
 `chose-other` `extra` fixture: C=1만(`unjudged` 제외), `cut --around <그 후보 근거 시각>`, R4 확인.
 
-- 규칙만으로 표현이 안 되면 원인은 추가하되 **엔진 개선 요청 초안**(필요 기능, 마스킹 예시, 원인 ID)을 보인다.
-- 기존 extractor를 바꾸면 그것을 쓰는 모든 원인의 fixture 회귀가 통과해야 하고 R5가 "승인 필요"가 될 수 있다. `parser-rules/` 변경은 메인테이너 리뷰 필수다.
-- fixture 자르기: 근거 기반(기존 원인) `parse_logcat.py cut <log> --evidence <match.json> --out WD/<KEY>/fixtures/cut-<n>.log --rules SNAP/parser-rules [--tz --year]`(parse와 같은 로그·순서). 시각 기반(새 원인·유형, resolved/fixed) `cut <log> --around <ISO 시각> --seconds 30 --out …`. 원인마다 양성 1개 이상, 판별에 필요한 최소 구간(20~100줄).
+- 규칙으로 표현이 안 되면 원인은 추가하고 **엔진 개선 요청 초안**(필요 기능, 마스킹 예시, 원인 ID)을 보인다.
+- 규칙 변경·삭제(`remove-parser-rule {file, key, reason}`: 실제 로그로 placeholder·미사용 확인 뒤만)는 쓰는 원인 fixture 회귀 통과가 필요하고 R5가 "승인 필요"일 수 있다. 메인테이너 리뷰 필수.
+- fixture 자르기: 근거 기반(기존 원인) `parse_logcat.py cut <log> --evidence <match.json> --cause <ID> --out WD/<KEY>/fixtures/cut-<n>.log --rules SNAP/parser-rules [--tz --year]`(match는 `--regress --top 0`, parse와 같은 로그·순서). 시각 기반(새 원인·유형, resolved/fixed) `cut <log> --around <ISO 시각> --out …`. 원인마다 양성 1개 이상(20~100줄).
 - `also_allowed`는 **같은 로그에 실제로 두 현상이 있을 때만** 쓴다.
 
 ## 5. 검증 결과를 읽을 때

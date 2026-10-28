@@ -8,7 +8,10 @@ stdin: hook 입력 `{tool_name, tool_input, tool_response, ...}`. `tool_name`이
    기본 정규식)와 트래커 경로 안전 형식으로 검사한다(트래커 어댑터 `key_from_read`). 대상 판별은 어댑터 `read_action`이고,
    매핑된 도구인데 어댑터가 지원하지 않는 읽기(`unsupported`)면 원문을 대체한다(fail-closed).
 2. 원문을 `<work_dir>/<KEY>/issue_raw.json`(디렉토리 권한 700)에 쓴다. `get_comments` 응답은 같은 파일의 `comments`에 합친다.
-   `triage.py run`이 이 파일을 `jira_fields.py extract --consume`으로 읽고 지운다.
+   `triage.py run`이 이 파일을 `jira_fields.py extract --consume`으로 읽고 지운다. 응답 형식은 `_payload` 순서
+   (structuredContent → 텍스트 블록마다 JSON → 전체 JSON → JSONL → `key`·`fields`·`comments` 키가 있는 YAML 객체 → 텍스트)로
+   읽는다. 텍스트(자유 문장)면 `get_comments`는 한 덩어리를 코멘트 1건(`comments_format: text`)으로 저장하고,
+   `get_issue`는 저장하지 않고 응답 모양(형식·블록 수·글자 수 — 내용 없음)만 알린다(사내 응답 모양은 S23에서 확인).
 3. 모델에는 `hookSpecificOutput.updatedToolOutput`으로 **마스킹된 요약**(요약·설명 앞부분·코멘트 마지막 3개)만 준다.
 
 **승인 코멘트 게시 결과**(`add_comment`): `tool_name`이 유효한 `tracker.write_tools.add_comment.tool`(정규화 비교,
@@ -61,21 +64,80 @@ POST_FAILED = ("telephony-triage: Jira 코멘트 게시 결과 처리 실패 —
                "Jira에서 확인하고 다시 게시하지 않는다(응답 원문은 표시하지 않는다).")
 
 
-def _payload(response):
-    """MCP 결과(문자열, `content[]` 블록, `structuredContent`)를 JSON 객체로 바꾼다."""
+YAML_KEYS = ("key", "fields", "comments")     # YAML로 받는 응답: 이 키가 있는 객체만(그 밖 텍스트는 YAML로 읽지 않는다)
+
+
+def _json_value(text: str):
+    """JSON 객체·배열이면 그 값, 아니면 None (스칼라·형식 오류는 JSON 응답으로 보지 않는다)."""
+    try:
+        data = json.loads(text)
+    except ValueError:
+        return None
+    return data if isinstance(data, (dict, list)) else None
+
+
+def _payload(response) -> tuple[object, str]:
+    """MCP 결과(문자열, `content[]` 블록, `structuredContent`)를 `(값, 형식)`으로 바꾼다. 예외를 내지 않는다.
+
+    순서: `structuredContent`(structured) → 텍스트 블록마다 JSON(하나면 json, 여럿이면 목록 json-blocks — 배열 블록은
+    펼친다) → 블록을 이은 문자열 전체 JSON(json) → 줄마다 JSON(jsonl, 2줄 이상) → YAML(`key`·`fields`·`comments` 키가
+    있는 객체만, yaml) → 나머지는 `{"text": 원문}`(text). 코멘트 본문 같은 자유 텍스트(`a: b: c`·탭·`@`·`%` 등)를
+    YAML로 읽다 ScannerError가 나지 않게 한다."""
     if isinstance(response, dict) and isinstance(response.get("structuredContent"), (dict, list)):
-        return response["structuredContent"]
+        return response["structuredContent"], "structured"
     blocks = response.get("content") if isinstance(response, dict) else response
+    texts = None
     if isinstance(blocks, list) and all(isinstance(b, dict) and "type" in b for b in blocks):
-        response = "".join(str(b.get("text") or "") for b in blocks if b.get("type") == "text")
-    if isinstance(response, str):
-        try:
-            return json.loads(response)
-        except json.JSONDecodeError:
-            from common import yamlio
-            data = yamlio.safe_load(response)
-            return data if isinstance(data, (dict, list)) else {"text": response}
-    return response
+        texts = [str(b.get("text") or "") for b in blocks if b.get("type") == "text"]
+        parts = [t for t in texts if t.strip()]
+        values = [_json_value(t) for t in parts]
+        if len(parts) > 1 and all(v is not None for v in values):
+            merged: list = []
+            for v in values:
+                if isinstance(v, list):
+                    merged.extend(v)
+                else:
+                    merged.append(v)
+            return merged, f"json-blocks×{len(parts)}"
+        response = "".join(texts)          # 큰 JSON을 블록 여러 개로 나눠 보내는 서버(이전 동작)
+    if not isinstance(response, str):
+        return response, "object"
+    whole = _json_value(response)
+    if whole is not None:
+        return whole, "json"
+    text = "\n".join(texts) if texts else response
+    lines = [ln for ln in text.splitlines() if ln.strip()]
+    if len(lines) > 1:
+        values = [_json_value(ln) for ln in lines]
+        if all(v is not None for v in values):
+            return values, "jsonl"
+    try:
+        from common import yamlio
+        data = yamlio.safe_load(text)
+    except Exception:  # noqa: BLE001 — yaml.YAMLError(ScannerError 등)·그 밖 로더 오류: 텍스트로 받는다
+        data = None
+    if isinstance(data, dict) and any(k in data for k in YAML_KEYS):
+        return data, "yaml"
+    return {"text": text}, "text"
+
+
+def _shape_note(response, shape: str | None = None) -> str:
+    """응답 형식 진단(내용 없음): 형식, structuredContent 유무, 텍스트 블록 수, 첫 글자 종류, 글자 수. 사내 보고용."""
+    try:
+        shape = shape or _payload(response)[1]
+        blocks = response.get("content") if isinstance(response, dict) else response
+        if isinstance(blocks, list):
+            texts = [str(b.get("text") or "") for b in blocks if isinstance(b, dict) and b.get("type") == "text"]
+        else:
+            texts = [response] if isinstance(response, str) else []
+        text = "".join(texts).lstrip()
+        first = text[:1]
+        kind = ("없음" if not first else first if first in "{[\"" else "글자" if first.isalpha()
+                else "숫자" if first.isdigit() else "기호")
+        sc = "있음" if isinstance(response, dict) and "structuredContent" in response else "없음"
+        return f"형식: {shape}, structuredContent {sc}, 텍스트 블록 {len(texts)}, 첫 글자 {kind}, {len(text)}자"
+    except Exception:  # noqa: BLE001 — 진단 실패는 형식만
+        return f"형식: {shape or '?'}"
 
 
 _PROFILES: dict[str, dict] = {}     # main이 채운다: 사용자 config의 모든 플랫폼 프로필 cfg
@@ -163,7 +225,7 @@ def bridge_post(event: dict, cfg: dict) -> str:
     except (OSError, ValueError):
         approved = None
     response = event.get("tool_response")
-    data = _payload(response)
+    data, _shape = _payload(response)
     at = issuepost.iso(issuepost.now())
     base = {"schema": 1, "key": key, "tool": spec["tool"], "body_sha256": sha,
             "approved_at": (approved or {}).get("approved_at")}
@@ -188,7 +250,11 @@ def bridge_post(event: dict, cfg: dict) -> str:
 
 
 def bridge(event: dict, cfg: dict, kind: str) -> str:
-    data = _payload(event.get("tool_response"))
+    response = event.get("tool_response")
+    data, shape = _payload(response)
+    if kind == "get_issue" and shape == "text":     # 자유 텍스트 이슈 응답: 필드를 읽을 수 없다(원문은 보이지 않는다)
+        return (f"telephony-triage: Jira 응답이 JSON이 아니라 저장하지 않았다({_shape_note(response, shape)}) "
+                "— tracker.tools.get_issue가 JSON을 내는 도구인지 확인한다(원문은 표시하지 않는다).")
     kre = _key_regex(cfg)
     key = trackers.of(cfg).key_from_read(data, event.get("tool_input") or {}, kre)
     if key is None:
@@ -205,15 +271,22 @@ def bridge(event: dict, cfg: dict, kind: str) -> str:
         issue = data.get("issue") if isinstance(data, dict) and isinstance(data.get("issue"), dict) else data
         if not isinstance(issue, dict):
             return "telephony-triage: Jira 응답이 객체가 아니라 저장하지 않았다(원문은 표시하지 않는다)."
-        comments = raw.get("comments")
+        comments, comments_format = raw.get("comments"), raw.get("comments_format")
         raw = dict(issue)
         raw.setdefault("key", key)      # 키가 응답 밖(도구 입력)에서 온 트래커도 extract가 같은 키를 본다
         if comments and not raw.get("comments"):
             raw["comments"] = comments
+            if comments_format:
+                raw["comments_format"] = comments_format
+    elif shape == "text":       # 자유 텍스트 코멘트 응답: 한 덩어리를 코멘트 1건으로(extract가 마스킹한다)
+        raw.setdefault("key", key)
+        raw["comments"] = [{"body": data["text"]}]
+        raw["comments_format"] = "text"
     else:
         comments = data.get("comments") if isinstance(data, dict) else data
         raw.setdefault("key", key)
         raw["comments"] = comments if isinstance(comments, list) else [comments]
+        raw.pop("comments_format", None)
     raw_path.write_text(json.dumps(raw, ensure_ascii=False), encoding="utf-8", newline="\n")
     try:
         raw_path.chmod(0o600)
@@ -224,7 +297,11 @@ def bridge(event: dict, cfg: dict, kind: str) -> str:
     shown = {"key": key, "saved_to": str(raw_path), "occurred_at": brief["occurred_at"], "missing": brief["missing"],
              "summary": text["summary"][:BRIEF_CHARS], "description": text["description"][:BRIEF_CHARS * 2],
              "comments_total": text["comments_total"], "last_comments": text["comments"]}
-    return ("telephony-triage: Jira 응답 원문은 파일로만 저장했다(모델에 보이지 않음). 아래는 마스킹된 요약이다. "
+    note = ""
+    if kind == "get_comments" and shape == "text":
+        note = (f"코멘트 응답이 JSON이 아니라 텍스트 한 덩어리를 코멘트 1건으로 저장했다"
+                f"(형식: text, {len(data['text'])}자). ")
+    return ("telephony-triage: Jira 응답 원문은 파일로만 저장했다(모델에 보이지 않음). " + note + "아래는 마스킹된 요약이다. "
             "분석은 triage.py run이 이 파일을 읽는다.\n" + json.dumps(shown, ensure_ascii=False, indent=1))
 
 
@@ -353,11 +430,12 @@ def main() -> int:
         try:
             text = bridge_post(event, cfg) if kind == "add_comment" else bridge(event, cfg, kind)
         except Exception as exc:  # noqa: BLE001 — 실패해도 원문을 내보내지 않는다
-            print(f"jira_bridge: {exc}", file=sys.stderr)
+            print(f"jira_bridge: {type(exc).__name__}", file=sys.stderr)    # 예외 문구에 응답 조각이 있을 수 있다
             if kind == "add_comment":
                 mark_unknown(event, cfg)
             text = POST_FAILED if kind == "add_comment" else \
-                f"telephony-triage: Jira 응답 처리 실패({type(exc).__name__}) — 원문은 표시하지 않는다."
+                (f"telephony-triage: Jira 응답 처리 실패({type(exc).__name__}) — 원문은 표시하지 않는다"
+                 f"({_shape_note(event.get('tool_response'))}).")
     print(json.dumps({"hookSpecificOutput": {"hookEventName": "PostToolUse", "updatedToolOutput": text}},
                      ensure_ascii=False))
     return 0

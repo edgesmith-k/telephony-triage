@@ -389,6 +389,18 @@
         {
           "type": "object",
           "additionalProperties": false,
+          "required": ["op", "file", "key", "reason"],
+          "properties": {
+            "op": {"const": "remove-parser-rule"},
+            "file": {"enum": ["tags.yaml", "ril.yaml", "extractors.yaml"]},
+            "section": {"$comment": "없으면 키가 있는 섹션", "enum": ["tags", "requests", "unsolicited", "extractors"]},
+            "key": {"type": "string", "minLength": 1},
+            "reason": {"$comment": "규칙 이력이 남지 않으므로 사유는 PR 본문(pr_notes)에도 쓴다", "type": "string", "minLength": 1}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
           "required": ["op", "owner", "kind", "signature"],
           "properties": {
             "op": {"const": "update-signature"},

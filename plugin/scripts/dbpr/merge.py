@@ -122,9 +122,12 @@ def retry_command(job: str, head: str) -> str:
 
 
 def offer(ctx: Ctx, job_dir, job: str, stage_result: dict, changed: list[str], number, url, head: str,
-          owners: list[str] = ()) -> dict:
-    """publish 성공 뒤 병합 기록을 `JOB/merge-offer.json`에 쓰고 publish 결과의 `merge` 블록을 돌려준다."""
+          owners: list[str] = (), review_reason: str | None = None) -> dict:
+    """publish 성공 뒤 병합 기록을 `JOB/merge-offer.json`에 쓰고 publish 결과의 `merge` 블록을 돌려준다.
+    `review_reason`(publish가 리뷰어를 못 붙였을 때)이 있으면 self여도 review다."""
     mode, reason = eligibility(ctx.cfg, stage_result, changed, owners)
+    if review_reason and mode == "self":
+        mode, reason = "review", review_reason
     if number is None:
         mode, reason = "review", "PR 번호를 알 수 없다 — GHE에서 머지한다"
     doc = {"mode": mode, "pr": number, "url": url, "head_sha": head, "reason": reason, "at": _iso(now())}

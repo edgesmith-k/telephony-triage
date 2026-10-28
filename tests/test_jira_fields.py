@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 import sys
 import tempfile
 from pathlib import Path
@@ -50,7 +51,7 @@ def test_extract_maps_masks_and_converts_time():
                            "carrier": "MockTel KR", "occurred_on": "2026-09-20"}
     assert out["occurred_at"] == "2026-09-20T05:32:10+00:00"
     assert out["logcat"]["year"] == 2026 and out["sim_slot"] == "0"
-    assert out["missing"] == []
+    assert out["missing"] == [] and out["missing_question"] is None
     desc = out["text"]["description"]
     assert "010-1234-5678" not in desc and "356938035643809" not in desc
     assert "<MSISDN#" in desc and "<IMEI#" in desc
@@ -71,6 +72,44 @@ def test_extract_reports_missing_fields():
     assert out["occurred_at"] is None and "occurred_at" in out["missing"]
     assert {"model", "sw", "platform_version"} <= set(out["missing"])
     assert "occurred_on" not in out["issue"] and out["logcat"]["year"] is None
+    # 빈 키는 issue 블록에 넣지 않는다(null을 계획에 복사하면 plan 형식 오류) — carrier도 같다
+    assert out["issue"] == {"key": "MOCK-9", "origin": "mcp"}
+    assert out["missing_question"] == (
+        'Jira에 비어 있는 항목이 있습니다. 기록에 넣을 값을 "항목: 값" 한 줄씩 알려 주세요.\n'
+        "- 필수: model(모델), platform_version(플랫폼 주 버전 — 숫자만, 예: 16)\n"
+        '- 선택: sw(SW 빌드 — 모르면 "모름", 그러면 기록하지 않음(수정·회귀 판단 불가)), '
+        'carrier(캐리어 — "없음"이면 기록하지 않음), '
+        'occurred_at(발생 시각 — 모르면 "모름", 그러면 occurred_on을 기록하지 않음)')
+
+
+def test_extract_carrier_only_empty_is_optional_question():
+    """carrier만 비면 `missing`은 그대로 비고(선택 필드), issue 블록에 carrier 키가 없으며 선택 항목만 묻는다."""
+    tmp = Path(tempfile.mkdtemp())
+    raw = tmp / "raw.yaml"
+    text = (MOCK_JIRA / "MOCK-1001.yaml").read_text(encoding="utf-8")
+    raw.write_text(re.sub(r"(?m)^.*customfield_10005.*\n", "", text), encoding="utf-8")
+    out = run_json("jira_fields.py", ["extract", raw, "--origin", "file", "--db", SAMPLE], env=_home())
+    assert out["missing"] == [] and "carrier" not in out["issue"] and out["issue"]["model"] == "MOCK-A56"
+    assert out["missing_question"].splitlines()[1:] == ['- 선택: carrier(캐리어 — "없음"이면 기록하지 않음)']
+
+
+def test_sw_required_follows_db_schema():
+    """필수/선택은 이슈 DB `schema/issue.schema.json` `required`가 정한다: 옛 운영 DB 스키마(sw 필수)면 sw를 필수로 묻는다."""
+    tmp = Path(tempfile.mkdtemp())
+    db = tmp / "db"
+    shutil.copytree(SAMPLE, db)
+    schema_path = db / "schema" / "issue.schema.json"
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    schema["required"].insert(4, "sw")
+    schema_path.write_text(json.dumps(schema, ensure_ascii=False), encoding="utf-8")
+    raw = tmp / "raw.yaml"
+    text = (MOCK_JIRA / "MOCK-1001.yaml").read_text(encoding="utf-8")
+    raw.write_text(re.sub(r"(?m)^.*customfield_10003.*\n", "", text), encoding="utf-8")
+    out = run_json("jira_fields.py", ["extract", raw, "--origin", "file", "--db", db], env=_home())
+    assert "sw" in out["missing"] and "sw" not in out["issue"]
+    assert out["missing_question"].splitlines()[1:] == ["- 필수: sw(SW 빌드)"]
+    out = run_json("jira_fields.py", ["extract", raw, "--origin", "file", "--db", SAMPLE], env=_home())
+    assert out["missing_question"].splitlines()[1:] == ['- 선택: sw(SW 빌드 — 모르면 "모름", 그러면 기록하지 않음(수정·회귀 판단 불가))']
 
 
 def test_extract_without_failed_step_fields_adds_no_keys():

@@ -116,6 +116,7 @@ fixture 번호, 피드백, pending 포함 여부는 계획 `source`로) → `db_
   `gh_error`(PR 생성 실패, `discard.skipped`, worktree·lock 유지)면 사유를 보고하고 PR 수동 처리 또는 publish 재시도를 사용자와 정한 뒤 `db_pr discard <wt>`.
 - 종료 2 + stderr만(JSON 없음): 보고하고 멈춘다.
 - `--and-merge`는 검사·병합 가능 상태를 최대 `issue_db.merge_wait_seconds`(기본 420초, 최대 480) 기다리므로 Bash timeout을 600000으로 준다. 종료 코드는 publish 결과다. `merge.result.merged: true`면 `merge_commit`을 알리고, false면 `reason`과 재시도 명령 `merge.result.retry`를 글자 그대로 보인다(PR은 그대로 — 재시도는 §6).
+- `warnings`(리뷰어 지정 실패 등)는 글자 그대로 보인다.
 - 성공하면(`discard.discarded: true`) PR 링크(`pr.url`)를 글자 그대로, 다음 질문 전에 보인다. `publish`가 계획의 `pr`·`base_sha`를 기록하고 pending 피드백 원본을 `included_pending/`으로 옮긴다.
 
 ## 6. 정리

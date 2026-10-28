@@ -29,6 +29,9 @@ snapshot·stage·publish는 이슈 DB 선언(`platform`)이 선택 플랫폼과 
 - 다른 작업 키의 lock이 있으면 종료 코드 2와 보유자 정보. 4시간 넘게 갱신되지 않은 lock은 만료로 보고 가져온다.
 - 같은 작업 키: `updated_at`이 10분 이내면 다른 세션이 진행 중일 수 있으므로 종료 코드 2
   (사용자가 확인하면 `--take-over`로 이어받는다). 10분이 넘었으면 그대로 이어받는다.
+  `TT_LOCK_OWNER`가 보유 owner와 같으면 재진입: owner·started_at 유지, `updated_at`만 갱신(`reacquired: true`, 종료 0).
+- `release`(--force 없음)의 owner 불일치는 종료 코드 2 "lock은 풀리지 않았다"(`{released: false, holder}`, 파일 그대로).
+  출력의 holder·previous owner는 앞 4자만 보인다.
 - `release --force`는 보유자와 상관없이 푼다(사용자가 "그 세션은 끝났다"고 확인한 경우).
 - 손상된 lock(읽을 수 없음)은 `acquire`·`touch`·`release`(--force 없음)가 종료 코드 2로 멈춘다. `release <아무 작업 키> --force`만
   `session.lock.corrupt-<UTC ts>`(같은 이름이 있으면 `-1`, `-2`…)로 옮기고 푼다. 지우지 않는다(사후 확인용).
@@ -53,7 +56,9 @@ config가 없거나 clone이 아니면 2.
 (`--json`·`--verbose`와 함께 못 쓴다). stage 1·2는 기존 그대로(summary 안 부른다), stage 성공·summary 실패는 종료 2
 (stdout은 stage 요약 JSON + `summary_error`).
 `publish`는 승인 해시·커밋 부모·커밋 메시지·브랜치를 `state.json`과 대조하고(다르면 1), lease push 뒤
-PR을 만들거나(`gh pr create`) 고친다(`gh pr edit`).
+PR을 만들거나(`gh pr create`, 리뷰어 없이 — 실패하면 head 브랜치의 열린 PR을 다시 찾는다) 고친다(`gh pr edit`).
+새 PR이면 리뷰어마다 `gh pr edit <n> --add-reviewer`: 실패는 `reviewers.failed`·`warnings`(오너 종류별 확인 대상)이고 종료 0,
+그때 병합 기록은 review다. 기존 PR(`edited`)에는 리뷰어를 더하지 않는다.
 `publish --commit`: 아직 커밋이 없으면(HEAD == base_sha) 승인 해시 → hooksPath(`.githooks`) → `git add -A` → guard 프로필 검사
 → `git commit -F <작업 디렉터리의 임시 파일>`(pre-commit 실행)을 한 뒤 위 대조·push로 간다. 이미 커밋이 있으면 건너뛴다(멱등).
 `publish --and-discard`: publish 종료 0일 때만 `discard`를 이어 부른다(실패하면 worktree·lock을 남긴다).

@@ -19,6 +19,8 @@
 
 ### 14.2 확인 대상 목록 (placeholder 레지스트리)
 
+사외 초안의 모의 값(`mock-org`·`*.mock.invalid`·`MOCKCL-`·가상 빌드명 등) 판별은 `tools/site_checks.py` `MOCK_VALUE_RE` 한 곳에 둔다(S-4a `s4a.codeowners`, S-6 `s6.mock`·`s6.placeholder`가 쓴다).
+
 | # | 항목 | 문서 위치 | 사내에서 확인하는 방법 | 반영 위치 (반영 Phase) |
 |---|---|---|---|---|
 | S1 | 사내 Claude Code 버전과 지원 기능: 플러그인, 마켓플레이스 하위 폴더 source, 커맨드/스킬 관계, hooks(PreToolUse, SessionStart), 권한 결정 필드(`allow`/`deny`/`ask`), **스킬/커맨드 본문 실행 시 `${CLAUDE_PLUGIN_ROOT}` 치환 여부**, **플러그인 hook에 전달되는 MCP 도구 이름 형식**(`mcp__<server>__<tool>`), hook matcher 정규식(`mcp__.*`) 지원, **`CLAUDE.md`의 `@파일` import 동작**, **커맨드 frontmatter `model` 지원 여부**(verify-fix·explore를 특정 모델로 고정; 확인 전엔 사용자가 `/model`로 고른다), **PreToolUse `Read` matcher**(로그 원문 읽기 차단, `99-deferred.md` E), **PostToolUse가 MCP 출력을 대체(원문 비노출)할 수 있는지**(`TODO(SITE:S1)`), PostToolUse가 MCP 쓰기 도구(Jira 코멘트)에도 실행되는지와 `ask` 권한 창에 도구 입력(본문)이 보이는지(S23)와 guard hook의 입출력 형식(차단 응답 필드), **표시 보조 hook(`08-safety.md §9.1`)의 전제**: Stop hook 입력(`last_assistant_message`·`stop_hook_active`)과 `block` → 새 메시지로 이어 쓰기·피드백이 transcript에 `isMeta`로 남는지, PreToolUse 시점 transcript에 같은 응답의 앞 텍스트가 있는지, 여러 matcher 그룹이 걸릴 때 `deny`가 이기는지, `AskUserQuestion` 입력 모양(`tests/mocks/plugin-probe/README.md` 10~12번), `AskUserQuestion` 질문당 선택지 상한(같은 README 14) | `01-architecture.md §3`, `08-safety.md §9`, `09-commands.md §10`, `CLAUDE.md` 머리말 | 사내 Claude Code 문서/버전 확인. 외부 공식 문서에 접근할 수 없으면 **빈 플러그인 실험**: 스킬·커맨드·hook 하나씩 가진 최소 플러그인을 로컬 로드해서 각 항목을 시험하고 결과를 기록 | 플러그인 구조, `hooks.json`, 스크립트 호출 방식 (Phase 1, 8, 12) |
@@ -38,8 +40,8 @@
 | S15 | 개발 환경: **Ubuntu 버전**(다른 OS는 v1 범위 밖, `01-architecture.md §3`), `python3` 버전(3.10+, 22.04 기본 3.10 그대로 가능), pip/사내 미러, git 버전(worktree, `worktree add --no-track`, `push --force-with-lease=<ref>:<sha>` 지원) | `01-architecture.md §3` | 명령으로 확인 | 3장 의존성 (Phase 1) |
 | S16 | Jira 키 형식 (프로젝트 키 규칙) | `02-config.md §5.3` `tracker.key_regex`, `03-issue-db.md §5.4 (2)` | 샘플 Jira 키, 사내 Jira 프로젝트 목록 | `issue-db.config.yaml` `tracker.key_regex` (Phase 1), `db_lint` 검사 (Phase 5). 경로 안전 형식이 `trackers/jira.py` `SAFE_KEY_RE`(`^[A-Za-z][A-Za-z0-9_]*-[0-9]+$`)보다 넓으면 어댑터를 고친다(`18-trackers.md §3`) |
 | S17 | `tracker.base_url` 형식 (이슈 링크 URL, README 링크 = 트래커 `link(base_url, 키)`) | `02-config.md §5.3`, `18-trackers.md §2` | 브라우저에서 샘플 Jira를 열어 URL 확인 | `issue-db.config.yaml` (Phase 1) |
-| S18 | `fix.ref` 형식: Gerrit CL 번호/URL 또는 커밋 해시 표기 | `02-config.md §5.3` `fix_ref_regex`, `03-issue-db.md §5.4` | 사내 Gerrit CL 링크 예시 | `issue-db.config.yaml` `fix_ref_regex` (Phase 1) |
-| S19 | CODEOWNERS 팀을 `gh pr create --reviewer`에 넘기는 형식 (`{org}/{team}` 등) | `02-config.md §5.3` `reviewers`·리뷰어 계산, `06-collaboration.md §6.1` | GHE 샌드박스 레포에서 `gh pr create --reviewer` 시험 | `issue-db.config.yaml` `reviewers` (Phase 1 초기값, Phase 7 사용) |
+| S18 | `fix.ref` 형식: 코드 수정 참조(리뷰 시스템 CL 번호·URL, 커밋 해시 등 — 어느 것을 쓰는지도 사내 확인). 뼈대 기본값 `^MOCKCL-\d+$`는 모의 값이라 실제 참조를 모두 거부한다 | `02-config.md §5.3` `fix_ref_regex`, `03-issue-db.md §5.4` | 사내 코드 수정 링크 예시 | `issue-db.config.yaml` `fix_ref_regex` (Phase 1) |
+| S19 | CODEOWNERS **팀 오너**(`@<org>/<team>`)를 gh 리뷰어 요청 값으로 바꾸는 형식 (`{org}/{team}` 등). **개인 오너(`@<login>`)만 쓰면 해당 없음**(형식을 쓰지 않는다 — `SITE_PROFILE.md`에 그렇게 기록) | `02-config.md §5.3` `reviewers`·리뷰어 계산, `06-collaboration.md §6.1` | 팀 오너를 쓸 때만: GHE 샌드박스 레포 PR에서 팀 리뷰어 요청(`gh pr edit --add-reviewer`) 시험 | `issue-db.config.yaml` `reviewers` (Phase 1 초기값, Phase 7 사용) |
 | S20 | 슬롯(phoneId) 표기: 태그 접미사(`DNC-<n>`)와 메시지 접두어(`[PHONE<n>]`, `[SUB<n>]` 등)의 실제 형식, RILJ 요청·응답에 슬롯이 어떻게 붙는지, Jira에 SIM 슬롯 필드가 있는지 | `04-parser-matching.md §5.8 (2)` 슬롯, `07-workflow.md §Step 3` | 듀얼 SIM 단말 샘플 logcat에서 두 슬롯의 데이터·RIL 로그 비교 | 파서 `phone_id` 추출 규칙(site-defaults `platform.log.phone_id`), `tracker.field_map.sim_slot` (Phase 2, 6). 리포트 슬롯 불일치 경고는 Jira 값의 첫 정수를 `phone_id`와 그대로 비교하므로 기준(0/1)이 다르면 `jira_fields.py`에서 정규화 |
 | S21 | bugreport 구조: 첨부 형식(zip/txt), logcat 섹션 헤더(`------ SYSTEM LOG`, `RADIO LOG` 등)의 실제 문자열, 헤더의 `Build fingerprint`·`Build` 줄 형식 | `contracts.md §3.2` `extract-bugreport`, `07-workflow.md §Step 3` | 샘플 Jira 첨부 bugreport 1~2개의 섹션 헤더 확인 | `platforms/android/bugreport.py`(`parse_logcat.py extract-bugreport`) 섹션 목록(site-defaults `platform.bugreport.*`) (Phase 2) |
 | S22 | 시험 절차·실패 스텝 표기: Jira 필드 유무, 설명·첨부의 표기, 첨부 형식(txt/csv/xlsx) | `02-config.md` `tracker.field_map`·`tracker.failed_step_patterns`, `07-workflow.md §Step 2` | 샘플 Jira 3~5건에서 시험 절차와 실패 스텝이 어디에 어떻게 적히는지 확인(없으면 선택 값이므로 비워 둔다). **스텝 마커 형식**: 시험 자동화가 logcat에 남기는 스텝 시작·통과·실패 줄의 태그와 문구(예: `TestRunner: Step 5 FAIL`)를 실제 로그에서 확인한다(없으면 `marker_patterns`를 비운다). **steps-file 시각 열**: 시험 절차 첨부(csv 등)에 스텝 시작·실패 시각이 있는지, 형식(ISO·오프셋 유무·`MM-DD HH:MM:SS`·시각만)과 타임존을 확인한다. **시험 장비 시계 vs 단말 logcat 시계**: 둘이 같은지(다르면 보통 얼마나 어긋나는지), Jira `occurred_at`이 어느 시계(장비·단말)인지 확인한다(실제 logcat에는 스텝 마커가 없고 장비 시각은 단말과 다를 수 있어 시계 차를 모르면 steps-file 시각을 쓰지 않는다. 안정적으로 알면 `failed_step.clock_offset`). **report.html 배치**: 표 머리 열 이름(번호·스텝·결과·시작·종료)과 상태 낱말(PASS/FAIL 외 `통과`·`NG` 등)을 확인하고 `steps_columns`·`steps_status`를 맞춘다. Jira 첨부가 zip이면 안의 `report.html` 위치. **`step_events` 내용**: 시험 스텝(CP 동작 포함)이 AP radio 버퍼·main 로그에 남기는 흔적(RIL 요청·unsol, 프레임워크 로그, extractor 이벤트)을 실제 로그로 확인해 스텝 → 흔적 규칙을 `issue-db.config.yaml`에 적고, 흔적이 없는 CP 스텝은 `observable: false`로 둔다 | `tracker.field_map.test_steps`·`failed_step`, `tracker.failed_step_patterns`, `failed_step.marker_patterns`(기본 `[]`)·`marker_status`·`steps_file_tz`·`clock_offset`·`steps_status`·`steps_columns`·`order` (`site-defaults.yaml`), `step_events` (`issue-db.config.yaml`) |
@@ -76,6 +78,7 @@
 
 ## 설계 변경
 - (날짜) <변경 내용> — 사유, 사용자 결정
+- (날짜) S-n <점검> 면제(사용자 결정): <사유>     ← `site_step.py --done --waive`가 쓴다. 사유는 줄 끝(길면 120자 + `…(전체: docs/site/evidence.md)`, 전체는 evidence.md), 쓴 줄은 `--done` 출력에 보인다
 
 ## 사외 문서와의 차이
 - (문서 세트 버전) <파일 §절> : <사내에서 다르게 적용한 점>
@@ -109,7 +112,7 @@
    - 샘플 Jira 키 2~3개 (카테고리가 다른 것)
    - 샘플 logcat: 카테고리별 문제 로그 1개씩 + 정상 로그 1~2개 (Android 16/17 각각 있으면 좋음)
    - 소스 트리 경로 (16/17)
-   - 빌드명 예시 몇 개, Gerrit CL 링크 예시 1~2개
+   - 빌드명 예시 몇 개, 코드 수정(CL·커밋) 링크 예시 1~2개
 3. S1(사내 Claude Code 기능)과 S15(개발 환경)를 먼저 확인한다. 외부 공식 문서에 접근할 수 없으면 빈 플러그인 실험으로 확인한다. 설계의 전제가 무너지면 여기서 멈추고 14.1 원칙대로 대안을 제시한다.
 4. 나머지 항목을 조사해서 `SITE_PROFILE.md`에 기록한다. 로그 문구는 **실제 로그 행을 근거로** 정규식을 만들고, 근거 파일과 행 번호를 적는다. 확인 못 한 항목은 "미확인"과 임시 대안을 적는다.
 5. 확인값을 반영할 위치(config 기본값, `issue-db.config.yaml`, `parser-rules/`, 샘플 type.md)를 목록으로 보여주고 승인받는다. 실제 반영은 14.2 표의 "반영 Phase"에서 한다.

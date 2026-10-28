@@ -19,6 +19,9 @@
   MOCK_GH_REVIEW_DECISION `pr view`의 reviewDecision (기본 빈 값 — 필수 리뷰 없음)
   MOCK_GH_MERGE_METHODS `repo view`가 허용하는 병합 방식(쉼표, 기본 merge,squash,rebase)
   MOCK_GH_FAIL_MERGE=1 `pr merge`를 실패시킨다
+  MOCK_GH_UNKNOWN_REVIEWERS=<쉼표 목록>  `pr create --reviewer`·`pr edit --add-reviewer`에 그 값이 있으면 종료 1
+                      (`could not request reviewer`, PR을 만들거나 고치지 않는다 — 없는 팀·사용자)
+  MOCK_GH_CREATE_THEN_FAIL=1 `pr create`가 PR을 만든 뒤 종료 1 (publish의 head 브랜치 재조회 경로 시험)
   GH_HOST             호스트 이름 (없으면 ghe.mock.invalid)
 """
 
@@ -51,6 +54,11 @@ def load_state() -> dict:
         return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {"next_number": 1, "prs": []}
+
+
+def unknown_reviewers(requested: list[str]) -> list[str]:
+    bad = {r.strip() for r in (os.environ.get("MOCK_GH_UNKNOWN_REVIEWERS") or "").split(",") if r.strip()}
+    return [r for r in requested if r in bad]
 
 
 def save_state(state: dict) -> None:
@@ -170,6 +178,10 @@ def cmd_pr(argv: list[str]) -> int:
         if args.body_file:
             body = Path(args.body_file).read_text(encoding="utf-8")
         branch = args.head or current_branch()
+        unknown = unknown_reviewers(args.reviewer)
+        if unknown:
+            print(f"could not request reviewer: '{unknown[0]}' not found", file=sys.stderr)
+            return 1
         existing = [
             p
             for p in state["prs"]
@@ -202,6 +214,9 @@ def cmd_pr(argv: list[str]) -> int:
         }
         state["prs"].append(pr)
         save_state(state)
+        if os.environ.get("MOCK_GH_CREATE_THEN_FAIL") == "1":
+            print("gh 스텁: PR을 만든 뒤 실패 (MOCK_GH_CREATE_THEN_FAIL)", file=sys.stderr)
+            return 1
         print(pr["url"])
         return 0
 
@@ -270,6 +285,10 @@ def cmd_pr(argv: list[str]) -> int:
             print(f"no pull requests found for {selector!r}", file=sys.stderr)
             return 1
         if sub == "edit":
+            unknown = unknown_reviewers(args.add_reviewer)
+            if unknown:
+                print(f"could not request reviewer: '{unknown[0]}' not found", file=sys.stderr)
+                return 1
             if args.title is not None:
                 match["title"] = args.title
             if args.body_file:

@@ -22,12 +22,13 @@ import sys
 import time
 from pathlib import Path
 
+import pytest
 import yaml
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "tests" / "helpers"))
 
-from runner import SAMPLE, git, git_db, run, run_json  # noqa: E402
+from runner import SAMPLE, git, git_db, plugin_root, run, run_json  # noqa: E402
 from workspace import Workspace  # noqa: E402
 
 COMMANDS = REPO / "plugin" / "commands"
@@ -392,7 +393,8 @@ def _offline(*args: str) -> subprocess.CompletedProcess:
 
 
 def test_offline_eval_prints_accuracy_table_on_synthetic_labelset():
-    proc = _offline(str(REPO / "tests" / "fixtures" / "offline-eval-sample.yaml"), "--json")
+    root = plugin_root()     # 명시 루트(SITE_PATHS 제외 복사본) — 사내 레포에서도 같은 결과
+    proc = _offline(str(REPO / "tests" / "fixtures" / "offline-eval-sample.yaml"), "--json", "--plugin-root", str(root))
     assert proc.returncode == 0, proc.stderr
     out = json.loads(proc.stdout)
     summary = out["summary"]
@@ -405,15 +407,24 @@ def test_offline_eval_prints_accuracy_table_on_synthetic_labelset():
     assert verdicts["EVAL-1"] == "1위" and verdicts["EVAL-7"] == "정답" and verdicts["EVAL-8"] == "미스"
     meta = out["meta"]
     assert meta["labelset_sha256"] == hashlib.sha256((REPO / "tests/fixtures/offline-eval-sample.yaml").read_bytes()).hexdigest()
-    assert meta["python"] == platform.python_version() and meta["argv"][-1] == "--json"
+    assert meta["python"] == platform.python_version() and "--json" in meta["argv"]
     assert set(meta["plugin_repo"]) == set(meta["db"]) == {"sha", "dirty"}
     assert meta["db"] == {"sha": None, "dirty": None}   # 샘플 DB는 플러그인 레포 하위 폴더(git 최상위 아님)
-    root = Path(meta["plugin_root"]["path"])
-    assert meta["plugin_root"]["temporary"] is True and not root.exists()      # 임시 루트는 실행 뒤 지운다
+    assert meta["plugin_root"] == {"path": str(root), "temporary": False}
     assert meta["site_defaults_sha256"] == hashlib.sha256((REPO / "plugin/site-defaults.example.yaml").read_bytes()).hexdigest()
     item = out["items"][0]
     assert item["logs_sha256"] and all(len(h) == 64 for h in item["logs_sha256"])
     assert item["backend"]["name"] and "version" in item["backend"] and item["external"] == []    # 외부 파서 없음
+
+
+@pytest.mark.skipif((REPO / "plugin" / "site-defaults.yaml").exists(), reason="plugin/site-defaults.yaml 있음: 기본 루트가 plugin/(사내)")
+def test_offline_eval_default_root_is_temporary_helper_root_without_site_defaults():
+    proc = _offline(str(REPO / "tests" / "fixtures" / "offline-eval-sample.yaml"), "--json")
+    assert proc.returncode == 0, proc.stderr
+    meta = json.loads(proc.stdout)["meta"]
+    root = Path(meta["plugin_root"]["path"])
+    assert meta["plugin_root"]["temporary"] is True and not root.exists()      # 임시 루트는 실행 뒤 지운다
+    assert meta["site_defaults_sha256"] == hashlib.sha256((REPO / "plugin/site-defaults.example.yaml").read_bytes()).hexdigest()
 
 
 def test_offline_eval_text_table_has_the_three_metrics():

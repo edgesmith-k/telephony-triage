@@ -10,8 +10,8 @@
 
 | 파일 | 내용 | 언제 읽나 |
 |---|---|---|
-| `SKILL.md` | 실행 규칙은 `rules.md`로 연결, `triage.py run` 호출과 `needs_input` 처리(Step 0~5 resolve는 드라이버, `contracts.md §3.2`), 결과 읽기, Step 6 리포트 규칙, Step 7 결정표, Step 8은 `write-flow.md`로, 흐름 A(찾기·분석)/B(등록) 한 줄. **8,064B 이하**(흐름 A/B 추가 뒤, 그 전 7.5KB(RF-1), W6 전 8KB) | 스킬이 트리거될 때 |
-| `reference/rules.md` | 실행 규칙(스크립트 호출, 종료 코드 2·S-3 중단, lock, 마스킹, 사용자 확인 지점). 2KB 이하 | analyze(SKILL이 지시), `record`·`verify-fix`·`fix-submitted`·`validate --cause`·`sync-pr`. `search`는 읽기 전용이라 읽지 않는다 |
+| `SKILL.md` | 실행 규칙은 `rules.md`로 연결, `triage.py run` 호출과 `needs_input` 처리(Step 0~5 resolve는 드라이버, `contracts.md §3.2`), 결과 읽기, Step 6 리포트 규칙, Step 7 결정표, Step 8은 `write-flow.md`로, 흐름 A(찾기·분석)/B(등록) 한 줄. **9,063B 이하**(한도는 `tests/test_triage.py` 단언 값, 늘린 이력은 그 주석 — 흐름 A/B 추가 뒤 8,064B, 그 전 7.5KB(RF-1), W6 전 8KB) | 스킬이 트리거될 때 |
+| `reference/rules.md` | 실행 규칙(스크립트 호출, 종료 코드 2·S-3 중단, lock, 마스킹, 사용자 확인 지점). 2,496B 이하(같은 테스트 단언 값, 그 전 2KB) | analyze(SKILL이 지시), `record`·`verify-fix`·`fix-submitted`·`validate --cause`·`sync-pr`. `search`는 읽기 전용이라 읽지 않는다 |
 | `reference/write-flow.md` | 공통 쓰기 절차(Step 8 방식), analyze 계획 형식, 확인 화면 형식, drift 결정, lock 해제 경로 | Step 7 계획 저장, Step 8, 모든 쓰기 흐름 |
 | `reference/record.md` | `07-workflow.md §record` | `record` 커맨드 |
 | `reference/verify.md` | `07-workflow.md §validate`(`--cause`), `§fix-submitted`, `§verify-fix` | 해당 커맨드 |

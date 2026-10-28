@@ -82,7 +82,7 @@ python3 tools/make_bundle.py --label import-v1     # 이 이름이 사내 .draft
 - Ubuntu PC (다른 OS는 지원하지 않음), Python 3.10+ (22.04 기본 python3 가능), git, `gh`
 - 샘플 Jira 키 2~3개(카테고리가 다른 것), 각 Jira의 발생 시각 필드 이름·형식·타임존
 - 카테고리별 실제 logcat 1개씩 + 정상 로그 1~2개(16/17), 듀얼 SIM 로그 1개 이상
-- Android 16/17 소스 경로, 빌드명 예시 3~5개, GHE 주소·조직·카테고리별 팀 이름, Gerrit CL 링크 예시, Jira URL 예시
+- Android 16/17 소스 경로, 빌드명 예시 3~5개, GHE 주소·조직·카테고리별 팀 이름, 코드 수정(CL·커밋) 링크 예시, Jira URL 예시
 - 샌드박스 이슈 DB 레포(빈 레포)
 - **기존 자산**: 검증된 로그 파서 코드 경로, 파서가 판별하는 경우별 실제 로그, data 이슈 분류 자료, data 분석 스킬 이름
 - 과거 해결 Jira 20~30건 목록(카테고리별 3건 이상, S-5 재현 평가용)

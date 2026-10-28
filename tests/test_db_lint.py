@@ -64,6 +64,12 @@ def _pairs(result) -> set[tuple[str, str]]:
     return {(f["code"], f["file"]) for f in result["errors"] + result["warnings"]}
 
 
+def test_fix_ref_error_says_regex_is_mock_value():
+    """뼈대 기본 fix_ref_regex(`^MOCKCL-\\d+$`)는 모의 값 — 실제 참조가 거부되면 그렇다고 알린다(사내 보고 15번)."""
+    found = [f for f in _lint(LINT_DB, "--all")["errors"] if f["code"] == "fix-ref"]
+    assert found and all("모의 값" in f["message"] and "S18" in f["message"] for f in found), found
+
+
 def test_variant_builder_is_deterministic():
     result = make_variant_dbs.check()
     assert not any(result.values()), result

@@ -981,6 +981,11 @@ def test_plan_format_error_names_nested_value_problem_missing_op_and_truncates()
     plan["schema_version"] = "x" * 1000
     err = error_of(plan)
     assert err.startswith("계획 형식 오류 (schema_version)") and err.endswith("…") and len(err) < 400
+    # op 분기가 아닌 oneOf(issue = null | 객체): 틀린 필드 경로를 말한다 (jira_fields 옛 출력의 null 복사)
+    plan = load_plan("p7-analyze-append.plan.json")
+    plan["issue"]["carrier"] = None
+    err = error_of(plan)
+    assert err.startswith("계획 형식 오류 (issue/carrier)") and "not of type 'string'" in err, err
 
 
 def test_check_ids_renumber_and_similar():
@@ -2260,6 +2265,69 @@ def test_publish_without_and_merge_leaves_pr_and_merge_needs_published_head():
     assert git(ws.clone, "rev-parse", "--abbrev-ref", "HEAD") == clone_branch and \
         git(ws.clone, "rev-parse", "HEAD") == clone_head, "사용자 clone은 fetch만"
     assert [r["merged"] for r in _trace_merge(ws)] == [False, True]
+
+
+def _data_owners(owners: str):
+    """/data/ 경로 오너를 정한 CODEOWNERS(마지막 맞는 규칙이 이긴다)."""
+    def edit(root: Path) -> None:
+        path = root / ".github" / "CODEOWNERS"
+        path.write_text(path.read_text(encoding="utf-8") + f"\n/data/ {owners}\n", encoding="utf-8", newline="\n")
+    return edit
+
+
+def test_publish_unknown_reviewers_still_creates_pr_and_warns_by_owner_kind():
+    """리뷰어 지정 실패(없는 팀·사용자)는 PR 생성을 막지 않는다: 리뷰어 없이 만들고 리뷰어마다 --add-reviewer, 실패는 경고·종료 0.
+    경고는 오너 종류별(팀 → S5·S19, 개인 → S5). 못 붙인 리뷰어가 있으면 --and-merge도 병합하지 않는다(review)."""
+    ws = Workspace()
+    ws.push_main(_data_owners("@mock-org/telephony-data-owners @solo-dev"), "카테고리 오너(팀·개인)")
+    env = {"MOCK_GH_UNKNOWN_REVIEWERS": "mock-org/telephony-data-owners,solo-dev"}
+    out = _published(ws, "MOCK-7002", "issue/MOCK-7002", "--and-merge", "--wait", "0", env=env)
+    assert out["published"] is True and "gh_error" not in out and out["pr"]["action"] == "created"
+    number = out["pr"]["number"]
+    assert isinstance(number, int) and ws.prs()[0]["number"] == number and ws.prs()[0]["reviewers"] == []
+    assert out["reviewers"]["requested"] == []
+    assert [f["reviewer"] for f in out["reviewers"]["failed"]] == ["mock-org/telephony-data-owners", "solo-dev"]
+    assert "could not request reviewer" in out["reviewers"]["failed"][0]["error"]
+    team, person = out["warnings"]
+    assert team.startswith("리뷰어 지정 실패: mock-org/telephony-data-owners") and "S5" in team and "S19" in team
+    assert person.startswith("리뷰어 지정 실패: solo-dev") and "로그인" in person and "S5" in person and "S19" not in person
+    assert out["merge"]["mode"] == "review" and out["merge"]["result"]["merged"] is False
+    assert ws.prs()[0]["state"] == "OPEN"
+    plan = json.loads((ws.job_dir("MOCK-7002") / "plan.json").read_text(encoding="utf-8"))
+    assert plan["pr"]["number"] == number
+    assert ws.json("job_status.py", ["MOCK-7002"])["stage"]["id"] == "pr-created"
+    assert _trace(ws, "MOCK-7002", "publish")[-1]["reviewers_failed"] == 2
+
+
+def test_publish_requests_reviewers_after_create_and_failed_reviewer_blocks_self_merge():
+    """리뷰어는 PR 생성 뒤 `gh pr edit --add-reviewer`로 요청한다(결과는 예전 `--reviewer`와 같다). 메인테이너 팀이 카테고리
+    경로 오너면 바로 병합 자격(self)인데, 그 리뷰어를 못 붙였으면 review로 바꾼다."""
+    ws = Workspace()
+    ws.push_main(_data_owners("@mock-org/telephony-issue-db-maintainers"), "메인테이너 팀이 /data/ 오너")
+    out = _published(ws)
+    assert out["reviewers"] == {"requested": ["mock-org/telephony-issue-db-maintainers"], "failed": []}
+    assert ws.prs()[0]["reviewers"] == ["mock-org/telephony-issue-db-maintainers"] and "warnings" not in out
+    assert out["merge"]["mode"] == "self"
+
+    ws = Workspace()
+    ws.push_main(_data_owners("@mock-org/telephony-issue-db-maintainers"), "메인테이너 팀이 /data/ 오너")
+    out = _published(ws, "MOCK-7002", "issue/MOCK-7002", "--and-merge", "--wait", "0",
+                     env={"MOCK_GH_UNKNOWN_REVIEWERS": "mock-org/telephony-issue-db-maintainers"})
+    assert out["merge"]["mode"] == "review" and "리뷰어 지정 실패" in out["merge"]["reason"]
+    assert out["merge"]["result"]["merged"] is False and ws.prs()[0]["state"] == "OPEN"
+    offer = json.loads((ws.job_dir("MOCK-7002") / "merge-offer.json").read_text(encoding="utf-8"))
+    assert offer["mode"] == "review"
+    assert _merge(ws, out["head_sha"], expect=(1, 2))["merged"] is False      # 병합 재시도도 막힌다
+
+
+def test_publish_create_failure_refinds_pr_by_head_branch():
+    """gh가 PR을 만든 뒤 실패로 끝나면 head 브랜치로 다시 찾아 그 번호를 기록한다(pushed-no-pr로 남기지 않는다)."""
+    ws = Workspace()
+    out = _published(ws, env={"MOCK_GH_CREATE_THEN_FAIL": "1"})
+    assert "gh_error" not in out and out["pr"]["number"] == ws.prs()[0]["number"]
+    assert any("실패로 끝났지만" in w for w in out["warnings"])
+    plan = json.loads((ws.job_dir("MOCK-7002") / "plan.json").read_text(encoding="utf-8"))
+    assert plan["pr"]["number"] == ws.prs()[0]["number"]
 
 
 def test_merge_refuses_or_waits_and_leaves_pr_with_retry():

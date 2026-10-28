@@ -125,7 +125,7 @@ parser_backend:                      # 이 이슈 DB의 시그니처가 전제�
 external_parsers: {}                 # 어댑터(외부 파서)를 쓰는 카테고리 고정. 예: {data: {adapter: site_data_existing, min_version: <버전>}}
                                      # 여기 있는 카테고리의 어댑터가 없거나 낮으면 백엔드 불일치와 같이 처리 (contracts.md §기존 자산 연결 계약)
 code_root_keys: [aosp, vendor_ril]   # code_refs에 쓸 수 있는 소스 루트 키
-fix_ref_regex: '<Gerrit CL 또는 커밋 형식 정규식>'   # fix.ref 형식 검사 (14-site.md S18)
+fix_ref_regex: '<코드 수정 참조 형식(CL·커밋 등) 정규식>'   # fix.ref 형식 검사 (14-site.md S18). 뼈대 기본값 '^MOCKCL-\d+$'는 모의 값
 build_compare:                       # fixed_in과 Jira SW를 비교하는 규칙 (03-issue-db.md §5.9)
   - branch_regex: '<브랜치 식별 정규식>'
     version_regex: '<비교 가능한 부분을 캡처하는 정규식>'
@@ -155,12 +155,12 @@ matcher:
   pattern_timeout_ms: 2000           # 시그니처·extractor 정규식 패턴당 실행 시간 상한 (04-parser-matching.md §5.8 (4))
 readme:
   issue_inline_max: 3                 # 표에 보이는 Jira 수, 나머지는 건수와 링크
-reviewers:                           # gh pr create --reviewer에 넘길 형식 (14-site.md S19)
-  format: '{org}/{team}'             # CODEOWNERS 항목 @<org>/<team>에서 {org}, {team}을 치환
+reviewers:                           # CODEOWNERS 팀 오너를 gh 리뷰어 요청(gh pr edit --add-reviewer)에 넘길 형식 (14-site.md S19)
+  format: '{org}/{team}'             # CODEOWNERS 팀 오너 @<org>/<team>에서 {org}, {team}을 치환. 개인 오너 @<login>은 <login> 그대로(개인 오너만 쓰면 S19 해당 없음)
 ```
 
 - **`step_events`**(메인테이너가 관리하는 **순서 있는 목록**): 시험 스텝(마스킹된 `번호 | 이름`)이 AP 로그에 남기는 흔적을 규칙으로 적는다. 스텝에 `pattern`이 처음 맞는 규칙 하나가 적용된다. 대상은 **정확히 하나**: `event`(extractor 이벤트 이름, 예약 `ril_*`, `builtin.*`; 선택 `fields{필드: 정규식}`), `ril`(`ril.yaml`의 요청·unsol 이름; 선택 `dir: req|resp|unsol`, 기본 `req`, `UNSOL_*`는 `unsol`), `match`(마스킹된 `TAG: msg`에 맞출 정규식). CP(모뎀) 동작처럼 AP 로그에 흔적이 없는 스텝은 `observable: false`(대상 없음)로 적는다. **어느 규칙에도 맞지 않는 스텝은 관측 불가**(건너뜀, 놓친 것으로 세지 않음). 기본 `[]`(스텝 순서 정렬 안 함). 예: `{pattern: '(?i)(비행기|airplane).*(켜|\bon\b)', match: '^ConnectivityService: setAirplaneMode enabled=true'}`, `{pattern: '(?i)데이터\s*연결', ril: SETUP_DATA_CALL}`, `{pattern: '(?i)(CP|모뎀)', observable: false}` (placeholder — `14-site.md` S22). `db_lint`가 검사한다(오류 코드 `step-event`, `contracts.md §3.2`). 규칙 번호는 목록 위치이므로 순서를 바꾸면 달라진다.
-- 리뷰어 계산: `db_pr summary`가 변경 파일 경로와 유형의 `secondary_categories`로 `.github/CODEOWNERS`의 해당 항목(`/<category>/`, `/parser-rules/` 등)을 찾고, 그 `@<org>/<team>`을 `reviewers.format`으로 바꿔 `gh pr create --reviewer`에 넘긴다. 계획에 `allow-cause`가 있으면 대상 fixture 경로의 카테고리 오너도 더한다(다른 카테고리 fixture의 `also_allowed`를 바꾸므로, `contracts.md §fixture`). 카테고리 오너는 선택이고 샘플·뼈대 CODEOWNERS는 메인테이너 경로만 둔다(`06-collaboration.md §6.1`) — 맞는 오너가 없으면 리뷰어는 빈 목록이고 확인 화면에 `리뷰어: 없음`, `--reviewer` 없이 PR을 만든다(메인테이너 팀으로 대신 채우지 않는다).
+- 리뷰어 계산: `db_pr summary`가 변경 파일 경로와 유형의 `secondary_categories`로 `.github/CODEOWNERS`의 해당 항목(`/<category>/`, `/parser-rules/` 등)을 찾고, 그 오너(팀 `@<org>/<team>`은 `reviewers.format`으로 바꾸고, 개인 `@<login>`은 그대로)를 PR을 만든 뒤 `gh pr edit --add-reviewer`로 하나씩 요청한다(실패는 경고 — 팀이면 S5·S19, 개인이면 S5 확인, PR은 리뷰어 없이 남는다). 계획에 `allow-cause`가 있으면 대상 fixture 경로의 카테고리 오너도 더한다(다른 카테고리 fixture의 `also_allowed`를 바꾸므로, `contracts.md §fixture`). 카테고리 오너는 선택이고 샘플·뼈대 CODEOWNERS는 메인테이너 경로만 둔다(`06-collaboration.md §6.1`) — 맞는 오너가 없으면 리뷰어는 빈 목록이고 확인 화면에 `리뷰어: 없음`, 리뷰어 요청 없이 PR을 만든다(메인테이너 팀으로 대신 채우지 않는다).
 - 카테고리 목록 검증(`category`가 `categories`에 있는지, ID 접두어가 `id_prefix`와 맞는지)은 JSON Schema가 아니라 `db_lint.py`가 한다.
 - `generator_version`이 플러그인 `GENERATOR_VERSION`과 다르면 `ci_mode: local`/`actions`에서는 **이슈 DB 쓰기 전체**(Step 8, `record`, `sync-pr`, `verify-fix`, `validate --cause`, `fix-submitted`, 리뷰 PR)를 막고 읽기 전용 분석만 한다. 예외는 메인테이너가 버전을 올리는 `migrate/schema-v<N>` 브랜치의 직접 편집뿐이다(그 브랜치에서는 `config.py check`·pre-commit·`validate`가 버전 불일치를 차단하지 않는다, `06-collaboration.md §6.4`). `actions-build`에서는 생성 파일을 PR에 넣지 않으므로 영향이 없다.
 - 원인의 `platform_versions: []`는 **전 버전**을 뜻한다 (`03-issue-db.md §5.4`).

@@ -1,6 +1,6 @@
 ---
 description: 작업 상태 한 화면 — 어디까지 했는지·막힌 것·다음 할 일 (읽기 전용, 로컬 기록만)
-argument-hint: "[JIRA-KEY] [--doctor] [--platform <이름>]"
+argument-hint: "[JIRA-KEY|작업 키] [--doctor] [--platform <이름>]"
 ---
 
 작업 하나의 진행 상태를 보여준다. 인자: $ARGUMENTS

@@ -1,8 +1,8 @@
 # 소유권 (06-collaboration.md §6.1)
 #
 # org·팀 이름은 모의 값이다 — TODO(SITE:S5). 사내에서 확인하고 바꾼다.
-# gh pr create --reviewer에 넘기는 형식은 issue-db.config.yaml의 reviewers.format
-# (TODO(SITE:S19)).
+# 오너는 팀(@<org>/<team>) 또는 개인(@<login>). 팀이면 리뷰어 요청 형식 issue-db.config.yaml
+# reviewers.format(TODO(SITE:S19))도 확인하고, 개인이면 해당 없음.
 #
 # 메인테이너 경로만 적는다. 카테고리(/data/·/call/ 등)에는 오너를 두지 않는다 — 카테고리 PR은 리뷰어 없이
 # 작성자가 바로 병합한다(issue_db.merge: self). 오너 리뷰를 받을 카테고리만 `/<category>/ @<org>/<team>`을

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 
-from common import failedstep, masking, yamldoc, yamlio
+from common import failedstep, issuedb, masking, yamldoc, yamlio
 
 from ..core import Reject
 
@@ -26,13 +26,18 @@ class JiraOps:
             raise Reject("issue-exists", f"Jira {key}가 이미 이슈 DB에 있습니다 ({self.tree.rel(existing)}). "
                          "기존 분류를 유지하거나 reclassify로 바꾼다.", i,
                          existing={"path": self.tree.rel(existing), "cause": record.get("cause")})
-        missing = [f for f in ("date", "model", "sw", "platform_version") if not jira.get(f)]
+        required = issuedb.record_required(self.tree.root)      # 적용 대상 트리의 스키마 — 옛 운영 DB면 sw도 필수
+        missing = [f for f in issuedb.RECORD_JIRA_FIELDS if f in required and not jira.get(f)]
         if missing:
-            raise Reject("issue-fields", f"Jira 기록 필수 필드가 없습니다: {', '.join(missing)}", i)
+            hint = (" (이슈 DB schema/issue.schema.json이 sw를 필수로 둔다 — 운영 DB schema 메인테이너 PR 필요. "
+                    "그 전에는 Jira SW 빌드 값을 넣는다)") if "sw" in missing else ""
+            raise Reject("issue-fields", f"Jira 기록 필수 필드가 없습니다: {', '.join(missing)}{hint}", i)
         record = {"key": key, "cause": cause, "date": jira["date"]}
         if jira.get("occurred_on"):
             record["occurred_on"] = jira["occurred_on"]
-        record.update(model=jira["model"], sw=jira["sw"], platform_version=str(jira["platform_version"]))
+        for f in ("model", "sw", "platform_version"):            # 선택 필드(sw)는 값이 있을 때만, 키 순서 유지
+            if jira.get(f):
+                record[f] = str(jira[f]) if f == "platform_version" else jira[f]
         if jira.get("carrier"):
             record["carrier"] = jira["carrier"]
         record["analyzed_by"] = self.user

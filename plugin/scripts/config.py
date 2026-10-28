@@ -21,7 +21,10 @@
   set <key> <value>            값 하나 바꾸기 (경로 값은 존재 검증)
   sync-scripts-path            plugin.scripts_path = ${CLAUDE_PLUGIN_ROOT}/scripts (setup 2, SessionStart hook)
   tracker-candidates [--mcp-config <json>...] [--tools-json <json>]
-                               등록된 MCP 서버에서 tracker.tools·읽기 도구 후보 (setup 4). exclude_servers 적용
+                               등록된 MCP 서버에서 tracker.tools·읽기 도구 후보 (setup 4). exclude_servers 적용.
+                               stdio 서버는 하나씩 서버당 최대 10초(응답 즉시 종료·프로세스 그룹 종료). 서버마다
+                               servers[].probe(stdio|tools-json|excluded|remote)·elapsed_ms·error, stderr에 진행 줄.
+                               --tools-json의 서버는 이름 정규화(`jira.corp`=`jira_corp`)로 비교해 다시 띄우지 않는다
   set-tracker --server <s> --get-issue <전체 이름> [--search-issues ..] [--get-comments ..] [--read-tools a,b]
                                사용자가 확인한 값을 저장. read_tools에 tracker.tools 값을 포함한다
   rename-legacy [--apply]      사용자 config.yaml의 옛 설정 키(jira:·year_source: jira·android_version)를 새 이름으로 바꾼다.
@@ -47,6 +50,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 from datetime import timedelta
 from pathlib import Path
 
@@ -345,27 +349,44 @@ def cmd_tracker_candidates(args, defaults: dict) -> dict:
     exclude = list(userconfig.get(merged, "tracker.exclude_servers", []) or [])
     servers: dict[str, list[str] | None] = {}
     errors: dict[str, str] = {}
+    probes: dict[str, dict] = {}     # 서버별 진단 {probe, elapsed_ms} (내용·자격증명 없음, 사내 보고용)
     if args.tools_json:
         for name, tools in json.loads(Path(args.tools_json).read_text(encoding="utf-8")).items():
             servers[name] = [t.split("__", 2)[-1] if t.startswith("mcp__") else t for t in tools]
+            probes[name] = {"probe": "tools-json", "elapsed_ms": 0}
+    given = {mcptools.server_segment(n) for n in servers}     # `jira.corp`와 세션 이름 `jira_corp`는 같은 서버
     configs = [Path(p) for p in args.mcp_config] if args.mcp_config else [Path.home() / ".claude.json"]
     for name, conf in mcptools.load_servers(configs).items():
-        if name in servers:
+        if name in servers or mcptools.server_segment(name) in given:
             continue
         if any(__import__("fnmatch").fnmatch(name, p) for p in exclude):
             servers[name] = None
+            probes[name] = {"probe": "excluded", "elapsed_ms": 0}
             continue
+        if not (isinstance(conf, dict) and conf.get("command")):
+            servers[name], errors[name] = None, mcptools.NOT_STDIO
+            probes[name] = {"probe": "remote", "elapsed_ms": 0}
+            continue
+        # 진행 줄: 중간에 멈춰도 어느 서버에서 멈췄는지 남는다(서버 이름·시간·결과 종류만)
+        print(f"[tracker-candidates] {name} 확인 중(최대 {mcptools.PROBE_TIMEOUT:g}초)", file=sys.stderr, flush=True)
+        start = time.monotonic()
         try:
             servers[name] = mcptools.list_tools(conf)
-        except (ValueError, OSError, subprocess.TimeoutExpired) as exc:
+            outcome = f"도구 {len(servers[name])}개"
+        except (ValueError, OSError, subprocess.SubprocessError) as exc:
             servers[name] = None
-            errors[name] = str(exc)
+            errors[name] = str(exc) if isinstance(exc, mcptools.ProbeError) else f"start-failed: {type(exc).__name__}: {exc}"
+            outcome = errors[name].split(":", 1)[0]
+        probes[name] = {"probe": "stdio", "elapsed_ms": int((time.monotonic() - start) * 1000)}
+        print(f"[tracker-candidates] {name} {probes[name]['elapsed_ms']}ms {outcome}", file=sys.stderr, flush=True)
     team = userconfig.get(defaults, "tracker.tools", {}) or {}
     try:     # 후보 보강은 설정 트래커 어댑터(jira는 그대로)
         adapter = trackers.of(merged)
     except trackers.TrackerConfigError as exc:
         raise UsageError(str(exc)) from exc
     result = mcptools.candidates(servers, exclude, team, errors, adapter.classify_extra)
+    for entry in result:
+        entry.update(probes.get(entry["server"]) or {"probe": None, "elapsed_ms": 0})
     usable = [s for s in result if not s["excluded"] and s["tracker_tools"].get("get_issue")]
     return {
         "exclude_servers": exclude,
