@@ -17,6 +17,8 @@ stdin: hook 입력 `{tool_name, tool_input, tool_response, ...}`. `tool_name`이
 **승인 코멘트 게시 결과**(`add_comment`): `tool_name`이 유효한 `tracker.write_tools.add_comment.tool`(정규화 비교,
 `common/issuepost.write_spec`)이면 `bridge_post`가 `<work_dir>/<KEY>/post.result.json`(posted|error)을 쓰고, 성공이면
 `post.approved.json`에 `used_at`을 남긴다(1회용). 실패 응답(`isError` 또는 참인 `error` 값)이면 승인을 소모하지 않는다.
+응답은 `isError`면 `_payload`(읽기 순서), 아니면 `_post_payload`(JSON, 아니면 YAML)로 읽는다(structuredContent가 먼저).
+`_post_payload`의 YAML 오류 등 읽다 난 예외는 처리 중 예외다.
 결과 처리 중 예외면 게시됐을 수 있으므로 `post.result.json` status unknown과 `used_at`을 남겨 재게시를 막는다. 모델에는 게시 요약만
 보이고 응답 원문은 보이지 않는다. 응답 형식(comment id 위치)은 TODO(SITE:S23).
 
@@ -77,7 +79,7 @@ def _json_value(text: str):
 
 
 def _payload(response) -> tuple[object, str]:
-    """MCP 결과(문자열, `content[]` 블록, `structuredContent`)를 `(값, 형식)`으로 바꾼다. 예외를 내지 않는다.
+    """MCP 결과(문자열, `content[]` 블록, `structuredContent`)를 `(값, 형식)`으로 바꾼다. 형식 오류로 예외를 내지 않는다.
 
     순서: `structuredContent`(structured) → 텍스트 블록마다 JSON(하나면 json, 여럿이면 목록 json-blocks — 배열 블록은
     펼친다) → 블록을 이은 문자열 전체 JSON(json) → 줄마다 JSON(jsonl, 2줄 이상) → YAML(`key`·`fields`·`comments` 키가
@@ -195,6 +197,25 @@ def target(event: dict, cfg: dict) -> str | None:
     return action if isinstance(action, str) and action in mapped else "unsupported"
 
 
+def _post_payload(response):
+    """게시 결과(`add_comment`) 응답을 값으로 바꾼다. 읽기용 `_payload`의 형식 순서를 쓰지 않는다: 블록을 이은 문자열이
+    JSON이 아니면 YAML로 읽고(`error: …` 객체는 실패, `id: …`는 comment id), 객체·목록이 아니면 `{"text": 원문}`.
+    YAML 오류는 올린다 — `main`이 결과 불명(unknown)과 `used_at`을 남긴다(게시됐을 수 있다)."""
+    if isinstance(response, dict) and isinstance(response.get("structuredContent"), (dict, list)):
+        return response["structuredContent"]
+    blocks = response.get("content") if isinstance(response, dict) else response
+    if isinstance(blocks, list) and all(isinstance(b, dict) and "type" in b for b in blocks):
+        response = "".join(str(b.get("text") or "") for b in blocks if b.get("type") == "text")
+    if isinstance(response, str):
+        try:
+            return json.loads(response)
+        except json.JSONDecodeError:
+            from common import yamlio
+            data = yamlio.safe_load(response)
+            return data if isinstance(data, (dict, list)) else {"text": response}
+    return response
+
+
 def _comment_id(data):
     if isinstance(data, dict):
         for node in (data, data.get("comment") if isinstance(data.get("comment"), dict) else None):
@@ -202,6 +223,19 @@ def _comment_id(data):
                 if node and isinstance(node.get(k), (str, int)) and str(node.get(k)):
                     return str(node[k])
     return None
+
+
+_JSON_ESCAPE = re.compile(r'\\(?:u[0-9a-fA-F]{4}|.)')   # json.dumps 이스케이프 하나씩 왼쪽부터(`\\` 뒤 `n`은 줄바꿈이 아니다)
+_ESCAPE_TO = {"\\\\": "\\\\", '\\"': '"'}                  # 역슬래시는 그대로, 따옴표는 풀고, 그 밖(제어 문자)은 `|`
+
+
+def _mask_detail(detail) -> str:
+    """실패 기록 `error`(마스킹 ≤200자). 객체는 json.dumps한 글 하나를 마스킹한다(키 문맥 `"token": "…"` 유지). 그 전에 제어 문자
+    이스케이프(줄바꿈·탭 등)는 `|`로, 이스케이프한 따옴표는 따옴표로 바꾼다 — 이스케이프 글자가 단어 경계를 가려 뒤 식별자를 놓치지
+    않게(`|`는 공백이 아니라 자격증명 값 앞에 와도 값이 끊기지 않는다)."""
+    if not isinstance(detail, str):
+        detail = _JSON_ESCAPE.sub(lambda m: _ESCAPE_TO.get(m.group(0), "|"), json.dumps(detail, ensure_ascii=False))
+    return masking.new_masker().mask(detail)[:POST_ERROR_CHARS]
 
 
 def bridge_post(event: dict, cfg: dict) -> str:
@@ -225,7 +259,9 @@ def bridge_post(event: dict, cfg: dict) -> str:
     except (OSError, ValueError):
         approved = None
     response = event.get("tool_response")
-    data, _shape = _payload(response)
+    # isError면 읽기 순서(`_payload`, YAML 오류는 텍스트로)로 읽어 실패로 남긴다. 아니면 `_post_payload`(YAML 오류는 처리 중 예외)
+    data = _payload(response)[0] if isinstance(response, dict) and response.get("isError") is True \
+        else _post_payload(response)
     at = issuepost.iso(issuepost.now())
     base = {"schema": 1, "key": key, "tool": spec["tool"], "body_sha256": sha,
             "approved_at": (approved or {}).get("approved_at")}
@@ -234,8 +270,7 @@ def bridge_post(event: dict, cfg: dict) -> str:
         isinstance(data, dict) and bool(data.get("error")) and not data.get("ok"))
     if failed:
         detail = data.get("error") if isinstance(data, dict) and data.get("error") else data
-        error = masking.new_masker().mask(json.dumps(detail, ensure_ascii=False)
-                                          if not isinstance(detail, str) else detail)[:POST_ERROR_CHARS]
+        error = _mask_detail(detail)
         issuepost.write_private_json(job / issuepost.RESULT_FILE, {**base, "status": "error", "at": at, "error": error})
         return (f"telephony-triage: Jira 코멘트 게시 실패({key}) — 승인은 소모하지 않았다(응답 원문은 표시하지 않는다). "
                 f"기록: {job / issuepost.RESULT_FILE}")

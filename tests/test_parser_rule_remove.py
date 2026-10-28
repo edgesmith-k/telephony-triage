@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -156,3 +157,11 @@ def test_remove_is_authoring_op_and_r5_needs_approval():
     proc = run("db_verify.py", ["rules", "--changed", "HEAD", "--db", db])
     rows = {r["id"]: r for r in json.loads(proc.stdout)["rules"]}
     assert proc.returncode == 3 and rows["R5"]["status"] == "needs-approval", proc.stdout[-2000:]
+
+
+def test_contracts_draft_gate_lists_every_authoring_op():
+    """contracts.md `db_pr stage` 초안 검증 게이트의 작성 op 목록(`작성 op(` ~ 닫는 `)`, `add-fixture` 빼고)이
+    `draftcheck.AUTHORING_OPS`와 같다(remove-parser-rule 포함)."""
+    text = (REPO / "docs/design/contracts.md").read_text(encoding="utf-8")
+    gate = text.split("**초안 검증 게이트**: 작성 op(", 1)[1].split(")", 1)[0]
+    assert set(re.findall(r"`([^`]+)`", gate)) - {"add-fixture"} == set(draftcheck.AUTHORING_OPS), gate
