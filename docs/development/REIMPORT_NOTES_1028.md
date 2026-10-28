@@ -31,7 +31,7 @@
 | 8 | publish: PR을 리뷰어 없이 만들고 리뷰어마다 `gh pr edit --add-reviewer`. 실패는 경고(팀 오너 → S5·S19, 개인 → S5)·종료 0, 바로 병합 대신 리뷰로. 새 점검 `s4a.codeowners`(모의값·`<org>`·`TODO(SITE` 남으면 실패, `@login` 허용) | 운영 DB `CODEOWNERS`의 `mock-org` 정리(S5, 메인테이너 PR), `site_step.py check S-4a` |
 | 9 | 계획 op `remove-parser-rule`(file·key·reason, section 선택; 없는 키·섹션 마지막 규칙 거부, R4/R5 검증). 뼈대 placeholder 규칙(데이터 스택 태그 제외, RILJ 포함)에 `reason: placeholder (…)`. 원칙: 파서 규칙 **삭제**도 사용자 확인 | 운영 DB `schema/plan.schema.json` 교체(메인테이너 PR) **뒤에** op 사용. 실제 이름이 아닌 placeholder 규칙은 이 op로 지운다(사용자 확인) |
 | 10 | lock: 같은 owner·같은 작업은 다시 잡을 수 있음(`reacquired: true`), 반납 실패는 "lock은 풀리지 않았다", 출력의 owner는 앞 4자만 | — |
-| 11 | `jira_bridge`: JSON(블록별)·JSONL 먼저, YAML은 key/fields/comments가 있는 dict일 때만. 자유 텍스트 댓글은 1건(`comments_format: text`), 자유 텍스트 이슈는 저장하지 않고 응답 형태만 알림 | 실패하면 메시지 끝 `형식: …`을 사외로(보류 중) |
+| 11 | `jira_bridge`: JSON(블록별)·JSONL 먼저, YAML은 key/fields/comments가 있는 dict일 때만. 자유 텍스트 댓글은 1건(`comments_format: text`), 자유 텍스트 이슈는 저장하지 않고 응답 형태만 알림. 게시 결과(add_comment)는 57d2846 전 해석(`isError`는 항상 실패), 실패 기록 `error`는 이스케이프를 풀고 마스킹(리뷰 수정 0637564) | 실패하면 메시지 끝 `형식: …`을 사외로(보류 중) |
 | 12 | `config.py tracker-candidates`: 응답 오면 바로 반환, 프로세스 그룹 종료, 서버당 10초, `servers[].{probe,elapsed_ms,error}`, stderr `[tracker-candidates] …` 진행 줄 | 그래도 멈추면 서버별 `probe`·`elapsed_ms`·`error` 줄과 실행 명령 종류(npx·uvx 등)를 사외로 |
 | 13 | `site_step.py --done --waive`: 사유를 줄 끝에, 120자 넘으면 `…(전체: docs/site/evidence.md)`, 쓴 줄을 출력, 같은 점검 중복 거부 | (원래 사유 형식 문의는 보류 중) |
 | 14 | `s4.placeholder`(정보)·`s6.placeholder`가 placeholder 규칙·`TODO(SITE…)`·모의값 세 종류를 file:line으로 셈. `s6.placeholder`는 보고한 수 = 현재 수일 때만 통과. 새 `s6.mock`(사용자 필요, 사유로 면제 가능) | `site_step.py check S-6` 다시 — 보고 줄 갱신, 남은 모의값 정리 또는 사유와 함께 면제 |
@@ -54,3 +54,15 @@ PR #71이 `SKILL.md`를, 이번 묶음이 `jira_bridge.py`를 바꿨다 → `SIT
 ## 7. 반입 뒤 후보 (P2)
 
 analyze의 다른 원인 자르기(`--around` 우회)를 `--cause`로, `write-flow.md` 빈 필드 질문 문구, `tracker-candidates` 병렬 점검·`--no-probe` 등 플래그, `list_site_todos`의 번호 없는 `TODO(SITE)`, `model`·`platform_version` 필수 해제(보고 없음, 같은 방식으로 DB 스키마 PR만).
+
+10/28 리뷰(별도 세션, `REVIEW_1028_HANDOFF.md`)에서 남긴 P2:
+
+- `db_pr lock status`는 owner 토큰을 그대로 보인다(계약 "그대로"). 같은 owner 재진입이 생겨, 다른 세션이 그 값을 `TT_LOCK_OWNER`로 쓰면 `--take-over` 확인 없이 같은 작업 lock을 잡는다(스킬 규칙 "lock 파일에서 토큰을 다시 읽어 쓰지 않는다"에만 기댄다). `contracts.md` `lock status` 출력 칸(`{job, command, started_at, updated_at, expired}`)도 실제(owner·platform·age_sec 포함)와 다르다(이전부터).
+- `remove-parser-rule`의 `reason`은 파일·PR 본문에 자동으로 남지 않는다(CHANGELOG 행도 없음). 계약은 "사유는 `pr_notes`에도"인데 `db-authoring.md`에 그 안내가 없다(크기 12,264/12,288B).
+- `db-authoring.md` fixture 자르기의 "(match는 `--regress --top 0`)"가 analyze의 `JOB/match.json` 사용과 섞일 수 있다(eval 50 단언은 `--evidence <JOB>/match.json`). eval 30·50은 다시 돌리지 않았다.
+- 계약 `update-parser-rule`의 "실제 로그로 바꾼 규칙의 `reason`은 placeholder로 시작하지 않는다"는 검사도 스킬 안내도 없다. 그대로 두면 `s6.placeholder`가 계속 센다.
+- `MOCK_VALUE_RE`의 `mock-[a-z]…`는 실제 이름에 `mock-`이 들어가면(예: `@<org>/mock-qa`) 오탐이다. `s4a.codeowners`는 fail이라 면제가 안 된다.
+- `ListSection.remove`로 묶음의 마지막 항목을 지우면 그 묶음 머리 주석(`# --- sms ---`)이 항목 없이 남는다(서식만, 데이터는 맞다).
+- 게시 결과(`bridge_post`, 57d2846 전 해석으로 되돌림): `isError` 없는 여러 JSON 블록·JSONL 응답은 YAML 오류로 결과 불명(unknown), 대문자 `Error:` 키는 실패로 보지 않는다(둘 다 57d2846 전과 같다). 사내 코멘트 도구 응답 모양은 S23에서 확인한다.
+- 마스커 한계(게시 실패 기록 `error`에서 확인, 57d2846 전과 같다): 키 바로 뒤 값이 공백·제어 문자로 시작하면(`"password": "\nx"` 등) 그 값, 자격증명 값 안 공백 뒤 꼬리(`<CRED#1> S3cr3t…`), `imsi` 값에서 이메일 뒤 MCC 001 번호는 가리지 못한다.
+- 게시 실패 기록 `error`: 한 문자열 안에서 키와 값이 줄바꿈·탭으로 갈리면(`{"text": "imsi:\n001010…"}`·`Bearer\n<토큰>`·`msisdn=\n…`·`gps\n…`) 문맥 규칙이 못 잡는다(57d2846과 같다). `isError` 자유 텍스트는 늘 `{"text": …}`라 흔한 모양이다 — 후보: detail이 `{"text": str}`면 그 문자열을 바로 마스킹(사본 시험에서 다섯 예 모두 가려지고 다른 경우는 그대로). `DataCallResponse` 제외 규칙(`outside=`)이 다음 JSON 필드의 `cid`까지 닿는 경우(`{"text": "Error\nDataCallResponse: { status=0", "cid": "54321"}`)는 규칙 쪽에서 고친다.
