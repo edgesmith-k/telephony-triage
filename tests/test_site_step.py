@@ -1,8 +1,11 @@
 """tools/site_step.py: "사내 설정 시작" 진행기 — SITE_PROFILE.md 생성, 단계 순서, 건너뛰기 거부, 사외 PC 거부."""
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
@@ -81,6 +84,55 @@ def test_done_keeps_other_sections(tmp_path, monkeypatch, capsys):
     main(tmp_path, capsys, "--done", "S-1")
     text = prof.read_text(encoding="utf-8")
     assert text.endswith("- (10/13) 사내 메모\n") and "- 완료 단계: S-1 (" in text
+
+
+def all_skip(monkeypatch):
+    """--waive 기록만 보는 테스트: 점검을 모두 건너뜀으로 바꾼다(면제해야 --done이 된다)."""
+    monkeypatch.setattr(ss.sc, "CHECKS", {s: [lambda ctx, s=s: ss.sc.res(f"{s}.x", "skip", "합성")] for s in ss.STEPS})
+
+
+WAIVE_LINE_RE = re.compile(r"^- \((\d{4}-\d{2}-\d{2})\) (S-\S+) (\S+) 면제\(사용자 결정\): (.+)$")
+
+
+@pytest.mark.parametrize("form", ["sep", "eq"])
+@pytest.mark.parametrize("why", ["사내 Jira 없음 - S-4에서 다시", "A -- B", "-로 시작", "--foo 이유", "a | b", "x — y", "LTE-A 망"])
+def test_waive_reason_with_dashes_is_recorded_whole_at_line_end(tmp_path, monkeypatch, capsys, why, form):
+    all_skip(monkeypatch)
+    main(tmp_path, capsys)
+    args = ["--waive", f"S-1.x={why}"] if form == "sep" else [f"--waive=S-1.x={why}"]
+    code, out, err = main(tmp_path, capsys, "--done", "S-1", *args)
+    assert code == 0, err
+    lines = [l for l in (tmp_path / "SITE_PROFILE.md").read_text(encoding="utf-8").split("## 설계 변경")[1].splitlines()
+             if "면제" in l]
+    assert len(lines) == 1
+    m = WAIVE_LINE_RE.match(lines[0])
+    assert m and m.group(2, 3, 4) == ("S-1", "S-1.x", why)                  # 사유가 줄 끝 — 그대로 되읽힌다
+    assert lines[0] in out                                                  # 기록한 줄을 출력에 보인다
+    assert (tmp_path / ss.sc.EVIDENCE_FILE).read_text(encoding="utf-8").endswith(f" 사용자 결정: {why}\n")
+
+
+def test_long_waive_reason_points_to_evidence_instead_of_silent_cut(tmp_path, monkeypatch, capsys):
+    all_skip(monkeypatch)
+    main(tmp_path, capsys)
+    why = "사내 Jira 프로젝트가 아직 없어 S-4에서 샘플을 받는다 - " + "가나다라마바사아자차 " * 15 + "끝"
+    assert len(why) > 200
+    code, out, err = main(tmp_path, capsys, "--done", "S-1", "--waive", f"S-1.x={why}")
+    assert code == 0, err
+    prof = (tmp_path / "SITE_PROFILE.md").read_text(encoding="utf-8")
+    line = next(l for l in prof.splitlines() if "면제(사용자 결정)" in l)
+    reason = WAIVE_LINE_RE.match(line).group(4)
+    assert reason == why[:ss.WAIVE_PROFILE_MAX].rstrip() + "…(전체: docs/site/evidence.md)"
+    assert line in out and len(prof.encode("utf-8")) <= 4096
+    assert (tmp_path / ss.sc.EVIDENCE_FILE).read_text(encoding="utf-8").endswith(f" 사용자 결정: {why}\n")   # 전체 사유
+
+
+def test_duplicate_waive_id_refused(tmp_path, monkeypatch, capsys):
+    all_skip(monkeypatch)
+    main(tmp_path, capsys)
+    code, _, err = main(tmp_path, capsys, "--done", "S-1", "--waive", "S-1.x=a", "--waive", "S-1.x=b")
+    assert code == 2 and "두 번" in err
+    prof = (tmp_path / "SITE_PROFILE.md").read_text(encoding="utf-8")
+    assert "- 현재 단계: S-1" in prof and "면제" not in prof                 # 아무것도 기록하지 않는다
 
 
 def test_start_full_pack_first_visit_then_brief(tmp_path, monkeypatch, capsys):

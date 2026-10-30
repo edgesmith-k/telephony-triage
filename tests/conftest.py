@@ -28,6 +28,8 @@ import runner  # noqa: E402
 def pytest_sessionstart(session):
     # Collection imports some Python APIs directly. Load them from the temporary
     # plugin before older tests add the source checkout to sys.path.
+    # 여기서 불러 둔 `parser_backends`의 `site/`는 모의 백엔드다. 사내 실제 site 백엔드는
+    # `real_site_backend` 픽스처(`runner.real_site_backend()`)로 다른 모듈 이름으로 받는다.
     root = runner.plugin_root()
     runner.variant_dir()  # 변형 이슈 DB를 미리 만든다 (프로세스당 한 번)
     session.config._tt_plugin_root = root
@@ -67,6 +69,18 @@ def _check_shared_variants(session):
 @pytest.fixture(scope="session", autouse=True)
 def session_plugin_root(pytestconfig):
     return pytestconfig._tt_plugin_root
+
+
+@pytest.fixture(scope="session")
+def real_site_backend():
+    """사내 골든 테스트(`tests/golden/test_*.py`)가 쓰는 **실제** site 백엔드. 없으면(사외) 건너뛴다.
+
+    세션 시작 때 불러 둔 `parser_backends`는 임시 루트(모의 site 백엔드)의 것이라 `import parser_backends.site`는
+    모의를 준다. 실제 백엔드는 `runner.real_site_backend()`가 `parser_backends.site_real`로 따로 불러온다."""
+    backend = runner.real_site_backend()
+    if backend is None:
+        pytest.skip(f"실제 site 백엔드 없음: {runner.REAL_SITE_BACKEND} (사내 S-4a에서 포팅)")
+    return backend
 
 
 def pytest_collection_modifyitems(config, items):

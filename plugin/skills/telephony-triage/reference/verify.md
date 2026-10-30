@@ -42,7 +42,7 @@ open ─(fix-submitted)─▶ fix-submitted ─(verify-fix passed)─▶ fixed
    `WD/<작업 키>/plan.json`(`source: validate-cause`, `issue: null`):
    `add-fixture {for: <ID>, kind: resolved, path}` → `verify-resolution {cause: <ID>, verification: {method: <요약>, evidence: [<fixture 경로>, (선택) Jira 키], by, date}}`(`status` 없음 — `db_verify` `suggested_ops` 그대로).
    커밋 메시지 `[<ID>] verify-resolution: <요약>`.
-5. 공통 쓰기 절차. 브랜치 `verify-res/<원인 ID>-<YYYYMMDD>`, 리뷰어는 원인 카테고리 오너.
+5. 공통 쓰기 절차. 브랜치 `verify-res/<원인 ID>-<YYYYMMDD>`, 리뷰어는 CODEOWNERS 기준(원인 카테고리에 오너를 둔 레포만, 없으면 없음).
 
 ---
 
@@ -69,10 +69,12 @@ open ─(fix-submitted)─▶ fix-submitted ─(verify-fix passed)─▶ fixed
 ## verify-fix (코드 수정 검증)
 
 ```
-/telephony-triage:verify-fix <원인 ID> <수정 빌드 logcat...> [--issue <검증 Jira>]
+/telephony-triage:verify-fix <원인 ID> <수정 빌드 logcat...> [--issue <검증 Jira>] [--bundle <CI/CD 번들 번호>]
 ```
 
-1. **빌드 확인을 먼저** 한다(작업 키에 빌드가 들어가므로): Jira SW(`--issue`면 `jira_fields.py`로), bugreport `build.json`, 또는 logcat
+**빌드 기준(AP 패치)**: 수정 패치가 적용된 빌드(main 반영 전 테스트 빌드 포함)의 로그면 되고 `fixed_in`과 비교하지 않는다. **모뎀 수정(`resolution_type: modem`)만 기존 규칙**(로그 빌드 ≥ `fixed_in`).
+
+1. **빌드 확인을 먼저** 한다(작업 키·`verification.build`에 들어가므로): Jira SW(`--issue`면 `jira_fields.py`로), bugreport `build.json`, 또는 logcat
    fingerprint. 로그가 bugreport면 먼저 추출한다. 빌드를 모르면 묻는다.
 2. 작업 키 `verify-fix-<원인 ID>-<sanitize된 build>`: lock → snapshot → `config.py check`. 여기서부터 중단하거나 기록하지 않고 끝나는
    **모든** 경로는 `lock release <작업 키>`.
@@ -81,17 +83,17 @@ open ─(fix-submitted)─▶ fix-submitted ─(verify-fix passed)─▶ fixed
    - `signatures_pending` 원인이면 중단하고 판별 시그니처 추가(`update-signature`)를 안내.
    - `verify_fix_blocked`가 있으면 그 사유를 보여주고 중단(`db_verify fix` 호출 안 함).
      사용자가 `update-signature`를 이 계획에 넣으면 `--plan --draft`로 판정, `withheld: true`면 판정 불가.
-   - `fixed_in`에 빌드 있는 항목이 없으면 중단하고 `fix-submitted`로 빌드를 추가하라고 안내.
+   - `fixed_in`에 빌드 있는 항목이 없으면 중단하고 `fix-submitted`로 빌드를 추가하라고 안내(`fixed` 기록·회귀 판정의 기준).
 4. `db_pr preflight --branch verify-fix/<원인 ID>-<build> --search <원인 ID>` → 열린 PR(다른 verify-fix, fix-submit)을 보여준다.
-5. 판정: `db_verify.py fix --db SNAP --cause <ID> <logcat...> --build <build> --json`
-   → `{judgement, reason, C, S, trace, satisfied_traces, other_candidates, build_check{status}, fix_status, user_confirmation_required, suggested_ops}`.
-   - 종료 코드 2(빌드가 fixed_in보다 이전, 상태 부적합, 흔적 시그니처 없음 등) → 사유를 보여주고 중단.
-   - `build_check.status: undetermined` → 비교 규칙이 없거나 파싱 불가. 두 값을 보여주고 사용자에게 이후 빌드인지 묻는다.
+5. 판정: `db_verify.py fix --db SNAP --cause <ID> <logcat...> --build <build> [--bundle <N>] --json`
+   → `{judgement, reason, C, S, trace, satisfied_traces, other_candidates, build_check{status}, fix_status, user_confirmation_required, bundle?, suggested_ops}`.
+   - 종료 코드 2(상태 부적합, 흔적 시그니처 없음, 모뎀 원인의 빌드가 fixed_in보다 이전 등) → 사유를 보여주고 중단.
+   - `build_check.status: not-compared`(모뎀 아님) → 이후 빌드인지는 묻지 않는다. 대신 로그 빌드(`build_check.build`)와 수정 CL(`fix.ref`)을 보이고 "이 빌드에 수정 패치가 들어 있나요?"를 한 번 확인받는다(아니오·모름이면 계획 없이 `lock release`). `undetermined`(모뎀만) → 비교 규칙이 없거나 파싱 불가. 두 값을 보여주고 사용자에게 이후 빌드인지 묻는다.
    - **시나리오 흔적**(`trace`)과 원인 본문의 '재현 시나리오' 줄을 그대로 인용해 함께 보여주고, 사용자가 그 시나리오를 수행한 로그인지 확인받는다.
      흔적 시그니처가 있는데 흔적이 없으면 **판단 불가**다. 사용자가 "시나리오 했어"라고 해도 흔적을 대신하지 않는다.
    - 유일한 예외 `user_confirmation_required`(비코드 유형 `user-setting`·`network`·`hw`이고 scenario·recovery 시그니처가 **둘 다 없음**)
      → 사용자 확인을 받고 그 사실을 `verification.note`에 "사용자 확인(흔적 시그니처 없음)"으로 남긴다. 코드·설정 수정 유형에는 이 예외가 없다(3번에서 중단).
-6. 판정별 계획 `WD/<작업 키>/plan.json`(`source: verify-fix`, `issue: null`, 형식은 위 §계획 형식). `verification`: `{build, date, by, issue?, fixture?, scenario_evidence?, note}`.
+6. 판정별 계획 `WD/<작업 키>/plan.json`(`source: verify-fix`, `issue: null`, 형식은 위 §계획 형식). `verification`: `{build, date, by, issue?, fixture?, scenario_evidence?, note}`. `--bundle`이면 `note`의 `CI/CD 번들 <N>`을 지우지 않는다(다른 note와는 `; `로 잇는다).
 
    | 판정 | 조건 | 계획 |
    |---|---|---|
@@ -105,4 +107,4 @@ open ─(fix-submitted)─▶ fix-submitted ─(verify-fix passed)─▶ fixed
    `user.ghe_id`. `optional: true` op는 사용자가 원할 때만 넣고 그 키는 지운다. 커밋 메시지 `[<ID>] verify-fix <result>: <build>`.
    (validate --cause의 `verify-resolution`도 같은 방식이다.)
 7. 공통 쓰기 절차. 브랜치 `verify-fix/<원인 ID>-<build>`. 판정 근거는 계획 `pr_notes`에 넣으면 확인 화면과 PR 본문에 나온다:
-   `판정: <judgement> — <reason>`, `시나리오 흔적: <전역 키> @ <시각>`, `빌드 비교: <build> ≥ <fixed_in 빌드>`, 필요하면 마스킹된 근거 로그 1~3줄.
+   `판정: <judgement> — <reason>`, `시나리오 흔적: <전역 키> @ <시각>`, `빌드: <build>(패치 적용 빌드 — 사용자 확인, fixed_in 비교 안 함)`(모뎀은 `빌드 비교: <build> ≥ <fixed_in 빌드>`), `--bundle`이면 `CI/CD 번들: <N>`, 필요하면 마스킹된 근거 로그 1~3줄.

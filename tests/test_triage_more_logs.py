@@ -148,7 +148,9 @@ def test_same_name_bugreports_extract_to_separate_dirs():
     files = _input_files(ws)
     assert len(files) == 3 and all(f.is_file() for f in files) and len({f.parent for f in files}) == 3
     out = tmp("tt-br-") / "cut.log"
-    proc = ws.run("parse_logcat.py", ["cut", *files, "--evidence", ws.job_dir(KEY) / "match.json", "--out", out,
+    match = ws.job_dir(KEY) / "match.json"
+    cause = next(c["cause"] for c in json.loads(match.read_text(encoding="utf-8"))["candidates"] if c.get("cause"))
+    proc = ws.run("parse_logcat.py", ["cut", *files, "--evidence", match, "--cause", cause, "--out", out,
                                       "--tz", "Asia/Seoul", "--year", "2026"])
     assert proc.returncode == 0 and out.is_file(), proc.stderr
 

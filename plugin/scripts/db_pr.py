@@ -10,8 +10,9 @@
     db_pr.py preflight --branch <br> [--search <원인 ID|JIRA-KEY>] [--issue <KEY>]
     db_pr.py stage <plan.json> --wt <dir> --branch <br> [--dry-run] [--verbose | --then-summary]
     db_pr.py summary <wt> [--format json|markdown]
-    db_pr.py publish <wt> --branch <br> --lease <sha|new> --approved <hash> [--commit] [--and-discard]
+    db_pr.py publish <wt> --branch <br> --lease <sha|new> --approved <hash> [--commit] [--and-discard] [--and-merge [--wait <초>]]
     db_pr.py discard <wt>
+    db_pr.py merge --job <작업 키> --approved <head sha> [--wait <초>]   (publish --and-merge가 바로 못 한 병합의 재시도)
     db_pr.py find-plan --branch <br>          (sync-pr 1~4번 보조: 계획 찾기·원격 변경 확인)
 
 작업 디렉토리 `<work_dir>/<작업 키>/`: `plan.json`(계획), `state.json`(`{base_sha, branch, approved_hash,
@@ -28,6 +29,9 @@ snapshot·stage·publish는 이슈 DB 선언(`platform`)이 선택 플랫폼과 
 - 다른 작업 키의 lock이 있으면 종료 코드 2와 보유자 정보. 4시간 넘게 갱신되지 않은 lock은 만료로 보고 가져온다.
 - 같은 작업 키: `updated_at`이 10분 이내면 다른 세션이 진행 중일 수 있으므로 종료 코드 2
   (사용자가 확인하면 `--take-over`로 이어받는다). 10분이 넘었으면 그대로 이어받는다.
+  `TT_LOCK_OWNER`가 보유 owner와 같으면 재진입: owner·started_at 유지, `updated_at`만 갱신(`reacquired: true`, 종료 0).
+- `release`(--force 없음)의 owner 불일치는 종료 코드 2 "lock은 풀리지 않았다"(`{released: false, holder}`, 파일 그대로).
+  출력의 holder·previous owner는 앞 4자만 보인다.
 - `release --force`는 보유자와 상관없이 푼다(사용자가 "그 세션은 끝났다"고 확인한 경우).
 - 손상된 lock(읽을 수 없음)은 `acquire`·`touch`·`release`(--force 없음)가 종료 코드 2로 멈춘다. `release <아무 작업 키> --force`만
   `session.lock.corrupt-<UTC ts>`(같은 이름이 있으면 `-1`, `-2`…)로 옮기고 푼다. 지우지 않는다(사후 확인용).
@@ -52,10 +56,26 @@ config가 없거나 clone이 아니면 2.
 (`--json`·`--verbose`와 함께 못 쓴다). stage 1·2는 기존 그대로(summary 안 부른다), stage 성공·summary 실패는 종료 2
 (stdout은 stage 요약 JSON + `summary_error`).
 `publish`는 승인 해시·커밋 부모·커밋 메시지·브랜치를 `state.json`과 대조하고(다르면 1), lease push 뒤
-PR을 만들거나(`gh pr create`) 고친다(`gh pr edit`).
+PR을 만들거나(`gh pr create`, 리뷰어 없이 — 실패하면 head 브랜치의 열린 PR을 다시 찾는다) 고친다(`gh pr edit`).
+새 PR이면 리뷰어마다 `gh pr edit <n> --add-reviewer`: 실패는 `reviewers.failed`·`warnings`(오너 종류별 확인 대상)이고 종료 0,
+그때 병합 기록은 review다. 기존 PR(`edited`)에는 리뷰어를 더하지 않는다.
 `publish --commit`: 아직 커밋이 없으면(HEAD == base_sha) 승인 해시 → hooksPath(`.githooks`) → `git add -A` → guard 프로필 검사
 → `git commit -F <작업 디렉터리의 임시 파일>`(pre-commit 실행)을 한 뒤 위 대조·push로 간다. 이미 커밋이 있으면 건너뛴다(멱등).
 `publish --and-discard`: publish 종료 0일 때만 `discard`를 이어 부른다(실패하면 worktree·lock을 남긴다).
+publish 종료 0이면 결과에 병합 기록 `merge`(`{mode: self, approved, retry}` 또는 `{mode: review, reason}`)를 싣고
+`JOB/merge-offer.json`에 남긴다(discard 뒤에도 남는다). `mode`: config `issue_db.merge`(self | review, 기본 self). self여도
+stage `needs-approval`·메인테이너 경로(`dbpr.merge.MAINTAINER_PATHS`) 변경·카테고리 오너 리뷰어(CODEOWNERS)면 review. summary(확인 화면)도 같은 판정으로
+병합 줄과 선택지(`push하고 바로 병합` / `push만(리뷰어에게)` / `취소`)를 낸다.
+`publish --and-merge`: publish(·discard) 종료 0이고 `merge.mode`가 self면 같은 프로세스에서 아래 `merge`를 이어 부르고 결과를
+`merge.result`에 싣는다(종료 코드는 publish 결과 그대로 — 병합 여부는 `merge.result.merged`). 권한 확인은 publish 한 번이다.
+`merge --job <작업 키> --approved <sha> [--wait <초>]`: `merge-offer.json`이 self이고 `--approved`가 publish가 push한 커밋(PR head)일
+때 PR 상태를 보고 병합한다(조건·대기 `dbpr/merge.py`): 검사 통과(검사가 없으면 `ci_mode: local`일 때만), `mergeStateStatus`
+CLEAN·HAS_HOOKS, 메인테이너 경로 없음(`git diff origin/<base>...head`로 다시 본다), main 불변. 검사 대기·상태 확인 중이면
+`--wait`(없으면 config `issue_db.merge_wait_seconds`, 기본 600, 0~3600)초까지 15초 간격으로 다시 본다.
+`gh pr merge <n> --<레포가 허용하는 방식> --match-head-commit <sha>`(`--delete-branch` 없음).
+병합하면 `{merged: true, pr, merge_commit, method}` 종료 0(이미 같은 커밋으로 병합됨도 0, `already`), 안 되면 `{merged: false,
+reason, left, waited, retry}` 종료 1(PR은 그대로), gh로 PR을 읽지 못하면 2. lock·worktree는 쓰지 않는다.
+결과는 `JOB/trace.jsonl` `merge` 행(최종 결과 한 줄). 구현 `dbpr/merge.py`.
 
 `stage`는 계획을 읽을 때 먼저 형식을 검사한다(최상위 키·필수 키, `계획 형식 오류:` 종료 코드 2 — 이전 작업 파일은
 그대로 둔다). 하위 스크립트가 Traceback으로 끝나면 사용자에게는 마지막 줄만 "내부 오류"로 보인다(`_err_brief`).
@@ -65,7 +85,7 @@ drift가 계산한 `ids_at_base`(계획 당시 기준 임시 ID 할당)는 stage
 시각은 환경변수 `TT_NOW`(ISO, 테스트용)로 바꿀 수 있다.
 
 이 파일은 CLI만 둔다. 구현은 `dbpr/`: `lock`(상수·`UsageError`·`Lock`), `worktree`(git·snapshot·`Ctx`·worktree 준비/제거·
-discard·cleanup), `publish`(my-prs·preflight·stage·summary·승인 해시·publish·find-plan).
+discard·cleanup), `publish`(my-prs·preflight·stage·summary·승인 해시·publish·find-plan), `merge`(병합 제안·merge).
 """
 
 from __future__ import annotations
@@ -85,6 +105,7 @@ import db_summary  # noqa: E402,F401 — test_db_summary가 본다
 from common.exitcodes import OK, USAGE  # noqa: E402
 from dbpr import worktree as _worktree_mod  # noqa: E402
 from dbpr.lock import Lock, UsageError, trace_note  # noqa: E402
+from dbpr.merge import merge  # noqa: E402
 from dbpr.publish import (_GUARD_FIX_TAIL, _brief_stage, approved_hash, find_plan, my_prs, preflight,  # noqa: E402,F401
                           publish, stage, summary)
 from dbpr.worktree import (Ctx, _drop_pasted_steps, _git, _job_of, _prepare_worktree,  # noqa: E402,F401
@@ -159,8 +180,15 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--commit", action="store_true",
                    help="커밋이 없으면 승인 해시·hooksPath·guard 검사를 거쳐 summary의 commit_message로 커밋한 뒤 publish한다 (멱등)")
     p.add_argument("--and-discard", action="store_true", help="publish 종료 0일 때만 이어서 discard한다")
+    p.add_argument("--and-merge", action="store_true",
+                   help="확인 화면에서 'push하고 바로 병합'을 골랐을 때만: publish 종료 0이고 병합 자격(self)이면 이어서 merge")
+    p.add_argument("--wait", type=int, metavar="초", help="--and-merge: 검사·병합 가능 상태를 기다릴 최대 초(기본 config)")
     p = sub.add_parser("discard")
     p.add_argument("wt")
+    p = sub.add_parser("merge")
+    p.add_argument("--job", metavar="작업 키", required=True)
+    p.add_argument("--approved", metavar="sha", required=True, help="publish 결과 merge.approved(PR head 커밋)")
+    p.add_argument("--wait", type=int, metavar="초", help="검사·병합 가능 상태를 기다릴 최대 초(기본 config issue_db.merge_wait_seconds)")
     p = sub.add_parser("find-plan")
     p.add_argument("--branch", required=True)
     _allow_common_anywhere(parser)
@@ -280,9 +308,21 @@ def main(argv: list[str] | None = None) -> int:
                                          "next": f"push는 됐다. PR을 수동 처리하거나 publish 재시도를 사용자와 정한 뒤 db_pr discard {args.wt}"}
                 else:
                     result["discard"] = {"discarded": False, "skipped": "publish 실패 — worktree·lock 보존"}
+            if args.and_merge and code == OK:
+                block = result.get("merge") or {}
+                if block.get("mode") == "self":
+                    try:        # publish는 이미 끝났다: 병합 오류가 publish 결과를 덮지 않게 한다
+                        block["result"], _ = merge(ctx, _job_of(Path(args.wt), ctx)[1], block["approved"], args.wait)
+                    except Exception as exc:    # noqa: BLE001 — 어떤 병합 오류도 publish 결과를 바꾸지 않는다
+                        block["result"] = {"merged": False, "reason": str(exc) or type(exc).__name__,
+                                           "retry": block.get("retry")}
+                else:
+                    block["result"] = {"merged": False, "reason": block.get("reason") or "병합 자격이 없다"}
         elif args.cmd == "discard":
             _shown_close(ctx, args.wt, "discard")
             result = discard(ctx, Path(args.wt))
+        elif args.cmd == "merge":
+            result, code = merge(ctx, args.job, args.approved, args.wait)
         else:
             result = find_plan(ctx, args.branch)
     except UsageError as exc:

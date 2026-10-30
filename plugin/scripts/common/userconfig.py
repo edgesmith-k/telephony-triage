@@ -58,7 +58,7 @@ def builtin() -> dict:
 def from_site_defaults(defaults: dict) -> dict:
     """site-defaults.yaml 값을 사용자 config 키 공간으로 옮긴 것.
 
-    issue_db.base_branch·work_dir는 옮기지 않는다 — 이슈 DB `.githooks/pre-push`가 사용자 config에서 이 두 값을 직접 읽고
+    `issue_db.merge`·`merge_wait_seconds`(PR 바로 병합 기본값)는 옮긴다. issue_db.base_branch·work_dir는 옮기지 않는다 — 이슈 DB `.githooks/pre-push`가 사용자 config에서 이 두 값을 직접 읽고
     (기본 main·<home>/work) site-defaults를 보지 않으므로, 팀 기본값으로 지원하려면 pre-push도 같이 바꾼다."""
     out: dict = {}
     tracker = defaults.get("tracker") or {}
@@ -75,7 +75,19 @@ def from_site_defaults(defaults: dict) -> dict:
     ghe = defaults.get("ghe") or {}
     if ghe.get("host"):
         out.setdefault("issue_db", {})["ghe_host"] = ghe["host"]
+    merge = site_merge(defaults)
+    if merge:   # PR 바로 병합 기본값(merge: self | review, merge_wait_seconds, 06-collaboration.md §6.1). 사용자 config가 덮는다
+        out.setdefault("issue_db", {}).update(merge)
     return out
+
+
+SITE_ISSUE_DB_KEYS = ("merge", "merge_wait_seconds")
+
+
+def site_merge(defaults: dict) -> dict:
+    """site-defaults `issue_db.merge`·`merge_wait_seconds`(있는 것만). 값 검사는 쓰는 쪽(`dbpr.merge`)이 한다."""
+    db = defaults.get("issue_db") if isinstance(defaults.get("issue_db"), dict) else {}
+    return {k: db[k] for k in SITE_ISSUE_DB_KEYS if db.get(k) is not None}
 
 
 def legacy_problems(defaults: dict | None, user: dict | None) -> list[str]:
@@ -179,6 +191,7 @@ def _with_profile(out: dict, defaults: dict, platform: str, prof) -> dict:
     ghe = (defaults.get("ghe") or {}).get("host")
     if ghe:
         issue_db["ghe_host"] = ghe
+    issue_db.update(site_merge(defaults))
     out.update({"issue_db": issue_db, "work_dir": str(home() / f"work-{platform}"), "code_profiles": [],
                 "recent_code_roots": []})
     out = deep_merge(out, {k: v for k, v in (prof or {}).items() if k in PROFILE_KEYS} if isinstance(prof, dict) else {})

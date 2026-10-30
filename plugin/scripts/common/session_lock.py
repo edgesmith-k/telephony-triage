@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -15,6 +16,13 @@ SNAPSHOT_DIR = "_snapshot"
 SNAPSHOT_META = "snapshot.json"   # `<work_dir>/snapshot.json` = {sha, base, at}
 FRESH = timedelta(minutes=10)
 EXPIRE = timedelta(hours=4)
+# 작업 키(`<work_dir>/<작업 키>/` 폴더 이름): 트래커 키(analyze·record) 또는 fix-submit-<원인 ID>·verify-fix-…·verify-res-…·
+# 브랜치 이름 기반 키(contracts.md `db_pr.py` 세부·reference/verify.md). `/`·`\`·선두 `.`·`_`를 막는다(경로 안전)
+JOB_KEY_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
+# 개명 전 작업 파일(jira_raw.json·jira.json·jira_meta.json)도 표식으로 본다 — 옛 JOB도 cleanup 대상·원문 잔여로 보이게(방어)
+LEGACY_JOB_FILES = ("jira_raw.json", "jira.json", "jira_meta.json")
+JOB_MARKERS = ("plan.json", "state.json", "trace.jsonl", "issue_raw.json", "triage-state.json",
+               *LEGACY_JOB_FILES)   # logs/는 흔한 이름이라 표식이 아니다
 
 
 class LockError(ValueError):
@@ -59,3 +67,15 @@ def describe(data: dict | None) -> dict | None:
         return None
     age = now() - parse(data["updated_at"])
     return {**data, "expired": age > EXPIRE, "age_sec": int(age.total_seconds())}
+
+
+def is_job_dir(work_dir: Path, name: str) -> bool:
+    """도구가 만든 작업 폴더 `<work_dir>/<name>/`: 이름이 작업 키 형식이고(경로 구분자·선두 `.` 없음) 표식 파일이 하나라도
+    있다(트래커 키가 아닌 작업 키 판정 — job_status)."""
+    if not isinstance(name, str) or not JOB_KEY_RE.fullmatch(name):
+        return False
+    path = Path(work_dir) / name
+    try:
+        return not path.is_symlink() and path.is_dir() and any((path / m).exists() for m in JOB_MARKERS)
+    except OSError:
+        return False

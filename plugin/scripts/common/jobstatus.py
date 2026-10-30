@@ -29,11 +29,11 @@ LABEL_MAX = 160
 GIT_TIMEOUT = 20
 MD_MAX = 3072                   # markdown 바이트 상한
 TRACE_TAIL = 256 << 10          # last-run-error: trace.jsonl 끝에서 읽는 바이트
-# 실행 하나가 끝난 행(triage done·needs_input·stopped·error, db_pr stage·publish·discard). 마지막 것이 오류면 last-run-error
-END_STEPS = ("done", "needs_input", "stopped", "error", "stage", "publish", "discard")
+# 실행 하나가 끝난 행(triage done·needs_input·stopped·error, db_pr stage·publish·discard·merge). 마지막 것이 오류면 last-run-error
+END_STEPS = ("done", "needs_input", "stopped", "error", "stage", "publish", "discard", "merge")
 RUN_ERROR_NEXT = ("메시지대로 고친 뒤 같은 명령을 다시 실행한다. '내부 오류'면 `/telephony-triage:status --doctor` 화면과 "
                   "trace.jsonl을 관리자에게 보낸다")
-STAGES = ("none", "pr-created", "pushed-no-pr", "committed", "needs-input", "summary-shown", "staged", "plan-saved",
+STAGES = ("none", "pr-merged", "pr-created", "pushed-no-pr", "committed", "needs-input", "summary-shown", "staged", "plan-saved",
           "needs-input-past", "analyzed", "started", "unknown")
 # 파일별로 쓰는 중첩 값의 형식. 값이 null이면 통과, 형식이 다르면 그 파일을 손상으로 본다(고치지 않는다)
 SHAPES = {
@@ -156,6 +156,12 @@ def read_lock(work_dir: Path, key: str, owner: str | None) -> tuple[dict, dict |
     return info, None
 
 
+def merged_row(job: Path, number) -> dict | None:
+    """trace 끝 256KB에서 이 PR의 마지막 `merge{merged: true}` 행(`db_pr merge`가 병합했거나 이미 병합됨을 확인). 없으면 None."""
+    return next((r for r in reversed(trace_rows(job, TRACE_TAIL))
+                 if r.get("step") == "merge" and r.get("merged") is True and r.get("pr") == number), None)
+
+
 def quick_stage(job: Path) -> str:
     """후보 목록용 얕은 단계(파일만, git·lock 없음). 손상 파일은 `unknown`."""
     files = _Files(job, [])
@@ -164,7 +170,7 @@ def quick_stage(job: Path) -> str:
         return "unknown"
     pr = (plan or {}).get("pr") or {}
     if pr.get("number"):
-        return "pr-created"
+        return "pr-merged" if merged_row(job, pr["number"]) else "pr-created"
     if pr.get("head_sha"):
         return "pushed-no-pr"
     if state and state.get("approved_hash") and (job / PR_FILE).is_file():
@@ -219,27 +225,36 @@ def last_run_error(job: Path) -> dict | None:
                 RUN_ERROR_NEXT, at)
 
 
+def job_kind(work_dir: Path, name: str, safe_key_re) -> str | None:
+    """작업 폴더 종류: 트래커 키 형식이면 `tracker`, 아니면 작업 키(fix-submit-…·verify-…·브랜치 기반) 형식이고 작업 표식
+    파일이 있으면 `work`, 그 밖(`_`·`.` 폴더 포함)은 None."""
+    if name.startswith(("_", ".")):
+        return None
+    if safe_key_re is None or safe_key_re.fullmatch(name):
+        return "tracker"
+    return "work" if session_lock.is_job_dir(work_dir, name) else None
+
+
 def candidates(work_dir: Path, safe_key_re) -> list[dict]:
-    """작업 디렉토리 후보(최근 기록 순, `_`·`.` 폴더 제외)."""
+    """작업 디렉토리 후보(최근 기록 순, `_`·`.` 폴더 제외). 트래커 키 폴더와 작업 키 폴더(`kind`)."""
     out = []
     try:
         entries = list(work_dir.iterdir())
     except OSError:
         return []
     for d in entries:
-        if d.name.startswith(("_", ".")) or (safe_key_re is not None and not safe_key_re.fullmatch(d.name)):
-            continue
         try:        # 훑는 도중 사라진 폴더·파일은 건너뛴다
-            if not d.is_dir():
+            kind = job_kind(work_dir, d.name, safe_key_re)
+            if kind is None or not d.is_dir():
                 continue
             stamps = [(d / n).stat().st_mtime for n in (PLAN, TRIAGE_STATE) if (d / n).is_file()]
             when = max(stamps) if stamps else d.stat().st_mtime
         except OSError:
             continue
-        out.append((when, d.name))
+        out.append((when, d.name, kind))
     out.sort(reverse=True)
-    return [{"key": name, "stage": quick_stage(work_dir / name),
-             "at": session_lock.iso(datetime.fromtimestamp(when, timezone.utc))} for when, name in out]
+    return [{"key": name, "kind": kind, "stage": quick_stage(work_dir / name),
+             "at": session_lock.iso(datetime.fromtimestamp(when, timezone.utc))} for when, name, kind in out]
 
 
 def _post(key: str, platform: str | None, defaults: dict) -> dict:
@@ -270,8 +285,9 @@ def _sha256(path: Path) -> str | None:
 
 
 def collect(work_dir: Path, key: str, cfg: dict, defaults: dict, platform: str | None = None,
-            tracker: str | None = None) -> dict:
-    """한 작업의 상태. 플랫폼 불일치는 `StatusUsage`."""
+            tracker: str | None = None, tracker_key: bool = True) -> dict:
+    """한 작업의 상태. 플랫폼 불일치는 `StatusUsage`. `tracker_key=False`(작업 키 — fix-submit-…·verify-… 등)면
+    `target.issue`는 None이고 트래커 코멘트 게시 상태는 보지 않는다(`post.state` 해당 없음), analyze 안내를 내지 않는다."""
     unpublished, pushed_no_pr, stale_note, plan_other = _notes()
     work_dir = Path(work_dir)
     platform = platform or userconfig.TOP_PROFILE
@@ -310,7 +326,7 @@ def collect(work_dir: Path, key: str, cfg: dict, defaults: dict, platform: str |
         snapshot = None
     issue = (plan or {}).get("issue") or (analysis or {}).get("issue") or {}
     out["target"] = {"platform": platform, "tracker": tracker, "key": key,
-                     "issue": {"key": issue.get("key") or key, "origin": issue.get("origin")},
+                     "issue": {"key": issue.get("key") or key, "origin": issue.get("origin")} if tracker_key else None,
                      "issue_db": str(userconfig.get(cfg, "issue_db.path") or "") or None, "work_dir": str(work_dir),
                      "snapshot": snapshot, "remote": REMOTE_NOTE}
 
@@ -366,9 +382,14 @@ def collect(work_dir: Path, key: str, cfg: dict, defaults: dict, platform: str |
     nxt = None
     if not has_job:
         st = stage("none", "작업 디렉토리 없음 — 이 키로 시작한 작업이 없다", "now")
-        nxt = f"/telephony-triage:analyze {key} <로그 경로>"
+        nxt = f"/telephony-triage:analyze {key} <로그 경로>" if tracker_key else None
     elif PLAN in files.corrupt:
         st = unknown(PLAN)
+    elif pr.get("number") and not resync and merged_row(job, pr["number"]):
+        row = merged_row(job, pr["number"])
+        st = stage("pr-merged", f"PR #{pr['number']} 병합됨(db_pr merge, {str(row.get('sha') or '?')[:12]}) — 원격 main은 다시 확인하지 않았다",
+                   "recorded", row.get("ts") if isinstance(row.get("ts"), str) else None, ["trace.jsonl merge 행"])
+        nxt = "없음 — 끝난 작업이다(작업 폴더는 db_pr cleanup --older-than이 정리한다)"
     elif pr.get("number") and not resync:
         st = stage("pr-created", f"PR #{pr['number']} 생성됨(브랜치 {pr.get('branch')}) — PR의 지금 상태는 확인하지 않았다",
                    "recorded", _mtime(job / PLAN), [f"plan.json pr.number {pr['number']}"])
@@ -424,7 +445,8 @@ def collect(work_dir: Path, key: str, cfg: dict, defaults: dict, platform: str |
         fb = (plan.get("feedback") or {}).get("decision")
         st = stage("plan-saved", f"작업 계획 저장됨(source: {plan.get('source')}, 결정: {fb or '없음'}) — 미게시", "recorded",
                    _mtime(job / PLAN), [f"started_at {plan.get('started_at')}" if plan.get("started_at") else "plan.json"])
-        nxt = unpublished + " — 이어서 하려면 같은 키로 analyze를 다시 실행해 이어서(resume)를 고른다"
+        nxt = unpublished + (" — 이어서 하려면 같은 키로 analyze를 다시 실행해 이어서(resume)를 고른다" if tracker_key
+                             else " — 이 작업을 만든 흐름(verify·sync-pr 등)에서 이어 가거나 폐기한다")
         if plan.get("request_hash") and (analysis or {}).get("request_hash") \
                 and plan["request_hash"] != analysis["request_hash"]:
             blockers.append(_row("plan-stale", f"{plan_other} — 계획이 지금 analysis.json과 다른 분석에서 나왔다", "recorded",
@@ -452,7 +474,8 @@ def collect(work_dir: Path, key: str, cfg: dict, defaults: dict, platform: str |
     else:
         ev = [n for n in (TRIAGE_STATE, "trace.jsonl") if (job / n).is_file()]
         st = stage("started", "작업 디렉토리만 있다(분석 결과 없음)", "now", None, [f"{', '.join(ev)} 있음"] if ev else None)
-        nxt = f"/telephony-triage:analyze {key} <로그 경로>로 다시 시작한다"
+        nxt = f"/telephony-triage:analyze {key} <로그 경로>로 다시 시작한다" if tracker_key else \
+            "이 작업을 만든 흐름(verify·sync-pr 등)을 같은 작업 키로 다시 시작한다"
     if resync:
         st.setdefault("evidence", []).insert(0, f"plan.json pr.number {pr.get('number')}, "
                                                 + ("wt git 읽기 실패 — 재동기화 여부 확인 불가" if git_failed else "wt HEAD ≠ pr.head_sha"))
@@ -507,7 +530,10 @@ def collect(work_dir: Path, key: str, cfg: dict, defaults: dict, platform: str |
 
     out["approval"] = {"approved_hash_prefix": str(approved)[:8] if approved else None,
                        "staged_at": (state or {}).get("staged_at"), "user_approval": "unknown"}
-    out["post"] = _post(key, platform, defaults) if has_job else {"state": "none"}
+    if not tracker_key:
+        out["post"] = {"state": "해당 없음(트래커 키 작업 아님)"}
+    else:
+        out["post"] = _post(key, platform, defaults) if has_job else {"state": "none"}
     names = {"plan": PLAN, "state": STATE, "stage": STAGE, "pr": PR_FILE, "analysis": "analysis.json",
              "report": "report.md", "post": issuepost.POST_FILE}
     found = {k: str(job / n) for k, n in names.items() if (job / n).is_file()}
@@ -570,7 +596,8 @@ def markdown(doc: dict) -> str:
         if not doc["candidates"]:
             lines.append(("- 작업 없음 — `/telephony-triage:analyze <JIRA-KEY> <로그 경로>`로 시작한다", None))
         for c in doc["candidates"]:
-            lines.append((f"- {_clip(c['key'], 80)}: {c['stage']} [기록 {c['at']}]", 1))
+            kind = " (작업 키)" if c.get("kind") == "work" else ""
+            lines.append((f"- {_clip(c['key'], 80)}{kind}: {c['stage']} [기록 {c['at']}]", 1))
         if doc["candidates"]:
             lines += [("", None), ("작업 키를 골라 `job_status.py <KEY>`로 다시 본다.", None)]
         return _fit(lines)
@@ -578,8 +605,9 @@ def markdown(doc: dict) -> str:
     issue = t["issue"]
     key = _clip(doc["key"], 80)
     L: list = [(f"## {key} 작업 상태 ({doc['platform']})", None), ("", None), ("### 대상", None),
-               (f"- [현재] 트래커 {t.get('tracker')} · 이슈 {_clip(issue.get('key'), 80)}"
-                + (f"(origin {issue['origin']})" if issue.get("origin") else ""), None)]
+               ((f"- [현재] 트래커 {t.get('tracker')} · 이슈 {_clip(issue.get('key'), 80)}"
+                 + (f"(origin {issue['origin']})" if issue.get("origin") else "")) if issue
+                else "- [현재] 작업 키(트래커 키 아님) — 이슈·코멘트 게시 해당 없음", None)]
     snap = t.get("snapshot")
     if snap:
         L.append((f"- {_tag({'confidence': 'recorded', 'at': snap.get('at')})} 스냅샷 {snap.get('sha')}"
@@ -602,7 +630,7 @@ def markdown(doc: dict) -> str:
         L.append((f"- {_tag({'confidence': 'now' if q.get('live') else 'recorded', 'at': q.get('asked_at')})} "
                   f"마지막 analyze 실행이 질문({q.get('kind')})에서 멈췄다", None))
     post = doc.get("post") or {}
-    if post.get("state") not in (None, "none"):
+    if post.get("state") not in (None, "none") and issue:    # 작업 키는 대상 줄이 이미 "해당 없음"을 말한다
         tag = "[확인 불가]" if post.get("state") == "확인 불가" else "[기록]"
         L.append((f"- {tag} Jira 코멘트: {post.get('state')}" + (f" — {_clip(post['reason'], 120)}" if post.get("reason") else ""), 3))
     ap = doc.get("approval") or {}

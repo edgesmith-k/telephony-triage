@@ -68,8 +68,11 @@ def validate_plan(plan: dict, db: Path) -> None:
     errors = sorted(jsonschema.Draft202012Validator(schema).iter_errors(plan), key=lambda e: list(e.absolute_path))
     if errors:
         first = errors[0]
+        detail = _branch_detail(first)
+        if detail is None and first.context:   # op 분기가 아닌 oneOf(예: issue = null | 객체): 가장 깊은 하위 오류의 필드 경로를 말한다
+            first = max(first.context, key=lambda e: len(e.absolute_path))
         where = "/".join(str(p) for p in first.absolute_path) or "(최상위)"
-        suffix, text = _branch_detail(first) or ("", _cap(first.message, 300))
+        suffix, text = detail or ("", _cap(first.message, 300))
         raise UsageError(f"계획 형식 오류 ({where}{suffix}): {text}")
 
 

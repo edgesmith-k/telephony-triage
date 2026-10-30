@@ -16,6 +16,13 @@ schema: 1
 # guard:
 #   raw_read: {names: [], exempt_dirs: []}
 
+# 이슈 DB PR 바로 병합 기본값 (06-collaboration.md §6.1). self: push 전 확인 화면에 'push하고 바로 병합' 선택지를 내고, 고르면
+# publish --and-merge가 본인 권한으로 병합한다(검사 통과·브랜치 보호 조건 충족일 때만). review: 선택지 없이 리뷰어가 GHE에서 머지한다.
+# merge_wait_seconds: 검사·병합 가능 상태를 기다리는 최대 초(기본 420, 최대 480). 사용자 config issue_db.*가 덮는다.
+issue_db:
+  merge: self
+  merge_wait_seconds: 600
+
 # 합성 fixture(origin: synthetic) 허용 여부.
 # 사내 기본값은 false이고, 이 example(테스트 헬퍼 복사본)만 true다 (15-local-draft.md §15.2).
 synthetic_allowed: true
@@ -163,6 +170,8 @@ analyzers:
     when: ask                          # ask | always | never
     inputs: [events_json, log_paths, top_candidates, issue_summary]
     max_tokens_hint: medium            # TODO(SITE:S10) 플러그인은 이 키를 읽지 않는다(S-4a에서 쓸지 지울지 결정)
+    # source: /abs/path/to/analyzer-skill   # 선택: 분석 스킬 소스 checkout(SKILL.md가 있는 폴더, git 저장소 안). 있으면 [스킬] 제안
+    #                                       # patch를 사용자가 승인한 뒤 그 워킹 트리에 git apply한다(커밋·push 안 함, 16 §16.5.1)
 
 # 탐색 분석: 후보 없음·원인 미확인일 때 Claude가 타임라인으로 가설을 세운다 (07-workflow.md §Step 5-2)
 # 결과는 리포트 보조 절에만 쓰고 점수·분류·검증에는 쓰지 않는다.

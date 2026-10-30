@@ -252,6 +252,31 @@ def test_ipv4_after_version_context_is_kept():
     assert masking.new_masker()("peer 1.2.3.4") == "peer <IP#1>"  # 문맥 없으면 안전 쪽
 
 
+def test_data_call_response_cid_is_not_cell():
+    """AOSP 데이터 콜 응답 객체 안의 `cid`는 context id라 셀이 아니다(S13 오탐). 셀 식별자는 그대로 마스킹한다.
+    (AOSP 형식을 본뜬 합성 줄)"""
+    m = masking.new_masker()
+    resp = ("RILJ: [0041]< SETUP_DATA_CALL DataCallResponse: { cause=NONE retry=-1 cid=1 linkStatus=2 protocolType=2 "
+            "ifname=rmnet_data0 addresses=[10.0.0.2/32] mtu=1500 defaultQos=EpsQos: {qci=9} sliceInfo=null} [PHONE0]")
+    assert m(resp) == resp.replace("10.0.0.2", "<IP#1>")
+    unsol = "[UNSL]< UNSOL_DATA_CALL_LIST_CHANGED [DataCallResponse: { cause=NONE retry=-1 cid=2 linkStatus=2}] lac=1234 cid=5678"
+    assert m(unsol) == "[UNSL]< UNSOL_DATA_CALL_LIST_CHANGED [DataCallResponse: { cause=NONE retry=-1 cid=2 linkStatus=2}] " \
+                       "lac=<CELL#1> cid=<CELL#2>"      # 객체 밖의 `cid`는 셀
+    aidl = "android.hardware.radio.data.SetupDataCallResult{cause: 0, suggestedRetryTime: -1, cid: 3, active: 2}"
+    assert m(aidl) == aidl
+    cell = "CellIdentityGsm:{ mLac=1234 mCid=5678 } CellIdentityLte:{ mCi=12345678 mPci=301 mTac=4660 }"
+    assert m(cell) == "CellIdentityGsm:{ mLac=<CELL#1> mCid=<CELL#2> } CellIdentityLte:{ mCi=<CELL#3> mPci=<CELL#4> mTac=<CELL#5> }"
+    # 닫는 `}` 없이 잘린 객체: 제외는 첫 `cid`까지라 뒤의 셀 `cid`는 마스킹된다
+    cut = "DataCallResponse: { cause=NONE retry=-1 cid=1 linkStatus=2 ifname=rmnet0 ... lac=1234 cid=5678"
+    assert m(cut) == "DataCallResponse: { cause=NONE retry=-1 cid=1 linkStatus=2 ifname=rmnet0 ... lac=<CELL#1> cid=<CELL#2>"   # 같은 값 = 같은 번호
+    hidl = "SetupDataCallResult{.cause = NONE, .suggestedRetryTime = -1, .cid = 1, .active = 2}"
+    assert m(hidl) == hidl
+    # 객체가 아닌 데이터 콜 문구(모의 형식)는 안전 쪽으로 그대로 셀로 본다
+    assert masking.new_masker()("[0041]< SETUP_DATA_CALL error=NONE cid=1") == "[0041]< SETUP_DATA_CALL error=NONE cid=<CELL#1>"
+    assert masking.new_masker().find(resp) == [{"kind": "IP", "start": resp.index("10.0.0.2"),
+                                                 "end": resp.index("10.0.0.2") + len("10.0.0.2")}]
+
+
 def test_pin_puk_values_need_four_digits():
     assert masking.new_masker()("pin: 3") == "pin: 3"
     assert masking.new_masker()("pin=null puk=unknown") == "pin=null puk=unknown"
@@ -584,17 +609,18 @@ def test_cut_writes_only_masked_lines():
     evidence = _tmp() / "match.json"
     evidence.write_text(json.dumps(match, ensure_ascii=False), encoding="utf-8")
     fixture = _tmp() / "DATA-001-01.2.log"
-    proc = _run("parse_logcat.py", ["cut", str(log), "--evidence", str(evidence), "--context", "3",
-                                    "--max-lines", "40", "--out", str(fixture), "--tz", TZ, "--year", YEAR])
+    proc = _run("parse_logcat.py", ["cut", str(log), "--evidence", str(evidence), "--cause", "DATA-001-01",
+                                    "--context", "3", "--max-lines", "40", "--out", str(fixture), "--tz", TZ, "--year", YEAR])
     assert proc.returncode == 0, proc.stderr
+    assert json.loads(proc.stdout)["cause"] == "DATA-001-01"
     text = fixture.read_text(encoding="utf-8")
     assert masking.new_masker().find(text) == [] and "450081234567890" not in text
     again = _match(_parse(fixture, "--mask"), "--regress")
     assert [c["cause"] for c in again["causes"] if c["C"]] == ["DATA-001-01"]
 
     # 3) --max-lines: 앵커만으로 넘으면 종료 코드 2
-    proc = _run("parse_logcat.py", ["cut", str(log), "--evidence", str(evidence), "--max-lines", "1",
-                                    "--out", str(_tmp() / "x.log"), "--tz", TZ, "--year", YEAR])
+    proc = _run("parse_logcat.py", ["cut", str(log), "--evidence", str(evidence), "--cause", "DATA-001-01",
+                                    "--max-lines", "1", "--out", str(_tmp() / "x.log"), "--tz", TZ, "--year", YEAR])
     assert proc.returncode == 2 and "max-lines" in proc.stderr
 
 
@@ -602,18 +628,19 @@ def _line_at(sec: int, tag: str, msg: str, ms: int = 0) -> str:
     return f"09-20 14:30:{sec:02d}.{ms:03d}  1234  1244 D {tag}: [PHONE0] {msg}"
 
 
-def _evidence_json(refs: list[dict | None], ts: str = "2026-09-20T05:30:10.000Z") -> Path:
-    """`match.json` 모양의 최소 입력 (1위 후보의 근거만)."""
+def _evidence_json(refs: list[dict | None], ts: str = "2026-09-20T05:30:10.000Z", **extra) -> Path:
+    """`match.json` 모양의 최소 입력 (원인 X-001-01 후보의 근거만, `extra`는 최상위 키)."""
     evidence = [{"ts": ts, "tag": "DSM-0", "msg": "x", "event": None, "line_ref": ref} for ref in refs]
     path = _tmp() / "match.json"
-    path.write_text(json.dumps({"candidates": [{"evidence": evidence}]}), encoding="utf-8")
+    candidates = [{"type": "X-001", "cause": "X-001-01", "C": 1, "evidence": evidence}]
+    path.write_text(json.dumps({"candidates": candidates, **extra}), encoding="utf-8")
     return path
 
 
-def _cut(logs: list[Path], evidence: Path, *extra: str):
+def _cut(logs: list[Path], evidence: Path, *extra: str, cause: str | None = "X-001-01"):
     out = _tmp() / "cut.log"
     proc = _run("parse_logcat.py", ["cut", *map(str, logs), "--evidence", str(evidence), "--out", str(out),
-                                    "--tz", TZ, "--year", YEAR, *extra])
+                                    "--tz", TZ, "--year", YEAR, *(["--cause", cause] if cause else []), *extra])
     return proc, out
 
 
@@ -670,6 +697,60 @@ def test_cut_raw_alignment_with_form_feed():
     assert proc.returncode == 0, proc.stderr
     assert out.read_text(encoding="utf-8").strip().endswith("evidence after control chars")
     assert json.loads(proc.stdout)["lines"] == 1
+
+
+def test_cut_evidence_picks_requested_cause():
+    """`--cause`가 2위 후보면 1위가 아니라 그 후보의 근거로 자른다 (회귀 모드는 같은 점수면 ID 순이라 1위가 다른 원인일 수 있다)."""
+    lines = [_line_at(n, "DSM-0", f"tick {n}") for n in range(1, 60)]
+    lines[9] = _line_at(10, "DSM-0", "first cause line")
+    lines[49] = _line_at(50, "DSM-0", "second cause line")
+    log = _write(lines)
+    def ev(sec, line_no):
+        return [{"ts": f"2026-09-20T05:30:{sec:02d}.000Z", "tag": "DSM-0", "msg": "x", "event": None,
+                 "line_ref": {"file_index": 0, "line_no": line_no}}]
+    match = {"candidates": [{"type": "X-001", "cause": "X-001-01", "C": 1, "evidence": ev(10, 10)},
+                            {"type": "X-001", "cause": "X-001-02", "C": 1, "evidence": ev(50, 50)}],
+             "causes": [{"type": "X-001", "cause": "X-001-01", "C": 1}, {"type": "X-001", "cause": "X-001-02", "C": 1}]}
+    path = _tmp() / "match.json"
+    path.write_text(json.dumps(match), encoding="utf-8")
+    proc, out = _cut([log], path, "--context", "1", cause="X-001-02")
+    assert proc.returncode == 0, proc.stderr
+    info = json.loads(proc.stdout)
+    text = out.read_text(encoding="utf-8")
+    assert "second cause line" in text and "first cause line" not in text
+    assert info["cause"] == "X-001-02" and info["rank"] == 2
+    assert [w["code"] for w in info["warnings"]] == ["evidence-other-causes"]
+    assert "X-001-01" in info["warnings"][0]["message"] and "경고[evidence-other-causes]" in proc.stderr
+    # 다른 C=1 원인이 없으면 경고가 없다
+    proc, _ = _cut([log], _evidence_json([{"file_index": 0, "line_no": 10}]), "--context", "0")
+    info = json.loads(proc.stdout)
+    assert proc.returncode == 0 and info["rank"] == 1 and info["warnings"] == []
+
+
+def test_cut_evidence_cause_errors():
+    log = _dup_ts_tag_log()
+    ref = [{"file_index": 0, "line_no": 10}]
+    # --cause 없음
+    proc, out = _cut([log], _evidence_json(ref), cause=None)
+    assert proc.returncode == 2 and "--cause" in proc.stderr and not out.exists()
+    # 이 로그에서 C=0 / 판정 불가 / signatures_pending
+    for extra, want in (({"causes": [{"cause": "Y-001-01", "C": 0}]}, "C=0"),
+                        ({"causes": [{"cause": "Y-001-01", "C": None}]}, "C=null"),
+                        ({"pending_causes": [{"type": "Y-001", "cause": "Y-001-01"}]}, "signatures_pending")):
+        proc, _ = _cut([log], _evidence_json(ref, **extra), cause="Y-001-01")
+        assert proc.returncode == 2 and want in proc.stderr and "X-001-01" in proc.stderr, (want, proc.stderr)
+    # --top으로 잘렸으면 --top 0 재실행 힌트
+    for extra in ({"omitted": {"types": 0, "causes": 2, "pending_causes": 0, "candidates": 0}},
+                  {"causes": [{"cause": "Y-001-01", "C": 1}], "omitted": {"candidates": 1}}):
+        proc, _ = _cut([log], _evidence_json(ref, **extra), cause="Y-001-01")
+        assert proc.returncode == 2 and "--top 0" in proc.stderr, proc.stderr
+    # match.json에 없는 원인
+    proc, _ = _cut([log], _evidence_json(ref), cause="Y-001-01")
+    assert proc.returncode == 2 and "없는 원인" in proc.stderr
+    # --around와 --cause는 같이 쓰지 않는다
+    proc = _run("parse_logcat.py", ["cut", str(log), "--around", "2026-09-20T14:30:10+09:00", "--cause", "X-001-01",
+                                    "--out", str(_tmp() / "x.log"), "--tz", TZ, "--year", YEAR])
+    assert proc.returncode == 2 and "--cause" in proc.stderr
 
 
 def _all_tests():

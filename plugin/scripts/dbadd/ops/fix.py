@@ -11,7 +11,9 @@ class FixOps:
 
     def _check_fix_ref(self, i: int, ref) -> None:
         if ref is not None and self.fix_ref_re is not None and not self.fix_ref_re.fullmatch(str(ref)):
-            raise Reject("fix-ref", f"fix.ref {ref}가 fix_ref_regex에 맞지 않습니다.", i)
+            mock = " (fix_ref_regex가 모의 값이다 — 사내 형식으로 바꾸는 메인테이너 PR, 14-site S18)" \
+                if "MOCKCL" in self.fix_ref_re.pattern else ""
+            raise Reject("fix-ref", f"fix.ref {ref}가 fix_ref_regex에 맞지 않습니다.{mock}", i)
 
     def _history_item(self, result: str, fix: dict, extra: dict, keep_fix: bool) -> dict:
         item = {"result": result}

@@ -53,7 +53,13 @@ STEP_INPUTS = {
 }
 GATE_RE = re.compile(r"(?m)^- S-5 게이트: top1 ≥ ([0-9.]+), error_rate ≤ ([0-9.]+) \((\d{4}-\d{2}-\d{2}) 합의\)\s*$")
 REVIEW_ROW_RE = re.compile(r"(?m)^\|\s*(R\d+)\s*\|")
-PLACEHOLDER_RE = re.compile(r"(?m)^\s*reason:\s*['\"]?placeholder\b")
+# placeholder 규칙: reason이 placeholder로 시작(블록 표기 `reason:` 줄과 흐름 표기 `- {…, reason: …}` 둘 다, 뼈대가 붙인다)
+PLACEHOLDER_RE = re.compile(r"(?:^\s*|[{,]\s*)reason:\s*['\"]?placeholder\b")
+TODO_SITE_RE = re.compile(r"TODO\(SITE(?::S\d+)?\)")             # 번호 없는 TODO(SITE)도
+# 사외 초안의 모의 값(샘플 이슈 DB·site-defaults.example.yaml에 실제 있는 것만). s4a.codeowners·s6.mock이 같이 쓴다
+MOCK_VALUE_RE = re.compile(r"(?<![A-Za-z0-9.-])(?:mock-[a-z][\w-]*|[\w-]+(?:\.[\w-]+)*\.mock\.invalid|MOCKCL-|"
+                           r"MOCK(?:A56|B77)_|MOCK\[AB\])")
+GENERATED_RE = re.compile(r"^(README\.md|STATS\.md|parser-rules/CHANGELOG\.md|[^/]+/README\.md)$")   # = db_summary.GENERATED_RE
 SYNTHETIC_RE = re.compile(r"(?m)^\s*origin:\s*['\"]?synthetic\b")
 PILOT_FIELDS = ("처리 건수", "오탐", "누락", "충돌", "온보딩", "PR 소요", "취소 비율")
 
@@ -854,7 +860,33 @@ def s4a_protection(ctx: Ctx) -> dict:
     reviews = data.get("required_pull_request_reviews") or {}
     owners = bool(reviews.get("require_code_owner_reviews"))
     return res("s4a.protection", "pass" if reviews and owners else "fail",
-               f"PR 리뷰 필수 {bool(reviews)} · CODEOWNERS 리뷰 {owners}", cmd)
+               f"PR 리뷰 필수 {bool(reviews)} · CODEOWNERS 리뷰 {owners} · 필수 승인 수 "
+               f"{reviews.get('required_approving_review_count', '?')}(0이면 본인 병합 가능, issue_db.merge)", cmd)
+
+
+CODEOWNERS_PATHS = (".github/CODEOWNERS", "CODEOWNERS", "docs/CODEOWNERS")
+CODEOWNERS_LEFT_RE = re.compile(r"<org>|TODO\(SITE")
+
+
+def s4a_codeowners(ctx: Ctx) -> dict:
+    """운영 DB CODEOWNERS 오너 줄(주석 밖)에 뼈대 값이 남았는지: 모의 값(MOCK_VALUE_RE)·`<org>`·`TODO(SITE`.
+    오너 형식은 팀(`@<org>/<team>`)·개인(`@<login>`) 모두 받는다. 머리 주석의 TODO(SITE:S5)는 보지 않는다."""
+    clone, early = _need_clone(ctx, "s4a.codeowners")
+    if early:
+        return early
+    path = next((clone / p for p in CODEOWNERS_PATHS if (clone / p).is_file()), None)
+    cmd = "grep -nv '^#' <임시 clone>/.github/CODEOWNERS"
+    if path is None:
+        return res("s4a.codeowners", "needs-user", "CODEOWNERS 없음 — 메인테이너 경로 필수 리뷰가 걸리지 않는다", cmd,
+                   ask="운영 DB에 CODEOWNERS(메인테이너 경로 오너)를 넣는 메인테이너 PR을 만든다(S5)")
+    rel = path.relative_to(clone).as_posix()
+    left = [f"{rel}:{n}" for n, line in enumerate(path.read_text(encoding="utf-8", errors="replace").splitlines(), 1)
+            if line.strip() and not line.lstrip().startswith("#")
+            and (MOCK_VALUE_RE.search(line) or CODEOWNERS_LEFT_RE.search(line))]
+    if left:
+        return res("s4a.codeowners", "fail", f"뼈대 오너 값 {len(left)}줄: " + ", ".join(left[:5]) + (" …" if len(left) > 5 else "")
+                   + " — 사내 팀(@<org>/<team>) 또는 개인(@<login>)으로 바꾸는 메인테이너 PR", cmd)
+    return res("s4a.codeowners", "pass", f"{rel} 오너 줄에 뼈대 값 없음", cmd)
 
 
 def _golden_tests(root: Path) -> list[Path]:
@@ -868,6 +900,16 @@ def s4a_golden(ctx: Ctx) -> dict:
     cmd = "python3 -m pytest --collect-only -q tests/golden"
     if not data:
         return res("s4a.golden", "fail", "tests/golden/ 골든 파일 0", cmd)
+    marks = []
+    for p in sorted(data):
+        if p.suffix == ".json":
+            try:
+                marks += golden_synthetic_errors(str(p.relative_to(ctx.root)), json.loads(p.read_text(encoding="utf-8")))
+            except ValueError:
+                pass        # 깨진 JSON은 골든 테스트가 잡는다
+    if marks:
+        return res("s4a.golden", "fail", "; ".join(marks), cmd,
+                   ask="합성 줄을 보충한 골든에 사유를 적는다(16-existing-assets.md §16.3 골든 1)")
     if not _golden_tests(ctx.root):
         return res("s4a.golden", "needs-user", f"골든 {len(data)}개, 수집할 test_*.py 없음", cmd,
                    ask="사내 골든 테스트(tests/golden/test_*.py)를 어떻게 돌리는지 정해 주세요")
@@ -908,6 +950,19 @@ def _mutate(value, path: str):
 
 
 MUTATIONS = 3
+# 골든 JSON 최상위 메타데이터(기대값이 아님): 합성 줄 보충 표식·사유(16-existing-assets.md §16.3 골든 1). 변조 대상에서 뺀다.
+GOLDEN_META_KEYS = ("synthetic",)
+
+
+def golden_synthetic_errors(name: str, data) -> list[str]:
+    """골든 JSON 최상위 `synthetic` 표식 검사: 있으면 `{reason: "<왜 실제 로그에 없는지>"}`이고 사유가 비지 않아야 한다.
+    표식이 없으면 실제 로그 기준 케이스다. 사내는 `s4a.golden`, 모의는 `tests/test_golden.py`가 쓴다."""
+    if not isinstance(data, dict) or "synthetic" not in data:
+        return []
+    mark = data["synthetic"]
+    if not isinstance(mark, dict) or not str(mark.get("reason") or "").strip():
+        return [f"{name}: synthetic 표식에 사유(reason)가 없습니다"]
+    return []
 
 
 def s4a_golden_mutation(ctx: Ctx) -> dict:
@@ -928,7 +983,8 @@ def s4a_golden_mutation(ctx: Ctx) -> dict:
     rel = goldens[0].relative_to(ctx.root)
     target = copy / rel
     original = target.read_text(encoding="utf-8")
-    leaves = [p for p, _ in _leaves(json.loads(original))]
+    leaves = [p for p, _ in _leaves(json.loads(original))
+              if (m := re.match(r"[^.\[]+", p)) is None or m.group() not in GOLDEN_META_KEYS]   # 최상위 메타 키만 뺀다(이벤트 필드 이름은 기대값, 최상위 목록은 키 없음)
     if not leaves:
         return res("s4a.golden_mutation", "skip", f"{rel}: 바꿀 값 없음", cmd, ask="값이 있는 골든 JSON을 둔다")
     picks = sorted({0, len(leaves) // 2, len(leaves) - 1})[:MUTATIONS]
@@ -1019,9 +1075,26 @@ def _types(db: Path) -> dict[str, list[Path]]:
     return out
 
 
+SEED_MIN = 5     # data 외 카테고리마다 실제 fixture 있는 유형 수 (15-local-draft.md §15.5 S-4 "카테고리 시드")
+
+
+def _categories(db: Path) -> list[str] | None:
+    """이슈 DB `issue-db.config.yaml` `categories[].key` (없거나 읽지 못하면 None)."""
+    try:
+        cfg = yaml.safe_load((db / "issue-db.config.yaml").read_text(encoding="utf-8")) or {}
+    except (OSError, yaml.YAMLError):
+        return None
+    keys = [c.get("key") for c in (cfg.get("categories") or []) if isinstance(c, dict) and c.get("key")]
+    return keys or None
+
+
 def _real_fixture(type_dir: Path) -> bool:
-    for e in (type_dir / "fixtures").glob("*.expect.yaml") if (type_dir / "fixtures").is_dir() else []:
-        if not SYNTHETIC_RE.search(e.read_text(encoding="utf-8", errors="replace")):
+    """fixture 로그(`fixtures/*.log`) 중 같은 이름 `.expect.yaml`에 `origin: synthetic`이 없는 것이 하나라도 있으면 실제.
+    `.expect.yaml`은 기대값이 기본과 다를 때만 있다(contracts.md §fixture) — 없으면 실제 fixture다."""
+    fx = type_dir / "fixtures"
+    for log in sorted(fx.glob("*.log")) if fx.is_dir() else []:
+        expect = log.with_suffix(".expect.yaml")
+        if not (expect.is_file() and SYNTHETIC_RE.search(expect.read_text(encoding="utf-8", errors="replace"))):
             return True
     return False
 
@@ -1030,29 +1103,81 @@ def s4_seed(ctx: Ctx) -> dict:
     clone, early = _need_clone(ctx, "s4.seed")
     if early:
         return early
-    counts = {cat: sum(_real_fixture(t) for t in types) for cat, types in _types(clone).items()}
-    low = {c: n for c, n in counts.items() if c != "data" and n < 5}
-    ev = "실제 fixture 있는 유형: " + (", ".join(f"{c} {n}" for c, n in counts.items()) or "없음")
+    cmd = "find <db> -path '*/fixtures/*.log'"
+    cats = _categories(clone)
+    if cats is None:
+        return res("s4.seed", "fail", "issue-db.config.yaml `categories` 없음 — 시드 대상 카테고리를 모름", cmd)
+    types = _types(clone)
+    counts = {c: sum(_real_fixture(t) for t in types.get(c, [])) for c in cats if c != "data"}
+    low = [c for c, n in counts.items() if n < SEED_MIN]
+    ev = "실제 fixture 있는 유형(data 제외): " + (", ".join(f"{c} {n}" for c, n in counts.items()) or "대상 카테고리 없음")
     if not counts or low:
-        return res("s4.seed", "fail", ev + (f" — 5 미만: {', '.join(low)}" if low else ""), "find <db> -name '*.expect.yaml'")
-    return res("s4.seed", "pass", ev, "find <db> -name '*.expect.yaml'")
+        return res("s4.seed", "fail", ev + (f" — {SEED_MIN} 미만: {', '.join(low)}" if low else ""), cmd)
+    return res("s4.seed", "pass", ev, cmd)
 
 
 def placeholder_rules(db: Path) -> list[str]:
     out = []
     for p in sorted((db / "parser-rules").rglob("*.y*ml")) if (db / "parser-rules").is_dir() else []:
         for n, line in enumerate(p.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
-            if PLACEHOLDER_RE.match(line):
+            if PLACEHOLDER_RE.search(line):
                 out.append(f"{p.relative_to(db).as_posix()}:{n}")
     return out
+
+
+LEFTOVER_KINDS = {"rule": "placeholder 규칙", "todo": "TODO(SITE)", "mock": "모의 값"}
+
+
+def _scan(path: Path, rel: str, out: dict) -> None:
+    """한 파일의 TODO(SITE)·모의 값 줄(`rel:행`). 모의 값은 주석 줄을 빼고 본다(값이 아니다)."""
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return
+    for n, line in enumerate(text.splitlines(), 1):
+        if TODO_SITE_RE.search(line):
+            out["todo"].append(f"{rel}:{n}")
+        if not line.lstrip().startswith("#") and MOCK_VALUE_RE.search(line):
+            out["mock"].append(f"{rel}:{n}")
+
+
+def site_leftovers(db: Path | None, site_defaults: Path | None) -> dict[str, dict[str, list[str]]]:
+    """사외 초안에서 남은 것 세 종류(`{'db': {rule, todo, mock}, 'site': {todo, mock}}`, 각 `<파일>:<행>`).
+    운영 DB는 생성 파일·.git 밖 모든 파일, 규칙은 parser-rules만. site-defaults.yaml은 TODO·모의 값만."""
+    out = {"db": {k: [] for k in LEFTOVER_KINDS}, "site": {"todo": [], "mock": []}}
+    if db is not None:
+        out["db"]["rule"] = placeholder_rules(db)
+        for p in sorted(db.rglob("*")):
+            rel = p.relative_to(db).as_posix()
+            if p.is_file() and ".git" not in p.relative_to(db).parts and not GENERATED_RE.match(rel):
+                _scan(p, rel, out["db"])
+    if site_defaults is not None and site_defaults.is_file():
+        _scan(site_defaults, "plugin/site-defaults.yaml", out["site"])
+    return out
+
+
+def _counts(left: dict) -> dict[str, int]:
+    return {k: len(left["db"][k]) + len(left["site"].get(k, [])) for k in LEFTOVER_KINDS}
+
+
+def _leftover_evidence(ctx: Ctx, left: dict) -> str:
+    db = " · ".join(f"{LEFTOVER_KINDS[k]} {len(v)}" for k, v in left["db"].items())
+    site = " · ".join(f"{LEFTOVER_KINDS[k]} {len(v)}" for k, v in left["site"].items())
+    first = "; ".join(f"{LEFTOVER_KINDS[k]}: " + ", ".join(v[:5]) + (" …" if len(v) > 5 else "")
+                      for k in LEFTOVER_KINDS if (v := left["db"][k] + left["site"].get(k, [])))
+    return f"운영 DB({ctx.clone_ref or '임시 clone'}) {db} / site-defaults.yaml {site}" + (f" — {first}" if first else "")
+
+
+LEFTOVER_CMD = ("grep -rnE 'reason: placeholder|TODO\\(SITE' <임시 clone> plugin/site-defaults.yaml; "
+                "모의 값은 site_checks.MOCK_VALUE_RE")
 
 
 def s4_placeholder(ctx: Ctx) -> dict:
     clone, early = _need_clone(ctx, "s4.placeholder")
     if early:
         return early
-    found = placeholder_rules(clone)
-    return res("s4.placeholder", "info", f"`reason: placeholder` 규칙 {len(found)}건", "grep -rn 'reason: placeholder' parser-rules")
+    return res("s4.placeholder", "info", _leftover_evidence(ctx, site_leftovers(clone, ctx.root / "plugin/site-defaults.yaml")),
+               LEFTOVER_CMD)
 
 
 # --- S-5 ----------------------------------------------------------------------------------------------------
@@ -1127,22 +1252,46 @@ def s6_synthetic(ctx: Ctx) -> dict:
                "grep -rl 'origin: synthetic' --include='*.expect.yaml' <임시 clone>")
 
 
-PLACEHOLDER_LINE = re.compile(r"(?m)^- placeholder 규칙: ")
+PLACEHOLDER_LINE = re.compile(r"(?m)^- placeholder (?:규칙|남은 것): ")     # 옛 형식(`규칙:`)도 바꿔 쓴다
+PLACEHOLDER_REPORT = re.compile(r"(?m)^- placeholder 남은 것: 규칙 (\d+) · TODO\(SITE\) (\d+) · 모의 값 (\d+)\b")
+
+
+def _leftovers(ctx: Ctx, cid: str) -> tuple[dict | None, dict | None]:
+    clone, early = _need_clone(ctx, cid)
+    return (None, early) if early else (site_leftovers(clone, ctx.root / "plugin/site-defaults.yaml"), None)
 
 
 def s6_placeholder(ctx: Ctx) -> dict:
-    clone, early = _need_clone(ctx, "s6.placeholder")
+    """보고 기준: 보고 줄의 세 개수가 지금 개수와 같을 때만 통과(옛 형식·다른 개수면 바꿀 줄을 제안한다)."""
+    left, early = _leftovers(ctx, "s6.placeholder")
     if early:
         return early
-    found = placeholder_rules(clone)
-    cmd = "grep -rn 'reason: placeholder' <임시 clone>/parser-rules"
-    if PLACEHOLDER_LINE.search(ctx.profile):
-        return res("s6.placeholder", "pass", f"SITE_PROFILE.md에 보고됨 (지금 {len(found)}건)", cmd)
-    return res("s6.placeholder", "needs-user", f"`reason: placeholder` {len(found)}건, SITE_PROFILE.md 보고 줄 없음", cmd,
-               ask="placeholder 목록 보고 줄을 승인해 주세요 → `propose --apply placeholder-line`",
+    now = _counts(left)
+    ev = _leftover_evidence(ctx, left)
+    m = PLACEHOLDER_REPORT.search(ctx.profile)
+    if m and tuple(map(int, m.groups())) == (now["rule"], now["todo"], now["mock"]):
+        return res("s6.placeholder", "pass", "SITE_PROFILE.md 보고가 지금 개수와 같음 — " + ev, LEFTOVER_CMD)
+    why = ("보고 개수가 지금과 다름" if m else "옛 형식 보고 줄" if PLACEHOLDER_LINE.search(ctx.profile)
+           else "SITE_PROFILE.md 보고 줄 없음")
+    basis = "; ".join(f"{k}: " + (", ".join(left["db"][k] + left["site"].get(k, [])) or "없음") for k in LEFTOVER_KINDS)
+    return res("s6.placeholder", "needs-user", f"{why} — {ev}", LEFTOVER_CMD,
+               ask="placeholder·TODO(SITE)·모의 값 보고 줄을 승인해 주세요 → `propose --apply placeholder-line`",
                propose=[{"id": "placeholder-line", "kind": "progress-line",
-                         "line": f"- placeholder 규칙: {len(found)}건 (목록 {EVIDENCE_FILE})", "pattern": PLACEHOLDER_LINE.pattern,
-                         "basis": "; ".join(found) or "없음"}])
+                         "line": f"- placeholder 남은 것: 규칙 {now['rule']} · TODO(SITE) {now['todo']} · 모의 값 {now['mock']} "
+                                 f"(목록 {EVIDENCE_FILE})", "pattern": PLACEHOLDER_LINE.pattern, "basis": basis}])
+
+
+def s6_mock(ctx: Ctx) -> dict:
+    """모의 값은 운영에서 맞는 값이 아니다(CODEOWNERS·fix_ref_regex·build_compare 등) — 0이거나 사유와 함께 면제."""
+    left, early = _leftovers(ctx, "s6.mock")
+    if early:
+        return early
+    hits = left["db"]["mock"] + left["site"]["mock"]
+    if not hits:
+        return res("s6.mock", "pass", "모의 값 0곳", LEFTOVER_CMD)
+    return res("s6.mock", "needs-user", f"모의 값 {len(hits)}곳: " + ", ".join(hits[:5]) + (" …" if len(hits) > 5 else ""),
+               LEFTOVER_CMD, ask=f"모의 값 {len(hits)}곳 — 사내 값으로 고치는 메인테이너 PR(운영 DB)·site-defaults.yaml 수정. "
+                                 "의도한 것이면 `--done S-6 --waive s6.mock=\"<사유>\"`")
 
 
 # --- S-7 ----------------------------------------------------------------------------------------------------
@@ -1189,10 +1338,10 @@ CHECKS = {
     "S-2": [s2_pending, s2_graded, s2_offsite, s2_safety, s2_manual, s2_summary, s2_probe, s2_s1_rows, s2_baseline],
     "S-3": [s3_site_defaults, s3_tracker_kind, s3_config_check, s3_doctor, s3_parse_logcat, s3_tracker_candidates,
             s3_jira_fields],
-    "S-4a": [s4a_protection, s4a_golden, s4a_golden_mutation, s4a_analyzers, s4a_import_pr],
+    "S-4a": [s4a_protection, s4a_codeowners, s4a_golden, s4a_golden_mutation, s4a_analyzers, s4a_import_pr],
     "S-4": [s4_regress, s4_verify_rules, s4_seed, s4_placeholder],
     "S-5": [s5_offline_eval, s5_sandbox_pr, s5_smoke],
-    "S-6": [s6_review_open, s6_synthetic, s6_placeholder],
+    "S-6": [s6_review_open, s6_synthetic, s6_placeholder, s6_mock],
     "S-7": [s7_marketplace, s7_usage, s7_pilot, s7_expansion],
 }
 

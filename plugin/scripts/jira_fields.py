@@ -14,12 +14,16 @@
 
 출력(JSON):
     {key, key_valid, origin,
-     issue: {key, origin, model, sw, platform_version, carrier, occurred_on},   # 계획 `issue` 블록 초안(date·note 제외)
+     issue: {key, origin, model, sw, platform_version, carrier, occurred_on},   # 계획 `issue` 블록 초안(date·note 제외),
+                                                # 값이 없는 키는 넣지 않는다(null을 계획에 복사하지 않게)
      occurred_at: <UTC ISO | null>, occurred_at_local: <tracker.timezone ISO | null>,
      logcat: {tz, year},                        # parse_logcat --tz/--year 값 (year_source: tracker일 때 발생 연도)
      sim_slot, components[], text: {summary, description, comments[], comments_total},   # 마스킹됨
                                                 # --comments last:N면 뒤에서 N개, --comment-chars면 하나당 N자
-     missing[], meta_out}
+     missing[], missing_question, meta_out}
+`missing_question`: 빈 항목을 사용자에게 묻는 고정 문구(빈 항목만, 필드 순서). 빈 항목이 없으면 null.
+필수/선택은 `--db`의 `schema/issue.schema.json` `required` 기준(현재 필수 model·platform_version, 선택 sw·carrier·발생 시각).
+`missing`의 뜻(carrier 제외)은 그대로다.
 선택 키(실패 스텝은 선택 값이라 **있을 때만** 나온다, 07-workflow.md §Step 2): `text.test_steps`(마스킹, ≤1000자),
 `failed_step_auto {text, source}`(Jira에서 자동으로 얻은 값: field > description > test_steps),
 `failed_step {text, source}`(`--failed-step`·`--steps-file`까지 반영한 최종 값, source는 cli|field|description|test_steps|steps_file),
@@ -47,11 +51,32 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS))
 
-from common import compat, dbpath, failedstep, masking, site_defaults, userconfig, yamlio  # noqa: E402
+from common import compat, dbpath, failedstep, issuedb, masking, site_defaults, userconfig, yamlio  # noqa: E402
 from common.exitcodes import CHECK_FAILED, OK, USAGE  # noqa: E402
 import trackers  # noqa: E402
 
 STRUCTURED = ("model", "sw", "platform_version", "carrier")
+# missing_question 항목 설명 (07-workflow.md record 2번). 필수/선택은 이슈 DB 스키마가 정하고 `missing`의 뜻과 별개다.
+QUESTION_LABELS = {
+    "model": "모델",
+    "sw": "SW 빌드",
+    "platform_version": "플랫폼 주 버전 — 숫자만, 예: 16",
+    "carrier": '캐리어 — "없음"이면 기록하지 않음',
+    "occurred_at": '발생 시각 — 모르면 "모름", 그러면 occurred_on을 기록하지 않음',
+}
+OPTIONAL_HINTS = {"sw": ' — 모르면 "모름", 그러면 기록하지 않음(수정·회귀 판단 불가)'}   # 선택일 때만 붙인다
+
+
+def missing_question(required: list[str], optional: list[str]) -> str | None:
+    """빈 항목을 한 번에 묻는 고정 문구. 빈 항목이 없으면 None."""
+    if not required and not optional:
+        return None
+    lines = ['Jira에 비어 있는 항목이 있습니다. 기록에 넣을 값을 "항목: 값" 한 줄씩 알려 주세요.']
+    if required:
+        lines.append("- 필수: " + ", ".join(f"{n}({QUESTION_LABELS[n]})" for n in required))
+    if optional:
+        lines.append("- 선택: " + ", ".join(f"{n}({QUESTION_LABELS[n]}{OPTIONAL_HINTS.get(n, '')})" for n in optional))
+    return "\n".join(lines)
 
 
 class UsageError(Exception):
@@ -251,13 +276,14 @@ def extract(raw: dict, cfg: dict, db: Path | None, origin: str, last: int | None
     year = None
     if when and (logcat_cfg.get("year_source") or "tracker") == "tracker":
         year = when.astimezone(ltz).year
-    jira_block = {"key": key, "origin": origin, **structured}
+    jira_block = {"key": key, "origin": origin, **{k: v for k, v in structured.items() if v is not None}}
     if local:
         jira_block["occurred_on"] = local.date().isoformat()
     if optional.get("failed_step") or optional.get("failed_step_auto"):
         jira_block["failed_step"] = (optional.get("failed_step") or optional["failed_step_auto"])["text"]
     if "test_steps" in optional:
         text["test_steps"] = optional.pop("test_steps")
+    required = issuedb.record_required(db)
     result = {
         "key": key,
         "key_valid": bool(key and kre.fullmatch(key)),
@@ -270,6 +296,10 @@ def extract(raw: dict, cfg: dict, db: Path | None, origin: str, last: int | None
         "components": [str(c) for c in comps],
         "text": text,
         "missing": missing,
+        "missing_question": missing_question(      # --db(스냅샷) 스키마 기준 — 옛 운영 DB면 sw도 필수로 묻는다
+            [n for n in STRUCTURED if structured[n] is None and n in required],
+            [n for n in STRUCTURED if structured[n] is None and n not in required]
+            + [n for n in missing if n == "occurred_at"]),
     }
     result.update(optional)
     return result

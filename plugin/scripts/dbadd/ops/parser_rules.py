@@ -1,4 +1,4 @@
-"""op `add-parser-rule`·`update-parser-rule`: `parser-rules/*.yaml` 엔티티 단위 쓰기."""
+"""op `add-parser-rule`·`update-parser-rule`·`remove-parser-rule`: `parser-rules/*.yaml` 엔티티 단위 쓰기."""
 
 from __future__ import annotations
 
@@ -83,3 +83,29 @@ class ParserRuleOps:
         new = list(old)
         new[n] = merged
         self._write_rules(path, doc, section, old, new)
+
+    def op_remove_parser_rule(self, i, op):
+        """placeholder·안 쓰는 규칙 삭제. 사용 여부는 정적으로 보지 않는다 — 계획 검증(R1~R5: rulediff 의존 시그니처,
+        R5 이벤트 diff)과 db_lint `step-event`가 영향을 보인다. 삭제 이력은 CHANGELOG에 남지 않는다(사유는 PR 본문)."""
+        path, doc = self._rules(i, op["file"])
+        if op.get("section"):
+            section = self._section(i, op)
+        else:
+            found = [s for s in RULE_SECTIONS[op["file"]]
+                     if any(self._rule_key(s, r) == op["key"] for r in doc["data"].get(s) or [])]
+            if len(found) > 1:
+                raise Reject("rule-section", f"parser-rules/{op['file']}의 {found} 섹션에 모두 키 {op['key']}가 있습니다 "
+                             "(section을 지정한다).", i)
+            section = found[0] if found else RULE_SECTIONS[op["file"]][0]
+        old = list(doc["data"].get(section) or [])
+        n = next((k for k, r in enumerate(old) if self._rule_key(section, r) == op["key"]), None)
+        if n is None:
+            raise Reject("rule-missing", f"parser-rules/{op['file']} {section}에 키 {op['key']}가 없습니다.", i)
+        if len(old) == 1:
+            raise Reject("rule-last", f"parser-rules/{op['file']} {section}의 마지막 항목은 지울 수 없습니다 — 스키마가 "
+                         "섹션마다 1개 이상을 요구한다. 같은 계획 앞쪽에 add-parser-rule로 실제 항목을 넣고 지운다.", i)
+        lines = doc["text"].splitlines(keepends=True)
+        text = yamldoc.ListSection(lines, section, old).remove(n)
+        doc["text"] = "".join(yamldoc.replace_block(lines, section, text))
+        doc["data"][section] = old[:n] + old[n + 1:]
+        self.tree.write(path, doc["text"])

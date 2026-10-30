@@ -9,15 +9,7 @@
 `.github/CODEOWNERS`:
 
 ```
-# 카테고리
-/data/                  @<org>/telephony-data-owners
-/call/                  @<org>/telephony-call-owners
-/network/               @<org>/telephony-network-owners
-/sim/                   @<org>/telephony-sim-owners
-/sms/                   @<org>/telephony-sms-owners
-/ims/                   @<org>/telephony-ims-owners
-
-# 공통 (모든 카테고리와 모든 기여자 PC에 영향)
+# 공통 (모든 카테고리와 모든 기여자 PC에 영향) — dbpr/merge.py MAINTAINER_PATHS와 같은 목록
 /parser-rules/          @<org>/telephony-issue-db-maintainers
 /schema/                @<org>/telephony-issue-db-maintainers
 /templates/             @<org>/telephony-issue-db-maintainers
@@ -29,18 +21,41 @@
 /.gitattributes         @<org>/telephony-issue-db-maintainers
 /.github/               @<org>/telephony-issue-db-maintainers
 
-# 피드백 기록은 리뷰 불필요 (자동 기록)
-/feedback/
+# 카테고리 오너는 두지 않는다(기본, 샘플 이슈 DB). 오너 리뷰를 받을 카테고리만 더한다 — 그 카테고리 PR은 오너 승인 전
+# BLOCKED라 본인 병합이 막힌다:
+# /data/                @<org>/telephony-data-owners
 ```
 
-- 팀 이름 형식과 `gh pr create --reviewer`에 넘기는 형식은 Phase 0에서 확인한다 (`14-site.md` S5, S19).
+- 팀 이름 형식과 gh 리뷰어 요청(`gh pr edit --add-reviewer`)에 넘기는 형식은 Phase 0에서 확인한다 (`14-site.md` S5, S19). `reviewers.format`은 팀 오너(`@<org>/<team>`)에만 쓰이고 개인 오너(`@<login>`)는 그대로 요청한다 — 개인 오너만 쓰면 S19는 해당 없음.
+- 리뷰어(`--add-reviewer`)는 CODEOWNERS에 오너가 있는 경로만 지정된다(`02-config.md §5.3` 리뷰어 계산). 카테고리 오너가 없으면 카테고리 경로만
+  바꾸는 PR(사례 추가·새 원인·`allow-cause` 등)은 리뷰어가 없다 — 확인 화면 `리뷰어: 없음`, 리뷰어 요청 없음. 메인테이너
+  경로를 바꾸면 메인테이너 팀이 리뷰어다(그 PR은 병합 자격도 없다). 카테고리 오너를 둔 레포에서 그 팀이 리뷰어면 병합 자격이 없다(아래).
+- 맞바꾼 것: 카테고리 오너가 없으면 다른 카테고리의 fixture에 `also_allowed`를 넣는 PR(`allow-cause`)도 그 카테고리 사람의 리뷰 없이
+  병합된다. 이것을 보는 곳은 이제 월간 리뷰의 `also_allowed` 누적 항목(§6.6)뿐이다 — 교차 카테고리 허용을 사전에 막아야 하는 팀은 카테고리 오너를 둔다.
 
 main 브랜치 보호 설정 (메인테이너가 GHE에서 설정하고 `docs/branch-protection.md`에 기록):
-- PR 필수, CODEOWNERS 승인 1명 이상 필수
-- 직접 push 금지
+- PR 필수(직접 push 금지), force push·삭제 금지
+- CODEOWNERS 리뷰 필수 + **필수 승인 수 0**: 오너가 적힌 경로(메인테이너 경로는 항상, 카테고리는 선택)만 리뷰가 필요하다.
+  리뷰어 머지를 유지할 팀은 필수 승인 1명 이상 + `issue_db.merge: review`.
 - (Actions를 쓰게 되면 `13-actions.md`의 추가 설정을 적용한다)
 
-**서버 측 강제가 전제다.** 플러그인의 Claude hook과 이슈 DB의 git hook(`pre-commit`, `pre-push`)은 모두 로컬 장치라 우회할 수 있다(최선 노력 명령 파싱, `core.hooksPath` 변경). 그리고 `core.hooksPath=.githooks`는 main에 커밋된 스크립트를 **모든 기여자 PC에서 실행**하므로, 브랜치 보호와 CODEOWNERS 필수 리뷰가 서버에서 강제되지 않으면 main 쓰기 권한이 곧 팀 전체 PC의 코드 실행 권한이 된다. 브랜치 보호를 설정할 수 없는 GHE 환경이면 `.githooks/` 채택 여부를 다시 결정한다 (`14-site.md` S5, `08-safety.md §9`).
+**본인 병합(PR + self-merge, 기본).** 이슈 DB 변경은 계속 PR로만 들어간다(이력·검사·되돌리기). `issue_db.merge: self`(사용자
+config > site-defaults > 내장 기본 `self`)이고 PR이 병합 자격이 있으면 push 전 확인 화면에 병합 줄과 선택지 `push하고 바로 병합` /
+`push만(리뷰어에게)` / `취소`가 나온다(`push하고 바로 병합`은 추천으로 표시하지 않는다). `push하고 바로 병합`이면
+`db_pr publish … --and-merge` **한 명령**(권한 확인 한 번)이 커밋·push·PR 뒤 같은 사용자 권한으로 병합한다. 조건: publish가 push한
+커밋이 PR head 그대로(승인 토큰 = 그 SHA, `gh pr merge --match-head-commit`), PR 검사가 모두 통과(검사가 없으면 `ci_mode: local`일
+때만 통과), `mergeStateStatus`가 CLEAN·HAS_HOOKS(오너 리뷰가 필요한 경로면 BLOCKED라 병합하지 않는다), 메인테이너 경로 변경 없음
+(기록이 아니라 `git diff origin/<base>...head`로 다시 본다), PR을 만든 뒤 main이 바뀌지 않음(fetch한 `origin/<base>`가 PR 커밋의 조상이
+아니거나 BEHIND면 같은 ID가 두 번 들어가지 않게 `sync-pr` 뒤 다시). 검사 대기·상태 확인 중(UNKNOWN 등)·fetch 실패면(리뷰 필요(`reviewDecision` REVIEW_REQUIRED·CHANGES_REQUESTED)와 BLOCKED는 기다리지 않는다 — `ci_mode`가 local이 아닌데 검사가 없으면 검사 대기로 본다)
+`issue_db.merge_wait_seconds`(기본 420초, 최대 480)까지 기다린다. 끝내 안 되면 PR을 그대로 두고 사유와 재시도 명령(`db_pr merge --job <KEY>
+--approved <sha>`)을 알린다. 병합 자격이 없는 PR — `issue_db.merge: review`, 검증 결과 "승인 필요"(`needs-approval`), 메인테이너
+경로(`/.githooks/`·`/schema/`·`/parser-rules/`·`/templates/`·`/.github/`·`/docs/`·`/issue-db.config.yaml`·`CONTRIBUTING.md`·
+`GLOSSARY.md`·`.gitattributes`) 변경, 리뷰어에 카테고리 오너(메인테이너가 아닌 CODEOWNERS 팀, 사유 `카테고리 오너 리뷰(CODEOWNERS)`)가
+든 PR — 은 확인 화면에 병합 선택지가 없다(리뷰어가 GHE에서 머지). guard는 `publish`·`merge`를 ask로,
+gh·MCP로 직접 머지는 거부로, 병합 기록(`merge-offer.json`) 직접 쓰기는 거부로 둔다(`08-safety.md §9` 규칙 7·11). 다른 사람이 문제를
+발견하면 그때 새 PR(또는 GHE의 Revert)로 고친다.
+
+**서버 측 강제가 전제다.** 플러그인의 Claude hook과 이슈 DB의 git hook(`pre-commit`, `pre-push`)은 모두 로컬 장치라 우회할 수 있다(최선 노력 명령 파싱, `core.hooksPath` 변경). 그리고 `core.hooksPath=.githooks`는 main에 커밋된 스크립트를 **모든 기여자 PC에서 실행**하므로, 브랜치 보호와 메인테이너 경로(`/.githooks/` 등)의 CODEOWNERS 필수 리뷰가 서버에서 강제되지 않으면 main 쓰기 권한이 곧 팀 전체 PC의 코드 실행 권한이 된다. 브랜치 보호를 설정할 수 없는 GHE 환경이면 `.githooks/` 채택 여부를 다시 결정한다 (`14-site.md` S5, `08-safety.md §9`).
 
 ### 6.2 PR 규칙과 충돌 방지 (로컬 모드)
 
@@ -52,10 +67,10 @@ main 브랜치 보호 설정 (메인테이너가 GHE에서 설정하고 `docs/br
 | 같은 원인에 Jira 동시 추가 | Jira 한 건 = 파일 하나. 서로 다른 파일이라 충돌하지 않는다. |
 | 같은 유형에 새 원인 동시 추가 (type.md) | `db_add.py`가 type.md를 파싱해서 엔티티 단위로 다시 쓴다. 최신 main 위에 내 원인을 추가하므로 텍스트 충돌이 없다. |
 | 새 유형/원인 ID 동시 할당 | ID는 **적용 시점에 최신 main 기준으로** 할당한다 (Step 8). push 후 main이 바뀌면 `sync-pr`가 계획을 다시 적용하면서 다시 할당한다. |
-| parser-rules 동시 추가 | 규칙 항목은 키로 식별하고 계획의 op(`add-parser-rule`/`update-parser-rule`)로 최신 main 위에 항목 단위로 넣는다. 같은 키를 main이 먼저 추가했거나 기능 필드를 바꿨으면 drift로 사용자에게 묻는다. 이력 필드만 바뀐 것은 drift가 아니다. |
+| parser-rules 동시 추가 | 규칙 항목은 키로 식별하고 계획의 op(`add-parser-rule`/`update-parser-rule`/`remove-parser-rule`)로 최신 main 위에 항목 단위로 넣는다. 같은 키를 main이 먼저 추가했거나 기능 필드를 바꿨으면 drift로 사용자에게 묻는다. 이력 필드만 바뀐 것은 drift가 아니다. |
 | 같은 Jira를 두 명이 분류 | 시작 시(`db_pr preflight`)와 Step 8-3에서 **origin/main의 같은 Jira 파일**과 **열린 PR**을 검사한다. main에 있으면 중단하고 기존 분류를 보여준 뒤 유지/재분류(`reclassify`)를 묻는다. 열린 PR이 있으면 링크를 보여주고 계속할지 묻는다. 그래도 둘 다 머지되면 사후 lint가 찾아서 알리고 메인테이너가 정리한다 (6.3). |
 | 같은 엔티티의 같은 필드를 양쪽이 수정 | (예: 같은 원인의 resolution을 둘 다 고침) 자동 해결하지 않는다. 계획 기반이면 drift로 양쪽 값을 보여주고 고르게 한다. 직접 편집한 브랜치는 rebase할 때 git 충돌로 드러난다 (6.3). |
-| **push 이후 ~ 머지 사이에 main이 바뀜** | 6.3의 `sync-pr`, 리뷰어 머지 체크리스트, 사후 lint로 막는다. |
+| **push 이후 ~ 머지 사이에 main이 바뀜** | 6.3의 `sync-pr`, 본인 병합이면 `publish --and-merge`·`db_pr merge`의 상태 검사(main 변경·BEHIND·충돌이면 병합 안 함), 리뷰어 머지면 체크리스트, 사후 lint로 막는다. |
 
 **ID가 바뀔 때 갱신하는 참조**: `contracts.md §renumber 참조`에만 있다. 직접 편집 브랜치의 `db_add renumber`와 메인테이너의 사후 정리가 같은 목록을 쓰고, 치환 후 `db_lint --residual`로 옛 ID 잔존을 검사한다. 도구가 만든 PR은 적용 시점 할당이라 renumber가 필요 없다.
 
@@ -73,7 +88,7 @@ CI 대신 아래 **5단계**로 검증한다. `issue-db.config.yaml`의 `ci_mode
 | ① 적용 시 | Step 8, `record`, `sync-pr`, `verify-fix`, `validate --cause`, `fix-submitted`, import/review/move 계획 PR | `db_pr stage` | drift 검사, `db_add apply` 후 `03-issue-db.md §5.7 (4)` 체크리스트 전부, 생성 파일 재생성, `db_verify rules --plan` |
 | ② 커밋 시 | `git commit` | **git pre-commit hook** (`.githooks/pre-commit` → `db_precommit.py --db "$(git rev-parse --show-toplevel)"`) + Claude hook | `db_lint --staged`, `mask_pii --check --staged`, `db_regress --staged`(parser-rules 변경 시 전체), 규칙 변경 시 `db_verify rules --staged`, `db_build --verify --staged` |
 | ③ push 직전 | 위 모든 쓰기 흐름 | `db_pr summary` + 사용자 확인 + `db_pr publish` | 최신 main 위 계획 적용(drift 결정 포함), `check-ids`, Jira 중복·열린 PR, `db_regress --all`, `05-verification.md` 검증, 확인 화면 승인, 승인 해시·커밋 부모·커밋 메시지 일치 확인 |
-| ④ 머지 직전 | 리뷰어 | PR 템플릿 체크리스트 + `sync-pr` | main이 PR 마지막 push 이후 바뀌었으면 작성자가 `sync-pr` 실행 후 머지 |
+| ④ 머지 직전 | 작성자(본인 병합) 또는 리뷰어 | `publish --and-merge`·`db_pr merge`(승인 커밋·PR 검사·`mergeStateStatus`·main 불변) 또는 PR 템플릿 체크리스트 + `sync-pr` | main이 PR 마지막 push 이후 바뀌었으면 작성자가 `sync-pr` 실행 후 머지 |
 | ⑤ 사후 | 모든 커맨드의 이슈 DB 최신화 직후 (`db_pr snapshot`) | `db_lint --all --db <work_dir>/_snapshot` | main 스냅샷 전체 검사. 문제를 발견하면 알리고 메인테이너 정리를 안내한다 (아래, v1은 수동) |
 
 - `db_verify rules`가 `needs-approval`(종료 코드 `3`)을 내면 ②는 경고 후 통과하고, ①③은 확인 화면과 PR 본문에 "승인 필요"로 표시한다 (`contracts.md §종료 코드`).
@@ -117,7 +132,7 @@ v1에서 도구는 이런 브랜치를 바꾸지 않는다. `sync-pr`는 아래 
 - 정리 PR을 만들기 전에 `db_pr preflight --branch chore/fix-db-<문제 ID>`로 원격에 같은 브랜치나 같은 제목의 열린 PR이 있는지 확인하고, 있으면 만들지 않고 링크만 보여준다.
 - 정리 자동화(소유자 판별, 공유 파일 참조 판별, `renumber --in-main`, 정리 PR 초안 생성)는 `99-deferred.md`에 있다. 파일럿에서 자주 생기면 도입한다.
 
-**`.github/pull_request_template.md`** (리뷰어 머지 체크리스트)
+**`.github/pull_request_template.md`** (머지 전 체크리스트 — 리뷰어가 머지할 때. 본인 병합은 `db_pr merge`가 충돌·main 변경·검사·브랜치 보호만 확인하고, 내용(작성 규칙)은 작성자가 push 전 확인 화면에서 본다)
 ```markdown
 ## 분석 요약
 (자동 작성)
@@ -125,7 +140,7 @@ v1에서 도구는 이런 브랜치를 바꾸지 않는다. `sync-pr`는 아래 
 ## 검증 결과
 (자동 작성. "승인 필요" 항목이 있으면 메인테이너 승인 필수)
 
-## 리뷰어 머지 전 체크리스트
+## 머지 전 체크리스트 (리뷰어 머지일 때 — 본인 병합은 도구가 충돌·main 변경·검사·브랜치 보호만 확인한다)
 - [ ] GHE에 충돌 표시가 없다
 - [ ] 이 PR의 마지막 push 이후 main에 다른 PR이 머지되지 않았다
       (머지됐다면 작성자에게 `/telephony-triage:sync-pr` 요청)
@@ -133,13 +148,14 @@ v1에서 도구는 이런 브랜치를 바꾸지 않는다. `sync-pr`는 아래 
 - [ ] parser-rules 변경이나 "승인 필요" 검증 결과가 있으면 메인테이너가 승인했다
 ```
 
-- 머지는 **한 번에 하나씩** 한다. 여러 PR이 대기 중이면 하나를 머지한 뒤 다음 PR의 작성자에게 `sync-pr`를 요청한다.
+- 머지는 **한 번에 하나씩** 한다. 여러 PR이 대기 중이면 하나를 머지한 뒤 다음 PR의 작성자에게 `sync-pr`를 요청한다. 본인 병합이면 main이 PR 뒤에 바뀐 PR은 도구가 병합하지 않고 `sync-pr`를 안내한다.
 - 동시 기여자가 많아져서 ④가 병목이 되면 `13-actions.md`(Actions 전환)를 검토한다.
 
 ### 6.4 스키마 버전과 마이그레이션
 
 - `issue-db.config.yaml`의 `schema_version`은 이슈 DB 파일 구조가 바뀔 때만 올린다. 필드 추가도 필수 필드면 올린다.
-- 첫 배포(반입) 전에는 v1 정의를 직접 고치고(예: Jira 기록의 선택 필드 `failed_step`, 트래커 범용화의 `jira/`→`issues/`·`platform_version(s)` 개명 — `18-trackers.md` T4), 배포 뒤에는 항상 버전을 올린다.
+- 첫 배포(반입) 전에는 v1 정의를 직접 고치고(예: Jira 기록의 선택 필드 `failed_step`, 트래커 범용화의 `jira/`→`issues/`·`platform_version(s)` 개명 — `18-trackers.md` T4), 배포 뒤 **구조 변경**(필수 필드 추가·개명·형식 변경)은 항상 버전을 올린다.
+- 배포 뒤 **호환 변경**(선택 필드·op 추가, 필수 해제 — 기존 파일·계획이 모두 그대로 유효하고 옛 플러그인도 기존 기능은 그대로 동작. 새 op가 든 계획은 새 플러그인으로 적용)은 버전을 올리지 않는다. 운영 이슈 DB의 `schema/`를 메인테이너 PR로 바꾸고, 플러그인은 그 DB의 스키마로 동작을 가른다(예: Jira 기록 `sw` 필수 해제 — `issuedb.record_required`, 계획 op `remove-parser-rule`).
 - 플러그인은 `SUPPORTED_SCHEMA = (min, max)`를 가진다.
 
 | 이슈 DB 버전 | 플러그인 동작 |
@@ -176,7 +192,7 @@ v1에서 도구는 이런 브랜치를 바꾸지 않는다. `sync-pr`는 아래 
 
 ### 6.6 정기 리뷰 (월 1회, 카테고리 오너)
 
-`/telephony-triage:review [category]`가 로컬에서 리뷰 리포트를 만든다 (push 안 함). 인자가 없으면 사용자가 오너인 카테고리(CODEOWNERS 기준)를 묻는다. 오너는 리포트를 보고 필요한 수정을 `review/<category>-<YYYY-MM>` PR로 올린다. 두 가지 방법이 있다: (a) 직접 편집 후 `validate` → push, (b) 리포트의 조치를 **계획 파일**(`source: review`, op: `set-status`·`update-signature`·`reclassify`·`set-resolution`·`allow-cause`·`add-fixture`)로 적어 공통 쓰기 절차(`07-workflow.md`)로 올린다. 계획 작성은 Claude Code가 돕고(`<work_dir>/review-<category>-<YYYY-MM>/plan.json`), **별도 커맨드는 없다**. 절차는 `docs/review-guide.md`에 적는다.
+`/telephony-triage:review [category]`가 로컬에서 리뷰 리포트를 만든다 (push 안 함). 인자가 없으면 사용자가 오너인 카테고리(CODEOWNERS 기준)를 묻는다(카테고리 오너가 없는 레포면 리뷰할 카테고리를 고른다). 오너는 리포트를 보고 필요한 수정을 `review/<category>-<YYYY-MM>` PR로 올린다. 두 가지 방법이 있다: (a) 직접 편집 후 `validate` → push, (b) 리포트의 조치를 **계획 파일**(`source: review`, op: `set-status`·`update-signature`·`reclassify`·`set-resolution`·`allow-cause`·`add-fixture`)로 적어 공통 쓰기 절차(`07-workflow.md`)로 올린다. 계획 작성은 Claude Code가 돕고(`<work_dir>/review-<category>-<YYYY-MM>/plan.json`), **별도 커맨드는 없다**. 절차는 `docs/review-guide.md`에 적는다.
 
 | 리포트 항목 | 기준 (`issue-db.config.yaml`) | 조치 |
 |---|---|---|
@@ -254,7 +270,7 @@ v1에서 도구는 이런 브랜치를 바꾸지 않는다. `sync-pr`는 아래 
 - 새 카테고리 PR은 **메인테이너의 직접 편집 브랜치** `category/<key>`다(계획 op로 표현할 수 없는 변경이므로, 6.3 "계획이 없는 브랜치" 절차: 편집 → `db_build --write` → `validate` → push). 들어갈 것:
   1. `issue-db.config.yaml`의 `categories`에 `{key, name, id_prefix}` 추가
   2. 카테고리 디렉토리 생성
-  3. `.github/CODEOWNERS`에 오너 팀 추가
+  3. (카테고리 오너를 두는 레포만) `.github/CODEOWNERS`에 오너 팀 추가
   4. `GLOSSARY.md`와 경계 표에 범위, 예시, 기존 카테고리와의 경계 추가
   5. `parser-rules/tags.yaml`, `ril.yaml`에 새 카테고리 태그와 RIL 요청 추가
   6. 첫 유형과 원인, fixture (선택. 보통 이 PR 뒤에 첫 이슈 PR을 올린다)

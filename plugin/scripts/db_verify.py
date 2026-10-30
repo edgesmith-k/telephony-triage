@@ -4,7 +4,8 @@
     db_verify.py rules (--plan <plan.json> [--draft <dir>] | --changed <ref> | --staged)
                        [--extra <logcat...>] [--extra-normal <logcat...>] [--db <path>] [--verbose]
     db_verify.py resolution --cause <ID> <logcat...> [--plan <plan.json> --draft <dir>] [--db <path>]
-    db_verify.py fix --cause <ID> <logcat...> [--build <빌드>] [--plan <plan.json> --draft <dir>] [--db <path>]
+    db_verify.py fix --cause <ID> <logcat...> [--build <빌드>] [--bundle <CI/CD 번들 번호>]
+                     [--plan <plan.json> --draft <dir>] [--db <path>]
 
 모든 판정은 회귀·검증 모드다(파일 전체, bonus 0, 피드백 가중치 끔, 모든 active 원인의 C 독립 평가, 판정은 S/C만).
 
@@ -46,8 +47,12 @@
 `fix` — 코드 수정 검증 판정 (`passed | partial | failed | unknown`, 05-verification.md §5.12 (2))
 - 중단(종료 코드 2): pending 원인, `fix.status`가 `fix-submitted`·`fixed`가 아님, 코드·설정 수정 유형(`framework-bug`,
   `vendor-ril`, `modem`, `carrier-config`)에 scenario·recovery 시그니처가 모두 없음(`--plan --draft`면 계획 적용 후 트리 기준),
-  `fixed_in`에 빌드 있는 항목 없음, `--build`가 `build_compare`로 모든 `fixed_in` 빌드보다 이전(이 순서로 첫 사유 하나).
-  비교할 수 없으면 `build_check: undetermined`로 이어가고 스킬이 사용자에게 묻는다.
+  `fixed_in`에 빌드 있는 항목 없음, (모뎀 원인만) `--build`가 `build_compare`로 모든 `fixed_in` 빌드보다 이전(이 순서로
+  첫 사유 하나). 모뎀(`modem`) 원인이 비교할 수 없으면 `build_check: undetermined`로 이어가고 스킬이 사용자에게 묻는다.
+- AP 패치 기준: `modem`이 아닌 원인은 로그 빌드를 `fixed_in`과 비교하지 않는다(`build_check: not-compared`). 수정 패치가
+  적용된 빌드(main 반영 전 테스트 빌드 포함)의 로그면 된다. 로그 빌드는 `verification.build`로 기록한다.
+- `--bundle <N>`(선택): CI/CD 번들 번호. 출력 `bundle`과 `suggested_ops`의 `verification.note`(`CI/CD 번들 <N>`)에
+  넣는다(이슈 DB 스키마의 `verification`에 번들 필드가 없으므로 note에 둔다).
 - 비코드 유형(`user-setting`·`network`·`hw`)은 흔적 대신 사용자 확인(`user_confirmation_required`).
 - failed: 원인 시그니처 충족(재발 자체가 시나리오 수행 근거다). unknown: 시나리오 흔적(scenario, 없으면 recovery) 없음.
   partial: 흔적 충족·원인 불충족·증상 남음(다른 원인 후보 `other_candidates`). passed: 흔적 충족·원인 불충족·증상
@@ -849,6 +854,10 @@ def _check_fix_target(cause: issuedb.Cause, build: str | None, rules_cfg: list) 
     if not fixed_in:
         raise UsageError(f"{cause.id}의 fixed_in에 빌드가 있는 항목이 없습니다. 먼저 fix-submitted 커맨드로 빌드를 "
                          "추가한다 (verify-fix passed의 전제).")
+    if cause.raw.get("resolution_type") != "modem":     # AP 패치 기준: 패치 적용 빌드 로그면 된다 (모뎀 수정만 빌드 비교)
+        return {"status": "not-compared", "build": build, "fixed_in": fixed_in,
+                "message": "AP 패치 기준: 로그 빌드를 fixed_in과 비교하지 않는다(수정 패치가 적용된 빌드의 로그면 된다). "
+                           "모뎀(modem) 원인만 비교한다"}
     if not build:
         return {"status": "not-given", "fixed_in": fixed_in,
                 "message": "--build가 없어 fixed_in 이후인지 확인하지 못했다. 사용자에게 묻는다"}
@@ -934,7 +943,14 @@ def judge_fix(run: Run, cause: issuedb.Cause, paths: list[Path]) -> dict:
                                                     + (", recovery 충족" if rec_hits else "")}
 
 
-def _suggest(kind: str, cause_id: str, judged: dict, build: str | None) -> list[dict]:
+def _with_bundle(note: str | None, bundle: str | None) -> str | None:
+    if not bundle:
+        return note
+    tag = f"CI/CD 번들 {bundle}"
+    return f"{note}; {tag}" if note else tag
+
+
+def _suggest(kind: str, cause_id: str, judged: dict, build: str | None, bundle: str | None = None) -> list[dict]:
     today = date.today().isoformat()
     fixture = "<parse_logcat cut 결과 경로>"
     j = judged["judgement"]
@@ -949,6 +965,8 @@ def _suggest(kind: str, cause_id: str, judged: dict, build: str | None) -> list[
         return []
     b = sanitize_build(build) if build else "<빌드>"
     v = {"build": build or "<빌드>", "date": today, "by": "<GHE 아이디>"}
+    if bundle:
+        v["note"] = _with_bundle(None, bundle)
     if j == "passed":
         trace = (judged.get("trace") or {}).get("signature")
         return [{"op": "add-fixture", "for": cause_id, "kind": "fixed", "build": b, "path": fixture},
@@ -956,12 +974,12 @@ def _suggest(kind: str, cause_id: str, judged: dict, build: str | None) -> list[
                  "verification": {**v, "fixture": fixture, **({"scenario_evidence": trace} if trace else {})}}]
     if j == "failed":
         return [{"op": "verify-fix", "cause": cause_id, "result": "failed",
-                 "verification": {**v, "note": judged["reason"]}},
+                 "verification": {**v, "note": _with_bundle(judged["reason"], bundle)}},
                 {"op": "add-fixture", "for": cause_id, "kind": "recurrence", "build": b, "path": fixture,
                  "optional": True}]
     others = ", ".join(o.get("cause") or f"{o['type']}(원인 미확인)" for o in judged.get("other_candidates") or [])
     return [{"op": "verify-fix", "cause": cause_id, "result": "partial",
-             "verification": {**v, "note": f"증상 남음. 다른 원인 후보: {others or '없음'}"}}]
+             "verification": {**v, "note": _with_bundle(f"증상 남음. 다른 원인 후보: {others or '없음'}", bundle)}}]
 
 
 def judge(args, defaults: dict, plugin_root: Path) -> tuple[dict, int]:
@@ -975,6 +993,11 @@ def judge(args, defaults: dict, plugin_root: Path) -> tuple[dict, int]:
             raise UsageError(f"로그 파일이 없습니다: {p}")
     if bool(args.plan) != bool(args.draft):
         raise UsageError("--plan과 --draft는 함께 쓴다.")
+    bundle = None
+    if args.cmd == "fix" and args.bundle is not None:
+        bundle = args.bundle.strip()
+        if not bundle or any(ch in bundle for ch in "\r\n"):
+            raise UsageError("--bundle에는 CI/CD 번들 번호 한 줄을 준다.")
     draft = applied = mapping = None
     cause_id = args.cause
     rules_result = None
@@ -1019,6 +1042,8 @@ def judge(args, defaults: dict, plugin_root: Path) -> tuple[dict, int]:
     if build_check is not None:
         out["build_check"] = build_check
         out["fix_status"] = (cause.raw.get("fix") or {}).get("status")
+    if bundle:
+        out["bundle"] = bundle
     if rules_result is not None:
         out["rules"] = rules_result
         r1_row = next(r for r in rules_result["rules"] if r["id"] == "R1")
@@ -1027,7 +1052,7 @@ def judge(args, defaults: dict, plugin_root: Path) -> tuple[dict, int]:
             out.update(withheld=True, withheld_judgement=out["judgement"], judgement="unknown",
                        reason="흔적 시그니처가 R1 흔적 검사를 통과하지 못해 판정을 쓰지 않는다: "
                               + "; ".join(c["reason"] for c in trace_fail))
-    out["suggested_ops"] = _suggest(args.cmd, cause_id, out, args.build if args.cmd == "fix" else None)
+    out["suggested_ops"] = _suggest(args.cmd, cause_id, out, args.build if args.cmd == "fix" else None, bundle)
     if mapping is not None:     # draft 모드: 초안 op는 계획의 temp_id로 (reason 문자열은 실제 ID 그대로)
         _retemp_drafts(out["suggested_ops"], {v: k for k, v in mapping.items()})
     return out, OK
@@ -1094,6 +1119,7 @@ def build_parser() -> argparse.ArgumentParser:
         p.add_argument("--draft", metavar="dir")
         if name == "fix":
             p.add_argument("--build", metavar="빌드")
+            p.add_argument("--bundle", metavar="N", help="CI/CD 번들 번호 (verification.note에 기록)")
     return parser
 
 
@@ -1108,6 +1134,8 @@ def main(argv: list[str] | None = None) -> int:
             setattr(args, name, None)
     if not hasattr(args, "build"):
         args.build = None
+    if not hasattr(args, "bundle"):
+        args.bundle = None
     defaults = site_defaults.load_or_exit(args.plugin_root)
     plugin_root = Path(args.plugin_root) if args.plugin_root else site_defaults.plugin_root()
     global _SESSION

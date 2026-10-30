@@ -11,6 +11,7 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "tests" / "helpers"))
 
 from runner import SAMPLE, plugin_root, tmp  # noqa: E402
+import make_plugin_root  # noqa: E402
 
 LOGS = REPO / "tests" / "fixtures" / "logs"
 
@@ -52,8 +53,10 @@ def test_uncollected_tags_are_parsed_lines_and_listed():
 
 
 def test_missing_site_defaults_stops_with_guidance():
+    bare = make_plugin_root.make(tmp("tt-s0-bare-") / "root")     # SITE_PATHS 제외 복사본 — 사내 레포에서도 site-defaults 없음
+    (bare / "site-defaults.yaml").unlink()
     proc = subprocess.run([sys.executable, str(REPO / "tools" / "s0_stats.py"), str(LOGS / "dual-sim-ril.log"),
-                           "--rules", str(SAMPLE / "parser-rules"), "--tz", "Asia/Seoul"],
+                           "--rules", str(SAMPLE / "parser-rules"), "--tz", "Asia/Seoul", "--plugin-root", str(bare)],
                           capture_output=True, text=True, encoding="utf-8")
     assert proc.returncode != 0 and "make_plugin_root.py" in proc.stderr
 

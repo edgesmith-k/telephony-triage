@@ -210,7 +210,8 @@ class ListSection:
         """`new` 목록을 블록 텍스트로. `key_of(item)`로 옛 항목을 찾아 값이 같으면 원래 텍스트를 쓴다.
 
         항목 사이 구분 줄(빈 줄·주석)은 옛 항목 뒤의 것을 따라가고, 새 항목 뒤에는 이 파일의 관례
-        (항목 사이에 빈 줄을 두는지)를 따른다. 마지막 항목 뒤 구분 줄은 블록 끝에 그대로 둔다."""
+        (항목 사이에 빈 줄을 두는지)를 따른다. 마지막 항목 뒤 구분 줄(다음 최상위 키 앞)은 넣지 않는다 —
+        `replace_block`이 원래 것을 그대로 둔다(둘 다 넣으면 쓸 때마다 빈 줄이 늘어난다)."""
         old_index = {key_of(item): n for n, item in enumerate(old or [])}
         first = self.items[0].start if self.items else self.block.end
         out = self.lines[self.block.start:first]
@@ -226,8 +227,31 @@ class ListSection:
                 out.extend(dump_item(item, self.indent, flow=flow).splitlines(keepends=True))
             if k < len(new) - 1:
                 out.extend(gaps[n] if n is not None and n < len(gaps) else default_gap)
-        if self.items:
-            out.extend(self.lines[self.items[-1].end:self.block.end])
+        return "".join(out)
+
+    def remove(self, n: int) -> str:
+        """항목 `n`을 뺀 블록 텍스트. 나머지 항목은 원래 텍스트 그대로다.
+
+        지운 항목 앞뒤 구분 줄은 합친다: 주석은 모두 순서대로 두고(지운 항목 뒤에 있던 다음 묶음 머리 주석
+        `# --- sms ---`를 잃지 않는다) 연속 빈 줄은 하나로 줄인다. 마지막 항목이면 앞 구분 줄의 끝 빈 줄을
+        뺀다 — 블록 끝 구분 줄은 `replace_block`이 원래 것을 둔다(`render`와 같다)."""
+        if not 0 <= n < len(self.items):
+            raise YamlDocError(f"{self.key}: 항목 {n}이 없습니다.")
+        items, lines = self.items, self.lines
+        last = n == len(items) - 1
+        before = lines[self.block.start + 1:items[0].start] if n == 0 else lines[items[n - 1].end:items[n].start]
+        after = [] if last else lines[items[n].end:items[n + 1].start]
+        gap: list[str] = []
+        for line in before + after:
+            if line.strip() or (gap and gap[-1].strip()) or (not gap and (n > 0 or (before and not before[0].strip()))):
+                gap.append(line)
+        if last:
+            while gap and not gap[-1].strip():
+                gap.pop()
+        out = lines[self.block.start:self.block.start + 1] if n == 0 else lines[self.block.start:items[n - 1].end]
+        out = out + gap
+        if not last:
+            out += lines[items[n + 1].start:items[-1].end]
         return "".join(out)
 
     def _render_fields(self, n: int, old: dict, new: dict) -> list[str]:
@@ -261,7 +285,7 @@ def replace_block(lines: list[str], key: str, new_text: str) -> list[str]:
     block = dict(top_blocks(lines)).get(key)
     if block is None:
         raise YamlDocError(f"최상위 키 {key}가 없습니다.")
-    # 블록 끝의 빈 줄·주석 줄(다음 키 앞 구분)은 둔다.
+    # 블록 끝의 빈 줄·주석 줄(다음 키 앞 구분)은 둔다. `new_text`(render 결과)에는 이 구분 줄이 없다.
     end = block.end
     while end > block.start + 1 and _is_filler(lines[end - 1]):
         end -= 1

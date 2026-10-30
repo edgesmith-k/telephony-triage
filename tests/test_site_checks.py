@@ -117,8 +117,9 @@ def test_done_refuses_unwaived_needs_user_and_records_waiver(tmp_path):
     r = run(root, "--done", "S-1", "--waive", "s1.samples=샘플은 S-4에서 받는다")
     assert r.returncode == 0, r.stdout + r.stderr
     prof = (root / "SITE_PROFILE.md").read_text(encoding="utf-8")
-    assert "- 현재 단계: S-2" in prof and "S-1 s1.samples 면제: 샘플은 S-4에서 받는다" in prof.split("## 설계 변경")[1]
-    assert "s1.samples 면제(needs-user): 샘플은 S-4에서 받는다" in (root / sc.EVIDENCE_FILE).read_text(encoding="utf-8")
+    assert "- 현재 단계: S-2" in prof and "S-1 s1.samples 면제(사용자 결정): 샘플은 S-4에서 받는다\n" in prof.split("## 설계 변경")[1]
+    ev = (root / sc.EVIDENCE_FILE).read_text(encoding="utf-8")
+    assert "s1.samples 면제(needs-user, 근거 " in ev and ") 사용자 결정: 샘플은 S-4에서 받는다\n" in ev
 
 
 # --- propose --------------------------------------------------------------------------------------------------
@@ -480,6 +481,53 @@ def test_s4a_golden_mutation_runs_on_temp_copy(tmp_path):
     assert snapshot(root)["tests/golden/a.golden.json"] == before["tests/golden/a.golden.json"]
 
 
+def test_s4a_golden_mutation_skips_synthetic_marker(tmp_path):
+    """`synthetic` 표식·사유는 메타데이터라 바꾸지 않는다(비교하지 않아도 못 잡음이 아니다)."""
+    root = site_root(tmp_path)
+    g = root / "tests" / "golden"
+    g.mkdir(parents=True)
+    (g / "a.golden.json").write_text('{"synthetic": {"reason": "bugreport 전용 흔적"}, "events": [{"tag": "DNC-0", "n": 3}]}',
+                                     encoding="utf-8")
+    (g / "test_a.py").write_text("import json, pathlib\n\ndef test_a():\n    p = pathlib.Path(__file__).with_name('a.golden.json')\n"
+                                 "    assert json.loads(p.read_text())['events'] == [{'tag': 'DNC-0', 'n': 3}]\n",
+                                 encoding="utf-8")
+    r = sc.s4a_golden_mutation(sc.Ctx(root))
+    assert r["status"] == "pass" and "synthetic" not in r["evidence"]
+    # 최상위 키만 메타데이터다. 이벤트 안의 `synthetic` 필드는 기대값이라 바꾸고, 비교하지 않으면 못 잡음
+    (g / "a.golden.json").write_text('{"events": [{"tag": "DNC-0", "synthetic": 1}, {"n": 3}]}', encoding="utf-8")
+    (g / "test_a.py").write_text("import json, pathlib\n\ndef test_a():\n    p = pathlib.Path(__file__).with_name('a.golden.json')\n"
+                                 "    assert json.loads(p.read_text())['events'][1:] == [{'n': 3}]\n", encoding="utf-8")
+    r = sc.s4a_golden_mutation(sc.Ctx(root))
+    assert r["status"] == "needs-user" and "events[0].synthetic" in r["evidence"]
+
+
+def test_s4a_golden_mutation_list_root(tmp_path):
+    """골든 JSON 최상위가 목록이면(경로 `[0].tag`) 메타 키 판별에서 멈추지 않고 그대로 바꿔 본다."""
+    root = site_root(tmp_path)
+    g = root / "tests" / "golden"
+    g.mkdir(parents=True)
+    (g / "a.golden.json").write_text('[{"tag": "DNC-0", "n": 3}]', encoding="utf-8")
+    (g / "test_a.py").write_text("import json, pathlib\n\ndef test_a():\n    p = pathlib.Path(__file__).with_name('a.golden.json')\n"
+                                 "    assert json.loads(p.read_text()) == [{'tag': 'DNC-0', 'n': 3}]\n", encoding="utf-8")
+    r = sc.s4a_golden_mutation(sc.Ctx(root))
+    assert r["status"] == "pass" and "잡음 2, 못 잡음 0" in r["evidence"]
+
+
+def test_s4a_golden_requires_synthetic_reason(tmp_path):
+    """사내 골든 JSON 최상위 `synthetic` 표식에 사유가 없으면 실패한다(16-existing-assets.md §16.3 골든 1)."""
+    root = site_root(tmp_path)
+    g = root / "tests" / "golden"
+    g.mkdir(parents=True)
+    (g / "a.golden.json").write_text('{"synthetic": {"reason": " "}, "events": []}', encoding="utf-8")
+    (g / "b.orig.json").write_text('[{"synthetic": true}]', encoding="utf-8")       # 최상위 dict가 아니면 표식이 아니다
+    r = sc.s4a_golden(sc.Ctx(root))
+    assert r["status"] == "fail" and "tests/golden/a.golden.json: synthetic 표식에 사유" in r["evidence"]
+    assert "b.orig.json" not in r["evidence"]
+    (g / "a.golden.json").write_text('{"synthetic": {"reason": "bugreport 전용 흔적"}, "events": []}', encoding="utf-8")
+    r = sc.s4a_golden(sc.Ctx(root))
+    assert r["status"] == "needs-user" and "test_*.py 없음" in r["evidence"]   # 표식은 통과, 다음 검사로
+
+
 def ops_db(tmp_path, synthetic: bool) -> Path:
     db = tmp_path / "ops-db"
     fx = db / "call" / "CALL-001-drop" / "fixtures"
@@ -506,7 +554,7 @@ def test_s6_synthetic_origin_fails_on_temp_clone_and_user_clone_untouched(tmp_pa
     assert out["s6.review_open"]["status"] == "pass"
     assert git(db, "for-each-ref") == refs and git(db, "rev-parse", "HEAD") == head
     assert git(db, "status", "--porcelain") == "" and not (db / ".git" / "FETCH_HEAD").exists()
-    assert sc.s4_seed(sc.Ctx(root))["status"] == "fail"                 # 실제 fixture 유형 5개 미만
+    assert sc.s4_seed(sc.Ctx(root))["status"] == "fail"                 # 카테고리 목록(issue-db.config.yaml) 없음
 
 
 def test_s4_s5_skip_without_inputs(tmp_path):
@@ -663,3 +711,141 @@ def test_s7_pilot_needs_fields_on_one_line(tmp_path):
 def test_allow_api_ask_mentions_mcp_health_check(tmp_path):
     r = sc.s2_probe(sc.Ctx(site_root(tmp_path)))
     assert r["status"] == "skip" and "claude mcp list" in r["ask"] and "Jira MCP" in r["ask"] and "데이터" in r["ask"]
+
+
+# --- S-4 카테고리 시드 (사내 보고 import-20261018 2번) ---------------------------------------------------------------
+
+def seed_db(tmp_path, per_cat: dict, synthetic: bool = False, config: bool = True) -> Path:
+    """카테고리(data·call·sms)별 유형 n개, 유형마다 fixture 로그 1개(`synthetic`이면 같은 이름 expect에 표식)."""
+    db = tmp_path / "seed-db"
+    db.mkdir(parents=True, exist_ok=True)
+    if config:
+        (db / "issue-db.config.yaml").write_text(
+            "categories:\n" + "".join(f"  - {{key: {c}, name: {c}, id_prefix: {c.upper()}}}\n" for c in ("data", "call", "sms")),
+            encoding="utf-8")
+    for cat, n in per_cat.items():
+        for k in range(1, n + 1):
+            tid = f"{cat.upper()}-{k:03d}"
+            fx = db / cat / f"{tid}-x" / "fixtures"
+            fx.mkdir(parents=True)
+            (fx.parent / "type.md").write_text(f"---\nid: {tid}\n---\n", encoding="utf-8")
+            (fx / f"{tid}-01.log").write_text("09-27 09:30:05.000  1  1 I T: x\n", encoding="utf-8")
+            if synthetic:
+                (fx / f"{tid}-01.expect.yaml").write_text("origin: synthetic\n", encoding="utf-8")
+    git(db, "init", "-q", "-b", "main")
+    git(db, "-c", "user.name=t", "-c", "user.email=t@example.invalid", "add", "-A")
+    git(db, "-c", "user.name=t", "-c", "user.email=t@example.invalid", "commit", "-qm", "init")
+    return db
+
+
+def _seed(tmp_path, db):
+    root = site_root(tmp_path)
+    (root / sc.STEPS_FILE).parent.mkdir(parents=True, exist_ok=True)
+    (root / sc.STEPS_FILE).write_text(f"ops_db: {db}\n", encoding="utf-8")
+    return sc.s4_seed(sc.Ctx(root))
+
+
+def test_s4_seed_fails_when_categories_have_no_types(tmp_path):
+    out = _seed(tmp_path, seed_db(tmp_path, {"data": 6}))          # data만 있고 call·sms 유형 0
+    assert out["status"] == "fail" and "call 0" in out["evidence"] and "sms 0" in out["evidence"]
+
+
+def test_s4_seed_counts_logs_without_expect_yaml_and_passes(tmp_path):
+    out = _seed(tmp_path, seed_db(tmp_path, {"call": 5, "sms": 5}))   # .expect.yaml 없는 실제 fixture
+    assert out["status"] == "pass", out
+
+
+def test_s4_seed_synthetic_marked_fixtures_do_not_count(tmp_path):
+    out = _seed(tmp_path, seed_db(tmp_path, {"call": 5, "sms": 5}, synthetic=True))
+    assert out["status"] == "fail" and "call 0" in out["evidence"]
+
+
+def test_s4_seed_without_categories_config_fails(tmp_path):
+    out = _seed(tmp_path, seed_db(tmp_path, {"call": 5, "sms": 5}, config=False))
+    assert out["status"] == "fail" and "categories" in out["evidence"]
+
+
+# --- 사외 초안 잔여물: placeholder 규칙·TODO(SITE)·모의 값 (사내 보고 import-20261018 14번, 8번 CODEOWNERS) ----------
+
+def skeleton_db(tmp_path) -> Path:
+    db = tmp_path / "skel-db"
+    subprocess.run([sys.executable, str(ROOT / "tools/make_db_skeleton.py"), str(db)], check=True, capture_output=True)
+    (db / "README.md").write_text("mock-org TODO(SITE:S5)\n", encoding="utf-8")       # 생성 파일은 세지 않는다
+    git(db, "init", "-q", "-b", "main")
+    git(db, "-c", "user.name=t", "-c", "user.email=t@example.invalid", "add", "-A")
+    git(db, "-c", "user.name=t", "-c", "user.email=t@example.invalid", "commit", "-qm", "init")
+    return db
+
+
+def _line_of(path: Path, needle: str) -> int:
+    return next(n for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1) if needle in line)
+
+
+def test_site_leftovers_counts_three_kinds_on_skeleton(tmp_path):
+    import yaml
+    db = skeleton_db(tmp_path)
+    rules = [(s, r) for f in ("tags", "ril", "extractors")
+             for s, items in (yaml.safe_load((db / f"parser-rules/{f}.yaml").read_text(encoding="utf-8")) or {}).items()
+             for r in items]
+    left = sc.site_leftovers(db, None)["db"]
+    assert len(left["rule"]) == sum(not (s == "tags" and r["category"] == "data") for s, r in rules) > 0   # 흐름 표기도 센다
+    assert f"docs/branch-protection.md:{_line_of(db / 'docs/branch-protection.md', 'TODO(SITE)')}" in left["todo"]
+    cfg = db / "issue-db.config.yaml"
+    assert f"issue-db.config.yaml:{_line_of(cfg, 'MOCKA56_U')}" in left["mock"]
+    assert f"issue-db.config.yaml:{_line_of(cfg, 'MOCK[AB]')}" in left["mock"]
+    assert ".github/CODEOWNERS:12" in left["mock"] and not any(x.startswith("README.md") for x in left["todo"] + left["mock"])
+
+
+def _profile_with(root: Path, line: str) -> None:
+    prof = root / "SITE_PROFILE.md"
+    prof.write_text(ss._insert_progress(prof.read_text(encoding="utf-8"), line, sc.PLACEHOLDER_LINE.pattern), encoding="utf-8")
+
+
+def test_s6_placeholder_passes_only_when_report_matches_current_counts(tmp_path):
+    root = site_root(tmp_path)
+    db = skeleton_db(tmp_path)
+    (root / sc.STEPS_FILE).parent.mkdir(parents=True)
+    (root / sc.STEPS_FILE).write_text(f"ops_db: {db}\n", encoding="utf-8")
+    r = sc.s6_placeholder(sc.Ctx(root))
+    assert r["status"] == "needs-user" and "보고 줄 없음" in r["evidence"]
+    _profile_with(root, r["propose"][0]["line"])
+    assert sc.s6_placeholder(sc.Ctx(root))["status"] == "pass"
+    _profile_with(root, "- placeholder 규칙: 0건 (목록 docs/site/evidence.md)")                  # 옛 형식
+    r = sc.s6_placeholder(sc.Ctx(root))
+    assert r["status"] == "needs-user" and "옛 형식" in r["evidence"]
+    _profile_with(root, r["propose"][0]["line"])
+    tags = db / "parser-rules/tags.yaml"
+    tags.write_text(tags.read_text(encoding="utf-8").replace("reason: 초기 (DataNetwork)}", "reason: placeholder}"),
+                    encoding="utf-8")
+    git(db, "-c", "user.name=t", "-c", "user.email=t@example.invalid", "commit", "-qam", "one more")
+    r = sc.s6_placeholder(sc.Ctx(root))
+    assert r["status"] == "needs-user" and "다름" in r["evidence"]                               # 개수가 바뀌면 다시 보고
+
+
+def test_s6_mock_and_s4a_codeowners(tmp_path):
+    root = site_root(tmp_path)
+    db = skeleton_db(tmp_path)
+    (root / sc.STEPS_FILE).parent.mkdir(parents=True)
+    (root / sc.STEPS_FILE).write_text(f"ops_db: {db}\n", encoding="utf-8")
+    r = sc.s6_mock(sc.Ctx(root))
+    assert r["status"] == "needs-user" and "s6.mock" in r["ask"] and ".github/CODEOWNERS:12" in r["evidence"]
+    r = sc.s4a_codeowners(sc.Ctx(root))
+    assert r["status"] == "fail" and ".github/CODEOWNERS:12" in r["evidence"]
+    owners = db / ".github/CODEOWNERS"
+    text = owners.read_text(encoding="utf-8")
+    owners.write_text(text.replace("@mock-org/telephony-issue-db-maintainers", "@db-admin"), encoding="utf-8")   # 개인 오너
+    git(db, "-c", "user.name=t", "-c", "user.email=t@example.invalid", "commit", "-qam", "owners")
+    r = sc.s4a_codeowners(sc.Ctx(root))
+    assert r["status"] == "pass", r                                     # 머리 주석의 TODO(SITE:S5)는 보지 않는다
+    owners.write_text(text.replace("@mock-org/telephony-issue-db-maintainers", "@<org>/maintainers"), encoding="utf-8")
+    git(db, "-c", "user.name=t", "-c", "user.email=t@example.invalid", "commit", "-qam", "owners")
+    assert sc.s4a_codeowners(sc.Ctx(root))["status"] == "fail"
+
+    clean = ops_db(tmp_path, synthetic=False)
+    (root / sc.STEPS_FILE).write_text(f"ops_db: {clean}\n", encoding="utf-8")
+    assert sc.s6_mock(sc.Ctx(root))["status"] == "pass"
+    assert sc.s4a_codeowners(sc.Ctx(root))["status"] == "needs-user"     # CODEOWNERS 없음
+    (root / "plugin").mkdir()
+    (root / "plugin/site-defaults.yaml").write_text("ghe:\n  host: ghe.mock.invalid   # TODO(SITE:S5)\n", encoding="utf-8")
+    r = sc.s6_mock(sc.Ctx(root))
+    assert r["status"] == "needs-user" and "plugin/site-defaults.yaml:2" in r["evidence"]

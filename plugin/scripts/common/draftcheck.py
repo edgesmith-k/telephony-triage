@@ -10,7 +10,8 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-AUTHORING_OPS = ("new-type", "new-cause", "update-signature", "add-parser-rule", "update-parser-rule")
+AUTHORING_OPS = ("new-type", "new-cause", "update-signature", "add-parser-rule", "update-parser-rule",
+                 "remove-parser-rule")
 RECORD = "draft-verify.json"
 
 

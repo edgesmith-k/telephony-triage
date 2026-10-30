@@ -312,6 +312,43 @@ def test_key_omitted_lock_job_single_job_and_candidates():
     assert _status(ws)["key"] == "MOCK-7002"                     # lock 잡은 작업이 먼저
 
 
+WORK_KEYS = ("fix-submit-DATA-001-01", "verify-fix-DATA-001-01-B1")
+
+
+def test_work_key_jobs_in_candidates_and_by_key():
+    """트래커 키가 아닌 작업 키(fix-submit-…·verify-fix-…)도 작업 표식 파일이 있으면 후보(`kind: work`)이고 키로 볼 수 있다.
+    push만 되고 PR 번호가 없는 작업(pushed-no-pr)이 후보에서 빠지지 않는다. 표식 없는 폴더·`_`·`.` 폴더는 후보가 아니다."""
+    ws = Workspace()
+    head = ws.main_sha()
+    for key in WORK_KEYS:
+        ws.plan(key, "p7-analyze-append.plan.json", match=None,
+                pr={"number": None, "branch": f"verify/{key}", "head_sha": head})
+    (ws.work / "random-dir").mkdir()
+    (ws.work / "random-dir" / "notes.txt").write_text("x", encoding="utf-8")
+    (ws.work / "_scratch").mkdir()
+    (ws.work / ".shown").mkdir(exist_ok=True)
+    out = _status(ws)
+    assert {c["key"] for c in out["candidates"]} == set(WORK_KEYS)
+    assert all(c["kind"] == "work" and c["stage"] == "pushed-no-pr" for c in out["candidates"])
+    assert "(작업 키)" in _md(ws)
+    doc = _status(ws, WORK_KEYS[0])
+    assert doc["stage"]["id"] == "pushed-no-pr" and doc["target"]["issue"] is None
+    assert doc["post"] == {"state": "해당 없음(트래커 키 작업 아님)"} and "pushed-no-pr" in _codes(doc)
+    assert "작업 키(트래커 키 아님)" in _md(ws, WORK_KEYS[0])
+    assert "Jira 키 형식이 아니다" in _status(ws, "random-dir", expect=2)["stderr"]        # 표식 없는 폴더
+    assert "Jira 키 형식이 아니다" in _status(ws, "no-such-job", expect=2)["stderr"]
+    assert "Jira 키 형식이 아니다" in _status(ws, "../" + WORK_KEYS[0], expect=2)["stderr"]  # 경로 안전
+    ws.plan(JOB, "p7-analyze-append.plan.json")                  # 트래커 키 작업과 함께
+    kinds = {c["key"]: c["kind"] for c in _status(ws)["candidates"]}
+    assert kinds == {JOB: "tracker", WORK_KEYS[0]: "work", WORK_KEYS[1]: "work"}
+    ws.acquire(WORK_KEYS[1])                                     # lock 잡은 작업 키 → 키 없이도 그 작업
+    assert _status(ws)["key"] == WORK_KEYS[1]
+    before = _tree(ws.work, ws.clone, ws.home)
+    for args in ([WORK_KEYS[0]], [WORK_KEYS[0], "--format", "markdown"], []):
+        assert ws.run("job_status.py", args).returncode == 0
+    assert _tree(ws.work, ws.clone, ws.home) == before, "작업 키도 읽기 전용"
+
+
 def test_registered_in_contracts_and_commands():
     import subprocess
     proc = subprocess.run([sys.executable, str(REPO / "tools" / "gen_contracts.py"), "--check"], capture_output=True, text=True)

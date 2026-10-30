@@ -22,7 +22,7 @@
 - 시그니처 `must_event`는 셋 모두 참조할 수 있다. extractor는 `builtin.`/`ext.` 접두어 이벤트를 만들 수 없다. 새 유형은 원칙적으로 extractor로 확장한다.
 - 모든 이벤트는 마지막 키로 `line_ref`(로그 줄 위치, 아래 (6))를 가진다. 이벤트 이름 공간·`source`와는 무관하다.
 
-모든 규칙 항목은 **키로 식별**되고(`tags`는 `tag`/`tag_regex`, `ril`은 `name`, `extractors`는 `id`), 이력 필드 `added_for`, `added_on`, `reason`을 가진다. 나머지 필드는 **기능 필드**다. `CHANGELOG.md`는 이력 필드로 `db_build.py`가 생성한다 (끝에 한 줄씩 붙이는 파일은 동시 PR에서 항상 충돌하므로 두지 않는다).
+모든 규칙 항목은 **키로 식별**되고(`tags`는 `tag`/`tag_regex`, `ril`은 `name`, `extractors`는 `id`), 이력 필드 `added_for`, `added_on`, `reason`을 가진다. 나머지 필드는 **기능 필드**다. `CHANGELOG.md`는 이력 필드로 `db_build.py`가 생성한다 (끝에 한 줄씩 붙이는 파일은 동시 PR에서 항상 충돌하므로 두지 않는다). 지금 있는 규칙만 보므로 `remove-parser-rule`로 지운 규칙은 행이 남지 않는다 — 삭제 사유는 PR 본문·git 이력에 남긴다.
 
 `parser-rules/tags.yaml` (예시, Phase 0에서 실제 로그로 확인하고 Phase 1에서 반영):
 
@@ -95,7 +95,7 @@ extractors:
 
 #### (3) 새 유형/원인 추가 시 파서 갱신 절차
 
-analyze Step 7에서 새 원인/유형을 계획할 때 아래를 점검하고, 부족하면 `add-parser-rule`(새 키) 또는 `update-parser-rule`(기존 키) op 초안을 만들어 사용자 승인을 받는다. Step 8 적용 시 `db_add.py`가 다시 확인한다. op 정의는 `contracts.md §작업 계획`.
+analyze Step 7에서 새 원인/유형을 계획할 때 아래를 점검하고, 부족하면 `add-parser-rule`(새 키) 또는 `update-parser-rule`(기존 키) op 초안을 만들어 사용자 승인을 받는다. 실제 로그로 placeholder·안 쓰는 규칙임을 확인한 규칙은 사용자 승인 뒤 `remove-parser-rule`로 지운다(주로 S-4 `source: import`·`review` 계획). Step 8 적용 시 `db_add.py`가 다시 확인한다. op 정의는 `contracts.md §작업 계획`.
 
 | 점검 | 부족할 때 |
 |---|---|
@@ -128,7 +128,7 @@ analyze Step 7에서 새 원인/유형을 계획할 때 아래를 점검하고, 
 - **`line_ref`**: `{file_index, line_no}` 또는 `null`. `file_index`는 `parse`에 준 로그 목록의 0부터 순번(= `events.json`의 `input.files` 순서), `line_no`는 그 파일의 1부터 센 물리 줄 번호(`platforms/android/logcat.py::read_file`과 같은 방식)다. 줄 레코드와 builtin 레코드(그 줄 레코드 값을 그대로 이어받음), `source: rules` 파생 이벤트(RIL 파생·extractor, 기준 줄의 값)는 줄 번호를 갖는다. 외부 파서(`ext.*`) 이벤트는 파일만 알아 `{file_index, line_no: null}`이다. 줄 위치를 줄 수 없는 백엔드는 `null`을 줘도 된다(`postprocess`가 빠진 키를 `null`로 채운다). 이벤트의 마지막 키다.
   코드: `common/events.py`(`LineRef`, `line_ref()`·`ref_key()`·`ref_label()`).
 - **매처 근거**: `match_signatures` 근거(`candidates[].evidence`, `types[].evidence`)에 `line_ref`(이벤트의 값 그대로)와 `event_index`(입력 `events[]` 안의 순번, 입력 문서 순서 기준)가 더해진다. S/C·score·정렬·회귀·검증 판정은 이 값을 쓰지 않는다.
-- **`cut --evidence`**: 근거마다 `line_ref`가 가리키는 줄이 입력에 있고 그 줄의 (시각, 태그)가 근거와 같으면 **그 줄만** 앵커로 삼는다. 아니면 그 근거만 (시각, 태그)가 같은 모든 줄을 앵커로 삼고(예전 동작), `line_ref`가 있었는데 못 쓴 경우 경고 `evidence-ref-mismatch`를 낸다(종료 코드는 그대로). 그래서 `cut`에는 `parse`와 **같은 로그를 같은 순서로** 줘야 한다. 출력 `anchors_by: {line_ref: n, ts_tag: m}`는 앵커를 찾은 방식별 근거 수다(`--around`는 둘 다 0).
+- **`cut --evidence`**: `--cause <원인 ID>`가 필수이고 그 원인 후보의 근거를 쓴다(1위 후보가 아니다 — 회귀 모드는 같은 점수면 ID 순). 그 원인이 후보가 아니면(C=0·판정 불가·`signatures_pending`·`--top`으로 잘림 — `--top 0`으로 다시 매칭) 사유와 종료 코드 2. 출력 `cause`·`rank`, 다른 원인도 C=1이면 경고 `evidence-other-causes`(표시 전용, 판정은 R4). 근거마다 `line_ref`가 가리키는 줄이 입력에 있고 그 줄의 (시각, 태그)가 근거와 같으면 **그 줄만** 앵커로 삼는다. 아니면 그 근거만 (시각, 태그)가 같은 모든 줄을 앵커로 삼고(예전 동작), `line_ref`가 있었는데 못 쓴 경우 경고 `evidence-ref-mismatch`를 낸다(종료 코드는 그대로). 그래서 `cut`에는 `parse`와 **같은 로그를 같은 순서로** 줘야 한다. 출력 `anchors_by: {line_ref: n, ts_tag: m}`는 앵커를 찾은 방식별 근거 수다(`--around`는 둘 다 0).
 - **`report.md`**: 근거 줄 끝에 ` (f<file_index>:L<line_no>)`이 붙는다(`analysis.json`의 근거 키는 그대로 `{ts, tag, msg, event}`).
 - 정수뿐이다. 경로·파일 이름·본문은 넣지 않으며 이슈 DB에는 쓰지 않는다(fixture는 마스킹된 잘라낸 텍스트라 줄 위치가 의미 없다, `08-safety.md §8`).
 

@@ -15,6 +15,7 @@ import stat
 import sys
 from pathlib import Path
 
+import pytest
 import yaml
 
 REPO = Path(__file__).resolve().parents[1]
@@ -140,6 +141,20 @@ def test_set_and_sync_scripts_path():
     assert result["changed"] is True and env.config()["plugin"]["scripts_path"] == str(other_root / "scripts")
 
 
+def test_set_issue_db_path_hints_old_snapshot_cleanup():
+    """issue_db.path를 바꿨고 옛 읽기 스냅샷이 있으면 정리 방법 한 줄(hint·stderr). 없거나 같은 값이면 없다."""
+    env = Env()
+    env.init(env.base / "db")
+    out = env.json("config.py", ["set", "issue_db.path", env.base / "db2"])
+    assert "hint" not in out                                         # 스냅샷 없음
+    (env.base / "work" / "_snapshot").mkdir(parents=True)
+    proc = env.run("config.py", ["set", "issue_db.path", env.base / "db3"])
+    out = json.loads(proc.stdout)
+    assert proc.returncode == 0 and "worktree remove --force" in out["hint"] and str(env.base / "db2") in out["hint"]
+    assert "안내:" in proc.stderr
+    assert "hint" not in env.json("config.py", ["set", "issue_db.path", env.base / "db3"])   # 같은 값
+
+
 # -- Jira MCP ------------------------------------------------------------------------
 
 
@@ -202,6 +217,112 @@ def test_excluded_mock_servers():
     found = env.json("config.py", ["tracker-candidates", "--mcp-config", MCP_CONFIG])
     assert found["usable"] == [] and found["servers"][0]["excluded"] is True
     assert found["servers"][0]["tools"] == [] and "중단" in found["next"]
+
+
+# 가짜 stdio MCP 서버(사내 피드백 12: tracker-candidates 무응답). {mode}: answer(응답 뒤 끝나지 않음)·silent(응답 없음,
+# 손자 프로세스가 stdout을 쥔다)·exit(바로 종료 3). {marker}: 띄워졌으면 만드는 파일
+FAKE_MCP = '''import json, os, subprocess, sys, time
+mode, marker = sys.argv[1], sys.argv[2]
+open(marker, "a").close()
+if mode == "exit":
+    sys.exit(3)
+if mode == "silent":
+    child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(600)"])   # stdout 상속(파이프를 쥔다)
+    open(marker + ".pid", "w").write(str(child.pid))
+    time.sleep(600)
+for line in sys.stdin:
+    m = json.loads(line)
+    if m.get("method") == "initialize":
+        print(json.dumps({"jsonrpc": "2.0", "id": m["id"], "result": {"protocolVersion": "2025-06-18", "capabilities": {},
+                          "serverInfo": {"name": "fake", "version": "0"}}}), flush=True)
+    elif m.get("method") == "tools/list":
+        print(json.dumps({"jsonrpc": "2.0", "id": m["id"], "result": {"tools": [{"name": "jira_get_issue"}]}}), flush=True)
+        break
+time.sleep(600)     # 응답 뒤에도(stdin EOF 뒤에도) 끝나지 않는다
+'''
+
+
+def _fake_mcp(base: Path, servers: dict[str, str | None]) -> Path:
+    """`{서버: mode 또는 None(원격 url)}` → MCP 설정 JSON 경로. 띄워진 서버는 `<base>/<서버>.started`를 남긴다."""
+    script = base / "fake_mcp.py"
+    script.write_text(FAKE_MCP, encoding="utf-8")
+    conf = {name: ({"command": sys.executable, "args": [str(script), mode, str(base / f"{name}.started")]} if mode
+                   else {"type": "http", "url": "https://mcp.mock.invalid/x"}) for name, mode in servers.items()}
+    path = base / "mcp.json"
+    path.write_text(json.dumps({"mcpServers": conf}), encoding="utf-8")
+    return path
+
+
+def _alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    try:    # 좀비(아직 거둬지지 않음)는 끝난 것으로 본다
+        return Path(f"/proc/{pid}/stat").read_text().split(")")[-1].split()[0] != "Z"
+    except OSError:
+        return True
+
+
+def test_list_tools_returns_on_response_and_kills_process_group():
+    """응답(`tools/list`) 뒤 끝나지 않는 서버도 바로 반환한다(이전: 타임아웃까지 기다린 뒤 오류). 응답 없는 서버는 timeout,
+    손자 프로세스(stdout을 쥔다)까지 끝낸다. 바로 끝나는 서버는 exited(코드). 원격 서버는 not-stdio."""
+    import time
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    from common import mcptools
+    base = tmp("tt-mcp-probe-")
+    conf = json.loads(_fake_mcp(base, {"answer": "answer", "silent": "silent", "exit": "exit"})
+                      .read_text(encoding="utf-8"))["mcpServers"]
+    start = time.monotonic()
+    assert mcptools.list_tools(conf["answer"]) == ["jira_get_issue"]
+    assert time.monotonic() - start < 5, "응답을 받으면 서버가 끝나기를 기다리지 않는다"
+
+    start = time.monotonic()
+    with pytest.raises(mcptools.ProbeError) as err:
+        mcptools.list_tools(conf["silent"], timeout=1.5)
+    assert err.value.kind == "timeout" and str(err.value).startswith("timeout(1.5초)")
+    assert time.monotonic() - start < 8, "손자가 파이프를 쥐어도 멈추지 않는다"
+    if POSIX:
+        pid = int((base / "silent.started.pid").read_text())
+        deadline = time.monotonic() + 5
+        while _alive(pid) and time.monotonic() < deadline:
+            time.sleep(0.1)
+        assert not _alive(pid), "프로세스 그룹(손자 포함)을 끝낸다"
+
+    with pytest.raises(mcptools.ProbeError) as err:
+        mcptools.list_tools(conf["exit"])
+    assert err.value.kind == "exited" and str(err.value).startswith("exited(3)")
+    with pytest.raises(mcptools.ProbeError) as err:
+        mcptools.list_tools({"type": "http", "url": "https://mcp.mock.invalid/x"})
+    assert err.value.kind == "not-stdio"
+
+
+def test_tracker_candidates_reports_probe_diagnostics():
+    """servers[].{probe, elapsed_ms, error}와 stderr 진행 줄(서버 이름·시간·결과 종류만). `--tools-json`의 서버는 이름
+    정규화(`jira.corp` = 세션 이름 `jira_corp`)로 비교해 다시 띄우지 않는다."""
+    env = Env()  # 테스트 헬퍼 루트: exclude_servers: []
+    base = tmp("tt-mcp-cand-")
+    mcp = _fake_mcp(base, {"fake-jira": "answer", "fake-exit": "exit", "jira.corp": "answer", "remote-jira": None})
+    tools = base / "tools.json"
+    tools.write_text(json.dumps({"jira_corp": ["mcp__jira_corp__jira_get_issue"]}), encoding="utf-8")
+    proc = env.run("config.py", ["tracker-candidates", "--mcp-config", mcp, "--tools-json", tools])
+    assert proc.returncode == 0, proc.stderr
+    found = {s["server"]: s for s in json.loads(proc.stdout)["servers"]}
+    assert set(found) == {"fake-jira", "fake-exit", "jira_corp", "remote-jira"}
+    assert found["fake-jira"]["probe"] == "stdio" and found["fake-jira"]["error"] is None
+    assert 0 < found["fake-jira"]["elapsed_ms"] < 5000
+    assert found["fake-jira"]["suggested"]["get_issue"] == "mcp__fake-jira__jira_get_issue"
+    assert found["fake-exit"]["probe"] == "stdio" and found["fake-exit"]["error"].startswith("exited(3)")
+    assert found["jira_corp"]["probe"] == "tools-json" and found["jira_corp"]["elapsed_ms"] == 0
+    assert not (base / "jira.corp.started").exists(), "--tools-json에 있는 서버(정규화 이름)는 띄우지 않는다"
+    assert found["remote-jira"]["probe"] == "remote" and found["remote-jira"]["error"].startswith("not-stdio")
+    lines = [ln for ln in proc.stderr.splitlines() if ln.startswith("[tracker-candidates]")]
+    assert "[tracker-candidates] fake-jira 확인 중(최대 10초)" in lines
+    assert any(ln.startswith("[tracker-candidates] fake-jira ") and ln.endswith("ms 도구 1개") for ln in lines)
+    assert any(ln.startswith("[tracker-candidates] fake-exit ") and ln.endswith("ms exited(3)") for ln in lines)
+    assert not any(name in ln for ln in lines for name in ("remote-jira", "jira.corp", "jira_corp"))   # 띄우지 않은 서버
 
 
 def test_missing_site_defaults_stops_everything():
@@ -331,9 +452,11 @@ def test_session_lock_rules():
     assert proc.returncode == 2 and json.loads(proc.stdout)["holder"]["job"] == "MOCK-1101"
     proc = env.run("db_pr.py", ["snapshot", "--job", "MOCK-2101"], env=at(1))
     assert proc.returncode == 2
-    # 같은 작업 키, 10분 이내 갱신 → --take-over 없이는 2, 있으면 이어받음
-    assert env.run("db_pr.py", ["lock", "acquire", "MOCK-1101"], env=at(5)).returncode == 2
-    taken = env.json("db_pr.py", ["lock", "acquire", "MOCK-1101", "--take-over"], env=at(5))
+    # 같은 작업 키, 10분 이내 갱신 → 다른 세션(owner 없음)은 --take-over 없이는 2, 있으면 이어받음
+    # (같은 owner의 재획득은 재진입 — test_lock_recovery.py)
+    other = lambda minutes: {**at(minutes), "TT_LOCK_OWNER": ""}  # noqa: E731
+    assert env.run("db_pr.py", ["lock", "acquire", "MOCK-1101"], env=other(5)).returncode == 2
+    taken = env.json("db_pr.py", ["lock", "acquire", "MOCK-1101", "--take-over"], env=other(5))
     assert taken["taken_over"] is True and taken["lock"]["started_at"] == "2026-09-29T09:00:00Z"
     # 10분이 넘었으면 그대로 이어받는다
     env.json("db_pr.py", ["lock", "acquire", "MOCK-1101"], env=at(16))

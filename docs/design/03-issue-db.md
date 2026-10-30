@@ -66,7 +66,8 @@ telephony-issue-db/
 ├── docs/
 │   ├── getting-started.md             # 10분 온보딩 (06-collaboration.md §6.9)
 │   ├── review-guide.md                # 월간 리뷰 절차 (06-collaboration.md §6.6)
-│   └── branch-protection.md           # 브랜치 보호 설정 기록 (06-collaboration.md §6.1)
+│   ├── branch-protection.md           # 브랜치 보호 설정 기록 (06-collaboration.md §6.1)
+│   └── analyzer-skills.md             # 카테고리 분석 스킬 만들기 (16-existing-assets.md §16.5.1)
 ├── schema/
 │   ├── type.schema.json
 │   ├── issue.schema.json
@@ -104,7 +105,7 @@ telephony-issue-db/
 │   └── 2026-09/ABC-12345-20260927T1830.yaml
 └── .github/
     ├── CODEOWNERS
-    └── pull_request_template.md       # 리뷰어 머지 체크리스트 (06-collaboration.md §6.3)
+    └── pull_request_template.md       # 머지 전 체크리스트 — 리뷰어 머지일 때 (06-collaboration.md §6.3)
     # workflows/는 Actions 사용 시에만 추가 (13-actions.md)
 ```
 
@@ -164,7 +165,7 @@ causes:
       date: 2026-09-15
     fix:
       status: not-a-bug                # open | fix-submitted | fixed | wont-fix | not-a-bug
-      ref: null                        # Gerrit CL 또는 커밋 (형식: issue-db.config.yaml fix_ref_regex)
+      ref: null                        # 코드 수정 참조(CL·커밋 등) (형식: issue-db.config.yaml fix_ref_regex)
       fixed_in: []                     # [{branch: <브랜치, 필수>, build: <빌드, 선택>}]
       verification: null               # fixed일 때 필수. 코드 수정 검증 기록 (05-verification.md §5.12 (2))
       verification_history: []         # 이전 검증·되돌림 기록, 최신이 위 (형식: contracts.md §상태 값)
@@ -221,7 +222,7 @@ cause: DATA-001-02                     # 원인 미확정이면 unresolved
 date: 2026-09-20                       # 분류한 날 (생성 결과의 기준일 계산에 씀, 5.2)
 occurred_on: 2026-09-18                # 선택. Jira 발생 시각의 날짜 (통계의 최근 N일·급증에 씀, 06-collaboration.md §6.7)
 model: <모델>
-sw: <빌드>
+sw: <빌드>                             # 선택. Jira에 빌드 정보가 없고 사용자도 모르면 생략(수정·회귀 판단 불가, 5.9)
 platform_version: "16"
 carrier: <캐리어>                      # 선택
 analyzed_by: <GHE 아이디>
@@ -483,7 +484,7 @@ cause: {{원인 ID | unresolved}}
 date: {{YYYY-MM-DD}}
 occurred_on: {{선택, 발생 날짜 YYYY-MM-DD}}
 model: {{모델}}
-sw: {{빌드}}
+sw: {{선택, 빌드}}
 platform_version: "{{버전}}"
 carrier: {{선택}}
 analyzed_by: {{GHE 아이디}}
@@ -524,7 +525,7 @@ note: {{선택, 한 줄}}
 |---|---|---|
 | open | 원인은 확인됐고 코드/설정 수정이 필요한데 아직 안 됨 | — |
 | fix-submitted | 수정 CL이 머지됐고 검증 대기 | `ref`(CL/커밋), `fixed_in`(브랜치 필수, 빌드 선택) |
-| fixed | 수정이 **검증까지** 완료 (`05-verification.md §5.12 (2)`) | `ref`, `fixed_in`(빌드 있는 항목 1개 이상, verify-fix 통과의 전제), `verification`(result: passed). 코드·설정 수정 유형은 `scenario_signatures` 또는 `recovery_signatures` |
+| fixed | 수정이 **검증까지** 완료 (`05-verification.md §5.12 (2)`) | `ref`, `fixed_in`(빌드 있는 항목 1개 이상, verify-fix 통과의 전제. verify-fix 로그 빌드와 비교하는 것은 `modem` 원인뿐 — AP 패치는 패치 적용 빌드 로그면 된다), `verification`(result: passed). 코드·설정 수정 유형은 `scenario_signatures` 또는 `recovery_signatures` |
 | wont-fix | 수정하지 않기로 결정 | 본문 비고에 사유 |
 | not-a-bug | 사용자 설정/네트워크 등 단말 수정 대상 아님 | — |
 
@@ -534,7 +535,7 @@ note: {{선택, 한 줄}}
 |---|---|---|
 | fixed, Jira SW < fixed_in | 이미 수정됨 | "BUILD_X에서 수정됨. 빌드 업데이트 후 재확인 권고" |
 | fixed, Jira SW ≥ fixed_in | **회귀 의심** | "수정 빌드 이후(같은 빌드 포함)에서 재발. 회귀 가능성" |
-| fixed 또는 fix-submitted, 같은 브랜치 규칙이 없거나 파싱 불가, `fixed_in`에 빌드 없음 | 판단 불가 | 두 값을 나란히 보여주고 사용자에게 판단을 맡긴다 |
+| fixed 또는 fix-submitted, 같은 브랜치 규칙이 없거나 파싱 불가, `fixed_in`에 빌드 없음, Jira SW 없음 | 판단 불가 | 두 값을 나란히 보여주고 사용자에게 판단을 맡긴다 |
 | fix-submitted, Jira SW < fixed_in | 수정 대기 빌드 | "수정 CL 반영 전 빌드. 업데이트 후 verify-fix 권고" |
 | fix-submitted, Jira SW ≥ fixed_in | **수정 미흡 의심** | "수정 반영 빌드에서 발생. verify-fix 실패 가능성" |
 | open | 미수정 | "미수정 원인. 기존 Jira N건" |
@@ -554,4 +555,4 @@ note: {{선택, 한 줄}}
 - 주 카테고리는 **사용자가 겪는 증상**으로 정한다.
 - 다른 카테고리가 원인 쪽이면 원인에 `related: [<다른 원인 ID>]`를 넣고, 유형에 `secondary_categories`를 넣는다. `related`는 양방향으로 넣는다 (`add-related` op는 양쪽을 함께 갱신한다).
 - `search`와 매처는 `secondary_categories`와 `related`도 탐색한다. 리포트에는 "관련: SIM-002-01 SIM refresh"처럼 보여준다.
-- `secondary_categories`가 있는 유형은 해당 카테고리 오너도 리뷰어로 지정한다 (`gh pr create --reviewer`, 계산 방법은 `02-config.md §5.3` 리뷰어 계산).
+- `secondary_categories`가 있는 유형은 해당 카테고리 오너(CODEOWNERS에 있을 때)도 리뷰어로 지정한다 (PR 생성 뒤 `gh pr edit --add-reviewer`, 계산 방법은 `02-config.md §5.3` 리뷰어 계산).

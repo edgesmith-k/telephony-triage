@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import sys
 import tempfile
 import time
@@ -28,7 +27,7 @@ PASTED_STEPS = "steps-pasted.txt"   # 개발자가 붙여넣은 스텝 목록 �
 # draft-verify.json(common/draftcheck)은 작업 파일이 아니다: plan.json과 함께 남아 sync-pr 재적용·discard 뒤 재stage에서
 # 작성 op가 그대로면 다시 묻지 않는다(지문이 다르면 stage가 멈춘다). cleanup --older-than은 폴더째 지운다
 WORK_FILES = (STATE, STAGE, PR_FILE, REGRESS, PASTED_STEPS)
-JOB_KEY_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
+JOB_KEY_RE = session_lock.JOB_KEY_RE
 TOOL_PREFIX = "tt/"
 
 
@@ -119,15 +118,25 @@ class Lock:
     def acquire(self, job: str, command: str | None, take_over: bool) -> dict:
         held = self.describe(self.read())
         stamp = _iso(now())
+        if held is not None and held["job"] == job and self.owner and self.owner == held.get("owner"):
+            # 재진입: 이 세션(TT_LOCK_OWNER = 보유 owner)이 이미 잡은 lock — 만료 여부와 상관없이 owner·started_at 유지, 시각만 갱신
+            data = {k: held[k] for k in ("job", "owner", "command", "started_at", "platform") if k in held}
+            data.update(command=command or held.get("command"), updated_at=stamp)
+            self.write(data)
+            return {"acquired": True, "reacquired": True, "lock": self.describe(data), "taken_over": False,
+                    "previous": None}
         if held is not None and not held["expired"]:
             if held["job"] != job:
                 raise UsageError(f"다른 작업({held['job']}, {held.get('command')})이 lock을 갖고 있습니다. "
                                  "그 세션이 끝났는지 확인하고, 끝났으면 lock release <작업 키> --force로 푼다.",
-                                 {"holder": held})
+                                 {"holder": mask_owner(held)})
             if now() - _parse(held["updated_at"]) <= FRESH and not take_over:
+                who = ("이 세션이 잡은 lock이면 이 세션이 받은 acquire 결과의 lock.owner(lock status 값이 아님)를 TT_LOCK_OWNER로 주고 다시 acquire한다(이어받기 불필요). "
+                       if not self.owner else "TT_LOCK_OWNER가 보유 owner와 다르다(다른 세션). ")
                 raise UsageError(f"같은 작업({job})의 lock이 {held['age_sec']}초 전에 갱신됐습니다. 다른 세션이 "
-                                 "진행 중일 수 있다. 사용자가 확인하면 --take-over로 이어받는다.", {"holder": held})
-        taken_from = held
+                                 f"진행 중일 수 있다. {who}사용자가 확인하면 --take-over로 이어받는다.",
+                                 {"holder": mask_owner(held)})
+        taken_from = mask_owner(held)
         started = held["started_at"] if (held and held["job"] == job) else stamp
         self.owner = uuid.uuid4().hex
         data = {"job": job, "owner": self.owner, "command": command or (held or {}).get("command"), "started_at": started,
@@ -146,7 +155,7 @@ class Lock:
         held = self.describe(self.read())
         if held is None or held["job"] != job:
             raise UsageError(f"세션 lock이 작업 {job}의 것이 아닙니다. 먼저 lock acquire {job}를 한다.",
-                             {"holder": held})
+                             {"holder": mask_owner(held)})
         self.check_owner(held)
         held.update(updated_at=_iso(now()))
         self.write({k: held[k] for k in ("job", "owner", "command", "started_at", "updated_at", "platform") if k in held})
@@ -175,11 +184,21 @@ class Lock:
         if held is None:
             return {"released": False, "note": "lock이 없습니다"}
         if held["job"] != job and not force:
-            raise UsageError(f"lock 보유자는 {held['job']}입니다. 그 세션이 끝났다면 --force로 푼다.", {"holder": held})
-        if not force:
-            self.check_owner(held)
+            raise UsageError(f"lock은 풀리지 않았다 — lock 보유자는 {held['job']}입니다. 그 세션이 끝났다면 --force로 푼다.",
+                             {"released": False, "holder": mask_owner(held)})
+        if not force and (not self.owner or self.owner != held.get("owner")):
+            raise UsageError("lock owner 불일치: lock은 풀리지 않았다(session.lock 그대로). acquire 결과의 lock.owner를 "
+                             "TT_LOCK_OWNER로 주고 다시 release한다. 그 세션이 끝났다고 사용자가 확인하면 --force로 푼다.",
+                             {"released": False, "holder": mask_owner(held)})
         self.path.unlink()
-        return {"released": True, "previous": held, "forced": held["job"] != job}
+        return {"released": True, "previous": mask_owner(held), "forced": held["job"] != job}
+
+
+def mask_owner(held: dict | None) -> dict | None:
+    """출력용 사본: owner 토큰은 앞 4자만 (토큰은 acquire 결과로만 전달한다 — 출력·lock 파일에서 다시 읽어 쓰지 않는다)."""
+    if not held or not held.get("owner"):
+        return held
+    return {**held, "owner": str(held["owner"])[:4] + "…"}
 
 
 def _read_json(path: Path) -> dict | None:

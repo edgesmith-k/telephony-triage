@@ -141,9 +141,14 @@ def drift_items(plan: dict, base: Snapshot, onto: Snapshot) -> list[dict]:
                 sa = next((s for s in ta.get(key) or [] if s.get("id") == sid), None)
                 if sb is not None and sa is None:
                     add(i, op, f"{owner}/{sid}", key, None, sb, op.get("signature"))
-        elif kind in ("add-parser-rule", "update-parser-rule"):
+        elif kind in ("add-parser-rule", "update-parser-rule", "remove-parser-rule"):
             sections = RULE_SECTIONS.get(op["file"], ())
             section = op.get("section") or (sections[0] if sections else None)
+            if kind == "remove-parser-rule" and not op.get("section"):
+                # 섹션을 안 주면 계획 당시 키가 있던 섹션 (적용 때와 같은 판별)
+                section = next((s for s in sections if any(ParserRuleOps._rule_key(s, r) == op["key"]
+                                                           for r in base.rules.get(op["file"], {}).get(s) or [])),
+                               section)
             if section is None:
                 continue
             key = op.get("key") or ParserRuleOps._rule_key(section, op["rule"])
@@ -154,8 +159,10 @@ def drift_items(plan: dict, base: Snapshot, onto: Snapshot) -> list[dict]:
                 if rb is not None and ra is None:
                     add(i, op, f"{op['file']}:{key}", section, None, rb, _functional(op.get("rule")))
             elif rb is None or _functional(ra) != _functional(rb):
+                # remove: 지우려던 항목을 main이 바꿨거나 이미 지웠다 — 계획 값은 null(삭제)
                 add(i, op, f"{op['file']}:{key}", section, _functional(ra) if ra else None,
-                    _functional(rb) if rb else None, _functional(op.get("rule")))
+                    _functional(rb) if rb else None,
+                    None if kind == "remove-parser-rule" else _functional(op.get("rule")))
         elif kind == "set-status":
             a, b = base.status(op["id"]), onto.status(op["id"])
             if a != b:

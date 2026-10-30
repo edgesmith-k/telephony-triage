@@ -7,7 +7,7 @@
 
 플러그인의 Claude hook과 이 레포의 git hook(`pre-commit`, `pre-push`)은 **모두 로컬 장치**라 우회할 수 있다(명령 파싱은 최선 노력이고, `core.hooksPath`는 바꿀 수 있다).
 
-그리고 `core.hooksPath=.githooks`는 main에 커밋된 스크립트를 **모든 기여자 PC에서 실행**한다. 그래서 브랜치 보호와 CODEOWNERS 필수 리뷰가 서버에서 강제되지 않으면 **main 쓰기 권한이 곧 팀 전체 PC의 코드 실행 권한**이 된다.
+그리고 `core.hooksPath=.githooks`는 main에 커밋된 스크립트를 **모든 기여자 PC에서 실행**한다. 그래서 브랜치 보호와 메인테이너 경로(`/.githooks/` 등)의 CODEOWNERS 필수 리뷰가 서버에서 강제되지 않으면 **main 쓰기 권한이 곧 팀 전체 PC의 코드 실행 권한**이 된다.
 
 브랜치 보호를 설정할 수 없는 GHE 환경이면 `.githooks/` 채택 여부를 다시 결정한다.
 
@@ -16,7 +16,7 @@
 | 항목 | 값 | 설정일 | 확인자 |
 |---|---|---|---|
 | PR 필수 (직접 push 금지) | 켬 | TODO(SITE) | TODO(SITE) |
-| CODEOWNERS 승인 필수 | 1명 이상 | TODO(SITE) | TODO(SITE) |
+| CODEOWNERS 리뷰 필수 | 켬 — 필수 승인 수 0(오너가 적힌 경로만 리뷰, 그 밖은 PR을 만든 사람이 바로 병합). 리뷰어 머지 팀은 1명 이상 + `issue_db.merge: review` | TODO(SITE) | TODO(SITE) |
 | force push 금지 | 켬 | TODO(SITE) | TODO(SITE) |
 | 브랜치 삭제 금지 | 켬 | TODO(SITE) | TODO(SITE) |
 | 관리자에게도 적용 | 켬 | TODO(SITE) | TODO(SITE) |

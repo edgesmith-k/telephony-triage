@@ -134,6 +134,7 @@ telephony-triage-plugin/                 # 개발 레포 루트
     │   ├── guard.py                     # Claude hook 판정기 (08-safety.md §9)
     │   ├── jira_bridge.py               # PostToolUse hook: Jira MCP 원문 → JOB/issue_raw.json, 모델에는 마스킹 요약. 승인 코멘트 게시 결과 → JOB/post.result.json (08-safety.md §9)
     │   ├── issue_post.py                # analyze Step 9: Jira 코멘트 본문(4칸) 렌더·승인 기록 (07-workflow.md §Step 9). 공용 판정은 common/issuepost.py
+    │   ├── skill_patch.py               # analyze Step 7 `[스킬]` 규칙 제안 → 담당자용 patch(diff·마스킹·apply --check·안내 줄, 표시 기록 kind patch)
     │   ├── job_status.py                # 작업 상태 한 화면(읽기 전용, 로컬 기록만). 수집은 common/jobstatus.py (contracts.md §3.2)
     │   ├── usage_stats.py               # 파일럿 지표(S-7, 읽기 전용, --json)
     │   ├── triage.py                    # analyze Step 0~4 + Step 5 resolve 드라이버 (contracts.md §3.2). CLI만. 구현은 triagelib/
@@ -180,6 +181,7 @@ telephony-triage-plugin/                 # 개발 레포 루트
 | `jira_bridge.py` | 설정된 Jira `get_issue`·`get_comments` MCP 응답 원문을 `<work_dir>/<KEY>/issue_raw.json`에 쓰고 모델에 보이는 결과를 마스킹 요약으로 바꾼다(PostToolUse `updatedToolOutput`). 설정된 코멘트 도구(`tracker.write_tools.add_comment`) 응답이면 `post.result.json`을 쓰고 승인 기록에 `used_at`을 남긴다 | `hooks.json` |
 | `triage.py` | **analyze 드라이버**: Step 0~4와 Step 5 `code_refs` resolve를 위 스크립트의 `main()`을 같은 프로세스에서 불러 순서대로 수행, `analysis.json`(≤4KB)·`report.md` 초안·`trace.jsonl`, 후보 없음·원인 미확인이면 Step 5-2 입력 `timeline.md`. `--analysis-only`면 기록하지 않는 분석 전용(쓰기 흐름의 사전 질문 생략, ok에서 lock 해제). 사용자 결정 지점은 `needs_input`. 자체 판정 로직은 없다(요약·절삭만) | analyze(SKILL.md), `tools/offline_eval.py`(`--offline-db`) |
 | `issue_post.py` | analyze Step 9: `analysis.json`·`issue.json`·`plan.json`(마스킹본)으로 PROBLEM/CAUSE/NEXT ACTION/ANALYSIS 코멘트 본문을 렌더(결정적 칸 + 검증한 LLM 칸, 재마스킹)해 확인 화면을 내고(`render`), 승인한 본문의 해시를 기록하고 호출할 도구·인자를 낸다(`approve`). Jira를 직접 부르지 않고 lock·git을 건드리지 않는다 | analyze Step 9(`post.md`) |
+| `skill_patch.py` | analyze Step 7에서 고른 `[스킬]` 규칙 제안의 사본(`JOB/skill-suggestions/<이름>/`)과 분석 스킬 디렉토리를 비교한 unified diff를 만들어 마스킹하고 스킬 디렉토리 임시 사본에 `git apply --check`한 뒤 `JOB/skill-suggestions/<이름>.patch`와 고정 안내 줄·파일별 줄 수(실패면 메모 한 줄)를 낸다. 낸 줄은 표시 기록(`kind: patch`). 스킬 디렉토리는 쓰지 않는다 | analyze Step 7(`reference/skill-patch.md`) |
 | `job_status.py` | 작업 상태 한 화면(`status` 커맨드): `<work_dir>/<KEY>/` 기록·`session.lock`·`wt/` git 읽기·trace 끝 행(`last-run-error`)으로 단계·막힌 것·다음 할 일. `--doctor`면 관리자 전달용 진단(버전·doctor fail·warn 행). 읽기 전용(mkdir·fetch·lock·git 쓰기 없음), 원격은 보지 않는다 | `status` |
 | `usage_stats.py` | 파일럿 운영 지표: `JOB/trace.jsonl` 사건 행과 파일 상태로 작업 상태·PR까지·분석까지 시간·취소 비율·드라이버 질문·재시도(work_dir 읽기만), `--transcripts`면 transcript usage의 단계별 토큰·대화 질문(숫자만) | S-7, 런북 §10 |
 

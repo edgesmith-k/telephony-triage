@@ -75,8 +75,10 @@ parse_logcat.py (플러그인 진입점, contracts.md §3.2 계약 유지)
 1. **포팅 전에** 실제 로그 N개(카테고리별, 정상 포함, data는 기존 파서가 판별하는 경우를 모두 포함)를 기존 파서로 돌려 출력을 저장한다: `tests/golden/<이름>.orig.json` (사내 전용, `SITE_PATHS`).
    - 기존 파서를 **원본 로그와 번호 토큰 마스킹 로그 양쪽**으로 돌려 판별 결과가 같은지 먼저 본다. 다르면 그 판별은 마스킹에 민감한 것이므로, 포팅 시 위 "마스킹과의 관계"대로 처리하고 사용자에게 보고한다.
    - 골든 비교는 마스킹된 로그 기준으로 한다(이슈 DB fixture와 같은 조건).
+   - **합성 줄 보충(예외)**: 사내 첨부가 대부분 logcat 덤프라 bugreport 캡처 흔적에만 기대는 판별 경로는 실제 로그에 나오지 않는다. **실제 로그에 없는 판별 경로에 한해서만** 실제 로그에 합성 줄을 보충해 케이스를 만들 수 있고, 그 케이스에는 `synthetic` 표식과 사유를 남긴다(그 골든 JSON `tests/golden/<이름>.golden.json` 최상위에 `"synthetic": {"reason": "<왜 실제 로그에 없는지>"}`, `reason` 필수 — 사내는 `site_checks.py` `s4a.golden`이, 모의 골든은 `tests/test_golden.py`가 검사하고, `test_golden.py --update`는 이 키를 남긴다). 나머지 판별은 모두 실제 로그 기준이다. 골든 비교는 `events`·백엔드 버전만 보므로 이 키가 비교를 바꾸지 않고, 최상위 메타데이터라 골든 변조 점검(`s4a.golden_mutation`)도 바꾸지 않는다(이벤트 안의 같은 이름 필드는 기대값이라 바꾼다).
 2. 기존 출력 → 이벤트 형식 변환 규칙(매핑표)을 정하고 사용자 확인을 받는다.
 3. 포팅한 백엔드의 결과가 변환된 골든과 **같은지** 비교하는 테스트(`tests/test_golden.py`)를 둔다. 다르면 포팅 버그다. 같은 로그의 원본/마스킹 입력에서 builtin 이벤트 이름과 마스킹 대상이 아닌 필드가 같은지도 검사한다.
+   - 사내 골든 테스트(`tests/golden/test_*.py`)는 백엔드를 `real_site_backend` 픽스처(`tests/conftest.py`, `runner.real_site_backend()`)로 받는다. `conftest.py`가 세션 시작 때 임시 플러그인 루트의 `parser_backends`(그 `site/`는 모의 백엔드)를 먼저 불러 두므로 `import parser_backends.site`는 모의를 준다. 픽스처는 실제 `plugin/scripts/parser_backends/site/`를 `parser_backends.site_real`이라는 다른 이름으로 불러와 모의를 쓰는 테스트와 한 세션에서 서로 가리지 않는다(없으면 건너뜀).
 4. 의도적으로 바꾼 부분(정렬, 필드 이름 등)은 사용자 승인 후에만 골든을 갱신하고 이유를 `SITE_PROFILE.md`에 기록한다.
 5. 이후 백엔드 코드를 바꿀 때마다 골든 테스트 + `db_regress --all` + R5 이벤트 diff를 돌린다.
 
@@ -148,6 +150,22 @@ analyzers:
 - analyze 옵션: `--analyzer`는 묻지 않고 호출, `--no-analyzer`는 호출하지 않는다.
 - 다른 카테고리도 같은 방식으로 분석 스킬을 붙일 수 있다.
 - 분석 스킬은 1위 후보가 있을 때만 호출된다. 후보 없음·원인 미확인일 때의 Claude 가설은 별도 단계인 **탐색 분석**(`07-workflow.md §Step 5-2`, `explore.when`)이 맡는다. 사내에 범용 로그 분석 스킬이 있어도 v1은 탐색 분석을 스킬 본문(`reference/explore.md`)으로 하고, 그 스킬 연결은 S-4a에서 필요성을 본 뒤 정한다.
+
+### 16.5.1 분석 스킬 만들기 (분석 스킬이 없는 카테고리)
+
+리포트의 `심층 분석: 해당 없음(1위 카테고리에 분석 스킬 설정 없음)`은 정상 상태다(줄 끝에 이 안내 위치를 붙인다). 분석 스킬은 필요할 때만 만든다. 이슈 DB 독자용 요약은 뼈대의 `docs/analyzer-skills.md`(`tools/make_db_skeleton.py`)에 있다.
+
+- **만들 때**: 다음이 있고 **유지할 오너가 있을 때만** 만든다 — (a) 시그니처(정규식·이벤트·순서)로 표현하기 어려운 판단 순서(여러 단계의 조건 분기, 값 비교), (b) 따라가야 하는 코드 경로, (c) 이슈를 거듭하며 쌓인 점검 목록. 오너가 없거나 시그니처·파서 규칙으로 표현되면 만들지 않는다(규칙은 결정적이고 fixture 회귀로 검증된다, `12-principles.md`).
+- **구조**: `SKILL.md`(공통 절차: 입력 읽기 → 판단 순서 → 출력) + `references/<유형 ID>.md`(이슈 유형별 점검 목록·코드 경로, 그 유형일 때만 읽는다) + `analyzer.md`(입출력 계약). 계약은 위 §16.5와 `07-workflow.md §Step 5-1`에 맞춘다:
+  - 입력: `inputs`의 `events_json`(마스킹된 이벤트 JSON **경로**), `log_paths`, `top_candidates`(`[{type, cause, score, confidence}]`), `issue_summary`(마스킹된 한두 줄). 원문 로그를 통째로 받지 않는다.
+  - 출력: 리포트 `심층 분석 (<스킬>)` 칸에 붙을 요약, 다른 원인이면 `분석 스킬 의견: <원인 ID — 근거>`, 규칙이 필요하면 `규칙 제안:` 줄 아래에 한 줄에 하나씩(제안만 한다). 마스킹된 값만 쓴다. 모의 예: `tests/mocks/skills/data-analyzer/`.
+    - 이슈 DB 규칙: `- [이슈 DB] add-parser-rule file=<parser-rules 파일> rule=<규칙> — 근거: <로그 줄·이유>` 또는 `- [이슈 DB] update-signature cause=<원인 ID> … — 근거: …`
+    - 분석 스킬 자체 개선(점검 목록·코드 경로 보완): `- [스킬] … — 근거: …`
+  - 처리(`07-workflow.md §Step 7`): 분류 확정 뒤 한 번 묻는다(여러 개 가능: 줄마다 선택지 + `모두` + `받지 않음(기본 — 확인 안 한 제안은 반영하지 않으려고)` — 기본값과 그 이유는 질문 머리가 아니라 그 선택지에 표시한다). 고른 `[이슈 DB]` 줄은 스킬이 `db-authoring.md` 점검을 거친 계획 op 초안으로 만들어 보이고, 승인한 것만 `plan.json`에 들어가 다른 작성 op와 같은 초안 검증(`db_verify rules --plan --draft`)·stage 검사를 거친다. 고른 `[스킬]` 줄은 계획·PR·Jira 코멘트에 넣지 않고, 스킬이 그 줄이 가리키는 분석 스킬 파일(Step 5-1 Skill 결과의 스킬 디렉토리 기준)을 읽어 제안을 반영한 사본을 `JOB/skill-suggestions/<스킬 이름>/<rel>`에 쓰고, `skill_patch.py`가 반영용 unified diff `JOB/skill-suggestions/<스킬 이름>.patch`(경로 `a/<스킬 디렉토리 기준 상대 경로>`, `mask_pii`와 같은 마스킹)를 만들어 고정 안내 줄(`스킬 제안 patch(적용 안 함, 마스킹됨): <경로> — …`)과 파일별 +/− 줄 수를 낸다(스킬은 글자 그대로 보이고 표시 보조 hook이 본다). **스킬 소스가 설정돼 있으면**(선택 키 `analyzers.<카테고리>.source` = 분석 스킬 소스 checkout 안의 스킬 폴더, 절대 경로, 사용자 config 또는 site-defaults) `skill_patch.py`가 적용 가능성을 미리 보고(`git apply --check` 등, patch가 200줄·12KB를 넘으면 제안하지 않고 "patch 파일을 열어 확인") patch 전문(마스킹됨 — 마스킹이 추가 줄을 바꿨으면 placeholder가 소스에 들어간다고 함께 알린다)과 `스킬 소스 적용 대기: <경로> — … sha256 <H> …` 줄을 함께 낸다. 스킬은 그것을 보인 뒤 "스킬 소스(<경로>)에 바로 적용할까요?"(적용 / patch만 남김)를 묻고, "적용"이면 `skill_patch.py <KEY> --name <스킬> --apply --sha <H>`(`--source` 없이 — 제안 때 meta에 기록한 스킬 소스에만, 지금 설정과 같고 sha256이 같을 때)가 그 저장소 워킹 트리에만 `git apply`한다(index·커밋·push 없음 → `스킬 소스에 적용함(커밋 안 함): <경로> — 확인 후 직접 커밋·push`). git 저장소가 아니거나, patch가 바꾸는 파일에 커밋하지 않은 변경이 있거나, `git apply --check`가 실패하거나, 경로가 설치된 플러그인 캐시(`SK`·`.claude/plugins`)·이슈 DB clone과 겹치면 적용하지 않고 메모(`스킬 소스에 적용 안 함(patch는 남김): <사유>`)와 patch를 남긴다. 스킬 소스가 없으면 담당자가 검토해 자기 스킬 소스에 `git apply`한다(이전과 같다). 스킬 디렉토리를 모르거나 파일을 읽지 못하면, 또는 경로가 스킬 디렉토리 밖이거나 마스킹 뒤 원본(임시 사본)에 `git apply --check`가 실패하면(마스킹이 문맥 줄을 바꾼 경우) patch 없이 메모로만 보인다(`reference/skill-patch.md`). 스크립트는 `규칙 제안:` 줄 자체는 읽지 않는다(사본만 비교한다).
+- **description**: telephony-triage 스킬의 트리거 설명(Jira·logcat 분석 요청)과 겹치지 않게 쓴다 — "telephony-triage analyze Step 5-1에서 `analyzers.<카테고리>`로만 부른다"처럼 호출 경로를 좁힌다. 겹치면 사용자의 분석 요청이 이 스킬로 새어 본 흐름(lock·스냅샷·확인 화면)을 건너뛴다.
+- **파일을 바꾸지 않는다**: 분석 스킬은 이슈 DB·작업 계획·로그·자기 references를 고치지 않고 규칙을 제안만 한다(`규칙 제안:`). 넣을지는 Step 7에서 사용자가 정한다. `[스킬]` 제안으로 telephony-triage가 만드는 patch도 설치된 분석 스킬 디렉토리(플러그인 캐시)에는 쓰거나 적용하지 않는다 — 스킬 소스(`source`)가 설정돼 있고 사용자가 "적용"을 고른 때만 그 소스의 워킹 트리에 적용하고, 커밋·push(·main PR)는 사용자가 한다. 다른 사용자에게서 문제가 나오면 그때 소스에서 고친다.
+- **검증**: 해결된 실제 이슈(마스킹된 로그)로 스킬 있음/없음을 같은 모델로 비교한다(`10-skill-eval.md` 방식: 1순위 결과 — 의견이 맞는 원인을 가리키는지·제안 규칙이 R1~R5를 통과하는지, 2순위 토큰). 나아지지 않으면 연결하지 않는다.
+- **연결·교체·끄기**: 키는 `analyzers.<카테고리>`(`skill`·`when`·`inputs`·선택 `source`, `contracts.md §기존 자산 연결 계약`). 팀 기본값은 `site-defaults.yaml`, 개인은 사용자 config(`~/.telephony-triage/config.yaml`, `02-config.md §4`)에 같은 키를 두면 덮어쓴다. `skill`을 바꾸면 교체, `when: never`면 끄기, 한 번만 건너뛰려면 analyze `--no-analyzer`.
 
 ## 16.6 사외 초안과 사내 작업
 

@@ -2,9 +2,11 @@
 """show_guard.py — 스크립트 출력을 요약하지 않고 사용자에게 보였는지 보는 **표시 보조** hook (08-safety.md "표시 보조 hook").
 
 Bash·Read 출력은 사용자에게 보이지 않는다. push 확인 화면, 게시 확인 화면, Step 6 분석 리포트(결정적 줄과 `must_show`),
-초안 검증표(규칙마다 한 행)는 모델이 글자 그대로 답에 옮겨야 한다.
+초안 검증표(규칙마다 한 행), 스킬 제안 patch 안내 줄(`skill_patch.py`, 안내 줄과 파일별 줄 수 또는 메모)은 모델이 글자 그대로
+답에 옮겨야 한다.
 
-**무엇이 의무인가 — 스크립트 기록**(L R): `db_pr summary`·`issue_post render`·`triage run`·`db_verify rules --draft`가 낸 출력과
+**무엇이 의무인가 — 스크립트 기록**(L R): `db_pr summary`·`issue_post render`·`triage run`·`db_verify rules --draft`·
+`skill_patch`가 낸 출력과
 `stage`·`publish`·`discard`·`lock`·`approve`가 실행된 사실을 스크립트가 `<work_dir>/.shown/log.jsonl`에 직접 남긴다
 (`common/shown.py` `record`, contracts.md "표시 기록"). hook은 사용자 config의 모든 프로필 work_dir에서 이 세션의 기록을 읽어
 transcript의 Bash 호출에 시각으로 고정하고(`shown.anchor`: tool_use 시각 − 2초 ≤ 기록 시각 ≤ tool_result 시각, 명령에 기록의
@@ -26,7 +28,7 @@ transcript의 Bash 호출에 시각으로 고정하고(`shown.anchor`: tool_use 
 - `post`(PostToolUse Bash): 명령에 기록 스크립트 이름이 있고 60초 안에 그 스크립트의 의무 기록이 있으면 `additionalContext`로
   "이 출력은 사용자에게 안 보인다, 다음 메시지에 전문을 글자 그대로" 안내만 한다.
 
-같은 의무 키(`push:<hash>`·`post:<sha 앞 16자>`·`report:<KEY>#<run>`·`draft:<sha1 12자>`)로 막은 횟수(transcript의 표식
+같은 의무 키(`push:<hash>`·`post:<sha 앞 16자>`·`report:<KEY>#<run>`·`draft:<sha1 12자>`·`patch:<KEY>/<스킬 이름>`·`apply:<KEY>/<스킬 이름>`)로 막은 횟수(transcript의 표식
 `[telephony-triage] show-guard <key>`가 든 Stop 피드백·거부된 도구 결과, 그 의무가 생긴 뒤)가 MAX_BLOCKS(2)에 이르면 더 막지
 않고 `systemMessage`로 사용자에게 직접 확인을 안내한다. 거부된 호출을 똑같이(`description` 제외) 사이 글·질문·사용자 입력 없이
 다시 한 거부는 키마다 BLIND_FREE(1)번까지 세지 않는다 — 그 거부 문구에는 RETRY_NOTE를 붙인다. Stop이 연이어 막혔는데
@@ -61,10 +63,11 @@ HEAD_BYTES = 64 * 1024
 BLOCK_LIMIT = 12 * 1024
 # ponytail: post 안내는 지금 호출이 남긴 기록을 시각으로만 고른다(60초). 같은 스크립트를 60초 안에 두 번 부르면 앞 기록도 안내한다
 POST_WINDOW = 60.0
-RECORD_SCRIPTS = ("db_pr", "issue_post", "db_verify", "triage")
-QUICK_TOKENS = ("## push 전 확인:", "게시 전 확인:", "triage.py", "--draft", "db_pr.py", "issue_post.py")
-KIND_NAME = {"push": "push 확인 화면", "post": "게시 확인 화면", "report": "분석 리포트", "draft": "초안 검증표"}
-OBJ = {"push": "을", "post": "을", "report": "를", "draft": "를"}      # 목적격 조사
+RECORD_SCRIPTS = ("db_pr", "issue_post", "db_verify", "triage", "skill_patch")
+QUICK_TOKENS = ("## push 전 확인:", "게시 전 확인:", "triage.py", "--draft", "db_pr.py", "issue_post.py", "skill_patch.py")
+KIND_NAME = {"push": "push 확인 화면", "post": "게시 확인 화면", "report": "분석 리포트", "draft": "초안 검증표",
+             "patch": "스킬 제안 patch 안내"}
+OBJ = {"push": "을", "post": "을", "report": "를", "draft": "를", "patch": "를"}      # 목적격 조사
 EXPLORE_Q = re.compile(r"(심층|탐색)\s*분석[^\n]*(할까요|실행할까|진행할까|\?)")
 NOTE = "[telephony-triage] 표시 안내"
 TRUNCATED = [False]      # 마지막 load_text가 끝부분만 읽었는가
@@ -248,7 +251,7 @@ def _examples(miss) -> str:
 
 
 def _block(ob) -> str:
-    label = {"report": "붙일 리포트 줄", "draft": "붙일 표"}.get(ob.kind, "붙일 화면")
+    label = {"report": "붙일 리포트 줄", "draft": "붙일 표", "patch": "붙일 줄"}.get(ob.kind, "붙일 화면")
     if len(ob.block.encode("utf-8")) <= BLOCK_LIMIT:
         return f"--- {label} ---\n{ob.block}"
     where = ob.path or "앞 Bash 출력"
@@ -277,13 +280,15 @@ def reason(ob, miss, *, deny: bool = False, retry: bool = False) -> str:
     why = f"{name}{OBJ[ob.kind]} 요약했다(빠진 {unit} {len(miss)}/{ob.total})."
     if deny:
         what = {"draft": "규칙마다 한 행(R1~R6 각각 상태, 통과가 아니면 사유)을",
-                "report": "아래 결정적 줄과 must_show를 글자 그대로(고쳐 쓰지 말고)"}.get(
+                "report": "아래 결정적 줄과 must_show를 글자 그대로(고쳐 쓰지 말고)",
+                "patch": "아래 줄을 모두 글자 그대로(고쳐 쓰지 말고)"}.get(
             ob.kind, "아래 화면 **전체**를 처음부터 끝까지 글자 그대로")
         todo = f"{what} 질문 본문 앞(또는 질문 바로 앞 글)에 넣고 질문을 다시 부른다."
         return _deny_text(ob, why, todo, miss, retry, unit)
     head = f"{shown.MARKER} {ob.key} {STOP_LEAD} {why} Bash 출력은 사용자에게 보이지 않는다."
     how = {"draft": "규칙마다 한 행(R1~R6 각각 상태, 통과가 아니면 사유)을 보이고 같은 메시지 끝에 질문을 다시 한다.",
-           "report": "결정적 줄과 must_show를 글자 그대로(고쳐 쓰지 말고) 보이고 같은 메시지 끝에 질문을 다시 한다."}.get(
+           "report": "결정적 줄과 must_show를 글자 그대로(고쳐 쓰지 말고) 보이고 같은 메시지 끝에 질문을 다시 한다.",
+           "patch": "아래 줄을 모두 글자 그대로(고쳐 쓰지 말고) 보인다 — 질문이 있었으면 같은 메시지 끝에 다시 한다."}.get(
         ob.kind, "화면 **전체**를 처음부터 끝까지 글자 그대로 다시 붙이고 같은 메시지 끝에 승인 질문을 다시 한다.")
     return f"{head}\n{how}\n빠진 {unit} 예:\n{_examples(miss)}\n{_block(ob)}"
 
@@ -557,6 +562,8 @@ def mode_post(inp) -> dict | None:
         elif kind == "report" and (r.get("lines") or r.get("must_show")):
             n = len(r.get("lines") or []) + len(r.get("must_show") or [])
             found[kind] = (KIND_NAME[kind], f"결정적 줄과 must_show({n}줄)", "Step 7 질문")
+        elif kind == "patch" and r.get("lines"):
+            found[kind] = (KIND_NAME[kind], f"출력 줄 전부({len(r['lines'])}줄)", "다음 질문")
     if not found:
         return None
     saved = _persisted(inp.get("tool_response"), _response_text(inp.get("tool_response")))

@@ -6,7 +6,7 @@ fixture·피드백 기록을 뺀** 것이 뼈대다. 반입·사내 운영 레�
 
 들어가는 것
     issue-db.config.yaml, schema/ (6), templates/ (3), parser-rules/ (placeholder),
-    .github/ (CODEOWNERS, PR 템플릿), docs/ (3), .githooks/ (pre-commit·pre-push),
+    .github/ (CODEOWNERS, PR 템플릿), docs/ (4), .githooks/ (pre-commit·pre-push),
     CONTRIBUTING.md, GLOSSARY.md, .gitignore, .gitattributes,
     빈 카테고리 디렉토리(.gitkeep)와 feedback/(.gitkeep)
 
@@ -16,7 +16,10 @@ fixture·피드백 기록을 뺀** 것이 뼈대다. 반입·사내 운영 레�
     — 생성 파일은 첫 PR 때 `db_build.py --write`가 만든다 (Phase 5).
 
 parser-rules의 `added_for`는 뼈대에 존재하지 않는 유형을 가리키면 안 되므로
-모두 `-`로 바꾼다. 나머지 내용(주석, TODO(SITE) 표시)은 그대로 둔다.
+모두 `-`로 바꾼다. 데이터 스택 태그(`tags.yaml`의 `category: data`, 14-site.md §14.1 확정 형식) 밖의 규칙은
+`reason`을 `placeholder (<원래 사유>)`로 바꿔 표시한다(15-local-draft.md §15.4 — S-4에서 실제 로그로
+`update-parser-rule`하거나 `remove-parser-rule`로 지운다. `site_checks` s4·s6.placeholder가 센다).
+나머지 내용(주석, TODO(SITE) 표시)은 그대로 둔다.
 
 `--platform <이름>`(17-platforms §4): 샘플은 기본 플랫폼(android, `platform` 키 없음) DB다. 다른 플랫폼이면
 설정에 `platform: <이름>`을 넣고, 지원 버전 키를 `platform_versions_supported: []`로, `parser_backend`를 그 플랫폼
@@ -58,6 +61,7 @@ COPY_FILES = [
     "docs/getting-started.md",
     "docs/review-guide.md",
     "docs/branch-protection.md",
+    "docs/analyzer-skills.md",
     ".githooks/pre-commit",
     ".githooks/pre-push",
 ]
@@ -67,11 +71,16 @@ COPY_DIRS = ["schema", "templates"]
 PARSER_RULES = ["parser-rules/tags.yaml", "parser-rules/ril.yaml", "parser-rules/extractors.yaml"]
 
 ADDED_FOR_RE = re.compile(r"added_for:\s*'?[A-Z][A-Z0-9]*-\d{3}(?:-\d{2})?'?")
+# 규칙의 reason 값: 흐름 표기(`  - {…, reason: X}`)와 블록 표기(`    reason: X`)
+FLOW_REASON_RE = re.compile(r"(\breason: )([^}]*)(\}\s*)$")
+BLOCK_REASON_RE = re.compile(r"^(\s+reason: )(.*?)(\s*)$")
 
 SKELETON_NOTE = (
     "# [뼈대] 이 파일은 tools/make_db_skeleton.py가 합성 샘플에서 만든 것이다.\n"
     "# 유형이 없는 상태이므로 added_for는 모두 '-'다. 첫 유형을 추가할 때\n"
     "# add-parser-rule / update-parser-rule op로 실제 ID를 넣는다.\n"
+    "# reason이 placeholder로 시작하는 규칙은 실제 로그로 확인하지 않은 것이다 — S-4에서\n"
+    "# update-parser-rule로 바꾸거나 remove-parser-rule로 지운다.\n"
 )
 
 # 카테고리 디렉토리는 issue-db.config.yaml의 categories에서 읽는다.
@@ -158,6 +167,27 @@ def _platform_config(text: str, spec, version: str) -> str:
     return text
 
 
+def _mark_placeholders(rel: str, text: str) -> str:
+    """규칙 reason 앞에 `placeholder`를 붙인다. `tags.yaml`의 `category: data` 줄(데이터 스택 태그)과
+    이미 placeholder인 것은 그대로 둔다."""
+    def mark(m: re.Match) -> str:
+        why = m[2].strip()
+        return m[0] if why.startswith("placeholder") else f"{m[1]}placeholder ({why}){m[3]}"
+
+    out = []
+    for line in text.splitlines(keepends=True):
+        body = line.rstrip("\n")
+        end = line[len(body):]
+        if rel.endswith("/tags.yaml") and re.search(r"\bcategory: data\b", body):
+            pass
+        elif body.lstrip().startswith("- {"):
+            body = FLOW_REASON_RE.sub(mark, body)
+        else:
+            body = BLOCK_REASON_RE.sub(mark, body)
+        out.append(body + end)
+    return "".join(out)
+
+
 def _read_categories(config_text: str) -> list[str]:
     keys = CATEGORY_RE.findall(config_text)
     if not keys:
@@ -209,6 +239,7 @@ def make(out: Path, force: bool = False, platform: str | None = None, tracker: s
             raise SystemExit(f"샘플에 없습니다: {rel}")
         if is_default:
             text = ADDED_FOR_RE.sub("added_for: '-'", src.read_text(encoding="utf-8"))
+            text = _mark_placeholders(rel, text)
         else:
             text = PLACEHOLDER_RULES[rel].format(label=spec.label)
         _write(out / rel, SKELETON_NOTE + text)

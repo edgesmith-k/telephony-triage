@@ -3,6 +3,10 @@
 # 사외에서는 시나리오에서 로그를 그때그때 만든다(생성기가 결정적이므로 같은
 # 입력이 나온다). 사내에서는 실제 마스킹 로그 경로를 쓰고, 골든은
 # tests/golden/(SITE_PATHS)에 둔다.
+# 실제 로그에 없는 판별 경로(bugreport 전용 흔적 등)에 한해 합성 줄을 보충한 케이스는
+# 이 목록이 아니라 그 골든 JSON(<이름>.golden.json) 최상위에
+#   "synthetic": {"reason": "<왜 실제 로그에 없는지>"}
+# 를 남긴다(reason 필수, test_golden_synthetic_marker_has_reason·사내 s4a.golden, --update가 남긴다). 나머지는 실제 로그 기준.
 cases:
   - name: data-001-01
     scenario: tests/mocks/scenarios/data-001-01-positive.yaml

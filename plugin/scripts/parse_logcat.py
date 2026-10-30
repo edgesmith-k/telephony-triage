@@ -14,9 +14,10 @@
       더한다. 규칙당 1000개·전체 5000개 상한(넘으면 경고 `step-events-truncated`), 잘못된 규칙은 경고 `step-event-rule`.
   extract-bugreport <zip|txt> --out <dir>
       bugreport에서 logcat 섹션(기본 system/radio/main)과 빌드 정보(build.json)만 꺼낸다.
-  cut <logcat...> (--evidence <match.json> | --around <ISO 시각> [--seconds 30]) --out <file>
+  cut <logcat...> (--evidence <match.json> --cause <원인 ID> | --around <ISO 시각> [--seconds 30]) --out <file>
       [--context 20] [--max-lines 100] [--tz <IANA>] [--year <YYYY>] [--rules <db>/parser-rules]
-      판별 근거 주변 최소 구간을 마스킹된 상태로만 쓴다(fixture용).
+      판별 근거 주변 최소 구간을 마스킹된 상태로만 쓴다(fixture용). `--evidence`는 `--cause` 원인 후보의 근거로 자른다
+      (순위와 무관). 그 원인이 후보가 아니면(C=0·판정 불가·signatures_pending·`--top`으로 잘림) 사유와 종료 코드 2.
 
 설정 읽기: 사용자 config를 읽지 않는다(시각은 `--tz`/`--year`). 파서 백엔드와
 외부 파서 설정은 플러그인 `site-defaults.yaml`에서만 읽는다. 이슈 DB 쪽 고정값
@@ -840,8 +841,45 @@ def run_extract_bugreport(args, profile: platforms.PlatformProfile | None = None
 # -- cut ------------------------------------------------------------------------
 
 
-def _cut_anchors(args, lines: list) -> tuple[set[int], dict, list[dict]]:
-    """(앵커 줄의 전체 순번 집합, 앵커 방식별 근거 수, 경고).
+def _evidence_candidate(match: dict, cause: str | None) -> tuple[dict, int, list[dict]]:
+    """`match.json`에서 `--cause` 원인 후보를 고른다 → (후보, 1부터 센 순위, 경고).
+
+    1위 후보를 쓰지 않는다: 회귀 모드는 같은 점수면 ID 순이라 기록할 원인이 아닌 원인의 구간을 자르게 된다.
+    후보가 아니면 사유와 함께 UsageError(종료 코드 2). 다른 원인도 C=1이면 경고 `evidence-other-causes`."""
+    if not cause:
+        raise UsageError("--evidence에는 --cause <원인 ID>가 필요합니다 (기록할 원인의 근거로 자른다).")
+    candidates = match.get("candidates") or []
+    rank = next((i for i, c in enumerate(candidates, 1) if c.get("cause") == cause), None)
+    if rank is None:
+        entry = next((c for c in match.get("causes") or [] if c.get("cause") == cause), None)
+        omitted = match.get("omitted") or {}
+        if any(p.get("cause") == cause for p in match.get("pending_causes") or []):
+            why = "원인 시그니처가 아직 없어(signatures_pending) 근거가 없습니다"
+        elif entry and entry.get("C") is None:
+            why = "이 로그에서 원인 시그니처를 판정할 수 없습니다(C=null)"
+        elif entry and not entry.get("C"):
+            why = "이 로그에서 원인 시그니처가 충족되지 않습니다(C=0)"
+        elif entry or any(omitted.values()):
+            why = "--top으로 잘린 결과라 후보에 없습니다 — match_signatures.py --regress --top 0으로 다시 매칭하세요"
+        else:
+            why = "match.json에 없는 원인입니다"
+        names = ", ".join(c.get("cause") or c.get("type") or "?" for c in candidates) or "없음"
+        raise UsageError(f"--evidence: {cause} — {why}. 후보: {names}")
+    cand = candidates[rank - 1]
+    if not cand.get("evidence"):
+        raise UsageError(f"--evidence: {cause} 후보에 근거가 없습니다.")
+    others = sorted({c["cause"] for c in [*candidates, *(match.get("causes") or [])]
+                     if c.get("cause") and c["cause"] != cause and c.get("C") == 1})
+    warnings = []
+    if others:
+        warnings.append({"code": "evidence-other-causes",
+                         "message": f"이 로그에는 {', '.join(others)}도 C=1입니다 — 잘라 낸 구간에 그 근거가 들어가면 "
+                                    "fixture 회귀(R4)가 실패할 수 있습니다."})
+    return cand, rank, warnings
+
+
+def _cut_anchors(args, lines: list) -> tuple[set[int], dict, list[dict], dict]:
+    """(앵커 줄의 전체 순번 집합, 앵커 방식별 근거 수, 경고, 고른 후보 `{cause, rank}` — `--around`면 빈 dict).
 
     `--evidence`는 근거마다 `line_ref`(`match.json` 근거의 줄 위치)가 가리키는 줄을 앵커로 삼는다.
     그 줄이 입력에 있고 시각·태그가 근거와 같을 때만이다(입력 파일이 `events.json`의 `input.files`와
@@ -854,15 +892,13 @@ def _cut_anchors(args, lines: list) -> tuple[set[int], dict, list[dict]]:
             raise UsageError(f"--around는 타임존이 있는 ISO 시각이어야 합니다: {exc}") from exc
         span = timedelta(seconds=args.seconds)
         found = {i for i, (_, line, _) in enumerate(lines) if center - span <= line.dt <= center + span}
-        return found, {"line_ref": 0, "ts_tag": 0}, []
+        return found, {"line_ref": 0, "ts_tag": 0}, [], {}
     try:
         match = json.loads(Path(args.evidence).read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise UsageError(f"--evidence를 읽을 수 없습니다: {exc}") from exc
-    candidates = match.get("candidates") or []
-    evidence = candidates[0].get("evidence") if candidates else None
-    if not evidence:
-        raise UsageError("--evidence: 1위 후보에 근거가 없습니다.")
+    cand, rank, warnings = _evidence_candidate(match, args.cause)
+    evidence = cand["evidence"]
     position = {(fi, line.line_no): i for i, (fi, line, _) in enumerate(lines)}
     by_ts_tag: dict[tuple, list[int]] = {}
     for i, (_, line, _) in enumerate(lines):
@@ -882,12 +918,11 @@ def _cut_anchors(args, lines: list) -> tuple[set[int], dict, list[dict]]:
         anchors.update(by_ts_tag.get(key, []))
         by["ts_tag"] += 1
         mismatch = mismatch or ref_pos is not None
-    warnings = []
     if mismatch:
         warnings.append({"code": "evidence-ref-mismatch",
                          "message": "근거의 줄 위치(line_ref)가 입력과 맞지 않아 (시각, 태그)로 앵커를 찾았습니다. "
                                     "parse에 준 로그를 같은 순서로 주세요 (events.json input.files 순서)."})
-    return anchors, by, warnings
+    return anchors, by, warnings, {"cause": args.cause, "rank": rank}
 
 
 def run_cut(args, profile: platforms.PlatformProfile | None = None) -> dict:
@@ -896,6 +931,8 @@ def run_cut(args, profile: platforms.PlatformProfile | None = None) -> dict:
     앵커 줄 앞뒤 `--context` 줄(파일 순서)을 합치고, `--max-lines`를 넘으면 context를
     줄인다. 앵커만으로도 넘으면 종료 코드 2. 여러 파일이면 시각 순으로 합친다.
     """
+    if args.around and args.cause:
+        raise UsageError("--cause는 --evidence와만 씁니다 (--around는 시각으로 자른다).")
     paths = [Path(p) for p in args.logs]
     for path in paths:
         if not path.is_file():
@@ -912,7 +949,7 @@ def run_cut(args, profile: platforms.PlatformProfile | None = None) -> dict:
             raw = [text.rstrip("\r\n") for text in fh]
         parsed, _ = read_file(path, index, args.tz, args.year)
         lines += [(index, line, raw[line.line_no - 1]) for line in parsed]
-    anchors, anchors_by, warnings = _cut_anchors(args, lines)
+    anchors, anchors_by, warnings, picked = _cut_anchors(args, lines)
     if not anchors:
         raise UsageError("앵커 줄이 없습니다 (시각·근거가 로그 범위 밖이거나 --tz/--year가 다름).")
 
@@ -944,6 +981,7 @@ def run_cut(args, profile: platforms.PlatformProfile | None = None) -> dict:
     out.write_text("\n".join(masked) + "\n", encoding="utf-8", newline="\n")
     return {
         "out": str(out),
+        **picked,
         "lines": len(masked),
         "anchors": len(anchors),
         "anchors_by": anchors_by,
@@ -998,8 +1036,9 @@ def build_parser() -> argparse.ArgumentParser:
     c = sub.add_parser("cut", parents=[common], help="판별 근거 주변 최소 구간 (마스킹해서 쓴다)")
     c.add_argument("logs", metavar="logcat", nargs="+")
     anchor = c.add_mutually_exclusive_group(required=True)
-    anchor.add_argument("--evidence", metavar="match.json", help="match_signatures.py 출력 (1위 후보의 근거)")
+    anchor.add_argument("--evidence", metavar="match.json", help="match_signatures.py 출력 (--cause 원인 후보의 근거)")
     anchor.add_argument("--around", metavar="ISO 시각", help="지정 시각 (타임존 있는 ISO)")
+    c.add_argument("--cause", metavar="원인 ID", help="--evidence에서 근거를 쓸 원인 (--evidence에 필수)")
     c.add_argument("--seconds", type=float, default=30, help="--around 앞뒤 초")
     c.add_argument("--out", metavar="file", required=True)
     c.add_argument("--rules", default=None, help="<db>/parser-rules (mask.allow_patterns를 읽는다)")

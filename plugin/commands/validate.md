@@ -29,7 +29,7 @@ argument-hint: "[--cause <원인 ID> <적용 후 logcat...>] [--extra <logcat...
    - `db_verify.py rules --changed <ref> --db <db>` (R1~R5. `--extra <logcat...>`을 받았으면 그대로 넘겨 **R6**까지)
    - `db_build.py --verify --db <db>` (생성 파일이 최신인지)
 4. **결과표** — 검사별로 `통과 / 실패 / 승인 필요 / 건너뜀(사유)`를 표로 보여준다. 종료 코드 1은 실패, 3은 승인 필요다.
-   - `skipped`는 **통과로 표시하지 않는다**. `fixture 없음`·`음성 fixture 없음`은 "검증 못 함 — 리뷰 대상"으로 밝힌다.
+   - `skipped`는 **통과로 표시하지 않는다**. `fixture 없음`·`음성 fixture 없음`은 "검증 못 함 — 자동 검증 없음"으로 밝힌다.
    - R6 `fail`은 진행을 막지 않는다(`blocking: false`)고 밝히고, 사용자가 진행 여부를 고른다.
    - `db_build.py --verify --db <db>`가 실패하면 "`db_build.py --write --db <db>`로 생성 파일을 다시 만든 뒤 커밋"을 안내한다(직접 편집 금지).
 5. **승인 필요 항목** — `needs-approval`(예: R5 기존 이벤트 변경)이 있으면 PR 본문에 붙일 영향 표(대상 fixture, 바뀐 이벤트, 이유)를

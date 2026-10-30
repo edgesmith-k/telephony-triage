@@ -264,6 +264,20 @@ def test_sample_plans_validate():
 # -- 3. 파일 배치 ----------------------------------------------------------
 
 
+def test_codeowners_lists_maintainer_paths_only():
+    """CODEOWNERS는 메인테이너 경로만 둔다(카테고리 오너 없음 — 카테고리 PR은 작성자 본인 병합, 06-collaboration §6.1).
+    목록은 본인 병합이 막히는 메인테이너 경로(`dbpr/merge.py` MAINTAINER_PATHS)와 같다. 뼈대(make_db_skeleton)도 이 파일을 복사한다."""
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    from dbpr.merge import MAINTAINER_PATHS
+
+    rules = [line.split() for line in (SAMPLE / ".github" / "CODEOWNERS").read_text(encoding="utf-8").splitlines()
+             if line.strip() and not line.lstrip().startswith("#")]
+    assert sorted(r[0].lstrip("/") for r in rules) == sorted(MAINTAINER_PATHS)
+    assert all(r[1:] == ["@mock-org/telephony-issue-db-maintainers"] for r in rules), rules
+    categories = yaml.safe_load((SAMPLE / "issue-db.config.yaml").read_text(encoding="utf-8"))["categories"]
+    assert not {r[0].strip("/") for r in rules} & {c["key"] for c in categories}
+
+
 def test_sample_tree_layout():
     required = [
         "issue-db.config.yaml",
@@ -278,6 +292,7 @@ def test_sample_tree_layout():
         "docs/getting-started.md",
         "docs/review-guide.md",
         "docs/branch-protection.md",
+        "docs/analyzer-skills.md",
         "templates/type.md",
         "templates/cause.yaml",
         "templates/issue.yaml",
@@ -493,6 +508,26 @@ def test_signature_references_exist_in_parser_rules():
     assert not errors, "\n".join(errors)
 
 
+def test_config_mock_values_are_marked():
+    """모의 설정 값은 TODO(SITE)로 표시하고 실제 사내 값을 받아들이지 않는다(사내 보고 14·15·16번, 뼈대도 같은 파일)."""
+    import re
+
+    text = (SAMPLE / "issue-db.config.yaml").read_text(encoding="utf-8")
+    cfg = _load_yaml(SAMPLE / "issue-db.config.yaml")
+    ref = re.compile(cfg["fix_ref_regex"])
+    assert ref.fullmatch("MOCKCL-1") and not any(ref.fullmatch(x) for x in ("1234567", "0123456789", "a1b2c3d", "CL 1"))
+    line = next(ln for ln in text.splitlines() if ln.startswith("fix_ref_regex:"))
+    assert "TODO(SITE:S18)" in line and "모의 값" in line and "Gerrit" not in text
+    lines = text.splitlines()
+    for needle in ("build_compare:", "- '^MOCK[AB]"):
+        n = next(k for k, ln in enumerate(lines) if needle in ln)
+        assert any("TODO(SITE:S12)" in ln for ln in lines[n - 1:n + 2]), needle
+    reviewers = text.split("reviewers:", 1)[1]
+    assert "TODO(SITE:S19)" in reviewers and "개인 오너" in reviewers and "해당 없음" in reviewers
+    owners = (SAMPLE / ".github/CODEOWNERS").read_text(encoding="utf-8")
+    assert "개인(@<login>)" in owners and "TODO(SITE:S5)" in owners
+
+
 # -- 6. 뼈대 ---------------------------------------------------------------
 
 
@@ -519,6 +554,9 @@ def test_skeleton_has_no_types_and_validates():
             assert (out / "schema" / name).exists(), f"뼈대에 {name}이 없습니다."
         for name in ("type.md", "cause.yaml", "issue.yaml"):
             assert (out / "templates" / name).exists(), f"뼈대에 템플릿 {name}이 없습니다."
+        guide = (out / "docs" / "analyzer-skills.md").read_text(encoding="utf-8")     # 분석 스킬 만들기 (16-existing-assets §16.5.1)
+        for needle in ("analyzers.<카테고리>", "- [이슈 DB] add-parser-rule file=", "- [스킬]", "파일을 바꾸지 않는다", "when: never", "references/<유형 ID>.md"):
+            assert needle in guide, needle
 
         validator = Draft202012Validator(
             json.loads((out / "schema" / "parser-rules.schema.json").read_text(encoding="utf-8"))
@@ -531,6 +569,10 @@ def test_skeleton_has_no_types_and_validates():
                 for item in data.get(section) or []:
                     if item["added_for"] != "-":
                         errors.append(f"{path.name}: added_for가 '-'가 아님 ({item['added_for']})")
+                    # 데이터 스택 태그(14-site §14.1 확정)만 빼고 placeholder 표시 (15-local-draft §15.4, s6.placeholder)
+                    data_tag = section == "tags" and item["category"] == "data"
+                    if str(item["reason"]).startswith("placeholder") == data_tag:
+                        errors.append(f"{path.name}: placeholder 표시가 틀림 ({item})")
         assert not errors, "\n".join(errors)
     finally:
         shutil.rmtree(out.parent, ignore_errors=True)

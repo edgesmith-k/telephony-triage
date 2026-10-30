@@ -17,11 +17,13 @@ import pytest
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+sys.path.insert(0, str(REPO / "tests" / "helpers"))
 
 import guard  # noqa: E402
 import issue_post  # noqa: E402
 import platforms  # noqa: E402
 from common import masking  # noqa: E402
+import make_plugin_root  # noqa: E402
 
 PLUGIN = str(REPO / "plugin")      # site-defaults.yaml 없음 → 설정 경고 1개, 사용자 config 없음
 LOGCAT = "09-20 14:32:11.123  1234  1300 E RILJ: x\n"
@@ -106,7 +108,9 @@ def test_late_warning_reaches_stderr(files, monkeypatch, capsys):
     monkeypatch.setattr(platforms, "known_raw_line_finders", lambda: ([], [("android", ImportError("x"))]))
     event = {"tool_name": "Bash", "tool_input": {"command": f"cat {files['logcat']}"}, "cwd": str(files["logcat"].parent)}
     monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps(event)))
-    assert guard.main(["--plugin-root", PLUGIN]) == 0
+    bare = make_plugin_root.make(files["logcat"].parent / "bare-root")   # SITE_PATHS 제외 복사본 — 사내 레포에서도 site-defaults 없음
+    (bare / "site-defaults.yaml").unlink()
+    assert guard.main(["--plugin-root", str(bare)]) == 0
     captured = capsys.readouterr()
     assert json.loads(captured.out)["hookSpecificOutput"]["permissionDecision"] == "deny"
     err = captured.err.splitlines()
