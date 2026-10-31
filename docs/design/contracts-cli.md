@@ -219,7 +219,7 @@ stdin: PostToolUse hook 입력 JSON (argparse 없음)
 완료. JOB/analysis.json(≤ 4KB, stdout도 같음). 값이 null·빈 목록·빈 객체인 최상위 키는 내지 않는다
 
 - key
-- platform?(선택 플랫폼. 기본 플랫폼(android)이면 내지 않는다 (17-platforms K8))
+- platform?(선택 플랫폼. android가 아니거나 --platform 없이 고르는 플랫폼 또는 지정(--platform·TT_PLATFORM)과 다를 때만 (17-platforms K8·§11))
 - generated_at
 - request_hash(입력 해시(부분별 parts {logs, issue, db, config, plugin, args}, 파싱 전에 계산))
 - run?(결과(core)를 계산한 실행 번호)
@@ -317,8 +317,9 @@ stdin: PostToolUse hook 입력 JSON (argparse 없음)
 사용자 결정 지점. 같은 명령에 --answer kind=값을 붙여 재실행
 
 - key
+- platform?(켠 플랫폼 2개 이상에서 ok와 같은 규칙일 때만 (17-platforms §11))
 - needs_input
-  - kind: lock | plan | issue | year | reanalyze | open_pr | logs | code | code_confirm | time | window
+  - kind: lock | plan | issue | year | reanalyze | open_pr | logs | code | code_confirm | time | window | platform
   - question
   - options
   - answer(--answer <kind>=<값>)
@@ -329,5 +330,6 @@ stdin: PostToolUse hook 입력 JSON (argparse 없음)
 사용자 중단(lock 해제)
 
 - key
+- platform?(needs_input과 같은 규칙)
 - reason
 - lock_released?

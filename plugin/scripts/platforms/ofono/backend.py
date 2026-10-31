@@ -4,9 +4,13 @@ android reference 백엔드(`platforms/android/backend.py`)와 같은 구조(파
 윈도우 → 정렬)를 플랫폼 중립으로 다시 썼다. android 모듈은 import하지 않는다.
 
 - 줄 해석: `SPEC.log`(`journal.py`). 시계 이상 기준은 `common.logtime`.
-- 짝 규칙: `configure(profile)`이 받은 `PairProtocol` 목록(SPEC 기본은 없음). 줄마다 **처음 맞는** 프로토콜의
-  주석을 이벤트 `ril` 칸에 쓰고, `name != "ril"`이면 `proto: <name>`을 단다. 짝은 프로토콜마다
-  `pair(records)`를 부른다 — 각 `pair`는 자기 주석만 다룬다(`PairProtocol` 계약).
+- 짝 규칙: `configure(profile)`이 받은 `PairProtocol` 목록(`profile.protocols`, 비면 `SPEC.protocols` — SPEC 기본은
+  없음, site 설정 `kind: regex`는 `pairing.py`). 줄마다 **처음 맞는** 프로토콜의 주석을 이벤트 `ril` 칸에 쓰고,
+  `name != "ril"`이면 `proto: <name>`을 단다. 짝은 프로토콜마다 수집 구간 전체(모든 데몬 줄)로 `pair(records)`를
+  부른다 — 각 `pair`는 자기 주석만 다룬다(`PairProtocol` 계약). 그래서 데몬 사이 짝은 한 스트림 안에서만 된다.
+- 구성요소(17-platforms §9): `profile.components`의 ident → 구성요소. `msg_format`이 있으면 그 함수가 뗀 본문으로
+  짝 규칙을 보고(이벤트 `msg`는 원문), `split_tag`면 이벤트 tag를 `ident/subtag`로 쓴다(이벤트 tag는 마스킹되지
+  않으므로 `subtag`가 `SUBTAG_RE` 모양일 때만 — 아니면 나누지 않는다). 기본 출력은 이전과 같다.
 - builtin 판별 없음(`detect()` → []). 사내 백엔드는 이 클래스를 상속해 `detect()`만 바꿔도 된다.
 """
 
@@ -22,7 +26,9 @@ from parser_backends.base import ParserBackend, Window
 
 from . import SPEC
 
-VERSION = "0.0.1"
+VERSION = "0.0.2"
+# split_tag 하위 식별: 글자로 시작하는 식별자 모양만 tag에 붙인다(숫자로 시작하는 값·공백·`:`·`/`는 나누지 않음)
+SUBTAG_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_-]{0,63}$")
 
 
 class OfonoReferenceBackend(ParserBackend):
@@ -32,13 +38,22 @@ class OfonoReferenceBackend(ParserBackend):
     # 슬롯 규칙·짝 규칙. `configure(profile)`이 바꾼 복사본에만 들어간다 (전역 상태 없음).
     _phone = SPEC.phone
     _protocols: tuple = tuple((p, frozenset(p.default_tags)) for p in SPEC.protocols)
+    _components: dict = {}   # ident → (Component, 형식 함수 | None). 아래에서 SPEC 기본으로 채운다
+
+    @staticmethod
+    def _component_map(components, spec) -> dict:
+        formats = dict(spec.msg_formats)
+        return {ident: (comp, formats.get(comp.msg_format) if comp.msg_format else None)
+                for comp in components for ident in comp.idents}
 
     def configure(self, profile) -> "OfonoReferenceBackend":
         other = copy.copy(self)
         other._phone = profile.phone
         tags = dict(profile.protocol_tags)
         spec = profile.spec or SPEC
-        other._protocols = tuple((p, tags.get(p.name, frozenset(p.default_tags))) for p in spec.protocols)
+        protocols = profile.protocols or spec.protocols     # 손으로 만든 PlatformProfile(테스트)은 protocols가 비어 있다
+        other._protocols = tuple((p, tags.get(p.name, frozenset(p.default_tags))) for p in protocols)
+        other._components = self._component_map(profile.components, spec)
         return other
 
     def version(self) -> str:
@@ -61,16 +76,29 @@ class OfonoReferenceBackend(ParserBackend):
                 return ann if proto.name == "ril" else {**ann, "proto": proto.name}
         return None
 
+    def _view(self, line) -> tuple[str, str]:
+        """(이벤트 tag, 짝 규칙 입력 본문). 구성요소 형식이 없거나 맞지 않으면 원문 그대로."""
+        hit = self._components.get(line.tag)
+        if hit is None or hit[1] is None or not (self._protocols or hit[0].split_tag):
+            return line.tag, line.msg
+        view = hit[1](line.msg)
+        if view is None:
+            return line.tag, line.msg
+        split = hit[0].split_tag and isinstance(view.subtag, str) and SUBTAG_RE.fullmatch(view.subtag)
+        tag = f"{line.tag}/{view.subtag}" if split else line.tag
+        return tag, view.body
+
     def _line_record(self, line) -> dict:
+        tag, body = self._view(line)
         rec = events.make_event(
             ts=logtime.format_ts(line.dt),
             pid=line.pid,
             tid=line.tid,
             level=line.level,
-            tag=line.tag,
+            tag=tag,
             msg=line.msg,
             phone_id=self._phone.phone_id(line.tag, line.msg),
-            ril=self._annotate(line.tag, line.msg),
+            ril=self._annotate(line.tag, body),
             source=f"{events.BACKEND_PREFIX}{self.name}",
             line_ref=events.line_ref(line.file_index, line.line_no),
         )
@@ -135,5 +163,7 @@ class OfonoReferenceBackend(ParserBackend):
         selected.sort(key=lambda r: (r["_dt"], r["_file"], r["_line"], r["_sub"]))
         return [{k: v for k, v in rec.items() if not k.startswith("_")} for rec in selected]
 
+
+OfonoReferenceBackend._components = OfonoReferenceBackend._component_map(SPEC.components, SPEC)
 
 BACKEND = OfonoReferenceBackend()

@@ -275,7 +275,7 @@ class ReportMixin:
             reuse = self.reuse_out(candidates, parts, runs) if self.reuse else None
         result = {
             "status": "ok", "key": self.key,
-            "platform": None if self.platform == userconfig.TOP_PROFILE else self.platform,   # 기본 플랫폼이면 내지 않는다(K8)
+            "platform": self.platform_out(),   # android가 아니거나 암묵 선택과 다를 때만(K8·D5)
             "generated_at": _now(),
             "request_hash": request_hash or self.request_hash(logs, core["around"], anchor),
             "run": run_no, "reuse": reuse,
@@ -350,6 +350,8 @@ class ReportMixin:
             must.append((priority, text))
             return f"- {text}"
 
+        if getattr(self, "pick", None):          # 플랫폼을 고른 근거(켠 플랫폼 2개 이상, 17-platforms §11). must_show 아님(D6)
+            lines.append(f"- {self.pick['line']}")
         if self.analysis_only:
             lines.append(add(1, "분석 전용: 이슈 DB에 기록하지 않는다(계획·PR 없음). 기록하려면 --analysis-only 없이 다시 실행"))
         if r.get("read_only_hint"):
@@ -503,7 +505,9 @@ class ReportMixin:
             lines.append("- 참고: 시그니처 없는 기존 원인: " + ", ".join(p["cause"] for p in r["pending_causes"]))
         analyzer = r.get("analyzer")
         if analyzer and analyzer.get("when") == "never":
-            lines.append(f"- 심층 분석 생략: analyzers.{cands[0].get('category')}.when: never")
+            # 설정 키 경로: 기본 플랫폼은 최상위 analyzers, 그 밖은 platforms.<p>.analyzers (17-platforms §10)
+            at = "" if self.platform == userconfig.TOP_PROFILE else f"platforms.{self.platform}."
+            lines.append(f"- 심층 분석 생략: {at}analyzers.{cands[0].get('category')}.when: never")
         elif analyzer:
             lines.append(f"- 심층 분석 ({analyzer['skill']}): TODO(LLM) 결과 요약 / 분석 스킬 의견: <원인 ID — 근거 | 1위와 같음>. "
                          "실행 안 함·실패면 이 줄을 \"심층 분석 생략: <사유>\"로")

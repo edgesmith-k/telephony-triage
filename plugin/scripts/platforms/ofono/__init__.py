@@ -4,7 +4,11 @@
 파서 전환이 실제로 되는지를 합성 로그로 보이는 최소 계약이다.
 
 - 로그 줄 해석·원문 줄 판별·재부팅 표시: `journal.py`(journald/syslog 가정 형식, TODO(SITE:S24)).
-- 짝 규칙(`protocols`): 없음, TODO(SITE:S26). 슬롯 표기: 없음, TODO(SITE:S29). 묶음 입력(capture): 없음.
+- 짝 규칙(`protocols`): 코드 기본 없음. site가 `protocols.<이름>: {kind: regex, ...}`로 만든다(`pairing.py`,
+  기본 꺼짐, TODO(SITE:S26)). 슬롯 표기: 없음, TODO(SITE:S29). 묶음 입력(capture): 없음.
+- 구성요소(데몬, 17-platforms §9): 코드 기본은 공개 upstream `ofonod` 하나(DBG 앞머리 가정 `file_func`).
+  사내 데몬 목록·ident·소스 루트 키는 site-defaults `components.<이름>`, TODO(SITE:S24·S25·S27). 메시지 하위 형식
+  함수는 `msgformat.py`.
 - 소스 트리: TODO(SITE:S27). 파서 백엔드: `ofono_reference`(`backend.py`, `parser_backends/ofono_reference`).
 
 표준 라이브러리와 이 패키지의 하위 모듈, `platforms.base`만 import한다(guard가 레지스트리로 불러온다.
@@ -13,9 +17,9 @@
 
 import re
 
-from platforms.base import LogFormat, PhoneIdRules, PlatformSpec, SourceTree
+from platforms.base import Component, LogFormat, PhoneIdRules, PlatformSpec, SourceTree
 
-from . import journal
+from . import journal, msgformat, pairing
 
 SPEC = PlatformSpec(
     name="ofono",
@@ -33,5 +37,8 @@ SPEC = PlatformSpec(
     default_root_keys=("ofono",),
     capture=None,
     default_backend="ofono_reference",
-    block_keys=("source_tree", "log", "protocols"),
+    block_keys=("source_tree", "log", "protocols", "components"),
+    components=(Component("ofono", ("ofonod",), root_key="ofono", msg_format="file_func"),),   # TODO(SITE:S24·S25)
+    msg_formats=msgformat.FORMATS,
+    protocol_kinds=((pairing.KIND, pairing.build),),
 )

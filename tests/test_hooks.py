@@ -355,6 +355,37 @@ def test_guard_skill_source_writes_ask():
         assert decision(bash(ws, cmd, cwd)) == want, cmd
 
 
+def test_guard_skill_source_of_every_platform_asks():
+    """규칙 12(17-platforms §10): site-defaults `platforms.<p>.analyzers`(사용자 config에 그 플랫폼 프로필이 없어도)와
+    사용자 config `platforms.<p>.analyzers`의 `source`도 보호한다. 읽기는 통과, android 최상위 것은 그대로."""
+    base = tmp("tt-skill-src-")
+    srcs = {k: base / k for k in ("site-ofono", "user-ofono", "android")}
+    for d in srcs.values():
+        (d / "references").mkdir(parents=True)
+    root = plugin_root("skill-src-platforms", platform={"name": "android", "enabled": ["android", "ofono"]},
+                       platforms={"ofono": {"analyzers": {"data": {"skill": "o", "source": str(srcs["site-ofono"])}}}})
+    ws = Workspace(root=root, build=False)
+    cfg = ws.home / "config.yaml"
+    data = yaml.safe_load(cfg.read_text(encoding="utf-8"))
+    data["analyzers"] = {"data": {"skill": "mock-data-analyzer", "source": str(srcs["android"])}}
+    cfg.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+    plain = str(srcs["user-ofono"] / "references" / "x.md")       # 아직 어디에도 설정 안 됨
+    assert decision(guard(ws, "Write", {"file_path": plain, "content": "x"}, ws.base)) is None
+    for name in ("site-ofono", "android"):
+        target = str(srcs[name] / "references" / "DATA-001.md")
+        out = guard(ws, "Write", {"file_path": target, "content": "x"}, ws.base)
+        assert decision(out) == "ask" and "skill_patch.py --apply로만" in out["permissionDecisionReason"], name
+        if name == "site-ofono":     # 사용자 config에 ofono 프로필이 없어도 site 것은 보호
+            assert "platforms" not in data
+        assert decision(bash(ws, f"echo x > {target}", ws.base)) == "ask", name
+        assert decision(bash(ws, f"grep -n x {target}", ws.base)) is None, name
+    data["platforms"] = {"ofono": {"analyzers": {"data": {"source": str(srcs["user-ofono"])}}}}
+    cfg.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+    assert decision(guard(ws, "Write", {"file_path": plain, "content": "x"}, ws.base)) == "ask"
+    assert decision(bash(ws, f"git -C {srcs['user-ofono']} apply /tmp/p.patch", ws.base)) == "ask"
+    assert decision(guard(ws, "Write", {"file_path": str(ws.base / "x.md"), "content": "x"}, ws.base)) is None
+
+
 def test_guard_stage_then_summary_and_discard_are_not_asked():
     """W5: `stage --then-summary`와 단독 `discard`는 판정할 것이 없다 (publish만 ask)."""
     ws = shared()

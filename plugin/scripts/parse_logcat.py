@@ -145,6 +145,11 @@ def _mask_record(rec: dict, masker) -> dict:
     rec["fields"] = {
         k: mask_value(v) if isinstance(v, str) else v for k, v in (rec.get("fields") or {}).items()
     }
+    # 설정 정의 짝 규칙(`proto` 주석, 17-platforms §9-3)의 값은 site 정규식이 뽑으므로 한 번 더 마스킹한다. 파생
+    # 이벤트(`_ril_events`)는 이 값으로 만들어진다. android 주석은 `proto`가 없어 그대로다(값이 `[A-Z][A-Z0-9_]*`로 고정).
+    ann = rec.get("ril")
+    if isinstance(ann, dict) and "proto" in ann:
+        rec["ril"] = {**ann, **{k: mask_value(ann[k]) for k in ("request", "error") if isinstance(ann.get(k), str)}}
     return rec
 
 

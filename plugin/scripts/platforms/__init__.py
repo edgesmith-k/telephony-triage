@@ -8,7 +8,8 @@ site-defaults에 `platform.name`이 없을 때만 쓴다.
 - `enabled(defaults)`: site-defaults `platform.enabled`(이 설치에서 켠 플랫폼, 없으면 `[platform.name]`).
 - `load(defaults, name=None)`: `site-defaults.yaml`의 `platform:` 블록(경로·태그·섹션 헤더 상수, RF-4,
   `02-config.md`)을 검증해 `PlatformProfile`로 준다. 기본 플랫폼은 `platform:` 블록 자체, 그 밖 플랫폼은
-  `platform.others.<name>` 블록이다. 받는 상수 키는 `SPEC.block_keys`다.
+  `platform.others.<name>` 블록이다. 받는 상수 키는 `SPEC.block_keys`다. `components`(구성요소, 통째로 바뀜)와
+  `protocols.<이름>: {kind, ...}`(설정 정의 짝 규칙, `SPEC.protocol_kinds`)는 `PlatformProfile.components`·`protocols`.
 - `backend_name(defaults, name)`: 그 플랫폼의 파서 백엔드 이름. `raw_line_finders(defaults)`: 켠 플랫폼의 원문 줄 판별.
 
 파일 I/O도 전역 상태도 없다(불변 `SPEC` 캐시만) — 호출한 쪽이 값을 들고 다니며(`ParserBackend.configure`,
@@ -28,7 +29,9 @@ from pathlib import PurePosixPath, PureWindowsPath
 from platforms.base import (  # noqa: F401  (계약 타입을 `platforms.X`로도 쓴다)
     DEFAULT_LINK_MS,
     CaptureSpec,
+    Component,
     LogFormat,
+    MsgView,
     PairProtocol,
     PhoneIdRules,
     PlatformConfigError,
@@ -42,6 +45,9 @@ from platforms.base import (  # noqa: F401  (계약 타입을 `platforms.X`로�
 )
 
 NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
+COMPONENT_NAME_RE = re.compile(r"^[a-z][a-z0-9_-]*$")   # 구성요소 이름 (placeholder `daemon-a`)
+ROOT_KEY_RE = re.compile(r"^[a-z][a-z0-9_]*$")          # 소스 루트 키 = code_ref 키 형식 (plan.schema.json)
+COMPONENT_KEYS = ("idents", "root_key", "source_tree", "msg_format", "split_tag")
 DEFAULT_NAME = "android"
 ENV = "TT_PLATFORM"            # 프로세스 간 선택 전달(triage → 하위 스크립트). 사람이 직접 쓰지 않는다
 _NOT_PLATFORMS = {"base"}
@@ -57,7 +63,9 @@ class PlatformProfile:
     bugreport: object | None                   # `SPEC.capture.default_rules` 형식 (capture 없는 플랫폼은 None)
     ril_vendor: VendorRules | None = None      # 선택 `platform.ril.vendor`. None이면 출력이 이전과 같다
     spec: PlatformSpec | None = None           # 레지스트리가 항상 채운다
-    protocol_tags: tuple = ()                  # `((프로토콜 이름, frozenset 태그), ...)` — `SPEC.protocols` 순서, ril은 `ril_tags`
+    protocol_tags: tuple = ()                  # `((프로토콜 이름, frozenset 태그), ...)` — `protocols` 순서, ril은 `ril_tags`
+    components: tuple = ()                     # `(Component, ...)` — `<블록>.components`(없으면 `SPEC.components`)
+    protocols: tuple = ()                      # `(PairProtocol, ...)` — `SPEC.protocols` 다음 설정 정의(`kind`) 순서
 
 
 # -- 레지스트리 --------------------------------------------------------------------
@@ -251,23 +259,94 @@ def _default_ril_tags(spec: PlatformSpec) -> frozenset:
     return frozenset(proto.default_tags) if proto else frozenset()
 
 
-def _protocol_tags(spec: PlatformSpec, block: dict, base: str, ril_tags: frozenset) -> tuple:
-    """`(이름, 태그)` 목록. ril은 `ril_tags`(`<블록>.ril.tags`), 그 밖은 `<블록>.protocols.<이름>.tags`(없으면 기본)."""
-    names = tuple(p.name for p in spec.protocols)
-    node = _mapping(block.get("protocols"), f"{base}.protocols", tuple(n for n in names if n != "ril"))
-    out = []
+def _protocols(spec: PlatformSpec, block: dict, base: str, ril_tags: frozenset) -> tuple[tuple, tuple]:
+    """`((이름, 태그), ...)`와 `(PairProtocol, ...)`. SPEC 프로토콜: ril은 `ril_tags`(`<블록>.ril.tags`), 그 밖은
+    `<블록>.protocols.<이름>.tags`(없으면 기본, `tags` 밖 키 거부). `SPEC.protocol_kinds`가 있으면 `protocols`의 다른
+    키는 site가 이름 지은 짝 규칙(`{kind: <kind>, ...}`)이고 `kind` factory가 나머지 키를 검증한다. 순서는 SPEC 다음 설정."""
+    fixed = tuple(p.name for p in spec.protocols)
+    kinds = dict(spec.protocol_kinds)
+    path = f"{base}.protocols"
+    node = _mapping(block.get("protocols"), path, None if kinds else tuple(n for n in fixed if n != "ril"))
+    tags_out, protos = [], list(spec.protocols)
     for proto in spec.protocols:
         if proto.name == "ril":
-            out.append((proto.name, ril_tags))
+            tags_out.append((proto.name, ril_tags))
             continue
-        at = f"{base}.protocols.{proto.name}"
+        at = f"{path}.{proto.name}"
         conf = _mapping(node.get(proto.name), at, ("tags",))
         if "tags" in conf:
-            path = f"{at}.tags"
-            tags = frozenset(_tag(t, f"{path}[{i}]") for i, t in enumerate(_list(conf["tags"], path, non_empty=False)))
+            tpath = f"{at}.tags"
+            tags = frozenset(_tag(t, f"{tpath}[{i}]") for i, t in enumerate(_list(conf["tags"], tpath, non_empty=False)))
         else:
             tags = frozenset(proto.default_tags)
-        out.append((proto.name, tags))
+        tags_out.append((proto.name, tags))
+    for key, raw in node.items():
+        if key in fixed and key != "ril":
+            continue
+        at = f"{path}.{key}"
+        if key == "ril" or not isinstance(key, str) or not NAME_RE.fullmatch(key):
+            raise _err(at, "짝 규칙 이름은 ^[a-z][a-z0-9_]*$이고 ril이 아니어야 합니다 (ril 태그는 <블록>.ril.tags).")
+        conf = _mapping_any(raw, at)
+        allowed = ", ".join(kinds)
+        if "kind" not in conf:
+            raise _err(f"{at}.kind", f"필요한 키입니다 (허용: {allowed}).")
+        kind = conf["kind"]
+        if not isinstance(kind, str) or kind not in kinds:
+            raise _err(f"{at}.kind", f"알 수 없는 kind입니다 (허용: {allowed}): {kind!r}")
+        proto = kinds[kind](key, conf, at)
+        if not isinstance(proto, PairProtocol) or proto.name != key:
+            raise _err(at, f"kind {kind}의 factory가 이름 {key!r}의 PairProtocol을 주지 않았습니다.")
+        tags_out.append((key, frozenset(proto.default_tags)))
+        protos.append(proto)
+    return tuple(tags_out), tuple(protos)
+
+
+def _components(raw, base: str, spec: PlatformSpec) -> tuple:
+    """`<블록>.components.<이름>: {idents, root_key, source_tree, msg_format, split_tag}` → `(Component, ...)`.
+    키를 쓰면 SPEC 기본 목록이 통째로 바뀐다(빈 매핑 = 구성요소 없음). `null`은 다른 블록 키처럼 생략과 같다(기본 유지)."""
+    node = _mapping_any(raw, base)
+    formats = dict(spec.msg_formats)
+    seen_idents: dict[str, str] = {}
+    seen_roots: dict[str, str] = {}
+    out = []
+    for name, item in node.items():
+        at = f"{base}.{name}"
+        if not isinstance(name, str) or not COMPONENT_NAME_RE.fullmatch(name):
+            raise _err(at, "구성요소 이름은 ^[a-z][a-z0-9_-]*$여야 합니다.")
+        item = _mapping(item, at, COMPONENT_KEYS)
+        if "idents" not in item:
+            raise _err(at, "'idents'가 필요합니다.")
+        ipath = f"{at}.idents"
+        idents = []
+        for i, ident in enumerate(_list(item["idents"], ipath, non_empty=True)):
+            ident = _tag(ident, f"{ipath}[{i}]")
+            if ident in seen_idents:
+                raise _err(f"{ipath}[{i}]", f"다른 구성요소({seen_idents[ident]})와 겹칩니다: {ident}")
+            seen_idents[ident] = name
+            idents.append(ident)
+        root_key = item.get("root_key")
+        if root_key is not None:
+            if not isinstance(root_key, str) or not ROOT_KEY_RE.fullmatch(root_key):
+                raise _err(f"{at}.root_key", f"^[a-z][a-z0-9_]*$여야 합니다: {root_key!r}")
+            if root_key in seen_roots:
+                raise _err(f"{at}.root_key", f"다른 구성요소({seen_roots[root_key]})와 겹칩니다: {root_key}")
+            seen_roots[root_key] = name
+        tree = None
+        if "source_tree" in item:
+            if root_key is None:
+                raise _err(f"{at}.source_tree", "root_key가 있어야 합니다.")
+            if root_key == spec.primary_root:
+                raise _err(f"{at}.source_tree", f"주 소스 루트({root_key})는 <블록>.source_tree에 둡니다.")
+            tree = _source_tree(item["source_tree"], f"{at}.source_tree", SourceTree((), ()))
+        msg_format = item.get("msg_format")
+        if msg_format is not None and (not isinstance(msg_format, str) or msg_format not in formats):
+            raise _err(f"{at}.msg_format", f"알 수 없는 형식입니다 (허용: {', '.join(formats) or '없음'}): {msg_format!r}")
+        split = item.get("split_tag", False)
+        if not isinstance(split, bool):
+            raise _err(f"{at}.split_tag", f"true/false여야 합니다: {split!r}")
+        if split and msg_format is None:
+            raise _err(f"{at}.split_tag", "msg_format이 있어야 합니다.")
+        out.append(Component(name, tuple(idents), root_key, tree, msg_format, split))
     return tuple(out)
 
 
@@ -283,6 +362,8 @@ def default(name: str = DEFAULT_NAME) -> PlatformProfile:
         bugreport=spec.capture.default_rules if spec.capture else None,
         spec=spec,
         protocol_tags=tuple((p.name, ril_tags if p.name == "ril" else frozenset(p.default_tags)) for p in spec.protocols),
+        components=spec.components,
+        protocols=spec.protocols,
     )
 
 
@@ -294,6 +375,10 @@ def _build(spec: PlatformSpec, name: str, block: dict, base: str) -> PlatformPro
         rules = capture.default_rules
         if capture.block_key and capture.configure is not None:
             rules = capture.configure(rules, block.get(capture.block_key), f"{base}.{capture.block_key}")
+    protocol_tags, protocols = _protocols(spec, block, base, ril_tags)
+    components = spec.components
+    if "components" in spec.block_keys and block.get("components") is not None:   # null = 생략(기본 유지)
+        components = _components(block["components"], f"{base}.components", spec)
     return PlatformProfile(
         name=name,
         source_tree=_source_tree(block.get("source_tree"), f"{base}.source_tree", spec.source_tree),
@@ -302,7 +387,9 @@ def _build(spec: PlatformSpec, name: str, block: dict, base: str) -> PlatformPro
         bugreport=rules,
         ril_vendor=_ril_vendor(block.get("ril"), f"{base}.ril", ril_tags),
         spec=spec,
-        protocol_tags=_protocol_tags(spec, block, base, ril_tags),
+        protocol_tags=protocol_tags,
+        components=components,
+        protocols=protocols,
     )
 
 
@@ -328,8 +415,9 @@ def load(defaults: dict | None, name: str | None = None, *, require_enabled: boo
     node = _block(defaults)
     base_name = node.get("name", DEFAULT_NAME)
     base_spec = _spec_at(base_name, "platform.name")
-    _mapping(node, "platform", ("name",) + base_spec.block_keys + ("enabled", "others"))
+    _mapping(node, "platform", ("name",) + base_spec.block_keys + ("enabled", "others", "detect"))
     on = enabled(defaults)
+    detect_rules(defaults)
     others = _others(node, base_name)
     name = base_name if name is None else name
     if require_enabled and name not in on:
@@ -355,6 +443,39 @@ def backend_name(defaults: dict | None, name: str | None = None) -> str:
     name = base_name if name is None else name
     chosen = parser.get("backend") if name == base_name else by.get(name)
     return chosen if chosen else get(name).default_backend
+
+
+DETECT_KEYS = ("tracker_field",)
+
+
+def detect_rules(defaults: dict | None) -> dict | None:
+    """site-defaults `platform.detect.tracker_field {path, values}`(17-platforms §11-4, 기본 꺼짐, TODO(SITE:S28·S32)):
+    트래커 필드 값 → 켠 플랫폼 이름. 없으면 None. `path`는 jira_fields field_map 경로 표기(비지 않은 문자열),
+    `values`는 `{트래커 값: 플랫폼}`(값은 `enabled` 안 이름). 플랫폼 선택 규칙이라 사용자 config로는 바꿀 수 없다(K7).
+    오류는 `PlatformConfigError`(호출자 종료 코드 2)."""
+    node = _block(defaults)
+    if node.get("detect") is None:
+        return None
+    detect = _mapping(node["detect"], "platform.detect", DETECT_KEYS)
+    if detect.get("tracker_field") is None:
+        return None
+    at = "platform.detect.tracker_field"
+    field = _mapping(detect["tracker_field"], at, ("path", "values"))
+    path = field.get("path")
+    if not isinstance(path, str) or not path.strip():
+        raise _err(f"{at}.path", "비어 있지 않은 문자열이어야 합니다.")
+    values = _mapping_any(field.get("values"), f"{at}.values")
+    if not values:
+        raise _err(f"{at}.values", "트래커 값 → 플랫폼 매핑이 1개 이상 있어야 합니다.")
+    on = enabled(defaults)
+    out = {}
+    for key, name in values.items():
+        if not isinstance(key, (str, int)) or isinstance(key, bool) or str(key) == "":
+            raise _err(f"{at}.values", f"트래커 값은 비어 있지 않은 문자열이어야 합니다: {key!r}")
+        if name not in on:
+            raise _err(f"{at}.values.{key}", f"켠 플랫폼 이름이어야 합니다 (platform.enabled: {', '.join(on)}): {name!r}")
+        out[str(key)] = name
+    return {"path": path, "values": out}
 
 
 def select(defaults: dict | None, cli: str | None = None, user: str | None = None) -> str:

@@ -62,5 +62,6 @@ analyzers:
     source: /abs/path/to/analyzer-repo/skills/<스킬 이름>   # 선택: 스킬 소스 checkout(개인 경로라 보통 사용자 config)
 ```
 
+- android가 아닌 플랫폼 DB면 키는 `platforms.<플랫폼>.analyzers.<카테고리>`다(같은 모양, android 분석 스킬을 물려받지 않는다).
 - 교체: `skill`을 바꾼다. 끄기: `when: never`. 한 번만 건너뛰기: analyze `--no-analyzer`.
 - `source`: `[스킬]` 제안을 승인 뒤 바로 적용할 스킬 소스 폴더(SKILL.md가 있는 폴더, git 저장소 안, 절대 경로). 없으면 patch만 남긴다.

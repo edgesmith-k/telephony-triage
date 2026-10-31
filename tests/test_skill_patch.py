@@ -351,6 +351,28 @@ def test_source_from_config_and_json(env, src):
     assert doc["status"] == "applied" and doc["files"] == [{"path": REL, "added": 1, "removed": 0}]
 
 
+def test_source_lookup_uses_selected_platform_only(env, src, tmp_path):
+    """기본 아닌 플랫폼은 `platforms.<p>.analyzers`의 source만 본다 — android 최상위 source를 쓰지 않는다(17-platforms §10)."""
+    from runner import plugin_root
+    root = plugin_root("ofono-on", platform={"name": "android", "enabled": ["android", "ofono"]})
+    job = env["base"] / "work-ofono" / KEY
+    copy = job / "skill-suggestions" / NAME / REL
+    copy.parent.mkdir(parents=True)
+    copy.write_text(ORIG + ADDED, encoding="utf-8", newline="\n")
+    cfg = env["base"] / "config.yaml"
+    head = cfg.read_text(encoding="utf-8") + f"analyzers:\n  data:\n    skill: {NAME}\n    source: {src}\n"
+    cfg.write_text(head, encoding="utf-8")
+    args = [KEY, "--skill-dir", str(env["sk"]), "--name", NAME, "--platform", "ofono", "--json"]
+    js = json.loads(run("skill_patch.py", args, root=root, env=env["env"]).stdout)
+    assert js["status"] == "ok" and js.get("source") is None          # android source는 ofono에 쓰지 않는다
+    other = tmp_path / "ofono-src"
+    other.mkdir()
+    cfg.write_text(head + f"platforms:\n  ofono:\n    analyzers:\n      data:\n        skill: {NAME}\n        source: {other}\n",
+                   encoding="utf-8")
+    js = json.loads(run("skill_patch.py", args, root=root, env=env["env"]).stdout)
+    assert js["source"] == str(other.resolve())
+
+
 def test_no_source_keeps_old_lines_and_apply_needs_source(env):
     put(env, REL, ORIG + ADDED)
     proc = call(env)

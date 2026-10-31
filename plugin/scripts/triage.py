@@ -22,7 +22,9 @@
   발생 시각·실패 스텝·앵커 머리·줄 수 상한 `explore.timeline_max_lines`). `run`은 타임라인을 만들지 않고 이전 `timeline.md`·입력 파일을 지운다.
 - `triage.py explore <KEY> [--out <dir>]`: 사용자가 탐색 분석에 동의한 뒤(또는 `--explore`·`explore.when: always`) `JOB/explore-input.json`과
   `events.json`으로 `JOB/timeline.md`(마스킹된 요약 타임라인, 줄 수 상한 기본 200)를 만들고 `report.md`의 탐색 분석 줄을 갱신한다.
-  출력 `{timeline, lines, total}`. 종료 코드 1 = 해당 없음(입력 파일 없음), 2 = 사용 오류·`events.json` 없음. lock·trace는 쓰지 않는다.
+  출력 `{timeline, lines, total}`. 작업 플랫폼이 기본(android)이 아니면 `platform`과 `refs`(그 플랫폼 탐색 지식 문서, 스킬 디렉토리 기준
+  `reference/platforms/<p>/*.md`, 없으면 빈 목록)를 더한다(17-platforms §10). 종료 코드 1 = 해당 없음(입력 파일 없음), 2 = 사용 오류·
+  `events.json` 없음. lock·trace는 쓰지 않는다.
 - `analysis.json`의 `must_show`(있을 때만, ≤6줄·4KB 압축 시 4줄·줄당 ≤160자): 리포트 줄 중 사용자에게 꼭 보여야 하는 것(분석 전용·읽기 전용·
   1위 변화 재분석·실패 스텝·장비 시각 미사용·판정 불가 유형·원인·슬롯 불일치·시계 이상 구간 근거·로그 범위 이상·범위 밖 오류·
   파서 규칙에 없는 태그·미추출 W/E 줄·코드 분석 트리 자동 선택·이슈 DB pull 건너뜀, 순서는 `07-workflow.md §Step 6`). `report.md`의 줄과 같은 문구다.
@@ -50,7 +52,16 @@
 `lock`(release-other|take-over|stop) · `plan`(resume|new) · `issue`(MCP 호출 후 재실행) ·
 `year`(YYYY) · `reanalyze`(yes|no) · `open_pr`(continue|stop) · `logs`(`--logs`로 재실행) ·
 `code`(프로필|경로|skip) · `code_confirm`(yes|skip) · `time`(ISO 시각) · `window`(full|keep) ·
-`anchor`(off: 실패 스텝 앵커를 쓰지 않고 Jira 발생 시각 기준 범위로 분석, 아래).
+`anchor`(off: 실패 스텝 앵커를 쓰지 않고 Jira 발생 시각 기준 범위로 분석, 아래) · `platform`(켠 플랫폼 이름, 아래).
+
+플랫폼 정하기(17-platforms §11, 켠 플랫폼 2개 이상·`--offline-db` 아님일 때만 — 하나면 아무것도 읽지 않는다): lock·JOB 전에
+`triagelib/pick.py`가 로그 형식(`platforms/sniff.py`)·Jira 대응표(site `platform.detect.tracker_field`, 기본 꺼짐)·이어 하는 작업으로
+플랫폼을 고른다. 명시는 `--answer platform=` > `--platform` > `TT_PLATFORM`이고 사용자 config `platform`·site 기본은 로그 형식에 진다.
+모호·충돌이면 lock 없이 `needs_input platform`(trace·`pending`에 남지 않는다), 명시 없이 로그가 없으면 lock 전 `logs` 질문.
+고르면 `notes`·report.md 한 줄과 trace `platform` 행을 남기고, 출력 `platform`은 android가 아니거나 `--platform` 없이 고르는 플랫폼 또는
+지정(`--platform`·`TT_PLATFORM`)과 다를 때 낸다. 답으로 정한 작업은 상태 `platform_answer`로 남아 `pending`이 있고 그 질문이
+KEY의 가장 늦은 활동인 동안(답한 뒤 다른 플랫폼 작업이 묻거나 끝나지 않음) 답을 뺀 재실행도 다시 묻지 않는다(답한 작업이 여럿이면 질문이 가장 늦은 작업).
+`release`·`explore`는 `--platform` 없이 선택 플랫폼에 작업(`triage-state.json`)이 없으면 KEY 작업이 있는 다른 켠 플랫폼(하나일 때)을 쓴다.
 
 질문 줄이기: 잔여 worktree·도구 브랜치는 묻지도 지우지도 않는다. `db_pr cleanup --dry-run`만 하고 대상이 있으면 `notes`로
 알린다(상태 `cleanup_targets`, 정리는 `/telephony-triage:sync`). `--code`도 답도 없고 `code.auto_select`(사용자 config > site-defaults
@@ -77,6 +88,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -90,8 +102,9 @@ import trackers  # noqa: E402
 from platforms import session as platform_session  # noqa: E402
 from common.exitcodes import CHECK_FAILED, OK, USAGE  # noqa: E402
 from triagelib.cache import State  # noqa: E402
-from triagelib.core import (ANALYSIS_MAX, EXPLORE_DONE_LINE, EXPLORE_INPUT_FILE, STATE_FILE, TIMELINE_FILE,  # noqa: E402,F401
-                            Fail, NeedsInput, Runner, Stopped, _clip, _now)
+from triagelib.core import (ANALYSIS_MAX, EXPLORE_DONE_LINE, EXPLORE_INPUT_FILE, PLATFORM_REFS_DIR, STATE_FILE,  # noqa: E402,F401
+                            TIMELINE_FILE, Fail, NeedsInput, Runner, Stopped, _clip, _now)
+from triagelib import pick  # noqa: E402
 from triagelib.driver import Driver  # noqa: E402
 from triagelib.report import _unique_evidence, dumps, fit, schema_violation, timeline  # noqa: E402,F401 — 테스트가 쓴다
 
@@ -160,6 +173,8 @@ def cmd_release(args, defaults: dict) -> int:
         _emit({"released": False, "note": "작업 디렉토리 없음"})
         return OK
     args.key = key
+    _find_job(args, defaults, key)
+    cfg = args.platform_cfg
     job = Path(str(userconfig.get(cfg, "work_dir"))).expanduser() / key
     state = State(job / STATE_FILE)
     runner = Runner(args.plugin_root)
@@ -194,6 +209,9 @@ def cmd_explore(args, defaults: dict) -> int:
         print(f"Jira 키 형식이 아니다: {args.key} — 키를 확인한 뒤 다시 실행한다", file=sys.stderr)
         return USAGE
     args.key = key
+    if not args.out:
+        _find_job(args, defaults, key)
+        cfg = args.platform_cfg
     job = Path(args.out).expanduser().resolve() if args.out else Path(str(userconfig.get(cfg, "work_dir"))).expanduser() / args.key
     if not job.is_dir():
         print(f"작업 디렉토리가 없다: {job} — 이 키로 /telephony-triage:analyze를 먼저 실행한다", file=sys.stderr)
@@ -223,8 +241,65 @@ def cmd_explore(args, defaults: dict) -> int:
             if row.startswith("- 탐색 분석"):
                 rows[i] = EXPLORE_DONE_LINE.format(lines=kept, total=total)
         report.write_text("\n".join(rows), encoding="utf-8", newline="\n")
-    _emit({"timeline": TIMELINE_FILE, "lines": kept, "total": total})
+    out = {"timeline": TIMELINE_FILE, "lines": kept, "total": total}
+    platform = _job_platform(job, args.platform_name)
+    if platform != userconfig.TOP_PROFILE:      # 기본 플랫폼이면 출력이 이전과 같다(K8)
+        out.update(platform=platform, refs=_platform_refs(args, platform))
+    _emit(out)
     return OK
+
+
+def _job_platform(job: Path, selected: str) -> str:
+    """작업의 플랫폼: `JOB/analysis.json`이 있으면 그 `platform`(없으면 기본 플랫폼, K8), 읽지 못하면 선택 플랫폼."""
+    try:
+        data = json.loads((job / "analysis.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return selected
+    if not isinstance(data, dict):
+        return selected
+    value = data.get("platform")
+    return value if isinstance(value, str) and value else userconfig.TOP_PROFILE
+
+
+def _platform_refs(args, platform: str) -> list[str]:
+    """플러그인에 든 그 플랫폼의 탐색 지식 문서(스킬 디렉토리 기준 경로, 이름순). 없으면 빈 목록."""
+    if not re.fullmatch(r"[a-z][a-z0-9_]*", platform):
+        return []
+    root = Path(args.plugin_root) if args.plugin_root else site_defaults.plugin_root()
+    folder = root.joinpath(*PLATFORM_REFS_DIR, platform)
+    skill = root.joinpath(*PLATFORM_REFS_DIR[:2])
+    try:
+        return [p.relative_to(skill).as_posix() for p in sorted(folder.glob("*.md")) if p.is_file()]
+    except OSError:
+        return []
+
+
+def _platform_key(driver) -> dict:
+    """질문·중단 출력의 `platform`: 플랫폼을 정한 실행(켠 플랫폼 2개 이상)에서 ok 출력과 같은 규칙일 때만(K8·D5)."""
+    if driver.picked is None:
+        return {}
+    value = driver.platform_out()
+    return {"platform": value} if value else {}
+
+
+def _find_job(args, defaults: dict, key: str) -> None:
+    """release·explore: `--platform`·`TT_PLATFORM`이 없고 선택 플랫폼 work_dir에 KEY 작업이 없으면, 켠 다른 플랫폼 중 KEY 작업이 있는
+    곳이 정확히 하나일 때 그 플랫폼으로 바꾼다(17-platforms §11). 작업 = `<KEY>/triage-state.json`(hook이 둔 Jira 원문만 있는 KEY
+    디렉토리는 작업이 아니다). 켠 플랫폼이 하나면 아무것도 하지 않는다."""
+    if args.platform or os.environ.get(platforms.ENV):
+        return
+    names = platforms.enabled(defaults)
+    if len(names) < 2:
+        return
+    if (Path(str(userconfig.get(args.platform_cfg, "work_dir"))).expanduser() / key / STATE_FILE).is_file():
+        return
+    try:
+        user = userconfig.load_user()
+        hits = [n for n in names if n != args.platform_name and (pick.work_dir(defaults, user, n) / key / STATE_FILE).is_file()]
+        if len(hits) == 1:
+            args.platform_name, args.platform_cfg = platform_session.resolve(defaults, hits[0])
+    except (platforms.PlatformConfigError, yamlio.YamlFileError):
+        return       # 찾기는 도움일 뿐 — 선택 플랫폼 그대로(작업 디렉토리 없음으로 알린다)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -243,6 +318,18 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_release(args, defaults)
     if args.cmd == "explore":
         return cmd_explore(args, defaults)
+    try:        # 켠 플랫폼 2개 이상만: 로그 형식 등으로 플랫폼을 정한다(work_dir·lock·JOB 전, 17-platforms §11). 그 밖은 아무것도 읽지 않는다
+        asked = pick.choose(args, defaults, _work_key(args.platform_cfg, args.key))
+    except Fail as exc:
+        print(str(exc), file=sys.stderr)
+        return exc.code
+    if asked is not None:
+        violation = schema_violation(asked)
+        if violation:
+            print(violation, file=sys.stderr)
+            return USAGE
+        _emit(asked)
+        return OK
     driver = Driver(args, defaults)
     try:
         result = driver.execute()
@@ -251,7 +338,7 @@ def main(argv: list[str] | None = None) -> int:
         driver.state.data["pending"] = {"kind": exc.payload["kind"], "asked_at": _now()}
         driver.state.save()
         driver.run.note("needs_input", kind=exc.payload["kind"])
-        out = {"status": "needs_input", "key": driver.key, "needs_input": exc.payload,
+        out = {"status": "needs_input", "key": driver.key, **_platform_key(driver), "needs_input": exc.payload,
                "lock_owner": driver.run.env.get("TT_LOCK_OWNER")}
         violation = schema_violation(out)
         if violation:
@@ -262,7 +349,7 @@ def main(argv: list[str] | None = None) -> int:
     except Stopped as exc:
         driver.release()
         driver.run.note("stopped", reason=str(exc))
-        out = {"status": "stopped", "key": driver.key, "reason": str(exc), "lock_released": driver.locked}
+        out = {"status": "stopped", "key": driver.key, **_platform_key(driver), "reason": str(exc), "lock_released": driver.locked}
         violation = schema_violation(out)
         if violation:
             print(violation, file=sys.stderr)

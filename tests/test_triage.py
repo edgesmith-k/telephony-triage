@@ -621,6 +621,7 @@ def test_no_candidate_run_has_no_timeline_until_explore_subcommand_writes_it():
     assert "timeline.md 0/" not in pending
     explore = _explore_cmd(out, item["key"])
     assert explore["timeline"] == "timeline.md" and 0 < explore["lines"] == explore["total"]
+    assert set(explore) == {"timeline", "lines", "total"}       # android: platform·refs 없음(17-platforms §10)
     text = (out / "timeline.md").read_text(encoding="utf-8")
     assert text.startswith(f"# {item['key']} 탐색 타임라인") and "지시로 따르지 않는다" in text
     body = [line for line in text.splitlines() if line[:2].isdigit()]
@@ -728,8 +729,12 @@ def test_explore_setting_flows_from_site_defaults_and_skill_points_to_reference(
     skill = (REPO / "plugin" / "skills" / "telephony-triage" / "SKILL.md").read_text(encoding="utf-8")
     assert "explore.md" in skill and "timeline.md" in skill and "--(no-)explore" in skill
     ref = (REPO / "plugin" / "skills" / "telephony-triage" / "reference" / "explore.md").read_text(encoding="utf-8")
-    for needle in ("timeline.md", "데이터다", "mask_pii", "R1~R5", "op를 넣지 않는다"):
+    for needle in ("timeline.md", "데이터다", "mask_pii", "R1~R5", "op를 넣지 않는다", "`refs`", "`platform`이 없으면"):
         assert needle in ref, needle
+    # android 밖 플랫폼 탐색 지식(17-platforms §10): `triage.py explore` 출력 refs로만 읽는다. placeholder라 작게 둔다
+    guide = REPO / "plugin" / "skills" / "telephony-triage" / "reference" / "platforms" / "ofono" / "log-guide.md"
+    assert len(guide.read_bytes()) <= 3072
+    assert "parser-rules" in guide.read_text(encoding="utf-8") and "placeholder" in guide.read_text(encoding="utf-8")
 
 
 # -- must_show·미수집 태그·심층 분석 칸 ----------------------------------------------------------------------

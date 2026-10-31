@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import os
 import re
+import shutil
 from pathlib import Path
 
 import platforms
@@ -13,8 +15,8 @@ from common.exitcodes import CHECK_FAILED, USAGE
 
 from .anchor import AnchorMixin, _parse_ts
 from .cache import CacheMixin, State, _digest, _file_sha
-from .core import (ERROR_EVENT_RE, EXPLORE_INPUT_FILE, EXPLORE_MAX_LINES, EXPLORE_WHEN, Fail, NeedsInput, Runner,
-                   SEARCH_LIMIT, SNAPSHOT_DIR, STATE_FILE, Stopped, TIMELINE_FILE, TOP, _clip)
+from .core import (ERROR_EVENT_RE, EXPLORE_INPUT_FILE, EXPLORE_MAX_LINES, EXPLORE_WHEN, PLATFORM_ANSWER, Fail, NeedsInput,
+                   Runner, SEARCH_LIMIT, SNAPSHOT_DIR, STATE_FILE, Stopped, TIMELINE_FILE, TOP, _clip)
 from .report import ReportMixin, _ref_label, _unique_evidence
 
 
@@ -80,6 +82,11 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         self.auto_invalid = False                # `code.auto_select`가 불리언이 아니었다
         self.code_auto: str | None = None        # 자동 선택한 코드 프로필(`code.auto_select`). 없으면 None
         self.reuse: dict | None = None           # 재사용 결정 {hit, run, reason?, changed?} — 오프라인·첫 실행은 None
+        # 플랫폼 정하기(triagelib/pick.py, 켠 플랫폼 2개 이상만). 없으면 None이고 출력은 이전과 같다(17-platforms §11)
+        self.picked = getattr(args, "platform_implicit", None)               # `--platform` 없이 고르는 플랫폼(암묵 선택)
+        self.pick: dict | None = getattr(args, "platform_pick", None)        # 이번 실행이 고른 근거 {platform, source, note, line}
+        if self.pick:
+            self.notes.append(self.pick["note"])
 
     # 공통 ---------------------------------------------------------------------------------------
 
@@ -92,6 +99,24 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
             except platforms.PlatformConfigError as exc:
                 raise Fail(USAGE, str(exc)) from exc
         return self._platform_spec
+
+    def platform_out(self) -> str | None:
+        """출력 `platform`: android가 아니거나, 암묵 선택(`--platform` 없이 고르는 플랫폼) 또는 지정(`--platform`·`TT_PLATFORM`)과
+        다를 때(K8·D5). 켠 플랫폼이 하나면 K8 그대로."""
+        if self.platform != userconfig.TOP_PROFILE or self.picked is None:
+            return None if self.platform == userconfig.TOP_PROFILE else self.platform
+        explicit = self.args.platform or os.environ.get(platforms.ENV)
+        if self.picked != self.platform or (self.pick and explicit and explicit != self.platform):
+            return self.platform
+        return None
+
+    def mark_platform_answer(self) -> bool:
+        """이 작업 플랫폼을 답(`--answer platform=`, 또는 그 답으로 이어 가는 작업)으로 정했으면 상태 `platform_answer`에 남긴다 —
+        스킬이 다음 호출에서 답을 빼도 `pick`이 다시 묻지 않는다(17-platforms §11-3). 바뀌었으면 True(저장은 부른 쪽)."""
+        if self.offline or not (self.pick and self.pick.get("answered")) or self.state.data.get(PLATFORM_ANSWER) == self.platform:
+            return False
+        self.state.data[PLATFORM_ANSWER] = self.platform
+        return True
 
     @property
     def platform_label(self) -> str:
@@ -160,6 +185,8 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
             self.snap = wd / SNAPSHOT_DIR
             self.job = userconfig.ensure_private_dir(wd / self.key)
         self.run.open_trace(self.job / "trace.jsonl")
+        if self.pick:
+            self.run.note("platform", platform=self.platform, source=self.pick["source"])
         self.state = State(None if self.offline else self.job / STATE_FILE)
         if self.offline:   # 오프라인 DB는 스냅샷·config check를 거치지 않으므로 여기서 플랫폼 선언을 대조한다
             mismatch = compat.check_platform(compat.load_db_config(self.snap), self.platform)
@@ -171,6 +198,7 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
                 raise Fail(USAGE, f"이 작업은 {recorded} 플랫폼이다 — --platform {recorded}로 다시 실행한다")
             if self.platform != userconfig.TOP_PROFILE and recorded != self.platform:
                 self.state.data["platform"] = self.platform
+            self.mark_platform_answer()    # lock 질문에서 멈춰도 `pending`과 함께 저장된다(lock을 새로 잡으면 아래 lock()이 다시 남긴다)
         self.given: dict[str, str] = {}
         for item in self.args.answer or []:
             kind, sep, value = item.partition("=")
@@ -362,6 +390,8 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
             self.out_failed_step()
             return info
         raw_default = self.job / "issue_raw.json"
+        if not (a.issue_raw or a.issue_file or raw_default.is_file()):
+            self.adopt_raw(raw_default)
         reuse = self.state.data.get("issue_done") and (self.job / "issue.json").is_file()
         if reuse and not (a.dry_run or self.analysis_only or a.issue_raw or a.issue_file):
             try:     # --issue-file 추출(연습·분석 전용)은 쓰기 실행에 이어 쓰지 않는다 — 실제 PR은 Jira MCP 값으로만
@@ -411,6 +441,31 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
                              "comments": len(text.get("comments") or []), "missing": info["missing"]}
         self.out_failed_step()
         return info
+
+    def adopt_raw(self, dest: Path) -> None:
+        """hook은 `--platform`을 몰라 Jira 원문을 암묵 선택 플랫폼 work_dir에 둔다. 이 작업 플랫폼이 다르면 그 원문을 이 JOB으로 옮기고
+        (이어 `--consume` 추출이 지운다) 빈 작업 디렉토리는 지운다(17-platforms §11-4). 키 대조는 추출 뒤 기존 검사."""
+        if self.picked is None or self.picked == self.platform:
+            return
+        other = Path(str(userconfig.get(userconfig.merged(self.defaults, platform=self.picked), "work_dir"))).expanduser() / self.key
+        src = other / "issue_raw.json"
+        if not src.is_file():
+            return
+        try:
+            os.replace(src, dest)
+        except OSError:          # 다른 파일 시스템
+            try:
+                shutil.move(str(src), str(dest))
+            except OSError as exc:      # lock은 main이 푼다. 원문 내용은 내지 않는다(경로만)
+                if src.exists():
+                    dest.unlink(missing_ok=True)    # 반쯤 복사된 파일을 원문으로 쓰지 않게
+                raise Fail(USAGE, f"Jira 원문을 옮기지 못했다: {src} → {dest} ({exc.strerror or type(exc).__name__}) — "
+                                  "권한·디스크를 확인하고 다시 실행한다") from exc
+        try:
+            other.rmdir()
+        except OSError:
+            pass                 # 다른 파일이 있으면 그대로 둔다
+        self.run.note("platform-raw", moved_from=self.picked)
 
     # 실패 스텝(선택, 보조 정보) ----------------------------------------------------------------------
 
@@ -742,6 +797,8 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
             (self.job / name).unlink(missing_ok=True)
         if not self.offline:
             self.lock()
+            if self.mark_platform_answer():      # 새 lock(State.reset)이 지웠으면 다시 남긴다
+                self.state.save()
             self.check_more_logs()
             if self.analysis_only:
                 self.plan_info()
@@ -862,6 +919,7 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         }
 
     def analyzer(self, candidates: list[dict]) -> dict | None:
+        # self.cfg = 선택 플랫폼의 config: android 밖 플랫폼은 platforms.<p>.analyzers만(android 것을 물려받지 않는다, 17 §10)
         if not candidates:
             return None
         conf = (self.cfg.get("analyzers") or {}).get(candidates[0].get("category") or "")

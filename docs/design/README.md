@@ -24,7 +24,7 @@
 | `14-site.md` | 사내 적용: placeholder 레지스트리 S1~S32(S24~S29 oFono, S30~S32 트래커), `SITE_PROFILE.md` 형식, Phase 0, 사외 문서 반영 |
 | `15-local-draft.md` | 사외 초안↔사내 보완: 모의 환경, 반입 체크리스트, **S-1~S-7**, `site-defaults.yaml` 필수, 재반입 |
 | `16-existing-assets.md` | 기존 Jira MCP 재사용(트래커 매핑 `tracker.tools`), 기존 파서 포팅(골든), 기존 분류 import, 분석 스킬 연결 |
-| `17-platforms.md` | 플랫폼 분리(Android 기본 / oFono / 이후 추가): 레지스트리 계약, 선택·경로 프로필, 플랫폼별 lock, 이슈 DB 분리·`platform-mismatch`, guard 다중 프로필, 새 플랫폼 추가 절차, 결정 기록 K1~K11, 미룬 것 |
+| `17-platforms.md` | 플랫폼 분리(Android 기본 / oFono / 이후 추가): 레지스트리 계약, 선택·경로 프로필, 플랫폼별 lock, 이슈 DB 분리·`platform-mismatch`, guard 다중 프로필, 새 플랫폼 추가 절차, 결정 기록 K1~K18, 미룬 것, 한 플랫폼 안의 여러 구성요소(데몬)·데몬 사이 짝·여러 소스 루트(§9), 분석 스킬·탐색 지식의 플랫폼 분리(§10), 이슈 시작 때 플랫폼 자동 판단(§11) |
 | `18-trackers.md` | 트래커 범용화(Jira 기본 / GitHub Issues / 이후 추가): `TrackerSpec` 계약·레지스트리·계층 규칙, 설정 층(site·사용자·DB `tracker`), 작업 키·경로 안전·GitHub `<owner>.<repo>-<N>`, `tracker-mismatch`, guard 규칙 2 일반화·전용 MCP 등록 권고, 새 트래커 추가 체크리스트, 결정 기록 T1~T10, 미룬 것 |
 | `99-deferred.md` | v1에서 뺀 설계. **어느 Phase에서도 읽지 않는다** |
 | `CLAUDE.md` (루트) | 진입점: 모드 판별(머리말), 작업 방식 요약, 항상 지킬 것 |

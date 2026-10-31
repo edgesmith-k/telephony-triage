@@ -19,6 +19,7 @@ SCRIPTS = Path(__file__).resolve().parents[1]
 
 ANALYSIS_MAX = 4096
 STATE_FILE = "triage-state.json"
+PLATFORM_ANSWER = "platform_answer"   # 상태 키: 이 작업 플랫폼을 `--answer platform=`으로 정했다(17-platforms §11-3)
 STATE_SCHEMA = 2                 # 2: `job` 절(로그·실행 이력·재사용 캐시 요약)이 있다. 스키마 표시가 없는 파일은 job = {}
 CACHE_FILE = "analysis-cache.json"
 CACHE_FORMAT = 3                 # 캐시 형식·`core` 구조를 바꾸면 올린다(plugin 해시에 들어가 이전 캐시가 무효가 된다). 2: 타임라인은 캐시 파일이 아니다. 3: core.unjudged
@@ -39,6 +40,9 @@ AUTO_CODE_NOTE = " (자동 선택: code.auto_select, `--code`로 변경 가능)"
 EXPLORE_WHEN = ("ask", "always", "never")
 EXPLORE_MAX_LINES = 200
 TIMELINE_FILE = "timeline.md"
+# 기본 아닌 플랫폼의 탐색 분석 지식(플러그인 루트 기준). `<여기>/<플랫폼>/*.md`가 있으면 `triage.py explore`가 `refs`로 알린다
+# (17-platforms §10). 스킬 디렉토리 기준 경로는 `reference/platforms/<플랫폼>/<파일>`
+PLATFORM_REFS_DIR = ("skills", "telephony-triage", "reference", "platforms")
 EXPLORE_INPUT_FILE = "explore-input.json"   # `triage.py explore`의 입력(마스킹된 값만). run이 쓰고, 탐색 동의 뒤 subcommand가 읽는다
 MUST_SHOW_MAX = 6                # render_report가 모으는 must_show 상한
 MUST_SHOW_FIT = 4                # fit이 마지막에 남기는 수

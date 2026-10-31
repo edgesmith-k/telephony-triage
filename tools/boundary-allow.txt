@@ -3,6 +3,8 @@
 
 # 마스킹 시험용 합성 IMEI·IMSI (공개 예시 값)
 pattern:long-number tests/* ^(450081234567890|450081234567891|356938035643809|490154203237518)$
+# oFono 설정 짝 규칙 PII 거부·마스킹 시험용 합성 IMSI (공개 시험 PLMN 310-150 예시 값)
+pattern:long-number tests/test_ofono_components.py ^310150123456789$
 # db_lint mask.allow_patterns 넓이 검사 표본 (같은 합성 값)
 pattern:long-number plugin/scripts/db_lint.py ^(450081234567890|356938035643809|01012345678|821012345678|89820012345678901234)$
 
