@@ -91,3 +91,14 @@ def test_site_profile_warning(tmp_path):
     f.write_bytes(b"x" * 4097)
     w = cp.site_profile_warning(tmp_path)
     assert w and "4097" in w and "14.3" in w
+
+
+def test_ofono_packs_resolve():
+    """oFono 트랙 pack(O-1~O-4): §15.5 별도 표의 행과 tasks.md 읽을 것이 모두 풀린다. 머리줄은 첫 표 것."""
+    for p in ("O-1", "O-2", "O-3", "O-4"):
+        row = cp.step_row(p)
+        assert row and row.splitlines()[0].startswith("| 단계 | 할 일 |") and f"| {p} |" in row and "완료 기준" in row, p
+        out = cp.render(p)
+        assert out.startswith(f"===== {cp.STEPS} §15.5 {p} =====")
+    assert "===== docs/design/14-site.md §14.2:S24 =====" in cp.render("O-1")
+    assert cp.step_row("O-5") is None

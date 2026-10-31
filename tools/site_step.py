@@ -8,18 +8,24 @@
     python3 tools/site_step.py propose ... --apply ID[,ID]         # 사용자가 승인한 항목만 쓴다(확인자 = git user.name)
     python3 tools/site_step.py evals [--batch N] [--baseline]       # S-2: 사내 대상 eval의 다음 배치 명령·추정 비용(실행하지 않음)
     python3 tools/site_step.py --done S-n [--waive 점검="사유"]...  # 사용자 확인 뒤: 점검 재실행 → 통과면 완료 기록·다음 단계
+    python3 tools/site_step.py ofono                    # oFono 트랙(O-1~O-4) 시작·이어 하기, S-3 완료 뒤
 
 - 순서는 S-1 → S-2 → S-3 → S-4a → S-4 → S-5 → S-6 → S-7(`STEPS`). S-0(선택)은 반입 전 일이라 넣지 않는다.
+- oFono 트랙은 Android 단계와 따로 O-1 → O-2 → O-3 → O-4(`OFONO_STEPS`)다. "oFono 설정 시작"이면 `ofono`: S-3 완료 기록 뒤에만
+  "진행 상태"에 `- oFono 단계: O-1`·`- oFono 완료: (없음)`을 넣는다(한 번). `check`·`propose`·`--done`은 단계 인자로 O-n을 받는다.
+  인자 없는 실행은 Android 단계에 안내 한 줄(`oFono 트랙: O-n 진행 중 → …`)을 붙이고, Android가 모두 완료면 oFono 단계를 바로 보인다.
 - 점검(`site_checks.py`)은 판정만 하고 단계를 넘기지 않는다. `--done`은 실패가 있으면 거부하고, 건너뜀·사용자 필요는
   `--waive`(사유는 SITE_PROFILE.md "설계 변경"·docs/site/evidence.md에 남는다 — 사유는 줄 끝, SITE_PROFILE에는 120자까지 +
   `…(전체: docs/site/evidence.md)`, 기록한 줄은 `--done` 출력에 보인다) 없이는 거부한다. 사용자 확인 없이 `--done`하지 않는다.
-- `SITE_PROFILE.md`의 "진행 상태" `현재 단계`·`완료 단계` 줄과, 승인된 `propose --apply` 항목만 고친다. 형식은 14-site.md §14.3.
+- `SITE_PROFILE.md`의 "진행 상태" `현재 단계`·`완료 단계`(oFono는 `oFono 단계`·`oFono 완료`) 줄과, 승인된 `propose --apply` 항목만
+  고친다. 형식은 14-site.md §14.3.
 - S-2 eval은 `tests/skill_evals/pending.json`의 사내 대상(`site`, 사내 모델이 사외 결과 모델과 다르면 `site_if_model_differs`도)만
   돌린다. 나머지는 사외 결과 기록(`offsite_results.json`, 점검 `s2.offsite`)으로 갈음한다.
 - 새로 만들 때 트래커는 jira다(사내 결정: S30·S31 GitHub 트래커 항목은 해당 없음, S-3에서 `tracker.kind: jira`).
 - 사외 초안 PC(`.local-draft`)에서는 SITE_PROFILE.md를 만들지 않는다(종료 2, 반입 전 경계 검사가 막는 파일이다).
 
-종료 코드: 0 정상(점검은 통과·정보만), 1 점검 실패·건너뜀·사용자 필요(`--done` 거부 포함), 2 사용 오류(사외 PC, 모드·단계 불일치, 진행 상태 줄 없음).
+종료 코드: 0 정상(점검은 통과·정보만), 1 점검 실패·건너뜀·사용자 필요(`--done` 거부 포함), 2 사용 오류(사외 PC, 모드·단계 불일치, 진행 상태 줄 없음,
+S-3 완료 전 `ofono`, 시작 전 O-n).
 """
 from __future__ import annotations
 
@@ -48,6 +54,11 @@ CURRENT_RE = re.compile(r"(?m)^- 현재 단계: *(\S+).*$")
 FINISHED_RE = re.compile(r"(?m)^- 완료 단계: *(.*)$")
 MODE_RE = re.compile(r"(?m)^- 모드: *(.+?)\s*$")
 GATE_LINE_RE = re.compile(r"(?m)^- S-5 게이트:.*$")
+OFONO_STEPS = ["O-1", "O-2", "O-3", "O-4"]
+OFONO_CURRENT_RE = re.compile(r"(?m)^- oFono 단계: *(\S+).*$")
+OFONO_FINISHED_RE = re.compile(r"(?m)^- oFono 완료: *(.*)$")
+S3_DONE_RE = re.compile(r"(?:^|,\s*)S-3 \(")           # `완료 단계` 값에 S-3 기록
+OFONO_NOT_STARTED = "oFono 트랙이 시작되지 않았다 — S-3 완료 뒤 `python3 tools/site_step.py ofono`"
 EVAL_BATCH = 5
 BASELINE_EVALS = sc.BASELINE_EVALS     # 사내 토큰 기준선 eval(pending.json site의 부분집합, s2.pending)
 
@@ -112,15 +123,51 @@ def _state(text: str) -> tuple[str, str]:
     return step, fin.group(1).strip()
 
 
-def _current(root: Path) -> str:
+def _ofono_state(text: str) -> tuple[str | None, str]:
+    """(oFono 단계 | None = 트랙 시작 전, 완료 값). 두 줄 중 하나만 있거나 모르는 단계면 사용 오류."""
+    cur, fin = OFONO_CURRENT_RE.search(text), OFONO_FINISHED_RE.search(text)
+    if not cur and not fin:
+        return None, ""
+    if not cur or not fin:
+        raise Usage("SITE_PROFILE.md '진행 상태'에 `- oFono 단계: O-n`·`- oFono 완료: …` 줄이 하나만 있다 — 14-site.md §14.3 형식으로 고친다")
+    step = cur.group(1)
+    if step not in OFONO_STEPS + [DONE]:
+        raise Usage(f"oFono 단계 '{step}'를 모른다 (순서: {' → '.join(OFONO_STEPS)})")
+    return step, fin.group(1).strip()
+
+
+def _profile_text(root: Path) -> str:
     prof = _profile(root)
     if not prof.exists():
         raise Usage("SITE_PROFILE.md가 없다 — 먼저 `python3 tools/site_step.py`로 시작한다")
-    return _state(prof.read_text(encoding="utf-8"))[0]
+    return prof.read_text(encoding="utf-8")
+
+
+def _current(root: Path) -> str:
+    return _state(_profile_text(root))[0]
+
+
+def _ofono_current(text: str) -> str:
+    """시작된 oFono 트랙의 단계(완료 포함). 시작 전이면 사용 오류."""
+    _state(text)                                       # 모드 확인
+    cur, _ = _ofono_state(text)
+    if cur is None:
+        raise Usage(OFONO_NOT_STARTED)
+    return cur
 
 
 def _step_arg(root: Path, step: str | None) -> str:
-    step = step or _current(root)
+    if step is None:
+        text = _profile_text(root)
+        step = _state(text)[0]
+        if step == DONE:                               # Android가 끝났으면 진행 중인 oFono 단계
+            o_cur, _ = _ofono_state(text)
+            step = o_cur if o_cur not in (None, DONE) else step
+    if step.startswith("O-"):
+        if step not in OFONO_STEPS:
+            raise Usage(f"oFono 단계 '{step}'를 모른다 (순서: {' → '.join(OFONO_STEPS)})")
+        _ofono_current(_profile_text(root))
+        return step
     if step not in STEPS:
         raise Usage(f"단계 '{step}'를 모른다 (순서: {' → '.join(STEPS)})")
     return step
@@ -155,8 +202,8 @@ def write_step_state(root: Path, step: str, results: list[dict] | None = None, v
 
 LOOP = """===== 진행 (한 단계씩, 확인 전에는 다음 단계로 가지 않는다) =====
 1. 할 일을 한다. 막히면(git 충돌·인증·MCP 부재·버전 불일치) 우회하지 않고 보고한다.
-2. `python3 tools/site_step.py check` — 자동 점검(읽기 전용). 실패·건너뜀·사용자 필요는 그대로 보고한다(통과로 쓰지 않는다).
-3. 값 반영: `python3 tools/site_step.py propose [--set 키=값]` → diff를 보여 주고, 사용자가 승인한 ID만 `propose --apply ID[,ID]`.
+2. `python3 tools/site_step.py check{arg}` — 자동 점검(읽기 전용). 실패·건너뜀·사용자 필요는 그대로 보고한다(통과로 쓰지 않는다).
+3. 값 반영: `python3 tools/site_step.py propose{arg} [--set 키=값]` → diff를 보여 주고, 사용자가 승인한 ID만 `propose{arg} --apply ID[,ID]`.
 4. (S-2) `python3 tools/site_step.py evals` — 사내 대상 eval의 다음 배치 명령·추정 비용(나머지는 사외 결과, s2.offsite). 비용 승인 뒤에만 실행하고, 수동 채점은 사람이 한다.
 5. 요약 → **사용자 확인** → `python3 tools/site_step.py --done {step}` (사용자가 확인한 건너뜀·사용자 필요만 `--waive 점검="사유"`)."""
 
@@ -176,12 +223,17 @@ def asks(results: list[dict]) -> str:
     return "===== 사용자에게 물을 것 (한 번에) =====\n" + ("\n".join(items) if items else "(없음)")
 
 
-def guide(step: str, created: bool, root: Path | None = None, allow_api: bool = False) -> tuple[str, int]:
-    """(출력, 종료 코드 = 점검 결과의 exit_code). root가 없으면 점검 없이 pack만(종료 0)."""
+def guide(step: str, created: bool, root: Path | None = None, allow_api: bool = False, ofono: bool = False,
+          started: bool = False) -> tuple[str, int]:
+    """(출력, 종료 코드 = 점검 결과의 exit_code). root가 없으면 점검 없이 pack만(종료 0). `ofono`면 oFono 트랙 단계."""
     if step == DONE:
+        if ofono:
+            return "oFono 트랙 O-1~O-4가 모두 완료로 기록돼 있다.", 0
         return "사내 보완 S-1~S-7이 모두 완료로 기록돼 있다. 파일럿 뒤 할 일은 15-local-draft.md §15.5 S-7 비고와 docs/tasks.md.", 0
-    head = [("SITE_PROFILE.md를 새로 만들었다(사내 보완, 트래커 jira). " if created else "") + f"지금 단계: {step}",
-            f"이 단계를 마치면: `site_step.py check` 보고 → 요약 → 사용자 확인 → `python3 tools/site_step.py --done {step}` "
+    arg = f" {step}" if ofono else ""     # 인자 없는 check·propose는 Android 현재 단계를 본다
+    head = [("SITE_PROFILE.md를 새로 만들었다(사내 보완, 트래커 jira). " if created else "")
+            + ("oFono 트랙을 시작했다. " if started else "") + ("oFono 트랙 " if ofono else "") + f"지금 단계: {step}",
+            f"이 단계를 마치면: `site_step.py check{arg}` 보고 → 요약 → 사용자 확인 → `python3 tools/site_step.py --done {step}` "
             "(확인 전에는 다음 단계로 가지 않는다)", ""]
     if root is None:
         return "\n".join(head) + context_pack.render(step), 0
@@ -189,7 +241,7 @@ def guide(step: str, created: bool, root: Path | None = None, allow_api: bool = 
     body = _brief(step) if seen else context_pack.render(step)
     results = sc.run_checks(step, root, allow_api)
     write_step_state(root, step, results, visited=True)
-    return "\n".join([*head, body, sc.report(step, results), "", asks(results), "", LOOP.format(step=step)]), \
+    return "\n".join([*head, body, sc.report(step, results), "", asks(results), "", LOOP.format(step=step, arg=arg)]), \
         sc.exit_code(results)
 
 
@@ -198,8 +250,32 @@ def start(root: Path, allow_api: bool = False) -> tuple[str, int]:
     created = not prof.exists()
     if created:
         prof.write_text(skeleton(root), encoding="utf-8", newline="\n")
-    step, _ = _state(prof.read_text(encoding="utf-8"))
-    return guide(step, created, root, allow_api)
+    text = prof.read_text(encoding="utf-8")
+    step, _ = _state(text)
+    o_cur, _ = _ofono_state(text)
+    if step == DONE and o_cur not in (None, DONE):     # Android가 끝났으면 oFono 단계를 바로 보인다
+        return guide(o_cur, created, root, allow_api, ofono=True)
+    out, code = guide(step, created, root, allow_api)
+    if o_cur is not None:                              # 시작 전이면 출력은 그대로다
+        out += "\n" + ("oFono 트랙: 완료" if o_cur == DONE else f"oFono 트랙: {o_cur} 진행 중 → python3 tools/site_step.py ofono")
+    return out, code
+
+
+def ofono_cmd(root: Path, allow_api: bool = False) -> tuple[str, int]:
+    """oFono 트랙 시작·이어 하기. 줄이 없으면 S-3 완료 기록이 있을 때만 두 줄을 넣는다(O-2가 site-defaults.yaml을 본다)."""
+    prof = _profile(root)
+    text = _profile_text(root)
+    cur, fin = _state(text)
+    o_cur, _ = _ofono_state(text)
+    started = o_cur is None
+    if started:
+        if not S3_DONE_RE.search(fin):
+            raise Usage(f"oFono 트랙은 S-3 완료 기록 뒤에 시작한다(O-2에 plugin/site-defaults.yaml 필요) — 지금 Android 단계 {cur}")
+        text = _insert_progress(text, "- oFono 단계: O-1", OFONO_CURRENT_RE.pattern)
+        text = _insert_progress(text, "- oFono 완료: (없음)", OFONO_FINISHED_RE.pattern)
+        prof.write_text(text, encoding="utf-8", newline="\n")
+        o_cur = OFONO_STEPS[0]
+    return guide(o_cur, False, root, allow_api, ofono=True, started=started)
 
 
 def check(root: Path, step: str | None, as_json: bool, allow_api: bool) -> tuple[str, int]:
@@ -516,9 +592,16 @@ def done(root: Path, step: str, waives: list[str] | None = None, allow_api: bool
     if not prof.exists():
         raise Usage("SITE_PROFILE.md가 없다 — 먼저 `python3 tools/site_step.py`로 시작한다")
     text = prof.read_text(encoding="utf-8")
-    cur, fin = _state(text)
+    ofono = step.startswith("O-")
+    if ofono:
+        cur = _ofono_current(text)
+        fin = _ofono_state(text)[1]
+        track, cur_re, fin_re, label = OFONO_STEPS, OFONO_CURRENT_RE, OFONO_FINISHED_RE, "oFono "
+    else:
+        cur, fin = _state(text)
+        track, cur_re, fin_re, label = STEPS, CURRENT_RE, FINISHED_RE, ""
     if step != cur:
-        raise Usage(f"현재 단계는 {cur}다 — --done {step}은 기록하지 않는다(단계를 건너뛰지 않는다)")
+        raise Usage(f"{label}현재 단계는 {cur}다 — --done {step}은 기록하지 않는다(단계를 건너뛰지 않는다)")
     waived = _parse_waivers(waives or [])
     results = sc.run_checks(step, root, allow_api)
     write_step_state(root, step, results)
@@ -547,14 +630,14 @@ def done(root: Path, step: str, waives: list[str] | None = None, allow_api: bool
         ev.write_text(_evidence(root, ev.read_text(encoding="utf-8") if ev.is_file() else None,
                                 [f"- ({today}) {step} {w} 면제({ids[w]['status']}, 근거 {ids[w]['evidence']}) 사용자 결정: {why}"
                                  for w, why in used.items()]), encoding="utf-8", newline="\n")
-    nxt = STEPS[STEPS.index(step) + 1] if step != STEPS[-1] else DONE
+    nxt = track[track.index(step) + 1] if step != track[-1] else DONE
     item = f"{step} ({today})"
     fin = item if fin in ("", "(없음)") else f"{fin}, {item}"
-    text = CURRENT_RE.sub(lambda m: f"- 현재 단계: {nxt}", text, count=1)
-    text = FINISHED_RE.sub(lambda m: f"- 완료 단계: {fin}", text, count=1)
+    text = cur_re.sub(lambda m: f"- {'oFono 단계' if ofono else '현재 단계'}: {nxt}", text, count=1)
+    text = fin_re.sub(lambda m: f"- {'oFono 완료' if ofono else '완료 단계'}: {fin}", text, count=1)
     prof.write_text(text, encoding="utf-8", newline="\n")
     extra = f" (면제 {', '.join(used)} — 사유는 SITE_PROFILE.md 설계 변경)" if used else ""
-    out, _ = guide(nxt, False, root, allow_api)     # 기록은 끝났다(종료 0). 다음 단계 점검 결과는 출력으로만 본다
+    out, _ = guide(nxt, False, root, allow_api, ofono=ofono)     # 기록은 끝났다(종료 0). 다음 단계 점검 결과는 출력으로만 본다
     shown = "".join(f"  SITE_PROFILE.md 설계 변경에 기록: {line}\n" for line in recorded)     # 쓴 줄을 그대로 보인다
     return f"{step} 완료를 기록했다{extra}.\n" + shown + out, 0
 
@@ -562,9 +645,10 @@ def done(root: Path, step: str, waives: list[str] | None = None, allow_api: bool
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="site_step.py", description=__doc__.split("\n\n")[0],
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("cmd", nargs="?", choices=("check", "propose", "evals"), help="없으면 시작·이어 하기")
-    ap.add_argument("step", nargs="?", metavar="S-n", help="check·propose 대상 단계(기본: 현재 단계)")
-    ap.add_argument("--done", metavar="S-n", help="사용자 확인을 받은 현재 단계: 점검 재실행 → 통과면 완료 기록·다음 단계")
+    ap.add_argument("cmd", nargs="?", choices=("check", "propose", "evals", "ofono"),
+                    help="없으면 시작·이어 하기. ofono: oFono 트랙(O-1~O-4) 시작·이어 하기(S-3 완료 뒤)")
+    ap.add_argument("step", nargs="?", metavar="S-n|O-n", help="check·propose 대상 단계(기본: 현재 단계)")
+    ap.add_argument("--done", metavar="S-n|O-n", help="사용자 확인을 받은 현재 단계: 점검 재실행 → 통과면 완료 기록·다음 단계")
     ap.add_argument("--waive", action="append", default=[], metavar='점검="사유"',
                     help="--done에서 사용자가 확인한 건너뜀·사용자 필요 점검(사유는 SITE_PROFILE.md에 남는다)")
     ap.add_argument("--json", action="store_true", help="check: JSON 출력")
@@ -583,6 +667,8 @@ def main(argv: list[str] | None = None) -> int:
         ap.error("--waive는 --done과 함께 쓴다")
     if (args.set or args.apply) and args.cmd != "propose":
         ap.error("--set·--apply는 propose에서만 쓴다")
+    if args.cmd == "ofono" and args.step:
+        ap.error("ofono는 단계 인자를 받지 않는다(지금 oFono 단계부터)")
     root = Path(args.root)
     code = 0
     try:
@@ -595,6 +681,8 @@ def main(argv: list[str] | None = None) -> int:
             out, code = propose(root, args.step, args.set, args.apply, args.allow_api)
         elif args.cmd == "evals":
             out, code = evals_cmd(root, max(1, args.batch), args.baseline)
+        elif args.cmd == "ofono":
+            out, code = ofono_cmd(root, args.allow_api)
         else:
             out, code = start(root, args.allow_api)
         print(out)

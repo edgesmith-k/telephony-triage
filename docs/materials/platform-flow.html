@@ -1,0 +1,432 @@
+<title>Android·oFono 분석 흐름</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* 레이아웃: 위에서 아래로 흐르는 한 줄 파이프라인. 단계마다 가운데는 공통, 양옆은 두 플랫폼 차선 */
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --ink: #18202b;
+  --muted: #5b6676;
+  --line: #d9dee6;
+  --android: #1f8a63;
+  --android-soft: #e3f3ec;
+  --ofono: #b8680f;
+  --ofono-soft: #fbeedd;
+  --shared: #3b5bdb;
+  --shared-soft: #e8edff;
+  --code-bg: #eef1f5;
+  --display: "Gothic A1", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11151b; --surface: #19202a; --ink: #e6eaf0; --muted: #9aa5b4; --line: #2c3542;
+    --android: #4fc79a; --android-soft: #15302a; --ofono: #f0a54a; --ofono-soft: #352614;
+    --shared: #8ea6ff; --shared-soft: #1d2645; --code-bg: #141a22; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11151b; --surface: #19202a; --ink: #e6eaf0; --muted: #9aa5b4; --line: #2c3542;
+  --android: #4fc79a; --android-soft: #15302a; --ofono: #f0a54a; --ofono-soft: #352614;
+  --shared: #8ea6ff; --shared-soft: #1d2645; --code-bg: #141a22; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 16px; line-height: 1.65;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 40px 64px;
+}
+.wrap { max-width: 1040px; margin: 0 auto; display: flex; flex-direction: column; gap: 56px; }
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; margin: 0; line-height: 1.3; }
+h1 { font-size: clamp(1.9rem, 4.5vw, 2.7rem); font-weight: 800; letter-spacing: -0.01em; }
+h2 { font-size: 1.45rem; font-weight: 800; }
+h3 { font-size: 1.05rem; font-weight: 700; }
+p { margin: 0; }
+.lead { max-width: 64ch; color: var(--muted); font-size: 1.05rem; }
+.eyebrow { font-size: 0.78rem; font-weight: 600; letter-spacing: 0.08em; color: var(--muted); text-transform: uppercase; }
+code, .mono { font-family: var(--mono); font-size: 0.86em; }
+code { background: var(--code-bg); padding: 1px 6px; border-radius: 4px; }
+
+header { display: flex; flex-direction: column; gap: 14px; }
+.legend { display: flex; flex-wrap: wrap; gap: 10px 18px; font-size: 0.9rem; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 8px; }
+.dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+.dot.a { background: var(--android); } .dot.o { background: var(--ofono); } .dot.s { background: var(--shared); }
+
+/* 한눈에 보기 */
+.overview { display: grid; grid-template-columns: 1fr; gap: 0; }
+.ov-row { display: grid; grid-template-columns: 1fr minmax(0, 1.2fr) 1fr; gap: 12px; align-items: stretch; }
+.ov-cell { border-radius: 10px; padding: 12px 14px; font-size: 0.93rem; min-width: 0; }
+.ov-cell.a { background: var(--android-soft); border-left: 4px solid var(--android); }
+.ov-cell.o { background: var(--ofono-soft); border-left: 4px solid var(--ofono); }
+.ov-cell.s { background: var(--surface); border: 1px solid var(--line); text-align: center; font-weight: 600; }
+.ov-cell.s small { display: block; font-weight: 400; color: var(--muted); font-size: 0.82rem; }
+.ov-cell.blank { background: transparent; }
+.ov-arrow { display: grid; grid-template-columns: 1fr minmax(0, 1.2fr) 1fr; gap: 12px; height: 26px; }
+.ov-arrow div:nth-child(2) { position: relative; }
+.ov-arrow div:nth-child(2)::after {
+  content: ""; position: absolute; left: 50%; top: 3px; bottom: 3px; width: 2px; background: var(--line); transform: translateX(-50%);
+}
+.ov-arrow div:nth-child(2)::before {
+  content: ""; position: absolute; left: 50%; bottom: 1px; transform: translateX(-50%);
+  border-left: 6px solid transparent; border-right: 6px solid transparent; border-top: 7px solid var(--line);
+}
+.ov-split .ov-cell.s { background: var(--shared-soft); border-color: transparent; color: var(--shared); }
+.ov-head { display: grid; grid-template-columns: 1fr minmax(0, 1.2fr) 1fr; gap: 12px; margin-bottom: 10px; font-size: 0.82rem; font-weight: 600; letter-spacing: 0.05em; }
+.ov-head div:first-child { color: var(--android); } .ov-head div:nth-child(2) { color: var(--muted); text-align: center; } .ov-head div:last-child { color: var(--ofono); }
+
+/* 단계 상세 */
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.toolbar .label { color: var(--muted); font-size: 0.9rem; margin-right: 4px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; padding: 3px; background: var(--surface); }
+.seg button {
+  font: inherit; font-size: 0.9rem; border: 0; background: transparent; color: var(--muted); padding: 6px 14px; border-radius: 999px; cursor: pointer;
+}
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+.seg button:focus-visible { outline: 2px solid var(--shared); outline-offset: 2px; }
+.steps { display: flex; flex-direction: column; gap: 18px; counter-reset: step; }
+.step { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+.step-head { display: flex; gap: 14px; align-items: baseline; }
+.num { font-family: var(--display); font-weight: 800; color: var(--shared); font-size: 1.1rem; min-width: 1.6em; }
+.step-head p { color: var(--muted); font-size: 0.95rem; margin-top: 2px; }
+.lanes { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.lane { border-radius: 10px; padding: 12px 14px; font-size: 0.93rem; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.lane h4 { margin: 0; font-size: 0.8rem; letter-spacing: 0.06em; font-weight: 600; }
+.lane.a { background: var(--android-soft); } .lane.a h4 { color: var(--android); }
+.lane.o { background: var(--ofono-soft); } .lane.o h4 { color: var(--ofono); }
+.lane ul { margin: 0; padding-left: 1.1em; display: flex; flex-direction: column; gap: 4px; }
+.common { font-size: 0.93rem; border-left: 3px solid var(--shared); padding-left: 12px; }
+.common + .common { margin-top: -4px; }
+.log { background: var(--code-bg); border-radius: 8px; padding: 10px 12px; overflow-x: auto; font-family: var(--mono); font-size: 0.78rem; line-height: 1.55; white-space: pre; color: var(--ink); }
+.log .t { color: var(--muted); }
+body[data-show="android"] .lane.o, body[data-show="ofono"] .lane.a { display: none; }
+body[data-show="android"] .lanes, body[data-show="ofono"] .lanes { grid-template-columns: 1fr; }
+
+/* 플랫폼 질문: 언제 묻고 언제 답을 다시 쓰나 */
+.ask { display: flex; flex-direction: column; gap: 10px; background: var(--shared-soft); border-radius: 10px; padding: 14px 16px; }
+.ask h4 { margin: 0; font-family: var(--display); font-size: 0.95rem; color: var(--shared); }
+.ask > p { font-size: 0.92rem; }
+.ask .table-wrap { background: var(--surface); }
+.ask table { min-width: 520px; font-size: 0.88rem; }
+.ask td:first-child { white-space: normal; font-weight: 500; }
+.verdict { display: inline-block; font-size: 0.78rem; font-weight: 600; padding: 1px 9px; border-radius: 999px; white-space: nowrap; }
+.verdict.go { background: var(--android-soft); color: var(--android); }
+.verdict.q { background: var(--ofono-soft); color: var(--ofono); }
+
+/* 섞이지 않게 막는 장치 */
+.guards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.guard { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; display: flex; flex-direction: column; gap: 6px; }
+.guard p { color: var(--muted); font-size: 0.93rem; }
+.pair { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+.chip { font-size: 0.8rem; padding: 2px 10px; border-radius: 999px; font-family: var(--mono); }
+.chip.a { background: var(--android-soft); color: var(--android); }
+.chip.o { background: var(--ofono-soft); color: var(--ofono); }
+.chip.s { background: var(--shared-soft); color: var(--shared); }
+
+/* 데몬 추가 표 */
+.table-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+table { border-collapse: collapse; width: 100%; min-width: 560px; font-size: 0.92rem; }
+th, td { text-align: left; padding: 11px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 0.78rem; letter-spacing: 0.06em; color: var(--muted); font-weight: 600; }
+tr:last-child td { border-bottom: 0; }
+td:first-child { white-space: nowrap; font-weight: 600; }
+.todo { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+.todo div { background: var(--surface); border: 1px dashed var(--line); border-radius: 10px; padding: 12px 14px; font-size: 0.9rem; }
+.todo b { font-family: var(--mono); font-size: 0.85rem; color: var(--ofono); margin-right: 6px; }
+section { display: flex; flex-direction: column; gap: 18px; }
+footer { color: var(--muted); font-size: 0.85rem; border-top: 1px solid var(--line); padding-top: 18px; display: flex; flex-direction: column; gap: 6px; }
+
+@media (max-width: 720px) {
+  .ov-head { display: none; }
+  .ov-row, .ov-arrow { grid-template-columns: 1fr; }
+  .ov-arrow div:first-child, .ov-arrow div:last-child, .ov-cell.blank { display: none; }
+  .ov-cell.a::before { content: "Android · "; font-weight: 600; color: var(--android); }
+  .ov-cell.o::before { content: "oFono · "; font-weight: 600; color: var(--ofono); }
+  .ov-row { gap: 8px; }
+  .lanes, .guards { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .lane { transition: opacity .2s ease; }
+}
+</style>
+
+<div class="wrap">
+  <header>
+    <span class="eyebrow">Telephony Triage · 플랫폼 구조</span>
+    <h1>Android와 oFono는 이렇게 따로 분석됩니다</h1>
+    <p class="lead">Jira 이슈와 로그를 넣으면 도구가 먼저 어느 플랫폼인지 정합니다. 그 뒤로는 로그 읽는 법, 비교할 이슈 DB, 분석 스킬, 기록할 곳이 모두 그 플랫폼 것만 쓰입니다. 흐름은 같고, 각 단계에서 쓰는 재료만 다릅니다.</p>
+    <div class="legend">
+      <span><i class="dot s"></i>두 플랫폼 공통</span>
+      <span><i class="dot a"></i>Android</span>
+      <span><i class="dot o"></i>oFono (와 함께 도는 데몬들)</span>
+    </div>
+  </header>
+
+  <section aria-labelledby="ov-title">
+    <h2 id="ov-title">한눈에 보기</h2>
+    <div class="overview">
+      <div class="ov-head"><div>ANDROID</div><div>공통 흐름</div><div>OFONO</div></div>
+
+      <div class="ov-row">
+        <div class="ov-cell blank"></div>
+        <div class="ov-cell s">Jira 이슈 + 로그 파일<small>사용자가 넣는 것은 같다</small></div>
+        <div class="ov-cell blank"></div>
+      </div>
+      <div class="ov-arrow"><div></div><div></div><div></div></div>
+
+      <div class="ov-row ov-split">
+        <div class="ov-cell a">logcat 형식이면 Android</div>
+        <div class="ov-cell s">① 플랫폼 정하기<small>로그 형식을 보고 자동, 애매하면 작업 전에 한 번 묻기</small></div>
+        <div class="ov-cell o">journald·syslog 형식이면 oFono</div>
+      </div>
+      <div class="ov-arrow"><div></div><div></div><div></div></div>
+
+      <div class="ov-row">
+        <div class="ov-cell a">logcat · RIL 요청/응답 짝 · bugreport</div>
+        <div class="ov-cell s">② 로그 읽기<small>줄 → 이벤트로 정리</small></div>
+        <div class="ov-cell o">한 스트림에 섞인 여러 데몬 · 데몬 사이 짝</div>
+      </div>
+      <div class="ov-arrow"><div></div><div></div><div></div></div>
+
+      <div class="ov-row">
+        <div class="ov-cell a">Android 이슈 DB</div>
+        <div class="ov-cell s">③ 이슈 DB와 비교<small>시그니처가 맞는 원인 찾기</small></div>
+        <div class="ov-cell o">oFono 이슈 DB (데몬 모두)</div>
+      </div>
+      <div class="ov-arrow"><div></div><div></div><div></div></div>
+
+      <div class="ov-row">
+        <div class="ov-cell a">AOSP 소스 루트</div>
+        <div class="ov-cell s">④ 코드 근거 찾기<small>로그 문구가 나온 소스 위치</small></div>
+        <div class="ov-cell o">oFono + 데몬별 소스 루트</div>
+      </div>
+      <div class="ov-arrow"><div></div><div></div><div></div></div>
+
+      <div class="ov-row">
+        <div class="ov-cell a">Android 분석 스킬 · Android 참고 자료</div>
+        <div class="ov-cell s">⑤ 규칙이 없을 때 가설 분석<small>심층 분석(5-1) · 탐색 분석(5-2)</small></div>
+        <div class="ov-cell o">oFono 분석 스킬 · oFono 참고 자료</div>
+      </div>
+      <div class="ov-arrow"><div></div><div></div><div></div></div>
+
+      <div class="ov-row">
+        <div class="ov-cell blank"></div>
+        <div class="ov-cell s">⑥ 리포트 → 사용자 확인<small>분류 확정은 사람이 한다</small></div>
+        <div class="ov-cell blank"></div>
+      </div>
+      <div class="ov-arrow"><div></div><div></div><div></div></div>
+
+      <div class="ov-row">
+        <div class="ov-cell a">Android 이슈 DB에 PR</div>
+        <div class="ov-cell s">⑦ 기록<small>승인한 변경만 PR로</small></div>
+        <div class="ov-cell o">oFono 이슈 DB에 PR</div>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="steps-title">
+    <h2 id="steps-title">단계별로 자세히</h2>
+    <div class="toolbar" role="group" aria-label="보여줄 플랫폼">
+      <span class="label">보기</span>
+      <div class="seg">
+        <button type="button" id="show-both" data-show="both" aria-pressed="true">둘 다</button>
+        <button type="button" id="show-android" data-show="android" aria-pressed="false">Android만</button>
+        <button type="button" id="show-ofono" data-show="ofono" aria-pressed="false">oFono만</button>
+      </div>
+    </div>
+
+    <div class="steps">
+      <article class="step">
+        <div class="step-head"><span class="num">1</span><div><h3>플랫폼 정하기</h3><p>이후 모든 단계가 이 결정을 따릅니다. 작업 폴더와 lock을 만들기 전에 정합니다.</p></div></div>
+        <p class="common">켠 플랫폼이 둘 이상이면 스크립트가 로그 앞부분(파일마다 최대 200줄)을 각 플랫폼의 줄 형식으로 검사합니다. 한 플랫폼만 맞으면 그걸로 진행하고, 결과 알림에 <code>로그 형식으로 oFono 선택 (기본 Android 대신)</code>, 리포트 머리에 <code>- 플랫폼: oFono (로그 형식으로 선택)</code>을 남깁니다. 형식을 모르는 파일이 섞여 있으면 나머지로 정하고 그 수를 알립니다. Android만 켠 설치는 검사도 파일 읽기도 없이 예전 그대로입니다.</p>
+        <p class="common">사용자가 플랫폼을 말하면(<code>--answer platform=</code> &gt; <code>--platform</code> 순) 그것이 우선합니다. 개인 설정의 기본 플랫폼은 기본값일 뿐이라 분명한 로그 형식에 집니다. 로그 형식이 둘 이상이거나 단서끼리 다르거나 말한 플랫폼과 로그가 다르면 작업을 시작하기 전에 묻고, 로그를 주지 않았으면 켠 플랫폼 모두의 로그 폴더에서 고르게 합니다. 결과에 <code>platform</code>이 나오면 이후 명령에 같은 <code>--platform</code>이 붙습니다.</p>
+        <div class="lanes">
+          <div class="lane a"><h4>ANDROID 로그 모양</h4>
+            <div class="log"><span class="t">09-20 14:32:09.100  1234  5678</span> I RILJ    : [0123]&gt; SETUP_DATA_CALL [PHONE0]</div>
+            <p>logcat 줄. 연도 없는 날짜, pid·tid, 레벨, 태그가 있습니다. bugreport(zip 포함)도 Android로 봅니다.</p>
+          </div>
+          <div class="lane o"><h4>OFONO 로그 모양 (형식 가정)</h4>
+            <div class="log"><span class="t">2026-09-20T14:32:09.100+09:00 host</span> ofonod[812]: src/network.c:…
+<span class="t">2026-09-20T14:32:09.140+09:00 host</span> daemon-a[640]: …</div>
+            <p>journald/syslog 줄. 줄마다 어느 데몬인지(ident)가 붙습니다. 실제 형식은 사내 로그로 확인할 항목(S24)입니다.</p>
+          </div>
+        </div>
+        <div class="ask">
+          <h4>한 번 묻고, 답은 기억합니다</h4>
+          <p>답한 플랫폼은 그 작업이 다음 질문(코드 경로 등)에서 멈춰 있는 동안 남아, 다음 실행에 답을 다시 붙이지 않아도 되묻지 않습니다. 단, 그 질문이 이 이슈의 <strong>가장 늦은 활동</strong>일 때만입니다. 답한 뒤 다른 플랫폼 쪽에서 질문이 나왔거나 분석이 끝났다면 사용자가 옮겨 간 것으로 보고 옛 답은 쓰지 않습니다.</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>상황</th><th>도구가 하는 일</th></tr></thead>
+              <tbody>
+                <tr><td>Android 로그 + oFono 로그를 섞어 줌, 플랫폼 말 없음</td><td><span class="verdict q">묻는다</span> 고르면 그 플랫폼으로 진행</td></tr>
+                <tr><td>위에서 oFono로 답했고, 코드 질문 뒤 답 없이 다시 실행</td><td><span class="verdict go">잇는다</span> oFono 작업 그대로</td></tr>
+                <tr><td>"android로 해" + oFono 형식 로그(자동으로 고른 oFono 작업이 있어도)</td><td><span class="verdict q">묻는다</span> 답으로 정한 적 없는 작업은 지정을 덮지 않는다</td></tr>
+                <tr><td>자동 선택 → 플랫폼을 바로잡아 답함 → 다음 실행엔 코드 답만</td><td><span class="verdict go">잇는다</span> 바로잡은 쪽, 질문이 되풀이되지 않는다</td></tr>
+                <tr><td>android로 답한 뒤 oFono로 옮겨 진행, 나중에 다시 Android 형식 로그 + oFono 지정</td><td><span class="verdict q">묻는다</span> 옛 android 답은 더 이상 쓰지 않는다</td></tr>
+                <tr><td>답한 작업이 이미 끝났고 같은 이슈를 다시 실행</td><td><span class="verdict q">묻는다</span> 답은 질문에서 멈춘 동안만 남는다</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>Jira 이슈 원문은 hook이 기본 플랫폼 작업 폴더에 받아 두므로, 고른 플랫폼이 다르면 그 원문을 이 작업 폴더로 옮겨 씁니다.</p>
+        </div>
+      </article>
+
+      <article class="step">
+        <div class="step-head"><span class="num">2</span><div><h3>로그 읽기</h3><p>줄을 시각·태그·요청 짝이 붙은 이벤트로 바꿉니다.</p></div></div>
+        <p class="common">파서 백엔드가 플랫폼마다 따로 있습니다(<code>reference</code> / <code>ofono_reference</code> 0.0.2). 시계가 튀거나 재부팅된 곳은 끊어서 보고, 시각 범위 밖 로그는 "로그 범위 밖"으로 따로 알립니다. 이슈 DB·매칭에 쓰는 값은 모두 마스킹됩니다.</p>
+        <div class="lanes">
+          <div class="lane a"><h4>ANDROID</h4>
+            <ul>
+              <li>logcat 여러 버퍼, bugreport 묶음이면 필요한 섹션만 꺼냄</li>
+              <li><code>RILJ</code> 요청과 응답을 serial로 짝지어 지연·무응답·오류 표시</li>
+              <li>슬롯 표기(<code>[PHONE0]</code>)로 SIM 구분</li>
+            </ul>
+          </div>
+          <div class="lane o"><h4>OFONO</h4>
+            <ul>
+              <li>모든 데몬이 한 스트림에 섞여 오고, ident가 태그가 됨</li>
+              <li>데몬 목록은 팀 설정 <code>components</code>에 둠(예: <code>daemon-a</code>, <code>daemon-b</code>)</li>
+              <li>데몬 사이 요청·응답 짝은 팀이 정규식으로 정의(기본 꺼짐). 다른 데몬의 응답도 같은 serial이면 짝. 이름·오류 값은 식별자 모양만 싣고 한 번 더 마스킹</li>
+              <li>데몬별 메시지 하위 형식, 모듈 단위 태그 나누기(<code>split_tag</code>)는 선택</li>
+            </ul>
+          </div>
+        </div>
+      </article>
+
+      <article class="step">
+        <div class="step-head"><span class="num">3</span><div><h3>이슈 DB와 비교</h3><p>이미 알려진 원인의 시그니처가 이 로그에 있는지 봅니다.</p></div></div>
+        <p class="common">판정은 스크립트가 합니다. 원인마다 시그니처가 로그에서 확인됐는지(C)와 증상이 맞는지(S)를 보고 순위를 냅니다. 세션 플랫폼과 이슈 DB가 선언한 플랫폼이 다르면 바로 멈춥니다(<code>platform-mismatch</code>).</p>
+        <div class="lanes">
+          <div class="lane a"><h4>ANDROID 이슈 DB</h4>
+            <ul>
+              <li>지금 쓰는 이슈 DB 레포</li>
+              <li>카테고리·태그 매핑은 그 DB의 <code>parser-rules/tags.yaml</code></li>
+            </ul>
+          </div>
+          <div class="lane o"><h4>OFONO 이슈 DB</h4>
+            <ul>
+              <li>새 레포 하나, <code>platform: ofono</code> 선언</li>
+              <li>oFono와 함께 도는 데몬 이슈도 모두 여기에. 데몬 구분은 카테고리와 <code>tags.yaml</code>(ident → 카테고리)</li>
+            </ul>
+          </div>
+        </div>
+      </article>
+
+      <article class="step">
+        <div class="step-head"><span class="num">4</span><div><h3>코드 근거 찾기</h3><p>로그 문구가 어느 소스에서 나왔는지 찾아 원인 설명을 받칩니다.</p></div></div>
+        <p class="common">사용자가 고른 소스 루트에서만 찾습니다. 근거를 못 찾으면 "코드 근거 없음"으로 밝힙니다.</p>
+        <div class="lanes">
+          <div class="lane a"><h4>ANDROID</h4>
+            <ul><li>AOSP 소스 루트 하나(<code>aosp</code>), 버전은 빌드 설정에서 추정</li></ul>
+          </div>
+          <div class="lane o"><h4>OFONO</h4>
+            <ul>
+              <li><code>ofono</code> 주 루트는 필수, 데몬마다 소스 루트를 더 둘 수 있음</li>
+              <li>데몬별 버전은 참고로만 보여줌(<code>component_versions</code>)</li>
+            </ul>
+          </div>
+        </div>
+      </article>
+
+      <article class="step">
+        <div class="step-head"><span class="num">5</span><div><h3>규칙이 없을 때 가설 분석</h3><p>이슈 DB로 원인이 안 잡히면 스킬이 가설을 세웁니다. 토큰을 더 쓰므로 먼저 묻습니다.</p></div></div>
+        <p class="common">결과는 리포트의 "추정" 칸에만 들어가고 판정·순위에는 쓰지 않습니다. 다른 플랫폼의 스킬이나 자료로 넘어가지 않습니다.</p>
+        <div class="lanes">
+          <div class="lane a"><h4>ANDROID</h4>
+            <ul>
+              <li>심층 분석(5-1): 설정 최상위 <code>analyzers.&lt;카테고리&gt;</code>의 분석 스킬</li>
+              <li>탐색 분석(5-2): Android 참고 자료(log-tags · ril-requests · fail-causes)</li>
+            </ul>
+          </div>
+          <div class="lane o"><h4>OFONO</h4>
+            <ul>
+              <li>심층 분석(5-1): <code>platforms.ofono.analyzers.&lt;카테고리&gt;</code>만. 없으면 제안하지 않고 리포트에 "해당 없음"</li>
+              <li>탐색 분석(5-2): <code>triage.py explore</code>가 알려 주는 <code>reference/platforms/ofono/</code> 자료만 읽음</li>
+            </ul>
+          </div>
+        </div>
+      </article>
+
+      <article class="step">
+        <div class="step-head"><span class="num">6</span><div><h3>리포트와 사용자 확인</h3><p>원인을 로그로 확인 / 코드로 추정 / 가설로 나눠 보여줍니다.</p></div></div>
+        <p class="common">분류 확정, 새 유형·원인, 시그니처·파서 규칙 추가·삭제, 수정 상태 변경은 모두 사람이 확인한 뒤에만 계획에 들어갑니다. 두 플랫폼이 같은 규칙을 따릅니다.</p>
+      </article>
+
+      <article class="step">
+        <div class="step-head"><span class="num">7</span><div><h3>기록</h3><p>승인한 변경을 그 플랫폼 이슈 DB에 PR로 올립니다.</p></div></div>
+        <p class="common">변경·diff·검증 결과·커밋 메시지를 보여주고 승인받은 뒤에만 push합니다. main에 직접 push하지 않습니다.</p>
+        <div class="lanes">
+          <div class="lane a"><h4>ANDROID</h4><ul><li>Android 이슈 DB 레포에 PR</li></ul></div>
+          <div class="lane o"><h4>OFONO</h4><ul><li>oFono 이슈 DB 레포에 PR</li></ul></div>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section aria-labelledby="guard-title">
+    <h2 id="guard-title">두 플랫폼이 섞이지 않게 막는 장치</h2>
+    <div class="guards">
+      <div class="guard"><h3>이슈 DB가 다르다</h3><p>DB마다 <code>platform</code>을 선언합니다. 세션과 다르면 분석도 기록도 멈춥니다.</p>
+        <div class="pair"><span class="chip a">Android DB</span><span class="chip o">oFono DB</span></div></div>
+      <div class="guard"><h3>작업 폴더와 lock이 다르다</h3><p>Android 작업과 oFono 작업을 동시에 해도 서로 덮지 않습니다.</p>
+        <div class="pair"><span class="chip a">work/</span><span class="chip o">work-ofono/</span></div></div>
+      <div class="guard"><h3>플랫폼은 lock 전에 정한다</h3><p>질문은 작업 폴더·lock을 만들기 전에 나가므로, 잘못 고른 쪽에 작업이 남지 않습니다.</p>
+        <div class="pair"><span class="chip s">needs_input platform</span><span class="chip s">lock_owner: null</span></div></div>
+      <div class="guard"><h3>옛 답은 다시 확인한다</h3><p>저장된 플랫폼 답은 그 질문이 이슈의 가장 늦은 활동일 때만 씁니다. 다른 플랫폼으로 옮겨 간 뒤엔 묻습니다.</p>
+        <div class="pair"><span class="chip s">platform_answer</span><span class="chip s">pending.asked_at</span></div></div>
+      <div class="guard"><h3>분석 스킬이 다르다</h3><p>oFono에 분석 스킬이 없어도 Android 스킬로 대신하지 않습니다. 스킬 소스 보호(guard)는 모든 플랫폼에 걸립니다.</p>
+        <div class="pair"><span class="chip a">analyzers</span><span class="chip o">platforms.ofono.analyzers</span></div></div>
+      <div class="guard"><h3>참고 자료가 다르다</h3><p>탐색 분석은 그 플랫폼 자료 목록만 받습니다.</p>
+        <div class="pair"><span class="chip a">log-tags.md …</span><span class="chip o">platforms/ofono/…</span></div></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="add-title">
+    <h2 id="add-title">oFono 쪽에 데몬 하나를 더하려면</h2>
+    <p class="lead">코드를 고치지 않고 설정과 이슈 DB 데이터만으로 됩니다. 메시지 안 형식을 따로 풀어야 할 때만 해석기를 더합니다.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>어디</th><th>무엇을</th><th>누가</th></tr></thead>
+        <tbody>
+          <tr><td>팀 설정 <code>components</code></td><td>데몬 이름, 로그 ident, 소스 루트 키, (선택) 메시지 형식</td><td>도입 담당자</td></tr>
+          <tr><td>oFono DB <code>tags.yaml</code></td><td>ident → 카테고리 매핑</td><td>메인테이너(PR)</td></tr>
+          <tr><td>oFono DB <code>code_root_keys</code></td><td>데몬 소스 루트 키 추가</td><td>메인테이너(PR)</td></tr>
+          <tr><td>팀 설정 <code>protocols</code></td><td>(선택) 그 데몬과 주고받는 요청·응답 정규식</td><td>도입 담당자</td></tr>
+          <tr><td><code>platforms.ofono.analyzers</code></td><td>(선택) 그 카테고리를 맡을 분석 스킬</td><td>팀 또는 개인</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section aria-labelledby="todo-title">
+    <h2 id="todo-title">사내에서 확인해 채울 것</h2>
+    <div class="todo">
+      <div><b>S24</b>oFono 로그의 실제 줄 형식(자동 판단에도 쓰임), 모듈 표기를 태그로 나눌지</div>
+      <div><b>S25</b>데몬 목록·ident, 데몬 → 카테고리, oFono 분석 스킬</div>
+      <div><b>S26</b>데몬 사이 요청·응답 줄 형식과 짝 키</div>
+      <div><b>S27</b>데몬별 소스 트리 구조와 버전 위치</div>
+      <div><b>S28·S32</b>oFono 이슈 DB 위치, 버전의 뜻, 플랫폼을 가리키는 Jira 필드</div>
+    </div>
+  </section>
+
+  <footer>
+    <span>상태(10/31): 리뷰 반영 — 플랫폼 질문 규칙 3건 수정, 남은 개선 후보는 <span class="mono">docs/development/REIMPORT_NOTES_1030.md §4</span>. 변경은 PR #72.</span>
+    <span>그림의 데몬 이름(daemon-a 등)과 oFono 로그 모양은 형식 가정 placeholder입니다. 실제 값은 사내에서만 확인하고 이 문서에는 넣지 않습니다. 설계 원문: <span class="mono">docs/design/17-platforms.md §9~§11</span>.</span>
+  </footer>
+</div>
+
+<script>
+(function () {
+  var buttons = document.querySelectorAll('.seg button');
+  function show(mode) {
+    document.body.setAttribute('data-show', mode);
+    buttons.forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.show === mode)); });
+    try { localStorage.setItem('platform-flow-show', mode); } catch (e) {}
+  }
+  buttons.forEach(function (b) { b.addEventListener('click', function () { show(b.dataset.show); }); });
+  var saved = null;
+  try { saved = localStorage.getItem('platform-flow-show'); } catch (e) {}
+  show(saved === 'android' || saved === 'ofono' ? saved : 'both');
+})();
+</script>
