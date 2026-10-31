@@ -151,6 +151,8 @@ class PairProtocol:
 
     태그 덮어쓰기(RF-4): `name == "ril"`이면 site-defaults `platform.ril.tags`(기존 키), 그 밖은
     `<블록>.protocols.<name>.tags`(`block_keys`에 `protocols`가 있는 플랫폼). 결과는 `PlatformProfile.protocol_tags`.
+    `PlatformSpec.protocol_kinds`가 있는 플랫폼은 `<블록>.protocols.<site 이름>: {kind, ...}`로 짝 규칙을 더 만든다
+    (`PlatformProfile.protocols`에 SPEC 것 뒤로 붙는다).
 
     주석은 이벤트의 `ril` 칸을 같이 쓴다. `name != "ril"`인 프로토콜은 주석에 `proto: <name>`을 단다.
     `pair`는 **자기 주석만** 다룬다(`proto`가 자기 이름인 것, "ril"이면 `proto`가 없는 것) — 다른 프로토콜 주석은
@@ -177,6 +179,27 @@ class CaptureSpec:
 
 
 @dataclass(frozen=True)
+class MsgView:
+    """구성요소 메시지 하위 형식 함수(`PlatformSpec.msg_formats`)의 결과. 형식이 맞지 않으면 함수가 None을 준다."""
+    body: str                  # 하위 형식 앞머리를 뗀 본문 (짝 규칙 annotate 입력. 이벤트 `msg`는 원문 그대로)
+    subtag: str | None = None  # 하위 식별(모듈 등). 구성요소 `split_tag`일 때만, 식별자 모양이면 이벤트 tag에 붙는다
+
+
+@dataclass(frozen=True)
+class Component:
+    """한 플랫폼 안의 구성요소(데몬) 하나 (17-platforms §9). 이름·ident·루트 키는 site가 정한다(코드에는 placeholder).
+
+    site-defaults `<블록>.components.<name>`(`block_keys`에 `components`가 있는 플랫폼)으로 덮어쓰고, 키를 쓰면
+    목록이 통째로 바뀐다. 카테고리는 여기 두지 않는다(이슈 DB `tags.yaml`이 정한다)."""
+    name: str                              # ^[a-z][a-z0-9_-]*$
+    idents: tuple[str, ...]                # LogLine.tag 정확한 이름, 1개 이상, 구성요소끼리 겹치지 않음
+    root_key: str | None = None            # 소스 루트 키 ^[a-z][a-z0-9_]*$ (code_ref 키 형식), 구성요소끼리 겹치지 않음
+    source_tree: SourceTree | None = None  # 그 루트의 required_dirs·version_sources (root_key 필요, 주 루트면 금지)
+    msg_format: str | None = None          # `PlatformSpec.msg_formats` 이름
+    split_tag: bool = False                # True면 이벤트 tag = f"{ident}/{subtag}" (msg_format 필요)
+
+
+@dataclass(frozen=True)
 class PlatformSpec:
     name: str
     label: str                               # 출력 라벨 ("Android")
@@ -189,3 +212,9 @@ class PlatformSpec:
     capture: CaptureSpec | None
     default_backend: str                     # 파서 백엔드 기본 이름 ("reference")
     block_keys: tuple[str, ...]              # site-defaults `platform:` 블록에서 받는 상수 키
+    # 다중 구성요소(17-platforms §9). 뒤쪽 기본값 필드라 기존 SPEC은 그대로다(없으면 빈 튜플).
+    components: tuple[Component, ...] = ()   # 코드 기본 구성요소. `block_keys`에 `components`가 있어야 덮어쓴다
+    msg_formats: tuple[tuple[str, Callable[[str], MsgView | None]], ...] = ()   # (이름, msg → MsgView | None)
+    # (kind, factory). factory(이름, 설정 블록, 키 경로) → PairProtocol. 자기 키를 `cfg_*`로 검증한다.
+    # `<블록>.protocols.<이름>: {kind: <kind>, ...}`로 site가 이름 지은 짝 규칙을 더한다(SPEC.protocols 뒤에 붙는다).
+    protocol_kinds: tuple[tuple[str, Callable[[str, dict, str], PairProtocol]], ...] = ()

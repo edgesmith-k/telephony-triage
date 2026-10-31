@@ -21,8 +21,8 @@
 끝 전에 글자 그대로 보였는지 본다. `SK` 안은 쓰지 않는다. 네트워크·lock 없음, git 쓰기는 `--apply`의 스킬 소스 워킹 트리
 (`git apply`)뿐이다(index·커밋·push 없음).
 
-**스킬 소스 적용(선택, 16-existing-assets §16.5.1)**: 스킬 소스 `SRC` = `--source` 또는 config `analyzers.<카테고리>.source`
-(`skill`이 `--name`과 같은 항목, 절대 경로 — 분석 스킬 소스 checkout 안의 스킬 폴더). patch를 만들 때 `SRC`가 있으면 적용 가능성을
+**스킬 소스 적용(선택, 16-existing-assets §16.5.1)**: 스킬 소스 `SRC` = `--source` 또는 선택 플랫폼 config의 `analyzers.<카테고리>.source`
+(기본 아닌 플랫폼은 `platforms.<p>.analyzers` — android 것을 물려받지 않는다, 17-platforms §10. `skill`이 `--name`과 같은 항목, 절대 경로 — 분석 스킬 소스 checkout 안의 스킬 폴더). patch를 만들 때 `SRC`가 있으면 적용 가능성을
 미리 본다(아래 검사): 되면 `스킬 소스 적용 대기: …` 줄과 patch 전문(```diff 울타리 — patch에 백틱 줄이 있으면 그보다 긴 울타리)을, 안 되면 `스킬 소스에 바로 적용할 수 없음(patch만
 남김): <사유>` 줄을 더한다(종료 0 그대로). patch가 200줄·12KB를 넘으면 제안하지 않는다("patch 파일을 열어 확인"). 마스킹이
 추가 줄을 바꿨으면 대기 줄 끝에 `추가 줄 N개가 마스킹으로 바뀜 — placeholder가 소스에 들어간다`. 사용자가 "적용"을 고르면
@@ -348,7 +348,8 @@ def run(args, defaults: dict) -> tuple[dict, int]:
 
 
 def configured_source(args) -> str | None:
-    """`--source` > config `analyzers.<카테고리>.source`(`skill`이 `--name`과 같은 첫 항목)."""
+    """`--source` > 선택 플랫폼 config `analyzers.<카테고리>.source`(`skill`이 `--name`과 같은 첫 항목, 기본 아닌 플랫폼은
+    `platforms.<p>.analyzers`의 것 — `userconfig.merged`)."""
     if getattr(args, "source", None):
         return str(args.source)
     cfg = getattr(args, "_cfg", None) or {}

@@ -124,7 +124,7 @@ def _parse(log: Path, rules: Path, *extra: str) -> dict:
 
 def test_parse_with_ofono_db():
     out = _parse(ISO_LOG, variant_db("issue-db-ofono") / "parser-rules")
-    assert out["backend"] == {"name": "ofono_reference", "version": "0.0.1"}
+    assert out["backend"] == {"name": "ofono_reference", "version": "0.0.2"}
     assert out["masked"] is True and out["warnings"] == [] and out["errors"] == []
     lines = [e for e in out["events"] if e["event"] is None]
     assert {e["tag"]: e["category_hint"] for e in lines} == {"ofonod": "common", "daemon-a": "data"}
@@ -166,6 +166,9 @@ def test_triage_offline_switches_platform():
     assert analysis["platform"] == "ofono" and analysis["candidates"][0]["cause"] == "DATA-001-01"
     report = (work / "job" / "report.md").read_text(encoding="utf-8")
     assert "다른 버전 원인 (oFono 2)" in report and "Android" not in report
+    # example site-defaults의 최상위 analyzers.data(android 모의 스킬)는 oFono에 넘어가지 않는다(17-platforms §10)
+    assert analysis.get("analyzer") is None and "mock-data-analyzer" not in report
+    assert "- 심층 분석: 해당 없음(1위 카테고리에 분석 스킬 설정 없음)" in report
     proc = run("triage.py", [*base, "--out", work / "job2", "--platform", "android"], root=root, env=env)
     assert proc.returncode == 2 and "플랫폼 불일치" in proc.stderr
     assert not (work / "job2" / "analysis.json").exists()
@@ -258,7 +261,7 @@ def test_backend_registration():
 
     loaded = parser_backends.load("ofono_reference")
     assert loaded is backend.BACKEND and loaded.platform == "ofono" and loaded.name == "ofono_reference"
-    assert loaded.version() == backend.VERSION == "0.0.1" and loaded.builtin_events() == []
+    assert loaded.version() == backend.VERSION == "0.0.2" and loaded.builtin_events() == []
     assert loaded.log_format() is platforms.get("ofono").log
 
 

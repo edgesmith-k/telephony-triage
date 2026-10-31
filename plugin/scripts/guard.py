@@ -26,7 +26,7 @@ TODO(SITE:S3) 플러그인 hook에 보이는 MCP 도구 이름이 `mcp__<server>
 | 8 | 같은 규칙, Bash: clone 본체에서 브랜치·파일을 바꾸는 git·`gh pr checkout`, clone 안으로의 파일 쓰기(리디렉션·tee·cp·rm·`sed -i` 등) 거부. migrate 브랜치 생성(깨끗한 트리)은 ask | Bash, clone 본체 |
 | 10 | 로그 원문 통독 차단: cat·tac·nl·less·more·bat·strings·zcat·zless·bzcat·xzcat, `head/tail -c`, `unzip -p/-c`가 로그 원문·zip·bugreport·`events*.json`·`issue_raw.json`·`match.json`을 통째로 읽으면 거부(`fixtures/`·`draft/` 제외, 사용자 config와 무관) | Bash |
 | 11 | 이슈 DB 원격 쓰기 확인: 대상이 이슈 DB인 `gh` 쓰기는 ask·`pr merge`는 거부(병합은 `db_pr.py merge`로만, 규칙 7), 비Jira MCP 쓰기형 도구(`owner`/`repo` 인자)도 같게 | Bash, `mcp__.*` |
-| 12 | 분석 스킬 소스 적용 확인: `skill_patch.py --apply`(낱말 그물: 이름 `skill_patch`와 낱말 `apply`)는 `ask`. config `analyzers.<카테고리>.source`(절대 경로) 안을 파일 도구·Bash 파일 쓰기(규칙 8과 같은 판별)·파일을 바꾸는 git(`CLONE_GIT_SUBS`·commit·push·stash)으로 바꾸면 `ask`(적용은 `skill_patch.py --apply`로만). 스크립트 기록 `<work_dir>/<KEY>/skill-suggestions/<이름>.patch`·`<이름>.meta.json`을 파일 도구·Bash 파일 쓰기로 쓰거나 지우면 거부(skill_patch.py만 쓴다) | Bash, Write/Edit/MultiEdit/NotebookEdit |
+| 12 | 분석 스킬 소스 적용 확인: `skill_patch.py --apply`(낱말 그물: 이름 `skill_patch`와 낱말 `apply`)는 `ask`. config `analyzers.<카테고리>.source`(절대 경로, site-defaults·사용자 config의 최상위와 모든 `platforms.<p>.analyzers` 것) 안을 파일 도구·Bash 파일 쓰기(규칙 8과 같은 판별)·파일을 바꾸는 git(`CLONE_GIT_SUBS`·commit·push·stash)으로 바꾸면 `ask`(적용은 `skill_patch.py --apply`로만). 스크립트 기록 `<work_dir>/<KEY>/skill-suggestions/<이름>.patch`·`<이름>.meta.json`을 파일 도구·Bash 파일 쓰기로 쓰거나 지우면 거부(skill_patch.py만 쓴다) | Bash, Write/Edit/MultiEdit/NotebookEdit |
 
 (1번은 SessionStart의 `config.py sync-scripts-path`다.)
 
@@ -245,7 +245,8 @@ class Config:
         if problems:
             self.warnings.append("사용자 config 플랫폼 프로필 문제(보호는 유지, 잘못된 work_dir은 예외 근거로 쓰지 않는다): "
                                  + "; ".join(problems[:5]))
-        self.skill_sources = _skill_sources(self.cfg) if self.user is not None else []   # 규칙 12
+        # 규칙 12: 모든 플랫폼(층·이름 유효성과 무관)의 분석 스킬 소스
+        self.skill_sources = _skill_sources(userconfig.analyzer_sources(defaults, self.user)) if self.user is not None else []
         top = self.profiles[0]            # 기본 플랫폼 프로필(옛 단일 프로필 속성)
         self.clone, self.clone_common, self.work_dir = top.clone, top.clone_common, top.work_dir
         self.base, self.remote_slug = top.base, top.remote_slug
@@ -324,14 +325,14 @@ class Config:
         return any(_same_repo(slug, s) for s in self.remote_slugs)
 
 
-def _skill_sources(cfg: dict) -> list[str]:
-    """규칙 12: config `analyzers.<카테고리>.source` 중 절대 경로(`~` 허용)의 정규화 경로."""
+def _skill_sources(sources: list[str]) -> list[str]:
+    """규칙 12: 분석 스킬 `source` 값(`userconfig.analyzer_sources`) 중 절대 경로(`~` 허용)의 정규화 경로(중복 없이)."""
     out = []
-    analyzers = cfg.get("analyzers") if isinstance(cfg.get("analyzers"), dict) else {}
-    for entry in analyzers.values():
-        src = entry.get("source") if isinstance(entry, dict) else None
+    for src in sources:
         if isinstance(src, str) and src.strip() and os.path.isabs(os.path.expanduser(src)):
-            out.append(_norm(os.path.expanduser(src)))
+            norm = _norm(os.path.expanduser(src))
+            if norm not in out:
+                out.append(norm)
     return out
 
 

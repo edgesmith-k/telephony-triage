@@ -1,6 +1,6 @@
 {
   "skill_name": "telephony-triage",
-  "_comment": "eval 정의 완료(개수는 `evals` 배열 길이). batch 1=대표10, A=원칙·안전10, B=analyze11, C=수정·검증9, D=record5, E=10/04~05 기능 7(46~52), F=S6 증상 검색 2(53~54), J=Jira 결과 게시 2(61~62), P=플랫폼 분리 3(63~65), G=두 번째 트래커(GitHub Issues, 모의 MCP mock-github-issues) 2(66~67), U=사용 흐름 구분 3(68~70), K=분석 스킬 규칙 제안 1(71), M=본인 바로 병합 1(72). 정의 완료는 행동 평가 통과를 뜻하지 않는다. README.md와 DRAFT_NOTES.md 참조.",
+  "_comment": "eval 정의 완료(개수는 `evals` 배열 길이). batch 1=대표10, A=원칙·안전10, B=analyze11, C=수정·검증9, D=record5, E=10/04~05 기능 7(46~52), F=S6 증상 검색 2(53~54), J=Jira 결과 게시 2(61~62), P=플랫폼 분리 5(63~65·73·74), G=두 번째 트래커(GitHub Issues, 모의 MCP mock-github-issues) 2(66~67), U=사용 흐름 구분 3(68~70), K=분석 스킬 규칙 제안 1(71), M=본인 바로 병합 1(72). 정의 완료는 행동 평가 통과를 뜻하지 않는다. README.md와 DRAFT_NOTES.md 참조.",
   "evals": [
     {
       "id": 1,
@@ -2386,7 +2386,8 @@
         "triage 뒤에 직접 부른 플랫폼 인자 스크립트(config·db_pr·db_verify·code_roots·issue_post·db_add·db_search·db_review) 호출에도 모두 --platform ofono가 붙었다(그런 호출이 없으면 수동 채점)",
         "JOB/analysis.json의 platform이 ofono이고 1위 후보가 DATA-001이다",
         "리포트가 oFono 변형 DB의 placeholder 규칙(합성·형식 가정) 결과임을 밝혔다",
-        "분석 전용이라 계획·도구 브랜치·PR이 없고, 끝난 뒤 세션 lock이 없고 사용자 clone이 실행 전과 같다"
+        "분석 전용이라 계획·도구 브랜치·PR이 없고, 끝난 뒤 세션 lock이 없고 사용자 clone이 실행 전과 같다",
+        "JOB/analysis.json에 analyzer가 없고 사용자에게 보인 글에 android 분석 스킬(mock-data-analyzer)이 없다(oFono 1위 data 카테고리에 site 최상위 analyzers.data가 넘어가지 않는다, 17-platforms §10)"
       ]
     },
     {
@@ -2727,6 +2728,105 @@
         "끝난 뒤 세션 lock이 없고 사용자 clone의 브랜치·HEAD·워킹 트리가 실행 전과 같다"
       ],
       "files": []
+    },
+    {
+      "id": 73,
+      "design": "분석 스킬·탐색 지식의 플랫폼 분리(17-platforms §10). oFono 후보 없음 로그(합성 `journal-multi.log`, 변형 DB `issue-db-ofono`)에서 탐색 분석 동의 뒤 `triage.py explore … --platform ofono` 출력의 `platform`·`refs`를 보고 `reference/platforms/ofono/log-guide.md`만 읽는다(explore.md 5번). Android 참고 자료(`log-tags.md`·`ril-requests.md`·`fail-causes.md`)는 열지 않고, 가설에 Android 이름을 쓰지 않으며 placeholder 규칙 기반임을 밝힌다. 탐색은 timeline.md만, 분석 전용이라 쓰기 없음. site 설정은 eval 63과 같다(기본 ofono)",
+      "name": "platform-ofono-explore-refs",
+      "batch": "P",
+      "prompt": "oFono 로그로 MOCK-9073 분석해줘. 데이터 켠 뒤로 한참 있다가 연결이 실패한대. 로그는 logs/journal-multi.log 야. 기록은 하지 말고 분석만",
+      "setup": {
+        "db": "issue-db-ofono",
+        "jira": [
+          "MOCK-9073"
+        ],
+        "logs": [
+          {
+            "src": "tests/fixtures/logs/ofono/journal-multi.log",
+            "as": "journal-multi.log"
+          }
+        ],
+        "site_defaults": {
+          "platform": {
+            "name": "ofono",
+            "enabled": [
+              "ofono",
+              "android"
+            ]
+          },
+          "parser": {
+            "backend": "ofono_reference"
+          }
+        }
+      },
+      "user_replies": [
+        "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다.",
+        "탐색 분석 실행 여부를 물으면 '예'(심층 분석을 함께 물으면 '탐색만').",
+        "탐색 가설을 채택할지 물으면 '채택하지 않음'.",
+        "선택지가 '새 유형 / 원인 미확정 / 기록하지 않음'이면 '기록하지 않음'.",
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "triage.py run --platform ofono(분석 전용) → 후보 없음(analysis.json platform=ofono, analyzer 없음) → 탐색 분석 여부 질문 → 승인 → triage.py explore MOCK-9073 --platform ofono(출력 platform: ofono, refs: [reference/platforms/ofono/log-guide.md]) → timeline.md와 log-guide.md만 읽고 데몬 사이 요청·오류 응답 둘레의 가설(로그 줄 인용·반대 근거·다음 확인, 코드 근거 없음, placeholder 규칙 기반)을 '탐색 분석 (추정)' 칸에 씀. Android 참고 자료를 열지 않고 Android 이름을 쓰지 않음. 계획·PR 없이 끝나고 lock이 풀린다.",
+      "assertions": [
+        "탐색 분석을 시작하기 전에 실행 여부를 물었고, 그 뒤 부른 triage.py explore에 --platform ofono가 붙었다",
+        "triage.py explore 뒤에 그 출력 refs의 reference/platforms/ofono/log-guide.md를 읽었고, Android 참고 자료(log-tags.md·ril-requests.md·fail-causes.md)는 열지 않았다",
+        "탐색 분석은 timeline.md를 읽었고 events.json·match.json·issue_raw.json·로그 원문은 읽지 않았다",
+        "사용자에게 보인 글에 Android 이름(RILJ·DataNetworkController·DataFailCause·SETUP_DATA_CALL)이 없다",
+        "탐색 가설이 placeholder 규칙(합성·형식 가정) 기반 해석임을 밝혔고 가설마다 timeline.md 줄 인용·반대 근거·다음 확인이 있다",
+        "JOB/analysis.json의 platform이 ofono이고 후보가 없으며 analyzer가 없다",
+        "분석 전용이라 계획·도구 브랜치·PR이 없고, 끝난 뒤 세션 lock이 없고 사용자 clone이 실행 전과 같다"
+      ],
+      "files": []
+    },
+    {
+      "id": 74,
+      "name": "platform-ask-when-mixed",
+      "batch": "P",
+      "design": "이슈 시작 때 플랫폼 정하기(17-platforms §11, K18 — 로그 자동 + 애매하면 질문). site 설정은 eval 63과 같다(`platform.name: ofono`·`enabled: [ofono, android]`). 사용자가 플랫폼을 말하지 않고 Android logcat(`data-disabled.log`)과 oFono journald(`journal-iso.log`)를 함께 준다 → triage.py run이 lock·JOB 전에 `needs_input platform`(f0·f1 형식이 다름)을 낸다 → 스킬이 질문·선택지를 그대로 보이고 사용자가 'oFono'를 고르면 같은 명령에 `--answer platform=ofono`를 붙여 다시 실행한다(SKILL 일반 needs_input 규칙, SKILL.md 불변) → JOB trace `platform` 행(`source: answer`)·analysis.json platform=ofono·1위 DATA-001(oFono 변형 DB). Android 로그는 oFono 파서로 해석되지 않아 file-unparsed 경고가 날 수 있다. 분석 전용이라 쓰기 없음. 실행은 사용자 승인 뒤(정의만)",
+      "prompt": "MOCK-1001 분석해줘. 데이터가 안 붙는대. 로그는 logs/data-disabled.log 랑 logs/journal-iso.log 야. 기록은 하지 말고 분석만",
+      "setup": {
+        "db": "issue-db-ofono",
+        "jira": [
+          "MOCK-1001"
+        ],
+        "logs": [
+          {
+            "src": "tests/fixtures/logs/data-disabled.log",
+            "as": "data-disabled.log"
+          },
+          {
+            "src": "tests/fixtures/logs/ofono/journal-iso.log",
+            "as": "journal-iso.log"
+          }
+        ],
+        "site_defaults": {
+          "platform": {
+            "name": "ofono",
+            "enabled": [
+              "ofono",
+              "android"
+            ]
+          },
+          "parser": {
+            "backend": "ofono_reference"
+          }
+        }
+      },
+      "user_replies": [
+        "어느 플랫폼으로 분석할지 물으면 'oFono'를 고른다.",
+        "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다.",
+        "심층 분석·탐색 분석 실행 여부를 물으면 '아니오'.",
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "triage.py run(분석 전용, --platform 없음) → needs_input platform(로그 파일 형식이 서로 다름, 선택지 Android·oFono)을 그대로 보이고 묻는다 → 'oFono' → 같은 명령에 --answer platform=ofono를 붙여 재실행 → analysis.json platform=ofono·1위 DATA-001(oFono 변형 DB, placeholder 규칙 결과)을 리포트로 보이고 notes의 플랫폼 줄(답한 플랫폼(oFono)으로 분석)을 알린다. 계획·PR 없이 끝나고 lock이 풀린다.",
+      "files": [],
+      "assertions": [
+        "triage.py run이 needs_input platform을 냈고, 그 뒤 다시 실행하기 전에 질문과 선택지(Android·oFono)를 사용자에게 보였다",
+        "답한 뒤 다시 부른 triage.py run에 --answer platform=ofono가 붙었고 두 로그(data-disabled.log·journal-iso.log)를 그대로 줬다",
+        "JOB/trace.jsonl에 platform 행(source: answer)이 있고 JOB/analysis.json의 platform이 ofono이며 1위 후보가 DATA-001이다",
+        "결과 notes의 플랫폼 줄(답한 플랫폼(oFono)으로 분석)을 사용자에게 알렸고 리포트가 placeholder 규칙(합성·형식 가정) 결과임을 밝혔다",
+        "분석 전용이라 계획·도구 브랜치·PR이 없고, 끝난 뒤 세션 lock이 없고 사용자 clone이 실행 전과 같다"
+      ]
     }
   ]
 }

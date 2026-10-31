@@ -142,7 +142,7 @@ def test_compiled_environment_platform():
     defaults = yaml.safe_load((REPO / "plugin" / "site-defaults.example.yaml").read_text(encoding="utf-8"))
     assert compiled.environment(defaults) == compiled.environment(defaults, "android")
     other = compiled.environment({**defaults, "platform": ON}, "ofono")
-    assert other["backend"] == {"name": "ofono_reference", "version": "0.0.1"} and other["external"] == {}   # 묶음 3 백엔드
+    assert other["backend"] == {"name": "ofono_reference", "version": "0.0.2"} and other["external"] == {}   # 묶음 3 백엔드
 
 
 # -- CLI: config set/show --platform ---------------------------------------------------------

@@ -2,8 +2,8 @@
 
 `--platform`(CLI) > `TT_PLATFORM`(triage가 하위 스크립트에 넘긴다) > 사용자 config `platform` > site-defaults `platform.name`.
 고른 플랫폼은 `platform.enabled`에 있어야 한다(`platforms.select`). 사용자 config의 플랫폼 키 오류(`platforms.<p>`에
-경로 프로필 밖 키 등)와 옛 설정 키(`userconfig.legacy_problems`), `tracker.kind` 오류(모르는 트래커, `trackers.kind_of`)도
-여기서 거부한다. 결과 cfg는 `userconfig.merged(…, platform=…)`이다.
+경로 프로필 밖 키 등)와 site-defaults `platforms:` 오류(`userconfig.site_platform_problems`), 옛 설정 키
+(`userconfig.legacy_problems`), `tracker.kind` 오류(모르는 트래커, `trackers.kind_of`)도 여기서 거부한다. 결과 cfg는 `userconfig.merged(…, platform=…)`이다.
 
 레지스트리(`platforms/__init__.py`)는 사용자 config를 모른다 — 둘을 잇는 곳은 이 모듈뿐이다.
 """
@@ -31,6 +31,9 @@ def resolve(defaults: dict, cli: str | None = None, user: dict | None = None) ->
     problems = userconfig.profile_problems(user)
     if problems:
         raise PlatformConfigError(f"사용자 config({userconfig.path()}): " + "; ".join(problems))
+    site = userconfig.site_platform_problems(defaults)
+    if site:        # 기본 아닌 플랫폼의 분석 스킬 팀 기본값(17-platforms §10)
+        raise PlatformConfigError("; ".join(site) + " (site-defaults는 관리자)")
     legacy = userconfig.legacy_problems(defaults, user)
     if legacy:      # 옛 설정 키(jira: 등)는 자동 변환하지 않는다 — 고치기 전까지 멈춘다(guard는 모든 MCP 거부)
         raise PlatformConfigError("옛 설정 키: " + "; ".join(legacy) + " — config.py rename-legacy로 바꾼다"
@@ -47,12 +50,21 @@ def resolve(defaults: dict, cli: str | None = None, user: dict | None = None) ->
     return name, cfg
 
 
+def implicit(defaults: dict, user: dict | None) -> str:
+    """`--platform` 없이 고르는 플랫폼(hook·플래그 없는 스크립트와 같은 기준: `TT_PLATFORM` > 사용자 `platform` > site).
+    잘못된 선택이면 기본 프로필(jira_bridge가 읽기 결과 위치를 정할 때와 같다). 17-platforms §11의 "암묵 선택"."""
+    try:
+        return select(defaults, None, userconfig.selected_hint(user))
+    except PlatformConfigError:
+        return userconfig.TOP_PROFILE
+
+
 def resolve_lenient(defaults: dict, cli: str | None = None, user: dict | None = None) -> tuple[str, dict, list[str]]:
     """`resolve`와 같되 사용자 config의 플랫폼 키 문제는 **경고 목록**으로 돌려준다(config.py show·set·doctor가 고칠 수
     있게). 사용자 `platform`이 켜지지 않은 이름이면 site 기본으로 대신한다. `--platform`(cli)이 잘못되면 그대로 오류다."""
     given = user is not None
     user = userconfig.load_user() if user is None else user
-    problems = userconfig.profile_problems(user)
+    problems = userconfig.profile_problems(user) + userconfig.site_platform_problems(defaults)
     try:
         name = select(defaults, cli, userconfig.selected_hint(user))
     except PlatformConfigError as exc:

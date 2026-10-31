@@ -23,7 +23,7 @@
    "properties": {
     "status": {"const": "ok"},
     "key": {"type": "string"},
-    "platform": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$", "description": "선택 플랫폼. 기본 플랫폼(android)이면 내지 않는다 (17-platforms K8)"},
+    "platform": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$", "description": "선택 플랫폼. android가 아니거나 --platform 없이 고르는 플랫폼 또는 지정(--platform·TT_PLATFORM)과 다를 때만 (17-platforms K8·§11)"},
     "generated_at": {"type": "string"},
     "request_hash": {"type": "string", "description": "입력 해시(부분별 parts {logs, issue, db, config, plugin, args}, 파싱 전에 계산)"},
     "run": {"type": "integer", "description": "결과(core)를 계산한 실행 번호"},
@@ -165,11 +165,12 @@
    "properties": {
     "status": {"const": "needs_input"},
     "key": {"type": "string"},
+    "platform": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$", "description": "켠 플랫폼 2개 이상에서 ok와 같은 규칙일 때만 (17-platforms §11)"},
     "needs_input": {
      "type": "object",
      "required": ["kind", "question", "options", "answer"],
      "properties": {
-      "kind": {"enum": ["lock", "plan", "issue", "year", "reanalyze", "open_pr", "logs", "code", "code_confirm", "time", "window"]},
+      "kind": {"enum": ["lock", "plan", "issue", "year", "reanalyze", "open_pr", "logs", "code", "code_confirm", "time", "window", "platform"]},
       "question": {"type": "string"},
       "options": {"type": "array"},
       "answer": {"type": "string", "description": "--answer <kind>=<값>"}
@@ -186,6 +187,7 @@
    "properties": {
     "status": {"const": "stopped"},
     "key": {"type": "string"},
+    "platform": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$", "description": "needs_input과 같은 규칙"},
     "reason": {"type": "string"},
     "lock_released": {"type": "boolean"}
    }

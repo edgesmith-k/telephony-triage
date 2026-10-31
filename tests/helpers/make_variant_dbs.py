@@ -15,7 +15,7 @@
 | `issue-db-step-focus/` | 스텝 기준 우선 유형(순위 참고): `step_focus.map`(`데이터` → DATA-001)과 DATA-001의 같은 스텝(`5 | 데이터 켜기`) Jira 기록 2건 |
 | `issue-db-step-events/` | 스텝 순서 정렬: `step_events` 규칙 10개(CP는 관측 불가, 비행기 모드 켜기·끄기는 `match`, 망 등록은 `ril`, 데이터 켜기·끄기는 `event`) |
 | `issue-db-review/` | 월간 리뷰(Phase 11): §6.6 항목마다 걸리는 경우와 걸리지 않는 경우 (`REVIEW_CASES`) |
-| `issue-db-ofono/` | oFono 플랫폼 뼈대 DB(17-platforms §5, **합성·형식 가정·placeholder**): `platform: ofono`, `ofono_reference` 백엔드, placeholder 태그(`ofonod`·`daemon-a`·`daemon-b`)·extractor 1개, 유형 `DATA-001`과 양성 fixture(`tests/fixtures/logs/ofono/journal-iso.log`) 하나 |
+| `issue-db-ofono/` | oFono 플랫폼 뼈대 DB(17-platforms §5, **합성·형식 가정·placeholder**): `platform: ofono`, `ofono_reference` 백엔드, placeholder 태그(`ofonod`·`daemon-a`·`daemon-b`)·extractor 1개·요청 `PLACEHOLDER_CALL`(데몬 사이 짝 시험용, 짝 설정 없으면 효과 없음), 유형 `DATA-001`과 양성 fixture(`tests/fixtures/logs/ofono/journal-iso.log`) 하나 |
 | `issue-db-github/` | 두 번째 트래커(트래커 범용화 §6-1, **합성**): `tracker {kind: github, base_url: https://ghe.mock.invalid/, key_regex: mock-org\\.mock-issues-\\d+}`, 기록·피드백·evidence의 Jira 키 `MOCK-<n>`을 GitHub 작업 키 `mock-org.mock-issues-<n>`으로(파일 이름 포함) |
 | `issue-db-unjudged/` | 원인 판정 불가(eval 68): `pattern_timeout_ms: 300`, DATA-001-01의 `data-disabled` 시그니처를 시간 초과하는 `slow-cause`(`must_match ['(a+)+$']`)로 바꾼 트리. `a`×40+`!` 줄이 있는 로그에서 `unjudged.cause_count` 1 |
 | `verify-logs/` | 이슈 DB가 아니다. `db_verify fix`·`resolution` 입력 로그(수정 후·재발·증상만 남음·시나리오 없음, 마스킹됨) |
@@ -579,6 +579,9 @@ tags:
 """
 OFONO_RIL = """# [합성·형식 가정·placeholder] 짝 규칙(RIL 계층·D-Bus 등)은 실제 로그를 받은 뒤 정한다. TODO(SITE:S26)
 # 스키마가 항목 1개 이상을 요구해서 둔 자리표시 항목이다 (17-platforms R7).
+# PLACEHOLDER_CALL: 데몬 사이 짝(site 설정 `protocols.<이름>: {kind: regex}`) 시험의 파생 이벤트용. 설정이 없으면 효과 없음.
+requests:
+  - {name: PLACEHOLDER_CALL, category: call, timeout_ms: 1000, added_for: '-', added_on: 2026-10-30, reason: placeholder (데몬 사이 짝 시험)}
 unsolicited:
   - {name: PLACEHOLDER_UNSOL, category: common, added_for: '-', added_on: 2026-10-11, reason: placeholder (스키마 최소 항목)}
 """

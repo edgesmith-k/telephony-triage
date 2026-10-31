@@ -918,7 +918,7 @@ def checks(eid: int, ctx: Ctx) -> list:
         return [_top_first(ctx, "MOCK-1004", "DATA-001-01", not_top="CALL-001-01")] + [None] * 5
     if eid in (61, 62):
         return checks_j(eid, ctx)
-    if eid in (63, 64, 65):
+    if eid in (63, 64, 65, 73, 74):
         return checks_p(eid, ctx)
     if eid in GITHUB_EVALS:
         return checks_g(eid, ctx)
@@ -1985,13 +1985,14 @@ def _sections(body: str) -> dict[str, str] | None:
     return {name: body[end:(heads[i + 1][0] if i + 1 < len(heads) else len(body))] for i, (_, end, name) in enumerate(heads)}
 
 
-# --- 플랫폼 분리 (배치 P, eval 63~65, docs/design/17-platforms.md) ---------------------------------------------
+# --- 플랫폼 분리 (배치 P, eval 63~65·73·74, docs/design/17-platforms.md) ------------------------------------------
 
 PLATFORM_SCRIPTS = ("config", "db_pr", "db_verify", "code_roots", "issue_post", "db_add", "db_search", "db_review", "job_status",
                     "skill_patch")   # --platform을 받는 스크립트(triage 밖)
 _SCRIPT_CALL = re.compile(r"\b(triage|config|db_pr|db_verify|code_roots|issue_post|db_add|db_search|db_review|job_status|skill_patch)"
                           r"\.py[\"']?([^\n;&|]*)")
 _PLATFORM_FLAG = re.compile(r"--platform(?:\s+|=)([A-Za-z0-9_]+)")
+_PLATFORM_ANSWER = re.compile(r"--answer(?:\s+|=)[\"']?platform=ofono\b")      # eval 74: 플랫폼 질문의 답
 
 
 def platform_calls(commands: list[str]) -> list[tuple[str, str, str | None]]:
@@ -2004,8 +2005,14 @@ def platform_calls(commands: list[str]) -> list[tuple[str, str, str | None]]:
     return out
 
 
+_ANDROID_NAMES = re.compile(r"\bRILJ\b|DataNetworkController|DataFailCause|SETUP_DATA_CALL")   # eval 73: oFono 가설에 Android 이름
+ANDROID_REFS = ("log-tags.md", "ril-requests.md", "fail-causes.md")
+
+
 def checks_p(eid, ctx):
-    """플랫폼 분리 eval 63~65. 실행 기록(events.jsonl)이 없으면 _Manual(수동 채점), 통과로 세지 않는다."""
+    """플랫폼 분리 eval 63~65·73·74. 실행 기록(events.jsonl)이 없으면 _Manual(수동 채점), 통과로 세지 않는다."""
+    key = "MOCK-9073" if eid == 73 else "MOCK-1001"
+
     def bash() -> list[str]:
         uses = ctx.tool_uses()
         if uses is None:
@@ -2013,13 +2020,25 @@ def checks_p(eid, ctx):
         return [_strip_heredocs(str(i.get("command", ""))) for n, i in uses if n == "Bash"]
 
     def analysis():
-        text = _read(ctx.work / "MOCK-1001" / "analysis.json")
+        text = _read(ctx.work / key / "analysis.json")
         return json.loads(text) if text else None
+
+    def no_android_analyzer():
+        """63 마지막·73: oFono에 android 분석 스킬(site 최상위 analyzers)이 넘어가지 않았다(17-platforms §10)."""
+        data = analysis()
+        if data is None:
+            return False, "JOB/analysis.json 없음"
+        texts = ctx.visible()
+        if texts is None:
+            raise _Manual("실행 기록(events.jsonl) 없음")
+        said = [t for t in texts if "mock-data-analyzer" in t]
+        return data.get("analyzer") is None and not said, (f"analyzer={data.get('analyzer')}; "
+                                                    f"mock-data-analyzer를 보인 글 {len(said)}개")
 
     def untouched():
         tool = [b for b in ctx.branches() if b.startswith(("issue/", "tt/"))]
         (a, ea), (b, eb) = ctx.lock_free(), ctx.clone_same()
-        plan = ctx.plan("MOCK-1001")
+        plan = ctx.plan(key)
         ok = a and b and not tool and not ctx.prs() and plan is None
         return ok, f"{ea}; {eb}; 도구 브랜치={tool} prs={len(ctx.prs())} plan={'있음' if plan else '없음'}"
 
@@ -2045,7 +2064,77 @@ def checks_p(eid, ctx):
             top = (data.get("candidates") or [{}])[0]
             ok = data.get("platform") == "ofono" and top.get("type") == "DATA-001"
             return ok, f"platform={data.get('platform')} 1위={top.get('type')}/{top.get('cause')}"
-        return [triage_flag, later_flags, result, None, untouched]
+        return [triage_flag, later_flags, result, None, untouched, no_android_analyzer]
+    if eid == 73:
+        def asked_then_flag():
+            order = ctx.explore_order()
+            if order is None:
+                raise _Manual("실행 기록(events.jsonl) 없음")
+            explored, asked, _ = order
+            calls = [c for c in platform_calls(bash()) if c[0] == "triage" and c[1].startswith("explore")]
+            ok = explored is not None and asked is not None and asked < explored and bool(calls) \
+                and all(c[2] == "ofono" for c in calls)
+            return ok, f"질문 순번={asked}, explore 순번={explored}, explore --platform={[c[2] for c in calls]}"
+        def refs_read():
+            order = ctx.explore_order("log-guide.md")
+            if order is None:
+                raise _Manual("실행 기록(events.jsonl) 없음")
+            explored, _, read = order
+            android = sorted(set(ctx.opened(*ANDROID_REFS)))
+            ok = explored is not None and read is not None and read > explored and not android
+            return ok, f"explore 순번={explored}, log-guide.md 첫 열람 순번={read}, Android 참고 자료 열람={android}"
+        def scope():
+            bad = ctx.opened("events.json", "issue_raw.json", "events-full.json", "match.json", "journal-multi.log")
+            seen = "timeline.md" in ctx.opened("timeline.md")
+            return seen and not bad, f"timeline.md 열람={seen}; 열면 안 되는 파일={sorted(set(bad))}"
+        def no_android_names():
+            texts = ctx.visible()
+            if texts is None:
+                raise _Manual("실행 기록(events.jsonl) 없음")
+            hits = sorted({m.group(0) for t in texts for m in _ANDROID_NAMES.finditer(t)})
+            return not hits, f"Android 이름: {hits}" if hits else "Android 이름 없음"
+        def result():
+            data = analysis()
+            if data is None:
+                return False, "JOB/analysis.json 없음"
+            ok = data.get("platform") == "ofono" and not data.get("candidates") and data.get("analyzer") is None
+            return ok, f"platform={data.get('platform')} 후보={len(data.get('candidates') or [])} analyzer={data.get('analyzer')}"
+        return [asked_then_flag, refs_read, scope, no_android_names, None, result, untouched]
+    if eid == 74:
+        def runs():
+            s = ctx.seq()
+            if s is None:
+                raise _Manual("실행 기록(events.jsonl) 없음")
+            idx = [i for i, e in enumerate(s) if e["kind"] == "tool" and e.get("name") == "Bash"
+                   and any(c[0] == "triage" and c[1].startswith("run")
+                           for c in platform_calls([_strip_heredocs(str((e.get("input") or {}).get("command", "")))]))]
+            asked = next((i for i in idx if re.search(r'"kind"\s*:\s*"platform"', str(s[i].get("result") or ""))), None)
+            again = next((i for i in idx if asked is not None and i > asked
+                          and _PLATFORM_ANSWER.search(str((s[i].get("input") or {}).get("command", "")))), None)
+            return s, asked, again
+
+        def asked_then_answered():
+            s, asked, again = runs()
+            shown_q = ctx.visible_between(asked + 1, again) if asked is not None and again is not None else []
+            ok = any("Android" in t and "oFono" in t for t in shown_q)
+            return ok, f"platform 질문 실행 순번={asked}, --answer platform=ofono 재실행 순번={again}, 사이에 보인 글 {len(shown_q)}개"
+
+        def same_command():
+            s, _, again = runs()
+            cmd = str((s[again].get("input") or {}).get("command", "")) if again is not None else ""
+            ok = again is not None and "data-disabled.log" in cmd and "journal-iso.log" in cmd
+            return ok, cmd[:200] or "--answer platform=ofono 재실행 없음"
+
+        def result():
+            data = analysis()
+            if data is None:
+                return False, "JOB/analysis.json 없음"
+            rows = [json.loads(x) for x in (_read(ctx.work / key / "trace.jsonl") or "").splitlines() if x.strip().startswith("{")]
+            picked = [r.get("source") for r in rows if r.get("step") == "platform"]
+            top = (data.get("candidates") or [{}])[0]
+            ok = "answer" in picked and data.get("platform") == "ofono" and top.get("type") == "DATA-001"
+            return ok, f"trace platform 행 source={picked} platform={data.get('platform')} 1위={top.get('type')}/{top.get('cause')}"
+        return [asked_then_answered, same_command, result, None, untouched]
     if eid == 64:
         def no_flag():
             hits = [c for c in bash() if "--platform" in c]

@@ -1,0 +1,10 @@
+2026-09-20T14:40:00.000000+09:00 dut ofonod[812]: src/example.c:example_cb() ipc call 5 PLACEHOLDER_CALL
+2026-09-20T14:40:00.100000+09:00 dut daemon-a[901]: ipc call 7 PLACEHOLDER_CALL
+2026-09-20T14:40:00.250000+09:00 dut daemon-b[902]: ipc reply 7 error=NONE
+2026-09-20T14:40:00.300000+09:00 dut daemon-b[902]: ipc reply 3 error=NONE
+2026-09-20T14:40:00.400000+09:00 dut daemon-a[901]: ipc call 8 PLACEHOLDER_CALL
+2026-09-20T14:40:00.500000+09:00 dut ofonod[812]: src/example.c:example_cb() ipc reply 5
+2026-09-20T14:40:01.900000+09:00 dut daemon-b[902]: ipc reply 8 error=PLACEHOLDER_ERROR
+2026-09-20T14:40:02.000000+09:00 dut daemon-a[901]: ipc call 9 PLACEHOLDER_CALL
+2026-09-20T14:40:02.100000+09:00 dut ofonod[812]: src/example.c:example_cb() /modem_0 context activate done: placeholder
+2026-09-20T14:40:04.000000+09:00 dut daemon-b[902]: status: placeholder

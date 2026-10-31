@@ -23,7 +23,8 @@ parser-rules의 `added_for`는 뼈대에 존재하지 않는 유형을 가리키
 
 `--platform <이름>`(17-platforms §4): 샘플은 기본 플랫폼(android, `platform` 키 없음) DB다. 다른 플랫폼이면
 설정에 `platform: <이름>`을 넣고, 지원 버전 키를 `platform_versions_supported: []`로, `parser_backend`를 그 플랫폼
-기본 백엔드(`SPEC.default_backend`와 그 버전)로, `code_root_keys`를 `SPEC.default_root_keys`로 바꾼다.
+기본 백엔드(`SPEC.default_backend`와 그 버전)로, `code_root_keys`를 `SPEC.default_root_keys`와 `SPEC.components`의
+루트 키(코드 기본값, TODO(SITE) 주석 — 구성요소 루트 키는 메인테이너가 더한다)로 바꾼다.
 parser-rules는 샘플(android 문구)을 쓰지 않고 스키마 최소 placeholder 항목만 둔다(TODO(SITE)). 플랫폼 이름은
 레지스트리(`plugin/scripts/platforms`)로 확인한다. 기본 플랫폼이면 결과는 옵션 없을 때와 같다.
 
@@ -90,6 +91,7 @@ CATEGORY_RE = re.compile(r"^\s*-\s*\{key:\s*([a-z][a-z0-9_]*)\s*,", re.MULTILINE
 # 기본 아닌 플랫폼의 parser-rules (스키마가 파일마다 항목 1개 이상을 요구해서 둔 자리표시 항목)
 PLACEHOLDER_RULES = {
     "parser-rules/tags.yaml": """# [뼈대·placeholder] {label} 플랫폼 태그. 실제 로그를 받은 뒤 바꾼다. TODO(SITE)
+# 구성요소(데몬)가 여럿이면 ident마다 한 줄. 구성요소별 카테고리를 둘지는 메인테이너가 정한다(oFono: 14-site S25).
 tags:
   - {{tag: PLACEHOLDER_TAG, category: common, added_for: '-', added_on: 2026-10-11, reason: placeholder (스키마 최소 항목)}}
 """,
@@ -150,6 +152,17 @@ def _tracker_config(text: str, spec) -> str:
     return text
 
 
+ROOT_KEYS_TODO = ("   # TODO(SITE:S27) 구성요소(데몬)마다 소스 루트 키 추가 "
+                  "(site-defaults platform.others.<p>.components.<이름>.root_key)")
+
+
+def _root_keys(spec) -> list[str]:
+    """코드 기본값만: `SPEC.default_root_keys` + `SPEC.components`의 루트 키(순서 유지, 중복 제거). site-defaults는 보지 않는다."""
+    keys = list(spec.default_root_keys)
+    keys += [c.root_key for c in spec.components if c.root_key and c.root_key not in keys]
+    return keys
+
+
 def _platform_config(text: str, spec, version: str) -> str:
     """샘플(기본 플랫폼) 설정을 다른 플랫폼 설정으로 바꾼다. 바꿀 줄이 없으면 멈춘다(샘플이 바뀐 것)."""
     edits = [
@@ -158,7 +171,7 @@ def _platform_config(text: str, spec, version: str) -> str:
          lambda m: "platform_versions_supported: []      # TODO(SITE) 이 플랫폼에서 지원하는 버전"),
         (r"(?m)^(parser_backend:[^\n]*\n  name: )\S+[^\n]*\n  min_version: \S+",
          lambda m: f"{m[1]}{spec.default_backend}\n  min_version: {version}"),
-        (r"(?m)^code_root_keys: \[.*\]", lambda m: f"code_root_keys: [{', '.join(spec.default_root_keys)}]"),
+        (r"(?m)^code_root_keys: \[.*\]", lambda m: f"code_root_keys: [{', '.join(_root_keys(spec))}]{ROOT_KEYS_TODO}"),
     ]
     for pattern, new in edits:
         text, n = re.subn(pattern, new, text, count=1)

@@ -19,7 +19,9 @@ from collections import defaultdict
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
-PATTERN = re.compile(r"TODO\(SITE:(?P<id>S\d+)\)(?P<rest>[^\n]*)")
+# 여러 항목을 묶은 표시(`TODO(SITE:S24·S25)`)는 항목마다 따로 센다.
+PATTERN = re.compile(r"TODO\(SITE:(?P<ids>S\d+(?:[·,]\s*S\d+)*)\)(?P<rest>[^\n]*)")
+ID_RE = re.compile(r"S\d+")
 
 SKIP_DIRS = {
     ".git",
@@ -75,14 +77,15 @@ def scan(root: Path) -> dict[str, list[dict]]:
             continue
         for number, line in enumerate(text.splitlines(), start=1):
             for match in PATTERN.finditer(line):
-                found[match.group("id")].append(
-                    {
-                        "file": path.relative_to(root).as_posix(),
-                        "line": number,
-                        "note": match.group("rest").strip(" :-"),
-                        "context": line.strip()[:160],
-                    }
-                )
+                for ident in ID_RE.findall(match.group("ids")):
+                    found[ident].append(
+                        {
+                            "file": path.relative_to(root).as_posix(),
+                            "line": number,
+                            "note": match.group("rest").strip(" :-"),
+                            "context": line.strip()[:160],
+                        }
+                    )
     return dict(sorted(found.items(), key=lambda kv: int(kv[0][1:])))
 
 

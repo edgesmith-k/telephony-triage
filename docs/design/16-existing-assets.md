@@ -149,7 +149,8 @@ analyzers:
 - 기본값 `ask`는 1위 후보가 그 카테고리일 때 "심층 분석을 실행할까요? (토큰 추가 사용)"를 묻는다. 사내 토큰이 적으므로 파일럿 동안은 `ask`로 두고, 호출 비율과 유용성을 Phase 14에서 본 뒤 `always`로 바꿀지 정한다.
 - analyze 옵션: `--analyzer`는 묻지 않고 호출, `--no-analyzer`는 호출하지 않는다.
 - 다른 카테고리도 같은 방식으로 분석 스킬을 붙일 수 있다.
-- 분석 스킬은 1위 후보가 있을 때만 호출된다. 후보 없음·원인 미확인일 때의 Claude 가설은 별도 단계인 **탐색 분석**(`07-workflow.md §Step 5-2`, `explore.when`)이 맡는다. 사내에 범용 로그 분석 스킬이 있어도 v1은 탐색 분석을 스킬 본문(`reference/explore.md`)으로 하고, 그 스킬 연결은 S-4a에서 필요성을 본 뒤 정한다.
+- **플랫폼별**: 최상위 `analyzers`는 android 것이다. 그 밖 플랫폼은 `platforms.<p>.analyzers.<카테고리>`(site-defaults·사용자 config, 같은 모양)만 쓰고 android 분석 스킬을 물려받지 않는다(없으면 `해당 없음`, `17-platforms.md §10-1`).
+- 분석 스킬은 1위 후보가 있을 때만 호출된다. 후보 없음·원인 미확인일 때의 Claude 가설은 별도 단계인 **탐색 분석**(`07-workflow.md §Step 5-2`, `explore.when`)이 맡는다. 사내에 범용 로그 분석 스킬이 있어도 v1은 탐색 분석을 스킬 본문(`reference/explore.md`)으로 하고, 그 스킬 연결은 S-4a에서 필요성을 본 뒤 정한다. android 밖 플랫폼의 탐색 지식은 지금 내장 `reference/platforms/<p>/`(`triage.py explore` 출력 `refs`, `17-platforms.md §10-2`)이다.
 
 ### 16.5.1 분석 스킬 만들기 (분석 스킬이 없는 카테고리)
 
@@ -165,7 +166,7 @@ analyzers:
 - **description**: telephony-triage 스킬의 트리거 설명(Jira·logcat 분석 요청)과 겹치지 않게 쓴다 — "telephony-triage analyze Step 5-1에서 `analyzers.<카테고리>`로만 부른다"처럼 호출 경로를 좁힌다. 겹치면 사용자의 분석 요청이 이 스킬로 새어 본 흐름(lock·스냅샷·확인 화면)을 건너뛴다.
 - **파일을 바꾸지 않는다**: 분석 스킬은 이슈 DB·작업 계획·로그·자기 references를 고치지 않고 규칙을 제안만 한다(`규칙 제안:`). 넣을지는 Step 7에서 사용자가 정한다. `[스킬]` 제안으로 telephony-triage가 만드는 patch도 설치된 분석 스킬 디렉토리(플러그인 캐시)에는 쓰거나 적용하지 않는다 — 스킬 소스(`source`)가 설정돼 있고 사용자가 "적용"을 고른 때만 그 소스의 워킹 트리에 적용하고, 커밋·push(·main PR)는 사용자가 한다. 다른 사용자에게서 문제가 나오면 그때 소스에서 고친다.
 - **검증**: 해결된 실제 이슈(마스킹된 로그)로 스킬 있음/없음을 같은 모델로 비교한다(`10-skill-eval.md` 방식: 1순위 결과 — 의견이 맞는 원인을 가리키는지·제안 규칙이 R1~R5를 통과하는지, 2순위 토큰). 나아지지 않으면 연결하지 않는다.
-- **연결·교체·끄기**: 키는 `analyzers.<카테고리>`(`skill`·`when`·`inputs`·선택 `source`, `contracts.md §기존 자산 연결 계약`). 팀 기본값은 `site-defaults.yaml`, 개인은 사용자 config(`~/.telephony-triage/config.yaml`, `02-config.md §4`)에 같은 키를 두면 덮어쓴다. `skill`을 바꾸면 교체, `when: never`면 끄기, 한 번만 건너뛰려면 analyze `--no-analyzer`.
+- **연결·교체·끄기**: 키는 `analyzers.<카테고리>`(android 밖 플랫폼은 `platforms.<p>.analyzers.<카테고리>`, `skill`·`when`·`inputs`·선택 `source`, `contracts.md §기존 자산 연결 계약`). 팀 기본값은 `site-defaults.yaml`, 개인은 사용자 config(`~/.telephony-triage/config.yaml`, `02-config.md §4`)에 같은 키를 두면 덮어쓴다. `skill`을 바꾸면 교체, `when: never`면 끄기, 한 번만 건너뛰려면 analyze `--no-analyzer`.
 
 ## 16.6 사외 초안과 사내 작업
 

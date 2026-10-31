@@ -11,6 +11,10 @@
 `platforms.<이름>:` 아래에 같은 키만 둔다(그 밖 키는 거부, RF-4 — 플랫폼 상수는 site-defaults에서만). `merged(…, platform=p)`가
 그 플랫폼의 실제 config를 준다. 다른 플랫폼은 기본 플랫폼 경로를 **물려받지 않는다**(ofono가 android clone을 가리키지 않게).
 플랫폼 이름 검증·`enabled` 관문은 `platforms.select`가 한다(`common/`은 `platforms`를 import하지 않는다).
+
+플랫폼마다 따로인 사용자 수준 키(`PLATFORM_SCOPED_KEYS`, 지금 `analyzers` — 17-platforms §10): 최상위 키는 기본 플랫폼 것이고,
+그 밖 플랫폼은 site-defaults `platforms.<p>.<키>` 위에 사용자 config `platforms.<p>.<키>`를 얹은 것만 쓴다(기본 플랫폼 값을
+**물려받지 않는다** — 다른 플랫폼에 Android 분석 스킬을 제안하지 않게).
 """
 
 from __future__ import annotations
@@ -32,6 +36,10 @@ FILENAME = "config.yaml"
 TOP_PROFILE = "android"
 # 플랫폼별 경로 프로필 키. `platforms.<p>`에는 이 키만 둘 수 있다
 PROFILE_KEYS = ("issue_db", "work_dir", "log_dir", "code_profiles", "recent_code_roots")
+# 플랫폼마다 따로 두고 기본 플랫폼 값을 물려받지 않는 사용자 수준 키(경로 프로필이 아니다). site-defaults `platforms.<p>`와
+# 사용자 config `platforms.<p>`에 둘 수 있다. `PROFILE_KEYS`에 넣지 않는다 — 최상위 `PROFILE_KEYS`는 "기본 플랫폼 프로필이 있다"는
+# 뜻이다(`_raw_profiles`·config init). 기본값으로 대신하는(override-with-fallback) 키가 생기면 다른 튜플로 둔다(17 §8 tracker)
+PLATFORM_SCOPED_KEYS = ("analyzers",)
 _PLATFORM_NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 
 
@@ -183,9 +191,20 @@ def merged(defaults: dict, user: dict | None = None, platform: str | None = None
     return _with_profile(out, defaults, platform, prof)
 
 
+def _site_platform(defaults: dict, platform: str) -> dict:
+    """site-defaults `platforms.<p>` 중 `PLATFORM_SCOPED_KEYS`의 매핑 값(사본). 모양이 틀리면 빈 dict(검사는
+    `site_platform_problems`)."""
+    block = defaults.get("platforms") if isinstance(defaults, dict) else None
+    block = block.get(platform) if isinstance(block, dict) else None
+    if not isinstance(block, dict):
+        return {}
+    return {k: copy.deepcopy(block[k]) for k in PLATFORM_SCOPED_KEYS if isinstance(block.get(k), dict)}
+
+
 def _with_profile(out: dict, defaults: dict, platform: str, prof) -> dict:
-    """공통 키만 남긴 `out`에 플랫폼 경로 프로필(`prof`, `PROFILE_KEYS`만)과 그 기본값을 얹는다."""
-    for key in PROFILE_KEYS:
+    """공통 키만 남긴 `out`에 플랫폼 경로 프로필(`prof`, `PROFILE_KEYS`만)과 그 기본값, 플랫폼 키(`PLATFORM_SCOPED_KEYS`:
+    site `platforms.<p>` 위에 `prof`의 것)를 얹는다. 기본 플랫폼(최상위)의 플랫폼 키는 버린다."""
+    for key in PROFILE_KEYS + PLATFORM_SCOPED_KEYS:
         out.pop(key, None)
     issue_db = {"base_branch": "main"}
     ghe = (defaults.get("ghe") or {}).get("host")
@@ -194,7 +213,9 @@ def _with_profile(out: dict, defaults: dict, platform: str, prof) -> dict:
     issue_db.update(site_merge(defaults))
     out.update({"issue_db": issue_db, "work_dir": str(home() / f"work-{platform}"), "code_profiles": [],
                 "recent_code_roots": []})
-    out = deep_merge(out, {k: v for k, v in (prof or {}).items() if k in PROFILE_KEYS} if isinstance(prof, dict) else {})
+    out.update(_site_platform(defaults, platform))
+    own = PROFILE_KEYS + PLATFORM_SCOPED_KEYS
+    out = deep_merge(out, {k: v for k, v in (prof or {}).items() if k in own} if isinstance(prof, dict) else {})
     out["platform"] = platform
     return out
 
@@ -205,9 +226,71 @@ def selected_hint(user: dict | None) -> str | None:
     return value if isinstance(value, str) and value else None
 
 
+def _scoped_problems(at: str, block: dict) -> list[str]:
+    """`platforms.<p>`의 `PLATFORM_SCOPED_KEYS` 값 모양: `analyzers`는 `{카테고리: 매핑}`."""
+    out = []
+    for key in PLATFORM_SCOPED_KEYS:
+        if key not in block:
+            continue
+        value = block[key]
+        if not isinstance(value, dict):
+            out.append(f"{at}.{key}: 매핑이어야 합니다({{카테고리: {{skill, when, source}}}}).")
+            continue
+        for cat, entry in value.items():
+            if not isinstance(entry, dict):
+                out.append(f"{at}.{key}.{cat}: 매핑이어야 합니다({{skill, when, source}}).")
+    return out
+
+
+def site_platform_problems(defaults: dict | None) -> list[str]:
+    """site-defaults `platforms:`(기본 아닌 플랫폼의 사용자 수준 팀 기본값, 17-platforms §10) 오류: 매핑이 아님, 이름 형식,
+    `TOP_PROFILE`(기본 플랫폼 것은 최상위 키), `PLATFORM_SCOPED_KEYS` 밖 키, 값 모양. 예외를 내지 않는다(guard 경로)."""
+    if not isinstance(defaults, dict) or defaults.get("platforms") is None:
+        return []
+    block = defaults["platforms"]
+    if not isinstance(block, dict):
+        return ["site-defaults platforms: 매핑이어야 합니다."]
+    out = []
+    for name, entry in block.items():
+        at = f"site-defaults platforms.{name}"
+        if not isinstance(name, str) or not _PLATFORM_NAME_RE.fullmatch(name):
+            out.append(f"{at}: 플랫폼 이름이 아닙니다(소문자·숫자·_).")
+        elif name == TOP_PROFILE:
+            out.append(f"{at}: {TOP_PROFILE} 값은 최상위 키({', '.join(PLATFORM_SCOPED_KEYS)})에 둔다.")
+        elif not isinstance(entry, dict):
+            out.append(f"{at}: 매핑이어야 합니다.")
+        else:
+            out += [f"{at}.{key}: 둘 수 없는 키입니다 (허용: {', '.join(PLATFORM_SCOPED_KEYS)}. 플랫폼 상수는 "
+                    f"platform.others.{name})." for key in entry if key not in PLATFORM_SCOPED_KEYS]
+            out += _scoped_problems(at, entry)
+    return out
+
+
+def analyzer_sources(defaults: dict | None, user: dict | None) -> list[str]:
+    """guard 규칙 12 보호 대상: site-defaults·사용자 config의 최상위 `analyzers`와 **모든** `platforms.<p>.analyzers`
+    (이름이 잘못된 것도 — 보호는 넓을수록 안전)의 `source` 원본 문자열. 경로 검사·정규화는 호출자. 예외를 내지 않는다."""
+    out: list[str] = []
+
+    def take(analyzers) -> None:
+        for entry in analyzers.values() if isinstance(analyzers, dict) else ():
+            src = entry.get("source") if isinstance(entry, dict) else None
+            if isinstance(src, str) and src.strip():
+                out.append(src)
+
+    for data in (defaults, user):
+        if not isinstance(data, dict):
+            continue
+        take(data.get("analyzers"))
+        profs = data.get("platforms")
+        for prof in profs.values() if isinstance(profs, dict) else ():
+            if isinstance(prof, dict):
+                take(prof.get("analyzers"))
+    return out
+
+
 def profile_problems(user: dict | None) -> list[str]:
     """사용자 config의 플랫폼 키 오류: `platform`이 이름 형식이 아님, `platforms`가 매핑이 아님, 이름 형식·`TOP_PROFILE`,
-    `platforms.<p>`에 `PROFILE_KEYS` 밖 키(RF-4)."""
+    `platforms.<p>`에 `PROFILE_KEYS`·`PLATFORM_SCOPED_KEYS` 밖 키(RF-4), 플랫폼 키 값 모양."""
     user = user or {}
     out = []
     if "platform" in user and (not isinstance(user["platform"], str) or not _PLATFORM_NAME_RE.fullmatch(user["platform"])):
@@ -226,9 +309,11 @@ def profile_problems(user: dict | None) -> list[str]:
             out.append(f"platforms.{name}: 매핑이어야 합니다.")
         else:
             for key in prof:
-                if key not in PROFILE_KEYS:
+                if key not in PROFILE_KEYS + PLATFORM_SCOPED_KEYS:
                     out.append(f"platforms.{name}.{key}: 플랫폼 프로필에 둘 수 없는 키입니다 "
-                               f"(허용: {', '.join(PROFILE_KEYS)}. 플랫폼 상수는 site-defaults에서만 바꾼다).")
+                               f"(허용: {', '.join(PROFILE_KEYS + PLATFORM_SCOPED_KEYS)}. "
+                               "플랫폼 상수는 site-defaults에서만 바꾼다).")
+            out += _scoped_problems(f"platforms.{name}", prof)
     return out + path_problems(user)
 
 
@@ -315,11 +400,13 @@ def profiles(defaults: dict, user: dict | None = None, *, invalid_names: bool = 
 
 
 def profile_key(platform: str | None, key: str) -> str:
-    """사용자 config에 쓸 키 경로: 기본 플랫폼이면 `key`, 그 밖이면 `platforms.<p>.<key>`. `PROFILE_KEYS` 밖이면 ValueError."""
+    """사용자 config에 쓸 키 경로: 기본 플랫폼이면 `key`, 그 밖이면 `platforms.<p>.<key>`. `PROFILE_KEYS`·`PLATFORM_SCOPED_KEYS`
+    밖이면 ValueError."""
     if not platform or platform == TOP_PROFILE:
         return key
-    if key.split(".")[0] not in PROFILE_KEYS:
-        raise ValueError(f"{key}는 플랫폼 프로필 키가 아닙니다 (허용: {', '.join(PROFILE_KEYS)}).")
+    allowed = PROFILE_KEYS + PLATFORM_SCOPED_KEYS
+    if key.split(".")[0] not in allowed:
+        raise ValueError(f"{key}는 플랫폼 프로필 키가 아닙니다 (허용: {', '.join(allowed)}).")
     return f"platforms.{platform}.{key}"
 
 

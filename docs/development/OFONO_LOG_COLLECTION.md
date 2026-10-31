@@ -19,13 +19,13 @@
 ## 2) 받을 로그(한 사례 = 폴더 하나)
 
 1. **journald 전체(현재 부팅)**: `journalctl -b -o short-iso-precise --no-pager > journal.log`. 시각에 마이크로초와 타임존 오프셋이 들어간다.
-2. **구성요소(데몬)별 로그를 각각**: `journalctl -b -o short-iso-precise -u <유닛> > journal-<유닛>.log`. oFono(`ofono`), 데이터 연결을 맡는 관리자(ConnMan 또는 NetworkManager), ModemManager가 함께 있으면 그것까지, 그리고 telephony에 관여하는 사내 구성요소 전부를 하나씩 받는다. 어떤 유닛이 있었는지 `notes.md`에 적는다.
+2. **구성요소(데몬)별 로그를 각각**: `journalctl -b -o short-iso-precise -u <유닛> > journal-<유닛>.log`. oFono(`ofono`), 데이터 연결을 맡는 관리자(ConnMan 또는 NetworkManager), ModemManager가 함께 있으면 그것까지, 그리고 telephony에 관여하는 사내 구성요소 전부를 하나씩 받는다. 어떤 유닛이 있었고 각 유닛 줄의 식별자(ident)가 무엇인지 `notes.md`에 적는다. 유닛별 로그는 형식 확인용이다 — 분석·데몬 사이 짝은 합친 `journal.log` 하나로 하고 둘을 같이 넣지 않는다(줄이 두 번 나온다).
 3. **형식 확인용 JSON 1건**(시나리오 하나만): `journalctl -b -o json -u ofono > journal-ofono.json`. 우선순위·PID·식별자 필드 구조를 보기 위한 것이다. `_HOSTNAME`·`_MACHINE_ID`·`_BOOT_ID`는 반드시 지운다.
 4. **oFono 디버그**: 실패 사례 중 최소 1건은 `ofonod`를 디버그로 켜고 받는다(일반적으로 `-d` 옵션, 예: systemd drop-in에서 `ofonod -n -d`). 켜는 방법은 사내 빌드 기준으로 확인한다.
 5. **모뎀 통신 트레이스**(AT·QMI·RIL 계층 중 해당하는 것): 디버그 환경변수나 옵션은 포크마다 다르다. 켤 수 있으면 실패 사례 1건 이상에서 켠다.
 6. **D-Bus**: `dbus-monitor --system "sender='org.ofono'" "destination='org.ofono'" > dbus.log`(가능하면 사례 시작 전에 켜 둔다). 속성 값에 APN 계정이 나올 수 있다(마스킹 대상).
 7. **커널**: `journalctl -k -b -o short-iso-precise > kernel.log`(모뎀 USB 열거, wwan 인터페이스 등).
-8. **상태·버전**(`info.txt`): oFono 버전, OS·빌드, 모뎀 펌웨어, `uname -r`, 단말 모델, `timedatectl` 출력, 실패 시점의 네트워크 상태 요약(인터페이스·라우트 유무만).
+8. **상태·버전**(`info.txt`): oFono 버전, 구성요소(데몬)마다 버전과 그 버전이 적힌 소스 파일, OS·빌드, 모뎀 펌웨어, `uname -r`, 단말 모델, `timedatectl` 출력, 실패 시점의 네트워크 상태 요약(인터페이스·라우트 유무만).
 9. journald가 없는 단말: `/var/log/messages` 또는 `/var/log/syslog`. 이 경우 연도·타임존을 `info.txt`에 꼭 적는다.
 
 ## 3) 시각 동기·타임존

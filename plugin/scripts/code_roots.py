@@ -9,6 +9,8 @@
         키가 `code_root_keys`에 있는지, 경로가 있는지, aosp에 필수 디렉토리(`platform.source_tree.required_dirs`,
         기본 `frameworks/opt/telephony`)가 모두 있는지 본다.
         트리 버전을 추정해 `--version`과 다르면 경고한다. 잘못된 루트는 종료 코드 2.
+        플랫폼에 구성요소(`platform…components`, 17-platforms §9)가 있으면 주 루트가 아닌 구성요소 루트도
+        그 `source_tree`의 필수 디렉토리를 보고 버전을 추정해 `component_versions`(참고용, `--version`과 비교하지 않음)로 낸다.
     code_roots.py resolve <ref> --roots <roots>
         `<root 키>:<상대 경로>` → 절대 경로 (03-issue-db.md §5.4 code_refs).
     code_roots.py find-symbol <symbol> --roots <roots>
@@ -68,8 +70,10 @@ def _cfg(defaults: dict) -> dict:
     return _session(defaults)[1]
 
 
-def _keys(args, defaults, spec: platforms.PlatformSpec | None = None) -> list[str]:
+def _keys(args, defaults, spec: platforms.PlatformSpec | None = None, components=()) -> list[str]:
+    """DB `code_root_keys`. DB가 없으면 플랫폼 기본 루트 키 + 구성요소 루트 키(순서 유지, 중복 제거)."""
     fallback = list(spec.default_root_keys) if spec else DEFAULT_KEYS
+    fallback += [c.root_key for c in components if c.root_key and c.root_key not in fallback]
     try:
         db = dbpath.resolve(getattr(args, "db", None),
                             user_config_path=lambda: userconfig.issue_db_path(defaults, _session(defaults)[0]))
@@ -147,9 +151,33 @@ def cmd_suggest(args, defaults) -> dict:
     return {"version": version, "candidates": ordered, "extra_choices": ["직접 입력", "코드 분석 건너뛰기"]}
 
 
+def _component_versions(roots: dict[str, str], primary: str, components, errors: list[str]) -> dict:
+    """주 루트가 아닌 구성요소 루트: 주어졌고 디렉토리이면 필수 디렉토리를 보고(`errors`에 더함) 버전을 추정한다.
+    없는 구성요소 루트는 오류가 아니다(선택 루트). 버전은 참고용이라 경고하지 않는다(17-platforms K15)."""
+    out = {}
+    for comp in components:
+        key = comp.root_key
+        if not key or key == primary or not roots.get(key):
+            continue
+        root = Path(roots[key]).expanduser()
+        if not root.is_dir():
+            continue                      # 경로 없음 오류는 위 루트 검사가 이미 냈다
+        tree = comp.source_tree
+        if tree is None:
+            out[key] = None
+            continue
+        for rel in tree.required_dirs:
+            if not (root / rel).is_dir():
+                errors.append(f"{key} 루트에 {rel}가 없습니다: {roots[key]}")
+        out[key] = estimate_version(root, tree.version_sources)
+    return out
+
+
 def validate(roots: dict[str, str], keys: list[str], version: str | None,
-             tree: platforms.SourceTree | None = None, spec: platforms.PlatformSpec | None = None) -> dict:
-    """`tree`(`platform.source_tree`)가 없으면 `spec`(없으면 기본 플랫폼)의 코드 기본값."""
+             tree: platforms.SourceTree | None = None, spec: platforms.PlatformSpec | None = None,
+             components=()) -> dict:
+    """`tree`(`platform.source_tree`)가 없으면 `spec`(없으면 기본 플랫폼)의 코드 기본값.
+    `components`(플랫폼 구성요소)가 있을 때만 결과에 `component_versions`가 붙는다(android는 없음 → 출력 불변)."""
     spec = spec or _DEFAULT_SPEC
     tree = tree or spec.source_tree
     required_dirs, sources = tree.required_dirs, tree.version_sources
@@ -175,14 +203,19 @@ def validate(roots: dict[str, str], keys: list[str], version: str | None,
             warnings.append("트리 버전을 추정하지 못했다 (사용자 입력을 신뢰한다)")
         elif version and estimated != str(version):
             warnings.append(f"트리 버전 {estimated}가 대상 {spec.label} {version}과 다르다. 계속할지 묻는다.")
-    return {"roots": roots, "valid": not errors, "errors": errors, "warnings": warnings,
-            "estimated_version": estimated, "version": version}
+    result = {"roots": roots, "valid": not errors, "errors": errors, "warnings": warnings,
+              "estimated_version": estimated, "version": version}
+    if components:
+        result["component_versions"] = _component_versions(roots, primary, components, errors)
+        result["valid"] = not errors
+    return result
 
 
 def cmd_validate(args, defaults) -> tuple[dict, int]:
     profile = _profile(defaults)
-    result = validate(parse_roots(args.roots, _cfg(defaults), profile.spec.primary_root), _keys(args, defaults, profile.spec),
-                      args.version, profile.source_tree, profile.spec)
+    keys = _keys(args, defaults, profile.spec, profile.components)
+    result = validate(parse_roots(args.roots, _cfg(defaults), profile.spec.primary_root), keys,
+                      args.version, profile.source_tree, profile.spec, profile.components)
     return result, (OK if result["valid"] else USAGE)
 
 

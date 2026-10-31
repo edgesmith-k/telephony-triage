@@ -1276,7 +1276,7 @@ def test_e39_doctor_table_from_text_or_transcript(tmp_path, where, ok):
 
 def test_jira_post_evals_defined():
     by_id = {e["id"]: e for e in _entries()}
-    assert len(by_id) == 72
+    assert len(by_id) == 74
     assert by_id[8]["name"] == "jira-comment-request-gated" and len(by_id[8]["assertions"]) == 4
     for eid, count in ((61, 11), (62, 6)):
         e = by_id[eid]
@@ -1429,11 +1429,11 @@ def test_e61_body_shape_without_render_record_is_manual(tmp_path):
 
 
 
-# --- 플랫폼 분리 (배치 P, eval 63~65, 17-platforms) --------------------------------------------------------
+# --- 플랫폼 분리 (배치 P, eval 63~65·73·74, 17-platforms) --------------------------------------------------------
 
 def test_platform_evals_defined_and_checks_cover_assertions(tmp_path):
     by_id = {e["id"]: e for e in _entries()}
-    for eid, count in ((63, 5), (64, 3), (65, 4)):
+    for eid, count in ((63, 6), (64, 3), (65, 4), (73, 7), (74, 5)):
         e = by_id[eid]
         assert e["batch"] == "P" and len(e["assertions"]) == count, eid
         assert len(grader.checks(eid, grader.Ctx(_synthetic_env(tmp_path / str(eid)), run_dir(tmp_path / str(eid))))) == count
@@ -1442,6 +1442,84 @@ def test_platform_evals_defined_and_checks_cover_assertions(tmp_path):
     assert by_id[63]["setup"]["site_defaults"]["platform"]["enabled"] == ["ofono", "android"]
     assert "db" not in by_id[64]["setup"] and "site_defaults" not in by_id[65]["setup"]   # 64 기본 흐름, 65는 android 선택 + oFono DB
     assert "oFono" in by_id[63]["prompt"] and "oFono" not in by_id[64]["prompt"] + by_id[65]["prompt"]
+    assert by_id[73]["setup"]["db"] == "issue-db-ofono" and by_id[73]["setup"]["site_defaults"] == by_id[63]["setup"]["site_defaults"]
+    assert by_id[73]["setup"]["logs"][0]["src"] == "tests/fixtures/logs/ofono/journal-multi.log" and "oFono" in by_id[73]["prompt"]
+    # 74(17-platforms §11): eval 63 환경 + 플랫폼 말 없이 Android·oFono 로그를 함께 → 플랫폼 질문
+    assert by_id[74]["setup"]["site_defaults"] == by_id[63]["setup"]["site_defaults"] and by_id[74]["setup"]["db"] == "issue-db-ofono"
+    assert [x["as"] for x in by_id[74]["setup"]["logs"]] == ["data-disabled.log", "journal-iso.log"]
+    assert "oFono" not in by_id[74]["prompt"] and "--platform" not in by_id[74]["prompt"]
+
+
+def test_e73_explore_refs_checks(tmp_path):
+    """eval 73(17-platforms §10): 질문 → `triage.py explore --platform ofono` → log-guide.md 열람(뒤), Android 참고 자료·이름 없음,
+    analysis.json platform=ofono·후보 없음·analyzer 없음. 63 마지막 행: analyzer·mock-data-analyzer 없음."""
+    env_dir = _synthetic_env(tmp_path)
+    run = run_dir(tmp_path)
+    _write_artifacts(run)
+    work = Path(json.loads((env_dir / "env.json").read_text(encoding="utf-8"))["work_dir"])
+    guide = "/p/skills/telephony-triage/reference/platforms/ofono/log-guide.md"
+    good = [("text", "탐색 분석을 실행할까요? (토큰 추가 사용)"),
+            ("tool", "e1", "Bash", {"command": "python3 /p/scripts/triage.py explore MOCK-9073 --platform ofono"}, "{}", False),
+            ("tool", "r1", "Read", {"file_path": "/w/MOCK-9073/timeline.md"}, "x", False),
+            ("tool", "r2", "Read", {"file_path": guide}, "x", False),
+            ("text", "가설: daemon-b 오류 응답 뒤 재시도 없음 (placeholder 규칙 기반)")]
+    _seq_events(run, good)
+    fns = grader.checks(73, grader.Ctx(env_dir, run))
+    assert [fns[i]()[0] for i in (0, 1, 2, 3)] == [True, True, True, True] and fns[4] is None
+    assert fns[5]()[0] is False                                           # analysis.json 없음
+    (work / "MOCK-9073").mkdir()
+    (work / "MOCK-9073" / "analysis.json").write_text(json.dumps({"platform": "ofono", "candidates": []}), encoding="utf-8")
+    assert fns[5]()[0] is True
+    (work / "MOCK-9073" / "analysis.json").write_text(json.dumps({"platform": "ofono", "analyzer": {"skill": "x"}}), encoding="utf-8")
+    assert fns[5]()[0] is False
+    bad = [good[0], ("tool", "e0", "Bash", {"command": "python3 /p/scripts/triage.py explore MOCK-9073"}, "{}", False),
+           ("tool", "r0", "Read", {"file_path": "/p/skills/telephony-triage/reference/log-tags.md"}, "x", False),
+           *good[2:4], ("text", "RILJ SETUP_DATA_CALL 응답이 늦다")]
+    _seq_events(run, bad)
+    fns = grader.checks(73, grader.Ctx(env_dir, run))
+    assert [fns[i]()[0] for i in (0, 1, 3)] == [False, False, False]      # 플래그 없음·Android 자료 열람·Android 이름
+    _seq_events(run, [("tool", "r2", "Read", {"file_path": guide}, "x", False), *good[:2]])   # explore 앞에 읽음
+    assert grader.checks(73, grader.Ctx(env_dir, run))[1]()[0] is False
+    # 63 마지막 행
+    (work / "MOCK-1001").mkdir()
+    (work / "MOCK-1001" / "analysis.json").write_text(json.dumps({"platform": "ofono", "candidates": []}), encoding="utf-8")
+    _seq_events(run, [("text", "심층 분석: 해당 없음")])
+    assert grader.checks(63, grader.Ctx(env_dir, run))[5]()[0] is True
+    _seq_events(run, [("text", "심층 분석(mock-data-analyzer)을 할까요?")])
+    assert grader.checks(63, grader.Ctx(env_dir, run))[5]()[0] is False
+
+
+def test_e74_platform_question_checks(tmp_path):
+    """eval 74(17-platforms §11): triage run → needs_input platform → 질문(선택지 Android·oFono)을 보임 → 같은 명령 + --answer platform=ofono
+    → trace `platform` 행(source answer)·analysis.json platform=ofono·1위 DATA-001."""
+    env_dir = _synthetic_env(tmp_path)
+    run = run_dir(tmp_path)
+    _write_artifacts(run)
+    work = Path(json.loads((env_dir / "env.json").read_text(encoding="utf-8"))["work_dir"])
+    base = "python3 /p/scripts/triage.py run MOCK-1001 --analysis-only --logs logs/data-disabled.log logs/journal-iso.log"
+    asked = json.dumps({"status": "needs_input", "needs_input": {"kind": "platform", "question": "q", "options": []}})
+    good = [("tool", "t1", "Bash", {"command": base}, asked, False),
+            ("text", "어느 플랫폼으로 분석할까요? 1) Android 2) oFono"),
+            ("tool", "t2", "Bash", {"command": base + " --answer platform=ofono"}, "{}", False),
+            ("text", "답한 플랫폼(oFono)으로 분석했다")]
+    _seq_events(run, good)
+    fns = grader.checks(74, grader.Ctx(env_dir, run))
+    assert [fns[i]()[0] for i in (0, 1)] == [True, True] and fns[3] is None
+    assert fns[2]()[0] is False                                           # analysis.json 없음
+    job = work / "MOCK-1001"
+    job.mkdir()
+    (job / "analysis.json").write_text(json.dumps({"platform": "ofono", "candidates": [{"type": "DATA-001"}]}), encoding="utf-8")
+    (job / "trace.jsonl").write_text(json.dumps({"step": "platform", "platform": "ofono", "source": "answer"}) + "\n", encoding="utf-8")
+    assert fns[2]()[0] is True
+    (job / "trace.jsonl").write_text(json.dumps({"step": "platform", "platform": "ofono", "source": "logs"}) + "\n", encoding="utf-8")
+    assert fns[2]()[0] is False
+    # 질문을 보이지 않고 답을 지어 재실행 · 로그를 하나 뺌
+    _seq_events(run, [good[0], ("tool", "t2", "Bash", {"command": base.replace(" logs/data-disabled.log", "")
+                                                       + " --answer platform=ofono"}, "{}", False)])
+    fns = grader.checks(74, grader.Ctx(env_dir, run))
+    assert [fns[i]()[0] for i in (0, 1)] == [False, False]
+    _seq_events(run, [good[1], good[2]])                                  # 질문 결과 없이 답만
+    assert grader.checks(74, grader.Ctx(env_dir, run))[0]()[0] is False
 
 
 def test_e63_platform_env_puts_profile_under_platforms(tmp_path):
