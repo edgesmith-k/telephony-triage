@@ -68,6 +68,8 @@
 - 트래커: jira                        ← 사내 보완을 `site_step.py`로 시작하면 들어간다(S30·S31 해당 없음)
 - 기준 문서 세트: <docs/history/CHANGES.md의 버전 또는 날짜>
 - S-5 게이트: top1 ≥ 0.60, error_rate ≤ 0.10 (YYYY-MM-DD 합의)   ← 값은 예시, S-1에서 사용자와 정한다(`site_step.py propose --set gate.top1=… --set gate.error_rate=…`). `check S-5`가 이 줄을 읽는다
+- oFono 단계: O-n                      ← S-3 완료 뒤 `site_step.py ofono`가 넣는다(oFono 트랙, §15.5), 끝나면 완료
+- oFono 완료: O-1 (날짜), …
 
 ## 확인값
 | # | 항목 | 확인값 | 근거 | 확인일 | 확인자 | 상태 |
@@ -89,7 +91,7 @@
 
 - `SITE_PROFILE.md`는 `CLAUDE.md`가 **매 세션 import**하므로 **4KB 이하로 유지한다**(`CLAUDE.md`와 같은 기준. 진행 상태, 확인값 요약, 설계 변경 요약). `tools/context_pack.py`가 넘으면 경고한다(종료 코드는 그대로). 확인 근거(로그 파일·행 번호, 긴 설명)는 import하지 않는 `docs/site/evidence.md`(사내 전용)에 둔다.
 - "진행 상태"는 Phase가 끝나고 사용자 확인을 받을 때마다 갱신한다. 새 세션은 이 절을 보고 어디서 이어갈지 정한다.
-- 사내 보완의 단계 점검 기록(방문·마지막 `site_step.py check` 결과)은 `docs/site/steps/S-n.json`, 단계 입력(운영 DB clone 경로·샌드박스·라벨셋·eval 예산 등)은 `docs/site/steps.yaml`(`propose --apply`로만 씀)에 둔다. 둘 다 import하지 않는 사내 전용 파일이다.
+- 사내 보완의 단계 점검 기록(방문·마지막 `site_step.py check` 결과)은 `docs/site/steps/S-n.json`·`O-n.json`, 단계 입력(운영 DB clone 경로·샌드박스·라벨셋·eval 예산 등)은 `docs/site/steps.yaml`(`propose --apply`로만 씀)에 둔다. 둘 다 import하지 않는 사내 전용 파일이다.
 
 ### 14.4 Phase 0: 사내 환경 확인 (Phase 1보다 먼저)
 

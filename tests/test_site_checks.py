@@ -849,3 +849,316 @@ def test_s6_mock_and_s4a_codeowners(tmp_path):
     (root / "plugin/site-defaults.yaml").write_text("ghe:\n  host: ghe.mock.invalid   # TODO(SITE:S5)\n", encoding="utf-8")
     r = sc.s6_mock(sc.Ctx(root))
     assert r["status"] == "needs-user" and "plugin/site-defaults.yaml:2" in r["evidence"]
+
+
+# --- oFono 트랙 O-1~O-4 (합성 로그 tests/fixtures/logs/ofono, 구성요소·짝 설정은 tests/test_ofono_components.py 형식) -----
+
+OFONO_LOGS = ROOT / "tests" / "fixtures" / "logs" / "ofono"
+ANDROID_LOG = ROOT / "tests" / "fixtures" / "logs" / "call-drop.log"
+COMPONENTS = {
+    "ofono": {"idents": ["ofonod"], "root_key": "ofono", "msg_format": "file_func"},
+    "daemon-a": {"idents": ["daemon-a"], "root_key": "daemon_a"},
+    "daemon-b": {"idents": ["daemon-b"], "root_key": "daemon_b"},
+}
+IPC = {"kind": "regex", "tags": ["ofonod", "daemon-a", "daemon-b"],
+       "request": r"^ipc call (?P<serial>\d+) (?P<name>[A-Z_]+)$",
+       "response": r"^ipc reply (?P<serial>\d+)(?: error=(?P<error>\S+))?$"}
+
+
+def ofono_root(tmp_path, ofono=None, enabled=("android", "ofono"), inputs="") -> Path:
+    """사내 루트 + plugin/scripts(레포 것 링크)·site-defaults.yaml(oFono 블록) + steps.yaml."""
+    import yaml
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    root = site_root(tmp_path)
+    (root / "plugin").mkdir()
+    (root / "plugin" / "scripts").symlink_to(ROOT / "plugin" / "scripts", target_is_directory=True)
+    plat = {"name": "android", "enabled": list(enabled)}
+    if ofono is not None:
+        plat["others"] = {"ofono": ofono}
+    (root / "plugin" / "site-defaults.yaml").write_text(yaml.safe_dump({"platform": plat}), encoding="utf-8")
+    set_inputs(root, inputs)
+    return root
+
+
+def ofono_logs(tmp_path) -> Path:
+    """수집 체크리스트 모양의 사례 폴더(마스킹본 `.masked`). 합친 journal에 데몬 사이 짝 줄이 있다."""
+    d = tmp_path / "ofono-logs"
+    for case, src, name in (("data-실패-1", "journal-multi.log", "journal.log.masked"),
+                            ("data-실패-1", "journal-iso.log", "journal-ofono.log.masked"),
+                            ("call-실패-1", "syslog-bsd.log", "syslog.masked")):
+        (d / case).mkdir(parents=True, exist_ok=True)
+        (d / case / name).write_bytes((OFONO_LOGS / src).read_bytes())
+    (d / "data-실패-1" / "notes.md").write_text("시각 14:40 ±1분\n", encoding="utf-8")
+    (d / ".hidden").mkdir()
+    (d / ".hidden" / "journal.log").write_bytes(ANDROID_LOG.read_bytes())       # 숨김 폴더는 보지 않는다
+    return d
+
+
+def _log_texts() -> list[str]:
+    """근거에 들어가면 안 되는 로그 본문 조각(줄의 식별자 뒤 메시지)."""
+    out = []
+    for p in (*OFONO_LOGS.glob("*.log"), ANDROID_LOG):
+        for line in p.read_text(encoding="utf-8").splitlines():
+            msg = line.split(": ", 1)[-1].strip()
+            if len(msg) >= 8:
+                out.append(msg)
+    return out
+
+
+def test_o1_masked_sniff_parse(tmp_path):
+    logs = ofono_logs(tmp_path)
+    alogs = tmp_path / "android"
+    alogs.mkdir()
+    (alogs / "logcat.txt").write_bytes(ANDROID_LOG.read_bytes())
+    root = ofono_root(tmp_path, inputs=f"ofono_log_dir: {logs}\nandroid_log_dir: {alogs}\n")
+    out = by_id(sc.run_checks("O-1", root))
+    assert [r["id"] for r in sc.run_checks("O-1", root)] == ["o1.masked", "o1.sniff", "o1.parse", "o1.rows"]
+    assert out["o1.masked"]["status"] == "pass" and "파일 4개" in out["o1.masked"]["evidence"]
+    assert out["o1.sniff"]["status"] == "pass", out["o1.sniff"]
+    assert "oFono 3" in out["o1.sniff"]["evidence"] and "이름 규칙 밖 1개" in out["o1.sniff"]["evidence"]
+    assert "Android 표본 1개 중 Android만이 아닌 것 0" in out["o1.sniff"]["evidence"]
+    assert out["o1.parse"]["status"] == "pass" and "해석 17/17줄" in out["o1.parse"]["evidence"]
+    assert out["o1.rows"]["status"] == "needs-user" and "S24, S29" in out["o1.rows"]["evidence"]
+
+    (logs / "call-실패-1" / "notes.md").write_text("상대 +821012345678\n", encoding="utf-8")   # 마스킹 안 된 번호
+    (logs / "mixed").mkdir()
+    (logs / "mixed" / "journal.log").write_bytes(ANDROID_LOG.read_bytes())                     # oFono 폴더에 Android 로그
+    out = by_id(sc.run_checks("O-1", root))
+    m = out["o1.masked"]
+    assert m["status"] == "fail" and "MSISDN 1" in m["evidence"] and "call-실패-1/notes.md:1" in m["evidence"]
+    assert "821012345678" not in m["evidence"]
+    s = out["o1.sniff"]
+    assert s["status"] == "fail" and "Android로 판별 1" in s["evidence"] and "mixed/journal.log" in s["evidence"] and s["ask"]
+    texts = _log_texts()
+    for r in out.values():
+        assert not any(t in r["evidence"] for t in texts), r                  # 근거에 로그 원문 없음
+
+
+def test_o1_rows_and_missing_input(tmp_path):
+    root = ofono_root(tmp_path)
+    out = by_id(sc.run_checks("O-1", root))
+    for cid in ("o1.masked", "o1.sniff", "o1.parse"):
+        assert out[cid]["status"] == "needs-user" and "ofono_log_dir" in out[cid]["ask"], out[cid]
+    (tmp_path / "b").mkdir()
+    root2 = site_root(tmp_path / "b", rows=("| S24 | 로그 형식 | short-iso-precise | 사례 | d | u | 확인 |",
+                                            "| S29 | 슬롯 표기 | 없음 | 사례 | d | u | 확인 |"))
+    assert sc.o1_rows(sc.Ctx(root2))["status"] == "pass"
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    set_inputs(root, f"ofono_log_dir: {empty}\n")
+    assert "파일 0" in sc.o1_sniff(sc.Ctx(root))["evidence"]
+    (empty / "info.txt").write_text("x\n", encoding="utf-8")
+    r = sc.o1_parse(sc.Ctx(root))
+    assert r["status"] == "needs-user" and "줄 로그 0" in r["evidence"]
+
+
+def test_o1_sniff_unknown_format_and_parse_low(tmp_path):
+    d = tmp_path / "logs" / "case"
+    d.mkdir(parents=True)
+    (d / "journal.log").write_text("".join(f"line {i} without stamp\n" for i in range(5)), encoding="utf-8")
+    root = ofono_root(tmp_path, inputs=f"ofono_log_dir: {tmp_path / 'logs'}\n")
+    s = sc.o1_sniff(sc.Ctx(root))
+    assert s["status"] == "needs-user" and "형식 미확인 1" in s["evidence"] and "journal.py" in s["ask"]
+    p = sc.o1_parse(sc.Ctx(root))
+    assert p["status"] == "needs-user" and "case/journal.log 0/5" in p["evidence"]
+
+
+def test_o2_checks_with_components_and_ipc(tmp_path):
+    logs = ofono_logs(tmp_path)
+    root = ofono_root(tmp_path, {"components": COMPONENTS, "protocols": {"ipc": IPC}}, inputs=f"ofono_log_dir: {logs}\n")
+    out = by_id(sc.run_checks("O-2", root))
+    assert [r["id"] for r in sc.run_checks("O-2", root)] == ["o2.enabled", "o2.config", "o2.idents", "o2.pairs", "o2.rows"]
+    assert out["o2.enabled"]["status"] == "pass"
+    assert out["o2.config"]["status"] == "pass" and "구성요소 3(설정) · 짝 규칙 1 · 백엔드 ofono_reference" in out["o2.config"]["evidence"]
+    assert out["o2.idents"]["status"] == "pass" and "ident 3 중 로그에 나옴 3" in out["o2.idents"]["evidence"]
+    assert out["o2.pairs"]["status"] == "pass" and "ipc 짝 3/요청 4" in out["o2.pairs"]["evidence"], out["o2.pairs"]
+    assert out["o2.rows"]["status"] == "needs-user" and "S25, S26, S27" in out["o2.rows"]["evidence"]
+
+    root = ofono_root(tmp_path / "b", {"components": {**COMPONENTS, "daemon-c": {"idents": ["daemon-c"]}}},
+                      inputs=f"ofono_log_dir: {logs}\n")
+    out = by_id(sc.run_checks("O-2", root))
+    assert out["o2.idents"]["status"] == "needs-user" and "daemon-c" in out["o2.idents"]["evidence"]
+    assert out["o2.pairs"]["status"] == "needs-user" and "o2.pairs" in out["o2.pairs"]["ask"]       # 짝 규칙 없음(S26)
+    root = ofono_root(tmp_path / "c", {}, inputs=f"ofono_log_dir: {logs}\n")
+    assert sc.o2_idents(sc.Ctx(root))["status"] == "needs-user" and "S25" in sc.o2_idents(sc.Ctx(root))["ask"]
+    root = ofono_root(tmp_path / "d", {"nosuch": 1})
+    r = sc.o2_config(sc.Ctx(root))
+    assert r["status"] == "fail" and "PlatformConfigError" in r["evidence"]
+    root = ofono_root(tmp_path / "e", enabled=("android",))
+    assert sc.o2_enabled(sc.Ctx(root))["status"] == "fail"
+    (tmp_path / "f").mkdir()
+    root = site_root(tmp_path / "f")
+    assert all(r["status"] == "skip" for cid, r in by_id(sc.run_checks("O-2", root)).items() if cid != "o2.rows")
+
+
+def _ofono_db(tmp_path) -> Path:
+    sys.path.insert(0, str(ROOT / "tests" / "helpers"))
+    from runner import git_db, variant_db
+    return git_db(variant_db("issue-db-ofono"))
+
+
+def test_o3_on_ofono_db(tmp_path):
+    db = _ofono_db(tmp_path)
+    root = ofono_root(tmp_path, {"components": COMPONENTS}, inputs=f"ofono_db: {db}\n")
+    refs, head = git(db, "for-each-ref"), git(db, "rev-parse", "HEAD")
+    out = by_id(sc.run_checks("O-3", root))
+    assert list(out) == ["o3.platform", "o3.regress", "o3.verify_rules", "o3.tags", "o3.root_keys", "o3.seed",
+                         "o3.synthetic", "o3.leftover", "o3.protection", "o3.codeowners"]
+    for cid in ("o3.platform", "o3.regress", "o3.verify_rules", "o3.tags"):
+        assert out[cid]["status"] == "pass", out[cid]
+    assert out["o3.root_keys"]["status"] == "fail" and "daemon_a, daemon_b" in out["o3.root_keys"]["evidence"]
+    assert out["o3.seed"]["status"] == "fail" and "(data 제외)" not in out["o3.seed"]["evidence"]
+    assert out["o3.synthetic"]["status"] == "fail" and out["o3.leftover"]["status"] == "needs-user"
+    assert "site-defaults.yaml" not in out["o3.leftover"]["evidence"]
+    assert out["o3.protection"]["status"] == "skip" and "ofono_db_repo" in out["o3.protection"]["ask"]
+    assert out["o3.platform"]["evidence"].startswith("[oFono DB 사용자 clone의 로컬 main@")
+    assert git(db, "for-each-ref") == refs and git(db, "rev-parse", "HEAD") == head and git(db, "status", "--porcelain") == ""
+
+    root2 = ofono_root(tmp_path / "b", {"components": {**COMPONENTS, "daemon-c": {"idents": ["daemon-c"]}}},
+                       inputs=f"ofono_db: {db}\n")
+    r = sc.o3_tags(sc.Ctx(root2))
+    assert r["status"] == "fail" and "daemon-c" in r["evidence"]
+
+    seed = seed_db(tmp_path / "seed", {"data": 3, "call": 3, "sms": 3})            # data 포함 카테고리마다 3
+    set_inputs(root, f"ofono_db: {seed}\n")
+    assert sc.o3_seed(sc.Ctx(root))["status"] == "pass"
+    seed2 = seed_db(tmp_path / "seed2", {"data": 2, "call": 3, "sms": 3})
+    set_inputs(root, f"ofono_db: {seed2}\n")
+    r = sc.o3_seed(sc.Ctx(root))
+    assert r["status"] == "fail" and "3 미만: data" in r["evidence"]
+    assert sc.o3_leftover(sc.Ctx(root))["status"] == "pass"
+    assert sc.o3_platform(sc.Ctx(root))["status"] == "fail"                       # platform 선언 없음(android DB)
+
+    skel = tmp_path / "skel"
+    subprocess.run([sys.executable, str(ROOT / "tools/make_db_skeleton.py"), "--platform", "ofono", str(skel)],
+                   check=True, capture_output=True)
+    git(skel, "init", "-q", "-b", "main")
+    git(skel, "-c", "user.name=t", "-c", "user.email=t@example.invalid", "add", "-A")
+    git(skel, "-c", "user.name=t", "-c", "user.email=t@example.invalid", "commit", "-qm", "init")
+    set_inputs(root, f"ofono_db: {skel}\n")
+    r = sc.o3_leftover(sc.Ctx(root))
+    assert r["status"] == "needs-user" and "placeholder 규칙" in r["evidence"] and "o3.leftover" in r["ask"]
+    assert sc.o3_tags(sc.Ctx(root))["status"] == "fail"                         # 뼈대 tags.yaml에 ident 없음
+
+
+def test_db_clone_keys_separate_labels(tmp_path, monkeypatch):
+    ops, ofono = ops_db(tmp_path, synthetic=False), _ofono_db(tmp_path)
+    root = site_root(tmp_path)
+    set_inputs(root, f"ops_db: {ops}\nofono_db: {ofono}\n")
+    ctx = sc.Ctx(root)
+    try:
+        a, b = ctx.db_clone("ofono_db"), ctx.ops_clone()
+        assert a != b and (a / "issue-db.config.yaml").is_file() and (b / "call").is_dir()
+        assert ctx.clone_label == "운영 DB"
+        assert ctx.db_clone("ofono_db") == a and ctx.clone_label == "oFono DB"   # 다시 부르면 같은 임시 clone, 라벨 맞춤
+    finally:
+        ctx.cleanup()
+    monkeypatch.setitem(sc.CHECKS, "T-1", [sc.o3_synthetic, sc.s6_synthetic, sc.s6_review_open])
+    out = sc.run_checks("T-1", root)
+    assert out[0]["evidence"].startswith("[oFono DB 사용자 clone의 로컬 main@")
+    assert out[1]["evidence"].startswith("[운영 DB 사용자 clone의 로컬 main@")
+    assert not out[2]["evidence"].startswith("[")
+    set_inputs(root, "")
+    r = sc.o3_synthetic(sc.Ctx(root))
+    assert r["status"] == "skip" and "`ofono_db`(oFono 이슈 DB clone)" in r["evidence"] and "propose --set ofono_db=" in r["ask"]
+
+
+def test_o3_protection_uses_ofono_repo_key(tmp_path, monkeypatch):
+    root = site_root(tmp_path)
+    set_inputs(root, "ops_db_repo: org/ops\nofono_db_repo: org/ofono-db\n")
+    seen = []
+
+    def fake(self, cmd, **kw):
+        seen.append(cmd)
+        return (0, "", "") if cmd[1] == "auth" else (0, json.dumps({"required_pull_request_reviews": {
+            "require_code_owner_reviews": True}}), "")
+    monkeypatch.setattr(sc.Ctx, "run", fake)
+    r = sc.o3_protection(sc.Ctx(root))
+    assert r["status"] == "pass" and r["id"] == "o3.protection"
+    assert seen[-1] == ["gh", "api", "repos/org/ofono-db/branches/main/protection"]
+    assert sc.s4a_protection(sc.Ctx(root))["id"] == "s4a.protection" and seen[-1][2] == "repos/org/ops/branches/main/protection"
+
+
+def _work_dir(tmp_path, autos: int) -> Path:
+    w = tmp_path / "work-ofono"
+    for i in range(6):
+        job = w / f"JOB-{i}"
+        job.mkdir(parents=True)
+        rows = [{"step": "start", "v": 2}] + ([{"step": "platform", "platform": "ofono", "source": "logs"}] if i < autos else [])
+        (job / "trace.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows) + "not json\n", encoding="utf-8")
+    (w / "_snapshot").mkdir()
+    (w / "_snapshot" / "trace.jsonl").write_text(json.dumps({"step": "platform", "platform": "ofono", "source": "x"}) + "\n",
+                                                  encoding="utf-8")
+    return w
+
+
+def test_o4_runs_counts_without_keys(tmp_path, monkeypatch):
+    root = site_root(tmp_path)
+    work = _work_dir(tmp_path, autos=2)
+    seen = []
+
+    def stats(jobs, in_progress=0, practice=0, unknown=0):
+        st = {"in_progress": in_progress, "practice": practice, "unknown": unknown, "pr": 0}
+        return json.dumps({"format": 2, "platform": "ofono", "work_dir": str(work), "jobs": jobs, "states": st})
+
+    def fake(out, code=0):
+        def run(self, cmd, **kw):
+            seen.append(cmd)
+            return code, out, "usage 오류" if code else ""
+        return run
+    monkeypatch.setattr(sc.Ctx, "run", fake(stats(6, in_progress=1)))
+    r = sc.o4_runs(sc.Ctx(root))
+    assert r["status"] == "pass" and "처리 건수 5 (작업 6" in r["evidence"] and "자동 판단 oFono 2 (logs 2)" in r["evidence"]
+    assert "JOB-" not in r["evidence"] and "--platform" in seen[-1] and "ofono" in seen[-1] and "--json" in seen[-1]
+    monkeypatch.setattr(sc.Ctx, "run", fake(stats(6, practice=1, unknown=1)))
+    r = sc.o4_runs(sc.Ctx(root))
+    assert r["status"] == "needs-user" and "처리 건수 4" in r["evidence"] and "o4.runs" in r["ask"]
+    monkeypatch.setattr(sc.Ctx, "run", fake("", code=2))
+    r = sc.o4_runs(sc.Ctx(root))
+    assert r["status"] == "skip" and "config.py init --platform ofono" in r["ask"]
+
+
+def test_o4_report_line(tmp_path):
+    root = site_root(tmp_path)
+    assert sc.o4_report(sc.Ctx(root))["status"] == "needs-user"
+    ev = root / sc.EVIDENCE_FILE
+    ev.parent.mkdir(parents=True, exist_ok=True)
+    ev.write_text("- oFono 시험: 처리 건수 5, 오탐 1\n", encoding="utf-8")          # 항목 빠짐
+    r = sc.o4_report(sc.Ctx(root))
+    assert r["status"] == "needs-user" and "플랫폼 오판" in r["evidence"] and "누락" in r["evidence"]
+    ev.write_text("- oFono 시험: 처리 건수 5, 플랫폼 오판 0, 오탐 1, 누락 0\n", encoding="utf-8")
+    assert sc.o4_report(sc.Ctx(root))["status"] == "pass"
+    ev.write_text("- oFono 시험: 처리 건수 6, 플랫폼 오판 1, 오탐 0, 누락 0\n", encoding="utf-8")
+    r = sc.o4_report(sc.Ctx(root))
+    assert r["status"] == "fail" and "플랫폼 오판 1" in r["evidence"]
+    ev.write_text("- oFono 시험: 처리 건수 5, 플랫폼 오판 2, 오탐 0\n", encoding="utf-8")   # 항목이 빠져도 오판 > 0은 면제 불가
+    r = sc.o4_report(sc.Ctx(root))
+    assert r["status"] == "fail" and "플랫폼 오판 2" in r["evidence"]
+    assert sc.o4_operate(sc.Ctx(root))["status"] == "needs-user"
+    assert sc.s7_pilot(sc.Ctx(root))["evidence"].startswith("파일럿 보고 줄(0줄 중)에 없는 항목: 처리 건수")   # Android 문구 그대로
+
+
+def test_o4_doctor_passes_platform(tmp_path, monkeypatch):
+    root = ofono_root(tmp_path)
+    seen = []
+
+    def fake(self, cmd, **kw):
+        seen.append(cmd)
+        return 0, json.dumps({"counts": {"ok": 3, "fail": 0}, "rows": []}), ""
+    monkeypatch.setattr(sc.Ctx, "run", fake)
+    r = sc.o4_doctor(sc.Ctx(root))
+    assert r["status"] == "pass" and r["cmd"] == "python3 plugin/scripts/config.py doctor --format json --platform ofono --plugin-root plugin"
+    assert seen[-1][seen[-1].index("--platform") + 1] == "ofono"
+    r = sc.s3_doctor(sc.Ctx(root))
+    assert r["cmd"] == "python3 plugin/scripts/config.py doctor --format json --plugin-root plugin" and "--platform" not in seen[-1]
+
+
+def test_checks_registry_ids_match_step(tmp_path):
+    root = site_root(tmp_path)
+    for step, fns in sc.CHECKS.items():
+        prefix = step.lower().replace("-", "")
+        assert all(sc.check_id(f).split(".")[0] == prefix for f in fns), step
+    for step in ("O-1", "O-2", "O-3", "O-4"):
+        out = sc.run_checks(step, root)
+        assert [r["id"] for r in out] == [sc.check_id(f) for f in sc.CHECKS[step]], step
+        assert not any("점검 오류" in r["evidence"] for r in out), out

@@ -18,8 +18,8 @@
 
 - 모드: **사외 초안**. Phase **D0, 1~13** 완료, 반입 전 보강 트랙 완료(history). 최신 반입 묶음 **import-20261018**(태그 있음). main 병합 PR #8~#71.
 - 10/21~28 **PR #71(병합됨)**: 사내 피드백 10건 + 17건(사내는 S-6까지 완료). → `REIMPORT_NOTES_1021.md`·`REIMPORT_NOTES_1028.md`, 리뷰 인계 `REVIEW_1028_HANDOFF.md`. 사내 추가 정보(7·11·13) 요청은 보류.
-- 10/30 **oFono 여러 데몬·플랫폼별 가설 분석·플랫폼 자동 판단**(결정 (t)) → **`REIMPORT_NOTES_1030.md`**. 10/31 리뷰 P1 3 수정(`REVIEW_1030_HANDOFF.md`), PR #72. eval 63·73·74·46·47 정의만. **다음: `OFONO_TRACK_HANDOFF.md`**(oFono 트랙→묶음).
-- 모델: Sonnet 5.5 기준(Opus 5.5 확인 11개 실패 0).
+- 10/30 **oFono 여러 데몬·플랫폼별 가설 분석·플랫폼 자동 판단**(결정 (t)) → **`REIMPORT_NOTES_1030.md`**. 10/31 리뷰 P1 3 수정, PR #72. eval 63·73·74·46·47 정의만. 10/31 oFono 사내 트랙(1030 노트 §5). **다음: `OFONO_TRACK_HANDOFF.md` 할 일 2~4**.
+- 모델: Sonnet 5.5 기준(Opus 5.5 11개 실패 0).
 - `TODO(SITE)`: `tools/list_site_todos.py`. REVIEW-OPEN 0건. 사내 시작: **"사내 설정 시작"**(결정 (o)).
 - 안내서 HTML: 책 `docs/book/telephony-triage-book.html`(공유본 https://claude.ai/artifact/1jov1Et4dQUMauFr6aoxWG), 목록 `docs/materials/00-index.html`
 

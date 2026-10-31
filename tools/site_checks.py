@@ -1,12 +1,15 @@
-"""사내 보완 S 단계 자동 점검 (읽기 전용, `site_step.py check`가 부른다. 15-local-draft.md §15.5).
+"""사내 보완 S 단계·oFono 트랙 O 단계 자동 점검 (읽기 전용, `site_step.py check`가 부른다. 15-local-draft.md §15.5).
 
-- `CHECKS[S-n]`의 함수마다 `fn(ctx) -> {id, status, evidence, cmd, ask?, propose?}`. status는
+- `CHECKS[S-n]`·`CHECKS[O-n]`의 함수마다 `fn(ctx) -> {id, status, evidence, cmd, ask?, propose?}`. status는
   pass | fail | skip(실행 못 함, 사유·ask) | needs-user(사람 정보·판단 필요) | info(판정 아님).
 - 판정 근거(evidence)는 개수·종료 코드·파일:행만. 로그·Jira 원문은 넣지 않는다.
-- 쓰지 않는다: 사용자 이슈 DB clone은 읽기 전용 임시 clone(`git clone --no-local --no-checkout` → 원본의 origin/main, 없으면 로컬 main)으로만 보고 fetch·브랜치 전환·lock 없음.
+- 쓰지 않는다: 사용자 이슈 DB clone(운영 `ops_db`, oFono `ofono_db`)은 읽기 전용 임시 clone(`git clone --no-local --no-checkout` →
+  원본의 origin/main, 없으면 로컬 main)으로만 보고 fetch·브랜치 전환·lock 없음.
   골든 변조 시험은 임시 복사본에서만 한다. `claude`는 `--allow-api`일 때만 부른다.
 - 한 점검이 예외를 내면 그 점검만 fail이고 나머지는 계속한다(doctor 방식).
 - 사내 값은 코드에 없다: 입력은 `docs/site/steps.yaml`(`propose --apply`로만 씀)·`SITE_PROFILE.md`·사내 파일에서 읽는다.
+- O 단계(oFono)는 플러그인 모듈(`platforms`·`parser_backends`·`common.parser_rules`·`common.userconfig`)을 점검 함수 안에서
+  지연 import한다(`_plugin`). import가 실패하면 그 점검만 fail이다. Android 점검 본문은 매개변수로 함께 쓰고 Android 문구는 그대로다.
 """
 from __future__ import annotations
 
@@ -50,7 +53,13 @@ STEP_INPUTS = {
     "jira_raw_dir": "S-3 jira_fields extract 확인용 저장 raw 디렉토리(마스킹본)",
     "platforms": "S-7 usage_stats 대상 플랫폼 목록",
     "eval_model": "S-2 eval·토큰 기준선 모델 ID(run.py --model)",
+    "ofono_log_dir": "O-1·O-2 oFono 로그 폴더(마스킹본, 수집 체크리스트 사례 폴더들)",
+    "android_log_dir": "O-1 선택: Android logcat 표본 폴더(oFono로 오판하지 않는지)",
+    "ofono_db": "oFono 이슈 DB clone 경로(읽기 전용, 점검은 임시 clone에서)",
+    "ofono_db_repo": "oFono 이슈 DB GHE 저장소 owner/repo (gh api 읽기)",
 }
+DB_LABELS = {"ops_db": "운영 DB", "ofono_db": "oFono DB"}               # 근거 머리 `[<라벨> <ref>]`
+DB_NAMES = {"ops_db": "운영 이슈 DB", "ofono_db": "oFono 이슈 DB"}
 GATE_RE = re.compile(r"(?m)^- S-5 게이트: top1 ≥ ([0-9.]+), error_rate ≤ ([0-9.]+) \((\d{4}-\d{2}-\d{2}) 합의\)\s*$")
 REVIEW_ROW_RE = re.compile(r"(?m)^\|\s*(R\d+)\s*\|")
 # placeholder 규칙: reason이 placeholder로 시작(블록 표기 `reason:` 줄과 흐름 표기 `- {…, reason: …}` 둘 다, 뼈대가 붙인다)
@@ -74,8 +83,9 @@ class Ctx:
     allow_api: bool = False
     timeout: int = 600
     _tmp: list = field(default_factory=list)
-    _clone: Path | None = None
+    _clones: dict = field(default_factory=dict)       # 입력 키 → (임시 clone, ref 설명)
     clone_ref: str = ""
+    clone_label: str = ""
     used_clone: bool = False
 
     @property
@@ -128,17 +138,23 @@ class Ctx:
         return d
 
     def ops_clone(self) -> Path | None:
-        """운영 이슈 DB의 읽기 전용 임시 clone. 원본에는 fetch·전환·쓰기를 하지 않는다(clone·fetch는 로컬 경로를 읽기만 한다).
+        return self.db_clone("ops_db")
+
+    def db_clone(self, key: str = "ops_db") -> Path | None:
+        """이슈 DB(steps.yaml `key`)의 읽기 전용 임시 clone. 원본에는 fetch·전환·쓰기를 하지 않는다(clone·fetch는 로컬 경로를 읽기만 한다).
         임시 clone의 `origin/*`은 원본의 **로컬** 브랜치이므로, 원본의 `refs/remotes/origin/main`(마지막 fetch 시점의 원격 main)을
-        `src/main`으로 가져와 그것을 본다. 없으면 원본 로컬 main. 근거에 넣을 `clone_ref`를 남긴다."""
+        `src/main`으로 가져와 그것을 본다. 없으면 원본 로컬 main. 근거에 넣을 `clone_label`·`clone_ref`를 부를 때마다 맞춘다."""
         self.used_clone = True
-        if self._clone is not None:
-            return self._clone
-        src = self.inputs.get("ops_db")
+        self.clone_label = DB_LABELS.get(key, key)
+        if key in self._clones:
+            self.clone_ref = self._clones[key][1]
+            return self._clones[key][0]
+        self.clone_ref = ""
+        src = self.inputs.get(key)
         if not src or not (Path(str(src)).expanduser() / ".git").exists():
             return None
         src = str(Path(str(src)).expanduser())
-        dst = self.tmpdir() / "ops-db"
+        dst = self.tmpdir() / key.replace("_", "-")
         env = dict(os.environ, GIT_LFS_SKIP_SMUDGE="1")
         code, _, err = self.run(["git", "clone", "--quiet", "--no-local", "--no-hardlinks", "--no-checkout", src, str(dst)],
                                 timeout=300, env=env)
@@ -151,9 +167,9 @@ class Ctx:
             if self.run(["git", "-C", str(dst), "checkout", "-q", "--detach", ref], timeout=120, env=env)[0] == 0:
                 sha = self.run(["git", "-C", str(dst), "rev-parse", "--short", "HEAD"], timeout=30)[1].strip()
                 self.clone_ref = label.format(sha)
-                self._clone = dst
+                self._clones[key] = (dst, self.clone_ref)
                 return dst
-        raise CloneUnavailable("운영 DB clone에 origin/main도 로컬 main도 없다")
+        raise CloneUnavailable(f"{self.clone_label} clone에 origin/main도 로컬 main도 없다")
 
     def gh(self, *args: str) -> tuple[int, str, str]:
         """모든 gh 호출에 GH_HOST(steps.yaml `ghe_host`)를 준다(auth status·pr list·api 공통)."""
@@ -165,7 +181,7 @@ class Ctx:
         for d in self._tmp:
             shutil.rmtree(d, ignore_errors=True)
         self._tmp.clear()
-        self._clone = None
+        self._clones.clear()
 
 
 def load_inputs(root: Path) -> dict:
@@ -751,18 +767,23 @@ def s3_config_check(ctx: Ctx) -> dict:
 
 
 def s3_doctor(ctx: Ctx) -> dict:
+    return _doctor(ctx, "s3.doctor")
+
+
+def _doctor(ctx: Ctx, cid: str, platform: str | None = None) -> dict:
     if _site_defaults(ctx) is None:
-        return _need_defaults("s3.doctor")
-    code, out, err = ctx.py("plugin/scripts/config.py", "doctor", "--format", "json", "--plugin-root",
+        return _need_defaults(cid)
+    plat = ["--platform", platform] if platform else []
+    code, out, err = ctx.py("plugin/scripts/config.py", "doctor", "--format", "json", *plat, "--plugin-root",
                             str(ctx.root / "plugin"), timeout=180)
-    cmd = "python3 plugin/scripts/config.py doctor --format json --plugin-root plugin"
+    cmd = "python3 plugin/scripts/config.py doctor --format json " + " ".join([*plat, "--plugin-root plugin"])
     try:
         data = json.loads(out)
     except ValueError:
-        return res("s3.doctor", "fail", f"종료 {code}, JSON 아님 — {_first_line(err)}", cmd)
+        return res(cid, "fail", f"종료 {code}, JSON 아님 — {_first_line(err)}", cmd)
     counts = data.get("counts") or {}
     fails = [r.get("check") for r in data.get("rows") or [] if r.get("status") == "fail"]
-    return res("s3.doctor", "pass" if not counts.get("fail") else "fail",
+    return res(cid, "pass" if not counts.get("fail") else "fail",
                " · ".join(f"{k} {counts.get(k, 0)}" for k in ("ok", "warn", "fail", "skip"))
                + (f" (fail: {', '.join(map(str, fails))})" if fails else ""), cmd)
 
@@ -844,22 +865,26 @@ def _gh_ready(ctx: Ctx, key: str, cid: str) -> tuple[str | None, dict | None]:
 
 
 def s4a_protection(ctx: Ctx) -> dict:
-    repo, early = _gh_ready(ctx, "ops_db_repo", "s4a.protection")
+    return _protection(ctx, "ops_db_repo", "s4a.protection")
+
+
+def _protection(ctx: Ctx, key: str, cid: str) -> dict:
+    repo, early = _gh_ready(ctx, key, cid)
     if early:
         return early
     cmd = f"gh api repos/{repo}/branches/main/protection"
     code, out, err = ctx.gh("api", f"repos/{repo}/branches/main/protection")
     if code:     # 403(권한)·404(보호 없음 또는 레포 없음)는 도구로 고칠 수 없다 — 사람에게 묻는다
         http = re.search(r"HTTP (\d{3})", err + out)
-        return res("s4a.protection", "skip", f"브랜치 보호 조회 종료 {code}" + (f" (HTTP {http.group(1)})" if http else ""), cmd,
+        return res(cid, "skip", f"브랜치 보호 조회 종료 {code}" + (f" (HTTP {http.group(1)})" if http else ""), cmd,
                    ask="main 브랜치 보호(PR 필수·CODEOWNERS 리뷰)를 켰는지, 조회 권한(관리자)이 있는지 확인해 주세요")
     try:
         data = json.loads(out)
     except ValueError:
-        return res("s4a.protection", "skip", "응답이 JSON 아님", cmd, ask="gh api 응답을 확인해 주세요")
+        return res(cid, "skip", "응답이 JSON 아님", cmd, ask="gh api 응답을 확인해 주세요")
     reviews = data.get("required_pull_request_reviews") or {}
     owners = bool(reviews.get("require_code_owner_reviews"))
-    return res("s4a.protection", "pass" if reviews and owners else "fail",
+    return res(cid, "pass" if reviews and owners else "fail",
                f"PR 리뷰 필수 {bool(reviews)} · CODEOWNERS 리뷰 {owners} · 필수 승인 수 "
                f"{reviews.get('required_approving_review_count', '?')}(0이면 본인 병합 가능, issue_db.merge)", cmd)
 
@@ -871,22 +896,26 @@ CODEOWNERS_LEFT_RE = re.compile(r"<org>|TODO\(SITE")
 def s4a_codeowners(ctx: Ctx) -> dict:
     """운영 DB CODEOWNERS 오너 줄(주석 밖)에 뼈대 값이 남았는지: 모의 값(MOCK_VALUE_RE)·`<org>`·`TODO(SITE`.
     오너 형식은 팀(`@<org>/<team>`)·개인(`@<login>`) 모두 받는다. 머리 주석의 TODO(SITE:S5)는 보지 않는다."""
-    clone, early = _need_clone(ctx, "s4a.codeowners")
+    return _codeowners(ctx, "s4a.codeowners", "ops_db")
+
+
+def _codeowners(ctx: Ctx, cid: str, key: str) -> dict:
+    clone, early = _need_clone(ctx, cid, key)
     if early:
         return early
     path = next((clone / p for p in CODEOWNERS_PATHS if (clone / p).is_file()), None)
     cmd = "grep -nv '^#' <임시 clone>/.github/CODEOWNERS"
     if path is None:
-        return res("s4a.codeowners", "needs-user", "CODEOWNERS 없음 — 메인테이너 경로 필수 리뷰가 걸리지 않는다", cmd,
-                   ask="운영 DB에 CODEOWNERS(메인테이너 경로 오너)를 넣는 메인테이너 PR을 만든다(S5)")
+        return res(cid, "needs-user", "CODEOWNERS 없음 — 메인테이너 경로 필수 리뷰가 걸리지 않는다", cmd,
+                   ask=f"{DB_LABELS[key]}에 CODEOWNERS(메인테이너 경로 오너)를 넣는 메인테이너 PR을 만든다(S5)")
     rel = path.relative_to(clone).as_posix()
     left = [f"{rel}:{n}" for n, line in enumerate(path.read_text(encoding="utf-8", errors="replace").splitlines(), 1)
             if line.strip() and not line.lstrip().startswith("#")
             and (MOCK_VALUE_RE.search(line) or CODEOWNERS_LEFT_RE.search(line))]
     if left:
-        return res("s4a.codeowners", "fail", f"뼈대 오너 값 {len(left)}줄: " + ", ".join(left[:5]) + (" …" if len(left) > 5 else "")
+        return res(cid, "fail", f"뼈대 오너 값 {len(left)}줄: " + ", ".join(left[:5]) + (" …" if len(left) > 5 else "")
                    + " — 사내 팀(@<org>/<team>) 또는 개인(@<login>)으로 바꾸는 메인테이너 PR", cmd)
-    return res("s4a.codeowners", "pass", f"{rel} 오너 줄에 뼈대 값 없음", cmd)
+    return res(cid, "pass", f"{rel} 오너 줄에 뼈대 값 없음", cmd)
 
 
 def _golden_tests(root: Path) -> list[Path]:
@@ -1031,39 +1060,47 @@ def s4a_import_pr(ctx: Ctx) -> dict:
 
 # --- S-4 ----------------------------------------------------------------------------------------------------
 
-def _need_clone(ctx: Ctx, cid: str) -> tuple[Path | None, dict | None]:
+def _need_clone(ctx: Ctx, cid: str, key: str = "ops_db") -> tuple[Path | None, dict | None]:
     try:
-        clone = ctx.ops_clone()
+        clone = ctx.db_clone(key)
     except CloneUnavailable as exc:
         return None, res(cid, "skip", str(exc), "git -C <임시 clone> checkout --detach origin/main",
-                         ask="운영 DB clone의 main(origin/main)을 확인해 주세요(점검은 원본을 바꾸지 않는다)")
+                         ask=f"{DB_LABELS[key]} clone의 main(origin/main)을 확인해 주세요(점검은 원본을 바꾸지 않는다)")
     except RuntimeError as exc:
-        return None, res(cid, "fail", str(exc), "git clone --no-local <ops_db> <임시>")
+        return None, res(cid, "fail", str(exc), f"git clone --no-local <{key}> <임시>")
     if clone is None:
-        return None, res(cid, "skip", "steps.yaml `ops_db`(운영 이슈 DB clone) 없음", None,
-                         ask="운영 이슈 DB clone 경로를 알려 주세요 → `propose --set ops_db=<경로>`(점검은 임시 clone에서만)")
+        return None, res(cid, "skip", f"steps.yaml `{key}`({DB_NAMES[key]} clone) 없음", None,
+                         ask=f"{DB_NAMES[key]} clone 경로를 알려 주세요 → `propose --set {key}=<경로>`(점검은 임시 clone에서만)")
     return clone, None
 
 
 def s4_regress(ctx: Ctx) -> dict:
-    clone, early = _need_clone(ctx, "s4.regress")
+    return _regress(ctx, "s4.regress")
+
+
+def _regress(ctx: Ctx, cid: str, key: str = "ops_db") -> dict:
+    clone, early = _need_clone(ctx, cid, key)
     if early:
         return early
     code, out, err = ctx.py("plugin/scripts/db_regress.py", "--db", str(clone), "--all", "--json",
                             "--plugin-root", str(ctx.root / "plugin"))
-    return res("s4.regress", "pass" if code == 0 else "fail", f"(임시 clone) 종료 {code}" +
+    return res(cid, "pass" if code == 0 else "fail", f"(임시 clone) 종료 {code}" +
                (f" — {_first_line(err)}" if code else ""), "python3 plugin/scripts/db_regress.py --db <임시 clone> --all")
 
 
 def s4_verify_rules(ctx: Ctx) -> dict:
-    clone, early = _need_clone(ctx, "s4.verify_rules")
+    return _verify_rules(ctx, "s4.verify_rules")
+
+
+def _verify_rules(ctx: Ctx, cid: str, key: str = "ops_db") -> dict:
+    clone, early = _need_clone(ctx, cid, key)
     if early:
         return early
     _, first, _ = ctx.run(["git", "-C", str(clone), "rev-list", "--max-parents=0", "HEAD"], timeout=30)
     first = (first.split() or [""])[0]
     code, _, err = ctx.py("plugin/scripts/db_verify.py", "rules", "--changed", first, "--db", str(clone), "--json",
                           "--plugin-root", str(ctx.root / "plugin"))
-    return res("s4.verify_rules", "pass" if code == 0 else "fail",
+    return res(cid, "pass" if code == 0 else "fail",
                f"(임시 clone, 첫 커밋 이후 전체) 종료 {code}" + (f" — {_first_line(err)}" if code else ""),
                "python3 plugin/scripts/db_verify.py rules --changed <첫 커밋> --db <임시 clone>")
 
@@ -1100,20 +1137,25 @@ def _real_fixture(type_dir: Path) -> bool:
 
 
 def s4_seed(ctx: Ctx) -> dict:
-    clone, early = _need_clone(ctx, "s4.seed")
+    return _seed(ctx, "s4.seed", "ops_db", SEED_MIN, ("data",))
+
+
+def _seed(ctx: Ctx, cid: str, key: str, minimum: int, exclude: tuple[str, ...]) -> dict:
+    clone, early = _need_clone(ctx, cid, key)
     if early:
         return early
     cmd = "find <db> -path '*/fixtures/*.log'"
     cats = _categories(clone)
     if cats is None:
-        return res("s4.seed", "fail", "issue-db.config.yaml `categories` 없음 — 시드 대상 카테고리를 모름", cmd)
+        return res(cid, "fail", "issue-db.config.yaml `categories` 없음 — 시드 대상 카테고리를 모름", cmd)
     types = _types(clone)
-    counts = {c: sum(_real_fixture(t) for t in types.get(c, [])) for c in cats if c != "data"}
-    low = [c for c, n in counts.items() if n < SEED_MIN]
-    ev = "실제 fixture 있는 유형(data 제외): " + (", ".join(f"{c} {n}" for c, n in counts.items()) or "대상 카테고리 없음")
+    counts = {c: sum(_real_fixture(t) for t in types.get(c, [])) for c in cats if c not in exclude}
+    low = [c for c, n in counts.items() if n < minimum]
+    ev = ("실제 fixture 있는 유형" + (f"({'·'.join(exclude)} 제외)" if exclude else "") + ": "
+          + (", ".join(f"{c} {n}" for c, n in counts.items()) or "대상 카테고리 없음"))
     if not counts or low:
-        return res("s4.seed", "fail", ev + (f" — {SEED_MIN} 미만: {', '.join(low)}" if low else ""), cmd)
-    return res("s4.seed", "pass", ev, cmd)
+        return res(cid, "fail", ev + (f" — {minimum} 미만: {', '.join(low)}" if low else ""), cmd)
+    return res(cid, "pass", ev, cmd)
 
 
 def placeholder_rules(db: Path) -> list[str]:
@@ -1160,12 +1202,13 @@ def _counts(left: dict) -> dict[str, int]:
     return {k: len(left["db"][k]) + len(left["site"].get(k, [])) for k in LEFTOVER_KINDS}
 
 
-def _leftover_evidence(ctx: Ctx, left: dict) -> str:
+def _leftover_evidence(ctx: Ctx, left: dict, label: str = "운영 DB", site: bool = True) -> str:
     db = " · ".join(f"{LEFTOVER_KINDS[k]} {len(v)}" for k, v in left["db"].items())
-    site = " · ".join(f"{LEFTOVER_KINDS[k]} {len(v)}" for k, v in left["site"].items())
+    defaults = " / site-defaults.yaml " + " · ".join(f"{LEFTOVER_KINDS[k]} {len(v)}" for k, v in left["site"].items()) \
+        if site else ""
     first = "; ".join(f"{LEFTOVER_KINDS[k]}: " + ", ".join(v[:5]) + (" …" if len(v) > 5 else "")
                       for k in LEFTOVER_KINDS if (v := left["db"][k] + left["site"].get(k, [])))
-    return f"운영 DB({ctx.clone_ref or '임시 clone'}) {db} / site-defaults.yaml {site}" + (f" — {first}" if first else "")
+    return f"{label}({ctx.clone_ref or '임시 clone'}) {db}{defaults}" + (f" — {first}" if first else "")
 
 
 LEFTOVER_CMD = ("grep -rnE 'reason: placeholder|TODO\\(SITE' <임시 clone> plugin/site-defaults.yaml; "
@@ -1242,12 +1285,16 @@ def s6_review_open(ctx: Ctx) -> dict:
 
 
 def s6_synthetic(ctx: Ctx) -> dict:
-    clone, early = _need_clone(ctx, "s6.synthetic")
+    return _synthetic(ctx, "s6.synthetic")
+
+
+def _synthetic(ctx: Ctx, cid: str, key: str = "ops_db") -> dict:
+    clone, early = _need_clone(ctx, cid, key)
     if early:
         return early
     hits = [p.relative_to(clone).as_posix() for p in sorted(clone.rglob("*.expect.yaml"))
             if SYNTHETIC_RE.search(p.read_text(encoding="utf-8", errors="replace"))]
-    return res("s6.synthetic", "fail" if hits else "pass", f"`origin: synthetic` {len(hits)}건"
+    return res(cid, "fail" if hits else "pass", f"`origin: synthetic` {len(hits)}건"
                + (": " + ", ".join(hits[:5]) + (" …" if len(hits) > 5 else "") if hits else ""),
                "grep -rl 'origin: synthetic' --include='*.expect.yaml' <임시 clone>")
 
@@ -1319,18 +1366,459 @@ def s7_usage(ctx: Ctx) -> dict:
 
 def s7_pilot(ctx: Ctx) -> dict:
     """파일럿 보고: '파일럿'이 든 한 줄에 항목이 모두 있어야 한다(여러 줄에 흩어진 낱말은 보고가 아니다)."""
+    return _report_line(ctx, "s7.pilot", "파일럿", PILOT_FIELDS,
+                        "파일럿 결과를 한 줄로(" + ", ".join(PILOT_FIELDS) + ") SITE_PROFILE.md 또는 evidence.md에 기록한다")[0]
+
+
+def _report_line(ctx: Ctx, cid: str, word: str, fields: tuple[str, ...], ask: str) -> tuple[dict, list[str]]:
+    """(결과, 항목이 모두 든 `word` 줄 목록). SITE_PROFILE.md와 evidence.md에서 `word`가 든 한 줄에 `fields`가 모두 있어야 한다."""
     text = ctx.profile + "\n" + ((ctx.root / EVIDENCE_FILE).read_text(encoding="utf-8") if (ctx.root / EVIDENCE_FILE).is_file() else "")
-    lines = [ln for ln in text.splitlines() if "파일럿" in ln]
-    best = min(([f for f in PILOT_FIELDS if f not in ln] for ln in lines), key=len, default=list(PILOT_FIELDS))
+    lines = [ln for ln in text.splitlines() if word in ln]
+    best = min(([f for f in fields if f not in ln] for ln in lines), key=len, default=list(fields))
     if best:
-        return res("s7.pilot", "needs-user", f"파일럿 보고 줄({len(lines)}줄 중)에 없는 항목: {', '.join(best)}", None,
-                   ask="파일럿 결과를 한 줄로(" + ", ".join(PILOT_FIELDS) + ") SITE_PROFILE.md 또는 evidence.md에 기록한다")
-    return res("s7.pilot", "pass", "파일럿 보고 줄에 항목 모두 있음", None)
+        return res(cid, "needs-user", f"{word} 보고 줄({len(lines)}줄 중)에 없는 항목: {', '.join(best)}", None, ask=ask), []
+    return res(cid, "pass", f"{word} 보고 줄에 항목 모두 있음", None), [ln for ln in lines if all(f in ln for f in fields)]
 
 
 def s7_expansion(ctx: Ctx) -> dict:
     return res("s7.expansion", "needs-user", "전체 확대 여부는 사용자가 정한다", None,
                ask="전체 확대 여부를 결정해 주세요 → `--done S-7 --waive s7.expansion=\"<결정>\"`")
+
+
+# --- O-1~O-4 (oFono 사내 트랙, S-3 완료 뒤 `site_step.py ofono`) -------------------------------------------------
+
+# 수집 체크리스트(docs/development/OFONO_LOG_COLLECTION.md) 사례 폴더의 줄 로그 이름(`.masked`를 뗀 이름). 그 밖(dbus.log·
+# info.txt·notes.md·json)은 형식·짝 점검에서 빼고 개수만 근거에 둔다. 마스킹 검사는 모든 파일.
+JOURNAL_RE = re.compile(r"^(journal(-.+)?\.log|kernel\.log|syslog(\.\d+)?|messages(\.\d+)?)$")
+OFONO_SEED_MIN = 3       # 카테고리마다 실제 fixture 있는 유형 수 (§15.5 O-3, 사용자 확정 10/31)
+OFONO_RUNS_MIN = 5       # 처리한 실제 oFono 이슈 수 (§15.5 O-4)
+OFONO_FIELDS = ("처리 건수", "플랫폼 오판", "오탐", "누락")
+MISJUDGE_RE = re.compile(r"플랫폼 오판\s*:?\s*(\d+)")
+
+
+def _plugin():
+    """플러그인 모듈(지연 import, 선례 tools/s0_stats.py). 실패는 부른 점검만 fail이다(run_checks 예외 처리)."""
+    scripts = str(REPO / "plugin" / "scripts")
+    if scripts not in sys.path:
+        sys.path.insert(0, scripts)
+    import parser_backends
+    import platforms
+    import platforms.sniff
+    from common import parser_rules, userconfig
+    return platforms, parser_backends, parser_rules, userconfig
+
+
+def _ofono_block(d: dict) -> dict:
+    """site-defaults에서 oFono 상수 블록(기본 플랫폼이면 `platform:`, 아니면 `platform.others.ofono`)."""
+    plat = (d or {}).get("platform") or {}
+    if not isinstance(plat, dict):
+        return {}
+    block = plat if plat.get("name") == "ofono" else (plat.get("others") or {}).get("ofono")
+    return block if isinstance(block, dict) else {}
+
+
+def _ofono_profile(ctx: Ctx):
+    platforms = _plugin()[0]
+    return platforms.load(_site_defaults(ctx), "ofono")
+
+
+def _rel(p: Path, base: Path) -> str:
+    return p.relative_to(base).as_posix()
+
+
+def _ofono_files(ctx: Ctx, cid: str) -> tuple[Path | None, list[Path], dict | None]:
+    """(폴더, 숨김 아닌 파일 전체, 조기 결과). 입력이 없거나 파일이 0이면 사용자 필요."""
+    d = ctx.inputs.get("ofono_log_dir")
+    ask = ("oFono 로그(수집 체크리스트 사례 폴더들, 마스킹본) 폴더를 알려 주세요 → `propose --set ofono_log_dir=<경로>` "
+           "(docs/development/OFONO_LOG_COLLECTION.md)")
+    base = Path(str(d)).expanduser() if d else None
+    if base is None or not base.is_dir():
+        return None, [], res(cid, "needs-user", "steps.yaml `ofono_log_dir` 없음" if not d else "ofono_log_dir 폴더 없음",
+                             None, ask=ask)
+    files = sorted(p for p in base.rglob("*") if p.is_file() and not any(x.startswith(".") for x in p.relative_to(base).parts))
+    if not files:
+        return None, [], res(cid, "needs-user", "ofono_log_dir 파일 0", None, ask=ask)
+    return base, files, None
+
+
+def _log_name(p: Path) -> str:
+    return p.name.removesuffix(".masked")
+
+
+def _journal(files: list[Path]) -> tuple[list[Path], int]:
+    """(줄 로그, 이름 규칙에 안 맞아 뺀 파일 수)."""
+    logs = [p for p in files if JOURNAL_RE.match(_log_name(p))]
+    return logs, len(files) - len(logs)
+
+
+def _no_logs(cid: str, skipped: int) -> dict:
+    return res(cid, "needs-user", f"줄 로그 0 (이름 규칙 밖 {skipped}개)", None,
+               ask="사례 폴더에 journal.log·journal-<유닛>.log·kernel.log·syslog·messages(마스킹본은 `.masked`)를 둔다 "
+                   "(docs/development/OFONO_LOG_COLLECTION.md 4)")
+
+
+def o1_masked(ctx: Ctx) -> dict:
+    base, files, early = _ofono_files(ctx, "o1.masked")
+    if early:
+        return early
+    if _site_defaults(ctx) is None:
+        return _need_defaults("o1.masked")
+    cmd = "python3 plugin/scripts/mask_pii.py <ofono_log_dir 파일> --check"
+    code, out, err = ctx.py("plugin/scripts/mask_pii.py", *map(str, files), "--check", "--plugin-root",
+                            str(ctx.root / "plugin"), timeout=600)
+    if code == 0:
+        return res("o1.masked", "pass", f"파일 {len(files)}개 마스킹 검사 종료 0", cmd)
+    if code != 1:
+        return res("o1.masked", "fail", f"파일 {len(files)}개, 종료 {code} — {_first_line(err)}", cmd)
+    try:
+        hits = json.loads(out).get("detections") or []
+    except ValueError:
+        return res("o1.masked", "fail", f"파일 {len(files)}개, 종료 1, JSON 아님", cmd)
+    kinds: dict[str, int] = {}
+    for h in hits:
+        kinds[str(h.get("kind"))] = kinds.get(str(h.get("kind")), 0) + 1
+    where = [f"{_rel(Path(str(h.get('path'))), base)}:{h.get('line')}" for h in hits[:5]]
+    return res("o1.masked", "fail", f"파일 {len(files)}개, 마스킹 안 됨 {len(hits)}곳 ("
+               + ", ".join(f"{k} {n}" for k, n in sorted(kinds.items())) + "): " + ", ".join(where)
+               + (" …" if len(hits) > 5 else ""), cmd,
+               ask="마스킹 안 된 파일을 `mask_pii.py <파일> --out <파일>.masked`로 다시 처리하고 원본은 폴더에서 뺀다")
+
+
+def o1_sniff(ctx: Ctx) -> dict:
+    base, files, early = _ofono_files(ctx, "o1.sniff")
+    if early:
+        return early
+    logs, skipped = _journal(files)
+    if not logs:
+        return _no_logs("o1.sniff", skipped)
+    sniff = _plugin()[0].sniff
+    names = ["android", "ofono"]
+    got = {p: sniff.file_match(p, names) for p in logs}
+    as_android = [_rel(p, base) for p, m in got.items() if "android" in m]
+    unknown = [_rel(p, base) for p, m in got.items() if not m]
+    ev = (f"줄 로그 {len(logs)}개: oFono {sum(m == ['ofono'] for m in got.values())} · Android로 판별 {len(as_android)} · "
+          f"형식 미확인 {len(unknown)} (이름 규칙 밖 {skipped}개 제외)")
+    adir = ctx.inputs.get("android_log_dir")
+    wrong = []
+    if adir:
+        apath = Path(str(adir)).expanduser()
+        afiles = sorted(p for p in apath.rglob("*") if p.is_file() and not any(
+            x.startswith(".") for x in p.relative_to(apath).parts)) if apath.is_dir() else []
+        wrong = [_rel(p, apath) for p in afiles if sniff.file_match(p, names) != ["android"]]
+        ev += f" · Android 표본 {len(afiles)}개 중 Android만이 아닌 것 {len(wrong)}"
+        if not afiles:
+            wrong = ["(android_log_dir 파일 0)"]
+    else:
+        ev += " · Android 표본 없음(선택 `android_log_dir`)"
+    cmd = "platforms.sniff.file_match(<파일>, [android, ofono])"
+    if as_android or wrong:
+        return res("o1.sniff", "fail", ev + ": " + ", ".join((as_android + wrong)[:5]), cmd,
+                   ask="oFono 로그가 Android로(또는 Android 표본이 oFono로) 판별된다 — 플랫폼 오판이다. 형식만 문장으로 사외 "
+                       "`platforms/ofono/journal.py`·`android/logcat.py` 수정을 요청한다(로그·구성요소 이름은 반출하지 않는다)")
+    if unknown:
+        return res("o1.sniff", "needs-user", ev + ": " + ", ".join(unknown[:5]), cmd,
+                   ask="형식 미확인 파일이 있다 — 줄 형식이 가정(journald short-iso-precise·syslog)과 다르면 형식만 문장으로 "
+                       "사외 `platforms/ofono/journal.py` 수정을 요청한다(S24, 로그 원문은 반출하지 않는다)")
+    return res("o1.sniff", "pass", ev, cmd)
+
+
+def o1_parse(ctx: Ctx) -> dict:
+    base, files, early = _ofono_files(ctx, "o1.parse")
+    if early:
+        return early
+    logs, skipped = _journal(files)
+    if not logs:
+        return _no_logs("o1.parse", skipped)
+    read = _plugin()[0].get("ofono").log.read_file
+    parsed = total = 0
+    low = []
+    for i, p in enumerate(logs):
+        _, st = read(p, i, None, None)
+        n = st.lines + st.unparsed
+        parsed, total = parsed + st.lines, total + n
+        if st.lines == 0 or st.unparsed * 2 > n:
+            low.append(f"{_rel(p, base)} {st.lines}/{n}")
+    pct = f"{parsed * 100 // total}%" if total else "-"
+    ev = f"줄 로그 {len(logs)}개: 해석 {parsed}/{total}줄({pct}) (이름 규칙 밖 {skipped}개 제외)"
+    cmd = "platforms.get('ofono').log.read_file(<파일>) — FileStats lines·unparsed"
+    if low:
+        return res("o1.parse", "needs-user", ev + f" · 절반 넘게 못 읽은 파일 {len(low)}: " + ", ".join(low[:5])
+                   + (" …" if len(low) > 5 else ""), cmd,
+                   ask="가정 형식(journal.py)이 읽지 못하는 파일이 있다 — 형식 차이를 문장으로(S24) 사외 수정을 요청하거나, "
+                       "형식 밖 파일이면 사유와 함께 `--waive o1.parse=…`")
+    return res("o1.parse", "pass", ev, cmd)
+
+
+def _rows_check(ctx: Ctx, cid: str, rows: dict[str, str]) -> dict:
+    have = {r[0] for r in profile_rows(ctx.profile)}
+    missing = [k for k in rows if k not in have]
+    if missing:
+        return res(cid, "needs-user", f"확인값 행 없음: {', '.join(missing)}", "SITE_PROFILE.md ## 확인값",
+                   ask="확인값을 주세요: " + "; ".join(f"{k} {rows[k]}" for k in missing)
+                       + " → `propose --set \"row.<S#>.<항목>=<값>\"` (예: `propose --set \"row.S24.로그 형식=…\"`)")
+    return res(cid, "pass", f"{'·'.join(rows)} 행 있음", "SITE_PROFILE.md ## 확인값")
+
+
+def o1_rows(ctx: Ctx) -> dict:
+    return _rows_check(ctx, "o1.rows", {"S24": "로그 형식", "S29": "모뎀·슬롯 표기"})
+
+
+def o2_enabled(ctx: Ctx) -> dict:
+    d = _site_defaults(ctx)
+    if d is None:
+        return _need_defaults("o2.enabled")
+    on = _plugin()[0].enabled(d)
+    return res("o2.enabled", "pass" if "ofono" in on else "fail", f"platform.enabled = {', '.join(on)}",
+               "grep -n -A3 'enabled' plugin/site-defaults.yaml")
+
+
+def o2_config(ctx: Ctx) -> dict:
+    d = _site_defaults(ctx)
+    if d is None:
+        return _need_defaults("o2.config")
+    platforms, parser_backends, _, userconfig = _plugin()
+    cmd = "platforms.load(site-defaults, 'ofono')·backend_name·detect_rules·userconfig.site_platform_problems"
+    try:
+        prof = platforms.load(d, "ofono")
+        backend = platforms.backend_name(d, "ofono")
+        parser_backends.load(backend)
+        detect = platforms.detect_rules(d)
+    except (platforms.PlatformConfigError, parser_backends.BackendError) as exc:
+        return res("o2.config", "fail", f"{type(exc).__name__}: {_first_line(str(exc))}", cmd)
+    problems = userconfig.site_platform_problems(d)
+    if problems:
+        return res("o2.config", "fail", f"site-defaults platforms 문제 {len(problems)}: {_first_line(problems[0])}", cmd)
+    analyzers = (((d.get("platforms") or {}).get("ofono") or {}).get("analyzers")) if isinstance(d.get("platforms"), dict) else None
+    block = _ofono_block(d)
+    ev = (f"구성요소 {len(prof.components)}({'설정' if block.get('components') is not None else '코드 기본'}) · "
+          f"짝 규칙 {len(prof.protocols)} · 백엔드 {backend} · platform.detect {'있음' if detect else '없음'} · "
+          f"platforms.ofono.analyzers {'있음' if analyzers else '없음'}")
+    return res("o2.config", "pass", ev, cmd)
+
+
+def _ofono_tags(read, logs: list[Path]) -> set[str]:
+    tags: set[str] = set()
+    for i, p in enumerate(logs):
+        tags |= {ln.tag for ln in read(p, i, None, None)[0]}
+    return tags
+
+
+def o2_idents(ctx: Ctx) -> dict:
+    d = _site_defaults(ctx)
+    if d is None:
+        return _need_defaults("o2.idents")
+    _, files, early = _ofono_files(ctx, "o2.idents")
+    if early:
+        return early
+    logs, skipped = _journal(files)
+    if not logs:
+        return _no_logs("o2.idents", skipped)
+    prof = _ofono_profile(ctx)
+    cmd = "read_file(<O-1 줄 로그>)의 LogLine.tag ⊇ components.*.idents"
+    if _ofono_block(d).get("components") is None:
+        return res("o2.idents", "needs-user", f"components 미설정(코드 기본 {len(prof.components)}개)", cmd,
+                   ask="oFono 구성요소(데몬) 목록과 ident를 정해 주세요(S25) → site-defaults "
+                       "`platform.others.ofono.components`(형식 plugin/site-defaults.example.yaml)")
+    tags = _ofono_tags(_plugin()[0].get("ofono").log.read_file, logs)
+    idents = [i for c in prof.components for i in c.idents]
+    missing = [i for i in idents if i not in tags]
+    ev = f"구성요소 {len(prof.components)} · ident {len(idents)} 중 로그에 나옴 {len(idents) - len(missing)} (줄 로그 {len(logs)}개)"
+    if missing:
+        return res("o2.idents", "needs-user", ev + f" — 안 나온 ident: {', '.join(missing)}", cmd,
+                   ask="설정한 ident가 O-1 로그에 없다 — ident 철자(S25)를 고치거나, 그 데몬이 든 사례를 더 받거나, "
+                       "사유와 함께 `--waive o2.idents=…`")
+    return res("o2.idents", "pass", ev, cmd)
+
+
+def o2_pairs(ctx: Ctx) -> dict:
+    d = _site_defaults(ctx)
+    if d is None:
+        return _need_defaults("o2.pairs")
+    platforms, parser_backends, _, _ = _plugin()
+    prof = _ofono_profile(ctx)
+    cmd = "parser_backends.load(backend_name(…, 'ofono')).configure(profile).parse([<줄 로그>])의 ril.proto별 paired_ts"
+    names = [p.name for p in prof.protocols]
+    if not names:
+        return res("o2.pairs", "needs-user", "짝 규칙(platform.others.ofono.protocols) 없음", cmd,
+                   ask="S26 요청-응답 짝이 없는 것이 맞는지 확인해 주세요(맞으면 `--waive o2.pairs=\"짝 없음(S26)\"`, "
+                       "있으면 `protocols.<이름>: {kind: regex, …}`를 site-defaults에)")
+    _, files, early = _ofono_files(ctx, "o2.pairs")
+    if early:
+        return early
+    logs, skipped = _journal(files)
+    logs = [p for p in logs if not _log_name(p).startswith("journal-")]     # 유닛별 로그는 합친 journal과 줄이 겹친다
+    if not logs:
+        return _no_logs("o2.pairs", skipped)
+    backend = parser_backends.load(platforms.backend_name(d, "ofono")).configure(prof)
+    req = {n: 0 for n in names}
+    paired = {n: 0 for n in names}
+    for p in logs:
+        for rec in backend.parse([p], None, None, None):
+            ann = rec.get("ril") or {}
+            name = ann.get("proto")
+            if name in req and ann.get("dir") == "req":
+                req[name] += 1
+                paired[name] += ann.get("paired_ts") is not None
+    ev = f"줄 로그 {len(logs)}개(journal-* 제외): " + " · ".join(f"{n} 짝 {paired[n]}/요청 {req[n]}" for n in names)
+    low = [n for n in names if paired[n] < 1]
+    if low:
+        return res("o2.pairs", "needs-user", ev + f" — 짝 0: {', '.join(low)}", cmd,
+                   ask=f"{', '.join(low)} 짝 규칙이 실제 로그에서 짝을 만들지 못한다 — request·response 정규식·tags(S26)를 "
+                       "고치거나 그 요청이 든 사례를 더 받는다")
+    return res("o2.pairs", "pass", ev, cmd)
+
+
+def o2_rows(ctx: Ctx) -> dict:
+    return _rows_check(ctx, "o2.rows", {"S25": "구성요소·ident·카테고리", "S26": "요청-응답 짝", "S27": "소스 트리"})
+
+
+def o3_platform(ctx: Ctx) -> dict:
+    clone, early = _need_clone(ctx, "o3.platform", "ofono_db")
+    if early:
+        return early
+    cfg = yaml.safe_load((clone / "issue-db.config.yaml").read_text(encoding="utf-8")) or {}
+    d = _site_defaults(ctx)
+    want = _plugin()[0].backend_name(d, "ofono") if d is not None else "ofono_reference"
+    got = (cfg.get("parser_backend") or {}).get("name")
+    ok = cfg.get("platform") == "ofono" and got == want
+    return res("o3.platform", "pass" if ok else "fail", f"platform = {cfg.get('platform')!r} · parser_backend.name = {got!r} "
+               f"(기대 ofono · {want})", "grep -nE '^platform|name:' <임시 clone>/issue-db.config.yaml")
+
+
+def o3_regress(ctx: Ctx) -> dict:
+    return _regress(ctx, "o3.regress", "ofono_db")
+
+
+def o3_verify_rules(ctx: Ctx) -> dict:
+    return _verify_rules(ctx, "o3.verify_rules", "ofono_db")
+
+
+def o3_tags(ctx: Ctx) -> dict:
+    clone, early = _need_clone(ctx, "o3.tags", "ofono_db")
+    if early:
+        return early
+    if _site_defaults(ctx) is None:
+        return _need_defaults("o3.tags")
+    rules = _plugin()[2].load(clone / "parser-rules")
+    idents = [i for c in _ofono_profile(ctx).components for i in c.idents]
+    missing = [i for i in idents if rules.tag_category(i) is None]
+    ev = f"구성요소 ident {len(idents)} 중 tags.yaml에 없음 {len(missing)}" + (f": {', '.join(missing)}" if missing else "")
+    return res("o3.tags", "fail" if missing else "pass", ev, "parser_rules.load(<임시 clone>/parser-rules).tag_category(<ident>)",
+               ask="ident마다 tags.yaml 규칙을 넣는 PR(`add-parser-rule`, 카테고리는 S25)" if missing else None)
+
+
+def o3_root_keys(ctx: Ctx) -> dict:
+    clone, early = _need_clone(ctx, "o3.root_keys", "ofono_db")
+    if early:
+        return early
+    if _site_defaults(ctx) is None:
+        return _need_defaults("o3.root_keys")
+    cfg = yaml.safe_load((clone / "issue-db.config.yaml").read_text(encoding="utf-8")) or {}
+    have = cfg.get("code_root_keys") or []
+    keys = [c.root_key for c in _ofono_profile(ctx).components if c.root_key]
+    missing = [k for k in keys if k not in have]
+    ev = f"구성요소 root_key {len(keys)} · code_root_keys {len(have)}" + (f" — 없는 키: {', '.join(missing)}" if missing else "")
+    return res("o3.root_keys", "fail" if missing else "pass", ev, "grep -n code_root_keys <임시 clone>/issue-db.config.yaml",
+               ask="code_root_keys에 구성요소 루트 키를 넣는 메인테이너 PR(S27)" if missing else None)
+
+
+def o3_seed(ctx: Ctx) -> dict:
+    return _seed(ctx, "o3.seed", "ofono_db", OFONO_SEED_MIN, ())
+
+
+def o3_synthetic(ctx: Ctx) -> dict:
+    return _synthetic(ctx, "o3.synthetic", "ofono_db")
+
+
+def o3_leftover(ctx: Ctx) -> dict:
+    clone, early = _need_clone(ctx, "o3.leftover", "ofono_db")
+    if early:
+        return early
+    left = site_leftovers(clone, None)
+    ev = _leftover_evidence(ctx, left, "oFono DB", site=False)
+    cmd = "grep -rnE 'reason: placeholder|TODO\\(SITE' <임시 clone>; 모의 값은 site_checks.MOCK_VALUE_RE"
+    if any(left["db"].values()):
+        return res("o3.leftover", "needs-user", ev, cmd,
+                   ask="oFono DB의 placeholder 규칙·TODO(SITE)·모의 값을 사내 값으로 바꾸는 PR — 남길 것은 사유와 함께 "
+                       "`--waive o3.leftover=…`")
+    return res("o3.leftover", "pass", ev, cmd)
+
+
+def o3_protection(ctx: Ctx) -> dict:
+    return _protection(ctx, "ofono_db_repo", "o3.protection")
+
+
+def o3_codeowners(ctx: Ctx) -> dict:
+    return _codeowners(ctx, "o3.codeowners", "ofono_db")
+
+
+def o4_doctor(ctx: Ctx) -> dict:
+    return _doctor(ctx, "o4.doctor", "ofono")
+
+
+def o4_runs(ctx: Ctx) -> dict:
+    """처리 건수 = usage_stats `base`(작업 − 진행 중·연습·손상, usage_stats와 같은 정의). 자동 판단(trace `platform` 행, oFono)
+    수는 근거 정보만(`--platform ofono` 명시 실행은 그 행이 없다, 17-platforms §11-4). 작업 키·trace 내용은 넣지 않는다."""
+    cmd = "python3 plugin/scripts/usage_stats.py --platform ofono --json"
+    code, out, err = ctx.py("plugin/scripts/usage_stats.py", "--platform", "ofono", "--json", "--plugin-root",
+                            str(ctx.root / "plugin"), timeout=120)
+    if code:
+        return res("o4.runs", "skip", f"종료 {code} — {_first_line(err)}", cmd,
+                   ask="oFono 사용자 설정을 먼저 한다(`python3 plugin/scripts/config.py init --platform ofono`, work_dir 생성)")
+    try:
+        data = json.loads(out)
+        st = data["states"]
+        base = data["jobs"] - st["in_progress"] - st["practice"] - st["unknown"]
+    except (ValueError, KeyError, TypeError):
+        return res("o4.runs", "fail", "usage_stats JSON 형식이 다르다", cmd)
+    sources: dict[str, int] = {}
+    work = Path(str(data.get("work_dir") or ""))
+    for trace in sorted(work.glob("*/trace.jsonl")) if data.get("work_dir") and work.is_dir() else []:
+        if trace.parent.name.startswith(("_", ".")):
+            continue
+        for line in trace.read_text(encoding="utf-8", errors="replace").splitlines():
+            try:
+                row = json.loads(line)
+            except ValueError:
+                continue
+            if isinstance(row, dict) and row.get("step") == "platform" and row.get("platform") == "ofono":
+                src = str(row.get("source"))
+                sources[src] = sources.get(src, 0) + 1
+    auto = sum(sources.values())
+    ev = (f"처리 건수 {base} (작업 {data['jobs']}, 진행 중·연습·손상 제외) · 자동 판단 oFono {auto}"
+          + (" (" + ", ".join(f"{k} {n}" for k, n in sorted(sources.items())) + ")" if sources else "") + " — 정보")
+    if base >= OFONO_RUNS_MIN:
+        return res("o4.runs", "pass", ev, cmd)
+    return res("o4.runs", "needs-user", ev + f" — {OFONO_RUNS_MIN}건 미만", cmd,
+               ask=f"실제 oFono 이슈를 {OFONO_RUNS_MIN}건 이상 처리한 뒤 다시 점검한다(못 하면 사유와 함께 `--waive o4.runs=…`)")
+
+
+def o4_report(ctx: Ctx) -> dict:
+    # 오판 수는 항목 검사보다 먼저 본다: 항목이 빠진 줄이라도 오판 > 0이면 면제할 수 없는 실패다(기준 오판 0, 사용자 확정)
+    text = ctx.profile + "\n" + ((ctx.root / EVIDENCE_FILE).read_text(encoding="utf-8") if (ctx.root / EVIDENCE_FILE).is_file() else "")
+    counted = [int(m.group(1)) for ln in text.splitlines() if "oFono 시험" in ln and (m := MISJUDGE_RE.search(ln))]
+    if counted and counted[-1]:
+        return res("o4.report", "fail", f"oFono 시험 보고: 플랫폼 오판 {counted[-1]} (기준 0)", None,
+                   ask="오판한 사례의 로그 형식 판별(sniff)·Jira 대응표(platform.detect)를 고친 뒤 다시 시험한다")
+    r, lines = _report_line(ctx, "o4.report", "oFono 시험", OFONO_FIELDS,
+                            "oFono 시험 결과를 한 줄로(" + ", ".join(OFONO_FIELDS) + " — 예: `oFono 시험: 처리 건수 5, 플랫폼 오판 0, "
+                            "오탐 1, 누락 0`) SITE_PROFILE.md 또는 evidence.md에 기록한다")
+    if not lines:
+        return r
+    m = MISJUDGE_RE.search(lines[-1])
+    if not m:
+        return res("o4.report", "needs-user", "oFono 시험 보고 줄에 `플랫폼 오판 <수>`가 없다", None,
+                   ask="플랫폼 오판 수를 숫자로 적는다(예: `플랫폼 오판 0`)")
+    n = int(m.group(1))
+    if n:
+        return res("o4.report", "fail", f"oFono 시험 보고: 플랫폼 오판 {n} (기준 0)", None,
+                   ask="오판한 사례의 로그 형식 판별(sniff)·Jira 대응표(platform.detect)를 고친 뒤 다시 시험한다")
+    return res("o4.report", "pass", "oFono 시험 보고 줄에 항목 모두 있음 · 플랫폼 오판 0", None)
+
+
+def o4_operate(ctx: Ctx) -> dict:
+    return res("o4.operate", "needs-user", "oFono 운영 계속 여부는 사용자가 정한다", None,
+               ask="oFono 운영을 계속할지 결정해 주세요 → `--done O-4 --waive o4.operate=\"<결정>\"`")
 
 
 CHECKS = {
@@ -1343,6 +1831,11 @@ CHECKS = {
     "S-5": [s5_offline_eval, s5_sandbox_pr, s5_smoke],
     "S-6": [s6_review_open, s6_synthetic, s6_placeholder, s6_mock],
     "S-7": [s7_marketplace, s7_usage, s7_pilot, s7_expansion],
+    "O-1": [o1_masked, o1_sniff, o1_parse, o1_rows],
+    "O-2": [o2_enabled, o2_config, o2_idents, o2_pairs, o2_rows],
+    "O-3": [o3_platform, o3_regress, o3_verify_rules, o3_tags, o3_root_keys, o3_seed, o3_synthetic, o3_leftover,
+            o3_protection, o3_codeowners],
+    "O-4": [o4_doctor, o4_runs, o4_report, o4_operate],
 }
 
 
@@ -1360,8 +1853,8 @@ def run_checks(step: str, root: Path, allow_api: bool = False) -> list[dict]:
                 r = fn(ctx)
             except Exception as exc:  # noqa: BLE001 — 한 점검의 오류가 나머지를 막지 않는다
                 r = res(check_id(fn), "fail", f"점검 오류: {type(exc).__name__}: {str(exc)[:160]}", None)
-            if ctx.used_clone and ctx.clone_ref:      # 운영 DB를 본 근거에는 어느 브랜치·커밋인지 붙인다
-                r["evidence"] = f"[운영 DB {ctx.clone_ref}] {r['evidence']}"
+            if ctx.used_clone and ctx.clone_ref:      # 이슈 DB를 본 근거에는 어느 DB·브랜치·커밋인지 붙인다
+                r["evidence"] = f"[{ctx.clone_label} {ctx.clone_ref}] {r['evidence']}"
             out.append(r)
     finally:
         ctx.cleanup()

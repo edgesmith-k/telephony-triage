@@ -51,3 +51,10 @@ PR #71(`REIMPORT_NOTES_1021.md`·`REIMPORT_NOTES_1028.md`) 뒤 묶음에 함께 
 - 답을 쓰지 않게 된 뒤에도 답 없는 옛 `pending` 작업은 이어 하는 작업 표 하나로 남는다(다른 플랫폼에 더 늦은 활동이 있어도) — 섞인 로그·명시 없음이면 그 옛 작업으로 조용히 계속한다. 가장 늦은 활동 거르기를 답 없는 작업에도 적용하기.
 - 켠 플랫폼 2개 이상에서 `--logs` 경로가 없으면 판정하지 않고 Driver로 넘어가, 종료 2 전에 그 플랫폼 work_dir에 JOB(`trace.jsonl`·`triage-state.json`·Jira 추출 파일)이 생긴다(Jira 추출이 로그 확인보다 먼저). pick에서 lock 전에 `로그 파일이 없습니다`로 끝내기.
 - 문서: `triage.py` 머리말·`contracts.md`의 "명시 없이 로그가 없으면 lock 전 logs 질문"에 "이어 하는 작업도 없으면"이 빠졌다(코드·17 §11-3은 있음). "시각 없는 작업은 막지 않는다"는 시각 없는 답이 다른 플랫폼의 시각 있는 작업에 막히는 경우를 말하지 않는다. `driver.py` `open_job`의 "아래 lock()이 다시 남긴다" 주석(실제로는 그 뒤 `prepare`).
+
+## 5. oFono 사내 트랙 O-1~O-4 (10/31)
+
+- `site_step.py`에 Android S 단계와 따로 가는 oFono 트랙을 더했다(`15-local-draft.md §15.5` oFono 트랙 표). **S-3 완료 뒤** "oFono 설정 시작" → `python3 tools/site_step.py ofono`. `SITE_PROFILE.md` 진행 상태에 `- oFono 단계: O-n`·`- oFono 완료: …` 두 줄이 생기고(§14.3), 인자 없는 실행은 Android 단계에 안내 한 줄만 붙인다. `check O-n`·`propose O-n`·`--done O-n`.
+- O-1 로그·형식(S24·S29), O-2 설정(S25~S27), O-3 oFono 이슈 DB(S28, 카테고리마다 실제 fixture 유형 3개 이상 — 쓰지 않을 뼈대 카테고리는 지운다), O-4 사용자·시험(실제 oFono 이슈 5건 이상, 플랫폼 오판 0). `docs/site/steps.yaml` 새 입력 `ofono_log_dir`·`android_log_dir`(선택)·`ofono_db`·`ofono_db_repo`.
+- oFono 트랙을 시작하지 않으면 `site_step.py` 출력·기록은 이전과 같다.
+- 반입 뒤 후보(P2): `--done S-n` 출력에는 oFono 안내 줄이 없다(인자 없는 실행만). `o1.masked`의 `mask_pii`가 oFono DB `allow_patterns`를 보지 않는다. `android_log_dir`의 로그 아닌 파일(notes 등)이 `o1.sniff` 실패가 된다. `ofono_log_dir`를 파일 링크까지 따라가 크기 상한 없이 점검마다 다시 읽는다. `o4.runs`는 점검하는 PC의 work_dir만 센다. `o4.report`·`s7.pilot` 면제 줄이 다시 보고 줄로 잡힐 수 있다(`s7.pilot` 기존).
