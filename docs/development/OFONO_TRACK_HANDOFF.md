@@ -15,7 +15,15 @@
 3. 최신 main에서 `python3 tools/make_bundle.py --label import-2026MMDD`(종료 3이 정상, 사람 확인 3건). `plugin.json` 설명의 "사외 초안" 정리가 먼저. 태그·push·사내 반입은 사용자(`docs/SITE_INSTALL.md` §8, 노트 `REIMPORT_NOTES_1021/1028/1030.md` 순서).
 4. 사용자에게 확인: 사내가 S-5·S-6에서 새로 요청한 사외 수정이 10 + 17건 밖에 더 있는지(사내 정보 없는 문장으로).
 
-## oFono 트랙 초안 (확정 전)
+## 확정 (10/31 사용자)
+
+- 별도 목록·병행: Android S 단계와 따로. `SITE_PROFILE.md` 진행 상태에 `- oFono 단계: O-n`·`- oFono 완료: O-1 (날짜), …`. 명령은 그대로 단계 인자로 O-n(`check O-2`·`propose O-2`·`--done O-2`).
+- 시작 조건: S-3 완료 기록 뒤(site-defaults가 있어야 O-2).
+- 안내: `site_step.py`는 Android 현재 단계 + oFono 트랙이 시작됐으면 한 줄 안내(`site_step.py ofono`). Android가 모두 끝났으면 oFono 단계를 바로 보인다. 시작은 "oFono 설정 시작" → `site_step.py ofono`.
+- 기준치: O-3 카테고리마다 실제 fixture 유형 3개 이상, O-4 실제 oFono 이슈 5건 이상·플랫폼 오판 0, offline_eval 게이트 없음.
+- 아래 초안에서 바꾼 것: ident ↔ `tags.yaml` 점검은 DB가 생기는 O-3으로(O-2는 ident가 O-1 로그에 실제로 나오는지).
+
+## oFono 트랙 초안 (위 확정으로 고침)
 
 | 단계 | 할 일 | 자동 점검 후보 |
 |---|---|---|
