@@ -14,11 +14,11 @@
 - 테스트는 `tools/related_tests.py --run`(관련만). 전체는 도구가 full이라 할 때·반입 직전·요청 시.
 - 진행 중 판단은 Fable 결정 에이전트에게 묻는다(10/06 사용자 지정). 원칙상 사용자 승인 대상(이슈 DB push, main 병합·태그 등 사용자가 지시하지 않은 외부 동작)은 사용자에게.
 
-## 진행 상태 (10/31)
+## 진행 상태 (11/02)
 
-- 모드: **사외 초안**. Phase **D0, 1~13** 완료, 반입 전 보강 트랙 완료(history). 최신 반입 묶음 **import-20261018**(태그 있음). main 병합 PR #8~#71.
+- 모드: **사외 초안**. Phase **D0, 1~13** 완료, 반입 전 보강 트랙 완료(history). 최신 반입 묶음 **import-20261031**(main PR #75 뒤, 태그·반입은 사용자). main 병합 PR #8~#75.
 - 10/21~28 **PR #71(병합됨)**: 사내 피드백 10건 + 17건(사내는 S-6까지 완료). → `REIMPORT_NOTES_1021.md`·`REIMPORT_NOTES_1028.md`, 리뷰 인계 `REVIEW_1028_HANDOFF.md`. 사내 추가 정보(7·11·13) 요청은 보류.
-- 10/30 **oFono 여러 데몬·플랫폼별 가설 분석·플랫폼 자동 판단**(결정 (t)) → **`REIMPORT_NOTES_1030.md`**. 10/31 리뷰 P1 3 수정, PR #72. eval 10/31 재측정(46·47 fail). 10/31 oFono 사내 트랙(1030 노트 §5). **다음: `OFONO_TRACK_HANDOFF.md` 할 일 2~4**.
+- 10/30 **oFono 여러 데몬·플랫폼별 가설 분석·플랫폼 자동 판단**(결정 (t)) → **`REIMPORT_NOTES_1030.md`**. PR #72. 10/31 oFono 사내 트랙 O-1~O-4(PR #73, 노트 §5), eval 재측정(PR #75, 46·47 fail). 사내 추가 요청 없음(사용자). **다음: 사내 반입 뒤 피드백**.
 - 모델: Sonnet 5.5 기준(Opus 5.5 11개 실패 0).
 - `TODO(SITE)`: `tools/list_site_todos.py`. REVIEW-OPEN 0건. 사내 시작: **"사내 설정 시작"**(결정 (o)).
 - 안내서 HTML: 책 `docs/book/telephony-triage-book.html`(공유본 https://claude.ai/artifact/1jov1Et4dQUMauFr6aoxWG), 목록 `docs/materials/00-index.html`
@@ -27,7 +27,7 @@
 
 | ☐ | 항목 | 메모 |
 |---|---|---|
-| ☐ F | 반입 묶음 **import-20261018** — 태그·반입은 사용자(20261015·20261016은 태그하지 않음) | 다음 묶음 = PR #71 + 10/30. 사내: SITE_INSTALL §8, **`REIMPORT_NOTES_1021/1028/1030.md`**(사내 eval은 추후) |
+| ☐ F | 반입 묶음 **import-20261031** — 태그·반입은 사용자 | PR #71~#75. 사내: SITE_INSTALL §8, **`REIMPORT_NOTES_1021/1028/1030.md`**(사내 eval은 추후) |
 | ☐ G | 범용판 별도 레포 — **보류(10/07 사용자)** | 재개는 사용자가 정한다 |
 
 ## 사내로 넘긴 것
