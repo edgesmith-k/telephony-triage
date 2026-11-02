@@ -262,7 +262,8 @@ def _default_ril_tags(spec: PlatformSpec) -> frozenset:
 def _protocols(spec: PlatformSpec, block: dict, base: str, ril_tags: frozenset) -> tuple[tuple, tuple]:
     """`((이름, 태그), ...)`와 `(PairProtocol, ...)`. SPEC 프로토콜: ril은 `ril_tags`(`<블록>.ril.tags`), 그 밖은
     `<블록>.protocols.<이름>.tags`(없으면 기본, `tags` 밖 키 거부). `SPEC.protocol_kinds`가 있으면 `protocols`의 다른
-    키는 site가 이름 지은 짝 규칙(`{kind: <kind>, ...}`)이고 `kind` factory가 나머지 키를 검증한다. 순서는 SPEC 다음 설정."""
+    키는 site가 이름 지은 짝 규칙(`{kind: <kind>, ...}`)이고 `kind` factory가 나머지 키를 검증한다. 순서는 SPEC 다음 설정
+    (적은 순서). 설정 규칙의 `PairProtocol.reads`는 그보다 앞(SPEC 또는 위에 적은 설정 규칙)에 있어야 한다."""
     fixed = tuple(p.name for p in spec.protocols)
     kinds = dict(spec.protocol_kinds)
     path = f"{base}.protocols"
@@ -296,6 +297,14 @@ def _protocols(spec: PlatformSpec, block: dict, base: str, ril_tags: frozenset) 
         proto = kinds[kind](key, conf, at)
         if not isinstance(proto, PairProtocol) or proto.name != key:
             raise _err(at, f"kind {kind}의 factory가 이름 {key!r}의 PairProtocol을 주지 않았습니다.")
+        before = {p.name: p for p in protos}
+        for read in proto.reads:      # 읽는 프로토콜의 짝이 먼저 채워져야 한다(백엔드는 목록 순서로 pair를 부른다)
+            if read not in before:
+                raise _err(at, f"읽는 짝 규칙 {read!r}가 앞에 없습니다 (SPEC 내장 또는 위에 적은 protocols.<이름>: "
+                               f"{', '.join(sorted(before)) or '없음'}).")
+            if before[read].reads:    # 읽는 규칙(hop 등)은 요청·응답 주석을 내지 않아 위 층이 될 수 없다(연결이 조용히 0)
+                raise _err(at, f"읽는 짝 규칙 {read!r}는 다른 규칙을 읽는 규칙이라 위 층이 될 수 없습니다 "
+                               "(요청·응답을 내는 규칙 — 예: gril, kind: regex — 을 적습니다).")
         tags_out.append((key, frozenset(proto.default_tags)))
         protos.append(proto)
     return tuple(tags_out), tuple(protos)

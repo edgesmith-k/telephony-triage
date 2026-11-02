@@ -9,6 +9,7 @@
 | `syslog-bsd.log` | (b) RFC3164 syslog / `journalctl -o short` (연도·타임존 없음 → `--year`/`--tz`) | 형식 (b) 해석 |
 | `journal-multi.log` | (a), 여러 데몬이 섞인 한 스트림 | 구성요소(데몬)·데몬 사이 짝(`kind: regex`, `ipc call/reply <serial>` 줄 모양도 가정)·`msg_format`(`ofonod` DBG 앞머리)·`split_tag` 시험 (`tests/test_ofono_components.py`) |
 | `syslog-busybox.log` | (c) BusyBox syslogd(`<facility>.<severity>` 칸, 밀리초, 연도·타임존 없음 → `--year`/`--tz`) | 형식 (c) 해석·레벨, 내장 짝 `gril`(요청·응답·실패·unsol·접두사 없는 이름·짝 없는 요청 → `ril_error`·`ril_timeout`·`ril_no_response`), 슬롯(`[0,`·`/ril_0`), `tail:` 줄 건너뜀, 마스킹 예외(`PdpContext{cid=…}`·짧은 `token=`) (`tests/test_ofono_gril.py`) |
+| `syslog-hop.log` | (c), `ofonod` gril trace + 아래 데몬(`daemon-a`)의 serial 없는 요청·응답 줄(`ipc req <NAME>`·`ipc rsp <Name>`, 줄 모양 가정) | `kind: hop` 연결: 요청 1ms·응답 앞 1ms(fold)·교차(nearest)·창 밖·위 없음·tags 밖·이름 모양 아님 (`tests/test_ofono_hop.py`) |
 
 - `ofonod`는 공개 upstream 데몬 이름이다. 그 밖 구성요소 자리는 placeholder `daemon-a`(data)·`daemon-b`(call)이다.
 - 호스트 칸은 `dut`(placeholder)다. 파서는 호스트를 이벤트에 넣지 않는다.

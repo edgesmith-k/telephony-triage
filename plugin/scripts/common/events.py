@@ -33,7 +33,7 @@ class LineRef(TypedDict):
 
 class _RilRequired(TypedDict):
     serial: int | None
-    dir: str | None
+    dir: str | None          # req / resp / unsol (oFono `hop` 아래 줄은 hop_req / hop_resp — RIL 파생 이벤트 없음)
     request: str | None
     error: str | None
     paired_ts: str | None

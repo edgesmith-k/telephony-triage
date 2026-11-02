@@ -36,6 +36,7 @@ LOGS = REPO / "tests" / "fixtures" / "logs" / "ofono"
 ISO_LOG = LOGS / "journal-iso.log"
 BSD_LOG = LOGS / "syslog-bsd.log"
 BUSYBOX_LOG = LOGS / "syslog-busybox.log"
+HOP_LOG = LOGS / "syslog-hop.log"
 LOGCAT = REPO / "tests" / "fixtures" / "logs" / "data-disabled.log"
 ON = {"name": "android", "enabled": ["android", "ofono"]}
 UTC = timezone.utc
@@ -176,7 +177,7 @@ def test_raw_line_and_find_raw_are_format_specific():
 
 
 def test_fixture_logs_are_masked_already():
-    for path in (ISO_LOG, BSD_LOG, BUSYBOX_LOG):
+    for path in (ISO_LOG, BSD_LOG, BUSYBOX_LOG, HOP_LOG):
         text = path.read_text(encoding="utf-8")
         masker = masking.new_masker(text, ())
         assert "\n".join(masker(line) for line in text.split("\n")) == text, path.name

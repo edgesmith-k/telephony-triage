@@ -5,8 +5,9 @@
 
 - 로그 줄 해석·원문 줄 판별·재부팅 표시: `journal.py`(journald/syslog/BusyBox syslogd 가정 형식, TODO(SITE:S24)).
 - 짝 규칙(`protocols`): 코드 기본은 upstream gril RIL trace 짝 `gril`(`gril.py`, tags `ofonod` — site-defaults
-  `protocols.gril: {tags: [...]}`로 바꾸고 `[]`면 끈다, TODO(SITE:S26)). site는 `protocols.<이름>: {kind: regex, ...}`로
-  짝 규칙을 더 만든다(`pairing.py`, 기본 없음 — `gril` 뒤에 붙는다). 슬롯 표기: gril 줄 앞 `[<slot>,`·모뎀 경로
+  `protocols.gril: {tags: [...]}`로 바꾸고 `[]`면 끈다, TODO(SITE:S26)). site는 `protocols.<이름>: {kind: regex, ...}`
+  (serial 짝, `pairing.py`)·`{kind: hop, upstream, ...}`(serial 없는 아래 데몬 줄을 위 짝 규칙 줄에 이름·시간 창으로 잇기,
+  `hop.py`)로 짝 규칙을 더 만든다(기본 없음 — `gril` 뒤에 적은 순서로 붙는다). 슬롯 표기: gril 줄 앞 `[<slot>,`·모뎀 경로
   `/ril_<n>`(`gril.py`, TODO(SITE:S29) — 데몬마다 다른 표기는 사내 확인 뒤 site `log.phone_id`로). 묶음 입력(capture): 없음.
 - 구성요소(데몬, 17-platforms §9): 코드 기본은 공개 upstream `ofonod` 하나(DBG 앞머리 가정 `file_func`).
   사내 데몬 목록·ident·소스 루트 키는 site-defaults `components.<이름>`, TODO(SITE:S24·S25·S27). 메시지 하위 형식
@@ -21,7 +22,7 @@ import re
 
 from platforms.base import Component, LogFormat, PairProtocol, PhoneIdRules, PlatformSpec, SourceTree
 
-from . import gril, journal, msgformat, pairing
+from . import gril, hop, journal, msgformat, pairing
 
 SPEC = PlatformSpec(
     name="ofono",
@@ -42,5 +43,5 @@ SPEC = PlatformSpec(
     block_keys=("source_tree", "log", "protocols", "components"),
     components=(Component("ofono", ("ofonod",), root_key="ofono", msg_format="file_func"),),   # TODO(SITE:S24·S25)
     msg_formats=msgformat.FORMATS,
-    protocol_kinds=((pairing.KIND, pairing.build),),
+    protocol_kinds=((pairing.KIND, pairing.build), (hop.KIND, hop.build)),
 )

@@ -287,6 +287,7 @@ def test_protocol_tags_override(fake_platforms):
     on = {"name": "android", "enabled": ["android", "proto"]}
     prof = platforms.load({"platform": on}, "proto")
     assert prof.protocol_tags == (("ril", frozenset({"RILJ"})), ("dbus", frozenset({"daemon-a"})))
+    assert [p.reads for p in prof.protocols] == [(), ()]          # `reads` 기본은 빈 튜플(ofono `hop`만 쓴다)
     prof = platforms.load({"platform": {**on, "others": {"proto": {"ril": {"tags": ["VR"]},
                                                                       "protocols": {"dbus": {"tags": ["daemon-b"]}}}}}},
                           "proto")

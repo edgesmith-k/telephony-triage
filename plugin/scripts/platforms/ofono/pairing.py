@@ -41,18 +41,23 @@ def _pattern(conf: dict, key: str, path: str) -> re.Pattern:
     return pattern
 
 
+def tag_list(value, path: str) -> list[str]:
+    """`tags`(비어 있지 않은 목록, 항목은 비어 있지 않은 문자열). `hop`도 쓴다."""
+    tags = []
+    for i, tag in enumerate(cfg_list(value, path, non_empty=True)):
+        if not isinstance(tag, str) or not tag.strip():
+            raise config_error(f"{path}[{i}]", "비어 있지 않은 문자열이어야 합니다.")
+        tags.append(tag)
+    return tags
+
+
 def build(name: str, conf: dict, path: str) -> PairProtocol:
     """`protocol_kinds`의 factory. 설정 블록을 검증해 `PairProtocol`을 준다(오류는 `PlatformConfigError`)."""
     conf = cfg_mapping(conf, path, KEYS)
     for key in ("tags", "request", "response"):
         if key not in conf:
             raise config_error(path, f"'{key}'가 필요합니다.")
-    tpath = f"{path}.tags"
-    tags = []
-    for i, tag in enumerate(cfg_list(conf["tags"], tpath, non_empty=True)):
-        if not isinstance(tag, str) or not tag.strip():
-            raise config_error(f"{tpath}[{i}]", "비어 있지 않은 문자열이어야 합니다.")
-        tags.append(tag)
+    tags = tag_list(conf["tags"], f"{path}.tags")
     request, response = _pattern(conf, "request", path), _pattern(conf, "response", path)
     return PairProtocol(name=name, default_tags=frozenset(tags), annotate=partial(_annotate, request, response),
                         pair=partial(_pair, name))
