@@ -111,13 +111,41 @@ _SEP = r'"?\s*[=:]\s*"?'
 
 _NUM_END = r"(?![\w*]|\.\w)"  # 숫자 값 뒤: 단어 문자·`*`(Android 부분 마스킹)·`.<글자>`(버전·IP의 일부)가 이어지면 안 된다. 문장 끝 `.`은 된다
 
+# IPv6 조각. `_V6_FULL|_V6_COMP`는 문맥 없는 IPv6 규칙(형식) 그대로, `_V6_PART`는 `::` 없이 끝이 `:`일 수 있는 잘린 표기
+_HEX4 = r"[0-9A-Fa-f]{1,4}"
+_V6_FULL = r"(?:" + _HEX4 + r":){7}" + _HEX4
+_V6_COMP = r"(?:" + _HEX4 + r"(?::" + _HEX4 + r"){0,6})?::(?:" + _HEX4 + r"(?::" + _HEX4 + r"){0,6})?"
+_V6_PART = r"(?:" + _HEX4 + r":){3,7}(?:" + _HEX4 + r")?"
+_MAC_SHAPE = re.compile(r"(?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}")
+_SHORT_NUM = re.compile(r"\d{1,10}|0[xX][0-9A-Fa-f]{1,8}")
+
+
+def _v6_like(value: str, min_groups: int) -> bool:
+    """`::` 없는 콜론 묶음이 IPv6(조각)처럼 보이는가. `::`가 있으면 `::` 하나만 아니면 된다. 없으면 8묶음이거나,
+    묶음 `min_groups`개 이상이고 3~4자리 묶음이 둘 이상이며 MAC 모양(2자리 6묶음)이 아니다 — 시각(`12:34:56`)·
+    날짜(`2026:11:02:07:21:33`)·`1:2:3:4:5:6:7`은 빠진다."""
+    if "::" in value:
+        return value != "::"
+    groups = [g for g in value.split(":") if g]
+    if len(groups) == 8:
+        return True
+    return (len(groups) >= min_groups and sum(len(g) >= 3 for g in groups) >= 2
+            and not _MAC_SHAPE.fullmatch(value.rstrip(":")))
+
+
+def _token_secret(value: str) -> bool:
+    """`token=` 값이 비밀값인가. 짧은 숫자(10진 10자리 이하, `0x`+16진 8자리 이하 — RIL 요청 token 등)는 아니다."""
+    return not _SHORT_NUM.fullmatch(value.rstrip(")]}>"))
+
 # 순서가 중요하다: 자격증명 → URI·이메일 → 문맥 있는 식별자 → 형식 → 문맥 없는 숫자.
 RULES: tuple[Rule, ...] = (
     # --- 자격증명 ---
     Rule("CRED", re.compile(r'(?i)\b(?:response|nonce|cnonce|opaque)\s*=\s*"?(?P<v>[^",\s]+)"?'),
          context=_SIP_AUTH_CONTEXT),
     Rule("CRED", re.compile(r"\b(?:RES|AUTN|AUTS|XRES)" + _SEP + r"(?:0x)?(?P<v>[0-9A-Fa-f]{8,})\b")),
-    Rule("CRED", re.compile(r'(?i)\b(?:password|passwd|pwd|secret|token)' + _SEP + r'(?P<v>[^\s",;]+)')),
+    Rule("CRED", re.compile(r'(?i)\b(?:password|passwd|pwd|secret)' + _SEP + r'(?P<v>[^\s",;]+)')),
+    # `token`은 짧은 숫자 값(RIL 요청 token `token=612`·`token: 0042`, `0x29`)을 빼고 본다. 긴 인증 토큰은 그대로
+    Rule("CRED", re.compile(r'(?i)\btoken' + _SEP + r'(?P<v>[^\s",;]+)'), check=_token_secret, gate=("token",)),
     Rule("CRED", re.compile(r'(?i)\b(?:api[_-]?key|key)' + _SEP + r'(?P<v>[A-Za-z0-9+/=_-]+)'),
          check=_secretish),
     # AKA 키 (대소문자 구분: 소문자 `ok=`·`ik` 섞인 문구를 피한다; Kc 64비트 = 16 hex가 하한)
@@ -160,7 +188,8 @@ RULES: tuple[Rule, ...] = (
          gate=("lat", "lon", "lng", "altitude")),
     Rule("GEO", re.compile(r"(?i)\b(?:gps|fused|network|passive)\s+(?P<v>[-+]?\d{1,3}\.\d{4,},[-+]?\d{1,3}\.\d{4,})"),
          gate=("gps", "fused", "network", "passive")),
-    Rule("ICCID", re.compile(r'(?i)\biccid' + _SEP + r'(?P<v>[0-9A-Fa-f]{18,20})' + _NUM_END)),
+    # `iccid=`·`"iccid":` 외에 `ICCID(<값>)`·`iccid[<값>]`도(벤더 데몬 표기)
+    Rule("ICCID", re.compile(r'(?i)\biccid(?:' + _SEP + r'|\s*[(\[]\s*)(?P<v>[0-9A-Fa-f]{18,20})' + _NUM_END)),
     Rule("TMSI", re.compile(r'(?i)\b(?:p-?tmsi|m-?tmsi|s-?tmsi|tmsi)' + _SEP + r'(?P<v>(?:0x)?[0-9A-Fa-f]{4,10})\b')),
     Rule("GUTI", re.compile(r'(?i)\b(?:5g-?guti|guti)' + _SEP + r'(?P<v>[0-9A-Fa-f][0-9A-Fa-f-]{7,})\b')),
     # 셀 식별자 (`mCid`·`CellIdentity*`의 키는 여기서 항상)
@@ -170,10 +199,12 @@ RULES: tuple[Rule, ...] = (
     # 맨 `cid`도 셀로 보되, AOSP 데이터 콜 응답 객체(`DataCallResponse: { … cid=1 …}`, `SetupDataCallResult{… cid: 1 …}`)
     # 안의 `cid`는 데이터 콜 context id라 셀이 아니다(사내 확인: 오탐, S13). 구간은 객체 이름부터 그 객체의 **첫** `cid` 값까지
     # (`cid`는 중첩 `{`·`}`보다 앞에 나온다). 그래서 닫는 `}` 없이 잘린 줄에서 뒤에 오는 셀 `cid=`는 구간 밖이라 마스킹된다.
+    # 벤더 데이터 콜 객체(`PdpContext{cid=1 …}`, `PdnInfo: cid=1`, `PDN_INFO_EXT (cid=1`)의 `cid`도 같다(사외 공개 표본, 11/02 승인).
     # 그 밖의 `cid=`(모의 `SETUP_DATA_CALL error=NONE cid=1` 등)는 그대로 셀로 본다(안전 쪽)
     Rule("CELL", re.compile(r"\bcid" + _SEP + r"(?P<v>0x[0-9A-Fa-f]+|\d+)" + _NUM_END), gate=("cid",),
-         outside=re.compile(r"\b(?:DataCallResponse|SetupDataCallResult)\s*:?\s*\{[^{}\n]*?\bcid" + _SEP
-                            + r"(?:0x[0-9A-Fa-f]+|\d+)")),
+         outside=re.compile(r"\b(?:DataCallResponse|SetupDataCallResult|PdpContext)\s*:?\s*\{[^{}\n]*?\bcid" + _SEP
+                            + r"(?:0x[0-9A-Fa-f]+|\d+)"
+                            + r"|\b(?:PdnInfo|PDN_INFO(?:_EXT)?)\s*:?\s*[({]?\s*cid" + _SEP + r"(?:0x[0-9A-Fa-f]+|\d+)")),
     Rule("MSISDN", re.compile(
         r'(?i)\b(?:msisdn|phone(?:number)?|dest(?:addr)?|destination|number|callee|caller)' + _SEP + r'(?P<v>\+?\d{7,15})'
         + _NUM_END)),
@@ -188,11 +219,15 @@ RULES: tuple[Rule, ...] = (
     Rule("IP", re.compile(
         r"(?<![\w.])(?P<v>(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})(?!\w|\.\w)"),
          before=_VERSION_BEFORE),
-    Rule("IP", re.compile(
-        r"(?<![0-9A-Fa-f:])(?P<v>(?:[0-9A-Fa-f]{1,4}:){7}[0-9A-Fa-f]{1,4}"
-        r"|(?:[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4}){0,6})?::(?:[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4}){0,6})?)"
-        r"(?![0-9A-Fa-f:])"),
+    Rule("IP", re.compile(r"(?<![0-9A-Fa-f:])(?P<v>" + _V6_FULL + "|" + _V6_COMP + r")(?![0-9A-Fa-f:])"),
          check=lambda v: v != "::"),
+    # 위 규칙의 앞 경계(`:` 금지)에 막히는 주소 키 바로 뒤(`addr:<v6>`, `ipv6address:<v6>/64`)와 끝이 `:`인 잘린 표기
+    Rule("IP", re.compile(r'(?i)(?:addr(?:ess)?|\bip(?:v6)?|\bgw|gateway|\bdns\d?)\s*[=:]\s*"?(?P<v>' + _V6_FULL + "|"
+                          + _V6_COMP + "|" + _V6_PART + r")(?![0-9A-Fa-f:])"),
+         check=lambda v: _v6_like(v, 4), gate=("addr", "ip", "gw", "gateway", "dns")),
+    # 줄 경계에서 쪼개진 주소 조각(`::` 없음, 6묶음 이상 — 시각·버전·MAC 모양은 `_v6_like`가 뺀다)
+    Rule("IP", re.compile(r"(?<![\w:.])(?P<v>(?:" + _HEX4 + r":){5,7}(?:" + _HEX4 + r")?)(?![0-9A-Fa-f:])"),
+         check=lambda v: "::" not in v and _v6_like(v, 6)),
     # --- 문맥 없는 15자리 ---
     Rule("IMEI", re.compile(r"(?<![\w.+-])(?P<v>\d{15})(?!\w|\.\w)"), check=_luhn),
     Rule("IMSI", re.compile(r"(?<![\w.+-])(?P<v>\d{15})(?!\w|\.\w)"), check=_valid_mcc),

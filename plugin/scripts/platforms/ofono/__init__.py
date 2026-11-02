@@ -3,9 +3,11 @@
 실제 로그 형식·태그·짝 규칙은 사용자가 사내 로그를 구한 뒤 정한다. 지금은 레지스트리·플랫폼 선택·이슈 DB 분리·
 파서 전환이 실제로 되는지를 합성 로그로 보이는 최소 계약이다.
 
-- 로그 줄 해석·원문 줄 판별·재부팅 표시: `journal.py`(journald/syslog 가정 형식, TODO(SITE:S24)).
-- 짝 규칙(`protocols`): 코드 기본 없음. site가 `protocols.<이름>: {kind: regex, ...}`로 만든다(`pairing.py`,
-  기본 꺼짐, TODO(SITE:S26)). 슬롯 표기: 없음, TODO(SITE:S29). 묶음 입력(capture): 없음.
+- 로그 줄 해석·원문 줄 판별·재부팅 표시: `journal.py`(journald/syslog/BusyBox syslogd 가정 형식, TODO(SITE:S24)).
+- 짝 규칙(`protocols`): 코드 기본은 upstream gril RIL trace 짝 `gril`(`gril.py`, tags `ofonod` — site-defaults
+  `protocols.gril: {tags: [...]}`로 바꾸고 `[]`면 끈다, TODO(SITE:S26)). site는 `protocols.<이름>: {kind: regex, ...}`로
+  짝 규칙을 더 만든다(`pairing.py`, 기본 없음 — `gril` 뒤에 붙는다). 슬롯 표기: gril 줄 앞 `[<slot>,`·모뎀 경로
+  `/ril_<n>`(`gril.py`, TODO(SITE:S29) — 데몬마다 다른 표기는 사내 확인 뒤 site `log.phone_id`로). 묶음 입력(capture): 없음.
 - 구성요소(데몬, 17-platforms §9): 코드 기본은 공개 upstream `ofonod` 하나(DBG 앞머리 가정 `file_func`).
   사내 데몬 목록·ident·소스 루트 키는 site-defaults `components.<이름>`, TODO(SITE:S24·S25·S27). 메시지 하위 형식
   함수는 `msgformat.py`.
@@ -17,9 +19,9 @@
 
 import re
 
-from platforms.base import Component, LogFormat, PhoneIdRules, PlatformSpec, SourceTree
+from platforms.base import Component, LogFormat, PairProtocol, PhoneIdRules, PlatformSpec, SourceTree
 
-from . import journal, msgformat, pairing
+from . import gril, journal, msgformat, pairing
 
 SPEC = PlatformSpec(
     name="ofono",
@@ -30,8 +32,8 @@ SPEC = PlatformSpec(
         find_raw=journal.find_raw,
         epoch_break=journal.epoch_break,
     ),
-    phone=PhoneIdRules((), (), ()),
-    protocols=(),
+    phone=PhoneIdRules((), (gril.SLOT_PREFIX_RE,), (gril.MODEM_PATH_RE,)),                   # TODO(SITE:S29)
+    protocols=(PairProtocol(gril.NAME, frozenset(gril.TAGS), gril.annotate, gril.pair),),   # TODO(SITE:S26)
     source_tree=SourceTree(("src",), (("configure.ac", re.compile(r"AC_INIT\(\[?ofono\]?,\s*\[?(\d+)")),)),
     primary_root="ofono",
     default_root_keys=("ofono",),

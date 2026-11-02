@@ -580,10 +580,14 @@ tags:
 OFONO_RIL = """# [합성·형식 가정·placeholder] 짝 규칙(RIL 계층·D-Bus 등)은 실제 로그를 받은 뒤 정한다. TODO(SITE:S26)
 # 스키마가 항목 1개 이상을 요구해서 둔 자리표시 항목이다 (17-platforms R7).
 # PLACEHOLDER_CALL: 데몬 사이 짝(site 설정 `protocols.<이름>: {kind: regex}`) 시험의 파생 이벤트용. 설정이 없으면 효과 없음.
+# SETUP_DATA_CALL 등: 내장 짝 `gril`(upstream RIL trace) 시험의 파생 이벤트용(공개 RIL 요청 이름, timeout은 placeholder).
 requests:
   - {name: PLACEHOLDER_CALL, category: call, timeout_ms: 1000, added_for: '-', added_on: 2026-10-30, reason: placeholder (데몬 사이 짝 시험)}
+  - {name: SETUP_DATA_CALL, category: data, timeout_ms: 30000, added_for: '-', added_on: 2026-11-02, reason: placeholder (내장 gril 짝 시험)}
+  - {name: DEACTIVATE_DATA_CALL, category: data, timeout_ms: 10000, added_for: '-', added_on: 2026-11-02, reason: placeholder (내장 gril 짝 시험)}
 unsolicited:
   - {name: PLACEHOLDER_UNSOL, category: common, added_for: '-', added_on: 2026-10-11, reason: placeholder (스키마 최소 항목)}
+  - {name: UNSOL_DATA_CALL_LIST_CHANGED, category: data, added_for: '-', added_on: 2026-11-02, reason: placeholder (내장 gril 짝 시험)}
 """
 OFONO_EXTRACTORS = """# [합성·형식 가정·placeholder] 실제 로그 문구가 아니다. TODO(SITE:S25)
 extractors:

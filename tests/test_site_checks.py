@@ -969,16 +969,17 @@ def test_o2_checks_with_components_and_ipc(tmp_path):
     out = by_id(sc.run_checks("O-2", root))
     assert [r["id"] for r in sc.run_checks("O-2", root)] == ["o2.enabled", "o2.config", "o2.idents", "o2.pairs", "o2.rows"]
     assert out["o2.enabled"]["status"] == "pass"
-    assert out["o2.config"]["status"] == "pass" and "구성요소 3(설정) · 짝 규칙 1 · 백엔드 ofono_reference" in out["o2.config"]["evidence"]
+    assert out["o2.config"]["status"] == "pass" and "구성요소 3(설정) · 짝 규칙 1(설정) · 내장 gril · 백엔드 ofono_reference" in out["o2.config"]["evidence"]
     assert out["o2.idents"]["status"] == "pass" and "ident 3 중 로그에 나옴 3" in out["o2.idents"]["evidence"]
-    assert out["o2.pairs"]["status"] == "pass" and "ipc 짝 3/요청 4" in out["o2.pairs"]["evidence"], out["o2.pairs"]
+    assert out["o2.pairs"]["status"] == "pass" and "gril 짝 0/요청 0 · ipc 짝 3/요청 4" in out["o2.pairs"]["evidence"], out["o2.pairs"]   # 내장 짝 0은 실패 아님
     assert out["o2.rows"]["status"] == "needs-user" and "S25, S26, S27" in out["o2.rows"]["evidence"]
 
     root = ofono_root(tmp_path / "b", {"components": {**COMPONENTS, "daemon-c": {"idents": ["daemon-c"]}}},
                       inputs=f"ofono_log_dir: {logs}\n")
     out = by_id(sc.run_checks("O-2", root))
     assert out["o2.idents"]["status"] == "needs-user" and "daemon-c" in out["o2.idents"]["evidence"]
-    assert out["o2.pairs"]["status"] == "needs-user" and "o2.pairs" in out["o2.pairs"]["ask"]       # 짝 규칙 없음(S26)
+    assert out["o2.pairs"]["status"] == "needs-user" and "o2.pairs" in out["o2.pairs"]["ask"]       # 설정 짝 없음·내장 짝 0(S26)
+    assert "내장 짝 0" in out["o2.pairs"]["evidence"]
     root = ofono_root(tmp_path / "c", {}, inputs=f"ofono_log_dir: {logs}\n")
     assert sc.o2_idents(sc.Ctx(root))["status"] == "needs-user" and "S25" in sc.o2_idents(sc.Ctx(root))["ask"]
     root = ofono_root(tmp_path / "d", {"nosuch": 1})
@@ -989,6 +990,22 @@ def test_o2_checks_with_components_and_ipc(tmp_path):
     (tmp_path / "f").mkdir()
     root = site_root(tmp_path / "f")
     assert all(r["status"] == "skip" for cid, r in by_id(sc.run_checks("O-2", root)).items() if cid != "o2.rows")
+
+
+def test_o2_pairs_builtin_gril(tmp_path):
+    """내장 짝 gril: 설정 짝 규칙이 없어도 gril trace가 든 로그면 짝이 생겨 pass. `protocols.gril.tags: []`면 끔."""
+    d = tmp_path / "logs" / "data-실패-1"
+    d.mkdir(parents=True)
+    (d / "messages.masked").write_bytes((OFONO_LOGS / "syslog-busybox.log").read_bytes())
+    root = ofono_root(tmp_path / "a", {"components": COMPONENTS}, inputs=f"ofono_log_dir: {tmp_path / 'logs'}\n")
+    r = sc.o2_pairs(sc.Ctx(root))
+    assert r["status"] == "pass" and "gril 짝 3/요청 4" in r["evidence"], r
+    assert "짝 규칙 0(설정) · 내장 gril · 백엔드" in sc.o2_config(sc.Ctx(root))["evidence"]
+    off = {"components": COMPONENTS, "protocols": {"gril": {"tags": []}}}
+    root = ofono_root(tmp_path / "b", off, inputs=f"ofono_log_dir: {tmp_path / 'logs'}\n")
+    assert "짝 규칙 0(설정) · 내장 gril(끔) · 백엔드" in sc.o2_config(sc.Ctx(root))["evidence"]
+    r = sc.o2_pairs(sc.Ctx(root))
+    assert r["status"] == "needs-user" and "gril 짝 0/요청 0" in r["evidence"] and "o2.pairs" in r["ask"]
 
 
 def _ofono_db(tmp_path) -> Path:

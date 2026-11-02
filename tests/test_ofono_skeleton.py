@@ -1,6 +1,7 @@
 """oFono 뼈대 전환 검증 (17-platforms 설계 §5·§7-C, 묶음 3). **형식 가정(placeholder)·합성 로그**만 쓴다.
 
-- `platforms/ofono/journal.py`: 가정 형식 (a) ISO·(b) BSD syslog 해석, 연도·타임존 없는 줄은 `--year`/`--tz`, 해석 못 한 줄 수
+- `platforms/ofono/journal.py`: 가정 형식 (a) ISO·(b) BSD syslog·(c) BusyBox syslogd 해석, 연도·타임존 없는 줄은
+  `--year`/`--tz`, 해석 못 한 줄 수, `tail:` 안내 줄·`\r\r\n` 캡처
 - `parse_logcat parse --rules <issue-db-ofono>`: `ofono_reference` 백엔드·태그 카테고리·extractor 이벤트·마스킹
 - 형식이 실제로 갈린다: ofono 로그 + android DB, logcat + ofono DB 모두 `file-unparsed`
 - `db_regress` ofono 1/1, `triage.py run --offline-db <issue-db-ofono> --platform ofono` 1위 DATA-001·라벨 oFono /
@@ -34,6 +35,7 @@ from platforms.ofono import journal  # noqa: E402
 LOGS = REPO / "tests" / "fixtures" / "logs" / "ofono"
 ISO_LOG = LOGS / "journal-iso.log"
 BSD_LOG = LOGS / "syslog-bsd.log"
+BUSYBOX_LOG = LOGS / "syslog-busybox.log"
 LOGCAT = REPO / "tests" / "fixtures" / "logs" / "data-disabled.log"
 ON = {"name": "android", "enabled": ["android", "ofono"]}
 UTC = timezone.utc
@@ -91,23 +93,90 @@ def test_unparsed_lines_rollover_zone_and_notices(tmp_path):
     assert journal.epoch_break(lines[2]) and not journal.epoch_break(lines[3])
 
 
+def test_format_c_busybox(tmp_path):
+    lines, stats = journal.read_file(BUSYBOX_LOG, 0, "UTC", 2026)
+    assert (stats.lines, stats.unparsed, stats.missing_year, stats.missing_zone) == (14, 0, False, False)  # `tail:` 줄은 세지 않음
+    assert lines[1].dt == datetime(2026, 9, 20, 14, 50, 0, 100000, tzinfo=UTC)                           # 밀리초
+    assert (lines[1].pid, lines[1].tid, lines[1].level, lines[1].tag) == (812, None, "D", "ofonod")
+    assert lines[1].msg == "[0,0001]> RIL_REQUEST_SETUP_DATA_CALL placeholder"
+    assert all("dut" not in ln.msg and "daemon." not in ln.msg for ln in lines)          # host·facility.severity 칸은 없다
+    path = _write(tmp_path, "levels.log", [
+        "Sep 20 14:32:11.001 dut daemon.debug a[1]: x",
+        "Sep 20 14:32:11.002 dut user.info a[1]: x",
+        "Sep 20 14:32:11.003 dut local0.notice a[1]: x",
+        "Sep 20 14:32:11.004 dut daemon.warn a[1]: x",
+        "Sep 20 14:32:11.005 dut daemon.warning a[1]: x",
+        "Sep 20 14:32:11.006 dut daemon.err a[1]: x",
+        "Sep 20 14:32:11.007 dut kern.error a[1]: x",
+        "Sep 20 14:32:11.008 dut daemon.crit a[1]: x",
+        "Sep 20 14:32:11.009 dut local7.alert a[1]: x",
+        "Sep 20 14:32:11.010 dut daemon.emerg a: no pid",
+    ])
+    lines, stats = journal.read_file(path, 0, "UTC", 2026)
+    assert (stats.lines, stats.unparsed) == (10, 0)
+    assert "".join(ln.level for ln in lines) == "DIIWWEEFFF"
+    assert lines[-1].pid == 0 and lines[-1].msg == "no pid"
+
+
+def test_format_c_rejects_unknown_facility_severity(tmp_path):
+    path = _write(tmp_path, "bad.log", [
+        "Sep 20 14:32:11.001 dut daemon.verbose a[1]: 모르는 severity",
+        "Sep 20 14:32:11.002 dut local8.info a[1]: 모르는 facility",
+        "Sep 20 14:32:11.003 dut daemon.info 데몬[1]: ASCII 아닌 ident",
+        "Sep 20 14:32:11.004 dut daemon.info a[1]: ok",
+    ])
+    lines, stats = journal.read_file(path, 0, "UTC", 2026)
+    assert (stats.lines, stats.unparsed) == (1, 3) and lines[0].msg == "ok"
+
+
+def test_none_host(tmp_path):
+    path = _write(tmp_path, "none.log", ["Sep 20 14:32:11.500 (none) user.notice daemon-a[7]: placeholder"])
+    lines, stats = journal.read_file(path, 0, "UTC", 2026)
+    assert (stats.lines, stats.unparsed) == (1, 0)
+    assert (lines[0].tag, lines[0].pid, lines[0].level, lines[0].msg) == ("daemon-a", 7, "I", "placeholder")
+    assert not journal.raw_line("Sep 20 14:32:11 (none) daemon-a[7]: (b)는 (none)을 받지 않는다")
+
+
+def test_tail_notice_skipped(tmp_path):
+    path = _write(tmp_path, "tail.log", ["tail: '/var/log/placeholder' has been replaced; following new file",
+                                         "Sep 20 14:32:11.500 dut user.info daemon-a[7]: placeholder"])
+    lines, stats = journal.read_file(path, 0, "UTC", 2026)
+    assert (stats.lines, stats.unparsed, [ln.line_no for ln in lines]) == (1, 0, [2])
+    assert not journal.raw_line("tail: '/var/log/placeholder' has been replaced; following new file")
+
+
+def test_busybox_crcrlf_tmp(tmp_path):
+    """직렬 콘솔 `tail -F` 캡처(줄 끝 `\r\r\n`): 메시지·시각은 같고 빈 줄이 끼어 line_no만 2k-1이 된다.
+    P2: `open_log`(`newline=""`)가 `\r`에서도 줄을 나눈다 — Android와 공유하므로 따로 정한다."""
+    text = BUSYBOX_LOG.read_text(encoding="utf-8")
+    path = tmp_path / "crcrlf.log"
+    path.write_bytes(text.replace("\n", "\r\r\n").encode("utf-8"))
+    want, want_stats = journal.read_file(BUSYBOX_LOG, 0, "UTC", 2026)
+    got, stats = journal.read_file(path, 0, "UTC", 2026)
+    assert (stats.lines, stats.unparsed) == (want_stats.lines, 0)
+    assert [(ln.dt, ln.level, ln.tag, ln.pid, ln.msg) for ln in got] == [(ln.dt, ln.level, ln.tag, ln.pid, ln.msg) for ln in want]
+    assert [ln.line_no for ln in got] == [2 * ln.line_no - 1 for ln in want]
+
+
 def test_raw_line_and_find_raw_are_format_specific():
     iso = ISO_LOG.read_text(encoding="utf-8").splitlines()[1]
     bsd = BSD_LOG.read_text(encoding="utf-8").splitlines()[1]
+    busybox = BUSYBOX_LOG.read_text(encoding="utf-8").splitlines()[1]
     logcat_line = LOGCAT.read_text(encoding="utf-8").splitlines()[0]
-    assert journal.raw_line(iso) and journal.raw_line(bsd)
+    assert journal.raw_line(iso) and journal.raw_line(bsd) and journal.raw_line(busybox)
     assert not journal.raw_line(logcat_line) and not journal.raw_line("데이터 연결이 실패했다")
-    assert journal.find_raw(f"근거: {iso}") and journal.find_raw(f"보기 {bsd} 끝")
+    assert journal.find_raw(f"근거: {iso}") and journal.find_raw(f"보기 {bsd} 끝") and journal.find_raw(f"보기 {busybox} 끝")
     assert not journal.find_raw("2026-09-20T14:32:10 에 실패했다") and not journal.find_raw(logcat_line)
     android = platforms.get("android").log
-    assert not android.raw_line(iso) and not android.raw_line(bsd)
+    assert not android.raw_line(iso) and not android.raw_line(bsd) and not android.raw_line(busybox)
+    assert not android.find_raw(f"보기 {busybox} 끝")
     spec = platforms.get("ofono")
     assert spec.log.read_file is journal.read_file and spec.log.raw_line is journal.raw_line
     assert spec.log.find_raw is journal.find_raw and spec.log.epoch_break is journal.epoch_break
 
 
 def test_fixture_logs_are_masked_already():
-    for path in (ISO_LOG, BSD_LOG):
+    for path in (ISO_LOG, BSD_LOG, BUSYBOX_LOG):
         text = path.read_text(encoding="utf-8")
         masker = masking.new_masker(text, ())
         assert "\n".join(masker(line) for line in text.split("\n")) == text, path.name
@@ -124,7 +193,7 @@ def _parse(log: Path, rules: Path, *extra: str) -> dict:
 
 def test_parse_with_ofono_db():
     out = _parse(ISO_LOG, variant_db("issue-db-ofono") / "parser-rules")
-    assert out["backend"] == {"name": "ofono_reference", "version": "0.0.2"}
+    assert out["backend"] == {"name": "ofono_reference", "version": "0.0.3"}
     assert out["masked"] is True and out["warnings"] == [] and out["errors"] == []
     lines = [e for e in out["events"] if e["event"] is None]
     assert {e["tag"]: e["category_hint"] for e in lines} == {"ofonod": "common", "daemon-a": "data"}
@@ -261,7 +330,7 @@ def test_backend_registration():
 
     loaded = parser_backends.load("ofono_reference")
     assert loaded is backend.BACKEND and loaded.platform == "ofono" and loaded.name == "ofono_reference"
-    assert loaded.version() == backend.VERSION == "0.0.2" and loaded.builtin_events() == []
+    assert loaded.version() == backend.VERSION == "0.0.3" and loaded.builtin_events() == []
     assert loaded.log_format() is platforms.get("ofono").log
 
 
@@ -313,6 +382,8 @@ RAW_LINES = [
     "Sep 20 14:32:11 dut daemon-b[902]: call setup failed: cause=PLACEHOLDER",
     "Sep  2 04:00:00 dut-01.lab systemd[1]: Started placeholder.",
     "Sep 20 14:32:11 dut kernel: [  12.3] placeholder",
+    "Sep 20 14:32:11.250 dut daemon.debug ofonod[812]: [0,0001]> RIL_REQUEST_SETUP_DATA_CALL placeholder",   # (c)
+    "Sep  2 04:00:00 (none) user.warn daemon-a: placeholder",
 ]
 SENTENCES = [
     "Sep 20 14:32:11 단말 재부팅: 확인됨",
@@ -321,6 +392,8 @@ SENTENCES = [
     "Sep 20 14:32:11 에 data connect 실패",
     "14:32:11 data connect failed",
     "Sept 20 14:32:11 a b: c",
+    "Sep 20 14:32:11 dut user.info 사용자: 확인",                       # (c) 자리에 한국어 ident
+    "Sep 20 14:32:11 dut daemon.verbose x[1]: y",                      # 모르는 severity
 ]
 
 

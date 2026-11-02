@@ -1590,9 +1590,12 @@ def o2_config(ctx: Ctx) -> dict:
         return res("o2.config", "fail", f"site-defaults platforms 문제 {len(problems)}: {_first_line(problems[0])}", cmd)
     analyzers = (((d.get("platforms") or {}).get("ofono") or {}).get("analyzers")) if isinstance(d.get("platforms"), dict) else None
     block = _ofono_block(d)
+    fixed = [p.name for p in prof.spec.protocols]
+    tags = dict(prof.protocol_tags)
+    builtin = "".join(f" · 내장 {n}{'' if tags.get(n) else '(끔)'}" for n in fixed)
     ev = (f"구성요소 {len(prof.components)}({'설정' if block.get('components') is not None else '코드 기본'}) · "
-          f"짝 규칙 {len(prof.protocols)} · 백엔드 {backend} · platform.detect {'있음' if detect else '없음'} · "
-          f"platforms.ofono.analyzers {'있음' if analyzers else '없음'}")
+          f"짝 규칙 {sum(p.name not in fixed for p in prof.protocols)}(설정){builtin} · 백엔드 {backend} · "
+          f"platform.detect {'있음' if detect else '없음'} · platforms.ofono.analyzers {'있음' if analyzers else '없음'}")
     return res("o2.config", "pass", ev, cmd)
 
 
@@ -1638,10 +1641,11 @@ def o2_pairs(ctx: Ctx) -> dict:
     prof = _ofono_profile(ctx)
     cmd = "parser_backends.load(backend_name(…, 'ofono')).configure(profile).parse([<줄 로그>])의 ril.proto별 paired_ts"
     names = [p.name for p in prof.protocols]
+    builtin = {p.name for p in prof.spec.protocols}         # 내장(gril): 요청이 없는 로그도 있으니 짝 0만으로 실패가 아니다
+    no_pairs = ("S26 요청-응답 짝이 없는 것이 맞는지 확인해 주세요(맞으면 `--waive o2.pairs=\"짝 없음(S26)\"`, "
+                "있으면 `protocols.<이름>: {kind: regex, …}`를 site-defaults에 — 내장 gril 형식이 다르면 사외 수정 요청)")
     if not names:
-        return res("o2.pairs", "needs-user", "짝 규칙(platform.others.ofono.protocols) 없음", cmd,
-                   ask="S26 요청-응답 짝이 없는 것이 맞는지 확인해 주세요(맞으면 `--waive o2.pairs=\"짝 없음(S26)\"`, "
-                       "있으면 `protocols.<이름>: {kind: regex, …}`를 site-defaults에)")
+        return res("o2.pairs", "needs-user", "짝 규칙(platform.others.ofono.protocols) 없음", cmd, ask=no_pairs)
     _, files, early = _ofono_files(ctx, "o2.pairs")
     if early:
         return early
@@ -1660,11 +1664,17 @@ def o2_pairs(ctx: Ctx) -> dict:
                 req[name] += 1
                 paired[name] += ann.get("paired_ts") is not None
     ev = f"줄 로그 {len(logs)}개(journal-* 제외): " + " · ".join(f"{n} 짝 {paired[n]}/요청 {req[n]}" for n in names)
-    low = [n for n in names if paired[n] < 1]
+    if not any(paired.values()) and builtin.issuperset(names):
+        return res("o2.pairs", "needs-user", ev + " — 설정 짝 규칙(platform.others.ofono.protocols) 없음·내장 짝 0", cmd,
+                   ask=no_pairs)
+    low = [n for n in names if paired[n] < 1 and (n not in builtin or req[n])]
     if low:
         return res("o2.pairs", "needs-user", ev + f" — 짝 0: {', '.join(low)}", cmd,
-                   ask=f"{', '.join(low)} 짝 규칙이 실제 로그에서 짝을 만들지 못한다 — request·response 정규식·tags(S26)를 "
-                       "고치거나 그 요청이 든 사례를 더 받는다")
+                   ask=f"{', '.join(low)} 짝 규칙이 실제 로그에서 짝을 만들지 못한다 — "
+                       + ("설정 규칙은 request·response 정규식·tags를, " if set(low) - builtin else "")
+                       + ("내장 규칙은 그 데몬 ident(`protocols.<이름>.tags`)·줄 형식이 upstream과 같은지를 "
+                          if set(low) & builtin else "")
+                       + "확인하거나(S26) 그 요청이 든 사례를 더 받는다")
     return res("o2.pairs", "pass", ev, cmd)
 
 

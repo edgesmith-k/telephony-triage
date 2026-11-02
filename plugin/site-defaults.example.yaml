@@ -137,8 +137,11 @@ platform:
 #         ofono: {idents: [ofonod], root_key: ofono, msg_format: file_func}
 #         daemon-a: {idents: [daemon-a], root_key: daemon_a, source_tree: {required_dirs: [src]}}
 #         daemon-b: {idents: [daemon-b], root_key: daemon_b}   # split_tag: true면 tag = <ident>/<모듈>(msg_format 필요)
-#       protocols:                                     # TODO(SITE:S26) 데몬 사이 짝(17-platforms §9-3). 이름은 site가 정한다
-#         ipc: {kind: regex, tags: [daemon-a, daemon-b], request: 'call (?P<serial>\d+) (?P<name>[A-Z_]+)', response: 'reply (?P<serial>\d+) (?P<error>\w+)'}
+#         # msg_format: file_func(upstream DBG) · tid_file_paren · level_tid_file · slot_level_seq · src_suffix(벤더 앞머리 모양, 17-platforms §9-2)
+#       protocols:                                     # TODO(SITE:S26) 짝 규칙(17-platforms §9-3)
+#         gril: {tags: [ofonod]}                       # 내장 upstream gril RIL trace 짝(코드 기본 켜짐). tags만 받는다, []면 끈다
+#         ipc: {kind: regex, tags: [daemon-a, daemon-b], request: 'call (?P<serial>\d+) (?P<name>[A-Z_]+)', response: 'reply (?P<serial>\d+) (?P<error>\w+)'}   # 데몬 사이 짝, 이름은 site가 정한다
+#       # log.phone_id를 쓰면 msg_prefix·msg_suffix 목록이 통째로 바뀐다 — 내장 gril 슬롯 규칙(`[<slot>,`·`/ril_<n>`)을 함께 둔다(TODO(SITE:S29))
 # platform.detect.tracker_field: 켠 플랫폼 2개 이상에서 이슈 시작 때 트래커 필드 값으로 플랫폼 고르기(17-platforms §11, 기본 꺼짐).
 #   로그 형식과 다르면 묻는다. 경로는 field_map 표기, 값은 켠 플랫폼 이름. 예:
 #   detect:

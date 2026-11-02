@@ -164,6 +164,19 @@ DETECT = [
     ("sn=R58M12ABCDE", "SERIAL", "R58M12ABCDE"),
     ("mPin=1234", "CRED", "1234"),
     ("wifiMacAddress=aabbccddeeff", "MAC", "aabbccddeeff"),
+    # 벤더 데몬 표기(사외 공개 표본에서 본 모양, 값은 합성): 괄호 ICCID, `key:` 바로 뒤 IPv6·잘린 표기·줄 경계 조각, 긴 token
+    ("SIM ICCID(8982300123456789012F) ready", "ICCID", "8982300123456789012F"),
+    ("iccid[89823001234567890123]", "ICCID", "89823001234567890123"),
+    ("iccid ( 8982300123456789012 )", "ICCID", "8982300123456789012"),
+    ("addr:2001:db8:85a3:0:0:8a2e:370:7334", "IP", "2001:db8:85a3:0:0:8a2e:370:7334"),
+    ("ipv6address:2001:db8:85a3:12:34:8a2e:370:7334/64", "IP", "2001:db8:85a3:12:34:8a2e:370:7334"),
+    ("gw:fe80::1", "IP", "fe80::1"),
+    ('"dns1":"2001:db8::53"', "IP", "2001:db8::53"),
+    ("IPv6Address=2001:db8:85a3:12:34:8a2e:370:", "IP", "2001:db8:85a3:12:34:8a2e:370:"),
+    ("85a3:12:34:8a2e:370:7334 continued", "IP", "85a3:12:34:8a2e:370:7334"),
+    ("token=12345678901", "CRED", "12345678901"),
+    ("token=0x123456789", "CRED", "0x123456789"),
+    ("token: ab12cd34", "CRED", "ab12cd34"),
 ]
 
 # 바뀌면 안 되는 줄 (빌드 번호·타임스탬프·일반 숫자·설정 키·Android 자체 마스킹)
@@ -201,6 +214,15 @@ KEEP = [
     "mSerial=41 serial=0042",
     "ki=0123456789abcdef0123456789abcdef ck=0123456789abcdef",
     "together=aabbccddeeff",
+    # RIL 요청 token(짧은 숫자)·시각·버전 모양 콜론 묶음은 가리지 않는다
+    "SOCKET REQUEST: SETUP_DATA_CALL token=1234 length:12",
+    "REQUEST: DIAL token: 0042 length:8",
+    "token=0x29 token=4294967295 token=1234)",
+    '{"token": "1234567890"}',
+    "12:34:56:78",
+    "1:2:3:4:5:6:7",
+    "2026:11:02:07:21:33",
+    "uptime 12:34:56.789 addr: 12:34:56:78",
 ]
 
 
@@ -275,6 +297,36 @@ def test_data_call_response_cid_is_not_cell():
     assert masking.new_masker()("[0041]< SETUP_DATA_CALL error=NONE cid=1") == "[0041]< SETUP_DATA_CALL error=NONE cid=<CELL#1>"
     assert masking.new_masker().find(resp) == [{"kind": "IP", "start": resp.index("10.0.0.2"),
                                                  "end": resp.index("10.0.0.2") + len("10.0.0.2")}]
+
+
+def test_vendor_data_call_objects_cid_not_cell():
+    """벤더 데이터 콜 객체(`PdpContext{…}`·`PdnInfo:`·`PDN_INFO_EXT`)의 `cid`도 context id다(11/02 사용자 승인).
+    객체 밖 `cid`·셀 위치 키는 그대로 마스킹한다. (합성 줄)"""
+    m = masking.new_masker()
+    for text in ("PdpContext{cid=1 apn=placeholder state=ACTIVE}", "PdpContext {cid=0x2}", "## PdnInfo: cid=3",
+                 "PDN_INFO_EXT cid=4 type=IPV4V6", "PDN_INFO_EXT (cid=5, state=1)", "PdnInfo cid: 6"):
+        assert m(text) == text, text
+    assert masking.new_masker()("PdpContext{cid=1 apn=x} lac=1234 cid=5678") == "PdpContext{cid=1 apn=x} lac=<CELL#1> cid=<CELL#2>"
+    assert masking.new_masker()("PDN_INFO_EXT (cid=4) cid=77") == "PDN_INFO_EXT (cid=4) cid=<CELL#1>"
+    assert masking.new_masker()("mPdpContext{cid=1}") == "mPdpContext{cid=<CELL#1>}"           # 객체 이름 경계
+    assert masking.new_masker()("PdnInfo: mCid=9 cellId=8") == "PdnInfo: mCid=<CELL#1> cellId=<CELL#2>"
+    assert masking.new_masker()("PDN_INFO_CELL cid=12345") == "PDN_INFO_CELL cid=<CELL#1>"     # 승인 범위(`_EXT`)만
+
+
+def test_ipv6_key_truncated_fragment():
+    """`key:` 바로 뒤 IPv6(기존 형식 규칙의 앞 경계 `:`에 막힘)·끝이 `:`인 잘린 표기·줄 경계 조각. 정확한 출력."""
+    m = masking.new_masker()
+    assert m("ifaddr:2001:db8:85a3:0:0:8a2e:370:7334/64 ipv6address:2001:db8:85a3:0:0:8a2e:370:7334") \
+        == "ifaddr:<IP#1>/64 ipv6address:<IP#1>"
+    assert m("IPv6Address=2001:db8:85a3:12:34:8a2e:370: next") == "IPv6Address=<IP#2> next"
+    assert m("8a2e:370:7334:12:34:56 tail") == "<IP#3> tail"
+    assert m("addr:aa:bb:cc:dd:ee:ff") == "addr:aa:bb:cc:dd:ee:ff"                  # MAC 모양(알려진 한계: key: 뒤 MAC)
+    assert m("85a3:12:34:8a2e:370 x") == "85a3:12:34:8a2e:370 x"                    # 5묶음 이하 조각은 문맥 없이 보지 않는다
+    assert m("dns 2001:4860:4860::8888") == "dns <IP#4>"                            # 기존 규칙 그대로
+    old = (r"(?<![0-9A-Fa-f:])(?P<v>(?:[0-9A-Fa-f]{1,4}:){7}[0-9A-Fa-f]{1,4}"
+           r"|(?:[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4}){0,6})?::(?:[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4}){0,6})?)"
+           r"(?![0-9A-Fa-f:])")
+    assert old in [r.regex.pattern for r in masking.RULES if r.kind == "IP"]       # 문맥 없는 IPv6 규칙은 바이트 그대로
 
 
 def test_pin_puk_values_need_four_digits():
