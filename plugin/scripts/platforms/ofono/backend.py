@@ -5,9 +5,10 @@ android reference 백엔드(`platforms/android/backend.py`)와 같은 구조(파
 
 - 줄 해석: `SPEC.log`(`journal.py`). 시계 이상 기준은 `common.logtime`.
 - 짝 규칙: `configure(profile)`이 받은 `PairProtocol` 목록(`profile.protocols`, 비면 `SPEC.protocols` — SPEC 기본은
-  내장 `gril`(`gril.py`), site 설정 `kind: regex`는 `pairing.py`). 줄마다 **처음 맞는** 프로토콜의 주석을 이벤트 `ril` 칸에 쓰고,
-  `name != "ril"`이면 `proto: <name>`을 단다. 짝은 프로토콜마다 수집 구간 전체(모든 데몬 줄)로 `pair(records)`를
-  부른다 — 각 `pair`는 자기 주석만 다룬다(`PairProtocol` 계약). 그래서 데몬 사이 짝은 한 스트림 안에서만 된다.
+  내장 `gril`(`gril.py`), site 설정 `kind: regex`는 `pairing.py`, `kind: hop`은 `hop.py`). 줄마다 **처음 맞는** 프로토콜의
+  주석을 이벤트 `ril` 칸에 쓰고, `name != "ril"`이면 `proto: <name>`을 단다. 짝은 프로토콜마다 **목록 순서로** 수집 구간
+  전체(모든 데몬 줄)에 `pair(records)`를 부른다 — 각 `pair`는 자기 주석만 바꾼다(`PairProtocol` 계약, `reads`의 앞 프로토콜
+  주석은 읽기만). 그래서 데몬 사이 짝은 한 스트림 안에서만 된다.
 - 구성요소(17-platforms §9): `profile.components`의 ident → 구성요소. `msg_format`이 있으면 그 함수가 뗀 본문으로
   짝 규칙을 보고(이벤트 `msg`는 원문), `split_tag`면 이벤트 tag를 `ident/subtag`로 쓴다(이벤트 tag는 마스킹되지
   않으므로 `subtag`가 `SUBTAG_RE` 모양일 때만 — 아니면 나누지 않는다).

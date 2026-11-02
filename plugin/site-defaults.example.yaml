@@ -141,6 +141,7 @@ platform:
 #       protocols:                                     # TODO(SITE:S26) 짝 규칙(17-platforms §9-3)
 #         gril: {tags: [ofonod]}                       # 내장 upstream gril RIL trace 짝(코드 기본 켜짐). tags만 받는다, []면 끈다
 #         ipc: {kind: regex, tags: [daemon-a, daemon-b], request: 'call (?P<serial>\d+) (?P<name>[A-Z_]+)', response: 'reply (?P<serial>\d+) (?P<error>\w+)'}   # 데몬 사이 짝, 이름은 site가 정한다
+#         ril_hop: {kind: hop, upstream: gril, tags: [daemon-a], request: 'ipc req (?:RIL_REQUEST_)?(?P<name>[A-Z][A-Z0-9_]*)', response: 'ipc rsp (?P<name>[A-Za-z]\w*)', fold: true, window_ms: 50}   # serial 없는 데몬 사이 연결(이름·시간 창), 아래 줄에만 주석. upstream은 위에 적은 규칙
 #       # log.phone_id를 쓰면 msg_prefix·msg_suffix 목록이 통째로 바뀐다 — 내장 gril 슬롯 규칙(`[<slot>,`·`/ril_<n>`)을 함께 둔다(TODO(SITE:S29))
 # platform.detect.tracker_field: 켠 플랫폼 2개 이상에서 이슈 시작 때 트래커 필드 값으로 플랫폼 고르기(17-platforms §11, 기본 꺼짐).
 #   로그 형식과 다르면 묻는다. 경로는 field_map 표기, 값은 켠 플랫폼 이름. 예:

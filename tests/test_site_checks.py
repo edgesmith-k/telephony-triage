@@ -1008,6 +1008,27 @@ def test_o2_pairs_builtin_gril(tmp_path):
     assert r["status"] == "needs-user" and "gril 짝 0/요청 0" in r["evidence"] and "o2.pairs" in r["ask"]
 
 
+HOP = {"kind": "hop", "upstream": "gril", "tags": ["daemon-a"],
+       "request": r"ipc req (?:RIL_REQUEST_)?(?P<name>[A-Z][A-Z0-9_]*)",
+       "response": r"ipc rsp (?P<name>[A-Za-z]\w*)", "fold": True, "window_ms": 50}
+
+
+def test_o2_pairs_hop(tmp_path):
+    """`kind: hop`: 아래 줄 연결 수를 따로 센다(위 gril 요청 수와 함께). 연결 0이면 사용자 필요."""
+    d = tmp_path / "logs" / "data-실패-1"
+    d.mkdir(parents=True)
+    (d / "messages.masked").write_bytes((OFONO_LOGS / "syslog-hop.log").read_bytes())
+    inputs = f"ofono_log_dir: {tmp_path / 'logs'}\n"
+    root = ofono_root(tmp_path / "a", {"components": COMPONENTS, "protocols": {"h": HOP}}, inputs=inputs)
+    r = sc.o2_pairs(sc.Ctx(root))
+    assert r["status"] == "pass" and "gril 짝 1/요청 4 · h 연결 4/아래 줄 6(위 gril 요청 4)" in r["evidence"], r
+    root = ofono_root(tmp_path / "c", {"components": COMPONENTS,
+                                       "protocols": {"gril": {"tags": []}, "h": HOP}}, inputs=inputs)
+    r = sc.o2_pairs(sc.Ctx(root))
+    assert r["status"] == "needs-user" and "h 연결 0/아래 줄 6(위 gril 요청 0)" in r["evidence"], r
+    assert "짝 0: h" in r["evidence"] and "hop 규칙은 upstream" in r["ask"] and "o2.pairs" not in r["ask"]
+
+
 def _ofono_db(tmp_path) -> Path:
     sys.path.insert(0, str(ROOT / "tests" / "helpers"))
     from runner import git_db, variant_db

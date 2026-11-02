@@ -13,7 +13,7 @@ platforms/
   session.py    # 사용자 세션 선택(--platform)과 사용자 config 프로필을 잇는 유일한 곳(resolve·resolve_lenient·implicit·add_arg)
   sniff.py      # 로그 파일 형식으로 플랫폼 판별(§11). 플랫폼 이름을 모른다
   android/      # SPEC + logcat·ril·bugreport·backend
-  ofono/        # SPEC 뼈대 + journal(형식 가정 placeholder)·msgformat·pairing(§9)·backend
+  ofono/        # SPEC 뼈대 + journal(형식 가정 placeholder)·msgformat·gril·pairing·hop(§9)·backend
 common/logtime.py                       # 플랫폼 무관 시각 함수·시계 이상 기준·coverage
 parser_backends/<p>_reference/          # 그 플랫폼 BACKEND 재수출 (android는 reference/)
 ```
@@ -21,7 +21,7 @@ parser_backends/<p>_reference/          # 그 플랫폼 BACKEND 재수출 (andro
 - 플랫폼 하나 = `platforms/<name>/__init__.py`의 `SPEC: PlatformSpec`. frozen dataclass와 Callable 필드다(상수와 함수가 섞이고 site-defaults로 덮어쓴 복사본을 만들어야 해서 ABC를 쓰지 않는다).
 - `PlatformSpec`: `name`, `label`(출력 라벨 "Android"/"oFono"), `log: LogFormat`, `phone: PhoneIdRules`(빈 규칙 허용), `protocols: tuple[PairProtocol, ...]`(0개 이상), `source_tree: SourceTree`, `primary_root`(주 소스 루트 키, android `aosp`), `default_root_keys`(DB `code_root_keys`가 없을 때), `capture: CaptureSpec | None`(bugreport류 묶음 입력), `default_backend`(android `reference`, ofono `ofono_reference`), `block_keys`(site-defaults에서 받는 상수 키). 뒤쪽 기본값 필드 `components`·`msg_formats`·`protocol_kinds`는 한 플랫폼 안의 여러 구성요소(데몬)용이다(§9, 기존 플랫폼은 비워 둔다).
 - `LogFormat`: `read_file(path, file_index, tz, year) -> (list[LogLine], FileStats)`, `raw_line(줄)`(줄 맨 앞이 원문 로그 줄인가, guard 규칙 10), `find_raw(문장)`(문장 안에 원문 줄이 끼었나, Jira 게시 검사), `epoch_break(LogLine)`(재부팅 등 불연속).
-- `PairProtocol`: `name`·`default_tags`·`annotate`·`pair`. 주석은 이벤트 `ril` 칸을 같이 쓰고 `name != "ril"`이면 `proto: <name>`을 단다. `pair`는 **자기 주석만** 다룬다(다른 프로토콜 주석은 짝·pid 분할에 쓰지 않는다). 태그 덮어쓰기는 ril이면 `<블록>.ril.tags`, 그 밖은 `<블록>.protocols.<name>.tags`. 코드 없이 설정으로 만드는 프로토콜은 §9-3.
+- `PairProtocol`: `name`·`default_tags`·`annotate`·`pair`·`reads`(기본 `()`). 주석은 이벤트 `ril` 칸을 같이 쓰고 `name != "ril"`이면 `proto: <name>`을 단다. `pair`는 **자기 주석만** 다룬다(다른 프로토콜 주석은 짝·pid 분할에 쓰지 않는다). `reads`에 적은 프로토콜의 주석은 읽기만 하고, 레지스트리가 그 이름이 목록에서 앞에 있는지 확인한다(백엔드는 목록 순서로 `pair`를 부른다, ofono `hop`, §9-3). 태그 덮어쓰기는 ril이면 `<블록>.ril.tags`, 그 밖은 `<블록>.protocols.<name>.tags`. 코드 없이 설정으로 만드는 프로토콜은 §9-3.
 - `CaptureSpec`: `looks_like`·`extract`·`error`·`default_rules`·`sniff_line`(guard 머리 판별), `block_key`·`configure`(site-defaults 블록 검증·덮어쓰기, 레지스트리는 규칙 모양을 모른다).
 - 파서 백엔드(`parser_backends/base.py`): 클래스 속성 `platform`(기본 `"android"`, 기존 site 백엔드 호환), `log_format()`(기본 `SPEC.log`). 백엔드 이름 공간은 `16-existing-assets.md §16.3`.
 
@@ -40,7 +40,7 @@ parser_backends/<p>_reference/          # 그 플랫폼 BACKEND 재수출 (andro
 
 - `common/`은 `platforms`를 import하지 않는다. 핵심(매처·`db_*`·guard·`config.py` 등)은 레지스트리 경유로만 플랫폼을 쓴다(`platforms.android` 직접 import 없음).
 - `platforms/<a>`는 `platforms/<b>`를 import하지 않는다(공용은 `platforms.base`와 레지스트리 밖 모듈: `common.logtime`·`common.events`, 백엔드 `backend.py`는 `parser_backends.base`도). 플랫폼 코드는 핵심 스크립트(`parse_logcat`·`triage`·`config`·`code_roots`·`db_*`)와 `parser_backends.site`를 import하지 않는다.
-- `platforms/<p>/__init__.py`는 표준 라이브러리 + 같은 패키지 하위 모듈 + `platforms.base`·`common.logtime`·`common.events`만(guard가 규칙 10에서 불러오므로 가벼워야 한다. `backend.py`는 `__init__`이 불러오지 않는다). `__init__`이 불러오는 하위 모듈(ofono `journal`·`msgformat`·`pairing`)도 같은 제한이다. 검사는 `tests/test_platforms.py`.
+- `platforms/<p>/__init__.py`는 표준 라이브러리 + 같은 패키지 하위 모듈 + `platforms.base`·`common.logtime`·`common.events`만(guard가 규칙 10에서 불러오므로 가벼워야 한다. `backend.py`는 `__init__`이 불러오지 않는다). `__init__`이 불러오는 하위 모듈(ofono `journal`·`msgformat`·`gril`·`pairing`·`hop`)도 같은 제한이다. 검사는 `tests/test_platforms.py`.
 
 ## 2. 선택·경로·프로필 규칙
 
@@ -106,7 +106,7 @@ lock·`session.guard`는 각 플랫폼 `work_dir`에 있다(`Lock(work_dir, plat
 | K7 | **RF-4 유지**: 플랫폼 상수(정규식·디렉토리·태그·섹션 헤더)는 site-defaults에서만. 사용자 config는 이름 선택과 경로 프로필 + 사용자 수준 키 `analyzers`(K16)만, `platforms.<p>`의 그 밖 키는 거부 | 상수는 결정적 파서 출력과 이슈 DB 회귀 기준을 정한다. 사람마다 다르면 같은 fixture가 다르게 판정된다. 이번 요구는 "어느 상수 묶음을 쓸지 고르기"다 |
 | K8 | 출력 `platform` 키는 android 아닐 때만(켠 플랫폼 2개 이상이면 `--platform` 없이 고르는 플랫폼 또는 지정과 다를 때도, K18), 라벨은 `SPEC.label` | android 바이트 불변, 기존 "있을 때만" 키 관례 |
 | K9 | (해소, 트래커 범용화) 스키마 필드 `android_version(s)`·`code_profiles[].android_version`·`field_map.android_version`을 `platform_version(s)`로 개명했다. DB 키는 `platform_versions_supported` 하나(옛 키는 읽지 않고 `db_lint` config 오류) | 처음에는 이슈 DB 마이그레이션이 필요해 미뤘다. 배포된 이슈 DB가 없어 원칙 (d)로 v1을 직접 고쳤다(`18-trackers.md` T4·T10). 옛 사용자 config 키는 감지만 한다(T5) |
-| K10 | 짝 규칙은 `SPEC.protocols`(0개 이상), 비-ril은 `proto` 주석, `pair`는 자기 주석만. `ril.yaml` 요청 이름은 DB 전체에서 유일 | oFono는 RIL 계층과 D-Bus 등 둘 이상일 수 있다 |
+| K10 | 짝 규칙은 `SPEC.protocols`(0개 이상), 비-ril은 `proto` 주석, `pair`는 자기 주석만(`reads`에 적은 앞 프로토콜 주석은 읽기만, K20). `ril.yaml` 요청 이름은 DB 전체에서 유일 | oFono는 RIL 계층과 D-Bus 등 둘 이상일 수 있다 |
 | K11 | 카테고리는 플랫폼 DB `categories`, 출처 → 카테고리는 플랫폼 DB `tags.yaml` | 코드에 카테고리 가정 없음(조사 결과) |
 | K12 | 구성요소(데몬) 계약은 `platforms/base.py` 공통 타입(`Component`·`MsgView`)과 `PlatformSpec` 뒤쪽 기본값 필드. 플랫폼은 `block_keys`의 `components`로 opt-in(ofono만, android SPEC·`block_keys` 불변). ident·루트·형식은 site-defaults, 카테고리·허용 루트 키는 DB (§9-1) | 사용자 답: oFono DB 하나에 모든 데몬(K5 유지). 레지스트리가 루트 키·형식을 일반 검사하고 다음 플랫폼도 쓴다(ofono 전용 모듈이면 `code_roots`가 플랫폼을 알아야 해 §1-2 위반). 파서 출력 상수라 site-defaults(K7) |
 | K13 | 메시지 하위 형식 hook(`msgformat.py` 함수 하나 + 등록 한 줄) + 선택 `split_tag`(기본 꺼짐, tag `<ident>/<subtag>`) (§9-2) | 기본 출력 바이트 동일. 한 데몬이 여러 카테고리에 걸치는 사이트만 켠다 |
@@ -116,13 +116,14 @@ lock·`session.guard`는 각 플랫폼 `work_dir`에 있다(`Lock(work_dir, plat
 | K17 | 탐색 지식(5-2): 내장 `reference/platforms/<p>/*.md` 관례 + `triage.py explore` 출력 `platform`·`refs`(android 아닐 때만), `reference/explore.md` 한 항목. 사이트 지식 스킬 연결은 S-4a (§10-2) | 다른 스택의 태그·요청·원인 이름은 가설을 틀린 쪽으로 끈다. 어느 문서를 읽을지 스크립트가 알려 SKILL.md(크기 상한) 불변, 추가 = 디렉토리 하나. 동의 뒤에만 필요해 `analysis.json`·캐시 밖 |
 | K18 | 이슈 시작 때 플랫폼 = 로그 자동 + 애매하면 질문(사용자 결정 D1~D6). `run`만, `resolve` 뒤·`Driver` 전(lock·JOB 전), 켠 플랫폼 2개 이상·`--offline-db` 아님. 명시 = `--answer platform=` > `--platform` > `TT_PLATFORM`, 사용자 `platform`·site는 기본값(로그 형식이 이김), 명시와 형식이 다르면 한 번 묻기(답은 이어 하는 작업에 `platform_answer`로 남아 다시 묻지 않음), 출력 `platform`은 암묵 선택·지정과 다를 때도 (§11) | lock·work_dir가 플랫폼별(K4)이라 그 전에 정해야 한다. 판별은 스크립트(guard 규칙 10과 같은 `raw_line`), LLM 추측 없음. 질문은 일반 `needs_input`이라 SKILL.md 불변. 단일 플랫폼 설치는 파일을 열지 않아 바이트 동일 |
 | K19 | oFono 내장 짝 이름은 `gril`(not `ril`): upstream gril RIL trace 짝이 ofono `SPEC.protocols` 기본이다. SPEC 고정 이름이라 `protocols.gril: {tags}`만 받고(`[]` = 끄기), 주석은 `proto: gril`, 파생 이벤트는 proto 무관. 슬롯 규칙(`[<slot>,`·`/ril_<n>`)은 ofono `SPEC.phone` 기본 (§9-3) | `ril` 태그는 `<블록>.ril.tags`에서만 받는데 ofono `block_keys`에 `ril`이 없고 `protocols.ril`은 거부한다 — `gril`이면 레지스트리 무변. 대안(`ril` + 레지스트리 예외)은 계약을 바꿔 쓰지 않았다(11/02) |
+| K20 | serial 없는 데몬 사이 연결 = 설정 kind `hop`(opt-in, 기본 출력 바이트 동일, `ofono_reference` 0.0.3 유지). 아래 줄에만 주석(`dir: hop_req`·`hop_resp`), 파생 이벤트 없음, 일대일 nearest-first·기본 창 50ms(상한 1000), 이름은 정규식 + `fold`, 계약 `PairProtocol.reads`(읽기만 하는 앞 프로토콜, 레지스트리가 순서 확인) (§9-3) | 공개 표본(11/02)의 벤더 RIL 데몬은 요청 이름은 남기지만 gril serial은 남기지 않고(token 값은 serial과 이어지지 않음), 시각은 위 요청 뒤 수 ms였다. 실측(개수만): 요청 50ms 180/209·60/67(200ms 190/209), 아래 시각을 ±0.5~3초 밀면 가짜 연결 0~3, 같은 이름이 몰린 구간에서 FIFO와 29건 차이 → 국소적인 nearest, FIFO는 P2. 응답은 실패 응답이 주로 이어졌다(77/218, 실패 75/82). 위 줄에 쓰면 gril 소유 주석을 바꾸고, 파생 이벤트는 새 예약 이름(RESERVED_EVENTS·rulediff·db_lint·contracts)이 필요하고 미연결 원인(로그 수준·다른 경로·캡처 경계)을 구분할 수 없어 넣지 않았다(미연결 수는 site_checks o2.pairs) |
 
 그 밖: `compiled.environment(defaults, platform)`은 `parser.backend`가 없으면 `SPEC.default_backend`를 쓴다(그런 설치만 분석 재사용 해시가 한 번 바뀐다). 두 벌 설치는 커맨드 이름 공간과 hook이 두 번 걸리므로 권장은 한 벌 설치 + `enabled` 2개다.
 
 ## 8. 미룬 것
 
 - **oFono 실제 파서 규칙·이슈 DB 내용**: 사내 로그를 받은 뒤 사내 모드에서(S24~S29, `docs/development/OFONO_LOG_COLLECTION.md`). 지금 `platforms/ofono`는 형식 가정(journald `short-iso-precise`·BSD syslog·BusyBox syslogd) placeholder이고 합성 로그로 검증한다. 이 가운데 (c) BusyBox syslogd 줄 형식·내장 짝 `gril`·벤더 앞머리 모양 4개는 사외 공개 표본(11/02, 사용자 확인: 사내 로그 아님)으로 **모양만** 확인했다 — 사내 로그로 확인할 것이 남았다(S24·S26·S29, `14-site.md`). 실제 로그·형식은 사외로 가져오지 않고, 표본의 줄·값·이름도 레포에 넣지 않는다(fixture는 손으로 쓴 합성).
-- **oFono P2**(11/02 공개 표본에서 본 것): syslog 줄 여러 개로 잘린 긴 메시지 잇기, `open_log`(`newline=""`)의 `\r` 줄 나눔(직렬 콘솔 `\r\r\n` 캡처에서 `line_no` 2배 — Android와 공유라 따로 정한다), D-Bus `dump_dmsg` 짝, 슬롯 없는 옛 gril `[%04d]>`, `[Class::Method]` 형식, klogd 시각이 붙은 커널 배너의 `epoch_break`, 짝 코드 공용화(gril이 Android `ril.pair`를 복제, §1-2).
+- **oFono P2**(11/02 공개 표본에서 본 것): syslog 줄 여러 개로 잘린 긴 메시지 잇기, `open_log`(`newline=""`)의 `\r` 줄 나눔(직렬 콘솔 `\r\r\n` 캡처에서 `line_no` 2배 — Android와 공유라 따로 정한다), D-Bus `dump_dmsg` 짝, 슬롯 없는 옛 gril `[%04d]>`, `[Class::Method]` 형식, klogd 시각이 붙은 커널 배너의 `epoch_break`, 짝 코드 공용화(gril이 Android `ril.pair`를 복제, §1-2). `hop` P2: 짝 규칙이 없는 데몬 줄을 위로 쓰기(`upstream: {tags, match}` — 공개 표본의 IMS 계층은 위 줄에 같은 이름이 없었다), unsol 연결, FIFO 옵션, `timeline.md`에 연결 표시.
 - **`external_parsers`는 기본 플랫폼만** 쓴다(그 밖 플랫폼은 `{}`). 비기본 플랫폼 어댑터는 필요할 때 `platform.others`·DB `external_parsers`와 함께 정한다.
 - **트래커 설정 플랫폼별 덮어쓰기**: `tracker.*`(트래커 종류·`field_map` 등)는 플랫폼끼리 공유한다. oFono 트래커나 프로젝트가 다르면 `platforms.<p>.tracker` 덮어쓰기(`PROFILE_KEYS` 확장)를 다음 작업으로(S28·S32, `18-trackers.md` T9).
 - parser-rules 스키마가 `ril.yaml` 항목 1개 이상과 요청 이름 `^[A-Z][A-Z0-9_]*$`를 요구한다. oFono DB에 placeholder 항목이 필요하고, D-Bus식 이름(`GetProperties` 등)은 넣을 수 없어 설정 프로토콜(§9-3)의 파생 이벤트(`ril_error`·`ril_timeout`·`ril_no_response`)가 생기지 않는다(짝·지연은 이벤트에 보인다). 이름 정규화(`regex` 옵션)나 프로토콜별 규칙 파일(스키마 마이그레이션, 메인테이너)은 S26이 정해진 뒤에.
@@ -156,8 +157,9 @@ lock·`session.guard`는 각 플랫폼 `work_dir`에 있다(`Lock(work_dir, plat
 
 - 엔진 변경은 없다: `pair()`는 한 스트림 구간의 레코드를 모두 받으므로 `tags`가 여러 데몬을 묶은 프로토콜은 pid·tag와 무관하게 짝을 짓는다. 없던 것은 코드 없이 설정으로 만드는 프로토콜이다.
 - **내장 `gril`**(`platforms/ofono/gril.py`, SPEC 고정, 기본 tags `ofonod`, K19): upstream oFono gril RIL trace — 요청 `[<slot>,<serial>]> RIL_REQUEST_<NAME> …`, 응답 `[<slot>,<serial>]< RIL_REQUEST_<NAME>[ …]`(실패 `failed <ERROR>`, 변형 `failed: X`·`failed; error: RIL_E_X`), 비요청 `[<slot>,UNSOL]< RIL_UNSOL_<NAME> …`. 이름은 Android RILJ·샘플 DB와 같게(`RIL_REQUEST_X` → `X`, `RIL_UNSOL_X` → `UNSOL_X`, 접두사 없는 벤더 이름도), 실패인데 이름이 없으면 `UNKNOWN`, `failed`가 없으면 `NONE`. `<INVALID>` 등 식별자 모양이 아닌 이름·슬롯 없는 옛 형식(P2)은 주석이 없다. 짝은 Android `ril.pair`와 같은 의미 — 자기 주석 pid가 바뀌면 구간을 끊고, 키 `(pid, phone_id, serial)`, 같은 이름의 가장 최근 대기 요청(지연 ≥ 0), 짝 없는 요청 `observed_until` = 구간 안 같은 pid의 마지막 줄. 프로토콜 목록에서 site `kind` 프로토콜보다 **먼저**다(줄마다 처음 맞는 주석). 다른 ident는 `protocols.gril: {tags: [...]}`, 끄기는 `tags: []`, 그 밖 키(`kind` 등)는 거부(TODO(SITE:S26)). 응답 본문이 대문자 낱말 하나뿐인 줄은 오류로 보지 않는다(`failed`가 있어야 오류) — 공개 표본에서 그런 줄은 모두 같은 serial이 이미 `failed`로 짝지어진 뒤의 두 번째 trace였다(오류로 세면 이중 계산, 사내 형식은 S26).
-- `platform.others.ofono.protocols.<이름>: {kind: regex, tags: [...], request: '<정규식>', response: '<정규식>'}`. 이름은 site가 짓는다(`^[a-z][a-z0-9_]*$`, `ril` 금지. SPEC 고정 이름(`gril`)이면 `tags`만). 각자 `PairProtocol`이라 `proto: <이름>`과 대기 표가 따로다. `kind`는 그 플랫폼 `protocol_kinds`에 있어야 한다(ofono `regex` = `platforms/ofono/pairing.py`). 설정이 없으면 site 프로토콜은 없다(TODO(SITE:S26)).
+- `platform.others.ofono.protocols.<이름>: {kind: regex, tags: [...], request: '<정규식>', response: '<정규식>'}`. 이름은 site가 짓는다(`^[a-z][a-z0-9_]*$`, `ril` 금지. SPEC 고정 이름(`gril`)이면 `tags`만). 각자 `PairProtocol`이라 `proto: <이름>`과 대기 표가 따로다. `kind`는 그 플랫폼 `protocol_kinds`에 있어야 한다(ofono `regex` = `platforms/ofono/pairing.py`, `hop` = `hop.py`). 설정이 없으면 site 프로토콜은 없다(TODO(SITE:S26)).
 - `regex`: `tags`는 ident다(`split_tag`와 무관). annotate 본문에 `re.search`, 요청을 먼저 본다. `request`는 이름 그룹 `serial` 필수·`name` 선택, `response`는 `serial` 필수·`name`·`error` 선택. serial이 10진이 아니거나 `name`·`error`가 식별자 모양(글자로 시작, `[A-Za-z0-9_.]`, 128자 이하 — 숫자로 시작하는 전화번호·IMSI·IP와 `:`이 든 MAC은 안 된다)이 아닌 줄은 주석을 달지 않는다(자유 문장을 싣지 않는다). `--mask`면 `parse_logcat`이 `proto` 주석의 `request`·`error`도 마스킹하고 파생 이벤트 필드는 그 값으로 만든다(android 주석은 `proto`가 없어 그대로). 짝 키는 그 프로토콜 안의 `serial`(같은 키의 나중 요청이 대기 요청을 바꾼다). 한쪽에 없는 요청 이름은 다른 쪽에서 채우고 둘 다 `paired_ts`·`latency_ms`를 받는다. 짝 없는 요청은 `observed_until` = 그 구간의 가장 늦은 레코드 시각(태그 무관)이라 `ril_no_response`가 생길 수 있다. 같은 serial의 나중 요청에 밀려난 요청은 `observed_until`을 받지 않는다(대화 키가 없어 연결별 serial 충돌일 수 있으므로 응답 없음으로 단정하지 않는다).
+- **`hop`**(`platforms/ofono/hop.py`, K20): serial 없는 아래 데몬 줄을 위 층 짝 규칙 줄에 요청 이름과 시간 창으로 잇는다. `{kind: hop, upstream: <위 규칙 이름>, tags: [<아래 ident>], request: '<정규식>', response: '<정규식>', fold: false, window_ms: 50}`. `upstream`은 프로토콜 목록에서 **앞**이어야 한다(SPEC 내장 또는 위에 적은 설정 규칙 — `PairProtocol.reads`, 아니면 키 경로와 종료 코드 2). `request`·`response`는 하나 이상(입력은 `msg_format`이 뗀 본문), 이름 그룹 `name` 필수(식별자 모양이 아니면 다음 정규식), 접두사는 정규식으로 흡수(`(?:RIL_REQUEST_)?(?P<name>…)`), `fold: true`면 대소문자·`_`를 무시해 비교한다. 창: 요청은 아래 줄이 위 요청 뒤 0~`window_ms`, 응답은 아래 줄이 위 응답 앞 0~`window_ms`(1~1000, 기본 50 — 클수록 가짜 연결이 늘어 100 이하 권장). 짝은 일대일 nearest-first(시각 차가 작은 쌍부터, 한 줄은 한 번만), `phone_id`는 둘 다 있을 때만 같아야 한다. 주석은 **아래 줄에만** `dir: hop_req`·`hop_resp`, 연결되면 `serial`·`request`(위 정규 이름)·`paired_ts`(위 줄 시각)·`latency_ms`. 위 주석은 읽기만 하고, 연결 못 한 줄은 `paired_ts: null`(`observed_until` 없음). 파생 이벤트는 없다(`dir`가 req·resp가 아니라 `ril_error` 등·step event `ril`·`s0_stats`에 걸리지 않는다). 미연결 수는 `site_checks` o2.pairs가 보인다. 줄마다 처음 맞는 규칙이라 아래 줄이 앞 규칙에 먼저 맞으면 hop 주석이 없다. 연결된 아래 줄의 `category_hint`는 연결 이름의 `ril.yaml` 카테고리가 된다. `timeline.md`에는 연결이 보이지 않는다(P2) — 시각 차로 따라간다. 위 규칙을 끄면(`gril: {tags: []}`) 연결이 0이다. 아래 데몬의 슬롯 표기가 없으면 듀얼 SIM에서 교차 연결될 수 있다(S29 site `log.phone_id`).
 - 대화 키(연결마다 serial이 다시 시작하는 경우)는 넣지 않았다: annotate는 `ril` 칸만 내고 그 키 목록이 닫혀 있어 `pair()`에 넘길 수 없다. 필요한지는 S26에서 본다.
 - 짝은 **한 스트림 안에서만** 생긴다. 유닛별 파일(`journal-<유닛>.log`)은 스트림이 따로라 데몬 사이 짝이 없고, 합친 `journal.log`와 같이 넣으면 줄이 두 번 나온다 — 분석은 합친 journal 하나로 한다(`docs/development/OFONO_LOG_COLLECTION.md`).
 - 파생 이벤트는 요청 이름이 DB `ril.yaml`에 있을 때만 생긴다(§8).
@@ -177,6 +179,7 @@ lock·`session.guard`는 각 플랫폼 `work_dir`에 있다(`Lock(work_dir, plat
 | ident → 카테고리 | 이슈 DB `parser-rules/tags.yaml` (S25) |
 | code_ref 허용 키 | 이슈 DB `code_root_keys` (S27) |
 | 데몬 사이 짝 | site-defaults `platform.others.ofono.protocols.<이름>`(`kind: regex`), 내장 `gril`의 ident·끄기는 `protocols.gril.tags`, 파생 이벤트는 DB `ril.yaml` (S26) |
+| serial 없는 아래 데몬 줄 연결 | site-defaults `platform.others.ofono.protocols.<이름>`(`kind: hop`, `upstream`은 앞 규칙) — 파생 이벤트 없음 (S26·S29) |
 | 새 메시지 형식 | `platforms/ofono/msgformat.py` 함수 하나(필요할 때만) |
 
 바꾼 뒤에는 플랫폼 상수 규칙(`02-config.md`)대로 이슈 DB에서 `db_regress --all`·`db_verify rules`를 다시 돌린다. site-defaults ↔ DB 교차 점검은 아직 없다(§8).
@@ -202,7 +205,7 @@ lock·`session.guard`는 각 플랫폼 `work_dir`에 있다(`Lock(work_dir, plat
 
 ### 10-2. 탐색 지식 (Step 5-2)
 
-- 관례: 플러그인 `skills/telephony-triage/reference/platforms/<p>/*.md`(경로 상수 `triagelib/core.py` `PLATFORM_REFS_DIR`, 코드에 플랫폼 이름 없음). 지금은 `ofono/log-guide.md` 하나(placeholder·공개 upstream 개념만, TODO(SITE:S24~S26), 3,072B 이하 — `tests/test_triage.py`).
+- 관례: 플러그인 `skills/telephony-triage/reference/platforms/<p>/*.md`(경로 상수 `triagelib/core.py` `PLATFORM_REFS_DIR`, 코드에 플랫폼 이름 없음). 지금은 `ofono/log-guide.md` 하나(줄 모양 — 형식 (c)·gril trace·`dump_dmsg` —, 계층 앱 → D-Bus → `ofonod` → RIL → 벤더 RIL → 모뎀, 판단 규칙 "위에서 본 오류는 시각·이름으로 한 층씩 내려가 처음 실패한 층을 찾는다", placeholder·공개 upstream 개념만, 데몬 이름 없음, TODO(SITE:S24~S26), 3,072B 이하 — `tests/test_triage.py`. Android 이름(`_ANDROID_NAMES`, eval 73)은 쓰지 않는다).
 - `triage.py explore` 출력: 작업 플랫폼이 android가 아니면 `{timeline, lines, total}`에 `platform`과 `refs`(그 디렉토리의 `*.md`, 스킬 디렉토리 기준 경로, 이름순, 없으면 `[]`)를 더한다. 작업 플랫폼 = `JOB/analysis.json`의 `platform`(키가 없으면 android), 그 파일을 읽지 못하면 선택 플랫폼 — `--out` 오프라인 작업도 그 작업의 문서를 받는다. android는 키가 없다(출력 불변). `analysis.json`·스키마·분석 재사용 캐시에는 넣지 않는다.
 - 스킬: `reference/explore.md` "읽는 것" 5번 — `platform`이 있으면 `refs` 문서만 읽고 Android 참고 자료(`log-tags.md`·`ril-requests.md`·`fail-causes.md`)는 열지 않는다, `refs`가 비면 그 이슈 DB `SNAP/parser-rules/`만. SKILL.md와 Android 참고 자료 머리말("Android 기준")은 그대로.
 - 새 플랫폼 = `reference/platforms/<p>/` 디렉토리(선택) + site `platforms.<p>.analyzers`(선택). 사이트 지식 스킬 연결은 S-4a(§8).

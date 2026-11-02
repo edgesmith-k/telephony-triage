@@ -25,10 +25,27 @@
 ## 3. 테스트
 
 - `python3 -m pytest -q tests`. 새 `tests/test_ofono_gril.py`, `test_ofono_skeleton.py`((c) 형식)·`test_ofono_components.py`(형식 4개)·`test_masking.py`·`test_platform_detect.py`·`test_site_checks.py` 보강. oFono 변형 DB(`issue-db-ofono`) `ril.yaml`에 `SETUP_DATA_CALL`·`DEACTIVATE_DATA_CALL`·`UNSOL_DATA_CALL_LIST_CHANGED` placeholder.
-- `plugin/skills/**`는 바꾸지 않았다(oFono `log-guide.md` 보강은 후속).
+- `plugin/skills/**`는 바꾸지 않았다(oFono `log-guide.md` 보강은 §5).
 
 ## 4. 반입 뒤 후보 (P2)
 
 syslog 줄 여러 개로 잘린 긴 메시지 잇기, `open_log`(`newline=""`)의 `\r` 줄 나눔(`line_no` 2배 — Android 공유라 따로 결정), D-Bus `dump_dmsg` 짝, 슬롯 없는 옛 gril `[%04d]>`, `[Class::Method]` 형식, klogd 시각이 붙은 커널 배너의 `epoch_break`, `key:` 바로 뒤 MAC 누락, 1묶음 압축 IPv6 과잉 마스킹(C++ `std::string`의 `d::s`), gril·Android 짝 코드 공용화. 위험: 응답 본문이 대문자 낱말 하나뿐인 줄은 오류로 보지 않는다(`failed`가 있어야 오류, S26).
 
 리뷰(11/02)에서 더한 것: `token` 완화는 문맥을 보지 않는다(짧은 숫자 OTP·인증 헤더 값도 남는다 — RIL 문맥으로 좁힐지 사내 보안 기준으로 검토), BusyBox 이름표 밖 facility(12~15)는 `<pri>`로 찍혀 그 줄을 해석하지 못한다, `-S`·`(none)` 호스트 조합은 (b)에서 거부된다, (a)·(b) unparsed 수는 `tail:` 건너뛰기만큼 줄 수 있다. 수정한 것: `--mask`에서 짝 주석 값(`NONE` 등)이 앞 줄에서 가린 같은 글자의 토큰이 되어 가짜 `ril_error`가 나던 것(이전부터 있던 결함, gril 기본으로 노출이 넓어짐 — 짝 값은 텍스트 규칙으로만 마스킹), `PDN_INFO` 예외를 `PDN_INFO_EXT`까지로, `src_suffix`는 끝 512자만 본다.
+
+## 5. 후속: `kind: hop`·oFono 탐색 지식
+
+같은 묶음(import-20261102)이라 `ofono_reference`는 0.0.3 그대로다(설정이 없으면 출력이 PR 앞과 바이트 단위로 같다). 설계는 `17-platforms.md §9-3`(K20)·§10-2.
+
+| 영역 | 바뀐 것 | 사내에서 할 일 |
+|---|---|---|
+| 짝 규칙 `kind: hop` | `protocols.<이름>: {kind: hop, upstream, tags, request, response, fold, window_ms}` — serial 없는 아래 데몬 줄(요청 이름만 남기는 벤더 RIL 등)을 위 짝 규칙(기본 `gril`) 줄에 이름·시간 창으로 잇는다. 아래 줄에만 주석 `dir: hop_req`·`hop_resp`(연결되면 위 serial·정규 이름·`paired_ts`·`latency_ms`), 일대일 nearest, 기본 창 50ms(1~1000), 파생 이벤트 없음 | 아래 데몬 줄 모양으로 정규식(S26), 이름 표기가 다르면 `fold: true`, 창은 실제 지연으로(100 이하 권장), 아래 데몬 슬롯 표기(S29). 연결 수는 `site_step.py ofono` O-2 `o2.pairs` |
+| 계약 | `PairProtocol.reads`(기본 `()`): 읽기만 하는 앞 프로토콜. 레지스트리가 목록 순서를 확인(`upstream`이 앞에 없으면 키 경로와 종료 코드 2) | — |
+| `site_checks` | `o2.pairs` 근거에 `<이름> 연결 L/아래 줄 D(위 <upstream> 요청 U)`, 연결 0이면 사용자 필요, 안내에 `kind: hop` | — |
+| 탐색 지식 | `reference/platforms/ofono/log-guide.md`: 줄 모양(형식 (c)·gril trace·`dump_dmsg`), 계층(앱 → D-Bus → `ofonod` → RIL → 벤더 RIL → 모뎀), "위에서 본 오류는 한 층씩 내려가 처음 실패한 층" 규칙. 데몬 이름 없음 | 사내 데몬·계층으로 placeholder를 채울지(S24~S26, 사이트 지식 스킬은 S-4a) |
+
+Android 영향: 없다(oFono 모듈·`PairProtocol` 기본값 필드만, Android SPEC 프로토콜의 `reads`는 `()`). 골든·`db_regress` 샘플·fixture는 바이트 그대로다.
+
+테스트: 새 `tests/test_ofono_hop.py`·fixture `tests/fixtures/logs/ofono/syslog-hop.log`(합성), `test_ofono_components.py`·`test_ofono_skeleton.py`·`test_platform_registry.py`·`test_site_checks.py` 보강.
+
+P2: 짝 규칙이 없는 데몬 줄을 위로 쓰기(`upstream: {tags, match}` — 공개 표본 IMS 계층), unsol 연결, FIFO 옵션(같은 이름이 몰린 구간에서 nearest와 다를 수 있다), `timeline.md`에 연결 표시. 위험: 창이 클수록 가짜 연결(공개 표본 50ms ≤3, 200ms ≤18), 위 규칙을 끄거나 아래 tags가 앞 규칙과 겹치면 연결 0, 응답 쪽 아래 줄 대부분은 다른 RIL 클라이언트 것이라 미연결이 많은 것이 정상이다.

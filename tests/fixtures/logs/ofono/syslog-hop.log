@@ -1,0 +1,13 @@
+Sep 20 15:00:00.000 dut daemon.debug ofonod[812]: [0,0001]> RIL_REQUEST_SETUP_DATA_CALL placeholder
+Sep 20 15:00:00.001 dut user.debug daemon-a[901]: ipc req SETUP_DATA_CALL len=8
+Sep 20 15:00:00.299 dut user.info daemon-a[901]: ipc rsp SetupDataCall placeholder
+Sep 20 15:00:00.300 dut daemon.debug ofonod[812]: [0,0001]< RIL_REQUEST_SETUP_DATA_CALL failed GENERIC_FAILURE
+Sep 20 15:00:01.000 dut daemon.debug ofonod[812]: [0,0002]> RIL_REQUEST_DEACTIVATE_DATA_CALL placeholder
+Sep 20 15:00:01.010 dut daemon.debug ofonod[812]: [0,0003]> RIL_REQUEST_DEACTIVATE_DATA_CALL placeholder
+Sep 20 15:00:01.011 dut user.debug daemon-a[901]: ipc req RIL_REQUEST_DEACTIVATE_DATA_CALL len=8
+Sep 20 15:00:01.012 dut user.debug daemon-a[901]: ipc req DEACTIVATE_DATA_CALL len=8
+Sep 20 15:00:02.000 dut daemon.debug ofonod[812]: [0,0004]> RIL_REQUEST_PLACEHOLDER_QUERY placeholder
+Sep 20 15:00:02.051 dut user.debug daemon-a[901]: ipc req PLACEHOLDER_QUERY len=8
+Sep 20 15:00:03.000 dut user.debug daemon-a[901]: ipc req PLACEHOLDER_OTHER len=8
+Sep 20 15:00:03.100 dut user.debug daemon-b[902]: ipc req PLACEHOLDER_OTHER len=8
+Sep 20 15:00:03.200 dut user.debug daemon-a[901]: ipc req 0102 len=8

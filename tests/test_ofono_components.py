@@ -28,7 +28,7 @@ from runner import copy_db, plugin_root, run, variant_db  # noqa: E402
 import platforms  # noqa: E402
 from common import events, masking  # noqa: E402
 from platforms import Component, MsgView, PlatformConfigError, SourceTree  # noqa: E402
-from platforms.ofono import gril, msgformat, pairing  # noqa: E402
+from platforms.ofono import gril, hop, msgformat, pairing  # noqa: E402
 
 LOGS = REPO / "tests" / "fixtures" / "logs" / "ofono"
 MULTI_LOG = LOGS / "journal-multi.log"
@@ -70,7 +70,7 @@ def test_spec_default_component_and_hooks():
     assert dict(spec.msg_formats) == {"file_func": msgformat.file_func, "tid_file_paren": msgformat.tid_file_paren,
                                       "level_tid_file": msgformat.level_tid_file, "slot_level_seq": msgformat.slot_level_seq,
                                       "src_suffix": msgformat.src_suffix}
-    assert dict(spec.protocol_kinds) == {"regex": pairing.build}
+    assert dict(spec.protocol_kinds) == {"regex": pairing.build, "hop": hop.build}   # hop: tests/test_ofono_hop.py
     assert "components" in spec.block_keys and [p.name for p in spec.protocols] == ["gril"]   # 내장 짝(17-platforms §9-3)
     assert spec.protocols[0].annotate is gril.annotate and spec.protocols[0].pair is gril.pair
     prof = platforms.load(None, "ofono", require_enabled=False)
@@ -149,8 +149,8 @@ def test_regex_protocol_from_config():
 @pytest.mark.parametrize("protocols,path,why", [
     ({"ril": IPC}, "protocols.ril", "ril이 아니어야"),
     ({"Bad-Name": IPC}, "protocols.Bad-Name", "^[a-z]"),
-    ({"ipc": {k: v for k, v in IPC.items() if k != "kind"}}, "protocols.ipc.kind", "허용: regex"),
-    ({"ipc": {**IPC, "kind": "nosuch"}}, "protocols.ipc.kind", "허용: regex"),
+    ({"ipc": {k: v for k, v in IPC.items() if k != "kind"}}, "protocols.ipc.kind", "허용: regex, hop"),
+    ({"ipc": {**IPC, "kind": "nosuch"}}, "protocols.ipc.kind", "허용: regex, hop"),
     ({"ipc": {k: v for k, v in IPC.items() if k != "kind"}}, "protocols.ipc.kind", "필요한 키"),
     ({"ipc": {**IPC, "kind": "nosuch"}}, "protocols.ipc.kind", "알 수 없는 kind"),
     ({"ipc": {**IPC, "kind": ["regex"]}}, "protocols.ipc.kind", "알 수 없는 kind"),   # 해시 불가 값도 TypeError가 아니라 오류

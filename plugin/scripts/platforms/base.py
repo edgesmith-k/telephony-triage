@@ -156,11 +156,13 @@ class PairProtocol:
 
     주석은 이벤트의 `ril` 칸을 같이 쓴다. `name != "ril"`인 프로토콜은 주석에 `proto: <name>`을 단다.
     `pair`는 **자기 주석만** 다룬다(`proto`가 자기 이름인 것, "ril"이면 `proto`가 없는 것) — 다른 프로토콜 주석은
-    짝·pid 분할에 쓰지 않는다."""
+    짝·pid 분할에 쓰지 않는다. 예외는 `reads`: 거기 적은 프로토콜의 주석은 **읽기만** 한다(바꾸지 않는다). 레지스트리는
+    `reads`의 이름이 목록에서 앞에 있는지 확인한다(백엔드는 목록 순서로 `pair`를 부르므로 그쪽 짝이 먼저 채워진다)."""
     name: str
     default_tags: frozenset
     annotate: Callable[..., dict | None]     # (tag, msg, tags, phone) → {serial, dir, request, error, ...} | None
-    pair: Callable[[list[dict]], None]       # 전체 레코드를 제자리에서. 자기 주석만 다룬다
+    pair: Callable[[list[dict]], None]       # 전체 레코드를 제자리에서. 자기 주석만 바꾼다
+    reads: tuple[str, ...] = ()              # 읽기만 하는 앞 프로토콜 이름 (ofono `hop`의 `upstream`)
 
 
 @dataclass(frozen=True)
