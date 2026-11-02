@@ -101,6 +101,8 @@ def test_registry_reads_order():
     prof = _load(protocols={"gril": {"tags": []}, "h": HOP})                    # 끈 gril도 목록에는 있다(연결 0, site_checks)
     assert [p.name for p in prof.protocols] == ["gril", "h"]
     assert all(p.reads == () for p in platforms.get("ofono").protocols + platforms.get("android").protocols)
+    msg = _error(protocols={"h": HOP, "h2": {**HOP, "upstream": "h"}})             # 리뷰 P2: hop은 위 층이 될 수 없다
+    assert "platform.others.ofono.protocols.h2: 읽는 짝 규칙 'h'는 다른 규칙을 읽는 규칙이라" in msg, msg
 
 
 # -- 줄 모양 ---------------------------------------------------------------------------------------------

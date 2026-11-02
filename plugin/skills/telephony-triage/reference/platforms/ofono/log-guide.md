@@ -23,8 +23,8 @@
 근거는 수 ms 안의 아래 층 줄, `failed`, ⇒ `ril_error`·`ril_timeout`·`ril_no_response` 표시다. 아래 층 줄이 없으면
 "그 층 로그 없음"이라고 쓰고 원인을 지어내지 않는다 — 로그 수준·수집 범위 탓일 수 있다.
 
-짝 결과는 ⇒ 표시로만 보인다(`ril.yaml`에 이름이 있을 때). 데몬 사이 연결(`kind: hop`)은 표시가 없으니 같은 이름의
-위·아래 줄을 시각 차로 맞춘다. 짝 설정이 없으면 "짝 정보 없음"이라고 쓴다.
+⇒ 표시는 `ril.yaml`에 이름이 있는 짝의 실패·시간 초과·무응답에만 붙는다(성공한 짝은 표시가 없다). 데몬 사이 연결
+(`kind: hop`)도 표시가 없으니 위·아래 줄을 시각 차로 맞춘다. RIL trace 줄이 없는 로그면 "짝 정보 없음"이라고 쓴다.
 
 ## upstream 개념 → 카테고리 (예시, 최종은 DB `tags.yaml`)
 
@@ -33,6 +33,6 @@ D-Bus 오류 `org.ofono.Error.<이름>`(Failed·InProgress·NotAttached·SimNotR
 
 ## 코드·이름
 
-루트 키는 `code.roots`의 것(주 루트 `ofono`, 구성요소 루트는 DB `code_root_keys`)만 쓴다. RIL 요청 이름은 타임라인·DB
-`ril.yaml`에 나온 것만 쓰고, Android 프레임워크 이름(클래스·실패 원인 enum)은 쓰지 않는다 — 다른 스택이라 맞는 줄이
-없고 가설을 틀린 쪽으로 끈다.
+루트 키는 `code.roots`의 것(주 루트 `ofono`, 구성요소 루트는 DB `code_root_keys`)만 쓴다. RIL 요청 이름은
+`timeline.md` 줄에 나온 것만 인용한다 — `ril.yaml`은 카테고리·timeout 확인용이고, 거기에만 있는 이름으로 "없는 줄"을
+말하지 않는다. Android 프레임워크 이름(클래스·실패 원인 enum)도 쓰지 않는다 — 다른 스택이라 가설을 틀린 쪽으로 끈다.
