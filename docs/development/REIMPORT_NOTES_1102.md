@@ -49,3 +49,6 @@ Android 영향: 없다(oFono 모듈·`PairProtocol` 기본값 필드만, Android
 테스트: 새 `tests/test_ofono_hop.py`·fixture `tests/fixtures/logs/ofono/syslog-hop.log`(합성), `test_ofono_components.py`·`test_ofono_skeleton.py`·`test_platform_registry.py`·`test_site_checks.py` 보강.
 
 P2: 짝 규칙이 없는 데몬 줄을 위로 쓰기(`upstream: {tags, match}` — 공개 표본 IMS 계층), unsol 연결, FIFO 옵션(같은 이름이 몰린 구간에서 nearest와 다를 수 있다), `timeline.md`에 연결 표시. 위험: 창이 클수록 가짜 연결(공개 표본 50ms ≤3, 200ms ≤18), 위 규칙을 끄거나 아래 tags가 앞 규칙과 겹치면 연결 0, 응답 쪽 아래 줄 대부분은 다른 RIL 클라이언트 것이라 미연결이 많은 것이 정상이다.
+
+eval(11/02, `log-guide.md` 변경): **73**만 다시 쟀다(claude-sonnet-5-5, iteration `r1102-a`, `offsite_results.json` 갱신). 7/8 통과·수동 행 통과(사용자 승인), 실패 1행은 Step 4 리포트를 보일 때 `events.json`을 함께 연 것(탐색·log-guide 읽기 전, 이번 변경과 무관 — 10/31 run은 통과)이라 73은 fail로 남는다(사내 `s2.offsite` fail 6: 15·40·46·47·69·73). 63·74는 log-guide를 읽지 않는다.
+
