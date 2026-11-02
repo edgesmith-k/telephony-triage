@@ -178,7 +178,7 @@ footer { color: var(--muted); font-size: 0.85rem; border-top: 1px solid var(--li
       <div class="ov-row ov-split">
         <div class="ov-cell a">logcat 형식이면 Android</div>
         <div class="ov-cell s">① 플랫폼 정하기<small>로그 형식을 보고 자동, 애매하면 작업 전에 한 번 묻기</small></div>
-        <div class="ov-cell o">journald·syslog 형식이면 oFono</div>
+        <div class="ov-cell o">journald·syslog(BusyBox 포함) 형식이면 oFono</div>
       </div>
       <div class="ov-arrow"><div></div><div></div><div></div></div>
 
@@ -249,7 +249,7 @@ footer { color: var(--muted); font-size: 0.85rem; border-top: 1px solid var(--li
           <div class="lane o"><h4>OFONO 로그 모양 (형식 가정)</h4>
             <div class="log"><span class="t">2026-09-20T14:32:09.100+09:00 host</span> ofonod[812]: src/network.c:…
 <span class="t">2026-09-20T14:32:09.140+09:00 host</span> daemon-a[640]: …</div>
-            <p>journald/syslog 줄. 줄마다 어느 데몬인지(ident)가 붙습니다. 실제 형식은 사내 로그로 확인할 항목(S24)입니다.</p>
+            <p>journald/syslog 줄. 줄마다 어느 데몬인지(ident)가 붙습니다. BusyBox syslogd는 호스트 뒤에 <code>daemon.info</code> 같은 칸이 더 있고 그것을 레벨로 씁니다. 실제 형식은 사내 로그로 확인할 항목(S24)입니다.</p>
           </div>
         </div>
         <div class="ask">
@@ -274,7 +274,7 @@ footer { color: var(--muted); font-size: 0.85rem; border-top: 1px solid var(--li
 
       <article class="step">
         <div class="step-head"><span class="num">2</span><div><h3>로그 읽기</h3><p>줄을 시각·태그·요청 짝이 붙은 이벤트로 바꿉니다.</p></div></div>
-        <p class="common">파서 백엔드가 플랫폼마다 따로 있습니다(<code>reference</code> / <code>ofono_reference</code> 0.0.2). 시계가 튀거나 재부팅된 곳은 끊어서 보고, 시각 범위 밖 로그는 "로그 범위 밖"으로 따로 알립니다. 이슈 DB·매칭에 쓰는 값은 모두 마스킹됩니다.</p>
+        <p class="common">파서 백엔드가 플랫폼마다 따로 있습니다(<code>reference</code> / <code>ofono_reference</code> 0.0.3). 시계가 튀거나 재부팅된 곳은 끊어서 보고, 시각 범위 밖 로그는 "로그 범위 밖"으로 따로 알립니다. 이슈 DB·매칭에 쓰는 값은 모두 마스킹됩니다.</p>
         <div class="lanes">
           <div class="lane a"><h4>ANDROID</h4>
             <ul>
@@ -287,6 +287,7 @@ footer { color: var(--muted); font-size: 0.85rem; border-top: 1px solid var(--li
             <ul>
               <li>모든 데몬이 한 스트림에 섞여 오고, ident가 태그가 됨</li>
               <li>데몬 목록은 팀 설정 <code>components</code>에 둠(예: <code>daemon-a</code>, <code>daemon-b</code>)</li>
+              <li><code>ofonod</code>의 upstream RIL trace(<code>[0,0001]&gt; RIL_REQUEST_…</code>)는 기본으로 짝지어 지연·무응답·오류 표시(내장 <code>gril</code>, 팀 설정으로 끌 수 있음). 슬롯은 <code>[0,</code>·<code>/ril_0</code>으로 구분</li>
               <li>데몬 사이 요청·응답 짝은 팀이 정규식으로 정의(기본 꺼짐). 다른 데몬의 응답도 같은 serial이면 짝. 이름·오류 값은 식별자 모양만 싣고 한 번 더 마스킹</li>
               <li>데몬별 메시지 하위 형식, 모듈 단위 태그 나누기(<code>split_tag</code>)는 선택</li>
             </ul>

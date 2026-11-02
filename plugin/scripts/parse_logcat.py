@@ -137,6 +137,11 @@ def _run_extractors(lines: list[dict], rules: parser_rules.Rules, timeout_ms: in
 
 def _mask_record(rec: dict, masker) -> dict:
     rec = dict(rec)
+    ann = rec.get("ril")
+    spans = getattr(masker, "_spans", None)
+    # 이 줄에서 가릴 원래 값 — 짝 주석(`proto`) 값 재마스킹에만 쓰므로 그 줄에서만 센다(마스킹은 hot path, 08-safety §8)
+    line_values = ([v for *_, v in spans(rec["msg"])]
+                   if spans and isinstance(ann, dict) and "proto" in ann and isinstance(rec.get("msg"), str) else [])
     if isinstance(rec.get("msg"), str):
         rec["msg"] = masker(rec["msg"])
     # 필드 값은 같은 마스커의 번호 대응을 쓴다: 줄에서 본 원래 값이면 같은 토큰이 된다
@@ -147,9 +152,20 @@ def _mask_record(rec: dict, masker) -> dict:
     }
     # 설정 정의 짝 규칙(`proto` 주석, 17-platforms §9-3)의 값은 site 정규식이 뽑으므로 한 번 더 마스킹한다. 파생
     # 이벤트(`_ril_events`)는 이 값으로 만들어진다. android 주석은 `proto`가 없어 그대로다(값이 `[A-Z][A-Z0-9_]*`로 고정).
-    ann = rec.get("ril")
+    # **같은 줄**에서 키 문맥으로 가린 값(또는 그 일부)이면 그 값의 토큰으로, 아니면 텍스트 규칙(`masker`)만 쓴다 —
+    # 번호 표 전체를 보면 앞 줄에서 가린 같은 글자(`password=NONE`)와 우연히 같은 값(gril 성공 응답 `NONE`)이 토큰이
+    # 되어 가짜 `ril_error`가 나고(11/02 리뷰), 텍스트 규칙만 쓰면 `token=<값>`처럼 키 문맥으로만 가려지는 값이 남는다.
     if isinstance(ann, dict) and "proto" in ann:
-        rec["ril"] = {**ann, **{k: mask_value(ann[k]) for k in ("request", "error") if isinstance(ann.get(k), str)}}
+        def _proto_value(v: str) -> str:
+            hit = next((lv for lv in line_values if v in lv), None)       # 줄에서 가린 값 그 자체이거나 그 일부
+            if hit is not None:
+                return mask_value(hit)
+            inner = [lv for lv in line_values if lv and lv in v]
+            if inner:   # 가린 값보다 길게 뽑았으면 든 부분을 토큰으로(단어 경계, 원래 v에 한 번만 — 이름·토큰을 깨지 않게)
+                alt = "|".join(map(re.escape, sorted(inner, key=len, reverse=True)))
+                v = re.sub(r"(?<![A-Za-z0-9_])(?:" + alt + r")(?![A-Za-z0-9_])", lambda m: mask_value(m.group(0)), v)
+            return masker(v)
+        rec["ril"] = {**ann, **{k: _proto_value(ann[k]) for k in ("request", "error") if isinstance(ann.get(k), str)}}
     return rec
 
 

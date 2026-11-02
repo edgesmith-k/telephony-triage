@@ -27,6 +27,9 @@
 7. **커널**: `journalctl -k -b -o short-iso-precise > kernel.log`(모뎀 USB 열거, wwan 인터페이스 등).
 8. **상태·버전**(`info.txt`): oFono 버전, 구성요소(데몬)마다 버전과 그 버전이 적힌 소스 파일, OS·빌드, 모뎀 펌웨어, `uname -r`, 단말 모델, `timedatectl` 출력, 실패 시점의 네트워크 상태 요약(인터페이스·라우트 유무만).
 9. journald가 없는 단말: `/var/log/messages` 또는 `/var/log/syslog`. 이 경우 연도·타임존을 `info.txt`에 꼭 적는다.
+   - BusyBox syslogd(`/var/log/messages`)와 `logread` 출력은 같은 형식이다(호스트 뒤에 `<facility>.<severity>` 칸, 파서 형식 (c)). 폴더에는 `messages`로 둔다.
+   - **파일을 복사해 받는다**(`cat /var/log/messages > messages`·scp 등). 직렬 콘솔에서 `tail -F`로 받으면 줄 끝이 `\r\r\n`이 되고 `tail: … has been replaced` 안내 줄이 끼어 줄 번호가 원본과 달라진다(파서는 읽지만 근거 줄 번호가 2배가 된다).
+   - BusyBox syslogd는 읽기 버퍼(빌드 옵션 `FEATURE_SYSLOGD_READ_BUFFER_SIZE`, 기본 256B)를 넘는 긴 메시지를 syslog 줄 여러 개로 자른다(주소·덤프가 줄 경계에서 쪼개진다). 버퍼를 키울 수 있으면 키우고, 잘린 줄이 있으면 `notes.md`에 적는다.
 
 ## 3) 시각 동기·타임존
 

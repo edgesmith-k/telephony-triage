@@ -210,7 +210,7 @@ def test_known_raw_line_finders_isolates_broken_platform(fake_platforms):
 def test_ofono_skeleton_is_installed():
     assert "ofono" in platforms.known()
     spec = platforms.get("ofono")
-    assert spec.label == "oFono" and spec.capture is None and spec.protocols == ()
+    assert spec.label == "oFono" and spec.capture is None and [p.name for p in spec.protocols] == ["gril"]   # 내장 짝
     assert spec.default_backend == "ofono_reference" and spec.primary_root == "ofono"
 
 

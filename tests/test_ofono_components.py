@@ -2,7 +2,8 @@
 
 - 레지스트리: `components`(기본·덮어쓰기·오류), android는 `components`를 받지 않음, 설정 정의 짝 규칙(`kind: regex`)
 - `regex` kind: 데몬 사이(다른 pid·tag) 짝, `observed_until` = 수집 구간 끝, 이름 채우기, 나중 요청이 대신함
-- `msg_format`: 앞머리를 뗀 본문으로 짝 규칙을 본다(이벤트 `msg`는 원문), `split_tag` → tag `ident/subtag`
+- `msg_format`: 앞머리를 뗀 본문으로 짝 규칙을 본다(이벤트 `msg`는 원문), `split_tag` → tag `ident/subtag`,
+  벤더 앞머리 모양 4개(`tid_file_paren`·`level_tid_file`·`slot_level_seq`·`src_suffix`)
 - `parse_logcat parse`(issue-db-ofono): `proto`·지연·파생 `ril_error`·`ril_timeout`·`ril_no_response`
 - 기본 설정 출력 불변(구성요소 블록을 명시해도, 짝 규칙이 없으면 이전과 같다)
 """
@@ -27,7 +28,7 @@ from runner import copy_db, plugin_root, run, variant_db  # noqa: E402
 import platforms  # noqa: E402
 from common import events, masking  # noqa: E402
 from platforms import Component, MsgView, PlatformConfigError, SourceTree  # noqa: E402
-from platforms.ofono import msgformat, pairing  # noqa: E402
+from platforms.ofono import gril, msgformat, pairing  # noqa: E402
 
 LOGS = REPO / "tests" / "fixtures" / "logs" / "ofono"
 MULTI_LOG = LOGS / "journal-multi.log"
@@ -66,12 +67,17 @@ def _error(**ofono) -> str:
 def test_spec_default_component_and_hooks():
     spec = platforms.get("ofono")
     assert spec.components == (Component("ofono", ("ofonod",), root_key="ofono", msg_format="file_func"),)
-    assert dict(spec.msg_formats) == {"file_func": msgformat.file_func}
+    assert dict(spec.msg_formats) == {"file_func": msgformat.file_func, "tid_file_paren": msgformat.tid_file_paren,
+                                      "level_tid_file": msgformat.level_tid_file, "slot_level_seq": msgformat.slot_level_seq,
+                                      "src_suffix": msgformat.src_suffix}
     assert dict(spec.protocol_kinds) == {"regex": pairing.build}
-    assert "components" in spec.block_keys and spec.protocols == ()
+    assert "components" in spec.block_keys and [p.name for p in spec.protocols] == ["gril"]   # 내장 짝(17-platforms §9-3)
+    assert spec.protocols[0].annotate is gril.annotate and spec.protocols[0].pair is gril.pair
     prof = platforms.load(None, "ofono", require_enabled=False)
-    assert prof.components == spec.components and prof.protocols == () and prof.protocol_tags == ()
+    assert prof.components == spec.components and prof.protocols == spec.protocols
+    assert prof.protocol_tags == (("gril", frozenset({"ofonod"})),)
     assert platforms.default("ofono").components == spec.components
+    assert platforms.default("ofono").protocol_tags == prof.protocol_tags
 
 
 def test_android_unchanged_and_rejects_components():
@@ -134,9 +140,10 @@ def test_component_errors_checked_even_when_loading_android():
 
 def test_regex_protocol_from_config():
     prof = _load(protocols={"ipc": IPC, "other": {**IPC, "tags": ["daemon-b"]}})
-    assert [p.name for p in prof.protocols] == ["ipc", "other"]
-    assert prof.protocol_tags == (("ipc", frozenset({"ofonod", "daemon-a", "daemon-b"})), ("other", frozenset({"daemon-b"})))
-    assert prof.protocols[1].default_tags == frozenset({"daemon-b"})
+    assert [p.name for p in prof.protocols] == ["gril", "ipc", "other"]                 # 내장 gril이 먼저
+    assert prof.protocol_tags == (("gril", frozenset({"ofonod"})), ("ipc", frozenset({"ofonod", "daemon-a", "daemon-b"})),
+                                  ("other", frozenset({"daemon-b"})))
+    assert prof.protocols[2].default_tags == frozenset({"daemon-b"})
 
 
 @pytest.mark.parametrize("protocols,path,why", [
@@ -205,6 +212,58 @@ def test_file_func_format():
     assert msgformat.file_func("src/example.c:example_cb() ipc call 5 X") == MsgView("ipc call 5 X", "example")
     assert msgformat.file_func("plugins/sub/mod.c:fn()") == MsgView("", "mod")
     assert msgformat.file_func("ipc call 5 X") is None and msgformat.file_func("src/x.h:fn() y") is None
+
+
+# 벤더 데몬 앞머리 모양(합성 placeholder 줄 — 데몬 이름 없음, 17-platforms §9-2)
+VENDOR_FORMATS = [
+    ("tid_file_paren", "tid:12 Example.cpp(34):Run > ipc call 5 X", MsgView("ipc call 5 X", "Example")),
+    ("tid_file_paren", "tid:7 example_mgr.h(9):ns::Cls::~Cls > done", MsgView("done", "example_mgr")),
+    ("tid_file_paren", "tid:12 Example.cpp(34):Run >", MsgView("", "Example")),
+    ("tid_file_paren", "tid:x Example.cpp(34):Run > y", None),
+    ("tid_file_paren", "tid:12 Example.go(34):Run > y", None),                   # 확장자 밖
+    ("level_tid_file", "[I][tid=12] example.cpp:34 ns::Cls::run() ipc reply 5", MsgView("ipc reply 5", "example")),
+    ("level_tid_file", "[E][tid=3] mod.cc:1 run() failed", MsgView("failed", "mod")),
+    ("level_tid_file", "[X][tid=12] example.cpp:34 run() y", None),              # 레벨 글자 밖
+    ("level_tid_file", "[I][tid=12] example.cpp run() y", None),
+    ("slot_level_seq", "[SLOT_0][D] 123 ipc call 5 X", MsgView("ipc call 5 X")),
+    ("slot_level_seq", "[SLOT_1][W] 9", MsgView("")),
+    ("slot_level_seq", "[SLOT_0] 123 y", None),
+    ("slot_level_seq", "[SID_0][D] 123 y", None),
+    ("src_suffix", "[CAT__] 000123 <*Obj->Run>  ipc call 5 X  path/sub/example.go:12",
+     MsgView("[CAT__] 000123 <*Obj->Run>  ipc call 5 X", "example")),
+    ("src_suffix", "ipc reply 5[./path/example.cxx +12]", MsgView("ipc reply 5", "example")),
+    ("src_suffix", "done [Example.cpp+7]", MsgView("done", "Example")),
+    ("src_suffix", "see path/example.go:12 later", None),                        # 끝이 아니다
+    ("src_suffix", "ratio 1.5:2", None),
+    ("src_suffix", "plain text", None),
+]
+
+
+@pytest.mark.parametrize("name,msg,want", VENDOR_FORMATS)
+def test_vendor_msg_formats(name, msg, want):
+    assert dict(msgformat.FORMATS)[name](msg) == want
+
+
+def test_src_suffix_bounded_scan():
+    """리뷰 P2(11/02): 꼬리는 끝 `_TAIL_SCAN`자에서만 찾는다 — 긴 공백 열에서 search가 제곱 시간이 되지 않게."""
+    import time
+    long_ws = "x" + " " * 200_000 + "y"
+    start = time.monotonic()
+    assert msgformat.src_suffix(long_ws) is None
+    assert time.monotonic() - start < 2
+    assert msgformat.src_suffix("a" * 5000 + " done path/example.go:12") == MsgView("a" * 5000 + " done", "example")
+
+
+def test_vendor_format_split_tag(tmp_path):
+    """벤더 형식 + `split_tag`: tag `daemon-a/Example`, 본문으로 짝 규칙을 본다(이벤트 msg는 원문)."""
+    log = tmp_path / "vendor.log"
+    log.write_text("2026-09-20T14:40:00.000Z dut daemon-a[901]: tid:12 Example.cpp(34):Run > ipc call 5 PLACEHOLDER_CALL\n"
+                   "2026-09-20T14:40:00.200Z dut daemon-a[901]: tid:12 Example.cpp(40):Run > ipc reply 5\n"
+                   "2026-09-20T14:40:00.300Z dut daemon-a[901]: free text\n", encoding="utf-8")
+    comps = {"daemon-a": {"idents": ["daemon-a"], "msg_format": "tid_file_paren", "split_tag": True}}
+    out = _backend(components=comps, protocols={"ipc": IPC}).parse([log], None, None, None)
+    assert [e["tag"] for e in out] == ["daemon-a/Example", "daemon-a/Example", "daemon-a"]
+    assert out[0]["ril"]["latency_ms"] == 200 and out[0]["msg"].startswith("tid:12 Example.cpp(34)")
 
 
 def test_regex_annotate_rules():
@@ -413,7 +472,7 @@ def _parse(log: Path, rules: Path, ofono: dict | None) -> dict:
 
 def test_parse_cross_daemon_derived_events():
     out = _parse(MULTI_LOG, variant_db("issue-db-ofono") / "parser-rules", {"components": COMPONENTS, "protocols": {"ipc": IPC}})
-    assert out["backend"] == {"name": "ofono_reference", "version": "0.0.2"}
+    assert out["backend"] == {"name": "ofono_reference", "version": "0.0.3"}
     assert out["errors"] == [] and events.validate_events(out["events"]) == []
     derived = [(e["event"], e["tag"], e["fields"]) for e in out["events"] if e["source"] == "rules"]
     assert derived == [                                       # 응답 줄 바로 뒤(ril_error → ril_timeout), 그다음 응답 없음

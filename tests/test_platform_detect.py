@@ -60,6 +60,18 @@ def test_fixture_logs_detect_their_platform(log, want):
     assert sniff.file_match(log, NAMES) == want
 
 
+def test_busybox_line_endings_and_cross_sniff(tmp_path):
+    """(c) BusyBox syslogd: `\r\r\n`(직렬 콘솔 `tail -F` 캡처)·`\r\n`도 oFono, logcat과 섞이지 않는다."""
+    text = (LOGS / "ofono" / "syslog-busybox.log").read_text(encoding="utf-8")
+    for name, eol in (("crcrlf.log", "\r\r\n"), ("crlf.log", "\r\n")):
+        path = tmp_path / name
+        path.write_bytes(text.replace("\n", eol).encode("utf-8"))
+        assert sniff.file_match(path, NAMES) == ["ofono"], name
+    alines = ALOG.read_text(encoding="utf-8").splitlines()
+    assert not any(platforms.get("ofono").log.raw_line(line) for line in alines)
+    assert not any(platforms.get("android").log.raw_line(line) for line in text.splitlines())
+
+
 def test_bugreport_text_and_zip_are_android_bundles(tmp_path):
     txt = _write(tmp_path / "bugreport.txt", ["== dumpstate: 2026-09-20 14:30:00", "plain text", "more text"])
     assert sniff.file_match(txt, NAMES) == ["android"]
