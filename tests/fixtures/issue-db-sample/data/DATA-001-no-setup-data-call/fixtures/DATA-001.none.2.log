@@ -4,4 +4,4 @@
 09-23 11:00:03.500  1234  1244 D DSMGR-0: mIsDataEnabled=true, prevDataEnabled=false
 09-23 11:00:04.000  1234  1244 I DNC-0: Data evaluation: evaluation reason:NEW_REQUEST, Data allowed reason: NORMAL, candidate profile=null
 09-23 11:00:04.300  1234  1244 D RILJ: [0041]> SETUP_DATA_CALL apn=default [PHONE0]
-09-23 11:00:05.200  1234  1244 D RILJ: [0041]< SETUP_DATA_CALL error=NONE cid=<CELL#1> [PHONE0]
+09-23 11:00:05.200  1234  1244 D RILJ: [0041]< SETUP_DATA_CALL error=NONE cid=1 [PHONE0]

@@ -15,7 +15,8 @@ site-defaults `platform.others.ofono.protocols.<이름>: {kind: hop, upstream, t
   (아래 데몬은 위로 응답을 올리기 전에 찍는다). 창이 클수록 가짜 연결이 는다 — 100 이하 권장.
 - 주석은 **아래 줄에만**: `{serial: None, dir: hop_req|hop_resp, request: <이름>, error: None, paired_ts: None,
   latency_ms: None}`(백엔드가 `proto: <이름>`을 단다). 연결되면 `serial`·`request` = 위 주석 값(정규 이름),
-  `paired_ts` = 위 줄 시각, `latency_ms` = 시각 차. 위 주석은 읽기만 한다(위 규칙 소유). 연결 못 한 줄은 그대로다
+  `paired_ts` = 위 줄 시각, `latency_ms` = 시각 차(`--mask`면 `parse_logcat`이 아래 줄 `serial`을 null로 — 위 줄
+  복사본이라 그 줄에서 가린 값인지 대조할 수 없다, 08-safety §8). 위 주석은 읽기만 한다(위 규칙 소유). 연결 못 한 줄은 그대로다
   (`observed_until` 없음 — 아래 줄이 없는 원인(로그 수준·다른 경로·캡처 경계)을 구분할 수 없다).
 - 짝: 일대일, 시각 차가 가장 작은 쌍부터(nearest-first, 같은 차이면 아래 줄 순서). 한 줄은 한 번만 쓴다. `phone_id`는
   둘 다 있을 때만 같아야 한다. 같은 이름이 몰리는 구간은 FIFO와 다를 수 있다(FIFO 옵션은 P2).

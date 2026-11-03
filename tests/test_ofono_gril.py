@@ -4,7 +4,8 @@
   슬롯 없는 Android RILJ 줄
 - 짝: Android `ril.pair`와 같은 의미 — 슬롯(phone_id)별 serial, pid 재시작, 응답 먼저 무시, `observed_until`
 - 슬롯 규칙(`PhoneIdRules`): `[<slot>,` 줄 앞(DBG 앞머리 뒤 포함)·`/ril_<n>`
-- `parse_logcat parse --mask`(issue-db-ofono): 파생 `ril_error`·`ril_timeout`·`ril_no_response`, 이름은 마스킹 불변
+- `parse_logcat parse --mask`(issue-db-ofono): 파생 `ril_error`·`ril_timeout`·`ril_no_response`, 이름은 마스킹 불변,
+  serial은 같은 줄 가린 값(IP·번호·셀)과 숫자가 겹쳐도 그대로
 - 설정: `protocols.gril.tags` 덮어쓰기·`[]`로 끄기·`kind` 거부, site `kind: regex` 짝 규칙과 함께
 """
 
@@ -293,7 +294,7 @@ def test_mask_proto_value_from_same_line_stays_masked(line, value):
 
 
 def test_mask_proto_value_keeps_names_and_tokens_intact():
-    """재리뷰 P1(11/02): 같은 줄의 짧은 값(`cid=2`)이 이름(`PDP2_ACTIVATE`)이나 앞서 넣은 토큰 안에서 다시 바뀌지 않는다."""
+    """재리뷰 P1(11/02): 같은 줄의 짧은 값(`lac=2`)이 이름(`PDP2_ACTIVATE`)이나 앞서 넣은 토큰 안에서 다시 바뀌지 않는다."""
     import parse_logcat
     from common import masking
     rec = {"msg": "ipc call 1 PDP2_ACTIVATE lac=2", "fields": {},
@@ -307,3 +308,18 @@ def test_mask_proto_value_keeps_names_and_tokens_intact():
            "ril": {"proto": "ipc", "dir": "resp", "serial": 1, "request": "CALL", "error": "ABCDEF0123456789.x"}}
     out = parse_logcat._mask_record(rec, masking.new_masker())
     assert out["ril"]["error"] == "<CRED#1>.x" and "ABCDEF0123456789" not in str(out)
+
+
+@pytest.mark.parametrize("msg,serial,direction", [
+    ("[0,0001]> RIL_REQUEST_SETUP_DATA_CALL 10.0.1.1 01012345671", 1, "req"),
+    ("[1,0012]< RIL_REQUEST_DIAL addr=10.0.12.1 number=01012345612", 12, "resp"),
+    ("src/example.c:trace() [0,0005]< RIL_REQUEST_SETUP_DATA_CALL lac=5", 5, "resp"),
+])
+def test_mask_keeps_gril_serial_beside_masked_values(msg, serial, direction):
+    """재리뷰 P1(11/02) 오탐 가드: `--mask`의 serial 대조(같은 줄에 보이는가)는 gril serial(`[<slot>,<serial>]`)이 같은 줄
+    가린 값(IP·번호·셀)에 숫자 조각으로 들어 있어도 버리지 않는다 — 숫자 조각 대조였다면 기본 설정 출력이 바뀐다."""
+    import parse_logcat
+    from common import masking
+    ann = {**gril._ann(serial, direction, "SETUP_DATA_CALL", "NONE" if direction == "resp" else None), "proto": "gril"}
+    out = parse_logcat._mask_record({"msg": msg, "fields": {}, "ril": ann}, masking.new_masker())
+    assert "<" in out["msg"] and out["ril"]["serial"] == serial

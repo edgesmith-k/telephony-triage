@@ -11,7 +11,7 @@
 - `ofonod` RIL trace: `[<slot>,<serial>]> <이름>` 요청, `[<slot>,<serial>]< <이름>` 응답(`failed <ERROR>`면 실패),
   `[<slot>,UNSOL]< <이름>` 비요청. 같은 serial이 한 요청·응답이고 slot이 타임라인 `p<n>`이다. `RIL_REQUEST_`를 뗀
   이름이 DB `ril.yaml` 이름이다.
-- `dump_dmsg method call|signal - i:<인터페이스> m:<메서드> p:<경로>` = `ofonod`가 주고받은 D-Bus. `p:/ril_<n>` = 슬롯 n.
+- `<덤프 함수> method call|signal - i:<인터페이스> m:<메서드> p:<경로>` = `ofonod`가 주고받은 D-Bus. `p:/ril_<n>` = 슬롯 n.
 - 앞머리 `src/<파일>.c:<함수>() `는 upstream 디버그 출력이다(소스 위치 단서).
 
 ## 계층과 판단 규칙
@@ -29,7 +29,7 @@
 ## upstream 개념 → 카테고리 (예시, 최종은 DB `tags.yaml`)
 
 modem 전원·온라인: 공통 · sim: sim · netreg: network · gprs·ConnectionContext: data · voicecall: call · sms: sms · ims: ims.
-D-Bus 오류 `org.ofono.Error.<이름>`(Failed·InProgress·NotAttached·SimNotReady·Timedout 등)은 대상 버전 `src/error.c`로 확인한다.
+D-Bus 오류 `org.ofono.Error.<이름>`(Failed·InProgress·NotAttached·SimNotReady·Timedout 등)은 대상 버전 `src/dbus.c`로 확인한다.
 
 ## 코드·이름
 

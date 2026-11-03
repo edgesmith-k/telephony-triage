@@ -3,7 +3,8 @@
 - 설정: 키·`upstream`·`tags`·정규식(`name` 그룹)·`fold`·`window_ms` 오류(키 경로), 레지스트리 `reads` 순서 확인
 - 모양: tag 필터, `(?:RIL_REQUEST_)?` 접두사 흡수, 식별자 모양 아닌 이름(`0102`·`a:b`) 무시, 키 = `RIL_KEYS`
 - 짝: 창 경계, 방향(요청은 아래가 뒤·응답은 아래가 앞), 일대일 nearest(재사용 없음), 슬롯, fold, 위 주석 불변
-- 백엔드·`parse_logcat`: 아래 줄에만 주석, gril 결과·파생 이벤트는 hop 유무와 무관, `--mask`에도 이름 불변
+- 백엔드·`parse_logcat`: 아래 줄에만 주석, gril 결과·파생 이벤트는 hop 유무와 무관, `--mask`에도 이름 불변,
+  `--mask`면 아래 줄 serial(위 줄 복사본)은 null, 11자리 이상 위 serial은 주석·복사 없음
 """
 
 from __future__ import annotations
@@ -241,6 +242,24 @@ def test_backend_fixture():
     assert events.validate_events(out) == [] and events.validate_events(plain) == []
 
 
+def test_hop_never_copies_long_serial(tmp_path):
+    """재리뷰 P1(11/02): 위 규칙(`kind: regex`)의 느슨한 serial 그룹이 11자리 이상(번호 모양)을 잡으면 위 줄 주석이 없고
+    아래 줄도 serial 없이 미연결이다 — `hop`이 PII 숫자를 아래 데몬 줄로 복사하지 않는다. 10자리 이하는 그대로 잇는다."""
+    ipc = {"kind": "regex", "tags": ["daemon-b"], "request": r"^ipc call (?P<serial>\d+) (?P<name>[A-Z_]+)$",
+           "response": r"^ipc reply (?P<serial>\d+)$"}
+    h = {"kind": "hop", "upstream": "ipc", "tags": ["daemon-a"], "request": r"ipc req (?P<name>[A-Z][A-Z0-9_]*)"}
+    log = tmp_path / "messages"
+    log.write_text("Sep 20 15:00:00.000 dut user.debug daemon-b[902]: ipc call 01012345678 SETUP_DATA_CALL\n"
+                   "Sep 20 15:00:00.001 dut user.debug daemon-a[901]: ipc req SETUP_DATA_CALL len=8\n"
+                   "Sep 20 15:00:01.000 dut user.debug daemon-b[902]: ipc call 0000000042 SETUP_DATA_CALL\n"
+                   "Sep 20 15:00:01.001 dut user.debug daemon-a[901]: ipc req SETUP_DATA_CALL len=8\n", encoding="utf-8")
+    out = _backend(protocols={"ipc": ipc, "h": h}).parse([log], "UTC", 2026, None)
+    got = [(e["tag"], e["ril"] and (e["ril"]["dir"], e["ril"]["serial"], e["ril"]["paired_ts"] is not None)) for e in out]
+    assert got == [("daemon-b", None), ("daemon-a", ("hop_req", None, False)),
+                   ("daemon-b", ("req", 42, False)), ("daemon-a", ("hop_req", 42, True))]
+    assert "1012345678" not in json.dumps([e["ril"] for e in out])
+
+
 @pytest.mark.parametrize("mask", [False, True])
 def test_parse_logcat_hop(mask):
     rules = variant_db("issue-db-ofono") / "parser-rules"
@@ -263,3 +282,12 @@ def test_parse_logcat_hop(mask):
         assert set(a) <= set(events.RIL_KEYS + events.RIL_OPTIONAL_KEYS)
     lines = [e for e in on["events"] if e["event"] is None]
     assert [e["msg"] for e in lines] == [e["msg"] for e in off["events"] if e["event"] is None]
+    # 재리뷰 P1(11/02): `--mask`면 아래 줄 serial(위 줄 복사본)은 null — 연결(`paired_ts`)은 그대로, gril serial은 그대로
+    if mask:
+        assert [a["serial"] for a in hops] == [None] * 6
+        assert [a["paired_ts"] is not None for a in hops] == [True, True, True, True, False, False]
+    else:
+        assert [a["serial"] for a in hops] == [1, 1, 3, 2, None, None]
+    grils = [e["ril"]["serial"] for e in on["events"]
+             if e["ril"] and e["ril"].get("proto") == "gril" and e["ril"]["dir"] in ("req", "resp")]
+    assert grils and all(isinstance(s, int) for s in grils)

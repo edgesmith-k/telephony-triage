@@ -118,7 +118,7 @@ DETECT = [
     ('{"iccid":"1234567890123456789"}', "ICCID", "1234567890123456789"),
     ('{"tmsi":"0x1234abcd"}', "TMSI", "0x1234abcd"),
     ('{"guti":"45005-1234abcd"}', "GUTI", "45005-1234abcd"),
-    ('{"cid":12345}', "CELL", "12345"),
+    ('{"mCid":12345}', "CELL", "12345"),                                  # 맨 `cid`는 가리지 않는다(11/02, KEEP)
     ('{"msisdn":"5551234567"}', "MSISDN", "5551234567"),
     ('{"impi":"sub01x@ims"}', "IMPI", "sub01x"),
     ("username: alice@example.com", "EMAIL", "alice@example.com"),     # 따옴표 없는 `username:`는 도메인까지 EMAIL로
@@ -223,6 +223,9 @@ KEEP = [
     "1:2:3:4:5:6:7",
     "2026:11:02:07:21:33",
     "uptime 12:34:56.789 addr: 12:34:56:78",
+    # 맨 `cid`(데이터 콜 context id)는 객체 안·밖 어디서나 가리지 않는다(11/02 사용자 결정)
+    "[0041]< SETUP_DATA_CALL error=NONE cid=1",
+    'cid: 1 {"cid":12345} .cid = 2 cid=0x3',
 ]
 
 
@@ -274,43 +277,43 @@ def test_ipv4_after_version_context_is_kept():
     assert masking.new_masker()("peer 1.2.3.4") == "peer <IP#1>"  # 문맥 없으면 안전 쪽
 
 
-def test_data_call_response_cid_is_not_cell():
-    """AOSP 데이터 콜 응답 객체 안의 `cid`는 context id라 셀이 아니다(S13 오탐). 셀 식별자는 그대로 마스킹한다.
-    (AOSP 형식을 본뜬 합성 줄)"""
+def test_bare_cid_is_never_masked():
+    """맨 `cid`는 데이터 콜 context id라 분석에 쓴다 — 객체 안·밖, 표기(`=`·`:`·JSON·HIDL `.cid =`)와 무관하게 가리지 않는다
+    (11/02 사용자 결정. 이전에는 데이터 콜 객체 안 첫 `cid`만 뺐다). `--check`(`find`)도 잡지 않는다. (AOSP·벤더 모양을 본뜬 합성 줄)"""
+    keep = [
+        "cid=1", "cid: 1", '"cid":1', '{"cid": 12345}', "cid=0x2", ".cid = 1",
+        "[0041]< SETUP_DATA_CALL error=NONE cid=1",                                   # 객체 밖(모의 형식)
+        "RILJ: [0041]< SETUP_DATA_CALL DataCallResponse: { cause=NONE retry=-1 cid=1 linkStatus=2 protocolType=2 "
+        "ifname=rmnet_data0 mtu=1500 defaultQos=EpsQos: {qci=9} sliceInfo=null} [PHONE0]",
+        "android.hardware.radio.data.SetupDataCallResult{cause: 0, suggestedRetryTime: -1, cid: 3, active: 2}",  # AIDL
+        "SetupDataCallResult{.cause = NONE, .suggestedRetryTime = -1, .cid = 1, .active = 2}",                    # HIDL
+        "DataCallResponse: { cause=NONE retry=-1 cid=1 linkStatus=2 ifname=rmnet0 ... cid=5678",          # 잘린 객체 뒤쪽
+        "PdpContext{cid=1 apn=placeholder state=ACTIVE}", "PdpContext {cid=0x2}", "## PdnInfo: cid=3", "PdnInfo cid: 6",
+        "PDN_INFO_EXT cid=4 type=IPV4V6", "PDN_INFO_EXT (cid=5, state=1)", "PDN_INFO cid=7",
+        "X_PDN_INFO_EXT cid=4", "X_PDN_INFO_EXT (cid=5)", "PDN_INFO_CELL cid=12345", "mPdpContext{cid=1}",  # 접두·목록 밖 이름
+        "data network connected: cid=1",
+    ]
+    for text in keep:
+        assert masking.new_masker()(text) == text, text
+        assert masking.new_masker().find(text) == [], text
+
+
+def test_cell_location_keys_still_masked_beside_bare_cid():
+    """맨 `cid`를 풀어도 셀 위치 키(`mCid`·`lac`·`ci`·`cellId` 등)는 그대로 가린다. `mCid`는 CellIdentity의 셀 ID 필드라
+    이번 결정에 들지 않는다. 같은 줄 맨 `cid`가 셀 번호를 차지하지 않는다(뒤 셀이 `<CELL#1>`부터). (합성 줄)"""
     m = masking.new_masker()
-    resp = ("RILJ: [0041]< SETUP_DATA_CALL DataCallResponse: { cause=NONE retry=-1 cid=1 linkStatus=2 protocolType=2 "
-            "ifname=rmnet_data0 addresses=[10.0.0.2/32] mtu=1500 defaultQos=EpsQos: {qci=9} sliceInfo=null} [PHONE0]")
-    assert m(resp) == resp.replace("10.0.0.2", "<IP#1>")
     unsol = "[UNSL]< UNSOL_DATA_CALL_LIST_CHANGED [DataCallResponse: { cause=NONE retry=-1 cid=2 linkStatus=2}] lac=1234 cid=5678"
     assert m(unsol) == "[UNSL]< UNSOL_DATA_CALL_LIST_CHANGED [DataCallResponse: { cause=NONE retry=-1 cid=2 linkStatus=2}] " \
-                       "lac=<CELL#1> cid=<CELL#2>"      # 객체 밖의 `cid`는 셀
-    aidl = "android.hardware.radio.data.SetupDataCallResult{cause: 0, suggestedRetryTime: -1, cid: 3, active: 2}"
-    assert m(aidl) == aidl
+                       "lac=<CELL#1> cid=5678"
     cell = "CellIdentityGsm:{ mLac=1234 mCid=5678 } CellIdentityLte:{ mCi=12345678 mPci=301 mTac=4660 }"
     assert m(cell) == "CellIdentityGsm:{ mLac=<CELL#1> mCid=<CELL#2> } CellIdentityLte:{ mCi=<CELL#3> mPci=<CELL#4> mTac=<CELL#5> }"
-    # 닫는 `}` 없이 잘린 객체: 제외는 첫 `cid`까지라 뒤의 셀 `cid`는 마스킹된다
-    cut = "DataCallResponse: { cause=NONE retry=-1 cid=1 linkStatus=2 ifname=rmnet0 ... lac=1234 cid=5678"
-    assert m(cut) == "DataCallResponse: { cause=NONE retry=-1 cid=1 linkStatus=2 ifname=rmnet0 ... lac=<CELL#1> cid=<CELL#2>"   # 같은 값 = 같은 번호
-    hidl = "SetupDataCallResult{.cause = NONE, .suggestedRetryTime = -1, .cid = 1, .active = 2}"
-    assert m(hidl) == hidl
-    # 객체가 아닌 데이터 콜 문구(모의 형식)는 안전 쪽으로 그대로 셀로 본다
-    assert masking.new_masker()("[0041]< SETUP_DATA_CALL error=NONE cid=1") == "[0041]< SETUP_DATA_CALL error=NONE cid=<CELL#1>"
-    assert masking.new_masker().find(resp) == [{"kind": "IP", "start": resp.index("10.0.0.2"),
-                                                 "end": resp.index("10.0.0.2") + len("10.0.0.2")}]
-
-
-def test_vendor_data_call_objects_cid_not_cell():
-    """벤더 데이터 콜 객체(`PdpContext{…}`·`PdnInfo:`·`PDN_INFO_EXT`)의 `cid`도 context id다(11/02 사용자 승인).
-    객체 밖 `cid`·셀 위치 키는 그대로 마스킹한다. (합성 줄)"""
-    m = masking.new_masker()
-    for text in ("PdpContext{cid=1 apn=placeholder state=ACTIVE}", "PdpContext {cid=0x2}", "## PdnInfo: cid=3",
-                 "PDN_INFO_EXT cid=4 type=IPV4V6", "PDN_INFO_EXT (cid=5, state=1)", "PdnInfo cid: 6"):
-        assert m(text) == text, text
-    assert masking.new_masker()("PdpContext{cid=1 apn=x} lac=1234 cid=5678") == "PdpContext{cid=1 apn=x} lac=<CELL#1> cid=<CELL#2>"
-    assert masking.new_masker()("PDN_INFO_EXT (cid=4) cid=77") == "PDN_INFO_EXT (cid=4) cid=<CELL#1>"
-    assert masking.new_masker()("mPdpContext{cid=1}") == "mPdpContext{cid=<CELL#1>}"           # 객체 이름 경계
-    assert masking.new_masker()("PdnInfo: mCid=9 cellId=8") == "PdnInfo: mCid=<CELL#1> cellId=<CELL#2>"
-    assert masking.new_masker()("PDN_INFO_CELL cid=12345") == "PDN_INFO_CELL cid=<CELL#1>"     # 승인 범위(`_EXT`)만
+    assert masking.new_masker()("mCid=5678") == "mCid=<CELL#1>"
+    assert masking.new_masker()('{"mCid":5678, "cid":1}') == '{"mCid":<CELL#1>, "cid":1}'
+    assert masking.new_masker()("PdnInfo: mCid=9 cellId=8 cid=1") == "PdnInfo: mCid=<CELL#1> cellId=<CELL#2> cid=1"
+    assert masking.new_masker()("PdpContext{cid=1 apn=x} lac=1234 ci=5678") == "PdpContext{cid=1 apn=x} lac=<CELL#1> ci=<CELL#2>"
+    assert masking.new_masker()("cid=5 lac=7") == "cid=5 lac=<CELL#1>"
+    found = masking.new_masker().find("cid=1 mCid=2")
+    assert [(f["kind"], f["start"]) for f in found] == [("CELL", len("cid=1 mCid="))]
 
 
 def test_ipv6_key_truncated_fragment():
