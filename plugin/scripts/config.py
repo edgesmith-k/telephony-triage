@@ -81,7 +81,7 @@ TOOL_NAME_RE = re.compile(r"^mcp__(?P<server>[^_].*?)__(?P<tool>[^_].*)$")
 FIELDS = [
     ("user.ghe_id", "GHE 아이디", "text", True),
     ("issue_db.path", "이슈 DB 로컬 clone 경로 (없으면 만들 위치)", "clone-path", True),
-    ("issue_db.remote", "이슈 DB 원격 URL", "text", True),
+    ("issue_db.remote", "이슈 DB 원격 URL", "remote", True),
     ("issue_db.base_branch", "base 브랜치", "text", False),
     ("issue_db.ghe_host", "GHE 호스트 (gh의 GH_HOST)", "text", False),
     ("tracker.timezone", "Jira 시각 타임존 (IANA)", "tz", False),
@@ -129,6 +129,10 @@ def validate(kind: str, value) -> str | None:
         return None
     if kind == "year-source":
         return None if text in YEAR_SOURCES else f"{' | '.join(YEAR_SOURCES)} 중 하나여야 합니다: {text}"
+    if kind == "remote":     # guard 규칙 11이 대상 비교에 쓴다 — 못 풀면 규칙 11이 꺼진다
+        return None if userconfig.repo_slug(text) else (
+            f"owner/repo로 풀리는 원격이어야 합니다(https://<host>/<owner>/<repo>.git·git@<host>:<owner>/<repo>.git·"
+            f"<SSH 별칭>:<owner>/<repo>.git): {text}")
     return None
 
 
@@ -299,7 +303,8 @@ def cmd_set(args, defaults: dict) -> dict:
         raise UsageError("config가 없습니다. 먼저 setup(config.py init)을 한다.")
     value = _parse_value(args.value)
     kind = PATH_KINDS.get(args.key) or ("tz" if args.key.endswith(".timezone") else
-                                        "year-source" if args.key == "logcat.year_source" else "")
+                                        "year-source" if args.key == "logcat.year_source" else
+                                        "remote" if args.key == "issue_db.remote" else "")
     msg = validate(kind, value)
     if msg:
         raise UsageError(f"{args.key}: {msg}")
@@ -664,7 +669,12 @@ def _doctor_rows(args, defaults: dict) -> list[dict]:
             rows.append(_row("config", "fail", "사용자 config 없음", "/telephony-triage:setup 을 실행한다"))
         else:
             cfg = userconfig.merged(defaults, user, platform=_platform(args))
-            rows.append(_row("config", "ok", "config.yaml 있음"))
+            bad = userconfig.remote_problems(defaults, user)    # 못 풀면 guard 규칙 11이 그 이슈 DB에 꺼진다
+            if bad:
+                rows.append(_row("config", "fail", f"{bad[0][0]}를 owner/repo로 못 풀어 guard 규칙 11이 꺼진다",
+                                 f"config.py set issue_db.remote https://<host>/<owner>/<repo>.git (지금 {bad[0][1]})"))
+            else:
+                rows.append(_row("config", "ok", "config.yaml 있음"))
     except Exception as exc:    # noqa: BLE001 — 읽기 실패도 한 행의 fail이다
         # init --force도 기존 파일을 먼저 읽으므로 손상 파일에서는 실패한다 → 파일을 옮긴 뒤 setup
         rows.append(_row("config", "fail", f"config 읽기 실패: {exc}",

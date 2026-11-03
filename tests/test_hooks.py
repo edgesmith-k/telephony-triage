@@ -432,7 +432,8 @@ def test_guard_publish_any_interpreter_or_substitution_asks():
 def test_guard_publish_word_net_closes_limits_and_skips_text():
     """L M-2: 낱말 그물(`word_net`)은 옛 한계(`python3 -m`·변수에 담은 하위 명령·`${P:-publish}`·`$C`·별칭·줄 이음)를 ask로
     닫고, `cat >` heredoc·`publish.json`·`publish-preview`·`dbpr/publish.py`는 판정하지 않는다. git·gh 줄은 글로 빼지
-    않는다(리뷰 2차 P0-2). 남는 한계(스크립트 파일 안, 변수로 만든 낱말, 가짜 heredoc)는 08-safety와 같게 고정한다."""
+    않는다(리뷰 2차 P0-2). 남는 한계(스크립트 파일 안, 변수로 만든 낱말)는 08-safety와 같게 고정한다. 인용 안 `<<EOF`는
+    heredoc이 아니다(H-A1 r6 `_heredoc_scan` — 옛 한계 "가짜 heredoc"을 닫는다)."""
     ws = shared()
     r = ws.root / "scripts"
     for cmd in ("python3 -m db_pr publish wt", "SUB=publish; python3 $S/db_pr.py $SUB wt",
@@ -458,15 +459,16 @@ def test_guard_publish_word_net_closes_limits_and_skips_text():
                 'S=/p/; python3 "$S"d""b_pr.py publish wt', 'python3 $S"d"b_pr.py publish wt',
                 'python3 "$S"db\\_pr.py publish wt', "python3 \"$S\"$'d'b_pr.py publish wt", "python3 $S'd'b_pr.py publish wt",
                 # P1: 낱말 안의 줄 이음(bash는 빈 글로 잇는다)
-                "python3 $S/db_pr.py pub\\\nlish wt", "python3 $S/db\\\n_pr.py publish wt"):
+                "python3 $S/db_pr.py pub\\\nlish wt", "python3 $S/db\\\n_pr.py publish wt",
+                # H-A1 r6: 인용·주석 안 `<<EOF`는 heredoc이 아니다(옛 한계 — 가짜 heredoc)
+                "echo \"<<EOF\"\npython3 $S/db_pr.py publish wt\nEOF", "ls # <<EOF\npython3 $S/db_pr.py publish wt\nEOF"):
         out = bash(ws, cmd, ws.base)
         assert decision(out) == "ask" and "규칙 7" in out["permissionDecisionReason"], cmd
     for cmd in ("cat > notes.md <<'EOF'\npython3 db_pr.py publish wt\nEOF", "cat /w/MOCK-1/publish.json",
                 f"python3 {r}/db_pr.py summary wt > /w/MOCK-1/publish-preview.md",
                 f"sed -n 1,20p {r}/db_pr.py {r}/dbpr/publish.py",
                 # 남는 한계
-                "bash /w/push.sh", f"P=pub; python3 {r}/db_pr.py ${{P}}lish wt", f"X=db; python3 {r}/${{X}}_pr.py publish wt",
-                "echo \"<<EOF\"\npython3 $S/db_pr.py publish wt\nEOF"):   # 인용 안 `<<EOF`로 만든 가짜 heredoc
+                "bash /w/push.sh", f"P=pub; python3 {r}/db_pr.py ${{P}}lish wt", f"X=db; python3 {r}/${{X}}_pr.py publish wt"):
         assert decision(bash(ws, cmd, ws.base)) is None, cmd
 
 
@@ -855,7 +857,8 @@ def test_guard_gh_env_repo_and_api_endpoint():
              ("gh api -X POST repos/{owner}/{repo}/issues -f title=x", db_origin, "ask"),
              ("gh pr create -t x", db_origin, "ask"),
              (f"gh pr create --repo=ssh://git@ghe.mock.invalid/{DB_SLUG} -t x", plain, "ask"),
-             (f"gh pr create -R other.host.invalid/{DB_SLUG} -t x", plain, None),   # host가 다르다
+             # host는 보지 않는다(gh는 www.을 떼고, SSH 별칭 host는 guard가 풀 수 없다 — owner/repo로 비교, H-A1 r4)
+             (f"gh pr create -R other.host.invalid/{DB_SLUG} -t x", plain, "ask"),
              (f"gh issue list -R {DB_SLUG}", plain, None), (f"gh run rerun 5 -R {DB_SLUG}", plain, "ask"),
              (f"gh repo clone {DB_SLUG}", plain, None)]
     for cmd, cwd, want in cases:
@@ -987,6 +990,10 @@ def test_guard_without_pyyaml_denies_mcp_and_asks_risky_bash():
     assert decision(out) == "ask"
     # Approve·리뷰 기각 형태는 대상 레포를 몰라도 거부, 그 밖의 gh(병합 포함)는 ask 그대로
     for cmd, want in (("gh pr review 3 --approve", "deny"), ("gh api -X PUT repos/o/r/pulls/3/reviews/9/dismissals", "deny"),
+                      ("gh -b LGTM pr review 3 --approve", "deny"),        # 앞 옵션도 모든 읽기를 본다(H-A1 r4)
+                      ("gh -X PUT api repos/o/r/pulls/3/reviews/9/dismissals", "deny"),
+                      ("if true; then gh pr review 3 --approve; fi", "deny"),   # 예약어 뒤도 본다(H-A1 r5)
+                      ('gh pr review 3 "$OPT"', "deny"),                         # 셸 값 옵션은 Approve일 수 있다
                       ("gh pr review 3 --comment -b x", "ask"), ("gh pr merge 3", "ask")):
         out, _ = judge("Bash", {"command": cmd})
         assert decision(out) == want and "의존성 없음" in out["permissionDecisionReason"], cmd
@@ -1147,8 +1154,11 @@ def test_guard_denies_claude_approve_dismiss_and_bypass_merges_on_issue_db():
                                  ("mcp__github__pull_request_review_write", {**db, "method": "create"}),
                                  ("mcp__github__disable_pr_auto_merge", db)):
             assert decision(guard(ws, tool, tool_input, ws.base)) == "ask", (tool, tool_input)
+        # 병합·Approve는 다른 레포 명시 대상이어도 cwd(이슈 DB clone) 판정이 남는다(H-A1 r4 — 닫힌 쪽)
+        out = bash(ws, "gh pr merge https://ghe.mock.invalid/other/repo/pull/3", c)
+        assert decision(out) == "deny" and "머지" in out["permissionDecisionReason"]
         nothing = [("gh pr review 3 --approve -R other/repo", plain),
-                   ("gh pr merge https://ghe.mock.invalid/other/repo/pull/3", c),
+                   ("gh pr merge https://ghe.mock.invalid/other/repo/pull/3", plain),
                    (f"gh api -X GET repos/{DB_SLUG}/pulls/3/reviews", plain), (f"gh api repos/{DB_SLUG}/pulls/3/reviews", plain),
                    ("gh api graphql -F query=@viewer.graphql", plain),
                    ("gh api graphql -F query=@- <<'EOF'\nquery { viewer { login } }\nEOF", plain),
@@ -1182,10 +1192,14 @@ def test_guard_gh_url_selector_option_values_api_clusters_and_graphql_url():
             (f"gh pr close 3 -c {other}/issues/1", c, "ask"),
             (f"gh issue close 3 --duplicate-of {other}/issues/5", c, "ask"),
             (f"gh pr comment 3 --body https://ghe.mock.invalid/{DB_SLUG}/issues/1", plain, "ask"),  # 옵션 값의 DB URL은 센다
-            # 선택자 URL은 그대로 이긴다(bool 옵션·`--` 뒤도 선택자)
-            (f"gh pr merge --squash {other}/pull/3", c, None), (f"gh pr merge -sd {other}/pull/3", c, None),
-            (f"gh pr merge -b x {other}/pull/3", c, None), (f"gh pr merge -- {other}/pull/3", c, None),
+            # 선택자 URL은 그대로 이긴다(bool 옵션·`--` 뒤도 선택자) — 쓰기(ask) 종류만. 병합·Approve·기각은 다른 레포 선택자여도
+            # cwd(이슈 DB) 판정이 남는다(H-A1 r4)
+            (f"gh pr edit --add-label x {other}/pull/3", c, None), (f"gh pr close -d {other}/pull/3", c, None),
+            (f"gh pr comment -b x {other}/pull/3", c, None), (f"gh pr comment -- {other}/pull/3", c, None),
             (f"gh pr review --comment {other}/pull/3 -b x", c, None),
+            (f"gh pr merge --squash {other}/pull/3", c, "deny"), (f"gh pr merge -sd {other}/pull/3", c, "deny"),
+            (f"gh pr merge -b x {other}/pull/3", c, "deny"), (f"gh pr merge -- {other}/pull/3", c, "deny"),
+            (f"gh pr merge -b x {other}/pull/3", plain, None),
             # gh api: bool -i와 묶은 짧은 옵션(pflag)
             (f"gh api -iX PUT repos/{DB_SLUG}/pulls/3/merge", plain, "deny"),
             (f"gh api -iXPUT repos/{DB_SLUG}/pulls/3/merge", plain, "deny"),
@@ -1223,10 +1237,12 @@ def test_guard_gh_repo_flag_in_option_value_keeps_cwd_target():
             ("gh api 'repos/{owner}/{repo}/pulls/3/reviews' -f event=APPROVE -t -Rother/x", "deny"),
             ("gh api -X PUT 'repos/{owner}/{repo}/pulls/3/reviews/9/dismissals' -f message=x -f -Rother/x", "deny"),
             ("gh pr create -t x -b '-R other/x 참고' -H issue/MOCK-1", "ask"), ("gh pr comment 3 -b -Rother/x", "ask"),
-            # 옵션 자리의 다른 레포는 cwd를 이긴다
-            ("gh pr merge 3 --merge -Rother/x", None), ("gh pr merge 3 --merge -b x -R other/x", None),
+            # 옵션 자리의 다른 레포는 cwd를 이긴다 — 쓰기(ask) 종류만. 병합·Approve·기각은 cwd 판정이 남는다(H-A1 r4)
+            ("gh pr comment 3 -Rother/x -b x", None), ("gh pr edit 3 -b x -R other/x", None),
             ("gh pr review 3 --comment -R other/x -b x", None),    # `pr review`의 --comment는 bool
-            ("gh pr create -t x -b y -Rother/x", None)]
+            ("gh pr create -t x -b y -Rother/x", None),
+            ("gh pr merge 3 --merge -Rother/x", "deny"), ("gh pr merge 3 --merge -b x -R other/x", "deny"),
+            ("gh pr review 3 --approve -R other/x", "deny")]
     try:
         for cwd in (c, wt):
             for cmd, want in rows:
@@ -1255,7 +1271,8 @@ def test_guard_gh_url_scheme_case_repo_id_endpoint_and_fragment():
             (f"gh pr merge HTTPS://{db}/pull/3 --squash", plain, "deny", merge),
             (f"gh pr merge hTtP://{db}/pull/3 --squash", plain, "deny", merge),
             (f"gh pr edit HTTPS://{db}/pull/3 --title x", plain, "ask", None),
-            ("gh pr merge HTTPS://ghe.mock.invalid/other/repo/pull/3", c, None, None),   # 선택자 URL이 cwd를 이긴다
+            ("gh pr edit HTTPS://ghe.mock.invalid/other/repo/pull/3 --title x", c, None, None),   # 선택자 URL이 cwd를 이긴다
+            ("gh pr merge HTTPS://ghe.mock.invalid/other/repo/pull/3", c, "deny", merge),   # 병합은 cwd 판정이 남는다(r4)
             # repositories/<id>: 대상과 무관하게
             (f"gh api {rid}/reviews -f event=APPROVE", plain, "deny", approve),
             (f"gh api -X PUT {rid}/merge", plain, "deny", merge),
@@ -1276,6 +1293,517 @@ def test_guard_gh_url_scheme_case_repo_id_endpoint_and_fragment():
         out = bash(ws, cmd, cwd)
         assert decision(out) == want, (cmd, cwd)
         assert why is None or why in out["permissionDecisionReason"], cmd
+
+
+def test_guard_gh_leading_options_target_resolution_and_placeholders_close_classes():
+    """규칙 11(H-A1 r4, 부류로 닫기): ① 그룹·동작 앞 옵션(`gh -b x pr merge`·`gh pr -b x merge`·`gh -X PUT api …` — cobra는 그
+    단계의 모르는 옵션이 다음 토큰을 먹는다)은 가능한 읽기를 모두 보고 가장 센 결정을 쓴다. 어느 읽기도 쓰기가 아니어도 대상이
+    이슈 DB면 ask. ② 병합·Approve·기각은 다른 레포로 푼 명시 대상이 cwd(이슈 DB) 판정을 끄지 않는다. ③ 대상 비교는 owner/repo만
+    (`www.`·끝 점·host 무관), 퍼센트 디코딩, 셸이 풀 값(`$`·백틱·`$( )`)과 명령 글의 `GH_REPO` 대입·언급은 이슈 DB일 수 있다로
+    본다. ④ 엔드포인트의 한 칸만 자리표시면 남은 칸이 이슈 DB 것과 같을 때 대상이다. 읽기·다른 레포 작업은 그대로다."""
+    ws = shared()
+    c = ws.clone
+    plain = tmp("tt-gh-plain-")
+    same = _repo_with_origin("https://ghe.mock.invalid/mock-org/telephony-triage")    # 같은 owner의 다른 레포
+    fork = _repo_with_origin(f"https://ghe.mock.invalid/jdoe/{DB_SLUG.split('/')[1]}")
+    h = "https://ghe.mock.invalid"
+    wt = ws.work / "wt-r4"
+    git(c, "worktree", "add", "-q", "--detach", str(wt), "origin/main")
+    approve, merge, dismiss = "Approve하지 않는다", "머지", "기각"
+    rows = [
+        # ① 앞 옵션 — 병합·Approve·기각(대상 무관 GraphQL·repositories/<id> 포함)
+        ("gh pr -b x merge 3 --merge", c, "deny", merge), ("gh pr --body x merge 3", c, "deny", merge),
+        ("gh -b x pr merge 3", c, "deny", merge), ("gh pr -b LGTM review 3 --approve", c, "deny", approve),
+        ("gh -b LGTM pr review 3 --approve", wt, "deny", approve),
+        (f"gh -X PUT api repos/{DB_SLUG}/pulls/3/merge", plain, "deny", merge),
+        (f"gh -f event=APPROVE api repos/{DB_SLUG}/pulls/3/reviews", plain, "deny", approve),
+        (f"gh -f query='{MERGE_MUTATION}' api graphql", plain, "deny", merge),
+        (f"gh pr -b x merge 3 --merge -R {DB_SLUG}", plain, "deny", merge),
+        (f"gh -R {DB_SLUG} -b x pr merge 3", plain, "deny", merge),
+        ("gh pr -t x merge 3 --auto", c, "deny", merge), ("gh --body x pr merge 3 --auto", c, "deny", merge),
+        (f"gh --method PUT api repos/{DB_SLUG}/pulls/3/merge", plain, "deny", merge),
+        (f"gh -X PUT api repos/{DB_SLUG}/pulls/3/reviews/5/dismissals", plain, "deny", dismiss),
+        ("gh -X PUT api repositories/123/pulls/3/merge", plain, "deny", merge),
+        (f"gh -f query='{APPROVE_MUTATION}' api graphql", plain, "deny", approve),
+        ("gh -f query='mutation { dismissPullRequestReview(input: {}) { clientMutationId } }' api graphql", plain, "deny",
+         dismiss),
+        ("gh -f query='mutation { enablePullRequestAutoMerge(input: {}) { clientMutationId } }' api graphql", plain, "deny",
+         merge),
+        ("gh pr -b -R merge 3", c, "deny", merge),       # pr 단계의 -b가 -R를 값으로 먹고 merge가 동작이다
+        # ① 앞 옵션 — 그 밖 쓰기는 ask, 동작을 못 정해도 대상이 이슈 DB면 ask
+        ("gh -b hi pr comment 3", c, "ask", None), ("gh pr -b hi comment 3", c, "ask", None),
+        ("gh -t x pr create -b y", c, "ask", None), (f"gh -X PUT api repos/{DB_SLUG}/contents/x", plain, "ask", None),
+        ("gh pr --json state view 3", c, "ask", None), ("gh pr --json state view 3", plain, None, None),
+        (f"gh -R {DB_SLUG} pr view 3", c, None, None), ("gh --version", c, None, None),
+        # ② 거부 종류는 다른 레포 명시 대상이 cwd 판정을 끄지 않는다. 쓰기는 그대로 명시 대상이 이긴다
+        (f"gh pr merge {h}/other/repo/pull/3", c, "deny", merge), ("gh pr merge 3 -R other/repo", c, "deny", merge),
+        ("gh pr review 3 --approve -R other/repo", wt, "deny", approve),
+        ("gh api -X PUT repos/other/repo/pulls/3/merge", c, "deny", merge),
+        ("gh pr merge 3 -R other/repo", plain, None, None), (f"gh pr merge {h}/other/repo/pull/3", plain, None, None),
+        (f"gh pr edit {h}/other/repo/pull/3 --add-label x", c, None, None),
+        ("gh pr comment 3 -R other/repo -b x", c, None, None),
+        # ③ host 무관·퍼센트 디코딩·셸이 풀 값·GH_REPO 대입
+        (f"gh pr merge https://www.ghe.mock.invalid/{DB_SLUG}/pull/3", plain, "deny", merge),
+        (f"gh pr merge https://www.ghe.mock.invalid/{DB_SLUG}/pull/3 --auto", c, "deny", merge),
+        (f"gh pr review https://www.ghe.mock.invalid/{DB_SLUG}/pull/3 --approve", wt, "deny", approve),
+        (f"gh pr merge 3 -R www.ghe.mock.invalid/{DB_SLUG}", plain, "deny", merge),
+        (f"GH_REPO=www.ghe.mock.invalid/{DB_SLUG} gh pr merge 3", plain, "deny", merge),
+        (f"gh pr merge https://ghe.mock.invalid./{DB_SLUG}/pull/3", c, "deny", merge),
+        (f"gh pr merge {h}/mock-org/telephony%2Dissue-db/pull/3 --squash", c, "deny", merge),
+        (f"gh pr merge {h}/mock-org/%74elephony-issue-db/pull/3", c, "deny", merge),
+        (f"gh pr review {h}/mock-org/telephony%2Dissue-db/pull/3 --approve", wt, "deny", approve),
+        (f"gh pr merge {h}/{DB_SLUG}/pull/%33", plain, "deny", merge),      # gh는 경로를 풀어 /pull/N을 찾는다
+        (f"gh api -X PUT repos/{DB_SLUG}/pulls/3/%6Derge", plain, "deny", merge),
+        (f"gh api {h}/api/%67raphql -f query='{MERGE_MUTATION}'", plain, "deny", merge),
+        (f"gh pr merge {h}/{DB_SLUG}$NOPE/pull/3", c, "deny", merge),
+        (f"gh pr merge {h}/{DB_SLUG}${{NOPE}}/pull/3", c, "deny", merge),
+        (f"gh pr merge {h}/{DB_SLUG}`true`/pull/3", c, "deny", merge),
+        (f"gh pr review {h}/{DB_SLUG}$NOPE/pull/3 --approve", wt, "deny", approve),
+        (f"gh pr merge 3 -R {DB_SLUG}$NOPE", plain, "deny", merge), (f"gh pr merge 3 -R {DB_SLUG}`true`", plain, "deny", merge),
+        (f'gh pr merge 3 -R "$(echo {DB_SLUG})"', plain, "deny", merge),
+        (f"GH_REPO={DB_SLUG}$NOPE gh pr merge 3", plain, "deny", merge),
+        (f"export GH_REPO={DB_SLUG}; gh pr merge 3", plain, "deny", merge),
+        (f"export GH_REPO={DB_SLUG} && gh pr review 3 --approve", plain, "deny", approve),
+        (f"export GH_REPO={DB_SLUG}; gh pr edit 3 --add-label x", plain, "ask", None),
+        ("export GH_REPO=other/x; gh pr merge 3", plain, None, None),
+        ("gh api -X PUT repos/mock-org/telephony%2Dissue-db/pulls/3/merge", c, "deny", merge),
+        ("gh api repos/mock-org/telephony%2Dissue-db/pulls/3/reviews -f event=APPROVE", plain, "deny", approve),
+        (f"gh api -X PUT repos/{DB_SLUG}$NOPE/pulls/3/merge", plain, "deny", merge),
+        # ④ 한 칸만 자리표시(gh가 GH_REPO·cwd 레포로 그 칸을 채운다)
+        ("gh api -X PUT 'repos/{owner}/telephony-issue-db/pulls/3/merge'", same, "deny", merge),
+        ("gh api 'repos/{owner}/telephony-issue-db/pulls/3/reviews' -f event=APPROVE", same, "deny", approve),
+        ("gh api -X PUT repos/:owner/telephony-issue-db/pulls/3/merge", same, "deny", merge),
+        ("gh api -X PUT '/repos/{owner}/telephony-issue-db/pulls/3/merge'", same, "deny", merge),
+        ("gh api -X POST 'repos/{owner}/telephony-issue-db/pulls/3/reviews/9/dismissals' -f message=x", same, "deny", dismiss),
+        ("gh api 'repos/{owner}/telephony-issue-db/pulls/3/reviews/9/events' -f event=APPROVE", same, "deny", approve),
+        ("GH_REPO=mock-org/x gh api -X PUT 'repos/{owner}/telephony-issue-db/pulls/3/merge'", plain, "deny", merge),
+        ("gh api -X PUT 'repos/mock-org/{repo}/pulls/3/merge'", fork, "deny", merge),
+        ("gh api -X PATCH 'repos/{owner}/telephony-issue-db/pulls/3' -f state=closed", same, "ask", None),
+        ("gh api 'repos/{owner}/telephony-issue-db/issues/3/comments' -f body=x", same, "ask", None),
+        ("gh api -X PUT 'repos/{owner}/{repo}/pulls/3/merge'", same, None, None),
+        ("gh api 'repos/{owner}/other/issues' -f title=x", same, None, None),
+        # 오탐 방지: 이슈 DB 읽기, 코멘트 리뷰, 이슈 DB가 아닌 cwd의 보통 gh
+        ("gh pr view 3", c, None, None), ("gh pr view 3 --json reviews,reviewDecision", wt, None, None),
+        ("gh pr list --state open", c, None, None), ("gh pr diff 3", c, None, None), ("gh pr checks 3", c, None, None),
+        ("gh pr status", c, None, None), (f"gh api repos/{DB_SLUG}/pulls/3/reviews", c, None, None),
+        (f"gh api -X GET repos/{DB_SLUG}/pulls/3/reviews -f per_page=100", c, None, None),
+        ("gh api 'repos/{owner}/{repo}/pulls/3/reviews' --jq '.[].state'", c, None, None),
+        ("gh api graphql -f query='query { repository(owner:\"mock-org\", name:\"telephony-issue-db\") "
+         "{ pullRequest(number:3) { reviews(states: APPROVED) { totalCount } } } }'", c, None, None),
+        ("gh pr review 3 --comment -b x", c, "ask", None), ("gh pr review 3 -c -b x", wt, "ask", None),
+        ("gh pr create -t x -b y", plain, None, None), ("gh pr comment 3 -b hi", plain, None, None),
+        ("gh pr merge 3 --squash", plain, None, None), ("gh pr review 3 --approve", plain, None, None),
+        ("gh pr create -t x -b y", same, None, None), ("gh pr merge 3", same, None, None),
+        ("gh issue list", plain, None, None), ("gh auth status", plain, None, None)]
+    try:
+        for cmd, cwd, want, why in rows:
+            out = bash(ws, cmd, cwd)
+            assert decision(out) == want, (cmd, cwd)
+            assert why is None or why in out["permissionDecisionReason"], cmd
+    finally:
+        gitp(c, "worktree", "remove", "--force", str(wt))
+
+
+def test_guard_gh_ssh_alias_remote_and_unknown_value_options_keep_cwd():
+    """규칙 11(H-A1 r4): `issue_db.remote`가 SSH 별칭 host(`git@ghe-ssh:…`)여도 gh가 찍는 https PR URL·`-R`은 owner/repo로
+    이슈 DB다. 값 받는 옵션 표(`GH_SEL_SHORT_WITH_ARG`)에 없는 동작은 `=` 없는 옵션 바로 뒤의 `-R…` 꼴을 그 옵션의 값으로 보고
+    cwd(이슈 DB) 판정을 막지 않는다(`label create -d -Rother/x` 등). 옵션 뒤가 아닌 `-R…`은 그대로 대상이다."""
+    ws = Workspace(build=False)
+    for p in ws.home.rglob("*.yaml"):
+        text = p.read_text(encoding="utf-8")
+        p.write_text(text.replace(f"https://ghe.mock.invalid/{DB_SLUG}.git", f"git@ghe-ssh:{DB_SLUG}.git"), encoding="utf-8")
+    c = ws.clone
+    plain = tmp("tt-gh-plain-")
+    alias_repo = _repo_with_origin(f"git@ghe-ssh:{DB_SLUG}.git")
+    url = f"https://ghe.mock.invalid/{DB_SLUG}/pull/3"
+    wt = ws.work / "wt-alias"
+    git(c, "worktree", "add", "-q", "--detach", str(wt), "origin/main")
+    rows = [(f"gh pr merge {url} --squash", c, "deny"), (f"gh pr merge {url} --squash", wt, "deny"),
+            (f"gh pr merge {url} --squash", alias_repo, "deny"), (f"gh pr review {url} --approve", c, "deny"),
+            (f"gh pr review {url} -a", wt, "deny"), (f"gh pr edit {url} --add-label x", c, "ask"),
+            (f"gh pr edit {url} --add-label x", plain, "ask"), (f"gh pr merge 3 -R ghe.mock.invalid/{DB_SLUG}", c, "deny"),
+            ("gh pr merge 3", alias_repo, "deny"), ("gh pr comment 3 -b x", alias_repo, "ask"),
+            ("gh pr view 3", plain, None), (f"gh pr view {url}", c, None),
+            # 표에 없는 동작의 값 받는 옵션 뒤 `-R…`
+            ("gh label create bug -d -Rother/x", c, "ask"), ("gh secret set TOKEN -e -Rother/x -b v", wt, "ask"),
+            ("gh release create v2 --notes '-Reworked parsers/masking'", c, "ask"),
+            ("gh label create x --description '-Resolved in data/x'", c, "ask"),
+            ("gh label create bug -d -Rother/x", alias_repo, "ask"),
+            ("gh release create v2 --target -Rother/x", c, "ask"),
+            ("gh release create v2 --discussion-category -Rother/x", c, "ask"),
+            ("gh label edit bug --description -Rother/x", c, "ask"), ("gh repo edit --description -Rother/x", c, "ask"),
+            ("gh variable set V -e -Rother/x -b v", c, "ask"), ("gh workflow run w.yml --ref -Rother/x", c, "ask"),
+            # 옵션 뒤가 아니거나 표의 bool 옵션 뒤면 그대로 대상(gh가 그 레포를 쓴다)
+            ("gh label create bug -Rother/x", c, None), ("gh run cancel 5 -Rother/x", c, None),
+            ("gh pr create -t x --draft -Rother/x", c, None), ("gh label create bug -d x -Rother/x", c, None),
+            ("gh pr comment 3 --edit-last -Rother/x", c, None)]
+    try:
+        for cmd, cwd, want in rows:
+            assert decision(bash(ws, cmd, cwd)) == want, (cmd, cwd)
+    finally:
+        gitp(c, "worktree", "remove", "--force", str(wt))
+
+
+def test_guard_reserved_words_redirections_and_line_continuations_find_commands():
+    """명령 낱말 찾기(H-A1 r5, 부류로 닫기): 셸 예약어(`if`·`then`·`do`·`{`·`!`·`function NAME`·`coproc`)와 앞 리디렉션
+    (`>/dev/null`·`2>&1`·`</dev/null`·`&>`)은 명령 낱말이 아니다. 작은따옴표 밖 줄 이음(`\\` + 줄바꿈)은 bash처럼 지우고
+    (`gh api \\⏎ --method PUT …` — GitHub 문서 꼴), `$'…'`은 풀어 읽는다. 규칙 11(gh)·6(push)·8(clone git) 모두 같다."""
+    ws = shared()
+    c = ws.clone
+    plain = tmp("tt-gh-plain-")
+    forms = ["if true; then {x}; fi", "for n in 3; do {x}; done", "while true; do {x} && break; done", "{{ {x}; }}", "! {x}",
+             "function f {{ {x}; }}", "f() {{ {x}; }}; f", ">/dev/null {x}", "2>&1 {x}", "</dev/null {x}", "&>/dev/null {x}",
+             "if ! {x}; then echo no; fi", "nohup >/dev/null 2>&1 {x}", "coproc {x}", "time ! {x}"]
+    cmds = [("gh pr merge 3 --squash", "머지"), ("gh pr review 3 --approve", "Approve하지 않는다"),
+            (f"gh api -X PUT repos/{DB_SLUG}/pulls/3/merge", "머지"), ("git push origin HEAD:main", "규칙 6"),
+            ("git checkout main", "규칙 8")]
+    for form in forms:
+        for x, why in cmds:
+            out = bash(ws, form.format(x=x), c)
+            assert decision(out) == "deny" and why in out["permissionDecisionReason"], form.format(x=x)
+    nl = "\\\n  "
+    rows = [(f"if true; then gh pr comment 3 -b hi -R {DB_SLUG}; fi", plain, "ask"),
+            (f'm() {{ gh pr merge "$@" -R {DB_SLUG}; }}; m 3', plain, "deny"),
+            ("gh 2>/dev/null pr merge 3", c, "deny"), ("git 2>&1 push origin HEAD:main", c, "deny"),
+            # 줄 이음(GitHub REST 문서 꼴)
+            ((f'gh api {nl}--method PUT {nl}-H "Accept: application/vnd.github+json" {nl}/repos/{DB_SLUG}/pulls/3/merge '
+              f'{nl}-f "merge_method=squash"'), plain, "deny"),
+            (f'gh api {nl}--method POST {nl}/repos/{DB_SLUG}/pulls/3/reviews {nl}-f "event=APPROVE"', plain, "deny"),
+            (f"gh api {nl}--method PUT {nl}/repos/{DB_SLUG}/pulls/3/reviews/9/dismissals {nl}-f message=x", plain, "deny"),
+            (f"gh api {nl}graphql {nl}-f query='{MERGE_MUTATION}'", plain, "deny"),
+            (f"gh api {nl}-X POST {nl}repos/{DB_SLUG}/issues/3/comments {nl}-f body=hi", plain, "ask"),
+            (f"gh {nl}pr merge 3 --squash", c, "deny"), (f"gh pr {nl}merge 3", c, "deny"), (f"git {nl}push origin HEAD:main", c, "deny"),
+            (f"gh api {nl}-X PUT {nl}'repos/{{owner}}/{{repo}}/pulls/3/merge'", c, "deny"),
+            ("echo x # 메모 \\\ngh pr merge 3", c, "deny"),             # 주석 끝 `\`는 줄을 잇지 않는다
+            ("gh api graphql -f query='query { viewer \\\n { login } }'", plain, None),   # 작은따옴표 안 줄 이음은 글자
+            # `$'…'`
+            ("echo $'it\\'s'; gh pr merge 3 --squash", c, "deny"), ("gh pr $'merge' 3", c, "deny"),
+            (f"gh api -X PUT $'repos/{DB_SLUG}/pulls/3/merge'", plain, "deny"),
+            # 오탐 방지: 글 명령 안의 낱말, 이슈 DB 읽기
+            (f"echo then gh pr merge 3 -R {DB_SLUG}", plain, None), ("grep -n 'do gh pr merge' notes.md", plain, None),
+            ("if true; then gh pr view 3; fi", c, None), ("for n in 3 4; do gh pr view $n --json state; done", c, None)]
+    for cmd, cwd, want in rows:
+        assert decision(bash(ws, cmd, cwd)) == want, (cmd, cwd)
+
+
+def test_guard_gh_shell_expanded_operations_are_closed():
+    """규칙 11(H-A1 r5): 셸이 정하는 동작은 모른다 — 닫힌 쪽. GraphQL은 Bash 명령 글 전체(heredoc 본문 포함)에서 병합·Approve·
+    기각 이름을 찾는다(`query="$(cat <<'EOF' …)"`·`Q=…; -f query="$Q"`·파이프 stdin·같은 명령에서 쓴 파일). 읽지 못한 본문은 대상과
+    무관하게 ask, 리뷰 mutation의 event 변수가 셸 값이면 Approve. REST는 셸이 푼 엔드포인트의 쓰기(끝 칸이 셸 값이거나 병합·리뷰
+    꼴)를 거부, 리뷰 엔드포인트의 `event="$E"`는 Approve. 그룹·`pr` 동작이 셸 값이면 거부, `pr review`의 옵션 자리 셸 값은
+    Approve. 작은따옴표 안 GraphQL 변수(`$o`)·인용한 선택자·옵션 값은 그대로다."""
+    ws = shared()
+    c = ws.clone
+    plain = tmp("tt-gh-plain-")
+    (plain / "q.graphql").write_text("query { viewer { login } }", encoding="utf-8")
+    hd = "gh api graphql -f query=\"$(cat <<'EOF'\n{q}\nEOF\n)\""
+    approve, merge, dyn = "Approve하지 않는다", "머지", "셸이 푸는 값"
+    rows = [(hd.format(q=MERGE_MUTATION), plain, "deny", merge),
+            (hd.format(q="mutation { enablePullRequestAutoMerge(input: {}) { clientMutationId } }"), c, "deny", merge),
+            (hd.format(q=APPROVE_MUTATION), plain, "deny", approve),
+            (f"Q='{MERGE_MUTATION}'; gh api graphql -f query=\"$Q\"", plain, "deny", merge),
+            (f"echo '{MERGE_MUTATION}' | gh api graphql -F query=@-", plain, "deny", merge),
+            (f"cat > m.graphql <<'E'\n{MERGE_MUTATION}\nE\ngh api graphql -F query=@m.graphql", plain, "deny", merge),
+            (("gh api graphql -f query='mutation($id:ID!,$e:PullRequestReviewEvent!){addPullRequestReview(input:"
+              "{pullRequestId:$id,event:$e}){clientMutationId}}' -f id=x -f e=\"$E\""), plain, "deny", approve),
+            ('gh api graphql -f query="$(cat none.graphql)"', plain, "ask", "GraphQL 본문을 읽지 못했다"),
+            ("cat x.graphql | gh api graphql -F query=@-", plain, "ask", "GraphQL 본문을 읽지 못했다"),
+            # 글자를 알 수 있는 셸 본문은 읽는다: heredoc 본문·있는 파일
+            (hd.format(q="query { viewer { login } }"), c, None, None),
+            ('gh api graphql -f query="$(cat q.graphql)"', plain, None, None),
+            (hd.format(q='mutation { addPullRequestReview(input: {pullRequestId: "x", event: COMMENT}) { clientMutationId } }'), c,
+             "ask", None),
+            (("gh api graphql -f query='mutation($id:ID!){addPullRequestReview(input:{pullRequestId:$id,event:COMMENT})"
+              "{clientMutationId}}' -f id=\"$ID\""), plain, None, None),
+            ("gh api graphql -f query='query($o:String!){ repository(owner:$o, name:\"x\"){ id } }' -f o=\"$OWNER\"", plain,
+             None, None),
+            ("gh api graphql -fquery='query($o:String!){ repository(owner:$o, name:\"x\"){ id } }' -f o=x", plain, None, None),
+            # REST
+            (f"EP=repos/{DB_SLUG}/pulls/3/merge; gh api -X PUT \"$EP\"", plain, "deny", dyn),
+            ('gh api -X POST "$EP" -f event=APPROVE', plain, "deny", dyn),
+            (f'BASE=repos/{DB_SLUG}; gh api -X PUT "$BASE/pulls/3/merge"', plain, "deny", merge),
+            ('gh api -X PUT "$PR/merge"', plain, "deny", dyn),
+            ('gh api "$URL/reviews" -f event=APPROVE', plain, "deny", approve),
+            ('gh api "$URL/reviews" -f event=COMMENT', plain, "ask", None),       # 레포를 몰라 어디서나 ask
+            ('gh api -X PUT "repos/{owner}/{repo}/pulls/$N/merge"', c, "deny", merge),
+            ('gh api -X PUT "repos/{owner}/{repo}/pulls/$N/merge"', plain, None, None),
+            ('gh api -X PUT "repos/other/x/pulls/3/$A"', c, "deny", dyn), ('gh api -X PUT "repos/other/x/pulls/3/$A"', plain, None, None),
+            (f'gh api repos/{DB_SLUG}/pulls/3/reviews -f event="$E"', plain, "deny", approve),
+            (f'gh api "repos/{DB_SLUG}/issues/$N/comments" -f body=x', plain, "ask", None),
+            ('gh api "$EP"', plain, None, None),
+            # 그룹·동작·리뷰 옵션
+            ("gh pr $ACT 3", c, "deny", dyn), (f'gh pr "$ACT" 3 -R {DB_SLUG}', plain, "deny", dyn),
+            ('gh "$G" merge 3', c, "deny", dyn), (f'gh "$G" -X PUT repos/{DB_SLUG}/pulls/3/merge', plain, "deny", dyn),
+            (f'gh issue "$A" 5 -R {DB_SLUG}', plain, "ask", None), ("gh pr $ACT 3", plain, None, None),
+            ('gh pr review 3 "$OPT"', c, "deny", approve), (f"gh pr review 3 $OPT -R {DB_SLUG}", plain, "deny", approve),
+            ("gh pr review 3 --comment -b $B", c, "deny", approve),
+            ('gh pr review "$N" --comment -b "$B"', c, "ask", None), ('gh pr review $n --comment --body="$B"', c, "ask", None),
+            ('gh pr view "$N" --json state', c, None, None)]
+    for cmd, cwd, want, why in rows:
+        out = bash(ws, cmd, cwd)
+        assert decision(out) == want, (cmd, cwd)
+        assert why is None or why in out["permissionDecisionReason"], cmd
+
+
+def _repo_with_remotes(remotes: list[tuple[str, str]], config: tuple = ()) -> Path:
+    path = tmp("tt-gh-repo-") / "r"
+    subprocess.run(["git", "init", "-q", "-b", "main", str(path)], check=True)
+    for name, url in remotes:
+        subprocess.run(["git", "-C", str(path), "remote", "add", name, url], check=True)
+    for key, value in config:
+        subprocess.run(["git", "-C", str(path), "config", key, value], check=True)
+    return path
+
+
+def test_guard_gh_cwd_resolution_remotes_gitdir_and_unknown_dirs():
+    """규칙 11(H-A1 r5): cwd 레포는 gh처럼 넓게 본다 — 원격 하나라도(upstream·이름 있는 원격·insteadOf를 푼 URL)·`gh-resolved`
+    값·앞 대입 `GIT_DIR`이 이슈 DB면 대상. 모르는 cwd(셸이 풀 경로·`cd $(…)`·없는 경로·셸이 푸는 `GIT_DIR`)는 이슈 DB로 본다(병합·
+    Approve는 거부, 쓰기는 ask, 사유를 붙인다). `cd -`·`pushd`/`popd`는 이 명령 글 안에서 따라간다. 읽기는 그대로다."""
+    ws = shared()
+    c = ws.clone
+    plain = tmp("tt-gh-plain-")
+    db, other = f"https://ghe.mock.invalid/{DB_SLUG}", "https://ghe.mock.invalid/jdoe/telephony-issue-db"
+    fork = _repo_with_remotes([("origin", other), ("upstream", db)])
+    named = _repo_with_remotes([("db", db)])
+    resolved = _repo_with_remotes([("origin", other)], (("remote.origin.gh-resolved", DB_SLUG),))
+    alias = _repo_with_remotes([("origin", "dbx:telephony-issue-db")], (("url.https://ghe.mock.invalid/mock-org/.insteadOf", "dbx:"),))
+    unrelated = _repo_with_remotes([("origin", other)])
+    unknown = "알 수 없어"
+    rows = [("gh pr merge 3 --squash", fork, "deny", "머지"), ("gh pr review 3 --approve", fork, "deny", "Approve"),
+            ("gh pr comment 3 -b hi", fork, "ask", None), ("gh pr merge 3", named, "deny", None),
+            ("gh pr merge 3", resolved, "deny", None), ("gh pr merge 3", alias, "deny", None),
+            ("gh pr merge 3", unrelated, None, None), ("gh pr view 3", fork, None, None),
+            (f"GIT_DIR={c}/.git gh pr merge 3 --squash", plain, "deny", None),
+            (f"GIT_DIR={c}/.git gh pr review 3 --approve", plain, "deny", "Approve"),
+            (f"GIT_DIR={fork}/.git gh pr comment 3 -b hi", plain, "ask", None),
+            ('GIT_DIR="$G" gh pr merge 3', plain, "deny", unknown),
+            (f'D={c}; cd "$D" && gh pr merge 3 --squash', plain, "deny", unknown),
+            (f"cd $(git -C {c} rev-parse --show-toplevel) && gh pr merge 3", plain, "deny", unknown),
+            (f"gh repo clone {DB_SLUG} {plain}/x && cd {plain}/x && gh pr merge 3", plain, "deny", unknown),
+            (f"cd {plain}/nope && gh pr comment 3 -b hi", plain, "ask", unknown),
+            (f"cd {c}; cd /tmp; cd -; gh pr merge 3", plain, "deny", "머지"),
+            (f"cd {c}; cd /tmp; cd -; git checkout main", plain, "deny", "규칙 8"),
+            (f"pushd {c} >/dev/null && gh pr merge 3", plain, "deny", None),
+            # 오탐 방지: 읽기, 따라갈 수 있는 디렉토리
+            (f'D={c}; cd "$D" && gh pr view 3', plain, None, None), (f"cd {plain}/nope && gh pr view 3", plain, None, None),
+            (f"cd {c} && cd {plain} && gh pr merge 3", plain, None, None), (f"pushd {c} && popd && gh pr merge 3", plain, None, None)]
+    for cmd, cwd, want, why in rows:
+        out = bash(ws, cmd, cwd)
+        assert decision(out) == want, (cmd, cwd)
+        assert why is None or why in out["permissionDecisionReason"], cmd
+
+
+def test_guard_gh_pr_read_list_aliases_and_repo_positional_targets():
+    """규칙 11(H-A1 r5): `pr`은 읽기 목록(list·view·status·checks·diff)만 읽기다(`revert`·`update-branch`·모르는 동작은 쓰기).
+    동작 별칭(`new`·`ls`·`co`)과 gh 기본 별칭 `gh co`(= `pr checkout`, 규칙 8)를 풀어 본다. `repo <동작> [<레포>]`의 위치 인자와
+    `issue transfer`의 대상 레포는 명시 대상이다(URL 꼴 포함). 다른 레포를 가리키는 `repo` 위치 인자는 cwd 판정을 끈다."""
+    ws = shared()
+    c = ws.clone
+    plain = tmp("tt-gh-plain-")
+    rows = [(f"gh pr revert 3 -R {DB_SLUG}", plain, "ask"), ("gh pr revert 3", c, "ask"),
+            (f"gh pr new -R {DB_SLUG} -t x -b y", plain, "ask"), (f"gh pr update-branch 3 -R {DB_SLUG}", plain, "ask"),
+            ("gh pr co 3", c, "deny"), ("gh co 3", c, "deny"),
+            (f"gh repo edit {DB_SLUG} --default-branch dev", plain, "ask"),
+            (f"gh repo edit {DB_SLUG} --enable-auto-merge", plain, "ask"),
+            (f"gh repo delete {DB_SLUG} --yes", plain, "ask"), (f"gh repo archive {DB_SLUG} -y", plain, "ask"),
+            (f"gh repo sync {DB_SLUG} --source mock-org/other --branch main --force", plain, "ask"),
+            (f"gh repo edit https://ghe.mock.invalid/{DB_SLUG} --default-branch dev", plain, "ask"),
+            (f"gh issue transfer 5 {DB_SLUG}", plain, "ask"), ("gh issue transfer 5 other/x", c, "ask"),
+            ("gh repo edit --description other/x", c, "ask"),        # 앞 옵션의 값일 수 있다 — cwd 판정이 남는다
+            # 오탐 방지
+            (f"gh pr ls -R {DB_SLUG}", plain, None), (f"gh issue ls -R {DB_SLUG}", plain, None),
+            (f"gh release ls -R {DB_SLUG}", plain, None), (f"gh pr checks 3 -R {DB_SLUG}", plain, None),
+            ("gh pr co 3", plain, None), (f"gh repo view {DB_SLUG}", plain, None), (f"gh repo clone {DB_SLUG}", plain, None),
+            ("gh repo edit other/x --description y", c, None), ("gh repo create acme/new --private", c, None),
+            ("gh issue transfer 5 other/x", plain, None), ("gh repo rename newname", plain, None)]
+    for cmd, cwd, want in rows:
+        assert decision(bash(ws, cmd, cwd)) == want, (cmd, cwd)
+
+
+def test_guard_cd_scope_follows_bash_subshells_pipes_and_branches():
+    """명령 파싱(H-A1 r6): cd·pushd·popd는 bash 범위대로 따라간다(`_Walk`). 서브셸(`( … )`·`$( … )`·`<( … )`)·파이프 요소·`&`
+    백그라운드 목록의 cd는 밖에 남지 않는다(`{ …; } | cat`·`… | while …; done` 같은 복합 명령 요소도). `&&`·`||` 뒤·분기·루프 안
+    cd는 돌지 않았을 수 있어 전후 cwd를 모두 본다. 함수 본문의 cd는 정의할 때 돌지 않는다(뒤에서 부를 수 있어 모르는 cwd도 본다).
+    `eval`·`{ …; }`·`builtin cd`의 cd는 남는다. `source`·`.`·셸 값 `eval`과 명령 글의 `CDPATH`는 모르는 cwd를 더한다. 셸이
+    읽는 heredoc 본문은 그 글에서 거친 모든 cwd로 본다."""
+    ws = shared()
+    c = ws.clone
+    plain = tmp("tt-gh-plain-")
+    other = _repo_with_origin("https://ghe.mock.invalid/other/repo")
+    wt = ws.work / "wt-cdscope"
+    git(c, "worktree", "add", "-q", "--detach", str(wt), "origin/main")
+    rows = [
+        # 서브셸·치환·파이프·백그라운드 안의 cd는 이슈 DB worktree·clone의 병합·Approve를 가리지 않는다
+        ("(cd /tmp && ls) ; gh pr merge 3 --squash", wt, "deny"),
+        ("(cd /tmp && ls) && gh pr merge 3 --auto --squash", wt, "deny"),
+        (f"(cd {other} && git log -1) && gh pr review 3 --approve", wt, "deny"),
+        (f"(cd {other}) ; gh pr merge 3", c, "deny"),
+        (f"cd {other} | cat; gh pr merge 3 --squash", c, "deny"),
+        (f"cat /dev/null | cd {other}; gh pr merge 3", c, "deny"),
+        (f"echo $(cd {other} && pwd); gh pr merge 3 --squash", c, "deny"),
+        (f"diff <(cd {other}; ls) x; gh pr merge 3", c, "deny"),
+        (f"cd {other} && ls & gh pr merge 3", c, "deny"),
+        (f"{{ cd {other}; }} | cat; gh pr merge 3", c, "deny"),
+        (f"ls | while read l; do cd {other}; done; gh pr merge 3", c, "deny"),
+        (f"for d in a; do cd {other}; done | cat; gh pr review 3 --approve", c, "deny"),
+        (f"(cd {other} && ls) ; gh pr create -t x -b y", wt, "ask"),
+        # 조건부·분기·함수 본문: 돌지 않았을 수 있다 — 전 cwd도 본다
+        (f"false && cd {other}; gh pr merge 3", c, "deny"),
+        (f"if test -d x; then cd {other}; fi; gh pr merge 3", c, "deny"),
+        (f"case $X in a) cd {other};; esac; gh pr merge 3", c, "deny"),
+        (f"f() {{ cd {other}; }}; gh pr merge 3", c, "deny"),
+        (f"f() {{ cd {c}; }}; cd {plain}; f; gh pr merge 3", plain, "deny"),     # 부르면 돈다 — 모르는 cwd
+        ("echo x) ; gh pr merge 3", plain, "deny"),                              # 짝 없는 `)`: 모르는 cwd
+        (f"X='cd {c}'; eval \"$X\"; gh pr merge 3", plain, "deny"),            # 셸 값 eval·source: cd할 수 있다
+        ("source ./env.sh && gh pr merge 3", plain, "deny"), ("source ./env.sh && gh pr view 3", plain, None),
+        (f"CDPATH={c.parent} cd {c.name}; gh pr merge 3", plain, "deny"),        # CDPATH에서 먼저 찾는다
+        # 셸이 읽는 heredoc 본문: 앞에서 거친 cwd로도 본다
+        (f"cd {c} && bash <<'EOF'\ngh pr merge 3\nEOF", plain, "deny"),
+        # 다른 레포에서 서브셸로 이슈 DB에 들어갔다 나오면 대상이 아니다
+        (f"(cd {wt} && ls) ; gh pr merge 3 --squash", other, None),
+        (f"echo $(cd {c} && pwd); gh pr merge 3", plain, None),
+        (f"cd {c} | cat; gh pr merge 3", plain, None),
+        # bash처럼 남는 cd는 그대로 따라간다
+        (f"cd {other} && ls ; gh pr merge 3", c, None),
+        (f"{{ cd {other}; }} ; gh pr merge 3", c, None),
+        (f"cd {other} && gh pr merge 3", wt, None),
+        (f"eval 'cd {c}'; gh pr merge 3", plain, "deny"),
+        (f"builtin cd {c}; gh pr merge 3", plain, "deny"),
+        (f"cd {c}; (gh pr merge 3)", plain, "deny"),
+        # git 규칙도 같은 cwd를 쓴다
+        (f"(cd {other} && ls); git push origin HEAD:main", c, "deny"),
+        (f"git -C {other} log | cd {other}; git push origin HEAD:main", c, "deny")]
+    try:
+        for cmd, cwd, want in rows:
+            assert decision(bash(ws, cmd, cwd)) == want, (cmd, cwd)
+    finally:
+        gitp(c, "worktree", "remove", "--force", str(wt))
+
+
+def test_guard_heredoc_detection_ignores_quotes_comments_herestrings_and_unterminated():
+    """명령 파싱(H-A1 r6, `_heredoc_scan`): heredoc 연산자는 인용·주석·산술 밖의 `<<`·`<<-`만이다(`<<<` here-string 아님). 끝
+    표시 줄을 못 찾으면 본문으로 빼지 않는다(뒤 줄을 지우지 않는다). 끝 표시는 줄 전체가 낱말과 같을 때만이다(`<<-`는 앞 탭만
+    뗀다). 그래서 `rg "<<EOF"`·주석 속 `<<EOF`·`<<< word`·`$((1<<X))` 뒤 줄의 병합·Approve·main push가 판정된다. 진짜 heredoc
+    본문은 여전히 명령으로 읽지 않는다(셸이 읽는 본문만 명령)."""
+    ws = shared()
+    c = ws.clone
+    wt = ws.work / "wt-heredoc"
+    git(c, "worktree", "add", "-q", "--detach", str(wt), "origin/main")
+    merge = f"gh api -X PUT repos/{DB_SLUG}/pulls/3/merge"
+    rows = [
+        ('rg -n "<<EOF" scripts/ | head -3\ngh pr merge 3 --squash', wt, "deny"),
+        ("# 확인: heredoc(<<EOF) 본문 포함\ngh pr review 3 --approve", wt, "deny"),
+        ("read -r a <<< word\ngh pr merge 3 --squash", c, "deny"),
+        ("git log --oneline -3   # <<HEAD\ngit push origin HEAD:main", c, "deny"),
+        ("echo $((1<<X))\ngh pr merge 3 --squash", c, "deny"),
+        ("((n <<= 1))\ngh pr merge 3", c, "deny"),
+        ("echo '<<EOF'\ngh pr merge 3 --squash", c, "deny"),
+        ("echo x # <<EOF\ngh pr merge 3 --auto --squash", c, "deny"),
+        (f'true\nrg -n "<<EOF" scripts/\ntrue\n{merge}', c, "deny"),
+        ("cat <<EOF\ngh pr merge 3 --squash", c, "deny"),                      # 끝 표시 없음
+        ('echo "\n<<EOF\n"; gh pr merge 3\nEOF', c, "deny"),                  # 여러 줄 인용 안 `<<EOF`
+        ("cat > f <<EOF\n  EOF\ncd /tmp\nEOF\ngh pr merge 3", c, "deny"),     # 공백 붙은 `  EOF`는 끝 표시가 아니다
+        ("cat <<'EOF' | bash\ngh pr merge 3\nEOF", c, "deny"),                # 셸이 읽는 본문은 명령이다
+        # 진짜 heredoc 본문은 명령이 아니다(오탐 없음)
+        ("cat >/dev/null <<'EOF'\ngh pr merge 3\nEOF", c, None),
+        ("cat >/dev/null <<-EOF\n\tgh pr merge 3\n\tEOF", c, None),
+        ("cat >/dev/null <<\\EOF\ngh pr merge 3\nEOF", c, None),
+        ("cat >/dev/null <<'END-X'\ngh pr merge 3\nEND-X", c, None),
+        ("cat <<A >/dev/null <<B\ngh pr merge 3\nA\ngh pr merge 4\nB", c, None),
+        ("X=\"$(cat <<'EOF'\ngh pr merge 3\nEOF\n)\"; echo \"$X\"", c, None),
+        ("cat <<EOF\nhello\nEOF\ngh pr merge 3 --squash", c, "deny")]
+    try:
+        for cmd, cwd, want in rows:
+            assert decision(bash(ws, cmd, cwd)) == want, (cmd, cwd)
+    finally:
+        gitp(c, "worktree", "remove", "--force", str(wt))
+
+
+def test_guard_gh_api_shell_resolved_endpoint_may_be_graphql():
+    """규칙 11(H-A1 r6): 셸이 푸는 엔드포인트(`"$GHE_API/graphql"`·`$X/graphql`·`"${X}/graphql"`)는 실행 때 GraphQL URL일 수 있다
+    (gh는 `://`가 든 경로를 그대로 쓰고 필드를 JSON 본문으로 보낸다). 병합·자동 병합·Approve·기각 mutation은 대상과 무관하게
+    거부한다. 끝 칸이 `graphql`이면 읽지 못한 본문은 ask다. 읽기 query·다른 REST 쓰기는 그대로다."""
+    ws = shared()
+    c = ws.clone
+    plain = tmp("tt-gh-plain-")
+    merge = "mutation { mergePullRequest(input:{pullRequestId:\"PR_x\"}) { clientMutationId } }"
+    approve = "mutation { addPullRequestReview(input:{pullRequestId:\"PR_x\", event: APPROVE}) { clientMutationId } }"
+    auto = "mutation { enablePullRequestAutoMerge(input:{pullRequestId:\"PR_x\"}) { clientMutationId } }"
+    dismiss = "mutation { dismissPullRequestReview(input:{pullReviewId:\"R_x\", message:\"m\"}) { clientMutationId } }"
+    rows = [(f"gh api \"$GHE_API/graphql\" -f query='{merge}'", plain, "deny", "머지"),
+            (f"gh api \"$GHE_API/graphql\" -f query='{approve}'", plain, "deny", "Approve"),
+            (f"gh api \"$GHE_API/graphql\" -f query='{auto}'", c, "deny", "머지"),
+            (f"gh api \"$GHE_API/graphql\" -f query='{dismiss}'", plain, "deny", "기각"),
+            (f"gh api $GHE_API/graphql -f query='{merge}'", plain, "deny", None),
+            (f"gh api \"${{GHE_API}}/graphql\" -f query='{merge}'", plain, "deny", None),
+            (f"gh api \"$BASE/api/%67raphql\" -f query='{merge}'", plain, "deny", None),
+            (f"Q='{merge}'; gh api \"$GHE_API/graphql\" -f query=\"$Q\"", plain, "deny", None),
+            (f"gh api \"$EP\" -f query='{approve}'", plain, "deny", None),
+            ("gh api \"$GHE_API/graphql\" -f query=\"$Q\"", plain, "ask", "GraphQL"),
+            ("gh api \"$GHE_API/graphql\" -f query='query { viewer { login } }'", plain, None, None),
+            ("gh api \"$BASE/repos/other/x/issues\" -f title=t", plain, None, None)]
+    for cmd, cwd, want, why in rows:
+        out = bash(ws, cmd, cwd)
+        assert decision(out) == want, (cmd, cwd)
+        assert why is None or why in out["permissionDecisionReason"], cmd
+
+
+def test_guard_scp_remote_without_user_keeps_explicit_targets_and_warns_unparsable():
+    """규칙 11(H-A1 r6): `issue_db.remote`가 user 없는 git SCP 꼴(`ghe-ssh:o/r.git` — ~/.ssh/config의 별칭)이어도 owner/repo로
+    푼다(`userconfig.repo_slug`). 그래서 `-R`·`api repos/…`·MCP owner/repo 명시 대상의 병합·Approve가 거부된다. 그 꼴 원격을 가진
+    다른 clone도 이슈 DB로 본다. owner/repo로 못 푸는 원격이면 guard가 경고한다(규칙 11이 꺼진다 — doctor `config` 행은 fail)."""
+    ws = Workspace(build=False)
+    ws.json("config.py", ["set-tracker", "--server", "mock-jira", "--get-issue", JIRA_TOOLS[0],
+                          "--search-issues", JIRA_TOOLS[1], "--get-comments", JIRA_TOOLS[2]])
+
+    def set_remote(old: str, value: str) -> None:
+        for p in ws.home.rglob("*.yaml"):
+            text = p.read_text(encoding="utf-8")
+            if old in text:
+                p.write_text(text.replace(old, value), encoding="utf-8")
+    set_remote(f"https://ghe.mock.invalid/{DB_SLUG}.git", f"ghe-ssh:{DB_SLUG}.git")
+    plain = tmp("tt-gh-plain-")
+    scp_clone = _repo_with_origin(f"ghe-ssh:{DB_SLUG}.git")
+    db = {"owner": "mock-org", "repo": "telephony-issue-db", "pullNumber": 3}
+    for cmd, cwd, want in [(f"gh pr merge 3 -R {DB_SLUG}", plain, "deny"),
+                           (f"gh api -X PUT repos/{DB_SLUG}/pulls/3/merge", plain, "deny"),
+                           (f"gh pr review 3 --approve -R {DB_SLUG}", plain, "deny"),
+                           (f"gh pr comment 3 -b x -R {DB_SLUG}", plain, "ask"),
+                           ("gh pr merge 3", ws.clone, "deny"), ("gh pr merge 3", scp_clone, "deny"),
+                           ("gh pr merge 3 -R other/x", plain, None)]:
+        assert decision(bash(ws, cmd, cwd)) == want, (cmd, cwd)
+    for tool, tool_input, want in [("mcp__github__merge_pull_request", db, "deny"),
+                                   ("mcp__github__pull_request_review_write", {**db, "method": "create", "event": "APPROVE"}, "deny"),
+                                   ("mcp__github__merge_pull_request", {**db, "owner": "other"}, None)]:
+        assert decision(guard(ws, tool, tool_input, plain)) == want, tool
+    # https 설정이어도 user 없는 SCP 꼴 원격의 다른 clone은 이슈 DB다
+    assert decision(bash(shared(), "gh pr merge 3", scp_clone)) == "deny"
+    # 못 푸는 원격: 규칙 11이 꺼진다는 경고(stderr)
+    set_remote(f"ghe-ssh:{DB_SLUG}.git", "telephony-issue-db")
+    event = {"hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_input": {"command": "ls"}, "cwd": str(plain)}
+    proc = run("guard.py", [], root=ws.root, cwd=plain, env=ws.env(), stdin=json.dumps(event))
+    assert proc.returncode == 0 and "issue_db.remote(telephony-issue-db)" in proc.stderr and "규칙 11" in proc.stderr, proc.stderr
+
+
+def test_guard_mcp_strong_words_before_write_gate():
+    """규칙 11 MCP(H-A1 r5): 병합·Approve·기각 낱말은 쓰기형 판정(`mcptools.is_write`)과 따로, 먼저 본다 — `pr_approve`·
+    `automerge_pr`·`squash_and_merge`·입력 `event` APPROVE. 동사가 읽기 동사(`get_merge_status`)면 보지 않는다."""
+    ws = shared()
+    db = {"owner": "mock-org", "repo": "telephony-issue-db", "number": 3}
+    rows = [("mcp__ghe__pr_approve", db, "deny", "Approve하지 않는다"),
+            ("mcp__ghe__pull_request_approve", db, "deny", "Approve하지 않는다"),
+            ("mcp__ghe__approvePullRequest", db, "deny", "Approve하지 않는다"),
+            ("mcp__ghe__pr_review", {**db, "event": "APPROVE"}, "deny", "Approve하지 않는다"),
+            ("mcp__ghe__automerge_pr", db, "deny", "머지"), ("mcp__ghe__squash_and_merge", db, "deny", "머지"),
+            ("mcp__ghe__pr_dismiss_review", db, "deny", "기각"),
+            ("mcp__ghe__disable_auto_merge", db, "ask", None), ("mcp__ghe__request_approval", db, "ask", None),
+            ("mcp__ghe__get_merge_status", db, None, None), ("mcp__ghe__list_approvals", db, None, None),
+            ("mcp__github__list_pull_requests", {**db, "state": "merged"}, None, None),
+            ("mcp__ghe__pr_approve", {"owner": "other", "repo": "x"}, None, None)]
+    for tool, tool_input, want, why in rows:
+        out = guard(ws, tool, tool_input, ws.base)
+        assert decision(out) == want, tool
+        assert why is None or why in out["permissionDecisionReason"], tool
 
 
 def test_guard_without_pyyaml_asks_file_writes():

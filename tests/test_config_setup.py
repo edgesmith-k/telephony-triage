@@ -141,6 +141,33 @@ def test_set_and_sync_scripts_path():
     assert result["changed"] is True and env.config()["plugin"]["scripts_path"] == str(other_root / "scripts")
 
 
+def test_issue_db_remote_must_resolve_to_owner_repo():
+    """H-A1 r6: `issue_db.remote`는 owner/repo로 풀려야 한다(`userconfig.repo_slug` — guard 규칙 11이 대상 비교에 쓴다. 못 풀면
+    규칙 11이 조용히 꺼진다). init·set은 거부하고, user 없는 SCP 꼴(`<SSH 별칭>:o/r.git`)·`git@host:o/r.git`은 받는다."""
+    env = Env()
+    env.init(env.base / "db")
+    for bad in ("/srv/git/telephony-issue-db.git", "telephony-issue-db", "file:///srv/o/r.git"):
+        proc = env.run("config.py", ["set", "issue_db.remote", bad])
+        assert proc.returncode == 2 and "owner/repo" in proc.stderr, bad
+    for good in ("ghe-ssh:mock-org/telephony-issue-db.git", "git@ghe.mock.invalid:mock-org/telephony-issue-db.git"):
+        env.json("config.py", ["set", "issue_db.remote", good])
+        assert env.config()["issue_db"]["remote"] == good
+    other = Env()
+    with pytest.raises(AssertionError):
+        other.init(other.base / "db", **{"issue_db.remote": "telephony-issue-db"})
+    assert not (other.home / "config.yaml").exists()
+
+
+def test_doctor_unresolvable_remote_fails_config_row():
+    """H-A1 r6: 사용자 config를 손으로 고쳐 `issue_db.remote`가 owner/repo로 풀리지 않으면 doctor `config` 행 fail(규칙 11이 꺼진다)."""
+    env, _ = _ready_env()
+    cfg = env.config()
+    cfg["issue_db"]["remote"] = "/srv/git/telephony-issue-db.git"
+    (env.home / "config.yaml").write_text(yaml.safe_dump(cfg, allow_unicode=True), encoding="utf-8")
+    row = _rows(_doctor(env, expect=1))["config"]
+    assert row["status"] == "fail" and "규칙 11" in row["detail"] and "config.py set issue_db.remote" in row["next"]
+
+
 def test_set_issue_db_path_hints_old_snapshot_cleanup():
     """issue_db.path를 바꿨고 옛 읽기 스냅샷이 있으면 정리 방법 한 줄(hint·stderr). 없거나 같은 값이면 없다."""
     env = Env()

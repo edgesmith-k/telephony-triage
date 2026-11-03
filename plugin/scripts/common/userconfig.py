@@ -341,6 +341,52 @@ def _raw_profiles(user: dict) -> list[tuple[str, str, dict]]:
     return out
 
 
+def repo_slug(value) -> tuple[str | None, str, str] | None:
+    """원격 URL·레포 값을 `(host|None, owner, repo)`로(소문자, `.git` 제거). 꼴: `https://<host>/o/r(.git)`,
+    `ssh://[<user>@]<host>[:port]/o/r`, git SCP 꼴 `[<user>@]<host>:o/r(.git)`(`://`가 없고 첫 `/` 앞에 `:`가 있다 — SSH 별칭
+    host 포함. `C:\\`·`C:/` 드라이브와 `host:<포트>/o/r`은 아니다), `host/o/r`, `o/r`. 로컬 경로·`file://`·형식 밖이거나 owner·repo에 `:`가 남으면
+    None. guard 규칙 11(이슈 DB 대상 비교)과 config 검사(`issue_db.remote`)가 같이 쓴다."""
+    v = str(value).strip().rstrip("/")
+    host = None
+    colon, slash = v.find(":"), v.find("/")
+    if "://" in v:
+        scheme, _, rest = v.partition("://")
+        if scheme.lower() == "file":
+            return None
+        netloc, _, path = rest.partition("/")
+        host = netloc.rsplit("@", 1)[-1].split(":", 1)[0]
+        parts = [p for p in path.split("/") if p]
+    elif (colon > 0 and (slash < 0 or colon < slash) and not re.match(r"^[A-Za-z]:[\\/]", v) and "\\" not in v
+          and not re.match(r"^\d+/", v[colon + 1:])):     # `host:8443/o/r`은 gh `-R`의 `HOST/OWNER/REPO`(포트) 꼴로 둔다
+        host = v[:colon].rsplit("@", 1)[-1]          # git SCP 꼴(git·gh 모두 `host:o/r`을 ssh로 읽는다)
+        parts = [p for p in v[colon + 1:].split("/") if p]
+    else:
+        if v.startswith(("/", ".", "~")) or "\\" in v or re.match(r"^[A-Za-z]:", v):
+            return None
+        parts = [p for p in v.split("/") if p]
+        if len(parts) >= 3:
+            host, parts = parts[0], parts[1:]
+    if len(parts) < 2:
+        return None
+    owner, repo = parts[0], parts[1]
+    if repo.lower().endswith(".git"):
+        repo = repo[:-4]
+    if not owner or not repo or ":" in owner or ":" in repo:
+        return None
+    return (host.lower() if host else None, owner.lower(), repo.lower())
+
+
+def remote_problems(defaults: dict | None, user: dict | None) -> list[tuple[str, str]]:
+    """`issue_db.remote`가 owner/repo로 풀리지 않는(`repo_slug`) 프로필의 `(키, 값)`. 안 풀리면 guard 규칙 11(이슈 DB 원격 쓰기
+    확인)이 그 프로필에 대해 조용히 꺼진다 — config 검사·doctor `config` 행·guard 경고가 쓴다."""
+    out = []
+    for name, cfg in (profiles(defaults or {}, user, invalid_names=True) if user else {}).items():
+        remote = get(cfg, "issue_db.remote")
+        if remote not in (None, "") and repo_slug(remote) is None:
+            out.append(("issue_db.remote" if name == TOP_PROFILE else f"platforms.{name}.issue_db.remote", str(remote)))
+    return out
+
+
 def path_problems(user: dict | None) -> list[str]:
     """프로필 경로 값 검사(guard 규칙 8의 제외 근거가 되므로): `work_dir`·`issue_db.path`는 비어 있지 않은 절대 경로(`~` 허용),
     어떤 work_dir도 어떤 clone을 포함하거나 같으면 안 된다, 프로필끼리 work_dir·clone·원격(`issue_db.remote`)이 겹치면 안 된다."""
