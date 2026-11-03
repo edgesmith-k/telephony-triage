@@ -1,0 +1,36 @@
+# H·I 사용자 결정 원문 (11/02~03)
+
+`MODULE_SKILLS_PLAN.md`(계획)의 D1~D12가 가리키는 결정과 다음 작업 I의 결정이다. 사용자가 대화에서 정한 것만 적었다 — 구현이 맞는지는 적지 않았다. 바꾸려면 사용자 확인을 받는다.
+
+## H. 모듈 스킬 레포와 +1 병합
+
+- **D1** 이슈 DB에 맞는 후보가 없을 때의 가설(탐색 분석, Step 5-2)과 1위 후보가 있을 때의 심층 분석(Step 5-1)을 **모듈별**로 둔다: ① 탐색 모듈 문서, ② 심층 분석 스킬. 둘 다 만든다. **oFono와 Android 둘 다** — Android도 모듈별 기본 스킬을 새로 만들고, 사내에 이미 있는 Android 분석 스킬은 사내에서 합친다.
+- **D2** 사내 GHE에 **모듈 스킬 레포 1개**. `<플랫폼>/_common/`(layers.md·components.md — 여러 모듈에 걸친 데몬·구성요소는 여기 한 번) + `<플랫폼>/<모듈>/`(explore.md = ①, SKILL.md = ②, analyzer.md = 입출력 계약, references/<유형 ID>.md, evals/ = 가정 이슈 시나리오), 루트 README.md·modules.yaml(플랫폼 → 모듈 → 경로·이슈 DB 카테고리·관련 데몬/태그).
+- **D3** 모듈 디렉토리 이름 = 이슈 DB 카테고리(data·sim·network·call·sms·ims). 모뎀은 디렉토리 `modem`이고 modules.yaml에서 DB 카테고리 `common`에 연결한다.
+- **D4** 받기: 도구가 관리하는 clone에 `<p>/_common` + 그 모듈만 sparse checkout, 쓸 때마다 최신 main(fetch + ff-only), 리포트에 스킬 커밋 SHA. 개인 clone은 건드리지 않는다.
+- **D5** 모듈 고르기: Step 5-1은 1위 후보 카테고리, Step 5-2는 타임라인에 나온 데몬·태그의 카테고리와 Jira 요약 — 둘 이상이면 묻는다.
+- **D6** 플러그인 내장 `reference/platforms/ofono/log-guide.md`에는 파서와 묶인 줄 모양만 남기고, 층·데몬 지식은 레포 `_common`으로 옮긴다.
+- **D7** 개선: ②는 기존 `[스킬]` 제안 흐름, ①은 새로 — 원인을 확정·기록하는 Step 7에서 "탐색 문서에 보탤 점" 제안을 한 번. 고른 것을 도구 브랜치에 반영 → diff·스크립트 점검(형식·크기·`mask_pii --check`·로그 원문·사내 값·링크) 결과 + Claude 의견(참고, 판정은 스크립트) → **본인이 리뷰·승인한 뒤 push·PR**.
+- **D8** **eval은 의무가 아니고 강력 추천**: 스킬 수정 push 전에 "eval을 돌리는 것을 강력히 추천합니다. 돌리지 않는 일이 쌓이면 모듈 스킬의 판단 일관성이 떨어질 수 있습니다" 같은 문구로 묻는다. 시나리오는 모듈당 2~3개(실패 층을 서로 다르게, 플랫폼마다 '아래 층 로그 없음' 함정 1개 이상, 여러 모듈 공통 데몬 줄 섞기). 판정 1순위 원인 층·데몬·근거 줄, 2순위 토큰, 안전 행은 실패 불가. 사외는 합성 로그·공개 표본 모양뿐이고, 실제 해결 이슈 검증은 사내. 참고 비용: eval 73 실측 1회 ≈ 총 40만 토큰(캐시 읽기 35.7만), 0.25달러, 1분(Sonnet 5.5).
+- **D9** **병합 규칙(모듈 스킬 레포·이슈 DB 공통)**: 작성자 외 아무나 +1(GHE Approve가 지금 head 커밋에, Request changes 없음). 모듈 오너 지정 없음. 이슈 DB의 "push하고 바로 병합"(`issue_db.merge: self`, `publish --and-merge`)을 없앤다. "병합해줘" → `db_pr merge`가 +1을 확인하고 병합, 없으면 병합하지 않고 이유(승인 없음/승인이 이전 커밋/변경 요청)와 PR 링크. 리뷰어 지정은 **묻고** 승인하면 요청(쓰기라 매번 확인), 지정하지 않으면 아무나. +1 뒤 GHE 웹에서 직접 병합해도 된다 — 브랜치 보호(필수 승인 1·필수 검사·최신 브랜치 요구) 권장을 사내 안내에. eval 72는 새 흐름으로 다시.
+- **D10** oFono 모듈 → 데몬. 데몬 이름은 레포에 그대로 넣는다(11/02 '표본은 구조만' 결정을 데몬 이름에 한해 바꿈 — 표본의 값·호스트·D-Bus 이름(`org.ofono.*` 제외)은 여전히 금지):
+
+  | 모듈 | 데몬 |
+  |---|---|
+  | data | NMD, MOSE, ofonod(gprs·lte), DITD, exynos-ril |
+  | sim | ofonod(sim), LPA, ipad, exynos-ril, MOSE |
+  | network | ofonod(netreg), exynos-ril, PTD, MOSE |
+  | call | ofonod(voicecall), exynos-ril, IMSSVC, MOSE |
+  | sms | ofonod(sms), exynos-ril, IMSSVC, MOSE |
+  | ims | IMSSVC, ENT, ofonod(ims), exynos-ril, MOSE |
+  | modem | ofonod(modem), exynos-ril, DMD, RFSD, vcd, MOSE |
+
+  location(GPS0·VRD) 제외, `exynos-ril`은 그대로. 공통 데몬: ofonod·exynos-ril·MOSE. 데몬 성격(표본 줄 내용 추정): NMD APN·인증·CLAT·프로필, MOSE D-Bus 도우미, DITD 라우팅(netlink), LPA eSIM 채널·EID, ipad eUICC 프로필 목록, PTD 무선·망 상태 이벤트, IMSSVC IMS 서비스·PDN·VoLTE·IMS 문자, ENT 사업자 entitlement(HTTP), DMD 모뎀 진단 로그 에이전트, RFSD 모뎀 NV 파일, vcd 모뎀 감시. 표본에 없는 사내 데몬은 사내에서 더한다.
+- **D11** oFono 시나리오 초안: data ① APN 인증 거절(NMD → ofonod gprs 활성화 실패 → exynos-ril `SETUP_DATA_CALL failed`) ② 데이터 콜 성공·DITD 라우팅 실패 ③ ofonod 오류만·아래 RIL 줄 없음(지어내지 않기) / sim ① SIM_IO 실패 ② LPA 채널 열기 실패 ③ ipad 목록 조회 오류 / network ① 등록 거절 ② PTD RADIO_ON 없음 / call ① VoLTE 발신 실패(IMSSVC → voicecall) ② RIL DIAL 실패 / sms ① SEND_SMS 실패 ② IMS 문자 실패 / ims ① IMS 등록 실패 ② ENT entitlement 거절 / modem ① 모뎀 리셋 연쇄(증상 모듈이 아니라 모뎀이 원인) ② RFSD NV 쓰기 실패. Android는 같은 7개 모듈, 층은 앱·프레임워크 → RILJ → RIL HAL → 벤더 RIL → 모뎀, 구성요소 대응은 계획에서 초안 → 사용자 확인.
+- **D12** 순서: 계획을 사용자에게 보이고 확인받은 뒤 구현(결정 (p)). 사외에서는 레포에 템플릿(`templates/module-skills/`)을 만들고, 사내에서 GHE 새 레포로 옮겨 site 설정에 주소. SKILL.md·reference는 skill-creator로 쓰고 eval로 검증(CLAUDE.md).
+
+## I. OpenCode·사내 GLM판 (H 다음)
+
+- 사내에 OpenCode가 배포돼 있다. GLM 세부(컨텍스트 길이·도구 호출·접속 방식)는 사용자가 확인 중이다.
+- Claude Code판과 **최대한 함께 간다**. 다만 사내 모델이 약해 공통 부분을 망칠 수 있다는 걱정이 있으므로: 한 레포에서 **공통 코어**(Python 스크립트·계약·테스트·이슈 DB·모듈 스킬 레포)는 같이 쓰고 PR + 전체 테스트·골든·안전 테스트(+ 코어를 바꾸면 Claude판 핵심 eval 일부)를 통과해야 바뀐다. **겉**(Claude판 스킬·커맨드·hook / GLM판 OpenCode 커맨드·플러그인·GLM용 짧은 프롬프트)은 나눈다. GLM판은 코어를 반입 묶음 라벨로 고정해 쓴다. 플러그인 개발은 사외(Claude), 사내 GLM은 실행 위주.
+- 첫 단계: OpenCode 규격 확인(이 환경에서 `opencode.ai`가 네트워크 정책에 막혀 있다 — 허용하거나 문서를 받아야 함)과 빈 플러그인 실험(MCP·Bash·편집 차단이 확실한지, 질문 도구, 스킬 로딩, `opencode run` 출력), GLM 도구 호출 확인. GLM으로 하는 실행·eval은 사내.
