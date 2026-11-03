@@ -12,7 +12,7 @@
     db_pr.py summary <wt> [--format json|markdown]
     db_pr.py publish <wt> --branch <br> --lease <sha|new> --approved <hash> [--commit] [--and-discard] [--and-merge [--wait <초>]]
     db_pr.py discard <wt>
-    db_pr.py merge --job <작업 키> --approved <head sha> [--wait <초>]   (publish --and-merge가 바로 못 한 병합의 재시도)
+    db_pr.py merge --job <작업 키> [--approved <head sha>] [--wait <초>]   (+1 관문 뒤 병합, publish --and-merge가 바로 못 한 병합의 재시도)
     db_pr.py find-plan --branch <br>          (sync-pr 1~4번 보조: 계획 찾기·원격 변경 확인)
 
 작업 디렉토리 `<work_dir>/<작업 키>/`: `plan.json`(계획), `state.json`(`{base_sha, branch, approved_hash,
@@ -68,13 +68,16 @@ stage `needs-approval`·메인테이너 경로(`dbpr.merge.MAINTAINER_PATHS`) �
 병합 줄과 선택지(`push하고 바로 병합` / `push만(리뷰어에게)` / `취소`)를 낸다.
 `publish --and-merge`: publish(·discard) 종료 0이고 `merge.mode`가 self면 같은 프로세스에서 아래 `merge`를 이어 부르고 결과를
 `merge.result`에 싣는다(종료 코드는 publish 결과 그대로 — 병합 여부는 `merge.result.merged`). 권한 확인은 publish 한 번이다.
-`merge --job <작업 키> --approved <sha> [--wait <초>]`: `merge-offer.json`이 self이고 `--approved`가 publish가 push한 커밋(PR head)일
-때 PR 상태를 보고 병합한다(조건·대기 `dbpr/merge.py`): 검사 통과(검사가 없으면 `ci_mode: local`일 때만), `mergeStateStatus`
+`merge --job <작업 키> [--approved <sha>] [--wait <초>]`: `merge-offer.json`이 self이고 `--approved`(생략하면 병합 기록의 head)가
+publish가 push한 커밋(PR head)일 때 PR 상태를 보고 병합한다(조건·대기 `dbpr/merge.py`): **+1**(작성자 외 1명(사람)이 head 커밋에
+Approve, 변경 요청 없음 — `common/ghreview.py`, REST 리뷰 목록. 없으면 기다리지 않고 사유·PR 링크로 거부), 검사 통과(검사가 없으면
+`ci_mode: local`일 때만), `mergeStateStatus`
 CLEAN·HAS_HOOKS, 메인테이너 경로 없음(`git diff origin/<base>...head`로 다시 본다), main 불변. 검사 대기·상태 확인 중이면
 `--wait`(없으면 config `issue_db.merge_wait_seconds`, 기본 600, 0~3600)초까지 15초 간격으로 다시 본다.
 `gh pr merge <n> --<레포가 허용하는 방식> --match-head-commit <sha>`(`--delete-branch` 없음).
-병합하면 `{merged: true, pr, merge_commit, method}` 종료 0(이미 같은 커밋으로 병합됨도 0, `already`), 안 되면 `{merged: false,
-reason, left, waited, retry}` 종료 1(PR은 그대로), gh로 PR을 읽지 못하면 2. lock·worktree는 쓰지 않는다.
+병합하면 `{merged: true, pr, merge_commit, method, review}` 종료 0(이미 같은 커밋으로 병합됨도 0, `already`), 안 되면 `{merged: false,
+reason, left, waited, review, retry}` 종료 1(PR은 그대로, `review{code, approvals}`는 +1 판정을 한 시도에만), gh로 PR·리뷰를 읽지
+못하면 2. lock·worktree는 쓰지 않는다.
 결과는 `JOB/trace.jsonl` `merge` 행(최종 결과 한 줄). 구현 `dbpr/merge.py`.
 
 `stage`는 계획을 읽을 때 먼저 형식을 검사한다(최상위 키·필수 키, `계획 형식 오류:` 종료 코드 2 — 이전 작업 파일은
@@ -187,7 +190,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("wt")
     p = sub.add_parser("merge")
     p.add_argument("--job", metavar="작업 키", required=True)
-    p.add_argument("--approved", metavar="sha", required=True, help="publish 결과 merge.approved(PR head 커밋)")
+    p.add_argument("--approved", metavar="sha", default=None,
+                   help="생략하면 병합 기록(merge-offer.json)의 head_sha. 주면 그 앞부분(7~64 hex)이어야 한다 — 어느 쪽이든 PR head가 다르면 거부")
     p.add_argument("--wait", type=int, metavar="초", help="검사·병합 가능 상태를 기다릴 최대 초(기본 config issue_db.merge_wait_seconds)")
     p = sub.add_parser("find-plan")
     p.add_argument("--branch", required=True)

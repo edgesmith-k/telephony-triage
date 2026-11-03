@@ -20,6 +20,7 @@ setup 필드 (모두 선택):
         split_buffers: true — 버퍼별 파일 <as>.main.log·<as>.radio.log
     inject_main: [{scenario: <파일>, dest: <이슈 DB 안 디렉토리>, message: <커밋 메시지>}]
     published_pr: {job, branch, plan: <tests/skill_evals/plans 파일>, files: {<작업 디렉토리 기준 경로>: <레포 기준 원본>}}
+        또는 그 목록 — 순서대로 올린다(PR 번호 1, 2…, eval 75)
     main_after_pr: [<이름>]  — 아래 MAIN_EDITS의 이름. 이미 올린 PR 뒤에 main을 바꾼다
     remote_after_pr: {branch, files: {<상대 경로>: <내용>}, message} — 제3자의 원격 PR 변경
     seed_plan: {job, plan, files} — 게시 전 계획을 작업 디렉토리에 보관
@@ -30,9 +31,11 @@ setup 필드 (모두 선택):
     analyzer_proposal: true — 모의 분석 스킬이 `규칙 제안:`([이슈 DB]·[스킬])을 내고 patch 대상 references/DATA-001.md를 둔다(plugin 모드, `run.py`가
         tests/mocks/skills/data-analyzer-proposal을 덧씌우고 채점용 analyzer-manifest.json을 쓴다, eval 71)
     gh_unauth: true  — gh 스텁 인증 실패
-    gh_merge: {checks: none|pass|pending|fail, merge_state: <mergeStateStatus>, methods: "merge,squash,rebase"} — gh 스텁의 PR 검사·
-        병합 가능 상태·허용 병합 방식(`MOCK_GH_CHECKS`·`MOCK_GH_MERGE_STATE`·`MOCK_GH_MERGE_METHODS`, 바로 병합 eval 72). 없는 키는
-        스텁 기본값(검사 없음·CLEAN·세 방식 모두)이고, gh_merge가 없으면 env에 아무것도 더하지 않는다(다른 eval은 예전과 같다)
+    gh_merge: {checks: none|pass|pending|fail, merge_state: <mergeStateStatus>, methods: "merge,squash,rebase",
+               reviews: "[<PR 번호|브랜치>=]<종류>:<login>@<head|old|none|sha>,…"} — gh 스텁의 PR 검사·병합 가능 상태·
+        허용 병합 방식·모의 리뷰(`MOCK_GH_CHECKS`·`MOCK_GH_MERGE_STATE`·`MOCK_GH_MERGE_METHODS`·`MOCK_GH_REVIEWS`, 병합 eval 72·75).
+        reviews는 스텁 파서(`parse_reviews`)로 검사한다. 없는 키는 스텁 기본값(검사 없음·CLEAN·세 방식 모두·리뷰 없음)이고,
+        gh_merge가 없으면 env에 아무것도 더하지 않는다(다른 eval은 예전과 같다)
     approver_deny: true — 권한 확인 응답 서버(eval-approver)가 모든 ask를 거부한다(`run.py`가 `EVAL_APPROVER_DENY=1`로 붙인다, eval 62)
 """
 
@@ -209,9 +212,25 @@ def _clone_state(clone: Path) -> dict:
     }
 
 
-GH_MERGE_KEYS = {"checks": "MOCK_GH_CHECKS", "merge_state": "MOCK_GH_MERGE_STATE", "methods": "MOCK_GH_MERGE_METHODS"}
+GH_MERGE_KEYS = {"checks": "MOCK_GH_CHECKS", "merge_state": "MOCK_GH_MERGE_STATE", "methods": "MOCK_GH_MERGE_METHODS",
+                 "reviews": "MOCK_GH_REVIEWS"}
 GH_CHECKS = ("none", "pass", "pending", "fail")
 GH_METHODS = ("merge", "squash", "rebase")
+GH_STUB = REPO / "tests" / "mocks" / "bin" / "gh_stub.py"
+
+
+def _check_reviews(spec) -> None:
+    """setup.gh_merge.reviews를 gh 스텁과 같은 파서(`parse_reviews`)로 검사한다. 틀리면 SystemExit."""
+    import importlib.util
+    if not isinstance(spec, str) or not spec.strip():
+        raise SystemExit(f"setup.gh_merge.reviews는 글(`[<PR|브랜치>=]<종류>:<login>@<커밋>`, 쉼표 목록): {spec!r}")
+    loader = importlib.util.spec_from_file_location("tt_gh_stub", GH_STUB)
+    stub = importlib.util.module_from_spec(loader)
+    loader.loader.exec_module(stub)
+    try:
+        stub.parse_reviews(spec)
+    except (Exception, SystemExit) as exc:  # noqa: BLE001 — 스텁은 형식 오류를 예외나 종료로 알린다
+        raise SystemExit(f"setup.gh_merge.reviews 형식 오류: {spec!r} ({exc})") from None
 
 
 def gh_merge_env(spec) -> dict[str, str]:
@@ -225,6 +244,8 @@ def gh_merge_env(spec) -> dict[str, str]:
     methods = [m for m in str(spec.get("methods") or ",".join(GH_METHODS)).split(",") if m]
     if not methods or set(methods) - set(GH_METHODS):
         raise SystemExit(f"setup.gh_merge.methods는 {','.join(GH_METHODS)} 중 쉼표로: {spec.get('methods')}")
+    if "reviews" in spec:
+        _check_reviews(spec["reviews"])
     return {GH_MERGE_KEYS[k]: str(v) for k, v in spec.items() if v not in (None, "")}
 
 
@@ -291,8 +312,8 @@ def build(entry: dict, out: Path, direct_tools: bool = True) -> dict:
     if setup.get("inject_main"):
         git(ws.clone, "pull", "-q", "--ff-only")
 
-    pr = setup.get("published_pr")
-    if pr:
+    pubs = setup.get("published_pr") or []
+    for pr in [pubs] if isinstance(pubs, dict) else pubs:     # 목록이면 순서대로 올린다(PR 번호 1, 2…)
         plan = json.loads((EVALS / "plans" / pr["plan"]).read_text(encoding="utf-8"))
         for rel, src in (pr.get("files") or {}).items():
             ws.put(pr["job"], rel, fixture_path(src))

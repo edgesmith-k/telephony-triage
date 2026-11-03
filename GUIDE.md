@@ -148,7 +148,7 @@ git add -A && git commit -m "사외 초안 반입: import-v1"     # .draft-manif
 한 단계 안에서는 이렇게 돕니다. 자동으로 다음 단계로 넘어가는 일은 없습니다.
 1. Claude가 할 일을 하고 `site_step.py check`(읽기 전용 점검)를 그대로 보고합니다. 실패·건너뜀·사용자 필요는 통과가 아닙니다.
 2. 사내 값(확인값 행, 운영 DB 경로·샌드박스·라벨셋·eval 예산, S-5 게이트)은 `site_step.py propose`의 diff로 보여 주고, **승인한 ID만** `propose --apply`로 씁니다.
-3. S-2 eval은 사내에서 꼭 해야 하는 것(`tests/skill_evals/pending.json`의 사내 대상 11개, 사내 모델이 사외와 다르면 7개 추가)만 돌립니다. `site_step.py evals`가 다음 배치 명령과 추정 비용을 냅니다. 비용을 승인해야 실행하고, 59·60은 사람이 채점합니다. 나머지 eval은 사외 결과 기록(`tests/skill_evals/offsite_results.json`)으로 갈음하고 `check S-2`의 `s2.offsite`에 보입니다.
+3. S-2 eval은 사내에서 꼭 해야 하는 것(`tests/skill_evals/pending.json`의 사내 대상 12개, 사내 모델이 사외와 다르면 7개 추가)만 돌립니다. `site_step.py evals`가 다음 배치 명령과 추정 비용을 냅니다. 비용을 승인해야 실행하고, 59·60은 사람이 채점합니다. 나머지 eval은 사외 결과 기록(`tests/skill_evals/offsite_results.json`)으로 갈음하고 `check S-2`의 `s2.offsite`에 보입니다.
 4. 요약을 보고 확인하면 `site_step.py --done S-n`. 실패가 있으면 거부되고, 건너뜀·사용자 필요는 확인한 것만 `--waive 점검="사유"`로 넘깁니다(사유는 `SITE_PROFILE.md`에 남음). S-2 eval을 잴 수 없으면(API 키·한도) 미채점 점검을 사유와 함께 면제해야만 완료로 기록되고, 실제 안전 위반(실패)은 면제할 수 없습니다.
 
 | 단계 | 사용자가 줄 것 | 하는 일 |
@@ -322,7 +322,7 @@ claude mcp list               # Jira MCP 사용자 범위 등록 확인
 6. 분석하는 동안 main이 바뀌어 내 계획이 건드리는 원인이 먼저 수정됐으면(drift) 항목마다 어느 값을 쓸지 물어봄
 7. **push 전 확인 화면**(변경 파일, README 미리보기, 검증 결과, 커밋 메시지) → 승인 → PR
 8. (선택) "분석 결과를 Jira 코멘트로 올릴까요?" → 예면 PROBLEM/CAUSE/NEXT ACTION/ANALYSIS 본문 확인 화면 → 승인 → 코멘트 1건 게시(`--dry-run`·분석 전용이면 묻지 않음)
-9. 확인 화면에서 "push하고 바로 병합"을 골랐으면 검사 통과 뒤 본인이 바로 병합, "push만"이면 리뷰어(CODEOWNERS 기준 — 카테고리 오너를 둔 레포만)가 머지
+9. 확인 화면에서 "push하고 바로 병합"을 골랐으면 작성자 외 1명이 Approve(+1)했고 검사를 통과했을 때만 병합(+1이 없으면 사유와 PR 링크), "push만"이면 리뷰어(CODEOWNERS 기준 — 카테고리 오너를 둔 레포만)가 머지
 
 ### 시나리오 2: 새 원인·새 유형 발견
 - 5단계에서 "새 원인" 또는 "새 유형" 선택 → 제목·해결책·시그니처 초안 제시

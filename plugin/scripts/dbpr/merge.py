@@ -8,7 +8,11 @@
 - `self`여도 검증 결과 "승인 필요"(stage `needs-approval`)나 메인테이너 경로(`MAINTAINER_PATHS`) 변경이 든 PR, 리뷰어에 메인테이너가
   아닌 CODEOWNERS 팀(레포가 카테고리 오너를 두기로 한 경우, `category_reviewers`)이 든 PR은 자격이 없다.
   `merge`는 기록 파일만 믿지 않고 `git diff --name-only origin/<base>...<head>`로 메인테이너 경로를 다시 본다.
-- 승인 토큰 = publish가 push한 커밋 SHA. PR head가 그 SHA가 아니면 병합하지 않는다(`gh pr merge --match-head-commit`도 같은 SHA).
+- 승인 토큰 = publish가 push한 커밋 SHA(`--approved`, 생략하면 병합 기록의 head). PR head가 그 SHA가 아니면 병합하지 않는다
+  (`gh pr merge --match-head-commit`도 같은 SHA).
+- **+1 관문**(`common/ghreview.py`, contracts.md §3.2 "+1 판정"): 상태·head·base·draft 다음, fetch 앞에서 REST 리뷰 목록을 읽어
+  작성자 외 1명(사람)이 head 커밋에 Approve했고 변경 요청이 없을 때만 지나간다. 없으면 기다리지 않고 사유와 PR 링크로 거부한다
+  (출력 `review{code, approvals}`, trace `review`·`approvers`). 리뷰를 못 읽으면 판정하지 않고 거부(종료 2).
   병합 조건: PR 검사가 모두 통과(검사가 없으면 이슈 DB `ci_mode: local`일 때만 통과 — 그 밖은 아직 안 온 것으로 본다),
   `mergeStateStatus`가 CLEAN·HAS_HOOKS, fetch한 `origin/<base>`가 PR 커밋의 조상(main이 바뀌면 `sync-pr`).
   검사 대기·병합 가능 상태 확인 중(UNKNOWN 등)이면 `wait`초까지 기다렸다 다시 본다(기본 config `issue_db.merge_wait_seconds`).
@@ -20,13 +24,12 @@
 
 from __future__ import annotations
 
-import json
 import re
 import time
 
 import yaml
 
-from common import masking, userconfig, yamlio
+from common import ghpr, masking, userconfig, yamlio
 from common.exitcodes import CHECK_FAILED, OK, USAGE
 
 from .lock import JOB_KEY_RE, PLAN, UsageError, _iso, _read_json, _write_json, now, trace_note
@@ -54,11 +57,13 @@ BLOCKED_REVIEW = "GHE 브랜치 보호 조건(필수 리뷰 등)을 만족하지
 BLOCKED_NO_CHECKS = ("GHE 브랜치 보호가 병합을 막는다(필수 리뷰 또는 필수 검사 — ci_mode: local이라 올 검사가 없다)"
                      " — 리뷰어가 GHE에서 머지한다")
 REVIEW_BLOCKING = {"REVIEW_REQUIRED", "CHANGES_REQUESTED"}
-PASS_CONCLUSIONS = {"SUCCESS", "NEUTRAL", "SKIPPED"}
-PASS_STATES = {"SUCCESS"}
-PENDING_STATES = {"PENDING", "EXPECTED"}
+PASS_CONCLUSIONS = ghpr.PASS_CONCLUSIONS     # 옮긴 이름(ghpr)을 그대로 다시 내보낸다
+PASS_STATES = ghpr.PASS_STATES
+PENDING_STATES = ghpr.PENDING_STATES
 VIEW_FIELDS = ("number,url,state,isDraft,headRefName,headRefOid,baseRefName,mergeStateStatus,statusCheckRollup,mergeCommit,"
-               "reviewDecision")
+               f"reviewDecision,{ghpr.AUTHOR_FIELD}")
+# --approved를 생략했는데 병합 기록 head가 계획의 PR head와 다를 때(publish가 PR 고치기 전에 끝남 등)
+OFFER_MISMATCH = "병합 기록(merge-offer.json)의 head가 계획의 PR head와 다르다 — publish(sync-pr)를 다시 끝낸 뒤 병합한다"
 
 
 def merge_mode(cfg: dict) -> tuple[str, str | None]:
@@ -137,56 +142,16 @@ def offer(ctx: Ctx, job_dir, job: str, stage_result: dict, changed: list[str], n
     return {"mode": mode, "reason": reason}
 
 
-def rollup_state(rollup) -> tuple[str, list[str]]:
-    """statusCheckRollup → `(none|pass|pending|fail, 이름 목록)`. CheckRun(status·conclusion)과 StatusContext(state)를 함께 본다."""
-    items = rollup if isinstance(rollup, list) else []
-    if not items:
-        return "none", []
-    pending, failed = [], []
-    for it in items:
-        if not isinstance(it, dict):
-            continue
-        name = str(it.get("name") or it.get("context") or "?")
-        if "status" in it or "conclusion" in it:        # CheckRun
-            if str(it.get("status") or "").upper() != "COMPLETED":
-                pending.append(name)
-            elif str(it.get("conclusion") or "").upper() not in PASS_CONCLUSIONS:
-                failed.append(name)
-        else:                                           # StatusContext
-            state = str(it.get("state") or "").upper()
-            if state in PENDING_STATES:
-                pending.append(name)
-            elif state not in PASS_STATES:
-                failed.append(name)
-    if failed:
-        return "fail", failed
-    if pending:
-        return "pending", pending
-    return "pass", []
+rollup_state = ghpr.rollup_state      # test_db_pr가 m.rollup_state로 본다
 
 
 def _method(ctx: Ctx) -> str:
     """레포가 허용하는 병합 방식(merge > squash > rebase). 확인하지 못하면 merge(GHE 기본)."""
-    proc = _gh(ctx, ["repo", "view", "--json", "mergeCommitAllowed,squashMergeAllowed,rebaseMergeAllowed"], ctx.repo)
-    try:
-        allowed = json.loads(proc.stdout) if proc.returncode == 0 else {}
-    except ValueError:
-        allowed = {}
-    for key, method in (("mergeCommitAllowed", "merge"), ("squashMergeAllowed", "squash"), ("rebaseMergeAllowed", "rebase")):
-        if allowed.get(key) is True:
-            return method
-    return "merge"
+    return ghpr.merge_method(ctx, _gh)
 
 
 def _view(ctx: Ctx, number) -> tuple[dict | None, str | None]:
-    proc = _gh(ctx, ["pr", "view", str(number), "--json", VIEW_FIELDS], ctx.repo)
-    if proc.returncode != 0:
-        return None, (proc.stderr or proc.stdout).strip()[:300]
-    try:
-        doc = json.loads(proc.stdout or "{}")
-    except ValueError:
-        return None, f"JSON 아님: {(proc.stdout or '').strip()[:100]}"
-    return (doc if isinstance(doc, dict) else None), (None if isinstance(doc, dict) else "객체 아님")
+    return ghpr.view(ctx, number, VIEW_FIELDS, _gh)
 
 
 def _ci_mode(ctx: Ctx) -> str:
@@ -200,15 +165,17 @@ def _ci_mode(ctx: Ctx) -> str:
 
 
 class _Stop(Exception):
-    """이번 시도의 결과: `retry`면 기다렸다 다시 볼 수 있는 사유."""
+    """이번 시도의 결과: `retry`면 기다렸다 다시 볼 수 있는 사유. `brief`는 trace용 사유(링크 없음, 없으면 reason)."""
 
-    def __init__(self, reason: str, code: int = CHECK_FAILED, retry: bool = False, **extra):
+    def __init__(self, reason: str, code: int = CHECK_FAILED, retry: bool = False, brief: str | None = None, **extra):
         super().__init__(reason)
-        self.reason, self.code, self.retry, self.extra = reason, code, retry, extra
+        self.reason, self.code, self.retry, self.brief, self.extra = reason, code, retry, brief, extra
 
 
-def _attempt(ctx: Ctx, number, head: str, branch: str) -> dict:
-    """병합 한 번 시도. 병합했거나 이미 병합됐으면 결과 dict, 아니면 `_Stop`."""
+def _attempt(ctx: Ctx, number, head: str, branch: str, seen: dict, url: str | None = None) -> dict:
+    """병합 한 번 시도. 병합했거나 이미 병합됐으면 결과 dict, 아니면 `_Stop`. +1 관문을 지나면 판정을 `seen`에 남긴다
+    (`review`·`approvers` — 시도마다 다시 판정한다: 기다리는 동안 승인이 취소되면 거부)."""
+    seen.clear()
     view, err = _view(ctx, number)
     if view is None:
         raise _Stop(f"PR 상태를 읽지 못했다 (gh): {err}", USAGE)
@@ -226,6 +193,13 @@ def _attempt(ctx: Ctx, number, head: str, branch: str) -> dict:
         raise _Stop(f"PR base가 {view.get('baseRefName')}다({ctx.base}가 아니다)")
     if view.get("isDraft"):
         raise _Stop(FINAL_STATES["DRAFT"])
+    revs, err = ghpr.reviews(ctx, view, number, _gh)
+    if revs is None:        # 리뷰를 못 읽으면 판정하지 않고 거부(PR 상태 읽기 실패와 같은 종료 2)
+        raise _Stop(f"PR 리뷰를 읽지 못했다 (gh): {err}", USAGE)
+    gate = ghpr.plus_one(view, revs, url, number)      # +1 관문. 기다리지 않는다(검사 대기에만 --wait)
+    seen.update(review=gate["review"], approvers=gate["approvers"])
+    if gate["reason"] is not None:
+        raise _Stop(gate["reason"], brief=gate["brief"])
     fetch = _git(ctx.repo, "fetch", "origin", check=False)    # 사용자 clone은 fetch만(브랜치·파일 불변)
     if fetch.returncode != 0:      # 오래된 origin/<base>로 메인테이너 경로·main 불변을 보지 않는다
         err = masking.mask_brief((fetch.stderr or fetch.stdout or "").strip(), 200)
@@ -244,7 +218,7 @@ def _attempt(ctx: Ctx, number, head: str, branch: str) -> dict:
         raise _Stop(f"PR 검사 실패({', '.join(names[:5])}) — 실패 원인을 고친 뒤 sync-pr로 다시 올린다", checks=checks)
     review = str(view.get("reviewDecision") or "").upper()
     if review in REVIEW_BLOCKING:      # 리뷰는 기다려도 오지 않는다 — 검사 대기 전에 멈춘다
-        raise _Stop(BLOCKED_REVIEW, checks=checks, review=review)
+        raise _Stop(BLOCKED_REVIEW, checks=checks, review_decision=review)
     if checks == "pending":
         raise _Stop(f"검사 대기({', '.join(names[:5])})", retry=True, checks=checks)
     mss = str(view.get("mergeStateStatus") or "").upper()
@@ -269,7 +243,9 @@ def _attempt(ctx: Ctx, number, head: str, branch: str) -> dict:
             "merge_commit": ((after or {}).get("mergeCommit") or {}).get("oid"), "method": method, "checks": checks}
 
 
-def merge(ctx: Ctx, job: str, approved: str, wait: int | None = None) -> tuple[dict, int]:
+def merge(ctx: Ctx, job: str, approved: str | None = None, wait: int | None = None) -> tuple[dict, int]:
+    """`approved`를 생략(None)하면 병합 기록(merge-offer.json)의 head를 쓴다(Q8 — 새 세션의 "병합해줘"는 SHA를 모른다).
+    어느 쪽이든 계획의 PR head·실제 PR head와 다르면 거부한다."""
     if not JOB_KEY_RE.fullmatch(job or "") or job.startswith((".", "_")):
         raise UsageError(f"작업 키 형식이 아닙니다: {job}")
     ctx.require_repo()
@@ -286,11 +262,16 @@ def merge(ctx: Ctx, job: str, approved: str, wait: int | None = None) -> tuple[d
     pr = {"number": number, "url": rec.get("url")}
     limit = wait_seconds(ctx.cfg, wait)
     started = time.monotonic()
+    seen: dict = {}         # 마지막 시도의 +1 판정(관문을 지난 시도만)
 
     def refuse(stop: _Stop) -> tuple[dict, int]:
         waited = int(time.monotonic() - started)
-        trace_note(job_dir, "merge", pr=number, merged=False, reason=stop.reason[:120], waited=waited)
-        out = {"merged": False, "pr": pr, "reason": stop.reason, "left": "PR은 그대로 둔다", "waited": waited, **stop.extra}
+        block = seen.get("review")      # 관문 앞 거부는 출력·trace 그대로(review 없음)
+        gate = {"review": block["code"], "approvers": seen.get("approvers", 0)} if block else {}
+        trace_note(job_dir, "merge", pr=number, merged=False, reason=(stop.brief or stop.reason)[:120], waited=waited,
+                   **gate)
+        out = {"merged": False, "pr": pr, "reason": stop.reason, "left": "PR은 그대로 둔다", "waited": waited, **stop.extra,
+               **({"review": block} if block else {})}
         if stop.code != USAGE and rec.get("mode") == "self":
             out["retry"] = retry_command(job, head)
         return out, stop.code
@@ -300,12 +281,15 @@ def merge(ctx: Ctx, job: str, approved: str, wait: int | None = None) -> tuple[d
         return refuse(_Stop(rec.get("reason") or "병합 자격이 없다 — 리뷰어가 GHE에서 머지한다"))
     if mode != "self":
         return refuse(_Stop(warning or REVIEW_REASON))
+    omitted = approved is None
+    if omitted:
+        approved = head
     if not re.fullmatch(r"[0-9a-f]{7,64}", approved or "") or not head.startswith(approved) \
             or ((plan.get("pr") or {}).get("head_sha") not in (None, head)):
-        return refuse(_Stop("승인한 커밋이 아니다(--approved는 publish 결과 merge.approved)"))
+        return refuse(_Stop(OFFER_MISMATCH if omitted else "승인한 커밋이 아니다(--approved는 publish 결과 merge.approved)"))
     while True:
         try:
-            done = _attempt(ctx, number, head, branch)
+            done = _attempt(ctx, number, head, branch, seen, rec.get("url"))
             break
         except _Stop as stop:
             left = limit - (time.monotonic() - started)
@@ -314,13 +298,14 @@ def merge(ctx: Ctx, job: str, approved: str, wait: int | None = None) -> tuple[d
                     stop.reason += f" — {limit}초 기다려도 안 됐다"
                 return refuse(stop)
             time.sleep(min(POLL, max(1.0, left)))
+    gate = {"review": seen["review"]["code"], "approvers": seen.get("approvers", 0)} if seen.get("review") else {}
     trace_note(job_dir, "merge", pr=number, merged=True, sha=done.get("merge_commit"), method=done.get("method"),
-               already=bool(done.get("already")) or None, waited=int(time.monotonic() - started))
+               already=bool(done.get("already")) or None, waited=int(time.monotonic() - started), **gate)
     if not done.get("already"):
         rec.update(merged_sha=done.get("merge_commit"), merged_at=_iso(now()))
         _write_json(job_dir / MERGE_OFFER, rec)
     result = {"merged": True, "pr": {"number": number, "url": done.pop("url", None) or rec.get("url")},
-              **{k: v for k, v in done.items() if k != "merged"}}
+              **{k: v for k, v in done.items() if k != "merged"}, **({"review": seen["review"]} if seen.get("review") else {})}
     if (job_dir / "wt").exists():
         result["next"] = f"작업 worktree가 남아 있다 — db_pr discard {job_dir / 'wt'}"
     return result, OK

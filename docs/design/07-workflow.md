@@ -323,7 +323,7 @@ Android 버전과 브랜치마다 소스 트리가 다르므로 **분석할 때�
    - 계획에 `pr: {number, branch, head_sha}`와 `base_sha`를 기록하고, 포함된 pending 피드백 원본을 `<work_dir>/<JIRA-KEY>/included_pending/`으로 옮긴다 (`sync-pr` 재적용 때 다시 포함).
 8. PR 링크를 보여준다.
 9. **정리**: `--and-discard`가 publish 성공(종료 코드 0) 뒤 이어서 `discard`한다(취소·`--dry-run`·discard 실패 때만 단독 `db_pr discard <wt>`; publish 0·discard 실패는 종료 코드 2이고 publish를 다시 하지 않는다). discard가 worktree, **도구 브랜치** `tt/issue/<JIRA-KEY>`, `state.json`을 지우고 lock을 푼다. 작업 계획은 PR 번호와 함께 남긴다 (`sync-pr`가 이 계획을 재적용한다).
-10. **바로 병합(선택)**: 확인 화면의 병합 줄이 선택지 `push하고 바로 병합` / `push만(리뷰어에게)` / `취소`를 내면(config `issue_db.merge: self`이고 "승인 필요"·메인테이너 경로 변경이 없을 때, 추천 표시 없음) 사용자가 `push하고 바로 병합`을 고른 경우만 7번에 `--and-merge`를 붙인다 — 한 명령(권한 확인 한 번)이 push·PR 뒤 승인 커밋·PR 검사·병합 가능 상태·메인테이너 경로·main 불변을 확인하고 `gh pr merge --match-head-commit`으로 병합한다. 검사 대기면 `issue_db.merge_wait_seconds`(기본 420초, 최대 480)까지 기다리고, 그래도 안 되면 PR을 두고 사유와 재시도 명령(`db_pr merge --job <JIRA-KEY> --approved <sha>`)을 알린다. 그 밖에는 리뷰어가 GHE에서 머지한다 (`06-collaboration.md §6.1`, `contracts.md §3.2`).
+10. **바로 병합(선택)**: 확인 화면의 병합 줄이 선택지 `push하고 바로 병합` / `push만(리뷰어에게)` / `취소`를 내면(config `issue_db.merge: self`이고 "승인 필요"·메인테이너 경로 변경이 없을 때, 추천 표시 없음) 사용자가 `push하고 바로 병합`을 고른 경우만 7번에 `--and-merge`를 붙인다 — 한 명령(권한 확인 한 번)이 push·PR 뒤 +1(작성자 외 1명의 head Approve)·승인 커밋·PR 검사·병합 가능 상태·메인테이너 경로·main 불변을 확인하고 `gh pr merge --match-head-commit`으로 병합한다. 새 PR은 아직 +1이 없어 병합하지 않고 사유와 PR 링크를 알린다. 검사 대기면 `issue_db.merge_wait_seconds`(기본 420초, 최대 480)까지 기다리고, 그래도 안 되면 PR을 두고 사유와 재시도 명령(`db_pr merge --job <JIRA-KEY> --approved <sha>` — `--approved`는 생략하면 병합 기록의 head)을 알린다. 그 밖에는 리뷰어가 GHE에서 머지한다 (`06-collaboration.md §6.1`, `contracts.md §3.2`).
 
 - 확인 이후 파일이 하나라도 바뀌면(자동 수정 포함) 승인은 무효이고, 5번 확인을 다시 받는다 (`publish`의 승인 해시 검사가 강제한다).
 

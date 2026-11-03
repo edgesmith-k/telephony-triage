@@ -830,7 +830,8 @@ def test_guard_gh_write_only_for_issue_db_repo():
                  (f"gh api repos/{DB_SLUG}/pulls", plugin_repo, None),
                  ("gh api -X PUT repos/other/repo/contents/x", c, None),
                  (f"GH_REPO=ghe.mock.invalid/{DB_SLUG} gh issue comment 1 -b hi", plugin_repo, "ask"),
-                 ("gh api graphql -f query='mutation { mergePullRequest(input: {}) { clientMutationId } }'", c, "ask"),
+                 # GraphQL 병합 mutation은 대상과 무관하게 거부(H A1 — 노드 ID로 레포를 가린다)
+                 ("gh api graphql -f query='mutation { mergePullRequest(input: {}) { clientMutationId } }'", c, "deny"),
                  ("gh api graphql -f query='query { viewer { login } }'", c, None),
                  ("gh pr edit 3 --add-label x", c, "ask"), ("gh pr view 3", wt, None), ("gh auth status", c, None)]
         for cmd, cwd, want in cases:
@@ -984,6 +985,13 @@ def test_guard_without_pyyaml_denies_mcp_and_asks_risky_bash():
     assert out is None and "의존성 없음" in err
     out, _ = judge("Write", {"file_path": str(ws.base / "x.txt")})
     assert decision(out) == "ask"
+    # Approve·리뷰 기각 형태는 대상 레포를 몰라도 거부, 그 밖의 gh(병합 포함)는 ask 그대로
+    for cmd, want in (("gh pr review 3 --approve", "deny"), ("gh api -X PUT repos/o/r/pulls/3/reviews/9/dismissals", "deny"),
+                      ("gh pr review 3 --comment -b x", "ask"), ("gh pr merge 3", "ask")):
+        out, _ = judge("Bash", {"command": cmd})
+        assert decision(out) == want and "의존성 없음" in out["permissionDecisionReason"], cmd
+        if want == "deny":
+            assert "Approve" in out["permissionDecisionReason"], cmd
 
 
 def test_guard_review_followups_redirects_and_input_redirects():
@@ -1031,7 +1039,8 @@ def test_guard_review_followups_gh_api_method_and_merge_endpoints():
 def test_guard_review_followups_mcp_verb_position():
     ws = shared()
     db = {"owner": "mock-org", "repo": "telephony-issue-db"}
-    for tool, want in (("mcp__github__disable_pr_auto_merge", "ask"), ("mcp__github__enable_pr_auto_merge", "ask"),
+    # 자동 병합 켜기는 +1 관문 없이 서버 조건만으로 병합한다 — 거부(H A1). 끄기는 ask
+    for tool, want in (("mcp__github__disable_pr_auto_merge", "ask"), ("mcp__github__enable_pr_auto_merge", "deny"),
                        ("mcp__github__list_triggers", None), ("mcp__github__request_copilot_review", "ask"),
                        ("mcp__github__run_secret_scanning", "ask"), ("mcp__github__pull_request_read", None),
                        ("mcp__github__merge_pull_request", "deny")):
@@ -1044,6 +1053,229 @@ def test_guard_review_followups_mcp_verb_position():
         assert decision(guard(ws, tool, {}, ws.base)) == "deny", tool
     # 설정된 서버는 그대로 read_tools 허용 목록
     assert decision(guard(ws, "mcp__mock-jira__jira_get_links", {}, ws.base)) == "deny"
+
+
+APPROVE_MUTATION = 'mutation { addPullRequestReview(input: {pullRequestId: "x", event: APPROVE}) { clientMutationId } }'
+MERGE_MUTATION = 'mutation { mergePullRequest(input: {pullRequestId: "x"}) { clientMutationId } }'
+
+
+def test_guard_denies_claude_approve_dismiss_and_bypass_merges_on_issue_db():
+    """규칙 11(H A1): Claude의 Approve·리뷰 기각, URL 선택자·붙인 `-R`의 병합, GraphQL 병합·자동 병합·Approve·기각 mutation
+    (인라인·`@파일`·`--input`·stdin heredoc), 병합·리뷰 별칭 만들기는 거부. 변경 요청·코멘트 리뷰는 ask로 남는다."""
+    ws = shared()
+    c = ws.clone
+    plain = tmp("tt-gh-plain-")
+    url = f"https://ghe.mock.invalid/{DB_SLUG}/pull/3"
+    files = {"r.json": '{"event": "APPROVE", "body": "x"}', "c.json": '{"event": "COMMENT", "body": "x"}', "e.txt": "APPROVE",
+             "q.graphql": APPROVE_MUTATION, "m.graphql": MERGE_MUTATION, "viewer.graphql": "query { viewer { login } }",
+             "v.graphql": ("mutation($e: PullRequestReviewEvent!) { addPullRequestReview(input: {pullRequestId: \"x\", "
+                           "event: $e}) { clientMutationId } }"),
+             "q.json": json.dumps({"query": APPROVE_MUTATION.replace("addPullRequestReview", "submitPullRequestReview")}),
+             "a.yml": "m: pr merge\n", "co.yml": "co: pr checkout\n"}
+    for name, text in files.items():
+        (plain / name).write_text(text, encoding="utf-8")
+    wt = ws.work / "wt-approve"
+    git(c, "worktree", "add", "-q", "--detach", str(wt), "origin/main")
+    db = {"owner": "mock-org", "repo": "telephony-issue-db", "pullNumber": 3}
+    try:
+        approve = [(f"gh pr review 3 --approve -R {DB_SLUG}", plain), ("gh pr review --approve", wt),
+                   (f"gh -R {DB_SLUG} pr review 3 -a", plain), (f"gh pr review 3 -ab LGTM -R {DB_SLUG}", plain),
+                   (f"gh pr review 3 -ra -R {DB_SLUG}", plain),
+                   (f"gh pr review 3 --approve=true -R {DB_SLUG}", plain), (f"gh pr review 3 -a=true -R {DB_SLUG}", plain),
+                   (f"gh pr review 3 -a=1 -R {DB_SLUG}", plain), (f"GH_REPO={DB_SLUG} gh pr review 3 --approve", plain),
+                   (f"env GH_HOST=ghe.mock.invalid gh pr review 3 --approve -R {DB_SLUG}", plain),
+                   (f'bash -c "gh pr review 3 -a -R {DB_SLUG}"', plain), (f"gh pr review {url} --approve", plain),
+                   (f"gh pr review 3 --approve -R{DB_SLUG}", plain), (f"gh pr review 3 --approve -R={DB_SLUG}", plain),
+                   (f"gh api repos/{DB_SLUG}/pulls/3/reviews -f event=APPROVE", plain),
+                   (f"gh api repos/{DB_SLUG}/pulls/3/reviews -F event=approve", plain),
+                   (f"gh api repos/{DB_SLUG}/pulls/3/reviews --raw-field event=APPROVE", plain),
+                   (f"gh api repos/{DB_SLUG}/pulls/3/reviews --field=event=APPROVE", plain),
+                   (f"gh api repos/{DB_SLUG}/pulls/3/reviews -fevent=APPROVE", plain),
+                   (f"gh api -X POST repos/{DB_SLUG}/pulls/3/reviews/77/events -f event=APPROVE", plain),
+                   (f"gh api repos/{DB_SLUG}/pulls/3/reviews --input r.json", plain),
+                   (f"gh api repos/{DB_SLUG}/pulls/3/reviews --input -", plain),
+                   (f"gh api repos/{DB_SLUG}/pulls/3/reviews -F event=@e.txt", plain),
+                   # GraphQL은 대상과 무관하게(cwd = DB 아님)
+                   (f"gh api graphql -f query='{APPROVE_MUTATION}'", plain), ("gh api graphql -F query=@q.graphql", plain),
+                   ("gh api graphql -F query=@v.graphql -f e=APPROVE", plain), ("gh api graphql --input q.json", plain)]
+        for cmd, cwd in approve:
+            out = bash(ws, cmd, cwd)
+            assert decision(out) == "deny" and "Approve하지 않는다" in out["permissionDecisionReason"], cmd
+        merge = [(f"gh pr merge {url} --merge", plain), (f"gh pr merge 3 --merge -R{DB_SLUG}", plain),
+                 (f"gh pr merge 3 --merge -R={DB_SLUG}", plain), (f"GH_REPO=other/repo gh pr merge 3 -R {DB_SLUG}", plain),
+                 (f"gh pr merge 3 --merge -dR {DB_SLUG}", plain),       # pflag 묶음: -d(bool) + -R <값>
+                 ("gh pr merge 3 -bRother/x", c),                       # 모호한 묶음은 cwd 판정을 막지 않는다
+                 ("gh api graphql -F query=@m.graphql", plain),
+                 (f"gh api graphql -F query=@- <<'EOF'\n{MERGE_MUTATION}\nEOF", plain),
+                 ("gh api graphql -f query='mutation { enablePullRequestAutoMerge(input: {}) { clientMutationId } }'", plain),
+                 ("gh api graphql -f query='mutation { enqueuePullRequest(input: {}) { clientMutationId } }'", plain)]
+        for cmd, cwd in merge:
+            out = bash(ws, cmd, cwd)
+            assert decision(out) == "deny" and "머지" in out["permissionDecisionReason"], cmd
+        for cmd in (f"gh api -X PUT repos/{DB_SLUG}/pulls/3/reviews/9/dismissals -f message=x",
+                    "gh api graphql -f query='mutation { dismissPullRequestReview(input: {}) { clientMutationId } }'"):
+            out = bash(ws, cmd, plain)
+            assert decision(out) == "deny" and "기각" in out["permissionDecisionReason"], cmd
+        for cmd in ("gh alias set lgtm 'pr review --approve'", """gh alias set m '!gh pr merge "$1"'""",
+                    "gh alias import a.yml", "gh alias import - <<'EOF'\nm: pr merge\nEOF", "cat a.yml | gh alias import -",
+                    "gh alias import none.yml"):
+            out = bash(ws, cmd, plain)
+            assert decision(out) == "deny" and "별칭" in out["permissionDecisionReason"], cmd
+        mcp = [("mcp__github__pull_request_review_write", {**db, "method": "create", "event": "APPROVE"}, "Approve하지 않는다"),
+               ("mcp__github__pull_request_review_write", {**db, "method": "submit_pending", "event": "approve"},
+                "Approve하지 않는다"),
+               ("mcp__github__create_pull_request_review", {**db, "event": "APPROVE"}, "Approve하지 않는다"),
+               ("mcp__x__approve_pull_request", db, "Approve하지 않는다"),
+               ("mcp__x__dismiss_pull_request_review", db, "기각"), ("mcp__github__enable_pr_auto_merge", db, "머지")]
+        for tool, tool_input, why in mcp:
+            out = guard(ws, tool, tool_input, ws.base)
+            assert decision(out) == "deny" and why in out["permissionDecisionReason"], tool
+        asks = [(f"gh pr review 3 --request-changes -b x -R {DB_SLUG}", plain),
+                (f"gh pr review 3 --comment -b x -R {DB_SLUG}", plain),
+                (f"gh pr review 3 -a=false -R {DB_SLUG}", plain), (f"gh pr review 3 --approve=0 -R {DB_SLUG}", plain),
+                (f"gh api repos/{DB_SLUG}/pulls/3/reviews -f event=COMMENT -f body=x", plain),
+                (f"gh api repos/{DB_SLUG}/pulls/3/reviews -f event=REQUEST_CHANGES", plain),
+                (f"gh api repos/{DB_SLUG}/pulls/3/reviews -f body=x", plain),       # event 없음: PENDING 리뷰 만들기
+                (f"gh api repos/{DB_SLUG}/pulls/3/reviews --input c.json", plain),
+                ("gh api graphql -f query='mutation { addPullRequestReview(input: {event: COMMENT}) { clientMutationId } }'", c),
+                ("gh api graphql -F query=@none.graphql", c),                   # 읽지 못한 본문은 쓰기
+                ("cat x.graphql | gh api graphql -F query=@-", c),                # stdin이 heredoc이 아니면 모르는 본문
+                (f"gh alias set p '!python3 {ws.root}/scripts/db_pr.py publish wt'; gh p", plain)]   # 낱말 그물 ask 그대로
+        for cmd, cwd in asks:
+            assert decision(bash(ws, cmd, cwd)) == "ask", cmd
+        for tool, tool_input in (("mcp__github__pull_request_review_write", {**db, "method": "create", "event": "COMMENT"}),
+                                 ("mcp__github__pull_request_review_write", {**db, "method": "create"}),
+                                 ("mcp__github__disable_pr_auto_merge", db)):
+            assert decision(guard(ws, tool, tool_input, ws.base)) == "ask", (tool, tool_input)
+        nothing = [("gh pr review 3 --approve -R other/repo", plain),
+                   ("gh pr merge https://ghe.mock.invalid/other/repo/pull/3", c),
+                   (f"gh api -X GET repos/{DB_SLUG}/pulls/3/reviews", plain), (f"gh api repos/{DB_SLUG}/pulls/3/reviews", plain),
+                   ("gh api graphql -F query=@viewer.graphql", plain),
+                   ("gh api graphql -F query=@- <<'EOF'\nquery { viewer { login } }\nEOF", plain),
+                   ("gh alias set co 'pr checkout'", plain), ("gh alias import co.yml", plain),
+                   ("gh lgtm 3", plain)]     # 이미 만든 별칭의 실행은 보지 못한다(한계 — 08 규칙 11)
+        for cmd, cwd in nothing:
+            assert decision(bash(ws, cmd, cwd)) is None, cmd
+        other = {"owner": "other", "repo": "x", "pullNumber": 3, "event": "APPROVE"}
+        assert decision(guard(ws, "mcp__github__pull_request_review_write", other, ws.base)) is None
+        empty = {"TELEPHONY_TRIAGE_HOME": tmp("tt-nohome-")}      # 사용자 config 없음: 규칙 11 없음
+        assert decision(bash(ws, f"gh pr review 3 --approve -R {DB_SLUG}", plain, env=empty)) is None
+        assert decision(bash(ws, f"gh api graphql -f query='{MERGE_MUTATION}'", plain, env=empty)) is None
+    finally:
+        gitp(c, "worktree", "remove", "--force", str(wt))
+
+
+def test_guard_gh_url_selector_option_values_api_clusters_and_graphql_url():
+    """규칙 11(H A1 리뷰): URL은 `pr`·`issue` 동작 뒤 첫 위치 인자일 때만 선택자다 — 옵션 값(`--body`·`-b`·`-t=`·`-c`·
+    `--duplicate-of`)의 다른 레포 URL은 cwd(이슈 DB clone) 판정을 막지 않는다. `gh api`의 bool `-i` 묶음(`-iX PUT`·`-if k=v`)과
+    전체 URL GraphQL 엔드포인트도 병합·Approve·기각으로 본다."""
+    ws = shared()
+    c = ws.clone
+    plain = tmp("tt-gh-plain-")
+    (plain / "m.graphql").write_text(MERGE_MUTATION, encoding="utf-8")
+    other = "https://ghe.mock.invalid/other/repo"
+    rows = [(f"gh pr merge 3 --merge --body {other}/issues/5", c, "deny"),
+            (f"gh pr merge 3 --auto --squash -b '{other}/issues/12 반영'", c, "deny"),
+            (f"gh pr merge 3 -t={other}/issues/5", c, "deny"), (f"gh pr merge 3 -b{other}/issues/5", c, "deny"),
+            (f"gh pr review 3 --approve -b {other}/pull/9", c, "deny"),
+            (f"gh pr comment 3 --body {other}/issues/1", c, "ask"), (f"gh pr edit 3 --body {other}/issues/1", c, "ask"),
+            (f"gh pr close 3 -c {other}/issues/1", c, "ask"),
+            (f"gh issue close 3 --duplicate-of {other}/issues/5", c, "ask"),
+            (f"gh pr comment 3 --body https://ghe.mock.invalid/{DB_SLUG}/issues/1", plain, "ask"),  # 옵션 값의 DB URL은 센다
+            # 선택자 URL은 그대로 이긴다(bool 옵션·`--` 뒤도 선택자)
+            (f"gh pr merge --squash {other}/pull/3", c, None), (f"gh pr merge -sd {other}/pull/3", c, None),
+            (f"gh pr merge -b x {other}/pull/3", c, None), (f"gh pr merge -- {other}/pull/3", c, None),
+            (f"gh pr review --comment {other}/pull/3 -b x", c, None),
+            # gh api: bool -i와 묶은 짧은 옵션(pflag)
+            (f"gh api -iX PUT repos/{DB_SLUG}/pulls/3/merge", plain, "deny"),
+            (f"gh api -iXPUT repos/{DB_SLUG}/pulls/3/merge", plain, "deny"),
+            (f"gh api -iX=PUT repos/{DB_SLUG}/pulls/3/merge", plain, "deny"),
+            (f"gh api repos/{DB_SLUG}/pulls/3/reviews -if event=APPROVE", plain, "deny"),
+            (f"gh api -iX PUT repos/{DB_SLUG}/pulls/3/reviews/9/dismissals -f message=x", plain, "deny"),
+            (f"gh api graphql -if query='{MERGE_MUTATION}'", plain, "deny"),
+            (f"gh api -iX GET repos/{DB_SLUG}/pulls/3/merge", plain, None),
+            # 전체 URL GraphQL 엔드포인트(gh는 필드를 JSON 본문 {"query": …}로 보낸다)
+            (f"gh api https://ghe.mock.invalid/api/graphql -f query='{MERGE_MUTATION}'", plain, "deny"),
+            (f"gh api https://ghe.mock.invalid/api/graphql -f query='{APPROVE_MUTATION}'", plain, "deny"),
+            ("gh api https://api.github.com/graphql -F query=@m.graphql", plain, "deny"),
+            ("gh api https://ghe.mock.invalid/api/graphql -f query='query { viewer { login } }'", plain, None)]
+    for cmd, cwd, want in rows:
+        assert decision(bash(ws, cmd, cwd)) == want, (cmd, cwd)
+
+
+def test_guard_gh_repo_flag_in_option_value_keeps_cwd_target():
+    """규칙 11(H A1 리뷰): 값 받는 옵션의 값 자리(`-b -Rother/x`·`--body '-R other/x'`)와 `gh api`(옵션 `-R`가 없다)의 `-R` 꼴은
+    gh가 레포로 읽지 않는다 — 이슈 DB일 때만 대상으로 세고 cwd(이슈 DB clone·worktree) 판정을 막지 않는다. 옵션 자리의
+    `-R<v>`·`-R <v>`(다른 레포)는 그대로 cwd를 이긴다."""
+    ws = shared()
+    c = ws.clone
+    plain = tmp("tt-gh-plain-")
+    wt = ws.work / "wt-repo-value"
+    git(c, "worktree", "add", "-q", "--detach", str(wt), "origin/main")
+    rows = [("gh pr merge 3 --merge -b -Rother/x", "deny"), ("gh pr merge 3 --merge --body '-R other/x'", "deny"),
+            ('gh pr merge 3 --squash -b "-Resolved MOCK-1101 in data/DATA-001"', "deny"),
+            ("gh pr merge 3 --merge -b -R other/x", "deny"),       # 값 `-R` 뒤 other/x는 위치 인자다
+            ("gh pr merge 3 --merge --subject=x -t -Rother/x", "deny"),
+            ("gh api -X PUT 'repos/{owner}/{repo}/pulls/3/merge' -q -Rother/x", "deny"),
+            ("gh api -X PUT 'repos/{owner}/{repo}/pulls/3/merge' -R other/x", "deny"),
+            ("gh pr review 3 --approve -b -Rother/x", "deny"), ("gh pr review 3 --approve --body '-R other/x'", "deny"),
+            ("gh pr review 3 --approve -b -R other/x", "deny"),
+            ("gh api 'repos/{owner}/{repo}/pulls/3/reviews' -f event=APPROVE -t -Rother/x", "deny"),
+            ("gh api -X PUT 'repos/{owner}/{repo}/pulls/3/reviews/9/dismissals' -f message=x -f -Rother/x", "deny"),
+            ("gh pr create -t x -b '-R other/x 참고' -H issue/MOCK-1", "ask"), ("gh pr comment 3 -b -Rother/x", "ask"),
+            # 옵션 자리의 다른 레포는 cwd를 이긴다
+            ("gh pr merge 3 --merge -Rother/x", None), ("gh pr merge 3 --merge -b x -R other/x", None),
+            ("gh pr review 3 --comment -R other/x -b x", None),    # `pr review`의 --comment는 bool
+            ("gh pr create -t x -b y -Rother/x", None)]
+    try:
+        for cwd in (c, wt):
+            for cmd, want in rows:
+                assert decision(bash(ws, cmd, cwd)) == want, (cmd, cwd)
+        # 값 자리의 이슈 DB는 대상으로 센다(cwd가 이슈 DB가 아니어도)
+        for cmd, want in ((f"gh pr merge 3 --merge -b -R{DB_SLUG}", "deny"), (f"gh pr merge 3 -b -R {DB_SLUG}", "deny"),
+                          (f"gh api -X PUT 'repos/{{owner}}/{{repo}}/pulls/3/merge' -q -R{DB_SLUG}", "deny"),
+                          (f"gh pr comment 3 --body '-R {DB_SLUG}'", "ask")):
+            assert decision(bash(ws, cmd, plain)) == want, cmd
+    finally:
+        gitp(c, "worktree", "remove", "--force", str(wt))
+
+
+def test_guard_gh_url_scheme_case_repo_id_endpoint_and_fragment():
+    """규칙 11(H A1 리뷰): 대문자 스킴 URL 선택자(`HTTPS://…/pull/N` — gh는 스킴을 소문자로 바꿔 URL로 본다), REST
+    `repositories/<id>/…`의 병합·Approve·기각(레포 ID라 대상을 풀 수 없다 — 대상과 무관하게 거부), 엔드포인트의 `#` 조각(gh는
+    보내지 않는다)도 cwd(이슈 DB 아님)에서 거부한다. `repos/{owner}/{repo}` 자리표시는 그대로 cwd로 본다."""
+    ws = shared()
+    c = ws.clone
+    plain = tmp("tt-gh-plain-")
+    db = f"ghe.mock.invalid/{DB_SLUG}"
+    rid = "repositories/123456/pulls/3"
+    approve, merge, dismiss = "Approve하지 않는다", "머지", "기각"
+    rows = [(f"gh pr review HTTPS://{db}/pull/3 --approve", plain, "deny", approve),
+            (f"gh pr review Https://{db}/pull/3 -a", plain, "deny", approve),
+            (f"gh pr merge HTTPS://{db}/pull/3 --squash", plain, "deny", merge),
+            (f"gh pr merge hTtP://{db}/pull/3 --squash", plain, "deny", merge),
+            (f"gh pr edit HTTPS://{db}/pull/3 --title x", plain, "ask", None),
+            ("gh pr merge HTTPS://ghe.mock.invalid/other/repo/pull/3", c, None, None),   # 선택자 URL이 cwd를 이긴다
+            # repositories/<id>: 대상과 무관하게
+            (f"gh api {rid}/reviews -f event=APPROVE", plain, "deny", approve),
+            (f"gh api -X PUT {rid}/merge", plain, "deny", merge),
+            (f"gh api -X PUT {rid}/reviews/9/dismissals -f message=x", plain, "deny", dismiss),
+            (f"gh api -X PUT https://ghe.mock.invalid/api/v3/{rid}/merge", plain, "deny", merge),
+            (f"gh api {rid}/merge", plain, None, None),                          # GET: 조회
+            (f"gh api {rid}/reviews -f event=COMMENT -f body=x", plain, None, None),   # 그 밖 쓰기는 cwd로 본다
+            ("gh api -X PUT 'repos/{owner}/{repo}/pulls/3/merge'", plain, None, None),
+            ("gh api -X PUT 'repos/{owner}/{repo}/pulls/3/merge'", c, "deny", merge),
+            # `#` 조각
+            (f"gh api 'repos/{DB_SLUG}/pulls/3/reviews#x' -f event=APPROVE", plain, "deny", approve),
+            (f"gh api -X PUT 'repos/{DB_SLUG}/pulls/3/merge#x'", plain, "deny", merge),
+            (f"gh api -X POST 'repos/{DB_SLUG}/merges#x' -f base=main -f head=x", plain, "deny", merge),
+            (f"gh api -X PUT 'repos/{DB_SLUG}/pulls/3/reviews/9/dismissals#x' -f message=x", plain, "deny", dismiss),
+            (f"gh api -X PUT 'https://{db.split('/')[0]}/api/v3/repos/{DB_SLUG}/pulls/3/merge#x'", plain, "deny", merge),
+            (f"gh api 'repos/{DB_SLUG}/pulls/3/merge#x'", plain, None, None)]
+    for cmd, cwd, want, why in rows:
+        out = bash(ws, cmd, cwd)
+        assert decision(out) == want, (cmd, cwd)
+        assert why is None or why in out["permissionDecisionReason"], cmd
 
 
 def test_guard_without_pyyaml_asks_file_writes():

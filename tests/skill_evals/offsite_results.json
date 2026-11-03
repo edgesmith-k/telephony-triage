@@ -2,7 +2,7 @@
   "model": "claude-sonnet-5-5",
   "generated": "2026-11-03",
   "grader_commit": "f17184da70c7b7399ef234610d861c93f8f6852c",
-  "note": "11/03 재리뷰 수정(log-guide dump_dmsg placeholder·src/dbus.c) 뒤 73 재측정(r1103-a) — 이전 run 이력은 git 47bfb42의 이 파일",
+  "note": "A1: eval 75 추가(site, 사외 run 없음 — 커밋 뒤 a1-75a·b로 다시 만든다). 이전 메모·run 이력은 git 40870b8의 이 파일",
   "evals": {
     "1": {
       "verdict": "none",
@@ -1437,6 +1437,10 @@
           "cost_usd": 0.2037
         }
       ]
+    },
+    "75": {
+      "verdict": "none",
+      "runs": []
     }
   }
 }

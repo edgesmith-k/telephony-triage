@@ -133,7 +133,7 @@
 | `summary` | `<wt> [--format {json,markdown}]` | `--format`: markdown: write-flow §4 확인 화면을 마크다운으로 (기본 json, --json과 함께 못 쓴다), 기본 json |
 | `publish` | `<wt> --branch <br> --lease <sha\|new> --approved <hash> [--commit] [--and-discard] [--and-merge] [--wait <초>]` | `--lease`: 원격 브랜치 SHA 또는 new(원격에 없어야 함); `--commit`: 커밋이 없으면 승인 해시·hooksPath·guard 검사를 거쳐 summary의 commit_message로 커밋한 뒤 publish한다 (멱등); `--and-discard`: publish 종료 0일 때만 이어서 discard한다; `--and-merge`: 확인 화면에서 'push하고 바로 병합'을 골랐을 때만: publish 종료 0이고 병합 자격(self)이면 이어서 merge; `--wait`: --and-merge: 검사·병합 가능 상태를 기다릴 최대 초(기본 config) |
 | `discard` | `<wt>` |  |
-| `merge` | `--job <작업 키> --approved <sha> [--wait <초>]` | `--approved`: publish 결과 merge.approved(PR head 커밋); `--wait`: 검사·병합 가능 상태를 기다릴 최대 초(기본 config issue_db.merge_wait_seconds) |
+| `merge` | `--job <작업 키> [--approved <sha>] [--wait <초>]` | `--approved`: 생략하면 병합 기록(merge-offer.json)의 head_sha. 주면 그 앞부분(7~64 hex)이어야 한다 — 어느 쪽이든 PR head가 다르면 거부; `--wait`: 검사·병합 가능 상태를 기다릴 최대 초(기본 config issue_db.merge_wait_seconds) |
 | `find-plan` | `--branch <BRANCH>` |  |
 
 ## `db_precommit.py`

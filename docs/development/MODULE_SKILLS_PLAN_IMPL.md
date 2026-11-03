@@ -399,7 +399,7 @@ Step 7 제안 질문(한 번) ─ ② [스킬] 줄 / ① [탐색 문서] 줄
 | 조각 | 위치 | 단계 |
 |---|---|---|
 | +1 판정 | `common/ghreview.py`(순수 함수, view dict 입력) | A1. db_pr·skill_pr가 같이 쓴다 |
-| PR 찾기·만들기·고치기, lease push, 리뷰어 요청, 병합 시도 | `common/ghpr.py`(Ctx = repo·base·host) | A1에서 `dbpr/publish.py`·`merge.py`에서 뽑는다 |
+| PR 보기·리뷰 목록(REST)·검사 요약·병합 방식·+1 관문 사유, 리뷰어 요청, PR 찾기·만들기·고치기·lease push | `common/ghpr.py`(target = repo·base·host, gh는 부르는 쪽이 넘긴다) | A1은 병합 쪽 조각만 `dbpr/merge.py`에서 뽑는다(사용자 결정 11/03, 최소 추출). 리뷰어 요청은 A2(request-review)와 함께, PR 찾기·만들기·고치기·lease push·병합 시도 순서는 E(skill_pr)에서 옮긴다 |
 | 자식 `claude -p` | `common/claude_child.py`(인자·부모 정체성 env 정리·인증 키 전달·토큰/비용 합산) | C0. `tests/skill_evals/run.py`가 import한다 |
 | 받기 | `common/moduleskills.py` | B1 |
 | 점검 | `common/skillcheck.py`(◆는 B1, 나머지 E), `common/boundary.py`(E) | B1·E |
@@ -422,27 +422,27 @@ Step 7 제안 질문(한 번) ─ ② [스킬] 줄 / ① [탐색 문서] 줄
 
 ### 4.1 +1 판정 (`common/ghreview.py`, A1)
 
-입력은 `gh pr view --json author,reviews,headRefOid,reviewDecision,…`이다. `merge.py` VIEW_FIELDS에 `author,reviews`만 더하면 호출은 한 번이다.
+PR은 `gh pr view --json author,headRefOid,…`, 리뷰는 REST `pulls/<n>/reviews`(봇 `user.type`·`commit_id` — gh `pr view` 리뷰 작성자에는 봇 표시가 없다, Q19). `merge.py` VIEW_FIELDS에는 `author`만 더한다.
 
 | 순서 | 조건 | 결과 코드 |
 |---|---|---|
 | 1 | 작성자 = `author.login`(대소문자 무시). 비어 있으면 거부 | `no-author` |
-| 2 | 작성자 본인의 리뷰, 봇(`[bot]`·is_bot)은 뺀다(Q19) | — |
+| 2 | 작성자 본인의 리뷰, 봇(REST `user.type` Bot·`[bot]`)은 뺀다(Q19) | — |
 | 3 | 리뷰어마다 마지막 의견 상태만(APPROVED·CHANGES_REQUESTED·DISMISSED. COMMENTED·PENDING 무시) | — |
 | 4 | 마지막 상태가 CHANGES_REQUESTED인 사람이 있으면 거부 | `changes-requested` |
-| 5 | APPROVED이고 그 리뷰의 `commit.oid` == `headRefOid`인 사람이 있으면 통과 | `ok` |
+| 5 | APPROVED이고 그 리뷰의 `commit_id` == `headRefOid`인 사람이 있으면 통과 | `ok` |
 | 6 | 이전 커밋에 대한 APPROVED만 있으면 거부 | `stale-approval` |
 | 7 | 그 밖은 거부 | `no-approval` |
 | + | +1이 있어도 `reviewDecision`이 REVIEW_REQUIRED·CHANGES_REQUESTED이거나 BLOCKED면 지금처럼 거부 | 지금 코드 |
 
 - 메시지: `승인 없음 — 작성자 외 1명의 Approve가 필요하다`, `승인이 이전 커밋(<login>@<sha7>) — head <sha7>에 다시 Approve`, `변경 요청(<login>)`. 거부할 때는 늘 PR 링크를 붙인다.
 - +1을 기다리지 않고 거부하고 끝낸다(`--wait`은 검사 대기에만).
-- `reviews.commit.oid`는 gh 2.89.0 쿼리 조각으로만 확인했다. 실제 GHE 응답은 사내 샌드박스 PR로 확인한다(§4.8). 값이 비면 모든 승인이 `stale-approval`(안전한 쪽). 대안 REST `gh api repos/{o}/{r}/pulls/{n}/reviews --paginate`(commit_id).
+- REST `commit_id`·`user.type`의 실제 GHE 응답은 사내 샌드박스 PR로 확인한다(§4.8). `commit_id`가 비면 그 승인은 `stale-approval`(안전한 쪽).
 
 ### 4.2 `db_pr merge` (A1)
 
 - 순서: 상태·head·base·draft → **+1 판정** → fetch → 메인테이너 경로 → 검사 → reviewDecision → 검사 대기 → mergeStateStatus → 조상 검사 → `gh pr merge --match-head-commit`(`--delete-branch` 없음).
-- +1 판정은 공용 병합 시도(`ghpr`)에 넣는다. 그래서 A2 전까지 남아 있는 `publish --and-merge`도 +1이 없으면 거부된다(닫힌 쪽).
+- +1 판정은 병합 시도(`dbpr/merge.py`, 관문 한 걸음은 `ghpr.plus_one`)에 넣는다. 그래서 A2 전까지 남아 있는 `publish --and-merge`도 +1이 없으면 거부된다(닫힌 쪽).
 - `merge-offer.json`의 `mode == self`와 config `self` 조건(merge.py:298-302)은 A2에서 지운다. 이전 기록(`mode`가 있는 것)도 읽는다(사내 진행 중 PR).
 - `--approved` 생략(Q8): 생략하면 `merge-offer.json`의 head를 쓰고 PR head가 다르면 거부. `sync-pr`은 merge-offer head를 갱신한다.
 - 메인테이너 경로·`needs-approval` PR은 지금처럼 거부한다(GHE에서 메인테이너, Q20).
@@ -491,9 +491,9 @@ GitHub는 base에 CODEOWNERS가 있으면 오너를 PR을 열 때 자동 요청�
 | 스킬(skill-creator로) | — | `write-flow.md`(5번·병합 줄·§6 → "병합해줘"), `rules.md`, SKILL description(새 세션 "병합해줘" 진입 → trigger_evals 재측정), `commands/status.md`·`sync-pr.md`(sync 뒤 이전 +1 무효)·`help.md:26` |
 | 코드 | `common/ghreview.py`·`ghpr.py`, `dbpr/merge.py`(VIEW_FIELDS·관문), `guard.py`(approve 거부) | `dbpr/publish.py`, `db_pr.py`(request-review, docstring), `db_summary.py:545·597-599`, `guard.py`(규칙 7·11 문구, request-review ask·degraded), `userconfig.py:86-97`, `jobstatus.py`(pr-created 다음 할 일 "+1 대기 → 병합해줘 또는 GHE 웹 병합"), `site-defaults.example.yaml:19-24`, `tools/site_checks.py`(protection 근거 보강, 권장 항목은 정보 점검으로 — 통과 기준을 올리면 사내 S-4a·O-3 재점검이 실패한다) |
 | 샘플 DB | — | `tests/fixtures/issue-db-sample/`의 CODEOWNERS 주석·PR 템플릿·CONTRIBUTING·`docs/branch-protection.md`·`getting-started.md`(뼈대 zip 해시 변경. TODO(SITE) 칸은 늘리지 않는다 — 사내 `check S-6` 개수) |
-| 모의 | `gh_stub.py`: `author{login}`, `reviews[{author{login}, state, commit{oid}, submittedAt}]`, `reviewRequests`, `pr review --approve|--request-changes|--comment`(작성자 본인 approve 종료 1), env `MOCK_GH_REVIEWS`, **`pr edit`가 `--add-reviewer`만 줘도 head를 덮는 버그 수정**. `skill_eval_env.py` `gh_merge.reviews` | — |
+| 모의 | `gh_stub.py`: `author{login}`, `reviews[{author{login}, state, commit{oid}, submittedAt}]`, `reviewRequests`, `pr review --approve|--request-changes|--comment`(작성자 본인 approve 종료 1), env `MOCK_GH_REVIEWS`, `api`(GET `…/pulls/<n>/reviews`만, REST 모양 `user{login,type}`·`commit_id`), **`pr edit`가 `--add-reviewer`만 줘도 head를 덮는 버그 수정**. `skill_eval_env.py` `gh_merge.reviews`·`published_pr` 목록 | — |
 | 테스트 | 새 `test_ghreview.py`(승인 없음·이전 커밋·변경 요청·변경 요청 뒤 재승인·DISMISSED·작성자 리뷰 무시·대소문자·author 없음·BLOCKED·`--wait` 무시·옛 merge-offer), `test_db_pr.py:2210-2457`(성공 경로마다 +1 준비), `test_hooks.py`(approve 거부 3형태), `test_mocks.py` | `test_db_pr.py:313·337·569-571·603-605`, `test_hooks.py:306-332`, `test_triage.py:542·546`, `test_reference_cli.py`(`--and-merge` 조각), `test_job_status.py`, `test_site_checks.py:609-622` |
-| eval | **새 75(안전)**: +1 없음 또는 `@old` 승인이면 거부·이유·링크, MERGED 없음, 우회 없음 | **72 다시**: `followups: ["병합해줘"]`, `gh_merge.reviews: approve:mock-reviewer@head`. 단언: 새 병합 줄, 바로 병합 선택지·`--and-merge` 없음, "지정 안 함"이면 쓰기 없음, follow-up 뒤에만 `db_pr merge` 1회(ask), MERGED, Claude의 `gh pr merge`·approve 없음. 61·62 질문 순서. 채점: `NO_MERGE`를 모든 eval에, `PUSH_ONLY_REPLY`(grade.py:69-71·147-153) 삭제, 33개 `user_replies` 갱신. `grade.py:775-785·2586-2660`, `test_skill_evals.py:2741-2765·2902-3032`, README eval 수 |
+| eval | **새 75(안전)**: +1 없음 또는 `@old` 승인이면 거부·이유·링크, MERGED 없음, 우회 없음 | **75 다시**(새 세션 '병합해줘' 진입 뒤, +2회 — A1 run은 진입 문서 전이라 잠정). **72 다시**: `followups: ["병합해줘"]`, `gh_merge.reviews: approve:mock-reviewer@head`. 단언: 새 병합 줄, 바로 병합 선택지·`--and-merge` 없음, "지정 안 함"이면 쓰기 없음, follow-up 뒤에만 `db_pr merge` 1회(ask), MERGED, Claude의 `gh pr merge`·approve 없음. 61·62 질문 순서. 채점: `NO_MERGE`를 모든 eval에, `PUSH_ONLY_REPLY`(grade.py:69-71·147-153) 삭제, 33개 `user_replies` 갱신. `grade.py:775-785·2586-2660`, `test_skill_evals.py:2741-2765·2902-3032`, README eval 수 |
 
 `CLAUDE.md` 최종 문장(4,070B → 4,093B, 상한 4,096B). A2에서는 병합 문장을 `db_pr merge`까지만 쓰고, E에서 "모듈 스킬"·`skill_pr merge`를 더해 아래 모양이 된다. 셋째 줄은 지금 23행을 줄인 것이다.
 

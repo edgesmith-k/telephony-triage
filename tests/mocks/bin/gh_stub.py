@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """`gh` CLI 스텁 (15-local-draft.md §15.2). 사내 GHE를 대신한다.
 
-지원: `auth status`, `pr create`, `pr list`(`--search`, `--author`), `pr view`, `pr edit`, `pr merge`, `repo view`.
+지원: `auth status`, `pr create`, `pr list`(`--search`, `--author`), `pr view`, `pr edit`, `pr merge`, `pr review`, `repo view`,
+`api`(GET `repos/<o>/<r>/pulls/<n>/reviews`만 — REST 리뷰 목록).
+`pr view --json`의 `author`는 `{login, is_bot}`, `reviews`는 gh GraphQL 모양(`author{login}`만 — 실제 gh처럼 봇 표시 없음),
+`reviewRequests`는 리뷰어(`/`가 있으면 Team). `api` 리뷰 목록은 REST 모양(`user{login, type}`, `commit_id`, `submitted_at`).
+리뷰 = `MOCK_GH_REVIEWS`(앞) + `pr review`가 상태에 쓴 것(뒤).
 상태는 `tests/mocks/gh-state/prs.json`에 저장한다
 (`MOCK_GH_STATE_DIR`로 바꿀 수 있다).
 
@@ -22,6 +26,12 @@
   MOCK_GH_UNKNOWN_REVIEWERS=<쉼표 목록>  `pr create --reviewer`·`pr edit --add-reviewer`에 그 값이 있으면 종료 1
                       (`could not request reviewer`, PR을 만들거나 고치지 않는다 — 없는 팀·사용자)
   MOCK_GH_CREATE_THEN_FAIL=1 `pr create`가 PR을 만든 뒤 종료 1 (publish의 head 브랜치 재조회 경로 시험)
+  MOCK_GH_REVIEWS     리뷰(쉼표 목록) `[<선택자>=]<종류>:<login>@<커밋>`. 선택자 = PR 번호 또는 head 브랜치(없으면 모든 PR),
+                      종류 = approve | request-changes | comment | dismissed | pending, 커밋 = head(보기 때의 headRefOid) |
+                      old(이전 커밋) | none(commit 없음) | 7~40 hex. 형식이 틀리면 종료 2 (`parse_reviews`)
+  MOCK_GH_REVIEW_COMMIT `pr review`가 기록하는 커밋 (기본 지금 headRefOid — 이전 커밋 승인을 만들 때)
+  MOCK_GH_NOW         `pr review`가 기록하는 시각 (기본 지금 UTC)
+  MOCK_GH_FAIL_REVIEWS=1 `api` 리뷰 목록을 실패시킨다 (종료 1)
   GH_HOST             호스트 이름 (없으면 ghe.mock.invalid)
 """
 
@@ -31,13 +41,20 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 DEFAULT_STATE_DIR = Path(__file__).resolve().parent.parent / "gh-state"
 DEFAULT_HOST = "ghe.mock.invalid"
 MOCK_USER = "mock-user"
+OLD_OID = hashlib.sha1(b"mock-old-commit").hexdigest()
+REVIEW_KINDS = {"approve": "APPROVED", "request-changes": "CHANGES_REQUESTED", "comment": "COMMENTED",
+                "dismissed": "DISMISSED", "pending": "PENDING"}
+REVIEW_LOGIN_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*(?:\[bot\])?$")
+REVIEWS_ENDPOINT_RE = re.compile(r"^/?repos/([^/]+)/([^/]+)/pulls/(\d+)/reviews/?(?:\?.*)?$")
 
 
 def state_path() -> Path:
@@ -298,19 +315,34 @@ def cmd_pr(argv: list[str]) -> int:
             for reviewer in args.add_reviewer:
                 if reviewer not in match["reviewers"]:
                     match["reviewers"].append(reviewer)
-            match["headRefOid"] = head_sha()
+            if args.title is not None or args.body is not None or args.body_file:
+                # 재게시(제목·본문 고치기)는 push 뒤에 온다 — 그때만 head를 다시 본다. --add-reviewer만이면 head를 바꾸지 않는다
+                # (사용자 clone(main) 등 다른 cwd에서 불러도 PR head 그대로)
+                match["headRefOid"] = head_sha()
             save_state(state)
             print(match["url"])
             return 0
         if args.json_fields is not None:
             fields = [f for f in args.json_fields.split(",") if f]
+            author = match.get("author", MOCK_USER)
             view = {**match, "statusCheckRollup": _rollup(), "mergeStateStatus": os.environ.get("MOCK_GH_MERGE_STATE") or "CLEAN",
-                    "isDraft": bool(match.get("isDraft")), "reviewDecision": os.environ.get("MOCK_GH_REVIEW_DECISION") or ""}
+                    "isDraft": bool(match.get("isDraft")), "reviewDecision": os.environ.get("MOCK_GH_REVIEW_DECISION") or "",
+                    "author": author if isinstance(author, dict) else {"login": author, "is_bot": False},
+                    "reviewRequests": _review_requests(match)}
+            if "reviews" in fields:
+                try:
+                    view["reviews"] = [_graphql_review(r) for r in _reviews_of(match)]
+                except ValueError as exc:
+                    print(f"gh 스텁: MOCK_GH_REVIEWS 형식 오류: {exc}", file=sys.stderr)
+                    return 2
             print(json.dumps({k: view.get(k) for k in fields}, ensure_ascii=False))
         else:
             print(f"#{match['number']} {match['title']}")
             print(match["body"])
         return 0
+
+    if sub == "review":
+        return _pr_review(rest, state, repo)
 
     if sub == "merge":
         parser = argparse.ArgumentParser(add_help=False)
@@ -349,6 +381,154 @@ def cmd_pr(argv: list[str]) -> int:
     return 2
 
 
+def parse_reviews(spec: str | None) -> list[dict]:
+    """`MOCK_GH_REVIEWS` → `[{selector, state, login, commit}]`(목록 순서 = 만든 순서). commit은 "head"(보기 때 headRefOid로 푼다),
+    `OLD_OID`, None, 소문자 hex. 형식이 틀리면 ValueError(틀린 항목). skill_eval_env가 같은 파서로 setup을 검증한다."""
+    out = []
+    for item in (spec or "").split(","):
+        item = item.strip()
+        if not item:
+            continue
+        selector, eq, rest = item.rpartition("=")
+        kind, colon, who = rest.partition(":")
+        name, at, commit = who.partition("@")
+        if (eq and (not selector or any(c.isspace() for c in selector))) or not colon or not at \
+                or kind not in REVIEW_KINDS or not REVIEW_LOGIN_RE.fullmatch(name) \
+                or not (commit in ("head", "old", "none") or re.fullmatch(r"[0-9a-fA-F]{7,40}", commit)):
+            raise ValueError(item)
+        out.append({"selector": selector if eq else None, "state": REVIEW_KINDS[kind], "login": name,
+                    "commit": {"old": OLD_OID, "none": None}.get(commit, commit if commit == "head" else commit.lower())})
+    return out
+
+
+def _reviews_of(pr: dict) -> list[dict]:
+    """그 PR의 리뷰(한 모양 `{login, state, commit, at, body}`): env 리뷰(앞, head는 지금 headRefOid로) + 상태에 저장된 리뷰(뒤)."""
+    out = []
+    for i, r in enumerate(parse_reviews(os.environ.get("MOCK_GH_REVIEWS")), 1):
+        sel = r["selector"]
+        if sel is not None and not (str(pr["number"]) == sel if sel.isdigit() else pr.get("branch") == sel):
+            continue
+        commit = pr.get("headRefOid") if r["commit"] == "head" else r["commit"]
+        out.append({"login": r["login"], "state": r["state"], "commit": commit, "at": f"2026-01-01T00:00:{i:02d}Z",
+                    "body": ""})
+    return out + [r for r in pr.get("reviews") or [] if isinstance(r, dict)]
+
+
+def _graphql_review(r: dict) -> dict:
+    """gh `pr view --json reviews` 모양. 실제 gh처럼 작성자는 `{login}`뿐이다(봇 표시 없음)."""
+    return {"author": {"login": r.get("login")}, "state": r.get("state"),
+            "commit": {"oid": r["commit"]} if r.get("commit") else None, "submittedAt": r.get("at"), "body": r.get("body") or ""}
+
+
+def _rest_review(i: int, r: dict) -> dict:
+    """REST `pulls/<n>/reviews` 항목 모양."""
+    name = str(r.get("login") or "")
+    return {"id": i, "user": {"login": name, "type": "Bot" if name.endswith("[bot]") else "User"}, "state": r.get("state"),
+            "commit_id": r.get("commit") or None, "submitted_at": r.get("at"), "author_association": "MEMBER",
+            "body": r.get("body") or ""}
+
+
+def _review_requests(pr: dict) -> list[dict]:
+    out = []
+    for r in pr.get("reviewers") or []:
+        if "/" in r:
+            slug = r.rsplit("/", 1)[1]
+            out.append({"__typename": "Team", "name": slug, "slug": slug})
+        else:
+            out.append({"__typename": "User", "login": r})
+    return out
+
+
+def _login_of(author) -> str:
+    return str(author.get("login") if isinstance(author, dict) else author or "")
+
+
+def _pr_review(rest: list[str], state: dict, repo: str) -> int:
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("selector", nargs="?", default=None)
+    parser.add_argument("-a", "--approve", action="store_true")
+    parser.add_argument("-r", "--request-changes", action="store_true")
+    parser.add_argument("-c", "--comment", action="store_true")
+    parser.add_argument("-b", "--body", default=None)
+    parser.add_argument("-F", "--body-file", default=None)
+    args, _ = parser.parse_known_args(rest)
+    kinds = [k for k, on in (("approve", args.approve), ("request-changes", args.request_changes),
+                             ("comment", args.comment)) if on]
+    if len(kinds) != 1:
+        print("--approve, --request-changes, or --comment required", file=sys.stderr)
+        return 1
+    kind = kinds[0]
+    body = args.body or ""
+    if args.body_file:
+        body = sys.stdin.read() if args.body_file == "-" else Path(args.body_file).read_text(encoding="utf-8")
+    if kind != "approve" and not body.strip():
+        print(f"body cannot be blank for {kind} review", file=sys.stderr)
+        return 1
+    selector = args.selector or current_branch()
+    match = next((p for p in state["prs"] if p["repo"] == repo and p["state"] == "OPEN"
+                  and (p["number"] == int(selector) if selector.isdigit() else p["branch"] == selector)), None)
+    if match is None:
+        print(f"no pull requests found for {selector!r}", file=sys.stderr)
+        return 1
+    if kind != "comment" and _login_of(match.get("author", MOCK_USER)).casefold() == me().casefold():
+        what = "approve" if kind == "approve" else "request changes on"
+        print(f"failed to create review: GraphQL: Review Can not {what} your own pull request (addPullRequestReview)",
+              file=sys.stderr)
+        return 1
+    at = os.environ.get("MOCK_GH_NOW") or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    match.setdefault("reviews", []).append({"login": me(), "state": REVIEW_KINDS[kind],
+                                            "commit": os.environ.get("MOCK_GH_REVIEW_COMMIT") or match.get("headRefOid"),
+                                            "at": at, "body": body})
+    save_state(state)
+    done = {"approve": "Approved", "request-changes": "Requested changes to", "comment": "Reviewed"}[kind]
+    print(f"✓ {done} pull request #{match['number']}")
+    return 0
+
+
+def cmd_api(argv: list[str]) -> int:
+    """`gh api [--hostname <h>] [--paginate] [-X GET] repos/<o>/<r>/pulls/<n>/reviews[?…]`만. REST 모양 배열 하나를 낸다."""
+    endpoint, method, i = None, "GET", 0
+    while i < len(argv):
+        tok = argv[i]
+        if tok in ("--hostname", "-X", "--method") and i + 1 < len(argv):
+            if tok != "--hostname":
+                method = argv[i + 1].upper()
+            i += 2
+            continue
+        if tok.startswith(("--hostname=", "--method=")):
+            if tok.startswith("--method="):
+                method = tok.split("=", 1)[1].upper()
+        elif tok == "--paginate":
+            pass
+        elif not tok.startswith("-") and endpoint is None:
+            endpoint = tok
+        else:
+            endpoint = None
+            break
+        i += 1
+    m = REVIEWS_ENDPOINT_RE.match(endpoint or "")
+    if m is None or method != "GET":
+        print(f"gh 스텁: 지원하지 않는 api: {argv}", file=sys.stderr)
+        return 2
+    owner, name, number = m.groups()
+    slug = repo_key() if (owner, name) == ("{owner}", "{repo}") else f"{owner}/{name}"
+    if os.environ.get("MOCK_GH_FAIL_REVIEWS") == "1":
+        print("gh 스텁: 리뷰 읽기 실패 (MOCK_GH_FAIL_REVIEWS)", file=sys.stderr)
+        return 1
+    match = next((p for p in load_state()["prs"]
+                  if str(p.get("repo", "")).casefold() == slug.casefold() and p["number"] == int(number)), None)
+    if match is None:
+        print("gh: Not Found (HTTP 404)", file=sys.stderr)
+        return 1
+    try:
+        items = [_rest_review(n, r) for n, r in enumerate(_reviews_of(match), 1)]
+    except ValueError as exc:
+        print(f"gh 스텁: MOCK_GH_REVIEWS 형식 오류: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps(items, ensure_ascii=False))
+    return 0
+
+
 def _rollup() -> list[dict]:
     kind = os.environ.get("MOCK_GH_CHECKS") or "none"
     if kind == "pass":
@@ -372,7 +552,7 @@ def cmd_repo(argv: list[str]) -> int:
 
 def main(argv: list[str]) -> int:
     if not argv:
-        print("gh 스텁: 명령이 필요합니다 (auth | pr).", file=sys.stderr)
+        print("gh 스텁: 명령이 필요합니다 (auth | pr | repo | api).", file=sys.stderr)
         return 2
     if argv[0] == "--version":
         print("gh version 0.0.0-mock (stub)")
@@ -383,6 +563,8 @@ def main(argv: list[str]) -> int:
         return cmd_pr(argv[1:])
     if argv[0] == "repo":
         return cmd_repo(argv[1:])
+    if argv[0] == "api":
+        return cmd_api(argv[1:])
     print(f"gh 스텁: 지원하지 않는 명령: {argv[0]}", file=sys.stderr)
     return 2
 

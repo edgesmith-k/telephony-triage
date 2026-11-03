@@ -10,7 +10,9 @@ Step 8과 공통 쓰기 절차를 **스킬 없이** 돌린다: 손으로 쓴 계
 
 from __future__ import annotations
 
+import hashlib
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -2218,8 +2220,36 @@ def _published(ws: Workspace, job: str = "MOCK-7002", branch: str = "issue/MOCK-
     return ws.db_pr(*_publish_args(ws, job, branch, "--commit", "--and-discard", *extra), env=env)
 
 
-def _merge(ws: Workspace, approved: str, job: str = "MOCK-7002", expect=0, wait: str = "0", **env) -> dict:
-    return ws.db_pr("merge", "--job", job, "--approved", approved, "--wait", wait, expect=expect, env=env or None)
+PLUS_ONE = "approve:mock-reviewer@head"     # 스텁 MOCK_GH_REVIEWS: 작성자(mock-user) 외 1명이 head 커밋에 Approve
+NO_APPROVAL = "승인 없음 — 작성자 외 1명의 Approve가 필요하다"
+OLD_OID = hashlib.sha1(b"mock-old-commit").hexdigest()     # 스텁의 "old" 커밋
+
+
+def _merge(ws: Workspace, approved: str | None, job: str = "MOCK-7002", expect=0, wait: str = "0",
+           reviews: str | None = PLUS_ONE, **env) -> dict:
+    """`db_pr merge`. 기본으로 +1(`PLUS_ONE`)을 준다 — `reviews=None`이면 리뷰 없음, `approved=None`이면 `--approved` 없이(Q8)."""
+    args = ["merge", "--job", job, *(["--approved", approved] if approved is not None else []), "--wait", wait]
+    if reviews is not None:
+        env = {"MOCK_GH_REVIEWS": reviews, **env}
+    return ws.db_pr(*args, expect=expect, env=env or None)
+
+
+def _gh(ws: Workspace, *args: str, cwd: Path | None = None, **env) -> subprocess.CompletedProcess:
+    """사용자 clone(cwd)에서 gh 스텁을 직접 부른다(리뷰어의 GHE 조작 대신)."""
+    full = mock_env.env_with_mocks(gh_state_dir=ws.gh_state)
+    full.update(env)
+    return subprocess.run([mock_env.resolve("gh", full), *args], cwd=str(cwd or ws.clone), env=full, capture_output=True,
+                          text=True, encoding="utf-8", errors="replace", check=False)
+
+
+def _set_pr(ws: Workspace, **fields) -> dict:
+    """스텁 상태의 첫 PR 필드를 바꾼다(제3자 push 등). 바꾸기 전 값을 돌려준다."""
+    path = ws.gh_state / "prs.json"
+    state = json.loads(path.read_text(encoding="utf-8"))
+    before = {k: state["prs"][0].get(k) for k in fields}
+    state["prs"][0].update(fields)
+    path.write_text(json.dumps(state), encoding="utf-8")
+    return before
 
 
 def _trace_merge(ws: Workspace, job: str = "MOCK-7002") -> list[dict]:
@@ -2229,7 +2259,7 @@ def _trace_merge(ws: Workspace, job: str = "MOCK-7002") -> list[dict]:
 
 def test_screen_offers_combined_choice_and_publish_and_merge_merges_in_one_command():
     ws = Workspace()
-    out = _published(ws, "MOCK-7002", "issue/MOCK-7002", "--and-merge", "--wait", "0")
+    out = _published(ws, "MOCK-7002", "issue/MOCK-7002", "--and-merge", "--wait", "0", env={"MOCK_GH_REVIEWS": PLUS_ONE})
     screen = ws.last_screen.splitlines()
     assert screen[-1].startswith("approved_hash: ") and screen[-3] == (
         "병합: push 뒤 바로 병합할 수 있다(issue_db.merge: self — 검사·브랜치 보호 조건을 확인한 뒤) — 선택지: "
@@ -2240,11 +2270,14 @@ def test_screen_offers_combined_choice_and_publish_and_merge_merges_in_one_comma
     assert out["merge"]["retry"] == f"db_pr merge --job MOCK-7002 --approved {head}"
     res = out["merge"]["result"]
     assert res["merged"] is True and res["method"] == "merge" and res["checks"] == "none"
+    assert res["review"] == {"code": "ok", "approvals": [{"login": "mock-reviewer", "commit": head,
+                                                          "at": "2026-01-01T00:00:01Z"}]}
     pr = ws.prs()[0]
     assert pr["state"] == "MERGED" and pr["deleteBranch"] is False and res["merge_commit"] == pr["mergeCommit"]["oid"]
     assert ws.db_pr("lock", "status")["held"] is False and not ws.wt("MOCK-7002").exists()
-    again = _merge(ws, head)                                # 같은 커밋으로 이미 병합됨: 0
-    assert again["merged"] is True and again["already"] is True
+    again = _merge(ws, head)                                # 같은 커밋으로 이미 병합됨: 0(관문 없음 — review 없음)
+    assert again["merged"] is True and again["already"] is True and "review" not in again
+    assert [(r["merged"], r.get("review"), r.get("approvers")) for r in _trace_merge(ws)] == [(True, "ok", 1), (True, None, None)]
     status = ws.json("job_status.py", ["MOCK-7002"])
     assert status["stage"]["id"] == "pr-merged" and res["merge_commit"][:12] in status["stage"]["label"]
 
@@ -2260,11 +2293,15 @@ def test_publish_without_and_merge_leaves_pr_and_merge_needs_published_head():
     clone_branch, clone_head = git(ws.clone, "rev-parse", "--abbrev-ref", "HEAD"), git(ws.clone, "rev-parse", "HEAD")
     bad = _merge(ws, "0" * 40, expect=1)
     assert bad["merged"] is False and "승인한 커밋이 아니다" in bad["reason"] and ws.prs()[0]["state"] == "OPEN"
+    assert "review" not in bad                              # 관문 앞 거부: 출력 그대로
     done = _merge(ws, head[:12])
-    assert done["merged"] is True and ws.prs()[0]["mergedWith"] == "merge"
+    assert done["merged"] is True and ws.prs()[0]["mergedWith"] == "merge" and done["review"]["code"] == "ok"
     assert git(ws.clone, "rev-parse", "--abbrev-ref", "HEAD") == clone_branch and \
         git(ws.clone, "rev-parse", "HEAD") == clone_head, "사용자 clone은 fetch만"
     assert [r["merged"] for r in _trace_merge(ws)] == [False, True]
+    first, second = _trace_merge(ws)
+    assert set(first) == {"ts", "step", "v", "pr", "merged", "reason", "waited"}     # 관문 앞 거부: trace 키 그대로
+    assert (second["review"], second["approvers"]) == ("ok", 1)
 
 
 def _data_owners(owners: str):
@@ -2292,6 +2329,7 @@ def test_publish_unknown_reviewers_still_creates_pr_and_warns_by_owner_kind():
     assert team.startswith("리뷰어 지정 실패: mock-org/telephony-data-owners") and "S5" in team and "S19" in team
     assert person.startswith("리뷰어 지정 실패: solo-dev") and "로그인" in person and "S5" in person and "S19" not in person
     assert out["merge"]["mode"] == "review" and out["merge"]["result"]["merged"] is False
+    assert "review" not in out["merge"]["result"]
     assert ws.prs()[0]["state"] == "OPEN"
     plan = json.loads((ws.job_dir("MOCK-7002") / "plan.json").read_text(encoding="utf-8"))
     assert plan["pr"]["number"] == number
@@ -2317,7 +2355,8 @@ def test_publish_requests_reviewers_after_create_and_failed_reviewer_blocks_self
     assert out["merge"]["result"]["merged"] is False and ws.prs()[0]["state"] == "OPEN"
     offer = json.loads((ws.job_dir("MOCK-7002") / "merge-offer.json").read_text(encoding="utf-8"))
     assert offer["mode"] == "review"
-    assert _merge(ws, out["head_sha"], expect=(1, 2))["merged"] is False      # 병합 재시도도 막힌다
+    again = _merge(ws, out["head_sha"], expect=(1, 2))                      # 병합 재시도도 막힌다(관문 앞 — review 없음)
+    assert again["merged"] is False and "review" not in again
 
 
 def test_publish_create_failure_refinds_pr_by_head_branch():
@@ -2343,7 +2382,7 @@ def test_merge_refuses_or_waits_and_leaves_pr_with_retry():
                       ({"MOCK_GH_FAIL_MERGE": "1"}, "gh pr merge 실패")):
         out = _merge(ws, head, expect=1, **env)
         assert out["merged"] is False and want in out["reason"] and out["left"] == "PR은 그대로 둔다", (env, out)
-        assert out["retry"] == retry and ws.prs()[0]["state"] == "OPEN"
+        assert out["retry"] == retry and ws.prs()[0]["state"] == "OPEN" and out["review"]["code"] == "ok"
     waited = _merge(ws, head, expect=1, wait="1", MOCK_GH_CHECKS="pending")    # 기다려도 안 되면 사유·재시도 명령
     assert "1초 기다려도 안 됐다" in waited["reason"] and waited["waited"] >= 1 and waited["retry"] == retry
     ok = _merge(ws, head, MOCK_GH_CHECKS="pass", MOCK_GH_MERGE_METHODS="squash,rebase")
@@ -2371,7 +2410,8 @@ def test_merge_does_not_wait_for_review_or_blocked_without_checks():
     for env in ({"MOCK_GH_REVIEW_DECISION": "REVIEW_REQUIRED", "MOCK_GH_CHECKS": "pending"},
                 {"MOCK_GH_REVIEW_DECISION": "CHANGES_REQUESTED"}):
         out = _merge(ws, head, expect=1, wait="30", **env)
-        assert out["reason"] == m_reason("BLOCKED_REVIEW") and out["review"] == env["MOCK_GH_REVIEW_DECISION"], out
+        assert out["reason"] == m_reason("BLOCKED_REVIEW") and out["review_decision"] == env["MOCK_GH_REVIEW_DECISION"], out
+        assert out["review"]["code"] == "ok"        # +1이 있어도 브랜치 보호(reviewDecision)는 그대로 본다
         assert out["waited"] < 10 and ws.prs()[0]["state"] == "OPEN"
     out = _merge(ws, head, expect=1, wait="30", MOCK_GH_MERGE_STATE="BLOCKED")
     assert out["reason"] == m_reason("BLOCKED_NO_CHECKS") and out["waited"] < 10
@@ -2406,6 +2446,7 @@ def test_merge_refuses_when_pr_head_moved_or_merged_elsewhere():
     path.write_text(json.dumps(state), encoding="utf-8")
     out = _merge(ws, head, expect=1)
     assert "승인한 커밋 뒤에 바뀌었다" in out["reason"] and ws.prs()[0]["state"] == "OPEN"
+    assert "review" not in out and set(_trace_merge(ws)[-1]) == {"ts", "step", "v", "pr", "merged", "reason", "waited"}
     state["prs"][0]["state"] = "MERGED"                     # 다른 커밋으로 병합됨 — already로 보지 않는다
     path.write_text(json.dumps(state), encoding="utf-8")
     out = _merge(ws, head, expect=1)
@@ -2430,6 +2471,7 @@ def test_review_mode_screen_has_no_merge_choice_and_merge_refuses():
     assert out["merge"]["mode"] == "review" and out["merge"]["result"]["merged"] is False
     refused = _merge(ws, out["head_sha"], expect=1)
     assert refused["merged"] is False and "review" in refused["reason"] and ws.prs()[0]["state"] == "OPEN"
+    assert "review" not in refused
     assert ws.db_pr("merge", "--job", "MOCK-0000", "--approved", "a" * 40, expect=2) == {}   # 병합 기록 없음
 
 
@@ -2455,3 +2497,139 @@ def test_merge_eligibility_rules_and_check_rollup(tmp_path):
     assert m.eligibility({}, {"result": "ok"}, ["parser-rules/data.yaml"]) == \
         ("review", "메인테이너 경로 변경(parser-rules/data.yaml) — 메인테이너 리뷰 뒤 GHE에서 머지한다")
     assert m.eligibility({}, {"result": "ok"}, ["data/x.md"]) == ("self", None)
+
+
+# -- +1 관문(H A1, contracts.md §3.2 `db_pr.py` 세부 "+1 판정") ---------------------------------------------
+
+
+def test_and_merge_without_plus_one_pushes_and_opens_pr_but_refuses_merge():
+    """새 PR에는 리뷰가 없다: push·PR·discard는 성공하고 병합만 사유·PR 링크로 거부한다(닫힌 쪽, A2 전의 --and-merge)."""
+    ws = Workspace()
+    out = _published(ws, "MOCK-7002", "issue/MOCK-7002", "--and-merge", "--wait", "0")
+    head, url, number = out["head_sha"], out["pr"]["url"], out["pr"]["number"]
+    assert out["published"] is True and out["pr"]["action"] == "created" and out["discard"]["discarded"] is True
+    res = out["merge"]["result"]
+    assert {k: v for k, v in res.items() if k != "waited"} == {
+        "merged": False, "pr": {"number": number, "url": url}, "reason": f"{NO_APPROVAL}. PR: {url}",
+        "left": "PR은 그대로 둔다", "review": {"code": "no-approval", "approvals": []},
+        "retry": f"db_pr merge --job MOCK-7002 --approved {head}"}
+    assert res["waited"] < 10 and ws.prs()[0]["state"] == "OPEN"
+    row = _trace_merge(ws)[-1]
+    assert (row["merged"], row["review"], row["approvers"]) == (False, "no-approval", 0)
+    assert row["reason"] == NO_APPROVAL and "PR:" not in row["reason"]     # trace에는 링크(호스트)를 남기지 않는다
+    assert ws.json("job_status.py", ["MOCK-7002"])["stage"]["id"] == "pr-created"
+
+
+def test_merge_plus_one_refusals_have_reason_and_link():
+    """거부만: 한 작업·한 PR에서 리뷰(env)만 바꿔 차례로 부른다. 모두 종료 1, 사유는 PR 링크로 끝나고 기다리지 않는다."""
+    ws = Workspace()
+    out = _published(ws)
+    head, url = out["head_sha"], out["pr"]["url"]
+    retry = f"db_pr merge --job MOCK-7002 --approved {head}"
+    stale = f"승인이 이전 커밋(mock-reviewer@{OLD_OID[:7]}) — head {head[:7]}에 다시 Approve"
+    for reviews, code, reason in ((None, "no-approval", NO_APPROVAL),
+                                  ("approve:mock-reviewer@old", "stale-approval", stale),
+                                  ("approve:mock-reviewer@none", "stale-approval",
+                                   f"승인이 이전 커밋(mock-reviewer@?) — head {head[:7]}에 다시 Approve"),
+                                  ("request-changes:mock-reviewer@head", "changes-requested", "변경 요청(mock-reviewer)"),
+                                  ("approve:a@head,request-changes:b@head", "changes-requested", "변경 요청(b)"),
+                                  ("approve:mock-user@head", "no-approval", NO_APPROVAL),      # 작성자 본인
+                                  ("approve:ci[bot]@head", "no-approval", NO_APPROVAL)):       # 봇(REST type Bot)
+        got = _merge(ws, head, expect=1, wait="30", reviews=reviews, MOCK_GH_CHECKS="pass")
+        assert got["merged"] is False and got["reason"] == f"{reason}. PR: {url}", (reviews, got)
+        assert got["review"]["code"] == code and got["retry"] == retry and got["left"] == "PR은 그대로 둔다", reviews
+        assert got["waited"] < 10, reviews
+        row = _trace_merge(ws)[-1]
+        assert (row["review"], row["reason"]) == (code, reason), reviews
+    assert [a["login"] for a in got["review"]["approvals"]] == []
+    assert ws.prs()[0]["state"] == "OPEN" and "mergeCommit" not in ws.prs()[0]
+
+
+def _ship_append(ws: Workspace, key: str) -> dict:
+    """p7-analyze-append 계획을 작업 키 `key`로 바꿔 ship(stage → summary → 커밋 → publish → discard)한다."""
+    plan = load_plan("p7-analyze-append.plan.json")
+    plan["issue"]["key"], plan["pr"]["branch"] = key, f"issue/{key}"
+    plan["commit_message"] = plan["commit_message"].replace("MOCK-7001", key)
+    ws.plan(key, plan)
+    return ws.ship(key, f"issue/{key}")["publish"]
+
+
+def test_merge_plus_one_ok_cases_merge():
+    """병합하는 경우: 경우마다 작업·PR을 따로 ship한다(이미 병합(already)이 끼지 않게)."""
+    ws = Workspace()
+    for key, reviews, approvers in (("MOCK-7101", "request-changes:r@head,approve:r@head", ["r"]),   # 변경 요청 뒤 재승인
+                                    ("MOCK-7102", "approve:Mock-Reviewer@old,approve:mock-reviewer@head", ["mock-reviewer"]),
+                                    ("MOCK-7103", "approve:ci[bot]@head,approve:mock-reviewer@head", ["mock-reviewer"])):
+        pub = _ship_append(ws, key)
+        done = _merge(ws, None, job=key, reviews=reviews)
+        assert done["merged"] is True and done["review"]["code"] == "ok", (key, done)
+        assert [a["login"] for a in done["review"]["approvals"]] == approvers, key      # 봇은 빠진다
+        assert all(a["commit"] == pub["head_sha"] for a in done["review"]["approvals"]), key
+        row = _trace_merge(ws, key)[-1]
+        assert (row["merged"], row["review"], row["approvers"]) == (True, "ok", 1), key
+    assert [p["state"] for p in ws.prs()] == ["MERGED"] * 3
+
+
+def test_merge_refuses_when_reviews_cannot_be_read():
+    """리뷰를 못 읽으면 판정하지 않고 거부한다(종료 2, PR 상태 읽기 실패와 같은 모양 — review·retry 없음)."""
+    ws = Workspace()
+    head = _published(ws)["head_sha"]
+    out = _merge(ws, head, expect=2, MOCK_GH_FAIL_REVIEWS="1")
+    assert out["merged"] is False and out["reason"].startswith("PR 리뷰를 읽지 못했다 (gh): ")
+    assert "MOCK_GH_FAIL_REVIEWS" in out["reason"] and "review" not in out and "retry" not in out
+    assert "review" not in _trace_merge(ws)[-1] and ws.prs()[0]["state"] == "OPEN"
+
+
+def test_merge_without_approved_uses_merge_offer_head():
+    """Q8: --approved를 생략하면 병합 기록의 head. PR head·계획 head가 다르면 거부(생략 때는 전용 문구)."""
+    ws = Workspace()
+    out = _published(ws)
+    head, url = out["head_sha"], out["pr"]["url"]
+    before = _set_pr(ws, headRefOid="f" * 40)               # 제3자 push: PR head가 기록과 다르다
+    got = _merge(ws, None, expect=1)
+    assert "승인한 커밋 뒤에 바뀌었다" in got["reason"] and "review" not in got
+    _set_pr(ws, **before)
+    plan_path = ws.job_dir("MOCK-7002") / "plan.json"
+    plan = json.loads(plan_path.read_text(encoding="utf-8"))
+    plan["pr"]["head_sha"] = "e" * 40                        # publish가 PR 고치기 전에 끝난 뒤(계획만 새 head)
+    plan_path.write_text(json.dumps(plan), encoding="utf-8")
+    assert _merge(ws, None, expect=1)["reason"] == m_reason("OFFER_MISMATCH")
+    assert _merge(ws, head, expect=1)["reason"] == "승인한 커밋이 아니다(--approved는 publish 결과 merge.approved)"
+    plan["pr"]["head_sha"] = head
+    plan_path.write_text(json.dumps(plan), encoding="utf-8")
+    offer_path = ws.job_dir("MOCK-7002") / "merge-offer.json"
+    offer = json.loads(offer_path.read_text(encoding="utf-8"))
+    offer["url"] = None                                     # 옛 기록: 링크는 gh view의 url
+    offer_path.write_text(json.dumps(offer), encoding="utf-8")
+    got = _merge(ws, None, expect=1, reviews=None)
+    assert got["reason"] == f"{NO_APPROVAL}. PR: {url}" and got["retry"] == f"db_pr merge --job MOCK-7002 --approved {head}"
+    done = _merge(ws, None)
+    assert done["merged"] is True and ws.prs()[0]["state"] == "MERGED"
+
+
+def test_sync_pr_republish_updates_merge_offer_head_and_old_approval_goes_stale():
+    """sync-pr 재publish는 merge-offer head를 새 head로 다시 쓴다 → 이전 커밋의 +1은 stale-approval, 새 head에 다시 Approve하면 병합."""
+    ws = Workspace()
+    first = _published(ws)
+    h1, number = first["head_sha"], first["pr"]["number"]
+    approve = _gh(ws, "pr", "review", str(number), "--approve", MOCK_GH_USER="mock-reviewer")     # cwd = 사용자 clone(main)
+    assert approve.returncode == 0, approve.stderr
+    assert ws.prs()[0]["reviews"][0]["commit"] == h1 and ws.prs()[0]["headRefOid"] == h1
+    ws.push_main(lambda c: (c / "NOTE.txt").write_text("다른 PR\n", encoding="utf-8"))
+    found = ws.db_pr("find-plan", "--branch", "issue/MOCK-7002")
+    ws.acquire(found["job"])
+    ws.stage("MOCK-7002", "issue/MOCK-7002")
+    summary = ws.db_pr("summary", ws.wt("MOCK-7002"))
+    ws.commit("MOCK-7002")
+    again = ws.db_pr("publish", ws.wt("MOCK-7002"), "--branch", "issue/MOCK-7002", "--lease", found["remote_sha"],
+                     "--approved", summary["approved_hash"], "--and-discard")
+    h2 = again["head_sha"]
+    assert again["pr"]["action"] == "edited" and h2 != h1
+    offer = json.loads((ws.job_dir("MOCK-7002") / "merge-offer.json").read_text(encoding="utf-8"))
+    assert offer["head_sha"] == h2 and ws.prs()[0]["headRefOid"] == h2
+    stale = _merge(ws, None, expect=1, reviews=None)
+    assert stale["review"]["code"] == "stale-approval", stale
+    assert stale["reason"].startswith(f"승인이 이전 커밋(mock-reviewer@{h1[:7]}) — head {h2[:7]}에 다시 Approve. PR: ")
+    assert _gh(ws, "pr", "review", str(number), "--approve", MOCK_GH_USER="mock-reviewer").returncode == 0
+    done = _merge(ws, None, reviews=None)
+    assert done["merged"] is True and [a["commit"] for a in done["review"]["approvals"]] == [h2]

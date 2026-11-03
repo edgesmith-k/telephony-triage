@@ -25,7 +25,7 @@ TODO(SITE:S3) 플러그인 hook에 보이는 MCP 도구 이름이 `mcp__<server>
 | 8 | 사용자 clone 직접 편집 차단: 대상 파일이 `issue_db.path` 안이면 거부(`work_dir` 아래는 제외) | Write/Edit/MultiEdit/NotebookEdit |
 | 8 | 같은 규칙, Bash: clone 본체에서 브랜치·파일을 바꾸는 git·`gh pr checkout`, clone 안으로의 파일 쓰기(리디렉션·tee·cp·rm·`sed -i` 등) 거부. migrate 브랜치 생성(깨끗한 트리)은 ask | Bash, clone 본체 |
 | 10 | 로그 원문 통독 차단: cat·tac·nl·less·more·bat·strings·zcat·zless·bzcat·xzcat, `head/tail -c`, `unzip -p/-c`가 로그 원문·zip·bugreport·`events*.json`·`issue_raw.json`·`match.json`을 통째로 읽으면 거부(`fixtures/`·`draft/` 제외, 사용자 config와 무관) | Bash |
-| 11 | 이슈 DB 원격 쓰기 확인: 대상이 이슈 DB인 `gh` 쓰기는 ask·`pr merge`는 거부(병합은 `db_pr.py merge`로만, 규칙 7), 비Jira MCP 쓰기형 도구(`owner`/`repo` 인자)도 같게 | Bash, `mcp__.*` |
+| 11 | 이슈 DB 원격 쓰기 확인: 대상이 이슈 DB인 `gh` 쓰기는 ask·`pr merge`·REST 병합은 거부(병합은 `db_pr.py merge`로만, 규칙 7), 비Jira MCP 쓰기형 도구(`owner`/`repo` 인자)도 같게. 대상: api 엔드포인트·PR/이슈 URL 선택자(`pr`·`issue` 동작 뒤 첫 위치 인자 — 옵션 값 자리의 URL은 이슈 DB일 때만 세고 cwd 판정을 막지 않는다)·`-R` 모든 꼴(`-R v`·`-Rv`·`-R=v`·`--repo[=]v`·묶음 `-dR v` — 옵션 값 자리(`-b -Rother/x`)와 `gh api`의 꼴은 이슈 DB일 때만 세고 cwd 판정을 막지 않는다)·`GH_REPO`(명시 대상은 합집합 — 하나라도 이슈 DB면 대상), 없으면 cwd. Claude Approve(`gh pr review --approve`·`-a`·`-a=<참>`, REST `…/reviews`·`…/events`의 event=APPROVE — `@파일`·`--input`도 본다, `gh api` 옵션은 pflag 꼴로 읽는다(묶음 `-iX PUT`·`-if k=v`), MCP 동사·단어 approve·입력 `event` APPROVE)·리뷰 기각(REST `…/dismissals`, MCP dismiss)·MCP 자동 병합 켜기(`enable_pr_auto_merge`)는 거부. GraphQL(엔드포인트 `graphql`·`/graphql`, 경로가 `/graphql`로 끝나는 URL) 병합·자동 병합·Approve·기각 mutation(`mergePullRequest`·`enablePullRequestAutoMerge`·`enqueuePullRequest`·`mergeBranch`·리뷰 APPROVE·`dismissPullRequestReview` — 본문은 인라인·`@파일`·`--input`·stdin heredoc, 64KB까지)과 병합·리뷰 별칭을 만드는 `gh alias set`·`gh alias import`는 대상과 무관하게 거부. 이미 만든 gh 별칭의 실행은 보지 못한다 | Bash, `mcp__.*` |
 | 12 | 분석 스킬 소스 적용 확인: `skill_patch.py --apply`(낱말 그물: 이름 `skill_patch`와 낱말 `apply`)는 `ask`. config `analyzers.<카테고리>.source`(절대 경로, site-defaults·사용자 config의 최상위와 모든 `platforms.<p>.analyzers` 것) 안을 파일 도구·Bash 파일 쓰기(규칙 8과 같은 판별)·파일을 바꾸는 git(`CLONE_GIT_SUBS`·commit·push·stash)으로 바꾸면 `ask`(적용은 `skill_patch.py --apply`로만). 스크립트 기록 `<work_dir>/<KEY>/skill-suggestions/<이름>.patch`·`<이름>.meta.json`을 파일 도구·Bash 파일 쓰기로 쓰거나 지우면 거부(skill_patch.py만 쓴다) | Bash, Write/Edit/MultiEdit/NotebookEdit |
 
 (1번은 SessionStart의 `config.py sync-scripts-path`다.)
@@ -54,8 +54,9 @@ TODO(SITE:S3) 플러그인 hook에 보이는 MCP 도구 이름이 `mcp__<server>
 없으므로 코멘트 도구도 거부한다. hook은 모든 도구 호출에 걸리므로, `site-defaults.yaml`이 없어도 guard는 멈추지 않고 사용자 config만으로
 판정한다(경고). 이때 커밋 검사(3·4번)가 부르는 스크립트는 종료 코드 2를 내므로 이슈 DB 커밋은 거부된다.
 
-**의존성 없음·내부 오류**(`_degraded`): import 실패나 판정 중 예외면 MCP는 거부, Bash의 git·gh·`db_pr.py publish`·`merge`·
-`skill_patch.py --apply`(규칙 7·12와 같은 `word_net`)와 파일 도구는 ask, 그 밖의 Bash는 통과 + 경고.
+**의존성 없음·내부 오류**(`_degraded`): import 실패나 판정 중 예외면 MCP는 거부, gh Approve·리뷰 기각 형태(규칙 11과 같은 판별,
+대상 레포를 몰라도)는 거부, Bash의 git·gh·`db_pr.py publish`·`merge`·`skill_patch.py --apply`(규칙 7·12와 같은 `word_net`)와
+파일 도구는 ask, 그 밖의 Bash는 통과 + 경고.
 종료 코드는 그래도 0이다(2는 설치 명령까지 모든 Bash를 막는다).
 """
 
@@ -479,9 +480,24 @@ def check_jira_post(tool: str, tool_input: dict, spec: dict, conf: Config, dec: 
 MCP_REPO_KEYS = ("repository", "full_name", "repo_url", "url")
 
 
+def _mcp_values(obj, key: str, depth: int = 0) -> list[str]:
+    """MCP 입력(깊이 3까지 dict·list)에서 키 `key`의 문자열 값."""
+    out: list[str] = []
+    if depth > 3:
+        return out
+    for k, v in (obj.items() if isinstance(obj, dict) else enumerate(obj) if isinstance(obj, list) else ()):
+        if k == key and isinstance(v, str):
+            out.append(v)
+        elif isinstance(v, (dict, list)):
+            out += _mcp_values(v, key, depth + 1)
+    return out
+
+
 def check_mcp_db_write(tool: str, part: str, tool_input: dict, conf: Config, dec: Decision) -> None:
-    """비Jira MCP의 쓰기형 도구가 이슈 DB 레포를 대상으로 하면 ask, 머지면 deny (규칙 11).
-    대상은 `owner`+`repo`(GitHub MCP 표준 인자) 또는 레포 문자열 인자로만 안다. 없으면 판정하지 않는다."""
+    """비Jira MCP의 쓰기형 도구가 이슈 DB 레포를 대상으로 하면 ask, 머지·자동 병합 켜기·Approve·리뷰 기각이면 deny (규칙 11).
+    대상은 `owner`+`repo`(GitHub MCP 표준 인자) 또는 레포 문자열 인자로만 안다. 없으면 판정하지 않는다.
+    Approve는 동사·단어 `approve` 또는 입력 `event` APPROVE(GitHub MCP `pull_request_review_write` 등), 기각은 단어 `dismiss`
+    또는 입력 `method`·`event`가 dismiss…."""
     if not conf.remote_slugs or not mcptools.is_write(part) or not isinstance(tool_input, dict):
         return
     slug = None
@@ -495,9 +511,16 @@ def check_mcp_db_write(tool: str, part: str, tool_input: dict, conf: Config, dec
                 break
     if slug is None or not conf.same_db_repo(slug):
         return
-    if mcptools.verb(part) == "merge":   # 동사 자리만: `disable_pr_auto_merge`는 ask
-        dec.deny.append(f"이슈 DB PR을 MCP로 직접 머지하지 않는다. 병합은 사용자가 고른 뒤 db_pr.py merge로만 하거나 리뷰어가 "
-                        f"GHE에서 한다 (규칙 7·11: {tool}).")
+    words, verb = mcptools._words(part), mcptools.verb(part)
+    events = [v.strip().lower() for v in _mcp_values(tool_input, "event")]
+    methods = [v.strip().lower() for v in _mcp_values(tool_input, "method")]
+    # 동사 merge, 또는 단어 merge이고 동사가 disable이 아니면(`enable_pr_auto_merge` — 자동 병합은 +1 관문 없이 서버 조건만으로 병합한다)
+    if verb == "merge" or ("merge" in words and verb != "disable"):
+        dec.deny.append(f"{MCP_MERGE_DENY}: {tool}).")
+    elif verb == "approve" or any(w in ("approve", "approves") for w in words) or "approve" in events:
+        dec.deny.append(f"{APPROVE_DENY}: {tool}).")
+    elif any(w.startswith("dismiss") for w in words) or any(v.startswith("dismiss") for v in events + methods):
+        dec.deny.append(f"{DISMISS_DENY}: {tool}).")
     else:
         dec.ask.append(f"이슈 DB 원격을 바꾸는 MCP 도구다({tool}). 변경·검증 결과를 보고 승인한 뒤에만 진행한다 (규칙 7).")
 
@@ -1320,6 +1343,55 @@ GH_REPO_READ = {"view", "list", "clone"}
 GH_API_WITH_ARG = {"-X", "--method", "-f", "-F", "--field", "--raw-field", "-H", "--header", "--input", "-q", "--jq",
                    "-t", "--template", "--hostname", "--cache", "-p", "--preview"}
 GH_API_FIELDS = {"-f", "-F", "--field", "--raw-field"}
+GH_API_SHORT_WITH_ARG = {k[1] for k in GH_API_WITH_ARG if not k.startswith("--")}
+GH_API_LONG_WITH_ARG = {k for k in GH_API_WITH_ARG if k.startswith("--")}
+# `gh pr|issue <동작>`의 값 받는 짧은 옵션(gh 2.89 `--help`, 물려받는 `-R`은 따로 더한다). 선택자·`-R` 자리를 찾을 때
+# 그 값을 건너뛴다(`_gh_scan`).
+# 표에 없는 동작은 표 전체를 합친 글자를 쓴다(값으로 더 건너뛰는 쪽 — URL을 선택자로 덜 보면 cwd 판정이 남는다)
+GH_SEL_SHORT_WITH_ARG = {"pr merge": "AbFt", "pr close": "c", "pr edit": "BbFmt", "pr review": "bF", "pr comment": "bF",
+                         "pr reopen": "c", "pr lock": "r", "pr create": "aBbFHlmprTt", "issue close": "cr",
+                         "issue comment": "bF", "issue edit": "bFmt", "issue reopen": "c", "issue lock": "r",
+                         "issue develop": "bn", "issue create": "abFlmpTt"}
+GH_SEL_SHORT_ANY = "".join(sorted(set("".join(GH_SEL_SHORT_WITH_ARG.values()))))
+# 값 받는 긴 옵션(두 그룹의 합집합). `pr review`의 `--comment`만 bool이다
+GH_SEL_LONG_WITH_ARG = {"--repo", "--author-email", "--body", "--body-file", "--match-head-commit", "--subject", "--comment",
+                        "--add-assignee", "--add-label", "--add-project", "--add-reviewer", "--base", "--milestone",
+                        "--remove-assignee", "--remove-label", "--remove-project", "--remove-reviewer", "--title",
+                        "--reason", "--assignee", "--head", "--label", "--project", "--recover", "--reviewer",
+                        "--template", "--duplicate-of", "--branch-repo", "--name"}
+# `gh pr review`의 값 받는 옵션(긴 이름과 짧은 글자). `-a`(--approve)는 bool이다
+GH_REVIEW_LONG_WITH_ARG = {"--body", "--body-file", "--repo"}
+GH_REVIEW_SHORT_WITH_ARG = set("bFR")
+GH_FALSE = {"0", "f", "F", "false", "FALSE", "False"}    # strconv.ParseBool 거짓. 그 밖 값은 approve로 본다(못 읽는 값은 gh가 오류)
+GH_BODY_MAX = 65536          # --input·@파일·별칭 파일은 이만큼까지 읽는다(넘거나 못 읽으면 모르는 본문)
+# 스킴은 대소문자 무관(gh는 url.Parse로 스킴을 소문자로 바꾼다 — `HTTPS://…`도 선택자다). 경로는 gh처럼 구분한다
+GH_URL_RE = re.compile(r"^(?i:https?)://[^/\s]+/[^/\s]+/[^/\s]+/(?:pull|pulls|issues)/\d+")
+# GraphQL 엔드포인트: `graphql`, `/graphql`(github.com은 REST 앞부분 + `graphql`이 GraphQL이다), 경로가 `/graphql`로 끝나는 URL
+# (`https://<host>/api/graphql` — gh는 URL을 그대로 쓰고 필드를 JSON 본문 `{"query": …}`로 보낸다)
+GH_GRAPHQL_RE = re.compile(r"^(?:/?|https?://[^/?#]+/(?:[^?#]*/)?)graphql/?(?:[?#].*)?$", re.IGNORECASE | re.DOTALL)
+GH_REST_MERGE_RE = re.compile(r"/pulls/[^/]+/merge/?$|/merges/?$")
+GH_REST_REVIEW_RE = re.compile(r"(?:^|/)pulls/[^/]+/reviews(?:/[^/]+/events)?/?$")    # 리뷰 만들기·PENDING 제출
+GH_REST_DISMISS_RE = re.compile(r"(?:^|/)pulls/[^/]+/reviews/[^/]+/dismissals/?$")
+# `repositories/<id>/…`: 레포 ID 경로라 슬러그로 대상을 풀 수 없다(병합·Approve·기각은 대상과 무관하게 본다)
+GH_REST_REPO_ID_RE = re.compile(r"(?:^|/)repositories/[^/]+/")
+# GraphQL 이름(대소문자 구분). 노드 ID로 레포를 가리므로 대상과 무관하게 본다
+GQL_MERGE_RE = re.compile(r"\b(?:mergePullRequest|enablePullRequestAutoMerge|enqueuePullRequest|mergeBranch)\b")
+GQL_REVIEW_RE = re.compile(r"\b(?:addPullRequestReview|submitPullRequestReview)\b")
+GQL_APPROVE_RE = re.compile(r"\bAPPROVE\b")
+GQL_DISMISS_RE = re.compile(r"\bdismissPullRequestReview\b")
+ALIAS_RISKY_RE = re.compile(r"merge|review|approve|dismiss", re.IGNORECASE)
+GH_MERGE_DENY = ("이슈 DB PR을 gh로 직접 머지하지 않는다. 병합은 사용자가 고른 뒤 db_pr.py merge(승인 커밋·PR 검사 대조)로만 "
+                 "하거나 리뷰어가 GHE에서 한다 (규칙 7·11).")
+APPROVE_DENY = ("이슈 DB PR을 Claude가 Approve하지 않는다. +1(작성자 외 1명의 Approve)은 사람이 GHE에서 하고, "
+                "병합은 그 뒤 db_pr.py merge가 확인한다 (규칙 11")
+DISMISS_DENY = "리뷰를 Claude가 기각(dismiss)하지 않는다. 변경 요청은 그 리뷰어나 메인테이너가 GHE에서 푼다 (규칙 11"
+ALIAS_DENY = "gh 별칭으로 병합·리뷰 명령을 만들지 않는다(별칭 실행은 guard가 보지 못한다) (규칙 11)."
+MCP_MERGE_DENY = ("이슈 DB PR을 MCP로 직접 머지하지 않는다. 병합은 사용자가 고른 뒤 db_pr.py merge로만 하거나 리뷰어가 "
+                  "GHE에서 한다 (규칙 7·11")
+DEGRADED_REVIEW_DENY = "Approve·리뷰 기각은 판정할 수 없어도 거부한다(Claude는 PR을 Approve하지 않는다, 규칙 11"
+# 규칙 11 거부 사유의 첫 마디(eval 채점기가 hook이 막은 호출의 결과에서 찾는다)
+GATE_DENY_HEADS = tuple(m.split("않는다", 1)[0] + "않는다" for m in (APPROVE_DENY, DISMISS_DENY, GH_MERGE_DENY, MCP_MERGE_DENY,
+                                                                   ALIAS_DENY, DEGRADED_REVIEW_DENY))
 
 
 def _gh_words(argv: list[str]) -> list[str]:
@@ -1335,96 +1407,327 @@ def _gh_words(argv: list[str]) -> list[str]:
     return words
 
 
-def _gh_api(argv: list[str]) -> tuple[str | None, bool]:
-    """`gh api`의 (엔드포인트, 쓰기 여부). 메서드를 밝히면 GET이 아닐 때만 쓰기, 밝히지 않으면 필드·`--input`이
-    있을 때 쓰기(gh 기본 POST). `graphql`은 필드 값에 `mutation`이 있거나 `--input`일 때만 쓰기."""
-    args = argv[argv.index("api") + 1:]
-    endpoint, method, fields, has_input = None, None, [], False
+def _gh_read(path: str, cwd: Path | None) -> str | None:
+    """`--input`·`@파일`·별칭 파일 내용(cwd 기준, `GH_BODY_MAX`까지). 없거나 크거나 못 읽으면 None. 내용은 출력하지 않는다."""
+    target = Path(_expand(path))
+    if not target.is_absolute():
+        target = (cwd or Path(".")) / target
+    try:
+        if not target.is_file() or target.stat().st_size > GH_BODY_MAX:
+            return None
+        return target.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+
+
+def _stdin_text(text: str | None) -> str | None:
+    """`@-`·`--input -`의 본문: Bash 명령 글에 heredoc이 있으면 그 글 전체(본문 포함), 아니면 모른다(파이프·리디렉션)."""
+    return text if text is not None and HEREDOC_RE.search(text) else None
+
+
+def _pflag(tok: str, nxt: str | None, short, long) -> tuple[str | None, str, bool]:
+    """pflag 옵션 토큰 하나 → `(값 받는 옵션, 값, 다음 토큰을 값으로 썼나)`. 값 받는 옵션이 없으면 `(None, "", False)`.
+    긴 옵션은 `--k v`·`--k=v`. 짧은 옵션 묶음은 bool 글자를 건너뛰고, 첫 값 받는 글자 뒤 나머지(앞 `=` 하나는 뗀다)나 다음
+    토큰이 값이다(`-X PUT`·`-XPUT`·`-X=PUT`·`-iX PUT`·`-if k=v`). bool 글자 뒤 `=`(`-i=true`)면 묶음이 끝난다."""
+    if tok.startswith("--"):
+        key, eq, value = tok.partition("=")
+        if key not in long:
+            return None, "", False
+        return (key, value, False) if eq else (key, nxt or "", nxt is not None)
+    cluster = tok[1:]
+    for k, ch in enumerate(cluster):
+        rest = cluster[k + 1:]
+        if ch in short:
+            return ("-" + ch, rest.removeprefix("="), False) if rest else ("-" + ch, nxt or "", nxt is not None)
+        if rest.startswith("="):
+            break
+    return None, "", False
+
+
+def _gh_api_parse(argv: list[str]) -> dict:
+    """`gh api` 인자 → `{endpoint, method, fields["k=v"], inputs[경로]}`. 옵션은 pflag 꼴로 읽는다(`_pflag`: `-XPUT`·`-X=PUT`·
+    `-fk=v`, bool `-i`와 묶은 `-iX PUT`·`-if k=v`)."""
+    args = argv[argv.index("api") + 1:] if "api" in argv else []
+    endpoint, method, fields, inputs = None, None, [], []
     i = 0
     while i < len(args):
         tok = args[i]
-        key, eq, value = tok.partition("=") if tok.startswith("--") else (tok, "", "")
-        if tok.startswith("-") and not tok.startswith("--") and len(tok) > 2 and tok[:2] in GH_API_WITH_ARG:
-            key, eq, value = tok[:2], "=", tok[2:]   # `-XPUT`, `-fquery=…`
-        if key in GH_API_WITH_ARG:
-            if not eq:
-                value = args[i + 1] if i + 1 < len(args) else ""
-                i += 1
+        if tok.startswith("-"):
+            key, value, used = _pflag(tok, args[i + 1] if i + 1 < len(args) else None,
+                                      GH_API_SHORT_WITH_ARG, GH_API_LONG_WITH_ARG)
+            i += used
             if key in ("-X", "--method"):
                 method = value.upper()
             elif key in GH_API_FIELDS:
                 fields.append(value)
             elif key == "--input":
-                has_input = True
-        elif not tok.startswith("-") and endpoint is None:
+                inputs.append(value)
+        elif endpoint is None:
             endpoint = tok
         i += 1
-    if endpoint == "graphql":
-        return endpoint, has_input or any("mutation" in f for f in fields)
-    if method is not None:   # 메서드를 밝히면 그것만 본다(`-X GET -f k=v`는 쿼리 문자열이다)
-        return endpoint, method != "GET"
-    return endpoint, bool(fields) or has_input   # gh는 필드가 있으면 POST로 보낸다
+    return {"endpoint": endpoint, "method": method, "fields": fields, "inputs": inputs}
 
 
-def _gh_kind(argv: list[str]) -> str:
-    """`read`|`write`|`merge`|`local`. 모르는 그룹은 read(오탐 방지)."""
+def _gh_graphql_body(parsed: dict, cwd: Path | None, text: str | None) -> tuple[str, bool]:
+    """GraphQL 본문 = 인라인 필드(`k=v` 그대로) + `@파일` 필드·`--input` 파일 내용 + `@-`·`--input -`면 명령 글(heredoc).
+    `(본문, 못 읽은 것이 있나)`."""
+    parts, unread = [], False
+    sources = [f.partition("=")[2][1:] for f in parsed["fields"] if f.partition("=")[2].startswith("@")]
+    parts += [f for f in parsed["fields"] if not f.partition("=")[2].startswith("@")]
+    for src in sources + parsed["inputs"]:
+        got = _stdin_text(text) if src == "-" else _gh_read(src, cwd)
+        if got is None:
+            unread = True
+        else:
+            parts.append(got)
+    return "\n".join(parts), unread
+
+
+def _gh_rest_approves(parsed: dict, cwd: Path | None) -> bool:
+    """REST 리뷰 엔드포인트의 `event`가 APPROVE인가. `event=@…`·`--input -`·못 읽은·JSON 객체가 아닌 `--input`은 approve로 본다
+    (리뷰 엔드포인트인 것은 안다 — 닫힌 쪽)."""
+    for f in parsed["fields"]:
+        key, eq, value = f.partition("=")
+        if eq and key.strip() == "event" and (value.startswith("@") or value.strip().upper() == "APPROVE"):
+            return True
+    for path in parsed["inputs"]:
+        raw = None if path == "-" else _gh_read(path, cwd)
+        try:
+            doc = json.loads(raw) if raw is not None else None
+        except ValueError:
+            doc = None
+        if not isinstance(doc, dict):
+            return True
+        event = doc.get("event")
+        if isinstance(event, str) and event.strip().upper() == "APPROVE":
+            return True
+    return False
+
+
+def _gh_api_path(endpoint: str) -> str:
+    """REST 엔드포인트의 경로(`?` 쿼리·`#` 조각을 뗀다 — gh는 조각을 보내지 않는다)."""
+    return re.split(r"[?#]", endpoint, maxsplit=1)[0]
+
+
+def _gh_api_kind(argv: list[str], cwd: Path | None = None, text: str | None = None) -> tuple[str, str, bool]:
+    """`gh api`의 `(종류, 형태, 대상 무관)`. REST는 메서드를 밝히면 GET이 아닐 때만 쓰기, 밝히지 않으면 필드·`--input`이 있을 때 쓰기
+    (gh 기본 POST). REST 병합·Approve·기각은 `repositories/<id>/…` 꼴이면 대상과 무관하게 본다(레포 ID라 대상을 풀 수 없다).
+    GraphQL(`GH_GRAPHQL_RE` — 전체 URL 포함)은 병합·자동 병합·Approve·기각 mutation이면 대상과 무관하게 그 종류,
+    그 밖은 `mutation`·`--input`·못 읽은 본문이 있을 때만 쓰기."""
+    parsed = _gh_api_parse(argv)
+    endpoint = parsed["endpoint"] or ""
+    if GH_GRAPHQL_RE.match(endpoint):
+        body, unread = _gh_graphql_body(parsed, cwd, text)
+        if GQL_MERGE_RE.search(body):
+            return "merge", "GraphQL 병합·자동 병합 mutation", True
+        if GQL_REVIEW_RE.search(body) and GQL_APPROVE_RE.search(body):
+            return "approve", "GraphQL 리뷰 APPROVE", True
+        if GQL_DISMISS_RE.search(body):
+            return "dismiss", "GraphQL dismissPullRequestReview", True
+        return ("write" if parsed["inputs"] or unread or "mutation" in body else "read"), "", False
+    if parsed["method"] is not None:   # 메서드를 밝히면 그것만 본다(`-X GET -f k=v`는 쿼리 문자열이다)
+        write = parsed["method"] != "GET"
+    else:
+        write = bool(parsed["fields"]) or bool(parsed["inputs"])   # gh는 필드가 있으면 POST로 보낸다
+    path = _gh_api_path(endpoint)
+    anywhere = bool(GH_REST_REPO_ID_RE.search(path))
+    if write and GH_REST_MERGE_RE.search(path):
+        return "merge", "gh api …/merge", anywhere
+    if write and GH_REST_DISMISS_RE.search(path):
+        return "dismiss", "gh api …/reviews/<id>/dismissals", anywhere
+    if write and GH_REST_REVIEW_RE.search(path) and _gh_rest_approves(parsed, cwd):
+        return "approve", "gh api …/reviews event=APPROVE", anywhere
+    return ("write" if write else "read"), "", False
+
+
+def _gh_api(argv: list[str], cwd: Path | None = None, text: str | None = None) -> tuple[str | None, bool]:
+    """`gh api`의 (엔드포인트, 쓰기 여부)."""
+    return _gh_api_parse(argv)["endpoint"], _gh_api_kind(argv, cwd, text)[0] != "read"
+
+
+def _gh_review_approves(argv: list[str]) -> bool:
+    """`gh pr review`가 Approve인가(순서·위치 무관): `--approve`, `--approve=<v>`·`-a=<v>`(v가 ParseBool 거짓이 아니면),
+    짧은 옵션 묶음에서 값 받는 글자(`b`·`F`·`R`) 앞의 `a`(`-a`, `-ab LGTM`, `-ra`). 값 받는 옵션의 값은 건너뛴다."""
+    i = 1
+    while i < len(argv):
+        tok, i = argv[i], i + 1
+        if tok == "--":
+            break
+        if tok.startswith("--"):
+            key, eq, value = tok.partition("=")
+            if key in GH_REVIEW_LONG_WITH_ARG and not eq:
+                i += 1
+            elif key == "--approve" and (not eq or value not in GH_FALSE):
+                return True
+            continue
+        if not tok.startswith("-") or len(tok) < 2:
+            continue
+        cluster = tok[1:]
+        for k, ch in enumerate(cluster):
+            if ch == "a":
+                rest = cluster[k + 1:]
+                if not rest.startswith("=") or rest[1:] not in GH_FALSE:
+                    return True
+                break
+            if ch in GH_REVIEW_SHORT_WITH_ARG or ch == "=":
+                if ch != "=" and k + 1 == len(cluster):
+                    i += 1          # 값이 다음 토큰
+                break
+    return False
+
+
+def _gh_alias_risky(argv: list[str], action: str, cwd: Path | None, text: str | None) -> bool:
+    """`gh alias set <이름> <확장>`·`gh alias import <파일|->`가 병합·리뷰 명령을 만드나. 확장이 stdin(`-`)이면 명령 글의 heredoc,
+    import 파일은 `GH_BODY_MAX`까지 읽는다. 못 읽으면 만드는 것으로 본다(닫힌 쪽)."""
+    try:
+        rest = argv[argv.index(action, argv.index("alias") + 1) + 1:]
+    except ValueError:
+        return True
+    pos = [t for t in rest if not t.startswith("-") or t == "-"]
+    src = (pos[1] if len(pos) > 1 else None) if action == "set" else (pos[0] if pos else "-")
+    if action == "set" and src != "-":
+        return bool(ALIAS_RISKY_RE.search(" ".join(rest)))
+    got = _stdin_text(text) if src == "-" else _gh_read(src, cwd)
+    return got is None or bool(ALIAS_RISKY_RE.search(got))
+
+
+def _gh_judge(argv: list[str], cwd: Path | None = None, text: str | None = None) -> tuple[str, str, bool]:
+    """`(종류, 형태, 대상 무관)`. 종류: `read`|`write`|`merge`|`approve`|`dismiss`|`local`|`alias`. 모르는 그룹은 read(오탐 방지).
+    `text`는 Bash 명령 글(`@-`·`--input -` 본문), `cwd`는 `@파일`·`--input` 기준."""
     words = _gh_words(argv)
     group = words[0] if words else ""
     action = words[1] if len(words) > 1 else ""
     if group == "api":
-        endpoint, write = _gh_api(argv)
-        if write and re.search(r"/pulls/[^/]+/merge/?$|/merges/?$", (endpoint or "").split("?", 1)[0]):
-            return "merge"
-        return "write" if write else "read"
+        return _gh_api_kind(argv, cwd, text)
     if group == "pr":
         if action == "merge":
-            return "merge"
+            return "merge", "gh pr merge", False
         if action == "checkout":
-            return "local"
-        return "write" if action in GH_PR_WRITE else "read"
+            return "local", "", False
+        if action == "review" and _gh_review_approves(argv):
+            return "approve", "gh pr review --approve", False
+        return ("write" if action in GH_PR_WRITE else "read"), "", False
+    if group == "alias" and action in ("set", "import"):
+        risky = _gh_alias_risky(argv, action, cwd, text)
+        return ("alias", f"gh alias {action}", True) if risky else ("read", "", False)
     if group in GH_ACTION_GROUPS:
-        return "read" if not action or action in GH_READ_ACTIONS else "write"
+        return ("read" if not action or action in GH_READ_ACTIONS else "write"), "", False
     if group == "repo":
-        return "read" if not action or action in GH_REPO_READ else "write"
-    return "read"
+        return ("read" if not action or action in GH_REPO_READ else "write"), "", False
+    return "read", "", False
+
+
+def _gh_kind(argv: list[str], cwd: Path | None = None, text: str | None = None) -> str:
+    """`read`|`write`|`merge`|`approve`|`dismiss`|`local`|`alias` (`_gh_judge`의 종류)."""
+    return _gh_judge(argv, cwd, text)[0]
+
+
+def _gh_scan(argv: list[str]) -> tuple[list[str], set[int]]:
+    """gh 인자를 pflag 꼴로 훑는다 → `(위치 인자, 옵션 자리 토큰의 번호)`. 값 받는 옵션은 `GH_SEL_*` 표와 `-R`로 보고 그 값을
+    건너뛴다(`pr review --comment`는 bool, 표에 없는 동작은 표 전체를 합친 글자). `--` 뒤는 모두 위치 인자."""
+    words = _gh_words(argv)
+    action = " ".join(words[:2])
+    short = GH_SEL_SHORT_WITH_ARG.get(action, GH_SEL_SHORT_ANY) + "R"
+    long = GH_SEL_LONG_WITH_ARG - {"--comment"} if action == "pr review" else GH_SEL_LONG_WITH_ARG
+    pos, opts, flags, i = [], set(), True, 1
+    while i < len(argv):
+        tok = argv[i]
+        if flags and tok == "--":
+            flags = False
+        elif flags and tok.startswith("-") and tok != "-":
+            opts.add(i)
+            i += _pflag(tok, argv[i + 1] if i + 1 < len(argv) else None, short, long)[2]
+        else:
+            pos.append(tok)
+        i += 1
+    return pos, opts
+
+
+def _gh_repo_values(argv: list[str]) -> tuple[list[str], list[str]]:
+    """`-R`·`--repo` 값 `(분명한 것, 그 밖)`. 분명한 것: 옵션 자리(`_gh_scan`)의 `-R v`, `--repo v`, `--repo=v`, `-Rv`,
+    `-R=v`(pflag 짧은 옵션). 그 밖: 묶음 `-dR v`·`-dRv`(앞 글자가 값을 받으면 R는 그 값의 일부라 모호하다), 값 받는 옵션의 값
+    자리·`--` 뒤의 같은 꼴(`-b -Rother/x`의 본문 — gh는 레포로 읽지 않는다), `gh api`의 모든 꼴(`gh api`엔 `-R`가 없다)."""
+    words = _gh_words(argv)
+    opts = set() if words[:1] == ["api"] else _gh_scan(argv)[1]
+    strict, loose = [], []
+    for i, tok in enumerate(argv[1:], 1):
+        nxt = argv[i + 1] if i + 1 < len(argv) else None
+        if tok in ("-R", "--repo"):
+            value, clear = nxt, True
+        elif tok.startswith("--repo="):
+            value, clear = tok.split("=", 1)[1], True
+        elif tok.startswith("-R") and len(tok) > 2:
+            value, clear = tok[2:].removeprefix("="), True
+        elif re.match(r"^-[A-Za-z]+R", tok):
+            value, clear = tok[tok.index("R") + 1:].removeprefix("=") or nxt, False
+        else:
+            continue
+        if value is not None:
+            (strict if clear and i in opts else loose).append(value)
+    return strict, loose
+
+
+def _gh_selector(argv: list[str]) -> str | None:
+    """`gh pr|issue <동작>`의 선택자(동작 뒤 첫 위치 인자 — 번호·URL·브랜치). 옵션 값은 pflag 꼴로 건너뛴다(`_gh_scan`).
+    그 밖 그룹이거나 없으면 None."""
+    words = _gh_words(argv)
+    if len(words) < 2 or words[0] not in ("pr", "issue"):
+        return None
+    pos = _gh_scan(argv)[0]
+    return pos[2] if len(pos) > 2 else None
 
 
 def _gh_targets_db(inv: Invocation, conf: Config) -> bool:
-    """대상 레포가 이슈 DB인가: api 엔드포인트의 `repos/<o>/<r>` → `-R`/`--repo`/`GH_REPO` → cwd(gh가 원격으로 정하는 레포:
-    이슈 DB clone·worktree·스냅샷이거나 origin이 이슈 DB 원격)."""
+    """대상 레포가 이슈 DB인가. 명시 대상 후보(api 엔드포인트의 `repos/<o>/<r>`, PR·이슈 URL 선택자(`_gh_selector`), `-R`·`--repo`의
+    모든 꼴, `GH_REPO`) 중 하나라도 이슈 DB면 대상(합집합 — gh는 URL 선택자면 cwd·`-R`과 무관하게 그 레포를 쓴다). 읽을 수 있는
+    분명한 후보가 없으면 cwd(gh가 원격으로 정하는 레포: 이슈 DB clone·worktree·스냅샷이거나 origin이 이슈 DB 원격). 선택자가
+    아닌 자리의 PR·이슈 URL(`--body`·`-c` 등 옵션 값)과 옵션 자리가 아닌 `-R` 꼴(`_gh_repo_values`의 그 밖)은 이슈 DB일 때만
+    대상으로 세고 cwd 판정을 막지 않는다."""
     argv = inv.argv
+    strict_raw, loose_raw = _gh_repo_values(argv)
     words = _gh_words(argv)
     if words and words[0] == "api":
-        endpoint = _gh_api(argv)[0] or ""
-        m = re.search(r"(?:^|/)repos/([^/]+)/([^/?#]+)", endpoint)
+        m = re.search(r"(?:^|/)repos/([^/]+)/([^/]+)", _gh_api_path(_gh_api_parse(argv)["endpoint"] or ""))
         if m and not any(t.startswith(("{", ":")) for t in m.groups()):
-            return conf.same_db_repo(_repo_slug(f"{m.group(1)}/{m.group(2)}"))
-    repo = inv.env.get("GH_REPO")
-    for i, tok in enumerate(argv[1:], 1):
-        if tok in ("-R", "--repo") and i + 1 < len(argv):
-            repo = argv[i + 1]
-        elif tok.startswith("--repo="):
-            repo = tok.split("=", 1)[1]
-    if repo:
-        return conf.same_db_repo(_repo_slug(_expand(repo)))
+            strict_raw.append(f"{m.group(1)}/{m.group(2)}")
+    sel = _gh_selector(argv)
+    sel = _expand(sel) if sel is not None else None
+    urls = [w for w in (_expand(t) for t in argv[1:]) if GH_URL_RE.match(w)]
+    strict_raw += [w for w in urls if w == sel]
+    loose_raw += [w for w in urls if w != sel]
+    if inv.env.get("GH_REPO"):
+        strict_raw.append(inv.env["GH_REPO"])
+    strict = [s for s in (_repo_slug(_expand(v)) for v in strict_raw) if s is not None]
+    loose = [s for s in (_repo_slug(_expand(v)) for v in loose_raw) if s is not None]
+    if any(conf.same_db_repo(s) for s in strict + loose):
+        return True
+    if strict:
+        return False
     if any(p.clone_common is not None for p in conf.profiles) and conf.profile_of_common(_common_dir(inv.cwd)):
         return True
     return conf.same_db_repo(_origin_slug(inv.cwd))
 
 
-def check_gh(inv: Invocation, conf: Config, dec: Decision) -> None:
+def check_gh(inv: Invocation, conf: Config, dec: Decision, text: str | None = None) -> None:
+    """규칙 11(gh). `text`는 Bash 명령 글 전체(GraphQL·별칭 본문을 stdin heredoc에서 읽는다)."""
     if conf.user is None or not conf.remote_slugs:
         return
-    kind = _gh_kind(inv.argv)
+    kind, form, anywhere = _gh_judge(inv.argv, inv.cwd, text)
     if kind == "local":
         if conf.is_clone_body(inv.cwd):
             dec.deny.append(CLONE_MUTATION_MSG)
         return
-    if kind == "read" or not _gh_targets_db(inv, conf):
+    if kind == "alias":     # 별칭엔 대상이 없다
+        dec.deny.append(ALIAS_DENY)
+        return
+    if kind == "read" or not (anywhere or _gh_targets_db(inv, conf)):
         return
     if kind == "merge":
-        dec.deny.append("이슈 DB PR을 gh로 직접 머지하지 않는다. 병합은 사용자가 고른 뒤 db_pr.py merge(승인 커밋·PR 검사 대조)로만 "
-                        "하거나 리뷰어가 GHE에서 한다 (규칙 7·11).")
+        dec.deny.append(GH_MERGE_DENY)
+    elif kind == "approve":
+        dec.deny.append(f"{APPROVE_DENY}: {form}).")
+    elif kind == "dismiss":
+        dec.deny.append(f"{DISMISS_DENY}: {form}).")
     else:
         dec.ask.append("이슈 DB 원격을 바꾸는 gh 명령이다. 변경·검증 결과를 보고 승인한 뒤에만 진행한다 (규칙 7).")
 
@@ -1665,7 +1968,7 @@ def check_bash(command: str, cwd: Path, conf: Config, dec: Decision) -> None:
         if conf.clones:
             check_clone_writes(inv, conf, dec)
         if name == "gh":
-            check_gh(inv, conf, dec)
+            check_gh(inv, conf, dec, command)
             continue
         if name != "git" or not conf.git_rules:
             continue
@@ -1714,8 +2017,8 @@ INSTALL_HINT = "pyproject 의존성(PyYAML·jsonschema)을 설치한 뒤 `config
 
 
 def _degraded(event: dict, why: str) -> tuple[dict | None, list[str]]:
-    """의존성 없음·내부 오류로 정상 판정을 못 할 때. MCP는 거부(Jira 쓰기 차단은 guard가 유일한 장치),
-    git·gh·`db_pr.py publish`와 파일 도구는 레포·clone을 판별할 수 없으므로 ask, 그 밖의 Bash는 통과 + 경고.
+    """의존성 없음·내부 오류로 정상 판정을 못 할 때. MCP는 거부(Jira 쓰기 차단은 guard가 유일한 장치), gh Approve·리뷰 기각
+    형태는 거부, git·gh·`db_pr.py publish`와 파일 도구는 레포·clone을 판별할 수 없으므로 ask, 그 밖의 Bash는 통과 + 경고.
     종료 2(모든 Bash 차단, 설치 명령까지)는 쓰지 않는다."""
     tool = str(event.get("tool_name") or "")
     tool_input = event.get("tool_input") if isinstance(event.get("tool_input"), dict) else {}
@@ -1729,6 +2032,10 @@ def _degraded(event: dict, why: str) -> tuple[dict | None, list[str]]:
             invs = invocations(str(tool_input.get("command") or ""), Path(str(event.get("cwd") or os.getcwd())))
             names = [_base(i.argv[0]) for i in invs]
             cmd = str(tool_input.get("command") or "")
+            for inv in invs:        # Approve·기각은 대상 레포를 몰라도 거부한다(guard 안 함수만 — import 없음)
+                kind, form, _ = _gh_judge(inv.argv, inv.cwd, cmd) if _base(inv.argv[0]) == "gh" else ("", "", False)
+                if kind in ("approve", "dismiss"):
+                    return _decision("deny", f"{why}: {DEGRADED_REVIEW_DENY}: {form}). {INSTALL_HINT}."), []
             risky = any(n in ("git", "gh") for n in names) or word_net(cmd) or word_net(cmd, "db_pr", "merge") or \
                 word_net(cmd, "skill_patch", "apply") or any(
                 not _expand(t).startswith("/dev/") for i in invs for t in _write_targets(i))   # 파일 쓰기(clone일 수 있다)

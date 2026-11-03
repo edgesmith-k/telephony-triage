@@ -17,7 +17,7 @@
 ## 진행 상태 (11/03)
 
 - 모드: **사외 초안**. Phase D0·1~13·반입 전 보강 완료. 최신 묶음 **import-20261103**(main `77e2827`). main 병합 PR #8~#79.
-- **H 진행 중**: 계획 확인 완료(11/03, Q1~Q8 추천안, `MODULE_SKILLS_DECISIONS.md` "계획 확인"). 단계표 `MODULE_SKILLS_PLAN.md §4` — 지금 **A1**(+1 관문).
+- **H 진행 중**: 계획 확인 완료(11/03, Q1~Q8 추천안, `MODULE_SKILLS_DECISIONS.md` "계획 확인"). 단계표 `MODULE_SKILLS_PLAN.md §4` — **A1**(+1 관문): 구현·리뷰 3회 끝, 전체 테스트·eval 75 남음(디스크 부족으로 중단, 11/03). 그다음 A2 → C0.
 - 모델 Sonnet 5.5 기준(Opus 5.5 11개 실패 0). `TODO(SITE)`: `tools/list_site_todos.py`. REVIEW-OPEN 0. 사내 시작 **"사내 설정 시작"**(결정 (o)).
 - 안내서: `docs/book/telephony-triage-book.html`(공유본 https://claude.ai/artifact/1jov1Et4dQUMauFr6aoxWG), 목록 `docs/materials/00-index.html`
 
@@ -32,8 +32,8 @@
 
 ## 사내로 넘긴 것
 
-- 사내 대상 eval 11개(`pending.json` `site`, S-2; 주입 59·60 포함, 사내 모델이 다르면 +7), 코드 Read line 힌트(T4, S-2 측정 뒤)·offline_eval 오류율 상한(S-1 합의, S-5)·`max_tokens_hint` 처리(S-4a)·setup Jira 없음 중단(U1, S-3), db-authoring 스키마 요약 확장(S-2, 스키마 Read 횟수로 판단), 사내 마켓플레이스 소스 유형 확인 → version 규칙(S-2·S-7, `plugin.json` version 없음 = 커밋 SHA 기준).
-- **L2로 hook이 바뀜**(옛·새 비교는 이 PC 기록으로 대신, 놓친 publish 0, 10/18): 반입 뒤 site eval 11개 모두 다시·plugin-probe 15·16 확인.
+- 사내 대상 eval 12개(`pending.json` `site`, S-2; 주입 59·60·+1 관문 75 포함, 사내 모델이 다르면 +7), 코드 Read line 힌트(T4, S-2 측정 뒤)·offline_eval 오류율 상한(S-1 합의, S-5)·`max_tokens_hint` 처리(S-4a)·setup Jira 없음 중단(U1, S-3), db-authoring 스키마 요약 확장(S-2, 스키마 Read 횟수로 판단), 사내 마켓플레이스 소스 유형 확인 → version 규칙(S-2·S-7, `plugin.json` version 없음 = 커밋 SHA 기준).
+- **L2로 hook이 바뀜**(옛·새 비교는 이 PC 기록으로 대신, 놓친 publish 0, 10/18): 반입 뒤 site eval 12개 모두 다시·plugin-probe 15·16 확인.
 - S-7: usage_stats format 2·`--transcripts` 허용 여부.
 - 반입 뒤 후보(RF-5·6·8·9, 리뷰 후속 R-36~R-47)는 `docs/history/draft-notes-2026-10.md` "10/13 이동".
 
