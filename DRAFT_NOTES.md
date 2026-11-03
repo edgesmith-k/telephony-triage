@@ -16,9 +16,8 @@
 
 ## 진행 상태 (11/02)
 
-- 모드: **사외 초안**. Phase D0·1~13·반입 전 보강 완료. 묶음 import-20261102는 **보류**(재리뷰 P1 — 새 라벨로). main 병합 PR #8~#78.
-- 반입 노트 `REIMPORT_NOTES_1021/1028/1030/1102.md`(#71 사내 피드백, #72~#78 oFono).
-- 11/02~03 재리뷰(`REVIEW_1102_HANDOFF.md` 머리, 1102 §6). 다음: eval 73 → PR → 병합(사용자) → 새 묶음 → **H**.
+- 모드: **사외 초안**. Phase D0·1~13·반입 전 보강 완료. 최신 묶음 **import-20261103**(main `77e2827`, 1102 대신). main 병합 PR #8~#79.
+- 11/02~03 재리뷰 완료(#79, `REVIEW_1102_HANDOFF.md` 머리, 1102 §6). **다음: H — `MODULE_SKILLS_PLAN.md` 머리 "새 세션에서 이어 하기"**.
 - 모델 Sonnet 5.5 기준(Opus 5.5 11개 실패 0). `TODO(SITE)`: `tools/list_site_todos.py`. REVIEW-OPEN 0. 사내 시작 **"사내 설정 시작"**(결정 (o)).
 - 안내서: `docs/book/telephony-triage-book.html`(공유본 https://claude.ai/artifact/1jov1Et4dQUMauFr6aoxWG), 목록 `docs/materials/00-index.html`
 
@@ -26,9 +25,10 @@
 
 | ☐ | 항목 | 메모 |
 |---|---|---|
-| ☐ F | 새 라벨 반입 묶음(1102 대신) — 태그·반입은 사용자 | 사내: SITE_INSTALL §8, 반입 노트 1021~1102(사내 eval은 추후) |
+| ☐ F | 묶음 import-20261103 — 사람 확인 3개·태그·반입은 사용자 | SITE_INSTALL §8·`REIMPORT_NOTES_1021~1102` |
 | ☐ G | 범용판 별도 레포 — **보류(10/07 사용자)** | 재개는 사용자가 정한다 |
 | ☐ H | 모듈 스킬 레포(탐색 문서+심층 분석 스킬)·+1 병합 | `MODULE_SKILLS_PLAN.md`. 계획 → 확인 → 구현 |
+| ☐ I | OpenCode·사내 GLM판(H 다음) | `MODULE_SKILLS_PLAN.md` 끝 절 |
 
 ## 사내로 넘긴 것
 
