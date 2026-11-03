@@ -1196,9 +1196,10 @@ def _backstop(seg: list[str]) -> list[int]:
 
 CD_NAMES = ("cd", "pushd", "popd")
 CWD_CAP = 8                         # 따라가는 cwd 후보 상한(넘으면 처음·보호 뿌리 안·최근 후보만 남기고 나머지를 모르는 디렉토리로 접는다)
-# 이보다 긴 cwd 후보(상대 cd가 길게 이어진 것)는 `..`을 접고 그래도 길면 상한 안의 조상으로 자른다(`_shorten`) — 후보 경로가 cd마다
-# 길어져 비용이 cd 수의 제곱으로 늘지 않게(재리뷰 P1 성능). 조상은 같은 worktree·작업 폴더·clone 안에 남는다
+# 이보다 긴 cwd 후보(상대 cd가 길게 이어진 것)는 실제 경로와 `..`을 글자로 접은 경로로 바꾼다(`_shorten`) — 후보 경로가 cd마다
+# 길어져 비용이 cd 수의 제곱으로 늘지 않게(재리뷰 P1 성능)
 LONG_CWD = 1024
+MAX_CWD = 4096                      # PATH_MAX: 이보다 긴 후보만 조상으로 자른다(모르는 디렉토리도 둔다)
 PIPE_OPS = {"|", "|&"}
 # 복합 명령(`_Walk`): 여는 말 → 닫는 말. `for`·`select`·`case` 머리의 나머지(`x in a b`)는 명령이 아니다
 COMPOUND = {"{": "}", "if": "fi", "case": "esac", "while": "done", "until": "done", "for": "done", "select": "done"}
@@ -1251,17 +1252,40 @@ def _root_of(path: str, roots: tuple[str, ...]) -> str | None:
     return max(hits, key=len) if hits else None
 
 
-def _shorten(d: Path) -> Path:
-    """`LONG_CWD`보다 긴 cwd 후보를 줄인다. 먼저 bash 논리 cd(`-L`, 기본)처럼 `..`·`.`을 글자로 접고(`a/../a/../…`), 그래도 길면
-    상한 안의 가장 깊은 조상으로 자른다 — 조상은 같은 worktree·작업 폴더·clone 안에 남는다(재리뷰 P1: 보호 뿌리로 접으면
-    worktree·작업 폴더 후보가 work_dir 자체가 돼 git 규칙·규칙 2/7 기록 검사를 건너뛰었다). 셸이 풀 글자가 있으면 모르는 디렉토리."""
+_SHORT: dict[str, tuple[Path, ...]] = {}
+
+
+def _shorten(d: Path) -> tuple[Path, ...]:
+    """`LONG_CWD`보다 긴 cwd 후보를 짧은 꼴로 바꾼다(후보 경로가 cd마다 길어져 비용이 cd 수의 제곱으로 늘지 않게). 실제 경로(심볼릭
+    링크를 푼 `_real` — 짧은 후보를 git·`_norm`이 푸는 것과 같다, bash `cd -P`·글자 경로가 없을 때의 기본 cd)와 글자로 `..`·`.`을
+    접은 경로(bash 논리 cd `-L`, 기본)를 다르면 둘 다 남긴다. 둘 다 그대로의 깊이다 — 뒤 상대 `..`가 실제 디렉토리에서 올라간다.
+    `MAX_CWD`(PATH_MAX)보다 길면 그 안의 가장 깊은 조상으로 자르고 모르는 디렉토리도 둔다(재리뷰 P1 2건: 글자로만 접으면 링크를
+    지나 clone·worktree·작업 폴더로 드는 사슬을 놓치고, 1024자 안 조상으로 자르면 깊이를 잊어 뒤 `..`가 그 밖으로 올라갔다. 그 전에는
+    보호 뿌리로 접어 worktree·작업 폴더 후보가 work_dir 자체가 됐다). 셸이 풀 글자가 있거나 상대 경로면 보호 뿌리나 모르는 디렉토리."""
     s = str(d)
     if "$" in s or "`" in s or not d.is_absolute():
-        return Path(_root_of(s, _KEEP_ROOTS) or UNKNOWN_DIR)
-    s = os.path.normpath(s)
-    while len(s) > LONG_CWD:
-        s = os.path.dirname(s[:LONG_CWD + 1])
-    return Path(s)
+        return (Path(_root_of(s, _KEEP_ROOTS) or UNKNOWN_DIR),)
+    if s in _SHORT:                     # 이미 줄인 꼴(그 자체로 고정점)이나 앞서 줄인 경로: `_dedupe`마다 다시 풀지 않는다(성능)
+        return _SHORT[s]
+    if len(_SHORT) > 50000:
+        _SHORT.clear()
+    forms = [os.path.normpath(s)]
+    try:
+        forms.insert(0, _real(s))
+    except Exception:  # noqa: BLE001 — 실제 경로를 못 풀면 글자 꼴만(판정 예외로 무너지지 않게)
+        pass
+    out: list[Path] = []
+    for f in dict.fromkeys(forms):
+        if len(f) <= MAX_CWD:
+            out.append(Path(f))
+            continue
+        while len(f) > MAX_CWD:
+            f = os.path.dirname(f[:MAX_CWD + 1])
+        out += [Path(f), UNKNOWN_DIR]
+    res = _SHORT[s] = tuple(dict.fromkeys(out))
+    for q in res:
+        _SHORT.setdefault(str(q), (q,))
+    return res
 
 
 def _dedupe(dirs) -> tuple[Path, ...]:
@@ -1269,7 +1293,7 @@ def _dedupe(dirs) -> tuple[Path, ...]:
     소스) 안의 후보 가장 최근 `CWD_CAP`개(그보다 많으면 나머지는 그 뿌리 자체로), 그 밖의 가장 최근 후보들을 남기고 나머지를 모르는
     디렉토리 하나로 접는다(회귀 수정 R4 — 넘침이 마지막 cd 대상을 버리던 부류, 재리뷰 — 분기·실패할 수 있는 이동이 후보를 늘려 처음
     cwd인 clone이 접히던 부류. 접힌 후보는 규칙 11에선 모르는 디렉토리로 남는다. git 규칙이 보는 후보는 보호 뿌리 안에 있다)."""
-    dirs = tuple(d if len(str(d)) <= LONG_CWD else _shorten(d) for d in dirs)
+    dirs = tuple(x for d in dirs for x in ((d,) if len(str(d)) <= LONG_CWD else _shorten(d)))
     out = tuple(dict.fromkeys(dirs))
     if len(out) <= CWD_CAP:
         return out
@@ -1329,6 +1353,15 @@ class _Cwd:
     def stack_dirs(self) -> tuple[Path, ...]:
         return tuple(d for level in self.stack for d in level)
 
+    def settle(self) -> "_Cwd":
+        """칸을 정확히 모르는 스택(`exact` 거짓 — 다시 참이 되지 않는다)은 칸 하나로 합친다. 그 뒤 연산은 스택 칸 전체(`stack_dirs`
+        — popd·`pushd ±N`·`cd ±N`의 `anywhere`)만 보므로 판정은 같고, 칸이 pushd마다 쌓여 popd마다 모두 다시 보는 비용이 pushd 수의
+        세제곱으로 늘지 않는다(재리뷰 P1 성능: 없는 경로 pushd 1000개 + popd 1000개가 hook 시간 한도 180초를 넘겨 판정 없이 통과했다
+        — Claude Code는 시간 초과를 막지 않는다). 합친 칸도 후보 상한(`_dedupe`) 안이다."""
+        if not self.exact and len(self.stack) > 1:
+            self.stack = [_dedupe(self.stack_dirs())]
+        return self
+
     @staticmethod
     def union(states) -> "_Cwd":
         """여러 경로 끝 상태의 합(후보 순서는 넘긴 순서 — 뒤가 최근이다). 스택이 다르면 칸을 모두 남기고 모른다고 표시한다
@@ -1339,7 +1372,7 @@ class _Cwd:
         same = all(s.stack == states[0].stack for s in states)
         stack = states[0].stack if same else list(dict.fromkeys(level for s in states for level in s.stack))
         return _Cwd([d for s in states for d in s.dirs], old, stack, any(s.sticky for s in states),
-                    same and all(s.exact for s in states))
+                    same and all(s.exact for s in states)).settle()
 
 
 def _is_sep(tok: str) -> bool:
@@ -1443,6 +1476,7 @@ class _Walk:
             if seg:
                 if any("DIRSTACK" in t for t in seg):     # 스택을 셸 배열로 바꿀 수 있다: 칸을 모른다
                     self.st.exact = False
+                    self.st.settle()
                 self.segment(seg, prev, tok, seg_ids)
             if tok in ("&&", "||"):
                 if self.andor is None:
@@ -1565,9 +1599,11 @@ class _Walk:
             except Exception:  # noqa: BLE001 — 이동을 따라가지 못했다: 실패했거나 모르는 곳으로 갔다(닫힌 쪽 — 판정은 이어 간다)
                 self.st = _Cwd.union([saved, _Cwd((UNKNOWN_DIR,))])
                 self.st.exact = False
+                self.st.settle()
                 self.seen += self.st.all()
         elif name == "dirs" and not scoped and len(_drop_redirs(first)) > 1:
             self.st.exact = False       # `dirs -c`(스택 비우기)·zsh `dirs <칸…>`(스택 바꾸기): 스택 칸을 모른다
+            self.st.settle()
         elif name == "eval" and self.depth < MAX_DEPTH and len(first) > 1:    # eval은 이 셸에서 돈다: cd가 남는다
             inner = _Walk(self.st.copy() if scoped else self.st, self.depth + 1, self.cdpath)
             self.out += inner.run(" ".join(first[1:]))
@@ -1661,6 +1697,7 @@ class _Walk:
                     self.fails.append(fail)
                 else:
                     self.st = _Cwd.union([fail, st])
+        self.st.settle()
         self.seen += self.st.all()
 
     @staticmethod

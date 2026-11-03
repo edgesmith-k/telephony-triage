@@ -1866,21 +1866,60 @@ def test_guard_long_cwd_candidates_stay_in_worktree_and_job_dir():
     (job / "s").mkdir(parents=True, exist_ok=True)
     deep = plain / "/".join(["d" * 60] * 20)                           # `..` 없이 1024자를 넘는 깊은 경로
     deep.mkdir(parents=True)
-    hops = "data/../" * 150
+    hops, shops = "data/../" * 150, "s/../" * 220                     # `.`은 pathlib이 접는다 — `..` 사슬로
+    # 심볼릭 링크를 지나는 긴 사슬: 실제 경로(cd -P·글자 경로가 없을 때의 기본 cd)로도 본다
+    (plain / "Lc").symlink_to(c / ".git")                              # Lc/.. = clone (clone은 바꾸지 않는다)
+    (plain / "Lwt").symlink_to(wt / "data")
+    (plain / "Ljob").symlink_to(job / "s")
+    (deep / "Lc").symlink_to(c)
+    # 1024자보다 깊은 실제 디렉토리: 뒤 상대 `..`는 실제 깊이에서 올라간다
+    dd = "/".join(["e" * 60] * 20)
+    (wt / "data" / dd).mkdir(parents=True)
+    (job / "s" / dd).mkdir(parents=True)
     rows = [(f"cd {hops}data; git push origin HEAD:main", wt, "deny"),
             (f"cd {hops}data && git commit --no-verify -m x", wt, "deny"),
             (f"cd {wt}/{hops}; git push origin HEAD:main", plain, "deny"),
             ("cd data; ls; cd ..; " * 120 + "git push origin HEAD:main", wt, "deny"),
-            (f"cd {'s/../' * 220}; echo x > post.approved.json", job, "deny"),
-            (f"cd {'s/../' * 220}; echo x > merge-offer.json", job, "deny"),
-            (f"cd {'s/../' * 220}; rm -f post.result.json", job, "deny"),
+            (f"cd {shops}; echo x > post.approved.json", job, "deny"),
+            (f"cd {shops}; echo x > merge-offer.json", job, "deny"),
+            (f"cd {shops}; rm -f post.result.json", job, "deny"),
             (f"cd {hops}; git push origin HEAD:main", c, "deny"),
+            (f"cd -P Lc/../{hops}; git push origin HEAD:main", plain, "deny"),
+            (f"cd -P Lc/..; cd {hops}; git commit --no-verify -m x", plain, "deny"),
+            (f"cd Lc/../{hops}; git push origin HEAD:main", plain, "deny"),     # 글자 경로 plain/data가 없다: bash는 실제 경로로
+            (f"cd -P Lwt/../{hops}; git push origin HEAD:main", plain, "deny"),
+            (f"cd -P Ljob/../{shops}; echo x > post.approved.json", plain, "deny"),
+            (f"cd {deep}/Lc; git push origin HEAD:main", plain, "deny"),
+            ("git push origin HEAD:main", deep / "Lc", "deny"),                # hook cwd 자체가 긴 링크 경로
+            (f"cd data/{dd}; cd {'../' * 20}; git push origin HEAD:main", wt, "deny"),
+            (f"cd data/{dd} && cd {'../' * 20} && git commit --no-verify -m x", wt, "deny"),
+            (f"cd s/{dd}; cd {'../' * 21}; echo x > merge-offer.json", job, "deny"),
+            (f"cd {'../' * 20}; git push origin HEAD:main", wt / "data" / dd, "deny"),
             # 오탐 방지: 길어도 이슈 DB 밖이면 그대로
             (f"cd {deep}; git push origin HEAD:main", plain, None),
             (f"cd {'x/../' * 300}; git push origin HEAD:main", plain, None)]
     try:
         for cmd, cwd, want in rows:
             assert decision(bash(ws, cmd, cwd)) == want, (cmd[:80], cwd)
+    finally:
+        gitp(c, "worktree", "remove", "--force", str(wt))
+
+
+def test_guard_pushd_popd_chains_stay_fast():
+    """명령 파싱(재리뷰 P1 성능): 실패할 수 있는 pushd(없는 경로)가 스택을 '모름'으로 만든 뒤에도 칸을 하나로 합쳐 상한 안에 둔다.
+    예전에는 칸이 pushd마다 쌓이고 popd마다 모두 다시 봐서 pushd 1000개 + popd 1000개가 hook 시간 한도(180초)를 넘겼다 — Claude
+    Code는 시간 초과를 막지 않는다(fail-open). 긴 상대 경로 후보는 한 번 줄인 꼴을 다시 풀지 않는다."""
+    import time
+    ws = shared()
+    c = ws.clone
+    wt = ws.work / "wt-pushd-perf"
+    git(c, "worktree", "add", "-q", "--detach", str(wt), "origin/main")
+    pd = "\n".join(f"pushd x{i}" for i in range(1000)) + "\n" + "\n".join("popd" for _ in range(1000))
+    try:
+        for cwd in (wt, c):
+            t0 = time.monotonic()
+            assert decision(bash(ws, pd + "\ngit push origin HEAD:main", cwd)) == "deny", cwd
+            assert time.monotonic() - t0 < 30, (cwd, time.monotonic() - t0)     # 이 PC 3~6초, 예전 156~250초
     finally:
         gitp(c, "worktree", "remove", "--force", str(wt))
 
