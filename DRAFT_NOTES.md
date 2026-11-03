@@ -16,23 +16,23 @@
 
 ## 진행 상태 (11/02)
 
-- 모드: **사외 초안**. Phase **D0, 1~13** 완료, 반입 전 보강 트랙 완료(history). 최신 반입 묶음 **import-20261102**(1031 대신, 태그·반입은 사용자). main 병합 PR #8~#78.
-- 10/21~28 **PR #71(병합됨)**: 사내 피드백 10건 + 17건(사내는 S-6까지 완료). → `REIMPORT_NOTES_1021/1028.md`, 인계 `REVIEW_1028_HANDOFF.md`. 사내 추가 정보(7·11·13) 요청은 보류.
-- 10/30 **oFono 여러 데몬·플랫폼별 가설 분석·플랫폼 자동 판단**(결정 (t)) → **`REIMPORT_NOTES_1030.md`**. PR #72. 10/31 사내 트랙 O-1~O-4(#73)·eval(#75). 11/02 공개 oFono 표본 반영(#77: syslog (c)·gril·마스킹)·`kind: hop`·log-guide(#78, eval 73) → **`REIMPORT_NOTES_1102.md`**. **다음: `REVIEW_1102_HANDOFF.md`**.
-- 모델: Sonnet 5.5 기준(Opus 5.5 11개 실패 0).
-- `TODO(SITE)`: `tools/list_site_todos.py`. REVIEW-OPEN 0건. 사내 시작: **"사내 설정 시작"**(결정 (o)).
-- 안내서 HTML: 책 `docs/book/telephony-triage-book.html`(공유본 https://claude.ai/artifact/1jov1Et4dQUMauFr6aoxWG), 목록 `docs/materials/00-index.html`
+- 모드: **사외 초안**. Phase D0·1~13·반입 전 보강 완료. 묶음 import-20261102는 **보류**(재리뷰 P1 — 새 라벨로). main 병합 PR #8~#78.
+- 반입 노트 `REIMPORT_NOTES_1021/1028/1030/1102.md`(#71 사내 피드백, #72~#78 oFono).
+- 11/02~03 재리뷰(`REVIEW_1102_HANDOFF.md` 머리, 1102 §6). 다음: eval 73 → PR → 병합(사용자) → 새 묶음 → **H**.
+- 모델 Sonnet 5.5 기준(Opus 5.5 11개 실패 0). `TODO(SITE)`: `tools/list_site_todos.py`. REVIEW-OPEN 0. 사내 시작 **"사내 설정 시작"**(결정 (o)).
+- 안내서: `docs/book/telephony-triage-book.html`(공유본 https://claude.ai/artifact/1jov1Et4dQUMauFr6aoxWG), 목록 `docs/materials/00-index.html`
 
 ## 남은 일 (사외 전용)
 
 | ☐ | 항목 | 메모 |
 |---|---|---|
-| ☐ F | 반입 묶음 **import-20261102** — 태그·반입은 사용자 | 사내: SITE_INSTALL §8, **`REIMPORT_NOTES_1021/1028/1030/1102.md`**(사내 eval은 추후) |
+| ☐ F | 새 라벨 반입 묶음(1102 대신) — 태그·반입은 사용자 | 사내: SITE_INSTALL §8, 반입 노트 1021~1102(사내 eval은 추후) |
 | ☐ G | 범용판 별도 레포 — **보류(10/07 사용자)** | 재개는 사용자가 정한다 |
+| ☐ H | 모듈 스킬 레포(탐색 문서+심층 분석 스킬)·+1 병합 | `MODULE_SKILLS_PLAN.md`. 계획 → 확인 → 구현 |
 
 ## 사내로 넘긴 것
 
-- 사내 대상 eval 11개(`pending.json` `site`, S-2; 주입 59·60 포함, 사내 모델이 다르면 +7), 코드 Read line 힌트(T4, S-2 측정 뒤)·offline_eval 오류율 상한(S-1 합의, S-5)·`max_tokens_hint` 처리(S-4a)·setup Jira 없음 중단(U1, S-3), db-authoring 스키마 요약 확장(S-2, 스키마 Read 횟수로 판단), 사내 마켓플레이스 소스 유형 확인 → version 규칙(S-2·S-7, V2에서 `plugin.json` version 삭제 = 커밋 SHA 기준. 반입 직후 캐시 1회 무효화는 무해).
+- 사내 대상 eval 11개(`pending.json` `site`, S-2; 주입 59·60 포함, 사내 모델이 다르면 +7), 코드 Read line 힌트(T4, S-2 측정 뒤)·offline_eval 오류율 상한(S-1 합의, S-5)·`max_tokens_hint` 처리(S-4a)·setup Jira 없음 중단(U1, S-3), db-authoring 스키마 요약 확장(S-2, 스키마 Read 횟수로 판단), 사내 마켓플레이스 소스 유형 확인 → version 규칙(S-2·S-7, `plugin.json` version 없음 = 커밋 SHA 기준).
 - **L2로 hook이 바뀜**(옛·새 비교는 이 PC 기록으로 대신, 놓친 publish 0, 10/18): 반입 뒤 site eval 11개 모두 다시·plugin-probe 15·16 확인.
 - S-7: usage_stats format 2·`--transcripts` 허용 여부.
 - 반입 뒤 후보(RF-5·6·8·9, 리뷰 후속 R-36~R-47)는 `docs/history/draft-notes-2026-10.md` "10/13 이동".
@@ -50,6 +50,8 @@
 - 없음.
 
 ## 결정
+
+- (u) 11/02~03 사용자: 맨 `cid`는 마스킹하지 않는다(셀 위치 키·`mCid`는 가림). 표본 데몬 이름은 레포에 넣어도 된다(그 밖 표본 값·호스트·D-Bus 이름은 금지). 다음 작업 H(모듈 스킬 레포·+1 병합)의 결정은 `docs/development/MODULE_SKILLS_PLAN.md`.
 
 - (t) oFono 확장(10/30, 사용자): oFono DB 하나에 모든 데몬, 한 스트림, 데몬별 소스, 데몬 사이 짝(17 §9 K12~K15). 가설 분석은 플랫폼별(최상위 `analyzers` = android, 그 밖 `platforms.<p>.analyzers`, 대체 없음, 탐색 자료 `reference/platforms/<p>/`, §10 K16·K17). 플랫폼은 로그 형식 자동 + 애매하면 질문(§11 K18).
 

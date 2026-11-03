@@ -29,7 +29,7 @@
 9. journald가 없는 단말: `/var/log/messages` 또는 `/var/log/syslog`. 이 경우 연도·타임존을 `info.txt`에 꼭 적는다.
    - BusyBox syslogd(`/var/log/messages`)와 `logread` 출력은 같은 형식이다(호스트 뒤에 `<facility>.<severity>` 칸, 파서 형식 (c)). 폴더에는 `messages`로 둔다.
    - **파일을 복사해 받는다**(`cat /var/log/messages > messages`·scp 등). 직렬 콘솔에서 `tail -F`로 받으면 줄 끝이 `\r\r\n`이 되고 `tail: … has been replaced` 안내 줄이 끼어 줄 번호가 원본과 달라진다(파서는 읽지만 근거 줄 번호가 2배가 된다).
-   - BusyBox syslogd는 읽기 버퍼(빌드 옵션 `FEATURE_SYSLOGD_READ_BUFFER_SIZE`, 기본 256B)를 넘는 긴 메시지를 syslog 줄 여러 개로 자른다(주소·덤프가 줄 경계에서 쪼개진다). 버퍼를 키울 수 있으면 키우고, 잘린 줄이 있으면 `notes.md`에 적는다.
+   - BusyBox syslogd는 메시지 하나를 읽기 버퍼(빌드 옵션 `FEATURE_SYSLOGD_READ_BUFFER_SIZE`, 기본 256B — 앞머리 `<pri>`·시각·`ident[pid]: ` 포함) 한 번으로 읽고, 버퍼를 넘는 뒤쪽은 **버린다**(다음 줄로 이어지지 않는다 — 긴 주소·덤프 줄은 끝이 잘린다). 버퍼를 키울 수 있으면 키우고, 끝이 잘린 줄이 있으면 `notes.md`에 적는다. 같은 데몬 줄이 이어져 보이면 데몬이 나눠 찍은 것이다.
 
 ## 3) 시각 동기·타임존
 

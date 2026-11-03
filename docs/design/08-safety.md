@@ -18,7 +18,7 @@
 | TMSI / GUTI / 5G-GUTI | 키 이름 문맥 | `<TMSI#n>` / `<GUTI#n>` |
 | MSISDN / 전화번호 | `+`국가번호, 국내 번호 형식, `tel:` URI | `<MSISDN#n>` |
 | SIP URI / IMPU / IMPI | `sip:…@…`, `tel:…`, IMS 도메인의 사용자 부분 | 사용자 부분만 `<IMPU#n>` / `<IMPI#n>` (도메인은 유지 옵션) |
-| Cell ID / TAC / CI / PCI 등 셀 식별자 | `mCi=`, `mTac=`, `cid=` 등 키 이름 문맥 (AOSP 데이터 콜 응답 객체 `DataCallResponse: {…}`·`SetupDataCallResult{…}`와 벤더 데이터 콜 객체 `PdpContext{…}`·`PdnInfo: `·`PDN_INFO*`(` (`)의 첫 `cid`는 context id라 제외 — 닫히지 않고 잘린 줄의 뒤쪽 `cid=`·객체 밖 `cid=`·`mCid`·`cellId` 등 셀 위치 키는 셀로 본다) | `<CELL#n>` |
+| Cell ID / TAC / CI / PCI 등 셀 식별자 | 셀 위치 키 이름 문맥 `mCi`·`mPci`·`mTac`·`mLac`·`mCid`·`mNci`·`mCellId`·`ci`·`pci`·`tac`·`lac`·`nci`·`eci`·`cellId`·`cellIdentity` (`mCid`는 CellIdentity의 셀 ID라 가린다). 맨 `cid`는 가리지 않는다 — 데이터 콜 context id(AOSP `DataCallResponse`·`SetupDataCallResult`, 벤더 `PdpContext{`·`PdnInfo`·`PDN_INFO*` 등)라 분석에 쓰므로 객체 안·밖, 표기(`cid=`·`cid:`·JSON·HIDL `.cid =`)와 무관하게 그대로 둔다(11/02 사용자 결정, 이전 "데이터 콜 객체 안 첫 `cid`만 제외"를 넓힘). 셀 ID를 맨 `cid=`로 찍는 로그가 있으면 그 값도 남는다 | `<CELL#n>` |
 | IP 주소 | IPv4/IPv6. IPv4 값 바로 앞이 `version`·`build`·`release`·`rev`·`fw`·`sw`·`baseband`·`kernel`·`v` 문맥이면 제외(버전 문자열). IPv6는 형식 규칙 외에 주소 키(`addr`·`address`·`ip`·`ipv6`·`gw`·`gateway`·`dns<n>`) 바로 뒤(`addr:<v6>`, `/64` 허용)·끝이 `:`인 잘린 표기, 문맥 없는 6묶음 이상 조각(`::` 없음, 3~4자리 묶음 2개 이상, MAC 모양 제외 — 줄 경계에서 쪼개진 주소) | `<IP#n>` |
 | MAC 주소 | 6옥텟 `:`·`-` 형식(`-` 형식은 숫자만이면 제외), 키 문맥(`mac`·`mac_address`·`bssid`·`hwaddr`·`ether`·`bd_addr`, 낱말이 앞에 붙은 `…MacAddress`)의 12 hex | `<MAC#n>` |
 | GPS 좌표 | `lat`·`latitude`·`lon`·`longitude`·`lng`·`altitude`(앞에 `m` 허용) 키 문맥의 소수 3자리 이상, `gps`·`fused`·`network`·`passive` 뒤의 `위도,경도` 쌍(소수 4자리 이상) | `<GEO#n>` |
@@ -38,6 +38,7 @@
 - 마스킹은 같은 입력이면 항상 같은 출력을 내고, 이미 마스킹된 입력(`<…#n>` 토큰)에 다시 적용해도 결과가 같다(멱등, 기존 토큰은 그대로 둔다). 분석과 회귀(마스킹된 fixture를 다시 파싱)의 일치를 위해서다.
 - **이미 토큰이 있는 입력**(부분 마스킹된 외부 로그, 사람이 원본 값을 끼워 넣은 fixture): 먼저 입력 전체에서 종류별 기존 최대 번호를 구하고, 새 원본 값에는 그 다음 번호부터 준다. 예: `<CELL#1>`이 이미 있는 파일에 새 셀 ID가 나오면 `<CELL#2>`. 서로 다른 값이 같은 토큰이 되어 값 비교 관계가 거짓으로 바뀌는 것을 막기 위해서다.
 - 파서 백엔드·외부 파서가 낸 이벤트의 `msg`와 `fields`도 extractor 전에 같은 함수(같은 번호 대응)로 마스킹한다 (`parse_logcat.py parse --mask`).
+- **짝 주석 값**(oFono 설정 짝 규칙·내장 gril의 `proto` 주석, `17-platforms.md §9-3`): site 정규식이 뽑을 수 있는 값이라 `--mask`면 한 번 더 본다. `request`·`error`는 같은 줄에서 가린 값이면 그 토큰, 아니면 텍스트 규칙으로 마스킹한다. `serial`은 짝 규칙이 10진 1~10자리만 주석에 싣고(11자리 이상 IMSI·ICCID·전화번호 모양은 주석 없음), `--mask` 출력에는 같은 수(앞 0 무시)가 마스킹된 같은 줄의 토큰 밖에 숫자로 따로 보일 때만 남긴다(숫자 경계 — 더 긴 숫자의 조각은 안 된다) — 아니면 `null`(파생 이벤트 필드에도 없다). 다른 줄에서 복사한 serial(`kind: hop` 아래 줄)은 같은 줄 대조를 할 수 없어 `null`이다. 번호 표 전체가 아니라 같은 줄만 본다(앞 줄의 같은 글자와 우연히 겹치지 않게). 한계: 가린 값에서 뽑은 serial과 같은 수가 그 줄의 가리지 않은 곳에 숫자로 따로 보이면 남는다(숫자 자체는 이미 출력에 보이고, "serial = 가린 값" 연결만 남는다). Android 주석은 `proto`가 없어 그대로다.
 - `--check` 모드는 검출 시 종료 코드 1이다. NUL이 든 파일도 건너뛰지 않는다(`--staged`·`--changed`: NUL을 지운 줄과 공백으로 바꾼 줄을 함께 검사 — UTF-16·잘린 logcat). `db_precommit`(`--staged`), `db_pr stage`(`--changed`), Claude hook이 쓴다.
 - 항목별 누락/과잉 마스킹 테스트를 둔다.
 

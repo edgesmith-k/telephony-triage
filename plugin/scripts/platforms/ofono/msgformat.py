@@ -11,6 +11,9 @@
 TODO(SITE:S24·S25)). 하위 식별(파일 줄기)은 백엔드 `SUBTAG_RE` 모양일 때만 tag에 붙는다.
 - `tid_file_paren`: `tid:<n> <File>.cpp(<줄>):<func> > 본문` → `> ` 뒤 본문, 하위 식별 = `File`.
 - `level_tid_file`: `[<L>][tid=<n>] <file>.cpp:<줄> <ns>::<Class>::<func>() 본문`(L = V/D/I/W/E/F) → `func() ` 뒤, `file`.
+  두 형식의 함수 칸(`<func>`·`<ns>::<Class>::<func>`)은 마스킹 토큰(`<IP#n>`)도 받는다 — C++ 범위 연산자 조각이 문맥
+  없는 IPv6 규칙에 가려져도 마스킹본(`mask_pii`·`cut` fixture 재파싱)이 원문과 같은 본문·하위 식별을 낸다(08-safety §8
+  분석과 회귀 일치). 토큰 모양은 `common.masking.TOKEN_RE`와 같게 인라인했다(테스트가 고정).
 - `slot_level_seq`: `[SLOT_<n>][<L>] <seq> 본문` → seq 뒤 본문, 하위 식별 없음.
 - `src_suffix`: 끝에 소스 위치 `  path/file.go:<줄>` 또는 `[./path/file.cxx +<줄>]`·`[File.cpp+<줄>]` → 꼬리 뗀 앞, 파일 줄기.
 - `[Class::Method] 본문` 형식은 아직 없다(P2).
@@ -28,9 +31,15 @@ from platforms.base import MsgView
 _FILE_FUNC = re.compile(r"^(?P<file>[\w./-]+\.c):(?P<func>\w+)\(\)\s?(?P<body>.*)$")
 _EXT = r"(?:c|cc|cpp|cxx|h|hh|hpp)"
 _SRC_EXT = r"(?:c|cc|cpp|cxx|h|hh|hpp|go|java|kt|py|rs)"
-_TID_FILE_PAREN = re.compile(r"^tid:\d+\s+(?P<file>[\w.-]+\." + _EXT + r")\(\d+\):[\w:~]+\s+>\s?(?P<body>.*)$")
+# 마스킹 토큰 — `common.masking.TOKEN_RE`와 같은 모양(이 모듈은 표준 라이브러리·platforms.base만 쓰므로 인라인, 테스트가 같은지 고정)
+_MASK_TOKEN = r"<[A-Z][A-Z0-9]*#\d+>"
+# C++ 함수 칸(`ns::Cls::~Cls`). 범위 연산자 조각(`ns::Cls`의 `::C`, `std::`의 `d::`)은 문맥 없는 IPv6 규칙에 `<IP#n>`으로
+# 가려지므로 토큰도 받는다 — 마스킹본(fixture 재파싱)이 원문과 같은 본문·하위 식별을 낸다(08-safety §8). 토큰 없는 줄은
+# 맞는 문자열 집합이 `[\w:~]+`와 같다(토큰 첫 글자 `<`는 `[\w:~]` 밖).
+_CXX_FUNC = r"(?:[\w:~]|" + _MASK_TOKEN + r")+"
+_TID_FILE_PAREN = re.compile(r"^tid:\d+\s+(?P<file>[\w.-]+\." + _EXT + r")\(\d+\):" + _CXX_FUNC + r"\s+>\s?(?P<body>.*)$")
 _LEVEL_TID_FILE = re.compile(
-    r"^\[[VDIWEF]\]\[tid=\d+\]\s+(?P<file>[\w.-]+\." + _EXT + r"):\d+\s+[\w:~]+\(\)\s?(?P<body>.*)$")
+    r"^\[[VDIWEF]\]\[tid=\d+\]\s+(?P<file>[\w.-]+\." + _EXT + r"):\d+\s+" + _CXX_FUNC + r"\(\)\s?(?P<body>.*)$")
 _SLOT_LEVEL_SEQ = re.compile(r"^\[SLOT_\d+\]\[[VDIWEF]\]\s+\d+\s?(?P<body>.*)$")
 _SRC_SUFFIX = re.compile(r"(?:\s+(?P<p1>[\w./-]+\." + _SRC_EXT + r"):\d+|\s*\[(?:\./)?(?P<p2>[\w./-]+\." + _SRC_EXT
                          + r")\s*\+\s*\d+\])\s*$")

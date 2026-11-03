@@ -78,7 +78,9 @@ def _ril_events(rec: dict, rules: parser_rules.Rules, last_ts: str | None) -> li
     if not rule:
         return []
     timeout = int(rule["timeout_ms"])
-    base_fields = {"request": ann["request"], "serial": ann["serial"]}
+    base_fields = {"request": ann["request"]}
+    if ann["serial"] is not None:   # `--mask`가 버린 serial(`_mask_record`)은 필드에서도 뺀다("None" 글자를 싣지 않는다)
+        base_fields["serial"] = ann["serial"]
     if "hal" in ann:  # 벤더 RIL 층 (platform.ril.vendor 있을 때만)
         base_fields["hal"] = ann["hal"]
     out = []
@@ -155,6 +157,9 @@ def _mask_record(rec: dict, masker) -> dict:
     # **같은 줄**에서 키 문맥으로 가린 값(또는 그 일부)이면 그 값의 토큰으로, 아니면 텍스트 규칙(`masker`)만 쓴다 —
     # 번호 표 전체를 보면 앞 줄에서 가린 같은 글자(`password=NONE`)와 우연히 같은 값(gril 성공 응답 `NONE`)이 토큰이
     # 되어 가짜 `ril_error`가 나고(11/02 리뷰), 텍스트 규칙만 쓰면 `token=<값>`처럼 키 문맥으로만 가려지는 값이 남는다.
+    # `serial`은 같은 수가 마스킹된 같은 줄에 숫자로 따로 보일 때만 남긴다(`_serial_shown`, 숫자 경계 — 더 긴 숫자의 조각은
+    # 안 된다) — 가린 값에서 뽑았거나 다른 줄 복사본(hop)이면 None(짝 시각·지연은 그대로). 가린 값의 숫자 조각 대조는
+    # gril `[0,0001]`이 같은 줄 IP·번호와 겹쳐 오탐이 난다(11/02 재리뷰).
     if isinstance(ann, dict) and "proto" in ann:
         def _proto_value(v: str) -> str:
             hit = next((lv for lv in line_values if v in lv), None)       # 줄에서 가린 값 그 자체이거나 그 일부
@@ -165,8 +170,27 @@ def _mask_record(rec: dict, masker) -> dict:
                 alt = "|".join(map(re.escape, sorted(inner, key=len, reverse=True)))
                 v = re.sub(r"(?<![A-Za-z0-9_])(?:" + alt + r")(?![A-Za-z0-9_])", lambda m: mask_value(m.group(0)), v)
             return masker(v)
-        rec["ril"] = {**ann, **{k: _proto_value(ann[k]) for k in ("request", "error") if isinstance(ann.get(k), str)}}
+        ril = {**ann, **{k: _proto_value(ann[k]) for k in ("request", "error") if isinstance(ann.get(k), str)}}
+        if ril.get("serial") is not None and not _serial_shown(ril, rec.get("msg")):
+            ril["serial"] = None
+        rec["ril"] = ril
     return rec
+
+
+def _serial_shown(ann: dict, masked_msg) -> bool:
+    """`--mask`: 짝 주석 `serial`과 같은 수가 마스킹된 **같은 줄**에 토큰 밖 숫자로 따로 보이는가(08-safety §8, 17-platforms §9-3).
+
+    짝 규칙 annotate 입력(본문)은 줄 `msg`의 일부라 가리지 않은 곳에서 뽑은 serial은 늘 보인다 — 내장 gril
+    (`[<slot>,<serial>]`, 앞뒤가 `,`·`]`)도 그래서 바뀌지 않는다. 보이지 않으면 가린 값(IMSI·번호·셀 등, 그 조각 포함)에서
+    뽑은 것이다. 숫자 경계로 맞춘다 — 더 긴 숫자의 조각(`pin=1234`를 가린 줄의 `len=12345`)은 같은 수가 아니라 보이지 않는
+    것으로 본다(11/02 재리뷰). 그래서 보이는 숫자의 일부만 잡은 site 정규식 serial도 `null`이 된다(안전 쪽).
+    다른 줄에서 복사한 serial(`dir`가 req·resp가 아닌 주석 — oFono `hop` 아래 줄)은 그 줄에서 대조할 수 없어 보이지 않는
+    것으로 본다. 토큰은 공백으로 바꿔 토큰 번호가 숫자로 세지거나 앞뒤 숫자가 이어 붙지 않게 한다. 앞 0은 무시된다
+    (`int`가 뗀 `0042`의 `42`도 보인다)."""
+    if ann.get("dir") not in ("req", "resp") or not isinstance(masked_msg, str):
+        return False
+    number = r"(?<![0-9])0*" + re.escape(str(ann["serial"]).lstrip("0") or "0") + r"(?![0-9])"
+    return re.search(number, masking.TOKEN_RE.sub(" ", masked_msg)) is not None
 
 
 def postprocess(

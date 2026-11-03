@@ -5,11 +5,14 @@ site-defaults `platform.others.ofono.protocols.<이름>: {kind: regex, tags, req
 
 - `tags`(필수, 비어 있지 않음): 이 규칙을 볼 ident. 여러 구성요소(데몬)의 ident를 섞어도 된다 — 백엔드는 한
   수집(스트림) 구간의 레코드 전체를 `pair`에 넘기므로 데몬 사이(다른 pid·tag) 짝이 된다.
-- `request`·`response`(필수 정규식, `re.search`): 이름 그룹 `serial`(10진 숫자) 필수. 선택 그룹: 요청 `name`,
-  응답 `name`·`error`. 그 밖 이름 그룹은 무시한다. 입력은 구성요소 `msg_format`이 앞머리를 뗀 본문이다.
-  한 줄에 요청을 먼저 본다. `serial`이 10진 숫자가 아니거나 `name`·`error` 값이 식별자 모양(`TOKEN_RE`: 글자로
-  시작, 글자·숫자·`_`·`.`, 128자 이하)이 아니면 그 줄은 주석을 달지 않는다. 숫자로 시작하는 값(전화번호·IMSI·IP)과
-  `:`이 든 값(MAC)은 여기서 막고, `--mask`면 `parse_logcat`이 `proto` 주석의 `request`·`error`를 한 번 더 마스킹한다.
+- `request`·`response`(필수 정규식, `re.search`): 이름 그룹 `serial`(10진 1~10자리 — RIL serial은 int32, 내장 gril과
+  같은 상한, 앞 0 허용) 필수. 선택 그룹: 요청 `name`, 응답 `name`·`error`. 그 밖 이름 그룹은 무시한다. 입력은 구성요소
+  `msg_format`이 앞머리를 뗀 본문이다. 한 줄에 요청을 먼저 본다. `serial`이 10진 1~10자리가 아니거나(11자리 이상 =
+  IMSI·ICCID·전화번호 모양 — `hop`도 복사하지 않는다) `name`·`error` 값이 식별자 모양(`TOKEN_RE`: 글자로 시작,
+  글자·숫자·`_`·`.`, 128자 이하)이 아니면 그 줄은 주석을 달지 않는다. 숫자로 시작하는 값(전화번호·IMSI·IP)과
+  `:`이 든 값(MAC)은 여기서 막고, `--mask`면 `parse_logcat`이 `proto` 주석의 `request`·`error`를 한 번 더 마스킹하고,
+  `serial`은 같은 수(앞 0 무시)가 마스킹된 같은 줄에 숫자로 따로 보일 때만 남긴다(10자리 이하라도 가린 값에서 뽑았으면
+  null — 더 긴 숫자의 조각만 보여도 null, 08-safety §8).
 - 주석: `{serial, dir, request, error, paired_ts, latency_ms}`(백엔드가 `proto: <이름>`을 단다).
 - 짝: 키는 `serial`(같은 수집 구간). 나중 요청이 같은 serial의 대기 요청을 대신한다. 응답에 `name`이 없으면
   요청 이름을 채운다(반대도). 짝 없는 요청은 `observed_until` = 그 구간의 가장 늦은 레코드 시각(태그 무관, "수집이
@@ -31,6 +34,7 @@ from platforms.base import PairProtocol, cfg_compile, cfg_list, cfg_mapping, con
 KIND = "regex"
 KEYS = ("kind", "tags", "request", "response")
 TOKEN_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.]{0,127}$")
+SERIAL_RE = re.compile(r"\d{1,10}")   # RIL serial은 int32(10자리 이하) — 내장 gril과 같은 상한, 앞 0 허용(`%04d`)
 
 
 def _pattern(conf: dict, key: str, path: str) -> re.Pattern:
@@ -81,7 +85,7 @@ def _annotate(request: re.Pattern, response: re.Pattern, tag, msg, tags, phone=N
         serial = hit.group("serial") or ""
         ok_name, name = _group(hit, "name")
         ok_error, error = _group(hit, "error") if direction == "resp" else (True, None)
-        if not (serial.isdecimal() and ok_name and ok_error):
+        if not (SERIAL_RE.fullmatch(serial) and ok_name and ok_error):     # 11자리 이상(IMSI·번호 모양)은 싣지 않는다
             continue
         return {"serial": int(serial), "dir": direction, "request": name, "error": error,
                 "paired_ts": None, "latency_ms": None}

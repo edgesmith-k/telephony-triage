@@ -3,7 +3,8 @@
 - 레지스트리: `components`(기본·덮어쓰기·오류), android는 `components`를 받지 않음, 설정 정의 짝 규칙(`kind: regex`)
 - `regex` kind: 데몬 사이(다른 pid·tag) 짝, `observed_until` = 수집 구간 끝, 이름 채우기, 나중 요청이 대신함
 - `msg_format`: 앞머리를 뗀 본문으로 짝 규칙을 본다(이벤트 `msg`는 원문), `split_tag` → tag `ident/subtag`,
-  벤더 앞머리 모양 4개(`tid_file_paren`·`level_tid_file`·`slot_level_seq`·`src_suffix`)
+  벤더 앞머리 모양 4개(`tid_file_paren`·`level_tid_file`·`slot_level_seq`·`src_suffix`), 마스킹본(C++ 함수 칸 토큰)도 같은 결과
+- 짝 주석 PII: `name`·`error`·`serial`(10진 1~10자리) 자리, `--mask` 재마스킹(같은 줄에 보이지 않는 serial은 null)
 - `parse_logcat parse`(issue-db-ofono): `proto`·지연·파생 `ril_error`·`ril_timeout`·`ril_no_response`
 - 기본 설정 출력 불변(구성요소 블록을 명시해도, 짝 규칙이 없으면 이전과 같다)
 """
@@ -11,6 +12,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import sys
 import textwrap
@@ -239,9 +241,34 @@ VENDOR_FORMATS = [
 ]
 
 
-@pytest.mark.parametrize("name,msg,want", VENDOR_FORMATS)
+# C++ 함수 칸(합성): 범위 연산자 조각(`c::`·`::C`·`d::`, 함수 칸 전체 `abcd::ef`)이 문맥 없는 IPv6 규칙에 가려지는 모양
+CXX_FUNCS = [
+    ("level_tid_file", "[I][tid=12] example.cpp:34 svc::Worker::send() ipc reply 5", MsgView("ipc reply 5", "example")),
+    ("level_tid_file", "[I][tid=12] example.cpp:34 ns::Cls::~Cls() done", MsgView("done", "example")),
+    ("level_tid_file", "[D][tid=3] mod.cc:1 abcd::ef() done", MsgView("done", "mod")),
+    ("tid_file_paren", "tid:7 Example.cpp(9):Svc::Send > ipc call 5 X", MsgView("ipc call 5 X", "Example")),
+    ("tid_file_paren", "tid:7 example_mgr.h(9):std::vector > done", MsgView("done", "example_mgr")),
+]
+
+
+@pytest.mark.parametrize("name,msg,want", VENDOR_FORMATS + CXX_FUNCS)
 def test_vendor_msg_formats(name, msg, want):
     assert dict(msgformat.FORMATS)[name](msg) == want
+
+
+@pytest.mark.parametrize("name,msg,want", [c for c in VENDOR_FORMATS + CXX_FUNCS if c[2] is not None])
+def test_vendor_msg_formats_on_masked_lines(name, msg, want):
+    """재리뷰 P1(11/02): 마스킹본(`mask_pii`와 같은 `new_masker` 경로)에서도 원문과 같은 본문·하위 식별 — C++ 함수 칸의
+    `::` 조각이 `<IP#n>`이 되어도 형식이 맞는다(08-safety §8 분석과 회귀 일치). 예시 본문에는 PII가 없다."""
+    masked = masking.new_masker(msg)(msg)
+    if "::" in msg:
+        assert "<IP#" in masked          # 시험이 비지 않게: 함수 칸이 실제로 가려진다
+    assert dict(msgformat.FORMATS)[name](masked) == want
+
+
+def test_msgformat_mask_token_matches_masking():
+    """`msgformat`은 `common.masking`을 불러오지 않으므로 토큰 모양을 인라인했다 — 둘이 같은지 고정한다."""
+    assert msgformat._MASK_TOKEN == re.sub(r"\(\?P<\w+>(.*?)\)", r"\1", masking.TOKEN_RE.pattern)
 
 
 def test_src_suffix_bounded_scan():
@@ -266,6 +293,35 @@ def test_vendor_format_split_tag(tmp_path):
     assert out[0]["ril"]["latency_ms"] == 200 and out[0]["msg"].startswith("tid:12 Example.cpp(34)")
 
 
+def test_vendor_format_masked_log_same_tags_and_pairs(tmp_path):
+    """재리뷰 P1(11/02): 마스킹본을 다시 파싱해도(O-2 `o2.pairs`·`cut` fixture → `db_regress`) 원문과 같은 tag·짝."""
+    text = ("2026-09-20T14:40:00.000Z dut daemon-a[901]: [I][tid=12] example.cpp:34 svc::Worker::send() "
+            "ipc call 5 PLACEHOLDER_CALL\n"
+            "2026-09-20T14:40:00.200Z dut daemon-a[901]: [I][tid=12] example.cpp:40 ns::Cls::~Cls() ipc reply 5\n"
+            "2026-09-20T14:40:00.300Z dut daemon-b[902]: tid:7 Example.cpp(9):Svc::Send > ipc call 6 PLACEHOLDER_CALL\n"
+            "2026-09-20T14:40:00.400Z dut daemon-b[902]: tid:7 Example.cpp(9):std::vector > ipc reply 6 "
+            "error=PLACEHOLDER_ERROR\n")
+    m = masking.new_masker(text)
+    masked_text = "\n".join(m(line) for line in text.split("\n"))
+    assert masked_text.count("<IP#") == 4
+    raw, masked = tmp_path / "raw" / "journal.log", tmp_path / "masked" / "journal.log"
+    for path, body in ((raw, text), (masked, masked_text)):
+        path.parent.mkdir()
+        path.write_text(body, encoding="utf-8")
+    comps = {"daemon-a": {"idents": ["daemon-a"], "msg_format": "level_tid_file", "split_tag": True},
+             "daemon-b": {"idents": ["daemon-b"], "msg_format": "tid_file_paren", "split_tag": True}}
+    be = _backend(components=comps, protocols={"ipc": IPC})
+
+    def shape(path):
+        return [(e["tag"], e["ril"] and (e["ril"]["dir"], e["ril"]["serial"], e["ril"]["request"], e["ril"]["error"],
+                                         e["ril"]["latency_ms"])) for e in be.parse([path], None, None, None)]
+    assert shape(raw) == shape(masked) == [
+        ("daemon-a/example", ("req", 5, "PLACEHOLDER_CALL", None, 200)),
+        ("daemon-a/example", ("resp", 5, "PLACEHOLDER_CALL", None, 200)),
+        ("daemon-b/Example", ("req", 6, "PLACEHOLDER_CALL", None, 100)),
+        ("daemon-b/Example", ("resp", 6, "PLACEHOLDER_CALL", "PLACEHOLDER_ERROR", 100))]
+
+
 def test_regex_annotate_rules():
     proto = pairing.build("ipc", dict(IPC), "p")
     tags = frozenset(IPC["tags"])
@@ -287,13 +343,29 @@ LOOSE = {**IPC, "request": r"^ipc call (?P<serial>\d+) (?P<name>\S+)$",
 
 @pytest.mark.parametrize("value", PII)
 def test_regex_annotate_refuses_pii_like_values(value):
-    """전화번호·IMSI·IP(숫자로 시작)·MAC(`:`)은 식별자 모양이 아니다 — 주석에 싣지 않는다."""
+    """전화번호·IMSI·IP(숫자로 시작)·MAC(`:`)은 식별자 모양이 아니다 — 주석에 싣지 않는다. serial 자리도(10진 1~10자리만,
+    재리뷰 P1(11/02) — 느슨한 `\\d+` 그룹이 11자리 이상 번호·IMSI를 잡아도 주석이 없다)."""
     proto = pairing.build("ipc", dict(LOOSE), "p")
     tags = frozenset(IPC["tags"])
     assert proto.annotate("daemon-a", f"ipc call 7 {value}", tags, None) is None
     assert proto.annotate("daemon-b", f"ipc reply 7 error={value}", tags, None) is None
     for ok in ("PLACEHOLDER_CALL", "GetProperties", "org.ofono.Error.Failed", "NONE"):
         assert proto.annotate("daemon-b", f"ipc reply 7 error={ok}", tags, None)["error"] == ok
+    assert proto.annotate("daemon-a", f"ipc call {value} PLACEHOLDER_CALL", tags, None) is None
+    assert proto.annotate("daemon-b", f"ipc reply {value}", tags, None) is None
+
+
+@pytest.mark.parametrize("serial,want", [("7", 7), ("0042", 42), ("4294967295", 4294967295), ("0000000001", 1),
+                                         ("12345678901", None), ("00000000042", None)])
+def test_regex_annotate_serial_digit_bound(serial, want):
+    """재리뷰 P1(11/02): serial은 10진 1~10자리(RIL serial은 int32 — 내장 gril과 같은 상한). 앞 0은 허용(gril `%04d`),
+    11자리 이상은 앞 0이어도 주석이 없다(`hop`이 복사할 serial도 생기지 않는다)."""
+    proto = pairing.build("ipc", dict(LOOSE), "p")
+    tags = frozenset(IPC["tags"])
+    ann = proto.annotate("daemon-a", f"ipc call {serial} PLACEHOLDER_CALL", tags, None)
+    assert (ann and ann["serial"]) == want
+    resp = proto.annotate("daemon-b", f"ipc reply {serial}", tags, None)
+    assert (resp and resp["serial"]) == want
 
 
 def test_mask_record_masks_proto_annotation_values():
@@ -325,11 +397,75 @@ def test_mask_record_masks_proto_annotation_values():
     assert parse_logcat._mask_record(rec, masking.new_masker())["ril"] is android
 
 
+_RULES = type("Rules", (), {"requests": {"PLACEHOLDER_CALL": {"timeout_ms": 1000}}})()
+
+
+def _proto_line(msg, serial, direction="resp", proto="ipc"):
+    """짝지어진(지연 1500ms > timeout 1000ms) `proto` 주석 줄 — 응답이면 오류도 있다."""
+    return {"ts": "2026-09-20T00:00:02.000Z", "pid": 1, "tid": 1, "level": "I", "tag": "daemon-b", "msg": msg,
+            "phone_id": None, "category_hint": None, "event": None, "fields": {}, "source": "backend:x",
+            "line_ref": None,
+            "ril": {"serial": serial, "dir": direction, "request": "PLACEHOLDER_CALL",
+                    "error": "PLACEHOLDER_ERROR" if direction == "resp" else None,
+                    "paired_ts": "2026-09-20T00:00:00.500Z", "latency_ms": 1500, "proto": proto}}
+
+
+@pytest.mark.parametrize("msg,serial", [
+    ("ipc reply number=0101234567", 101234567),             # 키 문맥 번호, 앞 0을 뗀 int
+    ("ipc reply imsi=4500812345", 4500812345),
+    ("ipc reply imsi=450081234567890", 4500812345),         # 15자리 값의 앞 10자리만 뽑은 조각
+    ("ipc reply lac=4660", 4660),
+    ("ipc reply pin=1234", 1234),
+    ("ipc reply pin=1234 len=12345", 1234),                 # 같은 줄의 더 긴 숫자 조각은 "보인다"가 아니다(숫자 경계)
+    ("ipc reply imsi=4500812345 t=145008123456", 4500812345),
+    ("ipc reply lac=1", 1),                                   # 토큰 번호(`<CELL#1>`의 1)는 보이는 숫자가 아니다
+])
+def test_mask_record_drops_serial_hidden_by_masking(msg, serial):
+    """재리뷰 P1(11/02): site 정규식 serial 그룹이 같은 줄에서 가린 값(또는 그 조각)을 잡았으면 `--mask` 출력의
+    `ril.serial`은 null — 짝 시각·지연은 그대로, 파생 이벤트 필드에 `serial`이 없다(원문이 어디에도 숫자로 남지 않는다).
+    같은 줄의 가리지 않은 더 긴 숫자가 그 숫자열을 품고 있어도 같은 수가 아니므로 null이다."""
+    import parse_logcat
+    rec = _proto_line(msg, serial)
+    out = parse_logcat._mask_record(rec, masking.new_masker())
+    assert out["ril"]["serial"] is None and rec["ril"]["serial"] == serial      # 입력 레코드는 바꾸지 않는다
+    assert (out["ril"]["paired_ts"], out["ril"]["latency_ms"]) == (rec["ril"]["paired_ts"], 1500)
+    assert list(out["ril"]) == list(rec["ril"])
+    derived = parse_logcat._ril_events(out, _RULES, None)
+    assert [e["event"] for e in derived] == ["ril_error", "ril_timeout"]
+    assert all("serial" not in e["fields"] for e in derived)
+    number = re.compile(r"(?<![0-9])0*" + str(serial) + r"(?![0-9])")
+    shown = masking.TOKEN_RE.sub(" ", out["msg"])                                # 토큰 번호는 원문 숫자가 아니다
+    assert not number.search(shown + json.dumps(out["ril"]) + json.dumps([e["fields"] for e in derived]))
+
+
+@pytest.mark.parametrize("msg,serial", [
+    ("ipc reply 7 lac=4660", 7),
+    ("ipc reply 0042 imsi=450081234567890", 42),            # 앞 0 무시
+    ("ipc reply 12 addr=10.0.12.1 number=01012345612", 12),  # 같은 줄 가린 값에 같은 숫자 조각이 있어도 보이면 남는다
+])
+def test_mask_record_keeps_visible_serial(msg, serial):
+    """마스킹된 같은 줄에 토큰 밖 숫자로 보이는 serial은 그대로(파생 필드도)."""
+    import parse_logcat
+    out = parse_logcat._mask_record(_proto_line(msg, serial), masking.new_masker())
+    assert "<" in out["msg"] and out["ril"]["serial"] == serial
+    assert parse_logcat._ril_events(out, _RULES, None)[0]["fields"]["serial"] == str(serial)
+
+
+def test_mask_record_drops_copied_hop_serial():
+    """`hop` 아래 줄 serial은 위 줄 복사본이라 그 줄에서 대조할 수 없다 — 같은 숫자가 보여도 `--mask`면 null(연결은 그대로)."""
+    import parse_logcat
+    rec = _proto_line("ipc req PLACEHOLDER_CALL len=5", 5, direction="hop_req", proto="h")
+    out = parse_logcat._mask_record(rec, masking.new_masker())
+    assert out["ril"]["serial"] is None and out["ril"]["paired_ts"] == rec["ril"]["paired_ts"]
+    assert out["ril"]["request"] == "PLACEHOLDER_CALL" and parse_logcat._ril_events(out, _RULES, None) == []
+
+
 def _journal(tmp_path: Path, values) -> Path:
     lines = ["2026-09-20T14:40:00.000000+09:00 dut daemon-a[901]: ipc call 8 PLACEHOLDER_CALL"]
     for i, value in enumerate(values):
         ms = 100 + i * 100
         lines += [f"2026-09-20T14:40:00.{ms:03d}000+09:00 dut daemon-a[901]: ipc call {10 + i} {value}",
+                  f"2026-09-20T14:40:00.{ms + 25:03d}000+09:00 dut daemon-a[901]: ipc call {value} PLACEHOLDER_CALL",
                   f"2026-09-20T14:40:00.{ms + 50:03d}000+09:00 dut daemon-b[902]: ipc reply 8 error={value}"]
     lines.append("2026-09-20T14:40:04.000000+09:00 dut daemon-b[902]: status: placeholder")
     path = tmp_path / "journal.log"
@@ -339,7 +475,8 @@ def _journal(tmp_path: Path, values) -> Path:
 
 @pytest.mark.parametrize("mask", [False, True])
 def test_parse_pii_values_never_reach_annotations(tmp_path, mask):
-    """원문·`--mask` 두 경로 모두 PII 모양 값은 `ril`·파생 필드에 실리지 않는다(`--mask`면 출력 어디에도 없다)."""
+    """원문·`--mask` 두 경로 모두 PII 모양 값은 `ril`·파생 필드에 실리지 않는다(`--mask`면 출력 어디에도 없다).
+    serial 자리(`ipc call <값> PLACEHOLDER_CALL`)도 — 11자리 이상 번호·IMSI는 주석이 없다(재리뷰 P1(11/02))."""
     log = _journal(tmp_path, PII)
     root = plugin_root("ofono-multi", platform={**ON, "others": {"ofono": {"components": COMPONENTS,
                                                                             "protocols": {"ipc": LOOSE}}}})
