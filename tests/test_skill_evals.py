@@ -2976,7 +2976,7 @@ def test_e72_defined_and_wired(tmp_path):
     assert "M=병합 2(72 본인 바로 병합·75 +1 관문)" in json.loads((EVALS / "evals.json").read_text(encoding="utf-8"))["_comment"]
     assert not any("gh_merge" in (x.get("setup") or {}) for x in by_id.values() if x["id"] not in (72, 75))
     data = json.loads((EVALS / "offsite_results.json").read_text(encoding="utf-8"))
-    assert data["evals"]["72"] == {"verdict": "none", "runs": []}
+    assert "72" in data["evals"]     # run 유무는 보지 않는다(사외 측정 a1-75a부터 run이 있다 — 75와 같은 꼴)
     # 확인 화면 병합 줄 판정 정규식이 merge.screen_line(self)의 실제 문구에 맞는다(스크립트가 기준)
     from dbpr import merge as dbmerge
     assert dbmerge.screen_line("self", None) == E72_MERGE_LINE and re.search(grader.MERGE_LINE, E72_MERGE_LINE, re.M)
