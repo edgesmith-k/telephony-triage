@@ -988,17 +988,22 @@ def test_guard_without_pyyaml_denies_mcp_and_asks_risky_bash():
     assert out is None and "의존성 없음" in err
     out, _ = judge("Write", {"file_path": str(ws.base / "x.txt")})
     assert decision(out) == "ask"
-    # Approve·리뷰 기각 형태는 대상 레포를 몰라도 거부, 그 밖의 gh(병합 포함)는 ask 그대로
-    for cmd, want in (("gh pr review 3 --approve", "deny"), ("gh api -X PUT repos/o/r/pulls/3/reviews/9/dismissals", "deny"),
-                      ("gh -b LGTM pr review 3 --approve", "deny"),        # 앞 옵션도 모든 읽기를 본다(H-A1 r4)
-                      ("gh -X PUT api repos/o/r/pulls/3/reviews/9/dismissals", "deny"),
-                      ("if true; then gh pr review 3 --approve; fi", "deny"),   # 예약어 뒤도 본다(H-A1 r5)
-                      ('gh pr review 3 "$OPT"', "deny"),                         # 셸 값 옵션은 Approve일 수 있다
-                      ("gh pr review 3 --comment -b x", "ask"), ("gh pr merge 3", "ask")):
+    # Approve·리뷰 기각·병합·자동 병합·병합 별칭 형태는 대상 레포를 몰라도 거부(내부 오류를 입력으로 일으킬 수 있다 — 회귀 수정
+    # R2), 그 밖의 gh 쓰기는 ask 그대로
+    for cmd, want, why in (("gh pr review 3 --approve", "deny", "Approve"),
+                           ("gh api -X PUT repos/o/r/pulls/3/reviews/9/dismissals", "deny", "Approve"),
+                           ("gh -b LGTM pr review 3 --approve", "deny", "Approve"),        # 앞 옵션도 모든 읽기를 본다(H-A1 r4)
+                           ("gh -X PUT api repos/o/r/pulls/3/reviews/9/dismissals", "deny", "Approve"),
+                           ("if true; then gh pr review 3 --approve; fi", "deny", "Approve"),   # 예약어 뒤도 본다(H-A1 r5)
+                           ('gh pr review 3 "$OPT"', "deny", "Approve"),                         # 셸 값 옵션은 Approve일 수 있다
+                           ("gh pr merge 3", "deny", "머지"), ("gh pr merge 3 --auto --squash", "deny", "머지"),
+                           ("gh -b x pr merge 3", "deny", "머지"), ("gh api -X PUT repos/o/r/pulls/3/merge", "deny", "머지"),
+                           (f"gh api graphql -f query='{MERGE_MUTATION}'", "deny", "머지"),
+                           ("gh alias set m 'pr merge --admin'", "deny", "머지"),
+                           ("gh pr review 3 --comment -b x", "ask", None), ("gh pr create -t x -b y", "ask", None)):
         out, _ = judge("Bash", {"command": cmd})
         assert decision(out) == want and "의존성 없음" in out["permissionDecisionReason"], cmd
-        if want == "deny":
-            assert "Approve" in out["permissionDecisionReason"], cmd
+        assert why is None or why in out["permissionDecisionReason"], cmd
 
 
 def test_guard_review_followups_redirects_and_input_redirects():
@@ -1680,6 +1685,420 @@ def test_guard_cd_scope_follows_bash_subshells_pipes_and_branches():
         gitp(c, "worktree", "remove", "--force", str(wt))
 
 
+def test_guard_cwd_moves_that_can_fail_keep_previous_candidates():
+    """명령 파싱(회귀 수정 R1): 실패할 수 있거나 대상을 모르는 이동은 이전 cwd 후보를 버리지 않는다. 모르는 디렉토리는 규칙 11에선
+    이슈 DB일 수 있는 것이지만 git 규칙(3~8·12)에선 판정하지 못하는 후보라, 이전 후보를 버리면 이슈 DB clone·worktree에서 도는
+    명령을 놓친다. Claude Code는 Bash 호출마다 새 셸이라 앞 호출의 pushd 스택은 없다 — 빈 스택 popd는 실패하고 cwd는 그대로다.
+    `popd -n`·`popd +N`(N≥1)·`pushd -n`은 cwd를 바꾸지 않는다(스택만). 분기를 합쳐 스택이 달라지면 뒤 popd는 스택 칸 모두·이전
+    후보·모르는 디렉토리로 본다. 없는 경로·셸이 풀 경로로의 cd도 실패할 수 있다(바로 뒤가 `&&`면 뒤 명령은 돌지 않는다)."""
+    ws = shared()
+    c = ws.clone
+    plain = tmp("tt-gh-plain-")
+    wt = ws.work / "wt-cdfail"
+    git(c, "worktree", "add", "-q", "--detach", str(wt), "origin/main")
+    rows = [
+        # 빈 스택 popd: 실패 — cwd 그대로
+        ("popd; git push origin HEAD:main", c, "deny"), ("popd; git push origin HEAD:main", wt, "deny"),
+        ("popd 2>/dev/null; git checkout -b x", c, "deny"), ("popd; git reset --hard origin/main", c, "deny"),
+        ("popd; echo x > notes.txt", c, "deny"), ("popd; git commit --no-verify -m x", c, "deny"),
+        ("popd; git commit --no-verify -m x", wt, "deny"), ("popd; git push --no-verify origin HEAD:issue/x", wt, "deny"),
+        ("popd; gh pr merge 3", plain, "deny"),                       # 규칙 11은 모르는 cwd(이슈 DB일 수 있다) 그대로
+        # popd -n·+N(N≥1)·pushd -n: cwd를 바꾸지 않는다
+        (f"pushd {c} >/dev/null; popd -n; git push origin HEAD:main", plain, "deny"),
+        (f"pushd {c} >/dev/null; popd -n; gh pr merge 3", plain, "deny"),
+        (f"pushd {c} >/dev/null; popd +1; git push origin HEAD:main", plain, "deny"),
+        ("pushd -n /tmp; git push origin HEAD:main", c, "deny"),
+        (f"pushd -n {c}; popd; git push origin HEAD:main", plain, "deny"),   # -n으로 넣은 칸으로 popd
+        # 인자 없는 pushd·pushd ±N·이전 디렉토리를 모르는 cd -·cd ±N: 실패하거나 모르는 칸
+        ("pushd; git push origin HEAD:main", c, "deny"), ("pushd +1; git push origin HEAD:main", c, "deny"),
+        ("cd -; git push origin HEAD:main", c, "deny"), ("cd -1; git push origin HEAD:main", c, "deny"),
+        ("popd -0; git push origin HEAD:main", c, "deny"),
+        # 분기로 스택을 모르게 되면 뒤 popd는 스택 칸·이전 후보 모두
+        ("if test -d x; then pushd /tmp; fi; popd; git push origin HEAD:main", c, "deny"),
+        (f"pushd {c} && pushd /tmp; popd; git push origin HEAD:main", plain, "deny"),
+        # 없는 경로·셸이 풀 경로: cd가 실패하면 cwd 그대로(`||` 뒤는 실패한 경우다)
+        (f"cd {plain}/nope; git push origin HEAD:main", c, "deny"),
+        ('cd "$D"; git checkout -b x', c, "deny"),
+        (f"cd {plain}/nope || git push origin HEAD:main", c, "deny"),
+        (f"cd {plain}/nope && ls || git push origin HEAD:main", c, "deny"),
+        # 오탐 방지: 따라갈 수 있는 스택은 그대로 따라간다, `&&` 뒤는 cd가 성공한 경우뿐이다
+        (f"pushd {plain} >/dev/null; popd; git push origin HEAD:main", c, "deny"),
+        (f"pushd {plain} >/dev/null; popd -n; git push origin HEAD:main", c, None),
+        (f"pushd {plain} >/dev/null; popd +0; git push origin HEAD:main", c, "deny"),
+        (f"pushd {plain} >/dev/null; pushd; git push origin HEAD:main", c, "deny"),
+        (f"pushd {c} >/dev/null; pushd; git push origin HEAD:main", plain, None),
+        (f"pushd {c} >/dev/null; popd +0; gh pr merge 3", plain, None),
+        (f"cd {plain}; popd -n; git push origin HEAD:main", c, None),
+        (f"cd {plain}/nope && git push origin HEAD:main", c, None),
+        (f"pushd {c} && popd && gh pr merge 3", plain, None)]
+    try:
+        for cmd, cwd, want in rows:
+            assert decision(bash(ws, cmd, cwd)) == want, (cmd, cwd)
+    finally:
+        gitp(c, "worktree", "remove", "--force", str(wt))
+
+
+def test_guard_cwd_candidate_overflow_keeps_first_and_latest():
+    """명령 파싱(회귀 수정 R4): cwd 후보가 상한(`CWD_CAP`)을 넘으면 처음 후보와 가장 최근 후보들을 남기고 가운데를 모르는
+    디렉토리로 접는다 — 넘침이 마지막 cd 대상(이슈 DB clone)을 버리지 않는다. 접힌 후보는 규칙 11에서 모르는 cwd로 남는다."""
+    ws = shared()
+    c = ws.clone
+    plain = tmp("tt-gh-plain-")
+    subs = [plain / f"d{i}" for i in range(9)]
+    for d in subs:
+        d.mkdir()
+    chain = "; ".join(f"true && cd {d}" for d in subs[:7])
+    arms = " ".join(f"{chr(97 + i)}) cd {d};;" for i, d in enumerate(subs[:7]))
+    rows = [(f"{chain}; true && cd {c}; git push origin HEAD:main", plain, "deny"),
+            (f"case $X in {arms} h) cd {c};; esac; git push origin HEAD:main", plain, "deny"),
+            (f"{chain}; true && cd {subs[7]}; true && cd {subs[8]}; git push origin HEAD:main", c, "deny"),   # 처음 cwd
+            (f"{chain}; true && cd {subs[7]}; true && cd {subs[8]}; gh pr merge 3", plain, "deny"),          # 접힌 후보
+            (f"{chain}; true && cd {c}; git push origin HEAD:issue/x", plain, "ask")]
+    for cmd, cwd, want in rows:
+        assert decision(bash(ws, cmd, cwd)) == want, (cmd, cwd)
+
+
+def _raising_realpath_env(ws: Workspace) -> dict:
+    """guard 하위 프로세스에서 `RAISEMARK`가 든 경로의 `os.path.realpath`가 ValueError를 내게 한다(`sitecustomize` — 경로 연산
+    예외가 판정 전체를 무너뜨리지 않는지 본다)."""
+    d = tmp("tt-raise-")
+    (d / "sitecustomize.py").write_text(
+        "import os.path as _p\n_real = _p.realpath\n\n\n"
+        "def realpath(path, *a, **k):\n"
+        "    if 'RAISEMARK' in str(path):\n        raise ValueError('test: 경로 연산 예외')\n"
+        "    return _real(path, *a, **k)\n\n\n_p.realpath = realpath\n", encoding="utf-8")
+    return {**ws.env(), "PYTHONPATH": str(d)}
+
+
+def test_guard_ansi_c_nul_surrogates_and_path_errors_do_not_degrade():
+    """명령 파싱(회귀 수정 R2): `$'…'`의 NUL(`\\0`·`\\x00`·`\\000`·`\\u0000`·`\\c@`)은 bash처럼 그 인용의 나머지를 버리고(`$'a\\0b'c`
+    = `ac`), 서로게이트(`\\ud800`)는 U+FFFD다. 명령 글의 날 NUL은 빼고 짝 없는 서로게이트는 U+FFFD다. 경로 연산이 예외를 내도
+    그 검사만 판정하지 못한 것(ask)으로 보고 다른 검사를 이어 간다 — 같은 명령의 병합·main push·--no-verify가 내부 오류 판정
+    (ask)으로 약해지지 않는다. 출력은 ASCII JSON이라 사유에 인코딩할 수 없는 글자가 들어도 종료 0이다."""
+    ws = shared()
+    c = ws.clone
+    plain = tmp("tt-gh-plain-")
+    wt = ws.work / "wt-ansic"
+    git(c, "worktree", "add", "-q", "--detach", str(wt), "origin/main")
+    rows = [("cat $'\\x00x'; gh pr merge 3 --squash", c, "deny", "머지"),
+            ("cat $'\\0'; git push origin HEAD:main", wt, "deny", "규칙 6"),
+            ("cat $'\\ud800'; gh pr merge 3", wt, "deny", "머지"),
+            ("echo hi > $'\\0x'; gh pr merge 3", wt, "deny", "머지"),
+            ("cat $'\\0'; git commit --no-verify -m x", c, "deny", "규칙 5"),
+            ("cat $'\\c@'; git push origin HEAD:main", c, "deny", "규칙 6"),
+            ("cat $'\\u0000'; git push origin HEAD:main", c, "deny", "규칙 6"),
+            ("cat $'\\000'; git push origin HEAD:main", c, "deny", "규칙 6"),
+            ("git config core.hooksPath $'\\ud800'", c, "deny", "규칙 5"),
+            # bash는 NUL 뒤를 버린다: 낱말이 그 앞까지다
+            ("git $'push\\0junk' origin HEAD:main", c, "deny", "규칙 6"),
+            ("gh pr $'merge\\x00x' 3", c, "deny", "머지"), ("git push origin $'HEAD:main\\0x'", c, "deny", "규칙 6"),
+            # 명령 글의 날 NUL·짝 없는 서로게이트(hook 입력 JSON의 \u0000·\ud800)
+            ("cat \x00x; gh pr merge 3", c, "deny", "머지"), ("git config core.hooksPath \ud800", c, "deny", "규칙 5"),
+            ("echo hi > x\x00y; git push origin HEAD:main", c, "deny", "규칙 6"),
+            ("cat $'\\x00x'", plain, None, None)]
+    try:
+        for cmd, cwd, want, why in rows:
+            event = {"hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_input": {"command": cmd}, "cwd": str(cwd)}
+            proc = run("guard.py", [], root=ws.root, cwd=cwd, env=ws.env(), stdin=json.dumps(event))
+            assert proc.returncode == 0 and "내부 오류" not in proc.stderr, (cmd, proc.stderr)
+            assert proc.stdout.isascii(), cmd
+            out = json.loads(proc.stdout)["hookSpecificOutput"] if proc.stdout.strip() else None
+            assert decision(out) == want, (cmd, cwd)
+            assert why is None or why in out["permissionDecisionReason"], (cmd, out)
+    finally:
+        gitp(c, "worktree", "remove", "--force", str(wt))
+    # 경로 연산 예외(여기선 sitecustomize로 일으킨다): 그 검사만 ask, 같은 명령의 다른 검사는 그대로
+    env = _raising_realpath_env(ws)
+    for cmd, cwd, want, why in [("cat RAISEMARK.log; gh pr merge 3", c, "deny", "머지"),
+                                ("echo x > RAISEMARK; git push origin HEAD:main", c, "deny", "규칙 6"),
+                                ("echo x > RAISEMARK; git commit --no-verify -m x", c, "deny", "규칙 5"),
+                                ("echo x > RAISEMARK", plain, "ask", "규칙 8")]:
+        out = bash(ws, cmd, cwd, env=env)
+        assert decision(out) == want and why in out["permissionDecisionReason"], (cmd, out)
+        assert "내부 오류" not in out["permissionDecisionReason"], cmd
+
+
+def test_guard_ansi_c_closing_quote_found_like_bash():
+    """명령 파싱(재리뷰 P0, e8f3342 회귀): `$'…'`의 닫는 `'`는 bash 어휘 분석처럼 먼저 찾고(`\\` 뒤 한 글자는 건너뛴다) 풀이는 그
+    안에서만 한다. 예전에는 인용 끝의 `\\c`가 닫는 `'`를 제어 문자 재료로 먹어 명령 글 끝까지를 한 인용으로 삼켰고, 그 뒤의 main
+    push·병합·--no-verify·clone 쓰기·로그 통독이 판정 밖으로 빠졌다(bash는 `$'\\c'`를 `\\c` 글자로 두고 다음 명령을 돈다)."""
+    import guard
+    assert guard._ansi_c("$'\\c'; x", 2) == ("\\c", 5)
+    assert guard._ansi_c("$'\\c\\\\'; x", 2) == ("\x1c", 7)            # `\c\\` = 제어-\ (두 `\`를 함께)
+    assert guard._ansi_c("$'\\c\\''; x", 2) == ("\x1c'", 7)            # `\'`는 어휘 분석에서 인용을 닫지 않는다
+    assert guard._ansi_c("$'a\\cAb\\c?'", 2) == ("a\x01b\x7f", 11)
+    assert guard._ansi_c("$'\\x4'1", 2) == ("\x04", 6)                  # 16진 풀이가 닫는 `'` 뒤로 넘지 않는다
+    assert guard._ansi_c("$'ab\\", 2) == ("ab\\", 5)                    # 닫히지 않으면 끝까지
+    ws = shared()
+    c = ws.clone
+    plain = tmp("tt-gh-plain-")
+    (plain / "x.log").write_text(LOGCAT, encoding="utf-8")             # 규칙 10: logcat 원문
+    wt = ws.work / "wt-ansic-c"
+    git(c, "worktree", "add", "-q", "--detach", str(wt), "origin/main")
+    rows = [("echo $'\\c'; git push origin HEAD:main", c, "deny"), ("echo $'\\c'; gh pr merge 3", c, "deny"),
+            ("echo $'\\c'; git commit --no-verify -m x", c, "deny"), ("echo $'\\c'; echo x > notes.txt", c, "deny"),
+            ("echo $'\\c'; git checkout -b x", c, "deny"), ("echo $'\\c'; git push origin HEAD:main", wt, "deny"),
+            ("echo $'\\c\\\\'; git push origin HEAD:main", c, "deny"),
+            ("echo $'\\c\\''; git push origin HEAD:main", c, "deny"),
+            ("printf %s $'x\\c' && git push origin HEAD:main", c, "deny"),
+            ("echo $'\\c'\ngit push origin HEAD:main", c, "deny"),
+            ("echo $'\\c'; gh api -X PUT repos/mock-org/telephony-issue-db/pulls/3/merge", plain, "deny"),
+            ("echo $'\\c'; cat x.log", plain, "deny"),
+            ("echo $'\\c'", c, None)]
+    try:
+        for cmd, cwd, want in rows:
+            assert decision(bash(ws, cmd, cwd)) == want, (cmd, cwd)
+    finally:
+        gitp(c, "worktree", "remove", "--force", str(wt))
+
+
+def test_guard_long_cwd_candidates_stay_in_worktree_and_job_dir():
+    """명령 파싱(재리뷰 P1): `LONG_CWD`보다 긴 cwd 후보(상대 cd가 길게 이어진 것)는 bash 논리 cd처럼 `..`을 접고, 그래도 길면 상한
+    안의 조상으로 자른다 — 같은 worktree·작업 폴더 안에 남는다. 예전에는 보호 뿌리(work_dir)로 접어 worktree의 main push·
+    --no-verify와 작업 폴더의 승인·병합 제안 기록 쓰기가 판정 밖으로 빠졌다."""
+    ws = shared()
+    c = ws.clone
+    plain = tmp("tt-gh-plain-")
+    wt = ws.work / "wt-longcwd"
+    git(c, "worktree", "add", "-q", "--detach", str(wt), "origin/main")
+    (wt / "data").mkdir(exist_ok=True)
+    job = ws.job_dir("MOCK-7202")
+    (job / "s").mkdir(parents=True, exist_ok=True)
+    deep = plain / "/".join(["d" * 60] * 20)                           # `..` 없이 1024자를 넘는 깊은 경로
+    deep.mkdir(parents=True)
+    hops = "data/../" * 150
+    rows = [(f"cd {hops}data; git push origin HEAD:main", wt, "deny"),
+            (f"cd {hops}data && git commit --no-verify -m x", wt, "deny"),
+            (f"cd {wt}/{hops}; git push origin HEAD:main", plain, "deny"),
+            ("cd data; ls; cd ..; " * 120 + "git push origin HEAD:main", wt, "deny"),
+            (f"cd {'s/../' * 220}; echo x > post.approved.json", job, "deny"),
+            (f"cd {'s/../' * 220}; echo x > merge-offer.json", job, "deny"),
+            (f"cd {'s/../' * 220}; rm -f post.result.json", job, "deny"),
+            (f"cd {hops}; git push origin HEAD:main", c, "deny"),
+            # 오탐 방지: 길어도 이슈 DB 밖이면 그대로
+            (f"cd {deep}; git push origin HEAD:main", plain, None),
+            (f"cd {'x/../' * 300}; git push origin HEAD:main", plain, None)]
+    try:
+        for cmd, cwd, want in rows:
+            assert decision(bash(ws, cmd, cwd)) == want, (cmd[:80], cwd)
+    finally:
+        gitp(c, "worktree", "remove", "--force", str(wt))
+
+
+def _site_env(ws: Workspace, code: str, no_yaml: bool = False) -> dict:
+    """guard 하위 프로세스에 `sitecustomize`(`code`)를 얹는다. `no_yaml`이면 PyYAML import도 실패하게 한다(의존성 없음 판정)."""
+    d = tmp("tt-site-")
+    (d / "sitecustomize.py").write_text(code, encoding="utf-8")
+    if no_yaml:
+        (d / "yaml.py").write_text('raise ImportError("PyYAML 없음 (테스트)")\n', encoding="utf-8")
+    return {**ws.env(), "PYTHONPATH": str(d)}
+
+
+# `EACCESMARK`가 든 경로의 stat이 PermissionError — 남의 홈·/root 아래처럼 들어갈 수 없는 경로(root가 아닌 사용자)를 흉내 낸다.
+# Python 3.13의 `Path.is_dir`은 ENOENT·ENOTDIR·EBADF·ELOOP 밖의 OSError를 그대로 올린다
+EACCES_SITE = ("import errno, os\n_stat = os.stat\n\n\n"
+               "def stat(path, *a, **k):\n"
+               "    if not isinstance(path, int) and 'EACCESMARK' in os.fsdecode(path):\n"
+               "        raise PermissionError(errno.EACCES, 'Permission denied (test)', os.fsdecode(path))\n"
+               "    return _stat(path, *a, **k)\n\n\nos.stat = stat\n")
+# `WALKRAISE`가 든 글의 `os.path.expandvars`가 RuntimeError — guard의 명령 걷기(`invocations`)가 예외로 끝나게 한다
+WALK_SITE = ("import posixpath\n_ev = posixpath.expandvars\n\n\n"
+             "def expandvars(p):\n"
+             "    if 'WALKRAISE' in str(p):\n        raise RuntimeError('test: 걷기 예외')\n"
+             "    return _ev(p)\n\n\nposixpath.expandvars = expandvars\n")
+
+
+def test_guard_unreachable_cd_targets_do_not_degrade():
+    """명령 파싱(재리뷰 P0): 들어갈 수 없는 cd 대상(경로 칸이 255바이트를 넘는 이름 — ENAMETOOLONG, 남의 홈·/root 아래 — EACCES)은
+    실패할 수 있는 이동이다: 이전 cwd 후보를 남기고 판정을 이어 간다. 예전에는 stat 예외가 명령 걷기 밖으로 새어 판정 전체가 내부
+    오류(ask)로 무너졌고, 같은 명령 어디에든 `; cd <그런 경로>`를 붙이면 병합·Approve·main push·--no-verify·clone 쓰기가
+    deny에서 ask로 약해졌다(`_degraded`의 걷기도 같은 예외를 내 병합 거부가 돌지 않았다)."""
+    ws = shared()
+    c = ws.clone
+    plain = tmp("tt-gh-plain-")
+    wt = ws.work / "wt-unreach"
+    git(c, "worktree", "add", "-q", "--detach", str(wt), "origin/main")
+    long_abs, long_rel, long_in = "/tmp/" + "b" * 300, "c" * 300, f"{c}/" + "e" * 300
+    rows = [(f"gh pr merge 3 --squash; cd {long_abs}", wt, "deny"), (f"git push origin HEAD:main; cd {long_abs}", c, "deny"),
+            (f"git commit --no-verify -m x; pushd {long_abs}", c, "deny"),
+            (f"cd {long_abs}; cd {c}; git push origin HEAD:main", plain, "deny"),
+            (f"cd {long_abs} 2>/dev/null; cd {c} && gh pr merge 3 --squash", plain, "deny"),
+            (f"cd {long_abs} 2>/dev/null; cd {c}; echo x > notes.txt", plain, "deny"),
+            (f"cd {long_abs} 2>/dev/null; cd {c}; git checkout -b x", plain, "deny"),
+            (f"true && cd {long_abs}; cd {c}; git push origin HEAD:main", wt, "deny"),
+            (f"(cd {long_abs}); cd {c}; git push origin HEAD:main", plain, "deny"),
+            (f"pushd -n {long_abs}; cd {c}; git push origin HEAD:main", plain, "deny"),
+            (f"cd {long_abs}; gh pr review 3 --approve", plain, "deny"), (f"cd {long_abs}; gh pr review 3 --approve", c, "deny"),
+            (f"echo x > notes.txt; cd {long_abs} || true", c, "deny"),
+            (f"git push origin HEAD:main; cd {long_rel}", c, "deny"), (f"git push origin HEAD:main; cd {long_in}", c, "deny"),
+            (f"cd {long_in}; git push origin HEAD:main", c, "deny"),         # cd가 실패하면 clone 그대로
+            (f"cd {long_abs} 2>/dev/null; ls", plain, None)]
+    eacces = _site_env(ws, EACCES_SITE)
+    other = "/home/EACCESMARK/proj"
+    erows = [(f"gh pr merge 3; cd {other}", wt, "deny"), (f"cd {other}; gh pr review 3 --approve", plain, "deny"),
+             (f"echo x > notes.txt; cd {other} || true", c, "deny"), (f"cd {other}; gh pr merge 3", wt, "deny"),
+             (f"cd {other} 2>/dev/null; cd {c}; git push origin HEAD:main", plain, "deny"),
+             (f"pushd {other} >/dev/null 2>&1; cd {c} && gh pr merge 3 --squash", plain, "deny"),
+             (f"cd {other}; git push origin HEAD:main", c, "deny"), (f"cd {other}; ls", plain, None)]
+    try:
+        for (cmd, cwd, want), env in [*((r, None) for r in rows), *((r, eacces) for r in erows)]:
+            event = {"hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_input": {"command": cmd}, "cwd": str(cwd)}
+            proc = run("guard.py", [], root=ws.root, cwd=cwd, env=env or ws.env(), stdin=json.dumps(event))
+            assert proc.returncode == 0 and "내부 오류" not in proc.stderr, (cmd[:80], proc.stderr)
+            out = json.loads(proc.stdout)["hookSpecificOutput"] if proc.stdout.strip() else None
+            assert decision(out) == want, (cmd[:80], cwd, out)
+    finally:
+        gitp(c, "worktree", "remove", "--force", str(wt))
+
+
+def test_guard_walk_errors_fall_back_closed():
+    """명령 파싱(재리뷰 P0): 명령 걷기(`invocations`) 자체가 예외로 끝나도 판정 전체를 내부 오류로 보내지 않는다 — ask("명령 파싱")와
+    낱말 수준 거부(gh와 병합·Approve·리뷰·기각·GraphQL·별칭·셸 값 낱말)를 남기고, cd를 따라가지 않는 대체 목록(처음 cwd·cd 절대
+    대상·모르는 디렉토리)으로 다른 검사를 이어 간다. 의존성 없음 판정(`_degraded`)도 걷기가 예외면 낱말 수준으로 병합을 거부한다."""
+    ws = shared()
+    c = ws.clone
+    plain = tmp("tt-gh-plain-")
+    env = _site_env(ws, WALK_SITE)
+    for cmd, cwd, want, why in [("env -C WALKRAISE true; gh pr merge 3", plain, "deny", "명령을 풀지 못해"),
+                                ("env -C WALKRAISE true; git push origin HEAD:main", c, "deny", "규칙 6"),
+                                ("env -C WALKRAISE true; git commit --no-verify -m x", c, "deny", "규칙 5"),
+                                (f"env -C WALKRAISE true; cd {c}; git push origin HEAD:main", plain, "deny", "규칙 6"),
+                                ("env -C WALKRAISE true; ls", plain, "ask", "명령 파싱"),
+                                ("env -C WALKRAISE true; gh pr view 3", plain, "ask", "명령 파싱")]:
+        event = {"hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_input": {"command": cmd}, "cwd": str(cwd)}
+        proc = run("guard.py", [], root=ws.root, cwd=cwd, env=env, stdin=json.dumps(event))
+        assert proc.returncode == 0 and "내부 오류" not in proc.stderr, (cmd, proc.stderr)
+        out = json.loads(proc.stdout)["hookSpecificOutput"] if proc.stdout.strip() else None
+        assert decision(out) == want and why in out["permissionDecisionReason"], (cmd, out)
+    env = _site_env(ws, WALK_SITE, no_yaml=True)
+    for cmd, want in [("env -C WALKRAISE true; gh pr merge 3", "deny"), ("env -C WALKRAISE true; gh pr review 3 -a", "deny"),
+                      ("env -C WALKRAISE true; gh pr view 3", "ask"), ("env -C WALKRAISE true; echo hi", None)]:
+        event = {"hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_input": {"command": cmd}, "cwd": str(plain)}
+        proc = run("guard.py", [], root=ws.root, cwd=plain, env=env, stdin=json.dumps(event))
+        assert proc.returncode == 0 and "Traceback" not in proc.stderr, (cmd, proc.stderr)
+        out = json.loads(proc.stdout)["hookSpecificOutput"] if proc.stdout.strip() else None
+        assert decision(out) == want, (cmd, out)
+        assert want is None or "의존성 없음" in out["permissionDecisionReason"], (cmd, out)
+
+
+def test_guard_cd_odd_options_dirs_and_negation_keep_previous_candidates():
+    """명령 파싱(재리뷰 P1 — 회귀 수정 R1 부류): bash가 거절하거나 다른 셸에선 뜻이 다른 cd 꼴(cd의 `-L`·`-P`·`-e`·`-@` 밖 옵션,
+    pushd·popd의 `-n` 밖 옵션 — zsh `popd -q`, 남는 인자 — zsh `cd a b`)은 실패할 수 있는 이동이라 이전 후보를 남기고 스택을 모른다고
+    본다. `dirs`에 인자가 있거나(`dirs -c`는 스택을 비운다 — 뒤 popd는 실패한다) `DIRSTACK`이 나오면 스택 칸을 모른다. `!`로 부정한
+    cd 뒤 `&&`는 cd가 실패했을 때만 돌므로 이동 전 cwd도 후보다(`&&` 미루기를 뒤집지 않는다)."""
+    ws = shared()
+    c = ws.clone
+    plain = tmp("tt-gh-plain-")
+    wt = ws.work / "wt-oddcd"
+    git(c, "worktree", "add", "-q", "--detach", str(wt), "origin/main")
+    rows = [(f"pushd {c} >/dev/null; dirs -c; popd; gh pr merge 3", plain, "deny"),
+            (f"pushd {c} >/dev/null; dirs -c; popd; git push origin HEAD:main", plain, "deny"),
+            (f"pushd {c} >/dev/null; dirs -c 2>/dev/null; popd; git commit --no-verify -m x", plain, "deny"),
+            (f"pushd {c} >/dev/null; popd -q; gh pr merge 3", plain, "deny"),
+            (f"pushd {c}; popd -x; git push origin HEAD:main", plain, "deny"),
+            (f"pushd {c} >/dev/null; popd -q; echo x > notes.txt", plain, "deny"),
+            (f"pushd {c} >/dev/null; DIRSTACK=(); popd; git push origin HEAD:main", plain, "deny"),
+            (f"pushd {c} >/dev/null; pushd -q; git push origin HEAD:main", plain, "deny"),
+            (f"pushd -q {c}; git push origin HEAD:main", plain, "deny"),
+            ("cd -Q /tmp; git push origin HEAD:main", c, "deny"), ("cd /tmp /usr; git push origin HEAD:main", c, "deny"),
+            ("cd -x /tmp && git push origin HEAD:main", c, "deny"), ("pushd -q /tmp; git push origin HEAD:main", c, "deny"),
+            ("pushd /tmp /usr; git push origin HEAD:main", c, "deny"),
+            # `!` 부정: 뒤 `&&`는 cd가 실패했을 때 돈다
+            ("! popd && git push origin HEAD:main", c, "deny"), ("! popd && git commit --no-verify -m x", c, "deny"),
+            ("! cd /nonexist && git push origin HEAD:main", c, "deny"),
+            ("! cd nosub 2>/dev/null && git push origin HEAD:main", c, "deny"),
+            ('! cd "$D" && git checkout -b x', c, "deny"), ("! pushd /nonexist && git reset --hard origin/main", c, "deny"),
+            ("time ! cd /nonexist && git push origin HEAD:main", c, "deny"), ("! cd - && git push origin HEAD:main", c, "deny"),
+            ("! cd /nonexist && echo x > notes.txt", c, "deny"), ("! cd /nonexist && git push origin HEAD:main", wt, "deny"),
+            ("if ! cd /nonexist && git push origin HEAD:main; then :; fi", c, "deny"),
+            # 오탐 방지: bash cd 옵션(-L·-P·-e·-@·--)과 인자 없는 dirs는 그대로 따라간다, 부정 없는 `&&` 뒤는 cd가 성공한 경우뿐이다
+            ("cd -P /tmp; git push origin HEAD:main", c, None), ("cd -LP /tmp; git push origin HEAD:main", c, None),
+            ("cd -e -P /tmp; git push origin HEAD:main", c, None), ("cd -- /tmp; git push origin HEAD:main", c, None),
+            (f"pushd {c} >/dev/null; dirs; popd; git push origin HEAD:main", plain, None),
+            (f"pushd {plain} >/dev/null; dirs -v; popd -n; git push origin HEAD:main", c, None),     # -n: cwd 그대로
+            ("cd /nonexist && git push origin HEAD:main", c, None)]
+    try:
+        for cmd, cwd, want in rows:
+            assert decision(bash(ws, cmd, cwd)) == want, (cmd, cwd)
+    finally:
+        gitp(c, "worktree", "remove", "--force", str(wt))
+
+
+def test_guard_andor_skipped_states_and_overflow_keep_clone_candidates():
+    """명령 파싱(재리뷰 — bash를 판정 기준으로 한 퍼징에서 나온 부류): and-or 목록에서 건너뛴 명령의 상태도 뒤 명령의 cwd 후보다.
+    `A || B && C`의 C는 A가 성공해 B를 건너뛴 상태에서도 돌고, `A && B || C`의 C는 A가 실패해 B를 건너뛴 상태에서도 돈다. `if`
+    조건의 cd도 돌았으므로 `else`·`fi` 뒤는 조건의 끝 상태에서도 돈다(`if ! cd X; then …; else …`의 else는 X에서 돈다). cwd 후보가
+    상한을 넘어 접힐 때도 보호 뿌리(이슈 DB clone·work_dir·스킬 소스) 안의 후보는 접지 않는다 — 처음에 들어간 clone이 뒤의 조건부
+    cd 여럿에 밀려 모르는 디렉토리로 접히지 않게(e8f3342는 거부했고 회귀 수정 R4의 접기는 놓쳤다)."""
+    ws = shared()
+    c = ws.clone
+    plain = tmp("tt-gh-plain-")
+    subs = [plain / f"d{i}" for i in range(9)]
+    for d in subs:
+        d.mkdir()
+    after = "; ".join(f"true && cd {d}" for d in subs)
+    arms = " ".join(f"{i + 1}) cd {d};;" for i, d in enumerate(subs[:8]))
+    rows = [(f"cd {c} || cd /tmp && git push origin HEAD:main", plain, "deny"),
+            ("false && cd /tmp || git push origin HEAD:main", c, "deny"),
+            ("test -d x && cd /tmp || git push origin HEAD:main", c, "deny"),
+            ("cd .. || pushd -q && cd -\ngit push origin HEAD:main", c, "deny"),
+            ("cd /tmp || cd /usr && cd - && git push origin HEAD:main", c, "deny"),
+            (f"cd {c} || pushd /tmp && gh pr merge 3", plain, "deny"),
+            (f"cd {c} || cd /tmp && echo x > notes.txt", plain, "deny"),
+            # if 조건의 cd도 돌았다: else·fi 뒤는 조건의 끝 상태에서도 돈다
+            (f"if ! cd {c}; then cd /usr; else true; fi; git push origin HEAD:main", plain, "deny"),
+            (f"if ! cd {c}; then cd /usr; fi; git push origin HEAD:main", plain, "deny"),
+            (f"if cd {c}; false; then cd /usr; else git push origin HEAD:main; fi", plain, "deny"),
+            (f"if false; then :; elif cd {c}; false; then cd /usr; else git push origin HEAD:main; fi", plain, "deny"),
+            # 넘침: 처음에 들어간 clone을 접지 않는다
+            (f"true && cd {c}; {after}; git push origin HEAD:main", plain, "deny"),
+            (f"case $X in 0) cd {c};; {arms} esac; git push origin HEAD:main", plain, "deny"),
+            (f'cd "$D" .. && cd -P nosub; {after}; git push origin HEAD:main', c, "deny"),
+            # 오탐 방지: 건너뛸 수 없는 경우는 그대로
+            ("cd /tmp && git push origin HEAD:main || true", c, None),
+            ("cd /tmp && ls || ls && git push origin HEAD:main", c, None),
+            ("cd /nonexist && git push origin HEAD:main", c, None),
+            ("if test -d x; then cd /usr; else cd /tmp; fi; git push origin HEAD:main", plain, None),
+            (f"{after}; git push origin HEAD:main", plain, None)]
+    for cmd, cwd, want in rows:
+        assert decision(bash(ws, cmd, cwd)) == want, (cmd, cwd)
+
+
+def test_guard_shell_heredoc_bodies_walk_once_per_operator():
+    """명령 파싱(재리뷰 P1): 셸이 읽는 heredoc 본문은 연산자가 든 명령의 cwd 후보로 한 번, 이 글에서 거친 나머지 후보(상한 안)로 한 번
+    걷는다. 예전에는 거친 cwd마다 본문을 다시 걸어(실패하는 cd마다 후보가 늘고 중첩 heredoc에서 곱으로 커진다) 1KB 미만 명령이 hook
+    시간 한도(180초)를 넘겼다 — Claude Code는 시간 초과를 막지 않는다(fail-open). 연산자 뒤에 cd가 많아도 연산자 자리의 cwd(이슈 DB
+    clone)는 버리지 않는다."""
+    import time
+    ws = shared()
+    c = ws.clone
+    plain = tmp("tt-gh-plain-")
+
+    def cds(prefix: str, n: int) -> str:
+        return "\n".join(f"cd {prefix}{i}" for i in range(n))
+    body = cds("m", 60) + "\ngit status"
+    nested = f"{cds('n', 8)}\nbash <<EOF\n{body}\nbash <<EOG\n{body}\nEOG\nEOF\ngit push origin HEAD:main"
+    first = f"git push origin HEAD:main\n{cds('n', 8)}\nbash <<EOF\n{body}\nbash <<EOG\n{body}\nEOG\nEOF"
+    level3 = (f"{cds('n', 8)}\nbash <<EOF\n{cds('m', 60)}\nbash <<EOG\n{cds('q', 60)}\nbash <<EOH\n{cds('p', 60)}\ngit status\n"
+              "EOH\nEOG\nEOF\ngit push origin HEAD:main")
+    for cmd in (nested, first, level3):
+        start = time.monotonic()
+        assert decision(bash(ws, cmd, c)) == "deny", cmd[:60]
+        assert time.monotonic() - start < 5, (cmd[:60], time.monotonic() - start)     # 예전: 수백 초
+    after = "; ".join(f"cd {d}" for d in ("/usr", "/tmp", "/var", "/etc", "/opt", "/srv", "/home", "/usr/bin"))
+    rows = [(f"cd {c}; bash <<EOF\ngit push origin HEAD:main\nEOF\n{after}", plain, "deny"),   # 연산자 뒤 cd 8개
+            (f"cd {c} && bash <<EOF\ncd sub 2>/dev/null\ngit push origin HEAD:main\nEOF", plain, "deny"),
+            (f"(cd {c}; bash <<EOF\ngit push origin HEAD:main\nEOF\n)", plain, "deny"),
+            (f"bash <<A; cd {c}; bash <<B\ngit status\nA\ngit push origin HEAD:main\nB", plain, "deny"),
+            (f"cd {c}; bash <<EOF\nbash <<EOG\ngit push origin HEAD:main\nEOG\nEOF", plain, "deny"),
+            (f"cd {c}; cat <<EOF | sh\necho x > notes.txt\nEOF", plain, "deny"),
+            (f"cd {c}; bash <<EOF\ngh pr merge 3\nEOF", plain, "deny"),
+            ("echo ; bash <<EOF\ngit push origin HEAD:main\nEOF", c, "deny"),   # 표시 글자가 이미 든 글
+            ("cd /tmp && bash <<EOF\ngit push origin HEAD:main\nEOF", plain, None)]
+    for cmd, cwd, want in rows:
+        assert decision(bash(ws, cmd, cwd)) == want, (cmd, cwd)
+
+
 def test_guard_heredoc_detection_ignores_quotes_comments_herestrings_and_unterminated():
     """명령 파싱(H-A1 r6, `_heredoc_scan`): heredoc 연산자는 인용·주석·산술 밖의 `<<`·`<<-`만이다(`<<<` here-string 아님). 끝
     표시 줄을 못 찾으면 본문으로 빼지 않는다(뒤 줄을 지우지 않는다). 끝 표시는 줄 전체가 낱말과 같을 때만이다(`<<-`는 앞 탭만
@@ -1778,8 +2197,24 @@ def test_guard_scp_remote_without_user_keeps_explicit_targets_and_warns_unparsab
         assert decision(guard(ws, tool, tool_input, plain)) == want, tool
     # https 설정이어도 user 없는 SCP 꼴 원격의 다른 clone은 이슈 DB다
     assert decision(bash(shared(), "gh pr merge 3", scp_clone)) == "deny"
+    # 숫자뿐인 owner의 SCP 꼴(회귀 수정 R3): git처럼 owner로 읽는다(포트가 아니다) — 규칙 11이 켜져 있고 경고가 없다
+    event = {"hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_input": {"command": "ls"}, "cwd": str(plain)}
+    current = f"ghe-ssh:{DB_SLUG}.git"
+    for remote, owner in (("git@ghe.mock.invalid:1234/telephony-issue-db.git", "1234"),
+                          ("ghe-ssh:20231234/telephony-issue-db.git", "20231234")):
+        set_remote(current, remote)
+        current = remote
+        num_clone = _repo_with_origin(remote)
+        for cmd, cwd, want in [(f"gh pr merge 3 -R {owner}/telephony-issue-db", plain, "deny"),
+                               (f"gh api -X PUT repos/{owner}/telephony-issue-db/pulls/3/merge", plain, "deny"),
+                               (f"gh pr comment 3 -b x -R {owner}/telephony-issue-db", plain, "ask"),
+                               ("gh pr merge 3", num_clone, "deny"),
+                               (f"gh pr merge 3 -R {DB_SLUG}", plain, None)]:
+            assert decision(bash(ws, cmd, cwd)) == want, (remote, cmd)
+        proc = run("guard.py", [], root=ws.root, cwd=plain, env=ws.env(), stdin=json.dumps(event))
+        assert proc.returncode == 0 and "규칙 11" not in proc.stderr, (remote, proc.stderr)
     # 못 푸는 원격: 규칙 11이 꺼진다는 경고(stderr)
-    set_remote(f"ghe-ssh:{DB_SLUG}.git", "telephony-issue-db")
+    set_remote(current, "telephony-issue-db")
     event = {"hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_input": {"command": "ls"}, "cwd": str(plain)}
     proc = run("guard.py", [], root=ws.root, cwd=plain, env=ws.env(), stdin=json.dumps(event))
     assert proc.returncode == 0 and "issue_db.remote(telephony-issue-db)" in proc.stderr and "규칙 11" in proc.stderr, proc.stderr

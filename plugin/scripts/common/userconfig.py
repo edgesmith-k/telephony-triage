@@ -344,8 +344,10 @@ def _raw_profiles(user: dict) -> list[tuple[str, str, dict]]:
 def repo_slug(value) -> tuple[str | None, str, str] | None:
     """원격 URL·레포 값을 `(host|None, owner, repo)`로(소문자, `.git` 제거). 꼴: `https://<host>/o/r(.git)`,
     `ssh://[<user>@]<host>[:port]/o/r`, git SCP 꼴 `[<user>@]<host>:o/r(.git)`(`://`가 없고 첫 `/` 앞에 `:`가 있다 — SSH 별칭
-    host 포함. `C:\\`·`C:/` 드라이브와 `host:<포트>/o/r`은 아니다), `host/o/r`, `o/r`. 로컬 경로·`file://`·형식 밖이거나 owner·repo에 `:`가 남으면
-    None. guard 규칙 11(이슈 DB 대상 비교)과 config 검사(`issue_db.remote`)가 같이 쓴다."""
+    host·숫자뿐인 owner(`ghe-ssh:1234/r.git`) 포함. `C:\\`·`C:/` 드라이브는 아니다), gh `-R`의 `HOST:PORT/OWNER/REPO`(user가 없고
+    콜론 뒤가 숫자 칸 + 경로 칸 둘 이상일 때만 — 회귀 수정 R3: 숫자 owner의 SCP 꼴을 포트로 읽던 부류), `host/o/r`, `o/r`.
+    로컬 경로·`file://`·형식 밖이거나 owner·repo에 `:`가 남으면 None. guard 규칙 11(이슈 DB 대상 비교)과 config 검사
+    (`issue_db.remote`)가 같이 쓴다."""
     v = str(value).strip().rstrip("/")
     host = None
     colon, slash = v.find(":"), v.find("/")
@@ -357,8 +359,10 @@ def repo_slug(value) -> tuple[str | None, str, str] | None:
         host = netloc.rsplit("@", 1)[-1].split(":", 1)[0]
         parts = [p for p in path.split("/") if p]
     elif (colon > 0 and (slash < 0 or colon < slash) and not re.match(r"^[A-Za-z]:[\\/]", v) and "\\" not in v
-          and not re.match(r"^\d+/", v[colon + 1:])):     # `host:8443/o/r`은 gh `-R`의 `HOST/OWNER/REPO`(포트) 꼴로 둔다
-        host = v[:colon].rsplit("@", 1)[-1]          # git SCP 꼴(git·gh 모두 `host:o/r`을 ssh로 읽는다)
+          and ("@" in v[:colon] or not re.match(r"^\d+/[^/]+/[^/]", v[colon + 1:]))):
+        # git SCP 꼴(git·gh 모두 `host:o/r`을 ssh로 읽는다 — `host:1234/r`의 1234는 owner다). user 없는 `host:8443/o/r`만 gh
+        # `-R`의 `HOST:PORT/OWNER/REPO`(포트) 꼴로 아래에서 읽는다
+        host = v[:colon].rsplit("@", 1)[-1]
         parts = [p for p in v[colon + 1:].split("/") if p]
     else:
         if v.startswith(("/", ".", "~")) or "\\" in v or re.match(r"^[A-Za-z]:", v):

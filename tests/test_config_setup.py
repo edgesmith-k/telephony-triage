@@ -149,7 +149,10 @@ def test_issue_db_remote_must_resolve_to_owner_repo():
     for bad in ("/srv/git/telephony-issue-db.git", "telephony-issue-db", "file:///srv/o/r.git"):
         proc = env.run("config.py", ["set", "issue_db.remote", bad])
         assert proc.returncode == 2 and "owner/repo" in proc.stderr, bad
-    for good in ("ghe-ssh:mock-org/telephony-issue-db.git", "git@ghe.mock.invalid:mock-org/telephony-issue-db.git"):
+    for good in ("ghe-ssh:mock-org/telephony-issue-db.git", "git@ghe.mock.invalid:mock-org/telephony-issue-db.git",
+                 # 숫자뿐인 owner의 SCP 꼴은 owner다(포트가 아니다 — 회귀 수정 R3). gh `-R`의 HOST:PORT/OWNER/REPO도 받는다
+                 "git@ghe.mock.invalid:1234/telephony-issue-db.git", "ghe-ssh:20231234/telephony-issue-db.git",
+                 "ghe.mock.invalid:8443/mock-org/telephony-issue-db"):
         env.json("config.py", ["set", "issue_db.remote", good])
         assert env.config()["issue_db"]["remote"] == good
     other = Env()
