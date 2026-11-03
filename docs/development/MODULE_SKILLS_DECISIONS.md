@@ -29,6 +29,12 @@
 - **D11** oFono 시나리오 초안: data ① APN 인증 거절(NMD → ofonod gprs 활성화 실패 → exynos-ril `SETUP_DATA_CALL failed`) ② 데이터 콜 성공·DITD 라우팅 실패 ③ ofonod 오류만·아래 RIL 줄 없음(지어내지 않기) / sim ① SIM_IO 실패 ② LPA 채널 열기 실패 ③ ipad 목록 조회 오류 / network ① 등록 거절 ② PTD RADIO_ON 없음 / call ① VoLTE 발신 실패(IMSSVC → voicecall) ② RIL DIAL 실패 / sms ① SEND_SMS 실패 ② IMS 문자 실패 / ims ① IMS 등록 실패 ② ENT entitlement 거절 / modem ① 모뎀 리셋 연쇄(증상 모듈이 아니라 모뎀이 원인) ② RFSD NV 쓰기 실패. Android는 같은 7개 모듈, 층은 앱·프레임워크 → RILJ → RIL HAL → 벤더 RIL → 모뎀, 구성요소 대응은 계획에서 초안 → 사용자 확인.
 - **D12** 순서: 계획을 사용자에게 보이고 확인받은 뒤 구현(결정 (p)). 사외에서는 레포에 템플릿(`templates/module-skills/`)을 만들고, 사내에서 GHE 새 레포로 옮겨 site 설정에 주소. SKILL.md·reference는 skill-creator로 쓰고 eval로 검증(CLAUDE.md).
 
+## 계획 확인 (11/03)
+
+- `MODULE_SKILLS_PLAN.md` §6.1 Q1~Q7은 모두 추천안: Q1 5-1은 받은 파일 Read · Q2 사내 `analyzers.data.skill`은 레포 주소가 없을 때의 대체 경로로 남김 · Q3 사내 이행은 새 트랙 MS-1·MS-2 · Q4 5-2 후보가 둘 이상이면 늘 묻기 · Q5 런타임 `claude -p` eval 허용(읽기 도구만) · Q6 D6대로 옮기고 eval 73(주소 없음)으로 잼, 떨어지면 최소 층 사슬을 내장에 남김 · Q7 G에서 81개 전체 재측정 + 사람 판정.
+- §6.3 기본안 Q10~Q25: 이의 없음.
+- Q8(A1 시작 때): `db_pr merge --approved` 생략 허용 — `merge-offer.json`의 head를 쓰고, PR head가 다르면 거부, `sync-pr`이 head를 갱신.
+
 ## I. OpenCode·사내 GLM판 (H 다음)
 
 - 사내에 OpenCode가 배포돼 있다. GLM 세부(컨텍스트 길이·도구 호출·접속 방식)는 사용자가 확인 중이다.
