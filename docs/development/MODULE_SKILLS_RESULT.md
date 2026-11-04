@@ -2,7 +2,7 @@
 
 단계표는 `MODULE_SKILLS_PLAN.md §4`. 이 파일은 단계마다 리뷰·재측정에서 P2로 남긴 것(결정 (r): P0·P1만 고치고 P2는 반입 뒤 후보)과 단계 결과를 적는다.
 
-## C0 모듈 스킬 시범 — 구현 (11/04, 유료 실행 전)
+## C0 모듈 스킬 시범 (11/04)
 
 범위: oFono `data` 모듈 하나, case 3개(deep `data-apn-auth-reject`, explore `data-ditd-route-fail`, explore 함정 `data-ofonod-only`). 새로 만든 것: 실행기·채점기 `plugin/scripts/module_eval.py`, 자식 공통 `common/claude_child.py`(skill eval `run.py`·`grade.py`도 여기서 다시 내보냄), 입력 생성기 `tests/helpers/make_module_eval_inputs.py`, variant DB `issue-db-ofono-modules`(`issue-db-ofono`는 바이트 동일), `templates/module-skills/ofono/{_common,data}`, 얼린 arm 자료 `tests/fixtures/module-arms`(pre·post sha 고정, 자식 stream 기록 1개). guard 규칙 7이 `module_eval.py --module`을 ask로 둔다. 범위 밖(설계대로): modules.yaml, 나머지 5 유형(C1), 모듈 레포·묶음, contracts 행(E), triage.py·플러그인 SKILL 변경(B).
 진행: 구현 2갈래(실행기·채점 / 문서·사례)·통합 → 리뷰 2관점 1회 → 반박 검증 → 17건 중 확정 P0 1·P1 3을 한 번 수정(재리뷰 없음). 설계·리뷰·검증은 노력 높음, 구현·수정은 보통. skill-creator: 문서 구현 에이전트가 `SKILL.md`·`references/DATA-001.md`를 쓰기 전에 불렀다(작업 기록 15:05 호출 → 15:07 작성). 쓰기 지침만 썼고 eval 반복·설명 최적화는 하지 않았다. 효과 측정은 C0 유료 6회가 대신한다.
@@ -10,6 +10,22 @@
 구현이 설계와 다르게 한 것: `gen_contracts` `NOT_CLI = ("module_eval",)`(E에서 contracts 행과 함께 SCRIPTS로), `ARM_PINS` 키는 플랫폼 경로 포함, `docs_sha256` 키는 `<arm>/<relpath>`, tags.yaml reason 구분자 `·`(YAML 흐름 표기의 쉼표), result 이벤트 없는 run(시간 초과 포함)은 안전 행 전부 `기록 없음` → 관문 fail, `--record`는 incomplete면 거부.
 검증(본 트리): 관련 테스트(claude_child 변경으로 전체) 2,735 통과(37분), check_boundary 위반 없음, `make_module_eval_inputs.py --check` 9개 일치, `make_variant_dbs.py --check` 일치, `gen_contracts --check` 최신, exec bit 100755, ruff는 새 파일 0·바뀐 파일 2c6e0cd보다 늘지 않음. dry-run(`--model sonnet`): run 6(case 3 × with·without), arm별 파일 묶음 설계 §7.2와 같음(deep with 문서 13,974B), 추정 6 × $0.25 = $1.50(상한 안), arm 고정값 일치·pre log-guide = 현재 플러그인. 유료 자식은 띄우지 않았다.
 해석 주의: explore 문서와 case를 같이 썼으므로 explore 결과는 상한이다(C1에 문서가 다루지 않는 case 하나 이상). B1 의무: `module --for deep`은 5-1에 deep timeline도 줘야 한다(설계 §2.2, 아니면 eval이 실제보다 쉽다). C1에서 다른 5 유형이 variant에 들어오면 입력 `--check`가 drift를 보고한다(예상, `--write` 후 C0 inputs_sha256은 옛 입력). S3(긴 로그 통째 읽기)은 C0 case로 시험되지 않는다(로그 100줄 이하, `S3 미시험` 메모).
+
+### C0 유료 실행 (11/04, 사용자 승인 "둘 다 승인")
+
+probe(`--probe-restricted`, 자식 1회): `confined` — cwd 안 읽기 성공, cwd 밖 읽기 거부, $0.012. 그래서 6회는 `--child-mode restricted --model sonnet`(반복 `module-ofono-data-001`, 코드 416af80, 기록 파일만 미커밋 상태라 `repo_dirty`).
+
+| case | 종류 | with | without | with 비용 | without 비용 |
+|---|---|---|---|---|---|
+| data-apn-auth-reject | deep | X(데몬) | O | $0.080 | $0.051 |
+| data-ditd-route-fail | explore | O | X(층) | $0.065 | $0.041 |
+| data-ofonod-only | explore 함정 | O | X(층·로그 없음) | $0.066 | $0.042 |
+
+관문 **pass**: 1순위 통과 with 2 · without 1, 안전 위반 0/0, 무효 0, 비용 전부 기록. 총 $0.346(probe 포함 $0.358), run당 평균 $0.058(추정 $0.25의 약 1/4), with가 run당 +$0.024~0.029·토큰 +5.2K~12.8K. run당 11~15초. 메모는 deep 두 arm의 `S3 미시험`뿐.
+읽는 법(n=1, 스크립트 판정 그대로, 사후 재채점 안 함):
+- deep with 실패는 문서와 case가 어긋난 탓이다. with는 `layers.md`대로 `원인 층: 모뎀·망`(거절 사유 USER_AUTHENTICATION(29)는 모뎀·망의 결과, 요청은 벤더 RIL까지 감)·`원인 데몬: 알 수 없음`을 썼다. case ①은 층으로 `모뎀|망`을 받지만 데몬은 `exynos-ril`만 받는다(리뷰 P2로 이미 적은 불일치). 문서(`모뎀·망`이면 데몬 칸에 무엇을 쓰나)와 case(데몬 regex) 중 어느 쪽을 고칠지는 사용자 결정 — 고친 뒤 다시 재야 deep 비교가 의미 있다.
+- explore 두 건의 차이는 사실보다 층 이름에서 나왔다. without도 DITD 실패(ditd)·RIL 줄 없음(ofonod-only)을 찾았지만 층을 `관리 데몬`·`ofonod`로 불렀다. with는 문서 어휘(`곁가지(DITD)`·`그 층 로그 없음(RIL trace)`)를 썼다. 함정 case에서 증상 데몬 층을 원인으로 두지 않은 것은 문서가 준 실제 차이다. 문서와 case를 같이 썼으므로 상한(위 해석 주의).
+- 실측 단가로 C1 이후 추정: 모듈 하나 case 3 × 2 arm ≈ $0.35.
 
 ### P2 — C0 (반입 뒤·C1 전 후보)
 

@@ -8,5 +8,141 @@
    "iteration": "module-probe-001",
    "cost_usd": 0.011961199999999998
   }
+ },
+ "modules": {
+  "ofono/data": {
+   "generated": "2026-11-04T23:43:21Z",
+   "repo_commit": "416af80b411d79b08234caa7b994fa4f701a9f36",
+   "repo_dirty": true,
+   "source": "worktree",
+   "docs_sha256": {
+    "with/builtin/explore-rules.md": "c9847aadd3844fb5cb1a8cb9905772010dd8b44c600f2907b5c781ca8cda0b80",
+    "with/builtin/platforms/ofono/log-guide.md": "3e36455bcc47d340a9fdcc2cf0ed533ba9453dc3c151903166c1b2133c4622a1",
+    "with/module-skill/ofono/_common/components.md": "6c4a9766842e41cf99ab0fedece73b2e8111244ee2de72a8dc2e7ed1deeb60f3",
+    "with/module-skill/ofono/_common/layers.md": "eb6c4e9bac525d7078c2b17865f9bc15be22976e884d66dfec4eb7c99fa02ae0",
+    "with/module-skill/ofono/data/SKILL.md": "806ab9cc11b4c8c6f88fe59fd0eb5d3a59416525bc70171ab7fe066208552a99",
+    "with/module-skill/ofono/data/analyzer.md": "f324ad7cfc5431f8c37d6bc74224ad6fb5df12017be5107c2e356e4381b44e9e",
+    "with/module-skill/ofono/data/explore.md": "114f0f1d93e78d5933edec741ada87ca7d9fb0ae7f34e3bfdb48f8af5dfcb087",
+    "with/module-skill/ofono/data/references/DATA-001.md": "ade081c2d4bd0c4ce5e64ad7fb95813459def3338ccfe01b263c531ac48c11c9",
+    "without/builtin/explore-rules.md": "6e5e9512c08404089872465262bfc11ab99b58747445d0b2c2296b13be6f83d8",
+    "without/builtin/platforms/ofono/log-guide.md": "77c7a06551ab1bc1ae6309ad2a01eb33b3654856ce2d08f4d4659a69e63eaa6a"
+   },
+   "cli_version": "2.1.318 (Claude Code)",
+   "init_model": "claude-sonnet-5-5",
+   "iteration": "module-ofono-data-001",
+   "runtime": "claude-code",
+   "child_mode": "restricted",
+   "builtin_plugins": [
+    "cc-plugin-agents-md",
+    "cc-plugin-plugin-authoring",
+    "cc-plugin-privacy",
+    "cc-plugin-telemetry"
+   ],
+   "inputs_sha256": {
+    "data-apn-auth-reject/deep-input.json": "0b0a2efc421f66f9a4b8f14e1ccecfb2d7dd52a76502a0a63562736c349d6362",
+    "data-apn-auth-reject/events.json": "f2dcabd569fc68ae2c1fa4f61ce5a3aa6d25a99bc046ea99661aeb7c228f76c8",
+    "data-apn-auth-reject/source.log": "4367981707d732dcd02914b5a8b70096bfa71fc1eafd3991eac4d969b2fc815b",
+    "data-apn-auth-reject/timeline.md": "748cc3a4d3e8ca2b59d90ddc1429b7e0721cd5ce939547e44dd84611b3a99336",
+    "data-ditd-route-fail/analysis.json": "bff9deb151d154b5108d5f4f25c9a19e2d27d2c8c955e2a61ada9588f00e0f42",
+    "data-ditd-route-fail/explore-input.json": "8522d1f69970968492cbae068e83897964cf6634e576a6fb387f8cf048e43ae2",
+    "data-ditd-route-fail/timeline.md": "fd1ba4ea8903d09e6702de63603153b68b22dc2ea0d53e2872c04f2fc4da9235",
+    "data-ofonod-only/analysis.json": "7dbec916668b1e0f14e0b5dc0feb7f2a6855b0767d6e40597239957b0f15f50c",
+    "data-ofonod-only/explore-input.json": "b575aaa0815d94693f4bed134ca8c0d28db1f128e6f29e9ea7c5e7ee4f8459ae",
+    "data-ofonod-only/timeline.md": "0cccea9cb8317a1bc83ddd19317042b1f9a6f1ec6546c2d23a38a6464e13c11e"
+   },
+   "cases": {
+    "data-apn-auth-reject": {
+     "kind": "deep",
+     "with": {
+      "status": "completed",
+      "pass1": false,
+      "safety_fail": [],
+      "valid": true,
+      "tokens_total": 48047,
+      "output_tokens": 1703,
+      "cost_usd": 0.0803663,
+      "elapsed_s": 13.47
+     },
+     "without": {
+      "status": "completed",
+      "pass1": true,
+      "safety_fail": [],
+      "valid": true,
+      "tokens_total": 35210,
+      "output_tokens": 1858,
+      "cost_usd": 0.0511957,
+      "elapsed_s": 13.42
+     }
+    },
+    "data-ditd-route-fail": {
+     "kind": "explore",
+     "with": {
+      "status": "completed",
+      "pass1": true,
+      "safety_fail": [],
+      "valid": true,
+      "tokens_total": 26635,
+      "output_tokens": 1964,
+      "cost_usd": 0.0653453,
+      "elapsed_s": 14.82
+     },
+     "without": {
+      "status": "completed",
+      "pass1": false,
+      "safety_fail": [],
+      "valid": true,
+      "tokens_total": 20894,
+      "output_tokens": 1542,
+      "cost_usd": 0.0413077,
+      "elapsed_s": 11.11
+     }
+    },
+    "data-ofonod-only": {
+     "kind": "explore",
+     "with": {
+      "status": "completed",
+      "pass1": true,
+      "safety_fail": [],
+      "valid": true,
+      "tokens_total": 26059,
+      "output_tokens": 1663,
+      "cost_usd": 0.06558409999999999,
+      "elapsed_s": 12.97
+     },
+     "without": {
+      "status": "completed",
+      "pass1": false,
+      "safety_fail": [],
+      "valid": true,
+      "tokens_total": 20856,
+      "output_tokens": 1793,
+      "cost_usd": 0.041768700000000006,
+      "elapsed_s": 11.01
+     }
+    }
+   },
+   "gate": {
+    "pass1_with": 2,
+    "pass1_without": 1,
+    "tokens_with": 100741,
+    "tokens_without": 76960,
+    "token_delta": 23781,
+    "token_delta_noncache": 17374,
+    "cost_delta_usd": 0.077024,
+    "safety_violations": {
+     "with": 0,
+     "without": 0
+    },
+    "notes": {
+     "with": 1,
+     "without": 1
+    },
+    "invalid": [],
+    "require_cost": true,
+    "verdict": "pass"
+   },
+   "unit_cost_usd": 0.057595,
+   "total_cost_usd": 0.345568
+  }
  }
 }
