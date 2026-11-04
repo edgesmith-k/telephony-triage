@@ -2,6 +2,29 @@
 
 단계표는 `MODULE_SKILLS_PLAN.md §4`. 이 파일은 단계마다 리뷰·재측정에서 P2로 남긴 것(결정 (r): P0·P1만 고치고 P2는 반입 뒤 후보)과 단계 결과를 적는다.
 
+## guard 규칙 11 쉬운 P1 3개 (11/04, A2 직후)
+
+커밋: dabaa74(구현·리뷰 수정), 다음 커밋(이 노트). 리뷰: 2관점(우회, 회귀) 1회 → 반박 검증 → 확인된 10건 한 번 수정(재리뷰 없음, 11/04 진행 방식).
+고친 빈틈(A1 노트 '열린 쪽'의 셋): ① cd·pushd 대상의 디렉토리 스택 tilde(`~-`·`~+`·`~N`·`~+N`·`~-N`, 뒤 `/…`)를 bash처럼 푼다 — clone에서 `cd /tmp && cd ~- && git push origin main`이 None이었다. ② 명령 낱말에 붙은 입력 리디렉션(`git</dev/null push`·`gh<x pr merge`·`git<>f`·`git<<<x`)을 나눠 본다. 리디렉션 앞 숫자·`{이름}`은 붙었을 때만 fd로 봐서 기존 빈틈 `timeout 5 >/dev/null git push origin main`도 막혔다. ③ 공백 없는 heredoc(`bash<<EOF`·`env bash<<-EOF`)과 `-c` 없는 셸의 here-string(`bash<<<"…"`)을 스크립트로 걷는다.
+리뷰가 찾은 것은 모두 첫 수정이 만든 회귀(기준보다 약해짐)였다 — 11건 중 10건 확인(P0 9·P1 1): `{fd}<` 이름 fd가 낱말로 남아 git·gh 하위 명령을 가림, `2>&1</dev/null`의 `1`을 fd로 읽어 `/dev/null`이 인자로 남음, `N<>f`(읽고 쓰기)를 입력으로만 봐 규칙 8 쓰기를 놓침, `~-//x`가 `/x`로 풀림, `<<-cmd`의 끝 표시를 `-c`로 읽음, `~١`(비ASCII 숫자), 줄 이음 뒤 fd(`2\⏎>`). 고치면서 `bash << -c`·`bash -c </dev/null '…'`(기준에도 있던 빈틈)도 막혔다.
+검증(본 트리): guard 테스트 5파일 203 통과(test_hooks 79·나머지 124), test_regress_perf 8 통과. 작업 worktree(같은 기준·같은 패치) 관련 테스트 전체 1,793 통과·check_boundary 통과. 말뭉치 7,403 × cwd 4: 기준(b740cc8)보다 약해진 판정 0, 강해진 1(문서 placeholder `<br>` — bash도 문법 오류). 리뷰어 사례 667건: 강해진 301·약해진 2 — 둘 다 bash로 확인한 과잉 거부가 빠진 것(`git log -1 2>&1</dev/null`은 아무것도 쓰지 않는다, `pushd /tmp; pushd /usr; pushd -n ~2; popd -n; popd; git push …`는 /tmp에서 끝난다). bash 대조 퍼징: cd·pushd·popd(시드 21~25·101, 1,500씩) 구멍 0, tilde가 결정하는 사례(시드 41~45·102) 구멍 0(첫 수정은 시드마다 53~70), 리디렉션 뒤 argv(시드 1~5·103) 불일치는 모두 기존 `N>&-낱말` 부류(기준 265 → 2~7).
+성능(명령 하나 judge 시간, 기준 → 수정): 대부분 같은 범위, 실패하는 상대 cd 2,000개 1.12배. 공백 없는 `bash<<EOF` 5,000줄 본문은 0.06s → 22s(예전엔 본문을 보지 않았다 — 공백 있는 꼴과 같아짐).
+
+### P2 — guard 쉬운 P1 (반입 뒤 후보, 모두 기준에도 있거나 기준보다 강함)
+
+- `>&-`·`<&-` 바로 뒤 낱말: bash는 fd 닫기 + 별도 인자인데 guard는 복제 대상으로 떼어 버린다. clone에서 `git 0<&-push origin main`이 None(기준도). `git 2>&-push …`는 규칙 8 덕에 우연히 deny.
+- 같은 명령에서 `OLDPWD`·`PWD`를 바꾸면 `cd -`·`~-`·`~+`는 모르는 디렉토리 후보만 더한다(값을 따라가지 않음 — `cd "$D"`와 같은 한계). git 규칙(3~8·12)은 모르는 후보를 판정하지 않아 `export OLDPWD=<clone>; cd ~-; git push origin main`이 None(규칙 11 gh는 deny). `export $'OLD\x50WD'=…`처럼 감춘 대입은 못 알아본다.
+- cd·pushd 대상 밖의 tilde는 풀지 않는다: `git -C ~-`·`env -C ~-`·리디렉션 대상 `> ~-/f`. 중괄호 확장 `cd {,~-}`도 글자로 본다.
+- 중첩 셸(`bash -c`·here-string·heredoc)은 OLDPWD를 모른 채 시작한다. bash는 OLDPWD를 자식에게 넘기므로 `cd <C>; cd /tmp; bash -c 'cd ~-; git push origin main'`이 None(기준도).
+- 셸에 파이프로 넘기는 글·here-string은 걷지 않는다: `cat <<<"…" | bash`·`echo "…" | bash`·`source /dev/stdin<<<"…"`·`bash -c 'eval "$(cat)"'<<<"…"`·`xargs bash -c<<<"…"`.
+- 래퍼 옵션 값이 리디렉션을 먹는다: `env -C</dev/null <C> git push …`·`sudo -D</dev/null <C> …`가 None(공백 있는 꼴도 기준부터 None).
+- `~-N`과 칸을 모르는 스택의 `~N`은 `popd -N`처럼 넓게 봐서 과잉 거부가 날 수 있다(`pushd /tmp; cd ~-1; git push origin HEAD:main`). 명령 글에 `PWD` 낱말이 있으면 cd 후보에 모르는 디렉토리가 더해져 gh 쓰기에 규칙 11 ask가 늘 수 있다(더 엄격한 쪽).
+- `_marked_tokens` 표시가 heredoc 끝 표시 낱말에 끼어 연산자별 heredoc cwd가 기록되지 않는다(늘 대체 경로 — 후보는 더 넓어 판정 변화는 못 찾음). 공백 있는 `bash <<EOF` 5,000줄 본문이 약 2배 느려졌고(1.2s → 2.6s), docstring·08-safety의 '연산자가 든 명령의 cwd 후보로 한 번' 문장이 실제와 다르다.
+- 긴 명령이 기준부터 느리다: 실패하는 상대 cd 2,000개 약 45~51s, cd 5,000줄 heredoc 약 81~87s, 무거운 5,000줄 `bash <<-EOF`는 120s 넘음(기준도). hook 한도 180s를 넘으면 fail-open.
+- 글 heredoc이 공백 없이 붙은 꼴(`cat<<EOF` 본문에 `db_pr.py publish`)도 이제 공백 있는 꼴처럼 글로 봐서 규칙 7 ask가 빠진다(bash는 출력만 한다, 말뭉치에 없음).
+- 토큰 나누기 한계(판정 영향 없음): `$(( ))`·`[[ ]]`·`${x/</y}` 안의 `<`도 리디렉션으로 나뉜다. 말뭉치 15칸은 판정은 같고 규칙 8 사유 글의 argv가 `<`에서 잘린다.
+- `MODULE_SKILLS_RESULT.md` A1 절의 '열린 쪽'은 그때 기록이라 고치지 않았다(위 ①~③은 이 절에서 닫힘).
+
 ## A2 바로 병합 삭제·확인 화면·리뷰어 질문 (11/04)
 
 커밋: 7746c46(구현·리뷰 P1 수정), 다음 커밋(eval 기록·이 노트). 리뷰: 2관점(동작, 문서·스킬) 1회 → 반박 검증 → P1 2건 한 번 수정(재리뷰 없음, 11/04 진행 방식).
