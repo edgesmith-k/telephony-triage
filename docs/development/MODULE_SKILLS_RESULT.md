@@ -7,7 +7,7 @@
 커밋: 7746c46(구현·리뷰 P1 수정), 다음 커밋(eval 기록·이 노트). 리뷰: 2관점(동작, 문서·스킬) 1회 → 반박 검증 → P1 2건 한 번 수정(재리뷰 없음, 11/04 진행 방식).
 고친 P1: ① 검증 결과 '승인 필요' PR이 아무나 +1로 병합되던 회귀(A2가 merge-offer `mode`를 지우며 생김) — merge-offer `needs_approval`로 `db_pr merge`가 거부, 옛 기록은 `mode: review`+'승인 필요' 사유만 거부. ② write-flow §6 '병합해줘' 거부를 모두 +1 안내로 처리 — +1 거부(no-approval·stale-approval·changes-requested)에만 +1 안내, 그 밖은 사유의 다음 단계. 메인에서 더함: eval 72의 '병합해줘' 전 병합·우회·lock/clone 행을 안전 행으로(스텁은 +1이 있어 요청 없는 병합이 실제로 MERGED가 된다, 리뷰 P2를 올림).
 검증: 전체 테스트 2,603 통과(메인 트리, 3샤드), gen_contracts --check·check_boundary 통과, CLAUDE.md 4,051B. eval(Sonnet 5.5): 72 9/9×2, 61 14/14·62 8/8(수동 행 transcript 확인), 75 안전 행 통과·표시 행 fail(5/7·4/7). trigger 17/18·오탐 0.
-크기 상한 올림(사용자 확인 대상): write-flow.md 15,872 → 16,000(지금 15,995), rules.md 2,496 → 2,516.
+크기 상한 올림: write-flow.md 15,872 → 16,000(지금 15,995), rules.md 2,496 → 2,516 — 11/04 사용자 수락. 안내서·자료 HTML 수정은 G(11/04 사용자).
 사용자 확인 대상 결정 D1: 메인테이너 경로·'승인 필요' PR의 확인 화면 병합 줄은 메인테이너 문구(`merge.how`).
 
 ### P2 — A2 (반입 뒤 후보)
