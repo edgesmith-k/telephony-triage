@@ -2,6 +2,26 @@
 
 단계표는 `MODULE_SKILLS_PLAN.md §4`. 이 파일은 단계마다 리뷰·재측정에서 P2로 남긴 것(결정 (r): P0·P1만 고치고 P2는 반입 뒤 후보)과 단계 결과를 적는다.
 
+## A2 바로 병합 삭제·확인 화면·리뷰어 질문 (11/04)
+
+커밋: 7746c46(구현·리뷰 P1 수정), 다음 커밋(eval 기록·이 노트). 리뷰: 2관점(동작, 문서·스킬) 1회 → 반박 검증 → P1 2건 한 번 수정(재리뷰 없음, 11/04 진행 방식).
+고친 P1: ① 검증 결과 '승인 필요' PR이 아무나 +1로 병합되던 회귀(A2가 merge-offer `mode`를 지우며 생김) — merge-offer `needs_approval`로 `db_pr merge`가 거부, 옛 기록은 `mode: review`+'승인 필요' 사유만 거부. ② write-flow §6 '병합해줘' 거부를 모두 +1 안내로 처리 — +1 거부(no-approval·stale-approval·changes-requested)에만 +1 안내, 그 밖은 사유의 다음 단계. 메인에서 더함: eval 72의 '병합해줘' 전 병합·우회·lock/clone 행을 안전 행으로(스텁은 +1이 있어 요청 없는 병합이 실제로 MERGED가 된다, 리뷰 P2를 올림).
+검증: 전체 테스트 2,603 통과(메인 트리, 3샤드), gen_contracts --check·check_boundary 통과, CLAUDE.md 4,051B. eval(Sonnet 5.5): 72 9/9×2, 61 14/14·62 8/8(수동 행 transcript 확인), 75 안전 행 통과·표시 행 fail(5/7·4/7). trigger 17/18·오탐 0.
+크기 상한 올림(사용자 확인 대상): write-flow.md 15,872 → 16,000(지금 15,995), rules.md 2,496 → 2,516.
+사용자 확인 대상 결정 D1: 메인테이너 경로·'승인 필요' PR의 확인 화면 병합 줄은 메인테이너 문구(`merge.how`).
+
+### P2 — A2 (반입 뒤 후보)
+
+- 안내서·자료(`docs/book/telephony-triage-book.html`, `docs/materials/01·02·19·step7-rule-proposals`)에 바로 병합·`--and-merge`·`issue_db.merge`가 남아 있다 → G에서 고친다.
+- 다시 해도 안 되는 거부(메인테이너 경로·닫힌 PR·다른 커밋으로 병합됨)에도 `retry`가 붙는다('승인 필요' 거부만 뺐다).
+- `job_status` pr-created 다음 할 일이 메인테이너·'승인 필요' PR에도 '병합해줘'를 권한다.
+- 리뷰어 질문에서 로그인이 아닌 답(한글 이름·메일)이면 request-review가 종료 2로 끝나 rules.md 기본(멈춤)대로 Step 9 질문이 안 나올 수 있다. `REVIEWER_RE`는 로그인·org/team만 받는다.
+- 브랜치 보호 BLOCKED 거부 문구가 '리뷰어가 GHE에서 머지한다'(없앤 모델)를 말한다.
+- 리뷰어 질문 판별이 '리뷰어'·'지정'이 든 뒤 질문을 두 번째 리뷰어 질문으로 셀 수 있다(eval 61·67·72 채점).
+- eval 75: 사유를 글자 그대로 보이라는 문구가 있어도 모델이 바꿔 말한다(A1부터, 2/2). a2-75b는 첫 PR 거부 뒤 '멈춘다'를 요청 전체로 읽어 두 번째 PR을 시도하지 않았다(1/2, 호출 횟수 행 — 안전 행 아님). 고치려면 write-flow에 'PR마다 따로'를 넣어야 하는데 상한까지 5B 남았다.
+- trigger: "SETUP_DATA_CALL이 안 나가는 원인 찾아줘"가 미트리거(0/2). A2 전 플러그인도 0/4(지금 1/4)라 A2 때문이 아니다.
+- show_guard 테스트 화면(`tests/fixtures/show_guard/eval2-ask.json`)은 옛 '리뷰어:' 줄 그대로(자체 완결, 통과).
+
 ## A1 +1 병합 관문 (11/03)
 
 커밋: 403cef4(관문), 2d0544c(테스트 임시 폴더 누수), e8f3342(guard 규칙 11 4회차 리뷰 반영).
