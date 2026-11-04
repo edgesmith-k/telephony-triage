@@ -1359,10 +1359,14 @@ def _dedupe(dirs) -> tuple[Path, ...]:
     roots = _KEEP_ROOTS
     guarded = [d for d in rev if _root_of(str(d), roots)]
     keep = set(guarded[:CWD_CAP]) | set([d for d in rev if not _root_of(str(d), roots)][:CWD_CAP - 2])
-    folded = [Path(r) for r in dict.fromkeys(_anchor_of(str(d), roots) for d in guarded[CWD_CAP:])]
+    # 넘친(오래된) 보호 후보는 레포 꼭대기·작업 폴더로 접고(최근 것부터 `CWD_CAP`개), 그래도 넘치면 뿌리로 접는다. 접은 자리는
+    # 오래된 쪽(처음 후보 바로 뒤)에 둔다 — 끝(최근 자리)에 두면 다음 넘침 때 진짜 최근 후보를 밀어냈다(마지막 리뷰 검증)
+    anchors = [Path(a) for a in dict.fromkeys(_anchor_of(str(d), roots) for d in guarded[CWD_CAP:])]
+    anchors = [a for a in anchors if a not in keep and a != head]
+    rooted = [Path(r) for r in dict.fromkeys(_root_of(str(a), roots) for a in anchors[CWD_CAP:])]
+    rooted = [r for r in rooted if r not in keep and r != head and r not in anchors[:CWD_CAP]]
     kept = [d for d in reversed(rev) if d in keep]
-    extra = [r for r in folded if r not in keep and r != head]
-    return (head, *kept, *extra, *(() if head == UNKNOWN_DIR else (UNKNOWN_DIR,)))
+    return (head, *rooted, *reversed(anchors[:CWD_CAP]), *kept, *(() if head == UNKNOWN_DIR else (UNKNOWN_DIR,)))
 
 
 def _isdir(p) -> bool:
