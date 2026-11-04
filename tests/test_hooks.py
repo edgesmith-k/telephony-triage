@@ -1905,6 +1905,31 @@ def test_guard_long_cwd_candidates_stay_in_worktree_and_job_dir():
         gitp(c, "worktree", "remove", "--force", str(wt))
 
 
+def test_guard_overflow_folds_into_repo_or_job_dir():
+    """명령 파싱(재리뷰): 보호 뿌리 안 cwd 후보가 상한을 넘으면 오래된 것은 그 후보가 든 레포 꼭대기(`.git`이 있는 곳)나 작업 폴더로
+    접는다. 예전에는 보호 뿌리 자체(work_dir)로 접어 worktree·작업 폴더 후보를 잃었다 — 실패하는 cd가 여럿 이어진 뒤(bash는 처음
+    들어간 worktree·작업 폴더에 남는다)의 main push·--no-verify·승인 기록 쓰기가 판정 밖으로 빠졌다."""
+    ws = shared()
+    c = ws.clone
+    plain = tmp("tt-gh-plain-")
+    wt = ws.work / "wt-fold"
+    git(c, "worktree", "add", "-q", "--detach", str(wt), "origin/main")
+    job = ws.job_dir("MOCK-7203")
+    job.mkdir(parents=True, exist_ok=True)
+    fails = "; ".join(f"cd {job}/nosuch{i}" for i in range(10))
+    wt_fails = "; ".join(f"cd {wt}/nosuch{i}" for i in range(10))
+    rows = [(f"true && cd {wt}; {fails}; git push origin HEAD:main", plain, "deny"),
+            (f"true && cd {wt}; {fails}; git commit --no-verify -m x", plain, "deny"),
+            (f"true && cd {c}; {fails}; echo x > notes.txt", plain, "deny"),
+            (f"true && cd {job}; {wt_fails}; echo x > post.approved.json", plain, "deny"),
+            (f"{fails}; git push origin HEAD:main", plain, None)]                     # 오탐 방지: 레포에 들어간 적 없음
+    try:
+        for cmd, cwd, want in rows:
+            assert decision(bash(ws, cmd, cwd)) == want, (cmd[:80], cwd)
+    finally:
+        gitp(c, "worktree", "remove", "--force", str(wt))
+
+
 def test_guard_pushd_popd_chains_stay_fast():
     """명령 파싱(재리뷰 P1 성능): 실패할 수 있는 pushd(없는 경로)가 스택을 '모름'으로 만든 뒤에도 칸을 하나로 합쳐 상한 안에 둔다.
     예전에는 칸이 pushd마다 쌓이고 popd마다 모두 다시 봐서 pushd 1000개 + popd 1000개가 hook 시간 한도(180초)를 넘겼다 — Claude

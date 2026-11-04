@@ -63,7 +63,7 @@ TAIL_BYTES = 16 * 1024 * 1024
 HEAD_BYTES = 64 * 1024
 BLOCK_LIMIT = 12 * 1024
 # post 안내는 지금 호출이 도는 동안 남은 기록만 고른다(`mode_post`, 시각만 본다 — 같은 때 다른 세션이 같은 스크립트를 부르면 그 기록도 안내한다)
-POST_WINDOW = 60.0       # 지금 호출의 시작 시각을 모를 때만 쓰는 창(입력에 transcript_path·tool_use_id가 없거나 기록이 없을 때)
+POST_WINDOW = 60.0       # 지금 호출의 시작 시각을 모를 때만 쓰는 창(입력에 transcript_path·tool_use_id가 없거나 transcript에서 호출을 못 찾을 때)
 POST_SCAN = 660.0        # 지금 호출이 남겼을 수 있는 기록을 찾는 범위(Bash 최대 10분 + 여유) — 이 안에 후보가 있을 때만 transcript를 읽는다
 RECORD_SCRIPTS = ("db_pr", "issue_post", "db_verify", "triage", "skill_patch")
 QUICK_TOKENS = ("## push 전 확인:", "게시 전 확인:", "triage.py", "--draft", "db_pr.py", "issue_post.py", "skill_patch.py")
@@ -181,12 +181,13 @@ def turn_start(seq) -> int | None:
 
 WAIT_SECONDS = 2.0       # PreToolUse 때 transcript에 지금 호출이 기록될 때까지 기다리는 상한
 WAIT_STEP = 0.05
+POST_WAIT_SECONDS = 0.3  # PostToolUse: 지금 호출은 이미 기록돼 있다(못 찾으면 60초 창으로)
 
 
-def _wait_recorded(path, tool_use_id) -> bool:
-    """transcript에 tool_use_id가 나타날 때까지 새로 붙은 바이트만 본다(WAIT_SECONDS 상한). 나타났으면 True."""
+def _wait_recorded(path, tool_use_id, wait: float | None = None) -> bool:
+    """transcript에 tool_use_id가 나타날 때까지 새로 붙은 바이트만 본다(`wait` 상한, 없으면 WAIT_SECONDS). 나타났으면 True."""
     needle = tool_use_id.encode("utf-8")
-    deadline = time.monotonic() + WAIT_SECONDS
+    deadline = time.monotonic() + (WAIT_SECONDS if wait is None else wait)
     pos, tail = 0, b""
     try:
         with Path(path).open("rb") as fh:
@@ -543,10 +544,11 @@ def _response_text(resp) -> str:
 
 
 def _call_start(inp) -> float | None:
-    """지금 Bash 호출의 tool_use 시각(transcript의 `tool_use_id` 줄). PostToolUse 때 그 줄은 이미 기록돼 있다(호출 전에 쓰인다 —
-    `load_seq_for_call`과 같이 WAIT_SECONDS까지 기다린다). 입력에 transcript_path·tool_use_id가 없거나 찾지 못하면 None."""
+    """지금 Bash 호출의 tool_use 시각(transcript의 `tool_use_id` 줄). PostToolUse 때 그 줄은 이미 기록돼 있다 — 기다림은
+    POST_WAIT_SECONDS로 짧게 둔다(하위 에이전트 호출은 transcript가 따로라 주 transcript에 없다: 기다려도 나타나지 않는다).
+    입력에 transcript_path·tool_use_id가 없거나 찾지 못하면 None."""
     tid, path = inp.get("tool_use_id"), inp.get("transcript_path")
-    if not tid or not path or not _wait_recorded(path, str(tid)):
+    if not tid or not path or not _wait_recorded(path, str(tid), POST_WAIT_SECONDS):
         return None
     for e in reversed(load_seq(path) or []):
         if e.get("kind") == "tool" and e.get("id") == tid:

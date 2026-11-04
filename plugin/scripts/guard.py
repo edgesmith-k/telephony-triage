@@ -1288,9 +1288,39 @@ def _shorten(d: Path) -> tuple[Path, ...]:
     return res
 
 
+@functools.lru_cache(maxsize=8192)
+def _anchor_of(path: str, roots: tuple[str, ...]) -> str | None:
+    """넘친 보호 뿌리 안 후보를 접을 자리: 그 후보(뿌리 안이면 글자 경로, 아니면 실제 경로)가 든 가장 가까운 git 작업 트리
+    꼭대기(`.git`이 있는 곳 — clone·worktree·스냅샷), 없으면 뿌리 바로 아래 첫 칸(`<work_dir>/<KEY>` 작업 폴더), 그것도
+    아니면 뿌리. 뿌리 밖이면 None. 예전에는 뿌리 자체로 접어 worktree·작업 폴더 후보가 work_dir(레포도 작업 폴더도 아님)이
+    돼 git 규칙·규칙 2/7 기록 검사를 건너뛰었다(재리뷰 — 긴 후보를 실제·글자 두 꼴로 보면서 넘침이 잦아졌다)."""
+    root = _root_of(path, roots)
+    if root is None:
+        return None
+    try:
+        p = os.path.normpath(path)
+        p = p if _inside(p, root) else _real(path)
+    except Exception:  # noqa: BLE001
+        return root
+    if not _inside(p, root):
+        return root
+    q = p
+    while True:
+        try:
+            if os.path.lexists(os.path.join(q, ".git")):
+                return q
+        except (OSError, ValueError):
+            pass
+        if len(q) <= len(root.rstrip(os.sep)) or os.path.dirname(q) == q:
+            break
+        q = os.path.dirname(q)
+    first = os.path.relpath(p, root).split(os.sep)[0]
+    return os.path.join(root, first) if first not in ("", ".", "..") else root
+
+
 def _dedupe(dirs) -> tuple[Path, ...]:
     """중복을 뺀 cwd 후보(처음 나온 순서). `CWD_CAP`을 넘으면 처음 후보, 보호 뿌리(`_KEEP_ROOTS` — 이슈 DB clone·work_dir·스킬
-    소스) 안의 후보 가장 최근 `CWD_CAP`개(그보다 많으면 나머지는 그 뿌리 자체로), 그 밖의 가장 최근 후보들을 남기고 나머지를 모르는
+    소스) 안의 후보 가장 최근 `CWD_CAP`개(그보다 많으면 나머지는 그 후보가 든 레포 꼭대기나 작업 폴더 — `_anchor_of`), 그 밖의 가장 최근 후보들을 남기고 나머지를 모르는
     디렉토리 하나로 접는다(회귀 수정 R4 — 넘침이 마지막 cd 대상을 버리던 부류, 재리뷰 — 분기·실패할 수 있는 이동이 후보를 늘려 처음
     cwd인 clone이 접히던 부류. 접힌 후보는 규칙 11에선 모르는 디렉토리로 남는다. git 규칙이 보는 후보는 보호 뿌리 안에 있다)."""
     dirs = tuple(x for d in dirs for x in ((d,) if len(str(d)) <= LONG_CWD else _shorten(d)))
@@ -1302,7 +1332,7 @@ def _dedupe(dirs) -> tuple[Path, ...]:
     roots = _KEEP_ROOTS
     guarded = [d for d in rev if _root_of(str(d), roots)]
     keep = set(guarded[:CWD_CAP]) | set([d for d in rev if not _root_of(str(d), roots)][:CWD_CAP - 2])
-    folded = [Path(r) for r in dict.fromkeys(_root_of(str(d), roots) for d in guarded[CWD_CAP:])]
+    folded = [Path(r) for r in dict.fromkeys(_anchor_of(str(d), roots) for d in guarded[CWD_CAP:])]
     kept = [d for d in reversed(rev) if d in keep]
     extra = [r for r in folded if r not in keep and r != head]
     return (head, *kept, *extra, *(() if head == UNKNOWN_DIR else (UNKNOWN_DIR,)))
