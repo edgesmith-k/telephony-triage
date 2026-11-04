@@ -619,7 +619,22 @@ def test_s4a_protection_403_404_is_skip_and_weak_data_fails(tmp_path, monkeypatc
     assert sc.s4a_protection(sc.Ctx(root))["status"] == "fail"
     good = {"required_pull_request_reviews": {"require_code_owner_reviews": True}}
     monkeypatch.setattr(sc.Ctx, "run", fake((0, json.dumps(good), "")))
-    assert sc.s4a_protection(sc.Ctx(root))["status"] == "pass"
+    r = sc.s4a_protection(sc.Ctx(root))
+    assert r["status"] == "pass"            # 통과 기준은 그대로(승인 수 0도 통과 — 권장 항목은 정보만, 올리면 사내 재점검이 깨진다)
+    assert "권장(이슈 DB docs/branch-protection.md) — 정보" in r["evidence"] and "필수 승인 수 ?(권장 1)" in r["evidence"]
+    assert "dismiss_stale_reviews) False" in r["evidence"] and "issue_db.merge" not in r["evidence"]
+    full = {"required_pull_request_reviews": {"require_code_owner_reviews": True, "required_approving_review_count": 1,
+                                              "dismiss_stale_reviews": True, "require_last_push_approval": True},
+            "required_status_checks": {"strict": True, "contexts": ["db-check"]}, "enforce_admins": {"enabled": True}}
+    monkeypatch.setattr(sc.Ctx, "run", fake((0, json.dumps(full), "")))
+    r = sc.s4a_protection(sc.Ctx(root))
+    assert r["status"] == "pass" and "필수 승인 수 1(권장 1)" in r["evidence"]
+    for part in ("dismiss_stale_reviews) True", "require_last_push_approval) True", "(strict) True(db-check)",
+                 "enforce_admins) True"):
+        assert part in r["evidence"], part
+    monkeypatch.setattr(sc.Ctx, "run", fake((0, json.dumps({**full, "required_pull_request_reviews": {
+        "required_approving_review_count": 1}}), "")))
+    assert sc.s4a_protection(sc.Ctx(root))["status"] == "fail"       # CODEOWNERS 리뷰가 꺼져 있으면 그대로 실패
 
 
 def test_review_open_missing_is_needs_user(tmp_path):

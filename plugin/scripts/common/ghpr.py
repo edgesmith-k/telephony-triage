@@ -1,8 +1,9 @@
-"""PR 공용 조각(이슈 DB `db_pr`, 뒤의 모듈 스킬 `skill_pr`): PR 보기, 리뷰 목록(REST), 검사 요약, 병합 방식, +1 관문 사유.
+"""PR 공용 조각(이슈 DB `db_pr`, 뒤의 모듈 스킬 `skill_pr`): PR 보기, 리뷰 목록(REST), 검사 요약, 병합 방식, +1 관문 사유,
+리뷰어 요청(`request_reviewers`).
 
 gh는 부르는 쪽이 `run(target, args, cwd) -> CompletedProcess`로 넘긴다(시간 초과 처리·예외는 부르는 쪽 그대로 —
 `dbpr.worktree._gh`는 UsageError). target은 `repo`(gh cwd)·`base`·`host`를 가진 객체다(`dbpr.worktree.Ctx`가 그대로 맞다).
-PR 만들기·고치기·lease push는 skill_pr(단계 E)가 생길 때, 리뷰어 요청은 request-review(A2)와 함께 옮긴다.
+PR 찾기·만들기·고치기·lease push는 skill_pr(단계 E)가 생길 때 옮긴다.
 """
 
 from __future__ import annotations
@@ -14,7 +15,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Protocol
 
-from common import ghreview
+from common import ghreview, masking
 
 AUTHOR_FIELD = "author"
 PR_URL_RE = re.compile(r"^https?://([^/\s]+)/([^/\s]+)/([^/\s]+)/pull/(\d+)/?$")
@@ -117,3 +118,16 @@ def plus_one(pr_view: dict, revs: list, url: str | None = None, number=None) -> 
     link = (pr_view or {}).get("url") if isinstance(pr_view, dict) else None
     return {"review": {"code": res["code"], "approvals": res["approvals"]}, "approvers": ghreview.head_approvers(res),
             "reason": None if msg is None else with_link(msg, link or url, number), "brief": msg}
+
+
+def request_reviewers(target: Target, number, reviewers: list[str], run: Run) -> dict:
+    """리뷰어마다 `gh pr edit <n> --add-reviewer <r>`(cwd `target.repo`) → `{requested, failed[{reviewer, error}]}`.
+    실패는 모으고 다음 리뷰어로 간다(error는 `masking.mask_brief`). `run`의 예외는 부르는 쪽으로 그대로 올라간다."""
+    requested, failed = [], []
+    for r in reviewers:
+        proc = run(target, ["pr", "edit", str(number), "--add-reviewer", r], target.repo)
+        if proc.returncode == 0:
+            requested.append(r)
+        else:
+            failed.append({"reviewer": r, "error": masking.mask_brief(proc.stderr or proc.stdout)})
+    return {"requested": requested, "failed": failed}

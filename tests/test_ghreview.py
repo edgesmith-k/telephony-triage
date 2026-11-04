@@ -234,6 +234,34 @@ def test_view_and_merge_method_keep_merge_py_behavior():
     assert ghpr.rollup_state([{"context": "b", "state": "PENDING"}]) == ("pending", ["b"])
 
 
+def test_request_reviewers_one_call_per_reviewer_collects_failures_and_propagates_exceptions():
+    """리뷰어마다 `gh pr edit <n> --add-reviewer <r>`(cwd target.repo). 실패는 모으고(마스킹·120자) 다음으로, `run` 예외는 그대로."""
+    calls = []
+
+    def run(target, args, cwd):
+        calls.append((args, cwd))
+        bad = args[-1] == "ghost"
+        return subprocess.CompletedProcess(["gh", *args], 1 if bad else 0, "", "could not request reviewer: 'ghost'\n" * 9
+                                           if bad else "")
+    got = ghpr.request_reviewers(_Target(), 3, ["mock-org/team", "ghost", "bob"], run)
+    assert [c[0] for c in calls] == [["pr", "edit", "3", "--add-reviewer", r] for r in ("mock-org/team", "ghost", "bob")]
+    assert all(cwd == Path("/clone") for _, cwd in calls)
+    assert got["requested"] == ["mock-org/team", "bob"] and [f["reviewer"] for f in got["failed"]] == ["ghost"]
+    assert got["failed"][0]["error"].startswith("could not request reviewer") and len(got["failed"][0]["error"]) <= 120
+    assert ghpr.request_reviewers(_Target(), 3, [], run) == {"requested": [], "failed": []}
+    run, _ = fake_run("", 1, "")
+    assert ghpr.request_reviewers(_Target(), 3, ["a"], run)["failed"] == [{"reviewer": "a", "error": ""}]
+
+    def boom(target, args, cwd):
+        raise TimeoutError("gh 시간 초과")
+    try:
+        ghpr.request_reviewers(_Target(), 3, ["a"], boom)
+    except TimeoutError:
+        pass
+    else:
+        raise AssertionError("run 예외는 부르는 쪽으로 올라가야 한다")
+
+
 def _all_tests():
     return [(name, obj) for name, obj in sorted(globals().items()) if name.startswith("test_") and callable(obj)]
 

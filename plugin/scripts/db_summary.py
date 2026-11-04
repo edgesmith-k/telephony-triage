@@ -542,7 +542,8 @@ def render_markdown(scr: dict, plan: dict, extra: dict) -> str:
                 ", ".join(md.line(f"#{p.get('number')} {p.get('title')} ({p.get('url')})") for p in prs) or "없음")
     out = [head, f"구분: {md.line(scr['source_label'])}",
            f"브랜치: {branch['name']} ({branch['remote']}) → PR 대상: {branch['base']}",
-           f"리뷰어: {md.line(', '.join(scr['reviewers'])) or '없음'}", f"열린 PR: {open_prs}", "",
+           f"리뷰어(제안 — push 뒤 지정할지 묻는다, 지정 안 하면 아무나): {md.line(', '.join(scr['reviewers'])) or '없음'}",
+           f"열린 PR: {open_prs}", "",
            "### 변경 파일", "", "| 구분 | 파일 | 변경 |", "|---|---|---|"]
     out += _file_rows(scr["files"]) or ["| 없음 | | |"]
     out += ["", "### ID 할당", ""]
@@ -594,8 +595,7 @@ def render_markdown(scr: dict, plan: dict, extra: dict) -> str:
         out.append(md.line(scr["push_note"]))
     elif not scr["push_allowed"]:
         out.append(f"({NO_RULE} — 원값: push_allowed=false)")
-    if extra.get("merge"):      # 병합 줄(dry-run 아닐 때 summary가 넣는다, dbpr/merge.py screen_line)
-        from dbpr import merge as _merge
-        out += ["", _merge.screen_line(extra["merge"]["mode"], extra["merge"].get("reason"))]
+    if extra.get("merge"):      # 병합 줄(dry-run 아닐 때 summary가 넣는다, dbpr/merge.py how — 보통 merge.SCREEN_LINE)
+        out += ["", "병합: " + extra["merge"]["how"]]
     out += ["", f"approved_hash: {extra['approved_hash']}"]
     return "\n".join(out) + "\n"

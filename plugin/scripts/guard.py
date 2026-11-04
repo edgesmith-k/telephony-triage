@@ -21,7 +21,7 @@ TODO(SITE:S3) 플러그인 hook에 보이는 MCP 도구 이름이 `mcp__<server>
 | 4 | 생성 파일 정합성: `git commit`이면 `db_build --verify --staged`(`actions-build`면 생성 파일 staged 거부), `.cache/` staged 거부 | Bash, 이슈 DB |
 | 5 | hook 우회 차단: 커밋의 `--no-verify`·`-n`, `-c core.hooksPath=…`(모든 git 명령), 유효 `core.hooksPath`가 정확히 `.githooks`가 아니면 커밋 거부, `core.hooksPath`를 바꾸거나 해제하는 `git config` 거부(정확히 `.githooks`로 설정은 허용), `GIT_CONFIG_*`·`GIT_INDEX_FILE` 대입이 붙은 commit·push·config 거부 | Bash, 이슈 DB |
 | 6 | base 브랜치 push 차단: refspec의 대상 ref(없으면 현재 브랜치), `--all`/`--mirror`, push `--no-verify` | Bash, 이슈 DB |
-| 7 | push 확인 강제: 이슈 DB `git push`와 `db_pr.py publish`는 `ask` (옵션 `--commit`·`--and-discard`와 무관: `publish` 토큰만 본다). publish는 명령 글의 낱말 그물(`word_net`: 이름 `db_pr`와 낱말 `publish`가 함께 든다, 글 명령만인 줄은 뺀다 — 아래 "명령 파싱")로 본다. 같은 그물로 `db_pr.py merge`·`publish --and-merge`(PR 바로 병합 — 확인 화면에서 "push하고 바로 병합"을 고른 뒤에만, 스크립트가 승인 커밋·검사를 대조)도 `ask`(한 명령이면 권한 확인 한 번). 병합 기록 `<work_dir>/<KEY>/merge-offer.json`을 파일 도구·Bash 파일 쓰기로 쓰거나 지우면 거부(db_pr만 쓴다) | Bash |
+| 7 | push 확인 강제: 이슈 DB `git push`와 `db_pr.py publish`는 `ask` (옵션 `--commit`·`--and-discard`와 무관: `publish` 토큰만 본다). publish는 명령 글의 낱말 그물(`word_net`: 이름 `db_pr`와 낱말 `publish`가 함께 든다, 글 명령만인 줄은 뺀다 — 아래 "명령 파싱")로 본다. 같은 그물로 `db_pr.py merge`(+1 병합 — 사용자가 병합을 요청한 뒤에만, 스크립트가 +1·승인 커밋·검사를 대조)와 `db_pr.py request-review`(리뷰어 요청 — push 뒤 리뷰어 질문에서 사용자가 고른 뒤에만, 매번)도 `ask`. 병합 기록 `<work_dir>/<KEY>/merge-offer.json`을 파일 도구·Bash 파일 쓰기로 쓰거나 지우면 거부(db_pr만 쓴다) | Bash |
 | 8 | 사용자 clone 직접 편집 차단: 대상 파일이 `issue_db.path` 안이면 거부(`work_dir` 아래는 제외) | Write/Edit/MultiEdit/NotebookEdit |
 | 8 | 같은 규칙, Bash: clone 본체에서 브랜치·파일을 바꾸는 git·`gh pr checkout`, clone 안으로의 파일 쓰기(리디렉션·tee·cp·rm·`sed -i` 등) 거부. migrate 브랜치 생성(깨끗한 트리)은 ask | Bash, clone 본체 |
 | 10 | 로그 원문 통독 차단: cat·tac·nl·less·more·bat·strings·zcat·zless·bzcat·xzcat, `head/tail -c`, `unzip -p/-c`가 로그 원문·zip·bugreport·`events*.json`·`issue_raw.json`·`match.json`을 통째로 읽으면 거부(`fixtures/`·`draft/` 제외, 사용자 config와 무관) | Bash |
@@ -64,7 +64,7 @@ bash 범위대로 — 서브셸·`$( )`·파이프 요소·`&` 백그라운드�
 
 **의존성 없음·내부 오류**(`_degraded`): import 실패나 판정 중 예외면 MCP는 거부, gh Approve·리뷰 기각·병합·자동 병합·병합 별칭
 형태(규칙 11과 같은 판별, 대상 레포를 몰라도 — `_gh_unjudged_deny`)는 거부, Bash의 git·gh·`db_pr.py publish`·`merge`·
-`skill_patch.py --apply`(규칙 7·12와 같은 `word_net`)와 파일 도구는 ask, 그 밖의 Bash는 통과 + 경고. 판정 중 경로·인코딩 예외
+`request-review`·`skill_patch.py --apply`(규칙 7·12와 같은 `word_net`)와 파일 도구는 ask, 그 밖의 Bash는 통과 + 경고. 판정 중 경로·인코딩 예외
 (ValueError·OSError)는 판정 전체를 여기로 보내지 않고 그 검사만 ask로 남긴다(`_checked`, 회귀 수정 R2).
 종료 코드는 그래도 0이다(2는 설치 명령까지 모든 Bash를 막는다). 출력은 ASCII JSON이고 판정·직렬화가 실패해도 최소 ask를 낸다.
 """
@@ -2440,14 +2440,14 @@ GQL_EVENT_VAR_RE = re.compile(r"\bevent\s*:\s*\$")      # 리뷰 mutation의 eve
 GH_ENV_REPO_RE = re.compile(r"\bGH_REPO\b(=?)")
 GH_LEAD_ASK = ("gh 그룹·동작 앞에 옵션이 있어 동작을 정할 수 없다. 대상이 이슈 DB일 수 있어 쓰기로 보고 확인한다 (규칙 11).")
 GH_LEAD_DENY = "gh 그룹·동작 앞 옵션이 너무 많아 판정할 수 없다. 옵션을 동작 뒤로 옮겨 쓴다 (규칙 11)."
-GH_MERGE_DENY = ("이슈 DB PR을 gh로 직접 머지하지 않는다. 병합은 사용자가 고른 뒤 db_pr.py merge(승인 커밋·PR 검사 대조)로만 "
-                 "하거나 리뷰어가 GHE에서 한다 (규칙 7·11).")
+GH_MERGE_DENY = ("이슈 DB PR을 gh로 직접 머지하지 않는다. 병합은 +1 뒤 사용자가 요청할 때 db_pr.py merge(+1·승인 커밋·PR 검사 "
+                 "대조)로만 하거나 사람이 GHE에서 한다 (규칙 7·11).")
 APPROVE_DENY = ("이슈 DB PR을 Claude가 Approve하지 않는다. +1(작성자 외 1명의 Approve)은 사람이 GHE에서 하고, "
                 "병합은 그 뒤 db_pr.py merge가 확인한다 (규칙 11")
 DISMISS_DENY = "리뷰를 Claude가 기각(dismiss)하지 않는다. 변경 요청은 그 리뷰어나 메인테이너가 GHE에서 푼다 (규칙 11"
 ALIAS_DENY = "gh 별칭으로 병합·리뷰 명령을 만들지 않는다(별칭 실행은 guard가 보지 못한다) (규칙 11)."
-MCP_MERGE_DENY = ("이슈 DB PR을 MCP로 직접 머지하지 않는다. 병합은 사용자가 고른 뒤 db_pr.py merge로만 하거나 리뷰어가 "
-                  "GHE에서 한다 (규칙 7·11")
+MCP_MERGE_DENY = ("이슈 DB PR을 MCP로 직접 머지하지 않는다. 병합은 +1 뒤 사용자가 요청할 때 db_pr.py merge(+1·승인 커밋·PR 검사 "
+                  "대조)로만 하거나 사람이 GHE에서 한다 (규칙 7·11")
 DEGRADED_REVIEW_DENY = "Approve·리뷰 기각은 판정할 수 없어도 거부한다(Claude는 PR을 Approve하지 않는다, 규칙 11"
 DEGRADED_MERGE_DENY = ("병합·자동 병합과 병합·리뷰 별칭은 판정할 수 없어도 거부한다(이슈 DB PR을 gh로 직접 머지하지 않는다 — 병합은 "
                        "db_pr.py merge로만, 규칙 7·11")
@@ -3323,8 +3323,10 @@ def check_post_record_writes(inv: Invocation, conf: Config, dec: Decision) -> No
 
 
 PUBLISH_ASK = "db_pr.py publish는 이슈 DB에 push한다. 확인 화면을 승인한 뒤에만 진행한다 (규칙 7)."
-MERGE_ASK = ("db_pr.py merge·publish --and-merge는 이슈 DB PR을 main에 병합한다. 사용자가 push 전 확인 화면에서 "
-             "'push하고 바로 병합'을 고른 뒤(재시도는 사용자가 병합을 요청한 뒤)에만 진행한다 (규칙 7).")
+MERGE_ASK = ("db_pr.py merge는 이슈 DB PR을 main에 병합한다. 사용자가 병합을 요청한 뒤에만 진행한다"
+             "(+1·승인 커밋·검사는 스크립트가 대조) (규칙 7).")
+REVIEW_REQUEST_ASK = ("db_pr.py request-review는 이슈 DB PR에 리뷰어를 요청한다(GHE 쓰기). 사용자가 push 뒤 리뷰어 질문에서 "
+                      "고른 뒤에만 진행한다 (규칙 7).")
 SKILL_APPLY_ASK = ("skill_patch.py --apply는 분석 스킬 소스의 워킹 트리를 바꾼다(커밋·push 안 함). patch를 보이고 사용자가 "
                    "'적용'을 고른 뒤에만 진행한다 (규칙 12).")
 SKILL_SOURCE_ASK = ("분석 스킬 소스(analyzers.<카테고리>.source)는 skill_patch.py --apply로만 바꾼다. 사용자가 직접 요청한 "
@@ -3478,8 +3480,10 @@ def check_bash(command: str, cwd: Path, conf: Config, dec: Decision) -> None:
     _checked(dec, "규칙 10", check_raw_read, command, cwd, dec, conf)
     if conf.user is not None and word_net(command):   # 규칙 7: 명령 글 전체의 낱말 그물 하나 (argv·치환·heredoc 무관)
         dec.ask.append(PUBLISH_ASK)
-    if conf.user is not None and word_net(command, "db_pr", "merge"):        # 규칙 7: PR 바로 병합
+    if conf.user is not None and word_net(command, "db_pr", "merge"):        # 규칙 7: +1 병합(사용자가 요청한 뒤)
         dec.ask.append(MERGE_ASK)
+    if conf.user is not None and word_net(command, "db_pr", "request-review"):   # 규칙 7: 리뷰어 요청(매번)
+        dec.ask.append(REVIEW_REQUEST_ASK)
     if conf.user is not None and word_net(command, "skill_patch", "apply"):  # 규칙 12: 분석 스킬 소스 적용
         dec.ask.append(SKILL_APPLY_ASK)
     invs, _ = _walk_or_flat(command, cwd, dec, _keep_roots(conf))
@@ -3556,7 +3560,7 @@ def _degraded(event: dict, why: str) -> tuple[dict | None, list[str]]:
     """의존성 없음·내부 오류로 정상 판정을 못 할 때. MCP는 거부(Jira 쓰기 차단은 guard가 유일한 장치), gh Approve·리뷰 기각·
     병합·자동 병합·병합 별칭 형태는 대상 레포와 무관하게 거부(`_gh_unjudged_deny` — 내부 오류를 입력으로 일으킬 수 있다, 회귀 수정
     R2. 명령 걷기도 예외면 낱말 수준 거부 `_text_unjudged_deny`와 cd를 따라가지 않는 대체 목록, 재리뷰 P0), git·gh·
-    `db_pr.py publish`와 파일 도구는 레포·clone을 판별할 수 없으므로 ask, 그 밖의 Bash는 통과 + 경고.
+    `db_pr.py publish`·`merge`·`request-review`와 파일 도구는 레포·clone을 판별할 수 없으므로 ask, 그 밖의 Bash는 통과 + 경고.
     종료 2(모든 Bash 차단, 설치 명령까지)는 쓰지 않는다."""
     tool = str(event.get("tool_name") or "")
     tool_input = event.get("tool_input") if isinstance(event.get("tool_input"), dict) else {}
@@ -3577,7 +3581,7 @@ def _degraded(event: dict, why: str) -> tuple[dict | None, list[str]]:
                 if deny:
                     return _decision("deny", f"{deny} {INSTALL_HINT}."), []
             risky = any(n in ("git", "gh") for n in names) or word_net(cmd) or word_net(cmd, "db_pr", "merge") or \
-                word_net(cmd, "skill_patch", "apply") or any(
+                word_net(cmd, "db_pr", "request-review") or word_net(cmd, "skill_patch", "apply") or any(
                 not _expand(t).startswith("/dev/") for i in invs for t in _write_targets(i))   # 파일 쓰기(clone일 수 있다)
         except Exception:  # noqa: BLE001 — 파싱도 못 하면 낱말 수준 거부를 보고 사람에게 넘긴다
             deny = _text_unjudged_deny(str(tool_input.get("command") or ""), f"{why}: ")

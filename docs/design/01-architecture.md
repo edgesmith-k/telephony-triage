@@ -122,7 +122,7 @@ telephony-triage-plugin/                 # 개발 레포 루트
     │   ├── db_add.py                    # CLI만. 구현은 dbadd/
     │   ├── dbadd/                       # core(상수·계획 검사·Tree), applier(apply), ops/<묶음>.py(op 메서드 믹스인), drift, ids, similar
     │   ├── db_pr.py                     # CLI만. 구현은 dbpr/
-    │   ├── dbpr/                        # lock(상수·UsageError·Lock·JSON 읽기/쓰기), worktree(git·snapshot·Ctx·worktree 준비/제거·discard·cleanup), publish(my-prs·preflight·stage·summary·publish·find-plan)
+    │   ├── dbpr/                        # lock(상수·UsageError·Lock·JSON 읽기/쓰기), worktree(git·snapshot·Ctx·worktree 준비/제거·discard·cleanup), publish(my-prs·preflight·stage·summary·publish·find-plan), merge(병합 기록·request-review·+1 병합)
     │   ├── db_summary.py                # 라이브러리: db_pr summary 확인 화면·PR 본문(pr_body)
     │   ├── db_build.py
     │   ├── db_lint.py

@@ -884,9 +884,17 @@ def _protection(ctx: Ctx, key: str, cid: str) -> dict:
         return res(cid, "skip", "응답이 JSON 아님", cmd, ask="gh api 응답을 확인해 주세요")
     reviews = data.get("required_pull_request_reviews") or {}
     owners = bool(reviews.get("require_code_owner_reviews"))
+    # 통과 기준은 PR 리뷰 필수·CODEOWNERS 리뷰 그대로(올리면 사내 S-4a·O-3 재점검이 실패한다). +1 병합 권장 항목은 정보로만 보인다
+    checks = data.get("required_status_checks") if isinstance(data.get("required_status_checks"), dict) else {}
+    admins = data.get("enforce_admins") if isinstance(data.get("enforce_admins"), dict) else {}
+    contexts = [str(c) for c in checks.get("contexts") or []]
+    info = (f"필수 승인 수 {reviews.get('required_approving_review_count', '?')}(권장 1) · "
+            f"이전 승인 무효(dismiss_stale_reviews) {bool(reviews.get('dismiss_stale_reviews'))} · "
+            f"마지막 push 승인(require_last_push_approval) {bool(reviews.get('require_last_push_approval'))} · "
+            f"필수 검사 최신(strict) {bool(checks.get('strict'))}({', '.join(contexts) or '검사 없음'}) · "
+            f"관리자 포함(enforce_admins) {bool(admins.get('enabled'))}")
     return res(cid, "pass" if reviews and owners else "fail",
-               f"PR 리뷰 필수 {bool(reviews)} · CODEOWNERS 리뷰 {owners} · 필수 승인 수 "
-               f"{reviews.get('required_approving_review_count', '?')}(0이면 본인 병합 가능, issue_db.merge)", cmd)
+               f"PR 리뷰 필수 {bool(reviews)} · CODEOWNERS 리뷰 {owners} · 권장(이슈 DB docs/branch-protection.md) — 정보: {info}", cmd)
 
 
 CODEOWNERS_PATHS = (".github/CODEOWNERS", "CODEOWNERS", "docs/CODEOWNERS")

@@ -33,6 +33,8 @@ PR을 올린 뒤 머지 전에 main이 바뀌면, 텍스트 rebase 대신 **원�
    - 확인 화면에 **ID 재할당 내역**과 **drift 결정 내역**을 반드시 넣는다(`db_pr summary`가 준다).
    - publish는 `--lease <start_sha> --commit --and-discard`. lease가 거부되면(원격이 또 바뀜) 3번부터 다시. `publish`가 PR 제목·본문의 바뀐 ID를
      `gh pr edit`으로 고치고 계획의 `pr.head_sha`·`base_sha`를 갱신한다.
+   - head가 새 커밋이라 그 전 +1은 병합에 쓰이지 않는다(+1은 head 커밋 승인만 센다) — 리뷰어에게 새 커밋에 다시 Approve를
+     요청하라고 알린다. 리뷰어 질문은 하지 않는다(기존 PR, `write-flow.md` 5번).
    - 정리 뒤 사용자 로컬 `<br>`가 있으면 원격 기준으로 다시 받으라고 안내하고, pending 피드백은 `source: analyze` 계획 PR에만
      올라간다고 알린다.
 

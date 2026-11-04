@@ -1,7 +1,7 @@
 ## push 전 확인: MOCK-7001 → DATA-001-02 Roaming disabled
 구분: 분석 (analyze)
 브랜치: issue/MOCK-7001 (신규) → PR 대상: main
-리뷰어: mock-org/telephony-data-owners
+리뷰어(제안 — push 뒤 지정할지 묻는다, 지정 안 하면 아무나): mock-org/telephony-data-owners
 열린 PR: 없음
 
 ### 변경 파일

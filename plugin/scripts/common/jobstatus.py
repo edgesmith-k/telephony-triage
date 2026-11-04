@@ -393,7 +393,8 @@ def collect(work_dir: Path, key: str, cfg: dict, defaults: dict, platform: str |
     elif pr.get("number") and not resync:
         st = stage("pr-created", f"PR #{pr['number']} 생성됨(브랜치 {pr.get('branch')}) — PR의 지금 상태는 확인하지 않았다",
                    "recorded", _mtime(job / PLAN), [f"plan.json pr.number {pr['number']}"])
-        nxt = f"PR 리뷰·머지 대기. main이 바뀌었으면 /telephony-triage:sync-pr {pr.get('branch')}"
+        nxt = (f"+1 대기 → '병합해줘'(db_pr merge) 또는 GHE 웹 병합. main이 바뀌었으면 "
+               f"/telephony-triage:sync-pr {pr.get('branch')}")
         if at_pr_head:
             nxt = f"PR은 만들어졌다. publish를 다시 하지 말고 db_pr discard {wt}만 다시 한다"
             blockers.append(_row("wt-after-pr", f"PR #{pr['number']} 생성 뒤 worktree가 남아 있다", "now", nxt))

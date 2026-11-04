@@ -66,7 +66,8 @@ def builtin() -> dict:
 def from_site_defaults(defaults: dict) -> dict:
     """site-defaults.yaml 값을 사용자 config 키 공간으로 옮긴 것.
 
-    `issue_db.merge`·`merge_wait_seconds`(PR 바로 병합 기본값)는 옮긴다. issue_db.base_branch·work_dir는 옮기지 않는다 — 이슈 DB `.githooks/pre-push`가 사용자 config에서 이 두 값을 직접 읽고
+    `issue_db.merge_wait_seconds`(`db_pr merge` 검사 대기 기본값)는 옮긴다. 없어진 `issue_db.merge`는 옮기지 않는다(`removed_keys`가
+    경고). issue_db.base_branch·work_dir는 옮기지 않는다 — 이슈 DB `.githooks/pre-push`가 사용자 config에서 이 두 값을 직접 읽고
     (기본 main·<home>/work) site-defaults를 보지 않으므로, 팀 기본값으로 지원하려면 pre-push도 같이 바꾼다."""
     out: dict = {}
     tracker = defaults.get("tracker") or {}
@@ -83,19 +84,40 @@ def from_site_defaults(defaults: dict) -> dict:
     ghe = defaults.get("ghe") or {}
     if ghe.get("host"):
         out.setdefault("issue_db", {})["ghe_host"] = ghe["host"]
-    merge = site_merge(defaults)
-    if merge:   # PR 바로 병합 기본값(merge: self | review, merge_wait_seconds, 06-collaboration.md §6.1). 사용자 config가 덮는다
-        out.setdefault("issue_db", {}).update(merge)
+    site_db = site_issue_db(defaults)
+    if site_db:   # db_pr merge 검사 대기 기본값(merge_wait_seconds, 06-collaboration.md §6.1). 사용자 config가 덮는다
+        out.setdefault("issue_db", {}).update(site_db)
     return out
 
 
-SITE_ISSUE_DB_KEYS = ("merge", "merge_wait_seconds")
+SITE_ISSUE_DB_KEYS = ("merge_wait_seconds",)
+# 없어진 키(+1 병합, H A2). 읽지 않고 config.py check·doctor가 경고만 한다 — legacy_problems(fail-closed)에는 넣지 않는다
+REMOVED_ISSUE_DB_KEYS = ("merge",)
 
 
-def site_merge(defaults: dict) -> dict:
-    """site-defaults `issue_db.merge`·`merge_wait_seconds`(있는 것만). 값 검사는 쓰는 쪽(`dbpr.merge`)이 한다."""
+def site_issue_db(defaults: dict) -> dict:
+    """site-defaults `issue_db`의 `SITE_ISSUE_DB_KEYS`(있는 것만). 값 검사는 쓰는 쪽(`dbpr.merge`)이 한다."""
     db = defaults.get("issue_db") if isinstance(defaults.get("issue_db"), dict) else {}
     return {k: db[k] for k in SITE_ISSUE_DB_KEYS if db.get(k) is not None}
+
+
+def removed_keys(defaults: dict | None, user: dict | None) -> list[str]:
+    """없어진 설정 키 경고: site-defaults `issue_db.merge`, 사용자 config 최상위 `issue_db.merge`와 `platforms.<p>.issue_db.merge`.
+    값은 무시한다(동작에 영향 없음). 예외를 내지 않는다."""
+    out: list[str] = []
+    blocks: list[tuple[str, str, object]] = [
+        ("site-defaults", "", defaults.get("issue_db") if isinstance(defaults, dict) else None)]
+    if isinstance(user, dict):
+        blocks.append(("사용자 config", "", user.get("issue_db")))
+        profs = user.get("platforms") if isinstance(user.get("platforms"), dict) else {}
+        blocks += [("사용자 config", f"platforms.{name}.", prof.get("issue_db"))
+                   for name, prof in profs.items() if isinstance(prof, dict)]
+    for where, at, block in blocks:
+        for key in REMOVED_ISSUE_DB_KEYS:
+            if isinstance(block, dict) and key in block:
+                out.append(f"{where}: 옛 키 `{at}issue_db.{key}`는 +1 병합으로 없어졌다(무시한다) — 그 줄을 지운다"
+                           + (" (관리자)" if where == "site-defaults" else ""))
+    return out
 
 
 def legacy_problems(defaults: dict | None, user: dict | None) -> list[str]:
@@ -210,7 +232,7 @@ def _with_profile(out: dict, defaults: dict, platform: str, prof) -> dict:
     ghe = (defaults.get("ghe") or {}).get("host")
     if ghe:
         issue_db["ghe_host"] = ghe
-    issue_db.update(site_merge(defaults))
+    issue_db.update(site_issue_db(defaults))
     out.update({"issue_db": issue_db, "work_dir": str(home() / f"work-{platform}"), "code_profiles": [],
                 "recent_code_roots": []})
     out.update(_site_platform(defaults, platform))

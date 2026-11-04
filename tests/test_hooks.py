@@ -304,20 +304,30 @@ def test_guard_publish_with_commit_and_discard_still_asks():
 
 
 def test_guard_merge_and_skill_apply_ask_direct_gh_merge_denied():
-    """PR 바로 병합: `db_pr.py merge`는 ask(사용자가 "병합"을 고른 뒤, 스크립트가 승인 커밋·검사 대조), gh로 직접 머지는 거부.
+    """+1 병합: `db_pr.py merge`는 ask(사용자가 병합을 요청한 뒤, 스크립트가 +1·승인 커밋·검사 대조), gh로 직접 머지는 거부.
+    리뷰어 요청: `db_pr.py request-review`는 매번 ask(push 뒤 리뷰어 질문에서 고른 뒤, 규칙 7).
     분석 스킬 소스 적용: `skill_patch.py --apply`는 ask(규칙 12). patch 만들기·my-prs는 판정할 것이 없다."""
     ws = shared()
     S = f'python3 "{ws.root}/scripts/'
     out = bash(ws, f'{S}db_pr.py" merge --job MOCK-1 --approved {"a" * 40} --json', ws.base)
     assert decision(out) == "ask" and "db_pr.py merge" in out["permissionDecisionReason"]
+    assert "병합을 요청한 뒤" in out["permissionDecisionReason"] and "바로 병합" not in out["permissionDecisionReason"]
+    out = bash(ws, f'{S}db_pr.py" merge --job MOCK-1 --json', ws.base)                  # --approved 생략(Q8)도 같다
+    assert decision(out) == "ask" and "db_pr.py merge" in out["permissionDecisionReason"]
     out = bash(ws, f"gh pr merge 3 --merge -R {DB_SLUG}", ws.base)
     assert decision(out) == "deny" and "db_pr.py merge" in out["permissionDecisionReason"]
+    for cmd in (f'{S}db_pr.py" request-review --job MOCK-1 --reviewer a,b --json',
+                f'S={ws.root}/scripts; python3 "$S/db_pr.py" request-review --job MOCK-1 --reviewer=@a'):
+        out = bash(ws, cmd, ws.base)
+        reason = out["permissionDecisionReason"]
+        assert decision(out) == "ask" and "request-review" in reason and "규칙 7" in reason, cmd
+        assert "db_pr.py merge는" not in reason and "publish는" not in reason, cmd     # 다른 ask와 섞이지 않는다
     out = bash(ws, f'{S}skill_patch.py" MOCK-1 --name mock-data-analyzer --apply --sha {"b" * 64}', ws.base)
     assert decision(out) == "ask" and "규칙 12" in out["permissionDecisionReason"]
     for cmd in (f'{S}skill_patch.py" MOCK-1 --skill-dir /x --name mock-data-analyzer', f'{S}db_pr.py" my-prs',
-                f'{S}db_pr.py" summary wt --format markdown'):
+                f'{S}db_pr.py" summary wt --format markdown', f'{S}db_pr.py" find-plan --branch review/x'):
         assert decision(bash(ws, cmd, ws.base)) is None, cmd
-    # "push하고 바로 병합" = 한 명령: 권한 확인 한 번(publish·merge 사유 둘 다)
+    # 없어진 publish --and-merge(옛 스킬): argparse가 거부하지만 guard는 그대로 ask(publish·merge 사유 둘 다 — 닫힌 쪽)
     out = bash(ws, f'{S}db_pr.py" publish wt --branch issue/MOCK-1 --lease new --approved x --commit --and-discard '
                    f'--and-merge --json', ws.base)
     assert decision(out) == "ask" and "publish" in out["permissionDecisionReason"] and \
@@ -981,7 +991,9 @@ def test_guard_without_pyyaml_denies_mcp_and_asks_risky_bash():
     assert decision(out) == "deny" and "의존성 없음" in out["permissionDecisionReason"]
     for cmd in (f'git -C "{ws.clone}" status', f"gh pr list -R {DB_SLUG}",
                 f'python3 "{ws.root}/scripts/db_pr.py" publish wt --branch issue/MOCK-1',
-                f'S="python3 {ws.root}/scripts/"; ${{S}}db_pr.py publish wt', "$PY $S/db_pr.py publish wt"):
+                f'S="python3 {ws.root}/scripts/"; ${{S}}db_pr.py publish wt', "$PY $S/db_pr.py publish wt",
+                f'python3 "{ws.root}/scripts/db_pr.py" merge --job MOCK-1',
+                f'python3 "{ws.root}/scripts/db_pr.py" request-review --job MOCK-1 --reviewer a,b'):
         out, _ = judge("Bash", {"command": cmd})
         assert decision(out) == "ask" and "레포 판별 불가" in out["permissionDecisionReason"], cmd
     out, err = judge("Bash", {"command": "echo hi"})

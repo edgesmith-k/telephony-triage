@@ -539,12 +539,12 @@ def test_skill_md_is_within_7_5kb_and_drives_triage():
                    "must_show", "triage.py explore"):
         assert needle in text, needle
     rules = (reference / "rules.md").read_text(encoding="utf-8")      # SKILL §실행 규칙이던 내용
-    assert len(rules.encode("utf-8")) <= 2496      # 머지는 `db_pr merge`만(본인 병합, 10/22) 뒤. 그 전 2,485B — `--platform`·`--json` 없이 목록에 skill_patch(10/22) 뒤의 한도. 그 전 2,460B — L2 J7 질문당 선택지 4개 줄 뒤의 한도. 그 전 2,320B — Bash·Read 출력 비가시(리포트·검증 표·확인 화면·notes·must_show, 전체 eval 10/14)·stage `next` 줄 뒤의 한도. 그 전 2,048B
+    assert len(rules.encode("utf-8")) <= 2516      # 병합은 +1 뒤 요청 시 `db_pr merge`만(Approve 금지, A2 11/04) 뒤. 그 전 2,496B — 머지는 `db_pr merge`만(본인 병합, 10/22) 뒤. 그 전 2,485B — `--platform`·`--json` 없이 목록에 skill_patch(10/22) 뒤의 한도. 그 전 2,460B — L2 J7 질문당 선택지 4개 줄 뒤의 한도. 그 전 2,320B — Bash·Read 출력 비가시(리포트·검증 표·확인 화면·notes·must_show, 전체 eval 10/14)·stage `next` 줄 뒤의 한도. 그 전 2,048B
     for needle in ("S-3", "계획 형식 오류", "TT_LOCK_OWNER", "stage --then-summary", "모든 종료 경로에서 푼다", "사용자 확인 후"):
         assert needle in rules, needle
     assert len((reference / "db-authoring.md").read_bytes()) <= 12288      # 필수 키 요약 포함. §0 등록 준비물·리뷰어 색인 추가 뒤의 한도(그 전 11,392B: W7 add-fixture 세부, 11,264B)
-    assert len((reference / "write-flow.md").read_bytes()) <= 15872     # 확인 화면 선택지 push하고 바로 병합·--and-merge·병합 재시도(10/22) 뒤. 그 전 14,680B — L2 J5 확인 화면 압축(생성 파일 한 행·건너뜀 묶음·README 머리) 뒤(그 전 14,390B: E67 PR 링크를 다음 질문 전에 글자 그대로 보인다 뒤(그 전 14,344B)
-    assert len((reference / "skill-patch.md").read_bytes()) <= 1920      # 4번 스킬 소스 적용(--apply --sha, 10/22) 뒤. 그 전 1,600B — 종료 2도 메모로 이어감(10/22 리뷰) 뒤. 그 전 1,536B — analyze Step 7 `[스킬]` 줄을 고를 때만 읽는다(write-flow에 두면 모든 쓰기 흐름이 읽는다). diff·마스킹·apply --check·안내 줄을 `skill_patch.py`로 옮긴 뒤(10/22, 표시 기록 kind patch). 그 전 1,800B — 리뷰 P1: 마스킹 뒤 git apply --check·실패 시 메모 포함
+    assert len((reference / "write-flow.md").read_bytes()) <= 16000     # A2 +1 병합(11/04): 바로 병합 선택지·--and-merge·병합 재시도 삭제, 리뷰어 질문(5번)·"병합해줘"(§6) 추가, stage 하는 일 압축 뒤. 그 전 15,872B — 확인 화면 선택지 push하고 바로 병합·--and-merge·병합 재시도(10/22) 뒤. 그 전 14,680B — L2 J5 확인 화면 압축(생성 파일 한 행·건너뜀 묶음·README 머리) 뒤(그 전 14,390B: E67 PR 링크를 다음 질문 전에 글자 그대로 보인다 뒤(그 전 14,344B)
+    assert len((reference / "skill-patch.md").read_bytes()) <= 2048      # A2: SKILL.md 규칙 제안 문장 이동(`[스킬]` 줄은 계획에 넣지 않고 담당자용 patch, 11/04) 뒤 — E에서 전면 재작성·재설정. 그 전 1,920B — 4번 스킬 소스 적용(--apply --sha, 10/22) 뒤. 그 전 1,600B — 종료 2도 메모로 이어감(10/22 리뷰) 뒤. 그 전 1,536B — analyze Step 7 `[스킬]` 줄을 고를 때만 읽는다(write-flow에 두면 모든 쓰기 흐름이 읽는다). diff·마스킹·apply --check·안내 줄을 `skill_patch.py`로 옮긴 뒤(10/22, 표시 기록 kind patch). 그 전 1,800B — 리뷰 P1: 마스킹 뒤 git apply --check·실패 시 메모 포함
     _check_op_summary(reference / "db-authoring.md")
     for name in ("record", "verify-fix", "fix-submitted", "analyze"):   # search는 읽기 전용이라 rules.md를 읽지 않는다
         assert "reference/rules.md" in (REPO / "plugin" / "commands" / f"{name}.md").read_text(encoding="utf-8"), name

@@ -13,8 +13,8 @@ main 기준 다음 번호로 정해진다. 계획이 건드리는 대상이 그�
 | 2 | 로컬·원격 브랜치 검사와 선택 (아래) |
 | 3 | `db_pr stage <plan> --wt <wt> --branch <br> [--dry-run] --then-summary` — drift면 결정 반영 후 다시 |
 | 4 | 확인 화면 = 3의 출력 그대로 (승인 / 수정 요청 / 전체 diff / 취소) |
-| 5 | `db_pr publish <wt> --branch <br> --lease <sha\|new> --approved <hash> --commit --and-discard [--and-merge]` → PR 링크 (커밋·push·PR·정리[·병합]) |
-| 6 | 정리: 5의 `--and-discard`가 한다(worktree·`tt/<br>`·state 삭제, lock 해제). 병합 재시도는 §6 |
+| 5 | `db_pr publish <wt> --branch <br> --lease <sha\|new> --approved <hash> --commit --and-discard` → PR 링크 (커밋·push·PR·정리) → 리뷰어 질문 |
+| 6 | 정리: 5의 `--and-discard`가 한다(worktree·`tt/<br>`·state 삭제, lock 해제). 병합은 §6("병합해줘") |
 
 ## 계획 형식 (analyze Step 7)
 
@@ -40,8 +40,7 @@ main 기준 다음 번호로 정해진다. 계획이 건드리는 대상이 그�
 lock 획득·인계 성공 시 반환된 `lock.owner`를 보관하고 이후 모든 `db_pr`·`db_verify` 호출의 `TT_LOCK_OWNER` 환경변수로 전달한다.
 lock 파일에서 토큰을 다시 읽어 대신 쓰지 않는다. owner 불일치는 중단하고, 새 인계는 사용자 확인 후에만 한다.
 
-`preflight` → `{tool_branch, user_branch: {exists, ahead_of_remote},
-remote_sha, open_prs[], issue_in_main}`.
+`preflight` 출력으로:
 - 쓰기 불가(`config.py check`의 `writable`/`push_allowed`가 false; `--for`는 `config.py check` 옵션이다)면 사유를 보여주고 멈춘다.
 - analyze 계획이 `issue.origin: file`이고 `--dry-run`이 아니면 여기 오기 전에 MCP로 다시 읽었어야 한다(아니면 멈춘다).
 - `issue_in_main`이면(append·unresolved) 기존 분류를 보여주고 유지/재분류(`reclassify`)를 묻는다. 열린 PR이 있으면 링크를 보여주고 계속할지 묻는다.
@@ -61,9 +60,8 @@ remote_sha, open_prs[], issue_in_main}`.
 ## 3. 적용 (`db_pr stage`)
 
 `S/db_pr.py stage <plan> --wt <wt> --branch <br> [--dry-run] --then-summary` (`--json` 불가). stage가 하는 일: lock 확인 → 기준 SHA(지금 origin/<base>) 기록 →
-drift 검사 → worktree 생성 또는 재적용 초기화 → `config.py check --db wt` → `db_add apply`(임시 ID를 최신 main 기준 다음 번호로,
-fixture 번호, 피드백, pending 포함 여부는 계획 `source`로) → `db_build --write` → `db_lint --changed` → `mask_pii --check --changed`
-→ `check-ids` → `db_regress --all` → `db_verify rules --plan`.
+drift 검사 → worktree 준비 → `config.py check --db wt` → `db_add apply`(새 ID는 위 "왜") → `db_build --write`
+→ lint·마스킹·`check-ids`·`db_regress --all`·`db_verify rules --plan`.
 
 - **출력**: 종료 0·3이면 stdout이 확인 화면 마크다운(§4). 1·2이면 stage 요약 JSON 또는 stderr이고 summary는 안 불린다.
 - **종료 코드 1 + drift 목록** `[{op_index, op, target, field, plan_value, plan_base_value, current_value}]`: 항목마다 **계획 값**(`plan_value` — 이 op가 그 필드에 쓰려는 값, `null`이면 그 필드를 쓰지 않고 대상이 그대로라고 전제), **계획 당시 main 값**(`plan_base_value`), **지금 main 값**(`current_value`)을 나란히 보여주고 **계획 값 유지 / main 값 유지(그 op 삭제) / 직접 입력**을 묻는다. 결정을 계획에 반영하고 계획의 `base_sha`를
@@ -81,7 +79,7 @@ fixture 번호, 피드백, pending 포함 여부는 계획 `source`로) → `db_
 3번 출력 전문을 글·질문 본문에 **그대로 붙인다(요약·"위 출력" 금지)**. summary는 따로 안 부른다. 빈 절은 "없음".
 절 순서: 머리(`## push 전 확인: <KEY 또는 원인 ID> → <원인/유형 ID 제목>`, 구분, 브랜치, 리뷰어, 열린 PR) → 변경 파일 → ID 할당 →
 수정 상태 변경(`fix_changes`가 있을 때) → drift 결정 내역(있을 때) → 추가 설명(`notes` 전부, 계획 `pr_notes` 포함) → README 반영 미리보기 →
-주요 diff(50줄 넘으면 요약 + "전체 diff 보기" 선택지) → 자동 검사 결과 → 검증 결과 → 커밋 메시지 / PR 제목 → 마지막 줄 `approved_hash`.
+주요 diff(50줄 넘으면 요약 + "전체 diff 보기" 선택지) → 자동 검사 결과 → 검증 결과 → 커밋 메시지 / PR 제목 → 병합 줄 → 마지막 줄 `approved_hash`.
 렌더가 따르는 문구 규칙(코드와 `tests/test_db_summary.py`가 이 문장·표와 대조한다):
 
 - 구분: record면 "수동 기록 (record)", 그리고 notes 전부.
@@ -98,8 +96,8 @@ fixture 번호, 피드백, pending 포함 여부는 계획 `source`로) → `db_
 - `skipped`를 통과(✅)로 표시하지 않는다.
 - 계획에 `set-resolution`이 있거나 새 원인이면 "해결책 검증 상태: unverified"를 명시한다. 같은 계획의 `verify-resolution`이
   적용된 경우만 verified다.
-- 선택지(병합 줄이 `… 선택지: push하고 바로 병합 / push만(리뷰어에게) / 취소`이면 **승인** 대신 `push하고 바로 병합`·`push만(리뷰어에게)`, 둘 다 추천 표시 없이. 4개가 넘으면 `전체 diff 보기`는 본문에 적고 Other로 받는다. 병합 줄이 `리뷰어가 …`이거나 없으면 그대로):
-  - **승인**·**push만(리뷰어에게)** → 5번. **push하고 바로 병합** → 5번에 `--and-merge`.
+- 선택지: **승인** / **수정 요청** / **전체 diff 보기** / **취소**(병합 줄은 안내다 — 선택지가 아니다):
+  - **승인** → 5번.
   - **수정 요청** → 사용자가 말한 부분을 **작업 계획에 반영**하고 `stage --then-summary`부터 다시(stage가 wt를 기준 SHA로 되돌려 다시 적용한다). **확인 화면을 다시 보여주고 다시 승인받는다.** 해결책 문구를 바꾸면 unverified로 돌아간다고 알린다.
   - **전체 diff 보기** → `git -C <wt> diff` + 새 파일 목록을 보여주고 다시 묻는다.
   - **취소** → 커밋하지 않는다(publish를 부르지 않는다). `db_pr discard <wt>`. 계획은 남긴다. 피드백은 아래 규칙.
@@ -115,16 +113,16 @@ fixture 번호, 피드백, pending 포함 여부는 계획 `source`로) → `db_
 - 종료 2 + `published: true`: push는 됐다. **publish를 다시 하지 않는다.** `discard.error`면 `discard.next`대로 `db_pr discard <wt>`만 다시 한다.
   `gh_error`(PR 생성 실패, `discard.skipped`, worktree·lock 유지)면 사유를 보고하고 PR 수동 처리 또는 publish 재시도를 사용자와 정한 뒤 `db_pr discard <wt>`.
 - 종료 2 + stderr만(JSON 없음): 보고하고 멈춘다.
-- `--and-merge`는 검사·병합 가능 상태를 최대 `issue_db.merge_wait_seconds`(기본 420초, 최대 480) 기다리므로 Bash timeout을 600000으로 준다. 종료 코드는 publish 결과다. `merge.result.merged: true`면 `merge_commit`을 알리고, false면 `reason`과 재시도 명령 `merge.result.retry`를 글자 그대로 보인다(PR은 그대로 — 재시도는 §6).
-- `warnings`(리뷰어 지정 실패 등)는 글자 그대로 보인다.
-- 성공하면(`discard.discarded: true`) PR 링크(`pr.url`)를 글자 그대로, 다음 질문 전에 보인다. `publish`가 계획의 `pr`·`base_sha`를 기록하고 pending 피드백 원본을 `included_pending/`으로 옮긴다.
+- `warnings`는 글자 그대로 보인다.
+- 성공하면(`discard.discarded: true`) PR 링크(`pr.url`)를 글자 그대로, 다음 질문 전에 보인다. 계획 `pr` 기록·pending 이동은 publish가 했다.
+- **리뷰어 질문**(새 PR `pr.action: created`만, PR 링크 뒤·Step 9 등 다음 질문 전 한 번): "리뷰어를 지정할까요?" — `지정 안 함(기본 — 아무나 +1)` / `제안대로: <확인 화면 리뷰어 제안>`(`없음`이면 뺀다) / Other(로그인, 쉼표). 리뷰어를 고르면(제안대로·Other) `S/db_pr.py request-review --job <작업 키> --reviewer <a[,b]> --json` 한 번(권한 확인, lock 불필요), `failed`·`warnings`를 글자 그대로. 실패해도 PR은 그대로 — 재호출·재질문 없음. sync-pr(기존 PR)엔 안 묻는다.
 
 ## 6. 정리
 
 5번의 `--and-discard`가 한다. 단독 `discard`는 취소·`--dry-run`·discard 실패·PR 생성 실패 뒤에만. 계획은 PR 번호와 함께 남는다(`sync-pr`가 재적용).
 사용자 로컬 `<br>`가 있으면 원격과 달라졌다고 알린다.
 
-**병합 재시도**: `--and-merge`가 병합하지 못했고 사용자가 나중에 병합을 요청할 때만 그 `retry` 명령(`S/db_pr.py merge --job <작업 키> --approved <sha> --json`, 같은 timeout)을 한 번 부른다. 1 → `reason` 그대로, 2 → stderr. `gh pr merge` 직접 금지.
+**병합해줘**(새 세션도, 요청할 때만): 작업 키 = 브랜치 `issue/<KEY>`의 `<KEY>`, 아니면 `S/db_pr.py find-plan --branch <br>`의 `job`, 브랜치도 모르면 `S/db_pr.py my-prs`를 보이고 묻는다. `S/db_pr.py merge --job <작업 키> --json`을 PR마다 한 번(`--approved` 생략, 검사 대기가 있어 Bash timeout 600000). 0 → 병합됨·`merge_commit`. 1 → `reason`·`retry`(있으면)를 요약 없이 글자 그대로 보이고 멈춘다(기다림·재호출·sync-pr·Approve·리뷰 기각·`gh pr merge`·설정 변경 없음). `review.code`가 no-approval·stale-approval·changes-requested일 때만 '작성자 외 1명이 head 커밋에 +1한 뒤 다시 요청하거나 GHE에서 병합'을 덧붙인다. 그 밖은 사유의 다음 할 일(sync-pr면 새 push라 +1을 다시 받는다)을 사용자가 고른다. 2 → stderr.
 
 ## pending 피드백 규칙 (취소할 때)
 

@@ -553,9 +553,20 @@ def check(db: Path, defaults: dict, for_: str, platform: str | None = None) -> d
     }
 
 
+def _removed_key_warnings(defaults: dict, user: dict | None = None) -> list[str]:
+    """없어진 설정 키(`userconfig.removed_keys`, 예: `issue_db.merge`) 경고. config를 못 읽으면 빈 목록(그 오류는 다른 곳이 보인다)."""
+    try:
+        return userconfig.removed_keys(defaults, userconfig.load_user() if user is None else user)
+    except (OSError, ValueError, yamlio.YamlFileError):
+        return []
+
+
 def cmd_check(args, defaults: dict) -> tuple[dict, int]:
     result = check(_db(args, defaults), defaults, args.for_, _platform(args))
     ok = result["push_allowed"] if args.for_ == "write" else result["writable"]
+    result["warnings"] = _removed_key_warnings(defaults)     # 경고만 — writable·push_allowed·종료 코드는 그대로
+    for warning in result["warnings"]:
+        print(f"경고: {warning}", file=sys.stderr)
     return result, (OK if ok else USAGE)
 
 
@@ -673,6 +684,9 @@ def _doctor_rows(args, defaults: dict) -> list[dict]:
             if bad:
                 rows.append(_row("config", "fail", f"{bad[0][0]}를 owner/repo로 못 풀어 guard 규칙 11이 꺼진다",
                                  f"config.py set issue_db.remote https://<host>/<owner>/<repo>.git (지금 {bad[0][1]})"))
+            elif _removed_key_warnings(defaults, user):    # 없어진 키(issue_db.merge)는 무시한다 — 경고만
+                rows.append(_row("config", "warn", "옛 키 issue_db.merge(+1 병합으로 없어짐 — 무시한다)",
+                                 "사용자 config에서 그 줄을 지운다 · site-defaults면 관리자"))
             else:
                 rows.append(_row("config", "ok", "config.yaml 있음"))
     except Exception as exc:    # noqa: BLE001 — 읽기 실패도 한 행의 fail이다

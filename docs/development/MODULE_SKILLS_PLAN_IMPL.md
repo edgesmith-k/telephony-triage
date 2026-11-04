@@ -456,7 +456,7 @@ PR은 `gh pr view --json author,headRefOid,…`, 리뷰는 REST `pulls/<n>/revie
 | 병합 줄 | self 선택지 설명 | `병합: 작성자 외 1명이 이 커밋을 Approve(+1)한 뒤 '병합해줘'(db_pr merge) 또는 GHE에서 병합` |
 | 리뷰어 줄 | `리뷰어: <CODEOWNERS 계산>`(자동 요청) | `리뷰어(제안 — push 뒤 지정할지 묻는다, 지정 안 하면 아무나): <계산>` |
 | publish | `--and-merge`·`--wait`, CODEOWNERS 자동 `--add-reviewer` | 둘 다 삭제(옛 스킬이 넘기면 argparse 종료 2, push 없음). 자동 요청 삭제 |
-| merge-offer | `{mode, pr, url, head_sha, reason, at}` | `{pr, url, head_sha, at[, merged_sha, merged_at]}` |
+| merge-offer | `{mode, pr, url, head_sha, reason, at}` | `{pr, url, head_sha, needs_approval, at[, merged_sha, merged_at]}` — `needs_approval`(stage `needs-approval`)이면 `merge` 거부(옛 기록: `mode: review`·reason `검증 결과 '승인 필요'…`) |
 
 GitHub는 base에 CODEOWNERS가 있으면 오너를 PR을 열 때 자동 요청한다. 도구가 요청하지 않아도 카테고리 오너 요청은 서버가 한다(사내 확인).
 

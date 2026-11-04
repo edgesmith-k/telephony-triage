@@ -197,6 +197,7 @@ def test_pushed_without_pr_then_published_pr_and_discard(tmp_path):
     ws2.db_pr("discard", ws2.wt(JOB))
     doc = _status(ws2, JOB)
     assert doc["stage"]["id"] == "pr-created" and "wt-after-pr" not in _codes(doc) and "sync-pr" in doc["next"]
+    assert "+1" in doc["next"] and "병합해줘" in doc["next"]        # +1 대기 → '병합해줘'(db_pr merge) 또는 GHE 웹 병합
     # sync-pr 재적용: PR이 있는 계획을 같은 JOB에서 다시 stage → wt-after-pr가 아니라 staged(재동기화 중)
     ws2.acquire(JOB)
     ws2.stage(JOB, BRANCH)
