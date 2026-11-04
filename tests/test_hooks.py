@@ -2268,6 +2268,147 @@ def test_guard_heredoc_detection_ignores_quotes_comments_herestrings_and_untermi
         gitp(c, "worktree", "remove", "--force", str(wt))
 
 
+def test_guard_dirstack_tilde_cd_targets_follow_bash():
+    """명령 파싱(H 계획 A2 뒤 — 규칙 11에 남았던 P1): cd·pushd 대상의 디렉토리 스택 tilde(`~-` = OLDPWD, `~+` = PWD, `~N`·`~+N` =
+    dirs 왼쪽에서 N번째(0 = cwd), `~-N` = 오른쪽에서 N번째, 뒤 `/…` 포함)는 이 글이 따라간 상태로 푼다(`cd -`·`pushd +N`·`popd`와
+    같은 상태). 예전에는 글자 경로(`/tmp/~-`)로 보아 `cd /tmp && cd ~- && git push origin main`(이슈 DB clone에서)이 규칙 6을 피했다.
+    풀 수 없으면(새 셸의 OLDPWD는 없다·스택이 짧다) bash는 글자 그대로 두어 cd가 실패하고 cwd는 그대로다 — 이전 후보를 버리지 않는다.
+    `~-N`은 아래에서 세므로 `popd -N`처럼 스택 칸 어디든·모르는 디렉토리다. 명령 글에서 OLDPWD·PWD를 바꿀 수 있으면 `cd -`·`~-`·`~+`는
+    모르는 디렉토리도 후보다. 따옴표 안·`\\`로 막은 tilde(`"~-"`·`\\~-`·`~"-"`)는 bash처럼 글자 그대로다."""
+    ws = shared()
+    c = ws.clone
+    plain = tmp("tt-gh-plain-")
+    wt = ws.work / "wt-tilde"
+    git(c, "worktree", "add", "-q", "--detach", str(wt), "origin/main")
+    push = "git push origin HEAD:main"
+    rows = [
+        ("cd /tmp && cd ~- && git push origin main", c, "deny"), (f"cd /tmp; cd ~-; {push}", c, "deny"),
+        (f"cd /tmp; cd ~-; {push}", wt, "deny"), (f"cd {c}; cd /tmp; cd ~-; {push}", plain, "deny"),
+        (f"pushd /tmp; cd ~1; {push}", c, "deny"), (f"pushd /tmp; cd ~+1; {push}", c, "deny"),
+        (f"pushd /tmp; cd ~-0; {push}", c, "deny"), (f"pushd /tmp >/dev/null; pushd ~1; {push}", c, "deny"),
+        (f"pushd {c}; pushd /tmp; cd ~1; {push}", plain, "deny"), (f"pushd -n {c}; cd ~1; {push}", plain, "deny"),
+        (f"pushd /tmp; pushd -n {plain}; cd ~2; {push}", c, "deny"), (f"cd {c}/data; cd /tmp; cd ~-/..; {push}", plain, "deny"),
+        (f"cd /tmp; cd ~-/; {push}", c, "deny"), (f"cd {c}; cd ~+; {push}", plain, "deny"),
+        ("cd /tmp; cd ~-; git commit --no-verify -m x", c, "deny"), ("cd /tmp; cd ~-; git checkout -b x", c, "deny"),
+        ("cd /tmp; cd ~-; git commit --no-verify -m x", wt, "deny"), ("cd /tmp; cd ~-; gh pr merge 3", c, "deny"),
+        # 풀 수 없다(새 셸 — OLDPWD 없음·빈 스택): 글자 그대로라 cd가 실패한다 — cwd 그대로
+        (f"cd ~-; {push}", c, "deny"), (f"cd ~1; {push}", c, "deny"), (f"cd ~-1 2>/dev/null; {push}", c, "deny"),
+        (f"pushd ~1; {push}", c, "deny"),
+        # OLDPWD·PWD를 바꾸면 값을 모른다(규칙 11: 이슈 DB일 수 있다)
+        (f"cd /tmp; OLDPWD={c}; cd ~-; gh pr merge 3", plain, "deny"), (f"cd /tmp; OLDPWD={c}; cd -; gh pr merge 3", plain, "deny"),
+        (f"export PWD={c}; cd ~+; gh pr merge 3", plain, "deny"),
+        # 오탐 방지: 푼 칸으로만 간다, 인용한 tilde는 글자다
+        (f"cd {c}; cd /tmp; cd ~-; cd ~-; {push}", plain, None), (f"cd /tmp; cd ~+; cd ~-; {push}", c, None),
+        (f"pushd {c}; pushd /tmp; cd ~2; {push}", plain, None), (f"cd /tmp; cd ~+; {push}", c, None),
+        (f'cd /tmp; cd "~-"; {push}', c, None), (f"cd /tmp; cd \\~-; {push}", c, None),
+        (f'cd /tmp; cd ~"-"; {push}', c, None), (f"cd {c}; cd ~-; {push}", plain, None),
+        (f"cd /tmp; cd ~-; cd {plain}; {push}", c, None)]
+    try:
+        for cmd, cwd, want in rows:
+            assert decision(bash(ws, cmd, cwd)) == want, (cmd, cwd)
+    finally:
+        gitp(c, "worktree", "remove", "--force", str(wt))
+
+
+def test_guard_redirections_and_heredocs_glued_to_command_word():
+    """명령 파싱(H 계획 A2 뒤 — 규칙 11에 남았던 P1): 따옴표 밖 `<`도 `>`처럼 연산자 글자다. bash는 `git</dev/null push`를 낱말
+    `git`·리디렉션 `</dev/null`·낱말 `push`로 읽는데 예전에는 `git</dev/null`을 한 낱말로 보아 git을 몰랐다(`gh<x pr merge 3`도).
+    같은 까닭으로 공백 없는 `bash<<EOF`(`sh<<'EOF'`·`bash<<-EOF`·`env bash<<EOF`)도 셸이 읽는 heredoc 본문으로 걷고, `-c` 없는
+    셸의 here-string(`bash<<<"…"`·`bash <<< '…'`)도 스크립트로 걷는다. 리디렉션 앞 숫자는 공백 없이 붙었을 때만 fd다(`2>`·`0<` —
+    `timeout 5 >/dev/null git …`의 `5`는 timeout 인자다). 따옴표 안 `<`, `<( )` 프로세스 치환, `$(( ))`·`[[ ]]` 비교, 셸이 아닌
+    명령의 heredoc·here-string(`cat<<EOF`)은 그대로 글이다."""
+    ws = shared()
+    c = ws.clone
+    plain = tmp("tt-gh-plain-")
+    push = "git push origin HEAD:main"
+    rows = [
+        ("git</dev/null push origin main", c, "deny"), ("git>/dev/null push origin main", c, "deny"),
+        ("git<>/dev/null push origin main", c, "deny"), ("git>|/dev/null push origin main", c, "deny"),
+        ("git>&2 push origin main", c, "deny"), ("git&>/dev/null push origin main", c, "deny"),
+        ("git 2</dev/null push origin main", c, "deny"), ("git<<<x push origin main", c, "deny"),
+        ("git push origin main</dev/null", c, "deny"), ("gh<x pr merge 3", c, "deny"), ("<x gh pr merge 3", c, "deny"),
+        ("gh</dev/null pr review 3 --approve", c, "deny"), ("gh pr merge 3</dev/null", c, "deny"),
+        ("timeout 5 </dev/null git push origin main", c, "deny"), ("timeout 5 >/dev/null git push origin main", c, "deny"),
+        (f"cd {c}</dev/null; {push}", plain, "deny"), ("git</dev/null checkout -b x", c, "deny"),
+        # 공백 없는 heredoc·셸의 here-string
+        ("bash<<EOF\ngh pr merge 12\nEOF", c, "deny"), ("sh<<'EOF'\ngh pr merge 12\nEOF", c, "deny"),
+        ("bash<<-EOF\n\tgh pr merge 12\n\tEOF", c, "deny"), ("env bash<<EOF\ngh pr merge 12\nEOF", c, "deny"),
+        ("X=1 bash<<EOF\ngit push origin main\nEOF", c, "deny"), (f"cd {c}; bash<<EOF\n{push}\nEOF", plain, "deny"),
+        ('bash<<<"gh pr merge 3"', c, "deny"), ("bash <<< 'gh pr merge 3'", c, "deny"), ("sh<<<$'gh pr merge 3'", c, "deny"),
+        (f'bash<<<"cd {c}; {push}"', plain, "deny"), ("bash -s<<<'gh pr review 3 --approve'", c, "deny"),
+        # 오탐 방지: 따옴표 안 `<`, 입력 리디렉션은 쓰기가 아니다, 프로세스 치환·산술·비교, 셸이 아닌 명령의 heredoc·here-string
+        ("gh pr comment 3 -b 'a<b>c' -R other/x", c, None), ('grep -n "gh<x pr merge 3" notes.md', c, None),
+        (f"echo a<{c}/README.md", ws.base, None), (f"sort 0<{c}/README.md >/tmp/o", ws.base, None),
+        ("diff <(git log -1) <(git log -2)", c, None), ("echo $((1<2)) $((1<<3))", c, None),
+        ("[[ a < b ]] && echo ok", c, None), ("cat <<EOF\ngh pr merge 3\nEOF", c, None),
+        ("cat<<EOF\ngh pr merge 3\nEOF", c, None), ("cat >/dev/null<<'EOF'\ngh pr merge 3\nEOF", c, None),
+        ('cat <<<"gh pr merge 3"', c, None), ("grep -c x<<<'gh pr merge 3'", c, None),
+        ("bash -c 'echo hi'<<<'gh pr merge 3'", c, None), ("git 2>/dev/null log -1 && echo 2 >/dev/null", c, None)]
+    for cmd, cwd, want in rows:
+        assert decision(bash(ws, cmd, cwd)) == want, (cmd, cwd)
+
+
+def test_guard_fd_words_heredoc_dash_rw_redirection_and_tilde_tails_follow_bash():
+    """명령 파싱(H 계획 A2 뒤 `<`·tilde 수정의 재리뷰 P0·P1): `<`를 연산자 글자로 나눈 뒤 bash 어휘 분석과 어긋나 약해졌던 자리.
+    `{이름}<`·`{이름}>`(bash 4.1+ fd 변수)도 숫자처럼 연산자에 붙은 fd다 — 예전에는 `{fd}`가 git·gh 낱말로 남아 하위 명령을 가렸다.
+    `>&`·`<&` 바로 뒤 숫자는 복제 대상이지 뒤 `<`의 fd가 아니다(`2>&1</dev/null`). `[n]<>f`는 읽고 쓰기로 열어 쓰기 대상이다(규칙 8).
+    `<<-`는 한 연산자이고 셸의 `-c`는 리디렉션을 뺀 argv에서 찾는다(`bash <<-cmds`의 끝 표시가 `-c`로 보여 본문을 걷지 않았다).
+    tilde 뒤 `//`는 bash처럼 그 디렉토리 아래다(`~-//` = `$OLDPWD//`), `~N`의 N은 ASCII 숫자만이다(`~\u0661`는 글자). 줄 이음은 먼저
+    지우고 fd·tilde를 가른다(`2\\⏎>`·`~\\⏎-`)."""
+    ws = shared()
+    c = ws.clone
+    plain = tmp("tt-gh-plain-")
+    wt = ws.work / "wt-fdword"
+    git(c, "worktree", "add", "-q", "--detach", str(wt), "origin/main")
+    push = "git push origin HEAD:main"
+    rows = [
+        # `{이름}` fd
+        ("git {fd}</dev/null push origin main", c, "deny"), ("git {fd}<<<x push origin main", c, "deny"),
+        ("git {fd}>/dev/null push origin main", c, "deny"), ("gh {fd}</dev/null pr merge 3", c, "deny"),
+        ("gh {x}<x pr review 3 --approve", c, "deny"), ("gh pr {fd}<1 merge 3", c, "deny"),
+        (f"git -C {c} {{fd}}</dev/null push origin main", plain, "deny"),
+        (f"cd {{fd}}</dev/null {c} && git push origin main", plain, "deny"),
+        (f"gh -R {DB_SLUG} {{fd}}</dev/null pr merge 3", plain, "deny"), ("echo x {fd}>README.md", c, "deny"),
+        # `>&`·`<&` 뒤 숫자는 복제 대상
+        (f"git -C {c} 2>&1</dev/null push origin main", plain, "deny"),
+        (f"git -C {c} 2>& 1</dev/null push origin main", plain, "deny"),
+        (f"gh -R {DB_SLUG} 2>&1</dev/null pr merge 3", plain, "deny"),
+        (f"cd 2>&1</dev/null {c} && git push origin main", plain, "deny"),
+        (f"git -C {c} 0<&3</dev/null push origin main", plain, "deny"),
+        # `<>`는 쓰기 대상
+        ("echo x 1<>README.md", c, "deny"), ("echo x 1<> README.md", c, "deny"), ("echo x 3<>README.md >&3", c, "deny"),
+        ("echo x <>README.md", c, "deny"), (f"echo x 1<>{c}/README.md", plain, "deny"),
+        (f"printf x {{fd}}<>{c}/README.md", plain, "deny"),
+        # `<<-` 한 연산자, 리디렉션 대상은 `-c`가 아니다
+        ("bash <<-cmds\ngh pr merge 3\ncmds", c, "deny"), ("bash <<-cmd\ngit push origin main\ncmd", c, "deny"),
+        ("env bash <<-code\ngh pr merge 3\ncode", c, "deny"), ("bash -s <<-cmd\ngh pr merge 3\ncmd", c, "deny"),
+        ("bash<<-cmd\n\tgh pr merge 3\n\tcmd", c, "deny"), ("bash 0<<-cmd\ngh pr merge 3\ncmd", c, "deny"),
+        ("bash << -c\ngh pr merge 3\n-c", c, "deny"), ("bash -c </dev/null 'gh pr merge 3'", c, "deny"),
+        # tilde 뒤 `//`, ASCII 숫자만
+        (f"cd {c}; cd /tmp; cd ~-//; {push}", plain, "deny"), (f"cd {c}; cd /tmp; cd ~-//./; {push}", plain, "deny"),
+        (f"cd ~+//; {push}", c, "deny"), (f"cd {c}; cd ~+//; gh pr merge 3", plain, "deny"),
+        (f"pushd {c}; pushd /tmp; cd ~1//; {push}", plain, "deny"),
+        (f"pushd {c}; pushd /tmp; cd ~1//data; {push}", plain, "deny"),
+        (f"cd /tmp && pushd -n ~-//. && popd && {push}", c, "deny"),
+        (f"pushd {c}; cd ~\u0661; {push}", plain, "deny"), (f"pushd {c}; cd ~+\u0661; {push}", plain, "deny"),
+        (f"cd {c}; cd ~\uff10/..; {push}", plain, "deny"),
+        # 줄 이음은 먼저 지운다
+        ("git 2\\\n>/dev/null push origin main", c, "deny"), ("git {fd}\\\n</dev/null push origin main", c, "deny"),
+        (f"cd /tmp; cd ~\\\n-; {push}", c, "deny"), (f"git -C {c} 2>&\\\n1</dev/null push origin main", plain, "deny"),
+        # 오탐 방지
+        ("git log -1 2>&1</dev/null", c, None), ("git '{x}'</dev/null push origin main", c, None),
+        ("git a\\\n2>/dev/null push origin main", c, None), ("git 2\\\\\n>/dev/null push origin main", c, None),
+        (f"cat 0<{c}/README.md >/dev/null", plain, None), (f"cd /tmp; cd ~-//; {push}", plain, None),
+        ("git commit -F - <<-end\nmsg\nend", wt, None), ("git commit -F - <<- end\nmsg\nend", wt, None),
+        ("bash -c 'echo hi' <<-cmd\ngh pr merge 3\ncmd", c, None), ("cat <<-cmd\ngh pr merge 3\ncmd", c, None),
+        ("pushd /tmp; pushd /usr; pushd -n ~2; popd -n; popd; git push origin main", c, None)]
+    try:
+        for cmd, cwd, want in rows:
+            assert decision(bash(ws, cmd, cwd)) == want, (cmd, cwd)
+    finally:
+        gitp(c, "worktree", "remove", "--force", str(wt))
+
+
 def test_guard_gh_api_shell_resolved_endpoint_may_be_graphql():
     """규칙 11(H-A1 r6): 셸이 푸는 엔드포인트(`"$GHE_API/graphql"`·`$X/graphql`·`"${X}/graphql"`)는 실행 때 GraphQL URL일 수 있다
     (gh는 `://`가 든 경로를 그대로 쓰고 필드를 JSON 본문으로 보낸다). 병합·자동 병합·Approve·기각 mutation은 대상과 무관하게

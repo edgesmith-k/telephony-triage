@@ -126,8 +126,16 @@ SHELL_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 # 리디렉션 토큰(`_tokens` 뒤): `>`·`>>`·`2>`·`2>&`·`>&2`·`&>`·`>|`·`<`·`<file`·`<<EOF`·`<<<w`·`{fd}>` … 대상이 붙었으면 1칸, 아니면
 # 다음 토큰까지 2칸(`_redir_len`)
 REDIR_RE = re.compile(r"^(?:(?:\{[A-Za-z_]\w*\}|\d+)?(?:<<<|<<-|<<|<>|<&|<|>>|>&|>\||>)|&>>|&>)(.*)$", re.DOTALL)
-# `_tokens`가 shlex 앞에 끼우고 뒤에서 되돌리는 표시: 셸이 풀지 않는 `$`·백틱(작은따옴표·`\` 안), 따옴표 밖 확장
-LIT_DOLLAR, LIT_TICK, BARE = "\ue024", "\ue060", "\ue000"
+# 입력 쪽 리디렉션 토큰(연산자, 붙은 대상): `<`는 파일을 읽고, `<>`는 파일을 읽고 쓰기로 연다(O_RDWR|O_CREAT — 입력 파일이자 쓰기
+# 대상), `<<`·`<<-`(heredoc 끝 표시)·`<<<`(here-string)·`<&`(fd 복제)는 파일이 아니다
+IN_REDIR_RE = re.compile(r"^(?:\{[A-Za-z_]\w*\}|\d+)?(<<<|<<-|<<|<>|<&|<)(.*)$", re.DOTALL)
+HERESTRING_RE = re.compile(r"^(?:\{[A-Za-z_]\w*\}|\d+)?<<<(.*)$", re.DOTALL)
+# `_tokens`가 shlex 앞에 끼우고 뒤에서 되돌리는 표시: 셸이 풀지 않는 `$`·백틱(작은따옴표·`\` 안), 따옴표 밖 확장, 따옴표 밖
+# 낱말 첫머리의 `~`(tilde 접두에 인용이 없다 — bash가 tilde로 푼다), 리디렉션 연산자에 공백 없이 붙은 fd(`2>`·`0<`·`{fd}<`),
+# 따옴표 밖 `<<-`의 `-`(연산자 글자로 두어 `<<-`를 한 연산자로 읽는다 — `-`는 낱말 글자라 `<<`와 `-TAG`로 갈라졌다)
+LIT_DOLLAR, LIT_TICK, BARE, TILDE_AT, FD_AT, HD_DASH = "\ue024", "\ue060", "\ue000", "\ue07e", "\ue03c", "\ue02d"
+# 공백 없이 리디렉션 연산자에 붙어 bash가 fd로 읽는 `{이름}`(bash 4.1+ — fd를 잡아 그 변수에 넣는다, `read_token_word`)
+FD_NAME_RE = re.compile(r"^\{[A-Za-z_][A-Za-z0-9_]*\}$")
 ANSI_C = {"a": "\a", "b": "\b", "e": "\x1b", "E": "\x1b", "f": "\f", "n": "\n", "r": "\r", "t": "\t", "v": "\v",
           "\\": "\\", "'": "'", '"': '"', "?": "?"}
 # 짝 없는 서로게이트: 경로(`os.path.realpath`·`open`·subprocess)와 출력 인코딩이 예외를 낸다. 명령 글과 `$'…'` 해석 결과에서
@@ -144,10 +152,12 @@ RAW_EXEMPT_DIRS = {"fixtures", "draft"}
 RAW_GLOB_MAX = 20
 RAW_SNIFF_BYTES = 8192
 RAW_SNIFF_LINES = 30
-REDIRECT_RE = re.compile(r"^(?:\d*>&|&>>?|\d*>>?\|?)(.*)$")
-# 따옴표 밖 연산자 묶음(`>>`, `2>&`, `>|`, `&&` …)을 하나씩 나눈다
-OPS_RE = re.compile(r">>\||>>|>&|>\||&>>|&>|\|\||&&|\|&|;;|[;&|()>]")
-OP_CHARS = set(";&|()>")
+# 출력 리디렉션 토큰(`_tokens` 뒤 — 앞 fd는 숫자나 `{이름}`: `2>`·`{fd}>`·`>&2`·`&>>`·`>|` …)과 붙은 대상
+REDIRECT_RE = re.compile(r"^(?:(?:\{[A-Za-z_]\w*\}|\d*)>&|&>>?|(?:\{[A-Za-z_]\w*\}|\d*)>>?\|?)(.*)$")
+# 따옴표 밖 연산자 묶음(`>>`, `2>&`, `>|`, `&&`, `<<<`, `<<-`(`<<` + `HD_DASH`), `<(` …)을 하나씩 나눈다
+PUNCT = ";&|()<>" + HD_DASH
+OPS_RE = re.compile(rf">>\||>>|>&|>\||&>>|&>|<<<|<<{HD_DASH}|<<|<>|<&|\|\||&&|\|&|;;|[{re.escape(PUNCT)}]")
+OP_CHARS = set(PUNCT)
 
 # git 전역 옵션 중 값을 받는 것 (값이 다음 토큰)
 GIT_GLOBAL_WITH_ARG = {"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--config-env",
@@ -860,9 +870,11 @@ def _strip_comments(command: str) -> str:
 
 class Word(str):
     """`_tokens`의 토큰. `dyn`: 셸이 풀 `$`·백틱이 있다(작은따옴표·`\\` 밖 — 값은 실행 때 정해진다). `bare`: 그중 따옴표 밖
-    확장이 있다(낱말 나누기로 여러 인자·옵션이 될 수 있다). str 메서드와 겹치지 않는 이름만 쓴다."""
+    확장이 있다(낱말 나누기로 여러 인자·옵션이 될 수 있다). `tilde`: 따옴표 밖 첫 글자 `~`이고 tilde 접두(첫 `/`까지)에 인용이
+    없다(bash가 tilde로 푼다 — `"~-"`·`\\~-`·`~"-"`는 글자 그대로). str 메서드와 겹치지 않는 이름만 쓴다."""
     dyn = False
     bare = False
+    tilde = False
 
 
 def _dyn(tok) -> bool:
@@ -918,7 +930,9 @@ def _ansi_c(text: str, i: int) -> tuple[str, int]:
 def _shell_prep(text: str) -> str:
     """shlex 앞 손질(bash 낱말 규칙): 작은따옴표 밖 줄 이음(`\\` + 줄바꿈)은 지운다(`gh api \\⏎ -X PUT …`). `$'…'`은 풀어
     작은따옴표 글로 바꾸고 `$"…"`는 `"…"`로 본다. 셸이 풀지 않는 `$`·백틱(작은따옴표 안·`\\$`)은 `LIT_*`로, 따옴표 밖 `$`·백틱
-    앞에는 `BARE`를 끼운다(`_word`가 되돌리며 `Word.dyn`·`bare`를 단다). 따옴표 짝은 shlex와 같게 센다."""
+    앞에는 `BARE`를 끼운다(`_word`가 되돌리며 `Word.dyn`·`bare`를 단다). 따옴표 밖 낱말 첫머리의 `~`(tilde 접두에 인용 없음) 앞에는
+    `TILDE_AT`(`Word.tilde`), 공백 없이 `<`·`>` 앞에 붙은 fd 낱말(`2>`·`0<`·`{fd}<` — `_fd_word`) 뒤에는 `FD_AT`(`_tokens`가 연산자와
+    붙인다)을 끼우고, `<<-`의 `-`는 `HD_DASH`(연산자 글자 — `<<-`가 한 연산자로 남는다)로 바꾼다. 따옴표 짝은 shlex와 같게 센다."""
     out, i, n, quote = [], 0, len(text), None
     while i < n:
         c = text[i]
@@ -947,38 +961,107 @@ def _shell_prep(text: str) -> str:
             out.append(c)
         elif c in "$`":
             out.append(BARE + c)
+        elif c == "~" and _word_start(text, i) and _tilde_plain(text, i + 1):
+            out.append(TILDE_AT + c)
+        elif c in "<>":
+            fd = FD_AT if _fd_word(text, i) else ""
+            if text.startswith(("<<<", "<<-"), i):          # `<<<`(here-string)·`<<-`(탭 떼는 heredoc)는 한 연산자다
+                out.append(fd + ("<<<" if text[i + 2] == "<" else "<<" + HD_DASH))
+                i += 3
+                continue
+            out.append(fd + c)
         else:
             out.append(c)
         i += 1
     return "".join(out)
 
 
+WORD_GAP = " \t\r\n;&|()<>"     # 따옴표 밖에서 낱말을 끝내는 글자
+
+
+def _back(text: str, j: int) -> int:
+    """`text[j]`에서 뒤로 줄 이음(`\\`+줄바꿈 — 바로 앞 `\\`가 홀수 개)을 건너뛴 자리. bash는 어휘 분석 전에 줄 이음을 지우므로
+    (`2\\⏎>f`는 `2>f`) 낱말·fd를 가를 때 앞 글자는 이 자리에서 본다(재리뷰 — 날 글의 줄바꿈을 낱말 끝으로 보던 부류)."""
+    while j >= 1 and text[j] == "\n" and text[j - 1] == "\\":
+        k = j - 1
+        while k >= 0 and text[k] == "\\":
+            k -= 1
+        if (j - 1 - k) % 2 == 0:            # `\\\\⏎`: 막힌 `\\` 뒤의 줄바꿈 — 줄 이음이 아니다
+            break
+        j -= 2
+    return j
+
+
+def _word_start(text: str, i: int) -> bool:
+    """`text[i]`가 따옴표 밖 낱말 첫 글자인가(앞이 글 처음이거나 낱말을 끝내는 글자 — 줄 이음은 건너뛴다)."""
+    j = _back(text, i - 1)
+    return j < 0 or text[j] in WORD_GAP
+
+
+def _tilde_plain(text: str, j: int) -> bool:
+    """`~` 뒤(`j`)부터 tilde 접두 끝(첫 `/`·낱말 끝)까지 인용 글자(`'`·`"`·`\\`)가 없나 — bash `bash_tilde_find_word`: 있으면 풀지 않는다.
+    줄 이음(`\\`+줄바꿈)은 bash가 먼저 지우므로 인용이 아니다(`~\\⏎-` = `~-`)."""
+    while j < len(text) and text[j] != "/" and text[j] not in WORD_GAP:
+        if text[j] == "\\" and text[j + 1:j + 2] == "\n":
+            j += 2
+            continue
+        if text[j] in "'\"\\":
+            return False
+        j += 1
+    return True
+
+
+def _fd_word(text: str, i: int) -> bool:
+    """`text[i]`(`<`·`>`) 바로 앞에 공백 없이 붙은 따옴표 밖 낱말이 bash가 fd로 읽는 꼴인가: 숫자들(`2>`·`0<`) 또는 `{이름}`(`{fd}<` —
+    `FD_NAME_RE`). 줄 이음은 건너뛰고 본다(`2\\⏎>`). `2 >`·`a2>`·`"2">`·`\\2>`·`$x>`·`'{fd}'<`는 아니고, `>&`·`<&` 바로 뒤(사이 공백
+    무관)의 낱말은 복제 대상이라 아니다(`2>&1</dev/null`의 `1` — bash `read_token_word`는 `>&` 다음 숫자를 대상으로 읽는다)."""
+    chars, j = [], _back(text, i - 1)
+    while j >= 0 and text[j] not in WORD_GAP:
+        if not (text[j].isascii() and (text[j].isalnum() or text[j] in "_{}")):     # 인용·`$`·`/` 등: fd 꼴이 아니다
+            return False
+        chars.append(text[j])
+        j = _back(text, j - 1)
+    word = "".join(reversed(chars))
+    if not (word.isascii() and word.isdigit() or FD_NAME_RE.match(word)):
+        return False
+    while j >= 0 and text[j] in " \t":
+        j = _back(text, j - 1)
+    k = _back(text, j - 1) if j >= 1 and text[j] == "&" else -1
+    return not (k >= 0 and text[k] in "<>")
+
+
 def _word(tok: str) -> Word:
-    w = Word(tok.replace(BARE, "").replace(LIT_DOLLAR, "$").replace(LIT_TICK, "`"))
+    w = Word(tok.replace(BARE, "").replace(LIT_DOLLAR, "$").replace(LIT_TICK, "`").replace(TILDE_AT, "").replace(FD_AT, "")
+             .replace(HD_DASH, "-"))
     w.bare = BARE in tok
     w.dyn = w.bare or "$" in tok or "`" in tok      # `LIT_*`가 아닌 `$`·백틱은 셸이 푼다
+    w.tilde = tok.startswith(TILDE_AT)
     return w
 
 
 def _tokens(command: str) -> list[str]:
     text = _shell_prep(_strip_comments(_strip_heredocs(command))).replace("\n", " \n ")
-    # `>`도 연산자 글자로 둔다: 공백 없이 붙은 리디렉션(`echo x>f`, `>>f`, `>|f`)을 따옴표 밖에서만 나눈다.
+    # `<`·`>`도 연산자 글자로 둔다: 공백 없이 붙은 리디렉션(`echo x>f`, `>>f`, `>|f`, `git</dev/null push`, `bash<<EOF`)을 따옴표
+    # 밖에서만 나눈다(bash 어휘 분석과 같다 — 따옴표 안 `<`·`>`는 글자다).
     # 주석은 위에서 뺀다: shlex 기본 `commenters="#"`는 주석과 함께 줄바꿈 토큰까지 먹어 다음 줄 명령이 앞 argv에 붙는다
-    lex = shlex.shlex(text, posix=True, punctuation_chars=";&|()>")
+    lex = shlex.shlex(text, posix=True, punctuation_chars=PUNCT)
     lex.commenters = ""
     lex.whitespace = " \t\r"
     lex.whitespace_split = True
     try:
         raw = list(lex)
     except ValueError:   # 따옴표 불균형 등: 따옴표를 무시하고 연산자 글자에서도 나눈다(닫힌 쪽 — 가려진 명령을 찾는다)
-        raw = [t.replace('"', "").replace("'", "") for t in re.findall(r"\n|[;&|()>]+|[^ \t\r\n;&|()>]+", text)]
+        punct = re.escape(PUNCT)
+        raw = [t.replace('"', "").replace("'", "") for t in re.findall(rf"\n|[{punct}]+|[^ \t\r\n{punct}]+", text)]
     out: list[str] = []
     prev_op = False
     for tok in raw:
         if tok and set(tok) <= OP_CHARS:
             for op in OPS_RE.findall(tok):
-                if op[0] == ">" and out and out[-1].isdigit() and not prev_op:
-                    out[-1] += op          # `2>`·`2>&`: 앞 숫자는 fd
+                op = op.replace(HD_DASH, "-")
+                fd = out[-1][:-1] if out and not prev_op and out[-1].endswith(FD_AT) else ""
+                if op[0] in "<>" and (fd.isascii() and fd.isdigit() or FD_NAME_RE.match(fd)):
+                    out[-1] = fd + op      # `2>`·`2>&`·`0<`·`{fd}<`: 공백 없이 붙은 앞 fd(`_fd_word`)
                 else:
                     out.append(op)
                 prev_op = True
@@ -1023,6 +1106,16 @@ def _drop_redirs(argv: list[str]) -> list[str]:
         if not n:
             out.append(argv[i])
         i += n or 1
+    return out
+
+
+def _herestrings(argv: list[str]) -> list[str]:
+    """argv의 here-string(`<<<w`·`<<< w`·`0<<<w`) 글. 셸(`-c` 없이)은 이 글을 stdin 스크립트로 읽는다(`bash <<<"gh pr merge 3"`)."""
+    out = []
+    for i, tok in enumerate(argv):
+        m = HERESTRING_RE.match(tok)
+        if m and (m.group(1) or i + 1 < len(argv)):
+            out.append(m.group(1) or argv[i + 1])
     return out
 
 
@@ -1166,13 +1259,14 @@ class Invocation:
 
 
 def _feeds_shell(line: str, cwd: Path) -> bool:
-    """heredoc이 시작된 줄에 `-c` 없는 셸(`SHELLS`)이 있다: 본문을 셸이 실행한다(`bash <<EOF`·`cat <<EOF | sh`). 줄을 풀다 예외가
-    나면 있다고 본다(닫힌 쪽 — 본문을 명령으로 보고, 낱말 그물은 그 줄을 빼지 않는다)."""
+    """heredoc이 시작된 줄에 `-c` 없는 셸(`SHELLS`)이 있다: 본문을 셸이 실행한다(`bash <<EOF`·`cat <<EOF | sh`). `-c`는 리디렉션과
+    그 대상을 뺀 argv에서 찾는다(`bash << -c`·`bash <<-cmds`의 끝 표시는 옵션이 아니다 — 재리뷰 P0). 줄을 풀다 예외가 나면 있다고
+    본다(닫힌 쪽 — 본문을 명령으로 보고, 낱말 그물은 그 줄을 빼지 않는다)."""
     try:
         for seg in _segments(_tokens(line)):
             seg, _, _ = _strip_prefix(seg, cwd)
             if seg and _base(seg[0]) in SHELLS and not any(
-                    t.startswith("-") and not t.startswith("--") and "c" in t[1:] for t in seg[1:]):
+                    t.startswith("-") and not t.startswith("--") and "c" in t[1:] for t in _drop_redirs(seg)[1:]):
                 return True
     except Exception:  # noqa: BLE001
         return True
@@ -1195,6 +1289,12 @@ def _backstop(seg: list[str]) -> list[int]:
 
 
 CD_NAMES = ("cd", "pushd", "popd")
+# 디렉토리 스택 tilde(bash `bash_special_tilde_expansions`): `~+`(PWD)·`~-`(OLDPWD)·`~N`·`~+N`(dirs 왼쪽에서 N번째, 0 = cwd)·
+# `~-N`(오른쪽에서 N번째), 뒤에 `/…`가 붙을 수 있다. `~`·`~/x`·`~user`는 아니다(HOME — `_expand`). N은 ASCII 숫자만(bash
+# `legal_number` — `~١`는 글자 그대로다)
+DIRSTACK_TILDE_RE = re.compile(r"^~([+-]?)([0-9]*)(/.*)?$", re.DOTALL)
+# 명령 글에서 PWD·OLDPWD를 바꿀 수 있다(대입·`export`·`read`·`unset`·`${OLDPWD:=…}` — `$PWD` 읽기는 아니다): `cd -`·`~-`·`~+`의 값을 모른다
+PWD_VAR_RE = re.compile(r"(?<![\w${])(?:OLD)?PWD\b|\$\{(?:OLD)?PWD:?=")
 CWD_CAP = 8                         # 따라가는 cwd 후보 상한(넘으면 처음·보호 뿌리 안·최근 후보만 남기고 나머지를 모르는 디렉토리로 접는다)
 # 이보다 긴 cwd 후보(상대 cd가 길게 이어진 것)는 실제 경로와 `..`을 글자로 접은 경로로 바꾼다(`_shorten`) — 후보 경로가 cd마다
 # 길어져 비용이 cd 수의 제곱으로 늘지 않게(재리뷰 P1 성능)
@@ -1479,8 +1579,8 @@ class _Walk:
     셸(`-c` 없이)이 읽는 heredoc 본문은 그 연산자가 든 명령의 cwd 후보로 한 번, 이 글에서 거친 나머지 cwd 후보(상한 안)로 한 번
     걷는다(재리뷰 P1 — 거친 cwd마다 본문을 다시 걸어 중첩 heredoc에서 시간이 곱으로 늘던 부류)."""
 
-    def __init__(self, st: _Cwd, depth: int, cdpath: bool = False):
-        self.st, self.depth, self.cdpath = st, depth, cdpath
+    def __init__(self, st: _Cwd, depth: int, cdpath: bool = False, pwdvar: bool = False):
+        self.st, self.depth, self.cdpath, self.pwdvar = st, depth, cdpath, pwdvar
         self.out: list[Invocation] = []
         # [여는 말, 들어갈 때 상태, 바깥 and-or 상태, 바깥 목록 시작 상태, 파이프·백그라운드 요소인가, 함수 본문인가, 분기 끝 상태들,
         #  바깥 실패 상태들, 바깥 성공 상태들]
@@ -1500,9 +1600,10 @@ class _Walk:
 
     @staticmethod
     def _marked_tokens(command: str, hds, ids) -> tuple[list, list[tuple[int, ...]]]:
-        """`_tokens(command)`와 같은 토큰과, 토큰마다 그 안에 든 heredoc 연산자 번호(`ids`에 든 것만). 연산자(`<<`) 앞에 명령 글에
-        없는 표시 글자(사용자 영역 U+F000~ — `_shell_prep`의 `BARE`·`LIT_*`와 겹치지 않는다)를 끼워 토큰을 만든 뒤 표시를 뗀다 —
-        표시는 낱말 글자라 토큰 경계·글을 바꾸지 않는다."""
+        """`_tokens(command)`와 같은 토큰과, 토큰마다 그 안에 든 heredoc 연산자 번호(`ids`에 든 것만). 연산자(`<<`·`<<-`) 뒤 끝 표시
+        낱말 바로 앞에 명령 글에 없는 표시 글자(사용자 영역 U+F000~ — `_shell_prep`의 `BARE`·`LIT_*`·`TILDE_AT`·`FD_AT`·`HD_DASH`와
+        겹치지 않는다)를 끼워 토큰을 만든 뒤 표시를 뗀다 — 표시는 낱말 글자라 끝 표시 낱말에 붙고 토큰 경계·글을 바꾸지 않는다(`<`는
+        연산자 글자라 연산자 앞에 끼우면 따로 토큰이 된다)."""
         plain = _tokens(command)
         marks = next(((chr(c), chr(c + 1)) for c in range(0xF000, 0xF8FE, 2)
                       if chr(c) not in command and chr(c + 1) not in command), None) if ids else None
@@ -1510,7 +1611,9 @@ class _Walk:
             return plain, [()] * len(plain)
         text = command
         for k in sorted(ids, key=lambda j: hds[j].op_pos, reverse=True):
-            p = hds[k].op_pos
+            p = hds[k].op_pos + (3 if hds[k].dash else 2)
+            while p < len(text) and text[p] in " \t":
+                p += 1
             text = f"{text[:p]}{marks[0]}{k}{marks[1]}{text[p:]}"
         pat = re.compile(f"{re.escape(marks[0])}(\\d+){re.escape(marks[1])}")
         toks, found = [], []
@@ -1518,7 +1621,7 @@ class _Walk:
             got = tuple(int(x) for x in pat.findall(t))
             if got:
                 w = Word(pat.sub("", t))
-                w.dyn, w.bare = _dyn(t), _split(t)
+                w.dyn, w.bare, w.tilde = _dyn(t), _split(t), getattr(t, "tilde", False)
                 t = w
             toks.append(t)
             found.append(got)
@@ -1528,6 +1631,7 @@ class _Walk:
 
     def run(self, command: str) -> list[Invocation]:
         self.cdpath = self.cdpath or "CDPATH" in command
+        self.pwdvar = self.pwdvar or bool(PWD_VAR_RE.search(command))
         hds = _heredoc_scan(command) if self.depth < MAX_DEPTH else ()
         fed_ids = [k for k, hd in enumerate(hds) if hd.found and _feeds_shell(hd.unit, self.seen[0])]
         toks, tok_ids = self._marked_tokens(command, hds, fed_ids)
@@ -1651,10 +1755,20 @@ class _Walk:
             if not seg or name in CD_NAMES or name == "eval":
                 continue
             if name in SHELLS and self.depth < MAX_DEPTH:
-                for i, tok in enumerate(seg[1:], 1):
-                    if tok.startswith("-") and not tok.startswith("--") and "c" in tok[1:] and i + 1 < len(seg):
-                        self.out += _Walk(_Cwd((seg_cwd,)), self.depth + 1).run(seg[i + 1])
-                        break
+                # `-c` 스크립트: 리디렉션을 뺀 argv(`bash -c </dev/null '…'` — bash는 리디렉션을 떼고 읽는다)와 원래 argv(따옴표 안
+                # `">"`도 리디렉션으로 보므로) 둘 다에서 찾는다(합집합 — 닫힌 쪽)
+                plain_seg = _drop_redirs(seg)
+                scripts = []
+                for argv in (plain_seg, seg):
+                    for i, tok in enumerate(argv[1:], 1):
+                        if tok.startswith("-") and not tok.startswith("--") and "c" in tok[1:] and i + 1 < len(argv):
+                            scripts.append(argv[i + 1])
+                            break
+                for body in dict.fromkeys(scripts):
+                    self.out += _Walk(_Cwd((seg_cwd,)), self.depth + 1).run(body)
+                if not any(t.startswith("-") and not t.startswith("--") and "c" in t[1:] for t in plain_seg[1:]):
+                    for body in _herestrings(seg):      # `-c` 없는 셸은 here-string(`bash <<<"…"`)을 스크립트로 읽는다
+                        self.out += _Walk(_Cwd((seg_cwd,)), self.depth + 1).run(body)
                 continue
             self.out.append(Invocation(seg_cwd, seg, env))
             for j in _backstop(seg):
@@ -1673,7 +1787,7 @@ class _Walk:
             self.st.exact = False       # `dirs -c`(스택 비우기)·zsh `dirs <칸…>`(스택 바꾸기): 스택 칸을 모른다
             self.st.settle()
         elif name == "eval" and self.depth < MAX_DEPTH and len(first) > 1:    # eval은 이 셸에서 돈다: cd가 남는다
-            inner = _Walk(self.st.copy() if scoped else self.st, self.depth + 1, self.cdpath)
+            inner = _Walk(self.st.copy() if scoped else self.st, self.depth + 1, self.cdpath, self.pwdvar)
             self.out += inner.run(" ".join(first[1:]))
             self.seen += inner.seen
             if not scoped:
@@ -1720,11 +1834,11 @@ class _Walk:
         targets = None                                     # None: cwd가 바뀌지 않는다
         if name == "cd":
             if arg == "-":
-                targets = st.old if st.old is not None else (UNKNOWN_DIR,)
+                targets = (st.old if st.old is not None else (UNKNOWN_DIR,)) + ((UNKNOWN_DIR,) if self.pwdvar else ())
             elif num:                                      # bash는 잘못된 옵션(그대로)이나 그 이름의 디렉토리, zsh는 스택 칸
                 targets = anywhere + self._targets(arg, prev)
             else:
-                targets = self._targets(arg, prev)
+                targets = self._dest(arg, prev)
                 if self.cdpath and arg is not None and not _expand(arg).startswith((".", "/")):
                     targets += (UNKNOWN_DIR,)              # CDPATH에서 먼저 찾는다
         elif no_cd:                                        # `pushd -n`·`popd -n`: 스택만
@@ -1737,7 +1851,7 @@ class _Walk:
                 st.stack.append(prev)
                 st.exact = False
             else:
-                targets = self._targets(arg, prev)
+                targets = self._dest(arg, prev)
                 st.stack.append(prev)
         else:                                              # popd
             k = 0 if arg is None else int(num.group(2)) if num and num.group(1) == "+" else None
@@ -1773,11 +1887,45 @@ class _Walk:
         target = _expand(arg) if arg is not None else str(Path.home())
         return tuple(Path(target) if Path(target).is_absolute() else d / target for d in prev)
 
+    def _dest(self, arg, prev) -> tuple[Path, ...]:
+        """cd·pushd 대상 후보. 디렉토리 스택 tilde(`DIRSTACK_TILDE_RE` — 따옴표 밖, tilde 접두에 인용 없음: `Word.tilde`)는 bash처럼
+        이 글이 따라간 상태로 푼다: `~-` = `cd -`의 이전 디렉토리(모르면 — 셸이 물려받은 OLDPWD — 모르는 디렉토리), `~+`·`~0` = 지금
+        cwd, `~N`·`~+N` = 이 글이 쌓은 스택 맨 위에서 N번째 칸(칸을 정확히 알 때. 넘으면 이 글 밖 칸 — 모르는 디렉토리), `~-N`(아래에서
+        세므로 이 글 밖 칸 수에 달렸다)·칸을 모르는 스택 = 스택 칸 어디든·모르는 디렉토리·cwd. 풀 수 없으면 bash는 글자 그대로 두므로
+        (`~-`라는 이름의 경로 — 보통 없어 cd가 실패하고 cwd는 그대로다) 글자 경로도 후보다(확실히 풀리는 칸만이면 빼서 이동이 확실하다).
+        명령 글에서 PWD·OLDPWD를 바꿀 수 있으면(`PWD_VAR_RE`) `~-`·`~+`·`~0`은 모르는 디렉토리도 후보다. 따옴표를 모르는 토큰(`Word`가
+        아님)은 푼 후보와 글자 경로를 모두 본다. 그 밖의 대상은 `_targets`."""
+        literal = self._targets(arg, prev)
+        m = DIRSTACK_TILDE_RE.match(arg) if arg is not None and getattr(arg, "tilde", True) else None
+        if not m or not (m.group(1) or m.group(2)):
+            return literal
+        # 뒤 경로의 앞 `/`는 모두 뗀다: bash는 `~-//x`를 `$OLDPWD//x`(= `$OLDPWD/x`)로 푼다 — `Path(d) / "/x"`는 `/x`가 된다(재리뷰 P0)
+        sign, num, rest = m.group(1), m.group(2), (m.group(3) or "").lstrip("/")
+        st = self.st
+        exact = st.exact and not st.sticky
+        n = int(num) if num else None
+        lit = True                                         # 풀지 못했을 수 있다(글자 그대로)
+        if n is None and sign == "-":                      # `~-`: OLDPWD
+            dirs, lit = (st.old, False) if st.old is not None else ((UNKNOWN_DIR,), True)
+        elif n is None or (n == 0 and sign != "-"):        # `~+`·`~0`·`~+0`: PWD
+            dirs, lit = prev, False
+        elif sign != "-" and exact and n <= len(st.stack):    # `~N`·`~+N`: 맨 위에서 N번째
+            dirs, lit = st.stack[-n], False
+        elif sign != "-" and exact:                        # 이 글이 쌓은 칸보다 깊다: 이 글 밖 칸이거나 풀지 못한다
+            dirs = (UNKNOWN_DIR,)
+        else:                                              # `~-N`·칸을 모르는 스택
+            dirs = st.stack_dirs() + (UNKNOWN_DIR,) + prev
+        if self.pwdvar and (n is None or (n == 0 and sign != "-")):
+            dirs += (UNKNOWN_DIR,)
+        lit = lit or UNKNOWN_DIR in dirs
+        out = tuple(d if d == UNKNOWN_DIR or not rest else d / rest for d in dirs)
+        return out + literal if lit or not isinstance(arg, Word) else out
+
     def _stack_only(self, name: str, arg, num, dyn: bool, exact: bool, prev) -> None:
         """`pushd -n`·`popd -n`: cwd는 그대로 두고 스택만 고친다. 칸을 정확히 모르면 스택을 모른다고 표시한다."""
         st = self.st
         if name == "pushd" and arg is not None and not num and not dyn:
-            targets = self._targets(arg, prev)
+            targets = self._dest(arg, prev)
             st.stack.append(targets)                   # bash `dirs`의 1번 칸
             if not all(_sure_dir(t) for t in targets):
                 st.exact = False
@@ -2169,17 +2317,19 @@ def _words_and_stdin(argv: list[str]) -> tuple[list[str], list[str]]:
     stdin: list[str] = []
     skip = redir_in = False
     for tok in argv[1:]:
+        m = IN_REDIR_RE.match(tok)
         if skip:
             skip = False
         elif redir_in:
             redir_in = False
             stdin.append(tok)
-        elif tok.startswith("<<"):
-            continue
-        elif tok == "<":
-            redir_in = True
-        elif tok.startswith("<") and len(tok) > 1:
-            stdin.append(tok[1:])
+        elif m and m.group(1) in ("<", "<>"):           # 입력 파일(`<f`·`< f`·`0<f`)
+            if m.group(2):
+                stdin.append(m.group(2))
+            else:
+                redir_in = True
+        elif m:                                         # heredoc 끝 표시·here-string·fd 복제: 파일이 아니다
+            skip = not m.group(2)
         elif tok and REDIRECT_RE.match(tok):
             skip = not REDIRECT_RE.match(tok).group(1)
         else:
@@ -2288,13 +2438,15 @@ def _raw_args(argv: list[str]) -> list[str]:
             redir_in = False
             out.append(tok)
             continue
-        if tok.startswith("<<"):
+        m = IN_REDIR_RE.match(tok)
+        if m and m.group(1) in ("<", "<>"):             # 입력 파일(`<f`·`< f`·`0<f`)
+            if m.group(2):
+                out.append(m.group(2))
+            else:
+                redir_in = True
             continue
-        if tok == "<":
-            redir_in = True
-            continue
-        if tok.startswith("<") and len(tok) > 1:
-            out.append(tok[1:])
+        if m:                                           # heredoc 끝 표시·here-string·fd 복제: 파일이 아니다
+            skip = not m.group(2)
             continue
         m = REDIRECT_RE.match(tok)
         if m:
@@ -3200,8 +3352,15 @@ def _write_targets(inv: Invocation) -> list[str]:
                 out.append(tok)
             pending = None
             continue
-        if tok.startswith("<"):   # 입력 리디렉션·heredoc·here-string은 쓰기가 아니다
-            if tok in ("<", "<<", "<<-", "<<<"):
+        m = IN_REDIR_RE.match(tok)
+        if m and m.group(1) == "<>":   # `[n]<>f`는 읽고 쓰기로 연다(O_RDWR|O_CREAT — 내용을 덮어쓰고 없으면 만든다): 쓰기 대상
+            if m.group(2):
+                out.append(m.group(2))
+            else:
+                pending = "out"
+            continue
+        if m:   # 입력 리디렉션·heredoc·here-string·입력 fd 복제(`0<`·`<&`)는 쓰기가 아니다
+            if not m.group(2):
                 pending = "in"
             continue
         m = REDIRECT_RE.match(tok) if tok else None
