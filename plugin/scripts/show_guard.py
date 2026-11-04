@@ -25,7 +25,8 @@ transcript의 Bash 호출에 시각으로 고정하고(`shown.anchor`: tool_use 
   마지막 질문(또는 사용자 입력) 사이에 화면 전체가 보였는지 본다. 맞는 의무가 없으면 판정하지 않는다(스크립트의 해시 대조와 규칙 7
   ask가 관문). `db_pr`·`stage`면 열린 초안 검증표(전부 통과 표 `shown.draft_all_clear` 제외 — push 확인 화면의 "검증 결과"로
   갈음)가 보였는지 본다. 거부 문구에는 붙일 화면 전문(12KB 이하)이 실린다.
-- `post`(PostToolUse Bash): 명령에 기록 스크립트 이름이 있고 60초 안에 그 스크립트의 의무 기록이 있으면 `additionalContext`로
+- `post`(PostToolUse Bash): 명령에 기록 스크립트 이름이 있고 그 호출이 도는 동안(transcript의 tool_use 시각 − 2초 ~ 지금, 시각을 모르면
+  60초 창) 그 스크립트의 의무 기록이 남았으면 `additionalContext`로
   "이 출력은 사용자에게 안 보인다, 다음 메시지에 전문을 글자 그대로" 안내만 한다.
 
 같은 의무 키(`push:<hash>`·`post:<sha 앞 16자>`·`report:<KEY>#<run>`·`draft:<sha1 12자>`·`patch:<KEY>/<스킬 이름>`·`apply:<KEY>/<스킬 이름>`)로 막은 횟수(transcript의 표식
@@ -61,8 +62,9 @@ MAX_BLOCKS = 2
 TAIL_BYTES = 16 * 1024 * 1024
 HEAD_BYTES = 64 * 1024
 BLOCK_LIMIT = 12 * 1024
-# ponytail: post 안내는 지금 호출이 남긴 기록을 시각으로만 고른다(60초). 같은 스크립트를 60초 안에 두 번 부르면 앞 기록도 안내한다
-POST_WINDOW = 60.0
+# post 안내는 지금 호출이 도는 동안 남은 기록만 고른다(`mode_post`, 시각만 본다 — 같은 때 다른 세션이 같은 스크립트를 부르면 그 기록도 안내한다)
+POST_WINDOW = 60.0       # 지금 호출의 시작 시각을 모를 때만 쓰는 창(입력에 transcript_path·tool_use_id가 없거나 기록이 없을 때)
+POST_SCAN = 660.0        # 지금 호출이 남겼을 수 있는 기록을 찾는 범위(Bash 최대 10분 + 여유) — 이 안에 후보가 있을 때만 transcript를 읽는다
 RECORD_SCRIPTS = ("db_pr", "issue_post", "db_verify", "triage", "skill_patch")
 QUICK_TOKENS = ("## push 전 확인:", "게시 전 확인:", "triage.py", "--draft", "db_pr.py", "issue_post.py", "skill_patch.py")
 KIND_NAME = {"push": "push 확인 화면", "post": "게시 확인 화면", "report": "분석 리포트", "draft": "초안 검증표",
@@ -540,7 +542,23 @@ def _response_text(resp) -> str:
     return str(resp or "")
 
 
+def _call_start(inp) -> float | None:
+    """지금 Bash 호출의 tool_use 시각(transcript의 `tool_use_id` 줄). PostToolUse 때 그 줄은 이미 기록돼 있다(호출 전에 쓰인다 —
+    `load_seq_for_call`과 같이 WAIT_SECONDS까지 기다린다). 입력에 transcript_path·tool_use_id가 없거나 찾지 못하면 None."""
+    tid, path = inp.get("tool_use_id"), inp.get("transcript_path")
+    if not tid or not path or not _wait_recorded(path, str(tid)):
+        return None
+    for e in reversed(load_seq(path) or []):
+        if e.get("kind") == "tool" and e.get("id") == tid:
+            return shown._epoch(e.get("ts"))
+    return None
+
+
 def mode_post(inp) -> dict | None:
+    """기록 스크립트를 부른 Bash 호출 뒤: **그 호출이 도는 동안** 남은 의무 기록(`tool_use 시각 − ANCHOR_SLACK ≤ at ≤ 지금`,
+    `shown.anchor`와 같은 고정)이 있으면 전문을 붙이라고 안내한다. 예전에는 60초 안의 모든 기록(다른 세션·eval 하위 세션·앞
+    호출이 남긴 것 포함)을 보고 기록을 남기지 않은 호출(`db_pr status` 등)에도 "push 화면을 붙여라"를 안내했다(11/04 수정).
+    지금 호출의 시작 시각을 모를 때만 60초 창을 쓴다(경고)."""
     if inp.get("tool_name") != "Bash":
         return None
     tool_input = inp.get("tool_input") if isinstance(inp.get("tool_input"), dict) else {}
@@ -549,10 +567,20 @@ def mode_post(inp) -> dict | None:
     if not names:
         return None
     now = time.time()
+    recs = [(t, r) for r in shown.read_records(work_dirs())
+            if (t := shown._epoch(r.get("at"))) is not None and -1 <= now - t <= POST_SCAN
+            and {r.get("script"), r.get("via")} & names]
+    if not recs:
+        return None
+    start = _call_start(inp)
+    if start is None:
+        warn("지금 호출의 시작 시각을 몰라(transcript_path·tool_use_id 없음 또는 기록 없음) 60초 창으로 고른다")
+        lo = now - POST_WINDOW
+    else:
+        lo = start - shown.ANCHOR_SLACK
     found: dict[str, tuple] = {}
-    for r in shown.read_records(work_dirs()):
-        t = shown._epoch(r.get("at"))
-        if t is None or now - t > POST_WINDOW or not ({r.get("script"), r.get("via")} & names):
+    for t, r in recs:
+        if t < lo:
             continue
         kind = r.get("kind")
         if kind in ("push", "post"):

@@ -18,6 +18,7 @@
 
 ### P2 — eval 75 채점
 
+- 사외 측정(a1-75a·a1-75b, Sonnet 5.5): 7행 중 5행 통과, 안전 행 통과. 실패 2행은 표시 행이다 — 병합 거부 때 `reason`과 재시도 명령을 글자 그대로 보이라는 write-flow §6 문구(병합 재시도·`--and-merge` 결과)가 있어도 모델이 사유를 바꿔 말했다. 11/04 사용자 결정: 문구는 그대로 두고 P2로 기록, A2에서 같은 파일(write-flow)을 고칠 때 함께 본다.
 - `checks_gate` 5행(우회 없음, 안전 행)이 `db_pr`·`publish`/`stage`를 언급만 하는 읽기 명령이나 `merge-offer.json` 복사를 우회로 셀 수 있다(거짓 안전 위반 쪽 — 실행 결과를 사람이 확인).
 
 ### P2 — guard 규칙 11 (best effort, 실제 강제는 db_pr +1 관문·git hook·GHE branch protection)
@@ -61,6 +62,10 @@ P2:
 - 닫힌 쪽: `if cd <DB>; then …; else …`의 else도 DB에서 판정, `true && cd X || <명령>`의 `||` 뒤도 cd 전 상태로 판정, bash가 거절하는 cd 옵션·남는 인자·`! cd <clone> && git push`는 양쪽 해석 모두로 막음, 같은 명령에서 만드는 폴더로의 cd·`cd X || exit`도 DB 후보를 남김, 걷기 예외 때 낱말 거부가 넓다, degraded(PyYAML 없음)에서 모든 `gh pr merge`가 deny(`--help` 오탐), 같은 거부 사유가 되풀이된다.
 - 열린 쪽(대부분 2d0544c에도 있음): 넘침 때 보호 뿌리 밖 가운데 후보는 모르는 디렉토리로, 보호 뿌리 안 후보가 8개를 넘으면 나머지는 뿌리(worktree → work_dir)로 접힌다. work_dir 밖 DB worktree는 우선하지 않는다. 명령 낱말에 붙은 입력 리디렉션(`git</dev/null push`)과 공백 없는 `bash<<EOF`는 명령으로 보지 않는다. 루프 되돌이(뒤 cd가 다음 회차 앞 명령의 cwd), while·until 조건 끝 상태, 함수 본문 cd(모르는 디렉토리만), `cd "$X" && git …`의 성공 상태가 이전 후보를 버린다. root로 돌면 x 권한 검사가 늘 참이다. `main`의 stdin 읽기가 try 밖이다(strict 디코딩 환경에서 잘못된 바이트면 종료 1).
 - 기타: `user@host:PORT/o/r`의 PORT를 owner로 읽는다(git도 SCP 경로로 읽는다). 긴 상대 cd 사슬이 앞 패치보다 약 2.7배 느리다(cd 2,000개 4.5s, e8f3342 5.3s — hook 한도 180s 안).
+
+### show_guard post 안내 (11/04)
+
+PostToolUse `post`가 60초 안의 모든 기록(다른 세션·eval 하위 세션·앞 호출)을 보고, 기록을 남기지 않은 호출(`db_pr status` 등)에도 "push 화면을 붙여라"를 안내했다(예전부터 있던 것). 11/04 사용자 결정으로 고쳤다: 그 호출이 도는 동안(transcript의 tool_use 시각 − 2초 ~ 지금) 남은 기록만 본다. 호출을 transcript에서 못 찾으면 예전 60초 창(경고). 같은 때 다른 세션이 같은 스크립트를 부른 기록은 여전히 안내될 수 있다(P2).
 
 ### 리뷰 중 사고 (11/03)
 

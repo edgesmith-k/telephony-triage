@@ -366,6 +366,40 @@ def test_post_reminds_full_output(tmp_path):
     assert hook("post", {"tool_name": "Bash", "tool_input": {"command": STAGE_CMD}, "tool_response": {}}, home=old)[0] is None
 
 
+def test_post_reminds_only_for_records_of_this_call(tmp_path):
+    """post 안내는 지금 Bash 호출이 도는 동안(tool_use 시각 − 2초 ~ 지금, `shown.anchor`와 같은 고정) 남은 기록으로만 고른다
+    (11/04): 앞 호출·다른 세션이 60초 안에 남긴 push 기록으로, 기록을 남기지 않은 호출(`db_pr status` 등)에 "화면을 붙여라"를
+    안내하지 않는다. 입력에 transcript_path·tool_use_id가 없으면 예전처럼 60초 창(경고)."""
+    from datetime import datetime, timedelta, timezone
+    now = datetime.now(timezone.utc)
+    status = "python3 /p/scripts/db_pr.py status --json"
+
+    def transcript(name, cmd, call_at):
+        rows = shown_records.stamp([{"type": "system", "subtype": "init"}, *prompt("p")], now - timedelta(seconds=120))
+        rows += [{**r, "timestamp": shown_records.iso(call_at)} for r in call("toolu_cur01", "Bash", {"command": cmd})]
+        path = tmp_path / name
+        path.write_text("\n".join(json.dumps(r, ensure_ascii=False) for r in rows) + "\n", encoding="utf-8")
+        return path
+
+    base = tmp_path / "post-call.home"
+    shown_records.home(base)
+    shown_records.log_path(base).unlink(missing_ok=True)
+    script, kind, fields = shown_records.screen_record(SCREEN)
+    shown_records.add_record(base, script, kind, "MOCK-1", now - timedelta(seconds=30), **fields)   # 30초 전 앞 호출의 화면
+    late = transcript("late.jsonl", status, now - timedelta(seconds=5))                              # 지금 호출은 5초 전 시작
+    ev = {"tool_name": "Bash", "tool_input": {"command": status}, "tool_response": {"stdout": "{}"},
+          "transcript_path": str(late), "tool_use_id": "toolu_cur01"}
+    assert hook("post", ev, home=base)[0] is None
+    # 같은 기록이 지금 호출이 도는 동안 남았으면(호출 시작 40초 전 → 기록 30초 전) 안내한다
+    early = transcript("early.jsonl", STAGE_CMD, now - timedelta(seconds=40))
+    out, _ = hook("post", {**ev, "tool_input": {"command": STAGE_CMD}, "transcript_path": str(early)}, home=base)
+    assert "사용자에게 안 보인다" in out["hookSpecificOutput"]["additionalContext"]
+    # 지금 호출을 transcript에서 못 찾으면(다른 id) 60초 창으로 — 경고를 남긴다
+    out, err = hook("post", {**ev, "tool_use_id": "toolu_other"}, home=base)
+    assert out is not None and "60초 창" in err
+    assert hook("post", {k: v for k, v in ev.items() if k != "transcript_path"}, home=base)[0] is not None
+
+
 # --- 성능 -------------------------------------------------------------------------------------------------------
 
 def test_large_transcript_is_fast(tmp_path):
