@@ -1,0 +1,12 @@
+{
+ "schema_version": 1,
+ "probes": {
+  "restricted": {
+   "generated": "2026-11-04T23:41:56Z",
+   "cli_version": "2.1.318 (Claude Code)",
+   "verdict": "confined",
+   "iteration": "module-probe-001",
+   "cost_usd": 0.011961199999999998
+  }
+ }
+}
