@@ -17,7 +17,7 @@
 ## 진행 상태 (11/03)
 
 - 모드: **사외 초안**. Phase D0·1~13·반입 전 보강 완료. 최신 묶음 **import-20261103**(main `77e2827`). main 병합 PR #8~#79.
-- **H 진행 중**: 계획 확인 완료(11/03, Q1~Q8 추천안, `MODULE_SKILLS_DECISIONS.md` "계획 확인"). 단계표 `MODULE_SKILLS_PLAN.md §4` — **A1**(+1 관문): 구현·리뷰 3회 끝, 전체 테스트·eval 75 남음(디스크 부족으로 중단, 11/03). 그다음 A2 → C0.
+- **H 진행 중**: 계획 확인 완료(11/03, Q1~Q8 추천안, `MODULE_SKILLS_DECISIONS.md` "계획 확인"). 단계표 `MODULE_SKILLS_PLAN.md §4` — **A1**(+1 관문) ☑ 11/04(결과·P2 `MODULE_SKILLS_RESULT.md`, guard 규칙 11은 이후 회귀만 본다). **A2** 진행 중, 그다음 C0.
 - 모델 Sonnet 5.5 기준(Opus 5.5 11개 실패 0). `TODO(SITE)`: `tools/list_site_todos.py`. REVIEW-OPEN 0. 사내 시작 **"사내 설정 시작"**(결정 (o)).
 - 안내서: `docs/book/telephony-triage-book.html`(공유본 https://claude.ai/artifact/1jov1Et4dQUMauFr6aoxWG), 목록 `docs/materials/00-index.html`
 
