@@ -343,6 +343,23 @@ def test_guard_merge_and_skill_apply_ask_direct_gh_merge_denied():
     assert decision(guard(ws, "Write", {"file_path": str(copy), "content": "x"}, ws.base)) is None
 
 
+def test_guard_module_eval_asks():
+    """모듈 eval: `module_eval.py`는 자식 `claude -p`를 띄워 비용이 든다 — `--dry-run`·`--probe-restricted`까지 모든 호출이
+    ask(낱말 그물: 이름 `module_eval` + 낱말 `module`, 규칙 7). `--module`이 없는 `--help`는 판정할 것이 없다."""
+    ws = shared()
+    S = f'python3 "{ws.root}/scripts/module_eval.py"'
+    for tail in ("--module ofono/data --dry-run", "--module ofono/data --dry-run --json",
+                 "--module ofono/data --probe-restricted", "--module ofono/data --model sonnet --record",
+                 "--module=ofono/data --child-mode restricted"):
+        out = bash(ws, f"{S} {tail}", ws.base)
+        reason = out["permissionDecisionReason"]
+        assert decision(out) == "ask" and "module_eval.py" in reason and "규칙 7" in reason, tail
+        assert "publish는" not in reason and "db_pr.py merge는" not in reason, tail
+    assert decision(bash(ws, f"{S} --help", ws.base)) is None
+    for cmd in ("python3 tests/test_module_eval.py", "ls templates/module-skills", "echo module_eval.py --module x"):
+        assert decision(bash(ws, cmd, ws.base)) is None, cmd
+
+
 def test_guard_skill_source_writes_ask():
     """규칙 12: config `analyzers.<카테고리>.source` 안을 파일 도구·Bash 쓰기·파일을 바꾸는 git으로 바꾸면 ask, 읽기는 통과."""
     ws = Workspace()
@@ -993,7 +1010,8 @@ def test_guard_without_pyyaml_denies_mcp_and_asks_risky_bash():
                 f'python3 "{ws.root}/scripts/db_pr.py" publish wt --branch issue/MOCK-1',
                 f'S="python3 {ws.root}/scripts/"; ${{S}}db_pr.py publish wt', "$PY $S/db_pr.py publish wt",
                 f'python3 "{ws.root}/scripts/db_pr.py" merge --job MOCK-1',
-                f'python3 "{ws.root}/scripts/db_pr.py" request-review --job MOCK-1 --reviewer a,b'):
+                f'python3 "{ws.root}/scripts/db_pr.py" request-review --job MOCK-1 --reviewer a,b',
+                f'python3 "{ws.root}/scripts/module_eval.py" --module ofono/data --dry-run'):
         out, _ = judge("Bash", {"command": cmd})
         assert decision(out) == "ask" and "레포 판별 불가" in out["permissionDecisionReason"], cmd
     out, err = judge("Bash", {"command": "echo hi"})

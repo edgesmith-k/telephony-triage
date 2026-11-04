@@ -39,6 +39,7 @@ sys.path.insert(0, str(HERE.parents[1] / "plugin" / "scripts"))   # guard 규칙
 # typedoc: 유형 제목 증상 형태(db_lint `title-form`과 같은 기준). shown: '사용자에게 보였다' 판정 — 채점기 전용 transcript 추론
 # `shown_infer.py`(L R부터 표시 보조 hook은 스크립트 기록을 보고, 채점기는 추론한다: 독립된 두 판정)
 from common import typedoc  # noqa: E402
+from common.claude_child import token_record  # run.py가 다시 내보낸다(모듈 eval과 공용)
 from dbpr.merge import SCREEN_LINE as _SCREEN_LINE  # noqa: E402 — 확인 화면 병합 줄(eval 72, 스크립트가 기준)
 sys.path.insert(0, str(HERE))
 import shown_infer as shown  # noqa: E402
@@ -3228,9 +3229,7 @@ def checks_g(eid, ctx):
 
 
 # 토큰 기록 -----------------------------------------------------------------------------------
-_USAGE_KEYS = ("input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens")
-_MODEL_KEYS = ("inputTokens", "outputTokens", "cacheCreationInputTokens", "cacheReadInputTokens")
-_FIELDS = ("input", "output", "cache_creation", "cache_read")
+# token_record는 common.claude_child로 옮겼다(모듈 eval과 공용, 위 import). 아래 셋은 이 파일의 다른 기록이 쓴다.
 
 
 def _int(v):
@@ -3244,25 +3243,6 @@ def _num(v):
 def _sum(parts):
     """하나라도 없으면(null) 합도 null — 빠진 값을 0으로 채우지 않는다."""
     return sum(parts) if parts and all(p is not None for p in parts) else None
-
-
-def token_record(result) -> dict:
-    """stream-json result 이벤트(또는 옛 execution.json)에서 `tokens` 기록을 만든다. None·빠진 값은 null.
-    total은 modelUsage 합(서브에이전트·보조 모델 포함)이고, usage_total은 상위 usage 네 값의 합(비교용)이다."""
-    r = result if isinstance(result, dict) else {}
-    usage = r.get("usage") if isinstance(r.get("usage"), dict) else {}
-    by_model = {}
-    mu = r.get("modelUsage")
-    for name, m in (mu.items() if isinstance(mu, dict) else []):
-        m = m if isinstance(m, dict) else {}
-        vals = [_int(m.get(k)) for k in _MODEL_KEYS]
-        by_model[str(name)] = {**dict(zip(_FIELDS, vals)), "total": _sum(vals), "cost_usd": _num(m.get("costUSD"))}
-    sums = [_sum([m[f] for m in by_model.values()]) for f in _FIELDS]
-    return {**dict(zip(_FIELDS, sums)), "total": _sum(sums),
-            "usage_total": _sum([_int(usage.get(k)) for k in _USAGE_KEYS]),
-            "num_turns": _int(r.get("num_turns")), "duration_ms": _num(r.get("duration_ms")),
-            "total_cost_usd": _num(r.get("total_cost_usd")),
-            "by_model": by_model, "source": "modelUsage" if by_model else None}
 
 
 def execution_tokens(execution: dict) -> dict | None:

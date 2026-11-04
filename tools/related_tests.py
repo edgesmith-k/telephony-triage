@@ -21,7 +21,10 @@ contracts.md §3.2). 기본 base는 HEAD다.
                            스크립트에 걸친 규칙을 고정하는데, 대부분 `db_pr`·`triage`·`parse_logcat`·
                            `match_signatures`를 이름 없이 헬퍼로 불러서 이름 검색으로는 안 잡힌다.
     tests/test_x.py        자기 자신. tests/conftest.py·tests/helpers/**·tests/__init__.py는 full.
-                           tests/skill_evals/**와 helpers/skill_eval_env.py는 test_skill_evals.py.
+                           tests/skill_evals/**와 helpers/skill_eval_env.py는 test_skill_evals.py
+                           (run.py·grade.py는 common.claude_child를 다시 내보내므로 test_module_eval.py도).
+    templates/module-skills/**, helpers/make_module_eval_inputs.py, skill_evals/module_offsite_results.json
+                           test_module_templates.py·test_module_eval.py (full 아님).
     tests/fixtures|mocks   그 경로 조각(첫 디렉토리, 흔한 이름이면 파일 이름)을 가리키는 테스트.
                            없으면 full.
     plugin/skills|commands|hooks   파일 이름·경로 조각(`skills/`, `commands/`, `hooks.json`)을 가리키는 테스트.
@@ -76,6 +79,13 @@ SKILL_EVAL_TEST = "tests/test_skill_evals.py"
 # 채점기 추론(shown_infer)과 표시 기록 도우미는 표시 판정 테스트도 쓴다 (SKILL_EVAL_PATHS보다 먼저 본다)
 SHOWN_PATHS = ("tests/skill_evals/shown_infer.py", "tests/helpers/shown_records.py")
 SHOWN_TESTS = {SKILL_EVAL_TEST, "tests/test_shown.py", "tests/test_show_guard.py", "tests/test_db_verify.py"}
+# 모듈 스킬 템플릿·입력 생성기·기록 (MODULE_SKILLS_PLAN_IMPL §5.1). helpers/skill_evals 규칙보다 먼저 본다
+MODULE_PATHS = ("templates/module-skills/*", "tests/helpers/make_module_eval_inputs.py",
+                "tests/skill_evals/module_offsite_results.json")
+MODULE_TESTS = {"tests/test_module_templates.py", "tests/test_module_eval.py"}
+# run.py·grade.py는 common.claude_child를 다시 내보낸다 → 재수출 테스트(test_module_eval)도 돈다
+CHILD_HELPER_PATHS = ("tests/skill_evals/run.py", "tests/skill_evals/grade.py")
+CHILD_HELPER_TESTS = {SKILL_EVAL_TEST, "tests/test_module_eval.py"}
 SAFETY_TEST = "tests/test_safety.py"      # plugin/scripts가 바뀌면 항상 포함
 MAX_IMPORTERS = 8                           # 간접 importer가 이보다 많으면 공용 모듈
 COMMON_NAMES = {"merge"}     # 따옴표 이름으로 찾지 않는 모듈 이름(`dbpr.merge` — "merge"는 설정·이벤트 값에 흔하다)
@@ -273,8 +283,14 @@ def select(files: list[str]) -> Selection:
         sel.per_file[path] = {"tests": [], "note": f"full ({reason})"}
 
     for path in files:
+        if matches(path, MODULE_PATHS):
+            add(path, MODULE_TESTS & set(tests))
+            continue
         if matches(path, SHOWN_PATHS):
             add(path, SHOWN_TESTS & set(tests))
+            continue
+        if matches(path, CHILD_HELPER_PATHS):
+            add(path, CHILD_HELPER_TESTS & set(tests))
             continue
         if matches(path, SKILL_EVAL_PATHS):
             add(path, {SKILL_EVAL_TEST} & set(tests))

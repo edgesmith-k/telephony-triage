@@ -16,6 +16,7 @@
 | `issue-db-step-events/` | 스텝 순서 정렬: `step_events` 규칙 10개(CP는 관측 불가, 비행기 모드 켜기·끄기는 `match`, 망 등록은 `ril`, 데이터 켜기·끄기는 `event`) |
 | `issue-db-review/` | 월간 리뷰(Phase 11): §6.6 항목마다 걸리는 경우와 걸리지 않는 경우 (`REVIEW_CASES`) |
 | `issue-db-ofono/` | oFono 플랫폼 뼈대 DB(17-platforms §5, **합성·형식 가정·placeholder**): `platform: ofono`, `ofono_reference` 백엔드, placeholder 태그(`ofonod`·`daemon-a`·`daemon-b`)·extractor 1개·요청 `PLACEHOLDER_CALL`(데몬 사이 짝 시험용, 짝 설정 없으면 효과 없음), 유형 `DATA-001`과 양성 fixture(`tests/fixtures/logs/ofono/journal-iso.log`) 하나 |
+| `issue-db-ofono-modules/` | 모듈 eval(H C0, 합성): issue-db-ofono 위에 데몬 13개 태그(MODULE_SKILLS_PLAN_IMPL §1.4), ril.yaml data 요청, exynos-ril 추출기 1개, 유형 DATA-001(SETUP_DATA_CALL 실패 + 인증 거절 원인)과 양성 fixture(모듈 템플릿 deep case 로그) |
 | `issue-db-github/` | 두 번째 트래커(트래커 범용화 §6-1, **합성**): `tracker {kind: github, base_url: https://ghe.mock.invalid/, key_regex: mock-org\\.mock-issues-\\d+}`, 기록·피드백·evidence의 Jira 키 `MOCK-<n>`을 GitHub 작업 키 `mock-org.mock-issues-<n>`으로(파일 이름 포함) |
 | `issue-db-unjudged/` | 원인 판정 불가(eval 68): `pattern_timeout_ms: 300`, DATA-001-01의 `data-disabled` 시그니처를 시간 초과하는 `slow-cause`(`must_match ['(a+)+$']`)로 바꾼 트리. `a`×40+`!` 줄이 있는 로그에서 `unjudged.cause_count` 1 |
 | `verify-logs/` | 이슈 DB가 아니다. `db_verify fix`·`resolution` 입력 로그(수정 후·재발·증상만 남음·시나리오 없음, 마스킹됨) |
@@ -668,6 +669,100 @@ def ofono(db: Path) -> None:
     _write(data / "fixtures/DATA-001-01.expect.yaml",
            "expect_top: DATA-001-01\noccurred_at: '2026-09-20T14:32:10+09:00'\norigin: synthetic\n")
 
+
+MODULES_DEEP_LOG = (REPO / "templates" / "module-skills" / "ofono" / "data" / "evals" / "data-apn-auth-reject"
+                    / "files" / "source.log")
+MODULES_TAGS = """# [합성] issue-db-ofono-modules 태그 (MODULE_SKILLS_PLAN_IMPL §1.4). 데몬 이름은 표본 데몬 이름(결정 u), 카테고리는 계획. TODO(SITE:S25)
+tags:
+  - {tag: ofonod,     category: common,  added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval·공통)}
+  - {tag: exynos-ril, category: common,  added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval·공통)}
+  - {tag: MOSE,       category: common,  added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval·공통)}
+  - {tag: DMD,        category: common,  added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval·modem = common·D3)}
+  - {tag: RFSD,       category: common,  added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval·modem = common·D3)}
+  - {tag: vcd,        category: common,  added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval·modem = common·D3)}
+  - {tag: NMD,        category: data,    added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval·data)}
+  - {tag: DITD,       category: data,    added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval·data)}
+  - {tag: LPA,        category: sim,     added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval·sim)}
+  - {tag: ipad,       category: sim,     added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval·sim)}
+  - {tag: PTD,        category: network, added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval·network)}
+  - {tag: IMSSVC,     category: ims,     added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval·ims)}
+  - {tag: ENT,        category: ims,     added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval·ims)}
+"""
+MODULES_RIL = """# [합성] gril 짝 파생 이벤트용 공개 RIL 요청 이름. timeout은 placeholder. TODO(SITE:S26)
+requests:
+  - {name: SETUP_DATA_CALL,      category: data, timeout_ms: 30000, added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval)}
+  - {name: DEACTIVATE_DATA_CALL, category: data, timeout_ms: 10000, added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval)}
+unsolicited:
+  - {name: UNSOL_DATA_CALL_LIST_CHANGED, category: data, added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval)}
+"""
+MODULES_EXTRACTORS = """# [합성] 줄 모양 가정(실제 로그 문구가 아니다). TODO(SITE:S25)
+extractors:
+  - id: pdp-fail-cause
+    added_for: DATA-001
+    added_on: 2026-11-04
+    reason: 합성 (벤더 RIL 데이터 콜 거절 사유)
+    tag: exynos-ril
+    patterns:
+      - 'pdp fail cause=(?P<cause>[A-Z_]+)'
+    event: pdp_fail_cause
+    fields: [cause]
+"""
+MODULES_DATA_TYPE = """---
+id: DATA-001
+category: data
+secondary_categories: []
+title: 데이터 연결이 되지 않음 (합성)
+summary: 모듈 eval용 합성 유형이다. 실제 원인·해결책이 아니다
+status: active
+symptom_signatures:
+  - id: setup-data-call-error
+    must_event:
+      - {event: ril_error, fields: {request: SETUP_DATA_CALL}}
+    window_sec: 60
+causes:
+  - id: DATA-001-01
+    status: active
+    title: APN 인증 거절 (합성)
+    description: 합성 원인. 모듈 eval deep case(data-apn-auth-reject)용이다
+    signatures:
+      - id: auth-reject
+        must_event:
+          - {id: rej, event: ril_error, fields: {request: SETUP_DATA_CALL}}
+          - {id: auth, event: pdp_fail_cause, fields: {cause: 'USER_AUTHENTICATION'}}   # fullmatch(common/signatures.py)
+        window_sec: 60
+    recovery_signatures: []
+    scenario_signatures: []
+    resolution: placeholder
+    resolution_type: network
+    resolution_verification: {status: unverified}
+    fix: {status: open, ref: null, fixed_in: [], verification: null, verification_history: []}
+    related: []
+    cp_evidence: null
+    platform_versions: ["2"]           # 플랫폼 버전. placeholder
+    code_refs: []
+tags: []
+---
+
+## 증상
+
+**합성.** 모듈 eval(MODULE_SKILLS_PLAN_IMPL §5.5) 시험용 유형이다. 실제 원인·해결책이 아니다.
+"""
+
+
+def ofono_modules(db: Path) -> None:
+    """모듈 eval용 oFono DB(MODULE_SKILLS_PLAN_IMPL §5.5): issue-db-ofono 위에 데몬 13개 태그·data 합성 유형."""
+    ofono(db)                                                     # issue-db-ofono는 그대로 두고 그 위에 덮는다
+    shutil.rmtree(db / "data/DATA-001-data-connect-failed")
+    _write(db / "parser-rules/tags.yaml", MODULES_TAGS)
+    _write(db / "parser-rules/ril.yaml", MODULES_RIL)
+    _write(db / "parser-rules/extractors.yaml", MODULES_EXTRACTORS)
+    data = db / "data/DATA-001-setup-data-call-rejected"
+    _write(data / "type.md", MODULES_DATA_TYPE)
+    (data / "fixtures").mkdir(parents=True)
+    shutil.copyfile(MODULES_DEEP_LOG, data / "fixtures/DATA-001-01.log")
+    _write(data / "fixtures/DATA-001-01.expect.yaml",
+           "expect_top: DATA-001-01\noccurred_at: '2026-09-20T15:10:02Z'\norigin: synthetic\n")
+
 GH_KEY = "mock-org.mock-issues-"
 GH_TRACKER = ("tracker:                             # 이슈 트래커 (트래커 범용화 §6-1, 합성)\n"
               "  kind: github\n"
@@ -715,6 +810,7 @@ VARIANTS = {
     "issue-db-step-focus": step_focus,
     "issue-db-step-events": step_events,
     "issue-db-ofono": ofono,
+    "issue-db-ofono-modules": ofono_modules,
     "issue-db-github": github,
     "issue-db-unjudged": unjudged,
     "verify-logs": verify_logs,

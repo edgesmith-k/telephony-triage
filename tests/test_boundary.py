@@ -182,6 +182,20 @@ def test_synthetic_marks_and_registries_pass(fake_repo):
     assert boundary.scan(fake_repo, "external") == []
 
 
+
+def test_module_template_log_needs_synthetic_case(fake_repo):
+    """모듈 스킬 템플릿 로그(MODULE_SKILLS_PLAN_IMPL §5.1): evals/<case>/files/ 아래이고 case.yaml에 synthetic: true."""
+    base = "templates/module-skills/ofono/data/evals"
+    _write(fake_repo, f"{base}/ok/case.yaml", "schema_version: 1\nname: ok\nsynthetic: true\n")
+    _write(fake_repo, f"{base}/ok/files/source.log", "-- [합성] x\n")
+    _write(fake_repo, f"{base}/notsyn/case.yaml", "schema_version: 1\nsynthetic: false\n")
+    _write(fake_repo, f"{base}/notsyn/files/source.log", "-- [합성] x\n")
+    _write(fake_repo, f"{base}/nocase/files/source.log", "-- [합성] x\n")
+    _write(fake_repo, "templates/module-skills/ofono/x.log", "-- [합성] x\n")
+    found = {path for rule, path in _rules(boundary.scan(fake_repo, "external")) if rule == "fixture-origin"}
+    assert found == {f"{base}/notsyn/files/source.log", f"{base}/nocase/files/source.log",
+                     "templates/module-skills/ofono/x.log"}
+
 def test_allow_file_and_site_patterns(fake_repo):
     _write(fake_repo, "tests/test_x.py", "IMEI = '359881234567812'\nOTHER = '359881234567813'\n")
     _write(fake_repo, "tools/boundary-allow.txt", "pattern:long-number tests/* ^359881234567812$\n")

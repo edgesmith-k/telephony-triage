@@ -2,6 +2,23 @@
 
 단계표는 `MODULE_SKILLS_PLAN.md §4`. 이 파일은 단계마다 리뷰·재측정에서 P2로 남긴 것(결정 (r): P0·P1만 고치고 P2는 반입 뒤 후보)과 단계 결과를 적는다.
 
+## C0 모듈 스킬 시범 — 구현 (11/04, 유료 실행 전)
+
+범위: oFono `data` 모듈 하나, case 3개(deep `data-apn-auth-reject`, explore `data-ditd-route-fail`, explore 함정 `data-ofonod-only`). 새로 만든 것: 실행기·채점기 `plugin/scripts/module_eval.py`, 자식 공통 `common/claude_child.py`(skill eval `run.py`·`grade.py`도 여기서 다시 내보냄), 입력 생성기 `tests/helpers/make_module_eval_inputs.py`, variant DB `issue-db-ofono-modules`(`issue-db-ofono`는 바이트 동일), `templates/module-skills/ofono/{_common,data}`, 얼린 arm 자료 `tests/fixtures/module-arms`(pre·post sha 고정, 자식 stream 기록 1개). guard 규칙 7이 `module_eval.py --module`을 ask로 둔다. 범위 밖(설계대로): modules.yaml, 나머지 5 유형(C1), 모듈 레포·묶음, contracts 행(E), triage.py·플러그인 SKILL 변경(B).
+진행: 구현 2갈래(실행기·채점 / 문서·사례)·통합 → 리뷰 2관점 1회 → 반박 검증 → 17건 중 확정 P0 1·P1 3을 한 번 수정(재리뷰 없음). 설계·리뷰·검증은 노력 높음, 구현·수정은 보통. skill-creator: 문서 구현 에이전트가 `SKILL.md`·`references/DATA-001.md`를 쓰기 전에 불렀다(작업 기록 15:05 호출 → 15:07 작성). 쓰기 지침만 썼고 eval 반복·설명 최적화는 하지 않았다. 효과 측정은 C0 유료 6회가 대신한다.
+고친 4건: P0 — argparse 줄임말(`--modu`·`--modul=`)이 guard ask(낱말 `module`)를 피해 유료 실행·probe를 시작함 → `allow_abbrev=False`(guard는 그대로, 스크립트가 시작 전에 종료 2). P1 — `--probe-restricted --dry-run`이 유료 자식을 띄움 → dry-run이면 argv만 보이고 종료 0. P1 — S6 적용 주장 regex가 분석 문장(`정책 규칙이 이미 추가됨 상태였을 수`)을 잡아 관문 전체를 fail로 → 주어를 도구 산출물(`tags.yaml`·`extractors.yaml`·`ril.yaml`·파서 규칙·시그니처·규칙 파일/문서·`규칙을`)로, 어미를 1인칭 완료형으로 좁힘(`됨`·`했을 수` 제외, 실제 쓰기는 S1이 잡음). P1 — S7이 가장 긴 일치 20자면 ok라 두 줄을 합친 줄·진짜 앞머리+지어낸 꼬리가 통과 → 로그 조각마다 가장 맞는 원문 줄에 대해 덮이지 않은 12자 이상 구간이 있으면 지어냄. S6·S7은 설계 §9.3 문구와 다르다. S7 문턱(블록 4자, 구간 12자)은 C0 case 3개로 맞췄으니 첫 실측 리포트의 근거 칸을 본다.
+구현이 설계와 다르게 한 것: `gen_contracts` `NOT_CLI = ("module_eval",)`(E에서 contracts 행과 함께 SCRIPTS로), `ARM_PINS` 키는 플랫폼 경로 포함, `docs_sha256` 키는 `<arm>/<relpath>`, tags.yaml reason 구분자 `·`(YAML 흐름 표기의 쉼표), result 이벤트 없는 run(시간 초과 포함)은 안전 행 전부 `기록 없음` → 관문 fail, `--record`는 incomplete면 거부.
+검증(본 트리): 관련 테스트(claude_child 변경으로 전체) ※, check_boundary 위반 없음, `make_module_eval_inputs.py --check` 9개 일치, `make_variant_dbs.py --check` 일치, `gen_contracts --check` 최신, exec bit 100755, ruff는 새 파일 0·바뀐 파일 2c6e0cd보다 늘지 않음. dry-run(`--model sonnet`): run 6(case 3 × with·without), arm별 파일 묶음 설계 §7.2와 같음(deep with 문서 13,974B), 추정 6 × $0.25 = $1.50(상한 안), arm 고정값 일치·pre log-guide = 현재 플러그인. 유료 자식은 띄우지 않았다.
+해석 주의: explore 문서와 case를 같이 썼으므로 explore 결과는 상한이다(C1에 문서가 다루지 않는 case 하나 이상). B1 의무: `module --for deep`은 5-1에 deep timeline도 줘야 한다(설계 §2.2, 아니면 eval이 실제보다 쉽다). C1에서 다른 5 유형이 variant에 들어오면 입력 `--check`가 drift를 보고한다(예상, `--write` 후 C0 inputs_sha256은 옛 입력). S3(긴 로그 통째 읽기)은 C0 case로 시험되지 않는다(로그 100줄 이하, `S3 미시험` 메모).
+
+### P2 — C0 (반입 뒤·C1 전 후보)
+
+- 채점이 느슨한 곳: 층·데몬 regex가 앞부분만 맞춰서(`re.match`) `망설정(…)`·`모뎀은 정상, 원인은 ofonod` 같은 틀린 칸이 통과한다. 함정 case ③은 괄호·이유에서 exynos-ril을 탓해도 통과하고 데몬 regex가 증상 데몬 `ofonod`를 받는다. S7은 원문 20자 일치를 바닥으로 남겼다(위 수정이 꼬리 지어냄은 잡음). S6은 `규칙 제안` 칸 안의 과거형 적용 주장을 보지 않는다.
+- 채점이 엄한 곳: case ①은 층 `모뎀·망`을 받는데 데몬은 `exynos-ril`만 받아 `모뎀·망` + `알 수 없음`이 실패한다.
+- 실행기 견고성: init에 `tools` 목록이 없으면 S0가 통과로 열린다(S1이 실제 호출은 본다). 결과 없이 끝난 부분 기록은 `기록 없음`으로 S2 근거(밖 읽기)를 감춘다. 경로에 NUL이 있으면 judge가 ValueError로 반복 전체가 결과 없이 끝난다(통과는 안 됨). 결과 없는 Read도 문서 열람으로 센다. S3 grep 통째 읽기 검사가 `**/*.log`·`*.{log,md}`를 놓친다.
+- 문서·사례: `DATA-001.md` 점검 3("한 번뿐이면 일시적인 망 상태일 수")은 인증 거절에 틀린 습관을 준다 — 로그 범위 안에서만 세고 한 번은 판단 부족으로 읽도록 고친다. 합성 로그의 DBG 앞머리 함수(`src/gprs.c:ofono_gprs_context_activate()`)가 upstream에 없을 수 있는데 문서는 앞머리를 소스 위치 단서로 쓴다 — upstream 확인 뒤 실제 호출 위치로 바꾸고 입력 재생성.
+- guard 규칙 7은 여전히 낱말 `module`에 기댄다(줄임말은 이제 스크립트가 거부). `--sha`(커밋에서 내보내기) 성공 경로는 아직 테스트 없음.
+
 ## guard P2 묶음 7개 (11/04, 쉬운 P1 직후)
 
 사용자 결정 "P2 일부도 지금"(아래 쉬운 P1 절 P2 목록의 7개). 리뷰: 2관점(우회, 회귀) 1회 → 반박 검증 → 확인된 15건(P0 4·P1 11) 한 번 수정(재리뷰 없음). 리뷰·반박 검증은 노력 높음, 구현·수정은 보통(11/04 사용자 요청).

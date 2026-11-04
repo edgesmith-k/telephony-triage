@@ -31,6 +31,8 @@ SKIP_DIRS = {
     # 설계 문서 자체는 placeholder를 설명하는 곳이므로 목록에서 뺀다.
     # 확인 대상은 코드·설정·모의 데이터에 남긴 표시다.
     "docs",
+    # 설계 기준선으로 얼린 플러그인 문서 사본(tests/fixtures/module-arms). 원본에서 센다
+    "module-arms",
 }
 SKIP_FILES = {"list_site_todos.py", "DRAFT_NOTES.md"}
 TEXT_SUFFIXES = {

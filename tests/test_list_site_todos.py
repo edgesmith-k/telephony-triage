@@ -26,3 +26,17 @@ def test_combined_marker_counts_each_item(tmp_path):
     found = list_site_todos.scan(tmp_path)
     assert sorted(found, key=lambda k: int(k[1:])) == ["S7", "S9", "S24", "S25"]
     assert found["S25"][0]["line"] == 1 and found["S9"][0]["line"] == 2
+
+
+def test_module_arms_dir_skipped(tmp_path):
+    """얼린 기준선 사본(tests/fixtures/module-arms)의 표시는 세지 않고, 모듈 문서의 묶은 표시는 항목마다 센다."""
+    arms = tmp_path / "tests" / "fixtures" / "module-arms"
+    arms.mkdir(parents=True)
+    (arms / "x.md").write_text("> placeholder TODO(SITE:S24)\n", encoding="utf-8")
+    assert dict(list_site_todos.scan(tmp_path)) == {}
+    doc = tmp_path / "templates" / "module-skills" / "ofono" / "data" / "explore.md"
+    doc.parent.mkdir(parents=True)
+    doc.write_text("> 이름은 합성·공개 이름이다(TODO(SITE:S24·S25·S26)).\n", encoding="utf-8")
+    found = list_site_todos.scan(tmp_path)
+    assert sorted(found) == ["S24", "S25", "S26"]
+    assert all(e["file"].startswith("templates/") for v in found.values() for e in v)

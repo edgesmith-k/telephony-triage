@@ -278,6 +278,16 @@ def check_fixture_origin(root: Path, files: dict[str, Path]) -> list[Finding]:
     registry = (root / LOG_REGISTRY).read_text(encoding="utf-8") if (root / LOG_REGISTRY).is_file() else ""
     readmes: dict[str, str] = {}
     for rel, path in files.items():
+        if rel.startswith("templates/module-skills/") and rel.endswith(".log"):
+            # 모듈 스킬 템플릿 case 로그(MODULE_SKILLS_PLAN_IMPL §5.1): evals/<case>/files/ 아래, case.yaml에 synthetic: true
+            name = rel.rsplit("/", 1)[1]
+            m = re.fullmatch(r"(templates/module-skills/.+/evals/[^/]+)/files/[^/]+\.log", rel)
+            case = files.get(f"{m.group(1)}/case.yaml") if m else None
+            text = case.read_text(encoding="utf-8") if case else ""
+            if not m or not re.search(r"(?m)^synthetic:\s*true\s*$", text):
+                findings.append(Finding("fixture-origin", rel, 0, name,
+                                        "모듈 템플릿 로그: evals/<case>/files/ 아래이고 case.yaml에 synthetic: true"))
+            continue
         if not (rel.startswith("tests/") and rel.endswith(".log")):
             continue
         parent, name = rel.rsplit("/", 1)

@@ -1,0 +1,65 @@
+{
+ "status": "ok",
+ "key": "MOCK-9102",
+ "platform": "ofono",
+ "mode": "offline",
+ "issue": {
+  "origin": "file",
+  "occurred_at": "2026-09-20T15:20:06+00:00",
+  "sw": null,
+  "platform_version": "2",
+  "sim_slot": "0",
+  "summary": "데이터 연결됐다고 나오는데 인터넷이 안 됨 (합성)",
+  "description": "데이터 아이콘은 뜨는데 인터넷이 되지 않습니다. 합성 case.",
+  "comments": 0,
+  "missing": [
+   "model",
+   "sw"
+  ]
+ },
+ "logs": {
+  "files": [
+   "source.log"
+  ],
+  "window": {
+   "start": "2026-09-20T15:15:06.000Z",
+   "end": "2026-09-20T15:25:06.000Z"
+  },
+  "range": [
+   "2026-09-20T15:20:00.000Z",
+   "2026-09-20T15:20:06.200Z"
+  ],
+  "in_range": "partial",
+  "clock_anomalies": 0,
+  "events": 13
+ },
+ "no_candidate": {
+  "search_hits": [
+   {
+    "id": "DATA-001",
+    "kind": "type",
+    "title": "데이터 연결이 되지 않음 (합성)"
+   },
+   {
+    "id": "DATA-001-01",
+    "kind": "cause",
+    "title": "APN 인증 거절 (합성)"
+   }
+  ],
+  "error_events": [],
+  "error_event_total": 0,
+  "unextracted_warn": 3
+ },
+ "code": {
+  "skipped": true
+ },
+ "explore": {
+  "reason": "no_candidate",
+  "when": "ask"
+ },
+ "must_show": [
+  "로그 범위: 2026-09-20T15:20:00.000Z ~ 2026-09-20T15:20:06.200Z (일부만 포함), 시계 이상 없음",
+  "오류·거부·타임아웃 이벤트: 추출 이벤트 기준 0건 (수집 태그 W/E/F 줄 중 이벤트로 추출 안 된 줄 3건: DITD 2줄, NMD 1줄)"
+ ],
+ "truncated": false
+}
