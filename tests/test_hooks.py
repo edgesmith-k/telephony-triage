@@ -2408,6 +2408,359 @@ def test_guard_fd_words_heredoc_dash_rw_redirection_and_tilde_tails_follow_bash(
     finally:
         gitp(c, "worktree", "remove", "--force", str(wt))
 
+def test_guard_close_fd_redirection_glued_to_word():
+    r"""명령 파싱(11/04 P2): `>&-`·`<&-`(앞 fd·`{이름}` 포함)는 fd를 닫는 연산자이고, 바로 뒤에 붙은(또는 공백 뒤) 낱말은 복제
+    대상이 아니라 별도 인자다(bash). 예전에는 `-낱말`을 복제 대상으로 떼어 버려 clone에서 `git 0<&-push origin main`이 None(bash는
+    git push를 돈다)이었다. 닫기 뒤 `N>f`는 새 fd 리디렉션이다(`>&-2>o`). 따옴표 친 `-`는 닫기가 아니라 파일이다(`>&"-x"`)."""
+    ws = shared()
+    c = ws.clone
+    plain = tmp("tt-gh-plain-")
+    rows = [
+        ("git 0<&-push origin main", c, "deny"), ("git 2>&-push origin main", c, "deny"),
+        ("git <&-push origin main", c, "deny"), ("git 3>&-push origin main", c, "deny"),
+        ("git {fd}>&-push origin main", c, "deny"), ("git 0<& -push origin main", c, "deny"),
+        ("git 2>&--C . push origin main", c, "deny"), (">&-git push origin main", c, "deny"),
+        ("gh 2>&-pr merge 3", c, "deny"), ("gh 0<&-pr merge 3", c, "deny"), (">&-gh pr merge 3", c, "deny"),
+        (f"git -C {c} 0<&-push origin main", plain, "deny"), (f"gh -R {DB_SLUG} 2>&-pr merge 3", plain, "deny"),
+        ("git 2>&-\\\npush origin main", c, "deny"), ("git 2>&\\\n-push origin main", c, "deny"),
+        # 오탐 방지: 닫기만(뒤 낱말 없음)·상태 명령·복제·따옴표 친 `-`·닫기 + 새 리디렉션
+        ("git status >&-", c, None), ("git status 2>&- </dev/null", c, None), ("echo x >&-", c, None),
+        ("echo x >&- ; git status", c, None), ("git log 2>&1 >&-", c, None),
+        ('git >&"-x" push origin main', plain, None), ("git log 0<&-2>o", plain, None)]
+    for cmd, cwd, want in rows:
+        assert decision(bash(ws, cmd, cwd)) == want, (cmd, cwd)
+
+
+def test_guard_nested_shell_inherits_oldpwd():
+    r"""명령 파싱(11/04 P2): bash는 `$OLDPWD`·`$PWD`를 자식 셸에 내보낸다. 중첩 셸(`bash -c '…'`·here-string·heredoc·파이프 글)의
+    `cd -`·`~-`는 부모가 따라간 이전 디렉토리(와 정적 OLDPWD 대입·앞 `env OLDPWD=`)를 쓴다. 예전에는 중첩을 old=None으로 시작해
+    `cd <C>; cd /tmp; bash -c 'cd ~-; git push'`가 None이었다."""
+    ws = shared()
+    c = ws.clone
+    plain = tmp("tt-gh-plain-")
+    rows = [
+        (f"cd {c}; cd /tmp; bash -c 'cd ~-; git push origin main'", plain, "deny"),
+        (f"cd {c}; cd /tmp; bash -c 'cd -; git push origin main'", plain, "deny"),
+        (f"cd {c}; cd /tmp; sh -c 'cd -; git push origin main'", plain, "deny"),
+        (f"cd {c}; cd /tmp; bash <<<'cd ~-; git push origin main'", plain, "deny"),
+        (f"cd {c}; cd /tmp; bash<<<'cd -; git push origin main'", plain, "deny"),
+        (f"cd {c}; cd /tmp; bash -c 'cd ~-; gh pr merge 3'", plain, "deny"),
+        (f"cd {c}; cd /tmp; bash -c 'bash -c \"cd ~-; git push origin main\"'", plain, "deny"),
+        (f"env OLDPWD={c} bash -c 'cd -; git push origin main'", plain, "deny"),
+        (f"cd {c}; cd /tmp; bash <<EOF\ncd ~-\ngit push origin main\nEOF", plain, "deny"),
+        # 오탐 방지: 부모의 이전 디렉토리가 clone이 아니면 중첩 cd ~-도 clone이 아니다
+        ("cd /usr; cd /tmp; bash -c 'cd ~-; git push origin main'", plain, None),
+        (f"cd {c}; cd /tmp; bash -c 'cd ~-; ls'", plain, None)]
+    for cmd, cwd, want in rows:
+        assert decision(bash(ws, cmd, cwd)) == want, (cmd, cwd)
+
+
+def test_guard_wrapper_option_values_skip_redirections():
+    r"""명령 파싱(11/04 P2): 앞 래퍼의 값 받는 옵션(`env -C`·`sudo -D`·`timeout -s/-k`·`nice -n`·`ionice -c`·`stdbuf -o`·`exec -a`·
+    `xargs -n` 등)이 값을 다음 낱말로 받을 때, 사이 리디렉션(대상째)을 bash처럼 먼저 뗀다. 예전에는 `env -C</dev/null <C> git push`가
+    리디렉션을 값으로 먹어 작업 디렉토리를 못 바꿔 None이었다."""
+    ws = shared()
+    c = ws.clone
+    plain = tmp("tt-gh-plain-")
+    rows = [
+        (f"env -C</dev/null {c} git push origin main", plain, "deny"),
+        (f"env -C </dev/null {c} git push origin main", plain, "deny"),
+        (f"sudo -D</dev/null {c} git push origin main", plain, "deny"),
+        (f"sudo -D </dev/null {c} git push origin main", plain, "deny"),
+        (f"env --chdir </dev/null {c} git push origin main", plain, "deny"),
+        (f"env -C 2>/dev/null {c} git push origin main", plain, "deny"),
+        (f"env -C</dev/null {c} gh pr merge 3", plain, "deny"),
+        (f"env -u</dev/null X git -C {c} push origin main", plain, "deny"),
+        (f"timeout -s </dev/null KILL 5 git -C {c} push origin main", plain, "deny"),
+        (f"nice -n </dev/null 5 git -C {c} push origin main", plain, "deny"),
+        (f"stdbuf -o </dev/null L git -C {c} push origin main", plain, "deny"),
+        (f"xargs -n </dev/null 1 git -C {c} push origin main", plain, "deny"),
+        # 오탐 방지: 리디렉션만 뗀다 — 값·명령은 그대로
+        (f"env -C {c} git status", plain, None), (f"env -C {plain} git push origin main", c, None)]
+    for cmd, cwd, want in rows:
+        assert decision(bash(ws, cmd, cwd)) == want, (cmd, cwd)
+
+
+def test_guard_static_text_fed_to_shell():
+    r"""명령 파싱(11/04 P2): 파이프·stdin으로 셸에 넘겨 실행되는 정적 글을 스크립트로 걷는다 — `echo "…" | bash`·`printf … | sh`·
+    `cat <<<"…" | bash`·`echo … | cat | bash`·`(echo …) | bash`·`echo … |& bash`·`source /dev/stdin <<<"…"`·`bash -s <<<"…"`.
+    파이프 요소는 서브셸이라 그 글의 cd는 밖으로 새지 않는다. 동적(확장) 글·브레이스 그룹·`eval "$(cat)"`은 보지 않는다(한계)."""
+    ws = shared()
+    c = ws.clone
+    plain = tmp("tt-gh-plain-")
+    rows = [
+        ('echo "gh pr merge 3" | bash', c, "deny"), ("echo gh pr merge 3 | bash", c, "deny"),
+        ("printf '%s\\n' 'git push origin main' | sh", c, "deny"),
+        ('cat <<<"git push origin main" | bash', c, "deny"), ('cat <<<"gh pr merge 3" | bash', c, "deny"),
+        ('source /dev/stdin <<<"gh pr merge 3"', c, "deny"), ('. /dev/stdin<<<"gh pr merge 3"', c, "deny"),
+        ('bash /dev/stdin <<<"gh pr merge 3"', c, "deny"), ('bash -s <<<"gh pr merge 3"', c, "deny"),
+        ('echo "gh pr merge 3" |& bash', c, "deny"), ('echo "gh pr merge 3" | cat | bash', c, "deny"),
+        ('(echo "gh pr merge 3") | bash', c, "deny"), ('echo "gh pr merge 3" | source /dev/stdin', c, "deny"),
+        ("cat <<EOF | sh\ngh pr merge 3\nEOF", c, "deny"),
+        (f'echo "cd {c}; git push origin main" | bash', plain, "deny"),
+        # 오탐 방지: 셸이 아닌 소비자, 정적이 아닌 글, 비-DB cwd, 서브셸 cd는 새지 않는다
+        ('echo "gh pr merge $N" | bash', c, "deny"),
+        ('echo "gh pr merge 3"', c, None), ("echo text | grep x", c, None),
+        ('cat <<<"gh pr merge 3" | wc -l', c, None), ("printf 'echo hi\\n' | sh", c, None),
+        ("echo 'ls -la' | bash", c, None), ('echo "gh pr merge 3" | bash', plain, None),
+        (f'echo "cd {c}" | bash; git push origin main', plain, None)]
+    for cmd, cwd, want in rows:
+        assert decision(bash(ws, cmd, cwd)) == want, (cmd, cwd)
+
+
+def test_guard_static_pwd_oldpwd_writes_track_value():
+    r"""명령 파싱(11/04 P2): 같은 글에서 OLDPWD·PWD에 정적 절대 경로를 넣으면(`OLDPWD=<C>`·`export`·`declare -x`·`env OLDPWD=`,
+    `else OLDPWD=…` 같은 예약어 뒤 포함) `cd -`·`~-`·`~+`가 그 값을 쓴다 — cd가 `$PWD`를 OLDPWD로 복사하므로 가짜 PWD도. 숨긴 이름
+    (`export $'OLD\x50WD'=…`·`export "OLDPWD"=…`)도 푼다. 예전에는 모르는 디렉토리만 더해 git 규칙(모르는 후보 건너뜀)이 None이었다.
+    동적·상대 값은 그대로 모르는 디렉토리(한계)."""
+    ws = shared()
+    c = ws.clone
+    plain = tmp("tt-gh-plain-")
+    rows = [
+        (f"OLDPWD={c}; cd ~-; git push origin main", plain, "deny"),
+        (f"export OLDPWD={c}; cd -; git push origin main", plain, "deny"),
+        (f"declare -x OLDPWD={c}; cd -; git push origin main", plain, "deny"),
+        (f"PWD={c}; cd ~+; git push origin main", plain, "deny"),
+        (f"PWD={c}; cd /tmp; cd -; git push origin main", plain, "deny"),
+        (f"PWD={c}; cd ~0; git push origin main", plain, "deny"),
+        (r"export $'OLD\x50WD'=" + str(c) + "; cd -; git push origin main", plain, "deny"),
+        (f'export "OLDPWD"={c}; cd ~-; git push origin main', plain, "deny"),
+        (f"typeset OLDPWD={c}; cd ~-; git push origin main", plain, "deny"),
+        (f"OLDPWD={c} cd -; git push origin main", plain, "deny"),
+        (f"OLDPWD={c}; cd ~-; gh pr merge 3", plain, "deny"),
+        (f"export OLDPWD={c}/data; cd ~-/..; git push origin main", plain, "deny"),
+        (f"true && OLDPWD={c}; cd ~-; git push origin main", plain, "deny"),
+        (f"if false; then :; else OLDPWD={c}; fi; cd ~-; git push origin main", plain, "deny"),
+        # 오탐 방지: 비-clone 값, 읽기 명령
+        ("OLDPWD=/tmp; cd ~-; git push origin main", plain, None),
+        ("OLDPWD=/tmp; cd ~-; gh pr view 3", plain, None),
+        ("OLDPWD=/tmp; cd ~-; ls", plain, None)]
+    for cmd, cwd, want in rows:
+        assert decision(bash(ws, cmd, cwd)) == want, (cmd, cwd)
+
+
+def test_guard_dirstack_tilde_outside_cd_targets():
+    r"""명령 파싱(11/04 P2): cd·pushd 대상 밖의 디렉토리 스택 tilde(`git -C ~-`·`git -C ~1`·`env -C ~-`·`sudo -D ~-`·리디렉션 대상
+    `> ~-/f`)도 이 글의 cd/스택 상태로 푼다(F). 예전에는 글자(`~-`)로 보아 clone에서 `cd /tmp && git -C ~- push`가 None이었다.
+    셸이 풀지 않는 꼴(`"~-"`·`--opt=~-`)은 그대로 둔다. 대입꼴 값(`GIT_DIR=~-/.git`)은 bash가 풀므로 푼다(재리뷰 — 아래 테스트)."""
+    ws = shared()
+    c = ws.clone
+    plain = tmp("tt-gh-plain-")
+    rows = [
+        ("cd /tmp && git -C ~- push origin main", c, "deny"), ("cd /tmp; git -C ~- push origin main", c, "deny"),
+        ("pushd /tmp; git -C ~1 push origin main", c, "deny"), ("git -C ~+ push origin main", c, "deny"),
+        ("cd /tmp && env -C ~- git push origin main", c, "deny"), ("cd /tmp && sudo -D ~- git push origin main", c, "deny"),
+        ("cd /tmp && echo x > ~-/README.md", c, "deny"), ("cd /tmp && echo x >~-/README.md", c, "deny"),
+        ("cd /tmp && cp /etc/hosts ~-/x", c, "deny"), ("cd /tmp && touch ~-/x", c, "deny"),
+        (f"cd {c}; cd /tmp; env -C ~- gh pr merge 3", plain, "deny"),
+        # 오탐 방지: 읽기 명령, OLDPWD 모름(새 셸)·따옴표 친 tilde
+        ("git -C ~- status", c, None), ("cd /tmp; git -C ~- status", c, None),
+        ("git -C ~- push origin main", plain, None), ('cd /tmp; git -C "~-" push origin main', c, None)]
+    for cmd, cwd, want in rows:
+        assert decision(bash(ws, cmd, cwd)) == want, (cmd, cwd)
+
+
+def test_marked_tokens_records_heredoc_operator_ids():
+    """명령 파싱(11/04 P2, G 회귀): `_marked_tokens`는 본문을 먼저 뺀 글에 표시를 끼워 셸이 읽는 heredoc 연산자별 cwd(`hd_at`)를
+    기록한다. 예전에는 표시가 끝 표시 낱말에 끼어 `_strip_heredocs`가 본문을 못 빼 연산자 번호가 기록되지 않고(늘 대체 경로) 큰
+    본문을 토큰으로 썰어 느려졌다. `cd X && bash <<EOF`·붙은 `bash<<EOF`·`bash<<-EOF`에서 연산자 번호를 찾는다."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("guard_mt", str(REPO / "plugin" / "scripts" / "guard.py"))
+    g = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(g)
+    for cmd in ("cd X && bash <<EOF\ngit status\nEOF", "bash<<EOF\ngit status\nEOF",
+                "bash<<-EOF\n\tgit status\n\tEOF"):
+        hds = g._heredoc_scan(cmd)
+        fed = [k for k, hd in enumerate(hds) if hd.found and g._feeds_shell(hd.unit, Path("/tmp"))]
+        assert fed, cmd
+        toks, ids = g._Walk._marked_tokens(cmd, hds, fed)
+        assert sorted({i for tup in ids for i in tup}) == sorted(fed), cmd
+        assert [str(t) for t in toks] == [str(t) for t in g._tokens(cmd)], cmd
+
+
+def test_guard_nested_shell_oldpwd_at_operator_keeps_unknown():
+    r"""명령 파싱(11/04 재리뷰 P0·P1, B): 중첩 셸의 OLDPWD 후보는 그 자리의 부모 후보다 — `-c`·here-string은 그 명령, heredoc은
+    연산자가 든 명령(본문 안 `git -C ~-`도), 파이프 글은 묶음이 시작할 때(뒤 cd가 숨기지 않는다). 부모 OLDPWD를 모르면(처음 OLDPWD,
+    실패할 수 있는 cd, `cd -`·`popd` 뒤) 모르는 디렉토리도 물려준다 — 예전에는 빼서 자식 `cd -; gh pr merge 3`이 None이었다."""
+    ws = shared()
+    c = ws.clone
+    plain = tmp("tt-gh-plain-")
+    rows = [
+        (f"cd {c}; cd /tmp; bash <<EOF\ngit -C ~- push origin main\nEOF", "deny"),
+        (f"cd {c}; cd /tmp; cat <<EOF | bash\ngit -C ~- push origin main\nEOF", "deny"),
+        (f"cd {c}; cd /tmp; bash<<EOF\ngit -C ~- push origin main\nEOF", "deny"),
+        (f"cd {c}; cd /tmp; bash <<-EOF\n\tgit -C ~- push origin main\n\tEOF", "deny"),
+        (f"cd {c}; cd /tmp; bash <<EOF\nenv -C ~- git push origin main\nEOF", "deny"),
+        (f"cd {c}; cd /tmp; echo 'cd -; git push origin main' | bash; cd /", "deny"),
+        (f"cd {c}; cd /tmp; echo 'cd -; git push origin main' | bash; cd -", "deny"),
+        (f"cd {c}; cd /tmp; echo 'git -C ~- push origin main' | bash; cd /", "deny"),
+        (f"cd {c}; cd /tmp; printf 'cd -\\ngit push origin main\\n' | sh; cd ~", "deny"),
+        (f"cd {c}; cd /tmp; cat <<<'cd -; gh pr merge 3' | bash; cd /", "deny"),
+        ("cd /nonexist; bash -c 'cd -; gh pr merge 3'", "deny"),
+        ("test -d /x && cd /usr; bash -c 'cd -; gh pr merge 3'", "deny"),
+        ("if false; then cd /usr; fi\nbash -c 'cd - >/dev/null; gh pr merge 3'", "deny"),
+        ("cd -; cd /tmp; bash -c 'cd -; gh pr merge 3'", "deny"),
+        ("popd; cd /tmp; sh -c 'cd ~-; gh pr merge 3'", "deny"),
+        ('cd -; cd /tmp; R="$(cd -; gh pr merge 3)"', "deny"),
+        ("cd -; cd /tmp; bash <<<'cd -; gh pr merge 3'", "deny"),
+        ("bash -c 'cd -; gh pr merge 3'", "deny"),
+        # 오탐 방지: 그 자리의 OLDPWD가 clone이 아니면 자식 cd -도 clone이 아니다
+        ("cd /usr; cd /tmp; bash <<EOF\ngit -C ~- push origin main\nEOF", None),
+        (f"cd /usr; cd /tmp; echo 'cd -; git push origin main' | bash; cd {c}", None),
+        (f"cd {c}/data && bash -c 'cd ~-; git push origin HEAD:main'", None),
+        ("cd /tmp; bash -c 'cd -; gh pr merge 3'", None)]
+    for cmd, want in rows:
+        assert decision(bash(ws, cmd, plain)) == want, cmd
+
+
+def test_guard_dash_children_keep_literal_dirstack_tilde():
+    r"""명령 파싱(11/04 재리뷰 P0): dash(이 머신의 `sh`)는 `~-`·`~+`를 풀지 않는다(`sh -c 'cd ~-'`는 실패하고 cwd 그대로). 물려받은
+    OLDPWD로 이동이 확실하다고 보면 `cd <C>/data && sh -c 'cd ~-; git push'`(push는 clone에서 돈다)가 None이었다. zsh·ksh는 이
+    머신에 없어 확인하지 못해 같은 쪽(글자 그대로·OLDPWD를 모를 수 있다)으로 본다."""
+    ws = shared()
+    c = ws.clone
+    plain = tmp("tt-gh-plain-")
+    rows = [
+        (f"cd {c}/data && sh -c 'cd ~-; git push origin HEAD:main'", "deny"),
+        (f"cd {c}/data && dash -c 'cd ~-; git push origin HEAD:main'", "deny"),
+        (f"cd {c}/data && sh -c 'git -C ~+ push origin HEAD:main'", "deny"),
+        (f"cd {c}/data && zsh -c 'cd ~-; git push origin HEAD:main'", "deny"),
+        (f"cd {c}/data && ksh -c 'cd -; git push origin HEAD:main'", "deny"),
+        (f"cd {c}/data && sh <<EOF\ncd ~-\ngit push origin HEAD:main\nEOF", "deny"),
+        # dash의 `cd -`는 물려받은 OLDPWD로 간다(확인함)
+        (f"cd {c}/data && sh -c 'cd -; git push origin HEAD:main'", None)]
+    for cmd, want in rows:
+        assert decision(bash(ws, cmd, plain)) == want, cmd
+
+
+def test_guard_fed_text_printf_source_heredoc_and_shell_options():
+    r"""명령 파싱(11/04 재리뷰 P1, D): 셸에 넘기는 글 — `printf`는 bash처럼 서식을 인자마다 되풀이한 출력을 걷는다(예전에는 인자를
+    공백으로 이어 `true git push …` 한 명령으로 보았다). `source`·`.`의 stdin heredoc·`/proc/self/fd/0`, 셸 값이 든 글(`bash -c`처럼
+    셸 값으로 판정), 묶음 가운데의 셸(`… | bash 2>&1 | cat`), 값 받는 셸 옵션(`-o errexit`·`--rcfile x`)과 `+x`도 본다.
+    `source /dev/stdin <<…`은 이 셸에서 돈다(cd가 남는다)."""
+    ws = shared()
+    c = ws.clone
+    plain = tmp("tt-gh-plain-")
+    rows = [
+        ("printf '%s\\n' 'true' 'git push origin main' | bash", c, "deny"),
+        ("printf '%s;' 'true' 'git push origin main' | bash", c, "deny"),
+        ("printf '%s\\n%s\\n' true 'git push origin main' | bash", c, "deny"),
+        ("printf '%b\\n' true 'git push origin main' | bash", c, "deny"),
+        ("printf 'gh pr %s 3\\n' merge | bash", c, "deny"), ("printf 'gh pr merge %d\\n' 3 | bash", c, "deny"),
+        ("printf 'gh pr merge %s\\n' 3 | bash", c, "deny"), ("echo -e 'true\\ngh pr merge 3' | bash", c, "deny"),
+        ("source /dev/stdin <<EOF\ngh pr merge 3\nEOF", c, "deny"), (". /dev/stdin <<EOF\ngh pr merge 3\nEOF", c, "deny"),
+        ("cat <<EOF | source /dev/stdin\ngh pr merge 3\nEOF", c, "deny"),
+        ('source /proc/self/fd/0 <<<"gh pr merge 3"', c, "deny"),
+        ("echo gh pr merge 3 | bash /proc/self/fd/0", c, "deny"), ("echo gh pr merge 3 | source /proc/self/fd/0", c, "deny"),
+        (f"source /dev/stdin <<EOF\ncd {c}\nEOF\ngit push origin main", plain, "deny"),
+        (f"source /dev/stdin <<<'cd {c}'; git push origin main", plain, "deny"),
+        ('echo "gh pr merge $N" | bash', c, "deny"), ('cat <<<"gh pr merge $N" | bash', c, "deny"),
+        ('echo "gh pr merge 3" | bash 2>&1 | cat', c, "deny"), ('echo "gh pr merge 3" | sh -s | cat', c, "deny"),
+        ("echo gh pr merge 3 | bash -o errexit", c, "deny"), ("echo gh pr merge 3 | bash -O extglob", c, "deny"),
+        ("echo gh pr merge 3 | bash --rcfile /dev/null", c, "deny"), ("echo gh pr merge 3 | bash +x", c, "deny"),
+        ("echo gh pr merge 3 | bash +o posix", c, "deny"),
+        # 오탐 방지: %q는 한 낱말, 셸이 아닌 소비자·스크립트 파일·`-c`, 파이프 요소의 cd는 새지 않는다
+        ("printf '%q\\n' 'git status' | bash", c, None), ("printf 'echo %s\\n' a b | bash", c, None),
+        ("echo gh pr merge 3 | bash script.sh", c, None), ("echo gh pr merge 3 | bash -c 'cat'", c, None),
+        ("echo gh pr merge 3 | grep gh", c, None), (f"echo 'cd {c}' | source /dev/stdin; git push origin main", plain, None)]
+    for cmd, cwd, want in rows:
+        assert decision(bash(ws, cmd, cwd)) == want, (cmd, cwd)
+
+
+def test_guard_oldpwd_writes_any_spelling_keep_unknown_candidate():
+    r"""명령 파싱(11/04 재리뷰 P0·P1, E): OLDPWD·PWD 대입은 푼 이름으로 본다(`$'OLDP\x57D'`·`OLDPW''D`·`"OLDPW"D`·`OLDPW\D`). 대입
+    빌트인 뒤 모든 `NAME=값`(`export FOO=1 OLDPWD=…`), `builtin`·`command` 앞, `eval` 안, `${OLDPWD:=/abs}`의 정적 값도 후보다.
+    정적 값은 후보를 더할 뿐 모르는 디렉토리를 빼지 않는다 — 돌지 않았을 수 있는 대입(`true || export …`·서브셸·함수·파이프
+    요소·`env` 자식 환경) 뒤의 `cd -`는 셸이 물려받은 OLDPWD(규칙 11에선 이슈 DB일 수 있다)로도 간다(예전에는 None)."""
+    ws = shared()
+    c = ws.clone
+    plain = tmp("tt-gh-plain-")
+    hid = r"$'OLD\x50WD'"
+    rows = [
+        (f"export FOO=1 OLDPWD={c}; cd -; git push origin main", "deny"),
+        (f"declare -x FOO=1 OLDPWD={c}; cd -; git push origin main", "deny"),
+        (f"builtin export OLDPWD={c}; cd -; git push origin main", "deny"),
+        (f"command export OLDPWD={c}; cd -; git push origin main", "deny"),
+        (f"eval 'OLDPWD={c}'; cd -; git push origin main", "deny"), (f"eval OLDPWD={c}; cd ~-; git push origin main", "deny"),
+        (f"cd /usr; cd /tmp; export FOO=1 OLDPWD={c}; cd -; git push origin main", "deny"),
+        (rf"export $'OLDP\x57D'={c}; cd -; git push origin main", "deny"),
+        (rf"export $'OLD\x50\x57D'={c}; cd ~-; git push origin main", "deny"),
+        (f'export "OLDPW"D={c}; cd -; git push origin main', "deny"),
+        (rf"export OLDPW\D={c}; cd -; git push origin main", "deny"),
+        (f"export OLDPW''D={c}; cd -; git push origin main", "deny"),
+        (rf"declare -x $'OLDP\x57D'={c}; cd -; git push origin main", "deny"),
+        (f"export PW''D={c}; cd ~+; git push origin main", "deny"),
+        (f"cd /usr; cd /tmp; export OLDPW''D={c}; cd -; git push origin main", "deny"),
+        (f": ${{OLDPWD:={c}}}; cd -; git push origin main", "deny"),
+        (f"true || export {hid}=/tmp; cd -; gh pr merge 3", "deny"), (f"(export {hid}=/tmp); cd -; gh pr merge 3", "deny"),
+        (f"if false; then export {hid}=/tmp; fi; cd -; gh pr merge 3", "deny"),
+        (f"f() {{ export {hid}=/tmp; }}; cd -; gh pr merge 3", "deny"),
+        (f"export {hid}=/tmp | cat; cd -; gh pr merge 3", "deny"), (f"env {hid}=/tmp true; cd -; gh pr merge 3", "deny"),
+        (f"true || declare -x {hid}=/tmp; cd -; gh pr merge 3", "deny"),
+        (f"true || typeset {hid}=/tmp; cd -; gh pr merge 3", "deny"),
+        (f"true || readonly {hid}=/tmp; cd -; gh pr merge 3", "deny"),
+        (f"true || export {hid}=/tmp; bash -c 'cd -; gh pr merge 3'", "deny"),
+        # 오탐 방지: 비-clone 정적 값만이면 git 규칙은 모르는 후보를 건너뛴다
+        ("export FOO=1 OLDPWD=/tmp; cd -; git push origin main", None),
+        (": ${OLDPWD:=/tmp}; cd -; git push origin main", None)]
+    for cmd, want in rows:
+        assert decision(bash(ws, cmd, plain)) == want, cmd
+
+
+def test_guard_dirstack_tilde_variants_and_assignment_values():
+    r"""명령 파싱(11/04 재리뷰 P1, F): 한 단순 명령의 같은 tilde 접두는 같은 값이라 접두 값마다 변형 하나다 — 예전에는 낱말마다 곱해
+    8개로 잘라 `cd a || cd b || cd <C>; cd /tmp; git -C ~- push … 2>~-/x`의 clone 후보를 버렸다. 대입꼴 낱말 값의 tilde
+    (`GIT_DIR=~-/.git`·`env GIT_DIR=~-/.git`·`X=a:~-`)도 bash처럼 푼다. `--opt=~-`·`a=x=~-`는 bash도 풀지 않는다."""
+    ws = shared()
+    c = ws.clone
+    plain = tmp("tt-gh-plain-")
+    rows = [
+        (f"cd /tmp/nx-a || cd /tmp/nx-b || cd {c}; cd /tmp; git -C ~- push origin main 2>~-/../x.log", plain, "deny"),
+        ((f"cd /tmp/nx-a || cd /tmp/nx-b || cd /tmp/nx-d || cd /tmp/nx-e || cd {c}; cd /tmp; "
+          "git -C ~- push origin main 2>~-/x.log >~-/y.log"), plain, "deny"),
+        (f"cd /tmp/nx-a || cd /tmp/nx-b || cd {c}; pushd /tmp; git -C ~- push origin main 2>~1/x.log", plain, "deny"),
+        (f"cd {c} && cd /tmp && GIT_DIR=~-/.git git push origin main", plain, "deny"),
+        (f"cd {c} && cd /tmp && env GIT_DIR=~-/.git git push origin main", plain, "deny"),
+        (f"cd {c} && cd /tmp && GIT_WORK_TREE=~- GIT_DIR=~-/.git git push origin main", plain, "deny"),
+        ("cd /tmp && GIT_DIR=~-/.git git push origin main", c, "deny"),
+        ("cd /tmp && env Y=1 GIT_DIR=~-/.git git push origin main", c, "deny"),
+        # bash가 풀지 않는 꼴
+        ("cd /tmp && GIT_DIR=x=~-/.git git push origin main", c, None),
+        ("cd /tmp && git --git-dir=~-/.git push origin main", c, None),
+        ('cd /tmp && GIT_DIR="~-/.git" git push origin main', c, None)]
+    for cmd, cwd, want in rows:
+        assert decision(bash(ws, cmd, cwd)) == want, (cmd, cwd)
+
+
+def test_guard_wrapper_quoted_option_values_are_not_redirections():
+    r"""명령 파싱(11/04 재리뷰 P0, C): 래퍼 옵션 값 앞의 리디렉션을 뗄 때 따옴표 밖 연산자만 리디렉션이다. 인용한 값
+    (`sudo -p '<pw>'`·`time -f '<%e>'`·`xargs -E '<<'`·`time -f \<%e`)을 리디렉션으로 떼면 뒤 `git`·`gh`가 대상으로 사라져 None이었다."""
+    ws = shared()
+    c = ws.clone
+    plain = tmp("tt-gh-plain-")
+    rows = [
+        ("sudo -p '<pw>' gh pr merge 3", c), ("/usr/bin/time -f '<%e>' git push origin main", c),
+        ('/usr/bin/time -f "<%e>" git push origin main', c), ("/usr/bin/time --format '<%e>' git push origin main", c),
+        ("/usr/bin/time --format '<%e>' gh pr merge 3", c), ("xargs -a '<f' git push origin main", c),
+        ("xargs -E '<<' git push origin main", c), ("timeout -s '<x' 5 git push origin main", c),
+        ("/usr/bin/time -f \\<%e git push origin main", c), (f"/usr/bin/time -f '<%e>' git -C {c} push origin main", plain),
+        (f"sudo -p '<pw>' gh -R {DB_SLUG} pr merge 3", plain), (f"env -C</dev/null {c} git push origin main", plain)]
+    for cmd, cwd in rows:
+        assert decision(bash(ws, cmd, cwd)) == "deny", (cmd, cwd)
+
+
+def test_guard_fed_pipe_text_walked_once_at_pipeline_start():
+    r"""명령 파싱(11/04 재리뷰 P1 성능, D): 파이프로 셸에 넘긴 글은 그 묶음이 시작할 때의 cwd 후보로 한 번만 걷는다 — 예전에는 그
+    글에서 거친 cwd마다 다시 걸어 상대 cd 1000개 뒤 파이프 500개가 hook 시간 한도(180초)를 넘겨 판정 없이 통과했다."""
+    import time
+    ws = shared()
+    c = ws.clone
+    cmd = ("\n".join(f"cd r{i}" for i in range(200)) + "\n" + "\n".join(f"echo 'cd s{i}; git status' | bash" for i in range(100))
+           + "\necho '" + "; ".join(f"cd t{i}" for i in range(300)) + "' | bash\ngit push origin HEAD:main")
+    t0 = time.time()
+    assert decision(bash(ws, cmd, c)) == "deny"
+    assert time.time() - t0 < 30
+
 
 def test_guard_gh_api_shell_resolved_endpoint_may_be_graphql():
     """규칙 11(H-A1 r6): 셸이 푸는 엔드포인트(`"$GHE_API/graphql"`·`$X/graphql`·`"${X}/graphql"`)는 실행 때 GraphQL URL일 수 있다
