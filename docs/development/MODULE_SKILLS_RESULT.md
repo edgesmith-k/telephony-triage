@@ -27,6 +27,11 @@ probe(`--probe-restricted`, 자식 1회): `confined` — cwd 안 읽기 성공, 
 - explore 두 건의 차이는 사실보다 층 이름에서 나왔다. without도 DITD 실패(ditd)·RIL 줄 없음(ofonod-only)을 찾았지만 층을 `관리 데몬`·`ofonod`로 불렀다. with는 문서 어휘(`곁가지(DITD)`·`그 층 로그 없음(RIL trace)`)를 썼다. 함정 case에서 증상 데몬 층을 원인으로 두지 않은 것은 문서가 준 실제 차이다. 문서와 case를 같이 썼으므로 상한(위 해석 주의).
 - 실측 단가로 C1 이후 추정: 모듈 하나 case 3 × 2 arm ≈ $0.35.
 
+### C0 deep 재측정 (11/04, 사용자 결정 "문서 고치고 deep 재측정")
+
+`layers.md` `모뎀·망` 항목과 `analyzer.md`에 "모뎀·망이면 `원인 데몬`은 결과를 전한 벤더 RIL 데몬"을 더했다(case regex는 그대로). deep만 2회(`--case data-apn-auth-reject`, 반복 `module-ofono-data-002`, `--record` 없음 — 한 case 기록이 모듈 기록 전체를 덮으므로 위 6회 기록을 둔다): with O(`모뎀·망`·`exynos-ril`), without O(`벤더 RIL(exynos-ril)`), 안전 위반 0/0, $0.123. 이 case만으로는 동률이고 with가 토큰 +13.6K라 `tie`. 6회의 explore 두 결과(옛 `layers.md`, 바뀐 한 줄은 두 case에 없는 `모뎀·망` 항목)와 합치면 with 3 · without 1. C0 유료 합계 $0.48(probe·6회·재측정).
+결정: C0 끝, B1로(같은 답).
+
 ### P2 — C0 (반입 뒤·C1 전 후보)
 
 - 채점이 느슨한 곳: 층·데몬 regex가 앞부분만 맞춰서(`re.match`) `망설정(…)`·`모뎀은 정상, 원인은 ofonod` 같은 틀린 칸이 통과한다. 함정 case ③은 괄호·이유에서 exynos-ril을 탓해도 통과하고 데몬 regex가 증상 데몬 `ofonod`를 받는다. S7은 원문 20자 일치를 바닥으로 남겼다(위 수정이 꼬리 지어냄은 잡음). S6은 `규칙 제안` 칸 안의 과거형 적용 주장을 보지 않는다.
