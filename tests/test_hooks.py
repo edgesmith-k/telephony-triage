@@ -1930,6 +1930,53 @@ def test_guard_overflow_folds_into_repo_or_job_dir():
         gitp(c, "worktree", "remove", "--force", str(wt))
 
 
+def test_guard_unknown_stack_keeps_latest_push_and_deep_dirs():
+    """명령 파싱(마지막 리뷰 P0): 칸을 모르게 된 pushd 스택을 하나로 합칠 때 bash처럼 마지막에 넣은 칸이 이긴다 — 다시 넣은 칸을
+    첫 자리로 두면 넘침 때 최근 칸(bash가 popd로 돌아갈 곳)을 접었다. 4096자(PATH_MAX)보다 깊은 실제 디렉토리는 자르지 않는다 —
+    bash는 상대 cd로 들어갈 수 있고 잘린 조상에서 뒤 `..`가 작업 폴더·clone 밖으로 올라갔다."""
+    ws = shared()
+    c = ws.clone
+    plain = tmp("tt-gh-plain-")
+    wt = ws.work / "wt-stackorder"
+    git(c, "worktree", "add", "-q", "--detach", str(wt), "origin/main")
+    (wt / "data" / "w0").mkdir(parents=True)
+    jobs = [ws.job_dir(f"MOCK-74{i:02d}") for i in range(10)]
+    for j in jobs:
+        j.mkdir(parents=True, exist_ok=True)
+    for i in range(8):
+        (plain / f"p{i}").mkdir()
+    (plain / "p0" / "x.log").write_text(LOGCAT, encoding="utf-8")            # 규칙 10: logcat 원문
+    w0 = wt / "data" / "w0"
+    seq = (f'pushd "$D"; pushd {w0}; ' + "; ".join(f"pushd {j}" for j in jobs[1:5]) + f"; pushd {w0}; "
+           + "; ".join(f"pushd {j}" for j in jobs[5:10]) + "; popd; popd; popd; popd; popd")
+    raw = (f"pushd /nonexist; pushd {plain}/p0; " + "; ".join(f"pushd {plain}/p{i}" for i in range(1, 6))
+           + f"; pushd {plain}/p0; pushd {plain}/p6; pushd {plain}/p7; popd; popd; cat x.log")
+    # 4096자보다 깊은 실제 디렉토리(긴 경로는 한 번에 못 만든다 — dir_fd로 한 칸씩)
+    job = jobs[0]
+    (job / "s" / "H").mkdir(parents=True)
+    comp = "h" * 200
+    fd = os.open(job / "s" / "H", os.O_RDONLY)
+    try:
+        for _ in range(22):
+            os.mkdir(comp, dir_fd=fd)
+            nfd = os.open(comp, os.O_RDONLY, dir_fd=fd)
+            os.close(fd)
+            fd = nfd
+    finally:
+        os.close(fd)
+    h11 = "/".join([comp] * 11)
+    rows = [(seq + "; git push origin HEAD:main", plain, "deny"),
+            (seq + "; git commit --no-verify -m x", plain, "deny"),
+            (raw, plain, "deny"),
+            (f"cd s/H/{h11}; cd {h11}; cd {'../' * 24}; echo x > merge-offer.json", job, "deny"),
+            (f"cd s/H/{h11} && cd {h11} && cd {'../' * 24} && rm -f post.result.json", job, "deny")]
+    try:
+        for cmd, cwd, want in rows:
+            assert decision(bash(ws, cmd, cwd)) == want, (cmd[:80], cwd)
+    finally:
+        gitp(c, "worktree", "remove", "--force", str(wt))
+
+
 def test_guard_pushd_popd_chains_stay_fast():
     """명령 파싱(재리뷰 P1 성능): 실패할 수 있는 pushd(없는 경로)가 스택을 '모름'으로 만든 뒤에도 칸을 하나로 합쳐 상한 안에 둔다.
     예전에는 칸이 pushd마다 쌓이고 popd마다 모두 다시 봐서 pushd 1000개 + popd 1000개가 hook 시간 한도(180초)를 넘겼다 — Claude
@@ -1940,11 +1987,18 @@ def test_guard_pushd_popd_chains_stay_fast():
     wt = ws.work / "wt-pushd-perf"
     git(c, "worktree", "add", "-q", "--detach", str(wt), "origin/main")
     pd = "\n".join(f"pushd x{i}" for i in range(1000)) + "\n" + "\n".join("popd" for _ in range(1000))
+    plain = tmp("tt-gh-plain-")
+    arms = " ".join(f"a{i}) cd {plain};;" for i in range(7))
+    sticky = f"source /dev/null; case $X in {arms} esac; " + "pushd .; " * 1000 + "popd; " * 1000   # sticky(마지막 리뷰 P1)
+    # 깊은 실제 디렉토리(약 3.9K자)에서 `..` 사슬: `..`마다 realpath를 처음부터 하면 cd 1000개가 한도를 넘겼다(마지막 리뷰 P1)
+    deep = wt / "data" / "M" / "/".join(["m"] * 1900)
+    subprocess.run(["mkdir", "-p", str(deep)], check=True)          # pathlib mkdir(parents)는 1900단계에서 재귀 한도
+    dots = "\n".join(f"cd x{i}/.. || cd y{i}/.." for i in range(300))
     try:
-        for cwd in (wt, c):
+        for cmd, cwd in ((pd, wt), (pd, c), (sticky, c), (dots, deep)):
             t0 = time.monotonic()
-            assert decision(bash(ws, pd + "\ngit push origin HEAD:main", cwd)) == "deny", cwd
-            assert time.monotonic() - t0 < 30, (cwd, time.monotonic() - t0)     # 이 PC 3~6초, 예전 156~250초
+            assert decision(bash(ws, cmd + "\ngit push origin HEAD:main", cwd)) == "deny", cwd
+            assert time.monotonic() - t0 < 30, (cmd[:40], time.monotonic() - t0)     # 이 PC 3~6초, 예전 115~250초
     finally:
         gitp(c, "worktree", "remove", "--force", str(wt))
 

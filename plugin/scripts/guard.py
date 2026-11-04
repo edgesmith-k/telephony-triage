@@ -1199,7 +1199,8 @@ CWD_CAP = 8                         # 따라가는 cwd 후보 상한(넘으면 �
 # 이보다 긴 cwd 후보(상대 cd가 길게 이어진 것)는 실제 경로와 `..`을 글자로 접은 경로로 바꾼다(`_shorten`) — 후보 경로가 cd마다
 # 길어져 비용이 cd 수의 제곱으로 늘지 않게(재리뷰 P1 성능)
 LONG_CWD = 1024
-MAX_CWD = 4096                      # PATH_MAX: 이보다 긴 후보만 조상으로 자른다(모르는 디렉토리도 둔다)
+MAX_CWD = 4096                      # PATH_MAX: 이보다 긴 후보는 실제로 있는 디렉토리가 아니면 조상으로 자른다(모르는 디렉토리도 둔다)
+MAX_KEEP_CWD = 1 << 16              # 실제로 있어도 이보다 길면 자른다(비용 상한)
 PIPE_OPS = {"|", "|&"}
 # 복합 명령(`_Walk`): 여는 말 → 닫는 말. `for`·`select`·`case` 머리의 나머지(`x in a b`)는 명령이 아니다
 COMPOUND = {"{": "}", "if": "fi", "case": "esac", "while": "done", "until": "done", "for": "done", "select": "done"}
@@ -1217,7 +1218,9 @@ _REAL: dict[str, str] = {}
 
 def _real(path: str) -> str:
     """`_norm`(realpath)과 같은 실제 경로를 캐시한 부모 결과에 한 칸씩 이어 만든다 — 한 칸씩 깊어지는 cd 후보마다 realpath를
-    처음부터 하면 cd 수의 제곱으로 느려진다. 칸이 심볼릭 링크·`.`·`..`면 그 자리에서 `_norm`으로 푼다."""
+    처음부터 하면 cd 수의 제곱으로 느려진다. 칸이 심볼릭 링크면 그 자리에서 `_norm`으로 풀고, `.`은 그대로, `..`은 이미 푼 실제
+    경로의 부모다(realpath가 하는 것과 같다 — 재리뷰 P1 성능: `..`마다 realpath를 처음부터 해 깊은 디렉토리에서 cd 1000개가 hook
+    시간 한도를 넘겼다). 푼 실제 경로도 그 자체를 키로 둔다(실제 꼴에서 이어지는 후보가 캐시에 맞게)."""
     if path in _REAL:
         return _REAL[path]
     if len(_REAL) > 50000:
@@ -1225,7 +1228,7 @@ def _real(path: str) -> str:
     names, p = [], path
     while p not in _REAL:
         parent, name = os.path.split(p)
-        if not name or parent == p or name in (".", ".."):
+        if not name or parent == p:
             _REAL[p] = _norm(p)
             break
         names.append(name)
@@ -1233,9 +1236,13 @@ def _real(path: str) -> str:
     base, cur = _REAL[p], p
     for name in reversed(names):
         cur = os.path.join(cur, name)
-        joined = os.path.join(base, name)
-        base = _norm(joined) if os.path.islink(joined) else os.path.normcase(joined)   # islink은 예외를 내지 않는다
+        if name == "..":
+            base = os.path.dirname(base)
+        elif name != ".":
+            joined = os.path.join(base, name)
+            base = _norm(joined) if os.path.islink(joined) else os.path.normcase(joined)   # islink은 예외를 내지 않는다
         _REAL[cur] = base
+        _REAL.setdefault(base, base)
     return base
 
 
@@ -1253,6 +1260,26 @@ def _root_of(path: str, roots: tuple[str, ...]) -> str | None:
 
 
 _SHORT: dict[str, tuple[Path, ...]] = {}
+
+
+def _deep_isdir(f: str) -> bool:
+    """PATH_MAX보다 긴 절대 경로가 실제 디렉토리인가. 긴 경로는 `os.stat`이 ENAMETOOLONG이라 상한 안 조상을 열고 나머지 칸을
+    하나씩 `dir_fd`로 연다(칸이 없으면 바로 거짓). `dir_fd`를 못 쓰는 OS(Windows)·오류는 거짓(자른다 — 예전 동작)."""
+    anc = f
+    while len(anc) > MAX_CWD:
+        anc = os.path.dirname(anc[:MAX_CWD + 1])
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+    fds = []
+    try:
+        fds.append(os.open(anc, flags))
+        for name in f[len(anc):].strip(os.sep).split(os.sep):
+            fds.append(os.open(name, flags, dir_fd=fds[-1]))
+        return True
+    except (OSError, ValueError, NotImplementedError, TypeError):
+        return False
+    finally:
+        for fd in fds:
+            os.close(fd)
 
 
 def _shorten(d: Path) -> tuple[Path, ...]:
@@ -1276,8 +1303,8 @@ def _shorten(d: Path) -> tuple[Path, ...]:
         pass
     out: list[Path] = []
     for f in dict.fromkeys(forms):
-        if len(f) <= MAX_CWD:
-            out.append(Path(f))
+        if len(f) <= MAX_CWD or (len(f) <= MAX_KEEP_CWD and _deep_isdir(f)):
+            out.append(Path(f))          # 실제로 있는 깊은 디렉토리는 자르지 않는다 — bash는 상대 cd로 들어갈 수 있다(재리뷰 P0)
             continue
         while len(f) > MAX_CWD:
             f = os.path.dirname(f[:MAX_CWD + 1])
@@ -1388,8 +1415,15 @@ class _Cwd:
         — popd·`pushd ±N`·`cd ±N`의 `anywhere`)만 보므로 판정은 같고, 칸이 pushd마다 쌓여 popd마다 모두 다시 보는 비용이 pushd 수의
         세제곱으로 늘지 않는다(재리뷰 P1 성능: 없는 경로 pushd 1000개 + popd 1000개가 hook 시간 한도 180초를 넘겨 판정 없이 통과했다
         — Claude Code는 시간 초과를 막지 않는다). 합친 칸도 후보 상한(`_dedupe`) 안이다."""
-        if not self.exact and len(self.stack) > 1:
-            self.stack = [_dedupe(self.stack_dirs())]
+        if (not self.exact or self.sticky) and len(self.stack) > 1:
+            # bash처럼 마지막에 넣은 것이 이긴다(다시 넣은 칸은 최근 자리로 — 재리뷰 P0: 첫 자리로 두면 넘침 때 최근 칸을 접었다).
+            # 자기 자신으로만 접히는 칸(보호 뿌리 그 자체·모르는 디렉토리)은 처음 후보 바로 뒤에 둬 구체적인 칸을 밀어내지 않게
+            flat = self.stack_dirs()
+            head = flat[0]
+            last = [d for d in reversed(dict.fromkeys(reversed(flat))) if d != head]
+            old = [d for d in last if d == UNKNOWN_DIR or str(d) in _KEEP_ROOTS]
+            self.stack = [_dedupe((head, *old, *(d for d in last if d not in old)))]
+            self.exact = False          # sticky면 어차피 칸을 정확히 쓰지 않는다(`cd`의 `exact`) — 재리뷰 P1 성능
         return self
 
     @staticmethod
@@ -1722,7 +1756,7 @@ class _Walk:
             st.old, st.dirs = prev, _dedupe(targets)
             if negated and after == "&&":                  # `! cd … && X`: X는 cd가 실패했을 때 돈다 — 곧바로 합친다
                 self.st = _Cwd.union([fail, st])
-            elif odd or not all(_sure_dir(t) for t in targets):     # 실패할 수 있다 — 이동 전 상태도 남는다
+            elif odd or UNKNOWN_DIR in targets or not all(_sure_dir(t) for t in targets):     # 실패할 수 있다 — 이동 전 상태도 남는다
                 if after == "&&" and not negated:
                     self.fails.append(fail)
                 else:
