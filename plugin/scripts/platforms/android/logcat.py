@@ -46,7 +46,7 @@ from platforms.base import FileStats, LogLine, PhoneIdRules
 THREADTIME_RE = re.compile(
     r"^" + _STAMP
     + r"\s+(?:(?P<uid>[A-Za-z0-9_.]+)\s+)?(?P<pid>\d+)\s+(?P<tid>\d+)"
-    r"\s+(?P<level>[VDIWEFA])\s+(?P<tag>[^:\s](?:[^:]|::)*?)\s*:(?: (?P<msg>.*))?$"
+    r"\s+(?P<level>[VDIWEFA])\s+(?P<tag>(?:[^:]|::)+?)\s*:(?: (?P<msg>.*))?$"
 )
 # time: "MM-DD HH:MM:SS.mmm L/TAG( PID): msg"
 TIME_RE = re.compile(

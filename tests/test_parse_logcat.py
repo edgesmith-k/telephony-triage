@@ -990,6 +990,19 @@ def test_a_shapes_tag_phone_space_and_scope_tag():
     assert ims and ims[0]["phone_id"] == 0
 
 
+
+def test_threadtime_blank_tag_still_parses_and_is_raw():
+    """`::` 태그를 받도록 바꾼 태그 패턴이 빈(공백) 태그 줄을 놓치지 않는다 — 읽기·원문 판별(플랫폼 합집합) 모두."""
+    import platforms
+    from platforms.android import logcat as alog
+    blank = "08-09 13:10:42.224  1234  1244 I       : x (합성)"
+    assert alog.raw_line(blank) and alog.find_raw("앞 글\n" + blank)
+    finders, _ = platforms.known_raw_line_finders()
+    assert any(raw(blank) for _, raw, _, _ in finders) and any(find("y\n" + blank) for _, _, find, _ in finders)
+    log = _a_log("b.log", [blank, "08-09 13:10:42.300  2101  2101 D RILJ    : [0353]> GET_SIM_STATUS [PHONE0]"])
+    lines, stats = alog.read_file(log, 0, "UTC", 2026)
+    assert stats.unparsed == 0 and [ln.tag for ln in lines] == ["", "RILJ"]
+
 VENDOR_ROWS = [
     "08-09 13:24:00.100  1188  1203 I RIL     : [<DEV#1>][TX] SIT_GET_SIM_STATUS, REQ, 8 bytes, Token(0x0210) (합성)",
     "08-09 13:24:00.180  1188  1203 E RIL     : [<DEV#1>][RX] SIT_GET_SIM_STATUS, RSP, 12 bytes, Token(0x0210), Error(RCM_E_GENERIC_FAILURE)",
