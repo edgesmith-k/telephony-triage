@@ -222,6 +222,34 @@ def test_state_rows_pinned_and_never_vote():
     assert mf.candidates(spec, items)["counts"] == {}
 
 
+def test_zero_value_rows_not_hot():
+    """H C1+D R13·S13: 0 값 오류 칸(`errorCode=0`·`result=0`·`RejectCause: 0`)은 hot이 아니다. 0이 아니면 hot. 두 플랫폼 같은 길
+    (`triagelib.core.is_error_text`, report 타임라인 고르기도 같다). (벤더 모양을 본뜬 합성 줄)"""
+    from triagelib.core import ZERO_VALUE_RE, is_error_text
+
+    android = [("2026-09-20T15:10:00.000Z", "RIL", "[PsService_0] OnSetupDataCallComplete cid=1 errorCode=0", "I", None),
+               ("2026-09-20T15:10:00.100Z", "RIL", "[PsService_0] OnSetupDataCallComplete cid=1 errorCode=2", "I", None),
+               ("2026-09-20T15:10:00.200Z", "RIL", "[RilContext_0] OnRequestComplete Request ID=27, result=0 error",
+                "I", None),
+               ("2026-09-20T15:10:00.300Z", "RIL", "[RilContext_0] OnRequestComplete Request ID=27, result=0", "I", None)]
+    spec = mf.compile_spec(MODULES, "android")
+    rows = mf.rows_of(_events(android))
+    mf.label(spec, rows)
+    assert [r["hot"] for r in rows] == [False, True, True, False]
+    ofono = [("2026-09-20T15:10:00.000Z", "ofonod", "src/network.c:reg_cb() RejectCause: 0", "I", None),
+             ("2026-09-20T15:10:00.100Z", "ofonod", "src/network.c:reg_cb() RejectCause: 13", "I", None)]
+    spec = mf.compile_spec(MODULES, "ofono")
+    rows = mf.rows_of(_events(ofono))
+    mf.label(spec, rows)
+    assert [r["hot"] for r in rows] == [False, True]
+    for text in ("errorCode=0", "RejectCause : 0", "error(0)", "result = 0", "rilErrorCode=0 ok", "fail_cause=0"):
+        assert not is_error_text(text), text
+    for text in ("errorCode=0x10", "errorCode=0.5 failed", "error=NONE but failed", "errorCode=00 timeout",
+                 "result=0 then RIL_REQUEST_DIAL failed", "errorCode=2", "lost"):
+        assert is_error_text(text), text
+    assert ZERO_VALUE_RE.sub("", "a errorCode=10 b") == "a errorCode=10 b"
+
+
 def test_background_family_counts_once():
     spec = mf.compile_spec(MODULES, "ofono")
     msg = "SIM_OPEN_CHANNEL failed NO_SUCH_ELEMENT"

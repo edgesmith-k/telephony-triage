@@ -35,6 +35,17 @@ SNAPSHOT_DIR = "_snapshot"
 TOP = 3
 SEARCH_LIMIT = 3
 ERROR_EVENT_RE = re.compile(r"(error|timeout|no_response|reject|fail|denied|lost)", re.I)
+# 0 값 오류 칸(`errorCode=0`·`RejectCause: 0`·`result=0`·`error(0)`)은 오류가 아니다. 오류 문구 판정(ERROR_EVENT_RE) 전에
+# 지운다 — report 타임라인 줄 고르기와 모듈 보기 hot 표시가 같이 쓴다(H C1+D R13, 두 플랫폼)
+ZERO_VALUE_RE = re.compile(r"(?i)\b(?:RejectCause|reject\s*cause|errorCode|RilErrorCode|rejectCode|error|result|"
+                           r"fail(?:ure)?_?(?:code|cause))\s*[:=(]\s*0\b(?![.\d])")
+
+
+def is_error_text(text: str | None) -> bool:
+    """메시지에 오류 문구가 있는가(0 값 오류 칸을 뺀 뒤 ERROR_EVENT_RE)."""
+    return bool(ERROR_EVENT_RE.search(ZERO_VALUE_RE.sub("", text or "")))
+
+
 ERROR_FIELDS = ("request", "error", "code", "reason", "cause")   # 오류 이벤트 줄에 싣는 필드 (analysis.json·report.md)
 AUTO_CODE_NOTE = " (자동 선택: code.auto_select, `--code`로 변경 가능)"   # report.md 코드 줄
 EXPLORE_WHEN = ("ask", "always", "never")

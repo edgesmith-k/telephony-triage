@@ -33,7 +33,7 @@ from pathlib import Path
 if __package__ in (None, ""):          # `python3 modulefilter.py --child`: 스크립트 루트를 경로에 (mask_pii.py:27-28처럼)
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from triagelib.core import ERROR_EVENT_RE, _clip
+from triagelib.core import _clip, is_error_text
 
 from common import masking
 
@@ -314,7 +314,7 @@ def label(spec: Spec, rows: list[dict]) -> None:
         r["bg"] = (tag, tpl(msg)) if not r["noise"] and spec.f.background.search(msg) else None
         lvl = (r.get("level") or "") in HOT_LEVELS and _base(tag) not in spec.f.level_unreliable \
             and tag not in spec.f.level_unreliable
-        r["hot"] = not r["noise"] and (bool(r.get("marks")) or lvl or bool(ERROR_EVENT_RE.search(spec.f.not_error.sub("", msg))))
+        r["hot"] = not r["noise"] and (bool(r.get("marks")) or lvl or is_error_text(spec.f.not_error.sub("", msg)))
         r["req"] = _request(spec, msg) if _is_common(spec, tag) else None
         tk = spec.f.token_re.search(msg)
         r["token"] = next((v for v in tk.groupdict().values() if v), None) if tk and tk.groupdict() else None

@@ -14,7 +14,7 @@ from common.exitcodes import USAGE
 
 from .anchor import _parse_ts, _step_label
 from .core import (ANALYSIS_MAX, AUTO_CODE_NOTE, CARRY_PARTS, DEEP_CONFIG_ERROR, DEEP_MODULE_PENDING, ERROR_EVENT_RE,
-                   ERROR_FIELDS, EXPLORE_INPUT_FILE, EXPLORE_PENDING_LINE, Fail, MUST_SHOW_CLIP, MUST_SHOW_FIT, MUST_SHOW_MAX, PULL_SKIPPED, SCRIPTS, SEARCH_LIMIT,
+                   ERROR_FIELDS, EXPLORE_INPUT_FILE, EXPLORE_PENDING_LINE, Fail, is_error_text, MUST_SHOW_CLIP, MUST_SHOW_FIT, MUST_SHOW_MAX, PULL_SKIPPED, SCRIPTS, SEARCH_LIMIT,
                    _HOT_LEVELS, _TOKEN_RE, _clip, _now)
 
 
@@ -109,7 +109,7 @@ def select_rows(rows: list[dict], around: str | None, limit: int) -> tuple[list[
         return abs((ts - center).total_seconds()) if ts and center else 0.0
 
     def hot(row: dict) -> bool:
-        return bool(row["marks"]) or (row["level"] or "") in _HOT_LEVELS or bool(ERROR_EVENT_RE.search(row["msg"] or ""))
+        return bool(row["marks"]) or (row["level"] or "") in _HOT_LEVELS or is_error_text(row["msg"])
 
     if total > limit:
         order = sorted(range(total), key=lambda i: (not hot(items[i]), dist(items[i]), str(items[i]["ts"]), i))
