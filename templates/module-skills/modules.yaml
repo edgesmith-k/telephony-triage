@@ -186,6 +186,8 @@ platforms:
         hal: [RadioMessagingProxy]
         services: [SmsService]
         sit: [SIT_*SMS*]
+        keywords: ['SEND_STATUS_ERROR']
+        also: {'^SHANNON_IMS$': '\[SMS'}   # SMS over IMS 벤더 줄(`[SMS#]` 접두는 합성 모양, 첨부 로그 A에는 SMS 전송이 없다)
         neighbours: [ims]
       ims:
         path: android/ims
@@ -194,7 +196,7 @@ platforms:
         ril: [NOTIFY_IMS_DATA_NETWORK, UPDATE_IMS_REGISTRATION_INFO]   # A: UPDATE_IMS_REGISTRATION_INFO as a RILJ request
         services: [ImsService]
         sit: [SIT_AIMS_*, SIT_IND_AIMS_*]
-        keywords: ['registerImsRegistrationCallback', 'service IMS is not available', 'ImsReasonInfo']
+        keywords: ['registerImsRegistrationCallback', 'service IMS is not available', 'ImsReasonInfo', 're:Ims Registration : (TRUE|FALSE)']   # 마지막: RIL [ImsService_<n>::…] 줄(태그는 common)
         quiet: ['\[(CONS|CONF|CAPA|LOCA|UTIL|PROX|FEAT|UCE#)\]']
         also: {'^ImsPhone$': 'handleIms(Un)?[Rr]egistered|ImsRegistration', '^SST-\d+$': 'setImsRegistrationState'}
         neighbours: [data]
