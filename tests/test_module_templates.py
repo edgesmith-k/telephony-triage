@@ -249,3 +249,42 @@ def test_variant_lint_regress():
     result = run_json("db_regress.py", ["--db", db, "--all"])
     assert (result["summary"]["total"], result["summary"]["passed"]) == (1, 1)
     assert result["results"][0]["C"] == ["DATA-001-01"]
+
+
+def _gen(*args) -> subprocess.CompletedProcess:
+    return subprocess.run([sys.executable, str(GENERATOR), *map(str, args)], capture_output=True, text=True,
+                          encoding="utf-8", cwd=str(REPO), check=False)
+
+
+def test_no_view_refuses_repo_templates():
+    """H C1+D R16: `--no-view`·기본이 아닌 `--db-variant` 쓰기는 레포 밖 --templates에서만, `--check`와는 함께 못 쓴다."""
+    for extra in (["--no-view"], ["--db-variant", "android=issue-db-android-plain"]):
+        proc = _gen("--write", *extra)
+        assert proc.returncode == 2 and "레포 밖 --templates" in proc.stderr, proc.stderr
+        assert _gen("--check", *extra).returncode == 2
+    assert _gen("--report", "--db-variant", "android=no-such-variant").returncode == 2
+    assert _gen("--db-variant", "android=issue-db-android-plain").returncode == 2     # 모드 없음(argparse)
+
+
+def test_android_plain_variant_strips_vendor_block(tmp_path):
+    """S8: 샘플 tags.yaml 마지막 벤더 묶음(표시 줄부터 끝)과 ril.yaml UNSOL_DATA_CALL_LIST_UPDATED 행만 뺀다. 없으면 그대로."""
+    sys.path.insert(0, str(REPO / "tests" / "helpers"))
+    import make_variant_dbs as mv
+
+    plain = mv.build("issue-db-android-plain", tmp_path / "plain")
+    sample = mv.SAMPLE
+    for rel in ("parser-rules/tags.yaml", "parser-rules/ril.yaml"):
+        assert (plain / rel).read_bytes() == (sample / rel).read_bytes()          # 아직 묶음이 없으면 같은 트리
+    db = tmp_path / "db"
+    shutil.copytree(sample, db)
+    tags, ril = db / "parser-rules/tags.yaml", db / "parser-rules/ril.yaml"
+    base_tags, base_ril = tags.read_text(encoding="utf-8"), ril.read_text(encoding="utf-8")
+    tags.write_text(base_tags + "\n" + mv.ANDROID_VENDOR_BLOCK + " — 사내 DB 미확인 ---\n"
+                    "  - {tag_regex: '^VCD$', category: common, added_for: '-', added_on: 2026-11-05, reason: x}\n",
+                    encoding="utf-8")
+    ril.write_text(base_ril.replace("unsolicited:\n", "unsolicited:\n  - {name: UNSOL_DATA_CALL_LIST_UPDATED, "
+                                    "category: data, added_for: '-', added_on: 2026-11-05, reason: x}\n", 1),
+                   encoding="utf-8")
+    mv.android_plain(db)
+    assert tags.read_text(encoding="utf-8") == base_tags + "\n"
+    assert ril.read_text(encoding="utf-8") == base_ril

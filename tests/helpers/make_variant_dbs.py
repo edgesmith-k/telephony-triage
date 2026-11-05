@@ -17,6 +17,7 @@
 | `issue-db-review/` | 월간 리뷰(Phase 11): §6.6 항목마다 걸리는 경우와 걸리지 않는 경우 (`REVIEW_CASES`) |
 | `issue-db-ofono/` | oFono 플랫폼 뼈대 DB(17-platforms §5, **합성·형식 가정·placeholder**): `platform: ofono`, `ofono_reference` 백엔드, placeholder 태그(`ofonod`·`daemon-a`·`daemon-b`)·extractor 1개·요청 `PLACEHOLDER_CALL`(데몬 사이 짝 시험용, 짝 설정 없으면 효과 없음), 유형 `DATA-001`과 양성 fixture(`tests/fixtures/logs/ofono/journal-iso.log`) 하나 |
 | `issue-db-ofono-modules/` | 모듈 eval(H C0, 합성): issue-db-ofono 위에 데몬 13개 태그(MODULE_SKILLS_PLAN_IMPL §1.4, ENT는 network — 결정 기록 11/05 ①), ril.yaml data 요청과 첨부 로그 sim·network 요청 5개(11/05 ②), exynos-ril 추출기 1개, 유형 DATA-001(SETUP_DATA_CALL 실패 + 인증 거절 원인)과 양성 fixture(모듈 템플릿 deep case 로그) |
+| `issue-db-android-plain/` | Android 모듈 eval $0 대조(H C1+D S8): 샘플에서 첨부 로그 A 벤더 태그 묶음(`tags.yaml`의 `  # --- 첨부 로그 A(11/05 승인, 결정 기록 ①)` 줄부터 끝까지)과 `ril.yaml` `UNSOL_DATA_CALL_LIST_UPDATED` 행을 뺀 트리(빼기만, 없으면 그대로). "vendor tags added (unconfirmed for the real DB)" 표의 기준 |
 | `issue-db-github/` | 두 번째 트래커(트래커 범용화 §6-1, **합성**): `tracker {kind: github, base_url: https://ghe.mock.invalid/, key_regex: mock-org\\.mock-issues-\\d+}`, 기록·피드백·evidence의 Jira 키 `MOCK-<n>`을 GitHub 작업 키 `mock-org.mock-issues-<n>`으로(파일 이름 포함) |
 | `issue-db-unjudged/` | 원인 판정 불가(eval 68): `pattern_timeout_ms: 300`, DATA-001-01의 `data-disabled` 시그니처를 시간 초과하는 `slow-cause`(`must_match ['(a+)+$']`)로 바꾼 트리. `a`×40+`!` 줄이 있는 로그에서 `unjudged.cause_count` 1 |
 | `verify-logs/` | 이슈 DB가 아니다. `db_verify fix`·`resolution` 입력 로그(수정 후·재발·증상만 남음·시나리오 없음, 마스킹됨) |
@@ -768,6 +769,36 @@ def ofono_modules(db: Path) -> None:
     _write(data / "fixtures/DATA-001-01.expect.yaml",
            "expect_top: DATA-001-01\noccurred_at: '2026-09-20T15:10:02Z'\norigin: synthetic\n")
 
+ANDROID_VENDOR_BLOCK = "  # --- 첨부 로그 A(11/05 승인, 결정 기록 ①)"
+ANDROID_PLAIN_UNSOL = "UNSOL_DATA_CALL_LIST_UPDATED"
+
+
+def android_plain(db: Path) -> None:
+    """샘플에서 11/05 승인 벤더 태그 묶음(표시 줄부터 파일 끝 — 묶음은 파일 마지막)과 ril.yaml unsol 한 행을 뺀다.
+    둘 다 없으면 바꾸지 않는다(G-A 샘플 변경 전에도 같은 트리)."""
+    tags = db / "parser-rules/tags.yaml"
+    text = tags.read_text(encoding="utf-8")
+    at = text.find("\n" + ANDROID_VENDOR_BLOCK)
+    if at >= 0:
+        tags.write_text(text[:at + 1], encoding="utf-8", newline="\n")
+    ril = db / "parser-rules/ril.yaml"
+    lines = ril.read_text(encoding="utf-8").splitlines(keepends=True)
+    item = re.compile(r"^\s*-\s*\{?\s*name:\s*" + ANDROID_PLAIN_UNSOL + r"\b")
+    kept, i = [], 0
+    while i < len(lines):
+        if item.match(lines[i]):
+            indent = len(lines[i]) - len(lines[i].lstrip())
+            i += 1
+            if not lines[i - 1].rstrip().endswith("}"):           # 블록 모양 항목: 더 깊이 들여 쓴 줄까지
+                while i < len(lines) and lines[i].strip() and len(lines[i]) - len(lines[i].lstrip()) > indent:
+                    i += 1
+            continue
+        kept.append(lines[i])
+        i += 1
+    if len(kept) != len(lines):
+        ril.write_text("".join(kept), encoding="utf-8", newline="\n")
+
+
 GH_KEY = "mock-org.mock-issues-"
 GH_TRACKER = ("tracker:                             # 이슈 트래커 (트래커 범용화 §6-1, 합성)\n"
               "  kind: github\n"
@@ -816,6 +847,7 @@ VARIANTS = {
     "issue-db-step-events": step_events,
     "issue-db-ofono": ofono,
     "issue-db-ofono-modules": ofono_modules,
+    "issue-db-android-plain": android_plain,
     "issue-db-github": github,
     "issue-db-unjudged": unjudged,
     "verify-logs": verify_logs,
