@@ -1,0 +1,70 @@
+{
+ "status": "ok",
+ "key": "MOCK-9816",
+ "mode": "offline",
+ "issue": {
+  "origin": "file",
+  "occurred_at": "2026-09-02T10:00:05+00:00",
+  "sw": null,
+  "platform_version": "14",
+  "sim_slot": "0",
+  "summary": "APN이 <APN#2>여야 하는데 <APN#1>로 붙음 (합성)",
+  "description": "SIM을 바꾼 뒤 데이터가 <APN#2>로 붙어야 하는데 <APN#1>로 붙습니다. APN은 손대지 않았습니다. 합성 case.",
+  "comments": 0,
+  "missing": [
+   "model",
+   "sw"
+  ]
+ },
+ "logs": {
+  "files": [
+   "source.log"
+  ],
+  "window": {
+   "start": "2026-09-02T09:55:05.000Z",
+   "end": "2026-09-02T10:05:05.000Z"
+  },
+  "range": [
+   "2026-09-02T10:00:02.000Z",
+   "2026-09-02T10:00:05.400Z"
+  ],
+  "in_range": "partial",
+  "clock_anomalies": 0,
+  "events": 22
+ },
+ "no_candidate": {
+  "search_hits": [
+   {
+    "id": "DATA-001",
+    "kind": "type",
+    "title": "SETUP_DATA_CALL이 발생하지 않음"
+   },
+   {
+    "id": "DATA-002",
+    "kind": "type",
+    "title": "데이터 연결이 사용자 조작으로 끊김"
+   },
+   {
+    "id": "CALL-001",
+    "kind": "type",
+    "title": "VoLTE가 동작하지 않음"
+   }
+  ],
+  "error_events": [],
+  "error_event_total": 0
+ },
+ "code": {
+  "skipped": true
+ },
+ "explore": {
+  "reason": "no_candidate",
+  "when": "ask"
+ },
+ "warnings": [
+  "형식을 모르는 줄 1개를 건너뛰었습니다."
+ ],
+ "must_show": [
+  "로그 범위: 2026-09-02T10:00:02.000Z ~ 2026-09-02T10:00:05.400Z (일부만 포함), 시계 이상 없음"
+ ],
+ "truncated": false
+}

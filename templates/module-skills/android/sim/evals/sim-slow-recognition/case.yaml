@@ -1,0 +1,25 @@
+# 합성 case (C1D 보정 §6.3). files/의 source.log 말고는 make_module_eval_inputs.py --write가 만든다
+schema_version: 1
+name: sim-slow-recognition
+kind: explore
+synthetic: true
+key: MOCK-9819
+issue:
+  summary: 'SIM 인식이 늦음 (합성)'
+  description: '부팅 뒤 SIM 인식까지 10초 가까이 걸립니다. 합성 case.'
+  occurred_at: '2026-09-05T08:00:14+0000'
+  platform_version: '14'
+  sim_slot: '0'
+parse: {tz: UTC, year: 2026, minutes: 5}
+input:
+  explore_input: files/explore-input.json
+  timeline: files/timeline.md
+  analysis: files/analysis.json
+run_expect:
+  explore_reason: no_candidate
+expect:
+  layer: '모뎀|망'
+  daemon: 'RIL$|RIL[ (]|RIL\b|모뎀|카드'
+  evidence: ['\[TX\] SIT_GET_SIM_STATUS', '\[RX\] SIT_GET_SIM_STATUS']
+  trap: null
+  wrong_layer: ['^\s*(프레임워크|UiccController|RILJ|RIL HAL|벤더 RIL|곁가지)', '^\s*그\s*층\s*로그\s*없음', '^\s*원인\s*아님']

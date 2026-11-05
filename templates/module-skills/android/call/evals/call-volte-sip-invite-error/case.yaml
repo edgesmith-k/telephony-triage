@@ -1,0 +1,25 @@
+# 합성 case (C1D 보정 §6.3). files/의 source.log 말고는 make_module_eval_inputs.py --write가 만든다
+schema_version: 1
+name: call-volte-sip-invite-error
+kind: explore
+synthetic: true
+key: MOCK-9818
+issue:
+  summary: 'VoLTE 발신 실패 (합성)'
+  description: 'IMS 등록 상태에서 VoLTE 발신이 바로 끊깁니다. 합성 case.'
+  occurred_at: '2026-09-04T12:02:01+0000'
+  platform_version: '14'
+  sim_slot: '0'
+parse: {tz: UTC, year: 2026, minutes: 5}
+input:
+  explore_input: files/explore-input.json
+  timeline: files/timeline.md
+  analysis: files/analysis.json
+run_expect:
+  explore_reason: no_candidate
+expect:
+  layer: '모뎀|망'
+  daemon: 'SHANNON_IMS|벤더 IMS'
+  evidence: ['status-code : 503', 'imsRegistered=true']
+  trap: null
+  wrong_layer: ['^\s*(프레임워크|ImsPhoneCallTracker|RILJ|RIL HAL|벤더 RIL)', '^\s*그\s*층\s*로그\s*없음', '^\s*원인\s*아님']
