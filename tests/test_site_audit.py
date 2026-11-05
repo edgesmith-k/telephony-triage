@@ -404,3 +404,154 @@ def test_module_dry_run_real_script_on_templates(site, monkeypatch, tmp_path):
     assert not by["mod:ofono/data"]["doc_only"] and by["mod:ofono/data"]["est_tokens"] > 0
     assert by["mod:android/data"]["doc_only"] and "arm 자료 없음 — 문서 리뷰만" in by["mod:android/data"]["flags"]
     assert not site["marker"].exists()
+
+
+# -- 시그니처 소실(drift): feedback suggested × issues sw·platform_version (설계 C §3) ------------------------------------
+
+DD = "data/DATA-001-no-setup-data-call"
+SIG = "DATA-001-01/data-disabled"
+
+
+def _rec(db: Path, key: str, cause: str, sw: str, pv: str | None, sigs: list[str], decision: str = "accepted",
+         stamp: str = "20261015T1000") -> None:
+    """기록 하나: `<유형>/issues/<KEY>.yaml` + `feedback/<YYYY-MM>/<KEY>-<시각>.yaml`(마스킹된 값만, 로그 원문 없음)."""
+    issue = {"key": key, "cause": cause, "date": "2026-10-15", "occurred_on": "2026-10-14", "model": "MOCK-A56", "sw": sw,
+             "carrier": "MockTel KR", "analyzed_by": "mock-user1"}
+    if pv is not None:
+        issue["platform_version"] = pv
+    (db / DD / "issues").mkdir(parents=True, exist_ok=True)
+    (db / DD / "issues" / f"{key}.yaml").write_text(yaml.safe_dump(issue, allow_unicode=True), encoding="utf-8")
+    month = f"{stamp[:4]}-{stamp[4:6]}"
+    fb = {"issue": key, "date": f"{month}-{stamp[6:8]}T{stamp[9:11]}:{stamp[11:13]}+09:00", "by": "mock-user1",
+          "suggested": [{"cause": s.split("/")[0], "signature": s, "score": 0.5} for s in sigs], "decision": decision,
+          "final": cause}
+    (db / "feedback" / month).mkdir(parents=True, exist_ok=True)
+    (db / "feedback" / month / f"{key}-{stamp}.yaml").write_text(yaml.safe_dump(fb), encoding="utf-8")
+
+
+def _old_hits(db: Path) -> Path:
+    """MOCK-1101·1102(U1_0901)도 SIG 제안 → SIG hits 4(1101·1102·1103·1104, 마지막 U1_20260920)."""
+    for k in ("MOCK-1101", "MOCK-1102"):
+        _rec(db, k, "DATA-001-01", "MOCKA56_U1_20260901", "16", [SIG], stamp="20260905T1000")
+    return db
+
+
+def _drift_db() -> Path:
+    return _old_hits(runner.copy_db(name="drift-db"))
+
+
+def _drift(db: Path) -> list[dict]:
+    return sa.drift_checks("ops_db", db)
+
+
+def _rows(out, status=None):
+    return [o["row"] for o in out if o["row"] and (status is None or o["row"]["status"] == status)]
+
+
+def test_drift_sample_db_passes():
+    out = _drift(runner.copy_db(name="sample"))
+    assert [r["status"] for r in _rows(out)] == ["pass"] and not any(o["sig"] for o in out)
+    assert "자주(≥3) 시그니처 0" in _rows(out)[0]["evidence"]
+
+
+def test_drift_needs_user_same_branch_newer_sw():
+    db = _drift_db()
+    _rec(db, "MOCK-1201", "DATA-001-01", "MOCKA56_U1_20261010", "16", [], decision="unresolved")
+    _rec(db, "MOCK-1202", "unresolved", "MOCKA56_U1_20261012", "16", ["DATA-001-02/roaming-disabled"], decision="unresolved")
+    _rec(db, "MOCK-1203", "DATA-001-01", "MOCKA56_U1_20260910", "16", [], decision="new-cause")   # 더 옛 빌드 → 셈 밖
+    out = _drift(db)
+    bad = _rows(out, "needs-user")
+    assert [o["sig"] for o in out if o["sig"]] == [SIG] and len(bad) == 1
+    ev = bad[0]["evidence"]
+    assert ev.startswith(f"{SIG}: 이전 hits 4 (마지막 MOCKA56_U1_20260920) → 새 빌드 기록 2건 0회 (예: MOCK-1201, MOCK-1202)")
+    assert "update-signature" in bad[0]["cmd"] and not _rows(out, "pass")
+
+
+def test_drift_other_cause_only_is_info_not_needs_user():
+    """원인 둘인 유형: 새 빌드에 다른 원인(DATA-001-02) 기록만 있으면 needs-user가 아니라 info 개수뿐."""
+    db = _drift_db()
+    for k, sw in (("MOCK-1211", "MOCKA56_U1_20261010"), ("MOCK-1212", "MOCKA56_U1_20261011")):
+        _rec(db, k, "DATA-001-02", sw, "16", ["DATA-001-02/roaming-disabled"])
+    out = _drift(db)
+    assert not _rows(out, "needs-user") and not any(o["sig"] for o in out)
+    info = _rows(out, "info")
+    assert len(info) == 1 and "새 빌드 기록 0건" in info[0]["evidence"]
+    assert "다른 원인 새 빌드 기록 2건(셈에서 뺌)" in info[0]["evidence"]
+    assert _rows(out)[0]["status"] == "pass"
+
+
+def test_drift_one_after_is_info_sample_short():
+    db = _drift_db()
+    _rec(db, "MOCK-1221", "DATA-001-01", "MOCKA56_U1_20261010", "16", [])
+    info = _rows(_drift(db), "info")
+    assert len(info) == 1 and info[0]["evidence"].endswith("— 표본 부족")
+
+
+def test_drift_cross_branch_same_platform_is_not_newer():
+    """다른 브랜치(MOCKB77_U2)는 sw 비교 불가 → platform_version이 같으면(16) 새 빌드 아님."""
+    db = _drift_db()
+    for k in ("MOCK-1231", "MOCK-1232"):
+        _rec(db, k, "DATA-001-01", "MOCKB77_U2_20261231", "16", [])
+    assert [r["status"] for r in _rows(_drift(db))] == ["pass"]
+
+
+def test_drift_cross_branch_newer_platform_is_newer():
+    """16 → 17 새 플랫폼(다른 브랜치·sw를 못 푸는 기록도 platform_version으로)."""
+    db = _drift_db()
+    _rec(db, "MOCK-1241", "DATA-001-01", "MOCKB77_U2_20260101", "17", [])     # 브랜치 다름: sw 날짜가 옛것이어도 17 > 16
+    _rec(db, "MOCK-1242", "unresolved", "UNPARSABLE_BUILD", "17", [], decision="unresolved")
+    bad = _rows(_drift(db), "needs-user")
+    assert len(bad) == 1 and "새 빌드 기록 2건 0회 (예: MOCK-1241, MOCK-1242)" in bad[0]["evidence"]
+
+
+def test_drift_same_branch_uses_sw_only_never_platform():
+    """같은 브랜치에서 sw가 옛것이면 platform_version이 커도 새 빌드 아님(두 순서를 섞지 않는다)."""
+    db = _drift_db()
+    for k in ("MOCK-1251", "MOCK-1252"):
+        _rec(db, k, "DATA-001-01", "MOCKA56_U1_20260801", "17", [])
+    assert [r["status"] for r in _rows(_drift(db))] == ["pass"]
+
+
+def test_drift_unparsable_builds_skip_not_pass():
+    db = _drift_db()
+    for f in (db / DD / "issues").glob("*.yaml"):
+        data = yaml.safe_load(f.read_text(encoding="utf-8"))
+        data["sw"] = "UNKNOWN"
+        data.pop("platform_version", None)
+        f.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+    out = _drift(db)
+    assert [r["status"] for r in _rows(out)] == ["skip"]
+    assert "빌드 판정 불가 4/4" in _rows(out)[0]["evidence"]
+
+
+def test_drift_manual_and_oversized_feedback_excluded():
+    db = _drift_db()
+    _rec(db, "MOCK-1261", "DATA-001-01", "MOCKA56_U1_20261010", "16", [], decision="manual")
+    _rec(db, "MOCK-1262", "DATA-001-01", "MOCKA56_U1_20261011", "16", [])
+    big = db / "feedback" / "2026-10" / "MOCK-1262-20261015T1000.yaml"
+    big.write_text(big.read_text(encoding="utf-8") + "#" * (sa.DRIFT_MAX_BYTES + 1) + "\n", encoding="utf-8")
+    out = _drift(db)
+    assert not _rows(out, "needs-user")
+    assert any("KiB 넘음 1" in r["evidence"] for r in _rows(out, "info"))
+
+
+def test_drift_item_review_and_carry(site, fake_py):
+    db = _old_hits(site["db"])
+    _rec(db, "MOCK-1201", "DATA-001-01", "MOCKA56_U1_20261010", "16", [])
+    _rec(db, "MOCK-1202", "unresolved", "MOCKA56_U1_20261012", "16", [], decision="unresolved")
+    runner.git(db, "add", "-A")
+    runner.git(db, "commit", "-qm", f"분석 기록 MOCK-1201\n\n{CLAUDE}")
+    p = plan(site, repos=["ops_db"], cap=1)
+    did = f"drift:ops_db:{SIG}"
+    it = next(i for i in p["items"] if i["id"] == did)
+    assert it["kind"] == "drift" and it["priority"] == "P1" and it["est_tokens"] == sa.DRIFT_TOKENS and it["slot"] == "미룸"
+    assert any(c["id"] == "audit.ops_db.drift" and c["status"] == "needs-user" for c in p["checks"]) and p["exit"] == 1
+    assert sa._carry_repo(did) == "ops_db"
+    assert "update-signature" in sa.review_md({**p, "items": [{**it, "slot": "이번"}]})
+    assert not site["marker"].exists()                                  # Claude를 부르지 않는다
+    sa.write_plan(site["root"], p)
+    sa.record(site["root"])
+    state = json.loads((site["root"] / sa.STATE_FILE).read_text(encoding="utf-8"))
+    assert did in state["carry"]
+    p2 = plan(site, repos=["ops_db"])
+    assert "이월" in next(i for i in p2["items"] if i["id"] == did)["flags"]

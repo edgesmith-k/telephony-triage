@@ -26,7 +26,8 @@
 - 모듈 스킬 트랙(MODULE_SKILLS_PLAN_IMPL §6)은 MS-1 → MS-2(`MODULE_STEPS`, 점검은 `site_checks.MODULE_CHECKS`)다. `modules`는 S-3 완료 기록
   뒤에만 "진행 상태"에 `- 모듈 단계: MS-1`·`- 모듈 완료: (없음)`을 넣는다(한 번). `check`·`--done`은 MS-n도 받는다. 안내는 §15.5에 MS 행이
   있으면 그것, 없으면 `MODULE_GUIDE`. `modules coverage`는 `tools/module_coverage.py`(토큰 0, 사내 전용 출력), `audit`은
-  `tools/site_audit.py`(토큰 0 검사 뒤 Claude가 볼 것과 추정 토큰만 보인다 — Claude를 부르지 않는다, `docs/site/audit/`만 쓴다).
+  `tools/site_audit.py`(토큰 0 검사 뒤 Claude가 볼 것과 추정 토큰만 보인다 — Claude를 부르지 않는다, `docs/site/audit/`만 쓴다.
+  이슈 DB마다 시그니처 소실 행 `audit.<레포>.drift`: 자주 맞던 원인 시그니처가 새 빌드 기록에서 0회면 사용자 필요·항목 `drift:<레포>:<K>`).
 - 점검(`site_checks.py`)은 판정만 하고 단계를 넘기지 않는다. `--done`은 실패가 있으면 거부하고, 건너뜀·사용자 필요는
   `--waive`(사유는 SITE_PROFILE.md "설계 변경"·docs/site/evidence.md에 남는다 — 사유는 줄 끝, SITE_PROFILE에는 120자까지 +
   `…(전체: docs/site/evidence.md)`, 기록한 줄은 `--done` 출력에 보인다) 없이는 거부한다. 사용자 확인 없이 `--done`하지 않는다.
@@ -989,7 +990,7 @@ def main(argv: list[str] | None = None) -> int:
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("cmd", nargs="?", choices=("check", "propose", "evals", "ofono", "modules", "audit", "runtime-check"),
                     help="없으면 시작·이어 하기. ofono: oFono 트랙(O-1~O-4) 시작·이어 하기(S-3 완료 뒤). modules: 모듈 스킬 트랙"
-                         "(MS-1~MS-2, S-3 완료 뒤). audit: 정기 점검(토큰 0 검사 + Claude가 볼 것, Claude는 부르지 않는다). "
+                         "(MS-1~MS-2, S-3 완료 뒤). audit: 정기 점검(토큰 0 검사·시그니처 소실 + Claude가 볼 것, Claude는 부르지 않는다). "
                          "runtime-check: claude-gateway|opencode 런타임 점검(모델·네트워크 호출 없음)")
     ap.add_argument("step", nargs="?", metavar="S-n|O-n|MS-n",
                     help="check·propose 대상 단계(기본: 현재 단계). runtime-check면 claude-gateway|opencode, "

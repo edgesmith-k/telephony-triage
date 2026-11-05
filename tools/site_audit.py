@@ -8,7 +8,9 @@
 (`module_skills.remote`, 임시 clone)에 들어온 커밋 중 사내 모델이 만든 것(`Triage-Env` trailer, db_summary.env_trailer)과 출처를
 모르는 것을 고른다. Claude 출처는 세기만 하고 뺀다. 그다음 **토큰 0 검사**를 먼저 돌린다: db_lint·db_regress·db_verify rules
 (R3·R4 = 시그니처 겹침, 종료 3 = 승인 필요)·db_review(중복 후보)·mask_pii --check·근거 원문 검사 기록(JOB `check-output.json`)·
-module_repo_check·module_eval `--dry-run`(case 형식·크기, 실행 수). 걸린 기록과 바뀐 모듈만 Claude가 볼 목록으로 남기고, 추정 토큰을
+module_repo_check·module_eval `--dry-run`(case 형식·크기, 실행 수)·시그니처 소실(창과 무관하게 최신 main의 feedback
+`suggested[].signature` × `issues/<KEY>.yaml` sw·platform_version — 자주 맞던 원인 시그니처가 새 빌드 기록에서 0회면 사용자 필요,
+`drift_checks`). 걸린 기록과 바뀐 모듈만 Claude가 볼 목록으로 남기고, 추정 토큰을
 붙여 상한(`AUDIT_CAP_TOKENS`) 안만 "이번"으로, 나머지는 "미룸"(다음 점검으로 이월)으로 둔다. **Claude를 부르지 않는다** — 명령과
 리뷰 지시문만 보인다.
 
@@ -504,6 +506,19 @@ def plan(ctx, since: list[str] | None = None, last: bool = False, repos: list[st
             w["base"] = w["from"]
         w.update({"commits": len(found), "provenance": prov})
         windows[repo] = w
+        if repo != "modules":                              # 소실 감지는 창과 무관하게 최신 main 전체를 본다
+            src = ctx.inputs.get(repo) or f"<{repo} clone>"
+            for d in drift_checks(repo, clone):
+                if d["row"]:
+                    checks.append(d["row"])
+                if d["sig"]:
+                    did = f"drift:{repo}:{d['sig']}"
+                    items.append({"id": did, "repo": repo, "kind": "drift", "priority": "P1",
+                                  "flags": ["시그니처 소실 의심"] + (["이월"] if did in carry else []),
+                                  "files": [d["sig"]], "est_tokens": DRIFT_TOKENS, "at": "", "changed": 0, "sha": None,
+                                  "evidence": (d["row"] or {}).get("evidence", ""),
+                                  "cmds": [f"/telephony-triage:analyze <새 빌드 KEY> [logs...]   # 이슈 DB {src}"],
+                                  "note": DRIFT_HOWTO})
         carried = [c for c in carry if (c.startswith("mod:") if repo == "modules" else c.startswith(f"rec:{repo}:"))]
         if not picked and not carried:
             checks.append(_row(f"audit.{repo}.window", "info", "고를 커밋 없음(사내·출처 모름 0)", None))
@@ -593,6 +608,145 @@ def plan(ctx, since: list[str] | None = None, last: bool = False, repos: list[st
     return result
 
 
+# -- 시그니처 소실(drift): 자주 맞던 원인 시그니처가 새 빌드 기록에서 0회 -------------------------------------------------
+
+DRIFT_MIN_HITS = 3              # "자주": K가 feedback suggested에 든 기록 수(순위 무관)
+DRIFT_MIN_AFTER = 2             # 새 빌드 기록(원인 cause(K)·unresolved·new-cause) 수 → needs-user. 1이면 info(표본 부족)
+DRIFT_TOKENS = 8_000            # 항목 하나: 그 유형 담당자가 새 빌드 이슈 하나를 부분 일치·코드 대조와 함께 재분석
+DRIFT_UNJUDGED = 0.8            # 유형 기록 중 빌드 판정 불가가 이 비율 이상이면 skip(통과로 안 보임)
+DRIFT_MAX_FEEDBACK = 5_000      # feedback 최신 N개
+DRIFT_MAX_BYTES = 16 * 1024     # 파일당 상한(넘으면 건너뛰고 개수 info)
+DRIFT_MAX_ROWS = 10             # 레포당 행(넘으면 개수만)
+DRIFT_KEYS = 3                  # 증거 칸 Jira 키 예시 수(원문·요약은 넣지 않는다)
+PV_RE = re.compile(r"^[0-9]+$")  # = issue.schema platform_version
+DRIFT_HOWTO = ("새 빌드 이슈 하나를 `analyze`로 다시 보고 부분 일치·코드 대조 줄을 확인 → 남은 다른 층 줄로 OR 시그니처를 "
+               "`update-signature`로(사용자 확인·PR·+1)")
+
+
+def _load_yaml(path: Path) -> dict | None:
+    import yaml
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, yaml.YAMLError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _drift_records(clone: Path) -> tuple[dict[str, dict], dict[str, str], dict]:
+    """({KEY: 기록}, {유형 ID: 유형 디렉토리}, 개수). 기록 = `<유형>/issues/<KEY>.yaml` + 그 키의 최신 feedback.
+    feedback이 없는 기록(import)과 `decision: manual`은 뺀다."""
+    types: dict[str, str] = {}
+    issues: dict[str, dict] = {}
+    for f in sorted(clone.glob("*/*/issues/*.yaml")):
+        tdir = f.parent.parent
+        m = TYPE_ID_RE.match(tdir.name)
+        if not m:
+            continue
+        types.setdefault(m.group(0), f"{tdir.parent.name}/{tdir.name}")
+        data = _load_yaml(f) or {}
+        issues[f.stem] = {"key": f.stem, "type": m.group(0), "cause": str(data.get("cause") or ""),
+                          "sw": str(data.get("sw") or ""), "pv": str(data.get("platform_version") or "")}
+    files = sorted(clone.glob("feedback/*/*.yaml"), key=lambda p: (p.parent.name, p.name), reverse=True)
+    counts = {"feedback": len(files), "over_cap": max(0, len(files) - DRIFT_MAX_FEEDBACK), "too_big": 0}
+    latest: dict[str, dict] = {}
+    for f in files[:DRIFT_MAX_FEEDBACK]:
+        try:
+            if f.stat().st_size > DRIFT_MAX_BYTES:
+                counts["too_big"] += 1
+                continue
+        except OSError:
+            continue
+        fb = _load_yaml(f)
+        if not fb or not isinstance(fb.get("issue"), str):
+            continue
+        prev = latest.get(fb["issue"])
+        if prev is None or str(fb.get("date") or "") > str(prev.get("date") or ""):
+            latest[fb["issue"]] = fb
+    recs: dict[str, dict] = {}
+    for key, fb in latest.items():
+        if fb.get("decision") == "manual" or key not in issues:
+            continue
+        sigs = [str(s["signature"]) for s in fb.get("suggested") or [] if isinstance(s, dict) and s.get("signature")]
+        recs[key] = {**issues[key], "decision": str(fb.get("decision") or ""), "sigs": sigs}
+    return recs, types, counts
+
+
+def _newer(a: dict, b: dict, rules: list, builds) -> bool:
+    """a가 b보다 새 빌드인가. 같은 브랜치이고 둘 다 build_compare로 풀리면 sw 순서만, 그 밖(브랜치 다름·sw 못 풂)은
+    platform_version 주 버전이 **더 클 때만**. 한 비교에 두 순서를 섞지 않는다. 못 정하면 새 빌드가 아니다."""
+    c = builds.compare(a["sw"], b["sw"], rules)
+    if c is not None:
+        return c > 0
+    return bool(PV_RE.match(a["pv"]) and PV_RE.match(b["pv"]) and int(a["pv"]) > int(b["pv"]))
+
+
+def _judgeable(r: dict, rules: list, builds) -> bool:
+    return builds.compare(r["sw"], r["sw"], rules) is not None or bool(PV_RE.match(r["pv"]))
+
+
+def drift_checks(repo: str, clone: Path) -> list[dict]:
+    """[{row, sig}] (토큰 0, Claude를 부르지 않는다). sig가 있는 것(needs-user)만 계획 항목 `drift:<repo>:<K>`가 된다.
+
+    K(원인 시그니처 전역 키)마다 hits = K가 suggested에 든 기록, after = K의 유형 기록 중 K가 맞은 모든 (판정 가능한) 빌드보다
+    새 빌드이고 원인이 cause(K)·unresolved이거나 decision new-cause인 것. 같은 유형의 다른 원인 기록은 개수로만 보인다."""
+    tag = f"audit.{repo}.drift"
+    builds = sc._plugin_common("builds")
+    rules = (_load_yaml(clone / "issue-db.config.yaml") or {}).get("build_compare") or []
+    recs, types, counts = _drift_records(clone)
+    hits: dict[str, list[dict]] = {}
+    by_type: dict[str, list[dict]] = {}
+    for r in recs.values():
+        by_type.setdefault(r["type"], []).append(r)
+        for k in dict.fromkeys(r["sigs"]):
+            hits.setdefault(k, []).append(r)
+    frequent = sorted(k for k, hs in hits.items() if len(hs) >= DRIFT_MIN_HITS)
+    out: list[dict] = []
+    skipped_types: set[str] = set()
+    for k in frequent:
+        hs = hits[k]
+        cause = k.split("/", 1)[0]
+        tm = TYPE_ID_RE.match(cause)
+        pool = by_type.get(tm.group(0) if tm else "") or []
+        tid = tm.group(0) if tm else cause
+        unjudged = sum(1 for r in pool if not _judgeable(r, rules, builds))
+        if not pool or unjudged >= DRIFT_UNJUDGED * len(pool):
+            if tid not in skipped_types:
+                skipped_types.add(tid)
+                out.append({"row": _row(tag, "skip", f"{types.get(tid, tid)}: 빌드 판정 불가 {unjudged}/{len(pool)} "
+                                                       "(build_compare·platform_version 모두로 못 풂)", None), "sig": None})
+            continue
+        ordered = [h for h in hs if _judgeable(h, rules, builds)]   # 둘 다 없는 기록은 빌드 판정에서 빼고 개수만(hits)
+        if not ordered:
+            continue
+        hit_keys = {h["key"] for h in hs}
+        newer = [r for r in pool if r["key"] not in hit_keys and all(_newer(r, h, rules, builds) for h in ordered)]
+        after = [r for r in newer if r["cause"] in (cause, "unresolved") or r["decision"] == "new-cause"]
+        other = len(newer) - len(after)
+        if not after and not other:
+            continue
+        last = next(h for h in sorted(ordered, key=lambda h: h["key"]) if not any(_newer(o, h, rules, builds) for o in ordered))
+        where = last["sw"] if builds.compare(last["sw"], last["sw"], rules) is not None else f"platform {last['pv']}"
+        ex = ", ".join(sorted(r["key"] for r in after)[:DRIFT_KEYS])
+        ev = (f"{k}: 이전 hits {len(hs)} (마지막 {where}) → 새 빌드 기록 {len(after)}건 0회" + (f" (예: {ex})" if ex else "")
+              + (f" · 다른 원인 새 빌드 기록 {other}건(셈에서 뺌)" if other else ""))
+        if len(after) >= DRIFT_MIN_AFTER:
+            out.append({"row": _row(tag, "needs-user", ev, f"권고: {DRIFT_HOWTO}"), "sig": k})
+        else:
+            out.append({"row": _row(tag, "info", ev + (" — 표본 부족" if after else ""), None), "sig": None})
+    if len(out) > DRIFT_MAX_ROWS:
+        rest = out[DRIFT_MAX_ROWS:]
+        out = out[:DRIFT_MAX_ROWS] + [{"row": None, "sig": o["sig"]} for o in rest if o["sig"]]
+        out.append({"row": _row(tag, "info", f"행 {len(rest)}개 더(사용자 필요 {sum(1 for o in rest if o['sig'])}) — "
+                                             f"상한 {DRIFT_MAX_ROWS}행", None), "sig": None})
+    if counts["too_big"] or counts["over_cap"]:
+        out.append({"row": _row(tag, "info", f"feedback 건너뜀: {DRIFT_MAX_BYTES // 1024} KiB 넘음 {counts['too_big']} · "
+                                             f"최신 {DRIFT_MAX_FEEDBACK:,}개 밖 {counts['over_cap']}", None), "sig": None})
+    if not any(o["sig"] or (o["row"] and o["row"]["status"] == "skip") for o in out):
+        out.insert(0, {"row": _row(tag, "pass", f"소실 의심 없음 (feedback {counts['feedback']} · 기록 {len(recs)} · "
+                                                f"자주(≥{DRIFT_MIN_HITS}) 시그니처 {len(frequent)})", None), "sig": None})
+    return out
+
+
 # -- 출력·기록 --------------------------------------------------------------------------------------------------------
 
 MARK = {"pass": "통과", "fail": "실패", "skip": "건너뜀", "needs-user": "사용자 필요", "info": "정보"}
@@ -642,7 +796,10 @@ def review_md(p: dict) -> str:
         lines.append(f"- 근거: {', '.join(it['flags'])}")
         lines.append(f"- 파일: {', '.join(it['files'])}")
         lines += [f"- 명령: `{c}`" for c in it["cmds"]]
-        if it["kind"] == "module" and it.get("doc_only"):
+        if it["kind"] == "drift":
+            lines.append(f"- 증거: {it.get('evidence', '')}")
+            lines.append(f"- 볼 것(권고): {DRIFT_HOWTO}. 시그니처 추가·변경은 사용자 확인 뒤에만, 이 리뷰는 바꾸지 않는다.")
+        elif it["kind"] == "module" and it.get("doc_only"):
             lines.append("- 볼 것: eval을 돌릴 수 없다 — 바뀐 문서(explore·SKILL·analyzer)가 플랫폼 공통 원칙·안전 규칙과 맞는지 diff로만 본다.")
         elif it["kind"] == "module":
             lines.append("- 볼 것: with ≥ without, 안전 위반 0. 결과 기록은 스크립트(module_eval)만 쓴다.")
@@ -660,10 +817,10 @@ def write_plan(root: Path, p: dict) -> list[str]:
 
 
 def _carry_repo(cid: str) -> str | None:
-    """이월 id의 레포: `mod:<p>/<m>` → modules, `rec:<레포>:<sha>` → <레포>."""
+    """이월 id의 레포: `mod:<p>/<m>` → modules, `rec:<레포>:<sha>`·`drift:<레포>:<K>` → <레포>."""
     if cid.startswith("mod:"):
         return "modules"
-    if cid.startswith("rec:"):
+    if cid.startswith(("rec:", "drift:")):
         return cid.split(":", 2)[1]
     return None
 

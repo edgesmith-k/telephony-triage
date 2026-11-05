@@ -95,6 +95,7 @@
 - `SITE_PROFILE.md`는 `CLAUDE.md`가 **매 세션 import**하므로 **4KB 이하로 유지한다**(`CLAUDE.md`와 같은 기준. 진행 상태, 확인값 요약, 설계 변경 요약). `tools/context_pack.py`가 넘으면 경고한다(종료 코드는 그대로). 확인 근거(로그 파일·행 번호, 긴 설명)는 import하지 않는 `docs/site/evidence.md`(사내 전용)에 둔다.
 - "진행 상태"는 Phase가 끝나고 사용자 확인을 받을 때마다 갱신한다. 새 세션은 이 절을 보고 어디서 이어갈지 정한다.
 - 사내 보완의 단계 점검 기록(방문·마지막 `site_step.py check` 결과)은 `docs/site/steps/S-n.json`·`O-n.json`, 단계 입력(운영 DB clone 경로·샌드박스·라벨셋·eval 예산 등)은 `docs/site/steps.yaml`(`propose --apply`로만 씀)에 둔다. 둘 다 import하지 않는 사내 전용 파일이다.
+- 정기 점검(`site_step.py audit`, `tools/site_audit.py`)의 시그니처 소실 행 `audit.<레포>.drift`(토큰 0): 이슈 DB 최신 main의 `feedback/*/*.yaml` `suggested[].signature`와 `<유형>/issues/<KEY>.yaml`의 `sw`·`platform_version`을 잇는다(manual·feedback 없는 기록 제외). 빌드 순서는 같은 브랜치이고 둘 다 `build_compare`로 풀리면 `sw` 순서만, 그 밖은 `platform_version` 주 버전이 더 클 때만 새 빌드다(섞지 않는다). 원인 시그니처 K가 기록 3건 이상(`DRIFT_MIN_HITS`)에 제안됐는데 K가 맞은 모든 빌드보다 새 빌드인 같은 유형 기록 중 원인 cause(K)·unresolved·`decision: new-cause`인 것이 2건 이상(`DRIFT_MIN_AFTER`)이고 거기서 0회면 사용자 필요(항목 `drift:<레포>:<K>`, 추정 8,000 토큰, 미루면 이월), 1건이면 정보, 같은 유형의 다른 원인 기록은 개수만 보인다. 유형 기록의 80% 이상이 빌드 판정 불가면 건너뜀. 권고는 새 빌드 이슈 하나를 `analyze`로 다시 보고 부분 일치·코드 대조 줄로 OR 시그니처를 `update-signature`(사용자 확인·PR·+1)로 — 점검은 시그니처를 바꾸지 않는다. 증상(유형) 시그니처 소실은 feedback 스키마 변경이 필요해 미룬다.
 
 ### 14.4 Phase 0: 사내 환경 확인 (Phase 1보다 먼저)
 
