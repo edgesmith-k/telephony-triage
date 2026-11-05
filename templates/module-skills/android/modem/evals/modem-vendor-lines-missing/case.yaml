@@ -1,0 +1,25 @@
+# 합성 case (설계 D §1.2-i. 함정 ★: 벤더 RIL 줄 없음. run_expect verify(cause_unconfirmed 예상)). files/의 source.log 말고는 make_module_eval_inputs.py --write가 만든다
+schema_version: 1
+name: modem-vendor-lines-missing
+kind: explore
+synthetic: true
+key: MOCK-9815
+issue:
+  summary: 데이터와 발신이 응답 없이 멈춤 (합성)
+  description: 데이터 연결과 발신 요청이 응답 없이 멈췄다가 데이터가 끊깁니다. 합성 case.
+  occurred_at: '2026-08-28T17:00:15+0000'
+  platform_version: '14'
+  sim_slot: '0'
+parse: {tz: UTC, year: 2026, minutes: 5}
+input:
+  explore_input: files/explore-input.json
+  timeline: files/timeline.md
+  analysis: files/analysis.json
+run_expect:
+  explore_reason: cause_unconfirmed
+expect:
+  layer: '그\s*층\s*로그\s*없음'
+  daemon: '없음|알 수 없음'
+  evidence: ['\[0601\]> SETUP_DATA_CALL', '\[0603\]> DIAL']
+  trap: below-layer-missing
+  wrong_layer: ['^\s*(모뎀|망|벤더 RIL|RIL HAL|프레임워크)']

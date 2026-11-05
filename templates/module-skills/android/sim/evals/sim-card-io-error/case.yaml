@@ -1,0 +1,27 @@
+# 합성 case (설계 D §1.2-b). files/의 source.log 말고는 make_module_eval_inputs.py --write가 만든다
+schema_version: 1
+name: sim-card-io-error
+kind: deep
+synthetic: true
+key: MOCK-9804
+issue:
+  summary: SIM이 인식되지 않음 (합성)
+  description: 부팅 뒤 SIM 없음으로 표시됩니다. 합성 case.
+  occurred_at: '2026-08-21T10:00:21+0000'
+  platform_version: '14'
+  sim_slot: '0'
+parse: {tz: UTC, year: 2026, minutes: 5}
+input:
+  deep_input: files/deep-input.json
+  events: files/events.json
+  timeline: files/timeline.md
+  log: files/source.log
+run_expect:
+  top_cause: SIM-001-01
+  C: 1
+expect:
+  layer: '모뎀|망|벤더 RIL'
+  daemon: 'RIL$|RIL[ (]|SimService|벤더 RIL'
+  evidence: ['CARD_IO_ERROR', 'SIT_GET_SIM_STATUS.*Error\(RCM_E_']
+  trap: null
+  wrong_layer: ['^\s*(프레임워크|UiccController|RILJ|RIL HAL)', '^\s*그\s*층\s*로그\s*없음']

@@ -1,0 +1,26 @@
+-- [합성] telephony-triage module-skills D eval log. Hand-written in the line shapes of attached log A (11/05); composed; RILJ requests with no vendor RIL rows.
+08-28 17:00:02.000  2101 2111 D DNC-0   : Internet data state changed from DISCONNECTED to CONNECTED.
+08-28 17:00:05.000  2101 2161 I SST-0   : onServiceStateChanged: regState=HOME cellId=<CELL#1> [PHONE0]
+08-28 17:00:08.000  2101 2101 D ImsPhone: [0] handleImsRegistered: onImsMmTelConnected imsTransportType=WWAN
+08-28 17:00:10.000  2101 2145 D RILJ    : [0601]> SETUP_DATA_CALL,reason=NORMAL,accessNetworkType=EUTRAN,dataProfile=[DataProfile=[ApnSetting] internet, internet.example, IPV4V6] [PHONE0]
+08-28 17:00:12.000  2101 2113 D ImsPhoneCallTracker: [0] dial: isVolteEnabled=false imsRegistered=true
+08-28 17:00:12.500  2101 2141 D RILJ    : [0603]> DIAL clir=0 [PHONE0]
+08-28 17:00:15.000  2101 2111 D DNC-0   : Internet data state changed from CONNECTED to DISCONNECTED.
+08-28 17:00:20.000  2101 2161 I SST-0   : onServiceStateChanged: regState=HOME cellId=<CELL#1> [PHONE0]
+08-28 17:00:25.000  2101 2111 I DNC-0   : onEvaluateNetworkRequests: reason=DATA_SERVICE_STATE_CHANGED
+08-28 17:00:30.000  2101 2101 D ImsPhone: [0] handleImsRegistered: onImsMmTelConnected imsTransportType=WWAN
+08-28 17:00:35.000  2101 2161 I SST-0   : onServiceStateChanged: regState=HOME cellId=<CELL#1> [PHONE0]
+08-28 17:00:40.000  2101 2111 I DNC-0   : onEvaluateNetworkRequests: reason=RETRY_SCHEDULED
+08-28 17:00:45.000  2101 2113 W ImsPhoneCallTracker: [0] call ended: cause=65535
+08-28 17:00:50.000  2101 2161 I SST-0   : onServiceStateChanged: regState=HOME cellId=<CELL#1> [PHONE0]
+08-28 17:00:55.000  2101 2111 I DNC-0   : onEvaluateNetworkRequests: reason=RETRY_SCHEDULED
+08-28 17:01:00.000  2101 2101 D ImsPhone: [0] handleImsRegistered: onImsMmTelConnected imsTransportType=WWAN
+08-28 17:01:05.000  2101 2161 I SST-0   : onServiceStateChanged: regState=HOME cellId=<CELL#1> [PHONE0]
+08-28 17:01:10.000  2101 2111 I DNC-0   : onEvaluateNetworkRequests: reason=RETRY_SCHEDULED
+08-28 17:01:15.000  2101 2145 D RILJ    : [0605]> GET_DATA_CALL_LIST [PHONE0]
+08-28 17:01:20.000  2101 2161 I SST-0   : onServiceStateChanged: regState=HOME cellId=<CELL#1> [PHONE0]
+08-28 17:01:25.000  2101 2111 I DNC-0   : onEvaluateNetworkRequests: reason=RETRY_SCHEDULED
+08-28 17:01:30.000  2101 2101 D ImsPhone: [0] handleImsRegistered: onImsMmTelConnected imsTransportType=WWAN
+08-28 17:01:35.000  2101 2161 I SST-0   : onServiceStateChanged: regState=HOME cellId=<CELL#1> [PHONE0]
+08-28 17:01:40.000  2101 2111 I DNC-0   : onEvaluateNetworkRequests: reason=RETRY_SCHEDULED
+08-28 17:01:45.000  2101 2161 I SST-0   : onServiceStateChanged: regState=HOME cellId=<CELL#1> [PHONE0]

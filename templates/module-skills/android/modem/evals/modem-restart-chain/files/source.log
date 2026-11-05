@@ -1,0 +1,26 @@
+-- [합성] telephony-triage module-skills D eval log. Hand-written in the line shapes of attached log A (11/05); composed modem restart chain; attached log A has no modem restart.
+08-27 16:00:02.100  2101 2141 D RILJ    : [0307]> NOTIFY_IMS_DATA_NETWORK [PHONE0]
+08-27 16:00:03.107  1188 1258 V RIL     : [<DEV#1>][TX] <unknown sit>, REQ, 12 bytes, Token(0x0207)
+08-27 16:00:04.114  1188 1258 V RIL     : [<DEV#1>][RX] <unknown sit>, RSP, 12 bytes, Token(0x0207), Error(RCM_E_UNDEFINED_CMD)
+08-27 16:00:05.121  1188 1248 E RILC    : Calling responseFunction() for token 307
+08-27 16:00:06.128  1188 1258 V RIL     : Send()_0 RCM Response Routing : Type=0001, RCM ID=0x0703 Service ID=5 Message ID=4009
+08-27 16:00:07.135  2101 2141 D RILJ    : [0307]< NOTIFY_IMS_DATA_NETWORK error 6 [PHONE0]
+08-27 16:00:20.000  2101 2142 D RILJ    : [UNSL]< UNSOL_MODEM_RESTART [PHONE0]
+08-27 16:00:20.010  1830 1910 V OemRil  : notifyRadioStateChanged: newState=RADIO_UNAVAILABLE
+08-27 16:00:20.500  2101 2141 D RILJ    : [0340]> GET_CURRENT_CALLS [PHONE0]
+08-27 16:00:21.000  2101 2101 D ImsPhone: [0] handleImsUnregistered: onImsMmTelDisconnected imsReasonInfo=ImsReasonInfo :: {121 : CODE_LOCAL_NETWORK_NO_SERVICE, 0, null}, suggestedAction=0
+08-27 16:00:21.100  2101 2113 W ImsRegistration: onRegistrationFailed: code=1000 reason=LOCAL [PHONE0]
+08-27 16:00:21.200  1188 1258 V RIL     : [<DEV#1>][RX] <HEXDUMP 16B>
+08-27 16:00:25.000  2101 2113 D ImsPhoneCallTracker: [0] dial: isVolteEnabled=true imsRegistered=false
+08-27 16:00:25.500  2101 2141 D RILJ    : [0342]> DIAL clir=0 [PHONE0]
+08-27 16:00:26.700  2101 2142 D RILJ    : [0342]< DIAL [PHONE0]
+08-27 16:00:28.700  2101 2142 D RILJ    : [UNSL]< UNSOL_RESPONSE_CALL_STATE_CHANGED [PHONE0]
+08-27 16:00:29.000  2101 2141 D RILJ    : [0343]> LAST_CALL_FAIL_CAUSE [PHONE0]
+08-27 16:00:29.400  2101 2142 D RILJ    : [0343]< LAST_CALL_FAIL_CAUSE causeCode=17 [PHONE0]
+08-27 16:00:29.600  2101 2113 W ImsPhoneCallTracker: [0] call ended: cause=17
+08-27 16:00:30.000  1188 1248 E RILC    : Calling responseFunction() for token 343
+08-27 16:00:32.010  1830 1910 V OemRil  : notifyRadioStateChanged: newState=RADIO_ON
+08-27 16:00:33.000  1188 1258 V RIL     : Send()_0 RCM Response Routing : Type=0001, RCM ID=0x0703 Service ID=5 Message ID=4009
+08-27 16:00:50.011  1188 1248 E RILC    : Calling responseFunction() for token 430
+08-27 16:00:50.311  1188 1258 V RIL     : [<DEV#1>][RX] <HEXDUMP 16B>
+08-27 16:00:50.611  1188 1258 V RIL     : Send()_0 RCM Response Routing : Type=0001, RCM ID=0x0703 Service ID=5 Message ID=4009

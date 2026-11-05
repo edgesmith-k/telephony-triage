@@ -1,0 +1,25 @@
+# 합성 case (설계 D §1.2-f. run_expect verify). files/의 source.log 말고는 make_module_eval_inputs.py --write가 만든다
+schema_version: 1
+name: sms-ims-local-reject
+kind: explore
+synthetic: true
+key: MOCK-9811
+issue:
+  summary: 문자가 늦게 전송됨 (합성)
+  description: 문자 전송이 한 번 실패로 뜬 뒤 몇 초 늦게 전송됩니다. 합성 case.
+  occurred_at: '2026-08-25T14:00:21+0000'
+  platform_version: '14'
+  sim_slot: '0'
+parse: {tz: UTC, year: 2026, minutes: 5}
+input:
+  explore_input: files/explore-input.json
+  timeline: files/timeline.md
+  analysis: files/analysis.json
+run_expect:
+  explore_reason: cause_unconfirmed
+expect:
+  layer: '벤더 IMS'
+  daemon: 'SHANNON_IMS|벤더 IMS'
+  evidence: ['SEND_STATUS_ERROR_FALLBACK', '\[0702\]> SEND_SMS']
+  trap: null
+  wrong_layer: ['^\s*(모뎀|망|RILJ|RIL HAL|벤더 RIL|프레임워크)']
