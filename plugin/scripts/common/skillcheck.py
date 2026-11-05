@@ -692,7 +692,8 @@ def template_findings(root) -> list[dict]:
     - `출처`: case마다 `origin_problems`(rule = 위반 문구).
     - `case 파일`: `files/`가 `FILES_SET[kind]`와 정확히 같다.
     - `플랫폼 섞임`: oFono 문서에 `ANDROID_NAMES`, Android 문서에 `OFONO_NAMES`(rule = 걸린 이름).
-    - `데몬 표`: modules.yaml `platforms.ofono`의 daemons 값마다 `ofono/_common/components.md`에 `| <이름> |` 행(rule = 이름).
+    - `데몬 표`: modules.yaml `platforms.ofono`의 daemons 값마다 `ofono/_common/components.md` 역할 표의 지금·구 이름 칸에
+      그 이름(rule = 이름).
     - `D-Bus 이름`: oFono 문서의 허용 밖 이름(`dbus_violations`, rule = 이름).
     modules.yaml을 못 읽으면 `읽기` finding 하나로 닫는다(그때 데몬 표·D-Bus 점검은 하지 않는다).
     """
@@ -737,8 +738,13 @@ def template_findings(root) -> list[dict]:
             daemons.extend(mb.get("daemons") or [])
     comp = root / "ofono" / "_common" / "components.md"
     table = _read(comp) if comp.is_file() else ""
+    listed = set()          # 역할 표(C1D 보정 §3.1): `| 역할 | 지금 이름 | 구 이름 | 층 | 비고 |`의 둘째·셋째 칸, `, `로 나눔
+    for line in table.splitlines():
+        cells = [c.strip() for c in line.strip().strip("|").split("|")] if line.startswith("|") else []
+        for cell in cells[1:3]:
+            listed |= {n.strip().strip("`") for n in cell.split(", ")}
     for name in dict.fromkeys(d for d in daemons if isinstance(d, str)):
-        if not re.search(rf"(?m)^\| {re.escape(name)} \|", table):
+        if name not in listed:
             findings.append(_finding("데몬 표", "ofono/_common/components.md", rule=name))
     allowed = dbus_allowed(doc)
     for path in _doc_paths(root, "ofono"):
