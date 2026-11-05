@@ -1,0 +1,68 @@
+{
+ "status": "ok",
+ "key": "MOCK-9404",
+ "platform": "ofono",
+ "mode": "offline",
+ "issue": {
+  "origin": "file",
+  "occurred_at": "2026-09-23T10:20:05+00:00",
+  "sw": null,
+  "platform_version": "2",
+  "sim_slot": "0",
+  "summary": "eCall MSD 전송 실패 (합성)",
+  "description": "eCall 통화는 연결되지만 MSD가 전송되지 않습니다. eCall·IVS 경로 줄은 로그에 없습니다. 합성 case.",
+  "comments": 0,
+  "missing": [
+   "model",
+   "sw"
+  ]
+ },
+ "logs": {
+  "files": [
+   "source.log"
+  ],
+  "window": {
+   "start": "2026-09-23T10:15:05.000Z",
+   "end": "2026-09-23T10:25:05.000Z"
+  },
+  "range": [
+   "2026-09-23T10:20:00.010Z",
+   "2026-09-23T10:20:47.010Z"
+  ],
+  "in_range": "partial",
+  "clock_anomalies": 0,
+  "events": 26
+ },
+ "no_candidate": {
+  "search_hits": [
+   {
+    "id": "SMS-001",
+    "kind": "type",
+    "title": "문자가 전송되지 않음 (합성)"
+   },
+   {
+    "id": "SMS-001-01",
+    "kind": "cause",
+    "title": "문자가 전송되지 않음 (합성)"
+   },
+   {
+    "id": "CALL-001",
+    "kind": "type",
+    "title": "발신이 되지 않음 (합성)"
+   }
+  ],
+  "error_events": [],
+  "error_event_total": 0
+ },
+ "code": {
+  "skipped": true
+ },
+ "explore": {
+  "reason": "no_candidate",
+  "when": "ask"
+ },
+ "must_show": [
+  "로그 범위: 2026-09-23T10:20:00.010Z ~ 2026-09-23T10:20:47.010Z (일부만 포함), 시계 이상 없음"
+ ],
+ "truncated": false
+}

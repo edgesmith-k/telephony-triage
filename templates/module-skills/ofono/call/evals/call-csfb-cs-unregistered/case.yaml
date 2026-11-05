@@ -1,0 +1,25 @@
+# 합성 case (C1D 보정 §6.3 N6). files/의 timeline·입력·analysis는 make_module_eval_inputs.py --write가 만든다
+schema_version: 1
+name: call-csfb-cs-unregistered
+kind: explore
+synthetic: true
+key: MOCK-9403
+issue:
+  summary: 'LTE에서 전화를 걸면 연결되지 않음 (합성)'
+  description: 'LTE에서 발신하면 CSFB가 되지 않고 끊깁니다. 합성 case.'
+  occurred_at: '2026-09-23T10:10:05+0000'
+  platform_version: '2'
+  sim_slot: '0'
+parse: {tz: UTC, year: 2026, minutes: 5}
+input:
+  explore_input: files/explore-input.json
+  timeline: files/timeline.md
+  analysis: files/analysis.json
+run_expect:
+  explore_reason: no_candidate
+expect:
+  layer: '모뎀|망'
+  daemon: 'exynos-ril'
+  evidence: ['Voice RegState=.*RejectCause=[1-9]', 'voiceOverLteCapable=0']
+  trap: null
+  wrong_layer: ['^\s*(관리 데몬|D-Bus|ofonod|MOSE|곁가지|벤더 RIL)', '^\s*그\s*층\s*로그\s*없음', '^\s*원인\s*아님']

@@ -1,0 +1,68 @@
+{
+ "status": "ok",
+ "key": "MOCK-9403",
+ "platform": "ofono",
+ "mode": "offline",
+ "issue": {
+  "origin": "file",
+  "occurred_at": "2026-09-23T10:10:05+00:00",
+  "sw": null,
+  "platform_version": "2",
+  "sim_slot": "0",
+  "summary": "LTE에서 전화를 걸면 연결되지 않음 (합성)",
+  "description": "LTE에서 발신하면 CSFB가 되지 않고 끊깁니다. 합성 case.",
+  "comments": 0,
+  "missing": [
+   "model",
+   "sw"
+  ]
+ },
+ "logs": {
+  "files": [
+   "source.log"
+  ],
+  "window": {
+   "start": "2026-09-23T10:05:05.000Z",
+   "end": "2026-09-23T10:15:05.000Z"
+  },
+  "range": [
+   "2026-09-23T10:10:00.010Z",
+   "2026-09-23T10:10:06.200Z"
+  ],
+  "in_range": "partial",
+  "clock_anomalies": 0,
+  "events": 25
+ },
+ "no_candidate": {
+  "search_hits": [
+   {
+    "id": "CALL-001",
+    "kind": "type",
+    "title": "발신이 되지 않음 (합성)"
+   },
+   {
+    "id": "DATA-001",
+    "kind": "type",
+    "title": "데이터 연결이 되지 않음 (합성)"
+   },
+   {
+    "id": "NETWORK-001",
+    "kind": "type",
+    "title": "NR 모드가 조회되지 않음 (합성)"
+   }
+  ],
+  "error_events": [],
+  "error_event_total": 0
+ },
+ "code": {
+  "skipped": true
+ },
+ "explore": {
+  "reason": "no_candidate",
+  "when": "ask"
+ },
+ "must_show": [
+  "로그 범위: 2026-09-23T10:10:00.010Z ~ 2026-09-23T10:10:06.200Z (일부만 포함), 시계 이상 없음"
+ ],
+ "truncated": false
+}

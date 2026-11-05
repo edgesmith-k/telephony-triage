@@ -1,0 +1,25 @@
+# 합성 case (C1D 보정 §6.3 N4). files/의 timeline·입력·analysis는 make_module_eval_inputs.py --write가 만든다
+schema_version: 1
+name: data-nr-switch-drop
+kind: explore
+synthetic: true
+key: MOCK-9105
+issue:
+  summary: '5G에서 LTE로 바뀔 때 데이터가 끊김 (합성)'
+  description: 'SA에서 LTE로 넘어가는 순간 데이터 연결이 끊깁니다. 합성 case.'
+  occurred_at: '2026-09-22T09:10:08+0000'
+  platform_version: '2'
+  sim_slot: '0'
+parse: {tz: UTC, year: 2026, minutes: 5}
+input:
+  explore_input: files/explore-input.json
+  timeline: files/timeline.md
+  analysis: files/analysis.json
+run_expect:
+  explore_reason: no_candidate
+expect:
+  layer: '모뎀|망'
+  daemon: 'exynos-ril'
+  evidence: ['UNSOL_DATA_CALL_LIST_CHANGED', 'SIT_IND_PHYSICAL_CHANNEL_CONFIG']
+  trap: null
+  wrong_layer: ['^\s*(관리 데몬|NMD|ofonod|D-Bus|MOSE|곁가지)', '^\s*그\s*층\s*로그\s*없음', '^\s*원인\s*아님']
