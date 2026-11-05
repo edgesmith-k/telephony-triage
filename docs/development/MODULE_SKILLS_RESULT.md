@@ -106,6 +106,7 @@ eval별 한 줄:
 | C0 모듈 eval 재실행(`module-ofono-data-003`, restricted, Sonnet, 6회) | $0.35 | $0.365 | $0.365 |
 | B2 통합 eval(`b2-a`: 76~79·40·41·71·46·47·57·63·1·73, `b2-b`: 73, Sonnet, 14회) | ≈ $6 | $4.36 | $4.73 |
 | B2 eval 수정 뒤 재실행(`b2fix-a`: 40·41·71·79·76·46·77·73, `b2fix-b`: 40·46·77·73, Sonnet, 12회) | ≈ $3.6 | $4.22 | $8.95 |
+| B2 eval 2차 수정 뒤 재실행(`b2fix2-a`: 40·71·77·46, `b2fix2-b`: 40·77, Sonnet, 6회) | ≈ $2.3 | $2.29 | $11.24 |
 
 C0 재실행: with 3/3·without 1/3, 안전 위반 0/0, 관문 pass(deep with 토큰 −7.1K, explore +4.8K·+12.2K). B2 통합 eval 1차(기계 행): 1·41·47·57·63·78·73(b2-a) 통과, 40(2행)·46(1)·71(1)·76(1)·77(1)·79(2)·73(b2-b, 2) 실패 — 원인 분석·수정·재실행은 아래 B2 eval 수정 절.
 
@@ -113,7 +114,10 @@ C0 재실행: with 3/3·without 1/3, 안전 위반 0/0, 관문 pass(deep with �
 
 원인(scratchpad b2fix): 76·77 채점기가 Read 도구만 세고(모델은 사본을 `cat`으로 읽음 — 모듈 문서는 런타임 중립이라 도구 이름을 쓰지 않고 OpenCode도 `cat`을 허용) 플러그인 진입 스킬 호출까지 Skill 위반으로 셌다. 71 채점기가 `skill_dir`를 잘못 비교. 41 채점기가 `출력 형식 불일치`를 분석 스킬 실패로 통과시켰다(나쁜 run 통과). 40 모의 분석 스킬에 run.py 절차가 없었다(B2로 Skill → 파일 읽기로 바뀌며 드러남). 79 SKILL.md 5-1이 module-skills.md를 `module` 호출 뒤에 읽게 두었고 채점기가 `echo exit=$?`를 못 읽었다. 73 explore.md 5번에서 refs 안내가 묻혔다. 46은 B2 전에도 있던 우연(가끔 로그 원문 grep).
 고친 것(900bb3d): 채점기 공용 Bash 읽기 판별(cat·head·sed·grep… — `cd`·변수·따옴표, 쓰기는 동사·리다이렉트로 판별), 진입 스킬 제외, 종료 코드 echo, 77 로그 원문 열람 실패, 41 행 강화, 71 meta.json `skill_dir` 대조, 모의 분석 스킬 `## 절차`, SKILL.md 5-1 "module 전에 module-skills.md"(9,060 → 9,107B, 상한 9,107 — 10-skill-eval.md·test_triage.py), explore.md 5번 순서(7,167/7,168B), core.py `EXPLORE_PENDING_LINE` 보강(골든 바이트 동일), eval 77 단언 2 문구. 재채점(사본): 41 행2 T→F, 71 행2·76 행3·79 행1 F→T, 다른 행·이전 22 반복 뒤집힘 0. 메인 판정: eval 73 G10 오판정은 11/03 "기록만" 결정대로 두고, `NEXT_CONTINUE` 문구 대안은 재실행에서도 멈출 때만.
-재실행 결과(900bb3d 뒤 12회): 41·71·76·79 통과(고침 확인). 40은 2/2 실패(리포트에 `심층 분석 (mock-data-analyzer)` 절 없음), 46·73·77은 각 1/2 실패 — 실패는 모두 explore 쪽에서 report.md를 읽은 직후 로그 원문을 연 것(`cat`·`grep`·`wc -l`; 77은 Bash `cat`으로 원문 전체). 2차 원인 분석(guard 규칙 10이 Bash 원문 읽기를 막는지 포함) 진행 중.
+재실행 결과(900bb3d 뒤 12회): 41·71·76·79 통과(고침 확인). 40은 2/2 실패(리포트에 `심층 분석 (mock-data-analyzer)` 절 없음), 46·73·77은 각 1/2 실패 — 실패는 모두 explore 쪽에서 report.md를 읽은 직후 로그 원문을 연 것(`cat`·`grep`·`wc -l`; 77은 Bash `cat`으로 원문 전체). 2차 원인 분석(guard 규칙 10이 Bash 원문 읽기를 막는지 포함)은 아래 2차 수정.
+2차 수정(1bc28b2, scratchpad b2fix2): 40 — 심층 `check-output` 결과 첫 줄이 표시 의무가 아니어서 모델이 리포트 절을 건너뜀 → 심층은 결과 첫 줄을 늘 `evidence` 표시 의무로(탐색·`--skipped`·실패는 그대로). 46·73·77 — guard 규칙 10은 Read 도구만 막고 Bash `cat`·`grep`은 안내 문구로만 막는다(모듈 문서·OpenCode가 `cat`을 쓰므로 막는 형태는 그대로) → `analysis.json` analyzer·explore에 `when: ask`일 때만 note("답 전 로그 원문 grep·sed·Read 금지"), report.md 원인 줄 탐색 변형, 규칙 10 거부 문구 보강. 채점기(11/05 사용자 결정 G): `wc`·`ls`·`stat`·`file`만 있는 조각은 열람으로 세지 않되, 파이프·`$(`·백틱·리다이렉트·xargs·tee·eval·heredoc이 있으면 아무 조각도 빼지 않는다(우회 20개 테스트). 작업 공간 전체 3,561 통과.
+2차 재실행(6회, $2.29): 40 2/2·46·71·77 2/2 통과, 실패 행 0(판정 보류 행은 사람 판정 행). 탐색 쪽 답 전 원문 열람 0/3(1차 재실행 4/5). 76은 Stop 차단 1회가 의도된 동작이라 다시 돌리지 않았다.
+P2(2차): F2 note가 4KB 최악 입력에서 must_show를 6→4로 줄인다(L≥155자일 때만), contracts "(심층 재실행 = 새 의무)" 문구가 모호, `shown.py:36` LINE_KINDS 주석이 evidence 의미 변화를 안 담음.
 P2: 채점기 — `Shell cwd was reset` 줄 무시로 cwd 오해석(77 영향 낮음), cwd로만 가리킨 쓰기(`cd …/module-skill && rm x`) 미탐지(옛 채점기도), 종료 코드 echo가 일치 명령과 묶이지 않음, 41 행2가 `마스킹 점검 실패` 같은 다른 사유도 통과, 풀 수 없는 경로를 76 read 밖으로 셈. 문서 — 5-2 경로에도 "module 전에 module-skills.md" 문구 없음(SKILL.md 상한과 함께), explore.md 5번 "꼭" 빠짐, 모의 `분석 스킬 의견:` 형식이 리포트 자리 표시와 다름, pending 줄 "(가설 근거는 이 파일)"이 module 경로에서는 JOB/timeline.md를 가리킴.
 
 ### P2 — B1·B2 통합 재리뷰 (11/05, 4관점 리뷰 → 반박 검증, 반입 뒤 후보)
