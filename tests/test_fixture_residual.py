@@ -101,6 +101,25 @@ def test_dump_split_chunks_and_shape(tmp_path):
     assert kinds == [(2, "plmn"), (3, "plmn"), (4, "plmn"), (5, "plmn")], kinds
 
 
+def test_dump_chunks_interleaved_and_ms(tmp_path):
+    """C-F1: 실제 로그는 조각 사이에 다른 줄이 끼고 ms가 바뀐다. 시각을 뺀 앞머리가 같고 1초 안이면 잇고, 순번은 원래 줄이다."""
+    other = "Sep 20 15:10:05.003 host1 daemon.info ofonod[1]: src/network.c:other() x"
+    lines = [
+        DUMP.replace(".000", ".001") + 'dict{"MobileCountryCode", variant("4',
+        other,
+        DUMP.replace(".000", ".004").replace("[1]", "[2]") + "other pid",
+        DUMP.replace(".000", ".007") + '50")}]',
+        DUMP.replace("05.000", "07.000") + "late chunk",
+    ]
+    assert fixture_residual.dump_groups(lines) == [[(0, len(DUMP)), (3, len(DUMP))]]
+    hits = fixture_residual.cross_hits(lines, fixture_residual.SHAPE_RX)
+    assert [(k, [i for i, _a, _b in pieces]) for k, _v, pieces in hits] == [("plmn", [0, 3])]
+    fix = tmp_path / "source.log"
+    fix.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    proc = _run(fix, "--json")
+    assert sorted((x["line"], x["kind"]) for x in json.loads(proc.stdout)["findings"]) == [(1, "plmn"), (4, "plmn")]
+
+
 def test_exit_codes(tmp_path):
     assert _run(tmp_path / "missing.log").returncode == 2
     clean = tmp_path / "ok.log"
