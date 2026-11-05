@@ -44,6 +44,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -1400,7 +1401,8 @@ def execute(args, src: Source, cases: list[Case], plan, cli: CliInfo, unit: floa
         "docs_sha256": dict(sorted(docs_sha.items())), "cli_version": cli.version,
         "iteration": iter_dir.name, "runtime": "claude-code", "child_mode": args.child_mode,
         "builtin_plugins": builtin, "inputs_sha256": dict(sorted(inputs_sha.items())),
-        "prompt_sha256": prompt_frame_sha(src.platform)}, doc_bytes)
+        "prompt_sha256": prompt_frame_sha(src.platform),
+        "runs_per_case": args.runs, "bare": args.bare, "require_cost": args.require_cost}, doc_bytes)
     if args.note:
         entry["note"] = args.note
     write_json(iter_dir / "module_offsite_results.json", {"schema_version": 1, "modules": {args.module: entry}})
@@ -1508,17 +1510,23 @@ def module_entry(rows: list[dict], gate: dict, cases: list[Case], arms, base: di
     return entry
 
 
+MERGE_SETTINGS = ("runs_per_case", "child_mode", "bare", "require_cost")  # 한 arm 기록을 합칠 때 같아야 하는 실행 설정
+
+
 def merge_single_arm(old, new: dict, arm: str, src: Source, cases: list[Case], require_cost: bool):
     """한 arm(`--arms with|without`) 기록을 기존 모듈 기록에 합친다. (합친 기록, 두 arm run 행).
 
-    조건(R17): 기존 기록이 있고 프롬프트 틀(`prompt_sha256`)·입력(`inputs_sha256`)·case 집합이 같고, 다른 arm의
-    문서(`docs_sha256`의 `<다른 arm>/…`)가 지금 파일과 같고, 다른 arm 기록이 관문 재계산 칸을 다 가진다.
-    아니면 UsageError `"<다른 arm> 기록이 낡음 — 두 arm 모두 다시"`.
+    조건(R17): 기존 기록이 있고 프롬프트 틀(`prompt_sha256`)·입력(`inputs_sha256`)·case 집합·실행 설정
+    (`MERGE_SETTINGS`: case당 run 수·자식 모드·bare·비용 기록 필수)이 같고, case마다 두 arm의 run 수가 같고, 다른
+    arm의 문서(`docs_sha256`의 `<다른 arm>/…`)가 지금 파일과 같고, 다른 arm 기록이 관문 재계산 칸을 다 가진다.
+    아니면 UsageError `"<다른 arm> 기록이 낡음 — 두 arm 모두 다시"`. (관문은 pass1 합계를 비교하므로 run 수가
+    다르면 진 arm이 이긴 것으로 보일 수 있다.)
     """
     other = "without" if arm == "with" else "with"
     stale = UsageError(f"{other} 기록이 낡음 — 두 arm 모두 다시")
     if not isinstance(old, dict) or old.get("prompt_sha256") != new["prompt_sha256"] \
-            or old.get("inputs_sha256") != new["inputs_sha256"] or set(old.get("cases") or {}) != set(new["cases"]):
+            or old.get("inputs_sha256") != new["inputs_sha256"] or set(old.get("cases") or {}) != set(new["cases"]) \
+            or any(k not in old or old[k] != new.get(k) for k in MERGE_SETTINGS):
         raise stale
     now = {}
     for case in cases:
@@ -1530,6 +1538,8 @@ def merge_single_arm(old, new: dict, arm: str, src: Source, cases: list[Case], r
     other_rows = _rows_from_record(old, other)
     new_rows = _rows_from_record(new, arm)
     if other_rows is None or new_rows is None:
+        raise stale
+    if Counter(r["case"] for r in other_rows) != Counter(r["case"] for r in new_rows):
         raise stale
     rows = new_rows + other_rows if arm == "with" else other_rows + new_rows
     gate = gate_summary(rows, require_cost)

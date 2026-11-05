@@ -1505,6 +1505,41 @@ def test_record_merge_refuses_stale(env, tmp_path, capsys):
     assert env.run("--arms", "with", "--record", "--iteration", str(tmp_path / "it4")) == 2
 
 
+
+@POSIX
+def test_record_merge_refuses_other_run_settings(env, tmp_path, capsys):
+    """한 arm 합치기는 case당 run 수·자식 모드·bare·비용 기록 필수가 같을 때만 — 다르면 pass1 합계 비교가
+    진 arm을 이긴 것으로 기록할 수 있다(--runs 2로 with만 다시 돌려 with 4/6 대 without 3/3 → pass)."""
+    env.streams(all_good(env))
+    assert env.run("--record", "--iteration", str(tmp_path / "it1")) == 0
+    before = me.RESULTS.read_text(encoding="utf-8")
+    first = json.loads(before)["modules"]["ofono/data"]
+    assert {k: first[k] for k in me.MERGE_SETTINGS} == {"runs_per_case": 1, "child_mode": "contract", "bare": False,
+                                                       "require_cost": True}
+    for i, extra in enumerate((["--runs", "2"], ["--child-mode", "restricted"], ["--bare"], ["--no-require-cost"]), 2):
+        env.log.unlink()
+        runs = 2 if extra[0] == "--runs" else 1
+        env.streams([good_stream(env, n, "with") for n in CASES for _ in range(runs)])
+        capsys.readouterr()
+        assert env.run("--arms", "with", *extra, "--record", "--iteration", str(tmp_path / f"it{i}")) == 2, extra
+        assert "without 기록이 낡음 — 두 arm 모두 다시" in capsys.readouterr().err
+        assert me.RESULTS.read_text(encoding="utf-8") == before
+    # 설정이 같아도 case마다 두 arm의 run 수가 다르면 거부(기록을 손으로 고친 경우 등)
+    old = json.loads(before)
+    rec = old["modules"]["ofono/data"]["cases"][CASES[0]]
+    rec["without"] = [rec["without"], rec["without"]]
+    me.RESULTS.write_text(json.dumps(old), encoding="utf-8")
+    env.log.unlink()
+    env.streams(_with_only(env))
+    assert env.run("--arms", "with", "--record", "--iteration", str(tmp_path / "it9")) == 2
+    # 옛 기록(설정 칸 없음)도 거부
+    old = json.loads(before)
+    old["modules"]["ofono/data"].pop("runs_per_case")
+    me.RESULTS.write_text(json.dumps(old), encoding="utf-8")
+    env.log.unlink()
+    env.streams(_with_only(env))
+    assert env.run("--arms", "with", "--record", "--iteration", str(tmp_path / "it10")) == 2
+
 def test_token_goal_in_gate():
     assert me.gate_summary([_row("with", tokens=90), _row("without", tokens=100)], True)["token_goal"] == "met"
     assert me.gate_summary([_row("with", tokens=100), _row("without", tokens=100)], True)["token_goal"] == "met"
