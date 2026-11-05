@@ -1,0 +1,68 @@
+{
+ "status": "ok",
+ "key": "MOCK-9602",
+ "platform": "ofono",
+ "mode": "offline",
+ "issue": {
+  "origin": "file",
+  "occurred_at": "2026-09-21T10:40:05+00:00",
+  "sw": null,
+  "platform_version": "2",
+  "sim_slot": "0",
+  "summary": "VoLTE 등록이 안 됨 (합성)",
+  "description": "VoLTE 등록이 되지 않습니다. 합성 case.",
+  "comments": 0,
+  "missing": [
+   "model",
+   "sw"
+  ]
+ },
+ "logs": {
+  "files": [
+   "source.log"
+  ],
+  "window": {
+   "start": "2026-09-21T10:35:05.000Z",
+   "end": "2026-09-21T10:45:05.000Z"
+  },
+  "range": [
+   "2026-09-21T10:40:00.010Z",
+   "2026-09-21T10:40:25.012Z"
+  ],
+  "in_range": "partial",
+  "clock_anomalies": 0,
+  "events": 27
+ },
+ "no_candidate": {
+  "search_hits": [
+   {
+    "id": "IMS-001",
+    "kind": "type",
+    "title": "IMS 등록 401 거절됨 (합성)"
+   },
+   {
+    "id": "IMS-001-01",
+    "kind": "cause",
+    "title": "IMS 등록 401 거절됨 (합성)"
+   },
+   {
+    "id": "CALL-001",
+    "kind": "type",
+    "title": "발신이 되지 않음 (합성)"
+   }
+  ],
+  "error_events": [],
+  "error_event_total": 0
+ },
+ "code": {
+  "skipped": true
+ },
+ "explore": {
+  "reason": "no_candidate",
+  "when": "ask"
+ },
+ "must_show": [
+  "로그 범위: 2026-09-21T10:40:00.010Z ~ 2026-09-21T10:40:25.012Z (일부만 포함), 시계 이상 없음"
+ ],
+ "truncated": false
+}

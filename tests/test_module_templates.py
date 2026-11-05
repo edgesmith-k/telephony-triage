@@ -79,8 +79,23 @@ def _module_docs() -> list[Path]:
     return sorted(p for p in TEMPLATES.rglob("*.md") if "evals" not in p.relative_to(TEMPLATES).parts)
 
 
+OFONO_CASES = {   # C0 3 + C1 13 (C1D §1 표, R21: ofono 묶음만 본다 — android는 test_module_templates_android)
+    "data": {"data-apn-auth-reject", "data-ditd-route-fail", "data-ofonod-only"},
+    "sim": {"sim-simio-ril-result", "sim-euicc-isdr-absent", "sim-openchannel-busy-race"},
+    "network": {"network-nrmode-modem-reject", "network-radio-off-queries"},
+    "call": {"call-dial-modem-reject", "call-epsfb-after-apm"},
+    "sms": {"sms-send-no-vendor-lines", "sms-ims-svc-reject"},
+    "ims": {"ims-401-then-registered", "ims-reg-403-no-retry"},
+    "modem": {"modem-reset-net-chain", "modem-oos-dm-drop"},
+}
+
+
 def test_templates_exist():
-    assert {p.name for p in _case_dirs()} == {"data-apn-auth-reject", "data-ditd-route-fail", "data-ofonod-only"}
+    got: dict[str, set] = {}
+    for case in _case_dirs():
+        if case.parts[-4] == "ofono":
+            got.setdefault(case.parts[-3], set()).add(case.name)
+    assert got == OFONO_CASES
 
 
 def test_allowed_names_only():
@@ -161,11 +176,23 @@ def test_case_files_residual_clean():
     assert fixture_residual.check(paths) == []
 
 
-def test_synthetic_marker():
+def test_origin_marker():
+    """case 출처 표시(R4·R5): 합성(`synthetic: true` + `-- [합성]`) 또는 마스킹 발췌(`synthetic: false` + origin 6키 +
+    머리 줄·`-- [생략]` 구간 줄 수). 규칙 정본은 `skillcheck.origin_problems`."""
+    from common import yamlio
+
+    sc = _skillcheck()
+    kinds = set()
     for case in _case_dirs():
-        first = (case / "files" / "source.log").read_text(encoding="utf-8").split("\n", 1)[0]
-        assert first.startswith("-- [합성]"), case.name
-        assert re.search(r"(?m)^synthetic:\s*true\s*$", (case / "case.yaml").read_text(encoding="utf-8"))
+        data = yamlio.load(case / "case.yaml")
+        log = (case / "files" / "source.log").read_text(encoding="utf-8")
+        assert sc.origin_problems(data, log) == [], case.name
+        kinds.add(data["synthetic"])
+        if data["synthetic"] is False:
+            assert data["origin"]["log"] in ("O1", "O2", "A") and len(log.encode()) <= 13312, case.name
+        else:
+            assert len(log.encode()) <= 6144, case.name
+    assert kinds == {True, False}
 
 
 def test_case_files_masked():
@@ -246,9 +273,22 @@ def test_variant_lint_regress():
     db = variant_db("issue-db-ofono-modules")
     lint = run_json("db_lint.py", ["--db", db, "--all"], expect=(0, 1))
     assert lint["errors"] == []
-    result = run_json("db_regress.py", ["--db", db, "--all"])
-    assert (result["summary"]["total"], result["summary"]["passed"]) == (1, 1)
-    assert result["results"][0]["C"] == ["DATA-001-01"]
+    result = run_json("db_regress.py", ["--db", db, "--all"], expect=(0, 1))
+    got = {r["fixture"].rsplit("/", 1)[-1].split(".")[0]: r for r in result["results"]}
+    assert (result["summary"]["total"], result["summary"]["passed"]) == (6, 6), {k: (r.get("status"), r.get("C")) for k, r in got.items()}
+    for name, r in got.items():                         # H C1: 카테고리마다 유형 하나, fixture마다 C = 자기 원인
+        assert r["C"] == [name], (name, r["C"])
+
+
+def test_generator_modem_also_case():
+    """R8: 모뎀(db_category common) deep case는 증상 모듈(1위 category의 모듈)로 deep-input을 쓰고 보기는 with_modem."""
+    import json
+
+    case = TEMPLATES / "ofono" / "modem" / "evals" / "modem-reset-net-chain"
+    deep = json.loads((case / "files" / "deep-input.json").read_text(encoding="utf-8"))
+    assert deep["module"] == "ofono/network" and deep["top_candidates"][0]["cause"] == "NETWORK-001-01"
+    timeline = (case / "files" / "timeline.md").read_text(encoding="utf-8")
+    assert re.search(r"run_modem_monitor : modem (reset|state changed)", timeline)
 
 
 def _gen(*args) -> subprocess.CompletedProcess:

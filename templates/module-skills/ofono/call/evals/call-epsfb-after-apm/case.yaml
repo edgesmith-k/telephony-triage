@@ -1,0 +1,33 @@
+# 마스킹 발췌 case (H C1, C1D §1). source.log는 tools/make_excerpt.py --write가 origin 구간으로 자른다.
+# files/의 나머지는 make_module_eval_inputs.py --write가 만든다
+schema_version: 1
+name: call-epsfb-after-apm
+kind: explore
+synthetic: false
+origin:
+  kind: masked-excerpt
+  log: O1
+  episode: E14c
+  lines: '24700-24720,25125-25140,25505-25516'
+  masker: 'd8d3018538a2'
+  residual: '2026-11-05'
+key: MOCK-9402
+issue:
+  summary: 'VoLTE 통화가 안 된다는 EPSFB failed 로그'
+  description: 'EPSFB failed 로그가 있어 VoLTE 통화가 안 되는 것 같습니다.'
+  occurred_at: '2026-02-27T17:51:52+0000'
+  platform_version: '2'
+  sim_slot: '0'
+parse: {tz: UTC, year: 2026, minutes: 5}
+input:
+  explore_input: files/explore-input.json
+  timeline: files/timeline.md
+  analysis: files/analysis.json
+run_expect:
+  explore_reason: no_candidate
+expect:
+  layer: '원인\s*아님|정상'
+  daemon: '.*'
+  evidence: ['IMS_REQUEST_AIRPLANE_MODE is_apm:1', 'EPSFB failed']
+  trap: null
+  wrong_layer: ['^\s*(벤더 RIL|모뎀|망|곁가지|관리 데몬|D-Bus|그\s*층)']

@@ -1,0 +1,33 @@
+# 마스킹 발췌 case (H C1, C1D §1). source.log는 tools/make_excerpt.py --write가 origin 구간으로 자른다.
+# files/의 나머지는 make_module_eval_inputs.py --write가 만든다
+schema_version: 1
+name: sim-euicc-isdr-absent
+kind: explore
+synthetic: false
+origin:
+  kind: masked-excerpt
+  log: O2
+  episode: E21
+  lines: '38-110'
+  masker: 'd8d3018538a2'
+  residual: '2026-11-05'
+key: MOCK-9202
+issue:
+  summary: 'eSIM EID를 읽지 못함'
+  description: 'eSIM EID 조회가 실패합니다.'
+  occurred_at: '2026-02-27T17:27:50+0000'
+  platform_version: '2'
+  sim_slot: '0'
+parse: {tz: UTC, year: 2026, minutes: 5}
+input:
+  explore_input: files/explore-input.json
+  timeline: files/timeline.md
+  analysis: files/analysis.json
+run_expect:
+  explore_reason: no_candidate
+expect:
+  layer: '모뎀|망|(e)?UICC|카드'
+  daemon: 'exynos-ril'
+  evidence: ['sw1 : 6A, sw2 : 82', 'SIM_OPEN_CHANNEL failed NO_SUCH_ELEMENT']
+  trap: null
+  wrong_layer: ['^\s*(관리 데몬|D-Bus|ofonod|벤더 RIL|그\s*층|원인\s*아님)', '^\s*(LPA|ipad)']

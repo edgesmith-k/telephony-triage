@@ -1,0 +1,65 @@
+{
+ "status": "ok",
+ "key": "MOCK-9702",
+ "platform": "ofono",
+ "mode": "offline",
+ "issue": {
+  "origin": "file",
+  "occurred_at": "2026-02-27T17:54:56+00:00",
+  "sw": null,
+  "platform_version": "2",
+  "sim_slot": "0",
+  "summary": "모뎀이 죽은 것 같음 — 데이터·통화 모두 안 됨",
+  "description": "데이터와 통화가 모두 안 됩니다. 모뎀이 죽은 것 같습니다.",
+  "comments": 0,
+  "missing": [
+   "model",
+   "sw"
+  ]
+ },
+ "logs": {
+  "files": [
+   "source.log"
+  ],
+  "window": {
+   "start": "2026-02-27T17:49:56.000Z",
+   "end": "2026-02-27T17:59:56.000Z"
+  },
+  "range": [
+   "2026-02-27T17:54:50.969Z",
+   "2026-02-27T17:55:01.304Z"
+  ],
+  "in_range": "partial",
+  "clock_anomalies": 0,
+  "events": 75
+ },
+ "no_candidate": {
+  "search_hits": [
+   {
+    "id": "DATA-001",
+    "kind": "type",
+    "title": "데이터 연결이 되지 않음 (합성)"
+   },
+   {
+    "id": "DATA-001-01",
+    "kind": "cause",
+    "title": "APN 인증 거절 (합성)"
+   }
+  ],
+  "error_events": [],
+  "error_event_total": 0,
+  "unextracted_warn": 3
+ },
+ "code": {
+  "skipped": true
+ },
+ "explore": {
+  "reason": "no_candidate",
+  "when": "ask"
+ },
+ "must_show": [
+  "로그 범위: 2026-02-27T17:54:50.969Z ~ 2026-02-27T17:55:01.304Z (일부만 포함), 시계 이상 없음",
+  "오류·거부·타임아웃 이벤트: 추출 이벤트 기준 0건 (수집 태그 W/E/F 줄 중 이벤트로 추출 안 된 줄 3건: exynos-ril 3줄)"
+ ],
+ "truncated": false
+}

@@ -1,0 +1,35 @@
+# 마스킹 발췌 case (H C1, C1D §1). source.log는 tools/make_excerpt.py --write가 origin 구간으로 자른다.
+# files/의 나머지는 make_module_eval_inputs.py --write가 만든다
+schema_version: 1
+name: network-nrmode-modem-reject
+kind: deep
+synthetic: false
+origin:
+  kind: masked-excerpt
+  log: O2
+  episode: E5b
+  lines: '1705-1737,1741-1745'
+  masker: 'd8d3018538a2'
+  residual: '2026-11-05'
+key: MOCK-9301
+issue:
+  summary: '5G(NR) 모드 설정 화면이 비어 있음'
+  description: '5G(NR) 모드 설정 값이 표시되지 않습니다.'
+  occurred_at: '2026-02-27T17:28:15+0000'
+  platform_version: '2'
+  sim_slot: '0'
+parse: {tz: UTC, year: 2026, minutes: 5}
+input:
+  deep_input: files/deep-input.json
+  events: files/events.json
+  timeline: files/timeline.md
+  log: files/source.log
+run_expect:
+  top_cause: NETWORK-001-01
+  C: 1
+expect:
+  layer: '모뎀|망'
+  daemon: 'exynos-ril'
+  evidence: ['SIT_GET_NR_MODE, RSP.*Error\(RCM_E_GENERIC_FAILURE\)', 'GET_NR_MODE failed GENERIC_FAILURE']
+  trap: null
+  wrong_layer: ['^\s*(MOSE|ofonod|관리 데몬|D-Bus|벤더 RIL|그\s*층|원인\s*아님)']

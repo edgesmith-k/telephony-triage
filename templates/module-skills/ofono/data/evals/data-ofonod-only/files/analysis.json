@@ -44,6 +44,11 @@
     "id": "DATA-001-01",
     "kind": "cause",
     "title": "APN 인증 거절 (합성)"
+   },
+   {
+    "id": "CALL-001",
+    "kind": "type",
+    "title": "발신이 되지 않음 (합성)"
    }
   ],
   "error_events": [],

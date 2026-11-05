@@ -1,0 +1,52 @@
+-- [마스킹 발췌] O1 E14c 줄 24700-24720,25125-25140,25505-25516
+Feb 27 17:51:48.199 host1 local0.info MOSE[1126]: [UI___] 000001 *UI->Update  tea.KeyMsg  mose/ui/ui.go:108
+Feb 27 17:51:48.199 host1 local0.info MOSE[1126]: [UI___] 000001 *UI->Update  Pressed key enter  mose/ui/ui.go:151
+Feb 27 17:51:48.232 host1 local0.info MOSE[1126]: [UI___] 000001 *UI->Update  uiMsg.CallMethodByFeatureMsg  mose/ui/ui.go:108
+Feb 27 17:51:48.233 host1 local0.info MOSE[1126]: [] 003012 *Manager->CallMethod  Using cached mapping: method SetAirplaneMode in service Service  mose/managers/manager.go:87
+Feb 27 17:51:48.233 host1 local0.info MOSE[1126]: [DBUS_] 003012 *BusHelperImpl->CallGenericOfonoMethod  methodName: SetProperty  mose/dbus/helper/dbus_helper_impl.go:92
+Feb 27 17:51:48.233 host1 local0.info MOSE[1126]: [DBUS_] 003012 *BusHelperImpl->CallGenericMethod  dest: org.ofono objectPath: /ril_0, dbusInterface: org.ofono.Modem, methodName SetProperty, args [Online false]  mose/dbus/helper/dbus_helper_impl.go:
+Feb 27 17:51:48.233 host1 local0.info MOSE[1126]: 98
+Feb 27 17:51:48.234 host1 local0.info MOSE[1126]: [DBUS_] 003012 *DBusClient->Object  dest: org.ofono, path: /ril_0  mose/dbus/client/dbus_client.go:135
+Feb 27 17:51:48.235 host1 daemon.info ofonod[486]: dump_dmsg method call - i:org.ofono.Modem m:SetProperty p:/ril_0 a:"Online", variant(false)
+Feb 27 17:51:48.235 host1 daemon.debug ofonod[486]: src/modem.c:get_modem_property() modem 0x55ac6ca5d0 property AlwaysOnline
+Feb 27 17:51:48.235 host1 daemon.info ofonod[486]: [0,0039]> IMS_REQUEST_AIRPLANE_MODE is_apm:1
+Feb 27 17:51:48.235 host1 daemon.info ofonod[486]: IMSD 0: > <HEXDUMP 16B>
+Feb 27 17:51:48.235 host1 daemon.info ofonod[486]: IMSD 0: <HEXDUMP 4B>
+Feb 27 17:51:48.235 host1 user.debug IMSSVC[479]: [SLOT_0][V] 8687 SOCKET: IMSSVC_SOCKET_1 REQUEST: IMS_REQUEST_SET_AIRPLANE_MODE token: 0039 length:16
+Feb 27 17:51:48.235 host1 user.debug IMSSVC[479]: [SLOT_0][V] 8688 [ImssvcD] dispatchInts [<-- 
+Feb 27 17:51:48.235 host1 user.debug IMSSVC[479]: [SLOT_0][V] 8689 [ reqParcel] [0039]> IMS_REQUEST_SET_AIRPLANE_MODE (1, )
+Feb 27 17:51:48.235 host1 user.debug IMSSVC[479]: [SLOT_0][V] 8690 [ImssvcApplication] IMSSVC_OnRequest [<-- 
+Feb 27 17:51:48.235 host1 user.debug IMSSVC[479]: [SLOT_0][V] 8691 [ImssvcApplication] OnRequest [<-- 
+Feb 27 17:51:48.235 host1 user.debug IMSSVC[479]: [SLOT_0][V] 8692 [ImssvcContext_0] OnRequest [<-- 
+Feb 27 17:51:48.235 host1 user.debug IMSSVC[479]: [SLOT_0][V] 8693 [ImssvcParser] createInts [<-- 
+Feb 27 17:51:48.235 host1 user.debug IMSSVC[479]: [SLOT_0][V] 8694 [ImssvcParser] createInts [--> 
+-- [생략]
+Feb 27 17:51:52.246 host1 user.debug IMSSVC[479]: [SLOT_0][V] 8869 SITRilClient__OnUnsolicitedResponse() msgId(3012), data(0x0x7fa8003380), length(64) channel(0) client(0)
+Feb 27 17:51:52.246 host1 daemon.debug exynos-ril[463]: getUnsolRespInfo found {unsolResponse=1002 halVer=00}
+Feb 27 17:51:52.246 host1 user.debug IMSSVC[479]: [SLOT_0][V] 8870 SITRilClient__OnUnsolicitedResponse() RILC_UNSOL_AIMS_REGISTRATION msgId = 3012
+Feb 27 17:51:52.246 host1 user.debug IMSSVC[479]: [SLOT_0][V] 8871 SITRilClient__OnUnsolicitedResponse() Send unsol msg msgId = 3012, clientId = 0, channel = 0
+Feb 27 17:51:52.246 host1 daemon.debug exynos-ril[463]: RIL_SOCKET_1 UNSOLICITED: UNSOL_RESPONSE_VOICE_NETWORK_STATE_CHANGED length:8
+Feb 27 17:51:52.246 host1 daemon.debug exynos-ril[463]: Send Response to RIL_SOCKET_1
+Feb 27 17:51:52.246 host1 user.debug IMSSVC[479]: [SLOT_0][V] 8872 [SID_0] UNSOL {RILC_UNSOL_AIMS_REGISTRATION(3012)} : 18RilIndRegistration [state : 1  feature : 3  feature-bitmask : 0  status-code : 0  uri-len : 0]
+Feb 27 17:51:52.246 host1 daemon.debug exynos-ril[463]: [<DEV#1>][RX] <unknown sit>, IND, 81 bytes
+Feb 27 17:51:52.246 host1 daemon.debug exynos-ril[463]: <HEXDUMP 16B>
+Feb 27 17:51:52.246 host1 user.debug IMSSVC[479]: [SLOT_0][V] 8873 [18RilIndRegistration::onMessage] mState : 1, mFeature : 3, mFeatureBitMask : 0, mStatusCode : 0, mUriLen : 0
+Feb 27 17:51:52.246 host1 user.info IMSSVC[479]: [SLOT_0][I] 8874 [20RegistrationListener_0::registrationDisconnected] APN:IMS, reason:0
+Feb 27 17:51:52.246 host1 user.info IMSSVC[479]: [SLOT_0][I] 8875 [20RegistrationListener_0::registrationDisconnected] resetBlockDeregiForOngoingCall
+Feb 27 17:51:52.246 host1 user.info IMSSVC[479]: [SLOT_0][I] 8876 [20RegistrationListener_0::registrationDisconnected] EPSFB failed, notify to ImsCallManager
+Feb 27 17:51:52.246 host1 daemon.debug exynos-ril[463]: <HEXDUMP 16B>
+Feb 27 17:51:52.246 host1 daemon.debug exynos-ril[463]: <HEXDUMP 16B>
+Feb 27 17:51:52.246 host1 daemon.debug exynos-ril[463]: <HEXDUMP 16B>
+-- [생략]
+Feb 27 17:51:52.272 host1 daemon.info ofonod[486]: IMSD 0: <HEXDUMP 16B>
+Feb 27 17:51:52.272 host1 daemon.info ofonod[486]: IMSD 0: <HEXDUMP 16B>
+Feb 27 17:51:52.272 host1 daemon.info ofonod[486]: IMSD 0: <HEXDUMP 4B>
+Feb 27 17:51:52.272 host1 daemon.info ofonod[486]: [0,UNSOL]< IMS_UNSOL_REQUEST_DEACT_PDN apnType:1
+Feb 27 17:51:52.272 host1 daemon.debug ofonod[486]: drivers/rilmodem/ims.c:ims_reqDeactPdn() cid:15 apnType:1
+Feb 27 17:51:52.272 host1 daemon.info ofonod[486]: drivers/rilmodem/gprs-data-call-coordinator.c:ril_gprs_dc_coordinator_deactivate() 15
+Feb 27 17:51:52.273 host1 daemon.info ofonod[486]: [0,0571]> RIL_REQUEST_DEACTIVATE_DATA_CALL (15,2)
+Feb 27 17:51:52.273 host1 daemon.debug ofonod[486]: drivers/rilmodem/voicecall.c:ims_update_capabilities() ims_voice_capable:0
+Feb 27 17:51:52.273 host1 daemon.info ofonod[486]: [0,UNSOL]< IMS_UNSOL_UPDATE_CAPABILITIES ims_voice_capable:0
+Feb 27 17:51:52.273 host1 daemon.info ofonod[486]: [0,UNSOL]< IMS_UNSOL_UPDATE_CAPABILITIES voiceOverLteCapable=0, emerOverLteCapable=1 smsOverLteCapable=0, utOverLteCapable=1
+Feb 27 17:51:52.273 host1 daemon.debug ofonod[486]: drivers/rilmodem/ims.c:ims_update_capabilities() ext_info = 0xa
+Feb 27 17:51:52.273 host1 daemon.debug ofonod[486]: src/ims.c:ofono_ims_capability_notify() /ril_0 ext_info:10

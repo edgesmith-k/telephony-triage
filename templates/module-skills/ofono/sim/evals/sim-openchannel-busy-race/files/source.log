@@ -1,0 +1,50 @@
+-- [마스킹 발췌] O1 E3c 줄 32505-32553
+Feb 27 17:52:14.897 host1 daemon.debug LPA[530]: tid:62 Procedures.cpp(304):runProcedure > runProcedure(BEG)
+Feb 27 17:52:14.897 host1 daemon.debug LPA[530]: tid:62 es10c.cpp(274):getEIDProc > GetEIDProc
+Feb 27 17:52:14.897 host1 daemon.debug LPA[530]: tid:62 DBusClient.cpp(174):transmitAPDU > needRefresh: 0
+Feb 27 17:52:14.897 host1 daemon.debug LPA[530]: tid:62 DBusClient.cpp(164):waitForSimManager > Waited for sim manager for 0s
+Feb 27 17:52:14.897 host1 daemon.debug LPA[530]: tid:62 DBusClient.cpp(93):openChannel > Open channel called
+Feb 27 17:52:14.898 host1 daemon.info ofonod[486]: dump_dmsg method call - i:org.ofono.SimManager m:OpenChannel p:/ril_0 a:"<AID#1>", 0
+Feb 27 17:52:14.898 host1 daemon.debug ofonod[486]: src/sim.c:sim_open_channel() 
+Feb 27 17:52:14.898 host1 daemon.debug ofonod[486]: drivers/rilmodem/sim.c:ril_open_channel_with_p2() 
+Feb 27 17:52:14.898 host1 daemon.info ofonod[486]: [0,0608]> RIL_REQUEST_SIM_OPEN_CHANNEL OPEN CHANNEL with p2 (AID:<AID#1>) (P2:0)
+Feb 27 17:52:14.898 host1 daemon.debug ofonod[486]: Device 0: > <HEXDUMP 16B>
+Feb 27 17:52:14.898 host1 daemon.debug ofonod[486]: Device 0: <HEXDUMP 16B>
+Feb 27 17:52:14.898 host1 daemon.debug ofonod[486]: Device 0: <HEXDUMP 16B>
+Feb 27 17:52:14.898 host1 daemon.debug ofonod[486]: Device 0: <HEXDUMP 16B>
+Feb 27 17:52:14.898 host1 daemon.debug ofonod[486]: Device 0: <HEXDUMP 16B>
+Feb 27 17:52:14.898 host1 daemon.debug ofonod[486]: Device 0: <HEXDUMP 8B>
+Feb 27 17:52:14.898 host1 daemon.debug exynos-ril[463]: SOCKET RIL_SOCKET_1 REQUEST: SIM_OPEN_CHANNEL length:84
+Feb 27 17:52:14.898 host1 daemon.info exynos-ril[463]: getCommandInfo found {request=115 halVer=00}
+Feb 27 17:52:14.898 host1 daemon.info exynos-ril[463]: RilApplication::GetInstance
+Feb 27 17:52:14.899 host1 daemon.info exynos-ril[463]: [RilContext_0] OnRequest 
+Feb 27 17:52:14.899 host1 daemon.debug exynos-ril[463]: [RilContext_0] SendMessage RIL Request Routing : RCM ID=115 Service ID=3 Message ID=2029 delayMillis=0
+Feb 27 17:52:14.899 host1 daemon.debug exynos-ril[463]: [ServiceMgr] msg(0x7f8c013f50) msgId=2029 svc=SimService_0(3) direction=Request
+Feb 27 17:52:14.899 host1 daemon.info exynos-ril[463]: [SimService_0] OpenSimChannelHandler OnRequest()
+Feb 27 17:52:14.899 host1 daemon.info exynos-ril[463]: AID=<AID#1>, P2=0x00
+Feb 27 17:52:14.899 host1 daemon.debug exynos-ril[463]: [RilContext_0] RecordRequestHistory token=0x0296
+Feb 27 17:52:14.900 host1 daemon.info exynos-ril[463]: [RilContext_0] Send 
+Feb 27 17:52:14.900 host1 daemon.debug exynos-ril[463]: [<DEV#1>][TX] SIT_OPEN_SIM_CHANNEL_WITH_P2, REQ, 30 bytes, Token(0x0296)
+Feb 27 17:52:14.900 host1 daemon.debug exynos-ril[463]: <HEXDUMP 16B>
+Feb 27 17:52:14.900 host1 daemon.debug exynos-ril[463]: <HEXDUMP 14B>
+Feb 27 17:52:14.901 host1 daemon.debug NMD[542]: name is unique connection id::1.136[./dbus/DbusWatchController.cxx +149]
+Feb 27 17:52:14.903 host1 daemon.debug NMD[542]: name is unique connection id::1.135[./dbus/DbusWatchController.cxx +149]
+Feb 27 17:52:14.903 host1 daemon.info ofonod[486]: dump_dmsg method call - i:org.ofono.SimManager m:OpenChannel p:/ril_0 a:"<AID#2>", 0
+Feb 27 17:52:14.903 host1 daemon.debug ofonod[486]: src/sim.c:sim_open_channel() 
+Feb 27 17:52:14.903 host1 daemon.info ofonod[486]: src/dbus.c:__ofono_error_busy() dump_dmsg err return - i:org.ofono.SimManager m:OpenChannel p:/ril_0
+Feb 27 17:52:14.904 host1 daemon.err ipad[534]: [E][tid=4216] apdu_transport.cpp:216 ipa::ApduTransport::openChannel() Failed to open logical channel: Operation already in progress (org.ofono.Error.InProgress)
+Feb 27 17:52:14.905 host1 daemon.err ipad[534]: [E][tid=4216] es10b_context.cpp:71 ipa::Es10bContext::sendCommand() ES10b sendCommand: failed to open channel
+Feb 27 17:52:14.905 host1 daemon.err ipad[534]: [E][tid=4216] ipad_controller.cpp:769 ipa::IpadController::getEid() GetEID: no response from eUICC
+Feb 27 17:52:14.905 host1 daemon.info ipad[534]: [I][tid=4216] dbus_dump.cpp:198 ipa::logDbusError() dbus method error  m:GetEID e:com.samsungds.ipa.EuiccNoResponse (eUICC not responding)
+Feb 27 17:52:14.905 host1 daemon.debug ipad[534]: [D][tid=4216] procedure_executor.cpp:82 ipa::common::ProcedureGuard::release() Procedure released: GetEID
+Feb 27 17:52:14.906 host1 local0.info MOSE[791]: [DBUS_] 000040 *BusHelperImpl->CallGenericMethod  callResult: &{com.samsungds.ipa /com/samsungds/ipa com.samsungds.ipa.GetEID [] 0x7f6b29b880 eUICC not responding [] 465 0x7f6b2ce050 0x13da00}  mose/d
+Feb 27 17:52:14.906 host1 local0.info MOSE[791]: bus/helper/dbus_helper_impl.go:114
+Feb 27 17:52:14.906 host1 local0.warn MOSE[791]: [DBUS_] 000040 *BusHelperImpl->CallGenericMethod  call error eUICC not responding  mose/dbus/helper/dbus_helper_impl.go:117
+Feb 27 17:52:14.906 host1 local0.warn MOSE[791]: [IPACM] 000040 *IpaCommon->getEID  Failed to get EID err: eUICC not responding  mose/managers/service/base/ipa_common.go:224
+Feb 27 17:52:14.906 host1 local0.info MOSE[791]: [DBUS_] 000040 *BusHelperImpl->CallIpaServiceMethod  methodName: GetDefaultSmdpAddress  mose/dbus/helper/dbus_helper_impl.go:74
+Feb 27 17:52:14.906 host1 local0.info MOSE[791]: [DBUS_] 000040 *BusHelperImpl->CallGenericMethod  dest: com.samsungds.ipa objectPath: /com/samsungds/ipa, dbusInterface: com.samsungds.ipa, methodName GetDefaultSmdpAddress, args []  mose/dbus/helper/
+Feb 27 17:52:14.906 host1 local0.info MOSE[791]: dbus_helper_impl.go:98
+Feb 27 17:52:14.907 host1 local0.info MOSE[791]: [DBUS_] 000040 *DBusClient->Object  dest: com.samsungds.ipa, path: /com/samsungds/ipa  mose/dbus/client/dbus_client.go:135
+Feb 27 17:52:14.907 host1 daemon.info ipad[534]: [I][tid=534] dbus_dump.cpp:180 ipa::logDbusCall() dbus method call   m:GetDefaultSmdpAddress a:(none)
+Feb 27 17:52:14.907 host1 daemon.debug ipad[534]: [D][tid=534] procedure_executor.cpp:75 ipa::common::ProcedureGuard::tryEnter() Procedure entered: GetDefaultSmdpAddress
+Feb 27 17:52:14.908 host1 daemon.debug ipad[534]: [D][tid=4218] es10b_context.cpp:66 ipa::Es10bContext::sendCommand() ES10b sendCommand: tag=BF3C, len=3

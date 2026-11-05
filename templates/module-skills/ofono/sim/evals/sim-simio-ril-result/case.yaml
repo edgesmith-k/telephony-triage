@@ -1,0 +1,35 @@
+# 마스킹 발췌 case (H C1, C1D §1). source.log는 tools/make_excerpt.py --write가 origin 구간으로 자른다.
+# files/의 나머지는 make_module_eval_inputs.py --write가 만든다
+schema_version: 1
+name: sim-simio-ril-result
+kind: deep
+synthetic: false
+origin:
+  kind: masked-excerpt
+  log: O2
+  episode: E4b
+  lines: '985-995,1560-1583'
+  masker: 'd8d3018538a2'
+  residual: '2026-11-05'
+key: MOCK-9201
+issue:
+  summary: 'SIM 파일을 읽지 못한다는 오류가 남'
+  description: 'SIM 파일 읽기 오류 로그가 남습니다.'
+  occurred_at: '2026-02-27T17:28:15+0000'
+  platform_version: '2'
+  sim_slot: '0'
+parse: {tz: UTC, year: 2026, minutes: 5}
+input:
+  deep_input: files/deep-input.json
+  events: files/events.json
+  timeline: files/timeline.md
+  log: files/source.log
+run_expect:
+  top_cause: SIM-001-01
+  C: 1
+expect:
+  layer: '벤더 RIL|exynos-ril'
+  daemon: 'exynos-ril'
+  evidence: ['SIT_SIM_IO, RSP.*OK\(RCM_E_SUCCESS\)', 'OnRequestComplete Request ID=\d+, result=2']
+  trap: null
+  wrong_layer: ['^\s*(모뎀|망|ofonod|관리 데몬|D-Bus|MOSE|그\s*층|원인\s*아님)']

@@ -1,0 +1,23 @@
+{
+ "schema_version": 1,
+ "key": "MOCK-9201",
+ "platform": "ofono",
+ "module": "ofono/sim",
+ "sha": "template",
+ "type_id": "SIM-001",
+ "top_candidates": [
+  {
+   "type": "SIM-001",
+   "cause": "SIM-001-01",
+   "score": 1.0,
+   "confidence": "high"
+  }
+ ],
+ "issue_summary": "SIM 파일을 읽지 못한다는 오류가 남",
+ "occurred_at": "2026-02-27T17:28:15+00:00",
+ "events": "events.json",
+ "timeline": "timeline.md",
+ "log_paths": [
+  "source.log"
+ ]
+}

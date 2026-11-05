@@ -1,0 +1,79 @@
+{
+ "status": "ok",
+ "key": "MOCK-9302",
+ "platform": "ofono",
+ "mode": "offline",
+ "issue": {
+  "origin": "file",
+  "occurred_at": "2026-02-27T17:52:08+00:00",
+  "sw": null,
+  "platform_version": "2",
+  "sim_slot": "0",
+  "summary": "망 정보·신호 조회 오류가 한꺼번에 남",
+  "description": "망 정보와 신호 세기 조회 오류가 한꺼번에 납니다.",
+  "comments": 0,
+  "missing": [
+   "model",
+   "sw"
+  ]
+ },
+ "logs": {
+  "files": [
+   "source.log"
+  ],
+  "window": {
+   "start": "2026-02-27T17:47:08.000Z",
+   "end": "2026-02-27T17:57:08.000Z"
+  },
+  "range": [
+   "2026-02-27T17:52:03.317Z",
+   "2026-02-27T17:52:08.522Z"
+  ],
+  "in_range": "partial",
+  "clock_anomalies": 0,
+  "events": 103
+ },
+ "no_candidate": {
+  "search_hits": [
+   {
+    "id": "NETWORK-001",
+    "kind": "type",
+    "title": "NR 모드가 조회되지 않음 (합성)"
+   },
+   {
+    "id": "NETWORK-001-01",
+    "kind": "cause",
+    "title": "NR 모드가 조회되지 않음 (합성)"
+   }
+  ],
+  "error_events": [
+   {
+    "ts": "2026-02-27T17:52:08.488Z",
+    "tag": "exynos-ril",
+    "event": "builtin.common.vendor_request_failed",
+    "phone": null
+   },
+   {
+    "ts": "2026-02-27T17:52:08.492Z",
+    "tag": "ofonod",
+    "event": "ril_error",
+    "phone": 0,
+    "request": "SIGNAL_STRENGTH",
+    "error": "INVALID_RESPONSE"
+   }
+  ],
+  "error_event_total": 2,
+  "unextracted_warn": 4
+ },
+ "code": {
+  "skipped": true
+ },
+ "explore": {
+  "reason": "no_candidate",
+  "when": "ask"
+ },
+ "must_show": [
+  "로그 범위: 2026-02-27T17:52:03.317Z ~ 2026-02-27T17:52:08.522Z (일부만 포함), 시계 이상 없음"
+ ],
+ "truncated": false
+}

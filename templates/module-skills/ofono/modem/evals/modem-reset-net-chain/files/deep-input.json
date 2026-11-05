@@ -1,0 +1,23 @@
+{
+ "schema_version": 1,
+ "key": "MOCK-9701",
+ "platform": "ofono",
+ "module": "ofono/network",
+ "sha": "template",
+ "type_id": "NETWORK-001",
+ "top_candidates": [
+  {
+   "type": "NETWORK-001",
+   "cause": "NETWORK-001-01",
+   "score": 1.0,
+   "confidence": "high"
+  }
+ ],
+ "issue_summary": "5G 설정이 안 되고 망이 잠시 끊김 (합성)",
+ "occurred_at": "2026-09-21T10:50:05+00:00",
+ "events": "events.json",
+ "timeline": "timeline.md",
+ "log_paths": [
+  "source.log"
+ ]
+}

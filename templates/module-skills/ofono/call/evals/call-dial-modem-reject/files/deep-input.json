@@ -1,0 +1,23 @@
+{
+ "schema_version": 1,
+ "key": "MOCK-9401",
+ "platform": "ofono",
+ "module": "ofono/call",
+ "sha": "template",
+ "type_id": "CALL-001",
+ "top_candidates": [
+  {
+   "type": "CALL-001",
+   "cause": "CALL-001-01",
+   "score": 1.0,
+   "confidence": "high"
+  }
+ ],
+ "issue_summary": "발신이 바로 끊김 (합성)",
+ "occurred_at": "2026-09-21T10:10:05+00:00",
+ "events": "events.json",
+ "timeline": "timeline.md",
+ "log_paths": [
+  "source.log"
+ ]
+}

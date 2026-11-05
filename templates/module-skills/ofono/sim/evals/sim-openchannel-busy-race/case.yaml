@@ -1,0 +1,33 @@
+# 마스킹 발췌 case (H C1, C1D §1). source.log는 tools/make_excerpt.py --write가 origin 구간으로 자른다.
+# files/의 나머지는 make_module_eval_inputs.py --write가 만든다
+schema_version: 1
+name: sim-openchannel-busy-race
+kind: explore
+synthetic: false
+origin:
+  kind: masked-excerpt
+  log: O1
+  episode: E3c
+  lines: '32505-32553'
+  masker: 'd8d3018538a2'
+  residual: '2026-11-05'
+key: MOCK-9203
+issue:
+  summary: 'eSIM 정보 조회 시 eUICC not responding 오류'
+  description: 'eSIM 정보 조회 중 eUICC not responding 오류가 납니다.'
+  occurred_at: '2026-02-27T17:52:14+0000'
+  platform_version: '2'
+  sim_slot: '0'
+parse: {tz: UTC, year: 2026, minutes: 5}
+input:
+  explore_input: files/explore-input.json
+  timeline: files/timeline.md
+  analysis: files/analysis.json
+run_expect:
+  explore_reason: no_candidate
+expect:
+  layer: '관리 데몬|D-Bus'
+  daemon: 'LPA|ipad|MOSE'
+  evidence: ['__ofono_error_busy\(\).*OpenChannel', 'Operation already in progress']
+  trap: null
+  wrong_layer: ['^\s*(모뎀|망|벤더 RIL|exynos|ofonod|그\s*층|원인\s*아님)']
