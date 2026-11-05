@@ -2975,7 +2975,7 @@
       "expected_output": "후보 없음 → 탐색 분석 질문 → 승인 → triage.py explore(module_skills: true) → triage.py module MOCK-9077 --for explore (pick.by auto, android/data, read 4개) → 사본·뷰만 읽고 explore-output.md → check-output --for explore → 리포트 '모듈 문서 android/data @<sha7>' 줄과 모듈 타임라인·근거 원문 검사 줄.",
       "assertions": [
         "모듈 문서를 고르는 질문 없이 진행했다(후보 하나)",
-        "module 출력 read의 _common 두 문서·android/data/explore.md·모듈 뷰를 읽었고 Android 참고 자료(log-tags.md·ril-requests.md·fail-causes.md)와 module 호출 뒤의 JOB/timeline.md는 열지 않았다",
+        "module 출력 read의 _common 두 문서·android/data/explore.md·모듈 뷰를 읽었고 Android 참고 자료(log-tags.md·ril-requests.md·fail-causes.md)와 module 호출 뒤의 JOB/timeline.md는 열지 않았다. 로그 원문(setup-error.log)도 열지 않았다",
         "리포트 탐색 분석 줄에 '모듈 문서 android/data @<레포 sha7>'와 '모듈 타임라인:' 아래 줄이 있다",
         "check-output --for explore를 불렀고 근거 원문 검사(인용 1개 이상, 원문 = 기록된 뷰)가 있다",
         "계획·브랜치·PR이 없고 관리 clone이 깨끗하며 lock이 풀렸고 JOB/module-skill*를 직접 쓰지 않았다"

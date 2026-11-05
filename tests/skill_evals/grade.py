@@ -20,7 +20,9 @@ import hashlib
 import json
 import math
 import os
+import posixpath
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -476,26 +478,59 @@ class Ctx:
             return None
         return shown.guard_counts(p.read_text(encoding="utf-8", errors="replace").splitlines())
 
-    def opened(self, *names):
-        """Read나 Bash 읽기(cat·head·tail·less·sed·awk·jq·grep·python)로 연 파일 중 basename이 names에 있는 것.
-        triage·parse_logcat 호출 인자는 제외한다. events.jsonl이 없으면 commands.md의 읽기 명령으로 본다."""
+    def opened(self, *names, chained: bool = True):
+        """Read나 Bash 읽기(cat·head·tail·less·sed·awk·jq·grep·rg·python)로 연 파일 중 basename이 names에 있는 것.
+        triage·parse_logcat 호출 조각(인자)만 제외한다 — 같은 호출에 이어 붙인 읽기는 센다. logs 아래 glob(`logs/*.log`·
+        `cd logs && grep x *`)은 이름과 맞춰 센다. chained=False면 예전 기준(triage·parse_logcat이 든 호출은 통째로 뺀다) —
+        e73 scope의 timeline.md 열람(11/03 판정 '노트만', G10 미적용)이 쓴다. events.jsonl이 없으면 commands.md의 읽기 명령으로 본다."""
         uses = self.tool_uses()
         if uses is None:
             return [n for n in names if re.search(r"\b(cat|head|tail|less|sed|awk|jq|grep)\b[^|\n]*" + re.escape(n), self.invoked)]
         hits = []
         for name, inp in uses:
-            hits += self._opens(name, inp, names)
+            hits += self._opens(name, inp, names, chained)
         return hits
 
     @staticmethod
-    def _opens(name, inp, names) -> list[str]:
+    def _opens(name, inp, names, chained: bool = True) -> list[str]:
         if name == "Read" and Path(str(inp.get("file_path", ""))).name in names:
             return [Path(inp["file_path"]).name]
-        if name == "Bash":
+        if name == "Bash" and not chained:
             cmd = str(inp.get("command", ""))
             if re.search(r"\b(cat|head|tail|less|sed|awk|jq|grep|python3?)\b", cmd) \
                     and "triage.py" not in cmd and "parse_logcat.py" not in cmd:
                 return [n for n in names if re.search(r"(?<![\w.-])" + re.escape(n) + r"\b", cmd)]
+        elif name == "Bash":
+            # triage·parse_logcat 조각만 뺀다 — 같은 호출에 이어 붙인 읽기(`triage.py check-output …; grep … x.log`)도 센다
+            # (triage 없는 호출은 예전처럼 원문 전체도 본다. 있으면 heredoc 본문은 빼고 본다 — 입력 글이 읽기로 잡히지 않게)
+            raw = str(inp.get("command", ""))
+            tool = "triage.py" in raw or "parse_logcat.py" in raw
+            kept, env, logs_cwd, globbed = ([] if tool else [raw]), {}, False, []
+            for seg in _sh_split(_strip_heredocs(raw) if tool else raw):
+                if "triage.py" in seg or "parse_logcat.py" in seg:
+                    continue
+                try:
+                    toks = _sh_words(seg)
+                except ValueError:
+                    toks = []
+                assigns, cmd_toks = _strip_prefix(toks)
+                if toks and not cmd_toks:       # 대입만: 값은 쓰는 조각에서 편다(triage 인자로만 쓰인 경로는 세지 않는다)
+                    # (env 값은 대입 글자 그대로 — 앞 대입을 펴지 않는다; 이름 맞춤에는 충분하다)
+                    env.update(t.split("=", 1) for t in assigns)
+                    continue
+                seg = _VAR_REF.sub(lambda m: env.get(m.group(1) or m.group(2), m.group(0)), seg)
+                kept.append(seg)
+                if cmd_toks and cmd_toks[0] in ("cd", "pushd"):
+                    dest = [t for t in cmd_toks[1:] if not t.startswith("-")]
+                    logs_cwd = bool(dest) and posixpath.basename(posixpath.normpath(dest[0])) == "logs"
+                elif re.search(r"\b(cat|head|tail|less|sed|awk|jq|grep|rg|python3?)\b", seg):
+                    # glob 인자(`logs/*.log`·`cd logs && grep x *`)는 logs 아래일 때 이름과 맞춰 본다
+                    for t in cmd_toks[1:]:
+                        if any(ch in t for ch in "*?[") and (logs_cwd and "/" not in t or t.startswith("logs/") or "/logs/" in t):
+                            globbed += [n for n in names if fnmatch.fnmatch(n, posixpath.basename(t) or "*")]
+            text = "\n".join(kept)
+            if re.search(r"\b(cat|head|tail|less|sed|awk|jq|grep|rg|python3?)\b", text):
+                return [n for n in names if re.search(r"(?<![\w.-])" + re.escape(n) + r"\b", text) or n in globbed]
         return []
 
     def explore_order(self, filename="timeline.md"):
@@ -513,7 +548,9 @@ class Ctx:
             return shown.ask_text(e["input"]) if shown._live_ask(e) else ""
         asked = next((i for i, e in enumerate(seq) if "탐색 분석" in question(e)
                       and re.search(r"할까요|실행할까|진행할까|할지", question(e)) and (explored is None or i < explored)), None)
-        read = next((i for i, e in enumerate(seq) if e["kind"] == "tool" and self._opens(e["name"], e["input"], (filename,))), None)
+        # explore 호출 자신은 아래에서 앞·뒤를 가린다(_opens는 triage 조각을 빼고 같은 호출의 읽기도 센다)
+        read = next((i for i, e in enumerate(seq) if e["kind"] == "tool" and i != explored
+                     and self._opens(e["name"], e["input"], (filename,))), None)
         if explored is not None:
             # 같은 Bash 호출 안에서 explore 뒤에 filename을 읽으면 explore 뒤 열람(순번 explored+0.5). 앞이면 인정하지 않는다.
             cmd = _strip_heredocs(str(seq[explored]["input"].get("command", "")))
@@ -1333,7 +1370,8 @@ def checks(eid: int, ctx: Ctx) -> list:
         def app():
             o = ops("MOCK-9041")
             return o == [{"op": "append", "cause": "DATA-001-01"}] and analyzer_called()[0], json.dumps(o, ensure_ascii=False) + "; " + analyzer_called()[1]
-        return [None, _report_check(ctx, "MOCK-9041", r"심층 분석 생략: \S"), None, app, none_remote_lock]
+        # 출력 형식 불일치(check-output 종료 1)는 분석 스킬 실패가 아니다 — 스스로 분석해 칸을 못 맞춘 run(B2 e41)
+        return [None, _report_check(ctx, "MOCK-9041", r"심층 분석 생략: (?!출력 형식 불일치)\S"), None, app, none_remote_lock]
     if eid == 44:
         return [_report_check(ctx, "MOCK-9044", source_patterns=(r"^- 분류 후보:[^\n]*원인 미확인",)), None, None,
                 lambda: unresolved("MOCK-9044"), none_remote_lock]
@@ -1566,8 +1604,12 @@ def _analyzer_called(ctx):
     read = mod is not None and any(e["kind"] == "tool" and e["name"] == "Read"
                                    and str(e["input"].get("file_path", "")).replace("\\", "/").endswith("/mock-data-analyzer/SKILL.md")
                                    for e in seq[mod:])
-    if read:
-        return True, "Read 경로: triage.py module --for deep 뒤 mock-data-analyzer/SKILL.md 읽음"
+    # Bash 읽기(cat·sed -n…)로 같은 파일을 연 것도 Read 경로다(module_doc_reads, 실행된 호출만 — sed -i는 읽기가 아니다)
+    bash = mod is not None and not read and any(r.endswith("/mock-data-analyzer/SKILL.md")
+                                                for r in module_doc_reads(ctx, mod + 1, executed_only=True))
+    if read or bash:
+        return True, ("Read 경로: triage.py module --for deep 뒤 mock-data-analyzer/SKILL.md 읽음"
+                      + ("(Bash 읽기)" if bash else ""))
     return False, (f"skill_calls={calls}, module --for deep {'있음' if mod is not None else '없음'}, SKILL.md Read 없음 — "
                    "mock-data-analyzer 5-1 미검증")
 
@@ -2128,7 +2170,7 @@ def checks_p(eid, ctx):
             return ok, f"explore 순번={explored}, log-guide.md 첫 열람 순번={read}, Android 참고 자료 열람={android}"
         def scope():
             bad = ctx.opened("events.json", "issue_raw.json", "events-full.json", "match.json", "journal-multi.log")
-            seen = "timeline.md" in ctx.opened("timeline.md")
+            seen = "timeline.md" in ctx.opened("timeline.md", chained=False)   # G10 미적용(11/03 '노트만'): 예전 기준 그대로
             return seen and not bad, f"timeline.md 열람={seen}; 열면 안 되는 파일={sorted(set(bad))}"
         def no_android_names():
             texts = ctx.visible()
@@ -2571,8 +2613,12 @@ def _calls(ctx, rx, purpose=None):
         cmd = _strip_heredocs(str(e["input"].get("command", "")))
         if not rx.search(cmd) or (purpose and not re.search(rf"--for[= ]{purpose}\b", cmd)):
             continue
-        m = re.search(r"Exit code (\d+)", str(e.get("result") or ""))
-        code = int(m.group(1)) if m else (None if e.get("error") else 0)
+        res = str(e.get("result") or "")
+        m = re.search(r"Exit code (\d+)", res)
+        # 모델이 `; echo "exit=$?"`(EXIT $? 등)로 종료 코드를 찍으면 Bash 결과는 0이다 — 찍힌 값을 쓴다
+        echo = (re.findall(r"(?im)^\s*exit(?:\s*code)?\s*[=:]?\s*(\d+)\s*$", res)
+                if re.search(r"(?i)echo\s+[\"']?exit(?:\s*code)?\s*[=:]?\s*\$\?", cmd) else [])
+        code = int(echo[-1]) if echo else int(m.group(1)) if m else (None if e.get("error") else 0)
         out.append((i, cmd, _last_json(e.get("result")), code))
     return out
 
@@ -2585,11 +2631,273 @@ def check_output_calls(ctx, purpose=None):
     return _calls(ctx, CHECK_CMD, purpose)
 
 
-def module_doc_reads(ctx, start: int = 0) -> list[str]:
-    """seq[start:]의 Read 경로(POSIX)."""
+# 셸 읽기 경로(B2 e76·e77): 실행자가 Read 대신 `cat`·`sed -n`으로 읽는 것도 읽기다(런타임 중립 문서 b2 §12.6, OpenCode `cat *`
+# 허용). 풀 수 없는 경로는 `?<원문>`으로 남긴다 — 그런 읽기가 통과를 돕지 못하게(76은 read 밖, 77은 읽음으로 세지 않는다).
+_GREP_VERBS = frozenset({"grep", "egrep", "fgrep", "rg"})
+_READ_VERBS = frozenset({"cat", "head", "tail", "less", "more", "sed", "awk", "nl", "tac", "cut", "sort", "uniq", "diff", "od",
+                         "xxd"}) | _GREP_VERBS
+_GREP_OPT = {"-e", "-f", "-m", "-A", "-B", "-C", "-d", "-D", "--regexp", "--file", "--max-count", "--after-context",
+             "--before-context", "--context", "--include", "--exclude", "--exclude-dir", "--exclude-from", "--label"}
+_OPT_ARG = {"head": {"-n", "-c", "--lines", "--bytes"}, "tail": {"-n", "-c", "--lines", "--bytes"},
+            "sed": {"-e", "-f", "-l", "--expression", "--file"}, "awk": {"-F", "-v", "-f", "--file", "--assign"},
+            "nl": {"-b", "-d", "-f", "-h", "-i", "-l", "-n", "-s", "-v", "-w"}, "less": {"-b", "-h", "-j", "-x", "-y", "-z"},
+            "grep": _GREP_OPT, "egrep": _GREP_OPT, "fgrep": _GREP_OPT,
+            "rg": {"-e", "-f", "-m", "-A", "-B", "-C", "-g", "-t", "-T", "-M", "-j", "-E", "--regexp", "--file", "--glob", "--iglob",
+                   "--type", "--type-not", "--max-count", "--context", "--after-context", "--before-context", "--max-columns",
+                   "--threads", "--sort", "--sortr", "--encoding"},
+            "cut": {"-b", "-c", "-f", "-d", "--output-delimiter"}, "tac": {"-s", "--separator"},
+            "sort": {"-k", "-t", "-o", "-S", "-T", "--key", "--field-separator", "--output", "--buffer-size",
+                     "--temporary-directory", "--parallel"},
+            "uniq": {"-f", "-s", "-w"}, "diff": {"-U", "-C", "-x", "-X", "-I", "-F", "--label", "--exclude", "--from-file", "--to-file"},
+            "od": {"-A", "-j", "-N", "-t", "-S"}, "xxd": {"-l", "-s", "-c", "-g", "-o", "-n"}}
+# 패턴(스크립트)을 주는 옵션: 주어지면 첫 위치 인자가 파일이다(sed·awk 스크립트, grep·rg 패턴)
+_PATTERN_OPT = {"sed": {"-e", "-f", "--expression", "--file"}, "awk": {"-f", "--file"}}
+_PATTERN_OPT.update({v: {"-e", "-f", "--regexp", "--file"} for v in _GREP_VERBS})
+_FIRST_ONLY = frozenset({"uniq", "xxd"})        # 둘째 위치 인자는 출력 파일
+# 명령 앞에 붙어 동사를 가리는 셸 낱말(`if cat f`·`do cat $f`·`time cat f`)
+_SH_PREFIX = frozenset({"do", "then", "else", "if", "elif", "while", "until", "!", "time", "command", "nohup", "exec", "{"})
+
+
+def _strip_prefix(toks: list[str]) -> tuple[list[str], list[str]]:
+    """앞의 셸 낱말·`export`·`NAME=값`을 뗀다 → (대입 토큰, 명령 토큰). 명령 토큰이 비면 대입만 있는 조각이다(`X=1 cat …`의
+    앞 대입은 그 명령의 환경일 뿐이라 호출하는 쪽이 env에 넣지 않는다)."""
+    assigns: list[str] = []
+    k = 0
+    while k < len(toks):
+        t = toks[k]
+        if t in _SH_PREFIX or t == "export" or (t == "-p" and k and toks[k - 1] == "time"):
+            k += 1
+        elif _ASSIGN.match(t):
+            assigns.append(t)
+            k += 1
+        else:
+            break
+    return assigns, toks[k:]
+
+
+def _for_items(toks: list[str]) -> tuple[str, list[str]] | None:
+    """`for V in A B …` 조각 → (V, [A, B, …]). 아니면 None."""
+    if len(toks) >= 3 and toks[0] == "for" and re.fullmatch(r"[A-Za-z_]\w*", toks[1]) and toks[2] == "in":
+        return toks[1], toks[3:]
+    return None
+_REDIRECT_TOK = re.compile(r"^(?:\d*[<>]{1,2}&?|&>>?|<<<|\d*>\|)$")
+_VAR_REF = re.compile(r"\$\{(\w+)\}|\$(\w+)")
+_ASSIGN = re.compile(r"^([A-Za-z_]\w*)=(.*)$", re.DOTALL)
+
+
+def _sh_split(cmd: str) -> list[str]:
+    """따옴표·역슬래시를 지키며 `; & && || |`·줄바꿈에서 자르고, `(`·`)`(서브셸·`$(`)는 따로 낸다. 리다이렉트의 `&`(`2>&1`·`&>`)는
+    자르지 않는다."""
+    out, cur, q, i = [], [], None, 0
+
+    def flush():
+        s = "".join(cur).strip()
+        if s:
+            out.append(s)
+        cur.clear()
+    while i < len(cmd):
+        c = cmd[i]
+        if q:
+            cur.append(c)
+            if c == q:
+                q = None
+            elif c == "\\" and q == '"' and i + 1 < len(cmd):
+                cur.append(cmd[i + 1])
+                i += 1
+        elif c in "'\"":
+            q = c
+            cur.append(c)
+        elif c == "\\" and i + 1 < len(cmd):
+            if cmd[i + 1] != "\n":          # 줄 이음은 지운다
+                cur += [c, cmd[i + 1]]
+            i += 1
+        elif c == "&" and ((cur and cur[-1] == ">") or cmd[i + 1:i + 2] == ">"):
+            cur.append(c)
+        elif c in ";|&\n":
+            flush()
+        elif c in "()":
+            flush()
+            out.append(c)
+        else:
+            cur.append(c)
+        i += 1
+    flush()
+    return out
+
+
+def _sh_words(seg: str) -> list[str]:
+    """조각 하나의 낱말: 따옴표를 풀고 리다이렉트 연산자(`>`·`2>&1`·`<`)는 붙어 있어도 따로 낸다. 따옴표 안의 `<`·`>`(sed·awk
+    스크립트 `'NR<=40'`, grep 패턴)는 낱말에 남는다. 짝이 안 맞는 따옴표면 ValueError."""
+    lex = shlex.shlex(seg, posix=True, punctuation_chars="<>&")
+    lex.whitespace_split = True
+    return list(lex)
+
+
+def _expand(tok: str, env: dict, cwd: str | None) -> str | None:
+    """`$NAME`·`${NAME}`를 같은 호출의 대입 값으로 편다(`$PWD`는 cwd). 못 펴면 None(`for` 변수 목록도 여기서는 못 편다)."""
+    def sub(m):
+        val = cwd if (m.group(1) or m.group(2)) == "PWD" else env.get(m.group(1) or m.group(2))
+        if not isinstance(val, str):
+            raise KeyError(m.group(0))
+        return val
+    try:
+        out = _VAR_REF.sub(sub, tok)
+    except KeyError:
+        return None
+    return None if "$" in out or "`" in out else out
+
+
+def _resolve(arg: str, env: dict, cwd: str | None) -> list[str]:
+    """읽기 인자 → 정규화한 절대 경로들(`for V in A B`의 `$V`는 항목마다 하나). 변수를 못 펴거나 glob·`~`·cwd 모름이면 `?<원문>`."""
+    loops = [n for n in {m.group(1) or m.group(2) for m in _VAR_REF.finditer(arg)} if isinstance(env.get(n), tuple)]
+    if loops:
+        return [r for item in env[loops[0]] for r in _resolve(arg, {**env, loops[0]: item}, cwd)]
+    val = _expand(arg, env, cwd)
+    if val is None or val.startswith("~") or any(ch in val for ch in "*?["):
+        return ["?" + arg]
+    if not val.startswith("/"):
+        if cwd is None:
+            return ["?" + arg]
+        val = posixpath.join(cwd, val)
+    return [posixpath.normpath(val)]
+
+
+def _read_args(verb: str, toks: list[str]) -> list[str] | None:
+    """읽기 동사 뒤 낱말(_sh_words — 리다이렉트 연산자는 따로) 중 파일 인자: 옵션·옵션 값·sed/awk 스크립트·grep/rg 패턴·
+    출력 리다이렉트(대상·fd 포함)는 빼고 `<` 입력은 파일로 센다. 짧은 옵션 묶음(`-rne PAT`·`-A3`)도 푼다. 디렉토리 인자(`grep -r X dir/`)도 경로로 낸다. `sed -i`(편집)면 None."""
+    if verb == "sed" and any(re.match(r"^-[A-Za-z]*i", t) or t.startswith("--in-place") for t in toks):
+        return None
+    with_arg, pat_opts = _OPT_ARG.get(verb, set()), _PATTERN_OPT.get(verb, set())
+    files, positional, script_given, skip, opts_done = [], [], False, False, False
+    for k, t in enumerate(toks):
+        if skip:
+            skip = False
+            continue
+        if _REDIRECT_TOK.match(t):
+            if t in ("<", "0<") and k + 1 < len(toks):
+                files.append(toks[k + 1])
+            skip = True
+            continue
+        if not opts_done and t == "--":
+            opts_done = True
+            continue
+        if not opts_done and t.startswith("--"):
+            name = t.split("=", 1)[0]
+            script_given = script_given or name in pat_opts
+            skip = "=" not in t and name in with_arg
+            continue
+        if not opts_done and t.startswith("-") and t != "-" and not re.fullmatch(r"-\d+", t):
+            for j in range(1, len(t)):      # 짧은 옵션 묶음: 값을 받는 글자가 나오면 나머지(또는 다음 토큰)가 값이다
+                o = "-" + t[j]
+                if o in with_arg:
+                    script_given = script_given or o in pat_opts
+                    skip = j == len(t) - 1
+                    break
+            continue
+        if t.startswith("-") and t != "-" and not opts_done:
+            continue                        # `head -5`
+        if t.isdigit() and k + 1 < len(toks) and _REDIRECT_TOK.match(toks[k + 1]):
+            continue                        # `2>/dev/null`의 fd
+        if t == "-":
+            continue
+        positional.append(t)
+    if verb in _PATTERN_OPT and not script_given and positional:
+        positional = positional[1:]         # 첫 인자는 스크립트·패턴
+    if verb in _FIRST_ONLY:
+        positional = positional[:1]
+    return files + positional
+
+
+def bash_read_paths(cmd: str, cwd: str | None = None) -> tuple[list[str], str | None]:
+    """Bash 명령 하나가 읽기 동사(_READ_VERBS: cat·head·tail·sed·awk·grep·rg·cut·sort…)로 연 파일·디렉토리(정규화한 POSIX 경로)와
+    호출 뒤 cwd. heredoc 본문은 빼고 triage.py·parse_logcat.py를 부르는 조각만 건너뛴다. 앞의 셸 낱말(`if`·`do`·`time`·`!`…)은
+    떼고 본다. `cd`·`pushd`·`popd`는 cwd를 바꾸고, 서브셸 `(…)` 안의 이동은 밖으로 나오지 않는다. 같은 호출의 `NAME=값`·
+    `export NAME=값`·`for V in A B`를 편다(셸 변수는 호출 사이에 이어지지 않는다). `xargs … 읽기 동사`는 대상을 모르므로
+    `?xargs …` 하나로 낸다. 출력 리다이렉트 대상·`sed -i`는 읽기가 아니다. 풀 수 없는 경로(정의 안 된 `$X`·glob·`~`·cwd 모름)는
+    `?<원문>`. 한계: 부분 읽기(`head -3`)도 그 파일을 읽은 것으로 센다(Read limit과 같다)."""
+    env: dict = {}
+    stack: list = []
+    out: list[str] = []
+    prev = ""
+    for seg in _sh_split(_strip_heredocs(cmd)):
+        if seg in ("(", ")"):
+            if seg == "(":
+                stack.append(("(", cwd))
+            elif stack:
+                cwd = stack.pop()[1]
+            continue
+        if "triage.py" in seg or "parse_logcat.py" in seg:
+            prev = seg
+            continue
+        try:
+            toks = _sh_words(seg)
+        except ValueError:          # 짝이 안 맞는 따옴표: 읽기 동사면 풀 수 없는 읽기로 남긴다
+            m = re.match(r"\s*(?:(?:\w+=\S*|do|then|else|if|elif|time|!)\s+)*(\S+)", seg)
+            if m and posixpath.basename(m.group(1)) in _READ_VERBS:
+                out.append("?" + seg[:80])
+            prev = seg
+            continue
+        assigns, toks = _strip_prefix(toks)
+        if not toks:                # 대입만 있는 조각
+            for t in assigns:
+                name, val = t.split("=", 1)
+                env[name] = _expand(val, env, cwd)
+            prev = seg
+            continue
+        loop = _for_items(toks)
+        if loop:
+            items = []
+            for it in loop[1]:
+                val = _expand(it, env, cwd)
+                items.append(it if val is None else val)
+            env[loop[0]] = tuple(items)
+            prev = seg
+            continue
+        verb = posixpath.basename(toks[0])
+        if verb in ("cd", "pushd"):
+            args = [t for t in toks[1:] if not t.startswith("-")]
+            if verb == "pushd":
+                stack.append(("pushd", cwd))
+            val = _expand(args[0], env, cwd) if args else None
+            if val is None or val.startswith("~") or (not val.startswith("/") and cwd is None):
+                cwd = None
+            else:
+                cwd = posixpath.normpath(val if val.startswith("/") else posixpath.join(cwd, val))
+        elif verb == "popd":
+            cwd = stack.pop()[1] if stack and stack[-1][0] == "pushd" else None
+        elif verb == "xargs":
+            if any(posixpath.basename(t) in _READ_VERBS for t in toks[1:]):
+                out.append(("?" + (prev + " | " if prev else "") + seg)[:200])
+        elif verb in _READ_VERBS:
+            args = _read_args(verb, toks[1:])
+            if args is not None:
+                out += [r for a in args for r in _resolve(a, env, cwd)]
+        prev = seg
+    return out, cwd
+
+
+def module_doc_reads(ctx, start: int = 0, *, executed_only: bool = False) -> list[str]:
+    """seq[start:]의 Read 경로와 Bash 읽기(cat·head·tail·sed…)로 연 파일(POSIX; cd는 호출 사이에도 이어 보고, 변수 대입을 펼치며,
+    리다이렉트 대상·sed -i는 제외). cwd는 seq 처음(실행 cwd = env 디렉토리)부터 따라가고 경로는 start부터 모은다. hook이 막은
+    호출은 cwd를 바꾸지 않고, executed_only면 경로에도 넣지 않는다(기본값은 막힌 시도도 센다). 풀 수 없는 경로는 `?<원문>`."""
     seq = ctx.seq() or []
-    return [str(e["input"].get("file_path", "")).replace("\\", "/") for e in seq[start:]
-            if e["kind"] == "tool" and e["name"] == "Read"]
+    cwd: str | None = str(ctx.env_dir).replace("\\", "/")
+    got: list[str] = []
+    for i, e in enumerate(seq):
+        if e["kind"] != "tool" or e["name"] not in ("Read", "Bash"):
+            continue
+        blocked = shown.not_run(e)
+        take = i >= start and not (executed_only and blocked)
+        if e["name"] == "Read":
+            if take:
+                got.append(str(e["input"].get("file_path", "")).replace("\\", "/"))
+            continue
+        paths, after = bash_read_paths(str(e["input"].get("command", "")), cwd)
+        if not blocked:
+            cwd = after
+        if take:
+            got += paths
+    return got
 
 
 def managed_clone_ok(ctx):
@@ -2608,7 +2916,10 @@ def managed_clone_ok(ctx):
 
 def no_direct_module_access(ctx):
     """관리 clone·JOB 모듈 기록을 실행자가 직접 만지지 않았다: 파일 도구 쓰기·Read가 `_module-skills/` 아래나 JOB 모듈 기록에 없고,
-    triage.py 밖 Bash 명령이 `_module-skills`나 모듈 기록을 가리키지 않는다."""
+    triage.py 밖 Bash 조각이 `_module-skills`를 가리키거나, module-skill.json·check-output.json을 가리키거나, input·모듈 사본
+    (deep-input.json·skill-input.json·`module-skill/`)을 쓰거나 지우지 않는다(input·read 사본 읽기는 허용 — module-skills.md 공통
+    '읽는 것'). 쓰기 판정은 _module_seg_bad(쓰기 동사·인터프리터·`sed -i`·`find -delete`·출력 리다이렉트·tee 대상).
+    한계: `cd …/module-skill && rm x`처럼 cwd로만 가리킨 쓰기는 보지 않는다."""
     uses = ctx.tool_uses()
     if uses is None:
         raise _Manual("실행 기록(events.jsonl) 없음")
@@ -2620,10 +2931,70 @@ def no_direct_module_access(ctx):
         elif name == "Read" and "/_module-skills/" in path:
             bad.append(f"Read {path}")
         elif name == "Bash":
-            cmd = _strip_heredocs(str(inp.get("command", "")))
-            if "triage.py" not in cmd and ("_module-skills" in cmd or any(r in cmd for r in MODULE_RECORDS)):
-                bad.append(cmd[:120])
+            env: dict = {}          # 같은 호출의 대입을 펴서 본다(`D=…/module-skill/deep; echo x > $D/a`)
+            for seg in _sh_split(_strip_heredocs(str(inp.get("command", "")))):
+                try:
+                    toks = shlex.split(seg)
+                except ValueError:
+                    toks = []
+                if toks and all(_ASSIGN.match(t) for t in toks[toks[0] == "export":]):
+                    env.update(t.split("=", 1) for t in toks[toks[0] == "export":])
+                    if "_module-skills" in seg or "module-skill.json" in seg or "check-output.json" in seg:
+                        bad.append(seg[:120])       # 가리키기만 해도 센다(예전 기준 그대로)
+                    continue
+                loop = _for_items(toks)
+                if loop:                # `for f in …/module-skill/a; do rm $f` — 항목을 이어 붙여 편다
+                    env[loop[0]] = " ".join(loop[1])
+                seg = _VAR_REF.sub(lambda m: env.get(m.group(1) or m.group(2), m.group(0)), seg)
+                if "triage.py" not in seg and _module_seg_bad(seg):
+                    bad.append(seg[:120])
     return not bad, f"직접 접근={bad[:3]}"
+
+
+# 모듈 사본 쓰기(no_direct_module_access): 읽기 동사를 허용 목록으로 두면 `find -type f`·`test -f`·`awk 'NR<=40'`·`sha256sum`처럼
+# 읽기만 하는 명령이 실패한다(B2 수정 리뷰 P1) — 쓰기를 고른다
+_WRITE_VERBS = frozenset({"rm", "mv", "cp", "ln", "touch", "truncate", "chmod", "chown", "chgrp", "mkdir", "rmdir", "dd", "install",
+                          "rsync", "patch", "git", "tee", "shred", "unlink", "split", "csplit"})
+_INTERPRETER = re.compile(r"^(?:python\d*(?:\.\d+)?|perl|ruby|node|bash|sh|zsh|dash|ksh|php|lua|pwsh)$")
+_FIND_WRITE = frozenset({"-delete", "-exec", "-execdir", "-ok", "-okdir", "-fprint", "-fprint0", "-fprintf", "-fls"})
+_MODULE_COPY = re.compile(r"deep-input\.json|skill-input\.json|\bmodule-skill(?:/|(?=[\s\"');]|$))")
+
+
+def _module_seg_bad(seg: str) -> bool:
+    """no_direct_module_access의 Bash 조각 판정: `_module-skills`·module-skill.json·check-output.json을 가리키면 참. input·모듈 사본은
+    쓸 때만 참 — 출력 리다이렉트 대상, 쓰기 동사(_WRITE_VERBS)·인터프리터, `sed -i`·`awk -i inplace`·`find -delete/-exec…`,
+    `xargs 쓰기 동사`. 앞의 셸 낱말·대입은 떼고, `for V in …`는 쓰기가 아니다."""
+    if "_module-skills" in seg or any(r in seg for r in MODULE_RECORDS if r not in ("deep-input.json", "skill-input.json")):
+        return True
+    if not _MODULE_COPY.search(seg):
+        return False
+    try:
+        toks = _sh_words(seg)
+    except ValueError:
+        return True
+    if any(">" in t and _REDIRECT_TOK.match(t) and k + 1 < len(toks) and _MODULE_COPY.search(toks[k + 1])
+           for k, t in enumerate(toks)):
+        return True
+    _, toks = _strip_prefix(toks)
+    if not toks or _for_items(toks):
+        return False
+    verb = posixpath.basename(toks[0])
+    if verb == "xargs":
+        rest = [t for t in toks[1:] if not t.startswith("-")]
+        if not rest:
+            return False
+        toks = toks[toks.index(rest[0]):]
+        verb = posixpath.basename(rest[0])
+    if verb in _WRITE_VERBS or _INTERPRETER.match(verb):
+        return True
+    if verb == "sed":
+        return _read_args("sed", toks[1:]) is None
+    if verb in ("awk", "gawk"):
+        return any(t in ("-iinplace", "--include=inplace") or (t in ("-i", "--include") and toks[k + 2:k + 3] == ["inplace"])
+                   for k, t in enumerate(toks[1:]))
+    if verb == "find":
+        return any(t in _FIND_WRITE for t in toks[1:])
+    return False
 
 
 def grounding_row(ctx, job: str, purpose: str, source: str | None):
@@ -2690,10 +3061,13 @@ def checks_h(eid, ctx):
             allowed |= {str(out.get("input") or "").replace("\\", "/"), str((out.get("timeline") or {}).get("path") or "").replace("\\", "/")}
             reads = module_doc_reads(ctx, calls[0][0])
             doc = [r for r in reads if "/module-skill/" in r or "/_module-skills/" in r]
-            outside = [r for r in doc if r not in allowed]
-            skills = (ctx.execution.get("plugin") or {}).get("skill_calls") if isinstance(ctx.execution.get("plugin"), dict) else []
+            # 풀 수 없는 읽기(`?…` — 정의 안 된 변수·glob)는 read 밖으로 센다: 통과를 돕지 못하게
+            outside = [r for r in doc if r not in allowed] + [r for r in reads if r.startswith("?")]
+            plugin = ctx.execution.get("plugin")      # 플러그인 자신의 진입 스킬(telephony-triage:*)은 대안 스킬이 아니다
+            skills = [s for s in (((plugin.get("seen") or plugin).get("skill_calls") or []) if isinstance(plugin, dict) else [])
+                      if not s.startswith("telephony-triage:")]
             ok = bool(doc) and not outside and not any("_module-skills" in r for r in reads) and not skills
-            return ok, f"모듈 문서 Read {len(doc)}개, read 밖={outside[:3]}, Skill 호출={skills}"
+            return ok, f"모듈 문서 읽기 {len(doc)}개, read 밖={outside[:3]}, Skill 호출={skills}"
 
         def report_ok():
             report = _read(ctx.work / key / "report.md") or ""
@@ -2716,12 +3090,17 @@ def checks_h(eid, ctx):
             if not calls:
                 return False, "module --for explore 출력 없음"
             reads = module_doc_reads(ctx, calls[0][0])
+            done = module_doc_reads(ctx, calls[0][0], executed_only=True)    # 읽음은 실행된 호출만, 금지 열람은 시도도 센다
             want = [p.replace("\\", "/") for p in calls[0][2]["read"]]
-            missing = [w for w in want if w not in reads]
+            missing = [w for w in want if w not in done]
             android = ctx.opened("log-tags.md", "ril-requests.md", "fail-causes.md")
-            job_tl = [r for r in reads if r.endswith(f"/{key}/timeline.md")]
-            ok = not missing and not android and not job_tl
-            return ok, f"read 중 안 읽음={missing}; Android 참고 자료={android}; module 뒤 JOB/timeline.md={job_tl}"
+            # 풀 수 없는 읽기(`?…` — xargs·glob·정의 안 된 변수)가 module 사본 밖 timeline.md를 가리키면 JOB/timeline.md로 센다
+            job_tl = [r for r in reads if r.endswith(f"/{key}/timeline.md")
+                      or (r.startswith("?") and "timeline.md" in r and "module-skill/" not in r)]
+            raw = ctx.opened("setup-error.log")       # 로그 원문(SKILL.md:51·explore.md — e46 scope와 같은 기준)
+            ok = not missing and not android and not job_tl and not raw
+            return ok, (f"read 중 안 읽음={missing}; Android 참고 자료={android}; module 뒤 JOB/timeline.md={job_tl}; "
+                        f"로그 원문={raw}")
 
         def report_ok():
             report = _read(ctx.work / key / "report.md") or ""
@@ -2807,9 +3186,10 @@ def checks_h(eid, ctx):
     return [auth_exit, report_line, no_workaround, continued, no_lock]
 
 
-def _skill_dir_from_base(ctx, script_lines: list[str]) -> tuple[bool, str]:
+def _skill_dir_from_base(ctx, script_lines: list[str], recorded: str | None = None) -> tuple[bool, str]:
     """R2: `skill_patch … --skill-dir <SK>`의 SK = 그 run의 `module --for deep` 출력 `base`. Skill 도구 대안(`module --for deep` 종료 1
-    `설치 스킬 못 찾음` 뒤)일 때만 그 결과의 `Base directory`라 base 비교를 하지 않는다. 기록이 없으면 비교하지 않는다(다른 행이 기록 없음을 본다)."""
+    `설치 스킬 못 찾음` 뒤)일 때만 그 결과의 `Base directory`라 base 비교를 하지 않는다. 기록이 없으면 비교하지 않는다(다른 행이 기록 없음을 본다).
+    SK는 skill_patch.py meta.json skill_dir(`recorded` — 해석된 값, guard 규칙 12로 스크립트만 씀), 없으면 명령 글자."""
     if ctx.seq() is None or not script_lines:
         return True, "skill-dir 비교 생략(기록 없음)"
     bases = [str((c[2] or {}).get("base") or "") for c in module_calls(ctx, "deep") if (c[2] or {}).get("base")]
@@ -2818,10 +3198,32 @@ def _skill_dir_from_base(ctx, script_lines: list[str]) -> tuple[bool, str]:
             return True, "module --for deep 종료 1 `설치 스킬 못 찾음`(Skill 도구 대안): Base directory 경로 허용"
         return False, "module --for deep base 없음, `설치 스킬 못 찾음`도 없음 — --skill-dir 출처 미검증"
     want = bases[-1].replace("\\", "/").rstrip("/")
+    if recorded:        # `$PWD/…`·상대 경로도 skill_patch.py가 푼 실제 값으로 비교한다
+        got_r = str(Path(recorded).resolve()).replace("\\", "/").rstrip("/")
+        want_r = str(Path(want).resolve()).replace("\\", "/").rstrip("/")
+        return got_r == want_r, f"skill_dir(meta.json)={got_r} base={want_r}"
     got = [m.group(1).strip("\"'").replace("\\", "/").rstrip("/") for l in script_lines
            for m in [re.search(r"--skill-dir[= ]((?:\"[^\"]*\")|(?:'[^']*')|\S+)", l)] if m]
     ok = bool(got) and got[-1] == want
     return ok, f"--skill-dir={got[-1:] or '없음'} base={want}"
+
+
+def _recorded_skill_dir(jobdir: Path, script_lines: list[str]) -> str | None:
+    """마지막 skill_patch 줄의 `--name` → `skill-suggestions/<이름>.meta.json`의 skill_dir. 그 이름의 .patch가 있고 sha256이 meta와
+    같을 때만(아니면 None — 명령 글자 비교로 돌아간다)."""
+    names = [m.group(1).strip("\"'") for l in script_lines for m in [re.search(r"--name[= ]((?:\"[^\"]*\")|(?:'[^']*')|[^\s;&|]+)", l)] if m]
+    if not names:
+        return None
+    name = re.sub(r"[^A-Za-z0-9._-]", "-", names[-1])      # skill_patch.safe_name
+    sug = jobdir / "skill-suggestions"
+    try:
+        meta = json.loads((sug / f"{name}.meta.json").read_text(encoding="utf-8"))
+        data = (sug / f"{name}.patch").read_bytes()
+    except (OSError, ValueError):
+        return None
+    if not isinstance(meta, dict) or not meta.get("skill_dir") or meta.get("sha256") != hashlib.sha256(data).hexdigest():
+        return None
+    return str(meta["skill_dir"])
 
 
 def checks_k(eid, ctx):
@@ -2872,7 +3274,7 @@ def checks_k(eid, ctx):
         diffs = [i for i, l in enumerate(lines) if re.search(r"\bdiff\b[^\n]*\.patch", l)]
         script = [i for i, l in enumerate(lines) if re.search(r"skill_patch\.py\b[^\n]*--skill-dir", l)]
         by_script = bool(script) and (not diffs or max(script) > max(diffs))
-        sk_ok, sk_ev = _skill_dir_from_base(ctx, [lines[i] for i in script])
+        sk_ok, sk_ev = _skill_dir_from_base(ctx, [lines[i] for i in script], _recorded_skill_dir(jobdir, [lines[i] for i in script]))
         evs.append(sk_ev)
         by_script = by_script and sk_ok
         pvars = {m.group(1) for l in lines for m in re.finditer(r"\b([A-Za-z_]\w*)=[^\s;&|]*\.patch\b", l)}

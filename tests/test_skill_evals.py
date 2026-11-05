@@ -3484,6 +3484,30 @@ def test_e71_skill_dir_must_be_module_base(tmp_path):
     assert grader._skill_dir_from_base(grader.Ctx(env_dir, run), ["skill_patch.py K --skill-dir /x"])[0] is True   # 대안 경로
 
 
+def test_e71_skill_dir_recorded_meta_wins(tmp_path):
+    import hashlib
+    env_dir = _synthetic_env(tmp_path)
+    run = run_dir(tmp_path)
+    base = str(tmp_path / "e" / "skills" / "mock-data-analyzer")
+    _tool_events(run, ("Bash", {"command": "python3 /p/scripts/triage.py module MOCK-9071 --for deep"},
+                       json.dumps({"skill": "mock-data-analyzer", "base": base}), False))
+    ctx = grader.Ctx(env_dir, run)
+    line = ['cd /e; python3 /p/skill_patch.py MOCK-9071 --skill-dir "$PWD/skills/mock-data-analyzer" --name mock-data-analyzer; echo $?']
+    assert grader._skill_dir_from_base(ctx, line, base)[0] is True
+    assert grader._skill_dir_from_base(ctx, line, "/other")[0] is False
+    assert grader._skill_dir_from_base(ctx, line, None)[0] is False           # 기록 없으면 명령 글자 비교
+    # meta 연결: 같은 이름의 patch sha256이 meta와 같을 때만 meta skill_dir
+    sug = tmp_path / "work" / "MOCK-9071" / "skill-suggestions"
+    sug.mkdir(parents=True)
+    (sug / "mock-data-analyzer.patch").write_bytes(b"--- a\n+++ b\n")
+    sha = hashlib.sha256(b"--- a\n+++ b\n").hexdigest()
+    (sug / "mock-data-analyzer.meta.json").write_text(json.dumps({"skill_dir": base, "sha256": sha}), encoding="utf-8")
+    assert grader._recorded_skill_dir(sug.parent, line) == base
+    (sug / "mock-data-analyzer.meta.json").write_text(json.dumps({"skill_dir": base, "sha256": "0" * 64}), encoding="utf-8")
+    assert grader._recorded_skill_dir(sug.parent, line) is None
+    assert grader._recorded_skill_dir(sug.parent, ["skill_patch.py K --skill-dir /x --name other"]) is None
+
+
 def test_e79_rows_detect_workaround_and_silent_fallback(tmp_path):
     env_dir = _synthetic_env(tmp_path)
     run = run_dir(tmp_path)
@@ -3497,6 +3521,179 @@ def test_e79_rows_detect_workaround_and_silent_fallback(tmp_path):
                  ("Read", {"file_path": "/e/mock-plugins/m/skills/mock-data-analyzer/SKILL.md"}, "x", False))
     ok, ev = grader.checks(79, grader.Ctx(env_dir, run))[2]()
     assert ok is False and "ls-remote" in ev and "SKILL.md Read=1" in ev
+
+    # B2 e79: `; echo "exit=$?"`면 Bash 결과는 0이다 — 찍힌 종료 코드를 쓴다
+    echoed = '{"reason":"인증","next":"x"}\nexit=2'
+    _tool_events(run, ("Bash", {"command": 'python3 /p/scripts/triage.py module MOCK-9041 --for deep; echo "exit=$?"'}, echoed, False))
+    assert grader.checks(79, grader.Ctx(env_dir, run))[0]()[0] is True
+    _tool_events(run, ("Bash", {"command": 'python3 /p/scripts/triage.py module MOCK-9041 --for deep; echo "exit=$?"'},
+                       '{"reason":"인증","next":"x"}\nexit=0', False))
+    assert grader.checks(79, grader.Ctx(env_dir, run))[0]()[0] is False
+    _tool_events(run, ("Bash", {"command": "python3 /p/scripts/triage.py module MOCK-9041 --for deep; echo EXIT $?"},
+                       '{"reason":"x"}\nEXIT 1', False))
+    assert grader.module_calls(grader.Ctx(env_dir, run), "deep")[0][3] == 1
+
+
+def test_bash_read_paths_resolves_cd_vars_and_skips_writes():
+    f = grader.bash_read_paths
+    assert f("cd /j && cat a b; cat /c/d | head -8", "/r") == (["/j/a", "/j/b", "/c/d"], "/j")
+    assert f("cat > out.md <<'EOF'\nbody\nEOF", "/r") == ([], "/r")               # heredoc·출력 리다이렉트는 읽기가 아니다
+    assert f("O=/o; cat >> $O/t.md <<'EOF'\nx\nEOF\ncat $O/a", "/r")[0] == ["/o/a"]
+    assert f("sed -n 1,80p /p/explore.md; head -n 5 f 2>&1", "/r")[0] == ["/p/explore.md", "/r/f"]
+    assert f("python3 /p/triage.py explore K > /tmp/x.json; cat /tmp/x.json", "/r")[0] == ["/tmp/x.json"]
+    assert f("sed -i s/a/b/ /j/SKILL.md", "/r")[0] == []
+    assert f("cat $UNSET/voice/SKILL.md", "/r")[0] == ["?$UNSET/voice/SKILL.md"]       # 못 펴면 ?로 남긴다
+    assert f("cat /j/*.md", "/r")[0] == ["?/j/*.md"]
+    assert f("(cd /x && cat a); cat b", "/r") == (["/x/a", "/r/b"], "/r")               # 서브셸 cd는 밖으로 안 나온다
+    assert f("cat ../../timeline.md", "/j/m/e")[0] == ["/j/timeline.md"]
+    assert f("cat a", None)[0] == ["?a"]
+    assert f("awk -F: '{print $1}' f; cat < in.txt", "/r")[0] == ["/r/f", "/r/in.txt"]
+    # B2 수정 리뷰 P1-2: grep·rg·cut…도 읽기, 셸 낱말 뒤 동사, for 항목, xargs는 `?` 하나
+    assert f("grep -rn APN /j/voice/", "/r")[0] == ["/j/voice"]
+    assert f("grep -n '' a b; grep -e X -n c; rg -A3 X d", "/r")[0] == ["/r/a", "/r/b", "/r/c", "/r/d"]
+    assert f("if cat a; then time cat b; fi; ! grep -q x c", "/r")[0] == ["/r/a", "/r/b", "/r/c"]
+    assert f('for f in a /j/b; do echo "== $f"; cat "$f"; done', "/r")[0] == ["/r/a", "/j/b"]
+    assert f("ls /j/* | xargs cat", "/r")[0] == ["?ls /j/* | xargs cat"]
+    assert f("cut -c1-80 a; sort -o out b; uniq c out2; xxd -l 16 d out3", "/r")[0] == ["/r/a", "/r/b", "/r/c", "/r/d"]
+    # 따옴표 안 `<`·`>`는 스크립트, 붙은 리다이렉트는 따로(P2-3)
+    assert f("awk 'NR<=40' a; sed -n '/<t>/p' b; cat /j/c>/tmp/x 2>&1", "/r")[0] == ["/r/a", "/r/b", "/j/c"]
+
+
+def _module_run(tmp_path, purpose, key, out, *later, skills=("telephony-triage:telephony-triage",)):
+    env_dir = _synthetic_env(tmp_path)
+    run = run_dir(tmp_path)
+    (run / "execution.json").write_text(json.dumps({"mode": "plugin", "plugin": {"skill_calls": list(skills)}}), encoding="utf-8")
+    _tool_events(run, ("Bash", {"command": f"python3 /p/scripts/triage.py module {key} --for {purpose} --json"}, json.dumps(out), False),
+                 *later)
+    return grader.Ctx(env_dir, run)
+
+
+def _e76_out(job):
+    deep = f"{job}/module-skill/deep"
+    return {"module": "ofono/data", "input": f"{job}/deep-input.json", "timeline": {"path": f"{deep}/timeline.md"},
+            "read": [f"{deep}/ofono/_common/layers.md", f"{deep}/ofono/data/SKILL.md", f"{deep}/timeline.md"]}
+
+
+def test_e76_reads_ok_counts_bash_reads_and_ignores_entry_skill(tmp_path):
+    def rows(name, *later, skills=("telephony-triage:telephony-triage",)):
+        job = str(tmp_path / name / "work" / "MOCK-9076")
+        ctx = _module_run(tmp_path / name, "deep", "MOCK-9076", _e76_out(job),
+                          *[("Bash", {"command": c.replace("JOB", job)}, "ok", False) for c in later], skills=skills)
+        return grader.checks(76, ctx)[2]()[0], grader.no_direct_module_access(ctx)[0]
+    good = ("cd JOB && cat module-skill/deep/ofono/_common/layers.md module-skill/deep/ofono/data/SKILL.md deep-input.json "
+            "module-skill/deep/timeline.md")
+    assert rows("a", good) == (True, True)
+    assert rows("b", good, "cat JOB/../_module-skills/ofono/data/SKILL.md") == (False, False)
+    assert rows("c", "cat JOB/module-skill/deep/ofono/voice/SKILL.md")[0] is False          # read 밖
+    assert rows("d", "cd JOB/module-skill/deep/ofono", "cat voice/SKILL.md")[0] is False     # cd는 호출 사이에도 잇는다
+    assert rows("e", good, skills=("mock-analyzers:mock-data-analyzer",))[0] is False
+    assert rows("f")[0] is False                                                             # 읽기 없음
+    assert rows("g", good, "echo x > JOB/deep-input.json")[1] is False
+    assert rows("h", good, "cat JOB/module-skill.json")[1] is False
+    assert rows("i", good, "cat $UNSET/voice/SKILL.md")[0] is False
+    assert rows("j", good, "D=JOB/module-skill/deep; rm -f $D/timeline.md")[1] is False
+    # B2 수정 리뷰 P1-1: 모듈 사본을 읽기만 하는 명령은 5행(직접 접근)을 실패시키지 않는다
+    for k, c in enumerate(("find JOB/module-skill -type f", "test -f JOB/module-skill/deep/timeline.md && echo y",
+                           "[ -f JOB/module-skill/deep/timeline.md ] && echo y", "echo 'JOB/module-skill/deep/timeline.md'",
+                           "awk 'NR<=40' JOB/module-skill/deep/timeline.md", "sha256sum JOB/module-skill/deep/timeline.md",
+                           "cut -c1-200 JOB/module-skill/deep/timeline.md", "jq . JOB/deep-input.json",
+                           'for f in JOB/module-skill/deep/timeline.md; do echo "== $f"; cat "$f"; done')):
+        assert rows(f"r{k}", good, c)[1] is True, c
+    for k, c in enumerate(("find JOB/module-skill -name x -delete", "find JOB/module-skill -exec rm {} +",
+                           "awk -i inplace '{print}' JOB/module-skill/deep/timeline.md", "cp /tmp/x JOB/deep-input.json",
+                           "python3 -c 'open(\"JOB/deep-input.json\",\"w\")'", "if true; then rm JOB/module-skill/deep/timeline.md; fi",
+                           "for f in JOB/module-skill/deep/timeline.md; do rm $f; done",
+                           "ls JOB/module-skill/deep/* | xargs rm JOB/module-skill/deep/a", "cat JOB/deep-input.json>JOB/deep-input.json")):
+        assert rows(f"w{k}", good, c)[1] is False, c
+    # P1-2: grep·xargs·for 읽기도 read 밖이면 3행 실패
+    for k, c in enumerate(("grep -rn APN JOB/module-skill/deep/ofono/voice/", "ls JOB/module-skill/deep/ofono/voice/* | xargs cat",
+                           "for f in JOB/module-skill/deep/ofono/voice/SKILL.md; do cat $f; done",
+                           "cat JOB/module-skill/deep/ofono/voice/SKILL.md>/tmp/x")):
+        assert rows(f"x{k}", good, c)[0] is False, c
+
+
+def test_e77_reads_ok_bash_reads_and_raw_log(tmp_path):
+    def row(name, *later, pre=()):
+        job = str(tmp_path / name / "work" / "MOCK-9077")
+        ex = f"{job}/module-skill/explore"
+        out = {"module": "android/data", "pick": {"by": "auto"},
+               "read": [f"{ex}/android/_common/layers.md", f"{ex}/android/data/explore.md", f"{ex}/timeline.md"]}
+        env_dir = _synthetic_env(tmp_path / name)
+        run = run_dir(tmp_path / name)
+        _tool_events(run, *[("Bash", {"command": c}, "ok", False) for c in pre],
+                     ("Bash", {"command": "python3 /p/scripts/triage.py module MOCK-9077 --for explore"}, json.dumps(out), False),
+                     *[("Bash", {"command": c.replace("JOB", job)}, "ok", False) for c in later])
+        return grader.checks(77, grader.Ctx(env_dir, run))[1]()
+    good = "cd JOB/module-skill/explore && cat android/_common/layers.md android/data/explore.md timeline.md"
+    assert row("a", good)[0] is True
+    assert row("b", good, "cat ../../timeline.md")[0] is False               # cwd를 이어 JOB/timeline.md
+    assert row("c", good, "W=JOB; cat $W/timeline.md")[0] is False
+    assert row("d", good, "python3 /p/scripts/triage.py check-output MOCK-9077 --for explore; cat JOB/timeline.md")[0] is False
+    assert row("e", "cd JOB/module-skill/explore && cat android/_common/layers.md timeline.md")[0] is False
+    ok, ev = row("f", good, pre=('grep -n "APN" logs/setup-error.log | head -20',))
+    assert ok is False and "로그 원문=['setup-error.log']" in ev
+    assert row("g", good, "cat > JOB/explore-output.md <<'EOF'\n가설\nEOF")[0] is True
+    # B2 수정 리뷰 P1-2: grep·for·xargs로 JOB/timeline.md를 읽어도 실패, 정상 grep·for·awk 읽기는 통과
+    for k, c in enumerate(("grep -n RIL JOB/timeline.md", "for f in JOB/timeline.md; do cat $f; done",
+                           "echo JOB/timeline.md | xargs cat")):
+        assert row(f"h{k}", good, c)[0] is False, c
+    ex = "cd JOB/module-skill/explore && "
+    for k, c in enumerate(("grep -n '' android/_common/layers.md android/data/explore.md timeline.md",
+                           "for f in android/_common/layers.md android/data/explore.md timeline.md; do cat $f; done",
+                           "cat android/_common/layers.md android/data/explore.md && awk 'NR<=400' timeline.md")):
+        assert row(f"i{k}", ex + c)[0] is True, c
+    # P1-3: triage.py와 같은 호출에 이어 붙인 로그 원문 읽기·logs glob도 센다
+    for k, c in enumerate(("python3 /p/scripts/triage.py check-output MOCK-9077 --for explore; grep -n APN logs/setup-error.log",
+                           "S=/p/scripts; python3 $S/triage.py explore MOCK-9077 > /tmp/x.json; sed -n 1,40p logs/setup-error.log",
+                           "grep -n APN logs/*.log", "cd logs && grep -n APN *", "F=logs/setup-error.log; grep -n APN $F")):
+        ok, ev = row(f"j{k}", good, pre=(c,))
+        assert ok is False and "로그 원문=['setup-error.log']" in ev, c
+    assert row("k", good, pre=("python3 /p/scripts/triage.py explore MOCK-9077 --log logs/setup-error.log",))[0] is True
+    # e73 scope의 timeline.md 열람은 예전 기준(chained=False — G10 미적용, 11/03 '노트만')
+    chained = {"command": "python3 /p/scripts/triage.py explore K; sed -n 1,80p /w/K/timeline.md"}
+    assert grader.Ctx._opens("Bash", chained, ("timeline.md",)) == ["timeline.md"]
+    assert grader.Ctx._opens("Bash", chained, ("timeline.md",), chained=False) == []
+
+
+def test_e78_only_that_counts_bash_reads(tmp_path):
+    job = str(tmp_path / "work" / "MOCK-9078")
+    ex = f"{job}/module-skill/explore/ofono"
+    ctx = _module_run(tmp_path, "explore", "MOCK-9078 --module ofono/sim", {"module": "ofono/sim"},
+                      ("Read", {"file_path": f"{ex}/sim/explore.md"}, "x", False),
+                      ("Bash", {"command": f"cat {ex}/data/explore.md"}, "x", False))
+    ok, ev = grader.checks(78, ctx)[2]()
+    assert ok is False and "data/explore.md" in ev
+
+
+def test_analyzer_called_accepts_bash_read_after_module(tmp_path):
+    env_dir = _synthetic_env(tmp_path)
+    run = run_dir(tmp_path)
+    (run / "execution.json").write_text(json.dumps({"mode": "plugin", "plugin": {"skill_calls": []}}), encoding="utf-8")
+    mod = ("Bash", {"command": "python3 /p/scripts/triage.py module MOCK-9040 --for deep"}, '{"skill":"mock-data-analyzer"}', False)
+    sk = "/e/mock-plugins/m/skills/mock-data-analyzer/SKILL.md"
+    _tool_events(run, mod, ("Bash", {"command": f"cat {sk}"}, "x", False))
+    ok, ev = grader._analyzer_called(grader.Ctx(env_dir, run))
+    assert ok is True and "(Bash 읽기)" in ev
+    _tool_events(run, ("Bash", {"command": f"cat {sk}"}, "x", False), mod)
+    assert grader._analyzer_called(grader.Ctx(env_dir, run))[0] is False      # module 앞 읽기
+    _tool_events(run, mod, ("Bash", {"command": f"sed -i s/a/b/ {sk}"}, "", False))
+    assert grader._analyzer_called(grader.Ctx(env_dir, run))[0] is False      # sed -i는 편집
+    _tool_events(run, mod, ("Bash", {"command": f"cat {sk}"}, "PreToolUse:Bash hook error: 거부", True))
+    assert grader._analyzer_called(grader.Ctx(env_dir, run))[0] is False      # hook이 막은 읽기
+
+
+def test_e41_row2_rejects_format_mismatch(tmp_path):
+    ctx = grader.Ctx(_synthetic_env(tmp_path), run_dir(tmp_path))
+    seen = {}
+
+    def shown(job, extra, **kw):
+        seen["extra"] = extra
+        return True, ""
+    ctx.report_shown = shown
+    grader.checks(41, ctx)[1]()
+    (pat,) = seen["extra"]
+    assert not re.search(pat, "- 심층 분석 생략: 출력 형식 불일치(칸)")
+    assert re.search(pat, "- 심층 분석 생략: mock-data-analyzer: internal error (timeout)")
 
 
 def test_module_skills_setup_validation(tmp_path):

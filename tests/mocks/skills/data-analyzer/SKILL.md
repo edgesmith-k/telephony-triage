@@ -58,13 +58,19 @@ analyzers:
 - [스킬] references/DATA-001.md에 설정 화면 경로 점검 추가 — 근거: 이번 이슈에서 확인 순서가 빠짐
 ```
 
-## 사외 테스트에서 쓰는 법
+## 절차
 
-LLM 없이 호출 경로만 확인하려면 같은 디렉토리의 `run.py`를 쓴다.
+이 모의 스킬은 스스로 해석하지 않는다. 결과는 같은 디렉토리 `run.py`의 출력만 쓴다.
+
+1. 실행한다. 종료 코드가 0이 아니면 분석 스킬 실패다 — 칸을 지어 쓰지 않고 stderr 한 줄을 사유로 끝낸다.
 
 ```sh
 python3 tests/mocks/skills/data-analyzer/run.py --input <입력.json>
 ```
+
+2. 출력 JSON을 칸으로 옮긴다: `요약:` = `summary` · `근거:` = 입력 `timeline` 파일의 줄 0~5개(글자 그대로) ·
+   `분석 스킬 의견:` = `suggested_cause`가 있으면 그 ID와 `detail`의 `의견:` 문장, null이면 `1위와 같음` ·
+   `규칙 제안:` = `detail`의 `규칙 제안:` 아래 줄, 없으면 `없음`.
 
 ## 사내 연결 (S-4a)
 

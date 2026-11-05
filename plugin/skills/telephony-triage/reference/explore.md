@@ -28,10 +28,10 @@
 3. 유사 유형의 증상·원인 시그니처가 필요하면 `S/db_search.py <ID> --db SNAP --limit 3`.
 4. 소스: Step 2-1에서 고른 루트(`code.roots`)에서 타임라인 문구로 `grep -rn -m 5`(상위 몇 줄), 필요한 함수만 읽는다.
    코드 경로를 고르지 않았으면(`code.skipped`) 코드 근거 없이 쓴다고 밝힌다.
-5. 플랫폼 지식: 모듈 문서를 받았으면 플랫폼 지식은 그 문서가 먼저다(읽는 범위·안전은 이 문서·`rules.md` 그대로) — `refs`(줄 모양)를
-   함께 읽는다. Android 참고 자료(`log-tags.md`·`ril-requests.md`·`fail-causes.md`)는 열지 않는다. 모듈 문서가 없으면:
-   `triage.py explore` 출력에 `platform`이 있으면(Android 아님) 그 `refs` 문서(이 스킬 디렉토리 기준)만 읽고 Android 참고 자료는
-   열지 않는다 — 다른 스택의 이름은 가설을 틀린 쪽으로 끈다. `refs`가 비면 그 이슈 DB `SNAP/parser-rules/`만 본다.
+5. 플랫폼 지식: `triage.py explore` 출력에 `platform`이 있으면(Android 아님) 그 `refs` 문서(이 스킬 디렉토리 기준)만, 타임라인과
+   함께 읽는다 — 그 플랫폼의 태그·층 이름은 거기에 있다. `refs`가 비면 그 이슈 DB `SNAP/parser-rules/`만 본다. 모듈 문서를 받았으면
+   플랫폼 지식은 그 문서가 먼저고 `refs`(줄 모양)는 함께 읽는다(읽는 범위·안전은 이 문서·`rules.md` 그대로). 두 경우 모두 Android 참고
+   자료(`log-tags.md`·`ril-requests.md`·`fail-causes.md`)는 열지 않는다 — 다른 스택의 이름은 가설을 틀린 쪽으로 끈다.
    `platform`이 없으면 위 1~4 그대로.
 
 로그 원문, `events.json`, `match.json`, `issue_raw.json`은 읽지 않는다. Step 7·8(계획 작성)에서도 같다:

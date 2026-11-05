@@ -49,8 +49,9 @@ MUST_SHOW_FIT = 4                # fit이 마지막에 남기는 수
 MUST_SHOW_CLIP = 160
 PULL_SKIPPED = "이슈 DB pull 건너뜀"     # must_show 줄 머리(issue_post가 Jira 본문에서 뺀다)
 EXPLORE_HYPOTHESIS = "TODO(LLM) 가설 1~3개 — 로그로 확인 / 코드로 추정 / 반대 근거 / 다음에 받을 로그. 실행하지 않으면 \"탐색 분석 생략: <사유>\". 점수·분류·검증에 쓰지 않는다"
-EXPLORE_PENDING_LINE = ("- 탐색 분석 (추정): 미실행 — 동의(또는 --explore·explore.when: always) 뒤 triage.py explore {key}가 "
-                        f"{TIMELINE_FILE}를 만든다. " + EXPLORE_HYPOTHESIS)
+EXPLORE_PENDING_LINE = ("- 탐색 분석 (추정): 미실행 — 실행 전(동의 답을 기다리는 동안 포함)엔 로그 원문을 grep·Read하지 않는다. "
+                        "동의(또는 --explore·explore.when: always) 뒤 triage.py explore {key}가 "
+                        f"{TIMELINE_FILE}를 만든다(가설 근거는 이 파일). " + EXPLORE_HYPOTHESIS)
 EXPLORE_DONE_LINE = "- 탐색 분석 (추정, " + TIMELINE_FILE + " {lines}/{total}줄): " + EXPLORE_HYPOTHESIS
 # 5-1·5-2 모듈 스킬·출력 검사 줄(B2 §5.5·§6·§7.2). `module`·`check-output`이 report.md의 그 줄만 고친다(`report.rewrite_line`)
 DEEP_TODO = "TODO(LLM) 결과는 check-output이 쓴다. 실행 안 함·실패면 \"심층 분석 생략: <사유>\"로"
