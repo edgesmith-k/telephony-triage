@@ -333,6 +333,17 @@ def test_ipv6_key_truncated_fragment():
     assert base in [r.regex.pattern for r in masking.RULES if r.kind == "IP"]      # 문맥 없는 IPv6 규칙: 경계만 M12로 넓힘
 
 
+def test_context_rule_is_per_line_in_multiline_text():
+    """H C1: 여러 줄 글에서 문맥 규칙(`Rule.context`)은 값이 있는 줄에서만 본다 — 모듈 보기 머리의 이름 목록
+    (`SIM_AUTHENTICATION`)이 다른 줄의 경로를 B64로 걸던 오탐. 같은 줄이면 그대로 잡는다."""
+    value = "Zm9vYmFyYmF6cXV4MTIzNDU2Nzg5"
+    other = f"미수집: SIM_AUTHENTICATION\nofonod drivers/rilmodem/sim 및 {value}"
+    assert masking.new_masker().find(other) == []
+    same = f"[0,0101]< SIM_AUTHENTICATION {value}"
+    assert [f["kind"] for f in masking.new_masker().find(same)] == ["B64"]
+    assert [f["kind"] for f in masking.new_masker().find("x\n" + same)] == ["B64"]
+
+
 def test_m12_cpp_scope_not_ip():
     """M12: 문맥 없는 IPv6 규칙의 앞뒤 경계가 낱말 문자 전부라 C++ 범위(`<이름>_<n>::<함수>`)는 IP가 아니다.
     주소는 그대로 가린다. 마스킹한 줄에서도 모듈 필터의 `MiscService_<n>::` 잡음 정규식이 맞는다. (벤더 모양을 본뜬 합성 줄)"""

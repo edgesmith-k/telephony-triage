@@ -489,6 +489,10 @@ class Masker:
                 continue
             if not rule.applies(text):  # 문맥 규칙은 줄 전체를 본다
                 continue
+            ctx_lines = None            # 여러 줄 글(문서·보기)이면 문맥은 값이 있는 그 줄에서만 본다(H C1: 보기 머리의
+            if rule.context is not None and "\n" in text:     # 이름 목록이 다른 줄의 값을 문맥 규칙에 걸던 오탐)
+                ctx_lines = [(m.start(), m.end()) for m in re.finditer(r"[^\n]*", text)
+                             if m.end() > m.start() and rule.context.search(m.group(0))]
             free, pos = [], 0
             for start, end in sorted(taken):
                 if start > pos:
@@ -504,6 +508,8 @@ class Masker:
                         if value is None or self._allowed(value) or (rule.check and not rule.check(value)):
                             continue
                         start, end = match.span(group)
+                        if ctx_lines is not None and not any(a <= lo + start < b for a, b in ctx_lines):
+                            continue
                         if rule.before is not None and rule.before.search(text[max(0, lo + start - 24):lo + start]):
                             continue
                         found.append((lo + start, lo + end, rule.kind, value, rule.fmt))
