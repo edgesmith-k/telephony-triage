@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -326,10 +327,30 @@ def test_ipv6_key_truncated_fragment():
     assert m("addr:aa:bb:cc:dd:ee:ff") == "addr:aa:bb:cc:dd:ee:ff"                  # MAC 모양(알려진 한계: key: 뒤 MAC)
     assert m("85a3:12:34:8a2e:370 x") == "85a3:12:34:8a2e:370 x"                    # 5묶음 이하 조각은 문맥 없이 보지 않는다
     assert m("dns 2001:4860:4860::8888") == "dns <IP#4>"                            # 기존 규칙 그대로
-    old = (r"(?<![0-9A-Fa-f:])(?P<v>(?:[0-9A-Fa-f]{1,4}:){7}[0-9A-Fa-f]{1,4}"
-           r"|(?:[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4}){0,6})?::(?:[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4}){0,6})?)"
-           r"(?![0-9A-Fa-f:])")
-    assert old in [r.regex.pattern for r in masking.RULES if r.kind == "IP"]       # 문맥 없는 IPv6 규칙은 바이트 그대로
+    base = (r"(?<![0-9A-Za-z_:])(?P<v>(?:[0-9A-Fa-f]{1,4}:){7}[0-9A-Fa-f]{1,4}"
+            r"|(?:[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4}){0,6})?::(?:[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4}){0,6})?)"
+            r"(?![0-9A-Za-z_:])")
+    assert base in [r.regex.pattern for r in masking.RULES if r.kind == "IP"]      # 문맥 없는 IPv6 규칙: 경계만 M12로 넓힘
+
+
+def test_m12_cpp_scope_not_ip():
+    """M12: 문맥 없는 IPv6 규칙의 앞뒤 경계가 낱말 문자 전부라 C++ 범위(`<이름>_<n>::<함수>`)는 IP가 아니다.
+    주소는 그대로 가린다. 마스킹한 줄에서도 모듈 필터의 `MiscService_<n>::` 잡음 정규식이 맞는다. (벤더 모양을 본뜬 합성 줄)"""
+    keep = [
+        "[MiscService_0::OnHandleRequest] request done",
+        "[ImsService_1::OnUNSOL_AIMS_REGISTRATION] Ims Registration : TRUE",
+        "V2_4::RadioDataProxy::setupDataCall",
+        "SetupDataCallCommand_V2_4::onRequest",
+    ]
+    for text in keep:
+        assert masking.new_masker()(text) == text, text
+        assert masking.new_masker(log_lines=True)(text) == text, text
+        assert masking.new_masker().find(text) == [], text
+    for text in ("fe80::1", "2001:db8::7", "a=::1", "addr fe80::1", "[fe80::1]"):
+        out = masking.new_masker()(text)
+        assert "<IP#1>" in out and "::" not in out, (text, out)
+    masked = masking.new_masker(log_lines=True)("Nov  1 10:00:01 host exynos-ril[901]: [MiscService_0::OnHandle] x")
+    assert re.search(r"MiscService_\d+::", masked), masked
 
 
 def test_pin_puk_values_need_four_digits():

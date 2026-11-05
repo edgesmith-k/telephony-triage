@@ -371,7 +371,8 @@ _BASE_RULES: tuple[Rule, ...] = (
     Rule("IP", re.compile(
         r"(?<![\w.])(?P<v>(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})(?!\w|\.\w)"),
          before=_VERSION_BEFORE),
-    Rule("IP", re.compile(r"(?<![0-9A-Fa-f:])(?P<v>" + _V6_FULL + "|" + _V6_COMP + r")(?![0-9A-Fa-f:])"),
+    # M12 앞뒤 경계에 낱말 문자 전부(`[0-9A-Za-z_:]`): C++ 범위 `MiscService_0::OnHandle`·`V2_4::RadioDataProxy`는 IP가 아니다
+    Rule("IP", re.compile(r"(?<![0-9A-Za-z_:])(?P<v>" + _V6_FULL + "|" + _V6_COMP + r")(?![0-9A-Za-z_:])"),
          check=lambda v: v != "::"),
     # 위 규칙의 앞 경계(`:` 금지)에 막히는 주소 키 바로 뒤(`addr:<v6>`, `ipv6address:<v6>/64`)와 끝이 `:`인 잘린 표기
     Rule("IP", re.compile(r'(?i)(?:addr(?:ess)?|\bip(?:v6)?|\bgw|gateway|\bdns\d?)\s*[=:]\s*"?(?P<v>' + _V6_FULL + "|"
