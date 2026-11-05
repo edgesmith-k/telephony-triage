@@ -111,7 +111,7 @@ platforms:
         daemons: [DMD, RFSD, vcd]
         ofonod_files: [src/modem.c, plugins/ril_samsung.c]
         ril: [RADIO_POWER, UNSOL_RESPONSE_RADIO_STATE_CHANGED]
-        sit: [SIT_SET_RADIO_POWER, SIT_IND_RADIO_STATE_CHANGED, SIT_PWR_*]
+        sit: [SIT_SET_RADIO_POWER, SIT_IND_RADIO_STATE_CHANGED, SIT_PWR_*, SIT_IND_TOTAL_OOS]   # TOTAL_OOS: network와 겹침, 망 없음은 모뎀 상태로도 본다 (H C1)
         dbus: [org.ofono.Modem]
   android:
     common:
