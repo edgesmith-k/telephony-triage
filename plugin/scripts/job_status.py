@@ -23,6 +23,8 @@
 label, confidence, at?, evidence?, next?}], must_show[], next, approval{approved_hash_prefix, staged_at, user_approval}, post, lock{held,
 mine, job, command, age_sec, expired, same_session}, files, warnings[], last_question?{kind, asked_at, live}}`(`last_question`은
 단계가 질문 단계가 아닌데 `pending`이 있을 때). 지금 기다리는 질문이 단계를 앞서도 `state.json`이 있으면 stage·pr.json 막힌 것을 본다.
+OpenCode 안(`TT_RUNTIME=opencode`)에서만 `runtime{name, model, opencode, pinned}`(런타임·모델은 `provenance.env_info`, OpenCode 버전은
+`opencode --version`, 계획 I O8)과 markdown 대상 절의 `런타임` 줄(`--doctor` 진단의 버전 줄에도)을 더한다 — Claude Code 출력은 그대로.
 `--format markdown`은 대상 → 단계 → 막힌 것 → 다음 할 일 → 관련 파일(≤3KB 보장: 넘으면 뒤쪽 줄을 빼고
 `- … 생략 N줄(근거·경고·파일 등, JSON 출력)`, 그래도 넘으면 줄마다 자르고 뒤에서부터 줄을 뺀다, `--json`과 함께 못 쓴다).
 
@@ -125,9 +127,26 @@ def run(args, defaults: dict) -> dict:
     else:
         key, tracker_key = _key(tracker, work, args.key)
     try:
-        return jobstatus.collect(work, key, cfg, defaults, platform=name, tracker=tracker.name, tracker_key=tracker_key)
+        doc = jobstatus.collect(work, key, cfg, defaults, platform=name, tracker=tracker.name, tracker_key=tracker_key)
     except jobstatus.StatusUsage as exc:
         raise Usage(str(exc)) from exc
+    rt = runtime_info(defaults)
+    if rt:
+        doc["runtime"] = rt
+    return doc
+
+
+def runtime_info(defaults: dict | None = None) -> dict | None:
+    """OpenCode 안(`TT_RUNTIME=opencode`)에서만 `{name, model, opencode, pinned}`(계획 I O8): 런타임·모델은
+    `provenance.env_info`(환경 변수만), OpenCode 버전은 `opencode --version`(못 읽으면 "확인 불가"). Claude Code에서는 None —
+    기본 출력은 그대로다."""
+    if os.environ.get("TT_RUNTIME") != "opencode":
+        return None
+    from common import oc_adapter, provenance
+
+    info = provenance.env_info(cfg=defaults)
+    return {"name": info["runtime"], "model": info["model"],
+            "opencode": oc_adapter.opencode_version() or "확인 불가", "pinned": oc_adapter.OPENCODE_VERSION}
 
 
 DIAG_MAX = 1024                  # --doctor 진단 절 바이트 상한(앞 빈 줄 포함). 기존 화면 ≤3,072B와 합쳐 ≤4,096B
@@ -186,10 +205,14 @@ def diagnosis(args, platform: str | None) -> dict:
         fingerprint = versions.plugin_fingerprint(root)
     except OSError as exc:      # 읽을 수 없는 파일이 있어도 진단은 낸다
         fingerprint = f"확인 불가 — {type(exc).__name__}"
-    return {"plugin": {"fingerprint": fingerprint, "dir": root.name,
+    diag = {"plugin": {"fingerprint": fingerprint, "dir": root.name,
                        "version": manifest.get("version") if isinstance(manifest, dict) else None},
             "claude_code": _claude_code_version(), "python": platform_mod.python_version(), "deps": _deps(),
             "doctor": doctor}
+    rt = runtime_info()
+    if rt:      # OpenCode 안에서만(계획 I O8)
+        diag["runtime"] = rt
+    return diag
 
 
 def diagnosis_markdown(diag: dict) -> str:
@@ -198,7 +221,8 @@ def diagnosis_markdown(diag: dict) -> str:
     ver = f", version {p['version']}" if p.get("version") else ""
     lines = ["", DIAG_HEAD,
              f"- [현재] 버전: 플러그인 지문 {p['fingerprint']}(설치 폴더 {jobstatus._clip(p['dir'], 60)}{ver}) · Claude Code "
-             f"{diag['claude_code']} · Python {diag['python']} · {diag['deps']}"]
+             f"{diag['claude_code']} · Python {diag['python']} · {diag['deps']}"
+             + (f" · 런타임 {diag['runtime']['name']}(OpenCode {diag['runtime']['opencode']})" if diag.get("runtime") else "")]
     if d.get("error"):
         lines.append(f"- [현재] {d['error']}")
         rows = []

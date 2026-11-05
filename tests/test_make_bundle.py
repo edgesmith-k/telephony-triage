@@ -435,6 +435,25 @@ def test_skeleton_zip_is_deterministic(tmp_path):
     assert modes["schema/b.sh"] == 0o755 and modes["schema/a.yaml"] == 0o644
 
 
+def test_real_repo_zip_contains_opencode(tmp_path):
+    """계획 I O10: 레포 zip(`git archive HEAD`)에 OpenCode v1 층(`opencode/`)이 통째로 들어간다 — 추적 파일 전부, `tt-oc`는
+    실행 권한 그대로. `.gitattributes`의 export-ignore나 SITE_PATHS가 opencode/를 빼면 여기서 막힌다."""
+    if not (REPO / ".git").exists():
+        pytest.skip("git 레포가 아니다(반입 사본)")
+    tracked = [n for n in _git(REPO, "ls-files", "-z", "--", "opencode").split("\0") if n]
+    assert "opencode/bin/tt-oc" in tracked and "opencode/plugins/tt-guard.js" in tracked
+    built, why = mb.build_bundle(REPO, LABEL, _git(REPO, "rev-parse", "HEAD").strip(), tmp_path, _skeleton_dir(tmp_path),
+                                 mb.load_site_paths(REPO))
+    assert built is not None, why
+    with zipfile.ZipFile(built / f"telephony-triage-{LABEL}.zip") as zf:
+        info = {i.filename: i for i in zf.infolist()}
+    committed = [n for n in _git(REPO, "ls-tree", "-r", "--name-only", "HEAD", "--", "opencode").splitlines() if n]
+    assert committed and not [n for n in committed if n not in info]
+    for name in ("opencode/opencode.json.template", "opencode/managed.json.sample", "opencode/agents/triage.md"):
+        assert name in info, name
+    assert info["opencode/bin/tt-oc"].external_attr >> 16 & 0o111, "tt-oc는 실행 권한으로 들어간다"
+
+
 def test_verify_skeleton_catches_types_jira_fixtures(tmp_path):
     ok = _skeleton_dir(tmp_path)
     assert mb.verify_skeleton(ok) == []

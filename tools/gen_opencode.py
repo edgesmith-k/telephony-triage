@@ -242,6 +242,29 @@ def install_files(dest: Path, values: dict, issue_dbs: list[str], roots: list[st
     return files
 
 
+MANAGED_SAMPLE = OC / "managed.json.sample"
+MANAGED_DIR = Path("/etc/opencode")         # 관리 설정(관리자 배포, 다중 방어 — `managed.json.sample`이 예시)
+MANAGED_NAMES = ("opencode.json", "opencode.jsonc")
+
+
+def managed_problems(cfg) -> list[str]:
+    """배포된 관리 설정이 `managed.json.sample`의 막는 항목을 모두 갖는지: 최상위 snapshot·autoupdate·share는 같은 값,
+    permission의 deny(bash 패턴 포함)는 모두 deny. 다른 키를 더한 것은 문제가 아니다(사내가 더 막을 수 있다)."""
+    want = json.loads(MANAGED_SAMPLE.read_text(encoding="utf-8"))
+    if not isinstance(cfg, dict):
+        return ["객체가 아니다"]
+    out = [f"{k}={json.dumps(cfg.get(k))}(필요 {json.dumps(want[k])})"
+           for k in ("snapshot", "autoupdate", "share") if k in want and cfg.get(k) != want[k]]
+    have = cfg.get("permission") if isinstance(cfg.get("permission"), dict) else {}
+    for key, value in want.get("permission", {}).items():
+        if isinstance(value, dict):
+            sub = have.get(key) if isinstance(have.get(key), dict) else {}
+            out += [f"permission.{key}[{pat!r}] 없음" for pat, v in value.items() if v == "deny" and sub.get(pat) != "deny"]
+        elif value == "deny" and have.get(key) != "deny":
+            out.append(f"permission[{key!r}]={json.dumps(have.get(key))}(필요 \"deny\")")
+    return out
+
+
 def scripts_digest(plugin_root: Path) -> str:
     """플러그인 스크립트(`scripts/**/*.py`) 전체의 지문. `opencode/bin/tt-oc` `scripts_digest`와 같은 계산이다."""
     h = hashlib.sha256()

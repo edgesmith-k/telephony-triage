@@ -174,6 +174,29 @@ def _run(cmd, *, cwd=None, env=None, timeout=60) -> subprocess.CompletedProcess:
                           timeout=timeout, check=False)
 
 
+def config_problems(cfg: dict) -> list[str]:
+    """v1 필수 설정과 다른 항목(`키=값(필요 값)`): snapshot:false·share:"disabled"·autoupdate:false·permission["*"]·task·
+    bash["*"] deny. `opencode debug config`(합쳐진 실제 설정)와 `site_step.py runtime-check opencode`(설치한 opencode.json)가 쓴다."""
+    perm = cfg.get("permission") if isinstance(cfg.get("permission"), dict) else {}
+    bash = perm.get("bash") if isinstance(perm.get("bash"), dict) else {"*": perm.get("bash")}
+    need = {"snapshot": (cfg.get("snapshot"), False), "share": (cfg.get("share"), "disabled"),
+            "autoupdate": (cfg.get("autoupdate"), False), 'permission["*"]': (perm.get("*"), "deny"),
+            "permission.task": (perm.get("task"), "deny"), 'permission.bash["*"]': (bash.get("*"), "deny")}
+    return [f"{k}={json.dumps(v[0])}(필요 {json.dumps(v[1])})" for k, v in need.items() if v[0] != v[1]]
+
+
+def version_row(oc: str, env: dict) -> tuple[dict, bool]:
+    """(`opencode-version` 행, 실행했는지). 버전 = `PINNED`일 때만 ok. `tools/site_step.py runtime-check opencode`도 쓴다."""
+    try:
+        r = _run([oc, "--version"], env=env, timeout=30)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return {"check": "opencode-version", "status": "fail", "detail": f"opencode 실행 실패: {type(exc).__name__}: {exc}"}, False
+    ver = (r.stdout or "").strip().splitlines()[-1:] or [""]
+    ok = r.returncode == 0 and ver[0] == PINNED
+    return {"check": "opencode-version", "status": "ok" if ok else "fail",
+            "detail": f"{ver[0] or '없음'} (고정 {PINNED})" + ("" if ver[0] == PINNED else " — 버전 불일치, 우회하지 말고 보고")}, True
+
+
 def preflight(oc: str, proj: Path, meta: dict, env: dict) -> list[dict]:
     """점검 행 [{check, status(ok|fail|warn), detail}]. warn은 막지 않는다. 앞 단계가 실패해도 할 수 있는 점검은 한다(건너뛴 것은 fail로 남긴다)."""
     rows = []
@@ -193,13 +216,9 @@ def preflight(oc: str, proj: Path, meta: dict, env: dict) -> list[dict]:
     row("integrity", not changed, "설치한 guard 플러그인·설정·에이전트·커맨드·플러그인 스크립트 그대로" if not changed else
         "설치 뒤 바뀌었거나 없다: " + ", ".join(changed) + " — 바꾼 적이 없으면 보고하고, 플러그인을 갱신했으면 "
         "tools/gen_opencode.py install --force로 다시 설치한다")
-    try:
-        r = _run([oc, "--version"], env=env, timeout=30)
-        ver = (r.stdout or "").strip().splitlines()[-1:] or [""]
-        row("opencode-version", r.returncode == 0 and ver[0] == PINNED,
-            f"{ver[0] or '없음'} (고정 {PINNED})" + ("" if ver[0] == PINNED else " — 버전 불일치, 우회하지 말고 보고"))
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        row("opencode-version", False, f"opencode 실행 실패: {type(exc).__name__}: {exc}")
+    ver_row, ran = version_row(oc, env)
+    rows.append(ver_row)
+    if not ran:
         return rows + [{"check": "opencode-config", "status": "fail", "detail": "건너뜀(opencode 실행 실패)"}]
     try:
         r = _run([oc, "debug", "config"], cwd=proj, env=env, timeout=60)
@@ -210,12 +229,7 @@ def preflight(oc: str, proj: Path, meta: dict, env: dict) -> list[dict]:
     if r is not None and not isinstance(cfg, dict):
         row("opencode-config", False, f"debug config 실패(종료 {r.returncode})")
     elif isinstance(cfg, dict):
-        perm = cfg.get("permission") if isinstance(cfg.get("permission"), dict) else {}
-        bash = perm.get("bash") if isinstance(perm.get("bash"), dict) else {"*": perm.get("bash")}
-        need = {"snapshot": (cfg.get("snapshot"), False), "share": (cfg.get("share"), "disabled"),
-                "autoupdate": (cfg.get("autoupdate"), False), 'permission["*"]': (perm.get("*"), "deny"),
-                "permission.task": (perm.get("task"), "deny"), 'permission.bash["*"]': (bash.get("*"), "deny")}
-        wrong = [f"{k}={json.dumps(v[0])}(필요 {json.dumps(v[1])})" for k, v in need.items() if v[0] != v[1]]
+        wrong = config_problems(cfg)
         row("opencode-config", not wrong, "snapshot:false·share:disabled·autoupdate:false·허용 목록·task deny" if not wrong
             else "설정 불일치: " + ", ".join(wrong))
     script = Path(meta["plugin_root"]) / "scripts" / "config.py"

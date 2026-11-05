@@ -17,7 +17,7 @@
 | `init` | `[--answers <ANSWERS>] [--force]` |  |
 | `set` | `<key> <value>` |  |
 | `sync-scripts-path` |  |  |
-| `tracker-candidates` | `[--mcp-config <MCP_CONFIG>]... [--tools-json <TOOLS_JSON>]` |  |
+| `tracker-candidates` | `[--mcp-config <MCP_CONFIG>]... [--opencode-config <OPENCODE_CONFIG>]... [--tools-json <TOOLS_JSON>]` | `--opencode-config`: OpenCode 설정(opencode.json·jsonc)의 mcp도 읽는다. OpenCode 안(TT_RUNTIME=opencode)에서는 없어도 작업 폴더에서 OpenCode가 합치는 설정을 읽는다 |
 | `set-tracker` | `--server <SERVER> --get-issue <GET_ISSUE> [--search-issues <SEARCH_ISSUES>] [--get-comments <GET_COMMENTS>] [--read-tools <READ_TOOLS>]` |  |
 | `rename-legacy` | `[--apply]` | `--apply`: 변경 목록대로 사용자 config.yaml을 쓴다(없으면 목록만) |
 | `install-hooks` | `[--db <DB>]` |  |

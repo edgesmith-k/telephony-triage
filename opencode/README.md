@@ -20,6 +20,7 @@ python3 tools/gen_opencode.py install --dest <git 레포 밖 폴더> --plugin-ro
     --work-root <작업 루트> [--issue-db <clone>]... --gateway-url <http(s)://…/v1> --model <모델 ID>
 export TT_GATEWAY_API_KEY=…            # 설정 파일에는 쓰지 않는다
 opencode/bin/tt-oc --project <dest> doctor
+python3 tools/site_step.py runtime-check opencode --project <dest>   # 사내 확인: 버전·설정·관리 설정 + 확인 0 curl 명령(모델 호출 없음)
 ```
 
 - `<dest>`는 git 레포 밖이어야 한다. 1.19.5는 `edit` 권한을 worktree 기준 상대 경로로 맞추는데, git 레포가 아닌 폴더의 worktree는

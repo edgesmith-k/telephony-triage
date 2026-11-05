@@ -136,6 +136,15 @@ def test_managed_sample():
     assert "*" not in p["bash"]           # 프로젝트 설정의 bash 허용 목록 뒤에 붙어 deny가 이긴다(관리 설정이 나중에 합쳐진다)
     tmpl_denies = {k for k, v in _template()["permission"]["bash"].items() if v == "deny" and k != "*"}
     assert tmpl_denies <= {k for k, v in p["bash"].items() if v == "deny"}
+    # 배포된 관리 설정 비교(site_step.py runtime-check opencode, O10): 예시 그대로면 문제 없음, 빠진 deny·다른 값은 문제
+    assert gen_opencode.managed_problems(m) == [] and gen_opencode.managed_problems([]) == ["객체가 아니다"]
+    worse = json.loads(MANAGED.read_text(encoding="utf-8"))
+    worse["snapshot"] = True
+    worse["permission"]["task"] = "allow"
+    del worse["permission"]["bash"]["*module_eval.py*"]
+    worse["permission"]["more"] = "deny"                      # 더 막는 것은 괜찮다
+    assert gen_opencode.managed_problems(worse) == ["snapshot=true(필요 false)", "permission['task']=\"allow\"(필요 \"deny\")",
+                                                    "permission.bash['*module_eval.py*'] 없음"]
 
 
 # -- 에이전트 -----------------------------------------------------------------------------------------------------------

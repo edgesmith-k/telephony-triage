@@ -485,3 +485,15 @@ def test_render_record_kinds():
     assert mod._epoch("2026-11-05T00:00:00.000Z") < now
     assert mod.refused_env({"OPENCODE_EXPERIMENTAL_X": "1", "OPENCODE_PERMISSION": "", "OPENCODE_LOG_LEVEL": "INFO"}) == \
         ["OPENCODE_EXPERIMENTAL_X"]
+
+
+def test_shared_checks_for_site_step(env):
+    """`site_step.py runtime-check opencode`(O10)가 같은 판정을 쓴다: `version_row`(실행했는지 함께)·`config_problems`."""
+    mod = _load("tt_oc", TTOC)
+    assert mod.config_problems(CONFIG_OK) == []
+    assert mod.config_problems({**CONFIG_OK, "snapshot": True, "permission": {"*": "deny"}}) == [
+        "snapshot=true(필요 false)", 'permission.task=null(필요 "deny")', 'permission.bash["*"]=null(필요 "deny")']
+    row, ran = mod.version_row(str(env["stub"]), env["env"])
+    assert ran and row == {"check": "opencode-version", "status": "ok", "detail": "1.19.5 (고정 1.19.5)"}
+    row, ran = mod.version_row(str(env["tmp"] / "no-opencode"), env["env"])
+    assert not ran and row["status"] == "fail" and row["detail"].startswith("opencode 실행 실패")

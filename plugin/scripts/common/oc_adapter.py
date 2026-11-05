@@ -165,12 +165,11 @@ def mcp_servers(directory: str, env: dict | None = None) -> tuple[list[str], str
 
 
 def mcp_candidates(tool: str, servers: list[str]) -> list[str]:
-    """OpenCode MCP 도구 이름 → Claude Code 이름 후보(가장 긴 서버 접두사 먼저)."""
-    out = []
-    for seg in sorted({sanitize(s) for s in servers}, key=len, reverse=True):
-        if seg and tool.startswith(seg + "_") and len(tool) > len(seg) + 1:
-            out.append(f"mcp__{seg}__{tool[len(seg) + 1:]}")
-    return out
+    """OpenCode MCP 도구 이름 → Claude Code 이름 후보(가장 긴 서버 접두사 먼저). 규칙은 `mcptools.opencode_candidates`
+    하나다(설정 쪽 `config.py tracker-candidates`와 같다)."""
+    from common import mcptools
+
+    return mcptools.opencode_candidates(tool, servers)
 
 
 # -- apply_patch ---------------------------------------------------------------------------------------
@@ -345,6 +344,26 @@ def refused_env(env: dict | None = None) -> list[str]:
 def jira_gate_open(env: dict | None = None) -> bool:
     env = os.environ if env is None else env
     return JIRA_READ_RELEASED or env.get(JIRA_GATE_ENV) == "open"
+
+
+def opencode_version(env: dict | None = None, timeout: float = 10) -> str | None:
+    """`opencode --version`의 마지막 줄(`TT_OPENCODE`, 없으면 PATH의 `opencode` — `tt-oc --opencode` 기본값과 같다). 바이너리가
+    없거나 실패하면 None. 모델·네트워크 호출 없음(`job_status.py`의 런타임 줄, O8)."""
+    import shutil
+
+    env = os.environ if env is None else env
+    exe = shutil.which(env.get("TT_OPENCODE") or "opencode", path=env.get("PATH"))
+    if not exe:
+        return None
+    try:
+        r = subprocess.run([exe, "--version"], stdin=subprocess.DEVNULL, capture_output=True, text=True,
+                           encoding="utf-8", errors="replace", timeout=timeout, check=False)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    last = (r.stdout or "").strip().splitlines()[-1:]
+    if r.returncode != 0 or not last:
+        return None
+    return re.sub(r"[^A-Za-z0-9._+-]", "", last[0])[:40] or None
 
 
 @dataclass

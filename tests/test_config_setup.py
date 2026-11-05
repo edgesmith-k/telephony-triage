@@ -355,6 +355,47 @@ def test_tracker_candidates_reports_probe_diagnostics():
     assert not any(name in ln for ln in lines for name in ("remote-jira", "jira.corp", "jira_corp"))   # 띄우지 않은 서버
 
 
+def test_tracker_candidates_reads_opencode_mcp():
+    """계획 I O8: `--opencode-config`(또는 TT_RUNTIME=opencode면 작업 폴더에서 OpenCode가 합치는 설정)의 `mcp`도 읽는다 —
+    local `command` 배열로 띄우고, `enabled:false`는 띄우지 않고(probe disabled), remote는 probe remote. 그 서버 항목에
+    source=opencode·opencode_tools(세션 이름 `<서버>_<도구>`), 저장 이름(tools)은 그대로 mcp__<서버>__<도구>."""
+    env = Env()  # 테스트 헬퍼 루트: exclude_servers: []
+    base = tmp("tt-mcp-oc-")
+    script = base / "fake_mcp.py"
+    script.write_text(FAKE_MCP, encoding="utf-8")
+    empty = base / "claude-mcp.json"
+    empty.write_text('{"mcpServers": {}}', encoding="utf-8")
+    proj = base / "proj"
+    proj.mkdir()
+    (proj / "opencode.jsonc").write_text("// 사용자 설정\n" + json.dumps({"mcp": {
+        "oc-jira": {"type": "local", "command": [sys.executable, str(script), "answer", str(base / "oc-jira.started")]},
+        "off-jira": {"type": "local", "command": [sys.executable, str(script), "answer", str(base / "off.started")],
+                     "enabled": False},
+        "remote-jira": {"type": "remote", "url": "https://mcp.mock.invalid/x"}}}), encoding="utf-8")
+    found = env.json("config.py", ["tracker-candidates", "--mcp-config", empty, "--opencode-config", proj / "opencode.jsonc"])
+    got = {s["server"]: s for s in found["servers"]}
+    assert set(got) == {"oc-jira", "off-jira", "remote-jira"} and found["usable"] == ["oc-jira"]
+    assert got["oc-jira"]["probe"] == "stdio" and got["oc-jira"]["tools"] == ["mcp__oc-jira__jira_get_issue"]
+    assert got["oc-jira"]["source"] == "opencode" and got["oc-jira"]["opencode_tools"] == ["oc-jira_jira_get_issue"]
+    assert got["off-jira"]["probe"] == "disabled" and got["off-jira"]["error"].startswith("disabled")
+    assert not (base / "off.started").exists(), "enabled:false 서버는 띄우지 않는다"
+    assert got["remote-jira"]["probe"] == "remote" and got["remote-jira"]["error"].startswith("not-stdio")
+
+    # OpenCode 안: 옵션 없이 작업 폴더 설정을 읽고(~/.claude.json은 기본으로 읽지 않는다), --tools-json은 OpenCode 세션 이름
+    tools = base / "tools.json"
+    tools.write_text(json.dumps({"corp.jira": ["corp_jira_jira_fetch_issue", "mcp__corp_jira__jira_search"]}), encoding="utf-8")
+    oc_env = {"TT_RUNTIME": "opencode", "HOME": str(base / "home"), "XDG_CONFIG_HOME": str(base / "home" / ".config")}
+    found = env.json("config.py", ["tracker-candidates", "--tools-json", tools], cwd=proj, env=oc_env)
+    got = {s["server"]: s for s in found["servers"]}
+    assert set(got) == {"corp.jira", "oc-jira", "off-jira", "remote-jira"}
+    assert got["corp.jira"]["tools"] == ["mcp__corp_jira__jira_fetch_issue", "mcp__corp_jira__jira_search"]
+    assert got["corp.jira"]["opencode_tools"] == ["corp_jira_jira_fetch_issue", "corp_jira_jira_search"]
+    # Claude Code(기본): OpenCode 설정을 읽지 않고 출력에 source 키가 없다
+    plain = env.json("config.py", ["tracker-candidates", "--mcp-config", empty, "--tools-json", tools], cwd=proj)
+    assert [s["server"] for s in plain["servers"]] == ["corp.jira"] and "source" not in plain["servers"][0]
+    assert plain["servers"][0]["tools"] == ["mcp__corp_jira__corp_jira_jira_fetch_issue", "mcp__corp_jira__jira_search"]
+
+
 def test_missing_site_defaults_stops_everything():
     bare = tmp("tt-bare-root-") / "root"
     make_plugin_root.make(bare)
@@ -614,6 +655,25 @@ def test_doctor_all_ok_markdown_fits_budget_and_changes_nothing():
     after = (_tree(env.base, clone), git(clone, "status", "--porcelain"), git(clone, "for-each-ref"))
     assert after == before, "doctor는 읽기 전용이다 (clone·work_dir·config 불변)"
     assert not (env.base / "work" / "session.lock").exists()
+
+
+def test_doctor_opencode_rows_only_under_opencode():
+    """계획 I O8: OpenCode 안(TT_RUNTIME=opencode)에서만 opencode_env(oc_adapter env-check)·jira_gate(JIRA_READ_RELEASED) 두
+    행을 끝에 더한다. 기본(Claude Code)은 13행 그대로(markdown 바이트도 같다)."""
+    env, _ = _ready_env()
+    plain_md = env.run("config.py", ["doctor", "--format", "markdown"]).stdout
+    result = env.json("config.py", ["doctor"], env={"TT_RUNTIME": "opencode"})
+    assert [r["check"] for r in result["rows"]] == DOCTOR_ROWS + ["opencode_env", "jira_gate"]
+    rows = _rows(result)
+    assert rows["opencode_env"] == {"check": "opencode_env", "status": "ok", "detail": "설정을 덮는 환경 변수 없음"}
+    assert rows["jira_gate"]["status"] == "warn" and rows["jira_gate"]["detail"].startswith("닫힘(JIRA_READ_RELEASED=False)")
+    assert result["counts"] == {"ok": 14, "warn": 1, "fail": 0, "skip": 0}
+    bad = env.json("config.py", ["doctor"], expect=1, env={"TT_RUNTIME": "opencode", "OPENCODE_PERMISSION": "{}",
+                                                          "TT_OC_JIRA_GATE": "open"})
+    assert _rows(bad)["opencode_env"]["status"] == "fail" and "OPENCODE_PERMISSION" in _rows(bad)["opencode_env"]["detail"]
+    assert _rows(bad)["jira_gate"]["detail"].startswith("시험 열림")
+    assert env.run("config.py", ["doctor", "--format", "markdown"]).stdout == plain_md
+    assert "opencode_env" not in plain_md and len(_doctor(env)["rows"]) == 13
 
 
 def test_doctor_python_deps_and_guard_selftest_rows():

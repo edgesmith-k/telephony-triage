@@ -23,11 +23,15 @@
                                analyzers.<카테고리>.prefer(module|skill)·.skill_dir(절대 경로). 남은 모듈 스킬·분석 스킬
                                설정 문제는 module_problems와 stderr 경고 한 줄
   sync-scripts-path            plugin.scripts_path = ${CLAUDE_PLUGIN_ROOT}/scripts (setup 2, SessionStart hook)
-  tracker-candidates [--mcp-config <json>...] [--tools-json <json>]
+  tracker-candidates [--mcp-config <json>...] [--opencode-config <json>...] [--tools-json <json>]
                                등록된 MCP 서버에서 tracker.tools·읽기 도구 후보 (setup 4). exclude_servers 적용.
                                stdio 서버는 하나씩 서버당 최대 10초(응답 즉시 종료·프로세스 그룹 종료). 서버마다
                                servers[].probe(stdio|tools-json|excluded|remote)·elapsed_ms·error, stderr에 진행 줄.
-                               --tools-json의 서버는 이름 정규화(`jira.corp`=`jira_corp`)로 비교해 다시 띄우지 않는다
+                               --tools-json의 서버는 이름 정규화(`jira.corp`=`jira_corp`)로 비교해 다시 띄우지 않는다.
+                               OpenCode(계획 I O8): --opencode-config 또는 TT_RUNTIME=opencode면 opencode.json `mcp`(enabled·
+                               command)도 읽고(OpenCode 안에서는 ~/.claude.json을 기본으로 읽지 않는다, enabled:false는
+                               probe=disabled), --tools-json 이름을 `<서버>_<도구>`로 읽는다. 그 서버 항목에 source=opencode·
+                               opencode_tools(세션 이름). 저장 이름은 그대로 mcp__<서버>__<도구>
   set-tracker --server <s> --get-issue <전체 이름> [--search-issues ..] [--get-comments ..] [--read-tools a,b]
                                사용자가 확인한 값을 저장. read_tools에 tracker.tools 값을 포함한다
   rename-legacy [--apply]      사용자 config.yaml의 옛 설정 키(jira:·year_source: jira·android_version)를 새 이름으로 바꾼다.
@@ -41,8 +45,9 @@
   gh-status                    gh 인증 확인 (setup 9). 실패면 로그인 안내와 종료 코드 2
   doctor [--format json|markdown]
                                환경 점검 한 장(python·deps·config·clone·hook·guard 자가시험·Jira 매핑(tracker)·Jira 코멘트
-                               도구(tracker_post)·gh·스냅샷·호환성·lock, 모듈 스킬 설정이 있을 때만 module_skills).
-                               **읽기 전용**
+                               도구(tracker_post)·gh·스냅샷·호환성·lock, 모듈 스킬 설정이 있을 때만 module_skills,
+                               OpenCode 안(TT_RUNTIME=opencode)에서만 opencode_env(설정을 덮는 환경 변수)·jira_gate(Jira
+                               읽기 관문 JIRA_READ_RELEASED, 닫힘이면 warn)). **읽기 전용**
                                (mkdir·fetch·lock·쓰기 없음). 행마다 ok|warn|fail|skip. fail이 있으면 종료 코드 1
 """
 
@@ -383,18 +388,43 @@ def cmd_tracker_candidates(args, defaults: dict) -> dict:
     servers: dict[str, list[str] | None] = {}
     errors: dict[str, str] = {}
     probes: dict[str, dict] = {}     # 서버별 진단 {probe, elapsed_ms} (내용·자격증명 없음, 사내 보고용)
+    # OpenCode(계획 I O8): `--opencode-config`가 있거나 OpenCode 안(`TT_RUNTIME=opencode`)이면 opencode.json `mcp`도 읽고,
+    # --tools-json의 이름을 OpenCode 세션 이름(`<서버>_<도구>`)으로 읽는다. OpenCode 안에서는 Claude Code 설정(~/.claude.json)을
+    # 기본으로 읽지 않는다(--mcp-config를 주면 읽는다).
+    in_opencode = os.environ.get("TT_RUNTIME") == "opencode"
+    oc_mode = bool(args.opencode_config) or in_opencode
+    oc_names: set[str] = set()       # OpenCode에서 온 서버(출력에 source·opencode_tools를 더한다)
     if args.tools_json:
         for name, tools in json.loads(Path(args.tools_json).read_text(encoding="utf-8")).items():
-            servers[name] = [t.split("__", 2)[-1] if t.startswith("mcp__") else t for t in tools]
+            servers[name] = [mcptools.tool_part(name, t, opencode=oc_mode) for t in tools]
             probes[name] = {"probe": "tools-json", "elapsed_ms": 0}
+            if oc_mode:
+                oc_names.add(name)
     given = {mcptools.server_segment(n) for n in servers}     # `jira.corp`와 세션 이름 `jira_corp`는 같은 서버
-    configs = [Path(p) for p in args.mcp_config] if args.mcp_config else [Path.home() / ".claude.json"]
-    for name, conf in mcptools.load_servers(configs).items():
+    found: list[tuple[str, dict, bool]] = []
+    if args.mcp_config or not in_opencode:
+        configs = [Path(p) for p in args.mcp_config] if args.mcp_config else [Path.home() / ".claude.json"]
+        found += [(name, conf, False) for name, conf in mcptools.load_servers(configs).items()]
+    if oc_mode:
+        oc_paths = ([Path(p) for p in args.opencode_config] if args.opencode_config
+                    else mcptools.opencode_config_paths(os.getcwd()))
+        try:
+            found += [(name, conf, True) for name, conf in mcptools.load_opencode_servers(oc_paths).items()]
+        except ValueError as exc:
+            raise UsageError(str(exc)) from exc
+    for name, conf, from_oc in found:
         if name in servers or mcptools.server_segment(name) in given:
             continue
+        if from_oc:     # Claude Code 설정에 같은(정규화) 이름이 있으면 그쪽이 먼저다
+            given.add(mcptools.server_segment(name))
+            oc_names.add(name)
         if any(__import__("fnmatch").fnmatch(name, p) for p in exclude):
             servers[name] = None
             probes[name] = {"probe": "excluded", "elapsed_ms": 0}
+            continue
+        if from_oc and not conf.get("enabled", True):
+            servers[name], errors[name] = None, "disabled: opencode.json enabled:false"
+            probes[name] = {"probe": "disabled", "elapsed_ms": 0}
             continue
         if not (isinstance(conf, dict) and conf.get("command")):
             servers[name], errors[name] = None, mcptools.NOT_STDIO
@@ -420,6 +450,10 @@ def cmd_tracker_candidates(args, defaults: dict) -> dict:
     result = mcptools.candidates(servers, exclude, team, errors, adapter.classify_extra)
     for entry in result:
         entry.update(probes.get(entry["server"]) or {"probe": None, "elapsed_ms": 0})
+        if entry["server"] in oc_names:     # OpenCode 세션에서 보이는 이름(저장은 tools의 전체 이름 그대로)
+            seg = mcptools.server_segment(entry["server"])
+            entry["source"] = "opencode"
+            entry["opencode_tools"] = sorted(f"{seg}_{t.split('__', 2)[-1]}" for t in entry["tools"])
     usable = [s for s in result if not s["excluded"] and s["tracker_tools"].get("get_issue")]
     return {
         "exclude_servers": exclude,
@@ -953,7 +987,33 @@ def _doctor_rows(args, defaults: dict) -> list[dict]:
     # 10 module_skills — 모듈 스킬·분석 스킬 선택 설정이 있을 때만(기본 설치는 13행 그대로, B1 §3.2·§3.3)
     if ok_cfg and _module_row_wanted(cfg, defaults, user, work):
         guarded("module_skills", lambda: rows.append(_module_skills_row(cfg, defaults, user, work)))
+    # 11 OpenCode 안(`TT_RUNTIME=opencode`)에서만: 설정을 덮는 환경 변수(`oc_adapter env-check`)와 Jira 읽기 관문(계획 I O8).
+    # Claude Code에서는 행이 없다(기본 13행 그대로)
+    if os.environ.get("TT_RUNTIME") == "opencode":
+        guarded("opencode_env", lambda: rows.append(_opencode_env_row()))
+        guarded("jira_gate", lambda: rows.append(_jira_gate_row()))
     return rows
+
+
+def _opencode_env_row() -> dict:
+    from common import oc_adapter   # 지연 import: OpenCode 안에서만
+
+    bad = oc_adapter.refused_env()
+    if bad:
+        return _row("opencode_env", "fail", "설정을 덮는 환경 변수: " + ", ".join(bad),
+                    "그 변수를 지우고 다시 실행한다(있으면 guard가 모든 도구를 거부한다)")
+    return _row("opencode_env", "ok", "설정을 덮는 환경 변수 없음")
+
+
+def _jira_gate_row() -> dict:
+    from common import oc_adapter
+
+    if oc_adapter.JIRA_READ_RELEASED:
+        return _row("jira_gate", "ok", "열림(JIRA_READ_RELEASED)")
+    if oc_adapter.jira_gate_open():
+        return _row("jira_gate", "warn", f"시험 열림({oc_adapter.JIRA_GATE_ENV}=open, 출시 전)")
+    return _row("jira_gate", "warn", "닫힘(JIRA_READ_RELEASED=False) — OpenCode에서 Jira MCP 읽기 거부",
+                "이슈 내용은 사용자가 붙여 넣거나 Claude Code에서 분석한다")
 
 
 MODULE_SOURCE_LABEL = {"module": "모듈 문서", "skill": "설치 스킬", "none": "없음", "error": "오류"}
@@ -1095,6 +1155,9 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("sync-scripts-path", parents=[common])
     p = sub.add_parser("tracker-candidates", parents=[common])
     p.add_argument("--mcp-config", action="append")
+    p.add_argument("--opencode-config", action="append",
+                   help="OpenCode 설정(opencode.json·jsonc)의 mcp도 읽는다. OpenCode 안(TT_RUNTIME=opencode)에서는 없어도 "
+                        "작업 폴더에서 OpenCode가 합치는 설정을 읽는다")
     p.add_argument("--tools-json")
     p = sub.add_parser("set-tracker", parents=[common])
     p.add_argument("--server", required=True)

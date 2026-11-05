@@ -9,6 +9,8 @@
     python3 tools/site_step.py evals [--batch N] [--baseline]       # S-2: 사내 대상 eval의 다음 배치 명령·추정 비용(실행하지 않음)
     python3 tools/site_step.py --done S-n [--waive 점검="사유"]...  # 사용자 확인 뒤: 점검 재실행 → 통과면 완료 기록·다음 단계
     python3 tools/site_step.py ofono                    # oFono 트랙(O-1~O-4) 시작·이어 하기, S-3 완료 뒤
+    python3 tools/site_step.py runtime-check claude-gateway         # Claude Code + 사내 모델 프로필 표(모델 호출 없음)
+    python3 tools/site_step.py runtime-check opencode [--project D] # OpenCode 1.19.5·설정·관리 설정 점검 + 사내 확인 0 curl 명령
 
 - 순서는 S-1 → S-2 → S-3 → S-4a → S-4 → S-5 → S-6 → S-7(`STEPS`). S-0(선택)은 반입 전 일이라 넣지 않는다.
 - oFono 트랙은 Android 단계와 따로 O-1 → O-2 → O-3 → O-4(`OFONO_STEPS`)다. "oFono 설정 시작"이면 `ofono`: S-3 완료 기록 뒤에만
@@ -23,9 +25,14 @@
   돌린다. 나머지는 사외 결과 기록(`offsite_results.json`, 점검 `s2.offsite`)으로 갈음한다.
 - 새로 만들 때 트래커는 jira다(사내 결정: S30·S31 GitHub 트래커 항목은 해당 없음, S-3에서 `tracker.kind: jira`).
 - 사외 초안 PC(`.local-draft`)에서는 SITE_PROFILE.md를 만들지 않는다(종료 2, 반입 전 경계 검사가 막는 파일이다).
+- `runtime-check`(계획 I O10, docs/development/RUNTIMES.md)는 단계와 무관하게 환경마다 한 번 돌리는 점검이다(SITE_PROFILE을 읽거나
+  쓰지 않는다). 판정은 기존 코드: claude-gateway는 `claude_child.gateway_profile_check`(missing·differs → 1), opencode는
+  `opencode/bin/tt-oc`(버전 = PINNED, 없으면 설치 안내·설치한 opencode.json 필수 설정·opencode가 있으면 사전 점검 전체)와
+  `gen_opencode.managed_problems`(/etc/opencode, 없으면 warn). 사내 확인 0(게이트웨이 curl)은 명령만 보인다(실행하지 않는다).
 
-종료 코드: 0 정상(점검은 통과·정보만), 1 점검 실패·건너뜀·사용자 필요(`--done` 거부 포함), 2 사용 오류(사외 PC, 모드·단계 불일치, 진행 상태 줄 없음,
-S-3 완료 전 `ofono`, 시작 전 O-n).
+종료 코드: 0 정상(점검은 통과·정보만), 1 점검 실패·건너뜀·사용자 필요(`--done` 거부 포함, runtime-check의 missing·differs·fail 행),
+2 사용 오류(사외 PC, 모드·단계 불일치, 진행 상태 줄 없음,
+S-3 완료 전 `ofono`, 시작 전 O-n, runtime-check 대상이 claude-gateway·opencode가 아님).
 """
 from __future__ import annotations
 
@@ -36,7 +43,9 @@ sys.dont_write_bytecode = True    # 사내 레포에 __pycache__를 남기지 �
 import argparse  # noqa: E402
 import difflib  # noqa: E402
 import json  # noqa: E402
+import os  # noqa: E402
 import re  # noqa: E402
+import shutil  # noqa: E402
 import subprocess  # noqa: E402
 from datetime import date, datetime  # noqa: E402
 from pathlib import Path  # noqa: E402
@@ -642,12 +651,155 @@ def done(root: Path, step: str, waives: list[str] | None = None, allow_api: bool
     return f"{step} 완료를 기록했다{extra}.\n" + shown + out, 0
 
 
+# -- 런타임 점검 (계획 I O10, docs/development/RUNTIMES.md) ----------------------------------------------------------
+# 모델·네트워크를 부르지 않는다(사내 토큰 최소). 판정은 기존 코드에 맡긴다: claude-gateway는 `common.claude_child`
+# `gateway_profile_check`, opencode는 `opencode/bin/tt-oc`의 `version_row`·`config_problems`·`preflight`와
+# `tools/gen_opencode.py` `managed_problems`.
+
+RUNTIMES = ("claude-gateway", "opencode")
+RUNTIME_FAIL = ("missing", "differs", "fail")
+CHECK0_BODY = ('{"model":"\'"$MODEL"\'","max_tokens":128,"stream":true,'
+               '"tools":[{"name":"get_time","description":"현재 시각","input_schema":{"type":"object","properties":{}}}],'
+               '"tool_choice":{"type":"tool","name":"get_time"},"messages":[{"role":"user","content":"지금 몇 시?"}]}')
+
+
+def check0_text() -> str:
+    """사내 확인 0(게이트웨이 `/v1/messages` 스트리밍 tool_use) — 사용자가 직접 실행할 curl 명령(여기서는 실행하지 않는다)."""
+    return "\n".join([
+        "사내 확인 0 — 게이트웨이 /v1/messages 스트리밍 tool_use (이 도구는 실행하지 않는다, 사용자가 터미널에서 한 번):",
+        "```sh",
+        "GW=<게이트웨이 주소(/v1 앞까지)>; KEY=<게이트웨이 키>; MODEL=<사내 모델 ID>",
+        'curl -sS -N "$GW/v1/messages" -H "content-type: application/json" -H "anthropic-version: 2023-06-01" \\',
+        '  -H "x-api-key: $KEY" -H "authorization: Bearer $KEY" \\',
+        f"  -d '{CHECK0_BODY}'",
+        "```",
+        '통과: `event: content_block_start`에 `"type":"tool_use"`, 이어서 `input_json_delta`, 끝에 `message_stop`. '
+        "결과(통과/실패와 첫 오류 줄 — 키는 빼고)를 보고한다.",
+    ])
+
+
+def _runtime_table(title: str, rows: list[dict]) -> str:
+    cell = lambda t: str(t).replace("|", "\\|").replace("\n", " ")  # noqa: E731
+    lines = [title, "", "| 항목 | 상태 | 내용 |", "|---|---|---|"]
+    lines += [f"| {r.get('key') or r.get('check')} | {r['status']} | {cell(r['detail'])} |" for r in rows]
+    return "\n".join(lines)
+
+
+def _runtime_result(rows: list[dict], fix: str) -> tuple[str, int]:
+    bad = [str(r.get("key") or r.get("check")) for r in rows if r["status"] in RUNTIME_FAIL]
+    if bad:
+        return f"결과: 실패 {len(bad)}행({', '.join(bad)}) — {fix}", 1
+    return "결과: 통과(warn·info 행은 막지 않는다)", 0
+
+
+def _scripts_on_path() -> None:
+    p = str(ROOT / "plugin" / "scripts")
+    if p not in sys.path:
+        sys.path.insert(0, p)
+
+
+def runtime_claude_gateway(env: dict) -> tuple[str, int]:
+    """Claude Code + 사내 모델(게이트웨이) 프로필: `claude_child.gateway_profile_check` 표, missing·differs가 있으면 1."""
+    _scripts_on_path()
+    from common import claude_child
+
+    rows = claude_child.gateway_profile_check(env)
+    result, code = _runtime_result(rows, "사용자 settings.json env(또는 환경 변수)를 고친 뒤 다시 실행한다")
+    title = "런타임 점검 claude-gateway — 모델 호출 없음(프로세스 환경 + 사용자 settings.json env, 비밀 값은 적지 않는다)"
+    return "\n\n".join([_runtime_table(title, rows), result, check0_text()]), code
+
+
+def _load_tt_oc():
+    from importlib.machinery import SourceFileLoader
+    import importlib.util
+
+    loader = SourceFileLoader("tt_oc", str(ROOT / "opencode" / "bin" / "tt-oc"))
+    spec = importlib.util.spec_from_loader("tt_oc", loader)
+    mod = importlib.util.module_from_spec(spec)
+    loader.exec_module(mod)
+    return mod
+
+
+def _managed_row(managed_dir: Path) -> dict:
+    import gen_opencode
+
+    found = [managed_dir / n for n in gen_opencode.MANAGED_NAMES if (managed_dir / n).is_file()]
+    if not found:
+        return {"check": "managed-config", "status": "warn",
+                "detail": f"{managed_dir}/opencode.json 없음 — 관리자 배포 권장(opencode/managed.json.sample, 다중 방어)"}
+    _scripts_on_path()
+    from common import oc_adapter
+
+    try:
+        cfg = json.loads(oc_adapter._strip_jsonc(found[0].read_text(encoding="utf-8")))
+    except (OSError, ValueError) as exc:
+        return {"check": "managed-config", "status": "fail", "detail": f"{found[0]} 읽기 실패: {type(exc).__name__}"}
+    wrong = gen_opencode.managed_problems(cfg)
+    if wrong:
+        return {"check": "managed-config", "status": "fail",
+                "detail": f"{found[0]}: " + ", ".join(wrong[:6]) + (f" 외 {len(wrong) - 6}" if len(wrong) > 6 else "")
+                          + " — opencode/managed.json.sample과 맞춘다(관리자)"}
+    return {"check": "managed-config", "status": "ok", "detail": f"{found[0]}: managed.json.sample의 막는 항목 모두 있음"}
+
+
+def runtime_opencode(project: str | None, opencode: str, managed_dir: Path, env: dict) -> tuple[str, int]:
+    """OpenCode v1: 버전(= tt-oc PINNED, 없으면 설치 안내), 설치한 opencode.json의 v1 필수 설정(snapshot:false 등), opencode가
+    있으면 `tt-oc` 사전 점검 전체(합쳐진 실제 설정·지문·지시 파일·config.py doctor), 관리 설정(/etc/opencode). 사내 확인 0은
+    명령만 보인다."""
+    tt = _load_tt_oc()
+    oc = shutil.which(opencode, path=env.get("PATH"))
+    rows: list[dict] = []
+    if not oc:
+        rows.append({"check": "opencode-version", "status": "fail",
+                     "detail": f"opencode 없음 — OpenCode {tt.PINNED}를 설치한다(예: npm install -g opencode-ai@{tt.PINNED}, "
+                               "사내 설치 경로는 관리자). 다른 버전은 쓰지 않는다"})
+    raw = project or env.get("TT_OC_PROJECT")
+    proj = meta = None
+    if raw:
+        try:
+            proj, meta = tt.load_project(raw)
+        except tt.Refused as exc:
+            rows.append({"check": "project", "status": "fail", "detail": str(exc)})
+    else:
+        rows.append({"check": "project", "status": "fail",
+                     "detail": "OpenCode 프로젝트 폴더 없음 — tools/gen_opencode.py install --dest <git 밖 폴더> … 뒤 "
+                               "--project <폴더>(또는 TT_OC_PROJECT)로 다시 실행"})
+    if proj is not None:
+        try:
+            wrong = tt.config_problems(json.loads((proj / "opencode.json").read_text(encoding="utf-8")))
+        except (OSError, ValueError, AttributeError) as exc:
+            wrong = [f"읽기 실패({type(exc).__name__})"]
+        rows.append({"check": "installed-config", "status": "fail" if wrong else "ok",
+                     "detail": ("설정 불일치: " + ", ".join(wrong) + " — gen_opencode.py install --force") if wrong
+                     else f"{proj / 'opencode.json'}: snapshot:false·share:disabled·autoupdate:false·허용 목록·task deny"})
+        if oc:
+            rows += tt.preflight(oc, proj, meta, tt.child_env(meta))
+    elif oc:
+        rows.append(tt.version_row(oc, env)[0])
+    rows.append(_managed_row(managed_dir))
+    result, code = _runtime_result(rows, "행의 안내대로 고친 뒤 다시 실행한다(버전 불일치·설정 우회는 하지 않고 보고)")
+    title = f"런타임 점검 opencode — 모델 호출 없음(고정 {tt.PINNED})"
+    return "\n\n".join([_runtime_table(title, rows), result, check0_text()]), code
+
+
+def runtime_check(target: str | None, project: str | None, managed_dir: Path) -> tuple[str, int]:
+    if target not in RUNTIMES:
+        raise Usage(f"runtime-check 대상은 {' | '.join(RUNTIMES)}: {target or '(없음)'}")
+    env = dict(os.environ)
+    if target == "claude-gateway":
+        return runtime_claude_gateway(env)
+    return runtime_opencode(project, env.get("TT_OPENCODE") or "opencode", managed_dir, env)
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="site_step.py", description=__doc__.split("\n\n")[0],
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("cmd", nargs="?", choices=("check", "propose", "evals", "ofono"),
-                    help="없으면 시작·이어 하기. ofono: oFono 트랙(O-1~O-4) 시작·이어 하기(S-3 완료 뒤)")
-    ap.add_argument("step", nargs="?", metavar="S-n|O-n", help="check·propose 대상 단계(기본: 현재 단계)")
+    ap.add_argument("cmd", nargs="?", choices=("check", "propose", "evals", "ofono", "runtime-check"),
+                    help="없으면 시작·이어 하기. ofono: oFono 트랙(O-1~O-4) 시작·이어 하기(S-3 완료 뒤). "
+                         "runtime-check: claude-gateway|opencode 런타임 점검(모델·네트워크 호출 없음)")
+    ap.add_argument("step", nargs="?", metavar="S-n|O-n",
+                    help="check·propose 대상 단계(기본: 현재 단계). runtime-check면 claude-gateway|opencode")
+    ap.add_argument("--project", help="runtime-check opencode: gen_opencode.py install --dest 폴더(기본: TT_OC_PROJECT)")
     ap.add_argument("--done", metavar="S-n|O-n", help="사용자 확인을 받은 현재 단계: 점검 재실행 → 통과면 완료 기록·다음 단계")
     ap.add_argument("--waive", action="append", default=[], metavar='점검="사유"',
                     help="--done에서 사용자가 확인한 건너뜀·사용자 필요 점검(사유는 SITE_PROFILE.md에 남는다)")
@@ -660,6 +812,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--batch", type=int, default=EVAL_BATCH, help="evals: 배치 크기")
     ap.add_argument("--baseline", action="store_true", help="evals: 사내 토큰 기준선 명령")
     ap.add_argument("--root", default=str(ROOT), help=argparse.SUPPRESS)   # 테스트용
+    ap.add_argument("--managed-dir", default=None, help=argparse.SUPPRESS)  # 테스트용(기본 gen_opencode.MANAGED_DIR)
     args = ap.parse_args(argv)
     if args.done and args.cmd:
         ap.error("--done은 단독으로 쓴다")
@@ -669,6 +822,8 @@ def main(argv: list[str] | None = None) -> int:
         ap.error("--set·--apply는 propose에서만 쓴다")
     if args.cmd == "ofono" and args.step:
         ap.error("ofono는 단계 인자를 받지 않는다(지금 oFono 단계부터)")
+    if (args.project or args.managed_dir) and args.cmd != "runtime-check":
+        ap.error("--project는 runtime-check에서만 쓴다")
     root = Path(args.root)
     code = 0
     try:
@@ -683,6 +838,10 @@ def main(argv: list[str] | None = None) -> int:
             out, code = evals_cmd(root, max(1, args.batch), args.baseline)
         elif args.cmd == "ofono":
             out, code = ofono_cmd(root, args.allow_api)
+        elif args.cmd == "runtime-check":
+            import gen_opencode
+            out, code = runtime_check(args.step, args.project,
+                                      Path(args.managed_dir) if args.managed_dir else gen_opencode.MANAGED_DIR)
         else:
             out, code = start(root, args.allow_api)
         print(out)

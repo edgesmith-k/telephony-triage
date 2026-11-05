@@ -22,7 +22,13 @@ contracts.md §3.2). 기본 base는 HEAD다.
                            `match_signatures`를 이름 없이 헬퍼로 불러서 이름 검색으로는 안 잡힌다.
     tests/test_x.py        자기 자신. tests/conftest.py·tests/helpers/**·tests/__init__.py는 full.
                            tests/skill_evals/**와 helpers/skill_eval_env.py는 test_skill_evals.py
-                           (run.py·grade.py는 common.claude_child를 다시 내보내므로 test_module_eval.py도).
+                           (run.py·grade.py는 common.claude_child를 다시 내보내므로 test_module_eval.py·
+                           test_claude_child.py도 — CHILD_HELPER_TESTS).
+    plugin/scripts/common/claude_child.py
+                           common인데 full이 아니다: 스크립트 규칙(importer·이름 참조, tools/site_step.py를 부르는
+                           테스트 포함) + CHILD_HELPER_TESTS.
+    opencode/**, tests/opencode/**
+                           test_oc_adapter.py·test_tt_oc.py·test_gen_opencode.py와 tests/opencode/ 디렉토리.
     templates/module-skills/**, helpers/make_module_eval_inputs.py, skill_evals/module_offsite_results.json
                            test_module_templates.py·test_module_eval.py (full 아님).
     tests/fixtures|mocks   그 경로 조각(첫 디렉토리, 흔한 이름이면 파일 이름)을 가리키는 테스트.
@@ -85,7 +91,14 @@ MODULE_PATHS = ("templates/module-skills/*", "tests/helpers/make_module_eval_inp
 MODULE_TESTS = {"tests/test_module_templates.py", "tests/test_module_eval.py"}
 # run.py·grade.py는 common.claude_child를 다시 내보낸다 → 재수출 테스트(test_module_eval)도 돈다
 CHILD_HELPER_PATHS = ("tests/skill_evals/run.py", "tests/skill_evals/grade.py")
-CHILD_HELPER_TESTS = {SKILL_EVAL_TEST, "tests/test_module_eval.py"}
+CHILD_HELPER_TESTS = {SKILL_EVAL_TEST, "tests/test_module_eval.py", "tests/test_claude_child.py"}
+# common/claude_child.py는 공용(common) full 대신 스크립트 규칙(import 그래프·이름 참조) + CHILD_HELPER_TESTS로 고른다
+# (importer: module_eval·run.py·grade.py·tools/site_step.py runtime-check)
+CHILD_SOURCE = "plugin/scripts/common/claude_child.py"
+# OpenCode v1 층(계획 I): opencode/**·tests/opencode/**는 이 테스트들과 tests/opencode/ 디렉토리(분류 불가 full 대신)
+OPENCODE_PATHS = ("opencode/*", "tests/opencode/*")
+OPENCODE_TESTS = {"tests/test_oc_adapter.py", "tests/test_tt_oc.py", "tests/test_gen_opencode.py"}
+OPENCODE_TEST_DIR = "tests/opencode"
 SAFETY_TEST = "tests/test_safety.py"      # plugin/scripts가 바뀌면 항상 포함
 MAX_IMPORTERS = 8                           # 간접 importer가 이보다 많으면 공용 모듈
 COMMON_NAMES = {"merge"}     # 따옴표 이름으로 찾지 않는 모듈 이름(`dbpr.merge` — "merge"는 설정·이벤트 값에 흔하다)
@@ -295,7 +308,12 @@ def select(files: list[str]) -> Selection:
         if matches(path, SKILL_EVAL_PATHS):
             add(path, {SKILL_EVAL_TEST} & set(tests))
             continue
-        reason = next((why for pat, why in FULL_PATTERNS if fnmatch.fnmatch(path, pat)), None)
+        if matches(path, OPENCODE_PATHS):
+            dirs = {OPENCODE_TEST_DIR} if (REPO / OPENCODE_TEST_DIR).is_dir() else set()
+            add(path, (OPENCODE_TESTS & set(tests)) | dirs, "OpenCode v1 층")
+            continue
+        reason = None if path == CHILD_SOURCE else \
+            next((why for pat, why in FULL_PATTERNS if fnmatch.fnmatch(path, pat)), None)
         if reason:
             full(path, reason)
             continue
@@ -333,6 +351,8 @@ def select(files: list[str]) -> Selection:
                 for tpath, text in tests.items():
                     if references_module(text, imported_names(text), mod, rel):
                         found.add(tpath)
+            if path == CHILD_SOURCE:
+                found |= CHILD_HELPER_TESTS & set(tests)
             add(path, found, f"importer {count}개")
         elif path.startswith("tests/test_") and path.endswith(".py") and path.count("/") == 1:
             add(path, {path} & set(tests))
@@ -374,7 +394,7 @@ def select(files: list[str]) -> Selection:
 
     if scripts_touched and SAFETY_TEST in tests:
         sel.tests.add(SAFETY_TEST)
-    sel.tests &= set(tests)
+    sel.tests &= set(tests) | ({OPENCODE_TEST_DIR} if (REPO / OPENCODE_TEST_DIR).is_dir() else set())
     return sel
 
 

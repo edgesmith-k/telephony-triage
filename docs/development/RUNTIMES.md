@@ -32,9 +32,7 @@
   argv·기록에 없음, `execution.json` `auth_from_user_settings`에 이름만). 고치기 전에는 프로필 키가 빠져 자식이 `max_tokens:32000`·
   thinking·베타 헤더로 요청했다. 모델은 settings.json 최상위 `model` 키로는 넘어가지 않는다 — `ANTHROPIC_MODEL` 또는 `--model`.
 - **점검(모델 호출 없음)**: `claude_child.gateway_profile_check(env)`가 위 표를 ok·missing·differs·info 행으로 낸다(비밀 값은 행에
-  없음). 지금 부르는 법:
-  `python3 -c "import os,sys,json; sys.path.insert(0,'plugin/scripts'); from common import claude_child as c; print(json.dumps(c.gateway_profile_check(dict(os.environ)), ensure_ascii=False, indent=1))"`
-  — `site_step.py`의 런타임 점검 명령으로 묶는 것은 O10(B1+B2 뒤 통합)에서 한다(§6).
+  없음). 부르는 법: `python3 tools/site_step.py runtime-check claude-gateway`(표, missing·differs가 있으면 종료 1, O10 — §6).
 
 ## 2. 비용 미상 (C2i)
 
@@ -170,9 +168,13 @@ MCP 쓰기(add_comment 승인 유무)·Write/Edit 규칙 8은 이번에 돌리�
 5. 가장 큰 화면·must_show를 16K 출력 안에서 그대로 옮기는지.
 - `--bare` 인증(§3) — 되면 module_eval에서 켠다.
 
-**B1+B2 뒤 통합(이 단계에서 하지 않음 — 파일 소유가 다른 구현에 있다)**:
-- O10 `site_step.py runtime-check claude-gateway`: `claude_child.gateway_profile_check`를 불러 표를 보이고, missing·differs가
-  있으면 실패(모델 호출 없음). 같은 명령에 OpenCode 점검(버전 1.19.5, `snapshot:false`, managed 설정)과 사내 확인 0의 curl 단계를 둔다.
-- O8 `common/mcptools.py`·`config.py setup`이 opencode.json `mcp`와 `<server>_<tool>` 이름을 읽고, `job_status.py`가
-  런타임(`TT_RUNTIME`)·모델·OpenCode 버전을 보인다.
-- `tools/related_tests.py` 대응: `common/claude_child.py`를 바꾸면 `tests/test_claude_child.py`도 고른다(`CHILD_HELPER_TESTS`에 추가).
+**B1+B2 뒤 통합 — 했다(11/05)**:
+- O10 `site_step.py runtime-check claude-gateway|opencode`(모델·네트워크 호출 없음, 사내 확인 0은 curl 명령만 보인다):
+  claude-gateway는 `gateway_profile_check` 표(missing·differs → 1), opencode는 버전 1.19.5(없으면 설치 안내)·설치한
+  opencode.json 필수 설정·`tt-oc` 사전 점검(공유 `version_row`·`config_problems`·`preflight`)·관리 설정(`gen_opencode.managed_problems`,
+  없으면 warn). 레포 zip에 `opencode/`가 들어가는 것은 `test_make_bundle.py`가 고정한다(검사 항목은 그대로).
+- O8 `config.py tracker-candidates`가 `--opencode-config`(또는 `TT_RUNTIME=opencode`면 작업 폴더 설정)의 `mcp`(enabled·command)를
+  읽고 `<server>_<tool>` 이름을 안다(`mcptools.opencode_candidates` — `oc_adapter`와 같은 규칙). `job_status.py`는 OpenCode 안에서만
+  런타임·모델·OpenCode 버전, `config.py doctor`는 OpenCode 안에서만 `opencode_env`·`jira_gate` 행(기본 13행 그대로).
+- `tools/related_tests.py`: `common/claude_child.py` → 스크립트 규칙 + `CHILD_HELPER_TESTS`(test_claude_child 포함), `opencode/**`·
+  `tests/opencode/**` → OpenCode 테스트 셋.

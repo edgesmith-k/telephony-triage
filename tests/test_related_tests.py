@@ -77,7 +77,23 @@ def test_module_templates_and_generator_select_module_tests():
     assert "tests/test_module_eval.py" in select("tests/fixtures/module-arms/ofono/pre/explore-rules.md")["tests"]
     for path in ("tests/skill_evals/run.py", "tests/skill_evals/grade.py"):
         out = select(path)
-        assert set(out["tests"]) == {"tests/test_skill_evals.py", "tests/test_module_eval.py"} and out["full"] is False
+        assert set(out["tests"]) == {"tests/test_skill_evals.py", "tests/test_module_eval.py",
+                                    "tests/test_claude_child.py"} and out["full"] is False
+
+
+def test_claude_child_and_opencode_layer():
+    """계획 I: common/claude_child.py는 full이 아니라 스크립트 규칙 + CHILD_HELPER_TESTS(test_claude_child 포함), run.py·grade.py도
+    test_claude_child를 고른다. opencode/**·tests/opencode/**는 OpenCode 테스트 셋과 tests/opencode/ 디렉토리(분류 불가 full 아님)."""
+    out = select("plugin/scripts/common/claude_child.py")
+    assert out["full"] is False and {"tests/test_claude_child.py", "tests/test_module_eval.py", "tests/test_skill_evals.py",
+                                     "tests/test_site_step_runtime.py"} <= set(out["tests"])
+    assert "tests/test_claude_child.py" in select("tests/skill_evals/run.py")["tests"]
+    assert select("plugin/scripts/common/masking.py")["full"] is True            # 다른 common은 그대로 full
+    want = ["tests/opencode", "tests/test_gen_opencode.py", "tests/test_oc_adapter.py", "tests/test_tt_oc.py"]
+    for path in ("opencode/bin/tt-oc", "opencode/plugins/tt-guard.js", "opencode/opencode.json.template",
+                 "tests/opencode/test_oc_e2e.py", "tests/opencode/fakes/x.py"):
+        out = select(path)
+        assert out["full"] is False and out["tests"] == want, path
 
 
 def test_tool_change_selects_tests_mentioning_it():

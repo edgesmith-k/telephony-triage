@@ -613,7 +613,12 @@ def markdown(doc: dict) -> str:
     if snap:
         L.append((f"- {_tag({'confidence': 'recorded', 'at': snap.get('at')})} 스냅샷 {snap.get('sha')}"
                   + (f" ({_clip(snap['base'], 40)})" if snap.get("base") else "") + f" — {snap.get('source')}", 3))
-    L += [(f"- [확인 불가] {t['remote']}", None), ("", None), ("### 단계", None)]
+    L += [(f"- [확인 불가] {t['remote']}", None)]
+    rt = doc.get("runtime")
+    if rt:      # OpenCode 안에서만 있다(job_status.runtime_info, 계획 I O8)
+        L.append((f"- [현재] 런타임 {rt.get('name')} · 모델 {_clip(rt.get('model'), 60)} · OpenCode {rt.get('opencode')}"
+                  f"(고정 {rt.get('pinned')})", None))
+    L += [("", None), ("### 단계", None)]
     st = doc["stage"]
     L.append((f"- {_tag(st)} {st['id']}: {st['label']}", None))
     L += [(f"  - {e}", 4) for e in st.get("evidence") or []]
