@@ -22,7 +22,7 @@ IMS: 프레임워크(ImsPhone…) ↔ 벤더 IMS(`SOL TX/RX{RILC_REQ_AIMS_*}`) �
 ## 수집 범위
 
 - 첫 RILJ 줄이 응답(`[n]<`) → radio 버퍼가 늦게 시작됐다 → `그 층 로그 없음(RILJ)`.
-- RILJ 요청은 있는데 RIL·RILC 줄이 0줄 → `그 층 로그 없음(벤더 RIL)`.
+- RILJ 요청은 있는데 RIL·RILC 줄이 0줄 → `그 층 로그 없음(벤더 RIL)`. 단 RILJ `serviceDied`·`has died`면 죽어서 줄이 없는 것 → `벤더 RIL`.
 - "일어나지 않은 일"은 로그가 그 시점을 덮을 때만 근거다.
 
 ## 원인 아님

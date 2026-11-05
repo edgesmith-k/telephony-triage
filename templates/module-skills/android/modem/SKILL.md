@@ -13,5 +13,5 @@ description: telephony-triage Step 5-1에서 triage.py module 출력으로만 �
 
 1. RILJ `UNSOL_MODEM_RESTART`·`newState=RADIO_UNAVAILABLE` → 뒤 실패는 결과다. `모뎀·망`, 원인 데몬은 그 줄의 태그. 1위가 다르면 `<1위 ID>과 다름 — 모뎀 재시작`.
 2. `UNSOL_MODEM_RESTART` 없이 RILJ `serviceDied`·`has died` → `벤더 RIL` 재시작.
-3. RILJ 요청은 있는데 벤더 RIL 줄이 0 → `그 층 로그 없음(벤더 RIL)`.
+3. RILJ 요청은 있는데 벤더 RIL 줄이 0 → `그 층 로그 없음(벤더 RIL)`(2가 아닐 때).
 4. 뒤의 `RADIO_ON`은 회복이다. 진단·NV 줄은 근거가 아니다.
