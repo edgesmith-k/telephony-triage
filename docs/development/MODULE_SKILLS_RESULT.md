@@ -10,6 +10,10 @@
 구현 리뷰(2관점 → 반박 검증 1): 확정 P1 3 — 갈린 덤프 조각 묶기가 실제 로그에서 0번 동작(시각 뺀 앞머리·1초 안으로 고침 — 첨부 로그 11묶음·plmn 8건 잡힘, 사례·fixture 재검사 0), Android 데몬 크래시(N10) 보기에 벤더 RIL 줄 0 → 일반 규칙과 충돌(`serviceDied`·`has died` 예외 추가), **실행 중 마스커가 `dump_dmsg_w_re()` 조각에 갈린 IMSI/ICCID 값을 안 가림**(기존 코드, 첨부 로그 0건, 사용자 결정 대기 — masking.py는 안 바꿈).
 자동 결정: 증상 행 130B 초과 허용(파일 상한 안, 사용자 행 안 버림), skillcheck.py 역할 표 열 읽기 변경(X-common), call-epsfb-after-apm 생성 입력 두 줄 늘어남·N3 데몬 `PsService`·N10 근거 `serviceDied|has died` 넓힘 → 정답 표에 표시.
 
+### 나중에 할 일 (사용자 11/06 — 이번 묶음 밖, 여유 될 때)
+- call·sms·ims·modem 모듈 증상 표의 "(초안)" 행을 사용자가 정정(`scratchpad/c1d/symptoms.md` 초안 열 → 모듈 explore.md ④). 구현 리뷰 P2: call·ims ④ "발신 실패"·"IMS 등록 실패"도 초안 열에서 왔는데 표시 없음.
+- 증상 표 행 상한 130B(공통 150B)가 글자 기준인지 바이트 기준인지 사용자 확인 → 정한 기준으로 시험 추가(지금 48행 초과, 최대 207B, 파일 상한은 모두 안).
+
 ### P2 — C1+D 보정 (반입 뒤 후보)
 - 설계 검증 P2는 설계 §13 목록. 구현 리뷰 P2: call·ims explore ④ "발신 실패"·"IMS 등록 실패"가 초안 열에서 왔는데 `(초안)` 없음, 행 바이트 상한(130/150B)을 시험이 안 봄(48행 초과, 최대 207B — 글자/바이트 기준 사용자 확인), oFono call SKILL CSFB 규칙이 N6 보기에 없는 `Data RegState=REGISTERED`를 요구, skillcheck가 components.md의 모든 표 2~3열을 데몬 이름으로 모음(역할 표 아래만 봐야 함).
 - X-infra: 기본 상수는 journal.py에 두고 backend가 import(순환 import 회피), module_measure가 기본 레벨 보정을 스스로 적용, modules.yaml `level_unreliable` 사본·일치 시험 안 넣음(C-F11).
