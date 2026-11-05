@@ -2,6 +2,18 @@
 
 단계표는 `MODULE_SKILLS_PLAN.md §4`. 이 파일은 단계마다 리뷰·재측정에서 P2로 남긴 것(결정 (r): P0·P1만 고치고 P2는 반입 뒤 후보)과 단계 결과를 적는다.
 
+## C1+D 보정 (11/06, 설계 → 설계 검증 → 구현 → 리뷰 → 검증 → 수정 — 사용자 11/06 "구현 전에 다시 설계하고 검증")
+
+설계 `scratchpad/c1d/correction-design.md`(v2, 검증 반영 §13): 사용자 결정 8개(모듈별 병렬 보정·증상별 첫 점검 표·사례 추가·대체 근거 A·데몬 역할 표·박힌 데몬 이름 → tags.yaml 속성·정답 표 확인·APN 설정 행) + 구현 보고 추가 항목. 설계 검증(2관점 리뷰 → 반박 검증): 확정 P0 2(기준 커밋, 사용자 확인 없는 견본 DB RIL 항목 분리 → 뺌)·P1 13 반영.
+구현(토큰 절약 — 사용자 11/06: 에이전트 4개): X-common(phase 0: 시험 상수·역할 표 시험·modules.yaml 네 줄·출력 형식 `원인 데몬`=로그에 찍힌 이름·analyzer 14개·기존 사례 채점 수정 3건 / `_common` 역할 표(역할 → 지금 이름·구 이름)·공통 증상·대체 근거 규칙(요청 없이 data call list에서 빠지면 모뎀·망)·짧은 지위 블록), M-ofono(7모듈 증상 표·역할 이름·대체 근거, 사례 5), M-android(7모듈, 사례 6), X-infra(tags.yaml `level: unreliable`·`ipc: vendor` — 선언 없으면 지금 상수, 출력 바이트 동일·`backend.apply_rules`·`db_lint` 검증·rulediff / `^GsmCdmaCallTracker$` 견본 DB 추가, 미수집 예시 → `GsmCdmaConnection` / 발췌 경로 사업자 이름·MCC/MNC·`dump_dmsg_w_re()` 갈린 조각 / ofono_reference 0.0.4·android reference 0.1.1). 사례 42개(oFono 21·Android 21), 문서는 모두 상한 안.
+통합(메인): 생성물은 버전 줄·태그 수(74→75)만, 골든·mask-gate 차이 0, fixture_residual 0, dry-run 14개(1회차 84회 추정 $5.11), 전체 3,776 통과·1 실패(S-0 context pack 31,068B > 30KB — 04 §5.8 태그 속성 설명 줄여 29,941B) → 수정 뒤 관련 383 통과.
+구현 리뷰(2관점 → 반박 검증 1): 확정 P1 3 — 갈린 덤프 조각 묶기가 실제 로그에서 0번 동작(시각 뺀 앞머리·1초 안으로 고침 — 첨부 로그 11묶음·plmn 8건 잡힘, 사례·fixture 재검사 0), Android 데몬 크래시(N10) 보기에 벤더 RIL 줄 0 → 일반 규칙과 충돌(`serviceDied`·`has died` 예외 추가), **실행 중 마스커가 `dump_dmsg_w_re()` 조각에 갈린 IMSI/ICCID 값을 안 가림**(기존 코드, 첨부 로그 0건, 사용자 결정 대기 — masking.py는 안 바꿈).
+자동 결정: 증상 행 130B 초과 허용(파일 상한 안, 사용자 행 안 버림), skillcheck.py 역할 표 열 읽기 변경(X-common), call-epsfb-after-apm 생성 입력 두 줄 늘어남·N3 데몬 `PsService`·N10 근거 `serviceDied|has died` 넓힘 → 정답 표에 표시.
+
+### P2 — C1+D 보정 (반입 뒤 후보)
+- 설계 검증 P2는 설계 §13 목록. 구현 리뷰 P2: call·ims explore ④ "발신 실패"·"IMS 등록 실패"가 초안 열에서 왔는데 `(초안)` 없음, 행 바이트 상한(130/150B)을 시험이 안 봄(48행 초과, 최대 207B — 글자/바이트 기준 사용자 확인), oFono call SKILL CSFB 규칙이 N6 보기에 없는 `Data RegState=REGISTERED`를 요구, skillcheck가 components.md의 모든 표 2~3열을 데몬 이름으로 모음(역할 표 아래만 봐야 함).
+- X-infra: 기본 상수는 journal.py에 두고 backend가 import(순환 import 회피), module_measure가 기본 레벨 보정을 스스로 적용, modules.yaml `level_unreliable` 사본·일치 시험 안 넣음(C-F11).
+
 ## 근거 줄 소실 대응 B: 이슈 DB 작성 지침 + `db_lint --advice` (11/06, c73550f)
 
 03-issue-db §5.7 (2)·reference/db-authoring.md에 "근거 줄 하나에만 기대지 않기": 다른 층 줄로 시그니처 하나 더(OR), 증상 시그니처도 같은 줄에 기대면 증상 쪽도 하나 더, 대체 원인 줄은 증상 근거와 같은 슬롯·창 안(analyze 짝 조건 — R1~R5 regress 모드는 이를 보지 않음), 그 줄이 없는 마스킹 새 빌드 로그를 `extra` fixture로 두고 analyze로 한 번 확인. 없음에 기대는 근거(`must_not_match`, 예 DATA-001)는 줄이 사라지면 잘못 분류되므로 OR 시그니처가 아니라 "일어났음" 줄을 같은 시그니처 `must_not_match`에 하나 더. `db_lint --advice`(선택 플래그): 시그니처가 하나뿐인 활성 원인·증상 시그니처 하나뿐인 활성 유형을 `참고[…]`로만 — 플래그 없으면 출력·종료 코드 바이트 동일(견본 + 변형 DB 12개), 어떤 관문도 `--advice`를 쓰지 않는다. 시그니처는 하나도 바꾸지 않았다.
