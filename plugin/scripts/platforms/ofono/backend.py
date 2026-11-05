@@ -14,6 +14,8 @@ android reference 백엔드(`platforms/android/backend.py`)와 같은 구조(파
   않으므로 `subtag`가 `SUBTAG_RE` 모양일 때만 — 아니면 나누지 않는다).
 - 0.0.3: 줄 형식 (c) BusyBox syslogd(레벨은 severity)·내장 짝 `gril`·슬롯 규칙(`[<slot>,`·`/ril_<n>`)이 기본 출력을 바꾼다
   (gril trace 줄의 `ril`·`phone_id`, (c) 줄 해석). (a)·(b) 형식이고 gril 줄·`/ril_<n>`이 없는 로그의 출력은 0.0.2와 같다.
+- 0.0.4(C1+D 보정): 레벨 보정(DITD·RFSD·DMD·MOSE → I)·벤더 IPC builtin이 0.0.3 출력을 바꿨다 — 버전이 분석 재사용
+  캐시 키(`compiled.environment` → `source_hash`)에 들어가므로 올린다.
 - builtin 판별(11/05 승인 ③, H C1 R12): `VENDOR_IPC_IDENTS`(`exynos-ril`, 첨부 로그에서 본 벤더 RIL 데몬 이름,
   TODO(SITE:S25)) 줄에 `common.vendor_ipc.detect`를 부른다 → `builtin.common.vendor_ipc_error`·
   `builtin.common.vendor_request_failed`. 그 밖 ident 줄은 판별하지 않는다. 이슈 DB tags.yaml에 `ipc: vendor`가 하나라도
@@ -36,7 +38,7 @@ from parser_backends.base import ParserBackend, TagAttrSet, Window
 from . import SPEC
 from .journal import DEFAULT_LEVEL, LEVEL_UNRELIABLE_IDENTS
 
-VERSION = "0.0.3"
+VERSION = "0.0.4"
 # split_tag 하위 식별: 글자로 시작하는 식별자 모양만 tag에 붙인다(숫자로 시작하는 값·공백·`:`·`/`는 나누지 않음)
 SUBTAG_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_-]{0,63}$")
 # 벤더 IPC 결과 판별을 부를 ident(첨부 oFono 로그의 벤더 RIL 데몬, TODO(SITE:S25)). split_tag면 `ident/subtag`도 받는다.

@@ -8,6 +8,8 @@
 (TODO(SITE:S9)). site 백엔드는 이 클래스를 상속해 `detect()`·`builtin_events()`를 바꾸면 공통 처리를 그대로
 재사용한다(벤더 이벤트도 원하면 `super().detect()`를 합친다).
 
+0.1.1(C1+D 보정): D에서 벤더 IPC builtin과 ril.py 해석이 0.1.0 출력을 바꿨다(분석 재사용 캐시 키 때문에 올림).
+
 구현 위치는 `platforms/android/backend.py`이고 `parser_backends/reference`는 BACKEND만 다시 내보낸다.
 """
 
@@ -22,7 +24,7 @@ from common import events, vendor_ipc
 from . import logcat, ril
 from parser_backends.base import ParserBackend, TagAttrSet, Window
 
-VERSION = "0.1.0"
+VERSION = "0.1.1"
 
 # 벤더 IPC 결과 줄을 보는 태그(첨부 로그 A의 벤더 RIL 태그). TODO(SITE:S9) 사내 태그 확인
 VENDOR_IPC_TAGS = frozenset({"RIL"})

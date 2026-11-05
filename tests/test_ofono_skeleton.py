@@ -237,7 +237,7 @@ def _parse(log: Path, rules: Path, *extra: str) -> dict:
 
 def test_parse_with_ofono_db():
     out = _parse(ISO_LOG, variant_db("issue-db-ofono") / "parser-rules")
-    assert out["backend"] == {"name": "ofono_reference", "version": "0.0.3"}
+    assert out["backend"] == {"name": "ofono_reference", "version": "0.0.4"}
     assert out["masked"] is True and out["warnings"] == [] and out["errors"] == []
     lines = [e for e in out["events"] if e["event"] is None]
     assert {e["tag"]: e["category_hint"] for e in lines} == {"ofonod": "common", "daemon-a": "data"}
@@ -374,7 +374,7 @@ def test_backend_registration():
 
     loaded = parser_backends.load("ofono_reference")
     assert loaded is backend.BACKEND and loaded.platform == "ofono" and loaded.name == "ofono_reference"
-    assert loaded.version() == backend.VERSION == "0.0.3"
+    assert loaded.version() == backend.VERSION == "0.0.4"
     assert loaded.builtin_events() == ["builtin.common.vendor_ipc_error", "builtin.common.vendor_request_failed"]
     assert loaded.log_format() is platforms.get("ofono").log
 

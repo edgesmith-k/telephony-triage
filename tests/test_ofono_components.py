@@ -622,7 +622,7 @@ def _parse(log: Path, rules: Path, ofono: dict | None) -> dict:
 
 def test_parse_cross_daemon_derived_events():
     out = _parse(MULTI_LOG, variant_db("issue-db-ofono") / "parser-rules", {"components": COMPONENTS, "protocols": {"ipc": IPC}})
-    assert out["backend"] == {"name": "ofono_reference", "version": "0.0.3"}
+    assert out["backend"] == {"name": "ofono_reference", "version": "0.0.4"}
     assert out["errors"] == [] and events.validate_events(out["events"]) == []
     derived = [(e["event"], e["tag"], e["fields"]) for e in out["events"] if e["source"] == "rules"]
     assert derived == [                                       # 응답 줄 바로 뒤(ril_error → ril_timeout), 그다음 응답 없음
