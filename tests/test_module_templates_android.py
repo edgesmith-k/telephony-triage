@@ -36,6 +36,12 @@ CASES = [
     ("ims", "ims-iradioims-absent", "explore", True, None),
     ("modem", "modem-restart-chain", "deep", False, None),
     ("modem", "modem-vendor-lines-missing", "explore", False, "below-layer-missing"),
+    ("data", "data-apn-wrong-applied", "explore", False, None),
+    ("data", "data-dc-list-drop", "explore", False, None),
+    ("call", "call-volte-sip-invite-error", "explore", False, None),
+    ("sim", "sim-slow-recognition", "explore", False, None),
+    ("modem", "modem-ril-daemon-crash", "explore", False, None),
+    ("ims", "ims-403-vendor-lines-missing", "deep", False, None),
 ]
 
 # 문서 상한(바이트, C1D 보정 §2.2) — skillcheck.CAPS보다 좁다(R24). 경로 키가 파일 이름 키보다 먼저

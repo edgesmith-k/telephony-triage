@@ -91,14 +91,14 @@ def _module_docs() -> list[Path]:
     return sorted(p for p in TEMPLATES.rglob("*.md") if "evals" not in p.relative_to(TEMPLATES).parts)
 
 
-OFONO_CASES = {   # C0 3 + C1 13 (C1D §1 표, R21: ofono 묶음만 본다 — android는 test_module_templates_android)
-    "data": {"data-apn-auth-reject", "data-ditd-route-fail", "data-ofonod-only"},
-    "sim": {"sim-simio-ril-result", "sim-euicc-isdr-absent", "sim-openchannel-busy-race"},
+OFONO_CASES = {   # C0 3 + C1 13 + 보정 5 (C1D §1 표, R21: ofono 묶음만 본다 — android는 test_module_templates_android)
+    "data": {"data-apn-auth-reject", "data-apn-overwritten", "data-ditd-route-fail", "data-nr-switch-drop", "data-ofonod-only", "data-throughput-trap"},
+    "sim": {"sim-euicc-isdr-absent", "sim-openchannel-busy-race", "sim-simio-ril-result"},
     "network": {"network-nrmode-modem-reject", "network-radio-off-queries"},
-    "call": {"call-dial-modem-reject", "call-epsfb-after-apm"},
-    "sms": {"sms-send-no-vendor-lines", "sms-ims-svc-reject"},
+    "call": {"call-csfb-cs-unregistered", "call-dial-modem-reject", "call-ecall-msd-lines-missing", "call-epsfb-after-apm"},
+    "sms": {"sms-ims-svc-reject", "sms-send-no-vendor-lines"},
     "ims": {"ims-401-then-registered", "ims-reg-403-no-retry"},
-    "modem": {"modem-reset-net-chain", "modem-oos-dm-drop"},
+    "modem": {"modem-oos-dm-drop", "modem-reset-net-chain"},
 }
 
 
