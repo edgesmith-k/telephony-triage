@@ -9,6 +9,9 @@
   빌드 시각, 사업자 이름, 벤더 경로 장치 노드, syslog 호스트 칸 값.
 - 디렉토리를 주면 그 아래 `.log`·`.txt`·`.json`과 case `files/*.md`를 본다(문서·`modules.yaml`의 정규식 글은 보지 않는다).
 - syslog 호스트 칸이 `dut`·`localhost`·`(none)`·`host<n>`이 아니면 `host`로 보인다(원본 없이도).
+- 모양 규칙 `SHAPE_RX`(덤프의 `MobileCountryCode`·`MobileNetworkCode` 2~3자리 값)는 원본 없이도 `plmn`으로 보인다.
+- oFono `dump_dmsg_w_re()` 덤프의 이어진 조각(같은 앞머리의 연속 줄)은 이은 글에서도 거부 목록·모양 규칙을 본다
+  (키·값이 두 줄에 갈린 경우, 걸친 줄마다 지적).
 
 출력은 파일·줄·종류(와 원본 줄 번호)뿐이며 맞은 글자는 내지 않는다. 마스킹한 실제 발췌는 허용한다(LM의 원문 금지
 규칙은 쓰지 않는다). 종료 코드: 0 깨끗함, 1 지적 있음, 2 사용 오류.
@@ -43,9 +46,17 @@ DENY_RX = (
     ("aid", re.compile(r"(?i)(?<![0-9A-F])(?P<v>A000000[0-9A-F]{10,})")),
     ("build_time", re.compile(r"(?i)(?:build|date|time)\D{0,12}(?P<v>\d{8}[._-]?\d{6})")),
     ("carrier", re.compile(r"(?i)(?:mOperatorAlphaLong|mOperatorAlphaShort|spn|carrier)\s*[=:]\s*\"?(?P<v>[^\s\",;}{)]{3,40})")),
-    ("carrier", re.compile(r"\"Name\",\s*variant\(\"(?P<v>[^\"]{3,40})\"")),
+    ("carrier", re.compile(r"\"(?:ServiceProviderName|Name)\",\s*variant\(\"(?P<v>[^\"]{3,40})\"")),
     ("device_node", re.compile(r"/dev/(?P<v>[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*)")),
 )
+# 모양 규칙(값 거부 목록은 4자 이상만 넣으므로 2~3자리 MCC·MNC는 모양으로 본다, C1+D 보정 §1.2 ②). `make_excerpt`가
+# `<PLMN#n>`으로 바꾸고, `check`는 `--against` 없이도 가리지 않은 값을 지적한다.
+SHAPE_RX = (
+    ("plmn", re.compile(r"\"Mobile(?:Country|Network)Code\",\s*variant\(\"(?P<v>\d{2,3})\"")),
+)
+# oFono `dump_dmsg_w_re()` 덤프는 한 메시지가 여러 줄에 잘린다(같은 시각·ident·pid, 앞머리가 같다). 줄 단위 규칙은 키와 값이
+# 갈린 조각을 놓치므로 이어진 조각을 이은 글에서 다시 본다(§1.2 ③).
+DUMP_MARK = "dump_dmsg_w_re() "
 _IDENT = re.compile(r"[A-Za-z]*[a-z][A-Z]\w*|[a-z]+")    # CamelCase 식별자·소문자 낱말(키 이름이지 값이 아니다)
 
 
@@ -57,6 +68,50 @@ def _value_ok(kind: str, value: str) -> bool:
 
 
 SPAN_KINDS = {"PRODUCT": "product", "BUILD": "build", "HASH": "build", "B64": "base64"}
+
+
+def dump_groups(lines: list[str]) -> list[list[tuple[int, int]]]:
+    """이어진 `dump_dmsg_w_re()` 조각 묶음 `[[(줄 순번, 조각 시작 열), ...], ...]`(두 줄 이상, 앞머리가 같은 연속 줄)."""
+    groups, cur, head = [], [], None
+    for i, line in enumerate(lines):
+        at = line.find(DUMP_MARK)
+        h = line[:at + len(DUMP_MARK)] if at >= 0 else None
+        if h is not None and h == head:
+            cur.append((i, len(h)))
+            continue
+        if len(cur) > 1:
+            groups.append(cur)
+        cur, head = ([(i, len(h))] if h is not None else []), h
+    if len(cur) > 1:
+        groups.append(cur)
+    return groups
+
+
+def cross_hits(lines: list[str], rules) -> list[tuple[str, str, list[tuple[int, int, int]]]]:
+    """조각을 이은 글에서 `rules`(`[(종류, 정규식)]`)가 맞고 그 맞은 글이 **두 줄 이상에 걸친** 것만(키·값이 갈림, 값이 갈림)
+    `[(종류, 값, [(줄 순번, 시작 열, 끝 열), ...])]`. 값은 이름 그룹 `v`(없으면 맞은 글 전체), 조각은 값이 든 줄만이다.
+    한 줄 안에서 끝나는 맞음은 줄 단위 규칙이 이미 본다."""
+    out = []
+    for group in dump_groups(lines):
+        text, starts = "", []
+        for i, col in group:
+            starts.append((len(text), i, col))
+            text += lines[i][col:]
+        bounds = [off for off, _i, _c in starts[1:]]
+        for kind, rx in rules:
+            for m in rx.finditer(text):
+                if not any(m.start() < x < m.end() for x in bounds):
+                    continue
+                a, b = m.span("v") if "v" in rx.groupindex else m.span()
+                pieces = []
+                for k, (off, i, col) in enumerate(starts):
+                    end = starts[k + 1][0] if k + 1 < len(starts) else len(text)
+                    lo, hi = max(a, off), min(b, end)
+                    if lo < hi:
+                        pieces.append((i, col + lo - off, col + hi - off))
+                if pieces:
+                    out.append((kind, text[a:b], pieces))
+    return out
 
 
 def _files(args: list[str]) -> list[Path]:
@@ -89,7 +144,11 @@ def deny_list(raw_dir: Path) -> dict[str, tuple[str, str, int]]:
         deny[value] = (kind, src, no)
 
     for path in _files([str(raw_dir)]):
-        for no, line in enumerate(_lines(path), 1):
+        lines = _lines(path)
+        for kind, value, pieces in cross_hits(lines, DENY_RX):     # 키·값이 갈린 덤프 조각(§1.2 ③)
+            if not (kind == "device_node" and value.split("/")[0] in DEV_GENERIC) and _value_ok(kind, value):
+                add(("/dev/" + value) if kind == "device_node" else value, kind, path.name, pieces[0][0] + 1)
+        for no, line in enumerate(lines, 1):
             m = HOST_HEAD.match(line)
             if m and not HOST_OK.fullmatch(m.group("v")):
                 add(m.group("v"), "host", path.name, no)
@@ -117,7 +176,14 @@ def check(paths: list[Path], deny: dict | None = None) -> list[dict]:
     rx = _deny_regex(deny or {})
     found = []
     for path in paths:
-        for no, line in enumerate(_lines(path), 1):
+        lines = _lines(path)
+        rules = list(SHAPE_RX) + ([("deny", rx)] if rx is not None else [])
+        for kind, value, pieces in cross_hits(lines, rules):             # 갈린 조각: 걸친 줄마다 한 번
+            extra = {"kind": deny[value][0], "raw_line": deny[value][2]} if kind == "deny" else {"kind": kind}
+            found += [{"file": str(path), "line": i + 1, **extra} for i in sorted({p[0] for p in pieces})]
+        for no, line in enumerate(lines, 1):
+            for kind, srx in SHAPE_RX:
+                found += [{"file": str(path), "line": no, "kind": kind} for _ in srx.finditer(line)]
             for kind, n in masking.residual(line).items():
                 found += [{"file": str(path), "line": no, "kind": kind}] * n
             m = HOST_HEAD.match(line)

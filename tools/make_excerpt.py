@@ -5,7 +5,8 @@
 
 `case.yaml` `origin`의 `lines` 구간(오름차순, 합계 ≤ 120줄)을 원본에서 잘라 로그 마스커(`new_masker(log_lines=True)`,
 구간 전체에 하나)로 가리고, `--against`면 `fixture_residual.deny_list` 값을 메모리에서 `<APN#n>`·`<PLMN#n>`·`<AID#n>`·
-`<CARRIER#n>`·`<DEV#n>`…(파일 안 번호)로 바꾼다. 1줄 `-- [마스킹 발췌] {log} {episode} 줄 {lines}`, 구간 사이 `-- [생략]`.
+`<CARRIER#n>`·`<DEV#n>`…(파일 안 번호)로 바꾼다. 모양 규칙(`fixture_residual.SHAPE_RX`, 덤프의 MCC·MNC)은 `--against` 없이도
+`<PLMN#n>`(같은 카운터)으로 바꾸고, `dump_dmsg_w_re()` 조각에 갈린 값은 이은 글에서 찾아 두 조각 모두 가린다. 1줄 `-- [마스킹 발췌] {log} {episode} 줄 {lines}`, 구간 사이 `-- [생략]`.
 관문(걸리면 쓰지 않고 종료 1): 근거 regex가 모두 구간 안(원본 줄 또는 가린 줄 — 줄 번호 어긋남), `fixture_residual`
 (거부 목록 포함)·`masking.residual`·`skillcheck.check_text`·`new_masker().find` 0건. `--check`는 다시 잘라 바이트 비교한다.
 출력은 `masker`(sha256(masking.py)[:12])·`residual`(오늘) 값과 `파일:줄 종류`뿐, 원본 글자는 내지 않는다.
@@ -56,22 +57,49 @@ def _origin(case: Path) -> tuple[dict, list[tuple[int, int]], list[str]]:
     return origin, segs, evidence
 
 
-def _deny_sub(lines: list[str], deny: dict) -> list[str]:
+def _deny_sub(lines: list[str], deny: dict | None) -> list[str]:
+    """거부 목록 값과 모양 규칙(`fixture_residual.SHAPE_RX`) 값을 `<종류#n>`으로 바꾼다(번호 카운터는 하나, 처음 나온 순서).
+    `dump_dmsg_w_re()` 조각에 갈린 값은 이은 글에서 찾아 걸친 조각 모두를 같은 토큰으로 바꾼다(C1+D 보정 §1.2 ③)."""
+    deny = deny or {}
     rx = fixture_residual._deny_regex(deny)
-    if rx is None:
-        return lines
+    rules = [(kind, srx) for kind, srx in fixture_residual.SHAPE_RX] + ([("deny", rx)] if rx is not None else [])
     text = "\n".join(lines)
     nums = {k: max((int(n) for n in re.findall(rf"<{k}#(\d+)>", text)), default=0) for k in set(TOKEN.values())}
-    seen: dict[str, str] = {}
+    seen: dict[tuple[str, str], str] = {}
 
-    def token(m: re.Match) -> str:
-        value = m.group(0)
-        if value not in seen:
-            kind = TOKEN.get(deny[value][0], "VAL")
-            nums[kind] = nums.get(kind, 0) + 1
-            seen[value] = f"<{kind}#{nums[kind]}>"
-        return seen[value]
-    return [rx.sub(token, line) for line in lines]
+    def token(kind: str, value: str) -> str:
+        if kind == "deny":
+            kind = deny[value][0]
+        key = (TOKEN.get(kind, "VAL"), value)
+        if key not in seen:
+            nums[key[0]] = nums.get(key[0], 0) + 1
+            seen[key] = f"<{key[0]}#{nums[key[0]]}>"
+        return seen[key]
+
+    spans: dict[int, list[tuple[int, int, str, str]]] = {}     # 줄 → [(시작, 끝, 종류, 값)]
+    for kind, value, pieces in fixture_residual.cross_hits(lines, rules):
+        for i, a, b in pieces:
+            spans.setdefault(i, []).append((a, b, kind, value))
+    out = []
+    for i, line in enumerate(lines):
+        mine = sorted(spans.get(i, []))
+        for kind, r in rules:
+            for m in r.finditer(line):
+                a, b = m.span("v") if "v" in r.groupindex else m.span()
+                if not any(a < y and x < b for x, y, _k, _v in mine):
+                    mine.append((a, b, kind, line[a:b]))
+        if not mine:
+            out.append(line)
+            continue
+        mine.sort()
+        parts, pos = [], 0
+        for a, b, kind, value in mine:
+            if a < pos:                                       # 겹치면 앞 것만
+                continue
+            parts += [line[pos:a], token(kind, value)]
+            pos = b
+        out.append("".join(parts) + line[pos:])
+    return out
 
 
 def cut(case: Path, raw: Path, against: Path | None) -> tuple[str, list[str]]:
@@ -85,8 +113,7 @@ def cut(case: Path, raw: Path, against: Path | None) -> tuple[str, list[str]]:
     masker = masking.new_masker("\n".join(flat), log_lines=True)
     masked = [masker.mask(ln) for ln in flat]
     deny = fixture_residual.deny_list(against) if against is not None else None
-    if deny:
-        masked = _deny_sub(masked, deny)
+    masked = _deny_sub(masked, deny)          # 모양 규칙은 --against 없이도 적용한다
     body, i = [], 0
     for n, seg in enumerate(raw_cut):
         if n:

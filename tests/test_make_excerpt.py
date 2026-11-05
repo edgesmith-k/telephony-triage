@@ -30,7 +30,15 @@ RAW = [
     f"Nov  1 10:00:06 {HOST} exynos-ril[901]: open /dev/fake_ipc9 failed",
     f"Nov  1 10:00:07 {HOST} ofonod[812]: Activating context failed",
     f"Nov  1 10:00:08 {HOST} ofonod[812]: end",
+    # oFono SimManager GetProperties 덤프 3줄(합성, C1+D 보정 §1.2): 사업자 이름·MCC/MNC, 키·값이 조각에 갈린다
+    f"Nov  1 10:00:09 {HOST} ofonod[812]: src/dbus.c:dump_dmsg_w_re() method return - i:org.ofono.SimManager "
+    'm:GetProperties p:/ril_0 a:array[dict{"ServiceProviderName", variant("MOCKTEL")}, '
+    'dict{"MobileCountryCode", variant("450")}, dict{"MobileNet',
+    f"Nov  1 10:00:09 {HOST} ofonod[812]: src/dbus.c:dump_dmsg_w_re() "
+    'workCode", variant("05")}, dict{"Name", variant("MOCK',
+    f"Nov  1 10:00:09 {HOST} ofonod[812]: src/dbus.c:dump_dmsg_w_re() " '-SPLIT")}]',
 ]
+DUMP_SECRETS = ("MOCKTEL", 'variant("450")', 'variant("05")', "MOCK-SPLIT", '"MOCK', "-SPLIT")
 
 
 def _case(tmp: Path, lines="2-4,7-8", evidence=("result=2", "Activating context failed")) -> Path:
@@ -107,9 +115,31 @@ def test_without_against_only_masker(tmp_path):
     assert not any(s in proc.stdout for s in SECRETS)
 
 
+def test_dump_carrier_plmn_and_split_chunks(tmp_path):
+    """GetProperties 덤프: 사업자 이름(ServiceProviderName·Name)은 거부 목록, MCC·MNC는 모양 규칙으로 `<PLMN#n>`.
+    `dump_dmsg_w_re()` 조각에 갈린 키(MobileNet|workCode)·값(MOCK|-SPLIT)도 잡고, 갈린 값은 두 조각 모두 같은 토큰."""
+    raw, raw_dir = _raw(tmp_path)
+    case = _case(tmp_path, lines="2-4,7-12")
+    proc = _run("--case", case, "--raw", raw, "--against", raw_dir, "--write")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    lines = (case / "files" / "source.log").read_text(encoding="utf-8").split("\n")
+    l10, l11, l12 = lines[-4:-1]
+    assert 'variant("<CARRIER#1>")' in l10 and 'variant("<PLMN#1>")' in l10
+    assert 'variant("<PLMN#2>")' in l11 and l11.endswith('variant("<CARRIER#2>')
+    assert l12.endswith('dump_dmsg_w_re() <CARRIER#2>")}]')
+    for s in (*SECRETS, *DUMP_SECRETS):
+        assert all(s not in ln for ln in lines) and s not in proc.stdout and s not in proc.stderr, s
+    assert _run("--case", case, "--raw", raw, "--against", raw_dir, "--check").returncode == 0
+    # --against 없이도 모양 규칙(MCC·MNC)은 가린다. 사업자 이름은 거부 목록이 있어야 가린다.
+    proc = _run("--case", case, "--raw", raw, "--write")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    text = (case / "files" / "source.log").read_text(encoding="utf-8")
+    assert 'variant("<PLMN#1>")' in text and 'variant("<PLMN#2>")' in text and "MOCKTEL" in text
+
+
 def test_usage_errors(tmp_path):
     raw, _ = _raw(tmp_path)
-    case = _case(tmp_path, lines="8-12")                 # 원본 9줄을 넘는다
+    case = _case(tmp_path, lines="8-14")                 # 원본 12줄을 넘는다
     assert _run("--case", case, "--raw", raw, "--write").returncode == 2
     case = _case(tmp_path, lines="7-8,2-4")              # 오름차순 아님
     assert _run("--case", case, "--raw", raw, "--write").returncode == 2
