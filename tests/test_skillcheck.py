@@ -475,7 +475,7 @@ def test_template_findings_platform_mix(tmp_path):
     p = root / "ofono" / "data" / "explore.md"
     p.write_text(p.read_text(encoding="utf-8") + "\nRILJ 줄을 본다.\n", encoding="utf-8")
     andr = root / "android" / "data"
-    andr.mkdir(parents=True)
+    andr.mkdir(parents=True, exist_ok=True)      # H C1+D: 템플릿에 android/data가 이미 있다 — explore.md를 덮어쓴다
     (andr / "explore.md").write_text("ok RILJ\nofonod 아님\ngril 줄·org.ofono.Modem\n", encoding="utf-8")
     got = [(f["check"], f["path"], f.get("line"), f.get("rule")) for f in sc.template_findings(root)]
     n = len(p.read_text(encoding="utf-8").split("\n")) - 1

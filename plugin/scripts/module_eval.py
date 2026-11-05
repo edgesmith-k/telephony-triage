@@ -110,6 +110,12 @@ ARM_PINS = {
     "ofono/pre/explore-rules.md": "6e5e9512c08404089872465262bfc11ab99b58747445d0b2c2296b13be6f83d8",
     "ofono/post/platforms/ofono/log-guide.md": "3e36455bcc47d340a9fdcc2cf0ed533ba9453dc3c151903166c1b2133c4622a1",
     "ofono/post/explore-rules.md": "c9847aadd3844fb5cb1a8cb9905772010dd8b44c600f2907b5c781ca8cda0b80",
+    # Android(H C1+D S12, 11/05 ④ 뒤 얼림 — tests/fixtures/module-arms/README.md 표)
+    "android/pre/log-tags.md": "f64baa5b4126f5288a6d7d964f3ab8f9f9d36d4a67f1ab0264bd0f16b380f5fb",
+    "android/pre/ril-requests.md": "262492459ef55a2be47e8a14a71afe244249d9a8868ecdc6f89b25c3dd5319e5",
+    "android/pre/fail-causes.md": "b7c12d9c66840723c91b17afab06278e38ad0c347b8281aadd59fa0ccb17ac5c",
+    "android/pre/explore-rules.md": "6e5e9512c08404089872465262bfc11ab99b58747445d0b2c2296b13be6f83d8",
+    "android/post/explore-rules.md": "c9847aadd3844fb5cb1a8cb9905772010dd8b44c600f2907b5c781ca8cda0b80",
 }
 # 플랫폼별 내장 문서(arm 자료 `<p>/pre|post/` 아래 상대 경로 → 자식 cwd 상대 경로). explore-rules.md는 따로 둔다.
 # without = pre, explore/with = post. Android는 log-guide 대신 내장 log-tags·ril-requests·fail-causes(DD §4.4, H C1+D S2)

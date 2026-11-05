@@ -1171,6 +1171,24 @@ def test_arm_pins(tmp_path, monkeypatch):
     assert code == 2 and not (tmp_path / "ws").exists()
 
 
+def test_arm_pins_android():
+    """H C1+D S12(I3): 커밋된 Android arm 자료 5개 = ARM_PINS, pre 내장 셋 = 지금 플러그인 파일(R26, ④ 직후),
+    explore-rules 사본 = oFono 것, README 표의 sha256 = 고정값."""
+    committed = REPO / "tests" / "fixtures" / "module-arms"
+    android = {rel for rel in me.ARM_PINS if rel.startswith("android/")}
+    assert android == {"android/pre/log-tags.md", "android/pre/ril-requests.md", "android/pre/fail-causes.md",
+                       "android/pre/explore-rules.md", "android/post/explore-rules.md"}
+    assert me.check_pins(committed, "android") == []
+    live = REPO / "plugin" / "skills" / "telephony-triage" / "reference"
+    for name in ("log-tags.md", "ril-requests.md", "fail-causes.md"):
+        assert (committed / "android" / "pre" / name).read_bytes() == (live / name).read_bytes(), name
+    for side in ("pre", "post"):
+        assert me.ARM_PINS[f"android/{side}/explore-rules.md"] == me.ARM_PINS[f"ofono/{side}/explore-rules.md"]
+    readme = (committed / "README.md").read_text(encoding="utf-8")
+    for rel in android:
+        assert f"| `{rel}` |" in readme and me.ARM_PINS[rel] in readme, rel
+
+
 # --- H C1+D O2: 마스킹 발췌 case·출력 형식·모뎀 also·플랫폼 arm·한 arm 합치기·토큰 목표 ---------------------------
 
 ORIGIN = {"kind": "masked-excerpt", "log": "O2", "episode": "E4b", "lines": "100-107,200-204",
@@ -1354,6 +1372,8 @@ def _android_env(env, tmp_path, monkeypatch, pinned=True):
         pins[f"android/{rel}"] = hashlib.sha256(p.read_bytes()).hexdigest()
     if pinned:
         monkeypatch.setattr(me, "ARM_PINS", pins)
+    else:   # 실제 ARM_PINS의 Android 고정값(I3)을 빼서 "자료는 있는데 고정값 없음"을 만든다
+        monkeypatch.setattr(me, "ARM_PINS", {k: v for k, v in me.ARM_PINS.items() if not k.startswith("android/")})
 
 
 @POSIX

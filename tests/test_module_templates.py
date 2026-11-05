@@ -378,12 +378,27 @@ def test_android_plain_variant_strips_vendor_block(tmp_path):
 
     plain = mv.build("issue-db-android-plain", tmp_path / "plain")
     sample = mv.SAMPLE
-    for rel in ("parser-rules/tags.yaml", "parser-rules/ril.yaml"):
-        assert (plain / rel).read_bytes() == (sample / rel).read_bytes()          # 아직 묶음이 없으면 같은 트리
+    s_tags = (sample / "parser-rules/tags.yaml").read_text(encoding="utf-8")
+    s_ril = (sample / "parser-rules/ril.yaml").read_text(encoding="utf-8")
+    p_tags = (plain / "parser-rules/tags.yaml").read_text(encoding="utf-8")
+    p_ril = (plain / "parser-rules/ril.yaml").read_text(encoding="utf-8")
+    # 샘플에는 A1 묶음(마지막)과 unsol 행이 있다(H C1+D A1) — plain은 표시 줄 앞까지, unsol 행 한 줄만 빠진다
+    at = s_tags.index("\n" + mv.ANDROID_VENDOR_BLOCK)
+    assert p_tags == s_tags[:at + 1] and mv.ANDROID_VENDOR_BLOCK not in p_tags
+    assert mv.ANDROID_PLAIN_UNSOL in s_ril and mv.ANDROID_PLAIN_UNSOL not in p_ril
+    dropped = [ln for ln in s_ril.splitlines() if ln not in p_ril.splitlines()]
+    assert len(dropped) == 1 and mv.ANDROID_PLAIN_UNSOL in dropped[0]
+    others = sorted(f.relative_to(sample).as_posix() for f in sample.rglob("*") if f.is_file())
+    for rel in others:                                                            # 다른 파일은 그대로
+        if rel not in ("parser-rules/tags.yaml", "parser-rules/ril.yaml"):
+            assert (plain / rel).read_bytes() == (sample / rel).read_bytes(), rel
+    # 묶음이 없으면 그대로(no-op), 다시 넣은 묶음·unsol 행은 뺀다
     db = tmp_path / "db"
-    shutil.copytree(sample, db)
+    shutil.copytree(plain, db)
     tags, ril = db / "parser-rules/tags.yaml", db / "parser-rules/ril.yaml"
-    base_tags, base_ril = tags.read_text(encoding="utf-8"), ril.read_text(encoding="utf-8")
+    mv.android_plain(db)
+    assert tags.read_text(encoding="utf-8") == p_tags and ril.read_text(encoding="utf-8") == p_ril
+    base_tags, base_ril = p_tags, p_ril
     tags.write_text(base_tags + "\n" + mv.ANDROID_VENDOR_BLOCK + " — 사내 DB 미확인 ---\n"
                     "  - {tag_regex: '^VCD$', category: common, added_for: '-', added_on: 2026-11-05, reason: x}\n",
                     encoding="utf-8")
