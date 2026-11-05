@@ -14,10 +14,10 @@
 - 테스트는 `tools/related_tests.py --run`(관련만). 전체는 도구가 full이라 할 때·반입 직전·요청 시.
 - 진행 중 판단은 Fable 결정 에이전트에게(10/06 사용자). 사용자 승인 대상(이슈 DB push, main 병합·태그 등 지시 없는 외부 동작)은 사용자에게.
 
-## 진행 상태 (11/04)
+## 진행 상태 (11/05)
 
 - 모드: **사외 초안**. Phase D0·1~13·반입 전 보강 완료. 최신 묶음 **import-20261103**(main `77e2827`). main 병합 PR #8~#79.
-- **H 진행 중**: 계획 확인 완료(11/03, Q1~Q8 추천안, `MODULE_SKILLS_DECISIONS.md` "계획 확인"). 단계표 `MODULE_SKILLS_PLAN.md §4` — **A1**(+1 관문) ☑ 11/04(결과·P2 `MODULE_SKILLS_RESULT.md`). **A2**(바로 병합 삭제) ☑ 11/04(크기 상한 write-flow 16,000·rules 2,516 수락, 안내서·자료는 G). guard P1·P2 묶음 ☑ 11/04(guard 멈춤). **C0** ☑ 11/04(관문 pass, 유료 $0.48). 다음 **B1+B2**(11/9 오전 목표, 결정 기록 11/05). 노력: 설계·리뷰 high, 구현 medium.
+- **H 진행 중**: 계획 확인 완료(11/03, Q1~Q8 추천안, `MODULE_SKILLS_DECISIONS.md` "계획 확인"). 단계표 `MODULE_SKILLS_PLAN.md §4` — **A1**·**A2**·guard 묶음 ☑ 11/04(결과·P2 `MODULE_SKILLS_RESULT.md`, A2 상한 수락·안내서는 G). **C0** ☑ 11/04. **B1+B2** ☑ 11/05(전체 3,529 통과, 유료 누적 $8.95, eval 2차 수정 진행). 계획 I(OpenCode·사내 모델) 사외 몫 ☑. 다음 **C1+D**(구현 중)·**F**(넣음, 확인은 C1+D와)·G, 11/9 오전 목표.
 - 모델 Sonnet 5.5 기준(Opus 5.5 11개 실패 0). `TODO(SITE)`: `tools/list_site_todos.py`. REVIEW-OPEN 0. 사내 시작 **"사내 설정 시작"**(결정 (o)).
 - 안내서: `docs/book/telephony-triage-book.html`(공유본 https://claude.ai/artifact/1jov1Et4dQUMauFr6aoxWG), 목록 `docs/materials/00-index.html`
 
@@ -28,7 +28,7 @@
 | ☐ F | 묶음 import-20261103 — 사람 확인 3개·태그·반입은 사용자 | SITE_INSTALL §8·`REIMPORT_NOTES_1021~1102` |
 | ☐ G | 범용판 별도 레포 — **보류(10/07 사용자)** | 재개는 사용자가 정한다 |
 | ☐ H | 모듈 스킬 레포(탐색 문서+심층 분석 스킬)·+1 병합 | `MODULE_SKILLS_PLAN.md`. 계획 → 확인 → 구현 |
-| ☐ I | OpenCode·사내 GLM판(H 다음) | `MODULE_SKILLS_PLAN.md` 끝 절 |
+| ☐ I | OpenCode·사내 모델판 — 사외 몫 ☑(사내 확인 남음) | `docs/RUNTIME_ADOPTION.md` |
 
 ## 사내로 넘긴 것
 
