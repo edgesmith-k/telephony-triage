@@ -18,7 +18,10 @@
                                다시 만든다(android는 입력한 항목만 갱신: --answers에 없는 키·Enter는 지금 값 유지,
                                빈 값·팀 기본값과 같은 답은 지워 상속, 그 밖 키는 유지). 새 config에 프로필 문제
                                (경로 규칙·겹침)·옛 설정 키·모르는 tracker.kind가 있으면 저장하지 않고 종료 2.
-  set <key> <value>            값 하나 바꾸기 (경로 값은 존재 검증)
+  set <key> <value>            값 하나 바꾸기 (경로 값은 존재 검증). module_skills.remote(https://<host>·ssh://<host>·<user>@<host>:o/r·
+                               file:///절대 경로만, 자격 증명 거부)·module_skills.base_branch는 최상위 키(--platform 없이),
+                               analyzers.<카테고리>.prefer(module|skill)·.skill_dir(절대 경로). 남은 모듈 스킬·분석 스킬
+                               설정 문제는 module_problems와 stderr 경고 한 줄
   sync-scripts-path            plugin.scripts_path = ${CLAUDE_PLUGIN_ROOT}/scripts (setup 2, SessionStart hook)
   tracker-candidates [--mcp-config <json>...] [--tools-json <json>]
                                등록된 MCP 서버에서 tracker.tools·읽기 도구 후보 (setup 4). exclude_servers 적용.
@@ -30,13 +33,16 @@
   rename-legacy [--apply]      사용자 config.yaml의 옛 설정 키(jira:·year_source: jira·android_version)를 새 이름으로 바꾼다.
                                변경 목록만 보이고 `--apply`일 때만 쓴다. site-defaults의 옛 키는 안내만(관리자가 고친다)
   install-hooks [--db <path>]  git config core.hooksPath .githooks, 값이 정확히 .githooks인지 확인 (setup 5)
-  check [--db <path>] [--for write|dry-run]
+  check [--db <path>] [--for write|dry-run] [--roots]
                                호환성 판정: 스키마·생성기 버전·파서 백엔드·외부 파서, (write면) gh 인증
                                → writable / push_allowed. `migrate/schema-v<N>` 브랜치는 버전을 보지 않는다.
+                               warnings(없어진 키·폐지 키·설치 스킬 대신 모듈 문서·runtime.label). remote·prefer·
+                               skill_dir가 있으면 deep_sources(카테고리별 5-1 출처). --roots면 read_roots[절대 경로]
   gh-status                    gh 인증 확인 (setup 9). 실패면 로그인 안내와 종료 코드 2
   doctor [--format json|markdown]
                                환경 점검 한 장(python·deps·config·clone·hook·guard 자가시험·Jira 매핑(tracker)·Jira 코멘트
-                               도구(tracker_post)·gh·스냅샷·호환성·lock). **읽기 전용**
+                               도구(tracker_post)·gh·스냅샷·호환성·lock, 모듈 스킬 설정이 있을 때만 module_skills).
+                               **읽기 전용**
                                (mkdir·fetch·lock·쓰기 없음). 행마다 ok|warn|fail|skip. fail이 있으면 종료 코드 1
 """
 
@@ -133,6 +139,14 @@ def validate(kind: str, value) -> str | None:
         return None if userconfig.repo_slug(text) else (
             f"owner/repo로 풀리는 원격이어야 합니다(https://<host>/<owner>/<repo>.git·git@<host>:<owner>/<repo>.git·"
             f"<SSH 별칭>:<owner>/<repo>.git): {text}")
+    if kind == "module-remote":     # 전송 방식이 드러난 꼴만(B1-18). 메시지에 자격 증명을 내지 않는다
+        return userconfig.module_remote_problem(value if isinstance(value, str) else text)
+    if kind == "ref":
+        return None if userconfig.BASE_BRANCH_RE.fullmatch(text) else f"{userconfig.BASE_BRANCH_MSG}: {text!r:.60}"
+    if kind == "prefer":
+        return None if text in userconfig.PREFER_VALUES else f"module 또는 skill이어야 합니다: {text}"
+    if kind == "path":              # analyzers.<cat>.skill_dir (B2 §9.1)
+        return userconfig.skill_dir_problem(text)
     return None
 
 
@@ -304,16 +318,26 @@ def cmd_set(args, defaults: dict) -> dict:
     value = _parse_value(args.value)
     kind = PATH_KINDS.get(args.key) or ("tz" if args.key.endswith(".timezone") else
                                         "year-source" if args.key == "logcat.year_source" else
-                                        "remote" if args.key == "issue_db.remote" else "")
+                                        "remote" if args.key == "issue_db.remote" else
+                                        "module-remote" if args.key == "module_skills.remote" else
+                                        "ref" if args.key == "module_skills.base_branch" else
+                                        "prefer" if re.fullmatch(r"analyzers\.[a-z0-9_]+\.prefer", args.key) else
+                                        "path" if re.fullmatch(r"analyzers\.[a-z0-9_]+\.skill_dir", args.key) else "")
     msg = validate(kind, value)
     if msg:
         raise UsageError(f"{args.key}: {msg}")
     if args.key.split(".")[0] in ("platform", "platforms"):
         raise UsageError(f"{args.key}: 플랫폼 키는 set --platform <이름> <프로필 키>로 쓴다(개인 기본 플랫폼은 config.yaml의 platform).")
-    try:
-        key = userconfig.profile_key(_platform(args), args.key)
-    except ValueError as exc:
-        raise UsageError(f"--platform {_platform(args)}: {exc}") from exc
+    if args.key.split(".")[0] == "module_skills":
+        # 최상위 공통 키 — 개인 기본 플랫폼이 android가 아니어도 최상위에 쓴다. 명시한 --platform만 거부한다
+        if getattr(args, "platform", None):
+            raise UsageError(f"{args.key}: 최상위 키다(레포 하나 안에 <플랫폼>/이 있다) — --platform 없이 set한다.")
+        key = args.key
+    else:
+        try:
+            key = userconfig.profile_key(_platform(args), args.key)
+        except ValueError as exc:
+            raise UsageError(f"--platform {_platform(args)}: {exc}") from exc
     before = userconfig.merged(defaults, copy.deepcopy(data), _platform(args))
     userconfig.set_value(data, key, value)
     userconfig.save(data)
@@ -329,6 +353,10 @@ def cmd_set(args, defaults: dict) -> dict:
     if problems:     # 저장은 한다(고치는 중일 수 있다). 남은 문제를 보인다 — 고치기 전까지 다른 스크립트는 종료 2
         out["problems"] = problems
         print("경고: 플랫폼 프로필 문제가 남았다 — " + "; ".join(problems), file=sys.stderr)
+    mprobs = userconfig.module_skills_problems(defaults, data) + userconfig.analyzer_problems(defaults, data)
+    if mprobs:       # 저장은 한다. triage.py module만 막고(종료 2) run은 막지 않는다(B1-13)
+        out["module_problems"] = mprobs
+        print("경고: 모듈 스킬·분석 스킬 설정 문제가 남았다 — " + "; ".join(mprobs), file=sys.stderr)
     return out
 
 
@@ -561,12 +589,54 @@ def _removed_key_warnings(defaults: dict, user: dict | None = None) -> list[str]
         return []
 
 
+def _user_or_none() -> dict | None:
+    try:
+        return userconfig.load_user()
+    except (OSError, ValueError, yamlio.YamlFileError):
+        return None
+
+
+def _deprecated_key_warnings(defaults: dict, user: dict | None = None) -> list[str]:
+    """폐지 하위 키(`userconfig.deprecated_keys`, `analyzers.<cat>.inputs`·`max_tokens_hint`) 경고. config를 못 읽으면 빈 목록."""
+    return userconfig.deprecated_keys(defaults, _user_or_none() if user is None else user)
+
+
+def _module_warnings(defaults: dict, user: dict | None) -> list[str]:
+    """remote가 있는데 `prefer` 없이 `skill`이 있는 카테고리(B1-19)와 site `runtime.label` 모양(R23). 경고만."""
+    return userconfig.implicit_module_switches(defaults, user) + userconfig.runtime_problems(defaults)
+
+
+def _deep_sources(cfg: dict, defaults: dict, user: dict | None) -> dict | None:
+    """카테고리별 5-1 출처(`userconfig.deep_source`). remote·`prefer`·`skill_dir`·분석 스킬 설정 문제 중 하나가 있을 때만
+    (없으면 None — `check` 출력이 그대로). 원격 주소는 넣지 않는다."""
+    ana = cfg.get("analyzers") if isinstance(cfg.get("analyzers"), dict) else {}
+    keyed = any(isinstance(e, dict) and ("prefer" in e or "skill_dir" in e) for e in ana.values())
+    if not (userconfig.module_skills(cfg) or keyed or userconfig.analyzer_problems(defaults, user)):
+        return None
+    out = {}
+    for cat in sorted(ana, key=str):
+        src = userconfig.deep_source(cfg, cat)
+        out[str(cat)] = {k: v for k, v in src.items() if v is not None}
+    star = userconfig.deep_source(cfg, None)
+    out["*"] = {k: v for k, v in star.items() if v is not None}
+    return out
+
+
 def cmd_check(args, defaults: dict) -> tuple[dict, int]:
     result = check(_db(args, defaults), defaults, args.for_, _platform(args))
     ok = result["push_allowed"] if args.for_ == "write" else result["writable"]
-    result["warnings"] = _removed_key_warnings(defaults)     # 경고만 — writable·push_allowed·종료 코드는 그대로
+    user = _user_or_none()
+    # 경고만 — writable·push_allowed·종료 코드는 그대로
+    result["warnings"] = (_removed_key_warnings(defaults, user) + _deprecated_key_warnings(defaults, user)
+                          + _module_warnings(defaults, user))
     for warning in result["warnings"]:
         print(f"경고: {warning}", file=sys.stderr)
+    cfg = userconfig.merged(defaults, user or {}, platform=_platform(args))
+    sources = _deep_sources(cfg, defaults, user)
+    if sources is not None:
+        result["deep_sources"] = sources
+    if getattr(args, "roots", False):    # OpenCode external_directory 허용 목록(B2-21). 플래그 없으면 키도 없다
+        result["read_roots"] = userconfig.read_roots(cfg, _plugin_root(args))
     return result, (OK if ok else USAGE)
 
 
@@ -687,6 +757,11 @@ def _doctor_rows(args, defaults: dict) -> list[dict]:
             elif _removed_key_warnings(defaults, user):    # 없어진 키(issue_db.merge)는 무시한다 — 경고만
                 rows.append(_row("config", "warn", "옛 키 issue_db.merge(+1 병합으로 없어짐 — 무시한다)",
                                  "사용자 config에서 그 줄을 지운다 · site-defaults면 관리자"))
+            elif _deprecated_key_warnings(defaults, user):    # 폐지 하위 키(B1 §3.1) — 읽지 않는다, 경고만
+                rows.append(_row("config", "warn", "폐지 키 analyzers.<카테고리>.inputs·max_tokens_hint(무시)",
+                                 "그 줄을 지운다 · site-defaults면 관리자"))
+            elif userconfig.runtime_problems(defaults):      # site 전용 runtime.label(출처 기록) — 경고만
+                rows.append(_row("config", "warn", userconfig.RUNTIME_LABEL_MSG, "site-defaults runtime.label을 고친다(관리자)"))
             else:
                 rows.append(_row("config", "ok", "config.yaml 있음"))
     except Exception as exc:    # noqa: BLE001 — 읽기 실패도 한 행의 fail이다
@@ -874,7 +949,91 @@ def _doctor_rows(args, defaults: dict) -> list[dict]:
             rows.append(_row("lock", "fail", str(exc) or type(exc).__name__,
                              f"lock 파일 확인: {work / session_lock.LOCK_FILE} — 그 세션이 끝났으면 "
                              "db_pr lock release <작업 키> --force(.corrupt-<ts>로 백업 후 제거)"))
+
+    # 10 module_skills — 모듈 스킬·분석 스킬 선택 설정이 있을 때만(기본 설치는 13행 그대로, B1 §3.2·§3.3)
+    if ok_cfg and _module_row_wanted(cfg, defaults, user, work):
+        guarded("module_skills", lambda: rows.append(_module_skills_row(cfg, defaults, user, work)))
     return rows
+
+
+MODULE_SOURCE_LABEL = {"module": "모듈 문서", "skill": "설치 스킬", "none": "없음", "error": "오류"}
+MODULE_CLONE_NAME = "_module-skills"     # = moduleskills.CLONE_DIR (모듈을 안 불러도 되는 행 조건에만 쓴다, 테스트가 같은지 본다)
+SKILL_DIR_NOTE = ("skill_dir가 작업 폴더 밖이면 Claude Code가 읽기를 한 번 묻는다 — 사용자가 permissions.additionalDirectories에 "
+                  "더할 수 있다 · OpenCode는 config.py check --roots")
+
+
+def _has_skill_dir(defaults: dict, user: dict | None) -> bool:
+    for data in (defaults, user):
+        blocks = [data.get("analyzers")] if isinstance(data, dict) else []
+        profs = data.get("platforms") if isinstance(data, dict) else None
+        blocks += [p.get("analyzers") for p in (profs.values() if isinstance(profs, dict) else ()) if isinstance(p, dict)]
+        for ana in blocks:
+            if any(isinstance(e, dict) and "skill_dir" in e for e in (ana.values() if isinstance(ana, dict) else ())):
+                return True
+    return False
+
+
+def _module_row_wanted(cfg: dict, defaults: dict, user: dict | None, work: Path | None) -> bool:
+    """`module_skills` 행을 보일지: remote, 모듈 스킬·분석 스킬 설정 문제, `prefer`, `skill_dir`(R39), 관리 clone 흔적 중 하나.
+    설치 스킬 파일 위치는 보지 않는다(기본 환경에서 파일 찾기를 돌리지 않는다)."""
+    ana = cfg.get("analyzers") if isinstance(cfg.get("analyzers"), dict) else {}
+    return bool(userconfig.module_skills(cfg) or userconfig.module_skills_problems(defaults, user)
+                or userconfig.analyzer_problems(defaults, user)
+                or any(isinstance(e, dict) and "prefer" in e for e in ana.values())
+                or _has_skill_dir(defaults, user)
+                or (work is not None and os.path.lexists(work / MODULE_CLONE_NAME)))
+
+
+def _source_summary(cfg: dict) -> str:
+    """`5-1 설치 스킬: data · 그 밖=모듈 문서` — `그 밖` 출처와 다른 카테고리만 묶어 적는다(80자 안)."""
+    rest = MODULE_SOURCE_LABEL[userconfig.deep_source(cfg, None)["source"]]
+    ana = cfg.get("analyzers") if isinstance(cfg.get("analyzers"), dict) else {}
+    odd: dict[str, list[str]] = {}
+    for cat in sorted(ana, key=str):
+        label = MODULE_SOURCE_LABEL[userconfig.deep_source(cfg, cat)["source"]]
+        if label != rest:
+            odd.setdefault(label, []).append(str(cat))
+    parts = [f"{label}: {','.join(cats)}" for label, cats in odd.items()]
+    return "5-1 " + " · ".join(parts) + (" · " if parts else "") + f"그 밖={rest}"
+
+
+def _module_skills_row(cfg: dict, defaults: dict, user: dict | None, work: Path | None) -> dict:
+    """설정 검사 → 5-1 출처 요약 → (remote가 있으면) git 버전 → 관리 clone 상태(읽기 전용, `moduleskills.inspect_clone`)
+    → B1-19 경고. 원격 주소는 `redact_remote`로만 보인다. 받기·lock·mkdir 없음."""
+    probs = userconfig.module_skills_problems(defaults, user) + userconfig.analyzer_problems(defaults, user)
+    if probs:
+        return _row("module_skills", "fail", probs[0],
+                    "config.py set module_skills.remote <주소> · analyzers.<카테고리>.prefer 확인 (site-defaults면 관리자)")
+    note = SKILL_DIR_NOTE if _has_skill_dir(defaults, user) else None
+    summary = _source_summary(cfg)
+    ms = userconfig.module_skills(cfg)
+    if ms is None:
+        return _row("module_skills", "ok", f"remote 없음 · {summary}", note)
+    from common import moduleskills   # 지연 import: remote가 있을 때만
+
+    ver = moduleskills.git_version()
+    need = ".".join(map(str, moduleskills.MIN_GIT))
+    if ver is None:
+        return _row("module_skills", "fail", f"git 없음 — 모듈 받기에 git {need} 이상 필요", "git을 설치한다")
+    if tuple(ver) < tuple(moduleskills.MIN_GIT):
+        return _row("module_skills", "fail", f"git {'.'.join(map(str, ver))} — cone sparse에 {need} 이상 필요",
+                    "git을 업데이트한다")
+    info = moduleskills.inspect_clone(work, ms["remote"], ms["base_branch"]) if work is not None else {"state": "absent"}
+    fix = (f"{work / moduleskills.CLONE_DIR if work else moduleskills.CLONE_DIR} 확인 — 고치지 못하면 사용자가 그 폴더를 지운다"
+           "(다음 받기에서 다시 받는다)")
+    if info.get("state") == "mismatch":
+        return _row("module_skills", "fail", f"관리 clone 불일치: {info.get('problem')}", fix)
+    if info.get("state") == "forced":
+        return _row("module_skills", "fail", "ff-only 실패: 원격 브랜치가 강제로 바뀌었다", fix)
+    switches = userconfig.implicit_module_switches(defaults, user)
+    if switches:
+        return _row("module_skills", "warn", switches[0],
+                    "계속 쓰려면 config.py set analyzers.<카테고리>.prefer skill (플랫폼이면 --platform <p>)")
+    slug = userconfig.repo_slug(ms["remote"]) if not ms["remote"].lower().startswith("file://") else None
+    where = f"{slug[1]}/{slug[2]}" if slug else userconfig.redact_remote(ms["remote"])   # 80자 안: owner/repo만
+    if info.get("state") == "ok":
+        return _row("module_skills", "ok", f"{where} @{str(info.get('sha') or '')[:7]} · {summary}", note)
+    return _row("module_skills", "ok", f"{where} 아직 받지 않음 · {summary}", note)
 
 
 def _doctor_markdown(rows: list[dict], counts: dict) -> str:
@@ -950,6 +1109,8 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("check", parents=[common])
     p.add_argument("--db", metavar="path", default=None)
     p.add_argument("--for", dest="for_", choices=["write", "dry-run"], default="write")
+    p.add_argument("--roots", action="store_true",
+                   help="read_roots(플러그인 스킬 폴더·work_dir·설치 스킬 SKILL.md 폴더, 절대 경로)를 더한다(OpenCode 읽기 허용용)")
     sub.add_parser("gh-status", parents=[common])
     p = sub.add_parser("doctor", parents=[common])
     p.add_argument("--format", choices=("json", "markdown"), default="json",

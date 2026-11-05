@@ -1,0 +1,12 @@
+platform: ofono
+module: data
+mode: deep
+center: '2026-02-27T17:52:03.317Z'
+fail: 112
+essential:
+- 15
+- 50
+- 73
+- 112
+- 120
+origin: O1 E14 줄 27045-27164

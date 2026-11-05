@@ -1,7 +1,7 @@
 {
   "model": "claude-sonnet-5-5",
-  "generated": "2026-11-04",
-  "grader_commit": "7746c466e1a08077866dd62014e59fdba3ceae49",
+  "generated": "2026-11-05",
+  "grader_commit": "cee471d3c7d8e83cc0b3e6e2f0d3c730fe13e3be",
   "note": "A2 뒤 72·75(각 2회)·61·62 재측정(a2-*, 커밋 28b07fd 위 A2 작업 트리 = 7746c46과 같은 내용). 72 9/9×2, 61·62 수동 행 포함 통과. 75는 안전 행 통과, 표시 행 fail(사유를 바꿔 말함 — A1부터의 P2), a2-75b는 첫 거부 뒤 두 번째 PR을 시도하지 않음(P2). 이전 메모·run 이력은 git 7746c46의 이 파일",
   "evals": {
     "1": {
@@ -1579,6 +1579,22 @@
           "cost_usd": 0.1475
         }
       ]
+    },
+    "76": {
+      "verdict": "none",
+      "runs": []
+    },
+    "77": {
+      "verdict": "none",
+      "runs": []
+    },
+    "78": {
+      "verdict": "none",
+      "runs": []
+    },
+    "79": {
+      "verdict": "none",
+      "runs": []
     }
   }
 }

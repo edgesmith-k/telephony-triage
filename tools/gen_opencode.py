@@ -18,6 +18,8 @@ CLI:
         쓴다. `tt-oc --project <dest>`로
         실행한다. 이미 있는 파일이 다르면 --force 없이는 쓰지 않는다. 키에 `@@ISSUE_DB_ROOT@@`가 든 설정 항목은 `--issue-db`
         마다 하나씩 펼친다(없으면 뺀다). 게이트웨이 키는 설정에 쓰지 않는다(`{env:TT_GATEWAY_API_KEY}`).
+        `config.py check --roots`의 `read_roots`(풀린 설치 스킬 SKILL.md 폴더 등) 중 플러그인·작업·이슈 DB 밖인 폴더는
+        `external_directory`에 읽기 allow로 더한다(B2 R21 — 설정을 바꾸면 다시 설치, `tt-oc doctor`가 경고).
         `<dest>`는 git 레포 밖이어야 한다: `edit` 패턴(`@@*_REL@@` = 앞 `/`를 뗀 절대 경로)은 worktree `/` 기준이다.
 
 종료 코드 (contracts.md §종료 코드)
@@ -31,7 +33,9 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -184,11 +188,42 @@ def _abs_dir(raw: str, what: str, must_exist: bool = True) -> str:
     return s
 
 
-def install_files(dest: Path, values: dict, issue_dbs: list[str]) -> dict[Path, str]:
+def read_roots(plugin_root: str) -> list[str]:
+    """`config.py check --roots`의 `read_roots`(플러그인 스킬 폴더·work_dir·풀린 설치 스킬 SKILL.md 폴더, B2 R21). 설치하는 사용자의
+    설정으로 돈다. 읽지 못하거나 경로에 패턴 글자가 있으면 그 항목은 뺀다(예외 없음)."""
+    try:
+        r = subprocess.run([sys.executable, str(Path(plugin_root) / "scripts" / "config.py"), "check", "--roots"],
+                           stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=60, check=False,
+                           env={**os.environ, "CLAUDE_PLUGIN_ROOT": plugin_root})
+        roots = json.loads(r.stdout).get("read_roots")
+    except (OSError, subprocess.TimeoutExpired, ValueError, AttributeError):
+        return []
+    out = []
+    for x in roots if isinstance(roots, list) else []:
+        if isinstance(x, str) and os.path.isabs(x) and not any(c in x for c in "\"*?[]{}\n\r") and "@@" not in x:
+            out.append(os.path.normpath(x))
+    return list(dict.fromkeys(out))
+
+
+def add_read_roots(config: dict, roots: list[str], covered: list[str]) -> dict:
+    """설치 설정 `permission.external_directory`에 `<root>/**: allow`(읽기 — edit 권한은 그대로 deny)를 더한다. 이미 덮인 폴더는 뺀다."""
+    ext = config.get("permission", {}).get("external_directory")
+    if not isinstance(ext, dict):
+        return config
+    for root in roots:
+        if any(root == c or root.startswith(c.rstrip("/") + "/") for c in covered):
+            continue
+        ext.setdefault(f"{root}/**", "allow")
+    return config
+
+
+def install_files(dest: Path, values: dict, issue_dbs: list[str], roots: list[str] = ()) -> dict[Path, str]:
     template = json.loads((OC / "opencode.json.template").read_text(encoding="utf-8"))
     meta = {"version": 1, "opencode": OPENCODE_VERSION, "plugin_root": values["@@PLUGIN_ROOT@@"],
             "work_root": values["@@WORK_ROOT@@"], "issue_dbs": issue_dbs, "model": values["@@MODEL_ID@@"]}
-    files = {dest / "opencode.json": json.dumps(render_config(template, values, issue_dbs), ensure_ascii=False, indent=2) + "\n",
+    config = add_read_roots(render_config(template, values, issue_dbs), list(roots),
+                            [values["@@PLUGIN_ROOT@@"], values["@@WORK_ROOT@@"], *issue_dbs])
+    files = {dest / "opencode.json": json.dumps(config, ensure_ascii=False, indent=2) + "\n",
              dest / "tt-oc.json": json.dumps(meta, ensure_ascii=False, indent=2) + "\n"}
     for sub in INSTALL_DIRS:
         for src in sorted((OC / sub).glob("*")) if (OC / sub).is_dir() else []:
@@ -236,7 +271,7 @@ def cmd_install(a) -> int:
         raise UsageError(f"--model 형식: 영문·숫자·._:/- : {a.model}")
     values = {"@@PLUGIN_ROOT@@": plugin, "@@WORK_ROOT@@": work, "@@PLUGIN_ROOT_REL@@": _rel(plugin),
               "@@WORK_ROOT_REL@@": _rel(work), "@@GATEWAY_BASE_URL@@": a.gateway_url, "@@MODEL_ID@@": a.model}
-    files = install_files(dest, values, dbs)
+    files = install_files(dest, values, dbs, read_roots(plugin))
     differ = [str(p) for p, text in files.items() if p.exists() and p.read_text(encoding="utf-8") != text]
     if differ and not a.force:
         raise UsageError(f"이미 있는 파일과 다르다(--force로 덮어쓴다): {differ}")

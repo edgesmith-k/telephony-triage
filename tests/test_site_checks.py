@@ -1215,3 +1215,28 @@ def test_checks_registry_ids_match_step(tmp_path):
         out = sc.run_checks(step, root)
         assert [r["id"] for r in out] == [sc.check_id(f) for f in sc.CHECKS[step]], step
         assert not any("점검 오류" in r["evidence"] for r in out), out
+
+
+# -- s4a.analyzers: 모듈 스킬 레포 주소 (B1 설계 §2.6·§10.7) -------------------------------------------------------
+
+
+def _s4a_root(tmp_path, data: dict) -> Path:
+    (tmp_path / "plugin").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "plugin" / "site-defaults.yaml").write_text(json.dumps(data), encoding="utf-8")
+    return tmp_path
+
+
+def test_s4a_analyzers_module_remote(tmp_path):
+    r = sc.s4a_analyzers(sc.Ctx(_s4a_root(tmp_path, {"module_skills": {"remote": "https://u:t@ghe.example.invalid/o/r.git"}})))
+    assert r["status"] == "pass" and "ghe.example.invalid/o/r" in r["evidence"] and "u:t" not in r["evidence"]
+    assert r["evidence"] == "module_skills.remote 설정됨(ghe.example.invalid/o/r)"
+    assert r["cmd"] == "grep -n -A3 -E '^(module_skills|analyzers):' plugin/site-defaults.yaml"
+    r = sc.s4a_analyzers(sc.Ctx(_s4a_root(tmp_path, {"module_skills": {"remote": "git@ghe.example.invalid:o/r.git"}})))
+    assert r["evidence"] == "module_skills.remote 설정됨(ghe.example.invalid:o/r)"
+
+
+def test_s4a_analyzers_no_remote_strings_unchanged(tmp_path):
+    for data, status, ev in (({"analyzers": {"data": {"skill": "s"}}}, "pass", "analyzers.data 설정됨"),
+                             ({"module_skills": {"remote": ""}}, "fail", "analyzers.data 비어 있음"), ({}, "fail", "analyzers.data 비어 있음")):
+        r = sc.s4a_analyzers(sc.Ctx(_s4a_root(tmp_path, data)))
+        assert (r["status"], r["evidence"], r["cmd"]) == (status, ev, "grep -n -A3 analyzers plugin/site-defaults.yaml"), data

@@ -493,6 +493,9 @@ def test_e40_plan_with_plugin_seen_skill_calls_does_not_raise(tmp_path):
     job.mkdir(parents=True)
     (job / "plan.json").write_text(json.dumps({"operations": [{"op": "append", "cause": "DATA-001-01"}],
                                                 "feedback": {"decision": "chose-other"}}), encoding="utf-8")
+    miss = 'Exit code 1\n{"reason":"설치 스킬 못 찾음","skill":"mock-data-analyzer","next":"x"}'
+    _tool_events(run, ("Bash", {"command": "python3 /p/scripts/triage.py module MOCK-9040 --for deep"}, miss, True),
+                 ("Skill", {"skill": "mock-analyzers:mock-data-analyzer"}, "Base directory for this skill: /x", False))
     for plugin in ({"seen": {"skill_calls": ["mock-analyzers:mock-data-analyzer"]}},
                    {"skill_calls": ["mock-analyzers:mock-data-analyzer"]}):
         (run / "execution.json").write_text(json.dumps({"plugin": plugin}), encoding="utf-8")
@@ -1288,7 +1291,7 @@ def test_e39_doctor_table_from_text_or_transcript(tmp_path, where, ok):
 
 def test_jira_post_evals_defined():
     by_id = {e["id"]: e for e in _entries()}
-    assert len(by_id) == 75
+    assert len(by_id) == 79      # H(76~79) 뒤. 그 전 75
     assert by_id[8]["name"] == "jira-comment-request-gated" and len(by_id[8]["assertions"]) == 4
     for eid, count in ((61, 11), (62, 6)):
         e = by_id[eid]
@@ -2871,6 +2874,11 @@ def test_prepare_plugin_mode_analyzer_proposal_variant_only_when_set(tmp_path):
 E71_SCRIPT = ("python3 /p/scripts/skill_patch.py MOCK-9071 --skill-dir /e/mock-plugins/mock-analyzers/skills/mock-data-analyzer "
               "--name mock-data-analyzer")
 E71_MASK = "python3 S/mask_pii.py JOB/skill-suggestions/mock-data-analyzer.patch --in-place"
+E71_BASE = "/e/mock-plugins/mock-analyzers/skills/mock-data-analyzer"
+# 기대 5-1 경로(재리뷰 P1 뒤 채점기는 이것 또는 `설치 스킬 못 찾음` 뒤 Skill 도구만 센다): module --for deep → SKILL.md Read
+E71_DEEP = [_bash("deep", "python3 /p/scripts/triage.py module MOCK-9071 --for deep",
+                  json.dumps({"skill": "mock-data-analyzer", "read": [E71_BASE + "/SKILL.md"], "base": E71_BASE})),
+            ("tool", "rd", "Read", {"file_path": E71_BASE + "/SKILL.md"}, "x", False)]
 
 
 def _e71_ctx(tmp_path, *, patch_text=None, events=(), shown="", made=E71_SCRIPT):
@@ -2890,7 +2898,7 @@ def _e71_ctx(tmp_path, *, patch_text=None, events=(), shown="", made=E71_SCRIPT)
     (job / "plan.json").write_text(json.dumps({"operations": [{"op": "append", "cause": "DATA-001-01"}]}), encoding="utf-8")
     run = run_dir(tmp_path)
     _write_artifacts(run)
-    _seq_events(run, [*([_bash("m", made, "")] if made else []),
+    _seq_events(run, [*E71_DEEP, *([_bash("m", made, "")] if made else []),
                       *(events(skill) if callable(events) else events), ("text", shown)])
     return grader.Ctx(env, run), skill
 
@@ -3348,3 +3356,271 @@ def test_e75_grades_refusals_and_no_bypass(tmp_path):
         assert _e75_rows(_e75_ctx(tmp_path / name, [*items[:3], it, items[3]]))[4] is True, name
     # lock이 남음 → 6번 실패
     assert _e75_rows(_e75_ctx(tmp_path / "lock", items, lock=True))[5] is False
+
+
+# --- 모듈 스킬 레포·출력 검사 (배치 H, eval 76~79, B2 §13) ------------------------------------------------------
+
+def _tool_events(run, *calls):
+    """[(이름, 입력, 결과 글, 오류)] → events.jsonl(tool_use + tool_result 짝)."""
+    rows = []
+    for k, (name, inp, result, err) in enumerate(calls):
+        tid = f"t{k}"
+        rows.append({"type": "assistant", "message": {"content": [{"type": "tool_use", "id": tid, "name": name, "input": inp}]}})
+        rows.append({"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": tid, "content": result,
+                                                             "is_error": err}]}})
+    (run / "events.jsonl").write_text("\n".join(json.dumps(r, ensure_ascii=False) for r in rows) + "\n", encoding="utf-8")
+
+
+def test_e76_79_defined_and_wired(tmp_path):
+    by_id = {e["id"]: e for e in _entries()}
+    sources = {76: "template", 77: "mock", 78: "mock", 79: "missing"}
+    for eid, src in sources.items():
+        e = by_id[eid]
+        assert e["batch"] == "H" and len(e["assertions"]) == 5 and e["setup"]["module_skills"] == {"source": src}, eid
+        for key in e["setup"]["jira"]:
+            assert (EVALS / "jira" / f"{key}.yaml").is_file() or (REPO / "tests" / "mocks" / "jira" / f"{key}.yaml").is_file()
+        for log in e["setup"]["logs"]:
+            assert (REPO / log["src"]).is_file(), log
+        d = tmp_path / str(eid)
+        fns = grader.checks(eid, grader.Ctx(_synthetic_env(d), run_dir(d)))
+        assert len(fns) == len(e["assertions"]) and all(callable(f) for f in fns)
+        for fn in fns:          # 실행 흔적이 없으면 어느 항목도 통과로 세지 않는다
+            try:
+                ok, _ = fn()
+            except grader._Manual:
+                continue
+            except Exception:  # noqa: BLE001 — 가짜 환경에는 원격·clone이 없다(grade()는 예외를 실패로 센다)
+                continue
+            assert ok is False, eid
+    assert by_id[78]["setup"]["db"] == "issue-db-ofono" and by_id[76]["setup"]["db"] == "issue-db-ofono-modules"
+    assert "H=모듈 스킬 레포·출력 검사 4(76~79)" in json.loads((EVALS / "evals.json").read_text(encoding="utf-8"))["_comment"]
+    log = (REPO / "tests" / "fixtures" / "logs" / "ofono" / "e078-sim-data.log").read_text(encoding="utf-8").splitlines()
+    assert log[0].startswith("-- [합성]") and len(log) <= 60
+    assert "e078-sim-data.log" in (REPO / "tests" / "fixtures" / "logs" / "ofono" / "README.md").read_text(encoding="utf-8")
+    e40 = by_id[40]
+    assert e40["setup"]["module_skills"] == {"source": "mock"}
+    assert e40["setup"]["user_config"]["analyzers"]["data"] == {"skill": "mock-data-analyzer", "when": "ask", "prefer": "skill"}
+    assert "SETUP_DATA_CALL" not in grader._ANDROID_NAMES.pattern
+    assert not any("SETUP_DATA_CALL)" in a for a in by_id[73]["assertions"])
+
+
+def _grounding_env(tmp_path, report_line, record):
+    env_dir = _synthetic_env(tmp_path)
+    job = tmp_path / "work" / "MOCK-9076"
+    job.mkdir(parents=True)
+    (job / "report.md").write_text("# r\n- 심층 분석 (모듈 스킬 ofono/data @abc1234): x\n" + report_line + "\n", encoding="utf-8")
+    (job / "module-skill.json").write_text(json.dumps({"deep": {"timeline": {"path": "module-skill/deep/timeline.md"}}}),
+                                           encoding="utf-8")
+    if record is not None:
+        (job / "check-output.json").write_text(json.dumps({"deep": record}), encoding="utf-8")
+    return grader.Ctx(env_dir, run_dir(tmp_path))
+
+
+def test_grounding_row_needs_report_line_and_record(tmp_path):
+    good_line = "  - 근거 원문 검사: 인용 2개 중 원문에 없음 0"
+    good = {"source": "module-skill/deep/timeline.md", "quotes": 2}
+    assert grader.grounding_row(_grounding_env(tmp_path / "a", good_line, good), "MOCK-9076", "deep", None)()[0] is True
+    skipped = "  - 근거 원문 검사: 건너뜀(기록이 이전 분석 것)"
+    ok, ev = grader.grounding_row(_grounding_env(tmp_path / "b", skipped, {"source": None, "quotes": 0}), "MOCK-9076", "deep",
+                                  None)()
+    assert ok is False and "건너뜀" in ev
+    assert grader.grounding_row(_grounding_env(tmp_path / "c", good_line, None), "MOCK-9076", "deep", None)()[0] is False
+    other = {"source": "timeline.md", "quotes": 2}       # 기록된 뷰가 아닌 원문
+    assert grader.grounding_row(_grounding_env(tmp_path / "d", good_line, other), "MOCK-9076", "deep", None)()[0] is False
+    ev_line = "  - 근거 원문 검사(events.json 기준): 인용 1개 중 원문에 없음 0"
+    skill = {"source": ["module-skill/deep/timeline.md", "events.json"], "quotes": 1}
+    assert grader.grounding_row(_grounding_env(tmp_path / "e", ev_line, skill), "MOCK-9076", "deep", "events.json")()[0] is True
+    zero = "  - 근거 원문 검사: 인용 0개 중 원문에 없음 0"
+    assert grader.grounding_row(_grounding_env(tmp_path / "f", zero, {**good, "quotes": 0}), "MOCK-9076", "deep", None)()[0] is False
+
+
+def test_analyzer_called_accepts_read_path_and_fails_without_records(tmp_path):
+    env_dir = _synthetic_env(tmp_path)
+    run = run_dir(tmp_path)
+    (run / "execution.json").write_text(json.dumps({"mode": "plugin", "plugin": {"skill_calls": []}}), encoding="utf-8")
+    ok, ev = grader._analyzer_called(grader.Ctx(env_dir, run))
+    assert ok is False and "기록 없음" in ev                                # plugin 모드인데 도구 기록이 없다
+    _tool_events(run, ("Bash", {"command": "python3 /p/scripts/triage.py module MOCK-9040 --for deep"},
+                       '{"skill":"mock-data-analyzer","read":["/e/mock-plugins/m/skills/mock-data-analyzer/SKILL.md"]}', False),
+                 ("Read", {"file_path": "/e/mock-plugins/m/skills/mock-data-analyzer/SKILL.md"}, "x", False))
+    ok, ev = grader._analyzer_called(grader.Ctx(env_dir, run))
+    assert ok is True and "Read 경로" in ev
+    _tool_events(run, ("Read", {"file_path": "/e/mock-plugins/m/skills/mock-data-analyzer/SKILL.md"}, "x", False))
+    assert grader._analyzer_called(grader.Ctx(env_dir, run))[0] is False   # module --for deep 없이 읽기만
+    (run / "execution.json").write_text(json.dumps({"mode": "plugin", "plugin": {"skill_calls": ["mock-analyzers:mock-data-analyzer"]}}),
+                                        encoding="utf-8")
+    # 재리뷰 P1: Skill 도구만(module --for deep 없음, 또는 종료 0으로 SKILL.md를 풀었는데 Read 대신 Skill)은 통과가 아니다
+    _tool_events(run, ("Skill", {"skill": "mock-analyzers:mock-data-analyzer"}, "Base directory for this skill: /x", False))
+    ok, ev = grader._analyzer_called(grader.Ctx(env_dir, run))
+    assert ok is False and "Skill 도구만" in ev
+    _tool_events(run, ("Bash", {"command": "python3 /p/scripts/triage.py module MOCK-9040 --for deep"},
+                       '{"skill":"mock-data-analyzer","read":["/e/mock-plugins/m/skills/mock-data-analyzer/SKILL.md"]}', False),
+                 ("Skill", {"skill": "mock-analyzers:mock-data-analyzer"}, "Base directory for this skill: /x", False))
+    assert grader._analyzer_called(grader.Ctx(env_dir, run))[0] is False
+    # 대안 경로: module --for deep 종료 1 `설치 스킬 못 찾음` 뒤의 Skill 도구
+    _tool_events(run, ("Bash", {"command": "python3 /p/scripts/triage.py module MOCK-9040 --for deep"},
+                       'Exit code 1\n{"reason":"설치 스킬 못 찾음","skill":"mock-data-analyzer","next":"x"}', True),
+                 ("Skill", {"skill": "mock-analyzers:mock-data-analyzer"}, "Base directory for this skill: /x", False))
+    ok, ev = grader._analyzer_called(grader.Ctx(env_dir, run))
+    assert ok is True and "대안" in ev
+    (run / "execution.json").write_text(json.dumps({"mode": "direct"}), encoding="utf-8")
+    assert grader._analyzer_called(grader.Ctx(env_dir, run))[0] is True     # direct 모드는 적용하지 않는다
+
+
+def test_e71_skill_dir_must_be_module_base(tmp_path):
+    env_dir = _synthetic_env(tmp_path)
+    run = run_dir(tmp_path)
+    base = "/e/mock-plugins/m/skills/mock-data-analyzer"
+    _tool_events(run, ("Bash", {"command": "python3 /p/scripts/triage.py module MOCK-9071 --for deep"},
+                       json.dumps({"skill": "mock-data-analyzer", "read": [base + "/SKILL.md"], "base": base}), False))
+    ctx = grader.Ctx(env_dir, run)
+    assert grader._skill_dir_from_base(ctx, [f'python3 /p/skill_patch.py MOCK-9071 --skill-dir "{base}" --name x'])[0] is True
+    assert grader._skill_dir_from_base(ctx, ["python3 /p/skill_patch.py MOCK-9071 --skill-dir /other --name x"])[0] is False
+    _tool_events(run, ("Skill", {"skill": "mock-analyzers:mock-data-analyzer"}, "Base directory for this skill: /x", False))
+    assert grader._skill_dir_from_base(grader.Ctx(env_dir, run), ["skill_patch.py K --skill-dir /x"])[0] is False  # 재리뷰 P1
+    _tool_events(run, ("Bash", {"command": "python3 /p/scripts/triage.py module MOCK-9071 --for deep"},
+                       'Exit code 1\n{"reason":"설치 스킬 못 찾음","skill":"mock-data-analyzer","next":"x"}', True),
+                 ("Skill", {"skill": "mock-analyzers:mock-data-analyzer"}, "Base directory for this skill: /x", False))
+    assert grader._skill_dir_from_base(grader.Ctx(env_dir, run), ["skill_patch.py K --skill-dir /x"])[0] is True   # 대안 경로
+
+
+def test_e79_rows_detect_workaround_and_silent_fallback(tmp_path):
+    env_dir = _synthetic_env(tmp_path)
+    run = run_dir(tmp_path)
+    fail = 'Exit code 2\n{"reason":"인증","next":"리포트 줄은 스크립트가 고쳤다 — 심층 분석 없이 Step 6로 계속"}'
+    _tool_events(run, ("Bash", {"command": "python3 /p/scripts/triage.py module MOCK-9041 --for deep"}, fail, True))
+    (run / "execution.json").write_text(json.dumps({"mode": "plugin", "plugin": {"skill_calls": []}}), encoding="utf-8")
+    fns = grader.checks(79, grader.Ctx(env_dir, run))
+    assert fns[0]()[0] is True and fns[2]()[0] is True
+    _tool_events(run, ("Bash", {"command": "python3 /p/scripts/triage.py module MOCK-9041 --for deep"}, fail, True),
+                 ("Bash", {"command": "git ls-remote file:///x/missing.git"}, "fatal", True),
+                 ("Read", {"file_path": "/e/mock-plugins/m/skills/mock-data-analyzer/SKILL.md"}, "x", False))
+    ok, ev = grader.checks(79, grader.Ctx(env_dir, run))[2]()
+    assert ok is False and "ls-remote" in ev and "SKILL.md Read=1" in ev
+
+
+def test_module_skills_setup_validation(tmp_path):
+    sys.path.insert(0, str(REPO / "tests" / "helpers"))
+    import skill_eval_env
+    assert skill_eval_env.module_remote(None, tmp_path) == (None, None)
+    url, sha = skill_eval_env.module_remote({"source": "missing"}, tmp_path)
+    assert url == (tmp_path / "missing.git").as_uri() and sha is None
+    for bad in ({"source": "x"}, {"source": "mock", "extra": 1}, "mock"):
+        with pytest.raises(SystemExit):
+            skill_eval_env.module_remote(bad, tmp_path)
+
+
+def test_mock_skill_dir_per_eval(tmp_path):
+    """B2-28: 40·41·71은 같은 플러그인 루트를 쓰지만 각자 모의 분석 스킬 사본을 갖는다 — skill_dir는 eval마다의 사용자 config에만."""
+    sys.path.insert(0, str(REPO / "tests" / "helpers"))
+    import skill_eval_env
+    import yaml
+    by_id = {e["id"]: e for e in _entries()}
+    dirs, roots = {}, set()
+    for eid in (40, 41, 71):
+        env_dir = tmp_path / f"e{eid}"
+        info = skill_eval_env.build(by_id[eid], env_dir, direct_tools=False)
+        evaluation.prepare_plugin_mode(by_id[eid], info, env_dir)
+        cfg = yaml.safe_load((Path(info["env"]["TELEPHONY_TRIAGE_HOME"]) / "config.yaml").read_text(encoding="utf-8"))
+        data = cfg["analyzers"]["data"]
+        dirs[eid] = Path(data["skill_dir"])
+        assert dirs[eid] == (env_dir / "mock-plugins" / evaluation.ANALYZER_PLUGIN / "skills" / "mock-data-analyzer").resolve()
+        assert (dirs[eid] / "SKILL.md").is_file()
+        site = yaml.safe_load((Path(info["plugin_root"]) / "site-defaults.yaml").read_text(encoding="utf-8"))
+        assert "skill_dir" not in json.dumps(site.get("analyzers"))
+        if eid != 40:
+            roots.add(info["plugin_root"])
+    assert by_id[40]["setup"]["user_config"]["analyzers"]["data"]["prefer"] == "skill"
+    assert yaml.safe_load((Path(skill_eval_env.build(by_id[40], tmp_path / "again", direct_tools=False)["env"]
+                                ["TELEPHONY_TRIAGE_HOME"]) / "config.yaml").read_text(encoding="utf-8"))["analyzers"]["data"][
+        "prefer"] == "skill"
+    assert len(set(dirs.values())) == 3 and len(roots) == 1         # 41·71: 같은 루트(플러그인 해시 같음), 사본은 따로
+    assert "internal error" in (dirs[41] / "run.py").read_text(encoding="utf-8")
+    assert (dirs[71] / "proposals.txt").is_file()
+    try:
+        from common import skillpath     # 작업 묶음 1 — 병합 뒤에만
+    except ImportError:
+        return
+    for eid in (41, 71):
+        cfg = {"analyzers": {"data": {"skill": "mock-data-analyzer", "skill_dir": str(dirs[eid])}}}
+        assert skillpath.resolve(cfg, "data")["path"] == str(dirs[eid] / "SKILL.md")
+
+
+# 오프라인 고정(B2 §13.1): 유료 eval 전에 fixture가 기대한 경로로 가는지 본다. `module`(작업 묶음 2)이 병합된 뒤에만 돈다.
+_needs_module = pytest.mark.skipif(not (REPO / "plugin" / "scripts" / "triagelib" / "modulecmd.py").is_file(),
+                                   reason="triage.py module(작업 묶음 2)이 아직 없다")
+
+
+def _eval_env(tmp_path, eid):
+    sys.path.insert(0, str(REPO / "tests" / "helpers"))
+    import skill_eval_env
+    by_id = {e["id"]: e for e in _entries()}
+    info = skill_eval_env.build(by_id[eid], tmp_path / f"e{eid}", direct_tools=False)
+    env = {**os.environ, **info["env"], "PATH": os.pathsep.join(info["path_prefix"] + [os.environ.get("PATH", "")])}
+    scripts = Path(info["plugin_root"]) / "scripts"
+
+    def run(*args, ok=(0,)):
+        proc = subprocess.run([sys.executable, str(scripts / "triage.py"), *map(str, args)], capture_output=True, text=True,
+                              encoding="utf-8", env=env, cwd=tmp_path / f"e{eid}", timeout=300)
+        assert proc.returncode in ok, (args, proc.returncode, proc.stderr[-800:])
+        return proc.returncode, json.loads(proc.stdout.strip().splitlines()[-1]) if proc.stdout.strip() else None
+    return info, run
+
+
+@_needs_module
+def test_e76_fixture_candidate(tmp_path):
+    info, run = _eval_env(tmp_path, 76)
+    log = info["logs"][0]
+    run("run", "MOCK-9076", "--logs", log, "--analysis-only", "--platform", "ofono", "--code", "skip",
+        "--issue-file", EVALS / "jira/MOCK-9076.yaml")
+    job = Path(info["work_dir"]) / "MOCK-9076"
+    a = json.loads((job / "analysis.json").read_text(encoding="utf-8"))
+    assert a["candidates"][0]["cause"] == "DATA-001-01" and a["candidates"][0]["category"] == "data"
+    assert a["logs"]["in_range"] in (True, "partial") and a["analyzer"]["category"] == "data"
+    _code, out = run("module", "MOCK-9076", "--for", "deep", "--platform", "ofono")
+    assert out["module"] == "ofono/data" and out["timeline"]["view"] is True
+    rec = json.loads((job / "module-skill.json").read_text(encoding="utf-8"))["deep"]
+    ev_ts = {e["ts"] for c in json.loads((job / "match.json").read_text(encoding="utf-8")).get("candidates") or []
+             for e in c.get("evidence") or []}
+    assert rec.get("center") in ev_ts                                     # 뷰 중심 = match.json 근거(B2-27)
+    view = (job / "module-skill" / "deep" / "timeline.md").read_text(encoding="utf-8")
+    assert f"중심: {rec['center']} (근거)" in view
+
+
+@_needs_module
+def test_e77_fixture_single_candidate(tmp_path):
+    info, run = _eval_env(tmp_path, 77)
+    run("run", "MOCK-9077", "--logs", info["logs"][0], "--analysis-only", "--code", "skip", "--answer", "time=2026-09-21T10:00:03+09:00",
+        "--issue-file", EVALS / "jira/MOCK-9077.yaml")
+    _c, ex = run("explore", "MOCK-9077")
+    assert ex.get("module_skills") is True
+    _c, out = run("module", "MOCK-9077", "--for", "explore")
+    assert out["pick"] == {"by": "auto"} and out["module"] == "android/data"
+
+
+@_needs_module
+def test_e78_fixture_two_candidates(tmp_path):
+    import re as _re
+    info, run = _eval_env(tmp_path, 78)
+    run("run", "MOCK-9078", "--logs", info["logs"][0], "--analysis-only", "--platform", "ofono", "--code", "skip",
+        "--issue-file", EVALS / "jira/MOCK-9078.yaml")
+    run("explore", "MOCK-9078", "--platform", "ofono")
+    _c, out = run("module", "MOCK-9078", "--for", "explore", "--platform", "ofono")
+    assert out["pick"] is None and {c["module"] for c in out["candidates"]} == {"ofono/data", "ofono/sim"}
+    q = out["ask"]["question"]
+    assert q.startswith("어느 모듈 문서로 볼까요? (모듈 신호 줄 수:") and len(out["ask"]["options"]) <= 3
+    assert not _re.search(r"탐색|explore|심층|analyzer|Step 5|할까요|실행할까|진행할까|할지|하시겠|할래요|\.md|--for",
+                          q + " ".join(out["ask"]["options"]))
+
+
+@_needs_module
+def test_e79_fixture_auth(tmp_path):
+    info, run = _eval_env(tmp_path, 79)
+    run("run", "MOCK-9041", "--logs", info["logs"][0], "--analysis-only", "--code", "skip",
+        "--issue-file", EVALS / "jira/MOCK-9041.yaml")
+    _code, out = run("module", "MOCK-9041", "--for", "deep", ok=(2,))
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    from triagelib import core
+    assert out["reason"] == "인증" and out["next"] == core.NEXT_CONTINUE
+    report = (Path(info["work_dir"]) / "MOCK-9041" / "report.md").read_text(encoding="utf-8")
+    assert "- 심층 분석 생략: 모듈 스킬 받기 실패(인증)" in report

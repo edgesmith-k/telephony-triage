@@ -1142,36 +1142,27 @@ def test_missing_claude_exit_2(env, tmp_path):
 
 # --- arm 자료 고정값 ---------------------------------------------------------------------------------------
 
-def _frozen_from_live() -> dict[str, bytes]:
-    """설계 §7.1 조각으로 현재 플러그인 문서에서 arm 자료를 만든다."""
-    live = REPO / "plugin" / "skills" / "telephony-triage" / "reference"
-    lg = (live / "platforms" / "ofono" / "log-guide.md").read_text(encoding="utf-8").split("\n")
-    ex = (live / "explore.md").read_text(encoding="utf-8").split("\n")
-    pre_ex = "\n".join(ex[0:5] + [""] + ex[20:26] + [""] + ex[33:35] + [""] + ex[36:51]) + "\n"
-    return {"ofono/pre/platforms/ofono/log-guide.md": (live / "platforms" / "ofono" / "log-guide.md").read_bytes(),
-            "ofono/pre/explore-rules.md": pre_ex.encode(),
-            "ofono/post/platforms/ofono/log-guide.md":
-                ("\n".join(lg[0:15] + [""] + lg[25:27] + [""] + lg[33:38]) + "\n").encode(),
-            "ofono/post/explore-rules.md": (pre_ex + "\n## 일반 판단 규칙\n\n" + "\n".join(lg[21:24]) + "\n").encode()}
+def _committed_arms() -> dict[str, bytes]:
+    """커밋된 arm 자료(`tests/fixtures/module-arms`, 고정값 `ARM_PINS`)."""
+    root = REPO / "tests" / "fixtures" / "module-arms"
+    return {rel: (root / rel).read_bytes() for rel in me.ARM_PINS}
 
 
 def test_arm_pins(tmp_path, monkeypatch):
-    frozen = _frozen_from_live()
-    live_lg = frozen["ofono/pre/platforms/ofono/log-guide.md"]
-    if hashlib.sha256(live_lg).hexdigest() == me.ARM_PINS["ofono/pre/platforms/ofono/log-guide.md"]:
-        # B2가 log-guide.md를 줄이기 전까지: 현재 플러그인에서 만든 사본이 고정값과 같다(B2에서 이 확인을 지운다)
-        assert {k: hashlib.sha256(v).hexdigest() for k, v in frozen.items()} == me.ARM_PINS
+    """B2-14: 플러그인 log-guide.md = C0 post arm(바이트 그대로), 줄인 일반 판단 규칙(pre arm 22~24줄)은 explore.md로 옮겼다."""
+    live = REPO / "plugin" / "skills" / "telephony-triage" / "reference"
+    live_lg = (live / "platforms" / "ofono" / "log-guide.md").read_bytes()
+    assert hashlib.sha256(live_lg).hexdigest() == me.ARM_PINS["ofono/post/platforms/ofono/log-guide.md"]
     committed = REPO / "tests" / "fixtures" / "module-arms"
-    if (committed / "ofono").is_dir():
-        assert me.check_pins(committed, "ofono") == []
-        assert (committed / "ofono/pre/platforms/ofono/log-guide.md").read_bytes() == live_lg or \
-            hashlib.sha256(live_lg).hexdigest() != me.ARM_PINS["ofono/pre/platforms/ofono/log-guide.md"]
+    assert me.check_pins(committed, "ofono") == []
+    pre_lg = (committed / "ofono/pre/platforms/ofono/log-guide.md").read_text(encoding="utf-8").split("\n")
+    assert "\n".join(pre_lg[21:24]) in (live / "explore.md").read_text(encoding="utf-8")
+    frozen = _committed_arms()
     arms = tmp_path / "arms"
     for rel, data in frozen.items():
         (arms / rel).parent.mkdir(parents=True, exist_ok=True)
         (arms / rel).write_bytes(data)
-    if hashlib.sha256(live_lg).hexdigest() == me.ARM_PINS["ofono/pre/platforms/ofono/log-guide.md"]:
-        assert me.check_pins(arms, "ofono") == []
+    assert me.check_pins(arms, "ofono") == []
     (arms / "ofono/pre/explore-rules.md").write_bytes(frozen["ofono/pre/explore-rules.md"] + b"x")
     assert "ofono/pre/explore-rules.md" in me.check_pins(arms, "ofono")
     monkeypatch.setattr(me, "WORKSPACE", tmp_path / "ws")

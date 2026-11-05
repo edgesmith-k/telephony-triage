@@ -33,6 +33,7 @@ MARKER = "[telephony-triage] show-guard"
 MARKER_RE = re.compile(re.escape(MARKER) + r" (\S+)")
 APPROVED_ARG = re.compile(r"--approved[= ]\s*[\"']?([0-9a-f]{7,64})\b")
 SHA_ARG = re.compile(r"--sha[=\s]+[\"']?([0-9a-f]{64})")
+LINE_KINDS = ("patch", "evidence")   # 줄 의무: 같은 key의 내용이 다른 기록만 닫는다(skill_patch 안내 줄, check-output 근거 원문 검사)
 STEP7_OPTS = ("기록하지 않음", "원인 미확정", "새 원인", "새 유형", "다른 기존 원인")
 REPORT_CORE = re.compile(r"^- (분류 후보|근거 로그|로그 범위|오류·거부·타임아웃|실패 스텝|분석 전용|재분석|설명 기반)")
 STATUS_TOKENS = {"pass": r"pass|통과|✅", "fail": r"fail|실패|❌", "skipped": r"skipped|건너뜀|해당 없음|생략",
@@ -331,7 +332,7 @@ def missing(ob: Obligation, chunks) -> list[str]:
     patch 안내 줄(글머리·굵게·백틱 무시)."""
     if ob.kind == "draft":
         return draft_rows_missing(ob.rules, visible_lines(chunks))
-    if ob.kind == "patch":
+    if ob.kind in LINE_KINDS:
         return patch_uncovered(ob.lines, chunks)
     if ob.kind == "report":
         raw = "\n".join(str(c) for c in chunks)
@@ -512,7 +513,7 @@ def _content(kind, r):
     patch = 안내 줄."""
     if kind == "report":
         return r.get("lines"), r.get("must_show")
-    if kind == "patch":
+    if kind in LINE_KINDS:
         return r.get("lines")
     return r.get("rules") if kind == "draft" else screen_lines(str(r.get("block") or ""))   # 줄 끝·빈 줄 차이는 같은 화면
 
@@ -523,7 +524,7 @@ def _obligation(kind, key, i, n, r):
     if kind in ("push", "post"):
         block = str(r.get("block") or "")
         return Obligation(kind, key, i, n, "end", lines=screen_lines(block), block=block, extra=extra)
-    if kind == "patch":
+    if kind in LINE_KINDS:
         lines = [str(x) for x in r.get("lines") or [] if str(x).strip()]
         return Obligation(kind, key, i, n, "end", lines=lines, block="\n".join(lines), path=r.get("path"),
                           extra=extra) if lines else None
@@ -550,7 +551,7 @@ def record_obligations(seq, recs) -> list[Obligation]:
     | post | key가 다른 post(restage) · close approve |
     | report(lines·must_show가 있을 때) | 다른 report(restage) · close stage · 고정 뒤 거부되지 않은 Step 7 질문(step7) |
     | draft | 같은 job·plan의 key가 다른 draft(draft — 전부 통과 표는 어느 draft로도) · close stage(stage)·discard·lock·report 기록(job) |
-    | patch(lines가 있을 때) | 같은 key(작업·스킬 이름)의 내용이 다른 기록만(새 의무) — 다른 key·close로 닫히지 않는다(턴이 끝나면 Stop·질문이 보지 않는다) |
+    | patch·evidence(lines가 있을 때) | 같은 key(작업·스킬 이름 / `evidence:<작업>/<purpose>`)의 내용이 다른 기록만(새 의무, lines가 비면 닫기만) — 다른 key·close로 닫히지 않는다(턴이 끝나면 Stop·질문이 보지 않는다) |
 
     같은 key의 뒤 기록은 새 의무가 아니다: 첫 기록의 창을 그대로 쓴다(열려 있으면 열린 채, 닫혔으면 닫힌 채) — `extra["last_at"]`만
     뒤 기록 시각으로. 단 열린 창의 내용(화면 전문·리포트 줄)이 바뀌었거나 그 창이 다른 화면·초안에 밀려 닫혔었으면 앞 의무를
@@ -576,7 +577,7 @@ def record_obligations(seq, recs) -> list[Obligation]:
                     shut(ob, i, "stage" if by == "stage" else "job")
             continue
         key = str(r.get("key") or "")
-        if kind not in ("push", "post", "report", "draft", "patch") or not key:
+        if kind not in ("push", "post", "report", "draft") + LINE_KINDS or not key:
             continue
         old = by_key.get(key)
         if old is not None:
@@ -598,7 +599,7 @@ def record_obligations(seq, recs) -> list[Obligation]:
             out.remove(old)
             live = [ob for ob in out if ob.open]
         for ob in live:
-            if ob.kind == kind and kind not in ("draft", "patch"):
+            if ob.kind == kind and kind not in ("draft",) + LINE_KINDS:
                 shut(ob, i, "restage")
             elif kind == "draft" and ob.kind == "draft" and (
                     draft_all_clear(ob.rules) or (ob.extra.get("job"), ob.extra.get("plan")) == (r.get("job"), r.get("plan"))):
@@ -606,7 +607,8 @@ def record_obligations(seq, recs) -> list[Obligation]:
             elif kind == "report" and ob.kind == "draft":
                 shut(ob, i, "job")
         ob = _obligation(kind, key, i, len(seq), r)
-        if ob is None:      # 보일 줄이 없는 리포트·patch: 의무는 없고 앞 의무를 닫기만 한다
+        if ob is None:      # 보일 줄이 없는 리포트·patch·evidence: 의무는 없고 앞 의무를 닫기만 한다
+            by_key.pop(key, None)   # 지운 앞 의무를 다시 찾지 않게(고친 뒤 다시 틀린 evidence → 새 의무)
             continue
         by_key[key] = ob
         out.append(ob)

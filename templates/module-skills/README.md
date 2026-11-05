@@ -4,12 +4,13 @@
 
 이 지위는 이 디렉토리의 모든 모듈 문서에 같다.
 
-MS-1 뒤에는 GHE 모듈 레포가 정본이다. 사외에서 여기를 고치면 반입 노트에 파일 목록을 적고 사내에서 모듈 레포 PR로 옮긴다.
+MS-1 뒤에는 GHE 모듈 레포가 정본이다. 사외에서 여기를 고치면 반입 노트에 파일 목록을 적고 사내에서 모듈 레포 PR로 옮긴다. 모듈 레포 PR(+1 리뷰)은 병합 전 `python3 <plugin>/tools/module_repo_check.py <clone>`이 0이어야 한다.
 
 ## 구조 (C0: ofono/data만, C1에서 나머지 모듈)
 
 ```
 README.md
+modules.yaml                                  # 모듈 필터·후보 규칙(스크립트 전용, 스키마 2)
 ofono/
 ├── _common/{layers.md, components.md}        # 5-1·5-2가 먼저 읽는 공통 층·데몬
 └── data/
@@ -24,7 +25,7 @@ ofono/
 
 루트 `README.md`·`modules.yaml`·`.github/**`, `<p>/_common/{layers,components}.md`, `<p>/<m>/{explore,SKILL,analyzer}.md`, `<p>/<m>/references/<ID>.md`, `<p>/<m>/evals/<case>/case.yaml`, `<p>/<m>/evals/<case>/files/*.{log,md,json}`. 그 밖의 이름, `CLAUDE.md`·`AGENTS.md`·`.claude/`, 심볼릭 링크, 실행 비트는 두지 않는다.
 
-문서에는 공개 upstream 이름, RIL 요청 이름, `org.ofono.*`·`org.freedesktop.DBus.*` D-Bus 이름, 표본 데몬 이름만 쓴다. 표본·사내 로그 원문, 값, 호스트는 넣지 않는다. case 로그는 손으로 쓴 합성이고 첫 줄이 `-- [합성]`이다.
+`.md` 문서에는 공개 upstream 이름, RIL 요청 이름, `org.ofono.*`·`org.freedesktop.DBus.*` D-Bus 이름, 표본 데몬 이름만 쓴다. `modules.yaml`에는 첨부 로그에서 본 벤더 데몬·IPC·서비스·D-Bus 이름도 쓸 수 있다(결정 기록 11/05). 표본·사내 로그 원문, 값, 호스트는 넣지 않는다. case 파일에는 마스킹한 실제 발췌를 쓸 수 있지만(결정 기록 11/03·11/05, 남은 식별자 검사 통과), 이 템플릿의 case 로그는 C1이 `case.yaml`을 바꿀 때까지 손으로 쓴 합성이고 첫 줄이 `-- [합성]`이다.
 
 ## case 형식
 

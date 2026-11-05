@@ -2,11 +2,101 @@
 
 단계표는 `MODULE_SKILLS_PLAN.md §4`. 이 파일은 단계마다 리뷰·재측정에서 P2로 남긴 것(결정 (r): P0·P1만 고치고 P2는 반입 뒤 후보)과 단계 결과를 적는다.
 
+## B1·B2 모듈 스킬 받기·5-1/5-2 흐름 (11/05, 묶음 구현 — 설정·doctor·guard·문서 갈래)
+
+범위: B1(설정·받기·받은 내용 점검·guard 12·모의 레포)과 B2(모듈 고르기·모듈 보기·출력 관문·리포트·표시·계측·eval)를 한 번에 구현했다(11/05 일정 단축 ③). 이 절은 설정·doctor·site 점검·guard·문서 갈래의 기록이다. 유료 eval 비용 장부는 메인 세션이 이 파일에 따로 적는다.
+
+설정·doctor·guard에서 한 것:
+- `common/userconfig.py`: `module_skills{remote, base_branch}`(최상위, `from_site_defaults`가 옮긴다, `builtin()`에는 없다), `prefer`·`skill_dir` 검사, `deep_source`(5-1 출처의 유일한 구현), `deep_source_problem`, 폐지 하위 키 경고(`inputs`·`max_tokens_hint`), B1-19 경고, `runtime.label` 경고, `read_roots`(지연 import). 어느 함수도 잘못된 입력에 예외를 내지 않는다(guard 경로).
+- 새 `common/skillpath.py`(설치 스킬 `SKILL.md`: `skill_dir` → `installed_plugins.json` `installPath` → 설정 폴더 `skills/` → OpenCode `skills/`, 하나만 찾았을 때만), 새 `common/provenance.py`(`env_info`, 주소는 종류만).
+- `config.py`: `set` 키 종류(`module-remote`·`ref`·`prefer`·`path`, `module_skills`는 `--platform` 없이), `module_problems`; `check` 경고·`deep_sources`·`--roots`; doctor `config` 행 경고 가지, 조건부 `module_skills` 행(기본 설치는 13행 그대로).
+- `guard.py`: 규칙 12 (a)(b)(이름 기반 관리 clone·lock·skill-wt, 기록 5종, `mv`·`ln`·`rsync` 원본, git 읽기 목록·경로 옵션·clone/init 대상), 규칙 11 대상에 모듈 원격(`remote_slugs`, 사용자 config 없이도), degraded `_module-skills` 쓰기 deny, 문서 행 6·11·12.
+- `tools/site_checks.py` `s4a.analyzers`: remote가 없으면 문구 그대로.
+
+**설치 스킬 위치 확인(R9, $0)**: Claude Code 2.1.318로 빈 플러그인(스킬 1개)을 로컬 디렉토리 marketplace에서 임시 `CLAUDE_CONFIG_DIR`에 설치했다(`claude plugin marketplace add <dir>` → `claude plugin install emptyp@localmkt`, 모델 호출 없음). `plugins/installed_plugins.json` = `{"version": 2, "plugins": {"emptyp@localmkt": [{"scope": "user", "installPath": "<cfg>/plugins/cache/localmkt/emptyp/0.1.0", "version": "0.1.0", "installedAt", "lastUpdated"}]}}`, 스킬은 `<installPath>/skills/hello/SKILL.md`. 같은 모양을 `tests/test_skillpath.py` `R9_INSTALLED`로 고정했고 `skillpath`에는 `TODO(SITE:S1)`을 두지 않았다. 사내 버전이 다를 수 있으므로 아래 반입 뒤 5-1 점검은 버전 재확인으로 남긴다.
+
+**출처 기록 환경 변수(B2-7)**: Claude Code가 `ANTHROPIC_MODEL`·`ANTHROPIC_DEFAULT_*_MODEL`·`ANTHROPIC_BASE_URL`을 Bash까지 넘기는지는 이 갈래에서 확인하지 않았다(가짜 모델 서버 실행은 메인 세션 몫). 넘어오지 않으면 `모름`·`{}`·`none`이고 틀린 값은 남지 않는다. 확인하면 이 줄을 고친다.
+
+**OpenCode 설치 스킬 모드(R40, v1 수용)**: OpenCode에서 설치 스킬은 `skill-input.json`이 가리키는 `timeline`만 읽는다(에이전트의 `events.json` 금지 규칙). 근거 원문 검사는 `events.json` 기준 그대로다(B2 §6.1). 그 차이는 MS-2(사내 Android 스킬을 모듈 문서로 합치기)에서 없어진다. I-2는 `RUNTIMES.md`에 같은 내용을 적는다.
+
+**episodes 관문(B2 §16, R16)**: `tools/module_measure.py episodes --episodes scratchpad/logmine/design/episodes.yaml`. 처음 잰
+값(oFono deep 근거 창 94/114, frozen 97에서 −3, E11 0/7)은 측정 입력이 낡은 탓이었다 — `o1-all`·`o2-all` `events.json`이
+ENT를 `ims`로 둔 옛 변형 DB로 만들어져 `category_hint`가 먼저 적용되며(B2 줄 382) ENT 53줄이 network 모듈 밖으로 갔다. 현재
+`make_variant_dbs.py`의 `issue-db-ofono-modules`(ENT → network, 결정 기록 11/05 ①)와 현재 파서(`parse_logcat.py parse --mask`,
+같은 입력·같은 창)로 두 run을 다시 만들어 쟀다(A run은 그대로): oFono explore @분 72/114(frozen 73), deep 근거 창 97/114(97),
+held-out 17/22·20/22(17·20), Android 43·63/88 — 모두 ±2 안, 통과. E11 deep 3/7. 이 run들이 C1/D 관문 기준이다.
+
+**재리뷰 수정(11/05, R16 반박 검증에서 확정된 P1)**: ① 관리 clone 받기가 `fetch origin`(설정의 첫 `remote.origin.url`·설정
+refspec)을 써서 값 둘·바꾼 refspec·global 설정으로 심은 커밋을 받았다 → 받기는 `module_skills.remote` 주소와
+`+refs/heads/<base>:refs/remotes/origin/<base>`를 명시하고, preflight는 모든 범위에서 `remote.origin.url` 값 하나·`fetch` 기본값·
+`tagopt --no-tags`만 받으며, 받은 뒤 `origin/<base>` = `FETCH_HEAD`를 본다(doctor도 같은 preflight). ② M10 뒤집힌 ICCID가 19자리
+(EF_ICCID 채움 nibble `F`가 마지막 숫자 앞, `…54F6`)를 놓쳤다 → 마스킹 커밋에서 고침. ③ M1 덤프 줄 뒤 짧은 꼬리(` ...`·`(len n)`·
+`[SUB0]`)와 `:` 바로 뒤가 아닌 바이트 8개 이상 연속이 남았다 → 마스킹 커밋에서 고침(첨부 로그 남은 8바이트 이상 연속 15·716·14
+→ 0, 다른 종류 수·db_lint 관문 그대로). ④ eval 40·41·71 채점기가 `module --for deep` 없이 Skill 도구만 불러도 통과시켰다 →
+Skill 도구는 `module --for deep` 종료 1 `설치 스킬 못 찾음` 뒤에만 센다. ⑤ OpenCode 쪽 R20·R21·R22(아래 계획 I-2 절, `RUNTIMES.md
+§5.4`). 남은 것(P2): EF_IMSI hex(`08 29 …`)와 쉼표로 나뉜 ICCID 바이트는 B2 §3.2 M10 범위 밖이라 그대로 — 사내 로그에 있으면
+규칙을 더한다. guard는 `python3 -c`로 관리 clone `.git/config`를 쓰는 것을 막지 않는다(받기 쪽이 이제 그 설정을 믿지 않는다).
+
+**C0 의무(B1-4) 처리**: 템플릿 `ofono/data/SKILL.md:25-26`의 `timeline.md` 직접 지칭은 이 묶음에서 `deep-input.json`의 `timeline` 값을 읽도록 고쳤다(스킬 크리에이터, `raw-read` 규칙과 함께 — eval은 cwd에 timeline.md를 두므로 잡지 못한다). 계획된 C0 유료 재실행이 이 문서 변경도 잰다.
+
+**관리자 한 줄(반입 노트에도)**: `site-defaults.yaml`에서 `analyzers.*.inputs`·`max_tokens_hint` 두 줄을 지운다(B1부터 읽지 않고 경고한다; `max_tokens_hint`는 S-4a에서 정한 대로). 지우기 전에는 remote가 없어도 `config.py check` 경고와 doctor `config` 행 `warn`이 난다(의도한 예외).
+
+### 반입 노트: 바뀐 파일 → 사내 site eval (B2 §14, 11/05 사내 토큰 최소)
+
+기준(`docs/SITE_INSTALL.md:224` 12개 전부 다시)을 바꾼 파일별 목록과 토큰 0 점검으로 대신한다. site 세트 1·2·8·9·39·45·58·59·60·61·62·75, 모델 차이 세트 13·17·18·24·29·33·37. 이 eval들은 모두 5-1·5-2에 "아니오"라 새 경로를 타지 않는다(거절 경로는 사외 eval 1로 확인).
+
+| 바뀐 파일 | remote 없을 때 사내 영향 | 닿을 수 있는 eval | 토큰 0 점검 | LLM 재실행 |
+|---|---|---|---|---|
+| `common/masking.py`·`parse_logcat.py`·`mask_pii.py`(로그 마스킹) | M 부류 줄의 이벤트·자른 글만 바뀐다 | 모든 analyze eval | site eval 로그로 `triage.py run --offline-db` 전후 비교, 운영 DB fixture `db_verify`·`db_regress` 전후 같음, 골든은 토큰 차이면 사용자 승인으로 갱신 | 차이가 없거나 토큰뿐이면 없음 |
+| `common/masking.py`(`find()` "all" 규칙) | `db_lint`·pre-commit `mask_pii --check`·Jira 본문 검사가 기존 내용에 새 지적을 낼 수 있다 | 2·9·61, DB 쓰기 전부 | 반입 전 읽기 전용: 운영 DB clone·`SITE_PATHS` 로그에 `db_lint --all`·`mask_pii --check` 이전·이후, site eval JOB 하나 `issue_post render` 이전·이후 — **새 지적이 있으면 반입을 멈춘다** | `render`가 다르면 61만 |
+| `guard.py` | 모듈 경로·기록·모듈 원격에만 새 거부 | 1·2·8·9·39·61·62·75 | `test_hooks.py`·`test_platform_guard.py`, 12개 site eval 세션 `tools/hook_replay.py` 이전·이후 | 재생이 다를 때만(예상 없음) |
+| `show_guard.py`·`common/shown.py` | 모듈 질문 면제 확대, `evidence` 기록은 `check-output` 뒤에만 | 1·2·9·39·45·59·60·61·62·75 | pytest + `hook_replay` 12개(기록이 없으면 "건너뜀" — 통과 아님) | 재생 불가면 1만 |
+| `triage.py`·`triagelib/{driver,report,core}.py`·`analysis.schema.json` | remote·`prefer` 없으면 바이트 동일, `explore`는 가리기가 필요했을 때만 `mask_warnings` | 모든 analyze eval | 오프라인 `run`·`explore` 이전·이후 비교 | 차이 없으면 없음 |
+| `triagelib/{modulecmd,output}.py`·`common/{modulefilter,evidence,skillpath,provenance,skillcheck,moduleskills}.py` | 동의 뒤에만 돈다 | 없음(모두 거절) | pytest + 아래 5-1 점검 | 없음 |
+| `SKILL.md` | 5-1·5-2 줄만, 동의 문장 바이트 동일, ±0B | 토큰 기준 1·2·39·45·58 | 바이트 차이 보고 | 없음 |
+| `reference/explore.md`·`module-skills.md`·`platforms/ofono/log-guide.md` | "예" 뒤나 oFono에서만 읽는다 | 없음 | — | 없음 |
+| `userconfig.py`·`config.py`·`site-defaults.example.yaml` | 폐지 키가 남았으면 doctor 경고, 새 선택 키 `prefer`·`skill_dir`·`runtime.label` | 58 | 폐지 키 두 줄을 먼저 지우고 `config.py doctor`·`check` 이전·이후 | 그래도 다르면 58만 |
+| `tools/site_checks.py` | remote 없으면 같은 출력 | — | `site_step.py check S-4a` | 없음 |
+| `templates/module-skills/modules.yaml`·`tests/fixtures/module-filter/**` | site eval이 쓰지 않는다 | 없음 | 둘 다 site 모드 `check_boundary`(회사 패턴이 벤더 이름에 맞으면 `docs/site/boundary-allow.txt`에 좁은 값 예외) | 없음 |
+| `usage_stats.py`·`module_eval.py`(import)·`tools/{module_measure,fixture_residual,mask_parity,module_repo_check}.py`·eval·채점기·모의·템플릿·fixture | site eval이 쓰지 않는다 | 없음 | pytest | 없음 |
+
+eval별 한 줄:
+- `1·2·8·9·39·45·59·60·61·62·75: 영향 없음 (5-1·5-2에 '아니오', 무원격 출력 바이트 동일, hook 재생 12개 일치, 이슈 DB lint·pre-commit 결과 동일)`
+- `58: 영향 없음 (doctor 출력 동일 — 폐지 키 두 줄 삭제 뒤)`
+- `13·17·18·24·29·33·37: 영향 없음 (5-1·5-2에 아니오 — 바뀐 줄은 동의 뒤 흐름, 거절 경로는 사외 eval 1로 확인)`
+
+**반입 뒤 5-1 점검(토큰 0, S-단계 메모)**: 사내 5-1이 Skill 도구에서 `module --for deep` + 풀린 `SKILL.md` Read로 바뀐다. site eval은 모두 거절해 이 경로를 타지 않으므로:
+1. 사내 config로 `config.py check --roots --json` → `read_roots`를 반입 노트에 옮긴다.
+2. 설치 분석 스킬이 있는 1위 카테고리의 site eval 로그 하나로 `triage.py run <KEY> --offline-db <snapshot> --out <scratch JOB> …` → `triage.py module <KEY> --for deep --out <scratch JOB>`.
+3. 종료 0, `read[0]`가 기대한 설치 `SKILL.md`이고 그 frontmatter `name`이 설정한 스킬 이름과 같아야 한다(Claude Code 버전이 2.1.318과 다르면 `installed_plugins.json` 모양도 여기서 다시 본다).
+4. 못 찾음·둘 이상(종료 1 `설치 스킬 못 찾음`)이면 사용자가 만나기 전에 `config.py set analyzers.<cat>.skill_dir <절대 경로>`. 어느 쪽이었는지 적는다.
+5. 그 파일이 작업 폴더 밖이면 `permissions.additionalDirectories`에 더하거나(사용자 설정 변경, 반입 노트에 적는다) Claude Code가 한 번 묻는 것을 받아들인다.
+
+예상 사내 LLM 비용: 토큰 0 점검이 모두 깨끗하면 site eval 0회, 아니면 많아야 58·61과 재생이 안 된 eval 하나.
+
+### 구현이 설계와 다르게 한 것 (설정·guard·문서 갈래)
+
+- `skill_dir`인데 `skill`이 없는 오류는 층마다가 아니라 합친 설정에서 본다(site `skill` + 사용자 `skill_dir`를 막지 않게). 모양 오류(`~` 허용, 절대 경로, `..` 없음, 300자)는 층마다.
+- doctor `module_skills` 행의 원격 표시는 80자 안에 넣으려고 `owner/repo`만 쓴다(`config.py check`와 오류 문구는 `redact_remote`의 `host/owner/repo`).
+- `provenance` gateway 판정은 호스트가 `anthropic.com`이거나 `.anthropic.com`으로 끝날 때만 `anthropic`이다(설계의 `endswith("anthropic.com")`는 `evilanthropic.com`도 받는다).
+- `skillpath`의 개인 스킬 폴더는 `$CLAUDE_CONFIG_DIR/skills`(없으면 `~/.claude/skills`) — Claude Code가 설정 폴더를 옮기면 스킬 폴더도 옮긴다. `plugin:` 접두가 있어도 세 위치를 모두 찾는다(하나만일 때만 고른다).
+- 사내 항목은 S33·S34에 S35(`runtime.label`)를 더했다(`list_site_todos`가 `TODO(SITE:S<n>)`만 세므로). 문서의 "S1~S32"는 "S1~S35"로.
+- `config.py set` 계약은 contracts §3.2 config 행에 `set` 키 종류 행을 따로 두었다.
+
+### P2 — B1·B2 설정·guard (반입 뒤 후보)
+
+- guard: 셸 glob·변수로 모듈 표지를 숨긴 쓰기(`rm -rf _mod*`)와 쓰기 직전 이름 바꾸기 창은 보지 못한다(스크립트 preflight·sha256 대조가 뒤를 받친다). `flock FILE git …` 래퍼도 git을 숨긴다(E).
+- guard: 모듈 레포에 대한 규칙 11 사유 문구가 "이슈 DB"라고 쓴다(바이트 동일 유지). 모듈 레포 전용 메모는 E(`skill_pr`)와 함께.
+- guard: 모듈 원격 경고와 기존 `issue_db.remote` 경고가 hook마다 반복된다. 기존 `issue_db.remote` 경고는 원래 값을 그대로 낸다(바꾸면 기존 출력이 바뀐다).
+- doctor: 관리 clone 상태 시험은 지금 `moduleskills` 대역으로 본다. 실제 clone(불일치·강제 push·더러운 트리·오래된 git) 시험은 통합 뒤 실제 모듈로 더한다.
+- `read_roots`는 설치 스킬을 찾을 때 파일을 연다(`--roots`일 때만). doctor는 설치 스킬 위치를 보지 않는다(기본 환경에서 파일 찾기를 돌리지 않으려고) — 작업 폴더 밖 `SKILL.md` 안내는 `skill_dir`가 있을 때만 나온다.
+
 ## 계획 I-2: OpenCode v1(분석 전용)·Claude Code + 사내 모델 (11/05, 계획 H와 나란히)
 
 결정: `MODULE_SKILLS_DECISIONS.md` "계획 I 1단계 결과". 1단계 실험(가짜 모델 서버, 비용 0)의 결론과 만든 것: OpenCode 1.19.5에서 guard.py를 고치지 않고 `plugin/scripts/common/oc_adapter.py`가 OpenCode 도구 호출을 Claude Code PreToolUse/PostToolUse JSON으로 바꿔 guard.py·jira_bridge.py를 그대로 부른다. `opencode/plugins/tt-guard.js`(node: 모듈만, package.json 없음)는 실패·시그널·시간 초과·해석 불가면 막는다. `opencode/opencode.json.template`(v1 키, `snapshot:false` 필수, bash는 `"*":"deny"` + 허용 목록, Jira는 허용 목록, `task` deny), `opencode/agents/triage.md`(약 2KB), `tools/gen_opencode.py`가 `plugin/commands`에서 `opencode/commands/*.md`를 만든다(쓰기 흐름은 "이 명령을 직접 실행" 안내), `opencode/bin/tt-oc` 래퍼(stdin 닫음, `--pure`·`--auto`·설정 덮어쓰기 env 거부, 시작 전 점검). Claude Code + 사내 모델: `claude_child.py` 게이트웨이 env 이어받기, 비용 미상이면 `cost_usd=None`, 읽기 전용 eval 자식 `--bare`(기본 꺼짐, 실패 시 대체), 환경 안내 `docs/development/RUNTIMES.md`.
 리뷰: 2관점(안전·호환) 1회 → 반박 검증 → 확정 6건 한 번 수정. P0 — OpenCode에서 guard가 있어도 스크립트 파일·python 하위 프로세스를 거친 이슈 DB push가 됐다(bash 전체 허용) → bash 허용 목록(oc_adapter, guard 판정 뒤). P1 — bash로 guard 연결 파일을 지우거나 고칠 수 있었다 → 플러그인 루트·`.opencode/`·설정 파일·AGENTS.md 등 편집 거부, tt-oc 점검 행. P1 — bash 안에서 `opencode run --pure`·`claude`를 다시 띄워 우회 → 허용 목록에 없음. P1 — apply_patch 경로 앞 U+FEFF를 OpenCode가 잘라 내 clone에 쓰던 것 → JS trim과 같은 규칙. P1 — tt-oc가 거부를 성공(0)으로 보고 → 거부 표시 `[telephony-triage]`로 판별. P1 — 에이전트 프롬프트에 `~/.claude/CLAUDE.md`·상위 AGENTS.md가 섞임 → `OPENCODE_DISABLE_CLAUDE_CODE_PROMPT=1`, doctor `instructions` 행.
 검증(본 트리): 새 테스트(어댑터 표·JS 실패 시 닫힘·래퍼·생성기·claude_child·module_eval) 349 통과·22 건너뜀(opencode 없는 환경), 실제 opencode 1.19.5 e2e 19 통과(가짜 서버, 비용 0, 작업 worktree), check_boundary·exec bit·gen_contracts·`gen_opencode --check` 통과. 관련 테스트 전체(claude_child 변경으로 전체) 2,989 통과·22 건너뜀(29분), check_boundary 통과.
+B1+B2 반영(11/05 재리뷰 수정): R19 `SHOWN_KINDS` evidence, R20 에이전트 규칙 2(`next`를 따름), R21 `read_roots` → 설치 설정 `external_directory` 읽기 allow·`tt-oc doctor` `read-roots` warn·규칙 8 `--skipped` 대안, R22 `module_skills` fail은 warn(시작함). 모델 동작(규칙 2·8을 실제로 따르는지)은 유료·사내 모델 실행에서 본다.
 B1+B2 뒤로 미룬 것: O8(`mcptools`·`config.py setup`이 opencode.json `mcp`와 `<server>_<tool>` 이름 읽기, `job_status` OpenCode 버전, doctor에 env-check·Jira 관문 상태), O10(`site_step.py runtime-check opencode`, 묶음에 `opencode/` 넣기). Jira 읽기 관문은 닫혀 있다(`JIRA_READ_RELEASED=False`) — 사내 확인 6(실제 Jira MCP 이름·응답 모양)과 아래 오류 경로 결정 뒤 연다.
 
 ### P2 — 계획 I-2 (반입 뒤 후보)

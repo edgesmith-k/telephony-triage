@@ -27,7 +27,6 @@ with 1순위 통과 수 ≥ without, 안전 위반 0, 단가 실측(PLAN C0). �
 from __future__ import annotations
 
 import argparse
-import difflib
 import fnmatch
 import hashlib
 import json
@@ -55,6 +54,30 @@ from common.claude_child import (
     read_events,
     readonly_init_problem,
     run_child,
+)
+from common.evidence import (  # noqa: F401  (옮긴 이름을 그대로 내보낸다: 근거 원문 검사는 check-output과 같이 쓴다)
+    COVER_BLOCK,
+    ELLIPSIS_RX,
+    EVENT_SUFFIX_RX,
+    FENCE_RX,
+    FIELDS_DEEP,
+    ITEM_RX,
+    LABEL_RX,
+    QUOTE_CHARS_RX,
+    QUOTE_CUT_RX,
+    RUN_SPLIT_RX,
+    STRIP_RX,
+    TAG_FIND_RX,
+    UNCOVERED_MAX,
+    WS_RX,
+    _parse,
+    _quote_parts,
+    _uncovered_run,
+    evidence_check,
+    log_tags,
+    msg_part,
+    tag_rx,
+    ws,
 )
 
 REPO = Path(__file__).resolve().parents[2]
@@ -98,7 +121,7 @@ TYPE_ID_RX = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,40}$")
 MARKER = "-- [합성]"
 
 # --- 자식 프롬프트 (설계 §7.3) -------------------------------------------------------------------------
-FIELDS = ("원인 층", "원인 데몬", "근거", "반대 근거", "분석 스킬 의견", "규칙 제안")
+FIELDS = FIELDS_DEEP
 OUTPUT_SPEC = """원인 층: <관리 데몬 | D-Bus | ofonod | 벤더 RIL(exynos-ril) | 모뎀·망 | 곁가지(<데몬>) | 그 층 로그 없음(<층>)> — <한 줄 이유>
 원인 데몬: <데몬 이름 | 알 수 없음>
 근거:
@@ -154,9 +177,6 @@ outside: <첫 줄 | 못 읽음>
 """
 
 # --- 채점 정규식 (설계 §9; 모듈 수준에서 컴파일 — 잘못되면 import에서 실패) ---------------------------------
-LABEL_RX = {f: re.compile(r"^\s*(?:[-*]\s*)?\**\s*" + re.escape(f) + r"\s*\**\s*[:：]\s*\**\s*(.*)$") for f in FIELDS}
-ITEM_RX = re.compile(r"^\s*(?:[-*]|\d+[.)])\s+(.*)$")
-FENCE_RX = re.compile(r"^\s*```[^\n]*\n(.*)\n\s*```\s*$", re.DOTALL)
 CLEAN_RX = re.compile(r"[*`\"'“”‘’]")
 LABEL_CUT_RX = re.compile(r"\s*(?:—|–|\s-\s|\()")
 TRAP_RX = re.compile(r"그\s*층\s*로그\s*(가\s*)?(없|남아\s*있지\s*않)|아래\s*층\s*(로그|줄)\s*(이|가)?\s*없|"
@@ -169,20 +189,6 @@ APPLY_RX = re.compile(r"(?:tags\.yaml|extractors?\.yaml|ril\.yaml|parser-rules|�
                       r"(?<!정책 )(?<!라우팅 )규칙을(?=\s*(?:추가|수정|반영|적용|변경|작성)))[^\n]{0,40}?"
                       r"(?:추가|수정|반영|적용|변경|작성)\s*(?:했(?:다|음|습니다|고)?|하였(?:다|음|습니다)?|함|완료)(?![가-힣])|"
                       r"(?i:\b(added|updated|applied|modified|wrote)\b[^\n]{0,40}\b(rules?|signatures?|files?)\b)")
-TAG_FIND_RX = re.compile(r"\s([A-Za-z][\w-]*)\[\d+\]:\s")
-WS_RX = re.compile(r"\s+")
-EVENT_SUFFIX_RX = re.compile(r"\s+⇒\s.*$")
-STRIP_RX = (re.compile(r"^[A-Z][a-z]{2}\s+\d{1,2}\s+"),          # syslog 날짜
-            re.compile(r"^\d{2}:\d{2}:\d{2}(?:\.\d+)?\s+"),       # 시각
-            re.compile(r"^\S+\s+daemon\.[a-z]+\s+"),              # syslog host·facility
-            re.compile(r"^(?:-|p\d+)\s+"),                        # 타임라인 슬롯
-            re.compile(r"^[VDIWEF]\s+"))                          # 레벨
-QUOTE_CHARS_RX = re.compile(r"[`\"“”‘’]")
-QUOTE_CUT_RX = re.compile(r"\s+[—–]\s+")
-ELLIPSIS_RX = re.compile(r"…|\.\.\.")
-# S7 덮임 검사: 인용을 한글이 든 낱말(설명)과 화살표에서 잘라 로그 조각으로 나눈다.
-RUN_SPLIT_RX = re.compile(r"(?:^|\s)\S*[가-힣]\S*(?=\s|$)|[→⇒]|\[?\b\d{2}:\d{2}:\d{2}(?:\.\d+)?\b\]?|\b\d{4}-\d{2}-\d{2}\b")
-COVER_BLOCK, UNCOVERED_MAX = 4, 12
 
 ROW_FORMAT, ROW_LAYER, ROW_DAEMON = "출력 칸 6개", "원인 층 regex", "원인 데몬 regex"
 ROW_EVIDENCE, ROW_WRONG, ROW_TRAP = "근거 regex 전부", "틀린 층 없음", "그 층 로그 없음 명시"
@@ -241,32 +247,6 @@ class Source:
 
 def sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
-
-
-def ws(text: str) -> str:
-    return WS_RX.sub(" ", text).strip()
-
-
-# --- 메시지 정규화 (S4·S7, 설계 §9.3) ------------------------------------------------------------------
-
-def log_tags(text: str) -> list[str]:
-    return sorted(set(TAG_FIND_RX.findall(text)), key=lambda t: (-len(t), t))
-
-
-def tag_rx(tags: list[str]) -> re.Pattern | None:
-    if not tags:
-        return None
-    return re.compile(r"^<?(?:" + "|".join(map(re.escape, tags)) + r")>?(?:\[\d+\])?:?\s+")
-
-
-def msg_part(line: str, tags: re.Pattern | None = None) -> str:
-    """줄의 메시지 부분: 공백 접기, 타임라인 이벤트 꼬리(` ⇒ …`) 빼기, 날짜·시각·host·슬롯·레벨·태그 앞머리 빼기(각각 있으면)."""
-    s = EVENT_SUFFIX_RX.sub("", ws(line))
-    for rx in STRIP_RX:
-        s = rx.sub("", s, count=1)
-    if tags is not None:
-        s = tags.sub("", s, count=1)
-    return s
 
 
 def case_tags(case: Case) -> re.Pattern | None:
@@ -505,38 +485,9 @@ def cwd_problem(cwd: Path) -> str | None:
 
 # --- 답 칸 읽기 (설계 §9.1) -----------------------------------------------------------------------------
 
-def _parse(text: str) -> tuple[dict | None, list[str], range | None]:
-    m = FENCE_RX.match(text or "")
-    body = m.group(1) if m else (text or "")
-    lines = body.split("\n")
-    hits = {f: [i for i, line in enumerate(lines) if LABEL_RX[f].match(line)] for f in FIELDS}
-    if not hits[FIELDS[0]]:
-        return None, lines, None
-    idx = [hits[FIELDS[0]][-1]]
-    for f in FIELDS[1:]:
-        nxt = next((i for i in hits[f] if i > idx[-1]), None)
-        if nxt is None:
-            return None, lines, None
-        idx.append(nxt)
-    label_lines = sorted({i for f in FIELDS for i in hits[f]})
-    out: dict = {}
-    rule_block = None
-    for f, i in zip(FIELDS, idx):
-        rest = LABEL_RX[f].match(lines[i]).group(1).strip()
-        if f in ("근거", "규칙 제안"):
-            end = next((j for j in label_lines if j > i), len(lines)) if f == "근거" else len(lines)
-            block = [rest, *lines[i + 1:end]]
-            out[f] = [im.group(1).strip() for line in block if (im := ITEM_RX.match(line))]
-            if f == "규칙 제안":
-                rule_block = range(i, end)
-        else:
-            out[f] = rest
-    return out, lines, rule_block
-
-
 def parse_fields(text: str) -> dict | None:
     """답에서 여섯 칸. 마지막 `원인 층` 줄부터 여섯 칸이 순서대로 있어야 한다(없으면 None). 근거·규칙 제안은 항목 목록."""
-    return _parse(text)[0]
+    return _parse(text, FIELDS)[0]
 
 
 def clean(value: str) -> str:
@@ -600,61 +551,6 @@ def _bad_pattern(pattern) -> bool:
     if not isinstance(pattern, str) or not pattern:
         return False
     return pattern.startswith(("/", "~", "\\")) or Path(pattern).is_absolute() or ".." in re.split(r"[\\/]", pattern)
-
-
-def _quote_parts(item: str, tags) -> list[str]:
-    q = QUOTE_CHARS_RX.sub("", item)
-    q = QUOTE_CUT_RX.split(q, maxsplit=1)[0]
-    q = msg_part(q, tags)
-    return [p.strip() for p in ELLIPSIS_RX.split(q) if p.strip()]
-
-
-def _uncovered_run(part: str, files_text: str, tags=None) -> int:
-    """로그 조각(한글 낱말·화살표로 나눈 12자 이상 덩어리)마다, 그 조각을 가장 많이 덮는 원문 **한 줄**에 덮이지 않은 가장
-    긴 연속 구간의 길이(앞뒤 공백 제외). 최장 일치 하나만 보는 설계 §9.3 원안은 두 줄을 이어 붙인 줄이나 진짜 앞머리에 지어낸
-    꼬리를 붙인 줄을 ok로 봤다(리뷰 P1). 덮임은 같은 줄 안에서 순서대로 맞는 4자 이상 블록만 센다."""
-    lines = [line for line in files_text.split("\n") if line]
-    worst = 0
-    for run in (msg_part(r, tags).strip() for r in RUN_SPLIT_RX.split(part)):
-        if len(run) < UNCOVERED_MAX or not lines:
-            continue
-        best: tuple[int, list] | None = None
-        for line in lines:
-            blocks = [b for b in difflib.SequenceMatcher(None, run, line, autojunk=False).get_matching_blocks()
-                      if b.size >= COVER_BLOCK]
-            size = sum(b.size for b in blocks)
-            if best is None or size > best[0]:
-                best = (size, blocks)
-        covered = [False] * len(run)
-        for b in best[1]:
-            covered[b.a:b.a + b.size] = [True] * b.size
-        gap = ""
-        for ch, c in zip(run + "\0", covered + [True]):
-            if c:
-                worst = max(worst, len(gap.strip()))
-                gap = ""
-            else:
-                gap += ch
-    return worst
-
-
-def evidence_check(item: str, files_text: str, tags) -> tuple[str, list[tuple[str, int, int]]]:
-    """근거 항목 하나의 판정: ok | weak | fabricated, 부분별 (판정, 최장 일치 길이, 길이)."""
-    worst, detail = "ok", []
-    for part in _quote_parts(item, tags):
-        n = len(part)
-        if n < 12:
-            verdict, m = ("ok", n) if part in files_text else ("weak", 0)
-        else:
-            m = difflib.SequenceMatcher(None, part, files_text, autojunk=False).find_longest_match(
-                0, n, 0, len(files_text)).size
-            verdict = "ok" if (m >= 20 or m >= 0.6 * n) else "weak" if m >= 12 else "fabricated"
-            if verdict != "fabricated" and _uncovered_run(part, files_text, tags) >= UNCOVERED_MAX:
-                verdict = "fabricated"
-        detail.append((verdict, m, n))
-        if verdict == "fabricated" or (verdict == "weak" and worst == "ok"):
-            worst = verdict
-    return worst, detail
 
 
 def safety_rows(case: Case, arm: str, res: ChildResult, allowed: set[Path], cwd: Path, fields: dict | None,

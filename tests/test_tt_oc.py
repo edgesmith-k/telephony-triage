@@ -178,6 +178,57 @@ def test_preflight_version_snapshot_and_doctor(env):
     assert run_calls(env) == []
 
 
+DOCTOR_ROWS = r'''import json, os, sys
+if sys.argv[1:2] == ["check"]:
+    print(json.dumps({"read_roots": json.loads(os.environ.get("STUB_ROOTS", "[]"))})); sys.exit(0)
+rows = json.loads(os.environ["STUB_DOCTOR_ROWS"])
+fail = sum(r["status"] == "fail" for r in rows)
+print(json.dumps({"counts": {"ok": len(rows) - fail, "fail": fail}, "rows": rows}))
+sys.exit(1 if fail else 0)
+'''
+
+
+def _doctor_stub(e):
+    (e["plug"] / "scripts" / "config.py").write_text(DOCTOR_ROWS, encoding="utf-8")
+    write_meta(e["proj"], e["plug"], e["work"])        # 플러그인 스크립트 지문을 다시 남긴다
+
+
+def _with(e, **extra):
+    return {**e, "env": {**e["env"], **extra}}
+
+
+def test_preflight_module_skills_fail_is_warning(env):
+    """B2 R22: doctor의 fail이 `module_skills` 행뿐이면 시작한다(모듈 문서 받기만 실패할 수 있다). 다른 fail이 있으면 막는다."""
+    _doctor_stub(env)
+    events(env, final())
+    only = [{"check": "config", "status": "ok", "detail": "x"},
+            {"check": "module_skills", "status": "fail", "detail": "사용자 config analyzers.data.prefer: module 또는 skill이어야 합니다"}]
+    r = tt(env, "--", "hi", extra_env={"STUB_DOCTOR_ROWS": json.dumps(only)})
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "module-skills: warn — 모듈 문서 받기는 실패할 수 있음" in r.stderr and len(run_calls(env)) == 1
+    code, rows = _doctor_rows(_with(env, STUB_DOCTOR_ROWS=json.dumps(only)))
+    assert code == 0 and rows["config-doctor"]["status"] == "ok" and rows["module-skills"]["status"] == "warn"
+    both = only + [{"check": "gh", "status": "fail", "detail": "인증 없음"}]
+    r = tt(env, "--", "hi", extra_env={"STUB_DOCTOR_ROWS": json.dumps(both)})
+    assert r.returncode == 2 and "config-doctor: fail" in r.stdout and len(run_calls(env)) == 1
+
+
+def test_doctor_warns_read_roots_outside_install(env):
+    """B2 R21: 풀린 설치 스킬 폴더가 설치한 external_directory 허용 밖이면 경고 행(막지 않는다)."""
+    _doctor_stub(env)
+    (env["proj"] / "opencode.json").write_text(json.dumps({"permission": {"external_directory": {
+        "*": "deny", f"{env['plug']}/**": "allow", f"{env['work']}/**": "allow"}}}), encoding="utf-8")
+    write_meta(env["proj"], env["plug"], env["work"])
+    ok_rows = json.dumps([{"check": "config", "status": "ok", "detail": "x"}])
+    inside = json.dumps([str(env["plug"] / "skills" / "telephony-triage"), str(env["work"])])
+    code, rows = _doctor_rows(_with(env, STUB_DOCTOR_ROWS=ok_rows, STUB_ROOTS=inside))
+    assert code == 0 and "read-roots" not in rows
+    outside = json.dumps([str(env["work"]), "/elsewhere/skills/mock"])
+    code, rows = _doctor_rows(_with(env, STUB_DOCTOR_ROWS=ok_rows, STUB_ROOTS=outside))
+    warn = rows["read-roots"]
+    assert code == 0 and warn["status"] == "warn" and "/elsewhere/skills/mock" in warn["detail"]
+
+
 def test_preflight_refuses_project_in_git(env):
     (env["tmp"] / ".git").mkdir()
     events(env, final())
@@ -397,6 +448,24 @@ def test_prints_screens_from_job_files_since_start(env):
     screens = r.stdout.split("모델을 거치지 않음) ----\n", 1)[1]
     assert screens.startswith("[report] ABC-1 (triage)\n- 분류 후보: C-1\nmust_show:\n- 분석 전용: 기록하지 않음\n")
     assert "옛 리포트 줄" not in r.stdout
+
+
+def test_prints_evidence_screen(env):
+    """B2 R19: check-output의 근거 원문 검사 기록(kind evidence)도 모델을 거치지 않고 줄 그대로 보인다."""
+    import sys as _sys
+    _sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    from common import shown
+
+    assert "evidence" in shown.LINE_KINDS and set(shown.LINE_KINDS) <= set(_load("tt_oc", TTOC).SHOWN_KINDS)
+    plat = env["work"] / "ofono"
+    (plat / ".shown").mkdir(parents=True)
+    rec = {"v": 1, "at": "2999-01-01T00:00:00.000Z", "script": "triage", "kind": "evidence", "job": "ABC-2",
+           "key": "evidence:ABC-2/deep", "lines": ["- 근거 원문 검사: 원문에 없음 1 — 근거 2"], "must_show": []}
+    (plat / ".shown" / "log.jsonl").write_text(json.dumps(rec, ensure_ascii=False) + "\n", encoding="utf-8")
+    events(env, final("모델 요약"))
+    r = tt(env, "--", "x", extra_env={"STUB_SHOWN": str(plat)})
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "[evidence] ABC-2 (triage)\n- 근거 원문 검사: 원문에 없음 1 — 근거 2" in r.stdout
 
 
 def test_delete_session(env):

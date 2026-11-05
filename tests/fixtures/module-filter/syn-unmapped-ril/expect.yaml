@@ -1,0 +1,9 @@
+platform: ofono
+module: data
+mode: explore
+center: '2026-09-20T15:10:00.400Z'
+fail: 4
+essential:
+- 4
+- 5
+origin: 합성

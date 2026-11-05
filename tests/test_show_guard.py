@@ -1144,3 +1144,65 @@ def test_skill_patch_table_row_passes_stop(tmp_path):
     table = PATCH_LINES[0] + "\n\n| 파일 | 더함 | 뺌 |\n|---|---|---|\n| references/DATA-001.md | +1 | −0 |"
     path = write(tmp_path, prompt("p"), bash("k", PATCH_CMD, PATCH_OUT), say(table), extra={"k": [_patch_rec()]})
     assert stop(path, table) is None
+
+
+# --- 근거 원문 검사(check-output, kind evidence, B2-6) · 모듈 문서 질문(B2-20) ---------------------------------------
+
+CHECK_CMD = "python3 /p/scripts/triage.py check-output MOCK-1 --for deep"
+EV_LINE = "- 근거 원문 검사: 인용 2개 중 원문에 없음 1 (ofonod: modem firmware crashed with…)"
+CHECK_OUT = json.dumps({"line": "- 심층 분석 (모듈 스킬 ofono/data @abc1234): 원인 층 ofonod", "evidence": EV_LINE[2:]},
+                       ensure_ascii=False)
+MODULE_Q = {"question": "어느 모듈 문서로 볼까요? (모듈 신호 줄 수: data 12 · network 7)"}
+
+
+def _ev_rec(lines=(EV_LINE,), purpose="deep"):
+    return ("triage", "evidence", {"key": f"evidence:MOCK-1/{purpose}", "lines": list(lines), "path": "/w/MOCK-1/report.md"})
+
+
+def test_module_questions_do_not_block_like_explore_questions(tmp_path):
+    import show_guard
+    run = _job(tmp_path)
+    for q in ("어느 모듈 문서로 볼까요? (모듈 신호 줄 수: data 12 · network 7)",
+              "고른 모듈 문서의 신호가 약합니다. 다른 모듈 문서로 바꿀까요? (모듈 신호 줄 수: sim 9 · data 2)"):
+        assert show_guard.EXPLORE_Q.search(q)
+        assert stop(write(tmp_path, prompt("p"), run, say(q)), q) is None          # 리포트 전 질문(Step 5)은 막지 않는다
+    also = "모뎀 모듈 문서도 함께 볼까요? (모뎀 신호: RFSD 2줄)"
+    assert stop(write(tmp_path, prompt("p"), run, say(also), name="also.jsonl"), also) is None
+    # 모듈 질문 뒤 Step 7 질문에서는 리포트를 여전히 본다
+    path = write(tmp_path, prompt("p"), run, say(MODULE_Q["question"]), prompt("data"), say("요약만"), name="s7.jsonl")
+    out = pre("pre-ask", path, ASK, {"question": "어떻게 기록할까요?", "options": [{"label": x} for x in STEP7]})
+    assert decision(out) == "deny"
+
+
+def test_evidence_line_required_at_stop_but_not_for_module_question(tmp_path):
+    rec = {"c": [_ev_rec()]}
+    para = "심층 분석을 마쳤습니다."
+    path = write(tmp_path, prompt("p"), bash("c", CHECK_CMD, CHECK_OUT), say(para), extra=rec)
+    out = stop(path, para)
+    assert out["decision"] == "block" and "근거 원문 검사 결과를 요약했다" in out["reason"]
+    assert out["reason"].startswith(shown.MARKER + " evidence:MOCK-1/deep")
+    assert decision(pre("pre-ask", path, ASK, {"question": "코드 경로를 고르세요"})) == "deny"     # 다른 질문은 본다
+    assert pre("pre-ask", path, ASK, MODULE_Q) is None                                          # 5-2 모듈 질문은 보지 않는다
+    assert pre("pre-ask", path, ASK, {"question": "토큰이 추가로 듭니다. 탐색 분석을 할까요?"}) is None
+    ok = write(tmp_path, prompt("p"), bash("c", CHECK_CMD, CHECK_OUT), say(EV_LINE), name="ok.jsonl", extra=rec)
+    assert stop(ok, EV_LINE) is None
+
+
+def test_evidence_fixed_rerun_closes_obligation(tmp_path):
+    fixed = json.dumps({"line": "x", "evidence": "근거 원문 검사: 인용 2개 중 원문에 없음 0"}, ensure_ascii=False)
+    path = write(tmp_path, prompt("p"), bash("c1", CHECK_CMD, CHECK_OUT), bash("c2", CHECK_CMD, fixed), say("고쳤습니다."),
+                 extra={"c1": [_ev_rec()], "c2": [_ev_rec(())]})
+    assert stop(path, "고쳤습니다.") is None
+    # 고친 뒤 다시 틀리면 새 의무
+    again = write(tmp_path, prompt("p"), bash("c1", CHECK_CMD, CHECK_OUT), bash("c2", CHECK_CMD, fixed),
+                  bash("c3", CHECK_CMD, CHECK_OUT), say("다시"), name="again.jsonl",
+                  extra={"c1": [_ev_rec()], "c2": [_ev_rec(())], "c3": [_ev_rec()]})
+    assert stop(again, "다시")["decision"] == "block"
+
+
+def test_post_reminds_evidence_output(tmp_path):
+    home = _post_home(tmp_path, _ev_rec())
+    out, _ = hook("post", {"tool_name": "Bash", "tool_input": {"command": CHECK_CMD}, "tool_response": {"stdout": CHECK_OUT}},
+                  home=home)
+    ctx = out["hookSpecificOutput"]["additionalContext"]
+    assert "근거 원문 검사 결과" in ctx and "출력 줄 전부(1줄)" in ctx

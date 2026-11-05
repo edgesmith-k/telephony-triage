@@ -55,6 +55,9 @@
 | S30 | (GitHub 트래커 — 사내는 Jira라 해당 없음, 결정 (o)) GitHub Issues를 트래커로 쓸지, 쓴다면 MCP 등록: **트래커 전용 등록인지**(issues toolset만), 도구 전체 이름, 인자 이름(`issue_read`의 `method`·`owner`·`repo`·`issue_number`, `add_issue_comment`의 `owner`·`repo`·`issue_number`·`body`), 응답 형식(comment id 위치, `isError`), GHE 호스트, repo 이름 규칙(`.`로 시작하는 repo 없음) | `18-trackers.md` §3·§5, `08-safety.md §9` 규칙 2 | MCP `tools/list`·스키마 조회, 샌드박스 이슈에 읽기·시험 코멘트 1건(사용자 승인 후). 트래커 서버가 일반 GitHub MCP와 같은 등록이면 그 서버의 `read_tools` 밖 도구(코드 읽기·PR 생성 포함)가 규칙 2로 모두 거부되므로 전용 등록을 정한다 | site-defaults `tracker.*`(`kind: github`), 이슈 DB `tracker.{kind, base_url, key_regex}`, `trackers/github.py` |
 | S31 | (GitHub 트래커) GitHub 이슈의 구조화 필드(모델·SW·플랫폼 버전·발생 시각·SIM 슬롯) 위치: 이슈 폼 본문, 라벨, Projects 필드 중 어디인지 | `18-trackers.md` §1·§8, `07-workflow.md §Step 2` | 샘플 이슈 3~5건에서 확인. `field_map` JSON 경로로 얻을 수 없으면 사용자 질문(지금 동작)으로 둔다. 본문 추출은 미룬다 | site-defaults `tracker.field_map`(기본 `{}`), `trackers/github.py` `text_defaults`·`components_default` |
 | S32 | 플랫폼마다 트래커나 프로젝트가 다른지(S28과 함께) | `18-trackers.md` §7 T9·§8, `17-platforms.md` §미룬 것 | 메인테이너·트래커 관리자 확인 | 다르면 `platforms.<p>.tracker` 덮어쓰기(`PROFILE_KEYS` 확장)를 다음 작업으로. 같으면 공유(지금 동작). 프로젝트·필드 값으로 플랫폼이 갈리면 `platform.detect.tracker_field`(`17-platforms.md §11-5`) |
+| S33 | 모듈 스킬 레포: GHE 주소(`https://`·`ssh://`·`<user>@<host>:o/r` 꼴만 — http·owner/repo만은 안 된다), partial clone 지원(확인 전에는 쓰지 않는다), 사용자 PC git 버전(cone sparse ≥ 2.25 — 2.43 밖은 사외 미검증), 팀 push 권한·브랜치 보호(승인 1). 주소를 넣으면 설치 스킬이 있는 카테고리(예: Android analyzers.data.skill)는 prefer: skill을 적지 않는 한 모듈 문서로 바뀐다(check·doctor 경고). base_branch를 바꾸면 사용자가 관리 clone을 지운다. 설치 스킬 SKILL.md 위치(Claude Code `installed_plugins.json` 모양은 사외 2.1.318에서 확인 — 사내 버전에서 반입 뒤 5-1 점검으로 다시 본다, 못 찾으면 `analyzers.<카테고리>.skill_dir`) | `MODULE_SKILLS_PLAN_IMPL` §2.1·§2.2·§4.5, 07 §Step 5-1 | GHE 관리자·메인테이너 확인, 사용자 PC에서 git --version, config.py doctor module_skills 행, `config.py check --roots` | site-defaults module_skills.remote·base_branch, analyzers.<카테고리>.prefer·skill_dir |
+| S34 | 런타임 사내 패턴(회사·서버·팀 이름 정규식): 모듈 문서 "사내 값" 점검의 출처(E 전에는 읽는 코드 없음) | `MODULE_SKILLS_PLAN_IMPL` §3.6 | 메인테이너 | site-defaults boundary.patterns(E에서 읽는다. 없으면 그 점검은 건너뜀(사내 패턴 없음)) |
+| S35 | 분석 환경 이름(출처 기록의 label): 사내 실행 환경(Claude Code + 사내 모델 게이트웨이, OpenCode + GLM)을 기록에서 가려낼 짧은 이름. Claude Code가 모델·게이트웨이 환경 변수(`ANTHROPIC_MODEL`·`ANTHROPIC_DEFAULT_*_MODEL`·`ANTHROPIC_BASE_URL`)를 Bash까지 넘기는지 | B2 설계 §9.3, `MODULE_SKILLS_DECISIONS` 11/05 ①(출처 기록) | 환경마다 `module-skill.json`·`check-output.json`의 `env` 확인 | site-defaults runtime.label(선택, 영숫자·._ +-, 40자 이하) |
 
 ### 14.3 `SITE_PROFILE.md` 형식
 
@@ -121,7 +124,7 @@
 6. 샘플 logcat은 Phase 1 fixture의 원본이 된다. fixture로 만들 때 반드시 마스킹한다.
 7. `SITE_PROFILE.md`의 "진행 상태"에 Phase 0 완료를 기록한다.
 
-완료 기준: 문서 정합성 검토 결과의 🔴 항목이 모두 처리 방식까지 정해졌고, `REVIEW-OPEN.md`의 모든 항목이 처리 방식이 정해졌거나 사유와 함께 보류로 `SITE_PROFILE.md`에 기록됐고, S1~S32(S24~S29는 그 플랫폼을 켤 때만, S30·S31은 GitHub 트래커를 쓸 때만)가 모두 "확인" 또는 "미확인 + 대안"으로 기록되고, 설계 변경이 필요한 항목은 사용자 결정이 기록돼 있다.
+완료 기준: 문서 정합성 검토 결과의 🔴 항목이 모두 처리 방식까지 정해졌고, `REVIEW-OPEN.md`의 모든 항목이 처리 방식이 정해졌거나 사유와 함께 보류로 `SITE_PROFILE.md`에 기록됐고, S1~S35(S24~S29는 그 플랫폼을 켤 때만, S30·S31은 GitHub 트래커를 쓸 때만, S33~S35는 모듈 스킬 레포를 쓸 때만)가 모두 "확인" 또는 "미확인 + 대안"으로 기록되고, 설계 변경이 필요한 항목은 사용자 결정이 기록돼 있다.
 
 ### 14.5 사외 문서 업데이트를 사내에 반영할 때
 

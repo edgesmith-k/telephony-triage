@@ -559,6 +559,9 @@ def test_site_defaults_example_shape():
     assert data["parser"]["backend"] == "reference"
     assert data["external_parsers"] == {}
     assert data["analyzers"]["data"]["when"] == "ask"
+    # 모듈 스킬 레포·runtime은 주석 예시만, 폐지 하위 키는 지웠다(B1 설계 §2.3 — 예시를 복사한 시험 루트가 경고를 받지 않게)
+    assert "module_skills" not in data and "runtime" not in data
+    assert data["analyzers"] == {"data": {"skill": "mock-data-analyzer", "when": "ask"}}
     # read_tools 는 tools 값을 모두 포함해야 한다
     # (contracts.md §기존 자산 연결 계약)
     assert set(data["tracker"]["tools"].values()) <= set(data["tracker"]["read_tools"])

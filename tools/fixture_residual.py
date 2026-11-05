@@ -1,0 +1,164 @@
+#!/usr/bin/env python3
+"""fixture_residual.py — fixture·case 파일의 남은 식별자 점검 (B2 §4.8, B2-12, 결정 기록 11/05).
+
+    python3 tools/fixture_residual.py <file|dir>... [--against <원본 로그 dir>] [--json]
+
+- (a) 줄마다 로그 마스커의 `masking.residual()`(M1~M11 포함). 걸리면 `file:line kind`.
+- (b) `--against`: 원본 로그에서 아직 가리지 않는 값의 거부 목록을 **메모리에서만** 만들고, fixture에 그 값이 있으면
+  `file:line kind (원본 줄 n)`. 종류: APN 값, PLMN(MCC-MNC), AID 꼬리, base64(M2b 모양), 제품·모뎀·부품 코드와 빌드 ID,
+  빌드 시각, 사업자 이름, 벤더 경로 장치 노드, syslog 호스트 칸 값.
+- 디렉토리를 주면 그 아래 `.log`·`.txt`·`.json`과 case `files/*.md`를 본다(문서·`modules.yaml`의 정규식 글은 보지 않는다).
+- syslog 호스트 칸이 `dut`·`localhost`·`(none)`·`host<n>`이 아니면 `host`로 보인다(원본 없이도).
+
+출력은 파일·줄·종류(와 원본 줄 번호)뿐이며 맞은 글자는 내지 않는다. 마스킹한 실제 발췌는 허용한다(LM의 원문 금지
+규칙은 쓰지 않는다). 종료 코드: 0 깨끗함, 1 지적 있음, 2 사용 오류.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import sys
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+
+from common import masking
+
+TEXT_SUFFIXES = (".log", ".txt", ".json")          # 디렉토리를 줄 때 보는 파일(로그·이벤트), 그리고 case `files/*.md`
+HOST_HEAD = re.compile(r"^(?:" + "|".join(masking._M11_STAMPS) + r") (?P<v>\S+) ")
+HOST_OK = re.compile(r"dut|localhost|\(none\)|host\d+")
+GENERIC = frozenset(("internet", "ims", "default", "null", "none", "true", "false", "unknown", "mms", "supl", "xcap",
+                     "emergency", "fota", "hipri", "dun", "ia", "cbs"))
+DEV_GENERIC = frozenset(("null", "zero", "random", "urandom", "tty", "console", "ptmx", "kmsg", "ashmem", "binder",
+                         "hwbinder", "vndbinder", "pts", "shm", "socket", "full", "fuse", "uinput", "input", "log",
+                         "mem", "cpuset", "stune", "blkio", "memcg", "block", "char", "bus", "properties"))
+DENY_RX = (
+    ("apn", re.compile(r"(?i)\bapn\s*[=:]\s*\"?(?P<v>[A-Za-z0-9][A-Za-z0-9._-]{2,62})")),
+    ("apn", re.compile(r"(?i)\bapn (?P<v>[a-z0-9-]+(?:\.[a-z0-9-]+)+)")),            # 공백 뒤는 도메인 모양만
+    ("plmn", re.compile(r"(?i)\b(?:plmn|mccmnc|mcc_mnc|numeric|operatorNumeric)\s*[=:]\s*\"?(?P<v>\d{5,6})\b")),
+    ("plmn", re.compile(r"(?i)\bmnc(?P<v>\d{2,3}\.mcc\d{3})\b")),
+    ("aid", re.compile(r"(?i)(?<![0-9A-F])(?P<v>A000000[0-9A-F]{10,})")),
+    ("build_time", re.compile(r"(?i)(?:build|date|time)\D{0,12}(?P<v>\d{8}[._-]?\d{6})")),
+    ("carrier", re.compile(r"(?i)(?:mOperatorAlphaLong|mOperatorAlphaShort|spn|carrier)\s*[=:]\s*\"?(?P<v>[^\s\",;}{)]{3,40})")),
+    ("carrier", re.compile(r"\"Name\",\s*variant\(\"(?P<v>[^\"]{3,40})\"")),
+    ("device_node", re.compile(r"/dev/(?P<v>[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*)")),
+)
+_IDENT = re.compile(r"[A-Za-z]*[a-z][A-Z]\w*|[a-z]+")    # CamelCase 식별자·소문자 낱말(키 이름이지 값이 아니다)
+
+
+def _value_ok(kind: str, value: str) -> bool:
+    """거부 목록에 넣을 값인가: 사업자 이름은 키 이름·식별자 모양(`SubId`·`value`)과 `=`·`:`가 든 조각을 뺀다."""
+    if kind == "carrier":
+        return not (re.search(r"[=:]", value) or _IDENT.fullmatch(value))
+    return True
+
+
+SPAN_KINDS = {"PRODUCT": "product", "BUILD": "build", "HASH": "build", "B64": "base64"}
+
+
+def _files(args: list[str]) -> list[Path]:
+    out = []
+    for name in args:
+        p = Path(name)
+        if p.is_dir():
+            out += [f for f in sorted(p.rglob("*")) if f.is_file()
+                    and (f.suffix in TEXT_SUFFIXES or (f.suffix == ".md" and f.parent.name == "files"))]
+        elif p.is_file():
+            out.append(p)
+        else:
+            raise FileNotFoundError(name)
+    return out
+
+
+def _lines(path: Path) -> list[str]:
+    return [ln.rstrip("\r") for ln in path.read_bytes().decode("utf-8", "replace").split("\n")]
+
+
+def deny_list(raw_dir: Path) -> dict[str, tuple[str, str, int]]:
+    """원본 로그의 거부 값 `{값: (종류, 원본 파일 이름, 줄)}` (처음 나온 곳). 메모리에만 있다."""
+    deny: dict[str, tuple[str, str, int]] = {}
+    masker = masking.new_masker(log_lines=True)
+
+    def add(value: str, kind: str, src: str, no: int) -> None:
+        value = value.strip()
+        if len(value) < 4 or value.lower() in GENERIC or value in deny:
+            return
+        deny[value] = (kind, src, no)
+
+    for path in _files([str(raw_dir)]):
+        for no, line in enumerate(_lines(path), 1):
+            m = HOST_HEAD.match(line)
+            if m and not HOST_OK.fullmatch(m.group("v")):
+                add(m.group("v"), "host", path.name, no)
+            for kind, rx in DENY_RX:
+                for hit in rx.finditer(line):
+                    v = hit.group("v")
+                    if (kind == "device_node" and v.split("/")[0] in DEV_GENERIC) or not _value_ok(kind, v):
+                        continue
+                    add(("/dev/" + v) if kind == "device_node" else v, kind, path.name, no)
+            for _s, _e, kind, value in masker._spans(line):
+                if kind in SPAN_KINDS:
+                    add(value, SPAN_KINDS[kind], path.name, no)
+    return deny
+
+
+def _deny_regex(deny: dict) -> re.Pattern | None:
+    if not deny:
+        return None
+    alt = "|".join(re.escape(v) for v in sorted(deny, key=lambda v: (-len(v), v)))
+    return re.compile(r"(?<![A-Za-z0-9])(?:" + alt + r")(?![A-Za-z0-9])")
+
+
+def check(paths: list[Path], deny: dict | None = None) -> list[dict]:
+    """지적 `[{file, line, kind, raw_line?}]` (값 없음)."""
+    rx = _deny_regex(deny or {})
+    found = []
+    for path in paths:
+        for no, line in enumerate(_lines(path), 1):
+            for kind, n in masking.residual(line).items():
+                found += [{"file": str(path), "line": no, "kind": kind}] * n
+            m = HOST_HEAD.match(line)
+            if m and not HOST_OK.fullmatch(m.group("v")) and not (deny and m.group("v") in deny):
+                found.append({"file": str(path), "line": no, "kind": "host"})
+            if rx is not None:
+                for hit in rx.finditer(line):
+                    kind, _src, raw_no = deny[hit.group(0)]
+                    found.append({"file": str(path), "line": no, "kind": kind, "raw_line": raw_no})
+    return found
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(prog="fixture_residual.py", description=__doc__,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("paths", nargs="+")
+    parser.add_argument("--against", help="원본 로그 디렉토리(거부 목록을 메모리에서 만든다)")
+    parser.add_argument("--json", action="store_true")
+    args = parser.parse_args(argv)
+    try:
+        paths = _files(args.paths)
+    except FileNotFoundError as exc:
+        print(f"파일·디렉토리가 없습니다: {Path(str(exc)).name}", file=sys.stderr)
+        return 2
+    deny = None
+    if args.against:
+        raw = Path(args.against)
+        if not raw.is_dir():
+            print("--against는 디렉토리여야 합니다", file=sys.stderr)
+            return 2
+        deny = deny_list(raw)
+    found = check(paths, deny)
+    if args.json:
+        print(json.dumps({"checked": len(paths), "findings": found, "deny_values": len(deny or {})}, ensure_ascii=False))
+    else:
+        for f in found:
+            extra = f" (원본 줄 {f['raw_line']})" if "raw_line" in f else ""
+            print(f"{f['file']}:{f['line']} {f['kind']}{extra}")
+        print(f"파일 {len(paths)}개, 지적 {len(found)}건")
+    return 1 if found else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

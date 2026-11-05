@@ -1046,9 +1046,22 @@ def s4a_analyzers(ctx: Ctx) -> dict:
     d = _site_defaults(ctx)
     if d is None:
         return _need_defaults("s4a.analyzers")
+    ms = d.get("module_skills") if isinstance(d.get("module_skills"), dict) else {}
+    remote = ms.get("remote") if isinstance(ms.get("remote"), str) and ms.get("remote").strip() else None
     data = (d.get("analyzers") or {}).get("data")
-    return res("s4a.analyzers", "pass" if data else "fail", f"analyzers.data {'설정됨' if data else '비어 있음'}",
-               "grep -n -A3 analyzers plugin/site-defaults.yaml")
+    if not remote:   # 모듈 스킬 레포가 없으면 예전 문자열 그대로(B1 §2.6)
+        return res("s4a.analyzers", "pass" if data else "fail", f"analyzers.data {'설정됨' if data else '비어 있음'}",
+                   "grep -n -A3 analyzers plugin/site-defaults.yaml")
+    return res("s4a.analyzers", "pass", f"module_skills.remote 설정됨({_redact_remote(remote)})",
+               "grep -n -A3 -E '^(module_skills|analyzers):' plugin/site-defaults.yaml")
+
+
+def _redact_remote(value: str) -> str:
+    """원격 주소에서 자격 증명·scheme·`.git`을 뺀 60자(site_checks는 플러그인 모듈을 import하지 않는다)."""
+    v = re.sub(r"://[^/@\s]+@", "://", value.strip())
+    v = re.sub(r"^[A-Za-z][A-Za-z0-9+.-]*://", "", v)
+    v = re.sub(r"^[^@/:\s]+@", "", v)
+    return re.sub(r"\.git/?$", "", v)[:60]
 
 
 def s4a_import_pr(ctx: Ctx) -> dict:

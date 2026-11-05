@@ -42,10 +42,8 @@ ALLOWED = [re.compile(p) for p in (
     r"[a-z]+/[a-z]+/evals/[a-z0-9][a-z0-9-]{2,60}/case\.yaml",
     r"[a-z]+/[a-z]+/evals/[a-z0-9][a-z0-9-]{2,60}/files/[^/]+\.(log|md|json)",
 )]
-# 파일별 상한(C0 설계 §1.1, IMPL §1.2)
-CAPS = {"README.md": 8192, "modules.yaml": 8192, "layers.md": 4096, "components.md": 6144,
-        "explore.md": 4096, "SKILL.md": 6144, "analyzer.md": 2048}
-REFERENCE_CAP, CASE_CAP, DEEP_SET_CAP = 4096, 16384, 22 * 1024
+# 파일별 상한은 skillcheck가 정본이다(CAPS·REFERENCE_CAP·CASE_CAP, R34). 받을 때 점검과 같은 값을 쓴다
+DEEP_SET_CAP = 22 * 1024
 
 STATUS_FIRST = "이 문서는 telephony-triage의 분석 절차 보조다."
 STATUS_BLOCK = ("이 문서는 telephony-triage의 분석 절차 보조다. telephony-triage의 SKILL.md·rules.md·guard와 다르면 그쪽이 맞다. "
@@ -59,6 +57,13 @@ LAYER_NAMES = ("관리 데몬", "D-Bus", "ofonod", "벤더 RIL(exynos-ril)", "�
 # 채점기 칸 이름(C0 설계 §9.1). module_eval이 있으면 그 FIELDS와도 같아야 한다
 FIELDS = ("원인 층", "원인 데몬", "근거", "반대 근거", "분석 스킬 의견", "규칙 제안")
 SKILL_DESCRIPTION = "telephony-triage Step 5-1에서 triage.py module 출력으로만 읽는다"
+
+
+def _skillcheck():
+    """`common.skillcheck`(받을 때 점검, B1 §6·B2 §4.2). 함수 안에서 불러 이 파일의 다른 시험이 기대지 않게 한다."""
+    from common import skillcheck
+
+    return skillcheck
 
 
 def _files() -> list[Path]:
@@ -96,12 +101,15 @@ def test_no_symlinks_no_exec_bits():
 
 
 def test_size_caps():
+    sc = _skillcheck()
     for path in _module_docs():
-        cap = REFERENCE_CAP if path.parent.name == "references" else CAPS[path.name]
+        cap = sc.REFERENCE_CAP if path.parent.name == "references" else sc.CAPS[path.name]
         assert path.stat().st_size <= cap, (path, path.stat().st_size, cap)
     for case in _case_dirs():
         total = sum(p.stat().st_size for p in case.rglob("*") if p.is_file())
-        assert total <= CASE_CAP, (case.name, total)
+        assert total <= sc.CASE_CAP, (case.name, total)
+    yml = TEMPLATES / "modules.yaml"
+    assert yml.stat().st_size <= sc.CAPS["modules.yaml"] == 24 * 1024
     for module in sorted(p for p in TEMPLATES.glob("*/*") if (p / "SKILL.md").is_file()):
         common = module.parent / "_common"
         refs = list((module / "references").glob("*.md"))
@@ -131,6 +139,26 @@ def test_case_schema(tmp_path):
         path.write_text(text.replace(old, new), encoding="utf-8")
         with pytest.raises(module_eval.CaseError):
             module_eval.load_case(dest)
+
+
+def test_modules_yaml_strict_valid():
+    """템플릿 modules.yaml(스키마 2, B2 §4.5)은 PR 쪽 엄격 검사(모르는 키도 오류)를 통과한다."""
+    sc = _skillcheck()
+    doc = sc.load_modules_yaml((TEMPLATES / "modules.yaml").read_bytes())
+    assert doc["schema_version"] == 2
+    assert sc.validate_modules(doc, strict=True) == []
+    assert "ENT" in doc["platforms"]["ofono"]["modules"]["network"]["daemons"]     # 결정 기록 11/05 ①
+    assert "PTD" in doc["platforms"]["ofono"]["modules"]["network"]["daemons"]
+    for platform in ("ofono", "android"):
+        assert doc["platforms"][platform]["common"]["filter"], platform
+
+
+def test_case_files_residual_clean():
+    """case 파일에 남은 식별자가 없다(로그 마스커 `residual`·호스트 칸, `tools/fixture_residual.py`)."""
+    import fixture_residual
+
+    paths = [p for case in _case_dirs() for p in sorted((case / "files").iterdir())]
+    assert fixture_residual.check(paths) == []
 
 
 def test_synthetic_marker():

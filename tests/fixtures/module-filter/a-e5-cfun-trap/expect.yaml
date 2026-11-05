@@ -1,0 +1,10 @@
+platform: android
+module: data
+mode: deep
+center: '2026-08-09T13:13:49.644Z'
+fail: 43
+essential:
+- 35
+- 42
+- 43
+origin: A A-E5 줄 58580-58660

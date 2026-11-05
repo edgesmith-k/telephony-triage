@@ -24,7 +24,15 @@
   `events.json`으로 `JOB/timeline.md`(마스킹된 요약 타임라인, 줄 수 상한 기본 200)를 만들고 `report.md`의 탐색 분석 줄을 갱신한다.
   출력 `{timeline, lines, total}`. 작업 플랫폼이 기본(android)이 아니면 `platform`과 `refs`(그 플랫폼 탐색 지식 문서, 스킬 디렉토리 기준
   `reference/platforms/<p>/*.md`, 없으면 빈 목록)를 더한다(17-platforms §10). 종료 코드 1 = 해당 없음(입력 파일 없음), 2 = 사용 오류·
-  `events.json` 없음. lock·trace는 쓰지 않는다.
+  `events.json` 없음. lock·trace는 쓰지 않는다. 타임라인은 `masking.redact`로 한 번 더 가리고, 가린 것이 있으면 `mask_warnings`
+  (`{종류: 수}`)를, `module_skills.remote`가 있으면 `module_skills: true`를 더한다(없으면 출력이 이전과 같다).
+- `triage.py module <KEY> --for deep [--also] | --for explore [--module <p>/<dir> | --choose top|<dir>] [--at <ISO>] [--out <dir>]`:
+  동의 뒤 5-1·5-2 모듈 스킬 문서를 관리 clone(`<work_dir>/_module-skills`)에서 받아 `JOB/module-skill/<purpose>/`·`module-skill.json`
+  (deep은 `deep-input.json`, 설치 스킬이면 `skill-input.json`)을 쓰고 리포트 줄을 고친다(`triagelib/modulecmd.py`). 출력은 JSON 한 줄
+  `{module, sha, read, also, input?, timeline, …}`(설치 스킬 `{skill, read, base, input, timeline}`, 후보 여럿 `{pick: null, ask, …}`),
+  실패면 `{reason, next}`. 종료 코드 1 = 해당 없음(설정 없음·후보 없음·레포에 없음·설치 스킬 못 찾음), 2 = 오류(`next`를 따른다).
+- `triage.py check-output <KEY> --for deep|explore [--skipped <사유>] [--out <dir>]`: Claude가 쓴 `JOB/<purpose>-output.md`를
+  마스킹·칸 검사·근거 원문 검사하고 리포트 줄을 쓴다(`triagelib/output.py`). 출력 `{line, evidence, quotes, …}`, 실패 `{reason, next?}`.
 - `analysis.json`의 `must_show`(있을 때만, ≤6줄·4KB 압축 시 4줄·줄당 ≤160자): 리포트 줄 중 사용자에게 꼭 보여야 하는 것(분석 전용·읽기 전용·
   1위 변화 재분석·실패 스텝·장비 시각 미사용·판정 불가 유형·원인·슬롯 불일치·시계 이상 구간 근거·로그 범위 이상·범위 밖 오류·
   파서 규칙에 없는 태그·미추출 W/E 줄·코드 분석 트리 자동 선택·이슈 DB pull 건너뜀, 순서는 `07-workflow.md §Step 6`). `report.md`의 줄과 같은 문구다.
@@ -96,7 +104,7 @@ from pathlib import Path
 SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS))
 
-from common import events, site_defaults, userconfig, yamlio  # noqa: E402
+from common import events, masking, site_defaults, userconfig, yamlio  # noqa: E402
 import platforms  # noqa: E402
 import trackers  # noqa: E402
 from platforms import session as platform_session  # noqa: E402
@@ -145,6 +153,20 @@ def build_parser() -> argparse.ArgumentParser:
                                           "없으면 steps-file의 장비 시각은 분석 구간에 쓰지 않는다")
     p = sub.add_parser("explore", parents=[common])
     p.add_argument("key", metavar="KEY")
+    p.add_argument("--out", metavar="dir", help="`run --offline-db --out`의 JOB 디렉토리(없으면 <work_dir>/<KEY>)")
+    p = sub.add_parser("module", parents=[common])
+    p.add_argument("key", metavar="KEY")
+    p.add_argument("--for", dest="purpose", choices=("deep", "explore"), required=True,
+                   help="deep = 5-1 심층 분석 문서, explore = 5-2 탐색 문서")
+    p.add_argument("--module", metavar="p/dir", help="explore: 이 모듈로(후보 계산 없이). deep에는 못 쓴다")
+    p.add_argument("--choose", metavar="top|dir", help="explore: 질문 없이 고른다(top = 1위 후보, dir = 모듈 디렉토리 이름)")
+    p.add_argument("--also", action="store_true", help="deep: 모뎀 모듈 문서도 같은 SHA로 함께 받는다")
+    p.add_argument("--at", metavar="ISO", help="explore --module: 받은 사본으로 타임라인 중심만 다시 잡는다(받기 없음)")
+    p.add_argument("--out", metavar="dir", help="`run --offline-db --out`의 JOB 디렉토리(없으면 <work_dir>/<KEY>)")
+    p = sub.add_parser("check-output", parents=[common])
+    p.add_argument("key", metavar="KEY")
+    p.add_argument("--for", dest="purpose", choices=("deep", "explore"), required=True)
+    p.add_argument("--skipped", metavar="사유", help="실행하지 않았거나 실패: report 줄을 '생략: <사유>'로")
     p.add_argument("--out", metavar="dir", help="`run --offline-db --out`의 JOB 디렉토리(없으면 <work_dir>/<KEY>)")
     p = sub.add_parser("release", parents=[common])
     p.add_argument("key", metavar="KEY")
@@ -233,6 +255,7 @@ def cmd_explore(args, defaults: dict) -> int:
         print(f"탐색 입력을 읽지 못했다({exc}) — 이 키로 /telephony-triage:analyze를 다시 실행한다", file=sys.stderr)
         return USAGE
     text, kept, total = timeline(args.key, events, spec.get("around"), limit, spec.get("failed_step"), spec.get("anchor"))
+    text, redacted = masking.redact(text, events.get("mask_allow") or [])    # 마스킹 전 JOB이어도 남은 값은 가린다(B2-25)
     (job / TIMELINE_FILE).write_text(text, encoding="utf-8", newline="\n")
     report = job / "report.md"
     if report.is_file():
@@ -245,6 +268,10 @@ def cmd_explore(args, defaults: dict) -> int:
     platform = _job_platform(job, args.platform_name)
     if platform != userconfig.TOP_PROFILE:      # 기본 플랫폼이면 출력이 이전과 같다(K8)
         out.update(platform=platform, refs=_platform_refs(args, platform))
+    if redacted:
+        out["mask_warnings"] = redacted
+    if userconfig.module_skills(cfg) is not None:      # 5-2 모듈 문서를 받을 수 있다(B2-4). 없으면 출력이 이전과 같다
+        out["module_skills"] = True
     _emit(out)
     return OK
 
@@ -312,8 +339,16 @@ def main(argv: list[str] | None = None) -> int:
     try:
         args.platform_name, args.platform_cfg = platform_session.resolve(defaults, args.platform)
     except (platforms.PlatformConfigError, yamlio.YamlFileError) as exc:
+        if args.cmd in ("module", "check-output"):       # 이 둘은 늘 JSON 한 줄(B1 §4.2)
+            _emit({"reason": "설정 오류"})
         print(str(exc), file=sys.stderr)
         return USAGE
+    if args.cmd == "module":
+        from triagelib import modulecmd
+        return modulecmd.cmd_module(args, defaults)
+    if args.cmd == "check-output":
+        from triagelib import output
+        return output.cmd_check_output(args, defaults)
     if args.cmd == "release":
         return cmd_release(args, defaults)
     if args.cmd == "explore":

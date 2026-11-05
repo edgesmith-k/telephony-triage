@@ -37,6 +37,10 @@ setup 필드 (모두 선택):
         reviews는 스텁 파서(`parse_reviews`)로 검사한다. 없는 키는 스텁 기본값(검사 없음·CLEAN·세 방식 모두·리뷰 없음)이고,
         gh_merge가 없으면 env에 아무것도 더하지 않는다(다른 eval은 예전과 같다)
     approver_deny: true — 권한 확인 응답 서버(eval-approver)가 모든 ask를 거부한다(`run.py`가 `EVAL_APPROVER_DENY=1`로 붙인다, eval 62)
+    module_skills: {source: mock|template|missing} — 모듈 스킬 레포(B2 §13.1). `<out>/module-remote/`에 file:// bare 레포를 만들고
+        (`tests/helpers/module_remote.build`: mock = `tests/mocks/module-skills`, template = `templates/module-skills`) site-defaults
+        `module_skills.remote`로 넣는다. missing = 없는 `file://<out>/missing.git`(git이 레포가 아니라고 해 `인증`, 오프라인 인증 실패).
+        env.json에 `module_source`·`module_remote_sha`(missing이면 null)
 """
 
 from __future__ import annotations
@@ -61,6 +65,26 @@ GEN = REPO / "tests" / "mocks" / "logcat_gen.py"
 CALL = REPO / "tests" / "mocks" / "jira_mcp" / "call.py"
 GH_CALL = REPO / "tests" / "mocks" / "github_issues_mcp" / "call.py"
 ANALYZER = REPO / "tests" / "mocks" / "skills" / "data-analyzer" / "run.py"
+MODULE_SOURCES = ("mock", "template", "missing")
+MODULE_TEMPLATES = REPO / "templates" / "module-skills"
+
+
+def module_remote(spec, out: Path) -> tuple[str | None, str | None]:
+    """setup.module_skills → (remote URL, HEAD sha). 없으면 (None, None). 틀리면 SystemExit."""
+    if not spec:
+        return None, None
+    if not isinstance(spec, dict) or set(spec) != {"source"} or spec["source"] not in MODULE_SOURCES:
+        raise SystemExit(f"setup.module_skills는 {{source: {'|'.join(MODULE_SOURCES)}}}: {spec}")
+    if spec["source"] == "missing":
+        return (out / "missing.git").as_uri(), None
+    import module_remote as mr  # 작업 묶음 2의 도우미(B2 §5.8, R30 build(out, src=MOCK, extra=None) -> file URL)
+    kwargs = {"src": MODULE_TEMPLATES} if spec["source"] == "template" else {}
+    url = mr.build(out / "module-remote", **kwargs)
+    from urllib.parse import unquote, urlparse
+    bare = Path(unquote(urlparse(url).path))
+    sha = subprocess.run(["git", "--git-dir", str(bare), "rev-parse", "HEAD"], capture_output=True, text=True,
+                         check=True).stdout.strip()
+    return url, sha
 
 
 def _gen(scenario: Path, out: Path, name: str | None = None, bugreport: str | None = None,
@@ -264,6 +288,9 @@ def build(entry: dict, out: Path, direct_tools: bool = True) -> dict:
     overrides = dict(setup.get("site_defaults") or {})
     if github:   # 두 번째 트래커: tracker 블록은 github 예시, site_defaults.tracker의 키가 우선
         overrides["tracker"] = github_defaults(**(overrides.get("tracker") or {}))["tracker"]
+    module_url, module_sha = module_remote(setup.get("module_skills"), out)
+    if module_url:      # URL이 env 디렉토리마다 달라 plugin_root 캐시 키도 다르다
+        overrides["module_skills"] = {"remote": module_url}
     root = plugin_root("eval", **overrides) if overrides else plugin_root()
     db_src = fixture_db(setup.get("db", "issue-db-github" if github else "issue-db-sample"))
     ws = Workspace(src=db_src, root=root)
@@ -397,6 +424,8 @@ def build(entry: dict, out: Path, direct_tools: bool = True) -> dict:
     }
     if gh_dir.is_dir():
         info["gh_issues_dir"] = str(gh_dir)
+    if module_url:
+        info.update(module_source=setup["module_skills"]["source"], module_remote_sha=module_sha)
     if direct_tools:
         call = GH_CALL if github else CALL      # 트래커 MCP 대신 부르는 명령(키 이름은 기존 그대로)
         info.update({

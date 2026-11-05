@@ -18,8 +18,7 @@ analyzers:
   data:
     skill: mock-data-analyzer
     when: ask                  # 기본값. 1위가 data일 때 호출 여부를 묻는다
-    inputs: [events_json, log_paths, top_candidates, issue_summary]
-    max_tokens_hint: medium
+    skill_dir: <설치 폴더>     # 선택
 ```
 
 - `--analyzer`는 묻지 않고 호출, `--no-analyzer`는 호출하지 않는다.
@@ -27,12 +26,15 @@ analyzers:
 
 ## 입력
 
+`triage.py module <KEY> --for deep`이 쓰는 `JOB/skill-input.json`(출력의 `input`):
+
 | 이름 | 내용 |
 |---|---|
 | `events_json` | 파서 이벤트 JSON **경로** (마스킹된 상태) |
 | `log_paths` | 로그 파일 경로 목록 |
 | `top_candidates` | 상위 후보 `[{type, cause, score, confidence}]` |
 | `issue_summary` | 마스킹된 Jira 요약 한두 줄 |
+| `timeline` | 심층 타임라인(마스킹된 요약) **경로** |
 
 원문 로그를 통째로 넘기지 않는다.
 
@@ -43,8 +45,7 @@ analyzers:
 "분석 스킬 의견: <내용>"으로 보여주고, 사용자가 Step 7에서 그 원인을
 고를 수 있게 한다(고르면 `decision: chose-other`).
 
-- 출력은 리포트에 넣기 전에 `mask_pii`를 한 번 더 거친다.
-- PR 본문에는 요약 한두 줄만 넣는다(원문 인용 금지).
+- 출력은 `JOB/deep-output.md`에 쓰고 `check-output`이 마스킹해 리포트 줄을 쓴다.
 - 이슈 DB에 없는 원인을 제시해도 그것만으로 원인을 만들지 않는다.
   사용자가 고르면 `new-cause` 흐름(시그니처 초안·검증 포함)으로 간다.
 - 규칙이 필요하면 `규칙 제안:` 줄 아래에 한 줄에 하나씩 쓴다(파일은 바꾸지 않는다,
@@ -60,7 +61,6 @@ analyzers:
 ## 사외 테스트에서 쓰는 법
 
 LLM 없이 호출 경로만 확인하려면 같은 디렉토리의 `run.py`를 쓴다.
-같은 입력이면 항상 같은 출력을 낸다.
 
 ```sh
 python3 tests/mocks/skills/data-analyzer/run.py --input <입력.json>

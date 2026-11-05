@@ -20,13 +20,13 @@ TODO(SITE:S3) 플러그인 hook에 보이는 MCP 도구 이름이 `mcp__<server>
 | 3 | PII 검사: `git commit`이면 `mask_pii --check --staged` | Bash, 이슈 DB |
 | 4 | 생성 파일 정합성: `git commit`이면 `db_build --verify --staged`(`actions-build`면 생성 파일 staged 거부), `.cache/` staged 거부 | Bash, 이슈 DB |
 | 5 | hook 우회 차단: 커밋의 `--no-verify`·`-n`, `-c core.hooksPath=…`(모든 git 명령), 유효 `core.hooksPath`가 정확히 `.githooks`가 아니면 커밋 거부, `core.hooksPath`를 바꾸거나 해제하는 `git config` 거부(정확히 `.githooks`로 설정은 허용), `GIT_CONFIG_*`·`GIT_INDEX_FILE` 대입이 붙은 commit·push·config 거부 | Bash, 이슈 DB |
-| 6 | base 브랜치 push 차단: refspec의 대상 ref(없으면 현재 브랜치), `--all`/`--mirror`, push `--no-verify` | Bash, 이슈 DB |
+| 6 | base 브랜치 push 차단: refspec의 대상 ref(없으면 현재 브랜치), `--all`/`--mirror`, push `--no-verify`. 관리 clone·skill-wt의 push는 규칙 12 (a)가 모두 거부 | Bash, 이슈 DB |
 | 7 | push 확인 강제: 이슈 DB `git push`와 `db_pr.py publish`는 `ask` (옵션 `--commit`·`--and-discard`와 무관: `publish` 토큰만 본다). publish는 명령 글의 낱말 그물(`word_net`: 이름 `db_pr`와 낱말 `publish`가 함께 든다, 글 명령만인 줄은 뺀다 — 아래 "명령 파싱")로 본다. 같은 그물로 `db_pr.py merge`(+1 병합 — 사용자가 병합을 요청한 뒤에만, 스크립트가 +1·승인 커밋·검사를 대조)와 `db_pr.py request-review`(리뷰어 요청 — push 뒤 리뷰어 질문에서 사용자가 고른 뒤에만, 매번)도 `ask`. 같은 그물(이름 `module_eval` + 낱말 `module`)로 `module_eval.py`(모듈 eval — 자식 `claude -p`를 띄워 비용이 든다, `--dry-run`·`--probe-restricted` 포함 모든 호출. dry-run 결과를 보이고 사용자가 실행을 승인한 뒤에만)도 `ask`. 병합 기록 `<work_dir>/<KEY>/merge-offer.json`을 파일 도구·Bash 파일 쓰기로 쓰거나 지우면 거부(db_pr만 쓴다) | Bash |
 | 8 | 사용자 clone 직접 편집 차단: 대상 파일이 `issue_db.path` 안이면 거부(`work_dir` 아래는 제외) | Write/Edit/MultiEdit/NotebookEdit |
 | 8 | 같은 규칙, Bash: clone 본체에서 브랜치·파일을 바꾸는 git·`gh pr checkout`, clone 안으로의 파일 쓰기(리디렉션·tee·cp·rm·`sed -i` 등) 거부. migrate 브랜치 생성(깨끗한 트리)은 ask | Bash, clone 본체 |
 | 10 | 로그 원문 통독 차단: cat·tac·nl·less·more·bat·strings·zcat·zless·bzcat·xzcat, `head/tail -c`, `unzip -p/-c`가 로그 원문·zip·bugreport·`events*.json`·`issue_raw.json`·`match.json`을 통째로 읽으면 거부(`fixtures/`·`draft/` 제외, 사용자 config와 무관) | Bash |
-| 11 | 이슈 DB 원격 쓰기 확인: 대상이 이슈 DB인 `gh` 쓰기는 ask·`pr merge`·REST 병합은 거부(병합은 `db_pr.py merge`로만, 규칙 7), 비Jira MCP 쓰기형 도구(`owner`/`repo` 인자)도 같게. `pr`은 읽기 목록(list·view·status·checks·diff)만 읽기, 동작 별칭(`new`·`ls`·`co`)·`gh co`는 풀어 본다(H-A1 r5). 대상: `repo <동작> [<레포>]`·`issue transfer`의 위치 인자 레포, api 엔드포인트·PR/이슈 URL 선택자(`pr`·`issue` 동작 뒤 첫 위치 인자 — 옵션 값 자리의 URL은 이슈 DB일 때만 세고 cwd 판정을 막지 않는다)·`-R` 모든 꼴(`-R v`·`-Rv`·`-R=v`·`--repo[=]v`·묶음 `-dR v` — 옵션 값 자리(`-b -Rother/x`)와 `gh api`의 꼴은 이슈 DB일 때만 세고 cwd 판정을 막지 않는다)·`GH_REPO`(명시 대상은 합집합 — 하나라도 이슈 DB면 대상), 없으면 cwd. 모르는 것은 닫힌 쪽(H-A1 r4): 그룹·동작 앞 옵션(`gh -b x pr merge`·`gh -X PUT api …`)은 cobra처럼 값을 먹는 읽기·안 먹는 읽기를 다 보고 가장 센 결정(어느 읽기도 쓰기가 아니어도 대상이 이슈 DB면 ask), 병합·Approve·기각은 다른 레포 명시 대상이 cwd 판정을 끄지 않는다, 대상은 owner/repo로만 비교(host 무관·퍼센트 디코딩 — URL 선택자·엔드포인트 종류도 푼 뒤에 가린다)하고 셸이 풀 값(`$`·백틱)·명령 글의 `GH_REPO` 대입은 이슈 DB일 수 있다로 본다, 엔드포인트 한 칸만 자리표시면 남은 칸으로 비교, 값 받는 옵션 표에 없는 동작은 `=` 없는 옵션 바로 뒤 `-R…`을 그 값으로 본다. cwd는 원격 하나라도·`gh-resolved`·앞 대입 `GIT_DIR`로 보고, 모르는 cwd(셸이 풀 경로·없는 경로·`cd -`·`popd`)는 이슈 DB로 본다(r5). 셸이 정하는 그룹·`pr` 동작·`api` 엔드포인트 쓰기(끝 칸이 셸 값이거나 병합·리뷰 꼴)는 거부, `pr review`의 셸 값 옵션·리뷰 엔드포인트의 셸 값 `event`는 Approve(r5). Claude Approve(`gh pr review --approve`·`-a`·`-a=<참>`, REST `…/reviews`·`…/events`의 event=APPROVE — `@파일`·`--input`도 본다, `gh api` 옵션은 pflag 꼴로 읽는다(묶음 `-iX PUT`·`-if k=v`), MCP 단어 속 approve·입력 `event` APPROVE)·리뷰 기각(REST `…/dismissals`, MCP dismiss)·MCP 자동 병합 켜기(`enable_pr_auto_merge`·`automerge_pr` — MCP 거부 낱말은 쓰기형 판정보다 먼저 본다, r5)는 거부. GraphQL(엔드포인트 `graphql`·`/graphql`, 경로가 `/graphql`로 끝나는 URL, 셸이 푸는 엔드포인트 `"$GHE_API/graphql"`·`"$EP"`도 — r6) 병합·자동 병합·Approve·기각 mutation(`mergePullRequest`·`enablePullRequestAutoMerge`·`enqueuePullRequest`·`mergeBranch`·리뷰 APPROVE·`dismissPullRequestReview` — 본문은 인라인·`@파일`·`--input`·stdin heredoc, 64KB까지, 이름은 Bash 명령 글 전체에서도 찾는다 — 셸이 만든 본문 `query="$(cat <<EOF …)"`·`"$Q"`, r5. 읽지 못한 본문은 대상과 무관하게 ask)과 병합·리뷰 별칭을 만드는 `gh alias set`·`gh alias import`는 대상과 무관하게 거부. 이미 만든 gh 별칭의 실행은 보지 못한다 | Bash, `mcp__.*` |
-| 12 | 분석 스킬 소스 적용 확인: `skill_patch.py --apply`(낱말 그물: 이름 `skill_patch`와 낱말 `apply`)는 `ask`. config `analyzers.<카테고리>.source`(절대 경로, site-defaults·사용자 config의 최상위와 모든 `platforms.<p>.analyzers` 것) 안을 파일 도구·Bash 파일 쓰기(규칙 8과 같은 판별)·파일을 바꾸는 git(`CLONE_GIT_SUBS`·commit·push·stash)으로 바꾸면 `ask`(적용은 `skill_patch.py --apply`로만). 스크립트 기록 `<work_dir>/<KEY>/skill-suggestions/<이름>.patch`·`<이름>.meta.json`을 파일 도구·Bash 파일 쓰기로 쓰거나 지우면 거부(skill_patch.py만 쓴다) | Bash, Write/Edit/MultiEdit/NotebookEdit |
+| 11 | 이슈 DB 원격 쓰기 확인: 대상이 이슈 DB인 `gh` 쓰기는 ask·`pr merge`·REST 병합은 거부(병합은 `db_pr.py merge`로만, 규칙 7), 비Jira MCP 쓰기형 도구(`owner`/`repo` 인자)도 같게. `pr`은 읽기 목록(list·view·status·checks·diff)만 읽기, 동작 별칭(`new`·`ls`·`co`)·`gh co`는 풀어 본다(H-A1 r5). 대상: `repo <동작> [<레포>]`·`issue transfer`의 위치 인자 레포, api 엔드포인트·PR/이슈 URL 선택자(`pr`·`issue` 동작 뒤 첫 위치 인자 — 옵션 값 자리의 URL은 이슈 DB일 때만 세고 cwd 판정을 막지 않는다)·`-R` 모든 꼴(`-R v`·`-Rv`·`-R=v`·`--repo[=]v`·묶음 `-dR v` — 옵션 값 자리(`-b -Rother/x`)와 `gh api`의 꼴은 이슈 DB일 때만 세고 cwd 판정을 막지 않는다)·`GH_REPO`(명시 대상은 합집합 — 하나라도 이슈 DB면 대상), 없으면 cwd. 모르는 것은 닫힌 쪽(H-A1 r4): 그룹·동작 앞 옵션(`gh -b x pr merge`·`gh -X PUT api …`)은 cobra처럼 값을 먹는 읽기·안 먹는 읽기를 다 보고 가장 센 결정(어느 읽기도 쓰기가 아니어도 대상이 이슈 DB면 ask), 병합·Approve·기각은 다른 레포 명시 대상이 cwd 판정을 끄지 않는다, 대상은 owner/repo로만 비교(host 무관·퍼센트 디코딩 — URL 선택자·엔드포인트 종류도 푼 뒤에 가린다)하고 셸이 풀 값(`$`·백틱)·명령 글의 `GH_REPO` 대입은 이슈 DB일 수 있다로 본다, 엔드포인트 한 칸만 자리표시면 남은 칸으로 비교, 값 받는 옵션 표에 없는 동작은 `=` 없는 옵션 바로 뒤 `-R…`을 그 값으로 본다. cwd는 원격 하나라도·`gh-resolved`·앞 대입 `GIT_DIR`로 보고, 모르는 cwd(셸이 풀 경로·없는 경로·`cd -`·`popd`)는 이슈 DB로 본다(r5). 셸이 정하는 그룹·`pr` 동작·`api` 엔드포인트 쓰기(끝 칸이 셸 값이거나 병합·리뷰 꼴)는 거부, `pr review`의 셸 값 옵션·리뷰 엔드포인트의 셸 값 `event`는 Approve(r5). Claude Approve(`gh pr review --approve`·`-a`·`-a=<참>`, REST `…/reviews`·`…/events`의 event=APPROVE — `@파일`·`--input`도 본다, `gh api` 옵션은 pflag 꼴로 읽는다(묶음 `-iX PUT`·`-if k=v`), MCP 단어 속 approve·입력 `event` APPROVE)·리뷰 기각(REST `…/dismissals`, MCP dismiss)·MCP 자동 병합 켜기(`enable_pr_auto_merge`·`automerge_pr` — MCP 거부 낱말은 쓰기형 판정보다 먼저 본다, r5)는 거부. GraphQL(엔드포인트 `graphql`·`/graphql`, 경로가 `/graphql`로 끝나는 URL, 셸이 푸는 엔드포인트 `"$GHE_API/graphql"`·`"$EP"`도 — r6) 병합·자동 병합·Approve·기각 mutation(`mergePullRequest`·`enablePullRequestAutoMerge`·`enqueuePullRequest`·`mergeBranch`·리뷰 APPROVE·`dismissPullRequestReview` — 본문은 인라인·`@파일`·`--input`·stdin heredoc, 64KB까지, 이름은 Bash 명령 글 전체에서도 찾는다 — 셸이 만든 본문 `query="$(cat <<EOF …)"`·`"$Q"`, r5. 읽지 못한 본문은 대상과 무관하게 ask)과 병합·리뷰 별칭을 만드는 `gh alias set`·`gh alias import`는 대상과 무관하게 거부. 이미 만든 gh 별칭의 실행은 보지 못한다. 대상: issue_db.remote와 module_skills.remote(owner/repo로 풀 때만, 사유 문구는 이슈 DB와 같다) | Bash, `mcp__.*` |
+| 12 | 모듈 스킬 관리 clone·기록 보호, 분석 스킬 소스 확인: (a) 관리 clone `<work_dir>/_module-skills/**`·lock `<work_dir>/_module-skills.lock`(경로 조각 `_module-skills`이거나 `_module-skills.`로 시작하면 설정과 무관하게 — `.lock`·`.tmp-*` 포함)과 `<work_dir>/<KEY>/skill-wt/**`(모든 프로필 work_dir — 이름이 잘못된 프로필 포함 — 과 켠 플랫폼의 기본 work_dir)를 파일 도구·Bash 파일 쓰기(규칙 8과 같은 판별 + `mv`·`ln`·`rsync --remove-source-files`의 원본)로 바꾸면 거부. 어디서 돌든 git 경로 옵션(`--output`·`-o`·`--output-directory`·config `--file`·`--git-dir`·`--work-tree`·`--separate-git-dir`)이 그 안이나 (b) 기록을 가리키면 거부. git 작업 디렉토리·`--git-dir`·`GIT_DIR`·`--work-tree` 중 하나라도 그 안이면 읽기 목록(`MODULE_GIT_READ`, `branch`·`remote`·`config`·`sparse-checkout`·`worktree`·`stash`는 읽기 꼴만)만 통과하고(`--output*`·`-O`·`--open-files-in-pager`·`--ext-diff`·`--textconv`는 읽기라도 거부) `-c` 덮어쓰기와 나머지(commit·push·stash·reset·checkout·sparse-checkout set·worktree add·fetch·remote set-url·config 쓰기 등)는 거부, 대상이 그 안인 `git clone`·`init`도 거부(이슈 DB 설정과 무관, 받기·갱신은 `triage.py module`만). (b) 스크립트 기록 `<work_dir>/<KEY>/module-skill.json`·`module-skill/**`·`deep-input.json`·`skill-input.json`·`check-output.json`(triage.py만 — `deep-output.md`·`explore-output.md`는 Claude가 쓴다)과 `skill-suggestions/<이름>.patch`·`.meta.json`(skill_patch.py만)을 파일 도구·Bash 파일 쓰기로 쓰거나 지우면 거부(사본 `skill-suggestions/<이름>/**`는 허용). 상대 경로는 hook 입력 `cwd` 기준. `skill_patch.py --apply`(낱말 그물: 이름 `skill_patch`와 낱말 `apply`)는 `ask`. config `analyzers.<카테고리>.source`(절대 경로, site-defaults·사용자 config의 최상위와 모든 `platforms.<p>.analyzers` 것) 안을 파일 도구·Bash 파일 쓰기(규칙 8과 같은 판별)·파일을 바꾸는 git(`CLONE_GIT_SUBS`·commit·push·stash)으로 바꾸면 `ask`(적용은 `skill_patch.py --apply`로만) | Bash, Write/Edit/MultiEdit/NotebookEdit |
 
 (1번은 SessionStart의 `config.py sync-scripts-path`다.)
 
@@ -52,7 +52,7 @@ bash 범위대로 — 서브셸·`$( )`·파이프 요소·`&` 백그라운드�
 (`echo "…" | bash`) 빼지 않음). 남는 한계: 낱말을 변수로 만들어 쓴 호출(`${P}lish`·`X=db; …/${X}_pr.py`)·인코딩, 스크립트 파일 안 호출(`bash push.sh`
 — eval 채점기는 결과의 `"published": true`로도 센다), 사용자 셸 프로필의 별칭·함수. 반대로 db_pr 소스·문서를 sed·python으로
 다루는 명령에 두 낱말이 함께 들면 ask 오판이다.
-진짜 강제는 git hook(pre-commit·pre-push)과 GHE 브랜치 보호다.
+진짜 강제는 git hook(pre-commit·pre-push)과 GHE 브랜치 보호다(모듈 스킬 레포도 브랜치 보호 승인 1, MODULE_SKILLS_PLAN_IMPL §4.5).
 
 **설정 없음**: 사용자 config가 없거나 `issue_db.path`로 레포를 판별할 수 없으면 git·파일 규칙은 적용하지 않는다.
 `issue_db.remote`가 없으면 11번을 적용하지 않는다. 있는데 owner/repo로 못 풀면(`userconfig.repo_slug`) 그 프로필의 11번이
@@ -61,11 +61,14 @@ bash 범위대로 — 서브셸·`$( )`·파이프 요소·`&` 백그라운드�
 모두 거부한다. `tracker.write_tools`가 없으면 코멘트 예외가 없다(모든 Jira 쓰기 거부). 사용자 config가 없으면 승인 기록을 찾을 수
 없으므로 코멘트 도구도 거부한다. hook은 모든 도구 호출에 걸리므로, `site-defaults.yaml`이 없어도 guard는 멈추지 않고 사용자 config만으로
 판정한다(경고). 이때 커밋 검사(3·4번)가 부르는 스크립트는 종료 코드 2를 내므로 이슈 DB 커밋은 거부된다.
+12번 (a)의 경로 조각 판정과 관리 clone git 판정은 사용자 config·issue_db.path가 없어도 적용한다. module_skills.remote가
+owner/repo로 풀리지 않으면(file:// 제외) 매번 경고한다.
 
 **의존성 없음·내부 오류**(`_degraded`): import 실패나 판정 중 예외면 MCP는 거부, gh Approve·리뷰 기각·병합·자동 병합·병합 별칭
 형태(규칙 11과 같은 판별, 대상 레포를 몰라도 — `_gh_unjudged_deny`)는 거부, Bash의 git·gh·`db_pr.py publish`·`merge`·
 `request-review`·`module_eval.py`·`skill_patch.py --apply`(규칙 7·12와 같은 `word_net`)와 파일 도구는 ask, 그 밖의 Bash는 통과 + 경고. 판정 중 경로·인코딩 예외
 (ValueError·OSError)는 판정 전체를 여기로 보내지 않고 그 검사만 ask로 남긴다(`_checked`, 회귀 수정 R2).
+degraded에서도 경로 조각 `_module-skills`(·`_module-skills.`로 시작) 파일 도구·Bash 쓰기는 ask가 아니라 deny.
 종료 코드는 그래도 0이다(2는 설치 명령까지 모든 Bash를 막는다). 출력은 ASCII JSON이고 판정·직렬화가 실패해도 최소 ask를 낸다.
 """
 
@@ -307,6 +310,27 @@ class Config:
                                  + "; ".join(problems[:5]))
         # 규칙 12: 모든 플랫폼(층·이름 유효성과 무관)의 분석 스킬 소스
         self.skill_sources = _skill_sources(userconfig.analyzer_sources(defaults, self.user)) if self.user is not None else []
+        # 규칙 12 (a)(b): 모듈 스킬 관리 clone·기록을 볼 work_dir — 모든 프로필 + 사용자 config가 없으면 기본 work_dir + 켠
+        # 플랫폼의 기본 work_dir(사용자 프로필이 없어도 triage가 쓸 수 있다)
+        mwd = [_norm(w) for w in self.work_dirs]
+        extra = [userconfig.home() / "work"] if self.user is None else []
+        site_platform = defaults.get("platform") if isinstance(defaults.get("platform"), dict) else {}
+        enabled = site_platform.get("enabled") if isinstance(site_platform.get("enabled"), list) else []
+        extra += [userconfig.home() / f"work-{p}" for p in enabled
+                  if isinstance(p, str) and re.fullmatch(r"[a-z][a-z0-9_]*", p) and p != userconfig.TOP_PROFILE]
+        for w in extra:
+            if _norm(w) not in mwd:
+                mwd.append(_norm(w))
+        self.module_work_dirs: list[str] = mwd
+        # 규칙 11: 모듈 스킬 레포도 원격 쓰기 확인 대상(owner/repo로 풀릴 때만, 문구는 이슈 DB와 같다)
+        self.module_slugs: list = []
+        for r in userconfig.module_remotes(defaults, self.user):
+            s = _repo_slug(r) if not r.strip().lower().startswith("file://") else None
+            if s is not None:
+                self.module_slugs.append(s)
+            elif not r.strip().lower().startswith("file://") and not os.path.isabs(os.path.expanduser(r.strip())):
+                self.warnings.append(f"module_skills.remote({userconfig.redact_remote(r)})를 owner/repo로 풀 수 없어 모듈 스킬 "
+                                     "레포의 원격 쓰기 확인(규칙 11)을 하지 못한다. `config.py doctor`로 확인한다.")
         top = self.profiles[0]            # 기본 플랫폼 프로필(옛 단일 프로필 속성)
         self.clone, self.clone_common, self.work_dir = top.clone, top.clone_common, top.work_dir
         self.base, self.remote_slug = top.base, top.remote_slug
@@ -369,7 +393,8 @@ class Config:
 
     @property
     def remote_slugs(self) -> list[str]:
-        return [p.remote_slug for p in self.profiles if p.remote_slug is not None]
+        """규칙 11 대상: 모든 프로필의 이슈 DB 원격 + 모듈 스킬 레포 원격(B1 §7.2 — 다섯 소비처가 고치지 않고 함께 판정)."""
+        return [p.remote_slug for p in self.profiles if p.remote_slug is not None] + list(self.module_slugs)
 
     def is_clone_body(self, cwd: Path) -> bool:
         """cwd가 어느 프로필이든 사용자 clone 본체인가."""
@@ -588,6 +613,50 @@ def _script_record(target: str, conf: Config) -> str | None:
     return None
 
 
+MODULE_CLONE, MODULE_LOCK, SKILL_WT = "_module-skills", "_module-skills.lock", "skill-wt"
+MODULE_CLONE_MSG = ("모듈 스킬 관리 clone·lock(<work_dir>/_module-skills/·_module-skills.lock)과 skill-wt는 도구가 직접 바꾸지 "
+                    "않는다. 받기·갱신은 triage.py module만 한다 (규칙 12")
+MODULE_RECORD_MSG = ("모듈 스킬 기록(module-skill.json·module-skill/·deep-input.json·skill-input.json·check-output.json)은 "
+                     "triage.py만 쓴다. 직접 쓰거나 지우지 않는다 (규칙 12")
+MODULE_GIT_MSG = ("모듈 스킬 관리 clone·skill-wt에서는 읽기 git(status·log·show·diff·ls-files 등)만 된다. 받기·갱신은 "
+                  "triage.py module이 한다 (규칙 12: git {sub}).")
+MODULE_GIT_PATH_MSG = "git의 경로 옵션({opt})이 모듈 스킬 관리 clone·기록을 가리킨다. 그 안은 triage.py module만 쓴다 (규칙 12)."
+MODULE_NEEDLES = ("_module-skills", "module-skill", "deep-input.json", "skill-wt", "skill-input.json", "check-output.json")
+MODULE_RECORD_FILES = (("module-skill.json",), ("deep-input.json",), ("skill-input.json",), ("check-output.json",))
+
+
+def _module_name_part(path: str) -> bool:
+    """경로 조각 하나라도 `_module-skills`이거나 `_module-skills.`로 시작(`.lock`·첫 받기 `.tmp-*`)하는가 — 설정과 무관."""
+    return any(part == MODULE_CLONE or part.startswith(MODULE_CLONE + ".") for part in Path(path).parts)
+
+
+def _rel_parts(target: str, work: str) -> tuple[str, ...] | None:
+    if not _inside(target, work) or target == work:
+        return None
+    return Path(os.path.relpath(target, work)).parts
+
+
+def _module_root(target: str, conf: Config) -> bool:
+    """규칙 12 (a): 관리 clone·lock(이름 기반)과 `<work_dir>/<KEY>/skill-wt/**`인가 (target은 `_norm` 경로)."""
+    if _module_name_part(target):
+        return True
+    for w in conf.module_work_dirs:
+        rel = _rel_parts(target, w)
+        if rel is not None and len(rel) >= 2 and rel[1] == SKILL_WT:
+            return True
+    return False
+
+
+def _module_record(target: str, conf: Config) -> bool:
+    """규칙 12 (b): `<work_dir>/<KEY>/module-skill.json`·`deep-input.json`·`skill-input.json`·`check-output.json`·
+    `module-skill/**`(그 폴더 자체 포함)인가. work_dir 밖 오프라인 `--out` 작업은 보호하지 않는다."""
+    for w in conf.module_work_dirs:
+        rel = _rel_parts(target, w)
+        if rel is not None and len(rel) >= 2 and (rel[1:] in MODULE_RECORD_FILES or rel[1] == "module-skill"):
+            return True
+    return False
+
+
 def _in_clone(target: str, conf: Config) -> bool:
     """어느 프로필이든 clone 안이고, 그 clone **안에 들어 있는** (유효한) work_dir 안이 아닌가 (target은 `_norm` 경로).
     가장 구체적인 경로 기준이다: clone을 포함하는 work_dir은 그 clone의 보호를 풀지 못한다."""
@@ -614,6 +683,12 @@ def check_file(tool_input: dict, cwd: Path, conf: Config, dec: Decision) -> None
         return
     if _script_record(target, conf):
         dec.deny.append(f"{_script_record(target, conf)}: {raw}).")
+        return
+    if _module_root(target, conf):      # 규칙 12 (a) — 규칙 8의 work_dir 제외보다 먼저
+        dec.deny.append(f"{MODULE_CLONE_MSG}: {raw}).")
+        return
+    if _module_record(target, conf):    # 규칙 12 (b)
+        dec.deny.append(f"{MODULE_RECORD_MSG}: {raw}).")
         return
     if _in_clone(target, conf):
         dec.deny.append("이슈 DB clone은 도구가 직접 고치지 않는다. 직접 편집은 사용자가 한다 "
@@ -2705,6 +2780,8 @@ class GitCall:
         git_dir = git_dir or (at(cwd, env_dir) if env_dir else None)
         work_tree = work_tree or (at(cwd, env["GIT_WORK_TREE"]) if env.get("GIT_WORK_TREE") else None)
         self.cwd = work_tree or git_dir or cwd
+        # 규칙 12 (a)는 셋을 따로 본다(어느 하나라도 관리 clone 안이면 읽기 목록만): -C 뒤 cwd, git dir, work tree
+        self.dir, self.git_dir, self.work_tree = cwd, git_dir, work_tree
         # 값 해석 없이 존재만 본다: hooksPath·index를 끼워 넣는 통로이고 정상 흐름에 없다 (규칙 5)
         self.config_env = sorted(k for k in env if k in GIT_CONFIG_ENV or re.match(r"^GIT_CONFIG_(KEY|VALUE)_\d+$", k))
 
@@ -3827,7 +3904,7 @@ def check_gh(inv: Invocation, conf: Config, dec: Decision, text: str | None = No
     가능한 읽기(`_gh_all_readings` — 그룹·동작 앞 옵션이 없으면 원래 argv와 리디렉션을 뺀 argv)를 모두 판정해 결정을 합친다(가장
     센 것이 이긴다). 앞 옵션이 있는데 어느 읽기도 결정을 내지 않았으면, 어느 읽기든 대상이 이슈 DB(일 수 있으)면 ask다
     (`GH_LEAD_ASK`). cwd를 몰라 대상으로 본 결정에는 그 사유(`GH_CWD_UNKNOWN_NOTE`)를 붙인다."""
-    if conf.user is None or not conf.remote_slugs:
+    if not conf.remote_slugs:      # 사용자 config가 없어도 site의 module_skills.remote는 본다(없으면 빈 목록 — 같은 동작)
         return
     readings = _gh_all_readings(inv.argv)
     if readings is None:
@@ -4075,6 +4152,132 @@ def check_post_record_writes(inv: Invocation, conf: Config, dec: Decision) -> No
             return
 
 
+def _rename_sources(inv: Invocation) -> list[str]:
+    """규칙 12에서 쓰기로 보는 원본: `mv`·`ln`·`rsync --remove-source-files`의 마지막이 아닌 위치 인자(`-t DIR`이면 모두).
+    이름 바꾸기는 lock 탈취, `ln` 원본은 관리 clone의 쓰기 가능한 별칭이다(B1 §7.3)."""
+    argv = _drop_redirs(inv.argv)
+    name = _base(argv[0]) if argv else ""
+    if name not in ("mv", "ln") and not (name == "rsync" and "--remove-source-files" in argv):
+        return []
+    with_arg = FILE_WRITERS[name][0]
+    pos, target_dir, i = [], False, 1
+    while i < len(argv):
+        a = argv[i]
+        if a == "--":
+            pos += argv[i + 1:]
+            break
+        if a in ("-t", "--target-directory"):
+            target_dir, i = True, i + 2
+            continue
+        if a.startswith("--target-directory="):
+            target_dir = True
+        elif a in with_arg:
+            i += 1
+        elif not a.startswith("-") or a == "-":
+            pos.append(a)
+        i += 1
+    return pos if target_dir else pos[:-1]
+
+
+def _module_gate(inv: Invocation) -> bool:
+    """규칙 12 Bash 검사 관문: 낱말·cwd·환경 값 어디에도 모듈 표지가 없으면 판정하지 않는다(설정 없는 평소 Bash에 새 경로
+    연산·판정 불가 ask가 생기지 않게)."""
+    words = [*inv.argv, str(inv.cwd), *(str(v) for v in inv.env.values())]
+    return any(n in w for w in words for n in MODULE_NEEDLES)
+
+
+def check_module_writes(inv: Invocation, conf: Config, dec: Decision) -> None:
+    """규칙 12 (a)(b), Bash: 파일 쓰기 대상(규칙 8과 같은 판별)과 이름 바꾸기·링크 원본이 관리 clone·lock·skill-wt나 모듈 스킬
+    기록이면 거부. 셸 glob·변수로 표지를 숨긴 것(`rm -rf _mod*`)은 보지 못한다(최선 노력, 스크립트 preflight가 뒤를 받친다)."""
+    if not _module_gate(inv):
+        return
+    for word in _write_targets(inv) + _rename_sources(inv):
+        p = _expand(word)
+        target = _norm(Path(p) if Path(p).is_absolute() else inv.cwd / p)
+        if _module_root(target, conf):
+            dec.deny.append(f"{MODULE_CLONE_MSG}: {word}).")
+            return
+        if _module_record(target, conf):
+            dec.deny.append(f"{MODULE_RECORD_MSG}: {word}).")
+            return
+
+
+MODULE_GIT_READ = {"status", "log", "show", "diff", "rev-parse", "rev-list", "ls-files", "ls-tree", "cat-file", "describe",
+                   "blame", "grep", "shortlog", "for-each-ref", "merge-base", "name-rev", "show-ref", "help", "version", "var",
+                   "check-ignore"}
+MODULE_GIT_EXEC = ("--output", "-O", "--open-files-in-pager", "--ext-diff", "--textconv")
+MODULE_CONFIG_READ = {"--get", "--get-all", "--get-regexp", "--list", "-l"}
+MODULE_CONFIG_WRITE = {"--add", "--unset", "--unset-all", "--replace-all", "--rename-section", "--remove-section", "-e",
+                       "--edit", "set", "unset"}
+
+
+def _git_path_options(call: GitCall) -> list[tuple[str, str]]:
+    """`(옵션, 값)`: `--output[=]`·`-o`·`--output-directory[=]`·config의 `--file[=]`/`-f`·`--git-dir`·`--work-tree`·
+    `--separate-git-dir`(하위 명령 인자 안)."""
+    out = []
+    args = call.args
+    names = {"--output", "-o", "--output-directory", "--git-dir", "--work-tree", "--separate-git-dir"}
+    if call.sub == "config":
+        names |= {"--file", "-f"}
+    for i, a in enumerate(args):
+        key, eq, value = a.partition("=")
+        if eq and key in names and key.startswith("--"):
+            out.append((key, value))
+        elif a in names and i + 1 < len(args):
+            out.append((a, args[i + 1]))
+    if call.git_dir is not None:
+        out.append(("--git-dir", str(call.git_dir)))
+    if call.work_tree is not None:
+        out.append(("--work-tree", str(call.work_tree)))
+    return out
+
+
+def _module_git_read(sub: str | None, args: list[str]) -> bool:
+    """관리 clone 안에서 허용하는 읽기 꼴인가(B1 §7.4 3~7)."""
+    pos = [a for a in args if not a.startswith("-")]
+    if sub in MODULE_GIT_READ:
+        return True
+    if sub == "branch":
+        mutating = any(a in BRANCH_MUTATING or a.split("=", 1)[0] in BRANCH_MUTATING for a in args)
+        return not mutating and (not pos or any(a in ("-l", "--list") for a in args))
+    if sub == "remote":
+        return not args or all(a in ("-v", "--verbose") for a in args) or (pos[:1] == ["get-url"])
+    if sub == "config":
+        if any(a in MODULE_CONFIG_WRITE for a in args):
+            return False
+        return pos[:1] in (["get"], ["list"]) or any(a in MODULE_CONFIG_READ for a in args)
+    if sub in ("sparse-checkout", "worktree"):
+        return pos[:1] == ["list"]
+    if sub == "stash":
+        return pos[:1] in (["list"], ["show"])
+    return False
+
+
+def check_module_git(call: GitCall, conf: Config, dec: Decision) -> None:
+    """규칙 12 (a), git: 경로 옵션이 관리 clone·기록을 가리키면 어디서 돌든 거부. 작업 디렉토리·git dir·work tree 중 하나라도
+    관리 clone 안이면 읽기 목록만(`-c`·pager·외부 diff 옵션 거부). 대상이 관리 clone인 clone·init 거부. 이슈 DB 설정과 무관."""
+    for opt, value in _git_path_options(call):
+        v = _expand(value)
+        target = _norm(Path(v) if Path(v).is_absolute() else call.dir / v)
+        if _module_root(target, conf) or _module_record(target, conf):
+            dec.deny.append(MODULE_GIT_PATH_MSG.format(opt=opt))
+            return
+    if call.sub in ("clone", "init"):
+        for a in call.args:
+            if a.startswith("-"):
+                continue
+            v = _expand(a)
+            if "://" not in v and _module_root(_norm(Path(v) if Path(v).is_absolute() else call.dir / v), conf):
+                dec.deny.append(MODULE_GIT_MSG.format(sub=call.sub))
+                return
+    dirs = [d for d in (call.dir, call.git_dir, call.work_tree) if d is not None]
+    if not any(_module_root(_norm(d), conf) for d in dirs):
+        return
+    if (call.config_overrides or call.config_env or any(a.startswith(MODULE_GIT_EXEC) for a in call.args)
+            or not _module_git_read(call.sub, call.args)):
+        dec.deny.append(MODULE_GIT_MSG.format(sub=call.sub or "?"))
+
+
 PUBLISH_ASK = "db_pr.py publish는 이슈 DB에 push한다. 확인 화면을 승인한 뒤에만 진행한다 (규칙 7)."
 MERGE_ASK = ("db_pr.py merge는 이슈 DB PR을 main에 병합한다. 사용자가 병합을 요청한 뒤에만 진행한다"
              "(+1·승인 커밋·검사는 스크립트가 대조) (규칙 7).")
@@ -4252,9 +4455,15 @@ def check_bash(command: str, cwd: Path, conf: Config, dec: Decision) -> None:
             _checked(dec, "규칙 12", check_skill_source, inv, conf, dec)
         if conf.clones:
             _checked(dec, "규칙 8", check_clone_writes, inv, conf, dec)
+        # 규칙 12 (a)(b): 사용자 config 없이도(이름 기반) — 모듈 표지 관문이 평소 Bash를 건너뛴다
+        _checked(dec, "규칙 12", check_module_writes, inv, conf, dec)
         if name == "gh":
             _checked(dec, "규칙 11", check_gh, inv, conf, dec, command, fallback=_gh_fallback(inv, command))
             continue
+        if name == "git" and _module_gate(inv):     # git 규칙 관문(git_rules = 이슈 DB clone 있음)보다 먼저
+            for argv in dict.fromkeys(map(tuple, (inv.argv, _drop_redirs(inv.argv)))):
+                _checked(dec, "규칙 12", lambda a=argv, i=inv: check_module_git(GitCall(Invocation(i.cwd, list(a), i.env)),
+                                                                              conf, dec))
         if name != "git" or not conf.git_rules:
             continue
         # 리디렉션을 뺀 argv도 본다(`git 2>&1 push …` — 합집합, 닫힌 쪽)
@@ -4318,13 +4527,17 @@ def _degraded(event: dict, why: str) -> tuple[dict | None, list[str]]:
     병합·자동 병합·병합 별칭 형태는 대상 레포와 무관하게 거부(`_gh_unjudged_deny` — 내부 오류를 입력으로 일으킬 수 있다, 회귀 수정
     R2. 명령 걷기도 예외면 낱말 수준 거부 `_text_unjudged_deny`와 cd를 따라가지 않는 대체 목록, 재리뷰 P0), git·gh·
     `db_pr.py publish`·`merge`·`request-review`와 파일 도구는 레포·clone을 판별할 수 없으므로 ask, `module_eval.py`(유료 자식
-    실행, 규칙 7)도 ask, 그 밖의 Bash는 통과 + 경고.
+    실행, 규칙 7)도 ask, 그 밖의 Bash는 통과 + 경고. 경로 조각 `_module-skills`(·`_module-skills.`로 시작)를 바꾸는 파일 도구·
+    Bash 쓰기는 이름만으로 판정되므로 deny(규칙 12 (a)).
     종료 2(모든 Bash 차단, 설치 명령까지)는 쓰지 않는다."""
     tool = str(event.get("tool_name") or "")
     tool_input = event.get("tool_input") if isinstance(event.get("tool_input"), dict) else {}
     if tool.startswith("mcp__"):
         return _decision("deny", f"{why}: MCP 도구 판정 불가. {INSTALL_HINT}."), []
     if tool in FILE_TOOLS:
+        raw = tool_input.get("file_path") or tool_input.get("notebook_path")
+        if raw and _module_name_part(str(raw)):     # 규칙 12 (a) 이름 기반 — 설정 없이도 판정한다
+            return _decision("deny", f"{why}: {MODULE_CLONE_MSG}: {raw}). {INSTALL_HINT}."), []
         return _decision("ask", f"{why}: 이슈 DB clone 경로를 판별할 수 없다 — 직접 확인한다. {INSTALL_HINT}."), []
     if tool == "Bash":
         risky = True
@@ -4333,6 +4546,11 @@ def _degraded(event: dict, why: str) -> tuple[dict | None, list[str]]:
             invs, deny = _walk_or_flat(cmd, Path(str(event.get("cwd") or os.getcwd())))
             if deny:                # 걷기 예외: 낱말 수준으로 거부 꼴을 찾았다
                 return _decision("deny", f"{why}: {deny} {INSTALL_HINT}."), []
+            for inv in invs:        # 규칙 12 (a) 이름 기반: 관리 clone·lock 쓰기는 ask가 아니라 deny
+                for word in _write_targets(inv) + _rename_sources(inv):
+                    p = _expand(word)
+                    if _module_name_part(p if Path(p).is_absolute() else str(inv.cwd / p)):
+                        return _decision("deny", f"{why}: {MODULE_CLONE_MSG}: {word}). {INSTALL_HINT}."), []
             names = [_base(i.argv[0]) for i in invs]
             for inv in invs:        # 대상 레포를 몰라도 거부하는 gh 형태(guard 안 함수만 — import 없음, 앞 옵션은 모든 읽기)
                 deny = _gh_unjudged_deny(inv, cmd, f"{why}: ")

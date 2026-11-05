@@ -1,0 +1,120 @@
+08-09 13:12:30.725  1096  1160 V RIL     : [GpsService_0] GPS Response: msgId=9011 errorCode=0 parameter=0x0xb400007dae20ad9c parameter length=1
+08-09 13:12:30.725  1096  1160 I RIL     : [GpsService_0] OnRequestComplete() MSG_ID=9011
+08-09 13:12:30.725  1096  1160 I RIL     : [RilContext_0] OnRequestComplete Request ID=10405
+08-09 13:12:30.725  1016  1028 I WPKTRT  : process_link_up: rmnet1 is activated
+08-09 13:12:30.725  1096  1160 D RIL_EXTERNAL: RilExternalManager::sendRequestRawResponse: clientId=5
+08-09 13:12:30.725  1096  1160 V RIL     : [RilContext_0] RemoveRequestHistory  token=0x01AC
+08-09 13:12:30.726  1096  1153 V RIL     : GetIfaFlags assume took ifaddrmsg, nlmsg_type:20, should be one of 20~22
+08-09 13:12:30.726  1096  1153 V RIL     : GetIfaFlags not expected ifa_index: 1
+08-09 13:12:30.726  1096  1153 V RIL     : GetIfaFlags assume took ifaddrmsg, nlmsg_type:20, should be one of 20~22
+08-09 13:12:30.726  1096  1153 V RIL     : GetIfaFlags not expected ifa_index: 2
+08-09 13:12:30.726  1096  1153 V RIL     : GetIfaFlags assume took ifaddrmsg, nlmsg_type:20, should be one of 20~22
+08-09 13:12:30.726  1096  1153 V RIL     : GetIfaFlags NLMSG_DONE :1
+08-09 13:12:30.727  1077  2423 D RILClient: [OemClient]RSP: (clientId = 5, t = 7, msgId = 205, len = 1, channel = 0, status = 0)
+08-09 13:12:30.727  1096  1153 V RIL     : for rmnet1, index:15, flags:c4, param:ip_action:3, family:1, ifa_valid:2147483647, ifa_prefered:2147483647, addr:<IP#1>
+08-09 13:12:30.728  1096  1153 W RIL     : set mtu 1500 to rmnet1
+08-09 13:12:30.728  1096  1153 I RIL     : OnActivated: (cid=2) Active State: ACTIVE_AND_LINKUP
+08-09 13:12:30.728  1096  1153 I RIL     : [PsService_0] OnSetupDataCallCompleteDefault errorCode=0, pPdpContext=PdpContext{cid=2, state=CONNECTED, active=ACTIVE_AND_LINKUP}
+08-09 13:12:30.728  1016  1028 I WPKTRT  : process_address_event: <IP#2> added to rmnet1
+08-09 13:12:30.728  1096  1153 V RIL     : [PsService_0] REQ msgId = 3001, halVersion = 0x24
+08-09 13:12:30.728  1016  1028 I WPKTRT  : process_link_up: rmnet1 is activated
+08-09 13:12:30.729  1096  1153 V RIL     : DataCallListResponseV2_0
+08-09 13:12:30.729  1096  1153 I RIL     : RilApplication::GetInstance
+08-09 13:12:30.729  1096  1153 I RIL     : RilApplication::GetInstance
+08-09 13:12:30.729  1096  1153 V RIL     : dnses:<IP#3>
+08-09 13:12:30.729  1096  1153 V RIL     : dnses:<IP#4>
+08-09 13:12:30.729  1096  1153 V RIL     : pcscf: <IP#3>
+08-09 13:12:30.729  1096  1153 V RIL     : pcscf: <IP#4>
+08-09 13:12:30.729  1096  1153 V RIL     : gateway: ::
+08-09 13:12:30.729  1096  1153 V RIL     : gateway: <IP#5>
+08-09 13:12:30.729  1096  1153 V RIL     : ===================================================
+08-09 13:12:30.729  1096  1153 V RIL     :   OnSetupDataCallCompleteDefault
+08-09 13:12:30.729  1096  1153 V RIL     :   CID=2
+08-09 13:12:30.729  1096  1153 V RIL     :   Cause=0x0
+08-09 13:12:30.729  1096  1153 V RIL     :   Active=ACTIVE(2)
+08-09 13:12:30.729  1096  1153 V RIL     :   MTUV4=1500, MTUV6=1500
+08-09 13:12:30.729  1096  1153 V RIL     :   suggestedRetryTime=0
+08-09 13:12:30.729  1096  1153 V RIL     : ===================================================
+08-09 13:12:30.729  1096  1153 I RIL     : [PsService_0] OnRequestCompleteAsync MSG_ID=3001, direction=4, status=3, token= 0x1a7, pRequest=0xb400007ede2106b0
+08-09 13:12:30.729  1096  1153 I RIL     : [RilContext_0] OnRequestComplete Request ID=27
+08-09 13:12:30.729  1096  1153 D RILC    : RequestComplete, RIL_SOCKET_1
+08-09 13:12:30.729  1096  1153 E RILC    : Calling responseFunction() for token 353
+08-09 13:12:30.729  1096  1153 D RILC-AIDL_SERVICE: SetupDataCallCommand_V2_<IP#6>onResponse: serial 353
+08-09 13:12:30.729  1096  1153 E RILC-AIDL_SERVICE: onResponse: convertRilDataCallToHal
+08-09 13:12:30.729  1096  1153 V RIL     : [RilContext_0] RemoveRequestHistory  token=0x01A7
+08-09 13:12:30.729  1096  1153 I RIL     : [RilContext_0] Send 
+08-09 13:12:30.730  1096  1153 V RIL     : [<DEVICENODE#1>][TX] SIT_SET_FD_INFO, REQ, 16 bytes, Token(0x01ad)
+08-09 13:12:30.730  1096  1153 V RIL     : <HEXDUMP 16B>
+08-09 13:12:30.732  1016  1028 I WPKTRT  : process_address_event: <IP#1> added to rmnet1
+08-09 13:12:30.733  1096  1167 V RIL     : [<DEVICENODE#1>][RX] SIT_SET_FD_INFO, RSP, 12 bytes, Token(0x01ad), OK(RCM_E_SUCCESS)
+08-09 13:12:30.733  1096  1167 V RIL     : <HEXDUMP 12B>
+08-09 13:12:30.736  1153  1153 I cpif    : LNK-TX(32): <HEXDUMP 24B>
+08-09 13:12:30.733  1096  1167 I RIL     : [RilContext_0] ProcessModemData 
+08-09 13:12:30.737     0     0 I [    C0] cpif: LNK-RX(24): <HEXDUMP 24B>
+08-09 13:12:30.733  1096  1167 E RIL     : WaitList<IP#7>ind() found record error : token=0x01AD
+08-09 13:12:30.734  1856  2244 D DataServiceCallback: onSetupDataCallComplete
+08-09 13:12:30.734  1856  2244 D DSM-C-0 : onSetupDataCallComplete. resultCode = 0, response = DataCallResponse: { cause=NONE(0x0) retry=0 cid=2 linkStatus=2 protocolType=2 ifname=rmnet1 addresses=[<IP#1>/64, <IP#8>/32] dnses=[/<IP#3>, /<IP#4>] gateways=[/::, /<IP#5>] pcscf=[/<IP#3>, /<IP#4>] mtu=1500 mtuV4=1500 mtuV6=1500 handoverFailureMode=retry handover pduSessionId=5 defaultQos=NrQos { fiveQi=5 downlink=Bandwidth { maxBitrateKbps=0 guaranteedBitrateKbps=0} uplink=Bandwidth { maxBitrateKbps=0 guaranteedBitrateKbps=0} qosFlowId=2 averagingWindowMs=0} qosBearerSessions=[] sliceInfo=SliceInfo{mSliceServiceType=EMBB, mSliceDifferentiator=-1, mMappedHplmnSliceServiceType=NONE, mMappedHplmnSliceDifferentiator=-1, mStatus=UNKNOWN} trafficDescriptors=[] networkValidationStatus=unsupported physicalNetworkTransportType=INVALID physicalNetworkSlotIndex=-1}
+08-09 13:12:30.734  1856  2170 D RILJ    : [0353]< SETUP_DATA_CALL DataCallResponse: { cause=NONE(0x0) retry=0 cid=2 linkStatus=2 protocolType=2 ifname=rmnet1 addresses=[<IP#1>/64, <IP#8>/32] dnses=[/<IP#3>, /<IP#4>] gateways=[/::, /<IP#5>] pcscf=[/<IP#3>, /<IP#4>] mtu=1500 mtuV4=1500 mtuV6=1500 handoverFailureMode=retry handover pduSessionId=5 defaultQos=NrQos { fiveQi=5 downlink=Bandwidth { maxBitrateKbps=0 guaranteedBitrateKbps=0} uplink=Bandwidth { maxBitrateKbps=0 guaranteedBitrateKbps=0} qosFlowId=2 averagingWindowMs=0} qosBearerSessions=[] sliceInfo=SliceInfo{mSliceServiceType=EMBB, mSliceDifferentiator=-1, mMappedHplmnSliceServiceType=NONE, mMappedHplmnSliceDifferentiator=-1, mStatus=UNKNOWN} trafficDescriptors=[] networkValidationStatus=unsupported physicalNetworkTransportType=INVALID physicalNetworkSlotIndex=-1} [PHONE0]
+08-09 13:12:30.735  1856  1856 D DN-100-C: ConnectingState: onSetupResponse: resultCode=RESULT_SUCCESS, response=DataCallResponse: { cause=NONE(0x0) retry=0 cid=2 linkStatus=2 protocolType=2 ifname=rmnet1 addresses=[<IP#1>/64, <IP#8>/32] dnses=[/<IP#3>, /<IP#4>] gateways=[/::, /<IP#5>] pcscf=[/<IP#3>, /<IP#4>] mtu=1500 mtuV4=1500 mtuV6=1500 handoverFailureMode=retry handover pduSessionId=5 defaultQos=NrQos { fiveQi=5 downlink=Bandwidth { maxBitrateKbps=0 guaranteedBitrateKbps=0} uplink=Bandwidth { maxBitrateKbps=0 guaranteedBitrateKbps=0} qosFlowId=2 averagingWindowMs=0} qosBearerSessions=[] sliceInfo=SliceInfo{mSliceServiceType=EMBB, mSliceDifferentiator=-1, mMappedHplmnSliceServiceType=NONE, mMappedHplmnSliceDifferentiator=-1, mStatus=UNKNOWN} trafficDescriptors=[] networkValidationStatus=unsupported physicalNetworkTransportType=INVALID physicalNetworkSlotIndex=-1}
+08-09 13:12:30.736  1856  1856 D DN-100-C: ConnectingState: PDU session id updated to 5
+08-09 13:12:30.736  1856  1856 D DN-100-C: ConnectingState: Link status updated to ACTIVE
+08-09 13:12:30.737  1856  1856 D DN-100-C: ConnectingState: sendLinkProperties {InterfaceName: rmnet1 LinkAddresses: [ <IP#1>/64,<IP#8>/32 ] DnsAddresses: [ /<IP#3>,/<IP#4> ] PcscfAddresses: [ /<IP#3>,/<IP#4> ] Domains: null MTU: 1500 TcpBufferSizes: 4194304,16777216,33554432,1048576,2097152,8388608 Routes: [ ::/0 -> :: rmnet1 mtu 1500,<IP#5>/0 -> <IP#5> rmnet1 mtu 1500 ]}
+08-09 13:12:30.739  1297  1487 D ConnectivityService: Adding iface rmnet1 to network 100
+08-09 13:12:30.741  1856  1856 D DN-100-C: ConnectingState: updateNetworkCapabilities: Capabilities not changed.
+08-09 13:12:30.741  1096  1153 I RIL     : DataCallListOnlyChangedHandler: DataCall{cid:2, active:2, status:0, pdpType:2, pco:0, ipv4_mtu_size:1500, ipv6_mtu_size:1500, pdu_session_id:5, suggestedRetryTime:0}
+08-09 13:12:30.741  1096  1153 V RIL     : PCSCF_EXT count is 5
+08-09 13:12:30.741  1096  1153 I RIL     : ***** IPv4 *****
+08-09 13:12:30.741  1096  1153 I RIL     : IP		: <IP#8>
+08-09 13:12:30.741  1096  1153 I RIL     : DNS1	: <IP#4>
+08-09 13:12:30.741  1096  1153 I RIL     : DNS2	: <IP#5>
+08-09 13:12:30.741  1096  1153 I RIL     : GW		: <IP#5>
+08-09 13:12:30.741  1096  1153 I RIL     : P-CSCF1  : <IP#4>
+08-09 13:12:30.741  1096  1153 I RIL     : P-CSCF2  : <IP#5>
+08-09 13:12:30.741  1096  1153 I RIL     : P-CSCF3  : <IP#5>
+08-09 13:12:30.741  1096  1153 I RIL     : P-CSCF4  : <IP#5>
+08-09 13:12:30.741  1096  1153 I RIL     : P-CSCF5  : <IP#5>
+08-09 13:12:30.741  1096  1153 I RIL     : P-CSCF6  : <IP#5>
+08-09 13:12:30.741  1096  1153 I RIL     : P-CSCF7  : <IP#5>
+08-09 13:12:30.741  1096  1153 I RIL     : P-CSCF8  : <IP#5>
+08-09 13:12:30.741  1096  1153 I RIL     : ****************
+08-09 13:12:30.741  1096  1153 I RIL     : ***** IPv6 *****
+08-09 13:12:30.741  1096  1153 I RIL     : IP		: <IP#1>
+08-09 13:12:30.741  1096  1153 I RIL     : DNS1	: <IP#3>
+08-09 13:12:30.741  1096  1153 I RIL     : DNS2	: ::
+08-09 13:12:30.741  1096  1153 I RIL     : GW		: ::
+08-09 13:12:30.741  1096  1153 I RIL     : P-CSCF1  : <IP#3>
+08-09 13:12:30.741  1096  1153 I RIL     : P-CSCF2  : ::
+08-09 13:12:30.741  1096  1153 I RIL     : P-CSCF3  : ::
+08-09 13:12:30.741  1096  1153 I RIL     : P-CSCF4  : ::
+08-09 13:12:30.741  1096  1153 I RIL     : P-CSCF5  : ::
+08-09 13:12:30.741  1096  1153 I RIL     : P-CSCF6  : ::
+08-09 13:12:30.741  1096  1153 I RIL     : P-CSCF7  : ::
+08-09 13:12:30.741  1096  1153 I RIL     : P-CSCF8  : ::
+08-09 13:12:30.741  1096  1153 I RIL     : ****************
+08-09 13:12:30.742  1096  1153 I RIL     : [PsService_0] UpdatePdpOnActiveDc PdpContext{cid=2, state=CONNECTED, active=ACTIVE_AND_LINKUP}
+08-09 13:12:30.742  1096  1153 V RIL     : [PsService_0]********** all pdp infos *************
+08-09 13:12:30.742  1096  1153 V RIL     : [0] PdpContext{cid=1, state=AVAILABLE, active=INACTIVE}
+08-09 13:12:30.742  1096  1153 V RIL     : [1] PdpContext{cid=2, state=CONNECTED, active=ACTIVE_AND_LINKUP}
+08-09 13:12:30.742  1096  1153 V RIL     : [2] PdpContext{cid=3, state=AVAILABLE, active=INACTIVE}
+08-09 13:12:30.742  1096  1153 V RIL     : [3] PdpContext{cid=4, state=AVAILABLE, active=INACTIVE}
+08-09 13:12:30.742  1096  1153 V RIL     : [4] PdpContext{cid=5, state=AVAILABLE, active=INACTIVE}
+08-09 13:12:30.742  1096  1153 V RIL     : [5] PdpContext{cid=6, state=AVAILABLE, active=INACTIVE}
+08-09 13:12:30.742  1096  1153 V RIL     : [6] PdpContext{cid=7, state=AVAILABLE, active=INACTIVE}
+08-09 13:12:30.742  1096  1153 V RIL     : [7] PdpContext{cid=8, state=AVAILABLE, active=INACTIVE}
+08-09 13:12:30.742  1096  1153 V RIL     : [8] PdpContext{cid=9, state=AVAILABLE, active=INACTIVE}
+08-09 13:12:30.742  1096  1153 V RIL     : [9] PdpContext{cid=10, state=AVAILABLE, active=INACTIVE}
+08-09 13:12:30.742  1096  1153 V RIL     : [10] PdpContext{cid=11, state=AVAILABLE, active=INACTIVE}
+08-09 13:12:30.742  1096  1153 V RIL     : [11] PdpContext{cid=12, state=AVAILABLE, active=INACTIVE}
+08-09 13:12:30.742  1096  1153 V RIL     : [12] PdpContext{cid=13, state=AVAILABLE, active=INACTIVE}
+08-09 13:12:30.742  1096  1153 V RIL     : [13] PdpContext{cid=14, state=AVAILABLE, active=INACTIVE}
+08-09 13:12:30.742  1096  1153 V RIL     : [14] PdpContext{cid=15, state=AVAILABLE, active=INACTIVE}
+08-09 13:12:30.742  1096  1153 V RIL     : [PsService_0]**************************************
+08-09 13:12:30.742  1096  1153 V RIL     : [AMBR] CID:0, Downlink 0 kbps, Uplink 0 kbps
+08-09 13:12:30.742  1096  1153 V RIL     : [PsService_0] NotifyAMBR to framework : CID:0, len:0
+08-09 13:12:30.742  1096  1153 V RIL     : DataCallListResponseV2_0
+08-09 13:12:30.742  1096  1153 I RIL     : RilApplication::GetInstance
+08-09 13:12:30.742  1096  1153 I RIL     : RilApplication::GetInstance
+08-09 13:12:30.742  1096  1153 V RIL     : dnses:<IP#3>
+08-09 13:12:30.742  1096  1153 V RIL     : dnses:<IP#4>
+08-09 13:12:30.742  1096  1153 V RIL     : pcscf: <IP#3>
+08-09 13:12:30.742  1096  1153 V RIL     : pcscf: <IP#4>

@@ -67,7 +67,7 @@ telephony-issue-db/
 │   ├── getting-started.md             # 10분 온보딩 (06-collaboration.md §6.9)
 │   ├── review-guide.md                # 월간 리뷰 절차 (06-collaboration.md §6.6)
 │   ├── branch-protection.md           # 브랜치 보호 설정 기록 (06-collaboration.md §6.1)
-│   └── analyzer-skills.md             # 카테고리 분석 스킬 만들기 (16-existing-assets.md §16.5.1)
+│   └── analyzer-skills.md             # 카테고리 분석 스킬 만들기 (16-existing-assets.md §16.5.1). 모듈별 기본 분석은 이슈 DB가 아니라 모듈 스킬 레포(module_skills.remote, 계획 H)
 ├── schema/
 │   ├── type.schema.json
 │   ├── issue.schema.json

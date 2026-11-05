@@ -3064,6 +3064,201 @@ def test_hooks_json_wires_show_guard_display_aid():
     assert all(x.get("timeout") for g in hooks["PostToolUse"] + hooks["PreToolUse"] for x in g["hooks"])
 
 
+# -- 규칙 12 (a)(b): 모듈 스킬 관리 clone·기록 (B1 설계 §7, B2-22) ------------------------------------------
+
+MODULE_REMOTE = "https://ghe.example.invalid/tt/module-skills.git"
+
+
+def _reason(out: dict | None) -> str:
+    return (out or {}).get("permissionDecisionReason", "")
+
+
+def _module_ws(**top) -> Workspace:
+    """사용자 config에 키를 더한 작업공간(clone을 바꾸지 않는다). 생성 파일 빌드는 하지 않는다."""
+    ws = Workspace(build=False)
+    cfg = ws.home / "config.yaml"
+    data = yaml.safe_load(cfg.read_text(encoding="utf-8"))
+    data.update(top)
+    cfg.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+    return ws
+
+
+def test_guard_module_clone_file_tools_denied_with_and_without_config():
+    ws = shared()
+    m = ws.work / "_module-skills"
+    nohome = tmp("tt-nohome-")
+    for target in (m / "ofono" / "data" / "SKILL.md", ws.work / "_module-skills.lock", ws.work / "MOCK-1" / "skill-wt" / "x.md",
+                   ws.work / "_module-skills.tmp-1-2" / "x"):
+        for tool in ("Write", "Edit", "NotebookEdit"):
+            key = "notebook_path" if tool == "NotebookEdit" else "file_path"
+            out = guard(ws, tool, {key: str(target), "content": "x"}, ws.base)
+            assert decision(out) == "deny" and "규칙 12" in _reason(out), (tool, target)
+    # 사용자 config 없이도 이름 기반(경로 조각) — 기본 work_dir의 skill-wt도
+    env = {"TELEPHONY_TRIAGE_HOME": str(nohome)}
+    out = guard(ws, "Write", {"file_path": str(nohome / "work" / "_module-skills" / "README.md")}, ws.base, env=env)
+    assert decision(out) == "deny"
+    out = guard(ws, "Write", {"file_path": str(nohome / "work" / "K-1" / "skill-wt" / "a.md")}, ws.base, env=env)
+    assert decision(out) == "deny"
+    assert decision(guard(ws, "Write", {"file_path": str(nohome / "work" / "K-1" / "notes.md")}, ws.base, env=env)) is None
+
+
+def test_guard_module_clone_default_work_dir_of_enabled_platform():
+    root = plugin_root("module-enabled", platform={"name": "android", "enabled": ["android", "ofono"]})
+    ws = Workspace(root=root, build=False)
+    target = ws.home / "work-ofono" / "K-1" / "skill-wt" / "x.md"       # 사용자 ofono 프로필은 없다
+    assert decision(guard(ws, "Write", {"file_path": str(target)}, ws.base)) == "deny"
+    rec = ws.home / "work-ofono" / "K-1" / "module-skill.json"
+    assert decision(guard(ws, "Write", {"file_path": str(rec)}, ws.base)) == "deny"
+
+
+def test_guard_module_clone_bash_writes_denied():
+    ws = shared()
+    m = ws.work / "_module-skills"
+    lock = ws.work / "_module-skills.lock"
+    cmds = [f"echo x > {m}/CLAUDE.md", f"cp a {m}/ofono/data/SKILL.md", f"sed -i s/a/b/ {m}/README.md", f"rm -rf {m}",
+            f"cd {m} && rm -f README.md", f"tee {lock}", f"mv {lock} /tmp/x", f"mv {m} /tmp/x",
+            f"ln -s {m} /tmp/l && echo x > /tmp/l/CLAUDE.md", f"rsync --remove-source-files {m}/README.md /tmp/",
+            f"touch {ws.work}/_module-skills.tmp-1-2/x", f"mv -t /tmp {m}"]
+    for cmd in cmds:
+        out = bash(ws, cmd, ws.base)
+        assert decision(out) == "deny" and "규칙 12" in _reason(out), cmd
+    # 읽기는 통과, 관문 밖 평소 명령은 지금과 같은 결정
+    for cmd in (f"cat {m}/README.md", f"ls {m}", f"cp {m}/README.md /tmp/r.md", "ls /tmp"):
+        assert decision(bash(ws, cmd, ws.base)) is None, cmd
+    nohome = {"TELEPHONY_TRIAGE_HOME": str(tmp("tt-nohome-"))}
+    assert decision(bash(ws, "ls /tmp", ws.base, env=nohome)) is None
+    assert decision(bash(ws, f"rm -rf {m}", ws.base, env=nohome)) == "deny"      # 이름 기반
+
+
+def test_guard_module_clone_git_allowlist_without_issue_db_path():
+    ws = shared()
+    nohome = tmp("tt-nohome-")
+    env = {"TELEPHONY_TRIAGE_HOME": str(nohome)}            # 사용자 config·issue_db.path 없음: git_rules 꺼짐
+    m = nohome / "work" / "_module-skills"
+    job = nohome / "work" / "K-1"
+    deny = [f"git -C {m} commit -m x", f"git -C {m} push", f"git -C {m} stash", f"git -C {m} reset --hard",
+            f"git -C {m} checkout .", f"git -C {m} sparse-checkout set x", f"git -C {m} worktree add ../w",
+            f"git -C {m} fetch", f"git -C {m} remote set-url origin x", f"git -C {m} config core.fsmonitor x",
+            f"git -C {m} -c core.fsmonitor=x status", f"GIT_DIR={m}/.git git reset --hard",
+            f"git --git-dir={m}/.git --work-tree=/tmp/y checkout .", f"git clone file:///x {m}",
+            f"git -C {m} grep -Ovim x", f"git -C {m} grep --open-files-in-pager x", f"git -C {m} diff --ext-diff",
+            f"git -C {m} branch -D main", f"git -C {m} branch newb", f"git -C {m} config --unset core.x"]
+    for cmd in deny:
+        out = bash(ws, cmd, ws.base, env=env)
+        assert decision(out) == "deny" and "규칙 12" in _reason(out), cmd
+    # 어디서 돌든 경로 옵션
+    for cmd in (f"git config --file {m}/.git/config core.fsmonitor x", f"git -C /tmp diff --output={m}/CLAUDE.md",
+                f"git -C {m} log --output={job}/module-skill/deep/ofono/data/SKILL.md",
+                f"git -C /tmp format-patch -o {m} HEAD~1"):
+        out = bash(ws, cmd, tmp("tt-elsewhere-"), env=env)
+        assert decision(out) == "deny" and "규칙 12" in _reason(out), cmd
+    for cmd in (f"git -C {m} status", f"git -C {m} log -1", f"git -C {m} diff", f"git -C {m} sparse-checkout list",
+                f"git -C {m} remote -v", f"git -C {m} config --get remote.origin.url", f"git -C {m} branch -a",
+                f"git -C {m} grep -n x", f"git -C {m} remote get-url origin", f"git -C {m} stash list"):
+        assert decision(bash(ws, cmd, ws.base, env=env)) is None, cmd
+    assert decision(bash(ws, "git -C /tmp status", ws.base, env=env)) is None
+
+
+def test_guard_module_records_denied_copies_and_notes_pass():
+    ws = shared()
+    job = ws.work / "MOCK-1"
+    for rel in ("module-skill.json", "deep-input.json", "skill-input.json", "check-output.json",
+                "module-skill/deep/ofono/data/SKILL.md"):
+        out = guard(ws, "Write", {"file_path": str(job / rel), "content": "x"}, ws.base)
+        assert decision(out) == "deny" and "만 쓴다" in _reason(out) and "규칙 12" in _reason(out), rel
+        for cmd in (f"echo x > {job / rel}", f"rm -f {job / rel}"):
+            assert decision(bash(ws, cmd, ws.base)) == "deny", cmd
+    assert decision(bash(ws, f"rm -rf {job}/module-skill", ws.base)) == "deny"
+    for rel in ("skill-suggestions/ofono/data/SKILL.md", "notes.md", "deep-output.md", "explore-output.md"):
+        assert decision(guard(ws, "Write", {"file_path": str(job / rel), "content": "x"}, ws.base)) is None, rel
+
+
+def test_guard_module_records_relative_paths_use_hook_cwd():
+    """B2-22: 상대 경로는 hook 입력 `cwd`로 푼다(guard 프로세스의 cwd가 아니다 — OpenCode 셈이 workdir를 cwd에 넣는다)."""
+    ws = shared()
+    job = ws.work / "MOCK-1"
+    job.mkdir(parents=True, exist_ok=True)
+    event = {"tool_name": "Bash", "tool_input": {"command": "rm -f module-skill.json"}, "cwd": str(job)}
+    proc = run("guard.py", [], root=ws.root, cwd=tmp("tt-other-cwd-"), env=ws.env(), stdin=json.dumps(event))
+    assert proc.returncode == 0 and json.loads(proc.stdout)["hookSpecificOutput"]["permissionDecision"] == "deny"
+    event = {"tool_name": "Write", "tool_input": {"file_path": "check-output.json", "content": "x"}, "cwd": str(job)}
+    proc = run("guard.py", [], root=ws.root, cwd=tmp("tt-other-cwd-"), env=ws.env(), stdin=json.dumps(event))
+    assert json.loads(proc.stdout)["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+def test_guard_word_net_signature_pinned_for_oc_adapter():
+    """R26: oc_adapter가 쓰는 guard 내부 함수의 모양을 고정한다."""
+    import inspect
+
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    import guard as guard_mod
+
+    sig = inspect.signature(guard_mod.word_net)
+    assert [(p.name, p.default) for p in sig.parameters.values()] == [
+        ("command", inspect.Parameter.empty), ("name", "db_pr"), ("word", "publish")]
+    assert guard_mod.word_net("python3 db_pr.py publish x") is True
+    assert guard_mod.word_net("triage.py module K --for deep", "module_eval", "module") is False
+
+
+def test_guard_triage_module_has_no_decision_normal_and_degraded():
+    ws = shared()
+    cmd = f'python3 "{ws.root}/scripts/triage.py" module MOCK-1 --for deep'
+    assert decision(bash(ws, cmd, ws.base)) is None
+    event = {"tool_name": "Bash", "tool_input": {"command": cmd}, "cwd": str(ws.base)}
+    proc = run("guard.py", [], root=ws.root, cwd=ws.base, env=_no_yaml_env(ws), stdin=json.dumps(event))
+    assert proc.returncode == 0 and not proc.stdout.strip() and "의존성 없음" in proc.stderr
+
+
+def test_guard_degraded_denies_module_clone_writes():
+    ws = shared()
+    env = _no_yaml_env(ws)
+
+    def judge(tool: str, tool_input: dict):
+        event = {"tool_name": tool, "tool_input": tool_input, "cwd": str(ws.base)}
+        proc = run("guard.py", [], root=ws.root, cwd=ws.base, env=env, stdin=json.dumps(event))
+        assert proc.returncode == 0, proc.stderr
+        return json.loads(proc.stdout)["hookSpecificOutput"] if proc.stdout.strip() else None
+
+    m = ws.work / "_module-skills"
+    assert decision(judge("Write", {"file_path": str(m / "x.md")})) == "deny"
+    assert decision(judge("Write", {"file_path": str(ws.base / "x.md")})) == "ask"
+    assert decision(judge("Bash", {"command": f"echo x > {m}/CLAUDE.md"})) == "deny"
+    assert decision(judge("Bash", {"command": f"mv {ws.work}/_module-skills.lock /tmp/x"})) == "deny"
+
+
+def test_guard_gh_and_mcp_with_module_remote():
+    ws = _module_ws(module_skills={"remote": MODULE_REMOTE})
+    plain = tmp("tt-gh-plain-")
+    module_clone = _repo_with_origin(MODULE_REMOTE)
+    baseline = bash(shared(), f"gh pr create -R {DB_SLUG} -t x", plain)
+    out = bash(ws, "gh pr create -R tt/module-skills -t x", plain)
+    assert decision(out) == "ask" and _reason(out) == _reason(baseline)       # 규칙 11 문구 그대로(메모 없음)
+    assert decision(bash(ws, "gh pr merge 1 -R tt/module-skills", plain)) == "deny"
+    assert decision(bash(ws, "gh pr review 1 --approve -R tt/module-skills", plain)) == "deny"
+    assert decision(bash(ws, "gh pr create -t x", module_clone)) == "ask"
+    assert decision(guard(ws, "mcp__github__merge_pull_request", {"owner": "tt", "repo": "module-skills"}, ws.base)) == "deny"
+    assert decision(bash(ws, "gh pr create -R tt/other -t x", plain)) is None
+    # 사용자 config 없이 site-defaults의 remote만 있어도 판정한다
+    root = plugin_root("module-remote-site", module_skills={"remote": MODULE_REMOTE})
+    nohome = {"TELEPHONY_TRIAGE_HOME": str(tmp("tt-nohome-"))}
+    proc = run("guard.py", [], root=root, cwd=plain, env=nohome, stdin=json.dumps(
+        {"tool_name": "Bash", "tool_input": {"command": "gh pr merge 1 -R tt/module-skills"}, "cwd": str(plain)}))
+    assert json.loads(proc.stdout)["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+def test_guard_module_remote_warnings():
+    def warn(remote: str) -> str:
+        ws = _module_ws(module_skills={"remote": remote})
+        event = {"tool_name": "Bash", "tool_input": {"command": "ls"}, "cwd": str(ws.base)}
+        return run("guard.py", [], root=ws.root, cwd=ws.base, env=ws.env(), stdin=json.dumps(event)).stderr
+
+    assert "module_skills" not in warn("file:///tmp/r.git")
+    err = warn("not a url")
+    assert "module_skills.remote" in err and "규칙 11" in err
+    err = warn("https://u:secret@x.invalid/o")
+    assert "module_skills.remote" in err and "secret" not in err
+
+
 if __name__ == "__main__":
     import pytest
 

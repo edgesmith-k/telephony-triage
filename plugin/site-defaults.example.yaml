@@ -179,8 +179,8 @@ analyzers:
   data:
     skill: mock-data-analyzer          # tests/mocks/skills/data-analyzer/
     when: ask                          # ask | always | never
-    inputs: [events_json, log_paths, top_candidates, issue_summary]
-    max_tokens_hint: medium            # TODO(SITE:S10) 플러그인은 이 키를 읽지 않는다(S-4a에서 쓸지 지울지 결정)
+    # prefer: module                 # module(기본) | skill — skill이면 module_skills.remote가 있어도 위 skill(설치 스킬)로 심층 분석(카테고리별, 사용자 config가 덮는다)
+    # skill_dir: /abs/path/to/<skill>   # 설치 스킬 SKILL.md 폴더(선택). 없으면 설치 위치를 찾는다(skillpath)
     # source: /abs/path/to/analyzer-skill   # 선택: 분석 스킬 소스 checkout(SKILL.md가 있는 폴더, git 저장소 안). 있으면 [스킬] 제안
     #                                       # patch를 사용자가 승인한 뒤 그 워킹 트리에 git apply한다(커밋·push 안 함, 16 §16.5.1)
 # 위 analyzers는 android 것이다. android 밖 플랫폼은 최상위 platforms.<이름>.analyzers(같은 모양)만 쓰고 android 것을
@@ -194,6 +194,15 @@ analyzers:
 explore:
   when: ask                            # ask | always | never (analyze --explore / --no-explore가 우선)
   timeline_max_lines: 200              # JOB/timeline.md 줄 수 상한 (20~1000)
+
+# 모듈 스킬 레포(①탐색·②심층 분석 모듈 문서, MODULE_SKILLS_PLAN_IMPL §2.1). 최상위 키 — 플랫폼별이 아니다(레포 하나 안에 <플랫폼>/이 있다).
+# 비워 두면 모듈 문서를 쓰지 않는다(지금 출력 그대로). 받기는 동의 뒤 triage.py module만 한다.
+# module_skills:
+#   remote: https://<GHE 호스트>/<owner>/<repo>.git   # TODO(SITE:S33) 주소·partial clone 지원·사용자 PC git 버전(≥2.25)
+#   base_branch: main
+
+# 분석 환경 출처 기록(module-skill.json·check-output.json·이슈 DB 커밋 꼬리말의 label). 선택, 이 파일에서만 읽는다.
+# runtime: {label: <사내 실행 환경 이름>}   # TODO(SITE:S35) 출처 기록용(선택) — 영숫자·._ +-, 40자 이하
 
 # 실패 스텝 기준 분석 구간 (07-workflow.md §Step 3, 02-config.md). TODO(SITE:S22)
 # 시험 자동화가 logcat에 남기는 스텝 마커로 실패 스텝의 시간 구간을 정한다(어디를 볼지만 정하고 S/C는 로그가 정한다).

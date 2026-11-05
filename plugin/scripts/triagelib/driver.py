@@ -6,6 +6,7 @@ import json
 import os
 import re
 import shutil
+import stat
 from pathlib import Path
 
 import platforms
@@ -15,8 +16,8 @@ from common.exitcodes import CHECK_FAILED, USAGE
 
 from .anchor import AnchorMixin, _parse_ts
 from .cache import CacheMixin, State, _digest, _file_sha
-from .core import (ERROR_EVENT_RE, EXPLORE_INPUT_FILE, EXPLORE_MAX_LINES, EXPLORE_WHEN, PLATFORM_ANSWER, Fail, NeedsInput,
-                   Runner, SEARCH_LIMIT, SNAPSHOT_DIR, STATE_FILE, Stopped, TIMELINE_FILE, TOP, _clip)
+from .core import (ERROR_EVENT_RE, EXPLORE_MAX_LINES, EXPLORE_WHEN, PLATFORM_ANSWER, Fail, NeedsInput,
+                   MODULE_RECORD_DIR, Runner, SEARCH_LIMIT, SNAPSHOT_DIR, STALE_FILES, STATE_FILE, Stopped, TOP, _clip)
 from .report import ReportMixin, _ref_label, _unique_evidence
 
 
@@ -788,13 +789,34 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
             core = self.core(ctx)
         return self.assemble(ctx, core, parts, request_hash, hit)
 
+    def drop_stale_records(self) -> None:
+        """이전 실행의 탐색·모듈 스킬 산출물은 이번 결과가 아니다(타임라인은 동의 뒤 `explore`가, 모듈 기록은 `module`·
+        `check-output`이 만든다, B2 §7.4). 링크는 따라가지 않고 링크만 지운다. 없으면 아무것도 바꾸지 않는다."""
+        for name in STALE_FILES:
+            path = self.job / name
+            try:
+                st = os.lstat(path)
+            except OSError:
+                continue
+            if stat.S_ISDIR(st.st_mode):
+                continue
+            path.unlink(missing_ok=True)
+        path = self.job / MODULE_RECORD_DIR
+        try:
+            st = os.lstat(path)
+        except OSError:
+            return
+        if stat.S_ISDIR(st.st_mode):
+            shutil.rmtree(path)
+        else:
+            path.unlink(missing_ok=True)
+
     def prepare(self) -> dict:
         """Step 0~2와 입력 정리(로그·코드·시간대·연도). 여기까지는 재사용 여부와 상관없이 항상 한다."""
         self.preflight_args()
         self.check_key()
         self.open_job()
-        for name in (TIMELINE_FILE, EXPLORE_INPUT_FILE):    # 이전 실행의 탐색 산출물은 이번 결과가 아니다(타임라인은 동의 뒤 `explore`가 만든다)
-            (self.job / name).unlink(missing_ok=True)
+        self.drop_stale_records()
         if not self.offline:
             self.lock()
             if self.mark_platform_answer():      # 새 lock(State.reset)이 지웠으면 다시 남긴다
@@ -922,8 +944,18 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         # self.cfg = 선택 플랫폼의 config: android 밖 플랫폼은 platforms.<p>.analyzers만(android 것을 물려받지 않는다, 17 §10)
         if not candidates:
             return None
-        conf = (self.cfg.get("analyzers") or {}).get(candidates[0].get("category") or "")
-        return {"skill": conf.get("skill"), "when": conf.get("when", "ask")} if conf else None
+        # 5-1 출처는 userconfig.deep_source 하나가 정한다(B2-3). 설치 스킬(레거시·prefer: skill)은 키·순서 그대로
+        cat = candidates[0].get("category") or ""
+        conf = (self.cfg.get("analyzers") or {}).get(cat)
+        conf = conf if isinstance(conf, dict) else {}
+        src = userconfig.deep_source(self.cfg, cat)
+        if src["source"] == "skill" or (src["source"] == "none" and conf and "prefer" not in conf):
+            return {"skill": conf.get("skill"), "when": conf.get("when", "ask")}
+        if src["source"] == "module":
+            return {"category": cat, "when": src["when"]}
+        if src["source"] == "error":         # when: never → SKILL "never면 생략"이 5-1 질문을 건너뛴다
+            return {"error": _clip(userconfig.deep_source_problem(self.cfg, cat) or "설정 오류", 120), "when": "never"}
+        return None
 
     def release(self) -> bool:
         if self.locked and self.run.env.get("TT_LOCK_OWNER"):

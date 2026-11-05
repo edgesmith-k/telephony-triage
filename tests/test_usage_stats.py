@@ -471,3 +471,31 @@ def test_plugin_session_needs_the_plugin_script_path(tmp_path):
     _T(sid="b").resp(bash('S="/x/plugin/scripts"; python3 "$S/config.py" show')).write(tmp_path / "p" / "b.jsonl")
     _T(sid="c").resp(bash(r"python3 C:\x\scripts\db_pr.py lock status")).write(tmp_path / "p" / "c.jsonl")
     assert usage_stats.transcripts(tmp_path / "p")["sessions"] == 2
+
+
+def test_transcripts_module_deep_stage_and_single_deep_call(tmp_path):
+    """B2-19: `module|check-output … --for deep`가 심층 단계를 연다. `module --for deep` 한 번 = 심층 호출 한 번, 같은 단계의 대안
+    Skill 호출(설치 스킬 못 찾음 뒤)은 다시 세지 않는다. `module`·`check-output … --for explore`는 탐색 단계."""
+    t = _T()
+    t.resp(bash(f"{S}/triage.py run K-1 --logs /x.log"))
+    t.resp(bash(f"{S}/triage.py module K-1 --for deep"))                                      # basic 응답, 다음 deep
+    t.resp(("Read", {"file_path": "/w/K-1/module-skill/deep/ofono/data/SKILL.md"}))            # deep
+    t.resp(bash(f"{S}/triage.py check-output K-1 --for deep"))                                 # deep
+    t.resp(bash(f"{S}/triage.py module K-1 --for explore --choose top"))                      # deep 응답, 다음 explore
+    t.resp(bash(f"{S}/triage.py check-output K-1 --for=explore"))                              # explore
+    t.resp()                                                                                  # explore
+    t.write(tmp_path / "a" / "p" / f"{SID}.jsonl")
+    tok = usage_stats.transcripts(tmp_path / "a")
+    calls = {k: v["calls"] for k, v in tok["by_stage"].items() if v["calls"]}
+    assert calls == {"basic": 2, "deep": 3, "explore": 2} and tok["deep_calls"] == 1
+    u = _T()
+    u.resp(bash(f"{S}/triage.py run K-1 --logs /x.log"))
+    u.resp(bash(f"{S}/triage.py module K-1 --for deep", '{"reason":"설치 스킬 못 찾음"}', True))
+    u.resp(("Skill", {"skill": "mock-analyzers:mock-data-analyzer"}))                         # 대안: 같은 심층 단계
+    u.resp(bash(f"{S}/triage.py check-output K-1 --for deep"))
+    u.resp()
+    u.write(tmp_path / "b" / "p" / f"{SID}.jsonl")
+    assert usage_stats.transcripts(tmp_path / "b")["deep_calls"] == 1
+    for cmd in (f"{S}/triage.py module K --for explore", f"{S}/triage.py check-output K --for explore --skipped x"):
+        assert usage_stats._bash_marker(cmd) == "explore", cmd
+    assert usage_stats._bash_marker(f"{S}/triage.py check-output K --for deep --skipped x") == "deep"

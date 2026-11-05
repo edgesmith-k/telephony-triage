@@ -52,6 +52,39 @@ EXPLORE_HYPOTHESIS = "TODO(LLM) 가설 1~3개 — 로그로 확인 / 코드로 �
 EXPLORE_PENDING_LINE = ("- 탐색 분석 (추정): 미실행 — 동의(또는 --explore·explore.when: always) 뒤 triage.py explore {key}가 "
                         f"{TIMELINE_FILE}를 만든다. " + EXPLORE_HYPOTHESIS)
 EXPLORE_DONE_LINE = "- 탐색 분석 (추정, " + TIMELINE_FILE + " {lines}/{total}줄): " + EXPLORE_HYPOTHESIS
+# 5-1·5-2 모듈 스킬·출력 검사 줄(B2 §5.5·§6·§7.2). `module`·`check-output`이 report.md의 그 줄만 고친다(`report.rewrite_line`)
+DEEP_TODO = "TODO(LLM) 결과는 check-output이 쓴다. 실행 안 함·실패면 \"심층 분석 생략: <사유>\"로"
+DEEP_MODULE_PENDING = ("- 심층 분석 (모듈 스킬 {platform}, 1위 카테고리 {category}): 미실행 — 동의 뒤 triage.py module {key} "
+                       "--for deep가 받는다. " + DEEP_TODO)
+DEEP_MODULE_FETCHED = "- 심층 분석 (모듈 스킬 {module} @{sha7}): " + DEEP_TODO
+DEEP_REPO_MISSING = "- 심층 분석: 해당 없음(레포에 {module} 없음 @{sha7}) (만드는 법: 모듈 스킬 레포 README)"
+DEEP_FETCH_FAILED = "- 심층 분석 생략: 모듈 스킬 받기 실패({reason})"
+DEEP_CONFIG_ERROR = "- 심층 분석 생략: 설정 오류({problem})"
+DEEP_SKIPPED = "- 심층 분석 생략: {reason}"
+EXPLORE_MODULE_DONE = ("- 탐색 분석 (추정, " + TIMELINE_FILE + " {lines}/{total}줄, 모듈 문서 {module} @{sha7}): "
+                       + EXPLORE_HYPOTHESIS)
+EXPLORE_MODULE_NONE = ("- 탐색 분석 (추정, " + TIMELINE_FILE + " {lines}/{total}줄, 모듈 문서 없음: {reason}): "
+                       + EXPLORE_HYPOTHESIS)
+EXPLORE_SKIPPED = "- 탐색 분석 생략: {reason}"
+MODULE_TIMELINE_SUB = "  - 모듈 타임라인: {kept}/{pool}줄, 잡음 {noise}, 반복 접음 {collapsed}{uncollected}"   # uncollected = ", 미수집 a·b" | ""
+EVIDENCE_SUB = "  - 근거 원문 검사: {text}"
+DEEP_PREFIX, EXPLORE_PREFIX = "- 심층 분석", "- 탐색 분석"    # rewrite_line·current_line의 prefix
+# check-output 한도(UTF-8 바이트, 한 칸 768바이트 = 한글 약 250자)
+OUTPUT_MAX_BYTES, FIELD_MAX_BYTES, DEEP_MAX_BYTES, EXPLORE_MAX_BYTES, QUOTES_MAX, HYPS_MAX = 16384, 768, 6144, 10240, 5, 3
+# 실패 JSON의 `next`(B2-24): 스크립트가 줄을 고친 뒤 모델이 할 일 한 줄
+NEXT_CONTINUE = "리포트 줄은 스크립트가 고쳤다 — 심층 분석 없이 Step 6로 계속"
+NEXT_SKILL_MISSING = ("스킬을 부르는 도구가 있으면 analyzer.skill을 input 파일로 부르고, 없으면 check-output --for deep "
+                      "--skipped \"설치 스킬 못 찾음\"")
+NEXT_FIX_CALL = "명령을 고쳐 한 번만 다시(module-skills.md) — 또 틀리면 check-output --skipped"
+NEXT_BUILTIN = "JOB/timeline.md로 explore.md대로"
+NEXT_ASK_BUILTIN = "실패를 보이고 \"탐색 분석을 내장 줄 모양만으로 할까요, 생략할까요?\"를 묻는다"
+NEXT_EXPLORE_SKIPPED = "리포트 줄은 스크립트가 고쳤다 — 탐색 분석 없이 Step 6로 계속"
+NEXT_CHECK_FAILED = "리포트 줄은 생략으로 고쳐 두었다 — 고쳐 쓰지 말고 Step 6로"
+NEXT_CHECK_NA = "리포트 줄은 그대로 둔다 — Step 6로 계속"
+MODULE_RECORD_DIR = "module-skill"
+# 새 run이 지우는 이전 실행 산출물(B2 §7.4) — 폴더 MODULE_RECORD_DIR도 지운다
+STALE_FILES = (TIMELINE_FILE, EXPLORE_INPUT_FILE, "module-skill.json", "deep-input.json", "skill-input.json", "check-output.json",
+               "deep-output.md", "explore-output.md")
 _HOT_LEVELS = {"W", "E", "F"}
 _TOKEN_RE = re.compile(r"[0-9A-Za-z가-힣_]{2,}")
 

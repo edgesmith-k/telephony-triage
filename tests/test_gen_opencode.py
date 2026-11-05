@@ -150,6 +150,11 @@ def test_agent_prompt():
     for must in ("Scripts judge", "200 lines", "verbatim", "exact command", "@@PLUGIN_ROOT@@", "tt-oc -s",
                  "db_pr.py publish|merge|request-review", "skill_patch.py --apply", "module_eval.py"):
         assert must in body, must
+    # B2 R20: `next`가 있으면 멈추지 않고 따른다(모듈 받기 실패는 분석을 끝내지 않는다). R21: 스킬 도구 없음 → --skipped 대안
+    rule2 = next(l for l in body.splitlines() if l.startswith("2. "))
+    assert "`next`" in rule2 and "overrides stop" in rule2 and "without `next`" in rule2
+    rule8 = next(l for l in body.splitlines() if l.startswith("8. "))
+    assert "설치 스킬 못 찾음" in rule8 and '--for deep --skipped "설치 스킬 못 찾음"' in rule8
 
 
 def test_pinned_versions_match():
@@ -211,6 +216,21 @@ def test_install_without_clone_drops_clone_rules(roots):
     assert _install(roots).returncode == 0
     cfg = json.loads((roots / "proj" / "opencode.json").read_text(encoding="utf-8"))
     assert len(cfg["permission"]["external_directory"]) == 3 and "dbA" not in json.dumps(cfg)
+
+
+def test_install_adds_read_roots_outside(roots):
+    """B2 R21: `config.py check --roots`의 `read_roots` 중 플러그인·작업 폴더 밖(풀린 설치 스킬 폴더)은 external_directory 읽기
+    allow로 더한다. edit 규칙은 그대로이고, 패턴 글자가 든 경로·상대 경로는 뺀다."""
+    skill = roots / "home" / ".config" / "opencode" / "skills" / "mock"
+    listed = [str(roots / "plug" / "skills" / "telephony-triage"), str(roots / "work"), str(skill), "/x/*/y", "rel/path"]
+    (roots / "plug" / "scripts" / "config.py").write_text(
+        "import json, sys\nassert sys.argv[1:] == ['check', '--roots']\n"
+        f"print(json.dumps({{'read_roots': {listed!r}}}))\nsys.exit(1)\n", encoding="utf-8")
+    assert _install(roots).returncode == 0
+    cfg = json.loads((roots / "proj" / "opencode.json").read_text(encoding="utf-8"))
+    assert list(cfg["permission"]["external_directory"]) == ["*", f"{roots}/plug/**", f"{roots}/work/**", f"{skill}/**"]
+    assert cfg["permission"]["external_directory"][f"{skill}/**"] == "allow"
+    assert not any(str(skill).lstrip("/") in k for k in cfg["permission"]["edit"])
 
 
 def test_install_refusals(roots):

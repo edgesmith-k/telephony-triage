@@ -1,0 +1,12 @@
+platform: ofono
+module: sim
+mode: deep
+center: '2026-02-27T17:48:28.432Z'
+fail: 87
+essential:
+- 61
+- 70
+- 87
+- 88
+- 89
+origin: O1 E4 줄 3711-3830

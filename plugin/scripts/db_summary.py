@@ -11,11 +11,13 @@ import json
 import re
 from pathlib import Path
 
-from common import masking, md
+from common import masking, md, provenance, site_defaults
 from common.exitcodes import NEEDS_APPROVAL, OK
 from common.fixtures import CAUSE_ID_RE, TYPE_ID_RE
 from common.issuedb import IssueDbError, parse_frontmatter_text
 
+ENV_TRAILER = "Triage-Env: "          # 이슈 DB 커밋 마지막 trailer(분석 환경, DEC:51 ①, R5) — URL은 넣지 않는다
+ENV_TRAILER_RE = re.compile(r"^Triage-Env: (.*)$", re.MULTILINE)
 GENERATED_RE = re.compile(r"^(README\.md|STATS\.md|parser-rules/CHANGELOG\.md|[^/]+/README\.md)$")
 SOURCE_LABELS = {"analyze": "분석 (analyze)", "record": "수동 기록 (record)", "import": "기존 분류 가져오기 (import)",
                  "fix-submitted": "수정 CL 반영 (fix-submitted)", "verify-fix": "코드 수정 검증 (verify-fix)",
@@ -233,6 +235,31 @@ def fix_changes(wt: Path, entries: list[tuple[str, str]], operations: list[dict]
     return out
 
 
+def _site_defaults() -> dict:
+    """db_pr가 읽은 것과 같은 site-defaults(`--plugin-root`는 `dbpr.worktree._PLUGIN_ROOT`). 못 읽으면 {}."""
+    try:
+        from dbpr import worktree
+        return site_defaults.load(worktree._PLUGIN_ROOT)
+    except Exception:       # noqa: BLE001 — 출처 표시는 보조: 없으면 label 없이
+        return {}
+
+
+def env_trailer(environ=None, defaults: dict | None = None) -> str:
+    """`Triage-Env: runtime=<r>; model=<m>; gateway=<g>; label=<l|->` — 값은 provenance.env_info(환경 변수·site `runtime.label`)."""
+    info = provenance.env_info(environ, _site_defaults() if defaults is None else defaults)
+    return (f"{ENV_TRAILER}runtime={info.get('runtime')}; model={info.get('model')}; gateway={info.get('gateway')}; "
+            f"label={info.get('label') or '-'}")
+
+
+def with_env_trailer(message: str, environ=None, defaults: dict | None = None) -> str:
+    """커밋 메시지 끝에 빈 줄 하나 + 분석 환경 trailer(계획이 이미 넣은 같은 trailer 줄은 뺀다). 빈 메시지는 그대로.
+    확인 화면(summary)이 이 메시지를 보이고 publish는 그 바이트 그대로 커밋한다 — 승인이 trailer를 덮는다."""
+    if not (message or "").strip():
+        return message
+    body = "\n".join(line for line in message.split("\n") if not line.startswith(ENV_TRAILER)).rstrip()
+    return body + "\n\n" + env_trailer(environ, defaults)
+
+
 def search_key(plan: dict, applied: dict) -> str | None:
     """열린 PR을 찾는 gh 검색어: Jira 키, 없으면 첫 할당 ID."""
     ids = applied.get("ids") or []
@@ -312,7 +339,7 @@ def screen(wt: Path, plan: dict, stage_result: dict, state: dict, db_cfg: dict, 
     notes += [masker(str(n)) for n in plan.get("pr_notes") or [] if str(n).strip()]
     check = stage_result.get("config_check") or {}
     push_allowed = bool(check.get("push_allowed")) and not stage_result.get("dry_run")
-    commit_message = applied.get("commit_message") or ""
+    commit_message = with_env_trailer(applied.get("commit_message") or "")
     title = commit_message.splitlines()[0] if commit_message else f"[{job}] {source}"
     revs = reviewers(wt, paths, plan, db_cfg)
     result = {
@@ -370,6 +397,9 @@ def pr_body(screen: dict, plan: dict) -> str:
     lines.append("")
     lines.append("승인 필요: " + (", ".join(r["id"] for r in screen["approval_needed"]) + " — 메인테이너 승인 필수"
                                   if screen["approval_needed"] else "없음"))
+    env = ENV_TRAILER_RE.search(screen.get("commit_message") or "")
+    if env:     # 커밋 trailer와 같은 값(확인 화면에 보인 것)
+        lines.append(f"- 분석 환경: {env.group(1)}")
     return "\n".join(lines) + "\n"
 
 

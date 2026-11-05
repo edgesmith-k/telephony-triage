@@ -16,7 +16,7 @@
 | `issue-db-step-events/` | 스텝 순서 정렬: `step_events` 규칙 10개(CP는 관측 불가, 비행기 모드 켜기·끄기는 `match`, 망 등록은 `ril`, 데이터 켜기·끄기는 `event`) |
 | `issue-db-review/` | 월간 리뷰(Phase 11): §6.6 항목마다 걸리는 경우와 걸리지 않는 경우 (`REVIEW_CASES`) |
 | `issue-db-ofono/` | oFono 플랫폼 뼈대 DB(17-platforms §5, **합성·형식 가정·placeholder**): `platform: ofono`, `ofono_reference` 백엔드, placeholder 태그(`ofonod`·`daemon-a`·`daemon-b`)·extractor 1개·요청 `PLACEHOLDER_CALL`(데몬 사이 짝 시험용, 짝 설정 없으면 효과 없음), 유형 `DATA-001`과 양성 fixture(`tests/fixtures/logs/ofono/journal-iso.log`) 하나 |
-| `issue-db-ofono-modules/` | 모듈 eval(H C0, 합성): issue-db-ofono 위에 데몬 13개 태그(MODULE_SKILLS_PLAN_IMPL §1.4), ril.yaml data 요청, exynos-ril 추출기 1개, 유형 DATA-001(SETUP_DATA_CALL 실패 + 인증 거절 원인)과 양성 fixture(모듈 템플릿 deep case 로그) |
+| `issue-db-ofono-modules/` | 모듈 eval(H C0, 합성): issue-db-ofono 위에 데몬 13개 태그(MODULE_SKILLS_PLAN_IMPL §1.4, ENT는 network — 결정 기록 11/05 ①), ril.yaml data 요청과 첨부 로그 sim·network 요청 5개(11/05 ②), exynos-ril 추출기 1개, 유형 DATA-001(SETUP_DATA_CALL 실패 + 인증 거절 원인)과 양성 fixture(모듈 템플릿 deep case 로그) |
 | `issue-db-github/` | 두 번째 트래커(트래커 범용화 §6-1, **합성**): `tracker {kind: github, base_url: https://ghe.mock.invalid/, key_regex: mock-org\\.mock-issues-\\d+}`, 기록·피드백·evidence의 Jira 키 `MOCK-<n>`을 GitHub 작업 키 `mock-org.mock-issues-<n>`으로(파일 이름 포함) |
 | `issue-db-unjudged/` | 원인 판정 불가(eval 68): `pattern_timeout_ms: 300`, DATA-001-01의 `data-disabled` 시그니처를 시간 초과하는 `slow-cause`(`must_match ['(a+)+$']`)로 바꾼 트리. `a`×40+`!` 줄이 있는 로그에서 `unjudged.cause_count` 1 |
 | `verify-logs/` | 이슈 DB가 아니다. `db_verify fix`·`resolution` 입력 로그(수정 후·재발·증상만 남음·시나리오 없음, 마스킹됨) |
@@ -686,12 +686,17 @@ tags:
   - {tag: ipad,       category: sim,     added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval·sim)}
   - {tag: PTD,        category: network, added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval·network)}
   - {tag: IMSSVC,     category: ims,     added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval·ims)}
-  - {tag: ENT,        category: ims,     added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval·ims)}
+  - {tag: ENT,        category: network, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 위성 entitlement → network (결정 기록 11/05 ①)}
 """
-MODULES_RIL = """# [합성] gril 짝 파생 이벤트용 공개 RIL 요청 이름. timeout은 placeholder. TODO(SITE:S26)
+MODULES_RIL = """# [합성 + 첨부 로그 요청 이름(11/05)] gril 짝 파생 이벤트용 공개 RIL 요청 이름. timeout은 placeholder. TODO(SITE:S26)
 requests:
   - {name: SETUP_DATA_CALL,      category: data, timeout_ms: 30000, added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval)}
   - {name: DEACTIVATE_DATA_CALL, category: data, timeout_ms: 10000, added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval)}
+  - {name: SIM_IO,                        category: sim,     timeout_ms: 10000, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 (결정 기록 11/05 ②)}
+  - {name: GET_NR_MODE,                   category: network, timeout_ms: 10000, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 (결정 기록 11/05 ②)}
+  - {name: SIM_OPEN_CHANNEL,              category: sim,     timeout_ms: 10000, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 (결정 기록 11/05 ②)}
+  - {name: SET_UNSOL_CELL_INFO_LIST_RATE, category: network, timeout_ms: 10000, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 (결정 기록 11/05 ②)}
+  - {name: SIGNAL_STRENGTH,               category: network, timeout_ms: 10000, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 (결정 기록 11/05 ②)}
 unsolicited:
   - {name: UNSOL_DATA_CALL_LIST_CHANGED, category: data, added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval)}
 """

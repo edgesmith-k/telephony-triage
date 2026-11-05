@@ -103,6 +103,28 @@ def plugin_prompt(entry: dict, env_dir: Path, run_dir: Path) -> tuple[str, str]:
     return entry["prompt"], system
 
 
+def merge_skill_dir(info: dict, skill: Path) -> bool:
+    """B2-28: 이 eval의 모의 분석 스킬 폴더를 **eval마다의 사용자 config**(`<home>/config.yaml`)에 `analyzers.data.skill_dir`로
+    깊게 합친다(setup.user_config의 analyzers 블록을 덮지 않는다). 실제 `analyzers.data.skill`이 mock-data-analyzer일 때만.
+    여러 eval이 함께 쓰는 플러그인 루트·site-defaults.yaml은 건드리지 않는다(플러그인 해시가 eval마다 같다)."""
+    import yaml
+    home = (info.get("env") or {}).get("TELEPHONY_TRIAGE_HOME")
+    site_path = Path(info["plugin_root"]) / "site-defaults.yaml"
+    if not home or not site_path.is_file():      # 단위 테스트의 가짜 info: 사용자 홈이 없다
+        return False
+    cfg_path = Path(home) / "config.yaml"
+    cfg = (yaml.safe_load(cfg_path.read_text(encoding="utf-8")) if cfg_path.is_file() else None) or {}
+    site = yaml.safe_load(site_path.read_text(encoding="utf-8")) or {}
+    user_data = ((cfg.get("analyzers") or {}).get("data") or {}) if isinstance(cfg.get("analyzers"), dict) else {}
+    site_data = ((site.get("analyzers") or {}).get("data") or {}) if isinstance(site.get("analyzers"), dict) else {}
+    name = user_data.get("skill", site_data.get("skill"))
+    if name != "mock-data-analyzer":
+        return False
+    cfg.setdefault("analyzers", {}).setdefault("data", {})["skill_dir"] = skill.resolve().as_posix()
+    cfg_path.write_text(yaml.safe_dump(cfg, allow_unicode=True, sort_keys=False), encoding="utf-8", newline="\n")
+    return True
+
+
 def prepare_plugin_mode(entry: dict, info: dict, env_dir: Path) -> dict:
     """plugin 모드 부속물: 모의 Jira MCP 설정, 모의 분석 스킬 플러그인. API 없이 만든다(`--prepare-only`에서도)."""
     setup = entry.get("setup") or {}
@@ -122,6 +144,7 @@ def prepare_plugin_mode(entry: dict, info: dict, env_dir: Path) -> dict:
                                                  (skill / "run.py").as_posix()), encoding="utf-8")
     if setup.get("analyzer_proposal"):     # 채점용: 준비 때 분석 스킬 디렉토리(파일 → sha256). grade.py가 실행 뒤와 비교한다
         dump(env_dir / ANALYZER_MANIFEST, skill_manifest(skill))
+    merge_skill_dir(info, skill)
     mcp = env_dir / "mcp.json"
     gh = {}
     if "MOCK_GH_ISSUES_DIR" in info["env"]:    # 두 번째 트래커 eval(setup.tracker: github, 트래커 범용화 §6-3)

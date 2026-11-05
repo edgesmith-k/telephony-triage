@@ -144,6 +144,23 @@ MCP 쓰기(add_comment 승인 유무)·Write/Edit 규칙 8은 이번에 돌리�
 - 예산 "한 답에 글자 그대로 옮길 것 ≤ 약 8 KB": 지금 fixture·녹화 최대(6.2 KB)는 안. 12 KB 상한까지 가는 화면은 16K 출력의
   ~1/4–1/3을 쓴다 — 넘치지는 않지만 약한 모델이 그대로 옮기는지는 사내 확인 5. 4 KB 넘는 스크립트 출력은 파일로(B2(b) 고정 칸·바이트 상한).
 
+### 5.4 OpenCode와 모듈 스킬(B1+B2, 계획 H amendments R19~R22·R26·R40)
+
+- **R19** `tt-oc` 표시 기록에 `evidence`(check-output 근거 원문 검사 줄)를 넣는다(`SHOWN_KINDS`).
+- **R20** 에이전트 규칙 2: 스크립트 JSON에 `next`가 있으면 stderr를 보이고 `next`를 따른다(멈춤보다 앞선다). `next` 없는 종료 2와
+  스크립트 오류만 멈춘다. `module --for deep`·`check-output`의 실패 JSON은 멈춤 사례(`사용 오류`·`설정 오류`·JOB 없는 `작업 없음`)
+  말고 모두 `next`를 낸다 — 모듈 받기 실패는 분석을 끝내지 않는다.
+- **R21** 설치 스킬 `SKILL.md`는 `config.py check --roots`의 `read_roots`로 연다: `gen_opencode.py install`이 플러그인·작업·이슈
+  DB 밖인 폴더를 `external_directory` 읽기 allow로 더하고(edit는 그대로 deny), `tt-oc doctor`는 지금 풀린 폴더가 설치한 허용
+  밖이면 `read-roots` warn(설정을 바꾼 뒤 `install --force`). 스킬 도구는 없다(에이전트 `skill: deny`): `설치 스킬 못 찾음`이나
+  Read 거부면 규칙 8대로 `check-output <KEY> --for deep --skipped "설치 스킬 못 찾음"`.
+- **R22** `tt-oc` 사전 점검은 `config.py doctor`의 fail이 `module_skills` 행뿐이면 시작한다(`module-skills` warn "모듈 문서 받기는
+  실패할 수 있음"). 다른 fail 행이 하나라도 있으면 전처럼 막는다.
+- **R26** 모듈 원격 `Config` 경고는 다른 설정 경고와 같다: 어댑터가 guard stderr 경고로 넘기고 tt-guard.js가 세션마다 한 번만 보인다(`warned`, O2a). `guard.word_net`과
+  hook 입력 `cwd` 해석은 고정 인터페이스(`test_hooks.py`) — I-2는 guard.py를 고치지 않는다.
+- **R40**(v1 수용) OpenCode에서 설치 스킬은 `skill-input.json`이 가리키는 `timeline`만 읽는다(에이전트의 `events.json` 금지).
+  근거 원문 검사는 `events.json` 기준 그대로(B2 §6.1). MS-2에서 없어진다.
+
 ## 6. 남은 일
 
 **사내 확인**(환경마다 짧은 스크립트 실행 1회, `MODULE_SKILLS_DECISIONS.md` "사내 토큰 최소"):

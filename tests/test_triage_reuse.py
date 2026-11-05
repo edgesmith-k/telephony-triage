@@ -359,3 +359,30 @@ def test_run_with_matcher_errors_writes_no_cache_and_next_run_recomputes():
     third = _run(ws, logs=log)
     assert not (third.get("reuse") or {}).get("hit") and "unjudged" not in third, third
     assert (job / "analysis-cache.json").is_file()
+
+
+def test_rerun_with_remote_drops_module_records_on_a_hit():
+    """B2 §7.4: 원격을 둔 작업에서도 새 run은 이전 탐색·모듈 스킬 기록을 지운다(적중이어도, 링크는 따라가지 않는다)."""
+    ws = Workspace()
+    log = _no_candidate_log()
+    _run(ws, "--answer", "time=2026-09-27T18:02:03+09:00", logs=log)
+    cfg_path = ws.home / "config.yaml"
+    cfg = yaml.safe_load(cfg_path.read_text(encoding="utf-8"))
+    cfg["module_skills"] = {"remote": "file:///nonexistent/module-skills.git"}
+    cfg_path.write_text(yaml.safe_dump(cfg, allow_unicode=True), encoding="utf-8")
+    _run(ws, "--answer", "time=2026-09-27T18:02:03+09:00", logs=log)      # 설정이 바뀌어 다시 계산(원격 있는 첫 run)
+    job = ws.job_dir(KEY)
+    ws.json("triage.py", ["explore", KEY])
+    names = ("module-skill.json", "deep-input.json", "skill-input.json", "check-output.json", "deep-output.md",
+             "explore-output.md")
+    for name in names:
+        (job / name).write_text("{}", encoding="utf-8")
+    (job / "module-skill" / "explore").mkdir(parents=True)
+    outside = ws.base / "outside.md"
+    outside.write_text("keep", encoding="utf-8")
+    (job / "explore-output.md").unlink()
+    (job / "explore-output.md").symlink_to(outside)
+    again = _run(ws, "--answer", "time=2026-09-27T18:02:03+09:00", logs=log)
+    assert again["reuse"]["hit"] is True
+    assert not any((job / n).exists() or (job / n).is_symlink() for n in (*names, "module-skill", "timeline.md"))
+    assert outside.read_text(encoding="utf-8") == "keep" and (job / "explore-input.json").is_file()

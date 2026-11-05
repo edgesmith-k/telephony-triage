@@ -21,7 +21,7 @@
 | `set-tracker` | `--server <SERVER> --get-issue <GET_ISSUE> [--search-issues <SEARCH_ISSUES>] [--get-comments <GET_COMMENTS>] [--read-tools <READ_TOOLS>]` |  |
 | `rename-legacy` | `[--apply]` | `--apply`: 변경 목록대로 사용자 config.yaml을 쓴다(없으면 목록만) |
 | `install-hooks` | `[--db <DB>]` |  |
-| `check` | `[--db <path>] [--for {write,dry-run}]` | `--for`: 기본 write |
+| `check` | `[--db <path>] [--for {write,dry-run}] [--roots]` | `--for`: 기본 write; `--roots`: read_roots(플러그인 스킬 폴더·work_dir·설치 스킬 SKILL.md 폴더, 절대 경로)를 더한다(OpenCode 읽기 허용용) |
 | `gh-status` |  |  |
 | `doctor` | `[--format {json,markdown}]` | `--format`: markdown: 표 하나와 마지막 줄 카운트 (기본 json, --json과 함께 못 쓴다), 기본 json |
 
@@ -180,6 +180,8 @@ stdin: PostToolUse hook 입력 JSON (argparse 없음)
 |---|---|---|
 | `run` | `<KEY> [--logs <logcat\|bugreport>... \| --more-logs <logcat\|bugreport>...] [--issue-raw <json> \| --issue-file <yaml> \| --issue-meta <json>] [--code <프로필\|경로\|skip>] [--dry-run] [--analysis-only] [--answer <kind=값>]... [--tz <TZ>] [--year <YEAR>] [--minutes <MINUTES>] [--refresh] [--offline-db <db>] [--out <dir>] [--failed-step <한 줄>] [--steps-file <파일>] [--clock-offset <±시간>]` | `--more-logs`: 이전 분석의 로그 뒤에 로그를 더해 다시 분석(RF-7). --logs와 함께 못 쓴다; `--analysis-only`: 이슈 DB에 기록하지 않는 분석 전용(cleanup·기존 계획·열린 PR 건너뜀, ok면 lock 해제). --dry-run과 함께 못 쓴다; `--refresh`: 같은 세션에서도 스냅샷을 다시 만들고, 같은 입력의 분석 재사용(analysis-cache.json)도 끈다; `--failed-step`: 실패 스텝 한 줄(선택, 보조 정보). 마스킹해서만 쓴다; `--steps-file`: 시험 절차 첨부 파일(txt/csv/html/zip, 선택). 읽지 못하면 경고만 내고 진행; `--clock-offset`: 시험 장비 시각 → 단말 logcat 시각 시계 차(단말 = 장비 + 값). 예: +3m, -90s, +00:03:00, 180. 없으면 steps-file의 장비 시각은 분석 구간에 쓰지 않는다 |
 | `explore` | `<KEY> [--out <dir>]` | `--out`: `run --offline-db --out`의 JOB 디렉토리(없으면 <work_dir>/<KEY>) |
+| `module` | `<KEY> --for {deep,explore} [--module <p/dir>] [--choose <top\|dir>] [--also] [--at <ISO>] [--out <dir>]` | `--for`: deep = 5-1 심층 분석 문서, explore = 5-2 탐색 문서; `--module`: explore: 이 모듈로(후보 계산 없이). deep에는 못 쓴다; `--choose`: explore: 질문 없이 고른다(top = 1위 후보, dir = 모듈 디렉토리 이름); `--also`: deep: 모뎀 모듈 문서도 같은 SHA로 함께 받는다; `--at`: explore --module: 받은 사본으로 타임라인 중심만 다시 잡는다(받기 없음); `--out`: `run --offline-db --out`의 JOB 디렉토리(없으면 <work_dir>/<KEY>) |
+| `check-output` | `<KEY> --for {deep,explore} [--skipped <사유>] [--out <dir>]` | `--skipped`: 실행하지 않았거나 실패: report 줄을 '생략: <사유>'로; `--out`: `run --offline-db --out`의 JOB 디렉토리(없으면 <work_dir>/<KEY>) |
 | `release` | `<KEY>` |  |
 
 ## `issue_post.py`
@@ -303,7 +305,7 @@ stdin: PostToolUse hook 입력 JSON (argparse 없음)
   - auto?(`true`: `code.auto_select`로 자동 선택했을 때만): true
   - resolved?
   - moved?
-- analyzer?({skill, when})
+- analyzer?({skill, when} 설치 분석 스킬(레거시·prefer: skill) | {category, when} 모듈 스킬 | {error, when} 설정 오류)
 - explore?({reason: no_candidate|cause_unconfirmed, when: ask|always|never}(run은 타임라인을 만들지 않는다))
 - warnings?
 - notes?(잔여 worktree·도구 브랜치 안내 등)

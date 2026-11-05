@@ -6,7 +6,8 @@
   `OPENCODE_PERMISSION`이 설정 deny를, `OPENCODE_CONFIG_CONTENT`가 `snapshot:false`를 이겼다 — 계획 I x3b·x4).
 - 사전 점검(`doctor`): opencode 버전 = `PINNED`, 프로젝트 폴더(`gen_opencode.py install` 결과)가 git 레포 밖, `opencode debug config`의
   `snapshot:false`·`share:"disabled"`·`autoupdate:false`·`permission["*"]:"deny"`·`permission.task:"deny"`, `config.py doctor` 통과.
-  하나라도 실패하면 시작하지 않는다(종료 코드 2).
+  하나라도 실패하면 시작하지 않는다(종료 코드 2). 예외(warn, 시작함): doctor의 fail이 `module_skills` 행뿐이면 "모듈 문서 받기는
+  실패할 수 있음"(B2 R22), `config.py check --roots`의 `read_roots`가 설치한 external_directory 허용 밖이면 다시 설치 안내(R21).
 - 실행: `opencode run --format json --agent triage [--command tt-…] [-s <세션>] -- <메시지>`를 stdin `/dev/null`·시간 제한
   (기본 1800초, 넘으면 프로세스 그룹 종료, 종료 코드 124)으로 돌리고, 결과는 종료 코드가 아니라 이벤트로 판정한다(`run`은 거부·
   자동 거절·멈춤에도 0으로 끝난다).
@@ -60,7 +61,7 @@ INSTRUCTION_FILES = ("AGENTS.md", "CONTEXT.md")   # 1.19.5가 프로젝트 폴�
 USER_CMD = re.compile(r"run this exact command yourself:\s*(.+)", re.DOTALL)
 WRITE_CMD = re.compile(r"(db_pr\.py\s+(publish|merge|request-review)|issue_post\.py\s+approve|skill_patch\.py\b.*--apply"
                        r"|module_eval\.py|\bgit\s+push\b|\bgh\s+pr\s+(merge|create|review)\b)")
-SHOWN_KINDS = ("report", "push", "post", "draft", "patch")
+SHOWN_KINDS = ("report", "push", "post", "draft", "patch", "evidence")   # evidence: check-output 근거 원문 검사(B2 R19, common.shown.LINE_KINDS)
 EXIT = {"ok": 0, "error": 1, "no-final-text": 1, "blocked": 3, "timeout": 124}
 
 
@@ -174,7 +175,7 @@ def _run(cmd, *, cwd=None, env=None, timeout=60) -> subprocess.CompletedProcess:
 
 
 def preflight(oc: str, proj: Path, meta: dict, env: dict) -> list[dict]:
-    """점검 행 [{check, status(ok|fail), detail}]. 앞 단계가 실패해도 할 수 있는 점검은 한다(건너뛴 것은 fail로 남긴다)."""
+    """점검 행 [{check, status(ok|fail|warn), detail}]. warn은 막지 않는다. 앞 단계가 실패해도 할 수 있는 점검은 한다(건너뛴 것은 fail로 남긴다)."""
     rows = []
 
     def row(check, ok, detail):
@@ -221,15 +222,59 @@ def preflight(oc: str, proj: Path, meta: dict, env: dict) -> list[dict]:
     try:
         r = _run([sys.executable, str(script), "doctor", "--format", "json"], env=env, timeout=150)
         detail = f"config.py doctor 종료 {r.returncode}"
+        doc_rows = []
         try:
-            counts = json.loads(r.stdout).get("counts")
+            doc = json.loads(r.stdout)
+            counts = doc.get("counts")
             detail += f" {counts}" if counts else ""
+            doc_rows = [x for x in doc.get("rows") or [] if isinstance(x, dict)]
         except (ValueError, AttributeError):
             pass
-        row("config-doctor", r.returncode == 0, detail + ("" if r.returncode == 0 else " — config.py doctor로 원인 확인"))
+        # B2 R22: `module_skills` 행의 fail(모듈 레포 설정·git·관리 clone)은 모듈 문서 받기만 실패하게 한다 — 받기 실패는
+        # `triage.py module`이 `next`로 계속하게 하므로 시작은 막지 않고 경고로 보인다. 다른 fail 행이 있으면 막는다.
+        fails = [x for x in doc_rows if x.get("status") == "fail"]
+        module_only = r.returncode != 0 and bool(fails) and all(x.get("check") == "module_skills" for x in fails)
+        ok = r.returncode == 0 or module_only
+        row("config-doctor", ok, detail + ("" if ok else " — config.py doctor로 원인 확인"))
+        if module_only:
+            rows.append({"check": "module-skills", "status": "warn",
+                         "detail": "모듈 문서 받기는 실패할 수 있음: " + str(fails[0].get("detail") or "")[:200]})
     except (OSError, subprocess.TimeoutExpired) as exc:
         row("config-doctor", False, f"config.py doctor 실행 실패: {type(exc).__name__}")
+    rows += read_roots_rows(proj, meta, env)
     return rows
+
+
+def _external_allows(proj: Path) -> list[str]:
+    """설치한 opencode.json `permission.external_directory`의 allow 패턴(`<dir>/**`)의 폴더."""
+    try:
+        cfg = json.loads((proj / "opencode.json").read_text(encoding="utf-8"))
+        ext = cfg["permission"]["external_directory"]
+    except (OSError, ValueError, KeyError, TypeError):
+        return []
+    return [k[:-3] for k, v in ext.items() if isinstance(ext, dict) and v == "allow" and k.endswith("/**")] \
+        if isinstance(ext, dict) else []
+
+
+def read_roots_rows(proj: Path, meta: dict, env: dict) -> list[dict]:
+    """B2 R21: `config.py check --roots`의 `read_roots`(풀린 설치 스킬 SKILL.md 폴더 등)가 설치한 external_directory 허용 밖이면
+    경고 행 하나(막지 않는다 — 그 스킬만 Read가 거부되고, 흐름은 `설치 스킬 못 찾음` 대안으로 간다). 읽지 못하면 행 없음."""
+    script = Path(meta["plugin_root"]) / "scripts" / "config.py"
+    try:
+        r = _run([sys.executable, str(script), "check", "--roots"], env=env, timeout=60)
+        roots = json.loads(r.stdout).get("read_roots")
+    except (OSError, subprocess.TimeoutExpired, ValueError, AttributeError):
+        return []
+    if not isinstance(roots, list):
+        return []
+    allowed = _external_allows(proj)
+    outside = [x for x in roots if isinstance(x, str)
+               and not any(x == a or x.startswith(a.rstrip("/") + "/") for a in allowed)]
+    if not outside:
+        return []
+    return [{"check": "read-roots", "status": "warn",
+             "detail": "설치 스킬 폴더가 OpenCode 읽기 허용 밖이다: " + ", ".join(outside)[:300]
+                       + " — tools/gen_opencode.py install --force로 다시 설치한다"}]
 
 
 # -- 실행·이벤트 판정 ---------------------------------------------------------------------------------------------------
@@ -445,7 +490,7 @@ def main(argv=None) -> int:
     oc = shutil.which(a.opencode) or a.opencode
     env = child_env(meta)
     rows = preflight(oc, proj, meta, env)
-    failed = [r for r in rows if r["status"] != "ok"]
+    failed = [r for r in rows if r["status"] == "fail"]    # warn 행(module-skills·read-roots)은 막지 않는다
     if a.action == "doctor":
         print(json.dumps({"rows": rows}, ensure_ascii=False)) if a.json else _print_rows(rows)
         return 2 if failed else 0
@@ -453,6 +498,9 @@ def main(argv=None) -> int:
         _print_rows(failed)
         print("[tt-oc] 사전 점검 실패 — 시작하지 않는다.", file=sys.stderr)
         return 2
+    for r in rows:
+        if r["status"] == "warn":    # --json 출력과 섞이지 않게 stderr
+            print(f"[tt-oc] {r['check']}: warn — {r['detail']}", file=sys.stderr)
     if a.oc_command and not re.fullmatch(r"tt-[a-z][a-z-]*", a.oc_command):
         print(f"[tt-oc] --command는 tt-<이름>만 받는다: {a.oc_command}", file=sys.stderr)
         return 2

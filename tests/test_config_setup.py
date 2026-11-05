@@ -887,6 +887,215 @@ def test_github_tracker_candidates_set_tracker_and_doctor():
     assert rows["guard"]["status"] == "ok" and rows["guard"]["detail"].startswith("deny 2/2"), rows["guard"]   # 이름 휴리스틱 + 승인 없는 게시
 
 
+# -- 모듈 스킬 설정(module_skills·prefer·skill_dir): set·check·doctor module_skills 행 (B1 설계 §2.5·§3, B2 §9.1) -----------
+
+MODULE_REMOTE = "https://ghe.example.invalid/tt/module-skills.git"
+# 그룹 2의 `common/moduleskills.py`가 이 브랜치에 오기 전까지 doctor 행 시험은 이 대역을 플러그인 사본에 넣어 쓴다(통합 뒤에도
+# 관리 clone 상태를 고정해 보는 데 쓴다). TT_MS_STUB(JSON)로 git 버전·inspect_clone 결과를 정한다.
+MODULESKILLS_STUB = '''"""테스트 대역(tests/test_config_setup.py): moduleskills의 doctor용 인터페이스만."""
+import json
+import os
+
+CLONE_DIR = "_module-skills"
+LOCK_FILE = "_module-skills.lock"
+MIN_GIT = (2, 25)
+
+
+def _s():
+    return json.loads(os.environ.get("TT_MS_STUB") or "{}")
+
+
+def git_version():
+    v = _s().get("git", [2, 43, 0])
+    return tuple(v) if v else None
+
+
+def norm_remote(url):
+    return url
+
+
+def inspect_clone(work_dir, remote, base):
+    return _s().get("info", {"state": "absent", "sha": None, "problem": None})
+'''
+
+
+def _stub_root(root: Path) -> Path:
+    import shutil
+
+    out = tmp("tt-ms-stub-") / "root"
+    shutil.copytree(root, out)
+    (out / "scripts" / "common" / "moduleskills.py").write_text(MODULESKILLS_STUB, encoding="utf-8")
+    return out
+
+
+def _doctor_m(env: Env, extra=("module_skills",), expect=0, stub: dict | None = None, root: Path | None = None) -> dict:
+    at = {"TT_MS_STUB": json.dumps(stub or {})}
+    result = env.json("config.py", ["doctor"], expect=expect, env=at, root=root or env.root)
+    assert [r["check"] for r in result["rows"]] == DOCTOR_ROWS + list(extra)
+    assert all(len(r["detail"]) <= 80 for r in result["rows"])
+    assert MODULE_REMOTE not in json.dumps(result, ensure_ascii=False)
+    return result
+
+
+def test_set_module_skills_and_prefer_kinds():
+    root = plugin_root("ms-set", platform={"name": "android", "enabled": ["android", "ofono"]})
+    env = Env(root=root)
+    env.init(env.base / "db")
+    out = env.json("config.py", ["set", "module_skills.remote", MODULE_REMOTE])
+    assert out["key"] == "module_skills.remote" and env.config()["module_skills"]["remote"] == MODULE_REMOTE
+    assert "module_problems" not in out
+    for bad, needle in (("tt/module-skills", "중 하나여야 합니다"), ("http://h.invalid/o/r.git", "중 하나여야 합니다"),
+                        ("https://u:secret@ghe.example.invalid/o/r.git", "자격 증명")):
+        proc = env.run("config.py", ["set", "module_skills.remote", bad])
+        assert proc.returncode == 2 and needle in proc.stderr and "secret" not in proc.stderr, bad
+    proc = env.run("config.py", ["set", "--platform", "ofono", "module_skills.remote", MODULE_REMOTE])
+    assert proc.returncode == 2 and "--platform 없이" in proc.stderr
+    env.json("config.py", ["set", "module_skills.base_branch", "release/1.0"])
+    assert env.run("config.py", ["set", "module_skills.base_branch", "a..b"]).returncode == 2
+    assert env.run("config.py", ["set", "analyzers.data.prefer", "foo"]).returncode == 2
+    proc = env.run("config.py", ["set", "analyzers.data.skill_dir", "rel/dir"])
+    assert proc.returncode == 2 and "절대 경로" in proc.stderr
+    proc = env.run("config.py", ["set", "analyzers.sim.prefer", "skill"])
+    assert proc.returncode == 0
+    out = json.loads(proc.stdout)
+    want = "analyzers.sim.prefer: skill인데 skill(설치된 분석 스킬 이름)이 없습니다 — skill을 적거나 prefer를 지운다."
+    assert out["module_problems"] == [want] and "problems" not in out
+    assert "경고: 모듈 스킬·분석 스킬 설정 문제가 남았다 — " in proc.stderr and "플랫폼 프로필 문제" not in proc.stderr
+
+
+def test_doctor_module_row_absent_by_default_and_check_unchanged():
+    env, clone = _ready_env()
+    rows = _rows(_doctor(env))
+    assert "module_skills" not in rows
+    out = env.json("config.py", ["check", "--db", str(clone), "--for", "dry-run"])
+    assert out["warnings"] == [] and "deep_sources" not in out and "read_roots" not in out
+
+
+def test_doctor_module_row_without_remote_shows_sources_and_skill_dir_note():
+    env, _ = _ready_env()
+    _set_user(env, analyzers={"data": {"prefer": "skill"}})
+    row = _rows(_doctor_m(env))["module_skills"]
+    assert row == {"check": "module_skills", "status": "ok", "detail": "remote 없음 · 5-1 설치 스킬: data · 그 밖=없음"}
+    _set_user(env, analyzers={"data": {"skill_dir": "/opt/skills/mock-data-analyzer"}})
+    row = _rows(_doctor_m(env))["module_skills"]
+    assert row["status"] == "ok" and "permissions.additionalDirectories" in row["next"] and "--roots" in row["next"]
+
+
+def test_doctor_module_row_six_categories_fit():
+    env, _ = _ready_env()
+    cats = {c: {"skill": f"s-{c}", "prefer": "skill"} for c in ("data", "sim", "network")}
+    cats.update({c: {"when": "ask", "prefer": "module"} for c in ("call", "sms", "ims")})
+    _set_user(env, analyzers=cats, module_skills={"remote": MODULE_REMOTE})
+    detail = _rows(_doctor_m(env, root=_stub_root(env.root)))["module_skills"]["detail"]
+    assert detail.endswith("그 밖=모듈 문서") and "설치 스킬: data,network,sim" in detail and "…" not in detail
+
+
+def test_doctor_module_row_remote_states():
+    env, _ = _ready_env()
+    root = _stub_root(env.root)
+    _set_user(env, module_skills={"remote": MODULE_REMOTE})
+    row = _rows(_doctor_m(env, root=root))["module_skills"]       # 예시의 analyzers.data.skill, prefer 없음: B1-19
+    want = "analyzers.data: 설치 스킬 mock-data-analyzer 대신 모듈 문서를 쓴다 — 계속 쓰려면 prefer: skill"
+    assert row["status"] == "warn" and row["detail"] == want and "prefer skill" in row["next"]
+    _set_user(env, module_skills={"remote": MODULE_REMOTE}, analyzers={"data": {"prefer": "module"}})
+    row = _rows(_doctor_m(env, root=root))["module_skills"]
+    assert row == {"check": "module_skills", "status": "ok",
+                   "detail": "tt/module-skills 아직 받지 않음 · 5-1 그 밖=모듈 문서"}
+    row = _rows(_doctor_m(env, root=root, stub={"info": {"state": "ok", "sha": "a" * 40}}))["module_skills"]
+    assert row["status"] == "ok" and "@aaaaaaa" in row["detail"]
+    row = _rows(_doctor_m(env, root=root, expect=1,
+                          stub={"info": {"state": "mismatch", "problem": "origin 다름"}}))["module_skills"]
+    assert row["status"] == "fail" and row["detail"] == "관리 clone 불일치: origin 다름" and "_module-skills" in row["next"]
+    row = _rows(_doctor_m(env, root=root, expect=1, stub={"info": {"state": "forced"}}))["module_skills"]
+    assert row["status"] == "fail" and row["detail"] == "ff-only 실패: 원격 브랜치가 강제로 바뀌었다"
+    row = _rows(_doctor_m(env, root=root, expect=1, stub={"git": None}))["module_skills"]
+    assert row["status"] == "fail" and "git 없음" in row["detail"]
+    row = _rows(_doctor_m(env, root=root, expect=1, stub={"git": [2, 20, 1]}))["module_skills"]
+    assert row["status"] == "fail" and "2.25" in row["detail"] and "git 2.20.1" in row["detail"]
+
+
+def test_doctor_module_row_real_moduleskills_clone_states():
+    """대역 없이 진짜 `common/moduleskills.py`로: 받기 전 → 받은 뒤(@sha) → origin이 다른 clone(불일치, fail)."""
+    import module_remote as mr
+
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    from common import moduleskills
+
+    env, _ = _ready_env()
+    url = mr.build(env.base / "ms-remote")
+    _set_user(env, module_skills={"remote": url}, analyzers={"data": {"prefer": "module"}})
+    row = _rows(_doctor_m(env))["module_skills"]
+    assert row["status"] == "ok" and "아직 받지 않음" in row["detail"] and url not in row["detail"], row
+    work = Path(env.config()["work_dir"]).expanduser()
+    with moduleskills.clone_lock(work) as lock:
+        state = moduleskills.prepare(work, url, "main", lock=lock, platform="ofono")
+        moduleskills.materialise(state, purpose="deep", module="data", category="data")
+    row = _rows(_doctor_m(env))["module_skills"]
+    assert row["status"] == "ok" and f"@{mr.head(env.base / 'ms-remote')[:7]}" in row["detail"], row
+    other = mr.build(env.base / "ms-remote2")
+    _set_user(env, module_skills={"remote": other}, analyzers={"data": {"prefer": "module"}})
+    row = _rows(_doctor_m(env, expect=1))["module_skills"]
+    assert row["status"] == "fail" and row["detail"].startswith("관리 clone 불일치"), row
+
+
+def test_doctor_module_row_config_problem_fails():
+    env, _ = _ready_env()
+    _set_user(env, module_skills={"remote": "tt/module-skills"})
+    row = _rows(_doctor_m(env, expect=1))["module_skills"]
+    assert row["status"] == "fail" and row["detail"].startswith("사용자 config module_skills.remote:")
+
+
+def test_doctor_module_row_appears_for_leftover_clone_dir():
+    env, _ = _ready_env()
+    work = Path(env.config()["work_dir"])
+    (work / "_module-skills").mkdir(parents=True)
+    row = _rows(_doctor_m(env))["module_skills"]
+    assert row["status"] == "ok" and row["detail"].startswith("remote 없음")
+
+
+def test_doctor_clone_dir_name_matches_moduleskills():
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    import config as config_mod
+
+    try:
+        from common import moduleskills
+    except ImportError:
+        pytest.skip("common/moduleskills.py(그룹 2)가 아직 없다")
+    assert config_mod.MODULE_CLONE_NAME == moduleskills.CLONE_DIR
+
+
+def test_check_module_warnings_deep_sources_and_roots():
+    env, clone = _ready_env()
+    _set_user(env, module_skills={"remote": MODULE_REMOTE})
+    args = ["check", "--db", str(clone), "--for", "dry-run"]
+    out = env.json("config.py", args)
+    assert out["warnings"] == ["analyzers.data: 설치 스킬 mock-data-analyzer 대신 모듈 문서를 쓴다 — 계속 쓰려면 prefer: skill"]
+    assert out["deep_sources"] == {"data": {"source": "module", "when": "ask"}, "*": {"source": "module", "when": "ask"}}
+    assert "read_roots" not in out and MODULE_REMOTE not in json.dumps(out)
+    _set_user(env, module_skills={"remote": MODULE_REMOTE}, analyzers={"data": {"prefer": "skill"}})
+    out = env.json("config.py", args + ["--roots"])
+    assert out["warnings"] == []
+    assert out["deep_sources"]["data"] == {"source": "skill", "skill": "mock-data-analyzer", "when": "ask"}
+    assert out["read_roots"][:2] == [str(env.root / "skills" / "telephony-triage"), env.config()["work_dir"]]
+    assert all(os.path.isabs(p) for p in out["read_roots"])
+
+
+def test_check_deprecated_keys_and_runtime_label_warn_only():
+    env, clone = _ready_env()
+    _set_user(env, analyzers={"data": {"inputs": ["x"]}})
+    proc = env.run("config.py", ["check", "--db", str(clone), "--for", "dry-run"])
+    out = json.loads(proc.stdout)
+    assert proc.returncode == 0 and out["writable"] is True
+    assert out["warnings"] == ["사용자 config: 폐지 키 `analyzers.data.inputs`는 읽지 않는다(무시) — 그 줄을 지운다"]
+    root = plugin_root("ms-runtime-label", runtime={"label": 3})
+    env2 = Env(root=root)
+    _setup_read_steps(env2, Path(_repo()["clone"]))
+    row = _rows(_doctor(env2))["config"]
+    assert row["status"] == "warn" and row["detail"].startswith("runtime.label:")
+    out = env2.json("config.py", ["check", "--db", env2.config()["issue_db"]["path"], "--for", "dry-run"])
+    assert "runtime.label: 문자열(영숫자·._ +-, 40자 이하)이어야 합니다 — 출처 기록에서 뺀다" in out["warnings"]
+
+
 if __name__ == "__main__":
     failures = 0
     for name, func in _all_tests():

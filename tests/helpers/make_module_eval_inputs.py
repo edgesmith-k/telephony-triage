@@ -9,6 +9,11 @@
 | deep | `events.json`(경로 정규화), `timeline.md`, `deep-input.json`(schema_version 1) |
 | explore | `timeline.md`, `explore-input.json`(run이 쓴 그대로), `analysis.json`(`generated_at`·`request_hash`·`files` 뺌) |
 
+`templates/module-skills/modules.yaml`에 그 플랫폼의 `common.filter`가 있으면 case `timeline.md`는 모듈 보기다
+(B2 §4.6: `common.modulefilter.build`를 같은 프로세스에서, `triage.py module`과 같은 인자로 — deep은 `match.json`
+1위 근거 창·고정 줄, 200줄/24KB; explore는 `anchor.fail`(없으면 발생 시각) 중심·고정 줄, 150줄/20KB). 필터가 없으면
+오늘 그대로 `explore` 타임라인이다. case 디렉토리는 `skillcheck.CASE_CAP` 이하여야 한다(R34).
+
 네트워크·claude를 쓰지 않는다. `files/`의 생성 파일은 손으로 고치지 않고 `--write`로만 다시 만든다.
 pytest(`test_module_templates.py::test_generator_no_drift`)가 `--check`로 drift를 본다.
 
@@ -44,6 +49,8 @@ GENERATED = {
 }
 ANALYSIS_DROP = ("generated_at", "request_hash", "files")   # 비결정·절대 경로(report.py)
 EXPLORE_LIMIT = 200
+MODULES_YAML = TEMPLATES / "modules.yaml"
+VIEW_CAPS = {"deep": (200, 24576), "explore": (150, 20480)}       # = modulecmd(B2 §5.4 D3, §4.3 Caps)
 OK, CHECK_FAILED, USAGE = 0, 1, 2
 
 
@@ -202,6 +209,9 @@ def build_case(case_dir: Path, case: dict, db: Path, root: Path, tmp: Path, runn
         explore_bytes = explore_input.read_bytes().decode("utf-8")
     _run(runner, root, ["explore", case["key"], "--out", job, "--platform", platform], home, name)
     timeline = (job / "timeline.md").read_bytes().decode("utf-8")
+    view = module_view(job, case, kind, platform, module, analysis, events, explore_bytes)
+    if view is not None:
+        timeline = view
     out: dict[str, str] = {"timeline.md": timeline}
     if kind == "deep":
         explore_input.unlink()
@@ -235,6 +245,67 @@ def build_case(case_dir: Path, case: dict, db: Path, root: Path, tmp: Path, runn
                 raise GenError(f"{name}/{fname}: 절대 경로가 남았다({marker[:40]}…)")
     assert set(out) == set(GENERATED[kind])
     return out
+
+
+def _modules_doc() -> dict | None:
+    """템플릿 `modules.yaml`(엄격 검사 통과). 검사기는 함수 안에서 부른다(skillcheck, B2 §4.6)."""
+    if not MODULES_YAML.is_file():
+        return None
+    from common import skillcheck
+
+    doc = skillcheck.load_modules_yaml(MODULES_YAML.read_bytes())
+    errors = skillcheck.validate_modules(doc, strict=True)
+    if errors:
+        raise GenError("templates/module-skills/modules.yaml: " + "; ".join(errors[:3]))
+    return doc
+
+
+def module_view(job: Path, case: dict, kind: str, platform: str, module: str, analysis: dict, events: dict,
+                explore_bytes: str | None) -> str | None:
+    """필터가 있으면 모듈 보기 글, 없으면 None(오늘 타임라인 그대로)."""
+    doc = _modules_doc()
+    if doc is None:
+        return None
+    from common import modulefilter
+
+    spec = modulefilter.compile_spec(doc, platform)
+    if spec is None or not spec.has_filter:
+        return None
+    cap_rows, cap_bytes = VIEW_CAPS[kind]
+    payload = {"op": "view", "modules": doc, "platform": platform, "events": str(job / "events.json"),
+               "key": case["key"], "module": module, "mode": kind, "allow": events.get("mask_allow") or [],
+               "cap_rows": cap_rows, "cap_bytes": cap_bytes, "with_modem": False}
+    if kind == "deep":
+        top = (analysis.get("candidates") or [{}])[0]
+        match_path = job / "match.json"
+        ev = []
+        if match_path.is_file():
+            ev = modulefilter.deep_evidence(json.loads(match_path.read_text(encoding="utf-8")), top)
+        source = "근거"
+        if not ev:
+            ev = [{k: e.get(k) for k in ("ts", "tag", "msg", "event")} for e in top.get("evidence") or []]
+            source = "근거 (analysis.json)"
+        payload.update(center=None, center_source=source, evidence=ev, pins=ev)
+    else:
+        explore_input = json.loads(explore_bytes or "{}")
+        fail = (explore_input.get("anchor") or {}).get("fail")
+        rows = modulefilter.rows_of(events)
+        pins = [{"ts": r["ts"], "tag": r["tag"], "msg": r["msg"]} for r in rows if fail and r["ts"] == fail]
+        payload.update(center=fail or explore_input.get("around"), center_source="실패 스텝" if fail else "발생 시각",
+                       evidence=[], pins=pins[:modulefilter.PINS_EXPLORE])
+    result = modulefilter.build(payload)
+    if "text" not in result:
+        raise GenError(f"{case['key']}: 모듈 보기 실패 {result}")
+    return result["text"]
+
+
+def _case_size(case_dir: Path) -> None:
+    """case 디렉토리 전체 바이트 ≤ skillcheck.CASE_CAP (R34)."""
+    from common import skillcheck
+
+    total = sum(p.stat().st_size for p in case_dir.rglob("*") if p.is_file())
+    if total > skillcheck.CASE_CAP:
+        raise GenError(f"{case_dir.name}: case 크기 {total}B > CASE_CAP {skillcheck.CASE_CAP}B")
 
 
 def generate(dirs: list[Path], validate: bool) -> dict[str, dict[str, str]]:
@@ -302,6 +373,7 @@ def main(argv: list[str] | None = None) -> int:
                 write(d, outputs[d.name])
             for d in dirs:
                 _validate(d)
+                _case_size(d)
             for d in dirs:
                 print(f"{d.name}: {', '.join(sorted(outputs[d.name]))} 씀")
             return OK
@@ -311,6 +383,12 @@ def main(argv: list[str] | None = None) -> int:
     except (OSError, KeyError, TypeError) as exc:
         print(f"환경 오류: {exc!r}", file=sys.stderr)
         return USAGE
+    try:
+        for d in dirs:
+            _case_size(d)
+    except GenError as exc:
+        print(f"실패: {exc}", file=sys.stderr)
+        return CHECK_FAILED
     report = {d.name: compare(d, outputs[d.name]) for d in dirs}
     drift = {name: [f"{f}: {s}" for f, s in rows if s != "일치"] for name, rows in report.items()}
     if args.json:

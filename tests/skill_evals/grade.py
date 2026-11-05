@@ -929,6 +929,8 @@ def checks(eid: int, ctx: Ctx) -> list:
         return checks_k(eid, ctx)
     if eid == 72:
         return checks_m(eid, ctx)
+    if eid in (76, 77, 78, 79):
+        return checks_h(eid, ctx)
     if eid in GATE_EVALS:
         return checks_gate(eid, ctx)
     no_remote = lambda br: (lambda: (br not in ctx.branches() and not ctx.prs(), f"branches={ctx.branches()} prs={len(ctx.prs())}"))
@@ -1029,8 +1031,14 @@ def checks(eid: int, ctx: Ctx) -> list:
             ok = p.get("operations") == [{"op": "append", "cause": "DATA-001-01"}] and \
                 (p.get("feedback") or {}).get("decision") == "chose-other"
             return ok and analyzer_called()[0], json.dumps({"ops": p.get("operations"), "fb": p.get("feedback")}, ensure_ascii=False) + "; " + analyzer_called()[1]
+        def no_fetch():
+            job = ctx.work / "MOCK-9040"
+            copies = sorted(str(p.relative_to(job)) for p in (job / "module-skill" / "deep").glob("ofono")) if job.is_dir() else []
+            clone = (ctx.work / "_module-skills").exists()
+            return not clone and not copies, f"_module-skills={clone}; 사본={copies}"
         return [None, None, _report_check(ctx, "MOCK-9040", r"심층 분석 \(mock-data-analyzer\)", r"분석 스킬 의견"),
-                _report_check(ctx, "MOCK-9040", top="DATA-001-02"), plan, None]   # 6: fixture·시그니처 검토 질문 1회는 수동 채점
+                _report_check(ctx, "MOCK-9040", top="DATA-001-02"), plan, None,   # 6: fixture·시그니처 검토 질문 1회는 수동 채점
+                no_fetch, grounding_row(ctx, "MOCK-9040", "deep", "events.json")]
     if eid == 42:
         def allow():
             p = ctx.plan("MOCK-9042") or {}
@@ -1534,14 +1542,46 @@ def checks(eid: int, ctx: Ctx) -> list:
 
 
 def _analyzer_called(ctx):
-    """e40·e41·e71은 분석 스킬을 실제로 Skill 도구로 불렀을 때만 센다(plugin 모드). direct 모드·기록 없음은 이 조건을 적용하지 않는다."""
+    """e40·e41·e71: 5-1 설치 분석 스킬을 실제로 썼을 때만 센다(plugin 모드). 두 길(B2-1): `triage.py … module … --for deep`을 부른 뒤
+    `/mock-data-analyzer/SKILL.md`를 Read로 읽음(기대 경로), 또는 그 호출이 종료 1 `설치 스킬 못 찾음`을 낸 뒤의 Skill 도구 호출. plugin 모드인데 도구 호출 기록이 없으면 실패("기록 없음"),
+    direct 모드·옛 결과(plugin 정보 없음)만 이 조건을 적용하지 않는다."""
     plugin = ctx.execution.get("plugin")   # run.py가 execution.json의 "plugin"에 seen을 그대로 쓴다(중첩 "seen"도 허용)
     seen = (plugin.get("seen") or plugin) if isinstance(plugin, dict) else None
     if seen is None:
-        return True, "plugin.seen 없음(direct 모드·옛 결과): skill_calls 조건 생략"
+        return True, "plugin.seen 없음(direct 모드·옛 결과): 5-1 호출 조건 생략"
     calls = seen.get("skill_calls") or []
-    ok = "mock-analyzers:mock-data-analyzer" in calls
-    return ok, f"skill_calls={calls}" + ("" if ok else " — mock-analyzers:mock-data-analyzer 호출 없음, 5-1 미검증")
+    seq = ctx.seq()
+    if seq is None:
+        return False, f"기록 없음(events.jsonl) — skill_calls={calls}, 5-1 경로 미검증"
+    if "mock-analyzers:mock-data-analyzer" in calls:
+        # Skill 도구는 대안 경로다: `module --for deep`이 종료 1 `설치 스킬 못 찾음`을 낸 뒤에만 센다(재리뷰 P1 — run.py가
+        # skill_dir를 써 두므로 이 eval들의 기대 경로는 Read다)
+        miss = _skill_missing_at(ctx)
+        if miss is not None:
+            return True, f"Skill 도구 대안: module --for deep 종료 1 `설치 스킬 못 찾음` 뒤 skill_calls={calls}"
+        return False, f"Skill 도구만: skill_calls={calls}, module --for deep 종료 1 `설치 스킬 못 찾음` 없음 — Read 경로가 기대"
+    mod = next((i for i, e in enumerate(seq) if e["kind"] == "tool" and e["name"] == "Bash"
+                and MODULE_CMD.search(_strip_heredocs(str(e["input"].get("command", ""))))
+                and re.search(r"--for[= ]deep\b", str(e["input"].get("command", "")))), None)
+    read = mod is not None and any(e["kind"] == "tool" and e["name"] == "Read"
+                                   and str(e["input"].get("file_path", "")).replace("\\", "/").endswith("/mock-data-analyzer/SKILL.md")
+                                   for e in seq[mod:])
+    if read:
+        return True, "Read 경로: triage.py module --for deep 뒤 mock-data-analyzer/SKILL.md 읽음"
+    return False, (f"skill_calls={calls}, module --for deep {'있음' if mod is not None else '없음'}, SKILL.md Read 없음 — "
+                   "mock-data-analyzer 5-1 미검증")
+
+
+def _skill_missing_at(ctx):
+    """`module --for deep`이 종료 1 `설치 스킬 못 찾음`을 낸 첫 seq 순번(없거나 기록이 없으면 None)."""
+    try:
+        calls = module_calls(ctx, "deep")
+    except _Manual:
+        return None
+    for i, _cmd, doc, code in calls:
+        if code == 1 and (doc or {}).get("reason") == "설치 스킬 못 찾음":
+            return i
+    return None
 
 
 def checks_w4(eid, ctx):
@@ -2008,7 +2048,7 @@ def platform_calls(commands: list[str]) -> list[tuple[str, str, str | None]]:
     return out
 
 
-_ANDROID_NAMES = re.compile(r"\bRILJ\b|DataNetworkController|DataFailCause|SETUP_DATA_CALL")   # eval 73: oFono 가설에 Android 이름
+_ANDROID_NAMES = re.compile(r"\bRILJ\b|DataNetworkController|DataFailCause")   # B2-16: SETUP_DATA_CALL은 oFono RIL trace에도 있다   # eval 73: oFono 가설에 Android 이름
 ANDROID_REFS = ("log-tags.md", "ril-requests.md", "fail-causes.md")
 
 
@@ -2496,6 +2536,294 @@ def checks_u(eid, ctx):
     return [_all(first_only, first_report), rerun_reused, not_reasked, appended, dry]
 
 
+# --- 모듈 스킬 레포·출력 검사(배치 H, B2 §13) -----------------------------------------------------------------------
+# `triage.py module|check-output`은 실행 기록(events.jsonl)의 Bash 호출과 그 결과 JSON(마지막 `{…}` 줄)으로 본다.
+# 기록이 없으면 통과로 세지 않는다(_Manual). 근거 원문 검사 행은 리포트 줄과 `JOB/check-output.json` 기록을 함께 본다.
+
+MODULE_CMD = re.compile(r"triage\.py[\"']?\s+(?:[^\n;&|]*?\s)?module\s")
+CHECK_CMD = re.compile(r"triage\.py[\"']?\s+(?:[^\n;&|]*?\s)?check-output\s")
+EVIDENCE_LINE = re.compile(r"근거 원문 검사(?:\(events\.json 기준\))?: 인용 ([1-9]\d*)개 중 원문에 없음 \d+")
+MODULE_RECORDS = ("module-skill.json", "deep-input.json", "skill-input.json", "check-output.json")
+
+
+def _last_json(text: str):
+    for line in reversed(str(text or "").splitlines()):
+        line = line.strip()
+        if line.startswith("{") and line.endswith("}"):
+            try:
+                doc = json.loads(line)
+            except ValueError:
+                continue
+            if isinstance(doc, dict):
+                return doc
+    return None
+
+
+def _calls(ctx, rx, purpose=None):
+    """[(seq 순번, 명령, 결과 JSON | None, 종료 코드 | None)]. 기록이 없으면 _Manual."""
+    seq = ctx.seq()
+    if seq is None:
+        raise _Manual("실행 기록(events.jsonl) 없음")
+    out = []
+    for i, e in enumerate(seq):
+        if e["kind"] != "tool" or e["name"] != "Bash":
+            continue
+        cmd = _strip_heredocs(str(e["input"].get("command", "")))
+        if not rx.search(cmd) or (purpose and not re.search(rf"--for[= ]{purpose}\b", cmd)):
+            continue
+        m = re.search(r"Exit code (\d+)", str(e.get("result") or ""))
+        code = int(m.group(1)) if m else (None if e.get("error") else 0)
+        out.append((i, cmd, _last_json(e.get("result")), code))
+    return out
+
+
+def module_calls(ctx, purpose=None):
+    return _calls(ctx, MODULE_CMD, purpose)
+
+
+def check_output_calls(ctx, purpose=None):
+    return _calls(ctx, CHECK_CMD, purpose)
+
+
+def module_doc_reads(ctx, start: int = 0) -> list[str]:
+    """seq[start:]의 Read 경로(POSIX)."""
+    seq = ctx.seq() or []
+    return [str(e["input"].get("file_path", "")).replace("\\", "/") for e in seq[start:]
+            if e["kind"] == "tool" and e["name"] == "Read"]
+
+
+def managed_clone_ok(ctx):
+    """관리 clone(`<work_dir>/_module-skills`)이 깨끗하고 HEAD가 이 eval 레포의 main(env.json `module_remote_sha`)이다."""
+    clone = ctx.work / "_module-skills"
+    want = ctx.env.get("module_remote_sha")
+    if not clone.is_dir():
+        return False, "관리 clone 없음"
+    head = subprocess.run(["git", "-C", str(clone), "rev-parse", "HEAD"], capture_output=True, text=True,
+                          check=False).stdout.strip()
+    dirty = subprocess.run(["git", "-C", str(clone), "status", "--porcelain"], capture_output=True, text=True,
+                           check=False).stdout.strip()
+    stale = sorted(p.name for p in ctx.work.glob("_module-skills.tmp*"))
+    return head == want and not dirty and not stale, f"HEAD={head[:12]} 기대={str(want)[:12]} 변경={bool(dirty)} 남은 tmp={stale}"
+
+
+def no_direct_module_access(ctx):
+    """관리 clone·JOB 모듈 기록을 실행자가 직접 만지지 않았다: 파일 도구 쓰기·Read가 `_module-skills/` 아래나 JOB 모듈 기록에 없고,
+    triage.py 밖 Bash 명령이 `_module-skills`나 모듈 기록을 가리키지 않는다."""
+    uses = ctx.tool_uses()
+    if uses is None:
+        raise _Manual("실행 기록(events.jsonl) 없음")
+    bad = []
+    for name, inp in uses:
+        path = str(inp.get("file_path") or inp.get("notebook_path") or "").replace("\\", "/")
+        if name in FILE_WRITE_TOOLS and ("/module-skill" in path or Path(path).name in MODULE_RECORDS or "/_module-skills" in path):
+            bad.append(f"{name} {path}")
+        elif name == "Read" and "/_module-skills/" in path:
+            bad.append(f"Read {path}")
+        elif name == "Bash":
+            cmd = _strip_heredocs(str(inp.get("command", "")))
+            if "triage.py" not in cmd and ("_module-skills" in cmd or any(r in cmd for r in MODULE_RECORDS)):
+                bad.append(cmd[:120])
+    return not bad, f"직접 접근={bad[:3]}"
+
+
+def grounding_row(ctx, job: str, purpose: str, source: str | None):
+    """근거 원문 검사 행: 리포트에 `근거 원문 검사…: 인용 n(≥1)개 중 원문에 없음 k`가 있고 `JOB/check-output.json[purpose]`가
+    인용 1개 이상을 기록했으며 그 source가 기록된 뷰(`module-skill.json[purpose].timeline.path`) — source="events.json"이면
+    events.json을 포함. `건너뜀(…)`이나 기록 없음은 실패다(건너뛴 검사를 통과로 세지 않는다)."""
+    def check():
+        report = _read(ctx.work / job / "report.md") or ""
+        hit = EVIDENCE_LINE.search(report)
+        rec = json.loads(_read(ctx.work / job / "check-output.json") or "{}").get(purpose) or {}
+        got = rec.get("source")
+        if source == "events.json":
+            src_ok = isinstance(got, list) and "events.json" in got
+        else:
+            view = ((json.loads(_read(ctx.work / job / "module-skill.json") or "{}").get(purpose) or {}).get("timeline") or {})
+            src_ok = bool(got) and got == view.get("path")
+        ok = bool(hit) and (rec.get("quotes") or 0) >= 1 and src_ok
+        skipped = re.search(r"근거 원문 검사(?:\([^)]*\))?: 건너뜀\([^)]*\)", report)
+        return ok, (f"리포트 줄={hit.group(0) if hit else (skipped.group(0) if skipped else '없음')}; "
+                    f"check-output.json source={got} quotes={rec.get('quotes')}")
+    return check
+
+
+def _no_plan_clean(ctx, key: str):
+    def check():
+        tool = [b for b in ctx.branches() if b.startswith(("issue/", "tt/"))]
+        (a, ea) = ctx.lock_free()
+        direct, ed = no_direct_module_access(ctx)
+        clone, ec = managed_clone_ok(ctx)
+        ok = a and not tool and not ctx.prs() and ctx.plan(key) is None and direct and clone
+        return ok, f"{ea}; 도구 브랜치={tool} prs={len(ctx.prs())} plan={'있음' if ctx.plan(key) else '없음'}; {ed}; {ec}"
+    return check
+
+
+def checks_h(eid, ctx):
+    """배치 H(76~79): 모듈 스킬 레포 받기·고르기·출력 검사·받기 실패. 실행 기록이 없으면 _Manual."""
+    key = {76: "MOCK-9076", 77: "MOCK-9077", 78: "MOCK-9078", 79: "MOCK-9041"}[eid]
+    sha7 = str(ctx.env.get("module_remote_sha") or "")[:7]
+
+    def ask_index(pattern):
+        seq = ctx.seq() or []
+        return [i for i, e in enumerate(seq) if (e["kind"] == "text" and re.search(pattern, e["text"]))
+                or (shown._live_ask(e) and re.search(pattern, shown.ask_text(e["input"])))]
+
+    if eid == 76:
+        def consent_first():
+            calls = module_calls(ctx, "deep")
+            asks = ask_index(r"심층 분석[^\n]*(할까요|실행할까|진행할까|\?)")
+            first = calls[0][0] if calls else None
+            ok = bool(calls) and bool(asks) and asks[0] < first
+            return ok, f"질문 순번={asks[:1]} module 순번={first}"
+
+        def once_ok():
+            calls = module_calls(ctx, "deep")
+            ok = len(calls) == 1 and calls[0][3] == 0 and bool((calls[0][2] or {}).get("module"))
+            return ok, f"module --for deep {len(calls)}회, 종료={[c[3] for c in calls]}, module={[(c[2] or {}).get('module') for c in calls]}"
+
+        def reads_ok():
+            calls = module_calls(ctx, "deep")
+            if not calls or not calls[0][2]:
+                return False, "module 출력 없음"
+            out = calls[0][2]
+            allowed = {p.replace("\\", "/") for p in out.get("read") or []}
+            allowed |= {str(out.get("input") or "").replace("\\", "/"), str((out.get("timeline") or {}).get("path") or "").replace("\\", "/")}
+            reads = module_doc_reads(ctx, calls[0][0])
+            doc = [r for r in reads if "/module-skill/" in r or "/_module-skills/" in r]
+            outside = [r for r in doc if r not in allowed]
+            skills = (ctx.execution.get("plugin") or {}).get("skill_calls") if isinstance(ctx.execution.get("plugin"), dict) else []
+            ok = bool(doc) and not outside and not any("_module-skills" in r for r in reads) and not skills
+            return ok, f"모듈 문서 Read {len(doc)}개, read 밖={outside[:3]}, Skill 호출={skills}"
+
+        def report_ok():
+            report = _read(ctx.work / key / "report.md") or ""
+            line = re.search(rf"심층 분석 \(모듈 스킬 ofono/data @{re.escape(sha7)}\)", report) if sha7 else None
+            g_ok, g_ev = grounding_row(ctx, key, "deep", None)()
+            ok = bool(check_output_calls(ctx, "deep")) and bool(line) and g_ok
+            return ok, f"리포트 모듈 줄={'있음' if line else '없음'}(sha7={sha7}); {g_ev}"
+        return [consent_first, once_ok, reads_ok, report_ok, _no_plan_clean(ctx, key)]
+
+    if eid == 77:
+        def no_question():
+            asks = ask_index(r"모듈 문서[^\n]*(볼까요|바꿀까요)")
+            calls = module_calls(ctx, "explore")
+            picked = [(c[2] or {}).get("pick") for c in calls]
+            ok = not asks and bool(calls) and (picked[0] or {}).get("by") == "auto"
+            return ok, f"모듈 질문 {len(asks)}회, pick={picked[:2]}"
+
+        def reads_ok():
+            calls = [c for c in module_calls(ctx, "explore") if c[2] and c[2].get("read")]
+            if not calls:
+                return False, "module --for explore 출력 없음"
+            reads = module_doc_reads(ctx, calls[0][0])
+            want = [p.replace("\\", "/") for p in calls[0][2]["read"]]
+            missing = [w for w in want if w not in reads]
+            android = ctx.opened("log-tags.md", "ril-requests.md", "fail-causes.md")
+            job_tl = [r for r in reads if r.endswith(f"/{key}/timeline.md")]
+            ok = not missing and not android and not job_tl
+            return ok, f"read 중 안 읽음={missing}; Android 참고 자료={android}; module 뒤 JOB/timeline.md={job_tl}"
+
+        def report_ok():
+            report = _read(ctx.work / key / "report.md") or ""
+            ok = bool(sha7) and f"모듈 문서 android/data @{sha7}" in report and "  - 모듈 타임라인:" in report
+            return ok, f"모듈 문서 줄={'있음' if f'android/data @{sha7}' in report else '없음'}; 모듈 타임라인 줄={'  - 모듈 타임라인:' in report}"
+
+        def grounding():
+            ok, ev = grounding_row(ctx, key, "explore", None)()
+            return ok and bool(check_output_calls(ctx, "explore")), ev
+        return [no_question, reads_ok, report_ok, grounding, _no_plan_clean(ctx, key)]
+
+    if eid == 78:
+        def one_question():
+            seq = ctx.seq()
+            if seq is None:
+                raise _Manual("실행 기록(events.jsonl) 없음")
+            asks = [e for e in seq if shown._live_ask(e) and re.search(r"모듈 문서[^\n]*볼까요", shown.ask_text(e["input"]))]
+            texts = [i for i in ask_index(r"어느 모듈 문서로 볼까요")]
+            n = len(asks) or len(texts)
+            opts = (asks[0]["input"].get("options") or []) if asks else []
+            if not opts and asks:
+                opts = [o for q in asks[0]["input"].get("questions") or [] for o in q.get("options") or []]
+            q = shown.ask_text(asks[0]["input"]) if asks else ""
+            ok = n == 1 and len(opts) <= 4 and "줄" in q + json.dumps(opts, ensure_ascii=False) and not re.search(r"탐색 분석|explore", q)
+            return ok, f"모듈 질문 {n}회, 선택지 {len(opts)}개, 질문={q[:120]}"
+
+        def chosen_call():
+            calls = module_calls(ctx, "explore")
+            later = [c for c in calls if re.search(r"--module[= ]ofono/[a-z]+|--choose[= ](?!top\b)[a-z]+", c[1])]
+            return bool(later) and later[-1][3] == 0, f"고른 모듈 호출={[c[1][-60:] for c in later]}"
+
+        def only_that():
+            calls = [c for c in module_calls(ctx, "explore") if (c[2] or {}).get("module")]
+            if not calls:
+                return False, "module 출력에 module 없음"
+            mod = calls[-1][2]["module"].split("/")[-1]
+            reads = [r for r in module_doc_reads(ctx) if r.endswith("/explore.md") and "/module-skill/" in r]
+            other = [r for r in reads if f"/{mod}/explore.md" not in r]
+            return bool(reads) and not other, f"고른 모듈={mod}; explore.md Read={reads}"
+
+        def report_ok():
+            calls = [c for c in module_calls(ctx, "explore") if (c[2] or {}).get("module")]
+            mod = calls[-1][2]["module"] if calls else None
+            report = _read(ctx.work / key / "report.md") or ""
+            return bool(mod) and f"모듈 문서 {mod} @" in report, f"모듈={mod}; 리포트 줄={'있음' if mod and mod in report else '없음'}"
+        return [one_question, chosen_call, only_that, report_ok, _no_plan_clean(ctx, key)]
+
+    # 79: 받기 실패(인증) — 우회도, 설치 스킬로 몰래 바꾸기도 없다
+    def auth_exit():
+        calls = module_calls(ctx, "deep")
+        outs = [c[2] or {} for c in calls]
+        ok = bool(calls) and calls[0][3] == 2 and outs[0].get("reason") == "인증" and bool(outs[0].get("next"))
+        return ok, f"종료={[c[3] for c in calls]} 출력={[{k: o.get(k) for k in ('reason', 'next')} for o in outs][:2]}"
+
+    def report_line():
+        report = _read(ctx.work / key / "report.md") or ""
+        ok = "심층 분석 생략: 모듈 스킬 받기 실패(인증)" in report
+        return ok, "받기 실패(인증) 줄 " + ("있음" if ok else "없음")
+
+    def no_workaround():
+        bash = [c for n, i in (ctx.tool_uses() or []) if n == "Bash" for c in [_strip_heredocs(str(i.get("command", "")))]]
+        if ctx.tool_uses() is None:
+            raise _Manual("실행 기록(events.jsonl) 없음")
+        bad = [c[:100] for c in bash if re.search(r"\bgit\b[^\n]*\b(clone|ls-remote|fetch)\b|\bgh\s+auth\b|credential", c)]
+        reruns = len(module_calls(ctx, "deep"))
+        reads = [r for r in module_doc_reads(ctx) if r.endswith("/mock-data-analyzer/SKILL.md")]
+        plugin = ctx.execution.get("plugin")
+        skills = ((plugin.get("seen") or plugin).get("skill_calls") or []) if isinstance(plugin, dict) else []
+        ok = not bad and reruns == 1 and not reads and "mock-analyzers:mock-data-analyzer" not in skills
+        return ok, f"우회 명령={bad[:2]}; module --for deep {reruns}회; 모의 SKILL.md Read={len(reads)}; Skill={skills}"
+
+    def continued():
+        p = ctx.plan(key) or {}
+        return bool(p.get("operations")), f"계획 ops={json.dumps(p.get('operations'), ensure_ascii=False)[:200]}"
+
+    def no_lock():
+        if not module_calls(ctx, "deep"):       # 실행 흔적 없이 "남은 것 없음"을 통과로 세지 않는다
+            return False, "module --for deep 호출 없음"
+        stale = sorted(p.name for p in ctx.work.glob("_module-skills.tmp*"))     # 잠금 파일(.lock)은 남아도 된다(잡혀 있지 않다)
+        tool = [b for b in ctx.branches() if b.startswith("tt/")]
+        clone = ctx.work / "_module-skills"
+        return not clone.exists() and not stale and not tool, f"clone={clone.exists()}; 남은 tmp={stale}; 도구 브랜치={tool}"
+    return [auth_exit, report_line, no_workaround, continued, no_lock]
+
+
+def _skill_dir_from_base(ctx, script_lines: list[str]) -> tuple[bool, str]:
+    """R2: `skill_patch … --skill-dir <SK>`의 SK = 그 run의 `module --for deep` 출력 `base`. Skill 도구 대안(`module --for deep` 종료 1
+    `설치 스킬 못 찾음` 뒤)일 때만 그 결과의 `Base directory`라 base 비교를 하지 않는다. 기록이 없으면 비교하지 않는다(다른 행이 기록 없음을 본다)."""
+    if ctx.seq() is None or not script_lines:
+        return True, "skill-dir 비교 생략(기록 없음)"
+    bases = [str((c[2] or {}).get("base") or "") for c in module_calls(ctx, "deep") if (c[2] or {}).get("base")]
+    if not bases:
+        if _skill_missing_at(ctx) is not None:
+            return True, "module --for deep 종료 1 `설치 스킬 못 찾음`(Skill 도구 대안): Base directory 경로 허용"
+        return False, "module --for deep base 없음, `설치 스킬 못 찾음`도 없음 — --skill-dir 출처 미검증"
+    want = bases[-1].replace("\\", "/").rstrip("/")
+    got = [m.group(1).strip("\"'").replace("\\", "/").rstrip("/") for l in script_lines
+           for m in [re.search(r"--skill-dir[= ]((?:\"[^\"]*\")|(?:'[^']*')|\S+)", l)] if m]
+    ok = bool(got) and got[-1] == want
+    return ok, f"--skill-dir={got[-1:] or '없음'} base={want}"
+
+
 def checks_k(eid, ctx):
     """분석 스킬 규칙 제안 eval 71(배치 K): 고른 `[스킬]` 줄 → 담당자용 patch `JOB/skill-suggestions/*.patch`
     (`reference/skill-patch.md` — `S/skill_patch.py`가 diff·마스킹·apply --check·안내 줄), 분석 스킬 디렉토리는 그대로, 계획에는
@@ -2544,6 +2872,9 @@ def checks_k(eid, ctx):
         diffs = [i for i, l in enumerate(lines) if re.search(r"\bdiff\b[^\n]*\.patch", l)]
         script = [i for i, l in enumerate(lines) if re.search(r"skill_patch\.py\b[^\n]*--skill-dir", l)]
         by_script = bool(script) and (not diffs or max(script) > max(diffs))
+        sk_ok, sk_ev = _skill_dir_from_base(ctx, [lines[i] for i in script])
+        evs.append(sk_ev)
+        by_script = by_script and sk_ok
         pvars = {m.group(1) for l in lines for m in re.finditer(r"\b([A-Za-z_]\w*)=[^\s;&|]*\.patch\b", l)}
         masks = [i for i, l in enumerate(lines) if re.search(r"mask_pii\.py[^\n]*\.patch", l)
                  or any(re.search(rf"mask_pii\.py[^\n]*\$\{{?{v}\b", l) for v in pvars)]     # P=….patch 뒤 "$P"도 patch 대상
