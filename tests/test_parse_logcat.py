@@ -889,6 +889,106 @@ def test_single_file_and_empty_file_warning_wording():
     assert len(msgs) == 1 and "빈 파일" in msgs[0]
 
 
+# -- 첨부 로그 A 모양 (결정 기록 11/05 ③, 설계 D §3.2) -----------------------------------------------
+
+
+def _a_log(name: str, rows: list[str]) -> Path:
+    path = _tmp() / name
+    path.write_text("\n".join(rows) + "\n", encoding="utf-8")
+    return path
+
+
+def _with_requests(*names: str) -> Path:
+    """샘플 규칙에 요청을 더한 복사본 (`ril_error`는 ril.yaml에 있는 요청만 만든다)."""
+    db = _copy_db(_tmp())
+    path = db / "parser-rules" / "ril.yaml"
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    for name in names:
+        data["requests"].append({"name": name, "category": "sim", "timeout_ms": 10000, "added_for": "-",
+                                 "added_on": "2026-11-05", "reason": "시험"})
+    path.write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    return db / "parser-rules"
+
+
+def test_a_shapes_iccio_request_and_numeric_error():
+    """`[n]> iccIO: SIM_IO …`는 SIM_IO 요청, `error <n>`은 RadioError 이름(모르는 숫자는 RADIO_ERROR_<n>)."""
+    log = _a_log("a.log", [
+        "08-09 13:20:00.100  2101  2101 D RILJ    : [0309]> iccIO: SIM_IO command = 0xb0 fileId = 0x2fe2 path = 3F00 p1 = 0 p2 = 0 p3 = 10 data = null aid = <AID#1> [PHONE0]",
+        "08-09 13:20:00.150  2101  2190 D RILJ    : [0309]< SIM_IO error 2 [PHONE0]",
+        "08-09 13:20:01.100  2101  2101 D RILJ    : [0310]> NOTIFY_IMS_DATA_NETWORK [PHONE0]",
+        "08-09 13:20:01.120  2101  2190 D RILJ    : [0310]< NOTIFY_IMS_DATA_NETWORK error 6 [PHONE0]",
+        "08-09 13:20:02.100  2101  2101 D RILJ    : [0311]> SIM_OPEN_CHANNEL [PHONE0]",
+        "08-09 13:20:02.120  2101  2190 D RILJ    : [0311]< SIM_OPEN_CHANNEL error 999 [PHONE0]",
+        "08-09 13:20:03.100  2101  2101 D RILJ    : [0312]> SIM_IO [PHONE0]",
+        "08-09 13:20:03.120  2101  2190 D RILJ    : [0312]< SIM_IO error 0 [PHONE0]",
+    ])
+    data = _parse([log], "--full", rules=_with_requests("SIM_IO", "NOTIFY_IMS_DATA_NETWORK", "SIM_OPEN_CHANNEL"), tz="UTC")
+    ann = {(e["ril"]["serial"], e["ril"]["dir"]): e["ril"] for e in data["events"] if e.get("ril")}
+    assert ann[(309, "req")]["request"] == "SIM_IO" and ann[(309, "req")]["paired_ts"]
+    assert ann[(309, "resp")]["error"] == "GENERIC_FAILURE"
+    assert ann[(310, "resp")]["error"] == "REQUEST_NOT_SUPPORTED"
+    assert ann[(311, "resp")]["error"] == "RADIO_ERROR_999"
+    assert ann[(312, "resp")]["error"] == "NONE"
+    errs = {e["fields"]["serial"]: e["fields"]["error"] for e in _events(data, event="ril_error")}
+    assert errs == {"309": "GENERIC_FAILURE", "310": "REQUEST_NOT_SUPPORTED", "311": "RADIO_ERROR_999"}
+    # 기존 `error=NAME` 형식은 그대로
+    from platforms.android import ril as aril
+    assert aril.parse("RILJ", "[0001]< SETUP_DATA_CALL error=NONE")["error"] == "NONE"
+    assert aril.parse("RILJ", "[0001]< SETUP_DATA_CALL error: INVALID_ARGUMENTS")["error"] == "INVALID_ARGUMENTS"
+
+
+def test_a_shapes_rilrequest_name_link():
+    """숫자 오류 RILJ 응답은 같은 pid·serial·요청의 RilRequest 줄(10ms 안) 이름을 쓴다. RilRequest는 짝 태그가 아니다."""
+    log = _a_log("b.log", [
+        "08-09 13:21:00.100  2101  2101 D RILJ    : [0320]> SIM_OPEN_CHANNEL [PHONE0]",
+        "08-09 13:21:00.140  2101  2190 D RILJ    : [0320]< SIM_OPEN_CHANNEL error 17 [PHONE0]",
+        "08-09 13:21:00.140  2101  2190 D RilRequest: [0320]< SIM_OPEN_CHANNEL error: com.android.internal.telephony.CommandException: NO_SUCH_ELEMENT ret= result={ what=8 }",
+        "08-09 13:21:01.100  2101  2101 D RILJ    : [0321]> SIM_OPEN_CHANNEL [PHONE0]",
+        "08-09 13:21:01.140  2101  2190 D RILJ    : [0321]< SIM_OPEN_CHANNEL error 77 [PHONE0]",
+        "08-09 13:21:01.145  2101  2190 D RilRequest: [0321]< SIM_OPEN_CHANNEL error: com.android.internal.telephony.CommandException: MISSING_RESOURCE ret= result={ what=8 }",
+        "08-09 13:21:02.100  2101  2101 D RILJ    : [0322]> SIM_OPEN_CHANNEL [PHONE0]",
+        "08-09 13:21:02.140  2101  2190 D RILJ    : [0322]< SIM_OPEN_CHANNEL error 77 [PHONE0]",
+        "08-09 13:21:02.200  2101  2190 D RilRequest: [0322]< SIM_OPEN_CHANNEL error: com.android.internal.telephony.CommandException: TOO_LATE ret= result={ what=8 }",
+    ])
+    data = _parse([log], "--full", rules=_with_requests("SIM_OPEN_CHANNEL"), tz="UTC")
+    errs = [(e["fields"]["serial"], e["fields"]["error"]) for e in _events(data, event="ril_error")]
+    assert errs == [("320", "NO_SUCH_ELEMENT"), ("321", "MISSING_RESOURCE"), ("322", "RADIO_ERROR_77")]
+    assert all(e.get("ril") is None for e in data["events"] if e["tag"] == "RilRequest")
+
+
+def test_a_shapes_radioconfig_pair():
+    """RadioConfig 요청과 RadioConfigResponseAidl 응답이 짝지어진다(`[PHONE]` 없음, 같은 pid)."""
+    log = _a_log("c.log", [
+        "08-09 13:22:00.100  2101  2101 D RadioConfig: [0303]> SET_PREFERRED_DATA_MODEM 0",
+        "08-09 13:22:00.104  2101  2163 D RadioConfigResponseAidl: [0303]< SET_PREFERRED_DATA_MODEM",
+    ])
+    data = _parse([log], "--full", tz="UTC")
+    ann = {e["ril"]["dir"]: e["ril"] for e in data["events"] if e.get("ril")}
+    assert ann["req"]["request"] == ann["resp"]["request"] == "SET_PREFERRED_DATA_MODEM"
+    assert ann["req"]["latency_ms"] == ann["resp"]["latency_ms"] == 4 and ann["resp"]["error"] == "NONE"
+
+
+def test_a_shapes_tag_phone_space_and_scope_tag():
+    """태그 끝 " [n]"은 슬롯(태그 글자는 그대로), `MobileConnectionLog[4]`는 아니다. 태그에 `::`가 있어도 줄을 읽는다."""
+    from platforms.android import logcat as alog
+    log = _a_log("d.log", [
+        "08-09 13:23:00.100  2101  2101 I ImsManager [0]: Trying to get MmTelFeature (합성)",
+        "08-09 13:23:00.200  1150  1150 I AF::AfPlaybackCommon: creating track (합성)",
+        "08-09 13:23:00.300  2101  2101 D RILJ    : [0353]> GET_SIM_STATUS [PHONE0]",
+        "08-09 13:23:00.400  2101  2101 D MobileConnectionLog[4]: state (합성)",
+    ])
+    lines, stats = alog.read_file(log, 0, "UTC", 2026)
+    assert stats.unparsed == 0
+    assert [ln.tag for ln in lines] == ["ImsManager [0]", "AF::AfPlaybackCommon", "RILJ", "MobileConnectionLog[4]"]
+    assert lines[2].msg == "[0353]> GET_SIM_STATUS [PHONE0]"
+    rules = alog.DEFAULT_PHONE_RULES
+    assert rules.phone_id("ImsManager [0]", "x") == 0
+    assert rules.phone_id("MobileConnectionLog[4]", "x") is None
+    data = _parse([log], "--full", tz="UTC")
+    ims = [e for e in data["events"] if e["tag"] == "ImsManager [0]"]
+    assert ims and ims[0]["phone_id"] == 0
+
+
 def _all_tests():
     return [(n, o) for n, o in sorted(globals().items()) if n.startswith("test_") and callable(o)]
 

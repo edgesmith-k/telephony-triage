@@ -8,6 +8,9 @@
 페어링은 윈도우를 자르기 **전에** 파일 전체로 한다. 응답 없음·에러·지연 이벤트는
 `ril.yaml`(timeout)을 아는 `parse_logcat.py`가 이 결과로 만든다.
 
+첨부 로그 A(11/05 ③) 모양: 요청 `[n]> iccIO: SIM_IO …`, 숫자 오류 `[n]< REQ error <n>`(RadioError 이름, 같은 serial `RilRequest`
+줄 이름이 있으면 그것), RadioConfig·RadioConfigResponseAidl 짝.
+
 RILJ 출력 형식은 placeholder다 — TODO(SITE:S9). 벤더 RIL 태그·슬롯 표기는 `platform.ril.tags`·`platform.log.phone_id`로 바꾼다.
 
 벤더 RIL 층 연결(`link_vendor`, 선택 `platform.ril.vendor`)은 짝 맞춤 뒤 전체 레코드로 RILJ 요청·응답에
@@ -23,14 +26,25 @@ from datetime import timedelta
 from . import logcat
 from platforms.base import DEFAULT_LINK_MS, VendorRules  # noqa: F401  (계약 타입, 기존 경로로 다시 내보낸다)
 
-RIL_TAGS = {"RILJ"}
+# RadioConfig·RadioConfigResponseAidl: 모뎀 설정 요청·응답 짝(`[PHONE]` 없음, RILJ와 같은 pid, 첨부 로그 A).
+# RilRequest는 짝 태그가 아니다 — RILJ 응답을 되풀이하므로 짝지으면 짝 없는 중복 `ril_error`가 생긴다. 이름 연결만 한다(`_link_names`).
+RIL_TAGS = {"RILJ", "RadioConfig", "RadioConfigResponseAidl"}
 
-REQUEST_RE = re.compile(r"^\[(?P<serial>\d+)\]>\s*(?P<request>[A-Z][A-Z0-9_]*)")
+REQUEST_RE = re.compile(r"^\[(?P<serial>\d+)\]>\s*(?:iccIO:\s*)?(?P<request>[A-Z][A-Z0-9_]*)")
 RESPONSE_RE = re.compile(r"^\[(?P<serial>\d+)\]<\s*(?P<request>[A-Z][A-Z0-9_]*)(?P<rest>.*)$")
 UNSOL_RE = re.compile(r"^\[UNSL\]<\s*(?P<request>[A-Z][A-Z0-9_]*)")
-ERROR_RE = re.compile(r"\berror[=:]\s*(?P<error>[A-Z][A-Z0-9_]*)")
-
 NO_ERROR = "NONE"
+ERROR_RE = re.compile(r"\berror[=:]\s*(?P<error>[A-Z][A-Z0-9_]*)")
+# AIDL RILJ 형식 `[0164]< SIM_IO error 2 [PHONE0]`: 숫자 RadioError.
+ERROR_NUM_RE = re.compile(r"^\s*error\s+(?P<code>\d+)\b")      # 응답 이름 바로 뒤만
+ERROR_NUM_LINE_RE = re.compile(r"\]<\s*[A-Z][A-Z0-9_]*\s+error\s+\d+\b")
+# AOSP `RadioError` 이름 중 첨부 로그 A에서 본 것만(공개 RadioError.aidl을 이 환경에서 열 수 없어 확인한 4개만 둔다).
+# 그 밖의 숫자는 `RADIO_ERROR_<n>`이고, 같은 serial `RilRequest` 줄의 이름이 있으면 그것을 쓴다.
+RADIO_ERROR = {0: NO_ERROR, 1: "RADIO_NOT_AVAILABLE", 2: "GENERIC_FAILURE", 6: "REQUEST_NOT_SUPPORTED", 17: "NO_SUCH_ELEMENT"}
+# RilRequest: `[0158]< SIM_OPEN_CHANNEL error: com.android.internal.telephony.CommandException: NO_SUCH_ELEMENT …`
+NAME_TAG = "RilRequest"
+NAME_RE = re.compile(r"^\[(?P<serial>\d+)\]<\s*(?P<request>[A-Z][A-Z0-9_]*) error: \S*CommandException: (?P<name>[A-Z][A-Z0-9_]*)")
+NAME_LINK = timedelta(milliseconds=10)
 
 
 def parse(tag: str, msg: str, tags=RIL_TAGS, phone: logcat.PhoneIdRules = logcat.DEFAULT_PHONE_RULES) -> dict | None:
@@ -44,17 +58,22 @@ def parse(tag: str, msg: str, tags=RIL_TAGS, phone: logcat.PhoneIdRules = logcat
         return _ann(int(hit.group("serial")), "req", hit.group("request"), None)
     hit = RESPONSE_RE.match(body)
     if hit:
-        err = ERROR_RE.search(hit.group("rest"))
-        return _ann(
-            int(hit.group("serial")),
-            "resp",
-            hit.group("request"),
-            err.group("error") if err else NO_ERROR,
-        )
+        return _ann(int(hit.group("serial")), "resp", hit.group("request"), _error(hit.group("rest")))
     hit = UNSOL_RE.match(body)
     if hit:
         return _ann(None, "unsol", hit.group("request"), None)
     return None
+
+
+def _error(rest: str) -> str:
+    err = ERROR_RE.search(rest)
+    if err:
+        return err.group("error")
+    num = ERROR_NUM_RE.search(rest)
+    if num:
+        code = int(num.group("code"))
+        return RADIO_ERROR.get(code, f"RADIO_ERROR_{code}")
+    return NO_ERROR
 
 
 def _ann(serial, direction, request, error) -> dict:
@@ -88,6 +107,31 @@ def pair(records: list[dict]) -> None:
         segments.append(current)
     for segment in segments:
         _pair_segment(segment)
+    _link_names(records)
+
+
+def _link_names(records: list[dict]) -> None:
+    """숫자 오류(`error <n>`) RILJ 응답에 같은 pid·serial·요청의 `RilRequest` 줄(±10ms) 이름을 단다.
+    RilRequest 줄 자체에는 `ril`을 달지 않는다."""
+    names: dict[tuple, list] = {}
+    for rec in records:
+        if rec.get("tag") == NAME_TAG:
+            hit = NAME_RE.match(rec.get("msg") or "")
+            if hit:
+                names.setdefault((rec["pid"], int(hit.group("serial")), hit.group("request")), []).append(
+                    (rec["_dt"], hit.group("name")))
+    if not names:
+        return
+    for rec in records:
+        ann = rec.get("ril")
+        if not _own(ann) or ann["dir"] != "resp" or ann["serial"] is None:
+            continue
+        if not ERROR_NUM_LINE_RE.search(rec.get("msg") or "") or ann["error"] == NO_ERROR:
+            continue
+        for dt, name in names.get((rec["pid"], ann["serial"], ann["request"]), []):
+            if abs(dt - rec["_dt"]) <= NAME_LINK:
+                ann["error"] = name
+                break
 
 
 def _own(ann) -> bool:
