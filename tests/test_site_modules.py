@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import sys
 from pathlib import Path
 
@@ -117,9 +118,15 @@ def test_ms1_tree_mismatch_fails(tmp_path):
 
 
 def test_ms1_tree_partial_repo_is_info(tmp_path):
-    """일부만 있는 레포(공식 템플릿: ofono/data·ofono/_common만): 목록만 있는 모듈은 정보, 실패 아님(§6 `tree`(2×7은 정보))."""
+    """일부만 있는 레포(템플릿 사본에서 ofono/data·ofono/_common만 남김): 목록만 있는 모듈은 정보, 실패 아님(§6 `tree`(2×7은 정보))."""
     root, _ = make_site(tmp_path, dbs=False)
-    remote = mr.build(tmp_path / "tpl", src=mr.TEMPLATES)
+    part = tmp_path / "partial"
+    shutil.copytree(mr.TEMPLATES, part)
+    for plat in ("ofono", "android"):
+        for d in (part / plat).iterdir():
+            if d.is_dir() and not (plat == "ofono" and d.name in ("_common", "data")):
+                shutil.rmtree(d)
+    remote = mr.build(tmp_path / "tpl", src=part)
     (root / "plugin" / "site-defaults.yaml").write_text(yaml.safe_dump({"module_skills": {"remote": remote}}), encoding="utf-8")
     out = run_ms1(root)
     ev = out["ms1.tree"]["evidence"]
