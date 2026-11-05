@@ -83,9 +83,13 @@ def _write_events(tmp_path: Path, events: dict) -> str:
 
 @pytest.mark.parametrize("name", _cases())
 def test_deep_view_keeps_every_essential_line(name):
+    """R27(H C1+D): 창·고정 줄은 `fail` 행 하나에서만 온다(모든 essential을 고정하면 이 시험은 실패할 수 없다).
+    그래도 essential 전부가 deep 보기에 있어야 한다. 실패하면 fixture를 느슨하게 하지 않고 보고한다."""
     expect, events = _case(name)
     spec, rows = _labeled(expect, events)
-    ev = _evidence(rows, expect["essential"])
+    assert isinstance(expect.get("fail"), int) and expect["fail"] in expect["essential"], name
+    ev = _evidence(rows, [expect["fail"]])
+    assert ev, (name, "fail 행이 events에 없다")
     center, window = mf.deep_window(ev, rows)
     picked, stats = mf.view(spec, rows, expect["module"], center, "deep", window=window, cap_rows=200,
                             cap_bytes=24576, pins=ev)
