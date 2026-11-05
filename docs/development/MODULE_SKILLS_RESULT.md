@@ -2,6 +2,22 @@
 
 단계표는 `MODULE_SKILLS_PLAN.md §4`. 이 파일은 단계마다 리뷰·재측정에서 P2로 남긴 것(결정 (r): P0·P1만 고치고 P2는 반입 뒤 후보)과 단계 결과를 적는다.
 
+## C1+D 모듈 스킬 문서(oFono 7·Android 7)·eval 사례 31개 (11/05~06, 워크플로 wf_5bb9c084-688)
+
+범위: `scratchpad/c1d/plan.md`(판정 R1~R45, 설계 C1D·DD)대로 G-O(oFono)·G-A(Android) 두 갈래 병렬 → 통합 I1~I3 → 4관점 리뷰 → 반박 검증 → 확정 P1 4건 수정. 워크플로는 수정 단계에서 중단(11/05 23:47 KST)됐으나 수정 커밋 4개는 남아 있었고, 메인이 b3e9956 위로 옮겨(충돌 0) 생성물 점검·전체 테스트를 다시 돌렸다 — 3,756 통과·1 실패(F 시험 `test_ms1_tree_partial_repo_is_info`가 공식 템플릿에 ofono/data만 있다고 가정 → 템플릿 사본에서 일부만 남겨 쓰게 고침, 그 파일 17 통과).
+만든 것: `templates/module-skills/{ofono,android}/` — `_common/layers.md`·`components.md`, 모듈마다 SKILL.md·analyzer.md·explore.md·references(skill-creator 지침), eval 사례 31개(oFono 16: deep 7·explore 9, 마스킹 발췌 8·합성 8 / Android 15: deep 7·explore 8, 발췌 6·합성 9). 견본 DB 태그 58개·`UNSOL_DATA_CALL_LIST_UPDATED`(11/05 승인), Android 파서 ③b(`iccIO:` SIM_IO, 숫자 error 이름, RadioConfig 짝, `::` 태그), oFono 파서 ③a(DITD·RFSD·DMD·MOSE 레벨 I, exynos-ril 벤더 IPC 이벤트), `tools/make_excerpt.py`·`make_module_repo.py`·`module_repo_check --template`, Android arm 고정값(S12), `make_bundle` 점검 11.
+마스킹(R28 — 사용자에게 보임): `masking.py` 전체 차이 — M12 IPv6 경계에 낱말 문자 전부(C++ 범위 `X::Y`가 IP 아님), SIM_AUTHENTICATION B64 규칙만 여러 줄 글에서 그 줄 문맥(`per_line`). 첨부 로그 IP 수 2453→214·783→34·2942→500, 남은 식별자 0, b64 경로 모양 0(세 번째 받아들인 예외). 골든 0 차이, mask-gate 스냅숏 그대로.
+측정(토큰 0): `module_measure episodes` oFono explore 72/114·deep 95/114(기준 97, −2 한계), held-out 17/22·20/22, Android 48/88·64/88(기준 ≥43·63). dry-run 14모듈 모두 종료 0·`pins_ok`, 64회 추정 ≈ $3.77.
+리뷰: 4관점(마스킹·발췌 / 문서·사례 / 기반 코드 / Android data) → 반박 검증. 확정 P1 4건 고침 — F1 접힌 SIP Digest 헤더(`nonce`·`response`·`cnonce`·`opaque`)가 여러 줄 글 경로(Jira 본문·issue_post·add-fixture·db_lint find)에서 안 가려짐(per_line을 SIM_AUTHENTICATION B64에만, 회귀 시험), F2 `원인 아님`·`그 층 로그 없음`일 때 `원인 데몬` 지시 없음 → `알 수 없음`(7개 함정 사례가 문서와 무관하게 갈리던 것), F3 한 arm 기록 합치기가 run 수·자식 모드 다른 기록을 섞어 진 비교를 pass로(같을 때만 합침), F4 threadtime 빈 태그 줄이 파싱 안 되고 원문 점검도 놓침. 메인 추가: `tests/test_make_excerpt.py`에 첨부 로그 거부 목록 장치 노드 값이 있던 것(검증은 P2로 봄 — 표본 값 금지 규칙으로 고침, 원래 커밋에 합쳐 이력에도 없음).
+
+### P2 — C1+D (반입 뒤 후보, 문서·사례 쪽은 보정 단계에서 함께 볼 수 있음)
+- 사례·채점: android `ims-iradioims-absent` daemon regex가 받는 `벤더 IMS`를 `wrong_layer`가 막음. Android 템플릿 `<구성요소: …>`를 베끼면 데몬 F. modem-oos-dm-drop·sms-ims-local-reject가 문서가 가르치지 않는 줄을 근거로 요구, modem 보기에 IMSSVC 0줄·DMD 과마스킹. ofono `sms-send-no-vendor-lines` ★ 함정이 보기 밖(exynos 0줄, 두 번째 시도 창 밖 3ms). oFono network 문서가 in-sample 사례의 결정 문구(`INVALID_RESPONSE` 등)를 적음 → 일반화, in-sample 사례 with 개선폭은 상한으로 표시.
+- 문서 크기: oFono modem deep with(R8) 11,275B > 10,752B(시험이 R8 묶음을 안 셈). 한 deep run 안에서 두 단계·짝 규칙 3번 반복(250~400B), 상태 블록 350B × 5문서(≈17%, R10 판정 — 사용자 결정 필요).
+- 마스킹: M12 경계 뒤로 글자·`_`에 붙은 IPv6(`src_2001:db8::5` 등)는 안 가려짐(DD §3.0이 정한 대가, 시험에 한계 적기). deny 목록이 DMD 줄 "Read"를 `<CARRIER#1>`로 과마스킹. oFono SimManager GetProperties 덤프의 사업자 이름·MCC/MNC가 마스커·deny 목록 통과(발췌 범위로 피함 — 보정 X-infra에서).
+- 도구: `make_module_eval_inputs._inside_repo`가 다른 worktree의 templates를 막지 않음(R16 우회), `related_tests`가 `tests/fixtures/module-arms/README.md`에 시험 0개, 플랫폼 다른 같은 이름 사례 `FileExistsError`(P3), `--report --no-view`가 `--no-view` 무시(P3).
+- 측정 기록: Android episodes 48/64는 461a8a3 파서로 저장된 events.json을 읽은 값 — HEAD 파서·견본 DB로 다시 파싱하면 45/69(기준 통과). oFono deep −2는 modules.yaml·modulefilter 변경 탓으로 보임(원인 커밋 미확인). reference 백엔드가 builtin 두 개를 내는데 문서(16-existing-assets:65·173, 15-local-draft:42, parser_backends/__init__.py:6)는 "builtin 판별 없음", 백엔드 VERSION 0.1.0·ofono_reference 0.0.3 그대로(보정 설계에서 결정).
+- 기타: `ofono_reference` VERSION, `_ask_switch` `--at` 경로 필터 없음, IMPL §5.9 "16KB" 문구, RadioError 표는 공개 enum 1·2·6·17만(googlesource 막힘).
+
 ## B1·B2 모듈 스킬 받기·5-1/5-2 흐름 (11/05, 묶음 구현 — 설정·doctor·guard·문서 갈래)
 
 범위: B1(설정·받기·받은 내용 점검·guard 12·모의 레포)과 B2(모듈 고르기·모듈 보기·출력 관문·리포트·표시·계측·eval)를 한 번에 구현했다(11/05 일정 단축 ③). 이 절은 설정·doctor·site 점검·guard·문서 갈래의 기록이다. 유료 eval 비용 장부는 메인 세션이 이 파일에 따로 적는다.
