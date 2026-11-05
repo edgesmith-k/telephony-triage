@@ -13,6 +13,6 @@
 15:20:01.700 - I exynos-ril SETUP_DATA_CALL rsp: ok cid=1 ifname=rmnet0
 15:20:01.710 p0 D ofonod [0,0021]< RIL_REQUEST_SETUP_DATA_CALL {status=0,retry=-1,cid=1,active=2,type=IP,ifname=rmnet0}
 15:20:01.720 - I ofonod src/gprs.c:pri_activate_callback() context 1 active on rmnet0
-15:20:01.724 - E DITD netlink RTM_NEWROUTE failed: err=-17 (File exists) dev=rmnet0 table=1002
-15:20:01.726 - W DITD default route not installed for rmnet0
+15:20:01.724 - I DITD netlink RTM_NEWROUTE failed: err=-17 (File exists) dev=rmnet0 table=1002
+15:20:01.726 - I DITD default route not installed for rmnet0
 15:20:06.000 - W NMD connectivity check failed profile_id=1

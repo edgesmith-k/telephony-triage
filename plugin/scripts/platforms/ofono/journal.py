@@ -17,6 +17,9 @@ oFono 플랫폼의 로그 줄 해석(17-platforms 설계 §5). 실제 사내 로
   시작하는 보통 문장(한국어 낱말이 host·ident 자리에 오는 것)을 원문 줄로 보지 않는다(guard 규칙 10·Jira 게시 검사 오탐).
 - `tag = ident`, `pid`는 없으면 0, `tid = None`, `level`은 (c)만 severity에서, (a)·(b)는 `"I"`(short 출력에는
   우선순위가 없다, TODO(SITE:S24)). `host`는 줄 객체에 넣지 않는다(PII일 수 있다).
+- 레벨을 심각도로 쓰지 않는 ident(`LEVEL_UNRELIABLE_IDENTS`: DITD·RFSD·DMD·MOSE, 첨부 oFono 로그에서 본 이름 —
+  DITD netlink 덤프를 crit/alert/emerg로, RFSD `checksum : verified`·MOSE 정상 결과를 warn으로 찍는다)는 severity와
+  상관없이 `"I"`로 둔다(11/05 승인 ③, 이름은 사내에서 조정 TODO(SITE:S24·S25)).
 - `-- `로 시작하는 journalctl 안내 줄(`-- Boot ...`, `-- No entries --` 등)과 `tail: `로 시작하는 줄(직렬 콘솔에서
   `tail -F`로 받을 때 끼는 파일 교체 안내)은 건너뛴다(해석 못 한 줄로 세지 않는다).
   TODO(SITE:S24) 재부팅 표시로 쓸지는 실제 로그를 본 뒤 정한다.
@@ -63,6 +66,8 @@ MONTHS = {name: i for i, name in enumerate(
 NOTICE_PREFIX = "-- "
 TAIL_NOTICE_PREFIX = "tail: "    # `tail -F` 파일 교체 안내(syslog 줄 아님)
 DEFAULT_LEVEL = "I"
+# severity가 심각도가 아닌 ident → 레벨을 DEFAULT_LEVEL로 둔다(첨부 oFono 로그에서 본 이름, TODO(SITE:S24·S25))
+LEVEL_UNRELIABLE_IDENTS = frozenset({"DITD", "RFSD", "DMD", "MOSE"})
 
 
 def _zone(text: str) -> timezone:
@@ -134,7 +139,8 @@ def read_file(path: str | Path, file_index: int, tz_name: str | None, year: int 
                 dt=naive.replace(tzinfo=zone or tz).astimezone(UTC),
                 pid=int(groups["pid"]) if groups.get("pid") else 0,
                 tid=None,
-                level=SEVERITY_LEVEL.get(groups.get("sev") or "", DEFAULT_LEVEL),
+                level=(DEFAULT_LEVEL if groups["ident"] in LEVEL_UNRELIABLE_IDENTS
+                       else SEVERITY_LEVEL.get(groups.get("sev") or "", DEFAULT_LEVEL)),
                 tag=groups["ident"],
                 msg=groups["msg"] or "",
             ))

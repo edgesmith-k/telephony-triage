@@ -14,7 +14,10 @@ android reference 백엔드(`platforms/android/backend.py`)와 같은 구조(파
   않으므로 `subtag`가 `SUBTAG_RE` 모양일 때만 — 아니면 나누지 않는다).
 - 0.0.3: 줄 형식 (c) BusyBox syslogd(레벨은 severity)·내장 짝 `gril`·슬롯 규칙(`[<slot>,`·`/ril_<n>`)이 기본 출력을 바꾼다
   (gril trace 줄의 `ril`·`phone_id`, (c) 줄 해석). (a)·(b) 형식이고 gril 줄·`/ril_<n>`이 없는 로그의 출력은 0.0.2와 같다.
-- builtin 판별 없음(`detect()` → []). 사내 백엔드는 이 클래스를 상속해 `detect()`만 바꿔도 된다.
+- builtin 판별(11/05 승인 ③, H C1 R12): `VENDOR_IPC_IDENTS`(`exynos-ril`, 첨부 로그에서 본 벤더 RIL 데몬 이름,
+  TODO(SITE:S25)) 줄에 `common.vendor_ipc.detect`를 부른다 → `builtin.common.vendor_ipc_error`·
+  `builtin.common.vendor_request_failed`. 태그 규칙(tags.yaml)과 상관없이 나온다. 그 밖 ident 줄은 판별하지 않는다.
+  사내 백엔드는 이 클래스를 상속해 `detect()`만 바꿔도 된다.
 """
 
 from __future__ import annotations
@@ -24,7 +27,7 @@ import re
 from pathlib import Path
 from typing import Sequence
 
-from common import events, logtime
+from common import events, logtime, vendor_ipc
 from parser_backends.base import ParserBackend, Window
 
 from . import SPEC
@@ -32,6 +35,8 @@ from . import SPEC
 VERSION = "0.0.3"
 # split_tag 하위 식별: 글자로 시작하는 식별자 모양만 tag에 붙인다(숫자로 시작하는 값·공백·`:`·`/`는 나누지 않음)
 SUBTAG_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_-]{0,63}$")
+# 벤더 IPC 결과 판별을 부를 ident(첨부 oFono 로그의 벤더 RIL 데몬, TODO(SITE:S25)). split_tag면 `ident/subtag`도 받는다.
+VENDOR_IPC_IDENTS = frozenset({"exynos-ril"})
 
 
 class OfonoReferenceBackend(ParserBackend):
@@ -63,14 +68,17 @@ class OfonoReferenceBackend(ParserBackend):
         return VERSION
 
     def builtin_events(self) -> list[str]:
-        return []
+        return list(vendor_ipc.EVENTS)
 
     def log_format(self):
         return SPEC.log
 
     def detect(self, record: dict) -> list[tuple[str, dict]]:
-        """줄 레코드 하나에 대한 builtin 판별 `[(이벤트 이름, fields)]`. 뼈대에는 없다."""
-        return []
+        """줄 레코드 하나에 대한 builtin 판별 `[(이벤트 이름, fields)]`. 벤더 RIL 데몬 줄의 IPC 결과만 본다."""
+        tag = record.get("tag") or ""
+        if tag.split("/", 1)[0] not in VENDOR_IPC_IDENTS:
+            return []
+        return vendor_ipc.detect(record.get("msg") or "")
 
     def _annotate(self, tag: str, msg: str) -> dict | None:
         for proto, tags in self._protocols:
