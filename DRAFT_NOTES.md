@@ -17,7 +17,7 @@
 ## 진행 상태 (11/04)
 
 - 모드: **사외 초안**. Phase D0·1~13·반입 전 보강 완료. 최신 묶음 **import-20261103**(main `77e2827`). main 병합 PR #8~#79.
-- **H 진행 중**: 계획 확인 완료(11/03, Q1~Q8 추천안, `MODULE_SKILLS_DECISIONS.md` "계획 확인"). 단계표 `MODULE_SKILLS_PLAN.md §4` — **A1**(+1 관문) ☑ 11/04(결과·P2 `MODULE_SKILLS_RESULT.md`). **A2**(바로 병합 삭제) ☑ 11/04(크기 상한 write-flow 16,000·rules 2,516 수락, 안내서·자료는 G). guard P1·P2 묶음 ☑ 11/04(guard 멈춤). **C0** ☑ 11/04(관문 pass, 유료 $0.48). 다음 **B1+B2**(설계 중, 11/9 오전 목표 — 결정 기록 11/05). 에이전트 노력: 설계·리뷰 high, 구현 medium(11/04 사용자).
+- **H 진행 중**: 계획 확인 완료(11/03, Q1~Q8 추천안, `MODULE_SKILLS_DECISIONS.md` "계획 확인"). 단계표 `MODULE_SKILLS_PLAN.md §4` — **A1**(+1 관문) ☑ 11/04(결과·P2 `MODULE_SKILLS_RESULT.md`). **A2**(바로 병합 삭제) ☑ 11/04(크기 상한 write-flow 16,000·rules 2,516 수락, 안내서·자료는 G). guard P1·P2 묶음 ☑ 11/04(guard 멈춤). **C0** ☑ 11/04(관문 pass, 유료 $0.48). 다음 **B1+B2**(11/9 오전 목표, 결정 기록 11/05). 노력: 설계·리뷰 high, 구현 medium.
 - 모델 Sonnet 5.5 기준(Opus 5.5 11개 실패 0). `TODO(SITE)`: `tools/list_site_todos.py`. REVIEW-OPEN 0. 사내 시작 **"사내 설정 시작"**(결정 (o)).
 - 안내서: `docs/book/telephony-triage-book.html`(공유본 https://claude.ai/artifact/1jov1Et4dQUMauFr6aoxWG), 목록 `docs/materials/00-index.html`
 
