@@ -88,8 +88,27 @@ eval별 한 줄:
 - guard: 셸 glob·변수로 모듈 표지를 숨긴 쓰기(`rm -rf _mod*`)와 쓰기 직전 이름 바꾸기 창은 보지 못한다(스크립트 preflight·sha256 대조가 뒤를 받친다). `flock FILE git …` 래퍼도 git을 숨긴다(E).
 - guard: 모듈 레포에 대한 규칙 11 사유 문구가 "이슈 DB"라고 쓴다(바이트 동일 유지). 모듈 레포 전용 메모는 E(`skill_pr`)와 함께.
 - guard: 모듈 원격 경고와 기존 `issue_db.remote` 경고가 hook마다 반복된다. 기존 `issue_db.remote` 경고는 원래 값을 그대로 낸다(바꾸면 기존 출력이 바뀐다).
-- doctor: 관리 clone 상태 시험은 지금 `moduleskills` 대역으로 본다. 실제 clone(불일치·강제 push·더러운 트리·오래된 git) 시험은 통합 뒤 실제 모듈로 더한다.
+- doctor: 실제 clone 시험은 통합 때 없음·맞음·불일치(`test_doctor_module_row_real_moduleskills_clone_states`)를 더했다. 강제 push·더러운 트리·오래된 git은 아직 `moduleskills` 대역으로만 본다.
 - `read_roots`는 설치 스킬을 찾을 때 파일을 연다(`--roots`일 때만). doctor는 설치 스킬 위치를 보지 않는다(기본 환경에서 파일 찾기를 돌리지 않으려고) — 작업 폴더 밖 `SKILL.md` 안내는 `skill_dir`가 있을 때만 나온다.
+
+### 마스킹 관문 1 기준 미달 2건 (11/05, 메인 판정 — 누출 아님)
+
+`mask_parity` 종류별 수가 측정 마스커(mask2+mask3)보다 둘 적다. 줄마다 대조했다(`scratchpad/mp/cmp.py`, 값은 scratch에만):
+- c617353d EMAIL 21 < 22: `RIL_REQUEST_SETUP_DATA_CALL (…,<사용자>,<비밀번호>,…)` 한 줄의 사용자 값(이메일 모양)을 M3 자리 인자 규칙이 `CRED`로 가린다(CRED 25 > 24). 재분류.
+- 9a32f905 NUM 153 < 155: `[CHRE] … assigned to app ID 0x<15자리>` 두 줄. `0x` 뒤 16진수 앱 ID라 M11 숫자 규칙이 일부러 건너뛴다(식별자 아님).
+
+남은 식별자 0, 경로 모양 B64 0이라 이 두 줄은 받아들이고(B2 §3.5 "종류별 ≥ 기준"의 예외), 기준 파일은 scratch에 그대로 둔다.
+
+### P2 — B1·B2 통합 재리뷰 (11/05, 4관점 리뷰 → 반박 검증, 반입 뒤 후보)
+
+리뷰 주장 36건 → 확정 P1 10건(위 "재리뷰 수정"에서 고침) · P2 23건. P2(아래 2건은 위 "남은 것"에 이미 적음):
+- 받기·guard: 규칙 12 git 점검이 관리 clone으로의 `git push <clone>`·`GIT_INDEX_FILE`/`GIT_OBJECT_DIRECTORY`·`python3 -c`·`find -delete`·lock `unlink`를 보지 않는다(받기 preflight가 뒤를 받친다). degraded guard는 관리 clone 안 git 변경을 deny가 아니라 ask로 둔다. 모듈 원격 규칙 11은 gh·MCP만 막고 `git push`는 보지 않는다(서버 branch protection이 받친다 — 문서에 적거나 규칙 6/7 확장).
+- 받기: fetch가 띄운 auto-gc/maintenance가 lock을 푼 뒤에도 clone을 바꿀 수 있다(`gc.auto=0`·`maintenance.auto=false` 미설정, 실패는 닫힘). global `url.<x>.insteadOf`가 받기 주소를 돌린다(guard는 `git config --global`을 보지 않음). prepare의 변경 단계에 `lock.check()`가 없어 동시 첫 clone이 `작업 디렉토리 이상`으로 표시된다. 죽은 첫 clone이 남긴 `_module-skills.tmp-*`를 doctor가 알려 주지 않는다(B1 §5.4 A 약속).
+- 설정: `module_skills.remote`가 `?query`·`#fragment`·`-` 호스트·`..` 경로를 받는다(query 토큰이 doctor·guard 문구에 나옴). 출처 trailer가 URL 모양 `ANTHROPIC_MODEL`/`TT_MODEL`을 그대로 싣는다(R5 "주소 없음" 위반 — 확인 화면에 보이긴 한다). remote를 두면 모듈 문서가 없는 카테고리도 5-1 동의·받기 뒤 `해당 없음`이 된다(설계대로, `analyzers.<cat>.when: never` 안내를 S33·반입 노트에). `skillpath`는 `installed_plugins.json`의 버전·범위가 다른 여러 항목을 모호로 보고 프로젝트 `.claude/skills`를 찾지 않는다.
+- 흐름: `module --platform bogus` 같은 설정 오류가 `next` 없이 끝난다(B2 §5.7·R20과 다름). `설치 스킬 못 찾음` 뒤 Skill 도구 결과가 네 칸 형식이 아니면 `check-output`이 버린다(step 3 안내에 형식이 없다). `_ask_switch`가 `explore.md` 없는 모듈을 고르게 한다. DANGER 문구 탐지가 쉽게 비켜 간다(+1 리뷰가 실제 관문). `module_repo_check`가 E까지 건너뛰는 점검 3개를 말하지 않고 0으로 끝난다.
+- 마스킹: 모양 규칙이 코드 이름(Itanium 맹글 8·`IC…S…/…1` 9)·긴 타임스탬프·10진 목록(`cellinfo: 12 34 56 78` → HEXDUMP)을 과하게 가린다(누출 아닌 정보 손실). M11 HOST가 호스트 칸 없는 syslog 줄에서 ident·연도를 가져간다(첨부·fixture에는 0줄). `add-fixture`가 `log_lines=False`로 가린다(보통 입력은 이미 가린 `cut` 출력). `masking.py` F811(`Masker` 타입 별칭을 클래스가 덮음, 동작 영향 없음).
+- 시험·문서: deep 보기 recall 시험이 필수 줄을 근거 고정으로 넘겨 실패할 수 없다. R19 끝-끝 시험이 `check-output`을 실제로 돌리지 않는다(생산·소비 쪽은 따로 고정). 07-workflow:241·16-existing-assets:165·contracts §usage_stats가 옛 Skill 도구 경로를 쓴다. 템플릿 README·IMPL §1.6 "`.md`에는 공개 이름만"에 "C1까지" 단서가 없다. 남은 ruff 스타일 증가 39건(RUF100·PLW1510·BLE001 등).
+- 실행하지 않은 것: OpenCode 에이전트가 규칙 2(`next` 따르기)·규칙 8(`--skipped`)를 실제로 지키는지(유료·사내 모델 실행 필요, 프롬프트 문구만 시험).
 
 ## 계획 I-2: OpenCode v1(분석 전용)·Claude Code + 사내 모델 (11/05, 계획 H와 나란히)
 
