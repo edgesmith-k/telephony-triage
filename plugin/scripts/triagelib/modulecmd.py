@@ -816,7 +816,7 @@ def _explore_module(args, job, key, p, cfg, analysis, events, explore, state, in
         out["candidates"] = cands_out
     out["timeline"] = {"path": str(tl_path), "lines": kept, "total": total, "view": bool(view)}
     if stats and stats.get("weak"):
-        out["ask_switch"] = _ask_switch(d, stats, cands_out)
+        out["ask_switch"] = _ask_switch(d, stats, cands_out, tree=state.tree, platform=p)
     return _success(job, purpose, out, _explore_lines(module, fetched.sha, kept, total, stats), fetched.warnings)
 
 
@@ -833,8 +833,10 @@ def _explore_lines(module, sha, kept, total, stats) -> list[str]:
     return [line] + ([_sub_line(stats)] if stats is not None else [])
 
 
-def _ask_switch(d: str, stats: dict, cands: list[dict]) -> dict:
-    hot = sorted(((k, v) for k, v in (stats.get("hot_modules") or {}).items() if k != d and NAME_OK.fullmatch(str(k))),
+def _ask_switch(d: str, stats: dict, cands: list[dict], tree=None, platform: str | None = None) -> dict:
+    """약한 신호일 때 바꿀 모듈 질문. `tree`(받은 레포 트리)를 주면 `<p>/<m>/explore.md`가 있는 모듈만 권한다(H C1+D R40)."""
+    hot = sorted(((k, v) for k, v in (stats.get("hot_modules") or {}).items() if k != d and NAME_OK.fullmatch(str(k))
+                  and (tree is None or f"{platform}/{k}/explore.md" in tree)),
                  key=lambda kv: (-kv[1], kv[0]))
     shown = " · ".join(f"{k} {v}" for k, v in hot[:3])
     others = [f"{k} — {v}줄" for k, v in hot[:2]]

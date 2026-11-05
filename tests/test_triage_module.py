@@ -704,3 +704,14 @@ def test_single_timeline_sub_and_at_recentre(env):
     (job / "analysis.json").write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
     code, out, err = env.module(*args, "--at", "2026-09-20T05:32:09Z", platform="android")
     assert (code, out["reason"]) == (2, "작업 없음") and "이전 분석 것" in err
+
+
+def test_ask_switch_offers_only_modules_with_explore():
+    """R40(H C1+D): 약한 신호 질문은 받은 트리에 `<p>/<m>/explore.md`가 있는 모듈만 권한다(14 모듈, 일부는 없을 수 있다)."""
+    stats = {"hot_modules": {"sim": 9, "network": 7, "ims": 3, "data": 20}}
+    tree = frozenset({"ofono/data/explore.md", "ofono/network/explore.md", "ofono/ims/explore.md"})
+    got = modulecmd._ask_switch("data", stats, [], tree=tree, platform="ofono")
+    assert got["options"] == ["그대로 data", "network — 7줄", "ims — 3줄"]
+    assert "sim" not in got["question"]
+    legacy = modulecmd._ask_switch("data", stats, [])                     # 트리를 모르면(--at) 예전처럼
+    assert legacy["options"] == ["그대로 data", "sim — 9줄", "network — 7줄"]
