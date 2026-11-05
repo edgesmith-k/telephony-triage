@@ -16,6 +16,7 @@
 - 마스킹 자리가 extractor보다 앞 (`--mask`·`cut` 자체는 `tests/test_masking.py`)
 - `site-defaults.yaml` 없으면 종료 코드 2
 - 벤더 RIL 층 연결(`platform.ril.vendor`): `hal` 4값·창·coverage_tags·RILJ 짝 유지(설정 없으면 필드 없음)
+- 첨부 로그 A 모양(11/05 ③): iccIO·숫자 RadioError·RilRequest 이름·RadioConfig 짝·태그 슬롯·`::` 태그, `RIL` 벤더 IPC builtin
 
 스냅샷 갱신: `python3 tests/test_parse_logcat.py --update`
 `pytest tests/test_parse_logcat.py`로도, 그냥 실행해도 돈다.
@@ -987,6 +988,42 @@ def test_a_shapes_tag_phone_space_and_scope_tag():
     data = _parse([log], "--full", tz="UTC")
     ims = [e for e in data["events"] if e["tag"] == "ImsManager [0]"]
     assert ims and ims[0]["phone_id"] == 0
+
+
+VENDOR_ROWS = [
+    "08-09 13:24:00.100  1188  1203 I RIL     : [<DEV#1>][TX] SIT_GET_SIM_STATUS, REQ, 8 bytes, Token(0x0210) (합성)",
+    "08-09 13:24:00.180  1188  1203 E RIL     : [<DEV#1>][RX] SIT_GET_SIM_STATUS, RSP, 12 bytes, Token(0x0210), Error(RCM_E_GENERIC_FAILURE)",
+    "08-09 13:24:00.181  1188  1203 I RIL     : [<DEV#1>][RX] SIT_SET_DATA_PROFILE, RSP, 12 bytes, Token(0x0211), OK(RCM_E_SUCCESS)",
+    "08-09 13:24:00.182  1188  1203 I RIL     : [RilContext_0] OnRequestComplete Request ID=3, result=2",
+    "08-09 13:24:00.183  1188  1203 I RIL     : [RilContext_0] OnRequestComplete Request ID=4, result=0",
+    "08-09 13:24:00.184  1188  1203 E RILC    : [<DEV#1>][RX] SIT_SIM_IO, RSP, 12 bytes, Token(0x0212), Error(RCM_E_GENERIC_FAILURE)",
+]
+
+
+def test_a_shapes_vendor_ipc_builtin():
+    """`RIL` 줄의 IPC `Error(RCM_E_*)`·`result≠0` → builtin.common.* (R12·S17). SUCCESS·result=0·다른 태그는 없다.
+    `RIL`이 tags.yaml에 없는 DB(태그 묶음 없는 plain)에서도 builtin 레코드는 남는다."""
+    from platforms.android import backend as aback
+    assert aback.BACKEND.builtin_events() == ["builtin.common.vendor_ipc_error", "builtin.common.vendor_request_failed"]
+    assert aback.VENDOR_IPC_TAGS == {"RIL"}
+    log = _a_log("e.log", VENDOR_ROWS)
+    db = _copy_db(_tmp())
+    tags = db / "parser-rules" / "tags.yaml"
+    text = tags.read_text(encoding="utf-8")
+    marker = "  # --- 첨부 로그 A(11/05 승인, 결정 기록 ①)"
+    if marker in text:
+        tags.write_text(text[:text.index(marker)], encoding="utf-8")
+    for rules in (RULES, db / "parser-rules"):
+        data = _parse([log], "--full", rules=rules, tz="UTC")
+        got = [(e["event"], e["fields"], e["category_hint"], e["source"]) for e in data["events"]
+               if (e["event"] or "").startswith("builtin.")]
+        assert got == [
+            ("builtin.common.vendor_ipc_error", {"ipc": "SIT_GET_SIM_STATUS", "error": "RCM_E_GENERIC_FAILURE"}, "common",
+             "backend:reference"),
+            ("builtin.common.vendor_request_failed", {"request_id": "3", "result": "2"}, "common", "backend:reference"),
+        ], rules
+    plain_lines = [e for e in data["events"] if e["event"] is None and e["tag"] == "RIL"]
+    assert not plain_lines, "plain DB는 RIL 줄 레코드를 버리고 builtin만 남긴다"
 
 
 def _all_tests():

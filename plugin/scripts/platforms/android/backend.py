@@ -1,8 +1,11 @@
 """reference 파서 백엔드 (16-existing-assets.md §16.3).
 
-공통 처리(포맷·시각·RIL 페어링·윈도우)는 제품 수준이고, builtin 판별 로직은
-없다. site 백엔드는 이 클래스를 상속해 `detect()`만 구현하면 공통 처리를 그대로
-재사용한다.
+공통 처리(포맷·시각·RIL 페어링·윈도우)는 제품 수준이다. builtin 판별은 벤더 RIL IPC 결과
+둘뿐이다(H C1+D R12·S17): `VENDOR_IPC_TAGS`(`RIL`) 줄을 `common.vendor_ipc.detect`에 넘겨
+`builtin.common.vendor_ipc_error`·`builtin.common.vendor_request_failed`를 낸다. 태그 규칙(tags.yaml)과
+무관하게 나온다(태그 묶음이 없는 DB에서도 같다). 태그 이름·줄 모양은 첨부 로그에서 본 것이며 사내에서 조정한다
+(TODO(SITE:S9)). site 백엔드는 이 클래스를 상속해 `detect()`·`builtin_events()`를 바꾸면 공통 처리를 그대로
+재사용한다(벤더 이벤트도 원하면 `super().detect()`를 합친다).
 
 구현 위치는 `platforms/android/backend.py`이고 `parser_backends/reference`는 BACKEND만 다시 내보낸다.
 """
@@ -14,11 +17,14 @@ from pathlib import Path
 import re
 from typing import Sequence
 
-from common import events
+from common import events, vendor_ipc
 from . import logcat, ril
 from parser_backends.base import ParserBackend, Window
 
 VERSION = "0.1.0"
+
+# 벤더 IPC 결과 줄을 보는 태그(첨부 로그 A의 벤더 RIL 태그). TODO(SITE:S9) 사내 태그 확인
+VENDOR_IPC_TAGS = frozenset({"RIL"})
 
 
 class ReferenceBackend(ParserBackend):
@@ -40,12 +46,14 @@ class ReferenceBackend(ParserBackend):
         return VERSION
 
     def builtin_events(self) -> list[str]:
-        return []
+        return list(vendor_ipc.EVENTS)
 
     def detect(self, record: dict) -> list[tuple[str, dict]]:
         """줄 레코드 하나에 대한 builtin 판별 `[(이벤트 이름, fields)]`.
-        reference는 판별 로직이 없다. site 백엔드가 바꾼다."""
-        return []
+        reference는 `VENDOR_IPC_TAGS` 줄의 벤더 IPC 결과만 본다. site 백엔드가 바꾼다."""
+        if record.get("tag") not in VENDOR_IPC_TAGS:
+            return []
+        return vendor_ipc.detect(record.get("msg") or "")
 
     # -- 공통 처리 ---------------------------------------------------------
 
