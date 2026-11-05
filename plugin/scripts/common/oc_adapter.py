@@ -8,6 +8,8 @@ OpenCode 호출을 Claude Code PreToolUse/PostToolUse hook 입력 JSON과 **같�
         → stdout {"decision": "allow"|"deny", "reason": str, "warnings": [str], "events": [도구 이름]}
     python3 <plugin>/scripts/common/oc_adapter.py after    stdin {tool, args, directory, sessionID, callID, content}
         → stdout {"replace": str|null}   (null이면 결과 그대로, 문자열이면 모델에 그 글만 보인다)
+    python3 <plugin>/scripts/common/oc_adapter.py error    stdin {tool, args, directory, sessionID, callID, error, allowed}
+        → stdout {"replace": str|null}   (오류로 끝난 MCP 호출의 오류 글 — 모델 요청 직전 `experimental.chat.messages.transform`)
     python3 <plugin>/scripts/common/oc_adapter.py env-check
         → stdout {"refused": [환경변수 이름]}
 
@@ -28,14 +30,23 @@ MCP 도구로 본다. 둘 다 아니면 거부한다(모르는 도구 = 거부).
 
 **분석 전용(v1)**: guard `ask`는 거부로 바꾸고 "OpenCode v1 does not run this; run this exact command yourself: …"로 정확한
 명령을 보인다. guard가 묻지 않는 쓰기 흐름도 여기서 막는다(`V1_NETS`: db_pr publish·merge, skill_patch apply, issue_post approve,
-리뷰어 요청, module_eval). Jira MCP는 `jira_bridge` 마스킹 다리가 출시 관문(`JIRA_READ_RELEASED`)을 넘기 전에는 읽기도 거부하고,
-코멘트 도구(`tracker.write_tools.add_comment`)는 v1에서 늘 거부한다.
+리뷰어 요청, module_eval, OpenCode 설정을 바꾸는 `config.py set opencode.*`). Jira MCP 읽기는 관문(`common/oc_jira_gate.py`:
+사용자 설정 `opencode.jira_read: open` + 같은 OpenCode 버전·플러그인 지문의 사내 확인 통과 기록)이 열려 있을 때만 guard에 넘기고,
+닫혀 있으면 거부한다. 관문은 OpenCode 시작 때 tt-guard.js가 `gate` 모드로 한 번 정해 `JIRA_SESSION_ENV`로 넘긴 값만 믿는다
+(세션 중에 쓰인 파일은 그 세션에 적용되지 않는다). 코멘트 도구(`tracker.write_tools.add_comment`)는 v1에서 늘 거부한다.
+
+**MCP 오류 경로(`error`)**: 1.19.5는 오류로 끝난 MCP 호출(MCP `isError`·JSON-RPC 오류·시간 초과)에 `tool.execute.after`를 돌리지
+않는다(오류 글 = 응답 본문이 그대로 모델에 간다). 대신 모델 요청마다(압축 요청 포함) 부르는 `experimental.chat.messages.transform`
+hook에서 tt-guard.js가 오류 tool part를 여기 넘기고, Jira 도구면 본문 없이 "Jira 오류(본문 숨김): <도구> <상태 분류>"로 바꾼다
+(저장된 세션 기록은 그대로, 모델 요청에만). 우리가 거부한 호출(before가 허용하지 않았고 `[telephony-triage]`로 시작)은 그 글을
+마스킹만 해서 둔다.
 
 **bash 허용 목록(`bash_allowlist`, guard 다음)**: guard는 거부 목록이라 셸 간접 실행(스크립트 파일·`python3 -c`·변수·중첩
 `opencode run --pure`)을 다 볼 수 없다. v1 bash는 플러그인 스크립트(`python3 <plugin>/scripts/<이름>.py …`, 절대 경로)와 읽기
 명령만 돌린다. 셸 부분집합(`split_bash`) 밖(펼침·파일 리디렉션·대입·서브셸·배경)은 거부한다. guard가 거부·확인한 호출은 guard
 문구를 그대로 쓴다. edit·write·apply_patch는 플러그인 루트·`.opencode/`·OpenCode 전역 설정·설정/지시 파일을 고치지 못한다
-(`protected_target`). apply_patch 경로는 1.19.5처럼 JS `.trim()`으로 다듬고, 보이지 않는 글자가 남은 경로는 거부한다.
+(`protected_target`). 플러그인 스크립트 인자도 같다(`--out` 등으로 받은 경로에 쓰는 스크립트가 있다 — 낱말·`--opt=값`·`-o값`을
+작업 폴더와 `cd` 후보 기준으로 풀어 보호 경로면 거부). apply_patch 경로는 1.19.5처럼 JS `.trim()`으로 다듬고, 보이지 않는 글자가 남은 경로는 거부한다.
 모든 거부 사유는 `[telephony-triage]`로 시작한다(tt-oc가 막힌 호출로 판정한다).
 
 **환경변수 무시 설정 거부(`REFUSED_ENV`)**: 설정을 덮거나 지우는 OpenCode 환경변수가 있으면 모든 도구를 거부한다(x3b·x4 실험).
@@ -88,10 +99,15 @@ REFUSED_ENV = ("OPENCODE_PERMISSION", "OPENCODE_CONFIG_CONTENT", "OPENCODE_CONFI
                "OPENCODE_TEST_HOME", "OPENCODE_ENABLE_EXA")
 REFUSED_ENV_PREFIXES = ("OPENCODE_EXPERIMENTAL",)
 
-# Jira 읽기 출시 관문: jira_bridge 다리(after)의 마스킹·오류 경로 e2e가 사내 실제 MCP 응답으로 통과한 뒤 PR로 True로 바꾼다.
-# 그 전에는 Jira 서버 도구를 모두 거부한다. 테스트·사내 확인만 `TT_OC_JIRA_GATE=open`으로 연다(모델은 이 프로세스 환경을 못 바꾼다).
-JIRA_READ_RELEASED = False
+# Jira 읽기 관문: 사용자 설정 + 사내 확인 통과 기록(`common/oc_jira_gate.py`). 파일은 OpenCode가 시작할 때 한 번만 본다:
+# tt-guard.js가 플러그인을 실을 때 `gate` 모드로 판정하고, 그 결과를 이후 모든 adapter 호출의 프로세스 환경
+# `JIRA_SESSION_ENV`(open|closed)로 넘긴다 — 세션 중에 누가 설정·기록을 써도 그 세션에는 적용되지 않는다(모델은 이 프로세스
+# 환경을 못 바꾼다). 테스트와 사내 확인 실행(`site_step.py runtime-check opencode --jira`가 그 한 번만 자식 환경에 넣는다)은
+# `TT_OC_JIRA_GATE=open`으로 연다.
 JIRA_GATE_ENV = "TT_OC_JIRA_GATE"
+JIRA_SESSION_ENV = "TT_OC_JIRA_SESSION_GATE"
+JIRA_ERROR_HIDDEN = "Jira 오류(본문 숨김)"
+GATE_SETTING = "opencode.jira_read"         # = oc_jira_gate.SETTING (사용자 config)
 
 ASK_PREFIX = "OpenCode v1 does not run this; run this exact command yourself: "
 BRIDGE_FAILED = ("telephony-triage: OpenCode jira_bridge 처리 실패 — 원문은 표시하지 않는다. "
@@ -341,9 +357,38 @@ def refused_env(env: dict | None = None) -> list[str]:
     return sorted(k for k in env if k in REFUSED_ENV or k.startswith(REFUSED_ENV_PREFIXES))
 
 
-def jira_gate_open(env: dict | None = None) -> bool:
+def jira_gate_files():
+    """설정·통과 기록 파일로 본 관문 상태(`oc_jira_gate.state`). 판정하지 못하면 닫힘. tt-guard.js가 시작할 때(`gate` 모드)와
+    거부 사유 안내에만 쓴다 — 도구 호출 판정은 `jira_gate_state`(시작 때 판정값)로 한다."""
+    from common import oc_jira_gate
+    try:
+        return oc_jira_gate.state()
+    except Exception as exc:  # noqa: BLE001 — 판정 불가: 닫힘
+        return oc_jira_gate.GateState(False, oc_jira_gate.CLOSED, problems=[f"관문 판정 실패({type(exc).__name__})"])
+
+
+def jira_gate_state(env: dict | None = None):
+    """이 OpenCode 프로세스의 관문(`oc_jira_gate.GateState`). 테스트 env로 열렸으면 `setting="env"`, 시작 때 판정이 열림이면
+    `setting="session"`. 그 밖은 닫힘 — 지금 파일이 열림이어도(세션 중에 바뀐 설정·기록은 다음 시작부터) 열지 않는다."""
+    from common import oc_jira_gate
+
     env = os.environ if env is None else env
-    return JIRA_READ_RELEASED or env.get(JIRA_GATE_ENV) == "open"
+    if env.get(JIRA_GATE_ENV) == "open":
+        return oc_jira_gate.GateState(True, "env")
+    if env.get(JIRA_SESSION_ENV) == "open":
+        return oc_jira_gate.GateState(True, "session")
+    files = jira_gate_files()
+    if JIRA_SESSION_ENV not in env:
+        why = "OpenCode 시작 때의 관문 판정이 없다(tt-guard.js 밖에서 불렸다)"
+    elif files.open:
+        why = "설정·통과 기록이 이 OpenCode 시작 뒤에 열림으로 바뀌었다 — OpenCode를 다시 시작해야 적용된다"
+    else:
+        why = files.problems[0] if files.problems else f"{GATE_SETTING}이 open이 아니다"
+    return oc_jira_gate.GateState(False, files.setting, files.accepted, [why], files.record)
+
+
+def jira_gate_open(env: dict | None = None) -> bool:
+    return jira_gate_state(env).open
 
 
 def opencode_version(env: dict | None = None, timeout: float = 10) -> str | None:
@@ -402,6 +447,7 @@ V1_NETS = (("db_pr", "publish", "이슈 DB push·PR(db_pr publish)"), ("db_pr", 
            ("issue_post", "approve", "Jira 코멘트 승인(issue_post approve)"),
            ("gh", "add-reviewer", "리뷰어 요청"), ("gh", "requested_reviewers", "리뷰어 요청"))
 MODULE_EVAL_RE = re.compile(r"module_eval")
+OPENCODE_KEY_RE = re.compile(r"opencode", re.IGNORECASE)   # config.py set의 opencode.* 키(인용·`\`·`$`를 지운 글에서, 넓게)
 
 
 def _word_net():
@@ -424,6 +470,12 @@ def v1_write_flow(command: str) -> str | None:
             return label
     if MODULE_EVAL_RE.search(re.sub(r"[\"'\\]", "", command)):
         return "모듈 스킬 평가(module_eval, 모델 호출·비용)"
+    try:
+        config_set = net(command, "config", "set")
+    except Exception:  # noqa: BLE001
+        config_set = "config" in command and "set" in command
+    if config_set and OPENCODE_KEY_RE.search(re.sub(r"[\"'\\$]", "", command)):
+        return "OpenCode 설정 변경(config.py set opencode.* — Jira 읽기 관문은 사용자가 터미널에서 연다)"
     return None
 
 
@@ -580,12 +632,42 @@ class BashVerdict:
     flow: str | None = None
 
 
-def bash_allowlist(command: str) -> BashVerdict:
-    """v1 bash 허용 목록 판정. flow는 사용자가 직접 실행할 쓰기 흐름(정확한 명령을 보인다)."""
+def _arg_paths(word: str) -> list[str]:
+    """스크립트 인자 낱말이 가리킬 수 있는 경로 후보: 낱말 그대로, `--opt=값`·`-o값`의 값 부분."""
+    out = [word]
+    if word.startswith("-"):
+        if "=" in word:
+            out.append(word.split("=", 1)[1])
+        elif not word.startswith("--") and len(word) > 2:
+            out.append(word[2:])
+    return [w for w in out if w]
+
+
+def _protected_args(words: list[str], cwds: list[str], directory: str, env: dict | None) -> str | None:
+    """플러그인 스크립트 인자 중 보호 경로(`protected_target`)를 가리킬 수 있는 것이 있으면 그 이유. 스크립트는 `--out` 같은
+    인자로 받은 경로에 쓰므로(mask_pii·parse_logcat 등) edit·write와 같은 보호를 인자에도 건다. 상대 경로는 이 명령이 거칠 수
+    있는 모든 작업 폴더(`cd` 후보 포함) 기준으로 본다."""
+    for word in words[2:]:
+        for cand in _arg_paths(word):
+            for cwd in cwds:
+                # 논리 경로(normpath)와 물리 경로(심볼릭 링크 뒤의 `..`를 커널처럼 푼 realpath) 둘 다 본다
+                joined = os.path.join(cwd, cand)
+                why = (protected_target(os.path.normpath(joined), directory, env)
+                       or protected_target(os.path.realpath(joined), directory, env))
+                if why:
+                    return f"스크립트 인자 `{word}`가 {why}를 가리킨다 — 스크립트로도 고치지 않는다(guard·설정 보호)"
+    return None
+
+
+def bash_allowlist(command: str, cwd: str | None = None, directory: str | None = None,
+                   env: dict | None = None) -> BashVerdict:
+    """v1 bash 허용 목록 판정. flow는 사용자가 직접 실행할 쓰기 흐름(정확한 명령을 보인다). cwd(작업 폴더)를 주면 플러그인
+    스크립트 인자가 보호 경로를 가리키는지도 본다(directory는 OpenCode 프로젝트 폴더 — `.opencode/` 판정)."""
     try:
         segments = split_bash(command)
     except ShellSubsetError as exc:
         return BashVerdict(deny=str(exc))
+    cwds = [cwd] if cwd else []
     for words in segments:
         head = words[0]
         if re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", head):
@@ -594,10 +676,20 @@ def bash_allowlist(command: str) -> BashVerdict:
             why, flow = _check_python(words)
             if why or flow:
                 return BashVerdict(deny=why, flow=flow)
+            why = _protected_args(words, cwds, directory or cwd or "", env) if cwds else None
+            if why:
+                return BashVerdict(deny=why)
         elif head in BASH_READ_CMDS:
             why = _check_read(words)
             if why:
                 return BashVerdict(deny=why)
+            if head == "cd" and cwds:
+                if words[1] == "-" or words[1].startswith("-"):
+                    return BashVerdict(deny="cd는 폴더 경로만 받는다(`cd -`·옵션은 쓰지 않는다)")
+                # `||`·실패한 cd가 있어도 빠지지 않게 이전 후보를 남기고 새 후보를 더한다(넓게 본다). 상대 경로는 CDPATH도.
+                bases = cwds if os.path.isabs(words[1]) else cwds + [
+                    d for d in ((env if env is not None else os.environ).get("CDPATH") or "").split(":") if d]
+                cwds = list(dict.fromkeys(cwds + [_abs(c, words[1]) for c in bases]))
         else:
             return BashVerdict(deny=f"`{head}`는 허용 목록 밖이다")
     return BashVerdict()
@@ -605,6 +697,7 @@ def bash_allowlist(command: str) -> BashVerdict:
 
 # -- 보호 경로(edit·write·apply_patch) ------------------------------------------------------------------
 
+USER_FILES_RE = r"(config\.yaml|opencode-jira-check\.json)(\..*)?"   # userconfig.FILENAME·oc_jira_gate.RECORD_NAME(+ 임시)
 PROTECTED_NAMES = {"opencode.json", "opencode.jsonc", "tt-oc.json", "AGENTS.md", "CLAUDE.md", "CONTEXT.md"}
 
 
@@ -615,6 +708,14 @@ def _real(path: str) -> str:
         head, part = os.path.dirname(head), os.path.basename(head)
         tail.append(part)
     return os.path.join(os.path.realpath(head), *reversed(tail))
+
+
+def _user_home(env: dict) -> Path:
+    """사용자 config 폴더(`userconfig.home`과 같은 규칙, env를 받는다): `TELEPHONY_TRIAGE_HOME` 또는 `~/.telephony-triage`."""
+    from common import userconfig
+
+    raw = env.get(userconfig.HOME_ENV)
+    return Path(raw).expanduser() if raw else Path(env.get("HOME") or Path.home()) / ".telephony-triage"
 
 
 def protected_target(target: str, directory: str, env: dict | None = None) -> str | None:
@@ -628,6 +729,10 @@ def protected_target(target: str, directory: str, env: dict | None = None) -> st
     for root, label in roots:
         if real == root or real.startswith(root + os.sep):
             return label
+    # 사용자 config·Jira 관문 통과 기록(기본 work_dir가 같은 폴더 아래라 폴더 전체는 막지 않는다 — 그 파일과 임시 파일만)
+    home = os.path.realpath(_user_home(env))
+    if os.path.dirname(real) == home and re.fullmatch(USER_FILES_RE, os.path.basename(real)):
+        return "telephony-triage 사용자 설정(config.yaml·Jira 관문 통과 기록)"
     if os.path.basename(real) in PROTECTED_NAMES:
         return f"설정·지시 파일({os.path.basename(real)})"
     return None
@@ -732,16 +837,21 @@ def before(payload: dict, env: dict | None = None, servers: list[str] | None = N
             result["reason"] = f"[telephony-triage] 트래커 설정을 읽지 못해 MCP 도구를 거부한다({type(exc).__name__})."
             return result
         from common import mcptools
+        gate = None
         for event in mapped.events:
             name = event["tool_name"]
             if view.comment_tool and mcptools.normalize(name) == view.comment_tool:
                 result["reason"] = ("[telephony-triage] Jira 코멘트 게시는 OpenCode v1에서 하지 않는다. "
                                     "issue_post.py render → approve → 게시는 Claude Code에서 한다.")
                 return result
-            if is_jira(name, view) and not jira_gate_open(env):
-                result["reason"] = (f"[telephony-triage] Jira MCP 도구({name})는 OpenCode에서 jira_bridge 마스킹 다리가 출시 관문을 "
-                                    "넘기 전까지 쓰지 않는다. Jira 읽기는 Claude Code에서 한다.")
-                return result
+            if is_jira(name, view):
+                gate = gate if gate is not None else jira_gate_state(env)
+                if not gate.open:
+                    why = gate.problems[0] if gate.problems else f"{GATE_SETTING}이 open이 아니다"
+                    result["reason"] = (f"[telephony-triage] Jira MCP 도구({name})는 OpenCode Jira 읽기 관문이 닫혀 있어 쓰지 않는다"
+                                        f"({why}). 여는 것은 사용자가 터미널에서 한다(사내 확인 runtime-check opencode --jira 뒤 "
+                                        f"config.py set {GATE_SETTING} open). 지금 Jira 읽기는 Claude Code에서 한다.")
+                    return result
     # hooks.json timeout을 호출 전체의 예산으로 쓴다(apply_patch 경로 여러 개도 합쳐서) — 플러그인 timeout은 이보다 길다
     budget = HOOK_TIMEOUT["Bash" if mapped.kind == BASH else "mcp" if mapped.kind == "mcp" else "file"]
     deadline = time.monotonic() + budget
@@ -760,7 +870,8 @@ def before(payload: dict, env: dict | None = None, servers: list[str] | None = N
         result["reason"] = _marked("\n".join(dict.fromkeys(asks)) + "\n" + _ask_text(mapped, payload))
     elif mapped.kind == BASH:
         # guard가 허용한 bash도 v1 허용 목록을 넘어야 돈다(guard 뒤에 보는 것은 guard의 구체적인 거부·확인 문구를 살리려고)
-        verdict = bash_allowlist(mapped.events[0]["tool_input"]["command"])
+        verdict = bash_allowlist(mapped.events[0]["tool_input"]["command"], mapped.cwd or directory_of(payload),
+                                 directory_of(payload), env)
         if verdict.flow:
             result["reason"] = (f"{MARK} {verdict.flow}는 OpenCode v1(분석 전용)에서 돌리지 않는다. "
                                 f"{ASK_PREFIX}{mapped.command}")
@@ -819,6 +930,57 @@ def after(payload: dict, env: dict | None = None, servers: list[str] | None = No
     return {"replace": replace}
 
 
+_STATUS_RE = re.compile(r"(?i)(?:status(?:[ _-]?code)?|http(?:/[0-9.]+)?|code|error)\W{0,4}([45][0-9]{2})(?![0-9])")
+_CLASS_WORDS = (("permission-denied", re.compile(r"prevents you from using this specific tool call|rejected permission")),  # OpenCode 설정 deny
+                ("not-found", re.compile(r"(?i)not[ _-]?found|does not exist|no such|존재하지 않|찾을 수 없")),
+                ("timeout", re.compile(r"(?i)time[ _-]?out|timed out|시간 초과")),
+                ("auth", re.compile(r"(?i)unauthori[sz]ed|forbidden|permission denied|access denied|권한")))
+
+
+def error_class(text: str) -> str:
+    """오류 글의 상태 분류(내용 없음, 고정 낱말만): `4xx`·`5xx`(status·HTTP·code 뒤의 세 자리), `not-found`, `timeout`, `auth`,
+    OpenCode 설정 거부 `permission-denied`, 그 밖 `error`. 모델에 가는 글은 이 분류와 도구 이름뿐이다."""
+    hit = _STATUS_RE.search(text or "")
+    if hit:
+        return f"{hit.group(1)[0]}xx"
+    for label, pattern in _CLASS_WORDS:
+        if pattern.search(text or ""):
+            return label
+    return "error"
+
+
+def hidden_error(tool: str, text: str) -> str:
+    return f"{JIRA_ERROR_HIDDEN}: {tool} {error_class(text)}"
+
+
+def error(payload: dict, env: dict | None = None, servers: list[str] | None = None) -> dict:
+    """오류로 끝난 도구 호출의 오류 글(`experimental.chat.messages.transform`, 모델 요청마다). 내장 도구는 그대로. 우리가 거부한
+    호출(before가 허용하지 않았고 `[telephony-triage]`로 시작)은 마스킹만 한다. MCP Jira 도구는 본문을 숨긴 한 줄로, 판정하지 못하면
+    (서버 목록·트래커 설정 오류) 숨긴다(닫힘). Jira가 아닌 MCP 도구는 그대로(after의 jira_bridge 범위와 같다)."""
+    env = os.environ if env is None else env
+    tool = str(payload.get("tool") or "")
+    text = str(payload.get("error") or "")
+    if tool in BUILTINS:
+        return {"replace": None}
+    if text.startswith(MARK) and payload.get("allowed") is not True:
+        from common import masking
+        red, counts = masking.redact(text)
+        return {"replace": red if counts else None}
+    servers_error = None
+    if servers is None:
+        servers, servers_error = mcp_servers(str(payload.get("directory") or ""), env)
+    mapped = map_tool(payload, servers, servers_error)
+    if mapped.deny or mapped.kind != "mcp":
+        return {"replace": hidden_error(tool, text)}
+    try:
+        view = tracker_view()
+    except Exception:  # noqa: BLE001 — Jira 판별 불가: 숨긴다
+        return {"replace": hidden_error(tool, text)}
+    if any(is_jira(e["tool_name"], view) for e in mapped.events):
+        return {"replace": hidden_error(tool, text)}
+    return {"replace": None}
+
+
 # -- CLI -----------------------------------------------------------------------------------------------
 
 
@@ -829,21 +991,28 @@ def main(argv: list[str] | None = None) -> int:
     except (AttributeError, ValueError):
         pass
     mode = argv[0] if argv else ""
-    if mode not in ("before", "after", "env-check"):
-        print("usage: oc_adapter.py (before | after | env-check)  # stdin: OpenCode 도구 호출 JSON", file=sys.stderr)
+    if mode not in ("before", "after", "error", "env-check", "gate"):
+        print("usage: oc_adapter.py (before | after | error | env-check | gate)  # stdin: OpenCode 도구 호출 JSON",
+              file=sys.stderr)
         return 2
     if mode == "env-check":
         print(json.dumps({"refused": refused_env()}))
+        return 0
+    if mode == "gate":
+        # tt-guard.js가 플러그인을 실을 때 한 번: 설정·통과 기록으로 본 관문(이 프로세스의 판정값이 된다). 내용 없이 열림·사유만.
+        st = jira_gate_files()
+        print(json.dumps({"open": bool(st.open), "problems": [str(p) for p in st.problems][:3]}, ensure_ascii=False))
         return 0
     try:
         payload = json.loads(sys.stdin.read() or "{}")
         if not isinstance(payload, dict):
             raise TypeError("객체가 아니다")
-        out = before(payload) if mode == "before" else after(payload)
-    except Exception as exc:  # noqa: BLE001 — 닫힘: before는 거부, after는 오류 문구
+        out = before(payload) if mode == "before" else after(payload) if mode == "after" else error(payload)
+    except Exception as exc:  # noqa: BLE001 — 닫힘: before는 거부, after는 오류 문구, error는 숨김
         print(f"[telephony-triage] oc_adapter {mode} 오류: {type(exc).__name__}: {exc}", file=sys.stderr)
         out = ({"decision": "deny", "reason": f"[telephony-triage] oc_adapter 내부 오류({type(exc).__name__})로 거부한다.",
-                "warnings": [], "events": []} if mode == "before" else {"replace": BRIDGE_FAILED})
+                "warnings": [], "events": []} if mode == "before" else {"replace": BRIDGE_FAILED} if mode == "after"
+               else {"replace": f"{JIRA_ERROR_HIDDEN}: oc_adapter 오류"})
     print(json.dumps(out, ensure_ascii=False))
     return 0
 

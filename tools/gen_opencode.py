@@ -13,7 +13,8 @@ CLI:
     python3 tools/gen_opencode.py [--check]
         opencode/commands/를 다시 만든다. --check는 쓰지 않고 다르면 종료 코드 1(골든 검사).
     python3 tools/gen_opencode.py install --dest <OpenCode 프로젝트 폴더> --plugin-root <설치된 plugin/>
-            --work-root <작업 루트> --gateway-url <URL> --model <모델 ID> [--issue-db <clone> ...] [--force]
+            --work-root <작업 루트> --gateway-url <URL> --model <모델 ID> [--issue-db <clone> ...]
+            [--jira-read-tool <OpenCode 이름> ...] [--force]
         <dest>/opencode.json(템플릿 렌더링)·<dest>/tt-oc.json(래퍼가 읽는 경로)과 <dest>/.opencode/{agents,commands,plugins}/를
         쓴다. `tt-oc --project <dest>`로
         실행한다. 이미 있는 파일이 다르면 --force 없이는 쓰지 않는다. 키에 `@@ISSUE_DB_ROOT@@`가 든 설정 항목은 `--issue-db`
@@ -21,6 +22,9 @@ CLI:
         `config.py check --roots`의 `read_roots`(풀린 설치 스킬 SKILL.md 폴더 등) 중 플러그인·작업·이슈 DB 밖인 폴더는
         `external_directory`에 읽기 allow로 더한다(B2 R21 — 설정을 바꾸면 다시 설치, `tt-oc doctor`가 경고).
         `<dest>`는 git 레포 밖이어야 한다: `edit` 패턴(`@@*_REL@@` = 앞 `/`를 뗀 절대 경로)은 worktree `/` 기준이다.
+        `--jira-read-tool`(OpenCode 이름 `<서버>_<도구>`, 읽기 도구만 — 쓰기로 보이는 이름은 거부)은 permission 끝에 allow로
+        더한다(마지막 규칙이 이긴다). Jira 읽기 관문(`config.py set opencode.jira_read open`)을 연 뒤 tt-oc에서 실제로 읽으려면
+        필요하다(관리 설정 `/etc/opencode`의 `jira_*` deny는 관리자 몫).
 
 종료 코드 (contracts.md §종료 코드)
     0  맞음 / 썼음
@@ -217,12 +221,43 @@ def add_read_roots(config: dict, roots: list[str], covered: list[str]) -> dict:
     return config
 
 
-def install_files(dest: Path, values: dict, issue_dbs: list[str], roots: list[str] = ()) -> dict[Path, str]:
+JIRA_TOOL_RE = re.compile(r"[A-Za-z0-9_-]+")
+
+
+def jira_read_problems(names: list[str]) -> list[str]:
+    """`--jira-read-tool` 이름 검사: OpenCode 도구 이름 모양(`<서버>_<도구>`, 영문·숫자·_-)이고 쓰기로 보이지 않는다
+    (`mcptools.is_write` — 코멘트·상태 전환 등은 OpenCode v1에서 늘 거부)."""
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    from common import mcptools
+
+    out = []
+    for name in names:
+        if not JIRA_TOOL_RE.fullmatch(name) or "_" not in name:
+            out.append(f"--jira-read-tool 형식(<서버>_<도구>, 영문·숫자·_-): {name!r}")
+        elif mcptools.is_write(name) or not mcptools.is_read(name):
+            out.append(f"--jira-read-tool은 읽기 도구만: {name}")
+    return out
+
+
+def add_jira_reads(config: dict, names: list[str]) -> dict:
+    perm = config.get("permission")
+    if isinstance(perm, dict):
+        for name in names:
+            perm.pop(name, None)
+            perm[name] = "allow"         # 끝에 둔다: `jira_*` deny 뒤(마지막 규칙이 이긴다)
+    return config
+
+
+def install_files(dest: Path, values: dict, issue_dbs: list[str], roots: list[str] = (),
+                  jira_read: list[str] = ()) -> dict[Path, str]:
     template = json.loads((OC / "opencode.json.template").read_text(encoding="utf-8"))
     meta = {"version": 1, "opencode": OPENCODE_VERSION, "plugin_root": values["@@PLUGIN_ROOT@@"],
             "work_root": values["@@WORK_ROOT@@"], "issue_dbs": issue_dbs, "model": values["@@MODEL_ID@@"]}
+    if jira_read:
+        meta["jira_read_tools"] = list(jira_read)
     config = add_read_roots(render_config(template, values, issue_dbs), list(roots),
                             [values["@@PLUGIN_ROOT@@"], values["@@WORK_ROOT@@"], *issue_dbs])
+    config = add_jira_reads(config, list(jira_read))
     files = {dest / "opencode.json": json.dumps(config, ensure_ascii=False, indent=2) + "\n",
              dest / "tt-oc.json": json.dumps(meta, ensure_ascii=False, indent=2) + "\n"}
     for sub in INSTALL_DIRS:
@@ -294,7 +329,11 @@ def cmd_install(a) -> int:
         raise UsageError(f"--model 형식: 영문·숫자·._:/- : {a.model}")
     values = {"@@PLUGIN_ROOT@@": plugin, "@@WORK_ROOT@@": work, "@@PLUGIN_ROOT_REL@@": _rel(plugin),
               "@@WORK_ROOT_REL@@": _rel(work), "@@GATEWAY_BASE_URL@@": a.gateway_url, "@@MODEL_ID@@": a.model}
-    files = install_files(dest, values, dbs, read_roots(plugin))
+    jira_read = list(dict.fromkeys(a.jira_read_tool or []))
+    bad = jira_read_problems(jira_read)
+    if bad:
+        raise UsageError("; ".join(bad))
+    files = install_files(dest, values, dbs, read_roots(plugin), jira_read)
     differ = [str(p) for p, text in files.items() if p.exists() and p.read_text(encoding="utf-8") != text]
     if differ and not a.force:
         raise UsageError(f"이미 있는 파일과 다르다(--force로 덮어쓴다): {differ}")
@@ -318,6 +357,8 @@ def main(argv=None) -> int:
     p.add_argument("--issue-db", action="append")
     p.add_argument("--gateway-url", required=True)
     p.add_argument("--model", required=True)
+    p.add_argument("--jira-read-tool", action="append",
+                   help="Jira 읽기 도구의 OpenCode 이름(<서버>_<도구>)을 permission allow로 더한다(관문을 연 뒤 tt-oc에서 읽으려면)")
     p.add_argument("--force", action="store_true")
     try:
         a = ap.parse_args(argv)

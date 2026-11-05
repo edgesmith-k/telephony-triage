@@ -21,7 +21,11 @@
   set <key> <value>            값 하나 바꾸기 (경로 값은 존재 검증). module_skills.remote(https://<host>·ssh://<host>·<user>@<host>:o/r·
                                file:///절대 경로만, 자격 증명 거부)·module_skills.base_branch는 최상위 키(--platform 없이),
                                analyzers.<카테고리>.prefer(module|skill)·.skill_dir(절대 경로). 남은 모듈 스킬·분석 스킬
-                               설정 문제는 module_problems와 stderr 경고 한 줄
+                               설정 문제는 module_problems와 stderr 경고 한 줄.
+                               opencode.jira_read open|closed [--accept-error-bodies]: OpenCode Jira 읽기 관문(최상위 키).
+                               open은 같은 OpenCode 버전·플러그인 지문의 사내 확인 통과 기록(site_step.py runtime-check
+                               opencode --jira)이 있을 때만, 오류 경로 행이 warn이면 --accept-error-bodies도. OpenCode 안
+                               (TT_RUNTIME=opencode)에서는 거부(사용자가 터미널에서 연다)
   sync-scripts-path            plugin.scripts_path = ${CLAUDE_PLUGIN_ROOT}/scripts (setup 2, SessionStart hook)
   tracker-candidates [--mcp-config <json>...] [--opencode-config <json>...] [--tools-json <json>]
                                등록된 MCP 서버에서 tracker.tools·읽기 도구 후보 (setup 4). exclude_servers 적용.
@@ -47,7 +51,7 @@
                                환경 점검 한 장(python·deps·config·clone·hook·guard 자가시험·Jira 매핑(tracker)·Jira 코멘트
                                도구(tracker_post)·gh·스냅샷·호환성·lock, 모듈 스킬 설정이 있을 때만 module_skills,
                                OpenCode 안(TT_RUNTIME=opencode)에서만 opencode_env(설정을 덮는 환경 변수)·jira_gate(Jira
-                               읽기 관문 JIRA_READ_RELEASED, 닫힘이면 warn)). **읽기 전용**
+                               읽기 관문 열림·닫힘과 마지막 사내 확인 요약, 닫힘이면 warn)). **읽기 전용**
                                (mkdir·fetch·lock·쓰기 없음). 행마다 ok|warn|fail|skip. fail이 있으면 종료 코드 1
 """
 
@@ -316,10 +320,55 @@ def _parse_value(text: str):
         return text
 
 
+def _set_opencode(args, data: dict) -> dict:
+    """`set opencode.jira_read open|closed [--accept-error-bodies]` — OpenCode Jira 읽기 관문(`common/oc_jira_gate.py`). 사용자가
+    터미널에서만 연다: OpenCode 안(`TT_RUNTIME=opencode`)이면 거부, open은 같은 OpenCode 버전·플러그인 지문의 사내 확인 통과 기록이
+    있을 때만, 그 기록의 오류 경로 행이 warn이면 `--accept-error-bodies`도 있어야 한다. 최상위 키다(`--platform` 없이)."""
+    from common import oc_jira_gate as gate
+
+    command = gate.open_command(gate.PLUGIN_ROOT, getattr(args, "accept_error_bodies", False))
+    if os.environ.get("TT_RUNTIME") == "opencode":
+        raise UsageError(f"{args.key}: OpenCode 안에서는 바꾸지 않는다. 사용자가 터미널에서 직접 실행한다: {command}")
+    if args.key != gate.SETTING:
+        raise UsageError(f"{args.key}: 쓸 수 있는 OpenCode 키는 {gate.SETTING}(open|closed)뿐이다"
+                         f"({gate.ACCEPT_SETTING}는 --accept-error-bodies로만 쓴다).")
+    if getattr(args, "platform", None):
+        raise UsageError(f"{args.key}: 최상위 키다 — --platform 없이 set한다.")
+    value = str(args.value).strip()
+    if value not in gate.VALUES:
+        raise UsageError(f"{args.key}: open 또는 closed: {args.value!r}")
+    accept = bool(getattr(args, "accept_error_bodies", False))
+    if accept and value != gate.OPEN:
+        raise UsageError("--accept-error-bodies는 opencode.jira_read open과 함께만 쓴다.")
+    record, err = gate.load_record()
+    if value == gate.OPEN:
+        problems = [err] if err else gate.record_problems(record)
+        if problems:
+            raise UsageError(f"{args.key} open 거부: " + "; ".join(problems) + f". 먼저 사내 확인을 돌린다: {gate.CHECK_COMMAND}")
+        if gate.needs_accept(record) and not accept:
+            row = gate.error_row(record) or "없음"
+            why = ("Jira 오류 응답 본문이 모델에 갔다 — 식별자 종류·개수는 통과 기록" if row == "warn"
+                   else "오류 경로를 확인하지 않았다(--missing-key 없이 돌림)")
+            raise UsageError(f"{args.key} open 거부: 사내 확인의 오류 경로 행이 {row}다({why}). 받아들이면 다시 실행한다: "
+                             + gate.open_command(gate.PLUGIN_ROOT, True))
+    userconfig.set_value(data, gate.SETTING, value)
+    if accept:
+        userconfig.set_value(data, gate.ACCEPT_SETTING, True)
+    elif isinstance(data.get("opencode"), dict):
+        data["opencode"].pop(gate.ACCEPT_SETTING.split(".", 1)[1], None)
+    userconfig.save(data)
+    return {"config": str(userconfig.path()), "key": gate.SETTING, "value": value, "accepted_error_bodies": accept,
+            "check": gate.summary(record), "record": str(gate.record_path())}
+
+
 def cmd_set(args, defaults: dict) -> dict:
     data = userconfig.load_user()
     if data is None:
         raise UsageError("config가 없습니다. 먼저 setup(config.py init)을 한다.")
+    if args.key.split(".")[0] == "opencode":
+        return _set_opencode(args, data)
+    if getattr(args, "accept_error_bodies", False):
+        raise UsageError("--accept-error-bodies는 opencode.jira_read open과 함께만 쓴다.")
     value = _parse_value(args.value)
     kind = PATH_KINDS.get(args.key) or ("tz" if args.key.endswith(".timezone") else
                                         "year-source" if args.key == "logcat.year_source" else
@@ -1006,14 +1055,30 @@ def _opencode_env_row() -> dict:
 
 
 def _jira_gate_row() -> dict:
-    from common import oc_adapter
+    """OpenCode Jira 읽기 관문(`common/oc_jira_gate.py`): 열림·닫힘과 마지막 사내 확인 요약(내용 없음)."""
+    from common import oc_adapter, oc_jira_gate as gate
 
-    if oc_adapter.JIRA_READ_RELEASED:
-        return _row("jira_gate", "ok", "열림(JIRA_READ_RELEASED)")
-    if oc_adapter.jira_gate_open():
-        return _row("jira_gate", "warn", f"시험 열림({oc_adapter.JIRA_GATE_ENV}=open, 출시 전)")
-    return _row("jira_gate", "warn", "닫힘(JIRA_READ_RELEASED=False) — OpenCode에서 Jira MCP 읽기 거부",
-                "이슈 내용은 사용자가 붙여 넣거나 Claude Code에서 분석한다")
+    if os.environ.get(oc_adapter.JIRA_GATE_ENV) == "open":
+        return _row("jira_gate", "warn", f"시험 열림({oc_adapter.JIRA_GATE_ENV}=open — 테스트·사내 확인 전용)")
+    st = oc_adapter.jira_gate_files()      # 설정·통과 기록 파일로 본 상태(다음 OpenCode 시작에 적용)
+    last = gate.short_summary(st.record)
+    reopen = f"사용자가 터미널에서: {gate.CHECK_COMMAND} → {gate.open_command()}"
+    # 이 OpenCode 세션의 판정값(tt-guard.js가 시작할 때 정해 bash 환경에도 넘긴다). 파일과 다르면 그 차이를 먼저 보인다
+    session = os.environ.get(oc_adapter.JIRA_SESSION_ENV)
+    if session is not None and (session == "open") != st.open:
+        if st.open:
+            return _row("jira_gate", "warn", f"이 세션은 닫힘(설정·기록은 시작 뒤 열림으로 바뀜) — {last}",
+                        "OpenCode를 다시 시작하면 열린다(관문은 시작 때 한 번만 본다)")
+        return _row("jira_gate", "warn", f"이 세션은 열림(시작 때 판정), 다음 시작부터 닫힘 — {'; '.join(st.problems)}",
+                    f"{gate.summary(st.record)}. 지금 닫으려면 OpenCode를 다시 시작한다")
+    if st.open:
+        return _row("jira_gate", "ok", f"열림{'(오류 본문 받아들임)' if st.accepted else ''} — {last}",
+                    f"{gate.summary(st.record)}. 닫기: config.py set {gate.SETTING} closed")
+    if st.setting == gate.OPEN:
+        return _row("jira_gate", "warn", f"닫힘 — {'; '.join(st.problems)}",
+                    f"{gate.summary(st.record)}. 사내 확인을 다시 돌린 뒤 {reopen}")
+    return _row("jira_gate", "warn", f"닫힘({gate.SETTING}: {st.setting}) — Jira MCP 읽기 거부 — {last}",
+                f"이슈 내용은 붙여 넣거나 Claude Code에서 분석한다. 열려면 {reopen}")
 
 
 MODULE_SOURCE_LABEL = {"module": "모듈 문서", "skill": "설치 스킬", "none": "없음", "error": "오류"}
@@ -1152,6 +1217,8 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("set", parents=[common])
     p.add_argument("key")
     p.add_argument("value")
+    p.add_argument("--accept-error-bodies", action="store_true",
+                   help="opencode.jira_read open: 사내 확인의 오류 경로 행이 pass가 아니어도(warn 본문이 모델에 감·skip 확인 안 함) 받아들인다")
     sub.add_parser("sync-scripts-path", parents=[common])
     p = sub.add_parser("tracker-candidates", parents=[common])
     p.add_argument("--mcp-config", action="append")

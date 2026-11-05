@@ -6,7 +6,7 @@
   계획 I 실험에서 찾은 시제품 결함(x1 workdir, x5 apply_patch → `mcp__apply__patch`, `corp_jira_*` 서버 오분할)을 표로 막는다.
 - guard 다리: 바뀌지 않은 guard.py를 하위 프로세스로 돌린 결정(설정된 이슈 DB clone 작업공간), `ask` → 거부 + 정확한 명령,
   guard 비정상(시그널·종료 코드·시간 초과·JSON 아님·모르는 결정) → 거부.
-- v1 분석 전용: db_pr publish·merge, skill_patch apply, issue_post approve, 리뷰어 요청, module_eval 거부. Jira 출시 관문·코멘트
+- v1 분석 전용: db_pr publish·merge, skill_patch apply, issue_post approve, 리뷰어 요청, module_eval 거부. Jira 읽기 관문·코멘트
   늘 거부, 설정을 덮는 환경변수 → 모두 거부.
 - jira_bridge 다리(after): 마스킹 요약으로 대체, 원문은 파일로만, 비Jira MCP는 그대로, 실패는 오류 문구.
 """
@@ -379,14 +379,14 @@ def _jira_payload(tool: str, args: dict, directory: Path) -> dict:
 
 
 def test_jira_gate_closed_denies_reads():
-    assert oc.JIRA_READ_RELEASED is False
+    assert not hasattr(oc, "JIRA_READ_RELEASED")          # 코드 상수 관문은 없다 — 사용자 설정 + 통과 기록(oc_jira_gate)
     d = _dir()
     out = cli("before", _jira_payload("mock-jira_jira_fetch_ticket", {"ticket": "MOCK-1001"}, d))
-    assert out["decision"] == "deny" and "출시 관문" in out["reason"]
+    assert out["decision"] == "deny" and "관문이 닫혀" in out["reason"] and "config.py set opencode.jira_read open" in out["reason"]
     # 서버 이름에 jira가 든 설정 밖 서버도 같다
     (d / "opencode.json").write_text(json.dumps({"mcp": {"corp-jira": {}}}), encoding="utf-8")
     out = cli("before", {"tool": "corp-jira_get_issue", "args": {}, "directory": str(d)})
-    assert out["decision"] == "deny" and "출시 관문" in out["reason"]
+    assert out["decision"] == "deny" and "관문이 닫혀" in out["reason"]
 
 
 def test_jira_gate_open_reads_follow_guard_and_comment_always_denied():

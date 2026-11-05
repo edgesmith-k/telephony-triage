@@ -160,6 +160,41 @@ MCP 쓰기(add_comment 승인 유무)·Write/Edit 규칙 8은 이번에 돌리�
 - **R40**(v1 수용) OpenCode에서 설치 스킬은 `skill-input.json`이 가리키는 `timeline`만 읽는다(에이전트의 `events.json` 금지).
   근거 원문 검사는 `events.json` 기준 그대로(B2 §6.1). MS-2에서 없어진다.
 
+### 5.5 OpenCode Jira 읽기 관문(11/05 사용자 "사내 확인 뒤 설정으로 열기")
+
+- 코드 상수(`JIRA_READ_RELEASED`)는 없앴다. 관문(`plugin/scripts/common/oc_jira_gate.py`)은 사용자 config `opencode.jira_read: open`
+  + 통과 기록(`~/.telephony-triage/opencode-jira-check.json`: 성공 경로 통과·같은 OpenCode 버전·같은 플러그인 스크립트 지문)이
+  모두 맞을 때만 열린다. 기록의 오류 경로 행이 pass가 아니면(warn·skip) `--accept-error-bodies`도 있어야 한다. 테스트·사내 확인
+  실행만 `TT_OC_JIRA_GATE=open`. 코멘트 쓰기(`tracker.write_tools.add_comment`)는 v1에서 늘 거부.
+- 사내 확인: `python3 tools/site_step.py runtime-check opencode --project <설치 폴더> --jira <있는 키> --missing-key <없는 키>`
+  (`tools/oc_jira_check.py`, 모델 토큰 0). 설치 폴더를 임시로 복사해 모델만 127.0.0.1 가짜 서버로 바꾸고(읽기 도구는 그 임시
+  설정에서만 allow, MCP 항목은 설정 파일 글자 그대로 — `{env:…}`를 풀지 않는다) 실제 opencode·tt-guard.js·실제 Jira MCP로
+  get_issue·get_comments(있는 키)·get_issue(없는 키)를 부른다. 가짜 모델이 **받은** 도구 결과로 판정: jira_bridge 격리 문구 +
+  원문 파일이 이번 실행에 `<work_dir>/<KEY>/issue_raw.json`에 쓰임, `masking.residual == {}`, 오류 본문이 갔는지(종류·개수만).
+  끝나면 세션 삭제·확인용 원문 파일 정리(전에 있던 파일은 복원). 종료 0은 성공 경로 통과일 때만. 통과 기록을 쓰고 여는 명령만 보인다.
+- 열기: 사용자가 터미널에서 `python3 <plugin>/scripts/config.py set opencode.jira_read open [--accept-error-bodies]`. 기록이 없거나
+  어긋나면 거부(runtime-check 명령 안내). **관문은 OpenCode가 시작할 때 한 번만 정한다**: tt-guard.js가 플러그인을 실을 때
+  `oc_adapter.py gate`로 설정·기록을 판정하고, 그 값(`TT_OC_JIRA_SESSION_GATE`)을 이후 모든 adapter 호출의 프로세스 환경으로
+  넘긴다. 세션 중에 쓰인 설정·기록은 그 세션에 적용되지 않는다(다음 시작부터, doctor `jira_gate` 행이 차이를 보인다). 시작
+  판정 없이 불린 adapter는 닫힘. OpenCode 안의 모델이 파일을 쓰는 길도 막는다: 어댑터가 bash `config.py set opencode.*`를
+  "직접 실행" 거부(v1 쓰기 흐름), `edit`·`write`·`apply_patch`와 **플러그인 스크립트 인자**(`--out X`·`--out=X`·`-oX`, 작업
+  폴더·`cd` 후보 기준 상대 경로, 심볼릭 링크 뒤 `..`)가 사용자 `config.yaml`·통과 기록·`opencode.json`·`.opencode/`·플러그인
+  루트(`hooks/hooks.json`)·`AGENTS.md` 등 보호 경로를 가리키면 거부(11/05 리뷰 P0: `mask_pii --out`으로 위조 기록·설정을 써서
+  열 수 있었다 — `tests/opencode/test_oc_jira.py`가 배포 템플릿 권한 그대로 회귀 확인), `config.py`도 `TT_RUNTIME=opencode`면
+  거부한다. tt-oc에서 실제로 읽으려면 설치 설정이
+  읽기 도구를 허용해야 한다: `gen_opencode.py install … --jira-read-tool <서버>_<도구> --force`(permission 끝 allow — 템플릿의
+  `"*"`·`jira_*` deny 뒤). 관리 설정(`/etc/opencode`)의 `jira_*` deny는 관리자 몫(확인의 tools-offered 행이 fail로 보인다).
+- **MCP 오류 경로(1.19.5 실험, 11/05)**: 오류로 끝난 MCP 호출(MCP `isError`·JSON-RPC 오류·시간 초과)은 `tool.execute.after`가
+  돌지 않는다 — 바이너리의 MCP 실행 경로는 `isError`면 `throw Error(<텍스트 블록>)`이라 그 오류 글(응답 본문)이 tool part
+  `state.error`가 되어 다음 모델 요청에 그대로 간다(after 기록 0건으로 확인). 대신 `experimental.chat.messages.transform`이
+  모델 요청 직전마다(대화 루프와 압축 요청 둘 다 — 바이너리에서 `trigger("experimental.chat.messages.transform",{},{messages})`
+  2곳) 보낼 메시지 배열로 불리고, 거기서 `state.error`를 바꾸면 모델이 받는 글이 바뀐다(실험: 가짜 서버가 받은 tool 메시지가
+  바꾼 글, 저장된 세션·이벤트는 원문 그대로). 그래서 tt-guard.js가 이 hook에서 내장 도구가 아닌 오류 part를 `oc_adapter.py error`에
+  넘기고, Jira 도구면 "Jira 오류(본문 숨김): <도구> <분류>"(분류는 고정 낱말 4xx·5xx·not-found·timeout·auth·permission-denied·
+  error)로 바꾼다. 판정 실패·시간 초과는 숨김(닫힘). before가 거부한 호출의 우리 문구는 식별자만 가린다. e2e:
+  `tests/opencode/test_oc_jira.py`(isError 404·JSON-RPC 500 모두 숨김, 이벤트에는 원문). 사용자 터미널 출력과 opencode.db에는
+  원문이 남는다(tt-oc `--delete-session`).
+
 ## 6. 남은 일
 
 **사내 확인**(환경마다 짧은 스크립트 실행 1회, `MODULE_SKILLS_DECISIONS.md` "사내 토큰 최소"):
@@ -167,6 +202,8 @@ MCP 쓰기(add_comment 승인 유무)·Write/Edit 규칙 8은 이번에 돌리�
 2. 호환 — `thinking`·`output_config.effort`·대화 중 `system`·베타 헤더 수용, 오류 본문 전달, 자격 변수(AUTH_TOKEN/API_KEY).
 3. `usage` 토큰이 오는지(비용이 미상이라 토큰이 유일한 수치).
 5. 가장 큰 화면·must_show를 16K 출력 안에서 그대로 옮기는지.
+6. OpenCode Jira 읽기 — `site_step.py runtime-check opencode --project <설치 폴더> --jira <있는 키> --missing-key <없는 키>`
+   (§5.5, 모델 토큰 0). 통과하면 사용자가 `config.py set opencode.jira_read open`으로 연다.
 - `--bare` 인증(§3) — 되면 module_eval에서 켠다.
 
 **B1+B2 뒤 통합 — 했다(11/05)**:
@@ -177,6 +214,7 @@ MCP 쓰기(add_comment 승인 유무)·Write/Edit 규칙 8은 이번에 돌리�
   F에서 unset 거짓 실패를 고쳤다: `CLAUDE_CODE_EFFORT_LEVEL`이 없으면 missing이던 것을 ok로(권장 값 unset).
 - O8 `config.py tracker-candidates`가 `--opencode-config`(또는 `TT_RUNTIME=opencode`면 작업 폴더 설정)의 `mcp`(enabled·command)를
   읽고 `<server>_<tool>` 이름을 안다(`mcptools.opencode_candidates` — `oc_adapter`와 같은 규칙). `job_status.py`는 OpenCode 안에서만
-  런타임·모델·OpenCode 버전, `config.py doctor`는 OpenCode 안에서만 `opencode_env`·`jira_gate` 행(기본 13행 그대로).
+  런타임·모델·OpenCode 버전, `config.py doctor`는 OpenCode 안에서만 `opencode_env`·`jira_gate` 행(기본 13행 그대로, `jira_gate`는
+  열림·닫힘과 마지막 사내 확인 요약 — §5.5).
 - `tools/related_tests.py`: `common/claude_child.py` → 스크립트 규칙 + `CHILD_HELPER_TESTS`(test_claude_child 포함), `opencode/**`·
   `tests/opencode/**` → OpenCode 테스트 셋.

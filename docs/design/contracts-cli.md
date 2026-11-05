@@ -15,7 +15,7 @@
 | `show` | `[--keys <a,b.c>]` | `--keys`: 쉼표로 구분한 키(점 표기)만 보인다 (예: work_dir,tracker.tools) |
 | `site-defaults` |  |  |
 | `init` | `[--answers <ANSWERS>] [--force]` |  |
-| `set` | `<key> <value>` |  |
+| `set` | `<key> <value> [--accept-error-bodies]` | `--accept-error-bodies`: opencode.jira_read open: 사내 확인의 오류 경로 행이 pass가 아니어도(warn 본문이 모델에 감·skip 확인 안 함) 받아들인다 |
 | `sync-scripts-path` |  |  |
 | `tracker-candidates` | `[--mcp-config <MCP_CONFIG>]... [--opencode-config <OPENCODE_CONFIG>]... [--tools-json <TOOLS_JSON>]` | `--opencode-config`: OpenCode 설정(opencode.json·jsonc)의 mcp도 읽는다. OpenCode 안(TT_RUNTIME=opencode)에서는 없어도 작업 폴더에서 OpenCode가 합치는 설정을 읽는다 |
 | `set-tracker` | `--server <SERVER> --get-issue <GET_ISSUE> [--search-issues <SEARCH_ISSUES>] [--get-comments <GET_COMMENTS>] [--read-tools <READ_TOOLS>]` |  |

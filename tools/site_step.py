@@ -16,6 +16,8 @@
     python3 tools/site_step.py audit --record [--defer ID[,ID]]     # 정기 점검: 토큰 0 검사 → Claude가 볼 것(상한 안) → 기준점 기록
     python3 tools/site_step.py runtime-check claude-gateway         # Claude Code + 사내 모델 프로필 표(모델 호출 없음)
     python3 tools/site_step.py runtime-check opencode [--project D] # OpenCode 1.19.5·설정·관리 설정 점검 + 사내 확인 0 curl 명령
+    python3 tools/site_step.py runtime-check opencode --project D --jira KEY [--missing-key KEY]
+                                                        # OpenCode Jira 읽기 사내 확인(모델 토큰 0, tools/oc_jira_check.py)
 
 - 순서는 S-1 → S-2 → S-3 → S-4a → S-4 → S-5 → S-6 → S-7(`STEPS`). S-0(선택)은 반입 전 일이라 넣지 않는다.
 - oFono 트랙은 Android 단계와 따로 O-1 → O-2 → O-3 → O-4(`OFONO_STEPS`)다. "oFono 설정 시작"이면 `ofono`: S-3 완료 기록 뒤에만
@@ -957,12 +959,28 @@ def runtime_opencode(project: str | None, opencode: str, managed_dir: Path, env:
     return "\n\n".join([_runtime_table(title, rows), result, check0_text()]), code
 
 
-def runtime_check(target: str | None, project: str | None, managed_dir: Path) -> tuple[str, int]:
+def runtime_opencode_jira(project: str | None, opencode: str, key: str, missing: str | None, env: dict) -> tuple[str, int]:
+    """OpenCode Jira 읽기 사내 확인(`tools/oc_jira_check.py`): 가짜 모델 서버로 실제 opencode·실제 Jira MCP를 거쳐 있는 티켓·없는
+    티켓을 읽고 모델이 받은 글을 본다. 통과 기록을 쓰고 관문을 여는 명령을 보인다(열지는 않는다)."""
+    _scripts_on_path()
+    import oc_jira_check
+
+    return oc_jira_check.check(_load_tt_oc(), project, opencode, key, missing, env)
+
+
+def runtime_check(target: str | None, project: str | None, managed_dir: Path, jira: str | None = None,
+                  missing_key: str | None = None) -> tuple[str, int]:
     if target not in RUNTIMES:
         raise Usage(f"runtime-check 대상은 {' | '.join(RUNTIMES)}: {target or '(없음)'}")
+    if (jira or missing_key) and target != "opencode":
+        raise Usage("--jira·--missing-key는 runtime-check opencode에서만 쓴다")
+    if missing_key and not jira:
+        raise Usage("--missing-key는 --jira와 함께 쓴다")
     env = dict(os.environ)
     if target == "claude-gateway":
         return runtime_claude_gateway(env)
+    if jira:
+        return runtime_opencode_jira(project, env.get("TT_OPENCODE") or "opencode", jira, missing_key, env)
     return runtime_opencode(project, env.get("TT_OPENCODE") or "opencode", managed_dir, env)
 
 
@@ -977,6 +995,8 @@ def main(argv: list[str] | None = None) -> int:
                     help="check·propose 대상 단계(기본: 현재 단계). runtime-check면 claude-gateway|opencode, "
                          "modules면 check|coverage")
     ap.add_argument("--project", help="runtime-check opencode: gen_opencode.py install --dest 폴더(기본: TT_OC_PROJECT)")
+    ap.add_argument("--jira", metavar="KEY", help="runtime-check opencode: Jira 읽기 사내 확인 — 있는 티켓 키(모델 토큰 0)")
+    ap.add_argument("--missing-key", metavar="KEY", help="runtime-check opencode --jira: 오류 경로용 없는 티켓 키")
     ap.add_argument("--done", metavar="S-n|O-n|MS-n", help="사용자 확인을 받은 현재 단계: 점검 재실행 → 통과면 완료 기록·다음 단계")
     ap.add_argument("--waive", action="append", default=[], metavar='점검="사유"',
                     help="--done에서 사용자가 확인한 건너뜀·사용자 필요 점검(사유는 SITE_PROFILE.md에 남는다)")
@@ -1025,6 +1045,8 @@ def main(argv: list[str] | None = None) -> int:
             ap.error("--cap-tokens는 0보다 크다")
     if (args.out or args.min_lines is not None) and not (args.cmd == "modules" and args.step == "coverage"):
         ap.error("--out·--min-lines는 modules coverage에서만 쓴다")
+    if (args.jira or args.missing_key) and args.cmd != "runtime-check":
+        ap.error("--jira·--missing-key는 runtime-check opencode에서만 쓴다")
     root = Path(args.root)
     code = 0
     try:
@@ -1049,7 +1071,8 @@ def main(argv: list[str] | None = None) -> int:
         elif args.cmd == "runtime-check":
             import gen_opencode
             out, code = runtime_check(args.step, args.project,
-                                      Path(args.managed_dir) if args.managed_dir else gen_opencode.MANAGED_DIR)
+                                      Path(args.managed_dir) if args.managed_dir else gen_opencode.MANAGED_DIR,
+                                      args.jira, args.missing_key)
         else:
             out, code = start(root, args.allow_api)
         print(out)

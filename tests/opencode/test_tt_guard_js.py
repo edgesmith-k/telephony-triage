@@ -26,6 +26,14 @@ STUB = r'''
 import json, os, signal, sys, time
 mode, stub = sys.argv[1], os.environ.get("STUB", "allow")
 data = sys.stdin.read()
+if mode == "gate":       # 플러그인을 실을 때 한 번(Jira 읽기 관문): STUB_GATE=open|kill|… (기본 닫힘), 호출 기록에는 안 남긴다
+    gate = os.environ.get("STUB_GATE", "closed")
+    if gate == "kill":
+        os.kill(os.getpid(), signal.SIGKILL)
+    print(json.dumps({"open": gate == "open", "problems": []}) if gate != "garbage" else "not json")
+    sys.exit(0)
+with open(os.environ["STUB_LOG"] + ".gate", "a", encoding="utf-8") as fh:   # adapter가 받은 관문 판정값
+    fh.write(os.environ.get("TT_OC_JIRA_SESSION_GATE", "<none>") + "\n")
 with open(os.environ["STUB_LOG"], "a", encoding="utf-8") as fh:
     fh.write(json.dumps({"mode": mode, "payload": json.loads(data)}) + "\n")
 if stub == "kill":
@@ -96,7 +104,7 @@ def _root(base: Path) -> Path:
 
 
 def harness(cases: list[dict], root: Path | None = None, base: Path | None = None, plugin: Path = PLUGIN,
-            root_env: bool = True) -> tuple[list[dict], list[dict]]:
+            root_env: bool = True, extra_env: dict | None = None) -> tuple[list[dict], list[dict]]:
     base = base or Path(tempfile.mkdtemp(prefix="tt-ocjs-"))
     try:
         root = root or _root(base)
@@ -107,12 +115,15 @@ def harness(cases: list[dict], root: Path | None = None, base: Path | None = Non
                "TT_PYTHON": sys.executable, "STUB_LOG": str(log), "TT_OC_GUARD_LOG": str(base / "guard.log")}
         if root_env:
             env["TT_PLUGIN_ROOT"] = str(root)
+        env.update(extra_env or {})
         proc = subprocess.run([NODE, str(script), str(plugin), json.dumps(cases)], capture_output=True, text=True,
                               env=env, timeout=120, check=False)
         assert proc.returncode == 0, proc.stderr
         calls = [json.loads(ln) for ln in log.read_text(encoding="utf-8").splitlines()] if log.is_file() else []
         guard_log = (base / "guard.log").read_text(encoding="utf-8") if (base / "guard.log").is_file() else ""
-        return json.loads(proc.stdout), calls + [{"guard_log": guard_log}]
+        gates = Path(str(log) + ".gate")
+        seen = gates.read_text(encoding="utf-8").split() if gates.is_file() else []
+        return json.loads(proc.stdout), calls + [{"guard_log": guard_log, "gate_env": seen}]
     finally:
         shutil.rmtree(base, ignore_errors=True)
 
@@ -159,7 +170,8 @@ def test_after_timeout_and_builtin_skip():
     (got,), _ = harness([{"stub": "sleep", "timeout": 800, "tool": "x_y", "hook": "after"}])
     assert "jira_bridge 처리 실패" in got["content"][0]["text"]
     (got,), calls = harness([{"stub": "garbage", "tool": "bash", "hook": "after"}])
-    assert got["content"][0]["text"].startswith("RAW") and calls == [{"guard_log": ""}]   # 내장 도구는 부르지 않는다
+    assert got["content"][0]["text"].startswith("RAW") and len(calls) == 1 and calls[0]["gate_env"] == []  # 내장 도구는 부르지 않는다
+    assert '"hook":"after"' not in calls[0]["guard_log"]
 
 
 def test_after_uses_args_seen_before():
@@ -206,3 +218,16 @@ def test_plugin_uses_node_imports_only():
     imports = [ln for ln in text.splitlines() if ln.startswith("import ")]
     assert imports and all('from "node:' in ln for ln in imports), imports
     assert not (REPO / "opencode" / "package.json").exists() and not (REPO / "opencode" / "plugins" / "package.json").exists()
+
+
+@pytest.mark.parametrize("gate,want", [("open", "open"), ("closed", "closed"), ("kill", "closed"), ("garbage", "closed")])
+def test_jira_gate_decided_once_at_load_and_passed_to_every_adapter_call(gate, want):
+    """리뷰 P0: 관문은 플러그인을 실을 때 한 번 정하고(`gate`), 이후 adapter 호출 환경에 넣는다. 실패는 닫힘. 바깥 환경의 같은
+    이름 변수는 덮인다(모델·사용자 env로 세션 판정을 바꾸지 못한다)."""
+    got, calls = harness([{"stub": "allow", "tool": "bash"}, {"stub": "allow", "tool": "bash", "same": True},
+                          {"hook": "env", "same": True}],
+                         extra_env={"STUB_GATE": gate, "TT_OC_JIRA_SESSION_GATE": "open" if want == "closed" else "x"})
+    assert [g["result"] for g in got] == ["ALLOWED", "ALLOWED", "ENV"]
+    assert calls[-1]["gate_env"] == [want, want]
+    assert got[2]["env"]["TT_OC_JIRA_SESSION_GATE"] == want
+    assert f'"jira":"{want}"' in calls[-1]["guard_log"]

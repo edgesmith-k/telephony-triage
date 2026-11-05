@@ -6,8 +6,8 @@
 - 상대 경로 write·apply_patch(gpt 모델 ID일 때 OpenCode가 주는 도구)로 clone 편집 → 거부, 파일 그대로
 - 로그 원문 통독(규칙 10) 거부, 평범한 bash는 실행
 - 설정을 덮는 환경변수(`OPENCODE_PERMISSION`) → 모든 도구 거부, task → 거부
-- Jira: 출시 관문 닫힘 → 읽기 거부 / 관문 열림(`TT_OC_JIRA_GATE=open`) → 마스킹 요약만 모델에, 원문은 work_dir 파일에만,
-  get_comments 합치기, MCP 오류 경로, 코멘트 도구 늘 거부, snapshot 폴더 없음
+- Jira: 관문 닫힘 → 읽기 거부 / 관문 열림(`TT_OC_JIRA_GATE=open`) → 마스킹 요약만 모델에, 원문은 work_dir 파일에만,
+  get_comments 합치기, MCP 오류 경로(본문 숨김 — test_oc_jira.py에 더 있다), 코멘트 도구 늘 거부, snapshot 폴더 없음
 - 가짜 GLM 변형(조각난 인자·한 턴 두 호출·reasoning_content·JSON 아닌 인자·stop+tool_calls·글로 쓴 호출·빈 마지막 글):
   OpenCode 동작을 기록하고, 실행된 bash는 모두 guard를 거쳤는지 본다
 """
@@ -188,7 +188,7 @@ def test_jira_gate_closed_denies_reads():
     r = run("jgate", [{"tool": "mock-jira_jira_fetch_ticket", "args": {"ticket": "MOCK-1001"}}, {"text": "FINAL"}],
             proj=proj, mcp=mcp, extra_env=env)
     assert "mock-jira_jira_fetch_ticket" in r.requests[-1]["tools"]
-    assert "출시 관문" in errors(r)[0]
+    assert "관문이 닫혀" in errors(r)[0]
     assert IMSI not in r.all_text() and "데이터 끊김" not in r.all_text()
 
 
@@ -208,7 +208,10 @@ def test_jira_masked_read_comments_merge_error_and_comment_denied():
     fetch, comments, missing, note = states
     assert fetch["status"] == "completed" and "데이터 끊김 e2e" in fetch["output"], fetch
     assert comments["status"] == "completed"
-    assert missing["status"] in ("completed", "error")       # MCP isError: 기록만(원문 표식이 없는지는 아래에서 본다)
+    assert missing["status"] == "error"                      # MCP isError: 1.19.5는 after hook을 돌리지 않는다
+    seen = [t for q in r.requests for t in q["tool_results"]]
+    assert any(t == "Jira 오류(본문 숨김): mock-jira_jira_fetch_ticket not-found" for t in seen), seen   # transform hook
+    assert not any("MOCK-9999" in t for t in seen)
     assert note["status"] == "error" and "코멘트 게시는 OpenCode v1" in note["error"]
     # 모델이 받은 것(가짜 서버 요청의 tool 메시지)과 이벤트 어디에도 원문 IMSI가 없다
     assert IMSI not in r.all_text()

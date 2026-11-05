@@ -98,6 +98,13 @@ def test_runtime_check_usage_errors(tmp_path):
     r = subprocess.run([sys.executable, str(SITE_STEP), "check", "--project", "/x"], capture_output=True, text=True,
                        env=env, stdin=subprocess.DEVNULL, check=False)
     assert r.returncode == 2 and "--project는 runtime-check에서만" in r.stderr
+    # --jira(OpenCode Jira 읽기 사내 확인)는 runtime-check opencode에서만, --missing-key는 --jira와 함께
+    assert run(env, "claude-gateway", "--jira", "ABC-1").returncode == 2
+    r = run(env, "opencode", "--missing-key", "ABC-9")
+    assert r.returncode == 2 and "--jira와 함께" in r.stderr
+    r = subprocess.run([sys.executable, str(SITE_STEP), "check", "--jira", "ABC-1"], capture_output=True, text=True,
+                       env=env, stdin=subprocess.DEVNULL, check=False)
+    assert r.returncode == 2 and "--jira" in r.stderr
 
 
 # -- opencode ----------------------------------------------------------------------------------------------------------
@@ -165,6 +172,20 @@ def test_opencode_all_ok_with_project_and_managed(oc):
     assert_check0_printed_only(r.stdout)
     # TT_OC_PROJECT도 받는다(tt-oc와 같다)
     assert oc_run(oc, env={"TT_OC_PROJECT": str(oc["proj"])}).returncode == 0
+
+
+def test_opencode_jira_check_without_opencode_or_bad_key_fails_without_record(oc):
+    """`--jira`: opencode가 없거나 키 형식이 틀리면 실행하지 않고 실패 행(종료 1) — 통과 기록을 쓰지 않는다(모델 호출 없음)."""
+    home = oc["tmp"] / "tt-home"
+    env = {"TELEPHONY_TRIAGE_HOME": str(home)}
+    r = oc_run(oc, "--project", str(oc["proj"]), "--jira", "ABC-1", env={**env, "PATH": "/nonexistent-bin"})
+    assert r.returncode == 1 and rows_of(r.stdout)["opencode-version"][0] == "fail", r.stdout + r.stderr
+    r = oc_run(oc, "--project", str(oc["proj"]), "--jira", "../x", env=env)
+    assert r.returncode == 1 and rows_of(r.stdout)["args"][0] == "fail"
+    r = oc_run(oc, "--project", str(oc["proj"]), "--jira", "ABC-1", env={**env, "STUB_VERSION": "1.20.0"})
+    assert r.returncode == 1 and rows_of(r.stdout)["opencode-version"][0] == "fail"
+    assert not (home / "opencode-jira-check.json").exists()
+    assert ["run"] not in [c[:1] for c in stub_calls(oc)]
 
 
 def test_opencode_version_installed_config_and_managed_failures(oc):

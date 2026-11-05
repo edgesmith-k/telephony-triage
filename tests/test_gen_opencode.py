@@ -242,6 +242,24 @@ def test_install_adds_read_roots_outside(roots):
     assert not any(str(skill).lstrip("/") in k for k in cfg["permission"]["edit"])
 
 
+def test_install_jira_read_tools_allowed_last(roots):
+    """Jira 읽기 관문을 연 뒤 tt-oc에서 읽으려면 설치 설정이 그 읽기 도구를 허용해야 한다: `--jira-read-tool`은 permission 끝에
+    allow(`"*"`·`jira_*` deny 뒤 — 마지막 규칙이 이긴다), 쓰기로 보이는 이름·형식이 틀린 이름은 거부."""
+    r = _install(roots, "--jira-read-tool", "jira_get_issue", "--jira-read-tool", "jira_get_comments")
+    assert r.returncode == 0, r.stderr
+    cfg = json.loads((roots / "proj" / "opencode.json").read_text(encoding="utf-8"))
+    keys = list(cfg["permission"])
+    assert keys[-2:] == ["jira_get_issue", "jira_get_comments"] and keys.index("jira_*") < keys.index("jira_get_issue")
+    assert cfg["permission"]["jira_get_issue"] == "allow" and cfg["permission"]["*"] == "deny"
+    meta = json.loads((roots / "proj" / "tt-oc.json").read_text(encoding="utf-8"))
+    assert meta["jira_read_tools"] == ["jira_get_issue", "jira_get_comments"]
+    for bad in ("jira_add_comment", "jira_ticket_add_note", "jira get", "jira_*", "getissue"):
+        r = _install(roots, "--jira-read-tool", bad, "--force", dest="proj2")
+        assert r.returncode == 2 and "--jira-read-tool" in r.stderr, (bad, r.stderr)
+    assert _install(roots, dest="proj3").returncode == 0                     # 없으면 템플릿 그대로
+    assert "jira_get_issue" not in (roots / "proj3" / "opencode.json").read_text(encoding="utf-8")
+
+
 def test_install_refusals(roots):
     assert _install(roots).returncode == 0
     r = _install(roots, "--issue-db", str(roots / "dbA"))           # 이미 있는 파일과 다름

@@ -658,7 +658,7 @@ def test_doctor_all_ok_markdown_fits_budget_and_changes_nothing():
 
 
 def test_doctor_opencode_rows_only_under_opencode():
-    """계획 I O8: OpenCode 안(TT_RUNTIME=opencode)에서만 opencode_env(oc_adapter env-check)·jira_gate(JIRA_READ_RELEASED) 두
+    """계획 I O8: OpenCode 안(TT_RUNTIME=opencode)에서만 opencode_env(oc_adapter env-check)·jira_gate(Jira 읽기 관문) 두
     행을 끝에 더한다. 기본(Claude Code)은 13행 그대로(markdown 바이트도 같다)."""
     env, _ = _ready_env()
     plain_md = env.run("config.py", ["doctor", "--format", "markdown"]).stdout
@@ -666,7 +666,8 @@ def test_doctor_opencode_rows_only_under_opencode():
     assert [r["check"] for r in result["rows"]] == DOCTOR_ROWS + ["opencode_env", "jira_gate"]
     rows = _rows(result)
     assert rows["opencode_env"] == {"check": "opencode_env", "status": "ok", "detail": "설정을 덮는 환경 변수 없음"}
-    assert rows["jira_gate"]["status"] == "warn" and rows["jira_gate"]["detail"].startswith("닫힘(JIRA_READ_RELEASED=False)")
+    assert rows["jira_gate"]["status"] == "warn" and rows["jira_gate"]["detail"].startswith("닫힘(opencode.jira_read: closed)")
+    assert "확인 기록 없음" in rows["jira_gate"]["detail"] and "runtime-check opencode" in rows["jira_gate"]["next"]
     assert result["counts"] == {"ok": 14, "warn": 1, "fail": 0, "skip": 0}
     bad = env.json("config.py", ["doctor"], expect=1, env={"TT_RUNTIME": "opencode", "OPENCODE_PERMISSION": "{}",
                                                           "TT_OC_JIRA_GATE": "open"})

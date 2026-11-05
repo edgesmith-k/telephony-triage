@@ -3,6 +3,11 @@
 // Every tool call goes through `plugin/scripts/common/oc_adapter.py before`, which maps the OpenCode call to the
 // Claude Code PreToolUse hook JSON and runs the unchanged guard.py (as hooks.json does). MCP results go through
 // `oc_adapter.py after`, which runs the unchanged jira_bridge.py (PostToolUse) and replaces the content.
+// 1.19.5 runs no `tool.execute.after` for an MCP call that ends in an error (MCP isError, JSON-RPC error, timeout): the
+// error text (= the response body) would reach the model as is. `experimental.chat.messages.transform` runs before every
+// model request (compaction included) on the messages about to be sent; there every error tool part of a non-built-in tool
+// goes through `oc_adapter.py error`, which hides a Jira error body ("Jira 오류(본문 숨김): <tool> <class>"). Only the
+// request is changed — the stored session keeps the original (the terminal output shows it to the user).
 //
 // Fail-closed: a spawn error, a signal, a timeout, a non-zero exit, or output that is not a decision blocks the call
 // (before) or replaces the result with an error string (after). guard stderr goes to a log; the first warning in a
@@ -12,6 +17,7 @@
 //      else <this file>/../../plugin for the repo or bundle layout), TT_PYTHON (default python3),
 //      TT_OC_GUARD_LOG (default $XDG_STATE_HOME/telephony-triage/oc-guard.log),
 //      TT_OC_TEST_TIMEOUT_MS (tests only: can only shorten the timeouts).
+//      TT_OC_JIRA_SESSION_GATE is set by this file (the Jira read gate decided at load), never read from the env.
 import { spawn } from "node:child_process"
 import { appendFileSync, existsSync, mkdirSync } from "node:fs"
 import { homedir } from "node:os"
@@ -37,6 +43,7 @@ const BUILTINS = new Set(["invalid", "question", "read", "glob", "grep", "skill"
   "list_mcp_resource_templates", "read_mcp_resource"])
 const BRIDGE_FAILED = "telephony-triage: OpenCode jira_bridge 처리 실패 — 원문은 표시하지 않는다. " +
   "Claude Code에서 다시 읽거나 config.py doctor로 확인한다."
+const ERROR_HIDDEN = "Jira 오류(본문 숨김)"   // = oc_adapter.JIRA_ERROR_HIDDEN
 
 function timeoutFor(kind) {
   const ms = TIMEOUT_MS[kind] ?? TIMEOUT_MS.default
@@ -53,12 +60,22 @@ function log(entry) {
   }
 }
 
+// Jira read gate (oc_adapter `gate`): decided once when the plugin loads, from the user config and the in-house check
+// record, then passed to every adapter call as JIRA_SESSION_ENV. A config or record written during the session (by
+// anyone, the model included) does not apply until OpenCode starts again. Unknown or failed → "closed".
+const JIRA_SESSION_ENV = "TT_OC_JIRA_SESSION_GATE"   // = oc_adapter.JIRA_SESSION_ENV
+let jiraSessionGate = "closed"
+
+function adapterEnv() {
+  return { ...process.env, [JIRA_SESSION_ENV]: jiraSessionGate }
+}
+
 function runAdapter(mode, payload, timeoutMs) {
   return new Promise((done) => {
     const res = { status: null, signal: null, stdout: "", stderr: "", error: null, timedOut: false }
     let child
     try {
-      child = spawn(PYTHON, [ADAPTER, mode], { stdio: ["pipe", "pipe", "pipe"], env: process.env })
+      child = spawn(PYTHON, [ADAPTER, mode], { stdio: ["pipe", "pipe", "pipe"], env: adapterEnv() })
     } catch (err) {
       res.error = String(err)
       return done(res)
@@ -113,9 +130,18 @@ function parseJson(text) {
 export const TtGuard = async ({ directory }) => {
   const warned = new Set()
   const argsByCall = new Map()   // callID -> args, for the after hook (its input may not carry args)
+  const allowedCalls = new Set() // non-built-in calls the before hook allowed (an error part of one is not our block text)
+  const errorText = new Map()    // callID + error text -> replacement (string) or null (keep), for the transform hook
   let model = process.env.TT_MODEL || ""
   const missing = existsSync(ADAPTER) ? null : `[telephony-triage] tt-guard: ${ADAPTER} not found — every tool is denied`
   if (missing) log({ hook: "init", error: missing })
+  if (!missing) {
+    const r = await runAdapter("gate", {}, timeoutFor("default"))
+    const fail = failure(r)
+    const d = fail ? null : parseJson(r.stdout)
+    jiraSessionGate = d && d.open === true ? "open" : "closed"
+    log({ hook: "gate", jira: jiraSessionGate, fail, problems: Array.isArray(d?.problems) ? d.problems : undefined })
+  }
 
   return {
     "tool.execute.before": async (input, output) => {
@@ -132,7 +158,10 @@ export const TtGuard = async ({ directory }) => {
       if (fail) throw new Error(`[telephony-triage] tt-guard blocked ${tool}: ${fail}`)
       if (!d) throw new Error(`[telephony-triage] tt-guard blocked ${tool}: adapter output is not a decision`)
       if (d.decision !== "allow") throw new Error(marked(String(d.reason || `tt-guard blocked ${tool}`)))
-      if (input?.callID && !BUILTINS.has(tool)) argsByCall.set(input.callID, payload.args)
+      if (input?.callID && !BUILTINS.has(tool)) {
+        argsByCall.set(input.callID, payload.args)
+        allowedCalls.add(input.callID)
+      }
       const session = String(input?.sessionID ?? "")
       if (warnings.length && !warned.has(session)) {
         warned.add(session)
@@ -163,10 +192,51 @@ export const TtGuard = async ({ directory }) => {
       if (d.replace !== null) return replace(BRIDGE_FAILED)
     },
 
+    "experimental.chat.messages.transform": async (_input, output) => {
+      const parts = []
+      for (const m of Array.isArray(output?.messages) ? output.messages : []) {
+        for (const p of Array.isArray(m?.parts) ? m.parts : []) {
+          if (p?.type === "tool" && p?.state?.status === "error" && !BUILTINS.has(String(p.tool ?? ""))) {
+            parts.push({ p, sessionID: m?.info?.sessionID })
+          }
+        }
+      }
+      for (const { p, sessionID } of parts) {
+        const tool = String(p.tool ?? "")
+        const text = String(p.state.error ?? "")
+        const key = `${p.callID}\u0000${text}`
+        try {
+          if (!errorText.has(key)) {
+            let rep
+            if (missing) {
+              rep = `${ERROR_HIDDEN}: ${tool} tt-guard`
+            } else {
+              const payload = { tool, args: p.state.input ?? {}, directory, sessionID, callID: p.callID, error: text,
+                allowed: allowedCalls.has(p.callID) }
+              const r = await runAdapter("error", payload, timeoutFor("after"))
+              const fail = failure(r)
+              const d = fail ? null : parseJson(r.stdout)
+              log({ hook: "error", tool, session: sessionID, fail, replaced: d ? d.replace !== null : null,
+                stderr: r.stderr ? r.stderr.slice(0, 2000) : undefined })
+              if (fail || !d || !("replace" in d)) rep = `${ERROR_HIDDEN}: ${tool} tt-guard`
+              else if (d.replace === null) rep = null
+              else rep = typeof d.replace === "string" ? d.replace : `${ERROR_HIDDEN}: ${tool} tt-guard`
+            }
+            errorText.set(key, rep)
+          }
+          const rep = errorText.get(key)
+          if (typeof rep === "string") p.state.error = rep
+        } catch {
+          p.state.error = `${ERROR_HIDDEN}: ${tool} tt-guard`   // fail closed: never send a body we could not judge
+        }
+      }
+    },
+
     "shell.env": async (_input, output) => {
       if (!output || typeof output.env !== "object") return
       output.env.TT_RUNTIME = "opencode"
       output.env.CLAUDE_PLUGIN_ROOT = ROOT
+      output.env[JIRA_SESSION_ENV] = jiraSessionGate   // shown by config.py doctor only; the adapter never reads bash env
       if (model) output.env.TT_MODEL = model
     },
 
