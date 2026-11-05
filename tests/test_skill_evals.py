@@ -3655,6 +3655,32 @@ def test_e77_reads_ok_bash_reads_and_raw_log(tmp_path):
     assert grader.Ctx._opens("Bash", chained, ("timeline.md",), chained=False) == []
 
 
+def test_opens_skips_metadata_only_segments_but_counts_every_content_read():
+    """G(11/05 사용자 결정): wc·ls·stat·file 조각은 로그 원문 열람이 아니다. 내용을 읽는 조각은 그대로 센다(같은 호출이어도)."""
+    O = grader.Ctx._opens
+    names = ("x.log",)
+    for c in ("cat report.md; wc -l logs/x.log", "ls -la logs/x.log && cat report.md", "stat logs/x.log", "file logs/x.log",
+              "python3 /p/scripts/triage.py check-output K --for deep; wc -l logs/x.log", "wc -l logs/x.log 2>/dev/null; cat r.md",
+              "python3 /p/scripts/triage.py check-output K --for deep <<'E'\nlogs/x.log\nE\nwc -l logs/x.log"):
+        assert O("Bash", {"command": c}, names) == [], c
+    # 이름을 넘길 수 있는 호출(파이프·치환·리다이렉트·xargs·tee·$_·heredoc)은 메타 조각도 빼지 않는다
+    for c in ("cat $(ls logs/x.log)", "F=$(ls logs/x.log); cat $F", "for f in $(ls logs/x.log); do cat $f; done",
+              "head -n 500 $(ls -t logs/x.log | head -1)", "grep -n APN $(ls logs/x.log)", "ls logs/x.log | xargs cat",
+              "ls logs/x.log | xargs head", "ls logs/x.log | while read f; do cat \"$f\"; done",
+              "python3 - <<'E'\nfile = 'logs/x.log'\nprint(open(file).read())\nE",
+              "python3 /p/scripts/triage.py explore K; ls logs/x.log | xargs cat", "{ ls logs/x.log; } | xargs cat",
+              "ls logs/x.log |& xargs cat", "ls logs/x.log 2>&1 | xargs cat", "ls logs/x.log | tee /tmp/l; xargs cat < /tmp/l",
+              "cd logs && ls x.log | xargs cat", "ls logs/x.log > /tmp/l; cat $(cat /tmp/l)", "ls logs/x.log; cat $_",
+              "cat `ls logs/x.log`", "while read f; do cat $f; done < <(ls logs/x.log)", "wc -l logs/x.log | head -n 3"):
+        assert O("Bash", {"command": c}, names) == ["x.log"], c
+    for c in ("wc -l logs/x.log && cat logs/x.log", "grep -c P logs/x.log", "python3 - <<'E'\nopen('logs/x.log')\nE",
+              "cp logs/x.log /tmp/a; cat /tmp/a", "cat tools/x.log; ls", "head -n 2 logs/x.log; wc -l logs/x.log",
+              "tail -n 5 logs/x.log", "sed -n 1,9p logs/x.log", "awk 'NR<3' logs/x.log",
+              "python3 /p/scripts/triage.py explore K; wc -l logs/x.log; grep -n APN logs/x.log"):
+        assert O("Bash", {"command": c}, names) == ["x.log"], c
+    assert O("Read", {"file_path": "/w/logs/x.log"}, names) == ["x.log"]
+
+
 def test_e78_only_that_counts_bash_reads(tmp_path):
     job = str(tmp_path / "work" / "MOCK-9078")
     ex = f"{job}/module-skill/explore/ofono"

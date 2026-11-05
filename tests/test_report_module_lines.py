@@ -47,12 +47,13 @@ def _run(analyzers: dict | None, user: dict | None = None) -> tuple[dict, str, P
     return json.loads((job / "analysis.json").read_text(encoding="utf-8")), (job / "report.md").read_text(encoding="utf-8"), job
 
 
+NOTE_51 = "답 전 로그 원문 grep·sed·Read 금지 — report.md를 보이고 묻는다(SKILL 5-1)"     # driver.ASK_NOTE(when: ask)
 REMOTE = {"module_skills": {"remote": "file:///nonexistent/module-skills.git"}}
 
 
 def test_remote_gives_category_shape_and_pending_line():
     analysis, text, _ = _run(None, REMOTE)
-    assert analysis["analyzer"] == {"category": "data", "when": "ask"}
+    assert analysis["analyzer"] == {"category": "data", "when": "ask", "note": "답 전 로그 원문 grep·sed·Read 금지 — report.md를 보이고 묻는다(SKILL 5-1)"}
     line = core.DEEP_MODULE_PENDING.format(platform="ofono", category="data", key="MOCK-9001")
     assert line in text.split("\n") and "TODO(LLM)" in line
 
@@ -65,7 +66,7 @@ def test_remote_with_when_never_keeps_never_line():
 
 def test_prefer_skill_keeps_legacy_shape_bytes():
     analysis, text, _ = _run({"data": {"skill": "mock-ofono-analyzer", "when": "ask", "prefer": "skill"}}, REMOTE)
-    assert list(analysis["analyzer"].items()) == [("skill", "mock-ofono-analyzer"), ("when", "ask")]
+    assert list(analysis["analyzer"].items()) == [("skill", "mock-ofono-analyzer"), ("when", "ask"), ("note", NOTE_51)]
     assert "- 심층 분석 (mock-ofono-analyzer): TODO(LLM) 결과 요약" in text
 
 
@@ -87,7 +88,7 @@ def test_prefer_only_without_remote_is_not_applicable():
 
 def test_no_remote_legacy_skill_unchanged():
     analysis, text, _ = _run({"data": {"skill": "mock-ofono-analyzer", "when": "ask"}})
-    assert analysis["analyzer"] == {"skill": "mock-ofono-analyzer", "when": "ask"}
+    assert analysis["analyzer"] == {"skill": "mock-ofono-analyzer", "when": "ask", "note": NOTE_51}
     assert "- 심층 분석 (mock-ofono-analyzer): TODO(LLM) 결과 요약 / 분석 스킬 의견:" in text
 
 

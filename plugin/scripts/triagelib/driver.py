@@ -21,6 +21,15 @@ from .core import (ERROR_EVENT_RE, EXPLORE_MAX_LINES, EXPLORE_WHEN, PLATFORM_ANS
 from .report import ReportMixin, _ref_label, _unique_evidence
 
 
+# 5-1·5-2 질문 대기(when: ask) 동안의 한 줄 안내(analysis.json `analyzer.note`·`explore.note`): 답 전에 원문을 열어 보는 일을 막는
+# 안내일 뿐이다(guard 규칙 10은 통째 읽기만 막는다).
+ASK_NOTE = "답 전 로그 원문 grep·sed·Read 금지 — report.md를 보이고 묻는다(SKILL {step})"
+
+
+def _ask_note(when, step: str) -> dict:
+    return {"note": ASK_NOTE.format(step=step)} if when == "ask" else {}
+
+
 def _unjudged(match: dict) -> dict | None:
     """match.json에서 판정 불가(시그니처 시간 초과·오류로 `S: null`·`C: null`) 유형·원인 요약. 오류가 없으면 None.
     대표 오류는 판정 불가 항목의 `error`에서 고른다. 충족된 유형의 다른 시그니처만 오류였으면(S/C 영향 없음)
@@ -763,7 +772,7 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         if when not in EXPLORE_WHEN:
             self.warnings.append(f"explore.when 값이 잘못됐다({when}). ask로 본다")
             when = "ask"
-        return {"reason": reason, "when": when}
+        return {"reason": reason, "when": when, **_ask_note(when, "5-2")}
 
     def explore_input(self, around: str | None, anchor: dict | None) -> dict:
         """`JOB/explore-input.json`의 내용(마스킹된 값만): 타임라인 머리·줄 수 상한. `core`에 들어가 캐시된다."""
@@ -950,9 +959,10 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         conf = conf if isinstance(conf, dict) else {}
         src = userconfig.deep_source(self.cfg, cat)
         if src["source"] == "skill" or (src["source"] == "none" and conf and "prefer" not in conf):
-            return {"skill": conf.get("skill"), "when": conf.get("when", "ask")}
+            when = conf.get("when", "ask")
+            return {"skill": conf.get("skill"), "when": when, **_ask_note(when, "5-1")}
         if src["source"] == "module":
-            return {"category": cat, "when": src["when"]}
+            return {"category": cat, "when": src["when"], **_ask_note(src["when"], "5-1")}
         if src["source"] == "error":         # when: never → SKILL "never면 생략"이 5-1 질문을 건너뛴다
             return {"error": _clip(userconfig.deep_source_problem(self.cfg, cat) or "설정 오류", 120), "when": "never"}
         return None

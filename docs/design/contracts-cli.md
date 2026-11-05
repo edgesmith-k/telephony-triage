@@ -305,8 +305,8 @@ stdin: PostToolUse hook 입력 JSON (argparse 없음)
   - auto?(`true`: `code.auto_select`로 자동 선택했을 때만): true
   - resolved?
   - moved?
-- analyzer?({skill, when} 설치 분석 스킬(레거시·prefer: skill) | {category, when} 모듈 스킬 | {error, when} 설정 오류)
-- explore?({reason: no_candidate|cause_unconfirmed, when: ask|always|never}(run은 타임라인을 만들지 않는다))
+- analyzer?({skill, when, note?} 설치 분석 스킬(레거시·prefer: skill) | {category, when, note?} 모듈 스킬 | {error, when} 설정 오류 (note: when ask일 때만 답 전 안내))
+- explore?({reason: no_candidate|cause_unconfirmed, when: ask|always|never, note?: when ask일 때만 답 전 안내}(run은 타임라인을 만들지 않는다))
 - warnings?
 - notes?(잔여 worktree·도구 브랜치 안내 등)
 - lock_owner?

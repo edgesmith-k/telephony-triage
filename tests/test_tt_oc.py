@@ -468,6 +468,20 @@ def test_prints_evidence_screen(env):
     assert "[evidence] ABC-2 (triage)\n- 근거 원문 검사: 원문에 없음 1 — 근거 2" in r.stdout
 
 
+def test_prints_clean_deep_check_output_line(env):
+    """B2-6: 지어낸 인용이 없는 심층 check-output도 결과 줄 기록을 남긴다 — tt-oc가 모델을 거치지 않고 그 줄을 보인다."""
+    plat = env["work"] / "android"
+    (plat / ".shown").mkdir(parents=True)
+    head = "- 심층 분석 (mock-data-analyzer): 망이 PDN 인증을 거절했다 / 분석 스킬 의견: DATA-001-01 — 1위와 같음"
+    rec = {"v": 1, "at": "2999-01-01T00:00:00.000Z", "script": "triage", "kind": "evidence", "job": "ABC-3",
+           "key": "evidence:ABC-3/deep", "lines": [head], "must_show": []}
+    (plat / ".shown" / "log.jsonl").write_text(json.dumps(rec, ensure_ascii=False) + "\n", encoding="utf-8")
+    events(env, final("모델 요약"))
+    r = tt(env, "--", "x", extra_env={"STUB_SHOWN": str(plat)})
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert f"[evidence] ABC-3 (triage)\n{head}" in r.stdout
+
+
 def test_delete_session(env):
     events(env, final())
     r = tt(env, "--delete-session", "--", "x")

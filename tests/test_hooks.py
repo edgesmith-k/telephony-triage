@@ -800,6 +800,23 @@ def test_guard_blocks_whole_raw_log_reads():
     assert decision(guard(None, "Bash", {"command": "cat x.log"}, d, env={**ws.env(), "HOME": str(d)})) == "deny"
 
 
+RAW_WAIT = "탐색·심층 분석을 묻기 전·답 대기 중·탐색 중이면 grep·sed·Read로도 원문을 보지 않는다(SKILL 5-2·explore.md)."
+
+
+def test_guard_raw_log_deny_text_names_ask_wait_but_grants_nothing_new():
+    """규칙 10 거부 문구는 5-1·5-2 답 전 원문 열람 금지를 알린다(안내만 — 막는 규칙은 그대로라 동의 뒤·거절 뒤 구간 읽기는 통과)."""
+    ws = shared()
+    d = tmp("tt-raw-")
+    (d / "x.log").write_text(LOGCAT, encoding="utf-8")
+    for cmd in ("cat x.log", "head -c 5000 x.log", "grep -n '' x.log"):
+        out = bash(ws, cmd, d)
+        assert decision(out) == "deny" and RAW_WAIT in out["permissionDecisionReason"], cmd
+        assert "동의 뒤" not in out["permissionDecisionReason"]          # 동의 뒤 grep을 허락하는 말은 없다
+    for cmd in ("grep -n RILJ x.log", "sed -n 10,40p x.log", "head -n 20 x.log", "wc -l x.log",
+                f"python3 {plugin_root()}/scripts/parse_logcat.py cut x.log --around 2026-10-06T12:00:05+09:00 --out cut.log"):
+        assert decision(bash(ws, cmd, d)) is None, cmd
+
+
 def _raw_guard(raw_read, cmd: str, cwd: Path):
     root = plugin_root(**({"guard": {"raw_read": raw_read}} if raw_read is not None else {}))
     event = {"hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_input": {"command": cmd}, "cwd": str(cwd)}

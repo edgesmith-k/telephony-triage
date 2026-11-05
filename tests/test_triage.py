@@ -639,7 +639,7 @@ def test_no_candidate_run_has_no_timeline_until_explore_subcommand_writes_it():
     out = tmp("tt-triage-") / "x"
     analysis = _offline(item, doc, out)
     assert not analysis.get("candidates")
-    assert analysis["explore"] == {"reason": "no_candidate", "when": "ask"}
+    assert analysis["explore"] == {"reason": "no_candidate", "when": "ask", "note": "답 전 로그 원문 grep·sed·Read 금지 — report.md를 보이고 묻는다(SKILL 5-2)"}     # 답 전 안내(driver.ASK_NOTE)
     assert not (out / "timeline.md").exists() and (out / "explore-input.json").is_file()
     pending = (out / "report.md").read_text(encoding="utf-8")
     assert ("- 탐색 분석 (추정): 미실행 — 실행 전(동의 답을 기다리는 동안 포함)엔 로그 원문을 grep·Read하지 않는다. "
@@ -681,6 +681,26 @@ def test_explore_subcommand_exit_codes():
     assert not (out2 / "timeline.md").exists()
 
 
+CAUSE_PLAIN = "- 원인: TODO(LLM) — 로그로 확인한 것 / 코드로 추정한 것 / placeholder 규칙 결과를 나눠 쓴다"
+CAUSE_EXPLORE = ("- 원인: TODO(LLM) — 로그로 확인한 것(탐색 동의 답 전엔 리포트에 보인 줄만 — 추출 안 된 줄은 동의 뒤 timeline.md, "
+                 "로그 원문은 grep·Read 안 함) / 코드로 추정한 것 / placeholder 규칙 결과를 나눠 쓴다")
+
+
+def test_cause_line_variant_follows_explore_line():
+    """원인 줄: 탐색 분석 줄이 있으면(never 아님) 답 전 원문 열람 금지를 담은 변형, 아니면 그대로. 앞머리 `- 원인: TODO(LLM)`는
+    같다(shown.report_core가 TODO(LLM) 줄을 빼고 test_shown이 고정한다)."""
+    doc, items = _items()
+    item = next(i for i in items if i["expect"] == "unresolved")
+    out = tmp("tt-triage-") / "x"
+    _offline(item, doc, out)
+    lines = (out / "report.md").read_text(encoding="utf-8").splitlines()
+    assert CAUSE_EXPLORE in lines and CAUSE_PLAIN not in lines
+    done = tmp("tt-triage-") / "y"
+    _offline(items[0], doc, done)                  # 후보 확정 → 탐색 분석 줄 없음
+    lines = (done / "report.md").read_text(encoding="utf-8").splitlines()
+    assert CAUSE_PLAIN in lines and not any(x.startswith("- 탐색 분석") for x in lines)
+
+
 def test_stale_timeline_is_removed_by_run():
     doc, items = _items()
     out = tmp("tt-triage-") / "x"
@@ -710,9 +730,10 @@ def test_explore_never_skips_timeline_but_says_so():
     analysis = run_json("triage.py", ["run", item["key"], "--offline-db", SAMPLE, "--out", out, "--logs", *logs,
                                       "--issue-meta", meta, "--tz", doc["tz"], "--year", doc["year"]],
                         root=plugin_root(explore={"when": "never"}))
-    assert analysis["explore"] == {"reason": "no_candidate", "when": "never"}
+    assert analysis["explore"] == {"reason": "no_candidate", "when": "never"}       # never·always면 note 없음
     assert not (out / "timeline.md").exists() and not (out / "explore-input.json").exists()
     assert "탐색 분석: 생략 (explore.when: never)" in (out / "report.md").read_text(encoding="utf-8")
+    assert CAUSE_PLAIN in (out / "report.md").read_text(encoding="utf-8").splitlines()
 
 
 def test_explore_marks_cause_unconfirmed_and_rejects_bad_settings(tmp_path):
@@ -721,7 +742,7 @@ def test_explore_marks_cause_unconfirmed_and_rejects_bad_settings(tmp_path):
     drv = SimpleNamespace(cfg={"explore": {"when": "sometimes", "timeline_max_lines": 5}}, warnings=[], job=tmp_path, key="K-1",
                           failed_step={"text": "4 | x | FAIL", "source": "cli"})
     got = triage.Driver.explore(drv, [{"C": 0}])
-    assert got == {"reason": "cause_unconfirmed", "when": "ask"}
+    assert got == {"reason": "cause_unconfirmed", "when": "ask", "note": "답 전 로그 원문 grep·sed·Read 금지 — report.md를 보이고 묻는다(SKILL 5-2)"}
     spec = triage.Driver.explore_input(drv, "2026-09-20T05:30:00Z", None)
     assert spec == {"around": "2026-09-20T05:30:00Z", "failed_step": "4 | x | FAIL", "limit": 200, "anchor": None}
     assert len(drv.warnings) == 2 and not (tmp_path / "timeline.md").exists()    # 타임라인은 run이 만들지 않는다
@@ -839,6 +860,23 @@ def test_fit_keeps_first_must_show_and_stays_within_4kb():
     # 읽기 전용 줄이 must_show에 있으면 넘칠 때 read_only_hint를 먼저 뺀다
     small = {"read_only_hint": "힌트" * 500, "must_show": ["읽기 전용: " + "힌트" * 500], "files": {"report": "r"}}
     assert "read_only_hint" not in triage.fit(small)
+
+
+def test_fit_worst_case_with_ask_notes_stays_within_4kb():
+    """5-1·5-2 답 전 안내(analyzer.note·explore.note, driver.ASK_NOTE)를 더해도 위 최악 경우가 4KB 안에 든다."""
+    triage = _triage_module()
+    from triagelib import driver
+    big = {"ts": "2026-09-20T05:30:00.000Z", "tag": "DNC-0", "msg": "x" * 140, "event": "e"}
+    must = ["분석 전용: " + "가" * 300, "읽기 전용: " + "나" * 300, "재분석: " + "다" * 300, "실패 스텝 " + "라" * 300,
+            "장비 시각 미사용: " + "마" * 300, "로그 범위: " + "바" * 300]
+    result = {"warnings": ["w" * 120] * 10, "files": {"report": "r", "events": "e"}, "read_only_hint": "힌트" * 80,
+              "must_show": must, "candidates": [{"cause": f"C-{i}", "evidence": [dict(big) for _ in range(10)]} for i in range(3)],
+              "analyzer": {"skill": "s" * 40, "when": "ask", **driver._ask_note("ask", "5-1")},
+              "explore": {"reason": "cause_unconfirmed", "when": "ask", **driver._ask_note("ask", "5-2")}}
+    out = triage.fit(result)
+    assert len(triage.dumps(out).encode("utf-8")) + 1 <= 4096 and out["truncated"] is False
+    assert out["explore"]["note"] == driver.ASK_NOTE.format(step="5-2") and out["analyzer"]["note"].endswith("(SKILL 5-1)")
+    assert driver._ask_note("always", "5-2") == {} and driver._ask_note("never", "5-1") == {}
 
 
 def _analyzer_report(cfg: dict) -> str:

@@ -61,7 +61,7 @@ INSTRUCTION_FILES = ("AGENTS.md", "CONTEXT.md")   # 1.19.5가 프로젝트 폴�
 USER_CMD = re.compile(r"run this exact command yourself:\s*(.+)", re.DOTALL)
 WRITE_CMD = re.compile(r"(db_pr\.py\s+(publish|merge|request-review)|issue_post\.py\s+approve|skill_patch\.py\b.*--apply"
                        r"|module_eval\.py|\bgit\s+push\b|\bgh\s+pr\s+(merge|create|review)\b)")
-SHOWN_KINDS = ("report", "push", "post", "draft", "patch", "evidence")   # evidence: check-output 근거 원문 검사(B2 R19, common.shown.LINE_KINDS)
+SHOWN_KINDS = ("report", "push", "post", "draft", "patch", "evidence")   # evidence: check-output 결과 줄(심층 첫 줄·근거 원문 검사, B2 R19, common.shown.LINE_KINDS)
 EXIT = {"ok": 0, "error": 1, "no-final-text": 1, "blocked": 3, "timeout": 124}
 
 

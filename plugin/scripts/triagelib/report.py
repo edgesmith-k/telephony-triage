@@ -562,7 +562,11 @@ class ReportMixin:
             lines.append(add(9, range_text))
         else:
             lines.append(f"- {range_text}")
-        lines.append("- 원인: TODO(LLM) — 로그로 확인한 것 / 코드로 추정한 것 / placeholder 규칙 결과를 나눠 쓴다")
+        if r.get("explore") and r["explore"].get("when") != "never":     # 탐색 분석 줄과 같은 조건(아래)
+            lines.append("- 원인: TODO(LLM) — 로그로 확인한 것(탐색 동의 답 전엔 리포트에 보인 줄만 — 추출 안 된 줄은 동의 뒤 "
+                         "timeline.md, 로그 원문은 grep·Read 안 함) / 코드로 추정한 것 / placeholder 규칙 결과를 나눠 쓴다")
+        else:
+            lines.append("- 원인: TODO(LLM) — 로그로 확인한 것 / 코드로 추정한 것 / placeholder 규칙 결과를 나눠 쓴다")
         code = r["code"]
         if code.get("skipped"):
             lines.append("- 코드 위치: 코드 미확인")

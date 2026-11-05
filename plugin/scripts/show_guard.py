@@ -19,7 +19,8 @@ transcript의 Bash 호출에 시각으로 고정하고(`shown.anchor`: tool_use 
 - `stop`(Stop): 이번 턴에 열린 의무(리포트는 턴을 넘어 열려 있어도, 단 마지막 메시지가 탐색·심층 분석 질문·모듈 문서 질문이면
   리포트는 보지 않는다)마다 보인 글 + `last_assistant_message`에 빠진 것이 있으면 `{"decision": "block", "reason"}`.
 - `pre-ask`(PreToolUse `AskUserQuestion|mcp__.*__ask_user`): 같은 판정에 질문 문구를 더해 빠지면 질문을 거부한다. 리포트는
-  Step 7 분류 질문일 때만 본다. 근거 원문 검사 결과(`evidence`)는 탐색·심층 분석 질문·모듈 문서 질문에는 보지 않는다.
+  Step 7 분류 질문일 때만 본다. check-output 결과 줄(`evidence` — 심층 분석 첫 줄·근거 원문 검사)은 탐색·심층 분석 질문·
+  모듈 문서 질문에는 보지 않는다(단 Step 7 질문이면 본다).
 - `pre-bash`(PreToolUse Bash): 명령이 `db_pr`·`publish`(`guard.word_net`, 규칙 7과 같은 낱말 그물)면 해시가 같은 push 의무(해시가
   변수 — `--approved "$H"` — 면 마지막 stage 실행 뒤에 기록된 push 의무)를, `issue_post`·`approve`면 post 의무를 골라 의무 뒤 ~
   마지막 질문(또는 사용자 입력) 사이에 화면 전체가 보였는지 본다. 맞는 의무가 없으면 판정하지 않는다(스크립트의 해시 대조와 규칙 7
@@ -68,8 +69,8 @@ POST_SCAN = 660.0        # 지금 호출이 남겼을 수 있는 기록을 찾�
 RECORD_SCRIPTS = ("db_pr", "issue_post", "db_verify", "triage", "skill_patch")
 QUICK_TOKENS = ("## push 전 확인:", "게시 전 확인:", "triage.py", "--draft", "db_pr.py", "issue_post.py", "skill_patch.py")
 KIND_NAME = {"push": "push 확인 화면", "post": "게시 확인 화면", "report": "분석 리포트", "draft": "초안 검증표",
-             "patch": "스킬 제안 patch 안내", "evidence": "근거 원문 검사 결과"}
-OBJ = {"push": "을", "post": "을", "report": "를", "draft": "를", "patch": "를", "evidence": "를"}      # 목적격 조사
+             "patch": "스킬 제안 patch 안내", "evidence": "check-output 결과 줄(심층 분석·근거 원문 검사)"}
+OBJ = {"push": "을", "post": "을", "report": "를", "draft": "를", "patch": "를", "evidence": "을"}      # 목적격 조사
 # Step 5 질문(동의·스크립트가 쓴 모듈 문서 질문 `ask`·`ask_switch`·`ask_also`): 리포트를 보이기 전에 묻는다
 EXPLORE_Q = re.compile(r"(심층|탐색)\s*분석[^\n]*(할까요|실행할까|진행할까|\?)|모듈 문서[^\n]*(볼까요|바꿀까요)")
 NOTE = "[telephony-triage] 표시 안내"
@@ -447,8 +448,10 @@ def mode_pre_ask(inp) -> dict | None:
     obs = obligations(seq, recs)
     ask = shown.ask_text(tool_input)
     found = []
-    # 근거 원문 검사 줄은 Step 5 질문(심층 check-output 바로 뒤 5-2 모듈 질문·ask_switch)에는 보지 않는다 — Stop·다른 질문은 본다
-    for ob in _checked(seq, obs, ts, report_ok=shown.step7_question(tool_input), evidence_ok=not EXPLORE_Q.search(ask)):
+    # check-output 결과 줄은 Step 5 질문(심층 check-output 바로 뒤 5-2 모듈 질문·ask_switch)에는 보지 않는다 — Stop·다른 질문은
+    # 본다. Step 7 질문은 "심층 분석 … 할까요?"를 담아도 본다
+    step7 = shown.step7_question(tool_input)
+    for ob in _checked(seq, obs, ts, report_ok=step7, evidence_ok=step7 or not EXPLORE_Q.search(ask)):
         miss = shown.missing(ob, shown.visible_between(seq, ob.start + 1) + [ask])
         if miss:
             found.append((ob, miss))

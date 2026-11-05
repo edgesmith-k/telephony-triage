@@ -183,7 +183,8 @@ def test_ofono_site_platform_analyzer(when, line):
     root = plugin_root(f"ofono-an-{when}", platform=ON,
                        platforms={"ofono": {"analyzers": {"data": {"skill": "mock-ofono-analyzer", "when": when}}}})
     analysis, report, _ = _ofono_offline(root, LOGS / "journal-iso.log", "2026-09-20T05:32:10Z")
-    assert analysis["analyzer"] == {"skill": "mock-ofono-analyzer", "when": when}
+    note = {"note": "답 전 로그 원문 grep·sed·Read 금지 — report.md를 보이고 묻는다(SKILL 5-1)"} if when == "ask" else {}
+    assert analysis["analyzer"] == {"skill": "mock-ofono-analyzer", "when": when, **note}
     assert line in report
 
 
@@ -223,5 +224,5 @@ def test_ofono_with_remote_gives_module_category_shape():
                            "--issue-meta", meta, "--out", work / "job", "--platform", "ofono"], root=root,
              env={"TELEPHONY_TRIAGE_HOME": home})
     analysis = json.loads((work / "job" / "analysis.json").read_text(encoding="utf-8"))
-    assert analysis["analyzer"] == {"category": "data", "when": "ask"}
+    assert analysis["analyzer"] == {"category": "data", "when": "ask", "note": "답 전 로그 원문 grep·sed·Read 금지 — report.md를 보이고 묻는다(SKILL 5-1)"}
     assert "- 심층 분석 (모듈 스킬 ofono, 1위 카테고리 data): 미실행" in (work / "job" / "report.md").read_text(encoding="utf-8")

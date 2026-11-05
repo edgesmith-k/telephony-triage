@@ -122,7 +122,8 @@ def _record(job: Path, purpose: str, entry: dict) -> None:
 
 
 def _obligation(args, job: Path, purpose: str, lines: list[str]) -> None:
-    """근거 원문 검사 표시 의무(B2-6). --out JOB은 작업 디렉토리 밖이라 기록하지 않는다."""
+    """check-output 표시 의무(B2-6: 심층은 결과 첫 줄 + 지어낸 인용이 있으면 근거 원문 검사 줄, 탐색은 그 검사 줄만,
+    `_skipped`·`_fail`은 빈 줄 = 닫기만). --out JOB은 작업 디렉토리 밖이라 기록하지 않는다."""
     if args.out:
         return
     shown.record(job.parent, "triage", "evidence", job.name, key=f"evidence:{job.name}/{purpose}", lines=lines,
@@ -473,8 +474,11 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
     n = (res or {}).get("n", 0)
     _record(job, purpose, {"mode": mode, "at": _now(), "env": env, "output_sha256": sha, "source": src_rel if res else None,
                            "quotes": n, **counts})
-    _obligation(args, job, purpose, [sub.lstrip()] if counts["fabricated"] else [])
-    _emit({"line": masking.mask_brief(lines[0], 300), "evidence": sub.lstrip(), "quotes": n, **counts})
+    head = masking.mask_brief(lines[0], 300)
+    fab = [sub.lstrip()] if counts["fabricated"] else []
+    # 심층 분석은 결과 줄(첫 줄)을 늘 보인다 — 탐색은 지어낸 인용이 있을 때만(B2-6)
+    _obligation(args, job, purpose, [head.removesuffix("…")] + fab if purpose == "deep" else fab)
+    _emit({"line": head, "evidence": sub.lstrip(), "quotes": n, **counts})
     return OK
 
 

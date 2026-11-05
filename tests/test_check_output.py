@@ -467,39 +467,70 @@ def test_evidence_record_on_work_dir_job(tmp_path, capsys, monkeypatch):
     work = tmp_path / "work"
     job = make_job(work)
     (job / "deep-output.md").write_text(_deep_out([Q1, FAKE]), encoding="utf-8")
-    assert check(job, out=False, capsys=capsys)[0] == 0
+    code, data, _ = check(job, out=False, capsys=capsys)
+    assert code == 0
     recs = [r for r in _shown(work) if r["kind"] == "evidence"]
     assert len(recs) == 1 and recs[0]["key"] == f"evidence:{KEY}/deep" and recs[0]["job"] == KEY
-    assert recs[0]["lines"][0].startswith("- 근거 원문 검사: 인용 2개 중 원문에 없음 1") and recs[0]["path"] == str(job / "report.md")
-    # 고쳐 다시(같은 턴): 줄을 다시 TODO로 두고 맞는 인용으로 → lines=[] 기록이 앞 의무를 닫는다
+    # 심층 분석: 첫 줄 = 결과 줄(낸 "line"과 같은 글, 끝 "…" 없이), 지어낸 인용이 있으면 근거 원문 검사 줄이 뒤에
+    assert recs[0]["lines"][0] == data["line"].removesuffix("…") and recs[0]["lines"][0].startswith("- 심층 분석 (모듈 스킬")
+    assert recs[0]["lines"][1].startswith("- 근거 원문 검사: 인용 2개 중 원문에 없음 1") and recs[0]["path"] == str(job / "report.md")
+    assert len(recs[0]["lines"]) == 2
+    # 고쳐 다시(같은 턴): 줄을 다시 TODO로 두고 맞는 인용으로 → 결과 줄만 든 새 의무(내용이 달라 앞 의무를 갈음한다)
     rows = (job / "report.md").read_text(encoding="utf-8").split("\n")
     i = next(k for k, t in enumerate(rows) if t.startswith("- 심층 분석"))
     rows[i:i + 4] = [DEEP_PENDING]
     (job / "report.md").write_text("\n".join(rows), encoding="utf-8")
     (job / "deep-output.md").write_text(_deep_out([Q1]), encoding="utf-8")
-    assert check(job, out=False, capsys=capsys)[0] == 0
+    code, data2, _ = check(job, out=False, capsys=capsys)
+    assert code == 0
     recs = [r for r in _shown(work) if r["kind"] == "evidence"]
-    assert len(recs) == 2 and recs[1]["lines"] == []
-    # 같은 key의 두 기록을 순서대로 고정하면(첫 기록 = 열린 의무, 둘째 = 빈 줄) 열린 의무가 없다
+    assert len(recs) == 2 and recs[1]["lines"] == [data2["line"].removesuffix("…")]
+    # 같은 key의 두 기록을 순서대로 고정하면 열린 의무는 둘째(결과 줄) 하나다
     seq = [{"kind": "tool", "name": "Bash", "id": f"b{k}", "input": {"command": f"python3 triage.py check-output {KEY} --for deep"},
             "result": "{}", "error": False} for k in range(2)]
     monkeypatch.setattr(shown, "anchor", lambda s, r: list(enumerate(r)))
     assert [ob.kind for ob in shown.record_obligations(seq, recs[:1]) if ob.open] == ["evidence"]
-    out = shown.record_obligations(seq, recs)
-    assert [ob for ob in out if ob.open] == []
+    out = [ob for ob in shown.record_obligations(seq, recs) if ob.open]
+    assert len(out) == 1 and out[0].start == 1 and out[0].lines == recs[1]["lines"]
 
 
-def test_weak_only_records_empty_lines_and_out_job_records_nothing(tmp_path, capsys):
+def test_weak_only_records_head_line_and_out_job_records_nothing(tmp_path, capsys):
     work = tmp_path / "work"
     job = make_job(work)
     (job / "deep-output.md").write_text(_deep_out([Q1]), encoding="utf-8")
-    assert check(job, out=False, capsys=capsys)[0] == 0
+    code, data, _ = check(job, out=False, capsys=capsys)
+    assert code == 0
     recs = [r for r in _shown(work) if r["kind"] == "evidence"]
-    assert len(recs) == 1 and recs[0]["lines"] == []
+    assert len(recs) == 1 and recs[0]["lines"] == [data["line"].removesuffix("…")]
     other = make_job(tmp_path / "o")
     (other / "deep-output.md").write_text(_deep_out([Q1, FAKE]), encoding="utf-8")
     assert check(other, capsys=capsys)[0] == 0
     assert not (tmp_path / "o" / shown.SHOWN_DIR).exists()
+
+
+def test_long_deep_head_line_recorded_without_ellipsis(tmp_path, capsys):
+    work = tmp_path / "work"
+    job = make_job(work)
+    (job / "deep-output.md").write_text(_deep_out([Q1], opinion="DATA-001-01 — " + "가" * 200), encoding="utf-8")
+    code, data, _ = check(job, out=False, capsys=capsys)
+    assert code == 0 and data["line"].endswith("…") and len(data["line"]) == 300
+    rec = next(r for r in _shown(work) if r["kind"] == "evidence")
+    assert rec["lines"] == [data["line"][:-1]]
+
+
+def test_explore_clean_records_empty_lines_but_fabricated_records_sub(tmp_path, capsys):
+    """탐색은 결과 줄 의무가 없다 — 지어낸 인용이 있을 때만 근거 원문 검사 줄."""
+    work = tmp_path / "work"
+    job = make_job(work, "explore", "plain")
+    (job / "explore-output.md").write_text(_explore_out([("망 인증 거절", [Q1])]), encoding="utf-8")
+    assert check(job, "explore", out=False, capsys=capsys)[0] == 0
+    recs = [r for r in _shown(work) if r["kind"] == "evidence"]
+    assert len(recs) == 1 and recs[0]["key"] == f"evidence:{KEY}/explore" and recs[0]["lines"] == []
+    other = make_job(tmp_path / "b", "explore", "plain")
+    (other / "explore-output.md").write_text(_explore_out([("망 인증 거절", [Q1, FAKE])]), encoding="utf-8")
+    assert check(other, "explore", out=False, capsys=capsys)[0] == 0
+    recs = [r for r in _shown(tmp_path / "b") if r["kind"] == "evidence"]
+    assert len(recs) == 1 and len(recs[0]["lines"]) == 1 and recs[0]["lines"][0].startswith("- 근거 원문 검사")
 
 
 def test_runtime_label_from_site_defaults(tmp_path, capsys, monkeypatch):

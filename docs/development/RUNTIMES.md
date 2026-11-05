@@ -145,7 +145,7 @@ MCP 쓰기(add_comment 승인 유무)·Write/Edit 규칙 8은 이번에 돌리�
 
 ### 5.4 OpenCode와 모듈 스킬(B1+B2, 계획 H amendments R19~R22·R26·R40)
 
-- **R19** `tt-oc` 표시 기록에 `evidence`(check-output 근거 원문 검사 줄)를 넣는다(`SHOWN_KINDS`).
+- **R19** `tt-oc` 표시 기록에 `evidence`(check-output 결과 줄 — 심층 분석 첫 줄과, 원문에 없는 인용이 있으면 근거 원문 검사 줄)를 넣는다(`SHOWN_KINDS`). 심층 check-output은 늘 줄을 남기므로 tt-oc가 심층 결과마다 그 줄을 보인다.
 - **R20** 에이전트 규칙 2: 스크립트 JSON에 `next`가 있으면 stderr를 보이고 `next`를 따른다(멈춤보다 앞선다). `next` 없는 종료 2와
   스크립트 오류만 멈춘다. `module --for deep`·`check-output`의 실패 JSON은 멈춤 사례(`사용 오류`·`설정 오류`·JOB 없는 `작업 없음`)
   말고 모두 `next`를 낸다 — 모듈 받기 실패는 분석을 끝내지 않는다.

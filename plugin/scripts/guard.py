@@ -3194,7 +3194,8 @@ def check_raw_read(command: str, cwd: Path, dec: Decision, conf: Config) -> None
                     dec.deny.append(
                         "로그 원문·zip·events/issue_raw/match.json은 통째로 읽지 않는다(원칙 §로그 원문, "
                         f"규칙 10: {verb} {arg}). grep -n '<패턴>' <파일> 또는 sed -n '<a>,<b>p' <파일>로 필요한 "
-                        "줄만, bugreport는 parse_logcat.py extract-bugreport. Read 도구도 limit·offset으로 구간만.")
+                        "줄만, bugreport는 parse_logcat.py extract-bugreport. Read 도구도 limit·offset으로 구간만. "
+                        "탐색·심층 분석을 묻기 전·답 대기 중·탐색 중이면 grep·sed·Read로도 원문을 보지 않는다(SKILL 5-2·explore.md).")
                     return
 
 

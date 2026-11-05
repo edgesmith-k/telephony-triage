@@ -506,7 +506,15 @@ class Ctx:
             raw = str(inp.get("command", ""))
             tool = "triage.py" in raw or "parse_logcat.py" in raw
             kept, env, logs_cwd, globbed = ([] if tool else [raw]), {}, False, []
-            for seg in _sh_split(_strip_heredocs(raw) if tool else raw):
+            cursor, cut = 0, []         # triage 없는 호출: 조각의 원문 위치(앞에서부터 차례로 찾는다)·뺄 구간
+            src = _strip_heredocs(raw) if tool else raw
+            # 목록·이름을 다른 명령에 넘길 수 있는 호출(파이프·`$(`·백틱·xargs·파일 리다이렉트·`$_`·heredoc 등)은 아무 조각도 빼지 않는다
+            # (`ls x | xargs cat`·`cat $(ls x)`·`ls x > l; cat $(cat l)`·heredoc 안 `file = 'x'`는 예전처럼 센다)
+            meta_ok = not _META_PASS.search(_DEVNULL.sub(" ", src)) and (tool or _strip_heredocs(raw) == raw)
+            for seg in _sh_split(src):
+                at = -1 if tool else raw.find(seg, cursor)
+                if at >= 0:
+                    cursor = at + len(seg)
                 if "triage.py" in seg or "parse_logcat.py" in seg:
                     continue
                 try:
@@ -514,6 +522,12 @@ class Ctx:
                 except ValueError:
                     toks = []
                 assigns, cmd_toks = _strip_prefix(toks)
+                if meta_ok and cmd_toks and posixpath.basename(cmd_toks[0]) in _META_ONLY and not _READ_VERB.search(seg):
+                    # 내용을 내지 않는 조각(`wc -l x.log`·`ls logs`·`stat`·`file`, G 11/05 사용자 결정)은 열람이 아니다 —
+                    # 그 조각만 뺀다(같은 호출의 다른 조각·heredoc 본문·cp 뒤 cat은 그대로 본다)
+                    if at >= 0:
+                        cut.append((at, cursor))
+                    continue
                 if toks and not cmd_toks:       # 대입만: 값은 쓰는 조각에서 편다(triage 인자로만 쓰인 경로는 세지 않는다)
                     # (env 값은 대입 글자 그대로 — 앞 대입을 펴지 않는다; 이름 맞춤에는 충분하다)
                     env.update(t.split("=", 1) for t in assigns)
@@ -528,6 +542,8 @@ class Ctx:
                     for t in cmd_toks[1:]:
                         if any(ch in t for ch in "*?[") and (logs_cwd and "/" not in t or t.startswith("logs/") or "/logs/" in t):
                             globbed += [n for n in names if fnmatch.fnmatch(n, posixpath.basename(t) or "*")]
+            for lo, hi in reversed(cut):
+                kept[0] = kept[0][:lo] + "\n" + kept[0][hi:]
             text = "\n".join(kept)
             if re.search(r"\b(cat|head|tail|less|sed|awk|jq|grep|rg|python3?)\b", text):
                 return [n for n in names if re.search(r"(?<![\w.-])" + re.escape(n) + r"\b", text) or n in globbed]
@@ -2656,6 +2672,14 @@ _PATTERN_OPT.update({v: {"-e", "-f", "--regexp", "--file"} for v in _GREP_VERBS}
 _FIRST_ONLY = frozenset({"uniq", "xxd"})        # 둘째 위치 인자는 출력 파일
 # 명령 앞에 붙어 동사를 가리는 셸 낱말(`if cat f`·`do cat $f`·`time cat f`)
 _SH_PREFIX = frozenset({"do", "then", "else", "if", "elif", "while", "until", "!", "time", "command", "nohup", "exec", "{"})
+
+
+# 파일 내용을 내지 않는 명령(크기·목록·속성만): `Ctx._opens`가 그 조각을 열람으로 세지 않는다(G 11/05 사용자 결정)
+_META_ONLY = frozenset({"wc", "ls", "stat", "file"})
+_READ_VERB = re.compile(r"\b(cat|head|tail|less|sed|awk|jq|grep|rg|python3?)\b")
+# 메타 조각을 빼지 않는 표지: 파이프(`|`·`|&`)·명령 치환·프로세스 치환·리다이렉트(/dev/null 제외)·xargs·tee·eval·`$_`·`!$`
+_META_PASS = re.compile(r"\||\$\(|`|<\(|>|<|\bxargs\b|\btee\b|\beval\b|\$_|!\$|\$\{_\}")
+_DEVNULL = re.compile(r"\d?>>?\s*/dev/null|\d>&\d(?!\s*\|)")
 
 
 def _strip_prefix(toks: list[str]) -> tuple[list[str], list[str]]:
