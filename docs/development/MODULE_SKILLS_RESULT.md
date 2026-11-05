@@ -134,6 +134,7 @@ B1+B2 뒤로 미룬 것: O8(`mcptools`·`config.py setup`이 opencode.json `mcp`
 - 게이트웨이 env 이어받기가 skill eval 실행기 자식 요청에도 들어간다. 게이트웨이 점검이 보조·하위 에이전트 모델 ID를 보지 않는다. RUNTIMES.md 일부가 이 패치보다 오래됐다.
 - related_tests가 `tests/opencode/*`를 고르지 않는다(guard·어댑터를 바꿔도 OpenCode 경유 테스트가 빠짐 — B1+B2 뒤 연결). 버전 고정 테스트가 env 이름 두 개를 쓴다. 생성된 `/tt-setup`에 OpenCode 안내가 없다. 일부 OpenCode 테스트는 아무 일이 없어도 통과한다.
 - bash 허용 목록이 좁다: 사내 흐름에 다른 읽기 명령(rg·jq·sort 등)이 필요하면 쓰기·실행 옵션과 함께 하나씩 더해야 한다.
+- O8·O10(11/05, 리뷰 1회 → 반박 검증, 확정 P0·P1 없음 — 전체 테스트 3,544 통과): OpenCode 모드에서 Claude 설정의 `jira.corp`와 opencode.json의 `jira_corp`가 두 번 탐색·두 번 후보로 나온다. opencode.json `mcp` 값의 `{env:VAR}`·`{file:…}`를 풀지 않고 글자 그대로 넘겨 탐색 때 진짜 env를 덮는다(시작 때 자격을 보는 Jira MCP는 후보가 안 뜬다 — `--tools-json`은 된다). `tt-oc --opencode <경로>`가 job_status 런타임 줄의 OpenCode 버전에 반영되지 않는다. `opencode/bin/tt-oc`·`managed.json.sample`을 바꿔도 related_tests가 `test_site_step_runtime.py`를 고르지 않는다. `runtime-check opencode`가 "모델·네트워크 호출 없음"이라면서 프로젝트가 있으면 `gh auth status --hostname <GHE>`를 부른다. contracts.md 표에 새 출력 칸이 없다. OpenCode에서 doctor 마크다운이 테스트 상한 1,152B를 넘을 수 있다. 기존 설치는 `oc_adapter.py` 지문이 바뀌어 `gen_opencode.py install --force`를 다시 해야 tt-oc가 시작한다(반입 노트). `gateway_profile_check`가 권장값 `CLAUDE_CODE_EFFORT_LEVEL=unset`을 글자로 비교해, 변수가 없으면 missing으로 claude-gateway 점검이 실패한다(I-2부터).
 
 ## C0 모듈 스킬 시범 (11/04)
 
