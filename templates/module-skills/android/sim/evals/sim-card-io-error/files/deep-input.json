@@ -1,0 +1,23 @@
+{
+ "schema_version": 1,
+ "key": "MOCK-9804",
+ "platform": null,
+ "module": "android/sim",
+ "sha": "template",
+ "type_id": "SIM-001",
+ "top_candidates": [
+  {
+   "type": "SIM-001",
+   "cause": "SIM-001-01",
+   "score": 1.0,
+   "confidence": "high"
+  }
+ ],
+ "issue_summary": "SIM이 인식되지 않음 (합성)",
+ "occurred_at": "2026-08-21T10:00:21+00:00",
+ "events": "events.json",
+ "timeline": "timeline.md",
+ "log_paths": [
+  "source.log"
+ ]
+}

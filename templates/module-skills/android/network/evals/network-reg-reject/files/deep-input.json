@@ -1,0 +1,23 @@
+{
+ "schema_version": 1,
+ "key": "MOCK-9806",
+ "platform": null,
+ "module": "android/network",
+ "sha": "template",
+ "type_id": "NETWORK-001",
+ "top_candidates": [
+  {
+   "type": "NETWORK-001",
+   "cause": "NETWORK-001-01",
+   "score": 1.0,
+   "confidence": "high"
+  }
+ ],
+ "issue_summary": "서비스 안 됨 (합성)",
+ "occurred_at": "2026-08-22T11:00:32+00:00",
+ "events": "events.json",
+ "timeline": "timeline.md",
+ "log_paths": [
+  "source.log"
+ ]
+}

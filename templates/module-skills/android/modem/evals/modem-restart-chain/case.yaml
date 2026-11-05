@@ -7,7 +7,7 @@ key: MOCK-9814
 issue:
   summary: 통화 중 갑자기 서비스 안 됨 (합성)
   description: 발신이 실패하고 잠시 서비스 안 됨이 떴다가 돌아옵니다. 합성 case.
-  occurred_at: '2026-08-27T16:00:25+0000'
+  occurred_at: '2026-08-27T16:00:22+0000'
   platform_version: '14'
   sim_slot: '0'
 parse: {tz: UTC, year: 2026, minutes: 5}

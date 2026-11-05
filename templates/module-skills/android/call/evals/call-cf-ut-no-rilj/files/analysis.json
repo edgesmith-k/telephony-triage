@@ -1,0 +1,78 @@
+{
+ "status": "ok",
+ "key": "MOCK-9809",
+ "mode": "offline",
+ "issue": {
+  "origin": "file",
+  "occurred_at": "2026-08-09T13:13:03+00:00",
+  "sw": null,
+  "platform_version": "14",
+  "sim_slot": "0",
+  "summary": "착신 전환 설정 확인 요청",
+  "description": "착신 전환을 설정했는데 RIL 요청 로그가 보이지 않습니다. 설정이 실제로 됐는지 확인해 주세요.",
+  "comments": 0,
+  "missing": [
+   "model",
+   "sw"
+  ]
+ },
+ "logs": {
+  "files": [
+   "source.log"
+  ],
+  "window": {
+   "start": "2026-08-09T13:08:03.000Z",
+   "end": "2026-08-09T13:18:03.000Z"
+  },
+  "range": [
+   "2026-08-09T13:13:00.233Z",
+   "2026-08-09T13:13:03.706Z"
+  ],
+  "in_range": "partial",
+  "clock_anomalies": 0,
+  "events": 27,
+  "uncollected_tags": [
+   {
+    "tag": "EmergencyNumberTracker",
+    "lines": 2,
+    "warn": 0
+   }
+  ]
+ },
+ "no_candidate": {
+  "search_hits": [
+   {
+    "id": "CALL-001-01",
+    "kind": "cause",
+    "title": "IMS 미등록"
+   },
+   {
+    "id": "DATA-001-01",
+    "kind": "cause",
+    "title": "Data disabled"
+   },
+   {
+    "id": "DATA-001-02",
+    "kind": "cause",
+    "title": "Roaming disabled"
+   }
+  ],
+  "error_events": [],
+  "error_event_total": 0
+ },
+ "code": {
+  "skipped": true
+ },
+ "explore": {
+  "reason": "no_candidate",
+  "when": "ask"
+ },
+ "warnings": [
+  "형식을 모르는 줄 7개를 건너뛰었습니다."
+ ],
+ "must_show": [
+  "로그 범위: 2026-08-09T13:13:00.233Z ~ 2026-08-09T13:13:03.706Z (일부만 포함), 시계 이상 없음",
+  "파서 규칙에 없는 태그 (수집 태그와 같은 프로세스, tags.yaml에 없어 이벤트로 추출 안 됨): EmergencyNumberTracker 2줄(W/E 0)"
+ ],
+ "truncated": false
+}

@@ -1,0 +1,23 @@
+{
+ "schema_version": 1,
+ "key": "MOCK-9810",
+ "platform": null,
+ "module": "android/sms",
+ "sha": "template",
+ "type_id": "SMS-001",
+ "top_candidates": [
+  {
+   "type": "SMS-001",
+   "cause": "SMS-001-01",
+   "score": 1.0,
+   "confidence": "high"
+  }
+ ],
+ "issue_summary": "문자 전송 실패 (합성)",
+ "occurred_at": "2026-08-24T13:00:25+00:00",
+ "events": "events.json",
+ "timeline": "timeline.md",
+ "log_paths": [
+  "source.log"
+ ]
+}

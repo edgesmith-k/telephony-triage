@@ -1,0 +1,88 @@
+{
+ "status": "ok",
+ "key": "MOCK-9807",
+ "mode": "offline",
+ "issue": {
+  "origin": "file",
+  "occurred_at": "2026-08-09T13:10:57+00:00",
+  "sw": null,
+  "platform_version": "14",
+  "sim_slot": "0",
+  "summary": "부팅 직후 망 등록이 늦음",
+  "description": "부팅 직후 망 등록 상태가 늦게 올라옵니다. 처음 요청이 언제 나갔는지 확인해 주세요.",
+  "comments": 0,
+  "missing": [
+   "model",
+   "sw"
+  ]
+ },
+ "logs": {
+  "files": [
+   "source.log"
+  ],
+  "window": {
+   "start": "2026-08-09T13:05:57.000Z",
+   "end": "2026-08-09T13:15:57.000Z"
+  },
+  "range": [
+   "2026-08-09T13:10:54.906Z",
+   "2026-08-09T13:10:57.430Z"
+  ],
+  "in_range": "partial",
+  "clock_anomalies": 0,
+  "events": 10,
+  "uncollected_tags": [
+   {
+    "tag": "DataReader",
+    "lines": 2,
+    "warn": 0
+   },
+   {
+    "tag": "OemMultiSimSettingController",
+    "lines": 2,
+    "warn": 0
+   },
+   {
+    "tag": "PhoneConfig",
+    "lines": 2,
+    "warn": 0
+   }
+  ]
+ },
+ "no_candidate": {
+  "search_hits": [
+   {
+    "id": "SIM-001-01",
+    "kind": "cause",
+    "title": "UICC 초기화 실패"
+   },
+   {
+    "id": "MOCK-4101",
+    "kind": "issue",
+    "title": "재부팅 직후 슬롯 1 SIM 미인식"
+   },
+   {
+    "id": "IMS-001",
+    "kind": "type",
+    "title": "IMS 등록이 되지 않음"
+   }
+  ],
+  "error_events": [],
+  "error_event_total": 0
+ },
+ "code": {
+  "skipped": true
+ },
+ "explore": {
+  "reason": "no_candidate",
+  "when": "ask"
+ },
+ "warnings": [
+  "형식을 모르는 줄 6개를 건너뛰었습니다."
+ ],
+ "must_show": [
+  "로그 범위: 2026-08-09T13:10:54.906Z ~ 2026-08-09T13:10:57.430Z (일부만 포함), 시계 이상 없음",
+  "파서 규칙에 없는 태그 (수집 태그와 같은 프로세스, tags.yaml에 없어 이벤트로 추출 안 됨): DataReader 2줄(W/E 0), OemMultiSimSettingController 2줄(W/E 0), PhoneConfig 2줄(W/E 0)"
+ ],
+ "truncated": false
+}
