@@ -274,6 +274,9 @@ def test_capture_block_goes_through_capture_configure(fake_platforms):
         platforms.load({"platform": {**on, "others": {"capt": {"dump": {"x": 1}}}}}, "capt")
 
 
+RIL_DEFAULT = frozenset({"RILJ", "RadioConfig", "RadioConfigResponseAidl"})   # android `ril.RIL_TAGS` (결정 기록 11/05 ③)
+
+
 def test_protocol_tags_override(fake_platforms):
     fake_platforms("proto", """
         import dataclasses
@@ -286,7 +289,7 @@ def test_protocol_tags_override(fake_platforms):
     """)
     on = {"name": "android", "enabled": ["android", "proto"]}
     prof = platforms.load({"platform": on}, "proto")
-    assert prof.protocol_tags == (("ril", frozenset({"RILJ"})), ("dbus", frozenset({"daemon-a"})))
+    assert prof.protocol_tags == (("ril", RIL_DEFAULT), ("dbus", frozenset({"daemon-a"})))
     assert [p.reads for p in prof.protocols] == [(), ()]          # `reads` 기본은 빈 튜플(ofono `hop`만 쓴다)
     prof = platforms.load({"platform": {**on, "others": {"proto": {"ril": {"tags": ["VR"]},
                                                                       "protocols": {"dbus": {"tags": ["daemon-b"]}}}}}},
@@ -295,7 +298,7 @@ def test_protocol_tags_override(fake_platforms):
     with pytest.raises(PlatformConfigError) as info:     # ril은 기존 ril 블록, protocols에는 ril 밖 이름만
         platforms.load({"platform": {**on, "others": {"proto": {"protocols": {"ril": {"tags": []}}}}}}, "proto")
     assert "platform.others.proto.protocols.ril" in str(info.value)
-    assert platforms.default().protocol_tags == (("ril", frozenset({"RILJ"})),)
+    assert platforms.default().protocol_tags == (("ril", RIL_DEFAULT),)
 
 
 def test_ril_pair_ignores_other_protocol_annotations():

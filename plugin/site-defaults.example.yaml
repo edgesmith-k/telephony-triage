@@ -154,11 +154,11 @@ platform:
   #     - {file: build/core/version_defaults.mk, regex: '^\s*PLATFORM_VERSION\s*:?=\s*(\d+)'}
   # log:
   #   phone_id:                      # TODO(SITE:S20) 슬롯 표기. 그룹 1 = 슬롯 번호. 위치마다 순서대로 첫 일치
-  #     tag: ['^[A-Za-z]+(?:-[CI])?-(\d+)$']                   # 태그에 match
+  #     tag: ['^[A-Za-z]+(?:-[CI])?-(\d+)$', '^.+ \[(\d)\]$']   # 태그에 match(`DNC-1`, `ImsManager [0]`)
   #     msg_prefix: ['^\[(?:PHONE|SUB)(\d+)\]\s?']   # 메시지 앞 match, RIL 해석 전 떼어냄
   #     msg_suffix: ['\s?\[PHONE(\d+)\]$']           # 메시지 끝 search, 떼어냄
   # ril:
-  #   tags: [RILJ]                   # TODO(SITE:S10) 벤더 RIL 태그(형식은 RILJ와 같아야 함, S9). tags.yaml 매핑도 함께
+  #   tags: [RILJ, RadioConfig, RadioConfigResponseAidl]   # TODO(SITE:S10) 벤더 RIL 태그(형식은 RILJ와 같아야 함, S9). tags.yaml 매핑도 함께
   #   vendor:                        # TODO(SITE:S10) 벤더 RIL 층 연결(선택). 없으면 출력이 이전과 같다. 초안: tools/s0_suggest.py
   #     link_ms: 2000                # RILJ 요청 뒤 HAL 줄을 찾는 시간(기본 2000, 앞쪽 500ms 고정)
   #     layers:                      # 정확한 태그 이름. 패턴마다 (?P<serial>)·(?P<token>) 중 정확히 하나, 첫 일치만
