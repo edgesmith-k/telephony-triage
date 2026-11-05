@@ -261,9 +261,21 @@ def test_vendor_msg_formats_on_masked_lines(name, msg, want):
     """재리뷰 P1(11/02): 마스킹본(`mask_pii`와 같은 `new_masker` 경로)에서도 원문과 같은 본문·하위 식별 — C++ 함수 칸의
     `::` 조각이 `<IP#n>`이 되어도 형식이 맞는다(08-safety §8 분석과 회귀 일치). 예시 본문에는 PII가 없다."""
     masked = masking.new_masker(msg)(msg)
-    if "::" in msg:
-        assert "<IP#" in masked          # 시험이 비지 않게: 함수 칸이 실제로 가려진다
+    if "::" in msg and "<IP#" not in masked:
+        # M12(H C1+D R28): `ns::Cls`처럼 앞뒤가 낱말 문자인 C++ 범위 조각은 더는 IP가 아니다(16진수만인 `abcd::ef`는 여전히
+        # IPv6 모양이라 가린다). M12 전 마스커가 만든 마스킹본(이미 쌓인 fixture)도 형식이 맞아야 한다
+        masked = _pre_m12(msg)
+        assert "<IP#" in masked          # 시험이 비지 않게: 함수 칸이 실제로 가려진 모양
     assert dict(msgformat.FORMATS)[name](masked) == want
+
+
+# M12 전 문맥 없는 IPv6 규칙(앞뒤 경계 16진수·`:`만)이 `::` 조각을 가린 모양 — 그 마스킹본으로 만든 fixture가 남아 있다
+_PRE_M12_RX = re.compile(r"(?<![0-9A-Fa-f:])[0-9A-Fa-f]{0,4}::[0-9A-Fa-f]{0,4}(?![0-9A-Fa-f:])")
+
+
+def _pre_m12(text: str) -> str:
+    n = iter(range(1, 1000))
+    return _PRE_M12_RX.sub(lambda m: f"<IP#{next(n)}>", text)
 
 
 def test_msgformat_mask_token_matches_masking():
@@ -302,8 +314,9 @@ def test_vendor_format_masked_log_same_tags_and_pairs(tmp_path):
             "2026-09-20T14:40:00.400Z dut daemon-b[902]: tid:7 Example.cpp(9):std::vector > ipc reply 6 "
             "error=PLACEHOLDER_ERROR\n")
     m = masking.new_masker(text)
-    masked_text = "\n".join(m(line) for line in text.split("\n"))
-    assert masked_text.count("<IP#") == 4
+    assert "\n".join(m(line) for line in text.split("\n")) == text     # M12: 함수 칸은 그대로
+    masked_text = _pre_m12(text)                                          # M12 전 마스킹본 모양
+    assert masked_text.count("<IP#") >= 4
     raw, masked = tmp_path / "raw" / "journal.log", tmp_path / "masked" / "journal.log"
     for path, body in ((raw, text), (masked, masked_text)):
         path.parent.mkdir()
