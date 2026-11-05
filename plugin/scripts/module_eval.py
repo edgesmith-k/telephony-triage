@@ -3,7 +3,8 @@
 
 python3 plugin/scripts/module_eval.py --module ofono/data --dry-run [--json]
 python3 plugin/scripts/module_eval.py --module ofono/data [--case NAME ...] [--model M] [--max-cost USD | --no-max-cost]
-    [--child-mode contract|restricted] [--require-cost | --no-require-cost] [--bare] [--record] [--json]
+    [--child-mode contract|restricted] [--require-cost | --no-require-cost] [--bare] [--record] [--note TEXT] [--json]
+    [--arms with,without | with | without]
 python3 plugin/scripts/module_eval.py --module ofono/data --probe-restricted [--model M] [--record] [--json]
 
 모듈 템플릿(`templates/module-skills/<p>/<m>/evals/<case>/`)의 case마다 두 arm을 자식 `claude -p`(읽기 도구만,
@@ -14,6 +15,12 @@ with 1순위 통과 수 ≥ without, 안전 위반 0, 단가 실측(PLAN C0). �
 
 **자식 실행은 비용이 든다.** `--dry-run` 결과를 사용자에게 보이고 승인받은 뒤에만 실제로 돌린다(guard ask, 규칙 7).
 `--probe-restricted`(자식 1회, ≈$0.05)도 같다.
+
+H C1+D: case는 합성(`synthetic: true`) 또는 마스킹 발췌(`synthetic: false` + `origin`, `skillcheck.origin_problems`)다. 출력 형식·arm
+구성은 플랫폼별(`OUTPUT_SPECS`·`ARM_BUILTINS`, oFono·Android). 모뎀(`db_category: common`) deep case의 with arm은 증상 모듈 문서 +
+모뎀 SKILL(runtime `--also`와 같다). 한 arm(`--arms with`)은 관문 없이 `single-arm`이고, `--record`는 프롬프트 틀·입력·다른 arm
+문서가 그대로일 때만 기존 기록에 합친다(아니면 종료 2 "<arm> 기록이 낡음"). 기록에는 case마다 `doc_bytes`·`token_delta`, 관문에
+`token_goal`(with − without ≤ 0이면 met)이 남는다.
 
 사내 게이트웨이 모델(Claude Code + 사내 모델, docs/development/RUNTIMES.md): CLI가 모르는 모델이면 result의 costBasis가
 "unknown"이고 비용은 자리 표시 값이라 쓰지 않는다 — run 비용은 null(비용 행 skipped), 단가(`unit_cost_usd`)는 남기지 않고 토큰만
@@ -42,7 +49,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from common import exitcodes, masking, yamlio
+from common import exitcodes, masking, skillcheck, yamlio
 from common.claude_child import (
     COST_UNKNOWN,
     ChildResult,
@@ -90,9 +97,9 @@ LIVE_SKILL = REPO / "plugin" / "skills" / "telephony-triage" / "reference"
 ARMS = ("with", "without")
 CONFIG = {"with": "with_skill", "without": "without_skill"}
 DEFAULT_MAX_COST = 1.5          # IMPL:651 (6회 ≤ $1.5)
-DEFAULT_UNIT = 0.25             # IMPL:647 eval 73 실측 단가(추정)
+DEFAULT_UNIT = 0.08             # RESULT C0 실측 $0.061 + 실제 로그 입력 여유(H C1+D R18). 기록 단가가 있으면 그것이 먼저다
 EPS = 1e-9
-CASE_MAX_BYTES = 16384          # IMPL:45
+CASE_MAX_BYTES = skillcheck.CASE_CAP     # 받을 때 점검과 같은 값 하나(H C1+D R3, 48 KiB)
 EVIDENCE_LIMIT = 200
 RAW_READ_LIMIT = 100            # 원본 .log 구간 읽기 한도(줄)
 GREP_CONTEXT_LIMIT = 20
@@ -104,13 +111,26 @@ ARM_PINS = {
     "ofono/post/platforms/ofono/log-guide.md": "3e36455bcc47d340a9fdcc2cf0ed533ba9453dc3c151903166c1b2133c4622a1",
     "ofono/post/explore-rules.md": "c9847aadd3844fb5cb1a8cb9905772010dd8b44c600f2907b5c781ca8cda0b80",
 }
+# 플랫폼별 내장 문서(arm 자료 `<p>/pre|post/` 아래 상대 경로 → 자식 cwd 상대 경로). explore-rules.md는 따로 둔다.
+# without = pre, explore/with = post. Android는 log-guide 대신 내장 log-tags·ril-requests·fail-causes(DD §4.4, H C1+D S2)
+ARM_BUILTINS = {
+    "ofono": {"pre": [("platforms/ofono/log-guide.md", "builtin/platforms/ofono/log-guide.md")],
+              "post": [("platforms/ofono/log-guide.md", "builtin/platforms/ofono/log-guide.md")]},
+    "android": {"pre": [("log-tags.md", "builtin/log-tags.md"), ("ril-requests.md", "builtin/ril-requests.md"),
+                        ("fail-causes.md", "builtin/fail-causes.md")],
+                "post": []},
+}
+# pre 사본이 지금 플러그인 파일과 같은지(R26): arm 자료 pre 상대 경로 → LIVE_SKILL 상대 경로
+EQUALS_LIVE = {"ofono": [("platforms/ofono/log-guide.md", "platforms/ofono/log-guide.md")],
+               "android": [("log-tags.md", "log-tags.md"), ("ril-requests.md", "ril-requests.md"),
+                           ("fail-causes.md", "fail-causes.md")]}
 
 # --- case 형식 (설계 §2) ------------------------------------------------------------------------------
 CASE_KEYS = {"schema_version", "name", "kind", "synthetic", "key", "issue", "parse", "input", "run_expect", "expect"}
+CASE_OPTIONAL = {"origin"}      # 마스킹 발췌(synthetic: false)에만, 형식은 skillcheck.origin_problems (H C1+D R4)
 ISSUE_KEYS = {"summary", "description", "occurred_at", "platform_version", "sim_slot"}
 INPUT_KEYS = {"deep": {"deep_input", "events", "timeline", "log"}, "explore": {"explore_input", "timeline", "analysis"}}
-FILES_SET = {"deep": {"source.log", "events.json", "timeline.md", "deep-input.json"},
-             "explore": {"source.log", "timeline.md", "explore-input.json", "analysis.json"}}
+FILES_SET = skillcheck.FILES_SET
 EXPECT_KEYS = {"layer", "daemon", "evidence", "trap", "wrong_layer"}
 EXPLORE_REASONS = {"no_candidate", "cause_unconfirmed"}
 NAME_RX = re.compile(r"^[a-z0-9][a-z0-9-]{2,60}$")
@@ -118,18 +138,24 @@ KEY_RX = re.compile(r"^MOCK-9\d{3}$")
 FILE_RX = re.compile(r"^files/([a-z0-9-]+\.(?:log|md|json))$")
 ISO_RX = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})$")
 TYPE_ID_RX = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,40}$")
-MARKER = "-- [합성]"
+MARKER = skillcheck.SYNTHETIC_MARK
 
 # --- 자식 프롬프트 (설계 §7.3) -------------------------------------------------------------------------
 FIELDS = FIELDS_DEEP
-OUTPUT_SPEC = """원인 층: <관리 데몬 | D-Bus | ofonod | 벤더 RIL(exynos-ril) | 모뎀·망 | 곁가지(<데몬>) | 그 층 로그 없음(<층>)> — <한 줄 이유>
-원인 데몬: <데몬 이름 | 알 수 없음>
-근거:
+_SPEC_TAIL = """근거:
 - <입력 파일의 줄 그대로, 또는 그 줄의 이어진 일부(8자 이상)> [— <짧은 설명>]
 반대 근거: <한 줄 | 없음>
 분석 스킬 의견: <1위와 같음 | <원인 ID> — <근거> | 해당 없음(후보 없음)>
 규칙 제안:
 - [이슈 DB] add-parser-rule|update-signature … — 근거: … | - [스킬] … — 근거: … | 없음"""
+# 플랫폼별 출력 형식(H C1+D R9). 칸 이름(FIELDS)은 같고 층 어휘만 다르다. 둘 다 `원인 아님(정상 동작)`을 받는다
+OUTPUT_SPECS = {
+    "ofono": ("원인 층: <관리 데몬 | D-Bus | ofonod | 벤더 RIL(exynos-ril) | 모뎀·망 | 곁가지(<데몬>) | 그 층 로그 없음(<층>) "
+              "| 원인 아님(정상 동작)> — <한 줄 이유>\n원인 데몬: <데몬 이름 | 알 수 없음>\n" + _SPEC_TAIL),
+    "android": ("원인 층: <프레임워크 | RILJ | RIL HAL | 벤더 RIL | 벤더 IMS | 모뎀·망 | 곁가지(<태그>) | 그 층 로그 없음(<층>) "
+                "| 원인 아님(정상 동작)> — <한 줄 이유>\n원인 데몬: <구성요소: 태그·클래스·벤더 데몬 | 알 수 없음>\n" + _SPEC_TAIL),
+}
+OUTPUT_SPEC = OUTPUT_SPECS["ofono"]
 PROMPT_TEMPLATE = """너는 telephony-triage 모듈 문서 평가의 격리된 분석 실행자다. 실제 사용자는 없고 질문할 수 없다. 한 번에 답을 끝낸다.
 지금 디렉토리 안의 파일만 읽는다. 파일을 만들거나 바꾸지 않고 명령을 실행하지 않는다.
 
@@ -162,7 +188,7 @@ INPUT_LISTS = {
     "deep": ("- deep-input.json — 입력 요약(마스킹됨). 안의 경로는 이 파일 기준 상대 경로다.\n"
              "- events.json — 마스킹된 이벤트.\n"
              "- timeline.md — 마스킹된 타임라인.\n"
-             "- source.log — 합성 원본 로그. 찾기(검색)나 offset·limit(100줄 이하)을 준 구간 읽기만 한다. 통째로 읽지 않는다."),
+             "- source.log — 원본 로그(합성 또는 마스킹 발췌). 찾기(검색)나 offset·limit(100줄 이하)을 준 구간 읽기만 한다. 통째로 읽지 않는다."),
     "explore": ("- explore-input.json — 타임라인 머리 정보.\n"
                 "- timeline.md — 마스킹된 타임라인.\n"
                 "- analysis.json — 분석 요약(마스킹됨)."),
@@ -180,7 +206,9 @@ outside: <첫 줄 | 못 읽음>
 CLEAN_RX = re.compile(r"[*`\"'“”‘’]")
 LABEL_CUT_RX = re.compile(r"\s*(?:—|–|\s-\s|\()")
 TRAP_RX = re.compile(r"그\s*층\s*로그\s*(가\s*)?(없|남아\s*있지\s*않)|아래\s*층\s*(로그|줄)\s*(이|가)?\s*없|"
-                     r"RIL\s*(trace\s*)?(줄|로그)\s*(이|가)?\s*없")
+                     r"RIL\s*(trace\s*)?(줄|로그)\s*(이|가)?\s*없|"
+                     # Android(DD §4.4, H C1+D S3)
+                     r"RILJ\s*(줄|로그)\s*(이|가)?\s*없|벤더\s*(RIL|층)\s*(줄|로그)\s*(이|가)?\s*없|radio\s*버퍼|수집되지\s*않")
 # S6: 도구 자신의 산출물(규칙 파일·시그니처)을 바꿨다는 완료 주장만 잡는다. 설계 §9.3 원안은 맨 `규칙`·`문서`·`파일` 주어와
 # `됨`도 받아서 ② DITD의 정책 라우팅 규칙("정책 규칙이 이미 추가됨 상태였을 수")이나 "설정 파일이 변경됨 흔적" 같은
 # 분석 문장을 위반으로 잡았다(리뷰 P1). 맨 `규칙`은 바로 뒤에 동사가 오는 `규칙을 추가했다` 꼴만(앞이 정책·라우팅이면 뺌),
@@ -198,7 +226,11 @@ NOTE_MISSING, NOTE_WEAK, NOTE_S3 = "없는 파일 읽기 시도(cwd 안)", "근�
 ROW_DOCS, ROW_COST = "지정 문서 모두 읽음", "비용 기록"
 TIE_RULE = ("동률(1순위 통과 수 같음): with 토큰이 적으면 pass, 아니면 tie(종료 0, 경고) — B로 갈지 사용자 판단 "
             "(설계 §15 Q1 기본값, IMPL:612)")
-DEEP_BASELINE_NOTE = "deep without arm은 지금 oFono에 분석 스킬이 없어 log-guide.md만 준 구성 기준선이다"
+DEEP_BASELINE_NOTE = {
+    "ofono": "deep without arm은 지금 oFono에 분석 스킬이 없어 log-guide.md만 준 구성 기준선이다",
+    "android": "Android without = 내장 log-tags·ril-requests·fail-causes",
+}
+SINGLE_ARM_NOTE = "한 arm만 돌렸다 — 관문은 --record로 기존 기록과 합친 뒤에만 판정한다"
 
 
 class CaseError(Exception):
@@ -243,6 +275,15 @@ class Source:
     @property
     def common_dir(self) -> Path:
         return self.templates / self.platform / "_common"
+
+    def db_category(self) -> str | None:
+        """modules.yaml의 이 모듈 `db_category`(없거나 못 읽으면 None — 그때는 모뎀 also 규칙을 쓰지 않는다)."""
+        try:
+            doc = skillcheck.load_modules_yaml((self.templates / "modules.yaml").read_bytes())
+            cat = doc["platforms"][self.platform]["modules"][self.module]["db_category"]
+        except Exception:  # noqa: BLE001 - 없음·형식 오류 모두 "모름"
+            return None
+        return cat if isinstance(cat, str) else None
 
 
 def sha256(data: bytes) -> str:
@@ -297,8 +338,8 @@ def load_case(case_dir) -> Case:
         data = yamlio.load(path)
     except Exception as exc:  # noqa: BLE001 — YAML 오류·인코딩 오류 모두 case 오류
         fail(f"case.yaml 읽기 실패: {exc}")
-    if not isinstance(data, dict) or set(data) != CASE_KEYS:
-        fail(f"최상위 키는 {sorted(CASE_KEYS)}")
+    if not isinstance(data, dict) or not CASE_KEYS <= set(data) <= CASE_KEYS | CASE_OPTIONAL:
+        fail(f"최상위 키는 {sorted(CASE_KEYS)}(+ {sorted(CASE_OPTIONAL)})")
     if not (isinstance(data["schema_version"], int) and not isinstance(data["schema_version"], bool)
             and data["schema_version"] == 1):
         fail("schema_version은 1")
@@ -307,8 +348,8 @@ def load_case(case_dir) -> Case:
     kind = data["kind"]
     if kind not in INPUT_KEYS:
         fail("kind는 deep 또는 explore")
-    if data["synthetic"] is not True:
-        fail("synthetic: true 필요(합성 표식)")
+    if data["synthetic"] not in (True, False) or not isinstance(data["synthetic"], bool):
+        fail("synthetic은 true(합성) 또는 false(마스킹 발췌, origin 필요)")
     if not isinstance(data["key"], str) or not KEY_RX.match(data["key"]):
         fail("key는 MOCK-9NNN")
     issue = data["issue"]
@@ -371,10 +412,10 @@ def load_case(case_dir) -> Case:
         log = raw.decode("utf-8")
     except (OSError, UnicodeDecodeError):
         fail("files/source.log는 UTF-8")
-    if not log.startswith(MARKER):
-        fail("files/source.log 첫 줄은 '-- [합성]'으로 시작")
     if "\r" in log:
         fail("files/source.log는 LF 줄바꿈")
+    for why in skillcheck.origin_problems(data, log):     # 합성 표식 또는 마스킹 발췌 origin(R4·R5)
+        fail(f"origin {why}")
     total = sum(p.lstat().st_size for p in case_dir.rglob("*") if p.is_file() and not p.is_symlink())
     if total > CASE_MAX_BYTES:
         fail(f"case 디렉토리 {total}B > {CASE_MAX_BYTES}B")
@@ -400,17 +441,26 @@ def find_cases(src: Source) -> list[Path]:
 # --- arm 자료·펼치기 (설계 §7) ---------------------------------------------------------------------------
 
 def check_pins(arm_root: Path, platform: str) -> list[str]:
-    """ARM_PINS와 다른(또는 없는) 파일 목록. 이 플랫폼 것만 본다."""
+    """ARM_PINS와 다르거나 없는 파일, 그리고 고정값 없이 놓인 파일 목록. 이 플랫폼 것만 본다.
+
+    닫힘(H C1+D R25): 이 플랫폼의 자료 디렉토리가 있는데 고정값이 하나도 없으면 `<p>/ (ARM_PINS 없음)` 한 줄을 돌려준다.
+    """
+    pins = {rel: pin for rel, pin in ARM_PINS.items() if rel.startswith(platform + "/")}
+    base = arm_root / platform
+    if not pins:
+        return [f"{platform}/ (ARM_PINS 없음)"] if base.is_dir() else []
     bad = []
-    for rel, pin in ARM_PINS.items():
-        if not rel.startswith(platform + "/"):
-            continue
-        p = arm_root / rel
+    for rel, pin in pins.items():
         try:
-            if sha256(p.read_bytes()) != pin:
+            if sha256((arm_root / rel).read_bytes()) != pin:
                 bad.append(rel)
         except OSError:
             bad.append(rel)
+    if base.is_dir():
+        for p in sorted(base.rglob("*")):
+            rel = p.relative_to(arm_root).as_posix()
+            if p.is_file() and rel not in pins:
+                bad.append(f"{rel} (고정값 없음)")
     return bad
 
 
@@ -422,30 +472,59 @@ def _type_id(case: Case) -> str | None:
     return tid if isinstance(tid, str) and TYPE_ID_RX.match(tid) else None
 
 
+def symptom_module(case: Case, src: Source) -> str | None:
+    """모뎀 also 규칙(H C1+D R8): 이 모듈의 `db_category`가 `common`이면 deep-input.json `module`(`<p>/<증상 모듈>`)의
+    증상 모듈 이름, 아니면 None. 증상 모듈이 같은 플랫폼의 다른 모듈 디렉토리가 아니면 CaseError."""
+    if case.kind != "deep" or src.db_category() != "common":
+        return None
+    try:
+        mod = json.loads(case.file("deep_input").read_text(encoding="utf-8")).get("module")
+    except (OSError, ValueError, AttributeError):
+        mod = None
+    p, _, name = mod.partition("/") if isinstance(mod, str) else ("", "", "")
+    if p != src.platform or not re.fullmatch(r"[a-z]+", name) or name == src.module \
+            or not (src.templates / p / name).is_dir():
+        raise CaseError(f"{case.name}: deep-input.json module은 같은 플랫폼의 증상 모듈(<p>/<m>)이어야 한다(모뎀 also)")
+    return name
+
+
 def arm_sources(case: Case, arm: str, src: Source) -> tuple[list[tuple[str, Path]], list[tuple[str, Path]]]:
-    """(cwd 루트에 둘 case 파일 [(상대 경로, 원본)], 프롬프트 순서의 문서 [(상대 경로, 원본)]). 설계 §7.2 표."""
+    """(cwd 루트에 둘 case 파일 [(상대 경로, 원본)], 프롬프트 순서의 문서 [(상대 경로, 원본)]). 설계 §7.2 표.
+
+    - deep/with: `_common` ×2 + SKILL + analyzer + 참조(type_id 파일이 있을 때). 모뎀(`db_category: common`)이면
+      증상 모듈의 SKILL·analyzer + 모뎀 SKILL + 증상 모듈 참조(runtime `triage.py module --also`와 같다, R8).
+    - deep/without: 플랫폼 내장 pre 문서(oFono log-guide, Android log-tags·ril-requests·fail-causes).
+    - explore/with: post explore-rules + `_common` ×2 + explore.md + 플랫폼 내장 post 문서(Android는 없음).
+    - explore/without: pre explore-rules + 플랫폼 내장 pre 문서.
+    """
     p, m = src.platform, src.module
+    if p not in ARM_BUILTINS:
+        raise UsageError(f"arm 구성이 없는 플랫폼: {p}")
     files = [(Path(v).name, case.dir / v) for v in case.input.values()]
     pre, post = src.arm_root / p / "pre", src.arm_root / p / "post"
-    lg = f"builtin/platforms/{p}/log-guide.md"
+    builtin = {k: [(rel, base / src_rel) for src_rel, rel in ARM_BUILTINS[p][k]] for k, base in (("pre", pre), ("post", post))}
     common = [(f"module-skill/{p}/_common/layers.md", src.common_dir / "layers.md"),
               (f"module-skill/{p}/_common/components.md", src.common_dir / "components.md")]
     if case.kind == "deep":
         if arm == "with":
-            docs = common + [(f"module-skill/{p}/{m}/SKILL.md", src.module_dir / "SKILL.md"),
-                             (f"module-skill/{p}/{m}/analyzer.md", src.module_dir / "analyzer.md")]
+            sym = symptom_module(case, src)
+            owner = sym or m
+            owner_dir = src.templates / p / owner
+            docs = common + [(f"module-skill/{p}/{owner}/SKILL.md", owner_dir / "SKILL.md"),
+                             (f"module-skill/{p}/{owner}/analyzer.md", owner_dir / "analyzer.md")]
+            if sym:
+                docs.append((f"module-skill/{p}/{m}/SKILL.md", src.module_dir / "SKILL.md"))
             tid = _type_id(case)
-            ref = src.module_dir / "references" / f"{tid}.md" if tid else None
+            ref = owner_dir / "references" / f"{tid}.md" if tid else None
             if ref is not None and ref.is_file():
-                docs.append((f"module-skill/{p}/{m}/references/{tid}.md", ref))
+                docs.append((f"module-skill/{p}/{owner}/references/{tid}.md", ref))
         else:
-            docs = [(lg, pre / "platforms" / p / "log-guide.md")]
+            docs = list(builtin["pre"])
     elif arm == "with":
         docs = [("builtin/explore-rules.md", post / "explore-rules.md"), *common,
-                (f"module-skill/{p}/{m}/explore.md", src.module_dir / "explore.md"),
-                (lg, post / "platforms" / p / "log-guide.md")]
+                (f"module-skill/{p}/{m}/explore.md", src.module_dir / "explore.md"), *builtin["post"]]
     else:
-        docs = [("builtin/explore-rules.md", pre / "explore-rules.md"), (lg, pre / "platforms" / p / "log-guide.md")]
+        docs = [("builtin/explore-rules.md", pre / "explore-rules.md"), *builtin["pre"]]
     return files, docs
 
 
@@ -463,11 +542,20 @@ def stage_arm(case: Case, arm: str, cwd: Path, src: Source) -> tuple[set[Path], 
     return allowed, [rel for rel, _ in docs], staged
 
 
-def build_prompt(case: Case, docs: list[str]) -> str:
+def build_prompt(case: Case, docs: list[str], platform: str) -> str:
+    if platform not in OUTPUT_SPECS:
+        raise UsageError(f"출력 형식이 없는 플랫폼: {platform}")
     doc_list = "\n".join(f"{i}. {rel}" for i, rel in enumerate(docs, 1))
     return (PROMPT_TEMPLATE.replace("{TASK}", TASKS[case.kind]).replace("{KEY}", case.key)
             .replace("{DOC_LIST}", doc_list).replace("{INPUT_LIST}", INPUT_LISTS[case.kind])
-            .replace("{OUTPUT_SPEC}", OUTPUT_SPEC))
+            .replace("{OUTPUT_SPEC}", OUTPUT_SPECS[platform]))
+
+
+def prompt_frame_sha(platform: str) -> str:
+    """프롬프트 틀(문서 목록·작업 키를 뺀 부분: 틀·과제·입력 목록·출력 형식)의 sha256. 한 arm 합치기 조건(R17)."""
+    parts = [PROMPT_TEMPLATE, OUTPUT_SPECS.get(platform, ""), *(TASKS[k] for k in sorted(TASKS)),
+             *(INPUT_LISTS[k] for k in sorted(INPUT_LISTS))]
+    return sha256("\0".join(parts).encode("utf-8"))
 
 
 def cwd_problem(cwd: Path) -> str | None:
@@ -736,8 +824,9 @@ def _sum_known(values) -> float | int | None:
     return sum(vals) if vals and all(v is not None for v in vals) else None
 
 
-def gate_summary(rows: list[dict], require_cost: bool) -> dict:
-    """관문 판정과 그 근거 숫자. 순서는 설계 §9.6 그대로."""
+def gate_summary(rows: list[dict], require_cost: bool, arms=ARMS) -> dict:
+    """관문 판정과 그 근거 숫자. 순서는 설계 §9.6 그대로. 한 arm만 돌렸으면(R17) 안전·무효까지만 보고
+    `single-arm`(종료 0)이다 — 비교 관문은 `--record`로 기존 기록과 합친 뒤에 판정한다."""
     ran = [r for r in rows if r["status"] != "not_run"]
     by = {a: [r for r in ran if r["arm"] == a] for a in ARMS}
     out = {"pass1_with": sum(r["pass1"] for r in by["with"]), "pass1_without": sum(r["pass1"] for r in by["without"]),
@@ -748,6 +837,8 @@ def gate_summary(rows: list[dict], require_cost: bool) -> dict:
            "invalid": [], "require_cost": require_cost, "warning": None}
     tw, tn = out["tokens_with"], out["tokens_without"]
     out["token_delta"] = tw - tn if tw is not None and tn is not None else None
+    # 토큰 목표(DEC 11/05): with − without ≤ 0. 넘으면 "over" — 막지 않고 RESULT에 표시하고 문서를 줄인다
+    out["token_goal"] = None if out["token_delta"] is None else ("met" if out["token_delta"] <= 0 else "over")
     nw, nn = _sum_known(r["noncache"] for r in by["with"]), _sum_known(r["noncache"] for r in by["without"])
     out["token_delta_noncache"] = nw - nn if nw is not None and nn is not None else None
     cw, cn = _sum_known(r["cost_usd"] for r in by["with"]), _sum_known(r["cost_usd"] for r in by["without"])
@@ -767,6 +858,9 @@ def gate_summary(rows: list[dict], require_cost: bool) -> dict:
         return verdict("fail", exitcodes.CHECK_FAILED)
     if out["invalid"]:
         return verdict("invalid", exitcodes.CHECK_FAILED)
+    if len(tuple(arms)) == 1:
+        out["warning"] = SINGLE_ARM_NOTE
+        return verdict("single-arm", exitcodes.OK)
     pw, pn = out["pass1_with"], out["pass1_without"]
     if pw < pn:
         return verdict("fail", exitcodes.CHECK_FAILED)
@@ -927,14 +1021,21 @@ def write_benchmark(iter_dir: Path, plan_rows: list[dict], gradings: dict, gate:
              "runs": runs, "run_summary": summary,
              "notes": [f"관문: {gate['verdict']}" + (f" — {gate['warning']}" if gate.get("warning") else ""),
                        f"pass1 with {gate['pass1_with']}/{n_cases} · without {gate['pass1_without']}/{n_cases}",
-                       DEEP_BASELINE_NOTE]}
+                       DEEP_BASELINE_NOTE.get(str(meta.get("skill_name", "")).split("/")[0], "")]}
     write_json(iter_dir / "benchmark.json", bench)
     return bench
 
 
+def case_token_delta(with_rows: list[dict], without_rows: list[dict]) -> int | None:
+    """case 하나의 with − without `tie_tokens` 합(어느 쪽이든 모르면 None)."""
+    a, b = _sum_known(r["tie_tokens"] for r in with_rows), _sum_known(r["tie_tokens"] for r in without_rows)
+    return a - b if a is not None and b is not None else None
+
+
 def summary_table(rows: list[dict], gate: dict) -> list[str]:
-    head = "case | kind | with pass1 | without pass1 | Δtokens(total) | Δtokens(non-cache) | Δcost | safety with/without | notes with/without"
-    out = [head, "|".join(["---"] * 9)]
+    head = ("case | kind | with pass1 | without pass1 | Δtokens(total) | Δtokens(non-cache) | Δcost | safety with/without "
+            "| notes with/without | token goal")
+    out = [head, "|".join(["---"] * 10)]
     def d(w, n, key, fmt="+d"):
         a, b = _sum_known(r[key] for r in w), _sum_known(r[key] for r in n)
         return format(a - b, fmt) if a is not None and b is not None else "?"
@@ -944,10 +1045,12 @@ def summary_table(rows: list[dict], gate: dict) -> list[str]:
     for case in dict.fromkeys(r["case"] for r in rows):
         w = [r for r in rows if r["case"] == case and r["arm"] == "with"]
         n = [r for r in rows if r["case"] == case and r["arm"] == "without"]
+        delta = case_token_delta(w, n)
         out.append(" | ".join([case, (w or n)[0]["kind"], p1(w), p1(n), d(w, n, "tie_tokens"), d(w, n, "noncache"),
                                d(w, n, "cost_usd", "+.4f"),
                                f"{sum(len(r['safety_fail']) for r in w)}/{sum(len(r['safety_fail']) for r in n)}",
-                               f"{sum(r['notes'] for r in w)}/{sum(r['notes'] for r in n)}"]))
+                               f"{sum(r['notes'] for r in w)}/{sum(r['notes'] for r in n)}",
+                               "?" if delta is None else ("met" if delta <= 0 else "over")]))
     return out
 
 
@@ -960,7 +1063,7 @@ def build_parser() -> argparse.ArgumentParser:
                                  allow_abbrev=False)
     ap.add_argument("--module", required=True, help="<플랫폼>/<모듈>, 예: ofono/data")
     ap.add_argument("--templates", type=Path, default=None)
-    ap.add_argument("--arms", default="with,without")
+    ap.add_argument("--arms", default="with,without", help="with,without | with | without (한 arm은 --record로 합친다)")
     ap.add_argument("--runs", type=int, default=1)
     ap.add_argument("--case", action="append", default=[])
     ap.add_argument("--model")
@@ -979,6 +1082,7 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--bare", action="store_true", help="읽기 전용 자식을 claude --bare로(인증 실패 시 그 run만 --bare 없이 다시)")
     ap.add_argument("--probe-restricted", action="store_true")
     ap.add_argument("--record", action="store_true")
+    ap.add_argument("--note", help="모듈 기록의 note(예: vendor tags added (unconfirmed for the real DB))")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--json", action="store_true")
     return ap
@@ -1090,8 +1194,11 @@ def _main(args) -> int:
     arms = [a.strip() for a in args.arms.split(",") if a.strip()]
     if set(arms) == {"old", "new"}:
         raise UsageError("--arms old,new: E 단계에서 지원")
-    if sorted(arms) != sorted(ARMS) or len(arms) != 2:
-        raise UsageError("--arms는 with,without만(C0)")
+    if len(arms) != len(set(arms)) or not set(arms) <= set(ARMS) or not arms:
+        raise UsageError("--arms는 with,without · with · without")
+    arms = [a for a in ARMS if a in arms]
+    if platform not in OUTPUT_SPECS or platform not in ARM_BUILTINS:
+        raise UsageError(f"모르는 플랫폼: {platform} (출력 형식·arm 구성 없음)")
     if args.runs < 1:
         raise UsageError("--runs는 1 이상")
     max_cost = None if args.no_max_cost else (DEFAULT_MAX_COST if args.max_cost is None else args.max_cost)
@@ -1101,6 +1208,8 @@ def _main(args) -> int:
     if not (arm_root / platform).is_dir():
         raise UsageError("without arm 자료 없음(레포 체크아웃에서만)")
     bad = check_pins(arm_root, platform)
+    if bad == [f"{platform}/ (ARM_PINS 없음)"]:
+        raise UsageError(f"arm material pins missing: {platform} (ARM_PINS에 고정값 없음 — 통합 커밋 I3에서 넣는다)")
     if bad:
         raise UsageError(f"arm material changed: {', '.join(bad)} (ARM_PINS와 다름)")
     templates = args.templates or TEMPLATES
@@ -1127,27 +1236,37 @@ def _main(args) -> int:
                 not {"--restricted", "--permission-prompts"} <= cli.flags:
             raise UsageError("이 CLI에 --restricted 없음")
         unit, unit_source = estimate_unit(args.module)
-        plan = [(c, a, n) for c in cases for a in ARMS for n in range(1, args.runs + 1)]
+        plan = [(c, a, n) for c in cases for a in arms for n in range(1, args.runs + 1)]
         within = max_cost is None or len(plan) * unit <= max_cost + EPS
         source = args.sha or "worktree"
         if args.dry_run:
-            return dry_run(args, src, plan, cli, unit, unit_source, max_cost, within, source)
+            return dry_run(args, src, plan, cli, unit, unit_source, max_cost, within, source, arms)
         if not within:
             raise UsageError(f"추정 ${len(plan) * unit:.2f} > 상한 ${max_cost:.2f}")
-        return execute(args, src, cases, plan, cli, unit, max_cost, source)
+        return execute(args, src, cases, plan, cli, unit, max_cost, source, arms)
     finally:
         if tmp_src is not None:
             shutil.rmtree(tmp_src, ignore_errors=True)
 
 
+def pre_equals_live(src: Source) -> bool:
+    """arm 자료 pre 내장 문서가 지금 플러그인 파일과 바이트로 같은지(R26). oFono: log-guide, Android: 내장 3개.
+    dry-run 키 이름은 C0 그대로 `pre_log_guide_equals_live`다(두 플랫폼 공통 뜻: pre 내장 문서 = 현재 플러그인)."""
+    try:
+        return all((src.arm_root / src.platform / "pre" / a).read_bytes() == (LIVE_SKILL / b).read_bytes()
+                   for a, b in EQUALS_LIVE[src.platform])
+    except (OSError, KeyError):
+        return False
+
+
 def dry_run(args, src: Source, plan, cli: CliInfo | None, unit: float, unit_source: str, max_cost: float | None,
-            within: bool, source: str) -> int:
+            within: bool, source: str, arms: list[str]) -> int:
     shown_cli = cli or CliInfo(path="claude", version=None, flags=frozenset())
     entries = []
     for case, arm, n in plan:
         files, docs = arm_sources(case, arm, src)
         staged = [{"path": rel, "bytes": len(p.read_bytes()), "sha256": sha256(p.read_bytes())} for rel, p in files + docs]
-        prompt = build_prompt(case, [rel for rel, _ in docs])
+        prompt = build_prompt(case, [rel for rel, _ in docs], src.platform)
         spec = ChildSpec(prompt, Path("."), args.model, args.timeout, max_budget_usd=max_cost, mode=args.child_mode,
                          bare=args.bare)
         try:
@@ -1159,21 +1278,20 @@ def dry_run(args, src: Source, plan, cli: CliInfo | None, unit: float, unit_sour
                         "prompt_bytes": len(prompt.encode("utf-8")), "argv": argv,
                         "stdin": f"<stdin {len(prompt.encode('utf-8'))} bytes>"})
     _, _, _, auth_keys = prepare_env(dict(os.environ))
-    live = LIVE_SKILL / "platforms" / src.platform / "log-guide.md"
-    pre = src.arm_root / src.platform / "pre" / "platforms" / src.platform / "log-guide.md"
-    try:
-        equals_live = live.read_bytes() == pre.read_bytes()
-    except OSError:
-        equals_live = False
+    equals_live = pre_equals_live(src)
     restricted_ok = cli is not None and {"--restricted", "--permission-prompts"} <= cli.flags
-    data = {"module": args.module, "arms": list(ARMS), "runs": args.runs, "source": source,
+    data = {"module": args.module, "arms": list(arms), "runs": args.runs, "source": source,
             "cli": ({"path": cli.path, "version": cli.version, "flags": sorted(cli.flags)} if cli else "missing"),
             "child_mode": args.child_mode, "require_cost": args.require_cost, "bare": args.bare, "plan": entries,
             "estimate": {"unit_usd": round(unit, 4), "unit_source": unit_source, "runs": len(plan),
                          "total_usd": round(len(plan) * unit, 4)},
             "max_cost_usd": max_cost, "within_cap": within, "auth_from_user_settings": auth_keys,
-            "arm_material": {"pins_ok": True, "pre_log_guide_equals_live": equals_live}, "tie_rule": TIE_RULE}
-    lines = [f"모듈 {args.module} · arm with,without · runs {args.runs} · 출처 {source}",
+            "arm_material": {"pins_ok": True, "pre_log_guide_equals_live": equals_live,
+                             "pre_equals_live_files": [rel for rel, _ in EQUALS_LIVE[src.platform]]},
+            "prompt_sha256": prompt_frame_sha(src.platform), "tie_rule": TIE_RULE}
+    if args.note:
+        data["note"] = args.note
+    lines = [f"모듈 {args.module} · arm {','.join(arms)} · runs {args.runs} · 출처 {source}",
              f"cli: {cli.path + ' ' + str(cli.version) + ' ' + ','.join(sorted(cli.flags)) if cli else 'missing'}",
              f"자식 모드: {args.child_mode} · 비용 기록 필수: {args.require_cost}"]
     if args.bare:
@@ -1190,7 +1308,8 @@ def dry_run(args, src: Source, plan, cli: CliInfo | None, unit: float, unit_sour
                                                for a in entries[0]["argv"]))
     lines += [(f"추정: run {len(plan)} × ${unit:.2f}({unit_source}) = ${len(plan) * unit:.2f} · 상한 "
                f"{'없음' if max_cost is None else f'${max_cost:.2f}'} · {'상한 안' if within else '상한 넘음'}"),
-              f"arm 자료 고정값 일치 · pre log-guide = 현재 플러그인: {equals_live}",
+              (f"arm 자료 고정값 일치 · pre 내장 문서({', '.join(rel for rel, _ in EQUALS_LIVE[src.platform])}) = 현재 플러그인: "
+               f"{equals_live}"),
               f"동률 규칙: {TIE_RULE}",
               "자식 실행 없음(dry-run). 실제 실행은 사용자 승인 뒤에만."]
     _emit(args, data, lines)
@@ -1198,7 +1317,7 @@ def dry_run(args, src: Source, plan, cli: CliInfo | None, unit: float, unit_sour
 
 
 def execute(args, src: Source, cases: list[Case], plan, cli: CliInfo, unit: float, max_cost: float | None,
-            source: str) -> int:
+            source: str, arms: list[str]) -> int:
     iter_dir = (args.iteration or next_dir(WORKSPACE, f"module-{src.platform}-{src.module}-")).resolve()
     if iter_dir.exists():
         raise UsageError(f"기존 반복 디렉토리는 덮어쓰지 않는다: {iter_dir}")
@@ -1216,6 +1335,7 @@ def execute(args, src: Source, cases: list[Case], plan, cli: CliInfo, unit: floa
     docs_sha: dict[str, str] = {}
     inputs_sha: dict[str, str] = {}
     builtin: list[str] = []
+    doc_bytes: dict[str, int] = {}          # case → with arm 문서 바이트(펼친 문서 합)
     stop: str | None = None
     for case, arm, n in plan:
         if stop is None and max_cost is not None and (spent + unit > max_cost + EPS or max_cost - spent < 0.01):
@@ -1237,7 +1357,9 @@ def execute(args, src: Source, cases: list[Case], plan, cli: CliInfo, unit: floa
                     docs_sha[f"{arm}/{s['path']}"] = s["sha256"]
                 else:
                     inputs_sha[f"{case.name}/{s['path']}"] = s["sha256"]
-            prompt = build_prompt(case, docs)
+            if arm == "with":
+                doc_bytes.setdefault(case.name, sum(s["bytes"] for s in staged if s["doc"]))
+            prompt = build_prompt(case, docs, src.platform)
             (run_dir / "prompt.txt").write_text(prompt, encoding="utf-8")
             budget = (max_cost - spent) if max_cost is not None else None
             res = run_child(ChildSpec(prompt, cwd, args.model, args.timeout, max_budget_usd=budget,
@@ -1266,47 +1388,45 @@ def execute(args, src: Source, cases: list[Case], plan, cli: CliInfo, unit: floa
         spent += res.cost_usd if res.cost_usd is not None else unit
         if res.status in ("blocked", "env_error"):
             stop = res.status
-    gate = gate_summary(rows, args.require_cost)
-    known = [r["cost_usd"] for r in rows if r["status"] == "completed" and r["cost_usd"] is not None]
-    # 비용 미상(costBasis unknown) run이 하나라도 있으면 단가를 남기지 않는다(자리 표시 단가도, 일부 run만의 평균도 단가가 아니다)
-    unknown = any(r["cost_basis"] == COST_UNKNOWN for r in rows if r["status"] != "not_run")
-    reported = [r["cost_usd"] for r in rows if r["cost_usd"] is not None]
-    model = next((r["init_model"] for r in rows if r["init_model"]), None)
-    entry = {"generated": _utc(), "repo_commit": commit, "repo_dirty": dirty, "source": source,
-             "docs_sha256": dict(sorted(docs_sha.items())), "cli_version": cli.version, "init_model": model,
-             "iteration": iter_dir.name, "runtime": "claude-code", "child_mode": args.child_mode,
-             "builtin_plugins": builtin, "inputs_sha256": dict(sorted(inputs_sha.items())), "cases": {},
-             "gate": {k: gate[k] for k in ("pass1_with", "pass1_without", "tokens_with", "tokens_without", "token_delta",
-                                           "token_delta_noncache", "cost_delta_usd", "safety_violations", "notes",
-                                           "invalid", "require_cost", "verdict")},
-             "unit_cost_usd": round(sum(known) / len(known), 6) if known and not unknown else None,
-             "total_cost_usd": round(sum(reported), 6) if reported or not unknown else None,
-             "cost_basis": COST_UNKNOWN if unknown else "reported"}
-    for case in cases:
-        rec = {"kind": case.kind}
-        for arm in ARMS:
-            mine = [{"status": r["status"] if r["status"] != "not_run" else f"not_run: {r['not_run']}",
-                     "pass1": r["pass1"], "safety_fail": r["safety_fail"], "valid": r["valid"],
-                     "tokens_total": r["tokens_total"], "output_tokens": r["output_tokens"], "cost_usd": r["cost_usd"],
-                     "elapsed_s": r["elapsed_s"]} for r in rows if r["case"] == case.name and r["arm"] == arm]
-            rec[arm] = mine[0] if len(mine) == 1 else mine
-        entry["cases"][case.name] = rec
+    gate = gate_summary(rows, args.require_cost, arms)
+    entry = module_entry(rows, gate, cases, arms, {
+        "generated": _utc(), "repo_commit": commit, "repo_dirty": dirty, "source": source,
+        "docs_sha256": dict(sorted(docs_sha.items())), "cli_version": cli.version,
+        "iteration": iter_dir.name, "runtime": "claude-code", "child_mode": args.child_mode,
+        "builtin_plugins": builtin, "inputs_sha256": dict(sorted(inputs_sha.items())),
+        "prompt_sha256": prompt_frame_sha(src.platform)}, doc_bytes)
+    if args.note:
+        entry["note"] = args.note
     write_json(iter_dir / "module_offsite_results.json", {"schema_version": 1, "modules": {args.module: entry}})
     write_benchmark(iter_dir, rows, gradings, gate, {
-        "skill_name": args.module, "skill_path": f"templates/module-skills/{args.module}", "executor_model": model,
-        "analyzer_model": None, "timestamp": entry["generated"], "runs_per_configuration": args.runs})
+        "skill_name": args.module, "skill_path": f"templates/module-skills/{args.module}",
+        "executor_model": entry["init_model"], "analyzer_model": None, "timestamp": entry["generated"],
+        "runs_per_configuration": args.runs})
     code = gate["exit"]
+    shown_rows, shown_gate = rows, gate
     if args.record:
         if gate["verdict"] == "incomplete":
             print("--record 거부: 실행되지 않았거나 막힌 run이 있다(불완전한 자료는 단가로 쓰지 않는다)", file=sys.stderr)
             code = exitcodes.USAGE
+        elif len(arms) == 1:
+            old = (_load_json(RESULTS).get("modules") or {}).get(args.module)
+            try:
+                entry, shown_rows = merge_single_arm(old, entry, arms[0], src, cases, args.require_cost)
+            except UsageError as exc:
+                print(f"--record 거부: {exc}", file=sys.stderr)
+                code = exitcodes.USAGE
+            else:
+                shown_gate = gate_summary(shown_rows, args.require_cost)
+                code = shown_gate["exit"]
+                merge_record(RESULTS, lambda d: d.setdefault("modules", {}).__setitem__(args.module, entry))
         else:
             merge_record(RESULTS, lambda d: d.setdefault("modules", {}).__setitem__(args.module, entry))
-    lines = [*summary_table(rows, gate), "",
-             (f"관문: {gate['verdict']} (pass1 with {gate['pass1_with']} · without {gate['pass1_without']}, "
-              f"안전 위반 with {gate['safety_violations']['with']} · without {gate['safety_violations']['without']})")]
-    if gate.get("warning"):
-        lines.append(gate["warning"])
+    lines = [*summary_table(shown_rows, shown_gate), "",
+             (f"관문: {shown_gate['verdict']} (pass1 with {shown_gate['pass1_with']} · without {shown_gate['pass1_without']}, "
+              f"안전 위반 with {shown_gate['safety_violations']['with']} · without "
+              f"{shown_gate['safety_violations']['without']}, 토큰 목표 {shown_gate['token_goal'] or '?'})")]
+    if shown_gate.get("warning"):
+        lines.append(shown_gate["warning"])
     for r in rows:
         for t in r["safety_fail"]:
             lines.append(f"안전 위반: {r['case']} {r['arm']} run-{r['run']} — {t}")
@@ -1314,15 +1434,111 @@ def execute(args, src: Source, cases: list[Case], plan, cli: CliInfo, unit: floa
             lines.append(f"상태: {r['case']} {r['arm']} run-{r['run']} — {r['status']}")
         if r["status"] == "not_run":
             lines.append(f"실행 안 함: {r['case']} {r['arm']} run-{r['run']} — {r['not_run']}")
-    for why in gate["invalid"]:
+    for why in shown_gate["invalid"]:
         lines.append(f"무효: {why}")
+    unknown = entry["cost_basis"] == COST_UNKNOWN
     total = "미상(costBasis unknown)" if entry["total_cost_usd"] is None else f"${entry['total_cost_usd']:.4f}"
     if unknown and entry["total_cost_usd"] is not None:
         total += " + 미상(costBasis unknown run)"
     lines += [f"자식 모드: {args.child_mode} · 총비용: {total} · 반복: {iter_dir}",
               "S3는 C0의 짧은 로그(≤100줄)로는 시험되지 않는다. 규칙 제안 R1~R5 미검증(C0 범위 밖)."]
-    _emit(args, {**entry, "gate": gate, "iteration_path": str(iter_dir)}, lines)
+    _emit(args, {**entry, "gate": shown_gate, "iteration_path": str(iter_dir)}, lines)
     return code
+
+
+# --- 모듈 기록·한 arm 합치기 (H C1+D R17) ------------------------------------------------------------------
+
+GATE_KEYS = ("pass1_with", "pass1_without", "tokens_with", "tokens_without", "token_delta", "token_delta_noncache",
+             "token_goal", "cost_delta_usd", "safety_violations", "notes", "invalid", "require_cost", "verdict")
+# case·arm 기록 칸. 뒤 6개는 한 arm 합치기 때 관문을 다시 계산하려고 둔다(run_row와 같은 이름)
+RUN_RECORD_KEYS = ("status", "pass1", "safety_fail", "valid", "tokens_total", "output_tokens", "cost_usd", "elapsed_s",
+                   "tie_tokens", "noncache", "notes", "cost_skipped", "cost_basis", "init_model")
+
+
+def _run_record(r: dict) -> dict:
+    rec = {k: r[k] for k in RUN_RECORD_KEYS}
+    if r["status"] == "not_run":
+        rec["status"] = f"not_run: {r['not_run']}"
+    return rec
+
+
+def _rows_from_record(entry: dict, arm: str) -> list[dict] | None:
+    """기록의 한 arm을 run_row 모양으로(관문 재계산용). 칸이 모자라면(옛 기록) None."""
+    out = []
+    for name, rec in (entry.get("cases") or {}).items():
+        runs = rec.get(arm) if isinstance(rec, dict) else None
+        runs = [runs] if isinstance(runs, dict) else runs
+        if not isinstance(runs, list) or not runs:
+            return None
+        for i, run in enumerate(runs, 1):
+            if not isinstance(run, dict) or not set(RUN_RECORD_KEYS) <= set(run):
+                return None
+            out.append({"case": name, "kind": rec.get("kind"), "arm": arm, "run": i, "not_run": None,
+                        **{k: run[k] for k in RUN_RECORD_KEYS}})
+    return out
+
+
+def module_entry(rows: list[dict], gate: dict, cases: list[Case], arms, base: dict, doc_bytes: dict) -> dict:
+    """모듈 기록 한 개(module_offsite_results.json `modules.<p>/<m>`). case마다 arm 기록, with 문서 바이트, 토큰 차."""
+    known = [r["cost_usd"] for r in rows if r["status"] == "completed" and r["cost_usd"] is not None]
+    # 비용 미상(costBasis unknown) run이 하나라도 있으면 단가를 남기지 않는다(자리 표시 단가도, 일부 run만의 평균도 단가가 아니다)
+    unknown = any(r["cost_basis"] == COST_UNKNOWN for r in rows if r["status"] != "not_run")
+    reported = [r["cost_usd"] for r in rows if r["cost_usd"] is not None]
+    entry = {**base, "init_model": next((r["init_model"] for r in rows if r["init_model"]), None),
+             "cases": {}, "gate": {k: gate[k] for k in GATE_KEYS},
+             "unit_cost_usd": round(sum(known) / len(known), 6) if known and not unknown else None,
+             "total_cost_usd": round(sum(reported), 6) if reported or not unknown else None,
+             "cost_basis": COST_UNKNOWN if unknown else "reported"}
+    for case in cases:
+        rec: dict = {"kind": case.kind}
+        for arm in arms:
+            mine = [_run_record(r) for r in rows if r["case"] == case.name and r["arm"] == arm]
+            rec[arm] = mine[0] if len(mine) == 1 else mine
+        w = [r for r in rows if r["case"] == case.name and r["arm"] == "with"]
+        n = [r for r in rows if r["case"] == case.name and r["arm"] == "without"]
+        rec["doc_bytes"] = doc_bytes.get(case.name)
+        rec["token_delta"] = case_token_delta(w, n) if w and n else None
+        entry["cases"][case.name] = rec
+    return entry
+
+
+def merge_single_arm(old, new: dict, arm: str, src: Source, cases: list[Case], require_cost: bool):
+    """한 arm(`--arms with|without`) 기록을 기존 모듈 기록에 합친다. (합친 기록, 두 arm run 행).
+
+    조건(R17): 기존 기록이 있고 프롬프트 틀(`prompt_sha256`)·입력(`inputs_sha256`)·case 집합이 같고, 다른 arm의
+    문서(`docs_sha256`의 `<다른 arm>/…`)가 지금 파일과 같고, 다른 arm 기록이 관문 재계산 칸을 다 가진다.
+    아니면 UsageError `"<다른 arm> 기록이 낡음 — 두 arm 모두 다시"`.
+    """
+    other = "without" if arm == "with" else "with"
+    stale = UsageError(f"{other} 기록이 낡음 — 두 arm 모두 다시")
+    if not isinstance(old, dict) or old.get("prompt_sha256") != new["prompt_sha256"] \
+            or old.get("inputs_sha256") != new["inputs_sha256"] or set(old.get("cases") or {}) != set(new["cases"]):
+        raise stale
+    now = {}
+    for case in cases:
+        for rel, path in arm_sources(case, other, src)[1]:
+            now[f"{other}/{rel}"] = sha256(path.read_bytes())
+    old_docs = {k: v for k, v in (old.get("docs_sha256") or {}).items() if k.startswith(other + "/")}
+    if old_docs != now:
+        raise stale
+    other_rows = _rows_from_record(old, other)
+    new_rows = _rows_from_record(new, arm)
+    if other_rows is None or new_rows is None:
+        raise stale
+    rows = new_rows + other_rows if arm == "with" else other_rows + new_rows
+    gate = gate_summary(rows, require_cost)
+    doc_bytes = {}
+    for name in new["cases"]:
+        src_rec = new["cases"][name] if arm == "with" else old["cases"][name]
+        doc_bytes[name] = src_rec.get("doc_bytes")
+    base = {k: v for k, v in new.items() if k not in ("cases", "gate", "unit_cost_usd", "total_cost_usd", "cost_basis",
+                                                      "init_model")}
+    base["docs_sha256"] = dict(sorted({**old_docs, **{k: v for k, v in new["docs_sha256"].items()
+                                                       if k.startswith(arm + "/")}}.items()))
+    base["iterations"] = {other: (old.get("iterations") or {}).get(other, old.get("iteration")), arm: new["iteration"]}
+    if "note" not in new and "note" in old:
+        base["note"] = old["note"]
+    return module_entry(rows, gate, cases, ARMS, base, doc_bytes), rows
 
 
 if __name__ == "__main__":

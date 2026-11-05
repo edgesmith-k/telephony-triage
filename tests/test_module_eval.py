@@ -510,7 +510,7 @@ def test_stage_arm_sets(env, tmp_path):
 
 
 def test_prompt_shared_block_and_no_leaks(env):
-    prompts = {(n, a): me.build_prompt(env.cases[n], env.docs(n, a)) for n in CASES for a in me.ARMS}
+    prompts = {(n, a): me.build_prompt(env.cases[n], env.docs(n, a), "ofono") for n in CASES for a in me.ARMS}
     tails = {p[p.index("[출력]"):] for p in prompts.values()}
     assert len(tails) == 1 and me.OUTPUT_SPEC in tails.pop()
     for n in CASES:
@@ -856,7 +856,7 @@ def test_output_files_shape(env, tmp_path):
     assert str(tmp_path) not in raw and "/tmp/" not in raw and GOOD[CASES[0]][:20] not in raw and "[과제]" not in raw
     assert entry["iteration"] == "it" and entry["child_mode"] == "contract" and entry["gate"]["verdict"] in ("pass", "tie")
     assert f"{CASES[0]}/deep-input.json" in entry["inputs_sha256"]
-    assert set(entry["cases"][CASES[0]]) == {"kind", "with", "without"}
+    assert set(entry["cases"][CASES[0]]) == {"kind", "with", "without", "doc_bytes", "token_delta"}
 
 
 @POSIX
@@ -864,7 +864,7 @@ def test_dry_run_launches_no_child(env, tmp_path, capsys):
     assert env.run("--dry-run", "--json") == 0
     data = json.loads(capsys.readouterr().out)
     assert env.calls() == [] and not (tmp_path / "workspace").exists()
-    assert data["estimate"] == {"unit_usd": 0.25, "unit_source": "default", "runs": 6, "total_usd": 1.5}
+    assert data["estimate"] == {"unit_usd": 0.08, "unit_source": "default", "runs": 6, "total_usd": 0.48}
     assert data["within_cap"] is True and data["max_cost_usd"] == 1.5 and data["child_mode"] == "contract"
     assert data["cli"]["version"] == "2.1.318 (Claude Code)" and set(data["cli"]["flags"]) == set(FLAGS)
     entry = data["plan"][0]
@@ -884,7 +884,7 @@ def test_dry_run_launches_no_child(env, tmp_path, capsys):
 @POSIX
 def test_max_cost_refuses_before_start(env, tmp_path):
     env.streams(all_good(env))
-    assert env.run("--max-cost", "1.0", "--iteration", str(tmp_path / "it")) == 2
+    assert env.run("--max-cost", "0.4", "--iteration", str(tmp_path / "it")) == 2       # 6 × $0.08 > $0.40
     assert env.calls() == [] and not (tmp_path / "it").exists()
 
 
@@ -1169,3 +1169,329 @@ def test_arm_pins(tmp_path, monkeypatch):
     code = me.main(["--module", "ofono/data", "--arm-material", str(arms), "--dry-run",
                     "--claude", str(tmp_path / "no-claude")])
     assert code == 2 and not (tmp_path / "ws").exists()
+
+
+# --- H C1+D O2: 마스킹 발췌 case·출력 형식·모뎀 also·플랫폼 arm·한 arm 합치기·토큰 목표 ---------------------------
+
+ORIGIN = {"kind": "masked-excerpt", "log": "O2", "episode": "E4b", "lines": "100-107,200-204",
+          "masker": "0123456789ab", "residual": "2026-11-06"}
+
+
+def _excerpt_copy(env, tmp_path, origin=None, body_edit=None, header=None):
+    """data-apn-auth-reject를 마스킹 발췌 모양으로 바꾼 사본(13줄 = 8 + 5)."""
+    import shutil
+    src = env.templates / "ofono" / "data" / "evals" / "data-apn-auth-reject"
+    d = tmp_path / f"ex-{next(_IDS)}" / "data-apn-auth-reject"
+    shutil.copytree(src, d)
+    origin = dict(ORIGIN if origin is None else origin)
+    data = yaml.safe_load((d / "case.yaml").read_text(encoding="utf-8"))
+    data["synthetic"] = False
+    data["origin"] = origin
+    (d / "case.yaml").write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    lines = LOGS["data-apn-auth-reject"].split("\n")
+    body = lines[:8] + ["-- [생략]"] + lines[8:]
+    if body_edit:
+        body = body_edit(body)
+    head = header if header is not None else f"-- [마스킹 발췌] {origin['log']} {origin['episode']} 줄 {origin['lines']}"
+    (d / "files" / "source.log").write_text("\n".join([head, *body]) + "\n", encoding="utf-8")
+    return d
+
+
+def test_load_case_excerpt_ok(env, tmp_path):
+    case = me.load_case(_excerpt_copy(env, tmp_path))
+    assert case.kind == "deep" and case.key == "MOCK-9101"
+
+
+def test_load_case_excerpt_needs_origin(env, tmp_path):
+    d = _excerpt_copy(env, tmp_path)
+    data = yaml.safe_load((d / "case.yaml").read_text(encoding="utf-8"))
+    del data["origin"]
+    (d / "case.yaml").write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+    with pytest.raises(me.CaseError, match=r"data-apn-auth-reject: origin origin 필요"):
+        me.load_case(d)
+    d = _excerpt_copy(env, tmp_path, origin={k: v for k, v in ORIGIN.items() if k != "masker"} | {"commit": "x"})
+    with pytest.raises(me.CaseError, match="origin 키는 정확히"):
+        me.load_case(d)
+
+
+def test_load_case_synthetic_rejects_origin(env, tmp_path):
+    d = env.templates / "ofono" / "data" / "evals" / "data-apn-auth-reject"
+    import shutil
+    c = tmp_path / "syn" / d.name
+    shutil.copytree(d, c)
+    data = yaml.safe_load((c / "case.yaml").read_text(encoding="utf-8"))
+    data["origin"] = dict(ORIGIN)
+    (c / "case.yaml").write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+    with pytest.raises(me.CaseError, match="origin은 마스킹 발췌"):
+        me.load_case(c)
+    data.pop("origin")
+    data["extra"] = 1
+    (c / "case.yaml").write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+    with pytest.raises(me.CaseError, match="최상위 키는"):
+        me.load_case(c)
+
+
+def test_load_case_excerpt_header_mismatch(env, tmp_path):
+    d = _excerpt_copy(env, tmp_path, header="-- [마스킹 발췌] 첨부 로그 O2 에피소드 E4b, 원본 줄 100-107,200-204")
+    with pytest.raises(me.CaseError, match="머리 줄과 다르다"):
+        me.load_case(d)
+    d = _excerpt_copy(env, tmp_path, header="-- [합성] x")
+    with pytest.raises(me.CaseError, match="머리 줄과 다르다"):
+        me.load_case(d)
+
+
+def test_load_case_excerpt_line_count(env, tmp_path):
+    d = _excerpt_copy(env, tmp_path, body_edit=lambda b: [x for x in b if x != "-- [생략]"])
+    with pytest.raises(me.CaseError, match="구간 줄 수"):
+        me.load_case(d)
+    d = _excerpt_copy(env, tmp_path, body_edit=lambda b: b[:-1])
+    with pytest.raises(me.CaseError, match="구간 줄 수"):
+        me.load_case(d)
+
+
+def test_load_case_excerpt_over_120(env, tmp_path):
+    d = _excerpt_copy(env, tmp_path, origin={**ORIGIN, "lines": "1-110,200-211"})
+    with pytest.raises(me.CaseError, match="120줄 초과"):
+        me.load_case(d)
+
+
+def test_load_case_excerpt_residual(env, tmp_path):
+    imsi = "45005" + "1234567890"
+    d = _excerpt_copy(env, tmp_path, body_edit=lambda b: b[:-1] + [b[-1] + f" imsi={imsi}"])
+    with pytest.raises(me.CaseError, match="남은 식별자"):
+        me.load_case(d)
+
+
+def test_case_cap_is_skillcheck():
+    from common import skillcheck
+    assert me.CASE_MAX_BYTES == skillcheck.CASE_CAP == 49152
+    assert me.FILES_SET is skillcheck.FILES_SET and me.DEFAULT_UNIT == 0.08
+
+
+def test_output_spec_per_platform(env):
+    ofono, android = me.OUTPUT_SPECS["ofono"], me.OUTPUT_SPECS["android"]
+    assert me.OUTPUT_SPEC == ofono and "| 원인 아님(정상 동작)> — <한 줄 이유>" in ofono
+    assert ofono.startswith("원인 층: <관리 데몬 | D-Bus | ofonod | 벤더 RIL(exynos-ril) | 모뎀·망 | 곁가지(<데몬>) | ")
+    layers = re.match(r"원인 층: <(.*)> — ", android).group(1).split(" | ")
+    assert layers == ["프레임워크", "RILJ", "RIL HAL", "벤더 RIL", "벤더 IMS", "모뎀·망", "곁가지(<태그>)",
+                      "그 층 로그 없음(<층>)", "원인 아님(정상 동작)"]
+    assert "\n원인 데몬: <구성요소: 태그·클래스·벤더 데몬 | 알 수 없음>\n" in android
+    assert ofono.split("\n")[2:] == android.split("\n")[2:]                  # 근거 칸부터 같다
+    for p in ("ofono", "android"):
+        labels = [m.group(1) for m in re.finditer(r"(?m)^([^\s:-][^:\n]*?):", me.OUTPUT_SPECS[p])]
+        assert labels == list(me.FIELDS)
+    case = env.cases["data-apn-auth-reject"]
+    assert android in me.build_prompt(case, ["a.md"], "android") and ofono not in me.build_prompt(case, ["a.md"], "android")
+    with pytest.raises(me.UsageError):
+        me.build_prompt(case, ["a.md"], "qmi")
+    assert "원본 로그(합성 또는 마스킹 발췌)" in me.INPUT_LISTS["deep"]
+    assert me.DEEP_BASELINE_NOTE["android"] == "Android without = 내장 log-tags·ril-requests·fail-causes"
+
+
+def test_trap_rx_android_phrases():
+    for text in ("RILJ 로그가 없다", "RILJ 줄 없음", "벤더 RIL 줄이 없다", "벤더 층 로그 없음", "radio 버퍼가 늦게 시작",
+                 "벤더 RIL 줄이 수집되지 않았다"):
+        assert me.TRAP_RX.search(text), text
+    assert not me.TRAP_RX.search("RILJ 응답이 오류다")
+
+
+MODULES_YAML = """schema_version: 2
+platforms:
+  ofono:
+    modules:
+      data: {path: ofono/data, db_category: data}
+      modem: {path: ofono/modem, db_category: common}
+"""
+
+
+def _modem_env(env, symptom="ofono/data"):
+    import shutil
+    (env.templates / "modules.yaml").write_text(MODULES_YAML, encoding="utf-8")
+    modem = env.templates / "ofono" / "modem"
+    (modem / "evals").mkdir(parents=True, exist_ok=True)
+    (modem / "SKILL.md").write_text("# ofono-modem\n", encoding="utf-8")
+    d = modem / "evals" / "modem-reset-call"
+    if d.exists():
+        shutil.rmtree(d)
+    shutil.copytree(env.templates / "ofono" / "data" / "evals" / "data-apn-auth-reject", d)
+    data = yaml.safe_load((d / "case.yaml").read_text(encoding="utf-8"))
+    data["name"] = d.name
+    (d / "case.yaml").write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    deep = json.loads((d / "files" / "deep-input.json").read_text(encoding="utf-8"))
+    deep["module"] = symptom
+    (d / "files" / "deep-input.json").write_text(json.dumps(deep, ensure_ascii=False), encoding="utf-8")
+    return me.load_case(d), me.Source(env.templates, "ofono", "modem", env.arms)
+
+
+def test_arm_sources_modem_also(env):
+    case, src = _modem_env(env)
+    assert src.db_category() == "common"
+    docs = [rel for rel, _ in me.arm_sources(case, "with", src)[1]]
+    assert docs == ["module-skill/ofono/_common/layers.md", "module-skill/ofono/_common/components.md",
+                    "module-skill/ofono/data/SKILL.md", "module-skill/ofono/data/analyzer.md",
+                    "module-skill/ofono/modem/SKILL.md", "module-skill/ofono/data/references/DATA-001.md"]
+    assert [rel for rel, _ in me.arm_sources(case, "without", src)[1]] == ["builtin/platforms/ofono/log-guide.md"]
+    # 모뎀이 아닌 모듈은 그대로(modules.yaml이 있어도)
+    data_src = me.Source(env.templates, "ofono", "data", env.arms)
+    assert data_src.db_category() == "data"
+    assert env.docs("data-apn-auth-reject", "with")[2] == "module-skill/ofono/data/SKILL.md"
+    for bad in ("ofono/modem", "ofono/none", "android/data", None):
+        case, src = _modem_env(env, symptom=bad)
+        with pytest.raises(me.CaseError, match="모뎀 also"):
+            me.arm_sources(case, "with", src)
+
+
+def _android_env(env, tmp_path, monkeypatch, pinned=True):
+    """env의 oFono 템플릿을 android 플랫폼으로 복사하고 Android arm 자료를 tmp에 만든다."""
+    import shutil
+    shutil.copytree(env.templates / "ofono", env.templates / "android")
+    pins = dict(me.ARM_PINS)
+    for rel in ("pre/log-tags.md", "pre/ril-requests.md", "pre/fail-causes.md", "pre/explore-rules.md",
+                "post/explore-rules.md"):
+        p = env.arms / "android" / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(f"# android/{rel} 사본(테스트)\n", encoding="utf-8")
+        pins[f"android/{rel}"] = hashlib.sha256(p.read_bytes()).hexdigest()
+    if pinned:
+        monkeypatch.setattr(me, "ARM_PINS", pins)
+
+
+@POSIX
+def test_android_arm_sets_dry_run(env, tmp_path, monkeypatch, capsys):
+    _android_env(env, tmp_path, monkeypatch)
+    code = me.main(["--module", "android/data", "--templates", str(env.templates), "--arm-material", str(env.arms),
+                    "--claude", str(env.claude), "--dry-run", "--json"])
+    assert code == 0
+    plan = json.loads(capsys.readouterr().out)["plan"]
+    docs = {(e["kind"], e["arm"]): [s["path"] for s in e["staged"] if "/" in s["path"]] for e in plan}
+    builtins = ["builtin/log-tags.md", "builtin/ril-requests.md", "builtin/fail-causes.md"]
+    assert docs[("deep", "without")] == builtins
+    assert docs[("deep", "with")] == ["module-skill/android/_common/layers.md", "module-skill/android/_common/components.md",
+                                      "module-skill/android/data/SKILL.md", "module-skill/android/data/analyzer.md",
+                                      "module-skill/android/data/references/DATA-001.md"]
+    assert docs[("explore", "with")] == ["builtin/explore-rules.md", "module-skill/android/_common/layers.md",
+                                         "module-skill/android/_common/components.md", "module-skill/android/data/explore.md"]
+    assert docs[("explore", "without")] == ["builtin/explore-rules.md", *builtins]
+    case = env.cases["data-ditd-route-fail"]
+    src = me.Source(env.templates, "android", "data", env.arms)
+    files = dict(me.arm_sources(case, "with", src)[1])
+    assert files["builtin/explore-rules.md"] == env.arms / "android" / "post" / "explore-rules.md"
+    assert dict(me.arm_sources(case, "without", src)[1])["builtin/explore-rules.md"] == \
+        env.arms / "android" / "pre" / "explore-rules.md"
+
+
+def test_check_pins_fail_closed(env, tmp_path, monkeypatch, capsys):
+    _android_env(env, tmp_path, monkeypatch, pinned=False)
+    assert me.check_pins(env.arms, "android") == ["android/ (ARM_PINS 없음)"]
+    assert me.check_pins(tmp_path / "nothing", "android") == []
+    code = me.main(["--module", "android/data", "--templates", str(env.templates), "--arm-material", str(env.arms),
+                    "--claude", str(env.claude), "--dry-run"])
+    assert code == 2 and "arm material pins missing: android" in capsys.readouterr().err
+    (env.arms / "ofono" / "pre" / "stray.md").write_text("x", encoding="utf-8")
+    assert me.check_pins(env.arms, "ofono") == ["ofono/pre/stray.md (고정값 없음)"]
+
+
+def test_pre_equals_live_per_platform(env, tmp_path, monkeypatch):
+    _android_env(env, tmp_path, monkeypatch)
+    live = tmp_path / "live"
+    for rel in ("log-tags.md", "ril-requests.md", "fail-causes.md"):
+        (live / rel).parent.mkdir(parents=True, exist_ok=True)
+        (live / rel).write_bytes((env.arms / "android" / "pre" / rel).read_bytes())
+    (live / "platforms" / "ofono").mkdir(parents=True)
+    (live / "platforms" / "ofono" / "log-guide.md").write_text("다름\n", encoding="utf-8")
+    monkeypatch.setattr(me, "LIVE_SKILL", live)
+    assert me.pre_equals_live(me.Source(env.templates, "android", "data", env.arms)) is True
+    assert me.pre_equals_live(me.Source(env.templates, "ofono", "data", env.arms)) is False
+    (live / "fail-causes.md").write_text("바뀜\n", encoding="utf-8")
+    assert me.pre_equals_live(me.Source(env.templates, "android", "data", env.arms)) is False
+
+
+def test_arms_flag_values(env, capsys):
+    assert env.run("--arms", "with,with", "--dry-run") == 2
+    assert env.run("--arms", "maybe", "--dry-run") == 2
+    assert "--arms는 with,without · with · without" in capsys.readouterr().err
+
+
+@POSIX
+def test_single_arm_dry_run_and_note(env, capsys):
+    assert env.run("--arms", "without", "--dry-run", "--json", "--note", "vendor tags added") == 0
+    data = json.loads(capsys.readouterr().out)
+    assert data["arms"] == ["without"] and {e["arm"] for e in data["plan"]} == {"without"}
+    assert data["estimate"]["runs"] == 3 and data["note"] == "vendor tags added"
+    assert data["prompt_sha256"] == me.prompt_frame_sha("ofono") != me.prompt_frame_sha("android")
+
+
+def _with_only(env):
+    return [good_stream(env, n, "with") for n in CASES]
+
+
+@POSIX
+def test_record_merge_one_arm(env, tmp_path, capsys):
+    env.streams(all_good(env))
+    assert env.run("--record", "--iteration", str(tmp_path / "it1"), "--note", "first") == 0
+    first = json.loads(me.RESULTS.read_text(encoding="utf-8"))["modules"]["ofono/data"]
+    assert first["prompt_sha256"] == me.prompt_frame_sha("ofono") and first["note"] == "first"
+    assert first["gate"]["token_goal"] == "met"
+    env.log.unlink()
+    env.streams([good_stream(env, n, "with", tokens=50) for n in CASES])
+    capsys.readouterr()
+    assert env.run("--arms", "with", "--iteration", str(tmp_path / "it2")) == 0      # 기록 없이: single-arm
+    assert "single-arm" in capsys.readouterr().out
+    env.log.unlink()
+    assert env.run("--arms", "with", "--record", "--iteration", str(tmp_path / "it3")) == 0
+    merged = json.loads(me.RESULTS.read_text(encoding="utf-8"))["modules"]["ofono/data"]
+    assert merged["iterations"] == {"without": "it1", "with": "it3"} and merged["iteration"] == "it3"
+    assert merged["note"] == "first"
+    assert merged["cases"][CASES[0]]["without"] == first["cases"][CASES[0]]["without"]
+    assert merged["cases"][CASES[0]]["with"]["tie_tokens"] == 50
+    assert merged["gate"]["tokens_with"] == 150 and merged["gate"]["tokens_without"] == first["gate"]["tokens_without"]
+    assert merged["gate"]["verdict"] in ("pass", "tie") and merged["gate"]["token_goal"] == "met"
+    assert merged["cases"][CASES[0]]["token_delta"] == 50 - first["cases"][CASES[0]]["without"]["tie_tokens"]
+    assert merged["cases"][CASES[0]]["doc_bytes"] == first["cases"][CASES[0]]["doc_bytes"] > 0
+    assert set(merged["docs_sha256"]) == set(first["docs_sha256"])
+
+
+@POSIX
+def test_record_merge_refuses_stale(env, tmp_path, capsys):
+    env.streams(_with_only(env))
+    assert env.run("--arms", "with", "--record", "--iteration", str(tmp_path / "it0")) == 2   # 기존 기록 없음
+    assert "without 기록이 낡음 — 두 arm 모두 다시" in capsys.readouterr().err and not me.RESULTS.exists()
+    env.log.unlink()
+    env.streams(all_good(env))
+    assert env.run("--record", "--iteration", str(tmp_path / "it1")) == 0
+    before = me.RESULTS.read_text(encoding="utf-8")
+    # without arm 문서(arm 자료)는 고정값이 막는다 → with arm 문서를 바꾸고 without만 다시 돌리면 거부
+    skill = env.templates / "ofono" / "data" / "SKILL.md"
+    skill.write_text(skill.read_text(encoding="utf-8") + "바뀜\n", encoding="utf-8")
+    env.log.unlink()
+    env.streams([good_stream(env, n, "without") for n in CASES])
+    capsys.readouterr()
+    assert env.run("--arms", "without", "--record", "--iteration", str(tmp_path / "it2")) == 2
+    assert "with 기록이 낡음 — 두 arm 모두 다시" in capsys.readouterr().err
+    assert me.RESULTS.read_text(encoding="utf-8") == before
+    # 입력이 바뀌면 거부
+    tl = env.templates / "ofono" / "data" / "evals" / CASES[1] / "files" / "timeline.md"
+    tl.write_text(tl.read_text(encoding="utf-8") + "\n", encoding="utf-8")
+    env.log.unlink()
+    env.streams(_with_only(env))
+    assert env.run("--arms", "with", "--record", "--iteration", str(tmp_path / "it3")) == 2
+    assert "without 기록이 낡음" in capsys.readouterr().err
+    # 옛 기록(prompt_sha256 없음)도 거부
+    old = json.loads(before)
+    old["modules"]["ofono/data"].pop("prompt_sha256")
+    me.RESULTS.write_text(json.dumps(old), encoding="utf-8")
+    tl.write_text(tl.read_text(encoding="utf-8")[:-1], encoding="utf-8")
+    env.log.unlink()
+    assert env.run("--arms", "with", "--record", "--iteration", str(tmp_path / "it4")) == 2
+
+
+def test_token_goal_in_gate():
+    assert me.gate_summary([_row("with", tokens=90), _row("without", tokens=100)], True)["token_goal"] == "met"
+    assert me.gate_summary([_row("with", tokens=100), _row("without", tokens=100)], True)["token_goal"] == "met"
+    assert me.gate_summary([_row("with", tokens=110), _row("without", tokens=100)], True)["token_goal"] == "over"
+    assert me.gate_summary([_row("with", tokens=None), _row("without", tokens=100)], True)["token_goal"] is None
+    one = me.gate_summary([_row("with")], True, ("with",))
+    assert one["verdict"] == "single-arm" and one["exit"] == 0 and one["warning"] == me.SINGLE_ARM_NOTE
+    assert me.gate_summary([_row("with", safety=["cwd 밖 읽기 0"])], True, ("with",))["verdict"] == "fail"
+    table = me.summary_table([_row("with", tokens=110), _row("without", tokens=100)], {})
+    assert table[0].endswith("| token goal") and table[2].endswith("| over")
