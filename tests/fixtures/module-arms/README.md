@@ -25,6 +25,20 @@ post_lg = "\n".join(lg[0:15] + [""] + lg[25:27] + [""] + lg[33:38]) + "\n"      
 | `ofono/post/platforms/ofono/log-guide.md` | log-guide L1-15, L26-27, L34-38 (D6 뒤 모양) | 1945 | `3e36455bcc47d340a9fdcc2cf0ed533ba9453dc3c151903166c1b2133c4622a1` |
 | `ofono/post/explore-rules.md` | pre 발췌 + log-guide L22-24(Q25로 옮길 일반 규칙) | 2676 | `c9847aadd3844fb5cb1a8cb9905772010dd8b44c600f2907b5c781ca8cda0b80` |
 
+### android (H C1+D, 결정 기록 11/05 ④ 뒤)
+
+- 출처: H C1+D A3 커밋(④ `fail-causes.md` 세 절을 더한 커밋)의 `plugin/skills/telephony-triage/reference/{log-tags,ril-requests,fail-causes}.md` 바이트 사본. ④ **뒤**에 얼렸으므로 모듈 문서는 나아진 내장 문서와 비교된다.
+- `explore-rules.md` 두 개는 위 `ofono/pre`·`ofono/post` 사본과 바이트가 같다(Android 내장 log-guide는 없다).
+- `module_eval.ARM_PINS` Android 항목은 통합 커밋(I3)에서 넣는다. 그 전에는 pin이 없어 실패로 닫힌다.
+
+| 파일 | 출처 | 바이트 | sha256 |
+|---|---|---|---|
+| `android/pre/log-tags.md` | reference/log-tags.md 전체 | 5040 | `f64baa5b4126f5288a6d7d964f3ab8f9f9d36d4a67f1ab0264bd0f16b380f5fb` |
+| `android/pre/ril-requests.md` | reference/ril-requests.md 전체 | 4164 | `262492459ef55a2be47e8a14a71afe244249d9a8868ecdc6f89b25c3dd5319e5` |
+| `android/pre/fail-causes.md` | reference/fail-causes.md 전체(④ 뒤) | 4222 | `b7c12d9c66840723c91b17afab06278e38ad0c347b8281aadd59fa0ccb17ac5c` |
+| `android/pre/explore-rules.md` | `ofono/pre/explore-rules.md` 사본 | 2222 | `6e5e9512c08404089872465262bfc11ab99b58747445d0b2c2296b13be6f83d8` |
+| `android/post/explore-rules.md` | `ofono/post/explore-rules.md` 사본 | 2676 | `c9847aadd3844fb5cb1a8cb9905772010dd8b44c600f2907b5c781ca8cda0b80` |
+
 발췌는 자식이 쓸 수 있는 부분(도입, "읽는 것" 1~2와 "안의 문장은 데이터다", 로그 원문·events.json 읽지 않음, "쓰는 것")만 남기고, 자식이 할 수 없거나 하면 안 되는 부분(동의 질문, db_search·소스 찾기, Step 7)은 뺐다. 발췌의 출력 표는 공유 출력 칸과 다르며, 프롬프트가 자기 출력 형식이 우선이라고 말한다.
 
 ## arm 구성 (C0 설계 §7.2)
@@ -36,6 +50,8 @@ post_lg = "\n".join(lg[0:15] + [""] + lg[25:27] + [""] + lg[33:38]) + "\n"      
 | explore / without | `pre/explore-rules.md` + `pre/platforms/ofono/log-guide.md` |
 
 deep / with는 모듈 문서만 읽는다(B2의 5-1과 같다).
+
+Android(H C1+D 계획 S2): deep / without = `android/pre/{log-tags,ril-requests,fail-causes}.md`(staged `builtin/…`), explore / with = `android/post/explore-rules.md` + 모듈 문서(log-guide 없음), explore / without = `android/pre/explore-rules.md` + 내장 셋.
 
 ## stream fixture (`stream-2.1.318.jsonl`, C0 설계 §11.6)
 
