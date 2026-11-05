@@ -7,7 +7,7 @@
 - `관리 데몬` — 프로필·정책을 들고 ofonod를 부르는 데몬(NMD, LPA·ipad).
 - `D-Bus` — `org.ofono.*` 호출·오류. MOSE는 그 위의 UI·시험 클라이언트다.
 - `ofonod` — upstream oFono 안(`src/<파일>.c:`, rilmodem 드라이버).
-- `벤더 RIL(exynos-ril)` — RIL 소켓 아래 벤더 RIL 데몬.
+- `벤더 RIL(<데몬>)` — RIL 소켓 아래 벤더 RIL 데몬.
 - `모뎀·망` — 모뎀·카드·망이 낸 결과. `원인 데몬:`은 그 결과를 전한 데몬(exynos-ril, 모뎀 재시작이면 vcd).
 - `곁가지(<데몬>)` — 사슬 밖 데몬(DITD 라우팅, IMSSVC).
 - `그 층 로그 없음(<층>)` — 판단에 필요한 아래 층 줄이 입력에 없다.
@@ -21,7 +21,7 @@
 ## 줄 → 층
 
 - gril 응답 `[<slot>,<serial>]< … failed <ERR>`은 ofonod tag로 찍혀도 아래 층의 답이다. 실패는 ofonod 아래에 있다.
-- exynos 두 단계: IPC `Error(RCM_E_*)` 또는 카드 SW(`sw1 : <XX>`) → `모뎀·망`. IPC `OK(RCM_E_SUCCESS)` 뒤 `OnRequestComplete … result≠0` → `벤더 RIL(exynos-ril)`. IPC 오류인데 gril이 성공이면 벤더 RIL이 감춘 것이다.
+- exynos 두 단계: IPC `Error(RCM_E_*)` 또는 카드 SW(`sw1 : <XX>`) → `모뎀·망`. IPC `OK(RCM_E_SUCCESS)` 뒤 `OnRequestComplete … result≠0` → `벤더 RIL(<데몬>)`. IPC 오류인데 gril이 성공이면 벤더 RIL이 감춘 것이다.
 - 짝: 공유 serial이 없다. gril ↔ exynos는 요청 이름·순서·수 ms 시각으로, exynos 요청 ↔ IPC는 `Token(0x…)`·`RecordRequestHistory token=`으로 잇는다.
 - `src/dbus.c:__ofono_error_<busy|failed|no_such_element>() … m:<메서드>`는 아래 실패가 위로 보인 증상이다. busy만 예외다(두 클라이언트 경합).
 

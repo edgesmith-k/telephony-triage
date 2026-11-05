@@ -38,9 +38,12 @@ CASES = [
     ("modem", "modem-vendor-lines-missing", "explore", False, "below-layer-missing"),
 ]
 
-# 설계 D §2.0 문서 상한(바이트) — skillcheck.CAPS보다 좁다(R24)
-DOC_CAPS = {"layers.md": 2800, "components.md": 3000, "SKILL.md": 2400, "analyzer.md": 1300, "explore.md": 2400}
-REFERENCE_CAP = 1500
+# 문서 상한(바이트, C1D 보정 §2.2) — skillcheck.CAPS보다 좁다(R24). 경로 키가 파일 이름 키보다 먼저
+DOC_CAPS = {"layers.md": 2900, "components.md": 3300, "SKILL.md": 2000, "analyzer.md": 1150, "explore.md": 2600,
+            "modem/SKILL.md": 1024, "data/explore.md": 2800}
+REFERENCE_CAP = 1300
+# run별 with arm 문서 합 = 그 run이 읽는 파일 상한의 합(C1D 보정 §2.3)
+COMMON_BUDGET, DEEP_RUN_BUDGET, ALSO_RUN_BUDGET, EXPLORE_RUN_BUDGET = 6000, 10450, 11474, 8800
 # 모듈마다 references(모뎀은 없음 — deep은 증상 모듈 + also)
 REFERENCES = {"data": "DATA-001", "sim": "SIM-001", "network": "NETWORK-001", "call": "CALL-001", "sms": "SMS-001",
               "ims": "IMS-001"}
@@ -74,7 +77,7 @@ def test_android_doc_caps():
     seen = set()
     for path in _docs():
         rel = path.relative_to(ANDROID)
-        cap = REFERENCE_CAP if path.parent.name == "references" else DOC_CAPS[path.name]
+        cap = REFERENCE_CAP if path.parent.name == "references" else DOC_CAPS.get(rel.as_posix(), DOC_CAPS.get(path.name))
         assert path.stat().st_size <= cap, (rel.as_posix(), path.stat().st_size, cap)
         seen.add(rel.as_posix())
     want = {"_common/layers.md", "_common/components.md"}
@@ -89,7 +92,7 @@ def test_android_analyzer_identical():
     for module in MODULES:
         text = (ANDROID / module / "analyzer.md").read_text(encoding="utf-8")
         first, body = text.split("\n", 1)
-        assert first == f"# Android {module} — 입력과 출력 칸", module
+        assert first == f"# Android {module} — 출력 칸", module
         bodies[module] = body
     assert len(set(bodies.values())) == 1
     block = bodies["data"].split("```", 2)[1]
@@ -98,6 +101,20 @@ def test_android_analyzer_identical():
     layer_line = next(ln for ln in block.splitlines() if ln.startswith("원인 층:"))
     for name in LAYER_NAMES:
         assert name in layer_line, name
+
+
+def test_android_run_budgets():
+    """한 run의 with arm 문서 합(oFono test_doc_budgets와 같은 모양). also = 증상 모듈 deep + 모뎀 SKILL의 최댓값."""
+    common = sum((ANDROID / "_common" / n).stat().st_size for n in ("layers.md", "components.md"))
+    assert common <= COMMON_BUDGET, common
+    modem_skill = (ANDROID / "modem" / "SKILL.md").stat().st_size
+    for module in MODULES:
+        refs = [p.stat().st_size for p in (ANDROID / module / "references").glob("*.md")]
+        deep = common + sum((ANDROID / module / n).stat().st_size for n in ("SKILL.md", "analyzer.md")) + max(refs, default=0)
+        assert deep <= DEEP_RUN_BUDGET, (module, deep)
+        if module != "modem":
+            assert deep + modem_skill <= ALSO_RUN_BUDGET, (module, deep + modem_skill)
+        assert common + (ANDROID / module / "explore.md").stat().st_size <= EXPLORE_RUN_BUDGET, module
 
 
 def test_android_layers_and_skill_frontmatter():

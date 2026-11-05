@@ -39,7 +39,7 @@ platforms:
         daemons: [NMD, DITD]
         ofonod_files: [src/gprs.c, src/gprs_ext.c, src/lte.c, src/user-apn-setting.c, drivers/rilmodem/gprs.c, drivers/rilmodem/gprs-context.c, drivers/rilmodem/gprs-data-call-coordinator.c, drivers/rilmodem/lte.c, plugins/auto-internet-active.c, plugins/apn/apn-manager.c]
         ril: [SETUP_DATA_CALL, DEACTIVATE_DATA_CALL, DATA_CALL_LIST, SET_DATA_PROFILE, SET_INITIAL_ATTACH_APN, UNSOL_DATA_CALL_LIST_CHANGED]
-        sit: [SIT_SETUP_DATA_CALL, SIT_DEACT_DATA_CALL, SIT_IND_DATA_CALL_LIST_CHANGED, SIT_GET_DATA_CALL_LIST, SIT_SET_DATA_PROFILE, SIT_SET_INITIAL_ATTACH_APN, SIT_IND_PDP_ATTACHED_APN, SIT_IND_IP_ADDR_STATUS]
+        sit: [SIT_SETUP_DATA_CALL, SIT_DEACT_DATA_CALL, SIT_IND_DATA_CALL_LIST_CHANGED, SIT_GET_DATA_CALL_LIST, SIT_SET_DATA_PROFILE, SIT_SET_INITIAL_ATTACH_APN, SIT_IND_PDP_ATTACHED_APN, SIT_IND_IP_ADDR_STATUS, SIT_IND_PHYSICAL_CHANNEL_CONFIG]
         services: [PsService]
         dbus: [org.ofono.ConnectionManager, org.ofono.ConnectionContext, org.ofono.LongTermEvolution, org.ofono.apnManager, org.ofono.AllowedAccessPoints, com.samsungds.nmd]
         client_tags: [NMD__, CCONN_]
@@ -78,7 +78,7 @@ platforms:
         services: [CsService]
         dbus: [org.ofono.VoiceCallManager, org.ofono.CallSettings, org.ofono.CallForwarding, org.ofono.CallBarring, org.ofono.CallVolume, org.ofono.SupplementaryServices]
         client_tags: [UIMCS]
-        also: {IMSSVC: 'ImsCallManager|EPSFB|ImsUt|CallWaiting|\bDial'}
+        also: {IMSSVC: 'ImsCallManager|EPSFB|ImsUt|CallWaiting|\bDial', ofonod: 'IMS_UNSOL_UPDATE_CAPABILITIES'}
         neighbours: [ims]
       sms:
         path: ofono/sms
@@ -156,7 +156,7 @@ platforms:
         ril: [GET_SIM_STATUS, SIM_IO, SIM_OPEN_CHANNEL, SIM_CLOSE_CHANNEL, SIM_TRANSMIT_APDU_CHANNEL, STK_SEND_TERMINAL_RESPONSE, UNSOL_STK_SESSION_END, UNSOL_RESPONSE_SIM_STATUS_CHANGED]
         hal: [RadioSimProxy, IccIoForAppCommand]
         services: [SimService, SimIoService, StkService]
-        sit: [SIT_SIM_IO, SIT_OPEN_SIM_CHANNEL*, SIT_CLOSE_SIM_CHANNEL, SIT_TRANSMIT_SIM_APDU*, SIT_IND_STK*]
+        sit: [SIT_GET_SIM_STATUS, SIT_SIM_IO, SIT_OPEN_SIM_CHANNEL*, SIT_CLOSE_SIM_CHANNEL, SIT_TRANSMIT_SIM_APDU*, SIT_IND_STK*]
         keywords: ['re:SIM_STATE_CHANGED (READY|LOADED|ABSENT|NOT_READY|LOCKED|CARD_IO_ERROR)', 're:^SW1:0x']
       network:
         path: android/network
@@ -176,7 +176,7 @@ platforms:
         services: [CsService, SupplementaryService]
         sit: [SIT_AIMS_SET_CALL_FORWARD*, SIT_SET_VONR, SIT_IND_EMERGENCY_CALL_LIST]
         keywords: ['re:\[UT##\]', 'RILC_REQ_AIMS_SET_CALL_FORWARD', 're:UsbAgent: ATD|CommandDial']
-        also: {'^ImsPhone$': 'dialInternal|MmiCode|onMMIDone|Call', '^SHANNON_IMS$': '\[UT##\]|RILC_REQ_AIMS_SET_CALL_FORWARD'}
+        also: {'^ImsPhone$': 'dialInternal|MmiCode|onMMIDone|Call', '^SHANNON_IMS$': '\[UT##\]|RILC_REQ_AIMS_SET_CALL_FORWARD|INVITE'}   # INVITE: 사내 확인
         neighbours: [ims]
       sms:
         path: android/sms

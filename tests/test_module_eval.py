@@ -1289,12 +1289,13 @@ def test_case_cap_is_skillcheck():
 def test_output_spec_per_platform(env):
     ofono, android = me.OUTPUT_SPECS["ofono"], me.OUTPUT_SPECS["android"]
     assert me.OUTPUT_SPEC == ofono and "| 원인 아님(정상 동작)> — <한 줄 이유>" in ofono
-    assert ofono.startswith("원인 층: <관리 데몬 | D-Bus | ofonod | 벤더 RIL(exynos-ril) | 모뎀·망 | 곁가지(<데몬>) | ")
+    assert ofono.startswith("원인 층: <관리 데몬 | D-Bus | ofonod | 벤더 RIL(<데몬>) | 모뎀·망 | 곁가지(<데몬>) | ")
     layers = re.match(r"원인 층: <(.*)> — ", android).group(1).split(" | ")
     assert layers == ["프레임워크", "RILJ", "RIL HAL", "벤더 RIL", "벤더 IMS", "모뎀·망", "곁가지(<태그>)",
                       "그 층 로그 없음(<층>)", "원인 아님(정상 동작)"]
-    assert "\n원인 데몬: <구성요소: 태그·클래스·벤더 데몬 | 알 수 없음>\n" in android
-    assert ofono.split("\n")[2:] == android.split("\n")[2:]                  # 근거 칸부터 같다
+    daemon = "\n원인 데몬: <로그에 찍힌 데몬·태그 이름 그대로(역할 이름 아님) | 알 수 없음>\n"     # 두 플랫폼 같은 글(C1D 보정 §3.2, D-F2)
+    assert daemon in android and daemon in ofono and "구성요소:" not in android
+    assert ofono.split("\n")[1:] == android.split("\n")[1:]                  # 원인 데몬 칸부터 같다
     for p in ("ofono", "android"):
         labels = [m.group(1) for m in re.finditer(r"(?m)^([^\s:-][^:\n]*?):", me.OUTPUT_SPECS[p])]
         assert labels == list(me.FIELDS)

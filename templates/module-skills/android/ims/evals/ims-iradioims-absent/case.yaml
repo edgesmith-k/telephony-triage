@@ -30,4 +30,4 @@ expect:
   daemon: '없음|알 수 없음|SHANNON_IMS|벤더 IMS'
   evidence: ['service IMS is not available', 'handleImsRegistered']
   trap: null
-  wrong_layer: ['^\s*(벤더|모뎀|망|RILJ|RIL HAL)']
+  wrong_layer: ['^\s*(벤더 RIL|모뎀|망|RILJ|RIL HAL)']
