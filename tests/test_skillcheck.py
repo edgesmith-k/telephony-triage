@@ -110,9 +110,12 @@ def test_tree_sizes():
     assert checks([blob("modules.yaml", 24577)]) == [("크기", "modules.yaml")]
     assert checks([blob("modules.yaml", 24576)]) == []
     case = "ofono/data/evals/case-a"
-    got = checks([blob(f"{case}/case.yaml", 6000), blob(f"{case}/files/a.log", 6000), blob(f"{case}/files/b.md", 4385)])
+    got = checks([blob(f"{case}/case.yaml", 6000), blob(f"{case}/files/a.log", 13312), blob(f"{case}/files/b.json", 29841)])
     assert got == [("크기", case)]
-    assert sc.CAPS["modules.yaml"] == 24576 and (sc.REFERENCE_CAP, sc.CASE_CAP) == (4096, 16384)
+    assert checks([blob(f"{case}/case.yaml", 6000), blob(f"{case}/files/a.log", 13312),
+                   blob(f"{case}/files/b.json", 29840)]) == []
+    assert sc.CAPS["modules.yaml"] == 24576 and (sc.REFERENCE_CAP, sc.CASE_CAP) == (4096, 49152)
+    assert (sc.EXCERPT_LOG_CAP, sc.SYNTHETIC_LOG_CAP) == (13312, 6144)
 
 
 def test_parse_ls_tree():
@@ -324,3 +327,164 @@ def test_module_repo_check_findings_without_content(tmp_path):
 def test_module_repo_check_usage(tmp_path):
     assert tool(tmp_path / "none").returncode == 2
     assert tool().returncode == 2
+
+
+# -- H C1+D O1: case 출처·D-Bus·템플릿 전용 점검 ---------------------------------------------------
+
+ORIGIN = {"kind": "masked-excerpt", "log": "O2", "episode": "E4b", "lines": "10-12,20-21",
+          "masker": "0123456789ab", "residual": "2026-11-06"}
+EXCERPT = ("-- [마스킹 발췌] O2 E4b 줄 10-12,20-21\n"
+           "Nov  1 10:00:01 <HOST#1> ofonod[812]: a\nNov  1 10:00:02 <HOST#1> ofonod[812]: b\n"
+           "Nov  1 10:00:03 <HOST#1> ofonod[812]: c\n-- [생략]\n"
+           "Nov  1 10:00:09 <HOST#1> exynos-ril[901]: d\nNov  1 10:00:10 <HOST#1> exynos-ril[901]: e\n")
+
+
+def _excerpt(**origin) -> dict:
+    return {"synthetic": False, "origin": {**ORIGIN, **origin}}
+
+
+def test_origin_problems_excerpt_ok():
+    assert sc.origin_problems(_excerpt(), EXCERPT) == []
+    import datetime
+
+    assert sc.origin_problems(_excerpt(residual=datetime.date(2026, 11, 6)), EXCERPT) == []   # YAML 날짜도 받는다
+    for ep in ("E4", "E3c", "A-E5", "A-E9+A-E4", "E1+E2b"):
+        assert sc.EPISODE_RE.fullmatch(ep), ep
+    for ep in ("e4", "A-", "E4+", "X-E1", "E4bb"):
+        assert not sc.EPISODE_RE.fullmatch(ep), ep
+
+
+def test_origin_problems_needs_origin_and_exact_keys():
+    assert sc.origin_problems({"synthetic": False}, EXCERPT) == ["origin 필요(synthetic: false)"]
+    bad = _excerpt()
+    del bad["origin"]["residual"]
+    assert sc.origin_problems(bad, EXCERPT) == [f"origin 키는 정확히 {list(sc.ORIGIN_KEYS)}"]
+    assert sc.origin_problems({**_excerpt(), "synthetic": "no"}, EXCERPT) == ["synthetic은 true(합성) 또는 false(마스킹 발췌)"]
+
+
+def test_origin_problems_field_formats():
+    assert sc.origin_problems(_excerpt(kind="real"), EXCERPT) == ["origin.kind는 masked-excerpt"]
+    assert sc.origin_problems(_excerpt(log="O3"), EXCERPT) == ["origin.log는 O1|O2|A"]
+    assert sc.origin_problems(_excerpt(episode="E4 b"), EXCERPT) == ["origin.episode 형식"]
+    assert sc.origin_problems(_excerpt(masker="4e36948"), EXCERPT) == ["origin.masker는 sha256(masking.py) 앞 12자리"]
+    assert sc.origin_problems(_excerpt(residual="2026-13-01"), EXCERPT) == ["origin.residual은 ISO 날짜"]
+    for lines in ("20-21,10-12", "10-12,12-14", "12-10", ["10-12"], 10, "0-3"):
+        assert sc.origin_problems(_excerpt(lines=lines), EXCERPT) == \
+            ["origin.lines는 'a-b,c-d' 문자열(오름차순·겹침 없음)"], lines
+    assert sc.origin_problems(_excerpt(lines="1-100,200-221"), EXCERPT) == ["origin.lines 합계 120줄 초과"]
+
+
+def test_origin_problems_header_and_line_count():
+    assert sc.origin_problems(_excerpt(), EXCERPT.replace("줄 10-12", "줄  10-12", 1)) == \
+        ["source.log 1줄이 origin 머리 줄과 다르다"]
+    assert sc.origin_problems(_excerpt(episode="E4"), EXCERPT) == ["source.log 1줄이 origin 머리 줄과 다르다"]
+    count = ["source.log 구간 줄 수가 origin.lines와 다르다(구간은 '-- [생략]' 한 줄로 나눈다)"]
+    assert sc.origin_problems(_excerpt(), EXCERPT.replace("-- [생략]\n", "")) == count
+    assert sc.origin_problems(_excerpt(), EXCERPT.replace("-- [생략]\n", "-- [생략] \n")) == count   # 정확히 같아야 구분 줄
+    assert sc.origin_problems(_excerpt(), EXCERPT + "Nov  1 10:00:11 <HOST#1> exynos-ril[901]: f\n") == count
+    # logcat 버퍼 표시 줄(`--------- beginning of …`)은 본문 줄로 센다
+    text = EXCERPT.replace("exynos-ril[901]: d", "exynos-ril[901]: d").replace(
+        "Nov  1 10:00:10 <HOST#1> exynos-ril[901]: e", "--------- beginning of radio")
+    assert sc.origin_problems(_excerpt(), text) == []
+
+
+def test_origin_problems_residual_identifier():
+    imsi = "45005" + "1234567890"
+    text = EXCERPT.replace(": e\n", f": imsi={imsi}\n")
+    assert sc.origin_problems(_excerpt(), text) == ["source.log에 남은 식별자"]
+
+
+def test_origin_problems_synthetic():
+    assert sc.origin_problems({"synthetic": True}, "-- [합성] x\nline\n") == []
+    assert sc.origin_problems({"synthetic": True, "origin": dict(ORIGIN)}, "-- [합성] x\n") == \
+        ["origin은 마스킹 발췌(synthetic: false)에만"]
+    assert sc.origin_problems({"synthetic": True}, EXCERPT) == ["source.log 1줄은 '-- [합성]'로 시작"]
+
+
+def test_dbus_allowed_union():
+    doc = {"platforms": {"ofono": {"modules": {"data": {"dbus": ["org.ofono.ConnectionManager", "com.example.nmd"]},
+                                               "sim": {"dbus": ["com.example.lpa"]}, "call": {}}},
+                         "android": {"modules": {"x": {"dbus": ["com.example.android"]}}}}}
+    assert sc.dbus_allowed(doc) == frozenset({"org.ofono", "org.freedesktop.DBus", "org.ofono.ConnectionManager",
+                                             "com.example.nmd", "com.example.lpa"})
+    assert sc.dbus_allowed(None) == frozenset({"org.ofono", "org.freedesktop.DBus"})
+    real = sc.load_modules_yaml((TEMPLATES / "modules.yaml").read_bytes())
+    assert "org.ofono.SimManager" in sc.dbus_allowed(real)
+
+
+def test_dbus_violations_prefix():
+    allowed = frozenset({"org.ofono", "org.freedesktop.DBus", "com.example.nmd"})
+    text = ("org.ofono.Modem 과 org.freedesktop.DBus.Properties.\n"
+            "com.example.nmd.Profile·com.example.nmdx.Y\n"
+            "net.other.Thing org.ofonox.Bad")
+    assert sc.dbus_violations(text, allowed) == [(2, "com.example.nmdx.Y"), (3, "net.other.Thing"), (3, "org.ofonox.Bad")]
+
+
+def _template_copy(tmp_path) -> Path:
+    import shutil
+
+    root = tmp_path / "t"
+    shutil.copytree(TEMPLATES, root, ignore=shutil.ignore_patterns("results", "__pycache__"))
+    return root
+
+
+def _rows(findings) -> list[tuple]:
+    return [(f["check"], f["path"], f.get("rule")) for f in findings]
+
+
+def test_template_findings_repo_clean():
+    assert sc.template_findings(TEMPLATES) == []
+
+
+def test_template_findings_origin(tmp_path):
+    root = _template_copy(tmp_path)
+    case = root / "ofono" / "data" / "evals" / "data-ofonod-only"
+    log = case / "files" / "source.log"
+    log.write_text("x\n" + log.read_text(encoding="utf-8"), encoding="utf-8")
+    assert _rows(sc.template_findings(root)) == [("출처", "ofono/data/evals/data-ofonod-only",
+                                                  "source.log 1줄은 '-- [합성]'로 시작")]
+    yml = case / "case.yaml"
+    yml.write_text(yml.read_text(encoding="utf-8").replace("synthetic: true", "synthetic: false"), encoding="utf-8")
+    assert _rows(sc.template_findings(root)) == [("출처", "ofono/data/evals/data-ofonod-only", "origin 필요(synthetic: false)")]
+
+
+def test_template_findings_files_set(tmp_path):
+    root = _template_copy(tmp_path)
+    (root / "ofono" / "data" / "evals" / "data-ofonod-only" / "files" / "analysis.json").unlink()
+    assert _rows(sc.template_findings(root)) == [("case 파일", "ofono/data/evals/data-ofonod-only", None)]
+
+
+def test_template_findings_platform_mix(tmp_path):
+    root = _template_copy(tmp_path)
+    p = root / "ofono" / "data" / "explore.md"
+    p.write_text(p.read_text(encoding="utf-8") + "\nRILJ 줄을 본다.\n", encoding="utf-8")
+    andr = root / "android" / "data"
+    andr.mkdir(parents=True)
+    (andr / "explore.md").write_text("ok RILJ\nofonod 아님\ngril 줄·org.ofono.Modem\n", encoding="utf-8")
+    got = [(f["check"], f["path"], f.get("line"), f.get("rule")) for f in sc.template_findings(root)]
+    n = len(p.read_text(encoding="utf-8").split("\n")) - 1
+    assert got == [("플랫폼 섞임", "ofono/data/explore.md", n, "RILJ"),
+                   ("플랫폼 섞임", "android/data/explore.md", 2, "ofonod"),
+                   ("플랫폼 섞임", "android/data/explore.md", 3, "gril"),
+                   ("플랫폼 섞임", "android/data/explore.md", 3, "org.ofono.")]
+
+
+def test_template_findings_daemon_table(tmp_path):
+    root = _template_copy(tmp_path)
+    comp = root / "ofono" / "_common" / "components.md"
+    comp.write_text(comp.read_text(encoding="utf-8").replace("| vcd |", "| VCD |"), encoding="utf-8")
+    assert _rows(sc.template_findings(root)) == [("데몬 표", "ofono/_common/components.md", "vcd")]
+
+
+def test_template_findings_dbus(tmp_path):
+    root = _template_copy(tmp_path)
+    p = root / "ofono" / "data" / "SKILL.md"
+    p.write_text(p.read_text(encoding="utf-8") + "\ncom.vendorx.thing.Iface 와 org.ofono.ConnectionManager\n",
+                 encoding="utf-8")
+    assert _rows(sc.template_findings(root)) == [("D-Bus 이름", "ofono/data/SKILL.md", "com.vendorx.thing.Iface")]
+
+
+def test_template_findings_unreadable_modules_yaml(tmp_path):
+    root = _template_copy(tmp_path)
+    (root / "modules.yaml").write_text("a: &x 1\nb: *x\n", encoding="utf-8")
+    assert _rows(sc.template_findings(root)) == [("읽기", "modules.yaml", None)]
