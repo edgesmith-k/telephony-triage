@@ -2,6 +2,12 @@
 
 단계표는 `MODULE_SKILLS_PLAN.md §4`. 이 파일은 단계마다 리뷰·재측정에서 P2로 남긴 것(결정 (r): P0·P1만 고치고 P2는 반입 뒤 후보)과 단계 결과를 적는다.
 
+## 근거 줄 소실 대응 B: 이슈 DB 작성 지침 + `db_lint --advice` (11/06, c73550f)
+
+03-issue-db §5.7 (2)·reference/db-authoring.md에 "근거 줄 하나에만 기대지 않기": 다른 층 줄로 시그니처 하나 더(OR), 증상 시그니처도 같은 줄에 기대면 증상 쪽도 하나 더, 대체 원인 줄은 증상 근거와 같은 슬롯·창 안(analyze 짝 조건 — R1~R5 regress 모드는 이를 보지 않음), 그 줄이 없는 마스킹 새 빌드 로그를 `extra` fixture로 두고 analyze로 한 번 확인. 없음에 기대는 근거(`must_not_match`, 예 DATA-001)는 줄이 사라지면 잘못 분류되므로 OR 시그니처가 아니라 "일어났음" 줄을 같은 시그니처 `must_not_match`에 하나 더. `db_lint --advice`(선택 플래그): 시그니처가 하나뿐인 활성 원인·증상 시그니처 하나뿐인 활성 유형을 `참고[…]`로만 — 플래그 없으면 출력·종료 코드 바이트 동일(견본 + 변형 DB 12개), 어떤 관문도 `--advice`를 쓰지 않는다. 시그니처는 하나도 바꾸지 않았다.
+리뷰 1회 → 반박 검증 → 확정 P1 2건 수정: analyze 짝 조건 누락(두 번째 시그니처가 검증은 통과하고 analyze에서 무효 — 재현), "잘못 분류하지는 않지만"이 `must_not_match`에는 거짓(재현 — 결정 기록·CONCERNS 문구도 고침). 테스트: related 2,400 통과, advice 5개, 메인 재확인 129 통과·gen_contracts·check_boundary.
+P2: reference에 예시 "예:" 표시와 "advice를 없애려고 근거를 지어내지 않는다" 없음(여유 4B, 12,284/12,288), db-authoring §0·§1 서로 가리킴, `tests/fixtures/issue-db-sample/CONTRIBUTING.md`(make_db_skeleton 원본) 시그니처 행에 지침 미반영, 양성 fixture에 두 줄이 다 있으면 R2가 두 번째 시그니처를 따로 검증하지 않음(지침의 `extra` + analyze로 해소, 도구 검사 없음).
+
 ## C1+D 모듈 스킬 문서(oFono 7·Android 7)·eval 사례 31개 (11/05~06, 워크플로 wf_5bb9c084-688)
 
 범위: `scratchpad/c1d/plan.md`(판정 R1~R45, 설계 C1D·DD)대로 G-O(oFono)·G-A(Android) 두 갈래 병렬 → 통합 I1~I3 → 4관점 리뷰 → 반박 검증 → 확정 P1 4건 수정. 워크플로는 수정 단계에서 중단(11/05 23:47 KST)됐으나 수정 커밋 4개는 남아 있었고, 메인이 b3e9956 위로 옮겨(충돌 0) 생성물 점검·전체 테스트를 다시 돌렸다 — 3,756 통과·1 실패(F 시험 `test_ms1_tree_partial_repo_is_info`가 공식 템플릿에 ofono/data만 있다고 가정 → 템플릿 사본에서 일부만 남겨 쓰게 고침, 그 파일 17 통과).
