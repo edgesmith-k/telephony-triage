@@ -59,6 +59,7 @@ class Rule:
     gate: tuple[str, ...] = ()                      # 소문자 줄에 이 중 하나가 있을 때만 (비면 항상)
     log_only: bool = False                          # 로그 마스커(`log_lines=True`)에서만 (M1~M11 모양 규칙)
     fmt: str | None = None                          # 토큰 모양. `{n}` 번호, `{b}` 덤프 바이트 수, `{h}` hex 길이/2
+    per_line: bool = False                          # 여러 줄 글에서 문맥을 값이 있는 그 줄에서만 본다
 
     def applies(self, text: str) -> bool:
         return self.context is None or bool(self.context.search(text))
@@ -287,7 +288,7 @@ _M_LATE: tuple[Rule, ...] = (
                            r"(?P<v>[A-Za-z0-9+/]{16,}={0,2})(?![A-Za-z0-9+/=])"),
          check=_b64_ish, gate=("resp", "payload", "challenge", "rand", "autn")),
     Rule("B64", re.compile(r"(?<![A-Za-z0-9+/=<#])(?P<v>[A-Za-z0-9+/]{16,}={0,2})(?![A-Za-z0-9+/=])"),
-         check=_b64_ish, context=re.compile(r"SIM_AUTHENTICATION"), gate=("sim_authentication",)),
+         check=_b64_ish, context=re.compile(r"SIM_AUTHENTICATION"), gate=("sim_authentication",), per_line=True),
     # M2b 모양만 보는 base64 (mask3.py:36, 97-101) + 경로 제외
     Rule("B64", re.compile(r"(?<![A-Za-z0-9+/=<#])(?P<v>[A-Za-z0-9+/]{24,}={0,2})(?![A-Za-z0-9+/=])"),
          check=_b64_shape, log_only=True),
@@ -489,8 +490,8 @@ class Masker:
                 continue
             if not rule.applies(text):  # 문맥 규칙은 줄 전체를 본다
                 continue
-            ctx_lines = None            # 여러 줄 글(문서·보기)이면 문맥은 값이 있는 그 줄에서만 본다(H C1: 보기 머리의
-            if rule.context is not None and "\n" in text:     # 이름 목록이 다른 줄의 값을 문맥 규칙에 걸던 오탐)
+            ctx_lines = None            # per_line 규칙만: 여러 줄 글이면 문맥은 값이 있는 그 줄에서만 본다(H C1: 보기 머리의
+            if rule.per_line and rule.context is not None and "\n" in text:  # 이름 목록 오탐). SIP Digest는 접힌 줄 때문에 글 전체
                 ctx_lines = [(m.start(), m.end()) for m in re.finditer(r"[^\n]*", text)
                              if m.end() > m.start() and rule.context.search(m.group(0))]
             free, pos = [], 0

@@ -344,6 +344,18 @@ def test_context_rule_is_per_line_in_multiline_text():
     assert [f["kind"] for f in masking.new_masker().find("x\n" + same)] == ["B64"]
 
 
+
+def test_sip_digest_folded_header_still_masked():
+    """줄 단위 문맥은 `per_line` 규칙(SIM_AUTHENTICATION B64)만 — 접힌(RFC 3261 이어짐 줄) Digest 헤더의
+    nonce·response·cnonce·opaque는 여러 줄 글 전체 `mask`·`find`(jira_fields·issue_post·db_lint 경로)에서 그대로 가린다."""
+    n, r, c, o = "QmFzZTY0Tm9uY2VWYWx1ZTEyMzQ=", "fedcba9876543210fedcba9876543210", "c0ffee12ab", "op4que99"
+    auth = f'REGISTER sip:x.example SIP/2.0\nAuthorization: Digest username="u",\n nonce="{n}",\n response="{r}", cnonce="{c}"'
+    www = f'SIP/2.0 401\nWWW-Authenticate: Digest realm="x",\n\tnonce="{n}", opaque="{o}"'
+    for text, values in ((auth, (n, r, c)), (www, (n, o))):
+        out = masking.new_masker().mask(text)
+        assert not [v for v in values if v in out]
+        assert [f["kind"] for f in masking.new_masker().find(text)].count("CRED") == len(values)
+
 def test_m12_cpp_scope_not_ip():
     """M12: 문맥 없는 IPv6 규칙의 앞뒤 경계가 낱말 문자 전부라 C++ 범위(`<이름>_<n>::<함수>`)는 IP가 아니다.
     주소는 그대로 가린다. 마스킹한 줄에서도 모듈 필터의 `MiscService_<n>::` 잡음 정규식이 맞는다. (벤더 모양을 본뜬 합성 줄)"""
