@@ -18,6 +18,16 @@
 - **예외**: `issue-db.config.yaml`의 `mask.allow_patterns`에 전체가 맞는 값은 그대로 둔다.
   Android 자체 마스킹(`***`, `xxxxxx`)도 그대로 둔다.
 
+- **로그 줄 전용 규칙(`Rule.log_only`, M1~M11)**: 첨부 실제 로그(oFono syslog 2·Android logcat 1)에서 찾은 빈틈을
+  측정한 마스커(`mask2.py`·`mask3.py`) 그대로 옮긴 규칙 중 모양만 보는 것(hex 덤프·base64·빌드/제품 코드·15~20자리
+  숫자·syslog 호스트 칸)은 `log_lines=True`로 만든 마스커(로그 마스킹: parse·cut·`mask_pii` 치환/이벤트·보기·점검
+  도구)에서만 돈다. `db_lint`·`mask_pii --check`·`issue_post`는 기본값(`False`)이라 그 종류의 결과가 전과 같다.
+  실제 식별자 규칙(M2a·M3·M4·M5·M7·M8 payload/salt·M9·뒤집힌 ICCID)은 어디서나 돈다.
+- **토큰 모양(`Rule.fmt`)**: 기본 `<종류#n>`. M1 덤프 줄은 `<HEXDUMP nB>`(번호 없음), M8 payload는 `<APDU#n>[nB]`,
+  M11 호스트는 `host<n>`(journal 형식 정규식의 호스트 칸에 그대로 맞아 마스킹한 줄도 해석된다).
+- **남은 식별자(`residual`)·가리기(`redact`)**: 로그 마스커의 `find()` 그대로(다른 탐지기 없음), 줄 단위.
+  그래서 `residual(mask(x)) == {}`가 구조상 성립한다.
+
 탐지 규칙의 키 이름·형식은 일반적인 Android 로그 기준이고, 사내 로그에서 오탐·누락을
 확인한다 — TODO(SITE:S13).
 """
@@ -47,6 +57,8 @@ class Rule:
     context: re.Pattern | None = None               # 이 문맥이 있는 텍스트에서만
     before: re.Pattern | None = None                # 값 앞 24자가 이 패턴에 맞으면 건너뛴다
     gate: tuple[str, ...] = ()                      # 소문자 줄에 이 중 하나가 있을 때만 (비면 항상)
+    log_only: bool = False                          # 로그 마스커(`log_lines=True`)에서만 (M1~M11 모양 규칙)
+    fmt: str | None = None                          # 토큰 모양. `{n}` 번호, `{b}` 덤프 바이트 수, `{h}` hex 길이/2
 
     def applies(self, text: str) -> bool:
         return self.context is None or bool(self.context.search(text))
@@ -134,8 +146,158 @@ def _token_secret(value: str) -> bool:
     """`token=` 값이 비밀값인가. 짧은 숫자(10진 10자리 이하, `0x`+16진 8자리 이하 — RIL 요청 token 등)는 아니다."""
     return not _SHORT_NUM.fullmatch(value.rstrip(")]}>"))
 
-# 순서가 중요하다: 자격증명 → URI·이메일 → 문맥 있는 식별자 → 형식 → 문맥 없는 숫자.
-RULES: tuple[Rule, ...] = (
+# --- M1~M11: 첨부 실제 로그로 측정한 마스커(`logmine/bin/mask2.py` 2차·`mask3.py`)를 옮긴 규칙 (B2 §3.2) ---
+# 줄 단위로 본다(`^`는 줄 처음). 측정 마스커와 다른 점은 표의 "Deviation" 열 그대로다.
+
+def _not_null(value: str) -> bool:
+    """M3 위치 인자: 빈 값·`null`은 그대로 둔다(토큰은 이미 차지한 구간이라 여기 오지 않는다)."""
+    return bool(value.strip()) and value.strip().lower() not in ("null", "(null)")
+
+
+def _b64_ish(value: str) -> bool:
+    """M2a: 문맥 뒤 값이 낱말(글자뿐)이 아니다."""
+    return not value.isalpha()
+
+
+# M2b 경로 모양 낱말: 소문자 낱말 또는 CamelCase (`com/example/telephony/DataNetwork`)
+_PATH_PART = re.compile(r"(?:[a-z][a-z0-9_]*|[A-Z]?[a-z0-9_]+(?:[A-Z][a-z0-9_]+)*)")
+
+
+def _b64_shape(value: str) -> bool:
+    """M2b (`mask3.py:97-101`): 대·소문자·숫자가 다 있고 hex만이 아니며 (`+`/`/`나 `=` 끝 또는 40자 이상), `Lambda` 없음.
+    더한 것: `+`·`=` 끝이 없고 `/`가 있으며 `/` 조각이 모두 경로 낱말이면 경로라 제외한다."""
+    if not (re.search(r"[A-Z]", value) and re.search(r"[a-z]", value) and re.search(r"[0-9]", value)):
+        return False
+    if re.fullmatch(r"[0-9A-Fa-f]+", value) or "Lambda" in value:
+        return False
+    if not (re.search(r"[+/]", value) or value.endswith("=") or len(value) >= 40):
+        return False
+    if "+" not in value and not value.endswith("=") and "/" in value:
+        if all(_PATH_PART.fullmatch(p) for p in value.split("/") if p):
+            return False
+    return True
+
+
+_HOST_KEEP = re.compile(r"\(none\)|localhost|dut|host\d+")
+
+
+def _host_value(value: str) -> bool:
+    """M11: 그대로 두는 호스트 칸 값(`(none)`·`localhost`·`dut`·이미 바꾼 `host<n>`)이 아니다."""
+    return not _HOST_KEEP.fullmatch(value)
+
+
+def _v6_after_key(value: str) -> bool:
+    return value != "::" and len([g for g in value.split(":") if g]) >= 2
+
+
+_HEXBYTE = re.compile(r"[0-9A-Fa-f]{2}")
+
+
+def _dump_bytes(value: str) -> int:
+    """`<HEXDUMP nB>`의 n: 앞에서부터 이어진 2자리 hex 낱말 수(ASCII 칸 앞까지)."""
+    n = 0
+    for part in value.split():
+        if not _HEXBYTE.fullmatch(part):
+            break
+        n += 1
+    return n
+
+
+_DUMP_FMT = " <HEXDUMP {b}B>"
+# M1 바이트 뒤 짧은 꼬리: 잘림 표시(`...`·`…`), 길이(`(len 10)`·`(length=10)`), 태그(`[SUB0]`)
+_DUMP_TAIL = r"(?:\s+(?:\.{2,}|\u2026|\((?:len|length|size)\s*[:=]?\s*\d+\)|\[[A-Za-z0-9_]{1,16}\]))"
+_PAYLOAD_FMT = "<{kind}#{n}>[{h}B]"
+_M11_STAMPS = (
+    r"\w{3} [ \d]\d \d\d:\d\d:\d\d(?:\.\d+)?",                                            # mask2.py:63 (RFC3164·BusyBox)
+    r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:?\d{2})?",          # journal.py ISO
+)
+
+# 맨 앞: M11 호스트 칸(줄 처음 고정이라 다른 규칙이 구간을 나누기 전에) → M1 덤프 줄(한 줄이 토큰 하나)
+_M_FIRST: tuple[Rule, ...] = (
+    Rule("HOST", re.compile(r"^(?:" + "|".join(_M11_STAMPS) + r") (?P<v>\S+) "), check=_host_value,
+         log_only=True, fmt="host{n}"),
+    # M1 gril `Device|IMSD n:` 줄(hex + ASCII 칸, mask3.py:26)
+    Rule("HEXDUMP", re.compile(
+        r"^.*?\b(?:Device|IMSD) \d+:(?:\s+[<>])?(?P<v>\s+(?:[0-9a-fA-F]{2}(?:\s+|$)){1,16}.*)$"),
+         gate=("device", "imsd"), log_only=True, fmt=_DUMP_FMT),
+    # M1 `:` 뒤가 hex 바이트 4개 이상인 줄(ASCII 칸 허용, mask3.py:27 + mask2.py:84). 상태 없음(B2-11)
+    # 더한 것: 바이트 뒤 짧은 꼬리(` ...`·`…`·`(len 10)`·`[SUB0]`)도 덤프 줄이다 — "모든 덤프 줄"(B2 §3.2 M1)
+    Rule("HEXDUMP", re.compile(r"^.*?:(?P<v>(?:\s+[0-9a-fA-F]{2}){4,}(?:\s{2,}.*|" + _DUMP_TAIL + r"*\s*))$"),
+         context=re.compile(r"(?:\s[0-9a-fA-F]{2}){4}"), log_only=True, fmt=_DUMP_FMT),
+    # M1 더한 것: `:` 바로 뒤가 아닌 덤프(`[SLOT_1][V] 0123 1 <바이트>`·`sendRequest] <바이트>`) — 공백으로 나뉜
+    # hex 바이트 8개 이상 연속은 앞뒤 문맥과 상관없이 그 바이트 부분만 `<HEXDUMP nB>`로 바꾼다
+    Rule("HEXDUMP", re.compile(r"(?<![\w:.<>#-])(?P<v>(?:[0-9a-fA-F]{2}[ \t]+){7,}[0-9a-fA-F]{2})(?![\w:.-])"),
+         context=re.compile(r"(?:[0-9a-fA-F]{2}[ \t]+){7}[0-9a-fA-F]{2}"), log_only=True, fmt="<HEXDUMP {b}B>"),
+    # M3 위치 인자 SETUP_DATA_CALL (tech,profile,apn,user,password,…) — 4·5번째 (mask3.py:30)
+    Rule("CRED", re.compile(r"SETUP_DATA_CALL \([^,()]*,[^,()]*,[^,()]*,(?P<v>[^,()]*),(?P<v2>[^,()]*)(?=[,)])"),
+         check=_not_null, gate=("setup_data_call",)),
+    # M4 GVariant·Go map·ofono dict의 APN 비밀번호 (mask2.py:72). 사용자 이름은 이메일 규칙 뒤(_M_LATE)
+    Rule("CRED", re.compile(r"""(?i)(?:password'?:?\s*<'|password:"|password",\s*variant\(")(?P<v>[^'"<>]+)(?=['"])"""),
+         gate=("password",)),
+)
+
+# 기존 규칙 뒤: 나머지 M 규칙 (측정 마스커에서 1차 저장소 마스커 뒤에 돈 순서 그대로)
+_M_LATE: tuple[Rule, ...] = (
+    # M5 주소·DNS·게이트웨이·P-CSCF 키 아래 숫자 배열 (mask3.py:35)
+    Rule("IP", re.compile(r'"[a-z0-9_]*(?:addr|address|dns|gateway|pcscf)[a-z0-9_]*"\s*:\s*\[(?P<v>[-0-9, ]{3,})\]'),
+         gate=("addr", "dns", "gateway", "pcscf")),
+    # M6 빌드·제품 코드 (mask3.py:31-34, mask2.py:94-100)
+    Rule("BUILD", re.compile(r"Build Info\s*:\s*(?!<)(?P<v>\S+)"), gate=("build info",), log_only=True),
+    Rule("BUILD", re.compile(r"commit ID:\s*(?P<v>[0-9a-fA-F]{6,})"), gate=("commit id",), log_only=True),
+    Rule("PRODUCT", re.compile(r"(?<![\w])(?P<v>m\d{4})(?=[^\w]|$)"), context=re.compile(r" cpif\s*:"),
+         gate=("cpif",), log_only=True),
+    Rule("PRODUCT", re.compile(r"(?<![\w])(?P<v>[A-Z]\d{4}[A-Z0-9]{2,})(?![\w])"),
+         context=re.compile(r" [VDIWEF] (?:synaptics_ts|sec_input|kernel)\b"), log_only=True),
+    Rule("PRODUCT", re.compile(r'(?i)"(?:Revision|Model|Manufacturer|SoftwareVersion)",\s*variant\("(?P<v>[^"]+)"'),
+         gate=("variant",), log_only=True),
+    # `ro.product.*`·`ro.build.*` 값. 키와 값 사이 구분(`]: [`·`=`·`:`·공백)을 요구한다 — 원본은 값이 없으면 키 끝 글자를 값으로 잡았다
+    Rule("PRODUCT", re.compile(r"(?i)\bro\.(?:product|build)\.[\w.]+?(?:\]?:\s*\[?|\]\s*\[|\s*=\s*|\s+)(?P<v>[^\[\]\s=]+)"),
+         gate=("ro.product.", "ro.build."), log_only=True),
+    Rule("PRODUCT", re.compile(r"(?i)fingerprint\s*[=:]\s*(?P<v>\S+)"), gate=("fingerprint",), log_only=True),
+    Rule("PRODUCT", re.compile(r'(?:^|(?<=[\s:]))v?a?r?i?ant\("(?P<v>[A-Z]{2,}\d{3,}[A-Z0-9]*-\d+_[A-Z0-9]+)"'),
+         gate=("ant(",), log_only=True),
+    Rule("PRODUCT", re.compile(r"\[CP_UART\] (?P<v>[A-Z]+\d{3,}[A-Z0-9]*) EVT"), gate=("cp_uart",), log_only=True),
+    # M7 SMSC 번호·NAI 속 IMSI (mask2.py:68,70)
+    Rule("MSISDN", re.compile(r'(?i)(?:smsc\s*[=:,]\s*|ServiceCenterAddress"?,?\s*variant\("|rAddress:"|sms\.sim\d\.smsc,)'
+                              r"(?P<v>\+?\d{6,15})"), gate=("smsc", "servicecenteraddress", "raddress")),
+    Rule("IMSI", re.compile(r"(?i)(?<![\w])0?(?P<v>\d{15})(?=(?:%40|@)(?:nai|wlan|ims|epc)\.)"),
+         gate=("nai.", "wlan.", "ims.", "epc.")),
+    # M4 APN 사용자 이름 (mask2.py:73) — 이메일 규칙 뒤라 `user@realm`은 통째로 EMAIL로 남는다(측정 순서)
+    Rule("CRED", re.compile(r"""(?i)(?:username'?:?\s*<'|username:"|username",\s*variant\(")(?P<v>[^'"<>@]+)(?=['"@])"""),
+         gate=("username",)),
+    # M8 SIM_IO·APDU payload (mask2.py:76-80), salt·eng 사용자·git 해시 (mask2.py:103-105)
+    Rule("APDU", re.compile(r"Payload: (?P<v>[0-9A-Fa-f]{8,})"), gate=("payload",), fmt=_PAYLOAD_FMT),
+    Rule("APDU", re.compile(r"Response:\[\(\d+\)(?P<v>[0-9A-Fa-f]{8,})"), gate=("response",), fmt=_PAYLOAD_FMT),
+    Rule("APDU", re.compile(r"(?:Received|Sent) : (?P<v>[0-9A-Fa-f]{8,})"), gate=("received", "sent"), fmt=_PAYLOAD_FMT),
+    Rule("APDU", re.compile(r"pRespons\w*\s*[:=]\s*(?P<v>[0-9A-Fa-f]{8,})"), gate=("prespons",), fmt=_PAYLOAD_FMT),
+    Rule("HEXBLOB", re.compile(r"(?:apdu|APDU|data|Data|cmd|resp|rsp)\s*[:=]\s*\[?(?P<v>[0-9A-Fa-f]{24,})"),
+         gate=("apdu", "data", "cmd", "resp", "rsp"), fmt=_PAYLOAD_FMT),
+    Rule("SALT", re.compile(r"(?i)\bsalt\s*[=:]\s*(?P<v>[0-9A-Fa-f]{16,})"), gate=("salt",)),
+    Rule("BUILD", re.compile(r"\beng\.(?P<v>[a-z][\w-]*)"), gate=("eng.",), log_only=True),
+    Rule("HASH", re.compile(r"(?i)(?:git hash:\s*|revision number\s*=\s*)(?P<v>[0-9a-f]{7,40})"),
+         gate=("git hash", "revision number"), log_only=True),
+    # M9 `<낱말>:`·`<낱말>=` 바로 뒤 IPv6 (mask2.py:108, `dnses:<v6>`)
+    Rule("IP", re.compile(r"(?<=[A-Za-z_\]][:=])(?P<v>" + _V6_FULL + "|" + _V6_COMP + r")(?![0-9A-Fa-f:])"),
+         check=_v6_after_key),
+    # M10 nibble 뒤집힌 ICCID (mask2.py:111). 더한 것: 19자리 ICCID는 EF_ICCID에 채움 nibble `F`가 마지막 숫자
+    # 앞에 온다(`…54F6`) — 측정 마스커는 이 모양을 놓쳤다
+    Rule("ICCID", re.compile(r"(?<![0-9A-Fa-f])(?P<v>98[0-9]{16,18}(?:[Ff][0-9]|[0-9Ff])?)(?![0-9A-Fa-f])")),
+    # M2a 인증 응답 문맥의 base64 (LM §5.3 M2) — 키 문맥 자격증명(`AUTN=<hex>` → CRED)·M8 payload(`Payload: <hex>` → APDU) 뒤, M2b 앞
+    Rule("B64", re.compile(r"(?i)(?:\bresp:|\bresponse\s*:|\bpayload:|\bchallenge|\brand|\bautn)\s*[=:]?\s*\"?"
+                           r"(?P<v>[A-Za-z0-9+/]{16,}={0,2})(?![A-Za-z0-9+/=])"),
+         check=_b64_ish, gate=("resp", "payload", "challenge", "rand", "autn")),
+    Rule("B64", re.compile(r"(?<![A-Za-z0-9+/=<#])(?P<v>[A-Za-z0-9+/]{16,}={0,2})(?![A-Za-z0-9+/=])"),
+         check=_b64_ish, context=re.compile(r"SIM_AUTHENTICATION"), gate=("sim_authentication",)),
+    # M2b 모양만 보는 base64 (mask3.py:36, 97-101) + 경로 제외
+    Rule("B64", re.compile(r"(?<![A-Za-z0-9+/=<#])(?P<v>[A-Za-z0-9+/]{24,}={0,2})(?![A-Za-z0-9+/=])"),
+         check=_b64_shape, log_only=True),
+    # M10 남은 15~20자리 숫자 — 맨 끝(IMEI·IMSI·ICCID 검증 규칙이 먼저 제 종류로 가린다, mask2.py:110).
+    # 더한 것: `0x` 16진 값(`0x0000000801234567` 주소)과 16진 낱말의 일부는 숫자 값이 아니라 제외한다(B2 §3.4 음성 사례)
+    Rule("NUM", re.compile(r"(?<![0-9])(?<!0[xX])(?P<v>\d{15,20})(?![0-9A-Fa-f])"), log_only=True),
+)
+
+# 순서가 중요하다: M11·M1·M3·M4 → 자격증명 → URI·이메일 → 문맥 있는 식별자 → 형식 → 문맥 없는 숫자 → 나머지 M.
+_BASE_RULES: tuple[Rule, ...] = (
     # --- 자격증명 ---
     Rule("CRED", re.compile(r'(?i)\b(?:response|nonce|cnonce|opaque)\s*=\s*"?(?P<v>[^",\s]+)"?'),
          context=_SIP_AUTH_CONTEXT),
@@ -224,6 +386,12 @@ RULES: tuple[Rule, ...] = (
     Rule("ICCID", re.compile(r"(?<![\w.+-])(?P<v>89\d{17,18})(?!\w|\.\w)")),
 )
 
+RULES: tuple[Rule, ...] = _M_FIRST + _BASE_RULES + _M_LATE
+
+# 다른 규칙이 다시 보지 않는 구간: 번호 토큰, M1 덤프 토큰, `redact()`가 넣은 가림 표시
+_PROTECTED = re.compile(TOKEN_RE.pattern + r"|<HEXDUMP \d+B>|<REDACTED:[A-Z][A-Z0-9]*>")
+_HOST_TOKEN = re.compile(r"(?<![A-Za-z0-9_.-])host(\d+)(?![A-Za-z0-9_.-])")
+
 
 def _android_masked(value: str) -> bool:
     return bool(value) and set(value) <= set("*xX")
@@ -237,7 +405,9 @@ class Masker:
     """번호 대응표를 가진 마스커. `masker(text)`로 텍스트를, `mask_value(v)`로 필드 값을
     마스킹한다. 한 파일(분석 1회) 동안 같은 인스턴스를 쓴다."""
 
-    def __init__(self, allow_patterns: Iterable[str] = (), existing_text: str | None = None):
+    def __init__(self, allow_patterns: Iterable[str] = (), existing_text: str | None = None, *,
+                 log_lines: bool = False):
+        self.log_lines = bool(log_lines)       # False면 `log_only` 규칙을 mask()·_spans()·find()에서 건너뛴다
         self.allow = []
         for p in allow_patterns or ():
             try:
@@ -247,6 +417,7 @@ class Masker:
         self.tables: dict[str, dict[str, int]] = {}
         self.next: dict[str, int] = {}
         self.counts: dict[str, int] = {}
+        self.fmts: dict[str, str] = {}          # 번호 토큰 모양이 기본과 다른 종류(`HOST` → `host{n}`)
         if existing_text:
             self.observe(existing_text)
 
@@ -257,15 +428,23 @@ class Masker:
         for hit in TOKEN_RE.finditer(text or ""):
             kind, n = hit.group("kind"), int(hit.group("n"))
             self.next[kind] = max(self.next.get(kind, 0), n)
+        if self.log_lines:
+            for hit in _HOST_TOKEN.finditer(text or ""):      # M11 `host<n>`도 다음 번호부터
+                self.next["HOST"] = max(self.next.get("HOST", 0), int(hit.group(1)))
 
-    def token(self, kind: str, value: str) -> str:
+    def token(self, kind: str, value: str, fmt: str | None = None) -> str:
+        self.counts[kind] = self.counts.get(kind, 0) + 1
+        if fmt is not None and "{n}" not in fmt:               # 번호 없는 모양(`<HEXDUMP nB>`)
+            return _render(fmt, kind, 0, value)
         table = self.tables.setdefault(kind, {})
         key = _norm_key(kind, value)
         if key not in table:
             self.next[kind] = self.next.get(kind, 0) + 1
             table[key] = self.next[kind]
-        self.counts[kind] = self.counts.get(kind, 0) + 1
-        return f"<{kind}#{table[key]}>"
+        if fmt is None:
+            return f"<{kind}#{table[key]}>"
+        self.fmts[kind] = fmt
+        return _render(fmt, kind, table[key], value)
 
     def _allowed(self, value: str) -> bool:
         return _android_masked(value) or any(p.fullmatch(value) for p in self.allow)
@@ -278,10 +457,10 @@ class Masker:
     def mask(self, text: str) -> str:
         if not text:
             return text
-        spans = self._spans(text)
+        spans = self._spans_fmt(text)
         out, pos = [], 0
-        for start, end, kind, value in spans:  # 텍스트에 나온 순서대로 번호를 준다
-            out += [text[pos:start], self.token(kind, value)]
+        for start, end, kind, value, fmt in spans:  # 텍스트에 나온 순서대로 번호를 준다
+            out += [text[pos:start], self.token(kind, value, fmt)]
             pos = end
         out.append(text[pos:])
         return "".join(out)
@@ -292,12 +471,19 @@ class Masker:
         기존 토큰은 그대로 둔다(멱등). 규칙은 우선순위 순서로 보고, 앞 규칙이 차지한
         구간과 기존 토큰은 경계가 되어 뒤 규칙이 다시 보지 않는다.
         """
-        taken = [(m.start(), m.end()) for m in TOKEN_RE.finditer(text)]
-        found: list[tuple[int, int, str, str]] = []
+        return [span[:4] for span in self._spans_fmt(text)]
+
+    def _spans_fmt(self, text: str) -> list[tuple[int, int, str, str, str | None]]:
+        """`_spans`에 규칙의 토큰 모양(`Rule.fmt`)을 붙인 것."""
+        taken = [(m.start(), m.end()) for m in _PROTECTED.finditer(text)]
+        found: list[tuple[int, int, str, str, str | None]] = []
         # ASCII가 아닌 줄은 게이트를 끈다: `(?i)` 정규식은 `ſ`(→s)·`İ`(→i)·`K`(켈빈)도 맞추지만
         # 부분문자열 게이트는 못 맞춘다
         gated, low = text.isascii(), text.lower()
+        log_lines = self.log_lines
         for rule in RULES:
+            if rule.log_only and not log_lines:
+                continue
             if gated and rule.gate and not any(k in low for k in rule.gate):  # 키가 없는 줄은 키 규칙을 돌리지 않는다
                 continue
             if not rule.applies(text):  # 문맥 규칙은 줄 전체를 본다
@@ -310,15 +496,17 @@ class Masker:
             free.append((pos, len(text)))
             for lo, hi in free:
                 piece = text[lo:hi]
+                groups = ("v", "v2") if "v2" in rule.regex.groupindex else ("v",)
                 for match in rule.regex.finditer(piece):
-                    value = match.group("v")
-                    if self._allowed(value) or (rule.check and not rule.check(value)):
-                        continue
-                    start, end = match.span("v")
-                    if rule.before is not None and rule.before.search(text[max(0, lo + start - 24):lo + start]):
-                        continue
-                    found.append((lo + start, lo + end, rule.kind, value))
-                    taken.append((lo + start, lo + end))
+                    for group in groups:
+                        value = match.group(group)
+                        if value is None or self._allowed(value) or (rule.check and not rule.check(value)):
+                            continue
+                        start, end = match.span(group)
+                        if rule.before is not None and rule.before.search(text[max(0, lo + start - 24):lo + start]):
+                            continue
+                        found.append((lo + start, lo + end, rule.kind, value, rule.fmt))
+                        taken.append((lo + start, lo + end))
         return sorted(found)
 
     def mask_value(self, value: str) -> str:
@@ -329,7 +517,8 @@ class Masker:
         for kind, table in self.tables.items():
             key = _norm_key(kind, value)
             if key in table:
-                return f"<{kind}#{table[key]}>"
+                fmt = self.fmts.get(kind)
+                return f"<{kind}#{table[key]}>" if fmt is None else _render(fmt, kind, table[key], value)
         return self.mask(value)
 
     # -- 검사 -----------------------------------------------------------------
@@ -339,9 +528,49 @@ class Masker:
         return [{"kind": kind, "start": start, "end": end} for start, end, kind, _ in self._spans(text or "")]
 
 
-def new_masker(existing_text: str | None = None, allow_patterns: Iterable[str] = ()) -> Masker:
-    """새 마스커. `existing_text`에 이미 있는 토큰 다음 번호부터 준다."""
-    return Masker(allow_patterns=allow_patterns, existing_text=existing_text)
+def _render(fmt: str, kind: str, n: int, value: str) -> str:
+    return fmt.format(kind=kind, n=n, b=_dump_bytes(value), h=len(value) // 2)
+
+
+def new_masker(existing_text: str | None = None, allow_patterns: Iterable[str] = (), *,
+               log_lines: bool = False) -> Masker:
+    """새 마스커. `existing_text`에 이미 있는 토큰 다음 번호부터 준다. 로그 줄을 가릴 때는 `log_lines=True`."""
+    return Masker(allow_patterns=allow_patterns, existing_text=existing_text, log_lines=log_lines)
+
+
+def residual(text: str, allow_patterns: Iterable[str] = (), *, log_lines: bool = True) -> dict[str, int]:
+    """남은 식별자 `{종류: 개수}`: 그 마스커의 `find()`를 줄마다 센 것 그대로(다른 탐지기 없음). 값은 내지 않는다.
+
+    마스커가 줄 단위로 일하므로(`^` 규칙) 줄마다 본다. 그래서 `residual(mask(line)) == {}`가 구조상 성립한다."""
+    masker = new_masker(allow_patterns=allow_patterns, log_lines=log_lines)
+    counts: dict[str, int] = {}
+    for line in (text or "").split("\n"):
+        for hit in masker.find(line):
+            counts[hit["kind"]] = counts.get(hit["kind"], 0) + 1
+    return dict(sorted(counts.items()))
+
+
+def redact(text: str, allow_patterns: Iterable[str] = (), *, log_lines: bool = True) -> tuple[str, dict[str, int]]:
+    """`find()` 구간마다 `<REDACTED:종류>`로 바꾼다(보기·explore 타임라인, B2-25). `(text, counts)`.
+    걸린 것이 없으면 같은 객체를 그대로 돌려준다."""
+    masker = new_masker(allow_patterns=allow_patterns, log_lines=log_lines)
+    counts: dict[str, int] = {}
+    out, changed = [], False
+    for line in (text or "").split("\n"):
+        hits = masker.find(line)
+        if hits:
+            changed = True
+            parts, pos = [], 0
+            for hit in hits:
+                parts += [line[pos:hit["start"]], f"<REDACTED:{hit['kind']}>"]
+                pos = hit["end"]
+                counts[hit["kind"]] = counts.get(hit["kind"], 0) + 1
+            parts.append(line[pos:])
+            line = "".join(parts)
+        out.append(line)
+    if not changed:
+        return text, {}
+    return "\n".join(out), dict(sorted(counts.items()))
 
 
 URL_USERINFO = re.compile(r"://[^/@\s]+@")

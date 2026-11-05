@@ -511,7 +511,7 @@ def run_parse(args, plugin_root: Path, defaults: dict, profile: platforms.Platfo
     masker = None
     if args.mask:
         # 입력에 이미 있는 토큰의 다음 번호부터 준다 (부분 마스킹된 로그, fixture 재파싱).
-        masker = masking.new_masker(_read_texts(paths), _allow_patterns(db_cfg))
+        masker = masking.new_masker(_read_texts(paths), _allow_patterns(db_cfg), log_lines=True)
 
     warnings: list[dict] = []
     warnings += compat.check_parser_backend(db_cfg, backend.name, backend.version())
@@ -614,6 +614,7 @@ def run_parse(args, plugin_root: Path, defaults: dict, profile: platforms.Platfo
         },
         "coverage": coverage,
         "masked": masker is not None,
+        "mask_allow": _allow_patterns(db_cfg),   # 이 이벤트를 가린 허용 패턴 — 보기·점검이 같은 목록을 쓴다(B2-26)
         "warnings": warnings,
         "errors": errors,
         "events": events,
@@ -713,7 +714,7 @@ def _step_event_hits(raw: list[dict], specs: list[dict | None], paths: list[Path
     hits: list[dict] = []
     masker = None
     if any(sp and sp["kind"] in ("match", "event") for sp in specs):
-        masker = masking.new_masker(_read_texts(paths), _allow_patterns(db_cfg))
+        masker = masking.new_masker(_read_texts(paths), _allow_patterns(db_cfg), log_lines=True)
     line_idx = [i for i, r in enumerate(raw) if r.get("event") is None]
 
     for rule, sp in enumerate(specs):             # ril
@@ -822,7 +823,7 @@ def run_markers(args, defaults: dict, profile: platforms.PlatformProfile | None 
                 done = set(found)
                 remaining = [i for i in remaining if i not in done]
         if hits:
-            masker = masking.new_masker(_read_texts(paths), _allow_patterns(db_cfg))
+            masker = masking.new_masker(_read_texts(paths), _allow_patterns(db_cfg), log_lines=True)
             for i in sorted(hits):
                 masked = masker(texts[i])
                 m = hits[i].search(masked)       # 이름 그룹은 마스킹된 텍스트에서만 뽑는다
@@ -1019,7 +1020,7 @@ def run_cut(args, profile: platforms.PlatformProfile | None = None) -> dict:
     if args.rules:
         allow = _allow_patterns(compat.load_db_config(Path(args.rules).parent))
     texts = [lines[j][2] for j in chosen]
-    masker = masking.new_masker("\n".join(texts), allow)
+    masker = masking.new_masker("\n".join(texts), allow, log_lines=True)
     masked = [masker(text) for text in texts]
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)

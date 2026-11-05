@@ -14,6 +14,8 @@
         `events` 목록이 없는 JSON(예: Jira 응답)은 모든 문자열 값을 마스킹한다
         (08-safety.md §8.1). 분석 경로의 logcat은 `parse_logcat.py parse --mask`를 쓴다.
 
+치환·이벤트 모드는 로그 마스커(`log_lines=True`, M1~M11 모양 규칙 포함)를, 검사 모드는 기본 마스커를 쓴다(B2 §3.3).
+
 `mask.allow_patterns`는 이슈 DB(`--db`, 없으면 cwd의 이슈 DB)의 `issue-db.config.yaml`에서
 읽는다. 이슈 DB를 찾지 못하면 예외 없이 마스킹한다.
 """
@@ -124,7 +126,7 @@ def run_replace(args, db: Path | None) -> tuple[dict, str | None]:
         if not path.is_file():
             raise UsageError(f"파일이 없습니다: {path}")
         text = path.read_text(encoding="utf-8", errors="replace")
-        masker = masking.new_masker(text, allow)
+        masker = masking.new_masker(text, allow, log_lines=True)
         masked = "\n".join(masker(line) for line in text.split("\n"))
         if args.in_place:
             path.write_text(masked, encoding="utf-8", newline="\n")
@@ -153,7 +155,7 @@ def run_events(args, db: Path | None) -> dict:
         doc = json.loads(Path(args.events).read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise UsageError(f"--events를 읽을 수 없습니다: {exc}") from exc
-    masker = masking.new_masker(json.dumps(doc, ensure_ascii=False), _allow(db))
+    masker = masking.new_masker(json.dumps(doc, ensure_ascii=False), _allow(db), log_lines=True)
     if isinstance(doc, dict) and isinstance(doc.get("events"), list):
         events = []
         for event in doc["events"]:
