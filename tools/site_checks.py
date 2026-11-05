@@ -1,11 +1,13 @@
 """사내 보완 S 단계·oFono 트랙 O 단계 자동 점검 (읽기 전용, `site_step.py check`가 부른다. 15-local-draft.md §15.5).
 
-- `CHECKS[S-n]`·`CHECKS[O-n]`의 함수마다 `fn(ctx) -> {id, status, evidence, cmd, ask?, propose?}`. status는
+- `CHECKS[S-n]`·`CHECKS[O-n]`·`MODULE_CHECKS[MS-n]`(모듈 스킬 트랙, 따로 둔 표)의 함수마다 `fn(ctx) -> {id, status, evidence, cmd, ask?, propose?}`. status는
   pass | fail | skip(실행 못 함, 사유·ask) | needs-user(사람 정보·판단 필요) | info(판정 아님).
 - 판정 근거(evidence)는 개수·종료 코드·파일:행만. 로그·Jira 원문은 넣지 않는다.
 - 쓰지 않는다: 사용자 이슈 DB clone(운영 `ops_db`, oFono `ofono_db`)은 읽기 전용 임시 clone(`git clone --no-local --no-checkout` →
   원본의 origin/main, 없으면 로컬 main)으로만 보고 fetch·브랜치 전환·lock 없음.
   골든 변조 시험은 임시 복사본에서만 한다. `claude`는 `--allow-api`일 때만 부른다.
+- MS 단계(모듈 스킬 트랙)는 모듈 스킬 레포를 임시 전체 clone(`Ctx.module_clone`)으로만 본다 — 관리 clone·사용자 clone은 건드리지
+  않는다. 토큰을 쓰는 확인(세션 안 중첩 `claude -p`)은 명령만 보인다(`ms1.nested_claude`, 사용자 필요).
 - 한 점검이 예외를 내면 그 점검만 fail이고 나머지는 계속한다(doctor 방식).
 - 사내 값은 코드에 없다: 입력은 `docs/site/steps.yaml`(`propose --apply`로만 씀)·`SITE_PROFILE.md`·사내 파일에서 읽는다.
 - O 단계(oFono)는 플러그인 모듈(`platforms`·`parser_backends`·`common.parser_rules`·`common.userconfig`)을 점검 함수 안에서
@@ -75,6 +77,13 @@ PILOT_FIELDS = ("처리 건수", "오탐", "누락", "충돌", "온보딩", "PR 
 
 class CloneUnavailable(Exception):
     """임시 clone은 됐지만 점검할 main이 없다(건너뜀 + 물을 것)."""
+
+
+class ModuleCloneError(Exception):
+    """모듈 스킬 레포 임시 clone 실패(이유: 인증·네트워크·원격 브랜치 없음)."""
+
+
+GIT_QUIET_ENV = {"GIT_TERMINAL_PROMPT": "0", "GCM_INTERACTIVE": "never", "GIT_LFS_SKIP_SMUDGE": "1"}
 
 
 @dataclass
@@ -171,11 +180,28 @@ class Ctx:
                 return dst
         raise CloneUnavailable(f"{self.clone_label} clone에 origin/main도 로컬 main도 없다")
 
-    def gh(self, *args: str) -> tuple[int, str, str]:
-        """모든 gh 호출에 GH_HOST(steps.yaml `ghe_host`)를 준다(auth status·pr list·api 공통)."""
-        host = self.inputs.get("ghe_host")
+    def gh(self, *args: str, host: str | None = None) -> tuple[int, str, str]:
+        """모든 gh 호출에 GH_HOST(`host`, 없으면 steps.yaml `ghe_host`)를 준다(auth status·pr list·api 공통)."""
+        host = host or self.inputs.get("ghe_host")
         env = dict(os.environ, GH_PROMPT_DISABLED="1", **({"GH_HOST": str(host)} if host else {}))
         return self.run(["gh", *args], timeout=60, env=env)
+
+    def module_clone(self) -> Path | None:
+        """모듈 스킬 레포(merged `module_skills`)의 임시 전체 clone(base 브랜치 하나). 관리 clone(`<work_dir>/_module-skills/`)·
+        사용자 clone은 건드리지 않는다. remote가 없으면 None, clone 실패는 `ModuleCloneError`(이유는 moduleskills.classify)."""
+        if "modules" in self._clones:
+            return self._clones["modules"][0]
+        ms = module_settings(self)["ms"]
+        if not ms:
+            return None
+        dst = self.tmpdir() / "module-skills"
+        code, _, err = self.run(["git", "clone", "--quiet", "--no-hardlinks", "--branch", ms["base_branch"], "--single-branch",
+                                 ms["remote"], str(dst)], timeout=300, env=dict(os.environ, **GIT_QUIET_ENV))
+        if code:
+            moduleskills = _plugin_common("moduleskills")
+            raise ModuleCloneError(f"{moduleskills.classify(err)}: {moduleskills.first_fatal(err, code)}")
+        self._clones["modules"] = (dst, "")
+        return dst
 
     def cleanup(self) -> None:
         for d in self._tmp:
@@ -885,16 +911,22 @@ def _protection(ctx: Ctx, key: str, cid: str) -> dict:
     reviews = data.get("required_pull_request_reviews") or {}
     owners = bool(reviews.get("require_code_owner_reviews"))
     # 통과 기준은 PR 리뷰 필수·CODEOWNERS 리뷰 그대로(올리면 사내 S-4a·O-3 재점검이 실패한다). +1 병합 권장 항목은 정보로만 보인다
+    info = _protection_info(data)
+    return res(cid, "pass" if reviews and owners else "fail",
+               f"PR 리뷰 필수 {bool(reviews)} · CODEOWNERS 리뷰 {owners} · 권장(이슈 DB docs/branch-protection.md) — 정보: {info}", cmd)
+
+
+def _protection_info(data: dict) -> str:
+    """브랜치 보호 응답의 +1 병합 권장 항목(IMPL §4.5) 정보 글(S-4a·O-3·MS-1 공통)."""
+    reviews = data.get("required_pull_request_reviews") or {}
     checks = data.get("required_status_checks") if isinstance(data.get("required_status_checks"), dict) else {}
     admins = data.get("enforce_admins") if isinstance(data.get("enforce_admins"), dict) else {}
     contexts = [str(c) for c in checks.get("contexts") or []]
-    info = (f"필수 승인 수 {reviews.get('required_approving_review_count', '?')}(권장 1) · "
+    return (f"필수 승인 수 {reviews.get('required_approving_review_count', '?')}(권장 1) · "
             f"이전 승인 무효(dismiss_stale_reviews) {bool(reviews.get('dismiss_stale_reviews'))} · "
             f"마지막 push 승인(require_last_push_approval) {bool(reviews.get('require_last_push_approval'))} · "
             f"필수 검사 최신(strict) {bool(checks.get('strict'))}({', '.join(contexts) or '검사 없음'}) · "
             f"관리자 포함(enforce_admins) {bool(admins.get('enabled'))}")
-    return res(cid, "pass" if reviews and owners else "fail",
-               f"PR 리뷰 필수 {bool(reviews)} · CODEOWNERS 리뷰 {owners} · 권장(이슈 DB docs/branch-protection.md) — 정보: {info}", cmd)
 
 
 CODEOWNERS_PATHS = (".github/CODEOWNERS", "CODEOWNERS", "docs/CODEOWNERS")
@@ -1866,6 +1898,432 @@ def o4_operate(ctx: Ctx) -> dict:
                ask="oFono 운영을 계속할지 결정해 주세요 → `--done O-4 --waive o4.operate=\"<결정>\"`")
 
 
+# --- MS-1·MS-2 (모듈 스킬 사내 트랙, S-3 완료 뒤 `site_step.py modules`, MODULE_SKILLS_PLAN_IMPL §6) --------------------
+# 모듈 레포는 임시 전체 clone(`Ctx.module_clone`)으로만 본다. 토큰을 쓰는 단계(세션 안 중첩 `claude -p`)는 명령만 보인다.
+
+MODULE_FILES = ("explore.md", "SKILL.md", "analyzer.md")
+COMMON_FILES = ("layers.md", "components.md")
+PLAN_PLATFORMS = ("ofono", "android")
+PLAN_MODULES = ("data", "sim", "network", "call", "sms", "ims", "modem")       # IMPL §1.1 트리(2 × 7)
+MODULE_DB_KEYS = {"android": "ops_db", "ofono": "ofono_db"}                     # 플랫폼 → steps.yaml 이슈 DB 입력
+SITE_MODULE_EVALS = "tests/site/module-evals"                                    # MS-2 사내 입력(SITE_PATHS)
+LIST_MAX = 10
+
+
+def _plugin_common(name: str):
+    """플러그인 `common.<name>` 지연 import(실패는 부른 점검만 fail, run_checks 예외 처리)."""
+    import importlib
+
+    scripts = str(REPO / "plugin" / "scripts")
+    if scripts not in sys.path:
+        sys.path.insert(0, scripts)
+    return importlib.import_module(f"common.{name}")
+
+
+def module_settings(ctx: Ctx) -> dict:
+    """{d: site-defaults|None, u: 사용자 config|None, ms: {remote, base_branch}|None, layer, problems}. 값은 보이지 않는다."""
+    d = _site_defaults(ctx)
+    if d is None:
+        return {"d": None, "u": None, "ms": None, "layer": None, "problems": []}
+    uc = _plugin_common("userconfig")
+    u = uc.load_user()
+    ms = uc.module_skills(uc.merged(d, u))
+    layer = "사용자 config" if uc.module_skills(u if isinstance(u, dict) else {}) else "site-defaults"
+    return {"d": d, "u": u, "ms": ms, "layer": layer, "problems": uc.module_skills_problems(d, u)}
+
+
+def _cap_list(items: list[str], n: int = LIST_MAX) -> str:
+    return ", ".join(items[:n]) + (f" 외 {len(items) - n}" if len(items) > n else "")
+
+
+def _need_remote(ctx: Ctx, cid: str) -> tuple[dict, dict | None]:
+    st = module_settings(ctx)
+    if st["d"] is None:
+        return st, _need_defaults(cid)
+    if st["problems"]:
+        return st, res(cid, "skip", "module_skills 설정 오류(ms1.config)", None)
+    if not st["ms"]:
+        return st, res(cid, "skip", "remote 없음(ms1.config)", None)
+    return st, None
+
+
+def _need_module_clone(ctx: Ctx, cid: str, fail: bool = False) -> tuple[Path | None, dict | None]:
+    st, early = _need_remote(ctx, cid)
+    if early:
+        return None, early
+    err = ctx._clones.get("modules_error")
+    if err is None:
+        try:
+            return ctx.module_clone(), None
+        except ModuleCloneError as exc:
+            err = ctx._clones["modules_error"] = str(exc)
+    cmd = f"git clone --branch {st['ms']['base_branch']} <module_skills.remote> <임시>"
+    if fail:
+        return None, res(cid, "fail", f"모듈 레포 임시 clone 실패 — {err}", cmd,
+                         ask="모듈 스킬 레포 주소·권한(S33)을 확인해 주세요(우회하지 않는다)")
+    return None, res(cid, "skip", "모듈 레포 clone 실패(ms1.tree)", cmd)
+
+
+def module_tree(clone: Path) -> set[str]:
+    out = subprocess.run(["git", "-C", str(clone), "ls-tree", "-r", "--name-only", "HEAD"], capture_output=True, text=True,
+                         encoding="utf-8", errors="replace", timeout=60).stdout
+    return set(out.splitlines())
+
+
+def modules_doc(clone: Path) -> dict:
+    p = clone / "modules.yaml"
+    doc = yaml.safe_load(p.read_text(encoding="utf-8")) if p.is_file() and not p.is_symlink() else None
+    return doc if isinstance(doc, dict) else {}
+
+
+def _module_paths(doc: dict) -> list[tuple[str, str, str, str | None]]:
+    """[(플랫폼, 모듈, 경로, db_category)] — modules.yaml 순서."""
+    out = []
+    for plat, block in ((doc.get("platforms") or {}) if isinstance(doc.get("platforms"), dict) else {}).items():
+        mods = (block or {}).get("modules") if isinstance(block, dict) else None
+        for name, m in (mods or {}).items() if isinstance(mods, dict) else ():
+            m = m if isinstance(m, dict) else {}
+            out.append((str(plat), str(name), str(m.get("path") or f"{plat}/{name}"), m.get("db_category")))
+    return out
+
+
+def ms1_config(ctx: Ctx) -> dict:
+    st = module_settings(ctx)
+    cmd = "python3 plugin/scripts/config.py show --keys module_skills"
+    if st["d"] is None:
+        return _need_defaults("ms1.config")
+    if st["problems"]:
+        return res("ms1.config", "fail", "module_skills 오류: " + _cap_list(st["problems"], 3), cmd)
+    if not st["ms"]:
+        return res("ms1.config", "needs-user", "module_skills.remote 없음(site-defaults·사용자 config)", cmd,
+                   ask="모듈 스킬 레포 주소·기본 브랜치(S33)를 알려 주세요 → site-defaults `module_skills.remote`·`base_branch`"
+                       "(관리자, 주소를 넣기 전에 ms1.prefer 안내대로 `prefer: skill`을 정한다)")
+    uc = _plugin_common("userconfig")
+    return res("ms1.config", "pass", f"module_skills.remote {uc.redact_remote(st['ms']['remote'])}({st['layer']}) · "
+               f"base {st['ms']['base_branch']}", cmd)
+
+
+def ms1_git(ctx: Ctx) -> dict:
+    ms = _plugin_common("moduleskills")
+    ver = ms.git_version()
+    want = ".".join(map(str, ms.MIN_GIT))
+    if ver is None:
+        return res("ms1.git", "skip", "git 버전을 읽지 못함", "git --version", ask=f"git {want} 이상인지 확인해 주세요")
+    have = ".".join(map(str, ver))
+    return res("ms1.git", "pass" if tuple(ver) >= tuple(ms.MIN_GIT) else "fail",
+               f"git {have} (필요 ≥ {want}) · partial clone 미사용(S33)", "git --version")
+
+
+def ms1_remote(ctx: Ctx) -> dict:
+    st, early = _need_remote(ctx, "ms1.remote")
+    if early:
+        return early
+    remote, base = st["ms"]["remote"], st["ms"]["base_branch"]
+    cmd = f"git ls-remote --heads <module_skills.remote> {base}"
+    code, out, err = ctx.run(["git", "ls-remote", "--heads", remote, base], timeout=60, env=dict(os.environ, **GIT_QUIET_ENV))
+    if code == 124:
+        return res("ms1.remote", "fail", "네트워크: 시간 초과(60초)", cmd)
+    if code:
+        ms = _plugin_common("moduleskills")
+        return res("ms1.remote", "fail", f"{ms.classify(err)}: {ms.first_fatal(err, code)}", cmd,
+                   ask="주소·인증(credential helper)·네트워크를 확인해 주세요(우회하지 않는다)")
+    sha = next((ln.split()[0] for ln in out.splitlines() if ln.split()[1:] == [f"refs/heads/{base}"]), None)
+    if not sha:
+        return res("ms1.remote", "fail", f"원격 브랜치 없음: {base}", cmd)
+    return res("ms1.remote", "pass", f"{base} {sha[:7]}", cmd)
+
+
+def ms1_push(ctx: Ctx) -> dict:
+    st, early = _need_remote(ctx, "ms1.push")
+    if early:
+        return early
+    remote = st["ms"]["remote"]
+    uc = _plugin_common("userconfig")
+    slug = None if remote.lower().startswith("file://") else uc.repo_slug(remote)
+    if slug is None:
+        return res("ms1.push", "info", "file:// 또는 owner/repo로 못 읽는 주소 — push 권한 점검 해당 없음", None)
+    host, owner, repo = slug
+    member_cmd = f"gh api repos/{owner}/{repo} --jq .permissions.push"
+    code, _, _ = ctx.gh("auth", "status", host=host)
+    if code:
+        return res("ms1.push", "skip", f"gh 인증 없음·없음(종료 {code})", "gh auth status",
+                   ask=f"`gh auth login`(S5) 뒤 다시 점검한다. 팀원마다: `{member_cmd}`(teams API는 관리자 권한이 필요)")
+    code, out, err = ctx.gh("api", f"repos/{owner}/{repo}", host=host)
+    if code:
+        http = re.search(r"HTTP (\d{3})", err + out)
+        return res("ms1.push", "skip", f"gh api 종료 {code}" + (f" (HTTP {http.group(1)})" if http else ""), member_cmd,
+                   ask="레포 읽기 권한을 확인해 주세요")
+    try:
+        push = (json.loads(out).get("permissions") or {}).get("push")
+    except (ValueError, AttributeError):
+        return res("ms1.push", "skip", "응답이 JSON 아님", member_cmd, ask="gh api 응답을 확인해 주세요")
+    if push is True:
+        return res("ms1.push", "pass", f"이 계정 push 권한 있음 · 팀원마다 `{member_cmd}`", member_cmd)
+    return res("ms1.push", "fail", "이 계정 push 권한 없음 — 팀에 write 권한을 준다(관리자)", member_cmd)
+
+
+def ms1_tree(ctx: Ctx) -> dict:
+    clone, early = _need_module_clone(ctx, "ms1.tree", fail=True)
+    if early:
+        return early
+    tree, doc = module_tree(clone), modules_doc(clone)
+    cmd = "git -C <임시 clone> ls-tree -r --name-only HEAD"
+    if not doc:
+        return res("ms1.tree", "fail", "modules.yaml 없음·읽지 못함", cmd)
+    mods = _module_paths(doc)
+    # 일부만 있는 레포도 된다: modules.yaml에만 있고 폴더가 없는 모듈은 정보(2×7 범위). 폴더가 있는데 파일이 빠진 것만 불일치
+    present = {path for _, _, path, _ in mods if any(t.startswith(path + "/") for t in tree)}
+    absent = sorted({path for _, _, path, _ in mods} - present)
+    miss = [f"{path}/{f}" for _, _, path, _ in mods if path in present for f in MODULE_FILES if f"{path}/{f}" not in tree]
+    plats = sorted({p for p, _, _, _ in mods})
+    with_dirs = sorted({p for p, _, path, _ in mods if path in present})   # _common은 모듈 폴더가 하나라도 있는 플랫폼만 요구
+    miss += [f"{p}/_common/{f}" for p in with_dirs for f in COMMON_FILES if f"{p}/_common/{f}" not in tree]
+    listed = {path for _, _, path, _ in mods}
+    extra = sorted({"/".join(t.split("/")[:2]) for t in tree
+                    if len(t.split("/")) >= 3 and t.split("/")[0] in plats and t.split("/")[1] != "_common"
+                    and t.split("/")[2] in MODULE_FILES} - listed)
+    have = {(p, m) for p, m, path, _ in mods if all(f"{path}/{f}" in tree for f in MODULE_FILES)}
+    plan = sum((p, m) in have for p in PLAN_PLATFORMS for m in PLAN_MODULES)
+    info = f"계획 2×7 중 {plan}개 있음(정보 — 일부만 있는 레포도 된다, 위험은 ms1.prefer)"
+    if absent:
+        info += f" · modules.yaml에만 있고 폴더 없음 {len(absent)}(정보): {_cap_list(absent, 5)}"
+    gaps = [f"없음 {x}" for x in miss] + [f"modules.yaml에 없는 모듈 폴더 {x}" for x in extra]
+    if gaps:
+        return res("ms1.tree", "fail", f"레포 트리·modules.yaml 불일치 {len(gaps)}: {_cap_list(gaps)} · {info}", cmd)
+    return res("ms1.tree", "pass", f"modules.yaml 모듈 폴더 {len(present)}개 = 트리 · {info}", cmd)
+
+
+def ms1_repo_check(ctx: Ctx) -> dict:
+    clone, early = _need_module_clone(ctx, "ms1.repo_check")
+    if early:
+        return early
+    import module_repo_check
+
+    found = module_repo_check.findings(clone)
+    cmd = "python3 tools/module_repo_check.py <모듈 레포 clone>"
+    if found:
+        return res("ms1.repo_check", "fail", f"지적 {len(found)}: {_cap_list(found)}", cmd)
+    return res("ms1.repo_check", "pass", "지적 0(트리 규칙·위험 지시·modules.yaml 엄격 검사)", cmd)
+
+
+def ms1_tags(ctx: Ctx) -> dict:
+    clone, early = _need_module_clone(ctx, "ms1.tags")
+    if early:
+        return early
+    doc = modules_doc(clone)
+    parser_rules = _plugin_common("parser_rules")
+    import module_measure
+
+    missing, bad_rx, mismatch, seen, skipped = [], [], [], [], []
+    for plat, block in ((doc.get("platforms") or {}) if isinstance(doc.get("platforms"), dict) else {}).items():
+        key = MODULE_DB_KEYS.get(plat)
+        if key is None:
+            continue
+        db, why = _need_clone(ctx, "ms1.tags", key)
+        if why:
+            skipped.append(f"{plat}: {why['evidence']}")
+            continue
+        rules = parser_rules.load(db / "parser-rules")
+        seen.append(plat)
+        block = block if isinstance(block, dict) else {}
+        common = block.get("common") if isinstance(block.get("common"), dict) else {}
+        mods = block.get("modules") if isinstance(block.get("modules"), dict) else {}
+        names = [str(n) for n in common.get("daemons") or ()] + [str(n) for m in mods.values() if isinstance(m, dict)
+                                                                 for n in m.get("daemons") or ()]
+        missing += [f"{plat}:{n}" for n in dict.fromkeys(names) if rules.tag_category(n) is None]
+        regexes = [str(r) for r in common.get("tags") or ()] + [str(r) for m in mods.values() if isinstance(m, dict)
+                                                               for r in m.get("tags") or ()]
+        pats = {p.pattern for p, _ in rules.tag_regexes}
+        for rx in dict.fromkeys(regexes):
+            try:
+                ok = rx in pats or any(re.search(rx, t) for t in rules.tag_exact)
+            except re.error:
+                ok = False
+            if not ok:
+                bad_rx.append(f"{plat}:{rx[:40]}")
+        found: list[str] = []
+        module_measure.config_checks(doc, plat, rules, None, found)
+        mismatch += [f"{plat}:{f}" for f in found if "데몬 " in f and "≠" in f]
+    cmd = "python3 -c 'parser_rules.load(<이슈 DB 임시 clone>/parser-rules).tag_category(<데몬>)'"
+    if not seen:
+        return res("ms1.tags", "skip", "이슈 DB 입력 없음: " + ("; ".join(skipped) or "modules.yaml 플랫폼 없음"), None,
+                   ask="플랫폼별 이슈 DB clone 경로를 알려 주세요 → `propose --set ops_db=<경로>`·`ofono_db=<경로>`")
+    bad = [f"tags.yaml에 없음 {x}" for x in missing] + [f"맞는 태그 없음 {x}" for x in bad_rx] + mismatch
+    ev = f"플랫폼 {', '.join(seen)}" + (f" (건너뜀 {'; '.join(skipped)})" if skipped else "")
+    if bad:
+        return res("ms1.tags", "fail", f"{ev} · {len(bad)}건: {_cap_list(bad)}", cmd,
+                   ask="이름마다 고른다: 이슈 DB tags.yaml에 더함(계획 op PR — 새 태그는 사용자 확인) 또는 modules.yaml에서 뺌(모듈 레포 PR)")
+    return res("ms1.tags", "pass", f"{ev} · modules.yaml 데몬·태그 ⊆ tags.yaml, 카테고리 일치", cmd)
+
+
+def implicit_pairs(st: dict) -> list[tuple[str, str, str, str]]:
+    """[(플랫폼, at, 카테고리, skill)]: skill이 있는데 prefer가 없는 카테고리(userconfig.implicit_module_switches와 같은 조건)."""
+    uc = _plugin_common("userconfig")
+    out = []
+    for plat, at, cfg in uc._merged_each(st["d"], st["u"]):
+        ana = cfg.get("analyzers") if isinstance(cfg.get("analyzers"), dict) else {}
+        for cat, entry in ana.items():
+            skill = entry.get("skill") if isinstance(entry, dict) else None
+            if isinstance(skill, str) and skill.strip() and "prefer" not in entry:
+                out.append((plat, at, str(cat), skill.strip()))
+    return out
+
+
+def ms1_prefer(ctx: Ctx) -> dict:
+    st, early = _need_remote(ctx, "ms1.prefer")
+    if early:
+        return early
+    pairs = implicit_pairs(st)
+    cmd = "python3 plugin/scripts/config.py check"
+    if not pairs:
+        return res("ms1.prefer", "pass", "설치 스킬을 prefer 없이 쓰는 카테고리 없음", cmd)
+    clone, early = _need_module_clone(ctx, "ms1.prefer")
+    if early:
+        return early
+    tree, mods = module_tree(clone), _module_paths(modules_doc(clone))
+    fails, infos, fixes = [], [], []
+    for plat, at, cat, _skill in pairs:
+        path = next((p for pl, _, p, c in mods if pl == plat and c == cat), None)
+        where = f"{at}analyzers.{cat}"
+        if path and f"{path}/SKILL.md" in tree:
+            infos.append(f"{where}: 모듈 문서({path})로 바뀜 — 계속 쓰려면 prefer: skill")
+            continue
+        fails.append(f"{where}: 레포에 {plat} 모듈 없음")
+        fixes.append(f"python3 plugin/scripts/config.py set analyzers.{cat}.prefer skill"
+                     + (f" --platform {plat}" if at else ""))
+    if fails:
+        return res("ms1.prefer", "fail", "5-1이 없는 모듈 문서로 바뀌어 종료 1이 된다: " + _cap_list(fails + infos), " ; ".join(fixes),
+                   ask="고치기: " + " ; ".join(fixes) + f" (팀 기본: site-defaults `analyzers.<카테고리>.prefer: skill` — 관리자)")
+    return res("ms1.prefer", "info", _cap_list(infos), cmd)
+
+
+def ms1_nested_claude(ctx: Ctx) -> dict:
+    clone, early = _need_module_clone(ctx, "ms1.nested_claude")
+    if early:
+        return early
+    tree = module_tree(clone)
+    first = next((path for _, _, path, _ in _module_paths(modules_doc(clone)) if f"{path}/SKILL.md" in tree), "<플랫폼>/<모듈>")
+    cmd = f"python3 plugin/scripts/module_eval.py --module {first} --templates <모듈 레포 clone> --probe-restricted --json"
+    ev = "토큰을 쓰는 확인이라 실행하지 않았다(S-2 probe와 같은 성격, 자식 1회·작음)"
+    if ctx.allow_api:
+        code, ver, _ = ctx.run(["claude", "--version"], timeout=60)
+        ev += f" · claude --version 종료 {code} ({_first_line(ver) or '?'})"
+    return res("ms1.nested_claude", "needs-user", ev, cmd,
+               ask=f"Claude Code 세션의 Bash에서 한 번 실행해 결과(confined·unsupported·not_confined)를 알려 주세요: `{cmd}` "
+                   "(`--record`는 붙이지 않는다) → `--done MS-1 --waive ms1.nested_claude=\"<결과>\"`")
+
+
+def ms1_protection(ctx: Ctx) -> dict:
+    st, early = _need_remote(ctx, "ms1.protection")
+    if early:
+        return {**early, "status": "info"}
+    uc = _plugin_common("userconfig")
+    remote, base = st["ms"]["remote"], st["ms"]["base_branch"]
+    slug = None if remote.lower().startswith("file://") else uc.repo_slug(remote)
+    if slug is None:
+        return res("ms1.protection", "info", "file:// 또는 owner/repo로 못 읽는 주소 — 브랜치 보호 조회 안 함", None)
+    host, owner, repo = slug
+    cmd = f"gh api repos/{owner}/{repo}/branches/{base}/protection"
+    code, out, err = ctx.gh("api", f"repos/{owner}/{repo}/branches/{base}/protection", host=host)
+    if code:
+        http = re.search(r"HTTP (\d{3})", err + out)
+        return res("ms1.protection", "info", f"조회 못 함(" + (f"HTTP {http.group(1)}" if http else f"종료 {code}")
+                   + ") — 권장은 IMPL §4.5(정보, Q15)", cmd)
+    try:
+        data = json.loads(out)
+    except ValueError:
+        return res("ms1.protection", "info", "응답이 JSON 아님", cmd)
+    return res("ms1.protection", "info", f"정보: {_protection_info(data if isinstance(data, dict) else {})}", cmd)
+
+
+def ms1_ci(ctx: Ctx) -> dict:
+    clone, early = _need_module_clone(ctx, "ms1.ci")
+    if early:
+        return {**early, "status": "info"}
+    flows = sorted(t for t in module_tree(clone) if re.fullmatch(r"\.github/workflows/[^/]+\.ya?ml", t))
+    return res("ms1.ci", "info", f"workflow {len(flows)}개" if flows else "workflow 없음(모듈 레포 CI는 선택, Q15)",
+               "git -C <임시 clone> ls-tree --name-only HEAD .github/workflows/")
+
+
+def ms1_coverage(ctx: Ctx) -> dict:
+    import module_coverage
+
+    clone, early = _need_module_clone(ctx, "ms1.coverage")
+    if early:
+        return early
+    result = module_coverage.run_site(ctx)
+    cmd = "python3 tools/site_step.py modules coverage --out docs/site/module-coverage.diff"
+    if not result["platforms"]:
+        why = "; ".join(f"{p}: {w}" for p, w in result["skipped"].items()) or "입력 없음"
+        return res("ms1.coverage", "skip", f"로그로 셀 플랫폼 없음 — {why}", cmd,
+                   ask="사내 로그(마스킹본) 폴더를 알려 주세요 → `propose --set ofono_log_dir=<경로>`·`android_log_dir=<경로>`")
+    n = module_coverage.counts(result)
+    ev = (f"플랫폼 {n['platforms']} · 로그 {n['logs']} · 줄 {n['rows']} · 분류 안 된 hot {n['unlabelled_hot']}줄 · 모듈에 없는 태그 "
+          f"(제안 후보 {n['known']}, 목록만 {n['common']}, tags.yaml에 없음 {n['unknown']}, 그중 {module_coverage.MIN_LINES}줄 이상 "
+          f"{n['unknown_over_min']}) · 안 보인 이름 {n['never_seen']} · 제안 {n['additions']}(손으로 {n['manual']})")
+    if result["skipped"]:
+        ev += f" · 건너뜀 {len(result['skipped'])}"
+    if n["additions"] or n["manual"] or n["unknown_over_min"]:
+        return res("ms1.coverage", "needs-user", ev, cmd,
+                   ask="이름은 `site_step.py modules coverage`로 본다(사내 전용 출력). 제안 diff를 검토해 모듈 레포 PR을 낼지, tags.yaml에 "
+                       "없는 태그를 이슈 DB 계획 op PR로 더할지(사용자 확인) 정해 주세요")
+    return res("ms1.coverage", "pass", ev, cmd)
+
+
+def ms2_audit(ctx: Ctx) -> dict:
+    import site_audit
+
+    last = site_audit.last_audit(site_audit.load_state(ctx.root))
+    cmd = "python3 tools/site_step.py audit"
+    if last is None:
+        return res("ms2.audit", "needs-user", "정기 점검 기록 없음", cmd,
+                   ask="`site_step.py audit`(토큰 0 검사·남은 것 목록) → 사내 Claude 리뷰(상한 안) → `audit --record`")
+    age = (site_audit.today() - last).days
+    due = last + site_audit.timedelta(days=site_audit.AUDIT_EVERY_DAYS)
+    ev = f"마지막 점검 {last.isoformat()}({age}일 전) · 다음 {due.isoformat()} · 주기 {site_audit.AUDIT_EVERY_DAYS}일"
+    if age > site_audit.AUDIT_OVERDUE_DAYS:
+        return res("ms2.audit", "needs-user", ev + f" — {site_audit.AUDIT_OVERDUE_DAYS}일 넘음", cmd,
+                   ask="정기 점검을 돌려 주세요: `site_step.py audit` → 리뷰 → `audit --record`")
+    return res("ms2.audit", "pass", ev, cmd)
+
+
+def ms2_merge(ctx: Ctx) -> dict:
+    st = module_settings(ctx)
+    if st["d"] is None:
+        return {**_need_defaults("ms2.merge"), "status": "info"}
+    pairs = implicit_pairs(st) if st["ms"] else []
+    uc = _plugin_common("userconfig")
+    cats = sorted({(p, str(c)) for p, _, cfg in uc._merged_each(st["d"], st["u"])
+                   for c, e in ((cfg.get("analyzers") or {}) if isinstance(cfg.get("analyzers"), dict) else {}).items()
+                   if isinstance(e, dict) and isinstance(e.get("skill"), str) and e["skill"].strip()})
+    if not cats:
+        return res("ms2.merge", "info", "설치 분석 스킬 카테고리 없음(합칠 것 없음)", None)
+    have = "모듈 레포 확인 안 함(remote 없음)"
+    if st["ms"]:
+        clone, early = _need_module_clone(ctx, "ms2.merge")
+        if clone is not None:
+            tree, mods = module_tree(clone), _module_paths(modules_doc(clone))
+            got = [f"{p}/{c}" for p, c in cats
+                   if any(pl == p and dc == c and f"{path}/SKILL.md" in tree for pl, _, path, dc in mods)]
+            have = f"레포에 모듈 있음 {len(got)}/{len(cats)}"
+    return res("ms2.merge", "info", f"설치 스킬 카테고리 {', '.join(f'{p}/{c}' for p, c in cats)} · {have} · prefer 없이 쓰는 "
+               f"{len(pairs)}개 (합치기는 선택, MS-2)", None)
+
+
+def ms2_module_eval(ctx: Ctx) -> dict:
+    d = ctx.root / SITE_MODULE_EVALS
+    n = sum(1 for p in d.iterdir() if p.is_dir()) if d.is_dir() else 0
+    return res("ms2.module_eval", "info", f"{SITE_MODULE_EVALS}/ 사례 {n}개" + ("" if n else " — 실제 이슈 eval은 선택·소수"),
+               f"ls {SITE_MODULE_EVALS}")
+
+
+MODULE_CHECKS = {
+    "MS-1": [ms1_config, ms1_git, ms1_remote, ms1_push, ms1_tree, ms1_repo_check, ms1_tags, ms1_prefer, ms1_nested_claude,
+             ms1_protection, ms1_ci, ms1_coverage],
+    "MS-2": [ms2_audit, ms2_merge, ms2_module_eval],
+}
+
+
 CHECKS = {
     "S-1": [s1_profile, s1_review_open, s1_gate, s1_samples, s1_python, s1_env, s1_ghe, s1_claude, s1_todos],
     "S-2": [s2_pending, s2_graded, s2_offsite, s2_safety, s2_manual, s2_summary, s2_probe, s2_s1_rows, s2_baseline],
@@ -1892,7 +2350,7 @@ def run_checks(step: str, root: Path, allow_api: bool = False) -> list[dict]:
     ctx = Ctx(Path(root), allow_api=allow_api)
     out = []
     try:
-        for fn in CHECKS[step]:
+        for fn in CHECKS.get(step) or MODULE_CHECKS[step]:
             ctx.used_clone = False
             try:
                 r = fn(ctx)

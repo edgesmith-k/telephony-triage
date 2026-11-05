@@ -23,7 +23,7 @@
 | `CLAUDE_CODE_MAX_OUTPUT_TOKENS` | `16000` | 요청 `max_tokens:16000`(없으면 32000) |
 | `CLAUDE_CODE_MAX_CONTEXT_TOKENS` | `202000` | `contextWindow 202000`(자동 압축 기준) |
 | `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS` | `1` | 베타 헤더를 줄인다: context-management·thinking-display 등이 빠지고 `claude-code`·`interleaved-thinking`·`effort`만 남았다(1단계 knobs 실행 — 이 표의 키를 함께 켬, 요청 `context_management` 없음) |
-| `CLAUDE_CODE_EFFORT_LEVEL` | `unset` | 요청에 `output_config` 없음(같은 knobs 실행) |
+| `CLAUDE_CODE_EFFORT_LEVEL` | `unset`(또는 변수 없음) | 요청에 `output_config` 없음(같은 knobs 실행) |
 | `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` | `1` | 업데이트·텔레메트리 등 외부 트래픽 없음(오프라인 실행 확인) |
 | `CLAUDE_CODE_DISABLE_THINKING` | `1` — **조건부** | 게이트웨이가 `thinking`을 거부할 때만(knobs 실행에서 요청 `thinking` 없음). CLI는 thinking 400에 한 번 자동 재시도한다(1단계 실험) |
 
@@ -32,7 +32,8 @@
   argv·기록에 없음, `execution.json` `auth_from_user_settings`에 이름만). 고치기 전에는 프로필 키가 빠져 자식이 `max_tokens:32000`·
   thinking·베타 헤더로 요청했다. 모델은 settings.json 최상위 `model` 키로는 넘어가지 않는다 — `ANTHROPIC_MODEL` 또는 `--model`.
 - **점검(모델 호출 없음)**: `claude_child.gateway_profile_check(env)`가 위 표를 ok·missing·differs·info 행으로 낸다(비밀 값은 행에
-  없음). 부르는 법: `python3 tools/site_step.py runtime-check claude-gateway`(표, missing·differs가 있으면 종료 1, O10 — §6).
+  없음). 권장 값이 `unset`인 키는 변수 없음·빈 값·글자 그대로 `unset`을 모두 ok로 본다(F). 부르는 법:
+  `python3 tools/site_step.py runtime-check claude-gateway`(표, missing·differs가 있으면 종료 1, O10 — §6).
 
 ## 2. 비용 미상 (C2i)
 
@@ -173,6 +174,7 @@ MCP 쓰기(add_comment 승인 유무)·Write/Edit 규칙 8은 이번에 돌리�
   claude-gateway는 `gateway_profile_check` 표(missing·differs → 1), opencode는 버전 1.19.5(없으면 설치 안내)·설치한
   opencode.json 필수 설정·`tt-oc` 사전 점검(공유 `version_row`·`config_problems`·`preflight`)·관리 설정(`gen_opencode.managed_problems`,
   없으면 warn). 레포 zip에 `opencode/`가 들어가는 것은 `test_make_bundle.py`가 고정한다(검사 항목은 그대로).
+  F에서 unset 거짓 실패를 고쳤다: `CLAUDE_CODE_EFFORT_LEVEL`이 없으면 missing이던 것을 ok로(권장 값 unset).
 - O8 `config.py tracker-candidates`가 `--opencode-config`(또는 `TT_RUNTIME=opencode`면 작업 폴더 설정)의 `mcp`(enabled·command)를
   읽고 `<server>_<tool>` 이름을 안다(`mcptools.opencode_candidates` — `oc_adapter`와 같은 규칙). `job_status.py`는 OpenCode 안에서만
   런타임·모델·OpenCode 버전, `config.py doctor`는 OpenCode 안에서만 `opencode_env`·`jira_gate` 행(기본 13행 그대로).

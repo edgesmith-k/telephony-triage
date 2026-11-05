@@ -107,6 +107,7 @@ GATEWAY_PROFILE = {
     "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": "1", "CLAUDE_CODE_EFFORT_LEVEL": "unset",
     "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"}
 GATEWAY_CREDENTIALS = ("ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_API_KEY")
+GATEWAY_UNSET = "unset"      # 권장 값이 "두지 않는다"인 키: 변수 없음·빈 값·글자 그대로 "unset"이 모두 맞다(F, O10 거짓 실패)
 
 
 def gateway_profile_check(env: dict[str, str]) -> list[dict]:
@@ -126,6 +127,10 @@ def gateway_profile_check(env: dict[str, str]) -> list[dict]:
         eff.get("ANTHROPIC_MODEL") or "없음 — 실행마다 --model <사내 모델>을 준다")
     for key, want in GATEWAY_PROFILE.items():
         have = eff.get(key)
+        if want == GATEWAY_UNSET:
+            add(key, "ok" if have in (None, "", GATEWAY_UNSET) else "differs",
+                f"{have} (권장 {want})" if have else f"없음 (권장 {want} — 두지 않아도 된다)")
+            continue
         add(key, "ok" if have == want else ("missing" if have is None else "differs"),
             f"{have} (권장 {want})" if have is not None else f"없음 (권장 {want})")
     add("CLAUDE_CODE_DISABLE_THINKING", "info", f"{eff.get('CLAUDE_CODE_DISABLE_THINKING') or '없음'} — 게이트웨이가 "

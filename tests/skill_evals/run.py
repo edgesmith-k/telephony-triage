@@ -2,7 +2,7 @@
 """격리된 스킬 행동 평가를 준비하고 Claude Code로 실행한다.
 
 python3 tests/skill_evals/run.py --iteration <새 디렉토리> --eval 3 4 --prepare-only
-python3 tests/skill_evals/run.py --iteration <새 디렉토리> --eval 3 4 --execute [--mode plugin|direct] [--model <id>]
+python3 tests/skill_evals/run.py --iteration <새 디렉토리> --eval 3 4 --execute [--mode plugin|direct] [--model <id>] [-j N]
 
 모드 (기본 plugin):
 - plugin — `claude -p --plugin-dir <플러그인>`로 **설치된 것처럼** 불러온다. 사용자 요청을 그대로 첫 메시지로 보내므로
@@ -13,10 +13,19 @@ python3 tests/skill_evals/run.py --iteration <새 디렉토리> --eval 3 4 --exe
 
 모델은 `--model`이 없으면 CLI 기본값이다. API 한도·인증 오류에서 배치를 멈추고, 기대 답이나
 assertion을 실행자에게 주지 않는다. transcript 기반 수동 채점은 grade.py 실행 뒤 별도 수행한다.
+
+`-j N`(2~8, `--execute`만, 기본 1 = 예전 순차 실행 그대로): 자식 `claude -p`만 N개까지 동시에 돈다. 준비(`build`·plugin
+부속물·eval_metadata.json)·채점·summary.json·출력은 메인 스레드에서 `--eval` 순서로 한다(테스트 도우미의 프로세스 캐시 때문).
+멈춤 규칙은 순차와 같다: completed가 아닌 결과(한도·인증 blocked·error·timeout)가 나오면 새 eval을 시작하지 않고, 이미 도는
+것은 끝까지 기다린 뒤(쓴 토큰을 버리지 않는다) 종료 1. 시작 안 한 eval은 디렉토리도 만들지 않는다. 출력 배치(`eval-<id>/…`,
+`env-<id>/`, summary.json)와 execution.json 필드는 순차와 같다. eval마다 env 디렉토리·사용자 홈·모의 상태가 따로이고 모의
+MCP 서버는 자식마다 stdio라 포트를 쓰지 않는다 — 동시에 도는 eval끼리 경로가 겹치면 시작하지 않고 종료 2(`_isolation_problem`).
+포트를 쓰는 모의 서버를 더하면 eval마다 임시 포트(0번 바인드)를 받게 한다.
 """
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import json
 import os
 import shutil
@@ -51,6 +60,11 @@ from common.claude_child import (  # noqa: F401
     read_events,
     user_auth_settings,
 )
+
+
+MAX_JOBS = 8                  # -j 상한(API 동시 요청)
+_LIVE: set = set()            # -j 실행 중인 자식(Ctrl-C 때 끝낸다). 순차 실행은 쓰지 않는다
+_LIVE_LOCK = threading.Lock()
 
 
 def dump(path: Path, value) -> None:
@@ -356,6 +370,8 @@ def execute(entry: dict, info: dict, env_dir: Path, run_dir: Path, claude: str,
     with (run_dir / "events.jsonl").open("w", encoding="utf-8") as events, (run_dir / "stderr.log").open("w", encoding="utf-8") as errors:
         proc = subprocess.Popen(command, cwd=env_dir, env=env, stdin=subprocess.PIPE,
                                 stdout=subprocess.PIPE if followups else events, stderr=errors, text=True, encoding="utf-8")
+        with _LIVE_LOCK:
+            _LIVE.add(proc)
         turns: list[dict] = []
         try:
             if followups:
@@ -381,6 +397,9 @@ def execute(entry: dict, info: dict, env_dir: Path, run_dir: Path, claude: str,
                     status, reason = "error", f"플러그인 환경: {problem}"
             if status == "completed":
                 derived = derive_outputs(run_dir, events_list)
+        finally:
+            with _LIVE_LOCK:
+                _LIVE.discard(proc)
     session = collect_transcript(events_list or read_events(run_dir / "events.jsonl")[0], env, run_dir) if plugin else None
     # 스크립트 표시 기록(L R): 임시 env가 지워져도 hook_replay 재생 비교가 되게 run 디렉토리로 복사한다
     if info.get("work_dir") and (shown_log := Path(info["work_dir"]) / ".shown" / "log.jsonl").is_file():
@@ -425,7 +444,113 @@ def child_python_problem() -> str | None:
     return None
 
 
-def main() -> int:
+def _prepare(eid: int, entry: dict, iteration: Path, mode: str) -> tuple[Path, Path, dict, dict | None]:
+    """eval 하나의 디렉토리·모의 환경·plugin 부속물·eval_metadata.json (메인 스레드, 순차와 같은 순서·내용)."""
+    run_dir = iteration / f"eval-{eid}" / "with_skill"
+    (run_dir / "outputs").mkdir(parents=True)
+    env_dir = iteration / f"env-{eid}"
+    info = build(entry, env_dir, direct_tools=(mode == "direct"))
+    plugin = prepare_plugin_mode(entry, info, env_dir) if mode == "plugin" else None
+    dump(run_dir.parent / "eval_metadata.json", {"eval_id": eid, "prompt": entry["prompt"], "assertions": entry["assertions"],
+                                                 "mode": mode})
+    return run_dir, env_dir, info, plugin
+
+
+ISOLATED_ENV = ("TELEPHONY_TRIAGE_HOME", "MOCK_GH_STATE_DIR", "MOCK_JIRA_DIR", "MOCK_JIRA_WRITE_LOG", "MOCK_GH_ISSUES_DIR",
+                "MOCK_GH_ISSUES_WRITE_LOG")
+
+
+def _isolation_paths(run_dir: Path, env_dir: Path, info: dict) -> dict[str, str]:
+    """동시에 도는 eval끼리 겹치면 안 되는 경로(이름 → 해석한 경로). 플러그인 루트·REPO·사용자 CLAUDE_CONFIG_DIR은 함께 쓴다
+    (읽기 전용·해시가 같다, transcript는 세션 ID로 고른다)."""
+    out = {"run_dir": run_dir, "env_dir": env_dir, "env.sh": env_dir / "env.sh", "bin": env_dir / "bin",
+           "approvals.json": env_dir / "approvals.json"}
+    for key in ("work_dir", "issue_db_clone"):
+        if info.get(key):
+            out[key] = Path(info[key])
+    for key in ISOLATED_ENV:
+        if (info.get("env") or {}).get(key):
+            out[key] = Path(info["env"][key])
+    return {k: str(Path(v).resolve()) for k, v in out.items()}
+
+
+def _isolation_problem(prepared: list[tuple[int, dict[str, str]]]) -> str | None:
+    """[(eval id, _isolation_paths)] 중 두 eval이 같은 경로를 쓰면 그 설명. 없으면 None."""
+    seen: dict[str, tuple[int, str]] = {}
+    for eid, paths in prepared:
+        for name, path in paths.items():
+            if path in seen and seen[path][0] != eid:
+                other, oname = seen[path]
+                return f"eval {other}({oname})와 eval {eid}({name})가 같은 경로를 쓴다: {path}"
+            seen.setdefault(path, (eid, name))
+    return None
+
+
+def _kill_live() -> None:
+    with _LIVE_LOCK:
+        procs = list(_LIVE)
+    for proc in procs:
+        try:
+            proc.kill()
+        except OSError:
+            pass
+
+
+def run_parallel(args, entries: dict, iteration: Path, claude: str, jobs: int) -> int:
+    """`-j N`: 준비·채점·summary·출력은 메인 스레드, `execute`(자식 claude)만 스레드 N개. 멈춤 규칙은 순차와 같다."""
+    pending = list(args.eval)
+    inflight: dict = {}            # future → (eid, entry, run_dir, env_dir, paths)
+    stop: tuple[int, str] | None = None
+    clash: str | None = None
+    failure: BaseException | None = None
+    done_n = 0
+    pool = concurrent.futures.ThreadPoolExecutor(max_workers=jobs, thread_name_prefix="skill-eval")
+    try:
+        while pending or inflight:
+            while pending and len(inflight) < jobs and stop is None and clash is None and failure is None:
+                eid = pending.pop(0)
+                entry = entries[eid]
+                run_dir, env_dir, info, plugin = _prepare(eid, entry, iteration, args.mode)
+                paths = _isolation_paths(run_dir, env_dir, info)
+                clash = _isolation_problem([(e, p) for e, _, _, _, p in inflight.values()] + [(eid, paths)])
+                if clash:
+                    print(f"격리 실패: {clash} — 시작하지 않는다", file=sys.stderr, flush=True)
+                    break
+                fut = pool.submit(execute, entry, info, env_dir, run_dir, claude, args.timeout, plugin, args.model)
+                inflight[fut] = (eid, entry, run_dir, env_dir, paths)
+            if not inflight:
+                break
+            finished, _ = concurrent.futures.wait(inflight, return_when=concurrent.futures.FIRST_COMPLETED)
+            for fut in sorted(finished, key=lambda f: args.eval.index(inflight[f][0])):
+                eid, entry, run_dir, env_dir, _ = inflight.pop(fut)
+                try:
+                    outcome = fut.result()
+                except Exception as exc:  # noqa: BLE001 — 순차라면 그대로 올라갔을 오류: 새 eval을 멈추고 끝에서 다시 올린다
+                    failure = failure or exc
+                    print(f"eval {eid}: 실행 오류 — {type(exc).__name__}: {str(exc)[:160]}", flush=True)
+                    continue
+                write_summary(iteration, eid, entry.get("batch"), grade(eid, run_dir, env_dir, entry["assertions"]))
+                print(f"eval {eid}: {outcome['status']} — {outcome['reason'][:180]}", flush=True)
+                done_n += 1
+                if outcome["status"] != "completed" and stop is None:
+                    stop = (eid, outcome["status"])
+    except KeyboardInterrupt:
+        _kill_live()
+        pool.shutdown(wait=True, cancel_futures=True)
+        print(f"중단(Ctrl-C): 실행 중 자식을 끝냈다 — 실행 안 함: {pending}", file=sys.stderr, flush=True)
+        return 130
+    pool.shutdown(wait=True)
+    if stop:
+        print(f"멈춤: eval {stop[0]} {stop[1]} — 실행 안 함: {pending}", flush=True)
+    print(f"병렬 -j {jobs}: 끝남 {done_n} · 멈춤 {1 if stop else 0} · 실행 안 함 {len(pending)}", flush=True)
+    if failure is not None:
+        raise failure
+    if clash:
+        return 2
+    return 1 if stop else 0
+
+
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--iteration", type=Path, required=True)
     parser.add_argument("--eval", type=int, nargs="+", required=True)
@@ -435,7 +560,13 @@ def main() -> int:
     parser.add_argument("--timeout", type=int, default=900)
     parser.add_argument("--mode", choices=("plugin", "direct"), default="plugin")
     parser.add_argument("--model")
-    args = parser.parse_args()
+    parser.add_argument("-j", "--jobs", type=int, default=1,
+                        help=f"--execute: 동시에 도는 자식 claude 수(1~{MAX_JOBS}, 기본 1 = 순차)")
+    args = parser.parse_args(argv)
+    if not 1 <= args.jobs <= MAX_JOBS:
+        parser.error(f"-j는 1~{MAX_JOBS}: {args.jobs}")
+    if len(set(args.eval)) != len(args.eval):
+        parser.error("--eval에 같은 번호가 두 번 있다")
     entries = {e["id"]: e for e in json.loads((HERE / "evals.json").read_text(encoding="utf-8"))["evals"]}
     for eid in args.eval:
         entry = entries.get(eid)
@@ -452,15 +583,13 @@ def main() -> int:
         parser.error(f"자식 세션 python3가 플러그인 실행 조건(Python 3.10+, yaml, jsonschema 4.0+)을 못 맞춤 — {problem}. "
                      "`pip install --user`로 설치하거나 venv `(tt)` 터미널에서 실행한다(docs/SITE_INSTALL.md 4·5절)")
     iteration.mkdir(parents=True)
+    if args.prepare_only and args.jobs > 1:
+        print(f"-j {args.jobs}: --prepare-only는 순차로 준비한다(병렬은 --execute만)", flush=True)
+    if args.execute and args.jobs > 1:
+        return run_parallel(args, entries, iteration, claude, args.jobs)
     for eid in args.eval:
         entry = entries[eid]
-        run_dir = iteration / f"eval-{eid}" / "with_skill"
-        (run_dir / "outputs").mkdir(parents=True)
-        env_dir = iteration / f"env-{eid}"
-        info = build(entry, env_dir, direct_tools=(args.mode == "direct"))
-        plugin = prepare_plugin_mode(entry, info, env_dir) if args.mode == "plugin" else None
-        dump(run_dir.parent / "eval_metadata.json", {"eval_id": eid, "prompt": entry["prompt"], "assertions": entry["assertions"],
-                                                     "mode": args.mode})
+        run_dir, env_dir, info, plugin = _prepare(eid, entry, iteration, args.mode)
         if args.prepare_only:
             dump(run_dir / "execution.json", {"status": "prepared", "reason": "환경 준비만 수행; 행동 평가 미실행",
                                               "mode": args.mode})

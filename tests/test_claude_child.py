@@ -80,11 +80,41 @@ def test_gateway_profile_check_rows(tmp_path):
     assert rows["CLAUDE_CODE_MAX_OUTPUT_TOKENS"]["status"] == "differs"
     assert rows["CLAUDE_CODE_MAX_CONTEXT_TOKENS"]["status"] == "ok"
     assert rows["CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS"]["status"] == "ok"      # 프로세스 환경도 본다
-    assert rows["CLAUDE_CODE_EFFORT_LEVEL"]["status"] == "missing"
+    assert rows["CLAUDE_CODE_EFFORT_LEVEL"]["status"] == "ok"           # 권장 unset: 변수 없음도 맞다(F)
     assert rows["CLAUDE_CODE_DISABLE_THINKING"]["status"] == "info"
     assert "tok-secret" not in json.dumps(list(rows.values()))
     empty = {r["key"]: r["status"] for r in cc.gateway_profile_check({"CLAUDE_CONFIG_DIR": str(tmp_path / "none")})}
     assert empty["ANTHROPIC_BASE_URL"] == "missing" and empty["credential"] == "missing"
+
+
+def test_gateway_profile_unset_accepts_absent(tmp_path):
+    """권장 값이 unset인 키(CLAUDE_CODE_EFFORT_LEVEL)는 변수 없음·빈 값·글자 그대로 unset이 ok, 다른 값은 differs.
+    다른 키의 없음은 그대로 missing이다(O10 거짓 실패 고침, F)."""
+    conf = str(tmp_path / "none")
+    for env in ({}, {"CLAUDE_CODE_EFFORT_LEVEL": ""}, {"CLAUDE_CODE_EFFORT_LEVEL": "unset"}):
+        rows = {r["key"]: r for r in cc.gateway_profile_check({"CLAUDE_CONFIG_DIR": conf, **env})}
+        assert rows["CLAUDE_CODE_EFFORT_LEVEL"]["status"] == "ok", env
+        assert rows["CLAUDE_CODE_MAX_OUTPUT_TOKENS"]["status"] == "missing"
+    absent = {r["key"]: r for r in cc.gateway_profile_check({"CLAUDE_CONFIG_DIR": conf})}
+    assert absent["CLAUDE_CODE_EFFORT_LEVEL"]["detail"] == "없음 (권장 unset — 두지 않아도 된다)"
+    high = {r["key"]: r for r in cc.gateway_profile_check({"CLAUDE_CONFIG_DIR": conf, "CLAUDE_CODE_EFFORT_LEVEL": "high"})}
+    assert high["CLAUDE_CODE_EFFORT_LEVEL"] == {"key": "CLAUDE_CODE_EFFORT_LEVEL", "status": "differs",
+                                                "detail": "high (권장 unset)"}
+
+
+def test_runtime_check_passes_without_effort_var(tmp_path):
+    """`site_step.py runtime-check claude-gateway`: 권장 프로필에서 CLAUDE_CODE_EFFORT_LEVEL만 없으면 통과(종료 0)."""
+    sys.path.insert(0, str(REPO / "tools"))
+    import site_step
+
+    conf = tmp_path / "conf"
+    profile = {"ANTHROPIC_BASE_URL": "https://gw.invalid", "ANTHROPIC_AUTH_TOKEN": "tok-secret",
+               "CLAUDE_CODE_MAX_OUTPUT_TOKENS": "16000", "CLAUDE_CODE_MAX_CONTEXT_TOKENS": "202000",
+               "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": "1", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"}
+    _settings(conf, {"env": profile})
+    out, code = site_step.runtime_claude_gateway({"CLAUDE_CONFIG_DIR": str(conf)})
+    assert code == 0, out
+    assert "| CLAUDE_CODE_EFFORT_LEVEL | ok |" in out and "tok-secret" not in out
 
 
 # --- C2i: 비용 미상 --------------------------------------------------------------------------------------
