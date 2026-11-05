@@ -928,6 +928,63 @@ def test_require_cost_flag(env, tmp_path):
     assert cost["status"] == "skipped" and cost["passed"] is False
 
 
+def _gateway_streams(env: Env):
+    """사내 게이트웨이 모델처럼 costBasis "unknown"(CLI 2.1.318 가짜 서버 실험 모양)이 붙은 stream들."""
+    streams = all_good(env, tokens=100, cost=0.0123)
+    for s in streams:
+        for m in s[-1]["modelUsage"].values():
+            m["costBasis"] = "unknown"
+    return streams
+
+
+@POSIX
+def test_unknown_cost_basis_records_tokens_not_cost(env, tmp_path, capsys):
+    """계획 I C2i: 자리 표시 단가는 비용으로 쓰지 않는다 — run 비용 null, 비용 행 skipped(사유), 단가 없음, 토큰은 기록."""
+    me.RESULTS.write_text(json.dumps({"modules": {"ofono/data": {"unit_cost_usd": 0.1}}}), encoding="utf-8")
+    env.streams(_gateway_streams(env))
+    it = tmp_path / "it"
+    assert env.run("--iteration", str(it), "--no-max-cost") == 1                  # 비용 기록 필수(기본)면 incomplete
+    entry = json.loads((it / "module_offsite_results.json").read_text(encoding="utf-8"))["modules"]["ofono/data"]
+    assert entry["gate"]["verdict"] == "incomplete"
+    env.log.unlink()
+    it2 = tmp_path / "it2"
+    assert env.run("--iteration", str(it2), "--no-max-cost", "--no-require-cost", "--record") == 0
+    out = capsys.readouterr().out
+    assert "총비용: 미상(costBasis unknown)" in out
+    entry = json.loads((it2 / "module_offsite_results.json").read_text(encoding="utf-8"))["modules"]["ofono/data"]
+    assert entry["unit_cost_usd"] is None and entry["total_cost_usd"] is None and entry["cost_basis"] == "unknown"
+    assert entry["gate"]["cost_delta_usd"] is None and entry["gate"]["tokens_with"] == 300
+    run = it2 / f"eval-{CASES[0]}" / "with_skill" / "run-1"
+    ex = json.loads((run / "execution.json").read_text(encoding="utf-8"))
+    assert ex["total_cost_usd"] is None and ex["cost_basis"] == "unknown" and ex["tokens"]["total"] == 100
+    assert ex["tokens"]["total_cost_usd"] is None and ex["bare"] is None
+    cost = rows_of(json.loads((run / "grading.json").read_text(encoding="utf-8")), "cost")[me.ROW_COST]
+    assert cost["status"] == "skipped" and "costBasis unknown" in cost["evidence"]
+    # --record한 미상 run은 단가를 남기지 않는다(모듈 기록은 통째로 바뀐다): 다음 추정은 기본값이지 자리 표시 단가(0.0123)가 아니다
+    assert me.estimate_unit("ofono/data") == (me.DEFAULT_UNIT, "default")
+
+
+@POSIX
+def test_bare_flag_reaches_child_argv_and_plan(env, tmp_path, capsys):
+    """계획 I C3i: --bare(기본 끔)는 CLI에 있을 때만 자식 argv에 붙고 plan·execution에 남는다."""
+    env.claude = fake_claude(tmp_path / "withbare", help_flags=(*FLAGS, "--bare"))
+    assert env.run("--dry-run", "--json", "--bare") == 0
+    data = json.loads(capsys.readouterr().out)
+    assert data["bare"] is True and data["plan"][0]["argv"][-1] == "--bare"
+    assert env.run("--dry-run", "--json") == 0
+    assert "--bare" not in json.loads(capsys.readouterr().out)["plan"][0]["argv"]
+    env.streams(all_good(env))
+    it = tmp_path / "it"
+    assert env.run("--iteration", str(it), "--bare") == 0
+    assert all(c["argv"][-1] == "--bare" for c in env.calls())
+    assert json.loads((it / "plan.json").read_text(encoding="utf-8"))["bare"] is True
+    ex = json.loads((it / f"eval-{CASES[0]}" / "with_skill" / "run-1" / "execution.json").read_text(encoding="utf-8"))
+    assert ex["bare"] == "used"
+    old = fake_claude(tmp_path / "nobare")
+    assert env.run("--dry-run", "--bare", claude=old) == 0
+    assert "이 CLI에 --bare 없음" in capsys.readouterr().out
+
+
 @POSIX
 def test_unit_cost_read_from_results_file(env, capsys):
     me.RESULTS.write_text(json.dumps({"modules": {"ofono/data": {"unit_cost_usd": 0.1}}}), encoding="utf-8")

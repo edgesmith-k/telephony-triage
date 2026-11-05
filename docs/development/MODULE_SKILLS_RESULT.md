@@ -2,6 +2,21 @@
 
 단계표는 `MODULE_SKILLS_PLAN.md §4`. 이 파일은 단계마다 리뷰·재측정에서 P2로 남긴 것(결정 (r): P0·P1만 고치고 P2는 반입 뒤 후보)과 단계 결과를 적는다.
 
+## 계획 I-2: OpenCode v1(분석 전용)·Claude Code + 사내 모델 (11/05, 계획 H와 나란히)
+
+결정: `MODULE_SKILLS_DECISIONS.md` "계획 I 1단계 결과". 1단계 실험(가짜 모델 서버, 비용 0)의 결론과 만든 것: OpenCode 1.19.5에서 guard.py를 고치지 않고 `plugin/scripts/common/oc_adapter.py`가 OpenCode 도구 호출을 Claude Code PreToolUse/PostToolUse JSON으로 바꿔 guard.py·jira_bridge.py를 그대로 부른다. `opencode/plugins/tt-guard.js`(node: 모듈만, package.json 없음)는 실패·시그널·시간 초과·해석 불가면 막는다. `opencode/opencode.json.template`(v1 키, `snapshot:false` 필수, bash는 `"*":"deny"` + 허용 목록, Jira는 허용 목록, `task` deny), `opencode/agents/triage.md`(약 2KB), `tools/gen_opencode.py`가 `plugin/commands`에서 `opencode/commands/*.md`를 만든다(쓰기 흐름은 "이 명령을 직접 실행" 안내), `opencode/bin/tt-oc` 래퍼(stdin 닫음, `--pure`·`--auto`·설정 덮어쓰기 env 거부, 시작 전 점검). Claude Code + 사내 모델: `claude_child.py` 게이트웨이 env 이어받기, 비용 미상이면 `cost_usd=None`, 읽기 전용 eval 자식 `--bare`(기본 꺼짐, 실패 시 대체), 환경 안내 `docs/development/RUNTIMES.md`.
+리뷰: 2관점(안전·호환) 1회 → 반박 검증 → 확정 6건 한 번 수정. P0 — OpenCode에서 guard가 있어도 스크립트 파일·python 하위 프로세스를 거친 이슈 DB push가 됐다(bash 전체 허용) → bash 허용 목록(oc_adapter, guard 판정 뒤). P1 — bash로 guard 연결 파일을 지우거나 고칠 수 있었다 → 플러그인 루트·`.opencode/`·설정 파일·AGENTS.md 등 편집 거부, tt-oc 점검 행. P1 — bash 안에서 `opencode run --pure`·`claude`를 다시 띄워 우회 → 허용 목록에 없음. P1 — apply_patch 경로 앞 U+FEFF를 OpenCode가 잘라 내 clone에 쓰던 것 → JS trim과 같은 규칙. P1 — tt-oc가 거부를 성공(0)으로 보고 → 거부 표시 `[telephony-triage]`로 판별. P1 — 에이전트 프롬프트에 `~/.claude/CLAUDE.md`·상위 AGENTS.md가 섞임 → `OPENCODE_DISABLE_CLAUDE_CODE_PROMPT=1`, doctor `instructions` 행.
+검증(본 트리): 새 테스트(어댑터 표·JS 실패 시 닫힘·래퍼·생성기·claude_child·module_eval) 349 통과·22 건너뜀(opencode 없는 환경), 실제 opencode 1.19.5 e2e 19 통과(가짜 서버, 비용 0, 작업 worktree), check_boundary·exec bit·gen_contracts·`gen_opencode --check` 통과. 관련 테스트 전체 ※.
+B1+B2 뒤로 미룬 것: O8(`mcptools`·`config.py setup`이 opencode.json `mcp`와 `<server>_<tool>` 이름 읽기, `job_status` OpenCode 버전, doctor에 env-check·Jira 관문 상태), O10(`site_step.py runtime-check opencode`, 묶음에 `opencode/` 넣기). Jira 읽기 관문은 닫혀 있다(`JIRA_READ_RELEASED=False`) — 사내 확인 6(실제 Jira MCP 이름·응답 모양)과 아래 오류 경로 결정 뒤 연다.
+
+### P2 — 계획 I-2 (반입 뒤 후보)
+
+- OpenCode 1.19.5는 오류로 끝난 MCP 호출에 after hook을 돌리지 않아 Jira 오류 본문이 마스킹 없이 모델에 간다(관문을 열기 전 결정 필요).
+- Jira로 알아보지 못한 다른 MCP 서버의 쓰기형 도구는 어댑터·guard를 지나고 설정 허용 목록에만 기댄다. 거부 env 목록이 어댑터와 tt-oc에서 조금 다르고 빈 값 처리도 다르다. tt-oc가 모델이 만든 명령을 그대로 "직접 실행" 안내로 보인다(이어 붙인 꼬리 포함). 템플릿이 원본 작업 파일 `read`를 허용한다.
+- 게이트웨이 env 이어받기가 skill eval 실행기 자식 요청에도 들어간다. 게이트웨이 점검이 보조·하위 에이전트 모델 ID를 보지 않는다. RUNTIMES.md 일부가 이 패치보다 오래됐다.
+- related_tests가 `tests/opencode/*`를 고르지 않는다(guard·어댑터를 바꿔도 OpenCode 경유 테스트가 빠짐 — B1+B2 뒤 연결). 버전 고정 테스트가 env 이름 두 개를 쓴다. 생성된 `/tt-setup`에 OpenCode 안내가 없다. 일부 OpenCode 테스트는 아무 일이 없어도 통과한다.
+- bash 허용 목록이 좁다: 사내 흐름에 다른 읽기 명령(rg·jq·sort 등)이 필요하면 쓰기·실행 옵션과 함께 하나씩 더해야 한다.
+
 ## C0 모듈 스킬 시범 (11/04)
 
 범위: oFono `data` 모듈 하나, case 3개(deep `data-apn-auth-reject`, explore `data-ditd-route-fail`, explore 함정 `data-ofonod-only`). 새로 만든 것: 실행기·채점기 `plugin/scripts/module_eval.py`, 자식 공통 `common/claude_child.py`(skill eval `run.py`·`grade.py`도 여기서 다시 내보냄), 입력 생성기 `tests/helpers/make_module_eval_inputs.py`, variant DB `issue-db-ofono-modules`(`issue-db-ofono`는 바이트 동일), `templates/module-skills/ofono/{_common,data}`, 얼린 arm 자료 `tests/fixtures/module-arms`(pre·post sha 고정, 자식 stream 기록 1개). guard 규칙 7이 `module_eval.py --module`을 ask로 둔다. 범위 밖(설계대로): modules.yaml, 나머지 5 유형(C1), 모듈 레포·묶음, contracts 행(E), triage.py·플러그인 SKILL 변경(B).

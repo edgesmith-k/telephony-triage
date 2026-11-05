@@ -3,7 +3,7 @@
 
 python3 plugin/scripts/module_eval.py --module ofono/data --dry-run [--json]
 python3 plugin/scripts/module_eval.py --module ofono/data [--case NAME ...] [--model M] [--max-cost USD | --no-max-cost]
-    [--child-mode contract|restricted] [--require-cost | --no-require-cost] [--record] [--json]
+    [--child-mode contract|restricted] [--require-cost | --no-require-cost] [--bare] [--record] [--json]
 python3 plugin/scripts/module_eval.py --module ofono/data --probe-restricted [--model M] [--record] [--json]
 
 모듈 템플릿(`templates/module-skills/<p>/<m>/evals/<case>/`)의 case마다 두 arm을 자식 `claude -p`(읽기 도구만,
@@ -14,6 +14,11 @@ with 1순위 통과 수 ≥ without, 안전 위반 0, 단가 실측(PLAN C0). �
 
 **자식 실행은 비용이 든다.** `--dry-run` 결과를 사용자에게 보이고 승인받은 뒤에만 실제로 돌린다(guard ask, 규칙 7).
 `--probe-restricted`(자식 1회, ≈$0.05)도 같다.
+
+사내 게이트웨이 모델(Claude Code + 사내 모델, docs/development/RUNTIMES.md): CLI가 모르는 모델이면 result의 costBasis가
+"unknown"이고 비용은 자리 표시 값이라 쓰지 않는다 — run 비용은 null(비용 행 skipped), 단가(`unit_cost_usd`)는 남기지 않고 토큰만
+기록한다. 그때는 `--no-require-cost --no-max-cost`로 돌린다(상한은 토큰·run 수로). `--bare`(기본 끔)는 읽기 전용 자식을
+`claude --bare`로 띄운다(입력 토큰이 줄어든다) — 인증이 안 되면 그 run만 `--bare` 없이 한 번 다시 돈다(`bare-attempt/`에 첫 기록).
 
 종료 코드: 0 관문 pass·tie(·dry-run), 1 fail·invalid·incomplete, 2 사용·환경 오류(claude 없음, case 오류, arm 고정값
 불일치, cwd 문제, blocked·env_error, 기존 반복 디렉토리). probe: 0 confined·unsupported, 1 not_confined·inconclusive,
@@ -40,6 +45,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from common import exitcodes, masking, yamlio
 from common.claude_child import (
+    COST_UNKNOWN,
     ChildResult,
     ChildSpec,
     CliInfo,
@@ -760,6 +766,9 @@ def docs_read_row(res: ChildResult, docs: list[str], cwd: Path) -> dict:
 def cost_row(res: ChildResult) -> dict:
     if isinstance(res.cost_usd, (int, float)):
         return _row(ROW_COST, True, f"${res.cost_usd:.4f}", "cost", status="pass")
+    if res.cost_basis == COST_UNKNOWN:
+        return _row(ROW_COST, False, "비용 미상(costBasis unknown — CLI가 모르는 모델의 자리 표시 단가) — 토큰만 기록, "
+                    "--no-require-cost로 돌린다", "cost", status="skipped")
     return _row(ROW_COST, False, "result에 total_cost_usd 없음", "cost", status="skipped")
 
 
@@ -812,7 +821,8 @@ def run_row(case: Case, arm: str, run_no: int, res: ChildResult | None, grading:
     if res is None or grading is None:
         return {"case": case.name, "kind": case.kind, "arm": arm, "run": run_no, "status": "not_run", "not_run": not_run,
                 "pass1": False, "valid": True, "safety_fail": [], "notes": 0, "cost_skipped": False, "tie_tokens": None,
-                "tokens_total": None, "noncache": None, "output_tokens": None, "cost_usd": None, "init_model": None,
+                "tokens_total": None, "noncache": None, "output_tokens": None, "cost_usd": None, "cost_basis": None,
+                "init_model": None,
                 "elapsed_s": None}
     exps = grading["expectations"]
     return {"case": case.name, "kind": case.kind, "arm": arm, "run": run_no, "status": res.status, "not_run": None,
@@ -822,7 +832,7 @@ def run_row(case: Case, arm: str, run_no: int, res: ChildResult | None, grading:
             "cost_skipped": any(r["kind"] == "cost" and r.get("status") == "skipped" for r in exps),
             "tie_tokens": res.tie_tokens, "tokens_total": (res.tokens or {}).get("total"),
             "noncache": _noncache(res.tokens), "output_tokens": (res.tokens or {}).get("output"),
-            "cost_usd": res.cost_usd, "init_model": res.model, "elapsed_s": res.elapsed_s}
+            "cost_usd": res.cost_usd, "cost_basis": res.cost_basis, "init_model": res.model, "elapsed_s": res.elapsed_s}
 
 
 def _sum_known(values) -> float | int | None:
@@ -1070,6 +1080,7 @@ def build_parser() -> argparse.ArgumentParser:
     req = ap.add_mutually_exclusive_group()
     req.add_argument("--require-cost", dest="require_cost", action="store_true", default=True)
     req.add_argument("--no-require-cost", dest="require_cost", action="store_false")
+    ap.add_argument("--bare", action="store_true", help="읽기 전용 자식을 claude --bare로(인증 실패 시 그 run만 --bare 없이 다시)")
     ap.add_argument("--probe-restricted", action="store_true")
     ap.add_argument("--record", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
@@ -1241,7 +1252,8 @@ def dry_run(args, src: Source, plan, cli: CliInfo | None, unit: float, unit_sour
         files, docs = arm_sources(case, arm, src)
         staged = [{"path": rel, "bytes": len(p.read_bytes()), "sha256": sha256(p.read_bytes())} for rel, p in files + docs]
         prompt = build_prompt(case, [rel for rel, _ in docs])
-        spec = ChildSpec(prompt, Path("."), args.model, args.timeout, max_budget_usd=max_cost, mode=args.child_mode)
+        spec = ChildSpec(prompt, Path("."), args.model, args.timeout, max_budget_usd=max_cost, mode=args.child_mode,
+                         bare=args.bare)
         try:
             argv = _display_argv(shown_cli, spec)
         except ValueError as exc:
@@ -1260,7 +1272,7 @@ def dry_run(args, src: Source, plan, cli: CliInfo | None, unit: float, unit_sour
     restricted_ok = cli is not None and {"--restricted", "--permission-prompts"} <= cli.flags
     data = {"module": args.module, "arms": list(ARMS), "runs": args.runs, "source": source,
             "cli": ({"path": cli.path, "version": cli.version, "flags": sorted(cli.flags)} if cli else "missing"),
-            "child_mode": args.child_mode, "require_cost": args.require_cost, "plan": entries,
+            "child_mode": args.child_mode, "require_cost": args.require_cost, "bare": args.bare, "plan": entries,
             "estimate": {"unit_usd": round(unit, 4), "unit_source": unit_source, "runs": len(plan),
                          "total_usd": round(len(plan) * unit, 4)},
             "max_cost_usd": max_cost, "within_cap": within, "auth_from_user_settings": auth_keys,
@@ -1268,6 +1280,9 @@ def dry_run(args, src: Source, plan, cli: CliInfo | None, unit: float, unit_sour
     lines = [f"모듈 {args.module} · arm with,without · runs {args.runs} · 출처 {source}",
              f"cli: {cli.path + ' ' + str(cli.version) + ' ' + ','.join(sorted(cli.flags)) if cli else 'missing'}",
              f"자식 모드: {args.child_mode} · 비용 기록 필수: {args.require_cost}"]
+    if args.bare:
+        lines.append("--bare: 사용(인증 실패 시 그 run만 --bare 없이 다시)" if cli and "--bare" in cli.flags
+                     else "--bare: 요청했지만 이 CLI에 --bare 없음 — 없이 돈다")
     if args.child_mode == "contract":
         lines.append("--restricted 미사용: §8.7 probe 뒤 --child-mode restricted 권장" if restricted_ok
                      else "이 CLI에 --restricted 없음: contract 모드만 가능")
@@ -1295,6 +1310,7 @@ def execute(args, src: Source, cases: list[Case], plan, cli: CliInfo, unit: floa
     iter_dir.mkdir(parents=True)
     write_json(iter_dir / "plan.json", {"module": args.module, "source": source, "child_mode": args.child_mode,
                                         "require_cost": args.require_cost, "max_cost_usd": max_cost, "unit_usd": unit,
+                                        "bare": args.bare,
                                         "cli": {"path": cli.path, "version": cli.version, "flags": sorted(cli.flags)},
                                         "plan": [{"case": c.name, "kind": c.kind, "arm": a, "config": CONFIG[a], "run": n}
                                                  for c, a, n in plan]})
@@ -1329,7 +1345,7 @@ def execute(args, src: Source, cases: list[Case], plan, cli: CliInfo, unit: floa
             (run_dir / "prompt.txt").write_text(prompt, encoding="utf-8")
             budget = (max_cost - spent) if max_cost is not None else None
             res = run_child(ChildSpec(prompt, cwd, args.model, args.timeout, max_budget_usd=budget,
-                                      mode=args.child_mode), run_dir, cli)
+                                      mode=args.child_mode, bare=args.bare), run_dir, cli)
             (run_dir / "outputs" / "answer.md").write_text(res.final_text or "", encoding="utf-8")
             try:
                 _, result = read_events(res.events_path)
@@ -1340,7 +1356,7 @@ def execute(args, src: Source, cases: list[Case], plan, cli: CliInfo, unit: floa
             write_json(run_dir / "execution.json", {
                 "runtime": res.runtime, "child_mode": args.child_mode, "status": res.status, "reason": res.reason,
                 "exit_code": res.exit_code, "elapsed_seconds": res.elapsed_s, "usage": (result or {}).get("usage"),
-                "total_cost_usd": res.cost_usd, "tokens": res.tokens, "tie_tokens": res.tie_tokens, "model": args.model,
+                "total_cost_usd": res.cost_usd, "cost_basis": res.cost_basis, "bare": res.bare, "tokens": res.tokens, "tie_tokens": res.tie_tokens, "model": args.model,
                 "init_model": res.model, "builtin_plugins": init.get("builtin_plugins"),
                 "memory_paths": init.get("memory_paths"), "init_counts": init.get("counts"), "repo_commit": commit,
                 "repo_dirty": dirty, "cli_version": cli.version, "cli_flags": sorted(cli.flags),
@@ -1356,6 +1372,9 @@ def execute(args, src: Source, cases: list[Case], plan, cli: CliInfo, unit: floa
             stop = res.status
     gate = gate_summary(rows, args.require_cost)
     known = [r["cost_usd"] for r in rows if r["status"] == "completed" and r["cost_usd"] is not None]
+    # 비용 미상(costBasis unknown) run이 하나라도 있으면 단가를 남기지 않는다(자리 표시 단가도, 일부 run만의 평균도 단가가 아니다)
+    unknown = any(r["cost_basis"] == COST_UNKNOWN for r in rows if r["status"] != "not_run")
+    reported = [r["cost_usd"] for r in rows if r["cost_usd"] is not None]
     model = next((r["init_model"] for r in rows if r["init_model"]), None)
     entry = {"generated": _utc(), "repo_commit": commit, "repo_dirty": dirty, "source": source,
              "docs_sha256": dict(sorted(docs_sha.items())), "cli_version": cli.version, "init_model": model,
@@ -1364,8 +1383,9 @@ def execute(args, src: Source, cases: list[Case], plan, cli: CliInfo, unit: floa
              "gate": {k: gate[k] for k in ("pass1_with", "pass1_without", "tokens_with", "tokens_without", "token_delta",
                                            "token_delta_noncache", "cost_delta_usd", "safety_violations", "notes",
                                            "invalid", "require_cost", "verdict")},
-             "unit_cost_usd": round(sum(known) / len(known), 6) if known else None,
-             "total_cost_usd": round(sum(r["cost_usd"] for r in rows if r["cost_usd"] is not None), 6)}
+             "unit_cost_usd": round(sum(known) / len(known), 6) if known and not unknown else None,
+             "total_cost_usd": round(sum(reported), 6) if reported or not unknown else None,
+             "cost_basis": COST_UNKNOWN if unknown else "reported"}
     for case in cases:
         rec = {"kind": case.kind}
         for arm in ARMS:
@@ -1400,7 +1420,10 @@ def execute(args, src: Source, cases: list[Case], plan, cli: CliInfo, unit: floa
             lines.append(f"실행 안 함: {r['case']} {r['arm']} run-{r['run']} — {r['not_run']}")
     for why in gate["invalid"]:
         lines.append(f"무효: {why}")
-    lines += [f"자식 모드: {args.child_mode} · 총비용: ${entry['total_cost_usd']:.4f} · 반복: {iter_dir}",
+    total = "미상(costBasis unknown)" if entry["total_cost_usd"] is None else f"${entry['total_cost_usd']:.4f}"
+    if unknown and entry["total_cost_usd"] is not None:
+        total += " + 미상(costBasis unknown run)"
+    lines += [f"자식 모드: {args.child_mode} · 총비용: {total} · 반복: {iter_dir}",
               "S3는 C0의 짧은 로그(≤100줄)로는 시험되지 않는다. 규칙 제안 R1~R5 미검증(C0 범위 밖)."]
     _emit(args, {**entry, "gate": gate, "iteration_path": str(iter_dir)}, lines)
     return code

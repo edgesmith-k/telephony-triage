@@ -5,6 +5,11 @@
 argv 조립(`build_command`), 환경 준비(`prepare_env`), init 검사(`readonly_init_problem`), 도구 호출 정규화
 (`normalize_calls`), 실행(`run_child`). 결과 모양(`ChildResult`)은 런타임 중립이라 나중의 `opencode_child.py`가 같은
 dataclass를 채운다. 표준 라이브러리만 쓴다.
+
+Claude Code + 사내 모델(게이트웨이, 계획 I C2i·C3i, docs/development/RUNTIMES.md): 사용자 settings.json env의 게이트웨이 프로필
+키(`GATEWAY_ENV_NAMES`)도 자식에 넘기고(`--setting-sources ""`라 그대로면 빠진다), result의 costBasis가 "unknown"이면 비용을
+None으로 둔다(`result_cost`·`token_record`). 읽기 전용 자식은 `ChildSpec.bare`로 `--bare`를 쓸 수 있고 인증이 안 되면 한 번
+`--bare` 없이 다시 돈다(`run_child`). `gateway_profile_check`는 모델 호출 없이 프로필을 점검한다.
 """
 from __future__ import annotations
 
@@ -14,7 +19,7 @@ import re
 import shutil
 import subprocess
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from common import shown
@@ -38,6 +43,14 @@ AUTH_SETTING_KEYS = ("apiKeyHelper", "awsAuthRefresh", "awsCredentialExport")
 AUTH_ENV_PREFIXES = ("ANTHROPIC_", "AWS_", "VERTEX_", "CLAUDE_CODE_USE_", "CLAUDE_CODE_API_KEY_HELPER")
 AUTH_ENV_NAMES = frozenset({"CLOUD_ML_REGION", "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "http_proxy", "https_proxy",
                             "no_proxy", "NODE_EXTRA_CA_CERTS", "SSL_CERT_FILE"})
+# 게이트웨이(사내 모델) 프로필 키(계획 I C2i, docs/development/RUNTIMES.md): 모델 한도·요청 모양을 정하는 CLI 환경 변수.
+# 사용자 settings.json env 블록에만 두면 `--setting-sources ""` 자식에서 빠져 자식이 32K 출력·thinking·베타 헤더로 요청한다
+# (가짜 서버 실험: max_tokens 32000, thinking adaptive). 모델 이름(`ANTHROPIC_MODEL`·`ANTHROPIC_DEFAULT_*_MODEL`)과 주소·키는
+# 위 `ANTHROPIC_` 접두로 이미 넘어간다. 값은 인증 env처럼 프로세스 환경에만 넣고 기록에는 이름만 남긴다.
+GATEWAY_ENV_NAMES = frozenset({
+    "CLAUDE_CODE_MAX_OUTPUT_TOKENS", "CLAUDE_CODE_MAX_CONTEXT_TOKENS", "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS",
+    "CLAUDE_CODE_EFFORT_LEVEL", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "CLAUDE_CODE_DISABLE_THINKING",
+    "CLAUDE_CODE_SUBAGENT_MODEL", "API_TIMEOUT_MS", "MAX_THINKING_TOKENS", "DISABLE_PROMPT_CACHING"})
 # 권한 모드를 명시한다: 생략하면 CLI 기본값(사내 설치는 auto)이 적용돼 분류기가 허용 목록의 Bash까지 막는다.
 # "default"는 옛 CLI의 이름이고 새 CLI(2.1.x, 도움말에는 manual)도 별칭으로 받는다(2.1.296 확인).
 CHILD_PERMISSION_MODE = "default"
@@ -67,8 +80,13 @@ def collect_transcript(events: list[dict], env: dict[str, str], run_dir: Path) -
     return dest.name
 
 
+def carried_env_key(k) -> bool:
+    """사용자 settings.json env 블록에서 자식에 넘기는 키인가: 인증·네트워크(`AUTH_ENV_*`)와 게이트웨이 프로필(`GATEWAY_ENV_NAMES`)."""
+    return isinstance(k, str) and (k.startswith(AUTH_ENV_PREFIXES) or k in AUTH_ENV_NAMES or k in GATEWAY_ENV_NAMES)
+
+
 def user_auth_settings(env: dict[str, str]) -> tuple[dict, dict[str, str]]:
-    """사용자 settings.json에서 인증·네트워크 키만 (최상위 키, env 블록). 없거나 깨졌으면 빈 값."""
+    """사용자 settings.json에서 인증·네트워크·게이트웨이 프로필 키만 (최상위 키, env 블록). 없거나 깨졌으면 빈 값."""
     base = Path(env["CLAUDE_CONFIG_DIR"]) if env.get("CLAUDE_CONFIG_DIR") else Path(env.get("HOME", str(Path.home()))) / ".claude"
     try:
         data = json.loads((base / "settings.json").read_text(encoding="utf-8"))
@@ -78,9 +96,41 @@ def user_auth_settings(env: dict[str, str]) -> tuple[dict, dict[str, str]]:
         return {}, {}
     top = {k: data[k] for k in AUTH_SETTING_KEYS if isinstance(data.get(k), str) and data[k]}
     raw_env = data.get("env") if isinstance(data.get("env"), dict) else {}
-    auth_env = {k: str(v) for k, v in raw_env.items()
-                if isinstance(k, str) and (k.startswith(AUTH_ENV_PREFIXES) or k in AUTH_ENV_NAMES) and v is not None}
+    auth_env = {k: str(v) for k, v in raw_env.items() if carried_env_key(k) and v is not None}
     return top, auth_env
+
+
+# 게이트웨이 프로필 권장값(RUNTIMES.md "Claude Code + 사내 모델"). 모델 호출 없이 환경만 본다 — `site_step.py`의 런타임 점검
+# (O10, B1+B2 뒤 통합)이 이 함수를 부른다.
+GATEWAY_PROFILE = {
+    "CLAUDE_CODE_MAX_OUTPUT_TOKENS": "16000", "CLAUDE_CODE_MAX_CONTEXT_TOKENS": "202000",
+    "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": "1", "CLAUDE_CODE_EFFORT_LEVEL": "unset",
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"}
+GATEWAY_CREDENTIALS = ("ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_API_KEY")
+
+
+def gateway_profile_check(env: dict[str, str]) -> list[dict]:
+    """게이트웨이 프로필 점검 행 [{key, status, detail}] (status: ok | missing | differs | info). 프로세스 환경 위에 사용자
+    settings.json env 블록을 얹은 값(자식이 실제로 받는 값)을 본다. 비밀 값(주소·키)은 행에 넣지 않는다."""
+    top, settings_env = user_auth_settings(env)
+    eff = {**env, **settings_env}
+    rows = []
+
+    def add(key, status, detail):
+        rows.append({"key": key, "status": status, "detail": detail})
+    add("ANTHROPIC_BASE_URL", "ok" if eff.get("ANTHROPIC_BASE_URL") else "missing",
+        "설정됨(값은 기록하지 않음)" if eff.get("ANTHROPIC_BASE_URL") else "게이트웨이 주소 없음 — 기본 Anthropic API로 간다")
+    cred = [k for k in GATEWAY_CREDENTIALS if eff.get(k)] + (["apiKeyHelper"] if top.get("apiKeyHelper") else [])
+    add("credential", "ok" if cred else "missing", ", ".join(cred) if cred else "ANTHROPIC_AUTH_TOKEN·ANTHROPIC_API_KEY·apiKeyHelper 없음")
+    add("ANTHROPIC_MODEL", "ok" if eff.get("ANTHROPIC_MODEL") else "info",
+        eff.get("ANTHROPIC_MODEL") or "없음 — 실행마다 --model <사내 모델>을 준다")
+    for key, want in GATEWAY_PROFILE.items():
+        have = eff.get(key)
+        add(key, "ok" if have == want else ("missing" if have is None else "differs"),
+            f"{have} (권장 {want})" if have is not None else f"없음 (권장 {want})")
+    add("CLAUDE_CODE_DISABLE_THINKING", "info", f"{eff.get('CLAUDE_CODE_DISABLE_THINKING') or '없음'} — 게이트웨이가 "
+        "thinking을 거부할 때만 1(사내 확인 2)")
+    return rows
 
 
 def child_settings(env: dict[str, str]) -> tuple[str, dict[str, str], list[str]]:
@@ -172,9 +222,31 @@ def _sum(parts):
     return sum(parts) if parts and all(p is not None for p in parts) else None
 
 
+COST_UNKNOWN = "unknown"
+
+
+def cost_basis(result) -> str | None:
+    """result 이벤트 modelUsage의 `costBasis`. 하나라도 "unknown"이면 "unknown"(CLI가 모르는 모델 ID — 사내 게이트웨이 모델 —
+    에 자리 표시 단가 $4/$20 per MTok를 매긴 값이다, CLI 2.1.318 가짜 서버 실험), 아니면 있는 값들(정렬, `,`로 이음), 없으면 None."""
+    mu = result.get("modelUsage") if isinstance(result, dict) else None
+    vals = {str(m.get("costBasis")) for m in (mu.values() if isinstance(mu, dict) else [])
+            if isinstance(m, dict) and isinstance(m.get("costBasis"), str) and m.get("costBasis")}
+    if COST_UNKNOWN in vals:
+        return COST_UNKNOWN
+    return ",".join(sorted(vals)) or None
+
+
+def result_cost(result) -> float | None:
+    """보고된 비용(`total_cost_usd`). costBasis가 unknown이면 None — 자리 표시 단가를 비용으로 쓰지 않는다."""
+    if cost_basis(result) == COST_UNKNOWN:
+        return None
+    return _num(result.get("total_cost_usd")) if isinstance(result, dict) else None
+
+
 def token_record(result) -> dict:
     """stream-json result 이벤트(또는 옛 execution.json)에서 `tokens` 기록을 만든다. None·빠진 값은 null.
-    total은 modelUsage 합(서브에이전트·보조 모델 포함)이고, usage_total은 상위 usage 네 값의 합(비교용)이다."""
+    total은 modelUsage 합(서브에이전트·보조 모델 포함)이고, usage_total은 상위 usage 네 값의 합(비교용)이다.
+    costBasis가 unknown인 모델의 cost_usd와 total_cost_usd는 null이다(`cost_basis` 키에 사유) — 토큰은 그대로 센다."""
     r = result if isinstance(result, dict) else {}
     usage = r.get("usage") if isinstance(r.get("usage"), dict) else {}
     by_model = {}
@@ -182,12 +254,15 @@ def token_record(result) -> dict:
     for name, m in (mu.items() if isinstance(mu, dict) else []):
         m = m if isinstance(m, dict) else {}
         vals = [_int(m.get(k)) for k in _MODEL_KEYS]
-        by_model[str(name)] = {**dict(zip(_FIELDS, vals)), "total": _sum(vals), "cost_usd": _num(m.get("costUSD"))}
+        basis = m.get("costBasis") if isinstance(m.get("costBasis"), str) else None
+        by_model[str(name)] = {**dict(zip(_FIELDS, vals)), "total": _sum(vals),
+                               "cost_usd": None if basis == COST_UNKNOWN else _num(m.get("costUSD")),
+                               **({"cost_basis": basis} if basis else {})}
     sums = [_sum([m[f] for m in by_model.values()]) for f in _FIELDS]
     return {**dict(zip(_FIELDS, sums)), "total": _sum(sums),
             "usage_total": _sum([_int(usage.get(k)) for k in _USAGE_KEYS]),
             "num_turns": _int(r.get("num_turns")), "duration_ms": _num(r.get("duration_ms")),
-            "total_cost_usd": _num(r.get("total_cost_usd")),
+            "total_cost_usd": result_cost(r), "cost_basis": cost_basis(r),
             "by_model": by_model, "source": "modelUsage" if by_model else None}
 
 
@@ -195,7 +270,7 @@ def token_record(result) -> dict:
 
 READONLY_TOOLS = ("Read", "Glob", "Grep")                   # --tools에 넘기는 이름
 READONLY_NORMALIZED = frozenset({"read", "glob", "grep"})   # 채점기가 받는 정규화 이름(Claude 런타임)
-OPTIONAL_FLAGS = ("--max-budget-usd", "--disable-slash-commands", "--restricted", "--permission-prompts")
+OPTIONAL_FLAGS = ("--max-budget-usd", "--disable-slash-commands", "--restricted", "--permission-prompts", "--bare")
 CHILD_MODES = ("contract", "restricted")
 INSTRUCTION_FILES = ("CLAUDE.md", "CLAUDE.local.md", "AGENTS.md")
 POPPED_ENV = ("CLAUDECODE", "CLAUDE_PLUGIN_ROOT", "CLAUDE_ENV_FILE")
@@ -219,6 +294,7 @@ class ChildSpec:
     max_budget_usd: float | None = None
     tools: tuple[str, ...] = READONLY_TOOLS
     mode: str = "contract"         # contract | restricted
+    bare: bool = False             # `--bare`(계획 I C3i, 기본 끔): 인증이 안 되면 run_child가 --bare 없이 한 번 다시 돈다
 
 
 @dataclass
@@ -240,6 +316,8 @@ class ChildResult:
     stderr_path: Path
     env_stripped: list[str]
     auth_keys: list[str]
+    cost_basis: str | None = None  # modelUsage costBasis — "unknown"이면 cost_usd는 None(`result_cost`)
+    bare: str | None = None        # None(안 씀) | "used" | "unsupported"(CLI에 없음) | "fallback: <사유>"(인증 실패로 다시 돎)
 
 
 def detect_cli(claude: str) -> CliInfo:
@@ -277,7 +355,25 @@ def build_command(cli: CliInfo, spec: ChildSpec, settings_json: str) -> list[str
         cmd += ["--max-budget-usd", f"{spec.max_budget_usd:.2f}"]
     if "--disable-slash-commands" in cli.flags:
         cmd += ["--disable-slash-commands"]
+    if spec.bare and "--bare" in cli.flags:
+        cmd += ["--bare"]      # hook·CLAUDE.md 자동 탐색·키체인·OAuth를 건너뛴다 — 인증은 ANTHROPIC_API_KEY·AUTH_TOKEN·apiKeyHelper만
     return cmd
+
+
+# `--bare` 인증 실패 모양(CLI 2.1.318 가짜 서버 실험): 키 없음 → 요청 없이 result is_error "Not logged in · Please run /login",
+# 게이트웨이 거부 → api_error_status 401/403.
+BARE_AUTH_RX = re.compile(r"not logged in|/login|invalid api key|authentication|unauthori[sz]ed|oauth|keychain", re.IGNORECASE)
+
+
+def bare_auth_failure(events: list[dict], result: dict | None) -> str | None:
+    """--bare 실행이 인증 때문에 실패했으면 그 사유(앞 ERROR_TEXT_LIMIT자), 아니면 None. 도구를 한 번이라도 불렀으면 None
+    (모델까지 갔다 — 다시 돌리지 않는다)."""
+    if not isinstance(result, dict) or normalize_calls(events):
+        return None
+    text = str(result.get("result") or "")
+    if result.get("api_error_status") in (401, 403) or (result.get("is_error") and BARE_AUTH_RX.search(text)):
+        return (text or f"api_error_status {result.get('api_error_status')}")[:ERROR_TEXT_LIMIT]
+    return None
 
 
 def prepare_env(base: dict[str, str]) -> tuple[dict[str, str], str, list[str], list[str]]:
@@ -431,7 +527,35 @@ def final_text(events: list[dict], result: dict | None) -> str:
 
 
 def run_child(spec: ChildSpec, run_dir: Path, cli: CliInfo) -> ChildResult:
-    """자식 하나를 돌린다. run_dir에 events.jsonl·stderr.log를 쓴다. 결과 이벤트가 없으면 completed가 아니다."""
+    """자식 하나를 돌린다. run_dir에 events.jsonl·stderr.log를 쓴다. 결과 이벤트가 없으면 completed가 아니다.
+    spec.bare이고 CLI에 `--bare`가 있는데 인증으로 실패하면(`bare_auth_failure`) 그 기록을 `run_dir/bare-attempt/`로 옮기고
+    `--bare` 없이 한 번 다시 돈다(결과의 `bare`에 "fallback: 사유"). CLI에 없으면 `--bare` 없이 돌고 "unsupported"."""
+    if not spec.bare:
+        return _run_once(spec, run_dir, cli)
+    if "--bare" not in cli.flags:
+        res = _run_once(replace(spec, bare=False), run_dir, cli)
+        res.bare = "unsupported"
+        return res
+    res = _run_once(spec, run_dir, cli)
+    try:
+        events, result = read_events(res.events_path)
+    except (OSError, UnicodeDecodeError):
+        events, result = [], None
+    why = bare_auth_failure(events, result) if res.status != "timeout" else None
+    if why is None:
+        res.bare = "used"
+        return res
+    attempt = run_dir / "bare-attempt"
+    attempt.mkdir(exist_ok=True)
+    for p in (res.events_path, res.stderr_path):
+        if p.exists():
+            shutil.move(str(p), attempt / p.name)
+    res = _run_once(replace(spec, bare=False), run_dir, cli)
+    res.bare = f"fallback: {why}"
+    return res
+
+
+def _run_once(spec: ChildSpec, run_dir: Path, cli: CliInfo) -> ChildResult:
     run_dir.mkdir(parents=True, exist_ok=True)
     events_path, stderr_path = run_dir / "events.jsonl", run_dir / "stderr.log"
     env, settings_json, stripped, auth_keys = prepare_env(dict(os.environ))
@@ -469,5 +593,6 @@ def run_child(spec: ChildSpec, run_dir: Path, cli: CliInfo) -> ChildResult:
     return ChildResult(
         runtime="claude-code", status=status, reason=reason, exit_code=code, final_text=final_text(events, result),
         calls=normalize_calls(events), readonly_tools=READONLY_NORMALIZED, init=init, tokens=tokens,
-        tie_tokens=tokens["total"], cost_usd=_num((result or {}).get("total_cost_usd")), model=init_model(events),
-        elapsed_s=elapsed, events_path=events_path, stderr_path=stderr_path, env_stripped=stripped, auth_keys=auth_keys)
+        tie_tokens=tokens["total"], cost_usd=result_cost(result), model=init_model(events),
+        elapsed_s=elapsed, events_path=events_path, stderr_path=stderr_path, env_stripped=stripped, auth_keys=auth_keys,
+        cost_basis=cost_basis(result))

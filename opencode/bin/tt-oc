@@ -1,0 +1,517 @@
+#!/usr/bin/env python3
+"""tt-oc — OpenCode v1(분석 전용) 실행 래퍼 (계획 I 2단계 O7).
+
+확인 화면·must_show가 있는 흐름은 이 래퍼로 돌린다(TUI는 자유 탐색만, 표시 보장 없음). 하는 일:
+- 거부: `--pure`·`--auto`·`--attach`·`--port`·`-i` 같은 opencode 옵션, 설정·권한을 덮는 환경 변수(`REFUSED_ENV`, 1.19.5에서
+  `OPENCODE_PERMISSION`이 설정 deny를, `OPENCODE_CONFIG_CONTENT`가 `snapshot:false`를 이겼다 — 계획 I x3b·x4).
+- 사전 점검(`doctor`): opencode 버전 = `PINNED`, 프로젝트 폴더(`gen_opencode.py install` 결과)가 git 레포 밖, `opencode debug config`의
+  `snapshot:false`·`share:"disabled"`·`autoupdate:false`·`permission["*"]:"deny"`·`permission.task:"deny"`, `config.py doctor` 통과.
+  하나라도 실패하면 시작하지 않는다(종료 코드 2).
+- 실행: `opencode run --format json --agent triage [--command tt-…] [-s <세션>] -- <메시지>`를 stdin `/dev/null`·시간 제한
+  (기본 1800초, 넘으면 프로세스 그룹 종료, 종료 코드 124)으로 돌리고, 결과는 종료 코드가 아니라 이벤트로 판정한다(`run`은 거부·
+  자동 거절·멈춤에도 0으로 끝난다).
+- 출력: 모델의 마지막 글(그대로), 이번 실행 동안 스크립트가 남긴 표시 기록(`<work_dir>/.shown/log.jsonl`의 report 결정적 줄·
+  must_show, push·post 화면, 초안 검증표, 스킬 패치 안내)을 **모델을 거치지 않고** 그대로, 막힌 호출의 메시지 전문(guard가 준
+  "run this exact command yourself: …" 명령 포함), 결과 줄(토큰, 비용은 미상 — OpenCode `cost:0`은 0원이 아니다).
+- `--delete-session`: 끝나면 `opencode session delete <세션>`(보존 최소화, 이어가기는 못 한다).
+
+CLI:
+    tt-oc --project <dir> [--timeout 초] [-s <세션>] [--command tt-<이름>] [--work-dir <dir>]... [--delete-session] [--json]
+          [--opencode <바이너리>] -- <메시지...>
+    tt-oc --project <dir> doctor [--json]
+
+`--project`가 없으면 `TT_OC_PROJECT`. 플러그인·작업 루트는 `<project>/tt-oc.json`(install이 쓴다)에서 읽는다.
+
+종료 코드: 0 = 끝남(막힌 호출 없음), 1 = 오류·마지막 글 없음, 2 = 사용 오류·거부·사전 점검 실패, 3 = 끝났지만 막힌 호출이 있음
+(사용자가 출력된 명령을 직접 실행할 차례일 수 있다), 124 = 시간 초과.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import shlex
+import shutil
+import signal
+import subprocess
+import sys
+import tempfile
+import threading
+import time
+from datetime import datetime, timezone
+from pathlib import Path
+
+PINNED = "1.19.5"
+AGENT = "triage"
+REFUSED_ARGS = ("--pure", "--auto", "--attach", "--port", "-i", "--interactive", "--fork", "-c", "--continue",
+                "--agent", "-m", "--model")
+REFUSED_ENV = ("OPENCODE_PERMISSION", "OPENCODE_CONFIG", "OPENCODE_CONFIG_CONTENT", "OPENCODE_CONFIG_DIR",
+               "OPENCODE_DISABLE_PROJECT_CONFIG", "OPENCODE_PURE", "OPENCODE_AUTO_SHARE", "OPENCODE_ENABLE_EXA",
+               "OPENCODE_TEST_HOME", "OPENCODE_TEST_MANAGED_CONFIG_DIR")
+REFUSED_ENV_PREFIX = ("OPENCODE_EXPERIMENTAL", "OPENCODE_ENABLE_EXPERIMENTAL")
+# 막힌 호출 표시: tt-guard.js·oc_adapter.py의 모든 거부는 `[telephony-triage]`로 시작한다(그중 한 번만 보이는 guard 경고는 막힘이
+# 아니다 — 모델이 같은 호출을 다시 한다). 나머지는 OpenCode 설정 deny·자동 거절 문구.
+BLOCK_MARKERS = ("[telephony-triage]", "prevents you from using this specific tool call", "rejected permission",
+                 "OpenCode v1 does not run this")
+WARN_MARKER = "[telephony-triage] guard warning"
+INSTRUCTION_FILES = ("AGENTS.md", "CONTEXT.md")   # 1.19.5가 프로젝트 폴더에서 `/`까지 자동으로 싣는 지시 파일(CLAUDE.md는 끈다)
+USER_CMD = re.compile(r"run this exact command yourself:\s*(.+)", re.DOTALL)
+WRITE_CMD = re.compile(r"(db_pr\.py\s+(publish|merge|request-review)|issue_post\.py\s+approve|skill_patch\.py\b.*--apply"
+                       r"|module_eval\.py|\bgit\s+push\b|\bgh\s+pr\s+(merge|create|review)\b)")
+SHOWN_KINDS = ("report", "push", "post", "draft", "patch")
+EXIT = {"ok": 0, "error": 1, "no-final-text": 1, "blocked": 3, "timeout": 124}
+
+
+class Refused(Exception):
+    pass
+
+
+# -- 거부·사전 점검 -----------------------------------------------------------------------------------------------------
+
+def refused_env(env) -> list[str]:
+    return sorted(k for k, v in env.items()
+                  if v != "" and (k in REFUSED_ENV or any(k.startswith(p) for p in REFUSED_ENV_PREFIX)))
+
+
+def refused_args(argv: list[str]) -> list[str]:
+    head = argv[:argv.index("--")] if "--" in argv else argv
+    return [a for a in head if a.split("=", 1)[0] in REFUSED_ARGS]
+
+
+def git_root(path: Path):
+    for d in (path, *path.parents):
+        if (d / ".git").exists():
+            return d
+    return None
+
+
+def load_project(raw: str | None) -> tuple[Path, dict]:
+    raw = raw or os.environ.get("TT_OC_PROJECT")
+    if not raw:
+        raise Refused("--project(또는 TT_OC_PROJECT)가 없다 — tools/gen_opencode.py install --dest의 폴더")
+    proj = Path(raw).expanduser().resolve()
+    meta_path = proj / "tt-oc.json"
+    if not (proj / "opencode.json").is_file() or not meta_path.is_file():
+        raise Refused(f"OpenCode 프로젝트 폴더가 아니다(opencode.json·tt-oc.json 없음): {proj}")
+    try:
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise Refused(f"tt-oc.json을 읽지 못함: {exc}") from exc
+    if not isinstance(meta, dict) or not meta.get("plugin_root") or not meta.get("work_root"):
+        raise Refused("tt-oc.json에 plugin_root·work_root가 없다 — gen_opencode.py install을 다시 한다")
+    return proj, meta
+
+
+def child_env(meta: dict) -> dict:
+    env = dict(os.environ)
+    # OPENCODE_DISABLE_CLAUDE_CODE_PROMPT: 1.19.5가 ~/.claude/CLAUDE.md(와 위 폴더의 CLAUDE.md)를 에이전트 프롬프트에 붙이지
+    # 않게 한다(사용자 결정 ⑤ — 프롬프트는 triage 에이전트 하나). AGENTS.md·CONTEXT.md는 끌 수 없어 사전 점검이 본다.
+    env.update({"OPENCODE_DISABLE_AUTOUPDATE": "1", "OPENCODE_DISABLE_MODELS_FETCH": "1",
+                "OPENCODE_DISABLE_CLAUDE_CODE_PROMPT": "1", "TT_RUNTIME": "opencode",
+                "CLAUDE_PLUGIN_ROOT": meta["plugin_root"], "TT_PLUGIN_ROOT": meta["plugin_root"]})
+    if meta.get("model"):
+        env["TT_MODEL"] = str(meta["model"])
+    return env
+
+
+def instruction_files(proj: Path, env: dict) -> list[Path]:
+    """1.19.5가 에이전트 프롬프트에 자동으로 붙이는 지시 파일(프로젝트 폴더에서 worktree — git 밖이면 `/` — 까지의
+    AGENTS.md·CONTEXT.md, 전역 `<XDG_CONFIG_HOME>/opencode/AGENTS.md`). `instructions: []`와 에이전트 권한으로는 막히지 않는다."""
+    found = [d / n for d in (proj, *proj.parents) for n in INSTRUCTION_FILES if (d / n).is_file()]
+    config = Path(env.get("XDG_CONFIG_HOME") or Path(env.get("HOME") or Path.home()) / ".config")
+    found += [p for p in (config / "opencode" / "AGENTS.md",) if p.is_file()]
+    if env.get("OPENCODE_DISABLE_CLAUDE_CODE_PROMPT") != "1":
+        found += [p for p in (Path(env.get("HOME") or Path.home()) / ".claude" / "CLAUDE.md",) if p.is_file()]
+    return found
+
+
+def sha256_file(path: Path) -> str:
+    import hashlib
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def scripts_digest(plugin_root: Path) -> str:
+    """플러그인 스크립트(`scripts/**/*.py`) 전체의 지문. `tools/gen_opencode.py scripts_digest`와 같은 계산이다."""
+    import hashlib
+    h = hashlib.sha256()
+    base = plugin_root / "scripts"
+    for p in sorted(base.rglob("*.py")):
+        if "__pycache__" in p.parts or not p.is_file():
+            continue
+        h.update(f"{p.relative_to(base).as_posix()}\0{sha256_file(p)}\n".encode())
+    return h.hexdigest()
+
+
+def integrity_problems(proj: Path, meta: dict) -> list[str]:
+    """`gen_opencode.py install`이 tt-oc.json `integrity`에 남긴 지문과 지금 파일을 비교한다(모델이 bash로 guard 플러그인을
+    지우거나 adapter를 고친 뒤 다음 세션에서 guard 없이 도는 것을 막는다). 지문이 없으면(옛 설치) 그 자체가 문제다."""
+    info = meta.get("integrity")
+    if not isinstance(info, dict) or not isinstance(info.get("files"), dict) or not info.get("plugin_scripts"):
+        return ["tt-oc.json에 integrity가 없다(옛 설치)"]
+    out = []
+    for rel, want in sorted(info["files"].items()):
+        p = proj / rel
+        try:
+            if sha256_file(p) != want:
+                out.append(rel)
+        except OSError:
+            out.append(f"{rel}(없음)")
+    if ".opencode/plugins/tt-guard.js" not in info["files"]:
+        out.append("integrity에 .opencode/plugins/tt-guard.js가 없다")
+    try:
+        if scripts_digest(Path(meta["plugin_root"])) != info["plugin_scripts"]:
+            out.append(f"{meta['plugin_root']}/scripts/**/*.py")
+    except OSError:
+        out.append(f"{meta['plugin_root']}/scripts(읽지 못함)")
+    return out
+
+
+def _run(cmd, *, cwd=None, env=None, timeout=60) -> subprocess.CompletedProcess:
+    return subprocess.run(cmd, cwd=cwd, env=env, stdin=subprocess.DEVNULL, capture_output=True, text=True,
+                          timeout=timeout, check=False)
+
+
+def preflight(oc: str, proj: Path, meta: dict, env: dict) -> list[dict]:
+    """점검 행 [{check, status(ok|fail), detail}]. 앞 단계가 실패해도 할 수 있는 점검은 한다(건너뛴 것은 fail로 남긴다)."""
+    rows = []
+
+    def row(check, ok, detail):
+        rows.append({"check": check, "status": "ok" if ok else "fail", "detail": detail})
+
+    bad = refused_env(os.environ)
+    row("env", not bad, "설정을 덮는 환경 변수 없음" if not bad else f"거부: {', '.join(bad)} — 지우고 다시 실행")
+    row("project-git", git_root(proj) is None,
+        "git 레포 밖" if git_root(proj) is None else f"git 레포({git_root(proj)}) 안 — edit 권한 패턴이 맞지 않는다")
+    extra = instruction_files(proj, env)
+    row("instructions", not extra, "자동으로 붙는 지시 파일 없음(프롬프트는 triage 에이전트 하나)" if not extra else
+        "OpenCode가 프롬프트에 자동으로 붙이는 지시 파일이 있다: " + ", ".join(map(str, extra)) +
+        " — 옮기거나 프로젝트 폴더를 그 밖으로 다시 설치한다(사용자 결정 ⑤)")
+    changed = integrity_problems(proj, meta)
+    row("integrity", not changed, "설치한 guard 플러그인·설정·에이전트·커맨드·플러그인 스크립트 그대로" if not changed else
+        "설치 뒤 바뀌었거나 없다: " + ", ".join(changed) + " — 바꾼 적이 없으면 보고하고, 플러그인을 갱신했으면 "
+        "tools/gen_opencode.py install --force로 다시 설치한다")
+    try:
+        r = _run([oc, "--version"], env=env, timeout=30)
+        ver = (r.stdout or "").strip().splitlines()[-1:] or [""]
+        row("opencode-version", r.returncode == 0 and ver[0] == PINNED,
+            f"{ver[0] or '없음'} (고정 {PINNED})" + ("" if ver[0] == PINNED else " — 버전 불일치, 우회하지 말고 보고"))
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        row("opencode-version", False, f"opencode 실행 실패: {type(exc).__name__}: {exc}")
+        return rows + [{"check": "opencode-config", "status": "fail", "detail": "건너뜀(opencode 실행 실패)"}]
+    try:
+        r = _run([oc, "debug", "config"], cwd=proj, env=env, timeout=60)
+        cfg = json.loads(r.stdout) if r.returncode == 0 else None
+    except (OSError, subprocess.TimeoutExpired, ValueError) as exc:
+        cfg, r = None, None
+        row("opencode-config", False, f"debug config 실패: {type(exc).__name__}")
+    if r is not None and not isinstance(cfg, dict):
+        row("opencode-config", False, f"debug config 실패(종료 {r.returncode})")
+    elif isinstance(cfg, dict):
+        perm = cfg.get("permission") if isinstance(cfg.get("permission"), dict) else {}
+        bash = perm.get("bash") if isinstance(perm.get("bash"), dict) else {"*": perm.get("bash")}
+        need = {"snapshot": (cfg.get("snapshot"), False), "share": (cfg.get("share"), "disabled"),
+                "autoupdate": (cfg.get("autoupdate"), False), 'permission["*"]': (perm.get("*"), "deny"),
+                "permission.task": (perm.get("task"), "deny"), 'permission.bash["*"]': (bash.get("*"), "deny")}
+        wrong = [f"{k}={json.dumps(v[0])}(필요 {json.dumps(v[1])})" for k, v in need.items() if v[0] != v[1]]
+        row("opencode-config", not wrong, "snapshot:false·share:disabled·autoupdate:false·허용 목록·task deny" if not wrong
+            else "설정 불일치: " + ", ".join(wrong))
+    script = Path(meta["plugin_root"]) / "scripts" / "config.py"
+    try:
+        r = _run([sys.executable, str(script), "doctor", "--format", "json"], env=env, timeout=150)
+        detail = f"config.py doctor 종료 {r.returncode}"
+        try:
+            counts = json.loads(r.stdout).get("counts")
+            detail += f" {counts}" if counts else ""
+        except (ValueError, AttributeError):
+            pass
+        row("config-doctor", r.returncode == 0, detail + ("" if r.returncode == 0 else " — config.py doctor로 원인 확인"))
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        row("config-doctor", False, f"config.py doctor 실행 실패: {type(exc).__name__}")
+    return rows
+
+
+# -- 실행·이벤트 판정 ---------------------------------------------------------------------------------------------------
+
+def run_opencode(cmd, *, cwd, env, timeout: float, progress=True) -> tuple[list[dict], list[str], int | None, str]:
+    """(이벤트, JSON 아닌 줄, 종료 코드(시간 초과면 None), stderr 끝)."""
+    with tempfile.TemporaryFile() as err:
+        proc = subprocess.Popen(cmd, cwd=cwd, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=err,
+                                text=True, encoding="utf-8", errors="replace", start_new_session=True)
+        events, raw = [], []
+
+        def reader():
+            for line in proc.stdout:
+                try:
+                    ev = json.loads(line)
+                except ValueError:
+                    if line.strip():
+                        raw.append(line.rstrip("\n"))
+                    continue
+                if isinstance(ev, dict):
+                    events.append(ev)
+                    if progress and ev.get("type") == "tool_use":
+                        p = ev.get("part") or {}
+                        print(f"[tt-oc] {p.get('tool')}: {(p.get('state') or {}).get('status')}", file=sys.stderr)
+
+        t = threading.Thread(target=reader, daemon=True)
+        t.start()
+        try:
+            code = proc.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            _kill_group(proc)
+            code = None
+        t.join(timeout=5)
+        err.seek(0)
+        tail = err.read().decode("utf-8", "replace")[-4000:]
+    return events, raw, code, tail
+
+
+def _kill_group(proc) -> None:
+    """시간 초과: 프로세스 그룹에 SIGTERM, 5초 안에 안 끝나면 SIGKILL(opencode는 provider 재시도를 끝없이 한다)."""
+    for sig in (signal.SIGTERM, signal.SIGKILL):
+        try:
+            os.killpg(proc.pid, sig)
+        except OSError:
+            pass
+        try:
+            proc.wait(timeout=5)
+            return
+        except subprocess.TimeoutExpired:
+            continue
+
+
+def judge(events: list[dict], code: int | None) -> dict:
+    """이벤트 → {outcome, session, final_text, blocked[{tool, message}], user_commands, errors, steps, tokens, finish}."""
+    session, final, blocked, errors, cmds, warnings = None, [], [], [], [], []
+    tokens = {"input": 0, "output": 0, "reasoning": 0}
+    steps, finish = 0, None
+    for ev in events:
+        session = session or ev.get("sessionID")
+        typ, part = ev.get("type"), ev.get("part") if isinstance(ev.get("part"), dict) else {}
+        if typ == "step_start":
+            steps += 1
+            final = []
+        elif typ == "text" and part.get("text"):
+            final.append(str(part["text"]))
+        elif typ == "step_finish":
+            finish = part.get("reason")
+            for k in tokens:
+                v = (part.get("tokens") or {}).get(k)
+                tokens[k] += v if isinstance(v, int) else 0
+        elif typ == "tool_use":
+            st = part.get("state") or {}
+            if st.get("status") == "error":
+                msg = str(st.get("error") or "")
+                if WARN_MARKER in msg:
+                    warnings.append(f"{part.get('tool')}: {msg}")
+                elif any(m in msg for m in BLOCK_MARKERS):
+                    blocked.append({"tool": part.get("tool"), "message": msg})
+                    m = USER_CMD.search(msg)
+                    if m:
+                        cmds.append(m.group(1).strip())
+                    elif part.get("tool") == "bash":
+                        cmds += _write_command(st.get("input"))
+                else:
+                    errors.append(f"{part.get('tool')}: {msg}")
+        elif typ == "error":
+            errors.append("error: " + json.dumps(ev.get("error"), ensure_ascii=False)[:500])
+    text = "".join(final).strip()
+    if code is None:
+        outcome = "timeout"
+    elif code != 0 or any(e.startswith("error: ") for e in errors):
+        outcome = "error"
+    elif finish != "stop" or not text:
+        outcome = "no-final-text"
+    elif blocked:
+        outcome = "blocked"
+    else:
+        outcome = "ok"
+    return {"outcome": outcome, "session": session, "final_text": text, "blocked": blocked, "user_commands": cmds,
+            "errors": errors, "guard_warnings": warnings, "steps": steps, "tokens": tokens, "finish": finish, "exit": code}
+
+
+def _write_command(inp) -> list[str]:
+    """설정 deny로 막힌 bash 호출이 안 A의 쓰기 명령(`WRITE_CMD`)이면 사용자가 직접 실행할 명령으로(workdir가 있으면 cd를 붙인다).
+    그 밖의 막힌 명령(예: 로그 원문 읽기)은 사용자에게 권하지 않는다."""
+    if not isinstance(inp, dict) or not WRITE_CMD.search(str(inp.get("command") or "")):
+        return []
+    cmd = str(inp["command"]).strip()
+    wd = inp.get("workdir")
+    return [f"cd {shlex.quote(str(wd))} && {cmd}" if wd else cmd]
+
+
+# -- 표시 기록(job 파일) -------------------------------------------------------------------------------------------------
+
+def _epoch(s) -> float | None:
+    try:
+        t = datetime.fromisoformat(str(s).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    return (t if t.tzinfo else t.replace(tzinfo=timezone.utc)).timestamp()
+
+
+def shown_records(work_dirs: list[Path], since: float) -> tuple[list[dict], list[str]]:
+    """work_dir마다 `.shown/log.jsonl`(+회전된 `.1`)에서 `at ≥ since`인 화면 기록(SHOWN_KINDS)을 시각 순으로. (기록, 경고)."""
+    out, warn = [], []
+    for w in dict.fromkeys(work_dirs):
+        for name in ("log.jsonl.1", "log.jsonl"):
+            p = w / ".shown" / name
+            if not p.is_file():
+                continue
+            try:
+                lines = p.read_text(encoding="utf-8", errors="replace").splitlines()
+            except OSError as exc:
+                warn.append(f"{p}: 읽지 못함({type(exc).__name__})")
+                continue
+            for line in lines:
+                try:
+                    r = json.loads(line)
+                except ValueError:
+                    continue
+                at = _epoch(r.get("at")) if isinstance(r, dict) else None
+                if at is not None and at >= since and r.get("kind") in SHOWN_KINDS:
+                    out.append(r)
+    return sorted(out, key=lambda r: str(r.get("at"))), warn
+
+
+def work_dirs_for(meta: dict, extra: list[str]) -> list[Path]:
+    """작업 루트와 그 바로 아래 폴더 중 `.shown/`이 있는 것(플랫폼별 work_dir), 그리고 --work-dir."""
+    dirs = [Path(x).expanduser().resolve() for x in extra]
+    root = Path(meta["work_root"])
+    for d in [root, *(sorted(p for p in root.iterdir() if p.is_dir()) if root.is_dir() else [])]:
+        if (d / ".shown").is_dir():
+            dirs.append(d)
+    return dirs
+
+
+def render_record(r: dict) -> str:
+    head = f"[{r.get('kind')}] {r.get('job') or ''} ({r.get('script') or ''})".rstrip()
+    body = []
+    if r.get("block"):
+        body.append(str(r["block"]).rstrip("\n"))
+    body += [str(x) for x in r.get("lines") or []]
+    must = [str(x) for x in r.get("must_show") or [] if str(x) not in body]
+    if must:
+        body += ["must_show:", *must]
+    for rule in r.get("rules") or []:
+        if isinstance(rule, dict):
+            body.append(" | ".join(str(rule.get(k, "")) for k in ("id", "status", "reason")))
+    if r.get("path"):
+        body.append(f"(파일: {r['path']})")
+    return "\n".join([head, *body])
+
+
+# -- main -----------------------------------------------------------------------------------------------------------
+
+def build_parser() -> argparse.ArgumentParser:
+    ap = argparse.ArgumentParser(prog="tt-oc", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--project")
+    ap.add_argument("--opencode", default=os.environ.get("TT_OPENCODE") or "opencode")
+    ap.add_argument("--timeout", type=float, default=1800.0)
+    ap.add_argument("-s", "--session")
+    ap.add_argument("--command", dest="oc_command")
+    ap.add_argument("--work-dir", action="append", default=[])
+    ap.add_argument("--delete-session", action="store_true")
+    ap.add_argument("--json", action="store_true")
+    ap.add_argument("action", nargs="?", choices=["doctor"])
+    return ap
+
+
+def _print_rows(rows):
+    for r in rows:
+        print(f"[tt-oc] {r['check']}: {r['status']} — {r['detail']}")
+
+
+def main(argv=None) -> int:
+    argv = list(sys.argv[1:] if argv is None else argv)
+    bad = refused_args(argv)
+    if bad:
+        print(f"[tt-oc] 거부: {', '.join(bad)} — tt-oc는 플러그인·권한을 끄거나 자동 승인하는 옵션, 에이전트·모델 바꾸기를 받지 않는다.",
+              file=sys.stderr)
+        return 2
+    head, message = (argv[:argv.index("--")], argv[argv.index("--") + 1:]) if "--" in argv else (argv, [])
+    try:
+        a = build_parser().parse_args(head)
+    except SystemExit as exc:
+        return 0 if exc.code == 0 else 2
+    a.message = message
+    try:
+        proj, meta = load_project(a.project)
+    except Refused as exc:
+        print(f"[tt-oc] {exc}", file=sys.stderr)
+        return 2
+    oc = shutil.which(a.opencode) or a.opencode
+    env = child_env(meta)
+    rows = preflight(oc, proj, meta, env)
+    failed = [r for r in rows if r["status"] != "ok"]
+    if a.action == "doctor":
+        print(json.dumps({"rows": rows}, ensure_ascii=False)) if a.json else _print_rows(rows)
+        return 2 if failed else 0
+    if failed:
+        _print_rows(failed)
+        print("[tt-oc] 사전 점검 실패 — 시작하지 않는다.", file=sys.stderr)
+        return 2
+    if a.oc_command and not re.fullmatch(r"tt-[a-z][a-z-]*", a.oc_command):
+        print(f"[tt-oc] --command는 tt-<이름>만 받는다: {a.oc_command}", file=sys.stderr)
+        return 2
+    if not a.message and not a.oc_command:
+        print("[tt-oc] 메시지가 없다: tt-oc --project <dir> -- <메시지>", file=sys.stderr)
+        return 2
+    cmd = [oc, "run", "--format", "json", "--agent", AGENT]
+    if a.oc_command:
+        cmd += ["--command", a.oc_command]
+    if a.session:
+        cmd += ["--session", a.session]
+    cmd += ["--", *a.message]
+    since = time.time() - 1.0
+    events, raw, code, tail = run_opencode(cmd, cwd=proj, env=env, timeout=a.timeout, progress=not a.json)
+    res = judge(events, code)
+    recs, warn = shown_records(work_dirs_for(meta, a.work_dir), since)
+    deleted = None
+    if a.delete_session and res["session"]:
+        try:
+            deleted = _run([oc, "session", "delete", res["session"]], cwd=proj, env=env, timeout=60).returncode == 0
+        except (OSError, subprocess.TimeoutExpired):
+            deleted = False
+    if a.json:
+        print(json.dumps({**res, "screens": recs, "warnings": warn, "non_json_lines": raw[-20:],
+                          "session_deleted": deleted, "stderr_tail": tail if res["outcome"] != "ok" else ""},
+                         ensure_ascii=False))
+        return EXIT[res["outcome"]]
+    if res["final_text"]:
+        print(res["final_text"])
+    if recs:
+        print("\n---- [tt-oc] 스크립트 화면(job 파일 그대로, 모델을 거치지 않음) ----")
+        print("\n\n".join(render_record(r) for r in recs))
+    if res["blocked"]:
+        print("\n---- [tt-oc] 막힌 호출(메시지 전문) ----")
+        for b in res["blocked"]:
+            print(f"[{b['tool']}] {b['message']}")
+    if res["user_commands"]:
+        print("\n---- [tt-oc] OpenCode v1에서 실행하지 않은 명령 — 터미널이나 Claude Code에서 직접 실행 ----")
+        print("\n".join(res["user_commands"]))
+    print("\n---- [tt-oc] 결과 ----")
+    t = res["tokens"]
+    print(f"outcome: {res['outcome']} · session: {res['session'] or '없음'} · steps: {res['steps']} · "
+          f"tokens in/out/reasoning: {t['input']}/{t['output']}/{t['reasoning']} · cost: 미상(OpenCode cost 0은 0원이 아니다)")
+    for w in warn:
+        print(f"경고: 표시 기록 {w}")
+    for w in res["guard_warnings"]:
+        print(f"guard 경고: {w}")
+    for e in res["errors"]:
+        print(f"오류: {e}")
+    if raw:
+        print(f"JSON 아닌 출력 {len(raw)}줄(끝): {raw[-1][:300]}")
+    if res["outcome"] in ("error", "timeout", "no-final-text") and tail.strip():
+        print("opencode stderr(끝):\n" + tail.strip()[-1500:])
+    if deleted is not None:
+        print(f"세션 삭제: {'됨' if deleted else '실패'}")
+    elif res["session"]:
+        print(f"이어서: tt-oc --project {proj} -s {res['session']} -- <답>")
+    return EXIT[res["outcome"]]
+
+
+if __name__ == "__main__":
+    sys.exit(main())
