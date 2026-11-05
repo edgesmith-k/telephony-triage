@@ -77,7 +77,7 @@ class CheckResult:
 @dataclass
 class Check:
     id: str
-    checklist: int                   # 15-local-draft.md §15.4 항목 번호 (1..10)
+    checklist: int                   # 15-local-draft.md §15.4 항목 번호 (1..11)
     kind: str                        # auto | manual
     fn: Callable | None = None       # fn(ctx) -> CheckResult (manual은 None)
     how: str = ""                    # manual: 사람이 할 일
@@ -284,6 +284,23 @@ def check_skeleton(ctx: Ctx) -> CheckResult:
                        {"files": count})
 
 
+MODULE_SKILL_STEPS = (   # (이름, 인자) — 싼 것부터, 처음 실패에서 멈춘다 (H C1 C1D §3.5, 체크리스트 11)
+    ("module_repo_check --template", ["tools/module_repo_check.py", "--template", "templates/module-skills"]),
+    ("make_module_eval_inputs --check", ["tests/helpers/make_module_eval_inputs.py", "--check"]),
+    ("fixture_residual", ["tools/fixture_residual.py", "templates/module-skills"]),
+)
+
+
+def check_module_skills(ctx: Ctx) -> CheckResult:
+    """모듈 스킬 템플릿: 받기 규칙 + 템플릿 점검(합성 또는 마스킹 발췌 표시(origin)), case 입력 drift·형식, 남은 식별자."""
+    for name, args in MODULE_SKILL_STEPS:
+        code, out = ctx.run("module-skills", [sys.executable, str(ctx.repo / args[0]), *args[1:]])
+        if code != 0:
+            return CheckResult("fail" if code == 1 else "error", f"{name}: 종료 {code}\n{tail(out)}")
+    return CheckResult("pass", "module_repo_check --template·make_module_eval_inputs --check·fixture_residual 통과 "
+                               "(case는 합성 또는 마스킹 발췌 표시(origin))")
+
+
 def check_offline_eval(ctx: Ctx) -> CheckResult:
     code, out = ctx.run("offline-eval", [sys.executable, str(ctx.repo / "tools" / "offline_eval.py"),
                                          str(ctx.repo / "tests" / "fixtures" / "offline-eval-sample.yaml"),
@@ -359,6 +376,7 @@ CHECKS: list[Check] = [
     Check("draft-notes-fresh", 9, "manual", None,
           "DRAFT_NOTES.md의 진행 상태·남은 일·막힌 것·결정이 최신인지 사람이 확인한다."),
     Check("skeleton", 7, "auto", check_skeleton),
+    Check("module-skills", 11, "auto", check_module_skills),
     Check("offline-eval", 1, "auto", check_offline_eval),
     Check("regress", 1, "auto", check_regress),
     Check("evals-prepare", 1, "auto", check_evals_prepare),

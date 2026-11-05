@@ -324,6 +324,22 @@ def test_module_repo_check_findings_without_content(tmp_path):
     assert "zzsecret" not in proc.stdout
 
 
+def test_module_repo_check_template_mode_and_skipped(tmp_path):
+    """R41: --template은 template_findings를 더하고, 건너뛴 받기 점검을 stderr `건너뜀(E): …`로 알린다(종료 코드 그대로)."""
+    import shutil
+    proc = tool("--template", TEMPLATES)
+    assert (proc.returncode, proc.stdout) == (0, "")
+    assert {ln for ln in proc.stderr.splitlines()} == {"건너뜀(E): 로그 원문", "건너뜀(E): 사내 값", "건너뜀(E): D-Bus 이름"}
+    root = tmp_path / "t"
+    shutil.copytree(TEMPLATES, root, ignore=shutil.ignore_patterns("results"))
+    case = root / "ofono" / "data" / "evals" / "data-ofonod-only" / "files" / "source.log"
+    case.write_text("-- not marked\n" + case.read_text(encoding="utf-8").split("\n", 1)[1], encoding="utf-8")
+    plain = tool(root)
+    assert plain.returncode == 0                                       # 받을 때 점검만으로는 출처 표시를 보지 않는다
+    got = tool("--template", root)
+    assert got.returncode == 1 and any(ln.startswith("ofono/data/evals/data-ofonod-only 출처") for ln in got.stdout.splitlines())
+
+
 def test_module_repo_check_usage(tmp_path):
     assert tool(tmp_path / "none").returncode == 2
     assert tool().returncode == 2

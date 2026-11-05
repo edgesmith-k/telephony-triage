@@ -325,11 +325,43 @@ def test_real_check_ids_order_and_manual_items():
     ids = [c.id for c in mb.CHECKS]
     assert ids == ["plugin-json", "site-paths", "mcp-local", "boundary", "human-search", "schemas", "contracts",
                    "exec-bits", "site-todos", "todos-seen", "draft-notes-size", "draft-notes-fresh", "skeleton",
-                   "offline-eval", "regress", "evals-prepare", "pytest"]
+                   "module-skills", "offline-eval", "regress", "evals-prepare", "pytest"]
     manual = [c.id for c in mb.CHECKS if c.kind == "manual"]
     assert manual == ["human-search", "todos-seen", "draft-notes-fresh"]
     assert all(c.how for c in mb.CHECKS if c.kind == "manual")
-    assert {c.checklist for c in mb.CHECKS} == set(range(1, 11))
+    assert {c.checklist for c in mb.CHECKS} == set(range(1, 12))
+
+
+class _FakeCtx:
+    """`Ctx.run`만 흉내: 단계 이름별 종료 코드를 주고 부른 순서를 남긴다."""
+
+    def __init__(self, repo: Path, codes: dict):
+        self.repo, self.codes, self.calls = repo, codes, []
+
+    def run(self, check_id, argv, **_kw):
+        tool = Path(argv[1]).name
+        self.calls.append(tool)
+        code = self.codes.get(tool, 0)
+        return code, "\n".join(f"line {i}" for i in range(30)) + f"\n{tool} 끝" if code else ""
+
+
+def test_module_skills_check_order(tmp_path):
+    """C1D §3.5: module_repo_check --template → make_module_eval_inputs --check → fixture_residual, 모두 통과면 pass."""
+    ctx = _FakeCtx(tmp_path, {})
+    got = mb.check_module_skills(ctx)
+    assert got.status == "pass" and "origin" in got.detail
+    assert ctx.calls == ["module_repo_check.py", "make_module_eval_inputs.py", "fixture_residual.py"]
+    assert [a[1:] for _, a in mb.MODULE_SKILL_STEPS][0] == ["--template", "templates/module-skills"]
+
+
+def test_module_skills_check_fails_with_tail(tmp_path):
+    """첫 실패에서 멈추고 그 도구 출력의 끝(tail)을 detail에 담는다. 종료 2는 error."""
+    ctx = _FakeCtx(tmp_path, {"make_module_eval_inputs.py": 1})
+    got = mb.check_module_skills(ctx)
+    assert got.status == "fail" and got.detail.startswith("make_module_eval_inputs --check: 종료 1")
+    assert "make_module_eval_inputs.py 끝" in got.detail and "line 5" not in got.detail
+    assert ctx.calls == ["module_repo_check.py", "make_module_eval_inputs.py"]
+    assert mb.check_module_skills(_FakeCtx(tmp_path, {"module_repo_check.py": 2})).status == "error"
 
 
 def _write_plugin_json(repo: Path, data: dict) -> None:
