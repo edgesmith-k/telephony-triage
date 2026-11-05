@@ -136,6 +136,7 @@ lock·`session.guard`는 각 플랫폼 `work_dir`에 있다(`Lock(work_dir, plat
 
 > 10/30 사용자 요청("oFono 외에 여러 데몬도 같이 돈다"). 사용자 답: (1) 모든 데몬을 oFono 이슈 DB 하나에 둔다(플랫폼은 `ofono` 그대로, K5 불변), (2) 로그는 한 스트림(journald/syslog)이고 줄마다 데몬 식별자(ident)가 있다, (3) 데몬마다 소스가 따로 있다, (4) 데몬 사이 요청·응답 짝이 필요하다(형식 미정 — placeholder). 결정은 §7 K12~K15. 기본 설정의 출력은 이전과 같고, 새 기능이 있어 `ofono_reference`는 0.0.2다(DB가 `min_version`으로 요구할 수 있다).
 > 11/02: 줄 형식 (c) BusyBox syslogd·내장 짝 `gril`·슬롯 규칙이 기본 출력을 바꿔 `ofono_reference`는 **0.0.3**이다((a)·(b) 형식이고 gril 줄·`/ril_<n>`이 없는 로그는 0.0.2와 같다, K19). 분석 재사용 캐시는 한 번 바뀐다.
+> C1+D 보정: (c) 형식의 레벨 보정(`LEVEL_UNRELIABLE_IDENTS`, 기본값 정본은 `journal.py`)은 줄 읽기(`journal.read_file`, severity 그대로)에서 `OfonoReferenceBackend._line_record`로 옮겼다. 벤더 IPC 판별 이름과 함께 이슈 DB tags.yaml `level: unreliable`·`ipc: vendor`로 바꿀 수 있다(`04-parser-matching.md §5.8 (2)`, 선언이 없으면 기본 상수 — 출력 같음).
 
 ### 9-1. 구성요소 계약 (`platforms/base.py`)
 

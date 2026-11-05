@@ -38,8 +38,7 @@ tags:
   - {tag: InboundSmsHandler, category: sms, added_for: SMS-001, added_on: 2026-09-28, reason: 초기 (SMS 수신)}
 
   # --- 첨부 로그 A(11/05 승인, 결정 기록 ①) — 사내 DB 미확인, 사내 DB는 DB PR로 ---
-  # 승인 목록 78개 중 위 정규식이 이미 덮는 19개와 보류 1개(GsmCdmaCallTracker — eval e004 미수집 태그 시나리오와 겹쳐
-  # 사용자 확인 대기)를 뺀 58개. 이 묶음은 파일 끝에 둔다(issue-db-android-plain이 여기부터 지운다).
+  # 승인 목록 78개 중 위 정규식이 이미 덮는 19개를 뺀 59개. 이 묶음은 파일 끝에 둔다(issue-db-android-plain이 여기부터 지운다).
   # common
   - {tag_regex: '^(RIL|RILC|RILC-AIDL_SERVICE|RIL_EXTERNAL)$', category: common, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (벤더 RIL·RIL HAL)}
   - {tag_regex: '^RilRequest$', category: common, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (RilRequest)}
@@ -85,6 +84,7 @@ tags:
   - {tag_regex: '^NitzStateMachineImpl$', category: network, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (NitzStateMachineImpl)}
   - {tag_regex: '^ShannonNS-', category: network, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (ShannonNS)}
   # call
+  - {tag_regex: '^GsmCdmaCallTracker$', category: call, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (GsmCdmaCallTracker)}
   - {tag_regex: '^CallManager$', category: call, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (CallManager)}
   - {tag_regex: '^CallNotifier$', category: call, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (CallNotifier)}
   - {tag_regex: '^CallWaitingCtrl$', category: call, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (CallWaitingCtrl)}

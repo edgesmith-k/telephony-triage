@@ -506,7 +506,8 @@ def run_parse(args, plugin_root: Path, defaults: dict, profile: platforms.Platfo
         raise UsageError(f"파서 규칙 오류: {exc}") from exc
     db_cfg = compat.load_db_config(rules_dir.parent)
 
-    backend = _load_backend(defaults, profile or _profile(defaults, db_cfg))
+    # tags.yaml 태그 속성(level·ipc)을 백엔드에 반영한다(선언이 없으면 백엔드 기본값, 04-parser-matching §5.8 (2))
+    backend = _load_backend(defaults, profile or _profile(defaults, db_cfg)).apply_rules(rules)
 
     masker = None
     if args.mask:
@@ -802,6 +803,13 @@ def run_markers(args, defaults: dict, profile: platforms.PlatformProfile | None 
     step_specs, rule_warnings = _step_event_rules(db_cfg) if getattr(args, "step_events", False) else ([], [])
     warnings += rule_warnings
     raw_records = None
+    if any(sp and sp["kind"] == "event" for sp in step_specs):
+        # event 규칙은 parse 출력의 builtin 이벤트를 보므로 규칙의 태그 속성(ipc·level)을 **파싱 전에** 반영한다.
+        # 규칙이 없으면 기본값(마커 줄 자체는 레벨·builtin을 쓰지 않는다).
+        try:
+            backend = backend.apply_rules(parser_rules.load(rules_dir))
+        except parser_rules.RulesError as exc:
+            raise UsageError(f"파서 규칙 오류: {exc}") from exc
     if compiled or any(step_specs):
         raw_records = backend.parse(paths, args.tz, args.year, None)       # 한 번만 파싱한다
     if compiled:

@@ -674,15 +674,16 @@ def ofono(db: Path) -> None:
 MODULES_DEEP_LOG = (REPO / "templates" / "module-skills" / "ofono" / "data" / "evals" / "data-apn-auth-reject"
                     / "files" / "source.log")
 MODULES_TAGS = """# [합성] issue-db-ofono-modules 태그 (MODULE_SKILLS_PLAN_IMPL §1.4). 데몬 이름은 표본 데몬 이름(결정 u), 카테고리는 계획. TODO(SITE:S25)
+# 속성 level·ipc(04-parser-matching §5.8 (2))는 백엔드 기본 상수와 같은 집합 → 출력 같음(선언 경로 시험).
 tags:
   - {tag: ofonod,     category: common,  added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval·공통)}
-  - {tag: exynos-ril, category: common,  added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval·공통)}
-  - {tag: MOSE,       category: common,  added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval·공통)}
-  - {tag: DMD,        category: common,  added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval·modem = common·D3)}
-  - {tag: RFSD,       category: common,  added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval·modem = common·D3)}
+  - {tag: exynos-ril, category: common,  ipc: vendor, added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval·공통)}
+  - {tag: MOSE,       category: common,  level: unreliable, added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval·공통)}
+  - {tag: DMD,        category: common,  level: unreliable, added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval·modem = common·D3)}
+  - {tag: RFSD,       category: common,  level: unreliable, added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval·modem = common·D3)}
   - {tag: vcd,        category: common,  added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval·modem = common·D3)}
   - {tag: NMD,        category: data,    added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval·data)}
-  - {tag: DITD,       category: data,    added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval·data)}
+  - {tag: DITD,       category: data,    level: unreliable, added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval·data)}
   - {tag: LPA,        category: sim,     added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval·sim)}
   - {tag: ipad,       category: sim,     added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval·sim)}
   - {tag: PTD,        category: network, added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval·network)}

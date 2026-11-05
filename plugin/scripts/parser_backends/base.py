@@ -24,6 +24,29 @@ from typing import Sequence
 Window = tuple[datetime, datetime]
 
 
+class TagAttrSet:
+    """태그 속성 판단(`apply_rules`용, 04-parser-matching §5.8 (2)). 규칙이 없거나 DB가 `key`를 하나도 선언하지 않으면
+    `default`(백엔드 기본 이름 집합), 하나라도 선언하면 `rules.tag_attr(tag, key) == value`인 태그만 해당한다.
+    `__call__(*tags)`는 넘긴 이름 중 하나라도 해당하면 참(oFono `split_tag`면 이벤트 tag `ident/subtag`와 ident를 같이 넘긴다).
+    결과는 이 객체에만 기억한다(줄마다 정규식을 다시 돌지 않게; 백엔드 사본마다 새 객체라 규칙 트리끼리 섞이지 않는다)."""
+
+    def __init__(self, rules, key: str, value: str, default: frozenset):
+        self.declared = rules is not None and rules.declares(key)
+        self._rules, self._key, self._value, self._default = rules, key, value, default
+        self._memo: dict[str, bool] = {}
+
+    def _one(self, tag: str) -> bool:
+        if not self.declared:
+            return tag in self._default
+        hit = self._memo.get(tag)
+        if hit is None:
+            hit = self._memo[tag] = self._rules.tag_attr(tag, self._key) == self._value
+        return hit
+
+    def __call__(self, *tags: str) -> bool:
+        return any(self._one(t) for t in tags if t)
+
+
 class ParserBackend(ABC):
     """모든 파서 백엔드의 부모. site 백엔드는 reference를 상속해 builtin 판별만
     더해도 된다 (16-existing-assets.md §16.3 "reference 백엔드의 역할")."""
@@ -37,6 +60,12 @@ class ParserBackend(ABC):
         """`platforms.PlatformProfile`(site-defaults `platform:`)을 반영한 백엔드를 준다 (옵트인).
         기본은 자기 자신이다. `_line_record`를 직접 구현한 site 백엔드는 무시해도 된다.
         원본 객체(싱글톤)는 바꾸지 않는다."""
+        return self
+
+    def apply_rules(self, rules) -> "ParserBackend":
+        """이슈 DB `parser-rules`(`common.parser_rules.Rules`)의 태그 속성(`level`·`ipc`, 04-parser-matching §5.8 (2))을
+        반영한 백엔드를 준다. 기본은 자기 자신이다(site 백엔드는 그대로). reference 백엔드는 키마다 DB가 하나라도
+        선언하면 DB만, 아니면 백엔드 기본 상수를 본다. 원본 객체(싱글톤)는 바꾸지 않는다."""
         return self
 
     @abstractmethod

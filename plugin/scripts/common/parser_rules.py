@@ -11,6 +11,8 @@
 - JSON 스키마를 통과한다.
 - 키가 겹치지 않는다(tags: tag/tag_regex, ril: name, extractors: id).
 - 정규식이 컴파일되고, extractor `fields`가 패턴의 이름 있는 그룹에 있다.
+
+tags 항목 속성 `level`·`ipc`는 `Rules.declares`·`Rules.tag_attr`로 읽는다(백엔드 `apply_rules`, 우선순위는 §5.8 (2)).
 """
 
 from __future__ import annotations
@@ -32,6 +34,8 @@ SCHEMA_REL = Path("schema") / "parser-rules.schema.json"
 # parse_logcat.py가 ril.yaml로 만드는 이벤트. extractor는 이 이름을 쓸 수 없다.
 RESERVED_EVENTS = ("ril_error", "ril_timeout", "ril_no_response")
 RESERVED_PREFIXES = ("builtin.", "ext.")
+# tags.yaml 항목의 기능 속성(스키마가 값을 막는다): level: unreliable, ipc: vendor. 백엔드가 `apply_rules`로 읽는다.
+TAG_ATTRS = ("level", "ipc")
 
 
 class RulesError(Exception):
@@ -61,6 +65,24 @@ class Rules:
     requests: dict[str, dict] = field(default_factory=dict)
     unsolicited: dict[str, dict] = field(default_factory=dict)
     extractors: list[Extractor] = field(default_factory=list)
+    # 태그 속성(`level`·`ipc`, 04-parser-matching §5.8 (2)). 속성이 있는 항목만 들어간다.
+    tag_attrs: dict[str, dict] = field(default_factory=dict)                     # 정확한 이름 → {키: 값}
+    tag_regex_attrs: list[tuple[re.Pattern, dict]] = field(default_factory=list)  # tags.yaml 순서, 모든 tag_regex 항목
+
+    def declares(self, key: str) -> bool:
+        """tags.yaml 어느 항목이든 `key` 속성을 선언했나. 하나도 없으면 백엔드 기본값을 쓴다."""
+        return any(key in attrs for attrs in self.tag_attrs.values()) or \
+            any(key in attrs for _p, attrs in self.tag_regex_attrs)
+
+    def tag_attr(self, tag: str, key: str) -> str | None:
+        """태그의 `key` 속성 값. `tag_category`와 같은 순서 — 정확한 이름 항목이 있으면 그 항목만 본다(없으면 None),
+        없으면 처음 맞는 `tag_regex` 항목의 값."""
+        if tag in self.tag_exact:
+            return self.tag_attrs.get(tag, {}).get(key)
+        for pattern, attrs in self.tag_regex_attrs:
+            if pattern.search(tag):
+                return attrs.get(key)
+        return None
 
     def tag_category(self, tag: str) -> str | None:
         """수집 대상 태그면 카테고리, 아니면 None(그 줄은 버린다)."""
@@ -190,10 +212,15 @@ def _load(rules_dir: Path, schema_path: Path) -> Rules:
         if key in seen:
             raise RulesError(f"tags.yaml: 키가 겹칩니다: {key}")
         seen.add(key)
+        attrs = {k: item[k] for k in TAG_ATTRS if k in item}
         if "tag" in item:
             rules.tag_exact[item["tag"]] = item["category"]
+            if attrs:
+                rules.tag_attrs[item["tag"]] = attrs
         else:
-            rules.tag_regexes.append((_compile(item["tag_regex"], "tags.yaml"), item["category"]))
+            pattern = _compile(item["tag_regex"], "tags.yaml")
+            rules.tag_regexes.append((pattern, item["category"]))
+            rules.tag_regex_attrs.append((pattern, attrs))
 
     ril_doc = docs["ril.yaml"]
     for section, target in (("requests", rules.requests), ("unsolicited", rules.unsolicited)):

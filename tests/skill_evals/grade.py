@@ -1322,7 +1322,7 @@ def checks(eid: int, ctx: Ctx) -> list:
         def pr():
             r = [o for o in op_list("MOCK-9004", "add-parser-rule") if o.get("file") == "tags.yaml"]
             rule = r[0].get("rule", {}) if r else {}
-            ok = bool(r) and "GsmCdmaCallTracker" in json.dumps(rule) and all(rule.get(k) for k in ("added_for", "added_on", "reason"))
+            ok = bool(r) and "GsmCdmaConnection" in json.dumps(rule) and all(rule.get(k) for k in ("added_for", "added_on", "reason"))
             return ok, json.dumps(r, ensure_ascii=False)
         def nt():
             n = op_list("MOCK-9004", "new-type")

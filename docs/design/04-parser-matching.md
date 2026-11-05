@@ -48,6 +48,19 @@ tags:
   - {tag_regex: '^Ims(Manager|Resolver|ServiceController|Registration).*', category: ims, added_for: IMS-001, added_on: 2026-09-27, reason: 초기}
 ```
 
+**태그 속성(선택, C1+D 보정)**: tags 항목(`tag`·`tag_regex`)에 기능 필드 두 개를 둘 수 있다. 값은 스키마가 막는다(잘못된 값은 `parser_rules.load` `RulesError` → `db_lint` 오류).
+
+| 키 | 값 | 뜻 | 백엔드 기본(DB가 그 키를 하나도 선언하지 않을 때) |
+|---|---|---|---|
+| `level` | `unreliable` | 이 태그 줄의 레벨은 심각도가 아니다 → 백엔드가 `I`로 둔다 | oFono {DITD, RFSD, DMD, MOSE}, Android 없음 |
+| `ipc` | `vendor` | 벤더 IPC 결과 판별(`builtin.common.vendor_ipc_error`·`vendor_request_failed`)을 이 태그 줄에 부른다 | oFono {exynos-ril}, Android {RIL} |
+
+- 우선순위는 키마다 따로: DB가 그 키를 **하나라도** 선언하면 DB만 본다(백엔드 기본 무시), 아니면 기본. 태그 값 조회는 `tag_category`와 같은 순서(정확한 이름 항목이 있으면 그 항목만, 없으면 처음 맞는 `tag_regex`). oFono `split_tag`면 이벤트 tag(`ident/subtag`)와 ident 둘 다 본다.
+- 과도기: 데몬이 바뀌거나 사라지면 옛·새 이름 **모두에** 속성을 두고, 옛 이름은 나중에 지운다. 빈 집합을 선언하는 방법은 없다.
+- 읽는 곳: `parse_logcat.py`가 규칙을 읽은 뒤 `backend.apply_rules(rules)`(`parser_backends/base.py`, 기본은 그대로 — site 백엔드 무관). `tools/site_checks.py`·`tools/bench_scale.py`는 기본값으로 돈다(사내 점검은 상수 기본과 같다).
+- `rulediff`: `ipc`가 바뀐 tags 항목은 벤더 IPC builtin을 쓰는 시그니처 전부를 대상에 넣는다. `level`은 매칭에 쓰이지 않아 대상을 더하지 않는다.
+- 사내 DB: 스키마 두 키를 먼저 넣어야 tags 속성이 스키마 오류가 아니다(한 PR로).
+
 `parser-rules/ril.yaml` (예시):
 
 ```yaml

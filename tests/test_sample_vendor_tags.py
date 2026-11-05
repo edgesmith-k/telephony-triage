@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """샘플 DB의 첨부 로그 A 태그 묶음 (결정 기록 11/05 ①·②, 설계 D §3.1).
 
-- 승인 목록 78개 중 기존 정규식이 덮지 않는 59개에서 보류 1개(`^GsmCdmaCallTracker$`: eval e004·`test_triage`의
-  미수집 태그 예시와 겹쳐 사용자 확인 대기)를 뺀 58개가 정해진 카테고리로 있고, 표식 주석 아래 파일 끝에 있다.
+- 승인 목록 78개 중 기존 정규식이 덮지 않는 59개(보류였던 `^GsmCdmaCallTracker$`는 11/05 ① 승인대로 C1+D 보정에서
+  넣음)가 정해진 카테고리로 있고, 표식 주석 아래 파일 끝에 있다. 미수집 태그 예시(eval e004·`test_triage`)는
+  `GsmCdmaConnection`이며 샘플 tags.yaml 어느 항목에도 걸리지 않는다.
 - `ril.yaml` unsolicited에 `UNSOL_DATA_CALL_LIST_UPDATED`(data)가 있다.
 - Android 모듈 템플릿 case 로그와 `tests/fixtures/module-filter/a-e*` 로그의 어떤 태그도
   카테고리가 다른 두 항목에 함께 걸리지 않는다.
@@ -42,14 +43,14 @@ APPROVED = {
             r"^UiccHal-(SE|Interface)$", r"^UiccProfile( \[\d+\])?$", r"^UiccSlot$", r"^UsimFH$"],
     "network": [r"^CSST$", r"^CellularNetworkService$", r"^DIC-\d+$", r"^ExSST$", r"^LocaleTracker-\d+$",
                 r"^NRM-[CI]-\d+$", r"^NetworkTypeController$", r"^NitzStateMachineImpl$", r"^ShannonNS-"],
-    "call": [r"^CallManager$", r"^CallNotifier$", r"^CallWaitingCtrl$", r"^ImsUt$",
+    "call": [r"^GsmCdmaCallTracker$", r"^CallManager$", r"^CallNotifier$", r"^CallWaitingCtrl$", r"^ImsUt$",
              r"^MMIDialogActivity$", r"^Telecom$"],
     "sms": [r"^CellBroadcastConfigTracker-\d+$", r"^ImsSmsDispatcher( \[\d+\])?$", r"^SMSDispatcher$"],
     "ims": [r"^ImsConfig$", r"^ImsEnablementTracker$", r"^ImsProvisioning", r"^ImsRIL$", r"^ImsRegCallbackHelper$",
             r"^ImsStateCallbackController$", r"^ImsStats$", r"^SHANNON_IMS$", r"^ShannonVCC"],
 }
 APPROVED_UNSOL = ("UNSOL_DATA_CALL_LIST_UPDATED", "data")
-HELD = r"^GsmCdmaCallTracker$"  # 보류: 넣으면 e004 시나리오의 미수집 태그가 사라진다
+UNCOLLECTED_EXAMPLE = "GsmCdmaConnection"  # e004·test_triage·test_parse_logcat의 미수집 태그 예 — 샘플에 없어야 한다
 
 
 def _entries(rules_dir: Path) -> list[dict]:
@@ -72,14 +73,16 @@ def _log_tags() -> set[str]:
 
 
 def test_approved_block_present() -> None:
-    assert sum(len(v) for v in APPROVED.values()) == 58
+    assert sum(len(v) for v in APPROVED.values()) == 59
     have = {e.get("tag_regex") or e.get("tag"): e for e in _entries(SAMPLE_RULES)}
     for category, regexes in APPROVED.items():
         for rx in regexes:
             assert rx in have, rx
             assert have[rx]["category"] == category, rx
             assert have[rx]["added_for"] == "-" and str(have[rx]["reason"]).startswith("첨부 로그 A"), rx
-    assert HELD not in have
+    rules = parser_rules.load(SAMPLE_RULES)
+    assert rules.tag_category(UNCOLLECTED_EXAMPLE) is None
+    assert not rules.declares("level") and not rules.declares("ipc")   # 샘플은 태그 속성을 선언하지 않는다(C-F2)
     assert _unsol(SAMPLE_RULES).get(APPROVED_UNSOL[0]) == APPROVED_UNSOL[1]
     parser_rules.load(SAMPLE_RULES)  # 스키마·키 중복·정규식 검사
 

@@ -47,6 +47,8 @@
         "tag": {"type": "string", "minLength": 1},
         "tag_regex": {"type": "string", "minLength": 1},
         "category": {"$ref": "#/$defs/categoryKey"},
+        "level": {"enum": ["unreliable"], "description": "이 태그 줄의 레벨은 심각도가 아니다 — 백엔드가 레벨을 I로 둔다(17-platforms). DB가 한 항목이라도 선언하면 이 키는 DB만 본다(백엔드 기본 이름 무시) — 데몬 이름이 바뀌면 옛·새 이름 모두에 둔다(04-parser-matching §5.8 (2))."},
+        "ipc": {"enum": ["vendor"], "description": "벤더 IPC 결과 판별(builtin.common.vendor_ipc_error·vendor_request_failed)을 이 태그 줄에 부른다. DB가 한 항목이라도 선언하면 이 키는 DB만 본다(백엔드 기본 이름 무시) — 데몬 이름이 바뀌면 옛·새 이름 모두에 둔다(04-parser-matching §5.8 (2))."},
         "added_for": true,
         "added_on": true,
         "reason": true

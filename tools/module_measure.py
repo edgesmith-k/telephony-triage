@@ -67,8 +67,11 @@ def _parse(log: Path, args) -> dict:
 
 def _raw_tags(logs: list[Path], args) -> Counter:
     """플랫폼 줄 읽기로 (태그, 레벨) 수. 이름은 마스킹·40자."""
+    unreliable: frozenset = frozenset()
+    DEFAULT_LEVEL = "I"
     if args.platform == "ofono":
-        from platforms.ofono.journal import read_file
+        # 레벨 보정은 줄 읽기에서 백엔드로 옮겨 갔다(C1+D 보정) — 측정 숫자를 같게 두려고 기본 이름 보정을 여기서 한다
+        from platforms.ofono.journal import DEFAULT_LEVEL, LEVEL_UNRELIABLE_IDENTS as unreliable, read_file
     else:
         from platforms.android.logcat import read_file
     masker = masking.new_masker(log_lines=True)
@@ -76,7 +79,7 @@ def _raw_tags(logs: list[Path], args) -> Counter:
     for i, log in enumerate(logs):
         lines, _stats = read_file(log, i, args.tz, args.year)
         for ln in lines:
-            out[(masker(ln.tag)[:40], ln.level)] += 1
+            out[(masker(ln.tag)[:40], DEFAULT_LEVEL if ln.tag in unreliable else ln.level)] += 1
     return out
 
 

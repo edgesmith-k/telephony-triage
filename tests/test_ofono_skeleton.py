@@ -120,7 +120,10 @@ def test_format_c_busybox(tmp_path):
 
 
 def test_format_c_level_unreliable_idents(tmp_path):
-    """H C1 ③a: DITD·RFSD·DMD·MOSE는 severity를 심각도로 쓰지 않는다 → 늘 I. 다른 ident는 그대로."""
+    """H C1 ③a: DITD·RFSD·DMD·MOSE는 severity를 심각도로 쓰지 않는다 → 백엔드 레코드는 늘 I. 다른 ident는 그대로.
+    C1+D 보정: 보정은 줄 읽기(journal, severity 그대로)가 아니라 백엔드가 한다. 기본값 정본은 journal 상수."""
+    from platforms.ofono import backend
+
     path = _write(tmp_path, "unreliable.log", [
         "Sep 20 14:32:11.001 dut daemon.crit DITD[10]: netlink dump",
         "Sep 20 14:32:11.002 dut daemon.emerg DITD[10]: netlink dump",
@@ -132,8 +135,11 @@ def test_format_c_level_unreliable_idents(tmp_path):
     ])
     lines, stats = journal.read_file(path, 0, "UTC", 2026)
     assert stats.lines == 7
-    assert "".join(ln.level for ln in lines) == "IIIIIEF"
+    assert "".join(ln.level for ln in lines) == "FFWEWEF"            # 줄 읽기는 severity 그대로
+    out = backend.BACKEND.parse([path], "UTC", 2026, None)
+    assert "".join(r["level"] for r in out if r["event"] is None) == "IIIIIEF"
     assert journal.LEVEL_UNRELIABLE_IDENTS == {"DITD", "RFSD", "DMD", "MOSE"}
+    assert backend.LEVEL_UNRELIABLE_IDENTS is journal.LEVEL_UNRELIABLE_IDENTS
 
 
 def test_backend_vendor_ipc_builtin(tmp_path):

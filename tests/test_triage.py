@@ -813,10 +813,10 @@ def test_uncollected_tag_of_collected_pid_is_reported_and_must_shown():
     out = tmp("tt-triage-") / "x"
     analysis = _e004_offline(out)
     assert not analysis.get("candidates")
-    assert analysis["logs"]["uncollected_tags"][0] == {"tag": "GsmCdmaCallTracker", "lines": 3, "warn": 1}
+    assert analysis["logs"]["uncollected_tags"][0] == {"tag": "GsmCdmaConnection", "lines": 1, "warn": 1}
     report = (out / "report.md").read_text(encoding="utf-8").splitlines()
     line = ("파서 규칙에 없는 태그 (수집 태그와 같은 프로세스, tags.yaml에 없어 이벤트로 추출 안 됨): "
-            "GsmCdmaCallTracker 3줄(W/E 1)")
+            "GsmCdmaConnection 1줄(W/E 1)")
     assert f"- {line}" in report and line in analysis["must_show"]
     # 후보 없음: 로그 범위 줄도 must_show에 있다(시계 이상 없음)
     assert any(m.startswith("로그 범위:") and "시계 이상 없음" in m for m in analysis["must_show"])

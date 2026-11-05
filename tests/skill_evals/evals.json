@@ -151,10 +151,10 @@
         "리뷰어를 지정할지 물으면 '지정 안 함'을 고른다.",
         "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
       ],
-      "expected_output": "판별 태그 GsmCdmaCallTracker가 tags.yaml에 없어 파서가 그 줄을 버린다는 것을 점검하고, add-parser-rule(tags.yaml, 필요하면 extractor) 초안, cut으로 만든 마스킹 fixture, 전체 회귀 결과를 보고한다.",
+      "expected_output": "판별 태그 GsmCdmaConnection이 tags.yaml에 없어 파서가 그 줄을 버린다는 것을 점검하고, add-parser-rule(tags.yaml, 필요하면 extractor) 초안, cut으로 만든 마스킹 fixture, 전체 회귀 결과를 보고한다.",
       "assertions": [
-        "GsmCdmaCallTracker 태그가 parser-rules에 없어 이벤트가 추출되지 않는다는 것을 짚었다",
-        "계획에 add-parser-rule(file tags.yaml, GsmCdmaCallTracker)이 있고 이력 필드(added_for, added_on, reason)가 있다",
+        "GsmCdmaConnection 태그가 parser-rules에 없어 이벤트가 추출되지 않는다는 것을 짚었다",
+        "계획에 add-parser-rule(file tags.yaml, GsmCdmaConnection)이 있고 이력 필드(added_for, added_on, reason)가 있다",
         "계획에 new-type(call)과 parse_logcat cut으로 만든 add-fixture가 있다",
         "초안 검증 결과(R1·R4 포함, 규칙 변경이면 R5)를 보여줬다",
         "dry-run이라 원격 브랜치·PR이 없고 끝난 뒤 lock이 없다"

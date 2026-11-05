@@ -805,13 +805,14 @@ def test_uncollected_tags_counts_dropped_tags_of_collected_pids_only():
     log.write_text("\n".join([
         "09-27 18:00:00.000  1300  1320 D RILJ: [PHONE0] [0095]> LAST_CALL_FAIL_CAUSE",
         "09-27 18:00:01.000  1300  1320 I GsmCdmaCallTracker: [PHONE0] call state changed: ACTIVE",
-        "09-27 18:00:02.000  1300  1320 W GsmCdmaCallTracker: [PHONE0] handlePollCalls: call dropped",
+        "09-27 18:00:02.000  1300  1320 W GsmCdmaConnection: [GsmCdmaConn] onDisconnect: cause=LOST_SIGNAL",
         "09-27 18:00:02.500  1300  1320 D OtherTag: [PHONE0] noise",
         "09-27 18:00:03.000  4242  4242 E ForeignTag: 다른 프로세스",
         "09-27 18:00:03.100  4242  4242 E ForeignTag: 다른 프로세스",
     ]) + "\n", encoding="utf-8")
     data = _parse([log], "--full", "--mask")
-    assert data["uncollected_tags"] == [{"tag": "GsmCdmaCallTracker", "lines": 2, "warn": 1},
+    # GsmCdmaCallTracker는 샘플 DB 수집 태그(11/05 ①) — 미수집 예는 GsmCdmaConnection
+    assert data["uncollected_tags"] == [{"tag": "GsmCdmaConnection", "lines": 1, "warn": 1},
                                         {"tag": "OtherTag", "lines": 1, "warn": 0}]
     assert "ForeignTag" not in json.dumps(data["uncollected_tags"])
     # 없으면 키가 없다(기존 출력 불변)

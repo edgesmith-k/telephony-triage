@@ -10,7 +10,9 @@ parser-rules 항목(키)의 기능 필드를 비교하므로 `--plan`(계획을 
 - 의존 그래프(보수적): 시그니처 `must_event` → 그 이벤트를 만드는 extractor, extractor `tag`/`tag_regex` → tags 항목,
   `must_match`의 RIL 요청 이름·태그 문자열 → ril·tags 항목. 바뀐 항목에 닿는 시그니처는 내용이 같아도 바뀐 것으로 본다.
   - tags 항목 변경: 그 태그를 쓰는 extractor의 이벤트, 패턴에 그 태그 이름이 들어 있는 `must_match`,
-    `tag_regex` 항목이면 같은 카테고리 소유자의 `must_match` 전부.
+    `tag_regex` 항목이면 같은 카테고리 소유자의 `must_match` 전부. 태그 속성 `ipc`가 생기거나·없어지거나·달라지면
+    벤더 IPC builtin(`builtin.common.vendor_ipc_error`·`vendor_request_failed`)을 쓰는 `must_event` 전부(백엔드 판별
+    대상이 바뀐다, 04-parser-matching §5.8 (2)). `level`은 매칭에 쓰이지 않아 대상을 더하지 않는다.
   - ril 항목 변경: 패턴에 그 이름이 들어 있는 `must_match`, 엔진이 ril.yaml로 만드는 이벤트(`ril_error` 등)를 쓰는
     `must_event` 전부.
 """
@@ -22,7 +24,7 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from . import issuedb, yamlio
+from . import issuedb, vendor_ipc, yamlio
 from .parser_rules import RESERVED_EVENTS
 
 HISTORY_FIELDS = ("added_for", "added_on", "reason")
@@ -197,6 +199,10 @@ def compute(base: State, cur: State) -> Diff:
                 if rule.get("event"):
                     events.setdefault(str(rule["event"]), why)
         elif section == "tags":
+            a, b = base.rules.get((section, key)) or {}, cur.rules.get((section, key)) or {}
+            if a.get("ipc") != b.get("ipc"):
+                for event in vendor_ipc.EVENTS:
+                    events.setdefault(event, why)
             for rule in versions:
                 for ext in extractors_now:
                     if ext.get("event") and _extractor_uses_tag(ext, rule):
