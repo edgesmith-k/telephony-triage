@@ -58,6 +58,8 @@
 
 - **B2 설계 질문(11/05, 추천안 자동 적용)**: ① 마스킹 M1~M11 커밋으로 생기는 골든·기대값 갱신은 **마스킹 토큰 교체와 events.json `mask_allow` 키뿐인 차이에 한해** 허용하고, 커밋 전에 차이 요약과 마스킹 관문 숫자를 사용자에게 보인다(그 밖의 차이나 샘플·변형 DB의 새 db_lint·mask_pii 지적이 있으면 멈춤, `tests/test_golden.py:13-14`). ② `tests/fixtures/module-filter/`에는 M 반영 뒤 마스킹으로 만든 첨부 로그 발췌를 두고, `tools/fixture_residual.py --against`(사업자 이름·벤더 장치 노드·빌드 시각·syslog 호스트도 거름)를 통과한 것만, fixture README에 파일별 출처 줄. `check_boundary.py`는 바꾸지 않는다. eval 78 fixture는 합성.
 
+- **목표(11/05 사용자): 모듈별 스킬로 최소 토큰, 최대한 정확한 가설.** 장치: 모델은 모듈 보기만 읽고(전체 타임라인 대신), 받기 명령이 정한 파일만 Read, 문서·출력 바이트 상한, `check-output` 고정 칸, 근거 원문 검사, 모듈 선택 질문. 측정: 모듈 eval·Haiku 비교에서 1순위 통과와 함께 **토큰 차이를 모듈별로 기록**하고, 관문 "문서 있음 ≥ 없음·안전 위반 0"에 더해 **토큰은 문서 없음보다 늘지 않는 것을 목표**로 둔다(넘는 모듈은 결과 노트에 표시하고 문서를 줄인다). C1·D 설계와 G 측정 기준에 넣는다.
+
 ## I. OpenCode·사내 GLM판 (H 다음)
 
 - **계획 I 1단계 결과(11/05, 추천안 자동 적용 — 사용자 "추천안으로 진행")**: 가짜 모델 서버 실험(비용 0)으로 확인. ① **OpenCode v1은 분석 전용(안 A)** — Jira 코멘트·이슈 DB push·`db_pr publish|merge`·리뷰어 요청·스킬 적용·module_eval은 OpenCode에서 막고 "정확한 명령"을 출력해 사용자가 직접 또는 Claude Code에서 실행(전체 쓰기 흐름 안 B는 사내 사용을 보고 나중에). ② 설치 스킬 선택(Q2 바꿈)은 스크립트가 SKILL.md 경로를 풀어 **모든 런타임에서 Read**로. ③ 확인 화면·must_show가 있는 흐름은 `tt-oc` 래퍼(run + 세션 이어가기), TUI는 자유 탐색만(표시 보장 없음). ④ 읽기 전용 module_eval 자식은 사내 인증 확인 뒤 `--bare`(실패 시 자동 대체). ⑤ GLM 프롬프트는 OpenCode 에이전트 프롬프트 1개(약 2KB) + C0 형식 공용 스킬, 사내 확인에서 실패한 곳만 GLM 전용. ⑥ OpenCode 설정은 허용 목록 백스톱을 프로젝트 설정에 넣고 `/etc/opencode` 예시를 함께 — 사내 관리자 배포는 다중 방어. ⑦ Claude Code + 사내 모델 수정(`claude_child` 게이트웨이 env 이어받기, 비용 미상)은 I-2에서. ⑧ OpenCode는 `task: deny` 전역. 그 밖 확인: OpenCode bash 권한 패턴은 우회 가능(보안 경계 아님) → guard.py를 `oc_adapter`로 재사용하고 실패 시 닫힘, `snapshot:false` 필수, 비대화 `run`은 질문 불가·`ask` 자동 거부, AGENTS.md가 CLAUDE.md보다 우선. 상세 scratchpad 계획 I brief.
