@@ -97,7 +97,7 @@
 
 | 서브커맨드 | 사용법 | 옵션 설명 |
 |---|---|---|
-| — | `[--db <DB>] (--all \| --ref <ref> \| --changed <ref> \| --staged) [--residual <옛 ID=새 ID>]... [--json] [--plugin-root <PLUGIN_ROOT>]` | `--json`: JSON 출력 (항상 JSON) |
+| — | `[--db <DB>] (--all \| --ref <ref> \| --changed <ref> \| --staged) [--residual <옛 ID=새 ID>]... [--advice] [--json] [--plugin-root <PLUGIN_ROOT>]` | `--advice`: 참고(advice)도 낸다: 시그니처가 하나뿐인 원인·유형. 오류·경고 수·종료 코드에 들지 않는다; `--json`: JSON 출력 (항상 JSON) |
 
 ## `db_regress.py`
 

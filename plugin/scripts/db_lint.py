@@ -45,6 +45,15 @@
 - `synthetic` 경고: `synthetic_allowed: false`인 플러그인에서 `origin: synthetic` fixture
 - `residual-id` 오류: `--residual`로 준 옛 ID가 남아 있음
 
+참고(advice, `--advice`일 때만 — 03-issue-db.md §5.7 (2) "근거 줄 하나에만 기대지 않기")
+- `single-signature`: active 유형의 active 원인에 판별 시그니처(`signatures`)가 하나뿐(`signatures_pending` 원인 제외)
+- `single-symptom-signature`: active 유형의 증상 시그니처가 하나뿐
+빌드 버그로 근거 줄이 사라지면 조용히 "분류 후보 없음"·"원인 미확인"이 되고(`must_not_match` 근거면 오히려 잘못
+맞는다), 가능하면 다른 층 줄로 근거를 하나 더 두라는 안내다(있음 근거는 시그니처 OR, 없음 근거는 `must_not_match` 항목).
+오류·경고가 아니다: `errors`·`warnings`·`summary.errors`·`summary.warnings`·종료 코드에 들지 않고, 결과 JSON의
+`advice`(+`summary.advice`)와 stderr `참고[...]` 줄로만 나온다. 옵션이 없으면 출력은 전과 같다(pre-commit·stage·
+사후 lint·site_audit 등 게이트는 이 옵션을 쓰지 않는다).
+
 범위: `--all`은 워킹 트리 전체, `--ref`는 그 커밋의 트리, `--changed <ref>`는 merge-base 이후 바뀐
 파일, `--staged`는 index 내용(바뀐 파일만 보고). 전역 검사(중복 등)는 전체를 보고, 결과 중
 바뀐 파일이 관련된 것만 낸다. 종료 코드: 오류가 있으면 1, 경고만 있으면 0.
@@ -168,10 +177,17 @@ def unsafe_regex(pattern: str) -> str | None:
 # -- 린터 --------------------------------------------------------------------------
 
 
+def _one(sigs) -> bool:
+    """시그니처 목록이 정확히 하나인지(목록이 아니면 schema가 보고하므로 False) — 참고 `single-*`."""
+    return isinstance(sigs, list) and len(sigs) == 1
+
+
 class Linter:
     def __init__(self, root: Path, defaults: dict, base_causes: set[str] | None = None,
-                 residual: list[tuple[str, str]] | None = None, scope: set[str] | None = None):
+                 residual: list[tuple[str, str]] | None = None, scope: set[str] | None = None,
+                 advice: bool = False):
         self.root = root
+        self.advice = advice
         self.defaults = defaults
         self.base_causes = base_causes
         self.residual = residual or []
@@ -193,6 +209,11 @@ class Linter:
 
     def warn(self, code, files, message):
         self.add("warning", code, files, message)
+
+    def note(self, code, files, message):
+        """참고(advice) — `--advice`일 때만 모으고 오류·경고 수·종료 코드에 들지 않는다."""
+        if self.advice:
+            self.add("advice", code, files, message)
 
     def _yaml(self, path: Path):
         """`yamlio.load` + 문법 오류는 `yaml-syntax`(파일당 한 번)로 보고하고 None."""
@@ -262,8 +283,12 @@ class Linter:
             findings = [f for f in findings if any(p in self.scope for p in f["files"])]
         errors = [f for f in findings if f["level"] == "error"]
         warnings = [f for f in findings if f["level"] == "warning"]
-        return {"errors": errors, "warnings": warnings,
-                "summary": {"errors": len(errors), "warnings": len(warnings), "types": self.checked}}
+        result = {"errors": errors, "warnings": warnings,
+                  "summary": {"errors": len(errors), "warnings": len(warnings), "types": self.checked}}
+        if self.advice:     # 옵션이 없으면 키도 만들지 않는다(기본 출력 불변)
+            result["advice"] = [f for f in findings if f["level"] == "advice"]
+            result["summary"]["advice"] = len(result["advice"])
+        return result
 
     # 준비 -----------------------------------------------------------------------
 
@@ -541,6 +566,11 @@ class Linter:
             self.err("pending-on-type", type_md, "signatures_pending은 원인에만 둔다. 유형의 증상 시그니처는 필수다.")
         if not data.get("symptom_signatures"):
             self.err("symptom-missing", type_md, f"{type_id}: 증상 시그니처(symptom_signatures)가 없습니다.")
+        elif data.get("status") == "active" and _one(data["symptom_signatures"]):
+            self.note("single-symptom-signature", type_md,
+                      f"{type_id}: 증상 시그니처가 하나뿐이다 — 근거 줄이 빌드에서 사라지면 \"분류 후보 없음\"(must_not_match 근거면 "
+                      "오분류)이 된다. 가능하면 다른 층 줄로 근거를 하나 더 둔다(있음은 시그니처 OR, 없음은 must_not_match "
+                      "항목, 03-issue-db §5.7 (2)).")
         self._merged(type_md, data.get("status"), type_id)
         self._title(type_md, type_id, data.get("title"), TYPE_TITLE_MAX)
         if not typedoc.symptom_title(data.get("title")):
@@ -560,7 +590,7 @@ class Linter:
         causes = [c for c in data.get("causes") or [] if isinstance(c, dict)]
         positives = self._check_fixtures(type_md, type_id, {str(c.get("id")) for c in causes})
         for cause in causes:
-            self._check_cause(type_md, type_id, cause, positives)
+            self._check_cause(type_md, type_id, cause, positives, data.get("status") == "active")
 
     def _title(self, path, ident, title, limit) -> None:
         title = str(title or "")
@@ -578,7 +608,8 @@ class Linter:
             if target not in known:
                 self.err("merged-into", path, f"{ident}의 병합 대상 {target}가 없습니다.")
 
-    def _check_cause(self, type_md: Path, type_id: str, cause: dict, positives: set[str]) -> None:
+    def _check_cause(self, type_md: Path, type_id: str, cause: dict, positives: set[str],
+                     type_active: bool = True) -> None:
         cid = str(cause.get("id"))
         if not CAUSE_ID_RE.fullmatch(cid):
             self.err("id-format", type_md, f"원인 ID 형식이 아닙니다: {cid}")
@@ -593,6 +624,11 @@ class Linter:
             else:
                 self.err("signatures-missing", type_md,
                          f"{cid}: 판별 시그니처가 없습니다. 수동 기록이면 signatures_pending: true가 있어야 한다.")
+        elif not pending and type_active and cause.get("status") == "active" and _one(cause["signatures"]):
+            self.note("single-signature", type_md,
+                      f"{cid}: 판별 시그니처가 하나뿐이다 — 근거 줄이 빌드에서 사라지면 \"원인 미확인\"(must_not_match 근거면 "
+                      "오분류)이 된다. 가능하면 다른 층 줄로 근거를 하나 더 둔다(있음은 시그니처 OR, 없음은 must_not_match "
+                      "항목, 03-issue-db §5.7 (2)).")
         verification = cause.get("resolution_verification") or {}
         if pending and verification.get("status") != "unverified":
             self.err("pending-verified", type_md, f"{cid}: signatures_pending 원인의 해결책은 unverified로 둔다.")
@@ -895,7 +931,8 @@ def run(args, defaults: dict) -> tuple[dict, int]:
                                                                     temp / "base"))
         except gitscope.GitError as exc:
             raise UsageError(str(exc)) from exc
-        result = Linter(root, defaults, base_causes=base, residual=residual, scope=scope).run()
+        result = Linter(root, defaults, base_causes=base, residual=residual, scope=scope,
+                        advice=bool(getattr(args, "advice", False))).run()
     finally:
         shutil.rmtree(temp, ignore_errors=True)
     result["summary"]["scope"] = ("ref:" + args.ref if args.ref else "staged" if args.staged
@@ -914,6 +951,8 @@ def build_parser() -> argparse.ArgumentParser:
     scope.add_argument("--staged", action="store_true")
     parser.add_argument("--residual", action="append", metavar="옛 ID=새 ID")
     parser.add_argument("--index-tree", metavar="dir", help=argparse.SUPPRESS)   # precommit 내부용: 이미 꺼낸 index 트리(--staged와 함께, 지우지 않는다)
+    parser.add_argument("--advice", action="store_true",
+                        help="참고(advice)도 낸다: 시그니처가 하나뿐인 원인·유형. 오류·경고 수·종료 코드에 들지 않는다")
     parser.add_argument("--json", action="store_true", help="JSON 출력 (항상 JSON)")
     parser.add_argument("--plugin-root", default=None)
     return parser
@@ -934,6 +973,8 @@ def main(argv: list[str] | None = None) -> int:
     for f in result["errors"] + result["warnings"]:
         print(f"{'오류' if f['level'] == 'error' else '경고'}[{f['code']}] {f['file']}: {f['message']}",
               file=sys.stderr)
+    for f in result.get("advice", []):
+        print(f"참고[{f['code']}] {f['file']}: {f['message']}", file=sys.stderr)
     print(json.dumps(result, ensure_ascii=False, indent=1))
     return code
 
