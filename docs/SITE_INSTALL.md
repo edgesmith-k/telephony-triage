@@ -122,6 +122,8 @@ S-1에서 `SITE_PROFILE.md`에 남길 것: 설치 경위(미러·A/B·Python 버
 
 팀원도 `claude`가 부르는 `python3`(hook과 Bash 도구 모두)가 3.10+ 이고 PyYAML·jsonschema를 import할 수 있어야 한다. 특별한 이유가 없으면 방법 1을 쓴다.
 
+사내 모델(Claude Code + 게이트웨이, OpenCode)을 팀에 열지와 그 확인·설정은 [RUNTIME_ADOPTION.md](RUNTIME_ADOPTION.md).
+
 | 방법 | 내용 | 장단점 |
 |---|---|---|
 | 1. 각자 `--user` (권장) | 22.04 기본 python3에 `pip install --user` 한 줄 | 가장 짧다. venv·`.bashrc` 불필요 |
@@ -131,6 +133,8 @@ S-1에서 `SITE_PROFILE.md`에 남길 것: 설치 경위(미러·A/B·Python 버
 ## 7. 팀원 사용 준비 (S-7 배포 뒤, 처음 한 번)
 
 **전제**: 도입 담당자가 S-7까지 끝냈다(사이트 설정 `plugin/site-defaults.yaml`, 운영 이슈 DB, 사내 마켓플레이스 등록). 그 전에는 setup이 "플러그인 관리자가 사이트 설정(site-defaults.yaml)을 아직 올리지 않았습니다"로 멈춘다.
+
+팀원에게 줄 사용 안내(세 실행 환경의 설치·매일 쓰는 흐름·갱신)는 [TEAM_GUIDE.md](TEAM_GUIDE.md). 아래 1~5는 Claude Code + Claude 기준의 짧은 판이다.
 
 1. **의존성** (Ubuntu 22.04 기준, 6절 방법 1. venv로 정했으면 4절 B)
    ```
