@@ -196,6 +196,119 @@ def test_module_template_log_needs_synthetic_case(fake_repo):
     assert found == {f"{base}/notsyn/files/source.log", f"{base}/nocase/files/source.log",
                      "templates/module-skills/ofono/x.log"}
 
+EXCERPT_CASE = """schema_version: 1
+name: ex
+synthetic: false
+origin:                         # 마스킹한 실제 발췌
+  kind: masked-excerpt
+  log: O2
+  episode: E4b
+  lines: '10-12,20-21'
+  masker: 0123456789ab
+  residual: '2026-11-06'
+key: MOCK-9201
+"""
+EXCERPT_LOG = "-- [마스킹 발췌] O2 E4b 줄 10-12,20-21\na\nb\nc\n-- [생략]\nd\ne\n"
+TBASE = "templates/module-skills/ofono/sim/evals"
+
+
+def _origin_findings(root: Path) -> set[str]:
+    return {path for rule, path in _rules(boundary.scan(root, "external")) if rule == "fixture-origin"}
+
+
+def test_template_case_excerpt_origin_ok(fake_repo):
+    _write(fake_repo, f"{TBASE}/ex/case.yaml", EXCERPT_CASE)
+    _write(fake_repo, f"{TBASE}/ex/files/source.log", EXCERPT_LOG)
+    assert _origin_findings(fake_repo) == set()
+
+
+def test_template_case_excerpt_missing_origin_key(fake_repo):
+    _write(fake_repo, f"{TBASE}/ex/case.yaml", EXCERPT_CASE.replace("  residual: '2026-11-06'\n", ""))
+    _write(fake_repo, f"{TBASE}/ex/files/source.log", EXCERPT_LOG)
+    _write(fake_repo, f"{TBASE}/kind/case.yaml", EXCERPT_CASE.replace("masked-excerpt", "real-log"))
+    _write(fake_repo, f"{TBASE}/kind/files/source.log", EXCERPT_LOG)
+    _write(fake_repo, f"{TBASE}/none/case.yaml", "schema_version: 1\nsynthetic: false\n")
+    _write(fake_repo, f"{TBASE}/none/files/source.log", EXCERPT_LOG)
+    assert _origin_findings(fake_repo) == {f"{TBASE}/ex/files/source.log", f"{TBASE}/kind/files/source.log",
+                                           f"{TBASE}/none/files/source.log"}
+
+
+def test_template_case_excerpt_header_mismatch(fake_repo):
+    _write(fake_repo, f"{TBASE}/ex/case.yaml", EXCERPT_CASE)
+    _write(fake_repo, f"{TBASE}/ex/files/source.log", "-- [합성] 아님\n" + EXCERPT_LOG.split("\n", 1)[1])
+    assert _origin_findings(fake_repo) == {f"{TBASE}/ex/files/source.log"}
+
+
+def test_template_case_synthetic_still_ok(fake_repo):
+    _write(fake_repo, f"{TBASE}/syn/case.yaml", "schema_version: 1\nsynthetic: true\n")
+    _write(fake_repo, f"{TBASE}/syn/files/source.log", "-- [합성] x\n")
+    _write(fake_repo, f"{TBASE}/nomark/case.yaml", "schema_version: 1\nsynthetic: true\n")
+    _write(fake_repo, f"{TBASE}/nomark/files/source.log", "Nov  1 10:00:00 x\n")
+    _write(fake_repo, f"{TBASE}/both/case.yaml", EXCERPT_CASE.replace("synthetic: false", "synthetic: true"))
+    _write(fake_repo, f"{TBASE}/both/files/source.log", "-- [합성] x\n")
+    assert _origin_findings(fake_repo) == {f"{TBASE}/nomark/files/source.log", f"{TBASE}/both/files/source.log"}
+
+
+MODULES = """schema_version: 2
+platforms:
+  ofono:
+    modules:
+      data:
+        path: ofono/data
+        db_category: data
+        dbus: [org.ofono.ConnectionManager, com.vendor.nmd]   # 합집합
+  android:
+    modules:
+      data: {path: android/data, db_category: data, keywords: [com.other.android.Thing]}
+"""
+
+
+def _dbus(root: Path) -> set[tuple[str, int, str]]:
+    return {(f.path, f.line, f.text) for f in boundary.scan(root, "external") if f.rule == "dbus-name"}
+
+
+def test_dbus_rule_flags_unknown_vendor_name(fake_repo):
+    _write(fake_repo, "templates/module-skills/modules.yaml", MODULES)
+    _write(fake_repo, "templates/module-skills/ofono/data/SKILL.md", "# x\ncom.vendorx.secret.Iface 를 본다\n")
+    _write(fake_repo, "tests/helpers/make_variant_dbs.py",
+           'OFONO_TAGS = """a\nnet.vendor.daemon.Thing\n"""\nOTHER = "com.free.form.Name"\n')
+    assert _dbus(fake_repo) == {("templates/module-skills/ofono/data/SKILL.md", 2, "com.vendorx.secret.Iface"),
+                                ("tests/helpers/make_variant_dbs.py", 2, "net.vendor.daemon.Thing")}
+
+
+def test_dbus_rule_allows_modules_yaml_union(fake_repo):
+    _write(fake_repo, "templates/module-skills/modules.yaml", MODULES)
+    _write(fake_repo, "templates/module-skills/ofono/data/SKILL.md",
+           "org.ofono.Modem · org.freedesktop.DBus.Properties · com.vendor.nmd.Profile · org.ofono.ConnectionManager.\n")
+    _write(fake_repo, "templates/module-skills/ofono/_common/components.md", "com.vendor.nmd\n")
+    assert _dbus(fake_repo) == set()
+    # modules.yaml의 ofono 블록 안 다른 칸에 허용 밖 이름이 있으면 잡는다(android 블록은 범위 밖)
+    _write(fake_repo, "templates/module-skills/modules.yaml",
+           MODULES.replace("db_category: data\n        dbus", "db_category: data   # com.leak.vendor.x\n        dbus", 1))
+    assert _dbus(fake_repo) == {("templates/module-skills/modules.yaml", 7, "com.leak.vendor.x")}
+
+
+def test_dbus_rule_scope(fake_repo):
+    _write(fake_repo, "templates/module-skills/modules.yaml", MODULES)
+    name = "com.example.x.y"
+    _write(fake_repo, "templates/module-skills/android/data/SKILL.md", f"{name}\n")
+    _write(fake_repo, "tests/fixtures/issue-db-sample/notes.md", f"{name}\n")
+    _write(fake_repo, "tests/fixtures/logs/x.log", f"{name}\n")
+    _write(fake_repo, "tests/mocks/log_fixtures.yaml", "fixtures:\n  - {name: x, scenario: x}\n")
+    _write(fake_repo, "docs/materials/x.html", f"{name}\n")
+    _write(fake_repo, f"{TBASE}/syn/case.yaml", "schema_version: 1\nsynthetic: true\n")
+    _write(fake_repo, f"{TBASE}/syn/files/source.log", f"-- [합성] x\n{name}\n")
+    _write(fake_repo, f"{TBASE}/syn/files/timeline.md", f"{name}\n")
+    assert _dbus(fake_repo) == set()
+
+
+def test_dbus_rule_unreadable_modules_yaml(fake_repo):
+    _write(fake_repo, "templates/module-skills/ofono/data/SKILL.md", "org.ofono.Modem\n")
+    assert _dbus(fake_repo) == {("templates/module-skills/modules.yaml", 0, "")}       # 없음
+    _write(fake_repo, "templates/module-skills/modules.yaml", "a: &x 1\nb: *x\n")
+    assert _dbus(fake_repo) == {("templates/module-skills/modules.yaml", 0, "")}       # 앵커
+
+
 def test_allow_file_and_site_patterns(fake_repo):
     _write(fake_repo, "tests/test_x.py", "IMEI = '359881234567812'\nOTHER = '359881234567813'\n")
     _write(fake_repo, "tools/boundary-allow.txt", "pattern:long-number tests/* ^359881234567812$\n")

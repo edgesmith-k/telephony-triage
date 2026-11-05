@@ -18,6 +18,15 @@
     fixture-origin `tests/` 아래 로그 fixture에 합성 표시가 없음. 이슈 DB fixture는 짝
                    `.expect.yaml`에 `origin: synthetic`, 그 밖의 로그는 같은 디렉토리
                    README.md(또는 상위 README)나 `tests/mocks/log_fixtures.yaml`에 이름이 있어야 한다.
+                   모듈 스킬 템플릿 case 로그(`templates/module-skills/**/evals/<case>/files/*.log`)는
+                   (a) case.yaml `synthetic: true` + 1줄 `-- [합성]`, 또는 (b) `synthetic: false` + `origin:`
+                   블록 6키(`kind: masked-excerpt`·log·episode·lines·masker·residual) + 1줄 `-- [마스킹 발췌] `
+                   (마스킹한 첨부 로그 발췌, H C1+D R6). 형식 전체는 `skillcheck.origin_problems`가 본다.
+    dbus-name      oFono 모듈 문서(`templates/module-skills/ofono/**/*.md`, evals 제외), modules.yaml의
+                   `platforms.ofono` 블록, `tests/helpers/make_variant_dbs.py`의 `OFONO_*`·`MODULES_*` 문자열
+                   상수에 허용 밖 D-Bus 이름(`skillcheck.dbus_allowed`: `org.ofono.*`·`org.freedesktop.DBus.*`·
+                   modules.yaml ofono `dbus` 합집합). modules.yaml을 못 읽으면 한 건(닫힘). case 로그·Android
+                   템플릿·`tests/fixtures/**`·`docs/**`는 범위 밖.
     site-path      (external 모드만) SITE_PATHS 경로에 파일이 있음.
 
 예외는 `tools/boundary-allow.txt`(사외)와 `docs/site/boundary-allow.txt`(사내)에
@@ -279,14 +288,18 @@ def check_fixture_origin(root: Path, files: dict[str, Path]) -> list[Finding]:
     readmes: dict[str, str] = {}
     for rel, path in files.items():
         if rel.startswith("templates/module-skills/") and rel.endswith(".log"):
-            # 모듈 스킬 템플릿 case 로그(MODULE_SKILLS_PLAN_IMPL §5.1): evals/<case>/files/ 아래, case.yaml에 synthetic: true
+            # 모듈 스킬 템플릿 case 로그(MODULE_SKILLS_PLAN_IMPL §5.1, H C1+D R6): evals/<case>/files/ 아래,
+            # 합성(synthetic: true + `-- [합성]`) 또는 마스킹 발췌(synthetic: false + origin 6키 + `-- [마스킹 발췌] `)
             name = rel.rsplit("/", 1)[1]
             m = re.fullmatch(r"(templates/module-skills/.+/evals/[^/]+)/files/[^/]+\.log", rel)
             case = files.get(f"{m.group(1)}/case.yaml") if m else None
             text = case.read_text(encoding="utf-8") if case else ""
-            if not m or not re.search(r"(?m)^synthetic:\s*true\s*$", text):
+            first = (_text(path) or "").split("\n", 1)[0]
+            if not m or not _template_origin_ok(text, first):
                 findings.append(Finding("fixture-origin", rel, 0, name,
-                                        "모듈 템플릿 로그: evals/<case>/files/ 아래이고 case.yaml에 synthetic: true"))
+                                        "모듈 템플릿 로그: evals/<case>/files/ 아래, case.yaml synthetic: true + 1줄 "
+                                        "'-- [합성]' 또는 synthetic: false + origin(kind: masked-excerpt 외 5키) + 1줄 "
+                                        "'-- [마스킹 발췌] '"))
             continue
         if not (rel.startswith("tests/") and rel.endswith(".log")):
             continue
@@ -313,6 +326,101 @@ def check_fixture_origin(root: Path, files: dict[str, Path]) -> list[Finding]:
             continue
         findings.append(Finding("fixture-origin", rel, 0, name,
                                 "합성 로그 목록(README.md·log_fixtures.yaml)에 이름이 없다"))
+    return findings
+
+
+ORIGIN_KEYS = ("kind", "log", "episode", "lines", "masker", "residual")
+
+
+def _template_origin_ok(case_text: str, first_line: str) -> bool:
+    """case.yaml 글(정규식으로만 본다)과 로그 1줄: 합성 표시 또는 마스킹 발췌 origin 표시."""
+    if re.search(r"(?m)^synthetic:\s*true\s*$", case_text):
+        return first_line.startswith("-- [합성]") and not re.search(r"(?m)^origin:", case_text)
+    if not re.search(r"(?m)^synthetic:\s*false\s*$", case_text):
+        return False
+    block = re.search(r"(?m)^origin:[ \t]*(?:#[^\n]*)?\n((?:[ \t]+[^\n]*\n?)+)", case_text)
+    if not block:
+        return False
+    keys = re.findall(r"(?m)^[ \t]+([a-z_]+):", block.group(1))
+    if sorted(keys) != sorted(ORIGIN_KEYS):
+        return False
+    if not re.search(r"(?m)^[ \t]+kind:[ \t]*['\"]?masked-excerpt['\"]?[ \t]*(?:#.*)?$", block.group(1)):
+        return False
+    return first_line.startswith("-- [마스킹 발췌] ")
+
+
+DBUS_DOCS = re.compile(r"templates/module-skills/ofono/(?!.*/evals/).+\.md")
+DBUS_MODULES = "templates/module-skills/modules.yaml"
+DBUS_CONSTS = "tests/helpers/make_variant_dbs.py"
+
+
+def _skillcheck():
+    scripts = str(Path(__file__).resolve().parents[1] / SCRIPTS_ROOT)
+    if scripts not in sys.path:
+        sys.path.insert(0, scripts)
+    from common import skillcheck
+
+    return skillcheck
+
+
+def _ofono_block(text: str) -> list[tuple[int, str]]:
+    """modules.yaml의 `platforms.ofono` 블록 줄(번호, 글) — 들여쓰기로 자른다."""
+    out, inside, indent = [], False, 0
+    for no, line in enumerate(text.splitlines(), 1):
+        m = re.match(r"^( *)ofono:\s*(?:#.*)?$", line)
+        if not inside and m:
+            inside, indent = True, len(m.group(1))
+            continue
+        if inside:
+            if line.strip() and not line.lstrip().startswith("#") and len(line) - len(line.lstrip()) <= indent:
+                break
+            out.append((no, line))
+    return out
+
+
+def _const_strings(text: str, rel: str) -> list[tuple[int, str]]:
+    """`OFONO_*`·`MODULES_*` 이름에 대입한 문자열 상수(줄 번호는 상수 시작 줄 + 상수 안 줄)."""
+    out = []
+    for node in ast.walk(ast.parse(text, filename=rel)):
+        if not isinstance(node, ast.Assign) or not isinstance(node.value, ast.Constant) \
+                or not isinstance(node.value.value, str):
+            continue
+        if any(isinstance(t, ast.Name) and t.id.startswith(("OFONO_", "MODULES_")) for t in node.targets):
+            for i, line in enumerate(node.value.value.split("\n")):
+                out.append((node.value.lineno + i, line))
+    return out
+
+
+def check_dbus_names(files: dict[str, Path]) -> list[Finding]:
+    """dbus-name 규칙(H C1+D R23, C1D §3.3). 범위 파일이 없으면 아무것도 하지 않는다."""
+    docs = sorted(rel for rel in files if DBUS_DOCS.fullmatch(rel))
+    scoped = docs + [r for r in (DBUS_MODULES, DBUS_CONSTS) if r in files]
+    if not scoped:
+        return []
+    sc = _skillcheck()
+    try:
+        modules_text = files[DBUS_MODULES].read_bytes() if DBUS_MODULES in files else None
+        if modules_text is None:
+            raise ValueError("없음")
+        doc = sc.load_modules_yaml(modules_text)
+    except Exception as exc:  # noqa: BLE001 - 크기·UTF-8·YAML·앵커 → 닫힘
+        return [Finding("dbus-name", DBUS_MODULES, 0, "", f"modules.yaml을 읽지 못해 D-Bus 허용 목록이 없다({type(exc).__name__})")]
+    allowed = sc.dbus_allowed(doc)
+    findings = []
+
+    def scan_lines(rel: str, lines) -> None:
+        for no, line in lines:
+            for _, name in sc.dbus_violations(line, allowed):
+                findings.append(Finding("dbus-name", rel, no, name, "허용 밖 D-Bus 이름(modules.yaml dbus에 없다)"))
+    for rel in docs:
+        text = _text(files[rel]) or ""
+        scan_lines(rel, enumerate(text.splitlines(), 1))
+    scan_lines(DBUS_MODULES, _ofono_block(modules_text.decode("utf-8")))
+    if DBUS_CONSTS in files:
+        try:
+            scan_lines(DBUS_CONSTS, _const_strings(files[DBUS_CONSTS].read_text(encoding="utf-8"), DBUS_CONSTS))
+        except (SyntaxError, UnicodeDecodeError) as exc:
+            findings.append(Finding("dbus-name", DBUS_CONSTS, getattr(exc, "lineno", 0) or 0, "", f"파싱 실패: {exc}"))
     return findings
 
 
@@ -349,6 +457,7 @@ def scan(root: Path, mode: str, files: dict[str, Path] | None = None) -> list[Fi
         check_patterns(files, patterns)
         + check_site_imports(files, site_patterns)
         + check_fixture_origin(root, files)
+        + check_dbus_names(files)
     )
     if mode == "external":
         findings += check_site_paths_absent(root, site_patterns)
