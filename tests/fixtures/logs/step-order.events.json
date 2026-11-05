@@ -65,6 +65,24 @@
    }
   },
   {
+   "ts": "2026-09-20T05:30:05.000Z",
+   "pid": 1234,
+   "tid": 1244,
+   "level": "D",
+   "tag": "ConnectivityService",
+   "msg": "setAirplaneMode enabled=true",
+   "phone_id": null,
+   "category_hint": "data",
+   "ril": null,
+   "event": null,
+   "fields": {},
+   "source": "backend:reference",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 3
+   }
+  },
+  {
    "ts": "2026-09-20T05:30:12.000Z",
    "pid": 1234,
    "tid": 1244,
@@ -101,6 +119,24 @@
    "line_ref": {
     "file_index": 0,
     "line_no": 4
+   }
+  },
+  {
+   "ts": "2026-09-20T05:30:20.000Z",
+   "pid": 1234,
+   "tid": 1244,
+   "level": "D",
+   "tag": "ConnectivityService",
+   "msg": "setAirplaneMode enabled=false",
+   "phone_id": null,
+   "category_hint": "data",
+   "ril": null,
+   "event": null,
+   "fields": {},
+   "source": "backend:reference",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 5
    }
   },
   {
@@ -373,6 +409,24 @@
    "line_ref": {
     "file_index": 0,
     "line_no": 14
+   }
+  },
+  {
+   "ts": "2026-09-20T05:34:10.000Z",
+   "pid": 1234,
+   "tid": 1244,
+   "level": "D",
+   "tag": "ConnectivityService",
+   "msg": "setAirplaneMode enabled=true",
+   "phone_id": null,
+   "category_hint": "data",
+   "ril": null,
+   "event": null,
+   "fields": {},
+   "source": "backend:reference",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 15
    }
   }
  ]
