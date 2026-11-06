@@ -16,6 +16,7 @@
 - 마스킹 자리가 extractor보다 앞 (`--mask`·`cut` 자체는 `tests/test_masking.py`)
 - `site-defaults.yaml` 없으면 종료 코드 2
 - 벤더 RIL 층 연결(`platform.ril.vendor`): `hal` 4값·창·coverage_tags·RILJ 짝 유지(설정 없으면 필드 없음)
+- 첨부 로그 A 모양(11/05 ③): iccIO·숫자 RadioError·RilRequest 이름·RadioConfig 짝·태그 슬롯·`::` 태그, `RIL` 벤더 IPC builtin
 
 스냅샷 갱신: `python3 tests/test_parse_logcat.py --update`
 `pytest tests/test_parse_logcat.py`로도, 그냥 실행해도 돈다.
@@ -804,13 +805,14 @@ def test_uncollected_tags_counts_dropped_tags_of_collected_pids_only():
     log.write_text("\n".join([
         "09-27 18:00:00.000  1300  1320 D RILJ: [PHONE0] [0095]> LAST_CALL_FAIL_CAUSE",
         "09-27 18:00:01.000  1300  1320 I GsmCdmaCallTracker: [PHONE0] call state changed: ACTIVE",
-        "09-27 18:00:02.000  1300  1320 W GsmCdmaCallTracker: [PHONE0] handlePollCalls: call dropped",
+        "09-27 18:00:02.000  1300  1320 W GsmCdmaConnection: [GsmCdmaConn] onDisconnect: cause=LOST_SIGNAL",
         "09-27 18:00:02.500  1300  1320 D OtherTag: [PHONE0] noise",
         "09-27 18:00:03.000  4242  4242 E ForeignTag: 다른 프로세스",
         "09-27 18:00:03.100  4242  4242 E ForeignTag: 다른 프로세스",
     ]) + "\n", encoding="utf-8")
     data = _parse([log], "--full", "--mask")
-    assert data["uncollected_tags"] == [{"tag": "GsmCdmaCallTracker", "lines": 2, "warn": 1},
+    # GsmCdmaCallTracker는 샘플 DB 수집 태그(11/05 ①) — 미수집 예는 GsmCdmaConnection
+    assert data["uncollected_tags"] == [{"tag": "GsmCdmaConnection", "lines": 1, "warn": 1},
                                         {"tag": "OtherTag", "lines": 1, "warn": 0}]
     assert "ForeignTag" not in json.dumps(data["uncollected_tags"])
     # 없으면 키가 없다(기존 출력 불변)
@@ -887,6 +889,155 @@ def test_single_file_and_empty_file_warning_wording():
     empty.write_text("", encoding="utf-8")
     msgs = [w["message"] for w in _parse([empty], tz="UTC")["warnings"] if w["code"] == "file-unparsed"]
     assert len(msgs) == 1 and "빈 파일" in msgs[0]
+
+
+# -- 첨부 로그 A 모양 (결정 기록 11/05 ③, 설계 D §3.2) -----------------------------------------------
+
+
+def _a_log(name: str, rows: list[str]) -> Path:
+    path = _tmp() / name
+    path.write_text("\n".join(rows) + "\n", encoding="utf-8")
+    return path
+
+
+def _with_requests(*names: str) -> Path:
+    """샘플 규칙에 요청을 더한 복사본 (`ril_error`는 ril.yaml에 있는 요청만 만든다)."""
+    db = _copy_db(_tmp())
+    path = db / "parser-rules" / "ril.yaml"
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    for name in names:
+        data["requests"].append({"name": name, "category": "sim", "timeout_ms": 10000, "added_for": "-",
+                                 "added_on": "2026-11-05", "reason": "시험"})
+    path.write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    return db / "parser-rules"
+
+
+def test_a_shapes_iccio_request_and_numeric_error():
+    """`[n]> iccIO: SIM_IO …`는 SIM_IO 요청, `error <n>`은 RadioError 이름(모르는 숫자는 RADIO_ERROR_<n>)."""
+    log = _a_log("a.log", [
+        "08-09 13:20:00.100  2101  2101 D RILJ    : [0309]> iccIO: SIM_IO command = 0xb0 fileId = 0x2fe2 path = 3F00 p1 = 0 p2 = 0 p3 = 10 data = null aid = <AID#1> [PHONE0]",
+        "08-09 13:20:00.150  2101  2190 D RILJ    : [0309]< SIM_IO error 2 [PHONE0]",
+        "08-09 13:20:01.100  2101  2101 D RILJ    : [0310]> NOTIFY_IMS_DATA_NETWORK [PHONE0]",
+        "08-09 13:20:01.120  2101  2190 D RILJ    : [0310]< NOTIFY_IMS_DATA_NETWORK error 6 [PHONE0]",
+        "08-09 13:20:02.100  2101  2101 D RILJ    : [0311]> SIM_OPEN_CHANNEL [PHONE0]",
+        "08-09 13:20:02.120  2101  2190 D RILJ    : [0311]< SIM_OPEN_CHANNEL error 999 [PHONE0]",
+        "08-09 13:20:03.100  2101  2101 D RILJ    : [0312]> SIM_IO [PHONE0]",
+        "08-09 13:20:03.120  2101  2190 D RILJ    : [0312]< SIM_IO error 0 [PHONE0]",
+    ])
+    data = _parse([log], "--full", rules=_with_requests("SIM_IO", "NOTIFY_IMS_DATA_NETWORK", "SIM_OPEN_CHANNEL"), tz="UTC")
+    ann = {(e["ril"]["serial"], e["ril"]["dir"]): e["ril"] for e in data["events"] if e.get("ril")}
+    assert ann[(309, "req")]["request"] == "SIM_IO" and ann[(309, "req")]["paired_ts"]
+    assert ann[(309, "resp")]["error"] == "GENERIC_FAILURE"
+    assert ann[(310, "resp")]["error"] == "REQUEST_NOT_SUPPORTED"
+    assert ann[(311, "resp")]["error"] == "RADIO_ERROR_999"
+    assert ann[(312, "resp")]["error"] == "NONE"
+    errs = {e["fields"]["serial"]: e["fields"]["error"] for e in _events(data, event="ril_error")}
+    assert errs == {"309": "GENERIC_FAILURE", "310": "REQUEST_NOT_SUPPORTED", "311": "RADIO_ERROR_999"}
+    # 기존 `error=NAME` 형식은 그대로
+    from platforms.android import ril as aril
+    assert aril.parse("RILJ", "[0001]< SETUP_DATA_CALL error=NONE")["error"] == "NONE"
+    assert aril.parse("RILJ", "[0001]< SETUP_DATA_CALL error: INVALID_ARGUMENTS")["error"] == "INVALID_ARGUMENTS"
+
+
+def test_a_shapes_rilrequest_name_link():
+    """숫자 오류 RILJ 응답은 같은 pid·serial·요청의 RilRequest 줄(10ms 안) 이름을 쓴다. RilRequest는 짝 태그가 아니다."""
+    log = _a_log("b.log", [
+        "08-09 13:21:00.100  2101  2101 D RILJ    : [0320]> SIM_OPEN_CHANNEL [PHONE0]",
+        "08-09 13:21:00.140  2101  2190 D RILJ    : [0320]< SIM_OPEN_CHANNEL error 17 [PHONE0]",
+        "08-09 13:21:00.140  2101  2190 D RilRequest: [0320]< SIM_OPEN_CHANNEL error: com.android.internal.telephony.CommandException: NO_SUCH_ELEMENT ret= result={ what=8 }",
+        "08-09 13:21:01.100  2101  2101 D RILJ    : [0321]> SIM_OPEN_CHANNEL [PHONE0]",
+        "08-09 13:21:01.140  2101  2190 D RILJ    : [0321]< SIM_OPEN_CHANNEL error 77 [PHONE0]",
+        "08-09 13:21:01.145  2101  2190 D RilRequest: [0321]< SIM_OPEN_CHANNEL error: com.android.internal.telephony.CommandException: MISSING_RESOURCE ret= result={ what=8 }",
+        "08-09 13:21:02.100  2101  2101 D RILJ    : [0322]> SIM_OPEN_CHANNEL [PHONE0]",
+        "08-09 13:21:02.140  2101  2190 D RILJ    : [0322]< SIM_OPEN_CHANNEL error 77 [PHONE0]",
+        "08-09 13:21:02.200  2101  2190 D RilRequest: [0322]< SIM_OPEN_CHANNEL error: com.android.internal.telephony.CommandException: TOO_LATE ret= result={ what=8 }",
+    ])
+    data = _parse([log], "--full", rules=_with_requests("SIM_OPEN_CHANNEL"), tz="UTC")
+    errs = [(e["fields"]["serial"], e["fields"]["error"]) for e in _events(data, event="ril_error")]
+    assert errs == [("320", "NO_SUCH_ELEMENT"), ("321", "MISSING_RESOURCE"), ("322", "RADIO_ERROR_77")]
+    assert all(e.get("ril") is None for e in data["events"] if e["tag"] == "RilRequest")
+
+
+def test_a_shapes_radioconfig_pair():
+    """RadioConfig 요청과 RadioConfigResponseAidl 응답이 짝지어진다(`[PHONE]` 없음, 같은 pid)."""
+    log = _a_log("c.log", [
+        "08-09 13:22:00.100  2101  2101 D RadioConfig: [0303]> SET_PREFERRED_DATA_MODEM 0",
+        "08-09 13:22:00.104  2101  2163 D RadioConfigResponseAidl: [0303]< SET_PREFERRED_DATA_MODEM",
+    ])
+    data = _parse([log], "--full", tz="UTC")
+    ann = {e["ril"]["dir"]: e["ril"] for e in data["events"] if e.get("ril")}
+    assert ann["req"]["request"] == ann["resp"]["request"] == "SET_PREFERRED_DATA_MODEM"
+    assert ann["req"]["latency_ms"] == ann["resp"]["latency_ms"] == 4 and ann["resp"]["error"] == "NONE"
+
+
+def test_a_shapes_tag_phone_space_and_scope_tag():
+    """태그 끝 " [n]"은 슬롯(태그 글자는 그대로), `MobileConnectionLog[4]`는 아니다. 태그에 `::`가 있어도 줄을 읽는다."""
+    from platforms.android import logcat as alog
+    log = _a_log("d.log", [
+        "08-09 13:23:00.100  2101  2101 I ImsManager [0]: Trying to get MmTelFeature (합성)",
+        "08-09 13:23:00.200  1150  1150 I AF::AfPlaybackCommon: creating track (합성)",
+        "08-09 13:23:00.300  2101  2101 D RILJ    : [0353]> GET_SIM_STATUS [PHONE0]",
+        "08-09 13:23:00.400  2101  2101 D MobileConnectionLog[4]: state (합성)",
+    ])
+    lines, stats = alog.read_file(log, 0, "UTC", 2026)
+    assert stats.unparsed == 0
+    assert [ln.tag for ln in lines] == ["ImsManager [0]", "AF::AfPlaybackCommon", "RILJ", "MobileConnectionLog[4]"]
+    assert lines[2].msg == "[0353]> GET_SIM_STATUS [PHONE0]"
+    rules = alog.DEFAULT_PHONE_RULES
+    assert rules.phone_id("ImsManager [0]", "x") == 0
+    assert rules.phone_id("MobileConnectionLog[4]", "x") is None
+    data = _parse([log], "--full", tz="UTC")
+    ims = [e for e in data["events"] if e["tag"] == "ImsManager [0]"]
+    assert ims and ims[0]["phone_id"] == 0
+
+
+
+def test_threadtime_blank_tag_still_parses_and_is_raw():
+    """`::` 태그를 받도록 바꾼 태그 패턴이 빈(공백) 태그 줄을 놓치지 않는다 — 읽기·원문 판별(플랫폼 합집합) 모두."""
+    import platforms
+    from platforms.android import logcat as alog
+    blank = "08-09 13:10:42.224  1234  1244 I       : x (합성)"
+    assert alog.raw_line(blank) and alog.find_raw("앞 글\n" + blank)
+    finders, _ = platforms.known_raw_line_finders()
+    assert any(raw(blank) for _, raw, _, _ in finders) and any(find("y\n" + blank) for _, _, find, _ in finders)
+    log = _a_log("b.log", [blank, "08-09 13:10:42.300  2101  2101 D RILJ    : [0353]> GET_SIM_STATUS [PHONE0]"])
+    lines, stats = alog.read_file(log, 0, "UTC", 2026)
+    assert stats.unparsed == 0 and [ln.tag for ln in lines] == ["", "RILJ"]
+
+VENDOR_ROWS = [
+    "08-09 13:24:00.100  1188  1203 I RIL     : [<DEV#1>][TX] SIT_GET_SIM_STATUS, REQ, 8 bytes, Token(0x0210) (합성)",
+    "08-09 13:24:00.180  1188  1203 E RIL     : [<DEV#1>][RX] SIT_GET_SIM_STATUS, RSP, 12 bytes, Token(0x0210), Error(RCM_E_GENERIC_FAILURE)",
+    "08-09 13:24:00.181  1188  1203 I RIL     : [<DEV#1>][RX] SIT_SET_DATA_PROFILE, RSP, 12 bytes, Token(0x0211), OK(RCM_E_SUCCESS)",
+    "08-09 13:24:00.182  1188  1203 I RIL     : [RilContext_0] OnRequestComplete Request ID=3, result=2",
+    "08-09 13:24:00.183  1188  1203 I RIL     : [RilContext_0] OnRequestComplete Request ID=4, result=0",
+    "08-09 13:24:00.184  1188  1203 E RILC    : [<DEV#1>][RX] SIT_SIM_IO, RSP, 12 bytes, Token(0x0212), Error(RCM_E_GENERIC_FAILURE)",
+]
+
+
+def test_a_shapes_vendor_ipc_builtin():
+    """`RIL` 줄의 IPC `Error(RCM_E_*)`·`result≠0` → builtin.common.* (R12·S17). SUCCESS·result=0·다른 태그는 없다.
+    `RIL`이 tags.yaml에 없는 DB(태그 묶음 없는 plain)에서도 builtin 레코드는 남는다."""
+    from platforms.android import backend as aback
+    assert aback.BACKEND.builtin_events() == ["builtin.common.vendor_ipc_error", "builtin.common.vendor_request_failed"]
+    assert aback.VENDOR_IPC_TAGS == {"RIL"}
+    log = _a_log("e.log", VENDOR_ROWS)
+    db = _copy_db(_tmp())
+    tags = db / "parser-rules" / "tags.yaml"
+    text = tags.read_text(encoding="utf-8")
+    marker = "  # --- 첨부 로그 A(11/05 승인, 결정 기록 ①)"
+    if marker in text:
+        tags.write_text(text[:text.index(marker)], encoding="utf-8")
+    for rules in (RULES, db / "parser-rules"):
+        data = _parse([log], "--full", rules=rules, tz="UTC")
+        got = [(e["event"], e["fields"], e["category_hint"], e["source"]) for e in data["events"]
+               if (e["event"] or "").startswith("builtin.")]
+        assert got == [
+            ("builtin.common.vendor_ipc_error", {"ipc": "SIT_GET_SIM_STATUS", "error": "RCM_E_GENERIC_FAILURE"}, "common",
+             "backend:reference"),
+            ("builtin.common.vendor_request_failed", {"request_id": "3", "result": "2"}, "common", "backend:reference"),
+        ], rules
+    plain_lines = [e for e in data["events"] if e["event"] is None and e["tag"] == "RIL"]
+    assert not plain_lines, "plain DB는 RIL 줄 레코드를 버리고 builtin만 남긴다"
 
 
 def _all_tests():

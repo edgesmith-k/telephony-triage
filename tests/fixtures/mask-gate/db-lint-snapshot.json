@@ -1,0 +1,120 @@
+{
+ "issue-db-dup-id": {
+  "db_lint": {
+   "errors:duplicate-id": 1,
+   "errors:duplicate-issue": 1,
+   "warnings:fixture-missing": 2
+  },
+  "db_lint_rc": 1,
+  "mask_pii": {},
+  "mask_pii_rc": 0
+ },
+ "issue-db-empty-category": {
+  "db_lint": {},
+  "db_lint_rc": 0,
+  "mask_pii": {},
+  "mask_pii_rc": 0
+ },
+ "issue-db-github": {
+  "db_lint": {},
+  "db_lint_rc": 0,
+  "mask_pii": {},
+  "mask_pii_rc": 0
+ },
+ "issue-db-lint-errors": {
+  "db_lint": {
+   "errors:also-allowed": 3,
+   "errors:builtin-event": 1,
+   "errors:code-ref": 1,
+   "errors:duplicate-id": 2,
+   "errors:duplicate-issue": 1,
+   "errors:evidence-missing": 2,
+   "errors:ext-event": 1,
+   "errors:fix-ref": 1,
+   "errors:fixture-name": 2,
+   "errors:id-prefix": 1,
+   "errors:pending-on-type": 1,
+   "errors:raw-identifier": 4,
+   "errors:regex-unsafe": 1,
+   "errors:related": 1,
+   "errors:schema": 6,
+   "errors:sequence": 3,
+   "errors:signatures-missing": 1,
+   "errors:symptom-missing": 1,
+   "errors:verified-without-evidence": 1,
+   "warnings:fixed-token": 1,
+   "warnings:fixture-missing": 3,
+   "warnings:glossary": 1,
+   "warnings:title-form": 3
+  },
+  "db_lint_rc": 1,
+  "mask_pii": {
+   "MSISDN": 2
+  },
+  "mask_pii_rc": 1
+ },
+ "issue-db-ofono": {
+  "db_lint": {
+   "warnings:title-form": 1
+  },
+  "db_lint_rc": 0,
+  "mask_pii": {},
+  "mask_pii_rc": 0
+ },
+ "issue-db-ofono-modules": {
+  "db_lint": {},
+  "db_lint_rc": 0,
+  "mask_pii": {},
+  "mask_pii_rc": 0
+ },
+ "issue-db-pending": {
+  "db_lint": {
+   "warnings:signatures-pending": 1
+  },
+  "db_lint_rc": 0,
+  "mask_pii": {},
+  "mask_pii_rc": 0
+ },
+ "issue-db-review": {
+  "db_lint": {
+   "errors:schema": 2,
+   "warnings:fixture-missing": 2,
+   "warnings:signatures-pending": 1
+  },
+  "db_lint_rc": 1,
+  "mask_pii": {},
+  "mask_pii_rc": 0
+ },
+ "issue-db-sample": {
+  "db_lint": {},
+  "db_lint_rc": 0,
+  "mask_pii": {},
+  "mask_pii_rc": 0
+ },
+ "issue-db-step-events": {
+  "db_lint": {},
+  "db_lint_rc": 0,
+  "mask_pii": {},
+  "mask_pii_rc": 0
+ },
+ "issue-db-step-focus": {
+  "db_lint": {},
+  "db_lint_rc": 0,
+  "mask_pii": {},
+  "mask_pii_rc": 0
+ },
+ "issue-db-unjudged": {
+  "db_lint": {
+   "errors:regex-unsafe": 1
+  },
+  "db_lint_rc": 1,
+  "mask_pii": {},
+  "mask_pii_rc": 0
+ },
+ "issue-db-verify": {
+  "db_lint": {},
+  "db_lint_rc": 0,
+  "mask_pii": {},
+  "mask_pii_rc": 0
+ }
+}

@@ -1,0 +1,27 @@
+# 합성 case (H C1, C1D §1.2). files/의 timeline·입력은 make_module_eval_inputs.py --write가 만든다
+schema_version: 1
+name: sms-send-no-vendor-lines
+kind: deep
+synthetic: true
+key: MOCK-9501
+issue:
+  summary: '문자 전송 실패 (합성)'
+  description: '문자를 보내면 실패합니다. 합성 case.'
+  occurred_at: '2026-09-21T10:20:05+0000'
+  platform_version: '2'
+  sim_slot: '0'
+parse: {tz: UTC, year: 2026, minutes: 5}
+input:
+  deep_input: files/deep-input.json
+  events: files/events.json
+  timeline: files/timeline.md
+  log: files/source.log
+run_expect:
+  top_cause: SMS-001-01
+  C: 1
+expect:
+  layer: '그\s*층\s*로그\s*없음'
+  daemon: '알 수 없음|없음|exynos-ril'
+  evidence: ['RIL_REQUEST_SEND_SMS failed']
+  trap: below-layer-missing
+  wrong_layer: ['^\s*(ofonod|관리 데몬|D-Bus|MOSE|모뎀|망|곁가지|원인\s*아님)']

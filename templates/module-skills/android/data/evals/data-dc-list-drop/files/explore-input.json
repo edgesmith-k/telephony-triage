@@ -1,0 +1,17 @@
+{
+ "around": "2026-09-03T11:00:20+00:00",
+ "failed_step": null,
+ "limit": 200,
+ "anchor": null,
+ "partial": [
+  {
+   "signature": "DATA-002-01/airplane-mode-teardown",
+   "missing": [
+    "apm"
+   ]
+  }
+ ],
+ "around_alt": [
+  "2026-09-03T11:00:20.031Z"
+ ]
+}

@@ -1,0 +1,102 @@
+{
+ "status": "ok",
+ "key": "MOCK-9813",
+ "mode": "offline",
+ "issue": {
+  "origin": "file",
+  "occurred_at": "2026-08-09T13:12:32+00:00",
+  "sw": null,
+  "platform_version": "14",
+  "sim_slot": "0",
+  "summary": "IMS 서비스 없음 로그가 반복됨",
+  "description": "IMS 서비스를 쓸 수 없다는 로그가 반복해서 찍힙니다. IMS 등록에 문제가 있는지 확인해 주세요.",
+  "comments": 0,
+  "missing": [
+   "model",
+   "sw"
+  ]
+ },
+ "logs": {
+  "files": [
+   "source.log"
+  ],
+  "window": {
+   "start": "2026-08-09T13:07:32.000Z",
+   "end": "2026-08-09T13:17:32.000Z"
+  },
+  "range": [
+   "2026-08-09T13:10:57.481Z",
+   "2026-08-09T13:12:32.278Z"
+  ],
+  "in_range": "partial",
+  "clock_anomalies": 0,
+  "events": 23,
+  "uncollected_tags": [
+   {
+    "tag": "Telephony",
+    "lines": 4,
+    "warn": 2
+   },
+   {
+    "tag": "SatelliteController",
+    "lines": 5,
+    "warn": 0
+   },
+   {
+    "tag": "PhoneInterfaceManager",
+    "lines": 1,
+    "warn": 0
+   }
+  ]
+ },
+ "no_candidate": {
+  "search_hits": [
+   {
+    "id": "IMS-001",
+    "kind": "type",
+    "title": "IMS 등록이 되지 않음"
+   },
+   {
+    "id": "CALL-001-01",
+    "kind": "cause",
+    "title": "IMS 미등록"
+   },
+   {
+    "id": "IMS-001-01",
+    "kind": "cause",
+    "title": "등록 거절 (403)"
+   }
+  ],
+  "error_events": [],
+  "error_event_total": 0,
+  "unextracted_warn": 2
+ },
+ "partial": [
+  {
+   "kind": "absent",
+   "type": "DATA-001",
+   "signature": "DATA-001/no-setup-data-call-request",
+   "matched": "0/1",
+   "missing": [
+    "must_event data_evaluation_rejected"
+   ],
+   "at": []
+  }
+ ],
+ "code": {
+  "skipped": true
+ },
+ "explore": {
+  "reason": "no_candidate",
+  "when": "ask"
+ },
+ "warnings": [
+  "형식을 모르는 줄 9개를 건너뛰었습니다."
+ ],
+ "must_show": [
+  "로그 범위: 2026-08-09T13:10:57.481Z ~ 2026-08-09T13:12:32.278Z (일부만 포함), 시계 이상 없음",
+  "오류·거부·타임아웃 이벤트: 추출 이벤트 기준 0건 (수집 태그 W/E/F 줄 중 이벤트로 추출 안 된 줄 2건: RILJ 2줄)",
+  "파서 규칙에 없는 태그 (수집 태그와 같은 프로세스, tags.yaml에 없어 이벤트로 추출 안 됨): Telephony 4줄(W/E 2), SatelliteController 5줄(W/E 0), PhoneInterfaceManager 1줄(W/E 0)"
+ ],
+ "truncated": false
+}

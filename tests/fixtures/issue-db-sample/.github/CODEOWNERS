@@ -4,9 +4,9 @@
 # 오너는 팀(@<org>/<team>) 또는 개인(@<login>). 팀이면 리뷰어 요청 형식 issue-db.config.yaml
 # reviewers.format(TODO(SITE:S19))도 확인하고, 개인이면 해당 없음.
 #
-# 메인테이너 경로만 적는다. 카테고리(/data/·/call/ 등)에는 오너를 두지 않는다 — 카테고리 PR은 리뷰어 없이
-# 작성자가 바로 병합한다(issue_db.merge: self). 오너 리뷰를 받을 카테고리만 `/<category>/ @<org>/<team>`을
-# 더한다(그 경로 PR은 오너 승인 전 BLOCKED라 본인 병합이 막힌다).
+# 메인테이너 경로만 적는다. 카테고리(/data/·/call/ 등)에는 오너를 두지 않는다 — 카테고리 PR은 작성자 외 1명이
+# +1(마지막 커밋 Approve)하면 병합한다(병합해줘 또는 GHE). 오너 리뷰를 받을 카테고리만 `/<category>/ @<org>/<team>`을
+# 더한다(그 경로 PR은 GHE가 오너를 자동 요청하고 오너 승인 전 BLOCKED).
 
 # 공통 (모든 카테고리와 모든 기여자 PC에 영향) — dbpr/merge.py MAINTAINER_PATHS와 같은 목록
 /parser-rules/          @mock-org/telephony-issue-db-maintainers

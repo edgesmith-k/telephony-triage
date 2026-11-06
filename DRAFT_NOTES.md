@@ -10,30 +10,29 @@
 - 최신 main에서 시작하고 remote를 fetch한다(이름은 PC마다 `telephony` 또는 `origin`).
 - clone에는 `.local-draft`가 없다. 첫 메시지를 **"사외 초안 모드로 진행해"** 로 하면 모드를 묻지 않는다(`touch .local-draft`).
 - 의존성: `pip install '.[test]'`(고정 버전).
-- Windows: `PYTHONUTF8=1`·stdin `/dev/null`·LF·`python3` shim. 환경 실패 4건은 CI(Ubuntu)에서 통과.
+- Windows: `PYTHONUTF8=1`·stdin `/dev/null`·LF·`python3` shim(환경 실패 4건은 CI 통과).
 - 테스트는 `tools/related_tests.py --run`(관련만). 전체는 도구가 full이라 할 때·반입 직전·요청 시.
-- 진행 중 판단은 Fable 결정 에이전트에게 묻는다(10/06 사용자 지정). 원칙상 사용자 승인 대상(이슈 DB push, main 병합·태그 등 사용자가 지시하지 않은 외부 동작)은 사용자에게.
+- 진행 중 판단은 Fable 결정 에이전트에게(10/06 사용자). 사용자 승인 대상(이슈 DB push, main 병합·태그 등 지시 없는 외부 동작)은 사용자에게.
 
-## 진행 상태 (11/02)
+## 진행 상태 (11/06)
 
-- 모드: **사외 초안**. Phase D0·1~13·반입 전 보강 완료. 묶음 import-20261102는 **보류**(재리뷰 P1 — 새 라벨로). main 병합 PR #8~#78.
-- 반입 노트 `REIMPORT_NOTES_1021/1028/1030/1102.md`(#71 사내 피드백, #72~#78 oFono).
-- 11/02~03 재리뷰(`REVIEW_1102_HANDOFF.md` 머리, 1102 §6). 다음: eval 73 → PR → 병합(사용자) → 새 묶음 → **H**.
-- 모델 Sonnet 5.5 기준(Opus 5.5 11개 실패 0). `TODO(SITE)`: `tools/list_site_todos.py`. REVIEW-OPEN 0. 사내 시작 **"사내 설정 시작"**(결정 (o)).
-- 안내서: `docs/book/telephony-triage-book.html`(공유본 https://claude.ai/artifact/1jov1Et4dQUMauFr6aoxWG), 목록 `docs/materials/00-index.html`
+- 모드: **사외 초안**. Phase D0·1~13·반입 전 보강 완료. 지난 묶음 **import-20261103**(main `77e2827`). 다음 묶음 **토 11/7 18:00 KST**.
+- **H 단계 G 마무리**: A1·A2·guard·C0·B1+B2 ☑. C1+D·보정·F·Jira 관문·C·C′·덤프 마스킹·후보 채점, Codex 리뷰 P1 6건, 모듈 eval(25→27/42, `_common` 근거 규칙)·Haiku 비교, G 재측정 67개(offsite pass 65·fail 5), 반입 노트(`b4a5b42` 이후 표) 브랜치 반영. 남은 것: 묶음(사용자 태그·반입), 단계 확인. 결과는 `MODULE_SKILLS_RESULT.md`.
+- 모델 Sonnet 5.5 기준. `TODO(SITE)`: `tools/list_site_todos.py`. REVIEW-OPEN 0. 사내 시작 **"사내 설정 시작"**(결정 (o)).
+- 안내서: `docs/book/telephony-triage-book.html`, 목록 `docs/materials/00-index.html`
 
 ## 남은 일 (사외 전용)
 
 | ☐ | 항목 | 메모 |
 |---|---|---|
-| ☐ F | 새 라벨 반입 묶음(1102 대신) — 태그·반입은 사용자 | 사내: SITE_INSTALL §8, 반입 노트 1021~1102(사내 eval은 추후) |
+| ☐ F | 묶음(11/7) — 사람 확인·태그·반입은 사용자 | SITE_INSTALL §8·반입 노트 |
 | ☐ G | 범용판 별도 레포 — **보류(10/07 사용자)** | 재개는 사용자가 정한다 |
-| ☐ H | 모듈 스킬 레포(탐색 문서+심층 분석 스킬)·+1 병합 | `MODULE_SKILLS_PLAN.md`. 계획 → 확인 → 구현 |
+| ☐ H | 모듈 스킬 레포·+1 병합 — G만 남음 | `MODULE_SKILLS_PLAN.md §4` |
+| ☐ I | OpenCode·사내 모델판 — 사외 몫 ☑(사내 확인 남음) | `docs/RUNTIME_ADOPTION.md` |
 
 ## 사내로 넘긴 것
 
-- 사내 대상 eval 11개(`pending.json` `site`, S-2; 주입 59·60 포함, 사내 모델이 다르면 +7), 코드 Read line 힌트(T4, S-2 측정 뒤)·offline_eval 오류율 상한(S-1 합의, S-5)·`max_tokens_hint` 처리(S-4a)·setup Jira 없음 중단(U1, S-3), db-authoring 스키마 요약 확장(S-2, 스키마 Read 횟수로 판단), 사내 마켓플레이스 소스 유형 확인 → version 규칙(S-2·S-7, `plugin.json` version 없음 = 커밋 SHA 기준).
-- **L2로 hook이 바뀜**(옛·새 비교는 이 PC 기록으로 대신, 놓친 publish 0, 10/18): 반입 뒤 site eval 11개 모두 다시·plugin-probe 15·16 확인.
+- 사내 대상 eval 12개(`pending.json` `site`, S-2; 주입 59·60·+1 관문 75 포함, 사내 모델이 다르면 +7 — 이번 반입은 `MODULE_SKILLS_RESULT.md` "반입 노트" 표로 영향 받는 것만 — 11/05 결정, SITE_INSTALL §228 대신), 코드 Read line 힌트(T4, S-2 측정 뒤)·offline_eval 오류율 상한(S-1 합의, S-5)·`max_tokens_hint` 처리(S-4a)·setup Jira 없음 중단(U1, S-3), db-authoring 스키마 요약 확장(S-2, 스키마 Read 횟수로 판단), 사내 마켓플레이스 소스 유형 확인 → version 규칙(S-2·S-7, `plugin.json` version 없음 = 커밋 SHA 기준).
 - S-7: usage_stats format 2·`--transcripts` 허용 여부.
 - 반입 뒤 후보(RF-5·6·8·9, 리뷰 후속 R-36~R-47)는 `docs/history/draft-notes-2026-10.md` "10/13 이동".
 
@@ -59,7 +58,7 @@
 
 - (r) 고칠 범위(10/15, 사용자): 리뷰·재측정에서 **P0·P1(안전 위반·기능 결함)만** 고치고 P2는 "반입 뒤 후보"에 적는다. 질문 순서·횟수 행은 안전 행이 아니다(게시 eval 61·67, 쓰기 순서 행은 안전 행).
 
-- (p) 수정 절차(10/14, 사용자): 수정할 게 나오면 **계획(Opus) → 수정(Opus) → 리뷰(별개 Opus, P0·P1이면 다시) → 테스트(Sonnet)** 를 단계별 에이전트로, 테스트 통과 뒤 커밋.
+- (p) 수정 절차(10/14, 11/04 갱신): **계획 → 수정 → 리뷰(별개 Opus, 단계마다 1회) → P0·P1은 그 단계에서 한 번 고치고 테스트·기계 검증만(재리뷰 없음)** → 테스트 통과 뒤 커밋. H 진행 방식은 `MODULE_SKILLS_DECISIONS.md`.
 
 - (q) 사내 S-2 축소(10/14, 사용자): 사내 대상 = hook·권한·적대 입력·외부 쓰기 승인·사내 측정에 걸리는 11개(`pending.json` `site`), 사내 모델이 다르면 +7. 나머지는 `offsite_results.json`(도구 생성)으로 갈음, 사외 실패·미결정은 사유 면제, 안전 위반은 면제 불가.
 
@@ -71,7 +70,7 @@
 - (g) eval 판정: 전·후 같은 모델, 1순위 동작, 2순위 토큰 W0 폭. (10/06)
 - (i) eval은 변경과 관련된 최소만 사외에서 돌린다: 각 VP는 바꾼 스킬·흐름의 eval만, V 끝은 W 영향 미확인 목록 중 아직 관련 있는 것만 골라서. 사내 S-2는 사내 대상만(결정 (q)). (10/07, 사용자) 단, 실행 방식·공통 지침이 바뀌면 전체 + 사람 판정(10/14).
 - (f)(h)(j)(k)(l) → history
-- (m) 플랫폼 분리 (10/11, 사용자): 동작·원인·해결책이 달라 이슈 DB를 플랫폼별로(합치기 안 안 씀), 추가는 디렉토리 + `platform.enabled`, lock은 플랫폼별("사용자·이슈 DB(플랫폼)별 한 번에 한 작업"), RF-4 유지. `17-platforms.md` §7.
-- (n) 트래커 범용화 (10/11, 사용자): 설정 `tracker.kind`(jira|github)·어댑터 `trackers/`, `issues/`·`platform_version(s)` 개명은 (d)로 v1 직접 수정, 옛 키는 감지만(fail-closed), DB kind 다르면 거부. `18-trackers.md` §7.
+- (m) 플랫폼 분리(10/11, 사용자): 이슈 DB 플랫폼별, lock 플랫폼별, RF-4 유지 — `17-platforms.md` §7.
+- (n) 트래커 범용화(10/11, 사용자): `tracker.kind`(jira|github)·어댑터 `trackers/` — `18-trackers.md` §7.
 - (o) 사내 트래커는 Jira (10/12, 사용자): 사내 설정은 `tracker.kind: jira`, S30·S31(GitHub 트래커)은 해당 없음. "사내 설정 시작" 한마디로 `tools/site_step.py`가 단계를 이어 낸다(단계마다 완료 기준·사용자 확인은 그대로).
 - 사내 로그가 모의와 다를 때 가장 먼저: `docs/development/S0_PROBE_CHECKLIST.md` + `tools/s0_stats.py`, 설정 초안은 `tools/s0_suggest.py`(사내 전용 출력).

@@ -1,0 +1,32 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "autoupdate": false,
+  "share": "disabled",
+  "snapshot": false,
+  "permission": {
+    "task": "deny",
+    "webfetch": "deny",
+    "websearch": "deny",
+    "codesearch": "deny",
+    "jira_*": "deny",
+    "github_*": "deny",
+    "bash": {
+      "git push": "deny",
+      "git push *": "deny",
+      "* git push *": "deny",
+      "git*push*": "deny",
+      "gh *": "deny",
+      "*opencode *": "deny",
+      "find *-exec*": "deny",
+      "find *-ok*": "deny",
+      "find *-delete*": "deny",
+      "find *-fprint*": "deny",
+      "*db_pr.py publish*": "deny",
+      "*db_pr.py merge*": "deny",
+      "*db_pr.py request-review*": "deny",
+      "*issue_post.py approve*": "deny",
+      "*skill_patch.py*--apply*": "deny",
+      "*module_eval.py*": "deny"
+    }
+  }
+}

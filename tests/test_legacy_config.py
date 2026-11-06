@@ -198,3 +198,98 @@ def test_rename_legacy_lists_changes_and_writes_only_with_apply():
     assert rows["tracker"]["status"] == "ok"
     assert w.run("jira_fields.py", ["check-key", KEY, "--db", SAMPLE]).returncode == 0
     assert w.json("config.py", ["rename-legacy", "--apply"])["changes"] == []          # 다시 해도 바꿀 것 없음
+
+
+# -- 없어진 키 issue_db.merge (+1 병합, H A2 — 경고만, fail-closed 아님) -------------------------------------
+
+REMOVED_USER = {
+    "user_top": {"issue_db": {"merge": "review"}},
+    "user_profile": {"platforms": {"ofono": {"issue_db": {"merge": "self"}}}},
+}
+
+
+def _check(w: Workspace, root: Path | None = None):
+    proc = run("config.py", ["check", "--for", "dry-run"], root=root or w.root, env=w.env(), cwd=w.base)
+    return proc, json.loads(proc.stdout)
+
+
+@pytest.mark.parametrize("name", sorted(REMOVED_USER))
+def test_removed_merge_key_in_user_config_only_warns(name):
+    w = ws()
+    base_proc, base = _check(w)
+    assert base["warnings"] == [] and "issue_db.merge" not in base_proc.stderr
+    set_user(w, REMOVED_USER[name])
+    data = yaml.safe_load((w.home / "config.yaml").read_text(encoding="utf-8"))
+    proc, doc = _check(w)
+    assert proc.returncode == base_proc.returncode and doc["writable"] == base["writable"], name     # 종료 코드·writable 그대로
+    assert doc["push_allowed"] == base["push_allowed"] and len(doc["warnings"]) == 1, name
+    at = "platforms.ofono.issue_db.merge" if name == "user_profile" else "`issue_db.merge`"
+    assert at in doc["warnings"][0] and doc["warnings"][0].startswith("사용자 config: ") and at in proc.stderr, name
+    assert userconfig.legacy_problems({}, data) == [], name                     # fail-closed 관문에는 넣지 않는다
+    rows = {r["check"]: r for r in w.json("config.py", ["doctor", "--format", "json"], expect=(0, 1))["rows"]}
+    assert rows["config"]["status"] == "warn" and "issue_db.merge" in rows["config"]["detail"], name
+    assert rows["tracker"]["status"] == "ok", name
+    assert guard(w, READ, {"ticket": KEY}).get("permissionDecision") is None, name    # guard는 닫히지 않는다
+
+
+def test_removed_merge_key_in_site_defaults_only_warns_and_wait_seconds_still_flows():
+    w = ws()
+    root = plugin_root("removed-merge-site", issue_db={"merge": "self", "merge_wait_seconds": 30})
+    proc, doc = _check(w, root)
+    base_proc, base = _check(w)
+    assert proc.returncode == base_proc.returncode and doc["writable"] == base["writable"]
+    assert len(doc["warnings"]) == 1 and doc["warnings"][0].startswith("site-defaults: ") and "관리자" in doc["warnings"][0]
+    assert guard(w, READ, {"ticket": KEY}, root=root).get("permissionDecision") is None
+    doctor = run("config.py", ["doctor", "--format", "json"], root=root, env=w.env(), cwd=w.base)
+    rows = {r["check"]: r for r in json.loads(doctor.stdout)["rows"]}
+    assert rows["config"]["status"] == "warn" and "관리자" in rows["config"]["next"]
+    defaults = {"issue_db": {"merge": "self", "merge_wait_seconds": 30}}
+    assert userconfig.legacy_problems(defaults, None) == []
+    top = userconfig.merged(defaults, {})
+    assert "merge" not in top["issue_db"] and top["issue_db"]["merge_wait_seconds"] == 30      # 대기 기본값은 그대로 흐른다
+    prof = userconfig.merged(defaults, {"platforms": {"ofono": {"issue_db": {"path": "/x"}}}}, platform="ofono")
+    assert "merge" not in prof["issue_db"] and prof["issue_db"]["merge_wait_seconds"] == 30
+    assert userconfig.SITE_ISSUE_DB_KEYS == ("merge_wait_seconds",)
+    assert userconfig.removed_keys(None, None) == [] and userconfig.removed_keys({"issue_db": "x"}, {"platforms": 1}) == []
+
+
+# -- 폐지 하위 키 analyzers.<cat>.inputs·max_tokens_hint (B1 설계 §2.3·§3.1·§9.1 예외 2 — 경고만, fail-closed 아님) ---------
+
+DEPRECATED_USER = {
+    "user_top": {"analyzers": {"data": {"inputs": ["events_json"]}}},
+    "user_profile": {"platforms": {"ofono": {"analyzers": {"data": {"max_tokens_hint": "medium"}}}}},
+}
+
+
+@pytest.mark.parametrize("name", sorted(DEPRECATED_USER))
+def test_deprecated_analyzer_keys_in_user_config_only_warn(name):
+    w = ws()
+    base_proc, base = _check(w)
+    set_user(w, DEPRECATED_USER[name])
+    data = yaml.safe_load((w.home / "config.yaml").read_text(encoding="utf-8"))
+    proc, doc = _check(w)
+    assert proc.returncode == base_proc.returncode and doc["writable"] == base["writable"], name
+    assert len(doc["warnings"]) == 1 and doc["warnings"][0].startswith("사용자 config: 폐지 키 `"), name
+    assert userconfig.legacy_problems({}, data) == [], name
+    rows = {r["check"]: r for r in w.json("config.py", ["doctor", "--format", "json"], expect=(0, 1))["rows"]}
+    assert rows["config"]["status"] == "warn" and "max_tokens_hint" in rows["config"]["detail"], name
+    assert guard(w, READ, {"ticket": KEY}).get("permissionDecision") is None, name
+
+
+def test_old_example_deprecated_warning_pinned():
+    """의도한 변경(B1 설계 §9.1 예외 2): 옛 예시(analyzers.data에 inputs·max_tokens_hint)를 복사한 사내 site-defaults는 remote가
+    없어도 check 경고 두 줄과 doctor `config` 행 warn을 받는다. 관리자가 두 줄을 지우면 사라진다."""
+    w = ws()
+    old = {"data": {"skill": "mock-data-analyzer", "when": "ask",
+                    "inputs": ["events_json", "log_paths", "top_candidates", "issue_summary"], "max_tokens_hint": "medium"}}
+    root = plugin_root("old-example-analyzers", analyzers=old)
+    _proc, doc = _check(w, root)
+    assert doc["warnings"] == [
+        "site-defaults: 폐지 키 `analyzers.data.inputs`는 읽지 않는다(무시) — 그 줄을 지운다 (관리자)",
+        "site-defaults: 폐지 키 `analyzers.data.max_tokens_hint`는 읽지 않는다(무시) — 그 줄을 지운다 (관리자)"]
+    doctor = run("config.py", ["doctor", "--format", "json"], root=root, env=w.env(), cwd=w.base)
+    rows = {r["check"]: r for r in json.loads(doctor.stdout)["rows"]}
+    assert rows["config"] == {"check": "config", "status": "warn",
+                              "detail": "폐지 키 analyzers.<카테고리>.inputs·max_tokens_hint(무시)",
+                              "next": "그 줄을 지운다 · site-defaults면 관리자"}
+    assert "module_skills" not in rows

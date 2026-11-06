@@ -204,13 +204,13 @@ def set_inputs(root, text):
 def test_pending_is_site_set_with_baseline_and_manual():
     ids = {e["id"] for e in sc.eval_entries(ROOT)}
     pend = sc.load_pending(ROOT)
-    assert sorted(pend["site"]) == [1, 2, 8, 9, 39, 45, 58, 59, 60, 61, 62] and all(pend["site"].values())
+    assert sorted(pend["site"]) == [1, 2, 8, 9, 39, 45, 58, 59, 60, 61, 62, 75] and all(pend["site"].values())
     assert sorted(pend["site_if_model_differs"]) == [13, 17, 18, 24, 29, 33, 37]
     assert set(pend["site"]) | set(pend["site_if_model_differs"]) <= ids and not set(pend["site"]) & set(pend["site_if_model_differs"])
     assert pend["manual"] == [59, 60] and set(sc.BASELINE_EVALS) <= set(pend["site"]) and ss.BASELINE_EVALS == sc.BASELINE_EVALS
     assert "rerun_first" not in json.loads((ROOT / sc.EVAL_DIR / "pending.json").read_text(encoding="utf-8"))
     r = sc.s2_pending(sc.Ctx(ROOT))
-    assert r["status"] == "pass" and f"사내 대상 11/{len(ids)}" in r["evidence"] and "기준선 ⊆ 사내" in r["evidence"]
+    assert r["status"] == "pass" and f"사내 대상 12/{len(ids)}" in r["evidence"] and "기준선 ⊆ 사내" in r["evidence"]
 
 
 def test_repo_offsite_results_is_generated_record():
@@ -619,7 +619,22 @@ def test_s4a_protection_403_404_is_skip_and_weak_data_fails(tmp_path, monkeypatc
     assert sc.s4a_protection(sc.Ctx(root))["status"] == "fail"
     good = {"required_pull_request_reviews": {"require_code_owner_reviews": True}}
     monkeypatch.setattr(sc.Ctx, "run", fake((0, json.dumps(good), "")))
-    assert sc.s4a_protection(sc.Ctx(root))["status"] == "pass"
+    r = sc.s4a_protection(sc.Ctx(root))
+    assert r["status"] == "pass"            # 통과 기준은 그대로(승인 수 0도 통과 — 권장 항목은 정보만, 올리면 사내 재점검이 깨진다)
+    assert "권장(이슈 DB docs/branch-protection.md) — 정보" in r["evidence"] and "필수 승인 수 ?(권장 1)" in r["evidence"]
+    assert "dismiss_stale_reviews) False" in r["evidence"] and "issue_db.merge" not in r["evidence"]
+    full = {"required_pull_request_reviews": {"require_code_owner_reviews": True, "required_approving_review_count": 1,
+                                              "dismiss_stale_reviews": True, "require_last_push_approval": True},
+            "required_status_checks": {"strict": True, "contexts": ["db-check"]}, "enforce_admins": {"enabled": True}}
+    monkeypatch.setattr(sc.Ctx, "run", fake((0, json.dumps(full), "")))
+    r = sc.s4a_protection(sc.Ctx(root))
+    assert r["status"] == "pass" and "필수 승인 수 1(권장 1)" in r["evidence"]
+    for part in ("dismiss_stale_reviews) True", "require_last_push_approval) True", "(strict) True(db-check)",
+                 "enforce_admins) True"):
+        assert part in r["evidence"], part
+    monkeypatch.setattr(sc.Ctx, "run", fake((0, json.dumps({**full, "required_pull_request_reviews": {
+        "required_approving_review_count": 1}}), "")))
+    assert sc.s4a_protection(sc.Ctx(root))["status"] == "fail"       # CODEOWNERS 리뷰가 꺼져 있으면 그대로 실패
 
 
 def test_review_open_missing_is_needs_user(tmp_path):
@@ -1200,3 +1215,28 @@ def test_checks_registry_ids_match_step(tmp_path):
         out = sc.run_checks(step, root)
         assert [r["id"] for r in out] == [sc.check_id(f) for f in sc.CHECKS[step]], step
         assert not any("점검 오류" in r["evidence"] for r in out), out
+
+
+# -- s4a.analyzers: 모듈 스킬 레포 주소 (B1 설계 §2.6·§10.7) -------------------------------------------------------
+
+
+def _s4a_root(tmp_path, data: dict) -> Path:
+    (tmp_path / "plugin").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "plugin" / "site-defaults.yaml").write_text(json.dumps(data), encoding="utf-8")
+    return tmp_path
+
+
+def test_s4a_analyzers_module_remote(tmp_path):
+    r = sc.s4a_analyzers(sc.Ctx(_s4a_root(tmp_path, {"module_skills": {"remote": "https://u:t@ghe.example.invalid/o/r.git"}})))
+    assert r["status"] == "pass" and "ghe.example.invalid/o/r" in r["evidence"] and "u:t" not in r["evidence"]
+    assert r["evidence"] == "module_skills.remote 설정됨(ghe.example.invalid/o/r)"
+    assert r["cmd"] == "grep -n -A3 -E '^(module_skills|analyzers):' plugin/site-defaults.yaml"
+    r = sc.s4a_analyzers(sc.Ctx(_s4a_root(tmp_path, {"module_skills": {"remote": "git@ghe.example.invalid:o/r.git"}})))
+    assert r["evidence"] == "module_skills.remote 설정됨(ghe.example.invalid:o/r)"
+
+
+def test_s4a_analyzers_no_remote_strings_unchanged(tmp_path):
+    for data, status, ev in (({"analyzers": {"data": {"skill": "s"}}}, "pass", "analyzers.data 설정됨"),
+                             ({"module_skills": {"remote": ""}}, "fail", "analyzers.data 비어 있음"), ({}, "fail", "analyzers.data 비어 있음")):
+        r = sc.s4a_analyzers(sc.Ctx(_s4a_root(tmp_path, data)))
+        assert (r["status"], r["evidence"], r["cmd"]) == (status, ev, "grep -n -A3 analyzers plugin/site-defaults.yaml"), data

@@ -14,6 +14,8 @@
         `events` 목록이 없는 JSON(예: Jira 응답)은 모든 문자열 값을 마스킹한다
         (08-safety.md §8.1). 분석 경로의 logcat은 `parse_logcat.py parse --mask`를 쓴다.
 
+치환·이벤트 모드는 로그 마스커(`log_lines=True`, M1~M11 모양 규칙 포함)를, 검사 모드는 기본 마스커를 쓴다(B2 §3.3).
+
 `mask.allow_patterns`는 이슈 DB(`--db`, 없으면 cwd의 이슈 DB)의 `issue-db.config.yaml`에서
 읽는다. 이슈 DB를 찾지 못하면 예외 없이 마스킹한다.
 """
@@ -106,9 +108,14 @@ def run_check(args, db: Path | None) -> dict:
     masker = masking.new_masker(allow_patterns=_allow(db))
     detections = []
     for name, text in targets:
-        for line_no, line in enumerate(text.splitlines(), 1):
-            for hit in masker.find(line):
-                detections.append({"path": name, "line": line_no, "col": hit["start"] + 1, "kind": hit["kind"]})
+        lines = text.split("\n")   # mask_lines·residual과 같은 줄 나눔(갈린 덤프 조각 묶음이 replace와 같게)
+        forced = masking.forced_lines(masker, lines)
+        for i, line in enumerate(lines):
+            pieces = forced.get(i, ())
+            found = [(hit["start"], hit["kind"]) for hit in masker.find(line, [(p[0], p[1]) for p in pieces])]
+            found += [(p[0], p[2]) for p in pieces]   # 갈린 IMSI·ICCID 조각은 조각마다 위치를 낸다
+            for start, kind in sorted(found):
+                detections.append({"path": name, "line": i + 1, "col": start + 1, "kind": kind})
     return {"checked": len(targets), "detections": detections}
 
 
@@ -124,8 +131,8 @@ def run_replace(args, db: Path | None) -> tuple[dict, str | None]:
         if not path.is_file():
             raise UsageError(f"파일이 없습니다: {path}")
         text = path.read_text(encoding="utf-8", errors="replace")
-        masker = masking.new_masker(text, allow)
-        masked = "\n".join(masker(line) for line in text.split("\n"))
+        masker = masking.new_masker(text, allow, log_lines=True)
+        masked = "\n".join(masking.mask_lines(masker, text.split("\n")))   # 갈린 덤프 조각도(08-safety §8)
         if args.in_place:
             path.write_text(masked, encoding="utf-8", newline="\n")
         elif args.out:
@@ -153,13 +160,15 @@ def run_events(args, db: Path | None) -> dict:
         doc = json.loads(Path(args.events).read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise UsageError(f"--events를 읽을 수 없습니다: {exc}") from exc
-    masker = masking.new_masker(json.dumps(doc, ensure_ascii=False), _allow(db))
+    masker = masking.new_masker(json.dumps(doc, ensure_ascii=False), _allow(db), log_lines=True)
     if isinstance(doc, dict) and isinstance(doc.get("events"), list):
         events = []
-        for event in doc["events"]:
+        # tag·pid·ts가 있는 덤프 조각은 이어서 본다(갈린 IMSI·ICCID, 08-safety §8). 없으면 줄마다와 같다
+        forced = masking.forced_records(masker, doc["events"])
+        for i, event in enumerate(doc["events"]):
             event = dict(event)
             if isinstance(event.get("msg"), str):
-                event["msg"] = masker(event["msg"])
+                event["msg"] = masker.mask(event["msg"], forced.get(i))
             event["fields"] = {
                 k: masker.mask_value(v) if isinstance(v, str) else v
                 for k, v in (event.get("fields") or {}).items()

@@ -1,0 +1,18 @@
+schema_version: 2
+platforms:
+  ofono:
+    common: {daemons: [ofonod, exynos-ril, MOSE]}
+    modules:
+      data: {path: ofono/data, db_category: data, daemons: [NMD, DITD], ofonod_files: [src/gprs.c, drivers/rilmodem/gprs-context.c, src/lte.c]}
+      sim: {path: ofono/sim, db_category: sim, daemons: [LPA, ipad], ofonod_files: [src/sim.c, drivers/rilmodem/sim.c]}
+      modem: {path: ofono/modem, db_category: common, daemons: [DMD, RFSD, vcd], ril: [RADIO_POWER]}
+  android:
+    common:
+      tags: ['^RILJ$']
+      filter:
+        noise: ['^\[ServiceMgr\] msg\(']
+        state: [['^RILJ$', 'RADIO_POWER']]
+        level_unreliable: [VCD]
+    modules:
+      data: {path: android/data, db_category: data, dbus: [com.example.Data]}
+      sim: {path: android/sim, db_category: sim, ipc: [SIT_EXAMPLE_SIM]}

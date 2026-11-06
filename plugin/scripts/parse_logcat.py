@@ -50,7 +50,7 @@ sys.path.insert(0, str(SCRIPTS))
 
 import adapters  # noqa: E402
 import parser_backends  # noqa: E402
-from common import compat, logtime, masking, parser_rules, site_defaults, stepanchor  # noqa: E402
+from common import compat, dumpjoin, logtime, masking, parser_rules, site_defaults, stepanchor  # noqa: E402
 from common import events as evt  # noqa: E402
 from common.patterns import DEFAULT_TIMEOUT_MS, PatternError, PatternRunner, PatternTimeout  # noqa: E402
 from common.exitcodes import OK, USAGE  # noqa: E402
@@ -137,7 +137,8 @@ def _run_extractors(lines: list[dict], rules: parser_rules.Rules, timeout_ms: in
     return derived
 
 
-def _mask_record(rec: dict, masker) -> dict:
+def _mask_record(rec: dict, masker, forced=None) -> dict:
+    """`forced`: 이 레코드 `msg`의 갈린 덤프 조각 구간(`masking.forced_records`, 08-safety §8)."""
     rec = dict(rec)
     ann = rec.get("ril")
     spans = getattr(masker, "_spans", None)
@@ -145,7 +146,7 @@ def _mask_record(rec: dict, masker) -> dict:
     line_values = ([v for *_, v in spans(rec["msg"])]
                    if spans and isinstance(ann, dict) and "proto" in ann and isinstance(rec.get("msg"), str) else [])
     if isinstance(rec.get("msg"), str):
-        rec["msg"] = masker(rec["msg"])
+        rec["msg"] = masker.mask(rec["msg"], forced) if forced else masker(rec["msg"])
     # 필드 값은 같은 마스커의 번호 대응을 쓴다: 줄에서 본 원래 값이면 같은 토큰이 된다
     # (문맥 없는 값도 마스킹된다, 08-safety.md §8).
     mask_value = getattr(masker, "mask_value", masker)
@@ -203,6 +204,7 @@ def postprocess(
     errors: list[dict] | None = None,
     dropped: dict | None = None,
     unextracted: dict | None = None,
+    window: tuple | None = None,
 ) -> list[dict]:
     """백엔드 출력에 태그 매핑 → 마스킹 → RIL 파생 이벤트 → extractor를 적용한다.
 
@@ -213,10 +215,15 @@ def postprocess(
     줄 레코드(`event: None`)는 `tags.yaml`에 없는 태그면 버린다. builtin 레코드는
     그대로 두고(마스킹만) 줄 레코드와 함께 낸다. 파생 이벤트는 그 줄 바로 뒤에 온다
     (RIL 파생 이벤트, 그다음 extractor 이벤트를 규칙 순서로).
+    `window`가 있으면(창 없이 받은 레코드) 갈린 조각을 전체에서 묶은 뒤 `ts`가 창 밖인 레코드를 버린다.
     """
     errors = [] if errors is None else errors
     kept: list[dict] = []
-    for rec in events:
+    # 갈린 덤프 조각(IMSI·ICCID)은 전체 레코드에서 한 번 묶어 줄 순번으로 적용한다(08-safety §8)
+    forced = masking.forced_records(masker, events) if isinstance(masker, masking.Masker) else {}
+    for n, rec in enumerate(events):
+        if window and not _in_window(rec, window):
+            continue   # 조각 묶음은 위에서 전체로 했다(창 밖 조각까지, 08-safety §8)
         if rec.get("event") is None:
             category = rules.tag_category(rec["tag"])
             if category is None:
@@ -229,11 +236,11 @@ def postprocess(
                 category = rules.ril_category(ann["request"]) or category
             rec = dict(rec, category_hint=category)
             rec.setdefault("line_ref", None)
-            kept.append(_mask_record(rec, masker) if masker else rec)
+            kept.append(_mask_record(rec, masker, forced.get(n)) if masker else rec)
         else:
             rec = dict(rec)
             rec.setdefault("line_ref", None)
-            kept.append(_mask_record(rec, masker) if masker else rec)
+            kept.append(_mask_record(rec, masker, forced.get(n)) if masker else rec)
 
     line_pos = [i for i, rec in enumerate(kept) if rec.get("event") is None]
     extracted = _run_extractors([kept[i] for i in line_pos], rules, timeout_ms, errors)
@@ -411,6 +418,15 @@ def _in_range(window, coverage: dict) -> bool | str | None:
     return "partial"
 
 
+def _in_window(rec: dict, window: tuple) -> bool:
+    """레코드 `ts`가 창 안인가(백엔드 창 자르기와 같은 닫힌 구간). 시각을 못 읽으면 남긴다."""
+    try:
+        ts = logtime.parse_ts(rec["ts"])
+    except (KeyError, TypeError, ValueError, AttributeError):
+        return True
+    return window[0] <= ts <= window[1]
+
+
 def _read_texts(paths: list[Path]) -> str:
     return "\n".join(logtime.open_log(p).read() for p in paths)
 
@@ -506,12 +522,17 @@ def run_parse(args, plugin_root: Path, defaults: dict, profile: platforms.Platfo
         raise UsageError(f"파서 규칙 오류: {exc}") from exc
     db_cfg = compat.load_db_config(rules_dir.parent)
 
-    backend = _load_backend(defaults, profile or _profile(defaults, db_cfg))
+    # tags.yaml 태그 속성(level·ipc)을 백엔드에 반영한다(선언이 없으면 백엔드 기본값, 04-parser-matching §5.8 (2))
+    backend = _load_backend(defaults, profile or _profile(defaults, db_cfg)).apply_rules(rules)
 
     masker = None
+    post_window = None
     if args.mask:
         # 입력에 이미 있는 토큰의 다음 번호부터 준다 (부분 마스킹된 로그, fixture 재파싱).
-        masker = masking.new_masker(_read_texts(paths), _allow_patterns(db_cfg))
+        texts = _read_texts(paths)
+        masker = masking.new_masker(texts, _allow_patterns(db_cfg), log_lines=True)
+        # 시간 창 밖에 갈린 덤프 조각이 있을 수 있으면 창 없이 읽고 묶은 뒤 자른다(백엔드 인터페이스 무변경)
+        post_window = window if window and dumpjoin.DUMP_MARK in texts else None
 
     warnings: list[dict] = []
     warnings += compat.check_parser_backend(db_cfg, backend.name, backend.version())
@@ -552,11 +573,12 @@ def run_parse(args, plugin_root: Path, defaults: dict, profile: platforms.Platfo
 
     timeout_ms = int((db_cfg.get("matcher") or {}).get("pattern_timeout_ms", DEFAULT_TIMEOUT_MS))
     errors: list[dict] = []
-    events = backend.parse(paths, args.tz, args.year, window)
+    events = backend.parse(paths, args.tz, args.year, None if post_window else window)
     dropped: dict = {}
     unextracted: dict = {}
     events = postprocess(events, rules, masker=masker, last_ts=coverage["last_ts"],
-                         timeout_ms=timeout_ms, errors=errors, dropped=dropped, unextracted=unextracted)
+                         timeout_ms=timeout_ms, errors=errors, dropped=dropped, unextracted=unextracted,
+                         window=post_window)
     uncollected = uncollected_tags(dropped, events, masker)
     for error in errors:
         warnings.append({"code": "pattern-timeout",
@@ -614,6 +636,7 @@ def run_parse(args, plugin_root: Path, defaults: dict, profile: platforms.Platfo
         },
         "coverage": coverage,
         "masked": masker is not None,
+        "mask_allow": _allow_patterns(db_cfg),   # 이 이벤트를 가린 허용 패턴 — 보기·점검이 같은 목록을 쓴다(B2-26)
         "warnings": warnings,
         "errors": errors,
         "events": events,
@@ -713,7 +736,7 @@ def _step_event_hits(raw: list[dict], specs: list[dict | None], paths: list[Path
     hits: list[dict] = []
     masker = None
     if any(sp and sp["kind"] in ("match", "event") for sp in specs):
-        masker = masking.new_masker(_read_texts(paths), _allow_patterns(db_cfg))
+        masker = masking.new_masker(_read_texts(paths), _allow_patterns(db_cfg), log_lines=True)
     line_idx = [i for i, r in enumerate(raw) if r.get("event") is None]
 
     for rule, sp in enumerate(specs):             # ril
@@ -801,6 +824,13 @@ def run_markers(args, defaults: dict, profile: platforms.PlatformProfile | None 
     step_specs, rule_warnings = _step_event_rules(db_cfg) if getattr(args, "step_events", False) else ([], [])
     warnings += rule_warnings
     raw_records = None
+    if any(sp and sp["kind"] == "event" for sp in step_specs):
+        # event 규칙은 parse 출력의 builtin 이벤트를 보므로 규칙의 태그 속성(ipc·level)을 **파싱 전에** 반영한다.
+        # 규칙이 없으면 기본값(마커 줄 자체는 레벨·builtin을 쓰지 않는다).
+        try:
+            backend = backend.apply_rules(parser_rules.load(rules_dir))
+        except parser_rules.RulesError as exc:
+            raise UsageError(f"파서 규칙 오류: {exc}") from exc
     if compiled or any(step_specs):
         raw_records = backend.parse(paths, args.tz, args.year, None)       # 한 번만 파싱한다
     if compiled:
@@ -822,9 +852,11 @@ def run_markers(args, defaults: dict, profile: platforms.PlatformProfile | None 
                 done = set(found)
                 remaining = [i for i in remaining if i not in done]
         if hits:
-            masker = masking.new_masker(_read_texts(paths), _allow_patterns(db_cfg))
+            masker = masking.new_masker(_read_texts(paths), _allow_patterns(db_cfg), log_lines=True)
+            forced = masking.forced_records(masker, records)      # 갈린 덤프 조각(08-safety §8), 전체에서 한 번
             for i in sorted(hits):
-                masked = masker(texts[i])
+                off = len(texts[i]) - len(str(records[i]["msg"]))
+                masked = masker.mask(texts[i], [(a + off, b + off, *rest) for a, b, *rest in forced.get(i, ())])
                 m = hits[i].search(masked)       # 이름 그룹은 마스킹된 텍스트에서만 뽑는다
                 if not m:
                     continue
@@ -1019,8 +1051,14 @@ def run_cut(args, profile: platforms.PlatformProfile | None = None) -> dict:
     if args.rules:
         allow = _allow_patterns(compat.load_db_config(Path(args.rules).parent))
     texts = [lines[j][2] for j in chosen]
-    masker = masking.new_masker("\n".join(texts), allow)
-    masked = [masker(text) for text in texts]
+    masker = masking.new_masker("\n".join(texts), allow, log_lines=True)
+    # 갈린 덤프 조각은 파일마다 전체 줄로 묶은 뒤 고른 줄에 적용한다(조각 1이 범위 밖이어도 조각 2를 가린다, 08-safety §8)
+    forced: dict[int, list] = {}
+    for file_index in sorted({entry[0] for entry in lines}):
+        idx = sorted((j for j, entry in enumerate(lines) if entry[0] == file_index), key=lambda j: lines[j][1].line_no)
+        for k, spans in masking.forced_lines(masker, [lines[j][2] for j in idx]).items():
+            forced[idx[k]] = spans
+    masked = [masker.mask(lines[j][2], forced.get(j)) for j in chosen]
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text("\n".join(masked) + "\n", encoding="utf-8", newline="\n")

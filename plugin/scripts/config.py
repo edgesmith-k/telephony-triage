@@ -18,25 +18,40 @@
                                다시 만든다(android는 입력한 항목만 갱신: --answers에 없는 키·Enter는 지금 값 유지,
                                빈 값·팀 기본값과 같은 답은 지워 상속, 그 밖 키는 유지). 새 config에 프로필 문제
                                (경로 규칙·겹침)·옛 설정 키·모르는 tracker.kind가 있으면 저장하지 않고 종료 2.
-  set <key> <value>            값 하나 바꾸기 (경로 값은 존재 검증)
+  set <key> <value>            값 하나 바꾸기 (경로 값은 존재 검증). module_skills.remote(https://<host>·ssh://<host>·<user>@<host>:o/r·
+                               file:///절대 경로만, 자격 증명 거부)·module_skills.base_branch는 최상위 키(--platform 없이),
+                               analyzers.<카테고리>.prefer(module|skill)·.skill_dir(절대 경로). 남은 모듈 스킬·분석 스킬
+                               설정 문제는 module_problems와 stderr 경고 한 줄.
+                               opencode.jira_read open|closed [--accept-error-bodies]: OpenCode Jira 읽기 관문(최상위 키).
+                               open은 같은 OpenCode 버전·플러그인 지문의 사내 확인 통과 기록(site_step.py runtime-check
+                               opencode --jira)이 있을 때만, 오류 경로 행이 warn이면 --accept-error-bodies도. OpenCode 안
+                               (TT_RUNTIME=opencode)에서는 거부(사용자가 터미널에서 연다)
   sync-scripts-path            plugin.scripts_path = ${CLAUDE_PLUGIN_ROOT}/scripts (setup 2, SessionStart hook)
-  tracker-candidates [--mcp-config <json>...] [--tools-json <json>]
+  tracker-candidates [--mcp-config <json>...] [--opencode-config <json>...] [--tools-json <json>]
                                등록된 MCP 서버에서 tracker.tools·읽기 도구 후보 (setup 4). exclude_servers 적용.
                                stdio 서버는 하나씩 서버당 최대 10초(응답 즉시 종료·프로세스 그룹 종료). 서버마다
                                servers[].probe(stdio|tools-json|excluded|remote)·elapsed_ms·error, stderr에 진행 줄.
-                               --tools-json의 서버는 이름 정규화(`jira.corp`=`jira_corp`)로 비교해 다시 띄우지 않는다
+                               --tools-json의 서버는 이름 정규화(`jira.corp`=`jira_corp`)로 비교해 다시 띄우지 않는다.
+                               OpenCode(계획 I O8): --opencode-config 또는 TT_RUNTIME=opencode면 opencode.json `mcp`(enabled·
+                               command)도 읽고(OpenCode 안에서는 ~/.claude.json을 기본으로 읽지 않는다, enabled:false는
+                               probe=disabled), --tools-json 이름을 `<서버>_<도구>`로 읽는다. 그 서버 항목에 source=opencode·
+                               opencode_tools(세션 이름). 저장 이름은 그대로 mcp__<서버>__<도구>
   set-tracker --server <s> --get-issue <전체 이름> [--search-issues ..] [--get-comments ..] [--read-tools a,b]
                                사용자가 확인한 값을 저장. read_tools에 tracker.tools 값을 포함한다
   rename-legacy [--apply]      사용자 config.yaml의 옛 설정 키(jira:·year_source: jira·android_version)를 새 이름으로 바꾼다.
                                변경 목록만 보이고 `--apply`일 때만 쓴다. site-defaults의 옛 키는 안내만(관리자가 고친다)
   install-hooks [--db <path>]  git config core.hooksPath .githooks, 값이 정확히 .githooks인지 확인 (setup 5)
-  check [--db <path>] [--for write|dry-run]
+  check [--db <path>] [--for write|dry-run] [--roots]
                                호환성 판정: 스키마·생성기 버전·파서 백엔드·외부 파서, (write면) gh 인증
                                → writable / push_allowed. `migrate/schema-v<N>` 브랜치는 버전을 보지 않는다.
+                               warnings(없어진 키·폐지 키·설치 스킬 대신 모듈 문서·runtime.label). remote·prefer·
+                               skill_dir가 있으면 deep_sources(카테고리별 5-1 출처). --roots면 read_roots[절대 경로]
   gh-status                    gh 인증 확인 (setup 9). 실패면 로그인 안내와 종료 코드 2
   doctor [--format json|markdown]
                                환경 점검 한 장(python·deps·config·clone·hook·guard 자가시험·Jira 매핑(tracker)·Jira 코멘트
-                               도구(tracker_post)·gh·스냅샷·호환성·lock). **읽기 전용**
+                               도구(tracker_post)·gh·스냅샷·호환성·lock, 모듈 스킬 설정이 있을 때만 module_skills,
+                               OpenCode 안(TT_RUNTIME=opencode)에서만 opencode_env(설정을 덮는 환경 변수)·jira_gate(Jira
+                               읽기 관문 열림·닫힘과 마지막 사내 확인 요약, 닫힘이면 warn)). **읽기 전용**
                                (mkdir·fetch·lock·쓰기 없음). 행마다 ok|warn|fail|skip. fail이 있으면 종료 코드 1
 """
 
@@ -81,7 +96,7 @@ TOOL_NAME_RE = re.compile(r"^mcp__(?P<server>[^_].*?)__(?P<tool>[^_].*)$")
 FIELDS = [
     ("user.ghe_id", "GHE 아이디", "text", True),
     ("issue_db.path", "이슈 DB 로컬 clone 경로 (없으면 만들 위치)", "clone-path", True),
-    ("issue_db.remote", "이슈 DB 원격 URL", "text", True),
+    ("issue_db.remote", "이슈 DB 원격 URL", "remote", True),
     ("issue_db.base_branch", "base 브랜치", "text", False),
     ("issue_db.ghe_host", "GHE 호스트 (gh의 GH_HOST)", "text", False),
     ("tracker.timezone", "Jira 시각 타임존 (IANA)", "tz", False),
@@ -129,6 +144,18 @@ def validate(kind: str, value) -> str | None:
         return None
     if kind == "year-source":
         return None if text in YEAR_SOURCES else f"{' | '.join(YEAR_SOURCES)} 중 하나여야 합니다: {text}"
+    if kind == "remote":     # guard 규칙 11이 대상 비교에 쓴다 — 못 풀면 규칙 11이 꺼진다
+        return None if userconfig.repo_slug(text) else (
+            f"owner/repo로 풀리는 원격이어야 합니다(https://<host>/<owner>/<repo>.git·git@<host>:<owner>/<repo>.git·"
+            f"<SSH 별칭>:<owner>/<repo>.git): {text}")
+    if kind == "module-remote":     # 전송 방식이 드러난 꼴만(B1-18). 메시지에 자격 증명을 내지 않는다
+        return userconfig.module_remote_problem(value if isinstance(value, str) else text)
+    if kind == "ref":
+        return None if userconfig.BASE_BRANCH_RE.fullmatch(text) else f"{userconfig.BASE_BRANCH_MSG}: {text!r:.60}"
+    if kind == "prefer":
+        return None if text in userconfig.PREFER_VALUES else f"module 또는 skill이어야 합니다: {text}"
+    if kind == "path":              # analyzers.<cat>.skill_dir (B2 §9.1)
+        return userconfig.skill_dir_problem(text)
     return None
 
 
@@ -293,22 +320,78 @@ def _parse_value(text: str):
         return text
 
 
+def _set_opencode(args, data: dict) -> dict:
+    """`set opencode.jira_read open|closed [--accept-error-bodies]` — OpenCode Jira 읽기 관문(`common/oc_jira_gate.py`). 사용자가
+    터미널에서만 연다: OpenCode 안(`TT_RUNTIME=opencode`)이면 거부, open은 같은 OpenCode 버전·플러그인 지문의 사내 확인 통과 기록이
+    있을 때만, 그 기록의 오류 경로 행이 warn이면 `--accept-error-bodies`도 있어야 한다. 최상위 키다(`--platform` 없이)."""
+    from common import oc_jira_gate as gate
+
+    command = gate.open_command(gate.PLUGIN_ROOT, getattr(args, "accept_error_bodies", False))
+    if os.environ.get("TT_RUNTIME") == "opencode":
+        raise UsageError(f"{args.key}: OpenCode 안에서는 바꾸지 않는다. 사용자가 터미널에서 직접 실행한다: {command}")
+    if args.key != gate.SETTING:
+        raise UsageError(f"{args.key}: 쓸 수 있는 OpenCode 키는 {gate.SETTING}(open|closed)뿐이다"
+                         f"({gate.ACCEPT_SETTING}는 --accept-error-bodies로만 쓴다).")
+    if getattr(args, "platform", None):
+        raise UsageError(f"{args.key}: 최상위 키다 — --platform 없이 set한다.")
+    value = str(args.value).strip()
+    if value not in gate.VALUES:
+        raise UsageError(f"{args.key}: open 또는 closed: {args.value!r}")
+    accept = bool(getattr(args, "accept_error_bodies", False))
+    if accept and value != gate.OPEN:
+        raise UsageError("--accept-error-bodies는 opencode.jira_read open과 함께만 쓴다.")
+    record, err = gate.load_record()
+    if value == gate.OPEN:
+        problems = [err] if err else gate.record_problems(record)
+        if problems:
+            raise UsageError(f"{args.key} open 거부: " + "; ".join(problems) + f". 먼저 사내 확인을 돌린다: {gate.CHECK_COMMAND}")
+        if gate.needs_accept(record) and not accept:
+            row = gate.error_row(record) or "없음"
+            why = ("Jira 오류 응답 본문이 모델에 갔다 — 식별자 종류·개수는 통과 기록" if row == "warn"
+                   else "오류 경로를 확인하지 않았다(--missing-key 없이 돌림)")
+            raise UsageError(f"{args.key} open 거부: 사내 확인의 오류 경로 행이 {row}다({why}). 받아들이면 다시 실행한다: "
+                             + gate.open_command(gate.PLUGIN_ROOT, True))
+    userconfig.set_value(data, gate.SETTING, value)
+    if accept:
+        userconfig.set_value(data, gate.ACCEPT_SETTING, True)
+    elif isinstance(data.get("opencode"), dict):
+        data["opencode"].pop(gate.ACCEPT_SETTING.split(".", 1)[1], None)
+    userconfig.save(data)
+    return {"config": str(userconfig.path()), "key": gate.SETTING, "value": value, "accepted_error_bodies": accept,
+            "check": gate.summary(record), "record": str(gate.record_path())}
+
+
 def cmd_set(args, defaults: dict) -> dict:
     data = userconfig.load_user()
     if data is None:
         raise UsageError("config가 없습니다. 먼저 setup(config.py init)을 한다.")
+    if args.key.split(".")[0] == "opencode":
+        return _set_opencode(args, data)
+    if getattr(args, "accept_error_bodies", False):
+        raise UsageError("--accept-error-bodies는 opencode.jira_read open과 함께만 쓴다.")
     value = _parse_value(args.value)
     kind = PATH_KINDS.get(args.key) or ("tz" if args.key.endswith(".timezone") else
-                                        "year-source" if args.key == "logcat.year_source" else "")
+                                        "year-source" if args.key == "logcat.year_source" else
+                                        "remote" if args.key == "issue_db.remote" else
+                                        "module-remote" if args.key == "module_skills.remote" else
+                                        "ref" if args.key == "module_skills.base_branch" else
+                                        "prefer" if re.fullmatch(r"analyzers\.[a-z0-9_]+\.prefer", args.key) else
+                                        "path" if re.fullmatch(r"analyzers\.[a-z0-9_]+\.skill_dir", args.key) else "")
     msg = validate(kind, value)
     if msg:
         raise UsageError(f"{args.key}: {msg}")
     if args.key.split(".")[0] in ("platform", "platforms"):
         raise UsageError(f"{args.key}: 플랫폼 키는 set --platform <이름> <프로필 키>로 쓴다(개인 기본 플랫폼은 config.yaml의 platform).")
-    try:
-        key = userconfig.profile_key(_platform(args), args.key)
-    except ValueError as exc:
-        raise UsageError(f"--platform {_platform(args)}: {exc}") from exc
+    if args.key.split(".")[0] == "module_skills":
+        # 최상위 공통 키 — 개인 기본 플랫폼이 android가 아니어도 최상위에 쓴다. 명시한 --platform만 거부한다
+        if getattr(args, "platform", None):
+            raise UsageError(f"{args.key}: 최상위 키다(레포 하나 안에 <플랫폼>/이 있다) — --platform 없이 set한다.")
+        key = args.key
+    else:
+        try:
+            key = userconfig.profile_key(_platform(args), args.key)
+        except ValueError as exc:
+            raise UsageError(f"--platform {_platform(args)}: {exc}") from exc
     before = userconfig.merged(defaults, copy.deepcopy(data), _platform(args))
     userconfig.set_value(data, key, value)
     userconfig.save(data)
@@ -324,6 +407,10 @@ def cmd_set(args, defaults: dict) -> dict:
     if problems:     # 저장은 한다(고치는 중일 수 있다). 남은 문제를 보인다 — 고치기 전까지 다른 스크립트는 종료 2
         out["problems"] = problems
         print("경고: 플랫폼 프로필 문제가 남았다 — " + "; ".join(problems), file=sys.stderr)
+    mprobs = userconfig.module_skills_problems(defaults, data) + userconfig.analyzer_problems(defaults, data)
+    if mprobs:       # 저장은 한다. triage.py module만 막고(종료 2) run은 막지 않는다(B1-13)
+        out["module_problems"] = mprobs
+        print("경고: 모듈 스킬·분석 스킬 설정 문제가 남았다 — " + "; ".join(mprobs), file=sys.stderr)
     return out
 
 
@@ -350,18 +437,43 @@ def cmd_tracker_candidates(args, defaults: dict) -> dict:
     servers: dict[str, list[str] | None] = {}
     errors: dict[str, str] = {}
     probes: dict[str, dict] = {}     # 서버별 진단 {probe, elapsed_ms} (내용·자격증명 없음, 사내 보고용)
+    # OpenCode(계획 I O8): `--opencode-config`가 있거나 OpenCode 안(`TT_RUNTIME=opencode`)이면 opencode.json `mcp`도 읽고,
+    # --tools-json의 이름을 OpenCode 세션 이름(`<서버>_<도구>`)으로 읽는다. OpenCode 안에서는 Claude Code 설정(~/.claude.json)을
+    # 기본으로 읽지 않는다(--mcp-config를 주면 읽는다).
+    in_opencode = os.environ.get("TT_RUNTIME") == "opencode"
+    oc_mode = bool(args.opencode_config) or in_opencode
+    oc_names: set[str] = set()       # OpenCode에서 온 서버(출력에 source·opencode_tools를 더한다)
     if args.tools_json:
         for name, tools in json.loads(Path(args.tools_json).read_text(encoding="utf-8")).items():
-            servers[name] = [t.split("__", 2)[-1] if t.startswith("mcp__") else t for t in tools]
+            servers[name] = [mcptools.tool_part(name, t, opencode=oc_mode) for t in tools]
             probes[name] = {"probe": "tools-json", "elapsed_ms": 0}
+            if oc_mode:
+                oc_names.add(name)
     given = {mcptools.server_segment(n) for n in servers}     # `jira.corp`와 세션 이름 `jira_corp`는 같은 서버
-    configs = [Path(p) for p in args.mcp_config] if args.mcp_config else [Path.home() / ".claude.json"]
-    for name, conf in mcptools.load_servers(configs).items():
+    found: list[tuple[str, dict, bool]] = []
+    if args.mcp_config or not in_opencode:
+        configs = [Path(p) for p in args.mcp_config] if args.mcp_config else [Path.home() / ".claude.json"]
+        found += [(name, conf, False) for name, conf in mcptools.load_servers(configs).items()]
+    if oc_mode:
+        oc_paths = ([Path(p) for p in args.opencode_config] if args.opencode_config
+                    else mcptools.opencode_config_paths(os.getcwd()))
+        try:
+            found += [(name, conf, True) for name, conf in mcptools.load_opencode_servers(oc_paths).items()]
+        except ValueError as exc:
+            raise UsageError(str(exc)) from exc
+    for name, conf, from_oc in found:
         if name in servers or mcptools.server_segment(name) in given:
             continue
+        if from_oc:     # Claude Code 설정에 같은(정규화) 이름이 있으면 그쪽이 먼저다
+            given.add(mcptools.server_segment(name))
+            oc_names.add(name)
         if any(__import__("fnmatch").fnmatch(name, p) for p in exclude):
             servers[name] = None
             probes[name] = {"probe": "excluded", "elapsed_ms": 0}
+            continue
+        if from_oc and not conf.get("enabled", True):
+            servers[name], errors[name] = None, "disabled: opencode.json enabled:false"
+            probes[name] = {"probe": "disabled", "elapsed_ms": 0}
             continue
         if not (isinstance(conf, dict) and conf.get("command")):
             servers[name], errors[name] = None, mcptools.NOT_STDIO
@@ -387,6 +499,10 @@ def cmd_tracker_candidates(args, defaults: dict) -> dict:
     result = mcptools.candidates(servers, exclude, team, errors, adapter.classify_extra)
     for entry in result:
         entry.update(probes.get(entry["server"]) or {"probe": None, "elapsed_ms": 0})
+        if entry["server"] in oc_names:     # OpenCode 세션에서 보이는 이름(저장은 tools의 전체 이름 그대로)
+            seg = mcptools.server_segment(entry["server"])
+            entry["source"] = "opencode"
+            entry["opencode_tools"] = sorted(f"{seg}_{t.split('__', 2)[-1]}" for t in entry["tools"])
     usable = [s for s in result if not s["excluded"] and s["tracker_tools"].get("get_issue")]
     return {
         "exclude_servers": exclude,
@@ -548,9 +664,62 @@ def check(db: Path, defaults: dict, for_: str, platform: str | None = None) -> d
     }
 
 
+def _removed_key_warnings(defaults: dict, user: dict | None = None) -> list[str]:
+    """없어진 설정 키(`userconfig.removed_keys`, 예: `issue_db.merge`) 경고. config를 못 읽으면 빈 목록(그 오류는 다른 곳이 보인다)."""
+    try:
+        return userconfig.removed_keys(defaults, userconfig.load_user() if user is None else user)
+    except (OSError, ValueError, yamlio.YamlFileError):
+        return []
+
+
+def _user_or_none() -> dict | None:
+    try:
+        return userconfig.load_user()
+    except (OSError, ValueError, yamlio.YamlFileError):
+        return None
+
+
+def _deprecated_key_warnings(defaults: dict, user: dict | None = None) -> list[str]:
+    """폐지 하위 키(`userconfig.deprecated_keys`, `analyzers.<cat>.inputs`·`max_tokens_hint`) 경고. config를 못 읽으면 빈 목록."""
+    return userconfig.deprecated_keys(defaults, _user_or_none() if user is None else user)
+
+
+def _module_warnings(defaults: dict, user: dict | None) -> list[str]:
+    """remote가 있는데 `prefer` 없이 `skill`이 있는 카테고리(B1-19)와 site `runtime.label` 모양(R23). 경고만."""
+    return userconfig.implicit_module_switches(defaults, user) + userconfig.runtime_problems(defaults)
+
+
+def _deep_sources(cfg: dict, defaults: dict, user: dict | None) -> dict | None:
+    """카테고리별 5-1 출처(`userconfig.deep_source`). remote·`prefer`·`skill_dir`·분석 스킬 설정 문제 중 하나가 있을 때만
+    (없으면 None — `check` 출력이 그대로). 원격 주소는 넣지 않는다."""
+    ana = cfg.get("analyzers") if isinstance(cfg.get("analyzers"), dict) else {}
+    keyed = any(isinstance(e, dict) and ("prefer" in e or "skill_dir" in e) for e in ana.values())
+    if not (userconfig.module_skills(cfg) or keyed or userconfig.analyzer_problems(defaults, user)):
+        return None
+    out = {}
+    for cat in sorted(ana, key=str):
+        src = userconfig.deep_source(cfg, cat)
+        out[str(cat)] = {k: v for k, v in src.items() if v is not None}
+    star = userconfig.deep_source(cfg, None)
+    out["*"] = {k: v for k, v in star.items() if v is not None}
+    return out
+
+
 def cmd_check(args, defaults: dict) -> tuple[dict, int]:
     result = check(_db(args, defaults), defaults, args.for_, _platform(args))
     ok = result["push_allowed"] if args.for_ == "write" else result["writable"]
+    user = _user_or_none()
+    # 경고만 — writable·push_allowed·종료 코드는 그대로
+    result["warnings"] = (_removed_key_warnings(defaults, user) + _deprecated_key_warnings(defaults, user)
+                          + _module_warnings(defaults, user))
+    for warning in result["warnings"]:
+        print(f"경고: {warning}", file=sys.stderr)
+    cfg = userconfig.merged(defaults, user or {}, platform=_platform(args))
+    sources = _deep_sources(cfg, defaults, user)
+    if sources is not None:
+        result["deep_sources"] = sources
+    if getattr(args, "roots", False):    # OpenCode external_directory 허용 목록(B2-21). 플래그 없으면 키도 없다
+        result["read_roots"] = userconfig.read_roots(cfg, _plugin_root(args))
     return result, (OK if ok else USAGE)
 
 
@@ -664,7 +833,20 @@ def _doctor_rows(args, defaults: dict) -> list[dict]:
             rows.append(_row("config", "fail", "사용자 config 없음", "/telephony-triage:setup 을 실행한다"))
         else:
             cfg = userconfig.merged(defaults, user, platform=_platform(args))
-            rows.append(_row("config", "ok", "config.yaml 있음"))
+            bad = userconfig.remote_problems(defaults, user)    # 못 풀면 guard 규칙 11이 그 이슈 DB에 꺼진다
+            if bad:
+                rows.append(_row("config", "fail", f"{bad[0][0]}를 owner/repo로 못 풀어 guard 규칙 11이 꺼진다",
+                                 f"config.py set issue_db.remote https://<host>/<owner>/<repo>.git (지금 {bad[0][1]})"))
+            elif _removed_key_warnings(defaults, user):    # 없어진 키(issue_db.merge)는 무시한다 — 경고만
+                rows.append(_row("config", "warn", "옛 키 issue_db.merge(+1 병합으로 없어짐 — 무시한다)",
+                                 "사용자 config에서 그 줄을 지운다 · site-defaults면 관리자"))
+            elif _deprecated_key_warnings(defaults, user):    # 폐지 하위 키(B1 §3.1) — 읽지 않는다, 경고만
+                rows.append(_row("config", "warn", "폐지 키 analyzers.<카테고리>.inputs·max_tokens_hint(무시)",
+                                 "그 줄을 지운다 · site-defaults면 관리자"))
+            elif userconfig.runtime_problems(defaults):      # site 전용 runtime.label(출처 기록) — 경고만
+                rows.append(_row("config", "warn", userconfig.RUNTIME_LABEL_MSG, "site-defaults runtime.label을 고친다(관리자)"))
+            else:
+                rows.append(_row("config", "ok", "config.yaml 있음"))
     except Exception as exc:    # noqa: BLE001 — 읽기 실패도 한 행의 fail이다
         # init --force도 기존 파일을 먼저 읽으므로 손상 파일에서는 실패한다 → 파일을 옮긴 뒤 setup
         rows.append(_row("config", "fail", f"config 읽기 실패: {exc}",
@@ -850,7 +1032,133 @@ def _doctor_rows(args, defaults: dict) -> list[dict]:
             rows.append(_row("lock", "fail", str(exc) or type(exc).__name__,
                              f"lock 파일 확인: {work / session_lock.LOCK_FILE} — 그 세션이 끝났으면 "
                              "db_pr lock release <작업 키> --force(.corrupt-<ts>로 백업 후 제거)"))
+
+    # 10 module_skills — 모듈 스킬·분석 스킬 선택 설정이 있을 때만(기본 설치는 13행 그대로, B1 §3.2·§3.3)
+    if ok_cfg and _module_row_wanted(cfg, defaults, user, work):
+        guarded("module_skills", lambda: rows.append(_module_skills_row(cfg, defaults, user, work)))
+    # 11 OpenCode 안(`TT_RUNTIME=opencode`)에서만: 설정을 덮는 환경 변수(`oc_adapter env-check`)와 Jira 읽기 관문(계획 I O8).
+    # Claude Code에서는 행이 없다(기본 13행 그대로)
+    if os.environ.get("TT_RUNTIME") == "opencode":
+        guarded("opencode_env", lambda: rows.append(_opencode_env_row()))
+        guarded("jira_gate", lambda: rows.append(_jira_gate_row()))
     return rows
+
+
+def _opencode_env_row() -> dict:
+    from common import oc_adapter   # 지연 import: OpenCode 안에서만
+
+    bad = oc_adapter.refused_env()
+    if bad:
+        return _row("opencode_env", "fail", "설정을 덮는 환경 변수: " + ", ".join(bad),
+                    "그 변수를 지우고 다시 실행한다(있으면 guard가 모든 도구를 거부한다)")
+    return _row("opencode_env", "ok", "설정을 덮는 환경 변수 없음")
+
+
+def _jira_gate_row() -> dict:
+    """OpenCode Jira 읽기 관문(`common/oc_jira_gate.py`): 열림·닫힘과 마지막 사내 확인 요약(내용 없음)."""
+    from common import oc_adapter, oc_jira_gate as gate
+
+    if os.environ.get(oc_adapter.JIRA_GATE_ENV) == "open":
+        return _row("jira_gate", "warn", f"시험 열림({oc_adapter.JIRA_GATE_ENV}=open — 테스트·사내 확인 전용)")
+    st = oc_adapter.jira_gate_files()      # 설정·통과 기록 파일로 본 상태(다음 OpenCode 시작에 적용)
+    last = gate.short_summary(st.record)
+    reopen = f"사용자가 터미널에서: {gate.CHECK_COMMAND} → {gate.open_command()}"
+    # 이 OpenCode 세션의 판정값(tt-guard.js가 시작할 때 정해 bash 환경에도 넘긴다). 파일과 다르면 그 차이를 먼저 보인다
+    session = os.environ.get(oc_adapter.JIRA_SESSION_ENV)
+    if session is not None and (session == "open") != st.open:
+        if st.open:
+            return _row("jira_gate", "warn", f"이 세션은 닫힘(설정·기록은 시작 뒤 열림으로 바뀜) — {last}",
+                        "OpenCode를 다시 시작하면 열린다(관문은 시작 때 한 번만 본다)")
+        return _row("jira_gate", "warn", f"이 세션은 열림(시작 때 판정), 다음 시작부터 닫힘 — {'; '.join(st.problems)}",
+                    f"{gate.summary(st.record)}. 지금 닫으려면 OpenCode를 다시 시작한다")
+    if st.open:
+        return _row("jira_gate", "ok", f"열림{'(오류 본문 받아들임)' if st.accepted else ''} — {last}",
+                    f"{gate.summary(st.record)}. 닫기: config.py set {gate.SETTING} closed")
+    if st.setting == gate.OPEN:
+        return _row("jira_gate", "warn", f"닫힘 — {'; '.join(st.problems)}",
+                    f"{gate.summary(st.record)}. 사내 확인을 다시 돌린 뒤 {reopen}")
+    return _row("jira_gate", "warn", f"닫힘({gate.SETTING}: {st.setting}) — Jira MCP 읽기 거부 — {last}",
+                f"이슈 내용은 붙여 넣거나 Claude Code에서 분석한다. 열려면 {reopen}")
+
+
+MODULE_SOURCE_LABEL = {"module": "모듈 문서", "skill": "설치 스킬", "none": "없음", "error": "오류"}
+MODULE_CLONE_NAME = "_module-skills"     # = moduleskills.CLONE_DIR (모듈을 안 불러도 되는 행 조건에만 쓴다, 테스트가 같은지 본다)
+SKILL_DIR_NOTE = ("skill_dir가 작업 폴더 밖이면 Claude Code가 읽기를 한 번 묻는다 — 사용자가 permissions.additionalDirectories에 "
+                  "더할 수 있다 · OpenCode는 config.py check --roots")
+
+
+def _has_skill_dir(defaults: dict, user: dict | None) -> bool:
+    for data in (defaults, user):
+        blocks = [data.get("analyzers")] if isinstance(data, dict) else []
+        profs = data.get("platforms") if isinstance(data, dict) else None
+        blocks += [p.get("analyzers") for p in (profs.values() if isinstance(profs, dict) else ()) if isinstance(p, dict)]
+        for ana in blocks:
+            if any(isinstance(e, dict) and "skill_dir" in e for e in (ana.values() if isinstance(ana, dict) else ())):
+                return True
+    return False
+
+
+def _module_row_wanted(cfg: dict, defaults: dict, user: dict | None, work: Path | None) -> bool:
+    """`module_skills` 행을 보일지: remote, 모듈 스킬·분석 스킬 설정 문제, `prefer`, `skill_dir`(R39), 관리 clone 흔적 중 하나.
+    설치 스킬 파일 위치는 보지 않는다(기본 환경에서 파일 찾기를 돌리지 않는다)."""
+    ana = cfg.get("analyzers") if isinstance(cfg.get("analyzers"), dict) else {}
+    return bool(userconfig.module_skills(cfg) or userconfig.module_skills_problems(defaults, user)
+                or userconfig.analyzer_problems(defaults, user)
+                or any(isinstance(e, dict) and "prefer" in e for e in ana.values())
+                or _has_skill_dir(defaults, user)
+                or (work is not None and os.path.lexists(work / MODULE_CLONE_NAME)))
+
+
+def _source_summary(cfg: dict) -> str:
+    """`5-1 설치 스킬: data · 그 밖=모듈 문서` — `그 밖` 출처와 다른 카테고리만 묶어 적는다(80자 안)."""
+    rest = MODULE_SOURCE_LABEL[userconfig.deep_source(cfg, None)["source"]]
+    ana = cfg.get("analyzers") if isinstance(cfg.get("analyzers"), dict) else {}
+    odd: dict[str, list[str]] = {}
+    for cat in sorted(ana, key=str):
+        label = MODULE_SOURCE_LABEL[userconfig.deep_source(cfg, cat)["source"]]
+        if label != rest:
+            odd.setdefault(label, []).append(str(cat))
+    parts = [f"{label}: {','.join(cats)}" for label, cats in odd.items()]
+    return "5-1 " + " · ".join(parts) + (" · " if parts else "") + f"그 밖={rest}"
+
+
+def _module_skills_row(cfg: dict, defaults: dict, user: dict | None, work: Path | None) -> dict:
+    """설정 검사 → 5-1 출처 요약 → (remote가 있으면) git 버전 → 관리 clone 상태(읽기 전용, `moduleskills.inspect_clone`)
+    → B1-19 경고. 원격 주소는 `redact_remote`로만 보인다. 받기·lock·mkdir 없음."""
+    probs = userconfig.module_skills_problems(defaults, user) + userconfig.analyzer_problems(defaults, user)
+    if probs:
+        return _row("module_skills", "fail", probs[0],
+                    "config.py set module_skills.remote <주소> · analyzers.<카테고리>.prefer 확인 (site-defaults면 관리자)")
+    note = SKILL_DIR_NOTE if _has_skill_dir(defaults, user) else None
+    summary = _source_summary(cfg)
+    ms = userconfig.module_skills(cfg)
+    if ms is None:
+        return _row("module_skills", "ok", f"remote 없음 · {summary}", note)
+    from common import moduleskills   # 지연 import: remote가 있을 때만
+
+    ver = moduleskills.git_version()
+    need = ".".join(map(str, moduleskills.MIN_GIT))
+    if ver is None:
+        return _row("module_skills", "fail", f"git 없음 — 모듈 받기에 git {need} 이상 필요", "git을 설치한다")
+    if tuple(ver) < tuple(moduleskills.MIN_GIT):
+        return _row("module_skills", "fail", f"git {'.'.join(map(str, ver))} — cone sparse에 {need} 이상 필요",
+                    "git을 업데이트한다")
+    info = moduleskills.inspect_clone(work, ms["remote"], ms["base_branch"]) if work is not None else {"state": "absent"}
+    fix = (f"{work / moduleskills.CLONE_DIR if work else moduleskills.CLONE_DIR} 확인 — 고치지 못하면 사용자가 그 폴더를 지운다"
+           "(다음 받기에서 다시 받는다)")
+    if info.get("state") == "mismatch":
+        return _row("module_skills", "fail", f"관리 clone 불일치: {info.get('problem')}", fix)
+    if info.get("state") == "forced":
+        return _row("module_skills", "fail", "ff-only 실패: 원격 브랜치가 강제로 바뀌었다", fix)
+    switches = userconfig.implicit_module_switches(defaults, user)
+    if switches:
+        return _row("module_skills", "warn", switches[0],
+                    "계속 쓰려면 config.py set analyzers.<카테고리>.prefer skill (플랫폼이면 --platform <p>)")
+    slug = userconfig.repo_slug(ms["remote"]) if not ms["remote"].lower().startswith("file://") else None
+    where = f"{slug[1]}/{slug[2]}" if slug else userconfig.redact_remote(ms["remote"])   # 80자 안: owner/repo만
+    if info.get("state") == "ok":
+        return _row("module_skills", "ok", f"{where} @{str(info.get('sha') or '')[:7]} · {summary}", note)
+    return _row("module_skills", "ok", f"{where} 아직 받지 않음 · {summary}", note)
 
 
 def _doctor_markdown(rows: list[dict], counts: dict) -> str:
@@ -909,9 +1217,14 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("set", parents=[common])
     p.add_argument("key")
     p.add_argument("value")
+    p.add_argument("--accept-error-bodies", action="store_true",
+                   help="opencode.jira_read open: 사내 확인의 오류 경로 행이 pass가 아니어도(warn 본문이 모델에 감·skip 확인 안 함) 받아들인다")
     sub.add_parser("sync-scripts-path", parents=[common])
     p = sub.add_parser("tracker-candidates", parents=[common])
     p.add_argument("--mcp-config", action="append")
+    p.add_argument("--opencode-config", action="append",
+                   help="OpenCode 설정(opencode.json·jsonc)의 mcp도 읽는다. OpenCode 안(TT_RUNTIME=opencode)에서는 없어도 "
+                        "작업 폴더에서 OpenCode가 합치는 설정을 읽는다")
     p.add_argument("--tools-json")
     p = sub.add_parser("set-tracker", parents=[common])
     p.add_argument("--server", required=True)
@@ -926,6 +1239,8 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("check", parents=[common])
     p.add_argument("--db", metavar="path", default=None)
     p.add_argument("--for", dest="for_", choices=["write", "dry-run"], default="write")
+    p.add_argument("--roots", action="store_true",
+                   help="read_roots(플러그인 스킬 폴더·work_dir·설치 스킬 SKILL.md 폴더, 절대 경로)를 더한다(OpenCode 읽기 허용용)")
     sub.add_parser("gh-status", parents=[common])
     p = sub.add_parser("doctor", parents=[common])
     p.add_argument("--format", choices=("json", "markdown"), default="json",

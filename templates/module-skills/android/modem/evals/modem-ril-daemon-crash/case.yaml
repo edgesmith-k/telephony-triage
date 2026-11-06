@@ -1,0 +1,28 @@
+# 합성 case (C1D 보정 §6.3). files/의 source.log 말고는 make_module_eval_inputs.py --write가 만든다
+schema_version: 2
+name: modem-ril-daemon-crash
+kind: explore
+synthetic: true
+key: MOCK-9820
+issue:
+  summary: '잠깐 서비스가 끊겼다 돌아옴 (합성)'
+  description: '대기 중 잠깐 서비스 없음이 됐다가 몇 초 뒤 돌아옵니다. 합성 case.'
+  occurred_at: '2026-09-06T16:00:02+0000'
+  platform_version: '14'
+  sim_slot: '0'
+parse: {tz: UTC, year: 2026, minutes: 5}
+input:
+  explore_input: files/explore-input.json
+  timeline: files/timeline.md
+  analysis: files/analysis.json
+run_expect:
+  explore_reason: no_candidate
+expect:
+  accept:
+    - layer: '벤더 RIL|RIL HAL'
+      daemon: 'RIL$|RIL[ (]|RIL\b|RILC|rild|벤더 RIL'
+      evidence: ['serviceDied|has died', 'RADIO_UNAVAILABLE']
+  trap:
+    - label: '^\s*(프레임워크|RILJ|모뎀|망|곁가지)'
+    - label: '^\s*그\s*층\s*로그\s*없음'
+    - label: '^\s*원인\s*아님'

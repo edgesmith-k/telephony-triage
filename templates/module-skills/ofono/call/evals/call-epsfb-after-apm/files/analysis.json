@@ -1,0 +1,52 @@
+{
+ "status": "ok",
+ "key": "MOCK-9402",
+ "platform": "ofono",
+ "mode": "offline",
+ "issue": {
+  "origin": "file",
+  "occurred_at": "2026-02-27T17:51:52+00:00",
+  "sw": null,
+  "platform_version": "2",
+  "sim_slot": "0",
+  "summary": "VoLTE 통화가 안 된다는 EPSFB failed 로그",
+  "description": "EPSFB failed 로그가 있어 VoLTE 통화가 안 되는 것 같습니다.",
+  "comments": 0,
+  "missing": [
+   "model",
+   "sw"
+  ]
+ },
+ "logs": {
+  "files": [
+   "source.log"
+  ],
+  "window": {
+   "start": "2026-02-27T17:46:52.000Z",
+   "end": "2026-02-27T17:56:52.000Z"
+  },
+  "range": [
+   "2026-02-27T17:51:48.199Z",
+   "2026-02-27T17:51:52.273Z"
+  ],
+  "in_range": "partial",
+  "clock_anomalies": 0,
+  "events": 49
+ },
+ "no_candidate": {
+  "search_hits": [],
+  "error_events": [],
+  "error_event_total": 0
+ },
+ "code": {
+  "skipped": true
+ },
+ "explore": {
+  "reason": "no_candidate",
+  "when": "ask"
+ },
+ "must_show": [
+  "로그 범위: 2026-02-27T17:51:48.199Z ~ 2026-02-27T17:51:52.273Z (일부만 포함), 시계 이상 없음"
+ ],
+ "truncated": false
+}

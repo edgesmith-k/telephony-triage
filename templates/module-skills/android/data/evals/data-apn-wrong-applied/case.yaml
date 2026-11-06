@@ -1,0 +1,29 @@
+# 합성 case (C1D 보정 §6.3). files/의 source.log 말고는 make_module_eval_inputs.py --write가 만든다
+# 사용자 11/06: 실제로는 SIM 변경 이벤트 처리 실패일 때만 생김(원인 층은 프레임워크로 같음)
+schema_version: 2
+name: data-apn-wrong-applied
+kind: explore
+synthetic: true
+key: MOCK-9816
+issue:
+  summary: 'APN이 <APN#2>여야 하는데 <APN#1>로 붙음 (합성)'
+  description: 'SIM을 바꾼 뒤 데이터가 <APN#2>로 붙어야 하는데 <APN#1>로 붙습니다. APN은 손대지 않았습니다. 합성 case.'
+  occurred_at: '2026-09-02T10:00:05+0000'
+  platform_version: '14'
+  sim_slot: '0'
+parse: {tz: UTC, year: 2026, minutes: 5}
+input:
+  explore_input: files/explore-input.json
+  timeline: files/timeline.md
+  analysis: files/analysis.json
+run_expect:
+  explore_reason: no_candidate
+expect:
+  accept:
+    - layer: '프레임워크'
+      daemon: 'DPM|DataProfileManager'
+      evidence: ['SET_INITIAL_ATTACH_APN.*<APN#1>', '[Pp]referred data profile.*<APN#1>']
+  trap:
+    - label: '^\s*(RILJ|RIL HAL|벤더|모뎀|망|곁가지)'
+    - label: '^\s*그\s*층\s*로그\s*없음'
+    - label: '^\s*원인\s*아님'

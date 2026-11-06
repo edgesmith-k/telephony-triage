@@ -335,3 +335,113 @@ class Evaluator:
                 if all_matches:
                     matches.append((rank, firsts, a, b))
         return matches if all_matches else best
+
+    # -- C′ 부분 일치 (04-parser-matching.md §5.12, 분석 모드 표시 전용 — 판정 `_evaluate`는 쓰지 않는다) ------
+
+    def partial(self, sig: Signature, occurred: datetime | None = None) -> dict | None:
+        """완전 일치가 아닌 시그니처가 얼마나 가까운지: `{kind, m, n, hits[인덱스], missing[Condition], blocked_by?,
+        order?[id, id], width_sec?, dist}` 또는 None(해당 없음·오류·범위 없음). 호출자는 완전 일치·오류가 아닌 것에만 부른다.
+        kind: missing(구간 최대 m, 1 ≤ m < n, m/n ≥ 0.5) · absent(n=1, 0건) · blocked(양성 n개 구간마다 부정 줄) ·
+        order(양성 n개 구간에서 sequence 어긋남) · window(양성 n개가 범위엔 있으나 W 구간 하나에 안 듦)."""
+        try:
+            pos = [self.lines(c.pattern) if c.kind == "match" else self.matching_events(c) for c in sig.positives]
+            negs = [self.lines(p) for p in sig.negatives]
+        except (PatternTimeout, PatternError):
+            return None
+        if self.lo is None or self.hi is None:
+            return None
+        width = timedelta(seconds=sig.window_sec)
+        end = max(self.hi, self.lo + width)
+        pos = [[i for i in hits if self.lo <= self.dts[i] <= end] for hits in pos]
+        phone = lambda i: self.events[i].get("phone_id")  # noqa: E731
+        slots = sorted({phone(i) for h in pos for i in h if phone(i) is not None}) if sig.same_phone else []
+        best = None
+        for slot in slots or [None]:
+            ok = (lambda i: True) if slot is None else (lambda i, s=slot: phone(i) in (s, None))
+            found = self._partial_group(sig, [[i for i in h if ok(i)] for h in pos],
+                                        [[i for i in h if ok(i)] for h in negs], occurred, width)
+            if found and (best is None or found["_rank"] < best["_rank"]):
+                best = found
+        if best:
+            best.pop("_rank")
+        return best
+
+    def _partial_group(self, sig: Signature, pos, negs, occurred, width) -> dict | None:
+        n = len(pos)
+        lo, a_max = self.lo, max(self.lo, self.hi - width)
+        times = {self.dts[i] for h in pos for i in h} | {self.dts[i] for h in negs for i in h}
+        cands = {lo, a_max}
+        for t in times:
+            cands.update((t - width, t, t + _EPS, t - width + _EPS))
+        keyed = [sorted((self.dts[i], i) for i in h) for h in pos]
+        key_dts = [[d for d, _ in ks] for ks in keyed]
+        neg_dts = [sorted(self.dts[i] for i in h) for h in negs]
+        order = {c.id: k for k, c in enumerate(sig.positives) if c.id}
+        best_m, best_firsts, full_free, blocked = 0, None, None, None
+        for a in sorted(c for c in cands if lo <= c <= a_max):
+            b = a + width
+            firsts = []
+            for ks, ds in zip(keyed, key_dts):
+                j = bisect_left(ds, a)
+                firsts.append(ks[j][1] if j < len(ds) and ds[j] <= b else None)
+            m = sum(f is not None for f in firsts)
+            if m > best_m:
+                best_m, best_firsts = m, firsts
+            if m == n:
+                hit_neg = [k for k, ds in enumerate(neg_dts)
+                           if (j := bisect_left(ds, a)) < len(ds) and ds[j] <= b]
+                if not hit_neg and full_free is None:
+                    full_free = firsts
+                elif hit_neg and blocked is None:
+                    blocked = (firsts, hit_neg[0])
+        out: dict = {"n": n}
+        if full_free is not None and sig.sequence:
+            seq = [full_free[order[s]] for s in sig.sequence]
+            pair = next((k for k, (x, y) in enumerate(zip(seq, seq[1:]))
+                         if (self.dts[x], x) >= (self.dts[y], y)), 0)
+            out.update(kind="order", m=n, hits=full_free, missing=[], order=sig.sequence[pair:pair + 2])
+        elif blocked is not None and full_free is None:
+            out.update(kind="blocked", m=n, hits=blocked[0], missing=[], blocked_by=sig.negatives[blocked[1]])
+        elif full_free is None and all(pos):
+            span, picks = self._min_span(keyed)
+            out.update(kind="window", m=n, hits=picks, missing=[], width_sec=round(span, 3))
+        elif n == 1 and best_m == 0:
+            out.update(kind="absent", m=0, hits=[], missing=[sig.positives[0]])
+        elif 1 <= best_m < n and best_m / n >= 0.5:
+            out.update(kind="missing", m=best_m, hits=best_firsts,
+                       missing=[c for c, f in zip(sig.positives, best_firsts) if f is None])
+        else:
+            return None
+        out["hits"] = [(sig.positives[k], i) for k, i in enumerate(out["hits"]) if i is not None]   # (조건, 레코드)
+        hits = [i for _c, i in out["hits"]]
+        if not hits:
+            out["dist"] = float("inf")
+        elif occurred is not None:
+            out["dist"] = min(abs((self.dts[i] - occurred).total_seconds()) for i in hits)
+        else:
+            out["dist"] = min((self.dts[i] - lo).total_seconds() for i in hits)
+        out["_rank"] = (PARTIAL_KINDS.index(out["kind"]), -out["m"] / n, len(out["missing"]), out["dist"])
+        return out
+
+    def _min_span(self, keyed) -> tuple[float, list[int]]:
+        """조건마다 하나씩 고른 레코드가 드는 가장 짧은 시간 폭(초)과 그 레코드들 (window kind 표시용)."""
+        merged = sorted((d, i, k) for k, ks in enumerate(keyed) for d, i in ks)
+        need, have, best, left = len(keyed), {}, None, 0
+        for right, (d, _i, k) in enumerate(merged):
+            have[k] = have.get(k, 0) + 1
+            while len(have) == need:
+                ld, _li, lk = merged[left]
+                span = (d - ld).total_seconds()
+                if best is None or span < best[0]:
+                    picks: dict[int, int] = {}
+                    for _d, wi, wk in merged[left:right + 1]:
+                        picks.setdefault(wk, wi)
+                    best = (span, [picks[x] for x in range(need)])
+                have[lk] -= 1
+                if not have[lk]:
+                    del have[lk]
+                left += 1
+        return best if best else (0.0, [])
+
+
+PARTIAL_KINDS = ("missing", "absent", "order", "window", "blocked")   # 부분 일치 순위 순 (§5.12)

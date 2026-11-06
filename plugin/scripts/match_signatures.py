@@ -37,6 +37,11 @@ phone_id, line_ref, event_index}` (`line_ref`: 이벤트의 로그 줄 위치 `{
 `events[]` 안의 순번 — 입력 문서 순서 기준이다. 점수·판정에는 쓰지 않는다, 04-parser-matching.md §5.8 (6)). 원인 미확인 후보는 `cause: null`.
 `--top N`(기본 3)은 후보 N개와 함께 `types[]`는 S=1, `causes[]`는 C=1인 것만, `pending_causes[]`는 N개만 내고
 뺀 개수를 `omitted`에 적는다. 판정 목록 전체가 필요하면 `--top 0`.
+
+부분 일치(C′, 분석 모드만, 04-parser-matching.md §5.12): 후보 없음 또는 1위 원인 미확인이면 `partial[]`(≤ 5, 판정·점수 아님) =
+`{kind: missing|absent|order|window|blocked, type, cause, signature, matched:"m/n", hits[≤3 {condition, ts, line_ref}],
+missing[≤3 {id, desc(60자), kind, pattern|event}], blocked_by?, order?, width_sec?}`. 1위 C=1이면 키 없음. 1위 시그니처에
+`must_not_match`가 있으면 `absence_basis: {signature, pattern(40자)}`. 회귀·검증 모드는 둘 다 내지 않는다(출력 그대로).
 """
 
 from __future__ import annotations
@@ -55,10 +60,11 @@ from common import builds, compat, dbpath, issuedb, site_defaults, stepanchor  #
 from common import compiled as compiled_cache  # noqa: E402
 from common.exitcodes import OK, USAGE  # noqa: E402
 from common.patterns import DEFAULT_TIMEOUT_MS  # noqa: E402
-from common.signatures import Evaluator, SignatureError  # noqa: E402
+from common.signatures import PARTIAL_KINDS, Evaluator, SignatureError  # noqa: E402
 from common.logtime import BACKWARD_THRESHOLD_SEC  # noqa: E402
 
 OUTPUT_SCHEMA = 1
+PARTIAL_MAX, PARTIAL_MISSING, PARTIAL_DESC = 5, 3, 60   # match.json `partial[]` 상한 (§5.12)
 DEFAULT_SCORING = {
     "symptom_weight": 0.4,
     "cause_weight": 0.6,
@@ -425,11 +431,13 @@ def match(events_doc: dict, db: issuedb.IssueDb, compiled: dict, *, regress: boo
                 candidates.append(_candidate(db, itype, None, S, 0, sym, None, jira, occurred, half,
                                              scoring, use_bonus, stats, min_samples, rules, use_feedback,
                                              focus_max if itype.id in focus_map else 0.0))
+        candidates.sort(key=_rank_key)
+        partial = None if regress else _partials(evaluator, db, compiled, candidates, types_out, causes_out,
+                                                 acceptance, occurred)
     finally:
         if own:
             evaluator.close()
 
-    candidates.sort(key=_rank_key)
     omitted = None
     if top:   # --top N: 후보 N개, 유형·원인은 충족된 것만, pending 원인 N개 (판정 목록 전체는 --top 0)
         kept_types = [t for t in types_out if t["S"] or t["S"] is None]   # 판정 불가(None)도 남긴다
@@ -452,11 +460,85 @@ def match(events_doc: dict, db: issuedb.IssueDb, compiled: dict, *, regress: boo
         "errors": errors,
         "warnings": warnings,
     }
+    if partial is not None:     # 분석 모드, 후보 없음·원인 미확인일 때만 (회귀·검증 모드 출력은 그대로)
+        result["partial"] = partial
+    basis = None if regress or not candidates else _absence_basis(compiled, candidates[0])
+    if basis:
+        result["absence_basis"] = basis
     if focus_map:
         result["step_focus"] = {"types": list(focus_map), "by": focus_map}
     if omitted is not None:
         result["omitted"] = omitted
     return result
+
+
+def _clip(text: str, n: int) -> str:
+    return text if len(text) <= n else text[: n - 1] + "…"
+
+
+def _partials(evaluator: Evaluator, db, compiled: dict, candidates: list, types_out: list, causes_out: list,
+              acceptance: dict, occurred) -> list[dict] | None:
+    """C′ 부분 일치 (04-parser-matching.md §5.12): 표시 전용, S/C·점수·순위 불변. 1위 C=1이면 None(구하지 않음).
+    (가) S=1 유형 없음 → active 유형(판정 불가 제외)의 증상 시그니처, `absent`는 feedback 1위 제시 수 상위 5 유형만.
+    (나) 1위 S=1·C=0 → 그 유형의 active·비 pending 원인(C=0) 시그니처."""
+    if candidates and candidates[0]["C"]:
+        return None
+    s_of = {t["type"]: t["S"] for t in types_out}
+    c_of = {c["cause"]: c["C"] for c in causes_out}
+    targets = []   # (유형, 원인 또는 None, 시그니처들, absent 허용)
+    if not candidates:
+        owner_type = {c.id: t.id for t in db.types for c in t.causes}
+        hits: dict[str, int] = {}
+        for key, (_acc, total) in (acceptance or {}).items():
+            owner = key.split("/", 1)[0]
+            itype = owner_type.get(owner, owner)
+            hits[itype] = hits.get(itype, 0) + total
+        top5 = {t for t, _ in sorted(((t, h) for t, h in hits.items() if h > 0), key=lambda x: (-x[1], x[0]))[:5]}
+        targets = [(t.id, None, compiled[t.id], t.id in top5) for t in db.types if t.active and s_of.get(t.id) == 0]
+    elif candidates[0]["S"] and candidates[0]["cause"] is None:
+        itype = next(t for t in db.types if t.id == candidates[0]["type"])
+        targets = [(itype.id, c.id, compiled[c.id], True) for c in itype.causes
+                   if c.active and not c.pending and c_of.get(c.id) == 0]
+    items = []
+    for type_id, cause_id, sigs, allow_absent in targets:
+        best = None
+        for sig in sigs:
+            found = evaluator.partial(sig, occurred)
+            if not found or (found["kind"] == "absent" and not allow_absent):
+                continue
+            rank = (PARTIAL_KINDS.index(found["kind"]), -found["m"] / found["n"], len(found["missing"]),
+                    found["dist"], sig.key)
+            if best is None or rank < best[0]:
+                best = (rank, sig, found)
+        if best:
+            items.append((best[0], type_id, cause_id, best[1], best[2]))
+    items.sort(key=lambda x: x[0])
+    out = []
+    for _rank, type_id, cause_id, sig, found in items[:PARTIAL_MAX]:
+        entry = {"kind": found["kind"], "type": type_id, "cause": cause_id, "signature": sig.key,
+                 "matched": f"{found['m']}/{found['n']}",
+                 "hits": [{"condition": _clip(c.id or c.describe(), PARTIAL_DESC),
+                           "ts": evaluator.events[i]["ts"], "line_ref": evaluator.events[i].get("line_ref")}
+                          for c, i in found["hits"][:PARTIAL_MISSING]],
+                 "missing": [{"id": c.id, "desc": _clip(c.describe(), PARTIAL_DESC), "kind": c.kind,
+                              **({"pattern": c.pattern} if c.kind == "match" else {"event": c.event})}
+                             for c in found["missing"][:PARTIAL_MISSING]]}
+        for k in ("blocked_by", "order", "width_sec"):
+            if k in found:
+                entry[k] = _clip(found[k], PARTIAL_DESC) if k == "blocked_by" else found[k]
+        out.append(entry)
+    return out
+
+
+def _absence_basis(compiled: dict, top: dict) -> dict | None:
+    """1위 후보 시그니처에 `must_not_match`가 있으면 `{signature, pattern}` (report.md "없음 근거 포함" 줄, 판정 불변)."""
+    key = top.get("signature")
+    if not key:
+        return None
+    sig = next((s for s in compiled.get(key.split("/", 1)[0]) or [] if s.key == key), None)
+    if sig is None or not sig.negatives:
+        return None
+    return {"signature": key, "pattern": _clip(sig.negatives[0], 40)}
 
 
 def _error_text(err: dict) -> str:

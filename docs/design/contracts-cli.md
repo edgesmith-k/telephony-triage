@@ -15,13 +15,13 @@
 | `show` | `[--keys <a,b.c>]` | `--keys`: 쉼표로 구분한 키(점 표기)만 보인다 (예: work_dir,tracker.tools) |
 | `site-defaults` |  |  |
 | `init` | `[--answers <ANSWERS>] [--force]` |  |
-| `set` | `<key> <value>` |  |
+| `set` | `<key> <value> [--accept-error-bodies]` | `--accept-error-bodies`: opencode.jira_read open: 사내 확인의 오류 경로 행이 pass가 아니어도(warn 본문이 모델에 감·skip 확인 안 함) 받아들인다 |
 | `sync-scripts-path` |  |  |
-| `tracker-candidates` | `[--mcp-config <MCP_CONFIG>]... [--tools-json <TOOLS_JSON>]` |  |
+| `tracker-candidates` | `[--mcp-config <MCP_CONFIG>]... [--opencode-config <OPENCODE_CONFIG>]... [--tools-json <TOOLS_JSON>]` | `--opencode-config`: OpenCode 설정(opencode.json·jsonc)의 mcp도 읽는다. OpenCode 안(TT_RUNTIME=opencode)에서는 없어도 작업 폴더에서 OpenCode가 합치는 설정을 읽는다 |
 | `set-tracker` | `--server <SERVER> --get-issue <GET_ISSUE> [--search-issues <SEARCH_ISSUES>] [--get-comments <GET_COMMENTS>] [--read-tools <READ_TOOLS>]` |  |
 | `rename-legacy` | `[--apply]` | `--apply`: 변경 목록대로 사용자 config.yaml을 쓴다(없으면 목록만) |
 | `install-hooks` | `[--db <DB>]` |  |
-| `check` | `[--db <path>] [--for {write,dry-run}]` | `--for`: 기본 write |
+| `check` | `[--db <path>] [--for {write,dry-run}] [--roots]` | `--for`: 기본 write; `--roots`: read_roots(플러그인 스킬 폴더·work_dir·설치 스킬 SKILL.md 폴더, 절대 경로)를 더한다(OpenCode 읽기 허용용) |
 | `gh-status` |  |  |
 | `doctor` | `[--format {json,markdown}]` | `--format`: markdown: 표 하나와 마지막 줄 카운트 (기본 json, --json과 함께 못 쓴다), 기본 json |
 
@@ -36,6 +36,7 @@
 | `resolve` | `<ref> --roots <ROOTS>` |  |
 | `find-symbol` | `<symbol> --roots <ROOTS>` |  |
 | `remember` | `<roots>` |  |
+| `find-text` | `--roots <ROOTS> --literals <json> [--events <마스킹된 events.json>]` |  |
 
 ## `parse_logcat.py`
 
@@ -97,7 +98,7 @@
 
 | 서브커맨드 | 사용법 | 옵션 설명 |
 |---|---|---|
-| — | `[--db <DB>] (--all \| --ref <ref> \| --changed <ref> \| --staged) [--residual <옛 ID=새 ID>]... [--json] [--plugin-root <PLUGIN_ROOT>]` | `--json`: JSON 출력 (항상 JSON) |
+| — | `[--db <DB>] (--all \| --ref <ref> \| --changed <ref> \| --staged) [--residual <옛 ID=새 ID>]... [--advice] [--json] [--plugin-root <PLUGIN_ROOT>]` | `--advice`: 참고(advice)도 낸다: 시그니처가 하나뿐인 원인·유형. 오류·경고 수·종료 코드에 들지 않는다; `--json`: JSON 출력 (항상 JSON) |
 
 ## `db_regress.py`
 
@@ -131,9 +132,10 @@
 | `preflight` | `--branch <br> [--search <원인 ID\|JIRA-KEY>] [--issue <KEY>]` |  |
 | `stage` | `<plan.json> --wt <dir> --branch <br> [--dry-run] [--verbose] [--then-summary]` | `--verbose`: stdout도 stage.json과 같이 전체 (기본은 통과 항목을 접는다); `--then-summary`: stage 종료 0·3이면 이어서 summary --format markdown을 부르고 그 마크다운만 출력한다 (--json·--verbose와 못 쓴다) |
 | `summary` | `<wt> [--format {json,markdown}]` | `--format`: markdown: write-flow §4 확인 화면을 마크다운으로 (기본 json, --json과 함께 못 쓴다), 기본 json |
-| `publish` | `<wt> --branch <br> --lease <sha\|new> --approved <hash> [--commit] [--and-discard] [--and-merge] [--wait <초>]` | `--lease`: 원격 브랜치 SHA 또는 new(원격에 없어야 함); `--commit`: 커밋이 없으면 승인 해시·hooksPath·guard 검사를 거쳐 summary의 commit_message로 커밋한 뒤 publish한다 (멱등); `--and-discard`: publish 종료 0일 때만 이어서 discard한다; `--and-merge`: 확인 화면에서 'push하고 바로 병합'을 골랐을 때만: publish 종료 0이고 병합 자격(self)이면 이어서 merge; `--wait`: --and-merge: 검사·병합 가능 상태를 기다릴 최대 초(기본 config) |
+| `publish` | `<wt> --branch <br> --lease <sha\|new> --approved <hash> [--commit] [--and-discard]` | `--lease`: 원격 브랜치 SHA 또는 new(원격에 없어야 함); `--commit`: 커밋이 없으면 승인 해시·hooksPath·guard 검사를 거쳐 summary의 commit_message로 커밋한 뒤 publish한다 (멱등); `--and-discard`: publish 종료 0일 때만 이어서 discard한다 |
 | `discard` | `<wt>` |  |
-| `merge` | `--job <작업 키> --approved <sha> [--wait <초>]` | `--approved`: publish 결과 merge.approved(PR head 커밋); `--wait`: 검사·병합 가능 상태를 기다릴 최대 초(기본 config issue_db.merge_wait_seconds) |
+| `request-review` | `--job <작업 키> --reviewer <login[,login]>` | `--reviewer`: 쉼표로 여럿. push 뒤 리뷰어 질문에서 고른 값 |
+| `merge` | `--job <작업 키> [--approved <sha>] [--wait <초>]` | `--approved`: 생략하면 병합 기록(merge-offer.json)의 head_sha. 주면 그 앞부분(7~64 hex)이어야 한다 — 어느 쪽이든 PR head가 다르면 거부; `--wait`: 검사·병합 가능 상태를 기다릴 최대 초(기본 config issue_db.merge_wait_seconds) |
 | `find-plan` | `--branch <BRANCH>` |  |
 
 ## `db_precommit.py`
@@ -179,6 +181,8 @@ stdin: PostToolUse hook 입력 JSON (argparse 없음)
 |---|---|---|
 | `run` | `<KEY> [--logs <logcat\|bugreport>... \| --more-logs <logcat\|bugreport>...] [--issue-raw <json> \| --issue-file <yaml> \| --issue-meta <json>] [--code <프로필\|경로\|skip>] [--dry-run] [--analysis-only] [--answer <kind=값>]... [--tz <TZ>] [--year <YEAR>] [--minutes <MINUTES>] [--refresh] [--offline-db <db>] [--out <dir>] [--failed-step <한 줄>] [--steps-file <파일>] [--clock-offset <±시간>]` | `--more-logs`: 이전 분석의 로그 뒤에 로그를 더해 다시 분석(RF-7). --logs와 함께 못 쓴다; `--analysis-only`: 이슈 DB에 기록하지 않는 분석 전용(cleanup·기존 계획·열린 PR 건너뜀, ok면 lock 해제). --dry-run과 함께 못 쓴다; `--refresh`: 같은 세션에서도 스냅샷을 다시 만들고, 같은 입력의 분석 재사용(analysis-cache.json)도 끈다; `--failed-step`: 실패 스텝 한 줄(선택, 보조 정보). 마스킹해서만 쓴다; `--steps-file`: 시험 절차 첨부 파일(txt/csv/html/zip, 선택). 읽지 못하면 경고만 내고 진행; `--clock-offset`: 시험 장비 시각 → 단말 logcat 시각 시계 차(단말 = 장비 + 값). 예: +3m, -90s, +00:03:00, 180. 없으면 steps-file의 장비 시각은 분석 구간에 쓰지 않는다 |
 | `explore` | `<KEY> [--out <dir>]` | `--out`: `run --offline-db --out`의 JOB 디렉토리(없으면 <work_dir>/<KEY>) |
+| `module` | `<KEY> --for {deep,explore} [--module <p/dir>] [--choose <top\|dir>] [--also] [--at <ISO>] [--out <dir>]` | `--for`: deep = 5-1 심층 분석 문서, explore = 5-2 탐색 문서; `--module`: explore: 이 모듈로(후보 계산 없이). deep에는 못 쓴다; `--choose`: explore: 질문 없이 고른다(top = 1위 후보, dir = 모듈 디렉토리 이름); `--also`: deep: 모뎀 모듈 문서도 같은 SHA로 함께 받는다; `--at`: explore --module: 받은 사본으로 타임라인 중심만 다시 잡는다(받기 없음); `--out`: `run --offline-db --out`의 JOB 디렉토리(없으면 <work_dir>/<KEY>) |
+| `check-output` | `<KEY> --for {deep,explore} [--skipped <사유>] [--out <dir>]` | `--skipped`: 실행하지 않았거나 실패: report 줄을 '생략: <사유>'로; `--out`: `run --offline-db --out`의 JOB 디렉토리(없으면 <work_dir>/<KEY>) |
 | `release` | `<KEY>` |  |
 
 ## `issue_post.py`
@@ -295,6 +299,16 @@ stdin: PostToolUse hook 입력 JSON (argparse 없음)
   - error_events[≤8]({ts, tag, event, phone, request?, error?, code?, reason?, cause?}(각 ≤40자, 있을 때만; 4KB 압축 시 4개·부가 필드 없음))
   - error_event_total
   - unextracted_warn?(수집 태그 W/E/F 줄 중 이벤트로 추출 안 된 줄 수(parse_logcat unextracted_warn.lines, 있을 때만))
+- partial?[≤3](C′ 부분 일치(판정·점수 아님, S/C 불변; 후보 없음·원인 미확인일 때만, 04-parser-matching.md §5.12). {kind: missing|absent|order|window|blocked, type, cause, signature, matched: "m/n", missing[≤3 조건 설명], blocked_by?, at[≤3 f:L], code[]?("<조건>:<상태>[:<root 키>:<경로>:<줄>]")}; 4KB 압축 시 partial[1:] → missing 40자 → 전체 제거)
+  - kind: missing | absent | order | window | blocked
+  - type
+  - cause?
+  - signature
+  - matched
+  - missing?[≤3]
+  - blocked_by?
+  - at?[≤3]
+  - code?[≤3]
 - code
   - skipped
   - roots?
@@ -302,8 +316,8 @@ stdin: PostToolUse hook 입력 JSON (argparse 없음)
   - auto?(`true`: `code.auto_select`로 자동 선택했을 때만): true
   - resolved?
   - moved?
-- analyzer?({skill, when})
-- explore?({reason: no_candidate|cause_unconfirmed, when: ask|always|never}(run은 타임라인을 만들지 않는다))
+- analyzer?({skill, when, note?} 설치 분석 스킬(레거시·prefer: skill) | {category, when, note?} 모듈 스킬 | {error, when} 설정 오류 (note: when ask일 때만 답 전 안내))
+- explore?({reason: no_candidate|cause_unconfirmed, when: ask|always|never, note?: when ask일 때만 답 전 안내}(run은 타임라인을 만들지 않는다))
 - warnings?
 - notes?(잔여 worktree·도구 브랜치 안내 등)
 - lock_owner?

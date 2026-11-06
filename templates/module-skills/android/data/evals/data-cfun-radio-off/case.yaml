@@ -1,0 +1,35 @@
+# 마스킹 발췌 case (설계 D §1, 계획 R4·R5) — 함정 ★: 오귀속(사용자 조작·비행기 모드처럼 보임). source.log는 tools/make_excerpt.py --write가 만든다
+# (masker·residual은 그 출력값). files/의 나머지는 make_module_eval_inputs.py --write가 만든다
+schema_version: 2
+name: data-cfun-radio-off
+kind: explore
+synthetic: false
+origin:
+  kind: masked-excerpt
+  log: A
+  episode: A-E5
+  lines: '57468-57472,57719-57722,57833-57836,58305-58308,58612-58623,58808-58811,59779-59782'
+  masker: d8d3018538a2
+  residual: '2026-11-05'
+key: MOCK-9802
+issue:
+  summary: 시험 중 데이터가 끊김
+  description: 자동 시험 도중 데이터 연결이 끊겼습니다.
+  occurred_at: '2026-08-09T13:13:49+0000'
+  platform_version: '14'
+  sim_slot: '0'
+parse: {tz: UTC, year: 2026, minutes: 5}
+input:
+  explore_input: files/explore-input.json
+  timeline: files/timeline.md
+  analysis: files/analysis.json
+run_expect:
+  explore_reason: cause_unconfirmed
+expect:
+  accept:
+    - layer: '곁가지|VCD|모뎀'
+      daemon: 'VCD'
+      evidence: ['AT\+CFUN=0', 'Internet data state changed from CONNECTED to DISCONNECTED']
+  trap:
+    - label: '^\s*(프레임워크|RILJ|RIL HAL|DNC|DN-|원인 아님)'
+    - label: '사용자|비행기'

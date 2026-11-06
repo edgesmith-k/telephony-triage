@@ -1,0 +1,5 @@
+-- [합성] module-filter negative fixture: an error on a RIL name no module lists still reaches the view. Hand-written, not a real capture.
+Sep 20 15:10:00.000 dut daemon.info NMD[610]: profile select: auth=CHAP profile_id=1
+Sep 20 15:10:00.200 dut daemon.debug ofonod[812]: [0,0099]> RIL_REQUEST_FOO_STATUS
+Sep 20 15:10:00.400 dut daemon.err ofonod[812]: [0,0099]< RIL_REQUEST_FOO_STATUS failed GENERIC_FAILURE
+Sep 20 15:10:01.000 dut daemon.warning NMD[610]: activate result: failed profile_id=1 retry in 10s

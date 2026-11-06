@@ -1,0 +1,68 @@
+{
+ "status": "ok",
+ "key": "MOCK-9104",
+ "platform": "ofono",
+ "mode": "offline",
+ "issue": {
+  "origin": "file",
+  "occurred_at": "2026-09-22T09:00:02+00:00",
+  "sw": null,
+  "platform_version": "2",
+  "sim_slot": "0",
+  "summary": "APN이 <APN#2>여야 하는데 <APN#1>로 붙음 (합성)",
+  "description": "데이터는 붙지만 기대한 APN이 아닙니다. 합성 case.",
+  "comments": 0,
+  "missing": [
+   "model",
+   "sw"
+  ]
+ },
+ "logs": {
+  "files": [
+   "source.log"
+  ],
+  "window": {
+   "start": "2026-09-22T08:55:02.000Z",
+   "end": "2026-09-22T09:05:02.000Z"
+  },
+  "range": [
+   "2026-09-22T09:00:00.010Z",
+   "2026-09-22T09:00:03.200Z"
+  ],
+  "in_range": "partial",
+  "clock_anomalies": 0,
+  "events": 27
+ },
+ "no_candidate": {
+  "search_hits": [
+   {
+    "id": "DATA-001-01",
+    "kind": "cause",
+    "title": "APN 인증 거절 (합성)"
+   },
+   {
+    "id": "DATA-001",
+    "kind": "type",
+    "title": "데이터 연결이 되지 않음 (합성)"
+   },
+   {
+    "id": "CALL-001",
+    "kind": "type",
+    "title": "발신이 되지 않음 (합성)"
+   }
+  ],
+  "error_events": [],
+  "error_event_total": 0
+ },
+ "code": {
+  "skipped": true
+ },
+ "explore": {
+  "reason": "no_candidate",
+  "when": "ask"
+ },
+ "must_show": [
+  "로그 범위: 2026-09-22T09:00:00.010Z ~ 2026-09-22T09:00:03.200Z (일부만 포함), 시계 이상 없음"
+ ],
+ "truncated": false
+}

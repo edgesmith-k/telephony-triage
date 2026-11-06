@@ -1,0 +1,96 @@
+{
+ "status": "ok",
+ "key": "MOCK-9818",
+ "mode": "offline",
+ "issue": {
+  "origin": "file",
+  "occurred_at": "2026-09-04T12:02:01+00:00",
+  "sw": null,
+  "platform_version": "14",
+  "sim_slot": "0",
+  "summary": "VoLTE 발신 실패 (합성)",
+  "description": "IMS 등록 상태에서 VoLTE 발신이 바로 끊깁니다. 합성 case.",
+  "comments": 0,
+  "missing": [
+   "model",
+   "sw"
+  ]
+ },
+ "logs": {
+  "files": [
+   "source.log"
+  ],
+  "window": {
+   "start": "2026-09-04T11:57:01.000Z",
+   "end": "2026-09-04T12:07:01.000Z"
+  },
+  "range": [
+   "2026-09-04T12:00:10.000Z",
+   "2026-09-04T12:02:10.000Z"
+  ],
+  "in_range": "partial",
+  "clock_anomalies": 0,
+  "events": 13
+ },
+ "no_candidate": {
+  "search_hits": [
+   {
+    "id": "CALL-001",
+    "kind": "type",
+    "title": "VoLTE가 동작하지 않음"
+   },
+   {
+    "id": "CALL-001-01",
+    "kind": "cause",
+    "title": "IMS 미등록"
+   },
+   {
+    "id": "MOCK-2101",
+    "kind": "issue",
+    "title": "VoLTE 발신 즉시 종료, IMS 등록 실패 동반"
+   }
+  ],
+  "error_events": [],
+  "error_event_total": 0,
+  "unextracted_warn": 1
+ },
+ "partial": [
+  {
+   "kind": "missing",
+   "type": "CALL-001",
+   "signature": "CALL-001/volte-call-not-established",
+   "matched": "1/2",
+   "missing": [
+    "must_event call_fail_cause"
+   ],
+   "at": [
+    "f0:L6"
+   ]
+  },
+  {
+   "kind": "absent",
+   "type": "DATA-001",
+   "signature": "DATA-001/no-setup-data-call-request",
+   "matched": "0/1",
+   "missing": [
+    "must_event data_evaluation_rejected"
+   ],
+   "at": []
+  }
+ ],
+ "code": {
+  "skipped": true
+ },
+ "explore": {
+  "reason": "no_candidate",
+  "when": "ask"
+ },
+ "warnings": [
+  "형식을 모르는 줄 1개를 건너뛰었습니다."
+ ],
+ "must_show": [
+  "로그 범위: 2026-09-04T12:00:10.000Z ~ 2026-09-04T12:02:10.000Z (일부만 포함), 시계 이상 없음",
+  "오류·거부·타임아웃 이벤트: 추출 이벤트 기준 0건 (수집 태그 W/E/F 줄 중 이벤트로 추출 안 된 줄 1건: ImsPhoneCallTracker 1줄)"
+ ],
+ "truncated": false
+}

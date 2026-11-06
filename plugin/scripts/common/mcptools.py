@@ -10,6 +10,10 @@
 - 도구 전체 이름은 `mcp__<server>__<tool>`이고, `<server>`의 `[A-Za-z0-9_-]` 밖 글자는 `_`로 바뀐다 — TODO(SITE:S1)
   사내 Claude Code 버전에서 확인한다 (치환 규칙은 공식 문서에 없어 관측 기반 추정이다).
 - 후보는 이름으로만 고른다. **사용자 확인을 받은 뒤** `config.py set-tracker`로 저장한다.
+- OpenCode(계획 I O8): 서버는 opencode.json(JSONC)의 `mcp`(`{이름: {type: local|remote, command: [명령, 인자...],
+  environment, enabled}}`)에서 읽는다(`opencode_config_paths`·`load_opencode_servers`). 세션의 도구 이름은 `<서버>_<도구>`
+  (서버 부분은 같은 `_` 치환)이고, 저장하는 이름은 Claude Code와 같은 `mcp__<서버>__<도구>`다 — `oc_adapter`가 guard에 넘길 때
+  같은 규칙(`opencode_candidates`)으로 바꾼다.
 """
 
 from __future__ import annotations
@@ -285,3 +289,84 @@ def candidates(servers: dict[str, list[str] | None], exclude: list[str], team_to
                 entry["suggested"][action] = names[0]
         out.append(entry)
     return out
+
+
+# -- OpenCode (계획 I O8) ----------------------------------------------------------------------------
+
+
+def opencode_candidates(tool: str, servers) -> list[str]:
+    """OpenCode MCP 도구 이름(`<서버>_<도구>`) → Claude Code 이름 후보 `mcp__<서버>__<도구>`(가장 긴 서버 접두사 먼저).
+    서버 이름이 서로 접두사이면(`corp`·`corp_jira`) 후보가 여럿이다 — 호출 쪽이 모두 본다(`oc_adapter.mcp_candidates`)."""
+    out = []
+    for seg in sorted({server_segment(s) for s in servers}, key=len, reverse=True):
+        if seg and tool.startswith(seg + "_") and len(tool) > len(seg) + 1:
+            out.append(f"mcp__{seg}__{tool[len(seg) + 1:]}")
+    return out
+
+
+def tool_part(server: str, name: str, opencode: bool = False) -> str:
+    """세션에 보이는 도구 이름 → 서버 안 도구 이름. `mcp__<서버>__<도구>`는 도구 부분, OpenCode(`opencode`)면 `<서버>_` 접두사를
+    뗀다(서버 부분은 정규화 비교). 그 밖은 그대로(이미 도구 이름)."""
+    name = str(name)
+    if name.startswith("mcp__"):
+        return name.split("__", 2)[-1]
+    seg = server_segment(server) + "_"
+    if opencode and name.startswith(seg) and len(name) > len(seg):
+        return name[len(seg):]
+    return name
+
+
+OPENCODE_MANAGED_DIR = Path("/etc/opencode")
+OPENCODE_CONFIG_NAMES = ("opencode.json", "opencode.jsonc", "config.json")
+
+
+def opencode_config_paths(directory: str, env: dict | None = None) -> list[Path]:
+    """`directory`에서 OpenCode가 합치는 설정 파일(있는 것만, `oc_adapter.config_files`)을 우선순위가 낮은 것부터:
+    전역(XDG) → `OPENCODE_CONFIG` → 프로젝트(먼 폴더 → 가까운 폴더) → 관리(`/etc/opencode`). 뒤 파일이 이긴다."""
+    from common import oc_adapter
+
+    env = os.environ if env is None else env
+    found = oc_adapter.config_files(directory, env)
+    xdg = Path(env.get("XDG_CONFIG_HOME") or Path(env.get("HOME") or Path.home()) / ".config") / "opencode"
+    managed = [p for p in found if p.parent == OPENCODE_MANAGED_DIR]
+    glob = [p for p in found if p.parent == xdg and p not in managed]
+    named = [p for p in found if env.get("OPENCODE_CONFIG") and p == Path(env["OPENCODE_CONFIG"]) and p not in glob]
+    chain = [p for p in found if p not in managed and p not in glob and p not in named]
+    return glob + named + chain[::-1] + managed
+
+
+def _opencode_conf(raw: dict) -> dict:
+    """opencode.json `mcp` 항목 하나 → `list_tools`가 받는 모양(`command`·`args`·`env`) + `enabled`·`type`."""
+    conf: dict = {"type": raw.get("type"), "enabled": raw.get("enabled", True) is not False}
+    cmd = raw.get("command")
+    if isinstance(cmd, str) and cmd:
+        cmd = [cmd]
+    if raw.get("type") != "remote" and isinstance(cmd, list) and cmd and all(isinstance(c, str) for c in cmd):
+        conf.update(command=cmd[0], args=cmd[1:])
+        if isinstance(raw.get("environment"), dict):
+            conf["env"] = {str(k): str(v) for k, v in raw["environment"].items()}
+    return conf
+
+
+def load_opencode_servers(config_paths: list[Path]) -> dict[str, dict]:
+    """opencode.json(JSONC) `mcp`의 서버 → `{이름: conf}`(`_opencode_conf`). 같은 서버는 뒤 파일의 키가 덮는다(얕은 합치기,
+    프로젝트에서 `{"enabled": false}`만 두는 경우). 읽지 못하거나 `mcp`가 객체가 아니면 ValueError(파일 경로 포함)."""
+    from common import oc_adapter
+
+    merged: dict[str, dict] = {}
+    for path in config_paths:
+        if not path.is_file():
+            continue
+        try:
+            data = json.loads(oc_adapter._strip_jsonc(path.read_text(encoding="utf-8")))
+        except (OSError, ValueError) as exc:
+            raise ValueError(f"{path}: OpenCode 설정을 읽지 못함 ({type(exc).__name__})") from exc
+        mcp = data.get("mcp") if isinstance(data, dict) else None
+        if mcp is None:
+            continue
+        if not isinstance(mcp, dict):
+            raise ValueError(f"{path}: mcp가 객체가 아니다")
+        for name, raw in mcp.items():
+            if isinstance(raw, dict):
+                merged[str(name)] = {**merged.get(str(name), {}), **raw}
+    return {name: _opencode_conf(raw) for name, raw in merged.items()}

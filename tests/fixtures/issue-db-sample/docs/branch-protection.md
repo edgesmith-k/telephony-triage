@@ -16,12 +16,13 @@
 | 항목 | 값 | 설정일 | 확인자 |
 |---|---|---|---|
 | PR 필수 (직접 push 금지) | 켬 | TODO(SITE) | TODO(SITE) |
-| CODEOWNERS 리뷰 필수 | 켬 — 필수 승인 수 0(오너가 적힌 경로만 리뷰, 그 밖은 PR을 만든 사람이 바로 병합). 리뷰어 머지 팀은 1명 이상 + `issue_db.merge: review` | TODO(SITE) | TODO(SITE) |
-| force push 금지 | 켬 | TODO(SITE) | TODO(SITE) |
-| 브랜치 삭제 금지 | 켬 | TODO(SITE) | TODO(SITE) |
+| PR 리뷰 | 필수 승인 1 · Dismiss stale approvals 켬 · 최근 push 승인(Require approval of the most recent push, 있으면) 켬 · CODEOWNERS 필수 리뷰(오너가 적힌 메인테이너 경로만) | TODO(SITE) | TODO(SITE) |
+| 필수 상태 검사 + up to date | 켬 — Actions면 필수 검사 `db-check`(GHE 웹 병합은 도구의 main 불변 검사를 거치지 않는다) | TODO(SITE) | TODO(SITE) |
+| force push·브랜치 삭제 금지 | 켬 | TODO(SITE) | TODO(SITE) |
 | 관리자에게도 적용 | 켬 | TODO(SITE) | TODO(SITE) |
 
-- Actions를 쓰게 되면 필수 상태 체크를 추가한다 (`13-actions.md`).
+- 필수 승인 1·Dismiss stale approvals는 +1(작성자 외 1명이 마지막 커밋에 Approve)을 서버에서도 강제한다 — 새 커밋을 push하면 이전 승인은 무효다.
+- Actions를 쓰게 되면 `13-actions.md`의 추가 설정도 적용한다.
 
 ## 로컬 hook (보조 장치)
 
@@ -35,5 +36,6 @@
 
 ## 머지 규칙
 
+- 머지는 작성자 외 1명의 +1 뒤에 한다: 작성자가 "병합해줘"(도구가 +1·검사·main 변경을 확인한다) 또는 GHE 웹 병합.
 - 머지는 **한 번에 하나씩** 한다. 여러 PR이 대기 중이면 하나를 머지한 뒤 다음 PR 작성자에게 `sync-pr`를 요청한다.
 - 동시 기여자가 많아져 이 단계가 병목이 되면 Actions 전환을 검토한다.

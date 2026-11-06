@@ -19,7 +19,7 @@ PR까지 = 첫 `0-key` → 그 뒤 첫 `publish{action: created, gh_ok: true}`(�
 `--transcripts [<dir>]`(opt-in, 기본 `$CLAUDE_CONFIG_DIR/projects` 또는 `~/.claude/projects`, 오프라인·읽기 전용): Claude Code
 transcript에서 플러그인 세션(플러그인 스크립트 Bash 호출 또는 `telephony-triage` 스킬)의 usage를 응답(message.id)마다 한 번 세어
 단계(basic·code·deep·explore·new_cause·write·post·other·retry·subagent, `transcripts()` 참고)로 나누고, 대화 질문(거부·입력 오류
-아닌 AskUserQuestion·__ask_user)·심층 스킬 호출·show_guard 되돌림·거부·스크립트 오류(종료 1·2)·모델·Claude Code 버전을 센다.
+아닌 AskUserQuestion·__ask_user)·심층 분석 호출(`triage.py module … --for deep`, 그 단계에 그것이 없을 때만 플러그인 밖 Skill)·show_guard 되돌림·거부·스크립트 오류(종료 1·2)·모델·Claude Code 버전을 센다.
 단계 합 = 전체(자체 검사). 대상 세션이 없거나 usage가 없으면 미측정(0이 아니다). 숫자만 내고 내용·명령·경로·세션 ID는 내지 않는다.
 플러그인 호출은 경로 모양(`…/scripts/<이름>.py`, `$S/<이름>.py`)만 본다. 세션 파일 하나씩(그 `subagents/` 포함) 필요한 필드만 줄여
 읽고, 모양이 바뀐 줄은 `unreadable_lines`, 숫자가 아닌 usage는 `usage_missing`으로 센다.
@@ -205,8 +205,13 @@ EXIT_RE = re.compile(r"Exit code (\d+)")
 _ARG = r"[^\n;&|]*"     # 같은 명령 안(줄·;·&·| 전)
 
 
+DEEP_MODULE = re.compile(rf"\btriage\.py\b{_ARG}\bmodule\b{_ARG}--for[= ]deep\b")   # 5-1 심층 분석 한 번(B2-19)
+
+
 def _bash_marker(cmd: str) -> str | None:
-    for key, pattern in (("explore", rf"\btriage\.py\b{_ARG}\bexplore\b"), ("basic", rf"\btriage\.py\b{_ARG}\brun\b"),
+    # `module`·`check-output … --for explore`는 explore 패턴(`\bexplore\b`)에 걸린다
+    for key, pattern in (("deep", rf"\btriage\.py\b{_ARG}\b(?:module|check-output)\b{_ARG}--for[= ]deep\b"),
+                         ("explore", rf"\btriage\.py\b{_ARG}\bexplore\b"), ("basic", rf"\btriage\.py\b{_ARG}\brun\b"),
                          ("new_cause", rf"\bdb_verify\.py\b{_ARG}\brules\b{_ARG}--draft|\bparse_logcat\.py\b{_ARG}\bcut\b|"
                                        rf"\bdb_add\.py\b{_ARG}\bsimilar\b"),
                          ("write", rf"\bdb_pr\.py\b{_ARG}\b(?:preflight|stage|summary|publish|discard|merge|find-plan)\b"),
@@ -362,7 +367,8 @@ def _responses(lines: list) -> list:
 def transcripts(root: Path) -> dict:
     """`root`(Claude Code projects 폴더) 아래 플러그인 세션의 단계별 토큰·대화 질문·재시도 신호 수. 오프라인·읽기 전용.
     단계: 응답은 현재 단계에 넣고 그 응답의 도구 호출이 다음 단계를 정한다(첫 표식 전 응답은 첫 표식 단계, 표식이 없으면
-    other). 실패 신호(플러그인 스크립트 종료 1·2, show_guard 거부, Stop 되돌림) 뒤 ~ 도구를 부르는 다음 응답까지는 retry."""
+    other). 실패 신호(플러그인 스크립트 종료 1·2, show_guard 거부, Stop 되돌림) 뒤 ~ 도구를 부르는 다음 응답까지는 retry.
+    deep 단계는 플러그인 밖 Skill 호출과 `triage.py module|check-output … --for deep`로 시작한다."""
     zero = {"calls": 0, "input": 0, "output": 0, "cache_read": 0, "cache_write": 0}
     out = {"dir": str(root), "sessions": 0, "analyze_sessions": 0, "by_stage": {k: dict(zero) for k in STEP_KEYS},
            "total": None, "asks": 0, "deep_calls": 0, "show_guard": {"stop": 0, "deny": 0}, "script_errors": 0,
@@ -397,6 +403,7 @@ def transcripts(root: Path) -> dict:
                 for k, _ in USAGE_KEYS:
                     total[k] += r["usage"][k]
         cur, pending, retry = None, [], False
+        deep_module = False     # 이번 심층 단계에 `module --for deep`를 셌다(설치 스킬 못 찾음 뒤 Skill 호출은 다시 세지 않는다)
         for r in main:
             if r.get("stop"):
                 out["show_guard"]["stop"] += 1
@@ -413,7 +420,11 @@ def transcripts(root: Path) -> dict:
                 if shown.is_ask(t["name"]) and not shown.denied(t) \
                         and not (t["error"] and any(x in t["result"] for x in shown.ASK_REJECTED)):
                     out["asks"] += 1
-                out["deep_calls"] += t["name"] == "Skill" and not _skill(t).startswith("telephony-triage")
+                if t["name"] == "Bash" and DEEP_MODULE.search(str(t["input"].get("command") or "")):
+                    out["deep_calls"] += 1
+                    deep_module = True
+                elif t["name"] == "Skill" and not _skill(t).startswith("telephony-triage") and not deep_module:
+                    out["deep_calls"] += 1
                 nxt = _marker(t, nxt or cur) or nxt
                 fail = _failed(t)
                 if fail == "deny":
@@ -429,6 +440,7 @@ def transcripts(root: Path) -> dict:
                     add(nxt, p)
                 pending = []
             cur = nxt or cur
+            deep_module = deep_module and cur == "deep"
         for p in pending:
             add("other", p)
         for r in sub:

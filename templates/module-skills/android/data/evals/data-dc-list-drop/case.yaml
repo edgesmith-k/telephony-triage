@@ -1,0 +1,28 @@
+# 합성 case (C1D 보정 §6.3). files/의 source.log 말고는 make_module_eval_inputs.py --write가 만든다
+schema_version: 2
+name: data-dc-list-drop
+kind: explore
+synthetic: true
+key: MOCK-9817
+issue:
+  summary: '데이터가 끊긴 뒤 다시 안 붙음 (합성)'
+  description: '인터넷을 쓰던 중 데이터가 끊기고 다시 붙지 않습니다. 합성 case.'
+  occurred_at: '2026-09-03T11:00:20+0000'
+  platform_version: '14'
+  sim_slot: '0'
+parse: {tz: UTC, year: 2026, minutes: 5}
+input:
+  explore_input: files/explore-input.json
+  timeline: files/timeline.md
+  analysis: files/analysis.json
+run_expect:
+  explore_reason: cause_unconfirmed
+expect:
+  accept:
+    - layer: '모뎀|망'
+      daemon: 'RIL$|RIL[ (]|RIL\b|모뎀|PsService'
+      evidence: ['UNSOL_DATA_CALL_LIST_UPDATED', 'CONNECTED to DISCONNECTED']
+  trap:
+    - label: '^\s*(프레임워크|DRM|DNC|RILJ|RIL HAL|곁가지)'
+    - label: '^\s*그\s*층\s*로그\s*없음'
+    - label: '^\s*원인\s*아님'

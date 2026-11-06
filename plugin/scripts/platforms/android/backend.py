@@ -1,8 +1,14 @@
 """reference 파서 백엔드 (16-existing-assets.md §16.3).
 
-공통 처리(포맷·시각·RIL 페어링·윈도우)는 제품 수준이고, builtin 판별 로직은
-없다. site 백엔드는 이 클래스를 상속해 `detect()`만 구현하면 공통 처리를 그대로
-재사용한다.
+공통 처리(포맷·시각·RIL 페어링·윈도우)는 제품 수준이다. builtin 판별은 벤더 RIL IPC 결과
+둘뿐이다(H C1+D R12·S17): `VENDOR_IPC_TAGS`(`RIL`) 줄을 `common.vendor_ipc.detect`에 넘겨
+`builtin.common.vendor_ipc_error`·`builtin.common.vendor_request_failed`를 낸다. 태그 규칙(tags.yaml)과
+무관하게 나온다(태그 묶음이 없는 DB에서도 같다) — 단 tags.yaml에 `ipc: vendor`가 하나라도 있으면 그 태그만 본다
+(`apply_rules`, 04-parser-matching §5.8 (2)). `level: unreliable`도 받는다(기본 없음). 태그 이름·줄 모양은 첨부 로그에서 본 것이며 사내에서 조정한다
+(TODO(SITE:S9)). site 백엔드는 이 클래스를 상속해 `detect()`·`builtin_events()`를 바꾸면 공통 처리를 그대로
+재사용한다(벤더 이벤트도 원하면 `super().detect()`를 합친다).
+
+0.1.1(C1+D 보정): D에서 벤더 IPC builtin과 ril.py 해석이 0.1.0 출력을 바꿨다(분석 재사용 캐시 키 때문에 올림).
 
 구현 위치는 `platforms/android/backend.py`이고 `parser_backends/reference`는 BACKEND만 다시 내보낸다.
 """
@@ -14,11 +20,17 @@ from pathlib import Path
 import re
 from typing import Sequence
 
-from common import events
+from common import events, vendor_ipc
 from . import logcat, ril
-from parser_backends.base import ParserBackend, Window
+from parser_backends.base import ParserBackend, TagAttrSet, Window
 
-VERSION = "0.1.0"
+VERSION = "0.1.1"
+
+# 벤더 IPC 결과 줄을 보는 태그(첨부 로그 A의 벤더 RIL 태그). TODO(SITE:S9) 사내 태그 확인
+VENDOR_IPC_TAGS = frozenset({"RIL"})
+# 레벨을 심각도로 쓰지 않는 태그 기본값(없음). tags.yaml `level: unreliable`로만 생긴다(oFono와 대칭).
+LEVEL_UNRELIABLE_TAGS: frozenset = frozenset()
+DEFAULT_LEVEL = "I"
 
 
 class ReferenceBackend(ParserBackend):
@@ -28,6 +40,9 @@ class ReferenceBackend(ParserBackend):
     _phone = logcat.DEFAULT_PHONE_RULES
     _ril_tags = ril.RIL_TAGS
     _ril_vendor = None
+    # 태그 속성 판단(`apply_rules`가 사본에 새로 만든다). 기본은 상수 집합.
+    _level_unreliable = TagAttrSet(None, "level", "unreliable", LEVEL_UNRELIABLE_TAGS)
+    _vendor_ipc = TagAttrSet(None, "ipc", "vendor", VENDOR_IPC_TAGS)
 
     def configure(self, profile) -> "ReferenceBackend":
         other = copy.copy(self)
@@ -36,16 +51,27 @@ class ReferenceBackend(ParserBackend):
         other._ril_vendor = profile.ril_vendor
         return other
 
+    def apply_rules(self, rules) -> "ReferenceBackend":
+        """tags.yaml `level: unreliable`·`ipc: vendor`(04-parser-matching §5.8 (2)). 키마다 DB가 하나도 선언하지 않으면
+        기본 상수(레벨 보정 없음·`VENDOR_IPC_TAGS`), 하나라도 선언하면 DB만 본다."""
+        other = copy.copy(self)
+        other._level_unreliable = TagAttrSet(rules, "level", "unreliable", LEVEL_UNRELIABLE_TAGS)
+        other._vendor_ipc = TagAttrSet(rules, "ipc", "vendor", VENDOR_IPC_TAGS)
+        return other
+
     def version(self) -> str:
         return VERSION
 
     def builtin_events(self) -> list[str]:
-        return []
+        return list(vendor_ipc.EVENTS)
 
     def detect(self, record: dict) -> list[tuple[str, dict]]:
         """줄 레코드 하나에 대한 builtin 판별 `[(이벤트 이름, fields)]`.
-        reference는 판별 로직이 없다. site 백엔드가 바꾼다."""
-        return []
+        reference는 벤더 IPC 태그(`_vendor_ipc`: 기본 `VENDOR_IPC_TAGS`, tags.yaml `ipc: vendor`가 있으면 그것) 줄의
+        결과만 본다. site 백엔드가 바꾼다."""
+        if not self._vendor_ipc(record.get("tag") or ""):
+            return []
+        return vendor_ipc.detect(record.get("msg") or "")
 
     # -- 공통 처리 ---------------------------------------------------------
 
@@ -54,7 +80,7 @@ class ReferenceBackend(ParserBackend):
             ts=logcat.format_ts(line.dt),
             pid=line.pid,
             tid=line.tid,
-            level=line.level,
+            level=DEFAULT_LEVEL if self._level_unreliable(line.tag) else line.level,
             tag=line.tag,
             msg=line.msg,
             phone_id=self._phone.phone_id(line.tag, line.msg),

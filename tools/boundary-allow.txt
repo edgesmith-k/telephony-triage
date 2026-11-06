@@ -17,3 +17,9 @@ pattern:* tests/test_boundary.py
 
 # 교육 자료의 마스킹 전·후 예시: 테스트 PLMN(001-01) 합성 IMSI
 pattern:long-number docs/* ^001010123456789$
+
+# OpenCode 설정 JSON 스키마 주소($schema, 계획 I 2단계)
+pattern:url-host opencode/* ^https://opencode\.ai$
+
+# 가짜 Anthropic 서버(127.0.0.1 loopback만) 선택 실행 테스트 — 계획 I C2i·C3i
+pattern:url-host tests/test_claude_child.py ^http://127\.0\.0\.1$

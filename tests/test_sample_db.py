@@ -265,8 +265,8 @@ def test_sample_plans_validate():
 
 
 def test_codeowners_lists_maintainer_paths_only():
-    """CODEOWNERS는 메인테이너 경로만 둔다(카테고리 오너 없음 — 카테고리 PR은 작성자 본인 병합, 06-collaboration §6.1).
-    목록은 본인 병합이 막히는 메인테이너 경로(`dbpr/merge.py` MAINTAINER_PATHS)와 같다. 뼈대(make_db_skeleton)도 이 파일을 복사한다."""
+    """CODEOWNERS는 메인테이너 경로만 둔다(카테고리 오너 없음 — 카테고리 PR은 작성자 외 1명의 +1로 병합, 06-collaboration §6.1).
+    목록은 `db_pr merge`가 거부하는 메인테이너 경로(`dbpr/merge.py` MAINTAINER_PATHS)와 같다. 뼈대(make_db_skeleton)도 이 파일을 복사한다."""
     sys.path.insert(0, str(REPO / "plugin" / "scripts"))
     from dbpr.merge import MAINTAINER_PATHS
 
@@ -276,6 +276,30 @@ def test_codeowners_lists_maintainer_paths_only():
     assert all(r[1:] == ["@mock-org/telephony-issue-db-maintainers"] for r in rules), rules
     categories = yaml.safe_load((SAMPLE / "issue-db.config.yaml").read_text(encoding="utf-8"))["categories"]
     assert not {r[0].strip("/") for r in rules} & {c["key"] for c in categories}
+
+
+def test_sample_docs_follow_plus_one_merge():
+    """+1 병합(H A2): 뼈대가 복사하는 샘플 파일(make_db_skeleton COPY_FILES)에 없어진 바로 병합 문구가 없고, PR 템플릿은
+    06-collaboration §6.3 블록과 같으며 +1 항목이 있다. 문서를 고쳐도 TODO(SITE) 줄 수(사내 `check S-6` 개수)와 CODEOWNERS 첫 오너
+    줄(12행, test_site_checks)은 그대로다."""
+    sys.path.insert(0, str(REPO / "tools"))
+    import make_db_skeleton
+    from site_checks import TODO_SITE_RE
+
+    stale = ("바로 병합", "issue_db.merge", "필수 승인 수 0", "본인 병합", "and-merge", "리뷰어 머지", "push하고")
+    todo: dict[str, int] = {}
+    for rel in make_db_skeleton.COPY_FILES:
+        text = (SAMPLE / rel).read_text(encoding="utf-8")
+        assert not [s for s in stale if s in text], rel
+        if n := sum(bool(TODO_SITE_RE.search(line)) for line in text.splitlines()):
+            todo[rel] = n
+    assert todo == {".github/CODEOWNERS": 2, "docs/branch-protection.md": 6, "issue-db.config.yaml": 7}, todo
+    template = (SAMPLE / ".github" / "pull_request_template.md").read_text(encoding="utf-8")
+    design = (REPO / "docs" / "design" / "06-collaboration.md").read_text(encoding="utf-8")
+    block = design.split("**`.github/pull_request_template.md`**", 1)[1].split("```markdown\n", 1)[1].split("```", 1)[0]
+    assert template == block and "- [ ] 작성자 외 1명이 이 PR의 마지막 커밋에 Approve했다(+1)" in template
+    owners = (SAMPLE / ".github" / "CODEOWNERS").read_text(encoding="utf-8").splitlines()
+    assert owners[11].startswith("/parser-rules/") and all(line.startswith("#") for line in owners[:9])
 
 
 def test_sample_tree_layout():

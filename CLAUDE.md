@@ -20,7 +20,7 @@ Android Telephony 이슈 도구: Jira 이슈와 logcat으로 원인·해결책�
 >
 > 위 import가 안 되는 환경(S1)이면 세션 시작 시 `SITE_PROFILE.md`를 먼저 읽는다.
 
-매 세션 로드되므로 ≤4KB로 유지한다. 설계는 `docs/design/` (지도: `docs/design/README.md`. 표·정의가 다르면 `contracts.md`가 맞다). `docs/history/`는 읽지 않는다.
+매 세션 로드되므로 ≤4KB. 설계는 `docs/design/`(지도 `README.md`, 표·정의는 `contracts.md`가 맞다). `docs/history/`는 읽지 않는다.
 
 ## 작업 방식 (상세 `11-phases.md §11.0`)
 
@@ -33,7 +33,7 @@ Android Telephony 이슈 도구: Jira 이슈와 logcat으로 원인·해결책�
 ## 항상 지킬 것 (상세 `12-principles.md`)
 
 - 분류 확정, 새 유형·원인, 시그니처·파서 규칙 추가·삭제, 수정 상태 변경은 **사용자 확인 후**에만.
-- 이슈 DB push는 변경·diff·검증 결과·커밋 메시지를 보여주고 **승인받은 뒤에만**. main 직접 push 금지. PR 병합은 사용자가 고른 경우 `db_pr`로만.
+- 이슈 DB push는 변경·diff·검증 결과·커밋 메시지를 보여주고 **승인받은 뒤에만**. main 직접 push 금지. 병합은 +1 뒤 요청 시 `db_pr merge`로만. Claude는 Approve 안 함.
 - 사용자의 이슈 DB clone은 브랜치도 파일도 바꾸지 않는다.
 - 테스트·매칭·이슈 DB에는 마스킹된 로그만 쓴다. Jira는 읽기와, 확인 화면에서 승인한 본문의 코멘트 추가만(바뀌면 재승인).
 - 생성 파일(README·STATS·CHANGELOG)은 `db_build.py`로만 만든다.

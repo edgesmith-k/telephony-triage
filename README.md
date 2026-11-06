@@ -11,6 +11,7 @@ Telephony 이슈 분석 도구(Claude Code 플러그인, Android 기본 — 팀�
 - 개발자: Claude Code 세션을 이 레포 루트에서 열면 [CLAUDE.md](CLAUDE.md)가 로드된다.
   모드(사외 초안 / 사내 보완 / 사내 처음부터)와 작업 방식은 거기에 있다.
 - 사내 반입·보완 담당자: [GUIDE.md](GUIDE.md) §4.
+- 실행 환경 도입(Claude Code + 사내 모델, OpenCode)과 팀원 사용 안내: [docs/RUNTIME_ADOPTION.md](docs/RUNTIME_ADOPTION.md), [docs/TEAM_GUIDE.md](docs/TEAM_GUIDE.md).
 - 설계 문서 지도: [docs/design/README.md](docs/design/README.md).
 
 ## 테스트

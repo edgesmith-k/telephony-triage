@@ -45,8 +45,9 @@ SCRIPTS = ("config", "code_roots", "parse_logcat", "mask_pii", "jira_fields", "m
 # argparse 없이 stdin만 받는 스크립트
 STDIN_ONLY = {"jira_bridge": "stdin: PostToolUse hook 입력 JSON",
               "show_guard": "`show_guard.py (stop | pre-ask | pre-bash | post)`, stdin: 그 hook 입력 JSON"}
-# `__main__`이 있지만 CLI가 아닌 모듈(현재 없음)
-NOT_CLI: tuple[str, ...] = ()
+# 계약 표(contracts-cli.md)에 싣지 않는 `__main__` 모듈. module_eval: 모듈 스킬 eval 개발 도구(계획 H C0) — 계약 행은
+# E 단계에서 SCRIPTS로 옮긴다(MODULE_SKILLS_PLAN_IMPL:414)
+NOT_CLI: tuple[str, ...] = ("module_eval",)
 
 BLOCK_START = "op 필수 키 ("
 BLOCK_END = "여기 없는 op·세부 제약은 `SNAP/schema/plan.schema.json`\n"

@@ -325,11 +325,43 @@ def test_real_check_ids_order_and_manual_items():
     ids = [c.id for c in mb.CHECKS]
     assert ids == ["plugin-json", "site-paths", "mcp-local", "boundary", "human-search", "schemas", "contracts",
                    "exec-bits", "site-todos", "todos-seen", "draft-notes-size", "draft-notes-fresh", "skeleton",
-                   "offline-eval", "regress", "evals-prepare", "pytest"]
+                   "module-skills", "offline-eval", "regress", "evals-prepare", "pytest"]
     manual = [c.id for c in mb.CHECKS if c.kind == "manual"]
     assert manual == ["human-search", "todos-seen", "draft-notes-fresh"]
     assert all(c.how for c in mb.CHECKS if c.kind == "manual")
-    assert {c.checklist for c in mb.CHECKS} == set(range(1, 11))
+    assert {c.checklist for c in mb.CHECKS} == set(range(1, 12))
+
+
+class _FakeCtx:
+    """`Ctx.run`만 흉내: 단계 이름별 종료 코드를 주고 부른 순서를 남긴다."""
+
+    def __init__(self, repo: Path, codes: dict):
+        self.repo, self.codes, self.calls = repo, codes, []
+
+    def run(self, check_id, argv, **_kw):
+        tool = Path(argv[1]).name
+        self.calls.append(tool)
+        code = self.codes.get(tool, 0)
+        return code, "\n".join(f"line {i}" for i in range(30)) + f"\n{tool} 끝" if code else ""
+
+
+def test_module_skills_check_order(tmp_path):
+    """C1D §3.5: module_repo_check --template → make_module_eval_inputs --check → fixture_residual, 모두 통과면 pass."""
+    ctx = _FakeCtx(tmp_path, {})
+    got = mb.check_module_skills(ctx)
+    assert got.status == "pass" and "origin" in got.detail
+    assert ctx.calls == ["module_repo_check.py", "make_module_eval_inputs.py", "fixture_residual.py"]
+    assert [a[1:] for _, a in mb.MODULE_SKILL_STEPS][0] == ["--template", "templates/module-skills"]
+
+
+def test_module_skills_check_fails_with_tail(tmp_path):
+    """첫 실패에서 멈추고 그 도구 출력의 끝(tail)을 detail에 담는다. 종료 2는 error."""
+    ctx = _FakeCtx(tmp_path, {"make_module_eval_inputs.py": 1})
+    got = mb.check_module_skills(ctx)
+    assert got.status == "fail" and got.detail.startswith("make_module_eval_inputs --check: 종료 1")
+    assert "make_module_eval_inputs.py 끝" in got.detail and "line 5" not in got.detail
+    assert ctx.calls == ["module_repo_check.py", "make_module_eval_inputs.py"]
+    assert mb.check_module_skills(_FakeCtx(tmp_path, {"module_repo_check.py": 2})).status == "error"
 
 
 def _write_plugin_json(repo: Path, data: dict) -> None:
@@ -433,6 +465,27 @@ def test_skeleton_zip_is_deterministic(tmp_path):
         assert all(i.date_time == mb.ZIP_DATE for i in zf.infolist())
         modes = {i.filename: i.external_attr >> 16 & 0o777 for i in zf.infolist()}
     assert modes["schema/b.sh"] == 0o755 and modes["schema/a.yaml"] == 0o644
+
+
+def test_real_repo_zip_contains_opencode(tmp_path):
+    """계획 I O10: 레포 zip(`git archive HEAD`)에 OpenCode v1 층(`opencode/`)이 통째로 들어간다 — 추적 파일 전부, `tt-oc`는
+    실행 권한 그대로. `.gitattributes`의 export-ignore나 SITE_PATHS가 opencode/를 빼면 여기서 막힌다."""
+    if not (REPO / ".git").exists():
+        pytest.skip("git 레포가 아니다(반입 사본)")
+    if (REPO / "SITE_PROFILE.md").exists():
+        pytest.skip("사내 레포(SITE_PROFILE.md 있음) — 묶음은 사외에서만 만들고, 사내 파일이 든 zip은 build_bundle이 거부한다")
+    tracked = [n for n in _git(REPO, "ls-files", "-z", "--", "opencode").split("\0") if n]
+    assert "opencode/bin/tt-oc" in tracked and "opencode/plugins/tt-guard.js" in tracked
+    built, why = mb.build_bundle(REPO, LABEL, _git(REPO, "rev-parse", "HEAD").strip(), tmp_path, _skeleton_dir(tmp_path),
+                                 mb.load_site_paths(REPO))
+    assert built is not None, why
+    with zipfile.ZipFile(built / f"telephony-triage-{LABEL}.zip") as zf:
+        info = {i.filename: i for i in zf.infolist()}
+    committed = [n for n in _git(REPO, "ls-tree", "-r", "--name-only", "HEAD", "--", "opencode").splitlines() if n]
+    assert committed and not [n for n in committed if n not in info]
+    for name in ("opencode/opencode.json.template", "opencode/managed.json.sample", "opencode/agents/triage.md"):
+        assert name in info, name
+    assert info["opencode/bin/tt-oc"].external_attr >> 16 & 0o111, "tt-oc는 실행 권한으로 들어간다"
 
 
 def test_verify_skeleton_catches_types_jira_fixtures(tmp_path):

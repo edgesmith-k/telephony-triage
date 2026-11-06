@@ -122,6 +122,8 @@ S-1에서 `SITE_PROFILE.md`에 남길 것: 설치 경위(미러·A/B·Python 버
 
 팀원도 `claude`가 부르는 `python3`(hook과 Bash 도구 모두)가 3.10+ 이고 PyYAML·jsonschema를 import할 수 있어야 한다. 특별한 이유가 없으면 방법 1을 쓴다.
 
+사내 모델(Claude Code + 게이트웨이, OpenCode)을 팀에 열지와 그 확인·설정은 [RUNTIME_ADOPTION.md](RUNTIME_ADOPTION.md).
+
 | 방법 | 내용 | 장단점 |
 |---|---|---|
 | 1. 각자 `--user` (권장) | 22.04 기본 python3에 `pip install --user` 한 줄 | 가장 짧다. venv·`.bashrc` 불필요 |
@@ -131,6 +133,8 @@ S-1에서 `SITE_PROFILE.md`에 남길 것: 설치 경위(미러·A/B·Python 버
 ## 7. 팀원 사용 준비 (S-7 배포 뒤, 처음 한 번)
 
 **전제**: 도입 담당자가 S-7까지 끝냈다(사이트 설정 `plugin/site-defaults.yaml`, 운영 이슈 DB, 사내 마켓플레이스 등록). 그 전에는 setup이 "플러그인 관리자가 사이트 설정(site-defaults.yaml)을 아직 올리지 않았습니다"로 멈춘다.
+
+팀원에게 줄 사용 안내(세 실행 환경의 설치·매일 쓰는 흐름·갱신)는 [TEAM_GUIDE.md](TEAM_GUIDE.md). 아래 1~5는 Claude Code + Claude 기준의 짧은 판이다.
 
 1. **의존성** (Ubuntu 22.04 기준, 6절 방법 1. venv로 정했으면 4절 B)
    ```
@@ -221,7 +225,7 @@ rm -rf ~/tt-old ~/tt-new
 ```
 실패하면 main에 합치지 않는다. `FAILED tests/…::<테스트 이름>` 줄만(사내 이름·경로는 빼고) 사외로 전달한다. 사내 레포에서는 사외 초안 전용 검사(`test_site_paths_are_absent_in_draft`, `test_check_boundary_external`, `test_site_defaults_required`)가 skip으로 나오는 것이 정상이다(import-20261014부터, 마지막 것은 그다음 묶음부터).
 
-반입한 묶음에서 **hook이나 공통 판정이 바뀌었으면**(`plugin/hooks/hooks.json`, `guard.py`, `show_guard.py`, `common/shown.py`, `jira_bridge.py`, 표시 기록을 쓰는 스크립트(`db_pr`·`issue_post`·`db_verify`·`triage`)의 기록 부분, 또는 `SKILL.md`·`reference/rules.md`의 공통 규칙) 사내 대상 eval 11개(`tests/skill_evals/pending.json` `site`)를 **모두** 다시 돌린다. 그 밖이면 바뀐 흐름의 eval만. 어느 쪽인지는 묶음과 함께 오는 `DRAFT_NOTES.md` "사내로 넘긴 것"의 재반입 노트에 적혀 있다. 생성기 버전(`generator_version`)이 올라간 묶음이면 운영 이슈 DB를 `migrate --to <현재 스키마>`로 맞춘다(`docs/design/06-collaboration.md §6.4` 버전 올림 순서, 운영 DB가 아직 없으면 뼈대 config 한 줄). 이어서 사내 단계는 `claude` → **계속**.
+반입한 묶음에서 **hook이나 공통 판정이 바뀌었으면**(`plugin/hooks/hooks.json`, `guard.py`, `show_guard.py`, `common/shown.py`, `jira_bridge.py`, 표시 기록을 쓰는 스크립트(`db_pr`·`issue_post`·`db_verify`·`triage`)의 기록 부분, 또는 `SKILL.md`·`reference/rules.md`의 공통 규칙) 사내 대상 eval 12개(`tests/skill_evals/pending.json` `site`)를 **모두** 다시 돌린다. 그 밖이면 바뀐 흐름의 eval만. 어느 쪽인지는 묶음과 함께 오는 `DRAFT_NOTES.md` "사내로 넘긴 것"의 재반입 노트에 적혀 있다. 생성기 버전(`generator_version`)이 올라간 묶음이면 운영 이슈 DB를 `migrate --to <현재 스키마>`로 맞춘다(`docs/design/06-collaboration.md §6.4` 버전 올림 순서, 운영 DB가 아직 없으면 뼈대 config 한 줄). 이어서 사내 단계는 `claude` → **계속**.
 
 ### 멈췄을 때
 
@@ -262,8 +266,27 @@ git push -u origin main
 - 이 폴더에는 `core.hooksPath`를 설정하지 않는다(`.githooks/pre-push`가 main push를 거부한다 — 그게 정상 동작이다). `--no-verify`로 우회하지 않는다.
 - 인증 실패·거부(레포가 비어 있지 않음 등)는 우회하지 말고 멈춰서 원인을 본다.
 
-**3. 바로 서버 보호 켜기** — main 브랜치 보호: **PR 필수**(직접 push 금지), force push·삭제 금지, **CODEOWNERS 리뷰 필수 + 필수 승인 수 0**. 승인 수를 0으로 두면 PR을 만든 사람이 바로 병합할 수 있고(`issue_db.merge: self`, 기본 — push 전 확인 화면에 `push하고 바로 병합` 선택지가 나온다), CODEOWNERS에 오너가 적힌 경로만 리뷰가 필요하다. 그래서 CODEOWNERS에는 **메인테이너 경로**(`/.githooks/`·`/schema/`·`/parser-rules/`·`/templates/`·`/issue-db.config.yaml`·`/.github/`·`/docs/` 등)만 오너를 적고, 카테고리 경로(`/data/` 등)의 오너는 선택이다(적으면 그 카테고리 PR은 리뷰가 필요해 본인 병합이 막힌다). `.githooks/`는 main의 스크립트가 모든 기여자 PC에서 돌므로 메인테이너 경로의 리뷰는 끄지 않는다(`docs/design/06-collaboration.md §6.1`). 리뷰어 머지를 유지할 팀은 필수 승인 1명 이상으로 두고 site-defaults `issue_db.merge: review`로 그 선택지를 끈다. Actions 검사를 쓰면 `issue_db.merge_wait_seconds`(기본 420, 최대 480)를 검사 시간에 맞춘다. 레포 설정 "Automatically delete head branches"를 켜 두면 병합한 PR 브랜치가 지워진다. 확인은 `python3 tools/site_step.py check`의 `s4a.protection`. TODO(SITE:S5) 사내 GHE에서 "필수 승인 0 + CODEOWNERS 리뷰 필수" 조합이 되는지 확인한다(안 되면 `issue_db.merge: review`로 두고 보고한다). 카테고리 경로만 바꾼 시험 PR에서 `gh pr view <N> --json reviewDecision,mergeStateStatus`가 오류 없이 나오고 `reviewDecision`이 REVIEW_REQUIRED가 아닌지도 본다(REVIEW_REQUIRED면 도구는 기다리지 않고 병합하지 않는다, 필드를 못 읽으면 병합이 늘 멈춘다).
+**3. 바로 서버 보호 켜기** — main 브랜치 보호(`docs/design/06-collaboration.md §6.1`):
+
+| 항목 | 값 | 이유 |
+|---|---|---|
+| PR 필수(직접 push 금지)·force push·삭제 금지 | 켬 | main은 PR로만 바뀐다 |
+| Require approvals | 1 | +1(작성자 외 1명의 Approve)을 서버도 강제 |
+| Dismiss stale approvals | 켬 | "승인이 이전 커밋" 판정과 GHE 화면을 맞춘다 |
+| Require approval of the most recent push | 있으면 켬 | 같은 이유 |
+| Require status checks + up to date | 켬(Actions면 필수 검사 `db-check`) | GHE 웹 병합은 `db_pr merge`의 main 불변 검사를 거치지 않는다 |
+| Include administrators | 켬 | 예외 없이 |
+| CODEOWNERS 필수 리뷰 | 메인테이너 경로만 | 아래 |
+
+CODEOWNERS에는 **메인테이너 경로**(`/.githooks/`·`/schema/`·`/parser-rules/`·`/templates/`·`/issue-db.config.yaml`·`/.github/`·`/docs/` 등)만 오너를 적고, 카테고리 경로(`/data/` 등)의 오너는 선택이다(적으면 GHE가 그 카테고리 PR에 오너를 자동 요청하고 오너 승인 전 BLOCKED다). `.githooks/`는 main의 스크립트가 모든 기여자 PC에서 돌므로 메인테이너 경로의 리뷰는 끄지 않는다(`docs/design/06-collaboration.md §6.1`). 병합은 작성자 외 1명이 Approve(+1)한 뒤 작성자가 "병합해줘"(`db_pr merge`) 또는 GHE에서 한다. Actions 검사를 쓰면 `issue_db.merge_wait_seconds`(기본 420, 최대 480)를 검사 시간에 맞춘다. 레포 설정 "Automatically delete head branches"를 켜 두면 병합한 PR 브랜치가 지워진다. 확인은 `python3 tools/site_step.py check`의 `s4a.protection`(권장 항목은 정보로 보인다). TODO(SITE:S5) 사내 GHE에서 위 항목(특히 Dismiss stale approvals·최근 push 승인)을 켤 수 있는지 확인한다(안 되는 항목은 보고한다). 카테고리 경로만 바꾼 시험 PR에서 `gh pr view <N> --json reviewDecision,mergeStateStatus`가 오류 없이 나오고, 다른 계정이 Approve하기 전에는 `reviewDecision`이 REVIEW_REQUIRED, head에 Approve한 뒤에는 APPROVED인지 본다(REVIEW_REQUIRED면 도구는 기다리지 않고 병합하지 않는다, 필드를 못 읽으면 병합이 늘 멈춘다). +1 병합 이전 판에서 올라왔으면 반입 뒤 site-defaults·사용자 config의 옛 `merge` 줄(`issue_db` 아래)을 지우고 doctor(`/telephony-triage:status --doctor`)의 `config` 행 경고가 사라졌는지 본다.
 
 **4. 뼈대 폴더 정리** — 이 폴더는 더 쓰지 않는다(지워도 된다). 도입 담당자도 팀원과 같이 `/telephony-triage:setup`으로 운영 레포를 clone하고, `core.hooksPath`는 setup이 설정한다. 이후 변경은 도구의 PR(`tt/*` 브랜치)이나 메인테이너 PR로만 한다.
 
 관련: 반입 체크리스트 `docs/design/15-local-draft.md §15.4`, 사내 단계 §15.5, 재반입 §15.6, 사람용 총정리 `GUIDE.md` 4장.
+
+## 10. 모듈 스킬 레포 연결과 정기 점검 (MS-1·MS-2, S-3 완료 뒤)
+
+1. **주소를 넣기 전에** 설치 분석 스킬이 연결된 카테고리에 `prefer: skill`을 적을지 정한다. 안 적으면 그 카테고리 5-1이 모듈 문서로 바뀌고, 레포에 그 모듈이 없으면 분석이 멈춘다(`config.py set analyzers.<카테고리>.prefer skill`, 플랫폼이면 `--platform <p>`).
+2. `python3 tools/site_step.py modules` → `modules check`: remote·push 권한·트리 = modules.yaml·데몬 ⊆ tags.yaml·prefer 규칙·보호·CI(정보). 중첩 `claude -p` 확인은 명령만 보인다(사용자가 한 번 돌리고 `--waive`).
+3. `python3 tools/site_step.py modules coverage --out docs/site/module-coverage.diff`(토큰 0, 사내 전용 출력): 사내 로그로 모듈별 줄 수·모듈에 없는 데몬·tags.yaml에 없는 태그를 보고, modules.yaml diff를 검토해 모듈 레포 PR로 보낸다. tags.yaml에 없는 태그는 이슈 DB 계획 op PR이 먼저다(사용자 확인).
+4. **정기 점검(매주, 상한 300,000 토큰/회)**: `python3 tools/site_step.py audit` — 사내 모델·출처 모름 커밋만 골라 토큰 0 검사를 먼저 돈다. 남은 것은 `docs/site/audit/<날짜>-review.md`의 목록·추정 토큰뿐이다(Claude는 부르지 않는다). 사내 Claude 리뷰(승인 뒤) → `audit --record`(넘친 항목은 이월). 14일 넘으면 ms2.audit가 사용자 필요.

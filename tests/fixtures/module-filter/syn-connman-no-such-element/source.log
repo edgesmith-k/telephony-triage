@@ -1,0 +1,5 @@
+-- [합성] module-filter negative fixture: a ConnectionManager no_such_element is not a background family (all repeats kept). Hand-written, not a real capture.
+Sep 20 15:10:00.000 dut daemon.err ofonod[812]: src/gprs.c:gprs_deactivate_all() __ofono_error_no_such_element() m:DeactivateAll ConnectionManager
+Sep 20 15:10:03.000 dut daemon.err ofonod[812]: src/gprs.c:gprs_deactivate_all() __ofono_error_no_such_element() m:DeactivateAll ConnectionManager
+Sep 20 15:10:06.000 dut daemon.err ofonod[812]: src/gprs.c:gprs_deactivate_all() __ofono_error_no_such_element() m:DeactivateAll ConnectionManager
+Sep 20 15:10:09.000 dut daemon.err ofonod[812]: src/gprs.c:gprs_deactivate_all() __ofono_error_no_such_element() m:DeactivateAll ConnectionManager

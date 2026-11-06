@@ -14,7 +14,15 @@ android reference 백엔드(`platforms/android/backend.py`)와 같은 구조(파
   않으므로 `subtag`가 `SUBTAG_RE` 모양일 때만 — 아니면 나누지 않는다).
 - 0.0.3: 줄 형식 (c) BusyBox syslogd(레벨은 severity)·내장 짝 `gril`·슬롯 규칙(`[<slot>,`·`/ril_<n>`)이 기본 출력을 바꾼다
   (gril trace 줄의 `ril`·`phone_id`, (c) 줄 해석). (a)·(b) 형식이고 gril 줄·`/ril_<n>`이 없는 로그의 출력은 0.0.2와 같다.
-- builtin 판별 없음(`detect()` → []). 사내 백엔드는 이 클래스를 상속해 `detect()`만 바꿔도 된다.
+- 0.0.4(C1+D 보정): 레벨 보정(DITD·RFSD·DMD·MOSE → I)·벤더 IPC builtin이 0.0.3 출력을 바꿨다 — 버전이 분석 재사용
+  캐시 키(`compiled.environment` → `source_hash`)에 들어가므로 올린다.
+- builtin 판별(11/05 승인 ③, H C1 R12): `VENDOR_IPC_IDENTS`(`exynos-ril`, 첨부 로그에서 본 벤더 RIL 데몬 이름,
+  TODO(SITE:S25)) 줄에 `common.vendor_ipc.detect`를 부른다 → `builtin.common.vendor_ipc_error`·
+  `builtin.common.vendor_request_failed`. 그 밖 ident 줄은 판별하지 않는다. 이슈 DB tags.yaml에 `ipc: vendor`가 하나라도
+  있으면 그 태그만 본다(`apply_rules`, 04-parser-matching §5.8 (2)).
+- 레벨 보정(C1+D 보정에서 `journal.read_file`에서 옮김): `LEVEL_UNRELIABLE_IDENTS`(기본값 정본은 `journal.py`) 줄은
+  severity와 상관없이 `"I"`. tags.yaml에 `level: unreliable`이 하나라도 있으면 그 태그만.
+  사내 백엔드는 이 클래스를 상속해 `detect()`만 바꿔도 된다.
 """
 
 from __future__ import annotations
@@ -24,14 +32,17 @@ import re
 from pathlib import Path
 from typing import Sequence
 
-from common import events, logtime
-from parser_backends.base import ParserBackend, Window
+from common import events, logtime, vendor_ipc
+from parser_backends.base import ParserBackend, TagAttrSet, Window
 
 from . import SPEC
+from .journal import DEFAULT_LEVEL, LEVEL_UNRELIABLE_IDENTS
 
-VERSION = "0.0.3"
+VERSION = "0.0.4"
 # split_tag 하위 식별: 글자로 시작하는 식별자 모양만 tag에 붙인다(숫자로 시작하는 값·공백·`:`·`/`는 나누지 않음)
 SUBTAG_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_-]{0,63}$")
+# 벤더 IPC 결과 판별을 부를 ident(첨부 oFono 로그의 벤더 RIL 데몬, TODO(SITE:S25)). split_tag면 `ident/subtag`도 받는다.
+VENDOR_IPC_IDENTS = frozenset({"exynos-ril"})
 
 
 class OfonoReferenceBackend(ParserBackend):
@@ -42,6 +53,9 @@ class OfonoReferenceBackend(ParserBackend):
     _phone = SPEC.phone
     _protocols: tuple = tuple((p, frozenset(p.default_tags)) for p in SPEC.protocols)
     _components: dict = {}   # ident → (Component, 형식 함수 | None). 아래에서 SPEC 기본으로 채운다
+    # 태그 속성 판단(`apply_rules`가 사본에 새로 만든다). 기본은 상수 집합.
+    _level_unreliable = TagAttrSet(None, "level", "unreliable", LEVEL_UNRELIABLE_IDENTS)
+    _vendor_ipc = TagAttrSet(None, "ipc", "vendor", VENDOR_IPC_IDENTS)
 
     @staticmethod
     def _component_map(components, spec) -> dict:
@@ -59,18 +73,30 @@ class OfonoReferenceBackend(ParserBackend):
         other._components = self._component_map(profile.components, spec)
         return other
 
+    def apply_rules(self, rules) -> "OfonoReferenceBackend":
+        """tags.yaml `level: unreliable`·`ipc: vendor`(04-parser-matching §5.8 (2)). 키마다 DB가 하나도 선언하지 않으면
+        기본 상수(`LEVEL_UNRELIABLE_IDENTS`·`VENDOR_IPC_IDENTS`), 하나라도 선언하면 DB만 본다."""
+        other = copy.copy(self)
+        other._level_unreliable = TagAttrSet(rules, "level", "unreliable", LEVEL_UNRELIABLE_IDENTS)
+        other._vendor_ipc = TagAttrSet(rules, "ipc", "vendor", VENDOR_IPC_IDENTS)
+        return other
+
     def version(self) -> str:
         return VERSION
 
     def builtin_events(self) -> list[str]:
-        return []
+        return list(vendor_ipc.EVENTS)
 
     def log_format(self):
         return SPEC.log
 
     def detect(self, record: dict) -> list[tuple[str, dict]]:
-        """줄 레코드 하나에 대한 builtin 판별 `[(이벤트 이름, fields)]`. 뼈대에는 없다."""
-        return []
+        """줄 레코드 하나에 대한 builtin 판별 `[(이벤트 이름, fields)]`. 벤더 RIL 데몬 줄(`_vendor_ipc`: 기본
+        `VENDOR_IPC_IDENTS`, tags.yaml `ipc: vendor`가 있으면 그것)의 IPC 결과만 본다."""
+        tag = record.get("tag") or ""
+        if not self._vendor_ipc(tag, tag.split("/", 1)[0]):
+            return []
+        return vendor_ipc.detect(record.get("msg") or "")
 
     def _annotate(self, tag: str, msg: str) -> dict | None:
         for proto, tags in self._protocols:
@@ -97,7 +123,7 @@ class OfonoReferenceBackend(ParserBackend):
             ts=logtime.format_ts(line.dt),
             pid=line.pid,
             tid=line.tid,
-            level=line.level,
+            level=DEFAULT_LEVEL if self._level_unreliable(tag, line.tag) else line.level,
             tag=tag,
             msg=line.msg,
             phone_id=self._phone.phone_id(line.tag, line.msg),

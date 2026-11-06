@@ -9,11 +9,25 @@
     python3 tools/site_step.py evals [--batch N] [--baseline]       # S-2: 사내 대상 eval의 다음 배치 명령·추정 비용(실행하지 않음)
     python3 tools/site_step.py --done S-n [--waive 점검="사유"]...  # 사용자 확인 뒤: 점검 재실행 → 통과면 완료 기록·다음 단계
     python3 tools/site_step.py ofono                    # oFono 트랙(O-1~O-4) 시작·이어 하기, S-3 완료 뒤
+    python3 tools/site_step.py modules                  # 모듈 스킬 트랙(MS-1~MS-2) 시작·이어 하기, S-3 완료 뒤
+    python3 tools/site_step.py modules check [--json] [--allow-api]   # 지금 MS 단계 점검(= check MS-n)
+    python3 tools/site_step.py modules coverage [--json] [--out F] [--min-lines N]   # 사내 로그 → 모듈별 줄 수·빈 이름·modules.yaml diff
+    python3 tools/site_step.py audit [--since D|레포=sha] [--last] [--repo R] [--cap-tokens N] [--inhouse-model RX] [--jobs DIR] [--json]
+    python3 tools/site_step.py audit --record [--defer ID[,ID]]     # 정기 점검: 토큰 0 검사 → Claude가 볼 것(상한 안) → 기준점 기록
+    python3 tools/site_step.py runtime-check claude-gateway         # Claude Code + 사내 모델 프로필 표(모델 호출 없음)
+    python3 tools/site_step.py runtime-check opencode [--project D] # OpenCode 1.19.5·설정·관리 설정 점검 + 사내 확인 0(OpenAI 호환) curl
+    python3 tools/site_step.py runtime-check opencode --project D --jira KEY [--missing-key KEY]
+                                                        # OpenCode Jira 읽기 사내 확인(모델 토큰 0, tools/oc_jira_check.py)
 
 - 순서는 S-1 → S-2 → S-3 → S-4a → S-4 → S-5 → S-6 → S-7(`STEPS`). S-0(선택)은 반입 전 일이라 넣지 않는다.
 - oFono 트랙은 Android 단계와 따로 O-1 → O-2 → O-3 → O-4(`OFONO_STEPS`)다. "oFono 설정 시작"이면 `ofono`: S-3 완료 기록 뒤에만
   "진행 상태"에 `- oFono 단계: O-1`·`- oFono 완료: (없음)`을 넣는다(한 번). `check`·`propose`·`--done`은 단계 인자로 O-n을 받는다.
   인자 없는 실행은 Android 단계에 안내 한 줄(`oFono 트랙: O-n 진행 중 → …`)을 붙이고, Android가 모두 완료면 oFono 단계를 바로 보인다.
+- 모듈 스킬 트랙(MODULE_SKILLS_PLAN_IMPL §6)은 MS-1 → MS-2(`MODULE_STEPS`, 점검은 `site_checks.MODULE_CHECKS`)다. `modules`는 S-3 완료 기록
+  뒤에만 "진행 상태"에 `- 모듈 단계: MS-1`·`- 모듈 완료: (없음)`을 넣는다(한 번). `check`·`--done`은 MS-n도 받는다. 안내는 §15.5에 MS 행이
+  있으면 그것, 없으면 `MODULE_GUIDE`. `modules coverage`는 `tools/module_coverage.py`(토큰 0, 사내 전용 출력), `audit`은
+  `tools/site_audit.py`(토큰 0 검사 뒤 Claude가 볼 것과 추정 토큰만 보인다 — Claude를 부르지 않는다, `docs/site/audit/`만 쓴다.
+  이슈 DB마다 시그니처 소실 행 `audit.<레포>.drift`: 자주 맞던 원인 시그니처가 새 빌드 기록에서 0회면 사용자 필요·항목 `drift:<레포>:<K>`).
 - 점검(`site_checks.py`)은 판정만 하고 단계를 넘기지 않는다. `--done`은 실패가 있으면 거부하고, 건너뜀·사용자 필요는
   `--waive`(사유는 SITE_PROFILE.md "설계 변경"·docs/site/evidence.md에 남는다 — 사유는 줄 끝, SITE_PROFILE에는 120자까지 +
   `…(전체: docs/site/evidence.md)`, 기록한 줄은 `--done` 출력에 보인다) 없이는 거부한다. 사용자 확인 없이 `--done`하지 않는다.
@@ -23,9 +37,16 @@
   돌린다. 나머지는 사외 결과 기록(`offsite_results.json`, 점검 `s2.offsite`)으로 갈음한다.
 - 새로 만들 때 트래커는 jira다(사내 결정: S30·S31 GitHub 트래커 항목은 해당 없음, S-3에서 `tracker.kind: jira`).
 - 사외 초안 PC(`.local-draft`)에서는 SITE_PROFILE.md를 만들지 않는다(종료 2, 반입 전 경계 검사가 막는 파일이다).
+- `runtime-check`(계획 I O10, docs/development/RUNTIMES.md)는 단계와 무관하게 환경마다 한 번 돌리는 점검이다(SITE_PROFILE을 읽거나
+  쓰지 않는다). 판정은 기존 코드: claude-gateway는 `claude_child.gateway_profile_check`(missing·differs → 1), opencode는
+  `opencode/bin/tt-oc`(버전 = PINNED, 없으면 설치 안내·설치한 opencode.json 필수 설정·opencode가 있으면 사전 점검 전체)와
+  `gen_opencode.managed_problems`(/etc/opencode, 없으면 warn). 사내 확인 0(게이트웨이 curl — claude-gateway는 Anthropic `/v1/messages`,
+  opencode는 OpenAI 호환 `/models`·`/chat/completions`)은 명령만 보인다(실행하지 않는다).
 
-종료 코드: 0 정상(점검은 통과·정보만), 1 점검 실패·건너뜀·사용자 필요(`--done` 거부 포함), 2 사용 오류(사외 PC, 모드·단계 불일치, 진행 상태 줄 없음,
-S-3 완료 전 `ofono`, 시작 전 O-n).
+종료 코드: 0 정상(점검은 통과·정보만), 1 점검 실패·건너뜀·사용자 필요(`--done` 거부 포함, runtime-check의 missing·differs·fail 행),
+2 사용 오류(사외 PC, 모드·단계 불일치, 진행 상태 줄 없음,
+S-3 완료 전 `ofono`·`modules`, 시작 전 O-n·MS-n, runtime-check 대상이 claude-gateway·opencode가 아님, `modules` 뒤 인자가
+check·coverage가 아님, `audit`의 잘못된 --since·기록 없는 --last·계획 없는(낡은) --record).
 """
 from __future__ import annotations
 
@@ -36,7 +57,9 @@ sys.dont_write_bytecode = True    # 사내 레포에 __pycache__를 남기지 �
 import argparse  # noqa: E402
 import difflib  # noqa: E402
 import json  # noqa: E402
+import os  # noqa: E402
 import re  # noqa: E402
+import shutil  # noqa: E402
 import subprocess  # noqa: E402
 from datetime import date, datetime  # noqa: E402
 from pathlib import Path  # noqa: E402
@@ -59,6 +82,25 @@ OFONO_CURRENT_RE = re.compile(r"(?m)^- oFono 단계: *(\S+).*$")
 OFONO_FINISHED_RE = re.compile(r"(?m)^- oFono 완료: *(.*)$")
 S3_DONE_RE = re.compile(r"(?:^|,\s*)S-3 \(")           # `완료 단계` 값에 S-3 기록
 OFONO_NOT_STARTED = "oFono 트랙이 시작되지 않았다 — S-3 완료 뒤 `python3 tools/site_step.py ofono`"
+MODULE_STEPS = ["MS-1", "MS-2"]
+MODULE_CURRENT_RE = re.compile(r"(?m)^- 모듈 단계: *(\S+).*$")
+MODULE_FINISHED_RE = re.compile(r"(?m)^- 모듈 완료: *(.*)$")
+MODULE_NOT_STARTED = "모듈 스킬 트랙이 시작되지 않았다 — S-3 완료 뒤 `python3 tools/site_step.py modules`"
+MODULE_SUBS = ("check", "coverage")
+# §15.5에 MS 행이 없을 때의 안내(MODULE_SKILLS_PLAN_IMPL §6). 15-local-draft.md에 행이 생기면 그것을 쓴다
+MODULE_GUIDE = {
+    "MS-1": """MS-1 모듈 스킬 레포 연결 (MODULE_SKILLS_PLAN_IMPL §6·docs/SITE_INSTALL.md §10)
+1. **주소를 넣기 전에** 설치 분석 스킬이 연결된 카테고리(예: analyzers.data.skill)에 `prefer: skill`을 적을지 정한다(ms1.prefer).
+2. `tools/make_module_repo.py`로 GHE module-skills 레포를 만들고 브랜치 보호(IMPL §4.5)를 켠다(관리자).
+3. site-defaults `module_skills.remote`·`base_branch`·`boundary.patterns`(S33·S34), git ≥ 2.25.
+4. `site_step.py modules check` — remote 도달·push 권한·트리 = modules.yaml·데몬 ⊆ tags.yaml·prefer·보호/CI(정보).
+5. 세션 안 중첩 `claude -p`는 ms1.nested_claude가 보인 명령을 사용자가 한 번 돌린다(토큰, 승인 뒤).
+6. `site_step.py modules coverage` — 사내 로그로 빈 이름을 찾아 modules.yaml diff(모듈 레포 PR)·tags.yaml(계획 op PR, 사용자 확인).""",
+    "MS-2": """MS-2 사내 스킬 합치기(선택)·정기 점검 (MODULE_SKILLS_PLAN_IMPL §6, 결정 기록 11/05 ③)
+1. (선택) 사내 Android 분석 스킬을 `android/<m>/`에 합친다(텍스트 절차만). 합치기 전에는 `prefer: skill`로 그대로 쓴다.
+2. (선택) `module_eval.py`를 S-5 라벨셋(마스킹, tests/site/module-evals/)에 소수로 — 비용 승인 뒤.
+3. 정기 점검(매주, 상한 300,000 토큰): `site_step.py audit` → 사내 Claude 리뷰(review.md) → `audit --record`.""",
+}
 EVAL_BATCH = 5
 BASELINE_EVALS = sc.BASELINE_EVALS     # 사내 토큰 기준선 eval(pending.json site의 부분집합, s2.pending)
 
@@ -136,6 +178,27 @@ def _ofono_state(text: str) -> tuple[str | None, str]:
     return step, fin.group(1).strip()
 
 
+def _module_state(text: str) -> tuple[str | None, str]:
+    """(모듈 단계 | None = 트랙 시작 전, 완료 값). 두 줄 중 하나만 있거나 모르는 단계면 사용 오류."""
+    cur, fin = MODULE_CURRENT_RE.search(text), MODULE_FINISHED_RE.search(text)
+    if not cur and not fin:
+        return None, ""
+    if not cur or not fin:
+        raise Usage("SITE_PROFILE.md '진행 상태'에 `- 모듈 단계: MS-n`·`- 모듈 완료: …` 줄이 하나만 있다 — 14-site.md §14.3 형식으로 고친다")
+    step = cur.group(1)
+    if step not in MODULE_STEPS + [DONE]:
+        raise Usage(f"모듈 단계 '{step}'를 모른다 (순서: {' → '.join(MODULE_STEPS)})")
+    return step, fin.group(1).strip()
+
+
+def _module_current(text: str) -> str:
+    _state(text)
+    cur, _ = _module_state(text)
+    if cur is None:
+        raise Usage(MODULE_NOT_STARTED)
+    return cur
+
+
 def _profile_text(root: Path) -> str:
     prof = _profile(root)
     if not prof.exists():
@@ -160,9 +223,15 @@ def _step_arg(root: Path, step: str | None) -> str:
     if step is None:
         text = _profile_text(root)
         step = _state(text)[0]
-        if step == DONE:                               # Android가 끝났으면 진행 중인 oFono 단계
+        if step == DONE:                               # Android가 끝났으면 진행 중인 oFono 단계(없으면 모듈 단계)
             o_cur, _ = _ofono_state(text)
-            step = o_cur if o_cur not in (None, DONE) else step
+            m_cur, _ = _module_state(text)
+            step = o_cur if o_cur not in (None, DONE) else (m_cur if m_cur not in (None, DONE) else step)
+    if step.startswith("MS-"):
+        if step not in MODULE_STEPS:
+            raise Usage(f"모듈 단계 '{step}'를 모른다 (순서: {' → '.join(MODULE_STEPS)})")
+        _module_current(_profile_text(root))
+        return step
     if step.startswith("O-"):
         if step not in OFONO_STEPS:
             raise Usage(f"oFono 단계 '{step}'를 모른다 (순서: {' → '.join(OFONO_STEPS)})")
@@ -223,9 +292,26 @@ def asks(results: list[dict]) -> str:
     return "===== 사용자에게 물을 것 (한 번에) =====\n" + ("\n".join(items) if items else "(없음)")
 
 
+MODULE_LOOP = """===== 진행 (한 단계씩, 확인 전에는 다음 단계로 가지 않는다) =====
+1. 할 일을 한다. 막히면(충돌·인증·권한·버전 불일치) 우회하지 않고 보고한다.
+2. `python3 tools/site_step.py modules check` — 자동 점검(읽기 전용, 모듈 레포는 임시 clone). 실패·건너뜀·사용자 필요는 그대로 보고한다.
+3. `python3 tools/site_step.py modules coverage` / `audit` — 토큰 0. 토큰을 쓰는 명령은 보이기만 한다(사용자 승인 뒤 실행).
+4. 요약 → **사용자 확인** → `python3 tools/site_step.py --done {step}` (사용자가 확인한 건너뜀·사용자 필요만 `--waive 점검="사유"`)."""
+
+
+def _module_body(step: str) -> str:
+    row = context_pack.step_row(step)
+    if row:
+        return f"===== {context_pack.STEPS} §15.5 {step} =====\n{row}\n"
+    return f"===== {step} (내장 안내 — §15.5에 MS 행 없음) =====\n{MODULE_GUIDE[step]}\n"
+
+
 def guide(step: str, created: bool, root: Path | None = None, allow_api: bool = False, ofono: bool = False,
-          started: bool = False) -> tuple[str, int]:
-    """(출력, 종료 코드 = 점검 결과의 exit_code). root가 없으면 점검 없이 pack만(종료 0). `ofono`면 oFono 트랙 단계."""
+          started: bool = False, module: bool = False) -> tuple[str, int]:
+    """(출력, 종료 코드 = 점검 결과의 exit_code). root가 없으면 점검 없이 pack만(종료 0). `ofono`면 oFono 트랙 단계,
+    `module`이면 모듈 스킬 트랙 단계."""
+    if module:
+        return _module_guide(step, root, allow_api, started)
     if step == DONE:
         if ofono:
             return "oFono 트랙 O-1~O-4가 모두 완료로 기록돼 있다.", 0
@@ -245,6 +331,20 @@ def guide(step: str, created: bool, root: Path | None = None, allow_api: bool = 
         sc.exit_code(results)
 
 
+def _module_guide(step: str, root: Path | None, allow_api: bool, started: bool) -> tuple[str, int]:
+    if step == DONE:
+        return "모듈 스킬 트랙 MS-1~MS-2가 모두 완료로 기록돼 있다. 정기 점검은 계속: `python3 tools/site_step.py audit`(매주).", 0
+    head = [("모듈 스킬 트랙을 시작했다. " if started else "") + f"모듈 스킬 트랙 지금 단계: {step}",
+            f"이 단계를 마치면: `site_step.py modules check` 보고 → 요약 → 사용자 확인 → `python3 tools/site_step.py --done {step}` "
+            "(확인 전에는 다음 단계로 가지 않는다)", ""]
+    if root is None:
+        return "\n".join(head) + _module_body(step), 0
+    results = sc.run_checks(step, root, allow_api)
+    write_step_state(root, step, results, visited=True)
+    return "\n".join([*head, _module_body(step), sc.report(step, results), "", asks(results), "",
+                      MODULE_LOOP.format(step=step)]), sc.exit_code(results)
+
+
 def start(root: Path, allow_api: bool = False) -> tuple[str, int]:
     prof = _profile(root)
     created = not prof.exists()
@@ -255,9 +355,15 @@ def start(root: Path, allow_api: bool = False) -> tuple[str, int]:
     o_cur, _ = _ofono_state(text)
     if step == DONE and o_cur not in (None, DONE):     # Android가 끝났으면 oFono 단계를 바로 보인다
         return guide(o_cur, created, root, allow_api, ofono=True)
+    m_cur, _ = _module_state(text)
+    if step == DONE and o_cur in (None, DONE) and m_cur not in (None, DONE):
+        return guide(m_cur, created, root, allow_api, module=True)
     out, code = guide(step, created, root, allow_api)
     if o_cur is not None:                              # 시작 전이면 출력은 그대로다
         out += "\n" + ("oFono 트랙: 완료" if o_cur == DONE else f"oFono 트랙: {o_cur} 진행 중 → python3 tools/site_step.py ofono")
+    if m_cur is not None:
+        out += "\n" + ("모듈 스킬 트랙: 완료" if m_cur == DONE else
+                       f"모듈 스킬 트랙: {m_cur} 진행 중 → python3 tools/site_step.py modules")
     return out, code
 
 
@@ -276,6 +382,82 @@ def ofono_cmd(root: Path, allow_api: bool = False) -> tuple[str, int]:
         prof.write_text(text, encoding="utf-8", newline="\n")
         o_cur = OFONO_STEPS[0]
     return guide(o_cur, False, root, allow_api, ofono=True, started=started)
+
+
+def modules_cmd(root: Path, sub: str | None, allow_api: bool = False, as_json: bool = False, out: str | None = None,
+                min_lines: int | None = None) -> tuple[str, int]:
+    """모듈 스킬 트랙 시작·이어 하기(`sub` 없음), 지금 MS 단계 점검(`check`), 사내 로그 coverage(`coverage`)."""
+    if sub is not None and sub not in MODULE_SUBS:
+        raise Usage(f"modules 뒤에는 {' | '.join(MODULE_SUBS)}만 온다: {sub}")
+    prof = _profile(root)
+    text = _profile_text(root)
+    cur, fin = _state(text)
+    m_cur, _ = _module_state(text)
+    if sub == "coverage":
+        return coverage_cmd(root, as_json, out, min_lines)
+    if sub == "check":
+        if m_cur is None:
+            raise Usage(MODULE_NOT_STARTED)
+        if m_cur == DONE:
+            return "모듈 스킬 트랙 MS-1~MS-2가 모두 완료로 기록돼 있다(점검은 `check MS-n`).", 0
+        return check(root, m_cur, as_json, allow_api)
+    started = m_cur is None
+    if started:
+        if not S3_DONE_RE.search(fin):
+            raise Usage(f"모듈 스킬 트랙은 S-3 완료 기록 뒤에 시작한다(site-defaults.yaml 필요) — 지금 Android 단계 {cur}")
+        text = _insert_progress(text, "- 모듈 단계: MS-1", MODULE_CURRENT_RE.pattern)
+        text = _insert_progress(text, "- 모듈 완료: (없음)", MODULE_FINISHED_RE.pattern)
+        prof.write_text(text, encoding="utf-8", newline="\n")
+        m_cur = MODULE_STEPS[0]
+    return guide(m_cur, False, root, allow_api, module=True, started=started)
+
+
+def coverage_cmd(root: Path, as_json: bool, out: str | None, min_lines: int | None) -> tuple[str, int]:
+    """`modules coverage`: 사내 입력(steps.yaml 로그 폴더·이슈 DB clone, 모듈 레포 임시 clone)으로 module_coverage. 사내 전용 출력."""
+    import module_coverage as mc
+
+    n = mc.MIN_LINES if min_lines is None else max(1, min_lines)
+    ctx = sc.Ctx(root)
+    try:
+        if not sc.module_settings(ctx)["ms"]:
+            return "modules coverage: module_skills.remote 없음 — `modules check`의 ms1.config", 1
+        try:
+            result = mc.run_site(ctx, min_lines=n)
+        except sc.ModuleCloneError as exc:
+            return f"modules coverage: 모듈 레포 임시 clone 실패 — {exc}", 1
+    finally:
+        ctx.cleanup()
+    code = mc.exit_code(result, n) if result["platforms"] else 1
+    written = ""
+    if out and result["suggestion"]["diff"]:
+        dst = Path(out) if Path(out).is_absolute() else root / out
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        dst.write_text(result["suggestion"]["diff"], encoding="utf-8", newline="\n")
+        written = f"\nmodules.yaml 제안 diff를 썼다: {dst}"
+    if as_json:
+        return json.dumps(result, ensure_ascii=False, indent=1, sort_keys=True), code
+    return mc.render(result) + written, code
+
+
+def audit_cmd(root: Path, args) -> tuple[str, int]:
+    import site_audit
+
+    _profile_text(root)                                # 사외 PC·SITE_PROFILE 없음은 사용 오류
+    try:
+        if args.record:
+            return site_audit.record(root, args.defer), 0
+        ctx = sc.Ctx(root)
+        try:
+            p = site_audit.plan(ctx, since=args.since, last=args.last, repos=args.repo, cap=args.cap_tokens,
+                                inhouse=args.inhouse_model, jobs=args.jobs)
+        finally:
+            ctx.cleanup()
+    except site_audit.AuditUsage as exc:
+        raise Usage(str(exc)) from None
+    files = site_audit.write_plan(root, p)
+    if args.json:
+        return json.dumps(p, ensure_ascii=False, indent=1), p["exit"]
+    return site_audit.render(p) + f"\n(썼다: {', '.join(files)})", p["exit"]
 
 
 def check(root: Path, step: str | None, as_json: bool, allow_api: bool) -> tuple[str, int]:
@@ -593,7 +775,12 @@ def done(root: Path, step: str, waives: list[str] | None = None, allow_api: bool
         raise Usage("SITE_PROFILE.md가 없다 — 먼저 `python3 tools/site_step.py`로 시작한다")
     text = prof.read_text(encoding="utf-8")
     ofono = step.startswith("O-")
-    if ofono:
+    module = step.startswith("MS-")
+    if module:
+        cur = _module_current(text)
+        fin = _module_state(text)[1]
+        track, cur_re, fin_re, label = MODULE_STEPS, MODULE_CURRENT_RE, MODULE_FINISHED_RE, "모듈 "
+    elif ofono:
         cur = _ofono_current(text)
         fin = _ofono_state(text)[1]
         track, cur_re, fin_re, label = OFONO_STEPS, OFONO_CURRENT_RE, OFONO_FINISHED_RE, "oFono "
@@ -633,22 +820,232 @@ def done(root: Path, step: str, waives: list[str] | None = None, allow_api: bool
     nxt = track[track.index(step) + 1] if step != track[-1] else DONE
     item = f"{step} ({today})"
     fin = item if fin in ("", "(없음)") else f"{fin}, {item}"
-    text = cur_re.sub(lambda m: f"- {'oFono 단계' if ofono else '현재 단계'}: {nxt}", text, count=1)
-    text = fin_re.sub(lambda m: f"- {'oFono 완료' if ofono else '완료 단계'}: {fin}", text, count=1)
+    cur_word, fin_word = ("모듈 단계", "모듈 완료") if module else (("oFono 단계", "oFono 완료") if ofono else ("현재 단계", "완료 단계"))
+    text = cur_re.sub(lambda m: f"- {cur_word}: {nxt}", text, count=1)
+    text = fin_re.sub(lambda m: f"- {fin_word}: {fin}", text, count=1)
     prof.write_text(text, encoding="utf-8", newline="\n")
     extra = f" (면제 {', '.join(used)} — 사유는 SITE_PROFILE.md 설계 변경)" if used else ""
-    out, _ = guide(nxt, False, root, allow_api, ofono=ofono)     # 기록은 끝났다(종료 0). 다음 단계 점검 결과는 출력으로만 본다
+    out, _ = guide(nxt, False, root, allow_api, ofono=ofono, module=module)     # 기록은 끝났다(종료 0). 다음 단계 점검 결과는 출력으로만 본다
     shown = "".join(f"  SITE_PROFILE.md 설계 변경에 기록: {line}\n" for line in recorded)     # 쓴 줄을 그대로 보인다
     return f"{step} 완료를 기록했다{extra}.\n" + shown + out, 0
+
+
+# -- 런타임 점검 (계획 I O10, docs/development/RUNTIMES.md) ----------------------------------------------------------
+# 모델·네트워크를 부르지 않는다(사내 토큰 최소). 판정은 기존 코드에 맡긴다: claude-gateway는 `common.claude_child`
+# `gateway_profile_check`, opencode는 `opencode/bin/tt-oc`의 `version_row`·`config_problems`·`preflight`와
+# `tools/gen_opencode.py` `managed_problems`.
+
+RUNTIMES = ("claude-gateway", "opencode")
+RUNTIME_FAIL = ("missing", "differs", "fail")
+CHECK0_BODY = ('{"model":"\'"$MODEL"\'","max_tokens":128,"stream":true,'
+               '"tools":[{"name":"get_time","description":"현재 시각","input_schema":{"type":"object","properties":{}}}],'
+               '"tool_choice":{"type":"tool","name":"get_time"},"messages":[{"role":"user","content":"지금 몇 시?"}]}')
+
+
+def check0_text() -> str:
+    """사내 확인 0(게이트웨이 `/v1/messages` 스트리밍 tool_use) — 사용자가 직접 실행할 curl 명령(여기서는 실행하지 않는다)."""
+    return "\n".join([
+        "사내 확인 0 — 게이트웨이 /v1/messages 스트리밍 tool_use (이 도구는 실행하지 않는다, 사용자가 터미널에서 한 번):",
+        "```sh",
+        "GW=<게이트웨이 주소(/v1 앞까지)>; KEY=<게이트웨이 키>; MODEL=<사내 모델 ID>",
+        'curl -sS -N "$GW/v1/messages" -H "content-type: application/json" -H "anthropic-version: 2023-06-01" \\',
+        '  -H "x-api-key: $KEY" -H "authorization: Bearer $KEY" \\',
+        f"  -d '{CHECK0_BODY}'",
+        "```",
+        '통과: `event: content_block_start`에 `"type":"tool_use"`, 이어서 `input_json_delta`, 끝에 `message_stop`. '
+        "결과(통과/실패와 첫 오류 줄 — 키는 빼고)를 보고한다.",
+    ])
+
+
+OC_CHECK0_BODY = ('{"model":"\'"$MODEL"\'","max_tokens":64,"stream":true,'
+                  '"tools":[{"type":"function","function":{"name":"get_time","description":"현재 시각",'
+                  '"parameters":{"type":"object","properties":{}}}}],'
+                  '"tool_choice":{"type":"function","function":{"name":"get_time"}},'
+                  '"messages":[{"role":"user","content":"지금 몇 시?"}]}')
+_SHELL_BAD = "'\"$`\\ \n"
+
+
+def _oc_gateway(proj: Path | None) -> tuple[str, str]:
+    """설치한 opencode.json의 provider baseURL·모델 ID(비밀 아님). 없거나 읽지 못하면 자리표시."""
+    base, model = "<게이트웨이 URL(/v1까지, install --gateway-url)>", "<사내 모델 ID>"
+    if proj is None:
+        return base, model
+    try:
+        cfg = json.loads((proj / "opencode.json").read_text(encoding="utf-8"))
+        prov_id, _, mid = str(cfg.get("model") or "").partition("/")
+        url = (((cfg.get("provider") or {}).get(prov_id) or {}).get("options") or {}).get("baseURL")
+    except (OSError, ValueError, AttributeError):
+        return base, model
+    if isinstance(url, str) and url.startswith(("http://", "https://")) and not any(c in url for c in _SHELL_BAD):
+        base = url.rstrip("/")
+    if mid and "@@" not in mid and not any(c in mid for c in _SHELL_BAD):
+        model = mid
+    return base, model
+
+
+def oc_check0_text(proj: Path | None) -> str:
+    """OpenCode용 사내 확인 0 — OpenAI 호환(`@ai-sdk/openai-compatible`) 모양 curl 명령(실행하지 않는다).
+    키는 `$TT_GATEWAY_API_KEY` 이름만 쓴다."""
+    base, model = _oc_gateway(proj)
+    return "\n".join([
+        "사내 확인 0(OpenCode) — 게이트웨이 OpenAI 호환 엔드포인트 (이 도구는 실행하지 않는다, 사용자가 터미널에서 한 번):",
+        "```sh",
+        f"BASE='{base}'; MODEL='{model}'   # 키: export TT_GATEWAY_API_KEY=… (출력·파일에 적지 않는다)",
+        "# (a) 토큰 0: 모델 목록에 $MODEL이 있는지",
+        'curl -sS "$BASE/models" -H "authorization: Bearer $TT_GATEWAY_API_KEY"',
+        "# (b) 선택(토큰 소량): 스트리밍 tool_calls",
+        'curl -sS -N "$BASE/chat/completions" -H "content-type: application/json" \\',
+        '  -H "authorization: Bearer $TT_GATEWAY_API_KEY" \\',
+        f"  -d '{OC_CHECK0_BODY}'",
+        "```",
+        '통과: (a) `"data"`에 `"id":"<MODEL>"`, (b) `data:` 줄 `delta`에 `"tool_calls"`(이름 `get_time`), 끝에 `data: [DONE]`. '
+        "결과(통과/실패와 첫 오류 줄 — 키는 빼고)를 보고한다. Anthropic 모양(/v1/messages)은 Claude Code용이다.",
+    ])
+
+
+def _runtime_table(title: str, rows: list[dict]) -> str:
+    cell = lambda t: str(t).replace("|", "\\|").replace("\n", " ")  # noqa: E731
+    lines = [title, "", "| 항목 | 상태 | 내용 |", "|---|---|---|"]
+    lines += [f"| {r.get('key') or r.get('check')} | {r['status']} | {cell(r['detail'])} |" for r in rows]
+    return "\n".join(lines)
+
+
+def _runtime_result(rows: list[dict], fix: str) -> tuple[str, int]:
+    bad = [str(r.get("key") or r.get("check")) for r in rows if r["status"] in RUNTIME_FAIL]
+    if bad:
+        return f"결과: 실패 {len(bad)}행({', '.join(bad)}) — {fix}", 1
+    return "결과: 통과(warn·info 행은 막지 않는다)", 0
+
+
+def _scripts_on_path() -> None:
+    p = str(ROOT / "plugin" / "scripts")
+    if p not in sys.path:
+        sys.path.insert(0, p)
+
+
+def runtime_claude_gateway(env: dict) -> tuple[str, int]:
+    """Claude Code + 사내 모델(게이트웨이) 프로필: `claude_child.gateway_profile_check` 표, missing·differs가 있으면 1."""
+    _scripts_on_path()
+    from common import claude_child
+
+    rows = claude_child.gateway_profile_check(env)
+    result, code = _runtime_result(rows, "사용자 settings.json env(또는 환경 변수)를 고친 뒤 다시 실행한다")
+    title = "런타임 점검 claude-gateway — 모델 호출 없음(프로세스 환경 + 사용자 settings.json env, 비밀 값은 적지 않는다)"
+    return "\n\n".join([_runtime_table(title, rows), result, check0_text()]), code
+
+
+def _load_tt_oc():
+    from importlib.machinery import SourceFileLoader
+    import importlib.util
+
+    loader = SourceFileLoader("tt_oc", str(ROOT / "opencode" / "bin" / "tt-oc"))
+    spec = importlib.util.spec_from_loader("tt_oc", loader)
+    mod = importlib.util.module_from_spec(spec)
+    loader.exec_module(mod)
+    return mod
+
+
+def _managed_row(managed_dir: Path) -> dict:
+    import gen_opencode
+
+    found = [managed_dir / n for n in gen_opencode.MANAGED_NAMES if (managed_dir / n).is_file()]
+    if not found:
+        return {"check": "managed-config", "status": "warn",
+                "detail": f"{managed_dir}/opencode.json 없음 — 관리자 배포 권장(opencode/managed.json.sample, 다중 방어)"}
+    _scripts_on_path()
+    from common import oc_adapter
+
+    try:
+        cfg = json.loads(oc_adapter._strip_jsonc(found[0].read_text(encoding="utf-8")))
+    except (OSError, ValueError) as exc:
+        return {"check": "managed-config", "status": "fail", "detail": f"{found[0]} 읽기 실패: {type(exc).__name__}"}
+    wrong = gen_opencode.managed_problems(cfg)
+    if wrong:
+        return {"check": "managed-config", "status": "fail",
+                "detail": f"{found[0]}: " + ", ".join(wrong[:6]) + (f" 외 {len(wrong) - 6}" if len(wrong) > 6 else "")
+                          + " — opencode/managed.json.sample과 맞춘다(관리자)"}
+    return {"check": "managed-config", "status": "ok", "detail": f"{found[0]}: managed.json.sample의 막는 항목 모두 있음"}
+
+
+def runtime_opencode(project: str | None, opencode: str, managed_dir: Path, env: dict) -> tuple[str, int]:
+    """OpenCode v1: 버전(= tt-oc PINNED, 없으면 설치 안내), 설치한 opencode.json의 v1 필수 설정(snapshot:false 등), opencode가
+    있으면 `tt-oc` 사전 점검 전체(합쳐진 실제 설정·지문·지시 파일·config.py doctor), 관리 설정(/etc/opencode). 사내 확인 0은
+    명령만 보인다."""
+    tt = _load_tt_oc()
+    oc = shutil.which(opencode, path=env.get("PATH"))
+    rows: list[dict] = []
+    if not oc:
+        rows.append({"check": "opencode-version", "status": "fail",
+                     "detail": f"opencode 없음 — OpenCode {tt.PINNED}를 설치한다(예: npm install -g opencode-ai@{tt.PINNED}, "
+                               "사내 설치 경로는 관리자). 다른 버전은 쓰지 않는다"})
+    raw = project or env.get("TT_OC_PROJECT")
+    proj = meta = None
+    if raw:
+        try:
+            proj, meta = tt.load_project(raw)
+        except tt.Refused as exc:
+            rows.append({"check": "project", "status": "fail", "detail": str(exc)})
+    else:
+        rows.append({"check": "project", "status": "fail",
+                     "detail": "OpenCode 프로젝트 폴더 없음 — tools/gen_opencode.py install --dest <git 밖 폴더> … 뒤 "
+                               "--project <폴더>(또는 TT_OC_PROJECT)로 다시 실행"})
+    if proj is not None:
+        try:
+            wrong = tt.config_problems(json.loads((proj / "opencode.json").read_text(encoding="utf-8")))
+        except (OSError, ValueError, AttributeError) as exc:
+            wrong = [f"읽기 실패({type(exc).__name__})"]
+        rows.append({"check": "installed-config", "status": "fail" if wrong else "ok",
+                     "detail": ("설정 불일치: " + ", ".join(wrong) + " — gen_opencode.py install --force") if wrong
+                     else f"{proj / 'opencode.json'}: snapshot:false·share:disabled·autoupdate:false·허용 목록·task deny"})
+        if oc:
+            rows += tt.preflight(oc, proj, meta, tt.child_env(meta))
+    elif oc:
+        rows.append(tt.version_row(oc, env)[0])
+    rows.append(_managed_row(managed_dir))
+    result, code = _runtime_result(rows, "행의 안내대로 고친 뒤 다시 실행한다(버전 불일치·설정 우회는 하지 않고 보고)")
+    title = f"런타임 점검 opencode — 모델 호출 없음(고정 {tt.PINNED})"
+    return "\n\n".join([_runtime_table(title, rows), result, oc_check0_text(proj)]), code
+
+
+def runtime_opencode_jira(project: str | None, opencode: str, key: str, missing: str | None, env: dict) -> tuple[str, int]:
+    """OpenCode Jira 읽기 사내 확인(`tools/oc_jira_check.py`): 가짜 모델 서버로 실제 opencode·실제 Jira MCP를 거쳐 있는 티켓·없는
+    티켓을 읽고 모델이 받은 글을 본다. 통과 기록을 쓰고 관문을 여는 명령을 보인다(열지는 않는다)."""
+    _scripts_on_path()
+    import oc_jira_check
+
+    return oc_jira_check.check(_load_tt_oc(), project, opencode, key, missing, env)
+
+
+def runtime_check(target: str | None, project: str | None, managed_dir: Path, jira: str | None = None,
+                  missing_key: str | None = None) -> tuple[str, int]:
+    if target not in RUNTIMES:
+        raise Usage(f"runtime-check 대상은 {' | '.join(RUNTIMES)}: {target or '(없음)'}")
+    if (jira or missing_key) and target != "opencode":
+        raise Usage("--jira·--missing-key는 runtime-check opencode에서만 쓴다")
+    if missing_key and not jira:
+        raise Usage("--missing-key는 --jira와 함께 쓴다")
+    env = dict(os.environ)
+    if target == "claude-gateway":
+        return runtime_claude_gateway(env)
+    if jira:
+        return runtime_opencode_jira(project, env.get("TT_OPENCODE") or "opencode", jira, missing_key, env)
+    return runtime_opencode(project, env.get("TT_OPENCODE") or "opencode", managed_dir, env)
 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="site_step.py", description=__doc__.split("\n\n")[0],
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("cmd", nargs="?", choices=("check", "propose", "evals", "ofono"),
-                    help="없으면 시작·이어 하기. ofono: oFono 트랙(O-1~O-4) 시작·이어 하기(S-3 완료 뒤)")
-    ap.add_argument("step", nargs="?", metavar="S-n|O-n", help="check·propose 대상 단계(기본: 현재 단계)")
-    ap.add_argument("--done", metavar="S-n|O-n", help="사용자 확인을 받은 현재 단계: 점검 재실행 → 통과면 완료 기록·다음 단계")
+    ap.add_argument("cmd", nargs="?", choices=("check", "propose", "evals", "ofono", "modules", "audit", "runtime-check"),
+                    help="없으면 시작·이어 하기. ofono: oFono 트랙(O-1~O-4) 시작·이어 하기(S-3 완료 뒤). modules: 모듈 스킬 트랙"
+                         "(MS-1~MS-2, S-3 완료 뒤). audit: 정기 점검(토큰 0 검사·시그니처 소실 + Claude가 볼 것, Claude는 부르지 않는다). "
+                         "runtime-check: claude-gateway|opencode 런타임 점검(모델·네트워크 호출 없음)")
+    ap.add_argument("step", nargs="?", metavar="S-n|O-n|MS-n",
+                    help="check·propose 대상 단계(기본: 현재 단계). runtime-check면 claude-gateway|opencode, "
+                         "modules면 check|coverage")
+    ap.add_argument("--project", help="runtime-check opencode: gen_opencode.py install --dest 폴더(기본: TT_OC_PROJECT)")
+    ap.add_argument("--jira", metavar="KEY", help="runtime-check opencode: Jira 읽기 사내 확인 — 있는 티켓 키(모델 토큰 0)")
+    ap.add_argument("--missing-key", metavar="KEY", help="runtime-check opencode --jira: 오류 경로용 없는 티켓 키")
+    ap.add_argument("--done", metavar="S-n|O-n|MS-n", help="사용자 확인을 받은 현재 단계: 점검 재실행 → 통과면 완료 기록·다음 단계")
     ap.add_argument("--waive", action="append", default=[], metavar='점검="사유"',
                     help="--done에서 사용자가 확인한 건너뜀·사용자 필요 점검(사유는 SITE_PROFILE.md에 남는다)")
     ap.add_argument("--json", action="store_true", help="check: JSON 출력")
@@ -659,7 +1056,18 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--apply", metavar="ID[,ID]", help="propose: 사용자가 승인한 제안만 쓴다")
     ap.add_argument("--batch", type=int, default=EVAL_BATCH, help="evals: 배치 크기")
     ap.add_argument("--baseline", action="store_true", help="evals: 사내 토큰 기준선 명령")
+    ap.add_argument("--out", help="modules coverage: modules.yaml 제안 diff를 쓸 파일(상대 경로는 레포 기준)")
+    ap.add_argument("--min-lines", type=int, default=None, help="modules coverage: 제안·알림 줄 수 기준(기본 20)")
+    ap.add_argument("--since", action="append", default=[], metavar="YYYY-MM-DD|레포=sha", help="audit: 창 시작")
+    ap.add_argument("--last", action="store_true", help="audit: 기록된 지난 점검부터(기본과 같다, 기록이 없으면 사용 오류)")
+    ap.add_argument("--repo", action="append", default=[], metavar="ops_db|ofono_db|modules", help="audit: 볼 레포만")
+    ap.add_argument("--cap-tokens", type=int, default=None, help="audit: 점검 한 번의 Claude 토큰 상한(기본 300000)")
+    ap.add_argument("--inhouse-model", action="append", default=[], metavar="정규식", help="audit: 사내 모델 ID 정규식")
+    ap.add_argument("--jobs", help="audit: 근거 원문 검사 기록을 찾을 work_dir(기본: 사용자 config work_dir)")
+    ap.add_argument("--record", action="store_true", help="audit: 마지막 계획의 끝 커밋을 기준점으로 기록")
+    ap.add_argument("--defer", action="append", default=[], metavar="ID[,ID]", help="audit --record: 다음 점검으로 미룰 항목")
     ap.add_argument("--root", default=str(ROOT), help=argparse.SUPPRESS)   # 테스트용
+    ap.add_argument("--managed-dir", default=None, help=argparse.SUPPRESS)  # 테스트용(기본 gen_opencode.MANAGED_DIR)
     args = ap.parse_args(argv)
     if args.done and args.cmd:
         ap.error("--done은 단독으로 쓴다")
@@ -669,6 +1077,24 @@ def main(argv: list[str] | None = None) -> int:
         ap.error("--set·--apply는 propose에서만 쓴다")
     if args.cmd == "ofono" and args.step:
         ap.error("ofono는 단계 인자를 받지 않는다(지금 oFono 단계부터)")
+    if (args.project or args.managed_dir) and args.cmd != "runtime-check":
+        ap.error("--project는 runtime-check에서만 쓴다")
+    window_opts = args.since or args.last or args.repo or args.cap_tokens is not None or args.inhouse_model or args.jobs
+    if (window_opts or args.record or args.defer) and args.cmd != "audit":
+        ap.error("--since·--last·--repo·--cap-tokens·--inhouse-model·--jobs·--record·--defer는 audit에서만 쓴다")
+    if args.cmd == "audit":
+        if args.step:
+            ap.error("audit는 단계 인자를 받지 않는다")
+        if args.defer and not args.record:
+            ap.error("--defer는 --record와 함께 쓴다")
+        if args.record and window_opts:
+            ap.error("--record는 --defer만 함께 쓴다")
+        if args.cap_tokens is not None and args.cap_tokens <= 0:
+            ap.error("--cap-tokens는 0보다 크다")
+    if (args.out or args.min_lines is not None) and not (args.cmd == "modules" and args.step == "coverage"):
+        ap.error("--out·--min-lines는 modules coverage에서만 쓴다")
+    if (args.jira or args.missing_key) and args.cmd != "runtime-check":
+        ap.error("--jira·--missing-key는 runtime-check opencode에서만 쓴다")
     root = Path(args.root)
     code = 0
     try:
@@ -683,6 +1109,18 @@ def main(argv: list[str] | None = None) -> int:
             out, code = evals_cmd(root, max(1, args.batch), args.baseline)
         elif args.cmd == "ofono":
             out, code = ofono_cmd(root, args.allow_api)
+        elif args.cmd == "modules":
+            out, code = modules_cmd(root, args.step, args.allow_api, args.json, args.out, args.min_lines)
+        elif args.cmd == "audit":
+            import site_audit
+            if args.cap_tokens is None:
+                args.cap_tokens = site_audit.AUDIT_CAP_TOKENS
+            out, code = audit_cmd(root, args)
+        elif args.cmd == "runtime-check":
+            import gen_opencode
+            out, code = runtime_check(args.step, args.project,
+                                      Path(args.managed_dir) if args.managed_dir else gen_opencode.MANAGED_DIR,
+                                      args.jira, args.missing_key)
         else:
             out, code = start(root, args.allow_api)
         print(out)

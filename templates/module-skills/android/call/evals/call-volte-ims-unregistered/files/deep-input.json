@@ -1,0 +1,29 @@
+{
+ "schema_version": 1,
+ "key": "MOCK-9808",
+ "platform": null,
+ "module": "android/call",
+ "sha": "template",
+ "type_id": "CALL-001",
+ "top_candidates": [
+  {
+   "type": "CALL-001",
+   "cause": "CALL-001-01",
+   "score": 1.0,
+   "confidence": "high"
+  },
+  {
+   "type": "IMS-001",
+   "cause": "IMS-001-01",
+   "score": 1.0,
+   "confidence": "high"
+  }
+ ],
+ "issue_summary": "VoLTE 통화가 안 됨 (합성)",
+ "occurred_at": "2026-08-23T12:03:25+00:00",
+ "events": "events.json",
+ "timeline": "timeline.md",
+ "log_paths": [
+  "source.log"
+ ]
+}

@@ -57,11 +57,47 @@ def test_unknown_path_is_full():
 
 def test_test_file_and_skill_evals():
     assert select("tests/test_db_pr.py")["tests"] == ["tests/test_db_pr.py"]
-    assert select("tests/skill_evals/run.py")["tests"] == ["tests/test_skill_evals.py"]
+    assert select("tests/skill_evals/offsite.py")["tests"] == ["tests/test_skill_evals.py"]
     shown = ["tests/test_db_verify.py", "tests/test_show_guard.py", "tests/test_shown.py", "tests/test_skill_evals.py"]
     assert select("tests/skill_evals/shown_infer.py")["tests"] == shown           # 채점기 추론: 표시 판정 테스트도
     assert select("tests/helpers/shown_records.py") == {**select("tests/helpers/shown_records.py"), "full": False}
     assert select("tests/helpers/shown_records.py")["tests"] == shown
+
+
+def test_module_templates_and_generator_select_module_tests():
+    """모듈 스킬(계획 H C0): 템플릿·입력 생성기·기록은 모듈 테스트 둘(helpers 규칙의 full보다 먼저), run.py·grade.py는
+    common.claude_child 재수출 테스트(test_module_eval)도 고른다."""
+    module = {t for t in ("tests/test_module_eval.py", "tests/test_module_templates.py", "tests/test_make_module_repo.py",
+                          "tests/test_boundary.py", "tests/test_make_excerpt.py", "tests/test_module_templates_android.py")
+              if (REPO / t).is_file()}
+    assert "tests/test_module_eval.py" in module
+    for path in ("templates/module-skills/ofono/data/SKILL.md", "tests/helpers/make_module_eval_inputs.py",
+                 "templates/module-skills/ofono/data/evals/data-apn-auth-reject/files/source.log",
+                 "tests/skill_evals/module_offsite_results.json"):
+        out = select(path)
+        assert set(out["tests"]) == module and out["full"] is False, path
+    assert "tests/test_module_eval.py" in select("tests/fixtures/module-arms/ofono/pre/explore-rules.md")["tests"]
+    out = select("tools/make_excerpt.py")                                       # R39: 발췌 도구도 모듈 경로
+    assert set(out["tests"]) == module and out["full"] is False
+    for path in ("tests/skill_evals/run.py", "tests/skill_evals/grade.py"):
+        out = select(path)
+        assert set(out["tests"]) == {"tests/test_skill_evals.py", "tests/test_module_eval.py",
+                                    "tests/test_claude_child.py"} and out["full"] is False
+
+
+def test_claude_child_and_opencode_layer():
+    """계획 I: common/claude_child.py는 full이 아니라 스크립트 규칙 + CHILD_HELPER_TESTS(test_claude_child 포함), run.py·grade.py도
+    test_claude_child를 고른다. opencode/**·tests/opencode/**는 OpenCode 테스트 셋과 tests/opencode/ 디렉토리(분류 불가 full 아님)."""
+    out = select("plugin/scripts/common/claude_child.py")
+    assert out["full"] is False and {"tests/test_claude_child.py", "tests/test_module_eval.py", "tests/test_skill_evals.py",
+                                     "tests/test_site_step_runtime.py"} <= set(out["tests"])
+    assert "tests/test_claude_child.py" in select("tests/skill_evals/run.py")["tests"]
+    assert select("plugin/scripts/common/masking.py")["full"] is True            # 다른 common은 그대로 full
+    want = ["tests/opencode", "tests/test_gen_opencode.py", "tests/test_oc_adapter.py", "tests/test_tt_oc.py"]
+    for path in ("opencode/bin/tt-oc", "opencode/plugins/tt-guard.js", "opencode/opencode.json.template",
+                 "tests/opencode/test_oc_e2e.py", "tests/opencode/fakes/x.py"):
+        out = select(path)
+        assert out["full"] is False and out["tests"] == want, path
 
 
 def test_tool_change_selects_tests_mentioning_it():
@@ -72,3 +108,15 @@ def test_no_files_is_usage_error():
     proc = subprocess.run([sys.executable, str(TOOL), "--files"], capture_output=True, text=True,
                           stdin=subprocess.DEVNULL)
     assert proc.returncode == 2
+
+
+def test_pycache_ignored():
+    """R39: `__pycache__`·`.pyc`는 시험도 full도 고르지 않는다."""
+    for path in ("plugin/scripts/common/__pycache__/masking.cpython-313.pyc", "tools/__pycache__/x.pyc", "x.pyc"):
+        out = select(path)
+        assert out["tests"] == [] and out["full"] is False, path
+
+
+def test_templates_include_make_module_repo_and_boundary():
+    out = select("templates/module-skills/ofono/sim/SKILL.md")
+    assert {"tests/test_make_module_repo.py", "tests/test_boundary.py", "tests/test_make_excerpt.py"} <= set(out["tests"])

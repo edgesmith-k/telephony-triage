@@ -294,6 +294,93 @@ def test_mock_remote_push_and_pr():
         assert failing.returncode == 1 and "MOCK_GH_FAIL_LIST" in failing.stderr
 
 
+def test_mock_gh_reviews_view_and_review_command():
+    """gh 스텁 리뷰(H A1 +1 관문): `pr view`의 author·reviews(GraphQL 모양 — 봇 표시 없음)·reviewRequests, `pr review`,
+    `api` 리뷰 목록(REST 모양 — user.type·commit_id), MOCK_GH_REVIEWS, `pr edit --add-reviewer`가 head를 바꾸지 않는 것."""
+    import hashlib
+
+    with tempfile.TemporaryDirectory(prefix="tt-reviews-") as tmp:
+        base = Path(tmp)
+        info = make_repo.make(REPO / "tests" / "fixtures" / "issue-db-sample", base / "repo")
+        clone = Path(info["clone"])
+        env = mock_env.env_with_mocks(gh_state_dir=base / "gh-state", gh_host="ghe.mock.invalid")
+        gh = mock_env.resolve("gh", env)
+
+        def run(args, cwd=clone, **extra):
+            return subprocess.run(args, cwd=str(cwd), env={**env, **extra}, capture_output=True, text=True,
+                                  encoding="utf-8", errors="replace", check=False)
+
+        def api(number, **extra):
+            return run([gh, "api", "--hostname", "ghe.mock.invalid", f"repos/{slug}/pulls/{number}/reviews?per_page=100",
+                        "--paginate"], **extra)
+
+        assert run(["git", "switch", "-q", "-c", "issue/MOCK-1001"]).returncode == 0
+        (clone / "note.txt").write_text("모의 변경\n", encoding="utf-8")
+        assert run(["git", "add", "-A"]).returncode == 0
+        assert run(["git", "commit", "-q", "-m", "모의 변경"]).returncode == 0
+        head = run(["git", "rev-parse", "HEAD"]).stdout.strip()
+        created = run([gh, "pr", "create", "--title", "t", "--body", "b", "--base", "main", "--head", "issue/MOCK-1001",
+                       "--reviewer", "mock-org/data-owners", "--reviewer", "bob"])
+        assert created.returncode == 0, created.stderr
+        slug = created.stdout.strip().split("ghe.mock.invalid/", 1)[1].rsplit("/pull/", 1)[0]
+        view = json.loads(run([gh, "pr", "view", "1", "--json", "author,reviews,reviewRequests"]).stdout)
+        assert view == {"author": {"login": "mock-user", "is_bot": False}, "reviews": [],
+                        "reviewRequests": [{"__typename": "Team", "name": "data-owners", "slug": "data-owners"},
+                                           {"__typename": "User", "login": "bob"}]}
+        own = run([gh, "pr", "review", "1", "--approve"])
+        assert own.returncode == 1 and "Can not approve your own pull request" in own.stderr
+        assert run([gh, "pr", "review", "1", "--request-changes"], MOCK_GH_USER="mock-reviewer").returncode == 1
+        approved = run([gh, "pr", "review", "1", "--approve"], MOCK_GH_USER="mock-reviewer", MOCK_GH_NOW="2026-11-03T00:00:00Z")
+        assert approved.returncode == 0 and approved.stdout.strip() == "✓ Approved pull request #1", approved.stderr
+        reviews = json.loads(run([gh, "pr", "view", "1", "--json", "reviews"]).stdout)["reviews"]
+        assert reviews == [{"author": {"login": "mock-reviewer"}, "state": "APPROVED", "commit": {"oid": head},
+                            "submittedAt": "2026-11-03T00:00:00Z", "body": ""}]       # gh처럼 리뷰 작성자에 봇 표시 없음
+        stored = {"id": 1, "user": {"login": "mock-reviewer", "type": "User"}, "state": "APPROVED", "commit_id": head,
+                  "submitted_at": "2026-11-03T00:00:00Z", "author_association": "MEMBER", "body": ""}
+        got = api(1)
+        assert got.returncode == 0 and json.loads(got.stdout) == [stored], got.stderr
+        blank = run([gh, "pr", "review", "1", "--request-changes"], MOCK_GH_USER="mock-reviewer")
+        assert blank.returncode == 1 and "body cannot be blank" in blank.stderr
+
+        # MOCK_GH_REVIEWS: 선택자(번호·브랜치)·종류·커밋(head·old·none), env 리뷰가 앞, 저장된 리뷰가 뒤
+        assert run([gh, "pr", "create", "--base", "main", "--head", "issue/MOCK-1002"]).returncode == 0
+        spec = "1=request-changes:x@head,approve:y@old,approve:ci[bot]@head,issue/MOCK-1002=comment:z@none"
+        old = hashlib.sha1(b"mock-old-commit").hexdigest()
+        one = json.loads(api(1, MOCK_GH_REVIEWS=spec).stdout)
+        assert [(r["user"], r["state"], r["commit_id"], r["submitted_at"]) for r in one] == [
+            ({"login": "x", "type": "User"}, "CHANGES_REQUESTED", head, "2026-01-01T00:00:01Z"),
+            ({"login": "y", "type": "User"}, "APPROVED", old, "2026-01-01T00:00:02Z"),
+            ({"login": "ci[bot]", "type": "Bot"}, "APPROVED", head, "2026-01-01T00:00:03Z"),
+            (stored["user"], "APPROVED", head, "2026-11-03T00:00:00Z")]
+        assert [r["id"] for r in one] == [1, 2, 3, 4]
+        two = json.loads(api(2, MOCK_GH_REVIEWS=spec).stdout)
+        assert [(r["user"]["login"], r["state"], r["commit_id"]) for r in two] == [
+            ("y", "APPROVED", old), ("ci[bot]", "APPROVED", head), ("z", "COMMENTED", None)]
+        viewed = json.loads(run([gh, "pr", "view", "2", "--json", "reviews"], MOCK_GH_REVIEWS=spec).stdout)["reviews"]
+        assert viewed[1]["author"] == {"login": "ci[bot]"} and viewed[2]["commit"] is None
+        for bad in ("approve:x", "merge:x@head", "approve:x@zz", "=approve:x@head", "approve:x y@head"):
+            out = api(1, MOCK_GH_REVIEWS=bad)
+            assert out.returncode == 2 and "MOCK_GH_REVIEWS 형식 오류" in out.stderr, bad
+        missing = api(99)
+        assert missing.returncode == 1 and "Not Found" in missing.stderr
+        failing = api(1, MOCK_GH_FAIL_REVIEWS="1")
+        assert failing.returncode == 1 and "MOCK_GH_FAIL_REVIEWS" in failing.stderr
+        post = run([gh, "api", "-X", "POST", f"repos/{slug}/pulls/1/reviews", "-f", "event=APPROVE"])
+        assert post.returncode == 2 and "지원하지 않는 api" in post.stderr
+
+        # 버그 회귀: --add-reviewer만이면 다른 cwd(main)에서 불러도 PR head 그대로, 제목·본문을 고치면 cwd head
+        assert run(["git", "switch", "-q", "main"]).returncode == 0
+        main_head = run(["git", "rev-parse", "HEAD"]).stdout.strip()
+        assert main_head != head
+        assert run([gh, "pr", "edit", "1", "--add-reviewer", "r"]).returncode == 0
+        state = json.loads((base / "gh-state" / "prs.json").read_text(encoding="utf-8"))
+        assert state["prs"][0]["headRefOid"] == head and "r" in state["prs"][0]["reviewers"]
+        assert run([gh, "pr", "edit", "1", "--title", "t2"]).returncode == 0
+        state = json.loads((base / "gh-state" / "prs.json").read_text(encoding="utf-8"))
+        assert state["prs"][0]["headRefOid"] == main_head
+        assert "reviews" not in state["prs"][1]          # pr create의 PR 모양은 그대로(리뷰는 pr review가 쓸 때만)
+
+
 # -- 3. 합성 logcat ---------------------------------------------------------
 
 
@@ -472,6 +559,9 @@ def test_site_defaults_example_shape():
     assert data["parser"]["backend"] == "reference"
     assert data["external_parsers"] == {}
     assert data["analyzers"]["data"]["when"] == "ask"
+    # 모듈 스킬 레포·runtime은 주석 예시만, 폐지 하위 키는 지웠다(B1 설계 §2.3 — 예시를 복사한 시험 루트가 경고를 받지 않게)
+    assert "module_skills" not in data and "runtime" not in data
+    assert data["analyzers"] == {"data": {"skill": "mock-data-analyzer", "when": "ask"}}
     # read_tools 는 tools 값을 모두 포함해야 한다
     # (contracts.md §기존 자산 연결 계약)
     assert set(data["tracker"]["tools"].values()) <= set(data["tracker"]["read_tools"])

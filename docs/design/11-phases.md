@@ -29,10 +29,10 @@
 - 할 일: `15-local-draft.md §15.2`의 모의 Jira MCP(`mock-jira`, 비표준 도구 이름, `tests/mocks/mcp.json`), 모의 원격·`gh` 스텁, 합성 logcat 생성기(슬롯·시계 이상·bugreport 래핑 옵션 포함), 모의 소스 트리, 가상 빌드명, `plugin/site-defaults.example.yaml`(`synthetic_allowed: true`, `tracker.exclude_servers: []`), **테스트 헬퍼 `tests/helpers/make_plugin_root.py`**(`15-local-draft.md §15.1`), `DRAFT_NOTES.md`, `.local-draft`(`.gitignore` 등록. 사내 처음부터 모드는 만들지 않는다), `tools/list_site_todos.py`, **`SITE_PATHS`와 `tools/import_draft.py`, 반입 기준선 `.draft-manifest.json`**(`15-local-draft.md §15.6`). 사외 Claude Code 실험(`15.2` "사내 Claude Code 기능" 행: 플러그인 로드, hooks, `${CLAUDE_PLUGIN_ROOT}`, MCP 도구 이름 형식, **`@SITE_PROFILE.md` import가 파일이 없을 때 오류·경고를 내는지**) 결과를 `tests/mocks/plugin-probe/README.md`의 '사외 결과'에 기록.
 - 완료 기준: 모의 Jira MCP에서 이슈 읽기, 모의 원격으로 push와 `gh pr create` 성공, 합성 logcat 생성, 모의 소스 트리에서 심볼 검색이 된다. `make_plugin_root.py`가 만든 루트에는 `site-defaults.yaml`이 있고, 개발 레포 `plugin/`에는 없다. `plugin/`을 직접 `${CLAUDE_PLUGIN_ROOT}`로 주면 `config.py`가 종료 코드 2("사내 기본값 없음")를 낸다. Ubuntu에서 `.githooks/pre-commit`·`pre-push` 스텁이 실행 비트와 함께 커밋된다(`git ls-files -s`로 100755 확인). `tools/import_draft.py`를 가짜 사내 레포에 두 번 반입해서 시험한다: `SITE_PATHS` 경로는 보존된다. 두 번째 반입에서 사외에서 지운 파일은 지워지고, 사내에서 새로 만든 비-`SITE_PATHS` 파일은 지워지지 않고 목록으로 보고되며, 첫 반입 이후 사내에서 고친 사외 파일이 있으면 목록을 보여주고 멈춘다. 레포 루트에 `.mcp.json`이 없다. 이후 Phase 1~13은 이 모의 환경으로 진행한다 (`15-local-draft.md §15.3`).
 - 읽을 문서: `15-local-draft.md`, `16-existing-assets.md`, `contracts.md`, `02-config.md`, `14-site.md §14.2`
-- 모의 site 백엔드(`builtin.data.*` 이벤트를 내는 가짜)·골든 테스트 틀·어댑터 예시, 모의 분석 스킬, 비표준 Jira 도구 이름도 만든다 (`16-existing-assets.md §16.6`). 백엔드·`tracker.tools`·`analyzers`의 구현 위치는 Phase 2(백엔드 인터페이스·어댑터), Phase 6(`tracker.tools` setup), Phase 13(심층 분석 호출, `--analyzer`/`--no-analyzer`)이며, 해당 Phase의 읽을 문서에 `16-existing-assets.md`를 더한다.
+- 모의 site 백엔드(`builtin.data.*` 이벤트를 내는 가짜)·골든 테스트 틀·어댑터 예시, 모의 분석 스킬, 비표준 Jira 도구 이름도 만든다 (`16-existing-assets.md §16.6`). 백엔드·`tracker.tools`·`analyzers`의 구현 위치는 Phase 2(백엔드 인터페이스·어댑터), Phase 6(`tracker.tools` setup), Phase 13(심층 분석 호출 — 계획 H 뒤에는 `triage.py module --for deep`이 설치 스킬 `SKILL.md`도 Read로 주고 모듈 문서는 `module_skills.remote`, `--analyzer`/`--no-analyzer`)이며, 해당 Phase의 읽을 문서에 `16-existing-assets.md`를 더한다.
 
 ### Phase 0. 사내 환경 확인 (사내 처음부터 모드에서만)
-- 할 일: `14-site.md §14.4` 절차. 문서 정합성 검토(여러 파일 간 참조·표 복사·개수 포함, `REVIEW-OPEN.md` 항목 포함) + 사내 환경 확인(S1~S32, S24~S29는 oFono를 켤 때만, S30·S31은 GitHub 트래커를 쓸 때만). 결과는 `SITE_PROFILE.md`(진행 상태 포함).
+- 할 일: `14-site.md §14.4` 절차. 문서 정합성 검토(여러 파일 간 참조·표 복사·개수 포함, `REVIEW-OPEN.md` 항목 포함) + 사내 환경 확인(S1~S36, S24~S29는 oFono를 켤 때만, S30·S31은 GitHub 트래커를 쓸 때만, S33~S35는 모듈 스킬 레포를 쓸 때만, S36은 GHE MCP 서버를 쓸 때만). 결과는 `SITE_PROFILE.md`(진행 상태 포함).
 - 완료 기준: `14-site.md §14.4` 완료 기준.
 - 읽을 문서: 전체 (`CLAUDE.md`, `docs/design/*.md`(`99-deferred.md` 제외), `REVIEW-OPEN.md`). 정합성 검토를 위해 이 Phase만 전부 읽는다. **사내 보완 모드에서는 이 Phase를 하지 않는다** (S-1 축약판을 쓴다). 이 Phase 다음은 Phase D0다.
 
@@ -182,7 +182,7 @@
 - 읽을 문서: `09-commands.md`, `01-architecture.md §3`, `07-workflow.md §validate·sync-pr·record`, `contracts.md §3.2`
 
 ### Phase 13. SKILL.md (skill-creator 사용)
-- 할 일: `10-skill-eval.md`의 구성과 입력으로 skill-creator 스킬을 실행한다. **SKILL.md 본체는 analyze 핵심 흐름만(500줄 이내)**, 나머지 흐름은 `reference/`로 나눈다 (`10-skill-eval.md §SKILL 구성`). Step 5-1 심층 분석(`analyzers`, 기본 `ask`, `--analyzer`/`--no-analyzer`)과 `tracker.tools` 호출을 포함한다 (모의 분석 스킬로 시험).
+- 할 일: `10-skill-eval.md`의 구성과 입력으로 skill-creator 스킬을 실행한다. **SKILL.md 본체는 analyze 핵심 흐름만(500줄 이내)**, 나머지 흐름은 `reference/`로 나눈다 (`10-skill-eval.md §SKILL 구성`). Step 5-1 심층 분석(`analyzers`, 기본 `ask`, `--analyzer`/`--no-analyzer` — 계획 H 뒤에는 동의 뒤 `triage.py module --for deep`·`check-output`, `reference/module-skills.md`)과 `tracker.tools` 호출을 포함한다 (모의 분석 스킬로 시험).
 - 완료 기준: `10-skill-eval.md`의 트리거 테스트 전 항목, eval 45개(수동 기록 30~38, 기존 자산 39~41, `allow-cause` 42, Jira 텍스트 마스킹 43, 슬롯 44, 후보 없음·범위 밖·bugreport 45 포함) 통과. 결과물은 `plugin/skills/telephony-triage/`. SKILL.md 본체가 500줄 이내이고, 각 커맨드는 자기 흐름의 `reference/` 파일만 읽는다. `analyze`, `record`, `validate --cause`, `verify-fix`, `fix-submitted` 커맨드가 스킬과 연결되어 동작한다.
 - 읽을 문서: `10-skill-eval.md`, `07-workflow.md`, `contracts.md`, `16-existing-assets.md §16.1·16.5`, `12-principles.md`, 그리고 `10-skill-eval.md §skill-creator 입력`의 db-authoring 구성 목록에 있는 절
 

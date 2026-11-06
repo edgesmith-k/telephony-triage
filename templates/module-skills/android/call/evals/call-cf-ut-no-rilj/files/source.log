@@ -1,0 +1,42 @@
+-- [마스킹 발췌] A A-E7 줄 52802-52806,53189-53198,54337-54340,54349-54352,54388-54391,54401-54404,54472-54475
+08-09 13:13:00.233  3101  3101 I exynos_ufs_gear_change: prev: 5, target gear = 3
+08-09 13:13:00.235  3101  3101 I exynos-ufs 38300000.ufs: ufs power mode change: m(1)g(3)l(2)hs-series(2)
+08-09 13:13:00.448  1101  1126 D VCD     : UsbAgent: ATD*21*123%23<CR>
+08-09 13:13:00.450  1096  1188 V RIL     : gsm.sim.operator.numeric [0]=<CARRIER#1> [1]=
+08-09 13:13:00.451  1096  1188 V RIL     : ================TelephonyStatusTracker(0)=======================
+-- [생략]
+08-09 13:13:00.507  1856  1856 D EmergencyNumberTracker: [1]found sim in slotId: 0 subid: 4
+08-09 13:13:00.507  1856  1856 D EmergencyNumberTracker: [1]Search results - inRilEccList:false inEmergencyNumberDb:false inEmergencyNumberTestList: false
+08-09 13:13:00.508  1856  1856 D ImsPhone: [0] dialInternal: dialing w/ mmi 'ImsPhoneMmiCode {State=PENDING action=* sc=21 sia=123 poundString=[qhCueMgbPEqjXw3pS7-HmXzqYus]}'...
+08-09 13:13:00.508  1856  1856 D ImsPhoneMmiCode: processCode: is CF
+08-09 13:13:00.508  1856  1856 D ImsPhoneMmiCode: processCode: is CF setCallForward
+08-09 13:13:00.508  1856  1856 D ImsPhone: [0] setCallForwardingOption action=3, reason=0 serviceClass=0
+08-09 13:13:00.508  1856  1856 D ImsUt   : updateCallForward :: Ut=com.android.ims.internal.IImsUt$Stub$Proxy@8065000, action=3, condition=0, number=[QL0AFWMIX8NRZTKeof9cXsvbvu8], serviceClass=0, timeSeconds=0
+08-09 13:13:00.508  1807  3224 D SHANNON_IMS: 1531 [UT##] Request to update Call forward. Action : 3, Condition : 0, ServiceClass : 0, Time : 0 (ShannonImsUtImpl%updateCallForward:316)
+08-09 13:13:00.510  1807  3224 D SHANNON_IMS: 1532 [UT##] Process SET_CALL_FORWARD_TYPE through CP_NETWORK [SLID:0 ] (UtOperatorProcessor%getUtProcessor:173)
+08-09 13:13:00.510  1297  1297 D CallerInfoAsyncQuery: ##### onQueryComplete() #####   query complete for token: 0
+-- [생략]
+08-09 13:13:01.330   919   919 I android.hardware.power-service.exynos9975: Power setBoost: 1, duration: 0
+08-09 13:13:01.691  1807  3177 I SHANNON_IMS: 1616 [ADAP] Sending set call forward status with reason [UNCONDITIONAL] [SLID:0 ] (UtAdaptor%sendSetCallForwardStatus:149)
+08-09 13:13:01.692  1807  3177 I SHANNON_IMS: 1617 [HELP] #:PURP:# SOL TX{RILC_REQ_AIMS_SET_CALL_FORWARD_STATUS} : status : 3  reason : 0  service-class : 1  toa : 129  number-len : 3  number : 1**  timeseconds : 0[  [ start-hour : 0  start-minute : 0  end-hour : 0  end-minute : 0 ]][  [ daylight-valid : 0  year : 26  month : 8  day: 9  hour : 5  minute : 13  second : 1  time-zone : 0  daylight-adjust : 0  day-of-week : 0 ]]  [SLID:0  Active:true] (ImsRilHelper%sendRequest:407)
+08-09 13:13:01.693  1807  3177 V ImsRIL  : [ImsRIL_36]> STATUS_MAX <HEXDUMP 67B> 
+-- [생략]
+08-09 13:13:01.695  1096  1159 V RIL     : [RilContext_0] RecordRequestHistory token=0x01C4
+08-09 13:13:01.695  1096  1159 I RIL     : [RilContext_0] Send 
+08-09 13:13:01.695  1096  1159 V RIL     : [<DEV#1>][TX] SIT_AIMS_SET_CALL_FORWARD_STATUS, REQ, 79 bytes, Token(0x01c4)
+08-09 13:13:01.695  1096  1159 V RIL     : <HEXDUMP 16B>
+-- [생략]
+08-09 13:13:03.583   919   919 I android.hardware.power-service.exynos9975: Power setBoost: 1, duration: 0
+08-09 13:13:03.672     0     0 I [    C0] cpif: LNK-RX(32): <HEXDUMP 24B>
+08-09 13:13:03.667  1096  1167 V RIL     : [<DEV#1>][RX] SIT_AIMS_SET_CALL_FORWARD_STATUS, RSP, 19 bytes, Token(0x01c4), OK(RCM_E_SUCCESS)
+08-09 13:13:03.667  1096  1167 V RIL     : <HEXDUMP 16B>
+-- [생략]
+08-09 13:13:03.668  1096  1159 D RIL_EXTERNAL: RilExternalManager::sendRequestRawResponse: clientId=8
+08-09 13:13:03.669  1096  1159 V RIL     : [RilContext_0] RemoveRequestHistory  token=0x01C4
+08-09 13:13:03.670  1807  3177 I SHANNON_IMS: 1618 [DATA] SOL RX{RILC_REQ_AIMS_SET_CALL_FORWARD_STATUS}  status : STATUS_SUCCESS [status : 3  reason : 0  service-class : 1  toa : 129  number-len : 3  number : 1**  timeseconds : 0[  [ start-hour : 0  start-minute : 0  end-hour : 0  end-minute : 0 ]][  [ daylight-valid : 0  year : 26  month : 8  day: 9  hour : 5  minute : 13  second : 1  time-zone : 0  daylight-adjust : 0  day-of-week : 0 ]]] (SolicitedMessage%handleMessage:71)
+08-09 13:13:03.672  1807  3177 D SHANNON_IMS: 1619 [UT##] #:BLUE:# Receive update result from CP about Id 1693469021  [SLID:0 ] (UtCpProcessor$UtNetworkListener%callOnUpdated:623)
+-- [생략]
+08-09 13:13:03.705  1096  1096 V RIL     : [RilContext_0] SendMessage RIL Request Routing : RCM ID=28 Service ID=14 Message ID=2017 delayMillis=0
+08-09 13:13:03.705  1096  1096 V RIL     : [ServiceMgr] msg(0xb400007d1e220fd0) msgId=2017 svc=SimIoService_0(14) direction=Request
+08-09 13:13:03.706  1856  1856 D ImsPhoneMmiCode: onSetComplete: mmi=ImsPhoneMmiCode {State=COMPLETE action=* sc=21 sia=123 poundString=[qhCueMgbPEqjXw3pS7-HmXzqYus]}
+08-09 13:13:03.706  1856  1856 D ImsPhone: [0] onMMIDone: mmi=ImsPhoneMmiCode {State=COMPLETE action=* sc=21 sia=123 poundString=[qhCueMgbPEqjXw3pS7-HmXzqYus]}

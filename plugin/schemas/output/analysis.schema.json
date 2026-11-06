@@ -96,6 +96,7 @@
       "unextracted_warn": {"type": "integer", "description": "수집 태그 W/E/F 줄 중 이벤트로 추출 안 된 줄 수(parse_logcat unextracted_warn.lines, 있을 때만)"}
      }
     },
+    "partial": {"type": "array", "maxItems": 3, "description": "C′ 부분 일치(판정·점수 아님, S/C 불변; 후보 없음·원인 미확인일 때만, 04-parser-matching.md §5.12). {kind: missing|absent|order|window|blocked, type, cause, signature, matched: \"m/n\", missing[≤3 조건 설명], blocked_by?, at[≤3 f:L], code[]?(\"<조건>:<상태>[:<root 키>:<경로>:<줄>]\")}; 4KB 압축 시 partial[1:] → missing 40자 → 전체 제거", "items": {"type": "object", "required": ["kind", "type", "signature", "matched"], "additionalProperties": false, "properties": {"kind": {"enum": ["missing", "absent", "order", "window", "blocked"]}, "type": {"type": "string"}, "cause": {"type": ["string", "null"]}, "signature": {"type": "string"}, "matched": {"type": "string"}, "missing": {"type": "array", "maxItems": 3}, "blocked_by": {"type": "string"}, "at": {"type": "array", "maxItems": 3}, "code": {"type": "array", "maxItems": 3}}}},
     "code": {
      "type": "object",
      "required": ["skipped"],
@@ -108,8 +109,8 @@
       "moved": {"type": "array"}
      }
     },
-    "analyzer": {"type": "object", "description": "{skill, when}"},
-    "explore": {"type": "object", "description": "{reason: no_candidate|cause_unconfirmed, when: ask|always|never}(run은 타임라인을 만들지 않는다)"},
+    "analyzer": {"type": "object", "description": "{skill, when, note?} 설치 분석 스킬(레거시·prefer: skill) | {category, when, note?} 모듈 스킬 | {error, when} 설정 오류 (note: when ask일 때만 답 전 안내)"},
+    "explore": {"type": "object", "description": "{reason: no_candidate|cause_unconfirmed, when: ask|always|never, note?: when ask일 때만 답 전 안내}(run은 타임라인을 만들지 않는다)"},
     "warnings": {"type": "array"},
     "notes": {"type": "array", "description": "잔여 worktree·도구 브랜치 안내 등"},
     "lock_owner": {"type": "string"},

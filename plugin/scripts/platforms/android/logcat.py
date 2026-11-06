@@ -9,7 +9,7 @@
   넘어가면 연도를 하나 올린다(`year`는 첫 줄의 연도다). 재부팅으로 시계가
   `01-01`로 갔다가 돌아오는 것은 해 넘김이 아니다(12월 → 1월만 센다).
 - 입력 인코딩: UTF-8(BOM 허용)과 UTF-16(BOM). `open_log()`가 고른다.
-- 슬롯(`phone_id`): 태그 접미사(`DNC-1`) → 메시지 접두어(`[PHONE1]`, `[SUB1]`)
+- 슬롯(`phone_id`): 태그 접미사(`DNC-1`, `ImsManager [0]`) → 메시지 접두어(`[PHONE1]`, `[SUB1]`)
   → 메시지 끝(`[PHONE1]`, AOSP RILJ 형식) 순서. 없으면 `None`
   (`04-parser-matching.md §5.8 (2)`).
 
@@ -42,11 +42,11 @@ from common.logtime import micro as _micro  # noqa: F401
 from common.logtime import zone_offset as _zone_offset  # noqa: F401
 from platforms.base import FileStats, LogLine, PhoneIdRules
 
-# threadtime (+ year / zone / uid): "MM-DD HH:MM:SS.mmm [UID] PID TID L TAG: msg"
+# threadtime (+ year / zone / uid): "MM-DD HH:MM:SS.mmm [UID] PID TID L TAG: msg". 태그에 `::`가 있을 수 있다(`AF::AfPlaybackCommon`).
 THREADTIME_RE = re.compile(
     r"^" + _STAMP
     + r"\s+(?:(?P<uid>[A-Za-z0-9_.]+)\s+)?(?P<pid>\d+)\s+(?P<tid>\d+)"
-    r"\s+(?P<level>[VDIWEFA])\s+(?P<tag>[^:]+?)\s*:(?: (?P<msg>.*))?$"
+    r"\s+(?P<level>[VDIWEFA])\s+(?P<tag>(?:[^:]|::)+?)\s*:(?: (?P<msg>.*))?$"
 )
 # time: "MM-DD HH:MM:SS.mmm L/TAG( PID): msg"
 TIME_RE = re.compile(
@@ -58,6 +58,8 @@ BEGINNING_PREFIX = "--------- "
 # 슬롯 기본 표기. 사내 값은 `platform.log.phone_id`로 덮어쓴다 (`platforms.load()`, 02-config.md).
 # 태그 접미사는 "이름-숫자" 한 마디만 본다(DN-17-C 같은 DataNetwork 태그는 슬롯이 아니다).
 TAG_PHONE_RE = re.compile(r"^[A-Za-z]+(?:-[CI])?-(\d+)$")
+# 태그 끝 " [n]"(공백 + 대괄호 숫자, `ImsManager [0]`). 태그 글자는 그대로 둔다. `MobileConnectionLog[4]`(공백 없음)는 아니다.
+TAG_PHONE_SPACE_RE = re.compile(r"^.+ \[(\d)\]$")
 MSG_PHONE_PREFIX_RE = re.compile(r"^\[(?:PHONE|SUB)(\d+)\]\s?")
 MSG_PHONE_SUFFIX_RE = re.compile(r"\s?\[PHONE(\d+)\]$")
 
@@ -139,4 +141,4 @@ def epoch_break(line: LogLine) -> bool:
     return line.tag == "boot_progress_start" or (line.tag.lower() == "kernel" and line.msg.startswith("Linux version "))
 
 
-DEFAULT_PHONE_RULES = PhoneIdRules((TAG_PHONE_RE,), (MSG_PHONE_PREFIX_RE,), (MSG_PHONE_SUFFIX_RE,))
+DEFAULT_PHONE_RULES = PhoneIdRules((TAG_PHONE_RE, TAG_PHONE_SPACE_RE), (MSG_PHONE_PREFIX_RE,), (MSG_PHONE_SUFFIX_RE,))

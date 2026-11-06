@@ -1,0 +1,23 @@
+{
+ "schema_version": 1,
+ "key": "MOCK-9301",
+ "platform": "ofono",
+ "module": "ofono/network",
+ "sha": "template",
+ "type_id": "NETWORK-001",
+ "top_candidates": [
+  {
+   "type": "NETWORK-001",
+   "cause": "NETWORK-001-01",
+   "score": 1.0,
+   "confidence": "high"
+  }
+ ],
+ "issue_summary": "5G(NR) 모드 설정 화면이 비어 있음",
+ "occurred_at": "2026-02-27T17:28:15+00:00",
+ "events": "events.json",
+ "timeline": "timeline.md",
+ "log_paths": [
+  "source.log"
+ ]
+}

@@ -104,7 +104,7 @@ lock·`session.guard`는 각 플랫폼 `work_dir`에 있다(`Lock(work_dir, plat
 | K5 | 이슈 DB `platform` 선언, 세션 선택과 다르면 거부(`platform-mismatch`) | **동작·원인·해결책이 플랫폼마다 달라** 다른 DB에 대고 매칭하는 것은 의미가 없다. 시그니처에 platform 표시를 다는 "합치기" 안은 쓰지 않는다(사용자 결정) |
 | K6 | DB에 고정된 도구는 DB 선언 플랫폼, 사용자 세션 흐름은 선택과 DB 선언을 대조 | oFono DB의 CI는 사용자 config 없이 돈다. `parse_logcat`은 사용자 config를 읽지 않는다 |
 | K7 | **RF-4 유지**: 플랫폼 상수(정규식·디렉토리·태그·섹션 헤더)는 site-defaults에서만. 사용자 config는 이름 선택과 경로 프로필 + 사용자 수준 키 `analyzers`(K16)만, `platforms.<p>`의 그 밖 키는 거부 | 상수는 결정적 파서 출력과 이슈 DB 회귀 기준을 정한다. 사람마다 다르면 같은 fixture가 다르게 판정된다. 이번 요구는 "어느 상수 묶음을 쓸지 고르기"다 |
-| K8 | 출력 `platform` 키는 android 아닐 때만(켠 플랫폼 2개 이상이면 `--platform` 없이 고르는 플랫폼 또는 지정과 다를 때도, K18), 라벨은 `SPEC.label` | android 바이트 불변, 기존 "있을 때만" 키 관례 |
+| K8 | 출력 `platform` 키는 android 아닐 때만(켠 플랫폼 2개 이상이면 `--platform` 없이 고르는 플랫폼 또는 지정과 다를 때도, K18), 라벨은 `SPEC.label` | android 바이트 불변, 기존 "있을 때만" 키 관례. 예외: `module_skills.remote`가 있을 때 `triage.py explore` 출력에 `module_skills`(K21) |
 | K9 | (해소, 트래커 범용화) 스키마 필드 `android_version(s)`·`code_profiles[].android_version`·`field_map.android_version`을 `platform_version(s)`로 개명했다. DB 키는 `platform_versions_supported` 하나(옛 키는 읽지 않고 `db_lint` config 오류) | 처음에는 이슈 DB 마이그레이션이 필요해 미뤘다. 배포된 이슈 DB가 없어 원칙 (d)로 v1을 직접 고쳤다(`18-trackers.md` T4·T10). 옛 사용자 config 키는 감지만 한다(T5) |
 | K10 | 짝 규칙은 `SPEC.protocols`(0개 이상), 비-ril은 `proto` 주석, `pair`는 자기 주석만(`reads`에 적은 앞 프로토콜 주석은 읽기만, K20). `ril.yaml` 요청 이름은 DB 전체에서 유일 | oFono는 RIL 계층과 D-Bus 등 둘 이상일 수 있다 |
 | K11 | 카테고리는 플랫폼 DB `categories`, 출처 → 카테고리는 플랫폼 DB `tags.yaml` | 코드에 카테고리 가정 없음(조사 결과) |
@@ -113,10 +113,11 @@ lock·`session.guard`는 각 플랫폼 `work_dir`에 있다(`Lock(work_dir, plat
 | K14 | 데몬 사이 짝 = 설정 프로토콜(`protocol_kinds`, ofono `regex`). 이름은 site, 기본 꺼짐, 짝 키 `serial`, 짝은 한 스트림 안에서만, 짝 없는 요청의 `observed_until` = 구간 끝. 대화 키는 없다(S26) (§9-3) | 엔진은 이미 스트림 구간 전체를 `pair()`에 준다. 프로토콜마다 `proto`·대기 표가 따로라 계층이 섞이지 않는다(규칙 목록 하나인 고정 프로토콜은 serial이 충돌). 형식 미정이라 코드 없이 설정으로 |
 | K15 | 여러 소스 루트: 구성요소 루트의 `required_dirs` 검사와 `component_versions`(참고 출력, 구성요소가 있는 플랫폼만), 주 루트 계속 필수, `platform_version`은 하나 (§9-4) | android 출력 불변. 버전 뜻(S28)이 정해지기 전에 비교 기준을 늘리지 않는다 |
 | K16 | 분석 스킬(5-1): 최상위 `analyzers` = 항상 android, 그 밖 플랫폼은 site·사용자 `platforms.<p>.analyzers`를 deep-merge한 것만(android 것으로 대신하지 않음 — 없으면 질문 없이 리포트 `해당 없음`). 키 목록 `PLATFORM_SCOPED_KEYS`(`PROFILE_KEYS` 밖), site `platforms.android`·모르는 키는 종료 코드 2, guard 규칙 12는 모든 층·플랫폼 합집합 (§10-1) | oFono 1위 `data`에 Android 분석 스킬(site `analyzers.data`)이 제안됐다. 최상위 = android는 K2와 같은 뜻(site `platform.name`에 따라 바뀌지 않는다). `platform.others.<p>`는 RF-4 파서 상수 블록(바꾸면 `db_regress`)이라 분리. `source`는 개인 경로라 사용자 층이 필요하다 |
-| K17 | 탐색 지식(5-2): 내장 `reference/platforms/<p>/*.md` 관례 + `triage.py explore` 출력 `platform`·`refs`(android 아닐 때만), `reference/explore.md` 한 항목. 사이트 지식 스킬 연결은 S-4a (§10-2) | 다른 스택의 태그·요청·원인 이름은 가설을 틀린 쪽으로 끈다. 어느 문서를 읽을지 스크립트가 알려 SKILL.md(크기 상한) 불변, 추가 = 디렉토리 하나. 동의 뒤에만 필요해 `analysis.json`·캐시 밖 |
+| K17 | 탐색 지식(5-2): 내장 `reference/platforms/<p>/*.md` 관례 + `triage.py explore` 출력 `platform`·`refs`(android 아닐 때만), `reference/explore.md` 한 항목. 사이트 지식 스킬 연결은 S-4a (§10-2) | 다른 스택의 태그·요청·원인 이름은 가설을 틀린 쪽으로 끈다. 어느 문서를 읽을지 스크립트가 알려 SKILL.md(크기 상한) 불변, 추가 = 디렉토리 하나. 동의 뒤에만 필요해 `analysis.json`·캐시 밖. 예외: `module_skills.remote`가 있으면 모듈 문서가 먼저다(K21 — 읽는 범위·안전은 `explore.md`·`rules.md` 그대로) |
 | K18 | 이슈 시작 때 플랫폼 = 로그 자동 + 애매하면 질문(사용자 결정 D1~D6). `run`만, `resolve` 뒤·`Driver` 전(lock·JOB 전), 켠 플랫폼 2개 이상·`--offline-db` 아님. 명시 = `--answer platform=` > `--platform` > `TT_PLATFORM`, 사용자 `platform`·site는 기본값(로그 형식이 이김), 명시와 형식이 다르면 한 번 묻기(답은 이어 하는 작업에 `platform_answer`로 남아 다시 묻지 않음), 출력 `platform`은 암묵 선택·지정과 다를 때도 (§11) | lock·work_dir가 플랫폼별(K4)이라 그 전에 정해야 한다. 판별은 스크립트(guard 규칙 10과 같은 `raw_line`), LLM 추측 없음. 질문은 일반 `needs_input`이라 SKILL.md 불변. 단일 플랫폼 설치는 파일을 열지 않아 바이트 동일 |
 | K19 | oFono 내장 짝 이름은 `gril`(not `ril`): upstream gril RIL trace 짝이 ofono `SPEC.protocols` 기본이다. SPEC 고정 이름이라 `protocols.gril: {tags}`만 받고(`[]` = 끄기), 주석은 `proto: gril`, 파생 이벤트는 proto 무관. 슬롯 규칙(`[<slot>,`·`/ril_<n>`)은 ofono `SPEC.phone` 기본 (§9-3) | `ril` 태그는 `<블록>.ril.tags`에서만 받는데 ofono `block_keys`에 `ril`이 없고 `protocols.ril`은 거부한다 — `gril`이면 레지스트리 무변. 대안(`ril` + 레지스트리 예외)은 계약을 바꿔 쓰지 않았다(11/02) |
 | K20 | serial 없는 데몬 사이 연결 = 설정 kind `hop`(opt-in, 기본 출력 바이트 동일, `ofono_reference` 0.0.3 유지). 아래 줄에만 주석(`dir: hop_req`·`hop_resp`), 파생 이벤트 없음, 일대일 nearest-first·기본 창 50ms(상한 1000), 이름은 정규식 + `fold`, 계약 `PairProtocol.reads`(읽기만 하는 앞 프로토콜, 레지스트리가 순서 확인) (§9-3) | 공개 표본(11/02)의 벤더 RIL 데몬은 요청 이름은 남기지만 gril serial은 남기지 않고(token 값은 serial과 이어지지 않음), 시각은 위 요청 뒤 수 ms였다. 실측(개수만): 요청 50ms 180/209·60/67(200ms 190/209), 아래 시각을 ±0.5~3초 밀면 가짜 연결 0~3, 같은 이름이 몰린 구간에서 FIFO와 29건 차이 → 국소적인 nearest, FIFO는 P2. 응답은 실패 응답이 주로 이어졌다(77/218, 실패 75/82). 위 줄에 쓰면 gril 소유 주석을 바꾸고, 파생 이벤트는 새 예약 이름(RESERVED_EVENTS·rulediff·db_lint·contracts)이 필요하고 미연결 원인(로그 수준·다른 경로·캡처 경계)을 구분할 수 없어 넣지 않았다(미연결 수는 site_checks o2.pairs) |
+| K21 | 모듈 스킬 레포(계획 H, `MODULE_SKILLS_PLAN_IMPL` §2.1~§2.3): 최상위 공통 키 `module_skills{remote, base_branch}`(플랫폼별이 아니다 — 레포 하나 안에 `<p>/_common`·`<p>/<모듈>`), 관리 clone `<work_dir>/_module-skills/`(플랫폼마다, 동의 뒤 `triage.py module`만, 최신 `base_branch` fetch → 받은 내용 점검 → ff-only → cone sparse `<p>/_common`+그 모듈), 점검한 바이트를 JOB에 복사해 Read, 리포트·`module-skill.json`에 SHA. 5-1 모듈 = 1위 후보 카테고리의 `db_category` 모듈(`common` → modem), 5-2 = 타임라인 태그·RIL·ofonod 파일 줄 수 + Jira 요약 힌트(둘 이상이면 묻는다). 분석 스킬 `analyzers`·`prefer`·`skill_dir`는 플랫폼별 그대로(§10-1), 설치 스킬도 `SKILL.md` 경로를 풀어 Read | 레포 하나에 플랫폼 폴더를 두면 관리·리뷰가 한 곳이고, 분석 스킬 선택은 플랫폼마다 다르다(K16). 주소가 없으면 출력 그대로(K8) |
 
 그 밖: `compiled.environment(defaults, platform)`은 `parser.backend`가 없으면 `SPEC.default_backend`를 쓴다(그런 설치만 분석 재사용 해시가 한 번 바뀐다). 두 벌 설치는 커맨드 이름 공간과 hook이 두 번 걸리므로 권장은 한 벌 설치 + `enabled` 2개다.
 
@@ -128,13 +129,15 @@ lock·`session.guard`는 각 플랫폼 `work_dir`에 있다(`Lock(work_dir, plat
 - **트래커 설정 플랫폼별 덮어쓰기**: `tracker.*`(트래커 종류·`field_map` 등)는 플랫폼끼리 공유한다. oFono 트래커나 프로젝트가 다르면 `platforms.<p>.tracker` 덮어쓰기(`PROFILE_KEYS` 확장)를 다음 작업으로(S28·S32, `18-trackers.md` T9).
 - parser-rules 스키마가 `ril.yaml` 항목 1개 이상과 요청 이름 `^[A-Z][A-Z0-9_]*$`를 요구한다. oFono DB에 placeholder 항목이 필요하고, D-Bus식 이름(`GetProperties` 등)은 넣을 수 없어 설정 프로토콜(§9-3)의 파생 이벤트(`ril_error`·`ril_timeout`·`ril_no_response`)가 생기지 않는다(짝·지연은 이벤트에 보인다). 이름 정규화(`regex` 옵션)나 프로토콜별 규칙 파일(스키마 마이그레이션, 메인테이너)은 S26이 정해진 뒤에.
 - **site-defaults ↔ 이슈 DB 교차 점검**(구성요소 ident가 `tags.yaml`에 없음, `root_key`가 `code_root_keys`에 없음 → doctor·site 점검 경고)은 미룬다.
-- **탐색 지식 스킬 연결**(사이트 로그 분석 스킬을 Step 5-2에서 부르기, 키는 `platforms.<p>` 아래)은 S-4a에서(`16-existing-assets.md §16.5`). 지금은 내장 `reference/platforms/<p>/`(§10-2).
+- **탐색 지식 스킬 연결**(사이트 로그 분석 스킬을 Step 5-2에서 부르기, 키는 `platforms.<p>` 아래)은 S-4a에서(`16-existing-assets.md §16.5`). 지금은 내장 `reference/platforms/<p>/`(§10-2). 모듈 스킬 레포는 최상위 `module_skills`(플랫폼 공유, 레포 안 `<p>/` 폴더), 분석 스킬 `analyzers`·`prefer`·`skill_dir`는 플랫폼별 그대로 — `MODULE_SKILLS_PLAN_IMPL §2.1`, K21.
 - **감지가 기본 아닌 플랫폼을 고르는 eval**(플랫폼 말 없이 다른 플랫폼 로그)은 eval 하네스가 둘째 플랫폼 프로필을 만들 수 있을 때. 지금은 pytest(`tests/test_platform_detect.py`)가 덮는다. Jira 실제 필드 → 플랫폼 대응(`platform.detect.tracker_field`)은 S28·S32.
 
 ## 9. 한 플랫폼 안의 여러 구성요소(데몬)
 
 > 10/30 사용자 요청("oFono 외에 여러 데몬도 같이 돈다"). 사용자 답: (1) 모든 데몬을 oFono 이슈 DB 하나에 둔다(플랫폼은 `ofono` 그대로, K5 불변), (2) 로그는 한 스트림(journald/syslog)이고 줄마다 데몬 식별자(ident)가 있다, (3) 데몬마다 소스가 따로 있다, (4) 데몬 사이 요청·응답 짝이 필요하다(형식 미정 — placeholder). 결정은 §7 K12~K15. 기본 설정의 출력은 이전과 같고, 새 기능이 있어 `ofono_reference`는 0.0.2다(DB가 `min_version`으로 요구할 수 있다).
 > 11/02: 줄 형식 (c) BusyBox syslogd·내장 짝 `gril`·슬롯 규칙이 기본 출력을 바꿔 `ofono_reference`는 **0.0.3**이다((a)·(b) 형식이고 gril 줄·`/ril_<n>`이 없는 로그는 0.0.2와 같다, K19). 분석 재사용 캐시는 한 번 바뀐다.
+> C1+D 보정: (c) 형식의 레벨 보정(`LEVEL_UNRELIABLE_IDENTS`, 기본값 정본은 `journal.py`)은 줄 읽기(`journal.read_file`, severity 그대로)에서 `OfonoReferenceBackend._line_record`로 옮겼다. 벤더 IPC 판별 이름과 함께 이슈 DB tags.yaml `level: unreliable`·`ipc: vendor`로 바꿀 수 있다(`04-parser-matching.md §5.8 (2)`, 선언이 없으면 기본 상수 — 출력 같음).
+> C1+D 보정 버전: `ofono_reference` **0.0.4**(레벨 보정·벤더 IPC builtin이 0.0.3 출력을 바꿈), Android `reference` **0.1.1**(D의 벤더 IPC builtin·ril.py 해석). 버전은 분석 재사용 캐시 키(`compiled.environment` → `source_hash`)라 올리지 않으면 이전 분석이 재사용된다.
 
 ### 9-1. 구성요소 계약 (`platforms/base.py`)
 
@@ -209,6 +212,12 @@ lock·`session.guard`는 각 플랫폼 `work_dir`에 있다(`Lock(work_dir, plat
 - `triage.py explore` 출력: 작업 플랫폼이 android가 아니면 `{timeline, lines, total}`에 `platform`과 `refs`(그 디렉토리의 `*.md`, 스킬 디렉토리 기준 경로, 이름순, 없으면 `[]`)를 더한다. 작업 플랫폼 = `JOB/analysis.json`의 `platform`(키가 없으면 android), 그 파일을 읽지 못하면 선택 플랫폼 — `--out` 오프라인 작업도 그 작업의 문서를 받는다. android는 키가 없다(출력 불변). `analysis.json`·스키마·분석 재사용 캐시에는 넣지 않는다.
 - 스킬: `reference/explore.md` "읽는 것" 5번 — `platform`이 있으면 `refs` 문서만 읽고 Android 참고 자료(`log-tags.md`·`ril-requests.md`·`fail-causes.md`)는 열지 않는다, `refs`가 비면 그 이슈 DB `SNAP/parser-rules/`만. SKILL.md와 Android 참고 자료 머리말("Android 기준")은 그대로.
 - 새 플랫폼 = `reference/platforms/<p>/` 디렉토리(선택) + site `platforms.<p>.analyzers`(선택). 사이트 지식 스킬 연결은 S-4a(§8).
+
+### 10-3. 모듈 스킬 레포 (K21)
+
+- `module_skills.remote`가 있을 때만: Step 5-1은 1위 카테고리의 `deep_source`가 module이면 `triage.py module --for deep`(그 플랫폼의 `<p>/_common`·`<p>/<모듈>`), Step 5-2는 `triage.py explore` 출력의 `module_skills: true`를 보고 `triage.py module --for explore`(모듈 후보·질문은 스크립트가 쓴다). 받은 `modules.yaml`에 `platforms.<p>.common.filter`가 있으면 모듈 보기(타임라인) — 모델은 그 보기만 읽는다. 레포에 그 플랫폼·모듈 폴더가 없으면 종료 1(`레포에 <p>/<모듈> 없음`)이고 리포트 줄은 스크립트가 고친다.
+- `prefer: skill`(또는 remote 없이 `skill`)인 카테고리는 설치 스킬 `SKILL.md`를 Read로 읽는다(모든 런타임). 분석 스킬 키는 §10-1처럼 플랫폼마다 따로다(android 것을 물려받지 않는다).
+- 주소가 없으면 `run`·`explore` 출력은 그대로다(K8). 주소가 있으면 `analysis.json` `analyzer` 모양과 5-1 줄, `explore` 출력의 `module_skills` 키만 바뀐다.
 
 ## 11. 이슈 시작 때 플랫폼 정하기
 

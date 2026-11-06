@@ -17,6 +17,10 @@ oFono 플랫폼의 로그 줄 해석(17-platforms 설계 §5). 실제 사내 로
   시작하는 보통 문장(한국어 낱말이 host·ident 자리에 오는 것)을 원문 줄로 보지 않는다(guard 규칙 10·Jira 게시 검사 오탐).
 - `tag = ident`, `pid`는 없으면 0, `tid = None`, `level`은 (c)만 severity에서, (a)·(b)는 `"I"`(short 출력에는
   우선순위가 없다, TODO(SITE:S24)). `host`는 줄 객체에 넣지 않는다(PII일 수 있다).
+- 레벨을 심각도로 쓰지 않는 ident(`LEVEL_UNRELIABLE_IDENTS`: DITD·RFSD·DMD·MOSE, 첨부 oFono 로그에서 본 이름 —
+  DITD netlink 덤프를 crit/alert/emerg로, RFSD `checksum : verified`·MOSE 정상 결과를 warn으로 찍는다)의 보정은 여기서
+  하지 않는다 — 줄 읽기는 severity 그대로이고 `backend.py`가 `"I"`로 둔다(11/05 승인 ③, C1+D 보정에서 백엔드로 옮김.
+  이슈 DB tags.yaml `level: unreliable`로 바꿀 수 있다, 04-parser-matching §5.8 (2)). 이름 기본값은 이 모듈에 둔다.
 - `-- `로 시작하는 journalctl 안내 줄(`-- Boot ...`, `-- No entries --` 등)과 `tail: `로 시작하는 줄(직렬 콘솔에서
   `tail -F`로 받을 때 끼는 파일 교체 안내)은 건너뛴다(해석 못 한 줄로 세지 않는다).
   TODO(SITE:S24) 재부팅 표시로 쓸지는 실제 로그를 본 뒤 정한다.
@@ -63,6 +67,10 @@ MONTHS = {name: i for i, name in enumerate(
 NOTICE_PREFIX = "-- "
 TAIL_NOTICE_PREFIX = "tail: "    # `tail -F` 파일 교체 안내(syslog 줄 아님)
 DEFAULT_LEVEL = "I"
+# severity가 심각도가 아닌 ident의 **기본값 정본**(첨부 oFono 로그에서 본 이름, TODO(SITE:S24·S25)). 줄 읽기는 severity를
+# 그대로 두고, 보정은 `OfonoReferenceBackend._line_record`가 한다(이슈 DB tags.yaml `level: unreliable`이 있으면 그것만,
+# 04-parser-matching §5.8 (2)). backend가 여기서 import한다(backend → journal 순환을 피함). `tools/module_measure.py`도 쓴다.
+LEVEL_UNRELIABLE_IDENTS = frozenset({"DITD", "RFSD", "DMD", "MOSE"})
 
 
 def _zone(text: str) -> timezone:

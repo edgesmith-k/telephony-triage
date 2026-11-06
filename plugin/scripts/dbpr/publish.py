@@ -439,11 +439,9 @@ def summary(ctx: Ctx, wt: Path, markdown: bool = False) -> dict:
     _write_json(job_dir / STATE, state)
     result = {**scr, "pr_body": body, "approved_hash": digest}
     extras = db_summary.screen_extras(wt, scr, stage_result["apply"].get("operations") or [], digest)
-    if not stage_result.get("dry_run"):     # 병합 줄·선택지(merge.py eligibility — publish --and-merge와 같은 판정)
-        mode, reason = _merge.eligibility(ctx.cfg, stage_result, [f.get("path") or "" for f in scr.get("files") or []],
-                                          _merge.category_reviewers(wt, scr["reviewers"], db_cfg))
-        result["merge"] = extras["merge"] = {"mode": mode, "reason": reason,
-                                             **({"choices": _merge.CHOICES} if mode == "self" else {})}
+    if not stage_result.get("dry_run"):     # 병합 줄(merge.py how — publish 결과 merge.how와 같은 판정)
+        result["merge"] = extras["merge"] = {
+            "how": _merge.how(stage_result, [f.get("path") or "" for f in scr.get("files") or []])}
     md = db_summary.render_markdown(scr, plan, extras)
     # 표시 기록(형식과 무관 — json·markdown·stage --then-summary): show_guard가 이 화면을 이 호출 뒤 답에서 찾는다
     shown.record(ctx.work_dir, "db_pr", "push", job, key=f"push:{digest}", block=md)
@@ -580,7 +578,7 @@ def publish(ctx: Ctx, wt: Path, branch: str, lease: str, approved: str, commit: 
                        wt)
             action = "edited"
         else:
-            # 리뷰어 없이 만든다: 없는 팀·사용자(CODEOWNERS 미확정)가 PR 생성을 막지 않게. 리뷰어는 아래 --add-reviewer
+            # 리뷰어 없이 만든다: 없는 팀·사용자(CODEOWNERS 미확정)가 PR 생성을 막지 않게
             args = ["pr", "create", "--base", ctx.base, "--head", branch, "--title", pr_info["title"],
                     "--body-file", str(body_file)]
             proc = _gh(ctx, args, wt)
@@ -600,10 +598,7 @@ def publish(ctx: Ctx, wt: Path, branch: str, lease: str, approved: str, commit: 
             gh_error = (proc.stderr or proc.stdout).strip()[:300]
     finally:
         body_file.unlink(missing_ok=True)
-    review = None
-    if action == "created" and number is not None and pr_info.get("reviewers"):     # edited(기존 PR)에는 더하지 않는다
-        review = _request_reviewers(ctx, wt, number, pr_info["reviewers"])
-        warnings += review.pop("warnings")
+    # 리뷰어는 요청하지 않는다(pr.json reviewers는 확인 화면의 제안). push 뒤 리뷰어 질문에서 고르면 db_pr request-review
     # 계획 갱신 (pr, base_sha, included_pending)
     plan_path = Path(stage_result.get("plan") or job_dir / PLAN)
     plan = json.loads(plan_path.read_text(encoding="utf-8"))
@@ -623,26 +618,18 @@ def publish(ctx: Ctx, wt: Path, branch: str, lease: str, approved: str, commit: 
         included[src.name] = {"file": src.name, "pr": number}
     plan["included_pending"] = sorted(included.values(), key=lambda i: i["file"])
     plan_path.write_text(json.dumps(plan, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
-    trace_note(job_dir, "publish", action=action, pr=number, gh_ok=gh_error is None,   # PR 생성 시각(usage_stats)
-               **({"reviewers_failed": len(review["failed"])} if review else {}))
+    trace_note(job_dir, "publish", action=action, pr=number, gh_ok=gh_error is None)   # PR 생성 시각(usage_stats)
     result = {"published": True, "pushed": True, **extra, "branch": branch, "head_sha": head, "lease": lease,
               "pr": {"number": number, "url": url, "action": action}, "plan": str(plan_path),
               "pr_ids_recorded": ids_recorded}
-    if review:
-        result["reviewers"] = review
     if warnings:
         result["warnings"] = warnings
     if gh_error:
         result["gh_error"] = f"push는 됐지만 PR {action}에 실패했다: {gh_error}"
         return result, USAGE
     changed = [p for p in _out(_git(wt, "diff", "--name-only", state["base_sha"], head, check=False)).splitlines() if p]
-    db_cfg = yamlio.load(wt / "issue-db.config.yaml") or {}
-    owners = _merge.category_reviewers(wt, (pr_info or {}).get("reviewers") or [], db_cfg if isinstance(db_cfg, dict) else {})
-    # 못 붙인 리뷰어가 있으면 바로 병합하지 않는다(오너 리뷰 의도를 지킨다 — 리뷰어를 GHE에서 지정한 뒤 머지)
-    unrequested = ("리뷰어 지정 실패(" + ", ".join(f["reviewer"] for f in review["failed"])
-                   + ") — GHE에서 리뷰어를 지정하고 리뷰 뒤 머지한다") if review and review["failed"] else None
-    result["merge"] = _merge.offer(ctx, job_dir, job, stage_result, changed, number, url, head, owners,   # 바로 병합 제안
-                                   review_reason=unrequested)
+    # 병합 기록(merge-offer.json — "승인 필요"면 needs_approval이라 merge가 거부)과 병합 줄. 병합은 하지 않는다
+    result["merge"] = _merge.offer(job_dir, number, url, head, stage_result, changed)
     return result, OK
 
 
@@ -655,41 +642,6 @@ def _find_open_pr(ctx: Ctx, wt: Path, branch: str) -> tuple[int, str | None] | N
         return None
     row = rows[0] if isinstance(rows, list) and rows and isinstance(rows[0], dict) else {}
     return (row["number"], row.get("url")) if isinstance(row.get("number"), int) else None
-
-
-def _request_reviewers(ctx: Ctx, wt: Path, number: int, reviewers: list[str]) -> dict:
-    """리뷰어마다 `gh pr edit <n> --add-reviewer <r>`. 실패는 PR을 막지 않고 `failed`·경고(오너 종류별 확인 대상)로 남긴다.
-    팀 오너(`/` 있음 또는 CODEOWNERS `@<org>/<team>`에서 나온 값) → 팀 이름(S5)·`reviewers.format`(S19), 개인 → 로그인·권한(S5)."""
-    requested, failed, warnings = [], [], []
-    teams = None
-    for r in reviewers:
-        try:
-            proc = _gh(ctx, ["pr", "edit", str(number), "--add-reviewer", r], wt)
-            error = None if proc.returncode == 0 else (proc.stderr or proc.stdout)
-        except UsageError as exc:       # 시간 초과: PR은 이미 있다 — 계획에 번호를 남기도록 실패로만 센다
-            error = str(exc) or "gh 시간 초과"
-        if error is None:
-            requested.append(r)
-            continue
-        failed.append({"reviewer": r, "error": masking.mask_brief(error)})
-        if teams is None:
-            teams = _team_reviewers(wt)
-        if "/" in r or r in teams:
-            check = "CODEOWNERS 팀 이름(TODO(SITE:S5))과 reviewers.format(TODO(SITE:S19))을 확인한다"
-        else:
-            check = "CODEOWNERS 사용자 로그인과 그 사용자의 레포 권한(TODO(SITE:S5))을 확인한다"
-        warnings.append(f"리뷰어 지정 실패: {r} — PR #{number}은 이 리뷰어 없이 만들었다. {check}")
-    return {"requested": requested, "failed": failed, "warnings": warnings}
-
-
-def _team_reviewers(wt: Path) -> set[str]:
-    """CODEOWNERS 팀 오너(`@<org>/<team>`)를 `reviewers.format`으로 바꾼 값들(형식이 `/`를 없애도 팀으로 안다)."""
-    try:
-        db_cfg = yamlio.load(wt / "issue-db.config.yaml") or {}
-        teams = [o for _, who in db_summary._codeowners(wt) for o in who if "/" in o]
-        return set(db_summary.format_owners(teams, db_cfg if isinstance(db_cfg, dict) else {}))
-    except Exception:  # noqa: BLE001 — 경고 문구 분류용일 뿐이다: 못 읽으면 `/`로만 판단
-        return set()
 
 
 # -- find-plan (sync-pr) -------------------------------------------------------------------

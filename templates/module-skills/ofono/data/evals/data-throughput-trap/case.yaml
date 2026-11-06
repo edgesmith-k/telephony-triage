@@ -1,0 +1,26 @@
+# 합성 case (C1D 보정 §6.3 N5). files/의 timeline·입력·analysis는 make_module_eval_inputs.py --write가 만든다
+schema_version: 2
+name: data-throughput-trap
+kind: explore
+synthetic: true
+key: MOCK-9106
+issue:
+  summary: '데이터 속도가 느림 (합성)'
+  description: '데이터는 연결되지만 속도가 느립니다. 합성 case.'
+  occurred_at: '2026-09-22T09:20:02+0000'
+  platform_version: '2'
+  sim_slot: '0'
+parse: {tz: UTC, year: 2026, minutes: 5}
+input:
+  explore_input: files/explore-input.json
+  timeline: files/timeline.md
+  analysis: files/analysis.json
+run_expect:
+  explore_reason: no_candidate
+expect:
+  accept:
+    - layer: '그\s*층\s*로그\s*없음'
+      daemon: '알\s*수\s*없음|없음'
+      evidence: ['RIL_REQUEST_SETUP_DATA_CALL', 'UNSOL_DATA_CALL_LIST_CHANGED']
+  trap:
+    - label: '^\s*(관리 데몬|D-Bus|ofonod|벤더 RIL|exynos|모뎀|망|곁가지|원인\s*아님)'

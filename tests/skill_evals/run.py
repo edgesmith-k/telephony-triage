@@ -2,7 +2,7 @@
 """격리된 스킬 행동 평가를 준비하고 Claude Code로 실행한다.
 
 python3 tests/skill_evals/run.py --iteration <새 디렉토리> --eval 3 4 --prepare-only
-python3 tests/skill_evals/run.py --iteration <새 디렉토리> --eval 3 4 --execute [--mode plugin|direct] [--model <id>]
+python3 tests/skill_evals/run.py --iteration <새 디렉토리> --eval 3 4 --execute [--mode plugin|direct] [--model <id>] [-j N]
 
 모드 (기본 plugin):
 - plugin — `claude -p --plugin-dir <플러그인>`로 **설치된 것처럼** 불러온다. 사용자 요청을 그대로 첫 메시지로 보내므로
@@ -13,13 +13,21 @@ python3 tests/skill_evals/run.py --iteration <새 디렉토리> --eval 3 4 --exe
 
 모델은 `--model`이 없으면 CLI 기본값이다. API 한도·인증 오류에서 배치를 멈추고, 기대 답이나
 assertion을 실행자에게 주지 않는다. transcript 기반 수동 채점은 grade.py 실행 뒤 별도 수행한다.
+
+`-j N`(2~8, `--execute`만, 기본 1 = 예전 순차 실행 그대로): 자식 `claude -p`만 N개까지 동시에 돈다. 준비(`build`·plugin
+부속물·eval_metadata.json)·채점·summary.json·출력은 메인 스레드에서 `--eval` 순서로 한다(테스트 도우미의 프로세스 캐시 때문).
+멈춤 규칙은 순차와 같다: completed가 아닌 결과(한도·인증 blocked·error·timeout)가 나오면 새 eval을 시작하지 않고, 이미 도는
+것은 끝까지 기다린 뒤(쓴 토큰을 버리지 않는다) 종료 1. 시작 안 한 eval은 디렉토리도 만들지 않는다. 출력 배치(`eval-<id>/…`,
+`env-<id>/`, summary.json)와 execution.json 필드는 순차와 같다. eval마다 env 디렉토리·사용자 홈·모의 상태가 따로이고 모의
+MCP 서버는 자식마다 stdio라 포트를 쓰지 않는다 — 동시에 도는 eval끼리 경로가 겹치면 시작하지 않고 종료 2(`_isolation_problem`).
+포트를 쓰는 모의 서버를 더하면 eval마다 임시 포트(0번 바인드)를 받게 한다.
 """
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import json
 import os
-import re
 import shutil
 import subprocess
 import sys
@@ -32,6 +40,31 @@ REPO = HERE.parents[1]
 sys.path.insert(0, str(REPO / "tests" / "helpers"))
 from skill_eval_env import build, _bash_path  # noqa: E402
 from grade import ANALYZER_MANIFEST, git, grade, skill_manifest, token_record, write_summary  # noqa: E402
+sys.path.insert(0, str(REPO / "plugin" / "scripts"))     # grade가 이미 넣지만 import 순서에 기대지 않는다
+# 자식 `claude -p` 도우미는 common.claude_child로 옮겼다(모듈 eval과 공용). 이름은 그대로 다시 내보낸다(evaluation.<이름>).
+from common.claude_child import (  # noqa: F401
+    AUTH_ENV_NAMES,
+    AUTH_ENV_PREFIXES,
+    AUTH_SETTING_KEYS,
+    CHILD_PERMISSION_MODE,
+    NO_ATTRIBUTION_SETTINGS,
+    PARENT_IDENTITY_NAMES,
+    PARENT_IDENTITY_PREFIXES,
+    child_common_args,
+    child_env,
+    child_settings,
+    classify_result,
+    collect_transcript,
+    init_model,
+    merge_results,
+    read_events,
+    user_auth_settings,
+)
+
+
+MAX_JOBS = 8                  # -j 상한(API 동시 요청)
+_LIVE: set = set()            # -j 실행 중인 자식(Ctrl-C 때 끝낸다). 순차 실행은 쓰지 않는다
+_LIVE_LOCK = threading.Lock()
 
 
 def dump(path: Path, value) -> None:
@@ -84,6 +117,28 @@ def plugin_prompt(entry: dict, env_dir: Path, run_dir: Path) -> tuple[str, str]:
     return entry["prompt"], system
 
 
+def merge_skill_dir(info: dict, skill: Path) -> bool:
+    """B2-28: 이 eval의 모의 분석 스킬 폴더를 **eval마다의 사용자 config**(`<home>/config.yaml`)에 `analyzers.data.skill_dir`로
+    깊게 합친다(setup.user_config의 analyzers 블록을 덮지 않는다). 실제 `analyzers.data.skill`이 mock-data-analyzer일 때만.
+    여러 eval이 함께 쓰는 플러그인 루트·site-defaults.yaml은 건드리지 않는다(플러그인 해시가 eval마다 같다)."""
+    import yaml
+    home = (info.get("env") or {}).get("TELEPHONY_TRIAGE_HOME")
+    site_path = Path(info["plugin_root"]) / "site-defaults.yaml"
+    if not home or not site_path.is_file():      # 단위 테스트의 가짜 info: 사용자 홈이 없다
+        return False
+    cfg_path = Path(home) / "config.yaml"
+    cfg = (yaml.safe_load(cfg_path.read_text(encoding="utf-8")) if cfg_path.is_file() else None) or {}
+    site = yaml.safe_load(site_path.read_text(encoding="utf-8")) or {}
+    user_data = ((cfg.get("analyzers") or {}).get("data") or {}) if isinstance(cfg.get("analyzers"), dict) else {}
+    site_data = ((site.get("analyzers") or {}).get("data") or {}) if isinstance(site.get("analyzers"), dict) else {}
+    name = user_data.get("skill", site_data.get("skill"))
+    if name != "mock-data-analyzer":
+        return False
+    cfg.setdefault("analyzers", {}).setdefault("data", {})["skill_dir"] = skill.resolve().as_posix()
+    cfg_path.write_text(yaml.safe_dump(cfg, allow_unicode=True, sort_keys=False), encoding="utf-8", newline="\n")
+    return True
+
+
 def prepare_plugin_mode(entry: dict, info: dict, env_dir: Path) -> dict:
     """plugin 모드 부속물: 모의 Jira MCP 설정, 모의 분석 스킬 플러그인. API 없이 만든다(`--prepare-only`에서도)."""
     setup = entry.get("setup") or {}
@@ -103,6 +158,7 @@ def prepare_plugin_mode(entry: dict, info: dict, env_dir: Path) -> dict:
                                                  (skill / "run.py").as_posix()), encoding="utf-8")
     if setup.get("analyzer_proposal"):     # 채점용: 준비 때 분석 스킬 디렉토리(파일 → sha256). grade.py가 실행 뒤와 비교한다
         dump(env_dir / ANALYZER_MANIFEST, skill_manifest(skill))
+    merge_skill_dir(info, skill)
     mcp = env_dir / "mcp.json"
     gh = {}
     if "MOCK_GH_ISSUES_DIR" in info["env"]:    # 두 번째 트래커 eval(setup.tracker: github, 트래커 범용화 §6-3)
@@ -159,83 +215,8 @@ def evaluation_prompt(entry: dict, info: dict, env_dir: Path, run_dir: Path) -> 
 """ + _rules(entry, run_dir)
 
 
-# 부모(원격 세션)의 정체성을 나르는 환경 변수: 자식 `claude -p`가 상속하면 부모 세션 ID로 동작해
-# 커밋에 부모의 `Co-Authored-By`·`Claude-Session` 줄이 붙는다. 인증·프록시(HTTPS_PROXY, ANTHROPIC_*, *_CA_*, GH_TOKEN …)는 남긴다.
-PARENT_IDENTITY_PREFIXES = ("CLAUDE_CODE_REMOTE", "CLAUDE_CODE_MESSAGING", "CLAUDE_CODE_ARTIFACT")
-PARENT_IDENTITY_NAMES = frozenset({
-    "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_CONTAINER_ID", "CLAUDE_CODE_CHILD_SESSION", "CLAUDE_CODE_USE_CCR_V2",
-    "CLAUDE_CODE_POST_FOR_SESSION_INGRESS_V2", "CLAUDE_CODE_SYNC_SESSION_REFS", "CLAUDE_CODE_SYNC_SKILLS",
-    "CLAUDE_CODE_WORKER_EPOCH", "TRACEPARENT"})
-# 커밋·PR 서명을 끈다(`claude --settings`는 JSON 문자열을 받는다).
-NO_ATTRIBUTION_SETTINGS = json.dumps({"includeCoAuthoredBy": False, "attribution": {"commit": "", "pr": ""}})
-# 자식은 `--setting-sources ""`로 사용자·프로젝트 설정(플러그인·hook·권한)을 읽지 않는다(재현성).
-# 그러면 사용자 settings.json으로 하는 인증(예: 사내 apiKeyHelper)도 빠져 "Not logged in"이 된다.
-# 인증·네트워크 관련 키만 사용자 설정에서 골라 넘긴다: 최상위 키는 --settings JSON에(명령 문자열이라 비밀 아님),
-# env 블록은 프로세스 환경에(값이 비밀일 수 있어 argv·기록에 넣지 않는다). 기록에는 키 이름만 남긴다.
-AUTH_SETTING_KEYS = ("apiKeyHelper", "awsAuthRefresh", "awsCredentialExport")
-AUTH_ENV_PREFIXES = ("ANTHROPIC_", "AWS_", "VERTEX_", "CLAUDE_CODE_USE_", "CLAUDE_CODE_API_KEY_HELPER")
-AUTH_ENV_NAMES = frozenset({"CLOUD_ML_REGION", "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "http_proxy", "https_proxy",
-                            "no_proxy", "NODE_EXTRA_CA_CERTS", "SSL_CERT_FILE"})
-# 권한 모드를 명시한다: 생략하면 CLI 기본값(사내 설치는 auto)이 적용돼 분류기가 허용 목록의 Bash까지 막는다.
-# "default"는 옛 CLI의 이름이고 새 CLI(2.1.x, 도움말에는 manual)도 별칭으로 받는다(2.1.296 확인).
-CHILD_PERMISSION_MODE = "default"
-
-
-def child_common_args(settings_json: str, persist: bool = False) -> list[str]:
-    """두 모드(plain·plugin) 자식 `claude -p`의 공통 인자. persist(plugin 모드)면 세션 transcript를 남긴다:
-    `--no-session-persistence`면 hook 입력의 `transcript_path` 파일이 생기지 않아 표시 보조 hook(show_guard.py)이 아무것도
-    판정하지 못한다(fail-open, 08-safety.md §9.1). 남긴 transcript는 실행 뒤 run 디렉토리로 옮긴다(`collect_transcript`)."""
-    return ["--output-format", "stream-json", "--verbose", *([] if persist else ["--no-session-persistence"]),
-            "--setting-sources", "", "--settings", settings_json, "--strict-mcp-config", "--permission-mode",
-            CHILD_PERMISSION_MODE]
-
-
-def collect_transcript(events: list[dict], env: dict[str, str], run_dir: Path) -> str | None:
-    """자식 세션 transcript(`<config>/projects/*/<session_id>.jsonl`)를 run 디렉토리의 `session.jsonl`로 옮긴다(사용자
-    projects 디렉토리에 남기지 않는다). session_id는 stream-json init 이벤트. 못 찾으면 None — show_guard가 판정하지 못한 실행이다."""
-    sid = next((e.get("session_id") for e in events if e.get("type") == "system" and e.get("session_id")), None)
-    if not sid or not re.fullmatch(r"[A-Za-z0-9-]+", str(sid)):
-        return None
-    base = Path(env["CLAUDE_CONFIG_DIR"]) if env.get("CLAUDE_CONFIG_DIR") else Path(env.get("HOME", str(Path.home()))) / ".claude"
-    found = sorted((base / "projects").glob(f"*/{sid}.jsonl"))
-    if not found:
-        return None
-    dest = run_dir / "session.jsonl"
-    shutil.move(str(found[0]), dest)
-    return dest.name
-
-
-def user_auth_settings(env: dict[str, str]) -> tuple[dict, dict[str, str]]:
-    """사용자 settings.json에서 인증·네트워크 키만 (최상위 키, env 블록). 없거나 깨졌으면 빈 값."""
-    base = Path(env["CLAUDE_CONFIG_DIR"]) if env.get("CLAUDE_CONFIG_DIR") else Path(env.get("HOME", str(Path.home()))) / ".claude"
-    try:
-        data = json.loads((base / "settings.json").read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return {}, {}
-    if not isinstance(data, dict):
-        return {}, {}
-    top = {k: data[k] for k in AUTH_SETTING_KEYS if isinstance(data.get(k), str) and data[k]}
-    raw_env = data.get("env") if isinstance(data.get("env"), dict) else {}
-    auth_env = {k: str(v) for k, v in raw_env.items()
-                if isinstance(k, str) and (k.startswith(AUTH_ENV_PREFIXES) or k in AUTH_ENV_NAMES) and v is not None}
-    return top, auth_env
-
-
-def child_settings(env: dict[str, str]) -> tuple[str, dict[str, str], list[str]]:
-    """자식 --settings JSON, 덧붙일 환경, 넘긴 키 이름 목록."""
-    top, auth_env = user_auth_settings(env)
-    settings = {**json.loads(NO_ATTRIBUTION_SETTINGS), **top}
-    return json.dumps(settings), auth_env, sorted(top) + sorted(f"env.{k}" for k in auth_env)
-
-
 DERIVED_HEADER = "<!-- run.py: 실행자 미작성, events.jsonl에서 생성 -->"
 REQUIRED_OUTPUTS = ("transcript.md", "commands.md", "notes.md")
-
-
-def child_env(env: dict[str, str]) -> tuple[dict[str, str], list[str]]:
-    """자식 claude에 넘길 환경 (부모 세션 정체성 변수를 뺀 사본, 뺀 이름 목록)."""
-    stripped = sorted(k for k in env if k.startswith(PARENT_IDENTITY_PREFIXES) or k in PARENT_IDENTITY_NAMES)
-    return {k: v for k, v in env.items() if k not in stripped}, stripped
 
 
 def derive_outputs(run_dir: Path, events: list[dict], names=REQUIRED_OUTPUTS) -> list[str]:
@@ -270,45 +251,6 @@ def derive_outputs(run_dir: Path, events: list[dict], names=REQUIRED_OUTPUTS) ->
             path.write_text(f"{DERIVED_HEADER}\n{bodies[name]}\n", encoding="utf-8")
             made.append(name)
     return made
-
-
-def read_events(path: Path) -> tuple[list[dict], dict | None]:
-    """events.jsonl의 (이벤트 목록, 마지막 result 이벤트). JSON이 아닌 줄은 건너뛴다."""
-    events, result = [], None
-    for line in path.read_text(encoding="utf-8").splitlines():
-        try:
-            event = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        events.append(event)
-        if event.get("type") == "result":
-            result = event
-    return events, result
-
-
-def merge_results(results: list[dict]) -> dict | None:
-    """후속 메시지(`followups`)로 여러 턴을 돈 실행의 result 이벤트들을 하나로. 마지막 result를 바탕으로
-    상위 `usage` 수치·`num_turns`·`duration_ms`는 턴별 값이라 더하고, `modelUsage`·`total_cost_usd`는 누적값이라
-    마지막 값을 쓴다(CLI 2.1.299 실측: 두 번째 result의 modelUsage cacheRead = 두 턴 합, num_turns는 턴마다 1·1,
-    duration_ms는 2441·2377로 턴별 값). 하나라도 오류면 오류."""
-    if not results:
-        return None
-    merged = dict(results[-1])
-    usage: dict = {}
-    for r in results:
-        for k, v in (r.get("usage") or {}).items():
-            if isinstance(v, (int, float)) and not isinstance(v, bool):
-                usage[k] = usage.get(k, 0) + v
-            else:
-                usage.setdefault(k, v)
-    merged["usage"] = usage
-    for k in ("num_turns", "duration_ms"):
-        vals = [r.get(k) for r in results if isinstance(r.get(k), (int, float))]
-        if vals:
-            merged[k] = sum(vals)
-    merged["is_error"] = any(r.get("is_error") for r in results)
-    merged["turn_results"] = len(results)
-    return merged
 
 
 def run_turns(proc: subprocess.Popen, events, prompt: str, followups: list[str], timeout: int) -> list[dict]:
@@ -352,24 +294,6 @@ def run_turns(proc: subprocess.Popen, events, prompt: str, followups: list[str],
     if expired.is_set():
         raise subprocess.TimeoutExpired(proc.args, timeout)
     return results
-
-
-def init_model(events: list[dict]) -> str | None:
-    """stream-json init 이벤트가 알려 주는 실제 모델 ID. `--model` 없이 돌렸을 때 기준선 모델의 출처다."""
-    init = next((e for e in events if e.get("type") == "system" and e.get("subtype") == "init"), None)
-    model = (init or {}).get("model")
-    return model if isinstance(model, str) and model else None
-
-
-def classify_result(result: dict | None, returncode: int) -> tuple[str, str]:
-    if not result:
-        return "error", f"Claude 결과 없음 (exit {returncode})"
-    reason = str(result.get("result", ""))
-    if result.get("api_error_status") in (401, 403, 429):
-        return "blocked", reason
-    if returncode or result.get("is_error"):
-        return "error", reason or str(result.get("subtype"))
-    return "completed", reason
 
 
 def repo_state(iteration: Path | None = None, repo: Path = REPO) -> tuple[str | None, bool | None]:
@@ -446,6 +370,8 @@ def execute(entry: dict, info: dict, env_dir: Path, run_dir: Path, claude: str,
     with (run_dir / "events.jsonl").open("w", encoding="utf-8") as events, (run_dir / "stderr.log").open("w", encoding="utf-8") as errors:
         proc = subprocess.Popen(command, cwd=env_dir, env=env, stdin=subprocess.PIPE,
                                 stdout=subprocess.PIPE if followups else events, stderr=errors, text=True, encoding="utf-8")
+        with _LIVE_LOCK:
+            _LIVE.add(proc)
         turns: list[dict] = []
         try:
             if followups:
@@ -471,6 +397,9 @@ def execute(entry: dict, info: dict, env_dir: Path, run_dir: Path, claude: str,
                     status, reason = "error", f"플러그인 환경: {problem}"
             if status == "completed":
                 derived = derive_outputs(run_dir, events_list)
+        finally:
+            with _LIVE_LOCK:
+                _LIVE.discard(proc)
     session = collect_transcript(events_list or read_events(run_dir / "events.jsonl")[0], env, run_dir) if plugin else None
     # 스크립트 표시 기록(L R): 임시 env가 지워져도 hook_replay 재생 비교가 되게 run 디렉토리로 복사한다
     if info.get("work_dir") and (shown_log := Path(info["work_dir"]) / ".shown" / "log.jsonl").is_file():
@@ -515,7 +444,113 @@ def child_python_problem() -> str | None:
     return None
 
 
-def main() -> int:
+def _prepare(eid: int, entry: dict, iteration: Path, mode: str) -> tuple[Path, Path, dict, dict | None]:
+    """eval 하나의 디렉토리·모의 환경·plugin 부속물·eval_metadata.json (메인 스레드, 순차와 같은 순서·내용)."""
+    run_dir = iteration / f"eval-{eid}" / "with_skill"
+    (run_dir / "outputs").mkdir(parents=True)
+    env_dir = iteration / f"env-{eid}"
+    info = build(entry, env_dir, direct_tools=(mode == "direct"))
+    plugin = prepare_plugin_mode(entry, info, env_dir) if mode == "plugin" else None
+    dump(run_dir.parent / "eval_metadata.json", {"eval_id": eid, "prompt": entry["prompt"], "assertions": entry["assertions"],
+                                                 "mode": mode})
+    return run_dir, env_dir, info, plugin
+
+
+ISOLATED_ENV = ("TELEPHONY_TRIAGE_HOME", "MOCK_GH_STATE_DIR", "MOCK_JIRA_DIR", "MOCK_JIRA_WRITE_LOG", "MOCK_GH_ISSUES_DIR",
+                "MOCK_GH_ISSUES_WRITE_LOG")
+
+
+def _isolation_paths(run_dir: Path, env_dir: Path, info: dict) -> dict[str, str]:
+    """동시에 도는 eval끼리 겹치면 안 되는 경로(이름 → 해석한 경로). 플러그인 루트·REPO·사용자 CLAUDE_CONFIG_DIR은 함께 쓴다
+    (읽기 전용·해시가 같다, transcript는 세션 ID로 고른다)."""
+    out = {"run_dir": run_dir, "env_dir": env_dir, "env.sh": env_dir / "env.sh", "bin": env_dir / "bin",
+           "approvals.json": env_dir / "approvals.json"}
+    for key in ("work_dir", "issue_db_clone"):
+        if info.get(key):
+            out[key] = Path(info[key])
+    for key in ISOLATED_ENV:
+        if (info.get("env") or {}).get(key):
+            out[key] = Path(info["env"][key])
+    return {k: str(Path(v).resolve()) for k, v in out.items()}
+
+
+def _isolation_problem(prepared: list[tuple[int, dict[str, str]]]) -> str | None:
+    """[(eval id, _isolation_paths)] 중 두 eval이 같은 경로를 쓰면 그 설명. 없으면 None."""
+    seen: dict[str, tuple[int, str]] = {}
+    for eid, paths in prepared:
+        for name, path in paths.items():
+            if path in seen and seen[path][0] != eid:
+                other, oname = seen[path]
+                return f"eval {other}({oname})와 eval {eid}({name})가 같은 경로를 쓴다: {path}"
+            seen.setdefault(path, (eid, name))
+    return None
+
+
+def _kill_live() -> None:
+    with _LIVE_LOCK:
+        procs = list(_LIVE)
+    for proc in procs:
+        try:
+            proc.kill()
+        except OSError:
+            pass
+
+
+def run_parallel(args, entries: dict, iteration: Path, claude: str, jobs: int) -> int:
+    """`-j N`: 준비·채점·summary·출력은 메인 스레드, `execute`(자식 claude)만 스레드 N개. 멈춤 규칙은 순차와 같다."""
+    pending = list(args.eval)
+    inflight: dict = {}            # future → (eid, entry, run_dir, env_dir, paths)
+    stop: tuple[int, str] | None = None
+    clash: str | None = None
+    failure: BaseException | None = None
+    done_n = 0
+    pool = concurrent.futures.ThreadPoolExecutor(max_workers=jobs, thread_name_prefix="skill-eval")
+    try:
+        while pending or inflight:
+            while pending and len(inflight) < jobs and stop is None and clash is None and failure is None:
+                eid = pending.pop(0)
+                entry = entries[eid]
+                run_dir, env_dir, info, plugin = _prepare(eid, entry, iteration, args.mode)
+                paths = _isolation_paths(run_dir, env_dir, info)
+                clash = _isolation_problem([(e, p) for e, _, _, _, p in inflight.values()] + [(eid, paths)])
+                if clash:
+                    print(f"격리 실패: {clash} — 시작하지 않는다", file=sys.stderr, flush=True)
+                    break
+                fut = pool.submit(execute, entry, info, env_dir, run_dir, claude, args.timeout, plugin, args.model)
+                inflight[fut] = (eid, entry, run_dir, env_dir, paths)
+            if not inflight:
+                break
+            finished, _ = concurrent.futures.wait(inflight, return_when=concurrent.futures.FIRST_COMPLETED)
+            for fut in sorted(finished, key=lambda f: args.eval.index(inflight[f][0])):
+                eid, entry, run_dir, env_dir, _ = inflight.pop(fut)
+                try:
+                    outcome = fut.result()
+                except Exception as exc:  # noqa: BLE001 — 순차라면 그대로 올라갔을 오류: 새 eval을 멈추고 끝에서 다시 올린다
+                    failure = failure or exc
+                    print(f"eval {eid}: 실행 오류 — {type(exc).__name__}: {str(exc)[:160]}", flush=True)
+                    continue
+                write_summary(iteration, eid, entry.get("batch"), grade(eid, run_dir, env_dir, entry["assertions"]))
+                print(f"eval {eid}: {outcome['status']} — {outcome['reason'][:180]}", flush=True)
+                done_n += 1
+                if outcome["status"] != "completed" and stop is None:
+                    stop = (eid, outcome["status"])
+    except KeyboardInterrupt:
+        _kill_live()
+        pool.shutdown(wait=True, cancel_futures=True)
+        print(f"중단(Ctrl-C): 실행 중 자식을 끝냈다 — 실행 안 함: {pending}", file=sys.stderr, flush=True)
+        return 130
+    pool.shutdown(wait=True)
+    if stop:
+        print(f"멈춤: eval {stop[0]} {stop[1]} — 실행 안 함: {pending}", flush=True)
+    print(f"병렬 -j {jobs}: 끝남 {done_n} · 멈춤 {1 if stop else 0} · 실행 안 함 {len(pending)}", flush=True)
+    if failure is not None:
+        raise failure
+    if clash:
+        return 2
+    return 1 if stop else 0
+
+
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--iteration", type=Path, required=True)
     parser.add_argument("--eval", type=int, nargs="+", required=True)
@@ -525,7 +560,13 @@ def main() -> int:
     parser.add_argument("--timeout", type=int, default=900)
     parser.add_argument("--mode", choices=("plugin", "direct"), default="plugin")
     parser.add_argument("--model")
-    args = parser.parse_args()
+    parser.add_argument("-j", "--jobs", type=int, default=1,
+                        help=f"--execute: 동시에 도는 자식 claude 수(1~{MAX_JOBS}, 기본 1 = 순차)")
+    args = parser.parse_args(argv)
+    if not 1 <= args.jobs <= MAX_JOBS:
+        parser.error(f"-j는 1~{MAX_JOBS}: {args.jobs}")
+    if len(set(args.eval)) != len(args.eval):
+        parser.error("--eval에 같은 번호가 두 번 있다")
     entries = {e["id"]: e for e in json.loads((HERE / "evals.json").read_text(encoding="utf-8"))["evals"]}
     for eid in args.eval:
         entry = entries.get(eid)
@@ -542,15 +583,13 @@ def main() -> int:
         parser.error(f"자식 세션 python3가 플러그인 실행 조건(Python 3.10+, yaml, jsonschema 4.0+)을 못 맞춤 — {problem}. "
                      "`pip install --user`로 설치하거나 venv `(tt)` 터미널에서 실행한다(docs/SITE_INSTALL.md 4·5절)")
     iteration.mkdir(parents=True)
+    if args.prepare_only and args.jobs > 1:
+        print(f"-j {args.jobs}: --prepare-only는 순차로 준비한다(병렬은 --execute만)", flush=True)
+    if args.execute and args.jobs > 1:
+        return run_parallel(args, entries, iteration, claude, args.jobs)
     for eid in args.eval:
         entry = entries[eid]
-        run_dir = iteration / f"eval-{eid}" / "with_skill"
-        (run_dir / "outputs").mkdir(parents=True)
-        env_dir = iteration / f"env-{eid}"
-        info = build(entry, env_dir, direct_tools=(args.mode == "direct"))
-        plugin = prepare_plugin_mode(entry, info, env_dir) if args.mode == "plugin" else None
-        dump(run_dir.parent / "eval_metadata.json", {"eval_id": eid, "prompt": entry["prompt"], "assertions": entry["assertions"],
-                                                     "mode": args.mode})
+        run_dir, env_dir, info, plugin = _prepare(eid, entry, iteration, args.mode)
         if args.prepare_only:
             dump(run_dir / "execution.json", {"status": "prepared", "reason": "환경 준비만 수행; 행동 평가 미실행",
                                               "mode": args.mode})

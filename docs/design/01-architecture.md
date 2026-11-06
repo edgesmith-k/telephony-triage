@@ -57,6 +57,7 @@ telephony-triage-plugin/                 # 개발 레포 루트
 ├── DRAFT_NOTES.md                       # 사외 초안 상태 파일(≤8KB): 진행 상태·남은 일·막힌 것·결정 (15-local-draft.md)
 ├── docs/history/                        # 아카이브(읽지 않음): draft-notes-<날짜>.md(Phase별 상세), CHANGES.md(문서 세트 변경 이력), REVIEW-10/11.md
 ├── tools/list_site_todos.py             # TODO(SITE:S<n>) 목록 추출
+├── templates/module-skills/            # 모듈 스킬 레포 템플릿(사내 GHE 새 레포로 옮긴다): README.md·modules.yaml(schema 2, 모듈 필터)·<p>/_common·<p>/<모듈>(explore.md·SKILL.md·analyzer.md·references·evals)
 ├── tools/offline_eval.py                # 라벨셋(과거 Jira + 로그 + 정답 원인)으로 analyze --dry-run 1위 정확도·오탐률 측정 (15-local-draft.md §15.5 S-5)
 ├── docs/design/                         # 설계 문서 (이 파일 포함. 지도 README.md, 원칙 12-principles.md. 배포 대상 아님)
 ├── docs/site/                           # [사내 전용, SITE_PATHS] 확인 근거 (14-site.md §14.3)
@@ -99,6 +100,8 @@ telephony-triage-plugin/                 # 개발 레포 루트
     │           ├── record.md            # 수동 기록 흐름
     │           ├── verify.md            # validate --cause, fix-submitted, verify-fix 흐름
     │           ├── explore.md           # analyze Step 5-2 탐색 분석 (후보 없음·원인 미확인일 때 Claude 가설)
+    │           ├── module-skills.md     # Step 5-1·5-2 동의 뒤 triage.py module·check-output 절차(모듈 문서·설치 스킬 Read, 계획 H)
+    │           ├── platforms/<p>/       # 플랫폼 탐색 지식(ofono/log-guide.md = 파서와 묶인 줄 모양만, 층·데몬 지식은 모듈 스킬 레포 _common)
     │           ├── post.md              # analyze Step 9 Jira 결과 게시 (4칸 코멘트, 확인 화면 승인 후 1건)
     │           ├── sync-pr.md           # sync-pr 흐름
     │           ├── search.md            # search 흐름: 증상 문장 그대로 db_search, 이슈 번호 줄·유형 > 원인 표 (읽기 전용)
@@ -107,7 +110,7 @@ telephony-triage-plugin/                 # 개발 레포 루트
     │           ├── fail-causes.md       # DataFailCause, CallFailCause, 등록 reject cause
     │           └── log-tags.md          # 태그 해설 (실제 수집 목록은 이슈 DB parser-rules/tags.yaml)
     ├── scripts/                         # 3.1 매트릭스 참고
-    │   ├── common/                      # config 로드, 이슈 DB 로드, 스키마 검증, git 헬퍼, 로깅, 시그니처 컴파일, 마스킹 함수, `events.py`(파서 출력 이벤트 키 순서·`line_ref`·`validate_event`, 표준 라이브러리만), `yamlio.py`(YAML 읽기 단일 입구, libyaml `CSafeLoader` 있으면 사용), `glossary.py`(GLOSSARY.md 표 읽기: `table`, `search_aliases`), `md.py`(마크다운 표 셀·코드 스팬 escape), `issuepost.py`(Jira 코멘트 본문 정규화·해시·렌더러·도구 인자 매핑·승인 대조, 표준 라이브러리만, guard와 공유)
+    │   ├── common/                      # config 로드, 이슈 DB 로드, 스키마 검증, git 헬퍼, 로깅, 시그니처 컴파일, 마스킹 함수, `events.py`(파서 출력 이벤트 키 순서·`line_ref`·`validate_event`, 표준 라이브러리만), `yamlio.py`(YAML 읽기 단일 입구, libyaml `CSafeLoader` 있으면 사용), `glossary.py`(GLOSSARY.md 표 읽기: `table`, `search_aliases`), `md.py`(마크다운 표 셀·코드 스팬 escape), `issuepost.py`(Jira 코멘트 본문 정규화·해시·렌더러·도구 인자 매핑·승인 대조, 표준 라이브러리만, guard와 공유), 모듈 스킬(계획 H): `moduleskills.py`(관리 clone 받기·점검·복사), `skillcheck.py`(받은 내용·modules.yaml 점검), `modulefilter.py`(모듈 후보·모듈 보기, 자식 프로세스), `evidence.py`(근거 원문 검사), `skillpath.py`(설치 스킬 SKILL.md 경로), `provenance.py`(분석 환경 출처)
     │   ├── config.py
     │   ├── code_roots.py
     │   ├── parse_logcat.py
@@ -122,7 +125,7 @@ telephony-triage-plugin/                 # 개발 레포 루트
     │   ├── db_add.py                    # CLI만. 구현은 dbadd/
     │   ├── dbadd/                       # core(상수·계획 검사·Tree), applier(apply), ops/<묶음>.py(op 메서드 믹스인), drift, ids, similar
     │   ├── db_pr.py                     # CLI만. 구현은 dbpr/
-    │   ├── dbpr/                        # lock(상수·UsageError·Lock·JSON 읽기/쓰기), worktree(git·snapshot·Ctx·worktree 준비/제거·discard·cleanup), publish(my-prs·preflight·stage·summary·publish·find-plan)
+    │   ├── dbpr/                        # lock(상수·UsageError·Lock·JSON 읽기/쓰기), worktree(git·snapshot·Ctx·worktree 준비/제거·discard·cleanup), publish(my-prs·preflight·stage·summary·publish·find-plan), merge(병합 기록·request-review·+1 병합)
     │   ├── db_summary.py                # 라이브러리: db_pr summary 확인 화면·PR 본문(pr_body)
     │   ├── db_build.py
     │   ├── db_lint.py
@@ -138,7 +141,7 @@ telephony-triage-plugin/                 # 개발 레포 루트
     │   ├── job_status.py                # 작업 상태 한 화면(읽기 전용, 로컬 기록만). 수집은 common/jobstatus.py (contracts.md §3.2)
     │   ├── usage_stats.py               # 파일럿 지표(S-7, 읽기 전용, --json)
     │   ├── triage.py                    # analyze Step 0~4 + Step 5 resolve 드라이버 (contracts.md §3.2). CLI만. 구현은 triagelib/
-    │   ├── triagelib/                   # core(상수·오류·Runner), cache(State·캐시 믹스인), anchor(실패 스텝·앵커 믹스인), report(fit·스키마 검사·report.md 믹스인), driver(Driver)
+    │   ├── triagelib/                   # core(상수·오류·Runner), cache(State·캐시 믹스인), anchor(실패 스텝·앵커 믹스인), report(fit·스키마 검사·report.md 믹스인), driver(Driver), modulecmd(`triage.py module`), output(`triage.py check-output`)
     │   └── migrations/                  # 0001_xxx.py … 스키마 버전별 마이그레이션
     ├── schemas/                         # 이슈 DB schema/ 사본 (단일 원본은 이슈 DB, tools/sync_schemas.py로 대조)
     │   └── output/analysis.schema.json   # 플러그인 소유: triage.py run 출력 형식 (TT_SCHEMA_CHECK=1이면 검사, 대조 대상 아님)

@@ -4,11 +4,21 @@ from __future__ import annotations
 
 import importlib
 import os
+import shutil
 import site
 from pathlib import Path
 import sys
+import tempfile
 
 import pytest
+
+# 테스트 임시 파일은 모두 세션 폴더 하나 아래에 만든다. 테스트·헬퍼가 `tempfile.mkdtemp`를 직접 부르거나(정리 목록 밖),
+# 하위 프로세스(스크립트)가 임시 폴더를 만들어도 세션 끝에 이 폴더째 지운다(`TT_KEEP_TMP=1`이면 남긴다).
+# 전에는 그런 폴더가 /tmp에 쌓여 디스크를 채웠다(11/03, tt-plugin-root-* 등 약 27GB).
+# 모듈 수준에서 정한다: 수집 중 import되는 테스트 모듈도 모듈 수준에서 mkdtemp를 부른다.
+_SESSION_TMP = Path(tempfile.mkdtemp(prefix="tt-session-"))
+tempfile.tempdir = str(_SESSION_TMP)
+os.environ["TMPDIR"] = str(_SESSION_TMP)
 
 # 하위 프로세스의 `python3`(git hook·스크립트)가 pytest와 같은 인터프리터를 쓰게 한다.
 # venv를 켜지 않고 `.venv/bin/python -m pytest`로 돌려도 PATH의 시스템 python3(의존성 없음)로 새지 않는다.
@@ -43,6 +53,8 @@ def pytest_sessionfinish(session, exitstatus):
         _check_shared_variants(session)
     finally:
         runner.cleanup_tmp()  # runner.tmp()가 만든 임시 디렉터리 (TT_KEEP_TMP=1이면 남긴다)
+        if os.environ.get("TT_KEEP_TMP") != "1":
+            shutil.rmtree(_SESSION_TMP, ignore_errors=True)   # 정리 목록 밖 mkdtemp·하위 프로세스 임시 폴더까지
 
 
 def _check_shared_variants(session):

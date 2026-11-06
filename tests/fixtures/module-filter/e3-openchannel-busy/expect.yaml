@@ -1,0 +1,10 @@
+platform: ofono
+module: sim
+mode: deep
+center: '2026-02-27T17:45:27.736Z'
+fail: 59
+essential:
+- 25
+- 27
+- 59
+origin: O1 E3 줄 250-330

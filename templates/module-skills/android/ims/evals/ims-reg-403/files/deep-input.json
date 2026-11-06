@@ -1,0 +1,23 @@
+{
+ "schema_version": 1,
+ "key": "MOCK-9812",
+ "platform": null,
+ "module": "android/ims",
+ "sha": "template",
+ "type_id": "IMS-001",
+ "top_candidates": [
+  {
+   "type": "IMS-001",
+   "cause": "IMS-001-01",
+   "score": 1.0,
+   "confidence": "high"
+  }
+ ],
+ "issue_summary": "IMS 등록 실패 (합성)",
+ "occurred_at": "2026-08-26T15:00:15+00:00",
+ "events": "events.json",
+ "timeline": "timeline.md",
+ "log_paths": [
+  "source.log"
+ ]
+}

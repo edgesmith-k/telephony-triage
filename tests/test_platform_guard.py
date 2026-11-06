@@ -269,3 +269,45 @@ def test_prepush_reads_platform_from_pushed_commit():
     assert proc.returncode != 0 and "base 브랜치(develop)" in proc.stderr
     cfg.write_text(saved, encoding="utf-8")
     git(clone, "checkout", "-q", "develop")
+
+
+# -- 규칙 12 (a)(b)·규칙 11 모듈 스킬 레포: 두 번째 프로필·이름이 잘못된 프로필·모듈 원격 (B1 설계 §10.8) --------------------
+
+
+def test_rule12_module_clone_and_records_in_second_work_dir():
+    p = two_profiles()
+    base, work = p["ws"].base, p["work"]
+    for target in (work / "_module-skills" / "ofono" / "data" / "SKILL.md", work / "OFN-1" / "skill-wt" / "a.md",
+                   work / "OFN-1" / "module-skill.json", work / "OFN-1" / "deep-input.json",
+                   work / "OFN-1" / "module-skill" / "deep" / "ofono" / "data" / "SKILL.md"):
+        assert guard("Write", {"file_path": str(target)}, base) == "deny", target
+        assert bash(f"echo x > {target}", base) == "deny", target
+    assert guard("Write", {"file_path": str(work / "OFN-1" / "deep-output.md")}, base) is None
+
+
+def _one_off(top: dict, tool: str, tool_input: dict) -> str | None:
+    ws = Workspace(build=False)
+    cfg_path = ws.home / "config.yaml"
+    cfg = yaml.safe_load(cfg_path.read_text(encoding="utf-8"))
+    cfg.update(top)
+    cfg_path.write_text(yaml.safe_dump(cfg, allow_unicode=True), encoding="utf-8")
+    event = {"tool_name": tool, "tool_input": tool_input, "cwd": str(ws.base)}
+    proc = run("guard.py", [], root=ws.root, cwd=ws.base, env=ws.env(), stdin=json.dumps(event))
+    out = json.loads(proc.stdout)["hookSpecificOutput"] if proc.stdout.strip() else None
+    return out and out["permissionDecision"]
+
+
+def test_rule12_module_records_in_invalid_name_profile_work_dir():
+    bad_work = tmp("tt-bad-work-")
+    top = {"platforms": {"oFono": {"work_dir": str(bad_work)}}}
+    assert _one_off(top, "Write", {"file_path": str(bad_work / "K-1" / "check-output.json")}) == "deny"
+    assert _one_off(top, "Write", {"file_path": str(bad_work / "K-1" / "skill-wt" / "x")}) == "deny"
+
+
+def test_rule11_gh_and_mcp_target_module_remote():
+    top = {"module_skills": {"remote": "git@ghe.mock.invalid:mock-org/module-skills.git"}}
+    assert _one_off(top, "Bash", {"command": "gh pr create -R mock-org/module-skills --title t --body b"}) == "ask"
+    assert _one_off(top, "Bash", {"command": "gh pr merge 3 -R mock-org/module-skills"}) == "deny"
+    assert _one_off(top, "Bash", {"command": "gh pr list -R mock-org/module-skills"}) is None
+    assert _one_off(top, "mcp__github__create_pull_request", {"owner": "mock-org", "repo": "module-skills"}) == "ask"
+    assert _one_off(top, "Bash", {"command": "gh pr merge 3 -R mock-org/telephony-issue-db"}) == "deny"   # 이슈 DB 그대로

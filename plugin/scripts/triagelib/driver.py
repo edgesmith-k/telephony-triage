@@ -6,6 +6,7 @@ import json
 import os
 import re
 import shutil
+import stat
 from pathlib import Path
 
 import platforms
@@ -15,9 +16,19 @@ from common.exitcodes import CHECK_FAILED, USAGE
 
 from .anchor import AnchorMixin, _parse_ts
 from .cache import CacheMixin, State, _digest, _file_sha
-from .core import (ERROR_EVENT_RE, EXPLORE_INPUT_FILE, EXPLORE_MAX_LINES, EXPLORE_WHEN, PLATFORM_ANSWER, Fail, NeedsInput,
-                   Runner, SEARCH_LIMIT, SNAPSHOT_DIR, STATE_FILE, Stopped, TIMELINE_FILE, TOP, _clip)
+from .core import (ERROR_EVENT_RE, EXPLORE_MAX_LINES, EXPLORE_WHEN, PLATFORM_ANSWER, Fail, NeedsInput,
+                   MODULE_RECORD_DIR, Runner, SEARCH_LIMIT, SNAPSHOT_DIR, STALE_FILES, STATE_FILE, Stopped, TOP, _clip,
+                   FIND_TEXT_ITEMS, PARTIAL_ANALYSIS_MAX)
 from .report import ReportMixin, _ref_label, _unique_evidence
+
+
+# 5-1·5-2 질문 대기(when: ask) 동안의 한 줄 안내(analysis.json `analyzer.note`·`explore.note`): 답 전에 원문을 열어 보는 일을 막는
+# 안내일 뿐이다(guard 규칙 10은 통째 읽기만 막는다).
+ASK_NOTE = "답 전 로그 원문 grep·sed·Read 금지 — report.md를 보이고 묻는다(SKILL {step})"
+
+
+def _ask_note(when, step: str) -> dict:
+    return {"note": ASK_NOTE.format(step=step)} if when == "ask" else {}
 
 
 def _unjudged(match: dict) -> dict | None:
@@ -750,6 +761,69 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         return {"skipped": False, "roots": code["roots"], "tree_version": code.get("tree_version"),
                 "resolved": resolved[:6], "moved": moved[:6]}
 
+    # C′ 부분 일치·코드 대조 (04-parser-matching.md §5.12) — 표시 전용, 판정·점수 불변 -------------------------------
+
+    def partial(self, match: dict, code: dict | None, events_path: Path, events_doc: dict) -> tuple[list, list]:
+        """match.json `partial[]` → (analysis.json용 ≤ 3개, report.md 보조 정보 같은 순서). 코드 루트를 골랐고
+        missing·absent가 있으면 `code_roots.py find-text`로 대조한다(코드 줄 글자는 받지도 쓰지도 않는다)."""
+        items = (match.get("partial") or [])[:PARTIAL_ANALYSIS_MAX]
+        out, extra = [], []
+        for p in items:
+            out.append({k: v for k, v in {
+                "kind": p["kind"], "type": p["type"], "cause": p.get("cause"), "signature": p["signature"],
+                "matched": p["matched"], "missing": [m["desc"] for m in p.get("missing") or []][:3],
+                "blocked_by": p.get("blocked_by"),
+                "at": [r for r in (_ref_label(h.get("line_ref")) for h in p.get("hits") or []) if r][:3]}.items()
+                if v is not None})
+            extra.append({"hits": [f"{h['condition']}" + (f" ({_ref_label(h.get('line_ref'))})"
+                                                          if _ref_label(h.get("line_ref")) else "")
+                                   for h in p.get("hits") or []],
+                          "missing": [(m.get("id") or f"#{k + 1}") + f" `{m['desc']}`"
+                                      for k, m in enumerate(p.get("missing") or [])],
+                          "order": p.get("order"), "width_sec": p.get("width_sec"), "code": []})
+        need = [n for n, p in enumerate(items) if p["kind"] in ("missing", "absent")]
+        if not need or not code or code.get("skipped"):
+            return out, extra
+        rules = None
+        try:
+            from common import parser_rules
+            rules = parser_rules.load(Path(self.snap) / "parser-rules")
+        except Exception:     # noqa: BLE001 — 규칙을 못 읽으면 must_event는 도출 불가로 둔다
+            rules = None
+        tags = sorted({str(e.get("tag")) for e in events_doc.get("events") or [] if e.get("tag")}
+                      | set((rules.tag_exact if rules else {}) or {}))
+        lit_items, code_refs, owner = [], [], {}
+        for n in need:
+            p = items[n]
+            if p.get("cause"):
+                code_refs += [r.get("ref") for r in self.cause_info(p["cause"]).get("code_refs") or [] if r.get("ref")]
+            for k, m in enumerate(p.get("missing") or []):
+                pattern = m.get("pattern")
+                if m.get("kind") == "event":
+                    ext = [x for x in (rules.extractors if rules else []) if x.event == m.get("event")]
+                    pattern = ext[0].patterns[0].pattern if len(ext) == 1 and len(ext[0].patterns) == 1 else None
+                label = m.get("id") or f"#{k + 1}"      # report.md 없는 조건 이름과 같게
+                lid = f"{n}:{label}"
+                owner[lid] = (n, label)
+                lit_items.append({"id": lid, "pattern": pattern})
+        skipped = lit_items[FIND_TEXT_ITEMS:]
+        spec = self.job / "find-text-literals.json"
+        spec.write_text(json.dumps({"tags": tags, "code_refs": sorted(set(code_refs)), "items": lit_items[:FIND_TEXT_ITEMS]},
+                                   ensure_ascii=False), encoding="utf-8", newline="\n")
+        rc, data, _ = self.run.call("5-code-text", "code_roots.py",
+                                    ["find-text", "--roots", code["roots"], "--literals", spec, "--events", events_path],
+                                    expect=(0, 2))
+        found = {i["id"]: i for i in ((data or {}).get("items") or [])} if rc == 0 else {}
+        scope = (data or {}).get("scope") or {}
+        for lit in lit_items:
+            n, cid = owner[lit["id"]]
+            res = found.get(lit["id"]) if lit not in skipped else None
+            status = "skipped" if lit in skipped else (res or {}).get("status", "unavailable")
+            out[n].setdefault("code", []).append(":".join([cid, status] + (res or {}).get("refs", [])[:1]))
+            extra[n]["code"].append({"id": cid, "status": status, "refs": (res or {}).get("refs") or [],
+                                     "log_refs": (res or {}).get("log_refs") or [], "scope": scope})
+        return out, extra
+
     def explore(self, candidates: list[dict]) -> dict | None:
         """Step 5-2 탐색 분석 해당 여부: 후보 없음·원인 미확인이면 `{reason, when}`, 아니면 None.
 
@@ -762,7 +836,7 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         if when not in EXPLORE_WHEN:
             self.warnings.append(f"explore.when 값이 잘못됐다({when}). ask로 본다")
             when = "ask"
-        return {"reason": reason, "when": when}
+        return {"reason": reason, "when": when, **_ask_note(when, "5-2")}
 
     def explore_input(self, around: str | None, anchor: dict | None) -> dict:
         """`JOB/explore-input.json`의 내용(마스킹된 값만): 타임라인 머리·줄 수 상한. `core`에 들어가 캐시된다."""
@@ -788,13 +862,34 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
             core = self.core(ctx)
         return self.assemble(ctx, core, parts, request_hash, hit)
 
+    def drop_stale_records(self) -> None:
+        """이전 실행의 탐색·모듈 스킬 산출물은 이번 결과가 아니다(타임라인은 동의 뒤 `explore`가, 모듈 기록은 `module`·
+        `check-output`이 만든다, B2 §7.4). 링크는 따라가지 않고 링크만 지운다. 없으면 아무것도 바꾸지 않는다."""
+        for name in STALE_FILES:
+            path = self.job / name
+            try:
+                st = os.lstat(path)
+            except OSError:
+                continue
+            if stat.S_ISDIR(st.st_mode):
+                continue
+            path.unlink(missing_ok=True)
+        path = self.job / MODULE_RECORD_DIR
+        try:
+            st = os.lstat(path)
+        except OSError:
+            return
+        if stat.S_ISDIR(st.st_mode):
+            shutil.rmtree(path)
+        else:
+            path.unlink(missing_ok=True)
+
     def prepare(self) -> dict:
         """Step 0~2와 입력 정리(로그·코드·시간대·연도). 여기까지는 재사용 여부와 상관없이 항상 한다."""
         self.preflight_args()
         self.check_key()
         self.open_job()
-        for name in (TIMELINE_FILE, EXPLORE_INPUT_FILE):    # 이전 실행의 탐색 산출물은 이번 결과가 아니다(타임라인은 동의 뒤 `explore`가 만든다)
-            (self.job / name).unlink(missing_ok=True)
+        self.drop_stale_records()
         if not self.offline:
             self.lock()
             if self.mark_platform_answer():      # 새 lock(State.reset)이 지웠으면 다시 남긴다
@@ -885,10 +980,18 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
                 cand.update(extra)
             candidates.append(cand)
         no_candidate = None if candidates else self.no_candidate_hints(info, events)
+        partial, partial_report = (self.partial(match, code, events_path, events) if match.get("partial") is not None
+                                   else (None, None))
         code_out = self.resolve_code(code, version, candidates)
         analyzer = self.analyzer(candidates)
         explore = self.explore(candidates)
         explore_input = self.explore_input(around, anchor) if explore and explore["when"] != "never" else None
+        if explore_input is not None and partial:    # 탐색 입력: 부분 일치 앞 3개(키·없는 조건 id)·맞은 근거 시각(보조 중심)
+            explore_input["partial"] = [{"signature": p["signature"],
+                                         "missing": [m.get("id") or m["desc"] for m in q.get("missing") or []]}
+                                        for p, q in zip(partial, match["partial"])]
+            explore_input["around_alt"] = sorted({h["ts"] for q in match["partial"][:len(partial)]
+                                                  for h in q.get("hits") or []})[:3]
         uncollected = [] if candidates and candidates[0]["C"] else \
             [{"tag": _clip(u.get("tag"), 40), "lines": u.get("lines"), "warn": u.get("warn")}
              for u in events.get("uncollected_tags") or []][:3]
@@ -907,7 +1010,9 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
             "around": around, "anchor": anchor, "outside": outside, "candidates": candidates,
             "pending_causes": [{"cause": p["cause"], "title": _clip(p.get("title"), 50)}
                                for p in match.get("pending_causes") or []][:TOP],
-            "no_candidate": no_candidate, "unjudged": unjudged, "code": code_out, "analyzer": analyzer, "explore": explore,
+            "no_candidate": no_candidate, "unjudged": unjudged, "code": code_out,
+            "partial": partial, "partial_report": partial_report, "absence_basis": match.get("absence_basis"),
+            "partial_unjudged": bool(unjudged) or bool(cause_unjudged), "analyzer": analyzer, "explore": explore,
             "explore_input": explore_input,
             "logs": {"files": [p.name for p in logs], "window": (events.get("input") or {}).get("window"),
                      "range": [cov.get("first_ts"), cov.get("last_ts")], "in_range": cov.get("window_in_range"),
@@ -922,8 +1027,19 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         # self.cfg = 선택 플랫폼의 config: android 밖 플랫폼은 platforms.<p>.analyzers만(android 것을 물려받지 않는다, 17 §10)
         if not candidates:
             return None
-        conf = (self.cfg.get("analyzers") or {}).get(candidates[0].get("category") or "")
-        return {"skill": conf.get("skill"), "when": conf.get("when", "ask")} if conf else None
+        # 5-1 출처는 userconfig.deep_source 하나가 정한다(B2-3). 설치 스킬(레거시·prefer: skill)은 키·순서 그대로
+        cat = candidates[0].get("category") or ""
+        conf = (self.cfg.get("analyzers") or {}).get(cat)
+        conf = conf if isinstance(conf, dict) else {}
+        src = userconfig.deep_source(self.cfg, cat)
+        if src["source"] == "skill" or (src["source"] == "none" and conf and "prefer" not in conf):
+            when = conf.get("when", "ask")
+            return {"skill": conf.get("skill"), "when": when, **_ask_note(when, "5-1")}
+        if src["source"] == "module":
+            return {"category": cat, "when": src["when"], **_ask_note(src["when"], "5-1")}
+        if src["source"] == "error":         # when: never → SKILL "never면 생략"이 5-1 질문을 건너뛴다
+            return {"error": _clip(userconfig.deep_source_problem(self.cfg, cat) or "설정 오류", 120), "when": "never"}
+        return None
 
     def release(self) -> bool:
         if self.locked and self.run.env.get("TT_LOCK_OWNER"):

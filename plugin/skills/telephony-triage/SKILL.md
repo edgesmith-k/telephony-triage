@@ -1,6 +1,6 @@
 ---
 name: telephony-triage
-description: Telephony 이슈(Android·oFono 등; data·call·network·sim·sms·ims)를 Jira와 logcat/bugreport·oFono 로그로 분석해 원인을 찾고 팀 이슈 DB에 유형·원인별로 분류해 PR로 쌓는다. "로그 분석해줘", "데이터 안 붙어", "콜이 왜 끊겼는지", "SIM 인식 안 됨", "SMS 전송 실패", "IMS 등록 실패", "서비스 없음", "비슷한 이슈 있었어?"처럼 telephony 증상의 원인 분석·분류를 요청하면 반드시 쓴다. record·fix-submitted·verify-fix·validate --cause·sync-pr도 이 스킬이다. 개념 설명, 앱 빌드 에러, 일반 git, 코드 리뷰, Jira 요약만은 쓰지 않는다.
+description: Telephony 이슈(Android·oFono 등; data·call·network·sim·sms·ims)를 Jira와 logcat/bugreport·oFono 로그로 분석해 원인을 찾고 팀 이슈 DB에 유형·원인별로 분류해 PR로 쌓는다. "로그 분석해줘", "데이터 안 붙어", "콜이 왜 끊겼는지", "SIM 인식 안 됨", "SMS 전송 실패", "IMS 등록 실패", "서비스 없음", "비슷한 이슈 있었어?"처럼 telephony 증상의 원인 분석·분류를 요청하면 반드시 쓴다. record·fix-submitted·verify-fix·validate --cause·sync-pr, 이슈 DB PR "병합해줘"도 이 스킬이다. 개념 설명, 앱 빌드 에러, 일반 git, 코드 리뷰, Jira 요약만은 쓰지 않는다.
 ---
 
 # telephony-triage
@@ -11,7 +11,7 @@ description: Telephony 이슈(Android·oFono 등; data·call·network·sim·sms�
 
 | 언제 | `reference/` |
 |---|---|
-| Step 7·8, 모든 쓰기 흐름 | `write-flow.md` |
+| Step 7·8, 모든 쓰기 흐름, "병합해줘" | `write-flow.md` |
 | 새 원인·유형·시그니처·파서 규칙·fixture, Step 7 op 필드 | `db-authoring.md` |
 | `record` / `verify-fix`·`fix-submitted`·`validate --cause` / `sync-pr` / 증상만 "비슷한 이슈·이슈 번호?"(search, analyze 아님) | `record.md` / `verify.md` / `sync-pr.md` / `search.md` |
 | 로그 해석 | `log-tags.md`, `ril-requests.md`, `fail-causes.md` |
@@ -48,9 +48,9 @@ description: Telephony 이슈(Android·oFono 등; data·call·network·sim·sms�
 - Step 5: `code.resolved` 파일에서 근거 문구의 출력 위치·분기 조건을 찾는다. `code.moved`는
   "경로 변경"으로 알리고 Step 7에서 `add-code-ref`를 묻는다.
 - Step 5-1 `analyzer`(값이 있으면)·5-2 `explore`(후보 없음·원인 미확인만): `--no-…`·`never`면 생략, `--analyzer`·`--explore`·`always`면
-  실행, 아니면 토큰 추가를 알리고 질문을 그대로 보인다(답 전 `explore`·원문 열람 금지). 둘 다 물으면 "심층 분석과 탐색 분석을 할까요?" 한 질문. 5-1은 `analyzer.skill`을 Skill로 부른다(입력 `files.events`·로그 경로·상위 후보·마스킹 요약).
-  결과는 `S/mask_pii.py` 후 report.md `심층 분석 (…)` 줄에(다른 원인 의견·규칙 제안은 Step 7). 5-2는 실행이 정해진 뒤에만
-  `S/triage.py explore <KEY>`, 그 `JOB/timeline.md`만 `explore.md`대로 읽는다.
+  실행, 아니면 토큰 추가를 알리고 질문을 그대로 보인다(답 전 explore·module·원문 열람 금지). 둘 다 물으면 "심층 분석과 탐색 분석을 할까요?" 한 질문. 5-1(`analyzer.skill`·`category`)은
+  `module-skills.md`를 먼저 읽고 `S/triage.py module <KEY> --for deep`(종료 2여도 계속), 5-2는 실행이 정해진 뒤에만 `S/triage.py explore <KEY>`(`module_skills`면 `module`도).
+  준 파일(`timeline.md` 등)만 그 문서·`explore.md`대로 읽고 칸은 `check-output`이 report.md에 쓴다(다른 원인 의견·규칙 제안은 Step 7).
 
 ### Step 6. 리포트
 
@@ -73,7 +73,7 @@ Step 7 질문 전에 `JOB/report.md`(`TODO(LLM)`만 채움)를 보인다(`must_s
 - 추정만으로·`unjudged`면 원인·유형을 안 만든다.
 - `chose-other`면 한 번 묻는다(기본 아니오): 고른 원인이 후보에서 C=1이면 `add-fixture {kind: extra}`로 넣을지(`db-authoring.md`, R4 실패면 뺀다), C=0·후보 밖이면 `update-signature` 검토를 `pr_notes`에 남길지. `unjudged.causes`면 묻지 않는다. 거절하면 `append`만.
 - 물어보고 넣는 op: 회귀 의심(fixed, SW ≥ `fixed_in`)은 `update-fix`(→open, history reverted), fix-submitted만 `update-fix`(실패 이력) 또는 verify-fix, `add-related`, `add-code-ref`, `update-signature`,
-  `set-resolution`, `set-status`. 심층 분석에 `규칙 제안:` 줄이 있으면 분류 확정 뒤 한 번 묻는다(여러 개 가능: 줄마다 선택지 + `모두` + `받지 않음(기본 — 확인 안 한 제안은 반영하지 않으려고)`): `[이슈 DB]` 줄(add-parser-rule·update-signature)은 db-authoring.md 점검을 거친 op 초안을 보이고 승인한 것만 계획에 넣는다. `[스킬]` 줄은 계획에 넣지 않고 담당자용 patch를 만든다(`skill-patch.md`).
+  `set-resolution`, `set-status`. report.md에 `규칙 제안` 줄이 있으면 분류 확정 뒤 한 번 묻는다(여러 개 가능: 줄마다 선택지 + `모두` + `받지 않음(기본 — 확인 안 한 제안은 반영하지 않으려고)`): `[이슈 DB]` 줄(add-parser-rule·update-signature)은 db-authoring.md 점검을 거친 op 초안을 보이고 승인한 것만 계획에 넣는다. `[스킬]` 줄은 `skill-patch.md`.
 - 시그니처·파서 규칙·새 원인·fixture가 있으면 `S/db_verify.py rules --plan JOB/plan.json --draft JOB/draft` 표를 보인다(`skipped`는 통과
   아님). 다른 유형 fixture에서 새 시그니처가 걸리면 **좁힐지 `allow-cause`할지 사용자가 고를 때까지** 멈춘다.
 - `note` 한 줄을 확인받고 `write-flow.md` §계획 형식으로 `JOB/plan.json`에 저장한다. 기록하지 않음·중간 취소·읽기 전용·계획만 저장이면
@@ -83,9 +83,9 @@ Step 7 질문 전에 `JOB/report.md`(`TODO(LLM)`만 채움)를 보인다(`must_s
 
 먼저 `S/db_pr.py preflight --branch issue/<KEY> --search <KEY> --issue <KEY>`로
 write-flow §2(브랜치·`--lease`)만 한다. 열린 PR·`issue_in_main`은 다시 묻지 않되 `open_prs`에 없던 PR은 알리고 묻는다.
-`write-flow.md` 그대로: `db_pr stage --then-summary`(출력 = 확인 화면, 생략 불가) → 승인 → `db_pr publish --commit --and-discard --json`.
+`write-flow.md` 그대로: `db_pr stage --then-summary`(출력=확인 화면, 생략 불가) → 승인 → `db_pr publish --commit --and-discard --json` → PR 링크 → 리뷰어 질문.
 취소·dry-run만 `discard`(직접 `git commit` 없음).
 
 ### Step 9. Jira 게시 (선택)
 
-`post.md`대로: PR 링크(`pr.url`)를 글로 보인 뒤·`release` 뒤 `postable: true`면 한 번 묻고(기본 아니오), 승인한 본문만 올린다.
+`post.md`대로: 리뷰어 질문·`release` 뒤 `postable: true`면 한 번 묻고(기본 아니오), 승인한 본문만 올린다.

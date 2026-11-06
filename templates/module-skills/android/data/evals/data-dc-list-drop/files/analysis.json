@@ -1,0 +1,94 @@
+{
+ "status": "ok",
+ "key": "MOCK-9817",
+ "mode": "offline",
+ "issue": {
+  "origin": "file",
+  "occurred_at": "2026-09-03T11:00:20+00:00",
+  "sw": null,
+  "platform_version": "14",
+  "sim_slot": "0",
+  "summary": "데이터가 끊긴 뒤 다시 안 붙음 (합성)",
+  "description": "인터넷을 쓰던 중 데이터가 끊기고 다시 붙지 않습니다. 합성 case.",
+  "comments": 0,
+  "missing": [
+   "model",
+   "sw"
+  ]
+ },
+ "logs": {
+  "files": [
+   "source.log"
+  ],
+  "window": {
+   "start": "2026-09-03T10:55:20.000Z",
+   "end": "2026-09-03T11:05:20.000Z"
+  },
+  "range": [
+   "2026-09-03T11:00:01.000Z",
+   "2026-09-03T11:00:40.000Z"
+  ],
+  "in_range": "partial",
+  "clock_anomalies": 0,
+  "events": 13
+ },
+ "candidates": [
+  {
+   "type": "DATA-002",
+   "cause": null,
+   "title": "데이터 연결이 사용자 조작으로 끊김 (원인 미확인)",
+   "category": "data",
+   "score": 0.5,
+   "confidence": "low",
+   "S": 1,
+   "C": 0,
+   "phones": [
+    0
+   ],
+   "evidence": [
+    {
+     "ts": "2026-09-03T11:00:20.031Z",
+     "tag": "DNC-0",
+     "msg": "Internet data state changed from CONNECTED to DISCONNECTED.",
+     "event": "data_internet_state_changed"
+    }
+   ],
+   "fix_judgement": null,
+   "fix_message": "",
+   "related": []
+  }
+ ],
+ "partial": [
+  {
+   "kind": "missing",
+   "type": "DATA-002",
+   "cause": "DATA-002-01",
+   "signature": "DATA-002-01/airplane-mode-teardown",
+   "matched": "1/2",
+   "missing": [
+    "must_event data_teardown_all {'reason': 'AIRPLANE_MODE_ON'}"
+   ],
+   "at": [
+    "f0:L9"
+   ]
+  }
+ ],
+ "code": {
+  "skipped": true
+ },
+ "analyzer": {
+  "skill": "mock-data-analyzer",
+  "when": "ask"
+ },
+ "explore": {
+  "reason": "cause_unconfirmed",
+  "when": "ask"
+ },
+ "warnings": [
+  "형식을 모르는 줄 1개를 건너뛰었습니다."
+ ],
+ "must_show": [
+  "로그 범위: 2026-09-03T11:00:01.000Z ~ 2026-09-03T11:00:40.000Z (일부만 포함), 시계 이상 없음"
+ ],
+ "truncated": false
+}

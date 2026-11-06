@@ -9,7 +9,7 @@
 
 계획에 넣기 전에 갖춘다. 없으면 만들지 않는다(`unresolved`·기록하지 않음).
 - 근거: 마스킹 로그에서 확인한 문구(추정만이면 §1, `unjudged`면 SKILL Step 7 — 금지).
-- 새 유형: `db_add similar` 상위 3개 먼저 → category·title·summary·dir_slug·증상 시그니처(§1·§2, 예외 없음).
+- 새 유형: `db_add.py similar "<제목>" --db SNAP`(전 카테고리) 상위 3개, 비슷하면 새 원인 → category·title·summary·dir_slug·증상 시그니처(§2, 예외 없음).
 - 새 원인: `new-cause` 필수 키 + 원인 시그니처(§2), 태그·RIL·fixture 점검(§4).
 - 리뷰어: CODEOWNERS대로(카테고리 오너 없으면 없음). `parser-rules/` 변경·종료 코드 3("승인 필요")은 메인테이너. 새 카테고리는 메인테이너 직접 편집 PR만(§1).
 - 취소: stage 전 lock 해제(`write-flow.md` §discard 없이 끝나는 경로: analyze `triage.py release <KEY>`, 그 밖 `db_pr lock release <KEY>`), stage 뒤 `db_pr discard <wt>`. lock은 모든 경로에서 푼다.
@@ -37,9 +37,8 @@ op 필수 키 (`op` 외, plan.schema.json 기준):
 - `signature`: id·window_sec 필수, 선택 must_match·must_event·must_not_match·same_phone·sequence
 여기 없는 op·세부 제약은 `SNAP/schema/plan.schema.json`
 
-- 새 유형 전에 **전체 카테고리**에서 유사 유형 상위 3개를 보인다(`db_add.py similar "<제목>" --db SNAP`). 비슷하면 새 원인 쪽을 권한다.
-- 원인이 확정되지 않았으면 원인을 만들지 않고 `unresolved`. **추정만으로 원인을 만들지 않는다.**
-- 어느 카테고리에도 안 맞으면 가장 가까운 카테고리 + `tags` 안과 새 카테고리 제안 초안을 함께 보인다. 새 카테고리는 메인테이너의 직접 편집 PR로만 생긴다.
+- **추정만으로 원인을 만들지 않는다**(미확정이면 `unresolved`).
+- 어느 카테고리에도 안 맞으면 가장 가까운 카테고리 + `tags` 안과 새 카테고리 제안 초안을 함께 보인다(생성은 §0 메인테이너 PR).
 - 새 원인·유형·시그니처·파서 규칙·해결책은 초안을 모두 사용자에게 보이고 **승인받은 뒤에만** 계획에 넣는다.
 
 ## 2. 작성 규칙
@@ -48,7 +47,8 @@ op 필수 키 (`op` 외, plan.schema.json 기준):
 - `resolution`은 **행동 지시 1~2문장**, "~한다"로 끝. 워크어라운드면 앞에 `[WA]`. `resolution_type`은 스키마 enum.
 - `fix.status`는 `open | fix-submitted | wont-fix | not-a-bug`로만 시작한다. `fix-submitted`면 `ref`+`fixed_in`(브랜치 필수). **`fixed`로 시작할 수 없다.**
 - `resolution_verification`은 새 원인·`resolution`이 바뀐 원인 모두 `unverified`. `verified`는 같은 계획의 `verify-resolution`(근거 Jira 또는 `resolved` fixture)뿐이다. 기록 대상 Jira 자신을 근거로 쓰지 않는다. **사용자 진술만 있으면 unverified + method `근거: 사용자 진술`.** 미검증 해결책은 리포트·README에 "⚠ 미검증".
-- **시그니처**: 증상용·원인용 분리. 새 유형·원인은 판별 시그니처 필수(예외: record에서 사용자가 명시한 원인 `signatures_pending`). **새 유형의 증상 시그니처는 예외 없음.** 마스킹된 로그에서 실제 확인한 문구로만 쓴다(`.*error.*`·마스킹될 값·`<CELL#1>` 토큰 번호 고정 금지). 반복되는 복잡한 패턴은 extractor + `must_event`. 매처는 마스킹 뒤 텍스트에 돈다.
+- **시그니처**: 증상용·원인용 분리. 새 유형·원인은 판별 시그니처 필수(예외: record에서 사용자가 명시한 원인 `signatures_pending` — 매칭 불가, 해결책 unverified 고정). **새 유형의 증상 시그니처는 예외 없음.** 마스킹된 로그에서 실제 확인한 문구로만 쓴다(`.*error.*`·마스킹될 값·`<CELL#1>` 토큰 번호 고정 금지). 반복되는 복잡한 패턴은 extractor + `must_event`. 매처는 마스킹 뒤 텍스트에 돈다.
+  **근거 줄 하나에만 기대지 않기**(빠지면 미매칭, `must_not_match` 근거면 오매칭): 다른 층 줄로 하나 더 — 있음은 시그니처 OR(증상도 그 줄이면 증상도, 원인 줄은 증상과 같은 슬롯·window), 없음은 일어남을 보이는 줄을 `must_not_match` 항목에. R1~R5는 결합을 못 보니 첫 줄 없는 로그를 `extra`로 넣어 analyze로 본다. `db_lint --advice`는 참고.
   `must_*`는 AND·시그니처끼리는 OR, `fields` 값은 정규식 fullmatch(부분 일치는 `.*X.*`), `same_phone`(기본 true)은 DDS처럼 슬롯을 가로지르는 원인만 false, `sequence`는 항목 `id` 순서.
 - `recovery_signatures`는 이 원인에 특정한 정상 흐름(계기가 풀리는 이벤트 + 정상 동작을 `sequence`로, 정상 로그 어디에나 맞는 동작만은 금지), `scenario_signatures`는 재현 시나리오 흔적(원인 시그니처 복사·부정 금지). 코드·설정 수정 유형은 `fixed` 전환 전 둘 중 하나 필수.
 - 본문 로그 예시는 마스킹 후 5~15줄, 원인별 상세에만. 재현 시나리오는 verify-fix가 보인다.
@@ -61,7 +61,7 @@ op 필수 키 (`op` 외, plan.schema.json 기준):
 - 새 원인·유형은 **임시 ID**(`NEW-CAUSE-<n>`, `NEW-TYPE-<n>`)로 쓴다. 적용 때 최신 main 기준 번호로 치환된다.
 - op는 **순서대로** 적용된다. `new-cause`·`new-type`은 원인·유형만 만든다. 이 Jira의 기록은 **`append {cause: NEW-CAUSE-1}`**을 함께 넣어야 생긴다.
   전형적인 순서: `add-parser-rule`(필요하면) → `new-cause` → `add-fixture {for: NEW-CAUSE-1}` → (`verify-resolution`) → `append` → (`allow-cause`).
-- `body`에는 `### <ID> <title>` 제목 줄을 넣지 않는다(`db_add`가 붙인다). `new-cause.body` 항목: `- **로그 예시**:`(마스킹 5~15줄)·`확인 방법`·`재현 시나리오`·`해결책`·`코드 위치`·`비고`(`SNAP/templates/type.md`). `new-type.body`는 `## 증상`·`## 증상 판별 방법`까지.
+- `body`에는 `### <ID> <title>` 제목 줄을 넣지 않는다(`db_add`가 붙인다). `new-cause.body` 항목: `- **로그 예시**:`·`확인 방법`·`재현 시나리오`·`해결책`·`코드 위치`·`비고`(`SNAP/templates/type.md`). `new-type.body`는 `## 증상`·`## 증상 판별 방법`까지.
 - record 피드백은 `suggested: []`, `decision: manual`.
 - **`계획 형식 오류`가 나면** 결정 내용(op·값)은 바꾸지 않고 메시지가 말한 키만 고쳐 다시 stage한다.
 - drift는 항목마다 계획 값 유지 / main 값 유지(op 삭제) / 직접 입력을 사용자가 고른다(`write-flow.md` 3번).
@@ -86,7 +86,7 @@ op 필수 키 (`op` 외, plan.schema.json 기준):
 - `skipped`는 통과가 아니다. 사유와 함께 "검증 못 함 — 자동 검증 없음"으로 표시한다. 해결책만 바뀌면 R1~R5는 `skipped: 해당 없음`이고 검증 상태만 unverified.
 - **R3·R4에서 다른 유형 양성 fixture에 새 시그니처가 C=1이 되면** 사용자가 고를 때까지 push하지 않는다. 몰래 좁히지도 허용하지도 않는다. 결과의 `allow_cause_drafts`(op 그대로)를 선택지와 함께 보인다.
   - (a) **시그니처 좁히기**: fixture와 걸린 시그니처 전역 키를 보이고 대상 원인 fixture에만 있는 조건(`must_not_match`·구체적인 `fields`·`sequence`)을 더한 안을 제시, 다시 초안 검증.
-  - (b) **허용**: 그 로그에 실제로 두 현상이 다 있으면 `allow-cause {fixture, cause}`. fixture `.expect.yaml` 변경이 확인 화면에 나오고 리뷰어는 CODEOWNERS대로다. 계획 `pr_notes`에 `allow-cause: <fixture>에 <현상>이 실제로 함께 있음 (<근거 로그 한 줄, 마스킹>)`을 넣는다.
+  - (b) **허용**: 그 로그에 실제로 두 현상이 다 있으면 `allow-cause {fixture, cause}`. 계획 `pr_notes`에 `allow-cause: <fixture>에 <현상>이 실제로 함께 있음 (<근거 로그 한 줄, 마스킹>)`을 넣는다.
 - R6 `fail`은 막지 않는다(`blocking: false`). 결과를 보이고 진행 여부는 사용자가 고른다.
 - 음성 fixture에 걸린 경우(R3)는 허용 선택지가 없다 — 시그니처를 좁힌다.
 
@@ -100,7 +100,6 @@ op 필수 키 (`op` 외, plan.schema.json 기준):
 
 - 주 카테고리는 **사용자가 겪는 증상** 기준이다(이슈 DB `GLOSSARY.md` §카테고리 경계). 원인이 다른 카테고리면 원인 `related`, 유형 `secondary_categories`로 잇는다.
 - ID는 main에 들어간 뒤 바꾸지 않는다. 병합·폐기는 `status`(`deprecated | merged-into:<ID>`)로, 삭제 금지.
-- `signatures_pending: true`는 record에서 사용자가 명시할 때만(매칭 불가, 해결책 unverified 고정).
-- 브랜치 이름은 흐름 문서(`record.md`·`verify.md`·`write-flow.md`)가 알려 준다(`contracts.md §브랜치`). PR 하나에 Jira 하나.
+- 브랜치 이름은 흐름 문서(`record.md`·`verify.md`·`write-flow.md`)가 알려 준다. PR 하나에 Jira 하나.
 - **기존 분류 가져오기**(`source: import`): record 규칙과 같되 새 유형·원인 모두 시그니처 필수(pending 불가), 해결책 unverified로 시작. 브랜치 `import/<category>-<n>`, PR당 새 유형 10개 이하.
 - **분석 스킬** 결과는 리포트 보조일 뿐 분류·점수·검증에 쓰지 않는다. 스킬이 DB에 없는 원인을 말해도 그것만으로 원인을 만들지 않는다 — 사용자가 고르면 `new-cause` 흐름(시그니처 초안·검증 포함).

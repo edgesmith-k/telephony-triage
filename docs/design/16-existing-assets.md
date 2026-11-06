@@ -137,11 +137,11 @@ analyzers:
   data:
     skill: <기존 data 분석 스킬 이름>
     when: ask                    # 기본값. ask(1위가 data일 때 묻기) | always(묻지 않고 호출) | never
-    inputs: [events_json, log_paths, top_candidates, issue_summary]
-    max_tokens_hint: medium
+    # prefer: skill              # 선택. module(기본) | skill — skill이면 module_skills.remote가 있어도 이 설치 스킬로 5-1
+    # skill_dir: /abs/path       # 선택. 설치 스킬 SKILL.md 폴더(없으면 설치 위치를 찾는다)
 ```
 
-- analyze Step 5(코드 분석) 뒤, Step 6 리포트 전에 호출한다. 입력은 파서 이벤트 JSON 경로, 로그 경로, 상위 후보, Jira 요약이다. 원문 로그를 통째로 넘기지 않는다.
+- analyze Step 5(코드 분석) 뒤, Step 6 리포트 전에 호출한다. 입력은 파서 이벤트 JSON 경로, 로그 경로, 상위 후보, Jira 요약(과 심층 타임라인)이다 — `triage.py module --for deep`이 `JOB/skill-input.json`(`{events_json, log_paths, top_candidates, issue_summary, timeline}`)에 쓴다. 원문 로그를 통째로 넘기지 않는다. **설치 스킬은 파일로 읽는다**(B2-1): 같은 명령이 설치 스킬의 `SKILL.md` 경로(`skill_dir` → Claude Code 설치 플러그인·스킬 폴더 → OpenCode 스킬 폴더)와 `base`(스킬 폴더)를 주고 모든 런타임이 Read로 읽는다. 못 찾거나 둘 이상이면 종료 1 `설치 스킬 못 찾음`이고, 스킬을 부르는 도구가 있는 런타임만 예전처럼 부른다. `module_skills.remote`가 있으면 `prefer: skill`을 적은 카테고리만 설치 스킬로 남는다(없으면 모듈 문서, `config.py check`·doctor 경고). 폐지 하위 키 `inputs`·`max_tokens_hint`는 읽지 않고 경고한다.
 - 결과는 리포트의 **"심층 분석 (<스킬 이름>)"** 절에 붙인다. 분류 후보·점수·확정에는 영향을 주지 않는다. 분석 스킬이 다른 원인을 제시하면 "분석 스킬 의견: <내용>"으로 보여주고, 사용자가 Step 7에서 그 원인을 고를 수 있게 한다 (고르면 `decision: chose-other`).
 - 스킬이 없거나 실패해도 analyze는 계속한다 ("심층 분석 생략: <사유>").
 - **마스킹**: 분석 스킬에는 마스킹된 이벤트와(원문이 필요하면) 로그 경로만 넘긴다. 스킬 출력은 리포트에 넣기 전에 `mask_pii`를 적용하고, PR 본문에는 요약 한두 줄만 넣는다(원문 인용 금지).
@@ -158,7 +158,7 @@ analyzers:
 
 - **만들 때**: 다음이 있고 **유지할 오너가 있을 때만** 만든다 — (a) 시그니처(정규식·이벤트·순서)로 표현하기 어려운 판단 순서(여러 단계의 조건 분기, 값 비교), (b) 따라가야 하는 코드 경로, (c) 이슈를 거듭하며 쌓인 점검 목록. 오너가 없거나 시그니처·파서 규칙으로 표현되면 만들지 않는다(규칙은 결정적이고 fixture 회귀로 검증된다, `12-principles.md`).
 - **구조**: `SKILL.md`(공통 절차: 입력 읽기 → 판단 순서 → 출력) + `references/<유형 ID>.md`(이슈 유형별 점검 목록·코드 경로, 그 유형일 때만 읽는다) + `analyzer.md`(입출력 계약). 계약은 위 §16.5와 `07-workflow.md §Step 5-1`에 맞춘다:
-  - 입력: `inputs`의 `events_json`(마스킹된 이벤트 JSON **경로**), `log_paths`, `top_candidates`(`[{type, cause, score, confidence}]`), `issue_summary`(마스킹된 한두 줄). 원문 로그를 통째로 받지 않는다.
+  - 입력: `skill-input.json`의 `events_json`(마스킹된 이벤트 JSON **경로**), `log_paths`, `top_candidates`(`[{type, cause, score, confidence}]`), `issue_summary`(마스킹된 한두 줄), `timeline`(심층 타임라인 경로). 원문 로그를 통째로 받지 않는다.
   - 출력: 리포트 `심층 분석 (<스킬>)` 칸에 붙을 요약, 다른 원인이면 `분석 스킬 의견: <원인 ID — 근거>`, 규칙이 필요하면 `규칙 제안:` 줄 아래에 한 줄에 하나씩(제안만 한다). 마스킹된 값만 쓴다. 모의 예: `tests/mocks/skills/data-analyzer/`.
     - 이슈 DB 규칙: `- [이슈 DB] add-parser-rule file=<parser-rules 파일> rule=<규칙> — 근거: <로그 줄·이유>` 또는 `- [이슈 DB] update-signature cause=<원인 ID> … — 근거: …`
     - 분석 스킬 자체 개선(점검 목록·코드 경로 보완): `- [스킬] … — 근거: …`
@@ -166,7 +166,7 @@ analyzers:
 - **description**: telephony-triage 스킬의 트리거 설명(Jira·logcat 분석 요청)과 겹치지 않게 쓴다 — "telephony-triage analyze Step 5-1에서 `analyzers.<카테고리>`로만 부른다"처럼 호출 경로를 좁힌다. 겹치면 사용자의 분석 요청이 이 스킬로 새어 본 흐름(lock·스냅샷·확인 화면)을 건너뛴다.
 - **파일을 바꾸지 않는다**: 분석 스킬은 이슈 DB·작업 계획·로그·자기 references를 고치지 않고 규칙을 제안만 한다(`규칙 제안:`). 넣을지는 Step 7에서 사용자가 정한다. `[스킬]` 제안으로 telephony-triage가 만드는 patch도 설치된 분석 스킬 디렉토리(플러그인 캐시)에는 쓰거나 적용하지 않는다 — 스킬 소스(`source`)가 설정돼 있고 사용자가 "적용"을 고른 때만 그 소스의 워킹 트리에 적용하고, 커밋·push(·main PR)는 사용자가 한다. 다른 사용자에게서 문제가 나오면 그때 소스에서 고친다.
 - **검증**: 해결된 실제 이슈(마스킹된 로그)로 스킬 있음/없음을 같은 모델로 비교한다(`10-skill-eval.md` 방식: 1순위 결과 — 의견이 맞는 원인을 가리키는지·제안 규칙이 R1~R5를 통과하는지, 2순위 토큰). 나아지지 않으면 연결하지 않는다.
-- **연결·교체·끄기**: 키는 `analyzers.<카테고리>`(android 밖 플랫폼은 `platforms.<p>.analyzers.<카테고리>`, `skill`·`when`·`inputs`·선택 `source`, `contracts.md §기존 자산 연결 계약`). 팀 기본값은 `site-defaults.yaml`, 개인은 사용자 config(`~/.telephony-triage/config.yaml`, `02-config.md §4`)에 같은 키를 두면 덮어쓴다. `skill`을 바꾸면 교체, `when: never`면 끄기, 한 번만 건너뛰려면 analyze `--no-analyzer`.
+- **연결·교체·끄기**: 키는 `analyzers.<카테고리>`(android 밖 플랫폼은 `platforms.<p>.analyzers.<카테고리>`, `skill`·`when`·선택 `prefer`·`skill_dir`·`source`, `contracts.md §기존 자산 연결 계약`). 팀 기본값은 `site-defaults.yaml`, 개인은 사용자 config(`~/.telephony-triage/config.yaml`, `02-config.md §4`)에 같은 키를 두면 덮어쓴다. `skill`을 바꾸면 교체, `when: never`면 끄기, 한 번만 건너뛰려면 analyze `--no-analyzer`.
 
 ## 16.6 사외 초안과 사내 작업
 

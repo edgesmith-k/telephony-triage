@@ -1,0 +1,23 @@
+{
+ "around": "2026-09-04T12:02:01+00:00",
+ "failed_step": null,
+ "limit": 200,
+ "anchor": null,
+ "partial": [
+  {
+   "signature": "CALL-001/volte-call-not-established",
+   "missing": [
+    "failed"
+   ]
+  },
+  {
+   "signature": "DATA-001/no-setup-data-call-request",
+   "missing": [
+    "must_event data_evaluation_rejected"
+   ]
+  }
+ ],
+ "around_alt": [
+  "2026-09-04T12:02:00.000Z"
+ ]
+}

@@ -33,8 +33,22 @@ CARRY_KEYS = ("time", "window", "anchor", "year", "code")   # 분석 전용이 l
 CARRY_PARTS = ("logs", "issue", "config")      # 이어받은 답을 쓰는 조건: 이 입력 부분 해시가 같을 때만
 SNAPSHOT_DIR = "_snapshot"
 TOP = 3
+# C′ 부분 일치 (04-parser-matching.md §5.12): analysis.json `partial[]` ≤ 3개(목표 ≤ 600 B), report.md 절 ≤ 1,200 B,
+# 코드 대조 리터럴 ≤ 9개(부분 일치 3 × 없는 조건 3)
+PARTIAL_ANALYSIS_MAX, PARTIAL_REPORT_MAX, FIND_TEXT_ITEMS = 3, 1200, 9
 SEARCH_LIMIT = 3
 ERROR_EVENT_RE = re.compile(r"(error|timeout|no_response|reject|fail|denied|lost)", re.I)
+# 0 값 오류 칸(`errorCode=0`·`RejectCause: 0`·`result=0`·`error(0)`)은 오류가 아니다. 오류 문구 판정(ERROR_EVENT_RE) 전에
+# 지운다 — report 타임라인 줄 고르기와 모듈 보기 hot 표시가 같이 쓴다(H C1+D R13, 두 플랫폼)
+ZERO_VALUE_RE = re.compile(r"(?i)\b(?:RejectCause|reject\s*cause|errorCode|RilErrorCode|rejectCode|error|result|"
+                           r"fail(?:ure)?_?(?:code|cause))\s*[:=(]\s*0\b(?![.\d])")
+
+
+def is_error_text(text: str | None) -> bool:
+    """메시지에 오류 문구가 있는가(0 값 오류 칸을 뺀 뒤 ERROR_EVENT_RE)."""
+    return bool(ERROR_EVENT_RE.search(ZERO_VALUE_RE.sub("", text or "")))
+
+
 ERROR_FIELDS = ("request", "error", "code", "reason", "cause")   # 오류 이벤트 줄에 싣는 필드 (analysis.json·report.md)
 AUTO_CODE_NOTE = " (자동 선택: code.auto_select, `--code`로 변경 가능)"   # report.md 코드 줄
 EXPLORE_WHEN = ("ask", "always", "never")
@@ -49,9 +63,43 @@ MUST_SHOW_FIT = 4                # fit이 마지막에 남기는 수
 MUST_SHOW_CLIP = 160
 PULL_SKIPPED = "이슈 DB pull 건너뜀"     # must_show 줄 머리(issue_post가 Jira 본문에서 뺀다)
 EXPLORE_HYPOTHESIS = "TODO(LLM) 가설 1~3개 — 로그로 확인 / 코드로 추정 / 반대 근거 / 다음에 받을 로그. 실행하지 않으면 \"탐색 분석 생략: <사유>\". 점수·분류·검증에 쓰지 않는다"
-EXPLORE_PENDING_LINE = ("- 탐색 분석 (추정): 미실행 — 동의(또는 --explore·explore.when: always) 뒤 triage.py explore {key}가 "
-                        f"{TIMELINE_FILE}를 만든다. " + EXPLORE_HYPOTHESIS)
+EXPLORE_PENDING_LINE = ("- 탐색 분석 (추정): 미실행 — 실행 전(동의 답을 기다리는 동안 포함)엔 로그 원문을 grep·Read하지 않는다. "
+                        "동의(또는 --explore·explore.when: always) 뒤 triage.py explore {key}가 "
+                        f"{TIMELINE_FILE}를 만든다(가설 근거는 이 파일). " + EXPLORE_HYPOTHESIS)
 EXPLORE_DONE_LINE = "- 탐색 분석 (추정, " + TIMELINE_FILE + " {lines}/{total}줄): " + EXPLORE_HYPOTHESIS
+# 5-1·5-2 모듈 스킬·출력 검사 줄(B2 §5.5·§6·§7.2). `module`·`check-output`이 report.md의 그 줄만 고친다(`report.rewrite_line`)
+DEEP_TODO = "TODO(LLM) 결과는 check-output이 쓴다. 실행 안 함·실패면 \"심층 분석 생략: <사유>\"로"
+DEEP_MODULE_PENDING = ("- 심층 분석 (모듈 스킬 {platform}, 1위 카테고리 {category}): 미실행 — 동의 뒤 triage.py module {key} "
+                       "--for deep가 받는다. " + DEEP_TODO)
+DEEP_MODULE_FETCHED = "- 심층 분석 (모듈 스킬 {module} @{sha7}): " + DEEP_TODO
+DEEP_REPO_MISSING = "- 심층 분석: 해당 없음(레포에 {module} 없음 @{sha7}) (만드는 법: 모듈 스킬 레포 README)"
+DEEP_FETCH_FAILED = "- 심층 분석 생략: 모듈 스킬 받기 실패({reason})"
+DEEP_CONFIG_ERROR = "- 심층 분석 생략: 설정 오류({problem})"
+DEEP_SKIPPED = "- 심층 분석 생략: {reason}"
+EXPLORE_MODULE_DONE = ("- 탐색 분석 (추정, " + TIMELINE_FILE + " {lines}/{total}줄, 모듈 문서 {module} @{sha7}): "
+                       + EXPLORE_HYPOTHESIS)
+EXPLORE_MODULE_NONE = ("- 탐색 분석 (추정, " + TIMELINE_FILE + " {lines}/{total}줄, 모듈 문서 없음: {reason}): "
+                       + EXPLORE_HYPOTHESIS)
+EXPLORE_SKIPPED = "- 탐색 분석 생략: {reason}"
+MODULE_TIMELINE_SUB = "  - 모듈 타임라인: {kept}/{pool}줄, 잡음 {noise}, 반복 접음 {collapsed}{uncollected}"   # uncollected = ", 미수집 a·b" | ""
+EVIDENCE_SUB = "  - 근거 원문 검사: {text}"
+DEEP_PREFIX, EXPLORE_PREFIX = "- 심층 분석", "- 탐색 분석"    # rewrite_line·current_line의 prefix
+# check-output 한도(UTF-8 바이트, 한 칸 768바이트 = 한글 약 250자)
+OUTPUT_MAX_BYTES, FIELD_MAX_BYTES, DEEP_MAX_BYTES, EXPLORE_MAX_BYTES, QUOTES_MAX, HYPS_MAX = 16384, 768, 6144, 10240, 5, 3
+# 실패 JSON의 `next`(B2-24): 스크립트가 줄을 고친 뒤 모델이 할 일 한 줄
+NEXT_CONTINUE = "리포트 줄은 스크립트가 고쳤다 — 심층 분석 없이 Step 6로 계속"
+NEXT_SKILL_MISSING = ("스킬을 부르는 도구가 있으면 analyzer.skill을 input 파일로 부르고, 없으면 check-output --for deep "
+                      "--skipped \"설치 스킬 못 찾음\"")
+NEXT_FIX_CALL = "명령을 고쳐 한 번만 다시(module-skills.md) — 또 틀리면 check-output --skipped"
+NEXT_BUILTIN = "JOB/timeline.md로 explore.md대로"
+NEXT_ASK_BUILTIN = "실패를 보이고 \"탐색 분석을 내장 줄 모양만으로 할까요, 생략할까요?\"를 묻는다"
+NEXT_EXPLORE_SKIPPED = "리포트 줄은 스크립트가 고쳤다 — 탐색 분석 없이 Step 6로 계속"
+NEXT_CHECK_FAILED = "리포트 줄은 생략으로 고쳐 두었다 — 고쳐 쓰지 말고 Step 6로"
+NEXT_CHECK_NA = "리포트 줄은 그대로 둔다 — Step 6로 계속"
+MODULE_RECORD_DIR = "module-skill"
+# 새 run이 지우는 이전 실행 산출물(B2 §7.4) — 폴더 MODULE_RECORD_DIR도 지운다
+STALE_FILES = (TIMELINE_FILE, EXPLORE_INPUT_FILE, "module-skill.json", "deep-input.json", "skill-input.json", "check-output.json",
+               "deep-output.md", "explore-output.md")
 _HOT_LEVELS = {"W", "E", "F"}
 _TOKEN_RE = re.compile(r"[0-9A-Za-z가-힣_]{2,}")
 

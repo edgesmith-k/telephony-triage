@@ -16,12 +16,10 @@ schema: 1
 # guard:
 #   raw_read: {names: [], exempt_dirs: []}
 
-# 이슈 DB PR 바로 병합 기본값 (06-collaboration.md §6.1). self: push 전 확인 화면에 'push하고 바로 병합' 선택지를 내고, 고르면
-# publish --and-merge가 본인 권한으로 병합한다(검사 통과·브랜치 보호 조건 충족일 때만). review: 선택지 없이 리뷰어가 GHE에서 머지한다.
-# merge_wait_seconds: 검사·병합 가능 상태를 기다리는 최대 초(기본 420, 최대 480). 사용자 config issue_db.*가 덮는다.
+# 이슈 DB PR 병합(06-collaboration.md §6.1): +1 뒤 사용자가 요청하면 `db_pr merge`가 검사·병합 가능 상태를 기다리는 최대 초
+# (기본 420, 최대 480). 사용자 config issue_db.*가 덮는다.
 issue_db:
-  merge: self
-  merge_wait_seconds: 600
+  merge_wait_seconds: 420
 
 # 합성 fixture(origin: synthetic) 허용 여부.
 # 사내 기본값은 false이고, 이 example(테스트 헬퍼 복사본)만 true다 (15-local-draft.md §15.2).
@@ -156,11 +154,11 @@ platform:
   #     - {file: build/core/version_defaults.mk, regex: '^\s*PLATFORM_VERSION\s*:?=\s*(\d+)'}
   # log:
   #   phone_id:                      # TODO(SITE:S20) 슬롯 표기. 그룹 1 = 슬롯 번호. 위치마다 순서대로 첫 일치
-  #     tag: ['^[A-Za-z]+(?:-[CI])?-(\d+)$']                   # 태그에 match
+  #     tag: ['^[A-Za-z]+(?:-[CI])?-(\d+)$', '^.+ \[(\d)\]$']   # 태그에 match(`DNC-1`, `ImsManager [0]`)
   #     msg_prefix: ['^\[(?:PHONE|SUB)(\d+)\]\s?']   # 메시지 앞 match, RIL 해석 전 떼어냄
   #     msg_suffix: ['\s?\[PHONE(\d+)\]$']           # 메시지 끝 search, 떼어냄
   # ril:
-  #   tags: [RILJ]                   # TODO(SITE:S10) 벤더 RIL 태그(형식은 RILJ와 같아야 함, S9). tags.yaml 매핑도 함께
+  #   tags: [RILJ, RadioConfig, RadioConfigResponseAidl]   # TODO(SITE:S10) 벤더 RIL 태그(형식은 RILJ와 같아야 함, S9). tags.yaml 매핑도 함께
   #   vendor:                        # TODO(SITE:S10) 벤더 RIL 층 연결(선택). 없으면 출력이 이전과 같다. 초안: tools/s0_suggest.py
   #     link_ms: 2000                # RILJ 요청 뒤 HAL 줄을 찾는 시간(기본 2000, 앞쪽 500ms 고정)
   #     layers:                      # 정확한 태그 이름. 패턴마다 (?P<serial>)·(?P<token>) 중 정확히 하나, 첫 일치만
@@ -181,8 +179,8 @@ analyzers:
   data:
     skill: mock-data-analyzer          # tests/mocks/skills/data-analyzer/
     when: ask                          # ask | always | never
-    inputs: [events_json, log_paths, top_candidates, issue_summary]
-    max_tokens_hint: medium            # TODO(SITE:S10) 플러그인은 이 키를 읽지 않는다(S-4a에서 쓸지 지울지 결정)
+    # prefer: module                 # module(기본) | skill — skill이면 module_skills.remote가 있어도 위 skill(설치 스킬)로 심층 분석(카테고리별, 사용자 config가 덮는다)
+    # skill_dir: /abs/path/to/<skill>   # 설치 스킬 SKILL.md 폴더(선택). 없으면 설치 위치를 찾는다(skillpath)
     # source: /abs/path/to/analyzer-skill   # 선택: 분석 스킬 소스 checkout(SKILL.md가 있는 폴더, git 저장소 안). 있으면 [스킬] 제안
     #                                       # patch를 사용자가 승인한 뒤 그 워킹 트리에 git apply한다(커밋·push 안 함, 16 §16.5.1)
 # 위 analyzers는 android 것이다. android 밖 플랫폼은 최상위 platforms.<이름>.analyzers(같은 모양)만 쓰고 android 것을
@@ -196,6 +194,15 @@ analyzers:
 explore:
   when: ask                            # ask | always | never (analyze --explore / --no-explore가 우선)
   timeline_max_lines: 200              # JOB/timeline.md 줄 수 상한 (20~1000)
+
+# 모듈 스킬 레포(①탐색·②심층 분석 모듈 문서, MODULE_SKILLS_PLAN_IMPL §2.1). 최상위 키 — 플랫폼별이 아니다(레포 하나 안에 <플랫폼>/이 있다).
+# 비워 두면 모듈 문서를 쓰지 않는다(지금 출력 그대로). 받기는 동의 뒤 triage.py module만 한다.
+# module_skills:
+#   remote: https://<GHE 호스트>/<owner>/<repo>.git   # TODO(SITE:S33) 주소·partial clone 지원·사용자 PC git 버전(≥2.25)
+#   base_branch: main
+
+# 분석 환경 출처 기록(module-skill.json·check-output.json·이슈 DB 커밋 꼬리말의 label). 선택, 이 파일에서만 읽는다.
+# runtime: {label: <사내 실행 환경 이름>}   # TODO(SITE:S35) 출처 기록용(선택) — 영숫자·._ +-, 40자 이하
 
 # 실패 스텝 기준 분석 구간 (07-workflow.md §Step 3, 02-config.md). TODO(SITE:S22)
 # 시험 자동화가 logcat에 남기는 스텝 마커로 실패 스텝의 시간 구간을 정한다(어디를 볼지만 정하고 S/C는 로그가 정한다).

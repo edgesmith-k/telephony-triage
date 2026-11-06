@@ -1,0 +1,29 @@
+{
+ "schema_version": 1,
+ "key": "MOCK-9814",
+ "platform": null,
+ "module": "android/call",
+ "sha": "template",
+ "type_id": "CALL-001",
+ "top_candidates": [
+  {
+   "type": "CALL-001",
+   "cause": "CALL-001-01",
+   "score": 1.0,
+   "confidence": "high"
+  },
+  {
+   "type": "IMS-001",
+   "cause": null,
+   "score": 0.4997,
+   "confidence": "low"
+  }
+ ],
+ "issue_summary": "통화 중 갑자기 서비스 안 됨 (합성)",
+ "occurred_at": "2026-08-27T16:00:22+00:00",
+ "events": "events.json",
+ "timeline": "timeline.md",
+ "log_paths": [
+  "source.log"
+ ]
+}

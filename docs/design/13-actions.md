@@ -59,7 +59,8 @@ jobs:
 
 브랜치 보호 설정 추가:
 - **Require status checks to pass**: `db-check`
-- **Require branches to be up to date before merging**: 켠다. main이 바뀐 PR은 머지 전에 업데이트가 필요해지므로, `06-collaboration.md §6.3` ④의 리뷰어 수동 체크를 대신한다. 업데이트는 GHE의 "Update branch" 버튼이 아니라 **`sync-pr`로 한다** (계획 재적용, 생성 파일 재생성, ID 재할당이 필요하므로). 계획이 없는 브랜치는 `06-collaboration.md §6.3`의 수동 절차로 한다.
+- **Require branches to be up to date before merging**: 켠다(로컬 모드부터 켜 둔다). main이 바뀐 PR은 머지 전에 업데이트가 필요해지므로, `06-collaboration.md §6.3` ④의 PR 템플릿 체크리스트(GHE 웹 병합)를 대신한다. 업데이트는 GHE의 "Update branch" 버튼이 아니라 **`sync-pr`로 한다** (계획 재적용, 생성 파일 재생성, ID 재할당이 필요하므로). 계획이 없는 브랜치는 `06-collaboration.md §6.3`의 수동 절차로 한다.
+- 필수 승인 1·Dismiss stale approvals·최근 push 승인(Require approval of the most recent push, 있으면)은 로컬 모드와 같다(`06-collaboration.md §6.1`). GHE 웹 병합은 `db_pr merge`의 +1·main 불변 검사를 거치지 않으므로 이 설정들에 기댄다.
 
 플러그인/이슈 DB 변경:
 - `issue-db.config.yaml`: `ci_mode: actions`
@@ -95,7 +96,7 @@ jobs:
 |---|---|---|---|
 | 생성 파일 | PR에 포함, 적용·재적용 때마다 재생성 | PR에 포함, CI가 정합성 검증 | PR에서 제외, 머지 후 봇이 생성 |
 | 강제 검증 | pre-commit hook + Claude hook (터미널 우회는 사후 lint로 보완) | CI 필수 체크 | CI 필수 체크 |
-| 머지 직전 최신 여부 | 리뷰어 체크리스트 + `sync-pr` | 브랜치 보호 "up to date" + `sync-pr` | 브랜치 보호 "up to date" + `sync-pr` |
+| 머지 직전 최신 여부 | `db_pr merge` 상태 검사 또는 브랜치 보호 "up to date"(GHE 웹 병합) + `sync-pr` | 브랜치 보호 "up to date" + `sync-pr` | 브랜치 보호 "up to date" + `sync-pr` |
 | ID 동시 할당 | 적용 시점 할당 + sync-pr 계획 재적용 + 사후 lint(보고, 메인테이너 정리) | + CI 검사 | + CI 검사 |
 | `generator_version` 불일치 | 이슈 DB 쓰기 전체 차단 | 이슈 DB 쓰기 전체 차단 | 영향 없음 |
 | 필요 조건 | 없음 | Actions + runner | Actions + runner + 봇 계정 |

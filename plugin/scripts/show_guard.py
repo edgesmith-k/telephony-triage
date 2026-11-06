@@ -16,16 +16,18 @@ transcript의 Bash 호출에 시각으로 고정하고(`shown.anchor`: tool_use 
 
     python3 show_guard.py stop|pre-ask|pre-bash|post   (stdin: hook 입력 JSON)
 
-- `stop`(Stop): 이번 턴에 열린 의무(리포트는 턴을 넘어 열려 있어도, 단 마지막 메시지가 탐색·심층 분석 질문이면 리포트는 보지
-  않는다)마다 보인 글 + `last_assistant_message`에 빠진 것이 있으면 `{"decision": "block", "reason"}`.
+- `stop`(Stop): 이번 턴에 열린 의무(리포트는 턴을 넘어 열려 있어도, 단 마지막 메시지가 탐색·심층 분석 질문·모듈 문서 질문이면
+  리포트는 보지 않는다)마다 보인 글 + `last_assistant_message`에 빠진 것이 있으면 `{"decision": "block", "reason"}`.
 - `pre-ask`(PreToolUse `AskUserQuestion|mcp__.*__ask_user`): 같은 판정에 질문 문구를 더해 빠지면 질문을 거부한다. 리포트는
-  Step 7 분류 질문일 때만 본다.
+  Step 7 분류 질문일 때만 본다. check-output 결과 줄(`evidence` — 심층 분석 첫 줄·근거 원문 검사)은 탐색·심층 분석 질문·
+  모듈 문서 질문에는 보지 않는다(단 Step 7 질문이면 본다).
 - `pre-bash`(PreToolUse Bash): 명령이 `db_pr`·`publish`(`guard.word_net`, 규칙 7과 같은 낱말 그물)면 해시가 같은 push 의무(해시가
   변수 — `--approved "$H"` — 면 마지막 stage 실행 뒤에 기록된 push 의무)를, `issue_post`·`approve`면 post 의무를 골라 의무 뒤 ~
   마지막 질문(또는 사용자 입력) 사이에 화면 전체가 보였는지 본다. 맞는 의무가 없으면 판정하지 않는다(스크립트의 해시 대조와 규칙 7
   ask가 관문). `db_pr`·`stage`면 열린 초안 검증표(전부 통과 표 `shown.draft_all_clear` 제외 — push 확인 화면의 "검증 결과"로
   갈음)가 보였는지 본다. 거부 문구에는 붙일 화면 전문(12KB 이하)이 실린다.
-- `post`(PostToolUse Bash): 명령에 기록 스크립트 이름이 있고 60초 안에 그 스크립트의 의무 기록이 있으면 `additionalContext`로
+- `post`(PostToolUse Bash): 명령에 기록 스크립트 이름이 있고 그 호출이 도는 동안(transcript의 tool_use 시각 − 2초 ~ 지금, 시각을 모르면
+  60초 창) 그 스크립트의 의무 기록이 남았으면 `additionalContext`로
   "이 출력은 사용자에게 안 보인다, 다음 메시지에 전문을 글자 그대로" 안내만 한다.
 
 같은 의무 키(`push:<hash>`·`post:<sha 앞 16자>`·`report:<KEY>#<run>`·`draft:<sha1 12자>`·`patch:<KEY>/<스킬 이름>`·`apply:<KEY>/<스킬 이름>`)로 막은 횟수(transcript의 표식
@@ -61,14 +63,16 @@ MAX_BLOCKS = 2
 TAIL_BYTES = 16 * 1024 * 1024
 HEAD_BYTES = 64 * 1024
 BLOCK_LIMIT = 12 * 1024
-# ponytail: post 안내는 지금 호출이 남긴 기록을 시각으로만 고른다(60초). 같은 스크립트를 60초 안에 두 번 부르면 앞 기록도 안내한다
-POST_WINDOW = 60.0
+# post 안내는 지금 호출이 도는 동안 남은 기록만 고른다(`mode_post`, 시각만 본다 — 같은 때 다른 세션이 같은 스크립트를 부르면 그 기록도 안내한다)
+POST_WINDOW = 60.0       # 지금 호출의 시작 시각을 모를 때만 쓰는 창(입력에 transcript_path·tool_use_id가 없거나 transcript에서 호출을 못 찾을 때)
+POST_SCAN = 660.0        # 지금 호출이 남겼을 수 있는 기록을 찾는 범위(Bash 최대 10분 + 여유) — 이 안에 후보가 있을 때만 transcript를 읽는다
 RECORD_SCRIPTS = ("db_pr", "issue_post", "db_verify", "triage", "skill_patch")
 QUICK_TOKENS = ("## push 전 확인:", "게시 전 확인:", "triage.py", "--draft", "db_pr.py", "issue_post.py", "skill_patch.py")
 KIND_NAME = {"push": "push 확인 화면", "post": "게시 확인 화면", "report": "분석 리포트", "draft": "초안 검증표",
-             "patch": "스킬 제안 patch 안내"}
-OBJ = {"push": "을", "post": "을", "report": "를", "draft": "를", "patch": "를"}      # 목적격 조사
-EXPLORE_Q = re.compile(r"(심층|탐색)\s*분석[^\n]*(할까요|실행할까|진행할까|\?)")
+             "patch": "스킬 제안 patch 안내", "evidence": "check-output 결과 줄(심층 분석·근거 원문 검사)"}
+OBJ = {"push": "을", "post": "을", "report": "를", "draft": "를", "patch": "를", "evidence": "을"}      # 목적격 조사
+# Step 5 질문(동의·스크립트가 쓴 모듈 문서 질문 `ask`·`ask_switch`·`ask_also`): 리포트를 보이기 전에 묻는다
+EXPLORE_Q = re.compile(r"(심층|탐색)\s*분석[^\n]*(할까요|실행할까|진행할까|\?)|모듈 문서[^\n]*(볼까요|바꿀까요)")
 NOTE = "[telephony-triage] 표시 안내"
 TRUNCATED = [False]      # 마지막 load_text가 끝부분만 읽었는가
 
@@ -179,12 +183,13 @@ def turn_start(seq) -> int | None:
 
 WAIT_SECONDS = 2.0       # PreToolUse 때 transcript에 지금 호출이 기록될 때까지 기다리는 상한
 WAIT_STEP = 0.05
+POST_WAIT_SECONDS = 0.3  # PostToolUse: 지금 호출은 이미 기록돼 있다(못 찾으면 60초 창으로)
 
 
-def _wait_recorded(path, tool_use_id) -> bool:
-    """transcript에 tool_use_id가 나타날 때까지 새로 붙은 바이트만 본다(WAIT_SECONDS 상한). 나타났으면 True."""
+def _wait_recorded(path, tool_use_id, wait: float | None = None) -> bool:
+    """transcript에 tool_use_id가 나타날 때까지 새로 붙은 바이트만 본다(`wait` 상한, 없으면 WAIT_SECONDS). 나타났으면 True."""
     needle = tool_use_id.encode("utf-8")
-    deadline = time.monotonic() + WAIT_SECONDS
+    deadline = time.monotonic() + (WAIT_SECONDS if wait is None else wait)
     pos, tail = 0, b""
     try:
         with Path(path).open("rb") as fh:
@@ -251,7 +256,7 @@ def _examples(miss) -> str:
 
 
 def _block(ob) -> str:
-    label = {"report": "붙일 리포트 줄", "draft": "붙일 표", "patch": "붙일 줄"}.get(ob.kind, "붙일 화면")
+    label = {"report": "붙일 리포트 줄", "draft": "붙일 표", "patch": "붙일 줄", "evidence": "붙일 줄"}.get(ob.kind, "붙일 화면")
     if len(ob.block.encode("utf-8")) <= BLOCK_LIMIT:
         return f"--- {label} ---\n{ob.block}"
     where = ob.path or "앞 Bash 출력"
@@ -281,14 +286,16 @@ def reason(ob, miss, *, deny: bool = False, retry: bool = False) -> str:
     if deny:
         what = {"draft": "규칙마다 한 행(R1~R6 각각 상태, 통과가 아니면 사유)을",
                 "report": "아래 결정적 줄과 must_show를 글자 그대로(고쳐 쓰지 말고)",
-                "patch": "아래 줄을 모두 글자 그대로(고쳐 쓰지 말고)"}.get(
+                "patch": "아래 줄을 모두 글자 그대로(고쳐 쓰지 말고)",
+                "evidence": "아래 줄을 모두 글자 그대로(고쳐 쓰지 말고)"}.get(
             ob.kind, "아래 화면 **전체**를 처음부터 끝까지 글자 그대로")
         todo = f"{what} 질문 본문 앞(또는 질문 바로 앞 글)에 넣고 질문을 다시 부른다."
         return _deny_text(ob, why, todo, miss, retry, unit)
     head = f"{shown.MARKER} {ob.key} {STOP_LEAD} {why} Bash 출력은 사용자에게 보이지 않는다."
     how = {"draft": "규칙마다 한 행(R1~R6 각각 상태, 통과가 아니면 사유)을 보이고 같은 메시지 끝에 질문을 다시 한다.",
            "report": "결정적 줄과 must_show를 글자 그대로(고쳐 쓰지 말고) 보이고 같은 메시지 끝에 질문을 다시 한다.",
-           "patch": "아래 줄을 모두 글자 그대로(고쳐 쓰지 말고) 보인다 — 질문이 있었으면 같은 메시지 끝에 다시 한다."}.get(
+           "patch": "아래 줄을 모두 글자 그대로(고쳐 쓰지 말고) 보인다 — 질문이 있었으면 같은 메시지 끝에 다시 한다.",
+           "evidence": "아래 줄을 모두 글자 그대로(고쳐 쓰지 말고) 보인다 — 질문이 있었으면 같은 메시지 끝에 다시 한다."}.get(
         ob.kind, "화면 **전체**를 처음부터 끝까지 글자 그대로 다시 붙이고 같은 메시지 끝에 승인 질문을 다시 한다.")
     return f"{head}\n{how}\n빠진 {unit} 예:\n{_examples(miss)}\n{_block(ob)}"
 
@@ -320,13 +327,15 @@ def obligations(seq, recs):
             if not (ob.kind == "draft" and shown.draft_all_clear(ob.rules))]
 
 
-def _checked(seq, obs, ts, *, report_ok=True):
+def _checked(seq, obs, ts, *, report_ok=True, evidence_ok=True):
     for ob in obs:
         if not ob.open:
             continue
         if ob.kind == "report":
             if report_ok:
                 yield ob
+        elif ob.kind == "evidence" and not evidence_ok:
+            continue
         elif ob.start >= ts:
             yield ob
 
@@ -439,7 +448,10 @@ def mode_pre_ask(inp) -> dict | None:
     obs = obligations(seq, recs)
     ask = shown.ask_text(tool_input)
     found = []
-    for ob in _checked(seq, obs, ts, report_ok=shown.step7_question(tool_input)):
+    # check-output 결과 줄은 Step 5 질문(심층 check-output 바로 뒤 5-2 모듈 질문·ask_switch)에는 보지 않는다 — Stop·다른 질문은
+    # 본다. Step 7 질문은 "심층 분석 … 할까요?"를 담아도 본다
+    step7 = shown.step7_question(tool_input)
+    for ob in _checked(seq, obs, ts, report_ok=step7, evidence_ok=step7 or not EXPLORE_Q.search(ask)):
         miss = shown.missing(ob, shown.visible_between(seq, ob.start + 1) + [ask])
         if miss:
             found.append((ob, miss))
@@ -540,7 +552,24 @@ def _response_text(resp) -> str:
     return str(resp or "")
 
 
+def _call_start(inp) -> float | None:
+    """지금 Bash 호출의 tool_use 시각(transcript의 `tool_use_id` 줄). PostToolUse 때 그 줄은 이미 기록돼 있다 — 기다림은
+    POST_WAIT_SECONDS로 짧게 둔다(하위 에이전트 호출은 transcript가 따로라 주 transcript에 없다: 기다려도 나타나지 않는다).
+    입력에 transcript_path·tool_use_id가 없거나 찾지 못하면 None."""
+    tid, path = inp.get("tool_use_id"), inp.get("transcript_path")
+    if not tid or not path or not _wait_recorded(path, str(tid), POST_WAIT_SECONDS):
+        return None
+    for e in reversed(load_seq(path) or []):
+        if e.get("kind") == "tool" and e.get("id") == tid:
+            return shown._epoch(e.get("ts"))
+    return None
+
+
 def mode_post(inp) -> dict | None:
+    """기록 스크립트를 부른 Bash 호출 뒤: **그 호출이 도는 동안** 남은 의무 기록(`tool_use 시각 − ANCHOR_SLACK ≤ at ≤ 지금`,
+    `shown.anchor`와 같은 고정)이 있으면 전문을 붙이라고 안내한다. 예전에는 60초 안의 모든 기록(다른 세션·eval 하위 세션·앞
+    호출이 남긴 것 포함)을 보고 기록을 남기지 않은 호출(`db_pr status` 등)에도 "push 화면을 붙여라"를 안내했다(11/04 수정).
+    지금 호출의 시작 시각을 모를 때만 60초 창을 쓴다(경고)."""
     if inp.get("tool_name") != "Bash":
         return None
     tool_input = inp.get("tool_input") if isinstance(inp.get("tool_input"), dict) else {}
@@ -549,10 +578,20 @@ def mode_post(inp) -> dict | None:
     if not names:
         return None
     now = time.time()
+    recs = [(t, r) for r in shown.read_records(work_dirs())
+            if (t := shown._epoch(r.get("at"))) is not None and -1 <= now - t <= POST_SCAN
+            and {r.get("script"), r.get("via")} & names]
+    if not recs:
+        return None
+    start = _call_start(inp)
+    if start is None:
+        warn("지금 호출의 시작 시각을 몰라(transcript_path·tool_use_id 없음 또는 기록 없음) 60초 창으로 고른다")
+        lo = now - POST_WINDOW
+    else:
+        lo = start - shown.ANCHOR_SLACK
     found: dict[str, tuple] = {}
-    for r in shown.read_records(work_dirs()):
-        t = shown._epoch(r.get("at"))
-        if t is None or now - t > POST_WINDOW or not ({r.get("script"), r.get("via")} & names):
+    for t, r in recs:
+        if t < lo:
             continue
         kind = r.get("kind")
         if kind in ("push", "post"):
@@ -562,7 +601,7 @@ def mode_post(inp) -> dict | None:
         elif kind == "report" and (r.get("lines") or r.get("must_show")):
             n = len(r.get("lines") or []) + len(r.get("must_show") or [])
             found[kind] = (KIND_NAME[kind], f"결정적 줄과 must_show({n}줄)", "Step 7 질문")
-        elif kind == "patch" and r.get("lines"):
+        elif kind in shown.LINE_KINDS and r.get("lines"):
             found[kind] = (KIND_NAME[kind], f"출력 줄 전부({len(r['lines'])}줄)", "다음 질문")
     if not found:
         return None

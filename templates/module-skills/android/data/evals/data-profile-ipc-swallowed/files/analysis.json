@@ -1,0 +1,92 @@
+{
+ "status": "ok",
+ "key": "MOCK-9803",
+ "mode": "offline",
+ "issue": {
+  "origin": "file",
+  "occurred_at": "2026-08-09T13:11:01+00:00",
+  "sw": null,
+  "platform_version": "14",
+  "sim_slot": "0",
+  "summary": "APN 프로필이 모뎀에 적용되지 않은 듯함",
+  "description": "부팅 직후 SET_DATA_PROFILE 응답은 성공인데 APN 프로필이 모뎀에 적용되지 않은 듯합니다.",
+  "comments": 0,
+  "missing": [
+   "model",
+   "sw"
+  ]
+ },
+ "logs": {
+  "files": [
+   "source.log"
+  ],
+  "window": {
+   "start": "2026-08-09T13:06:01.000Z",
+   "end": "2026-08-09T13:16:01.000Z"
+  },
+  "range": [
+   "2026-08-09T13:11:01.259Z",
+   "2026-08-09T13:11:01.266Z"
+  ],
+  "in_range": "partial",
+  "clock_anomalies": 0,
+  "events": 60
+ },
+ "candidates": [
+  {
+   "type": "DATA-001",
+   "cause": null,
+   "title": "SETUP_DATA_CALL이 발생하지 않음 (원인 미확인)",
+   "category": "data",
+   "score": 0.4999,
+   "confidence": "low",
+   "S": 1,
+   "C": 0,
+   "phones": [
+    0
+   ],
+   "evidence": [
+    {
+     "ts": "2026-08-09T13:11:01.261Z",
+     "tag": "DNC-0",
+     "msg": "Data evaluation: evaluation reason:SIM_LOADED, Data disallowed reasons: NOT_IN_SERVICE SERVICE_OPTION_NOT_SUPPORTED NO_SUITABLE_DATA_PROFIL…",
+     "event": "data_evaluation_rejected"
+    }
+   ],
+   "fix_judgement": null,
+   "fix_message": "",
+   "related": []
+  }
+ ],
+ "partial": [
+  {
+   "kind": "absent",
+   "type": "DATA-001",
+   "cause": "DATA-001-02",
+   "signature": "DATA-001-02/roaming-disabled",
+   "matched": "0/1",
+   "missing": [
+    "must_event data_evaluation_rejected {'reasons': '.*ROAMING_…"
+   ],
+   "at": []
+  }
+ ],
+ "code": {
+  "skipped": true
+ },
+ "analyzer": {
+  "skill": "mock-data-analyzer",
+  "when": "ask"
+ },
+ "explore": {
+  "reason": "cause_unconfirmed",
+  "when": "ask"
+ },
+ "warnings": [
+  "형식을 모르는 줄 4개를 건너뛰었습니다."
+ ],
+ "must_show": [
+  "로그 범위: 2026-08-09T13:11:01.259Z ~ 2026-08-09T13:11:01.266Z (일부만 포함), 시계 이상 없음"
+ ],
+ "truncated": false
+}

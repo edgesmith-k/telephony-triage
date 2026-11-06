@@ -1,0 +1,23 @@
+{
+ "schema_version": 1,
+ "key": "MOCK-9101",
+ "platform": "ofono",
+ "module": "ofono/data",
+ "sha": "template",
+ "type_id": "DATA-001",
+ "top_candidates": [
+  {
+   "type": "DATA-001",
+   "cause": "DATA-001-01",
+   "score": 1.0,
+   "confidence": "high"
+  }
+ ],
+ "issue_summary": "데이터가 연결되지 않음 (합성)",
+ "occurred_at": "2026-09-20T15:10:02+00:00",
+ "events": "events.json",
+ "timeline": "timeline.md",
+ "log_paths": [
+  "source.log"
+ ]
+}

@@ -28,3 +28,7 @@ tests/skill_evals/workspace/
 /build/
 /dist/
 .claude/settings.local.json
+
+# 모듈 스킬 템플릿 eval 결과 (MODULE_SKILLS_PLAN_IMPL §5.1)
+templates/module-skills/**/evals/results/
+*-workspace/

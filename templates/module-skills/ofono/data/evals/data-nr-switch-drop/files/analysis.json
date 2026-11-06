@@ -1,0 +1,68 @@
+{
+ "status": "ok",
+ "key": "MOCK-9105",
+ "platform": "ofono",
+ "mode": "offline",
+ "issue": {
+  "origin": "file",
+  "occurred_at": "2026-09-22T09:10:08+00:00",
+  "sw": null,
+  "platform_version": "2",
+  "sim_slot": "0",
+  "summary": "5G에서 LTE로 바뀔 때 데이터가 끊김 (합성)",
+  "description": "SA에서 LTE로 넘어가는 순간 데이터 연결이 끊깁니다. 합성 case.",
+  "comments": 0,
+  "missing": [
+   "model",
+   "sw"
+  ]
+ },
+ "logs": {
+  "files": [
+   "source.log"
+  ],
+  "window": {
+   "start": "2026-09-22T09:05:08.000Z",
+   "end": "2026-09-22T09:15:08.000Z"
+  },
+  "range": [
+   "2026-09-22T09:10:00.010Z",
+   "2026-09-22T09:10:09.200Z"
+  ],
+  "in_range": "partial",
+  "clock_anomalies": 0,
+  "events": 23
+ },
+ "no_candidate": {
+  "search_hits": [
+   {
+    "id": "DATA-001",
+    "kind": "type",
+    "title": "데이터 연결이 되지 않음 (합성)"
+   },
+   {
+    "id": "DATA-001-01",
+    "kind": "cause",
+    "title": "APN 인증 거절 (합성)"
+   },
+   {
+    "id": "CALL-001",
+    "kind": "type",
+    "title": "발신이 되지 않음 (합성)"
+   }
+  ],
+  "error_events": [],
+  "error_event_total": 0
+ },
+ "code": {
+  "skipped": true
+ },
+ "explore": {
+  "reason": "no_candidate",
+  "when": "ask"
+ },
+ "must_show": [
+  "로그 범위: 2026-09-22T09:10:00.010Z ~ 2026-09-22T09:10:09.200Z (일부만 포함), 시계 이상 없음"
+ ],
+ "truncated": false
+}

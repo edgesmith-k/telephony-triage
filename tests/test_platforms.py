@@ -25,7 +25,7 @@ def test_reference_backend_identity():
 
     assert parser_backends.load("reference") is backend.BACKEND
     assert backend.BACKEND.name == "reference"
-    assert backend.BACKEND.version() == backend.VERSION == "0.1.0"
+    assert backend.BACKEND.version() == backend.VERSION == "0.1.1"
 
 
 def test_old_backend_shims_removed():

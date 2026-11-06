@@ -1,0 +1,84 @@
+{
+ "status": "ok",
+ "key": "MOCK-9820",
+ "mode": "offline",
+ "issue": {
+  "origin": "file",
+  "occurred_at": "2026-09-06T16:00:02+00:00",
+  "sw": null,
+  "platform_version": "14",
+  "sim_slot": "0",
+  "summary": "잠깐 서비스가 끊겼다 돌아옴 (합성)",
+  "description": "대기 중 잠깐 서비스 없음이 됐다가 몇 초 뒤 돌아옵니다. 합성 case.",
+  "comments": 0,
+  "missing": [
+   "model",
+   "sw"
+  ]
+ },
+ "logs": {
+  "files": [
+   "source.log"
+  ],
+  "window": {
+   "start": "2026-09-06T15:55:02.000Z",
+   "end": "2026-09-06T16:05:02.000Z"
+  },
+  "range": [
+   "2026-09-06T16:00:02.000Z",
+   "2026-09-06T16:00:06.000Z"
+  ],
+  "in_range": "partial",
+  "clock_anomalies": 0,
+  "events": 10
+ },
+ "no_candidate": {
+  "search_hits": [
+   {
+    "id": "NETWORK-001",
+    "kind": "type",
+    "title": "서비스가 잡히지 않음"
+   },
+   {
+    "id": "NETWORK-001-01",
+    "kind": "cause",
+    "title": "망 등록 거절"
+   },
+   {
+    "id": "MOCK-3101",
+    "kind": "issue",
+    "title": "등록 거절 코드 13 반복, 서비스 없음 표시"
+   }
+  ],
+  "error_events": [],
+  "error_event_total": 0,
+  "unextracted_warn": 1
+ },
+ "partial": [
+  {
+   "kind": "absent",
+   "type": "DATA-001",
+   "signature": "DATA-001/no-setup-data-call-request",
+   "matched": "0/1",
+   "missing": [
+    "must_event data_evaluation_rejected"
+   ],
+   "at": []
+  }
+ ],
+ "code": {
+  "skipped": true
+ },
+ "explore": {
+  "reason": "no_candidate",
+  "when": "ask"
+ },
+ "warnings": [
+  "형식을 모르는 줄 1개를 건너뛰었습니다."
+ ],
+ "must_show": [
+  "로그 범위: 2026-09-06T16:00:02.000Z ~ 2026-09-06T16:00:06.000Z (일부만 포함), 시계 이상 없음",
+  "오류·거부·타임아웃 이벤트: 추출 이벤트 기준 0건 (수집 태그 W/E/F 줄 중 이벤트로 추출 안 된 줄 1건: RILJ 1줄)"
+ ],
+ "truncated": false
+}

@@ -1,0 +1,35 @@
+-- [합성] C1 call-dial-modem-reject. 첨부 로그에 발신 에피소드가 없어 첨부 로그 줄 모양을 본떠 새로 썼다. SIT_DIAL·DialHandler 이름은 가정(A).
+Sep 21 10:10:00.010 dut local0.info MOSE[731]: [UI___] 000101 *UI->Update  uiMsg.TimeMsg  mose/ui/ui.go:108
+Sep 21 10:10:00.200 dut daemon.info exynos-ril[452]: [NetworkService_0] SignalStrengthHandler OnUnsolicited() lte rsrp=-95
+Sep 21 10:10:01.000 dut daemon.info ofonod[466]: Device 0: <HEXDUMP 32B>
+Sep 21 10:10:02.010 dut local0.info MOSE[731]: [UI___] 000102 *UI->Update  uiMsg.TimeMsg  mose/ui/ui.go:108
+Sep 21 10:10:03.200 dut daemon.info exynos-ril[452]: [NetworkService_0] SignalStrengthHandler OnUnsolicited() lte rsrp=-96
+Sep 21 10:10:05.000 dut local0.info MOSE[731]: [UIMCS] 000103 *CallManager->Dial  number: <MSISDN#1> hide: default  mose/managers/call/call_manager.go:77
+Sep 21 10:10:05.002 dut local0.info MOSE[731]: [DBUS_] 000103 *BusHelperImpl->CallGenericMethod  dest: org.ofono objectPath: /ril_0, dbusInterface: org.ofono.VoiceCallManager, methodName Dial  mose/dbus/helper/dbus_helper_impl.go:90
+Sep 21 10:10:05.004 dut daemon.info ofonod[466]: dump_dmsg method call - i:org.ofono.VoiceCallManager m:Dial p:/ril_0 a:"<MSISDN#1>", "default"
+Sep 21 10:10:05.005 dut daemon.debug ofonod[466]: src/voicecall.c:manager_dial() dialing
+Sep 21 10:10:05.006 dut daemon.debug ofonod[466]: drivers/rilmodem/voicecall.c:ril_dial()
+Sep 21 10:10:05.006 dut daemon.info ofonod[466]: [0,0301]> RIL_REQUEST_DIAL (<MSISDN#1>,0)
+Sep 21 10:10:05.007 dut daemon.debug exynos-ril[452]: SOCKET RIL_SOCKET_1 REQUEST: DIAL length:40
+Sep 21 10:10:05.007 dut daemon.info exynos-ril[452]: [RilContext_0] OnRequest
+Sep 21 10:10:05.007 dut daemon.debug exynos-ril[452]: [RilContext_0] SendMessage RIL Request Routing : RCM ID=10 Service ID=2 Message ID=3001 delayMillis=0
+Sep 21 10:10:05.008 dut daemon.info exynos-ril[452]: [CsService_0] DialHandler OnRequest()
+Sep 21 10:10:05.008 dut daemon.debug exynos-ril[452]: [RilContext_0] RecordRequestHistory token=0x0131
+Sep 21 10:10:05.008 dut daemon.debug exynos-ril[452]: [<DEV#1>][TX] SIT_DIAL, REQ, 36 bytes, Token(0x0131)
+Sep 21 10:10:05.008 dut daemon.debug exynos-ril[452]: <HEXDUMP 16B>
+Sep 21 10:10:05.090 dut daemon.info exynos-ril[452]: [NetworkService_0] SignalStrengthHandler OnUnsolicited() lte rsrp=-96
+Sep 21 10:10:05.410 dut daemon.debug exynos-ril[452]: [<DEV#1>][RX] SIT_DIAL, RSP, 12 bytes, Token(0x0131), Error(RCM_E_GENERIC_FAILURE)
+Sep 21 10:10:05.410 dut daemon.debug exynos-ril[452]: <HEXDUMP 12B>
+Sep 21 10:10:05.411 dut daemon.debug exynos-ril[452]: WaitList::Find() found record : token=0x0131 SrcService ID =2 DestService ID=2 Result Id=3001
+Sep 21 10:10:05.411 dut daemon.info exynos-ril[452]: [CsService_0] DialHandler OnResponse()
+Sep 21 10:10:05.411 dut daemon.info exynos-ril[452]: [RilContext_0] OnRequestComplete Request ID=10, result=2
+Sep 21 10:10:05.411 dut daemon.debug exynos-ril[452]: Send Response to RIL_SOCKET_1
+Sep 21 10:10:05.412 dut daemon.debug exynos-ril[452]: [RilContext_0] RemoveRequestHistory  token=0x0131
+Sep 21 10:10:05.413 dut daemon.debug ofonod[466]: [0,0301]< RIL_REQUEST_DIAL failed GENERIC_FAILURE
+Sep 21 10:10:05.413 dut daemon.info ofonod[466]: drivers/rilmodem/voicecall.c:ril_dial_cb() Dial failed: GENERIC_FAILURE
+Sep 21 10:10:05.414 dut daemon.info ofonod[466]: src/dbus.c:__ofono_error_failed() dump_dmsg err return - i:org.ofono.VoiceCallManager m:Dial p:/ril_0
+Sep 21 10:10:05.416 dut local0.warn MOSE[731]: [UIMCS] 000103 *CallManager->Dial  call error Operation failed  mose/managers/call/call_manager.go:91
+Sep 21 10:10:06.010 dut local0.info MOSE[731]: [UI___] 000104 *UI->Update  uiMsg.TimeMsg  mose/ui/ui.go:108
+Sep 21 10:10:06.200 dut daemon.info exynos-ril[452]: [NetworkService_0] SignalStrengthHandler OnUnsolicited() lte rsrp=-95
+Sep 21 10:10:07.000 dut daemon.info ofonod[466]: Device 0: <HEXDUMP 32B>
+Sep 21 10:10:08.010 dut local0.info MOSE[731]: [UI___] 000105 *UI->Update  uiMsg.TimeMsg  mose/ui/ui.go:108

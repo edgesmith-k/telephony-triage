@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -326,10 +327,53 @@ def test_ipv6_key_truncated_fragment():
     assert m("addr:aa:bb:cc:dd:ee:ff") == "addr:aa:bb:cc:dd:ee:ff"                  # MAC 모양(알려진 한계: key: 뒤 MAC)
     assert m("85a3:12:34:8a2e:370 x") == "85a3:12:34:8a2e:370 x"                    # 5묶음 이하 조각은 문맥 없이 보지 않는다
     assert m("dns 2001:4860:4860::8888") == "dns <IP#4>"                            # 기존 규칙 그대로
-    old = (r"(?<![0-9A-Fa-f:])(?P<v>(?:[0-9A-Fa-f]{1,4}:){7}[0-9A-Fa-f]{1,4}"
-           r"|(?:[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4}){0,6})?::(?:[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4}){0,6})?)"
-           r"(?![0-9A-Fa-f:])")
-    assert old in [r.regex.pattern for r in masking.RULES if r.kind == "IP"]       # 문맥 없는 IPv6 규칙은 바이트 그대로
+    base = (r"(?<![0-9A-Za-z_:])(?P<v>(?:[0-9A-Fa-f]{1,4}:){7}[0-9A-Fa-f]{1,4}"
+            r"|(?:[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4}){0,6})?::(?:[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4}){0,6})?)"
+            r"(?![0-9A-Za-z_:])")
+    assert base in [r.regex.pattern for r in masking.RULES if r.kind == "IP"]      # 문맥 없는 IPv6 규칙: 경계만 M12로 넓힘
+
+
+def test_context_rule_is_per_line_in_multiline_text():
+    """H C1: 여러 줄 글에서 문맥 규칙(`Rule.context`)은 값이 있는 줄에서만 본다 — 모듈 보기 머리의 이름 목록
+    (`SIM_AUTHENTICATION`)이 다른 줄의 경로를 B64로 걸던 오탐. 같은 줄이면 그대로 잡는다."""
+    value = "Zm9vYmFyYmF6cXV4MTIzNDU2Nzg5"
+    other = f"미수집: SIM_AUTHENTICATION\nofonod drivers/rilmodem/sim 및 {value}"
+    assert masking.new_masker().find(other) == []
+    same = f"[0,0101]< SIM_AUTHENTICATION {value}"
+    assert [f["kind"] for f in masking.new_masker().find(same)] == ["B64"]
+    assert [f["kind"] for f in masking.new_masker().find("x\n" + same)] == ["B64"]
+
+
+
+def test_sip_digest_folded_header_still_masked():
+    """줄 단위 문맥은 `per_line` 규칙(SIM_AUTHENTICATION B64)만 — 접힌(RFC 3261 이어짐 줄) Digest 헤더의
+    nonce·response·cnonce·opaque는 여러 줄 글 전체 `mask`·`find`(jira_fields·issue_post·db_lint 경로)에서 그대로 가린다."""
+    n, r, c, o = "QmFzZTY0Tm9uY2VWYWx1ZTEyMzQ=", "fedcba9876543210fedcba9876543210", "c0ffee12ab", "op4que99"
+    auth = f'REGISTER sip:x.example SIP/2.0\nAuthorization: Digest username="u",\n nonce="{n}",\n response="{r}", cnonce="{c}"'
+    www = f'SIP/2.0 401\nWWW-Authenticate: Digest realm="x",\n\tnonce="{n}", opaque="{o}"'
+    for text, values in ((auth, (n, r, c)), (www, (n, o))):
+        out = masking.new_masker().mask(text)
+        assert not [v for v in values if v in out]
+        assert [f["kind"] for f in masking.new_masker().find(text)].count("CRED") == len(values)
+
+def test_m12_cpp_scope_not_ip():
+    """M12: 문맥 없는 IPv6 규칙의 앞뒤 경계가 낱말 문자 전부라 C++ 범위(`<이름>_<n>::<함수>`)는 IP가 아니다.
+    주소는 그대로 가린다. 마스킹한 줄에서도 모듈 필터의 `MiscService_<n>::` 잡음 정규식이 맞는다. (벤더 모양을 본뜬 합성 줄)"""
+    keep = [
+        "[MiscService_0::OnHandleRequest] request done",
+        "[ImsService_1::OnUNSOL_AIMS_REGISTRATION] Ims Registration : TRUE",
+        "V2_4::RadioDataProxy::setupDataCall",
+        "SetupDataCallCommand_V2_4::onRequest",
+    ]
+    for text in keep:
+        assert masking.new_masker()(text) == text, text
+        assert masking.new_masker(log_lines=True)(text) == text, text
+        assert masking.new_masker().find(text) == [], text
+    for text in ("fe80::1", "2001:db8::7", "a=::1", "addr fe80::1", "[fe80::1]"):
+        out = masking.new_masker()(text)
+        assert "<IP#1>" in out and "::" not in out, (text, out)
+    masked = masking.new_masker(log_lines=True)("Nov  1 10:00:01 host exynos-ril[901]: [MiscService_0::OnHandle] x")
+    assert re.search(r"MiscService_\d+::", masked), masked
 
 
 def test_pin_puk_values_need_four_digits():
@@ -806,6 +850,218 @@ def test_cut_evidence_cause_errors():
     proc = _run("parse_logcat.py", ["cut", str(log), "--around", "2026-09-20T14:30:10+09:00", "--cause", "X-001-01",
                                     "--out", str(_tmp() / "x.log"), "--tz", TZ, "--year", YEAR])
     assert proc.returncode == 2 and "--cause" in proc.stderr
+
+
+# --- M1~M11: 첨부 실제 로그 기준 로그 마스킹 규칙 (B2 §3.2~§3.4) ---------------------------------------------
+# (입력, 결과에 있어야 할 토큰, 결과에 없어야 할 원래 값, log_only 여부). 값은 모두 합성이다.
+M_IMSI = "45005" + "1234567890"          # 합성 15자리(경계 검사의 긴 숫자 패턴을 피해 나눠 쓴다)
+M_POSITIVE = [
+    ("ofonod[1]: gril: Device 0: < 89 82 10 31 00 00 00 00 00 00 00 00 00 00 00 01  ................",
+     "<HEXDUMP 16B>", "89 82 10", True),                                                               # M1 gril
+    ("I cpif    : IPC: RX: 0a 1b 2c 3d 4e 5f", "<HEXDUMP 6B>", "0a 1b 2c", True),                     # M1 hex 줄
+    # M1 바이트 뒤 짧은 꼬리(재리뷰 P1): 잘림 표시·길이·태그
+    ("<6>[  1.0] C1] cpif: LNK-RX(12): 45 00 00 54 12 34 40 00 40 01 f6 0a ...", "<HEXDUMP 12B>", "45 00 00 54", True),
+    ("I SIM     : sim_read_cb: 98 10 32 54 76 98 10 32 54 f6 (len 10)", "<HEXDUMP 10B>", "98 10 32 54", True),
+    ("I SIM     : rsp: 0a 1b 2c 3d [SUB0]", "<HEXDUMP 4B>", "0a 1b 2c", True),
+    ("I cpif    : LNK-TX(64): 60 00 00 00 00 20 06 40 \u2026", "<HEXDUMP 8B>", "60 00 00 00", True),
+    # M1 `:` 바로 뒤가 아닌 바이트 8개 이상 연속(재리뷰 P1)
+    ("I RILD    : [SLOT_1][V] 0123 1 0a 1b 2c 3d 4e 5f 60 71 82", "<HEXDUMP 9B>", "0a 1b 2c", True),
+    ("I RILD    : Helper sendRequest] 0a 1b 2c 3d 4e 5f 60 71 ", "<HEXDUMP 8B>", "4e 5f 60", True),
+    ("D RILJ    : SIM_AUTHENTICATION resp: QUJDREVGR0hJSktMTU5PUA==", "<B64#1>", "QUJDREVGR0hJSktMTU5PUA", False),  # M2a
+    ("D RILJ    : RIL_REQUEST_SIM_AUTHENTICATION > Zm9vYmFyYmF6cXV4MTIzNDU2", "<B64#1>", "Zm9vYmFyYmF6cXV4MTIz", False),
+    ("I QMI     : key aGVsbG8gd29ybGQgdGhpcyBpcyBhIHRlc3QxMjM0NTY3OA== end", "<B64#1>", "aGVsbG8gd29y", True),  # M2b
+    ("ofonod[2]: [0,0012]> RIL_REQUEST_SETUP_DATA_CALL (16,1,internet.example,user1,pass2,IP)",
+     "<CRED#2>", "pass2", False),                                                                       # M3
+    ("ofonod[2]: {'Password': <'s3cr3t'>}", "<CRED#1>", "s3cr3t", False),                              # M4
+    ('ofonod[2]: "Username", variant("bob")', "<CRED#1>", "bob", False),
+    ('I DNSRES  : {"dns_addresses": [10, 0, 0, 1]}', "[<IP#1>]", "10, 0, 0, 1", False),               # M5
+    ("I MODEM   : Build Info : ABC123XYZ", "<BUILD#1>", "ABC123XYZ", True),                            # M6
+    ("I MODEM   : commit ID:0a1b2c3d4e", "<BUILD#1>", "0a1b2c3d4e", True),
+    ("08-09 13:10:57.528     0     0 I cpif    : modem m1234 boot", "<PRODUCT#1>", "m1234", True),
+    ("08-09 13:10:57.528     0     0 I kernel  : panel X1234AB ready", "<PRODUCT#1>", "X1234AB", True),
+    ('ofonod[2]: "Revision", variant("REV-MOCK-01")', "<PRODUCT#1>", "REV-MOCK-01", True),
+    ("I init    : [ro.product.model]: [MOCK-PHONE]", "<PRODUCT#1>", "MOCK-PHONE", True),
+    ("I init    : fingerprint=mock/brand/dev:15/X/1:user/keys", "<PRODUCT#1>", "mock/brand", True),
+    ('ofonod[2]: variant("MOCK1234X-1_AB12")', "<PRODUCT#1>", "MOCK1234X", True),
+    ("I UART    : [CP_UART] MOCK1234 EVT1.0", "<PRODUCT#1>", "MOCK1234", True),
+    ("ofonod[2]: smsc=+821099998888", "<MSISDN#1>", "99998888", False),                               # M7
+    (f"I EAP     : EAP_ID=0{M_IMSI}%40nai.epc.mnc005.mcc450.example", "<IMSI#1>", M_IMSI, False),
+    ("D RILJ    : SIM_IO IccIoResult sw1:0x90 sw2:0x0 Payload: A0B0C0D0E0F0A1B1", "<APDU#1>[8B]", "A0B0C0D0", False),  # M8
+    ("D SE      : Received : 9F1C2B3A4D5E6F70", "<APDU#1>[8B]", "9F1C2B3A", False),
+    ("D UICC    : apdu=[00A40004023F00A0B0C0D0E0F0A1B1]", "<HEXBLOB#1>[15B]", "00A40004023F00", False),
+    ("D CRYPT   : salt=0123456789abcdef0123", "<SALT#1>", "0123456789abcdef", False),
+    ("I build   : version 15 eng.mockuser.20260101", "<BUILD#1>", "mockuser", True),
+    ("I build   : git hash: 0a1b2c3d4e5f", "<HASH#1>", "0a1b2c3d4e5f", True),
+    ("D DNS     : dnses:fe80::1:2", "<IP#1>", "fe80::1:2", False),                                     # M9
+    ("ofonod[2]: id 98214365870921436587 ok", "<ICCID#1>", "98214365870921436587", False),            # M10
+    # M10 19자리 ICCID: EF_ICCID 채움 nibble F가 마지막 숫자 앞(`…54F6`). 측정 마스커가 놓친 모양(재리뷰 P1)
+    ("D RILJ    : SIM_IO response 9000 981032547698103254F6", "<ICCID#1>", "981032547698103254F6", False),
+    ("D RILJ    : {sw1=0x90,sw2=0x0,981032547698103254F6}", "<ICCID#1>", "981032547698103254", False),
+    ("D X       : seq 1234567890123456789 done", "<NUM#1>", "1234567890123456789", True),
+    ("Sep 20 14:32:11 mockhost ofonod[812]: hello", "host1", "mockhost", True),                       # M11
+    ("2026-09-20T14:32:11.123+0900 mockhost ofonod[812]: hello", "host1", "mockhost", True),
+    ("Feb 27 17:28:20.119 mockhost daemon.info ofonod[464]: hello", "host1", "mockhost", True),
+]
+
+M_NEGATIVE = [
+    "D Rx      : com.example.Foo$$Lambda$12/0x0000000801234567 apply",
+    "D RILJ    : [0163]> SIM_IO RIL_REQUEST_SIM_IO",
+    "D RILJ    : SIM_IO IccIoResult sw1 90 sw2 00",
+    "I RILC    : SIT_SET_DATA_PROFILE done",
+    "I DEV     : serial short ABC12",
+    "ofonod[2]: /ril_0/context1 Active=true",
+    "ofonod[2]: org.ofono.ConnectionContext.PropertyChanged",
+    "ofonod[2]: drivers/rilmodem/network.c:120 ok",
+    "D DATA    : src/java/com/example/telephony/DataNetwork.java:120",
+    "D DATA    : isUsingCarrierAggregation=false",
+    "D UICC    : aid A0000000871002FFFFFFFFFF89060000 selected",
+    "D X       : handle 0x00007f1234567890 ok",
+    "Sep 20 14:32:11 dut ofonod[812]: hello",
+    "Feb 27 17:28:20.119 (none) daemon.info ofonod[464]: hello",
+    "D X       : time: 12 34 56 78 seconds left",                          # 짧은 꼬리 목록 밖 낱말은 덤프 아님
+    "D X       : rsp: 0a 1b 2c 3d [not a tag]",
+    "D X       : seven 0a 1b 2c 3d 4e 5f 60 only",                         # `:` 없이 바이트 7개는 덤프 아님
+]
+
+
+def test_m_rules_positive():
+    for text, token, raw, log_only in M_POSITIVE:
+        out = masking.new_masker(log_lines=True).mask(text)
+        assert token in out and raw not in out, f"{text!r} → {out!r}"
+        assert masking.residual(text), text
+        assert masking.residual(out) == {}, (text, masking.residual(out))
+
+
+def test_m_rules_log_only_scope():
+    for text, token, raw, log_only in M_POSITIVE:
+        if not log_only:
+            continue
+        plain = masking.new_masker().mask(text)   # db_lint·mask_pii --check·issue_post의 기본 마스커
+        assert raw in plain and token not in plain, f"log_lines=False인데 가림: {text!r} → {plain!r}"
+        assert not any(h["kind"] == token.strip("<>").split("#")[0] for h in masking.new_masker().find(text)), text
+
+
+def test_m_rules_negative():
+    for text in M_NEGATIVE:
+        out = masking.new_masker(log_lines=True).mask(text)
+        assert out == text, f"과잉: {text!r} → {out!r}"
+        assert masking.residual(text) == {}, (text, masking.residual(text))
+
+
+def test_m3_keeps_empty_and_null_fields():
+    text = "ofonod[2]: RIL_REQUEST_SETUP_DATA_CALL (16,1,internet,,null,IP)"
+    assert masking.new_masker(log_lines=True).mask(text) == text
+    out = masking.new_masker(log_lines=True).mask("x SETUP_DATA_CALL (16,1,ims,<CRED#4>,null,IP)")
+    assert out == "x SETUP_DATA_CALL (16,1,ims,<CRED#4>,null,IP)"
+
+
+def test_m11_masked_lines_still_parse():
+    from platforms.ofono import journal
+
+    for text, regex in (("Sep 20 14:32:11 mockhost ofonod[812]: hello", journal.BSD_RE),
+                        ("2026-09-20T14:32:11.123+0900 mockhost ofonod[812]: hello", journal.ISO_RE),
+                        ("Feb 27 17:28:20.119 mockhost daemon.info ofonod[464]: hello", journal.BUSYBOX_RE)):
+        masked = masking.new_masker(log_lines=True).mask(text)
+        m = regex.match(masked)
+        assert m and m.group("host") == "host1" and m.group("ident") == "ofonod" and m.group("pid"), masked
+    # 같은 호스트 = 같은 번호, 이미 바꾼 `host<n>` 다음 번호부터
+    masker = masking.new_masker("Sep 20 14:32:11 host3 a[1]: x", log_lines=True)
+    assert masker.mask("Sep 20 14:32:12 other a[1]: x").split()[3] == "host4"
+    assert masker.mask("Sep 20 14:32:13 other a[1]: y").split()[3] == "host4"
+
+
+def test_m_rules_idempotent_and_numbered():
+    masker = masking.new_masker(log_lines=True)
+    lines = [t for t, *_ in M_POSITIVE]
+    once = [masker.mask(t) for t in lines]
+    again = masking.new_masker("\n".join(once), log_lines=True)
+    assert [again.mask(t) for t in once] == once
+
+
+def test_residual_and_redact():
+    raw = f"D RILJ    : imsi={M_IMSI} key aGVsbG8gd29ybGQgdGhpcyBpcyBhIHRlc3QxMjM0NTY3OA=="
+    assert masking.residual(raw) == {"B64": 1, "IMSI": 1}
+    assert masking.residual(raw, log_lines=False) == {"IMSI": 1}
+    text, counts = masking.redact(raw + "\nclean line")
+    assert counts == {"B64": 1, "IMSI": 1}
+    assert "<REDACTED:IMSI>" in text and "<REDACTED:B64>" in text and text.endswith("\nclean line")
+    assert masking.residual(text) == {}
+    clean = "D X       : nothing to see\nsecond line"
+    same, none = masking.redact(clean)
+    assert same is clean and none == {}
+    # 결과에 원래 값이 없다
+    assert M_IMSI not in json.dumps(masking.residual(raw))
+
+
+def test_allow_pattern_is_not_residual():
+    text = "D X       : seq 1234567890123456789 done"
+    allow = [r"\d{19}"]
+    assert masking.new_masker(allow_patterns=allow, log_lines=True).mask(text) == text
+    assert masking.residual(text, allow) == {}
+    assert masking.redact(text, allow)[1] == {}
+
+
+def _corpus_files() -> list[Path]:
+    files = [p for p in sorted((REPO / "tests" / "fixtures" / "logs").rglob("*")) if p.is_file() and p.suffix != ".md"]
+    files += sorted((REPO / "templates" / "module-skills").glob("*/*/evals/*/files/source.log"))
+    files += sorted((REPO / "tests" / "fixtures" / "module-filter").glob("*/source.log"))
+    return files
+
+
+def test_corpus_invariant():
+    """`residual(mask(line)) == {}` — 저장소 fixture 로그·C0 사례·모듈 필터 fixture 전부 (B2 §3.4)."""
+    checked = 0
+    for path in _corpus_files():
+        text = path.read_text(encoding="utf-8", errors="replace")
+        masker = masking.new_masker(text, log_lines=True)
+        for no, line in enumerate(text.split("\n"), 1):
+            got = masking.residual(masker.mask(line))
+            assert got == {}, f"{path.relative_to(REPO)}:{no} {got}"
+            checked += 1
+    assert checked > 1000
+
+
+def test_parse_events_carry_mask_allow():
+    """`events.json` 최상위 `mask_allow`(B2-26): 파싱에 쓴 `mask.allow_patterns` 그대로."""
+    log = REPO / "tests" / "fixtures" / "logs" / "data-disabled.log"
+    proc = _run("parse_logcat.py", ["parse", str(log), "--rules", str(RULES), "--tz", TZ, "--year", YEAR, "--full",
+                                    "--mask"])
+    assert proc.returncode == 0, proc.stderr
+    doc = json.loads(proc.stdout)
+    cfg = yaml.safe_load((SAMPLE / "issue-db.config.yaml").read_text(encoding="utf-8"))
+    assert doc["mask_allow"] == list((cfg.get("mask") or {}).get("allow_patterns") or [])
+
+
+SNAPSHOT = REPO / "tests" / "fixtures" / "mask-gate" / "db-lint-snapshot.json"
+_SNAP_SUFFIXES = (".md", ".yaml", ".yml", ".log", ".json", ".txt")
+
+
+def _db_counts(db: Path) -> dict:
+    lint = _run("db_lint.py", ["--db", str(db), "--all"])
+    doc = json.loads(lint.stdout)
+    rules: dict[str, int] = {}
+    for sev in ("errors", "warnings", "findings"):
+        for f in doc.get(sev) or []:
+            key = f"{sev}:{f.get('rule') or f.get('code') or f.get('check')}"
+            rules[key] = rules.get(key, 0) + 1
+    files = [str(p) for p in sorted(db.rglob("*")) if p.is_file() and p.suffix in _SNAP_SUFFIXES and ".git" not in p.parts]
+    check = _run("mask_pii.py", [*files, "--check", "--db", str(db)])
+    kinds: dict[str, int] = {}
+    for d in json.loads(check.stdout).get("detections") or []:
+        kinds[d["kind"]] = kinds.get(d["kind"], 0) + 1
+    return {"db_lint": dict(sorted(rules.items())), "db_lint_rc": lint.returncode,
+            "mask_pii": dict(sorted(kinds.items())), "mask_pii_rc": check.returncode}
+
+
+def test_db_lint_unchanged_by_m():
+    """M 커밋 전(b7f3bdf) 값과 같다: 샘플·변형 DB의 `db_lint --all`·`mask_pii --check` 규칙 id·종류별 수(값·경로 없음).
+    새 지적이 생기면 규칙이 아니라 데이터를 고친다(B2 §3.5 2번)."""
+    import runner
+
+    snap = json.loads(SNAPSHOT.read_text(encoding="utf-8"))
+    for name in sorted(snap):
+        db = SAMPLE if name == "issue-db-sample" else runner.variant_db(name)
+        assert _db_counts(db) == snap[name], name
 
 
 def _all_tests():

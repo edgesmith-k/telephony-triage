@@ -529,22 +529,47 @@ def _check_op_summary(path):
         assert keys == set(required[op]), (op, keys, required[op])
 
 
+MODULE_SKILLS_NEEDLES = ("triage.py module", "--for deep", "--for explore", "`read`", "`input`", "timeline.path", "`next`",
+                         "--also", "--choose", "--at", "ask_also", "ask_switch", "check-output", "--skipped", "deep-output.md",
+                         "explore-output.md", "설치 스킬 못 찾음", "받기 실패", "〔script",
+                         "탐색 분석을 내장 줄 모양만으로 할까요, 생략할까요?", "종료 2여도", "--module <p>/<모듈>", "--choose top")
+
+
+def _check_module_skills_md(path):
+    """B2 §10.2: 5-1·5-2 동의 뒤 절차(새 문서, 4KB). 런타임 중립 — 도구 이름·플러그인 변수 없이 쓴다(OpenCode도 읽는다)."""
+    text = path.read_text(encoding="utf-8")
+    assert len(text.encode("utf-8")) <= 4096
+    for needle in MODULE_SKILLS_NEEDLES:
+        assert needle in text, needle
+    for bad in ("Read 도구", "AskUserQuestion", "Bash", "Task 도구", "${CLAUDE_PLUGIN_ROOT}"):
+        assert bad not in text, bad
+    assert re.search(r"`ask_also`[^\n]{0,40}\*\*먼저\*\*", text)        # 문서를 읽기 전에 묻는다
+    for m in re.finditer(r"deep-input\.json", text):                    # 읽는 것은 막지 않는다(고치지 않을 뿐)
+        near = text[max(0, m.start() - 20):m.end() + 20]
+        assert not (re.search(r"열|읽", near) and re.search(r"않|금지", near)), near
+
+
 def test_skill_md_is_within_7_5kb_and_drives_triage():
     skill = REPO / "plugin" / "skills" / "telephony-triage" / "SKILL.md"
     reference = skill.parent / "reference"
     text = skill.read_text(encoding="utf-8")
-    assert len(text.encode("utf-8")) <= 9063        # 규칙 제안 질문: 여러 개 가능·`모두`·`받지 않음(기본 — 이유)` 선택지(10/22 사용자) 뒤. 그 전 8,968B — Step 7 `[스킬]` 줄 → 담당자용 patch(`skill-patch.md`) 뒤. 그 전 8,962B — 분석 스킬 `규칙 제안:` 줄 처리(Step 5-1 괄호·Step 7 질문, 사내 문구 그대로) 뒤. 그 전 8,590B — L2 재측정 뒤: --more-logs는 --logs 대신(e52)·회귀 의심은 update-fix(e10) 명시 뒤. 그 전 8,500B — L2 ③ 리뷰: Step 7 질문 모양(고정 둘·글 거부·분석 스킬 의견 자리·후보 0개) 뒤. 그 전 8,280B — E67: Step 9 앞 PR 링크(`pr.url`)를 글로 보인다는 말 뒤. 그 전 8,256B — 전체 eval(10/14) 반영: 이어서 plan.next·mode write·거부 뒤 선택지·issue 재호출 뒤의 한도. 그 전 8,064B(흐름 A/B 한 줄 추가 뒤). 그 전 7,680B(W6: 실행 규칙을 reference/rules.md로 옮김), W6 전 8,192B
+    assert len(text.encode("utf-8")) <= 9107        # B2 e79: Step 5-1이 module 전에 module-skills.md를 읽게(종료 2 계속 규칙) 뒤. 그 전 9,063B — 규칙 제안 질문: 여러 개 가능·`모두`·`받지 않음(기본 — 이유)` 선택지(10/22 사용자) 뒤. 그 전 8,968B — Step 7 `[스킬]` 줄 → 담당자용 patch(`skill-patch.md`) 뒤. 그 전 8,962B — 분석 스킬 `규칙 제안:` 줄 처리(Step 5-1 괄호·Step 7 질문, 사내 문구 그대로) 뒤. 그 전 8,590B — L2 재측정 뒤: --more-logs는 --logs 대신(e52)·회귀 의심은 update-fix(e10) 명시 뒤. 그 전 8,500B — L2 ③ 리뷰: Step 7 질문 모양(고정 둘·글 거부·분석 스킬 의견 자리·후보 0개) 뒤. 그 전 8,280B — E67: Step 9 앞 PR 링크(`pr.url`)를 글로 보인다는 말 뒤. 그 전 8,256B — 전체 eval(10/14) 반영: 이어서 plan.next·mode write·거부 뒤 선택지·issue 재호출 뒤의 한도. 그 전 8,064B(흐름 A/B 한 줄 추가 뒤). 그 전 7,680B(W6: 실행 규칙을 reference/rules.md로 옮김), W6 전 8,192B
     for needle in ("triage.py run", "needs_input", "--answer", "write-flow.md", "--commit", "reference/rules.md",
                    "steps-pasted.txt", "--dry-run --issue-file", "analyzer.skill",
-                   "must_show", "triage.py explore"):
+                   "must_show", "triage.py explore", "triage.py module", "check-output", "module-skills.md"):
         assert needle in text, needle
+    lines = text.split("\n")
+    at = next(i for i, x in enumerate(lines) if x.startswith("- Step 5-1 `analyzer`"))
+    block = "\n".join(lines[at:at + 4])                # 5-1·5-2 줄(B2 §10.1): 런타임 중립(Skill 도구 이름 없음)
+    assert "답 전 explore·module·원문 열람 금지" in lines[at + 1] and "Skill로" not in block
+    _check_module_skills_md(reference / "module-skills.md")
     rules = (reference / "rules.md").read_text(encoding="utf-8")      # SKILL §실행 규칙이던 내용
-    assert len(rules.encode("utf-8")) <= 2496      # 머지는 `db_pr merge`만(본인 병합, 10/22) 뒤. 그 전 2,485B — `--platform`·`--json` 없이 목록에 skill_patch(10/22) 뒤의 한도. 그 전 2,460B — L2 J7 질문당 선택지 4개 줄 뒤의 한도. 그 전 2,320B — Bash·Read 출력 비가시(리포트·검증 표·확인 화면·notes·must_show, 전체 eval 10/14)·stage `next` 줄 뒤의 한도. 그 전 2,048B
+    assert len(rules.encode("utf-8")) <= 2516      # 병합은 +1 뒤 요청 시 `db_pr merge`만(Approve 금지, A2 11/04) 뒤. 그 전 2,496B — 머지는 `db_pr merge`만(본인 병합, 10/22) 뒤. 그 전 2,485B — `--platform`·`--json` 없이 목록에 skill_patch(10/22) 뒤의 한도. 그 전 2,460B — L2 J7 질문당 선택지 4개 줄 뒤의 한도. 그 전 2,320B — Bash·Read 출력 비가시(리포트·검증 표·확인 화면·notes·must_show, 전체 eval 10/14)·stage `next` 줄 뒤의 한도. 그 전 2,048B
     for needle in ("S-3", "계획 형식 오류", "TT_LOCK_OWNER", "stage --then-summary", "모든 종료 경로에서 푼다", "사용자 확인 후"):
         assert needle in rules, needle
     assert len((reference / "db-authoring.md").read_bytes()) <= 12288      # 필수 키 요약 포함. §0 등록 준비물·리뷰어 색인 추가 뒤의 한도(그 전 11,392B: W7 add-fixture 세부, 11,264B)
-    assert len((reference / "write-flow.md").read_bytes()) <= 15872     # 확인 화면 선택지 push하고 바로 병합·--and-merge·병합 재시도(10/22) 뒤. 그 전 14,680B — L2 J5 확인 화면 압축(생성 파일 한 행·건너뜀 묶음·README 머리) 뒤(그 전 14,390B: E67 PR 링크를 다음 질문 전에 글자 그대로 보인다 뒤(그 전 14,344B)
-    assert len((reference / "skill-patch.md").read_bytes()) <= 1920      # 4번 스킬 소스 적용(--apply --sha, 10/22) 뒤. 그 전 1,600B — 종료 2도 메모로 이어감(10/22 리뷰) 뒤. 그 전 1,536B — analyze Step 7 `[스킬]` 줄을 고를 때만 읽는다(write-flow에 두면 모든 쓰기 흐름이 읽는다). diff·마스킹·apply --check·안내 줄을 `skill_patch.py`로 옮긴 뒤(10/22, 표시 기록 kind patch). 그 전 1,800B — 리뷰 P1: 마스킹 뒤 git apply --check·실패 시 메모 포함
+    assert len((reference / "write-flow.md").read_bytes()) <= 16000     # A2 +1 병합(11/04): 바로 병합 선택지·--and-merge·병합 재시도 삭제, 리뷰어 질문(5번)·"병합해줘"(§6) 추가, stage 하는 일 압축 뒤. 그 전 15,872B — 확인 화면 선택지 push하고 바로 병합·--and-merge·병합 재시도(10/22) 뒤. 그 전 14,680B — L2 J5 확인 화면 압축(생성 파일 한 행·건너뜀 묶음·README 머리) 뒤(그 전 14,390B: E67 PR 링크를 다음 질문 전에 글자 그대로 보인다 뒤(그 전 14,344B)
+    assert len((reference / "skill-patch.md").read_bytes()) <= 2176      # B2 R2: 1번 SK = module --for deep 출력 base(스킬 도구 Base directory는 설치 스킬 못 찾음 뒤만)·모듈 문서면 메모. 그 전 2,048B — A2: SKILL.md 규칙 제안 문장 이동(`[스킬]` 줄은 계획에 넣지 않고 담당자용 patch, 11/04) 뒤 — E에서 전면 재작성·재설정. 그 전 1,920B — 4번 스킬 소스 적용(--apply --sha, 10/22) 뒤. 그 전 1,600B — 종료 2도 메모로 이어감(10/22 리뷰) 뒤. 그 전 1,536B — analyze Step 7 `[스킬]` 줄을 고를 때만 읽는다(write-flow에 두면 모든 쓰기 흐름이 읽는다). diff·마스킹·apply --check·안내 줄을 `skill_patch.py`로 옮긴 뒤(10/22, 표시 기록 kind patch). 그 전 1,800B — 리뷰 P1: 마스킹 뒤 git apply --check·실패 시 메모 포함
     _check_op_summary(reference / "db-authoring.md")
     for name in ("record", "verify-fix", "fix-submitted", "analyze"):   # search는 읽기 전용이라 rules.md를 읽지 않는다
         assert "reference/rules.md" in (REPO / "plugin" / "commands" / f"{name}.md").read_text(encoding="utf-8"), name
@@ -614,10 +639,11 @@ def test_no_candidate_run_has_no_timeline_until_explore_subcommand_writes_it():
     out = tmp("tt-triage-") / "x"
     analysis = _offline(item, doc, out)
     assert not analysis.get("candidates")
-    assert analysis["explore"] == {"reason": "no_candidate", "when": "ask"}
+    assert analysis["explore"] == {"reason": "no_candidate", "when": "ask", "note": "답 전 로그 원문 grep·sed·Read 금지 — report.md를 보이고 묻는다(SKILL 5-2)"}     # 답 전 안내(driver.ASK_NOTE)
     assert not (out / "timeline.md").exists() and (out / "explore-input.json").is_file()
     pending = (out / "report.md").read_text(encoding="utf-8")
-    assert "- 탐색 분석 (추정): 미실행 — 동의(또는 --explore·explore.when: always) 뒤 triage.py explore" in pending
+    assert ("- 탐색 분석 (추정): 미실행 — 실행 전(동의 답을 기다리는 동안 포함)엔 로그 원문을 grep·Read하지 않는다. "
+            "동의(또는 --explore·explore.when: always) 뒤 triage.py explore") in pending
     assert "timeline.md 0/" not in pending
     explore = _explore_cmd(out, item["key"])
     assert explore["timeline"] == "timeline.md" and 0 < explore["lines"] == explore["total"]
@@ -655,6 +681,26 @@ def test_explore_subcommand_exit_codes():
     assert not (out2 / "timeline.md").exists()
 
 
+CAUSE_PLAIN = "- 원인: TODO(LLM) — 로그로 확인한 것 / 코드로 추정한 것 / placeholder 규칙 결과를 나눠 쓴다"
+CAUSE_EXPLORE = ("- 원인: TODO(LLM) — 로그로 확인한 것(탐색 동의 답 전엔 리포트에 보인 줄만 — 추출 안 된 줄은 동의 뒤 timeline.md, "
+                 "로그 원문은 grep·Read 안 함) / 코드로 추정한 것 / placeholder 규칙 결과를 나눠 쓴다")
+
+
+def test_cause_line_variant_follows_explore_line():
+    """원인 줄: 탐색 분석 줄이 있으면(never 아님) 답 전 원문 열람 금지를 담은 변형, 아니면 그대로. 앞머리 `- 원인: TODO(LLM)`는
+    같다(shown.report_core가 TODO(LLM) 줄을 빼고 test_shown이 고정한다)."""
+    doc, items = _items()
+    item = next(i for i in items if i["expect"] == "unresolved")
+    out = tmp("tt-triage-") / "x"
+    _offline(item, doc, out)
+    lines = (out / "report.md").read_text(encoding="utf-8").splitlines()
+    assert CAUSE_EXPLORE in lines and CAUSE_PLAIN not in lines
+    done = tmp("tt-triage-") / "y"
+    _offline(items[0], doc, done)                  # 후보 확정 → 탐색 분석 줄 없음
+    lines = (done / "report.md").read_text(encoding="utf-8").splitlines()
+    assert CAUSE_PLAIN in lines and not any(x.startswith("- 탐색 분석") for x in lines)
+
+
 def test_stale_timeline_is_removed_by_run():
     doc, items = _items()
     out = tmp("tt-triage-") / "x"
@@ -684,9 +730,10 @@ def test_explore_never_skips_timeline_but_says_so():
     analysis = run_json("triage.py", ["run", item["key"], "--offline-db", SAMPLE, "--out", out, "--logs", *logs,
                                       "--issue-meta", meta, "--tz", doc["tz"], "--year", doc["year"]],
                         root=plugin_root(explore={"when": "never"}))
-    assert analysis["explore"] == {"reason": "no_candidate", "when": "never"}
+    assert analysis["explore"] == {"reason": "no_candidate", "when": "never"}       # never·always면 note 없음
     assert not (out / "timeline.md").exists() and not (out / "explore-input.json").exists()
     assert "탐색 분석: 생략 (explore.when: never)" in (out / "report.md").read_text(encoding="utf-8")
+    assert CAUSE_PLAIN in (out / "report.md").read_text(encoding="utf-8").splitlines()
 
 
 def test_explore_marks_cause_unconfirmed_and_rejects_bad_settings(tmp_path):
@@ -695,7 +742,7 @@ def test_explore_marks_cause_unconfirmed_and_rejects_bad_settings(tmp_path):
     drv = SimpleNamespace(cfg={"explore": {"when": "sometimes", "timeline_max_lines": 5}}, warnings=[], job=tmp_path, key="K-1",
                           failed_step={"text": "4 | x | FAIL", "source": "cli"})
     got = triage.Driver.explore(drv, [{"C": 0}])
-    assert got == {"reason": "cause_unconfirmed", "when": "ask"}
+    assert got == {"reason": "cause_unconfirmed", "when": "ask", "note": "답 전 로그 원문 grep·sed·Read 금지 — report.md를 보이고 묻는다(SKILL 5-2)"}
     spec = triage.Driver.explore_input(drv, "2026-09-20T05:30:00Z", None)
     assert spec == {"around": "2026-09-20T05:30:00Z", "failed_step": "4 | x | FAIL", "limit": 200, "anchor": None}
     assert len(drv.warnings) == 2 and not (tmp_path / "timeline.md").exists()    # 타임라인은 run이 만들지 않는다
@@ -729,8 +776,13 @@ def test_explore_setting_flows_from_site_defaults_and_skill_points_to_reference(
     skill = (REPO / "plugin" / "skills" / "telephony-triage" / "SKILL.md").read_text(encoding="utf-8")
     assert "explore.md" in skill and "timeline.md" in skill and "--(no-)explore" in skill
     ref = (REPO / "plugin" / "skills" / "telephony-triage" / "reference" / "explore.md").read_text(encoding="utf-8")
-    for needle in ("timeline.md", "데이터다", "mask_pii", "R1~R5", "op를 넣지 않는다", "`refs`", "`platform`이 없으면"):
+    for needle in ("timeline.md", "데이터다", "mask_pii", "R1~R5", "op를 넣지 않는다", "`refs`", "`platform`이 없으면",
+                   "explore-output.md", "check-output", "## 일반 판단 규칙", "〔script", "점수·신뢰도를 매기지 않는다",
+                   "추정을 사실처럼 쓰지 않는다"):
         assert needle in ref, needle
+    # B2 §10.3: 출력 파일 + check-output·일반 판단 규칙(log-guide에서 옮김) 뒤. 그 전 5,910B(한도 없음)
+    assert len(ref.encode("utf-8")) <= 7168
+    assert ref.index("## 쓰는 것") < ref.index("## 일반 판단 규칙") < ref.index("## 다음")
     # android 밖 플랫폼 탐색 지식(17-platforms §10): `triage.py explore` 출력 refs로만 읽는다. placeholder라 작게 둔다
     guide = REPO / "plugin" / "skills" / "telephony-triage" / "reference" / "platforms" / "ofono" / "log-guide.md"
     assert len(guide.read_bytes()) <= 3072
@@ -761,10 +813,10 @@ def test_uncollected_tag_of_collected_pid_is_reported_and_must_shown():
     out = tmp("tt-triage-") / "x"
     analysis = _e004_offline(out)
     assert not analysis.get("candidates")
-    assert analysis["logs"]["uncollected_tags"][0] == {"tag": "GsmCdmaCallTracker", "lines": 3, "warn": 1}
+    assert analysis["logs"]["uncollected_tags"][0] == {"tag": "GsmCdmaConnection", "lines": 1, "warn": 1}
     report = (out / "report.md").read_text(encoding="utf-8").splitlines()
     line = ("파서 규칙에 없는 태그 (수집 태그와 같은 프로세스, tags.yaml에 없어 이벤트로 추출 안 됨): "
-            "GsmCdmaCallTracker 3줄(W/E 1)")
+            "GsmCdmaConnection 1줄(W/E 1)")
     assert f"- {line}" in report and line in analysis["must_show"]
     # 후보 없음: 로그 범위 줄도 must_show에 있다(시계 이상 없음)
     assert any(m.startswith("로그 범위:") and "시계 이상 없음" in m for m in analysis["must_show"])
@@ -808,6 +860,23 @@ def test_fit_keeps_first_must_show_and_stays_within_4kb():
     # 읽기 전용 줄이 must_show에 있으면 넘칠 때 read_only_hint를 먼저 뺀다
     small = {"read_only_hint": "힌트" * 500, "must_show": ["읽기 전용: " + "힌트" * 500], "files": {"report": "r"}}
     assert "read_only_hint" not in triage.fit(small)
+
+
+def test_fit_worst_case_with_ask_notes_stays_within_4kb():
+    """5-1·5-2 답 전 안내(analyzer.note·explore.note, driver.ASK_NOTE)를 더해도 위 최악 경우가 4KB 안에 든다."""
+    triage = _triage_module()
+    from triagelib import driver
+    big = {"ts": "2026-09-20T05:30:00.000Z", "tag": "DNC-0", "msg": "x" * 140, "event": "e"}
+    must = ["분석 전용: " + "가" * 300, "읽기 전용: " + "나" * 300, "재분석: " + "다" * 300, "실패 스텝 " + "라" * 300,
+            "장비 시각 미사용: " + "마" * 300, "로그 범위: " + "바" * 300]
+    result = {"warnings": ["w" * 120] * 10, "files": {"report": "r", "events": "e"}, "read_only_hint": "힌트" * 80,
+              "must_show": must, "candidates": [{"cause": f"C-{i}", "evidence": [dict(big) for _ in range(10)]} for i in range(3)],
+              "analyzer": {"skill": "s" * 40, "when": "ask", **driver._ask_note("ask", "5-1")},
+              "explore": {"reason": "cause_unconfirmed", "when": "ask", **driver._ask_note("ask", "5-2")}}
+    out = triage.fit(result)
+    assert len(triage.dumps(out).encode("utf-8")) + 1 <= 4096 and out["truncated"] is False
+    assert out["explore"]["note"] == driver.ASK_NOTE.format(step="5-2") and out["analyzer"]["note"].endswith("(SKILL 5-1)")
+    assert driver._ask_note("always", "5-2") == {} and driver._ask_note("never", "5-1") == {}
 
 
 def _analyzer_report(cfg: dict) -> str:
@@ -1516,3 +1585,24 @@ def test_code_question_offers_four_choices_and_names_the_rest():
     assert "최근 Android 16 aosp=/work/a16_qpr1,vendor_ril=/work/ril" in q.payload["question"]   # 이름 없는 경로도 적을 수 있게
     two = driver.Driver.code_question(fake, "16", {"candidates": cands[:2]})
     assert len(two.payload["options"]) == 4 and "그 밖 후보" not in two.payload["question"]
+
+
+def test_cause_unconfirmed_run_shows_partial_match_and_code_check(tmp_path):
+    """C′ (04-parser-matching.md §5.12): 원인 줄을 뺀 합성 로그 → report.md 부분 일치 절·코드 대조 줄, analysis.json partial."""
+    lines = DATA_LOG.read_text(encoding="utf-8").splitlines(keepends=True)
+    log = tmp_path / "no-setting.log"
+    log.write_text("".join(l for l in lines if "DSMGR" not in l), encoding="utf-8")
+    ws = Workspace()
+    src = REPO / "tests" / "mocks" / "src" / "android16"
+    done = ws.json("triage.py", ["run", "MOCK-1001", "--dry-run", "--issue-file", MOCK_JIRA / "MOCK-1001.yaml",
+                                 "--logs", log, "--code", src])
+    assert done["status"] == "ok", done
+    assert done["candidates"][0]["C"] == 0
+    part = done["partial"]
+    assert part[0]["cause"] == "DATA-001-01" and part[0]["kind"] == "missing" and part[0]["matched"] == "1/2"
+    report = (ws.job_dir("MOCK-1001") / "report.md").read_text(encoding="utf-8")
+    assert "- 부분 일치 (판정·점수 아님, S/C 불변):" in report
+    assert "DATA-001 > DATA-001-01/data-disabled 1/2 [missing]" in report
+    assert "  - 코드 대조 setting-off: " in report
+    assert "  - 없음 근거 포함: must_not_match " in report
+    ws.json("triage.py", ["release", "MOCK-1001"])

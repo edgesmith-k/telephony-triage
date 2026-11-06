@@ -1,0 +1,75 @@
+{
+ "status": "ok",
+ "key": "MOCK-9202",
+ "platform": "ofono",
+ "mode": "offline",
+ "issue": {
+  "origin": "file",
+  "occurred_at": "2026-02-27T17:27:50+00:00",
+  "sw": null,
+  "platform_version": "2",
+  "sim_slot": "0",
+  "summary": "eSIM EID를 읽지 못함",
+  "description": "eSIM EID 조회가 실패합니다.",
+  "comments": 0,
+  "missing": [
+   "model",
+   "sw"
+  ]
+ },
+ "logs": {
+  "files": [
+   "source.log"
+  ],
+  "window": {
+   "start": "2026-02-27T17:22:50.000Z",
+   "end": "2026-02-27T17:32:50.000Z"
+  },
+  "range": [
+   "2026-02-27T17:27:50.347Z",
+   "2026-02-27T17:27:50.384Z"
+  ],
+  "in_range": "partial",
+  "clock_anomalies": 0,
+  "events": 76
+ },
+ "no_candidate": {
+  "search_hits": [],
+  "error_events": [
+   {
+    "ts": "2026-02-27T17:27:50.381Z",
+    "tag": "exynos-ril",
+    "event": "builtin.common.vendor_ipc_error",
+    "phone": null,
+    "error": "RCM_E_NO_SUCH_ELEMENT"
+   },
+   {
+    "ts": "2026-02-27T17:27:50.382Z",
+    "tag": "exynos-ril",
+    "event": "builtin.common.vendor_request_failed",
+    "phone": null
+   },
+   {
+    "ts": "2026-02-27T17:27:50.382Z",
+    "tag": "ofonod",
+    "event": "ril_error",
+    "phone": 0,
+    "request": "SIM_OPEN_CHANNEL",
+    "error": "NO_SUCH_ELEMENT"
+   }
+  ],
+  "error_event_total": 3,
+  "unextracted_warn": 2
+ },
+ "code": {
+  "skipped": true
+ },
+ "explore": {
+  "reason": "no_candidate",
+  "when": "ask"
+ },
+ "must_show": [
+  "로그 범위: 2026-02-27T17:27:50.347Z ~ 2026-02-27T17:27:50.384Z (일부만 포함), 시계 이상 없음"
+ ],
+ "truncated": false
+}

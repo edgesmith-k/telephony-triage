@@ -183,7 +183,8 @@ def test_ofono_site_platform_analyzer(when, line):
     root = plugin_root(f"ofono-an-{when}", platform=ON,
                        platforms={"ofono": {"analyzers": {"data": {"skill": "mock-ofono-analyzer", "when": when}}}})
     analysis, report, _ = _ofono_offline(root, LOGS / "journal-iso.log", "2026-09-20T05:32:10Z")
-    assert analysis["analyzer"] == {"skill": "mock-ofono-analyzer", "when": when}
+    note = {"note": "답 전 로그 원문 grep·sed·Read 금지 — report.md를 보이고 묻는다(SKILL 5-1)"} if when == "ask" else {}
+    assert analysis["analyzer"] == {"skill": "mock-ofono-analyzer", "when": when, **note}
     assert line in report
 
 
@@ -207,3 +208,21 @@ def test_ofono_explore_reports_platform_refs():
     (work / "job" / "analysis.json").write_text(json.dumps(data), encoding="utf-8")
     plain = run_json("triage.py", ["explore", "MOCK-9001", "--out", work / "job"], root=root, env=env)
     assert set(plain) == {"timeline", "lines", "total"}
+
+
+def test_ofono_with_remote_gives_module_category_shape():
+    """원격(`module_skills.remote`)이 있으면 1위 카테고리의 5-1 출처는 모듈 문서: `{category, when}`(B2-3). 원격 없는 위 결과는 그대로."""
+    root = plugin_root("ofono-on", platform=ON)
+    work = tmp("tt-plat-an-remote-")
+    home = work / "home"
+    home.mkdir(parents=True)
+    (home / "config.yaml").write_text("module_skills:\n  remote: file:///nonexistent/module-skills.git\n", encoding="utf-8")
+    meta = work / "meta.json"
+    meta.write_text(json.dumps({"key": "MOCK-9001", "occurred_at": "2026-09-20T05:32:10Z", "summary": "x",
+                                "platform_version": "2"}), encoding="utf-8")
+    run_json("triage.py", ["run", "MOCK-9001", "--offline-db", variant_db("issue-db-ofono"), "--logs", LOGS / "journal-iso.log",
+                           "--issue-meta", meta, "--out", work / "job", "--platform", "ofono"], root=root,
+             env={"TELEPHONY_TRIAGE_HOME": home})
+    analysis = json.loads((work / "job" / "analysis.json").read_text(encoding="utf-8"))
+    assert analysis["analyzer"] == {"category": "data", "when": "ask", "note": "답 전 로그 원문 grep·sed·Read 금지 — report.md를 보이고 묻는다(SKILL 5-1)"}
+    assert "- 심층 분석 (모듈 스킬 ofono, 1위 카테고리 data): 미실행" in (work / "job" / "report.md").read_text(encoding="utf-8")

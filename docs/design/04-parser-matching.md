@@ -48,6 +48,8 @@ tags:
   - {tag_regex: '^Ims(Manager|Resolver|ServiceController|Registration).*', category: ims, added_for: IMS-001, added_on: 2026-09-27, reason: 초기}
 ```
 
+**태그 속성(선택, C1+D 보정)**: tags 항목에 `level: unreliable`(그 줄 레벨은 심각도가 아님 → `I`)·`ipc: vendor`(벤더 IPC builtin 판별 대상)를 둘 수 있다(값은 스키마가 막음). 키마다 DB가 하나라도 선언하면 DB만, 아니면 백엔드 기본(oFono level {DITD, RFSD, DMD, MOSE}·ipc {exynos-ril}, Android ipc {RIL}). 데몬이 바뀌면 옛·새 이름 모두에 두고 옛 이름은 나중에 지운다. 읽기는 `backend.apply_rules(rules)`, `rulediff`는 `ipc`가 바뀌면 벤더 IPC builtin 시그니처를 대상에 넣는다. 사내 DB는 스키마 두 키를 같은 PR로 넣는다.
+
 `parser-rules/ril.yaml` (예시):
 
 ```yaml
@@ -197,3 +199,22 @@ feedback_weight가 켜져 있고 해당 시그니처 표본 ≥ min_samples면: 
 - `status`가 `active`가 아닌 원인의 fixture는 회귀에서 제외한다. `signatures_pending` 원인의 양성 fixture는 제외하지 않고 `"<유형 ID>:unresolved"` 기대값으로 돈다 (`contracts.md §fixture`).
 - `.expect.yaml`의 `occurred_at`(선택)은 판정에 쓰지 않고, 결과 표에 참고로 보여준다.
 - 이슈 기록(`issues/<KEY>.yaml`)과 `feedback/`은 이 모드의 판정에 들어가지 않는다(bonus·피드백 끔, 수정 상태·시그니처는 `type.md`). 그래서 `db_regress --changed`/`--staged`는 이슈 기록만 바뀐 유형을 범위에 넣지 않는다 (`contracts.md §3.2` 이슈 기록 제외).
+
+### 5.12 C′ 부분 일치·코드 대조 (분석 모드 표시 전용, S/C·점수 불변)
+
+#### (1) 정의 (`Evaluator.partial`, 판정 함수 `_evaluate`는 그대로)
+완전 일치도 오류(S/C=None)도 아닌 시그니처 중 하나: `missing`(같은 슬롯 W 구간 안 맞은 양성 조건 최대 m, 1 ≤ m < n, m/n ≥ 0.5) · `absent`(n=1, 범위 안 0건) · `blocked`(양성 n개 구간마다 `must_not_match` 줄) · `order`(양성 n개 구간에서 `sequence` 어긋남) · `window`(양성 n개가 범위엔 있으나 W 구간 하나에 안 듦, 가장 가까운 폭 표시).
+평가 대상: (가) S=1 유형 없음 → active 유형의 증상 시그니처(`absent`는 feedback 1위 제시 수 상위 5 유형만), (나) 1위 S=1·C=0 → 그 유형의 active·비 pending 원인 시그니처. 판정 불가 유형·원인은 뺀다. 1위 C=1이면 구하지 않는다. **회귀·검증 모드(`--regress`)는 구하지 않는다**(출력 그대로).
+
+#### (2) 순위·상한
+kind 순(missing → absent → order → window → blocked) → m/n 내림 → 없는 조건 수 → 발생 시각과 맞은 근거 거리 → 시그니처 키. 유형·원인당 하나. `match.json partial[]` ≤ 5(없는 조건 ≤ 3, 설명 60자), `analysis.json partial[]` ≤ 3(`fit()`: 다른 후보 근거 다음, 1위 근거·must_show 전에 `partial[1:]` → `missing` 40자 → 전체 제거), report.md 절 ≤ 1,200 B.
+
+#### (3) report.md (`render_report`, 분류 후보 절 다음·로그 범위 앞)
+`- 부분 일치 (판정·점수 아님, S/C 불변): …` 머리 줄 + 항목마다 `<유형> > <시그니처> m/n [kind] — 맞음 … / 없음 …`, 코드 대조 줄 ≤ 3, `규칙 제안 (부분 일치): [이슈 DB] update-signature <ID> — 근거 … (Step 7, 사용자 확인 뒤에만)`. 계산했는데 없으면 `- 부분 일치: 없음`. 1위 시그니처에 `must_not_match`가 있으면 근거 줄 아래 `없음 근거 포함: must_not_match <패턴 40자> — 이 줄이 빌드에서 사라져도 같은 결과(03 §5.7)`. 탐색 입력(`explore-input.json`)에 `partial`(키·없는 조건 id)·`around_alt`(맞은 근거 시각 ≤ 3)를 넣는다.
+
+#### (4) 기록 (Step 7)
+제안은 `규칙 제안` 줄로만 내고 기존 Step 7 질문(줄마다 선택지 + 모두 + 받지 않음(기본))에 태운다. 자동으로 쓰지 않는다. 새 문구 시그니처는 `find-text`의 `log_refs`(마스킹된 events 줄)로만 만들고, 없으면 `pr_notes 메모: 문구 다름 <ref> — 새 빌드 로그로 재확인`만 남긴다. 코드 문자열로 패턴을 만들지 않는다.
+
+#### (5) 코드 대조 (`code_roots.py find-text`, 토큰 0)
+`missing`·`absent`이고 코드 루트를 골랐을 때만(아니면 머리 줄에 "코드 대조: 코드 미확인"). 리터럴: 패턴을 `re._parser`로 파싱한 최상위 LITERAL 구간(필수 단일 그룹·대안 하나인 분기만 들어감, `.`·`\s`·클래스·반복은 끊음)에서 태그와 같은 구간·oFono `_FILE_FUNC` 앞머리·`/\w+_\d+` 조각·마스킹 토큰을 버리고 `: `·`=`에서 끊어 6자 이상·영문자 2개 이상 중 가장 긴 것. `must_event`는 그 이벤트를 내는 extractor가 하나·패턴 하나일 때만. 범위 ① code_refs 디렉토리 → ② `required_dirs` → ③ 루트 전체(표시만). 상한 20초·파일 1 MiB·20만 파일, 제외 `.git .repo out build prebuilts node_modules`·점 디렉토리, `test(s)/` 맞음은 aux. 출력은 `key:경로:줄`·상태뿐(코드 글 없음).
+상태 → 리포트: `same` 같음(±2줄 `LOG_CALL_RE`) · `string-only` 문자열만 있음(로그 호출 밖) · `reworded` 문구 다름(가장 긴 4자 이상 낱말 둘이 로그 호출 줄에) · `not-found` 못 찾음(①② 다 봤을 때만) · `ambiguous` 애매(문구 다름 4파일 이상 또는 같음과 섞임; 모델이 ≤ 2곳 × 앞뒤 20줄 읽고 "코드로 추정"으로만) · `no-literal`·`limit` 확인 못 함 · 리터럴 9개 넘음 건너뜀(상한). 확인 못 함·건너뜀은 통과로 보이지 않는다.
