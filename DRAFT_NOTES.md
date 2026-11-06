@@ -16,8 +16,8 @@
 
 ## 진행 상태 (11/06)
 
-- 모드: **사외 초안**. Phase D0·1~13·반입 전 보강 완료. 지난 묶음 **import-20261103**(main `77e2827`). 다음 묶음 **토 11/7 18:00 KST**(기준 `b4a5b42` + G).
-- **H 단계 G 진행 중**: A1·A2·guard·C0·B1+B2 ☑, C1+D·보정·F·Jira 관문·C·C′(+코드 대조)·IMSI/ICCID 덤프 마스킹·후보 채점 브랜치 반영 `b4a5b42`(전체 3,855 통과). G: runtime-check opencode 확인 0을 OpenAI 호환으로, 도입·팀원 가이드 표시 정리(opencode/는 레포 읽기 전용 clone), 반입 노트(`MODULE_SKILLS_RESULT.md` "반입 노트": 75 새 eval 1회, 사내 할 일 8단계). 남은 G: 사용자 정답 표 확인 → 유료 1회차, CONCERNS HTML, 묶음.
+- 모드: **사외 초안**. Phase D0·1~13·반입 전 보강 완료. 지난 묶음 **import-20261103**(main `77e2827`). 다음 묶음 **토 11/7 18:00 KST**.
+- **H 단계 G 마무리**: A1·A2·guard·C0·B1+B2 ☑. C1+D·보정·F·Jira 관문·C·C′·덤프 마스킹·후보 채점, Codex 리뷰 P1 6건, 모듈 eval(25→27/42, `_common` 근거 규칙)·Haiku 비교, G 재측정 67개(offsite pass 65·fail 5), 반입 노트(`b4a5b42` 이후 표) 브랜치 반영. 남은 것: 묶음(사용자 태그·반입), 단계 확인. 결과는 `MODULE_SKILLS_RESULT.md`.
 - 모델 Sonnet 5.5 기준. `TODO(SITE)`: `tools/list_site_todos.py`. REVIEW-OPEN 0. 사내 시작 **"사내 설정 시작"**(결정 (o)).
 - 안내서: `docs/book/telephony-triage-book.html`, 목록 `docs/materials/00-index.html`
 

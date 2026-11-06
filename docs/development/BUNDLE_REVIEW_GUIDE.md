@@ -1,6 +1,6 @@
 # 묶음 리뷰 안내 (일요일 사용자 리뷰용)
 
-범위: `77e2827`(묶음 import-20261103) → `f5a4811`(11/06 G 반입 노트) 141커밋, 599파일. 다음 묶음은 토 11/7 18:00 KST(기준 `b4a5b42` + G).
+범위: `77e2827`(묶음 import-20261103) → 이 브랜치 끝(`git log --oneline 77e2827..HEAD`). 다음 묶음은 토 11/7 18:00 KST.
 사실의 출처는 `MODULE_SKILLS_RESULT.md`(결과 노트)·`MODULE_SKILLS_DECISIONS.md`(결정 원문)·`DRAFT_NOTES.md`·git log이다. 사람이 읽는 요약은 `CONCERNS.md`(HTML `docs/materials/21-concerns.html`).
 
 ## 읽는 법
@@ -29,6 +29,8 @@ git diff 77e2827..HEAD -- <파일>
 | 후보 방식 채점 | `module_eval.py`·`tools/module_answers.py` | 탐색 27개 후보 1~3개 + 가장 유력, accept/trap, `GRADER_VERSION 2` |
 | 계획 I OpenCode·사내 모델 | `opencode/`·`common/oc_adapter.py`·`oc_jira_gate.py`·`docs/RUNTIME_ADOPTION.md` | bash 허용 목록, guard 연결 파일 편집 거부, Jira 읽기는 `runtime-check opencode --jira` 통과 뒤 설정 |
 | F 사내 트랙 | `tools/site_step.py`(modules·modules coverage·audit) | 토큰 0, MS-1·MS-2 |
+| C1+D 유료 측정·근거 인용 규칙 | `templates/module-skills/*/_common/layers.md`·`tests/skill_evals/module_offsite_results.json` | 1회차 25/42 → 규칙 뒤 27/42, 유지 결정 근거(독립 판단·반박 검증), 결과 노트 "C1+D 모듈 eval 유료 측정" |
+| G 전체 재측정 | `tests/skill_evals/offsite_results.json`·`grade.py`(eval 65) | pass 65·fail 5 원인(모델 행동 4·A1 P2 1), 결과 노트 "G 전체 재측정" |
 | G 문서 | `docs/SITE_INSTALL.md`·`docs/TEAM_GUIDE.md`·결과 노트 "반입 노트" | 반입 뒤 사내 site eval 표·사내 할 일 8단계 |
 | Codex 리뷰 반영(F1·F2·F3·F4·F6·F8) | `guard.py` 규칙 11·8, `mask_pii.py --check`, `parse_logcat.py` 시간 창, `code_roots.py`, `tools/site_audit.py` | MCP 대상 판별 못 하면 ask, 플러그인 스크립트 `--out` clone 거부, 갈린 조각 `--check` 실패·창 밖 묶기, 근거 건너뜀은 skip. 판정 표와 P2는 결과 노트 "Codex 리뷰" |
 
@@ -48,9 +50,14 @@ git diff 77e2827..HEAD -- <파일>
 | B2 통합 eval (14회) | $4.36 | $4.73 |
 | B2 수정 뒤 재실행 (12회) | $4.22 | $8.95 |
 | B2 2차 수정 뒤 재실행 (6회) | $2.29 | $11.24 |
+| C1+D 모듈 eval 1회차 (84회) | $6.32 | $17.56 |
+| C1+D 2회차, with만 (42회) | $2.82 | $20.38 |
+| C1+D Haiku 비교 (34회) | $0.25 | $20.63 |
+
+G 전체 재측정(별도 상한 $80): 67회 $24.03.
 
 ## 남은 것
 
-1. 사용자 정답 표 확인(후보 방식 "인정 후보 / 함정") → 모듈 eval 유료 1회차(dry-run 추정 84회 $5.11), 미달이면 2회차.
-2. 81회 전체 재측정(사외 G, 상한 $80).
-3. 묶음(11/7) — 사람 확인·태그·반입은 사용자(SITE_INSTALL §8·반입 노트).
+1. 묶음(11/7) — 사람 확인·태그·반입은 사용자(SITE_INSTALL §8·반입 노트, `b4a5b42` 이후 표 포함).
+2. 단계 확인: C1+D·F·보정·C·C′·Codex 리뷰 반영(결과 노트 각 절).
+3. 반입 뒤 후보: 결과 노트 각 "P2" 절.

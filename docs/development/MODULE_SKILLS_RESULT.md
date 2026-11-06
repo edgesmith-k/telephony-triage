@@ -63,6 +63,22 @@
 - C: drift는 원인 시그니처만(유형 단위는 feedback 스키마 `type_signature` 필요 — 다음 묶음), 기준 3/2는 사내 측정 뒤 조정.
 - 후보 채점: 인정 후보가 사례마다 1개(기계 변환) — 사용자 확인으로 넓힘, 층 여러 개를 한 칸에 쓰면 형식 실패 규칙·같은 후보 중복 실패(설계 F5)는 구현됨, 두 arm 모두 만점 근처라 동률 늘 것(관문 경고에 top1 with/without 표시).
 
+## G 전체 재측정 (11/06, 사외 eval 67개 — 사내 대상 12개 제외)
+
+g-1: 커밋 `cc2ca81` 위, Sonnet, `-j 3`, 67개 모두 끝남(멈춤 0), $24.03(별도 상한 $80). 채점 527행: 스크립트 통과 429, 미결정 95행은 transcript로 수동 판정해 통과 93·실패 2, 스크립트 실패 4.
+실패 원인 분류(에이전트 1, 이전 실행과 비교):
+- 32: 모델이 초안 검증표를 생각(thinking)에만 쓰고 답 글에 쓰지 않음 → show_guard가 `stage --dry-run`을 3번 거부(정상) → 확인 화면까지 못 감. 회귀(이전 4회 통과)이지만 모델 행동이다.
+- 65: 채점기 오판 — `grade.py` guided가 `triage.py` 속 점에서 문장을 잘랐다. 고침(뒤에 공백·끝이 오는 `.?!`만), 시험 추가, 다시 채점해 통과.
+- 77: 모델이 `module` 출력의 `_common` 두 문서를 `wc -l`만 하고 읽지 않음. 회귀(b2fix2 통과)이지만 모델 행동이다.
+- 46(수동): Step 7 질문에 넷째 선택지 '채택하지 않음'을 더함. 47(수동): 슬롯 가설의 반대 근거가 슬롯 차이를 말하지 않음.
+`offsite_results.json` 재생성: pass 65·fail 5(32·46·47·75·77)·none 9(사내 대상). 이전 대비 15·40·69·73·76·78·79 → pass, 32·77 → fail. 75는 A1부터의 P2. `b2-a`는 사내 eval 1 미판정만 더해 넣지 않았다.
+전체 테스트: 3,873 통과·26 skip(채점기 고침 커밋 위).
+
+### P2 — G 재측정 (반입 뒤 후보)
+- show_guard 거부 문구에 "생각(thinking)은 사용자에게 보이지 않는다 — 표는 답 글로 쓴다" 한 줄(eval 32).
+- `module --for …` JSON 출력에 "`read`의 파일은 `_common`까지 모두 Read"를 직접 넣기(eval 77).
+- Step 7 선택지 고정(eval 46)·탐색 가설 반대 근거(eval 47)는 다음 SKILL 손질 때 eval로 확인.
+
 ## C1+D 모듈 eval 유료 측정 (11/06, 정답 표 사용자 답 반영 뒤)
 
 **정답 표 답(사용자 11/06)**: N2는 ofonod도 인정 후보로 넣었다(함정에서 뺌, 새 파라미터가 추가되면 NMD와 oFono를 함께 고치고 APN 핵심 로직은 ofonod에 있다). oFono data explore의 APN 행도 고쳤다. N1은 주석만 넣었다(실제로는 SIM 변경 이벤트 처리가 실패할 때만 생긴다). N3은 지금 정답 유지(프레임워크 재시도는 함정), N6·N9·N10은 그대로 둔다. components.md는 크기 예산(3800B)과 7모듈 docs_sha256 때문에 손대지 않았다.
@@ -160,7 +176,7 @@ Skill 도구는 `module --for deep` 종료 1 `설치 스킬 못 찾음` 뒤에�
 
 ### 반입 노트: 바뀐 파일 → 사내 site eval (B2 §14, 11/05 사내 토큰 최소 — 11/06 G에서 import-20261103 이후 전체로 넓힘)
 
-범위: `77e2827`(import-20261103)..`b4a5b42`. 기준(`docs/SITE_INSTALL.md:228` hook·공통 판정이 바뀌면 12개 전부 다시)을 11/05 결정(사내 토큰 최소, `MODULE_SKILLS_DECISIONS.md`)에 따라바꾼 파일별 목록과 토큰 0 점검으로 대신한다. site 세트(`tests/skill_evals/pending.json` `site`) 1·2·8·9·39·45·58·59·60·61·62·**75(이번에 새로 — A1)**, 모델 차이 세트 13·17·18·24·29·33·37. 이 eval들은 모두 5-1·5-2에 "아니오"라 모듈 경로를 타지 않는다(거절 경로는 사외 eval 1로 확인). 아래 첫 표는 B1·B2, 둘째 표는 그 밖(A1·A2·guard·C1+D·C·C′·마스킹·OpenCode).
+범위: `77e2827`(import-20261103)..`b4a5b42`, 그 뒤(G·Codex 리뷰)는 아래 셋째 표. 기준(`docs/SITE_INSTALL.md:228` hook·공통 판정이 바뀌면 12개 전부 다시)을 11/05 결정(사내 토큰 최소, `MODULE_SKILLS_DECISIONS.md`)에 따라바꾼 파일별 목록과 토큰 0 점검으로 대신한다. site 세트(`tests/skill_evals/pending.json` `site`) 1·2·8·9·39·45·58·59·60·61·62·**75(이번에 새로 — A1)**, 모델 차이 세트 13·17·18·24·29·33·37. 이 eval들은 모두 5-1·5-2에 "아니오"라 모듈 경로를 타지 않는다(거절 경로는 사외 eval 1로 확인). 아래 첫 표는 B1·B2, 둘째 표는 그 밖(A1·A2·guard·C1+D·C·C′·마스킹·OpenCode).
 
 | 바뀐 파일 | remote 없을 때 사내 영향 | 닿을 수 있는 eval | 토큰 0 점검 | LLM 재실행 |
 |---|---|---|---|---|
@@ -192,6 +208,17 @@ B1·B2 밖 (A1·A2·guard·C1+D·C·C′·마스킹·I-2·Jira 관문):
 | `config.py`·`userconfig.py`·`site-defaults.example.yaml`(`issue_db.merge` 없어짐, `merge_wait_seconds` 420) | doctor에 없어진 키·폐지 키 경고 | 58 | 아래 2번 뒤 `config.py doctor` 전후 | 다르면 58만 |
 | `oc_adapter.py`·`oc_jira_gate.py`·`mcptools.py`·`job_status.py`·`claude_child.py`·`opencode/**`·`tools/{gen_opencode,oc_jira_check,site_step}.py` | OpenCode·게이트웨이 경로만 | 없음(site eval은 Claude Code + Claude) | `tt-oc doctor`·`runtime-check` | 없음 |
 | `module_eval.py`·`common/{modulefilter,moduleskills,skillcheck}.py`·`templates/module-skills/**`·`tools/{site_audit,make_module_repo,make_excerpt,module_*}.py`·eval·채점기 | site eval이 쓰지 않는다 | 없음 | pytest, `site_step.py modules check` | 없음 |
+
+`b4a5b42` 이후 (Codex 리뷰 반영·정답 표 답·모듈 eval 공통 근거 규칙·G 재측정):
+
+| 바뀐 파일 | 사내 영향 | 닿을 수 있는 eval | 토큰 0 점검 | LLM 재실행 |
+|---|---|---|---|---|
+| `guard.py`(규칙 11 MCP 대상 키 정규화·판별 불가 병합·Approve ask, 규칙 8 플러그인 스크립트 `--out`·`--in-place` 등 clone 쓰기 거부, clone `db_build --write` ask) | MCP 쓰기·플러그인 스크립트 출력이 clone을 향할 때만 새 거부·확인. 사내 GitHub MCP(S36)는 쓰기 도구 대상 인자가 `repo`라 이슈 DB 대상은 ask | 1·8·39·61·62·75 | `test_hooks.py`·`test_oc_adapter.py`, 12개 세션 `hook_replay` 전후 | 재생이 다를 때만 |
+| `mask_pii.py --check`(갈린 덤프 조각도 검사) | pre-commit·게시 검사가 운영 DB에 이미 있는 oFono 갈린 IMSI/ICCID를 새로 잡을 수 있다 | 2·9·61, DB 쓰기 전부 | 반입 전 읽기 전용: 운영 DB clone에서 `mask_pii.py --check` 전후 | 지적이 새로 나면 그 내용부터 마스킹(DB PR) |
+| `parse_logcat.py`(`--mask` + 시간 창, 덤프 표식 있는 입력만 창 밖까지 묶음) | oFono 덤프 조각이 창 경계에 걸릴 때만 마스킹 결과가 달라진다 | oFono analyze | oFono site 로그로 `parse --between … --mask` 전후 | 없음 |
+| `tools/site_audit.py`(근거 건너뜀·오류·`source: null`은 pass 아닌 skip) | audit 표시만 | 없음 | `site_step.py audit` | 없음 |
+| `code_roots.py`(3.10 정규식 파서) | 3.11 이상은 같음 | 없음 | — | 없음 |
+| `templates/module-skills/**`(`_common/layers.md` 근거 인용 규칙, oFono data APN 행)·eval 사례·`grade.py`·`offsite_results.json` | site eval이 쓰지 않는다. 모듈 스킬 레포는 `make_module_repo.py`로 새로 만들 때 반영 | 없음 | pytest | 없음 |
 
 **사내에서 할 일(순서)**:
 1. 반입 전(IMPL §4.8): 운영 이슈 DB 브랜치 보호(+1 필수 승인, IMPL §4.5), `docs/site/boundary-allow.txt`에 데몬 이름 줄.
@@ -257,6 +284,7 @@ eval별 한 줄:
 | C1+D 모듈 eval 1회차(14모듈 42사례 × 두 arm, restricted, Sonnet, 84회) | ≈ $5.1~5.9 | $6.32 | $17.56 |
 | C1+D 모듈 eval 2회차(`_common` 근거 인용 규칙 cc2ca81 뒤 with arm만, 42회) | ≈ $2.8 | $2.82 | $20.38 |
 | C1+D Haiku 비교(17사례 × 두 arm, 기록 안 함, 34회) | ≈ $0.7 | $0.25 | $20.63 |
+| (별도 상한 $80, 11/05 미리 승인) G 전체 재측정 g-1(사외 eval 67개, Sonnet, -j 3) | ≈ $23 | $24.03 | — |
 
 C0 재실행: with 3/3·without 1/3, 안전 위반 0/0, 관문 pass(deep with 토큰 −7.1K, explore +4.8K·+12.2K). B2 통합 eval 1차(기계 행): 1·41·47·57·63·78·73(b2-a) 통과, 40(2행)·46(1)·71(1)·76(1)·77(1)·79(2)·73(b2-b, 2) 실패 — 원인 분석·수정·재실행은 아래 B2 eval 수정 절.
 
