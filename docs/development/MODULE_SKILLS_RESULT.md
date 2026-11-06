@@ -116,6 +116,8 @@ B1·B2 밖 (A1·A2·guard·C1+D·C·C′·마스킹·I-2·Jira 관문):
 | 바뀐 파일 | 사내 영향 | 닿을 수 있는 eval | 토큰 0 점검 | LLM 재실행 |
 |---|---|---|---|---|
 | `dbpr/{merge,publish}.py`·`common/{ghpr,ghreview}.py`·`db_pr.py`·`reference/{write-flow,post,sync-pr}.md` (A1 +1 관문, A2 바로 병합 삭제·확인 화면 선택지·리뷰어 질문) | push 확인 화면에 '바로 병합' 없음, 병합은 +1 뒤 요청 시 `db_pr merge`만 | 1·2·9·61·62·**75** | `test_db_pr.py`, 확인 화면 `hook_replay` 전후 | **75는 새 eval — 1회 필수**. 61·62·9는 재생이 다를 때만(사외 A2 재측정 61·62 통과) |
+| `db_summary.py`(확인 화면·커밋 메시지 끝 `Triage-Env:` trailer, `pr_body` "분석 환경" 줄, 리뷰어 줄 "(제안 — …)") | 확인 화면·PR 본문에 trailer·환경 줄·리뷰어 제안 표시가 붙는다 | 1·2·9·61·62·75 | `db_pr summary <wt> --format markdown` 전후 — trailer·"분석 환경"·리뷰어 줄 차이만 허용(`hook_replay`는 이 차이를 보지 못한다) | 그 밖의 차이가 있는 eval만 |
+| `reference/fail-causes.md`(RadioError 숫자, ImsReasonInfo 121, RCM_E_* 해석 +12줄) | `SKILL.md` "로그 해석" 표가 가리키므로 analyze 답이 바뀔 수 있다 | analyze 전부(1·2·45·13·24·33·37) | 바이트 차이 보고만 — 토큰 0 점검(오프라인 `run`)으로는 확인할 수 없다 | 확인하려면 해당 eval 재실행(건너뛰면 "미확인"으로 기록) |
 | `guard.py`(규칙 11 +1 병합·쉬운 P1 3·P2 7)·`show_guard.py` | `gh pr merge`·GraphQL·우회 경로 새 거부, post 안내 문구 | 8·61·62·75 | `test_hooks.py`·`test_platform_guard.py`, 12개 세션 `hook_replay` | 재생이 다를 때만 |
 | `platforms/{android,ofono}/*`·`common/vendor_ipc.py`·`parse_logcat.py`·`parser_backends/base.py`·`schemas/parser-rules.schema.json`(③a·③b, tags.yaml `level`·`ipc`) | Android iccIO·숫자 RadioError·RadioConfig, oFono 레벨 I·벤더 IPC → 이벤트·후보가 바뀔 수 있음 | analyze 전부(1·2·45·13·24·33·37) | site eval 로그로 `triage.py run --offline-db` 전후, 운영 DB `db_verify`·`db_regress` 전후 같음 | 후보·이벤트가 다른 eval만 |
 | `common/masking.py`(M12 IPv6 경계·B64 per_line·덤프 조각)·`common/dumpjoin.py`·`mask_pii.py` | IPv6 과마스킹 줄어듦, oFono 갈린 IMSI/ICCID 가림 | analyze 전부, 2·9·61 | 첫 표 마스킹 행과 같음 — `db_lint --all`·`mask_pii --check` **새 지적이 있으면 반입 멈춤** | 차이가 토큰뿐이면 없음 |
@@ -136,7 +138,8 @@ B1·B2 밖 (A1·A2·guard·C1+D·C·C′·마스킹·I-2·Jira 관문):
 8. 위 토큰 0 점검이 깨끗하면 "영향 없음" 기록, 75만 1회. 다르면 그 eval만 `site_step.py evals`로.
 
 eval별 한 줄:
-- `1·8·9·39·59·60·61·62: 영향 없음 (5-1·5-2에 '아니오', 무원격 출력 바이트 동일, hook 재생 일치, 이슈 DB lint·pre-commit 결과 동일, 오프라인 run 후보·부분 일치 없음)`
+- `8·39·59·60: 영향 없음 (5-1·5-2에 '아니오', 무원격 출력 바이트 동일, hook 재생 일치, 이슈 DB lint·pre-commit 결과 동일, 오프라인 run 후보·부분 일치 없음)`
+- `1·9·61·62: 영향 없음 (5-1·5-2에 '아니오', 무원격 출력은 확인 화면 Triage-Env trailer·리뷰어 줄만 다름(db_pr summary 전후), hook 재생 일치, 이슈 DB lint·pre-commit 결과 동일, 오프라인 run 후보·부분 일치 없음)`
 - `2·45: 영향 없음 (위와 같음 + 오프라인 run에 부분 일치 항목 없음)` — 부분 일치가 생기면 그 eval 1회
 - `75: 새 eval(A1 +1 병합 관문) — 1회 실행, 결과를 SITE_PROFILE에`
 - `58: 영향 없음 (doctor 출력 동일 — 폐지 키 두 줄 삭제 뒤)`
