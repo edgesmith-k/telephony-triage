@@ -2,6 +2,54 @@
 
 단계표는 `MODULE_SKILLS_PLAN.md §4`. 이 파일은 단계마다 리뷰·재측정에서 P2로 남긴 것(결정 (r): P0·P1만 고치고 P2는 반입 뒤 후보)과 단계 결과를 적는다.
 
+## Codex 리뷰 (77e2827..f8b980b) 반영 (11/06, 재현 판정 → 설계 → 설계 검증 → 구현 → 리뷰 → 검증 → 수정)
+
+외부 리뷰(Codex)는 P0 5건·P1 4건을 냈다. 재현 스크립트는 받지 않았고, 9건 모두 검증 에이전트가 합성 데이터로 직접 재현했다(반박 기본값, `scratchpad/codex/{guard,mask,misc}`). 동작은 9건 모두 재현됐고, 갈린 것은 심각도다.
+
+| # | 지적 | Codex | 판정 | 근거 |
+|---|---|---|---|---|
+| F1 | MCP 인자 `repository_full_name`·`repo_full_name`, `action: APPROVE` → 병합·Approve 판정 없음 | P0 | P1 | 실제 github-mcp-server(owner/repo/event)는 막혔음. 그러나 OpenCode가 판정 없음을 allow로 처리하고(`oc_adapter.before`), 사내 GHE MCP 인자 이름은 아직 미확인(메인이 P2에서 올림) |
+| F2 | 플러그인 CLI `--out`으로 사용자 DB clone 덮어씀 | P0 | P1 | sha가 바뀌고 `git status` M. Claude Code는 Bash 확인 창이 뜨고, OpenCode는 자동 허용 |
+| F3 | `mask_pii --check`가 갈린 ICCID를 통과 | P0 | P1 | rc 0, detections 비어 있음. 마스킹을 건너뛴 원문이 올라올 때만 생김(P0 경계) |
+| F4 | `--between/--around --mask`에서 뒷조각 원문 + `masked: true` | P0 | P1 | 창을 자른 뒤 묶었음. 창 경계가 조각 사이 약 250ms에 걸려야 생김 |
+| F5 | 자정 넘는 조각 미결합 | P0 | P2 | 재현됨(연말도 같음). 한 메시지의 조각 둘이 날짜 경계에 걸쳐야 해서 확률이 매우 낮음 |
+| F6 | Python 3.10에서 find-text ImportError | P1 | P1 | 3.10.20에서 시험 3개 실패. CI 대상 |
+| F7 | 슬롯이 다른 이벤트를 ×2로 합침 | P1 | P2 | 내장 파서는 phone_id를 tag·msg 글에서 뽑으므로 (tag,msg)가 같으면 슬롯도 같음. 외부 어댑터에서만 생김 |
+| F8 | 근거 검증 생략·실패를 감사가 pass로 표시 | P1 | P1 | `skipped`·`error` 모두 pass. "건너뛴 검증을 통과로 표시하지 않는다" 위반 |
+| F9 | 문서 1줄만 읽어도 "모두 읽음" | P1 | P2 | 지정 문서가 약 100줄 이하이고 프롬프트가 "모두 읽는다"라서 부분 읽기 가능성이 낮음 |
+
+**고침**(설계 `scratchpad/codex/design.md` r2, 설계 검증 12건 반영. U1 guard, U2 나머지):
+- **F1** 규칙 11:
+  - MCP 인자 키를 정규화해 깊이 3까지 찾는다. 대상 후보(slug·URL·owner×repo, `name`은 owner와 같은 층일 때만)의 합집합을 쓴다.
+  - MCP는 owner/repo만 비교한다(SSH 별칭 remote 대비). URL의 `api/v3`·`repos/`·`#` 꼴도 읽는다.
+  - 동작은 `event`·`action`·`method`·`*event`에서 읽는다.
+  - 대상을 판별하지 못하면 병합·Approve·기각 부류는 ask, 레포 단서 키가 있는 쓰기 도구도 ask다.
+  - 14-site에 **S36**(GHE MCP 도구·인자 이름)을 추가했다.
+- **F2** 규칙 8: 플러그인 스크립트의 출력 인자를 clone 쓰기 판정에 넣었다.
+  - 대상 인자: mask_pii `--out`·`--in-place`, parse_logcat·db_review·triage `--out`, db_build `--preview`, jira_fields `--meta-out`·`--consume`. `=` 꼴, argparse 약어, 인터프리터 옵션도 처리한다.
+  - clone 안이면 deny, `db_build --write`가 clone을 향하면 ask. OpenCode는 guard 판정을 따른다.
+- **F3** `--check`도 `forced_lines`로 조각을 묶고, 조각마다 원래 줄 번호로 알린다.
+- **F4** DUMP_MARK가 있는 입력만 창 없이 파싱해 묶은 뒤 창을 자른다. 백엔드 인터페이스는 바꾸지 않았다.
+- **F6** 3.10에서는 `sre_parse`로 대체하고, `POSSESSIVE_REPEAT`는 있을 때만 쓴다.
+- **F8** 감사 근거 행에서 `skipped`·`error`·`fabricated` 없음·`source: null`은 미검증으로 보고 skip으로 둔다.
+
+구현 리뷰(1) → 반박 검증(1) 결과 확정 P1 1건(F1에서 URL·경로 꼴 대상이 "DB 아님"으로 읽힘)을 고쳤다. 같은 수정에서 P2 2건(출력 옵션 약어, 인터프리터 옵션 열린 쪽)도 함께 닫혔다.
+관련 시험 598 통과, 3.10 code 검색 시험 8 통과, 전체 3,873 통과·26 skip(ca95309).
+
+### P2·반박 — Codex 리뷰 (반입 뒤 후보)
+- F5 자정·연말 조각: `dumpjoin._sec`이 날짜를 버린다. 음수 차이에 +86400을 더하는 정도면 된다.
+- F7 `modulefilter` 중복 키에 phone 추가.
+- F9 `docs_read_row`: offset·limit 합집합이 문서 줄 수를 덮을 때만 "읽음"으로 본다.
+- F4 잔여: DUMP_MARK가 있는 입력에서 `--mask`일 때만 창 비교가 ms로 잘린 `ts` 기준이 된다. 그래서 창 끝 바로 뒤(4~9자리 소수) 레코드가 더 나온다. 고치려면 창 선택은 백엔드 결과를 쓰고, 묶기에만 창 없는 파싱을 쓴다.
+- 조각 사이에 같은 프로세스의 다른 덤프 레코드가 끼면 조각이 묶이지 않아 원문이 남는다(`--full`도 같음, 기존 dumpjoin 동작). 실제 oFono 덤프에서 이런 배치가 나오는지 사내 로그로 확인할 것.
+- code_roots가 `db_lint._parser_mod`를 늦게 import한다(첫 호출에 약 30ms). `common.skillcheck`의 `_sre`·`_src`로 바꿀 수 있다.
+- `tools/site_step.py`의 S-단계에 S36이 이름으로 나오지 않는다. 지금은 `TODO(SITE:S36)` 잔여 검사로만 걸린다.
+- 범위 밖, 기존 동작: issue_post 코멘트 본문과 외부 어댑터 이벤트는 조각 미결합이다.
+- 열린 질문:
+  - Q1 사내 GHE MCP 이름(S36)
+  - Q2 guard가 `db_migrate --to/--write`도 볼지(자체 사전 검사 있음)
+  - Q3 대상 미판별 Approve를 ask에서 deny로 올릴지
+
 ## C·C′(+코드 대조)·실행 중 IMSI/ICCID 마스킹·후보 방식 채점 (11/06, 설계 → 설계 검증 → 구현 → 리뷰 → 검증 → 수정)
 
 **C′ 부분 일치**(설계 `scratchpad/cc/design.md`, 설계 검증 P1 9 반영): 분석 모드에서만, 후보가 없거나 1위가 S=1·C=0일 때 부분 일치(missing·absent(한 줄 시그니처가 통째로 없음)·blocked·order·window)를 match.json 5·analysis.json 3·report.md ≤1,200B로 보인다. S/C 판정과 regress 출력은 그대로. report.md `규칙 제안 (부분 일치):` → 기존 Step 7 질문(기본 받지 않음) → update-signature(사용자 확인·PR·+1). 제안은 마스킹된 로그 줄(`log_refs`)로만 만들고 코드 문자열로는 만들지 않는다. **코드 대조** `code_roots.py find-text`: 부분 일치이고 code root를 골랐을 때만, 시그니처 regex에서 리터럴 도출(태그·oFono file:func 앞머리 제거) → 같음(±2줄 안 로그 호출일 때만)/문구 다름/못 찾음(범위: code_refs+required_dirs를 다 봤을 때만)/문자열만 있음/애매/확인 못 함/건너뜀(상한), 20초·1MiB·제외 디렉토리, 출력은 key:path:line만(코드 글 없음). **C**: `site_audit` drift — feedback `suggested[].signature` × issues(sw·platform_version)로 "이전 3회 이상 맞던 시그니처가 새 빌드 기록 2건 이상에서 0회"면 needs-user(같은 브랜치는 sw 순서만, 다른 브랜치는 platform_version 주 버전이 클 때만, 같은 원인·unresolved·new-cause만 셈), 1건은 info, 판단 못 하면 skip. Claude 안 부름.

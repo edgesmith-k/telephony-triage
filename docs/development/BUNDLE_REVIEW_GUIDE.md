@@ -30,6 +30,7 @@ git diff 77e2827..HEAD -- <파일>
 | 계획 I OpenCode·사내 모델 | `opencode/`·`common/oc_adapter.py`·`oc_jira_gate.py`·`docs/RUNTIME_ADOPTION.md` | bash 허용 목록, guard 연결 파일 편집 거부, Jira 읽기는 `runtime-check opencode --jira` 통과 뒤 설정 |
 | F 사내 트랙 | `tools/site_step.py`(modules·modules coverage·audit) | 토큰 0, MS-1·MS-2 |
 | G 문서 | `docs/SITE_INSTALL.md`·`docs/TEAM_GUIDE.md`·결과 노트 "반입 노트" | 반입 뒤 사내 site eval 표·사내 할 일 8단계 |
+| Codex 리뷰 반영(F1·F2·F3·F4·F6·F8) | `guard.py` 규칙 11·8, `mask_pii.py --check`, `parse_logcat.py` 시간 창, `code_roots.py`, `tools/site_audit.py` | MCP 대상 판별 못 하면 ask, 플러그인 스크립트 `--out` clone 거부, 갈린 조각 `--check` 실패·창 밖 묶기, 근거 건너뜀은 skip. 판정 표와 P2는 결과 노트 "Codex 리뷰" |
 
 ## 주요 결정
 
@@ -37,7 +38,7 @@ git diff 77e2827..HEAD -- <파일>
 
 ## 알려진 P2 (반입 뒤 후보)
 
-`MODULE_SKILLS_RESULT.md`의 절: "P2 — C·C′·마스킹·후보 채점", "P2 — C1+D 보정", "근거 줄 소실 대응 B"의 P2 줄, "P2 — C1+D", "P2 — B1·B2 설정·guard", "P2 — B1·B2 통합 재리뷰", "P2 — 계획 I-2", "P2 — C0", "P2 — guard P2 묶음", "P2 — guard 쉬운 P1", "P2 — A2", "P2 — 병합 쪽"·"eval 75 채점"·"guard 규칙 11". 이번 묶음 밖 할 일은 "나중에 할 일"(증상 표 "(초안)" 행 정정, 행 130B 기준).
+`MODULE_SKILLS_RESULT.md`의 절: "P2·반박 — Codex 리뷰", "P2 — C·C′·마스킹·후보 채점", "P2 — C1+D 보정", "근거 줄 소실 대응 B"의 P2 줄, "P2 — C1+D", "P2 — B1·B2 설정·guard", "P2 — B1·B2 통합 재리뷰", "P2 — 계획 I-2", "P2 — C0", "P2 — guard P2 묶음", "P2 — guard 쉬운 P1", "P2 — A2", "P2 — 병합 쪽"·"eval 75 채점"·"guard 규칙 11". 이번 묶음 밖 할 일은 "나중에 할 일"(증상 표 "(초안)" 행 정정, 행 130B 기준).
 
 ## 유료 eval 장부 ($25 미리 승인 안)
 
