@@ -559,10 +559,31 @@ def _mcp_keyed(obj, depth: int = 0) -> list[list[tuple[str, object]]]:
     return out
 
 
-def _mcp_targets(layers: list[list[tuple[str, object]]]) -> tuple[list[tuple], bool]:
-    """대상 후보의 `(풀린 slug 목록, 판별 불가 여부)`. 판별 불가: 후보 값이 owner/repo로 안 풀림(`"$R"`·owner 없는 repo)
-    또는 후보 키가 없음."""
-    slugs: list[tuple] = []
+MCP_SUBPATH = {"pull", "pulls", "issues"}       # 대상 꼴 `owner/repo[/pull|pulls|issues/N]`
+
+
+def _mcp_segs(value: str) -> tuple[list[str], bool]:
+    """MCP 대상 값의 경로 단어와 대상 꼴 여부. `#…`·`?…`·scheme+host·SCP `host:`·`api/v3/`·`repos/`·`.git`을 벗긴다.
+    꼴은 `owner/repo` 또는 `owner/repo/(pull|pulls|issues)/N`만 — 그 밖은 판별 불가(F1 r2)."""
+    s = value.split("#", 1)[0].split("?", 1)[0].strip()
+    if "://" in s:
+        s = s.split("://", 1)[1].partition("/")[2]
+    elif re.match(r"^[^/:]+:[^/]", s):
+        s = s.split(":", 1)[1]
+    segs = [x[:-4] if x.endswith(".git") else x for x in s.split("/") if x]
+    if segs[:2] == ["api", "v3"]:
+        segs = segs[2:]
+    if segs[:1] == ["repos"]:
+        segs = segs[1:]
+    ok = len(segs) == 2 or (len(segs) == 4 and segs[2] in MCP_SUBPATH and segs[3].isdigit())
+    return segs, ok
+
+
+def _mcp_targets(layers: list[list[tuple[str, object]]]) -> tuple[list[list[str]], bool]:
+    """대상 후보의 `(경로 단어 목록들, 판별 불가 여부)`. 이슈 DB 판정은 이어진 두 단어가 원격 owner/repo와 같은가로 한다
+    (`api/v3/repos/o/r/pulls/3`·`o/r/pull/3`·`o/r#3`). 판별 불가: 후보 값이 대상 꼴이 아님(`"$R"`·owner 없는 repo·
+    그 밖의 경로) 또는 후보 키가 없음."""
+    cands: list[list[str]] = []
     unresolved, seen = False, False
     for layer in layers:
         owners = [v.strip() for k, v in layer if k in MCP_OWNER_KEYS and isinstance(v, str) and v.strip()]
@@ -573,15 +594,20 @@ def _mcp_targets(layers: list[list[tuple[str, object]]]) -> tuple[list[tuple], b
             pair = k in MCP_REPO_NAME_KEYS or (k == "name" and owners)
             if k in MCP_SLUG_KEYS and ("/" in v or k not in MCP_REPO_NAME_KEYS):
                 seen = True
-                slug = _repo_slug(v)
-                slugs.append(slug) if slug else None
-                unresolved = unresolved or slug is None
+                segs, ok = _mcp_segs(v)
+                cands.append(segs)
+                unresolved = unresolved or not ok
             elif pair:
                 seen = True
-                got = [s for s in (_repo_slug(f"{o}/{v}") for o in owners) if s]
-                slugs += got
-                unresolved = unresolved or not got
-    return slugs, unresolved or not seen
+                got = [_mcp_segs(f"{o}/{v}") for o in owners]
+                cands += [segs for segs, _ in got]
+                unresolved = unresolved or not got or not all(ok for _, ok in got)
+    return cands, unresolved or not seen
+
+
+def _mcp_is_db(cands: list[list[str]], conf: Config) -> bool:
+    pairs = {tuple(s[1:]) for s in conf.remote_slugs if s}
+    return any(tuple(segs[i:i + 2]) in pairs for segs in cands for i in range(len(segs) - 1))
 
 
 def check_mcp_db_write(tool: str, part: str, tool_input: dict, conf: Config, dec: Decision) -> None:
@@ -599,8 +625,8 @@ def check_mcp_db_write(tool: str, part: str, tool_input: dict, conf: Config, dec
     if not conf.remote_slugs or not isinstance(tool_input, dict):
         return
     layers = _mcp_keyed(tool_input)
-    slugs, unknown = _mcp_targets(layers)
-    is_db = any(s[1:] == tuple(slug[1:]) for slug in slugs for s in conf.remote_slugs)
+    cands, unknown = _mcp_targets(layers)
+    is_db = _mcp_is_db(cands, conf)
     if not is_db and not unknown:
         return
     words, verb = mcptools._words(part), mcptools.verb(part)
@@ -4065,7 +4091,7 @@ def _perl_inplace_files(rest: list[str]) -> list[str]:
 
 
 # 플러그인 스크립트의 출력 인자(규칙 8·2·12·스킬 소스가 함께 본다): 스크립트 → (출력 옵션, 그 스크립트의 모든 긴 옵션 — argparse
-# 약어 판별용). `--out V`·`--out=V`·유일한 접두사 약어(`--ou`). 위치 인자를 쓰는 꼴(`mask_pii --in-place`, `jira_fields extract
+# 약어 판별용). `--out V`·`--out=V`·3자 이상 접두사 약어(`--o` — 출력 옵션은 유일성을 보지 않는다, F2 r2). 위치 인자를 쓰는 꼴(`mask_pii --in-place`, `jira_fields extract
 # --consume`)은 `_script_out_targets`가 따로 본다.
 SCRIPT_OUT_OPTS = {
     "mask_pii.py": (("--out",), ("--check", "--changed", "--staged", "--events", "--out", "--in-place", "--db", "--json",
@@ -4086,35 +4112,41 @@ SCRIPT_OUT_OPTS = {
 MASK_PII_VALUE_OPTS = ("--db", "--events", "--changed", "--out", "--plugin-root")
 JIRA_FIELDS_VALUE_OPTS = ("--db", "--plugin-root", "--origin", "--meta-out", "--comments", "--comment-chars",
                           "--failed-step", "--steps-file")
-PY_FLAG_OPTS = set("uBIOEsS")
 
 
 def _script_call(argv: list[str]) -> tuple[str, list[str]] | None:
     """플러그인 스크립트 호출이면 `(스크립트 기저 이름, 그 뒤 인자)`. argv[0] 기저가 `python|python3|python3.N`이면 인터프리터
-    옵션(`-u -B -I -O -E -s -S` 묶음, 값 받는 `-X -W`) 뒤 첫 위치 인자, 아니면 argv[0]."""
+    옵션 뒤 첫 위치 인자, 아니면 argv[0]. `-m`·`-c`·`-`가 아닌 단일 대시 옵션은 모두 플래그(묶음 포함), `-X`·`-W`는 값을 받는다."""
     if not argv:
         return None
     if re.fullmatch(r"python(3(\.\d+)?)?", _base(argv[0])):
         i = 1
         while i < len(argv) and argv[i].startswith("-") and argv[i] != "-":
             a = argv[i]
-            if a in ("-X", "-W"):
-                i += 2
-                continue
-            if a[1:2] in ("X", "W") or set(a[1:]) <= PY_FLAG_OPTS:
-                i += 1
-                continue
-            return None         # `-m`·`-c`·모르는 옵션: 스크립트 파일 호출이 아니다
+            if a.startswith("--"):
+                if a == "--check-hash-based-pycs":
+                    i += 2
+                    continue
+                return None     # `--help`·`--version` 등: 스크립트를 돌리지 않는다
+            step = 1
+            for j, ch in enumerate(a[1:]):
+                if ch in "mc":
+                    return None     # `-m`·`-c`(묶음 포함): 스크립트 파일 호출이 아니다
+                if ch in "XW":
+                    step = 2 if j == len(a) - 2 else 1      # 값이 다음 단어거나 붙어 있다
+                    break
+            i += step           # 그 밖 단일 대시 옵션은 모두 플래그로 보고 계속 본다(F3)
         return (_base(argv[i]), argv[i + 1:]) if i < len(argv) else None
     return _base(argv[0]), argv[1:]
 
 
-def _opt_hit(tok: str, opt: str, longs: tuple[str, ...]) -> tuple[bool, str | None]:
-    """`tok`이 긴 옵션 `opt`(또는 유일한 접두사 약어)인가와 붙은 값(`--out=V`)."""
+def _opt_hit(tok: str, opt: str, longs: tuple[str, ...], lax: bool = False) -> tuple[bool, str | None]:
+    """`tok`이 긴 옵션 `opt`(또는 유일한 접두사 약어)인가와 붙은 값(`--out=V`). `lax`(출력 옵션 — 닫힌 쪽)면 3자 이상 접두사는
+    유일성을 보지 않고 맞다고 본다(F2: 하위 명령마다 옵션 집합이 달라 `--o`가 `--out`으로 풀린다)."""
     name, eq, val = tok.partition("=")
     if not name.startswith("--") or len(name) < 3:
         return False, None
-    if name != opt and not (opt.startswith(name) and [o for o in longs if o.startswith(name)] == [opt]):
+    if name != opt and not (opt.startswith(name) and (lax or [o for o in longs if o.startswith(name)] == [opt])):
         return False, None
     return True, (val if eq else None)
 
@@ -4125,7 +4157,7 @@ def _opt_values(rest: list[str], opts: tuple[str, ...], longs: tuple[str, ...]) 
         if a == "--":
             break
         for opt in opts:
-            hit, val = _opt_hit(a, opt, longs)
+            hit, val = _opt_hit(a, opt, longs, lax=True)
             if hit:
                 if val is not None:
                     out.append(val)
@@ -4134,8 +4166,8 @@ def _opt_values(rest: list[str], opts: tuple[str, ...], longs: tuple[str, ...]) 
     return out
 
 
-def _has_opt(rest: list[str], opt: str, longs: tuple[str, ...]) -> bool:
-    return any(_opt_hit(a, opt, longs)[0] for a in rest if a != "--")
+def _has_opt(rest: list[str], opt: str, longs: tuple[str, ...], lax: bool = False) -> bool:
+    return any(_opt_hit(a, opt, longs, lax)[0] for a in rest if a != "--")
 
 
 def _positionals(rest: list[str], value_opts: tuple[str, ...], longs: tuple[str, ...]) -> list[str]:
@@ -4163,10 +4195,10 @@ def _script_out_targets(argv: list[str]) -> list[str]:
     name, rest = call
     opts, longs = SCRIPT_OUT_OPTS[name]
     out = _opt_values(rest, opts, longs)
-    if name == "mask_pii.py" and _has_opt(rest, "--in-place", longs) and not _has_opt(rest, "--check", longs) \
+    if name == "mask_pii.py" and _has_opt(rest, "--in-place", longs, lax=True) and not _has_opt(rest, "--check", longs) \
             and not _has_opt(rest, "--events", longs):
         out += _positionals(rest, MASK_PII_VALUE_OPTS, longs)
-    if name == "jira_fields.py" and _has_opt(rest, "--consume", longs):
+    if name == "jira_fields.py" and _has_opt(rest, "--consume", longs, lax=True):
         pos = _positionals(rest, JIRA_FIELDS_VALUE_OPTS, longs)
         if pos and pos[0] == "extract":
             out += pos[1:]

@@ -944,7 +944,13 @@ def test_guard_mcp_issue_db_key_variants():
             (review, {"repo_full_name": DB_SLUG, "action": "APPROVE"}, "deny"),
             ("mcp__github__pr_write", {"repo_full_name": DB_SLUG, "action": "merge"}, "deny"),
             ("mcp__github__push_files", {"repository": "other/x", "url": url}, "ask"),
-            ("mcp__github__create_pull_request", {"owner": "me", "repo": "fork"}, None)]
+            ("mcp__github__create_pull_request", {"owner": "me", "repo": "fork"}, None),
+            # F1 r2: API URL·`api/v3`·`/pull/N`·`#N` 꼴도 이어진 두 단어가 원격 owner/repo면 이슈 DB
+            (merge, {"pr_url": f"https://api.github.com/repos/{DB_SLUG}/pulls/3"}, "deny"),
+            (merge, {"url": f"https://ghe.mock.invalid/api/v3/repos/{DB_SLUG}/pulls/3"}, "deny"),
+            (merge, {"repository": f"{DB_SLUG}/pull/3"}, "deny"), (merge, {"repository": f"{DB_SLUG}#3"}, "deny"),
+            (merge, {"url": "https://ghe.mock.invalid/other/x/pull/3"}, None),
+            (merge, {"url": "https://ghe.mock.invalid/other/x/blob/main/f"}, "ask")]
     for tool, tool_input, want in rows:
         assert decision(guard(ws, tool, tool_input, ws.base)) == want, (tool, tool_input)
 
@@ -1053,7 +1059,12 @@ def test_guard_blocks_plugin_script_outputs_into_clone():
             f"python3 {P}/db_review.py --out {c}/r.md", f"python3 {P}/triage.py run K --offline-db d --out {c}/job",
             f"python3 {P}/db_build.py --preview {c}/p", f"python3 {P}/jira_fields.py extract j.json --meta-out {c}/m.json",
             f"python3 {P}/jira_fields.py extract {c}/raw.json --consume",
-            f"env A=1 timeout 5 python3 {P}/mask_pii.py a --out {c}/b.md"]
+            f"env A=1 timeout 5 python3 {P}/mask_pii.py a --out {c}/b.md",
+            # F2 r2: 3자 이상 접두사는 유일성과 무관하게 출력 옵션(하위 명령마다 argparse 옵션 집합이 다르다)
+            f"python3 {P}/triage.py explore K --o {c}/x", f"python3 {P}/triage.py module K --o={c}/x"]
+    # F3 r2: `-m`·`-c`·`-`가 아닌 단일 대시 인터프리터 옵션은 플래그로 보고 스크립트를 찾는다
+    deny += [f"python3 {f} {P}/mask_pii.py a --out {c}/b" for f in ("-q", "-P", "-bb", "-d", "-v", "-x", "-R", "-u",
+                                                                    "-X dev", "-Wignore", "-uW ignore")]
     for cmd in deny:
         out = bash(ws, cmd, ws.base)
         assert decision(out) == "deny" and "규칙 8" in out["permissionDecisionReason"], cmd
@@ -1066,6 +1077,9 @@ def test_guard_blocks_plugin_script_outputs_into_clone():
                 f"python3 {P}/mask_pii.py --check --in-place {c}/a", f"python3 {P}/mask_pii.py --events e --in-place {c}/a",
                 f"python3 {P}/db_build.py --write --db {w}/wt"):
         assert decision(bash(ws, cmd, ws.base)) is None, cmd
+    for cmd in (f"python3 -c pass {P}/mask_pii.py a --out {c}/b", f"python3 -uc pass {P}/mask_pii.py a --out {c}/b"):
+        out = bash(ws, cmd, ws.base)
+        assert decision(out) != "deny" or "규칙 8" not in out["permissionDecisionReason"], cmd
 
 def test_guard_migrate_branch_creation_asks():
     ws = Workspace()
