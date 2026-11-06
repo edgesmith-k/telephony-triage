@@ -2137,6 +2137,8 @@ def test_guard_pushd_popd_chains_stay_fast():
             assert decision(bash(ws, cmd + "\ngit push origin HEAD:main", cwd)) == "deny", cwd
             assert time.monotonic() - t0 < 30, (cmd[:40], time.monotonic() - t0)     # 이 PC 3~6초, 예전 115~250초
     finally:
+        # 1900단계 디렉토리는 `rm -rf`로 먼저 지운다: 남으면 세션 끝 `shutil.rmtree`가 Python 3.11 이하에서 재귀 한도에 걸린다
+        subprocess.run(["rm", "-rf", str(wt / "data" / "M")], check=False)
         gitp(c, "worktree", "remove", "--force", str(wt))
 
 
