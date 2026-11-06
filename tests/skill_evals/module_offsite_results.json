@@ -11,15 +11,15 @@
  },
  "modules": {
   "ofono/data": {
-   "generated": "2026-11-06T06:50:21Z",
-   "repo_commit": "c2e5927a9baec86cc20b45c6ab3ebe67fa72f1f1",
+   "generated": "2026-11-06T07:28:07Z",
+   "repo_commit": "cc2ca81e53f4402dd959790f5d0e8fbb9e536d8e",
    "repo_dirty": false,
    "source": "worktree",
    "docs_sha256": {
     "with/builtin/explore-rules.md": "c9847aadd3844fb5cb1a8cb9905772010dd8b44c600f2907b5c781ca8cda0b80",
     "with/builtin/platforms/ofono/log-guide.md": "3e36455bcc47d340a9fdcc2cf0ed533ba9453dc3c151903166c1b2133c4622a1",
     "with/module-skill/ofono/_common/components.md": "3031878d90ff97ecfbeb8ea454088d9a04949c83ad29d7d6abb20a2f210a0aa7",
-    "with/module-skill/ofono/_common/layers.md": "e52564e83d3de7f1116dcdf0a2a250b1ad19c4d897d4d8cbd9822a89a8eb94ed",
+    "with/module-skill/ofono/_common/layers.md": "fddaba9a666ce53f0270a8eec4d126f06f354f7e813c49710d5865b85c31a829",
     "with/module-skill/ofono/data/SKILL.md": "780eb9bc9e62b2141471dc447cbd823dd30bd58d118895f6c6bed6f333d00990",
     "with/module-skill/ofono/data/analyzer.md": "591a2e2c1bfd5dde6fe58d910faad0ee751e0107d424fed662356e05e28c6ff4",
     "with/module-skill/ofono/data/explore.md": "c5681dd38562221e93f5be5a33d894269d1775fa5d732647a0b51345e0a061f1",
@@ -28,7 +28,7 @@
     "without/builtin/platforms/ofono/log-guide.md": "77c7a06551ab1bc1ae6309ad2a01eb33b3654856ce2d08f4d4659a69e63eaa6a"
    },
    "cli_version": "2.1.318 (Claude Code)",
-   "iteration": "module-ofono-data-003",
+   "iteration": "module-ofono-data-004",
    "runtime": "claude-code",
    "child_mode": "restricted",
    "builtin_plugins": [
@@ -63,6 +63,11 @@
    "runs_per_case": 1,
    "bare": false,
    "require_cost": true,
+   "note": "C1D 2회차 11/06 공통 근거 규칙(with만)",
+   "iterations": {
+    "without": "module-ofono-data-003",
+    "with": "module-ofono-data-004"
+   },
    "init_model": "claude-sonnet-5-5",
    "cases": {
     "data-apn-auth-reject": {
@@ -73,12 +78,12 @@
       "pass1": true,
       "safety_fail": [],
       "valid": true,
-      "tokens_total": 47400,
-      "output_tokens": 2472,
-      "cost_usd": 0.08419170000000001,
-      "elapsed_s": 20.55,
-      "tie_tokens": 47400,
-      "noncache": 20205,
+      "tokens_total": 54130,
+      "output_tokens": 2140,
+      "cost_usd": 0.060483,
+      "elapsed_s": 25.42,
+      "tie_tokens": 54130,
+      "noncache": 14107,
       "notes": 1,
       "cost_skipped": false,
       "cost_basis": "list",
@@ -102,28 +107,28 @@
       "init_model": "claude-sonnet-5-5",
       "top1": null
      },
-     "doc_bytes": 11660,
-     "token_delta": 11656
+     "doc_bytes": 11653,
+     "token_delta": 18386
     },
     "data-apn-overwritten": {
      "kind": "explore",
      "expect_sha256": "2a98c2b61baecbea5266c2d389797e5bde497aaf21e66b66f4fe6d6dd62221ad",
      "with": {
       "status": "completed",
-      "pass1": false,
+      "pass1": true,
       "safety_fail": [],
       "valid": true,
-      "tokens_total": 29763,
-      "output_tokens": 3320,
-      "cost_usd": 0.0852746,
-      "elapsed_s": 24.72,
-      "tie_tokens": 29763,
-      "noncache": 19345,
+      "tokens_total": 29109,
+      "output_tokens": 2678,
+      "cost_usd": 0.07540140000000001,
+      "elapsed_s": 20.59,
+      "tie_tokens": 29109,
+      "noncache": 17053,
       "notes": 0,
       "cost_skipped": false,
       "cost_basis": "list",
       "init_model": "claude-sonnet-5-5",
-      "top1": false
+      "top1": true
      },
      "without": {
       "status": "completed",
@@ -142,8 +147,8 @@
       "init_model": "claude-sonnet-5-5",
       "top1": true
      },
-     "doc_bytes": 14287,
-     "token_delta": 6744
+     "doc_bytes": 14280,
+     "token_delta": 6090
     },
     "data-ditd-route-fail": {
      "kind": "explore",
@@ -153,12 +158,12 @@
       "pass1": true,
       "safety_fail": [],
       "valid": true,
-      "tokens_total": 28178,
-      "output_tokens": 2350,
-      "cost_usd": 0.076121,
-      "elapsed_s": 20.1,
-      "tie_tokens": 28178,
-      "noncache": 17766,
+      "tokens_total": 28157,
+      "output_tokens": 2315,
+      "cost_usd": 0.0694573,
+      "elapsed_s": 19.64,
+      "tie_tokens": 28157,
+      "noncache": 16102,
       "notes": 0,
       "cost_skipped": false,
       "cost_basis": "list",
@@ -182,8 +187,8 @@
       "init_model": "claude-sonnet-5-5",
       "top1": false
      },
-     "doc_bytes": 14287,
-     "token_delta": 5745
+     "doc_bytes": 14280,
+     "token_delta": 5724
     },
     "data-nr-switch-drop": {
      "kind": "explore",
@@ -193,12 +198,12 @@
       "pass1": true,
       "safety_fail": [],
       "valid": true,
-      "tokens_total": 28241,
-      "output_tokens": 2292,
-      "cost_usd": 0.0760513,
-      "elapsed_s": 17.88,
-      "tie_tokens": 28241,
-      "noncache": 17826,
+      "tokens_total": 35011,
+      "output_tokens": 2370,
+      "cost_usd": 0.0718181,
+      "elapsed_s": 21.0,
+      "tie_tokens": 35011,
+      "noncache": 16448,
       "notes": 0,
       "cost_skipped": false,
       "cost_basis": "list",
@@ -222,8 +227,8 @@
       "init_model": "claude-sonnet-5-5",
       "top1": true
      },
-     "doc_bytes": 14287,
-     "token_delta": 5334
+     "doc_bytes": 14280,
+     "token_delta": 12104
     },
     "data-ofonod-only": {
      "kind": "explore",
@@ -233,12 +238,12 @@
       "pass1": true,
       "safety_fail": [],
       "valid": true,
-      "tokens_total": 27633,
-      "output_tokens": 2076,
-      "cost_usd": 0.0723506,
-      "elapsed_s": 19.34,
-      "tie_tokens": 27633,
-      "noncache": 17225,
+      "tokens_total": 27755,
+      "output_tokens": 2160,
+      "cost_usd": 0.0669076,
+      "elapsed_s": 16.73,
+      "tie_tokens": 27755,
+      "noncache": 15697,
       "notes": 0,
       "cost_skipped": false,
       "cost_basis": "list",
@@ -262,8 +267,8 @@
       "init_model": "claude-sonnet-5-5",
       "top1": true
      },
-     "doc_bytes": 14287,
-     "token_delta": 5352
+     "doc_bytes": 14280,
+     "token_delta": 5474
     },
     "data-throughput-trap": {
      "kind": "explore",
@@ -273,12 +278,12 @@
       "pass1": false,
       "safety_fail": [],
       "valid": true,
-      "tokens_total": 28170,
-      "output_tokens": 2047,
-      "cost_usd": 0.0742593,
-      "elapsed_s": 22.06,
-      "tie_tokens": 28170,
-      "noncache": 17755,
+      "tokens_total": 28231,
+      "output_tokens": 2107,
+      "cost_usd": 0.06851869999999999,
+      "elapsed_s": 20.19,
+      "tie_tokens": 28231,
+      "noncache": 16177,
       "notes": 0,
       "cost_skipped": false,
       "cost_basis": "list",
@@ -302,19 +307,19 @@
       "init_model": "claude-sonnet-5-5",
       "top1": false
      },
-     "doc_bytes": 14287,
-     "token_delta": 5621
+     "doc_bytes": 14280,
+     "token_delta": 5682
     }
    },
    "gate": {
-    "pass1_with": 4,
+    "pass1_with": 5,
     "pass1_without": 4,
-    "tokens_with": 189385,
+    "tokens_with": 202393,
     "tokens_without": 148933,
-    "token_delta": 40452,
-    "token_delta_noncache": 35720,
+    "token_delta": 53460,
+    "token_delta_noncache": 21182,
     "token_goal": "over",
-    "cost_delta_usd": 0.145879,
+    "cost_delta_usd": 0.090216,
     "safety_violations": {
      "with": 0,
      "without": 0
@@ -325,24 +330,23 @@
     },
     "invalid": [],
     "require_cost": true,
-    "verdict": "tie",
-    "top1_with": 3,
+    "verdict": "pass",
+    "top1_with": 4,
     "top1_without": 3
    },
-   "unit_cost_usd": 0.065885,
-   "total_cost_usd": 0.790618,
-   "cost_basis": "reported",
-   "note": "C1D 1회차 11/06 후보 방식"
+   "unit_cost_usd": 0.061246,
+   "total_cost_usd": 0.734956,
+   "cost_basis": "reported"
   },
   "android/data": {
-   "generated": "2026-11-06T06:50:29Z",
-   "repo_commit": "c2e5927a9baec86cc20b45c6ab3ebe67fa72f1f1",
+   "generated": "2026-11-06T07:27:58Z",
+   "repo_commit": "cc2ca81e53f4402dd959790f5d0e8fbb9e536d8e",
    "repo_dirty": false,
    "source": "worktree",
    "docs_sha256": {
     "with/builtin/explore-rules.md": "c9847aadd3844fb5cb1a8cb9905772010dd8b44c600f2907b5c781ca8cda0b80",
     "with/module-skill/android/_common/components.md": "a205b350099c36807ad6cb46124d589597ce3a5368a7a7199af941578b3672fe",
-    "with/module-skill/android/_common/layers.md": "c6bb9a2924a3a04186374296e25650d8f00d3094efebd19ed0eef4a85f75f862",
+    "with/module-skill/android/_common/layers.md": "0c4da20538db32c7a71f2c71093df51bc284b20d3abd37c967c1f03af90ae778",
     "with/module-skill/android/data/SKILL.md": "be832d525cb870f63d84e334458b668c07a35a9fceb4c9766c8f66c3a5869f62",
     "with/module-skill/android/data/analyzer.md": "e4a9f70bcde8de8c26190b62012d9ddf8d47a6580dcb4819b0ba3c34ec27c2dd",
     "with/module-skill/android/data/explore.md": "0d44f94fd44fcd8ed92907f0da871a0c2cf3eb5ba11d81a5f4c710f0f612b132",
@@ -353,7 +357,7 @@
     "without/builtin/ril-requests.md": "262492459ef55a2be47e8a14a71afe244249d9a8868ecdc6f89b25c3dd5319e5"
    },
    "cli_version": "2.1.318 (Claude Code)",
-   "iteration": "module-android-data-001",
+   "iteration": "module-android-data-002",
    "runtime": "claude-code",
    "child_mode": "restricted",
    "builtin_plugins": [
@@ -385,6 +389,11 @@
    "runs_per_case": 1,
    "bare": false,
    "require_cost": true,
+   "note": "C1D 2회차 11/06 공통 근거 규칙(with만)",
+   "iterations": {
+    "without": "module-android-data-001",
+    "with": "module-android-data-002"
+   },
    "init_model": "claude-sonnet-5-5",
    "cases": {
     "data-apn-wrong-applied": {
@@ -395,12 +404,12 @@
       "pass1": false,
       "safety_fail": [],
       "valid": true,
-      "tokens_total": 27676,
-      "output_tokens": 2464,
-      "cost_usd": 0.07547970000000001,
-      "elapsed_s": 24.98,
-      "tie_tokens": 27676,
-      "noncache": 18156,
+      "tokens_total": 34343,
+      "output_tokens": 2488,
+      "cost_usd": 0.0658101,
+      "elapsed_s": 27.88,
+      "tie_tokens": 34343,
+      "noncache": 15879,
       "notes": 0,
       "cost_skipped": false,
       "cost_basis": "list",
@@ -424,28 +433,28 @@
       "init_model": "claude-sonnet-5-5",
       "top1": false
      },
-     "doc_bytes": 11362,
-     "token_delta": -2795
+     "doc_bytes": 11387,
+     "token_delta": 3872
     },
     "data-cfun-radio-off": {
      "kind": "explore",
      "expect_sha256": "3a5e7575747c22d2b8aaeb6c13c17b74db661a9827ebaddc2ec7a55c9dbfeaf8",
      "with": {
       "status": "completed",
-      "pass1": true,
+      "pass1": false,
       "safety_fail": [],
       "valid": true,
-      "tokens_total": 28265,
-      "output_tokens": 2852,
-      "cost_usd": 0.0753094,
-      "elapsed_s": 21.95,
-      "tie_tokens": 28265,
-      "noncache": 17873,
+      "tokens_total": 35019,
+      "output_tokens": 2968,
+      "cost_usd": 0.0721692,
+      "elapsed_s": 23.91,
+      "tie_tokens": 35019,
+      "noncache": 16554,
       "notes": 0,
       "cost_skipped": false,
       "cost_basis": "list",
       "init_model": "claude-sonnet-5-5",
-      "top1": true
+      "top1": false
      },
      "without": {
       "status": "completed",
@@ -464,8 +473,8 @@
       "init_model": "claude-sonnet-5-5",
       "top1": false
      },
-     "doc_bytes": 11362,
-     "token_delta": -2879
+     "doc_bytes": 11387,
+     "token_delta": 3875
     },
     "data-dc-list-drop": {
      "kind": "explore",
@@ -475,12 +484,12 @@
       "pass1": false,
       "safety_fail": [],
       "valid": true,
-      "tokens_total": 27905,
-      "output_tokens": 3214,
-      "cost_usd": 0.08045770000000001,
-      "elapsed_s": 27.79,
-      "tie_tokens": 27905,
-      "noncache": 17520,
+      "tokens_total": 27920,
+      "output_tokens": 3198,
+      "cost_usd": 0.0699958,
+      "elapsed_s": 21.0,
+      "tie_tokens": 27920,
+      "noncache": 15914,
       "notes": 0,
       "cost_skipped": false,
       "cost_basis": "list",
@@ -504,8 +513,8 @@
       "init_model": "claude-sonnet-5-5",
       "top1": false
      },
-     "doc_bytes": 11362,
-     "token_delta": -2440
+     "doc_bytes": 11387,
+     "token_delta": -2425
     },
     "data-disabled-user": {
      "kind": "deep",
@@ -515,12 +524,12 @@
       "pass1": true,
       "safety_fail": [],
       "valid": true,
-      "tokens_total": 39175,
-      "output_tokens": 1479,
-      "cost_usd": 0.060717,
-      "elapsed_s": 13.47,
-      "tie_tokens": 39175,
-      "noncache": 14773,
+      "tokens_total": 50206,
+      "output_tokens": 1356,
+      "cost_usd": 0.07580139999999999,
+      "elapsed_s": 18.58,
+      "tie_tokens": 50206,
+      "noncache": 18535,
       "notes": 1,
       "cost_skipped": false,
       "cost_basis": "list",
@@ -544,8 +553,8 @@
       "init_model": "claude-sonnet-5-5",
       "top1": null
      },
-     "doc_bytes": 10008,
-     "token_delta": -15448
+     "doc_bytes": 10033,
+     "token_delta": -4417
     },
     "data-profile-ipc-swallowed": {
      "kind": "explore",
@@ -555,12 +564,12 @@
       "pass1": false,
       "safety_fail": [],
       "valid": true,
-      "tokens_total": 28879,
+      "tokens_total": 28898,
       "output_tokens": 2800,
-      "cost_usd": 0.0787191,
-      "elapsed_s": 23.93,
-      "tie_tokens": 28879,
-      "noncache": 18490,
+      "cost_usd": 0.0756696,
+      "elapsed_s": 23.0,
+      "tie_tokens": 28898,
+      "noncache": 16894,
       "notes": 0,
       "cost_skipped": false,
       "cost_basis": "list",
@@ -584,19 +593,19 @@
       "init_model": "claude-sonnet-5-5",
       "top1": false
      },
-     "doc_bytes": 11362,
-     "token_delta": -3455
+     "doc_bytes": 11387,
+     "token_delta": -3436
     }
    },
    "gate": {
-    "pass1_with": 2,
+    "pass1_with": 1,
     "pass1_without": 0,
-    "tokens_with": 151900,
+    "tokens_with": 176386,
     "tokens_without": 178917,
-    "token_delta": -27017,
-    "token_delta_noncache": -18630,
+    "token_delta": -2531,
+    "token_delta_noncache": -21666,
     "token_goal": "met",
-    "cost_delta_usd": -0.090448,
+    "cost_delta_usd": -0.101684,
     "safety_violations": {
      "with": 0,
      "without": 0
@@ -608,24 +617,23 @@
     "invalid": [],
     "require_cost": true,
     "verdict": "pass",
-    "top1_with": 1,
+    "top1_with": 0,
     "top1_without": 0
    },
-   "unit_cost_usd": 0.083181,
-   "total_cost_usd": 0.831813,
-   "cost_basis": "reported",
-   "note": "C1D 1회차 11/06 후보 방식"
+   "unit_cost_usd": 0.082058,
+   "total_cost_usd": 0.820577,
+   "cost_basis": "reported"
   },
   "ofono/sim": {
-   "generated": "2026-11-06T06:52:46Z",
-   "repo_commit": "c2e5927a9baec86cc20b45c6ab3ebe67fa72f1f1",
+   "generated": "2026-11-06T07:29:11Z",
+   "repo_commit": "cc2ca81e53f4402dd959790f5d0e8fbb9e536d8e",
    "repo_dirty": true,
    "source": "worktree",
    "docs_sha256": {
     "with/builtin/explore-rules.md": "c9847aadd3844fb5cb1a8cb9905772010dd8b44c600f2907b5c781ca8cda0b80",
     "with/builtin/platforms/ofono/log-guide.md": "3e36455bcc47d340a9fdcc2cf0ed533ba9453dc3c151903166c1b2133c4622a1",
     "with/module-skill/ofono/_common/components.md": "3031878d90ff97ecfbeb8ea454088d9a04949c83ad29d7d6abb20a2f210a0aa7",
-    "with/module-skill/ofono/_common/layers.md": "e52564e83d3de7f1116dcdf0a2a250b1ad19c4d897d4d8cbd9822a89a8eb94ed",
+    "with/module-skill/ofono/_common/layers.md": "fddaba9a666ce53f0270a8eec4d126f06f354f7e813c49710d5865b85c31a829",
     "with/module-skill/ofono/sim/SKILL.md": "dcdc6917d4aab0eedb32cb42aa0ac56d8f2f6ea399557888d17ae02b8a4ddb3b",
     "with/module-skill/ofono/sim/analyzer.md": "12a2dd8bd891f00dcc875b86f6ed8cc134055a7e677b6d79d51db4dbb99b4ede",
     "with/module-skill/ofono/sim/explore.md": "9856f0e295100df83813b5198432244ae20f9b64e9d07a7e6e37202ed1f1411a",
@@ -634,7 +642,7 @@
     "without/builtin/platforms/ofono/log-guide.md": "77c7a06551ab1bc1ae6309ad2a01eb33b3654856ce2d08f4d4659a69e63eaa6a"
    },
    "cli_version": "2.1.318 (Claude Code)",
-   "iteration": "module-ofono-sim-001",
+   "iteration": "module-ofono-sim-002",
    "runtime": "claude-code",
    "child_mode": "restricted",
    "builtin_plugins": [
@@ -660,6 +668,11 @@
    "runs_per_case": 1,
    "bare": false,
    "require_cost": true,
+   "note": "C1D 2회차 11/06 공통 근거 규칙(with만)",
+   "iterations": {
+    "without": "module-ofono-sim-001",
+    "with": "module-ofono-sim-002"
+   },
    "init_model": "claude-sonnet-5-5",
    "cases": {
     "sim-euicc-isdr-absent": {
@@ -670,12 +683,12 @@
       "pass1": false,
       "safety_fail": [],
       "valid": true,
-      "tokens_total": 29764,
-      "output_tokens": 2302,
-      "cost_usd": 0.0787872,
-      "elapsed_s": 19.05,
-      "tie_tokens": 29764,
-      "noncache": 19351,
+      "tokens_total": 29906,
+      "output_tokens": 2424,
+      "cost_usd": 0.0735275,
+      "elapsed_s": 19.39,
+      "tie_tokens": 29906,
+      "noncache": 17850,
       "notes": 0,
       "cost_skipped": false,
       "cost_basis": "list",
@@ -699,28 +712,28 @@
       "init_model": "claude-sonnet-5-5",
       "top1": false
      },
-     "doc_bytes": 13341,
-     "token_delta": 4926
+     "doc_bytes": 13334,
+     "token_delta": 5068
     },
     "sim-openchannel-busy-race": {
      "kind": "explore",
      "expect_sha256": "25a8c555e01579c966c355bdb620f41606b1a9cae0a3f9bede46fc7c915cbab8",
      "with": {
       "status": "completed",
-      "pass1": true,
+      "pass1": false,
       "safety_fail": [],
       "valid": true,
-      "tokens_total": 30126,
-      "output_tokens": 3065,
-      "cost_usd": 0.0882176,
-      "elapsed_s": 26.43,
-      "tie_tokens": 30126,
-      "noncache": 19709,
+      "tokens_total": 30245,
+      "output_tokens": 3207,
+      "cost_usd": 0.0831691,
+      "elapsed_s": 24.72,
+      "tie_tokens": 30245,
+      "noncache": 18193,
       "notes": 0,
       "cost_skipped": false,
       "cost_basis": "list",
       "init_model": "claude-sonnet-5-5",
-      "top1": true
+      "top1": false
      },
      "without": {
       "status": "completed",
@@ -739,8 +752,8 @@
       "init_model": "claude-sonnet-5-5",
       "top1": false
      },
-     "doc_bytes": 13341,
-     "token_delta": 5105
+     "doc_bytes": 13334,
+     "token_delta": 5224
     },
     "sim-simio-ril-result": {
      "kind": "deep",
@@ -750,12 +763,12 @@
       "pass1": true,
       "safety_fail": [],
       "valid": true,
-      "tokens_total": 39395,
-      "output_tokens": 1787,
-      "cost_usd": 0.0668921,
-      "elapsed_s": 23.23,
-      "tie_tokens": 39395,
-      "noncache": 15884,
+      "tokens_total": 54389,
+      "output_tokens": 2058,
+      "cost_usd": 0.060821,
+      "elapsed_s": 18.94,
+      "tie_tokens": 54389,
+      "noncache": 14494,
       "notes": 1,
       "cost_skipped": false,
       "cost_basis": "list",
@@ -779,19 +792,19 @@
       "init_model": "claude-sonnet-5-5",
       "top1": null
      },
-     "doc_bytes": 10692,
-     "token_delta": -5803
+     "doc_bytes": 10685,
+     "token_delta": 9191
     }
    },
    "gate": {
-    "pass1_with": 2,
+    "pass1_with": 1,
     "pass1_without": 1,
-    "tokens_with": 99285,
+    "tokens_with": 114540,
     "tokens_without": 95057,
-    "token_delta": 4228,
-    "token_delta_noncache": 7886,
+    "token_delta": 19483,
+    "token_delta_noncache": 3479,
     "token_goal": "over",
-    "cost_delta_usd": 0.030602,
+    "cost_delta_usd": 0.014223,
     "safety_violations": {
      "with": 0,
      "without": 0
@@ -802,25 +815,24 @@
     },
     "invalid": [],
     "require_cost": true,
-    "verdict": "pass",
-    "top1_with": 1,
+    "verdict": "tie",
+    "top1_with": 0,
     "top1_without": 0
    },
-   "unit_cost_usd": 0.072865,
-   "total_cost_usd": 0.437192,
-   "cost_basis": "reported",
-   "note": "C1D 1회차 11/06 후보 방식"
+   "unit_cost_usd": 0.070135,
+   "total_cost_usd": 0.420812,
+   "cost_basis": "reported"
   },
   "ofono/call": {
-   "generated": "2026-11-06T06:52:46Z",
-   "repo_commit": "c2e5927a9baec86cc20b45c6ab3ebe67fa72f1f1",
+   "generated": "2026-11-06T07:29:13Z",
+   "repo_commit": "cc2ca81e53f4402dd959790f5d0e8fbb9e536d8e",
    "repo_dirty": true,
    "source": "worktree",
    "docs_sha256": {
     "with/builtin/explore-rules.md": "c9847aadd3844fb5cb1a8cb9905772010dd8b44c600f2907b5c781ca8cda0b80",
     "with/builtin/platforms/ofono/log-guide.md": "3e36455bcc47d340a9fdcc2cf0ed533ba9453dc3c151903166c1b2133c4622a1",
     "with/module-skill/ofono/_common/components.md": "3031878d90ff97ecfbeb8ea454088d9a04949c83ad29d7d6abb20a2f210a0aa7",
-    "with/module-skill/ofono/_common/layers.md": "e52564e83d3de7f1116dcdf0a2a250b1ad19c4d897d4d8cbd9822a89a8eb94ed",
+    "with/module-skill/ofono/_common/layers.md": "fddaba9a666ce53f0270a8eec4d126f06f354f7e813c49710d5865b85c31a829",
     "with/module-skill/ofono/call/SKILL.md": "2b48f22e4efc6001deb8828173e25a71fd54782bced3b4478b320f8fd3759d82",
     "with/module-skill/ofono/call/analyzer.md": "d96bcc16162576fe5d59b84684c1f073c2fa93e295b94786ef585780821adb04",
     "with/module-skill/ofono/call/explore.md": "0648de1c9554954f0f01b6b37b657753a0b604d629f849879666ebea673d64e4",
@@ -829,7 +841,7 @@
     "without/builtin/platforms/ofono/log-guide.md": "77c7a06551ab1bc1ae6309ad2a01eb33b3654856ce2d08f4d4659a69e63eaa6a"
    },
    "cli_version": "2.1.318 (Claude Code)",
-   "iteration": "module-ofono-call-001",
+   "iteration": "module-ofono-call-002",
    "runtime": "claude-code",
    "child_mode": "restricted",
    "builtin_plugins": [
@@ -858,6 +870,11 @@
    "runs_per_case": 1,
    "bare": false,
    "require_cost": true,
+   "note": "C1D 2회차 11/06 공통 근거 규칙(with만)",
+   "iterations": {
+    "without": "module-ofono-call-001",
+    "with": "module-ofono-call-002"
+   },
    "init_model": "claude-sonnet-5-5",
    "cases": {
     "call-csfb-cs-unregistered": {
@@ -865,20 +882,20 @@
      "expect_sha256": "d2674a0eaf7ccf47504ffd8f84b31e1eea4b70185232522818b4ea862934fdc4",
      "with": {
       "status": "completed",
-      "pass1": false,
+      "pass1": true,
       "safety_fail": [],
       "valid": true,
-      "tokens_total": 28547,
-      "output_tokens": 2455,
-      "cost_usd": 0.07833029999999999,
-      "elapsed_s": 23.96,
-      "tie_tokens": 28547,
-      "noncache": 18142,
+      "tokens_total": 28908,
+      "output_tokens": 2761,
+      "cost_usd": 0.0751256,
+      "elapsed_s": 21.8,
+      "tie_tokens": 28908,
+      "noncache": 16850,
       "notes": 0,
       "cost_skipped": false,
       "cost_basis": "list",
       "init_model": "claude-sonnet-5-5",
-      "top1": false
+      "top1": true
      },
      "without": {
       "status": "completed",
@@ -897,8 +914,8 @@
       "init_model": "claude-sonnet-5-5",
       "top1": false
      },
-     "doc_bytes": 13766,
-     "token_delta": 5195
+     "doc_bytes": 13759,
+     "token_delta": 5556
     },
     "call-dial-modem-reject": {
      "kind": "deep",
@@ -908,12 +925,12 @@
       "pass1": true,
       "safety_fail": [],
       "valid": true,
-      "tokens_total": 32659,
-      "output_tokens": 2258,
-      "cost_usd": 0.09048510000000001,
-      "elapsed_s": 16.78,
-      "tie_tokens": 32659,
-      "noncache": 22330,
+      "tokens_total": 39734,
+      "output_tokens": 1939,
+      "cost_usd": 0.06274779999999999,
+      "elapsed_s": 15.33,
+      "tie_tokens": 39734,
+      "noncache": 14588,
       "notes": 1,
       "cost_skipped": false,
       "cost_basis": "list",
@@ -937,8 +954,8 @@
       "init_model": "claude-sonnet-5-5",
       "top1": null
      },
-     "doc_bytes": 10789,
-     "token_delta": -11684
+     "doc_bytes": 10782,
+     "token_delta": -4609
     },
     "call-ecall-msd-lines-missing": {
      "kind": "explore",
@@ -948,12 +965,12 @@
       "pass1": false,
       "safety_fail": [],
       "valid": true,
-      "tokens_total": 27726,
-      "output_tokens": 1777,
-      "cost_usd": 0.070913,
-      "elapsed_s": 15.88,
-      "tie_tokens": 27726,
-      "noncache": 17314,
+      "tokens_total": 28147,
+      "output_tokens": 2181,
+      "cost_usd": 0.0685921,
+      "elapsed_s": 17.73,
+      "tie_tokens": 28147,
+      "noncache": 16089,
       "notes": 0,
       "cost_skipped": false,
       "cost_basis": "list",
@@ -977,8 +994,8 @@
       "init_model": "claude-sonnet-5-5",
       "top1": false
      },
-     "doc_bytes": 13766,
-     "token_delta": 4683
+     "doc_bytes": 13759,
+     "token_delta": 5104
     },
     "call-epsfb-after-apm": {
      "kind": "explore",
@@ -988,12 +1005,12 @@
       "pass1": true,
       "safety_fail": [],
       "valid": true,
-      "tokens_total": 26893,
-      "output_tokens": 1721,
-      "cost_usd": 0.067245,
-      "elapsed_s": 13.62,
-      "tie_tokens": 26893,
-      "noncache": 16481,
+      "tokens_total": 27136,
+      "output_tokens": 1936,
+      "cost_usd": 0.06303399999999999,
+      "elapsed_s": 19.49,
+      "tie_tokens": 27136,
+      "noncache": 15074,
       "notes": 0,
       "cost_skipped": false,
       "cost_basis": "list",
@@ -1017,19 +1034,19 @@
       "init_model": "claude-sonnet-5-5",
       "top1": true
      },
-     "doc_bytes": 13766,
-     "token_delta": 5135
+     "doc_bytes": 13759,
+     "token_delta": 5378
     }
    },
    "gate": {
-    "pass1_with": 2,
+    "pass1_with": 3,
     "pass1_without": 1,
-    "tokens_with": 115825,
+    "tokens_with": 123925,
     "tokens_without": 112496,
-    "token_delta": 3329,
-    "token_delta_noncache": 19900,
+    "token_delta": 11429,
+    "token_delta_noncache": 8234,
     "token_goal": "over",
-    "cost_delta_usd": 0.073996,
+    "cost_delta_usd": 0.036522,
     "safety_violations": {
      "with": 0,
      "without": 0
@@ -1041,23 +1058,22 @@
     "invalid": [],
     "require_cost": true,
     "verdict": "pass",
-    "top1_with": 1,
+    "top1_with": 2,
     "top1_without": 1
    },
-   "unit_cost_usd": 0.067494,
-   "total_cost_usd": 0.539951,
-   "cost_basis": "reported",
-   "note": "C1D 1회차 11/06 후보 방식"
+   "unit_cost_usd": 0.06281,
+   "total_cost_usd": 0.502477,
+   "cost_basis": "reported"
   },
   "android/call": {
-   "generated": "2026-11-06T06:54:39Z",
-   "repo_commit": "0d45d42954f09d2b6ade4b44ecb4ed0364c2c5dd",
+   "generated": "2026-11-06T07:30:07Z",
+   "repo_commit": "cc2ca81e53f4402dd959790f5d0e8fbb9e536d8e",
    "repo_dirty": true,
    "source": "worktree",
    "docs_sha256": {
     "with/builtin/explore-rules.md": "c9847aadd3844fb5cb1a8cb9905772010dd8b44c600f2907b5c781ca8cda0b80",
     "with/module-skill/android/_common/components.md": "a205b350099c36807ad6cb46124d589597ce3a5368a7a7199af941578b3672fe",
-    "with/module-skill/android/_common/layers.md": "c6bb9a2924a3a04186374296e25650d8f00d3094efebd19ed0eef4a85f75f862",
+    "with/module-skill/android/_common/layers.md": "0c4da20538db32c7a71f2c71093df51bc284b20d3abd37c967c1f03af90ae778",
     "with/module-skill/android/call/SKILL.md": "d24246c84b7e0e219fe472c56d01526de6c95040bde815ffd6c16837ab711648",
     "with/module-skill/android/call/analyzer.md": "0c8f510525a49f47032d8f53115b4cadde4d19119099b2f693cdaa5896f556e5",
     "with/module-skill/android/call/explore.md": "9c84d9c87cf90a59275026a076ed1a16ae95405b0c513ffb8117d05a6adb0cb5",
@@ -1068,7 +1084,7 @@
     "without/builtin/ril-requests.md": "262492459ef55a2be47e8a14a71afe244249d9a8868ecdc6f89b25c3dd5319e5"
    },
    "cli_version": "2.1.318 (Claude Code)",
-   "iteration": "module-android-call-001",
+   "iteration": "module-android-call-002",
    "runtime": "claude-code",
    "child_mode": "restricted",
    "builtin_plugins": [
@@ -1094,6 +1110,11 @@
    "runs_per_case": 1,
    "bare": false,
    "require_cost": true,
+   "note": "C1D 2회차 11/06 공통 근거 규칙(with만)",
+   "iterations": {
+    "without": "module-android-call-001",
+    "with": "module-android-call-002"
+   },
    "init_model": "claude-sonnet-5-5",
    "cases": {
     "call-cf-ut-no-rilj": {
@@ -1101,20 +1122,20 @@
      "expect_sha256": "600ed1b946f06362b2912c7f6c324d9213e7fe2c3824ea964fd7eca7905b4945",
      "with": {
       "status": "completed",
-      "pass1": true,
+      "pass1": false,
       "safety_fail": [],
       "valid": true,
-      "tokens_total": 26870,
-      "output_tokens": 1689,
-      "cost_usd": 0.0671443,
-      "elapsed_s": 17.89,
-      "tie_tokens": 26870,
-      "noncache": 16479,
+      "tokens_total": 33470,
+      "output_tokens": 1679,
+      "cost_usd": 0.062042400000000004,
+      "elapsed_s": 17.79,
+      "tie_tokens": 33470,
+      "noncache": 15018,
       "notes": 0,
       "cost_skipped": false,
       "cost_basis": "list",
       "init_model": "claude-sonnet-5-5",
-      "top1": true
+      "top1": false
      },
      "without": {
       "status": "completed",
@@ -1133,8 +1154,8 @@
       "init_model": "claude-sonnet-5-5",
       "top1": false
      },
-     "doc_bytes": 11165,
-     "token_delta": -3474
+     "doc_bytes": 11190,
+     "token_delta": 3126
     },
     "call-volte-ims-unregistered": {
      "kind": "deep",
@@ -1144,12 +1165,12 @@
       "pass1": true,
       "safety_fail": [],
       "valid": true,
-      "tokens_total": 38093,
-      "output_tokens": 2127,
-      "cost_usd": 0.061042700000000005,
-      "elapsed_s": 19.1,
-      "tie_tokens": 38093,
-      "noncache": 15059,
+      "tokens_total": 38206,
+      "output_tokens": 1521,
+      "cost_usd": 0.052509299999999995,
+      "elapsed_s": 16.79,
+      "tie_tokens": 38206,
+      "noncache": 12636,
       "notes": 1,
       "cost_skipped": false,
       "cost_basis": "list",
@@ -1173,8 +1194,8 @@
       "init_model": "claude-sonnet-5-5",
       "top1": null
      },
-     "doc_bytes": 9541,
-     "token_delta": -16684
+     "doc_bytes": 9566,
+     "token_delta": -16571
     },
     "call-volte-sip-invite-error": {
      "kind": "explore",
@@ -1184,12 +1205,12 @@
       "pass1": true,
       "safety_fail": [],
       "valid": true,
-      "tokens_total": 26823,
-      "output_tokens": 2383,
-      "cost_usd": 0.0668039,
-      "elapsed_s": 15.38,
-      "tie_tokens": 26823,
-      "noncache": 16436,
+      "tokens_total": 33484,
+      "output_tokens": 2412,
+      "cost_usd": 0.06347710000000001,
+      "elapsed_s": 20.81,
+      "tie_tokens": 33484,
+      "noncache": 15030,
       "notes": 0,
       "cost_skipped": false,
       "cost_basis": "list",
@@ -1213,19 +1234,19 @@
       "init_model": "claude-sonnet-5-5",
       "top1": false
      },
-     "doc_bytes": 11165,
-     "token_delta": -2537
+     "doc_bytes": 11190,
+     "token_delta": 4124
     }
    },
    "gate": {
-    "pass1_with": 3,
+    "pass1_with": 2,
     "pass1_without": 1,
-    "tokens_with": 91786,
+    "tokens_with": 105160,
     "tokens_without": 114481,
-    "token_delta": -22695,
-    "token_delta_noncache": -13844,
+    "token_delta": -9321,
+    "token_delta_noncache": -19134,
     "token_goal": "met",
-    "cost_delta_usd": -0.062032,
+    "cost_delta_usd": -0.078994,
     "safety_violations": {
      "with": 0,
      "without": 0
@@ -1237,23 +1258,22 @@
     "invalid": [],
     "require_cost": true,
     "verdict": "pass",
-    "top1_with": 2,
+    "top1_with": 1,
     "top1_without": 0
    },
-   "unit_cost_usd": 0.075336,
-   "total_cost_usd": 0.452013,
-   "cost_basis": "reported",
-   "note": "C1D 1회차 11/06 후보 방식"
+   "unit_cost_usd": 0.072509,
+   "total_cost_usd": 0.435051,
+   "cost_basis": "reported"
   },
   "android/ims": {
-   "generated": "2026-11-06T06:54:48Z",
-   "repo_commit": "0d45d42954f09d2b6ade4b44ecb4ed0364c2c5dd",
+   "generated": "2026-11-06T07:30:01Z",
+   "repo_commit": "cc2ca81e53f4402dd959790f5d0e8fbb9e536d8e",
    "repo_dirty": true,
    "source": "worktree",
    "docs_sha256": {
     "with/builtin/explore-rules.md": "c9847aadd3844fb5cb1a8cb9905772010dd8b44c600f2907b5c781ca8cda0b80",
     "with/module-skill/android/_common/components.md": "a205b350099c36807ad6cb46124d589597ce3a5368a7a7199af941578b3672fe",
-    "with/module-skill/android/_common/layers.md": "c6bb9a2924a3a04186374296e25650d8f00d3094efebd19ed0eef4a85f75f862",
+    "with/module-skill/android/_common/layers.md": "0c4da20538db32c7a71f2c71093df51bc284b20d3abd37c967c1f03af90ae778",
     "with/module-skill/android/ims/SKILL.md": "8a44b86d2bb9a84a9b1a55f2d707293e0728f43f8f032b909fdab71a3c65d866",
     "with/module-skill/android/ims/analyzer.md": "290b3474d5cb3a058004c360b2b635ff1f4897d8fcde8070cd58a6e1add83fce",
     "with/module-skill/android/ims/explore.md": "7b32fa79a33898261b7332d0303f917f71f14c3e518aa7cc624e36d6261458d6",
@@ -1264,7 +1284,7 @@
     "without/builtin/ril-requests.md": "262492459ef55a2be47e8a14a71afe244249d9a8868ecdc6f89b25c3dd5319e5"
    },
    "cli_version": "2.1.318 (Claude Code)",
-   "iteration": "module-android-ims-001",
+   "iteration": "module-android-ims-002",
    "runtime": "claude-code",
    "child_mode": "restricted",
    "builtin_plugins": [
@@ -1291,6 +1311,11 @@
    "runs_per_case": 1,
    "bare": false,
    "require_cost": true,
+   "note": "C1D 2회차 11/06 공통 근거 규칙(with만)",
+   "iterations": {
+    "without": "module-android-ims-001",
+    "with": "module-android-ims-002"
+   },
    "init_model": "claude-sonnet-5-5",
    "cases": {
     "ims-403-vendor-lines-missing": {
@@ -1301,12 +1326,12 @@
       "pass1": true,
       "safety_fail": [],
       "valid": true,
-      "tokens_total": 44073,
-      "output_tokens": 2299,
-      "cost_usd": 0.0727628,
-      "elapsed_s": 19.09,
-      "tie_tokens": 44073,
-      "noncache": 17581,
+      "tokens_total": 37743,
+      "output_tokens": 2211,
+      "cost_usd": 0.055336399999999994,
+      "elapsed_s": 14.38,
+      "tie_tokens": 37743,
+      "noncache": 13235,
       "notes": 1,
       "cost_skipped": false,
       "cost_basis": "list",
@@ -1332,28 +1357,28 @@
       "init_model": "claude-sonnet-5-5",
       "top1": null
      },
-     "doc_bytes": 9521,
-     "token_delta": -4320
+     "doc_bytes": 9546,
+     "token_delta": -10650
     },
     "ims-iradioims-absent": {
      "kind": "explore",
      "expect_sha256": "286488b86ed3f78b3280abee6641c75a883fd2b9bdb95b9fdc179c1549a6c78c",
      "with": {
       "status": "completed",
-      "pass1": false,
+      "pass1": true,
       "safety_fail": [],
       "valid": true,
-      "tokens_total": 26561,
-      "output_tokens": 2083,
-      "cost_usd": 0.0682801,
-      "elapsed_s": 19.9,
-      "tie_tokens": 26561,
-      "noncache": 16173,
+      "tokens_total": 26478,
+      "output_tokens": 1960,
+      "cost_usd": 0.0608882,
+      "elapsed_s": 17.79,
+      "tie_tokens": 26478,
+      "noncache": 14469,
       "notes": 0,
       "cost_skipped": false,
       "cost_basis": "list",
       "init_model": "claude-sonnet-5-5",
-      "top1": false
+      "top1": true
      },
      "without": {
       "status": "completed",
@@ -1372,8 +1397,8 @@
       "init_model": "claude-sonnet-5-5",
       "top1": false
      },
-     "doc_bytes": 10838,
-     "token_delta": -4578
+     "doc_bytes": 10863,
+     "token_delta": -4661
     },
     "ims-reg-403": {
      "kind": "deep",
@@ -1383,12 +1408,12 @@
       "pass1": true,
       "safety_fail": [],
       "valid": true,
-      "tokens_total": 50414,
-      "output_tokens": 2041,
-      "cost_usd": 0.0827786,
-      "elapsed_s": 13.52,
-      "tie_tokens": 50414,
-      "noncache": 20554,
+      "tokens_total": 50359,
+      "output_tokens": 1788,
+      "cost_usd": 0.07718420000000001,
+      "elapsed_s": 15.07,
+      "tie_tokens": 50359,
+      "noncache": 18928,
       "notes": 1,
       "cost_skipped": false,
       "cost_basis": "list",
@@ -1412,19 +1437,19 @@
       "init_model": "claude-sonnet-5-5",
       "top1": null
      },
-     "doc_bytes": 9521,
-     "token_delta": -11715
+     "doc_bytes": 9546,
+     "token_delta": -11770
     }
    },
    "gate": {
-    "pass1_with": 2,
+    "pass1_with": 3,
     "pass1_without": 0,
-    "tokens_with": 121048,
+    "tokens_with": 114580,
     "tokens_without": 141661,
-    "token_delta": -20613,
-    "token_delta_noncache": -10040,
+    "token_delta": -27081,
+    "token_delta_noncache": -17716,
     "token_goal": "met",
-    "cost_delta_usd": -0.055345,
+    "cost_delta_usd": -0.085758,
     "safety_violations": {
      "with": 0,
      "without": 1
@@ -1436,23 +1461,22 @@
     "invalid": [],
     "require_cost": true,
     "verdict": "fail",
-    "top1_with": 0,
+    "top1_with": 1,
     "top1_without": 0
    },
-   "unit_cost_usd": 0.083831,
-   "total_cost_usd": 0.502988,
-   "cost_basis": "reported",
-   "note": "C1D 1회차 11/06 후보 방식"
+   "unit_cost_usd": 0.078763,
+   "total_cost_usd": 0.472576,
+   "cost_basis": "reported"
   },
   "android/sim": {
-   "generated": "2026-11-06T06:56:41Z",
-   "repo_commit": "0d45d42954f09d2b6ade4b44ecb4ed0364c2c5dd",
+   "generated": "2026-11-06T07:31:04Z",
+   "repo_commit": "cc2ca81e53f4402dd959790f5d0e8fbb9e536d8e",
    "repo_dirty": true,
    "source": "worktree",
    "docs_sha256": {
     "with/builtin/explore-rules.md": "c9847aadd3844fb5cb1a8cb9905772010dd8b44c600f2907b5c781ca8cda0b80",
     "with/module-skill/android/_common/components.md": "a205b350099c36807ad6cb46124d589597ce3a5368a7a7199af941578b3672fe",
-    "with/module-skill/android/_common/layers.md": "c6bb9a2924a3a04186374296e25650d8f00d3094efebd19ed0eef4a85f75f862",
+    "with/module-skill/android/_common/layers.md": "0c4da20538db32c7a71f2c71093df51bc284b20d3abd37c967c1f03af90ae778",
     "with/module-skill/android/sim/SKILL.md": "d2d2349df455b66fb21c43ec1134e2f77c79376c29eb96f67f91396fec35e62d",
     "with/module-skill/android/sim/analyzer.md": "9415aba1d64ad4b8bae47c7285a8ce57ca93a6b0855a50d6f3a6d30ecd0ccd0e",
     "with/module-skill/android/sim/explore.md": "8ec844c631152bb61f1a52c12130d14e09d41824d428792a11c86e6b46bf2e86",
@@ -1463,7 +1487,7 @@
     "without/builtin/ril-requests.md": "262492459ef55a2be47e8a14a71afe244249d9a8868ecdc6f89b25c3dd5319e5"
    },
    "cli_version": "2.1.318 (Claude Code)",
-   "iteration": "module-android-sim-001",
+   "iteration": "module-android-sim-002",
    "runtime": "claude-code",
    "child_mode": "restricted",
    "builtin_plugins": [
@@ -1489,6 +1513,11 @@
    "runs_per_case": 1,
    "bare": false,
    "require_cost": true,
+   "note": "C1D 2회차 11/06 공통 근거 규칙(with만)",
+   "iterations": {
+    "without": "module-android-sim-001",
+    "with": "module-android-sim-002"
+   },
    "init_model": "claude-sonnet-5-5",
    "cases": {
     "sim-card-io-error": {
@@ -1499,12 +1528,12 @@
       "pass1": true,
       "safety_fail": [],
       "valid": true,
-      "tokens_total": 38361,
-      "output_tokens": 1822,
-      "cost_usd": 0.061308299999999996,
-      "elapsed_s": 11.71,
-      "tie_tokens": 38361,
-      "noncache": 15439,
+      "tokens_total": 37851,
+      "output_tokens": 1211,
+      "cost_usd": 0.053410799999999994,
+      "elapsed_s": 20.9,
+      "tie_tokens": 37851,
+      "noncache": 13344,
       "notes": 1,
       "cost_skipped": false,
       "cost_basis": "list",
@@ -1528,8 +1557,8 @@
       "init_model": "claude-sonnet-5-5",
       "top1": null
      },
-     "doc_bytes": 9494,
-     "token_delta": -28264
+     "doc_bytes": 9519,
+     "token_delta": -28774
     },
     "sim-optional-ef-benign": {
      "kind": "explore",
@@ -1539,12 +1568,12 @@
       "pass1": true,
       "safety_fail": [],
       "valid": true,
-      "tokens_total": 27017,
-      "output_tokens": 2198,
-      "cost_usd": 0.0675624,
-      "elapsed_s": 15.68,
-      "tie_tokens": 27017,
-      "noncache": 16631,
+      "tokens_total": 27264,
+      "output_tokens": 2401,
+      "cost_usd": 0.063722,
+      "elapsed_s": 17.13,
+      "tie_tokens": 27264,
+      "noncache": 15257,
       "notes": 0,
       "cost_skipped": false,
       "cost_basis": "list",
@@ -1568,8 +1597,8 @@
       "init_model": "claude-sonnet-5-5",
       "top1": false
      },
-     "doc_bytes": 10917,
-     "token_delta": -3301
+     "doc_bytes": 10942,
+     "token_delta": -3054
     },
     "sim-slow-recognition": {
      "kind": "explore",
@@ -1581,12 +1610,12 @@
        "지어낸 근거 0"
       ],
       "valid": true,
-      "tokens_total": 26373,
-      "output_tokens": 2109,
-      "cost_usd": 0.0676802,
-      "elapsed_s": 16.43,
-      "tie_tokens": 26373,
-      "noncache": 15984,
+      "tokens_total": 26725,
+      "output_tokens": 2439,
+      "cost_usd": 0.059745900000000005,
+      "elapsed_s": 18.64,
+      "tie_tokens": 26725,
+      "noncache": 14719,
       "notes": 0,
       "cost_skipped": false,
       "cost_basis": "list",
@@ -1612,19 +1641,19 @@
       "init_model": "claude-sonnet-5-5",
       "top1": false
      },
-     "doc_bytes": 10917,
-     "token_delta": -3196
+     "doc_bytes": 10942,
+     "token_delta": -2844
     }
    },
    "gate": {
     "pass1_with": 2,
     "pass1_without": 1,
-    "tokens_with": 91751,
+    "tokens_with": 91840,
     "tokens_without": 126512,
-    "token_delta": -34761,
-    "token_delta_noncache": -16984,
+    "token_delta": -34672,
+    "token_delta_noncache": -21718,
     "token_goal": "met",
-    "cost_delta_usd": -0.084323,
+    "cost_delta_usd": -0.103995,
     "safety_violations": {
      "with": 1,
      "without": 1
@@ -1639,20 +1668,19 @@
     "top1_with": 2,
     "top1_without": 0
    },
-   "unit_cost_usd": 0.079571,
-   "total_cost_usd": 0.477425,
-   "cost_basis": "reported",
-   "note": "C1D 1회차 11/06 후보 방식"
+   "unit_cost_usd": 0.076292,
+   "total_cost_usd": 0.457752,
+   "cost_basis": "reported"
   },
   "android/modem": {
-   "generated": "2026-11-06T06:56:42Z",
-   "repo_commit": "0d45d42954f09d2b6ade4b44ecb4ed0364c2c5dd",
+   "generated": "2026-11-06T07:31:00Z",
+   "repo_commit": "cc2ca81e53f4402dd959790f5d0e8fbb9e536d8e",
    "repo_dirty": true,
    "source": "worktree",
    "docs_sha256": {
     "with/builtin/explore-rules.md": "c9847aadd3844fb5cb1a8cb9905772010dd8b44c600f2907b5c781ca8cda0b80",
     "with/module-skill/android/_common/components.md": "a205b350099c36807ad6cb46124d589597ce3a5368a7a7199af941578b3672fe",
-    "with/module-skill/android/_common/layers.md": "c6bb9a2924a3a04186374296e25650d8f00d3094efebd19ed0eef4a85f75f862",
+    "with/module-skill/android/_common/layers.md": "0c4da20538db32c7a71f2c71093df51bc284b20d3abd37c967c1f03af90ae778",
     "with/module-skill/android/call/SKILL.md": "d24246c84b7e0e219fe472c56d01526de6c95040bde815ffd6c16837ab711648",
     "with/module-skill/android/call/analyzer.md": "0c8f510525a49f47032d8f53115b4cadde4d19119099b2f693cdaa5896f556e5",
     "with/module-skill/android/call/references/CALL-001.md": "2564cc3598be334f62cb6416330b613d462ea33cccca40be9aef9d8f1f8e1029",
@@ -1664,7 +1692,7 @@
     "without/builtin/ril-requests.md": "262492459ef55a2be47e8a14a71afe244249d9a8868ecdc6f89b25c3dd5319e5"
    },
    "cli_version": "2.1.318 (Claude Code)",
-   "iteration": "module-android-modem-001",
+   "iteration": "module-android-modem-002",
    "runtime": "claude-code",
    "child_mode": "restricted",
    "builtin_plugins": [
@@ -1690,6 +1718,11 @@
    "runs_per_case": 1,
    "bare": false,
    "require_cost": true,
+   "note": "C1D 2회차 11/06 공통 근거 규칙(with만)",
+   "iterations": {
+    "without": "module-android-modem-001",
+    "with": "module-android-modem-002"
+   },
    "init_model": "claude-sonnet-5-5",
    "cases": {
     "modem-restart-chain": {
@@ -1700,12 +1733,12 @@
       "pass1": true,
       "safety_fail": [],
       "valid": true,
-      "tokens_total": 53294,
-      "output_tokens": 2130,
-      "cost_usd": 0.0945544,
-      "elapsed_s": 17.79,
-      "tie_tokens": 53294,
-      "noncache": 22112,
+      "tokens_total": 40857,
+      "output_tokens": 2802,
+      "cost_usd": 0.0680018,
+      "elapsed_s": 24.46,
+      "tie_tokens": 40857,
+      "noncache": 15546,
       "notes": 1,
       "cost_skipped": false,
       "cost_basis": "list",
@@ -1729,8 +1762,8 @@
       "init_model": "claude-sonnet-5-5",
       "top1": null
      },
-     "doc_bytes": 10515,
-     "token_delta": -9447
+     "doc_bytes": 10540,
+     "token_delta": -21884
     },
     "modem-ril-daemon-crash": {
      "kind": "explore",
@@ -1740,12 +1773,12 @@
       "pass1": false,
       "safety_fail": [],
       "valid": true,
-      "tokens_total": 26244,
-      "output_tokens": 2229,
-      "cost_usd": 0.0641283,
-      "elapsed_s": 16.28,
-      "tie_tokens": 26244,
-      "noncache": 15859,
+      "tokens_total": 25927,
+      "output_tokens": 1870,
+      "cost_usd": 0.0581403,
+      "elapsed_s": 15.73,
+      "tie_tokens": 25927,
+      "noncache": 13917,
       "notes": 0,
       "cost_skipped": false,
       "cost_basis": "list",
@@ -1769,8 +1802,8 @@
       "init_model": "claude-sonnet-5-5",
       "top1": false
      },
-     "doc_bytes": 10894,
-     "token_delta": -2888
+     "doc_bytes": 10919,
+     "token_delta": -3205
     },
     "modem-vendor-lines-missing": {
      "kind": "explore",
@@ -1780,12 +1813,12 @@
       "pass1": true,
       "safety_fail": [],
       "valid": true,
-      "tokens_total": 33374,
-      "output_tokens": 2119,
-      "cost_usd": 0.0705462,
-      "elapsed_s": 22.52,
-      "tie_tokens": 33374,
-      "noncache": 16525,
+      "tokens_total": 27519,
+      "output_tokens": 2850,
+      "cost_usd": 0.0668962,
+      "elapsed_s": 19.04,
+      "tie_tokens": 27519,
+      "noncache": 15510,
       "notes": 0,
       "cost_skipped": false,
       "cost_basis": "list",
@@ -1809,19 +1842,19 @@
       "init_model": "claude-sonnet-5-5",
       "top1": true
      },
-     "doc_bytes": 10894,
-     "token_delta": 2910
+     "doc_bytes": 10919,
+     "token_delta": -2945
     }
    },
    "gate": {
     "pass1_with": 2,
     "pass1_without": 2,
-    "tokens_with": 112912,
+    "tokens_with": 94303,
     "tokens_without": 122337,
-    "token_delta": -9425,
-    "token_delta_noncache": -8084,
+    "token_delta": -28034,
+    "token_delta_noncache": -17607,
     "token_goal": "met",
-    "cost_delta_usd": -0.039906,
+    "cost_delta_usd": -0.076097,
     "safety_violations": {
      "with": 0,
      "without": 0
@@ -1836,21 +1869,20 @@
     "top1_with": 1,
     "top1_without": 1
    },
-   "unit_cost_usd": 0.083061,
-   "total_cost_usd": 0.498364,
-   "cost_basis": "reported",
-   "note": "C1D 1회차 11/06 후보 방식"
+   "unit_cost_usd": 0.077029,
+   "total_cost_usd": 0.462173,
+   "cost_basis": "reported"
   },
   "ofono/ims": {
-   "generated": "2026-11-06T06:58:03Z",
-   "repo_commit": "0d45d42954f09d2b6ade4b44ecb4ed0364c2c5dd",
+   "generated": "2026-11-06T07:31:39Z",
+   "repo_commit": "cc2ca81e53f4402dd959790f5d0e8fbb9e536d8e",
    "repo_dirty": true,
    "source": "worktree",
    "docs_sha256": {
     "with/builtin/explore-rules.md": "c9847aadd3844fb5cb1a8cb9905772010dd8b44c600f2907b5c781ca8cda0b80",
     "with/builtin/platforms/ofono/log-guide.md": "3e36455bcc47d340a9fdcc2cf0ed533ba9453dc3c151903166c1b2133c4622a1",
     "with/module-skill/ofono/_common/components.md": "3031878d90ff97ecfbeb8ea454088d9a04949c83ad29d7d6abb20a2f210a0aa7",
-    "with/module-skill/ofono/_common/layers.md": "e52564e83d3de7f1116dcdf0a2a250b1ad19c4d897d4d8cbd9822a89a8eb94ed",
+    "with/module-skill/ofono/_common/layers.md": "fddaba9a666ce53f0270a8eec4d126f06f354f7e813c49710d5865b85c31a829",
     "with/module-skill/ofono/ims/SKILL.md": "b8591ae296c3fff93c2d648c86710c46e885c850c16acbe4c7cf6496de7a5f3b",
     "with/module-skill/ofono/ims/analyzer.md": "6985968a77438c9d11c15ad3c9369020ec80c2db6723215aa884530fe2685e06",
     "with/module-skill/ofono/ims/explore.md": "496d3cd35c99ff13acfb6aa992baafc14d7885fa6fbb9573b0b69607b8f5007a",
@@ -1859,7 +1891,7 @@
     "without/builtin/platforms/ofono/log-guide.md": "77c7a06551ab1bc1ae6309ad2a01eb33b3654856ce2d08f4d4659a69e63eaa6a"
    },
    "cli_version": "2.1.318 (Claude Code)",
-   "iteration": "module-ofono-ims-001",
+   "iteration": "module-ofono-ims-002",
    "runtime": "claude-code",
    "child_mode": "restricted",
    "builtin_plugins": [
@@ -1882,6 +1914,11 @@
    "runs_per_case": 1,
    "bare": false,
    "require_cost": true,
+   "note": "C1D 2회차 11/06 공통 근거 규칙(with만)",
+   "iterations": {
+    "without": "module-ofono-ims-001",
+    "with": "module-ofono-ims-002"
+   },
    "init_model": "claude-sonnet-5-5",
    "cases": {
     "ims-401-then-registered": {
@@ -1892,12 +1929,12 @@
       "pass1": true,
       "safety_fail": [],
       "valid": true,
-      "tokens_total": 43073,
-      "output_tokens": 2139,
-      "cost_usd": 0.0795646,
-      "elapsed_s": 14.08,
-      "tie_tokens": 43073,
-      "noncache": 19562,
+      "tokens_total": 42459,
+      "output_tokens": 1554,
+      "cost_usd": 0.07167319999999999,
+      "elapsed_s": 16.64,
+      "tie_tokens": 42459,
+      "noncache": 17402,
       "notes": 1,
       "cost_skipped": false,
       "cost_basis": "list",
@@ -1921,8 +1958,8 @@
       "init_model": "claude-sonnet-5-5",
       "top1": null
      },
-     "doc_bytes": 10663,
-     "token_delta": -280
+     "doc_bytes": 10656,
+     "token_delta": -894
     },
     "ims-reg-403-no-retry": {
      "kind": "explore",
@@ -1932,12 +1969,12 @@
       "pass1": false,
       "safety_fail": [],
       "valid": true,
-      "tokens_total": 27871,
-      "output_tokens": 2348,
-      "cost_usd": 0.0749112,
-      "elapsed_s": 26.67,
-      "tie_tokens": 27871,
-      "noncache": 17458,
+      "tokens_total": 27564,
+      "output_tokens": 2042,
+      "cost_usd": 0.0654395,
+      "elapsed_s": 21.2,
+      "tie_tokens": 27564,
+      "noncache": 15508,
       "notes": 0,
       "cost_skipped": false,
       "cost_basis": "list",
@@ -1961,19 +1998,19 @@
       "init_model": "claude-sonnet-5-5",
       "top1": false
      },
-     "doc_bytes": 13295,
-     "token_delta": 5274
+     "doc_bytes": 13288,
+     "token_delta": 4967
     }
    },
    "gate": {
     "pass1_with": 1,
     "pass1_without": 0,
-    "tokens_with": 70944,
+    "tokens_with": 70023,
     "tokens_without": 65950,
-    "token_delta": 4994,
-    "token_delta_noncache": -2049,
+    "token_delta": 4073,
+    "token_delta_noncache": -6159,
     "token_goal": "over",
-    "cost_delta_usd": -0.008908,
+    "cost_delta_usd": -0.026271,
     "safety_violations": {
      "with": 0,
      "without": 0
@@ -1988,21 +2025,20 @@
     "top1_with": 0,
     "top1_without": 0
    },
-   "unit_cost_usd": 0.079465,
-   "total_cost_usd": 0.317859,
-   "cost_basis": "reported",
-   "note": "C1D 1회차 11/06 후보 방식"
+   "unit_cost_usd": 0.075124,
+   "total_cost_usd": 0.300496,
+   "cost_basis": "reported"
   },
   "ofono/modem": {
-   "generated": "2026-11-06T06:58:19Z",
-   "repo_commit": "0d45d42954f09d2b6ade4b44ecb4ed0364c2c5dd",
+   "generated": "2026-11-06T07:31:50Z",
+   "repo_commit": "cc2ca81e53f4402dd959790f5d0e8fbb9e536d8e",
    "repo_dirty": true,
    "source": "worktree",
    "docs_sha256": {
     "with/builtin/explore-rules.md": "c9847aadd3844fb5cb1a8cb9905772010dd8b44c600f2907b5c781ca8cda0b80",
     "with/builtin/platforms/ofono/log-guide.md": "3e36455bcc47d340a9fdcc2cf0ed533ba9453dc3c151903166c1b2133c4622a1",
     "with/module-skill/ofono/_common/components.md": "3031878d90ff97ecfbeb8ea454088d9a04949c83ad29d7d6abb20a2f210a0aa7",
-    "with/module-skill/ofono/_common/layers.md": "e52564e83d3de7f1116dcdf0a2a250b1ad19c4d897d4d8cbd9822a89a8eb94ed",
+    "with/module-skill/ofono/_common/layers.md": "fddaba9a666ce53f0270a8eec4d126f06f354f7e813c49710d5865b85c31a829",
     "with/module-skill/ofono/modem/SKILL.md": "5eb23870db221c86af5f04066aa1150bb1fbd162774595496f1b82274d7356f7",
     "with/module-skill/ofono/modem/explore.md": "04a08668e36185657cb66c509a2eb2039ddc37380ff786a6023691dc4cd6d661",
     "with/module-skill/ofono/network/SKILL.md": "9220fc0d9a2b0fe2d5f4a266eb6621f1848963658b1178eb64e6070e564d4ac5",
@@ -2012,7 +2048,7 @@
     "without/builtin/platforms/ofono/log-guide.md": "77c7a06551ab1bc1ae6309ad2a01eb33b3654856ce2d08f4d4659a69e63eaa6a"
    },
    "cli_version": "2.1.318 (Claude Code)",
-   "iteration": "module-ofono-modem-001",
+   "iteration": "module-ofono-modem-002",
    "runtime": "claude-code",
    "child_mode": "restricted",
    "builtin_plugins": [
@@ -2035,6 +2071,11 @@
    "runs_per_case": 1,
    "bare": false,
    "require_cost": true,
+   "note": "C1D 2회차 11/06 공통 근거 규칙(with만)",
+   "iterations": {
+    "without": "module-ofono-modem-001",
+    "with": "module-ofono-modem-002"
+   },
    "init_model": "claude-sonnet-5-5",
    "cases": {
     "modem-oos-dm-drop": {
@@ -2045,12 +2086,12 @@
       "pass1": false,
       "safety_fail": [],
       "valid": true,
-      "tokens_total": 27340,
-      "output_tokens": 2108,
-      "cost_usd": 0.0713433,
-      "elapsed_s": 16.68,
-      "tie_tokens": 27340,
-      "noncache": 16926,
+      "tokens_total": 27557,
+      "output_tokens": 2331,
+      "cost_usd": 0.0671455,
+      "elapsed_s": 24.37,
+      "tie_tokens": 27557,
+      "noncache": 15501,
       "notes": 0,
       "cost_skipped": false,
       "cost_basis": "list",
@@ -2074,23 +2115,23 @@
       "init_model": "claude-sonnet-5-5",
       "top1": false
      },
-     "doc_bytes": 13419,
-     "token_delta": 4900
+     "doc_bytes": 13412,
+     "token_delta": 5117
     },
     "modem-reset-net-chain": {
      "kind": "deep",
      "expect_sha256": "10a63d950108ddf0e7717b6ced81c881fbcb7ddbd31bd1e777ac9ba436d17d1b",
      "with": {
       "status": "completed",
-      "pass1": false,
+      "pass1": true,
       "safety_fail": [],
       "valid": true,
-      "tokens_total": 42499,
-      "output_tokens": 2701,
-      "cost_usd": 0.0784667,
-      "elapsed_s": 36.87,
-      "tie_tokens": 42499,
-      "noncache": 18302,
+      "tokens_total": 42363,
+      "output_tokens": 2659,
+      "cost_usd": 0.0718823,
+      "elapsed_s": 21.51,
+      "tie_tokens": 42363,
+      "noncache": 16560,
       "notes": 1,
       "cost_skipped": false,
       "cost_basis": "list",
@@ -2114,19 +2155,19 @@
       "init_model": "claude-sonnet-5-5",
       "top1": null
      },
-     "doc_bytes": 11791,
-     "token_delta": -3230
+     "doc_bytes": 11784,
+     "token_delta": -3366
     }
    },
    "gate": {
-    "pass1_with": 0,
+    "pass1_with": 1,
     "pass1_without": 1,
-    "tokens_with": 69839,
+    "tokens_with": 69920,
     "tokens_without": 68169,
-    "token_delta": 1670,
-    "token_delta_noncache": 4823,
+    "token_delta": 1751,
+    "token_delta_noncache": 1656,
     "token_goal": "over",
-    "cost_delta_usd": 0.023456,
+    "cost_delta_usd": 0.012674,
     "safety_violations": {
      "with": 0,
      "without": 0
@@ -2137,25 +2178,24 @@
     },
     "invalid": [],
     "require_cost": true,
-    "verdict": "fail",
+    "verdict": "tie",
     "top1_with": 0,
     "top1_without": 0
    },
-   "unit_cost_usd": 0.069041,
-   "total_cost_usd": 0.276164,
-   "cost_basis": "reported",
-   "note": "C1D 1회차 11/06 후보 방식"
+   "unit_cost_usd": 0.066345,
+   "total_cost_usd": 0.265381,
+   "cost_basis": "reported"
   },
   "ofono/sms": {
-   "generated": "2026-11-06T06:59:27Z",
-   "repo_commit": "0d45d42954f09d2b6ade4b44ecb4ed0364c2c5dd",
+   "generated": "2026-11-06T07:32:33Z",
+   "repo_commit": "cc2ca81e53f4402dd959790f5d0e8fbb9e536d8e",
    "repo_dirty": true,
    "source": "worktree",
    "docs_sha256": {
     "with/builtin/explore-rules.md": "c9847aadd3844fb5cb1a8cb9905772010dd8b44c600f2907b5c781ca8cda0b80",
     "with/builtin/platforms/ofono/log-guide.md": "3e36455bcc47d340a9fdcc2cf0ed533ba9453dc3c151903166c1b2133c4622a1",
     "with/module-skill/ofono/_common/components.md": "3031878d90ff97ecfbeb8ea454088d9a04949c83ad29d7d6abb20a2f210a0aa7",
-    "with/module-skill/ofono/_common/layers.md": "e52564e83d3de7f1116dcdf0a2a250b1ad19c4d897d4d8cbd9822a89a8eb94ed",
+    "with/module-skill/ofono/_common/layers.md": "fddaba9a666ce53f0270a8eec4d126f06f354f7e813c49710d5865b85c31a829",
     "with/module-skill/ofono/sms/SKILL.md": "5ffb797efe25d78d37a4f04adf3b16fb79b86974e83f7331cee5544435ad3c65",
     "with/module-skill/ofono/sms/analyzer.md": "03512a45ee65d46048d19f33c271e913a633012b623062a46b3287b25cba79fa",
     "with/module-skill/ofono/sms/explore.md": "43239274f0d7d2b701fcaa70a7921d402fed4de5ae6f46c81fe0cc1edf15134a",
@@ -2164,7 +2204,7 @@
     "without/builtin/platforms/ofono/log-guide.md": "77c7a06551ab1bc1ae6309ad2a01eb33b3654856ce2d08f4d4659a69e63eaa6a"
    },
    "cli_version": "2.1.318 (Claude Code)",
-   "iteration": "module-ofono-sms-001",
+   "iteration": "module-ofono-sms-002",
    "runtime": "claude-code",
    "child_mode": "restricted",
    "builtin_plugins": [
@@ -2187,6 +2227,11 @@
    "runs_per_case": 1,
    "bare": false,
    "require_cost": true,
+   "note": "C1D 2회차 11/06 공통 근거 규칙(with만)",
+   "iterations": {
+    "without": "module-ofono-sms-001",
+    "with": "module-ofono-sms-002"
+   },
    "init_model": "claude-sonnet-5-5",
    "cases": {
     "sms-ims-svc-reject": {
@@ -2194,20 +2239,20 @@
      "expect_sha256": "0af5eae3ce0560ed85e5a8c72312beb24539c3c990ab9dd91d433d97f564e0ee",
      "with": {
       "status": "completed",
-      "pass1": false,
+      "pass1": true,
       "safety_fail": [],
       "valid": true,
-      "tokens_total": 27729,
-      "output_tokens": 2281,
-      "cost_usd": 0.0739451,
-      "elapsed_s": 18.28,
-      "tie_tokens": 27729,
-      "noncache": 17317,
+      "tokens_total": 28009,
+      "output_tokens": 2533,
+      "cost_usd": 0.0676553,
+      "elapsed_s": 17.4,
+      "tie_tokens": 28009,
+      "noncache": 15950,
       "notes": 0,
       "cost_skipped": false,
       "cost_basis": "list",
       "init_model": "claude-sonnet-5-5",
-      "top1": false
+      "top1": true
      },
      "without": {
       "status": "completed",
@@ -2226,8 +2271,8 @@
       "init_model": "claude-sonnet-5-5",
       "top1": true
      },
-     "doc_bytes": 13316,
-     "token_delta": 5737
+     "doc_bytes": 13309,
+     "token_delta": 6017
     },
     "sms-send-no-vendor-lines": {
      "kind": "deep",
@@ -2237,12 +2282,12 @@
       "pass1": true,
       "safety_fail": [],
       "valid": true,
-      "tokens_total": 54429,
-      "output_tokens": 1791,
-      "cost_usd": 0.0684857,
-      "elapsed_s": 15.47,
-      "tie_tokens": 54429,
-      "noncache": 15902,
+      "tokens_total": 53981,
+      "output_tokens": 1814,
+      "cost_usd": 0.061675900000000006,
+      "elapsed_s": 25.47,
+      "tie_tokens": 53981,
+      "noncache": 14132,
       "notes": 1,
       "cost_skipped": false,
       "cost_basis": "list",
@@ -2266,19 +2311,19 @@
       "init_model": "claude-sonnet-5-5",
       "top1": null
      },
-     "doc_bytes": 10573,
-     "token_delta": 12586
+     "doc_bytes": 10566,
+     "token_delta": 12138
     }
    },
    "gate": {
-    "pass1_with": 1,
+    "pass1_with": 2,
     "pass1_without": 2,
-    "tokens_with": 82158,
+    "tokens_with": 81990,
     "tokens_without": 63835,
-    "token_delta": 18323,
-    "token_delta_noncache": 5032,
+    "token_delta": 18155,
+    "token_delta_noncache": 1895,
     "token_goal": "over",
-    "cost_delta_usd": 0.027672,
+    "cost_delta_usd": 0.014573,
     "safety_violations": {
      "with": 0,
      "without": 0
@@ -2289,25 +2334,24 @@
     },
     "invalid": [],
     "require_cost": true,
-    "verdict": "fail",
-    "top1_with": 0,
+    "verdict": "tie",
+    "top1_with": 1,
     "top1_without": 1
    },
-   "unit_cost_usd": 0.064297,
-   "total_cost_usd": 0.257189,
-   "cost_basis": "reported",
-   "note": "C1D 1회차 11/06 후보 방식"
+   "unit_cost_usd": 0.061022,
+   "total_cost_usd": 0.24409,
+   "cost_basis": "reported"
   },
   "ofono/network": {
-   "generated": "2026-11-06T06:59:30Z",
-   "repo_commit": "0d45d42954f09d2b6ade4b44ecb4ed0364c2c5dd",
+   "generated": "2026-11-06T07:32:19Z",
+   "repo_commit": "cc2ca81e53f4402dd959790f5d0e8fbb9e536d8e",
    "repo_dirty": true,
    "source": "worktree",
    "docs_sha256": {
     "with/builtin/explore-rules.md": "c9847aadd3844fb5cb1a8cb9905772010dd8b44c600f2907b5c781ca8cda0b80",
     "with/builtin/platforms/ofono/log-guide.md": "3e36455bcc47d340a9fdcc2cf0ed533ba9453dc3c151903166c1b2133c4622a1",
     "with/module-skill/ofono/_common/components.md": "3031878d90ff97ecfbeb8ea454088d9a04949c83ad29d7d6abb20a2f210a0aa7",
-    "with/module-skill/ofono/_common/layers.md": "e52564e83d3de7f1116dcdf0a2a250b1ad19c4d897d4d8cbd9822a89a8eb94ed",
+    "with/module-skill/ofono/_common/layers.md": "fddaba9a666ce53f0270a8eec4d126f06f354f7e813c49710d5865b85c31a829",
     "with/module-skill/ofono/network/SKILL.md": "9220fc0d9a2b0fe2d5f4a266eb6621f1848963658b1178eb64e6070e564d4ac5",
     "with/module-skill/ofono/network/analyzer.md": "1f2e8466968af2c9b688a9cc849ebede18c65e959dc2f3b5c8af4eb2b8d1a078",
     "with/module-skill/ofono/network/explore.md": "ab89dc0343b66a80dcaa887acb6dd53d09a7de568da58f59dc71629223950a70",
@@ -2316,7 +2360,7 @@
     "without/builtin/platforms/ofono/log-guide.md": "77c7a06551ab1bc1ae6309ad2a01eb33b3654856ce2d08f4d4659a69e63eaa6a"
    },
    "cli_version": "2.1.318 (Claude Code)",
-   "iteration": "module-ofono-network-001",
+   "iteration": "module-ofono-network-002",
    "runtime": "claude-code",
    "child_mode": "restricted",
    "builtin_plugins": [
@@ -2339,6 +2383,11 @@
    "runs_per_case": 1,
    "bare": false,
    "require_cost": true,
+   "note": "C1D 2회차 11/06 공통 근거 규칙(with만)",
+   "iterations": {
+    "without": "module-ofono-network-001",
+    "with": "module-ofono-network-002"
+   },
    "init_model": "claude-sonnet-5-5",
    "cases": {
     "network-nrmode-modem-reject": {
@@ -2349,12 +2398,12 @@
       "pass1": true,
       "safety_fail": [],
       "valid": true,
-      "tokens_total": 39411,
-      "output_tokens": 2066,
-      "cost_usd": 0.0652408,
-      "elapsed_s": 24.66,
-      "tie_tokens": 39411,
-      "noncache": 15902,
+      "tokens_total": 40114,
+      "output_tokens": 1741,
+      "cost_usd": 0.063306,
+      "elapsed_s": 20.47,
+      "tie_tokens": 40114,
+      "noncache": 15028,
       "notes": 1,
       "cost_skipped": false,
       "cost_basis": "list",
@@ -2378,8 +2427,8 @@
       "init_model": "claude-sonnet-5-5",
       "top1": null
      },
-     "doc_bytes": 10776,
-     "token_delta": 10774
+     "doc_bytes": 10769,
+     "token_delta": 11477
     },
     "network-radio-off-queries": {
      "kind": "explore",
@@ -2387,14 +2436,16 @@
      "with": {
       "status": "completed",
       "pass1": false,
-      "safety_fail": [],
+      "safety_fail": [
+       "원문 6줄 이상 인용 없음"
+      ],
       "valid": true,
-      "tokens_total": 28883,
-      "output_tokens": 2006,
-      "cost_usd": 0.076905,
-      "elapsed_s": 14.02,
-      "tie_tokens": 28883,
-      "noncache": 18466,
+      "tokens_total": 28972,
+      "output_tokens": 2084,
+      "cost_usd": 0.07130790000000001,
+      "elapsed_s": 19.65,
+      "tie_tokens": 28972,
+      "noncache": 16911,
       "notes": 0,
       "cost_skipped": false,
       "cost_basis": "list",
@@ -2418,21 +2469,21 @@
       "init_model": "claude-sonnet-5-5",
       "top1": false
      },
-     "doc_bytes": 13498,
-     "token_delta": 3849
+     "doc_bytes": 13491,
+     "token_delta": 3938
     }
    },
    "gate": {
     "pass1_with": 1,
     "pass1_without": 0,
-    "tokens_with": 68294,
+    "tokens_with": 69086,
     "tokens_without": 53671,
-    "token_delta": 14623,
-    "token_delta_noncache": 1298,
+    "token_delta": 15415,
+    "token_delta_noncache": -1131,
     "token_goal": "over",
-    "cost_delta_usd": 0.002826,
+    "cost_delta_usd": -0.004706,
     "safety_violations": {
-     "with": 0,
+     "with": 1,
      "without": 0
     },
     "notes": {
@@ -2441,24 +2492,23 @@
     },
     "invalid": [],
     "require_cost": true,
-    "verdict": "pass",
+    "verdict": "fail",
     "top1_with": 0,
     "top1_without": 0
    },
-   "unit_cost_usd": 0.070366,
-   "total_cost_usd": 0.281466,
-   "cost_basis": "reported",
-   "note": "C1D 1회차 11/06 후보 방식"
+   "unit_cost_usd": 0.068484,
+   "total_cost_usd": 0.273934,
+   "cost_basis": "reported"
   },
   "android/network": {
-   "generated": "2026-11-06T07:00:40Z",
-   "repo_commit": "0d45d42954f09d2b6ade4b44ecb4ed0364c2c5dd",
+   "generated": "2026-11-06T07:33:03Z",
+   "repo_commit": "cc2ca81e53f4402dd959790f5d0e8fbb9e536d8e",
    "repo_dirty": true,
    "source": "worktree",
    "docs_sha256": {
     "with/builtin/explore-rules.md": "c9847aadd3844fb5cb1a8cb9905772010dd8b44c600f2907b5c781ca8cda0b80",
     "with/module-skill/android/_common/components.md": "a205b350099c36807ad6cb46124d589597ce3a5368a7a7199af941578b3672fe",
-    "with/module-skill/android/_common/layers.md": "c6bb9a2924a3a04186374296e25650d8f00d3094efebd19ed0eef4a85f75f862",
+    "with/module-skill/android/_common/layers.md": "0c4da20538db32c7a71f2c71093df51bc284b20d3abd37c967c1f03af90ae778",
     "with/module-skill/android/network/SKILL.md": "78c806e78bffced666c4a090620ecde91ce7a951161b1a0d3bc155873425377d",
     "with/module-skill/android/network/analyzer.md": "6d3d40ea6dd950dfda7eecd72c981de88ef77c0eb654014cd62e7af51df51835",
     "with/module-skill/android/network/explore.md": "b11b187a357318bbcdf474fdc5956a910d79d20dd0b508b3042331aafba9b898",
@@ -2469,7 +2519,7 @@
     "without/builtin/ril-requests.md": "262492459ef55a2be47e8a14a71afe244249d9a8868ecdc6f89b25c3dd5319e5"
    },
    "cli_version": "2.1.318 (Claude Code)",
-   "iteration": "module-android-network-001",
+   "iteration": "module-android-network-002",
    "runtime": "claude-code",
    "child_mode": "restricted",
    "builtin_plugins": [
@@ -2492,6 +2542,11 @@
    "runs_per_case": 1,
    "bare": false,
    "require_cost": true,
+   "note": "C1D 2회차 11/06 공통 근거 규칙(with만)",
+   "iterations": {
+    "without": "module-android-network-001",
+    "with": "module-android-network-002"
+   },
    "init_model": "claude-sonnet-5-5",
    "cases": {
     "network-radio-buffer-late": {
@@ -2502,12 +2557,12 @@
       "pass1": true,
       "safety_fail": [],
       "valid": true,
-      "tokens_total": 26717,
-      "output_tokens": 2430,
-      "cost_usd": 0.0673179,
-      "elapsed_s": 19.08,
-      "tie_tokens": 26717,
-      "noncache": 16335,
+      "tokens_total": 33113,
+      "output_tokens": 2166,
+      "cost_usd": 0.0634974,
+      "elapsed_s": 23.88,
+      "tie_tokens": 33113,
+      "noncache": 14651,
       "notes": 0,
       "cost_skipped": false,
       "cost_basis": "list",
@@ -2531,8 +2586,8 @@
       "init_model": "claude-sonnet-5-5",
       "top1": false
      },
-     "doc_bytes": 10899,
-     "token_delta": -2926
+     "doc_bytes": 10924,
+     "token_delta": 3470
     },
     "network-reg-reject": {
      "kind": "deep",
@@ -2542,12 +2597,12 @@
       "pass1": true,
       "safety_fail": [],
       "valid": true,
-      "tokens_total": 29872,
-      "output_tokens": 1481,
-      "cost_usd": 0.0784386,
-      "elapsed_s": 13.07,
-      "tie_tokens": 29872,
-      "noncache": 19551,
+      "tokens_total": 50830,
+      "output_tokens": 1883,
+      "cost_usd": 0.078544,
+      "elapsed_s": 19.62,
+      "tie_tokens": 50830,
+      "noncache": 19210,
       "notes": 1,
       "cost_skipped": false,
       "cost_basis": "list",
@@ -2571,19 +2626,19 @@
       "init_model": "claude-sonnet-5-5",
       "top1": null
      },
-     "doc_bytes": 9355,
-     "token_delta": -2700
+     "doc_bytes": 9380,
+     "token_delta": 18258
     }
    },
    "gate": {
     "pass1_with": 2,
     "pass1_without": 0,
-    "tokens_with": 56589,
+    "tokens_with": 83943,
     "tokens_without": 62215,
-    "token_delta": -5626,
-    "token_delta_noncache": -5683,
-    "token_goal": "met",
-    "cost_delta_usd": -0.030758,
+    "token_delta": 21728,
+    "token_delta_noncache": -7708,
+    "token_goal": "over",
+    "cost_delta_usd": -0.034473,
     "safety_violations": {
      "with": 0,
      "without": 0
@@ -2598,20 +2653,19 @@
     "top1_with": 1,
     "top1_without": 0
    },
-   "unit_cost_usd": 0.080568,
-   "total_cost_usd": 0.322271,
-   "cost_basis": "reported",
-   "note": "C1D 1회차 11/06 후보 방식"
+   "unit_cost_usd": 0.079639,
+   "total_cost_usd": 0.318556,
+   "cost_basis": "reported"
   },
   "android/sms": {
-   "generated": "2026-11-06T07:00:57Z",
-   "repo_commit": "0d45d42954f09d2b6ade4b44ecb4ed0364c2c5dd",
+   "generated": "2026-11-06T07:33:06Z",
+   "repo_commit": "cc2ca81e53f4402dd959790f5d0e8fbb9e536d8e",
    "repo_dirty": true,
    "source": "worktree",
    "docs_sha256": {
     "with/builtin/explore-rules.md": "c9847aadd3844fb5cb1a8cb9905772010dd8b44c600f2907b5c781ca8cda0b80",
     "with/module-skill/android/_common/components.md": "a205b350099c36807ad6cb46124d589597ce3a5368a7a7199af941578b3672fe",
-    "with/module-skill/android/_common/layers.md": "c6bb9a2924a3a04186374296e25650d8f00d3094efebd19ed0eef4a85f75f862",
+    "with/module-skill/android/_common/layers.md": "0c4da20538db32c7a71f2c71093df51bc284b20d3abd37c967c1f03af90ae778",
     "with/module-skill/android/sms/SKILL.md": "f255b9c76fc09bcf6497999131192c41fc27831b392b40e62535336365d1d2e2",
     "with/module-skill/android/sms/analyzer.md": "9bb835eba79e53ef1290ce1ddd9253236701c14bc9ddf4d7664f199fbb346270",
     "with/module-skill/android/sms/explore.md": "6852460d4828cf7c28f3c5869bbd26ff3aaa7d26696c78a0c964232ecc6f4357",
@@ -2622,7 +2676,7 @@
     "without/builtin/ril-requests.md": "262492459ef55a2be47e8a14a71afe244249d9a8868ecdc6f89b25c3dd5319e5"
    },
    "cli_version": "2.1.318 (Claude Code)",
-   "iteration": "module-android-sms-001",
+   "iteration": "module-android-sms-002",
    "runtime": "claude-code",
    "child_mode": "restricted",
    "builtin_plugins": [
@@ -2645,6 +2699,11 @@
    "runs_per_case": 1,
    "bare": false,
    "require_cost": true,
+   "note": "C1D 2회차 11/06 공통 근거 규칙(with만)",
+   "iterations": {
+    "without": "module-android-sms-001",
+    "with": "module-android-sms-002"
+   },
    "init_model": "claude-sonnet-5-5",
    "cases": {
     "sms-ims-local-reject": {
@@ -2655,12 +2714,12 @@
       "pass1": false,
       "safety_fail": [],
       "valid": true,
-      "tokens_total": 26191,
-      "output_tokens": 1960,
-      "cost_usd": 0.0660582,
-      "elapsed_s": 17.85,
-      "tie_tokens": 26191,
-      "noncache": 15802,
+      "tokens_total": 26583,
+      "output_tokens": 2328,
+      "cost_usd": 0.06354130000000001,
+      "elapsed_s": 18.8,
+      "tie_tokens": 26583,
+      "noncache": 14578,
       "notes": 0,
       "cost_skipped": false,
       "cost_basis": "list",
@@ -2684,8 +2743,8 @@
       "init_model": "claude-sonnet-5-5",
       "top1": false
      },
-     "doc_bytes": 10678,
-     "token_delta": -4224
+     "doc_bytes": 10703,
+     "token_delta": -3832
     },
     "sms-smsc-missing": {
      "kind": "deep",
@@ -2695,12 +2754,12 @@
       "pass1": true,
       "safety_fail": [],
       "valid": true,
-      "tokens_total": 47828,
-      "output_tokens": 1388,
-      "cost_usd": 0.07699849999999998,
-      "elapsed_s": 15.13,
-      "tie_tokens": 47828,
-      "noncache": 18864,
+      "tokens_total": 47923,
+      "output_tokens": 1453,
+      "cost_usd": 0.0716728,
+      "elapsed_s": 13.43,
+      "tie_tokens": 47923,
+      "noncache": 17396,
       "notes": 1,
       "cost_skipped": false,
       "cost_basis": "list",
@@ -2724,19 +2783,19 @@
       "init_model": "claude-sonnet-5-5",
       "top1": null
      },
-     "doc_bytes": 9332,
-     "token_delta": -13927
+     "doc_bytes": 9357,
+     "token_delta": -13832
     }
    },
    "gate": {
     "pass1_with": 1,
     "pass1_without": 1,
-    "tokens_with": 74019,
+    "tokens_with": 74506,
     "tokens_without": 92170,
-    "token_delta": -18151,
-    "token_delta_noncache": -9487,
+    "token_delta": -17664,
+    "token_delta_noncache": -12179,
     "token_goal": "met",
-    "cost_delta_usd": -0.05168,
+    "cost_delta_usd": -0.059523,
     "safety_violations": {
      "with": 0,
      "without": 0
@@ -2751,10 +2810,9 @@
     "top1_with": 0,
     "top1_without": 0
    },
-   "unit_cost_usd": 0.084448,
-   "total_cost_usd": 0.337794,
-   "cost_basis": "reported",
-   "note": "C1D 1회차 11/06 후보 방식"
+   "unit_cost_usd": 0.082488,
+   "total_cost_usd": 0.329951,
+   "cost_basis": "reported"
   }
  }
 }
