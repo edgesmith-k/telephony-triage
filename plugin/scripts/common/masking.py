@@ -50,6 +50,7 @@ Masker = Callable[[str], str]
 TOKEN_RE = re.compile(r"<(?P<kind>[A-Z][A-Z0-9]*)#(?P<n>\d+)>")
 KINDS = ("IMSI", "IMEI", "ICCID", "SUPI", "SUCI", "TMSI", "GUTI", "MSISDN", "IMPU", "IMPI",
          "CELL", "IP", "MAC", "EMAIL", "CRED", "EID", "GEO", "SERIAL")
+PIECE_MIN_TABLE = 6   # 갈린 조각 글자를 값 표에 넣는 최소 길이(짧으면 같은 글자의 다른 필드까지 토큰이 된다)
 
 _SIP_AUTH_CONTEXT = re.compile(
     r"(?i)\b(?:authorization|www-authenticate|proxy-authenticate|proxy-authorization|digest)\b"
@@ -485,7 +486,8 @@ class Masker:
         table = self.tables.setdefault(kind, {})
         key = _norm_key(kind, value)
         tok = self.token(kind, value) if first or key not in table else f"<{kind}#{table[key]}>"
-        table.setdefault(_norm_key(kind, piece), table[key])
+        if len(piece) >= PIECE_MIN_TABLE:   # 짧은 조각("0"·"450")을 넣으면 같은 글자의 이벤트 필드가 토큰이 된다
+            table.setdefault(_norm_key(kind, piece), table[key])
         return tok
 
     def _spans(self, text: str) -> list[tuple[int, int, str, str]]:

@@ -20,17 +20,20 @@ _DUMP_IDENT = re.compile(r"\S+\[\d+\]:")                 # ident[pid]: (앞머�
 _DUMP_TIME = re.compile(r"(\d{2}):(\d{2}):(\d{2}(?:\.\d+)?)")
 
 
+UNTIMED = "untimed"   # 시각 없는 조각의 키 머리. 시각 있는 레코드 키도 튜플이라 이것으로 가른다
+
+
 def _sec(text) -> float | None:
     t = _DUMP_TIME.search(text) if isinstance(text, str) else None
     return int(t[1]) * 3600 + int(t[2]) * 60 + float(t[3]) if t else None
 
 
 def _join(items) -> list[list[tuple[int, int]]]:
-    """`items` = `[(순번, 열, 키, 시각 또는 None)]`. 시각이 None이면 키는 튜플(앞머리 전체)이다."""
+    """`items` = `[(순번, 열, 키, 시각 또는 None)]`. 시각이 None이면 키는 `(UNTIMED, ...)`이다(시각 없는 줄끼리만 닫는다)."""
     groups, open_ = [], {}                             # 키 -> (묶음, 마지막 시각)
     for i, col, key, sec in items:
         if sec is None:
-            for k in [k for k in open_ if isinstance(k, tuple)]:
+            for k in [k for k in open_ if isinstance(k, tuple) and k[:1] == (UNTIMED,)]:
                 if k != key:
                     groups.append(open_.pop(k)[0])
         prev = open_.get(key)
@@ -57,7 +60,7 @@ def groups_from_lines(lines: list[str]) -> list[list[tuple[int, int]]]:
         if m and sec is not None:
             items.append((i, at + len(DUMP_MARK), head[m.start():], sec))
         else:
-            items.append((i, at + len(DUMP_MARK), ("", head), None))
+            items.append((i, at + len(DUMP_MARK), (UNTIMED, head), None))
     return _join(items)
 
 
@@ -73,7 +76,7 @@ def groups_from_records(recs: list[dict]) -> list[list[tuple[int, int]]]:
             continue
         key = ("rec", str(rec.get("tag")), str(rec.get("pid")), msg[:at])
         sec = _sec(rec.get("ts"))
-        items.append((i, at + len(DUMP_MARK), key if sec is not None else ("", key), sec))
+        items.append((i, at + len(DUMP_MARK), key if sec is not None else (UNTIMED, key), sec))
     return _join(items)
 
 

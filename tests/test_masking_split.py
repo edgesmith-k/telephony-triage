@@ -194,3 +194,21 @@ def test_fields_from_pieces_use_same_token(tmp_path):
     mask_pii.run_replace(argparse.Namespace(files=[str(raw)], in_place=True, out=None), None)
     masked = raw.read_text(encoding="utf-8")
     assert IMSI_A not in masked and IMSI_B not in masked and masked.count("<IMSI#1>") == 2
+
+
+def test_short_piece_not_in_value_table():
+    """짧은 조각("0"·"450")은 값 표에 넣지 않는다 — 같은 글자의 이벤트 필드가 토큰이 되면 안 된다."""
+    for a, b in ((IMSI_A + IMSI_B[:-1], IMSI_B[-1]), (IMSI_A[:3], IMSI_A[3:] + IMSI_B)):
+        lines = _split(a, b)
+        out, masker = _mask(lines)
+        assert out[0].endswith("imsi=<IMSI#1>") and "<IMSI#1>, more}" in out[1], out
+        short = a if len(a) < len(b) else b
+        assert masker.mask_value(short) == short
+
+
+def test_untimed_record_does_not_close_timed_group():
+    """시각 없는 dump 레코드가 끼어도 시각 있는 레코드 묶음은 닫히지 않는다."""
+    lines = _split(IMSI_A, IMSI_B)
+    recs = _records(lines)
+    mid = dict(recs[0], ts=None, pid="77")
+    assert [[i for i, _c in g] for g in dumpjoin.groups_from_records([recs[0], mid, recs[1]])] == [[0, 2]]
