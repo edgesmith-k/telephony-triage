@@ -342,7 +342,7 @@ def db_checks(ctx, repo: str, clone: Path, base: str, picked: list[dict], jobs: 
             if m:
                 keys.setdefault(m.group(1), c)
     subj = {k: c for c in picked for k in KEY_RE.findall(c["subject"]) if k not in keys}
-    counts = {"ok": 0, "weak": 0, "fabricated": 0, "none": 0}
+    counts = {"ok": 0, "weak": 0, "fabricated": 0, "unverified": 0, "none": 0}
     for key, c in [*keys.items(), *subj.items()]:
         rec = (jobs / key / "check-output.json") if jobs else None
         data = _json(rec.read_text(encoding="utf-8")) if rec and rec.is_file() else None
@@ -350,19 +350,36 @@ def db_checks(ctx, repo: str, clone: Path, base: str, picked: list[dict], jobs: 
             if key in keys:
                 counts["none"] += 1
             continue
-        fab = sum(int((v or {}).get("fabricated") or 0) for v in data.values() if isinstance(v, dict))
-        weak = sum(int((v or {}).get("weak") or 0) for v in data.values() if isinstance(v, dict))
-        verdict = "fabricated" if fab else ("weak" if weak else "ok")
+        verdicts = [_grounding_verdict(v) for v in data.values() if isinstance(v, dict)] or ["unverified"]
+        verdict = max(verdicts, key=_GROUNDING_RANK.index)   # 파일은 가장 나쁜 항목
         counts[verdict] += 1
         if verdict != "ok":
-            flags.append({"sha": c["sha"], "flag": f"근거 {verdict} {key}", "priority": "P0" if fab else "P2", "file": None})
-    ev = f"ok {counts['ok']} · weak {counts['weak']} · fabricated {counts['fabricated']} · 근거 기록 없음 {counts['none']}"
-    status = "fail" if counts["fabricated"] else ("skip" if counts["none"] else "pass")
+            label = "건너뜀/오류" if verdict == "unverified" else verdict
+            flags.append({"sha": c["sha"], "flag": f"근거 {label} {key}",
+                          "priority": "P0" if verdict == "fabricated" else "P2", "file": None})
+    ev = (f"ok {counts['ok']} · weak {counts['weak']} · fabricated {counts['fabricated']}"
+          f" · 건너뜀/오류 {counts['unverified']} · 근거 기록 없음 {counts['none']}")
+    # 건너뛴 검증은 통과가 아니다(12-principles): 오류·건너뜀·기록 없음은 skip
+    status = "fail" if counts["fabricated"] else ("skip" if counts["none"] or counts["unverified"] else "pass")
     if not keys and not any(counts.values()):
         status, ev = "info", "바뀐 이슈 기록 없음"
     rows.append(_row(f"{tag}.grounding", status, ev + ("" if jobs else " (JOB 폴더 모름 — --jobs)"),
                      "<work_dir>/<KEY>/check-output.json"))
     return rows, flags
+
+
+_GROUNDING_RANK = ["ok", "weak", "unverified", "fabricated"]
+
+
+def _grounding_verdict(item: dict) -> str:
+    """check-output.json 항목 하나의 판정. 오류·건너뜀·`fabricated` 없음·근거 원본 없음(`source: null`)은 unverified."""
+    if "error" in item or "skipped" in item or "fabricated" not in item:
+        return "unverified"
+    if "source" in item and item["source"] is None:
+        return "unverified"
+    if int(item.get("fabricated") or 0):
+        return "fabricated"
+    return "weak" if int(item.get("weak") or 0) else "ok"
 
 
 def _measured(module: str, root: Path) -> float | None:

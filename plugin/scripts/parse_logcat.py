@@ -50,7 +50,7 @@ sys.path.insert(0, str(SCRIPTS))
 
 import adapters  # noqa: E402
 import parser_backends  # noqa: E402
-from common import compat, logtime, masking, parser_rules, site_defaults, stepanchor  # noqa: E402
+from common import compat, dumpjoin, logtime, masking, parser_rules, site_defaults, stepanchor  # noqa: E402
 from common import events as evt  # noqa: E402
 from common.patterns import DEFAULT_TIMEOUT_MS, PatternError, PatternRunner, PatternTimeout  # noqa: E402
 from common.exitcodes import OK, USAGE  # noqa: E402
@@ -204,6 +204,7 @@ def postprocess(
     errors: list[dict] | None = None,
     dropped: dict | None = None,
     unextracted: dict | None = None,
+    window: tuple | None = None,
 ) -> list[dict]:
     """백엔드 출력에 태그 매핑 → 마스킹 → RIL 파생 이벤트 → extractor를 적용한다.
 
@@ -214,12 +215,15 @@ def postprocess(
     줄 레코드(`event: None`)는 `tags.yaml`에 없는 태그면 버린다. builtin 레코드는
     그대로 두고(마스킹만) 줄 레코드와 함께 낸다. 파생 이벤트는 그 줄 바로 뒤에 온다
     (RIL 파생 이벤트, 그다음 extractor 이벤트를 규칙 순서로).
+    `window`가 있으면(창 없이 받은 레코드) 갈린 조각을 전체에서 묶은 뒤 `ts`가 창 밖인 레코드를 버린다.
     """
     errors = [] if errors is None else errors
     kept: list[dict] = []
     # 갈린 덤프 조각(IMSI·ICCID)은 전체 레코드에서 한 번 묶어 줄 순번으로 적용한다(08-safety §8)
     forced = masking.forced_records(masker, events) if isinstance(masker, masking.Masker) else {}
     for n, rec in enumerate(events):
+        if window and not _in_window(rec, window):
+            continue   # 조각 묶음은 위에서 전체로 했다(창 밖 조각까지, 08-safety §8)
         if rec.get("event") is None:
             category = rules.tag_category(rec["tag"])
             if category is None:
@@ -414,6 +418,15 @@ def _in_range(window, coverage: dict) -> bool | str | None:
     return "partial"
 
 
+def _in_window(rec: dict, window: tuple) -> bool:
+    """레코드 `ts`가 창 안인가(백엔드 창 자르기와 같은 닫힌 구간). 시각을 못 읽으면 남긴다."""
+    try:
+        ts = logtime.parse_ts(rec["ts"])
+    except (KeyError, TypeError, ValueError, AttributeError):
+        return True
+    return window[0] <= ts <= window[1]
+
+
 def _read_texts(paths: list[Path]) -> str:
     return "\n".join(logtime.open_log(p).read() for p in paths)
 
@@ -513,9 +526,13 @@ def run_parse(args, plugin_root: Path, defaults: dict, profile: platforms.Platfo
     backend = _load_backend(defaults, profile or _profile(defaults, db_cfg)).apply_rules(rules)
 
     masker = None
+    post_window = None
     if args.mask:
         # 입력에 이미 있는 토큰의 다음 번호부터 준다 (부분 마스킹된 로그, fixture 재파싱).
-        masker = masking.new_masker(_read_texts(paths), _allow_patterns(db_cfg), log_lines=True)
+        texts = _read_texts(paths)
+        masker = masking.new_masker(texts, _allow_patterns(db_cfg), log_lines=True)
+        # 시간 창 밖에 갈린 덤프 조각이 있을 수 있으면 창 없이 읽고 묶은 뒤 자른다(백엔드 인터페이스 무변경)
+        post_window = window if window and dumpjoin.DUMP_MARK in texts else None
 
     warnings: list[dict] = []
     warnings += compat.check_parser_backend(db_cfg, backend.name, backend.version())
@@ -556,11 +573,12 @@ def run_parse(args, plugin_root: Path, defaults: dict, profile: platforms.Platfo
 
     timeout_ms = int((db_cfg.get("matcher") or {}).get("pattern_timeout_ms", DEFAULT_TIMEOUT_MS))
     errors: list[dict] = []
-    events = backend.parse(paths, args.tz, args.year, window)
+    events = backend.parse(paths, args.tz, args.year, None if post_window else window)
     dropped: dict = {}
     unextracted: dict = {}
     events = postprocess(events, rules, masker=masker, last_ts=coverage["last_ts"],
-                         timeout_ms=timeout_ms, errors=errors, dropped=dropped, unextracted=unextracted)
+                         timeout_ms=timeout_ms, errors=errors, dropped=dropped, unextracted=unextracted,
+                         window=post_window)
     uncollected = uncollected_tags(dropped, events, masker)
     for error in errors:
         warnings.append({"code": "pattern-timeout",

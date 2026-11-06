@@ -212,3 +212,87 @@ def test_untimed_record_does_not_close_timed_group():
     recs = _records(lines)
     mid = dict(recs[0], ts=None, pid="77")
     assert [[i for i, _c in g] for g in dumpjoin.groups_from_records([recs[0], mid, recs[1]])] == [[0, 2]]
+
+
+def _check(path: Path) -> dict:
+    return mask_pii.run_check(argparse.Namespace(files=[str(path)], changed=False, staged=False), None)
+
+
+def test_check_flags_split_iccid_line_numbers(tmp_path):
+    """`--check`도 갈린 조각을 묶는다: 조각마다 원 줄 번호로 낸다(사이에 다른 줄), 종료 1."""
+    a, b = _split(ICCID_A, ICCID_B, key="iccid=")
+    log = tmp_path / "split.log"
+    log.write_text("\n".join([a, OTHER, b]) + "\n", encoding="utf-8")
+    res = _check(log)
+    assert [(d["line"], d["kind"]) for d in res["detections"]] == [(1, "ICCID"), (3, "ICCID")]
+    assert res["detections"][1]["col"] == b.index(ICCID_B) + 1
+    sys.path.insert(0, str(REPO / "tests" / "helpers"))
+    import runner
+
+    proc = runner.run("mask_pii.py", ["--check", str(log)])
+    assert proc.returncode == 1, proc.stderr
+    assert [(d["line"], d["kind"]) for d in json.loads(proc.stdout)["detections"]] == [(1, "ICCID"), (3, "ICCID")]
+    a, b = _split(IMSI_A, IMSI_B)
+    log.write_text("\n".join([a, OTHER, b]) + "\n", encoding="utf-8")
+    assert [(d["line"], d["kind"]) for d in _check(log)["detections"]] == [(1, "IMSI"), (3, "IMSI")]
+
+
+def test_check_clean_after_replace(tmp_path):
+    raw = tmp_path / "raw.log"
+    raw.write_text("\n".join([*_split(ICCID_A, ICCID_B, key="iccid="), OTHER, *_split(IMSI_A, IMSI_B)]) + "\n",
+                   encoding="utf-8")
+    mask_pii.run_replace(argparse.Namespace(files=[str(raw)], in_place=True, out=None), None)
+    assert _check(raw) == {"checked": 1, "detections": []}
+
+
+BETWEEN = ["--between", "2026-09-20T15:10:05.300+09:00", "2026-09-20T15:10:05.400+09:00"]
+
+
+def _parse(log: Path, *extra: str) -> list[dict]:
+    sys.path.insert(0, str(REPO / "tests" / "helpers"))
+    from runner import variant_db
+
+    rules = variant_db("issue-db-ofono") / "parser-rules"
+    args = parse_logcat.build_parser().parse_args(
+        ["parse", str(log), "--rules", str(rules), "--tz", "Asia/Seoul", "--year", "2026", *extra])
+    profile = platforms.load({}, "ofono", require_enabled=False)
+    return parse_logcat.run_parse(args, REPO / "plugin", {}, profile)["events"]
+
+
+def _split_log(tmp_path: Path, a: str, b: str, key: str = "imsi=") -> Path:
+    log = tmp_path / "ofono.log"
+    first, second = _split(a, b, key=key)
+    log.write_text("\n".join([first, OTHER, second]) + "\n", encoding="utf-8")
+    return log
+
+
+def test_parse_window_piece_two_only(tmp_path):
+    """`parse --mask`의 시간 창이 첫 조각을 빼도 둘째 조각은 전체 값 토큰으로 가린다(`--full`의 같은 레코드 msg와 같음)."""
+    for a, b, key, tok in ((IMSI_A, IMSI_B, "imsi=", "<IMSI#1>"), (ICCID_A, ICCID_B, "iccid=", "<ICCID#1>")):
+        log = _split_log(tmp_path, a, b, key)
+        win = [e for e in _parse(log, "--mask", *BETWEEN) if e["event"] is None]
+        assert len(win) == 1 and b not in win[0]["msg"] and win[0]["msg"].endswith(f"{tok}, more}}")
+        full = [e for e in _parse(log, "--mask", "--full") if e["event"] is None and e["ts"] == win[0]["ts"]]
+        assert [e["msg"] for e in full] == [win[0]["msg"]]
+
+
+def test_parse_window_no_context_leak(tmp_path):
+    events = _parse(_split_log(tmp_path, IMSI_A, IMSI_B), "--mask", *BETWEEN)
+    lo, hi = (parse_logcat.logtime.parse_ts(t) for t in BETWEEN[1:])
+    assert events and all(lo <= parse_logcat.logtime.parse_ts(e["ts"]) <= hi for e in events)
+    assert not any("method return" in str(e.get("msg")) for e in events)
+
+
+def test_parse_window_same_as_backend_window(tmp_path):
+    """DUMP_MARK 있는 로그: 창 뒤 자르기(마스킹) 레코드 집합이 백엔드 창 자르기(비마스킹)와 같다 — 경계 포함."""
+    log = tmp_path / "ofono.log"
+    first, second = _split(IMSI_A, IMSI_B)
+    lines = [first, OTHER, _dump("05.300") + "start", second, _dump("05.400") + "edge", _dump("05.401") + "after"]
+    log.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    assert dumpjoin.DUMP_MARK in log.read_text(encoding="utf-8")
+
+    def key(events):
+        return sorted((e["ts"], e["tag"], e.get("event")) for e in events)
+
+    masked, plain = _parse(log, "--mask", *BETWEEN), _parse(log, *BETWEEN)
+    assert key(masked) == key(plain) and len([e for e in plain if e["event"] is None]) == 3

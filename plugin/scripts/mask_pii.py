@@ -108,9 +108,14 @@ def run_check(args, db: Path | None) -> dict:
     masker = masking.new_masker(allow_patterns=_allow(db))
     detections = []
     for name, text in targets:
-        for line_no, line in enumerate(text.splitlines(), 1):
-            for hit in masker.find(line):
-                detections.append({"path": name, "line": line_no, "col": hit["start"] + 1, "kind": hit["kind"]})
+        lines = text.split("\n")   # mask_lines·residual과 같은 줄 나눔(갈린 덤프 조각 묶음이 replace와 같게)
+        forced = masking.forced_lines(masker, lines)
+        for i, line in enumerate(lines):
+            pieces = forced.get(i, ())
+            found = [(hit["start"], hit["kind"]) for hit in masker.find(line, [(p[0], p[1]) for p in pieces])]
+            found += [(p[0], p[2]) for p in pieces]   # 갈린 IMSI·ICCID 조각은 조각마다 위치를 낸다
+            for start, kind in sorted(found):
+                detections.append({"path": name, "line": i + 1, "col": start + 1, "kind": kind})
     return {"checked": len(targets), "detections": detections}
 
 

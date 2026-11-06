@@ -169,3 +169,10 @@ def test_skeleton_root_keys_todo():
     cfg = (out / "issue-db.config.yaml").read_text(encoding="utf-8")
     assert re.search(r"(?m)^code_root_keys: \[ofono\]   # TODO\(SITE:S27\) 구성요소\(데몬\)마다 소스 루트 키", cfg)
     assert "구성요소(데몬)가 여럿이면 ident마다 한 줄" in (out / "parser-rules" / "tags.yaml").read_text(encoding="utf-8")
+
+
+def test_regex_runs_repeat_forms():
+    """반복·그룹·플래그 꼴(3.10의 sre_parse에서도 같은 결과 — db_lint._parser_mod 재사용)."""
+    assert code_roots._regex_runs("abc(?:def)+ghi") == (["abc", "def", "ghi"], False)
+    assert code_roots._regex_runs("x*literal") == (["literal"], False)
+    assert code_roots._regex_runs("(?i)Foo") == (["Foo"], True)

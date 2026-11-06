@@ -302,7 +302,9 @@ _WORD_MIN = 4
 def _regex_runs(pattern: str) -> tuple[list[str], bool]:
     """정규식의 최상위 LITERAL 연속 구간들과 (?i) 여부. 분기·클래스·`.`·`\\s`·반복은 구간을 끊는다.
     그룹은 그 안으로 이어 들어가고(필수 단일 그룹), 분기는 대안이 하나일 때만, 반복은 최소 1이면 그 안만 따로 본다."""
-    from re import _constants as sc, _parser as sp
+    from db_lint import _parser_mod   # 3.10은 sre_parse·sre_constants(같은 도우미 재사용)
+    sp, sc = _parser_mod()
+    repeats = tuple(getattr(sc, n) for n in ("MAX_REPEAT", "MIN_REPEAT", "POSSESSIVE_REPEAT") if hasattr(sc, n))
     try:
         parsed = sp.parse(pattern)
     except re.error:
@@ -325,7 +327,7 @@ def _regex_runs(pattern: str) -> tuple[list[str], bool]:
                 walk(av[-1])
             elif op == sc.BRANCH and len(av[1]) == 1:
                 walk(av[1][0])
-            elif op in (sc.MAX_REPEAT, sc.MIN_REPEAT, sc.POSSESSIVE_REPEAT):
+            elif op in repeats:
                 flush()
                 if av[0] >= 1:
                     walk(av[2])

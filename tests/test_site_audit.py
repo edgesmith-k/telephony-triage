@@ -555,3 +555,30 @@ def test_drift_item_review_and_carry(site, fake_py):
     assert did in state["carry"]
     p2 = plan(site, repos=["ops_db"])
     assert "이월" in next(i for i in p2["items"] if i["id"] == did)["flags"]
+
+
+def _grounding(site, record) -> dict:
+    (site["jobs"] / "MOCK-1003" / "check-output.json").write_text(json.dumps(record), encoding="utf-8")
+    p = plan(site, since=[f"ops_db={site['init']}"], repos=["ops_db"])
+    return next(c for c in p["checks"] if c["id"] == "audit.ops_db.grounding")
+
+
+def test_grounding_skipped_is_not_pass(site, fake_py):
+    g = _grounding(site, {"deep": {"skipped": "근거 원본 없음"}})
+    assert g["status"] == "skip" and "건너뜀/오류 1" in g["evidence"]
+
+
+def test_grounding_error_is_not_pass(site, fake_py):
+    g = _grounding(site, {"deep": {"error": "읽기 실패", "fabricated": 0}})
+    assert g["status"] == "skip" and "건너뜀/오류 1" in g["evidence"]
+
+
+def test_grounding_source_null_is_not_pass(site, fake_py):
+    g = _grounding(site, {"deep": {"quotes": 0, "fabricated": 0, "source": None}})
+    assert g["status"] == "skip" and "건너뜀/오류 1" in g["evidence"]
+
+
+def test_grounding_mixed_ok_and_skipped(site, fake_py):
+    g = _grounding(site, {"deep": {"quotes": 2, "fabricated": 0, "weak": 0, "source": "a.log"},
+                          "quick": {"skipped": True}})
+    assert g["status"] == "skip" and "ok 0" in g["evidence"] and "건너뜀/오류 1" in g["evidence"]
