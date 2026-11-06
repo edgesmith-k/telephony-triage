@@ -15,6 +15,11 @@
         `<root 키>:<상대 경로>` → 절대 경로 (03-issue-db.md §5.4 code_refs).
     code_roots.py find-symbol <symbol> --roots <roots>
         `Class#method` 또는 함수 이름이 있는 위치 → `[{ref, line, kind}]` (`ref`는 `<root 키>:<상대 경로>`).
+    code_roots.py find-text --roots <roots> --literals <json> [--events <마스킹된 events.json>]
+        C′ 코드 대조(04-parser-matching.md §5.12): 부분 일치의 없는 조건 패턴(≤ 9)에서 찾을 글자를 만들어
+        ① code_refs 디렉토리 → ② required_dirs → ③ 루트 전체 순으로 바이트 비교한다(20초·파일 1 MiB·20만 파일 상한).
+        `{items[{id, status, refs[≤3 "key:rel:line"], aux_refs, log_call?, log_refs?}], scanned_files, truncated, scope}`.
+        status: same|string-only|reworded|not-found|ambiguous|no-literal|limit. 줄 글자는 내지 않는다.
     code_roots.py remember <roots>
         직접 입력한 루트를 `recent_code_roots`에 기록한다(최근 5개).
 
@@ -29,6 +34,7 @@ import json
 import os
 import re
 import sys
+import time
 from datetime import date
 from pathlib import Path, PureWindowsPath
 
@@ -276,6 +282,249 @@ def cmd_find_symbol(args, defaults) -> dict:
     return {"symbol": args.symbol, "matches": matches}
 
 
+# -- find-text: C′ 코드 대조 (04-parser-matching.md §5.12 (5)) ------------------------------------------------
+# 줄 글자(사내 코드)는 내지 않는다: 출력은 `<root 키>:<상대 경로>:<줄>`과 상태 낱말뿐이다.
+
+LOG_CALL_RE = re.compile(rb"\w*[Ll]og[a-z]?\(|Log\.|Rlog\.|DBG\(|ofono_\w+\(")
+FIND_TEXT_SEC = 20.0
+FIND_TEXT_MAX_FILE = 1 << 20
+FIND_TEXT_MAX_FILES = 200_000
+FIND_TEXT_MAX_ITEMS = 9
+FIND_TEXT_REFS = 3
+EXCLUDED_DIRS = {".git", ".repo", "out", "build", "prebuilts", "node_modules"}
+TEST_DIRS = {"test", "tests"}
+_MASK_TOKEN_RE = re.compile(r"<[A-Z][A-Z0-9]*#\d+>")
+_PATH_FRAGMENT_RE = re.compile(r"/\w+_\d+")
+_LITERAL_MIN = 6
+_WORD_MIN = 4
+
+
+def _regex_runs(pattern: str) -> tuple[list[str], bool]:
+    """정규식의 최상위 LITERAL 연속 구간들과 (?i) 여부. 분기·클래스·`.`·`\\s`·반복은 구간을 끊는다.
+    그룹은 그 안으로 이어 들어가고(필수 단일 그룹), 분기는 대안이 하나일 때만, 반복은 최소 1이면 그 안만 따로 본다."""
+    from re import _constants as sc, _parser as sp
+    try:
+        parsed = sp.parse(pattern)
+    except re.error:
+        return [], False
+    runs: list[str] = []
+    cur: list[str] = []
+
+    def flush():
+        if cur:
+            runs.append("".join(cur))
+            cur.clear()
+
+    def walk(items):
+        for op, av in items:
+            if op == sc.LITERAL:
+                cur.append(chr(av))
+            elif op == sc.AT:
+                continue
+            elif op == sc.SUBPATTERN:
+                walk(av[-1])
+            elif op == sc.BRANCH and len(av[1]) == 1:
+                walk(av[1][0])
+            elif op in (sc.MAX_REPEAT, sc.MIN_REPEAT, sc.POSSESSIVE_REPEAT):
+                flush()
+                if av[0] >= 1:
+                    walk(av[2])
+                    flush()
+            else:
+                flush()
+
+    walk(parsed)
+    flush()
+    return runs, bool(parsed.state.flags & re.IGNORECASE)
+
+
+def derive_literal(pattern: str | None, tags=()) -> dict | None:
+    """시그니처·파서 규칙 패턴 → 코드에서 찾을 글자 `{literal, aux, icase}` 또는 None(도출 불가).
+    태그와 같은 구간·oFono `file.c:func()` 앞머리·`/ril_0` 꼴 경로 조각·마스킹 토큰은 버리고, `: `·`=`에서 끊는다.
+    조건: 6자 이상, 영문자 2개 이상. 가장 긴 구간(동률이면 앞)이 literal, 두 번째가 aux."""
+    if not pattern:
+        return None
+    from platforms.ofono.msgformat import _FILE_FUNC
+    runs, icase = _regex_runs(pattern)
+    tags_l = {str(t).lower() for t in tags if t}
+    pieces = []
+    for run in runs:
+        hit = _FILE_FUNC.match(run)
+        if hit:
+            run = hit["body"]
+        run = _PATH_FRAGMENT_RE.sub(" ", _MASK_TOKEN_RE.sub("\0", run))
+        for piece in re.split(r"\0|: |=", run):
+            piece = piece.strip(" \t>:-[](){},;'\"")
+            if piece.lower() in tags_l or len(piece) < _LITERAL_MIN:
+                continue
+            if sum(ch.isascii() and ch.isalpha() for ch in piece) < 2:
+                continue
+            pieces.append(piece)
+    if not pieces:
+        return None
+    ordered = sorted(pieces, key=len, reverse=True)
+    return {"literal": ordered[0], "aux": ordered[1] if len(ordered) > 1 else None, "icase": icase}
+
+
+def _words(literal: str) -> list[str]:
+    """리터럴의 4자 이상 낱말 중 가장 긴 둘(문구 다름 판단용). 둘이 안 되면 []."""
+    words = sorted({w for w in re.findall(r"[A-Za-z_][A-Za-z0-9_]*", literal) if len(w) >= _WORD_MIN},
+                   key=lambda w: (-len(w), w))
+    return words[:2] if len(words) >= 2 else []
+
+
+def _walk_files(base: Path, deadline: float, state: dict):
+    """`base` 아래 소스 파일(링크 안 따라감, 제외 디렉토리 건너뜀). 상한에 닿으면 `state['truncated']`."""
+    for cur, dirs, names in os.walk(base, followlinks=False):
+        dirs[:] = sorted(d for d in dirs if d not in EXCLUDED_DIRS and not d.startswith("."))
+        for name in sorted(names):
+            if time.monotonic() > deadline or state["files"] >= FIND_TEXT_MAX_FILES:
+                state["truncated"] = True
+                return
+            path = Path(cur) / name
+            if path.suffix not in SOURCE_SUFFIXES or path.is_symlink():
+                continue
+            yield path
+
+
+def _event_refs(events_path: str | None, words: list[str], icase: bool) -> list[str]:
+    """마스킹된 events.json에서 두 낱말이 함께 든 줄의 `f:L` (≤ 3, 새 문구 제안의 유일한 원천)."""
+    if not events_path or not words:
+        return []
+    try:
+        doc = json.loads(Path(events_path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    if not isinstance(doc, dict) or doc.get("masked") is not True:
+        return []
+    refs = []
+    for e in doc.get("events") or []:
+        text = f"{e.get('tag')}: {e.get('msg')}"
+        text = text.lower() if icase else text
+        ref = e.get("line_ref") or {}
+        if all((w.lower() if icase else w) in text for w in words) and ref.get("line_no"):
+            label = f"{ref.get('file_index')}:{ref['line_no']}"
+            if label not in refs:
+                refs.append(label)
+        if len(refs) >= FIND_TEXT_REFS:
+            break
+    return refs
+
+
+def cmd_find_text(args, defaults) -> dict:
+    """`--literals`: `{tags[], code_refs["key:rel"], items[{id, pattern}]}` (≤ 9). 범위 ① code_refs 디렉토리 →
+    ② 주 루트의 `required_dirs` → ③ 루트 전체(남은 시간). `못 찾음`은 ①②를 다 봤을 때만."""
+    profile = _profile(defaults)
+    roots = parse_roots(args.roots, _cfg(defaults), profile.spec.primary_root)
+    try:
+        spec = json.loads(Path(args.literals).read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise UsageError(f"--literals를 읽을 수 없다: {exc}") from exc
+    items = []
+    for raw in (spec.get("items") or [])[:FIND_TEXT_MAX_ITEMS]:
+        lit = derive_literal(raw.get("pattern"), spec.get("tags") or [])
+        item = {"id": str(raw.get("id")), "lit": lit, "same": [], "string": [], "reworded": [], "aux": []}
+        if lit:
+            item["needle"] = lit["literal"].lower().encode() if lit["icase"] else lit["literal"].encode()
+            item["words"] = [(w.lower() if lit["icase"] else w).encode() for w in _words(lit["literal"])]
+        items.append(item)
+    live = [it for it in items if it["lit"]]
+    deadline = time.monotonic() + float(os.environ.get("TT_FIND_TEXT_SEC") or FIND_TEXT_SEC)
+    state = {"files": 0, "truncated": False}
+    seen: set[Path] = set()
+
+    def scan(base: Path, key: str, root: Path) -> bool:
+        if not base.is_dir():
+            return True
+        for path in _walk_files(base, deadline, state):
+            real = path.resolve()
+            if real in seen:
+                continue
+            seen.add(real)
+            state["files"] += 1
+            try:
+                if path.stat().st_size > FIND_TEXT_MAX_FILE:
+                    state["truncated"] = True
+                    continue
+                data = path.read_bytes()
+            except OSError:
+                continue
+            hay = data.lower() if any(it["lit"]["icase"] for it in live) else None
+            rel = path.relative_to(root).as_posix()
+            is_test = bool(TEST_DIRS & set(Path(rel).parts[:-1]))
+            lines = None
+            for it in live:
+                buf = hay if it["lit"]["icase"] else data
+                has_lit = it["needle"] in buf
+                has_words = bool(it["words"]) and all(w in buf for w in it["words"])
+                if not (has_lit or has_words):
+                    continue
+                lines = lines if lines is not None else data.splitlines()
+                for no, line in enumerate(lines, 1):
+                    cmp = line.lower() if it["lit"]["icase"] else line
+                    ref = f"{key}:{rel}:{no}"
+                    if it["needle"] in cmp:
+                        near = b"\n".join(lines[max(0, no - 3):no + 2])
+                        bucket = "aux" if is_test else ("same" if LOG_CALL_RE.search(near) else "string")
+                        it[bucket].append(ref)
+                    elif it["words"] and all(w in cmp for w in it["words"]) and LOG_CALL_RE.search(line):
+                        it["aux" if is_test else "reworded"].append(ref)
+        return not state["truncated"]
+
+    primary = profile.spec.primary_root
+    ref_dirs = []
+    for ref in spec.get("code_refs") or []:
+        try:
+            key, rel = _split_ref(str(ref))
+        except UsageError:
+            continue
+        if key in roots:
+            root = Path(roots[key]).expanduser()
+            target = root / rel
+            ref_dirs.append((target.parent if target.suffix else target, key, root))
+    scope = {"code_refs": "없음", "required_dirs": "건너뜀(상한)", "root": "건너뜀(상한)"}
+    full = True
+    if live:
+        if ref_dirs:
+            full = all([scan(d, k, r) for d, k, r in ref_dirs])
+            scope["code_refs"] = "봄" if full else "건너뜀(상한)"
+        if primary in roots and full:
+            root = Path(roots[primary]).expanduser()
+            full = all([scan(root / d, primary, root) for d in profile.source_tree.required_dirs])
+        scope["required_dirs"] = "봄" if full else "건너뜀(상한)"
+        if full:
+            whole = all([scan(Path(v).expanduser(), k, Path(v).expanduser()) for k, v in sorted(roots.items())])
+            scope["root"] = "봄" if whole else "건너뜀(상한)"
+    else:
+        scope = {"code_refs": "없음", "required_dirs": "건너뜀(찾을 글자 없음)", "root": "건너뜀(찾을 글자 없음)"}
+    out_items = []
+    for it in items:
+        entry = {"id": it["id"]}
+        if not it["lit"]:
+            entry["status"] = "no-literal"
+        else:
+            files = {r.rsplit(":", 1)[0] for r in it["reworded"]}
+            if it["same"] and it["reworded"] or len(files) >= 4:
+                entry["status"], refs = "ambiguous", (it["same"][:1] + it["reworded"][:1]) if it["same"] else it["reworded"][:2]
+            elif it["same"]:
+                entry["status"], refs = "same", it["same"]
+            elif it["reworded"]:
+                entry["status"], refs = "reworded", it["reworded"]
+                entry["log_refs"] = _event_refs(args.events, _words(it["lit"]["literal"]), it["lit"]["icase"])
+            elif it["string"]:
+                entry["status"], refs = "string-only", it["string"]
+            elif full:
+                entry["status"], refs = "not-found", []
+            else:
+                entry["status"], refs = "limit", []
+            entry["refs"] = refs[:FIND_TEXT_REFS]
+            entry["log_call"] = entry["status"] in ("same", "reworded")
+        entry["aux_refs"] = it["aux"][:FIND_TEXT_REFS]
+        out_items.append(entry)
+    return {"items": out_items, "scanned_files": state["files"], "truncated": state["truncated"], "scope": scope,
+            **({"reason": "시간·크기 상한"} if state["truncated"] else {})}
+
+
 def cmd_remember(args, defaults) -> dict:
     data = userconfig.load_user()
     if data is None:
@@ -325,6 +574,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--roots", required=True)
     p = sub.add_parser("remember")
     p.add_argument("roots")
+    p = sub.add_parser("find-text")
+    p.add_argument("--roots", required=True)
+    p.add_argument("--literals", required=True, metavar="json")
+    p.add_argument("--events", metavar="마스킹된 events.json")
     _allow_common_anywhere(parser)
     return parser
 
@@ -353,6 +606,8 @@ def main(argv: list[str] | None = None) -> int:
             result, code = cmd_resolve(args, defaults)
         elif args.cmd == "find-symbol":
             result = cmd_find_symbol(args, defaults)
+        elif args.cmd == "find-text":
+            result = cmd_find_text(args, defaults)
         else:
             result = cmd_remember(args, defaults)
     except UsageError as exc:

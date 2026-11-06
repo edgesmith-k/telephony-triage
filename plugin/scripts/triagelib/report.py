@@ -15,7 +15,7 @@ from common.exitcodes import USAGE
 from .anchor import _parse_ts, _step_label
 from .core import (ANALYSIS_MAX, AUTO_CODE_NOTE, CARRY_PARTS, DEEP_CONFIG_ERROR, DEEP_MODULE_PENDING, ERROR_EVENT_RE,
                    ERROR_FIELDS, EXPLORE_INPUT_FILE, EXPLORE_PENDING_LINE, Fail, is_error_text, MUST_SHOW_CLIP, MUST_SHOW_FIT, MUST_SHOW_MAX, PULL_SKIPPED, SCRIPTS, SEARCH_LIMIT,
-                   _HOT_LEVELS, _TOKEN_RE, _clip, _now)
+                   _HOT_LEVELS, _TOKEN_RE, _clip, _now, PARTIAL_REPORT_MAX)
 
 
 def _top_label(candidates: list) -> str | None:
@@ -253,6 +253,11 @@ def fit(result: dict) -> dict:
     steps = []
     for c in cands[1:]:
         steps.append(lambda c=c: c.update(evidence=c["evidence"][:2]))
+    # C′ 부분 일치(§5.12): 다른 후보 근거 다음, 1위 근거·must_show 줄이기 전에 partial[1:] → missing 40자 → partial 전체
+    steps += [lambda: result.get("partial") and result.update(partial=result["partial"][:1]),
+              lambda: result.get("partial") and result.update(partial=[
+                  {**p, "missing": [_clip(m, 40) for m in p.get("missing") or []]} for p in result["partial"]]),
+              lambda: result.pop("partial", None)]
     steps.append(lambda: cands and cands[0].update(evidence=cands[0]["evidence"][:6]))
     for c in cands:
         steps.append(lambda c=c: c.update(evidence=[{**e, "msg": _clip(e.get("msg"), 80)} for e in c["evidence"]]))
@@ -283,6 +288,28 @@ def fit(result: dict) -> dict:
         step()
     result["truncated"] = size() > ANALYSIS_MAX
     return result
+
+
+_CODE_STATUS = {"same": "같음 {ref} — 경로 안 탐 또는 로그 미수집 의심", "string-only": "문자열만 있음(로그 호출 밖) {ref}",
+                "reworded": "문구 다름 {ref}", "ambiguous": "애매 {refs} — 모델이 구간 확인",
+                "no-literal": "확인 못 함(찾을 글자 없음)", "limit": "확인 못 함(시간·크기 상한)",
+                "skipped": "건너뜀(상한)", "unavailable": "확인 못 함(find-text 실패)"}
+
+
+def _code_status(c: dict) -> str:
+    """find-text 결과 하나 → report.md 낱말. `못 찾음`은 ①②를 다 봤을 때만 find-text가 낸다(③은 표시만)."""
+    refs = c.get("refs") or []
+    if c["status"] == "not-found":
+        scope = c.get("scope") or {}
+        where = "code_refs+required_dirs" if scope.get("code_refs") == "봄" else "required_dirs"
+        return f"못 찾음(범위: {where}, ③ {scope.get('root', '?')}) — 출력 사라짐·바뀜 의심"
+    return _CODE_STATUS.get(c["status"], "확인 못 함").format(ref=refs[0] if refs else "-", refs=", ".join(refs[:2]) or "-")
+
+
+def _clip_bytes(text: str, limit: int) -> str:
+    while len(text.encode("utf-8")) > limit:
+        text = text[:-2] + "…"
+    return text
 
 
 ANALYSIS_SCHEMA = SCRIPTS.parent / "schemas" / "output" / "analysis.schema.json"
@@ -378,6 +405,7 @@ class ReportMixin:
             "pending_causes": core["pending_causes"],
             "unjudged": core.get("unjudged"),
             "no_candidate": core["no_candidate"],
+            "partial": core.get("partial"),
             "code": {**core["code"], "auto": True} if self.code_auto and not core["code"].get("skipped") else core["code"],
             "analyzer": core["analyzer"],
             "explore": core["explore"],
@@ -389,8 +417,10 @@ class ReportMixin:
                       "match": str(self.job / "match.json"), "issue": str(self.job / "issue.json")},
         }
         result["_outside"] = core.get("outside")      # report.md 전용, analysis.json에는 안 나간다
+        result["_partial"] = {k: core.get(k) for k in ("partial_report", "absence_basis", "partial_unjudged")}
         report, must_show = self.render_report(result, anchor)
         result.pop("_outside", None)
+        result.pop("_partial", None)
         if must_show:
             result["must_show"] = must_show
         # analysis.json 내용을 먼저 확정하고(TT_SCHEMA_CHECK면 검사) 그 뒤에 파일을 쓴다: 위반이면 이전 결과·캐시를 건드리지 않는다
@@ -427,6 +457,64 @@ class ReportMixin:
                          path=str(self.job.absolute() / "report.md"))
         self.run.note("done", candidates=len(candidates), calls=self.run.calls)
         return result
+
+    def partial_lines(self, r: dict, cands: list) -> list[str]:
+        """C′ 부분 일치 절 (04-parser-matching.md §5.12): 판정·점수 아님. 후보 없음·원인 미확인일 때만(계산했을 때만) ≤ 1,200 B.
+        코드 대조 줄은 `<root 키>:<경로>:<줄>`과 상태 낱말뿐, 규칙 제안 줄은 Step 7 질문(사용자 확인 뒤에만)으로 간다."""
+        items = r.get("partial")
+        if items is None:
+            return []
+        extra = (r.get("_partial") or {}).get("partial_report") or [{}] * len(items)
+        code = r.get("code") or {}
+        tail = " (판정 불가 유형 제외)" if (r.get("_partial") or {}).get("partial_unjudged") else ""
+        if code.get("skipped") and any(p["kind"] in ("missing", "absent") for p in items):
+            tail += " — 코드 대조: 코드 미확인"
+        if not items:
+            return [f"- 부분 일치: 없음{tail}"]
+        out = []
+        for p, x in zip(items, extra):
+            owner = p["signature"].split("/", 1)[0]
+            head = f"{p['type']} > {p['signature']} {p['matched']} [{p['kind']}]"
+            parts = []
+            if x.get("hits"):
+                parts.append("맞음 " + ", ".join(x["hits"]))
+            if x.get("missing"):
+                parts.append("없음 " + ", ".join(x["missing"]))
+            if p.get("blocked_by"):
+                parts.append(f"막음 must_not_match {p['blocked_by']}")
+            if x.get("order"):
+                parts.append("순서 어긋남 " + " → ".join(x["order"]))
+            if x.get("width_sec") is not None:
+                parts.append(f"한 구간에 안 듦(가장 가까운 폭 {x['width_sec']:g}초)")
+            body = f"{head} — {' / '.join(parts)}" if parts else head
+            block = [_clip_bytes(body, 220)]
+            same = memo = False
+            log_refs = []
+            for c in (x.get("code") or [])[:3]:
+                block.append("  - " + _clip_bytes(f"코드 대조 {c['id']}: {_code_status(c)}", 130))
+                same |= c["status"] == "same"
+                if c["status"] == "reworded":
+                    log_refs += c.get("log_refs") or []
+                    memo |= not c.get("log_refs")
+            # missing은 같음이 아니면 제안, absent(0/1)는 코드 대조가 출력 변화(못 찾음·문구 다름)를 보일 때만 제안한다
+            changed = any(c["status"] in ("not-found", "reworded") for c in x.get("code") or [])
+            if (p["kind"] == "missing" and not same) or (p["kind"] == "absent" and changed and not same):
+                ids = ", ".join(m.split(" ", 1)[0] or "?" for m in x.get("missing") or [])
+                if memo and not log_refs:
+                    ref = next((c["refs"][0] for c in x.get("code") or [] if c["status"] == "reworded" and c["refs"]), "")
+                    block.append("  - " + _clip_bytes(f"pr_notes 메모: 문구 다름 {ref} — 새 빌드 로그로 재확인", 130))
+                else:
+                    new = f"·새 문구 로그 {', '.join(log_refs[:3])}" if log_refs else ""
+                    block.append("  - " + _clip_bytes(f"규칙 제안 (부분 일치): [이슈 DB] update-signature {owner} — 근거: 부분 일치 "
+                                                      f"{p['matched']}·없는 줄 {ids}{new} (Step 7, 사용자 확인 뒤에만)", 220))
+            out.append(block)
+        lines = [f"- 부분 일치 (판정·점수 아님, S/C 불변){tail}:"]
+        for block in out:        # 절 전체 ≤ 1,200 B: 넘치면 뒤 항목부터 뺀다
+            text = [f"  - {block[0]}"] + ["  " + b for b in block[1:]]
+            if len("\n".join(lines + text).encode("utf-8")) > PARTIAL_REPORT_MAX:
+                break
+            lines += text
+        return lines
 
     def render_report(self, r: dict, anchor: dict | None = None) -> tuple[str, list[str]]:
         """`report.md` 본문과, 사용자에게 꼭 보여야 하는 줄(`must_show`: 우선순위 순, 줄 앞 "- " 없이, 최대 `MUST_SHOW_MAX`개)을 돌려준다."""
@@ -503,6 +591,9 @@ class ReportMixin:
             lines.append(f"- 근거 로그 (마스킹, 슬롯 phone {','.join(map(str, top['phones'])) or '?'}):")
             lines += [f"  - {e['ts']} {e['tag']} {e['msg']}" + (f" ({e['_ref']})" if e.get("_ref") else "")
                       for e in top["evidence"]]
+            basis = (r.get("_partial") or {}).get("absence_basis")
+            if basis:      # must_not_match에 기대는 시그니처: 그 줄이 빌드에서 사라져도 같은 결과(판정 불변, must_show 아님)
+                lines.append(f"  - 없음 근거 포함: must_not_match {basis['pattern']} — 이 줄이 빌드에서 사라져도 같은 결과(03 §5.7)")
             jira_slot = (r.get("issue") or {}).get("sim_slot")
             slot = _slot_number(jira_slot)
             if slot is not None and top["phones"] and slot not in top["phones"]:
@@ -532,6 +623,7 @@ class ReportMixin:
                 text += f" (수집 태그 W/E/F 줄 중 이벤트로 추출 안 된 줄 {unext}건" + (f": {tags}" if tags else "") + ")"
             lines.append(add(11, text) if unext and not total else f"- {text}")
             lines += [f"  - {_error_line(e)}" for e in (hints.get("error_events") or [])[:8]]
+        lines += self.partial_lines(r, cands)
         if unjudged:
             err = (unjudged.get("errors") or [{}])[0]
             where = f"시그니처 시간 초과·오류 {err.get('signature')}: {err.get('error')}"

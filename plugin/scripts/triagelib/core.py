@@ -33,6 +33,9 @@ CARRY_KEYS = ("time", "window", "anchor", "year", "code")   # 분석 전용이 l
 CARRY_PARTS = ("logs", "issue", "config")      # 이어받은 답을 쓰는 조건: 이 입력 부분 해시가 같을 때만
 SNAPSHOT_DIR = "_snapshot"
 TOP = 3
+# C′ 부분 일치 (04-parser-matching.md §5.12): analysis.json `partial[]` ≤ 3개(목표 ≤ 600 B), report.md 절 ≤ 1,200 B,
+# 코드 대조 리터럴 ≤ 9개(부분 일치 3 × 없는 조건 3)
+PARTIAL_ANALYSIS_MAX, PARTIAL_REPORT_MAX, FIND_TEXT_ITEMS = 3, 1200, 9
 SEARCH_LIMIT = 3
 ERROR_EVENT_RE = re.compile(r"(error|timeout|no_response|reject|fail|denied|lost)", re.I)
 # 0 값 오류 칸(`errorCode=0`·`RejectCause: 0`·`result=0`·`error(0)`)은 오류가 아니다. 오류 문구 판정(ERROR_EVENT_RE) 전에

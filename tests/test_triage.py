@@ -1585,3 +1585,24 @@ def test_code_question_offers_four_choices_and_names_the_rest():
     assert "최근 Android 16 aosp=/work/a16_qpr1,vendor_ril=/work/ril" in q.payload["question"]   # 이름 없는 경로도 적을 수 있게
     two = driver.Driver.code_question(fake, "16", {"candidates": cands[:2]})
     assert len(two.payload["options"]) == 4 and "그 밖 후보" not in two.payload["question"]
+
+
+def test_cause_unconfirmed_run_shows_partial_match_and_code_check(tmp_path):
+    """C′ (04-parser-matching.md §5.12): 원인 줄을 뺀 합성 로그 → report.md 부분 일치 절·코드 대조 줄, analysis.json partial."""
+    lines = DATA_LOG.read_text(encoding="utf-8").splitlines(keepends=True)
+    log = tmp_path / "no-setting.log"
+    log.write_text("".join(l for l in lines if "DSMGR" not in l), encoding="utf-8")
+    ws = Workspace()
+    src = REPO / "tests" / "mocks" / "src" / "android16"
+    done = ws.json("triage.py", ["run", "MOCK-1001", "--dry-run", "--issue-file", MOCK_JIRA / "MOCK-1001.yaml",
+                                 "--logs", log, "--code", src])
+    assert done["status"] == "ok", done
+    assert done["candidates"][0]["C"] == 0
+    part = done["partial"]
+    assert part[0]["cause"] == "DATA-001-01" and part[0]["kind"] == "missing" and part[0]["matched"] == "1/2"
+    report = (ws.job_dir("MOCK-1001") / "report.md").read_text(encoding="utf-8")
+    assert "- 부분 일치 (판정·점수 아님, S/C 불변):" in report
+    assert "DATA-001 > DATA-001-01/data-disabled 1/2 [missing]" in report
+    assert "  - 코드 대조 setting-off: " in report
+    assert "  - 없음 근거 포함: must_not_match " in report
+    ws.json("triage.py", ["release", "MOCK-1001"])

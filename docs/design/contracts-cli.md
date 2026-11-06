@@ -36,6 +36,7 @@
 | `resolve` | `<ref> --roots <ROOTS>` |  |
 | `find-symbol` | `<symbol> --roots <ROOTS>` |  |
 | `remember` | `<roots>` |  |
+| `find-text` | `--roots <ROOTS> --literals <json> [--events <마스킹된 events.json>]` |  |
 
 ## `parse_logcat.py`
 
@@ -298,6 +299,16 @@ stdin: PostToolUse hook 입력 JSON (argparse 없음)
   - error_events[≤8]({ts, tag, event, phone, request?, error?, code?, reason?, cause?}(각 ≤40자, 있을 때만; 4KB 압축 시 4개·부가 필드 없음))
   - error_event_total
   - unextracted_warn?(수집 태그 W/E/F 줄 중 이벤트로 추출 안 된 줄 수(parse_logcat unextracted_warn.lines, 있을 때만))
+- partial?[≤3](C′ 부분 일치(판정·점수 아님, S/C 불변; 후보 없음·원인 미확인일 때만, 04-parser-matching.md §5.12). {kind: missing|absent|order|window|blocked, type, cause, signature, matched: "m/n", missing[≤3 조건 설명], blocked_by?, at[≤3 f:L], code[]?("<조건>:<상태>[:<root 키>:<경로>:<줄>]")}; 4KB 압축 시 partial[1:] → missing 40자 → 전체 제거)
+  - kind: missing | absent | order | window | blocked
+  - type
+  - cause?
+  - signature
+  - matched
+  - missing?[≤3]
+  - blocked_by?
+  - at?[≤3]
+  - code?[≤3]
 - code
   - skipped
   - roots?
