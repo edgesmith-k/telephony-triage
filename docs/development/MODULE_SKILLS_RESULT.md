@@ -92,9 +92,9 @@ Skill 도구는 `module --for deep` 종료 1 `설치 스킬 못 찾음` 뒤에�
 
 **관리자 한 줄(반입 노트에도)**: `site-defaults.yaml`에서 `analyzers.*.inputs`·`max_tokens_hint` 두 줄을 지운다(B1부터 읽지 않고 경고한다; `max_tokens_hint`는 S-4a에서 정한 대로). 지우기 전에는 remote가 없어도 `config.py check` 경고와 doctor `config` 행 `warn`이 난다(의도한 예외).
 
-### 반입 노트: 바뀐 파일 → 사내 site eval (B2 §14, 11/05 사내 토큰 최소)
+### 반입 노트: 바뀐 파일 → 사내 site eval (B2 §14, 11/05 사내 토큰 최소 — 11/06 G에서 import-20261103 이후 전체로 넓힘)
 
-기준(`docs/SITE_INSTALL.md:224` 12개 전부 다시)을 바꾼 파일별 목록과 토큰 0 점검으로 대신한다. site 세트 1·2·8·9·39·45·58·59·60·61·62·75, 모델 차이 세트 13·17·18·24·29·33·37. 이 eval들은 모두 5-1·5-2에 "아니오"라 새 경로를 타지 않는다(거절 경로는 사외 eval 1로 확인).
+범위: `77e2827`(import-20261103)..`b4a5b42`. 기준(`docs/SITE_INSTALL.md:224` 12개 전부 다시)을 바꾼 파일별 목록과 토큰 0 점검으로 대신한다. site 세트(`tests/skill_evals/pending.json` `site`) 1·2·8·9·39·45·58·59·60·61·62·**75(이번에 새로 — A1)**, 모델 차이 세트 13·17·18·24·29·33·37. 이 eval들은 모두 5-1·5-2에 "아니오"라 모듈 경로를 타지 않는다(거절 경로는 사외 eval 1로 확인). 아래 첫 표는 B1·B2, 둘째 표는 그 밖(A1·A2·guard·C1+D·C·C′·마스킹·OpenCode).
 
 | 바뀐 파일 | remote 없을 때 사내 영향 | 닿을 수 있는 eval | 토큰 0 점검 | LLM 재실행 |
 |---|---|---|---|---|
@@ -111,10 +111,36 @@ Skill 도구는 `module --for deep` 종료 1 `설치 스킬 못 찾음` 뒤에�
 | `templates/module-skills/modules.yaml`·`tests/fixtures/module-filter/**` | site eval이 쓰지 않는다 | 없음 | 둘 다 site 모드 `check_boundary`(회사 패턴이 벤더 이름에 맞으면 `docs/site/boundary-allow.txt`에 좁은 값 예외) | 없음 |
 | `usage_stats.py`·`module_eval.py`(import)·`tools/{module_measure,fixture_residual,mask_parity,module_repo_check}.py`·eval·채점기·모의·템플릿·fixture | site eval이 쓰지 않는다 | 없음 | pytest | 없음 |
 
+B1·B2 밖 (A1·A2·guard·C1+D·C·C′·마스킹·I-2·Jira 관문):
+
+| 바뀐 파일 | 사내 영향 | 닿을 수 있는 eval | 토큰 0 점검 | LLM 재실행 |
+|---|---|---|---|---|
+| `dbpr/{merge,publish}.py`·`common/{ghpr,ghreview}.py`·`db_pr.py`·`reference/{write-flow,post,sync-pr}.md` (A1 +1 관문, A2 바로 병합 삭제·확인 화면 선택지·리뷰어 질문) | push 확인 화면에 '바로 병합' 없음, 병합은 +1 뒤 요청 시 `db_pr merge`만 | 1·2·9·61·62·**75** | `test_db_pr.py`, 확인 화면 `hook_replay` 전후 | **75는 새 eval — 1회 필수**. 61·62·9는 재생이 다를 때만(사외 A2 재측정 61·62 통과) |
+| `guard.py`(규칙 11 +1 병합·쉬운 P1 3·P2 7)·`show_guard.py` | `gh pr merge`·GraphQL·우회 경로 새 거부, post 안내 문구 | 8·61·62·75 | `test_hooks.py`·`test_platform_guard.py`, 12개 세션 `hook_replay` | 재생이 다를 때만 |
+| `platforms/{android,ofono}/*`·`common/vendor_ipc.py`·`parse_logcat.py`·`parser_backends/base.py`·`schemas/parser-rules.schema.json`(③a·③b, tags.yaml `level`·`ipc`) | Android iccIO·숫자 RadioError·RadioConfig, oFono 레벨 I·벤더 IPC → 이벤트·후보가 바뀔 수 있음 | analyze 전부(1·2·45·13·24·33·37) | site eval 로그로 `triage.py run --offline-db` 전후, 운영 DB `db_verify`·`db_regress` 전후 같음 | 후보·이벤트가 다른 eval만 |
+| `common/masking.py`(M12 IPv6 경계·B64 per_line·덤프 조각)·`common/dumpjoin.py`·`mask_pii.py` | IPv6 과마스킹 줄어듦, oFono 갈린 IMSI/ICCID 가림 | analyze 전부, 2·9·61 | 첫 표 마스킹 행과 같음 — `db_lint --all`·`mask_pii --check` **새 지적이 있으면 반입 멈춤** | 차이가 토큰뿐이면 없음 |
+| `match_signatures.py`·`common/signatures.py`·`triagelib/{report,output,driver}.py`·`analysis.schema.json`·`code_roots.py`(find-text)·`reference/{write-flow,explore}.md` (C′) | 후보 없음·1위 S=1·C=0이면 report.md `규칙 제안 (부분 일치):` + Step 7 질문(기본 받지 않음) | **45·2**, 그 밖은 1위가 S=1·C=0일 때 | 오프라인 `run` 전후 `analysis.json` 부분 일치 항목 유무 | 부분 일치가 생긴 eval만(예상 45) |
+| `db_lint.py`(`--advice`)·`reference/db-authoring.md` | 참고만 — 경고 수·종료 코드 그대로 | 2 | `db_lint --all` 경고 수 전후 같음 | 없음 |
+| `config.py`·`userconfig.py`·`site-defaults.example.yaml`(`issue_db.merge` 없어짐, `merge_wait_seconds` 420) | doctor에 없어진 키·폐지 키 경고 | 58 | 아래 2번 뒤 `config.py doctor` 전후 | 다르면 58만 |
+| `oc_adapter.py`·`oc_jira_gate.py`·`mcptools.py`·`job_status.py`·`claude_child.py`·`opencode/**`·`tools/{gen_opencode,oc_jira_check,site_step}.py` | OpenCode·게이트웨이 경로만 | 없음(site eval은 Claude Code + Claude) | `tt-oc doctor`·`runtime-check` | 없음 |
+| `module_eval.py`·`common/{modulefilter,moduleskills,skillcheck}.py`·`templates/module-skills/**`·`tools/{site_audit,make_module_repo,make_excerpt,module_*}.py`·eval·채점기 | site eval이 쓰지 않는다 | 없음 | pytest, `site_step.py modules check` | 없음 |
+
+**사내에서 할 일(순서)**:
+1. 반입 전(IMPL §4.8): 운영 이슈 DB 브랜치 보호(+1 필수 승인, IMPL §4.5), `docs/site/boundary-allow.txt`에 데몬 이름 줄.
+2. site-defaults·사용자 config에서 없어진 `issue_db.merge`와 폐지 `analyzers.<cat>.inputs`·`max_tokens_hint`를 지운다(관리자·사용자) → `config.py doctor`.
+3. 운영 이슈 DB `schema/parser-rules.schema.json`에 `level`·`ipc` **두 키를 한 PR**로(메인테이너 로컬 브랜치 — 스키마 변경). 속성 선언은 그 뒤 계획 op PR(사용자 확인): 키마다 하나라도 선언하면 DB만 보므로 그 키의 이름을 모두(옛·새) 한 번에.
+4. 모듈 스킬 레포: `tools/make_module_repo.py <out>` → GHE 빈 레포 만들기·push(사람) → 브랜치 보호 → site-defaults `module_skills.remote` → `site_step.py modules`·`modules check`(RUNTIME_ADOPTION 4.1).
+5. OpenCode: 레포 사본을 새 태그로 → 기존 설치 모두 `gen_opencode.py install … --force` → `tt-oc doctor`·`runtime-check opencode`(확인 0은 OpenAI 호환 `/models`·`/chat/completions`).
+6. Jira 관문(쓰는 사용자만): `runtime-check opencode --jira <키> --missing-key <키>` → `config.py set opencode.jira_read open`(error-path가 pass가 아니면 `--accept-error-bodies`, 허용 여부는 SITE_PROFILE) → `install … --jira-read-tool <서버>_<도구> --force` → 관리자가 `/etc/opencode` `jira_*` deny를 푼다.
+7. drift 첫 실행: `site_step.py audit --inhouse-model '<정규식>'`(첫 점검은 최근 14일, 기준 이전 3회·새 빌드 2건) → `review.md`를 Claude Code + Claude로 → `audit --record`.
+8. 위 토큰 0 점검이 깨끗하면 "영향 없음" 기록, 75만 1회. 다르면 그 eval만 `site_step.py evals`로.
+
 eval별 한 줄:
-- `1·2·8·9·39·45·59·60·61·62·75: 영향 없음 (5-1·5-2에 '아니오', 무원격 출력 바이트 동일, hook 재생 12개 일치, 이슈 DB lint·pre-commit 결과 동일)`
+- `1·8·9·39·59·60·61·62: 영향 없음 (5-1·5-2에 '아니오', 무원격 출력 바이트 동일, hook 재생 일치, 이슈 DB lint·pre-commit 결과 동일, 오프라인 run 후보·부분 일치 없음)`
+- `2·45: 영향 없음 (위와 같음 + 오프라인 run에 부분 일치 항목 없음)` — 부분 일치가 생기면 그 eval 1회
+- `75: 새 eval(A1 +1 병합 관문) — 1회 실행, 결과를 SITE_PROFILE에`
 - `58: 영향 없음 (doctor 출력 동일 — 폐지 키 두 줄 삭제 뒤)`
-- `13·17·18·24·29·33·37: 영향 없음 (5-1·5-2에 아니오 — 바뀐 줄은 동의 뒤 흐름, 거절 경로는 사외 eval 1로 확인)`
+- `13·17·18·24·29·33·37: 영향 없음 (5-1·5-2에 아니오 — 바뀐 줄은 동의 뒤 흐름, 거절 경로는 사외 eval 1로 확인; analyze 쪽은 오프라인 run 전후 같음)`
 
 **반입 뒤 5-1 점검(토큰 0, S-단계 메모)**: 사내 5-1이 Skill 도구에서 `module --for deep` + 풀린 `SKILL.md` Read로 바뀐다. site eval은 모두 거절해 이 경로를 타지 않으므로:
 1. 사내 config로 `config.py check --roots --json` → `read_roots`를 반입 노트에 옮긴다.
@@ -123,7 +149,7 @@ eval별 한 줄:
 4. 못 찾음·둘 이상(종료 1 `설치 스킬 못 찾음`)이면 사용자가 만나기 전에 `config.py set analyzers.<cat>.skill_dir <절대 경로>`. 어느 쪽이었는지 적는다.
 5. 그 파일이 작업 폴더 밖이면 `permissions.additionalDirectories`에 더하거나(사용자 설정 변경, 반입 노트에 적는다) Claude Code가 한 번 묻는 것을 받아들인다.
 
-예상 사내 LLM 비용: 토큰 0 점검이 모두 깨끗하면 site eval 0회, 아니면 많아야 58·61과 재생이 안 된 eval 하나.
+예상 사내 LLM 비용: 토큰 0 점검이 모두 깨끗하면 site eval 1회(75), 아니면 많아야 75·45·58·61과 재생이 안 된 eval 하나.
 
 ### 구현이 설계와 다르게 한 것 (설정·guard·문서 갈래)
 
