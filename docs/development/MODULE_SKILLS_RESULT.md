@@ -94,7 +94,7 @@ Skill 도구는 `module --for deep` 종료 1 `설치 스킬 못 찾음` 뒤에�
 
 ### 반입 노트: 바뀐 파일 → 사내 site eval (B2 §14, 11/05 사내 토큰 최소 — 11/06 G에서 import-20261103 이후 전체로 넓힘)
 
-범위: `77e2827`(import-20261103)..`b4a5b42`. 기준(`docs/SITE_INSTALL.md:224` 12개 전부 다시)을 바꾼 파일별 목록과 토큰 0 점검으로 대신한다. site 세트(`tests/skill_evals/pending.json` `site`) 1·2·8·9·39·45·58·59·60·61·62·**75(이번에 새로 — A1)**, 모델 차이 세트 13·17·18·24·29·33·37. 이 eval들은 모두 5-1·5-2에 "아니오"라 모듈 경로를 타지 않는다(거절 경로는 사외 eval 1로 확인). 아래 첫 표는 B1·B2, 둘째 표는 그 밖(A1·A2·guard·C1+D·C·C′·마스킹·OpenCode).
+범위: `77e2827`(import-20261103)..`b4a5b42`. 기준(`docs/SITE_INSTALL.md:228` hook·공통 판정이 바뀌면 12개 전부 다시)을 11/05 결정(사내 토큰 최소, `MODULE_SKILLS_DECISIONS.md`)에 따라바꾼 파일별 목록과 토큰 0 점검으로 대신한다. site 세트(`tests/skill_evals/pending.json` `site`) 1·2·8·9·39·45·58·59·60·61·62·**75(이번에 새로 — A1)**, 모델 차이 세트 13·17·18·24·29·33·37. 이 eval들은 모두 5-1·5-2에 "아니오"라 모듈 경로를 타지 않는다(거절 경로는 사외 eval 1로 확인). 아래 첫 표는 B1·B2, 둘째 표는 그 밖(A1·A2·guard·C1+D·C·C′·마스킹·OpenCode).
 
 | 바뀐 파일 | remote 없을 때 사내 영향 | 닿을 수 있는 eval | 토큰 0 점검 | LLM 재실행 |
 |---|---|---|---|---|
@@ -136,6 +136,7 @@ B1·B2 밖 (A1·A2·guard·C1+D·C·C′·마스킹·I-2·Jira 관문):
 6. Jira 관문(쓰는 사용자만): `runtime-check opencode --jira <키> --missing-key <키>` → `config.py set opencode.jira_read open`(error-path가 pass가 아니면 `--accept-error-bodies`, 허용 여부는 SITE_PROFILE) → `install … --jira-read-tool <서버>_<도구> --force` → 관리자가 `/etc/opencode` `jira_*` deny를 푼다.
 7. drift 첫 실행: `site_step.py audit --inhouse-model '<정규식>'`(첫 점검은 최근 14일, 기준 이전 3회·새 빌드 2건) → `review.md`를 Claude Code + Claude로 → `audit --record`.
 8. 위 토큰 0 점검이 깨끗하면 "영향 없음" 기록, 75만 1회. 다르면 그 eval만 `site_step.py evals`로.
+9. plugin-probe 15·16 확인(L2 hook 변경 10/18 — 사내에서 아직 안 했으면).
 
 eval별 한 줄:
 - `8·39·59·60: 영향 없음 (5-1·5-2에 '아니오', 무원격 출력 바이트 동일, hook 재생 일치, 이슈 DB lint·pre-commit 결과 동일, 오프라인 run 후보·부분 일치 없음)`

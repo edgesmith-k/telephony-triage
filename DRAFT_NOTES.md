@@ -32,7 +32,7 @@
 
 ## 사내로 넘긴 것
 
-- 사내 대상 eval 12개(`pending.json` `site`, S-2; 주입 59·60·+1 관문 75 포함, 사내 모델이 다르면 +7 — 이번 반입은 반입 노트 표로 영향 받는 것만), 코드 Read line 힌트(T4, S-2 측정 뒤)·offline_eval 오류율 상한(S-1 합의, S-5)·`max_tokens_hint` 처리(S-4a)·setup Jira 없음 중단(U1, S-3), db-authoring 스키마 요약 확장(S-2, 스키마 Read 횟수로 판단), 사내 마켓플레이스 소스 유형 확인 → version 규칙(S-2·S-7, `plugin.json` version 없음 = 커밋 SHA 기준).
+- 사내 대상 eval 12개(`pending.json` `site`, S-2; 주입 59·60·+1 관문 75 포함, 사내 모델이 다르면 +7 — 이번 반입은 `MODULE_SKILLS_RESULT.md` "반입 노트" 표로 영향 받는 것만 — 11/05 결정, SITE_INSTALL §228 대신), 코드 Read line 힌트(T4, S-2 측정 뒤)·offline_eval 오류율 상한(S-1 합의, S-5)·`max_tokens_hint` 처리(S-4a)·setup Jira 없음 중단(U1, S-3), db-authoring 스키마 요약 확장(S-2, 스키마 Read 횟수로 판단), 사내 마켓플레이스 소스 유형 확인 → version 규칙(S-2·S-7, `plugin.json` version 없음 = 커밋 SHA 기준).
 - S-7: usage_stats format 2·`--transcripts` 허용 여부.
 - 반입 뒤 후보(RF-5·6·8·9, 리뷰 후속 R-36~R-47)는 `docs/history/draft-notes-2026-10.md` "10/13 이동".
 
