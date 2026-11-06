@@ -299,3 +299,32 @@ def test_real_cli_bare_without_credentials_falls_back(tmp_path, monkeypatch, fak
     # 가는 곳은 늘 가짜 서버다(ANTHROPIC_BASE_URL을 이 테스트가 정했다)
     for line in log.read_text(encoding="utf-8").splitlines() if log.exists() else []:
         assert json.loads(line)["path"].startswith("/v1/")
+
+
+def test_gateway_site_rows_report_cli_hooks_and_s1_without_blocking(tmp_path, monkeypatch):
+    """종합 리뷰 F: runtime-check claude-gateway가 환경 변수 비교만 하던 것에 토큰 0 행 3개(claude_cli·plugin_hooks·
+    isolation_confirmed). 전부 ok·warn·info라 종료 코드는 그대로다."""
+    sys.path.insert(0, str(REPO / "tools"))
+    sys.path.insert(0, str(REPO / "tests" / "helpers"))
+    import site_step
+    from runner import plugin_root
+    home = tmp_path / "tt-home"
+    home.mkdir()
+    monkeypatch.setenv("TELEPHONY_TRIAGE_HOME", str(home))
+    bare = tmp_path / "bin"
+    bare.mkdir()
+    rows = {r["key"]: r for r in site_step.gateway_site_rows({"PATH": str(bare)})}
+    assert rows["claude_cli"]["status"] == "warn" and "PATH에 claude 없음" in rows["claude_cli"]["detail"]
+    assert rows["plugin_hooks"]["status"] == "warn" and "setup" in rows["plugin_hooks"]["detail"]
+    assert rows["isolation_confirmed"]["status"] == "info"
+    assert all(r["status"] not in site_step.RUNTIME_FAIL for r in rows.values())
+    fake = bare / "claude"
+    fake.write_text("#!/bin/sh\necho '9.9.9 (Claude Code)'\n", encoding="utf-8")
+    fake.chmod(0o755)
+    root = plugin_root()
+    (home / "config.yaml").write_text(f"plugin:\n  scripts_path: {root / 'scripts'}\n", encoding="utf-8")
+    rows = {r["key"]: r for r in site_step.gateway_site_rows({"PATH": str(bare), "HOME": str(tmp_path)})}
+    assert rows["claude_cli"]["status"] == "ok" and rows["claude_cli"]["detail"].startswith("9.9.9")
+    assert rows["plugin_hooks"]["status"] == "ok" and "PreToolUse" in rows["plugin_hooks"]["detail"] and "matcher 8개" in rows["plugin_hooks"]["detail"]
+    out, code = site_step.runtime_claude_gateway({"CLAUDE_CONFIG_DIR": str(tmp_path / "none"), "PATH": str(bare)})
+    assert code == 1 and "| claude_cli | ok |" in out and "재는 것:" in out and "안 재는 것:" in out

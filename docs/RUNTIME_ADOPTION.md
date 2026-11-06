@@ -65,6 +65,7 @@ python3 tools/site_step.py runtime-check claude-gateway
 ```
 
 - 판정은 `claude_child.gateway_profile_check`(비밀 값은 표에 없음). missing·differs면 종료 1. 끝에 사내 확인 0 curl을 보인다(실행 안 함).
+- 토큰 0 추가 행(`site_step.gateway_site_rows`, 종료 코드 무관): `claude_cli`(`claude --version`), `plugin_hooks`(사용자 config `plugin.scripts_path`의 설치본 `hooks/hooks.json`과 matcher 수 — 실제 로드는 사내 확인 5), `isolation_confirmed`(site-defaults `tracker.isolation_confirmed`, S1 기록). 이 점검이 **안 재는 것**: 게이트웨이 프로토콜·모델 응답·hook 동작·must_show — 아래 사내 확인이 확정한다.
 - 자격(`ANTHROPIC_AUTH_TOKEN` 또는 `ANTHROPIC_API_KEY`, 또는 `apiKeyHelper`)이 없으면 `credential` 행이 missing이다. 위 예시에 자격을 더한다.
 - `CLAUDE_CODE_EFFORT_LEVEL`은 없거나 비었거나 `"unset"`이면 ok(권장 값이 "두지 않음").
 
@@ -111,7 +112,7 @@ python3 plugin/scripts/module_eval.py --module ofono/data --case data-apn-auth-r
 
 | go | no-go |
 |---|---|
-| `runtime-check claude-gateway` 종료 0 | missing·differs 남음 |
+| `runtime-check claude-gateway` 종료 0 — **환경 변수·자격 이름·claude CLI·설치본 hooks·S1 기록만 잰다**(모델 응답·프로토콜·hook 실제 동작은 아래 사내 확인) | missing·differs 남음 |
 | 사내 확인 0·2·3 통과 | OpenAI 모양만(0 실패) → 이 환경 보류 |
 | 사내 확인 5에서 must_show 그대로 | 되돌림 뒤에도 요약 |
 | 고른 모듈 with ≥ without, 안전 위반 0 | 안전 위반 1건이라도 |
