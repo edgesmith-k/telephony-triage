@@ -100,6 +100,7 @@ GITHUB_TRACKER = {
     "exclude_servers": [],
     "tools": {"get_issue": GH_READ, "get_comments": GH_READ, "search_issues": GH_SEARCH},
     "read_tools": [GH_READ, GH_SEARCH],
+    "isolation_confirmed": True,       # 테스트 헬퍼: 모의 서버. 사내는 S1 확인 뒤 true (guard 규칙 2)
     "write_tools": {"add_comment": {"tool": GH_COMMENT, "body_arg": "body", "extra_args": {}, "format": "markdown"}},
     "timezone": "Asia/Seoul",
     "field_map": {},

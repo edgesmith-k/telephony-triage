@@ -103,6 +103,7 @@ tracker:
 #   read_tools:
 #     - mcp__mock-github-issues__issue_read
 #     - mcp__mock-github-issues__search_issues
+#   isolation_confirmed: true      # S1 확인 뒤 true (위 jira 블록과 같은 뜻)
 #   write_tools:
 #     add_comment:
 #       tool: mcp__mock-github-issues__add_issue_comment

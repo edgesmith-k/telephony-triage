@@ -553,7 +553,7 @@ def test_skill_md_is_within_7_5kb_and_drives_triage():
     skill = REPO / "plugin" / "skills" / "telephony-triage" / "SKILL.md"
     reference = skill.parent / "reference"
     text = skill.read_text(encoding="utf-8")
-    assert len(text.encode("utf-8")) <= 9107        # B2 e79: Step 5-1이 module 전에 module-skills.md를 읽게(종료 2 계속 규칙) 뒤. 그 전 9,063B — 규칙 제안 질문: 여러 개 가능·`모두`·`받지 않음(기본 — 이유)` 선택지(10/22 사용자) 뒤. 그 전 8,968B — Step 7 `[스킬]` 줄 → 담당자용 patch(`skill-patch.md`) 뒤. 그 전 8,962B — 분석 스킬 `규칙 제안:` 줄 처리(Step 5-1 괄호·Step 7 질문, 사내 문구 그대로) 뒤. 그 전 8,590B — L2 재측정 뒤: --more-logs는 --logs 대신(e52)·회귀 의심은 update-fix(e10) 명시 뒤. 그 전 8,500B — L2 ③ 리뷰: Step 7 질문 모양(고정 둘·글 거부·분석 스킬 의견 자리·후보 0개) 뒤. 그 전 8,280B — E67: Step 9 앞 PR 링크(`pr.url`)를 글로 보인다는 말 뒤. 그 전 8,256B — 전체 eval(10/14) 반영: 이어서 plan.next·mode write·거부 뒤 선택지·issue 재호출 뒤의 한도. 그 전 8,064B(흐름 A/B 한 줄 추가 뒤). 그 전 7,680B(W6: 실행 규칙을 reference/rules.md로 옮김), W6 전 8,192B
+    assert len(text.encode("utf-8")) <= 9180        # 종합 리뷰 A6: S1 확인 전엔 guard가 Jira 읽기마다 묻는다(우회 금지) 한 구절 뒤. 그 전 9,107B — B2 e79: Step 5-1이 module 전에 module-skills.md를 읽게(종료 2 계속 규칙) 뒤. 그 전 9,063B — 규칙 제안 질문: 여러 개 가능·`모두`·`받지 않음(기본 — 이유)` 선택지(10/22 사용자) 뒤. 그 전 8,968B — Step 7 `[스킬]` 줄 → 담당자용 patch(`skill-patch.md`) 뒤. 그 전 8,962B — 분석 스킬 `규칙 제안:` 줄 처리(Step 5-1 괄호·Step 7 질문, 사내 문구 그대로) 뒤. 그 전 8,590B — L2 재측정 뒤: --more-logs는 --logs 대신(e52)·회귀 의심은 update-fix(e10) 명시 뒤. 그 전 8,500B — L2 ③ 리뷰: Step 7 질문 모양(고정 둘·글 거부·분석 스킬 의견 자리·후보 0개) 뒤. 그 전 8,280B — E67: Step 9 앞 PR 링크(`pr.url`)를 글로 보인다는 말 뒤. 그 전 8,256B — 전체 eval(10/14) 반영: 이어서 plan.next·mode write·거부 뒤 선택지·issue 재호출 뒤의 한도. 그 전 8,064B(흐름 A/B 한 줄 추가 뒤). 그 전 7,680B(W6: 실행 규칙을 reference/rules.md로 옮김), W6 전 8,192B
     for needle in ("triage.py run", "needs_input", "--answer", "write-flow.md", "--commit", "reference/rules.md",
                    "steps-pasted.txt", "--dry-run --issue-file", "analyzer.skill",
                    "must_show", "triage.py explore", "triage.py module", "check-output", "module-skills.md"):
@@ -1606,6 +1606,6 @@ def test_cause_unconfirmed_run_shows_partial_match_and_code_check(tmp_path):
     assert "  - 코드 대조 setting-off: " in report
     assert "  - 없음 근거 포함: must_not_match " in report
     # 종합 리뷰 P1: 이 합성 로그에는 RILJ(수집 태그) 줄이 없어 `RILJ.*>\s*SETUP_DATA_CALL` 없음은 확인된 것이 아니다 → must_show
-    assert "- 배제 조건 검증 불가: must_not_match " in report and "태그 RILJ 줄이 이 로그에 0줄" in report
+    assert "- 배제 조건 검증 불가: DATA-001/no-setup-data-call-request의 must_not_match 태그 RILJ 줄이 이 로그에 0줄" in report
     assert any(m.startswith("배제 조건 검증 불가") for m in done.get("must_show") or []), done.get("must_show")
     ws.json("triage.py", ["release", "MOCK-1001"])
