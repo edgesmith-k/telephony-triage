@@ -2,6 +2,19 @@
 
 단계표는 `MODULE_SKILLS_PLAN.md §4`. 이 파일은 단계마다 리뷰·재측정에서 P2로 남긴 것(결정 (r): P0·P1만 고치고 P2는 반입 뒤 후보)과 단계 결과를 적는다.
 
+## C·C′(+코드 대조)·실행 중 IMSI/ICCID 마스킹·후보 방식 채점 (11/06, 설계 → 설계 검증 → 구현 → 리뷰 → 검증 → 수정)
+
+**C′ 부분 일치**(설계 `scratchpad/cc/design.md`, 설계 검증 P1 9 반영): 분석 모드에서만, 후보가 없거나 1위가 S=1·C=0일 때 부분 일치(missing·absent(한 줄 시그니처가 통째로 없음)·blocked·order·window)를 match.json 5·analysis.json 3·report.md ≤1,200B로 보인다. S/C 판정과 regress 출력은 그대로. report.md `규칙 제안 (부분 일치):` → 기존 Step 7 질문(기본 받지 않음) → update-signature(사용자 확인·PR·+1). 제안은 마스킹된 로그 줄(`log_refs`)로만 만들고 코드 문자열로는 만들지 않는다. **코드 대조** `code_roots.py find-text`: 부분 일치이고 code root를 골랐을 때만, 시그니처 regex에서 리터럴 도출(태그·oFono file:func 앞머리 제거) → 같음(±2줄 안 로그 호출일 때만)/문구 다름/못 찾음(범위: code_refs+required_dirs를 다 봤을 때만)/문자열만 있음/애매/확인 못 함/건너뜀(상한), 20초·1MiB·제외 디렉토리, 출력은 key:path:line만(코드 글 없음). **C**: `site_audit` drift — feedback `suggested[].signature` × issues(sw·platform_version)로 "이전 3회 이상 맞던 시그니처가 새 빌드 기록 2건 이상에서 0회"면 needs-user(같은 브랜치는 sw 순서만, 다른 브랜치는 platform_version 주 버전이 클 때만, 같은 원인·unresolved·new-cause만 셈), 1건은 info, 판단 못 하면 skip. Claude 안 부름.
+**마스킹**: `common/dumpjoin.py`(fixture_residual과 같은 묶기: 시각 뺀 앞머리·1초 안)로 oFono `dump_dmsg_w_re()` 조각을 이어 키 있는 IMSI/ICCID 규칙만 적용, mask_pii·parse_logcat(run_cut·fields 포함)·residual·redact. R28: 골든·mask-gate 차이 0, 첨부 로그 3개 종류별 마스킹 수 변화 0(갈린 경우 0건), fixture_residual 0. 사용자에게 보임.
+**후보 방식 채점**(사용자 11/06 "이런 후보가 있을 수 있다 정도로, 결론이 아니게", 설계 `scratchpad/cand/design.md`, 설계 검증 P1 2 반영): 탐색 사례 27개는 후보 1~3개 + `가장 유력: n`, 인정 후보(`accept`)가 목록에 있고 함정(`trap`)을 가장 유력으로 두지 않으면 통과(근거는 맞힌 그 후보에), 1순위 적중은 기록만. 심층 15개는 결론 1개 그대로. 함정 규칙은 두 arm 공용 프롬프트에만(모듈 문서 안 바꿈). 기록에 case별 `expect_sha256`·`GRADER_VERSION 2` — 정답이 바뀌면 한 arm 합치기 거절. `tools/module_answers.py table|migrate`(정답표 자동 생성 — 커밋 안 함). 27개는 migrate로 1:1 변환(옛 wrong_layer → trap). 정답 표(후보 방식)는 사용자 확인 대기.
+리뷰: C·C′·마스킹 구현 리뷰(2관점 → 검증 1) 확정 P1 4 고침 — find-text가 범위를 못 보고 not-found, drift 빌드 순서 모순에 StopIteration으로 점검 전체 중단, 짧은 숫자 조각이 값 표에 들어가 다른 필드를 `<IMSI#n>`으로 가림, 시각 없는 dump 레코드가 묶음을 닫음. 통합 전체 테스트 3,855 통과(C′ 부분 일치로 탐색 생성 입력 다시 만듦 — partial 항목만). 진행 중 컨테이너 재시작 1회(메모리: 관련 테스트와 에이전트 동시) — 잃은 것 없음, 이후 전체 테스트는 단독 실행.
+
+### P2 — C·C′·마스킹·후보 채점 (반입 뒤 후보)
+- C′: (나)에서 1위 유형 원인만 봄(다른 S=1·C=0 유형 원인은 다음), 원인 부분 일치 구간을 1위 증상 슬롯으로 제한 안 함, 1위가 S=1·C=0이면 다른 유형 증상 부분 일치 추가. find-text 시작 디렉토리 링크·FIFO 처리(출력은 ref뿐이라 누출 없음). 기존 `find-symbol`에 시간·크기 상한·제외 디렉토리 없음.
+- 마스킹: `make_excerpt`가 아직 줄마다 `masker.mask`(갈린 IMSI/ICCID 든 발췌는 residual에서 거부 — 안전 쪽 실패).
+- C: drift는 원인 시그니처만(유형 단위는 feedback 스키마 `type_signature` 필요 — 다음 묶음), 기준 3/2는 사내 측정 뒤 조정.
+- 후보 채점: 인정 후보가 사례마다 1개(기계 변환) — 사용자 확인으로 넓힘, 층 여러 개를 한 칸에 쓰면 형식 실패 규칙·같은 후보 중복 실패(설계 F5)는 구현됨, 두 arm 모두 만점 근처라 동률 늘 것(관문 경고에 top1 with/without 표시).
+
 ## C1+D 보정 (11/06, 설계 → 설계 검증 → 구현 → 리뷰 → 검증 → 수정 — 사용자 11/06 "구현 전에 다시 설계하고 검증")
 
 설계 `scratchpad/c1d/correction-design.md`(v2, 검증 반영 §13): 사용자 결정 8개(모듈별 병렬 보정·증상별 첫 점검 표·사례 추가·대체 근거 A·데몬 역할 표·박힌 데몬 이름 → tags.yaml 속성·정답 표 확인·APN 설정 행) + 구현 보고 추가 항목. 설계 검증(2관점 리뷰 → 반박 검증): 확정 P0 2(기준 커밋, 사용자 확인 없는 견본 DB RIL 항목 분리 → 뺌)·P1 13 반영.
