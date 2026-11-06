@@ -2151,11 +2151,14 @@ def _site_env(ws: Workspace, code: str, no_yaml: bool = False) -> dict:
 
 # `EACCESMARK`가 든 경로의 stat이 PermissionError — 남의 홈·/root 아래처럼 들어갈 수 없는 경로(root가 아닌 사용자)를 흉내 낸다.
 # Python 3.13의 `Path.is_dir`은 ENOENT·ENOTDIR·EBADF·ELOOP 밖의 OSError를 그대로 올린다
+# 바꿔 끼운 stat은 `__get__` 없는 호출 객체다: Python 3.10 pathlib `_NormalAccessor.stat = os.stat`이 함수를 메서드로 묶어
+# 경로 자리에 accessor가 들어가는 일을 막는다(3.11부터는 accessor가 없다)
 EACCES_SITE = ("import errno, os\n_stat = os.stat\n\n\n"
-               "def stat(path, *a, **k):\n"
-               "    if not isinstance(path, int) and 'EACCESMARK' in os.fsdecode(path):\n"
-               "        raise PermissionError(errno.EACCES, 'Permission denied (test)', os.fsdecode(path))\n"
-               "    return _stat(path, *a, **k)\n\n\nos.stat = stat\n")
+               "class _Stat:\n"
+               "    def __call__(self, path, *a, **k):\n"
+               "        if not isinstance(path, int) and 'EACCESMARK' in os.fsdecode(path):\n"
+               "            raise PermissionError(errno.EACCES, 'Permission denied (test)', os.fsdecode(path))\n"
+               "        return _stat(path, *a, **k)\n\n\nos.stat = _Stat()\n")
 # `WALKRAISE`가 든 글의 `os.path.expandvars`가 RuntimeError — guard의 명령 걷기(`invocations`)가 예외로 끝나게 한다
 WALK_SITE = ("import posixpath\n_ev = posixpath.expandvars\n\n\n"
              "def expandvars(p):\n"
