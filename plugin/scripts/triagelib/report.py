@@ -516,6 +516,27 @@ class ReportMixin:
             lines += text
         return lines
 
+    def _conclusion(self, cands: list, unjudged: dict) -> str:
+        """결론 한 줄(후보 줄 바로 앞): 분류 결과 한 문장과 다음 행동. 판정은 아래 줄들과 같다(새 정보 없음) — 엔지니어가 이 줄만
+        보고 다음 행동을 고르게. 규칙 일치 수준은 진단 확신이 아니다."""
+        nxt = ("기록 없음(분석 전용)" if self.analysis_only else "아래 후보를 보고 Step 7에서 분류를 확정하거나 다른 원인을 고른다")
+        if cands:
+            top = cands[0]
+            label = {"high": "높음", "medium": "중간", "low": "낮음"}.get(top["confidence"], top["confidence"])
+            if top["cause"]:
+                return (f"결론: {top.get('category')} > {top['type']} > {top['cause']} {top['title']} — 규칙 일치 {label}"
+                        f"(진단 확신 아님). 다음: {nxt}")
+            if top.get("_cause_unjudged"):
+                return (f"결론: 증상은 {top['type']}에 맞으나 원인 시그니처가 판정 불가(시간 초과·오류). 다음: 관리자에게 시그니처 확인을 "
+                        f"요청하고, 원인은 탐색 분석(동의 뒤)·로그 추가(--more-logs)로 찾는다")
+            return (f"결론: 증상은 {top['type']}에 맞으나 아는 원인과 맞지 않음(원인 미확인). 다음: 탐색 분석(동의 뒤) 또는 "
+                    f"로그 추가(--more-logs), 그래도 없으면 원인 미확정으로 기록")
+        if unjudged.get("count"):
+            return ("결론: 판정 불완전 — 시그니처 시간 초과·오류로 일부 유형을 판정하지 못함. 다음: 관리자에게 시그니처 확인을 요청하고 "
+                    "'후보 없음'으로 단정하지 않는다")
+        return ("결론: 아는 증상·원인과 맞는 후보 없음. 다음: 아래 설명 기반 유사 후보·오류 이벤트를 보고 탐색 분석(동의 뒤) 또는 "
+                "로그 추가(--more-logs), 새 유형이면 Step 7에서 등록")
+
     def render_report(self, r: dict, anchor: dict | None = None) -> tuple[str, list[str]]:
         """`report.md` 본문과, 사용자에게 꼭 보여야 하는 줄(`must_show`: 우선순위 순, 줄 앞 "- " 없이, 최대 `MUST_SHOW_MAX`개)을 돌려준다."""
         lines = [f"## {self.key} 분석", ""]
@@ -576,6 +597,8 @@ class ReportMixin:
             lines.append("- 스텝 기준 우선 유형 (순위 참고만, 점수·S/C 불변): " + ", ".join(self.focus))
         cands = r["candidates"]
         unjudged = r.get("unjudged") or {}
+        # 한 문장 결론(종합 리뷰 A): 머리 알림(분석 전용·읽기 전용·실패 스텝·시계) 다음, 후보 줄 바로 앞. must_show 아님(새 정보 없음)
+        lines.append("- " + self._conclusion(cands, unjudged))
         if cands:
             top = cands[0]
             label = {"high": "높음", "medium": "중간", "low": "낮음"}.get(top["confidence"], top["confidence"])
@@ -593,7 +616,7 @@ class ReportMixin:
                       for e in top["evidence"]]
             basis = (r.get("_partial") or {}).get("absence_basis")
             if basis:      # must_not_match에 기대는 시그니처: 그 줄이 빌드에서 사라져도 같은 결과(판정 불변, must_show 아님)
-                lines.append(f"  - 없음 근거 포함: must_not_match {basis['pattern']} — 이 줄이 빌드에서 사라져도 같은 결과(03 §5.7)")
+                lines.append(f"  - 없음 근거 포함: must_not_match {basis['pattern']} — 이 줄이 빌드에서 사라져도 같은 결과")
                 for u in (basis.get("unverifiable") or [])[:2]:    # 수집 태그 줄이 0줄: 공허하게 참일 수 있다 → must_show(과신 방지)
                     # 패턴 원문(정규식 메타 문자)은 위 줄에만 — must_show는 Jira 본문에 글자 그대로 들어가므로 wiki 마크업과 겹치지 않게
                     lines.append(add(6, f"배제 조건 검증 불가: {u['signature']}의 must_not_match 태그 {u['anchor']} 줄이 이 로그에 0줄 — "
@@ -613,10 +636,10 @@ class ReportMixin:
                 lines.append(f"- 순위 참고: 규칙 일치 점수 동점 후보 {n}개 — 발생 시각 근접·키워드 근거 순으로 정렬했다(원인 확정 아님)")
         else:
             if unjudged.get("count"):
-                lines.append(f"- 분류 후보: **판정 불완전** — S=1인 유형 없음, 판정 불가 유형 {unjudged['count']}개 "
+                lines.append(f"- 분류 후보: **판정 불완전** — 증상 시그니처에 맞는 유형 없음, 판정 불가 유형 {unjudged['count']}개 "
                              "(후보 없음으로 단정하지 않음)")
             else:
-                lines.append("- 분류 후보: **후보 없음** (S=1인 유형 없음)")
+                lines.append("- 분류 후보: **후보 없음** (증상 시그니처에 맞는 유형 없음)")
             hints = r.get("no_candidate") or {}
             lines.append("- 설명 기반 유사 후보: " + (", ".join(f"{h['id']} {h['title']}" for h in hints.get("search_hits") or [])
                                                  or "없음"))
@@ -635,7 +658,7 @@ class ReportMixin:
                 ids = ", ".join((unjudged.get("types") or []) + (unjudged.get("causes") or []))
                 n = f"{unjudged['count']}" + (f"·원인 {unjudged['cause_count']}" if unjudged.get("cause_count") else "")
                 lines.append(add(6, f"판정 불가 유형: {n}개" + (f" ({ids})" if ids else "") + f" — {where}. "
-                                    "후보 순위·'후보 없음'·'원인 미확인'은 불완전하다 (matcher.pattern_timeout_ms·시그니처 확인)"))
+                                    "후보 순위·'후보 없음'·'원인 미확인'은 불완전하다 (관리자: 이슈 DB matcher.pattern_timeout_ms·그 시그니처 확인)"))
             else:     # 충족된 유형의 다른 시그니처만 오류: S/C는 그대로, 근거 선택만 달라질 수 있다
                 lines.append(add(6, f"{where} — 충족된 유형의 다른 시그니처라 S/C는 그대로(근거 선택은 달라질 수 있다)"))
         if anchor and (not cands or not cands[0]["C"]):

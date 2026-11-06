@@ -290,3 +290,26 @@ CODEOWNERS에는 **메인테이너 경로**(`/.githooks/`·`/schema/`·`/parser-
 2. `python3 tools/site_step.py modules` → `modules check`: remote·push 권한·트리 = modules.yaml·데몬 ⊆ tags.yaml·prefer 규칙·보호·CI(정보). 중첩 `claude -p` 확인은 명령만 보인다(사용자가 한 번 돌리고 `--waive`).
 3. `python3 tools/site_step.py modules coverage --out docs/site/module-coverage.diff`(토큰 0, 사내 전용 출력): 사내 로그로 모듈별 줄 수·모듈에 없는 데몬·tags.yaml에 없는 태그를 보고, modules.yaml diff를 검토해 모듈 레포 PR로 보낸다. tags.yaml에 없는 태그는 이슈 DB 계획 op PR이 먼저다(사용자 확인).
 4. **정기 점검(매주, 상한 300,000 토큰/회)**: `python3 tools/site_step.py audit` — 사내 모델·출처 모름 커밋만 골라 토큰 0 검사를 먼저 돈다. 남은 것은 `docs/site/audit/<날짜>-review.md`의 목록·추정 토큰뿐이다(Claude는 부르지 않는다). 사내 Claude 리뷰(승인 뒤) → `audit --record`(넘친 항목은 이월). 14일 넘으면 ms2.audit가 사용자 필요.
+
+## 11. 되돌리기·제거 (배포본 롤백, 플러그인 제거, 반입 되돌리기)
+
+종합 리뷰에서 "배포 뒤 잘못된 버전을 되돌리는 절차와 제거 절차가 없다"가 지적됐다. 사외에서 정할 수 있는 부분만 적는다. 사내 마켓플레이스의 실제 갱신 방식(S2)은 `SITE_PROFILE.md`에 보완한다.
+
+### 11.1 배포본 되돌리기 (잘못된 묶음을 팀에 배포했을 때)
+
+- 플러그인의 "판"은 사내 마켓플레이스가 가리키는 사내 tt 레포의 **반입 태그(커밋)** 다. 되돌리기 = 마켓플레이스 정의(`.claude-plugin/`, S2)가 가리키는 태그를 직전 반입 태그로 바꾸고, 팀원이 플러그인 화면에서 업데이트(안 되면 제거 뒤 재설치)한다. `plugin/site-defaults.yaml`은 `SITE_PATHS`라 묶음에 없고 되돌려도 그대로다.
+- **이슈 DB 스키마·생성기 버전이 같이 올라간 반입**이었으면 플러그인만 되돌리면 `SUPPORTED_SCHEMA`·생성기 불일치로 커맨드가 멈춘다(`docs/design/06-collaboration.md §6.4`). 순서: 이슈 DB의 migrate PR을 **Revert PR**로 되돌려 병합(+1) → 플러그인 되돌리기. 진행 중 계획·열린 PR은 `python3 $S/job_status.py <KEY>`로 상태를 보고, 계획은 그대로 두었다가 되돌린 판에서 `sync-pr`로 재적용한다(계획 형식이 바뀐 반입이면 `migrate` 커맨드의 upgrade-plan 안내를 따른다).
+- OpenCode 설치본은 레포 사본을 직전 태그로 바꾼 뒤 `python3 tools/gen_opencode.py install --force …`(`docs/TEAM_GUIDE.md` 4절)를 다시 한다 — 지문(integrity)이 판에 묶여 있어 사본과 플러그인 판이 다르면 시작하지 않는다.
+- 되돌린 뒤 팀원은 `/telephony-triage:status --doctor`로 `compat`·`config` 행이 ok인지 본다. 되돌린 사유·버전 조합·담당자는 `SITE_PROFILE.md`에 한 줄 남긴다(S2 구체화, `15-local-draft.md` S-7 C7).
+
+### 11.2 플러그인 제거 (팀원 PC)
+
+1. 플러그인 화면에서 `telephony-triage`를 제거한다(마켓플레이스 등록도 더 쓰지 않으면 함께).
+2. 사용자 데이터를 지운다 — 작업 계획·`issue_raw.json`·마스킹 로그·pending 피드백에 **Jira 요약이 들어 있다**:
+   `~/.telephony-triage/`(config·pending-feedback·기본 work_dir `work`·`work-<플랫폼>`), config의 `work_dir`가 다른 곳이면 그 폴더, OpenCode 설치 폴더(`--dest`)와 세션(`opencode.db`, `opencode/README.md`의 `--delete-session`). Claude Code transcript(`~/.claude/projects`)의 보존은 사내 정책(S14)에 따른다.
+3. 이슈 DB clone은 공유 레포라 보통 둔다. 지우려면 열린 PR·로컬 브랜치(`git -C <clone> branch`)를 먼저 정리한다. clone의 `core.hooksPath`는 setup이 설정한 값이라 clone을 둘 때는 그대로 둔다(스크립트가 없어진 뒤 커밋하면 hook이 실패한다 — `git -C <clone> config --unset core.hooksPath`).
+4. Python 의존성(PyYAML·jsonschema)은 다른 도구가 쓸 수 있어 지우지 않는다. 설치 방법 B(venv)였으면 venv 폴더만 지운다.
+
+### 11.3 사내 레포에서 반입 되돌리기
+
+반입은 main에 ff 병합한 커밋(8절)이다. 되돌리기는 `git revert -m 1 <병합 커밋>`(ff였으면 반입 커밋 범위를 `git revert <A>..<B>`) → 커밋 → 태그. `SITE_PATHS` 파일은 반입이 건드리지 않으므로 그대로 남는다. 반입 **도중** 실패는 8절 "멈췄을 때"(도구가 되돌린다).

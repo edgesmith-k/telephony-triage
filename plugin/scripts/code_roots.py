@@ -340,20 +340,39 @@ def _regex_runs(pattern: str) -> tuple[list[str], bool]:
     return runs, bool(parsed.state.flags & re.IGNORECASE)
 
 
+_MSG_FORMAT_FNS: list | None = None
+
+
+def _msg_format_fns() -> list:
+    """설치된 모든 플랫폼 `SPEC.msg_formats`의 함수(이름 순). 플랫폼 이름을 코드에 적지 않는다(17-platforms §1-2 — 예전에는
+    `platforms.ofono.msgformat._FILE_FUNC`를 직접 불러 핵심이 플랫폼을 알았다). 한 번만 모은다."""
+    global _MSG_FORMAT_FNS
+    if _MSG_FORMAT_FNS is None:
+        fns = []
+        for name in platforms.known():
+            try:
+                fns += [fn for _label, fn in platforms.get(name).msg_formats]
+            except platforms.PlatformConfigError:
+                continue
+        _MSG_FORMAT_FNS = fns
+    return _MSG_FORMAT_FNS
+
+
 def derive_literal(pattern: str | None, tags=()) -> dict | None:
     """시그니처·파서 규칙 패턴 → 코드에서 찾을 글자 `{literal, aux, icase}` 또는 None(도출 불가).
     태그와 같은 구간·oFono `file.c:func()` 앞머리·`/ril_0` 꼴 경로 조각·마스킹 토큰은 버리고, `: `·`=`에서 끊는다.
     조건: 6자 이상, 영문자 2개 이상. 가장 긴 구간(동률이면 앞)이 literal, 두 번째가 aux."""
     if not pattern:
         return None
-    from platforms.ofono.msgformat import _FILE_FUNC
     runs, icase = _regex_runs(pattern)
     tags_l = {str(t).lower() for t in tags if t}
     pieces = []
     for run in runs:
-        hit = _FILE_FUNC.match(run)
-        if hit:
-            run = hit["body"]
+        for fn in _msg_format_fns():       # 플랫폼 메시지 하위 형식 앞머리(oFono `file.c:func()`)를 뗀다 — 레지스트리 경유(17 §1-2)
+            view = fn(run)
+            if view is not None:
+                run = view.body
+                break
         run = _PATH_FRAGMENT_RE.sub(" ", _MASK_TOKEN_RE.sub("\0", run))
         for piece in re.split(r"\0|: |=", run):
             piece = piece.strip(" \t>:-[](){},;'\"")

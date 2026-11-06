@@ -177,7 +177,7 @@ feedback_weight가 켜져 있고 해당 시그니처 표본 ≥ min_samples면: 
 - 신뢰도: `score ≥ confidence.high` 높음, `≥ confidence.medium` 중간, 그 외 낮음. `confidence`는 score를 구간으로 나눈 규칙 일치 수준이며 진단 확신도가 아니고 자동 게시 근거로 쓰지 않는다(`ARCHITECTURE_REVIEW` 결정 (b)).
 - 증상만 충족(S=1, C=0)하면 "유형 일치, 원인 미확인" 후보로 표시한다.
 - `status`가 `active`가 아닌 유형과 원인은 후보에서 제외한다.
-- 수락률 = (그 시그니처가 **1위로 제시된** 피드백 중 `decision: accepted`인 건수) / (그 시그니처가 1위로 제시된 피드백 건수). 2위 이하로 제시된 경우는 분모에 넣지 않는다. `decision: manual`(수동 기록)은 제시된 후보가 없으므로 집계하지 않는다 (`06-collaboration.md §6.5`).
+- 수락률 = (그 시그니처가 **1위로 제시된** 피드백 중 `decision: accepted`인 건수) / (그 시그니처가 1위로 제시된 피드백 건수). 2위 이하로 제시된 경우는 분모에 넣지 않는다. `decision: manual`(수동 기록)은 제시된 후보가 없으므로 집계하지 않는다. 뒤에 `reclassify`로 옮겨진 Jira(현재 분류가 기록의 `final`과 다름)의 `accepted`는 분모에는 남고 수락으로는 세지 않는다 (`06-collaboration.md §6.5`).
 - 발생 시각과 근거 시각은 같은 기준(UTC)으로 바꿔서 비교한다 (`02-config.md §4` 시각 정렬).
 
 #### (3) 컴파일

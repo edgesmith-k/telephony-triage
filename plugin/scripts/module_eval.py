@@ -174,7 +174,7 @@ _LAYER_DAEMON_SPEC = {p: ("원인 층: " + v + " — <한 줄 이유>\n원인 �
                           "| 알 수 없음>\n") for p, v in _LAYERS.items()}
 # deep 출력 형식(결론 하나). 바이트가 시험으로 고정돼 있다(설계 F7 — 템플릿 시험·층 목록 대조가 이 글을 쓴다)
 OUTPUT_SPECS = {p: _LAYER_DAEMON_SPEC[p] + _SPEC_TAIL for p in _LAYERS}
-# explore 출력 형식(후보 목록, 모듈 eval explore 후보 설계 §1.1). `분석 스킬 의견`은 explore에서 늘 해당 없음이라 뺀다
+# explore 출력 형식(후보 목록, 모듈 eval explore 후보 채점 — 이 파일 `explore_rows`·`gate_summary` 머리말). `분석 스킬 의견`은 explore에서 늘 해당 없음이라 뺀다
 EXPLORE_SPECS = {p: ("가설 1: <원인 한 줄>\n" + _LAYER_DAEMON_SPEC[p] + _EVIDENCE_SPEC
                      + "(가설 2·3도 같은 다섯 칸. 층·데몬이 갈리는 다른 설명이 있을 때만 쓴다. 서지 않으면 쓰지 않는다)\n"
                      + "가장 유력: <가설 번호 하나>\n" + _RULE_SPEC) for p in _LAYERS}
@@ -364,7 +364,7 @@ def _rx_ok(value) -> bool:
 
 
 def _expect_problem(kind: str, exp) -> str | None:
-    """expect 형식 위반 문구(없으면 None). deep은 schema 1 그대로, explore는 accept/trap 목록(후보 설계 §2.1)."""
+    """expect 형식 위반 문구(없으면 None). deep은 schema 1 그대로, explore는 accept/trap 목록(explore 후보 채점 `explore_rows`)."""
     if kind == "deep":
         if not isinstance(exp, dict) or set(exp) != EXPECT_KEYS:
             return f"expect 키는 {sorted(EXPECT_KEYS)}"
@@ -691,7 +691,7 @@ def label(value: str) -> str:
     return LABEL_CUT_RX.split(clean(value), maxsplit=1)[0].strip()
 
 
-# explore 후보 목록 읽기(후보 설계 §1.2, F6: evidence.HYP_RX 대신 자체 regex — `### 가설 1:`·`가설 1 (추정):` 허용)
+# explore 후보 목록 읽기(`parse_candidates`, F6: evidence.HYP_RX 대신 자체 regex — `### 가설 1:`·`가설 1 (추정):` 허용)
 CAND_HEAD_RX = re.compile(r"^\s*(?:#{1,6}\s*)?(?:[-*]\s*)?\**\s*가설\s*#?(\d+)?\s*(?:\([^)\n]{0,20}\))?\s*\**\s*[:：]\s*\**\s*(.*)$")
 CAND_FIELDS = ("원인 층", "원인 데몬", "근거", "반대 근거")
 CAND_RX = {f: _label_rx(f) for f in CAND_FIELDS}
@@ -831,7 +831,7 @@ def _row(text: str, passed: bool, evidence: str, kind: str, **extra) -> dict:
 
 
 def explore_rows(case: Case, text: str) -> tuple[list[dict], dict | None]:
-    """explore 판정 행 4개(kind=judgment) + top-1 지표 행(kind=metric). 후보 설계 §3.1."""
+    """explore 판정 행 4개(kind=judgment) + top-1 지표 행(kind=metric). pass1은 ②③④, top-1은 지표(`gate_summary`)."""
     parsed, _, _, why = parse_candidates(text)
     problems = candidate_format_problems(parsed) if parsed else why
     names = [ROW_CAND_ACCEPT, ROW_CAND_EVIDENCE, ROW_CAND_TRAP]
@@ -1111,7 +1111,7 @@ def gate_summary(rows: list[dict], require_cost: bool, arms=ARMS) -> dict:
            "safety_violations": {a: sum(len(r["safety_fail"]) for r in by[a]) for a in ARMS},
            "notes": {a: sum(r["notes"] for r in by[a]) for a in ARMS},
            "invalid": [], "require_cost": require_cost, "warning": None,
-           # top-1(가장 유력 = 인정 후보)은 표시만 — verdict는 pass1·토큰 그대로(후보 설계 §3.2)
+           # top-1(가장 유력 = 인정 후보)은 표시만 — verdict는 pass1·토큰 그대로(동률 1차 기준도 아니다 — 종합 리뷰 E 제안은 미결)
            "explore_runs": sum(1 for r in ran if r.get("kind") == "explore"),
            "top1_with": sum(r.get("top1") is True for r in by["with"]),
            "top1_without": sum(r.get("top1") is True for r in by["without"])}

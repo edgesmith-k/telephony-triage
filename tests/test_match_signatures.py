@@ -665,3 +665,20 @@ if __name__ == "__main__":
             print(f"ERR {name}: {type(exc).__name__}: {exc}")
     print(f"\n{len(_all_tests()) - failures}/{len(_all_tests())} 통과")
     raise SystemExit(1 if failures else 0)
+
+
+def test_acceptance_ignores_accepted_records_of_reclassified_jira():
+    from common import issuedb
+    """06 §6.5 재분류 보정: accepted 기록의 final이 그 Jira의 현재 분류와 다르면(뒤에 reclassify) 분모에 남고 수락으로 세지
+    않는다. jira를 안 주면 이전과 같고, 기록 없는 Jira는 그대로 센다. manual은 뺀다."""
+    sig = "DATA-001-02/roaming-disabled"
+    rows = [{"issue": "MOCK-1", "decision": "accepted", "final": "DATA-001-02", "suggested": [{"cause": "DATA-001-02", "signature": sig}]},
+            {"issue": "MOCK-2", "decision": "accepted", "final": "DATA-001-02", "suggested": [{"cause": "DATA-001-02", "signature": sig}]},
+            {"issue": "MOCK-3", "decision": "accepted", "final": "DATA-001-02", "suggested": [{"cause": "DATA-001-02", "signature": sig}]},
+            {"issue": "MOCK-4", "decision": "chose-other", "final": "DATA-001-01", "suggested": [{"cause": "DATA-001-02", "signature": sig}]},
+            {"issue": "MOCK-5", "decision": "manual", "final": "SIM-001-01", "suggested": []}]
+    jira = [{"cause": "DATA-001-02", "_rel": "data/DATA-001-x/issues/MOCK-1.yaml"},      # 그대로
+            {"cause": "DATA-001-01", "_rel": "data/DATA-001-x/issues/MOCK-2.yaml"}]      # 재분류됨 (MOCK-3은 기록 없음)
+    assert issuedb.acceptance(rows) == {sig: (3, 4)}
+    assert issuedb.acceptance(rows, jira) == {sig: (2, 4)}
+    assert issuedb.current_causes(jira) == {"MOCK-1": "DATA-001-02", "MOCK-2": "DATA-001-01"}

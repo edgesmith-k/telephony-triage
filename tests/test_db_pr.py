@@ -121,6 +121,9 @@ def test_each_op_reaches_pr():
     ws.ship("review-data-2026-10", "review/data-2026-10")
     moved = yaml.safe_load(ws.remote_file("review/data-2026-10", f"{DATA_DIR}/issues/MOCK-1104.yaml"))
     assert moved["cause"] == "DATA-001-01" and "reclassified from unresolved" in moved["note"]
+    # 재분류 보정(06 §6.5)은 피드백 파일을 바꾸지 않는다(스키마 불변) — 집계가 현재 분류와 대조한다(test_match_signatures)
+    fb = yaml.safe_load(ws.remote_file("review/data-2026-10", "feedback/2026-09/MOCK-1104-20260926T1010.yaml"))
+    assert fb["decision"] == "unresolved" and fb["final"] == "unresolved" and "corrected" not in fb
 
     titles = {p["branch"]: p["title"] for p in ws.prs()}
     assert titles["issue/MOCK-7002"].startswith("[DATA-001-03]")

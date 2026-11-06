@@ -77,6 +77,7 @@ work_dir: ~/.telephony-triage/work          # 작업 계획·상태 파일, 읽�
 **코드 경로는 analyze할 때마다 정한다.** Android 버전(16, 17 …)과 브랜치마다 소스 트리 위치가 다르고, 같은 파일도 버전에 따라 경로가 바뀌기 때문이다. `code_profiles`는 고르기 편하게 하는 프리셋일 뿐이고 없어도 된다. 절차는 `07-workflow.md §Step 2-1`이다.
 
 - `roots`의 키는 이슈 DB `issue-db.config.yaml`의 `code_root_keys`에 있는 이름만 쓴다 (기본 `aosp`, `vendor_ril`).
+- `reviewer.ask`(선택, 불리언, 기본 `true`): push 뒤 "리뷰어를 지정할까요?" 질문을 할지. `false`면 묻지 않고 지정 안 함(아무나 +1, `write-flow.md` 5번). 매 PR 반복되는 질문을 줄이는 개인 설정이다(`config.py set reviewer.ask false`). `setup`은 쓰지 않는다.
 - `code.auto_select`(선택, 불리언, 기본 `true`): `--code`도 답도 없을 때 대상 버전이 일치하는 `code_profiles` 프로필이 정확히 1개면 묻지 않고 그 프로필을 쓴다(`07-workflow.md §Step 2-1`, 알림 의무). 우선순위는 사용자 config > `site-defaults.yaml` > 내장 기본값 `true`이다(실행할 때 사용자 config·site-defaults에서 직접 읽는다). `setup`이 만드는 config에는 쓰지 않는다. `false`면 항상 묻는다. 값은 불리언(`true`/`false`)만, 따옴표 없이 쓴다. 문자열·0/1·null은 잘못된 값이라 `explore.when`처럼 warnings에 경고(`code.auto_select 값이 잘못됐다(<값>). 묻기로 본다`)하고 묻는 쪽(`false`)으로 본다(묻는 질문에도 표시한다).
 - 이슈 DB의 `code_refs`는 `<root 키>:<루트 기준 상대 경로>` 형식이다 (`03-issue-db.md §5.4`). 그래서 같은 이슈 DB를 어떤 버전 트리에 대해서도 쓸 수 있다.
 - 시각 정렬: Jira 발생 시각(`tracker.timezone`)과 logcat 시각(`logcat.timezone`, 연도는 `logcat.year_source`)을 같은 기준(UTC)으로 바꿔서 비교한다. 파서(`parse_logcat.py`)는 **사용자 config를 읽지 않고** 시각을 `--tz/--year` 인자로만 받는다 (Phase 2에서 인자로 구현, Phase 6에서 config 연결). 파서가 읽는 설정은 플러그인 `site-defaults.yaml`의 파서 백엔드·외부 파서 설정뿐이다 (`contracts.md §3.2` 설정 읽기). 형식과 기본값은 Phase 0에서 확인한다(S4, S7).

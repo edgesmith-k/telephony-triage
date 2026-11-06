@@ -550,7 +550,9 @@ def run_parse(args, plugin_root: Path, defaults: dict, profile: platforms.Platfo
             {"code": "unparsed-lines", "message": f"형식을 모르는 줄 {stats['unparsed']}개를 건너뛰었습니다."}
         )
     if not stats.get("lines"):
-        warnings.append({"code": "no-lines-parsed", "message": "해석한 logcat 줄이 없습니다 — 로그 범위 밖이 아니라 형식·인코딩 문제입니다(S7)."})
+        warnings.append({"code": "no-lines-parsed", "message": "해석한 로그 줄이 없습니다 — 로그 범위 밖이 아니라 형식·인코딩 문제입니다. "
+                                                                "지원 형식: logcat threadtime(연·월·일 또는 월·일 시각), bugreport zip, "
+                                                                "oFono syslog/journal(켠 플랫폼). 다른 형식이면 관리자에게(사내 확인 항목 S7)."})
     # 파일 단위: 0줄이거나 절반 넘게 못 읽은 파일이 있으면 그 관측은 불완전하다(complete: false).
     files = stats.get("files") or []
     for path, f in zip(paths, files):

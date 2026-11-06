@@ -365,7 +365,7 @@ def match(events_doc: dict, db: issuedb.IssueDb, compiled: dict, *, regress: boo
     use_feedback = bool(scoring.get("feedback_weight")) and not regress and not no_feedback_weight
     min_samples = int((db.config.get("quality") or {}).get("min_samples", 5))
     if acceptance is None:
-        acceptance = issuedb.acceptance(db.feedback)
+        acceptance = issuedb.acceptance(db.feedback, db.jira)
     stats = acceptance if use_feedback else {}
     timeout_ms = int((db.config.get("matcher") or {}).get("pattern_timeout_ms", DEFAULT_TIMEOUT_MS))
     rules = db.config.get("build_compare") or []

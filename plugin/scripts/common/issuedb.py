@@ -197,9 +197,22 @@ def load(db_root: str | Path) -> IssueDb:
                    jira=jira_records)
 
 
-def acceptance(feedback: list[dict]) -> dict[str, tuple[int, int]]:
+def current_causes(jira: list[dict]) -> dict[str, str]:
+    """`IssueDb.jira`(issues/<KEY>.yaml 기록) → `{KEY: 현재 cause}` (키는 파일 이름)."""
+    out: dict[str, str] = {}
+    for record in jira or []:
+        rel = record.get("_rel")
+        if rel and record.get("cause"):
+            out[Path(rel).stem] = str(record["cause"])
+    return out
+
+
+def acceptance(feedback: list[dict], jira: list[dict] | None = None) -> dict[str, tuple[int, int]]:
     """시그니처 전역 키별 `(수락 건수, 1위로 제시된 건수)` (04-parser-matching.md §5.11 (2)).
-    1위로 제시된 경우만 분모에 넣는다. `decision: manual`은 제시된 후보가 없으므로 뺀다."""
+    1위로 제시된 경우만 분모에 넣는다. `decision: manual`은 제시된 후보가 없으므로 뺀다. `jira`(`IssueDb.jira`)를 주면 **재분류 보정**:
+    `accepted`인데 그 Jira의 현재 분류(issues/<KEY>.yaml `cause`)가 기록의 `final`과 다르면 — 뒤에 `reclassify`로 옮겨졌으면 —
+    분모에는 남고 수락으로는 세지 않는다(그 1위 제안은 결국 틀렸다, 06-collaboration.md §6.5). 기록이 없는 Jira는 그대로 센다."""
+    now = current_causes(jira) if jira else {}
     stats: dict[str, list[int]] = {}
     for record in feedback:
         if record.get("decision") == "manual":
@@ -213,5 +226,8 @@ def acceptance(feedback: list[dict]) -> dict[str, tuple[int, int]]:
         entry = stats.setdefault(key, [0, 0])
         entry[1] += 1
         if record.get("decision") == "accepted":
+            issue = str(record.get("issue") or "")
+            if issue in now and now[issue] != str(record.get("final")):
+                continue      # 재분류됨: 수락으로 세지 않는다
             entry[0] += 1
     return {k: (v[0], v[1]) for k, v in stats.items()}

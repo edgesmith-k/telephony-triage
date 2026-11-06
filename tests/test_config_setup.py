@@ -1171,3 +1171,16 @@ if __name__ == "__main__":
             print(f"ERR {name}: {type(exc).__name__}: {exc}")
     print(f"\n{len(_all_tests()) - failures}/{len(_all_tests())} 통과")
     raise SystemExit(1 if failures else 0)
+
+
+def test_set_reviewer_ask_false_is_boolean_and_visible_to_skill():
+    """02-config §4 `reviewer.ask`(종합 리뷰 A 제안): push 뒤 리뷰어 질문을 끄는 개인 설정. 불리언으로 저장되고
+    `show --keys`로 스킬(write-flow.md 5번)이 읽는다. 기본은 없음(= 묻는다)."""
+    env = Env()
+    env.init(env.base / "db")
+    before = env.json("config.py", ["show", "--keys", "reviewer.ask"])
+    assert before["missing"] == ["reviewer.ask"]
+    env.json("config.py", ["set", "reviewer.ask", "false"])
+    assert env.config()["reviewer"]["ask"] is False
+    after = env.json("config.py", ["show", "--keys", "reviewer.ask"])
+    assert after["values"] == {"reviewer.ask": False} and after["missing"] == []
