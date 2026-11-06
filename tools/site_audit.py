@@ -882,5 +882,6 @@ def record(root: Path, defer: list[str] | None = None) -> str:
     _write(root, STATE_FILE, json.dumps(state, ensure_ascii=False, indent=1) + "\n")
     p["recorded"] = at
     _write(root, PLAN_FILE, json.dumps(p, ensure_ascii=False, indent=1) + "\n")
-    return (f"정기 점검 기록: 기준점 {', '.join(f'{REPO_LABELS[r]} {w['to'][:7]}' for r, w in p['window'].items())} · "
+    anchors = ", ".join(f"{REPO_LABELS[r]} {w['to'][:7]}" for r, w in p["window"].items())   # 3.10·3.11: f-string 안 같은 따옴표 금지
+    return (f"정기 점검 기록: 기준점 {anchors} · "
             f"이월 {len(state['carry'])} · 다음 점검 {(today() + timedelta(days=AUDIT_EVERY_DAYS)).isoformat()} ({STATE_FILE})")
