@@ -149,6 +149,16 @@ def git_version() -> tuple[int, ...] | None:
     return tuple(int(g) for g in m.groups() if g is not None) if m else None
 
 
+CRED_DETAIL = "URL에 자격 증명 — git credential helper를 쓴다"
+_URL_PASSWORD = re.compile(r"^[A-Za-z][A-Za-z0-9+.\-]*://[^/?#@\s]*:[^/?#@\s]*@")
+
+
+def url_has_password(remote) -> bool:
+    """`scheme://user:pass@…`(비밀번호가 든 주소). git 2.37 이상은 `transfer.credentialsInUrl=die`가 막지만 MIN_GIT(2.25)~2.36은
+    모르는 설정이라 그대로 보낸다 — 원격에 보내기 전에 직접 막는다. 사용자 이름만 든 주소(`user@`)는 git도 막지 않는다."""
+    return bool(_URL_PASSWORD.match(str(remote or "")))
+
+
 def _fatal_lines(err: str) -> list[str]:
     return [ln for ln in (err or "").splitlines() if ln.startswith(("fatal:", "error:"))]
 
@@ -176,7 +186,7 @@ def first_fatal(err: str, rc: int = 1) -> str:
         return "시간 초과"
     lines = _fatal_lines(err)
     if any("uses plaintext credentials" in ln for ln in lines):
-        return "URL에 자격 증명 — git credential helper를 쓴다"
+        return CRED_DETAIL
     if not lines:
         lines = [ln for ln in (err or "").splitlines() if ln.startswith("warning:")]
     line = lines[0] if lines else f"git 실패(rc {rc})"
@@ -454,6 +464,8 @@ def _first_clone(work: Path, clone: Path, remote: str, base: str) -> None:
 
 def prepare(work_dir, remote, base, *, lock, platform) -> TreeState:
     """B1 §5.4 A–G: clone 또는 fetch, 객체 저장소·트리 점검, modules.yaml 읽기. HEAD는 움직이지 않는다(ff는 materialise)."""
+    if url_has_password(remote):            # 보내기 전에(git 2.37 미만은 credentialsInUrl=die를 모른다)
+        raise ModuleError(2, "인증", CRED_DETAIL)
     work = Path(work_dir)
     clone = work / CLONE_DIR
     if not os.path.lexists(clone):

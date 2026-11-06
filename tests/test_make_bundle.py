@@ -472,6 +472,8 @@ def test_real_repo_zip_contains_opencode(tmp_path):
     실행 권한 그대로. `.gitattributes`의 export-ignore나 SITE_PATHS가 opencode/를 빼면 여기서 막힌다."""
     if not (REPO / ".git").exists():
         pytest.skip("git 레포가 아니다(반입 사본)")
+    if (REPO / "SITE_PROFILE.md").exists():
+        pytest.skip("사내 레포(SITE_PROFILE.md 있음) — 묶음은 사외에서만 만들고, 사내 파일이 든 zip은 build_bundle이 거부한다")
     tracked = [n for n in _git(REPO, "ls-files", "-z", "--", "opencode").split("\0") if n]
     assert "opencode/bin/tt-oc" in tracked and "opencode/plugins/tt-guard.js" in tracked
     built, why = mb.build_bundle(REPO, LABEL, _git(REPO, "rev-parse", "HEAD").strip(), tmp_path, _skeleton_dir(tmp_path),

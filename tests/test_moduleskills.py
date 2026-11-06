@@ -150,6 +150,18 @@ def test_credentials_never_printed(env, capfd):
         assert secret not in e.detail + str(e) + out + err
 
 
+def test_credentials_url_refused_before_git(env, monkeypatch):
+    """비밀번호가 든 주소는 git을 부르기 전에 막는다 — git 2.25~2.36은 `transfer.credentialsInUrl=die`를 몰라 그대로 보낸다
+    (사이트 리허설 Ubuntu 22.04 git 2.34에서 '네트워크'로 분류됐다)."""
+    calls = []
+    monkeypatch.setattr(ms, "_git", lambda *a, **k: calls.append(a) or (_ for _ in ()).throw(AssertionError("git 호출")))
+    for url in ("http://alice:zz99zz@localhost:1/o/r.git", "https://u:p%40x@ghe.example.invalid/o/r"):
+        e = fails(env, url=url)
+        assert (e.code, e.reason, e.detail) == (2, "인증", ms.CRED_DETAIL) and not calls, url
+    assert not ms.url_has_password("http://alice@localhost:1/o/r.git") and not ms.url_has_password("git@ghe.example.invalid:o/r")
+    assert not ms.url_has_password("/srv/git/o/r.git") and not ms.url_has_password("https://ghe.example.invalid/o/r?a=b:c@d")
+
+
 def test_user_without_password(env, monkeypatch):
     for k in ("http_proxy", "HTTP_PROXY", "https_proxy", "HTTPS_PROXY", "all_proxy", "ALL_PROXY"):
         monkeypatch.delenv(k, raising=False)

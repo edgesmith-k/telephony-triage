@@ -106,6 +106,12 @@ def test_ms1_remote_missing_branch_and_auth_fail(tmp_path):
     (root / "plugin" / "site-defaults.yaml").write_text(yaml.safe_dump({"module_skills": {"remote": gone}}), encoding="utf-8")
     r = by_id(sc.run_checks("MS-1", root))["ms1.remote"]
     assert r["status"] == "fail" and r["evidence"].split(":")[0] in ("인증", "네트워크")
+    # 비밀번호가 든 주소는 설정 검사(ms1.config)가 막아 ls-remote까지 가지 않는다(git 2.37 미만은 credentialsInUrl=die를 모른다)
+    (root / "plugin" / "site-defaults.yaml").write_text(
+        yaml.safe_dump({"module_skills": {"remote": "https://alice:zz99zz@ghe.example.invalid/o/r.git"}}), encoding="utf-8")
+    rows = by_id(sc.run_checks("MS-1", root))
+    assert rows["ms1.config"]["status"] == "fail" and "자격 증명" in rows["ms1.config"]["evidence"]
+    assert rows["ms1.remote"]["status"] == "skip" and "zz99zz" not in json.dumps(rows, ensure_ascii=False)
 
 
 def test_ms1_tree_mismatch_fails(tmp_path):
