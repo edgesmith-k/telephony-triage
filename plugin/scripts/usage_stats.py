@@ -492,7 +492,8 @@ def _token_line(t: dict | None) -> str:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="usage_stats.py", description=__doc__)
+    parser = argparse.ArgumentParser(prog="usage_stats.py", description=HELP_SUMMARY, epilog=HELP_EPILOG,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
     target = parser.add_mutually_exclusive_group()
     target.add_argument("--work-dir", help="기본: 선택 플랫폼의 사용자 config work_dir")
     platform_session.add_arg(target)
@@ -502,6 +503,17 @@ def build_parser() -> argparse.ArgumentParser:
                              "기본 $CLAUDE_CONFIG_DIR/projects 또는 ~/.claude/projects")
     parser.add_argument("--plugin-root", default=None)
     return parser
+
+
+# --help는 요약만(종합 리뷰 A: 판정 규칙 전체가 help에 들어가 4,000자 한 단락이었다). 규칙 전문은 이 모듈 머리말(`__doc__`)과
+# contracts.md §3.2 `usage_stats.py` 행.
+HELP_SUMMARY = """파일럿 운영 지표(S-7): work_dir의 작업마다 상태 하나(PR·push만·진행 중·연습·취소·보류·분석만·결과 없음·손상)를 고르고
+분석까지/PR까지 시간(중앙값·평균), 취소 비율, 드라이버 질문 수, 재시도를 낸다. 개수·시간만 — 작업 키·내용은 내지 않는다.
+텍스트 9줄(첫 줄 집계 대상). --json이면 한 줄 JSON(format 2). --transcripts는 opt-in: Claude Code transcript의 토큰을
+단계별로 세고(읽기 전용, 숫자만), 없으면 tokens null(미측정). 모델·네트워크 호출 없음."""
+HELP_EPILOG = """기본 대상: 선택 플랫폼(--platform > TT_PLATFORM > 사용자 config platform > site)의 사용자 config work_dir.
+--work-dir와 --platform은 함께 쓸 수 없다. 상태 판정 규칙(위에서 처음 맞는 것)·JSON 키 전체: 모듈 머리말, contracts.md §3.2.
+팀원마다 뽑은 --json 파일을 합치는 표: python3 tools/team_stats.py <a.json> <b.json> …"""
 
 
 def main(argv: list[str] | None = None) -> int:

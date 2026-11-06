@@ -499,3 +499,14 @@ def test_transcripts_module_deep_stage_and_single_deep_call(tmp_path):
     for cmd in (f"{S}/triage.py module K --for explore", f"{S}/triage.py check-output K --for explore --skipped x"):
         assert usage_stats._bash_marker(cmd) == "explore", cmd
     assert usage_stats._bash_marker(f"{S}/triage.py check-output K --for deep --skipped x") == "deep"
+
+
+def test_help_is_a_summary_not_the_rulebook():
+    """종합 리뷰 A: --help가 판정 규칙 전문(4,000자 한 단락)이었다. 요약 + epilog(규칙 위치·team_stats)만."""
+    import subprocess
+    import sys
+    from pathlib import Path
+    proc = subprocess.run([sys.executable, str(Path(__file__).resolve().parents[1] / "plugin" / "scripts" / "usage_stats.py"), "--help"],
+                          capture_output=True, text=True, encoding="utf-8")
+    assert proc.returncode == 0 and len(proc.stdout) < 2200, len(proc.stdout)
+    assert "team_stats.py" in proc.stdout and "contracts.md" in proc.stdout and "format 2" in proc.stdout
