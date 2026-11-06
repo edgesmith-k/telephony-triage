@@ -14,26 +14,25 @@
 - 테스트는 `tools/related_tests.py --run`(관련만). 전체는 도구가 full이라 할 때·반입 직전·요청 시.
 - 진행 중 판단은 Fable 결정 에이전트에게(10/06 사용자). 사용자 승인 대상(이슈 DB push, main 병합·태그 등 지시 없는 외부 동작)은 사용자에게.
 
-## 진행 상태 (11/05)
+## 진행 상태 (11/06)
 
-- 모드: **사외 초안**. Phase D0·1~13·반입 전 보강 완료. 최신 묶음 **import-20261103**(main `77e2827`). main 병합 PR #8~#79.
-- **H 진행 중**: 계획 확인 완료(11/03, Q1~Q8 추천안, `MODULE_SKILLS_DECISIONS.md` "계획 확인"). 단계표 `MODULE_SKILLS_PLAN.md §4` — **A1**·**A2**·guard 묶음 ☑ 11/04(결과·P2 `MODULE_SKILLS_RESULT.md`, A2 상한 수락·안내서는 G). **C0** ☑ 11/04. **B1+B2** ☑ 11/05(전체 3,529 통과, 유료 누적 $8.95, eval 2차 수정 진행). 계획 I(OpenCode·사내 모델) 사외 몫 ☑. 다음 **C1+D**(구현 중)·**F**(넣음, 확인은 C1+D와)·G, 11/9 오전 목표.
-- 모델 Sonnet 5.5 기준(Opus 5.5 11개 실패 0). `TODO(SITE)`: `tools/list_site_todos.py`. REVIEW-OPEN 0. 사내 시작 **"사내 설정 시작"**(결정 (o)).
-- 안내서: `docs/book/telephony-triage-book.html`(공유본 https://claude.ai/artifact/1jov1Et4dQUMauFr6aoxWG), 목록 `docs/materials/00-index.html`
+- 모드: **사외 초안**. Phase D0·1~13·반입 전 보강 완료. 지난 묶음 **import-20261103**(main `77e2827`). 다음 묶음 **토 11/7 18:00 KST**(기준 `b4a5b42` + G).
+- **H 단계 G 진행 중**: A1·A2·guard·C0·B1+B2 ☑, C1+D·보정·F·Jira 관문·C·C′(+코드 대조)·IMSI/ICCID 덤프 마스킹·후보 채점 브랜치 반영 `b4a5b42`(전체 3,855 통과). G: runtime-check opencode 확인 0을 OpenAI 호환으로, 도입·팀원 가이드 표시 정리(opencode/는 레포 읽기 전용 clone), 반입 노트(`MODULE_SKILLS_RESULT.md` "반입 노트": 75 새 eval 1회, 사내 할 일 8단계). 남은 G: 사용자 정답 표 확인 → 유료 1회차, CONCERNS HTML, 묶음.
+- 모델 Sonnet 5.5 기준. `TODO(SITE)`: `tools/list_site_todos.py`. REVIEW-OPEN 0. 사내 시작 **"사내 설정 시작"**(결정 (o)).
+- 안내서: `docs/book/telephony-triage-book.html`, 목록 `docs/materials/00-index.html`
 
 ## 남은 일 (사외 전용)
 
 | ☐ | 항목 | 메모 |
 |---|---|---|
-| ☐ F | 묶음 import-20261103 — 사람 확인 3개·태그·반입은 사용자 | SITE_INSTALL §8·`REIMPORT_NOTES_1021~1102` |
+| ☐ F | 묶음(11/7) — 사람 확인·태그·반입은 사용자 | SITE_INSTALL §8·반입 노트 |
 | ☐ G | 범용판 별도 레포 — **보류(10/07 사용자)** | 재개는 사용자가 정한다 |
-| ☐ H | 모듈 스킬 레포(탐색 문서+심층 분석 스킬)·+1 병합 | `MODULE_SKILLS_PLAN.md`. 계획 → 확인 → 구현 |
+| ☐ H | 모듈 스킬 레포·+1 병합 — G만 남음 | `MODULE_SKILLS_PLAN.md §4` |
 | ☐ I | OpenCode·사내 모델판 — 사외 몫 ☑(사내 확인 남음) | `docs/RUNTIME_ADOPTION.md` |
 
 ## 사내로 넘긴 것
 
-- 사내 대상 eval 12개(`pending.json` `site`, S-2; 주입 59·60·+1 관문 75 포함, 사내 모델이 다르면 +7), 코드 Read line 힌트(T4, S-2 측정 뒤)·offline_eval 오류율 상한(S-1 합의, S-5)·`max_tokens_hint` 처리(S-4a)·setup Jira 없음 중단(U1, S-3), db-authoring 스키마 요약 확장(S-2, 스키마 Read 횟수로 판단), 사내 마켓플레이스 소스 유형 확인 → version 규칙(S-2·S-7, `plugin.json` version 없음 = 커밋 SHA 기준).
-- **L2로 hook이 바뀜**(놓친 publish 0, 10/18): 반입 뒤 site eval 12개 모두 다시·plugin-probe 15·16 확인.
+- 사내 대상 eval 12개(`pending.json` `site`, S-2; 주입 59·60·+1 관문 75 포함, 사내 모델이 다르면 +7 — 이번 반입은 반입 노트 표로 영향 받는 것만), 코드 Read line 힌트(T4, S-2 측정 뒤)·offline_eval 오류율 상한(S-1 합의, S-5)·`max_tokens_hint` 처리(S-4a)·setup Jira 없음 중단(U1, S-3), db-authoring 스키마 요약 확장(S-2, 스키마 Read 횟수로 판단), 사내 마켓플레이스 소스 유형 확인 → version 규칙(S-2·S-7, `plugin.json` version 없음 = 커밋 SHA 기준).
 - S-7: usage_stats format 2·`--transcripts` 허용 여부.
 - 반입 뒤 후보(RF-5·6·8·9, 리뷰 후속 R-36~R-47)는 `docs/history/draft-notes-2026-10.md` "10/13 이동".
 
