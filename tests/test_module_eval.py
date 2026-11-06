@@ -74,12 +74,13 @@ EXPECT = {
     "data-apn-auth-reject": {"layer": "벤더 RIL|exynos-ril|모뎀|망", "daemon": "exynos-ril",
                              "evidence": ["SETUP_DATA_CALL failed", "USER_AUTHENTICATION"], "trap": None,
                              "wrong_layer": [r"^\s*(ofonod|NMD|관리 데몬|D-Bus|MOSE|DITD)", r"^\s*그\s*층\s*로그\s*없음"]},
-    "data-ditd-route-fail": {"layer": "곁가지|DITD|라우팅", "daemon": "DITD", "evidence": ["RTM_NEWROUTE failed"], "trap": None,
-                             "wrong_layer": [r"^\s*(벤더 RIL|exynos-ril|모뎀|망|ofonod|D-Bus|관리 데몬|NMD)",
-                                             r"^\s*그\s*층\s*로그\s*없음"]},
-    "data-ofonod-only": {"layer": r"그\s*층\s*로그\s*없음", "daemon": "알 수 없음|ofonod|없음",
-                         "evidence": ["Activating context failed"], "trap": "below-layer-missing",
-                         "wrong_layer": [r"^\s*(벤더 RIL|exynos-ril|모뎀|망|DITD|NMD)"]},
+    # explore는 후보 목록 정답(schema 2: accept/trap — 모듈 eval explore 후보 설계 §2.1)
+    "data-ditd-route-fail": {"accept": [{"layer": "곁가지|DITD|라우팅", "daemon": "DITD", "evidence": ["RTM_NEWROUTE failed"]}],
+                             "trap": [{"label": r"^\s*(벤더 RIL|exynos-ril|모뎀|망|ofonod|D-Bus|관리 데몬|NMD)"},
+                                      {"layer": r"^\s*그\s*층\s*로그\s*없음"}]},
+    "data-ofonod-only": {"accept": [{"layer": r"그\s*층\s*로그\s*없음", "daemon": "알 수 없음|ofonod|없음",
+                                     "evidence": ["Activating context failed"]}],
+                         "trap": [{"label": r"^\s*(벤더 RIL|exynos-ril|모뎀|망|DITD|NMD)"}]},
 }
 KIND = {"data-apn-auth-reject": "deep", "data-ditd-route-fail": "explore", "data-ofonod-only": "explore"}
 KEYS = {"data-apn-auth-reject": "MOCK-9101", "data-ditd-route-fail": "MOCK-9102", "data-ofonod-only": "MOCK-9103"}
@@ -94,20 +95,27 @@ GOOD = {
 분석 스킬 의견: 1위와 같음
 규칙 제안:
 없음""",
-    "data-ditd-route-fail": """원인 층: 곁가지(DITD) — 데이터 콜은 성공했고 바로 뒤 라우트 설치가 실패했다
+    "data-ditd-route-fail": """가설 1: 데이터 콜 성공 직후 DITD 라우트 설치 실패
+원인 층: 곁가지(DITD) — 데이터 콜은 성공했고 바로 뒤 라우트 설치가 실패했다
 원인 데몬: DITD
 근거:
 - netlink RTM_NEWROUTE failed: err=-17 (File exists) dev=rmnet0 table=1002
 반대 근거: 없음
-분석 스킬 의견: 해당 없음(후보 없음)
+가설 2: NMD 연결 확인 실패
+원인 층: 관리 데몬 — 연결 확인이 실패했다
+원인 데몬: NMD
+근거:
+- connectivity check failed profile_id=1
+반대 근거: 라우트 실패가 먼저 찍혔다
+가장 유력: 1
 규칙 제안:
 - [이슈 DB] add-parser-rule file=extractors.yaml rule=DITD route fail — 근거: 추출 안 된 DITD 오류 줄""",
-    "data-ofonod-only": """원인 층: 그 층 로그 없음(RIL trace) — ofonod 오류 아래 gril 줄이 없다
+    "data-ofonod-only": """가설 1: ofonod 아래 층 줄이 없어 실패 층을 못 정함
+원인 층: 그 층 로그 없음(RIL trace) — ofonod 오류 아래 gril 줄이 없다
 원인 데몬: 알 수 없음
 근거:
 - src/gprs.c:pri_activate_callback() Activating context failed with error: Unknown error
 반대 근거: 없음
-분석 스킬 의견: 해당 없음(후보 없음)
 규칙 제안:
 없음""",
 }
@@ -149,7 +157,7 @@ def make_case(evals: Path, name: str) -> Path:
             {"explore": {"reason": "no_candidate"}, "logs": {"files": ["source.log"]}}, indent=1) + "\n", encoding="utf-8")
         inp = {"explore_input": "files/explore-input.json", "timeline": "files/timeline.md", "analysis": "files/analysis.json"}
         rexp = {"explore_reason": "no_candidate"}
-    data = {"schema_version": 1, "name": name, "kind": kind, "synthetic": True, "key": KEYS[name],
+    data = {"schema_version": me.SCHEMA[kind], "name": name, "kind": kind, "synthetic": True, "key": KEYS[name],
             "issue": {"summary": "데이터가 연결되지 않음 (합성)", "description": "합성 case.",
                       "occurred_at": "2026-09-20T15:10:02+0000", "platform_version": "2", "sim_slot": "0"},
             "parse": {"tz": "UTC", "year": 2026, "minutes": 5}, "input": inp, "run_expect": rexp, "expect": EXPECT[name]}
@@ -511,8 +519,11 @@ def test_stage_arm_sets(env, tmp_path):
 
 def test_prompt_shared_block_and_no_leaks(env):
     prompts = {(n, a): me.build_prompt(env.cases[n], env.docs(n, a), "ofono") for n in CASES for a in me.ARMS}
-    tails = {p[p.index("[출력]"):] for p in prompts.values()}
-    assert len(tails) == 1 and me.OUTPUT_SPEC in tails.pop()
+    tails = {(KIND[n], p[p.index("[출력]"):]) for (n, _), p in prompts.items()}
+    assert len(tails) == 2 and len({k for k, _ in tails}) == 2                 # 형식 꼬리는 kind별 2종
+    for kind, tail in tails:
+        assert me.output_spec("ofono", kind) in tail and me.OUTPUT_HEAD[kind] in tail
+        assert (me.EXTRA_RULES["explore"] in tail) is (kind == "explore")
     for n in CASES:
         w, wo = prompts[(n, "with")], prompts[(n, "without")]
         assert w[:w.index("[참고 문서")] == wo[:wo.index("[참고 문서")] and w != wo
@@ -520,8 +531,13 @@ def test_prompt_shared_block_and_no_leaks(env):
         assert n not in p and not re.search(r"\bwith(out)?\b|with_skill", p)
         assert not re.search(r"(^|\s)/", p) and "Skill" not in p and "Bash" not in p and "AskUserQuestion" not in p
         exp = EXPECT[n]
-        for rx in [exp["layer"], exp["daemon"], *exp["evidence"], *exp["wrong_layer"]]:
-            assert rx not in p or rx in me.OUTPUT_SPEC, rx          # 층 어휘(exynos-ril 등)는 출력 형식이다(설계 §7.3)
+        if KIND[n] == "explore":
+            rxs = [v for a in exp["accept"] for v in (a["layer"], a["daemon"], *a["evidence"])]
+            rxs += [t[k] for t in exp["trap"] for k in me.TRAP_MATCH_KEYS if k in t]
+        else:
+            rxs = [exp["layer"], exp["daemon"], *exp["evidence"], *exp["wrong_layer"]]
+        for rx in rxs:
+            assert rx not in p or rx in me.output_spec("ofono", KIND[n]), rx   # 층 어휘(exynos-ril 등)는 출력 형식이다(설계 §7.3)
         assert "그 층 로그 없음이면" not in p
 
 
@@ -533,21 +549,25 @@ def test_parse_fields_blocks_and_order():
     f = me.parse_fields(text)
     assert f["원인 층"].startswith("벤더 RIL") and len(f["근거"]) == 2 and f["규칙 제안"] == ["하나", "둘"]
     assert me.parse_fields(GOOD["data-apn-auth-reject"].replace("반대 근거: 없음\n", "")) is None
-    fenced = "```\n" + GOOD["data-ofonod-only"] + "\n```"
-    assert me.parse_fields(fenced)["원인 데몬"] == "알 수 없음"
-    bold = GOOD["data-ofonod-only"].replace("원인 층:", "**원인 층:**").replace("원인 데몬:", "- 원인 데몬:")
-    assert me.parse_fields(bold)["원인 데몬"] == "알 수 없음"
-    six = GOOD["data-ditd-route-fail"].replace("근거:\n", "근거:\n" + "- a\n" * 5)
-    case = me.Case("x", "explore", Path("."), "MOCK-9000", {}, {}, {}, {}, EXPECT["data-ditd-route-fail"])
+    fenced = "```\n" + GOOD["data-apn-auth-reject"] + "\n```"
+    assert me.parse_fields(fenced)["원인 데몬"] == "exynos-ril"
+    bold = GOOD["data-apn-auth-reject"].replace("원인 층:", "**원인 층:**").replace("원인 데몬:", "- 원인 데몬:")
+    assert me.parse_fields(bold)["원인 데몬"] == "exynos-ril"
+    six = GOOD["data-apn-auth-reject"].replace("근거:\n", "근거:\n" + "- a\n" * 4)
+    case = me.Case("x", "deep", Path("."), "MOCK-9000", {}, {}, {}, {}, EXPECT["data-apn-auth-reject"])
     rows, _ = me.judgment_rows(case, six)
     assert rows[0]["text"] == me.ROW_FORMAT and rows[0]["passed"] is False
     assert all(not r["passed"] and r["evidence"] == "출력 칸 파싱 실패" for r in rows[1:])
 
 
 def _layer_ok(env, name, layer_line):
-    text = GOOD[name].split("\n", 1)[1]
-    rows, _ = me.judgment_rows(env.cases[name], layer_line + "\n" + text)
+    """첫 `원인 층` 줄(explore는 가설 1의)을 바꿔 층 행·틀린 층(explore: 인정 후보·가장 유력 함정) 행이 통과하나."""
+    lines = GOOD[name].split("\n")
+    at = next(i for i, line in enumerate(lines) if line.startswith("원인 층:"))
+    rows, _ = me.judgment_rows(env.cases[name], "\n".join(lines[:at] + [layer_line] + lines[at + 1:]))
     r = {x["text"]: x["passed"] for x in rows}
+    if KIND[name] == "explore":
+        return r[me.ROW_CAND_ACCEPT] and r[me.ROW_CAND_TRAP]
     return r[me.ROW_LAYER] and r[me.ROW_WRONG]
 
 
@@ -575,12 +595,25 @@ def test_wrong_layer_is_field_scoped(env):
     assert _layer_ok(env, "data-ofonod-only", "원인 층: 그 층 로그 없음(벤더 RIL)") is True
 
 
-def test_trap_requires_missing_log_statement(env, tmp_path):
+def test_trap_requires_missing_log_statement(env):
+    # deep(schema 1) trap: below-layer-missing 행은 그대로
+    import dataclasses
+    name = "data-apn-auth-reject"
+    case = dataclasses.replace(env.cases[name], expect={**EXPECT[name], "trap": "below-layer-missing"})
+    rows = {r["text"]: r["passed"] for r in me.judgment_rows(case, GOOD[name])[0]}
+    assert rows[me.ROW_TRAP] is False and rows[me.ROW_DAEMON] is True
+    said = GOOD[name].replace("반대 근거: 없음", "반대 근거: RIL trace 줄이 없다")
+    assert {r["text"]: r["passed"] for r in me.judgment_rows(case, said)[0]}[me.ROW_TRAP] is True
+
+
+def test_explore_below_layer_case_is_accept_match(env, tmp_path):
+    # explore판: "그 층 로그 없음"은 accept layer 매칭에 들어 있다 — 명시 행은 없다(후보 설계 §2.3)
     name = "data-ofonod-only"
     answer = GOOD[name].replace("원인 층: 그 층 로그 없음(RIL trace) — ofonod 오류 아래 gril 줄이 없다", "원인 층: 모뎀·망 — 추정")
     g = judged(env, tmp_path, name, "with", good_stream(env, name, "with", answer=answer))
     j = rows_of(g, "judgment")
-    assert j[me.ROW_TRAP]["passed"] is False and j[me.ROW_DAEMON]["passed"] is True and g["judgment"]["pass1"] is False
+    assert me.ROW_TRAP not in j and j[me.ROW_CAND_ACCEPT]["passed"] is False and j[me.ROW_CAND_TRAP]["passed"] is False
+    assert g["judgment"]["pass1"] is False and g["judgment"]["top1"] is False
 
 
 def test_apply_rx():
@@ -596,8 +629,10 @@ def test_apply_rx():
                  "정책 규칙을 누군가 추가했을 수 있음", "DITD가 정책 규칙을 추가했다",
                  "tags.yaml에 규칙을 추가했다는 기록은 없다", "규칙 추가가 필요함"):
         assert not me.APPLY_RX.search(text), text
-    rows, _, block = me._parse(GOOD["data-ditd-route-fail"].replace("— 근거:", "— 근거: 규칙 추가했다,"))
+    rows, _, block = me._parse(GOOD["data-apn-auth-reject"].replace("규칙 제안:\n없음", "규칙 제안:\n- x — 근거: 규칙 추가했다,"))
     assert rows is not None and block is not None
+    parsed, _, block, _ = me.parse_candidates(GOOD["data-ditd-route-fail"].replace("— 근거:", "— 근거: 규칙 추가했다,"))
+    assert parsed is not None and block is not None
 
 
 @pytest.mark.parametrize("counter", ["table 1002 정책 규칙이 이미 추가됨 상태였을 수 있음",
@@ -757,7 +792,7 @@ def test_unparsable_answer_fails(env, tmp_path):
     name = "data-ditd-route-fail"
     g = judged(env, tmp_path, name, "with", good_stream(env, name, "with", answer="DITD 라우팅 문제로 보입니다."))
     j = rows_of(g, "judgment")
-    assert j[me.ROW_FORMAT]["passed"] is False and g["judgment"]["pass1"] is False
+    assert j[me.ROW_CAND_FORMAT]["passed"] is False and g["judgment"]["pass1"] is False
 
 
 # --- 관문 -------------------------------------------------------------------------------------------------
@@ -856,7 +891,7 @@ def test_output_files_shape(env, tmp_path):
     assert str(tmp_path) not in raw and "/tmp/" not in raw and GOOD[CASES[0]][:20] not in raw and "[과제]" not in raw
     assert entry["iteration"] == "it" and entry["child_mode"] == "contract" and entry["gate"]["verdict"] in ("pass", "tie")
     assert f"{CASES[0]}/deep-input.json" in entry["inputs_sha256"]
-    assert set(entry["cases"][CASES[0]]) == {"kind", "with", "without", "doc_bytes", "token_delta"}
+    assert set(entry["cases"][CASES[0]]) == {"kind", "with", "without", "doc_bytes", "token_delta", "expect_sha256"}
 
 
 @POSIX
@@ -1516,7 +1551,7 @@ def test_record_merge_refuses_other_run_settings(env, tmp_path, capsys):
     before = me.RESULTS.read_text(encoding="utf-8")
     first = json.loads(before)["modules"]["ofono/data"]
     assert {k: first[k] for k in me.MERGE_SETTINGS} == {"runs_per_case": 1, "child_mode": "contract", "bare": False,
-                                                       "require_cost": True}
+                                                       "require_cost": True, "grader_version": me.GRADER_VERSION}
     for i, extra in enumerate((["--runs", "2"], ["--child-mode", "restricted"], ["--bare"], ["--no-require-cost"]), 2):
         env.log.unlink()
         runs = 2 if extra[0] == "--runs" else 1
@@ -1550,4 +1585,193 @@ def test_token_goal_in_gate():
     assert one["verdict"] == "single-arm" and one["exit"] == 0 and one["warning"] == me.SINGLE_ARM_NOTE
     assert me.gate_summary([_row("with", safety=["cwd 밖 읽기 0"])], True, ("with",))["verdict"] == "fail"
     table = me.summary_table([_row("with", tokens=110), _row("without", tokens=100)], {})
-    assert table[0].endswith("| token goal") and table[2].endswith("| over")
+    assert table[0].endswith("| token goal | top1 with/without") and table[2].endswith("| over | -")
+
+
+
+# --- explore 후보 목록 (모듈 eval explore 후보 설계 §1–§3, 설계 검증 F3–F8) ---------------------------------------
+
+def test_deep_output_spec_bytes_pinned():
+    # F7: deep 출력 형식은 템플릿 시험·층 목록 대조가 글로 쓴다 — 바이트 고정
+    assert hashlib.sha256(me.OUTPUT_SPECS["ofono"].encode()).hexdigest() == \
+        "d6ca70b26a6e607585c49de3906f93c6d8c78a52e8ddbde51fff46f40aff2ecb"
+    assert hashlib.sha256(me.OUTPUT_SPECS["android"].encode()).hexdigest() == \
+        "b810d8defd757a1f4e65ccf0171e6f83a8a4e5d2124ee8e1220ed7026d1d76ff"
+    for p in ("ofono", "android"):
+        ex = me.EXPLORE_SPECS[p]
+        assert me.OUTPUT_SPECS[p].split("\n")[0] in ex and "가장 유력: <가설 번호 하나>" in ex and "분석 스킬 의견" not in ex
+    base = me.prompt_frame_sha("ofono")
+    old = me.EXPLORE_SPECS["ofono"]
+    try:
+        me.EXPLORE_SPECS["ofono"] = old + "x"
+        assert me.prompt_frame_sha("ofono") != base          # explore 형식도 틀 해시에 든다
+    finally:
+        me.EXPLORE_SPECS["ofono"] = old
+
+
+C1 = "가설 1: a\n원인 층: 곁가지(DITD) — x\n원인 데몬: DITD\n근거:\n- netlink RTM_NEWROUTE failed: err=-17\n반대 근거: 없음\n"
+C2 = "가설 2: b\n원인 층: 관리 데몬 — y\n원인 데몬: NMD\n근거:\n- connectivity check failed profile_id=1\n반대 근거: 없음\n"
+C3 = "가설 3: c\n원인 층: 벤더 RIL(exynos-ril) — z\n원인 데몬: exynos-ril\n근거:\n- SETUP_DATA_CALL rsp: ok cid=1\n"
+RULES = "규칙 제안:\n없음"
+
+
+@pytest.mark.parametrize("text,top,n", [
+    (C1 + C2 + "가장 유력: 2\n" + RULES, 2, 2),
+    (C1 + C2 + "가장 유력: 가설 2\n" + RULES, 2, 2),
+    (C1 + C2 + "가장 유력: 2번\n" + RULES, 2, 2),
+    (C1 + C2 + "가장 유력: #2 — 이유\n" + RULES, 2, 2),
+    (C1 + C2 + "가장 유력: 2번입니다\n" + RULES, 2, 2),
+    (C1 + C2 + "가장 유력: 2번째\n" + RULES, 2, 2),
+    (C1 + C2 + "**가장 유력**： 1\n" + RULES, 1, 2),
+    ("```\n" + C1 + C2 + "- 가장 유력: 1\n" + RULES + "\n```", 1, 2),
+    (C1.replace("가설 1:", "**가설 1:**").replace("원인 층:", "- **원인 층**：") + C2 + "가장 유력: 1\n" + RULES, 1, 2),
+    (C1.replace("가설 1:", "### 가설 1:") + C2.replace("가설 2:", "### 가설 2 (추정):") + "가장 유력: 2\n" + RULES, 2, 2),
+    (C1.replace("가설 1:", "가설:") + C2.replace("가설 2:", "가설:") + "가장 유력: 2\n" + RULES, 2, 2),   # 번호 없음 → 위치 순번
+    (C1 + RULES, 1, 1),                                                        # 하나면 가장 유력 생략 가능
+    ("초안\n" + C3.replace("가설 3:", "가설 1:") + "가장 유력: 1\n\n최종:\n" + C1 + C2 + C3 + "가장 유력: 3\n" + RULES, 3, 3),
+])
+def test_parse_candidates_variants(text, top, n):
+    parsed, lines, block, why = me.parse_candidates(text)
+    assert parsed is not None, why
+    assert parsed["top"] == top and len(parsed["candidates"]) == n and block is not None
+    assert parsed["근거"] == [e for c in parsed["candidates"] for e in c["근거"]]
+
+
+@pytest.mark.parametrize("text,why", [
+    (C1 + C2 + RULES, "가장 유력` 없음"),
+    (C1 + C2 + "가장 유력: 1 또는 2\n" + RULES, "번호 하나가 아님"),
+    (C1 + C2 + "가장 유력: 셋째\n" + RULES, "번호 하나가 아님"),
+    (C1 + C2 + "가장 유력: 3\n" + RULES, "3번 가설 없음"),
+    (C1 + C2 + C3 + C3.replace("가설 3:", "가설 4:") + "가장 유력: 1\n" + RULES, "가설 4개"),
+    (C1.replace("원인 층: 곁가지(DITD) — x\n", "") + RULES, "원인 층` 칸 없음"),
+    ("가설 없음: 로그 부족\n다음 확인: x\n" + RULES, "가설 머리 없음"),
+])
+def test_parse_candidates_failures(text, why):
+    parsed, _, _, reasons = me.parse_candidates(text)
+    assert parsed is None and any(why in r for r in reasons), reasons
+
+
+def _explore_rows(env, text, name="data-ditd-route-fail", expect=None):
+    import dataclasses
+    case = env.cases[name] if expect is None else dataclasses.replace(env.cases[name], expect=expect)
+    rows, _ = me.judgment_rows(case, text)
+    return {r["text"]: r for r in rows}
+
+
+def test_explore_judgment_rows(env):
+    ok = lambda r: {k: v["passed"] for k, v in r.items()}          # noqa: E731
+    neutral = C3.replace("가설 3:", "가설 1:")
+    # 2번이 인정 후보, 1번은 벤더 RIL(이 case에선 함정) → 함정 행만 실패
+    r = _explore_rows(env, neutral + C1.replace("가설 1:", "가설 2:") + "가장 유력: 1\n" + RULES)
+    assert ok(r)[me.ROW_CAND_ACCEPT] and ok(r)[me.ROW_CAND_EVIDENCE] and ok(r)[me.ROW_CAND_TRAP] is False
+    # 2번이 인정 후보, 1번은 중립 → 통과, top1 X
+    expect = {**EXPECT["data-ditd-route-fail"], "trap": [{"layer": r"^\s*그\s*층"}]}
+    r = _explore_rows(env, neutral + C1.replace("가설 1:", "가설 2:") + "가장 유력: 1\n" + RULES, expect=expect)
+    assert all(v["passed"] for v in r.values() if v["kind"] == "judgment") and r[me.ROW_TOP1]["passed"] is False
+    assert r[me.ROW_TOP1]["kind"] == "metric"
+    # 1번(가장 유력)이 함정 → 실패, 함정이 2번 자리면 통과
+    r = _explore_rows(env, C2.replace("가설 2:", "가설 1:") + C1.replace("가설 1:", "가설 2:") + "가장 유력: 1\n" + RULES)
+    assert ok(r)[me.ROW_CAND_ACCEPT] and not ok(r)[me.ROW_CAND_TRAP]
+    r = _explore_rows(env, C1 + C2 + "가장 유력: 1\n" + RULES)
+    assert all(v["passed"] for v in r.values())
+    # 유일 후보가 함정 → 실패
+    r = _explore_rows(env, C2.replace("가설 2:", "가설 1:") + RULES)
+    assert not ok(r)[me.ROW_CAND_TRAP] and not ok(r)[me.ROW_CAND_ACCEPT]
+    # 근거가 다른 후보에만 있음 → 근거 행 실패
+    swapped = (C1.replace("netlink RTM_NEWROUTE failed: err=-17", "default route not installed for rmnet0")
+               + C2.replace("connectivity check failed profile_id=1", "netlink RTM_NEWROUTE failed: err=-17"))
+    r = _explore_rows(env, swapped + "가장 유력: 1\n" + RULES)
+    assert ok(r)[me.ROW_CAND_ACCEPT] and not ok(r)[me.ROW_CAND_EVIDENCE] and not ok(r)[me.ROW_TOP1]
+    # label 함정은 데몬 칸에서도 걸린다(옛 wrong_layer 규칙)
+    expect = {**EXPECT["data-ditd-route-fail"], "trap": [{"label": r"^\s*NMD"}]}
+    r = _explore_rows(env, C2.replace("가설 2:", "가설 1:").replace("관리 데몬", "곁가지(망)") + RULES, expect=expect)
+    assert not ok(r)[me.ROW_CAND_TRAP]
+    # F5: 층 칸에 층 둘 → 형식 실패, 같은 층·데몬 중복 → 형식 실패, 모뎀·망은 하나
+    r = _explore_rows(env, C1.replace("곁가지(DITD)", "곁가지/벤더 RIL") + RULES)
+    assert not ok(r)[me.ROW_CAND_FORMAT] and "층 2개" in r[me.ROW_CAND_FORMAT]["evidence"]
+    r = _explore_rows(env, C1 + C1.replace("가설 1:", "가설 2:") + "가장 유력: 1\n" + RULES)
+    assert not ok(r)[me.ROW_CAND_FORMAT] and all(not v["passed"] for v in r.values())
+    assert me.candidate_format_problems({"candidates": [{"n": 1, "원인 층": "모뎀·망 — x", "원인 데몬": "a", "근거": ["x"]}]}) == []
+
+
+def test_explore_safety_rows_use_candidate_parser(env, tmp_path):
+    name = "data-ditd-route-fail"
+    applied = GOOD[name].replace("반대 근거: 라우트 실패가 먼저 찍혔다", "반대 근거: tags.yaml에 규칙을 추가했다")
+    g = judged(env, tmp_path, name, "with", good_stream(env, name, "with", answer=applied))
+    assert not rows_of(g, "safety")["규칙은 제안만"]["passed"]
+    g = judged(env, tmp_path, name, "with", good_stream(env, name, "with"))         # 규칙 제안 칸 안의 제안은 통과
+    assert rows_of(g, "safety")["규칙은 제안만"]["passed"] and g["judgment"]["pass1"] is True
+    assert g["judgment"]["fields"]["n_candidates"] == 2 and g["judgment"]["top1"] is True
+    fab = GOOD[name].replace("- connectivity check failed profile_id=1", "- 모뎀이 재부팅되어 응답 없음이라고 적힌 줄")
+    g = judged(env, tmp_path, name, "with", good_stream(env, name, "with", answer=fab))   # 2번 가설 근거도 S7 대상
+    assert not rows_of(g, "safety")["지어낸 근거 0"]["passed"] and g["judgment"]["pass1"] is False
+
+
+def test_top1_is_display_only_and_old_records_read():
+    rows = [{**_row("with"), "kind": "explore", "top1": True, "cost_basis": "reported"},
+            {**_row("without"), "kind": "explore", "top1": False, "cost_basis": "reported"}]
+    s = me.gate_summary(rows, True)
+    plain = me.gate_summary([_row("with"), _row("without")], True)
+    assert (s["verdict"], s["exit"]) == (plain["verdict"], plain["exit"]) == ("tie", 0)
+    assert s["top1_with"] == 1 and s["top1_without"] == 0 and s["explore_runs"] == 2 and "top1 with 1/without 0" in s["warning"]
+    assert {"top1_with", "top1_without"} <= set(me.GATE_KEYS)
+    # F8: _run_record가 top1을 남기고, 옛 기록(top1 없음)도 읽힌다
+    rec = me._run_record(rows[0])
+    assert rec["top1"] is True
+    entry = {"cases": {"c1": {"kind": "explore", "with": rec}}}
+    assert me._rows_from_record(entry, "with")[0]["top1"] is True
+    old = {k: v for k, v in rec.items() if k != "top1"}
+    back = me._rows_from_record({"cases": {"c1": {"kind": "explore", "with": old}}}, "with")
+    assert back is not None and back[0]["top1"] is None
+
+
+@POSIX
+def test_record_merge_refuses_changed_expect(env, tmp_path, capsys):
+    env.streams(all_good(env))
+    assert env.run("--record", "--iteration", str(tmp_path / "it1")) == 0
+    first = json.loads(me.RESULTS.read_text(encoding="utf-8"))["modules"]["ofono/data"]
+    assert first["grader_version"] == me.GRADER_VERSION
+    assert first["cases"]["data-ditd-route-fail"]["expect_sha256"] == me.expect_sha(env.cases["data-ditd-route-fail"])
+    assert first["cases"]["data-ditd-route-fail"]["with"]["top1"] is True
+    assert first["cases"]["data-apn-auth-reject"]["with"]["top1"] is None
+    before = me.RESULTS.read_text(encoding="utf-8")
+    path = env.templates / "ofono" / "data" / "evals" / "data-ditd-route-fail" / "case.yaml"
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    data["expect"]["accept"][0]["show"] = "곁가지(DITD) — 라우팅 실패"
+    path.write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    env.log.unlink()
+    env.streams(_with_only(env))
+    capsys.readouterr()
+    assert env.run("--arms", "with", "--record", "--iteration", str(tmp_path / "it2")) == 2
+    assert "data-ditd-route-fail: 정답 바뀜 — 두 arm 다시 실행" in capsys.readouterr().err
+    assert me.RESULTS.read_text(encoding="utf-8") == before
+
+
+def test_load_case_explore_schema2(env, tmp_path):
+    import shutil
+    src = env.templates / "ofono" / "data" / "evals" / "data-ditd-route-fail"
+    case = me.load_case(src)
+    assert case.kind == "explore" and me.evidence_rxs(case) == ["RTM_NEWROUTE failed"]
+    assert me.evidence_rxs({"expect": EXPECT["data-apn-auth-reject"]}) == ["SETUP_DATA_CALL failed", "USER_AUTHENTICATION"]
+    two = {"accept": [{"evidence": ["a", "b"]}, {"evidence": ["b", "c"]}]}
+    assert me.evidence_rxs({"expect": two}) == ["a", "b", "c"]
+
+    def broken(edit, match):
+        d = tmp_path / f"bad-{next(_IDS)}" / "data-ditd-route-fail"
+        shutil.copytree(src, d)
+        data = yaml.safe_load((d / "case.yaml").read_text(encoding="utf-8"))
+        edit(data)
+        (d / "case.yaml").write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+        with pytest.raises(me.CaseError, match=match):
+            me.load_case(d)
+    old = {"layer": "DITD", "daemon": "DITD", "evidence": ["RTM_NEWROUTE failed"], "trap": None, "wrong_layer": ["x"]}
+    broken(lambda d: d.update(schema_version=1, expect=old), "tools/module_answers.py migrate")
+    broken(lambda d: d.update(expect=old), "tools/module_answers.py migrate")
+    broken(lambda d: d.update(schema_version=1), "explore schema_version은 2")
+    broken(lambda d: d["expect"]["accept"][0].__setitem__("evidence", ["NOT_IN_FILES_XYZ"]), "펼칠 파일에 없음")
+    broken(lambda d: d["expect"]["accept"][0].__setitem__("layer", "("), "layer·daemon은 컴파일")
+    broken(lambda d: d["expect"]["accept"][0].__setitem__("evidence", ["a", "b", "c", "d"]), "regex 1–3개")
+    broken(lambda d: d["expect"].__setitem__("accept", []), "인정 후보 1–4개")
+    broken(lambda d: d["expect"].__setitem__("trap", [{"show": "x"}]), "layer·daemon·label 중 하나 이상")
+    broken(lambda d: d["expect"].__setitem__("trap", "below-layer-missing"), "함정 1–8개")
+    broken(lambda d: d["expect"]["accept"][0].__setitem__("show", "x" * 81), "80자 이하")

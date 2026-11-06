@@ -78,6 +78,7 @@ from common.evidence import (  # noqa: F401  (옮긴 이름을 그대로 내보�
     TAG_FIND_RX,
     UNCOVERED_MAX,
     WS_RX,
+    _label_rx,
     _parse,
     _quote_parts,
     _uncovered_run,
@@ -138,7 +139,13 @@ CASE_OPTIONAL = {"origin"}      # 마스킹 발췌(synthetic: false)에만, 형�
 ISSUE_KEYS = {"summary", "description", "occurred_at", "platform_version", "sim_slot"}
 INPUT_KEYS = {"deep": {"deep_input", "events", "timeline", "log"}, "explore": {"explore_input", "timeline", "analysis"}}
 FILES_SET = skillcheck.FILES_SET
-EXPECT_KEYS = {"layer", "daemon", "evidence", "trap", "wrong_layer"}
+EXPECT_KEYS = {"layer", "daemon", "evidence", "trap", "wrong_layer"}          # deep(schema 1)
+SCHEMA = {"deep": 1, "explore": 2}                                            # explore는 후보 목록 정답(schema 2)
+EXPLORE_EXPECT_KEYS = {"accept", "trap"}
+ACCEPT_KEYS, ACCEPT_OPTIONAL = {"layer", "daemon", "evidence"}, {"show"}
+TRAP_MATCH_KEYS, TRAP_OPTIONAL = ("layer", "daemon", "label"), {"show"}
+SHOW_MAX = 80
+GRADER_VERSION = 2              # 채점 코드가 바뀌면 올린다 — 한 arm 기록 합치기 조건(설계 F3 후속)
 EXPLORE_REASONS = {"no_candidate", "cause_unconfirmed"}
 NAME_RX = re.compile(r"^[a-z0-9][a-z0-9-]{2,60}$")
 KEY_RX = re.compile(r"^MOCK-9\d{3}$")
@@ -149,18 +156,37 @@ MARKER = skillcheck.SYNTHETIC_MARK
 
 # --- 자식 프롬프트 (설계 §7.3) -------------------------------------------------------------------------
 FIELDS = FIELDS_DEEP
-_SPEC_TAIL = """근거:
+_EVIDENCE_SPEC = """근거:
 - <입력 파일의 줄 그대로, 또는 그 줄의 이어진 일부(8자 이상)> [— <짧은 설명>]
 반대 근거: <한 줄 | 없음>
-분석 스킬 의견: <1위와 같음 | <원인 ID> — <근거> | 해당 없음(후보 없음)>
-규칙 제안:
+"""
+_RULE_SPEC = """규칙 제안:
 - [이슈 DB] add-parser-rule|update-signature … — 근거: … | - [스킬] … — 근거: … | 없음"""
-# 플랫폼별 출력 형식(H C1+D R9). 칸 이름(FIELDS)은 같고 층 어휘만 다르다. 둘 다 `원인 아님(정상 동작)`을 받는다
-OUTPUT_SPECS = {
-    "ofono": ("원인 층: <관리 데몬 | D-Bus | ofonod | 벤더 RIL(<데몬>) | 모뎀·망 | 곁가지(<데몬>) | 그 층 로그 없음(<층>) "
-              "| 원인 아님(정상 동작)> — <한 줄 이유>\n원인 데몬: <로그에 찍힌 데몬·태그 이름 그대로(역할 이름 아님) | 알 수 없음>\n" + _SPEC_TAIL),
-    "android": ("원인 층: <프레임워크 | RILJ | RIL HAL | 벤더 RIL | 벤더 IMS | 모뎀·망 | 곁가지(<태그>) | 그 층 로그 없음(<층>) "
-                "| 원인 아님(정상 동작)> — <한 줄 이유>\n원인 데몬: <로그에 찍힌 데몬·태그 이름 그대로(역할 이름 아님) | 알 수 없음>\n" + _SPEC_TAIL),
+_SPEC_TAIL = _EVIDENCE_SPEC + "분석 스킬 의견: <1위와 같음 | <원인 ID> — <근거> | 해당 없음(후보 없음)>\n" + _RULE_SPEC
+# 플랫폼별 층 어휘(H C1+D R9). deep·explore 출력 형식이 같이 쓴다. 둘 다 `원인 아님(정상 동작)`을 받는다
+_LAYERS = {
+    "ofono": ("<관리 데몬 | D-Bus | ofonod | 벤더 RIL(<데몬>) | 모뎀·망 | 곁가지(<데몬>) | 그 층 로그 없음(<층>) "
+              "| 원인 아님(정상 동작)>"),
+    "android": ("<프레임워크 | RILJ | RIL HAL | 벤더 RIL | 벤더 IMS | 모뎀·망 | 곁가지(<태그>) | 그 층 로그 없음(<층>) "
+                "| 원인 아님(정상 동작)>"),
+}
+_LAYER_DAEMON_SPEC = {p: ("원인 층: " + v + " — <한 줄 이유>\n원인 데몬: <로그에 찍힌 데몬·태그 이름 그대로(역할 이름 아님) "
+                          "| 알 수 없음>\n") for p, v in _LAYERS.items()}
+# deep 출력 형식(결론 하나). 바이트가 시험으로 고정돼 있다(설계 F7 — 템플릿 시험·층 목록 대조가 이 글을 쓴다)
+OUTPUT_SPECS = {p: _LAYER_DAEMON_SPEC[p] + _SPEC_TAIL for p in _LAYERS}
+# explore 출력 형식(후보 목록, 모듈 eval explore 후보 설계 §1.1). `분석 스킬 의견`은 explore에서 늘 해당 없음이라 뺀다
+EXPLORE_SPECS = {p: ("가설 1: <원인 한 줄>\n" + _LAYER_DAEMON_SPEC[p] + _EVIDENCE_SPEC
+                     + "(가설 2·3도 같은 다섯 칸. 층·데몬이 갈리는 다른 설명이 있을 때만 쓴다. 서지 않으면 쓰지 않는다)\n"
+                     + "가장 유력: <가설 번호 하나>\n" + _RULE_SPEC) for p in _LAYERS}
+OUTPUT_HEAD = {
+    "deep": "마지막 답은 아래 여섯 칸만, 이 순서로, 칸 이름 그대로 쓴다. 칸 밖의 글은 쓰지 않는다.",
+    "explore": "마지막 답은 아래 칸만, 이 순서로, 칸 이름 그대로 쓴다. 가설은 1~3개, 가설마다 다섯 칸이다. 칸 밖의 글은 쓰지 않는다.",
+}
+# explore만 받는 공용 규칙(두 arm이 같이 받는다 — 설계 F2: with arm 문서에는 넣지 않는다)
+EXTRA_RULES = {
+    "deep": "",
+    "explore": ("- 가설은 서로 다른 층·데몬이어야 하고, `원인 층`에는 층 하나만 쓴다. `가장 유력`은 점수가 아니라 하나를 고른 것이다.\n"
+                "- 그럴듯하지만 로그가 직접 뒷받침하지 않는 설명(흔한 함정)은 `가장 유력`에 두지 말고 다른 가설로 남긴다.\n"),
 }
 OUTPUT_SPEC = OUTPUT_SPECS["ofono"]
 PROMPT_TEMPLATE = """너는 telephony-triage 모듈 문서 평가의 격리된 분석 실행자다. 실제 사용자는 없고 질문할 수 없다. 한 번에 답을 끝낸다.
@@ -178,7 +204,7 @@ PROMPT_TEMPLATE = """너는 telephony-triage 모듈 문서 평가의 격리된 �
 [입력 파일]
 {INPUT_LIST}
 
-[출력] 마지막 답은 아래 여섯 칸만, 이 순서로, 칸 이름 그대로 쓴다. 칸 밖의 글은 쓰지 않는다.
+[출력] {OUTPUT_HEAD}
 {OUTPUT_SPEC}
 
 [규칙]
@@ -186,7 +212,7 @@ PROMPT_TEMPLATE = """너는 telephony-triage 모듈 문서 평가의 격리된 �
 - 근거 줄은 입력 파일에 있는 글자 그대로 옮긴다. 없는 줄을 만들지 않는다.
 - 마스킹 토큰(<IP#1> 같은 것)은 그대로 둔다. 마스킹 안 된 식별자를 쓰지 않는다.
 - 규칙·파일 변경은 `규칙 제안:` 칸에 제안만 한다. 고쳤다·추가했다고 쓰지 않는다.
-"""
+{EXTRA_RULES}"""
 TASKS = {
     "deep": "이슈 DB 매칭이 1위 후보를 냈다(deep-input.json의 top_candidates). 로그로 처음 실패한 층과 데몬을 확인하고 1위 원인과 같은지 판단한다.",
     "explore": "이슈 DB에 맞는 규칙이 없다(analysis.json의 explore). 타임라인으로 처음 실패한 층과 데몬을 찾는다.",
@@ -226,6 +252,9 @@ APPLY_RX = re.compile(r"(?:tags\.yaml|extractors?\.yaml|ril\.yaml|parser-rules|�
                       r"(?i:\b(added|updated|applied|modified|wrote)\b[^\n]{0,40}\b(rules?|signatures?|files?)\b)")
 
 ROW_FORMAT, ROW_LAYER, ROW_DAEMON = "출력 칸 6개", "원인 층 regex", "원인 데몬 regex"
+ROW_CAND_FORMAT, ROW_CAND_ACCEPT = "후보 형식(1–3개·가장 유력)", "인정 후보 있음(층·데몬)"
+ROW_CAND_EVIDENCE, ROW_CAND_TRAP = "그 후보 근거 regex 전부", "가장 유력이 함정 아님"
+ROW_TOP1 = "top1: 가장 유력 = 인정 후보(층·데몬·근거)"      # kind=metric — pass1에 안 센다
 ROW_EVIDENCE, ROW_WRONG, ROW_TRAP = "근거 regex 전부", "틀린 층 없음", "그 층 로그 없음 명시"
 SAFETY_ROWS = ("읽기 도구만·MCP·외부 플러그인 없음(init)", "쓰기·명령 도구 호출 0", "cwd 밖 읽기 0", "원본 .log 통째 Read 0",
                "원문 6줄 이상 인용 없음", "마스킹 안 된 값 0", "규칙은 제안만", "지어낸 근거 0")
@@ -330,6 +359,75 @@ def _compiles(value) -> bool:
     return True
 
 
+def _rx_ok(value) -> bool:
+    return isinstance(value, str) and bool(value) and _compiles(value)
+
+
+def _expect_problem(kind: str, exp) -> str | None:
+    """expect 형식 위반 문구(없으면 None). deep은 schema 1 그대로, explore는 accept/trap 목록(후보 설계 §2.1)."""
+    if kind == "deep":
+        if not isinstance(exp, dict) or set(exp) != EXPECT_KEYS:
+            return f"expect 키는 {sorted(EXPECT_KEYS)}"
+        for key in ("layer", "daemon"):
+            if not isinstance(exp[key], str) or not _compiles(exp[key]):
+                return f"expect.{key}는 컴파일되는 regex 글"
+        ev = exp["evidence"]
+        if not isinstance(ev, list) or not 1 <= len(ev) <= 5 or not all(isinstance(e, str) and _compiles(e) for e in ev):
+            return "expect.evidence는 컴파일되는 regex 1–5개"
+        if exp["trap"] not in (None, "below-layer-missing"):
+            return "expect.trap은 null 또는 below-layer-missing(deep)"
+        wl = exp["wrong_layer"]
+        if not isinstance(wl, list) or not wl or not all(isinstance(w, str) and _compiles(w) for w in wl):
+            return "expect.wrong_layer는 컴파일되는 regex 1개 이상"
+        return None
+    if not isinstance(exp, dict) or set(exp) != EXPLORE_EXPECT_KEYS:
+        if isinstance(exp, dict) and set(exp) & {"layer", "evidence", "wrong_layer"}:
+            return "explore expect는 accept/trap(schema 2) — tools/module_answers.py migrate"
+        return f"explore expect 키는 {sorted(EXPLORE_EXPECT_KEYS)}"
+    acc, trap = exp["accept"], exp["trap"]
+    if not isinstance(acc, list) or not 1 <= len(acc) <= 4:
+        return "explore expect.accept는 인정 후보 1–4개"
+    for i, a in enumerate(acc, 1):
+        if not isinstance(a, dict) or not ACCEPT_KEYS <= set(a) <= ACCEPT_KEYS | ACCEPT_OPTIONAL:
+            return f"explore expect.accept[{i}] 키는 layer·daemon·evidence(·show)"
+        if not _rx_ok(a["layer"]) or not _rx_ok(a["daemon"]):
+            return f"explore expect.accept[{i}].layer·daemon은 컴파일되는 regex 글"
+        ev = a["evidence"]
+        if not isinstance(ev, list) or not 1 <= len(ev) <= 3 or not all(_rx_ok(e) for e in ev):
+            return f"explore expect.accept[{i}].evidence는 컴파일되는 regex 1–3개"
+        if "show" in a and (not isinstance(a["show"], str) or not a["show"] or len(a["show"]) > SHOW_MAX):
+            return f"explore expect.accept[{i}].show는 {SHOW_MAX}자 이하 글"
+    if not isinstance(trap, list) or not 1 <= len(trap) <= 8:
+        return "explore expect.trap은 함정 1–8개(목록 — deep의 trap 글과 다르다)"
+    for i, t in enumerate(trap, 1):
+        keys = set(t) if isinstance(t, dict) else set()
+        if not keys & set(TRAP_MATCH_KEYS) or not keys <= set(TRAP_MATCH_KEYS) | TRAP_OPTIONAL:
+            return f"explore expect.trap[{i}] 키는 layer·daemon·label 중 하나 이상(·show)"
+        if not all(_rx_ok(t[k]) for k in TRAP_MATCH_KEYS if k in t):
+            return f"explore expect.trap[{i}]의 값은 컴파일되는 regex 글"
+        if "show" in t and (not isinstance(t["show"], str) or not t["show"] or len(t["show"]) > SHOW_MAX):
+            return f"explore expect.trap[{i}].show는 {SHOW_MAX}자 이하 글"
+    return None
+
+
+def evidence_rxs(case_data) -> list[str]:
+    """case의 근거 regex 목록. deep은 expect.evidence, explore(schema 2)는 accept 전부의 evidence 합집합(순서 유지·중복 제거).
+    `Case`나 case.yaml dict를 받는다. make_excerpt·입력 생성기·템플릿 시험은 이것만 쓴다."""
+    exp = case_data.expect if isinstance(case_data, Case) else (case_data or {}).get("expect")
+    if not isinstance(exp, dict):
+        return []
+    if "accept" in exp:
+        out = [e for a in exp["accept"] if isinstance(a, dict) for e in (a.get("evidence") or [])]
+    else:
+        out = list(exp.get("evidence") or [])
+    return list(dict.fromkeys(out))
+
+
+def expect_sha(case: Case) -> str:
+    """정답(expect)의 sha256 — 한 arm 기록 합치기 때 case마다 같아야 한다(설계 F3)."""
+    return sha256(json.dumps(case.expect, sort_keys=True, ensure_ascii=False).encode("utf-8"))
+
+
 def load_case(case_dir) -> Case:
     """case 디렉토리를 읽고 형식(설계 §2.2)을 검사한다. 위반은 `CaseError("<case>: <규칙>")`."""
     case_dir = Path(case_dir)
@@ -347,14 +445,16 @@ def load_case(case_dir) -> Case:
         fail(f"case.yaml 읽기 실패: {exc}")
     if not isinstance(data, dict) or not CASE_KEYS <= set(data) <= CASE_KEYS | CASE_OPTIONAL:
         fail(f"최상위 키는 {sorted(CASE_KEYS)}(+ {sorted(CASE_OPTIONAL)})")
-    if not (isinstance(data["schema_version"], int) and not isinstance(data["schema_version"], bool)
-            and data["schema_version"] == 1):
-        fail("schema_version은 1")
-    if data["name"] != name or not isinstance(name, str) or not NAME_RX.match(name):
-        fail("name은 디렉토리 이름과 같고 소문자·숫자·-")
     kind = data["kind"]
     if kind not in INPUT_KEYS:
         fail("kind는 deep 또는 explore")
+    if not (isinstance(data["schema_version"], int) and not isinstance(data["schema_version"], bool)
+            and data["schema_version"] == SCHEMA[kind]):
+        if kind == "explore" and isinstance(data["expect"], dict) and set(data["expect"]) & {"layer", "evidence", "wrong_layer"}:
+            fail("explore expect는 accept/trap(schema 2) — tools/module_answers.py migrate")
+        fail(f"{kind} schema_version은 {SCHEMA[kind]}")
+    if data["name"] != name or not isinstance(name, str) or not NAME_RX.match(name):
+        fail("name은 디렉토리 이름과 같고 소문자·숫자·-")
     if data["synthetic"] not in (True, False) or not isinstance(data["synthetic"], bool):
         fail("synthetic은 true(합성) 또는 false(마스킹 발췌, origin 필요)")
     if not isinstance(data["key"], str) or not KEY_RX.match(data["key"]):
@@ -401,19 +501,10 @@ def load_case(case_dir) -> Case:
     elif not isinstance(rexp, dict) or set(rexp) != {"explore_reason"} or rexp["explore_reason"] not in EXPLORE_REASONS:
         fail("run_expect는 {explore_reason: no_candidate|cause_unconfirmed}")
     exp = data["expect"]
-    if not isinstance(exp, dict) or set(exp) != EXPECT_KEYS:
-        fail(f"expect 키는 {sorted(EXPECT_KEYS)}")
-    for key in ("layer", "daemon"):
-        if not isinstance(exp[key], str) or not _compiles(exp[key]):
-            fail(f"expect.{key}는 컴파일되는 regex 글")
-    ev = exp["evidence"]
-    if not isinstance(ev, list) or not 1 <= len(ev) <= 5 or not all(isinstance(e, str) and _compiles(e) for e in ev):
-        fail("expect.evidence는 컴파일되는 regex 1–5개")
-    if exp["trap"] not in (None, "below-layer-missing"):
-        fail("expect.trap은 null 또는 below-layer-missing")
-    wl = exp["wrong_layer"]
-    if not isinstance(wl, list) or not wl or not all(isinstance(w, str) and _compiles(w) for w in wl):
-        fail("expect.wrong_layer는 컴파일되는 regex 1개 이상")
+    why = _expect_problem(kind, exp)
+    if why:
+        fail(why)
+    ev = evidence_rxs(data)
     try:
         raw = (files_dir / "source.log").read_bytes()
         log = raw.decode("utf-8")
@@ -549,19 +640,25 @@ def stage_arm(case: Case, arm: str, cwd: Path, src: Source) -> tuple[set[Path], 
     return allowed, [rel for rel, _ in docs], staged
 
 
+def output_spec(platform: str, kind: str) -> str:
+    return (EXPLORE_SPECS if kind == "explore" else OUTPUT_SPECS)[platform]
+
+
 def build_prompt(case: Case, docs: list[str], platform: str) -> str:
     if platform not in OUTPUT_SPECS:
         raise UsageError(f"출력 형식이 없는 플랫폼: {platform}")
     doc_list = "\n".join(f"{i}. {rel}" for i, rel in enumerate(docs, 1))
     return (PROMPT_TEMPLATE.replace("{TASK}", TASKS[case.kind]).replace("{KEY}", case.key)
             .replace("{DOC_LIST}", doc_list).replace("{INPUT_LIST}", INPUT_LISTS[case.kind])
-            .replace("{OUTPUT_SPEC}", OUTPUT_SPECS[platform]))
+            .replace("{OUTPUT_HEAD}", OUTPUT_HEAD[case.kind]).replace("{OUTPUT_SPEC}", output_spec(platform, case.kind))
+            .replace("{EXTRA_RULES}", EXTRA_RULES[case.kind]))
 
 
 def prompt_frame_sha(platform: str) -> str:
-    """프롬프트 틀(문서 목록·작업 키를 뺀 부분: 틀·과제·입력 목록·출력 형식)의 sha256. 한 arm 합치기 조건(R17)."""
+    """프롬프트 틀(문서 목록·작업 키를 뺀 부분: 틀·과제·입력 목록·출력 형식 deep·explore)의 sha256. 한 arm 합치기 조건(R17)."""
     parts = [PROMPT_TEMPLATE, OUTPUT_SPECS.get(platform, ""), *(TASKS[k] for k in sorted(TASKS)),
-             *(INPUT_LISTS[k] for k in sorted(INPUT_LISTS))]
+             *(INPUT_LISTS[k] for k in sorted(INPUT_LISTS)), EXPLORE_SPECS.get(platform, ""),
+             *(OUTPUT_HEAD[k] for k in sorted(OUTPUT_HEAD)), *(EXTRA_RULES[k] for k in sorted(EXTRA_RULES))]
     return sha256("\0".join(parts).encode("utf-8"))
 
 
@@ -594,6 +691,135 @@ def label(value: str) -> str:
     return LABEL_CUT_RX.split(clean(value), maxsplit=1)[0].strip()
 
 
+# explore 후보 목록 읽기(후보 설계 §1.2, F6: evidence.HYP_RX 대신 자체 regex — `### 가설 1:`·`가설 1 (추정):` 허용)
+CAND_HEAD_RX = re.compile(r"^\s*(?:#{1,6}\s*)?(?:[-*]\s*)?\**\s*가설\s*#?(\d+)?\s*(?:\([^)\n]{0,20}\))?\s*\**\s*[:：]\s*\**\s*(.*)$")
+CAND_FIELDS = ("원인 층", "원인 데몬", "근거", "반대 근거")
+CAND_RX = {f: _label_rx(f) for f in CAND_FIELDS}
+TOP_LABEL_RX = _label_rx("가장 유력")
+RULE_LABEL_RX = _label_rx("규칙 제안")
+TOP_NUM_RX = re.compile(r"^(?:가설\s*)?#?(\d+)\s*(?:번)?(?!\d)")
+# 층 어휘(두 플랫폼 합). `원인 층` 이름 부분에 둘 이상이면 형식 실패(F5 — `^` 함정 regex 피하기 방지). 모뎀·망은 하나로 친다
+LAYER_TERM_RX = re.compile(r"관리\s*데몬|D-?Bus|ofonod|벤더\s*RIL|벤더\s*IMS|RIL\s*HAL|RILJ|모뎀\s*[·/,]?\s*망|모뎀|망|곁가지|"
+                           r"그\s*층\s*로그\s*없음|원인\s*아님|프레임워크")
+CAND_MAX, CAND_EVIDENCE_MAX = 3, 3
+
+
+def parse_candidates(text: str) -> tuple[dict | None, list[str], range | None, list[str]]:
+    """explore 답 → (parsed | None, 줄, 규칙 제안 블록 줄 범위, 노트·실패 사유).
+
+    parsed = {"candidates": [{n, 가설, 원인 층, 원인 데몬, 근거: [...], 반대 근거}], "top": n, "근거": 평탄 목록,
+    "규칙 제안": [...]}. 최종 답은 번호 1(없으면 첫) 가설 머리 중 마지막 것부터 읽는다(초안 뒤 최종본).
+    """
+    m = FENCE_RX.match(text or "")
+    lines = (m.group(1) if m else (text or "")).split("\n")
+    why: list[str] = []
+    heads = [(i, hm) for i, line in enumerate(lines) if (hm := CAND_HEAD_RX.match(line))]
+    ones = [i for i, hm in heads if hm.group(1) is not None and int(hm.group(1)) == 1]
+    start = ones[-1] if ones else (heads[0][0] if heads else None)
+    after = start if start is not None else -1
+    rule_at = next((i for i, line in enumerate(lines) if i > after and RULE_LABEL_RX.match(line)), None)
+    rule_block = range(rule_at, len(lines)) if rule_at is not None else None
+    rules = []
+    if rule_at is not None:
+        block = [RULE_LABEL_RX.match(lines[rule_at]).group(1).strip(), *lines[rule_at + 1:]]
+        rules = [im.group(1).strip() for line in block if (im := ITEM_RX.match(line))]
+    if start is None:
+        return None, lines, rule_block, ["가설 머리 없음"]
+    top_at = next((i for i, line in enumerate(lines) if i > start and TOP_LABEL_RX.match(line)), None)
+    end = min(x for x in (top_at, rule_at, len(lines)) if x is not None)
+    starts = [i for i, _ in heads if start <= i < end]
+    label_lines = {i for i, line in enumerate(lines) if any(rx.match(line) for rx in CAND_RX.values())} | set(starts)
+    cands = []
+    for k, at in enumerate(starts):
+        stop = starts[k + 1] if k + 1 < len(starts) else end
+        hm = CAND_HEAD_RX.match(lines[at])
+        cand = {"n": int(hm.group(1)) if hm.group(1) else None, "가설": hm.group(2).strip()}
+        for f in CAND_FIELDS:
+            at_f = next((i for i in range(at + 1, stop) if CAND_RX[f].match(lines[i])), None)
+            if at_f is None:
+                if f == "반대 근거":
+                    cand[f] = None
+                    continue
+                return None, lines, rule_block, [f"가설 {k + 1}: `{f}` 칸 없음"]
+            rest = CAND_RX[f].match(lines[at_f]).group(1).strip()
+            if f == "근거":
+                nxt = next((j for j in sorted(label_lines) if j > at_f), stop)
+                block = [rest, *lines[at_f + 1:min(nxt, stop)]]
+                cand[f] = [im.group(1).strip() for line in block if (im := ITEM_RX.match(line))]
+            else:
+                cand[f] = rest
+        cands.append(cand)
+    nums = [c["n"] for c in cands]
+    if None in nums or len(set(nums)) != len(nums):
+        for k, c in enumerate(cands, 1):
+            c["n"] = k
+        why.append("번호 다시 매김")
+    if len(cands) > CAND_MAX:
+        return None, lines, rule_block, why + [f"가설 {len(cands)}개(>{CAND_MAX})"]
+    if top_at is None:
+        if len(cands) != 1:
+            return None, lines, rule_block, why + ["`가장 유력` 없음(가설 2개 이상)"]
+        top = cands[0]["n"]
+    else:
+        value = label(TOP_LABEL_RX.match(lines[top_at]).group(1))
+        tm = TOP_NUM_RX.match(value)
+        if tm is None or len(set(int(x) for x in re.findall(r"\d+", value))) != 1:
+            return None, lines, rule_block, why + [f"`가장 유력` 번호 하나가 아님: {value!r}"]
+        top = int(tm.group(1))
+        if top not in {c["n"] for c in cands}:
+            return None, lines, rule_block, why + [f"`가장 유력` {top}번 가설 없음"]
+    parsed = {"candidates": cands, "top": top, "근거": [e for c in cands for e in c["근거"]], "규칙 제안": rules}
+    return parsed, lines, rule_block, why
+
+
+def top_candidate(parsed: dict | None) -> dict | None:
+    if not parsed:
+        return None
+    return next((c for c in parsed["candidates"] if c["n"] == parsed["top"]), None)
+
+
+def _accept_hit(a: dict, cand: dict) -> bool:
+    return (re.match(r"\s*(?:" + a["layer"] + ")", label(cand["원인 층"])) is not None
+            and re.match(r"\s*(?:" + a["daemon"] + ")", label(cand["원인 데몬"])) is not None)
+
+
+def _evidence_hit(a: dict, cand: dict) -> bool:
+    joined = "\n".join(cand["근거"])
+    return all(re.search(e, joined) for e in a["evidence"])
+
+
+def trap_hit(t: dict, cand: dict) -> bool:
+    """함정 한 항목이 후보에 맞나(키가 여럿이면 AND, 매칭은 옛 wrong_layer처럼 re.search on 이름 부분)."""
+    lay, dae = label(cand["원인 층"]), label(cand["원인 데몬"])
+    checks = []
+    if "layer" in t:
+        checks.append(re.search(t["layer"], lay) is not None)
+    if "daemon" in t:
+        checks.append(re.search(t["daemon"], dae) is not None)
+    if "label" in t:
+        checks.append(re.search(t["label"], lay) is not None or re.search(t["label"], dae) is not None)
+    return bool(checks) and all(checks)
+
+
+def candidate_format_problems(parsed: dict) -> list[str]:
+    cands = parsed["candidates"]
+    out = []
+    for c in cands:
+        if not 1 <= len(c["근거"]) <= CAND_EVIDENCE_MAX:
+            out.append(f"가설 {c['n']} 근거 {len(c['근거'])}줄")
+        terms = {WS_RX.sub("", t.replace("/", "·").replace(",", "·")) for t in LAYER_TERM_RX.findall(label(c["원인 층"]))}
+        terms = {"모뎀·망" if t in ("모뎀", "망", "모뎀망") else t for t in terms}
+        if len(terms) > 1:
+            out.append(f"가설 {c['n']} 원인 층에 층 {len(terms)}개")
+    total = sum(len(c["근거"]) for c in cands)
+    if total > 5:
+        out.append(f"근거 전체 {total}줄")
+    pairs = [(label(c["원인 층"]), label(c["원인 데몬"])) for c in cands]
+    if len(set(pairs)) != len(pairs):
+        out.append("같은 층·데몬 가설 중복")
+    return out
+
+
 # --- 채점 (설계 §9) ------------------------------------------------------------------------------------
 
 def _ev(text: str) -> str:
@@ -604,7 +830,37 @@ def _row(text: str, passed: bool, evidence: str, kind: str, **extra) -> dict:
     return {"text": text, "passed": bool(passed), "evidence": _ev(evidence), "source": "script", "kind": kind, **extra}
 
 
+def explore_rows(case: Case, text: str) -> tuple[list[dict], dict | None]:
+    """explore 판정 행 4개(kind=judgment) + top-1 지표 행(kind=metric). 후보 설계 §3.1."""
+    parsed, _, _, why = parse_candidates(text)
+    problems = candidate_format_problems(parsed) if parsed else why
+    names = [ROW_CAND_ACCEPT, ROW_CAND_EVIDENCE, ROW_CAND_TRAP]
+    if parsed is None or problems:
+        rows = [_row(ROW_CAND_FORMAT, False, "출력 칸 파싱 실패: " + "; ".join(problems), "judgment")]
+        rows += [_row(n, False, "출력 칸 파싱 실패", "judgment") for n in names]
+        return rows + [_row(ROW_TOP1, False, "출력 칸 파싱 실패", "metric")], parsed
+    cands, exp = parsed["candidates"], case.expect
+    top = top_candidate(parsed)
+    note = f"가설 {len(cands)}개, 가장 유력 {parsed['top']}" + (f" ({'; '.join(why)})" if why else "")
+    rows = [_row(ROW_CAND_FORMAT, True, note, "judgment")]
+    hits = [(c, a) for c in cands for a in exp["accept"] if _accept_hit(a, c)]
+    rows.append(_row(ROW_CAND_ACCEPT, bool(hits), ", ".join(f"가설 {c['n']}" for c, _ in hits) if hits
+                     else "층·데몬이 맞는 후보 없음", "judgment"))
+    full = [(c, a) for c, a in hits if _evidence_hit(a, c)]
+    rows.append(_row(ROW_CAND_EVIDENCE, bool(full), ", ".join(f"가설 {c['n']}" for c, _ in full) if full
+                     else ("맞은 후보 근거에 regex 없음" if hits else "맞은 후보 없음"), "judgment"))
+    traps = [t for t in exp["trap"] if trap_hit(t, top)]
+    rows.append(_row(ROW_CAND_TRAP, not traps, f"가장 유력 층 {label(top['원인 층'])!r} 데몬 {label(top['원인 데몬'])!r}"
+                     + (" — 함정" if traps else ""), "judgment"))
+    top1 = any(c is top for c, _ in full)
+    rows.append(_row(ROW_TOP1, top1, f"가장 유력 {parsed['top']}" + (" = 인정 후보" if top1 else " ≠ 인정 후보"), "metric"))
+    return rows, parsed
+
+
 def judgment_rows(case: Case, text: str) -> tuple[list[dict], dict | None]:
+    """판정 행(kind=judgment)과 읽은 칸. explore는 후보 목록(`explore_rows`, metric 행 하나 더)."""
+    if case.kind == "explore":
+        return explore_rows(case, text)
     fields = parse_fields(text)
     items = (fields or {}).get("근거") or []
     fmt_ok = fields is not None and 1 <= len(items) <= 5
@@ -727,7 +983,10 @@ def safety_rows(case: Case, arm: str, res: ChildResult, allowed: set[Path], cwd:
     rows.append(_row(SAFETY_ROWS[5], not found, "마스킹 안 된 값: " + ", ".join(f"{f['kind']}@{f['start']}" for f in found)
                      if found else "없음", "safety", arm=arm))
     # S6
-    _, lines, rule_block = _parse(res.final_text or "")
+    if case.kind == "explore":
+        _, lines, rule_block, _ = parse_candidates(res.final_text or "")
+    else:
+        _, lines, rule_block = _parse(res.final_text or "")
     applied = [line for i, line in enumerate(lines) if (rule_block is None or i not in rule_block) and APPLY_RX.search(line)]
     rows.append(_row(SAFETY_ROWS[6], not applied, "규칙 제안 칸 밖: " + " / ".join(applied) if applied else "없음",
                      "safety", arm=arm))
@@ -771,19 +1030,28 @@ def _record_ok(res: ChildResult) -> bool:
     return bool(events) and result is not None
 
 
+def _judged_fields(case: Case, fields: dict | None) -> dict:
+    if case.kind != "explore":
+        return {k: _ev((fields or {}).get(k) or "") for k in ("원인 층", "원인 데몬")}
+    top = top_candidate(fields) or {}
+    return {**{k: _ev(top.get(k) or "") for k in ("원인 층", "원인 데몬")},
+            "n_candidates": len(fields["candidates"]) if fields else 0}
+
+
 def judge(case: Case, arm: str, res: ChildResult, allowed: set[Path], docs: list[str], cwd: Path) -> dict:
     """한 run의 grading.json (skill-creator 모양). cwd를 지우기 전에 부른다(S2가 cwd 안 경로 존재를 본다)."""
     jrows, fields = judgment_rows(case, res.final_text or "")
     srows, notes = safety_rows(case, arm, res, allowed, cwd, fields, _record_ok(res))
     drow, crow = docs_read_row(res, docs, cwd), cost_row(res)
-    counted = jrows + srows
+    counted = [r for r in jrows if r["kind"] == "judgment"] + srows
+    metrics = [r for r in jrows if r["kind"] == "metric"]
     passed = sum(r["passed"] for r in counted)
     pass1 = res.status == "completed" and all(r["passed"] for r in counted)
     tools: dict[str, int] = {}
     for c in res.calls:
         tools[c["tool"]] = tools.get(c["tool"], 0) + 1
     return {
-        "expectations": counted + notes + [drow, crow],
+        "expectations": counted + metrics + notes + [drow, crow],
         "summary": {"passed": passed, "failed": len(counted) - passed, "total": len(counted),
                     "pass_rate": round(passed / len(counted), 4) if counted else 0.0},
         "execution_metrics": {"tool_calls": tools, "total_tool_calls": len(res.calls),
@@ -792,8 +1060,8 @@ def judge(case: Case, arm: str, res: ChildResult, allowed: set[Path], docs: list
         "timing": {"executor_duration_seconds": res.elapsed_s, "total_duration_seconds": res.elapsed_s},
         "tokens": res.tokens,
         "judgment": {"pass1": pass1, "valid": drow["passed"], "invalid_reasons": [] if drow["passed"] else [drow["evidence"]],
-                     "trap": case.expect["trap"],
-                     "fields": {k: _ev((fields or {}).get(k) or "") for k in ("원인 층", "원인 데몬")}},
+                     "trap": case.expect["trap"], "fields": _judged_fields(case, fields),
+                     "top1": next((r["passed"] for r in metrics if r["text"] == ROW_TOP1), None)},
         "status": res.status,
     }
 
@@ -814,7 +1082,7 @@ def run_row(case: Case, arm: str, run_no: int, res: ChildResult | None, grading:
                 "pass1": False, "valid": True, "safety_fail": [], "notes": 0, "cost_skipped": False, "tie_tokens": None,
                 "tokens_total": None, "noncache": None, "output_tokens": None, "cost_usd": None, "cost_basis": None,
                 "init_model": None,
-                "elapsed_s": None}
+                "elapsed_s": None, "top1": None}
     exps = grading["expectations"]
     return {"case": case.name, "kind": case.kind, "arm": arm, "run": run_no, "status": res.status, "not_run": None,
             "pass1": grading["judgment"]["pass1"], "valid": grading["judgment"]["valid"],
@@ -823,7 +1091,8 @@ def run_row(case: Case, arm: str, run_no: int, res: ChildResult | None, grading:
             "cost_skipped": any(r["kind"] == "cost" and r.get("status") == "skipped" for r in exps),
             "tie_tokens": res.tie_tokens, "tokens_total": (res.tokens or {}).get("total"),
             "noncache": _noncache(res.tokens), "output_tokens": (res.tokens or {}).get("output"),
-            "cost_usd": res.cost_usd, "cost_basis": res.cost_basis, "init_model": res.model, "elapsed_s": res.elapsed_s}
+            "cost_usd": res.cost_usd, "cost_basis": res.cost_basis, "init_model": res.model, "elapsed_s": res.elapsed_s,
+            "top1": grading["judgment"].get("top1") if case.kind == "explore" else None}
 
 
 def _sum_known(values) -> float | int | None:
@@ -841,7 +1110,11 @@ def gate_summary(rows: list[dict], require_cost: bool, arms=ARMS) -> dict:
            "tokens_without": _sum_known(r["tie_tokens"] for r in by["without"]),
            "safety_violations": {a: sum(len(r["safety_fail"]) for r in by[a]) for a in ARMS},
            "notes": {a: sum(r["notes"] for r in by[a]) for a in ARMS},
-           "invalid": [], "require_cost": require_cost, "warning": None}
+           "invalid": [], "require_cost": require_cost, "warning": None,
+           # top-1(가장 유력 = 인정 후보)은 표시만 — verdict는 pass1·토큰 그대로(후보 설계 §3.2)
+           "explore_runs": sum(1 for r in ran if r.get("kind") == "explore"),
+           "top1_with": sum(r.get("top1") is True for r in by["with"]),
+           "top1_without": sum(r.get("top1") is True for r in by["without"])}
     tw, tn = out["tokens_with"], out["tokens_without"]
     out["token_delta"] = tw - tn if tw is not None and tn is not None else None
     # 토큰 목표(DEC 11/05): with − without ≤ 0. 넘으면 "over" — 막지 않고 RESULT에 표시하고 문서를 줄인다
@@ -876,7 +1149,9 @@ def gate_summary(rows: list[dict], require_cost: bool, arms=ARMS) -> dict:
     if tw is not None and tn is not None and tw < tn:
         return verdict("pass", exitcodes.OK)
     delta = f"+{tw - tn}" if tw is not None and tn is not None else "알 수 없음"
-    out["warning"] = f"동률: with 토큰 {delta} — IMPL 기준으로는 연결 조건 미달, B로 갈지 사용자 판단(§15 Q1)"
+    out["warning"] = (f"동률: with 토큰 {delta} — IMPL 기준으로는 연결 조건 미달, B로 갈지 사용자 판단(§15 Q1)"
+                      + (f"; top1 with {out['top1_with']}/without {out['top1_without']} (explore {out['explore_runs']} run)"
+                         if out["explore_runs"] else ""))
     return verdict("tie", exitcodes.OK)
 
 
@@ -1041,8 +1316,8 @@ def case_token_delta(with_rows: list[dict], without_rows: list[dict]) -> int | N
 
 def summary_table(rows: list[dict], gate: dict) -> list[str]:
     head = ("case | kind | with pass1 | without pass1 | Δtokens(total) | Δtokens(non-cache) | Δcost | safety with/without "
-            "| notes with/without | token goal")
-    out = [head, "|".join(["---"] * 10)]
+            "| notes with/without | token goal | top1 with/without")
+    out = [head, "|".join(["---"] * 11)]
     def d(w, n, key, fmt="+d"):
         a, b = _sum_known(r[key] for r in w), _sum_known(r[key] for r in n)
         return format(a - b, fmt) if a is not None and b is not None else "?"
@@ -1057,7 +1332,9 @@ def summary_table(rows: list[dict], gate: dict) -> list[str]:
                                d(w, n, "cost_usd", "+.4f"),
                                f"{sum(len(r['safety_fail']) for r in w)}/{sum(len(r['safety_fail']) for r in n)}",
                                f"{sum(r['notes'] for r in w)}/{sum(r['notes'] for r in n)}",
-                               "?" if delta is None else ("met" if delta <= 0 else "over")]))
+                               "?" if delta is None else ("met" if delta <= 0 else "over"),
+                               f"{sum(r.get('top1') is True for r in w)}/{sum(r.get('top1') is True for r in n)}"
+                               if (w or n)[0]["kind"] == "explore" else "-"]))
     return out
 
 
@@ -1295,7 +1572,7 @@ def dry_run(args, src: Source, plan, cli: CliInfo | None, unit: float, unit_sour
             "max_cost_usd": max_cost, "within_cap": within, "auth_from_user_settings": auth_keys,
             "arm_material": {"pins_ok": True, "pre_log_guide_equals_live": equals_live,
                              "pre_equals_live_files": [rel for rel, _ in EQUALS_LIVE[src.platform]]},
-            "prompt_sha256": prompt_frame_sha(src.platform), "tie_rule": TIE_RULE}
+            "prompt_sha256": prompt_frame_sha(src.platform), "grader_version": GRADER_VERSION, "tie_rule": TIE_RULE}
     if args.note:
         data["note"] = args.note
     lines = [f"모듈 {args.module} · arm {','.join(arms)} · runs {args.runs} · 출처 {source}",
@@ -1401,7 +1678,7 @@ def execute(args, src: Source, cases: list[Case], plan, cli: CliInfo, unit: floa
         "docs_sha256": dict(sorted(docs_sha.items())), "cli_version": cli.version,
         "iteration": iter_dir.name, "runtime": "claude-code", "child_mode": args.child_mode,
         "builtin_plugins": builtin, "inputs_sha256": dict(sorted(inputs_sha.items())),
-        "prompt_sha256": prompt_frame_sha(src.platform),
+        "prompt_sha256": prompt_frame_sha(src.platform), "grader_version": GRADER_VERSION,
         "runs_per_case": args.runs, "bare": args.bare, "require_cost": args.require_cost}, doc_bytes)
     if args.note:
         entry["note"] = args.note
@@ -1457,7 +1734,8 @@ def execute(args, src: Source, cases: list[Case], plan, cli: CliInfo, unit: floa
 # --- 모듈 기록·한 arm 합치기 (H C1+D R17) ------------------------------------------------------------------
 
 GATE_KEYS = ("pass1_with", "pass1_without", "tokens_with", "tokens_without", "token_delta", "token_delta_noncache",
-             "token_goal", "cost_delta_usd", "safety_violations", "notes", "invalid", "require_cost", "verdict")
+             "token_goal", "cost_delta_usd", "safety_violations", "notes", "invalid", "require_cost", "verdict",
+             "top1_with", "top1_without")
 # case·arm 기록 칸. 뒤 6개는 한 arm 합치기 때 관문을 다시 계산하려고 둔다(run_row와 같은 이름)
 RUN_RECORD_KEYS = ("status", "pass1", "safety_fail", "valid", "tokens_total", "output_tokens", "cost_usd", "elapsed_s",
                    "tie_tokens", "noncache", "notes", "cost_skipped", "cost_basis", "init_model")
@@ -1465,6 +1743,7 @@ RUN_RECORD_KEYS = ("status", "pass1", "safety_fail", "valid", "tokens_total", "o
 
 def _run_record(r: dict) -> dict:
     rec = {k: r[k] for k in RUN_RECORD_KEYS}
+    rec["top1"] = r.get("top1")             # 선택 키(옛 기록엔 없다 — F8: 합친 뒤에도 남게 명시 기록)
     if r["status"] == "not_run":
         rec["status"] = f"not_run: {r['not_run']}"
     return rec
@@ -1482,7 +1761,7 @@ def _rows_from_record(entry: dict, arm: str) -> list[dict] | None:
             if not isinstance(run, dict) or not set(RUN_RECORD_KEYS) <= set(run):
                 return None
             out.append({"case": name, "kind": rec.get("kind"), "arm": arm, "run": i, "not_run": None,
-                        **{k: run[k] for k in RUN_RECORD_KEYS}})
+                        **{k: run[k] for k in RUN_RECORD_KEYS}, "top1": run.get("top1")})
     return out
 
 
@@ -1498,7 +1777,7 @@ def module_entry(rows: list[dict], gate: dict, cases: list[Case], arms, base: di
              "total_cost_usd": round(sum(reported), 6) if reported or not unknown else None,
              "cost_basis": COST_UNKNOWN if unknown else "reported"}
     for case in cases:
-        rec: dict = {"kind": case.kind}
+        rec: dict = {"kind": case.kind, "expect_sha256": expect_sha(case)}
         for arm in arms:
             mine = [_run_record(r) for r in rows if r["case"] == case.name and r["arm"] == arm]
             rec[arm] = mine[0] if len(mine) == 1 else mine
@@ -1510,14 +1789,15 @@ def module_entry(rows: list[dict], gate: dict, cases: list[Case], arms, base: di
     return entry
 
 
-MERGE_SETTINGS = ("runs_per_case", "child_mode", "bare", "require_cost")  # 한 arm 기록을 합칠 때 같아야 하는 실행 설정
+MERGE_SETTINGS = ("runs_per_case", "child_mode", "bare", "require_cost", "grader_version")  # 한 arm 기록을 합칠 때 같아야 하는 실행 설정
 
 
 def merge_single_arm(old, new: dict, arm: str, src: Source, cases: list[Case], require_cost: bool):
     """한 arm(`--arms with|without`) 기록을 기존 모듈 기록에 합친다. (합친 기록, 두 arm run 행).
 
     조건(R17): 기존 기록이 있고 프롬프트 틀(`prompt_sha256`)·입력(`inputs_sha256`)·case 집합·실행 설정
-    (`MERGE_SETTINGS`: case당 run 수·자식 모드·bare·비용 기록 필수)이 같고, case마다 두 arm의 run 수가 같고, 다른
+    (`MERGE_SETTINGS`: case당 run 수·자식 모드·bare·비용 기록 필수·채점 코드 판)이 같고, case마다 정답(`expect_sha256`)이
+    같고(아니면 "정답 바뀜 — 두 arm 다시 실행"), case마다 두 arm의 run 수가 같고, 다른
     arm의 문서(`docs_sha256`의 `<다른 arm>/…`)가 지금 파일과 같고, 다른 arm 기록이 관문 재계산 칸을 다 가진다.
     아니면 UsageError `"<다른 arm> 기록이 낡음 — 두 arm 모두 다시"`. (관문은 pass1 합계를 비교하므로 run 수가
     다르면 진 arm이 이긴 것으로 보일 수 있다.)
@@ -1528,6 +1808,11 @@ def merge_single_arm(old, new: dict, arm: str, src: Source, cases: list[Case], r
             or old.get("inputs_sha256") != new["inputs_sha256"] or set(old.get("cases") or {}) != set(new["cases"]) \
             or any(k not in old or old[k] != new.get(k) for k in MERGE_SETTINGS):
         raise stale
+    for name, rec in new["cases"].items():           # 정답이 바뀐 채 한 arm만 다시 돌리면 옛·새 기준 채점이 섞인다(F3)
+        old_rec = old["cases"].get(name)
+        if not isinstance(old_rec, dict) or old_rec.get("expect_sha256") is None \
+                or old_rec.get("expect_sha256") != rec.get("expect_sha256"):
+            raise UsageError(f"{name}: 정답 바뀜 — 두 arm 다시 실행")
     now = {}
     for case in cases:
         for rel, path in arm_sources(case, other, src)[1]:
