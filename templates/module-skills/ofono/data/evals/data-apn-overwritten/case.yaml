@@ -1,5 +1,5 @@
 # 합성 case (C1D 보정 §6.3 N2). files/의 timeline·입력·analysis는 make_module_eval_inputs.py --write가 만든다
-schema_version: 1
+schema_version: 2
 name: data-apn-overwritten
 kind: explore
 synthetic: true
@@ -18,8 +18,11 @@ input:
 run_expect:
   explore_reason: no_candidate
 expect:
-  layer: '관리\s*데몬'
-  daemon: 'NMD'
-  evidence: ['addApnInfo.*<APN#1>.*internet', 'SETUP_DATA_CALL.*<APN#1>']
-  trap: null
-  wrong_layer: ['^\s*(ofonod|벤더 RIL|exynos|모뎀|망|D-Bus|MOSE|곁가지)', '^\s*그\s*층\s*로그\s*없음', '^\s*원인\s*아님']
+  accept:
+    - layer: '관리\s*데몬'
+      daemon: 'NMD'
+      evidence: ['addApnInfo.*<APN#1>.*internet', 'SETUP_DATA_CALL.*<APN#1>']
+  trap:
+    - label: '^\s*(ofonod|벤더 RIL|exynos|모뎀|망|D-Bus|MOSE|곁가지)'
+    - label: '^\s*그\s*층\s*로그\s*없음'
+    - label: '^\s*원인\s*아님'

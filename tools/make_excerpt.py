@@ -28,6 +28,7 @@ sys.path.insert(0, str(REPO / "plugin" / "scripts"))
 sys.path.insert(0, str(REPO / "tools"))
 
 import fixture_residual
+import module_eval
 from common import masking, skillcheck, yamlio
 
 TOKEN = {"apn": "APN", "plmn": "PLMN", "aid": "AID", "carrier": "CARRIER", "device_node": "DEV", "host": "HOST",
@@ -53,7 +54,7 @@ def _origin(case: Path) -> tuple[dict, list[tuple[int, int]], list[str]]:
         raise Usage("origin.lines: 'a-b,c-d' 오름차순·겹침 없음·합계 ≤ 120")
     if origin.get("log") not in skillcheck.ORIGIN_LOGS or not skillcheck.EPISODE_RE.fullmatch(str(origin.get("episode"))):
         raise Usage("origin.log·episode 형식")
-    evidence = list(((data.get("expect") or {}).get("evidence")) or [])
+    evidence = module_eval.evidence_rxs(data)
     return origin, segs, evidence
 
 

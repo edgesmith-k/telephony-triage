@@ -72,7 +72,12 @@ def test_android_cases_present():
         assert ("origin" in data) is excerpt, name
         if excerpt:
             assert data["origin"]["log"] == "A" and data["origin"]["kind"] == "masked-excerpt", name
-        assert data["expect"]["trap"] == trap, name
+        if kind == "deep":
+            assert data["expect"]["trap"] == trap, name
+        else:   # explore schema 2: trap은 함정 목록, below-layer-missing은 accept 층 `그 층 로그 없음`으로 옮겨졌다(설계 §2.3)
+            assert data["schema_version"] == 2 and isinstance(data["expect"]["trap"], list), name
+            below = all(re.search(r"그\\s\*층", a["layer"]) for a in data["expect"]["accept"])
+            assert below is (trap == "below-layer-missing"), name
     for module in MODULES:
         kinds = {k for m, _, k, *_ in CASES if m == module}
         assert kinds == {"deep", "explore"}, module

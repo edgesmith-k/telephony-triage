@@ -1,6 +1,6 @@
 # 마스킹 발췌 case (설계 D §1, 계획 R4·R5) — 함정 ★: 오귀속(사용자 조작·비행기 모드처럼 보임). source.log는 tools/make_excerpt.py --write가 만든다
 # (masker·residual은 그 출력값). files/의 나머지는 make_module_eval_inputs.py --write가 만든다
-schema_version: 1
+schema_version: 2
 name: data-cfun-radio-off
 kind: explore
 synthetic: false
@@ -26,8 +26,10 @@ input:
 run_expect:
   explore_reason: cause_unconfirmed
 expect:
-  layer: '곁가지|VCD|모뎀'
-  daemon: 'VCD'
-  evidence: ['AT\+CFUN=0', 'Internet data state changed from CONNECTED to DISCONNECTED']
-  trap: null
-  wrong_layer: ['^\s*(프레임워크|RILJ|RIL HAL|DNC|DN-|원인 아님)', '사용자|비행기']
+  accept:
+    - layer: '곁가지|VCD|모뎀'
+      daemon: 'VCD'
+      evidence: ['AT\+CFUN=0', 'Internet data state changed from CONNECTED to DISCONNECTED']
+  trap:
+    - label: '^\s*(프레임워크|RILJ|RIL HAL|DNC|DN-|원인 아님)'
+    - label: '사용자|비행기'

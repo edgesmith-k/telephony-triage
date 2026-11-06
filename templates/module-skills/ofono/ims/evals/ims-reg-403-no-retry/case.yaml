@@ -1,5 +1,5 @@
 # 합성 case (H C1, C1D §1.2). files/의 timeline·입력은 make_module_eval_inputs.py --write가 만든다
-schema_version: 1
+schema_version: 2
 name: ims-reg-403-no-retry
 kind: explore
 synthetic: true
@@ -18,8 +18,9 @@ input:
 run_expect:
   explore_reason: no_candidate
 expect:
-  layer: '모뎀|망'
-  daemon: 'exynos-ril|IMSSVC'
-  evidence: ['fail-code : 403', 'fail_code=403']
-  trap: null
-  wrong_layer: ['^\s*(ofonod|관리 데몬|D-Bus|곁가지|그\s*층|원인\s*아님)']
+  accept:
+    - layer: '모뎀|망'
+      daemon: 'exynos-ril|IMSSVC'
+      evidence: ['fail-code : 403', 'fail_code=403']
+  trap:
+    - label: '^\s*(ofonod|관리 데몬|D-Bus|곁가지|그\s*층|원인\s*아님)'

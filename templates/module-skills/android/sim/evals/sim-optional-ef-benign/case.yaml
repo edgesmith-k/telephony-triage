@@ -1,6 +1,6 @@
 # 마스킹 발췌 case (설계 D §1, 계획 R4·R5) — 함정: 정상 동작. run_expect verify. source.log는 tools/make_excerpt.py --write가 만든다
 # (masker·residual은 그 출력값). files/의 나머지는 make_module_eval_inputs.py --write가 만든다
-schema_version: 1
+schema_version: 2
 name: sim-optional-ef-benign
 kind: explore
 synthetic: false
@@ -26,8 +26,9 @@ input:
 run_expect:
   explore_reason: no_candidate
 expect:
-  layer: '원인\s*아님|정상'
-  daemon: '없음|알 수 없음|UiccController|SIMRecords'
-  evidence: ['SIM_IO error 2', 'SIM_STATE_CHANGED LOADED']
-  trap: null
-  wrong_layer: ['^\s*(모뎀|망|벤더|RILJ|RIL HAL|프레임워크)']
+  accept:
+    - layer: '원인\s*아님|정상'
+      daemon: '없음|알 수 없음|UiccController|SIMRecords'
+      evidence: ['SIM_IO error 2', 'SIM_STATE_CHANGED LOADED']
+  trap:
+    - label: '^\s*(모뎀|망|벤더|RILJ|RIL HAL|프레임워크)'

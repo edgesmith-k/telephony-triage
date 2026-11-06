@@ -58,6 +58,19 @@ SAMPLE_DB = REPO / "tests" / "fixtures" / "issue-db-sample"
 DB_VARIANTS = {"ofono": VARIANT, "android": None}      # None = 샘플 그대로(make_filter_fixtures와 같다, H C1+D S7)
 COMPONENTS = {"data": "Data", "sim": "SIM", "network": "Network", "call": "Call", "sms": "SMS", "ims": "IMS",
               "modem": "Modem"}                         # 모의 Jira components(S6). data는 C0 바이트 그대로
+
+
+def evidence_rxs(data) -> list[str]:
+    """근거 regex 목록 — `module_eval.evidence_rxs`(정본: deep은 expect.evidence, explore schema 2는 accept 합집합).
+    실행기가 없는 체크아웃이면 같은 규칙으로 직접 모은다."""
+    try:
+        from module_eval import evidence_rxs as rxs
+    except ImportError:
+        exp = (data or {}).get("expect") or {}
+        out = ([e for a in exp.get("accept") or [] for e in (a.get("evidence") or [])]
+               if "accept" in exp else list(exp.get("evidence") or []))
+        return list(dict.fromkeys(out))
+    return rxs(data)
 PLATFORM = {"name": "android", "enabled": ["android", "ofono"]}   # test_platform_analyzers.py ON과 같다
 GENERATED = {
     "deep": ("events.json", "timeline.md", "deep-input.json"),
@@ -123,7 +136,7 @@ def _basic_check(case_dir: Path) -> None:
     name = case_dir.name
     if not isinstance(data, dict) or not TOP_KEYS <= set(data) <= TOP_KEYS | TOP_OPTIONAL:
         raise GenError(f"{name}: 최상위 키가 {sorted(TOP_KEYS)}(+ origin)가 아니다")
-    if data["name"] != name or data["schema_version"] != 1:
+    if data["name"] != name or data["schema_version"] != (2 if data.get("kind") == "explore" else 1):
         raise GenError(f"{name}: name·schema_version")
     kind = data["kind"]
     if set(data["input"]) != INPUT_KEYS[kind]:
@@ -136,7 +149,7 @@ def _basic_check(case_dir: Path) -> None:
     for why in skillcheck.origin_problems(data, log):
         raise GenError(f"{name}: origin {why}")
     staged = "\n".join((case_dir / v).read_text(encoding="utf-8") for v in data["input"].values())
-    for rx in data["expect"]["evidence"]:
+    for rx in evidence_rxs(data):
         if not (re.search(rx, staged) and re.search(rx, log)):
             raise GenError(f"{name}: 근거 regex {rx!r}가 files/에 없다")
 
@@ -254,7 +267,7 @@ def build_case(case_dir: Path, case: dict, db: Path, root: Path, tmp: Path, runn
         signal = modem_signal(job, doc, platform, view_module, analysis)
         if signal < 1:
             mismatch(f"{name}: 모뎀 신호 없음(op also rows 0)")
-    missing = [rx for rx in case["expect"]["evidence"] if not re.search(rx, timeline)]
+    missing = [rx for rx in evidence_rxs(case) if not re.search(rx, timeline)]
     if missing:
         mismatch(f"{name}: expect.evidence가 timeline.md에 없다: {', '.join(map(repr, missing))}")
     out: dict[str, str] = {"timeline.md": timeline}
@@ -481,7 +494,7 @@ def _inside_repo(path: Path) -> bool:
 def evidence_counts(case_dir: Path, timeline: str | None) -> tuple[int | None, int]:
     """(타임라인에 있는 근거 regex 수, 근거 regex 수). 타임라인이 없으면 (None, m)."""
     data = yamlio.load(case_dir / "case.yaml")
-    rxs = list(((data or {}).get("expect") or {}).get("evidence") or [])
+    rxs = evidence_rxs(data)
     if timeline is None:
         return None, len(rxs)
     return sum(1 for rx in rxs if re.search(rx, timeline)), len(rxs)

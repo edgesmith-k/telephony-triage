@@ -289,6 +289,7 @@ def test_doc_budgets():
         assert common + (root / mod / "explore.md").stat().st_size <= EXPLORE_RUN_BUDGET, mod
 
 
+@needs_module_eval
 def test_evidence_in_timeline():
     """근거 regex는 생성한 timeline.md(모듈 보기)에 있어야 한다 — 생성기 검사와 같은 규칙(보기 접기에 근거가 빠지지 않게)."""
     from common import yamlio
@@ -296,7 +297,7 @@ def test_evidence_in_timeline():
     for case in _case_dirs():
         data = yamlio.load(case / "case.yaml")
         timeline = (case / "files" / "timeline.md").read_text(encoding="utf-8")
-        for rx in data["expect"]["evidence"]:
+        for rx in module_eval.evidence_rxs(data):
             assert re.search(rx, timeline), (case.name, rx)
 
 
@@ -421,6 +422,25 @@ def test_layers_names_fixed():
         assert f"`{name}`" in text, name
 
 
+# below-layer-missing(옛 deep식 trap)였던 explore 5건: schema 2에서는 "명시" 행 대신 accept 층이 `그 층 로그 없음`이다(설계 §2.3)
+BELOW_LAYER_EXPLORE = {
+    ("ofono", "data", "data-ofonod-only"), ("ofono", "data", "data-throughput-trap"),
+    ("ofono", "call", "call-ecall-msd-lines-missing"),
+    ("android", "network", "network-radio-buffer-late"), ("android", "modem", "modem-vendor-lines-missing"),
+}
+
+
+def test_below_layer_explore_accept_names_missing_layer():
+    from common import yamlio
+
+    for platform, module, name in sorted(BELOW_LAYER_EXPLORE):
+        data = yamlio.load(TEMPLATES / platform / module / "evals" / name / "case.yaml")
+        assert data["kind"] == "explore" and data["schema_version"] == 2, name
+        accept = data["expect"]["accept"]
+        assert accept and all(re.search(r"그\\s\*층", a["layer"]) for a in accept), (name, accept)
+
+
+@needs_module_eval
 def test_evidence_present_in_files():
     """IMPL §5.5: 근거 regex는 files/에 실제로 있어야 한다(source.log와 staged 파일 하나 이상)."""
     from common import yamlio
@@ -429,7 +449,7 @@ def test_evidence_present_in_files():
         data = yamlio.load(case / "case.yaml")
         log = (case / "files" / "source.log").read_text(encoding="utf-8")
         staged = [(case / v).read_text(encoding="utf-8") for v in data["input"].values()]
-        for rx in data["expect"]["evidence"]:
+        for rx in module_eval.evidence_rxs(data):
             assert re.search(rx, log) and any(re.search(rx, t) for t in staged), (case.name, rx)
 
 

@@ -1,5 +1,5 @@
 # 합성 case (C1D 보정 §6.3 N5). files/의 timeline·입력·analysis는 make_module_eval_inputs.py --write가 만든다
-schema_version: 1
+schema_version: 2
 name: data-throughput-trap
 kind: explore
 synthetic: true
@@ -18,8 +18,9 @@ input:
 run_expect:
   explore_reason: no_candidate
 expect:
-  layer: '그\s*층\s*로그\s*없음'
-  daemon: '알\s*수\s*없음|없음'
-  evidence: ['RIL_REQUEST_SETUP_DATA_CALL', 'UNSOL_DATA_CALL_LIST_CHANGED']
-  trap: below-layer-missing
-  wrong_layer: ['^\s*(관리 데몬|D-Bus|ofonod|벤더 RIL|exynos|모뎀|망|곁가지|원인\s*아님)']
+  accept:
+    - layer: '그\s*층\s*로그\s*없음'
+      daemon: '알\s*수\s*없음|없음'
+      evidence: ['RIL_REQUEST_SETUP_DATA_CALL', 'UNSOL_DATA_CALL_LIST_CHANGED']
+  trap:
+    - label: '^\s*(관리 데몬|D-Bus|ofonod|벤더 RIL|exynos|모뎀|망|곁가지|원인\s*아님)'

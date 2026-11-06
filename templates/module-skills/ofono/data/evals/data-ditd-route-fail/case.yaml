@@ -1,5 +1,5 @@
 # 합성 case (MODULE_SKILLS_PLAN_IMPL §5.5). files/의 timeline·입력·analysis는 make_module_eval_inputs.py --write가 만든다
-schema_version: 1
+schema_version: 2
 name: data-ditd-route-fail
 kind: explore
 synthetic: true
@@ -18,8 +18,10 @@ input:
 run_expect:
   explore_reason: no_candidate
 expect:
-  layer: '곁가지|DITD|라우팅'
-  daemon: 'DITD'
-  evidence: ['RTM_NEWROUTE failed']
-  trap: null
-  wrong_layer: ['^\s*(벤더 RIL|exynos-ril|모뎀|망|ofonod|D-Bus|관리 데몬|NMD)', '^\s*그\s*층\s*로그\s*없음']
+  accept:
+    - layer: '곁가지|DITD|라우팅'
+      daemon: 'DITD'
+      evidence: ['RTM_NEWROUTE failed']
+  trap:
+    - label: '^\s*(벤더 RIL|exynos-ril|모뎀|망|ofonod|D-Bus|관리 데몬|NMD)'
+    - label: '^\s*그\s*층\s*로그\s*없음'

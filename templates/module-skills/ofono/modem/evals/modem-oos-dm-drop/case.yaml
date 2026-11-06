@@ -1,6 +1,6 @@
 # 마스킹 발췌 case (H C1, C1D §1). source.log는 tools/make_excerpt.py --write가 origin 구간으로 자른다.
 # files/의 나머지는 make_module_eval_inputs.py --write가 만든다
-schema_version: 1
+schema_version: 2
 name: modem-oos-dm-drop
 kind: explore
 synthetic: false
@@ -26,8 +26,10 @@ input:
 run_expect:
   explore_reason: no_candidate
 expect:
-  layer: '모뎀|망'
-  daemon: 'exynos-ril'
-  evidence: ['SIT_IND_TOTAL_OOS', 'DM packet dropped']
-  trap: null
-  wrong_layer: ['^\s*(곁가지|관리 데몬|D-Bus|ofonod|그\s*층|원인\s*아님)', '^\s*DMD']
+  accept:
+    - layer: '모뎀|망'
+      daemon: 'exynos-ril'
+      evidence: ['SIT_IND_TOTAL_OOS', 'DM packet dropped']
+  trap:
+    - label: '^\s*(곁가지|관리 데몬|D-Bus|ofonod|그\s*층|원인\s*아님)'
+    - label: '^\s*DMD'

@@ -1,6 +1,6 @@
 # 마스킹 발췌 case (H C1, C1D §1). source.log는 tools/make_excerpt.py --write가 origin 구간으로 자른다.
 # files/의 나머지는 make_module_eval_inputs.py --write가 만든다
-schema_version: 1
+schema_version: 2
 name: sim-openchannel-busy-race
 kind: explore
 synthetic: false
@@ -26,8 +26,9 @@ input:
 run_expect:
   explore_reason: no_candidate
 expect:
-  layer: '관리 데몬|D-Bus'
-  daemon: 'LPA|ipad|MOSE'
-  evidence: ['__ofono_error_busy\(\).*OpenChannel', 'Operation already in progress']
-  trap: null
-  wrong_layer: ['^\s*(모뎀|망|벤더 RIL|exynos|ofonod|그\s*층|원인\s*아님)']
+  accept:
+    - layer: '관리 데몬|D-Bus'
+      daemon: 'LPA|ipad|MOSE'
+      evidence: ['__ofono_error_busy\(\).*OpenChannel', 'Operation already in progress']
+  trap:
+    - label: '^\s*(모뎀|망|벤더 RIL|exynos|ofonod|그\s*층|원인\s*아님)'

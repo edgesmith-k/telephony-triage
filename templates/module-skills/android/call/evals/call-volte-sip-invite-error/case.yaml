@@ -1,5 +1,5 @@
 # 합성 case (C1D 보정 §6.3). files/의 source.log 말고는 make_module_eval_inputs.py --write가 만든다
-schema_version: 1
+schema_version: 2
 name: call-volte-sip-invite-error
 kind: explore
 synthetic: true
@@ -18,8 +18,11 @@ input:
 run_expect:
   explore_reason: no_candidate
 expect:
-  layer: '모뎀|망'
-  daemon: 'SHANNON_IMS|벤더 IMS'
-  evidence: ['status-code : 503', 'imsRegistered=true']
-  trap: null
-  wrong_layer: ['^\s*(프레임워크|ImsPhoneCallTracker|RILJ|RIL HAL|벤더 RIL)', '^\s*그\s*층\s*로그\s*없음', '^\s*원인\s*아님']
+  accept:
+    - layer: '모뎀|망'
+      daemon: 'SHANNON_IMS|벤더 IMS'
+      evidence: ['status-code : 503', 'imsRegistered=true']
+  trap:
+    - label: '^\s*(프레임워크|ImsPhoneCallTracker|RILJ|RIL HAL|벤더 RIL)'
+    - label: '^\s*그\s*층\s*로그\s*없음'
+    - label: '^\s*원인\s*아님'
