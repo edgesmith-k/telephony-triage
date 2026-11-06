@@ -58,6 +58,21 @@
    "related": []
   }
  ],
+ "partial": [
+  {
+   "kind": "missing",
+   "type": "DATA-002",
+   "cause": "DATA-002-01",
+   "signature": "DATA-002-01/airplane-mode-teardown",
+   "matched": "1/2",
+   "missing": [
+    "must_event data_teardown_all {'reason': 'AIRPLANE_MODE_ON'}"
+   ],
+   "at": [
+    "f0:L9"
+   ]
+  }
+ ],
  "code": {
   "skipped": true
  },

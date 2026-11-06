@@ -58,6 +58,19 @@
    "related": []
   }
  ],
+ "partial": [
+  {
+   "kind": "absent",
+   "type": "DATA-001",
+   "cause": "DATA-001-02",
+   "signature": "DATA-001-02/roaming-disabled",
+   "matched": "0/1",
+   "missing": [
+    "must_event data_evaluation_rejected {'reasons': '.*ROAMING_…"
+   ],
+   "at": []
+  }
+ ],
  "code": {
   "skipped": true
  },

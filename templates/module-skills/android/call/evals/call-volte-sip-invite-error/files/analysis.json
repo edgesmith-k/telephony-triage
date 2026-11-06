@@ -54,6 +54,30 @@
   "error_event_total": 0,
   "unextracted_warn": 1
  },
+ "partial": [
+  {
+   "kind": "missing",
+   "type": "CALL-001",
+   "signature": "CALL-001/volte-call-not-established",
+   "matched": "1/2",
+   "missing": [
+    "must_event call_fail_cause"
+   ],
+   "at": [
+    "f0:L6"
+   ]
+  },
+  {
+   "kind": "absent",
+   "type": "DATA-001",
+   "signature": "DATA-001/no-setup-data-call-request",
+   "matched": "0/1",
+   "missing": [
+    "must_event data_evaluation_rejected"
+   ],
+   "at": []
+  }
+ ],
  "code": {
   "skipped": true
  },

@@ -60,6 +60,18 @@
   "error_events": [],
   "error_event_total": 0
  },
+ "partial": [
+  {
+   "kind": "absent",
+   "type": "DATA-001",
+   "signature": "DATA-001/no-setup-data-call-request",
+   "matched": "0/1",
+   "missing": [
+    "must_event data_evaluation_rejected"
+   ],
+   "at": []
+  }
+ ],
  "code": {
   "skipped": true
  },

@@ -58,6 +58,21 @@
    "related": []
   }
  ],
+ "partial": [
+  {
+   "kind": "missing",
+   "type": "SMS-001",
+   "cause": "SMS-001-01",
+   "signature": "SMS-001-01/smsc-missing-then-fail",
+   "matched": "1/2",
+   "missing": [
+    "must_event smsc_address_missing"
+   ],
+   "at": [
+    "f0:L14"
+   ]
+  }
+ ],
  "code": {
   "skipped": true
  },

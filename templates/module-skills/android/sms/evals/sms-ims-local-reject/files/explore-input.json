@@ -2,5 +2,16 @@
  "around": "2026-08-25T14:00:21+00:00",
  "failed_step": null,
  "limit": 200,
- "anchor": null
+ "anchor": null,
+ "partial": [
+  {
+   "signature": "SMS-001-01/smsc-missing-then-fail",
+   "missing": [
+    "smsc"
+   ]
+  }
+ ],
+ "around_alt": [
+  "2026-08-25T14:00:21.000Z"
+ ]
 }
