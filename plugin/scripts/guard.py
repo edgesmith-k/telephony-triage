@@ -23,9 +23,9 @@ TODO(SITE:S3) 플러그인 hook에 보이는 MCP 도구 이름이 `mcp__<server>
 | 6 | base 브랜치 push 차단: refspec의 대상 ref(없으면 현재 브랜치), `--all`/`--mirror`, push `--no-verify`. 관리 clone·skill-wt의 push는 규칙 12 (a)가 모두 거부 | Bash, 이슈 DB |
 | 7 | push 확인 강제: 이슈 DB `git push`와 `db_pr.py publish`는 `ask` (옵션 `--commit`·`--and-discard`와 무관: `publish` 토큰만 본다). publish는 명령 글의 낱말 그물(`word_net`: 이름 `db_pr`와 낱말 `publish`가 함께 든다, 글 명령만인 줄은 뺀다 — 아래 "명령 파싱")로 본다. 같은 그물로 `db_pr.py merge`(+1 병합 — 사용자가 병합을 요청한 뒤에만, 스크립트가 +1·승인 커밋·검사를 대조)와 `db_pr.py request-review`(리뷰어 요청 — push 뒤 리뷰어 질문에서 사용자가 고른 뒤에만, 매번)도 `ask`. 같은 그물(이름 `module_eval` + 낱말 `module`)로 `module_eval.py`(모듈 eval — 자식 `claude -p`를 띄워 비용이 든다, `--dry-run`·`--probe-restricted` 포함 모든 호출. dry-run 결과를 보이고 사용자가 실행을 승인한 뒤에만)도 `ask`. 병합 기록 `<work_dir>/<KEY>/merge-offer.json`을 파일 도구·Bash 파일 쓰기로 쓰거나 지우면 거부(db_pr만 쓴다) | Bash |
 | 8 | 사용자 clone 직접 편집 차단: 대상 파일이 `issue_db.path` 안이면 거부(`work_dir` 아래는 제외) | Write/Edit/MultiEdit/NotebookEdit |
-| 8 | 같은 규칙, Bash: clone 본체에서 브랜치·파일을 바꾸는 git·`gh pr checkout`, clone 안으로의 파일 쓰기(리디렉션·tee·cp·rm·`sed -i` 등) 거부. migrate 브랜치 생성(깨끗한 트리)은 ask | Bash, clone 본체 |
+| 8 | 같은 규칙, Bash: clone 본체에서 브랜치·파일을 바꾸는 git·`gh pr checkout`, clone 안으로의 파일 쓰기(리디렉션·tee·cp·rm·`sed -i` 등, 플러그인 스크립트 출력 인자 `--out`·`--preview`·`--meta-out`·`mask_pii --in-place`·`jira_fields extract --consume` — `_script_out_targets`) 거부. migrate 브랜치 생성(깨끗한 트리)과 clone을 고치는 `db_build.py --write`(`--db` 값이 clone 안이거나 `--db` 없이 cwd가 clone 본체)는 ask | Bash, clone 본체 |
 | 10 | 로그 원문 통독 차단: cat·tac·nl·less·more·bat·strings·zcat·zless·bzcat·xzcat, `head/tail -c`, `unzip -p/-c`가 로그 원문·zip·bugreport·`events*.json`·`issue_raw.json`·`match.json`을 통째로 읽으면 거부(`fixtures/`·`draft/` 제외, 사용자 config와 무관) | Bash |
-| 11 | 이슈 DB 원격 쓰기 확인: 대상이 이슈 DB인 `gh` 쓰기는 ask·`pr merge`·REST 병합은 거부(병합은 `db_pr.py merge`로만, 규칙 7), 비Jira MCP 쓰기형 도구(`owner`/`repo` 인자)도 같게. `pr`은 읽기 목록(list·view·status·checks·diff)만 읽기, 동작 별칭(`new`·`ls`·`co`)·`gh co`는 풀어 본다(H-A1 r5). 대상: `repo <동작> [<레포>]`·`issue transfer`의 위치 인자 레포, api 엔드포인트·PR/이슈 URL 선택자(`pr`·`issue` 동작 뒤 첫 위치 인자 — 옵션 값 자리의 URL은 이슈 DB일 때만 세고 cwd 판정을 막지 않는다)·`-R` 모든 꼴(`-R v`·`-Rv`·`-R=v`·`--repo[=]v`·묶음 `-dR v` — 옵션 값 자리(`-b -Rother/x`)와 `gh api`의 꼴은 이슈 DB일 때만 세고 cwd 판정을 막지 않는다)·`GH_REPO`(명시 대상은 합집합 — 하나라도 이슈 DB면 대상), 없으면 cwd. 모르는 것은 닫힌 쪽(H-A1 r4): 그룹·동작 앞 옵션(`gh -b x pr merge`·`gh -X PUT api …`)은 cobra처럼 값을 먹는 읽기·안 먹는 읽기를 다 보고 가장 센 결정(어느 읽기도 쓰기가 아니어도 대상이 이슈 DB면 ask), 병합·Approve·기각은 다른 레포 명시 대상이 cwd 판정을 끄지 않는다, 대상은 owner/repo로만 비교(host 무관·퍼센트 디코딩 — URL 선택자·엔드포인트 종류도 푼 뒤에 가린다)하고 셸이 풀 값(`$`·백틱)·명령 글의 `GH_REPO` 대입은 이슈 DB일 수 있다로 본다, 엔드포인트 한 칸만 자리표시면 남은 칸으로 비교, 값 받는 옵션 표에 없는 동작은 `=` 없는 옵션 바로 뒤 `-R…`을 그 값으로 본다. cwd는 원격 하나라도·`gh-resolved`·앞 대입 `GIT_DIR`로 보고, 모르는 cwd(셸이 풀 경로·없는 경로·`cd -`·`popd`)는 이슈 DB로 본다(r5). 셸이 정하는 그룹·`pr` 동작·`api` 엔드포인트 쓰기(끝 칸이 셸 값이거나 병합·리뷰 꼴)는 거부, `pr review`의 셸 값 옵션·리뷰 엔드포인트의 셸 값 `event`는 Approve(r5). Claude Approve(`gh pr review --approve`·`-a`·`-a=<참>`, REST `…/reviews`·`…/events`의 event=APPROVE — `@파일`·`--input`도 본다, `gh api` 옵션은 pflag 꼴로 읽는다(묶음 `-iX PUT`·`-if k=v`), MCP 단어 속 approve·입력 `event` APPROVE)·리뷰 기각(REST `…/dismissals`, MCP dismiss)·MCP 자동 병합 켜기(`enable_pr_auto_merge`·`automerge_pr` — MCP 거부 낱말은 쓰기형 판정보다 먼저 본다, r5)는 거부. GraphQL(엔드포인트 `graphql`·`/graphql`, 경로가 `/graphql`로 끝나는 URL, 셸이 푸는 엔드포인트 `"$GHE_API/graphql"`·`"$EP"`도 — r6) 병합·자동 병합·Approve·기각 mutation(`mergePullRequest`·`enablePullRequestAutoMerge`·`enqueuePullRequest`·`mergeBranch`·리뷰 APPROVE·`dismissPullRequestReview` — 본문은 인라인·`@파일`·`--input`·stdin heredoc, 64KB까지, 이름은 Bash 명령 글 전체에서도 찾는다 — 셸이 만든 본문 `query="$(cat <<EOF …)"`·`"$Q"`, r5. 읽지 못한 본문은 대상과 무관하게 ask)과 병합·리뷰 별칭을 만드는 `gh alias set`·`gh alias import`는 대상과 무관하게 거부. 이미 만든 gh 별칭의 실행은 보지 못한다. 대상: issue_db.remote와 module_skills.remote(owner/repo로 풀 때만, 사유 문구는 이슈 DB와 같다) | Bash, `mcp__.*` |
+| 11 | 이슈 DB 원격 쓰기 확인: 대상이 이슈 DB인 `gh` 쓰기는 ask·`pr merge`·REST 병합은 거부(병합은 `db_pr.py merge`로만, 규칙 7), 비Jira MCP 쓰기형 도구도 같게(대상 후보 합집합 — slug 키·같은 층 owner×repo 키, 정규화·깊이 3, owner/repo만 비교, `check_mcp_db_write`. 판별 불가면 병합·Approve·기각 부류는 ask, 레포 단서 키가 있는 쓰기형은 ask). `pr`은 읽기 목록(list·view·status·checks·diff)만 읽기, 동작 별칭(`new`·`ls`·`co`)·`gh co`는 풀어 본다(H-A1 r5). 대상: `repo <동작> [<레포>]`·`issue transfer`의 위치 인자 레포, api 엔드포인트·PR/이슈 URL 선택자(`pr`·`issue` 동작 뒤 첫 위치 인자 — 옵션 값 자리의 URL은 이슈 DB일 때만 세고 cwd 판정을 막지 않는다)·`-R` 모든 꼴(`-R v`·`-Rv`·`-R=v`·`--repo[=]v`·묶음 `-dR v` — 옵션 값 자리(`-b -Rother/x`)와 `gh api`의 꼴은 이슈 DB일 때만 세고 cwd 판정을 막지 않는다)·`GH_REPO`(명시 대상은 합집합 — 하나라도 이슈 DB면 대상), 없으면 cwd. 모르는 것은 닫힌 쪽(H-A1 r4): 그룹·동작 앞 옵션(`gh -b x pr merge`·`gh -X PUT api …`)은 cobra처럼 값을 먹는 읽기·안 먹는 읽기를 다 보고 가장 센 결정(어느 읽기도 쓰기가 아니어도 대상이 이슈 DB면 ask), 병합·Approve·기각은 다른 레포 명시 대상이 cwd 판정을 끄지 않는다, 대상은 owner/repo로만 비교(host 무관·퍼센트 디코딩 — URL 선택자·엔드포인트 종류도 푼 뒤에 가린다)하고 셸이 풀 값(`$`·백틱)·명령 글의 `GH_REPO` 대입은 이슈 DB일 수 있다로 본다, 엔드포인트 한 칸만 자리표시면 남은 칸으로 비교, 값 받는 옵션 표에 없는 동작은 `=` 없는 옵션 바로 뒤 `-R…`을 그 값으로 본다. cwd는 원격 하나라도·`gh-resolved`·앞 대입 `GIT_DIR`로 보고, 모르는 cwd(셸이 풀 경로·없는 경로·`cd -`·`popd`)는 이슈 DB로 본다(r5). 셸이 정하는 그룹·`pr` 동작·`api` 엔드포인트 쓰기(끝 칸이 셸 값이거나 병합·리뷰 꼴)는 거부, `pr review`의 셸 값 옵션·리뷰 엔드포인트의 셸 값 `event`는 Approve(r5). Claude Approve(`gh pr review --approve`·`-a`·`-a=<참>`, REST `…/reviews`·`…/events`의 event=APPROVE — `@파일`·`--input`도 본다, `gh api` 옵션은 pflag 꼴로 읽는다(묶음 `-iX PUT`·`-if k=v`), MCP 단어 속 approve·입력 `event` APPROVE)·리뷰 기각(REST `…/dismissals`, MCP dismiss)·MCP 자동 병합 켜기(`enable_pr_auto_merge`·`automerge_pr` — MCP 거부 낱말은 쓰기형 판정보다 먼저 본다, r5)는 거부. GraphQL(엔드포인트 `graphql`·`/graphql`, 경로가 `/graphql`로 끝나는 URL, 셸이 푸는 엔드포인트 `"$GHE_API/graphql"`·`"$EP"`도 — r6) 병합·자동 병합·Approve·기각 mutation(`mergePullRequest`·`enablePullRequestAutoMerge`·`enqueuePullRequest`·`mergeBranch`·리뷰 APPROVE·`dismissPullRequestReview` — 본문은 인라인·`@파일`·`--input`·stdin heredoc, 64KB까지, 이름은 Bash 명령 글 전체에서도 찾는다 — 셸이 만든 본문 `query="$(cat <<EOF …)"`·`"$Q"`, r5. 읽지 못한 본문은 대상과 무관하게 ask)과 병합·리뷰 별칭을 만드는 `gh alias set`·`gh alias import`는 대상과 무관하게 거부. 이미 만든 gh 별칭의 실행은 보지 못한다. 대상: issue_db.remote와 module_skills.remote(owner/repo로 풀 때만, 사유 문구는 이슈 DB와 같다) | Bash, `mcp__.*` |
 | 12 | 모듈 스킬 관리 clone·기록 보호, 분석 스킬 소스 확인: (a) 관리 clone `<work_dir>/_module-skills/**`·lock `<work_dir>/_module-skills.lock`(경로 조각 `_module-skills`이거나 `_module-skills.`로 시작하면 설정과 무관하게 — `.lock`·`.tmp-*` 포함)과 `<work_dir>/<KEY>/skill-wt/**`(모든 프로필 work_dir — 이름이 잘못된 프로필 포함 — 과 켠 플랫폼의 기본 work_dir)를 파일 도구·Bash 파일 쓰기(규칙 8과 같은 판별 + `mv`·`ln`·`rsync --remove-source-files`의 원본)로 바꾸면 거부. 어디서 돌든 git 경로 옵션(`--output`·`-o`·`--output-directory`·config `--file`·`--git-dir`·`--work-tree`·`--separate-git-dir`)이 그 안이나 (b) 기록을 가리키면 거부. git 작업 디렉토리·`--git-dir`·`GIT_DIR`·`--work-tree` 중 하나라도 그 안이면 읽기 목록(`MODULE_GIT_READ`, `branch`·`remote`·`config`·`sparse-checkout`·`worktree`·`stash`는 읽기 꼴만)만 통과하고(`--output*`·`-O`·`--open-files-in-pager`·`--ext-diff`·`--textconv`는 읽기라도 거부) `-c` 덮어쓰기와 나머지(commit·push·stash·reset·checkout·sparse-checkout set·worktree add·fetch·remote set-url·config 쓰기 등)는 거부, 대상이 그 안인 `git clone`·`init`도 거부(이슈 DB 설정과 무관, 받기·갱신은 `triage.py module`만). (b) 스크립트 기록 `<work_dir>/<KEY>/module-skill.json`·`module-skill/**`·`deep-input.json`·`skill-input.json`·`check-output.json`(triage.py만 — `deep-output.md`·`explore-output.md`는 Claude가 쓴다)과 `skill-suggestions/<이름>.patch`·`.meta.json`(skill_patch.py만)을 파일 도구·Bash 파일 쓰기로 쓰거나 지우면 거부(사본 `skill-suggestions/<이름>/**`는 허용). 상대 경로는 hook 입력 `cwd` 기준. `skill_patch.py --apply`(낱말 그물: 이름 `skill_patch`와 낱말 `apply`)는 `ask`. config `analyzers.<카테고리>.source`(절대 경로, site-defaults·사용자 config의 최상위와 모든 `platforms.<p>.analyzers` 것) 안을 파일 도구·Bash 파일 쓰기(규칙 8과 같은 판별)·파일을 바꾸는 git(`CLONE_GIT_SUBS`·commit·push·stash)으로 바꾸면 `ask`(적용은 `skill_patch.py --apply`로만) | Bash, Write/Edit/MultiEdit/NotebookEdit |
 
 (1번은 SessionStart의 `config.py sync-scripts-path`다.)
@@ -527,57 +527,110 @@ def check_jira_post(tool: str, tool_input: dict, spec: dict, conf: Config, dec: 
     dec.ask.append(f"승인한 Jira 코멘트 게시다({key}, 본문 sha256 {sha[:12]}). 확인 화면의 본문과 같은지 보고 허용한다 (규칙 2).")
 
 
-MCP_REPO_KEYS = ("repository", "full_name", "repo_url", "url")
+# 규칙 11 MCP 대상·동작 인자 (키는 `_mcp_nkey`로 정규화 — 소문자, `_`·`-` 제거). TODO(SITE:S36) 사내 GHE MCP 서버의 쓰기 도구
+# 이름과 대상·동작 인자 이름을 `tools/list`·S1 실험 hook으로 확인해 이 목록을 보강한다(사외는 github-mcp-server 관측·추정).
+MCP_SLUG_KEYS = {"repository", "repo", "fullname", "repofullname", "repositoryfullname", "namewithowner", "repourl",
+                 "repositoryurl", "url", "htmlurl", "prurl", "pullrequesturl"}
+MCP_OWNER_KEYS = {"owner", "repoowner", "repositoryowner", "org", "organization"}
+MCP_REPO_NAME_KEYS = {"repo", "reponame", "repositoryname", "repository"}   # 짝 키(`name`은 owner 키가 같은 층에 있을 때만)
+MCP_ACTION_KEYS = {"event", "action", "method"}       # + 정규화 키가 `event`로 끝나는 칸(`review_event`·`reviewEvent`)
+MCP_TARGET_HINTS = ("repo", "owner", "pull")          # 판별 불가 (b): 쓰기형 도구의 이 단서 키는 ask
 
 
-def _mcp_values(obj, key: str, depth: int = 0) -> list[str]:
-    """MCP 입력(깊이 3까지 dict·list)에서 키 `key`의 문자열 값."""
-    out: list[str] = []
+def _mcp_nkey(key) -> str:
+    return re.sub(r"[_-]", "", str(key).lower())
+
+
+def _mcp_keyed(obj, depth: int = 0) -> list[list[tuple[str, object]]]:
+    """MCP 입력(깊이 3까지 dict·list)의 dict마다 `(정규화 키, 값)` 목록 — 같은 층 짝(owner×repo)을 보려고 층별로 둔다."""
+    out: list[list[tuple[str, object]]] = []
     if depth > 3:
         return out
-    for k, v in (obj.items() if isinstance(obj, dict) else enumerate(obj) if isinstance(obj, list) else ()):
-        if k == key and isinstance(v, str):
-            out.append(v)
-        elif isinstance(v, (dict, list)):
-            out += _mcp_values(v, key, depth + 1)
+    if isinstance(obj, dict):
+        out.append([(_mcp_nkey(k), v) for k, v in obj.items()])
+        children = list(obj.values())
+    elif isinstance(obj, list):
+        children = obj
+    else:
+        return out
+    for v in children:
+        if isinstance(v, (dict, list)):
+            out += _mcp_keyed(v, depth + 1)
     return out
+
+
+def _mcp_targets(layers: list[list[tuple[str, object]]]) -> tuple[list[tuple], bool]:
+    """대상 후보의 `(풀린 slug 목록, 판별 불가 여부)`. 판별 불가: 후보 값이 owner/repo로 안 풀림(`"$R"`·owner 없는 repo)
+    또는 후보 키가 없음."""
+    slugs: list[tuple] = []
+    unresolved, seen = False, False
+    for layer in layers:
+        owners = [v.strip() for k, v in layer if k in MCP_OWNER_KEYS and isinstance(v, str) and v.strip()]
+        for k, v in layer:
+            if not isinstance(v, str) or not v.strip():
+                continue
+            v = v.strip()
+            pair = k in MCP_REPO_NAME_KEYS or (k == "name" and owners)
+            if k in MCP_SLUG_KEYS and ("/" in v or k not in MCP_REPO_NAME_KEYS):
+                seen = True
+                slug = _repo_slug(v)
+                slugs.append(slug) if slug else None
+                unresolved = unresolved or slug is None
+            elif pair:
+                seen = True
+                got = [s for s in (_repo_slug(f"{o}/{v}") for o in owners) if s]
+                slugs += got
+                unresolved = unresolved or not got
+    return slugs, unresolved or not seen
 
 
 def check_mcp_db_write(tool: str, part: str, tool_input: dict, conf: Config, dec: Decision) -> None:
     """비Jira MCP 도구가 이슈 DB 레포를 대상으로 하면: 머지·자동 병합 켜기·Approve·리뷰 기각이면 deny, 그 밖 쓰기형 도구는 ask
-    (규칙 11). 대상은 `owner`+`repo`(GitHub MCP 표준 인자) 또는 레포 문자열 인자로만 안다. 없으면 판정하지 않는다.
+    (규칙 11). 대상 후보는 합집합(하나라도 이슈 DB면 대상): slug 키(`MCP_SLUG_KEYS` — `repo`는 `/`가 들 때만)와 같은 층의
+    owner 키 × repo 키(`name`은 owner 키가 있을 때만), 키는 정규화(소문자, `_`·`-` 제거)·깊이 3. 비교는 owner/repo만(URL 키는
+    GHE 웹 host, `issue_db.remote`는 SSH 별칭 SCP 꼴일 수 있다 — gh 경로와 같은 기준).
     거부 낱말은 쓰기형 판정(`mcptools.is_write`)과 따로, 그보다 먼저 본다(H-A1 r5 — `pr_approve`·`automerge_pr`처럼 쓰기 낱말로
     잡히지 않는 이름): 병합은 동사 `merge`이거나 어느 단어에든 `merge`가 들고(`automerge`·`squash_and_merge`) 동사가 `disable`이
-    아닐 때, Approve는 어느 단어에든 `approve`가 들거나 입력 `event`가 APPROVE(GitHub MCP `pull_request_review_write` 등),
-    기각은 어느 단어에든 `dismiss`가 들거나 입력 `method`·`event`가 dismiss…. 동사가 읽기 동사(`get_merge_status`)면 거부 낱말을
-    보지 않는다."""
+    아닐 때, 또는 입력 `action`·`method`가 merge…(`merge_method`는 보지 않는다). Approve는 어느 단어에든 `approve`가 들거나 입력
+    `event`·`action`·`method`·`*event`가 approve…, 기각은 어느 단어에든 `dismiss`가 들거나 그 칸이 dismiss…. 동사가 읽기
+    동사(`get_merge_status`)면 거부 낱말을 보지 않는다.
+    판별 불가(후보 값이 owner/repo로 안 풀리거나 후보 키가 없음): (a) 병합·자동 병합·Approve·기각 부류 → ask(서버 무관),
+    (b) 쓰기형이고 정규화 키에 `repo`·`owner`·`pull`이 든 칸이 있으면 ask, (c) 그 밖은 판정하지 않는다."""
     if not conf.remote_slugs or not isinstance(tool_input, dict):
         return
-    slug = None
-    owner, repo = tool_input.get("owner"), tool_input.get("repo")
-    if isinstance(owner, str) and isinstance(repo, str) and owner and repo:
-        slug = _repo_slug(f"{owner}/{repo}") if "/" not in repo else _repo_slug(repo)
-    if slug is None:
-        for key in MCP_REPO_KEYS:
-            if isinstance(tool_input.get(key), str) and _repo_slug(tool_input[key]):
-                slug = _repo_slug(tool_input[key])
-                break
-    if slug is None or not conf.same_db_repo(slug):
+    layers = _mcp_keyed(tool_input)
+    slugs, unknown = _mcp_targets(layers)
+    is_db = any(s[1:] == tuple(slug[1:]) for slug in slugs for s in conf.remote_slugs)
+    if not is_db and not unknown:
         return
     words, verb = mcptools._words(part), mcptools.verb(part)
-    events = [v.strip().lower() for v in _mcp_values(tool_input, "event")]
-    methods = [v.strip().lower() for v in _mcp_values(tool_input, "method")]
+    vals = [(k, v.strip().lower()) for layer in layers for k, v in layer
+            if isinstance(v, str) and (k in MCP_ACTION_KEYS or k.endswith("event"))]
+    acts = [v for _, v in vals]
+    am = [v for k, v in vals if k in ("action", "method")]
     strong = verb not in mcptools.READ_VERBS
+    kind = None
     # 단어 속 merge이고 동사가 disable이 아니면(`enable_pr_auto_merge`·`automerge_pr` — 자동 병합은 +1 관문 없이 서버 조건만으로
     # 병합한다)
-    if strong and (verb == "merge" or (any("merge" in w for w in words) and verb != "disable")):
-        dec.deny.append(f"{MCP_MERGE_DENY}: {tool}).")
-    elif strong and (any("approve" in w for w in words) or "approve" in events):
-        dec.deny.append(f"{APPROVE_DENY}: {tool}).")
-    elif strong and (any("dismiss" in w for w in words) or any(v.startswith("dismiss") for v in events + methods)):
-        dec.deny.append(f"{DISMISS_DENY}: {tool}).")
-    elif mcptools.is_write(part):
-        dec.ask.append(f"이슈 DB 원격을 바꾸는 MCP 도구다({tool}). 변경·검증 결과를 보고 승인한 뒤에만 진행한다 (규칙 7).")
+    if strong and (verb == "merge" or (any("merge" in w for w in words) and verb != "disable")
+                   or any(v.startswith("merge") for v in am)):
+        kind = MCP_MERGE_DENY
+    elif strong and (any("approve" in w for w in words) or any(v.startswith("approve") for v in acts)):
+        kind = APPROVE_DENY
+    elif strong and (any("dismiss" in w for w in words) or any(v.startswith("dismiss") for v in acts)):
+        kind = DISMISS_DENY
+    if is_db:
+        if kind:
+            dec.deny.append(f"{kind}: {tool}).")
+        elif mcptools.is_write(part):
+            dec.ask.append(f"이슈 DB 원격을 바꾸는 MCP 도구다({tool}). 변경·검증 결과를 보고 승인한 뒤에만 진행한다 (규칙 7).")
+        return
+    if kind:
+        dec.ask.append(f"대상 레포를 판별하지 못한 MCP 병합·Approve·기각 도구다({tool}). 이슈 DB면 병합은 db_pr.py merge로만, "
+                       "Approve·기각은 하지 않는다 — 대상을 확인한다 (규칙 11).")
+    elif mcptools.is_write(part) and any(h in k for layer in layers for k, _ in layer for h in MCP_TARGET_HINTS):
+        dec.ask.append(f"대상 레포를 판별하지 못한 MCP 쓰기 도구다({tool}). 이슈 DB 원격이면 변경·검증 결과를 보고 승인한 뒤에만 "
+                       "진행한다 (규칙 11).")
 
 
 # -- 파일 도구 (8) -------------------------------------------------------------------------
@@ -4011,6 +4064,135 @@ def _perl_inplace_files(rest: list[str]) -> list[str]:
     return pos if script_given else pos[1:]
 
 
+# 플러그인 스크립트의 출력 인자(규칙 8·2·12·스킬 소스가 함께 본다): 스크립트 → (출력 옵션, 그 스크립트의 모든 긴 옵션 — argparse
+# 약어 판별용). `--out V`·`--out=V`·유일한 접두사 약어(`--ou`). 위치 인자를 쓰는 꼴(`mask_pii --in-place`, `jira_fields extract
+# --consume`)은 `_script_out_targets`가 따로 본다.
+SCRIPT_OUT_OPTS = {
+    "mask_pii.py": (("--out",), ("--check", "--changed", "--staged", "--events", "--out", "--in-place", "--db", "--json",
+                                 "--plugin-root")),
+    "parse_logcat.py": (("--out",), ("--json", "--plugin-root", "--around", "--between", "--full", "--minutes", "--rules",
+                                     "--tz", "--year", "--mask", "--no-external", "--step-events", "--out", "--evidence",
+                                     "--cause", "--seconds", "--context", "--max-lines")),
+    "db_review.py": (("--out",), ("--db", "--out", "--as-of", "--json", "--owners", "--plugin-root")),
+    "triage.py": (("--out",), ("--plugin-root", "--json", "--logs", "--more-logs", "--issue-raw", "--issue-file",
+                               "--issue-meta", "--code", "--dry-run", "--analysis-only", "--answer", "--tz", "--year",
+                               "--minutes", "--refresh", "--offline-db", "--out", "--failed-step", "--steps-file",
+                               "--clock-offset", "--for", "--module", "--choose", "--also", "--at", "--skipped")),
+    "db_build.py": (("--preview",), ("--db", "--write", "--verify", "--preview", "--staged", "--index-tree", "--json",
+                                     "--plugin-root")),
+    "jira_fields.py": (("--meta-out",), ("--db", "--json", "--plugin-root", "--origin", "--meta-out", "--consume",
+                                         "--comments", "--comment-chars", "--failed-step", "--steps-file")),
+}
+MASK_PII_VALUE_OPTS = ("--db", "--events", "--changed", "--out", "--plugin-root")
+JIRA_FIELDS_VALUE_OPTS = ("--db", "--plugin-root", "--origin", "--meta-out", "--comments", "--comment-chars",
+                          "--failed-step", "--steps-file")
+PY_FLAG_OPTS = set("uBIOEsS")
+
+
+def _script_call(argv: list[str]) -> tuple[str, list[str]] | None:
+    """플러그인 스크립트 호출이면 `(스크립트 기저 이름, 그 뒤 인자)`. argv[0] 기저가 `python|python3|python3.N`이면 인터프리터
+    옵션(`-u -B -I -O -E -s -S` 묶음, 값 받는 `-X -W`) 뒤 첫 위치 인자, 아니면 argv[0]."""
+    if not argv:
+        return None
+    if re.fullmatch(r"python(3(\.\d+)?)?", _base(argv[0])):
+        i = 1
+        while i < len(argv) and argv[i].startswith("-") and argv[i] != "-":
+            a = argv[i]
+            if a in ("-X", "-W"):
+                i += 2
+                continue
+            if a[1:2] in ("X", "W") or set(a[1:]) <= PY_FLAG_OPTS:
+                i += 1
+                continue
+            return None         # `-m`·`-c`·모르는 옵션: 스크립트 파일 호출이 아니다
+        return (_base(argv[i]), argv[i + 1:]) if i < len(argv) else None
+    return _base(argv[0]), argv[1:]
+
+
+def _opt_hit(tok: str, opt: str, longs: tuple[str, ...]) -> tuple[bool, str | None]:
+    """`tok`이 긴 옵션 `opt`(또는 유일한 접두사 약어)인가와 붙은 값(`--out=V`)."""
+    name, eq, val = tok.partition("=")
+    if not name.startswith("--") or len(name) < 3:
+        return False, None
+    if name != opt and not (opt.startswith(name) and [o for o in longs if o.startswith(name)] == [opt]):
+        return False, None
+    return True, (val if eq else None)
+
+
+def _opt_values(rest: list[str], opts: tuple[str, ...], longs: tuple[str, ...]) -> list[str]:
+    out = []
+    for i, a in enumerate(rest):
+        if a == "--":
+            break
+        for opt in opts:
+            hit, val = _opt_hit(a, opt, longs)
+            if hit:
+                if val is not None:
+                    out.append(val)
+                elif i + 1 < len(rest):
+                    out.append(rest[i + 1])
+    return out
+
+
+def _has_opt(rest: list[str], opt: str, longs: tuple[str, ...]) -> bool:
+    return any(_opt_hit(a, opt, longs)[0] for a in rest if a != "--")
+
+
+def _positionals(rest: list[str], value_opts: tuple[str, ...], longs: tuple[str, ...]) -> list[str]:
+    pos, i = [], 0
+    while i < len(rest):
+        a = rest[i]
+        if a == "--":
+            pos += rest[i + 1:]
+            break
+        if a.startswith("-") and a != "-":
+            hit = next((o for o in value_opts if _opt_hit(a, o, longs)[0]), None)
+            i += 2 if hit and "=" not in a else 1
+            continue
+        pos.append(a)
+        i += 1
+    return pos
+
+
+def _script_out_targets(argv: list[str]) -> list[str]:
+    """플러그인 스크립트가 쓰거나 지우는 경로(펼치기 전 단어): `SCRIPT_OUT_OPTS`의 출력 옵션 값, `mask_pii.py --in-place`의 위치
+    인자(`--check`·`--events`가 있으면 그쪽이 먼저 돌아 쓰지 않는다), `jira_fields.py extract --consume`의 원본(지운다)."""
+    call = _script_call(argv)
+    if call is None or call[0] not in SCRIPT_OUT_OPTS:
+        return []
+    name, rest = call
+    opts, longs = SCRIPT_OUT_OPTS[name]
+    out = _opt_values(rest, opts, longs)
+    if name == "mask_pii.py" and _has_opt(rest, "--in-place", longs) and not _has_opt(rest, "--check", longs) \
+            and not _has_opt(rest, "--events", longs):
+        out += _positionals(rest, MASK_PII_VALUE_OPTS, longs)
+    if name == "jira_fields.py" and _has_opt(rest, "--consume", longs):
+        pos = _positionals(rest, JIRA_FIELDS_VALUE_OPTS, longs)
+        if pos and pos[0] == "extract":
+            out += pos[1:]
+    return out
+
+
+def _db_build_write_target(inv: Invocation, conf: Config) -> str | None:
+    """`db_build.py --write`가 사용자 clone을 고쳐 쓰는가(자체 preflight 없음): `--db` 값이 clone 안이거나, `--db`가 없고 cwd가
+    clone 본체면 그 단어. `db_migrate --to/--write`는 자체 preflight가 있어 보지 않는다."""
+    call = _script_call(_drop_redirs(inv.argv))
+    if call is None or call[0] != "db_build.py":
+        return None
+    longs = SCRIPT_OUT_OPTS["db_build.py"][1]
+    rest = call[1]
+    if not _has_opt(rest, "--write", longs):
+        return None
+    dbs = _opt_values(rest, ("--db",), longs)
+    for word in dbs:
+        p = _expand(word)
+        if _in_clone(_norm(Path(p) if Path(p).is_absolute() else inv.cwd / p), conf):
+            return word
+    if not dbs and conf.is_clone_body(inv.cwd):
+        return str(inv.cwd)
+    return None
+
+
 def _write_targets(inv: Invocation) -> list[str]:
     """이 호출이 쓰는 파일 경로(펼치기 전 단어): 출력 리디렉션 대상, tee·cp·mv·rm 등의 대상, `sed -i`·`perl -i`·
     `sort -o`·`unzip -d`·`tar -x -C`·`dd of=`."""
@@ -4099,7 +4281,7 @@ def _write_targets(inv: Invocation) -> list[str]:
                     out.append(a.split("=", 1)[1])
     elif name == "dd":
         out += [a[3:] for a in rest if a.startswith("of=")]
-    return out
+    return out + _script_out_targets([argv[0]] + rest if argv and not REDIRECT_RE.match(argv[0]) else [])
 
 
 def check_clone_writes(inv: Invocation, conf: Config, dec: Decision) -> None:
@@ -4110,6 +4292,10 @@ def check_clone_writes(inv: Invocation, conf: Config, dec: Decision) -> None:
         if _in_clone(target, conf):
             dec.deny.append(f"{CLONE_MUTATION_MSG}: {word}")
             return
+    word = _db_build_write_target(inv, conf)
+    if word is not None:
+        dec.ask.append(f"db_build.py --write가 사용자 clone({word})의 생성 파일을 고쳐 쓴다. 메인테이너 migrate 흐름인지 확인한 "
+                       "뒤에만 진행한다 (규칙 8).")
 
 
 def check_clone_git(call: GitCall, conf: Config, dec: Decision) -> None:

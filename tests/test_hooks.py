@@ -927,6 +927,54 @@ def test_guard_mcp_write_tools_targeting_issue_db():
     assert decision(guard(ws, "mcp__github__push_files", db, ws.base, env=empty)) is None
 
 
+
+def test_guard_mcp_issue_db_key_variants():
+    """규칙 11(F1): 대상 인자 이름 변형(정규화 키·중첩·owner+name)과 동작 칸(`event`·`action`·`method`·`*event`)도 본다.
+    대상 후보는 합집합 — 하나라도 이슈 DB면 대상이다."""
+    ws = shared()
+    url = f"https://ghe.mock.invalid/{DB_SLUG}/pull/3"
+    merge = "mcp__github__merge_pull_request"
+    review = "mcp__github__pull_request_review_write"
+    rows = [(merge, {"repository_full_name": DB_SLUG}, "deny"), (merge, {"repo_full_name": DB_SLUG}, "deny"),
+            (merge, {"repoFullName": DB_SLUG}, "deny"), (merge, {"pr": {"repository": DB_SLUG}}, "deny"),
+            (merge, {"owner": "mock-org", "name": "telephony-issue-db"}, "deny"),
+            (merge, {"owner": "mock-org", "repo": "telephony-issue-db", "pullNumber": 3}, "deny"),
+            (review, {"owner": "mock-org", "repo": "telephony-issue-db", "method": "create", "event": "APPROVE"}, "deny"),
+            (review, {"repo_full_name": DB_SLUG, "review_event": "APPROVE"}, "deny"),
+            (review, {"repo_full_name": DB_SLUG, "action": "APPROVE"}, "deny"),
+            ("mcp__github__pr_write", {"repo_full_name": DB_SLUG, "action": "merge"}, "deny"),
+            ("mcp__github__push_files", {"repository": "other/x", "url": url}, "ask"),
+            ("mcp__github__create_pull_request", {"owner": "me", "repo": "fork"}, None)]
+    for tool, tool_input, want in rows:
+        assert decision(guard(ws, tool, tool_input, ws.base)) == want, (tool, tool_input)
+
+
+def test_guard_mcp_scp_alias_remote_url():
+    """규칙 11(F1): `issue_db.remote`가 SSH 별칭 SCP 꼴이어도 MCP URL 인자는 owner/repo로 비교한다(host 무관)."""
+    ws = Workspace(build=False)
+    for p in ws.home.rglob("*.yaml"):
+        text = p.read_text(encoding="utf-8")
+        p.write_text(text.replace(f"https://ghe.mock.invalid/{DB_SLUG}.git", "ghe-ssh:mock-org/telephony-issue-db.git"),
+                     encoding="utf-8")
+    out = guard(ws, "mcp__github__merge_pull_request", {"url": "https://ghe.example/mock-org/telephony-issue-db/pull/3"},
+                ws.base)
+    assert decision(out) == "deny"
+
+
+def test_guard_mcp_undeterminable_target_asks():
+    """규칙 11(F1): 대상을 owner/repo로 풀지 못하면 (a) 병합·Approve·기각 부류는 ask (b) 레포 단서 키가 있는 쓰기형은 ask
+    (c) 그 밖은 판정하지 않는다."""
+    ws = shared()
+    rows = [("mcp__github__merge_pull_request", {"repo_full_name": "$REPO"}, "ask"),
+            ("mcp__github__merge_pull_request", {"pull_number": 3}, "ask"),
+            ("mcp__github__push_files", {"repository_id": 42}, "ask"),
+            ("mcp__github__create_or_update_file", {"repo": "telephony-issue-db"}, "ask"),
+            ("mcp__github__get_file_contents", {"repo_full_name": "$R"}, None),
+            ("mcp__github__list_pull_requests", {}, None), ("mcp__gdrive__create_file", {"name": "x"}, None),
+            ("mcp__github__create_repository", {"name": "x"}, None)]
+    for tool, tool_input, want in rows:
+        assert decision(guard(ws, tool, tool_input, ws.base)) == want, (tool, tool_input)
+
 def test_guard_git_dir_work_tree_and_env_forms():
     ws = shared()
     c = ws.clone
@@ -990,6 +1038,34 @@ def test_guard_blocks_file_writes_into_clone_from_bash():
                 f'sed s/a/b/ "{c}/README.md" > /tmp/out', f'cat "{c}/README.md" >&2'):
         assert decision(bash(ws, cmd, ws.base)) is None, cmd
 
+
+
+def test_guard_blocks_plugin_script_outputs_into_clone():
+    """규칙 8(F2): 플러그인 스크립트의 출력 인자(`--out`·`--preview`·`--meta-out`, `--in-place`·`--consume`의 위치 인자)가
+    clone 안이면 거부. `db_build.py --write`가 clone을 고치면 ask. work dir·/tmp·검사 모드는 판정 없음."""
+    ws = shared()
+    c, w = ws.clone, ws.work
+    P = plugin_root() / "scripts"
+    deny = [f"python3 {P}/mask_pii.py safe.txt --out {c}/CONTRIBUTING.md", f"python3 {P}/mask_pii.py a --out={c}/b.md",
+            f"python3 {P}/mask_pii.py a --ou {c}/b.md", f"python3 {P}/mask_pii.py --in-place {c}/a.md",
+            f"python3 -u {P}/parse_logcat.py cut a.log --around T --out {c}/c.log",
+            f"python3 {P}/parse_logcat.py extract-bugreport b.zip --out {c}/bug",
+            f"python3 {P}/db_review.py --out {c}/r.md", f"python3 {P}/triage.py run K --offline-db d --out {c}/job",
+            f"python3 {P}/db_build.py --preview {c}/p", f"python3 {P}/jira_fields.py extract j.json --meta-out {c}/m.json",
+            f"python3 {P}/jira_fields.py extract {c}/raw.json --consume",
+            f"env A=1 timeout 5 python3 {P}/mask_pii.py a --out {c}/b.md"]
+    for cmd in deny:
+        out = bash(ws, cmd, ws.base)
+        assert decision(out) == "deny" and "규칙 8" in out["permissionDecisionReason"], cmd
+    out = bash(ws, f"python3 {P}/mask_pii.py a --out {w}/MOCK-1/post.approved.json", ws.base)
+    assert decision(out) == "deny" and "규칙 2" in out["permissionDecisionReason"]
+    assert decision(bash(ws, f"python3 {P}/db_build.py --write --db {c}", ws.base)) == "ask"
+    assert decision(bash(ws, f"python3 {P}/db_build.py --write", c)) == "ask"
+    for cmd in (f"python3 {P}/mask_pii.py a --out {ws.base}/o", f"python3 {P}/mask_pii.py a --out {w}/MOCK-1/o.txt",
+                f"python3 {P}/mask_pii.py {c}/a.md", f"python3 {P}/mask_pii.py --check {c}/a.md",
+                f"python3 {P}/mask_pii.py --check --in-place {c}/a", f"python3 {P}/mask_pii.py --events e --in-place {c}/a",
+                f"python3 {P}/db_build.py --write --db {w}/wt"):
+        assert decision(bash(ws, cmd, ws.base)) is None, cmd
 
 def test_guard_migrate_branch_creation_asks():
     ws = Workspace()
