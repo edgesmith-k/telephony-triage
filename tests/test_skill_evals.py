@@ -1619,7 +1619,9 @@ def test_e65_mismatch_bypass_and_guidance_checks(tmp_path):
                          ("ofono 로그와 다른 버퍼를 봅니다. 플랫폼은 android입니다.", False),
                          ("플랫폼 불일치로 멈췄습니다. `--platform ofono`로 다시 하세요.", False),     # ofono가 다른 문장
                          ("이슈 DB(ofono)와 플랫폼이 다르다고 나옵니다", True), ("플랫폼이 다르지만 ofono 로그는 있습니다", True),
-                         ("플랫폼 설정을 다르게 하라는 ofono 안내", False)):
+                         ("플랫폼 설정을 다르게 하라는 ofono 안내", False),
+                         # 이름 속 점(`triage.py`)은 문장 끝이 아니다 (g-1 eval 65)
+                         ("이슈 DB는 oFono용인데 선택된 플랫폼이 android라서, `triage.py run`이 \"플랫폼 불일치\"로 종료 코드 2를 냈습니다.", True)):
         _seq_events(run, [("tool", "q", "mcp__eval-approver__ask_user", {"question": question}, "중단", False)])
         assert grader.checks(65, grader.Ctx(env_dir, run))[2]()[0] is ok, question
     with pytest.raises(grader._Manual):                                  # 실행 기록 없음은 통과로 세지 않는다

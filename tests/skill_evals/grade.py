@@ -2269,11 +2269,12 @@ def checks_p(eid, ctx):
             texts = ctx.visible()       # 질문 문구로 알린 것도 보인 글이다 (h1-b eval 65)
             if texts is None:
                 raise _Manual("실행 기록(events.jsonl) 없음")
-            # 같은 문장(`.`·`?`·`!`·줄바꿈으로 나눔)에 플랫폼 낱말·불일치 낱말·ofono가 함께 있어야 한다("확인해 달라" 같은 말은
+            # 같은 문장(뒤에 공백·끝이 오는 `.`·`?`·`!`, 줄바꿈으로 나눔 — `triage.py` 같은 이름 속 점은 문장 끝이 아니다, g-1 eval 65)에
+            # 플랫폼 낱말·불일치 낱말·ofono가 함께 있어야 한다("확인해 달라" 같은 말은
             # 알림이 아니다). "다르"는 활용형만(다르다·다르고·다르지·다릅니다)
             said = re.compile(r"(?:플랫폼|platform)[^.?!\n]{0,40}(?:불일치|mismatch|다르[다고지]|다릅|맞지 않)|"
                               r"(?:불일치|mismatch)[^.?!\n]{0,40}(?:플랫폼|platform)", re.I)
-            hit = next((x for t in texts for x in re.split(r"[.?!\n]", t) if said.search(x) and "ofono" in x.lower()), None)
+            hit = next((x for t in texts for x in re.split(r"[.?!](?=\s|$)|\n", t) if said.search(x) and "ofono" in x.lower()), None)
             return hit is not None, (hit[:300] if hit else "플랫폼 불일치(ofono) 알림 없음")
         def nothing_left():
             ok, ev = untouched()
