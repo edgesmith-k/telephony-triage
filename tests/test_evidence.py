@@ -105,3 +105,28 @@ def test_check_quotes_prefilter_same_verdicts_on_big_source():
     finally:
         evidence.BIG_SOURCE = small
     assert fast == full and fast["fabricated"] >= 1
+
+
+def test_evidence_check_catches_decision_token_alteration():
+    """종합 리뷰 P1: 12자 미만 변조(오류 코드·슬롯·성공/실패 낱말)와 결론과 무관한 줄 인용이 ok로 통과했다. 결정 토큰은 앵커(토큰을 뺀
+    가장 긴 조각)가 든 원문 한 줄에 모두 있어야 ok다."""
+    tl = "\n".join([
+        "14:32:10.100 p0 E RILJ [PHONE0] < SETUP_DATA_CALL error 2 failed cause=AUTH(29)",
+        "14:32:10.200 p0 I NMD state=disconnected for rmnet0",
+        "14:32:11.000 p1 I RILJ [PHONE1] < GET_SIGNAL_STRENGTH error 0 succeeded",
+    ])
+    source, tags = evidence.source_text(tl)
+    genuine = "[PHONE0] < SETUP_DATA_CALL error 2 failed cause=AUTH(29)"
+    assert evidence.evidence_check(genuine, source, tags)[0] == "ok"
+    assert evidence.evidence_check("RILJ [PHONE0] < SETUP_DATA_CALL error 2 failed cause=AUTH(29) 줄에서 거절 확인",
+                                   source, tags)[0] == "ok"
+    for altered in ("[PHONE0] < SETUP_DATA_CALL error 6 failed cause=AUTH(29)",      # 오류 코드
+                    "[PHONE1] < SETUP_DATA_CALL error 2 failed cause=AUTH(29)",      # 슬롯
+                    "[PHONE0] < SETUP_DATA_CALL error 2 succeeded cause=AUTH(29)",   # 성공/실패
+                    "[PHONE0] < SETUP_DATA_CALL error 2 failed cause=NONE(0)"):      # 원인 코드
+        assert evidence.evidence_check(altered, source, tags)[0] == "fabricated", altered
+    # 앵커가 없는(토큰뿐인) 짧은 조각·앵커를 담은 줄이 없는 조각은 이 검사가 판정하지 않는다(앞 검사 결과 그대로)
+    assert evidence._decision_tokens_altered("error 2 failed", source) is False
+    assert evidence._decision_tokens_altered("UNKNOWN_REQUEST_NAME error 9", source) is False
+    res = evidence.check_quotes([genuine, "[PHONE1] < SETUP_DATA_CALL error 2 failed cause=AUTH(29)"], source, tags)
+    assert res["fabricated"] == 1 and res["first"].startswith("[PHONE1]")

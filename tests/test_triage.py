@@ -1605,4 +1605,7 @@ def test_cause_unconfirmed_run_shows_partial_match_and_code_check(tmp_path):
     assert "DATA-001 > DATA-001-01/data-disabled 1/2 [missing]" in report
     assert "  - 코드 대조 setting-off: " in report
     assert "  - 없음 근거 포함: must_not_match " in report
+    # 종합 리뷰 P1: 이 합성 로그에는 RILJ(수집 태그) 줄이 없어 `RILJ.*>\s*SETUP_DATA_CALL` 없음은 확인된 것이 아니다 → must_show
+    assert "- 배제 조건 검증 불가: must_not_match " in report and "태그 RILJ 줄이 이 로그에 0줄" in report
+    assert any(m.startswith("배제 조건 검증 불가") for m in done.get("must_show") or []), done.get("must_show")
     ws.json("triage.py", ["release", "MOCK-1001"])

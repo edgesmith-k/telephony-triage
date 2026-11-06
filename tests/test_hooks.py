@@ -3375,3 +3375,55 @@ if __name__ == "__main__":
     import pytest
 
     raise SystemExit(pytest.main([__file__, "-q"]))
+
+
+# -- 종합 리뷰 A 묶음: S1 미확인 Jira 읽기 ask, 인터프리터 인라인 코드·링크의 clone/원문 경로 ask -------------------------------------
+
+
+def test_guard_asks_jira_reads_until_isolation_confirmed():
+    """규칙 9(원문 격리)는 PostToolUse 출력 대체에 기대고 미지원이면 열린다. S1 확인 기록(site-defaults `tracker.isolation_confirmed`)
+    전에는 read_tools 호출도 ask(위험 고지), 쓰기는 그대로 deny. OpenCode 어댑터 환경(TT_OC_ADAPTER)은 자체 관문·대체가 있어 묻지 않는다."""
+    home = tmp("tt-home-")
+
+    def judge(root: Path, tool: str, extra: dict | None = None) -> dict | None:
+        event = {"tool_name": tool, "tool_input": {}, "cwd": str(home)}
+        proc = run("guard.py", [], root=root, env={"TELEPHONY_TRIAGE_HOME": home, **(extra or {})}, stdin=json.dumps(event))
+        assert proc.returncode == 0, proc.stderr
+        return json.loads(proc.stdout)["hookSpecificOutput"] if proc.stdout.strip() else None
+
+    tracker = _jira("mock-jira", JIRA_TOOLS[0])
+    tracker.pop("isolation_confirmed", None)
+    unconfirmed = plugin_root("jira-unconfirmed", tracker=tracker)
+    out = judge(unconfirmed, JIRA_TOOLS[0])
+    assert decision(out) == "ask" and "isolation_confirmed" in out["permissionDecisionReason"] and "S1" in out["permissionDecisionReason"]
+    assert decision(judge(unconfirmed, "mcp__mock-jira__jira_add_comment")) == "deny"
+    assert judge(unconfirmed, JIRA_TOOLS[0], {"TT_OC_ADAPTER": "1"}) is None
+    confirmed = plugin_root("jira-confirmed", tracker={**tracker, "isolation_confirmed": True})
+    assert judge(confirmed, JIRA_TOOLS[0]) is None
+    assert decision(judge(plugin_root("jira-false", tracker={**tracker, "isolation_confirmed": False}), JIRA_TOOLS[0])) == "ask"
+
+
+def test_guard_inline_interpreter_code_and_symlink_into_clone_ask():
+    """종합 리뷰에서 재현된 우회: `python3 -c`/heredoc/`perl -e` 안의 clone 쓰기와 원문 읽기, `ln -s <clone>`은 셸 파서가 보지 못해
+    통과했다. 코드 의미는 모르므로 ask. 무관한 경로·경로 없는 코드·clone 밖 링크는 그대로 통과한다."""
+    ws = shared()
+    clone = ws.clone
+    raw_dir = ws.root / "work" / "INLINE-1"
+    raw_dir.mkdir(parents=True, exist_ok=True)
+    (raw_dir / "events.json").write_text("{}", encoding="utf-8")
+    link = tmp("tt-link-") / "lk"
+    asks = [
+        (f"python3 -c \"open('{clone}/README.md','w').write('x')\"", "규칙 8"),
+        (f"python3 - <<'EOF'\nopen('{clone}/README.md','w').write('x')\nEOF", "규칙 8"),
+        (f"perl -e 'open(F,\">{clone}/README.md\");print F 1'", "규칙 8"),
+        (f"python3 -c'import pathlib; pathlib.Path(\"{clone}/x\").write_text(\"1\")'", "규칙 8"),
+        (f"ln -s {clone} {link}", "규칙 8"),
+        (f"python3 -c \"print(open('{raw_dir}/events.json').read())\"", "규칙 10"),
+    ]
+    for cmd, rule in asks:
+        out = bash(ws, cmd, clone)
+        assert decision(out) == "ask" and rule in out["permissionDecisionReason"], (cmd, out)
+    for cmd in (f"python3 -c \"print(open('{ws.root}/no-such-notes.txt').read())\"", "python3 -c 'print(1+1)'",
+                f"ln -s {link} {link}2", "perl -e 'print 1'", f"python3 -c \"import json; json.load(open('{clone}'))\" --flag"):
+        out = bash(ws, cmd, clone)
+        assert decision(out) in (None, "ask") if "import json" in cmd else decision(out) is None, (cmd, out)

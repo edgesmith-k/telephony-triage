@@ -33,6 +33,15 @@ ELLIPSIS_RX = re.compile(r"…|\.\.\.")
 # S7 덮임 검사: 인용을 한글이 든 낱말(설명)과 화살표에서 잘라 로그 조각으로 나눈다.
 RUN_SPLIT_RX = re.compile(r"(?:^|\s)\S*[가-힣]\S*(?=\s|$)|[→⇒]|\[?\b\d{2}:\d{2}:\d{2}(?:\.\d+)?\b\]?|\b\d{4}-\d{2}-\d{2}\b")
 COVER_BLOCK, UNCOVERED_MAX = 4, 12
+# 결정 토큰(종합 리뷰 P1): 바뀌면 텔레포니 결론이 달라지는 조각 — 슬롯(`[PHONE0]`·`phoneId=1`), 오류·원인·상태 코드(`error 2`·
+# `cause=AUTH(29)`·`status=FAILED`), 성공/실패 낱말. 최장 일치·덮임 검사는 12자 미만 변조(`error 2`→`error 6`, `PHONE0`→`PHONE1`,
+# `failed`→`succeeded`)를 ok로 봤다. 인용의 토큰을 뺀 가장 긴 조각(`ANCHOR_MIN`자 이상)이 든 원문 **한 줄**에 토큰이 모두 있어야 ok다.
+DECISION_TOKEN_RX = re.compile(
+    r"\[PHONE\d+\]|\bphone[_ ]?id\s*[=:]\s*\d+|"
+    r"\b(?:error|err|errno|cause|code|reason|status|state|result|rat|fail_cause|failcause|rc|ret)\s*[=:]?\s*[-A-Za-z0-9_]+(?:\(\d+\))?|"
+    r"\b(?:failed|failure|fail|succeeded|success|rejected|reject|accepted|timeout|timed out|denied|disconnected|connected)\b",
+    re.IGNORECASE)
+ANCHOR_MIN = 8
 
 # 타임라인 행 문법(report.row_line·모듈 뷰): `시각 슬롯 레벨 태그 메시지`. 머리 글머리표(`- …`)와 `## ` 제목은 아니다
 ROW_RX = re.compile(r"^(?!- )\S+ (?:p\d+|-) [A-Z?-] \S+ ")
@@ -194,8 +203,31 @@ def _uncovered_run(part: str, files_text: str, tags=None) -> int:
     return worst
 
 
+def _decision_tokens_altered(part: str, files_text: str) -> bool:
+    """인용 조각의 결정 토큰(`DECISION_TOKEN_RX`)이 원문에서 바뀌었나. 토큰을 뺀 나머지 중 가장 긴 조각(앵커, `ANCHOR_MIN`자 이상)이
+    든 원문 줄들 가운데 **한 줄**이 토큰을 모두(대소문자 무관) 담으면 그대로다. 앵커가 없거나 앵커를 담은 줄이 없으면 판정하지
+    않는다(False — 그 경우는 최장 일치·덮임 검사가 이미 판정했다)."""
+    tokens = [m.group(0) for m in DECISION_TOKEN_RX.finditer(part)]
+    if not tokens:
+        return False
+    runs = sorted((r.strip() for r in DECISION_TOKEN_RX.sub("\0", part).split("\0")), key=len, reverse=True)
+    anchor = next((r for r in runs if len(r) >= ANCHOR_MIN), None)
+    if anchor is None:
+        return False
+    lows = [t.lower() for t in tokens]
+    seen = False
+    for line in files_text.split("\n"):
+        if anchor not in line:
+            continue
+        seen = True
+        low = ws(line).lower()
+        if all(t in low for t in lows):
+            return False
+    return seen
+
+
 def evidence_check(item: str, files_text: str, tags) -> tuple[str, list[tuple[str, int, int]]]:
-    """근거 항목 하나의 판정: ok | weak | fabricated, 부분별 (판정, 최장 일치 길이, 길이)."""
+    """근거 항목 하나의 판정: ok | weak | fabricated, 부분별 (판정, 최장 일치 길이, 길이). 결정 토큰이 바뀐 인용은 fabricated다."""
     worst, detail = "ok", []
     for part in _quote_parts(item, tags):
         n = len(part)
@@ -206,6 +238,8 @@ def evidence_check(item: str, files_text: str, tags) -> tuple[str, list[tuple[st
                 0, n, 0, len(files_text)).size
             verdict = "ok" if (m >= 20 or m >= 0.6 * n) else "weak" if m >= 12 else "fabricated"
             if verdict != "fabricated" and _uncovered_run(part, files_text, tags) >= UNCOVERED_MAX:
+                verdict = "fabricated"
+            if verdict != "fabricated" and _decision_tokens_altered(part, files_text):
                 verdict = "fabricated"
         detail.append((verdict, m, n))
         if verdict == "fabricated" or (verdict == "weak" and worst == "ok"):

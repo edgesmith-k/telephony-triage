@@ -21,8 +21,10 @@
         tz: Asia/Seoul            # 선택
         failed_step: ""           # 선택. 실패 스텝 한 줄(보조 정보, 후보 동점 정렬의 키워드 보너스·후보 없음 힌트에만 쓴다)
         expect: DATA-001-01       # 정답 원인 ID 또는 unresolved
+        negative_control: true    # 선택. 대조군(일부러 틀린 라벨 등): 돌리고 판정은 보이되 지표의 분모·분자에서 뺀다
 
-지표:
+지표(대조군 제외 — `negative_control: true` 항목은 `controls`로 따로 세고 표에 `대조군(<판정>)`으로 보인다. 라벨셋이
+시그니처를 쓴 fixture 자체면 in-sample 자기 일치라 정확도 지표가 아니다 — 사내 S-5는 시그니처 작성에 쓰지 않은 로그만 넣는다):
   - 1위 정확도: 정답이 원인 ID인 항목 중 1위 후보가 정답인 비율
   - 상위 3 포함률: 정답이 원인 ID인 항목 중 상위 3 후보에 정답이 있는 비율
   - 오탐률: 정답이 unresolved인 항목 중 후보를 낸 비율
@@ -138,6 +140,7 @@ def evaluate_item(root: Path, db: Path, base: Path, doc: dict, item: dict, work:
     if tz:
         args += ["--tz", str(tz)]
     result = {"key": key, "expect": str(item["expect"]), "top": None, "top3": [], "error": None, "warning": None, "unjudged": None,
+              "control": bool(item.get("negative_control")),
               "logs_sha256": [hashlib.sha256(Path(p).read_bytes()).hexdigest() if Path(p).is_file() else None for p in logs],
               "backend": None, "external": None}
     try:
@@ -190,10 +193,13 @@ def evaluate_item(root: Path, db: Path, base: Path, doc: dict, item: dict, work:
 
 
 def summarize(results: list[dict]) -> dict:
-    scored = [r for r in results if not r["error"]]
+    """대조군(`control`)은 판정은 매기되(`대조군(<판정>)`) 지표·분모 어디에도 넣지 않는다 — 일부러 틀린 라벨이 '정확도'로 읽히지 않게."""
+    controls = [r for r in results if r.get("control")]
+    graded = [r for r in results if not r["error"]]
+    scored = [r for r in graded if not r.get("control")]
     positive = [r for r in scored if r["expect"] != UNRESOLVED]
     negative = [r for r in scored if r["expect"] == UNRESOLVED]
-    for r in scored:
+    for r in graded:
         if r["expect"] == UNRESOLVED:
             r["verdict"] = "오탐" if any(c is not None for c in r["top3"]) else "정답"   # cause: null(유형만)은 오탐 아님
         elif r["top"] == r["expect"]:
@@ -202,21 +208,25 @@ def summarize(results: list[dict]) -> dict:
             r["verdict"] = "상위3"
         else:
             r["verdict"] = "미스"
+        if r.get("control"):
+            r["verdict"] = f"대조군({r['verdict']})"
 
     def rate(num: int, den: int) -> float | None:
         return round(num / den, 4) if den else None
 
+    counted = [r for r in results if not r.get("control")]
     return {
         "total": len(results),
+        "controls": len(controls),          # 지표 제외(돌리기는 한다)
         "evaluated": len(scored),
-        "errors": len(results) - len(scored),
-        "unjudged_errors": sum(bool(r["error"]) and bool(r.get("unjudged")) for r in results),
-        "error_rate": rate(len(results) - len(scored), len(results)),
+        "errors": len(counted) - len(scored),
+        "unjudged_errors": sum(bool(r["error"]) and bool(r.get("unjudged")) for r in counted),
+        "error_rate": rate(len(counted) - len(scored), len(counted)),
         "type_only": sum(bool(r["top3"]) and all(c is None for c in r["top3"]) for r in negative),
         "positive": len(positive),          # 평가된(오류 아닌) 항목만
         "negative": len(negative),
-        "positive_total": sum(r["expect"] != UNRESOLVED for r in results),     # 오류 포함 전체
-        "negative_total": sum(r["expect"] == UNRESOLVED for r in results),
+        "positive_total": sum(r["expect"] != UNRESOLVED for r in counted),     # 오류 포함, 대조군 제외
+        "negative_total": sum(r["expect"] == UNRESOLVED for r in counted),
         "top1_accuracy": rate(sum(r["top"] == r["expect"] for r in positive), len(positive)),
         "top3_inclusion": rate(sum(r["expect"] in r["top3"] for r in positive), len(positive)),
         "false_positive_rate": rate(sum(r["verdict"] == "오탐" for r in negative), len(negative)),
@@ -242,9 +252,10 @@ def render(results: list[dict], summary: dict) -> str:
             lines.append(f"경고 {r['key']}: {r['warning']}")
     lines += [
         "",
-        f"평가 {summary['evaluated']}/전체 {summary['total']}",
-        f"항목 {summary['total']}건 (정답 원인 ID {summary['positive_total']}·unresolved {summary['negative_total']}, "
-        f"평가된 것 원인 {summary['positive']}·unresolved {summary['negative']}, 오류 {summary['errors']})",
+        f"평가 {summary['evaluated']}/전체 {summary['total']}"
+        + (f" (대조군 {summary['controls']}건은 지표에서 뺌)" if summary.get("controls") else ""),
+        f"항목 {summary['total'] - summary.get('controls', 0)}건 (정답 원인 ID {summary['positive_total']}·unresolved "
+        f"{summary['negative_total']}, 평가된 것 원인 {summary['positive']}·unresolved {summary['negative']}, 오류 {summary['errors']})",
         f"1위 정확도    {_pct(summary['top1_accuracy'])}",
         f"상위 3 포함률 {_pct(summary['top3_inclusion'])}",
         f"오탐률        {_pct(summary['false_positive_rate'])} (원인 후보 기준, 유형만 {summary['type_only']}건 제외)",

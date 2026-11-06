@@ -594,6 +594,9 @@ class ReportMixin:
             basis = (r.get("_partial") or {}).get("absence_basis")
             if basis:      # must_not_match에 기대는 시그니처: 그 줄이 빌드에서 사라져도 같은 결과(판정 불변, must_show 아님)
                 lines.append(f"  - 없음 근거 포함: must_not_match {basis['pattern']} — 이 줄이 빌드에서 사라져도 같은 결과(03 §5.7)")
+                for u in (basis.get("unverifiable") or [])[:2]:    # 수집 태그 줄이 0줄: 공허하게 참일 수 있다 → must_show(과신 방지)
+                    lines.append(add(6, f"배제 조건 검증 불가: must_not_match {u['pattern']}의 태그 {u['anchor']} 줄이 이 로그에 0줄 — "
+                                        "그 버퍼·태그가 수집되지 않았으면 '없음'은 확인된 것이 아니다(S/C·점수 불변, 일치 수준을 과신하지 않는다)"))
             jira_slot = (r.get("issue") or {}).get("sim_slot")
             slot = _slot_number(jira_slot)
             if slot is not None and top["phones"] and slot not in top["phones"]:

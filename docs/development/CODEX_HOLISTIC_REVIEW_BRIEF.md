@@ -139,7 +139,7 @@
 pip install '.[test]'
 python3 -m pytest -q                                   # 전체(3,900개 수집, 실행 시간은 작성자 추정 30~40분)
 python3 tests/helpers/make_plugin_root.py --out /tmp/proot
-python3 tools/offline_eval.py tests/fixtures/offline-eval-sample.yaml --plugin-root /tmp/proot   # 합성 라벨셋 매칭 정확도 표
+python3 tools/offline_eval.py tests/fixtures/offline-eval-sample.yaml --plugin-root /tmp/proot   # 합성 라벨셋 매칭 표(도구 동작 확인용 — 항목이 시그니처 fixture 자체라 정확도 측정이 아니다. EVAL-8은 대조군)
 python3 plugin/scripts/module_eval.py --module ofono/data --dry-run      # 모듈 평가 실행 계획(비용 없음)
 python3 tests/skill_evals/run.py --iteration /tmp/it --eval 3 --prepare-only   # 스킬 eval 입력 준비(모델 호출 없음)
 python3 tools/check_boundary.py ; python3 tools/gen_contracts.py --check

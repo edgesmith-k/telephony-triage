@@ -399,13 +399,14 @@ def test_offline_eval_prints_accuracy_table_on_synthetic_labelset():
     assert proc.returncode == 0, proc.stderr
     out = json.loads(proc.stdout)
     summary = out["summary"]
-    assert summary["total"] == 8 and summary["errors"] == 0
-    assert summary["positive"] == 7 and summary["negative"] == 1
-    assert summary["top1_accuracy"] == round(6 / 7, 4)      # EVAL-8은 일부러 틀린 라벨
-    assert summary["top3_inclusion"] == round(6 / 7, 4)
+    assert summary["total"] == 8 and summary["errors"] == 0 and summary["controls"] == 1
+    assert summary["positive"] == 6 and summary["negative"] == 1 and summary["positive_total"] == 6
+    assert summary["top1_accuracy"] == 1.0           # in-sample 자기 일치(fixture 자체) — 대조군 EVAL-8은 분모에서 뺀다
+    assert summary["top3_inclusion"] == 1.0
     assert summary["false_positive_rate"] == 0.0
     verdicts = {r["key"]: r["verdict"] for r in out["items"]}
-    assert verdicts["EVAL-1"] == "1위" and verdicts["EVAL-7"] == "정답" and verdicts["EVAL-8"] == "미스"
+    assert verdicts["EVAL-1"] == "1위" and verdicts["EVAL-7"] == "정답" and verdicts["EVAL-8"] == "대조군(미스)"
+    assert [r["control"] for r in out["items"]].count(True) == 1
     meta = out["meta"]
     assert meta["labelset_sha256"] == hashlib.sha256((REPO / "tests/fixtures/offline-eval-sample.yaml").read_bytes()).hexdigest()
     assert meta["python"] == platform.python_version() and "--json" in meta["argv"]

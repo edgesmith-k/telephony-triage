@@ -2007,6 +2007,49 @@ def test_stage_rejects_suggested_mismatch_and_missing_match_json():
     assert not ws.wt(job).exists() and not (ws.job_dir(job) / "state.json").exists()
 
 
+def test_stage_rejects_feedback_decision_inconsistent_with_top_candidate():
+    """`decision`·`final`은 LLM이 적는 값이라 1위 후보와 대조한다(종합 리뷰 P1: accepted가 수락률→점수 가중치로 들어가는데
+    어느 스크립트도 검증하지 않았다). accepted ⇔ final == 1위 원인, chose-other ⇒ 1위가 아닌 원인 ID, new-cause ⇒ 1위 아님,
+    unresolved ⇒ final unresolved. 거부는 계획·작업 파일을 바꾸기 전이다."""
+    ws = Workspace()
+    job = "MOCK-7001"
+    ws.acquire(job)
+    base = load_plan("p7-analyze-append.plan.json")
+    ws.put(job, "match.json", _match_json("MOCK-7001", MATCH_CANDS))
+    cases = [
+        ({"decision": "accepted", "final": "DATA-001-01"}, "accepted"),          # (a) accepted인데 final이 1위가 아님
+        ({"decision": "chose-other", "final": "DATA-001-02"}, "chose-other"),    # (b) chose-other인데 1위와 같음
+        ({"decision": "chose-other", "final": "unresolved"}, "chose-other"),     # (c) chose-other인데 원인 ID가 아님
+        ({"decision": "new-cause", "final": "DATA-001-02"}, "new-cause"),        # (d) 새 원인인데 final이 1위
+        ({"decision": "unresolved", "final": "DATA-001-02"}, "unresolved"),      # (e) unresolved인데 final이 원인
+    ]
+    for patch, word in cases:
+        plan = json.loads(json.dumps(base))
+        plan["feedback"].update(patch)
+        plan["feedback"]["suggested"] = []           # stage가 match.json에서 채우는 경로에서도 대조한다
+        ws.plan(job, plan, match=None)
+        proc = _stage_raw(ws, job, "issue/MOCK-7001")
+        assert proc.returncode == 2 and "feedback.decision" in proc.stderr and word in proc.stderr, (patch, proc.stderr)
+        assert ws.read_plan(job)["feedback"]["suggested"] == [], patch     # 거부면 계획을 채워 쓰지 않는다
+        assert not ws.wt(job).exists() and not (ws.job_dir(job) / "state.json").exists(), patch
+    # (f) accepted인데 후보가 없다(match.json 없음·suggested 비어 있음)
+    plan = json.loads(json.dumps(base))
+    plan["feedback"]["suggested"] = []
+    ws.plan(job, plan, match=None)
+    (ws.job_dir(job) / "match.json").unlink()
+    proc = _stage_raw(ws, job, "issue/MOCK-7001")
+    assert proc.returncode == 2 and "feedback.decision" in proc.stderr and "suggested" in proc.stderr, proc.stderr
+    # 맞는 조합은 그대로 통과한다: chose-other + 1위가 아닌 원인(suggested가 이미 채워진 경로)
+    plan = json.loads(json.dumps(base))
+    plan["feedback"].update({"decision": "chose-other", "final": "DATA-001-01"})
+    plan["operations"] = [{"op": "append", "cause": "DATA-001-01"}]
+    ws.plan(job, plan, match=None)
+    ws.put(job, "match.json", _match_json("MOCK-7001", MATCH_CANDS))
+    ok = ws.stage(job, "issue/MOCK-7001")
+    assert ok["feedback_check"] == {"status": "verified", "count": 1}
+    ws.db_pr("discard", ws.wt(job))
+
+
 def test_stage_skips_feedback_check_for_record_and_republished_plan():
     ws = Workspace()
     ws.plan("MOCK-7005", "p7-record-pending.plan.json")

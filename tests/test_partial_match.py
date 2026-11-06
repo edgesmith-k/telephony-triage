@@ -176,3 +176,22 @@ def test_fit_trims_partial_before_top_evidence():
               "files": {"report": "r"}, "warnings": []}
     out = fit(result)
     assert len(out.get("partial") or []) <= 1 and len(out["candidates"][0]["evidence"]) == 20
+
+
+def test_absence_basis_flags_unverifiable_when_collection_tag_has_no_lines():
+    """종합 리뷰 P1: DATA-001 증상의 `must_not_match: RILJ.*>\\s*SETUP_DATA_CALL`은 RILJ(수집 태그) 줄이 0줄인 로그에서 공허하게
+    참이다. 판정·점수는 그대로 두고 `absence_basis.unverifiable`로 알린다. RILJ 줄이 하나라도 있으면(내용 무관) 검증된 것이다.
+    메시지 리터럴 배제(DATA-002 `notifyDataEnabledChanged: …`)는 태그가 아니라 판정하지 않는다."""
+    hit = [_ev(10, "data_setting_changed", 5, enabled="false"), _ev(20, "data_evaluation_rejected", 7, reasons="DATA_DISABLED")]
+    out = _match(hit)
+    top = out["candidates"][0]
+    assert (top["cause"], top["C"], top["confidence"]) == ("DATA-001-01", 1, "high")
+    basis = out["absence_basis"]
+    assert basis["signature"] == "DATA-001/no-setup-data-call-request"      # 원인 시그니처엔 부정 조건이 없다 → 유형 것
+    assert [u["anchor"] for u in basis["unverifiable"]] == ["RILJ"]
+    assert basis["unverifiable"][0]["pattern"].startswith("RILJ")
+    with_rilj = hit + [_line(15, "RILJ", "[0001]> GET_SIGNAL_STRENGTH", 6)]
+    out2 = _match(with_rilj)
+    assert out2["candidates"][0]["cause"] == "DATA-001-01" and "unverifiable" not in out2["absence_basis"]
+    assert match_signatures._literal_anchor("notifyDataEnabledChanged: enabled=false") == "notifyDataEnabledChanged"
+    assert match_signatures._literal_anchor("(?i)foo") is None and match_signatures._literal_anchor(r"RILJ.*>\s*X") == "RILJ"

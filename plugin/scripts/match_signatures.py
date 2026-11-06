@@ -56,7 +56,7 @@ from pathlib import Path
 SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS))
 
-from common import builds, compat, dbpath, issuedb, site_defaults, stepanchor  # noqa: E402
+from common import builds, compat, dbpath, issuedb, parser_rules, site_defaults, stepanchor  # noqa: E402
 from common import compiled as compiled_cache  # noqa: E402
 from common.exitcodes import OK, USAGE  # noqa: E402
 from common.patterns import DEFAULT_TIMEOUT_MS  # noqa: E402
@@ -462,7 +462,7 @@ def match(events_doc: dict, db: issuedb.IssueDb, compiled: dict, *, regress: boo
     }
     if partial is not None:     # 분석 모드, 후보 없음·원인 미확인일 때만 (회귀·검증 모드 출력은 그대로)
         result["partial"] = partial
-    basis = None if regress or not candidates else _absence_basis(compiled, candidates[0])
+    basis = None if regress or not candidates else _absence_basis(compiled, candidates[0], types_out, evaluator, db)
     if basis:
         result["absence_basis"] = basis
     if focus_map:
@@ -530,15 +530,63 @@ def _partials(evaluator: Evaluator, db, compiled: dict, candidates: list, types_
     return out
 
 
-def _absence_basis(compiled: dict, top: dict) -> dict | None:
-    """1위 후보 시그니처에 `must_not_match`가 있으면 `{signature, pattern}` (report.md "없음 근거 포함" 줄, 판정 불변)."""
-    key = top.get("signature")
-    if not key:
+_REGEX_META = set(".^$*+?{}[]\\|()")
+
+
+def _literal_anchor(pattern: str) -> str | None:
+    """정규식 앞머리 리터럴의 첫 낱말(첫 메타 문자·공백·`:` 전) — 평가 글 `TAG: msg`의 태그 자리에 올 수 있는 글자. 3자 미만이면 None."""
+    lit = []
+    for ch in pattern:
+        if ch in _REGEX_META:
+            break
+        lit.append(ch)
+    word = re.split(r"[\s:]", "".join(lit).strip(), maxsplit=1)[0]
+    return word if len(word) >= 3 else None
+
+
+def _collection_rules(db):
+    """이슈 DB의 수집 태그 규칙(`parser-rules/tags.yaml`). 못 읽으면 None — 검증 불가 판정(표시 전용)을 하지 않는다."""
+    try:
+        return parser_rules.load(Path(db.root) / "parser-rules")
+    except Exception:  # noqa: BLE001
         return None
-    sig = next((s for s in compiled.get(key.split("/", 1)[0]) or [] if s.key == key), None)
-    if sig is None or not sig.negatives:
+
+
+def _absence_basis(compiled: dict, top: dict, types_out: list | None = None, evaluator: Evaluator | None = None,
+                   db=None) -> dict | None:
+    """1위 후보의 시그니처(원인, 그리고 같은 유형의 충족된 증상 시그니처)에 `must_not_match`가 있으면 `{signature, pattern}`
+    (report.md "없음 근거 포함" 줄, 판정 불변). 배제 패턴의 앞 낱말이 **수집 태그**(tags.yaml)인데 그 태그로 시작하는 줄이 이벤트에
+    하나도 없으면 `unverifiable: [{signature, pattern, anchor}]`를 더한다 — 그 버퍼·태그가 수집되지 않아 부정 조건이 공허하게
+    참일 수 있다(종합 리뷰 P1: main 버퍼만 받은 로그에서 `RILJ.*>\\s*SETUP_DATA_CALL` 없음이 '높음'으로 보였다). 메시지 리터럴
+    배제(`notifyDataEnabledChanged: …`)는 태그가 아니라 판정하지 않는다. S/C·점수·순위는 바꾸지 않는다."""
+    keys: list[str] = []
+    for key in [top.get("signature")] + [t.get("signature") for t in types_out or [] if t.get("type") == top.get("type")]:
+        if key and key not in keys:
+            keys.append(key)
+    sigs = []
+    for key in keys:
+        sig = next((s for s in compiled.get(key.split("/", 1)[0]) or [] if s.key == key), None)
+        if sig is not None and sig.negatives:
+            sigs.append(sig)
+    if not sigs:
         return None
-    return {"signature": key, "pattern": _clip(sig.negatives[0], 40)}
+    basis = {"signature": sigs[0].key, "pattern": _clip(sigs[0].negatives[0], 40)}
+    rules = _collection_rules(db) if evaluator is not None and db is not None else None
+    if rules is None:
+        return basis
+    tags = {str(e.get("tag") or "") for e in evaluator.events}
+    unverifiable = []
+    for sig in sigs:
+        for pattern in sig.negatives:
+            anchor = _literal_anchor(pattern)
+            if not anchor or any(t.startswith(anchor) for t in tags):
+                continue
+            if not any(rules.tag_category(x) for x in (anchor, anchor + "-0", anchor + "0")):   # 정확한 이름·접두 regex 태그
+                continue
+            unverifiable.append({"signature": sig.key, "pattern": _clip(pattern, 40), "anchor": anchor})
+    if unverifiable:
+        basis["unverifiable"] = unverifiable
+    return basis
 
 
 def _error_text(err: dict) -> str:

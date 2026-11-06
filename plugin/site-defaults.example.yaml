@@ -35,6 +35,11 @@ tracker:
   # 사내 setup이 mock-* 을 후보에서 빼는 규칙. 테스트 헬퍼 복사본은 비워 둔다.
   exclude_servers: []
 
+  # Jira 읽기 결과 격리(08-safety.md §9 9번, PostToolUse `updatedToolOutput` 대체)가 사내 Claude Code에서 동작함을 S1에서 확인한
+  # 뒤에만 true로 둔다. 참이 아니면 guard가 읽기 도구 호출마다 묻는다(원문이 모델 문맥에 남을 수 있다는 경고). 사내 초기값은 false.
+  # 테스트 헬퍼(모의 서버)는 true. TODO(SITE:S1)
+  isolation_confirmed: true
+
   # 논리 동작 → 실제 도구 전체 이름 (16-existing-assets.md §16.1)
   # 모의 서버는 일부러 비표준 이름을 쓴다. 매핑 경로를 반드시 거치게 하기 위해서다.
   tools:

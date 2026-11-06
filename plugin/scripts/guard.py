@@ -15,7 +15,7 @@ TODO(SITE:S3) 플러그인 hook에 보이는 MCP 도구 이름이 `mcp__<server>
 
 | # | 규칙 | 대상 |
 |---|---|---|
-| 2 | 트래커(Jira) 쓰기 차단: 트래커 서버(`tracker.mcp_server`와 `tracker.tools` 도구 이름의 서버 접두사, 이름 정규화) 도구 중 `tracker.read_tools`(전체 이름, 정규화 비교)에 없는 것은 거부. **예외 1종**: `tracker.write_tools.add_comment.tool`(승인 코멘트, `common/issuepost.write_spec` 조건)은 `read_tools`보다 먼저 판정해 `<work_dir>/<KEY>/post.approved.json`과 대조(인자 집합·이슈 키·도구·정규화 본문 sha256·30분 만료·1회용, 키 인자 모양은 트래커 어댑터)하고 맞으면 ask, 아니면·설정 오류·판정 예외면 거부. 설정되지 않은 서버라도 이름에 설치된 모든 트래커의 서버 단어(`trackers.all_server_words`, jira·atlassian, 레지스트리 실패 시 내장 jira·atlassian)가 들면 쓰기형 도구 거부. 옛 설정 키(`jira:` 등, `userconfig.legacy_problems`)가 남아 있거나 `tracker.kind`가 잘못됐으면(모르는 트래커) 모든 MCP 호출 거부 | `mcp__.*` |
+| 2 | 트래커(Jira) 쓰기 차단: 트래커 서버(`tracker.mcp_server`와 `tracker.tools` 도구 이름의 서버 접두사, 이름 정규화) 도구 중 `tracker.read_tools`(전체 이름, 정규화 비교)에 없는 것은 거부. **예외 1종**: `tracker.write_tools.add_comment.tool`(승인 코멘트, `common/issuepost.write_spec` 조건)은 `read_tools`보다 먼저 판정해 `<work_dir>/<KEY>/post.approved.json`과 대조(인자 집합·이슈 키·도구·정규화 본문 sha256·30분 만료·1회용, 키 인자 모양은 트래커 어댑터)하고 맞으면 ask, 아니면·설정 오류·판정 예외면 거부. 설정되지 않은 서버라도 이름에 설치된 모든 트래커의 서버 단어(`trackers.all_server_words`, jira·atlassian, 레지스트리 실패 시 내장 jira·atlassian)가 들면 쓰기형 도구 거부. 옛 설정 키(`jira:` 등, `userconfig.legacy_problems`)가 남아 있거나 `tracker.kind`가 잘못됐으면(모르는 트래커) 모든 MCP 호출 거부. **S1 확인 전**(site-defaults `tracker.isolation_confirmed`가 참이 아님)에는 read_tools 호출도 ask — 규칙 9의 원문 격리(`updatedToolOutput` 대체)가 미확인이라 원문이 모델 문맥에 남을 수 있음을 사람이 보고 허용한다(OpenCode 어댑터 `TT_OC_ADAPTER` 환경은 자체 관문·대체가 있어 묻지 않는다) | `mcp__.*` |
 | 2 | 같은 규칙: `<work_dir>/<KEY>/post.approved.json`·`post.result.json`을 파일 도구나 Bash 파일 쓰기(규칙 8과 같은 판별)로 쓰거나 지우면 거부(approve·jira_bridge만 쓴다) | Write/Edit/MultiEdit/NotebookEdit, Bash |
 | 3 | PII 검사: `git commit`이면 `mask_pii --check --staged` | Bash, 이슈 DB |
 | 4 | 생성 파일 정합성: `git commit`이면 `db_build --verify --staged`(`actions-build`면 생성 파일 staged 거부), `.cache/` staged 거부 | Bash, 이슈 DB |
@@ -23,8 +23,8 @@ TODO(SITE:S3) 플러그인 hook에 보이는 MCP 도구 이름이 `mcp__<server>
 | 6 | base 브랜치 push 차단: refspec의 대상 ref(없으면 현재 브랜치), `--all`/`--mirror`, push `--no-verify`. 관리 clone·skill-wt의 push는 규칙 12 (a)가 모두 거부 | Bash, 이슈 DB |
 | 7 | push 확인 강제: 이슈 DB `git push`와 `db_pr.py publish`는 `ask` (옵션 `--commit`·`--and-discard`와 무관: `publish` 토큰만 본다). publish는 명령 글의 낱말 그물(`word_net`: 이름 `db_pr`와 낱말 `publish`가 함께 든다, 글 명령만인 줄은 뺀다 — 아래 "명령 파싱")로 본다. 같은 그물로 `db_pr.py merge`(+1 병합 — 사용자가 병합을 요청한 뒤에만, 스크립트가 +1·승인 커밋·검사를 대조)와 `db_pr.py request-review`(리뷰어 요청 — push 뒤 리뷰어 질문에서 사용자가 고른 뒤에만, 매번)도 `ask`. 같은 그물(이름 `module_eval` + 낱말 `module`)로 `module_eval.py`(모듈 eval — 자식 `claude -p`를 띄워 비용이 든다, `--dry-run`·`--probe-restricted` 포함 모든 호출. dry-run 결과를 보이고 사용자가 실행을 승인한 뒤에만)도 `ask`. 병합 기록 `<work_dir>/<KEY>/merge-offer.json`을 파일 도구·Bash 파일 쓰기로 쓰거나 지우면 거부(db_pr만 쓴다) | Bash |
 | 8 | 사용자 clone 직접 편집 차단: 대상 파일이 `issue_db.path` 안이면 거부(`work_dir` 아래는 제외) | Write/Edit/MultiEdit/NotebookEdit |
-| 8 | 같은 규칙, Bash: clone 본체에서 브랜치·파일을 바꾸는 git·`gh pr checkout`, clone 안으로의 파일 쓰기(리디렉션·tee·cp·rm·`sed -i` 등, 플러그인 스크립트 출력 인자 `--out`·`--preview`·`--meta-out`·`mask_pii --in-place`·`jira_fields extract --consume` — `_script_out_targets`) 거부. migrate 브랜치 생성(깨끗한 트리)과 clone을 고치는 `db_build.py --write`(`--db` 값이 clone 안이거나 `--db` 없이 cwd가 clone 본체)는 ask | Bash, clone 본체 |
-| 10 | 로그 원문 통독 차단: cat·tac·nl·less·more·bat·strings·zcat·zless·bzcat·xzcat, `head/tail -c`, `unzip -p/-c`가 로그 원문·zip·bugreport·`events*.json`·`issue_raw.json`·`match.json`을 통째로 읽으면 거부(`fixtures/`·`draft/` 제외, 사용자 config와 무관) | Bash |
+| 8 | 같은 규칙, Bash: clone 본체에서 브랜치·파일을 바꾸는 git·`gh pr checkout`, clone 안으로의 파일 쓰기(리디렉션·tee·cp·rm·`sed -i` 등, 플러그인 스크립트 출력 인자 `--out`·`--preview`·`--meta-out`·`mask_pii --in-place`·`jira_fields extract --consume` — `_script_out_targets`) 거부. migrate 브랜치 생성(깨끗한 트리)과 clone을 고치는 `db_build.py --write`(`--db` 값이 clone 안이거나 `--db` 없이 cwd가 clone 본체)는 ask. 인터프리터 인라인 코드(`python3 -c`·`perl -e`·`python3 - <<EOF` 본문)에 clone 안 경로 낱말이 있거나 `ln`의 원본이 clone 안이면 ask(셸 파서는 코드 안 쓰기를 보지 못한다 — `check_inline_code`. `/` 없는 상대 이름은 보지 않는다) | Bash, clone 본체 |
+| 10 | 로그 원문 통독 차단: cat·tac·nl·less·more·bat·strings·zcat·zless·bzcat·xzcat, `head/tail -c`, `unzip -p/-c`가 로그 원문·zip·bugreport·`events*.json`·`issue_raw.json`·`match.json`을 통째로 읽으면 거부(`fixtures/`·`draft/` 제외, 사용자 config와 무관). 인터프리터 인라인 코드가 그 파일 경로를 담으면 ask(`check_inline_code`) | Bash |
 | 11 | 이슈 DB 원격 쓰기 확인: 대상이 이슈 DB인 `gh` 쓰기는 ask·`pr merge`·REST 병합은 거부(병합은 `db_pr.py merge`로만, 규칙 7), 비Jira MCP 쓰기형 도구도 같게(대상 후보 합집합 — slug 키·같은 층 owner×repo 키, 정규화·깊이 3, owner/repo만 비교, `check_mcp_db_write`. 판별 불가면 병합·Approve·기각 부류는 ask, 레포 단서 키가 있는 쓰기형은 ask). `pr`은 읽기 목록(list·view·status·checks·diff)만 읽기, 동작 별칭(`new`·`ls`·`co`)·`gh co`는 풀어 본다(H-A1 r5). 대상: `repo <동작> [<레포>]`·`issue transfer`의 위치 인자 레포, api 엔드포인트·PR/이슈 URL 선택자(`pr`·`issue` 동작 뒤 첫 위치 인자 — 옵션 값 자리의 URL은 이슈 DB일 때만 세고 cwd 판정을 막지 않는다)·`-R` 모든 꼴(`-R v`·`-Rv`·`-R=v`·`--repo[=]v`·묶음 `-dR v` — 옵션 값 자리(`-b -Rother/x`)와 `gh api`의 꼴은 이슈 DB일 때만 세고 cwd 판정을 막지 않는다)·`GH_REPO`(명시 대상은 합집합 — 하나라도 이슈 DB면 대상), 없으면 cwd. 모르는 것은 닫힌 쪽(H-A1 r4): 그룹·동작 앞 옵션(`gh -b x pr merge`·`gh -X PUT api …`)은 cobra처럼 값을 먹는 읽기·안 먹는 읽기를 다 보고 가장 센 결정(어느 읽기도 쓰기가 아니어도 대상이 이슈 DB면 ask), 병합·Approve·기각은 다른 레포 명시 대상이 cwd 판정을 끄지 않는다, 대상은 owner/repo로만 비교(host 무관·퍼센트 디코딩 — URL 선택자·엔드포인트 종류도 푼 뒤에 가린다)하고 셸이 풀 값(`$`·백틱)·명령 글의 `GH_REPO` 대입은 이슈 DB일 수 있다로 본다, 엔드포인트 한 칸만 자리표시면 남은 칸으로 비교, 값 받는 옵션 표에 없는 동작은 `=` 없는 옵션 바로 뒤 `-R…`을 그 값으로 본다. cwd는 원격 하나라도·`gh-resolved`·앞 대입 `GIT_DIR`로 보고, 모르는 cwd(셸이 풀 경로·없는 경로·`cd -`·`popd`)는 이슈 DB로 본다(r5). 셸이 정하는 그룹·`pr` 동작·`api` 엔드포인트 쓰기(끝 칸이 셸 값이거나 병합·리뷰 꼴)는 거부, `pr review`의 셸 값 옵션·리뷰 엔드포인트의 셸 값 `event`는 Approve(r5). Claude Approve(`gh pr review --approve`·`-a`·`-a=<참>`, REST `…/reviews`·`…/events`의 event=APPROVE — `@파일`·`--input`도 본다, `gh api` 옵션은 pflag 꼴로 읽는다(묶음 `-iX PUT`·`-if k=v`), MCP 단어 속 approve·입력 `event` APPROVE)·리뷰 기각(REST `…/dismissals`, MCP dismiss)·MCP 자동 병합 켜기(`enable_pr_auto_merge`·`automerge_pr` — MCP 거부 낱말은 쓰기형 판정보다 먼저 본다, r5)는 거부. GraphQL(엔드포인트 `graphql`·`/graphql`, 경로가 `/graphql`로 끝나는 URL, 셸이 푸는 엔드포인트 `"$GHE_API/graphql"`·`"$EP"`도 — r6) 병합·자동 병합·Approve·기각 mutation(`mergePullRequest`·`enablePullRequestAutoMerge`·`enqueuePullRequest`·`mergeBranch`·리뷰 APPROVE·`dismissPullRequestReview` — 본문은 인라인·`@파일`·`--input`·stdin heredoc, 64KB까지, 이름은 Bash 명령 글 전체에서도 찾는다 — 셸이 만든 본문 `query="$(cat <<EOF …)"`·`"$Q"`, r5. 읽지 못한 본문은 대상과 무관하게 ask)과 병합·리뷰 별칭을 만드는 `gh alias set`·`gh alias import`는 대상과 무관하게 거부. 이미 만든 gh 별칭의 실행은 보지 못한다. 대상: issue_db.remote와 module_skills.remote(owner/repo로 풀 때만, 사유 문구는 이슈 DB와 같다) | Bash, `mcp__.*` |
 | 12 | 모듈 스킬 관리 clone·기록 보호, 분석 스킬 소스 확인: (a) 관리 clone `<work_dir>/_module-skills/**`·lock `<work_dir>/_module-skills.lock`(경로 조각 `_module-skills`이거나 `_module-skills.`로 시작하면 설정과 무관하게 — `.lock`·`.tmp-*` 포함)과 `<work_dir>/<KEY>/skill-wt/**`(모든 프로필 work_dir — 이름이 잘못된 프로필 포함 — 과 켠 플랫폼의 기본 work_dir)를 파일 도구·Bash 파일 쓰기(규칙 8과 같은 판별 + `mv`·`ln`·`rsync --remove-source-files`의 원본)로 바꾸면 거부. 어디서 돌든 git 경로 옵션(`--output`·`-o`·`--output-directory`·config `--file`·`--git-dir`·`--work-tree`·`--separate-git-dir`)이 그 안이나 (b) 기록을 가리키면 거부. git 작업 디렉토리·`--git-dir`·`GIT_DIR`·`--work-tree` 중 하나라도 그 안이면 읽기 목록(`MODULE_GIT_READ`, `branch`·`remote`·`config`·`sparse-checkout`·`worktree`·`stash`는 읽기 꼴만)만 통과하고(`--output*`·`-O`·`--open-files-in-pager`·`--ext-diff`·`--textconv`는 읽기라도 거부) `-c` 덮어쓰기와 나머지(commit·push·stash·reset·checkout·sparse-checkout set·worktree add·fetch·remote set-url·config 쓰기 등)는 거부, 대상이 그 안인 `git clone`·`init`도 거부(이슈 DB 설정과 무관, 받기·갱신은 `triage.py module`만). (b) 스크립트 기록 `<work_dir>/<KEY>/module-skill.json`·`module-skill/**`·`deep-input.json`·`skill-input.json`·`check-output.json`(triage.py만 — `deep-output.md`·`explore-output.md`는 Claude가 쓴다)과 `skill-suggestions/<이름>.patch`·`.meta.json`(skill_patch.py만)을 파일 도구·Bash 파일 쓰기로 쓰거나 지우면 거부(사본 `skill-suggestions/<이름>/**`는 허용). 상대 경로는 hook 입력 `cwd` 기준. `skill_patch.py --apply`(낱말 그물: 이름 `skill_patch`와 낱말 `apply`)는 `ask`. config `analyzers.<카테고리>.source`(절대 경로, site-defaults·사용자 config의 최상위와 모든 `platforms.<p>.analyzers` 것) 안을 파일 도구·Bash 파일 쓰기(규칙 8과 같은 판별)·파일을 바꾸는 git(`CLONE_GIT_SUBS`·commit·push·stash)으로 바꾸면 `ask`(적용은 `skill_patch.py --apply`로만) | Bash, Write/Edit/MultiEdit/NotebookEdit |
 
@@ -459,6 +459,12 @@ def _same_repo(a: tuple | None, b: tuple | None) -> bool:
 
 # -- Jira (2) --------------------------------------------------------------------------------
 
+OC_ADAPTER_ENV = "TT_OC_ADAPTER"      # OpenCode 어댑터(`common/oc_adapter.run_script`)가 guard를 부를 때 넣는다
+JIRA_ISOLATION_ASK = ("Jira 읽기 결과 격리(규칙 9: PostToolUse `updatedToolOutput` 대체)가 이 Claude Code에서 동작하는지 아직 "
+                      "확인되지 않았다(사내 확인 S1). 확인 전에는 {tool} 결과 원문이 모델 문맥·transcript에 남을 수 있다 — 그 위험을 "
+                      "알고 읽을 때만 허용한다. S1에서 확인되면 site-defaults.yaml `tracker.isolation_confirmed: true`로 기록한다 "
+                      "(그 뒤에는 묻지 않는다, 규칙 2).")
+
 
 def check_mcp(tool: str, tool_input: dict, conf: Config, dec: Decision) -> None:
     if conf.legacy:
@@ -486,6 +492,11 @@ def check_mcp(tool: str, tool_input: dict, conf: Config, dec: Decision) -> None:
         if name not in {mcptools.normalize(t) for t in read_tools}:
             dec.deny.append(f"이 플러그인은 Jira 읽기 전용이다(예외: 승인한 코멘트 추가 1종, tracker.write_tools.add_comment). "
                             f"{tool}은(는) tracker.read_tools에 없어 거부한다 (규칙 2).")
+        elif not userconfig.get(conf.cfg, "tracker.isolation_confirmed") and not os.environ.get(OC_ADAPTER_ENV):
+            # 규칙 9(원문 격리)는 PostToolUse `updatedToolOutput` 대체에 기대고 미지원이면 열린다(원문이 모델 문맥에 남는다).
+            # 사내 S1 확인 전에는 읽기마다 사람이 그 위험을 보고 허용한다. OpenCode 어댑터는 `after`가 결과를 직접 바꾸고 자체
+            # 관문(`oc_jira_gate`)이 있어 묻지 않는다
+            dec.ask.append(JIRA_ISOLATION_ASK.format(tool=tool))
         return
     if not prefixes:
         dec.warn.append("tracker.mcp_server가 비어 있어 Jira 읽기 전용 규칙을 적용하지 않았다 (setup 전).")
@@ -4316,14 +4327,88 @@ def _write_targets(inv: Invocation) -> list[str]:
     return out + _script_out_targets([argv[0]] + rest if argv and not REDIRECT_RE.match(argv[0]) else [])
 
 
+# 규칙 8·10 보강(종합 리뷰 P2 — 재현된 우회): 셸 파서는 인터프리터 인라인 코드(`python3 -c …`·`perl -e …`·`python3 - <<EOF` 본문)
+# 안의 open()·쓰기를 보지 못해 clone 쓰기(규칙 8)와 원문 통독(규칙 10)이 통과했다. 코드 의미는 모르므로 거부하지 않고, 코드 글에 든
+# 경로 낱말이 사용자 clone 안이거나 로그 원문·분석 파일이면 ask로 사람이 본다. 상대 경로 낱말(`/` 없는 이름)은 보지 않는다(한계).
+INLINE_CODE_OPTS = {"python": {"-c"}, "perl": {"-e", "-E"}, "ruby": {"-e"}, "node": {"-e", "-p"}, "php": {"-r"}, "lua": {"-e"}}
+_INTERP_RE = re.compile(r"^(?:(python)(?:[23](?:\.\d+)?)?|pypy3?|(perl)5?[\d.]*|(ruby)[\d.]*|(node)(?:js)?\d*|(php)\d*|(lua)[\d.]*)$")
+PATH_WORD_RE = re.compile(r"(?:~[A-Za-z0-9_-]*|\.{1,2})?(?:/[A-Za-z0-9_.@%+-]+)+")
+
+
+def _interp_family(word: str) -> str | None:
+    m = _INTERP_RE.match(_base(word))
+    if not m:
+        return None
+    if m.group(0).startswith("pypy"):
+        return "python"
+    return next(g for g in m.groups() if g)
+
+
+def _inline_code_texts(command: str, cwd: Path, invs) -> list[tuple[str, Path]]:
+    """명령 글의 인터프리터 인라인 코드 `(코드, 그 호출의 cwd)`: 코드 옵션의 다음 토큰(`-c CODE`)·붙여 쓴 꼴(`-c'CODE'`는 토큰이
+    `-cCODE`)·인터프리터가 든 줄이 연 heredoc 본문(`python3 - <<EOF`, 끝 표시를 찾은 것만). `invs`는 check_bash가 이미 걸은
+    호출 목록이다(다시 걷지 않는다 — 걷기 비용은 큰 명령에서 지배적이다)."""
+    out: list[tuple[str, Path]] = []
+    for inv in invs:
+        fam = _interp_family(inv.argv[0]) if inv.argv else None
+        if fam is None:
+            continue
+        opts = INLINE_CODE_OPTS[fam]
+        argv = inv.argv
+        for i in range(1, len(argv)):
+            tok = argv[i]
+            if tok in opts and i + 1 < len(argv):
+                out.append((argv[i + 1], inv.cwd))
+            elif len(tok) > 2 and tok[:2] in opts and not tok.startswith("--"):
+                out.append((tok[2:], inv.cwd))
+    for unit, body in _heredocs(command):
+        try:
+            words = _tokens(unit)
+        except Exception:  # noqa: BLE001 — 토큰화 실패면 낱말로 본다(닫힌 쪽)
+            words = unit.split()
+        if any(_interp_family(w) for w in words):
+            out.append((body, cwd))
+    return out
+
+
+def check_inline_code(command: str, cwd: Path, dec: Decision, conf: Config, invs) -> None:
+    """인라인 코드의 경로 낱말이 사용자 clone 안이면 ask(규칙 8), 로그 원문·zip·`events*.json`·`issue_raw.json`·`match.json`이면
+    ask(규칙 10). 코드 하나에 한 번만 묻는다."""
+    for code, at in _inline_code_texts(command, cwd, invs):
+        for word in dict.fromkeys(m.group(0) for m in PATH_WORD_RE.finditer(code)):
+            p = _expand(word)
+            path = Path(p) if Path(p).is_absolute() else at / p
+            if conf.clones and _in_clone(_norm(path), conf):
+                dec.ask.append(f"인터프리터 인라인 코드에 사용자 clone 안 경로가 있다({word}). 코드가 그 파일을 쓰면 규칙 8 위반이다 — "
+                               "읽기만인지 확인한 뒤 허용한다 (규칙 8, 셸 파서는 코드 안 쓰기를 보지 못한다).")
+                break
+            try:
+                raw = _is_raw_file(path, conf.raw_names, conf.raw_exempt, conf.raw_sniffers)
+            except (OSError, ValueError):
+                raw = False
+            if raw:
+                dec.ask.append(f"인터프리터 인라인 코드가 로그 원문·분석 파일을 연다({word}). 통째로 읽어 출력하면 규칙 10 위반이다 — "
+                               "필요한 구간만 다루는지 확인한 뒤 허용한다 (규칙 10).")
+                break
+
+
 def check_clone_writes(inv: Invocation, conf: Config, dec: Decision) -> None:
-    """Bash 명령의 파일 쓰기 대상이 어느 프로필이든 사용자 clone 안이면 거부 (어느 `<work_dir>` 아래든 제외)."""
+    """Bash 명령의 파일 쓰기 대상이 어느 프로필이든 사용자 clone 안이면 거부 (어느 `<work_dir>` 아래든 제외). `ln`의 **원본**이
+    clone 안이면 ask — 링크를 거친 쓰기는 `_norm`(realpath)이 잡지만 같은 명령 안에서 만들고 바로 쓰는 꼴은 판정 때 링크가 없다."""
     for word in _write_targets(inv):
         p = _expand(word)
         target = _norm(Path(p) if Path(p).is_absolute() else inv.cwd / p)
         if _in_clone(target, conf):
             dec.deny.append(f"{CLONE_MUTATION_MSG}: {word}")
             return
+    if inv.argv and _base(inv.argv[0]) == "ln":
+        pos = [a for a in inv.argv[1:] if not a.startswith("-") or a == "-"]
+        for word in pos[:-1]:
+            p = _expand(word)
+            if _in_clone(_norm(Path(p) if Path(p).is_absolute() else inv.cwd / p), conf):
+                dec.ask.append(f"사용자 clone 안을 가리키는 링크를 만든다({word}). 링크를 거친 쓰기는 clone을 바꾼다 — 읽기 용도인지 "
+                               "확인한 뒤 허용한다 (규칙 8).")
+                return
     word = _db_build_write_target(inv, conf)
     if word is not None:
         dec.ask.append(f"db_build.py --write가 사용자 clone({word})의 생성 파일을 고쳐 쓴다. 메인테이너 migrate 흐름인지 확인한 "
@@ -4666,6 +4751,7 @@ def check_bash(command: str, cwd: Path, conf: Config, dec: Decision) -> None:
     if conf.user is not None and word_net(command, "module_eval", "module"):  # 규칙 7: 모듈 eval(유료 자식 실행)
         dec.ask.append(MODULE_EVAL_ASK)
     invs, _ = _walk_or_flat(command, cwd, dec, _keep_roots(conf))
+    _checked(dec, "규칙 8·10", check_inline_code, command, cwd, dec, conf, invs)   # 인터프리터 인라인 코드의 clone·원문 경로 → ask
     for inv in invs:
         name = _base(inv.argv[0])
         if conf.work_dirs:

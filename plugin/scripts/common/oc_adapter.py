@@ -755,6 +755,7 @@ def run_script(script: str, event: dict, timeout: float, env: dict | None = None
         return "시간 예산을 다 썼다"
     run_env = dict(os.environ if env is None else env)
     run_env["CLAUDE_PLUGIN_ROOT"] = str(PLUGIN_ROOT)
+    run_env["TT_OC_ADAPTER"] = "1"      # guard 규칙 2의 S1 미확인 ask를 건너뛴다: 여기서는 after가 결과를 직접 바꾸고 관문이 따로 있다
     cwd = event.get("cwd") if os.path.isdir(str(event.get("cwd") or "")) else None
     try:
         return subprocess.run([sys.executable, str(SCRIPTS / script)], input=json.dumps(event, ensure_ascii=False),
