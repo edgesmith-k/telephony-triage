@@ -724,7 +724,12 @@ def drift_checks(repo: str, clone: Path) -> list[dict]:
         other = len(newer) - len(after)
         if not after and not other:
             continue
-        last = next(h for h in sorted(ordered, key=lambda h: h["key"]) if not any(_newer(o, h, rules, builds) for o in ordered))
+        last = next((h for h in sorted(ordered, key=lambda h: h["key"])
+                     if not any(_newer(o, h, rules, builds) for o in ordered)), None)
+        if last is None:   # 같은 브랜치 sw 순서와 platform 순서가 어긋난 기록 — 마지막 빌드를 정할 수 없다
+            out.append({"row": _row(tag, "skip", f"{k}: 빌드 순서 모순 (hits {len(hs)}) — 기록의 sw·platform_version 확인",
+                                    None), "sig": None})
+            continue
         where = last["sw"] if builds.compare(last["sw"], last["sw"], rules) is not None else f"platform {last['pv']}"
         ex = ", ".join(sorted(r["key"] for r in after)[:DRIFT_KEYS])
         ev = (f"{k}: 이전 hits {len(hs)} (마지막 {where}) → 새 빌드 기록 {len(after)}건 0회" + (f" (예: {ex})" if ex else "")
