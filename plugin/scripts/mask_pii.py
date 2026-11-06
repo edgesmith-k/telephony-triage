@@ -127,7 +127,7 @@ def run_replace(args, db: Path | None) -> tuple[dict, str | None]:
             raise UsageError(f"파일이 없습니다: {path}")
         text = path.read_text(encoding="utf-8", errors="replace")
         masker = masking.new_masker(text, allow, log_lines=True)
-        masked = "\n".join(masker(line) for line in text.split("\n"))
+        masked = "\n".join(masking.mask_lines(masker, text.split("\n")))   # 갈린 덤프 조각도(08-safety §8)
         if args.in_place:
             path.write_text(masked, encoding="utf-8", newline="\n")
         elif args.out:
@@ -158,10 +158,12 @@ def run_events(args, db: Path | None) -> dict:
     masker = masking.new_masker(json.dumps(doc, ensure_ascii=False), _allow(db), log_lines=True)
     if isinstance(doc, dict) and isinstance(doc.get("events"), list):
         events = []
-        for event in doc["events"]:
+        # tag·pid·ts가 있는 덤프 조각은 이어서 본다(갈린 IMSI·ICCID, 08-safety §8). 없으면 줄마다와 같다
+        forced = masking.forced_records(masker, doc["events"])
+        for i, event in enumerate(doc["events"]):
             event = dict(event)
             if isinstance(event.get("msg"), str):
-                event["msg"] = masker(event["msg"])
+                event["msg"] = masker.mask(event["msg"], forced.get(i))
             event["fields"] = {
                 k: masker.mask_value(v) if isinstance(v, str) else v
                 for k, v in (event.get("fields") or {}).items()

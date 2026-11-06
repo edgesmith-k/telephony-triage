@@ -28,7 +28,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "plugin" / "scripts"))
 
-from common import masking
+from common import dumpjoin, masking
 
 TEXT_SUFFIXES = (".log", ".txt", ".json")          # 디렉토리를 줄 때 보는 파일(로그·이벤트), 그리고 case `files/*.md`
 HOST_HEAD = re.compile(r"^(?:" + "|".join(masking._M11_STAMPS) + r") (?P<v>\S+) ")
@@ -56,7 +56,7 @@ SHAPE_RX = (
 )
 # oFono `dump_dmsg_w_re()` 덤프는 한 메시지가 여러 줄에 잘린다(같은 ident·pid, 시각은 ms가 바뀌고 사이에 다른 줄이 낀다). 줄 단위 규칙은 키와 값이
 # 갈린 조각을 놓치므로 이어진 조각을 이은 글에서 다시 본다(§1.2 ③).
-DUMP_MARK = "dump_dmsg_w_re() "
+DUMP_MARK = dumpjoin.DUMP_MARK
 _IDENT = re.compile(r"[A-Za-z]*[a-z][A-Z]\w*|[a-z]+")    # CamelCase 식별자·소문자 낱말(키 이름이지 값이 아니다)
 
 
@@ -70,68 +70,14 @@ def _value_ok(kind: str, value: str) -> bool:
 SPAN_KINDS = {"PRODUCT": "product", "BUILD": "build", "HASH": "build", "B64": "base64"}
 
 
-_DUMP_IDENT = re.compile(r"\S+\[\d+\]:")                 # ident[pid]: (앞머리에서 시각 뒤)
-_DUMP_TIME = re.compile(r"(\d{2}):(\d{2}):(\d{2}(?:\.\d+)?)")
-DUMP_GAP = 1.0                                         # 같은 메시지 조각으로 볼 시각 차(초) 상한(미만)
-
-
 def dump_groups(lines: list[str]) -> list[list[tuple[int, int]]]:
-    """이어진 `dump_dmsg_w_re()` 조각 묶음 `[[(줄 순번, 조각 시작 열), ...], ...]`(두 줄 이상).
-    시각을 뺀 앞머리(ident[pid] 이후)가 같고 앞 조각과 시각 차가 `DUMP_GAP` 미만이면 잇는다. 사이의 덤프 아닌 줄·다른
-    앞머리 줄은 건너뛰고(실제 로그는 조각 사이에 다른 줄이 끼고 ms가 바뀐다), 순번은 원래 줄 순번이다. 시각을 못 읽으면
-    앞머리 전체가 같은 다음 덤프 줄을 잇는다."""
-    groups, open_ = [], {}                             # 앞머리 키 -> (묶음, 마지막 시각)
-    for i, line in enumerate(lines):
-        at = line.find(DUMP_MARK)
-        if at < 0:
-            continue
-        col = at + len(DUMP_MARK)
-        head = line[:at]
-        m, t = _DUMP_IDENT.search(head), _DUMP_TIME.search(head)
-        if m and t:
-            key, sec = head[m.start():], int(t[1]) * 3600 + int(t[2]) * 60 + float(t[3])
-        else:
-            key, sec = ("", head), None
-            for k in [k for k in open_ if isinstance(k, tuple)]:
-                if k != key:
-                    groups.append(open_.pop(k)[0])
-        prev = open_.get(key)
-        if prev and (sec is None or 0 <= sec - prev[1] < DUMP_GAP):
-            prev[0].append((i, col))
-            open_[key] = (prev[0], sec)
-            continue
-        if prev:
-            groups.append(prev[0])
-        open_[key] = ([(i, col)], sec)
-    groups += [g for g, _s in open_.values()]
-    return sorted((g for g in groups if len(g) > 1), key=lambda g: g[0][0])
+    """이어진 `dump_dmsg_w_re()` 조각 묶음 `[[(줄 순번, 조각 시작 열), ...], ...]`(두 줄 이상). 규칙은 `common.dumpjoin`."""
+    return dumpjoin.groups_from_lines(lines)
 
 
 def cross_hits(lines: list[str], rules) -> list[tuple[str, str, list[tuple[int, int, int]]]]:
-    """조각을 이은 글에서 `rules`(`[(종류, 정규식)]`)가 맞고 그 맞은 글이 **두 줄 이상에 걸친** 것만(키·값이 갈림, 값이 갈림)
-    `[(종류, 값, [(줄 순번, 시작 열, 끝 열), ...])]`. 값은 이름 그룹 `v`(없으면 맞은 글 전체), 조각은 값이 든 줄만이다.
-    한 줄 안에서 끝나는 맞음은 줄 단위 규칙이 이미 본다."""
-    out = []
-    for group in dump_groups(lines):
-        text, starts = "", []
-        for i, col in group:
-            starts.append((len(text), i, col))
-            text += lines[i][col:]
-        bounds = [off for off, _i, _c in starts[1:]]
-        for kind, rx in rules:
-            for m in rx.finditer(text):
-                if not any(m.start() < x < m.end() for x in bounds):
-                    continue
-                a, b = m.span("v") if "v" in rx.groupindex else m.span()
-                pieces = []
-                for k, (off, i, col) in enumerate(starts):
-                    end = starts[k + 1][0] if k + 1 < len(starts) else len(text)
-                    lo, hi = max(a, off), min(b, end)
-                    if lo < hi:
-                        pieces.append((i, col + lo - off, col + hi - off))
-                if pieces:
-                    out.append((kind, text[a:b], pieces))
-    return out
+    """조각을 이은 글에서 `rules`가 맞고 두 줄 이상에 걸친 것만 `[(종류, 값, [(줄 순번, 시작 열, 끝 열), ...])]`."""
+    return dumpjoin.cross_hits(lines, rules)
 
 
 def _files(args: list[str]) -> list[Path]:

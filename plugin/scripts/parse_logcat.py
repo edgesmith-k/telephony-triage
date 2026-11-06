@@ -137,7 +137,8 @@ def _run_extractors(lines: list[dict], rules: parser_rules.Rules, timeout_ms: in
     return derived
 
 
-def _mask_record(rec: dict, masker) -> dict:
+def _mask_record(rec: dict, masker, forced=None) -> dict:
+    """`forced`: 이 레코드 `msg`의 갈린 덤프 조각 구간(`masking.forced_records`, 08-safety §8)."""
     rec = dict(rec)
     ann = rec.get("ril")
     spans = getattr(masker, "_spans", None)
@@ -145,7 +146,7 @@ def _mask_record(rec: dict, masker) -> dict:
     line_values = ([v for *_, v in spans(rec["msg"])]
                    if spans and isinstance(ann, dict) and "proto" in ann and isinstance(rec.get("msg"), str) else [])
     if isinstance(rec.get("msg"), str):
-        rec["msg"] = masker(rec["msg"])
+        rec["msg"] = masker.mask(rec["msg"], forced) if forced else masker(rec["msg"])
     # 필드 값은 같은 마스커의 번호 대응을 쓴다: 줄에서 본 원래 값이면 같은 토큰이 된다
     # (문맥 없는 값도 마스킹된다, 08-safety.md §8).
     mask_value = getattr(masker, "mask_value", masker)
@@ -216,7 +217,9 @@ def postprocess(
     """
     errors = [] if errors is None else errors
     kept: list[dict] = []
-    for rec in events:
+    # 갈린 덤프 조각(IMSI·ICCID)은 전체 레코드에서 한 번 묶어 줄 순번으로 적용한다(08-safety §8)
+    forced = masking.forced_records(masker, events) if isinstance(masker, masking.Masker) else {}
+    for n, rec in enumerate(events):
         if rec.get("event") is None:
             category = rules.tag_category(rec["tag"])
             if category is None:
@@ -229,11 +232,11 @@ def postprocess(
                 category = rules.ril_category(ann["request"]) or category
             rec = dict(rec, category_hint=category)
             rec.setdefault("line_ref", None)
-            kept.append(_mask_record(rec, masker) if masker else rec)
+            kept.append(_mask_record(rec, masker, forced.get(n)) if masker else rec)
         else:
             rec = dict(rec)
             rec.setdefault("line_ref", None)
-            kept.append(_mask_record(rec, masker) if masker else rec)
+            kept.append(_mask_record(rec, masker, forced.get(n)) if masker else rec)
 
     line_pos = [i for i, rec in enumerate(kept) if rec.get("event") is None]
     extracted = _run_extractors([kept[i] for i in line_pos], rules, timeout_ms, errors)
@@ -832,8 +835,10 @@ def run_markers(args, defaults: dict, profile: platforms.PlatformProfile | None 
                 remaining = [i for i in remaining if i not in done]
         if hits:
             masker = masking.new_masker(_read_texts(paths), _allow_patterns(db_cfg), log_lines=True)
+            forced = masking.forced_records(masker, records)      # 갈린 덤프 조각(08-safety §8), 전체에서 한 번
             for i in sorted(hits):
-                masked = masker(texts[i])
+                off = len(texts[i]) - len(str(records[i]["msg"]))
+                masked = masker.mask(texts[i], [(a + off, b + off, *rest) for a, b, *rest in forced.get(i, ())])
                 m = hits[i].search(masked)       # 이름 그룹은 마스킹된 텍스트에서만 뽑는다
                 if not m:
                     continue
@@ -1029,7 +1034,13 @@ def run_cut(args, profile: platforms.PlatformProfile | None = None) -> dict:
         allow = _allow_patterns(compat.load_db_config(Path(args.rules).parent))
     texts = [lines[j][2] for j in chosen]
     masker = masking.new_masker("\n".join(texts), allow, log_lines=True)
-    masked = [masker(text) for text in texts]
+    # 갈린 덤프 조각은 파일마다 전체 줄로 묶은 뒤 고른 줄에 적용한다(조각 1이 범위 밖이어도 조각 2를 가린다, 08-safety §8)
+    forced: dict[int, list] = {}
+    for file_index in sorted({entry[0] for entry in lines}):
+        idx = sorted((j for j, entry in enumerate(lines) if entry[0] == file_index), key=lambda j: lines[j][1].line_no)
+        for k, spans in masking.forced_lines(masker, [lines[j][2] for j in idx]).items():
+            forced[idx[k]] = spans
+    masked = [masker.mask(lines[j][2], forced.get(j)) for j in chosen]
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text("\n".join(masked) + "\n", encoding="utf-8", newline="\n")

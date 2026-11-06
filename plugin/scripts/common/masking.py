@@ -27,6 +27,11 @@
   M11 호스트는 `host<n>`(journal 형식 정규식의 호스트 칸에 그대로 맞아 마스킹한 줄도 해석된다).
 - **남은 식별자(`residual`)·가리기(`redact`)**: 로그 마스커의 `find()` 그대로(다른 탐지기 없음), 줄 단위.
   그래서 `residual(mask(x)) == {}`가 구조상 성립한다.
+- **갈린 덤프 조각(`SPLIT_KINDS`)**: oFono `dump_dmsg_w_re()`가 IMSI·ICCID 값을 두 줄에 가르면(`common.dumpjoin`으로 묶음)
+  키 있는 IMSI·ICCID 규칙만 이은 글에 돌려 조각 경계를 넘는 맞음을 줄별 강제 구간(`forced`)으로 되돌린다. 토큰은 전체
+  값으로 한 번 만들고(개수 1회) 조각마다 같은 토큰을 쓰며, 조각 글자도 번호 표에 그 토큰으로 넣는다(`mask_value`).
+  `mask_lines`·`mask_records`가 이 경로이고 `residual`·`redact`도 같은 맞음을 센다/가린다. 키 없는 규칙(15자리·`89…`·
+  뒤집힌 ICCID)은 이은 글에 쓰지 않는다(조각 경계를 넘는 숫자열 오탐 방지).
 
 탐지 규칙의 키 이름·형식은 일반적인 Android 로그 기준이고, 사내 로그에서 오탐·누락을
 확인한다 — TODO(SITE:S13).
@@ -37,6 +42,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from typing import Callable, Iterable
+
+from . import dumpjoin
 
 Masker = Callable[[str], str]
 
@@ -456,16 +463,30 @@ class Masker:
     def __call__(self, text: str) -> str:
         return self.mask(text)
 
-    def mask(self, text: str) -> str:
+    def mask(self, text: str, forced=None) -> str:
+        """`forced`: 갈린 덤프 조각 구간 `[(start, end, kind, 전체 값, 첫 조각?)]`(`forced_lines`·`forced_records`).
+        먼저 놓고, 겹치는 일반 규칙 구간은 보지 않는다."""
         if not text:
             return text
-        spans = self._spans_fmt(text)
+        fixed = [f for f in (forced or ()) if 0 <= f[0] < f[1] <= len(text)]
+        spans = [(*sp, None) for sp in self._spans_fmt(text, [(f[0], f[1]) for f in fixed])]
+        spans += [(a, b, kind, value, None, first) for a, b, kind, value, first in fixed]
         out, pos = [], 0
-        for start, end, kind, value, fmt in spans:  # 텍스트에 나온 순서대로 번호를 준다
-            out += [text[pos:start], self.token(kind, value, fmt)]
+        for start, end, kind, value, fmt, first in sorted(spans, key=lambda sp: sp[0]):  # 나온 순서대로 번호를 준다
+            tok = (self.token(kind, value, fmt) if first is None
+                   else self._piece_token(kind, value, first, text[start:end]))
+            out += [text[pos:start], tok]
             pos = end
         out.append(text[pos:])
         return "".join(out)
+
+    def _piece_token(self, kind: str, value: str, first: bool, piece: str) -> str:
+        """갈린 조각: 전체 값의 토큰(첫 조각이거나 처음 보는 값일 때만 센다). 조각 글자도 그 번호로 표에 넣는다."""
+        table = self.tables.setdefault(kind, {})
+        key = _norm_key(kind, value)
+        tok = self.token(kind, value) if first or key not in table else f"<{kind}#{table[key]}>"
+        table.setdefault(_norm_key(kind, piece), table[key])
+        return tok
 
     def _spans(self, text: str) -> list[tuple[int, int, str, str]]:
         """마스킹할 구간 `[(start, end, kind, value)]` (시작 위치 순).
@@ -475,9 +496,9 @@ class Masker:
         """
         return [span[:4] for span in self._spans_fmt(text)]
 
-    def _spans_fmt(self, text: str) -> list[tuple[int, int, str, str, str | None]]:
-        """`_spans`에 규칙의 토큰 모양(`Rule.fmt`)을 붙인 것."""
-        taken = [(m.start(), m.end()) for m in _PROTECTED.finditer(text)]
+    def _spans_fmt(self, text: str, reserved=()) -> list[tuple[int, int, str, str, str | None]]:
+        """`_spans`에 규칙의 토큰 모양(`Rule.fmt`)을 붙인 것. `reserved` 구간(갈린 조각)은 규칙이 보지 않는다."""
+        taken = [(m.start(), m.end()) for m in _PROTECTED.finditer(text)] + list(reserved)
         found: list[tuple[int, int, str, str, str | None]] = []
         # ASCII가 아닌 줄은 게이트를 끈다: `(?i)` 정규식은 `ſ`(→s)·`İ`(→i)·`K`(켈빈)도 맞추지만
         # 부분문자열 게이트는 못 맞춘다
@@ -531,9 +552,10 @@ class Masker:
 
     # -- 검사 -----------------------------------------------------------------
 
-    def find(self, text: str) -> list[dict]:
-        """마스킹되지 않은 식별자 위치 `[{kind, start, end}]` (값은 내지 않는다)."""
-        return [{"kind": kind, "start": start, "end": end} for start, end, kind, _ in self._spans(text or "")]
+    def find(self, text: str, reserved=()) -> list[dict]:
+        """마스킹되지 않은 식별자 위치 `[{kind, start, end}]` (값은 내지 않는다). `reserved` 구간은 보지 않는다."""
+        return [{"kind": kind, "start": start, "end": end}
+                for start, end, kind, *_ in self._spans_fmt(text or "", reserved)]
 
 
 def _render(fmt: str, kind: str, n: int, value: str) -> str:
@@ -546,33 +568,109 @@ def new_masker(existing_text: str | None = None, allow_patterns: Iterable[str] =
     return Masker(allow_patterns=allow_patterns, existing_text=existing_text, log_lines=log_lines)
 
 
+# --- 갈린 덤프 조각 (oFono `dump_dmsg_w_re()`) -------------------------------------------------------------
+
+SPLIT_KINDS = ("IMSI", "ICCID")
+
+
+def _split_rule(kind: str, head: str) -> Rule:
+    return next(r for r in RULES if r.kind == kind and r.regex.pattern.startswith(head))
+
+
+# 키 있는 규칙만: NAI 속 IMSI(`…@nai.`), `imsi=`, `iccid=`·`ICCID(`. 키 없는 15자리·`89…`·뒤집힌 ICCID(`98…`)는 뺀다.
+_SPLIT_RULES = (_split_rule("IMSI", r"(?i)(?<![\w])0?(?P<v>\d{15})(?="), _split_rule("IMSI", r"(?i)\bimsi"),
+                _split_rule("ICCID", r"(?i)\biccid"))
+
+
+def _split_spans(texts: list, groups, masker=None) -> dict[int, list[tuple[int, int, str, str, bool]]]:
+    """조각 경계를 넘는 키 있는 IMSI·ICCID 맞음 → `{순번: [(start, end, kind, 전체 값, 첫 조각?)]}`."""
+    if not groups:
+        return {}
+    rules = [(r.kind, r.regex) for r in _SPLIT_RULES]
+    texts = [t.rstrip("\r") if isinstance(t, str) else "" for t in texts]
+    out: dict[int, list] = {}
+    used: list[tuple[int, int, int]] = []
+    for kind, value, pieces in dumpjoin.cross_hits(texts, rules, groups):
+        if (masker is not None and masker._allowed(value)) or _android_masked(value):
+            continue
+        if any(i == j and s < f and t < e for i, s, e in pieces for j, t, f in used):
+            continue                                   # 같은 값을 두 규칙이 맞힘
+        used += pieces
+        for n, (i, s, e) in enumerate(pieces):
+            out.setdefault(i, []).append((s, e, kind, value, n == 0))
+    return {i: sorted(v) for i, v in out.items()}
+
+
+def forced_lines(masker, lines: list[str]) -> dict[int, list]:
+    """원 줄 목록 전체에서 한 번: 갈린 조각 강제 구간 `{줄 순번: [...]}`(`Masker.mask(line, forced=...)`)."""
+    return _split_spans(lines, dumpjoin.groups_from_lines([ln.rstrip("\r") for ln in lines]), masker)
+
+
+def forced_records(masker, recs: list[dict]) -> dict[int, list]:
+    """파서 레코드 목록 전체에서 한 번: `msg` 안 강제 구간 `{레코드 순번: [...]}`."""
+    return _split_spans([r.get("msg") if isinstance(r, dict) else None for r in recs],
+                        dumpjoin.groups_from_records(recs), masker)
+
+
+def mask_lines(masker, lines: list[str]) -> list[str]:
+    """줄 목록 마스킹(갈린 덤프 조각 포함). `masker`가 `Masker`가 아니면 줄마다 부른다."""
+    if not isinstance(masker, Masker):
+        return [masker(line) for line in lines]
+    forced = forced_lines(masker, lines)
+    return [masker.mask(line, forced.get(i)) for i, line in enumerate(lines)]
+
+
+def mask_records(masker, recs: list[dict]) -> list[dict]:
+    """레코드 목록의 `msg` 마스킹(갈린 덤프 조각 포함, tag·pid·ts로 묶음). 다른 칸은 그대로다."""
+    forced = forced_records(masker, recs) if isinstance(masker, Masker) else {}
+    out = []
+    for i, rec in enumerate(recs):
+        if isinstance(rec, dict) and isinstance(rec.get("msg"), str):
+            msg = masker.mask(rec["msg"], forced.get(i)) if forced else masker(rec["msg"])
+            rec = dict(rec, msg=msg)
+        out.append(rec)
+    return out
+
+
 def residual(text: str, allow_patterns: Iterable[str] = (), *, log_lines: bool = True) -> dict[str, int]:
     """남은 식별자 `{종류: 개수}`: 그 마스커의 `find()`를 줄마다 센 것 그대로(다른 탐지기 없음). 값은 내지 않는다.
 
-    마스커가 줄 단위로 일하므로(`^` 규칙) 줄마다 본다. 그래서 `residual(mask(line)) == {}`가 구조상 성립한다."""
+    마스커가 줄 단위로 일하므로(`^` 규칙) 줄마다 본다. 그래서 `residual(mask(line)) == {}`가 구조상 성립한다.
+    갈린 덤프 조각의 키 있는 IMSI·ICCID는 이은 값 하나로 센다(그 조각 구간은 줄 단위로 다시 세지 않는다)."""
     masker = new_masker(allow_patterns=allow_patterns, log_lines=log_lines)
+    lines = (text or "").split("\n")
+    forced = forced_lines(masker, lines)
     counts: dict[str, int] = {}
-    for line in (text or "").split("\n"):
-        for hit in masker.find(line):
+    for i, line in enumerate(lines):
+        pieces = forced.get(i, ())
+        for hit in masker.find(line, [(p[0], p[1]) for p in pieces]):
             counts[hit["kind"]] = counts.get(hit["kind"], 0) + 1
+        for p in pieces:
+            if p[4]:
+                counts[p[2]] = counts.get(p[2], 0) + 1
     return dict(sorted(counts.items()))
 
 
 def redact(text: str, allow_patterns: Iterable[str] = (), *, log_lines: bool = True) -> tuple[str, dict[str, int]]:
     """`find()` 구간마다 `<REDACTED:종류>`로 바꾼다(보기·explore 타임라인, B2-25). `(text, counts)`.
-    걸린 것이 없으면 같은 객체를 그대로 돌려준다."""
+    갈린 덤프 조각은 조각마다 가리고 값 하나로 센다. 걸린 것이 없으면 같은 객체를 그대로 돌려준다."""
     masker = new_masker(allow_patterns=allow_patterns, log_lines=log_lines)
+    lines = (text or "").split("\n")
+    forced = forced_lines(masker, lines)
     counts: dict[str, int] = {}
     out, changed = [], False
-    for line in (text or "").split("\n"):
-        hits = masker.find(line)
+    for i, line in enumerate(lines):
+        pieces = forced.get(i, ())
+        hits = [(h["start"], h["end"], h["kind"], True) for h in masker.find(line, [(p[0], p[1]) for p in pieces])]
+        hits += [(p[0], p[1], p[2], p[4]) for p in pieces]
         if hits:
             changed = True
             parts, pos = [], 0
-            for hit in hits:
-                parts += [line[pos:hit["start"]], f"<REDACTED:{hit['kind']}>"]
-                pos = hit["end"]
-                counts[hit["kind"]] = counts.get(hit["kind"], 0) + 1
+            for start, end, kind, count in sorted(hits):
+                parts += [line[pos:start], f"<REDACTED:{kind}>"]
+                pos = end
+                if count:
+                    counts[kind] = counts.get(kind, 0) + 1
             parts.append(line[pos:])
             line = "".join(parts)
         out.append(line)
