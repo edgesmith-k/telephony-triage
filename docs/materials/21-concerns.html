@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="계획 H·I(11/03~)에서 사용자가 짚은 고민마다 판단·보완·상태를 정리한 요약.">
+<title>사용자 고민과 보완</title>
+<!-- 원본: docs/development/CONCERNS.md (결정 정본은 MODULE_SKILLS_DECISIONS.md). 파일 하나로 완결(외부 요청 없음, 시스템 글꼴). -->
+<style>
+:root {
+  --bg: #f6f8f9; --surface: #ffffff; --sunken: #eef2f3; --ink: #17232b; --ink-2: #4a5a63;
+  --rule: #d5dee2; --accent: #0b6874; --good: #1f6b3a; --good-soft: #e1f1e6;
+  --warn: #9a5b00; --warn-soft: #fbf0dc;
+  --font-body: "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", Consolas, "D2Coding", monospace;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #11181c; --surface: #182227; --sunken: #1f2b31; --ink: #e3eaed; --ink-2: #a6b6bd;
+    --rule: #33444c; --accent: #5cc3cf; --good: #7fd19b; --good-soft: #17331f;
+    --warn: #f0b860; --warn-soft: #3a2c12; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body);
+  font-size: 0.96875rem; line-height: 1.7; word-break: keep-all; overflow-wrap: anywhere; -webkit-text-size-adjust: 100%; }
+a { color: var(--accent); text-underline-offset: 2px; }
+code { font-family: var(--font-mono); font-size: 0.875em; background: var(--sunken); border: 1px solid var(--rule);
+  border-radius: 4px; padding: 0.05em 0.35em; }
+main { max-width: 60rem; margin: 0 auto; padding: 1.5rem 16px 2.5rem; }
+.hero { padding: 0.5rem 0 1.2rem; border-bottom: 1px solid var(--rule); }
+.eyebrow { color: var(--accent); font-size: 0.8125rem; font-weight: 700; letter-spacing: 0.08em; }
+h1 { font-size: 1.75rem; line-height: 1.35; margin: 0.2rem 0 0.6rem; }
+.hero p { color: var(--ink-2); margin: 0.3rem 0; }
+nav.toc { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 1rem 0 0; }
+nav.toc a { display: inline-block; font-size: 0.875rem; padding: 0.15rem 0.7rem; border: 1px solid var(--rule);
+  border-radius: 999px; background: var(--surface); text-decoration: none; }
+section { margin-top: 2rem; }
+h2 { font-size: 1.375rem; margin: 0 0 0.8rem; padding-left: 0.6rem; border-left: 4px solid var(--accent); }
+.card { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 0.9rem 1.1rem; margin: 0 0 0.8rem; }
+.card h3 { font-size: 1.05rem; line-height: 1.5; margin: 0 0 0.6rem; }
+.card h3 small { display: block; color: var(--accent); font-size: 0.8125rem; font-weight: 700; margin-bottom: 0.1rem; }
+dl { display: grid; grid-template-columns: 4.2rem minmax(0, 1fr); gap: 0.35rem 0.9rem; margin: 0; }
+dt { color: var(--ink-2); font-weight: 700; font-size: 0.875rem; padding-top: 0.1rem; }
+dd { margin: 0; }
+dd.status { justify-self: start; background: var(--good-soft); color: var(--good);
+  border-radius: 6px; padding: 0.05rem 0.55rem; font-size: 0.9rem; font-weight: 600; }
+dd.status.wip { background: var(--warn-soft); color: var(--warn); }
+footer { margin-top: 2.2rem; padding-top: 0.8rem; border-top: 1px solid var(--rule); color: var(--ink-2); font-size: 0.8125rem; }
+@media (max-width: 560px) { dl { grid-template-columns: minmax(0, 1fr); gap: 0.1rem; } dd { margin-bottom: 0.45rem; } h1 { font-size: 1.45rem; } }
+@media print {
+  :root { --bg: #fff; --surface: #fff; --sunken: #f3f3f3; --ink: #000; --ink-2: #333; --rule: #bbb; --accent: #0b5560; color-scheme: light; }
+  nav.toc { display: none; } .card { break-inside: avoid; } a { color: inherit; text-decoration: none; }
+}
+</style>
+</head>
+<body>
+<main>
+  <header class="hero">
+    <div class="eyebrow">CONCERNS · 계획 H·I, 11/03~</div>
+    <h1>사용자 고민과 보완</h1>
+    <p>사용자가 짚은 고민마다 <b>무엇이 걱정이었나 → 어떻게 판단했나 → 무엇으로 보완했나 → 지금 상태</b>를 남깁니다.</p>
+    <p>결정의 정본은 <code>MODULE_SKILLS_DECISIONS.md</code>이고, 이 페이지는 사람이 읽는 요약 <code>docs/development/CONCERNS.md</code>를 옮긴 것입니다.</p>
+    <nav class="toc" aria-label="절"><a href="#runtime">사내 모델·런타임</a><a href="#module">모듈 스킬</a><a href="#drift">로그가 바뀔 때</a><a href="#schedule">일정·진행</a></nav>
+  </header>
+
+  <section id="runtime">
+    <h2>사내 모델·런타임</h2>
+    <article class="card"><h3><small>고민</small>사내 모델은 Claude보다 약한데, 사내 모델로 만든 기록(5-2 가설·결론)이 쌓이면 장기적으로 DB 품질이 떨어지지 않나</h3><dl>
+      <dt>판단</dt><dd>사람 확인만으로는 부족하다. 사내 문서는 밖으로 못 가져오므로 사외 재검토는 불가</dd>
+      <dt>보완</dt><dd>① <b>출처 기록</b>: 커밋·PR에 <code>Triage-Env</code>(분석 환경·모델) — 사내 모델이 만든 것만 골라낼 수 있다 ② <b>근거 원문 검사</b>: 5-1·5-2 근거 줄이 실제 입력에 있는지 스크립트가 보고 없으면 표시 ③ <b>사내 정기 점검</b> <code>site_step.py audit</code>: 사내 모델 출처만 골라 토큰 0 검사 먼저, 남은 것만 Claude 리뷰(상한 30만 토큰/회, 매주)</dd>
+      <dt>상태</dt><dd class="status">①② B2 ☑, ③ F ☑</dd></dl></article>
+    <article class="card"><h3><small>고민</small>OpenCode로 스킬(모듈 문서)이 계속 수정되면 품질이 떨어질 것</h3><dl>
+      <dt>판단</dt><dd>모듈 문서 변경도 기록과 같은 위험</dd>
+      <dt>보완</dt><dd>모듈 레포 PR은 +1 리뷰 뒤에만 병합, 정기 점검이 바뀐 모듈을 모듈 eval 고정 세트로 다시 잼, 출처 기록</dd>
+      <dt>상태</dt><dd class="status wip">F ☑(점검), E(스킬 개선 흐름)는 다음 묶음</dd></dl></article>
+    <article class="card"><h3><small>고민</small>사내는 토큰이 얼마 없다 — 사내에서 확인·맞출 것은 최소로</h3><dl>
+      <dt>판단</dt><dd>사외에서 할 수 있는 것은 모두 사외에서</dd>
+      <dt>보완</dt><dd>사내 단계는 LLM 없는 스크립트(<code>site_step.py</code>), site eval은 이번 변경이 닿는 것만(목록은 사외에서 만듦), 81회 전체 재측정은 사외 G, 사내 확인은 환경마다 짧은 실행 1회</dd>
+      <dt>상태</dt><dd class="status">결정 11/05</dd></dl></article>
+    <article class="card"><h3><small>고민</small>Claude Code에서 사내 모델을 쓰는 경우와 OpenCode에서 사내 모델을 쓰는 경우를 어떻게 구분하나</h3><dl>
+      <dt>판단</dt><dd>진입 경로가 다르다</dd>
+      <dt>보완</dt><dd><code>plugin/</code>(Claude Code) vs <code>opencode/</code>(tt-oc)로 <code>TT_RUNTIME</code> 결정, 모델은 env 프로필, guard·코어 스크립트는 같은 것</dd>
+      <dt>상태</dt><dd class="status">I-2 ☑</dd></dl></article>
+    <article class="card"><h3><small>고민</small>OpenCode·사내 모델은 hook 형식·출력이 달라 eval을 어떻게 재나</h3><dl>
+      <dt>판단</dt><dd><code>module_eval</code>은 <code>claude -p</code>로만 자식을 띄운다</dd>
+      <dt>보완</dt><dd>Claude Code + 사내 모델은 <code>module_eval --no-require-cost</code>(토큰만)로 직접 잼. OpenCode는 같은 모델을 게이트웨이로 붙여 간접 측정 + 출처 기록·정기 점검</dd>
+      <dt>상태</dt><dd class="status">문서 <code>RUNTIME_ADOPTION.md</code></dd></dl></article>
+    <article class="card"><h3><small>고민</small>OpenCode에서 Jira MCP를 이미 쓰고 있는데 왜 막았나</h3><dl>
+      <dt>판단</dt><dd>1.19.5가 MCP 오류에 마스킹 hook을 안 돌려 오류 본문이 그대로 모델로 갔고, 사내 Jira MCP 모양을 몰랐다</dd>
+      <dt>보완</dt><dd>사내 확인(<code>runtime-check opencode --jira</code>, 토큰 0) 통과 뒤 사용자가 직접 설정으로 연다, 오류 본문은 transform hook으로 숨김, 모델이 스스로 못 열게(리뷰 P0 — 스크립트 <code>--out</code> 덮어쓰기 — 수정)</dd>
+      <dt>상태</dt><dd class="status">☑ c7e452c</dd></dl></article>
+  </section>
+
+  <section id="module">
+    <h2>모듈 스킬</h2>
+    <article class="card"><h3><small>고민</small>사내에 이미 있는 분석 스킬을 계속 쓰고 싶다</h3><dl>
+      <dt>판단</dt><dd>모듈 문서로 강제하면 기존 자산을 버린다</dd>
+      <dt>보완</dt><dd>카테고리별 <code>prefer: module|skill</code>, <code>skill_dir</code> — 설치 스킬을 파일로 읽는다(모든 런타임)</dd>
+      <dt>상태</dt><dd class="status">B1 ☑</dd></dl></article>
+    <article class="card"><h3><small>고민</small>모듈 스킬 레포도 승인 뒤 업데이트 가능해야 한다(이슈 DB처럼)</h3><dl>
+      <dt>판단</dt><dd>맞다</dd>
+      <dt>보완</dt><dd>모듈 레포 PR + +1 병합(E에서 자동 제안 흐름)</dd>
+      <dt>상태</dt><dd class="status wip">안내 그림 반영, E 다음 묶음</dd></dl></article>
+    <article class="card"><h3><small>고민</small>첨부한 실제 로그를 최대한 써서 모듈별 필터·가설을 잘 하게</h3><dl>
+      <dt>판단</dt><dd>합성만으로는 실제 줄 모양을 못 따라간다</dd>
+      <dt>보완</dt><dd>마스킹한 실제 발췌를 사례·fixture로(남은 식별자 0 확인), 모듈 필터를 첨부 로그로 측정(필수 줄 recall 37→64% 등)</dd>
+      <dt>상태</dt><dd class="status">B2 ☑, C1+D 사례 14개 실제 발췌</dd></dl></article>
+    <article class="card"><h3><small>고민</small>모듈 스킬로 어떻게 결과를 판단하나</h3><dl>
+      <dt>판단</dt><dd>정답을 아는 사례로 스크립트 채점</dd>
+      <dt>보완</dt><dd>사례마다 정답 층·데몬·근거 regex, 문서 있음/없음 비교, 안전 행, 토큰 차이. 정답 표는 사용자 확인</dd>
+      <dt>상태</dt><dd class="status wip">C0 ☑, C1+D 진행</dd></dl></article>
+    <article class="card"><h3><small>고민</small>모듈별로 실제 이슈 유형이 다양하다(sim 인식·느림·eSIM, data 연결·끊김·재시도·APN·ping·쓰루풋·원치 않는 패킷, CSFB·eCall·VoLTE·NR, 타이밍·크래시 …)</h3><dl>
+      <dt>판단</dt><dd>사례 2~3개로는 다 못 덮는다</dd>
+      <dt>보완</dt><dd>모듈 문서에 "증상별 첫 점검" 표, 텔레포니 로그로 못 보는 증상은 받을 로그 안내, 빈 증상 합성 사례 약 11개 추가, 나머지는 사내 실제 이슈(MS-2)</dd>
+      <dt>상태</dt><dd class="status">C1+D 보정(금)</dd></dl></article>
+    <article class="card"><h3><small>고민</small>문서 보정을 1회로 줄인 것</h3><dl>
+      <dt>판단</dt><dd>순서대로 하면 회차가 반나절</dd>
+      <dt>보완</dt><dd>모듈별 에이전트 병렬 — 회차 1시간 남짓, 최대 2회</dd>
+      <dt>상태</dt><dd class="status">C1+D 보정(금)</dd></dl></article>
+    <article class="card"><h3><small>고민</small>모듈 eval 정답을 결론 하나로 못 박으면 정답 표가 틀릴 때 측정이 흔들리고 확인 부담도 크다</h3><dl>
+      <dt>판단</dt><dd>실제 탐색(5-2)도 가설 1~3개(추정)라 eval이 어긋나 있었다</dd>
+      <dt>보완</dt><dd>탐색 사례는 후보 1~3개 + 가장 유력, 인정 후보가 목록에 있고 함정이 가장 유력이 아니면 통과, 1순위 적중은 따로 기록, 정답 표는 "인정 후보 / 함정"(스크립트 생성)</dd>
+      <dt>상태</dt><dd class="status">☑ 11/06</dd></dl></article>
+  </section>
+
+  <section id="drift">
+    <h2>로그가 바뀔 때</h2>
+    <article class="card"><h3><small>고민</small>같은 버전(예: Android 17)인데 버그로 판단 근거 줄이 사라지면</h3><dl>
+      <dt>판단</dt><dd>보통은 시그니처가 안 맞아 "후보 없음"으로 가고 아무도 모른다. 줄이 <b>없음</b>에 기대는 시그니처(<code>must_not_match</code>)는 그 줄이 사라지면 <b>잘못 분류</b>될 수도 있다(B 리뷰에서 확인). 회귀 검증은 저장된 예전 로그와 비교해서 못 잡는다. verify-fix는 흔적이 필수라 거짓 "고쳐짐"은 막는다</dd>
+      <dt>보완</dt><dd><b>A</b> 모듈 문서에 대체 근거 <b>B</b> 이슈 DB 작성 지침(다른 층 줄로 시그니처 하나 더(OR) — 증상 시그니처도 같은 줄에 기대면 둘 다, 대체 줄은 같은 슬롯·창 안; 없음에 기대는 근거는 "일어났음" 줄을 <code>must_not_match</code>에 하나 더) + <code>db_lint --advice</code> 참고 알림(관문에 안 듦) <b>C′</b> 분석 때 부분 일치·없는 줄 표시와 시그니처 추가 제안 <b>C</b> 정기 점검에서 "자주 맞던 시그니처 0건" 감지 — DB 업데이트는 <code>update-signature</code>(사용자 확인·PR·+1)</dd>
+      <dt>상태</dt><dd class="status">B ☑ c73550f, A ☑ C1+D 보정, C·C′ ☑ (11/06)</dd></dl></article>
+    <article class="card"><h3><small>고민</small>스크립트가 후보를 걸렀는데 완벽히 일치하지 않을 때, 코드를 한번 확인해 대조하면 과한가</h3><dl>
+      <dt>판단</dt><dd>과하지 않다 — 부분 일치일 때만, 스크립트로 먼저 하면 토큰이 거의 안 든다. 로그만으로는 "줄이 사라짐 / 그 경로를 안 탐 / 로그 미수집"을 못 가른다</dd>
+      <dt>보완</dt><dd><b>C′ 코드 대조</b>: 코드 경로가 있으면 없는 줄의 출력 문구를 grep → 못 찾음·문구 다름(path:line)·같음 한 줄을 리포트에, 문구가 다르면 새 문구로 시그니처 추가 제안(사용자 확인). 모델은 애매할 때만 해당 구간을 읽음</dd>
+      <dt>상태</dt><dd class="status">☑ 11/06 (출력은 path:line만, 제안은 마스킹 로그 줄로만)</dd></dl></article>
+    <article class="card"><h3><small>고민</small>리팩토링으로 로그가 확 바뀌거나, oFono는 개발 중이라 데몬이 생기고·사라지고·합쳐지고·대체된다</h3><dl>
+      <dt>판단</dt><dd>이름·규칙은 데이터여야 한다. 이번 코드에 데몬 이름이 박힌 곳 3개 발견</dd>
+      <dt>보완</dt><dd>박힌 이름(DITD·RFSD·DMD·MOSE 레벨, exynos-ril·RIL 벤더 IPC)을 이슈 DB <code>tags.yaml</code> 속성으로(기본값 유지), 모듈 문서 데몬 이름을 공통 표 한 곳(역할 → 지금 이름·구 이름)에, 과도기에는 옛·새 이름을 같이, <code>modules coverage</code>(토큰 0)로 새·사라진 데몬 발견 → <code>modules.yaml</code> PR</dd>
+      <dt>상태</dt><dd class="status">☑ 11/06 C1+D 보정</dd></dl></article>
+  </section>
+
+  <section id="schedule">
+    <h2>일정·진행</h2>
+    <article class="card"><h3><small>고민</small>월요일 오전까지 끝나야 한다 → 토요일 저녁으로(일요일 사용자 리뷰)</h3><dl>
+      <dt>보완</dt><dd>단계 병렬(별도 작업 공간, 확인 전 브랜치에 안 넣음), E 다음 묶음, 모듈별 병렬 보정, 81회 재측정 <code>run.py -j</code></dd>
+      <dt>상태</dt><dd class="status wip">진행 중</dd></dl></article>
+    <article class="card"><h3><small>고민</small>컨텍스트가 차면 알아서 요약</h3><dl>
+      <dt>보완</dt><dd>단계마다 인계 메모, 결정은 레포 문서에</dd>
+      <dt>상태</dt><dd class="status wip">진행 중</dd></dl></article>
+  </section>
+
+  <footer>원본 <code>docs/development/CONCERNS.md</code> · 문서 목록 <a href="00-index.html">00-index.html</a></footer>
+</main>
+</body>
+</html>
