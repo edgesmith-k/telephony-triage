@@ -15,7 +15,7 @@
     python3 tools/site_step.py audit [--since D|레포=sha] [--last] [--repo R] [--cap-tokens N] [--inhouse-model RX] [--jobs DIR] [--json]
     python3 tools/site_step.py audit --record [--defer ID[,ID]]     # 정기 점검: 토큰 0 검사 → Claude가 볼 것(상한 안) → 기준점 기록
     python3 tools/site_step.py runtime-check claude-gateway         # Claude Code + 사내 모델 프로필 표(모델 호출 없음)
-    python3 tools/site_step.py runtime-check opencode [--project D] # OpenCode 1.19.5·설정·관리 설정 점검 + 사내 확인 0 curl 명령
+    python3 tools/site_step.py runtime-check opencode [--project D] # OpenCode 1.19.5·설정·관리 설정 점검 + 사내 확인 0(OpenAI 호환) curl
     python3 tools/site_step.py runtime-check opencode --project D --jira KEY [--missing-key KEY]
                                                         # OpenCode Jira 읽기 사내 확인(모델 토큰 0, tools/oc_jira_check.py)
 
@@ -40,7 +40,8 @@
 - `runtime-check`(계획 I O10, docs/development/RUNTIMES.md)는 단계와 무관하게 환경마다 한 번 돌리는 점검이다(SITE_PROFILE을 읽거나
   쓰지 않는다). 판정은 기존 코드: claude-gateway는 `claude_child.gateway_profile_check`(missing·differs → 1), opencode는
   `opencode/bin/tt-oc`(버전 = PINNED, 없으면 설치 안내·설치한 opencode.json 필수 설정·opencode가 있으면 사전 점검 전체)와
-  `gen_opencode.managed_problems`(/etc/opencode, 없으면 warn). 사내 확인 0(게이트웨이 curl)은 명령만 보인다(실행하지 않는다).
+  `gen_opencode.managed_problems`(/etc/opencode, 없으면 warn). 사내 확인 0(게이트웨이 curl — claude-gateway는 Anthropic `/v1/messages`,
+  opencode는 OpenAI 호환 `/models`·`/chat/completions`)은 명령만 보인다(실행하지 않는다).
 
 종료 코드: 0 정상(점검은 통과·정보만), 1 점검 실패·건너뜀·사용자 필요(`--done` 거부 포함, runtime-check의 missing·differs·fail 행),
 2 사용 오류(사외 PC, 모드·단계 불일치, 진행 상태 줄 없음,
@@ -856,6 +857,52 @@ def check0_text() -> str:
     ])
 
 
+OC_CHECK0_BODY = ('{"model":"\'"$MODEL"\'","max_tokens":64,"stream":true,'
+                  '"tools":[{"type":"function","function":{"name":"get_time","description":"현재 시각",'
+                  '"parameters":{"type":"object","properties":{}}}}],'
+                  '"tool_choice":{"type":"function","function":{"name":"get_time"}},'
+                  '"messages":[{"role":"user","content":"지금 몇 시?"}]}')
+_SHELL_BAD = "'\"$`\\ \n"
+
+
+def _oc_gateway(proj: Path | None) -> tuple[str, str]:
+    """설치한 opencode.json의 provider baseURL·모델 ID(비밀 아님). 없거나 읽지 못하면 자리표시."""
+    base, model = "<게이트웨이 URL(/v1까지, install --gateway-url)>", "<사내 모델 ID>"
+    if proj is None:
+        return base, model
+    try:
+        cfg = json.loads((proj / "opencode.json").read_text(encoding="utf-8"))
+        prov_id, _, mid = str(cfg.get("model") or "").partition("/")
+        url = (((cfg.get("provider") or {}).get(prov_id) or {}).get("options") or {}).get("baseURL")
+    except (OSError, ValueError, AttributeError):
+        return base, model
+    if isinstance(url, str) and url.startswith(("http://", "https://")) and not any(c in url for c in _SHELL_BAD):
+        base = url.rstrip("/")
+    if mid and "@@" not in mid and not any(c in mid for c in _SHELL_BAD):
+        model = mid
+    return base, model
+
+
+def oc_check0_text(proj: Path | None) -> str:
+    """OpenCode용 사내 확인 0 — OpenAI 호환(`@ai-sdk/openai-compatible`) 모양 curl 명령(실행하지 않는다).
+    키는 `$TT_GATEWAY_API_KEY` 이름만 쓴다."""
+    base, model = _oc_gateway(proj)
+    return "\n".join([
+        "사내 확인 0(OpenCode) — 게이트웨이 OpenAI 호환 엔드포인트 (이 도구는 실행하지 않는다, 사용자가 터미널에서 한 번):",
+        "```sh",
+        f"BASE='{base}'; MODEL='{model}'   # 키: export TT_GATEWAY_API_KEY=… (출력·파일에 적지 않는다)",
+        "# (a) 토큰 0: 모델 목록에 $MODEL이 있는지",
+        'curl -sS "$BASE/models" -H "authorization: Bearer $TT_GATEWAY_API_KEY"',
+        "# (b) 선택(토큰 소량): 스트리밍 tool_calls",
+        'curl -sS -N "$BASE/chat/completions" -H "content-type: application/json" \\',
+        '  -H "authorization: Bearer $TT_GATEWAY_API_KEY" \\',
+        f"  -d '{OC_CHECK0_BODY}'",
+        "```",
+        '통과: (a) `"data"`에 `"id":"<MODEL>"`, (b) `data:` 줄 `delta`에 `"tool_calls"`(이름 `get_time`), 끝에 `data: [DONE]`. '
+        "결과(통과/실패와 첫 오류 줄 — 키는 빼고)를 보고한다. Anthropic 모양(/v1/messages)은 Claude Code용이다.",
+    ])
+
+
 def _runtime_table(title: str, rows: list[dict]) -> str:
     cell = lambda t: str(t).replace("|", "\\|").replace("\n", " ")  # noqa: E731
     lines = [title, "", "| 항목 | 상태 | 내용 |", "|---|---|---|"]
@@ -957,7 +1004,7 @@ def runtime_opencode(project: str | None, opencode: str, managed_dir: Path, env:
     rows.append(_managed_row(managed_dir))
     result, code = _runtime_result(rows, "행의 안내대로 고친 뒤 다시 실행한다(버전 불일치·설정 우회는 하지 않고 보고)")
     title = f"런타임 점검 opencode — 모델 호출 없음(고정 {tt.PINNED})"
-    return "\n\n".join([_runtime_table(title, rows), result, check0_text()]), code
+    return "\n\n".join([_runtime_table(title, rows), result, oc_check0_text(proj)]), code
 
 
 def runtime_opencode_jira(project: str | None, opencode: str, key: str, missing: str | None, env: dict) -> tuple[str, int]:

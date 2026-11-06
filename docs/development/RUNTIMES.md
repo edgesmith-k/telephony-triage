@@ -210,7 +210,9 @@ MCP 쓰기(add_comment 승인 유무)·Write/Edit 규칙 8은 이번에 돌리�
 - O10 `site_step.py runtime-check claude-gateway|opencode`(모델·네트워크 호출 없음, 사내 확인 0은 curl 명령만 보인다):
   claude-gateway는 `gateway_profile_check` 표(missing·differs → 1), opencode는 버전 1.19.5(없으면 설치 안내)·설치한
   opencode.json 필수 설정·`tt-oc` 사전 점검(공유 `version_row`·`config_problems`·`preflight`)·관리 설정(`gen_opencode.managed_problems`,
-  없으면 warn). 레포 zip에 `opencode/`가 들어가는 것은 `test_make_bundle.py`가 고정한다(검사 항목은 그대로).
+  없으면 warn). 확인 0 curl은 대상별: claude-gateway는 Anthropic `/v1/messages`, opencode는 OpenAI 호환 `<baseURL>/models`(토큰 0)·
+  선택 `/chat/completions` 스트리밍 tool_calls(설치한 opencode.json의 baseURL·모델을 채우고 키는 `$TT_GATEWAY_API_KEY` 이름만, 11/06 G).
+  레포 zip에 `opencode/`가 들어가는 것은 `test_make_bundle.py`가 고정한다(검사 항목은 그대로).
   F에서 unset 거짓 실패를 고쳤다: `CLAUDE_CODE_EFFORT_LEVEL`이 없으면 missing이던 것을 ok로(권장 값 unset).
 - O8 `config.py tracker-candidates`가 `--opencode-config`(또는 `TT_RUNTIME=opencode`면 작업 폴더 설정)의 `mcp`(enabled·command)를
   읽고 `<server>_<tool>` 이름을 안다(`mcptools.opencode_candidates` — `oc_adapter`와 같은 규칙). `job_status.py`는 OpenCode 안에서만

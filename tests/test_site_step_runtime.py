@@ -3,7 +3,8 @@
 - claude-gateway: `plugin/scripts/common/claude_child.py` `gateway_profile_check` 표 그대로, missing·differs가 있으면 종료 1.
 - opencode: 버전(= tt-oc PINNED, 없으면 설치 안내), 설치한 opencode.json 필수 설정(snapshot:false 등, tt-oc `config_problems`),
   opencode가 있으면 tt-oc 사전 점검 전체, 관리 설정(`gen_opencode.managed_problems`). 가짜 opencode 바이너리만 쓴다.
-- 두 대상 모두 사내 확인 0의 curl 명령을 **보이기만** 한다.
+- 두 대상 모두 사내 확인 0의 curl 명령을 **보이기만** 한다. claude-gateway는 Anthropic `/v1/messages`, opencode는 OpenAI 호환
+  (`/models` 토큰 0 + 선택 `/chat/completions` tool_calls) — OpenCode가 `@ai-sdk/openai-compatible`로 부르기 때문이다.
 """
 from __future__ import annotations
 
@@ -66,6 +67,13 @@ def rows_of(out: str) -> dict[str, tuple[str, str]]:
 def assert_check0_printed_only(out: str) -> None:
     assert "사내 확인 0" in out and 'curl -sS -N "$GW/v1/messages"' in out and '"stream":true' in out
     assert '"type":"tool_use"' in out and "이 도구는 실행하지 않는다" in out
+
+
+def assert_oc_check0_printed_only(out: str) -> None:
+    assert "사내 확인 0(OpenCode)" in out and "이 도구는 실행하지 않는다" in out
+    assert 'curl -sS "$BASE/models"' in out and 'curl -sS -N "$BASE/chat/completions"' in out
+    assert '"tool_choice":{"type":"function"' in out and '"stream":true' in out and "$TT_GATEWAY_API_KEY" in out
+    assert "/v1/messages\"" not in out and "anthropic-version" not in out and "x-api-key" not in out
 
 
 # -- claude-gateway ----------------------------------------------------------------------------------------------------
@@ -156,7 +164,8 @@ def test_opencode_absent_gives_install_hint(oc):
     assert rows["opencode-version"][0] == "fail" and "npm install -g opencode-ai" + "@" + gen_opencode.OPENCODE_VERSION in rows["opencode-version"][1]
     assert rows["project"][0] == "fail" and "gen_opencode.py install" in rows["project"][1]
     assert rows["managed-config"][0] == "warn"           # 관리 설정은 권장(다중 방어) — 없으면 막지 않는다
-    assert_check0_printed_only(r.stdout)
+    assert_oc_check0_printed_only(r.stdout)
+    assert "BASE='<게이트웨이 URL" in r.stdout and "MODEL='<사내 모델 ID>'" in r.stdout   # 프로젝트 없음 → 자리표시
 
 
 def test_opencode_all_ok_with_project_and_managed(oc):
@@ -169,7 +178,7 @@ def test_opencode_all_ok_with_project_and_managed(oc):
         assert rows[check][0] == "ok", (check, rows.get(check))
     assert "결과: 통과" in r.stdout
     assert ["run"] not in [c[:1] for c in stub_calls(oc)], "모델 호출(opencode run)은 하지 않는다"
-    assert_check0_printed_only(r.stdout)
+    assert_oc_check0_printed_only(r.stdout)
     # TT_OC_PROJECT도 받는다(tt-oc와 같다)
     assert oc_run(oc, env={"TT_OC_PROJECT": str(oc["proj"])}).returncode == 0
 
@@ -204,3 +213,21 @@ def test_opencode_version_installed_config_and_managed_failures(oc):
     r = oc_run(oc)
     assert rows_of(r.stdout)["managed-config"][0] == "fail" and "'gh *'" in r.stdout
     assert rows_of(r.stdout)["opencode-version"][0] == "ok"      # 프로젝트 없이도 버전은 본다(tt-oc version_row)
+
+
+def test_opencode_check0_uses_installed_base_url_and_model_never_key(oc):
+    """확인 0(OpenCode)은 설치한 opencode.json의 provider baseURL·모델을 채운다(비밀 아님). 키 값은 어디에도 없다.
+    셸에 위험한 글자가 든 값은 채우지 않고 자리표시로 둔다."""
+    cfg = {**CONFIG_OK, "model": "gw/glm-x",
+           "provider": {"gw": {"npm": "@ai-sdk/openai-compatible",
+                               "options": {"baseURL": "https://gw.example.invalid/v1/", "apiKey": "{env:TT_GATEWAY_API_KEY}"}}}}
+    (oc["proj"] / "opencode.json").write_text(json.dumps(cfg), encoding="utf-8")
+    r = oc_run(oc, "--project", str(oc["proj"]), env={"TT_GATEWAY_API_KEY": "sk-oc-secret"})
+    assert_oc_check0_printed_only(r.stdout)
+    assert "BASE='https://gw.example.invalid/v1'; MODEL='glm-x'" in r.stdout
+    assert "sk-oc-secret" not in r.stdout + r.stderr
+    assert ["run"] not in [c[:1] for c in stub_calls(oc)]
+    cfg["provider"]["gw"]["options"]["baseURL"] = "https://gw.invalid/v1'; rm -rf ~; '"
+    (oc["proj"] / "opencode.json").write_text(json.dumps(cfg), encoding="utf-8")
+    r = oc_run(oc, "--project", str(oc["proj"]))
+    assert "rm -rf" not in r.stdout and "BASE='<게이트웨이 URL" in r.stdout and "MODEL='glm-x'" in r.stdout
