@@ -1,8 +1,8 @@
 # 사내 도입 가이드: 실행 환경 셋 (Claude Code + Claude / Claude Code + 사내 모델 / OpenCode + 사내 모델)
 
-대상: 묶음을 반입하고 팀원에게 어느 환경을 언제 열지 정하는 **도입 담당자**. 기준 `d02f5cf`, 근거 `docs/development/RUNTIMES.md`·`opencode/README.md`·`docs/SITE_INSTALL.md`.
+대상: 묶음을 반입하고 팀원에게 어느 환경을 언제 열지 정하는 **도입 담당자**. 기준 `b4a5b42`(11/07 반입 묶음), 근거 `docs/development/RUNTIMES.md`·`opencode/README.md`·`docs/SITE_INSTALL.md`.
 
-- **(이번 묶음에서 추가 — G에서 최종 확인)** 은 반입 전에 들어오는 작업 중 기능이다. 반입 뒤 `--help`로 이름·옵션을 다시 본다.
+- 이 문서의 기능은 모두 이번 묶음에 들어 있다(11/06 G 확인). 이름·옵션이 다르면 `--help`가 맞다.
 - `<GHE 호스트>`·`<게이트웨이 URL>`·`<사내 모델 이름>`·`<Jira MCP 서버 이름>`은 사내 값으로 바꾸고 `SITE_PROFILE.md`·`SITE_PATHS` 경로에만 적는다.
 - 사내 단계는 **스크립트(토큰 0)가 먼저**. 모델 호출은 환경마다 짧은 확인과 상한을 둔 측정뿐이다.
 
@@ -13,7 +13,7 @@
 | 겉모습 | `/telephony-triage:*`, 말로 요청 | 같음(모델만 게이트웨이로) | `tt-oc` 래퍼 + `/tt-*` |
 | 분석 | 됨 | 됨 | 됨 — v1은 **분석 전용** |
 | 쓰기(push·PR·`db_pr merge`·Jira 코멘트) | 확인 화면 → 승인 뒤 | 같음 | **안 함.** 명령을 출력 → 사용자가 터미널·Claude Code에서 실행 |
-| Jira 읽기 | Jira MCP | 같음 | **닫힘이 기본.** 사용자마다 사내 확인 뒤 직접 연다(3.4, 이번 묶음에서 추가 — G에서 최종 확인). 코멘트는 늘 막힘 |
+| Jira 읽기 | Jira MCP | 같음 | **닫힘이 기본.** 사용자마다 사내 확인 뒤 직접 연다(3.4). 코멘트는 늘 막힘 |
 | 안전 장치 | guard·git hook·show_guard | 같음 | `tt-guard.js` → `oc_adapter` → 같은 `guard.py` + 허용 목록 |
 | 확인 화면·must_show | show_guard 판정 | 같음 — **세션 기록을 켜야** 판정 | 래퍼가 모델을 거치지 않고 출력(TUI는 보장 없음) |
 | 설치 스킬·module_eval | 됨 | 됨(`--no-require-cost`) | 스킬만 됨 |
@@ -25,7 +25,7 @@
 2. `claude`·`opencode`가 부르는 `python3`가 3.10+이고 PyYAML·jsonschema를 import한다(`SITE_INSTALL.md` 5·6절).
 3. 도입 담당자 계정으로 `<게이트웨이 URL>`의 `<사내 모델 이름>`을 부를 수 있다. Claude Code는 게이트웨이가 Anthropic 모양 `/v1/messages`(스트리밍 `tool_use`)를 내야 된다(사내 확인 0). OpenCode는 같은 게이트웨이의 OpenAI 호환(`…/v1`) 엔드포인트가 필요하다.
 4. OpenCode 1.19.5 배포와 `/etc/opencode/` 관리 설정(관리자). 다른 버전이면 `tt-oc`가 시작하지 않는다.
-5. **OpenCode 파일은 `plugin/` 밖이다**(`opencode/`, `tools/`). 마켓플레이스 설치에 없으므로 팀원에게 줄 방법(레포 읽기 전용 clone 또는 공용 경로의 묶음 사본)을 정한다(설치된 플러그인과 같은 판).
+5. **OpenCode 파일은 `plugin/` 밖이다**(`opencode/`, `tools/`) — 마켓플레이스 설치에 없다. 배포는 **레포 읽기 전용 clone 하나**로 한다(3.1 0). 반입 묶음의 레포 zip에도 `opencode/`가 들어 있다(`test_make_bundle.py`가 고정).
 6. 확인 실행에는 **마스킹된 로그만** 쓴다(site eval 로그나 `SITE_PATHS`의 마스킹본).
 
 ## 2. Claude Code + 사내 모델
@@ -66,7 +66,7 @@ python3 tools/site_step.py runtime-check claude-gateway
 
 - 판정은 `claude_child.gateway_profile_check`(비밀 값은 표에 없음). missing·differs면 종료 1. 끝에 사내 확인 0 curl을 보인다(실행 안 함).
 - 자격(`ANTHROPIC_AUTH_TOKEN` 또는 `ANTHROPIC_API_KEY`, 또는 `apiKeyHelper`)이 없으면 `credential` 행이 missing이다. 위 예시에 자격을 더한다.
-- 지금은 `CLAUDE_CODE_EFFORT_LEVEL`이 **없으면** missing — `"unset"`을 넣으면 통과. 없어도 ok로 보는 고침 **(이번 묶음에서 추가 — G에서 최종 확인)**.
+- `CLAUDE_CODE_EFFORT_LEVEL`은 없거나 비었거나 `"unset"`이면 ok(권장 값이 "두지 않음").
 
 ### 2.3 사내 확인 (번호는 `RUNTIMES.md §6`, 남은 것 0·2·3·5)
 
@@ -104,7 +104,8 @@ python3 plugin/scripts/module_eval.py --module ofono/data --case data-apn-auth-r
 
 - 1줄째는 계획만(토큰 0). 2줄째가 통과하면 남은 case. `--bare`(입력 토큰 감소)는 `execution.json` `bare`가 `used`면 계속 쓴다.
 - 판정은 스크립트다: with 1순위 통과 수 ≥ without, 안전 위반 0. 비용 행 `skipped`("비용 미상")는 통과가 아니다.
-- 모듈은 지금 `ofono/data`뿐이고 oFono·Android 각 7개(data·sim·network·call·sms·ims·modem)가 들어온다 **(이번 묶음에서 추가 — G에서 최종 확인)**. 사내 모델로는 팀이 많이 쓰는 모듈 1~2개만 잰다.
+- 모듈은 oFono·Android 각 7개(data·sim·network·call·sms·ims·modem). 모듈 문서는 증상별 첫 점검 표·대체 근거(핵심 줄이 없을 때 볼 다른 층 줄)를 갖고, 데몬은 역할로 부른다(이름은 `_common/components.md` 역할 표 한 곳). 사내 모델로는 팀이 많이 쓰는 모듈 1~2개만 잰다.
+- 탐색(explore) 사례는 후보 채점이다: 후보 1~3개 + `가장 유력`, 인정 후보가 목록에 있고 함정이 가장 유력이 아니면 통과(1순위 적중은 기록만). 심층(deep)은 결론 1개 그대로.
 
 ### 2.5 go / no-go
 
@@ -123,6 +124,7 @@ v1은 분석 전용이다. 확인 화면·must_show가 있는 흐름은 **`tt-oc
 
 ### 3.1 설치
 
+0. 레포 사본(도입 담당자가 한 번 정하고 팀에 공지): 사내 GHE의 telephony-triage 레포를 **마켓플레이스 플러그인과 같은 반입 태그**로 읽기 전용 clone — `git clone --depth 1 --branch <반입 태그> <사내 tt 레포> <사본>`. 같은 판 확인: `diff -rq -x __pycache__ <사본>/plugin/scripts <설치된 plugin>/scripts`가 빈 출력. 갱신은 `git fetch --depth 1 origin tag <새 태그> && git checkout <새 태그>` 뒤 3.5. 사본은 고치지 않는다(`install`이 커맨드·`tt-guard.js`를 여기서 복사하고 `tt-oc`도 여기서 돈다).
 1. OpenCode 1.19.5 — 사내 경로가 없으면 npm 패키지 `opencode-ai` 버전 1.19.5를 전역 설치(`npm install -g`에 패키지 이름과 버전을 `이름@버전`으로).
 2. 관리 설정(관리자) — `opencode/managed.json.sample`을 `/etc/opencode/opencode.json`으로. 더 막는 키는 더해도 된다.
 3. 사용자별 설치 폴더 — git 레포·플러그인·이슈 DB clone 밖. setup(config)이 먼저다(`install`이 `config.py check --roots`로 읽기 폴더를 정한다).
@@ -145,11 +147,12 @@ python3 tools/site_step.py runtime-check opencode --project <dest>
 ```
 
 - `tt-oc doctor` 행: `env`·`project-git`·`instructions`·`integrity`·`opencode-version`·`opencode-config`·`config-doctor`(개수만), warn `module-skills`·`read-roots`. fail이면 종료 2.
-- `runtime-check opencode`: 위 + 관리 설정(없으면 warn) + 사내 확인 0 curl. fail이면 종료 1. G에서 볼 것: 이 curl은 Anthropic 모양이라 OpenCode(OpenAI 호환)와 어긋난다. OpenAI 호환을 따로 보는 명령은 없다.
+- `runtime-check opencode`: 위 + 관리 설정(없으면 warn) + OpenCode용 사내 확인 0 curl(실행 안 함). fail이면 종료 1.
+- 사내 확인 0(OpenCode)은 OpenAI 호환 모양이다: (a) 토큰 0 `GET <baseURL>/models`에 모델 ID가 있는지, (b) 선택 `POST <baseURL>/chat/completions` 스트리밍 `tool_calls`. 설치한 `opencode.json`의 baseURL·모델을 채워 보이고 키는 `$TT_GATEWAY_API_KEY` 이름만 쓴다.
 
 ### 3.3 에이전트 규칙 확인 (짧은 실행 1~2회)
 
-3.4 전이라 Jira MCP는 막혀 있다(`oc_adapter.JIRA_READ_RELEASED = False`, 템플릿 `"jira_*": "deny"`). 이슈 본문은 `--issue-file`로 준다(`--dry-run`·`--analysis-only`에서만).
+3.4로 열기 전에는 Jira MCP가 막혀 있다(설정 `opencode.jira_read` 기본 closed, 템플릿 `"jira_*": "deny"`). 이슈 본문은 `--issue-file`로 준다(`--dry-run`·`--analysis-only`에서만).
 
 ```sh
 opencode/bin/tt-oc --project <dest> --command tt-analyze -- <KEY> <마스킹된 로그> --issue-file <이슈 yaml> --dry-run
@@ -163,9 +166,9 @@ opencode/bin/tt-oc --project <dest> --command tt-analyze -- <KEY> <마스킹된 
 - 막힌 호출은 `[telephony-triage]`·"run this exact command yourself: …"가 그대로 나오고, 모델이 다른 모양으로 재시도하지 않는다.
 - 질문은 번호 선택지로 끝난다 → `tt-oc --project <dest> -s <세션> -- <번호>`. 마지막 이어가기에 붙인다: `tt-oc --project <dest> -s <세션> --delete-session -- <번호>`(이어가기가 없으면 첫 실행의 `--` 앞에).
 
-### 3.4 Jira 읽기 관문 열기 **(이번 묶음에서 추가 — G에서 최종 확인)**
+### 3.4 Jira 읽기 관문 열기
 
-지금은 코드 상수로 닫혀 있다. 이번 묶음에서 "사내 확인 + 사용자 설정"으로 바뀐다(결정 11/05).
+기본은 닫힘. "사내 확인 + 사용자 설정"으로 연다(결정 11/05). 확인은 사용자마다 한다 — 기록이 그 사용자 홈에 있고 MCP 설정도 사용자별이라서다.
 
 1. 확인 실행 — **열려는 사람이 자기 PC에서**(레포 사본 `tools/` 필요). 기록은 그 사용자의 `~/.telephony-triage/opencode-jira-check.json`이고 `config.py set`은 그것만 본다. 모델 토큰 0: 가짜 모델 서버로 실제 opencode·`<Jira MCP 서버 이름>`을 거쳐 있는·없는 티켓을 읽고 원문 격리·마스킹·오류 경로를 본다.
    ```sh
@@ -177,14 +180,13 @@ opencode/bin/tt-oc --project <dest> --command tt-analyze -- <KEY> <마스킹된 
    python3 <설치된 plugin>/scripts/config.py set opencode.jira_read open
    python3 <설치된 plugin>/scripts/config.py set opencode.jira_read open --accept-error-bodies   # error-path가 pass가 아닐 때
    ```
-   이번 묶음은 보내기 직전에 Jira 오류 본문을 숨긴다(`Jira 오류(본문 숨김)`, tt-guard.js transform). 확인의 `error-path` 행이 그것을 본다. pass가 아니면(warn, 또는 `--missing-key` 없이 돌려 skip) 열 때 `--accept-error-bodies`가 필요하다 — 허용 여부는 도입 담당자가 정해 `SITE_PROFILE.md`에.
+   보내기 직전에 Jira 오류 본문을 숨긴다(`Jira 오류(본문 숨김)`, tt-guard.js transform). 확인의 `error-path` 행이 그것을 본다. pass가 아니면(warn, 또는 `--missing-key` 없이 돌려 skip) 열 때 `--accept-error-bodies`가 필요하다 — 허용 여부는 도입 담당자가 정해 `SITE_PROFILE.md`에.
 3. 통과 기록은 OpenCode 버전·플러그인 지문에 묶인다. 플러그인을 갱신하면 각자 1부터 다시. 닫기: `config.py set opencode.jira_read closed`. 상태는 `jira_gate` 행(6절).
 4. tt-oc에서 실제로 읽으려면 `gen_opencode.py install … --jira-read-tool <서버>_<도구> --force`(읽기 도구만 허용). `/etc/opencode`의 `"jira_*": "deny"`(`managed.json.sample`)는 관리자가 푼다 — 관리 설정이 마지막에 합쳐져 이긴다.
-5. G에서 볼 것: 사용자마다 확인하는 동작이 결정 11/05의 뜻과 맞는지.
 
 ### 3.5 재설치
 
-플러그인 스크립트가 바뀌면 `tt-oc`가 시작하지 않는다. 3.1과 같은 인자에 `--force`(Jira를 열었으면 3.4의 4도). 레포 사본도 같은 판으로 맞춘다. 이번 묶음은 `oc_adapter.py`가 바뀌므로 **기존 OpenCode 설치는 모두 `install --force`**(반입 노트). 플러그인 경로가 바뀌면 `--plugin-root`도.
+플러그인 스크립트가 바뀌면 `tt-oc`가 시작하지 않는다. 3.1과 같은 인자에 `--force`(Jira를 열었으면 3.4의 4도). 레포 사본도 같은 판으로 맞춘다. 11/07 묶음은 `oc_adapter.py`·`tt-guard.js`가 바뀌므로 **기존 OpenCode 설치는 모두 `install --force`**(반입 노트). 플러그인 경로가 바뀌면 `--plugin-root`도.
 
 ### 3.6 go / no-go
 
@@ -192,12 +194,12 @@ opencode/bin/tt-oc --project <dest> --command tt-analyze -- <KEY> <마스킹된 
 |---|---|
 | `tt-oc doctor`·`runtime-check opencode` 종료 0(관리 설정 warn은 사유 기록) | 버전 불일치·설정 우회 — 보고 |
 | 3.3 실행에서 규칙 지킴 | 막힌 호출 재시도, 화면 요약 |
-| OpenCode는 OpenAI 호환 주소로 부른다. 확인 0은 Claude Code + 사내 모델용이고, OpenCode는 3.3 실행이 실제 확인이다 | — |
+| 사내 확인 0(OpenCode, OpenAI 호환 (a)·(b)) 통과, 3.3 실행이 실제 확인 | `/models`에 모델 없음, tool_calls 안 나옴 |
 | Jira가 필요하면 3.4 통과, 아니면 "닫힘 — 이슈 본문은 `--issue-file`" 안내 | 오류 본문 위험 수용 여부 미정 |
 
 ## 4. 공통
 
-### 4.1 모듈 스킬 레포 (MS-1) **(이번 묶음에서 추가 — G에서 최종 확인)**
+### 4.1 모듈 스킬 레포 (MS-1)
 
 **주소를 넣기 전에** 설치 스킬을 쓸 카테고리를 정한다(4.2).
 
@@ -210,6 +212,7 @@ python3 tools/site_step.py modules check   # remote·push 권한·트리·데몬
 python3 tools/site_step.py modules coverage --out docs/site/module-coverage.diff   # 사내 로그 → 모듈별 줄 수·빈 이름
 ```
 
+- 태그 속성: 이슈 DB `parser-rules/tags.yaml` 항목에 `level: unreliable`(그 줄 레벨은 심각도 아님)·`ipc: vendor`(벤더 IPC 결과 판별). 선언이 없으면 백엔드 기본 이름. 키마다 하나라도 선언하면 DB만 보므로 그 키의 이름을 모두(데몬이 바뀌면 옛·새 이름 둘 다) 같은 PR에. 운영 DB `schema/parser-rules.schema.json`에 두 키를 먼저 넣는다(메인테이너, 한 PR).
 - `coverage`는 토큰 0, `modules.yaml` `daemons` 추가 diff만 제안한다(지우는 제안 없음). 사용자 clone에서 적용해 **모듈 레포 PR(+1)** 로. tags.yaml에 없는 태그는 이슈 DB 계획 op PR(사용자 확인).
 - 중첩 `claude -p` 점검은 명령만 출력한다. 출력된 `module_eval.py … --probe-restricted --json`(자식 1회)을 Claude Code 세션의 Bash에서 한 번 돌리고 `--done MS-1 --waive ms1.nested_claude="<결과>"`(fail `ms1.prefer`는 출력대로 고친다).
 
@@ -229,7 +232,10 @@ python3 plugin/scripts/config.py set analyzers.<카테고리>.prefer skill [--pl
 |---|---|---|
 | 출처 기록 | 커밋 끝 `Triage-Env: runtime=…; model=…; gateway=…; label=…`(주소 없음). 확인 화면에 보인다. `runtime.label`로 팀 표식 | HEAD |
 | 근거 원문 검사 | `triage.py check-output`이 5-1·5-2 근거 줄이 입력에 있는지 표시 | HEAD |
-| 정기 점검 | 사내 모델·출처 모름 기록만 토큰 0 검사(lint·regress·겹침·중복·마스킹·근거) → 걸린 것·바뀐 모듈만 사내 Claude로 | 이번 묶음에서 추가 — G에서 최종 확인 |
+| 정기 점검 | 사내 모델·출처 모름 기록만 토큰 0 검사(lint·regress·겹침·중복·마스킹·근거) → 걸린 것·바뀐 모듈만 사내 Claude로 | HEAD |
+| 시그니처 소실(drift) | 이전에 3회 이상 맞던 원인 시그니처가 새 빌드 기록 2건 이상에서 0회 → `audit.<레포>.drift` 사용자 필요(기준은 사내 측정 뒤 조정). 첫 점검은 최근 14일 | HEAD |
+| 부분 일치(C′) | 후보 없음·1위 S=1·C=0이면 report.md `규칙 제안 (부분 일치):`(마스킹된 로그 줄로만). 코드 루트가 있으면 `code_roots.py find-text`로 없는 조건 문구를 코드와 대조(same·reworded·not-found …). 받아들이면 update-signature PR(+1) | HEAD |
+| 마스킹 | oFono `dump_dmsg_w_re()` 조각으로 갈린 IMSI/ICCID 값도 실행 중 가린다 | HEAD |
 
 ```sh
 python3 tools/site_step.py audit --inhouse-model '<사내 모델 이름 정규식>'   # 토큰 0. docs/site/audit/에 계획·review.md
@@ -244,13 +250,13 @@ python3 tools/site_step.py audit --record   # 기준점 기록, 넘친 항목은
 1. 반입 노트(`MODULE_SKILLS_RESULT.md`)의 **토큰 0 점검** 먼저: `tools/hook_replay.py <세션 .jsonl>`·`triage.py run … --offline-db` 전후, `db_lint --all`·`mask_pii --check`(새 지적이 있으면 반입을 멈춘다). 반입 뒤 5-1 점검: `config.py check --roots --json`, `triage.py module <KEY> --for deep`.
 2. 깨끗하면 "영향 없음"으로 기록. 다르면 그 eval만 — `python3 tools/site_step.py evals`가 배치 명령·추정 비용을 낸다(실행 안 함).
 3. SITE_INSTALL §8의 '12개 모두' 규칙은 이번 묶음에서는 반입 노트 표로 대신한다(`guard.py`·`show_guard.py`가 바뀌어도). 재생·전후 비교가 다를 때만 해당 eval을 돌린다. 평소 모델이 사외 결과와 다르면 `site_if_model_differs` 7개도.
-4. 병렬 `tests/skill_evals/run.py -j N`(최대 8) **(이번 묶음에서 추가 — G에서 최종 확인)**. 멈춤 규칙은 직렬과 같다.
+4. 병렬 `tests/skill_evals/run.py -j N`(최대 8). 멈춤 규칙은 직렬과 같다.
 
 ## 5. 팀원에게 열기 전 체크리스트
 
 - **공통**: [ ] S-7 끝, 재반입이면 §8 테스트 통과 · [ ] **반입 전**(IMPL §4.8 1·2): 운영 이슈 DB 브랜치 보호를 IMPL §4.5로, `docs/site/boundary-allow.txt`에 데몬 이름 줄(반입 뒤면 `--check-boundary`가 막음) · [ ] 모듈 레포면 `modules check` 통과·`prefer: skill` 결정 · [ ] 사내 모델을 열면 정기 점검 담당·요일
 - **Claude Code + 사내 모델**: [ ] `runtime-check claude-gateway` 0 · [ ] 사내 확인 0·2·3·5를 `SITE_PROFILE.md`에 · [ ] 고른 모듈 안전 위반 0 · [ ] 팀원용 `env` 예시(키 없이) · [ ] `runtime.label`
-- **OpenCode + 사내 모델**: [ ] 1.19.5·`/etc/opencode` 배포(또는 warn 사유) · [ ] 레포 사본 배포 방법(1절 5) · [ ] `tt-oc doctor`·`runtime-check opencode` 0, 3.3 통과 · [ ] Jira: 사용자별 3.4 절차와 `--accept-error-bodies` 여부 공지, 또는 "닫힘" 안내 · [ ] 갱신 절차 공지(`TEAM_GUIDE.md` 8절)
+- **OpenCode + 사내 모델**: [ ] 1.19.5·`/etc/opencode` 배포(또는 warn 사유) · [ ] 레포 사본 clone 주소·반입 태그 공지(3.1 0) · [ ] `tt-oc doctor`·`runtime-check opencode` 0, 3.3 통과 · [ ] Jira: 사용자별 3.4 절차와 `--accept-error-bodies` 여부 공지, 또는 "닫힘" 안내 · [ ] 갱신 절차 공지(`TEAM_GUIDE.md` 8절)
 
 **팀원이 처음 한 번** (`SITE_INSTALL.md` §7에 더해, 전문은 `TEAM_GUIDE.md`)
 

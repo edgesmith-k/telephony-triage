@@ -1,6 +1,6 @@
 # 팀원 사용 가이드: telephony-triage 플러그인(Claude Code · Claude Code + 사내 모델 · OpenCode)
 
-도입 담당자가 사내 점검·배포를 끝낸 뒤 읽는다. 꺾쇠 값은 도입 담당자에게 받는다. "(이번 묶음에서 추가 — G에서 최종 확인)"은 이 묶음과 함께 들어오는 기능이다.
+도입 담당자가 사내 점검·배포를 끝낸 뒤 읽는다. 꺾쇠 값은 도입 담당자에게 받는다.
 
 **용어**: 5-1 심층 분석(1위 후보를 모듈 문서·설치 스킬로) · 5-2 탐색 분석(후보 없을 때 가설) · must_show 모델이 그대로 보여야 하는 스크립트 화면 · guard 승인 없는 쓰기를 막는 hook · integrity OpenCode 설치 파일 지문.
 
@@ -58,16 +58,16 @@ claude mcp list   # <Jira MCP 서버 이름>이 사용자 범위로 보여야 �
 ```
 
 - 자격은 게이트웨이가 받는 쪽 하나만(`ANTHROPIC_AUTH_TOKEN` 또는 `ANTHROPIC_API_KEY`).
-- `CLAUDE_CODE_DISABLE_THINKING=1`은 게이트웨이가 thinking을 거부할 때만. `CLAUDE_CODE_EFFORT_LEVEL`은 `"unset"`을 넣는다(지금 코드와 이번 묶음 모두 통과). 모델 ID는 모두 같게.
+- `CLAUDE_CODE_DISABLE_THINKING=1`은 게이트웨이가 thinking을 거부할 때만. `CLAUDE_CODE_EFFORT_LEVEL`은 `"unset"`을 넣는다(없어도 통과). 모델 ID는 모두 같게.
 - Claude와 번갈아 쓰려면 settings.json `env` 대신 같은 키를 셸 파일에 `export`로 적고 그 터미널에서만 `source` 뒤 `claude`(둘 다 두면 모든 `claude`가 게이트웨이로).
 - `claude -p`에 `--no-session-persistence`를 붙이지 않는다(표시 점검이 꺼진다).
-- 레포 사본(1.4)이 있으면 점검(모델 호출 없음): `python3 $TT/tools/site_step.py runtime-check claude-gateway`. `CLAUDE_CODE_EFFORT_LEVEL`이 없어도 통과(이번 묶음에서 추가 — G에서 최종 확인).
+- 레포 사본(1.4)이 있으면 점검(모델 호출 없음): `python3 $TT/tools/site_step.py runtime-check claude-gateway`. `CLAUDE_CODE_EFFORT_LEVEL`이 없어도 통과.
 
 ### 1.4 OpenCode + 사내 모델 (`tt-oc`)
 
 필요한 것: OpenCode **1.19.5**(다른 버전이면 시작 안 함), 레포 사본(`opencode/`·`tools/`), 설치된 플러그인 폴더, **setup이 끝난 사용자 설정**(2절 1번).
 
-- 레포 사본은 도입 담당자가 정한 방법(읽기 전용 clone 또는 공용 경로의 묶음 사본)으로 받는다. **설치된 플러그인과 같은 묶음 판**이어야 한다(install이 커맨드·`tt-guard.js`를 사본에서 복사). Jira 확인·`runtime-check`도 이 사본으로.
+- 레포 사본은 사내 tt 레포를 도입 담당자가 공지한 반입 태그로 읽기 전용 clone한다: `git clone --depth 1 --branch <반입 태그> <사내 tt 레포> <사본>`. **설치된 플러그인과 같은 판**이어야 한다(`diff -rq -x __pycache__ $TT/plugin/scripts <설치된 plugin>/scripts`가 빈 출력). 사본은 고치지 않는다(install이 커맨드·`tt-guard.js`를 사본에서 복사). Jira 확인·`runtime-check`도 이 사본으로.
 
 ```
 TT=<tt 레포 사본>
@@ -81,7 +81,7 @@ tt-oc doctor   # 사전 점검. fail이 있으면 시작하지 않는다
 ```
 
 - `--dest`는 git 밖. 그 폴더와 위 폴더(`/`까지)의 `AGENTS.md`·`CONTEXT.md`, 또는 `~/.config/opencode/AGENTS.md`가 있으면 시작 안 함.
-- `<작업 디렉토리>`는 사용자 설정의 `work_dir`(기본 플랫폼 `~/.telephony-triage/work`). 다른 플랫폼(oFono 등)의 기본 `~/.telephony-triage/work-<플랫폼>`은 그 밖이다 — G에서 정한다. `--work-root`에 `~/.telephony-triage`는 주지 않는다(config.yaml이 edit 범위에 든다). `--issue-db`는 clone마다.
+- `<작업 디렉토리>`는 사용자 설정의 `work_dir`(기본 플랫폼 `~/.telephony-triage/work`). 다른 플랫폼(oFono 등)의 기본 `~/.telephony-triage/work-<플랫폼>`은 그 밖이다 — 한 설치는 작업 폴더 하나만 쓰므로 oFono도 OpenCode로 쓰면 다른 `--dest`(예: `~/tt-oc-ofono`)에 `--work-root <work-ofono>`로 한 번 더 install한다. `--work-root`에 `~/.telephony-triage`는 주지 않는다(config.yaml이 edit 범위에 든다). `--issue-db`는 clone마다.
 
 ## 2. 처음 한 번 설정
 
@@ -91,7 +91,7 @@ tt-oc doctor   # 사전 점검. fail이 있으면 시작하지 않는다
    - Claude Code: `/telephony-triage:status --doctor`
    - OpenCode: `tt-oc doctor` — `env`·`project-git`·`instructions`·`integrity`·`opencode-version`·`opencode-config`·`config-doctor`(개수만), warn `module-skills`·`read-roots`. 점검표 행을 하나씩 보려면 `TT_RUNTIME=opencode python3 $S/config.py doctor --format markdown`(모델 호출 없음, `opencode_env`·`jira_gate` 포함).
 3. **이슈 DB clone**은 내 것이다. 도구는 그 브랜치도 파일도 바꾸지 않는다. 경로 바꾸기는 `docs/SITE_INSTALL.md` 7절.
-4. **모듈 스킬**: 팀이 모듈 스킬 레포를 켰으면 할 일이 없다. 심층·탐색 분석에 동의하면 그 분야 문서를 최신판으로 받아 읽는다(받기에 실패해도 분석은 끝난다). 모듈은 oFono·Android 각 data·sim·network·call·sms·ims·modem 7개다(지금은 oFono data만, 나머지 13개는 이번 묶음에서 추가 — G에서 최종 확인. 팀 레포에 있는지는 MS-1 결과를 따른다).
+4. **모듈 스킬**: 팀이 모듈 스킬 레포를 켰으면 할 일이 없다. 심층·탐색 분석에 동의하면 그 분야 문서를 최신판으로 받아 읽는다(받기에 실패해도 분석은 끝난다). 모듈은 oFono·Android 각 data·sim·network·call·sms·ims·modem 7개다(팀 레포에 있는지는 MS-1 결과를 따른다). 문서는 증상별 첫 점검 표와 대체 근거(핵심 줄이 없을 때 볼 다른 층 줄)를 갖는다.
 5. **설치 스킬을 계속 쓰기(선택)**: 이미 쓰는 사내 분석 스킬을 분야별로 고른다.
    ```
    python3 $S/config.py set analyzers.data.prefer skill
@@ -156,7 +156,7 @@ tt-oc -s <세션> --delete-session -- 2   # 마지막 답 + 세션 삭제
 - **분석 전용**: 쓰기(코멘트·push·PR·병합·리뷰어 요청·스킬 적용)는 "OpenCode v1에서 실행하지 않은 명령" 절에 명령으로 낸다. "스크립트 화면" 절(모델을 거치지 않은 원본)을 읽고 승인할 때만 터미널에서 실행한다.
 - **종료 코드**: 0 끝남, 1 오류, 2 거부·사전 점검 실패, 3 막힌 호출(내 차례일 수 있음), 124 시간 초과. 비용은 "미상"(`cost:0`≠0원).
 - **막힘 표시**: `[telephony-triage]`로 시작하면 guard가 막은 것(`… guard warning`은 경고뿐).
-- **Jira 읽기 관문** (이번 묶음에서 추가 — G에서 최종 확인): 기본은 닫힘(`jira_gate` 행 warn). 이슈 내용은 `--issue-file <yaml>`로(`--analysis-only`·`--dry-run`에서만) 주거나 Claude Code에서 분석한다. 열기는 내가 직접 한다(OpenCode 안의 모델은 못 연다. 코멘트는 계속 막힘):
+- **Jira 읽기 관문**: 기본은 닫힘(`jira_gate` 행 warn). 이슈 내용은 `--issue-file <yaml>`로(`--analysis-only`·`--dry-run`에서만) 주거나 Claude Code에서 분석한다. 열기는 내가 직접 한다(OpenCode 안의 모델은 못 연다. 코멘트는 계속 막힘):
   1. Jira MCP를 `~/.config/opencode/opencode.json`의 `mcp`에 둔다.
   2. `python3 $TT/tools/site_step.py runtime-check opencode --project ~/tt-oc --jira <있는 키> --missing-key <없는 키>` 통과.
   3. `python3 $S/config.py set opencode.jira_read open`(오류 경로가 pass가 아니면 `--accept-error-bodies` — 허용 여부는 도입 담당자 안내).
@@ -172,7 +172,8 @@ tt-oc -s <세션> --delete-session -- 2   # 마지막 답 + 세션 삭제
 - **근거 원문 검사 줄**: `원문에 없음` 1 이상은 입력에 없는 줄을 인용한 것(지어낸 근거일 수 있다). `약함`은 일부만 맞음. `건너뜀(…)`은 통과가 아니다.
 - **출처 기록**: 커밋 끝 `Triage-Env: runtime=…; model=…; gateway=…; label=…`와 확인 화면 `분석 환경` 줄이 자동으로 붙는다. 지우지 않는다(점검에 쓴다).
 - **의심되면**: Claude Code + Claude로 `--analysis-only` 비교. 확인 화면이 요약돼 보이면 승인 말고 전문 요청.
-- **정기 점검**: 도입 담당자가 사내 모델 기록만 골라 점검한다(`site_step.py audit`, 이번 묶음에서 추가 — G에서 최종 확인). 고칠 것은 PR로 온다.
+- **정기 점검**: 도입 담당자가 사내 모델 기록만 골라 점검한다(`site_step.py audit` — 새 빌드 뒤 0건이 된 시그니처(drift)도 본다). 고칠 것은 PR로 온다.
+- **부분 일치**: 후보가 없거나 약하면 리포트에 `규칙 제안 (부분 일치):`가 나온다(코드 루트를 골랐으면 코드 대조 결과도). 기본은 받지 않음. 받으면 시그니처 추가 PR(+1)로 간다.
 - **토큰 아끼기**: 필요 없으면 `--no-analyzer --no-explore`.
 
 ## 6. 하지 말 것
@@ -225,8 +226,8 @@ tt-oc -s <세션> --delete-session -- 2   # 마지막 답 + 세션 삭제
 ## 8. 플러그인을 갱신할 때
 
 1. Claude Code 마켓플레이스에서 `telephony-triage`를 업데이트한다.
-2. OpenCode면 레포 사본도 같은 판으로 바꾸고 1.4의 install을 같은 인자 + `--force`로(Jira를 열었으면 4절 4도). 이번 묶음 반입 뒤에도 한 번.
-3. OpenCode Jira를 열어 두었으면 4절의 확인과 `config.py set … open`을 다시 한다(이번 묶음에서 추가 — G에서 최종 확인).
+2. OpenCode면 레포 사본도 같은 태그로(`git fetch --depth 1 origin tag <새 태그> && git checkout <새 태그>`) 바꾸고 1.4의 install을 같은 인자 + `--force`로(Jira를 열었으면 4절 4도). 이번 묶음 반입 뒤에도 한 번.
+3. OpenCode Jira를 열어 두었으면 4절의 확인과 `config.py set … open`을 다시 한다(통과 기록이 플러그인 지문에 묶인다).
 4. 사내 모델 `env`(1.3)는 그대로. 점검표를 다시 본다.
 
 근거: `SITE_INSTALL.md` 7절, `RUNTIMES.md`, `opencode/README.md`, `plugin/commands/`.
