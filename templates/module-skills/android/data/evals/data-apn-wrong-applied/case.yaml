@@ -1,4 +1,5 @@
 # 합성 case (C1D 보정 §6.3). files/의 source.log 말고는 make_module_eval_inputs.py --write가 만든다
+# 사용자 11/06: 실제로는 SIM 변경 이벤트 처리 실패일 때만 생김(원인 층은 프레임워크로 같음)
 schema_version: 2
 name: data-apn-wrong-applied
 kind: explore

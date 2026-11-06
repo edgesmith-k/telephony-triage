@@ -18,7 +18,7 @@ UI·시험 클라이언트 → 데이터 관리 데몬 → ofonod `ConnectionMan
 | 증상 | 볼 역할·줄 | 흔한 첫 실패 → 층 | 대체 근거 · 받을 로그 |
 |---|---|---|---|
 | 연결 안 됨 | IA·프로필 → `SETUP_DATA_CALL` | `failed`·`RCM_E_*` → 벤더 RIL·모뎀·망 / `NMD_MOBILE_GPRS_NOT_ATTACHED` → 관리 데몬 | data call list |
-| APN이 다름(B여야 하는데 A) | `addApnInfo … internet` 순서, 요청 인자 | 마지막에 internet APN을 넣은 쪽 → 관리 데몬 | APN 토큰 비교 / 프로필 덤프 |
+| APN이 다름(B여야 하는데 A) | `addApnInfo … internet` 순서, 요청 인자 | APN 로직 → ofonod (관리 데몬은 거의 전달만, 둘 다 봄) | APN 토큰 비교 / 프로필 덤프 |
 | 끊김 | data call list, `DEACTIVATE_DATA_CALL` | 요청 없이 빠짐 → 모뎀·망 / DEACTIVATE 먼저 → 보낸 층 | 전후 수집 |
 | 재시도 안 됨 | 재시도 줄, 다음 `SETUP_DATA_CALL` | 시점이 로그 밖 → 그 층 로그 없음(관리 데몬) | 간격을 덮는 수집 |
 | ping 안 됨·연결됐는데 안 됨 | 관리 데몬 라우팅·netconf·firewall | 라우팅 오류 → 곁가지 / 설정 실패 → 관리 데몬 | 줄 없음 → 그 층 로그 없음(관리 데몬) |
@@ -28,5 +28,5 @@ UI·시험 클라이언트 → 데이터 관리 데몬 → ofonod `ConnectionMan
 
 ## ⑤ 함정
 - `src/gprs.c` 오류뿐이고 gril 줄이 없으면 → `그 층 로그 없음(벤더 RIL)`.
-- APN을 두 번 넣으면 마지막 internet APN이 쓰인다. 그 사이 ofonod 설정 줄이 없으면 넣은 쪽은 데이터 관리 데몬이다.
+- APN을 두 번 넣으면 마지막 internet APN이 쓰인다. 관리 데몬 줄만으로 정하지 않는다(새 파라미터면 둘 다 바뀜).
 - 신호 세기는 근거가 아니다. 자격 정보·APN은 토큰이라 토큰끼리 같은지만 본다.
