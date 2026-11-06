@@ -23,8 +23,10 @@
         expect: DATA-001-01       # 정답 원인 ID 또는 unresolved
         negative_control: true    # 선택. 대조군(일부러 틀린 라벨 등): 돌리고 판정은 보이되 지표의 분모·분자에서 뺀다
 
-지표(대조군 제외 — `negative_control: true` 항목은 `controls`로 따로 세고 표에 `대조군(<판정>)`으로 보인다. 라벨셋이
-시그니처를 쓴 fixture 자체면 in-sample 자기 일치라 정확도 지표가 아니다 — 사내 S-5는 시그니처 작성에 쓰지 않은 로그만 넣는다):
+지표(대조군 제외 — `negative_control: true` 항목은 `controls`로 따로 세고 표에 `대조군(<판정>)`으로 보인다. **표본내**
+항목 — 로그가 그 이슈 DB의 `*/fixtures/` 아래 파일(시그니처를 만들 때 쓴 fixture 자체)이면 자기 일치라 정확도 지표가 아니다 —
+도 자동으로 `in_sample`로 세고 표에 `표본내(<판정>)`로 보이며 지표에서 뺀다. 도구 동작 확인(합성 샘플)에는 `--include-in-sample`.
+사내 S-5는 시그니처 작성에 쓰지 않은 로그만 넣는다):
   - 1위 정확도: 정답이 원인 ID인 항목 중 1위 후보가 정답인 비율
   - 상위 3 포함률: 정답이 원인 ID인 항목 중 상위 3 후보에 정답이 있는 비율
   - 오탐률: 정답이 unresolved인 항목 중 후보를 낸 비율
@@ -43,7 +45,7 @@
 `plugin_root`(실제 실행 루트 경로·임시 여부), `site_defaults_sha256`, `labelset_sha256`, Python 버전, 실행 인자 — 결과를 어느
 코드·DB·설정·라벨셋으로 냈는지 식별한다(비밀값·원문 없음). 항목에는 `logs_sha256`(입력 로그 해시)과 `backend`·`external`
 (`events.json`의 파서 백엔드·외부 파서, 못 읽으면 null)을 더한다.
-종료 코드: 0 = 실행 완료, 1 = 평가 가능한 항목 없음(전부 오류 — 통과로 보지 않는다), 2 = 사용 오류.
+종료 코드: 0 = 실행 완료, 1 = 평가 가능한 항목 없음(전부 오류·대조군·표본내 — 통과로 보지 않는다), 2 = 사용 오류.
 """
 
 from __future__ import annotations
@@ -120,6 +122,15 @@ def load_labelset(path: Path) -> dict:
     return doc
 
 
+def _under_fixtures(log: Path, db: Path) -> bool:
+    """로그가 그 이슈 DB의 `<카테고리>/<유형>/fixtures/` 아래 파일인가(시그니처 작성 fixture 자체 = 표본내)."""
+    try:
+        rel = log.resolve().relative_to(Path(db).resolve())
+    except (ValueError, OSError):
+        return False
+    return "fixtures" in rel.parts[:-1]
+
+
 def evaluate_item(root: Path, db: Path, base: Path, doc: dict, item: dict, work: Path) -> dict:
     """analyze와 같은 드라이버(`triage.py run --offline-db`)로 파서 → 매처를 돌린다."""
     key = str(item["key"])
@@ -141,6 +152,7 @@ def evaluate_item(root: Path, db: Path, base: Path, doc: dict, item: dict, work:
         args += ["--tz", str(tz)]
     result = {"key": key, "expect": str(item["expect"]), "top": None, "top3": [], "error": None, "warning": None, "unjudged": None,
               "control": bool(item.get("negative_control")),
+              "in_sample": any(_under_fixtures(Path(p), db) for p in logs),
               "logs_sha256": [hashlib.sha256(Path(p).read_bytes()).hexdigest() if Path(p).is_file() else None for p in logs],
               "backend": None, "external": None}
     try:
@@ -192,11 +204,17 @@ def evaluate_item(root: Path, db: Path, base: Path, doc: dict, item: dict, work:
     return result
 
 
-def summarize(results: list[dict]) -> dict:
-    """대조군(`control`)은 판정은 매기되(`대조군(<판정>)`) 지표·분모 어디에도 넣지 않는다 — 일부러 틀린 라벨이 '정확도'로 읽히지 않게."""
+def _excluded(r: dict, include_in_sample: bool) -> bool:
+    return bool(r.get("control")) or (bool(r.get("in_sample")) and not include_in_sample)
+
+
+def summarize(results: list[dict], include_in_sample: bool = False) -> dict:
+    """대조군(`control`)과 표본내(`in_sample`, `--include-in-sample`이 아니면)는 판정은 매기되(`대조군(<판정>)`·`표본내(<판정>)`)
+    지표·분모 어디에도 넣지 않는다 — 일부러 틀린 라벨·자기 일치가 '정확도'로 읽히지 않게."""
     controls = [r for r in results if r.get("control")]
+    in_sample = [r for r in results if r.get("in_sample") and not r.get("control")]
     graded = [r for r in results if not r["error"]]
-    scored = [r for r in graded if not r.get("control")]
+    scored = [r for r in graded if not _excluded(r, include_in_sample)]
     positive = [r for r in scored if r["expect"] != UNRESOLVED]
     negative = [r for r in scored if r["expect"] == UNRESOLVED]
     for r in graded:
@@ -210,14 +228,18 @@ def summarize(results: list[dict]) -> dict:
             r["verdict"] = "미스"
         if r.get("control"):
             r["verdict"] = f"대조군({r['verdict']})"
+        elif r.get("in_sample") and not include_in_sample:
+            r["verdict"] = f"표본내({r['verdict']})"
 
     def rate(num: int, den: int) -> float | None:
         return round(num / den, 4) if den else None
 
-    counted = [r for r in results if not r.get("control")]
+    counted = [r for r in results if not _excluded(r, include_in_sample)]
     return {
         "total": len(results),
         "controls": len(controls),          # 지표 제외(돌리기는 한다)
+        "in_sample": len(in_sample),        # fixture 자체인 항목 수(--include-in-sample이 아니면 지표 제외)
+        "include_in_sample": include_in_sample,
         "evaluated": len(scored),
         "errors": len(counted) - len(scored),
         "unjudged_errors": sum(bool(r["error"]) and bool(r.get("unjudged")) for r in counted),
@@ -253,8 +275,12 @@ def render(results: list[dict], summary: dict) -> str:
     lines += [
         "",
         f"평가 {summary['evaluated']}/전체 {summary['total']}"
-        + (f" (대조군 {summary['controls']}건은 지표에서 뺌)" if summary.get("controls") else ""),
-        f"항목 {summary['total'] - summary.get('controls', 0)}건 (정답 원인 ID {summary['positive_total']}·unresolved "
+        + (f" (대조군 {summary['controls']}건은 지표에서 뺌)" if summary.get("controls") else "")
+        + (f" (표본내 — 시그니처 fixture 자체 — {summary['in_sample']}건은 지표에서 뺌; 도구 동작 확인용이면 --include-in-sample)"
+           if summary.get("in_sample") and not summary.get("include_in_sample")
+           else f" (표본내 {summary['in_sample']}건 포함 — 정확도 지표 아님)" if summary.get("in_sample") else ""),
+        f"항목 {summary['total'] - summary.get('controls', 0) - (0 if summary.get('include_in_sample') else summary.get('in_sample', 0))}건 "
+        f"(정답 원인 ID {summary['positive_total']}·unresolved "
         f"{summary['negative_total']}, 평가된 것 원인 {summary['positive']}·unresolved {summary['negative']}, 오류 {summary['errors']})",
         f"1위 정확도    {_pct(summary['top1_accuracy'])}",
         f"상위 3 포함률 {_pct(summary['top3_inclusion'])}",
@@ -263,7 +289,7 @@ def render(results: list[dict], summary: dict) -> str:
         f"그중 판정 불가 {summary['unjudged_errors']}건)",
     ]
     if not summary["evaluated"]:
-        lines.append("평가 가능한 항목 없음 — 전부 오류(지표 없음, 통과 아님)")
+        lines.append("평가 가능한 항목 없음 — 전부 오류·대조군·표본내(지표 없음, 통과 아님)")
     return "\n".join(lines)
 
 
@@ -277,6 +303,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--db", default=None, help="이슈 DB 경로 (없으면 라벨셋의 db)")
     parser.add_argument("--plugin-root", default=None)
     parser.add_argument("--json", action="store_true")
+    parser.add_argument("--include-in-sample", action="store_true",
+                        help="표본내 항목(로그가 이슈 DB fixtures/ 자체)도 지표에 넣는다 — 도구 동작 확인용, 정확도 측정 아님")
     args = parser.parse_args(argv)
 
     label_path = Path(args.labelset).resolve()
@@ -314,7 +342,7 @@ def main(argv: list[str] | None = None) -> int:
         if temp_root is not None:
             shutil.rmtree(temp_root, ignore_errors=True)
 
-    summary = summarize(results)
+    summary = summarize(results, include_in_sample=args.include_in_sample)
     if args.json:
         print(json.dumps({"meta": meta, "summary": summary, "items": results}, ensure_ascii=False, indent=1))
     else:

@@ -609,7 +609,8 @@ class ReportMixin:
             else:
                 cause = "원인 미확인"
             lines.append(f"- 분류 후보: {top.get('category')} > {top['type']} > {cause} "
-                         f"(규칙 일치 점수 {top['score']}, 일치 수준 {label} — 진단 확신도 아님"
+                         f"(규칙 일치 점수 {top['score']}, 일치 조건 {top.get('matched_conditions', len(top['evidence']))}개, "
+                         f"일치 수준 {label} — 진단 확신도 아님"
                          f"{'' if top['C'] else (', 유형 일치·원인 판정 불가' if top.get('_cause_unjudged') else ', 유형 일치·원인 미확인')})")
             lines.append(f"- 근거 로그 (마스킹, 슬롯 phone {','.join(map(str, top['phones'])) or '?'}):")
             lines += [f"  - {e['ts']} {e['tag']} {e['msg']}" + (f" ({e['_ref']})" if e.get("_ref") else "")

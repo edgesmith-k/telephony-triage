@@ -40,6 +40,10 @@ tracker:
   # 테스트 헬퍼(모의 서버)는 true. TODO(SITE:S1)
   isolation_confirmed: true
 
+# 작업 폴더 보존 기간(일, 선택, 14-site S14). 두면 doctor `retention` 행이 기한 넘은 작업 폴더 수를 경고한다(지우지 않는다 —
+# 정리는 `db_pr.py cleanup --older-than <일>`). 없으면 그 행은 skip. 사내 보안 규정으로 정한다. TODO(SITE:S14)
+# retention_days: 90
+
   # 논리 동작 → 실제 도구 전체 이름 (16-existing-assets.md §16.1)
   # 모의 서버는 일부러 비표준 이름을 쓴다. 매핑 경로를 반드시 거치게 하기 위해서다.
   tools:

@@ -266,6 +266,7 @@ stdin: PostToolUse hook 입력 JSON (argparse 없음)
 - candidates?[≤3]
   - type
   - cause
+  - matched_conditions?(원인+증상 시그니처가 맞춘 조건 수(특이도) — 동점 3차 정렬 키·표시용, 점수 불변)
   - title?
   - category?
   - score

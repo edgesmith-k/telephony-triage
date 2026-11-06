@@ -601,7 +601,10 @@ def _rank_key(c: dict) -> tuple:
     우선 유형이 없으면 키가 `(-score, -(근접+키워드), 유형, 원인)`으로 이전과 같다."""
     b = c["bonus"]
     focus = b.get("step", 0)
-    return (-round(c["score"] + focus, 4), -round(b["proximity"] + b["keyword"] + focus, 4), c["type"], c["cause"] or "")
+    # 세 번째 키 = 일치 조건 수(특이도, `matched_conditions`): 점수가 min(1,…)로 포화해 C=1 후보가 모두 1.0일 때 조건 1개짜리와
+    # 3개 sequence가 같은 "높음"으로 ID 순이 되던 것(종합 리뷰 D)을, 더 구체적인 시그니처가 앞서게 한다. score·confidence 불변
+    return (-round(c["score"] + focus, 4), -round(b["proximity"] + b["keyword"] + focus, 4),
+            -int(c.get("matched_conditions") or 0), c["type"], c["cause"] or "")
 
 
 def _version_match(cause, jira: dict) -> bool | None:
@@ -647,6 +650,7 @@ def _candidate(db, itype, cause, S, C, sym, res, jira, occurred, half, scoring, 
         "C": C,
         "signature": signature,
         "evidence": evidence,
+        "matched_conditions": len(evidence),      # 원인+증상 시그니처가 맞춘 조건 수(특이도) — 동점 3차 정렬 키, 표시용
         "bonus": bonus,
         "feedback": feedback,
         "fix_judgement": judgement,

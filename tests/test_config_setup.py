@@ -1184,3 +1184,31 @@ def test_set_reviewer_ask_false_is_boolean_and_visible_to_skill():
     assert env.config()["reviewer"]["ask"] is False
     after = env.json("config.py", ["show", "--keys", "reviewer.ask"])
     assert after["values"] == {"reviewer.ask": False} and after["missing"] == []
+
+
+def test_doctor_retention_row_counts_old_job_dirs_without_deleting(tmp_path):
+    """02-config `retention_days`(종합 리뷰 G, S14): 두면 `retention` 행이 생겨 기한 넘은 작업 폴더 수를 warn으로 세고 지우지 않는다.
+    없으면 행 자체가 없다. 잘못된 값은 fail."""
+    import time as _time
+    env = Env()
+    env.init(env.base / "db")
+    rows = {r["check"]: r for r in json.loads(env.run("config.py", ["doctor"]).stdout)["rows"]}
+    assert "retention" not in rows                                 # 기간을 정하지 않은 팀: 행 없음(점검표·예산 불변)
+    work = Path(env.config()["work_dir"]).expanduser()
+    old, fresh = work / "MOCK-9001", work / "MOCK-9002"
+    for d in (old, fresh):
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "plan.json").write_text("{}", encoding="utf-8")
+    past = _time.time() - 40 * 86400
+    os.utime(old, (past, past))
+    root = plugin_root("retention-30", retention_days=30)
+    rows = {r["check"]: r for r in json.loads(env.run("config.py", ["doctor"], root=root).stdout)["rows"]}
+    assert rows["retention"]["status"] == "warn" and "1개" in rows["retention"]["detail"]
+    assert "cleanup --older-than 30" in rows["retention"]["next"]
+    assert old.is_dir() and fresh.is_dir()                       # 세기만 한다
+    os.utime(old, None)
+    rows = {r["check"]: r for r in json.loads(env.run("config.py", ["doctor"], root=root).stdout)["rows"]}
+    assert rows["retention"]["status"] == "ok"
+    bad = plugin_root("retention-bad", retention_days="90일")
+    rows = {r["check"]: r for r in json.loads(env.run("config.py", ["doctor"], root=bad).stdout)["rows"]}
+    assert rows["retention"]["status"] == "fail"

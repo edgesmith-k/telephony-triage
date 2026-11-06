@@ -395,11 +395,12 @@ def _offline(*args: str) -> subprocess.CompletedProcess:
 
 def test_offline_eval_prints_accuracy_table_on_synthetic_labelset():
     root = plugin_root()     # 명시 루트(SITE_PATHS 제외 복사본) — 사내 레포에서도 같은 결과
-    proc = _offline(str(REPO / "tests" / "fixtures" / "offline-eval-sample.yaml"), "--json", "--plugin-root", str(root))
+    proc = _offline(str(REPO / "tests" / "fixtures" / "offline-eval-sample.yaml"), "--json", "--plugin-root", str(root), "--include-in-sample")
     assert proc.returncode == 0, proc.stderr
     out = json.loads(proc.stdout)
     summary = out["summary"]
     assert summary["total"] == 8 and summary["errors"] == 0 and summary["controls"] == 1
+    assert summary["in_sample"] == 7 and summary["include_in_sample"] is True     # 전부 fixture 자체 — 도구 동작 확인용
     assert summary["positive"] == 6 and summary["negative"] == 1 and summary["positive_total"] == 6
     assert summary["top1_accuracy"] == 1.0           # in-sample 자기 일치(fixture 자체) — 대조군 EVAL-8은 분모에서 뺀다
     assert summary["top3_inclusion"] == 1.0
@@ -421,7 +422,7 @@ def test_offline_eval_prints_accuracy_table_on_synthetic_labelset():
 
 @pytest.mark.skipif((REPO / "plugin" / "site-defaults.yaml").exists(), reason="plugin/site-defaults.yaml 있음: 기본 루트가 plugin/(사내)")
 def test_offline_eval_default_root_is_temporary_helper_root_without_site_defaults():
-    proc = _offline(str(REPO / "tests" / "fixtures" / "offline-eval-sample.yaml"), "--json")
+    proc = _offline(str(REPO / "tests" / "fixtures" / "offline-eval-sample.yaml"), "--json", "--include-in-sample")
     assert proc.returncode == 0, proc.stderr
     meta = json.loads(proc.stdout)["meta"]
     root = Path(meta["plugin_root"]["path"])
@@ -430,11 +431,25 @@ def test_offline_eval_default_root_is_temporary_helper_root_without_site_default
 
 
 def test_offline_eval_text_table_has_the_three_metrics():
-    proc = _offline(str(REPO / "tests" / "fixtures" / "offline-eval-sample.yaml"))
+    proc = _offline(str(REPO / "tests" / "fixtures" / "offline-eval-sample.yaml"), "--include-in-sample")
     assert proc.returncode == 0, proc.stderr
     assert proc.stdout.startswith("meta: ")
     for label in ("1위 정확도", "상위 3 포함률", "오탐률", "EVAL-8"):
         assert label in proc.stdout
+
+
+def test_offline_eval_excludes_in_sample_fixtures_by_default():
+    """종합 리뷰 D: 라벨셋 로그가 이슈 DB fixtures/ 자체면 자기 일치라 정확도가 아니다 — 기본은 `표본내(<판정>)`로 보이고 지표에서
+    뺀다(전부 표본내면 평가 0건, 종료 1). `--include-in-sample`일 때만 지표에 넣는다."""
+    root = plugin_root()
+    proc = _offline(str(REPO / "tests" / "fixtures" / "offline-eval-sample.yaml"), "--json", "--plugin-root", str(root))
+    assert proc.returncode == 1, proc.stderr
+    out = json.loads(proc.stdout)
+    assert out["summary"]["in_sample"] == 7 and out["summary"]["evaluated"] == 0 and out["summary"]["top1_accuracy"] is None
+    verdicts = {r["key"]: r["verdict"] for r in out["items"]}
+    assert verdicts["EVAL-1"] == "표본내(1위)" and verdicts["EVAL-8"] == "대조군(미스)"
+    text = _offline(str(REPO / "tests" / "fixtures" / "offline-eval-sample.yaml"), "--plugin-root", str(root)).stdout
+    assert "표본내 — 시그니처 fixture 자체 — 7건은 지표에서 뺌" in text and "평가 가능한 항목 없음" in text
 
 
 def test_offline_eval_counts_false_positive_when_unresolved_expected_but_candidate_produced(tmp_path):
@@ -444,7 +459,7 @@ def test_offline_eval_counts_false_positive_when_unresolved_expected_but_candida
         "items": [{"key": "FP-1", "occurred_at": "2026-09-20T14:32:10+09:00", "expect": "unresolved",
                    "logs": [str(SAMPLE / "data/DATA-001-no-setup-data-call/fixtures/DATA-001-01.log")]}],
     }), encoding="utf-8")
-    proc = _offline(str(labelset), "--json")
+    proc = _offline(str(labelset), "--json", "--include-in-sample")
     assert proc.returncode == 0, proc.stderr
     out = json.loads(proc.stdout)
     assert out["summary"]["false_positive_rate"] == 1.0 and out["items"][0]["verdict"] == "오탐"
@@ -484,7 +499,7 @@ def test_offline_eval_defaults_year_from_occurred_at(tmp_path):
         "items": [{"key": "EVAL-1", "occurred_at": "2026-09-20T14:32:10+09:00", "expect": "DATA-001-01",
                    "logs": [str(SAMPLE / "data/DATA-001-no-setup-data-call/fixtures/DATA-001-01.log")]}],
     }), encoding="utf-8")
-    proc = _offline(str(labelset), "--json")
+    proc = _offline(str(labelset), "--json", "--include-in-sample")
     assert proc.returncode == 0, proc.stderr
     assert json.loads(proc.stdout)["items"][0]["verdict"] == "1위"
 
@@ -497,7 +512,7 @@ def test_offline_eval_out_of_range_item_is_error_not_scored(tmp_path):
                    "expect": "DATA-001-01",
                    "logs": [str(SAMPLE / "data/DATA-001-no-setup-data-call/fixtures/DATA-001-01.log")]}],
     }), encoding="utf-8")
-    proc = _offline(str(labelset), "--json")
+    proc = _offline(str(labelset), "--json", "--include-in-sample")
     assert proc.returncode == 1, proc.stderr          # 전부 오류 = 통과 아님
     out = json.loads(proc.stdout)
     assert out["summary"]["errors"] == 1 and out["summary"]["evaluated"] == 0

@@ -1775,3 +1775,16 @@ def test_load_case_explore_schema2(env, tmp_path):
     broken(lambda d: d["expect"].__setitem__("trap", [{"show": "x"}]), "layer·daemon·label 중 하나 이상")
     broken(lambda d: d["expect"].__setitem__("trap", "below-layer-missing"), "함정 1–8개")
     broken(lambda d: d["expect"]["accept"][0].__setitem__("show", "x" * 81), "80자 이하")
+
+
+def test_gate_tie_breaks_on_top1_before_tokens():
+    """종합 리뷰 E: pass1 동률이면 explore top1(가장 유력 = 인정) 수를 먼저 본다 — with가 많으면 pass, 적으면 tie(경고),
+    같으면 토큰. explore run이 없으면 이전과 같다(토큰)."""
+    def ex(arm, top1, tokens=100):
+        return {**_row(arm, tokens=tokens), "kind": "explore", "top1": top1}
+    assert me.gate_verdict([ex("with", True, 110), ex("without", False, 100)], True) == ("pass", 0)   # 토큰이 많아도 top1이 앞
+    s = me.gate_summary([ex("with", False, 90), ex("without", True, 100)], True)
+    assert s["verdict"] == "tie" and "top1은 with 0 < without 1" in s["warning"]              # 토큰이 적어도 top1이 뒤면 tie
+    assert me.gate_verdict([ex("with", True, 90), ex("without", True, 100)], True) == ("pass", 0)   # top1 같음 → 토큰
+    assert me.gate_verdict([ex("with", True, 110), ex("without", True, 100)], True) == ("tie", 0)
+    assert me.gate_verdict([_row("with", tokens=110), _row("without", tokens=100)], True) == ("tie", 0)   # deep만: 그대로

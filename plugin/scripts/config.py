@@ -999,6 +999,30 @@ def _doctor_rows(args, defaults: dict) -> list[dict]:
     else:
         guarded("snapshot", snapshot)
 
+    # 7b retention (site-defaults `retention_days`, 14-site S14): 팀이 보존 기간을 정했을 때만 행이 생긴다(기본 점검표·예산 불변).
+    # 기한 넘은 작업 폴더 수만 센다 — 지우지 않는다(종합 리뷰 G). site-defaults에서 직접 읽는다(merged는 알려진 키만 옮긴다)
+    retention_days = userconfig.get(defaults, "retention_days")
+
+    def retention():
+        days = retention_days
+        if isinstance(days, bool) or not isinstance(days, int) or days <= 0:
+            rows.append(_row("retention", "fail", f"retention_days 값이 잘못됨({days!r})", "site-defaults retention_days는 양의 정수(일) — 관리자"))
+            return
+        limit = time.time() - days * 86400
+        old = [p.name for p in work.iterdir() if p.is_dir() and not p.name.startswith((".", "_"))
+               and session_lock.JOB_KEY_RE.fullmatch(p.name) and any((p / m).exists() for m in session_lock.JOB_MARKERS)
+               and p.stat().st_mtime < limit]
+        if old:
+            rows.append(_row("retention", "warn", f"{days}일 넘은 작업 폴더 {len(old)}개(Jira 요약·마스킹 로그가 남아 있다)",
+                             f"db_pr.py cleanup --older-than {days} --dry-run 으로 확인한 뒤 --yes (미게시 계획은 따로 알린다)"))
+        else:
+            rows.append(_row("retention", "ok", f"{days}일 넘은 작업 폴더 없음"))
+    if retention_days is not None:
+        if ok_cfg and work is not None and work.is_dir():
+            guarded("retention", retention)
+        else:
+            skip("retention", "config 없음" if not ok_cfg else "work_dir 없음")
+
     # 8 compat (<work_dir>/_snapshot 기준)
     if not snap_box:
         skip("compat", "스냅샷 없음")

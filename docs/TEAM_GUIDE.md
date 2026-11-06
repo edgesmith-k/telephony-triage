@@ -103,7 +103,7 @@ tt-oc doctor   # 사전 점검. fail이 있으면 시작하지 않는다
 
 ## 3. 매일 쓰는 흐름
 
-1. **분석 요청**: `/telephony-triage:analyze ABC-12345 ~/logs/radio.txt` 또는 말로 "ABC-12345 로그 분석해줘, 로그는 ~/logs/radio.txt". 연습 `--dry-run`, 결과만 `--analysis-only`.
+1. **분석 요청**: `/telephony-triage:analyze ABC-12345 ~/logs/radio.txt` 또는 말로 "ABC-12345 로그 분석해줘, 로그는 ~/logs/radio.txt". 연습 `--dry-run`, 결과만 `--analysis-only`. **처음 몇 번은 `--analysis-only`를 권한다** — 리포트만 받고(계획·PR 없음, 질문도 적다) 읽는 법에 익숙해진 뒤 기록까지 한다. 리포트의 `결론:` 한 줄이 분류와 다음 행동이다.
 2. **질문에 답하기**: 코드 경로, 심층·탐색 분석 여부(토큰이 더 든다), 어느 모듈 문서로 볼지.
 3. **리포트 읽기**
 
@@ -200,6 +200,7 @@ tt-oc -s <세션> --delete-session -- 2   # 마지막 답 + 세션 삭제
 | `tracker`·`tracker_post` | Jira 도구 짝 | setup의 Jira 단계만 다시 |
 | `gh` | GHE 인증 | `gh auth login -h <GHE 호스트>` |
 | `snapshot` | 스냅샷 나이 | `/telephony-triage:sync` |
+| `retention`(site-defaults `retention_days`를 둔 팀만) | 보존 기간 넘은 작업 폴더 수 | `db_pr.py cleanup --older-than <일> --dry-run` 확인 뒤 `--yes` |
 | `compat` | 이슈 DB 스키마 호환 | 플러그인 업데이트 |
 | `lock` | 세션 잠금 | 그 세션이 끝난 뒤에만 해제 |
 | `module_skills` | 모듈 스킬·설치 스킬 설정 | 팀 기본 값 문제면 도입 담당자 |
@@ -222,6 +223,16 @@ tt-oc -s <세션> --delete-session -- 2   # 마지막 답 + 세션 삭제
 | "병합해줘"가 거절됨 | 사유대로. 보통 최신 커밋 +1이 필요 |
 
 막히면 `/telephony-triage:status --doctor`(OpenCode는 `tt-oc doctor`) 화면을 고치지 말고 그대로 도입 담당자에게 보낸다.
+
+### 누구에게 보내나 (2선 지원)
+
+| 순서 | 누구 | 무엇을 |
+|---|---|---|
+| 1선 | 도입 담당자 | doctor 화면, 막힌 명령·사유 한 줄 |
+| 2선 | 이슈 DB 메인테이너(`CODEOWNERS`의 메인테이너 경로 오너 — 도입 담당자가 자리에 없을 때) | 같은 것. 시그니처·파서 규칙·DB 스키마 문제는 처음부터 이쪽 |
+| 접수 | 팀이 정한 한 곳(권장: 이슈 DB 레포 Issue, 제목 `[support] <doctor 행 이름>`) | 메일·채팅으로 흩어지지 않게. 해결 뒤 같은 Issue에 원인·조치 한 줄(다음 사람의 답이 된다) |
+
+도입 담당자·메인테이너가 같은 사람이면 대리인을 한 명 정해 `SITE_PROFILE.md`에 적어 둔다(작성자 부재 시 열린 PR 인수는 `docs/design/06-collaboration.md §6.3`).
 
 ## 8. 플러그인을 갱신할 때
 
