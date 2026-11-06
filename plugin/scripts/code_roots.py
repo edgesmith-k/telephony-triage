@@ -435,7 +435,7 @@ def cmd_find_text(args, defaults) -> dict:
 
     def scan(base: Path, key: str, root: Path) -> bool:
         if not base.is_dir():
-            return True
+            return False
         for path in _walk_files(base, deadline, state):
             real = path.resolve()
             if real in seen:
@@ -481,16 +481,22 @@ def cmd_find_text(args, defaults) -> dict:
         if key in roots:
             root = Path(roots[key]).expanduser()
             target = root / rel
-            ref_dirs.append((target.parent if target.suffix else target, key, root))
+            target = target.parent if target.suffix else target
+            if target.is_dir():
+                ref_dirs.append((target, key, root))
     scope = {"code_refs": "없음", "required_dirs": "건너뜀(상한)", "root": "건너뜀(상한)"}
     full = True
     if live:
         if ref_dirs:
             full = all([scan(d, k, r) for d, k, r in ref_dirs])
             scope["code_refs"] = "봄" if full else "건너뜀(상한)"
+        # ② 필수 디렉토리: 주 root가 있고, 있는 필수 디렉토리를 하나 이상 상한 없이 다 걸었을 때만 봄
         if primary in roots and full:
             root = Path(roots[primary]).expanduser()
-            full = all([scan(root / d, primary, root) for d in profile.source_tree.required_dirs])
+            req = [root / d for d in profile.source_tree.required_dirs if (root / d).is_dir()]
+            full = bool(req) and all([scan(d, primary, root) for d in req])
+        else:
+            full = False
         scope["required_dirs"] = "봄" if full else "건너뜀(상한)"
         if full:
             whole = all([scan(Path(v).expanduser(), k, Path(v).expanduser()) for k, v in sorted(roots.items())])
