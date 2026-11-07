@@ -241,6 +241,7 @@ python3 plugin/scripts/config.py set analyzers.<카테고리>.prefer skill [--pl
 ```sh
 python3 tools/site_step.py audit --inhouse-model '<사내 모델 이름 정규식>'   # 토큰 0. docs/site/audit/에 계획·review.md
 # → <날짜>-review.md를 Claude Code + Claude 세션에서 리뷰(파일 쓰기·push 없음)
+python3 tools/site_step.py audit --notify  # 걸린 항목(P0·P1·실패 검사)을 이슈 DB 레포 Issue로 — 보기만. 확인 뒤 --create
 python3 tools/site_step.py audit --record   # 기준점 기록, 넘친 항목은 다음 회차
 ```
 

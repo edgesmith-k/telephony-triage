@@ -14,6 +14,7 @@
     python3 tools/site_step.py modules coverage [--json] [--out F] [--min-lines N]   # 사내 로그 → 모듈별 줄 수·빈 이름·modules.yaml diff
     python3 tools/site_step.py audit [--since D|레포=sha] [--last] [--repo R] [--cap-tokens N] [--inhouse-model RX] [--jobs DIR] [--json]
     python3 tools/site_step.py audit --record [--defer ID[,ID]]     # 정기 점검: 토큰 0 검사 → Claude가 볼 것(상한 안) → 기준점 기록
+    python3 tools/site_step.py audit --notify [--create] [--json]   # 걸린 항목(P0·P1·실패 검사)을 이슈 DB 레포 Issue로(기본 보기만)
     python3 tools/site_step.py runtime-check claude-gateway         # Claude Code + 사내 모델 프로필 표(모델 호출 없음)
     python3 tools/site_step.py runtime-check opencode [--project D] # OpenCode 1.19.5·설정·관리 설정 점검 + 사내 확인 0(OpenAI 호환) curl
     python3 tools/site_step.py runtime-check opencode --project D --jira KEY [--missing-key KEY]
@@ -446,6 +447,16 @@ def audit_cmd(root: Path, args) -> tuple[str, int]:
     try:
         if args.record:
             return site_audit.record(root, args.defer), 0
+        if args.notify:
+            p = site_audit.load_plan(root)
+            ctx = sc.Ctx(root)
+            try:
+                res = site_audit.notify(ctx, p, create=args.create)
+            finally:
+                ctx.cleanup()
+            if args.json:
+                return json.dumps(res, ensure_ascii=False, indent=1), res["exit"]
+            return site_audit.render_notify(res), res["exit"]
         ctx = sc.Ctx(root)
         try:
             p = site_audit.plan(ctx, since=args.since, last=args.last, repos=args.repo, cap=args.cap_tokens,
@@ -1118,6 +1129,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--jobs", help="audit: 근거 원문 검사 기록을 찾을 work_dir(기본: 사용자 config work_dir)")
     ap.add_argument("--record", action="store_true", help="audit: 마지막 계획의 끝 커밋을 기준점으로 기록")
     ap.add_argument("--defer", action="append", default=[], metavar="ID[,ID]", help="audit --record: 다음 점검으로 미룰 항목")
+    ap.add_argument("--notify", action="store_true", help="audit: 마지막 계획의 P0·P1 항목·실패 검사 행을 이슈 DB 레포 Issue로(기본 보기만)")
+    ap.add_argument("--create", action="store_true", help="audit --notify: 실제로 만든다(사용자 확인 뒤). 열린 같은 표식 Issue는 건너뜀")
     ap.add_argument("--root", default=str(ROOT), help=argparse.SUPPRESS)   # 테스트용
     ap.add_argument("--managed-dir", default=None, help=argparse.SUPPRESS)  # 테스트용(기본 gen_opencode.MANAGED_DIR)
     args = ap.parse_args(argv)
@@ -1132,15 +1145,19 @@ def main(argv: list[str] | None = None) -> int:
     if (args.project or args.managed_dir) and args.cmd != "runtime-check":
         ap.error("--project는 runtime-check에서만 쓴다")
     window_opts = args.since or args.last or args.repo or args.cap_tokens is not None or args.inhouse_model or args.jobs
-    if (window_opts or args.record or args.defer) and args.cmd != "audit":
-        ap.error("--since·--last·--repo·--cap-tokens·--inhouse-model·--jobs·--record·--defer는 audit에서만 쓴다")
+    if (window_opts or args.record or args.defer or args.notify or args.create) and args.cmd != "audit":
+        ap.error("--since·--last·--repo·--cap-tokens·--inhouse-model·--jobs·--record·--defer·--notify·--create는 audit에서만 쓴다")
     if args.cmd == "audit":
         if args.step:
             ap.error("audit는 단계 인자를 받지 않는다")
         if args.defer and not args.record:
             ap.error("--defer는 --record와 함께 쓴다")
-        if args.record and window_opts:
+        if args.record and (window_opts or args.notify):
             ap.error("--record는 --defer만 함께 쓴다")
+        if args.create and not args.notify:
+            ap.error("--create는 --notify와 함께 쓴다")
+        if args.notify and (window_opts or args.defer):
+            ap.error("--notify는 --create·--json만 함께 쓴다")
         if args.cap_tokens is not None and args.cap_tokens <= 0:
             ap.error("--cap-tokens는 0보다 크다")
     if (args.out or args.min_lines is not None) and not (args.cmd == "modules" and args.step == "coverage"):
