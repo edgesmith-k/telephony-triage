@@ -21,6 +21,8 @@ from .core import (ERROR_EVENT_RE, EXPLORE_MAX_LINES, EXPLORE_WHEN, PLATFORM_ANS
                    FIND_TEXT_ITEMS, PARTIAL_ANALYSIS_MAX)
 from .report import ReportMixin, _ref_label, _unique_evidence
 
+MASKED_DIR = "logs-masked"       # 원문 마스킹 사본(parse_logcat.py mask-copy, 종합 리뷰 G①) — 모델이 읽을 대상
+
 
 # 5-1·5-2 질문 대기(when: ask) 동안의 한 줄 안내(analysis.json `analyzer.note`·`explore.note`): 답 전에 원문을 열어 보는 일을 막는
 # 안내일 뿐이다(guard 규칙 10은 통째 읽기만 막는다).
@@ -586,7 +588,21 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
             self.out["build"] = {k: _clip(v, 120) for k, v in build.items() if isinstance(v, str)}
         if not out:
             raise Fail(USAGE, "bugreport에서 logcat 섹션을 찾지 못했다.")
+        self.mask_copy(out)
         return out
+
+    def mask_copy(self, logs: list[Path]) -> None:
+        """원문을 받자마자 `<JOB>/logs-masked/`에 마스킹 사본(줄 번호 그대로)을 만든다(종합 리뷰 G① 축소판): 모델이 grep·sed·Read할 대상은
+        이쪽이다(guard 규칙 10 문구·rules.md). 상한보다 큰 파일은 스크립트가 건너뛰고 경고한다(`mask-copy-skipped` → warnings)."""
+        dest = self.job / MASKED_DIR
+        _, data, _ = self.run.call("3-mask", "parse_logcat.py",
+                                   ["mask-copy", *logs, "--out", dest, "--rules", self.snap / "parser-rules"])
+        files = (data or {}).get("files") or []
+        for f in files:
+            if f.get("skipped"):
+                self.warn(f"mask-copy-skipped: {f.get('name')} {f.get('reason', '')} — 원문은 grep -n·sed -n 구간으로만")
+        self.masked = {"dir": MASKED_DIR, "files": [f["name"] for f in files if not f.get("skipped")],   # JOB 상대(출력 결정성)
+                       "skipped": [f["name"] for f in files if f.get("skipped")]}
 
     def auto_select(self) -> bool:
         """`code.auto_select`: 사용자 config > site-defaults > 기본 true (02-config.md). 유효 값은 불리언뿐이고(`type(v) is bool`),
@@ -1017,6 +1033,7 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
             "logs": {"files": [p.name for p in logs], "window": (events.get("input") or {}).get("window"),
                      "range": [cov.get("first_ts"), cov.get("last_ts")], "in_range": cov.get("window_in_range"),
                      "clock_anomalies": len(cov.get("clock_anomalies") or []), "events": len(events.get("events") or []),
+                     "masked": getattr(self, "masked", None),
                      **({"uncollected_tags": uncollected} if uncollected else {})},
             "warnings_core": self.warnings[warn0:], "extra_warnings": extra_warnings,
             "attrs": {"clock": self.clock, "order_fail": self.order_fail, "order_evidence": self.order_evidence,

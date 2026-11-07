@@ -1062,3 +1062,42 @@ if __name__ == "__main__":
             print(f"ERR {name}: {type(exc).__name__}: {exc}")
     print(f"\n{len(_all_tests()) - failures}/{len(_all_tests())} 통과")
     raise SystemExit(1 if failures else 0)
+
+
+# -- mask-copy (종합 리뷰 G① 축소판): 줄 번호가 같은 마스킹 사본, 한 masker, 상한 초과는 건너뜀 ---------------------------
+
+IMSI_A, IMSI_B = "45005" + "0123456789", "45005" + "9999999999"      # 이어 붙여 경계 검사(long-number)를 피한다 — 합성 값
+
+
+def test_mask_copy_masks_keeps_line_numbers_and_skips_big():
+    tmp = _tmp()
+    a = tmp / "a.log"
+    a.write_text("09-26 13:00:00.000  1500  1510 I RILJ    : imsi=" + IMSI_A + " msisdn=+821012345678\n"
+                 "09-26 13:00:01.000  1500  1510 I RILJ    : plain line\n"
+                 "09-26 13:00:02.000  1500  1510 I RILJ    : again imsi=" + IMSI_A + "\n", encoding="utf-8")
+    sub = tmp / "sub"
+    sub.mkdir()
+    b = sub / "a.log"                                                      # 같은 이름 → a-2.log
+    b.write_text("09-26 13:00:03.000  1  2 I X: imsi=" + IMSI_A + " other=" + IMSI_B + "\n", encoding="utf-8")
+    big = tmp / "big.log"
+    big.write_text("x" * 10_000 + "\n", encoding="utf-8")
+    out = tmp / "m"
+    code, data, err = _run(["mask-copy", str(a), str(b), str(big), "--out", str(out), "--max-bytes", "5000"])
+    assert code == 0, err
+    by = {f["name"]: f for f in data["files"]}
+    assert set(by) == {"a.log", "a-2.log", "big.log"} and data["out"] == str(out)
+    assert by["a.log"]["lines"] == 3 and by["a.log"]["source"] == str(a) and by["a.log"]["skipped"] is False
+    assert by["big.log"]["skipped"] is True and by["big.log"]["path"] is None and "--max-bytes" in by["big.log"]["reason"]
+    assert [w["code"] for w in data["warnings"]] == ["mask-copy-skipped"] and "mask-copy-skipped" in err
+    ma = (out / "a.log").read_text(encoding="utf-8").split("\n")
+    assert len(ma) == 4 and ma[-1] == "" and IMSI_A + "" not in "\n".join(ma) and "+821012345678" not in ma[0]
+    assert "<IMSI#" in ma[0] and ma[1].endswith("plain line") and ma[0].split("imsi=")[1].split()[0] == ma[2].split("imsi=")[1]
+    mb = (out / "a-2.log").read_text(encoding="utf-8")
+    assert ma[0].split("imsi=")[1].split()[0] in mb and IMSI_B + "" not in mb      # 한 masker: 같은 값 = 같은 토큰
+    assert not (out / "big.log").exists()
+    index = json.loads((out / "index.json").read_text(encoding="utf-8"))
+    assert index["version"] == 1 and [f["name"] for f in index["files"]] == ["a.log", "a-2.log", "big.log"]
+    assert data["replacements"].get("IMSI", 0) >= 1
+    # 사용 오류: 없는 파일·0 이하 상한
+    assert _run(["mask-copy", str(tmp / "none.log"), "--out", str(out)])[0] == 2
+    assert _run(["mask-copy", str(a), "--out", str(out), "--max-bytes", "0"])[0] == 2

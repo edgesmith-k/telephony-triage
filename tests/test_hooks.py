@@ -787,6 +787,7 @@ def test_guard_blocks_whole_raw_log_reads():
         out = bash(ws, cmd, d)
         assert decision(out) == "deny", cmd
         assert "규칙 10" in out["permissionDecisionReason"], cmd
+        assert "logs-masked/<이름>" in out["permissionDecisionReason"], cmd      # 종합 리뷰 G①: 원문 대신 마스킹 사본을 안내
     allow = [f"cat {d}/jira.json", f"less {d}/jira_meta.json", "grep -n RILJ x.log", "sed -n 1,20p x.log", "head -n 20 x.log", "wc -l x.log", "unzip -l br.zip",
              f"cat {fx}/X.log", "cat timeline.md", "cat report.md", "cat commit-message.txt",
              "cat <<EOF > x.log\nhi\nEOF", "cat nonexistent.log", "cat a.txt", "echo hi > x.log",

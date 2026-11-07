@@ -76,6 +76,7 @@
       "in_range": {},
       "clock_anomalies": {"type": "integer"},
       "events": {"type": "integer"},
+      "masked": {"type": ["object", "null"], "description": "원문 마스킹 사본(<JOB>/logs-masked/, parse_logcat.py mask-copy): {dir(JOB 상대 `logs-masked`), files[이름], skipped[이름 — 상한 초과]}. 모델이 grep·sed·Read할 대상", "properties": {"dir": {"type": "string"}, "files": {"type": "array"}, "skipped": {"type": "array"}}},
       "uncollected_tags": {"type": "array", "maxItems": 3, "description": "{tag(≤40), lines, warn}; 후보 없음·1위 C=0일 때만, 파서 규칙에 없는 태그 힌트"}
      }
     },

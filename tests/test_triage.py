@@ -564,7 +564,7 @@ def test_skill_md_is_within_7_5kb_and_drives_triage():
     assert "답 전 explore·module·원문 열람 금지" in lines[at + 1] and "Skill로" not in block
     _check_module_skills_md(reference / "module-skills.md")
     rules = (reference / "rules.md").read_text(encoding="utf-8")      # SKILL §실행 규칙이던 내용
-    assert len(rules.encode("utf-8")) <= 2516      # 병합은 +1 뒤 요청 시 `db_pr merge`만(Approve 금지, A2 11/04) 뒤. 그 전 2,496B — 머지는 `db_pr merge`만(본인 병합, 10/22) 뒤. 그 전 2,485B — `--platform`·`--json` 없이 목록에 skill_patch(10/22) 뒤의 한도. 그 전 2,460B — L2 J7 질문당 선택지 4개 줄 뒤의 한도. 그 전 2,320B — Bash·Read 출력 비가시(리포트·검증 표·확인 화면·notes·must_show, 전체 eval 10/14)·stage `next` 줄 뒤의 한도. 그 전 2,048B
+    assert len(rules.encode("utf-8")) <= 2700      # 종합 리뷰 G①: 로그는 마스킹 사본 logs-masked/를 쓴다 한 구절 뒤. 그 전 2,516B — 병합은 +1 뒤 요청 시 `db_pr merge`만(Approve 금지, A2 11/04) 뒤. 그 전 2,496B — 머지는 `db_pr merge`만(본인 병합, 10/22) 뒤. 그 전 2,485B — `--platform`·`--json` 없이 목록에 skill_patch(10/22) 뒤의 한도. 그 전 2,460B — L2 J7 질문당 선택지 4개 줄 뒤의 한도. 그 전 2,320B — Bash·Read 출력 비가시(리포트·검증 표·확인 화면·notes·must_show, 전체 eval 10/14)·stage `next` 줄 뒤의 한도. 그 전 2,048B
     for needle in ("S-3", "계획 형식 오류", "TT_LOCK_OWNER", "stage --then-summary", "모든 종료 경로에서 푼다", "사용자 확인 후"):
         assert needle in rules, needle
     assert len((reference / "db-authoring.md").read_bytes()) <= 12288      # 필수 키 요약 포함. §0 등록 준비물·리뷰어 색인 추가 뒤의 한도(그 전 11,392B: W7 add-fixture 세부, 11,264B)
@@ -807,6 +807,21 @@ def _e004_offline(out: Path, *extra) -> dict:
                     encoding="utf-8")
     return run_json("triage.py", ["run", "MOCK-9004", "--offline-db", SAMPLE, "--out", out, "--logs", log, "--issue-meta", meta,
                                   "--tz", "Asia/Seoul", "--year", "2026", *extra])
+
+
+def test_analyze_makes_masked_log_copy_with_same_line_numbers():
+    """종합 리뷰 G① 축소판: 원문을 받자마자 <JOB>/logs-masked/<이름>(줄 번호 같음)을 만들고 logs.masked로 알린다."""
+    out = tmp("tt-triage-") / "x"
+    analysis = _e004_offline(out)
+    masked = analysis["logs"]["masked"]
+    assert masked["dir"] == "logs-masked" and masked["skipped"] == []          # JOB 상대 — 출력은 --out과 무관하게 같다
+    assert masked["files"] == analysis["logs"]["files"]
+    src = Path(analysis["logs"]["files"][0])
+    copy = out / "logs-masked" / src.name
+    assert copy.is_file() and (out / "logs-masked" / "index.json").is_file()
+    gen_log = next((out.parent.parent).glob("tt-e004-*/*.log"), None)
+    if gen_log is not None:
+        assert len(copy.read_text(encoding="utf-8").split("\n")) == len(gen_log.read_text(encoding="utf-8").split("\n"))
 
 
 def test_uncollected_tag_of_collected_pid_is_reported_and_must_shown():
